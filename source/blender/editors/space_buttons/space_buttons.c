@@ -150,7 +150,9 @@ static void buttons_main_area_draw(const bContext *C, ARegion *ar)
 
 	buttons_context_compute(C, sbuts);
 
-	if (sbuts->mainb == BCONTEXT_SCENE)
+	if (sbuts->mainb == BCONTEXT_SCRIPT)
+		ED_region_panels(C, ar, vertical, "script", sbuts->mainb);
+	else if (sbuts->mainb == BCONTEXT_SCENE)
 		ED_region_panels(C, ar, vertical, "scene", sbuts->mainb);
 	else if (sbuts->mainb == BCONTEXT_RENDER)
 		ED_region_panels(C, ar, vertical, "render", sbuts->mainb);

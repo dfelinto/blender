@@ -141,6 +141,7 @@ EnumPropertyItem clip_editor_mode_items[] = {
 
 /* Actually populated dynamically trough a function, but helps for context-less access (e.g. doc, i18n...). */
 static EnumPropertyItem buttons_context_items[] = {
+	{BCONTEXT_SCRIPT, "SCRIPT", ICON_GAME, "Script", "Script"},
 	{BCONTEXT_SCENE, "SCENE", ICON_SCENE_DATA, "Scene", "Scene"},
 	{BCONTEXT_RENDER, "RENDER", ICON_SCENE, "Render", "Render"},
 	{BCONTEXT_RENDER_LAYER, "RENDER_LAYER", ICON_RENDERLAYERS, "Render Layers", "Render layers"},
@@ -847,6 +848,10 @@ static EnumPropertyItem *rna_SpaceProperties_context_itemf(bContext *UNUSED(C), 
 	SpaceButs *sbuts = (SpaceButs *)(ptr->data);
 	EnumPropertyItem *item = NULL;
 	int totitem = 0;
+
+	if (sbuts->pathflag & (1 << BCONTEXT_SCRIPT)) {
+		RNA_enum_items_add_value(&item, &totitem, buttons_context_items, BCONTEXT_SCRIPT);
+	}
 
 	if (sbuts->pathflag & (1 << BCONTEXT_RENDER)) {
 		RNA_enum_items_add_value(&item, &totitem, buttons_context_items, BCONTEXT_RENDER);

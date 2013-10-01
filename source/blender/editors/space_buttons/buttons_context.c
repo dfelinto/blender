@@ -511,6 +511,8 @@ static int buttons_context_path(const bContext *C, ButsContextPath *path, int ma
 	/* now for each buttons context type, we try to construct a path,
 	 * tracing back recursively */
 	switch (mainb) {
+		case BCONTEXT_SCRIPT:
+			found = 1;
 		case BCONTEXT_SCENE:
 		case BCONTEXT_RENDER:
 		case BCONTEXT_RENDER_LAYER:
@@ -1023,7 +1025,7 @@ void buttons_context_draw(const bContext *C, uiLayout *layout)
 			name = RNA_struct_name_get_alloc(ptr, namebuf, sizeof(namebuf), NULL);
 
 			if (name) {
-				if (!ELEM3(sbuts->mainb, BCONTEXT_RENDER, BCONTEXT_SCENE, BCONTEXT_RENDER_LAYER) && ptr->type == &RNA_Scene)
+				if (!ELEM4(sbuts->mainb, BCONTEXT_SCRIPT, BCONTEXT_RENDER, BCONTEXT_SCENE, BCONTEXT_RENDER_LAYER) && ptr->type == &RNA_Scene)
 					uiItemLDrag(row, ptr, "", icon);  /* save some space */
 				else
 					uiItemLDrag(row, ptr, name, icon);
