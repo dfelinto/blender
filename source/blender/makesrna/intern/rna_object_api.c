@@ -41,6 +41,7 @@
 #include "DNA_constraint_types.h"
 #include "DNA_modifier_types.h"
 #include "DNA_object_types.h"
+#include "DNA_anim_types.h"
 
 #include "rna_internal.h"  /* own include */
 
@@ -408,6 +409,27 @@ void rna_Object_dm_info(struct Object *ob, int type, char *result)
 		}
 	}
 }
+
+static void rna_Object_get_velocity(Object *ob, Scene *scene, float r_vel[3])
+{
+	float ploc[3], cloc[3];
+	float rot[4];//not used
+	float ctime = BKE_scene_frame_get(scene);
+
+	ob->recalc |= OB_RECALC_OB | OB_RECALC_DATA | OB_RECALC_TIME;
+	BKE_animsys_evaluate_animdata(scene, &ob->id, ob->adt, ctime-1, ADT_RECALC_ANIM);
+	BKE_object_where_is_calc_time(scene, ob, ctime-1);
+	mat4_to_loc_quat(ploc, rot, ob->obmat);
+
+	ob->recalc |= OB_RECALC_OB | OB_RECALC_DATA | OB_RECALC_TIME;
+	BKE_animsys_evaluate_animdata(scene, &ob->id, ob->adt, ctime, ADT_RECALC_ANIM);
+	BKE_object_where_is_calc_time(scene, ob, ctime);
+	mat4_to_loc_quat(cloc, rot, ob->obmat);
+
+	//velocity in blender units / frames
+	sub_v3_v3v3(r_vel, cloc, ploc);
+}
+
 #endif /* NDEBUG */
 
 static int rna_Object_update_from_editmode(Object *ob)
@@ -577,6 +599,17 @@ void RNA_api_object(StructRNA *srna)
 	RNA_def_property_flag(parm, PROP_REQUIRED);
 	parm = RNA_def_boolean(func, "result", 0, "", "Object visibility");
 	RNA_def_function_return(func, parm);
+
+	/* */
+	func = RNA_def_function(srna, "velocity", "rna_Object_get_velocity");
+	RNA_def_function_ui_description(func, "");
+	parm = RNA_def_pointer(func, "scene", "Scene", "", "");
+	RNA_def_property_flag(parm, PROP_REQUIRED | PROP_NEVER_NULL);
+	parm = RNA_def_float_vector(func, "velocity", 3, NULL, -FLT_MAX, FLT_MAX, "Velocity",
+	                            "", -1e4, 1e4);
+	RNA_def_property_flag(parm, PROP_THICK_WRAP);
+	RNA_def_function_output(func, parm);
+
 
 #ifndef NDEBUG
 	/* mesh */
