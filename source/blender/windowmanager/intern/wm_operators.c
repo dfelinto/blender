@@ -57,6 +57,7 @@
 #include "BLI_math.h"
 #include "BLI_utildefines.h"
 #include "BLI_ghash.h"
+#include "BLI_callbacks.h"
 
 #include "BLO_readfile.h"
 
@@ -2730,6 +2731,8 @@ static int wm_exit_blender_exec(bContext *C, wmOperator *op)
 {
 	WM_operator_free(op);
 	
+	BLI_callback_exec(CTX_data_main(C), NULL, BLI_CB_EVT_QUIT_PRE);
+
 	WM_exit(C);
 	
 	return OPERATOR_FINISHED;
