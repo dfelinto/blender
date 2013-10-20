@@ -314,7 +314,7 @@ void ED_keymap_object(wmKeyConfig *keyconf)
 
 	WM_keymap_add_item(keymap, "VIEW3D_OT_game_start", PKEY, KM_PRESS, 0, 0);
 
-	kmi = WM_keymap_add_item(keymap, "OBJECT_OT_select_all", AKEY, KM_PRESS, 0, 0);
+	kmi = WM_keymap_add_item(keymap, "OBJECT_OT_select_all", AKEY, KM_PRESS, KM_CTRL, 0);
 	RNA_enum_set(kmi->ptr, "action", SEL_TOGGLE);
 	kmi = WM_keymap_add_item(keymap, "OBJECT_OT_select_all", IKEY, KM_PRESS, KM_CTRL, 0);
 	RNA_enum_set(kmi->ptr, "action", SEL_INVERT);
@@ -387,7 +387,7 @@ void ED_keymap_object(wmKeyConfig *keyconf)
 
 	WM_keymap_add_item(keymap, "OBJECT_OT_duplicates_make_real", AKEY, KM_PRESS, KM_SHIFT | KM_CTRL, 0);
 
-	WM_keymap_add_menu(keymap, "VIEW3D_MT_object_apply", AKEY, KM_PRESS, KM_CTRL, 0);
+	//WM_keymap_add_menu(keymap, "VIEW3D_MT_object_apply", AKEY, KM_PRESS, KM_CTRL, 0);
 	WM_keymap_add_menu(keymap, "VIEW3D_MT_make_single_user", UKEY, KM_PRESS, 0, 0);
 	WM_keymap_add_menu(keymap, "VIEW3D_MT_make_links", LKEY, KM_PRESS, KM_CTRL, 0);
 
