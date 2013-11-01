@@ -94,6 +94,7 @@ typedef struct bUnitDef {
 #define B_UNIT_DEF_NONE 0
 #define B_UNIT_DEF_SUPPRESS 1 /* Use for units that are not used enough to be translated into for common use */
 #define B_UNIT_DEF_TENTH 2 /* Display a unit even if its value is 0.1, eg 0.1mm instead of 100um */
+#define B_UNIT_DEF_NOSCALE 4	/* ignore scale, take value as is */
 
 /* define a single unit */
 typedef struct bUnitCollection {
@@ -254,9 +255,10 @@ static struct bUnitDef buNaturalTimeDef[] = {
 	{"second", "seconds",           "sec", "s", "Seconds",      1.0, 0.0,       B_UNIT_DEF_NONE}, /* base unit */
 	{"millisecond", "milliseconds", "ms", NULL, "Milliseconds", 0.001, 0.0,     B_UNIT_DEF_NONE},
 	{"microsecond", "microseconds", "µs",  "us", "Microseconds", 0.000001, 0.0, B_UNIT_DEF_NONE},
+	{"frame", "frames",             "f",  NULL, "Frames",       1.0, 0.0,       B_UNIT_DEF_SUPPRESS|B_UNIT_DEF_NOSCALE},
 	{NULL, NULL, NULL, NULL, NULL, 0.0, 0.0}
 };
-static struct bUnitCollection buNaturalTimeCollection = {buNaturalTimeDef, 3, 0, sizeof(buNaturalTimeDef) / sizeof(bUnitDef)};
+static struct bUnitCollection buNaturalTimeCollection = {buNaturalTimeDef, 6, 0, sizeof(buNaturalTimeDef) / sizeof(bUnitDef)};
 
 
 static struct bUnitDef buNaturalRotDef[] = {
@@ -412,6 +414,43 @@ static int unit_as_string(char *str, int len_max, double value, int prec, bUnitC
 	return i;
 }
 
+
+void bUnit_AsString_smpte(char *str, int len_max, double value, double fps)
+{
+	int len;
+	int h,m,s,f;
+	double fractpart, intpart;
+
+	const int frames_in_sec = fps;
+	const int frames_in_min = frames_in_sec * 60;
+	const int frames_in_hr  = frames_in_min * 60;
+
+	fractpart = modf(value / frames_in_hr, &intpart);
+	h = (int) intpart;
+
+	value -= h * frames_in_hr;
+
+	fractpart = modf(value / frames_in_min, &intpart);
+	m = (int) intpart;
+
+	value -= m * frames_in_min;
+
+	fractpart = modf(value / frames_in_sec, &intpart);
+	s = (int) intpart;
+
+	value -= s * frames_in_sec;
+
+	f = value;
+
+	/* Convert to a string */
+	{
+		len = BLI_snprintf(str, len_max, "%02d:%02d:%02d:%02d", h, m, s, f);
+
+		if (len >= len_max)
+			str[len_max - 1] = '\0';
+	}
+}
+
 /* Used for drawing number buttons, try keep fast */
 void bUnit_AsString(char *str, int len_max, double value, int prec, int system, int type, int split, int pad)
 {
@@ -421,7 +460,7 @@ void bUnit_AsString(char *str, int len_max, double value, int prec, int system, 
 		usys = &buDummyCollection;
 
 	/* split output makes sense only for length, mass and time */
-	if (split && (type == B_UNIT_LENGTH || type == B_UNIT_MASS || type == B_UNIT_TIME || type == B_UNIT_CAMERA)) {
+	if (split && (type == B_UNIT_LENGTH || type == B_UNIT_MASS || type == B_UNIT_CAMERA)) {
 		bUnitDef *unit_a, *unit_b;
 		double value_a, value_b;
 
@@ -525,7 +564,10 @@ static int unit_scale_str(char *str, int len_max, char *str_tmp, double scale_pr
 
 		len_name = strlen(replace_str);
 		len_move = (len - (found_ofs + len_name)) + 1; /* 1+ to copy the string terminator */
-		len_num = BLI_snprintf(str_tmp, TEMP_STR_SIZE, "*%g"SEP_STR, unit->scalar / scale_pref); /* # removed later */
+		if (unit->flag & B_UNIT_DEF_NOSCALE)
+			len_num = BLI_snprintf(str_tmp, TEMP_STR_SIZE, SEP_STR); /* # removed later */
+		else
+			len_num = BLI_snprintf(str_tmp, TEMP_STR_SIZE, "*%g"SEP_STR, unit->scalar / scale_pref); /* # removed later */
 
 		if (len_num > len_max)
 			len_num = len_max;
@@ -593,7 +635,7 @@ static int unit_find(const char *str, bUnitDef *unit)
  *
  * return true of a change was made.
  */
-int bUnit_ReplaceString(char *str, int len_max, const char *str_prev, double scale_pref, int system, int type)
+int bUnit_ReplaceString(char *str, int len_max, const char *str_prev, double scale_pref, int system, int type, int smpte)
 {
 	bUnitCollection *usys = unit_get_system(system, type);
 
@@ -612,6 +654,59 @@ int bUnit_ReplaceString(char *str, int len_max, const char *str_prev, double sca
 		for (i = 0; (i < len_max) && (*ch != '\0'); i++, ch++) {
 			if ((*ch >= 'A') && (*ch <= 'Z'))
 				*ch += ('a' - 'A');
+		}
+	}
+
+	if (smpte) {
+		int len = strlen(str);
+		char *ch = str + len - 1;
+		char str_smpte[4] = "smh";
+		char *c = &str_smpte[0];
+		char found_smtpe = 0;
+		int i;
+
+		for (i = 0; i < len && *c != '\0'; i++, ch--) {
+			if (*ch == ':') {
+				*ch = *c;
+				c++;
+				found_smtpe = 1;
+			}
+		}
+		if (found_smtpe) {
+			/* smpte can have leading '0': 01:02:03:04
+			   After inserting the unit it becomes: 01h02m03s04
+			   which pose a problem because leading 0 are not understood by blender !!!
+			 */
+			char state;  /* 0: not a digit, just copy
+							1: digit, leading '0'
+							2: digit, in number 
+						  */
+			for (c=str, ch=str, state=0; *ch != 0; ch++) {
+				if (isdigit(*ch)) {
+					if (state != 2 && *ch == '0') {
+						/* leading 0, skip */
+						state = 1;
+						continue;
+					}
+					/* in number, copy */
+					state = 2;
+				} else {
+					/* letter, close previous number*/
+					if (state == 1) {
+						/* the previous number only had '0', must at least add one */
+						/* we know for sure there is room for a '0' because
+						   one was skipped when state was set to 1 */
+						*c++ = '0';
+					}
+					state = 0;
+				}
+				if (c != ch)
+					*c = *ch;
+				c++;
+			}
+			if (state == 1)
+				*c++ = '0';
+			*c++ = 0;
 		}
 	}
 
@@ -659,7 +754,7 @@ int bUnit_ReplaceString(char *str, int len_max, const char *str_prev, double sca
 		/* add the unit prefix and re-run, use brackets in case there was an expression given */
 		if (BLI_snprintf(str_tmp, sizeof(str_tmp), "(%s)%s", str, unit->name) < sizeof(str_tmp)) {
 			strncpy(str, str_tmp, len_max);
-			return bUnit_ReplaceString(str, len_max, NULL, scale_pref, system, type);
+			return bUnit_ReplaceString(str, len_max, NULL, scale_pref, system, type, smpte);
 		}
 		else {
 			/* BLI_snprintf would not fit into str_tmp, cant do much in this case
@@ -702,6 +797,14 @@ int bUnit_ReplaceString(char *str, int len_max, const char *str_prev, double sca
 	}
 
 	return changed;
+}
+
+void bUnit_ToUnitAltName_smpte(char *str, int len_max, const char *orig_str, double fps)
+{
+	double frame;
+	sscanf (orig_str, "%lf", &frame);
+
+	bUnit_AsString_smpte(str, len_max, frame, fps);
 }
 
 /* 45µm --> 45um */

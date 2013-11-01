@@ -1549,6 +1549,16 @@ bool ui_is_but_bool(uiBut *but)
 	return false;
 }
 
+bool ui_is_but_int(uiBut *but)
+{
+	if (but->pointype == UI_BUT_POIN_INT && but->poin)
+		return true;
+
+	if (but->rnaprop && RNA_property_type(but->rnaprop) == PROP_INT)
+		return true;
+
+	return false;
+}
 
 bool ui_is_but_unit(uiBut *but)
 {
@@ -1562,13 +1572,15 @@ bool ui_is_but_unit(uiBut *but)
 	if (unit->system_rotation == USER_UNIT_ROT_RADIANS && unit_type == PROP_UNIT_ROTATION)
 		return false;
 #endif
-	
+
+#if 0
 	/* for now disable time unit conversion */
 	if (unit_type == PROP_UNIT_TIME)
 		return false;
+#endif
 
 	if (unit->system == USER_UNIT_NONE) {
-		if (unit_type != PROP_UNIT_ROTATION) {
+		if (!ELEM(unit_type, PROP_UNIT_ROTATION, PROP_UNIT_TIME)) {
 			return false;
 		}
 	}
@@ -1770,6 +1782,20 @@ static double ui_get_but_scale_unit(uiBut *but, double value)
 	}
 }
 
+static double ui_get_but_fps(uiBut *but)
+{
+	/* WARNING - using evil_C :| */
+	Scene *scene = CTX_data_scene(but->block->evil_C);
+	return FPS;
+}
+
+static bool ui_is_but_smpte(uiBut *but)
+{
+	return (ui_is_but_int(but) &&
+	        uiButGetUnitType(but) == PROP_UNIT_TIME &&
+	        but->block->unit->system_time == USER_UNIT_TIME_SMPTE);
+}
+
 /* str will be overwritten */
 void ui_convert_to_unit_alt_name(uiBut *but, char *str, size_t maxlen)
 {
@@ -1777,11 +1803,15 @@ void ui_convert_to_unit_alt_name(uiBut *but, char *str, size_t maxlen)
 		UnitSettings *unit = but->block->unit;
 		int unit_type = uiButGetUnitType(but);
 		char *orig_str;
+		const bool smpte = ui_is_but_smpte(but);
 		
 		orig_str = MEM_callocN(sizeof(char) * maxlen + 1, "textedit sub str");
 		memcpy(orig_str, str, maxlen);
-		
-		bUnit_ToUnitAltName(str, maxlen, orig_str, unit->system, RNA_SUBTYPE_UNIT_VALUE(unit_type));
+
+		if (smpte)
+			bUnit_ToUnitAltName_smpte(str, maxlen, orig_str, ui_get_but_fps(but));
+		else
+			bUnit_ToUnitAltName(str, maxlen, orig_str, unit->system, RNA_SUBTYPE_UNIT_VALUE(unit_type));
 		
 		MEM_freeN(orig_str);
 	}
@@ -1916,13 +1946,14 @@ static bool ui_set_but_string_eval_num_unit(bContext *C, uiBut *but, const char 
 {
 	char str_unit_convert[256];
 	const int unit_type = uiButGetUnitType(but);
+	const bool smpte = ui_is_but_smpte(but);
 
 	BLI_strncpy(str_unit_convert, str, sizeof(str_unit_convert));
 
 	/* ugly, use the draw string to get the value,
 	 * this could cause problems if it includes some text which resolves to a unit */
 	bUnit_ReplaceString(str_unit_convert, sizeof(str_unit_convert), but->drawstr,
-	                    ui_get_but_scale_unit(but, 1.0), but->block->unit->system, RNA_SUBTYPE_UNIT_VALUE(unit_type));
+	                    ui_get_but_scale_unit(but, 1.0), but->block->unit->system, RNA_SUBTYPE_UNIT_VALUE(unit_type), smpte);
 
 	return (BPY_button_exec(C, str_unit_convert, value, TRUE) != -1);
 }
@@ -1937,7 +1968,7 @@ bool ui_set_but_string_eval_num(bContext *C, uiBut *but, const char *str, double
 #ifdef WITH_PYTHON
 
 	if (str[0] != '\0') {
-		bool is_unit_but = (ui_is_but_float(but) && ui_is_but_unit(but));
+		bool is_unit_but = ui_is_but_unit(but);
 		/* only enable verbose if we won't run again with units */
 		if (BPY_button_exec(C, str, value, is_unit_but == false) != -1) {
 			/* if the value parsed ok without unit conversion this button may still need a unit multiplier */
@@ -2457,6 +2488,11 @@ void ui_check_but(uiBut *but)
 						const int prec = ui_but_float_precision(but, value);
 						BLI_snprintf(but->drawstr, sizeof(but->drawstr), "%s%.*f", but->str, prec, value);
 					}
+				}
+				else if (ui_is_but_smpte(but)) {
+					char new_str[sizeof(but->drawstr)];
+					bUnit_AsString_smpte(new_str, sizeof(new_str), value, ui_get_but_fps(but));
+					BLI_snprintf(but->drawstr, sizeof(but->drawstr), "%s%s", but->str, new_str);
 				}
 				else {
 					BLI_snprintf(but->drawstr, sizeof(but->drawstr), "%s%d", but->str, (int)value);
