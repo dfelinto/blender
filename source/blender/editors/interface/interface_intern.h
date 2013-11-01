@@ -398,6 +398,7 @@ extern void ui_set_but_default(struct bContext *C, const bool all, const bool us
 extern void ui_check_but(uiBut *but);
 extern bool ui_is_but_float(const uiBut *but);
 extern bool ui_is_but_bool(const uiBut *but);
+extern bool ui_is_but_int(const uiBut *but);
 extern bool ui_is_but_unit(const uiBut *but);
 extern bool ui_is_but_rna_valid(uiBut *but);
 extern bool ui_is_but_utf8(const uiBut *but);

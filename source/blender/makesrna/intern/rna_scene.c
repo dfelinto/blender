@@ -2187,6 +2187,12 @@ static void rna_def_unit_settings(BlenderRNA  *brna)
 		{0, NULL, 0, NULL, NULL}
 	};
 
+	static EnumPropertyItem time_units[] = {
+		{USER_UNIT_TIME_FRAMES, "FRAMES", 0, "Frames", "Display the frames"},
+		{USER_UNIT_TIME_SMPTE, "SMPTE", 0, "SMPTE", "Display the time as HH:MM:SS:FF"},
+		{0, NULL, 0, NULL, NULL}
+	};
+
 	srna = RNA_def_struct(brna, "UnitSettings", NULL);
 	RNA_def_struct_ui_text(srna, "Unit Settings", "");
 
@@ -2199,6 +2205,11 @@ static void rna_def_unit_settings(BlenderRNA  *brna)
 	prop = RNA_def_property(srna, "system_rotation", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_items(prop, rotation_units);
 	RNA_def_property_ui_text(prop, "Rotation Units", "Unit to use for displaying/editing rotation values");
+	RNA_def_property_update(prop, NC_WINDOW, NULL);
+
+	prop = RNA_def_property(srna, "system_time", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_items(prop, time_units);
+	RNA_def_property_ui_text(prop, "Time Units", "Unit to use for display/editing time values");
 	RNA_def_property_update(prop, NC_WINDOW, NULL);
 
 	prop = RNA_def_property(srna, "scale_length", PROP_FLOAT, PROP_UNSIGNED);

@@ -1125,6 +1125,10 @@ typedef struct UnitSettings {
 	char system; /* imperial, metric etc */
 	char system_rotation; /* not implemented as a proper unit system yet */
 	short flag;
+	float pad;
+	char system_time; /* frames, smpte etc */
+	char pad2;
+	short pad3;
 } UnitSettings;
 
 /* ------------------------------------------- */
@@ -1760,7 +1764,12 @@ typedef enum SculptFlags {
 #define	USER_UNIT_IMPERIAL		2
 /* UnitSettings->flag */
 #define	USER_UNIT_OPT_SPLIT		1
+/* UnitSettings->system_rotation */
 #define USER_UNIT_ROT_RADIANS	2
+/* UnitSettings->system_time */
+#define USER_UNIT_TIME_FRAMES	0
+#define USER_UNIT_TIME_SMPTE	1
+
 
 #ifdef __cplusplus
 }

@@ -77,6 +77,7 @@ class SCENE_PT_unit(SceneButtonsPanel, Panel):
         col = layout.column()
         col.row().prop(unit, "system", expand=True)
         col.row().prop(unit, "system_rotation", expand=True)
+        col.row().prop(unit, "system_time", expand=True)
 
         if unit.system != 'NONE':
             row = layout.row()

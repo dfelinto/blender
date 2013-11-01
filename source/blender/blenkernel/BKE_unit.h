@@ -36,11 +36,15 @@ extern "C" {
 /* humanly readable representation of a value in units (used for button drawing) */
 size_t  bUnit_AsString(char *str, int len_max, double value, int prec, int system, int type, int split, int pad);
 
+/* smpte representation of time value (used for button drawing)  */
+void    bUnit_AsString_smpte(char *str, int len_max, double value, double scale_pref);
+
 /* replace units with values, used before python button evaluation */
-int     bUnit_ReplaceString(char *str, int len_max, const char *str_prev, double scale_pref, int system, int type);
+int     bUnit_ReplaceString(char *str, int len_max, const char *str_prev, double scale_pref, int system, int type, int smpte);
 
 /* make string keyboard-friendly: 10µm --> 10um */
 void bUnit_ToUnitAltName(char *str, int len_max, const char *orig_str, int system, int type);
+void bUnit_ToUnitAltName_smpte(char *str, int len_max, const char *orig_str, double fps);
 
 /* the size of the unit used for this value (used for calculating the ckickstep) */
 double bUnit_ClosestScalar(double value, int system, int type);
