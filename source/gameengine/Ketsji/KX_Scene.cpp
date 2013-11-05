@@ -564,6 +564,7 @@ KX_GameObject* KX_Scene::AddNodeReplicaObject(class SG_IObject* node, class CVal
 		newobj->SetGraphicController(newctrl);
 	}
 
+#ifdef WITH_BULLET
 	// replicate physics controller
 	if (orgobj->GetPhysicsController())
 	{
@@ -580,6 +581,8 @@ KX_GameObject* KX_Scene::AddNodeReplicaObject(class SG_IObject* node, class CVal
 		if (parent)
 			parent->Release();
 	}
+#endif
+
 	return newobj;
 }
 
@@ -1907,10 +1910,12 @@ static void MergeScene_GameObject(KX_GameObject* gameobj, KX_Scene *to, KX_Scene
 		ctrl->SetPhysicsEnvironment(to->GetPhysicsEnvironment());
 	}
 
+#ifdef WITH_BULLET
 	ctrl = gameobj->GetPhysicsController();
 	if (ctrl) {
 		ctrl->SetPhysicsEnvironment(to->GetPhysicsEnvironment());
 	}
+#endif
 
 	/* SG_Node can hold a scene reference */
 	SG_Node *sg= gameobj->GetSGNode();
