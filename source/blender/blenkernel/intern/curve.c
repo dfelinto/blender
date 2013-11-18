@@ -2929,15 +2929,12 @@ static void calchandleNurb_intern(BezTriple *bezt, BezTriple *prev, BezTriple *n
 		tvec[0] = dvec_b[0] / len_b + dvec_a[0] / len_a;
 		tvec[1] = dvec_b[1] / len_b + dvec_a[1] / len_a;
 		tvec[2] = dvec_b[2] / len_b + dvec_a[2] / len_a;
-		len = len_v3(tvec) * 2.5614f;
+
+		/* force the handlers transition to be 1/3 */
+		len = 6.0;
 
 		if (len != 0.0f) {
 			int leftviolate = 0, rightviolate = 0;  /* for mode==2 */
-
-			if (len_a > 5.0f * len_b)
-				len_a = 5.0f * len_b;
-			if (len_b > 5.0f * len_a)
-				len_b = 5.0f * len_a;
 
 			if (ELEM(bezt->h1, HD_AUTO, HD_AUTO_ANIM)) {
 				len_a /= len;
