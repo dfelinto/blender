@@ -112,6 +112,8 @@ typedef struct BezTriple {
 	char h1, h2; 				/* h1, h2: the handle type of the two handles */
 	char f1, f2, f3;			/* f1, f2, f3: used for selection status */
 	char hide;					/* hide: used to indicate whether BezTriple is hidden (3D), type of keyframe (eBezTriple_KeyframeTypes) */
+	char f4;					/* f4: used to distinguish between Blender's and addon's keyframes */
+	char pad[7];
 } BezTriple;
 
 /* note; alfa location in struct is abused by Key system */
