@@ -374,6 +374,15 @@ typedef struct SolidLight {
 	float col[4], spec[4], vec[4];
 } SolidLight;
 
+typedef struct ViewNavigation {
+	float mouse_sensitivity; /* speed factor for look around */
+	float teleport_duration; /* duration to use for teleporting */
+	float camera_height;
+	float jump_height;
+	float move_speed;
+	float boost_factor;
+} ViewNavigation;
+
 typedef struct UserDef {
 	/* UserDef has separate do-version handling, and can be read from other files */
 	int versionfile, subversionfile;
@@ -477,7 +486,7 @@ typedef struct UserDef {
 	float gpencil_new_layer_col[4]; /* default color for newly created Grease Pencil layers */
 
 	short tweak_threshold;
-	short pad3;
+	short navigation_mode;
 
 	char author[80];	/* author name for file formats supporting it */
 
@@ -486,6 +495,8 @@ typedef struct UserDef {
 	
 	float fcu_inactive_alpha;	/* opacity of inactive F-Curves in F-Curve Editor */
 	float pixelsize;			/* private, set by GHOST, to multiply DPI with */
+
+	struct ViewNavigation navigation;
 } UserDef;
 
 extern UserDef U; /* from blenkernel blender.c */
@@ -551,6 +562,12 @@ typedef enum eViewZoom_Style {
 	USER_ZOOM_SCALE			= 1,
 	USER_ZOOM_DOLLY			= 2
 } eViewZoom_Style;
+
+/* navigation_mode */
+typedef enum eViewNavigation_Method {
+	FPS_NAVIGATION_FLY  = 0,
+	FPS_NAVIGATION_WALK = 1,
+} eViewNavigation_Method;
 
 /* uiflag */
 typedef enum eUserpref_UI_Flag {

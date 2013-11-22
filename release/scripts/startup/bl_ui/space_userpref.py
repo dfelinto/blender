@@ -1049,6 +1049,22 @@ class USERPREF_PT_input(Panel):
 
         col.separator()
         sub = col.column()
+        sub.label(text="View Navigation:")
+        navigation = inputs.view_navigation
+        sub.row().prop(inputs, "navigation_mode", expand=True)
+        sub.prop(navigation, "mouse_sensitivity")
+        sub.prop(navigation, "teleport_duration")
+
+        sub = col.column(align=True)
+        sub.prop(navigation, "camera_height")
+        sub.prop(navigation, "jump_height")
+
+        sub = col.column(align=True)
+        sub.prop(navigation, "move_speed")
+        sub.prop(navigation, "boost_factor")
+
+        col.separator()
+        sub = col.column()
         sub.label(text="NDOF Device:")
         sub.prop(inputs, "ndof_sensitivity", text="NDOF Sensitivity")
         sub.prop(inputs, "ndof_orbit_sensitivity", text="NDOF Orbit Sensitivity")

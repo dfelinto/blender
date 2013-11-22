@@ -7385,7 +7385,7 @@ static void convert_tface_mt(FileData *fd, Main *main)
 
 /* initialize userdef with non-UI dependency stuff */
 /* other initializers (such as theme color defaults) go to resources.c */
-static void do_versions_userdef(FileData *UNUSED(fd), BlendFileData *bfd)
+static void do_versions_userdef(FileData *fd, BlendFileData *bfd)
 {
 	Main *bmain = bfd->main;
 	UserDef *user = bfd->user;
@@ -7401,6 +7401,16 @@ static void do_versions_userdef(FileData *UNUSED(fd), BlendFileData *bfd)
 			copy_v4_v4_char(btheme->tseq.grid, btheme->tseq.back);
 		}
 	}
+
+	if (!DNA_struct_elem_find(fd->filesdna, "UserDef", "ViewNavigation", "view_navigation")) {
+		user->navigation.mouse_sensitivity = 1.f;
+		user->navigation.teleport_duration = 1.f; /* s */
+		user->navigation.camera_height =  1.6f;   /* m */
+		user->navigation.jump_height = 0.4f;      /* m */
+		user->navigation.move_speed = 2.5f;       /* m/s */
+		user->navigation.boost_factor = 5.f;
+	}
+
 }
 
 static void do_versions(FileData *fd, Library *lib, Main *main)
