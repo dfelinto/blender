@@ -24,7 +24,7 @@
  *  \ingroup spview3d
  */
 
-/* defines VIEW3D_OT_fly modal operator */
+/* defines VIEW3D_OT_navigate - fly modal operator */
 
 //#define NDOF_FLY_DEBUG
 //#define NDOF_FLY_DRAW_TOOMUCH  /* is this needed for ndof? - commented so redraw doesnt thrash - campbell */
@@ -149,8 +149,8 @@ void fly_modal_keymap(wmKeyConfig *keyconf)
 	WM_modalkeymap_add_item(keymap, SKEY, KM_PRESS, 0, 0, FLY_MODAL_DIR_BACKWARD);
 	WM_modalkeymap_add_item(keymap, AKEY, KM_PRESS, 0, 0, FLY_MODAL_DIR_LEFT);
 	WM_modalkeymap_add_item(keymap, DKEY, KM_PRESS, 0, 0, FLY_MODAL_DIR_RIGHT);
-	WM_modalkeymap_add_item(keymap, RKEY, KM_PRESS, 0, 0, FLY_MODAL_DIR_UP);
-	WM_modalkeymap_add_item(keymap, FKEY, KM_PRESS, 0, 0, FLY_MODAL_DIR_DOWN);
+	WM_modalkeymap_add_item(keymap, EKEY, KM_PRESS, 0, 0, FLY_MODAL_DIR_UP);
+	WM_modalkeymap_add_item(keymap, QKEY, KM_PRESS, 0, 0, FLY_MODAL_DIR_DOWN);
 
 	WM_modalkeymap_add_item(keymap, UPARROWKEY, KM_PRESS, 0, 0, FLY_MODAL_DIR_FORWARD);
 	WM_modalkeymap_add_item(keymap, DOWNARROWKEY, KM_PRESS, 0, 0, FLY_MODAL_DIR_BACKWARD);
@@ -167,7 +167,7 @@ void fly_modal_keymap(wmKeyConfig *keyconf)
 	WM_modalkeymap_add_item(keymap, LEFTCTRLKEY, KM_RELEASE, KM_ANY, 0, FLY_MODAL_FREELOOK_DISABLE);
 
 	/* assign map to operators */
-	WM_modalkeymap_assign(keymap, "VIEW3D_OT_fly");
+	WM_modalkeymap_assign(keymap, "VIEW3D_OT_navigate");
 }
 
 typedef struct FlyInfo {
@@ -1027,7 +1027,9 @@ static int flyApply_ndof(bContext *C, FlyInfo *fly)
 	return OPERATOR_FINISHED;
 }
 
-static int fly_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+/****** Operators functions called from VIEW3D_OT_navigate ******/
+
+int fly_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
 	RegionView3D *rv3d = CTX_wm_region_view3d(C);
 	FlyInfo *fly;
@@ -1051,7 +1053,7 @@ static int fly_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 	return OPERATOR_RUNNING_MODAL;
 }
 
-static void fly_cancel(bContext *C, wmOperator *op)
+void fly_cancel(bContext *C, wmOperator *op)
 {
 	FlyInfo *fly = op->customdata;
 
@@ -1060,7 +1062,7 @@ static void fly_cancel(bContext *C, wmOperator *op)
 	op->customdata = NULL;
 }
 
-static int fly_modal(bContext *C, wmOperator *op, const wmEvent *event)
+int fly_modal(bContext *C, wmOperator *op, const wmEvent *event)
 {
 	int exit_code;
 	bool do_draw = false;
@@ -1098,21 +1100,4 @@ static int fly_modal(bContext *C, wmOperator *op, const wmEvent *event)
 	}
 
 	return exit_code;
-}
-
-void VIEW3D_OT_fly(wmOperatorType *ot)
-{
-	/* identifiers */
-	ot->name = "Fly Navigation";
-	ot->description = "Interactively fly around the scene";
-	ot->idname = "VIEW3D_OT_fly";
-
-	/* api callbacks */
-	ot->invoke = fly_invoke;
-	ot->cancel = fly_cancel;
-	ot->modal = fly_modal;
-	ot->poll = ED_operator_view3d_active;
-
-	/* flags */
-	ot->flag = OPTYPE_BLOCKING;
 }
