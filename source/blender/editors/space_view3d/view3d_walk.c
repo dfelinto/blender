@@ -318,15 +318,22 @@ typedef struct WalkInfo {
 
 } WalkInfo;
 
-static void drawWalkPixel(const struct bContext *UNUSED(C), ARegion *UNUSED(ar), void *arg)
+static void drawWalkPixel(const struct bContext *C, ARegion *ar, void *arg)
 {
-	WalkInfo *walk = arg;
 	/* draws an aim/cross in the center */
+	WalkInfo *walk = arg;
 
 	const int outter_length = 20;
 	const int inner_length = 4;
-	const int xoff = walk->ar->winx / 2;
-	const int yoff = walk->ar->winy / 2;
+	int xoff, yoff;
+
+	rctf viewborder;
+	View3D *v3d = walk->v3d;
+
+	ED_view3d_calc_camera_border(CTX_data_scene(C), ar, v3d, walk->rv3d, &viewborder, false);
+
+	xoff = viewborder.xmin + BLI_rctf_size_x(&viewborder) * 0.5;
+	yoff = viewborder.ymin + BLI_rctf_size_y(&viewborder) * 0.5;
 
 	cpack(0);
 
