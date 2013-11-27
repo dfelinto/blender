@@ -110,8 +110,10 @@ float ndof_to_axis_angle(const struct wmNDOFMotionData *ndof, float axis[3]);
 
 /* view3d_fly.c */
 void view3d_keymap(struct wmKeyConfig *keyconf);
-void VIEW3D_OT_fly(struct wmOperatorType *ot);
-void VIEW3D_OT_fps(struct wmOperatorType *ot);
+void VIEW3D_OT_navigate(struct wmOperatorType *ot);
+int fly_invoke(struct bContext *C, struct wmOperator *op, const struct wmEvent *event);
+void fly_cancel(struct bContext *C, struct wmOperator *op);
+int fly_modal(struct bContext *C, struct wmOperator *op, const struct wmEvent *event);
 
 /* view3d_ruler.c */
 void VIEW3D_OT_ruler(struct wmOperatorType *ot);
@@ -196,7 +198,7 @@ void setwinmatrixview3d(ARegion *ar, View3D *v3d, rctf *rect);
 void setviewmatrixview3d(Scene *scene, View3D *v3d, RegionView3D *rv3d);
 
 void fly_modal_keymap(struct wmKeyConfig *keyconf);
-void fps_modal_keymap(struct wmKeyConfig *keyconf);
+void walk_modal_keymap(struct wmKeyConfig *keyconf);
 void viewrotate_modal_keymap(struct wmKeyConfig *keyconf);
 void viewmove_modal_keymap(struct wmKeyConfig *keyconf);
 void viewzoom_modal_keymap(struct wmKeyConfig *keyconf);

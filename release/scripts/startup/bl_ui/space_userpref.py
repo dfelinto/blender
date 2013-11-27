@@ -1054,18 +1054,23 @@ class USERPREF_PT_input(Panel):
         col.separator()
         sub = col.column()
         sub.label(text="View Navigation:")
-        navigation = inputs.view_navigation
         sub.row().prop(inputs, "navigation_mode", expand=True)
-        sub.prop(navigation, "mouse_sensitivity")
-        sub.prop(navigation, "teleport_duration")
+        if inputs.navigation_mode == 'WALK':
+            walk = inputs.walk_navigation
 
-        sub = col.column(align=True)
-        sub.prop(navigation, "camera_height")
-        sub.prop(navigation, "jump_height")
+            sub.prop(walk, "mouse_sensitivity")
+            sub.prop(walk, "teleport_duration")
 
-        sub = col.column(align=True)
-        sub.prop(navigation, "move_speed")
-        sub.prop(navigation, "boost_factor")
+            sub = col.column(align=True)
+            sub.prop(walk, "move_speed")
+            sub.prop(walk, "boost_factor")
+
+            sub.separator()
+            sub.prop(walk, "use_gravity")
+            sub = col.column(align=True)
+            sub.active = walk.use_gravity
+            sub.prop(walk, "camera_height")
+            sub.prop(walk, "jump_height")
 
         col.separator()
         sub = col.column()

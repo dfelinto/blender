@@ -374,14 +374,16 @@ typedef struct SolidLight {
 	float col[4], spec[4], vec[4];
 } SolidLight;
 
-typedef struct ViewNavigation {
+typedef struct WalkNavigation {
 	float mouse_sensitivity; /* speed factor for look around */
 	float teleport_duration; /* duration to use for teleporting */
 	float camera_height;
 	float jump_height;
 	float move_speed;
 	float boost_factor;
-} ViewNavigation;
+	short flag;
+	short pad;
+} WalkNavigation;
 
 typedef struct UserDef {
 	/* UserDef has separate do-version handling, and can be read from other files */
@@ -496,7 +498,7 @@ typedef struct UserDef {
 	float fcu_inactive_alpha;	/* opacity of inactive F-Curves in F-Curve Editor */
 	float pixelsize;			/* private, set by GHOST, to multiply DPI with */
 
-	struct ViewNavigation navigation;
+	struct WalkNavigation walk_navigation;
 } UserDef;
 
 extern UserDef U; /* from blenkernel blender.c */
@@ -565,9 +567,15 @@ typedef enum eViewZoom_Style {
 
 /* navigation_mode */
 typedef enum eViewNavigation_Method {
-	FPS_NAVIGATION_FLY  = 0,
-	FPS_NAVIGATION_WALK = 1,
+	VIEW_NAVIGATION_WALK = 0,
+	VIEW_NAVIGATION_FLY  = 1,
 } eViewNavigation_Method;
+
+/* flag */
+typedef enum eWalkNavigation_Flag {
+	WALK_GRAVITY			= (1 << 0),
+	WALK_REVERSE_MOUSE		= (1 << 1),
+} eWalkNavigation_Flag;
 
 /* uiflag */
 typedef enum eUserpref_UI_Flag {

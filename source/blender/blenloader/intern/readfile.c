@@ -7402,13 +7402,13 @@ static void do_versions_userdef(FileData *fd, BlendFileData *bfd)
 		}
 	}
 
-	if (!DNA_struct_elem_find(fd->filesdna, "UserDef", "ViewNavigation", "view_navigation")) {
-		user->navigation.mouse_sensitivity = 1.f;
-		user->navigation.teleport_duration = 1.f; /* s */
-		user->navigation.camera_height =  1.6f;   /* m */
-		user->navigation.jump_height = 0.4f;      /* m */
-		user->navigation.move_speed = 2.5f;       /* m/s */
-		user->navigation.boost_factor = 5.f;
+	if (!DNA_struct_elem_find(fd->filesdna, "UserDef", "WalkNavigation", "walk_navigation")) {
+		user->walk_navigation.mouse_sensitivity = 1.f;
+		user->walk_navigation.teleport_duration = 1.f; /* s */
+		user->walk_navigation.camera_height =  1.6f;   /* m */
+		user->walk_navigation.jump_height = 0.4f;      /* m */
+		user->walk_navigation.move_speed = 2.5f;       /* m/s */
+		user->walk_navigation.boost_factor = 5.f;
 	}
 
 }
