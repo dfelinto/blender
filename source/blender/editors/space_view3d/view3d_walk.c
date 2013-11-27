@@ -1199,19 +1199,22 @@ static int walkApply(bContext *C, WalkInfo *walk)
 				if ((walk->active_directions & WALK_BIT_UP) ||
 				    (walk->active_directions & WALK_BIT_DOWN)) {
 
-					direction = 0;
+					if (walk->navigation_mode == WALK_MODE_FREE) {
 
-					if ((walk->active_directions & WALK_BIT_UP))
-						direction -= 1;
+						direction = 0;
 
-					if ((walk->active_directions & WALK_BIT_DOWN))
-						direction = 1;
+						if ((walk->active_directions & WALK_BIT_UP))
+							direction -= 1;
 
-					dvec_tmp[0] = 0.0;
-					dvec_tmp[1] = 0.0;
-					dvec_tmp[2] = direction;
+						if ((walk->active_directions & WALK_BIT_DOWN))
+							direction = 1;
 
-					add_v3_v3(dvec, dvec_tmp);
+						dvec_tmp[0] = 0.0;
+						dvec_tmp[1] = 0.0;
+						dvec_tmp[2] = direction;
+
+						add_v3_v3(dvec, dvec_tmp);
+					}
 				}
 
 				mul_v3_fl(dvec, walk->speed * time_redraw);
@@ -1223,40 +1226,34 @@ static int walkApply(bContext *C, WalkInfo *walk)
 				      WALK_GRAVITY_STATE_OFF,
 				      WALK_GRAVITY_STATE_START)) {
 
-				if ((walk->active_directions & WALK_BIT_UP) ||
-					(walk->active_directions & WALK_BIT_DOWN)){
-					walk->camera_height -= dvec[2];
+				bool ret;
+				float ray_distance;
+				float difference = -100.f;
+				float fall_distance;
+
+				ret = getFloorDistance(C, rv3d, dvec, &ray_distance);
+
+				if (ret) {
+					difference = walk->camera_height - ray_distance;
+				}
+
+				/* the distance we would fall naturally smoothly enough that we
+				   can manually drop the object without activating gravity */
+				fall_distance = time_redraw * walk->speed * WALK_BOOST_FACTOR;
+
+				if (abs(difference) < fall_distance) {
+					/* slope/stairs */
+					dvec[2] -= difference;
 				}
 				else {
-					bool ret;
-					float ray_distance;
-					float difference = -100.f;
-					float fall_distance;
+					/* hijack the teleport variables */
+					walk->teleport.initial_time = PIL_check_seconds_timer();
+					walk->gravity = WALK_GRAVITY_STATE_ON;
+					walk->teleport.duration = 0;
 
-					ret = getFloorDistance(C, rv3d, dvec, &ray_distance);
+					copy_v3_v3(walk->teleport.origin, walk->rv3d->viewinv[3]);
+					copy_v2_v2(walk->teleport.direction, dvec);
 
-					if (ret) {
-						difference = walk->camera_height - ray_distance;
-					}
-
-					/* the distance we would fall naturally smoothly enough that we
-					   can manually drop the object without activating gravity */
-					fall_distance = time_redraw * walk->speed * WALK_BOOST_FACTOR;
-
-					if (abs(difference) < fall_distance) {
-						/* slope/stairs */
-						dvec[2] -= difference;
-					}
-					else {
-						/* hijack the teleport variables */
-						walk->teleport.initial_time = PIL_check_seconds_timer();
-						walk->gravity = WALK_GRAVITY_STATE_ON;
-						walk->teleport.duration = 0;
-
-						copy_v3_v3(walk->teleport.origin, walk->rv3d->viewinv[3]);
-						copy_v2_v2(walk->teleport.direction, dvec);
-
-					}
 				}
 			}
 
