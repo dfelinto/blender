@@ -811,7 +811,7 @@ static void walkEvent(bContext *C, wmOperator *UNUSED(op), WalkInfo *walk, const
 				walk->is_slow = false;
 				break;
 
-#define JUMP_SPEED_MIN 1.f
+#define JUMP_SPEED_MIN 1.0f
 #define JUMP_TIME_MAX 0.2f /* s */
 #define JUMP_MAX_HEIGHT walk->jump_height /* m */
 #define JUMP_SPEED_MAX sqrtf(2.0f * EARTH_GRAVITY * JUMP_MAX_HEIGHT)
@@ -835,8 +835,9 @@ static void walkEvent(bContext *C, wmOperator *UNUSED(op), WalkInfo *walk, const
 				break;
 			case WALK_MODAL_JUMP:
 				if ((walk->navigation_mode == WALK_MODE_GRAVITY) &&
-					(walk->gravity == WALK_GRAVITY_STATE_OFF) &&
-					walk->teleport.state == WALK_TELEPORT_STATE_OFF) {
+				    (walk->gravity == WALK_GRAVITY_STATE_OFF) &&
+				    (walk->teleport.state == WALK_TELEPORT_STATE_OFF))
+				{
 					/* no need to check for ground,
 					 * walk->gravity wouldn't be off
 					 * if we were over a hole */
@@ -862,7 +863,7 @@ static void walkEvent(bContext *C, wmOperator *UNUSED(op), WalkInfo *walk, const
 				bool ret = getTeleportRay(C, walk->rv3d, loc, nor, &distance);
 
 				/* in case we are teleporting middle way from a jump */
-				walk->speed_jump = 0.f;
+				walk->speed_jump = 0.0f;
 
 				if (ret) {
 					WalkTeleport *teleport = &walk->teleport;
@@ -990,7 +991,8 @@ static float getFreeFallDistance(double time)
 	return WALK_GRAVITY * (time * time) * 0.5;
 }
 
-static float getVelocityZeroTime(float velocity) {
+static float getVelocityZeroTime(float velocity)
+{
 	return velocity / WALK_GRAVITY;
 }
 
@@ -1063,8 +1065,9 @@ static int walkApply(bContext *C, WalkInfo *walk)
 
 			if (walk->is_fast) {
 				walk->speed *= WALK_BOOST_FACTOR;
-			} else if (walk->is_slow) {
-				walk->speed *= 1.f / WALK_BOOST_FACTOR;
+			}
+			else if (walk->is_slow) {
+				walk->speed *= 1.0f / WALK_BOOST_FACTOR;
 			}
 
 			copy_m3_m4(mat, rv3d->viewinv);
@@ -1137,13 +1140,15 @@ static int walkApply(bContext *C, WalkInfo *walk)
 
 			/* WASD - 'move' translation code */
 			if ((walk->active_directions) &&
-				walk->gravity == WALK_GRAVITY_STATE_OFF){
+			    (walk->gravity == WALK_GRAVITY_STATE_OFF))
+			{
 
 				short direction;
 				zero_v3(dvec);
 
 				if ((walk->active_directions & WALK_BIT_FORWARD) ||
-					(walk->active_directions & WALK_BIT_BACKWARD)) {
+				    (walk->active_directions & WALK_BIT_BACKWARD))
+				{
 
 					direction = 0;
 
@@ -1177,7 +1182,8 @@ static int walkApply(bContext *C, WalkInfo *walk)
 				}
 
 				if ((walk->active_directions & WALK_BIT_LEFT) ||
-					(walk->active_directions & WALK_BIT_RIGHT)) {
+				    (walk->active_directions & WALK_BIT_RIGHT))
+				{
 
 					direction = 0;
 
@@ -1197,7 +1203,8 @@ static int walkApply(bContext *C, WalkInfo *walk)
 				}
 
 				if ((walk->active_directions & WALK_BIT_UP) ||
-				    (walk->active_directions & WALK_BIT_DOWN)) {
+				    (walk->active_directions & WALK_BIT_DOWN))
+				{
 
 					if (walk->navigation_mode == WALK_MODE_FREE) {
 
@@ -1222,13 +1229,14 @@ static int walkApply(bContext *C, WalkInfo *walk)
 
 			/* stick to the floor */
 			if (walk->navigation_mode == WALK_MODE_GRAVITY &&
-				ELEM(walk->gravity,
-				      WALK_GRAVITY_STATE_OFF,
-				      WALK_GRAVITY_STATE_START)) {
+			    ELEM(walk->gravity,
+			         WALK_GRAVITY_STATE_OFF,
+			         WALK_GRAVITY_STATE_START))
+			{
 
 				bool ret;
 				float ray_distance;
-				float difference = -100.f;
+				float difference = -100.0f;
 				float fall_distance;
 
 				ret = getFloorDistance(C, rv3d, dvec, &ray_distance);
@@ -1266,7 +1274,7 @@ static int walkApply(bContext *C, WalkInfo *walk)
 				float t;
 				float cur_zed, new_zed;
 				bool ret;
-				float ray_distance, difference = -100.f;
+				float ray_distance, difference = -100.0f;
 
 				/* delta time */
 				t = (float)(PIL_check_seconds_timer() - walk->teleport.initial_time);
@@ -1295,7 +1303,7 @@ static int walkApply(bContext *C, WalkInfo *walk)
 						/* quit falling */
 						dvec[2] -= difference;
 						walk->gravity = WALK_GRAVITY_STATE_OFF;
-						walk->speed_jump = 0.f;
+						walk->speed_jump = 0.0f;
 					}
 				}
 			}
