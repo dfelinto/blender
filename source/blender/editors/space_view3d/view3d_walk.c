@@ -1244,6 +1244,10 @@ static int walkApply(bContext *C, WalkInfo *walk)
 				if (abs(difference) < fall_distance) {
 					/* slope/stairs */
 					dvec[2] -= difference;
+
+					/* in case we switched from FREE to GRAVITY too close to the ground */
+					if (walk->gravity == WALK_GRAVITY_STATE_START)
+						walk->gravity = WALK_GRAVITY_STATE_OFF;
 				}
 				else {
 					/* hijack the teleport variables */
