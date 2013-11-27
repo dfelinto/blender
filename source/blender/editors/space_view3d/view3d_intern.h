@@ -49,6 +49,7 @@ struct bPoseChannel;
 struct bScreen;
 struct Mesh;
 struct wmNDOFMotionData;
+struct wmEvent;
 struct wmOperatorType;
 struct wmWindowManager;
 
