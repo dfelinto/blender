@@ -62,7 +62,7 @@
 
 #include "view3d_intern.h"  /* own include */
 
-#define EARTH_GRAVITY 9.80668 /* m/s2 */
+#define EARTH_GRAVITY 9.80668f /* m/s2 */
 
 /* prototypes */
 static float getVelocityZeroTime(float velocity);
@@ -318,7 +318,7 @@ typedef struct WalkInfo {
 
 } WalkInfo;
 
-static void drawWalkPixel(const struct bContext *C, ARegion *ar, void *arg)
+static void drawWalkPixel(const struct bContext *UNUSED(C), ARegion *ar, void *arg)
 {
 	/* draws an aim/cross in the center */
 	WalkInfo *walk = arg;
@@ -330,10 +330,10 @@ static void drawWalkPixel(const struct bContext *C, ARegion *ar, void *arg)
 	rctf viewborder;
 	View3D *v3d = walk->v3d;
 
-	ED_view3d_calc_camera_border(CTX_data_scene(C), ar, v3d, walk->rv3d, &viewborder, false);
+	ED_view3d_calc_camera_border(walk->scene, ar, v3d, walk->rv3d, &viewborder, false);
 
-	xoff = viewborder.xmin + BLI_rctf_size_x(&viewborder) * 0.5;
-	yoff = viewborder.ymin + BLI_rctf_size_y(&viewborder) * 0.5;
+	xoff = viewborder.xmin + BLI_rctf_size_x(&viewborder) * 0.5f;
+	yoff = viewborder.ymin + BLI_rctf_size_y(&viewborder) * 0.5f;
 
 	cpack(0);
 
@@ -814,13 +814,13 @@ static void walkEvent(bContext *C, wmOperator *UNUSED(op), WalkInfo *walk, const
 #define JUMP_SPEED_MIN 1.f
 #define JUMP_TIME_MAX 0.2f /* s */
 #define JUMP_MAX_HEIGHT walk->jump_height /* m */
-#define JUMP_SPEED_MAX sqrt(2 * EARTH_GRAVITY * JUMP_MAX_HEIGHT)
+#define JUMP_SPEED_MAX sqrtf(2.0f * EARTH_GRAVITY * JUMP_MAX_HEIGHT)
 			case WALK_MODAL_JUMP_STOP:
 				if (walk->gravity == WALK_GRAVITY_STATE_JUMP) {
-					double t;
+					float t;
 
 					/* delta time */
-					t = PIL_check_seconds_timer() - walk->teleport.initial_time;
+					t = (float)(PIL_check_seconds_timer() - walk->teleport.initial_time);
 
 					/* reduce the veolocity, if JUMP wasn't hold for long enough */
 					t = min_ff(t, JUMP_TIME_MAX);
@@ -997,9 +997,9 @@ static float getVelocityZeroTime(float velocity) {
 static int walkApply(bContext *C, WalkInfo *walk)
 {
 #define WALK_ROTATE_FAC 0.8f /* more is faster */
-#define WALK_ZUP_CORRECT_FAC 0.1f /* amount to correct per step */
-#define WALK_ZUP_CORRECT_ACCEL 0.05f /* increase upright momentum each step */
-#define WALK_SMOOTH_FAC 20.0f  /* higher value less lag */
+// #define WALK_ZUP_CORRECT_FAC 0.1f /* amount to correct per step */
+// #define WALK_ZUP_CORRECT_ACCEL 0.05f /* increase upright momentum each step */
+// #define WALK_SMOOTH_FAC 20.0f  /* higher value less lag */
 #define WALK_TOP_LIMIT DEG2RADF(85.0f)
 #define WALK_BOTTOM_LIMIT DEG2RADF(-80.0f)
 #define WALK_MOVE_SPEED walk->base_speed
@@ -1047,13 +1047,13 @@ static int walkApply(bContext *C, WalkInfo *walk)
 			 * this is so simple scenes don't walk too fast */
 			double time_current;
 			float time_redraw;
-			float time_redraw_clamped;
+//			float time_redraw_clamped;  // UNUSED
 #ifdef NDOF_WALK_DRAW_TOOMUCH
 			walk->redraw = 1;
 #endif
 			time_current = PIL_check_seconds_timer();
 			time_redraw = (float)(time_current - walk->time_lastdraw);
-			time_redraw_clamped = min_ff(0.05f, time_redraw); /* clamp redraw time to avoid jitter in roll correction */
+//			time_redraw_clamped = min_ff(0.05f, time_redraw); /* clamp redraw time to avoid jitter in roll correction */
 
 			walk->time_lastdraw = time_current;
 
@@ -1263,13 +1263,13 @@ static int walkApply(bContext *C, WalkInfo *walk)
 
 			/* Falling or jumping) */
 			if (ELEM(walk->gravity, WALK_GRAVITY_STATE_ON, WALK_GRAVITY_STATE_JUMP)) {
-				double t;
+				float t;
 				float cur_zed, new_zed;
 				bool ret;
 				float ray_distance, difference = -100.f;
 
 				/* delta time */
-				t = PIL_check_seconds_timer() - walk->teleport.initial_time;
+				t = (float)(PIL_check_seconds_timer() - walk->teleport.initial_time);
 
 				/* keep moving if we were moving */
 				copy_v2_v2(dvec, walk->teleport.direction);
@@ -1302,12 +1302,12 @@ static int walkApply(bContext *C, WalkInfo *walk)
 
 			/* Teleport */
 			else if (walk->teleport.state == WALK_TELEPORT_STATE_ON) {
-				double t; /* factor */
+				float t; /* factor */
 				float new_loc[3];
 				float cur_loc[3];
 
 				/* linear interpolation */
-				t = PIL_check_seconds_timer() - walk->teleport.initial_time;
+				t = (float)(PIL_check_seconds_timer() - walk->teleport.initial_time);
 				t /= walk->teleport.duration;
 
 				/* clamp so we don't go past our limit */
