@@ -382,7 +382,7 @@ typedef struct WalkNavigation {
 	float move_speed;
 	float boost_factor;
 	short flag;
-	short pad;
+	short pad[3];
 } WalkNavigation;
 
 typedef struct UserDef {
