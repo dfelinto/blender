@@ -999,9 +999,6 @@ static float getVelocityZeroTime(float velocity)
 static int walkApply(bContext *C, WalkInfo *walk)
 {
 #define WALK_ROTATE_FAC 0.8f /* more is faster */
-// #define WALK_ZUP_CORRECT_FAC 0.1f /* amount to correct per step */
-// #define WALK_ZUP_CORRECT_ACCEL 0.05f /* increase upright momentum each step */
-// #define WALK_SMOOTH_FAC 20.0f  /* higher value less lag */
 #define WALK_TOP_LIMIT DEG2RADF(85.0f)
 #define WALK_BOTTOM_LIMIT DEG2RADF(-80.0f)
 #define WALK_MOVE_SPEED walk->base_speed
@@ -1049,13 +1046,11 @@ static int walkApply(bContext *C, WalkInfo *walk)
 			 * this is so simple scenes don't walk too fast */
 			double time_current;
 			float time_redraw;
-//			float time_redraw_clamped;  // UNUSED
 #ifdef NDOF_WALK_DRAW_TOOMUCH
 			walk->redraw = 1;
 #endif
 			time_current = PIL_check_seconds_timer();
 			time_redraw = (float)(time_current - walk->time_lastdraw);
-//			time_redraw_clamped = min_ff(0.05f, time_redraw); /* clamp redraw time to avoid jitter in roll correction */
 
 			walk->time_lastdraw = time_current;
 
