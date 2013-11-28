@@ -7205,7 +7205,10 @@ void draw_object(Scene *scene, ARegion *ar, View3D *v3d, Base *base, const short
 	if (!is_obact || !(ob->mode & OB_MODE_ALL_PAINT)) {
 		int do_draw_center = -1; /* defines below are zero or positive... */
 
-		if (render_override) {
+		if (ob->dtx & OB_DRAW_NOCENTER) {
+			/* don't draw */
+		}
+		else if (render_override){
 			/* don't draw */
 		}
 		else if ((scene->basact) == base)

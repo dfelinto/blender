@@ -219,6 +219,8 @@ class OBJECT_PT_display(ObjectButtonsPanel, Panel):
         if obj_type == 'MESH':
             col.prop(obj, "show_all_edges")
 
+        col.prop(obj, "show_origin", text="Origin")
+
         col = split.column()
         row = col.row()
         row.prop(obj, "show_bounds", text="Bounds")
