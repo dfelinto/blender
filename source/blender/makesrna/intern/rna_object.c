@@ -2625,6 +2625,12 @@ static void rna_def_object(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "X-Ray",
 	                         "Make the object draw in front of others (unsupported for duplicator drawing)");
 	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, NULL);
+
+	prop = RNA_def_property(srna, "show_origin", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_negative_sdna(prop, NULL, "dtx", OB_DRAW_NOCENTER);
+	RNA_def_property_ui_text(prop, "Draw Origin",
+	                         "Display the object origin");
+	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, NULL);
 	
 	/* Grease Pencil */
 	prop = RNA_def_property(srna, "grease_pencil", PROP_POINTER, PROP_NONE);
