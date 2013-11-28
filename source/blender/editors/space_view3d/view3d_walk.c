@@ -260,24 +260,6 @@ typedef struct WalkInfo {
 	float speed; /* the speed the view is moving per redraw */
 	float grid; /* world scale 1.0 default */
 
-	/* root most parent */
-	Object *root_parent;
-
-	/* backup values */
-	float dist_backup; /* backup the views distance since we use a zero dist for walk mode */
-	float ofs_backup[3]; /* backup the views offset in case the user cancels navigation in non camera mode */
-
-	/* backup the views quat in case the user cancels walking in non camera mode.
-	 * (quat for view, eul for camera) */
-	float rot_backup[4];
-	short persp_backup; /* remember if were ortho or not, only used for restoring the view if it was a ortho view */
-
-	/* are we walking an ortho camera in perspective view,
-	 * which was originall in ortho view?
-	 * could probably figure it out but better be explicit */
-	bool is_ortho_cam;
-	void *obtfm; /* backup the objects transform */
-
 	/* compare between last state */
 	double time_lastwheel; /* used to accelerate when using the mousewheel a lot */
 	double time_lastdraw; /* time between draws */
@@ -286,9 +268,6 @@ typedef struct WalkInfo {
 
 	/* use for some lag */
 	float dvec_prev[3]; /* old for some lag */
-
-	/* for parenting calculation */
-	float view_mat_prev[4][4];
 
 	/* walk/fly */
 	eWalkMethod navigation_mode;
@@ -315,6 +294,8 @@ typedef struct WalkInfo {
 	float speed_jump;
 	float jump_height; /* maximum jump height */
 	float speed_boost; /* to use for fast/slow speeds */
+
+	struct View3DCameraControl *v3d_camera_control;
 
 } WalkInfo;
 
@@ -434,8 +415,6 @@ static bool getTeleportRay(bContext *C, RegionView3D *rv3d, float r_location[3],
 static bool initWalkInfo(bContext *C, WalkInfo *walk, wmOperator *op, const wmEvent *event)
 {
 	wmWindow *win = CTX_wm_window(C);
-	float upvec[3]; /* tmp */
-	float mat[3][3];
 
 	walk->rv3d = CTX_wm_region_view3d(C);
 	walk->v3d = CTX_wm_view3d(C);
@@ -508,71 +487,10 @@ static bool initWalkInfo(bContext *C, WalkInfo *walk, wmOperator *op, const wmEv
 
 	walk->rv3d->rflag |= RV3D_NAVIGATING; /* so we draw the corner margins */
 
-	/* detect whether to start with Z locking */
-	upvec[0] = 1.0f;
-	upvec[1] = 0.0f;
-	upvec[2] = 0.0f;
-	copy_m3_m4(mat, walk->rv3d->viewinv);
-	mul_m3_v3(mat, upvec);
-	upvec[0] = 0;
-	upvec[1] = 0;
-	upvec[2] = 0;
 
-	walk->persp_backup = walk->rv3d->persp;
-	walk->dist_backup = walk->rv3d->dist;
-
-	/* check for walking ortho camera - which we cant support well
-	 * we _could_ also check for an ortho camera but this is easier */
-	if ((walk->rv3d->persp == RV3D_CAMOB) &&
-	    (walk->rv3d->is_persp == false))
-	{
-		((Camera *)walk->v3d->camera->data)->type = CAM_PERSP;
-		walk->is_ortho_cam = true;
-	}
-
-	if (walk->rv3d->persp == RV3D_CAMOB) {
-		Object *ob_back;
-		if ((U.uiflag & USER_CAM_LOCK_NO_PARENT) == 0 && (walk->root_parent = walk->v3d->camera->parent)) {
-			while (walk->root_parent->parent)
-				walk->root_parent = walk->root_parent->parent;
-			ob_back = walk->root_parent;
-		}
-		else {
-			ob_back = walk->v3d->camera;
-		}
-
-		/* store the original camera loc and rot */
-		walk->obtfm = BKE_object_tfm_backup(ob_back);
-
-		BKE_object_where_is_calc(walk->scene, walk->v3d->camera);
-		negate_v3_v3(walk->rv3d->ofs, walk->v3d->camera->obmat[3]);
-
-		walk->rv3d->dist = 0.0;
-	}
-	else {
-		/* perspective or ortho */
-		if (walk->rv3d->persp == RV3D_ORTHO)
-			walk->rv3d->persp = RV3D_PERSP;  /* if ortho projection, make perspective */
-
-		copy_qt_qt(walk->rot_backup, walk->rv3d->viewquat);
-		copy_v3_v3(walk->ofs_backup, walk->rv3d->ofs);
-
-		/* the dist defines a vector that is infront of the offset
-		 * to rotate the view about.
-		 * this is no good for walk mode because we
-		 * want to rotate about the viewers center.
-		 * but to correct the dist removal we must
-		 * alter offset so the view doesn't jump. */
-
-		walk->rv3d->dist = 0.0f;
-
-		upvec[2] = walk->dist_backup; /* x and y are 0 */
-		mul_m3_v3(mat, upvec);
-		sub_v3_v3(walk->rv3d->ofs, upvec);
-		/* Done with correcting for the dist */
-	}
-
-	ED_view3d_to_m4(walk->view_mat_prev, walk->rv3d->ofs, walk->rv3d->viewquat, walk->rv3d->dist);
+	walk->v3d_camera_control = ED_view3d_cameracontrol_aquire(
+							walk->scene, walk->v3d, walk->rv3d,
+	                        (U.uiflag & USER_CAM_LOCK_NO_PARENT) == 0);
 
 	/* remove the mouse cursor temporarily */
 	WM_cursor_modal_set(win, CURSOR_NONE);
@@ -583,9 +501,6 @@ static bool initWalkInfo(bContext *C, WalkInfo *walk, wmOperator *op, const wmEv
 static int walkEnd(bContext *C, WalkInfo *walk)
 {
 	RegionView3D *rv3d = walk->rv3d;
-	View3D *v3d = walk->v3d;
-
-	float upvec[3];
 
 	if (walk->state == WALK_RUNNING)
 		return OPERATOR_RUNNING_MODAL;
@@ -598,54 +513,11 @@ static int walkEnd(bContext *C, WalkInfo *walk)
 
 	ED_region_draw_cb_exit(walk->ar->type, walk->draw_handle_pixel);
 
-	rv3d->dist = walk->dist_backup;
-	if (walk->state == WALK_CANCEL) {
-		/* Revert to original view? */
-		if (walk->persp_backup == RV3D_CAMOB) { /* a camera view */
-			Object *ob_back;
-			ob_back = (walk->root_parent) ? walk->root_parent : walk->v3d->camera;
-
-			/* store the original camera loc and rot */
-			BKE_object_tfm_restore(ob_back, walk->obtfm);
-
-			DAG_id_tag_update(&ob_back->id, OB_RECALC_OB);
-		}
-		else {
-			/* Non Camera we need to reset the view back to the original location bacause the user canceled*/
-			copy_qt_qt(rv3d->viewquat, walk->rot_backup);
-			rv3d->persp = walk->persp_backup;
-		}
-		/* always, is set to zero otherwise */
-		copy_v3_v3(rv3d->ofs, walk->ofs_backup);
-	}
-	else if (walk->persp_backup == RV3D_CAMOB) { /* camera */
-		DAG_id_tag_update(walk->root_parent ? &walk->root_parent->id : &v3d->camera->id, OB_RECALC_OB);
-		
-		/* always, is set to zero otherwise */
-		copy_v3_v3(rv3d->ofs, walk->ofs_backup);
-	}
-	else { /* not camera */
-
-		/* Apply the walk mode view */
-		/* restore the dist */
-		float mat[3][3];
-		upvec[0] = upvec[1] = 0;
-		upvec[2] = walk->dist_backup; /* x and y are 0 */
-		copy_m3_m4(mat, rv3d->viewinv);
-		mul_m3_v3(mat, upvec);
-		add_v3_v3(rv3d->ofs, upvec);
-		/* Done with correcting for the dist */
-	}
-
-	if (walk->is_ortho_cam) {
-		((Camera *)walk->v3d->camera->data)->type = CAM_ORTHO;
-	}
+	ED_view3d_cameracontrol_release(walk->v3d_camera_control, walk->state == WALK_CANCEL);
 
 	rv3d->rflag &= ~RV3D_NAVIGATING;
 //XXX2.5	BIF_view3d_previewrender_signal(walk->sa, PR_DBASE|PR_DISPRECT); /* not working at the moment not sure why */
 
-	if (walk->obtfm)
-		MEM_freeN(walk->obtfm);
 	if (walk->ndof)
 		MEM_freeN(walk->ndof);
 
@@ -904,86 +776,10 @@ static void walkEvent(bContext *C, wmOperator *UNUSED(op), WalkInfo *walk, const
 	}
 }
 
-static void walkMoveCamera(bContext *C, RegionView3D *rv3d, WalkInfo *walk,
+static void walkMoveCamera(bContext *C, WalkInfo *walk,
                             const bool do_rotate, const bool do_translate)
 {
-	/* we are in camera view so apply the view ofs and quat to the view matrix and set the camera to the view */
-
-	View3D *v3d = walk->v3d;
-	Scene *scene = walk->scene;
-	ID *id_key;
-
-	/* transform the parent or the camera? */
-	if (walk->root_parent) {
-		Object *ob_update;
-
-		float view_mat[4][4];
-		float prev_view_imat[4][4];
-		float diff_mat[4][4];
-		float parent_mat[4][4];
-
-		invert_m4_m4(prev_view_imat, walk->view_mat_prev);
-		ED_view3d_to_m4(view_mat, rv3d->ofs, rv3d->viewquat, rv3d->dist);
-		mul_m4_m4m4(diff_mat, view_mat, prev_view_imat);
-		mul_m4_m4m4(parent_mat, diff_mat, walk->root_parent->obmat);
-
-		BKE_object_apply_mat4(walk->root_parent, parent_mat, true, false);
-
-		// BKE_object_where_is_calc(scene, walk->root_parent);
-
-		ob_update = v3d->camera->parent;
-		while (ob_update) {
-			DAG_id_tag_update(&ob_update->id, OB_RECALC_OB);
-			ob_update = ob_update->parent;
-		}
-
-		copy_m4_m4(walk->view_mat_prev, view_mat);
-
-		id_key = &walk->root_parent->id;
-	}
-	else {
-		float view_mat[4][4];
-		float size_mat[4][4];
-		float size_back[3];
-
-		/* even though we handle the size matrix, this still changes over time */
-		copy_v3_v3(size_back, v3d->camera->size);
-
-		ED_view3d_to_m4(view_mat, rv3d->ofs, rv3d->viewquat, rv3d->dist);
-		size_to_mat4(size_mat, v3d->camera->size);
-		mul_m4_m4m4(view_mat, view_mat, size_mat);
-
-		BKE_object_apply_mat4(v3d->camera, view_mat, true, true);
-
-		copy_v3_v3(v3d->camera->size, size_back);
-
-		id_key = &v3d->camera->id;
-	}
-
-	/* record the motion */
-	if (autokeyframe_cfra_can_key(scene, id_key)) {
-		ListBase dsources = {NULL, NULL};
-
-		/* add datasource override for the camera object */
-		ANIM_relative_keyingset_add_source(&dsources, id_key, NULL, NULL);
-
-		/* insert keyframes 
-		 *	1) on the first frame
-		 *	2) on each subsequent frame
-		 *		TODO: need to check in future that frame changed before doing this 
-		 */
-		if (do_rotate) {
-			KeyingSet *ks = ANIM_builtin_keyingset_get_named(NULL, ANIM_KS_ROTATION_ID);
-			ANIM_apply_keyingset(C, &dsources, NULL, ks, MODIFYKEY_MODE_INSERT, (float)CFRA);
-		}
-		if (do_translate) {
-			KeyingSet *ks = ANIM_builtin_keyingset_get_named(NULL, ANIM_KS_LOCATION_ID);
-			ANIM_apply_keyingset(C, &dsources, NULL, ks, MODIFYKEY_MODE_INSERT, (float)CFRA);
-		}
-
-		/* free temp data */
-		BLI_freelistN(&dsources);
-	}
+	ED_view3d_cameracontrol_update(walk->v3d_camera_control, true, C, do_rotate, do_translate);
 }
 
 static float getFreeFallDistance(double time)
@@ -1328,7 +1124,7 @@ static int walkApply(bContext *C, WalkInfo *walk)
 			}
 
 			if (rv3d->persp == RV3D_CAMOB) {
-				Object *lock_ob = walk->root_parent ? walk->root_parent : walk->v3d->camera;
+				Object *lock_ob = ED_view3d_cameracontrol_object_get(walk->v3d_camera_control);
 				if (lock_ob->protectflag & OB_LOCK_LOCX) dvec[0] = 0.0;
 				if (lock_ob->protectflag & OB_LOCK_LOCY) dvec[1] = 0.0;
 				if (lock_ob->protectflag & OB_LOCK_LOCZ) dvec[2] = 0.0;
@@ -1339,7 +1135,7 @@ static int walkApply(bContext *C, WalkInfo *walk)
 			if (rv3d->persp == RV3D_CAMOB) {
 				const bool do_rotate = (moffset[0] || moffset[1]);
 				const bool do_translate = (walk->speed != 0.0f);
-				walkMoveCamera(C, rv3d, walk, do_rotate, do_translate);
+				walkMoveCamera(C, walk, do_rotate, do_translate);
 			}
 
 		}
@@ -1411,7 +1207,7 @@ static int walkApply_ndof(bContext *C, WalkInfo *walk)
 
 		if (rv3d->persp == RV3D_CAMOB) {
 			/* respect camera position locks */
-			Object *lock_ob = walk->root_parent ? walk->root_parent : walk->v3d->camera;
+			Object *lock_ob = ED_view3d_cameracontrol_object_get(walk->v3d_camera_control);
 			if (lock_ob->protectflag & OB_LOCK_LOCX) trans[0] = 0.0f;
 			if (lock_ob->protectflag & OB_LOCK_LOCY) trans[1] = 0.0f;
 			if (lock_ob->protectflag & OB_LOCK_LOCZ) trans[2] = 0.0f;
@@ -1485,7 +1281,7 @@ static int walkApply_ndof(bContext *C, WalkInfo *walk)
 		walk->redraw = true;
 
 		if (rv3d->persp == RV3D_CAMOB) {
-			walkMoveCamera(C, rv3d, walk, do_rotate, do_translate);
+			walkMoveCamera(C, walk, do_rotate, do_translate);
 		}
 	}
 
@@ -1533,7 +1329,7 @@ static int walk_modal(bContext *C, wmOperator *op, const wmEvent *event)
 	bool do_draw = false;
 	WalkInfo *walk = op->customdata;
 	RegionView3D *rv3d = walk->rv3d;
-	Object *walk_object = walk->root_parent ? walk->root_parent : walk->v3d->camera;
+	Object *walk_object = ED_view3d_cameracontrol_object_get(walk->v3d_camera_control);
 
 	walk->redraw = 0;
 
