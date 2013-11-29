@@ -754,12 +754,13 @@ static void walkEvent(bContext *C, wmOperator *UNUSED(op), WalkInfo *walk, const
 					SetNavigationMode(walk, WALK_MODE_FREE);
 
 					copy_v3_v3(teleport->origin, walk->rv3d->viewinv[3]);
-					sub_v3_v3v3(teleport->direction, loc, teleport->origin);
 
-					/* XXX TODO
-					 we could have an offset so we don't move all the way to the destination
-					 if WALK we should keep the same original height (or leave it to after the fact)
-					 */
+					/* stop the camera from a distance (camera height) */
+					normalize_v3(nor);
+					mul_v3_fl(nor, walk->camera_height);
+					add_v3_v3(loc, nor);
+
+					sub_v3_v3v3(teleport->direction, loc, teleport->origin);
 				}
 				else {
 					walk->teleport.state = WALK_TELEPORT_STATE_OFF;
@@ -806,7 +807,6 @@ static int walkApply(bContext *C, WalkInfo *walk)
 #define WALK_BOTTOM_LIMIT DEG2RADF(-80.0f)
 #define WALK_MOVE_SPEED walk->base_speed
 #define WALK_BOOST_FACTOR walk->speed_boost
-#define TELEPORT_OFFSET 0.8f
 
 	/* walk mode - Ctrl+Shift+F
 	 * a walk loop where the user can move move the view as if they are in a walk game
@@ -1108,8 +1108,8 @@ static int walkApply(bContext *C, WalkInfo *walk)
 				t /= walk->teleport.duration;
 
 				/* clamp so we don't go past our limit */
-				if (t >= TELEPORT_OFFSET) {
-					t = TELEPORT_OFFSET;
+				if (t >= 1.0f) {
+					t = 1.0f;
 					walk->teleport.state = WALK_TELEPORT_STATE_OFF;
 					SetNavigationMode(walk, walk->teleport.navigation_mode);
 				}
@@ -1156,7 +1156,6 @@ static int walkApply(bContext *C, WalkInfo *walk)
 #undef WALK_BOTTOM_LIMIT
 #undef WALK_MOVE_SPEED
 #undef WALK_BOOST_FACTOR
-#undef TELEPORT_OFFSET
 }
 
 static int walkApply_ndof(bContext *C, WalkInfo *walk)
