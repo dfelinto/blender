@@ -955,22 +955,13 @@ static int walkApply(bContext *C, WalkInfo *walk)
 					if ((walk->active_directions & WALK_BIT_BACKWARD))
 						direction -= 1;
 
+					dvec_tmp[0] = 0.0f;
+					dvec_tmp[1] = 0.0f;
+					dvec_tmp[2] = direction;
+					mul_m3_v3(mat, dvec_tmp);
+
 					if (walk->navigation_mode == WALK_MODE_GRAVITY) {
-						dvec_tmp[0] = direction * rv3d->viewinv[1][0];
-						dvec_tmp[1] = direction * rv3d->viewinv[1][1];
 						dvec_tmp[2] = 0.0f;
-
-						if (rv3d->viewmat[2][2] > 0) {
-							mul_v3_fl(dvec_tmp, -1.0);
-						}
-					}
-					else { /* WALK_MODE_FREE */
-						dvec_tmp[0] = 0.0f;
-						dvec_tmp[1] = 0.0f;
-						dvec_tmp[2] = 1.0f;
-						mul_m3_v3(mat, dvec_tmp);
-
-						mul_v3_fl(dvec_tmp, direction);
 					}
 
 					normalize_v3(dvec_tmp);
@@ -1021,6 +1012,7 @@ static int walkApply(bContext *C, WalkInfo *walk)
 					}
 				}
 
+				/* apply movement */
 				mul_v3_fl(dvec, walk->speed * time_redraw);
 			}
 
