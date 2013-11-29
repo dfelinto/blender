@@ -278,6 +278,9 @@ typedef struct WalkInfo {
 	bool is_fast;
 	bool is_slow;
 
+	/* mouse reverse */
+	bool is_reversed;
+
 	/* gravity system */
 	eWalkGravityState gravity;
 
@@ -470,6 +473,8 @@ static bool initWalkInfo(bContext *C, WalkInfo *walk, wmOperator *op, const wmEv
 	walk->speed_boost = U.walk_navigation.boost_factor;
 
 	walk->gravity = WALK_GRAVITY_STATE_OFF;
+
+	walk->is_reversed = (U.walk_navigation.flag & WALK_REVERSE_MOUSE);
 
 	walk->active_directions = 0;
 
@@ -830,6 +835,11 @@ static int walkApply(bContext *C, WalkInfo *walk)
 		/* mouse offset from the center */
 		moffset[0] = walk->mval[0] - walk->prev_mval[0];
 		moffset[1] = walk->mval[1] - walk->prev_mval[1];
+
+		/* revert mouse */
+		if (walk->is_reversed) {
+			moffset[1] = -moffset[1];
+		}
 
 		copy_v2_v2_int(walk->prev_mval, walk->mval);
 

@@ -1058,6 +1058,7 @@ class USERPREF_PT_input(Panel):
         if inputs.navigation_mode == 'WALK':
             walk = inputs.walk_navigation
 
+            sub.prop(walk, "use_reverse_mouse")
             sub.prop(walk, "mouse_sensitivity")
             sub.prop(walk, "teleport_duration")
 
