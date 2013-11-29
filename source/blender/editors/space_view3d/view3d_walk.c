@@ -784,12 +784,12 @@ static void walkMoveCamera(bContext *C, WalkInfo *walk,
 
 static float getFreeFallDistance(double time)
 {
-	return WALK_GRAVITY * (time * time) * 0.5;
+	return EARTH_GRAVITY * (time * time) * 0.5;
 }
 
 static float getVelocityZeroTime(float velocity)
 {
-	return velocity / WALK_GRAVITY;
+	return velocity / EARTH_GRAVITY;
 }
 
 static int walkApply(bContext *C, WalkInfo *walk)
