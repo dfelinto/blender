@@ -351,13 +351,14 @@ static void SetNavigationMode(WalkInfo *walk, eWalkMethod mode)
 	}
 }
 
-static bool getFloorDistance(bContext *C, RegionView3D *rv3d, float dvec[3], float *ray_distance)
+static bool getFloorDistance(bContext *C, RegionView3D *rv3d, WalkInfo *walk, float dvec[3], float *ray_distance)
 {
 	float dummy_dist_px = 0;
 	float ray_normal[3] = {0, 0, -1}; /* down */
 	float ray_start[3];
 	float r_location[3];
 	float r_normal[3];
+	float dvec_tmp[3];
 	bool ret;
 
 	*ray_distance = TRANSFORM_DIST_MAX_RAY;
@@ -365,7 +366,8 @@ static bool getFloorDistance(bContext *C, RegionView3D *rv3d, float dvec[3], flo
 	copy_v3_v3(ray_start, rv3d->viewinv[3]);
 
 	if (dvec) {
-		add_v3_v3(ray_start, dvec);
+		mul_v3_v3fl(dvec_tmp, dvec, walk->grid);
+		add_v3_v3(ray_start, dvec_tmp);
 	}
 
 	ret = snapObjectsRayEx(CTX_data_scene(C), NULL, NULL, NULL, NULL, SCE_SNAP_MODE_FACE,
@@ -373,6 +375,8 @@ static bool getFloorDistance(bContext *C, RegionView3D *rv3d, float dvec[3], flo
 	                       ray_start, ray_normal, ray_distance,
 	                       NULL, &dummy_dist_px, r_location, r_normal, SNAP_ALL);
 
+	/* artifically scale the distance to the scene size */
+	*ray_distance /= walk->grid;
 	return ret;
 }
 
@@ -381,7 +385,7 @@ static bool getFloorDistance(bContext *C, RegionView3D *rv3d, float dvec[3], flo
  r_location = location of the hit point
  r_normal = normal of the hit surface
  */
-static bool getTeleportRay(bContext *C, RegionView3D *rv3d, float r_location[3], float r_normal[3], float *ray_distance)
+static bool getTeleportRay(bContext *C, RegionView3D *rv3d, WalkInfo *walk, float r_location[3], float r_normal[3], float *ray_distance)
 {
 	float dummy_dist_px = 0;
 	float ray_normal[3] = {0, 0, 1}; /* forward */
@@ -403,6 +407,9 @@ static bool getTeleportRay(bContext *C, RegionView3D *rv3d, float r_location[3],
 	                       NULL, NULL,
 	                       ray_start, ray_normal, ray_distance,
 	                       NULL, &dummy_dist_px, r_location, r_normal, SNAP_ALL);
+
+	/* artifically scale the distance to the scene size */
+	*ray_distance /= walk->grid;
 
 	return ret;
 }
@@ -450,7 +457,7 @@ static bool initWalkInfo(bContext *C, WalkInfo *walk, wmOperator *op, const wmEv
 	walk->speed = 0.0f;
 	walk->is_fast = false;
 	walk->is_slow = false;
-	walk->grid = 1.0f; /* get that from unit_settings.scale_length */
+	walk->grid = 1.f / walk->scene->unit.scale_length;
 
 	/* user preference settings */
 	walk->teleport.duration = U.walk_navigation.teleport_duration;
@@ -611,7 +618,7 @@ static void walkEvent(bContext *C, wmOperator *UNUSED(op), WalkInfo *walk, const
 				/* Mouse wheel delays range from (0.5 == slow) to (0.01 == fast) */
 				time_wheel = 1.0f + (10.0f - (20.0f * min_ff(time_wheel, 0.5f))); /* 0-0.5 -> 0-5.0 */
 
-				walk->base_speed += walk->grid * time_wheel * (walk->is_slow ? 0.1f : 1.0f);
+				walk->base_speed += time_wheel * (walk->is_slow ? 0.1f : 1.0f);
 				break;
 			}
 			case WALK_MODAL_DECELERATE:
@@ -624,7 +631,7 @@ static void walkEvent(bContext *C, wmOperator *UNUSED(op), WalkInfo *walk, const
 				walk->time_lastwheel = time_currwheel;
 				time_wheel = 1.0f + (10.0f - (20.0f * min_ff(time_wheel, 0.5f))); /* 0-0.5 -> 0-5.0 */
 
-				walk->base_speed -= walk->grid * time_wheel * (walk->is_slow ? 0.1f : 1.0f);
+				walk->base_speed -= time_wheel * (walk->is_slow ? 0.1f : 1.0f);
 				if (walk->base_speed < 0.0f) {
 					walk->base_speed = 0;
 				}
@@ -732,7 +739,7 @@ static void walkEvent(bContext *C, wmOperator *UNUSED(op), WalkInfo *walk, const
 			{
 				float loc[3], nor[3];
 				float distance;
-				bool ret = getTeleportRay(C, walk->rv3d, loc, nor, &distance);
+				bool ret = getTeleportRay(C, walk->rv3d, walk, loc, nor, &distance);
 
 				/* in case we are teleporting middle way from a jump */
 				walk->speed_jump = 0.0f;
@@ -852,7 +859,6 @@ static int walkApply(bContext *C, WalkInfo *walk)
 
 			/* base speed in m/s */
 			walk->speed = WALK_MOVE_SPEED;
-			walk->speed *= walk->grid;
 
 			if (walk->is_fast) {
 				walk->speed *= WALK_BOOST_FACTOR;
@@ -1030,7 +1036,7 @@ static int walkApply(bContext *C, WalkInfo *walk)
 				float difference = -100.0f;
 				float fall_distance;
 
-				ret = getFloorDistance(C, rv3d, dvec, &ray_distance);
+				ret = getFloorDistance(C, rv3d, walk, dvec, &ray_distance);
 
 				if (ret) {
 					difference = walk->camera_height - ray_distance;
@@ -1040,7 +1046,7 @@ static int walkApply(bContext *C, WalkInfo *walk)
 				   can manually drop the object without activating gravity */
 				fall_distance = time_redraw * walk->speed * WALK_BOOST_FACTOR;
 
-				if (abs(difference) < fall_distance) {
+				if (fabs(difference) < fall_distance) {
 					/* slope/stairs */
 					dvec[2] -= difference;
 
@@ -1074,17 +1080,17 @@ static int walkApply(bContext *C, WalkInfo *walk)
 				copy_v2_v2(dvec, walk->teleport.direction);
 
 				cur_zed = walk->rv3d->viewinv[3][2];
-				new_zed = walk->teleport.origin[2] - getFreeFallDistance(t);
+				new_zed = walk->teleport.origin[2] - getFreeFallDistance(t) * walk->grid;
 
 				/* jump */
-				new_zed += t * walk->speed_jump;
+				new_zed += t * walk->speed_jump * walk->grid;
 
 				dvec[2] = cur_zed - new_zed;
 
 				/* duration is the jump duration */
 				if (t > walk->teleport.duration) {
 					/* check to see if we are landing */
-					ret = getFloorDistance(C, rv3d, dvec, &ray_distance);
+					ret = getFloorDistance(C, rv3d, walk, dvec, &ray_distance);
 
 					if (ret) {
 						difference = walk->camera_height - ray_distance;
@@ -1130,7 +1136,9 @@ static int walkApply(bContext *C, WalkInfo *walk)
 				if (lock_ob->protectflag & OB_LOCK_LOCZ) dvec[2] = 0.0;
 			}
 
-			add_v3_v3(rv3d->ofs, dvec);
+			/* scale the movement to the scene size */
+			mul_v3_v3fl(dvec_tmp, dvec, walk->grid);
+			add_v3_v3(rv3d->ofs, dvec_tmp);
 
 			if (rv3d->persp == RV3D_CAMOB) {
 				const bool do_rotate = (moffset[0] || moffset[1]);
