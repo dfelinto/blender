@@ -214,10 +214,6 @@ void walk_modal_keymap(wmKeyConfig *keyconf)
 	WM_modalkeymap_add_item(keymap, SPACEKEY, KM_PRESS, KM_ANY, 0, WALK_MODAL_TELEPORT);
 	WM_modalkeymap_add_item(keymap, MIDDLEMOUSE, KM_ANY, KM_ANY, 0, WALK_MODAL_TELEPORT);
 
-	/* temporary P/O shortcuts for me to debug in my laptop ;) */
-	WM_modalkeymap_add_item(keymap, PKEY, KM_PRESS, KM_ANY, 0, WALK_MODAL_ACCELERATE);
-	WM_modalkeymap_add_item(keymap, OKEY, KM_PRESS, KM_ANY, 0, WALK_MODAL_DECELERATE);
-
 	WM_modalkeymap_add_item(keymap, PADPLUSKEY, KM_PRESS, KM_ANY, 0, WALK_MODAL_ACCELERATE);
 	WM_modalkeymap_add_item(keymap, PADMINUS, KM_PRESS, KM_ANY, 0, WALK_MODAL_DECELERATE);
 	WM_modalkeymap_add_item(keymap, WHEELUPMOUSE, KM_PRESS, KM_ANY, 0, WALK_MODAL_ACCELERATE);
