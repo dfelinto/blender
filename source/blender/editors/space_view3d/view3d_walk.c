@@ -418,6 +418,10 @@ static bool getTeleportRay(bContext *C, RegionView3D *rv3d, WalkInfo *walk, floa
 #define WALK_CANCEL      1
 #define WALK_CONFIRM     2
 
+/* keep the previous speed until user changes userpreferences */
+static float base_speed = -1.f;
+static float userdef_speed = -1.f;
+
 static bool initWalkInfo(bContext *C, WalkInfo *walk, wmOperator *op, const wmEvent *event)
 {
 	wmWindow *win = CTX_wm_window(C);
@@ -452,7 +456,12 @@ static bool initWalkInfo(bContext *C, WalkInfo *walk, wmOperator *op, const wmEv
 	}
 
 	walk->state = WALK_RUNNING;
-	walk->base_speed = U.walk_navigation.move_speed;
+
+	if (fabs(U.walk_navigation.move_speed - userdef_speed) > 0.1) {
+		base_speed = U.walk_navigation.move_speed;
+		userdef_speed = U.walk_navigation.move_speed;
+	}
+
 	walk->speed = 0.0f;
 	walk->is_fast = false;
 	walk->is_slow = false;
@@ -619,7 +628,7 @@ static void walkEvent(bContext *C, wmOperator *UNUSED(op), WalkInfo *walk, const
 				/* Mouse wheel delays range from (0.5 == slow) to (0.01 == fast) */
 				time_wheel = 1.0f + (10.0f - (20.0f * min_ff(time_wheel, 0.5f))); /* 0-0.5 -> 0-5.0 */
 
-				walk->base_speed += time_wheel * (walk->is_slow ? 0.1f : 1.0f);
+				base_speed += time_wheel * (walk->is_slow ? 0.1f : 1.0f);
 				break;
 			}
 			case WALK_MODAL_DECELERATE:
@@ -632,9 +641,9 @@ static void walkEvent(bContext *C, wmOperator *UNUSED(op), WalkInfo *walk, const
 				walk->time_lastwheel = time_currwheel;
 				time_wheel = 1.0f + (10.0f - (20.0f * min_ff(time_wheel, 0.5f))); /* 0-0.5 -> 0-5.0 */
 
-				walk->base_speed -= time_wheel * (walk->is_slow ? 0.1f : 1.0f);
-				if (walk->base_speed < 0.0f) {
-					walk->base_speed = 0;
+				base_speed -= time_wheel * (walk->is_slow ? 0.1f : 1.0f);
+				if (base_speed < 0.0f) {
+					base_speed = 0;
 				}
 				break;
 			}
@@ -806,7 +815,7 @@ static int walkApply(bContext *C, WalkInfo *walk)
 #define WALK_ROTATE_FAC 0.8f /* more is faster */
 #define WALK_TOP_LIMIT DEG2RADF(85.0f)
 #define WALK_BOTTOM_LIMIT DEG2RADF(-80.0f)
-#define WALK_MOVE_SPEED walk->base_speed
+#define WALK_MOVE_SPEED base_speed
 #define WALK_BOOST_FACTOR walk->speed_boost
 
 	/* walk mode - Ctrl+Shift+F
@@ -844,10 +853,10 @@ static int walkApply(bContext *C, WalkInfo *walk)
 		copy_v2_v2_int(walk->prev_mval, walk->mval);
 
 		/* Should we redraw? */
-		if ((walk->base_speed != 0.0f) ||
+		if ((walk->active_directions) ||
 		    moffset[0] || moffset[1] ||
-			walk->teleport.state == WALK_TELEPORT_STATE_ON ||
-			walk->gravity != WALK_GRAVITY_STATE_OFF)
+		    walk->teleport.state == WALK_TELEPORT_STATE_ON ||
+		    walk->gravity != WALK_GRAVITY_STATE_OFF)
 		{
 			float dvec_tmp[3];
 
