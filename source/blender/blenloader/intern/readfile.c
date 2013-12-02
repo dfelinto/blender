@@ -7408,7 +7408,7 @@ static void do_versions_userdef(FileData *fd, BlendFileData *bfd)
 		user->walk_navigation.walk_speed_factor = 5.0f;
 		user->walk_navigation.view_height =  1.6f;   /* m */
 		user->walk_navigation.jump_height = 0.4f;      /* m */
-		user->walk_navigation.teleport_time = 1.0f; /* s */
+		user->walk_navigation.teleport_time = 0.2f; /* s */
 	}
 
 }
