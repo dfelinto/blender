@@ -800,9 +800,9 @@ static void walkMoveCamera(bContext *C, WalkInfo *walk,
 	ED_view3d_cameracontrol_update(walk->v3d_camera_control, true, C, do_rotate, do_translate);
 }
 
-static float getFreeFallDistance(double time)
+static float getFreeFallDistance(const float time)
 {
-	return EARTH_GRAVITY * (time * time) * 0.5;
+	return EARTH_GRAVITY * (time * time) * 0.5f;
 }
 
 static float getVelocityZeroTime(float velocity)
@@ -1053,7 +1053,7 @@ static int walkApply(bContext *C, WalkInfo *walk)
 				   can manually drop the object without activating gravity */
 				fall_distance = time_redraw * walk->speed * WALK_BOOST_FACTOR;
 
-				if (fabs(difference) < fall_distance) {
+				if (fabsf(difference) < fall_distance) {
 					/* slope/stairs */
 					dvec[2] -= difference;
 
@@ -1444,7 +1444,7 @@ void VIEW3D_OT_navigate(wmOperatorType *ot)
 	/* flags */
 	ot->flag = OPTYPE_BLOCKING | OPTYPE_CURSOR_WRAP;
 
-	RNA_def_boolean(ot->srna, "use_vertical_restrict", 1, "Restrict Vertical View", "Restrict view from looking above human limits");
+	RNA_def_boolean(ot->srna, "use_vertical_restrict", true, "Restrict Vertical View", "Restrict view from looking above human limits");
 	RNA_def_enum(ot->srna, "mode", navigation_mode_items, 0, "Navigation Mode", "");
 }
 
