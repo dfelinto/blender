@@ -556,7 +556,6 @@ static int walkEnd(bContext *C, WalkInfo *walk)
 	ED_view3d_cameracontrol_release(walk->v3d_camera_control, walk->state == WALK_CANCEL);
 
 	rv3d->rflag &= ~RV3D_NAVIGATING;
-//XXX2.5	BIF_view3d_previewrender_signal(walk->sa, PR_DBASE|PR_DISPRECT); /* not working at the moment not sure why */
 
 	if (walk->ndof)
 		MEM_freeN(walk->ndof);
@@ -569,12 +568,12 @@ static int walkEnd(bContext *C, WalkInfo *walk)
 	               walk->ar->winrct.xmin + walk->center_mval[0],
 	               walk->ar->winrct.ymin + walk->center_mval[1]);
 
-	/* garbage collection */
-	MEM_freeN(walk);
-
-	if (walk->state == WALK_CONFIRM)
+	if (walk->state == WALK_CONFIRM) {
+		MEM_freeN(walk);
 		return OPERATOR_FINISHED;
+	}
 
+	MEM_freeN(walk);
 	return OPERATOR_CANCELLED;
 }
 
