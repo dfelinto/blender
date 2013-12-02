@@ -92,6 +92,7 @@ void VIEW3D_OT_view_center_camera(struct wmOperatorType *ot);
 void VIEW3D_OT_view_center_lock(struct wmOperatorType *ot);
 void VIEW3D_OT_view_pan(struct wmOperatorType *ot);
 void VIEW3D_OT_view_persportho(struct wmOperatorType *ot);
+void VIEW3D_OT_navigate(struct wmOperatorType *ot);
 void VIEW3D_OT_background_image_add(struct wmOperatorType *ot);
 void VIEW3D_OT_background_image_remove(struct wmOperatorType *ot);
 void VIEW3D_OT_view_orbit(struct wmOperatorType *ot);
@@ -113,7 +114,6 @@ void view3d_keymap(struct wmKeyConfig *keyconf);
 void VIEW3D_OT_fly(struct wmOperatorType *ot);
 
 /* view3d_walk.c */
-void VIEW3D_OT_navigate(struct wmOperatorType *ot);
 void VIEW3D_OT_walk(struct wmOperatorType *ot);
 
 /* view3d_ruler.c */

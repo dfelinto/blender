@@ -1394,34 +1394,4 @@ void VIEW3D_OT_walk(wmOperatorType *ot)
 	ot->flag = OPTYPE_BLOCKING;
 }
 
-/**** generic navigate operator functions ****/
-
-static int navigate_invoke(bContext *C, wmOperator *UNUSED(op), const wmEvent *UNUSED(event))
-{
-	eViewNavigation_Method mode;
-	mode = U.navigation_mode;
-
-	switch (mode) {
-		case VIEW_NAVIGATION_FLY:
-			return WM_operator_name_call(C, "VIEW3D_OT_fly", WM_OP_INVOKE_DEFAULT, NULL);
-			break;
-		case VIEW_NAVIGATION_WALK:
-		default:
-			return WM_operator_name_call(C, "VIEW3D_OT_walk", WM_OP_INVOKE_DEFAULT, NULL);
-			break;
-	}
-}
-
-void VIEW3D_OT_navigate(wmOperatorType *ot)
-{
-	/* identifiers */
-	ot->name = "View Navigation";
-	ot->description = "Interactively navigate around the scene. It uses the mode (walk/fly) set in the User Preferences";
-	ot->idname = "VIEW3D_OT_navigate";
-
-	/* api callbacks */
-	ot->invoke = navigate_invoke;
-	ot->poll = ED_operator_view3d_active;
-}
-
 #undef EARTH_GRAVITY
