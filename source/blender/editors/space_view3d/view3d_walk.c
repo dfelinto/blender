@@ -352,6 +352,9 @@ static void walk_navigation_mode_set(WalkInfo *walk, eWalkMethod mode)
 	}
 }
 
+/**
+ * \param ray_distance  Distance to the hit point
+ */
 static bool walk_floor_distance_get(bContext *C, RegionView3D *rv3d, WalkInfo *walk, float dvec[3], float *ray_distance)
 {
 	float dummy_dist_px = 0;
@@ -384,7 +387,7 @@ static bool walk_floor_distance_get(bContext *C, RegionView3D *rv3d, WalkInfo *w
 /**
  * \param ray_distance  Distance to the hit point
  * \param r_location  Location of the hit point
- * \param r_normal  Normal of the hit surface
+ * \param r_normal  Normal of the hit surface, transformed to always face the camera
  */
 static bool walk_ray_cast(bContext *C, RegionView3D *rv3d, WalkInfo *walk, float r_location[3], float r_normal[3], float *ray_distance)
 {
@@ -408,6 +411,12 @@ static bool walk_ray_cast(bContext *C, RegionView3D *rv3d, WalkInfo *walk, float
 	                       NULL, NULL,
 	                       ray_start, ray_normal, ray_distance,
 	                       NULL, &dummy_dist_px, r_location, r_normal, SNAP_ALL);
+
+
+	/* dot is positive if both rays are facing the same direction */
+	if (dot_v3v3(ray_normal, r_normal) > 0) {
+		copy_v3_fl3(r_normal, -r_normal[0], -r_normal[1], -r_normal[2]);
+	}
 
 	/* artifically scale the distance to the scene size */
 	*ray_distance /= walk->grid;
