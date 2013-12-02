@@ -257,7 +257,6 @@ typedef struct WalkInfo {
 	float grid; /* world scale 1.0 default */
 
 	/* compare between last state */
-	double time_lastwheel; /* used to accelerate when using the mousewheel a lot */
 	double time_lastdraw; /* time between draws */
 
 	void *draw_handle_pixel;
@@ -503,7 +502,7 @@ static bool initWalkInfo(bContext *C, WalkInfo *walk, wmOperator *op, const wmEv
 	copy_v2_v2_int(walk->mval, event->mval);
 	walk->ndof = NULL;
 
-	walk->time_lastdraw = walk->time_lastwheel = PIL_check_seconds_timer();
+	walk->time_lastdraw = PIL_check_seconds_timer();
 
 	walk->draw_handle_pixel = ED_region_draw_cb_activate(walk->ar->type, drawWalkPixel, walk, REGION_DRAW_POST_PIXEL);
 
@@ -623,35 +622,11 @@ static void walkEvent(bContext *C, wmOperator *UNUSED(op), WalkInfo *walk, const
 				break;
 
 			case WALK_MODAL_ACCELERATE:
-			{
-				double time_currwheel;
-				float time_wheel;
-
-				time_currwheel = PIL_check_seconds_timer();
-				time_wheel = (float)(time_currwheel - walk->time_lastwheel);
-				walk->time_lastwheel = time_currwheel;
-				/* Mouse wheel delays range from (0.5 == slow) to (0.01 == fast) */
-				time_wheel = 1.0f + (10.0f - (20.0f * min_ff(time_wheel, 0.5f))); /* 0-0.5 -> 0-5.0 */
-
-				base_speed += time_wheel * (walk->is_slow ? 0.1f : 1.0f);
+				base_speed *= 1.0 + (walk->is_slow ? 0.01f : 0.1f);
 				break;
-			}
 			case WALK_MODAL_DECELERATE:
-			{
-				double time_currwheel;
-				float time_wheel;
-
-				time_currwheel = PIL_check_seconds_timer();
-				time_wheel = (float)(time_currwheel - walk->time_lastwheel);
-				walk->time_lastwheel = time_currwheel;
-				time_wheel = 1.0f + (10.0f - (20.0f * min_ff(time_wheel, 0.5f))); /* 0-0.5 -> 0-5.0 */
-
-				base_speed -= time_wheel * (walk->is_slow ? 0.1f : 1.0f);
-				if (base_speed < 0.0f) {
-					base_speed = 0;
-				}
+				base_speed /= 1.0 + (walk->is_slow ? 0.01f : 0.1f);
 				break;
-			}
 
 			/* implement WASD keys */
 			case WALK_MODAL_DIR_FORWARD:
