@@ -631,10 +631,10 @@ static void walkEvent(bContext *C, wmOperator *UNUSED(op), WalkInfo *walk, const
 				break;
 
 			case WALK_MODAL_ACCELERATE:
-				base_speed *= 1.0 + (walk->is_slow ? 0.01f : 0.1f);
+				base_speed *= 1.0f + (walk->is_slow ? 0.01f : 0.1f);
 				break;
 			case WALK_MODAL_DECELERATE:
-				base_speed /= 1.0 + (walk->is_slow ? 0.01f : 0.1f);
+				base_speed /= 1.0f + (walk->is_slow ? 0.01f : 0.1f);
 				break;
 
 			/* implement WASD keys */
@@ -814,10 +814,10 @@ static int walkApply(bContext *C, WalkInfo *walk)
 	ARegion *ar = walk->ar;
 
 	float mat[3][3]; /* 3x3 copy of the view matrix so we can move along the view axis */
-	float dvec[3] = {0, 0, 0}; /* this is the direction thast added to the view offset per redraw */
+	float dvec[3] = {0.0f, 0.0f, 0.0f}; /* this is the direction that's added to the view offset per redraw */
 
 	/* Camera Uprighting variables */
-	float upvec[3] = {0, 0, 0}; /* stores the view's up vector */
+	float upvec[3] = {0.0f, 0.0f, 0.0f}; /* stores the view's up vector */
 
 	float moffset[2]; /* mouse offset from the views center */
 	float tmp_quat[4]; /* used for rotating the view */
@@ -892,15 +892,13 @@ static int walkApply(bContext *C, WalkInfo *walk)
 					/* it ranges from 90.0f to -90.0f */
 					angle = -asin(rv3d->viewmat[2][2]);
 
-					if (angle > WALK_TOP_LIMIT && y > 0)
-						y = 0;
+					if (angle > WALK_TOP_LIMIT && y > 0.0f)
+						y = 0.0f;
 
-					else if (angle < WALK_BOTTOM_LIMIT && y < 0)
-						y = 0;
+					else if (angle < WALK_BOTTOM_LIMIT && y < 0.0f)
+						y = 0.0f;
 
-					upvec[0] = 1;
-					upvec[1] = 0;
-					upvec[2] = 0;
+					copy_v3_fl3(upvec, 1.0f, 0.0f, 0.0f);
 					mul_m3_v3(mat, upvec);
 					/* Rotate about the relative up vec */
 					axis_angle_to_quat(tmp_quat, upvec, -y);
@@ -912,9 +910,7 @@ static int walkApply(bContext *C, WalkInfo *walk)
 					float x;
 
 					/* if we're upside down invert the moffset */
-					upvec[0] = 0.0f;
-					upvec[1] = 1.0f;
-					upvec[2] = 0.0f;
+					copy_v3_fl3(upvec, 0.0f, 1.0f, 0.0f);
 					mul_m3_v3(mat, upvec);
 
 					if (upvec[2] < 0.0f)
@@ -929,9 +925,7 @@ static int walkApply(bContext *C, WalkInfo *walk)
 					/* user adjustement factor */
 					x *= walk->mouse_speed;
 
-					upvec[0] = 0.0f;
-					upvec[1] = 0.0f;
-					upvec[2] = 1.0f;
+					copy_v3_fl3(upvec, 0.0f, 0.0f, 1.0f);
 
 					/* Rotate about the relative up vec */
 					axis_angle_to_quat(tmp_quat, upvec, x);
@@ -959,9 +953,7 @@ static int walkApply(bContext *C, WalkInfo *walk)
 					if ((walk->active_directions & WALK_BIT_BACKWARD))
 						direction -= 1;
 
-					dvec_tmp[0] = 0.0f;
-					dvec_tmp[1] = 0.0f;
-					dvec_tmp[2] = direction;
+					copy_v3_fl3(dvec_tmp, 0.0f, 0.0f, direction);
 					mul_m3_v3(mat, dvec_tmp);
 
 					if (walk->navigation_mode == WALK_MODE_GRAVITY) {
@@ -1008,10 +1000,7 @@ static int walkApply(bContext *C, WalkInfo *walk)
 						if ((walk->active_directions & WALK_BIT_DOWN))
 							direction = 1;
 
-						dvec_tmp[0] = 0.0;
-						dvec_tmp[1] = 0.0;
-						dvec_tmp[2] = direction;
-
+						copy_v3_fl3(dvec_tmp, 0.0f, 0.0f, direction);
 						add_v3_v3(dvec, dvec_tmp);
 					}
 				}
@@ -1054,7 +1043,7 @@ static int walkApply(bContext *C, WalkInfo *walk)
 					/* hijack the teleport variables */
 					walk->teleport.initial_time = PIL_check_seconds_timer();
 					walk->gravity = WALK_GRAVITY_STATE_ON;
-					walk->teleport.duration = 0;
+					walk->teleport.duration = 0.0f;
 
 					copy_v3_v3(walk->teleport.origin, walk->rv3d->viewinv[3]);
 					copy_v2_v2(walk->teleport.direction, dvec);
@@ -1127,9 +1116,9 @@ static int walkApply(bContext *C, WalkInfo *walk)
 
 			if (rv3d->persp == RV3D_CAMOB) {
 				Object *lock_ob = ED_view3d_cameracontrol_object_get(walk->v3d_camera_control);
-				if (lock_ob->protectflag & OB_LOCK_LOCX) dvec[0] = 0.0;
-				if (lock_ob->protectflag & OB_LOCK_LOCY) dvec[1] = 0.0;
-				if (lock_ob->protectflag & OB_LOCK_LOCZ) dvec[2] = 0.0;
+				if (lock_ob->protectflag & OB_LOCK_LOCX) dvec[0] = 0.0f;
+				if (lock_ob->protectflag & OB_LOCK_LOCY) dvec[1] = 0.0f;
+				if (lock_ob->protectflag & OB_LOCK_LOCZ) dvec[2] = 0.0f;
 			}
 
 			/* scale the movement to the scene size */
