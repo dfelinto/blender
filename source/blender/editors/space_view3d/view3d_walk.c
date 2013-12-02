@@ -272,7 +272,7 @@ typedef struct WalkInfo {
 	WalkTeleport teleport;
 
 	/* look speed factor - user preferences */
-	float mouse_sensitivity;
+	float mouse_speed;
 
 	/* speed adjustments */
 	bool is_fast;
@@ -285,14 +285,14 @@ typedef struct WalkInfo {
 	eWalkGravityState gravity;
 
 	/* height to use in walk mode */
-	float camera_height;
+	float view_height;
 
 	/* counting system to allow movement to continue if a direction (WASD) key is still pressed */
 	int active_directions;
 
 	float speed_jump;
 	float jump_height; /* maximum jump height */
-	float speed_boost; /* to use for fast/slow speeds */
+	float speed_factor; /* to use for fast/slow speeds */
 
 	struct View3DCameraControl *v3d_camera_control;
 
@@ -338,7 +338,7 @@ static void drawWalkPixel(const struct bContext *UNUSED(C), ARegion *ar, void *a
 	/* XXX print shortcuts for modal options, and current values */
 }
 
-static void SetNavigationMode(WalkInfo *walk, eWalkMethod mode)
+static void walk_navigation_mode_set(WalkInfo *walk, eWalkMethod mode)
 {
 	if (mode == WALK_MODE_FREE) {
 		walk->navigation_mode = WALK_MODE_FREE;
@@ -350,7 +350,7 @@ static void SetNavigationMode(WalkInfo *walk, eWalkMethod mode)
 	}
 }
 
-static bool getFloorDistance(bContext *C, RegionView3D *rv3d, WalkInfo *walk, float dvec[3], float *ray_distance)
+static bool walk_floor_distance_get(bContext *C, RegionView3D *rv3d, WalkInfo *walk, float dvec[3], float *ray_distance)
 {
 	float dummy_dist_px = 0;
 	float ray_normal[3] = {0, 0, -1}; /* down */
@@ -380,11 +380,11 @@ static bool getFloorDistance(bContext *C, RegionView3D *rv3d, WalkInfo *walk, fl
 }
 
 /**
- ray_distance = distance to the hit point
- r_location = location of the hit point
- r_normal = normal of the hit surface
+ * \param ray_distance  Distance to the hit point
+ * \param r_location  Location of the hit point
+ * \param r_normal  Normal of the hit surface
  */
-static bool getTeleportRay(bContext *C, RegionView3D *rv3d, WalkInfo *walk, float r_location[3], float r_normal[3], float *ray_distance)
+static bool walk_ray_cast(bContext *C, RegionView3D *rv3d, WalkInfo *walk, float r_location[3], float r_normal[3], float *ray_distance)
 {
 	float dummy_dist_px = 0;
 	float ray_normal[3] = {0, 0, 1}; /* forward */
@@ -414,9 +414,11 @@ static bool getTeleportRay(bContext *C, RegionView3D *rv3d, WalkInfo *walk, floa
 }
 
 /* WalkInfo->state */
-#define WALK_RUNNING     0
-#define WALK_CANCEL      1
-#define WALK_CONFIRM     2
+enum {
+	WALK_RUNNING     = 0,
+	WALK_CANCEL      = 1,
+	WALK_CONFIRM     = 2,
+};
 
 /* keep the previous speed until user changes userpreferences */
 static float base_speed = -1.f;
@@ -457,9 +459,9 @@ static bool initWalkInfo(bContext *C, WalkInfo *walk, wmOperator *op, const wmEv
 
 	walk->state = WALK_RUNNING;
 
-	if (fabs(U.walk_navigation.move_speed - userdef_speed) > 0.1) {
-		base_speed = U.walk_navigation.move_speed;
-		userdef_speed = U.walk_navigation.move_speed;
+	if (fabsf(U.walk_navigation.walk_speed - userdef_speed) > 0.1f) {
+		base_speed = U.walk_navigation.walk_speed;
+		userdef_speed = U.walk_navigation.walk_speed;
 	}
 
 	walk->speed = 0.0f;
@@ -468,22 +470,22 @@ static bool initWalkInfo(bContext *C, WalkInfo *walk, wmOperator *op, const wmEv
 	walk->grid = 1.f / walk->scene->unit.scale_length;
 
 	/* user preference settings */
-	walk->teleport.duration = U.walk_navigation.teleport_duration;
-	walk->mouse_sensitivity = U.walk_navigation.mouse_sensitivity;
+	walk->teleport.duration = U.walk_navigation.teleport_time;
+	walk->mouse_speed = U.walk_navigation.mouse_speed;
 
-	if ((U.walk_navigation.flag & WALK_GRAVITY))
-		SetNavigationMode(walk, WALK_MODE_GRAVITY);
+	if ((U.walk_navigation.flag & USER_WALK_GRAVITY))
+		walk_navigation_mode_set(walk, WALK_MODE_GRAVITY);
 	else
-		SetNavigationMode(walk, WALK_MODE_FREE);
+		walk_navigation_mode_set(walk, WALK_MODE_FREE);
 
-	walk->camera_height = U.walk_navigation.camera_height;
+	walk->view_height = U.walk_navigation.view_height;
 	walk->jump_height = U.walk_navigation.jump_height;
-	walk->speed = U.walk_navigation.move_speed;
-	walk->speed_boost = U.walk_navigation.boost_factor;
+	walk->speed = U.walk_navigation.walk_speed;
+	walk->speed_factor = U.walk_navigation.walk_speed_factor;
 
 	walk->gravity = WALK_GRAVITY_STATE_OFF;
 
-	walk->is_reversed = (U.walk_navigation.flag & WALK_REVERSE_MOUSE);
+	walk->is_reversed = ((U.walk_navigation.flag & USER_WALK_MOUSE_REVERSE) != 0);
 
 	walk->active_directions = 0;
 
@@ -506,7 +508,7 @@ static bool initWalkInfo(bContext *C, WalkInfo *walk, wmOperator *op, const wmEv
 
 
 	walk->v3d_camera_control = ED_view3d_cameracontrol_aquire(
-							walk->scene, walk->v3d, walk->rv3d,
+	                        walk->scene, walk->v3d, walk->rv3d,
 	                        (U.uiflag & USER_CAM_LOCK_NO_PARENT) == 0);
 
 	/* remove the mouse cursor temporarily */
@@ -598,10 +600,10 @@ static void walkEvent(bContext *C, wmOperator *UNUSED(op), WalkInfo *walk, const
 					// free(walk->ndof);
 					walk->ndof = NULL;
 				}
-				{
+
 				/* update the time else the view will jump when 2D mouse/timer resume */
 				walk->time_lastdraw = PIL_check_seconds_timer();
-				}
+
 				break;
 			default:
 				break; /* should always be one of the above 3 */
@@ -702,8 +704,8 @@ static void walkEvent(bContext *C, wmOperator *UNUSED(op), WalkInfo *walk, const
 
 #define JUMP_SPEED_MIN 1.0f
 #define JUMP_TIME_MAX 0.2f /* s */
-#define JUMP_MAX_HEIGHT walk->jump_height /* m */
-#define JUMP_SPEED_MAX sqrtf(2.0f * EARTH_GRAVITY * JUMP_MAX_HEIGHT)
+#define JUMP_SPEED_MAX sqrtf(2.0f * EARTH_GRAVITY * walk->jump_height)
+
 			case WALK_MODAL_JUMP_STOP:
 				if (walk->gravity == WALK_GRAVITY_STATE_JUMP) {
 					float t;
@@ -749,7 +751,7 @@ static void walkEvent(bContext *C, wmOperator *UNUSED(op), WalkInfo *walk, const
 			{
 				float loc[3], nor[3];
 				float distance;
-				bool ret = getTeleportRay(C, walk->rv3d, walk, loc, nor, &distance);
+				bool ret = walk_ray_cast(C, walk->rv3d, walk, loc, nor, &distance);
 
 				/* in case we are teleporting middle way from a jump */
 				walk->speed_jump = 0.0f;
@@ -758,16 +760,16 @@ static void walkEvent(bContext *C, wmOperator *UNUSED(op), WalkInfo *walk, const
 					WalkTeleport *teleport = &walk->teleport;
 					teleport->state = WALK_TELEPORT_STATE_ON;
 					teleport->initial_time = PIL_check_seconds_timer();
-					teleport->duration = U.walk_navigation.teleport_duration;
+					teleport->duration = U.walk_navigation.teleport_time;
 
 					teleport->navigation_mode = walk->navigation_mode;
-					SetNavigationMode(walk, WALK_MODE_FREE);
+					walk_navigation_mode_set(walk, WALK_MODE_FREE);
 
 					copy_v3_v3(teleport->origin, walk->rv3d->viewinv[3]);
 
 					/* stop the camera from a distance (camera height) */
 					normalize_v3(nor);
-					mul_v3_fl(nor, walk->camera_height);
+					mul_v3_fl(nor, walk->view_height);
 					add_v3_v3(loc, nor);
 
 					sub_v3_v3v3(teleport->direction, loc, teleport->origin);
@@ -779,16 +781,16 @@ static void walkEvent(bContext *C, wmOperator *UNUSED(op), WalkInfo *walk, const
 			}
 
 #undef JUMP_SPEED_MAX
-#undef JUMP_MAX_HEIGHT
 #undef JUMP_TIME_MAX
 #undef JUMP_SPEED_MIN
 
 			case WALK_MODAL_TOGGLE:
 				if (walk->navigation_mode == WALK_MODE_GRAVITY) {
-					SetNavigationMode(walk, WALK_MODE_FREE);
+					walk_navigation_mode_set(walk, WALK_MODE_FREE);
 				}
 				else { /* WALK_MODE_FREE */
-					SetNavigationMode(walk, WALK_MODE_GRAVITY);				}
+					walk_navigation_mode_set(walk, WALK_MODE_GRAVITY);
+				}
 				break;
 		}
 	}
@@ -816,7 +818,7 @@ static int walkApply(bContext *C, WalkInfo *walk)
 #define WALK_TOP_LIMIT DEG2RADF(85.0f)
 #define WALK_BOTTOM_LIMIT DEG2RADF(-80.0f)
 #define WALK_MOVE_SPEED base_speed
-#define WALK_BOOST_FACTOR walk->speed_boost
+#define WALK_BOOST_FACTOR ((void)0, walk->speed_factor)
 
 	/* walk mode - Ctrl+Shift+F
 	 * a walk loop where the user can move move the view as if they are in a walk game
@@ -897,7 +899,7 @@ static int walkApply(bContext *C, WalkInfo *walk)
 					y *= WALK_ROTATE_FAC;
 
 					/* user adjustement factor */
-					y *= walk->mouse_sensitivity;
+					y *= walk->mouse_speed;
 
 					/* clamp the angle limits */
 					/* it ranges from 90.0f to -90.0f */
@@ -938,7 +940,7 @@ static int walkApply(bContext *C, WalkInfo *walk)
 					x *= WALK_ROTATE_FAC;
 
 					/* user adjustement factor */
-					x *= walk->mouse_sensitivity;
+					x *= walk->mouse_speed;
 
 					upvec[0] = 0.0f;
 					upvec[1] = 0.0f;
@@ -1043,10 +1045,10 @@ static int walkApply(bContext *C, WalkInfo *walk)
 				float difference = -100.0f;
 				float fall_distance;
 
-				ret = getFloorDistance(C, rv3d, walk, dvec, &ray_distance);
+				ret = walk_floor_distance_get(C, rv3d, walk, dvec, &ray_distance);
 
 				if (ret) {
-					difference = walk->camera_height - ray_distance;
+					difference = walk->view_height - ray_distance;
 				}
 
 				/* the distance we would fall naturally smoothly enough that we
@@ -1097,13 +1099,13 @@ static int walkApply(bContext *C, WalkInfo *walk)
 				/* duration is the jump duration */
 				if (t > walk->teleport.duration) {
 					/* check to see if we are landing */
-					ret = getFloorDistance(C, rv3d, walk, dvec, &ray_distance);
+					ret = walk_floor_distance_get(C, rv3d, walk, dvec, &ray_distance);
 
 					if (ret) {
-						difference = walk->camera_height - ray_distance;
+						difference = walk->view_height - ray_distance;
 					}
 
-					if (ray_distance < walk->camera_height) {
+					if (ray_distance < walk->view_height) {
 						/* quit falling */
 						dvec[2] -= difference;
 						walk->gravity = WALK_GRAVITY_STATE_OFF;
@@ -1126,7 +1128,7 @@ static int walkApply(bContext *C, WalkInfo *walk)
 				if (t >= 1.0f) {
 					t = 1.0f;
 					walk->teleport.state = WALK_TELEPORT_STATE_OFF;
-					SetNavigationMode(walk, walk->teleport.navigation_mode);
+					walk_navigation_mode_set(walk, walk->teleport.navigation_mode);
 				}
 
 				mul_v3_v3fl(new_loc, walk->teleport.direction, t);

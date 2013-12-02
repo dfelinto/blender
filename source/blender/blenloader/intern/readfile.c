@@ -7403,12 +7403,12 @@ static void do_versions_userdef(FileData *fd, BlendFileData *bfd)
 	}
 
 	if (!DNA_struct_elem_find(fd->filesdna, "UserDef", "WalkNavigation", "walk_navigation")) {
-		user->walk_navigation.mouse_sensitivity = 1.f;
-		user->walk_navigation.teleport_duration = 1.f; /* s */
-		user->walk_navigation.camera_height =  1.6f;   /* m */
+		user->walk_navigation.mouse_speed = 1.0f;
+		user->walk_navigation.walk_speed = 2.5f;       /* m/s */
+		user->walk_navigation.walk_speed_factor = 5.0f;
+		user->walk_navigation.view_height =  1.6f;   /* m */
 		user->walk_navigation.jump_height = 0.4f;      /* m */
-		user->walk_navigation.move_speed = 2.5f;       /* m/s */
-		user->walk_navigation.boost_factor = 5.f;
+		user->walk_navigation.teleport_time = 1.0f; /* s */
 	}
 
 }
