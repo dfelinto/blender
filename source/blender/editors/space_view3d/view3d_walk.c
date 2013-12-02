@@ -154,7 +154,7 @@ void walk_modal_keymap(wmKeyConfig *keyconf)
 		{WALK_MODAL_SLOW_DISABLE, "SLOW_DISABLE", 0, "Slow Disable", "Resume regular speed"},
 
 		{WALK_MODAL_JUMP, "JUMP", 0, "Jump", "Jump when in walk mode"},
-		{WALK_MODAL_JUMP_STOP, "JUMP_STOP", 0, "Jump Stop", "Stop pushing jump forward"},
+		{WALK_MODAL_JUMP_STOP, "JUMP_STOP", 0, "Jump Stop", "Stop pushing jump"},
 
 		{0, NULL, 0, NULL, NULL}};
 
@@ -248,7 +248,7 @@ typedef struct WalkInfo {
 	bool redraw;
 
 	int mval[2]; /* latest 2D mouse values */
-	int prev_mval[2]; /* previous mouse values */
+	int center_mval[2]; /* center mouse values */
 	wmNDOFMotionData *ndof;  /* latest 3D mouse values */
 
 	/* walk state state */
@@ -435,7 +435,7 @@ enum {
 static float base_speed = -1.f;
 static float userdef_speed = -1.f;
 
-static bool initWalkInfo(bContext *C, WalkInfo *walk, wmOperator *op, const wmEvent *event)
+static bool initWalkInfo(bContext *C, WalkInfo *walk, wmOperator *op)
 {
 	wmWindow *win = CTX_wm_window(C);
 
@@ -507,8 +507,6 @@ static bool initWalkInfo(bContext *C, WalkInfo *walk, wmOperator *op, const wmEv
 
 	walk->timer = WM_event_add_timer(CTX_wm_manager(C), win, TIMER, 0.01f);
 
-	copy_v2_v2_int(walk->prev_mval, event->mval);
-	copy_v2_v2_int(walk->mval, event->mval);
 	walk->ndof = NULL;
 
 	walk->time_lastdraw = PIL_check_seconds_timer();
@@ -521,6 +519,14 @@ static bool initWalkInfo(bContext *C, WalkInfo *walk, wmOperator *op, const wmEv
 	walk->v3d_camera_control = ED_view3d_cameracontrol_aquire(
 	                        walk->scene, walk->v3d, walk->rv3d,
 	                        (U.uiflag & USER_CAM_LOCK_NO_PARENT) == 0);
+
+	/* center the mouse */
+	walk->center_mval[0] = walk->ar->winx * 0.5f;
+	walk->center_mval[1] = walk->ar->winy * 0.5f;
+
+	copy_v2_v2_int(walk->mval, walk->center_mval);
+
+	WM_cursor_warp(CTX_wm_window(C), walk->ar->winrct.xmin + walk->center_mval[0], walk->ar->winrct.ymin + walk->center_mval[1]);
 
 	/* remove the mouse cursor temporarily */
 	WM_cursor_modal_set(win, CURSOR_NONE);
@@ -555,7 +561,7 @@ static int walkEnd(bContext *C, WalkInfo *walk)
 	WM_cursor_modal_restore(CTX_wm_window(C));
 
 	/* center the mouse */
-	WM_cursor_warp(CTX_wm_window(C), walk->ar->winrct.xmin + walk->ar->winx / 2, walk->ar->winrct.ymin + walk->ar->winy / 2);
+	WM_cursor_warp(CTX_wm_window(C), walk->ar->winrct.xmin + walk->center_mval[0], walk->ar->winrct.ymin + walk->center_mval[1]);
 
 	/* garbage collection */
 	MEM_freeN(walk);
@@ -819,7 +825,7 @@ static int walkApply(bContext *C, WalkInfo *walk)
 	/* Camera Uprighting variables */
 	float upvec[3] = {0.0f, 0.0f, 0.0f}; /* stores the view's up vector */
 
-	float moffset[2]; /* mouse offset from the views center */
+	int moffset[2]; /* mouse offset from the views center */
 	float tmp_quat[4]; /* used for rotating the view */
 
 #ifdef NDOF_WALK_DEBUG
@@ -831,15 +837,13 @@ static int walkApply(bContext *C, WalkInfo *walk)
 
 	{
 		/* mouse offset from the center */
-		moffset[0] = walk->mval[0] - walk->prev_mval[0];
-		moffset[1] = walk->mval[1] - walk->prev_mval[1];
+		moffset[0] = walk->mval[0] - walk->center_mval[0];
+		moffset[1] = walk->mval[1] - walk->center_mval[1];
 
 		/* revert mouse */
 		if (walk->is_reversed) {
 			moffset[1] = -moffset[1];
 		}
-
-		copy_v2_v2_int(walk->prev_mval, walk->mval);
 
 		/* Should we redraw? */
 		if ((walk->active_directions) ||
@@ -880,7 +884,7 @@ static int walkApply(bContext *C, WalkInfo *walk)
 					float y;
 
 					/* relative offset */
-					y = moffset[1] / ar->winy;
+					y = (float) moffset[1] / ar->winy;
 
 					/* speed factor */
 					y *= WALK_ROTATE_FAC;
@@ -917,7 +921,7 @@ static int walkApply(bContext *C, WalkInfo *walk)
 						moffset[0] = -moffset[0];
 
 					/* relative offset */
-					x = moffset[0] / ar->winx;
+					x = (float) moffset[0] / ar->winx;
 
 					/* speed factor */
 					x *= WALK_ROTATE_FAC;
@@ -1138,6 +1142,9 @@ static int walkApply(bContext *C, WalkInfo *walk)
 		}
 		/* end drawing */
 		copy_v3_v3(walk->dvec_prev, dvec);
+
+		/* center the mouse */
+		WM_cursor_warp(CTX_wm_window(C), walk->ar->winrct.xmin + walk->center_mval[0], walk->ar->winrct.ymin + walk->center_mval[1]);
 	}
 
 	return OPERATOR_FINISHED;
@@ -1293,7 +1300,7 @@ static int walk_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 
 	op->customdata = walk;
 
-	if (initWalkInfo(C, walk, op, event) == false) {
+	if (initWalkInfo(C, walk, op) == false) {
 		MEM_freeN(op->customdata);
 		return OPERATOR_CANCELLED;
 	}
@@ -1368,7 +1375,7 @@ void VIEW3D_OT_walk(wmOperatorType *ot)
 	ot->poll = ED_operator_view3d_active;
 
 	/* flags */
-	ot->flag = OPTYPE_BLOCKING | OPTYPE_CURSOR_WRAP;
+	ot->flag = OPTYPE_BLOCKING;
 }
 
 /**** generic navigate operator functions ****/
