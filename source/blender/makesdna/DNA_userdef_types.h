@@ -375,12 +375,12 @@ typedef struct SolidLight {
 } SolidLight;
 
 typedef struct WalkNavigation {
-	float mouse_sensitivity; /* speed factor for look around */
-	float teleport_duration; /* duration to use for teleporting */
-	float camera_height;
+	float mouse_speed;  /* speed factor for look around */
+	float walk_speed;
+	float walk_speed_factor;
+	float view_height;
 	float jump_height;
-	float move_speed;
-	float boost_factor;
+	float teleport_time;  /* duration to use for teleporting */
 	short flag;
 	short pad[3];
 } WalkNavigation;
@@ -573,8 +573,8 @@ typedef enum eViewNavigation_Method {
 
 /* flag */
 typedef enum eWalkNavigation_Flag {
-	WALK_GRAVITY			= (1 << 0),
-	WALK_REVERSE_MOUSE		= (1 << 1),
+	USER_WALK_GRAVITY			= (1 << 0),
+	USER_WALK_MOUSE_REVERSE		= (1 << 1),
 } eWalkNavigation_Flag;
 
 /* uiflag */

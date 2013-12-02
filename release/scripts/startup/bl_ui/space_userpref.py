@@ -1058,19 +1058,19 @@ class USERPREF_PT_input(Panel):
         if inputs.navigation_mode == 'WALK':
             walk = inputs.walk_navigation
 
-            sub.prop(walk, "use_reverse_mouse")
-            sub.prop(walk, "mouse_sensitivity")
-            sub.prop(walk, "teleport_duration")
+            sub.prop(walk, "use_mouse_reverse")
+            sub.prop(walk, "mouse_speed")
+            sub.prop(walk, "teleport_time")
 
             sub = col.column(align=True)
-            sub.prop(walk, "move_speed")
-            sub.prop(walk, "boost_factor")
+            sub.prop(walk, "walk_speed")
+            sub.prop(walk, "walk_speed_factor")
 
             sub.separator()
             sub.prop(walk, "use_gravity")
             sub = col.column(align=True)
             sub.active = walk.use_gravity
-            sub.prop(walk, "camera_height")
+            sub.prop(walk, "view_height")
             sub.prop(walk, "jump_height")
 
         col.separator()

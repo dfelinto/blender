@@ -2889,38 +2889,38 @@ static void rna_def_userdef_walk_navigation(BlenderRNA *brna)
 	RNA_def_struct_clear_flag(srna, STRUCT_UNDO);
 	RNA_def_struct_ui_text(srna, "Walk Navigation", "Walk navigation settings");
 
-	prop = RNA_def_property(srna, "mouse_sensitivity", PROP_FLOAT, PROP_NONE);
+	prop = RNA_def_property(srna, "mouse_speed", PROP_FLOAT, PROP_NONE);
 	RNA_def_property_range(prop, 0.01f, 10.0f);
 	RNA_def_property_ui_text(prop, "Mouse Sensitivity", "Speed factor for when looking around, high values mean faster mouse movement");
 
-	prop = RNA_def_property(srna, "teleport_duration", PROP_FLOAT, PROP_NONE);
-	RNA_def_property_range(prop, 0.f, 10.f);
-	RNA_def_property_ui_text(prop, "Teleport Duration", "Interval of time warp when teleporting in navigation mode");
+	prop = RNA_def_property(srna, "walk_speed", PROP_FLOAT, PROP_VELOCITY);
+	RNA_def_property_range(prop, 0.01f, 100.f);
+	RNA_def_property_ui_text(prop, "Walk Speed", "Base speed for walking and flying");
 
-	prop = RNA_def_property(srna, "camera_height", PROP_FLOAT, PROP_UNIT_LENGTH);
+	prop = RNA_def_property(srna, "walk_speed_factor", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_range(prop, 0.01f, 10.f);
+	RNA_def_property_ui_text(prop, "Speed Factor", "Multiplication factor when using the fast or slow modifiers");
+
+	prop = RNA_def_property(srna, "view_height", PROP_FLOAT, PROP_UNIT_LENGTH);
 	RNA_def_property_ui_range(prop, 0.1f, 10.f, 0.1, 2);
 	RNA_def_property_range(prop, 0.f, 1000.f);
-	RNA_def_property_ui_text(prop, "Camera Height", "View distance from the floor when walking");
+	RNA_def_property_ui_text(prop, "View Height", "View distance from the floor when walking");
 
 	prop = RNA_def_property(srna, "jump_height", PROP_FLOAT, PROP_UNIT_LENGTH);
 	RNA_def_property_ui_range(prop, 0.1f, 10.f, 0.1, 2);
 	RNA_def_property_range(prop, 0.1f, 100.f);
 	RNA_def_property_ui_text(prop, "Jump Height", "Maximum height of a jump");
 
-	prop = RNA_def_property(srna, "move_speed", PROP_FLOAT, PROP_VELOCITY);
-	RNA_def_property_range(prop, 0.01f, 100.f);
-	RNA_def_property_ui_text(prop, "Move Speed", "Base speed for walking and flying");
-
-	prop = RNA_def_property(srna, "boost_factor", PROP_FLOAT, PROP_NONE);
-	RNA_def_property_range(prop, 0.01f, 10.f);
-	RNA_def_property_ui_text(prop, "Boost Factor", "Multiplication factor when using the fast or slow modifiers");
+	prop = RNA_def_property(srna, "teleport_time", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_range(prop, 0.f, 10.f);
+	RNA_def_property_ui_text(prop, "Teleport Duration", "Interval of time warp when teleporting in navigation mode");
 
 	prop = RNA_def_property(srna, "use_gravity", PROP_BOOLEAN, PROP_BOOLEAN);
-	RNA_def_property_boolean_sdna(prop, NULL, "flag", WALK_GRAVITY);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag", USER_WALK_GRAVITY);
 	RNA_def_property_ui_text(prop, "Gravity", "Walks with gravity, or free navigate");
 
-	prop = RNA_def_property(srna, "use_reverse_mouse", PROP_BOOLEAN, PROP_BOOLEAN);
-	RNA_def_property_boolean_sdna(prop, NULL, "flag", WALK_REVERSE_MOUSE);
+	prop = RNA_def_property(srna, "use_mouse_reverse", PROP_BOOLEAN, PROP_BOOLEAN);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag", USER_WALK_MOUSE_REVERSE);
 	RNA_def_property_ui_text(prop, "Reverse Mouse", "Reverse the mouse look");
 }
 
