@@ -220,7 +220,7 @@ void walk_modal_keymap(wmKeyConfig *keyconf)
 	WM_modalkeymap_add_item(keymap, WHEELDOWNMOUSE, KM_PRESS, KM_ANY, 0, WALK_MODAL_DECELERATE);
 
 	/* assign map to operators */
-	WM_modalkeymap_assign(keymap, "VIEW3D_OT_navigate");
+	WM_modalkeymap_assign(keymap, "VIEW3D_OT_walk");
 }
 
 
@@ -1307,8 +1307,7 @@ static int walkApply_ndof(bContext *C, WalkInfo *walk)
 	return OPERATOR_FINISHED;
 }
 
-/****** Operators functions called from VIEW3D_OT_navigate ******/
-
+/****** walk operator ******/
 static int walk_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
 	RegionView3D *rv3d = CTX_wm_region_view3d(C);
@@ -1382,53 +1381,37 @@ static int walk_modal(bContext *C, wmOperator *op, const wmEvent *event)
 	return exit_code;
 }
 
+void VIEW3D_OT_walk(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Walk Navigation";
+	ot->description = "Interactively walk around the scene";
+	ot->idname = "VIEW3D_OT_walk";
+
+	/* api callbacks */
+	ot->invoke = walk_invoke;
+	ot->cancel = walk_cancel;
+	ot->modal = walk_modal;
+	ot->poll = ED_operator_view3d_active;
+
+	/* flags */
+	ot->flag = OPTYPE_BLOCKING | OPTYPE_CURSOR_WRAP;
+}
 
 /**** generic navigate operator functions ****/
 
-static int navigate_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+static int navigate_invoke(bContext *C, wmOperator *UNUSED(op), const wmEvent *UNUSED(event))
 {
 	eViewNavigation_Method mode;
 	mode = U.navigation_mode;
 
 	switch (mode) {
 		case VIEW_NAVIGATION_FLY:
-			return fly_invoke(C, op, event);
+			return WM_operator_name_call(C, "VIEW3D_OT_fly", WM_OP_INVOKE_DEFAULT, NULL);
 			break;
 		case VIEW_NAVIGATION_WALK:
 		default:
-			return walk_invoke(C, op, event);
-			break;
-	}
-}
-
-static void navigate_cancel(bContext *C, wmOperator *op)
-{
-	eViewNavigation_Method mode;
-	mode = U.navigation_mode;
-
-	switch (mode) {
-		case VIEW_NAVIGATION_FLY:
-			return fly_cancel(C, op);
-			break;
-		case VIEW_NAVIGATION_WALK:
-		default:
-			return walk_cancel(C, op);
-			break;
-	}
-}
-
-static int navigate_modal(bContext *C, wmOperator *op, const wmEvent *event)
-{
-	eViewNavigation_Method mode;
-	mode = U.navigation_mode;
-
-	switch (mode) {
-		case VIEW_NAVIGATION_FLY:
-			return fly_modal(C, op, event);
-			break;
-		case VIEW_NAVIGATION_WALK:
-		default:
-			return walk_modal(C, op, event);
+			return WM_operator_name_call(C, "VIEW3D_OT_walk", WM_OP_INVOKE_DEFAULT, NULL);
 			break;
 	}
 }
@@ -1436,21 +1419,13 @@ static int navigate_modal(bContext *C, wmOperator *op, const wmEvent *event)
 void VIEW3D_OT_navigate(wmOperatorType *ot)
 {
 	/* identifiers */
-	ot->name = "Walk Navigation";
-	ot->description = "Interactively navigate around the scene";
+	ot->name = "View Navigation";
+	ot->description = "Interactively navigate around the scene. It uses the mode (walk/fly) set in the User Preferences";
 	ot->idname = "VIEW3D_OT_navigate";
 
 	/* api callbacks */
 	ot->invoke = navigate_invoke;
-	ot->cancel = navigate_cancel;
-	ot->modal = navigate_modal;
 	ot->poll = ED_operator_view3d_active;
-
-	/* flags */
-	ot->flag = OPTYPE_BLOCKING | OPTYPE_CURSOR_WRAP;
-
-	RNA_def_boolean(ot->srna, "use_vertical_restrict", true, "Restrict Vertical View", "Restrict view from looking above human limits");
-	RNA_def_enum(ot->srna, "mode", navigation_mode_items, 0, "Navigation Mode", "");
 }
 
 #undef EARTH_GRAVITY

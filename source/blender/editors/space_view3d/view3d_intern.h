@@ -49,7 +49,6 @@ struct bPoseChannel;
 struct bScreen;
 struct Mesh;
 struct wmNDOFMotionData;
-struct wmEvent;
 struct wmOperatorType;
 struct wmWindowManager;
 
@@ -111,10 +110,11 @@ float ndof_to_axis_angle(const struct wmNDOFMotionData *ndof, float axis[3]);
 
 /* view3d_fly.c */
 void view3d_keymap(struct wmKeyConfig *keyconf);
+void VIEW3D_OT_fly(struct wmOperatorType *ot);
+
+/* view3d_walk.c */
 void VIEW3D_OT_navigate(struct wmOperatorType *ot);
-int fly_invoke(struct bContext *C, struct wmOperator *op, const struct wmEvent *event);
-void fly_cancel(struct bContext *C, struct wmOperator *op);
-int fly_modal(struct bContext *C, struct wmOperator *op, const struct wmEvent *event);
+void VIEW3D_OT_walk(struct wmOperatorType *ot);
 
 /* view3d_ruler.c */
 void VIEW3D_OT_ruler(struct wmOperatorType *ot);
