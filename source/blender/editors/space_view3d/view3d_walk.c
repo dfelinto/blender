@@ -623,12 +623,6 @@ static void walkEvent(bContext *C, wmOperator *UNUSED(op), WalkInfo *walk, const
 				               walk->ar->winrct.xmin + walk->center_mval[0],
 				               walk->ar->winrct.ymin + walk->center_mval[1]);
 
-				/* hack! - osx doesnt get mousemoves from warp */
-				/* left here for a quick test, will remove soon */
-#ifdef __APPLE__
-				win->addmousemove = true;
-#endif
-
 #endif  /* __APPLE__ */
 				copy_v2_v2_int(walk->prev_mval, walk->center_mval);
 			}
