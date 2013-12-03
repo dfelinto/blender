@@ -65,7 +65,7 @@
 #define EARTH_GRAVITY 9.80668f /* m/s2 */
 
 /* prototypes */
-static float walk_velocity_zero_time_get(float velocity);
+static float getVelocityZeroTime(float velocity);
 
 /* NOTE: these defines are saved in keymap files, do not change values but just add new ones */
 enum {
@@ -540,7 +540,8 @@ static bool initWalkInfo(bContext *C, WalkInfo *walk, wmOperator *op)
 
 static int walkEnd(bContext *C, WalkInfo *walk)
 {
-	RegionView3D *rv3d = walk->rv3d;
+	wmWindow *win;
+	RegionView3D *rv3d;
 
 	if (walk->state == WALK_RUNNING)
 		return OPERATOR_RUNNING_MODAL;
@@ -549,7 +550,10 @@ static int walkEnd(bContext *C, WalkInfo *walk)
 	puts("\n-- walk end --");
 #endif
 
-	WM_event_remove_timer(CTX_wm_manager(C), CTX_wm_window(C), walk->timer);
+	win = CTX_wm_window(C);
+	rv3d = walk->rv3d;
+
+	WM_event_remove_timer(CTX_wm_manager(C), win, walk->timer);
 
 	ED_region_draw_cb_exit(walk->ar->type, walk->draw_handle_pixel);
 
@@ -561,10 +565,10 @@ static int walkEnd(bContext *C, WalkInfo *walk)
 		MEM_freeN(walk->ndof);
 
 	/* restore the cursor */
-	WM_cursor_modal_restore(CTX_wm_window(C));
+	WM_cursor_modal_restore(win);
 
 	/* center the mouse */
-	WM_cursor_warp(CTX_wm_window(C),
+	WM_cursor_warp(win,
 	               walk->ar->winrct.xmin + walk->center_mval[0],
 	               walk->ar->winrct.ymin + walk->center_mval[1]);
 
@@ -716,7 +720,7 @@ static void walkEvent(bContext *C, wmOperator *UNUSED(op), WalkInfo *walk, const
 					walk->speed_jump = JUMP_SPEED_MIN + t * (JUMP_SPEED_MAX - JUMP_SPEED_MIN) / JUMP_TIME_MAX;
 
 					/* when jumping, duration is how long it takes before we start going down */
-					walk->teleport.duration = walk_velocity_zero_time_get(walk->speed_jump);
+					walk->teleport.duration = getVelocityZeroTime(walk->speed_jump);
 
 					/* no more increase of jump speed */
 					walk->gravity = WALK_GRAVITY_STATE_ON;
@@ -740,7 +744,7 @@ static void walkEvent(bContext *C, wmOperator *UNUSED(op), WalkInfo *walk, const
 					copy_v2_v2(walk->teleport.direction, walk->dvec_prev);
 
 					/* when jumping, duration is how long it takes before we start going down */
-					walk->teleport.duration = walk_velocity_zero_time_get(walk->speed_jump);
+					walk->teleport.duration = getVelocityZeroTime(walk->speed_jump);
 				}
 
 				break;
@@ -800,12 +804,12 @@ static void walkMoveCamera(bContext *C, WalkInfo *walk,
 	ED_view3d_cameracontrol_update(walk->v3d_camera_control, true, C, do_rotate, do_translate);
 }
 
-static float walk_freefall_distance_get(const float time)
+static float getFreeFallDistance(const float time)
 {
 	return EARTH_GRAVITY * (time * time) * 0.5f;
 }
 
-static float walk_velocity_zero_time_get(float velocity)
+static float getVelocityZeroTime(float velocity)
 {
 	return velocity / EARTH_GRAVITY;
 }
@@ -1063,7 +1067,7 @@ static int walkApply(bContext *C, WalkInfo *walk)
 			/* Falling or jumping) */
 			if (ELEM(walk->gravity, WALK_GRAVITY_STATE_ON, WALK_GRAVITY_STATE_JUMP)) {
 				float t;
-				float cur_zed, new_zed;
+				float z_old, z_new;
 				bool ret;
 				float ray_distance, difference = -100.0f;
 
@@ -1073,13 +1077,13 @@ static int walkApply(bContext *C, WalkInfo *walk)
 				/* keep moving if we were moving */
 				copy_v2_v2(dvec, walk->teleport.direction);
 
-				cur_zed = walk->rv3d->viewinv[3][2];
-				new_zed = walk->teleport.origin[2] - walk_freefall_distance_get(t) * walk->grid;
+				z_old = walk->rv3d->viewinv[3][2];
+				z_new = walk->teleport.origin[2] - getFreeFallDistance(t) * walk->grid;
 
 				/* jump */
-				new_zed += t * walk->speed_jump * walk->grid;
+				z_new += t * walk->speed_jump * walk->grid;
 
-				dvec[2] = cur_zed - new_zed;
+				dvec[2] = z_old - z_new;
 
 				/* duration is the jump duration */
 				if (t > walk->teleport.duration) {
@@ -1271,6 +1275,7 @@ static int walkApply_ndof(bContext *C, WalkInfo *walk)
 				/* transform view vectors to world coordinates */
 				mul_qt_v3(view_inv, view_horizon);
 				mul_qt_v3(view_inv, view_direction);
+
 
 				/* find difference between view & world horizons
 				 * true horizon lives in world xy plane, so look only at difference in z */
