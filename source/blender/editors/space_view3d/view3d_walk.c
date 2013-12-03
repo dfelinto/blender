@@ -862,7 +862,7 @@ static float getVelocityZeroTime(float velocity)
 
 static int walkApply(bContext *C, WalkInfo *walk)
 {
-#define WALK_ROTATE_FAC 0.8f /* more is faster */
+#define WALK_ROTATE_FAC 1.6f /* more is faster */
 #define WALK_TOP_LIMIT DEG2RADF(85.0f)
 #define WALK_BOTTOM_LIMIT DEG2RADF(-80.0f)
 #define WALK_MOVE_SPEED base_speed
