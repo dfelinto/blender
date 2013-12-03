@@ -584,7 +584,6 @@ static bool wm_event_is_last_mousemove(const wmEvent *event)
 {
 	while ((event = event->next)) {
 		if (ELEM(event->type, MOUSEMOVE, INBETWEEN_MOUSEMOVE)) {
-			//printf("NOT LAST\n");
 			return false;
 		}
 	}
@@ -594,7 +593,7 @@ static bool wm_event_is_last_mousemove(const wmEvent *event)
 static void walkEvent(bContext *C, wmOperator *UNUSED(op), WalkInfo *walk, const wmEvent *event)
 {
 	if (event->type == TIMER && event->customdata == walk->timer) {
-		walk->redraw = 1;
+		walk->redraw = true;
 	}
 	else if (ELEM(event->type, MOUSEMOVE, INBETWEEN_MOUSEMOVE)) {
 
@@ -608,7 +607,7 @@ static void walkEvent(bContext *C, wmOperator *UNUSED(op), WalkInfo *walk, const
 		{
 			wmWindow *win = CTX_wm_window(C);
 
-			walk->redraw = 1;
+			walk->redraw = true;
 
 			if (wm_event_is_last_mousemove(event)) {
 #ifdef __APPLE__
@@ -1384,7 +1383,7 @@ static int walk_modal(bContext *C, wmOperator *op, const wmEvent *event)
 	RegionView3D *rv3d = walk->rv3d;
 	Object *walk_object = ED_view3d_cameracontrol_object_get(walk->v3d_camera_control);
 
-	walk->redraw = 0;
+	walk->redraw = false;
 
 	walkEvent(C, op, walk, event);
 
