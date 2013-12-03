@@ -28,7 +28,6 @@
 
 //#define NDOF_WALK_DEBUG
 //#define NDOF_WALK_DRAW_TOOMUCH  /* is this needed for ndof? - commented so redraw doesnt thrash - campbell */
-#include "DNA_anim_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_object_types.h"
 #include "DNA_camera_types.h"
@@ -40,10 +39,7 @@
 #include "BLI_utildefines.h"
 
 #include "BKE_context.h"
-#include "BKE_object.h"
 #include "BKE_report.h"
-
-#include "BKE_depsgraph.h" /* for walk mode updating */
 
 #include "RNA_define.h"
 #include "RNA_enum_types.h"
@@ -53,7 +49,6 @@
 #include "WM_api.h"
 #include "WM_types.h"
 
-#include "ED_keyframing.h"
 #include "ED_screen.h"
 #include "ED_space_api.h"
 #include "ED_transform.h"
@@ -855,7 +850,7 @@ static float getVelocityZeroTime(float velocity)
 
 static int walkApply(bContext *C, WalkInfo *walk)
 {
-#define WALK_ROTATE_FAC 1.6f /* more is faster */
+#define WALK_ROTATE_FAC 2.2f /* more is faster */
 #define WALK_TOP_LIMIT DEG2RADF(85.0f)
 #define WALK_BOTTOM_LIMIT DEG2RADF(-80.0f)
 #define WALK_MOVE_SPEED base_speed
