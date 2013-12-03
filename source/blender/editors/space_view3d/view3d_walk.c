@@ -612,8 +612,8 @@ static void walkEvent(bContext *C, wmOperator *UNUSED(op), WalkInfo *walk, const
 
 			if (wm_event_is_last_mousemove(event)) {
 #ifdef __APPLE__
-				if ((abs(walk->prev_mval[0] - walk->center_mval[0]) > walk->center_mval[0] * 0.5f) ||
-				    (abs(walk->prev_mval[1] - walk->center_mval[1]) > walk->center_mval[1] * 0.5f))
+				if ((abs(walk->prev_mval[0] - walk->center_mval[0]) > walk->center_mval[0] / 2) ||
+				    (abs(walk->prev_mval[1] - walk->center_mval[1]) > walk->center_mval[1] / 2))
 				{
 					WM_cursor_warp(win,
 					               walk->ar->winrct.xmin + walk->center_mval[0],
