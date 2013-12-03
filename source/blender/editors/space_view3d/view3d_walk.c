@@ -612,25 +612,25 @@ static void walkEvent(bContext *C, wmOperator *UNUSED(op), WalkInfo *walk, const
 
 			if (wm_event_is_last_mousemove(event)) {
 #ifdef __APPLE__
-				if ((abs(walk->prev_mval[0] - walk->center_mval[0]) > walk->center_mval[0] * 0.5) ||
-				    (abs(walk->prev_mval[1] - walk->center_mval[1]) > walk->center_mval[1] * 0.5)) {
+				if ((fabsf(walk->prev_mval[0] - walk->center_mval[0]) > walk->center_mval[0] * 0.5f) ||
+				    (fabsf(walk->prev_mval[1] - walk->center_mval[1]) > walk->center_mval[1] * 0.5f))
+				{
 					WM_cursor_warp(win,
 					               walk->ar->winrct.xmin + walk->center_mval[0],
 					               walk->ar->winrct.ymin + walk->center_mval[1]);
-					copy_v2_v2_int(walk->prev_mval, walk->center_mval);
 				}
 #else
 				WM_cursor_warp(win,
 				               walk->ar->winrct.xmin + walk->center_mval[0],
 				               walk->ar->winrct.ymin + walk->center_mval[1]);
-				copy_v2_v2_int(walk->prev_mval, walk->center_mval);
 
 //				/* hack! - osx doesnt get mousemoves from warp */
 //#ifdef __APPLE__
 //				win->addmousemove = true;
 //#endif
-//
-#endif
+
+#endif  /* __APPLE__ */
+				copy_v2_v2_int(walk->prev_mval, walk->center_mval);
 			}
 		}
 	}
