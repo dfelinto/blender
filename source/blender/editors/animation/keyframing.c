@@ -42,6 +42,7 @@
 #include "BLI_math.h"
 #include "BLI_dynstr.h"
 #include "BLI_utildefines.h"
+#include "BLI_callbacks.h"
 
 #include "BLF_translation.h"
 
@@ -1281,6 +1282,7 @@ static int insert_key_exec(bContext *C, wmOperator *op)
 		
 		/* send notifiers that keyframes have been changed */
 		WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
+		BLI_callback_exec(CTX_data_main(C), &scene->id, BLI_CB_EVT_KEYFRAME_UPDATE);
 	}
 	else
 		BKE_report(op->reports, RPT_WARNING, "Keying set failed to insert any keyframes");
@@ -1433,6 +1435,7 @@ static int delete_key_exec(bContext *C, wmOperator *op)
 		
 		/* send notifiers that keyframes have been changed */
 		WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
+		BLI_callback_exec(CTX_data_main(C), &scene->id, BLI_CB_EVT_KEYFRAME_UPDATE);
 	}
 	else
 		BKE_report(op->reports, RPT_WARNING, "Keying set failed to remove any keyframes");
@@ -1527,8 +1530,10 @@ static int clear_anim_v3d_exec(bContext *C, wmOperator *op)
 	}
 	CTX_DATA_END;
 
-	if (num_deleted > 0)
+	if (num_deleted > 0) {
 		BKE_reportf(op->reports, RPT_INFO, "Deleted %d animation F-Curves from selected objects", num_deleted);
+		BLI_callback_exec(CTX_data_main(C), &CTX_data_scene(C)->id, BLI_CB_EVT_KEYFRAME_UPDATE);
+	}
 
 	/* send updates */
 	WM_event_add_notifier(C, NC_OBJECT | ND_KEYS, NULL);
@@ -1595,7 +1600,7 @@ static int delete_key_v3d_exec(bContext *C, wmOperator *op)
 	
 	/* send updates */
 	WM_event_add_notifier(C, NC_OBJECT | ND_KEYS, NULL);
-	
+	BLI_callback_exec(CTX_data_main(C), &scene->id, BLI_CB_EVT_KEYFRAME_UPDATE);
 	return OPERATOR_FINISHED;
 }
 
@@ -1684,6 +1689,7 @@ static int insert_key_button_exec(bContext *C, wmOperator *op)
 		
 		/* send notifiers that keyframes have been changed */
 		WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
+		BLI_callback_exec(CTX_data_main(C), &scene->id, BLI_CB_EVT_KEYFRAME_UPDATE);
 	}
 	
 	return (success) ? OPERATOR_FINISHED : OPERATOR_CANCELLED;

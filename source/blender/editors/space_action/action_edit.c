@@ -39,6 +39,7 @@
 #include "BLI_blenlib.h"
 #include "BLI_math.h"
 #include "BLI_utildefines.h"
+#include "BLI_callbacks.h"
 
 #include "DNA_anim_types.h"
 #include "DNA_gpencil_types.h"
@@ -658,6 +659,7 @@ static void insert_action_keys(bAnimContext *ac, short mode)
 
 static int actkeys_insertkey_exec(bContext *C, wmOperator *op)
 {
+	Scene *scene = CTX_data_scene(C);
 	bAnimContext ac;
 	short mode;
 	
@@ -678,6 +680,7 @@ static int actkeys_insertkey_exec(bContext *C, wmOperator *op)
 	
 	/* set notifier that keyframes have changed */
 	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
+	BLI_callback_exec(CTX_data_main(C), &scene->id, BLI_CB_EVT_KEYFRAME_UPDATE);
 	
 	return OPERATOR_FINISHED;
 }
@@ -825,6 +828,7 @@ static bool delete_action_keys(bAnimContext *ac)
 
 static int actkeys_delete_exec(bContext *C, wmOperator *op)
 {
+	Scene *scene = CTX_data_scene(C);
 	bAnimContext ac;
 	bool changed;
 	
@@ -842,8 +846,10 @@ static int actkeys_delete_exec(bContext *C, wmOperator *op)
 	/* set notifier that keyframes have changed */
 	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
 	
-	if (changed)
+	if (changed) {
 		BKE_report(op->reports, RPT_INFO, "Deleted selected keyframes");
+		BLI_callback_exec(CTX_data_main(C), &scene->id, BLI_CB_EVT_KEYFRAME_UPDATE);
+	}
 
 	return OPERATOR_FINISHED;
 }
