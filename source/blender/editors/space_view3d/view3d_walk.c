@@ -600,11 +600,11 @@ static void walkEvent(bContext *C, wmOperator *UNUSED(op), WalkInfo *walk, const
 		if ((walk->center_mval[0] != event->mval[0]) ||
 		    (walk->center_mval[1] != event->mval[1]))
 		{
-			wmWindow *win = CTX_wm_window(C);
-
 			walk->redraw = true;
 
 			if (wm_event_is_last_mousemove(event)) {
+				wmWindow *win = CTX_wm_window(C);
+
 #ifdef __APPLE__
 				if ((abs(walk->prev_mval[0] - walk->center_mval[0]) > walk->center_mval[0] / 2) ||
 				    (abs(walk->prev_mval[1] - walk->center_mval[1]) > walk->center_mval[1] / 2))
