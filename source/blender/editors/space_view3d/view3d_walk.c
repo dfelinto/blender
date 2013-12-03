@@ -608,18 +608,13 @@ static void walkEvent(bContext *C, wmOperator *UNUSED(op), WalkInfo *walk, const
 #ifdef __APPLE__
 				if ((abs(walk->prev_mval[0] - walk->center_mval[0]) > walk->center_mval[0] / 2) ||
 				    (abs(walk->prev_mval[1] - walk->center_mval[1]) > walk->center_mval[1] / 2))
+#endif
 				{
 					WM_cursor_warp(win,
 					               walk->ar->winrct.xmin + walk->center_mval[0],
 					               walk->ar->winrct.ymin + walk->center_mval[1]);
+					copy_v2_v2_int(walk->prev_mval, walk->center_mval);
 				}
-#else
-				WM_cursor_warp(win,
-				               walk->ar->winrct.xmin + walk->center_mval[0],
-				               walk->ar->winrct.ymin + walk->center_mval[1]);
-
-#endif  /* __APPLE__ */
-				copy_v2_v2_int(walk->prev_mval, walk->center_mval);
 			}
 		}
 	}
