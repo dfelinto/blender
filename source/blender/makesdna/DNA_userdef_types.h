@@ -488,7 +488,7 @@ typedef struct UserDef {
 	float gpencil_new_layer_col[4]; /* default color for newly created Grease Pencil layers */
 
 	short tweak_threshold;
-	short navigation_mode;
+	char navigation_mode, pad;
 
 	char author[80];	/* author name for file formats supporting it */
 

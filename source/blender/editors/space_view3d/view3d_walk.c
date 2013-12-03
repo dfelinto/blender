@@ -65,7 +65,7 @@
 #define EARTH_GRAVITY 9.80668f /* m/s2 */
 
 /* prototypes */
-static float getVelocityZeroTime(float velocity);
+static float walk_velocity_zero_time_get(float velocity);
 
 /* NOTE: these defines are saved in keymap files, do not change values but just add new ones */
 enum {
@@ -514,12 +514,12 @@ static bool initWalkInfo(bContext *C, WalkInfo *walk, wmOperator *op)
 
 	walk->draw_handle_pixel = ED_region_draw_cb_activate(walk->ar->type, drawWalkPixel, walk, REGION_DRAW_POST_PIXEL);
 
-	walk->rv3d->rflag |= RV3D_NAVIGATING; /* so we draw the corner margins */
+	walk->rv3d->rflag |= RV3D_NAVIGATING;
 
 
 	walk->v3d_camera_control = ED_view3d_cameracontrol_aquire(
-	                        walk->scene, walk->v3d, walk->rv3d,
-	                        (U.uiflag & USER_CAM_LOCK_NO_PARENT) == 0);
+	        walk->scene, walk->v3d, walk->rv3d,
+	        (U.uiflag & USER_CAM_LOCK_NO_PARENT) == 0);
 
 	/* center the mouse */
 	walk->center_mval[0] = walk->ar->winx * 0.5f;
@@ -716,7 +716,7 @@ static void walkEvent(bContext *C, wmOperator *UNUSED(op), WalkInfo *walk, const
 					walk->speed_jump = JUMP_SPEED_MIN + t * (JUMP_SPEED_MAX - JUMP_SPEED_MIN) / JUMP_TIME_MAX;
 
 					/* when jumping, duration is how long it takes before we start going down */
-					walk->teleport.duration = getVelocityZeroTime(walk->speed_jump);
+					walk->teleport.duration = walk_velocity_zero_time_get(walk->speed_jump);
 
 					/* no more increase of jump speed */
 					walk->gravity = WALK_GRAVITY_STATE_ON;
@@ -740,7 +740,7 @@ static void walkEvent(bContext *C, wmOperator *UNUSED(op), WalkInfo *walk, const
 					copy_v2_v2(walk->teleport.direction, walk->dvec_prev);
 
 					/* when jumping, duration is how long it takes before we start going down */
-					walk->teleport.duration = getVelocityZeroTime(walk->speed_jump);
+					walk->teleport.duration = walk_velocity_zero_time_get(walk->speed_jump);
 				}
 
 				break;
@@ -800,12 +800,12 @@ static void walkMoveCamera(bContext *C, WalkInfo *walk,
 	ED_view3d_cameracontrol_update(walk->v3d_camera_control, true, C, do_rotate, do_translate);
 }
 
-static float getFreeFallDistance(const float time)
+static float walk_freefall_distance_get(const float time)
 {
 	return EARTH_GRAVITY * (time * time) * 0.5f;
 }
 
-static float getVelocityZeroTime(float velocity)
+static float walk_velocity_zero_time_get(float velocity)
 {
 	return velocity / EARTH_GRAVITY;
 }
@@ -1074,7 +1074,7 @@ static int walkApply(bContext *C, WalkInfo *walk)
 				copy_v2_v2(dvec, walk->teleport.direction);
 
 				cur_zed = walk->rv3d->viewinv[3][2];
-				new_zed = walk->teleport.origin[2] - getFreeFallDistance(t) * walk->grid;
+				new_zed = walk->teleport.origin[2] - walk_freefall_distance_get(t) * walk->grid;
 
 				/* jump */
 				new_zed += t * walk->speed_jump * walk->grid;
@@ -1146,8 +1146,8 @@ static int walkApply(bContext *C, WalkInfo *walk)
 			 * we cannot rely on 'continous mouse' because event->mval is stored as a short in X11
 			 * and it easily get too big */
 
-			if ((abs(walk->prev_mval[0] - walk->center_mval[0]) > walk->center_mval[0] * 0.5) ||
-			    (abs(walk->prev_mval[1] - walk->center_mval[1]) > walk->center_mval[1] * 0.5)) {
+			if ((fabsf(walk->prev_mval[0] - walk->center_mval[0]) > walk->center_mval[0] * 0.5f) ||
+			    (fabsf(walk->prev_mval[1] - walk->center_mval[1]) > walk->center_mval[1] * 0.5f)) {
 				WM_cursor_warp(CTX_wm_window(C),
 				               walk->ar->winrct.xmin + walk->center_mval[0],
 				               walk->ar->winrct.ymin + walk->center_mval[1]);
