@@ -247,9 +247,9 @@ typedef struct WalkInfo {
 	short state;
 	bool redraw;
 
-	int mval[2]; /* latest 2D mouse values */
 	int prev_mval[2]; /* previous 2D mouse values */
 	int center_mval[2]; /* center mouse values */
+	int moffset[2];
 	wmNDOFMotionData *ndof;  /* latest 3D mouse values */
 
 	/* walk state state */
@@ -526,7 +526,6 @@ static bool initWalkInfo(bContext *C, WalkInfo *walk, wmOperator *op)
 	walk->center_mval[1] = walk->ar->winy * 0.5f;
 
 	copy_v2_v2_int(walk->prev_mval, walk->center_mval);
-	copy_v2_v2_int(walk->mval, walk->center_mval);
 
 	WM_cursor_warp(CTX_wm_window(C),
 	               walk->ar->winrct.xmin + walk->center_mval[0],
@@ -581,13 +580,59 @@ static int walkEnd(bContext *C, WalkInfo *walk)
 	return OPERATOR_CANCELLED;
 }
 
+static bool wm_event_is_last_mousemove(const wmEvent *event)
+{
+	while ((event = event->next)) {
+		if (ELEM(event->type, MOUSEMOVE, INBETWEEN_MOUSEMOVE)) {
+			//printf("NOT LAST\n");
+			return false;
+		}
+	}
+	return true;
+}
+
 static void walkEvent(bContext *C, wmOperator *UNUSED(op), WalkInfo *walk, const wmEvent *event)
 {
 	if (event->type == TIMER && event->customdata == walk->timer) {
 		walk->redraw = 1;
 	}
-	else if (event->type == MOUSEMOVE) {
-		copy_v2_v2_int(walk->mval, event->mval);
+	else if (ELEM(event->type, MOUSEMOVE, INBETWEEN_MOUSEMOVE)) {
+
+		walk->moffset[0] += event->mval[0] - walk->prev_mval[0];
+		walk->moffset[1] += event->mval[1] - walk->prev_mval[1];
+
+		copy_v2_v2_int(walk->prev_mval, event->mval);
+
+		if ((walk->center_mval[0] != event->mval[0]) ||
+		    (walk->center_mval[1] != event->mval[1]))
+		{
+			wmWindow *win = CTX_wm_window(C);
+
+			walk->redraw = 1;
+
+			if (wm_event_is_last_mousemove(event)) {
+#ifdef __APPLE__
+				if ((abs(walk->prev_mval[0] - walk->center_mval[0]) > walk->center_mval[0] * 0.5) ||
+				    (abs(walk->prev_mval[1] - walk->center_mval[1]) > walk->center_mval[1] * 0.5)) {
+					WM_cursor_warp(win,
+					               walk->ar->winrct.xmin + walk->center_mval[0],
+					               walk->ar->winrct.ymin + walk->center_mval[1]);
+					copy_v2_v2_int(walk->prev_mval, walk->center_mval);
+				}
+#else
+				WM_cursor_warp(win,
+				               walk->ar->winrct.xmin + walk->center_mval[0],
+				               walk->ar->winrct.ymin + walk->center_mval[1]);
+				copy_v2_v2_int(walk->prev_mval, walk->center_mval);
+
+//				/* hack! - osx doesnt get mousemoves from warp */
+//#ifdef __APPLE__
+//				win->addmousemove = true;
+//#endif
+//
+#endif
+			}
+		}
 	}
 	else if (event->type == NDOF_MOTION) {
 		/* do these automagically get delivered? yes. */
@@ -846,8 +891,11 @@ static int walkApply(bContext *C, WalkInfo *walk)
 
 	{
 		/* mouse offset from the center */
-		sub_v2_v2v2_int(moffset, walk->mval, walk->prev_mval);
-		copy_v2_v2_int(walk->prev_mval, walk->mval);
+		copy_v2_v2_int(moffset, walk->moffset);
+
+		/* apply moffset so we can re-accumulate */
+		walk->moffset[0] = 0;
+		walk->moffset[1] = 0;
 
 		/* revert mouse */
 		if (walk->is_reversed) {
@@ -1142,21 +1190,6 @@ static int walkApply(bContext *C, WalkInfo *walk)
 				const bool do_rotate = (moffset[0] || moffset[1]);
 				const bool do_translate = (walk->speed != 0.0f);
 				walkMoveCamera(C, walk, do_rotate, do_translate);
-			}
-
-			/* center the mouse only if we go over a certain threshold (a quarter of editor area)
-			 * this prevents re-centering it every time which result in a laggy movement
-			 *
-			 * we cannot rely on 'continous mouse' because event->mval is stored as a short in X11
-			 * and it easily get too big */
-
-			if ((fabsf(walk->prev_mval[0] - walk->center_mval[0]) > walk->center_mval[0] * 0.5f) ||
-			    (fabsf(walk->prev_mval[1] - walk->center_mval[1]) > walk->center_mval[1] * 0.5f)) {
-				WM_cursor_warp(CTX_wm_window(C),
-				               walk->ar->winrct.xmin + walk->center_mval[0],
-				               walk->ar->winrct.ymin + walk->center_mval[1]);
-
-				copy_v2_v2_int(walk->prev_mval, walk->center_mval);
 			}
 		}
 		else {
