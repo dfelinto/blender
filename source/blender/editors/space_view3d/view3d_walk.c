@@ -303,8 +303,8 @@ static void drawWalkPixel(const struct bContext *UNUSED(C), ARegion *ar, void *a
 	/* draws an aim/cross in the center */
 	WalkInfo *walk = arg;
 
-	const int outter_length = 20;
-	const int inner_length = 4;
+	const int outter_length = 24;
+	const int inner_length = 14;
 	int xoff, yoff;
 	rctf viewborder;
 
