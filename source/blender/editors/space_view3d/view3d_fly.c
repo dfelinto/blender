@@ -73,6 +73,12 @@ enum {
 	FLY_MODAL_SPEED,	/* mousepan typically */
 };
 
+enum {
+	FLY_BIT_FORWARD  = 1 << 0,
+	FLY_BIT_SIDE     = 1 << 1,
+	FLY_BIT_UP       = 1 << 2,
+};
+
 /* relative view axis locking - xlock, zlock */
 typedef enum eFlyPanState {
 	/* disabled */
@@ -191,7 +197,7 @@ typedef struct FlyInfo {
 
 	/* fly state state */
 	float speed; /* the speed the view is moving per redraw */
-	short axis; /* Axis index to move along by default Z to move along the view */
+	bool axis[3]; /* current axis */
 	bool pan_view; /* when true, pan the view instead of rotating */
 
 	eFlyPanState xlock, zlock;
@@ -206,6 +212,10 @@ typedef struct FlyInfo {
 
 	/* use for some lag */
 	float dvec_prev[3]; /* old for some lag */
+
+	/* counting system to allow movement to continue if a direction (WASD) key is still pressed */
+	int active_directions;
+	int pause;
 
 	struct View3DCameraControl *v3d_camera_control;
 
@@ -300,7 +310,9 @@ static bool initFlyInfo(bContext *C, FlyInfo *fly, wmOperator *op, const wmEvent
 
 	fly->state = FLY_RUNNING;
 	fly->speed = 0.0f;
-	fly->axis = 2;
+	fly->axis[0] = false;
+	fly->axis[1] = false;
+	fly->axis[2] = false;
 	fly->pan_view = false;
 	fly->xlock = FLY_AXISLOCK_STATE_OFF;
 	fly->zlock = FLY_AXISLOCK_STATE_OFF;
@@ -325,6 +337,9 @@ static bool initFlyInfo(bContext *C, FlyInfo *fly, wmOperator *op, const wmEvent
 	fly->draw_handle_pixel = ED_region_draw_cb_activate(fly->ar->type, drawFlyPixel, fly, REGION_DRAW_POST_PIXEL);
 
 	fly->rv3d->rflag |= RV3D_NAVIGATING;
+
+	fly->active_directions = 0;
+	fly->pause = false;
 
 	/* detect whether to start with Z locking */
 	copy_v3_fl3(upvec, 1.0f, 0.0f, 0.0f);
@@ -462,8 +477,11 @@ static void flyEvent(FlyInfo *fly, const wmEvent *event)
 				float time_wheel;
 
 				/* not quite correct but avoids confusion WASD/arrow keys 'locking up' */
-				if (fly->axis == -1) {
-					fly->axis = 2;
+				if (fly->pause) {
+					fly->pause = 0;
+					fly->axis[0] = false;
+					fly->axis[1] = false;
+					fly->axis[2] = true;
 					fly->speed = fabsf(fly->speed);
 				}
 
@@ -487,8 +505,11 @@ static void flyEvent(FlyInfo *fly, const wmEvent *event)
 				float time_wheel;
 
 				/* not quite correct but avoids confusion WASD/arrow keys 'locking up' */
-				if (fly->axis == -1) {
-					fly->axis = 2;
+				if (fly->pause) {
+					fly->pause = 0;
+					fly->axis[0] = false;
+					fly->axis[1] = false;
+					fly->axis[2] = true;
 					fly->speed = -fabsf(fly->speed);
 				}
 
@@ -516,68 +537,83 @@ static void flyEvent(FlyInfo *fly, const wmEvent *event)
 			/* implement WASD keys,
 			 * comments only for 'forward '*/
 			case FLY_MODAL_DIR_FORWARD:
-				if (fly->axis == 2 && fly->speed < 0.0f) { /* reverse direction stops, tap again to continue */
-					fly->axis = -1;
+				if (fly->axis[2] && fly->speed < 0.0f) { /* reverse direction stops, tap again to continue */
+					fly->axis[2] = false;
+					fly->pause |= FLY_BIT_FORWARD;
 				}
 				else {
 					/* flip speed rather than stopping, game like motion,
 					 * else increase like mousewheel if were already moving in that direction */
 					if (fly->speed < 0.0f)   fly->speed = -fly->speed;
-					else if (fly->axis == 2) fly->speed += fly->grid;
-					fly->axis = 2;
+					else if (fly->axis[2]) fly->speed += fly->grid;
+
+					fly->axis[2] = true;
+					fly->pause &= ~FLY_BIT_FORWARD;
 				}
 				break;
 			case FLY_MODAL_DIR_BACKWARD:
-				if (fly->axis == 2 && fly->speed > 0.0f) {
-					fly->axis = -1;
+				if (fly->axis[2] && fly->speed > 0.0f) {
+					fly->axis[2] = false;
+					fly->pause |= FLY_BIT_FORWARD;
 				}
 				else {
 					if (fly->speed > 0.0f)   fly->speed = -fly->speed;
-					else if (fly->axis == 2) fly->speed -= fly->grid;
+					else if (fly->axis[2]) fly->speed -= fly->grid;
 
-					fly->axis = 2;
+					fly->axis[2] = true;
+					fly->pause &= ~FLY_BIT_FORWARD;
 				}
 				break;
 			case FLY_MODAL_DIR_LEFT:
-				if (fly->axis == 0 && fly->speed < 0.0f) {
-					fly->axis = -1;
+				if (fly->axis[0] && fly->speed < 0.0f) {
+					fly->axis[0] = false;
+					fly->pause |= FLY_BIT_SIDE;
 				}
 				else {
 					if (fly->speed < 0.0f)   fly->speed = -fly->speed;
-					else if (fly->axis == 0) fly->speed += fly->grid;
+					else if (fly->axis[0]) fly->speed += fly->grid;
 
-					fly->axis = 0;
+					fly->axis[0] = true;
+					fly->pause &= ~FLY_BIT_SIDE;
 				}
 				break;
 			case FLY_MODAL_DIR_RIGHT:
-				if (fly->axis == 0 && fly->speed > 0.0f) {
-					fly->axis = -1;
+				if (fly->axis[0] && fly->speed > 0.0f) {
+					fly->axis[0] = false;
+					fly->pause |= FLY_BIT_SIDE;
 				}
 				else {
 					if (fly->speed > 0.0f)   fly->speed = -fly->speed;
-					else if (fly->axis == 0) fly->speed -= fly->grid;
+					else if (fly->axis[0]) fly->speed -= fly->grid;
 
-					fly->axis = 0;
+					fly->axis[0] = true;
+					fly->pause &= ~FLY_BIT_SIDE;
 				}
 				break;
 			case FLY_MODAL_DIR_DOWN:
-				if (fly->axis == 1 && fly->speed < 0.0f) {
-					fly->axis = -1;
+				if (fly->axis[1] && fly->speed < 0.0f) {
+					fly->axis[1] = false;
+					fly->pause |= FLY_BIT_UP;
 				}
 				else {
 					if (fly->speed < 0.0f)   fly->speed = -fly->speed;
-					else if (fly->axis == 1) fly->speed += fly->grid;
-					fly->axis = 1;
+					else if (fly->axis[1]) fly->speed += fly->grid;
+
+					fly->axis[1] = true;
+					fly->pause &= ~FLY_BIT_UP;
 				}
 				break;
 			case FLY_MODAL_DIR_UP:
-				if (fly->axis == 1 && fly->speed > 0.0f) {
-					fly->axis = -1;
+				if (fly->axis[1] && fly->speed > 0.0f) {
+					fly->axis[1] = false;
+					fly->pause |= FLY_BIT_UP;
 				}
 				else {
 					if (fly->speed > 0.0f)   fly->speed = -fly->speed;
-					else if (fly->axis == 1) fly->speed -= fly->grid;
-					fly->axis = 1;
+					else if (fly->axis[1]) fly->speed -= fly->grid;
+
+					fly->axis[1] = true;
+					fly->pause &= ~FLY_BIT_UP;
 				}
 				break;
 
@@ -827,16 +863,30 @@ static int flyApply(bContext *C, FlyInfo *fly)
 					}
 				}
 
-				if (fly->axis == -1) {
+				if (fly->pause) {
 					/* pause */
-					zero_v3(dvec_tmp);
+					if ((fly->pause & FLY_BIT_FORWARD))
+						dvec_tmp[2] = 0.0f;
+
+					if ((fly->pause & FLY_BIT_SIDE))
+						dvec_tmp[0] = 0.0f;
+
+					if ((fly->pause & FLY_BIT_UP))
+						dvec_tmp[1] = 0.0f;
+
+					fly->pause = 0;
+					//printf("pausou\n");
 				}
-				else if (!fly->use_freelook) {
+
+				if (!fly->use_freelook) {
 					/* Normal operation */
 					/* define dvec, view direction vector */
-					zero_v3(dvec_tmp);
 					/* move along the current axis */
-					dvec_tmp[fly->axis] = 1.0f;
+					dvec_tmp[0] = (fly->axis[0] ? 1.0f : 0.0f);
+					dvec_tmp[1] = (fly->axis[1] ? 1.0f : 0.0f);
+					dvec_tmp[2] = (fly->axis[2] ? 1.0f : 0.0f);
+
+					//printf("%4.2f, %4.2f, %4.2f\n", dvec_tmp[0], dvec_tmp[1], dvec_tmp[2]);
 
 					mul_m3_v3(mat, dvec_tmp);
 				}
