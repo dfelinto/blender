@@ -897,3 +897,80 @@ void OBJECT_OT_bake_image(wmOperatorType *ot)
 	ot->invoke = objects_bake_render_invoke;
 	ot->modal = objects_bake_render_modal;
 }
+
+/********************** Bake Maps ******************************/
+/********************** bake map operators *********************/
+
+static int bake_map_poll(bContext *C)
+{
+	Object *ob = ED_object_context(C);
+	ID *data = (ob) ? ob->data : NULL;
+
+	return (ob && !ob->id.lib &&
+	        data && !data->lib &&
+	        OB_TYPE_SUPPORT_BAKE(ob->type) &&
+	        ob->bakemaps.first);
+}
+
+static int bake_map_supported_poll(bContext *C)
+{
+	Object *ob = ED_object_context(C);
+	ID *data = (ob) ? ob->data : NULL;
+	return (ob && !ob->id.lib && OB_TYPE_SUPPORT_BAKE(ob->type) && data && !data->lib);
+}
+
+static int bake_map_add_exec(bContext *C, wmOperator *UNUSED(op))
+{
+	Object *ob = ED_object_context(C);
+
+//	ED_vgroup_add(ob);
+//	DAG_id_tag_update(&ob->id, OB_RECALC_DATA);
+//	WM_event_add_notifier(C, NC_GEOM | ND_VERTEX_GROUP, ob->data);
+	WM_event_add_notifier(C, NC_OBJECT | ND_DRAW, ob);
+	
+	return OPERATOR_FINISHED;
+}
+
+void OBJECT_OT_bake_map_add(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Add Bake Map";
+	ot->idname = "OBJECT_OT_bake_map_add";
+	ot->description = "Add a new bake map to the active object";
+	
+	/* api callbacks */
+	ot->poll = bake_map_supported_poll;
+	ot->exec = bake_map_add_exec;
+
+	/* flags */
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
+
+static int bake_map_remove_exec(bContext *C, wmOperator *op)
+{
+	Object *ob = ED_object_context(C);
+
+	//bakemap_delete(ob);
+
+	//DAG_id_tag_update(&ob->id, OB_RECALC_DATA);
+	//WM_event_add_notifier(C, NC_GEOM | ND_VERTEX_GROUP, ob->data);
+	WM_event_add_notifier(C, NC_OBJECT | ND_DRAW, ob);
+	
+	return OPERATOR_FINISHED;
+}
+
+void OBJECT_OT_bake_map_remove(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Remove Bake Map";
+	ot->idname = "OBJECT_OT_bake_map_remove";
+	ot->description = "Delete the active bake map from the active object";
+	
+	/* api callbacks */
+	ot->poll = bake_map_poll;
+	ot->exec = bake_map_remove_exec;
+
+	/* flags */
+	ot->flag = /*OPTYPE_REGISTER|*/ OPTYPE_UNDO;
+}
+

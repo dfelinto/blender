@@ -3236,6 +3236,7 @@ static RNAProcessItem PROCESS_ITEMS[] = {
 	{"rna_animviz.c", NULL, RNA_def_animviz},
 	{"rna_actuator.c", "rna_actuator_api.c", RNA_def_actuator},
 	{"rna_armature.c", "rna_armature_api.c", RNA_def_armature},
+	{"rna_bakemap.c", NULL, RNA_def_bakemap},
 	{"rna_boid.c", NULL, RNA_def_boid},
 	{"rna_brush.c", NULL, RNA_def_brush},
 	{"rna_camera.c", "rna_camera_api.c", RNA_def_camera},

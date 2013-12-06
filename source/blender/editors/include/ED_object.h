@@ -170,6 +170,10 @@ void ED_object_constraint_set_active(struct Object *ob, struct bConstraint *con)
 void ED_object_constraint_update(struct Object *ob);
 void ED_object_constraint_dependency_update(struct Main *bmain, struct Object *ob);
 
+/* bake maps */
+void ED_object_bakemap_set_active(struct Object *ob, struct bBakeMap *bmap);
+void ED_object_bakemap_update(struct Object *ob);
+
 /* object_lattice.c */
 bool mouse_lattice(struct bContext *C, const int mval[2], bool extend, bool deselect, bool toggle);
 void undo_push_lattice(struct bContext *C, const char *name);

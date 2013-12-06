@@ -2437,6 +2437,13 @@ static void rna_def_object(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Vertex Groups", "Vertex groups of the object");
 	rna_def_object_vertex_groups(brna, prop);
 
+	/* bake maps */
+	prop = RNA_def_property(srna, "bake_maps", PROP_COLLECTION, PROP_NONE);
+	RNA_def_property_collection_sdna(prop, NULL, "bakemaps", NULL);
+	RNA_def_property_struct_type(prop, "BakeMap");
+	RNA_def_property_ui_text(prop, "Bake Maps", "Bake maps of the object");
+	RNA_def_object_bakemaps(brna, prop);
+
 	/* empty */
 	prop = RNA_def_property(srna, "empty_draw_type", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "empty_drawtype");

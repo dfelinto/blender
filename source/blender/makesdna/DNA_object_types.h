@@ -58,6 +58,26 @@ struct SculptSession;
 struct bGPdata;
 struct RigidBodyOb;
 
+/* Bake Maps - Name Info */
+typedef struct bBakeMap {
+	struct bBakeMap *next, *prev;
+	char name[64];	/* MAX_BAKEMAP_NAME */
+
+	short type;
+	char flag, pad[5];
+} bBakeMap;
+#define MAX_BAKEMAP_NAME 64
+
+/*bBakeMap flag */
+enum {
+	BAKEMAP_ACTIVE = (1 << 0),
+};
+
+/* bBakeMap type */
+enum {
+	BAKEMAP_TYPE_DIFFUSE  = 0,
+	BAKEMAP_TYPE_SPECULAR = 1,
+};
 
 /* Vertex Groups - Name Info */
 typedef struct bDeformGroup {
@@ -142,6 +162,7 @@ typedef struct Object {
 	ListBase effect  DNA_DEPRECATED;             // XXX deprecated... keep for readfile
 	ListBase defbase;   /* list of bDeformGroup (vertex groups) names and flag only */
 	ListBase modifiers; /* list of ModifierData structures */
+	ListBase bakemaps; /* list of bBakeMap structures */
 
 	int mode;           /* Local object mode */
 	int restore_mode;   /* Keep track of what mode to return to after toggling a mode */
@@ -291,6 +312,11 @@ typedef struct Object {
 
 	/* Runtime valuated curve-specific data, not stored in the file */
 	struct CurveCache *curve_cache;
+
+	unsigned short actbakemap;	/* current bake map, note: index starts at 1 */
+	unsigned short pad2;
+	short pad3[2];
+
 } Object;
 
 /* Warning, this is not used anymore because hooks are now modifiers */
@@ -365,6 +391,9 @@ enum {
 	(ELEM7(_type, OB_MESH, OB_FONT, OB_CURVE, OB_SURF, OB_MBALL, OB_LATTICE, OB_ARMATURE))
 #define OB_TYPE_SUPPORT_PARVERT(_type) \
 	(ELEM4(_type, OB_MESH, OB_SURF, OB_CURVE, OB_LATTICE))
+#define OB_TYPE_SUPPORT_BAKE(_type) \
+	((_type) >= OB_MESH && (_type) <= OB_MBALL)
+//XXX check which types are actually supported --dfelinto
 
 /* is this ID type used as object data */
 #define OB_DATA_SUPPORT_ID(_id_type) \

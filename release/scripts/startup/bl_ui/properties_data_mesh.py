@@ -106,6 +106,16 @@ class MESH_UL_uvmaps_vcols(UIList):
             layout.label(text="", icon_value=icon)
 
 
+class MESH_UL_bakemaps(UIList):
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
+        bakemap = item
+        if self.layout_type in {'DEFAULT', 'COMPACT'}:
+            layout.label(text=bakemap.name, translate=False, icon_value=icon)
+        elif self.layout_type in {'GRID'}:
+            layout.alignment = 'CENTER'
+            layout.label(text="", icon_value=icon)
+
+
 class MeshButtonsPanel():
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
@@ -353,6 +363,42 @@ class DATA_PT_vertex_colors(MeshButtonsPanel, Panel):
         col = row.column(align=True)
         col.operator("mesh.vertex_color_add", icon='ZOOMIN', text="")
         col.operator("mesh.vertex_color_remove", icon='ZOOMOUT', text="")
+
+
+class DATA_PT_bake_maps(MeshButtonsPanel, Panel):
+    bl_label = "Bake Maps"
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_GAME'}
+
+    @classmethod
+    def poll(cls, context):
+        engine = context.scene.render.engine
+        obj = context.object
+        return (obj and obj.type == 'MESH' and (engine in cls.COMPAT_ENGINES))
+        #XXX investigate which other types are supported
+
+    def draw(self, context):
+        layout = self.layout
+
+        ob = context.object
+        bake_map = ob.bake_maps.active
+
+        rows = 1
+        if map:
+            rows = 4
+
+        row = layout.row()
+        row.template_list("MESH_UL_bakemaps", "", ob, "bakemaps", ob.bake_maps, "active_index", rows=rows)
+
+        col = row.column(align=True)
+        col.operator("object.bake_map_add", icon='ZOOMIN', text="")
+        col.operator("object.bake_map_remove", icon='ZOOMOUT', text="")
+        if bake_map:
+            col.separator()
+            #col.operator("object.bake_map_move", icon='TRIA_UP', text="").direction = 'UP'
+            #col.operator("object.bake_map_move", icon='TRIA_DOWN', text="").direction = 'DOWN'
+
+            row = layout.row()
+            row.prop(bake_map, "name")
 
 
 class DATA_PT_customdata(MeshButtonsPanel, Panel):
