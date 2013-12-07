@@ -57,6 +57,7 @@ extern EnumPropertyItem space_type_items[];
 extern EnumPropertyItem region_type_items[];
 extern EnumPropertyItem modifier_type_items[];
 extern EnumPropertyItem constraint_type_items[];
+extern EnumPropertyItem bakemap_type_items[];
 extern EnumPropertyItem boidrule_type_items[];
 extern EnumPropertyItem sequence_modifier_type_items[];
 

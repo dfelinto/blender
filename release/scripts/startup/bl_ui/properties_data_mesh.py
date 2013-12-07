@@ -387,7 +387,7 @@ class DATA_PT_bake_maps(MeshButtonsPanel, Panel):
             rows = 4
 
         row = layout.row()
-        row.template_list("MESH_UL_bakemaps", "", ob, "bakemaps", ob.bake_maps, "active_index", rows=rows)
+        row.template_list("MESH_UL_bakemaps", "", ob, "bake_maps", ob.bake_maps, "active_index", rows=rows)
 
         col = row.column(align=True)
         col.operator("object.bake_map_add", icon='ZOOMIN', text="")
