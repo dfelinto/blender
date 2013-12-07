@@ -93,13 +93,20 @@ static void rna_def_bakemap(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Name", "Bake map name");
 	RNA_def_property_string_funcs(prop, NULL, NULL, "rna_BakeMap_name_set");
 	RNA_def_struct_name_property(srna, prop);
-	RNA_def_property_update(prop, NC_LOGIC, NULL);
+	RNA_def_property_update(prop, NC_OBJECT, NULL);
 
 	prop = RNA_def_property(srna, "type", PROP_ENUM, PROP_NONE);
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 	RNA_def_property_enum_items(prop, bakemap_type_items);
 	RNA_def_property_ui_text(prop, "Type", "XXX");
-	RNA_def_property_update(prop, NC_LOGIC, NULL);
+	RNA_def_property_update(prop, NC_OBJECT, NULL);
+
+    prop = RNA_def_property(srna, "use", PROP_BOOLEAN, PROP_NONE);
+    RNA_def_property_boolean_sdna(prop, NULL, "flag", BAKEMAP_USE);
+    RNA_def_property_ui_text(prop, "Enabled", "Disable or enable the bake map");
+    RNA_def_property_update(prop, NC_OBJECT, NULL);
+	
+
 }
 
 static void rna_def_diffuse_bakemap(BlenderRNA *brna)

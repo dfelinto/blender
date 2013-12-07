@@ -70,7 +70,7 @@ typedef struct bBakeMap {
 
 /*bBakeMap flag */
 enum {
-	BAKEMAP_ACTIVE = (1 << 0),
+	BAKEMAP_USE = (1 << 0),
 };
 
 /* bBakeMap type */

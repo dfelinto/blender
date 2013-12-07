@@ -39,6 +39,7 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_blenlib.h"
+#include "BLI_listbase.h"
 #include "BLI_math.h"
 #include "BLI_kdopbvh.h"
 #include "BLI_utildefines.h"
@@ -71,39 +72,6 @@ void BKE_unique_bakemap_name(bBakeMap *bmap, ListBase *list)
 	BLI_uniquename(list, bmap, DATA_("BakeMap"), '.', offsetof(bBakeMap, name), sizeof(bmap->name));
 }
 
-/* finds the 'active' constraint in a constraint stack */
-bBakeMap *BKE_bakemaps_get_active(ListBase *list)
-{
-	bBakeMap *bmap;
-	
-	/* search for the first bake map with the 'active' flag set */
-	if (list) {
-		for (bmap = list->first; bmap; bmap = bmap->next) {
-			if (bmap->flag & BAKEMAP_ACTIVE)
-				return bmap;
-		}
-	}
-	
-	/* no active bake map found */
-	return NULL;
-}
-
-/* Set the given bake map as the active one (clearing all the others) */
-void BKE_bakemaps_set_active(ListBase *list, bBakeMap *bmap)
-{
-	bBakeMap *b;
-	
-	if (list) {
-		for (b = list->first; b; b = b->next) {
-			if (b == bmap) 
-				b->flag |= BAKEMAP_ACTIVE;
-			else 
-				b->flag &= ~BAKEMAP_ACTIVE;
-		}
-	}
-}
-
-
 /* Remove the specified bake map from the given constraint stack */
 int BKE_remove_bakemap(ListBase *list, bBakeMap *bmap)
 {
@@ -123,6 +91,7 @@ static bBakeMap *add_new_bakemap_internal(const char *name, short type)
 
 	/* Set up a generic constraint datablock */
 	bmap->type = type;
+	bmap->flag |= BAKEMAP_USE;
 
 	/* if no name is provided, use the generic "Bake Map" name */
 	/* NOTE: any bake map type that gets here really shouldn't get added... */
@@ -142,20 +111,16 @@ static bBakeMap *add_new_bakemap(Object *ob, const char *name, short type)
 
 	/* add the bake map */
 	bmap = add_new_bakemap_internal(name, type);
-
-	/* find the bake map stack - bone or object? */
 	list = &ob->bakemaps;
 
-	if (list) {
-		/* add new bake map to end of list of bake maps before ensuring that it has a unique name
-		 * (otherwise unique-naming code will fail, since it assumes element exists in list)
-		 */
-		BLI_addtail(list, bmap);
-		BKE_unique_bakemap_name(bmap, list);
+	/* add new bake map to end of list of bake maps before ensuring that it has a unique name
+	 * (otherwise unique-naming code will fail, since it assumes element exists in list)
+	 */
+	BLI_addtail(list, bmap);
+	BKE_unique_bakemap_name(bmap, list);
 
-		/* make this bake map the active one */
-		BKE_bakemaps_set_active(list, bmap);
-	}
+	/* make this bake map the active one */
+	ob->actbakemap = BLI_countlist(list);
 
 	/* set type+owner specific immutable settings */
 	switch (type) {

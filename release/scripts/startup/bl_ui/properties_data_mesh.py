@@ -110,7 +110,9 @@ class MESH_UL_bakemaps(UIList):
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
         bakemap = item
         if self.layout_type in {'DEFAULT', 'COMPACT'}:
-            layout.label(text=bakemap.name, translate=False, icon_value=icon)
+            layout.prop(bakemap, "name", text="", emboss=False, icon_value=icon)
+            icon = 'RESTRICT_RENDER_OFF' if item.use else 'RESTRICT_RENDER_ON'
+            layout.prop(item, "use", text="", icon=icon, emboss=False)
         elif self.layout_type in {'GRID'}:
             layout.alignment = 'CENTER'
             layout.label(text="", icon_value=icon)
@@ -390,15 +392,16 @@ class DATA_PT_bake_maps(MeshButtonsPanel, Panel):
         row.template_list("MESH_UL_bakemaps", "", ob, "bake_maps", ob.bake_maps, "active_index", rows=rows)
 
         col = row.column(align=True)
-        col.operator("object.bake_map_add", icon='ZOOMIN', text="")
+        col.operator_menu_enum("object.bake_map_add", "type", icon='ZOOMIN', text="")
         col.operator("object.bake_map_remove", icon='ZOOMOUT', text="")
-        if bake_map:
-            col.separator()
-            #col.operator("object.bake_map_move", icon='TRIA_UP', text="").direction = 'UP'
-            #col.operator("object.bake_map_move", icon='TRIA_DOWN', text="").direction = 'DOWN'
+        #if bake_map:
+        #    col.separator()
+        #    col.operator("object.bake_map_move", icon='TRIA_UP', text="").direction = 'UP'
+        #    col.operator("object.bake_map_move", icon='TRIA_DOWN', text="").direction = 'DOWN'
 
+        if bake_map:
             row = layout.row()
-            row.prop(bake_map, "name")
+            row.prop(bake_map, "type")
 
 
 class DATA_PT_customdata(MeshButtonsPanel, Panel):

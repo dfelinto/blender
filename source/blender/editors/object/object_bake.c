@@ -64,10 +64,16 @@
 #include "BKE_depsgraph.h"
 #include "BKE_mesh.h"
 #include "BKE_scene.h"
+#include "BKE_bakemap.h"
 
 #include "RE_pipeline.h"
 #include "RE_shader_ext.h"
 #include "RE_multires_bake.h"
+
+#include "RNA_access.h"
+#include "RNA_define.h"
+#include "RNA_enum_types.h"
+
 
 #include "PIL_time.h"
 
@@ -919,13 +925,12 @@ static int bake_map_supported_poll(bContext *C)
 	return (ob && !ob->id.lib && OB_TYPE_SUPPORT_BAKE(ob->type) && data && !data->lib);
 }
 
-static int bake_map_add_exec(bContext *C, wmOperator *UNUSED(op))
+static int bake_map_add_exec(bContext *C, wmOperator *op)
 {
 	Object *ob = ED_object_context(C);
+	int type = RNA_enum_get(op->ptr, "type");
 
-//	ED_vgroup_add(ob);
-//	DAG_id_tag_update(&ob->id, OB_RECALC_DATA);
-//	WM_event_add_notifier(C, NC_GEOM | ND_VERTEX_GROUP, ob->data);
+	BKE_add_ob_bakemap(ob, NULL, type);
 	WM_event_add_notifier(C, NC_OBJECT | ND_DRAW, ob);
 	
 	return OPERATOR_FINISHED;
@@ -939,16 +944,21 @@ void OBJECT_OT_bake_map_add(wmOperatorType *ot)
 	ot->description = "Add a new bake map to the active object";
 	
 	/* api callbacks */
+	ot->invoke = WM_menu_invoke;
 	ot->poll = bake_map_supported_poll;
 	ot->exec = bake_map_add_exec;
 
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+	/* properties */
+	ot->prop = RNA_def_enum(ot->srna, "type", bakemap_type_items, 0, "Type", "");
 }
 
 static int bake_map_remove_exec(bContext *C, wmOperator *op)
 {
 	Object *ob = ED_object_context(C);
+
 
 	//bakemap_delete(ob);
 

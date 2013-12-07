@@ -1355,21 +1355,22 @@ static bBakeMap *rna_Object_bakemap_new(Object *object, int type, const char *na
 static PointerRNA rna_Object_active_bakemap_get(PointerRNA *ptr)
 {
 	Object *ob = (Object *)ptr->id.data;
-	bBakeMap *bakemap = BKE_bakemaps_get_active(&ob->bakemaps);
-	return rna_pointer_inherit_refine(ptr, &RNA_BakeMap, bakemap);
+	bBakeMap *bmap;
+
+	bmap = BLI_findlink(&ob->bakemaps, ob->actbakemap - 1);
+	return rna_pointer_inherit_refine(ptr, &RNA_BakeMap, bmap);
 }
 
 static void rna_Object_active_bakemap_set(PointerRNA *ptr, PointerRNA value)
 {
 	Object *ob = (Object *)ptr->id.data;
-	BKE_bakemaps_set_active(&ob->bakemaps, (bBakeMap *)value.data);
+	ob->actbakemap = BLI_findindex(&ob->bakemaps, (bBakeMap *)value.data);
 }
 
 static int rna_Object_active_bakemap_index_get(PointerRNA *ptr)
 {
 	Object *ob = (Object *)ptr->id.data;
-
-	return BLI_findindex(&ob->bakemaps, ptr->data);
+	return ob->actbakemap - 1;
 }
 
 static void rna_Object_active_bakemap_index_set(PointerRNA *ptr, int value)
