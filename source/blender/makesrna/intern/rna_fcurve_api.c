@@ -42,6 +42,8 @@
 
 #include "rna_internal.h"  /* own include */
 
+#include "WM_types.h"
+
 #ifdef RNA_RUNTIME
 
 #include <stddef.h>
@@ -49,12 +51,25 @@
 #include "BKE_animsys.h"
 #include "BKE_fcurve.h"
 
+static void rna_FCurve_calculate_handles(FCurve *fcu)
+{
+	calchandles_fcurve(fcu);
+};
 #else
 
 void RNA_api_drivers(StructRNA *UNUSED(srna))
 {
 /*	FunctionRNA *func; */
 /*	PropertyRNA *parm; */
+}
+
+void RNA_api_fcurves(StructRNA *srna)
+{
+	FunctionRNA *func;
+/*	PropertyRNA *parm; */
+
+	func = RNA_def_function(srna, "calculate_smooth_handles", "rna_FCurve_calculate_handles");
+	RNA_def_function_ui_description(func, "Calculate the keyframe handles to make a smooth animation curve");
 }
 
 #endif

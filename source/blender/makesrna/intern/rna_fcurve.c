@@ -1863,6 +1863,9 @@ static void rna_def_fcurve(BlenderRNA *brna)
 	                            "Min/Max values", -FLT_MAX, FLT_MAX);
 	RNA_def_property_flag(parm, PROP_THICK_WRAP);
 	RNA_def_function_output(func, parm);
+
+	/* Functions */
+	RNA_api_fcurves(srna);
 }
 
 /* *********************** */
