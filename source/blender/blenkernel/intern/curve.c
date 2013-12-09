@@ -2932,19 +2932,20 @@ static void calchandleNurb_intern(BezTriple *bezt, BezTriple *prev, BezTriple *n
 
 		/* force the handlers transition to be 1/3 */
 		len = 6.0;
-
+		/* assume normal handle until we check */
+		bezt->f5 = HD_AUTOTYPE_NORMAL;
 		if (len != 0.0f) {
 			int leftviolate = 0, rightviolate = 0;  /* for mode==2 */
 
 			if (ELEM(bezt->h1, HD_AUTO, HD_AUTO_ANIM)) {
 				len_a /= len;
 				madd_v3_v3v3fl(p2 - 3, p2, tvec, -len_a);
-
 				if ((bezt->h1 == HD_AUTO_ANIM) && next && prev) { /* keep horizontal if extrema */
 					float ydiff1 = prev->vec[1][1] - bezt->vec[1][1];
 					float ydiff2 = next->vec[1][1] - bezt->vec[1][1];
 					if ((ydiff1 <= 0.0f && ydiff2 <= 0.0f) || (ydiff1 >= 0.0f && ydiff2 >= 0.0f)) {
 						bezt->vec[0][1] = bezt->vec[1][1];
+						bezt->f5 = HD_AUTOTYPE_SPECIAL;
 					}
 					else { /* handles should not be beyond y coord of two others */
 						if (ydiff1 <= 0.0f) {
@@ -2971,6 +2972,7 @@ static void calchandleNurb_intern(BezTriple *bezt, BezTriple *prev, BezTriple *n
 					float ydiff2 = next->vec[1][1] - bezt->vec[1][1];
 					if ( (ydiff1 <= 0.0f && ydiff2 <= 0.0f) || (ydiff1 >= 0.0f && ydiff2 >= 0.0f) ) {
 						bezt->vec[2][1] = bezt->vec[1][1];
+						bezt->f5 = HD_AUTOTYPE_SPECIAL;
 					}
 					else { /* andles should not be beyond y coord of two others */
 						if (ydiff1 <= 0.0f) {
@@ -3102,6 +3104,177 @@ static void calchandlesNurb_intern(Nurb *nu, int skip_align)
 		bezt++;
 	}
 }
+
+/* auto handle evaluation doesn't more than this many bezier point ahead */
+#define MAX_AUTO_HANDLE_INFLUENCE	10
+/* or if the C coefficient is getting more than this */
+#define MAX_AUTO_C_VALUE			1000.f
+
+/*
+ * This function computes the handles of a series of auto bezier points
+ * on the basis of 'no acceleration discontinuities' at the points.
+ * The first and last bezier points are considered 'fixed' (their handles are not touched)
+ * The result is the smoothest possible trajectory going through intemediate points.
+ * The difficulty is that the handles depends on their neighbours.
+ *
+ * The exact solution is a recursive formula that computes the first point handles
+ * as the sum of the influence of the nth following points. The influence decreases
+ * rapidly (as 1/4^n) so that just a few iterations are necessary. Once the first point
+ * is computed, it becomes 'fixed' and the next point is computed.
+ *
+ * Note: this algorithm assumes that the handle horizontal size if always 1/3 of the
+ * of the interval to the next point. This rule ensures linear interpolation of time.
+ *
+ * ^ height (co 1)
+ * |                                            yN
+ * |                                   yN-1     |
+ * |                      y2           |        |
+ * |           y1         |            |        |
+ * |    y0     |          |            |        |
+ * |    |      |          |            |        |
+ * |    |      |          |            |        |
+ * |    |      |          |            |        |
+ * |-------t1---------t2--------- ~ --------tN-------------------> time (co 0)
+ *
+ *
+ * Definitions:
+ * 
+ * for n>=2:
+ *   l(n) = t(n)/t(n-1)   
+ *   b(n) = 2*(1+l(n))
+ *   a(n) = (y(n)-y(n-1))+l(n)*l(n)*(y(n-1)-y(n-2))
+ *   p(n) = l(n)*p(n-1)   for n>=3
+ *        = 1             for n=2
+ *   c(n) = l(n)*(c(n-1)*b(n)-c(n-2)*p(n) for n>=3
+ *        = b(2)   for n=2
+ *        = 1      for n=1
+ * 
+ * Then the nth approximation of right handle height of the first point is:
+ *
+ * for n>=2:
+ *   h(n) = (b(n)*l(n)*c(n-1)*h(n-1)-c(n-2)*h(n-2)*l(n-1)*l(n)*l(n)+((-1)^n)*a(n))/c(n)
+ *   h(0) = 0
+ *   h(1) = 0
+ *
+ * 1/c(n) is the fraction of influence of the nth points to the first one. 
+ * You can stop the iterations when c(n) > 1000
+ *
+ * Example: if there are only 3 points in the series (N=2), the middle point
+ * is the auto handle and the optimal right handle height = h(2) = a(2)/c(2) = a(2)/b(2)
+ * 
+ *
+ */
+void BKE_nurb_handle_calc_smooth(BezTriple *first, int count)
+{
+	static int mod3[3] = { 1, 2, 0 };
+	float *pl;
+	float *l;
+	float *a;
+	float *b;
+	float *y;
+	float c[3];	/* only need to keep 3 C coef: current and previous 2 */
+	float h[3]; /* only need to keey 3 h value: current and previous 2 */
+	float t[3];
+	float sign, dy, f;
+	BezTriple *bezt, *prev, *next;
+	int i, j, n, n1, n2, maxpoints;
+
+	if (count < 3)
+		return;
+
+	pl = (float *)MEM_mallocN(sizeof(float)*count, "ha_prod_lamba");
+	l = (float *)MEM_mallocN(sizeof(float)*count, "ha_lamba");
+	a = (float *)MEM_mallocN(sizeof(float)*count, "ha_a");
+	b = (float *)MEM_mallocN(sizeof(float)*count, "ha_b");
+	y = (float *)MEM_mallocN(sizeof(float)*count, "ha_y");
+
+	bezt = first;
+	pl[2] = 1.0f;
+	n=0;
+	n1=2;	/* n-1 mod 3 */
+	n2=1;   /* n-2 mod 3 */
+	for (i=0; i<count; i++) {
+		t[n] = bezt->vec[1][0];
+		if (i==0) {
+			y[i] = bezt->vec[2][1];
+		} else if (i==count-1) {
+			y[i] = bezt->vec[0][1];
+		} else {
+			y[i] = bezt->vec[1][1];
+		}
+		if (i >= 2) {
+			l[i] = (t[n]-t[n1])/(t[n1]-t[n2]);
+			b[i] = 2.0f*(1.0f+l[i]);
+			a[i] = (y[i]-y[i-1]) + l[i]*l[i]*(y[i-1]-y[i-2]);
+			if (i>=3)
+				pl[i] = pl[i-1]*l[i];
+		}
+		n = mod3[n];
+		n1 = mod3[n1];
+		n2 = mod3[n2];
+		bezt++;
+	}
+	prev = first;
+	bezt = first+1;
+	next = first+2;
+	dy = 0.f;
+	for (i=1; i<count-1; i++) {
+		/* compute ideal slope as if the next bezier point was fixed */
+		/* adjust a[n] based on the previous computed handle (assumed fixed) */
+		a[i+1] -= l[i+1]*l[i+1]*dy;
+		c[0] = 0.f;
+		c[1] = 1.f;
+		c[2] = b[i+1];
+		h[0] = 0.f;
+		h[1] = 0.f;
+		h[2] = a[i+1]/c[2];
+		/* evaluate the influence of the remaing bezier points */
+		n=0;
+		n1=2;
+		n2=1;
+		sign=-1;
+		maxpoints = (i+MAX_AUTO_HANDLE_INFLUENCE+1);
+		if (maxpoints > count)
+			maxpoints = count;
+		for (j=i+2; j<maxpoints; j++) {
+			c[n] = l[j]*(c[n1]*b[j]-c[n2]*pl[j]);
+			h[n] = (b[j]*l[j]*c[n1]*h[n1]-c[n2]*h[n2]*l[j-1]*l[j]*l[j]+sign*a[j])/c[n];
+			sign = -sign;
+			n = mod3[n];
+			n1 = mod3[n1];
+			n2 = mod3[n2];
+			if (c[n1] > MAX_AUTO_C_VALUE)
+				break;
+		}
+		/* h[n-1] is the value of the right handle adjusted for 0 accelaration step */
+		dy = h[n1];
+		/* avoid overshoot it any */
+		if (dy > 0.f) {
+			if (dy > (f = (next->vec[1][1]-y[i]))) {
+				dy = f;
+			} else if (dy > (f=l[i+1]*(y[i]-prev->vec[1][1]))) {
+				dy = f;
+			}
+		} else {
+			if (dy < (f = (next->vec[1][1]-y[i]))) {
+				dy = f;
+			} else if (dy < (f = l[i+1]*(y[i]-prev->vec[1][1]))) {
+				dy = f;
+			}
+		}
+		bezt->vec[2][1] = y[i]+dy;
+		bezt->vec[0][1] = y[i]-dy/l[i+1];
+		bezt++;
+		next++;
+		prev++;
+	}
+	MEM_freeN(pl);
+	MEM_freeN(l);
+	MEM_freeN(a);
+	MEM_freeN(b);
+	MEM_freeN(y);
+}
+
 
 void BKE_nurb_handle_calc(BezTriple *bezt, BezTriple *prev, BezTriple *next, int mode)
 {

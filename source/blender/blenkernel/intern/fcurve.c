@@ -803,8 +803,9 @@ void fcurve_store_samples(FCurve *fcu, void *data, int start, int end, FcuSample
  */
 void calchandles_fcurve(FCurve *fcu)
 {
-	BezTriple *bezt, *prev, *next;
+	BezTriple *bezt, *prev, *next, *first;
 	int a = fcu->totvert;
+	int count;
 
 	/* Error checking:
 	 *	- need at least two points
@@ -836,6 +837,8 @@ void calchandles_fcurve(FCurve *fcu)
 				if (fcu->extend == FCURVE_EXTRAPOLATE_CONSTANT) {
 					bezt->vec[0][1] = bezt->vec[2][1] = bezt->vec[1][1];
 				}
+				/* remember that these keyframes are special, they don't need to be adjusted */
+				bezt->f5 = HD_AUTOTYPE_SPECIAL;
 			}
 		}
 		
@@ -843,6 +846,31 @@ void calchandles_fcurve(FCurve *fcu)
 		prev = bezt;
 		if (a == 1) next = NULL;
 		else next++;
+		bezt++;
+	}
+
+	/* do a second pass for auto handle: compute the handle to have 0 accelaration step */
+	a = fcu->totvert;
+	bezt = fcu->bezt;
+	first = bezt;
+	count = 0;
+
+	while (a--) {
+		if (ELEM(bezt->h1, HD_AUTO, HD_AUTO_ANIM) && ELEM(bezt->h2, HD_AUTO, HD_AUTO_ANIM) && bezt->f5 == HD_AUTOTYPE_NORMAL) {
+			/* count the number of auto keyframe in a row */
+			count++;
+		} else {
+			/* non auto handle closes the list (we come here at least for the last handle, see above) */
+			if (count >= 2) {
+				/* there at least 1 auto handle to adjust (the first one excluded) */
+				count++;
+				BKE_nurb_handle_calc_smooth(first, count);
+			}
+			/* restart counting for a new range */
+			first = bezt;
+			count = 1;
+		}
+		/* advance pointers for next iteration */
 		bezt++;
 	}
 }

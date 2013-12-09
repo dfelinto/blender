@@ -113,7 +113,8 @@ typedef struct BezTriple {
 	char f1, f2, f3;			/* f1, f2, f3: used for selection status */
 	char hide;					/* hide: used to indicate whether BezTriple is hidden (3D), type of keyframe (eBezTriple_KeyframeTypes) */
 	char f4;					/* f4: used to distinguish between Blender's and addon's keyframes */
-	char pad[7];
+	char f5;					/* f5: used for auto handle to distinguish between normal handle and exception (extrema) */
+	char pad[6];
 } BezTriple;
 
 /* note; alfa location in struct is abused by Key system */
@@ -332,6 +333,12 @@ typedef enum eBezTriple_Handle {
 	HD_ALIGN = 3,
 	HD_AUTO_ANIM = 4 	/* auto-clamped handles for animation */
 } eBezTriple_Handle;
+
+/* f5 (beztriple) */
+typedef enum eBezTriple_Auto_Type {
+	HD_AUTOTYPE_NORMAL = 0,
+	HD_AUTOTYPE_SPECIAL = 1
+};
 
 /* interpolation modes (used only for BezTriple->ipo) */
 typedef enum eBezTriple_Interpolation {
