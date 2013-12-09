@@ -69,7 +69,7 @@ struct wmOperatorType;
 struct PointerRNA;
 struct PropertyRNA;
 struct EnumPropertyItem;
-struct bBakeMap;
+struct BakeMap;
 
 /* object_edit.c */
 struct Object *ED_object_context(struct bContext *C);               /* context.object */
@@ -172,7 +172,7 @@ void ED_object_constraint_update(struct Object *ob);
 void ED_object_constraint_dependency_update(struct Main *bmain, struct Object *ob);
 
 /* bake maps */
-void ED_object_bakemap_set_active(struct Object *ob, struct bBakeMap *bmap);
+void ED_object_bakemap_set_active(struct Object *ob, struct BakeMap *bmap);
 void ED_object_bakemap_update(struct Object *ob);
 
 /* object_lattice.c */

@@ -67,13 +67,13 @@
 /* -------------- Naming -------------- */
 
 /* Find the first available, non-duplicate name for a given bake map */
-void BKE_unique_bakemap_name(bBakeMap *bmap, ListBase *list)
+void BKE_unique_bakemap_name(BakeMap *bmap, ListBase *list)
 {
-	BLI_uniquename(list, bmap, DATA_("BakeMap"), '.', offsetof(bBakeMap, name), sizeof(bmap->name));
+	BLI_uniquename(list, bmap, DATA_("BakeMap"), '.', offsetof(BakeMap, name), sizeof(bmap->name));
 }
 
 /* Remove the specified bake map from the given constraint stack */
-int BKE_remove_bakemap(ListBase *list, bBakeMap *bmap)
+int BKE_remove_bakemap(ListBase *list, BakeMap *bmap)
 {
 	if (bmap) {
 		//BKE_free_bakemap_data(bmap);
@@ -84,9 +84,9 @@ int BKE_remove_bakemap(ListBase *list, bBakeMap *bmap)
 		return 0;
 }
 
-static bBakeMap *add_new_bakemap_internal(const char *name, short type)
+static BakeMap *add_new_bakemap_internal(const char *name, short type)
 {
-	bBakeMap *bmap = MEM_callocN(sizeof(bBakeMap), "BakeMap");
+	BakeMap *bmap = MEM_callocN(sizeof(BakeMap), "BakeMap");
 	const char *newName;
 
 	/* Set up a generic constraint datablock */
@@ -104,9 +104,9 @@ static bBakeMap *add_new_bakemap_internal(const char *name, short type)
 	return bmap;
 }
 
-static bBakeMap *add_new_bakemap(Object *ob, const char *name, short type)
+static BakeMap *add_new_bakemap(Object *ob, const char *name, short type)
 {
-	bBakeMap *bmap;
+	BakeMap *bmap;
 	ListBase *list;
 
 	/* add the bake map */
@@ -134,7 +134,7 @@ static bBakeMap *add_new_bakemap(Object *ob, const char *name, short type)
 }
 
 /* Add new bake map for the given object */
-bBakeMap *BKE_add_ob_bakemap(Object *ob, const char *name, short type)
+BakeMap *BKE_add_ob_bakemap(Object *ob, const char *name, short type)
 {
 	return add_new_bakemap(ob, name, type);
 }

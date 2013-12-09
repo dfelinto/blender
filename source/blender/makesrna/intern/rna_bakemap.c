@@ -53,7 +53,7 @@ EnumPropertyItem bakemap_type_items[] = {
 
 static StructRNA *rna_BakeMap_refine(struct PointerRNA *ptr)
 {
-	bBakeMap *bmap = (bBakeMap *)ptr->data;
+	BakeMap *bmap = (BakeMap *)ptr->data;
 
 	switch (bmap->type) {
 		case BAKEMAP_TYPE_DIFFUSE:
@@ -67,13 +67,13 @@ static StructRNA *rna_BakeMap_refine(struct PointerRNA *ptr)
 
 static void rna_BakeMap_name_set(PointerRNA *ptr, const char *value)
 {
-	bBakeMap *bmap = (bBakeMap *)ptr->data;
+	BakeMap *bmap = (BakeMap *)ptr->data;
 
 	BLI_strncpy_utf8(bmap->name, value, sizeof(bmap->name));
 
 	if (ptr->id.data) {
 		Object *ob = (Object *)ptr->id.data;
-		BLI_uniquename(&ob->bakemaps, bmap, DATA_("BakeMap"), '.', offsetof(bBakeMap, name), sizeof(bmap->name));
+		BLI_uniquename(&ob->bakemaps, bmap, DATA_("BakeMap"), '.', offsetof(BakeMap, name), sizeof(bmap->name));
 	}
 }
 
@@ -86,7 +86,7 @@ static void rna_def_bakemap(BlenderRNA *brna)
 
 	srna = RNA_def_struct(brna, "BakeMap", NULL);
 	RNA_def_struct_ui_text(srna, "Bake Map", "XXX");
-	RNA_def_struct_sdna(srna, "bBakeMap");
+	RNA_def_struct_sdna(srna, "BakeMap");
 	RNA_def_struct_refine_func(srna, "rna_BakeMap_refine");
 
 	prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);

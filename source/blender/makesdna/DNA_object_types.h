@@ -59,21 +59,21 @@ struct bGPdata;
 struct RigidBodyOb;
 
 /* Bake Maps - Name Info */
-typedef struct bBakeMap {
-	struct bBakeMap *next, *prev;
+typedef struct BakeMap {
+	struct BakeMap *next, *prev;
 	char name[64];	/* MAX_BAKEMAP_NAME */
 
 	short type;
 	char flag, pad[5];
-} bBakeMap;
+} BakeMap;
 #define MAX_BAKEMAP_NAME 64
 
-/*bBakeMap flag */
+/*BakeMap flag */
 enum {
 	BAKEMAP_USE = (1 << 0),
 };
 
-/* bBakeMap type */
+/* BakeMap type */
 enum {
 	BAKEMAP_TYPE_DIFFUSE  = 0,
 	BAKEMAP_TYPE_SPECULAR = 1,
@@ -162,7 +162,7 @@ typedef struct Object {
 	ListBase effect  DNA_DEPRECATED;             // XXX deprecated... keep for readfile
 	ListBase defbase;   /* list of bDeformGroup (vertex groups) names and flag only */
 	ListBase modifiers; /* list of ModifierData structures */
-	ListBase bakemaps; /* list of bBakeMap structures */
+	ListBase bakemaps; /* list of BakeMap structures */
 
 	int mode;           /* Local object mode */
 	int restore_mode;   /* Keep track of what mode to return to after toggling a mode */

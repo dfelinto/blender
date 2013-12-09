@@ -34,7 +34,7 @@
  */
 
 struct ID;
-struct bBakeMap;
+struct BakeMap;
 struct ListBase;
 struct Object;
 
@@ -45,9 +45,9 @@ extern "C" {
 
 
 /* Bake Map API function prototypes */
-void BKE_unique_bakemap_name(struct bBakeMap *bmap, struct ListBase *list);
-struct bBakeMap *BKE_add_ob_bakemap(struct Object *ob, const char *name, short type);
-int BKE_remove_bakemap(ListBase *list, struct bBakeMap *bmap);
+void BKE_unique_bakemap_name(struct BakeMap *bmap, struct ListBase *list);
+struct BakeMap *BKE_add_ob_bakemap(struct Object *ob, const char *name, short type);
+int BKE_remove_bakemap(ListBase *list, struct BakeMap *bmap);
 
 #ifdef __cplusplus
 }

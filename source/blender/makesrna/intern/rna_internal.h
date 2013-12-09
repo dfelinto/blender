@@ -35,7 +35,6 @@
 
 #define RNA_MAGIC ((int)~0)
 
-struct bBakeMap;
 struct ColorBand;
 struct ID;
 struct IDProperty;

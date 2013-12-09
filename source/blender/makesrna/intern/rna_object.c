@@ -1346,7 +1346,7 @@ static void rna_Object_modifier_clear(Object *object, bContext *C)
 	WM_main_add_notifier(NC_OBJECT | ND_MODIFIER | NA_REMOVED, object);
 }
 
-static bBakeMap *rna_Object_bakemap_new(Object *object, int type, const char *name)
+static BakeMap *rna_Object_bakemap_new(Object *object, int type, const char *name)
 {
 	WM_main_add_notifier(NC_OBJECT | NA_ADDED, object);
 	return BKE_add_ob_bakemap(object, name, type);
@@ -1355,7 +1355,7 @@ static bBakeMap *rna_Object_bakemap_new(Object *object, int type, const char *na
 static PointerRNA rna_Object_active_bakemap_get(PointerRNA *ptr)
 {
 	Object *ob = (Object *)ptr->id.data;
-	bBakeMap *bmap;
+	BakeMap *bmap;
 
 	bmap = BLI_findlink(&ob->bakemaps, ob->actbakemap - 1);
 	return rna_pointer_inherit_refine(ptr, &RNA_BakeMap, bmap);
@@ -1364,7 +1364,7 @@ static PointerRNA rna_Object_active_bakemap_get(PointerRNA *ptr)
 static void rna_Object_active_bakemap_set(PointerRNA *ptr, PointerRNA value)
 {
 	Object *ob = (Object *)ptr->id.data;
-	ob->actbakemap = BLI_findindex(&ob->bakemaps, (bBakeMap *)value.data);
+	ob->actbakemap = BLI_findindex(&ob->bakemaps, (BakeMap *)value.data);
 }
 
 static int rna_Object_active_bakemap_index_get(PointerRNA *ptr)
@@ -1390,7 +1390,7 @@ static void rna_Object_active_bakemap_index_range(PointerRNA *ptr, int *min, int
 
 static void rna_Object_bakemap_remove(Object *object, ReportList *reports, PointerRNA *bakemap_ptr)
 {
-	bBakeMap *bmap = bakemap_ptr->data;
+	BakeMap *bmap = bakemap_ptr->data;
 	if (BLI_findindex(&object->bakemaps, bmap) == -1) {
 		BKE_reportf(reports, RPT_ERROR, "Bake map '%s' not found in object '%s'", bmap->name, object->id.name + 2);
 		return;
