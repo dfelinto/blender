@@ -63,20 +63,55 @@ typedef struct BakeMap {
 	struct BakeMap *next, *prev;
 	char name[64];	/* MAX_BAKEMAP_NAME */
 
-	short type;
-	char flag, pad[5];
+	/*
+	 enum - image/vertex color
+	 image datablock or filepath
+	 uv map ?
+	 margin ?
+	 */
+
+	short normal_space, type;
+	short samples;
+	char flag, pad;
+
+	float user_scale, pad2;
 } BakeMap;
 #define MAX_BAKEMAP_NAME 64
 
-/*BakeMap flag */
+/* BakeMap flag */
 enum {
-	BAKEMAP_USE = (1 << 0),
+	BAKEMAP_USE            = (1 << 0),
+	BAKEMAP_MULTIRES       = (1 << 1),
+	BAKEMAP_LORES_MESH     = (1 << 2),
+	BAKEMAP_NORMALIZE      = (1 << 3),
+	BAKEMAP_VCOL           = (1 << 4),
+	BAKEMAP_USERSCALE      = (1 << 5),
+};
+
+/* bake_normal_space */
+enum {
+	BAKEMAP_SPACE_CAMERA  = 0,
+	BAKEMAP_SPACE_WORLD   = 1,
+	BAKEMAP_SPACE_OBJECT  = 2,
+	BAKEMAP_SPACE_TANGENT = 3,
 };
 
 /* BakeMap type */
 enum {
-	BAKEMAP_TYPE_DIFFUSE  = 0,
-	BAKEMAP_TYPE_SPECULAR = 1,
+	BAKEMAP_TYPE_ALL                = 0,
+	BAKEMAP_TYPE_AO                 = 1,
+	BAKEMAP_TYPE_SHADOW             = 2,
+	BAKEMAP_TYPE_NORMALS            = 3,
+	BAKEMAP_TYPE_TEXTURE            = 4,
+	BAKEMAP_TYPE_DISPLACEMENT       = 5,
+	BAKEMAP_TYPE_DERIVATIVE         = 6,
+	BAKEMAP_TYPE_VERTEX_COLORS      = 7,
+	BAKEMAP_TYPE_EMIT               = 8,
+	BAKEMAP_TYPE_ALPHA              = 9,
+	BAKEMAP_TYPE_MIRROR_INTENSITY   = 10,
+	BAKEMAP_TYPE_MIRROR_COLOR       = 11,
+	BAKEMAP_TYPE_SPEC_INTENSITY     = 12,
+	BAKEMAP_TYPE_SPEC_COLOR         = 13,
 };
 
 /* Vertex Groups - Name Info */
@@ -315,7 +350,18 @@ typedef struct Object {
 
 	unsigned short actbakemap;	/* current bake map, note: index starts at 1 */
 	unsigned short pad2;
-	short pad3[2];
+
+	/* Bake Render options */
+	short bake_quad_split, bake_margin;
+	float bake_maxdist, bake_biasdist;
+
+	/*
+	short bake_osa, bake_filter, bake_mode, bake_flag;
+	//short bake_normal_space, bake_quad_split DNA_DEPRECATED;
+
+	short bake_samples, bake_pad;
+	float bake_user_scale, bake_pad1 DNA_DEPRECATED;
+	 */
 
 } Object;
 

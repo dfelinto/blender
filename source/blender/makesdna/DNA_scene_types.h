@@ -507,11 +507,13 @@ typedef struct RenderData {
 	float dither_intensity;
 	
 	/* Bake Render options */
-	short bake_osa, bake_filter, bake_mode, bake_flag;
-	short bake_normal_space, bake_quad_split;
-	float bake_maxdist, bake_biasdist;
-	short bake_samples, bake_pad;
-	float bake_user_scale, bake_pad1;
+	/* I think there is no need to keep them here, not even for
+	   bakward compatibility -- I'll leave them here for now, so I don't have to do with the baking code for the time being */
+	short bake_osa DNA_DEPRECATED, bake_filter DNA_DEPRECATED, bake_mode DNA_DEPRECATED, bake_flag DNA_DEPRECATED;
+	short bake_normal_space DNA_DEPRECATED, bake_quad_split DNA_DEPRECATED;
+	float bake_maxdist DNA_DEPRECATED, bake_biasdist DNA_DEPRECATED;
+	short bake_samples DNA_DEPRECATED, bake_pad DNA_DEPRECATED;
+	float bake_user_scale DNA_DEPRECATED, bake_pad1 DNA_DEPRECATED;
 
 	/* path to render output */
 	char pic[1024]; /* 1024 = FILE_MAX */

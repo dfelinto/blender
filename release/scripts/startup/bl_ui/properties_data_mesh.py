@@ -384,8 +384,8 @@ class DATA_PT_bake_maps(MeshButtonsPanel, Panel):
         ob = context.object
         bake_map = ob.bake_maps.active
 
-        rows = 1
-        if map:
+        rows = 2
+        if bake_map:
             rows = 4
 
         row = layout.row()
@@ -401,7 +401,33 @@ class DATA_PT_bake_maps(MeshButtonsPanel, Panel):
 
         if bake_map:
             row = layout.row()
-            row.label("{0} Map".format(bake_map.type.title()))
+            row.label("{0} Map".format(bake_map.type.title().replace('_', ' ')))
+
+            if bake_map.type in ('NORMALS', 'DISPLACEMENT', 'DERIVATIVE', 'AMBIENT_OCCLUSION'):
+                getattr(self, bake_map.type)(layout, ob, bake_map)
+
+    def AMBIENT_OCCLUSION(self, layout, ob, bmap):
+        layout.prop(bmap, "use_multires")
+        layout.prop(bmap, "use_normalize")
+        layout.prop(bmap, "samples")
+
+    def DERIVATIVE(self, layout, ob, bmap):
+        layout.prop(bmap, "use_multires")
+        row = layout.row()
+        row.prop(bmap, "use_user_scale", text="")
+
+        sub = row.column()
+        sub.active = bmap.use_user_scale
+        sub.prop(bmap, "user_scale", text="User Scale")
+
+    def DISPLACEMENT(self, layout, ob, bmap):
+        layout.prop(bmap, "use_multires")
+        layout.prop(bmap, "use_lores_mesh")
+        layout.prop(bmap, "use_normalize")
+
+    def NORMALS(self, layout, ob, bmap):
+        layout.prop(bmap, "use_multires")
+        layout.prop(bmap, "normal_space")
 
 
 class DATA_PT_customdata(MeshButtonsPanel, Panel):

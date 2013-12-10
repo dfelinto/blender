@@ -111,6 +111,7 @@
 #include "BKE_softbody.h"
 #include "BKE_material.h"
 #include "BKE_camera.h"
+#include "BKE_bakemap.h"
 
 #ifdef WITH_MOD_FLUID
 #include "LBM_fluidsim.h"
@@ -373,6 +374,8 @@ void BKE_object_free(Object *ob)
 	free_sensors(&ob->sensors);
 	free_controllers(&ob->controllers);
 	free_actuators(&ob->actuators);
+
+	BKE_free_bakemaps(&ob->bakemaps);
 	
 	BKE_free_constraints(&ob->constraints);
 	

@@ -72,12 +72,29 @@ void BKE_unique_bakemap_name(BakeMap *bmap, ListBase *list)
 	BLI_uniquename(list, bmap, DATA_("BakeMap"), '.', offsetof(BakeMap, name), sizeof(bmap->name));
 }
 
+static void free_bakemap(BakeMap *bmap)
+{
+//	if (bmap->object)
+//		id_us_min((ID *) bmap->object);
+
+	MEM_freeN(bmap);
+}
+
+void BKE_free_bakemaps(ListBase *lb)
+{
+	BakeMap *bmap;
+
+	while ((bmap = BLI_pophead(lb))) {
+		free_bakemap(bmap);
+	}
+}
+
 /* Remove the specified bake map from the given constraint stack */
 int BKE_remove_bakemap(ListBase *list, BakeMap *bmap)
 {
 	if (bmap) {
-		//BKE_free_bakemap_data(bmap);
-		BLI_freelinkN(list, bmap);
+		BLI_remlink(list, bmap);
+		free_bakemap(bmap);
 		return 1;
 	}
 	else
@@ -124,9 +141,9 @@ static BakeMap *add_new_bakemap(Object *ob, const char *name, short type)
 
 	/* set type+owner specific immutable settings */
 	switch (type) {
-		case BAKEMAP_TYPE_DIFFUSE:
+		case BAKEMAP_TYPE_ALL:
 			break;
-		case BAKEMAP_TYPE_SPECULAR:
+		case BAKEMAP_TYPE_AO:
 			break;
 	}
 	

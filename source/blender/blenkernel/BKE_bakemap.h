@@ -47,7 +47,8 @@ extern "C" {
 /* Bake Map API function prototypes */
 void BKE_unique_bakemap_name(struct BakeMap *bmap, struct ListBase *list);
 struct BakeMap *BKE_add_ob_bakemap(struct Object *ob, const char *name, short type);
-int BKE_remove_bakemap(ListBase *list, struct BakeMap *bmap);
+int BKE_remove_bakemap(struct ListBase *list, struct BakeMap *bmap);
+void BKE_free_bakemaps(struct ListBase *lb);
 
 #ifdef __cplusplus
 }

@@ -976,18 +976,23 @@ void OBJECT_OT_bake_map_add(wmOperatorType *ot)
 	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
 
-static int bake_map_remove_exec(bContext *C, wmOperator *op)
+static int bake_map_remove_exec(bContext *C, wmOperator *UNUSED(op))
 {
 	Object *ob = ED_object_context(C);
+	BakeMap *bmap;
 
+	bmap = BLI_findlink(&ob->bakemaps, ob->actbakemap - 1);
 
-	//bakemap_delete(ob);
+	if (bmap) {
+		BKE_remove_bakemap(&ob->bakemaps, bmap);
 
-	//DAG_id_tag_update(&ob->id, OB_RECALC_DATA);
-	//WM_event_add_notifier(C, NC_GEOM | ND_VERTEX_GROUP, ob->data);
-	WM_event_add_notifier(C, NC_OBJECT | ND_DRAW, ob);
-	
-	return OPERATOR_FINISHED;
+		DAG_id_tag_update(&ob->id, OB_RECALC_DATA);
+		WM_event_add_notifier(C, NC_OBJECT | ND_DRAW, ob);
+
+		return OPERATOR_FINISHED;
+	}
+
+	return OPERATOR_CANCELLED;
 }
 
 void OBJECT_OT_bake_map_remove(wmOperatorType *ot)
