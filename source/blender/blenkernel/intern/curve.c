@@ -3251,15 +3251,17 @@ void BKE_nurb_handle_calc_smooth(BezTriple *first, int count)
 		/* avoid overshoot it any */
 		if (dy > 0.f) {
 			if (dy > (f = (next->vec[1][1]-y[i]))) {
-				dy = f;
-			} else if (dy > (f=l[i+1]*(y[i]-prev->vec[1][1]))) {
-				dy = f;
+				dy = (f < 0.f) ? 0.f : f;
+			}
+			if (dy > (f=l[i+1]*(y[i]-prev->vec[1][1]))) {
+				dy = (f < 0.f) ? 0.f : f;
 			}
 		} else {
 			if (dy < (f = (next->vec[1][1]-y[i]))) {
-				dy = f;
-			} else if (dy < (f = l[i+1]*(y[i]-prev->vec[1][1]))) {
-				dy = f;
+				dy = (f > 0.f) ? 0.f : f;
+			}
+			if (dy < (f = l[i+1]*(y[i]-prev->vec[1][1]))) {
+				dy = (f > 0.f) ? 0.f : f;
 			}
 		}
 		bezt->vec[2][1] = y[i]+dy;
