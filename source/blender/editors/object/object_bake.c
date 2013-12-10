@@ -928,9 +928,26 @@ static int bake_map_supported_poll(bContext *C)
 static int bake_map_add_exec(bContext *C, wmOperator *op)
 {
 	Object *ob = ED_object_context(C);
+	BakeMap *bmap;
+	PointerRNA bmap_ptr;
+	PropertyRNA *prop;
+	const char *bmap_name;
+	char name[MAX_NAME];
 	int type = RNA_enum_get(op->ptr, "type");
 
-	BKE_add_ob_bakemap(ob, NULL, type);
+	RNA_string_get(op->ptr, "name", name);
+	bmap = BKE_add_ob_bakemap(ob, name, type);
+
+	if (*name == '\0') {
+		/* set the bake map name based on rna type enum */
+		RNA_pointer_create((ID *)ob, &RNA_BakeMap, bmap, &bmap_ptr);
+		prop = RNA_struct_find_property(&bmap_ptr, "type");
+
+		RNA_property_enum_name(C, &bmap_ptr, prop, RNA_property_enum_get(&bmap_ptr, prop), &bmap_name);
+		BLI_strncpy(bmap->name, bmap_name, sizeof(bmap->name));
+		BKE_unique_bakemap_name(bmap, &ob->bakemaps);
+	}
+
 	WM_event_add_notifier(C, NC_OBJECT | ND_DRAW, ob);
 	
 	return OPERATOR_FINISHED;
@@ -938,6 +955,8 @@ static int bake_map_add_exec(bContext *C, wmOperator *op)
 
 void OBJECT_OT_bake_map_add(wmOperatorType *ot)
 {
+	PropertyRNA *prop;
+
 	/* identifiers */
 	ot->name = "Add Bake Map";
 	ot->idname = "OBJECT_OT_bake_map_add";
@@ -953,6 +972,8 @@ void OBJECT_OT_bake_map_add(wmOperatorType *ot)
 
 	/* properties */
 	ot->prop = RNA_def_enum(ot->srna, "type", bakemap_type_items, 0, "Type", "");
+	prop = RNA_def_string(ot->srna, "name", "", MAX_NAME, "Name", "Name of the bake map to add");
+	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
 
 static int bake_map_remove_exec(bContext *C, wmOperator *op)

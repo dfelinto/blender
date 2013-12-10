@@ -401,7 +401,7 @@ class DATA_PT_bake_maps(MeshButtonsPanel, Panel):
 
         if bake_map:
             row = layout.row()
-            row.prop(bake_map, "type")
+            row.label("{0} Map".format(bake_map.type.title()))
 
 
 class DATA_PT_customdata(MeshButtonsPanel, Panel):
