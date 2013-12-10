@@ -1125,10 +1125,8 @@ typedef struct UnitSettings {
 	char system; /* imperial, metric etc */
 	char system_rotation; /* not implemented as a proper unit system yet */
 	short flag;
-	float pad;
 	char system_time; /* frames, smpte etc */
-	char pad2;
-	short pad3;
+	char pad[7];
 } UnitSettings;
 
 /* ------------------------------------------- */

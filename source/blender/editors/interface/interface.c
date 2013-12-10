@@ -1569,12 +1569,6 @@ bool ui_is_but_unit(const uiBut *but)
 		return false;
 #endif
 
-#if 0
-	/* for now disable time unit conversion */
-	if (unit_type == PROP_UNIT_TIME)
-		return false;
-#endif
-
 	if (unit->system == USER_UNIT_NONE) {
 		if (!ELEM(unit_type, PROP_UNIT_ROTATION, PROP_UNIT_TIME)) {
 			return false;

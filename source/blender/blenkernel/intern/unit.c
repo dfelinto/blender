@@ -420,13 +420,12 @@ static size_t unit_as_string(char *str, int len_max, double value, int prec, bUn
 
 void bUnit_AsString_smpte(char *str, int len_max, double value, double fps)
 {
-	int len;
 	int h,m,s,f;
 	double fractpart, intpart;
 
-	const int frames_in_sec = fps;
-	const int frames_in_min = frames_in_sec * 60;
-	const int frames_in_hr  = frames_in_min * 60;
+	const float frames_in_sec = (float) fps;
+	const float frames_in_min = frames_in_sec * 60.0f;
+	const float frames_in_hr  = frames_in_min * 60.0f;
 
 	fractpart = modf(value / frames_in_hr, &intpart);
 	h = (int) intpart;
@@ -443,15 +442,10 @@ void bUnit_AsString_smpte(char *str, int len_max, double value, double fps)
 
 	value -= s * frames_in_sec;
 
-	f = value;
+	f = (int) value;
 
 	/* Convert to a string */
-	{
-		len = BLI_snprintf(str, len_max, "%02d:%02d:%02d:%02d", h, m, s, f);
-
-		if (len >= len_max)
-			str[len_max - 1] = '\0';
-	}
+	BLI_snprintf(str, len_max, "%02d:%02d:%02d:%02d", h, m, s, f);
 }
 
 /* Used for drawing number buttons, try keep fast.
@@ -661,7 +655,7 @@ int bUnit_ReplaceString(char *str, int len_max, const char *str_prev, double sca
 		char *ch = str + len - 1;
 		char str_smpte[4] = "smh";
 		char *c = &str_smpte[0];
-		char found_smtpe = 0;
+		bool found_smtpe = false;
 		int i;
 
 		for (i = 0; i < len && *c != '\0'; i++, ch--) {
