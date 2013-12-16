@@ -68,7 +68,7 @@ class SEQUENCER_HT_header(Header):
 
             if st.view_type in {'SEQUENCER', 'SEQUENCER_PREVIEW'}:
                 row.menu("SEQUENCER_MT_select")
-                row.menu("SEQUENCER_MT_marker")
+                #row.menu("SEQUENCER_MT_marker")
                 row.menu("SEQUENCER_MT_add")
                 row.menu("SEQUENCER_MT_strip")
 

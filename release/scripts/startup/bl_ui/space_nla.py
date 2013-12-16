@@ -38,7 +38,7 @@ class NLA_HT_header(Header):
         if context.area.show_menus:
             row.menu("NLA_MT_view")
             row.menu("NLA_MT_select")
-            row.menu("NLA_MT_marker")
+            #row.menu("NLA_MT_marker")
             row.menu("NLA_MT_edit")
             row.menu("NLA_MT_add")
 

@@ -1495,6 +1495,9 @@ void ED_marker_keymap(wmKeyConfig *keyconf)
 	wmKeyMap *keymap = WM_keymap_find(keyconf, "Markers", 0, 0);
 	wmKeyMapItem *kmi;
 	
+#if 1
+	return;
+#else
 	WM_keymap_verify_item(keymap, "MARKER_OT_add", MKEY, KM_PRESS, 0, 0);
 	WM_keymap_verify_item(keymap, "MARKER_OT_move", EVT_TWEAK_S, KM_ANY, 0, 0);
 	WM_keymap_verify_item(keymap, "MARKER_OT_duplicate", DKEY, KM_PRESS, KM_SHIFT, 0);
@@ -1524,6 +1527,7 @@ void ED_marker_keymap(wmKeyConfig *keyconf)
 #ifdef DURIAN_CAMERA_SWITCH
 	WM_keymap_add_item(keymap, "MARKER_OT_camera_bind", BKEY, KM_PRESS, KM_CTRL, 0);
 #endif
+#endif
 }
 
 /* to be called from animation editor keymaps, see note below */
@@ -1533,6 +1537,6 @@ void ED_marker_keymap_animedit_conflictfree(wmKeyMap *keymap)
 	 * since these are handy to be able to do unrestricted and won't conflict
 	 * with primary function hotkeys (Usability tweak [#27469])
 	 */
-	WM_keymap_add_item(keymap, "MARKER_OT_add", MKEY, KM_PRESS, 0, 0);
-	WM_keymap_add_item(keymap, "MARKER_OT_rename", MKEY, KM_PRESS, KM_CTRL, 0);
+//	WM_keymap_add_item(keymap, "MARKER_OT_add", MKEY, KM_PRESS, 0, 0);
+//	WM_keymap_add_item(keymap, "MARKER_OT_rename", MKEY, KM_PRESS, KM_CTRL, 0);
 }

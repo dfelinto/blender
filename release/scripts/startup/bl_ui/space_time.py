@@ -36,7 +36,7 @@ class TIME_HT_header(Header):
 
         if context.area.show_menus:
             row.menu("TIME_MT_view")
-            row.menu("TIME_MT_marker")
+            #row.menu("TIME_MT_marker")
             row.menu("TIME_MT_frame")
             row.menu("TIME_MT_playback")
 

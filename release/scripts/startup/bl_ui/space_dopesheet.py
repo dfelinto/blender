@@ -110,7 +110,7 @@ class DOPESHEET_HT_header(Header):
         if context.area.show_menus:
             row.menu("DOPESHEET_MT_view")
             row.menu("DOPESHEET_MT_select")
-            row.menu("DOPESHEET_MT_marker")
+            #row.menu("DOPESHEET_MT_marker")
 
             if st.mode == 'DOPESHEET' or (st.mode == 'ACTION' and st.action is not None):
                 row.menu("DOPESHEET_MT_channel")

@@ -38,7 +38,7 @@ class GRAPH_HT_header(Header):
         if context.area.show_menus:
             row.menu("GRAPH_MT_view")
             row.menu("GRAPH_MT_select")
-            row.menu("GRAPH_MT_marker")
+            #row.menu("GRAPH_MT_marker")
             row.menu("GRAPH_MT_channel")
             row.menu("GRAPH_MT_key")
 
