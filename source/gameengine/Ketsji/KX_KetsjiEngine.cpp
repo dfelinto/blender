@@ -1334,6 +1334,9 @@ void KX_KetsjiEngine::RenderFrame(KX_Scene* scene, KX_Camera* cam)
 
 	scene->CalculateVisibleMeshes(m_rasterizer,cam);
 
+	// update levels of detail
+	scene->UpdateObjectLods();
+
 	m_logger->StartLog(tc_rasterizer, m_kxsystem->GetTimeInSeconds(), true);
 	SG_SetActiveStage(SG_STAGE_RENDER);
 
