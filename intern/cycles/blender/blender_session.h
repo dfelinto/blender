@@ -49,6 +49,9 @@ public:
 	/* offline render */
 	void render();
 
+	//XXX missing BakeMaps and return floats
+	void bake(BL::Object b_object, int passes_bit_flag);
+
 	void write_render_result(BL::RenderResult b_rr, BL::RenderLayer b_rlay, RenderTile& rtile);
 	void write_render_tile(RenderTile& rtile);
 

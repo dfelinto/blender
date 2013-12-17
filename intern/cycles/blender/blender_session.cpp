@@ -421,6 +421,13 @@ void BlenderSession::render()
 	sync = NULL;
 }
 
+//XXX missing BakeMaps and return floats
+void BlenderSession::bake(BL::Object b_object, int passes_bit_flag)
+{
+	printf("Baking inside Cycles\n");
+	printf("passes: %d\n", passes_bit_flag);
+}
+
 void BlenderSession::do_write_update_render_result(BL::RenderResult b_rr, BL::RenderLayer b_rlay, RenderTile& rtile, bool do_update_only)
 {
 	RenderBuffers *buffers = rtile.buffers;

@@ -65,6 +65,7 @@
 #include "BKE_mesh.h"
 #include "BKE_scene.h"
 
+#include "RE_engine.h"
 #include "RE_pipeline.h"
 #include "RE_shader_ext.h"
 #include "RE_multires_bake.h"
@@ -896,4 +897,236 @@ void OBJECT_OT_bake_image(wmOperatorType *ot)
 	ot->exec = bake_image_exec;
 	ot->invoke = objects_bake_render_invoke;
 	ot->modal = objects_bake_render_modal;
+}
+
+/* catch esc */
+static int objects_bake_modal(bContext *C, wmOperator *UNUSED(op), const wmEvent *event)
+{
+	/* no running blender, remove handler and pass through */
+	if (0 == WM_jobs_test(CTX_wm_manager(C), CTX_data_scene(C), WM_JOB_TYPE_RENDER_BAKE))
+		return OPERATOR_FINISHED | OPERATOR_PASS_THROUGH;
+
+	/* running render */
+	switch (event->type) {
+		case ESCKEY:
+			return OPERATOR_RUNNING_MODAL;
+			break;
+	}
+	return OPERATOR_PASS_THROUGH;
+}
+
+static int objects_bake_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(_event))
+{
+#if 0
+	Scene *scene = CTX_data_scene(C);
+	int result = OPERATOR_CANCELLED;
+
+	if (0 && is_multires_bake(scene)) {
+		result = multiresbake_image_exec(C, op);
+	}
+	else {
+		/* only one render job at a time */
+		if (WM_jobs_test(CTX_wm_manager(C), scene, WM_JOB_TYPE_RENDER_BAKE))
+			return OPERATOR_CANCELLED;
+
+		if (test_bake_internal(C, op->reports) == 0) {
+			return OPERATOR_CANCELLED;
+		}
+		else {
+			BakeRender *bkr = MEM_callocN(sizeof(BakeRender), "render bake");
+			wmJob *wm_job;
+
+			{
+				Scene *scene = CTX_data_scene(C);
+				bScreen *sc = CTX_wm_screen(C);
+
+				/* get editmode results */
+				ED_object_editmode_load(CTX_data_edit_object(C));
+
+				bkr->sa = sc ? BKE_screen_find_big_area(sc, SPACE_IMAGE, 10) : NULL; /* can be NULL */
+				bkr->main = CTX_data_main(C);
+				bkr->scene = scene;
+				bkr->actob = (scene->r.bake_flag & R_BAKE_TO_ACTIVE) ? OBACT : NULL;
+				bkr->re = RE_NewRender("_Bake View_");
+			}
+
+			//init_bake_internal(bkr, C);
+			bkr->reports = op->reports;
+
+			/* setup job */
+			wm_job = WM_jobs_get(CTX_wm_manager(C), CTX_wm_window(C), scene, "Render Bake",
+			                     WM_JOB_EXCL_RENDER | WM_JOB_PRIORITY | WM_JOB_PROGRESS, WM_JOB_TYPE_RENDER_BAKE);
+			WM_jobs_customdata_set(wm_job, bkr, bake_freejob);
+			WM_jobs_timer(wm_job, 0.5, NC_IMAGE, 0); /* TODO - only draw bake image, can we enforce this */
+			WM_jobs_callbacks(wm_job, bake_startjob, NULL, bake_update, NULL);
+
+			G.is_break = FALSE;
+			G.is_rendering = TRUE;
+
+			WM_jobs_start(CTX_wm_manager(C), wm_job);
+
+			WM_cursor_wait(0);
+
+			/* add modal handler for ESC */
+			WM_event_add_modal_handler(C, op);
+		}
+
+		result = OPERATOR_RUNNING_MODAL;
+	}
+
+	WM_event_add_notifier(C, NC_SCENE | ND_RENDER_RESULT, scene);
+
+	return result;
+#endif
+	return OPERATOR_CANCELLED;
+}
+
+
+/* for exec() when there is no render job
+ * note: this wont check for the escape key being pressed, but doing so isnt threadsafe */
+static int bake_break(void *UNUSED(rjv))
+{
+	if (G.is_break)
+		return 1;
+	return 0;
+}
+
+static int bake_exec(bContext *C, wmOperator *op)
+{
+	Scene *scene = CTX_data_scene(C);
+	Object *object = CTX_data_active_object(C);
+
+	Render *re = RE_NewRender(scene->id.name);
+	G.is_break = FALSE;
+
+	RE_test_break_cb(re, NULL, bake_break);
+	RE_SetReports(re, op->reports);
+
+	/**
+	 // PSEUDO-CODE TIME
+
+	 // for now ignore the 'bakemap' references below
+	 // this is just to help thinking how this will fit
+	 // in the overall design and future changes
+	 // for the current bake structure just consider
+	 // that there is one bakemap made with the current
+	 // render selected options
+
+	 for object in selected_objects:
+ 		BakePixels *pixel_array[];
+
+	 	// doing this at this point means a bakemap won't have
+		// a unique UVMap, which may be fine
+
+	 	populate_bake_pixels(object, pixel_array);
+
+	 	for bakemap in object.bakemaps:
+	 		float *ret[]
+
+	 		if bakemap.type in (A):
+	 			extern_bake(object, pixel_array, len(bp), bakemap.type, ret);
+	 		else:
+	 			intern_bake(object, pixel_array, len(bp), bakemap.type, ret);
+
+	 		if bakemap.save_external:
+	 			write_image(bakemap.filepath, ret);
+
+	 		elif bakemap.save_internal:
+	 			bakemap.image(bakemap.image, ret);
+
+	 		elif ... (vertex color?)
+	 
+	 
+	 
+	 //TODO:
+	 1. get RE_engine_bake function to actually call the cycles function
+	 (right now re->r.engine is "", while it should be 'CYCLES')
+
+	 2. void BlenderSession::bake() to take BakePixel and to return float result().
+	 
+	 3. write the populate_bake_pixels () function - start of duplication
+	    of existent baking code.
+	 
+	 4. void BlenderSession::bake() to actually render something
+	    (looking from the mesh_displace and the background baking it's not
+	     the critical part, it may be relatively straightforward)
+	 
+	 5. everything else ... (after getting this concept working, it'll
+	    be time to decide where to move in terms of development.
+	    e.g., do the image part? the cycle part? the blender internal changes? ...
+	 */
+
+	RE_engine_bake(re, object, 23);
+
+	RE_SetReports(re, NULL);
+
+#if 0
+	Main *bmain = CTX_data_main(C);
+	Scene *scene = CTX_data_scene(C);
+	int result = OPERATOR_CANCELLED;
+
+	if (is_multires_bake(scene)) {
+		result = multiresbake_image_exec_locked(C, op);
+	}
+	else {
+		if (test_bake_internal(C, op->reports) == 0) {
+			return OPERATOR_CANCELLED;
+		}
+		else {
+			ListBase threads;
+			BakeRender bkr = {NULL};
+
+			init_bake_internal(&bkr, C);
+			bkr.reports = op->reports;
+
+			RE_test_break_cb(bkr.re, NULL, thread_break);
+			G.is_break = FALSE;   /* blender_test_break uses this global */
+
+			RE_Database_Baking(bkr.re, bmain, scene, scene->lay, scene->r.bake_mode, (scene->r.bake_flag & R_BAKE_TO_ACTIVE) ? OBACT : NULL);
+
+			/* baking itself is threaded, cannot use test_break in threads  */
+			BLI_init_threads(&threads, do_bake_render, 1);
+			bkr.ready = 0;
+			BLI_insert_thread(&threads, &bkr);
+
+			while (bkr.ready == 0) {
+				PIL_sleep_ms(50);
+				if (bkr.ready)
+					break;
+
+				/* used to redraw in 2.4x but this is just for exec in 2.5 */
+				if (!G.background)
+					blender_test_break();
+			}
+			BLI_end_threads(&threads);
+
+			if (bkr.result == BAKE_RESULT_NO_OBJECTS)
+				BKE_report(op->reports, RPT_ERROR, "No valid images found to bake to");
+			else if (bkr.result == BAKE_RESULT_FEEDBACK_LOOP)
+				BKE_report(op->reports, RPT_ERROR, "Circular reference in texture stack");
+
+			finish_bake_internal(&bkr);
+
+			result = OPERATOR_FINISHED;
+		}
+	}
+
+	WM_event_add_notifier(C, NC_SCENE | ND_RENDER_RESULT, scene);
+	
+	return result;
+#endif
+	return OPERATOR_CANCELLED;
+}
+
+void OBJECT_OT_bake(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Bake";
+	ot->description = "Bake image textures of selected objects";
+	ot->idname = "OBJECT_OT_bake";
+
+	/* api callbacks */
+	ot->exec = bake_exec;
+	ot->invoke = objects_bake_invoke;
+	ot->modal = objects_bake_modal;
 }

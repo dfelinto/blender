@@ -67,7 +67,7 @@
 static RenderEngineType internal_render_type = {
 	NULL, NULL,
 	"BLENDER_RENDER", N_("Blender Render"), RE_INTERNAL,
-	NULL, NULL, NULL, NULL, NULL,
+	NULL, NULL, NULL, NULL, NULL, NULL,
 	{NULL, NULL, NULL}
 };
 
@@ -76,7 +76,7 @@ static RenderEngineType internal_render_type = {
 static RenderEngineType internal_game_type = {
 	NULL, NULL,
 	"BLENDER_GAME", N_("Blender Game"), RE_INTERNAL | RE_GAME,
-	NULL, NULL, NULL, NULL, NULL,
+	NULL, NULL, NULL, NULL, NULL, NULL,
 	{NULL, NULL, NULL}
 };
 
@@ -394,6 +394,51 @@ RenderData *RE_engine_get_render_data(Render *re)
 	return &re->r;
 }
 
+/* Bake */
+
+//XXX missing BakeMaps and return floats
+int RE_engine_bake(Render *re, Object *object, int passes_bit_flag)
+{
+	RenderEngineType *type = RE_engines_find(re->r.engine);
+	RenderEngine *engine;
+	int persistent_data = re->r.mode & R_PERSISTENT_DATA;
+
+	G.is_rendering = TRUE;
+
+	/* verify if we can render */
+	if (!type->bake)
+		return 0;
+
+	/* render */
+	engine = re->engine;
+
+	if (!engine) {
+		engine = RE_engine_create(type);
+		re->engine = engine;
+	}
+
+	engine->flag |= RE_ENGINE_RENDERING;
+
+	//if (type->update)
+	//	type->update(engine, re->main, re->scene);
+
+	if (type->bake)
+		type->bake(engine, re->scene, object, passes_bit_flag);
+
+	engine->flag &= ~RE_ENGINE_RENDERING;
+
+	/* re->engine becomes zero if user changed active render engine during render */
+	if (!persistent_data || !re->engine) {
+		RE_engine_free(engine);
+		re->engine = NULL;
+	}
+
+	if (BKE_reports_contain(re->reports, RPT_ERROR))
+		G.is_break = TRUE;
+
+	return 1;
+}
+
 /* Render */
 
 static bool render_layer_exclude_animated(Scene *scene, SceneRenderLayer *srl)
@@ -407,8 +452,12 @@ static bool render_layer_exclude_animated(Scene *scene, SceneRenderLayer *srl)
 	return RNA_property_animated(&ptr, prop);
 }
 
-int RE_engine_render(Render *re, int do_all)
+int aRE_engine_render(Render *re, int do_all)
 {
+	return RE_engine_bake(re, NULL, 47);
+}
+
+int RE_engine_render(Render *re, int do_all) {
 	RenderEngineType *type = RE_engines_find(re->r.engine);
 	RenderEngine *engine;
 	int persistent_data = re->r.mode & R_PERSISTENT_DATA;

@@ -117,6 +117,26 @@ static void engine_render(RenderEngine *engine, struct Scene *scene)
 	RNA_parameter_list_free(&list);
 }
 
+//XXX missing BakeMaps and return floats
+static void engine_bake(RenderEngine *engine, struct Scene *scene, struct Object *object, int passes_bit_flag)
+{
+	extern FunctionRNA rna_RenderEngine_bake_func;
+	PointerRNA ptr;
+	ParameterList list;
+	FunctionRNA *func;
+
+	RNA_pointer_create(NULL, engine->type->ext.srna, engine, &ptr);
+	func = &rna_RenderEngine_bake_func;
+
+	RNA_parameter_list_create(&list, &ptr, func);
+	RNA_parameter_set_lookup(&list, "scene", &scene);
+	RNA_parameter_set_lookup(&list, "object", &object);
+	RNA_parameter_set_lookup(&list, "passes_bit_flag", passes_bit_flag);
+	engine->type->ext.call(NULL, &ptr, func, &list);
+
+	RNA_parameter_list_free(&list);
+}
+
 static void engine_view_update(RenderEngine *engine, const struct bContext *context)
 {
 	extern FunctionRNA rna_RenderEngine_view_update_func;
@@ -189,7 +209,7 @@ static StructRNA *rna_RenderEngine_register(Main *bmain, ReportList *reports, vo
 	RenderEngineType *et, dummyet = {NULL};
 	RenderEngine dummyengine = {NULL};
 	PointerRNA dummyptr;
-	int have_function[5];
+	int have_function[6];
 
 	/* setup dummy engine & engine type to store static properties in */
 	dummyengine.type = &dummyet;
@@ -226,9 +246,10 @@ static StructRNA *rna_RenderEngine_register(Main *bmain, ReportList *reports, vo
 
 	et->update = (have_function[0]) ? engine_update : NULL;
 	et->render = (have_function[1]) ? engine_render : NULL;
-	et->view_update = (have_function[2]) ? engine_view_update : NULL;
-	et->view_draw = (have_function[3]) ? engine_view_draw : NULL;
-	et->update_script_node = (have_function[4]) ? engine_update_script_node : NULL;
+	et->bake = (have_function[2]) ? engine_bake : NULL;
+	et->view_update = (have_function[3]) ? engine_view_update : NULL;
+	et->view_draw = (have_function[4]) ? engine_view_draw : NULL;
+	et->update_script_node = (have_function[5]) ? engine_update_script_node : NULL;
 
 	BLI_addtail(&R_engines, et);
 
@@ -343,6 +364,18 @@ static void rna_def_render_engine(BlenderRNA *brna)
 	RNA_def_function_ui_description(func, "Render scene into an image");
 	RNA_def_function_flag(func, FUNC_REGISTER_OPTIONAL | FUNC_ALLOW_WRITE);
 	RNA_def_pointer(func, "scene", "Scene", "", "");
+
+	func = RNA_def_function(srna, "bake", NULL);
+	RNA_def_function_ui_description(func, "Bake passes");
+	RNA_def_function_flag(func, FUNC_REGISTER_OPTIONAL | FUNC_ALLOW_WRITE);
+	prop = RNA_def_pointer(func, "scene", "Scene", "", "");
+	RNA_def_property_flag(prop, PROP_REQUIRED);
+	prop = RNA_def_pointer(func, "object", "Object", "", "");
+	RNA_def_property_flag(prop, PROP_REQUIRED);
+	prop = prop = RNA_def_int(func, "passes_bit_flag", 0, 0, INT_MAX, "", "", 0, INT_MAX);
+	RNA_def_property_flag(prop, PROP_REQUIRED);
+	//XXX we could use custom get/set to make sure we are asking to bake a valid pass
+
 
 	/* viewport render callbacks */
 	func = RNA_def_function(srna, "view_update", NULL);
