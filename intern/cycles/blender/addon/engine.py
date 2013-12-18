@@ -63,7 +63,12 @@ def render(engine):
 def bake(engine, object, pass_type):
     import _cycles
     if hasattr(engine, "session"):
-        _cycles.bake(engine.session, object, pass_type)
+        #f=open('/Users/dfelinto/tmp/h.txt', 'w')
+        #f.write("{0}".format(pass_type))
+        #f.write("{0}".format(type(pass_type)))
+        #f.close()
+        print( pass_type, type( pass_type))
+        _cycles.bake(engine.session, object.as_pointer(), pass_type)
 
 def reset(engine, data, scene):
     import _cycles

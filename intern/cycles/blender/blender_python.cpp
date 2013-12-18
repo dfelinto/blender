@@ -137,12 +137,14 @@ static PyObject *render_func(PyObject *self, PyObject *value)
 static PyObject *bake_func(PyObject *self, PyObject *args)
 {
 	PyObject *pysession, *pyobject;
-	int pass_type;
+	const char *pass_type;
 
-	if(!PyArg_ParseTuple(args, "OOi", &pysession, &pyobject, &pass_type))
+	if(!PyArg_ParseTuple(args, "OOs", &pysession, &pyobject, &pass_type))
 		return NULL;
 
 	Py_BEGIN_ALLOW_THREADS
+
+	//pass_type = *(int *)PyLong_AsVoidPtr(pypass_type);
 
 	BlenderSession *session = (BlenderSession*)PyLong_AsVoidPtr(pysession);
 

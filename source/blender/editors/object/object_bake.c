@@ -998,7 +998,7 @@ static int bake_exec(bContext *C, wmOperator *op)
 
 	Render *re = RE_NewRender(scene->id.name);
 
-	RE_engine_set_render_data(re, &scene->r);
+	RE_engine_bake_set_engine_parameters(re, CTX_data_main(C), scene);
 
 	G.is_break = FALSE;
 
@@ -1060,7 +1060,7 @@ static int bake_exec(bContext *C, wmOperator *op)
 	 */
 
 	//XXX for now get the number from scene->r bake type
-	RE_engine_bake(re, object, 23);
+	RE_engine_bake(re, object, 2);
 
 	RE_SetReports(re, NULL);
 
@@ -1133,4 +1133,6 @@ void OBJECT_OT_bake(wmOperatorType *ot)
 	ot->exec = bake_exec;
 	ot->invoke = objects_bake_invoke;
 	ot->modal = objects_bake_modal;
+
+	//enum
 }

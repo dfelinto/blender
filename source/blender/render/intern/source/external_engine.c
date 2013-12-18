@@ -394,9 +394,11 @@ RenderData *RE_engine_get_render_data(Render *re)
 	return &re->r;
 }
 
-void RE_engine_set_render_data(Render *re, RenderData *rd)
+void RE_engine_bake_set_engine_parameters(Render *re, Main *bmain, Scene *scene)
 {
-	re->r = *rd;     /* hardcopy */
+	re->scene = scene;
+	re->main = bmain;
+	re->r = scene->r;
 }
 
 /* Bake */
@@ -424,8 +426,9 @@ int RE_engine_bake(Render *re, Object *object, int pass_type)
 
 	engine->flag |= RE_ENGINE_RENDERING;
 
-	//if (type->update)
-	//	type->update(engine, re->main, re->scene);
+	/* update is only called so we create the engine.session */
+	if (type->update)
+		type->update(engine, re->main, re->scene);
 
 	if (type->bake)
 		type->bake(engine, re->scene, object, pass_type);

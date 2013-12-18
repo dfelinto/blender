@@ -50,7 +50,7 @@ public:
 	void render();
 
 	//XXX missing BakePixels and return floats
-	void bake(BL::Object b_object, int pass_type);
+	void bake(BL::Object b_object, const string& pass_type);
 
 	void write_render_result(BL::RenderResult b_rr, BL::RenderLayer b_rlay, RenderTile& rtile);
 	void write_render_tile(RenderTile& rtile);

@@ -44,14 +44,20 @@ BlenderSession::BlenderSession(BL::RenderEngine b_engine_, BL::UserPreferences b
 {
 	/* offline render */
 
-	width = render_resolution_x(b_render);
-	height = render_resolution_y(b_render);
+	if (b_render) {
+		width = render_resolution_x(b_render);
+		height = render_resolution_y(b_render);
+	}
+	else {
+		width = height = 0.0;
+	}
 
 	background = true;
 	last_redraw_time = 0.0;
 	start_resize_time = 0.0;
 
-	create_session();
+	if (b_render)
+		create_session();
 }
 
 BlenderSession::BlenderSession(BL::RenderEngine b_engine_, BL::UserPreferences b_userpref_,
@@ -422,10 +428,10 @@ void BlenderSession::render()
 }
 
 //XXX missing BakePixels and return floats
-void BlenderSession::bake(BL::Object b_object, int pass_type)
+void BlenderSession::bake(BL::Object b_object, const string& pass_type)
 {
 	printf("Baking inside Cycles\n");
-	printf("passes: %d\n", pass_type);
+	printf("passes: %s\n", pass_type.c_str());
 }
 
 void BlenderSession::do_write_update_render_result(BL::RenderResult b_rr, BL::RenderLayer b_rlay, RenderTile& rtile, bool do_update_only)
