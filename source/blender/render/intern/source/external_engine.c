@@ -394,10 +394,15 @@ RenderData *RE_engine_get_render_data(Render *re)
 	return &re->r;
 }
 
+void RE_engine_set_render_data(Render *re, RenderData *rd)
+{
+	re->r = *rd;     /* hardcopy */
+}
+
 /* Bake */
 
-//XXX missing BakeMaps and return floats
-int RE_engine_bake(Render *re, Object *object, int passes_bit_flag)
+//XXX missing BakePixels and return floats
+int RE_engine_bake(Render *re, Object *object, int pass_type)
 {
 	RenderEngineType *type = RE_engines_find(re->r.engine);
 	RenderEngine *engine;
@@ -423,7 +428,7 @@ int RE_engine_bake(Render *re, Object *object, int passes_bit_flag)
 	//	type->update(engine, re->main, re->scene);
 
 	if (type->bake)
-		type->bake(engine, re->scene, object, passes_bit_flag);
+		type->bake(engine, re->scene, object, pass_type);
 
 	engine->flag &= ~RE_ENGINE_RENDERING;
 
@@ -450,11 +455,6 @@ static bool render_layer_exclude_animated(Scene *scene, SceneRenderLayer *srl)
 	prop = RNA_struct_find_property(&ptr, "layers_exclude");
 
 	return RNA_property_animated(&ptr, prop);
-}
-
-int aRE_engine_render(Render *re, int do_all)
-{
-	return RE_engine_bake(re, NULL, 47);
 }
 
 int RE_engine_render(Render *re, int do_all) {

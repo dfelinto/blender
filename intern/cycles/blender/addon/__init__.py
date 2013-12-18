@@ -66,9 +66,9 @@ class CyclesRender(bpy.types.RenderEngine):
     def render(self, scene):
         engine.render(self)
 
-    #XXX missing BakeMaps and return floats
-    def bake(self, scene, object, passes_bit_flag):
-        engine.bake(self, object, passes_bit_flag)
+    #XXX missing BakePixels and return floats
+    def bake(self, scene, object, pass_type):
+        engine.bake(self, object, pass_type)
 
     # viewport render
     def view_update(self, context):

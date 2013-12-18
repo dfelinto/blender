@@ -117,8 +117,8 @@ static void engine_render(RenderEngine *engine, struct Scene *scene)
 	RNA_parameter_list_free(&list);
 }
 
-//XXX missing BakeMaps and return floats
-static void engine_bake(RenderEngine *engine, struct Scene *scene, struct Object *object, int passes_bit_flag)
+//XXX missing BakePixels and return floats
+static void engine_bake(RenderEngine *engine, struct Scene *scene, struct Object *object, int pass_type)
 {
 	extern FunctionRNA rna_RenderEngine_bake_func;
 	PointerRNA ptr;
@@ -131,7 +131,7 @@ static void engine_bake(RenderEngine *engine, struct Scene *scene, struct Object
 	RNA_parameter_list_create(&list, &ptr, func);
 	RNA_parameter_set_lookup(&list, "scene", &scene);
 	RNA_parameter_set_lookup(&list, "object", &object);
-	RNA_parameter_set_lookup(&list, "passes_bit_flag", passes_bit_flag);
+	RNA_parameter_set_lookup(&list, "pass_type", &pass_type);
 	engine->type->ext.call(NULL, &ptr, func, &list);
 
 	RNA_parameter_list_free(&list);
@@ -340,6 +340,39 @@ void rna_RenderPass_rect_set(PointerRNA *ptr, const float *values)
 
 #else /* RNA_RUNTIME */
 
+static EnumPropertyItem pass_type_items[] = {
+	{SCE_PASS_COMBINED, "COMBINED", 0, "Combined", ""},
+	{SCE_PASS_Z, "Z", 0, "Z", ""},
+	{SCE_PASS_RGBA, "COLOR", 0, "Color", ""},
+	{SCE_PASS_DIFFUSE, "DIFFUSE", 0, "Diffuse", ""},
+	{SCE_PASS_SPEC, "SPECULAR", 0, "Specular", ""},
+	{SCE_PASS_SHADOW, "SHADOW", 0, "Shadow", ""},
+	{SCE_PASS_AO, "AO", 0, "AO", ""},
+	{SCE_PASS_REFLECT, "REFLECTION", 0, "Reflection", ""},
+	{SCE_PASS_NORMAL, "NORMAL", 0, "Normal", ""},
+	{SCE_PASS_VECTOR, "VECTOR", 0, "Vector", ""},
+	{SCE_PASS_REFRACT, "REFRACTION", 0, "Refraction", ""},
+	{SCE_PASS_INDEXOB, "OBJECT_INDEX", 0, "Object Index", ""},
+	{SCE_PASS_UV, "UV", 0, "UV", ""},
+	{SCE_PASS_MIST, "MIST", 0, "Mist", ""},
+	{SCE_PASS_EMIT, "EMIT", 0, "Emit", ""},
+	{SCE_PASS_ENVIRONMENT, "ENVIRONMENT", 0, "Environment", ""},
+	{SCE_PASS_INDEXMA, "MATERIAL_INDEX", 0, "Material Index", ""},
+	{SCE_PASS_DIFFUSE_DIRECT, "DIFFUSE_DIRECT", 0, "Diffuse Direct", ""},
+	{SCE_PASS_DIFFUSE_INDIRECT, "DIFFUSE_INDIRECT", 0, "Diffuse Indirect", ""},
+	{SCE_PASS_DIFFUSE_COLOR, "DIFFUSE_COLOR", 0, "Diffuse Color", ""},
+	{SCE_PASS_GLOSSY_DIRECT, "GLOSSY_DIRECT", 0, "Glossy Direct", ""},
+	{SCE_PASS_GLOSSY_INDIRECT, "GLOSSY_INDIRECT", 0, "Glossy Indirect", ""},
+	{SCE_PASS_GLOSSY_COLOR, "GLOSSY_COLOR", 0, "Glossy Color", ""},
+	{SCE_PASS_TRANSM_DIRECT, "TRANSMISSION_DIRECT", 0, "Transmission Direct", ""},
+	{SCE_PASS_TRANSM_INDIRECT, "TRANSMISSION_INDIRECT", 0, "Transmission Indirect", ""},
+	{SCE_PASS_TRANSM_COLOR, "TRANSMISSION_COLOR", 0, "Transmission Color", ""},
+	{SCE_PASS_SUBSURFACE_DIRECT, "SUBSURFACE_DIRECT", 0, "Subsurface Direct", ""},
+	{SCE_PASS_SUBSURFACE_INDIRECT, "SUBSURFACE_INDIRECT", 0, "Subsurface Indirect", ""},
+	{SCE_PASS_SUBSURFACE_COLOR, "SUBSURFACE_COLOR", 0, "Subsurface Color", ""},
+	{0, NULL, 0, NULL, NULL}
+};
+
 static void rna_def_render_engine(BlenderRNA *brna)
 {
 	StructRNA *srna;
@@ -372,10 +405,9 @@ static void rna_def_render_engine(BlenderRNA *brna)
 	RNA_def_property_flag(prop, PROP_REQUIRED);
 	prop = RNA_def_pointer(func, "object", "Object", "", "");
 	RNA_def_property_flag(prop, PROP_REQUIRED);
-	prop = prop = RNA_def_int(func, "passes_bit_flag", 0, 0, INT_MAX, "", "", 0, INT_MAX);
+	prop = RNA_def_enum(func, "pass_type", pass_type_items, 0, "Pass", "Pass to bake");
 	RNA_def_property_flag(prop, PROP_REQUIRED);
 	//XXX we could use custom get/set to make sure we are asking to bake a valid pass
-
 
 	/* viewport render callbacks */
 	func = RNA_def_function(srna, "view_update", NULL);
@@ -621,39 +653,6 @@ static void rna_def_render_pass(BlenderRNA *brna)
 	StructRNA *srna;
 	PropertyRNA *prop;
 
-	static EnumPropertyItem pass_type_items[] = {
-		{SCE_PASS_COMBINED, "COMBINED", 0, "Combined", ""},
-		{SCE_PASS_Z, "Z", 0, "Z", ""},
-		{SCE_PASS_RGBA, "COLOR", 0, "Color", ""},
-		{SCE_PASS_DIFFUSE, "DIFFUSE", 0, "Diffuse", ""},
-		{SCE_PASS_SPEC, "SPECULAR", 0, "Specular", ""},
-		{SCE_PASS_SHADOW, "SHADOW", 0, "Shadow", ""},
-		{SCE_PASS_AO, "AO", 0, "AO", ""},
-		{SCE_PASS_REFLECT, "REFLECTION", 0, "Reflection", ""},
-		{SCE_PASS_NORMAL, "NORMAL", 0, "Normal", ""},
-		{SCE_PASS_VECTOR, "VECTOR", 0, "Vector", ""},
-		{SCE_PASS_REFRACT, "REFRACTION", 0, "Refraction", ""},
-		{SCE_PASS_INDEXOB, "OBJECT_INDEX", 0, "Object Index", ""},
-		{SCE_PASS_UV, "UV", 0, "UV", ""},
-		{SCE_PASS_MIST, "MIST", 0, "Mist", ""},
-		{SCE_PASS_EMIT, "EMIT", 0, "Emit", ""},
-		{SCE_PASS_ENVIRONMENT, "ENVIRONMENT", 0, "Environment", ""},
-		{SCE_PASS_INDEXMA, "MATERIAL_INDEX", 0, "Material Index", ""},
-		{SCE_PASS_DIFFUSE_DIRECT, "DIFFUSE_DIRECT", 0, "Diffuse Direct", ""},
-		{SCE_PASS_DIFFUSE_INDIRECT, "DIFFUSE_INDIRECT", 0, "Diffuse Indirect", ""},
-		{SCE_PASS_DIFFUSE_COLOR, "DIFFUSE_COLOR", 0, "Diffuse Color", ""},
-		{SCE_PASS_GLOSSY_DIRECT, "GLOSSY_DIRECT", 0, "Glossy Direct", ""},
-		{SCE_PASS_GLOSSY_INDIRECT, "GLOSSY_INDIRECT", 0, "Glossy Indirect", ""},
-		{SCE_PASS_GLOSSY_COLOR, "GLOSSY_COLOR", 0, "Glossy Color", ""},
-		{SCE_PASS_TRANSM_DIRECT, "TRANSMISSION_DIRECT", 0, "Transmission Direct", ""},
-		{SCE_PASS_TRANSM_INDIRECT, "TRANSMISSION_INDIRECT", 0, "Transmission Indirect", ""},
-		{SCE_PASS_TRANSM_COLOR, "TRANSMISSION_COLOR", 0, "Transmission Color", ""},
-		{SCE_PASS_SUBSURFACE_DIRECT, "SUBSURFACE_DIRECT", 0, "Subsurface Direct", ""},
-		{SCE_PASS_SUBSURFACE_INDIRECT, "SUBSURFACE_INDIRECT", 0, "Subsurface Indirect", ""},
-		{SCE_PASS_SUBSURFACE_COLOR, "SUBSURFACE_COLOR", 0, "Subsurface Color", ""},
-		{0, NULL, 0, NULL, NULL}
-	};
-	
 	srna = RNA_def_struct(brna, "RenderPass", NULL);
 	RNA_def_struct_ui_text(srna, "Render Pass", "");
 

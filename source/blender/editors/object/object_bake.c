@@ -997,6 +997,9 @@ static int bake_exec(bContext *C, wmOperator *op)
 	Object *object = CTX_data_active_object(C);
 
 	Render *re = RE_NewRender(scene->id.name);
+
+	RE_engine_set_render_data(re, &scene->r);
+
 	G.is_break = FALSE;
 
 	RE_test_break_cb(re, NULL, bake_break);
@@ -1056,6 +1059,7 @@ static int bake_exec(bContext *C, wmOperator *op)
 	    e.g., do the image part? the cycle part? the blender internal changes? ...
 	 */
 
+	//XXX for now get the number from scene->r bake type
 	RE_engine_bake(re, object, 23);
 
 	RE_SetReports(re, NULL);

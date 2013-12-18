@@ -133,13 +133,13 @@ static PyObject *render_func(PyObject *self, PyObject *value)
 	Py_RETURN_NONE;
 }
 
-//XXX missing BakeMaps and return floats
+//XXX missing BakePixels and return floats
 static PyObject *bake_func(PyObject *self, PyObject *args)
 {
 	PyObject *pysession, *pyobject;
-	int passes_bit_flag;
+	int pass_type;
 
-	if(!PyArg_ParseTuple(args, "OOi", &pysession, &pyobject, &passes_bit_flag))
+	if(!PyArg_ParseTuple(args, "OOi", &pysession, &pyobject, &pass_type))
 		return NULL;
 
 	Py_BEGIN_ALLOW_THREADS
@@ -150,7 +150,7 @@ static PyObject *bake_func(PyObject *self, PyObject *args)
 	RNA_id_pointer_create((ID*)PyLong_AsVoidPtr(pyobject), &objectptr);
 	BL::Object b_object(objectptr);
 
-	session->bake(b_object, passes_bit_flag);
+	session->bake(b_object, pass_type);
 
 	Py_END_ALLOW_THREADS
 

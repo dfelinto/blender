@@ -59,11 +59,11 @@ def render(engine):
         _cycles.render(engine.session)
 
 
-#XXX missing BakeMaps and return floats
-def bake(engine, object, passes_bit_flag):
+#XXX missing BakePixels and return floats
+def bake(engine, object, pass_type):
     import _cycles
     if hasattr(engine, "session"):
-        _cycles.bake(engine.session, object, passes_bit_flag)
+        _cycles.bake(engine.session, object, pass_type)
 
 def reset(engine, data, scene):
     import _cycles

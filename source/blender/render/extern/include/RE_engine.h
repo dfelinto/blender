@@ -85,8 +85,8 @@ typedef struct RenderEngineType {
 
 	void (*update)(struct RenderEngine *engine, struct Main *bmain, struct Scene *scene);
 	void (*render)(struct RenderEngine *engine, struct Scene *scene);
-	//XXX missing BakeMaps and return floats
-	void (*bake)(struct RenderEngine *engine, struct Scene *scene, struct Object *object, int passes_bit_flag);
+	//XXX missing BakePixels and return floats
+	void (*bake)(struct RenderEngine *engine, struct Scene *scene, struct Object *object, int pass_type);
 
 	void (*view_update)(struct RenderEngine *engine, const struct bContext *context);
 	void (*view_draw)(struct RenderEngine *engine, const struct bContext *context);
@@ -146,7 +146,7 @@ int RE_engine_render(struct Render *re, int do_all);
 
 int RE_engine_is_external(struct Render *re);
 
-int RE_engine_bake(struct Render *re, struct Object *object, int passes_bit_flag);
+int RE_engine_bake(struct Render *re, struct Object *object, int pass_type);
 
 /* Engine Types */
 
@@ -157,6 +157,7 @@ RenderEngineType *RE_engines_find(const char *idname);
 
 void RE_engine_get_current_tiles(struct Render *re, int *total_tiles_r, rcti **tiles_r);
 struct RenderData *RE_engine_get_render_data(struct Render *re);
+void RE_engine_set_render_data(struct Render *re, struct RenderData *rd);
 
 #endif /* __RE_ENGINE_H__ */
 
