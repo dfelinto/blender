@@ -42,6 +42,10 @@
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
 
+#include "RNA_access.h"
+#include "RNA_define.h"
+#include "RNA_enum_types.h"
+
 #include "BLI_blenlib.h"
 #include "BLI_threads.h"
 #include "BLI_utildefines.h"
@@ -996,6 +1000,8 @@ static int bake_exec(bContext *C, wmOperator *op)
 	Scene *scene = CTX_data_scene(C);
 	Object *object = CTX_data_active_object(C);
 
+	int pass_type = RNA_enum_get(op->ptr, "type");
+
 	Render *re = RE_NewRender(scene->id.name);
 
 	RE_engine_bake_set_engine_parameters(re, CTX_data_main(C), scene);
@@ -1044,8 +1050,10 @@ static int bake_exec(bContext *C, wmOperator *op)
 	 //TODO:
 	 1. get RE_engine_bake function to actually call the cycles function
 	 (right now re->r.engine is "", while it should be 'CYCLES')
+	 <done>
 
 	 2. void BlenderSession::bake() to take BakePixel and to return float result().
+	 <next>
 	 
 	 3. write the populate_bake_pixels () function - start of duplication
 	    of existent baking code.
@@ -1059,8 +1067,7 @@ static int bake_exec(bContext *C, wmOperator *op)
 	    e.g., do the image part? the cycle part? the blender internal changes? ...
 	 */
 
-	//XXX for now get the number from scene->r bake type
-	RE_engine_bake(re, object, 2);
+	RE_engine_bake(re, object, pass_type);
 
 	RE_SetReports(re, NULL);
 
@@ -1134,5 +1141,5 @@ void OBJECT_OT_bake(wmOperatorType *ot)
 	ot->invoke = objects_bake_invoke;
 	ot->modal = objects_bake_modal;
 
-	//enum
+	ot->prop = RNA_def_enum(ot->srna, "type", render_pass_type_items, SCE_PASS_COMBINED, "Type", "Type of pass to bake, some of them may not be supported by the current render engine");
 }
