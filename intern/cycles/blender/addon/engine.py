@@ -59,6 +59,11 @@ def render(engine):
         _cycles.render(engine.session)
 
 
+def bake(engine, object, pass_type, pixel_array, num_pixels, depth, result):
+    import _cycles
+    if hasattr(engine, "session"):
+        _cycles.bake(engine.session, object.as_pointer(), pass_type, pixel_array.as_pointer(), num_pixels, depth, result.as_pointer())
+
 def reset(engine, data, scene):
     import _cycles
     data = data.as_pointer()
