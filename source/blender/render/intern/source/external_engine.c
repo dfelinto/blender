@@ -57,6 +57,7 @@
 
 #include "RE_engine.h"
 #include "RE_pipeline.h"
+#include "RE_bake.h"
 
 #include "initrender.h"
 #include "render_types.h"
@@ -403,8 +404,7 @@ void RE_engine_bake_set_engine_parameters(Render *re, Main *bmain, Scene *scene)
 
 /* Bake */
 
-//XXX missing BakePixels and return floats
-int RE_engine_bake(Render *re, Object *object, int pass_type)
+int	RE_engine_bake(Render *re, Object *object, BakePixel *UNUSED(pixel_array), int UNUSED(num_pixels), int pass_type, float UNUSED(result[]))
 {
 	RenderEngineType *type = RE_engines_find(re->r.engine);
 	RenderEngine *engine;

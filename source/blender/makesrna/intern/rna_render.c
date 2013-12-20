@@ -407,7 +407,6 @@ static void rna_def_render_engine(BlenderRNA *brna)
 	RNA_def_property_flag(prop, PROP_REQUIRED);
 	prop = RNA_def_enum(func, "pass_type", render_pass_type_items, 0, "Pass", "Pass to bake");
 	RNA_def_property_flag(prop, PROP_REQUIRED);
-	//XXX we could use custom get/set to make sure we are asking to bake a valid pass
 
 	/* viewport render callbacks */
 	func = RNA_def_function(srna, "view_update", NULL);

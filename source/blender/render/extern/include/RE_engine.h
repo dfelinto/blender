@@ -146,8 +146,6 @@ int RE_engine_render(struct Render *re, int do_all);
 
 int RE_engine_is_external(struct Render *re);
 
-int RE_engine_bake(struct Render *re, struct Object *object, int pass_type);
-
 /* Engine Types */
 
 void RE_engines_init(void);
