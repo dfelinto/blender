@@ -443,12 +443,14 @@ void BlenderSession::bake(BL::Object b_object, const string& pass_type, BakePixe
 			printf("\nprimitive_id: %d\n", pixel_array[i].primitive_id);
 			printf("u: %4.2f\n", pixel_array[i].u);
 			printf("v: %4.2f\n", pixel_array[i].v);
+
+			result[i] = pixel_array[i].u + pixel_array[i].v;
 		}
 		printf("\n</bakepixel>\n\n");
 	}
 #endif
 
-#if 1
+#if 0
 	{
 		/* so far so good, although in the real implementation result will be zero'ed */
 		int i = 0;

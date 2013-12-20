@@ -145,6 +145,7 @@ static int bake_exec(bContext *C, wmOperator *op)
 	pixel_array = MEM_callocN(sizeof(BakePixel), "bake pixels");
 	result = MEM_callocN(sizeof(float) * depth * num_pixels, "bake return pixels");
 
+#if 0
 	{
 		/* temporarily fill the result array with a normalized data */
 		int i;
@@ -152,6 +153,7 @@ static int bake_exec(bContext *C, wmOperator *op)
 			result[i] = (float)i / num_pixels;
 		}
 	}
+#endif
 
 	{
 		/* populate the array while we don't have a real populate_bake_pixels */
@@ -233,6 +235,20 @@ static int bake_exec(bContext *C, wmOperator *op)
 	 */
 
 	RE_engine_bake(re, object, pixel_array, num_pixels, depth, pass_type, result);
+
+	{
+		/* this is 90% likely working, but
+		    right now cycles is segfaulting on ~free, so
+		    we don't get as far as here */
+
+		int i = 0;
+		printf("RE_engine_bake output:\n");
+		printf("\n<result>\n\n");
+		for (i=0;i < num_pixels; i++) {
+			printf("%4.2f\n", result[i]);
+		}
+		printf("\n</result>\n\n");
+	}
 
 	MEM_freeN(pixel_array);
 	MEM_freeN(result);
