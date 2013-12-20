@@ -404,7 +404,7 @@ void RE_engine_bake_set_engine_parameters(Render *re, Main *bmain, Scene *scene)
 
 /* Bake */
 
-int	RE_engine_bake(Render *re, Object *object, BakePixel *UNUSED(pixel_array), int UNUSED(num_pixels), int pass_type, float UNUSED(result[]))
+int	RE_engine_bake(Render *re, Object *object, BakePixel pixel_array[], int num_pixels, int depth, int pass_type, float result[])
 {
 	RenderEngineType *type = RE_engines_find(re->r.engine);
 	RenderEngine *engine;
@@ -431,7 +431,7 @@ int	RE_engine_bake(Render *re, Object *object, BakePixel *UNUSED(pixel_array), i
 		type->update(engine, re->main, re->scene);
 
 	if (type->bake)
-		type->bake(engine, re->scene, object, pass_type);
+		type->bake(engine, re->scene, object, pass_type, pixel_array, num_pixels, depth, result);
 
 	engine->flag &= ~RE_ENGINE_RENDERING;
 

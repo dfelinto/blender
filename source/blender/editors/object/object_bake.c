@@ -140,24 +140,33 @@ static int bake_exec(bContext *C, wmOperator *op)
 	float *result;
 	BakePixel *pixel_array;
 	const int num_pixels = 100;
-	int i;
+	const int depth = 1;
 
 	pixel_array = MEM_callocN(sizeof(BakePixel), "bake pixels");
-	result = MEM_callocN(sizeof(float) * 3 * num_pixels, "bake return pixels");
+	result = MEM_callocN(sizeof(float) * depth * num_pixels, "bake return pixels");
+
+	{
+		/* temporarily fill the result array with a normalized data */
+		int i;
+		for (i=0; i< num_pixels; i++) {
+			result[i] = (float)i / num_pixels;
+		}
+	}
 
 	{
 		/* populate the array while we don't have a real populate_bake_pixels */
 		const int num_faces = 2;
 		const int face_size = (float) num_pixels / num_faces;
 		const int face_width = sqrtf(face_size);
+		int i;
 
 		for (i=0; i < num_pixels; i++) {
 			const int x = (i % face_size) % face_width;
 			const int y = (i % face_size) / face_width;
 
 			pixel_array[i].primitive_id = i % num_faces; //0 and 1
-			pixel_array[i].u  = x / face_width;
-			pixel_array[i].v  = y / face_width;
+			pixel_array[i].u  = (float) x / face_width;
+			pixel_array[i].v  = (float) y / face_width;
 
 			pixel_array[i].dudx =
 			pixel_array[i].dudy =
@@ -223,12 +232,12 @@ static int bake_exec(bContext *C, wmOperator *op)
 	    e.g., do the image part? the cycle part? the blender internal changes? ...
 	 */
 
-	RE_engine_bake(re, object, pixel_array, num_pixels, pass_type, result);
+	RE_engine_bake(re, object, pixel_array, num_pixels, depth, pass_type, result);
+
+	MEM_freeN(pixel_array);
+	MEM_freeN(result);
 
 	RE_SetReports(re, NULL);
-
-
-
 
 
 #if 0

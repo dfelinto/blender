@@ -35,6 +35,7 @@
 #include "DNA_listBase.h"
 #include "DNA_scene_types.h"
 #include "RNA_types.h"
+#include "RE_bake.h"
 
 struct bNode;
 struct bNodeTree;
@@ -47,6 +48,7 @@ struct RenderLayer;
 struct RenderResult;
 struct ReportList;
 struct Scene;
+struct BakePixel;
 
 /* External Engine */
 
@@ -85,8 +87,8 @@ typedef struct RenderEngineType {
 
 	void (*update)(struct RenderEngine *engine, struct Main *bmain, struct Scene *scene);
 	void (*render)(struct RenderEngine *engine, struct Scene *scene);
-	//XXX missing BakePixels and return floats
-	void (*bake)(struct RenderEngine *engine, struct Scene *scene, struct Object *object, int pass_type);
+//	void (*bake)(struct RenderEngine *engine, struct Scene *scene, struct Object *object, int pass_type, struct BakePixel pixel_array[], int num_pixels, int depth, float result[]);
+	void (*bake)(struct RenderEngine *engine, struct Scene *scene, struct Object *object, int pass_type, void *pixel_array, int num_pixels, int depth, void *result);
 
 	void (*view_update)(struct RenderEngine *engine, const struct bContext *context);
 	void (*view_draw)(struct RenderEngine *engine, const struct bContext *context);

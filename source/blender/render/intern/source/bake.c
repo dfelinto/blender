@@ -77,7 +77,7 @@ extern struct Render R;
 /* ************************* bake ************************ */
 
 
-int RE_internal_bake(Render *UNUSED(re), Object *UNUSED(object), BakePixel *UNUSED(pixel_array), int UNUSED(num_pixels), int UNUSED(pass_type), float UNUSED(result[]))
+int RE_internal_bake(Render *UNUSED(re), Object *UNUSED(object), BakePixel UNUSED(pixel_array[]), int UNUSED(num_pixels), int UNUSED(depth), int UNUSED(pass_type), float UNUSED(result[]))
 {
 	return 0;
 }

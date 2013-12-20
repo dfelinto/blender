@@ -133,18 +133,18 @@ static PyObject *render_func(PyObject *self, PyObject *value)
 	Py_RETURN_NONE;
 }
 
-//XXX missing BakePixels and return floats
+/* pixel_array and result passed as pointers */
 static PyObject *bake_func(PyObject *self, PyObject *args)
 {
 	PyObject *pysession, *pyobject;
+	PyObject *pypixel_array, *pyresult;
 	const char *pass_type;
+	int num_pixels, depth;
 
-	if(!PyArg_ParseTuple(args, "OOs", &pysession, &pyobject, &pass_type))
+	if(!PyArg_ParseTuple(args, "OOsOiiO", &pysession, &pyobject, &pass_type, &pypixel_array,  &num_pixels, &depth, &pyresult))
 		return NULL;
 
 	Py_BEGIN_ALLOW_THREADS
-
-	//pass_type = *(int *)PyLong_AsVoidPtr(pypass_type);
 
 	BlenderSession *session = (BlenderSession*)PyLong_AsVoidPtr(pysession);
 
@@ -152,7 +152,11 @@ static PyObject *bake_func(PyObject *self, PyObject *args)
 	RNA_id_pointer_create((ID*)PyLong_AsVoidPtr(pyobject), &objectptr);
 	BL::Object b_object(objectptr);
 
-	session->bake(b_object, pass_type);
+	void *b_bakepixel(PyLong_AsVoidPtr(pypixel_array));
+	void *b_result(PyLong_AsVoidPtr(pyresult));
+
+	session->bake(b_object, pass_type, (BakePixel *)b_bakepixel, num_pixels, depth, (float *)b_result);
+	//session->bake(b_object, pass_type, b_bakepixel, num_pixels, depth, (float *)b_result);
 
 	Py_END_ALLOW_THREADS
 

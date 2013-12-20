@@ -30,6 +30,16 @@ class Session;
 class RenderBuffers;
 class RenderTile;
 
+struct BakePixel;
+
+/* plain copy from Blender */
+typedef struct BakePixel {
+	int primitive_id;
+	float u, v;
+	float dudx, dudy;
+	float dvdx, dvdy;
+} BakePixel;
+
 class BlenderSession {
 public:
 	BlenderSession(BL::RenderEngine b_engine, BL::UserPreferences b_userpref,
@@ -49,8 +59,7 @@ public:
 	/* offline render */
 	void render();
 
-	//XXX missing BakePixels and return floats
-	void bake(BL::Object b_object, const string& pass_type);
+	void bake(BL::Object b_object, const string& pass_type, BakePixel pixel_array[], int num_pixels, int depth, float pixels[]);
 
 	void write_render_result(BL::RenderResult b_rr, BL::RenderLayer b_rlay, RenderTile& rtile);
 	void write_render_tile(RenderTile& rtile);

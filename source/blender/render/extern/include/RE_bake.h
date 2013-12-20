@@ -32,7 +32,6 @@
 #ifndef __RE_BAKE_H__
 #define __RE_BAKE_H__
 
-struct BakePixel;
 struct Render;
 
 typedef struct BakePixel {
@@ -43,9 +42,9 @@ typedef struct BakePixel {
 } BakePixel;
 
 /* external_engine.c */
-int RE_engine_bake(struct Render *re, struct Object *object, struct BakePixel *pixel_array, int num_pixels, int pass_type, float result[]);
+int RE_engine_bake(struct Render *re, struct Object *object, struct BakePixel pixel_array[], int num_pixels, int depth, int pass_type, float result[]);
 
 /* bake.c */
-int RE_internal_bake(struct Render *re, struct Object *object, struct BakePixel *pixel_array, int num_pixels, int pass_type, float result[]);
+int RE_internal_bake(struct Render *re, struct Object *object, struct BakePixel pixel_array[], int num_pixels, int depth, int pass_type, float result[]);
 
 #endif
