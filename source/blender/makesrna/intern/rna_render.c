@@ -411,14 +411,14 @@ static void rna_def_render_engine(BlenderRNA *brna)
 	RNA_def_property_flag(prop, PROP_REQUIRED);
 	prop = RNA_def_enum(func, "pass_type", render_pass_type_items, 0, "Pass", "Pass to bake");
 	RNA_def_property_flag(prop, PROP_REQUIRED);
-	prop = RNA_def_pointer(func, "pixel_array", NULL, "", "");
+	prop = RNA_def_pointer(func, "pixel_array", "AnyType", "", "");
 	RNA_def_property_flag(prop, PROP_REQUIRED);
 	prop = RNA_def_int(func, "num_pixels", 0, 0, INT_MAX, "Number of Pixels", "Size of the baking batch", 0, INT_MAX);
 	RNA_def_property_flag(prop, PROP_REQUIRED);
 	prop = RNA_def_int(func, "depth", 0, 0, INT_MAX, "Pixels depth", "Number of channels", 1, INT_MAX);
 	RNA_def_property_flag(prop, PROP_REQUIRED);
 	/* TODO, see how array size of 0 works, this shouldnt be used */
-	prop = RNA_def_pointer(func, "result", NULL, "", "");
+	prop = RNA_def_pointer(func, "result", "AnyType", "", "");
 	RNA_def_property_flag(prop, PROP_REQUIRED);
 
 	/* viewport render callbacks */
