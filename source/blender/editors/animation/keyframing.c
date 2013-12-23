@@ -1436,6 +1436,7 @@ static int delete_key_exec(bContext *C, wmOperator *op)
 		/* send notifiers that keyframes have been changed */
 		WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
 		BLI_callback_exec(CTX_data_main(C), &scene->id, BLI_CB_EVT_KEYFRAME_UPDATE);
+		BLI_callback_exec(CTX_data_main(C), &scene->id, BLI_CB_EVT_KEYFRAME_DELETE);
 	}
 	else
 		BKE_report(op->reports, RPT_WARNING, "Keying set failed to remove any keyframes");
@@ -1533,6 +1534,7 @@ static int clear_anim_v3d_exec(bContext *C, wmOperator *op)
 	if (num_deleted > 0) {
 		BKE_reportf(op->reports, RPT_INFO, "Deleted %d animation F-Curves from selected objects", num_deleted);
 		BLI_callback_exec(CTX_data_main(C), &CTX_data_scene(C)->id, BLI_CB_EVT_KEYFRAME_UPDATE);
+		BLI_callback_exec(CTX_data_main(C), &CTX_data_scene(C)->id, BLI_CB_EVT_KEYFRAME_DELETE);
 	}
 
 	/* send updates */
@@ -1601,6 +1603,7 @@ static int delete_key_v3d_exec(bContext *C, wmOperator *op)
 	/* send updates */
 	WM_event_add_notifier(C, NC_OBJECT | ND_KEYS, NULL);
 	BLI_callback_exec(CTX_data_main(C), &scene->id, BLI_CB_EVT_KEYFRAME_UPDATE);
+	BLI_callback_exec(CTX_data_main(C), &scene->id, BLI_CB_EVT_KEYFRAME_DELETE);
 	return OPERATOR_FINISHED;
 }
 

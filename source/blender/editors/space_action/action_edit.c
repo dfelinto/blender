@@ -849,6 +849,7 @@ static int actkeys_delete_exec(bContext *C, wmOperator *op)
 	if (changed) {
 		BKE_report(op->reports, RPT_INFO, "Deleted selected keyframes");
 		BLI_callback_exec(CTX_data_main(C), &scene->id, BLI_CB_EVT_KEYFRAME_UPDATE);
+		BLI_callback_exec(CTX_data_main(C), &scene->id, BLI_CB_EVT_KEYFRAME_DELETE);
 	}
 
 	return OPERATOR_FINISHED;
