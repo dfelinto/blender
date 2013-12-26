@@ -47,6 +47,7 @@
 EnumPropertyItem rigidbody_object_type_items[] = {
 	{RBO_TYPE_ACTIVE, "ACTIVE", 0, "Active", "Object is directly controlled by simulation results"},
 	{RBO_TYPE_PASSIVE, "PASSIVE", 0, "Passive", "Object is directly controlled by animation system"},
+	{RBO_TYPE_SENSOR, "SENSOR", 0, "Sensor", "Object is driven by parent, collides with all non-sensor objects except parent but does not return force"},
 	{0, NULL, 0, NULL, NULL}};
 
 /* collision shapes of objects in rigid body sim */
@@ -260,6 +261,20 @@ static void rna_RigidBodyOb_collision_groups_set(PointerRNA *ptr, const int *val
 			rbo->col_groups |= (1 << i);
 		else
 			rbo->col_groups &= ~(1 << i);
+	}
+	rbo->flag |= RBO_FLAG_NEEDS_VALIDATE;
+}
+
+static void rna_RigidBodyOb_collision_mask_set(PointerRNA *ptr, const int *values)
+{
+	RigidBodyOb *rbo = (RigidBodyOb *)ptr->data;
+	int i;
+
+	for (i = 0; i < 20; i++) {
+		if (values[i])
+			rbo->col_mask |= (1 << i);
+		else
+			rbo->col_mask &= ~(1 << i);
 	}
 	rbo->flag |= RBO_FLAG_NEEDS_VALIDATE;
 }
@@ -919,6 +934,15 @@ static void rna_def_rigidbody_object(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Collision Groups", "Collision Groups Rigid Body belongs to");
 	RNA_def_property_update(prop, NC_OBJECT | ND_POINTCACHE, "rna_RigidBodyOb_reset");
 	RNA_def_property_flag(prop, PROP_LIB_EXCEPTION);
+
+	prop = RNA_def_property(srna, "collision_mask", PROP_BOOLEAN, PROP_LAYER_MEMBER);
+	RNA_def_property_boolean_sdna(prop, NULL, "col_mask", 1);
+	RNA_def_property_array(prop, 20);
+	RNA_def_property_boolean_funcs(prop, NULL, "rna_RigidBodyOb_collision_mask_set");
+	RNA_def_property_ui_text(prop, "Collision Mask", "Collision Groups that sensor object can detect");
+	RNA_def_property_update(prop, NC_OBJECT | ND_POINTCACHE, "rna_RigidBodyOb_reset");
+	RNA_def_property_flag(prop, PROP_LIB_EXCEPTION);
+
 }
 
 static void rna_def_rigidbody_constraint(BlenderRNA *brna)

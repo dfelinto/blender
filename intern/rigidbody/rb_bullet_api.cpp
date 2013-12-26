@@ -84,6 +84,8 @@ struct rbDynamicsWorld {
 struct rbRigidBody {
 	btRigidBody *body;
 	int col_groups;
+	int col_mask;
+	int is_sensor;
 };
 
 struct rbVert {
@@ -113,11 +115,17 @@ struct rbFilterCallback : public btOverlapFilterCallback
 		rbRigidBody *rb0 = (rbRigidBody *)((btRigidBody *)proxy0->m_clientObject)->getUserPointer();
 		rbRigidBody *rb1 = (rbRigidBody *)((btRigidBody *)proxy1->m_clientObject)->getUserPointer();
 		
-		bool collides;
-		collides = (proxy0->m_collisionFilterGroup & proxy1->m_collisionFilterMask) != 0;
-		collides = collides && (proxy1->m_collisionFilterGroup & proxy0->m_collisionFilterMask);
-		collides = collides && (rb0->col_groups & rb1->col_groups);
-		
+		bool collides = true;
+		if (!rb0->is_sensor && !rb1->is_sensor) {
+			collides = (proxy0->m_collisionFilterGroup & proxy1->m_collisionFilterMask) != 0;
+			collides = collides && (proxy1->m_collisionFilterGroup & proxy0->m_collisionFilterMask);
+			collides = collides && (rb0->col_groups & rb1->col_groups);
+		} else {
+			if (rb0->is_sensor)
+				collides = collides && (rb0->col_mask & rb1->col_groups);
+			if (rb1->is_sensor)
+				collides = collides && (rb1->col_mask & rb0->col_groups);
+		}
 		return collides;
 	}
 };
@@ -248,10 +256,11 @@ void RB_dworld_export(rbDynamicsWorld *world, const char *filename)
 
 /* Setup ---------------------------- */
 
-void RB_dworld_add_body(rbDynamicsWorld *world, rbRigidBody *object, int col_groups)
+void RB_dworld_add_body(rbDynamicsWorld *world, rbRigidBody *object, int col_groups, int col_mask)
 {
 	btRigidBody *body = object->body;
 	object->col_groups = col_groups;
+	object->col_mask = col_mask;
 	
 	world->dynamicsWorld->addRigidBody(body);
 }
@@ -544,6 +553,20 @@ void RB_body_set_kinematic_state(rbRigidBody *object, int kinematic)
 		body->setCollisionFlags(body->getCollisionFlags() | btCollisionObject::CF_KINEMATIC_OBJECT);
 	else
 		body->setCollisionFlags(body->getCollisionFlags() & ~btCollisionObject::CF_KINEMATIC_OBJECT);
+}
+
+/* ............ */
+
+void RB_body_set_sensor_state(rbRigidBody *object, int sensor)
+{
+	btRigidBody *body = object->body;
+	if (sensor) {
+		body->setCollisionFlags(body->getCollisionFlags() | btCollisionObject::CF_NO_CONTACT_RESPONSE);
+		object->is_sensor = true;
+	} else {
+		body->setCollisionFlags(body->getCollisionFlags() & ~btCollisionObject::CF_NO_CONTACT_RESPONSE);
+		object->is_sensor = false;
+	}
 }
 
 /* ............ */

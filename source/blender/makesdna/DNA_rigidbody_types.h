@@ -105,7 +105,7 @@ typedef struct RigidBodyOb {
 	int col_groups;			/* Collision groups that determines wich rigid bodies can collide with each other */
 	short mesh_source;		/* (eRigidBody_MeshSource) mesh source for mesh based collision shapes */
 	short pad;
-	
+
 	/* Physics Parameters */
 	float mass;				/* how much object 'weighs' (i.e. absolute 'amount of stuff' it holds) */
 	
@@ -122,7 +122,8 @@ typedef struct RigidBodyOb {
 	
 	float orn[4];			/* rigid body orientation */
 	float pos[3];			/* rigid body position */
-	float pad1;
+
+	int col_mask;			/* for sensor: determines which object group it detects */
 } RigidBodyOb;
 
 
@@ -131,7 +132,9 @@ typedef enum eRigidBodyOb_Type {
 	/* active geometry participant in simulation. is directly controlled by sim */
 	RBO_TYPE_ACTIVE	= 0,
 	/* passive geometry participant in simulation. is directly controlled by animsys */
-	RBO_TYPE_PASSIVE
+	RBO_TYPE_PASSIVE,
+	/* sensor geometry, non participant to simulation. is driven by parent */
+	RBO_TYPE_SENSOR
 } eRigidBodyOb_Type;
 
 /* Flags for RigidBodyOb */

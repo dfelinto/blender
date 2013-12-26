@@ -341,7 +341,8 @@ static rbCollisionShape *rigidbody_get_shape_trimesh_from_mesh(Object *ob)
 			 *    - GImpact Mesh:      for active objects. These are slower and less stable,
 			 *                         but are more flexible for general usage.
 			 */
-			if (ob->rigidbody_object->type == RBO_TYPE_PASSIVE) {
+			if (ob->rigidbody_object->type == RBO_TYPE_PASSIVE || 
+				ob->rigidbody_object->type == RBO_TYPE_SENSOR) {
 				shape = RB_shape_new_trimesh(mdata);
 			}
 			else {
@@ -501,7 +502,7 @@ static void rigidbody_validate_sim_object(RigidBodyWorld *rbw, Object *ob, bool 
 		RB_body_set_sleep_thresh(rbo->physics_object, rbo->lin_sleep_thresh, rbo->ang_sleep_thresh);
 		RB_body_set_activation_state(rbo->physics_object, rbo->flag & RBO_FLAG_USE_DEACTIVATION);
 
-		if (rbo->type == RBO_TYPE_PASSIVE || rbo->flag & RBO_FLAG_START_DEACTIVATED)
+		if (rbo->type == RBO_TYPE_PASSIVE || rbo->type == RBO_TYPE_SENSOR || rbo->flag & RBO_FLAG_START_DEACTIVATED)
 			RB_body_deactivate(rbo->physics_object);
 
 
@@ -516,10 +517,11 @@ static void rigidbody_validate_sim_object(RigidBodyWorld *rbw, Object *ob, bool 
 
 		RB_body_set_mass(rbo->physics_object, RBO_GET_MASS(rbo));
 		RB_body_set_kinematic_state(rbo->physics_object, rbo->flag & RBO_FLAG_KINEMATIC || rbo->flag & RBO_FLAG_DISABLED);
+		RB_body_set_sensor_state(rbo->physics_object, rbo->type == RBO_TYPE_SENSOR);
 	}
 
 	if (rbw && rbw->physics_world)
-		RB_dworld_add_body(rbw->physics_world, rbo->physics_object, rbo->col_groups);
+		RB_dworld_add_body(rbw->physics_world, rbo->physics_object, rbo->col_groups, rbo->col_mask);
 }
 
 /* --------------------- */
@@ -815,6 +817,7 @@ RigidBodyOb *BKE_rigidbody_create_object(Scene *scene, Object *ob, short type)
 	rbo->ang_damping = 0.1f; /* 0.1 is game engine default */
 
 	rbo->col_groups = 1;
+	rbo->col_mask = 1;
 
 	/* use triangle meshes for passive objects
 	 * use convex hulls for active objects since dynamic triangle meshes are very unstable
@@ -1209,7 +1212,7 @@ static void rigidbody_update_simulation_post_step(RigidBodyWorld *rbw)
 				RB_body_set_kinematic_state(rbo->physics_object, rbo->flag & RBO_FLAG_KINEMATIC || rbo->flag & RBO_FLAG_DISABLED);
 				RB_body_set_mass(rbo->physics_object, RBO_GET_MASS(rbo));
 				/* deactivate passive objects so they don't interfere with deactivation of active objects */
-				if (rbo->type == RBO_TYPE_PASSIVE)
+				if (rbo->type == RBO_TYPE_PASSIVE || rbo->type == RBO_TYPE_SENSOR)
 					RB_body_deactivate(rbo->physics_object);
 			}
 		}
@@ -1227,7 +1230,7 @@ void BKE_rigidbody_sync_transforms(RigidBodyWorld *rbw, Object *ob, float ctime)
 	RigidBodyOb *rbo = ob->rigidbody_object;
 
 	/* keep original transform for kinematic and passive objects */
-	if (ELEM(NULL, rbw, rbo) || rbo->flag & RBO_FLAG_KINEMATIC || rbo->type == RBO_TYPE_PASSIVE)
+	if (ELEM(NULL, rbw, rbo) || rbo->flag & RBO_FLAG_KINEMATIC || rbo->type == RBO_TYPE_PASSIVE || rbo->type == RBO_TYPE_SENSOR)
 		return;
 
 	/* use rigid body transform after cache start frame if objects is not being transformed */
@@ -1274,7 +1277,7 @@ void BKE_rigidbody_aftertrans_update(Object *ob, float loc[3], float rot[3], flo
 	}
 	if (rbo->physics_object) {
 		/* allow passive objects to return to original transform */
-		if (rbo->type == RBO_TYPE_PASSIVE)
+		if (rbo->type == RBO_TYPE_PASSIVE || rbo->type == RBO_TYPE_SENSOR)
 			RB_body_set_kinematic_state(rbo->physics_object, TRUE);
 		RB_body_set_loc_rot(rbo->physics_object, rbo->pos, rbo->orn);
 	}

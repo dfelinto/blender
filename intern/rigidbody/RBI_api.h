@@ -105,7 +105,7 @@ void RB_dworld_export(rbDynamicsWorld *world, const char *filename);
 /* Setup ---------------------------- */
 
 /* Add RigidBody to dynamics world */
-void RB_dworld_add_body(rbDynamicsWorld *world, rbRigidBody *body, int col_groups);
+extern void RB_dworld_add_body(rbDynamicsWorld *world, rbRigidBody *body, int col_groups, int col_mask);
 
 /* Remove RigidBody from dynamics world */
 void RB_dworld_remove_body(rbDynamicsWorld *world, rbRigidBody *body);
@@ -181,6 +181,9 @@ void RB_body_set_angular_factor(rbRigidBody *object, float x, float y, float z);
 
 /* Kinematic State */
 void RB_body_set_kinematic_state(rbRigidBody *body, int kinematic);
+
+/* Sensor State (a sensor does not restitute force but collides with everything) */
+void RB_body_set_sensor_state(rbRigidBody *object, int sensor);
 
 /* RigidBody Interface - Rigid Body Activation States */
 int RB_body_get_activation_state(rbRigidBody *body);

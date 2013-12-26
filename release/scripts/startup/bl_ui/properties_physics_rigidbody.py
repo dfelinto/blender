@@ -94,6 +94,8 @@ class PHYSICS_PT_rigid_body_collisions(PHYSICS_PT_rigidbody_panel, Panel):
             sub.prop(rbo, "collision_margin", text="Margin")
 
         layout.prop(rbo, "collision_groups")
+        if rbo.type == 'SENSOR':
+            layout.prop(rbo, "collision_mask")
 
 
 class PHYSICS_PT_rigid_body_dynamics(PHYSICS_PT_rigidbody_panel, Panel):
