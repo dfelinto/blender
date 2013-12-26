@@ -84,7 +84,7 @@ void BKE_rigidbody_remove_constraint(struct Scene *scene, struct Object *ob);
 
 /* get mass of Rigid Body Object to supply to RigidBody simulators */
 #define RBO_GET_MASS(rbo) \
-	((rbo && ((rbo->type == RBO_TYPE_PASSIVE) || (rbo->flag & RBO_FLAG_KINEMATIC) || (rbo->flag & RBO_FLAG_DISABLED))) ? (0.0f) : (rbo->mass))
+	((rbo && ((rbo->type == RBO_TYPE_PASSIVE) || (rbo->type == RBO_TYPE_SENSOR) || (rbo->flag & RBO_FLAG_KINEMATIC) || (rbo->flag & RBO_FLAG_DISABLED))) ? (0.0f) : (rbo->mass))
 /* get collision margin for Rigid Body Object, triangle mesh and cone shapes cannot embed margin, convex hull always uses custom margin */
 #define RBO_GET_MARGIN(rbo) \
 	((rbo->flag & RBO_FLAG_USE_MARGIN || rbo->shape == RB_SHAPE_CONVEXH || rbo->shape == RB_SHAPE_TRIMESH || rbo->shape == RB_SHAPE_CONE) ? (rbo->margin) : (0.04f))
