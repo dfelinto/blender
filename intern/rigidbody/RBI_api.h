@@ -75,6 +75,10 @@ typedef struct rbConstraint rbConstraint;
 // TODO: add args to set the type of constraint solvers, etc.
 extern rbDynamicsWorld *RB_dworld_new(const float gravity[3]);
 
+/* store a pointer that can be used to link a rigid body to user object */
+void RB_body_set_user_pointer(rbRigidBody *object, void *user_pointer);
+void *RB_body_get_user_pointer(rbRigidBody *object);
+
 /* Delete the given dynamics world, and free any extra data it may require */
 extern void RB_dworld_delete(rbDynamicsWorld *world);
 
@@ -114,7 +118,9 @@ extern void RB_dworld_remove_body(rbDynamicsWorld *world, rbRigidBody *body);
 
 void RB_world_convex_sweep_test(rbDynamicsWorld *world, rbRigidBody *object,
 								const float loc_start[3], const float loc_end[3],
-	                            float v_location[3],  float v_hitpoint[3],  float v_normal[3], int *r_hit);
+	                            float v_location[3],  float v_hitpoint[3],  float v_normal[3], 
+								int *r_hit, rbRigidBody **p_hitbody,
+								int col_groups, int use_sensor);
 
 /* ............ */
 

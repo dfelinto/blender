@@ -468,6 +468,7 @@ void BKE_rigidbody_validate_sim_object(RigidBodyWorld *rbw, Object *ob, short re
 
 		rbo->physics_object = RB_body_new(rbo->physics_shape, loc, rot);
 
+		RB_body_set_user_pointer(rbo->physics_object, (void *)ob);
 		RB_body_set_friction(rbo->physics_object, rbo->friction);
 		RB_body_set_restitution(rbo->physics_object, rbo->restitution);
 
