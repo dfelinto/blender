@@ -83,6 +83,7 @@ struct rbDynamicsWorld {
 };
 struct rbRigidBody {
 	btRigidBody *body;
+	void *user_pointer;
 	int col_groups;
 	int col_mask;
 	int is_sensor;
@@ -272,18 +273,46 @@ void RB_dworld_remove_body(rbDynamicsWorld *world, rbRigidBody *object)
 	world->dynamicsWorld->removeRigidBody(body);
 }
 
+
 /* Collision detection */
+
+struct rbSweepResultCallback : public btCollisionWorld::ClosestConvexResultCallback
+{
+	bool m_useSensor;
+	int  m_colGroups;
+
+	rbSweepResultCallback(const btVector3& convexFromWorld,const btVector3& convexToWorld, int col_groups, int use_sensor) :
+		btCollisionWorld::ClosestConvexResultCallback(convexFromWorld, convexToWorld)
+	{
+		m_colGroups = col_groups;
+		m_useSensor = use_sensor;
+	}
+
+	bool needsCollision(btBroadphaseProxy* proxy0) const
+	{
+		rbRigidBody *rb0 = (rbRigidBody *)((btRigidBody *)proxy0->m_clientObject)->getUserPointer();
+		
+		if (!m_useSensor && rb0->is_sensor)
+			return false;
+		bool collides = (proxy0->m_collisionFilterGroup & m_collisionFilterMask) != 0;
+		collides = collides && (m_collisionFilterGroup & proxy0->m_collisionFilterMask);
+		collides = collides && (m_colGroups & rb0->col_groups);
+		return collides;
+	}
+};
 
 void RB_world_convex_sweep_test(
         rbDynamicsWorld *world, rbRigidBody *object,
         const float loc_start[3], const float loc_end[3],
-        float v_location[3],  float v_hitpoint[3],  float v_normal[3], int *r_hit)
+        float v_location[3],  float v_hitpoint[3],  float v_normal[3],
+        int *r_hit, rbRigidBody **p_hitbody,
+        int col_groups, int use_sensor)
 {
 	btRigidBody *body = object->body;
 	btCollisionShape *collisionShape = body->getCollisionShape();
 	/* only convex shapes are supported, but user can specify a non convex shape */
 	if (collisionShape->isConvex()) {
-		btCollisionWorld::ClosestConvexResultCallback result(btVector3(loc_start[0], loc_start[1], loc_start[2]), btVector3(loc_end[0], loc_end[1], loc_end[2]));
+		rbSweepResultCallback result(btVector3(loc_start[0], loc_start[1], loc_start[2]), btVector3(loc_end[0], loc_end[1], loc_end[2]), col_groups, use_sensor);
 
 		btQuaternion obRot = body->getWorldTransform().getRotation();
 		
@@ -314,6 +343,8 @@ void RB_world_convex_sweep_test(
 			v_normal[1] = result.m_hitNormalWorld[1];
 			v_normal[2] = result.m_hitNormalWorld[2];
 			
+			if (p_hitbody != NULL)
+				*p_hitbody = (rbRigidBody *)result.m_hitCollisionObject->getUserPointer();
 		}
 		else {
 			*r_hit = 0;
@@ -370,6 +401,16 @@ void RB_body_delete(rbRigidBody *object)
 	
 	delete body;
 	delete object;
+}
+
+void RB_body_set_user_pointer(rbRigidBody *object, void *user_pointer)
+{
+	object->user_pointer = user_pointer;
+}
+
+void *RB_body_get_user_pointer(rbRigidBody *object)
+{
+	return object->user_pointer;
 }
 
 /* Settings ------------------------- */
