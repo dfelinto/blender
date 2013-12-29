@@ -336,6 +336,29 @@ void RB_world_convex_sweep_test(rbDynamicsWorld *world, rbRigidBody *object, con
 	}
 }
 
+void RB_dworld_get_collision_pairs(rbDynamicsWorld *world, rbCollisionCallback callback, void *p_user)
+{
+	btDispatcher* dispatcher = world->dynamicsWorld->getDispatcher();
+	int numManifolds = dispatcher->getNumManifolds();
+	int i;
+
+	for (i=0; i<numManifolds; i++) {
+		btPersistentManifold* manifold = dispatcher->getManifoldByIndexInternal(index);
+		if (manifold->getNumContacts()) {
+			const btRigidBody* body0 = static_cast<const btRigidBody*>(manifold->getBody0());
+			const btRigidBody* body1 = static_cast<const btRigidBody*>(manifold->getBody1());
+			rbRigidBody *rb0 = (rbRigidBody *)body0->getUserPointer();
+			rbRigidBody *rb1 = (rbRigidBody *)body1->getUserPointer();
+			callback(rb0, rb1, p_user);
+			if (!dispatcher->needsResponse(body0, body1))
+				// Refresh algorithm fails sometimes when there is penetration 
+				// (usuall the case with ghost and sensor objects)
+				// Let's just clear the manifold, in any case, it is recomputed on each frame.
+				manifold->clearManifold(); 
+		}
+	}
+}
+
 /* ............ */
 
 rbRigidBody *RB_body_new(rbCollisionShape *shape, const float loc[3], const float rot[4])
