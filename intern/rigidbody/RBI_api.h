@@ -123,6 +123,10 @@ void RB_world_convex_sweep_test(
         int *r_hit, rbRigidBody **p_hitbody,
         int col_groups, int use_sensor);
 
+typedef void (*rbCollisionCallback)(rbRigidBody *p_body0, rbRigidBody *p_body1, void *p_user);
+
+void RB_dworld_get_collision_pairs(rbDynamicsWorld *world, rbCollisionCallback callback, void *p_user);
+
 /* ............ */
 
 /* Create new RigidBody instance */
