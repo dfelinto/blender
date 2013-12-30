@@ -263,12 +263,14 @@ void RB_dworld_remove_body(rbDynamicsWorld *world, rbRigidBody *object)
 
 struct rbSweepResultCallback : public btCollisionWorld::ClosestConvexResultCallback
 {
+	rbRigidBody *m_self;
 	bool m_useSensor;
 	int  m_colGroups;
 
-	rbSweepResultCallback(const btVector3& convexFromWorld,const btVector3& convexToWorld, int col_groups, int use_sensor) :
+	rbSweepResultCallback(rbRigidBody *self, const btVector3& convexFromWorld,const btVector3& convexToWorld, int col_groups, int use_sensor) :
 		btCollisionWorld::ClosestConvexResultCallback(convexFromWorld, convexToWorld)
 	{
+		m_self = self;
 		m_colGroups = col_groups;
 		m_useSensor = use_sensor;
 	}
@@ -277,6 +279,9 @@ struct rbSweepResultCallback : public btCollisionWorld::ClosestConvexResultCallb
 	{
 		rbRigidBody *rb0 = (rbRigidBody *)((btRigidBody *)proxy0->m_clientObject)->getUserPointer();
 		
+		if (rb0 == m_self)
+			// ignore self object shape
+			return false;
 		if (!m_useSensor && rb0->is_sensor)
 			return false;
 		bool collides = (proxy0->m_collisionFilterGroup & m_collisionFilterMask) != 0;
@@ -292,7 +297,7 @@ void RB_world_convex_sweep_test(rbDynamicsWorld *world, rbRigidBody *object, con
 	btCollisionShape *collisionShape = body->getCollisionShape();
 	/* only convex shapes are supported, but user can specify a non convex shape */
 	if (collisionShape->isConvex()) {
-		rbSweepResultCallback result(btVector3(loc_start[0], loc_start[1], loc_start[2]), btVector3(loc_end[0], loc_end[1], loc_end[2]), col_groups, use_sensor);
+		rbSweepResultCallback result(object, btVector3(loc_start[0], loc_start[1], loc_start[2]), btVector3(loc_end[0], loc_end[1], loc_end[2]), col_groups, use_sensor);
 
 		btQuaternion obRot = body->getWorldTransform().getRotation();
 		
@@ -343,7 +348,7 @@ void RB_dworld_get_collision_pairs(rbDynamicsWorld *world, rbCollisionCallback c
 	int i;
 
 	for (i=0; i<numManifolds; i++) {
-		btPersistentManifold* manifold = dispatcher->getManifoldByIndexInternal(index);
+		btPersistentManifold* manifold = dispatcher->getManifoldByIndexInternal(i);
 		if (manifold->getNumContacts()) {
 			const btRigidBody* body0 = static_cast<const btRigidBody*>(manifold->getBody0());
 			const btRigidBody* body1 = static_cast<const btRigidBody*>(manifold->getBody1());
