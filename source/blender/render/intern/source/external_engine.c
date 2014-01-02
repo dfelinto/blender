@@ -57,6 +57,7 @@
 
 #include "RE_engine.h"
 #include "RE_pipeline.h"
+#include "RE_bake.h"
 
 #include "initrender.h"
 #include "render_types.h"
@@ -67,7 +68,7 @@
 static RenderEngineType internal_render_type = {
 	NULL, NULL,
 	"BLENDER_RENDER", N_("Blender Render"), RE_INTERNAL,
-	NULL, NULL, NULL, NULL, NULL,
+	NULL, NULL, NULL, NULL, NULL, NULL,
 	{NULL, NULL, NULL}
 };
 
@@ -76,7 +77,7 @@ static RenderEngineType internal_render_type = {
 static RenderEngineType internal_game_type = {
 	NULL, NULL,
 	"BLENDER_GAME", N_("Blender Game"), RE_INTERNAL | RE_GAME,
-	NULL, NULL, NULL, NULL, NULL,
+	NULL, NULL, NULL, NULL, NULL, NULL,
 	{NULL, NULL, NULL}
 };
 
@@ -402,6 +403,58 @@ RenderData *RE_engine_get_render_data(Render *re)
 	return &re->r;
 }
 
+void RE_engine_bake_set_engine_parameters(Render *re, Main *bmain, Scene *scene)
+{
+	re->scene = scene;
+	re->main = bmain;
+	re->r = scene->r;
+}
+
+/* Bake */
+
+int	RE_engine_bake(Render *re, Object *object, BakePixel pixel_array[], int num_pixels, int depth, int pass_type, float result[])
+{
+	RenderEngineType *type = RE_engines_find(re->r.engine);
+	RenderEngine *engine;
+	int persistent_data = re->r.mode & R_PERSISTENT_DATA;
+
+	G.is_rendering = TRUE;
+
+	/* verify if we can render */
+	if (!type->bake)
+		return 0;
+
+	/* render */
+	engine = re->engine;
+
+	if (!engine) {
+		engine = RE_engine_create(type);
+		re->engine = engine;
+	}
+
+	engine->flag |= RE_ENGINE_RENDERING;
+
+	/* update is only called so we create the engine.session */
+	if (type->update)
+		type->update(engine, re->main, re->scene);
+
+	if (type->bake)
+		type->bake(engine, re->scene, object, pass_type, pixel_array, num_pixels, depth, result);
+
+	engine->flag &= ~RE_ENGINE_RENDERING;
+
+	/* re->engine becomes zero if user changed active render engine during render */
+	if (!persistent_data || !re->engine) {
+		RE_engine_free(engine);
+		re->engine = NULL;
+	}
+
+	if (BKE_reports_contain(re->reports, RPT_ERROR))
+		G.is_break = TRUE;
+
+	return 1;
+}
+
 /* Render */
 
 static bool render_layer_exclude_animated(Scene *scene, SceneRenderLayer *srl)
@@ -415,8 +468,7 @@ static bool render_layer_exclude_animated(Scene *scene, SceneRenderLayer *srl)
 	return RNA_property_animated(&ptr, prop);
 }
 
-int RE_engine_render(Render *re, int do_all)
-{
+int RE_engine_render(Render *re, int do_all) {
 	RenderEngineType *type = RE_engines_find(re->r.engine);
 	RenderEngine *engine;
 	int persistent_data = re->r.mode & R_PERSISTENT_DATA;
