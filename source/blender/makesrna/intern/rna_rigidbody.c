@@ -626,22 +626,25 @@ static void rna_RigidBodyWorld_convex_sweep_test(
 {
 #ifdef WITH_BULLET
 	RigidBodyOb *rob = object->rigidbody_object;
+	int r_status;
 
+	*r_hit = FALSE;
 	*r_object = NULL;
+
 	if (rbw->physics_world != NULL && rob->physics_object != NULL) {
 		rbRigidBody *hit_object;
 		RB_world_convex_sweep_test(rbw->physics_world, rob->physics_object, ray_start, ray_end,
-		                           r_location, r_hitpoint, r_normal, r_hit, &hit_object, col_groups, use_sensor);
-		if (*r_hit == -2) {
+		                           r_location, r_hitpoint, r_normal, &r_status, &hit_object, col_groups, use_sensor);
+		if (r_status == -2) {
 			BKE_report(reports, RPT_ERROR,
 			           "A non convex collision shape was passed to the function, use only convex collision shapes");
 		}
-		if (*r_hit == 1) {
+		else if (r_status == 1) {
+			*r_hit = TRUE;
 			*r_object = (Object *)RB_body_get_user_pointer(hit_object);
 		}
 	}
 	else {
-		*r_hit = -1;
 		BKE_report(reports, RPT_ERROR, "Rigidbody world was not properly initialized, need to step the simulation first");
 	}
 #else
@@ -750,7 +753,7 @@ static void rna_def_rigidbody_world(BlenderRNA *brna)
 	prop = RNA_def_float_vector(func, "end", 3, NULL, -FLT_MAX, FLT_MAX, "", "", -1e4, 1e4);
 	RNA_def_property_flag(prop, PROP_REQUIRED);
 	prop = RNA_def_int(func, "col_groups", -1, INT_MIN, INT_MAX, "", "bit mask of the collision groups that it will detect, -1=all (default)", INT_MIN, INT_MAX);
-	prop = RNA_def_int(func, "use_sensor", 0, 0, 1, "", "1=sensors will be detected, 0 (default)=sensor objects are ignored", 0, 1);
+	prop = RNA_def_boolean(func, "use_sensor", FALSE, "", "True = sensors will be detected, False (default) = objects are ignored");
 
 	prop = RNA_def_float_vector(func, "object_location", 3, NULL, -FLT_MAX, FLT_MAX, "Location",
 	                            "The hit location of this sweep test", -1e4, 1e4);
@@ -767,7 +770,7 @@ static void rna_def_rigidbody_world(BlenderRNA *brna)
 	RNA_def_property_flag(prop, PROP_THICK_WRAP);
 	RNA_def_function_output(func, prop);
 
-	prop = RNA_def_int(func, "has_hit", 0, 0, 0, "", "If the function has found collision point, value is 1, otherwise 0", 0, 0);
+	prop = RNA_def_boolean(func, "has_hit", FALSE, "", "If the function has found collision point");
 	RNA_def_function_output(func, prop);
 
 	prop = RNA_def_pointer(func, "hit_object", "Object", "", "object that was hit");
