@@ -130,17 +130,17 @@ static int bake_exec(bContext *C, wmOperator *op)
 
 	Render *re = RE_NewRender(scene->id.name);
 
+	float *result;
+	BakePixel *pixel_array;
+	const int num_pixels = 100;
+	const int depth = 1;
+
 	RE_engine_bake_set_engine_parameters(re, CTX_data_main(C), scene);
 
 	G.is_break = FALSE;
 
 	RE_test_break_cb(re, NULL, bake_break);
 	RE_SetReports(re, op->reports);
-
-	float *result;
-	BakePixel *pixel_array;
-	const int num_pixels = 100;
-	const int depth = 1;
 
 	pixel_array = MEM_callocN(sizeof(BakePixel), "bake pixels");
 	result = MEM_callocN(sizeof(float) * depth * num_pixels, "bake return pixels");
