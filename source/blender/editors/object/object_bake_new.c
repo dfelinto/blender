@@ -132,7 +132,9 @@ static int bake_exec(bContext *C, wmOperator *op)
 
 	float *result;
 	BakePixel *pixel_array;
-	const int num_pixels = 100;
+	const int width = 64; //XXX get from elsewhere
+	const int height = 64; //XXX get from elsewhere
+	const int num_pixels = width * height;
 	const int depth = 1;
 
 	RE_engine_bake_set_engine_parameters(re, CTX_data_main(C), scene);
@@ -155,28 +157,8 @@ static int bake_exec(bContext *C, wmOperator *op)
 	}
 #endif
 
-	{
-		/* populate the array while we don't have a real populate_bake_pixels */
-		const int num_faces = 2;
-		const int face_size = (float) num_pixels / num_faces;
-		const int face_width = sqrtf(face_size);
-		int i;
-
-		for (i=0; i < num_pixels; i++) {
-			const int x = (i % face_size) % face_width;
-			const int y = (i % face_size) / face_width;
-
-			pixel_array[i].primitive_id = i % num_faces; //0 and 1
-			pixel_array[i].u  = (float) x / face_width;
-			pixel_array[i].v  = (float) y / face_width;
-
-			pixel_array[i].dudx =
-			pixel_array[i].dudy =
-			pixel_array[i].dvdx =
-			pixel_array[i].dvdy =
-			0.f;
-		}
-	}
+	/* populate the pixel array with the face data */
+	RE_populate_bake_pixels(object, pixel_array, width, height);
 
 	/**
 	 // PSEUDO-CODE TIME

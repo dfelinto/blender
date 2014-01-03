@@ -190,10 +190,16 @@ void BlenderSession::reset_session(BL::BlendData b_data_, BL::Scene b_scene_)
 
 void BlenderSession::free_session()
 {
-	if(sync)
-		delete sync;
+	try {
+		if (sync)
+			delete sync;
 
-	delete session;
+		delete session;
+	}
+	catch (const std::exception &exc)
+	{
+		printf("Cycles-free session: ERROR: %s\n", exc.what());
+	}
 }
 
 static PassType get_pass_type(BL::RenderPass b_pass)

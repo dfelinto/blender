@@ -74,8 +74,73 @@ extern struct Render R;
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 
 
-/* ************************* bake ************************ */
+typedef struct BakeData {
+	BakePixel *pixel_array;
+	int width;
+	int primitive_id;
+	ZSpan zspan;
+} BakeData;
 
+/* ************************* bake ************************ */
+static void store_bake_pixel(void *handle, int x, int y, float u, float v)
+{
+	BakeData *bd = (BakeData *)handle;
+	BakePixel *pixel_array = bd->pixel_array;
+	const int width = bd->width;
+	const int i = y * width + x;
+
+	pixel_array[i].primitive_id = bd->primitive_id;
+	pixel_array[i].u = u;
+	pixel_array[i].v = v;
+
+	pixel_array[i].dudx =
+	pixel_array[i].dudy =
+	pixel_array[i].dvdx =
+	pixel_array[i].dvdy =
+	0.f;
+}
+
+void RE_populate_bake_pixels(Object *object, BakePixel pixel_array[], const int width, const int height)
+{
+	BakeData bd;
+	const int num_pixels = width * height;
+	int i;
+
+	bd.pixel_array = pixel_array;
+	bd.width = width;
+
+	/* initialize all pixel arrays so we know which ones are 'blank' */
+	for (i=0; i < num_pixels; i++) {
+		pixel_array[i].primitive_id = -1;
+	}
+
+	zbuf_alloc_span(&bd.zspan, width, height, R.clipcrop);
+
+	/* TODO: * get the loop over faces to work
+
+	         * find whether we need to triangulate the mesh
+			   for zspan_scanconvert to work
+	           (I guess we do since baking had the splitting option)
+
+	         * find which primitive_id to use
+	           (it's the id of the original face or the new triangulated?)
+	 */
+#if 0
+	/* pseudo code */
+	for face in object.faces {
+		bd.primitive_id = face_id;
+	 	v1, v2, v3 = face.vertices[:]
+	 
+	 	//TODO copy/adapt UV offset hack/trick from bake.c */
+
+		zspan_scanconvert(&bd.zspan, (void *)&bd, v1, v2, v3, store_bake_pixel);
+	 }
+#endif
+
+	/* we could preserve this if zbuffer pass is required, maybe store the zed of the
+	   pixel in the BakePixel struct - TBI */
+	zbuf_free_span(&bd.zspan);
+}
 
 int RE_internal_bake(Render *UNUSED(re), Object *UNUSED(object), BakePixel UNUSED(pixel_array[]), int UNUSED(num_pixels), int UNUSED(depth), int UNUSED(pass_type), float UNUSED(result[]))
 {
