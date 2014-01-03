@@ -660,6 +660,38 @@ static void rna_RigidBodyWorld_convex_sweep_test(
 #endif
 }
 
+static void rna_rigidbody_collision_pairs_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)
+{
+#ifdef WITH_BULLET
+	RigidBodyWorld *rbw = (RigidBodyWorld *)ptr->data;
+	/*
+	 * We now need to call the function that
+	 * verifies if we have already calculated this frame
+	 * and if we have not we need to recalculate it.
+	 *
+	 * The (not so) tricky part is that we need to
+	 * make sure the list is cleaned if we remove an object
+	 * and the list is tagged as dirty if we add a new object
+	 *
+	 * But then we need a system to trash the cache anyways
+	 *
+	 * The only thing to be aware of (and the reason I think
+	 * caching may be a good idea) is that this function here
+	 * is called even if you do:
+	 * print(len(bpy.context.scene.rigidbody_world.collision_pairs))
+	 *
+	 * But honestly, it may be fine to simply recalculate the
+	 * ListBase everytime we get here, so no cache == simpler.
+	 *
+	 * */
+
+	printf("calculate collision pairs\n");
+
+	rna_iterator_listbase_begin(iter, &rbw->collision_pairs, NULL);
+#else
+#endif
+}
+
 #else
 
 static void rna_def_rigidbody_world(BlenderRNA *brna)
@@ -744,6 +776,14 @@ static void rna_def_rigidbody_world(BlenderRNA *brna)
 	RNA_def_property_struct_type(prop, "EffectorWeights");
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 	RNA_def_property_ui_text(prop, "Effector Weights", "");
+
+	/* collision pairs test */
+	prop = RNA_def_property(srna, "collision_pairs", PROP_COLLECTION, PROP_NONE);
+	RNA_def_property_struct_type(prop, "RigidBodyCollisionPair");
+	RNA_def_property_ui_text(prop, "Collision Pairs", "");
+	RNA_def_property_collection_funcs(prop, "rna_rigidbody_collision_pairs_begin", "rna_iterator_listbase_next",
+	                                  "rna_iterator_listbase_end", "rna_iterator_listbase_get",
+	                                  NULL, NULL, NULL, NULL);
 
 	/* Sweep test */
 	func = RNA_def_function(srna, "convex_sweep_test", "rna_RigidBodyWorld_convex_sweep_test");
@@ -1266,11 +1306,30 @@ static void rna_def_rigidbody_constraint(BlenderRNA *brna)
 	RNA_def_property_update(prop, NC_OBJECT, "rna_RigidBodyOb_reset");
 }
 
+static void rna_def_rigidbody_collision_pair(BlenderRNA *brna)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	srna = RNA_def_struct(brna, "RigidBodyCollisionPair", NULL);
+	RNA_def_struct_sdna(srna, "RigidBodyCollP");
+	RNA_def_struct_ui_text(srna, "Rigid Body Collision Pair", "");
+
+	prop = RNA_def_property(srna, "object1", PROP_POINTER, PROP_NONE);
+	RNA_def_property_pointer_sdna(prop, NULL, "object1");
+	RNA_def_property_struct_type(prop, "Object");
+
+	prop = RNA_def_property(srna, "object2", PROP_POINTER, PROP_NONE);
+	RNA_def_property_pointer_sdna(prop, NULL, "object2");
+	RNA_def_property_struct_type(prop, "Object");
+}
+
 void RNA_def_rigidbody(BlenderRNA *brna)
 {
 	rna_def_rigidbody_world(brna);
 	rna_def_rigidbody_object(brna);
 	rna_def_rigidbody_constraint(brna);
+	rna_def_rigidbody_collision_pair(brna);
 }
 
 

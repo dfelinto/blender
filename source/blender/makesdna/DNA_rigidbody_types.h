@@ -71,6 +71,8 @@ typedef struct RigidBodyWorld {
 	
 	/* References to Physics Sim objects. Exist at runtime only ---------------------- */
 	void *physics_world;		/* Physics sim world (i.e. btDiscreteDynamicsWorld) */
+
+	ListBase collision_pairs;
 } RigidBodyWorld;
 
 /* Flags for RigidBodyWorld */
@@ -302,6 +304,12 @@ typedef enum eRigidBodyCon_Flag {
 } eRigidBodyCon_Flag;
 
 /* ******************************** */
+
+/* Collision Pair */
+typedef struct RigidBodyCollP {
+	struct RigidBodyCollP *next, *prev;
+	struct Object *object1, *object2;
+} RigidBodyCollP;
 
 #endif /* __DNA_RIGIDBODY_TYPES_H__ */
 
