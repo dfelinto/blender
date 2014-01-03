@@ -218,6 +218,7 @@ static int bake_exec(bContext *C, wmOperator *op)
 
 	RE_engine_bake(re, object, pixel_array, num_pixels, depth, pass_type, result);
 
+#if 0
 	{
 		/* this is 90% likely working, but
 		    right now cycles is segfaulting on ~free, so
@@ -231,6 +232,7 @@ static int bake_exec(bContext *C, wmOperator *op)
 		}
 		printf("\n</result>\n\n");
 	}
+#endif
 
 	MEM_freeN(pixel_array);
 	MEM_freeN(result);
