@@ -660,6 +660,16 @@ static void rna_RigidBodyWorld_convex_sweep_test(
 #endif
 }
 
+static int rna_rigidbody_collision_pair_skip(CollectionPropertyIterator *UNUSED(iter), void *data)
+{
+	RigidBodyCollP *cp = (RigidBodyCollP *) data;
+
+	if (cp->object1 || cp->object2)
+		return 0;
+
+	return 1;
+}
+
 static void rna_rigidbody_collision_pairs_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)
 {
 #ifdef WITH_BULLET
@@ -669,22 +679,22 @@ static void rna_rigidbody_collision_pairs_begin(CollectionPropertyIterator *iter
 	   based on bullet cache. Hence, it corresponds to the last simulation
 	   step and NOT necessarily to the current frame because of the pointcache
 	   implemented in the Blender kernel.
-	   
+
 	   So the correct way to use this function is in a single sweep of the
 	   simulation:
 	   1) set the frame to first frame of the simulation
 	   2) reset the rigidbody world to clear the cache
-	      Currently that can only be done by changing something to the 
-		  simulation (e.g adding an object, changing time scale)
-		  TODO: add a function to force a cache clear
+	      Currently that can only be done by changing something to the
+	      simulation (e.g adding an object, changing time scale)
+	      TODO: add a function to force a cache clear
 	   3) increment the frame and update the scene
 	   4) after each increment, check the collision_pairs collection
-	      to find out which object collided in that frame.
-
+	      to find out which object collided in that frame
 	*/
+
 	BKE_rigidbody_update_collision_pairs(rbw);
 
-	rna_iterator_listbase_begin(iter, &rbw->collision_pairs, NULL);
+	rna_iterator_listbase_begin(iter, &rbw->collision_pairs, rna_rigidbody_collision_pair_skip);
 #else
 #endif
 }
