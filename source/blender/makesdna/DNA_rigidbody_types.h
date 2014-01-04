@@ -72,7 +72,8 @@ typedef struct RigidBodyWorld {
 	/* References to Physics Sim objects. Exist at runtime only ---------------------- */
 	void *physics_world;		/* Physics sim world (i.e. btDiscreteDynamicsWorld) */
 
-	ListBase collision_pairs;
+	ListBase collision_pairs;	/* list of RigidBodyCollP holding the pairs of colliding
+								   objects during last simulation steps */
 } RigidBodyWorld;
 
 /* Flags for RigidBodyWorld */
@@ -82,7 +83,9 @@ typedef enum eRigidBodyWorld_Flag {
 	/* sim data needs to be rebuilt */
 	RBW_FLAG_NEEDS_REBUILD		= (1 << 1),
 	/* usse split impulse when stepping the simulation */
-	RBW_FLAG_USE_SPLIT_IMPULSE	= (1 << 2)
+	RBW_FLAG_USE_SPLIT_IMPULSE	= (1 << 2),
+	/* collision pair needs rebuild */
+	RBW_FLAG_COLLISION_PAIR_REBUILD	= (1 << 3)
 } eRigidBodyWorld_Flag;
 
 /* ******************************** */

@@ -664,28 +664,25 @@ static void rna_rigidbody_collision_pairs_begin(CollectionPropertyIterator *iter
 {
 #ifdef WITH_BULLET
 	RigidBodyWorld *rbw = (RigidBodyWorld *)ptr->data;
-	/*
-	 * We now need to call the function that
-	 * verifies if we have already calculated this frame
-	 * and if we have not we need to recalculate it.
-	 *
-	 * The (not so) tricky part is that we need to
-	 * make sure the list is cleaned if we remove an object
-	 * and the list is tagged as dirty if we add a new object
-	 *
-	 * But then we need a system to trash the cache anyways
-	 *
-	 * The only thing to be aware of (and the reason I think
-	 * caching may be a good idea) is that this function here
-	 * is called even if you do:
-	 * print(len(bpy.context.scene.rigidbody_world.collision_pairs))
-	 *
-	 * But honestly, it may be fine to simply recalculate the
-	 * ListBase everytime we get here, so no cache == simpler.
-	 *
-	 * */
 
-	printf("calculate collision pairs\n");
+	/* this function will update the collision_pairs list
+	   based on bullet cache. Hence, it corresponds to the last simulation
+	   step and NOT necessarily to the current frame because of the pointcache
+	   implemented in the Blender kernel.
+	   
+	   So the correct way to use this function is in a single sweep of the
+	   simulation:
+	   1) set the frame to first frame of the simulation
+	   2) reset the rigidbody world to clear the cache
+	      Currently that can only be done by changing something to the 
+		  simulation (e.g adding an object, changing time scale)
+		  TODO: add a function to force a cache clear
+	   3) increment the frame and update the scene
+	   4) after each increment, check the collision_pairs collection
+	      to find out which object collided in that frame.
+
+	*/
+	BKE_rigidbody_update_collision_pairs(rbw);
 
 	rna_iterator_listbase_begin(iter, &rbw->collision_pairs, NULL);
 #else
