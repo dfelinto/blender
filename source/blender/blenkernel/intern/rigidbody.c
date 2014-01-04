@@ -120,6 +120,9 @@ void BKE_rigidbody_free_world(RigidBodyWorld *rbw)
 	if (rbw->effector_weights)
 		MEM_freeN(rbw->effector_weights);
 
+	/* clear collision list */
+	BLI_freelistN(&rbw->collision_pairs);
+
 	/* free rigidbody world itself */
 	MEM_freeN(rbw);
 }
@@ -897,6 +900,7 @@ void BKE_rigidbody_remove_object(Scene *scene, Object *ob)
 	int i;
 
 	if (rbw) {
+		RigidBodyCollP *colpair;
 		/* remove from rigidbody world, free object won't do this */
 		if (rbw->physics_world && rbo->physics_object)
 			RB_dworld_remove_body(rbw->physics_world, rbo->physics_object);
@@ -924,6 +928,15 @@ void BKE_rigidbody_remove_object(Scene *scene, Object *ob)
 						BKE_rigidbody_remove_constraint(scene, obt);
 					}
 				}
+			}
+		}
+
+		/* remove object from collision pairs if it was listed */
+		for (colpair = rbw->collision_pairs.first; colpair; colpair = colpair->next) {
+			if (colpair->object1 == ob || colpair->object2 == ob) {
+				/* don't remove the item from the list because it would change the list length */
+				colpair->object1 = NULL;
+				colpair->object2 = NULL;
 			}
 		}
 	}
@@ -1181,6 +1194,12 @@ static void rigidbody_update_simulation_post_step(RigidBodyWorld *rbw)
 	}
 }
 
+static void rigidbody_clear_collision_pairs(RigidBodyWorld *rbw)
+{
+	BLI_freelistN(&rbw->collision_pairs);
+	rbw->flag |= RBW_FLAG_COLLISION_PAIR_REBUILD;
+}
+
 bool BKE_rigidbody_check_sim_running(RigidBodyWorld *rbw, float ctime)
 {
 	return (rbw && (rbw->flag & RBW_FLAG_MUTED) == 0 && ctime > rbw->pointcache->startframe);
@@ -1339,9 +1358,33 @@ void BKE_rigidbody_do_simulation(Scene *scene, float ctime)
 		/* write cache for current frame */
 		BKE_ptcache_validate(cache, (int)ctime);
 		BKE_ptcache_write(&pid, (unsigned int)ctime);
-
+		/* clear the collision pair because it is reset on each simulation step */
+		rigidbody_clear_collision_pairs(rbw);
 		rbw->ltime = ctime;
 	}
+}
+
+static void rigidbody_collision_callback(rbRigidBody *p_body0, rbRigidBody *p_body1, void *p_user)
+{
+	ListBase *list = p_user;
+	RigidBodyCollP *pair = MEM_mallocN(sizeof(RigidBodyCollP), "RigidBodyCollP");
+
+	pair->object1 = (Object *)RB_body_get_user_pointer(p_body0);
+	pair->object2 = (Object *)RB_body_get_user_pointer(p_body1);
+	BLI_addtail(list, pair);
+}
+
+/* update RigidBodyWorld.collision_pairs from Bullet cache if needed */
+void BKE_rigidbody_update_collision_pairs(struct RigidBodyWorld *rbw)
+{
+	if (rbw->physics_world == NULL || !(rbw->flag & RBW_FLAG_COLLISION_PAIR_REBUILD))
+		return;
+
+	/* The list should already be empty, but clear it just in case */
+	BLI_freelistN(&rbw->collision_pairs);
+	/* populate the list */
+	RB_dworld_get_collision_pairs(rbw->physics_world, rigidbody_collision_callback, &rbw->collision_pairs);
+	rbw->flag &= ~RBW_FLAG_COLLISION_PAIR_REBUILD;
 }
 /* ************************************** */
 
@@ -1377,6 +1420,7 @@ bool BKE_rigidbody_check_sim_running(RigidBodyWorld *rbw, float ctime) { return 
 void BKE_rigidbody_cache_reset(RigidBodyWorld *rbw) {}
 void BKE_rigidbody_rebuild_world(Scene *scene, float ctime) {}
 void BKE_rigidbody_do_simulation(Scene *scene, float ctime) {}
+void BKE_rigidbody_update_collision_pairs(struct RigidBodyWorld *rbw) {}
 
 #ifdef __GNUC__
 #  pragma GCC diagnostic pop
