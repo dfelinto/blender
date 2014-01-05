@@ -144,7 +144,7 @@ static int bake_exec(bContext *C, wmOperator *op)
 	RE_test_break_cb(re, NULL, bake_break);
 	RE_SetReports(re, op->reports);
 
-	pixel_array = MEM_callocN(sizeof(BakePixel), "bake pixels");
+	pixel_array = MEM_callocN(sizeof(BakePixel) * num_pixels, "bake pixels");
 	result = MEM_callocN(sizeof(float) * depth * num_pixels, "bake return pixels");
 
 #if 0
