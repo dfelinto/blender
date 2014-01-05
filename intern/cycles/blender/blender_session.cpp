@@ -449,6 +449,9 @@ void BlenderSession::bake(BL::Object b_object, const string& pass_type, BakePixe
 		int i = 0;
 		printf("\n<bakepixel>\n\n");
 		for (i=0;i < num_pixels; i++) {
+			if (pixel_array[i].primitive_id == -1)
+				continue;
+
 			printf("\nprimitive_id: %d\n", pixel_array[i].primitive_id);
 			printf("u: %4.2f\n", pixel_array[i].u);
 			printf("v: %4.2f\n", pixel_array[i].v);

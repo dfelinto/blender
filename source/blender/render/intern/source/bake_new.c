@@ -44,6 +44,7 @@
 #include "DNA_meshdata_types.h"
 
 #include "BKE_customdata.h"
+#include "BKE_mesh.h"
 #include "BKE_global.h"
 #include "BKE_image.h"
 #include "BKE_main.h"
@@ -104,7 +105,14 @@ void RE_populate_bake_pixels(Object *object, BakePixel pixel_array[], const int 
 {
 	BakeData bd;
 	const int num_pixels = width * height;
-	int i;
+	int i, a;
+	MTFace *mtface;
+
+	Mesh *me = (Mesh *)object->data;
+
+	/* we can't bake in edit mode */
+	if (me->edit_btmesh)
+		return;
 
 	bd.pixel_array = pixel_array;
 	bd.width = width;
@@ -116,29 +124,38 @@ void RE_populate_bake_pixels(Object *object, BakePixel pixel_array[], const int 
 
 	zbuf_alloc_span(&bd.zspan, width, height, R.clipcrop);
 
-	/* TODO: * get the loop over faces to work
+	/* remove tessface to ensure we don't hold references to invalid faces */
+	BKE_mesh_tessface_clear(me);
+	BKE_mesh_tessface_calc(me);
 
-	         * find whether we need to triangulate the mesh
-			   for zspan_scanconvert to work
-	           (I guess we do since baking had the splitting option)
+	mtface = CustomData_get_layer(&me->fdata, CD_MTFACE);
 
-	         * find which primitive_id to use
-	           (it's the id of the original face or the new triangulated?)
-	 */
-#if 0
-	/* pseudo code */
-	for face in object.faces {
-		bd.primitive_id = face_id;
-	 	v1, v2, v3 = face.vertices[:]
-	 
-	 	//TODO copy/adapt UV offset hack/trick from bake.c */
+	if (mtface == NULL)
+		return;
 
-		zspan_scanconvert(&bd.zspan, (void *)&bd, v1, v2, v3, store_bake_pixel);
-	 }
-#endif
+	for (i = 0; i < me->totface; i++) {
+		float vec[4][2];
+		MTFace *mtf = &mtface[i];
 
-	/* we could preserve this if zbuffer pass is required, maybe store the zed of the
-	   pixel in the BakePixel struct - TBI */
+		bd.primitive_id = i;
+
+		for (a = 0; a < 4; a++) {
+			/* Note, workaround for pixel aligned UVs which are common and can screw up our intersection tests
+			 * where a pixel gets in between 2 faces or the middle of a quad,
+			 * camera aligned quads also have this problem but they are less common.
+			 * Add a small offset to the UVs, fixes bug #18685 - Campbell */
+			vec[a][0] = mtf->uv[a][0] * (float)width - (0.5f + 0.001f);
+			vec[a][1] = mtf->uv[a][1] * (float)height - (0.5f + 0.002f);
+		}
+
+		zspan_scanconvert(&bd.zspan, (void *)&bd, vec[0], vec[1], vec[2], store_bake_pixel);
+
+		/* XXX TODO
+		if (...) // verts == 4
+			zspan_scanconvert(&bd.zspan, (void *)&bd, vec[0], vec[2], vec[3], store_bake_pixel);
+		*/
+	}
+
 	zbuf_free_span(&bd.zspan);
 }
 
