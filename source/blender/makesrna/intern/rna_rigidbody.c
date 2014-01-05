@@ -638,7 +638,7 @@ static void rna_RigidBodyWorld_convex_sweep_test(
 	*r_hit = FALSE;
 	*r_object = NULL;
 
-	if (rbw->physics_world != NULL && rob->physics_object != NULL) {
+	if (rbw->physics_world != NULL && rob != NULL && rob->physics_object != NULL) {
 		rbRigidBody *hit_object;
 		RB_world_convex_sweep_test(rbw->physics_world, rob->physics_object, ray_start, ray_end,
 		                           r_location, r_hitpoint, r_normal, &r_status, &hit_object, col_groups, use_sensor);
