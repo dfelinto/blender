@@ -717,7 +717,7 @@ RigidBodyWorld *BKE_rigidbody_create_world(Scene *scene)
 	/* set default settings */
 	rbw->effector_weights = BKE_add_effector_weights(NULL);
 
-	rbw->ltime = PSFRA;
+	rbw->ltime = SFRA;
 
 	rbw->time_scale = 1.0f;
 
@@ -726,6 +726,8 @@ RigidBodyWorld *BKE_rigidbody_create_world(Scene *scene)
 
 	rbw->pointcache = BKE_ptcache_add(&(rbw->ptcaches));
 	rbw->pointcache->step = 1;
+	rbw->pointcache->startframe = SFRA;
+	rbw->pointcache->endframe = EFRA;
 
 	/* return this sim world */
 	return rbw;
@@ -1290,6 +1292,19 @@ void BKE_rigidbody_rebuild_world(Scene *scene, float ctime)
 	if (rbw->physics_world == NULL || rbw->numbodies != BLI_countlist(&rbw->group->gobject)) {
 		cache->flag |= PTCACHE_OUTDATED;
 	}
+	if (startframe != SFRA || endframe != EFRA) {
+		/* the simulation range has changed, force a full cache reset */
+		cache->flag |= PTCACHE_OUTDATED;
+		BKE_ptcache_id_reset(scene, &pid, PTCACHE_RESET_OUTDATED);
+		/* and change the range */
+		cache->startframe = SFRA;
+		cache->endframe = EFRA;
+		BKE_ptcache_id_time(&pid, scene, ctime, &startframe, &endframe, NULL);
+		rbw->ltime = startframe;
+		/* still mark the cache outdated because we need to initialize the first frame */
+		cache->flag |= PTCACHE_OUTDATED;
+	}
+
 
 	if (ctime <= startframe + 1 && rbw->ltime == startframe) {
 		if (cache->flag & PTCACHE_OUTDATED) {
