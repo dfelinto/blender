@@ -75,6 +75,10 @@ typedef struct rbConstraint rbConstraint;
 // TODO: add args to set the type of constraint solvers, etc.
 extern rbDynamicsWorld *RB_dworld_new(const float gravity[3]);
 
+/* store a pointer that can be used to link a rigid body to user object */
+void RB_body_set_user_pointer(rbRigidBody *object, void *user_pointer);
+void *RB_body_get_user_pointer(rbRigidBody *object);
+
 /* Delete the given dynamics world, and free any extra data it may require */
 extern void RB_dworld_delete(rbDynamicsWorld *world);
 
@@ -105,7 +109,7 @@ void RB_dworld_export(rbDynamicsWorld *world, const char *filename);
 /* Setup ---------------------------- */
 
 /* Add RigidBody to dynamics world */
-extern void RB_dworld_add_body(rbDynamicsWorld *world, rbRigidBody *body, int col_groups);
+extern void RB_dworld_add_body(rbDynamicsWorld *world, rbRigidBody *body, int col_groups, int col_mask);
 
 /* Remove RigidBody from dynamics world */
 extern void RB_dworld_remove_body(rbDynamicsWorld *world, rbRigidBody *body);
@@ -114,7 +118,13 @@ extern void RB_dworld_remove_body(rbDynamicsWorld *world, rbRigidBody *body);
 
 void RB_world_convex_sweep_test(rbDynamicsWorld *world, rbRigidBody *object,
 								const float loc_start[3], const float loc_end[3],
-	                            float v_location[3],  float v_hitpoint[3],  float v_normal[3], int *r_hit);
+	                            float v_location[3],  float v_hitpoint[3],  float v_normal[3], 
+								int *r_hit, rbRigidBody **p_hitbody,
+								int col_groups, int use_sensor);
+
+typedef void (*rbCollisionCallback)(rbRigidBody *p_body0, rbRigidBody *p_body1, void *p_user);
+
+void RB_dworld_get_collision_pairs(rbDynamicsWorld *world, rbCollisionCallback callback, void *p_user);
 
 /* ............ */
 
@@ -180,6 +190,9 @@ extern void RB_body_set_angular_factor(rbRigidBody *object, float x, float y, fl
 
 /* Kinematic State */
 extern void RB_body_set_kinematic_state(rbRigidBody *body, int kinematic);
+
+/* Sensor State (a sensor does not restitute force but collides with everything) */
+void RB_body_set_sensor_state(rbRigidBody *object, int sensor);
 
 /* RigidBody Interface - Rigid Body Activation States */
 extern int RB_body_get_activation_state(rbRigidBody *body);

@@ -120,6 +120,9 @@ void BKE_rigidbody_free_world(RigidBodyWorld *rbw)
 	if (rbw->effector_weights)
 		MEM_freeN(rbw->effector_weights);
 
+	/* clear collision list */
+	BLI_freelistN(&rbw->collision_pairs);
+
 	/* free rigidbody world itself */
 	MEM_freeN(rbw);
 }
@@ -314,7 +317,8 @@ static rbCollisionShape *rigidbody_get_shape_trimesh_from_mesh(Object *ob)
 			 *    - GImpact Mesh:      for active objects. These are slower and less stable,
 			 *                         but are more flexible for general usage.
 			 */
-			if (ob->rigidbody_object->type == RBO_TYPE_PASSIVE) {
+			if (ob->rigidbody_object->type == RBO_TYPE_PASSIVE || 
+				ob->rigidbody_object->type == RBO_TYPE_SENSOR) {
 				shape = RB_shape_new_trimesh(mdata);
 			}
 			else {
@@ -467,6 +471,7 @@ void BKE_rigidbody_validate_sim_object(RigidBodyWorld *rbw, Object *ob, short re
 
 		rbo->physics_object = RB_body_new(rbo->physics_shape, loc, rot);
 
+		RB_body_set_user_pointer(rbo->physics_object, (void *)ob);
 		RB_body_set_friction(rbo->physics_object, rbo->friction);
 		RB_body_set_restitution(rbo->physics_object, rbo->restitution);
 
@@ -474,7 +479,7 @@ void BKE_rigidbody_validate_sim_object(RigidBodyWorld *rbw, Object *ob, short re
 		RB_body_set_sleep_thresh(rbo->physics_object, rbo->lin_sleep_thresh, rbo->ang_sleep_thresh);
 		RB_body_set_activation_state(rbo->physics_object, rbo->flag & RBO_FLAG_USE_DEACTIVATION);
 
-		if (rbo->type == RBO_TYPE_PASSIVE || rbo->flag & RBO_FLAG_START_DEACTIVATED)
+		if (rbo->type == RBO_TYPE_PASSIVE || rbo->type == RBO_TYPE_SENSOR || rbo->flag & RBO_FLAG_START_DEACTIVATED)
 			RB_body_deactivate(rbo->physics_object);
 
 
@@ -489,10 +494,11 @@ void BKE_rigidbody_validate_sim_object(RigidBodyWorld *rbw, Object *ob, short re
 
 		RB_body_set_mass(rbo->physics_object, RBO_GET_MASS(rbo));
 		RB_body_set_kinematic_state(rbo->physics_object, rbo->flag & RBO_FLAG_KINEMATIC || rbo->flag & RBO_FLAG_DISABLED);
+		RB_body_set_sensor_state(rbo->physics_object, rbo->type == RBO_TYPE_SENSOR);
 	}
 
 	if (rbw && rbw->physics_world)
-		RB_dworld_add_body(rbw->physics_world, rbo->physics_object, rbo->col_groups);
+		RB_dworld_add_body(rbw->physics_world, rbo->physics_object, rbo->col_groups, rbo->col_mask);
 }
 
 /* --------------------- */
@@ -711,7 +717,7 @@ RigidBodyWorld *BKE_rigidbody_create_world(Scene *scene)
 	/* set default settings */
 	rbw->effector_weights = BKE_add_effector_weights(NULL);
 
-	rbw->ltime = PSFRA;
+	rbw->ltime = SFRA;
 
 	rbw->time_scale = 1.0f;
 
@@ -720,6 +726,8 @@ RigidBodyWorld *BKE_rigidbody_create_world(Scene *scene)
 
 	rbw->pointcache = BKE_ptcache_add(&(rbw->ptcaches));
 	rbw->pointcache->step = 1;
+	rbw->pointcache->startframe = SFRA;
+	rbw->pointcache->endframe = EFRA;
 
 	/* return this sim world */
 	return rbw;
@@ -789,6 +797,7 @@ RigidBodyOb *BKE_rigidbody_create_object(Scene *scene, Object *ob, short type)
 	rbo->ang_damping = 0.1f; /* 0.1 is game engine default */
 
 	rbo->col_groups = 1;
+	rbo->col_mask = 1;
 
 	/* use triangle meshes for passive objects
 	 * use convex hulls for active objects since dynamic triangle meshes are very unstable
@@ -893,6 +902,7 @@ void BKE_rigidbody_remove_object(Scene *scene, Object *ob)
 	int i;
 
 	if (rbw) {
+		RigidBodyCollP *colpair;
 		/* remove from rigidbody world, free object won't do this */
 		if (rbw->physics_world && rbo->physics_object)
 			RB_dworld_remove_body(rbw->physics_world, rbo->physics_object);
@@ -920,6 +930,15 @@ void BKE_rigidbody_remove_object(Scene *scene, Object *ob)
 						BKE_rigidbody_remove_constraint(scene, obt);
 					}
 				}
+			}
+		}
+
+		/* remove object from collision pairs if it was listed */
+		for (colpair = rbw->collision_pairs.first; colpair; colpair = colpair->next) {
+			if (colpair->object1 == ob || colpair->object2 == ob) {
+				/* don't remove the item from the list because it would change the list length */
+				colpair->object1 = NULL;
+				colpair->object2 = NULL;
 			}
 		}
 	}
@@ -1170,11 +1189,17 @@ static void rigidbody_update_simulation_post_step(RigidBodyWorld *rbw)
 				RB_body_set_kinematic_state(rbo->physics_object, rbo->flag & RBO_FLAG_KINEMATIC || rbo->flag & RBO_FLAG_DISABLED);
 				RB_body_set_mass(rbo->physics_object, RBO_GET_MASS(rbo));
 				/* deactivate passive objects so they don't interfere with deactivation of active objects */
-				if (rbo->type == RBO_TYPE_PASSIVE)
+				if (rbo->type == RBO_TYPE_PASSIVE || rbo->type == RBO_TYPE_SENSOR)
 					RB_body_deactivate(rbo->physics_object);
 			}
 		}
 	}
+}
+
+static void rigidbody_clear_collision_pairs(RigidBodyWorld *rbw)
+{
+	BLI_freelistN(&rbw->collision_pairs);
+	rbw->flag |= RBW_FLAG_COLLISION_PAIR_REBUILD;
 }
 
 bool BKE_rigidbody_check_sim_running(RigidBodyWorld *rbw, float ctime)
@@ -1188,7 +1213,7 @@ void BKE_rigidbody_sync_transforms(RigidBodyWorld *rbw, Object *ob, float ctime)
 	RigidBodyOb *rbo = ob->rigidbody_object;
 
 	/* keep original transform for kinematic and passive objects */
-	if (ELEM(NULL, rbw, rbo) || rbo->flag & RBO_FLAG_KINEMATIC || rbo->type == RBO_TYPE_PASSIVE)
+	if (ELEM(NULL, rbw, rbo) || rbo->flag & RBO_FLAG_KINEMATIC || rbo->type == RBO_TYPE_PASSIVE || rbo->type == RBO_TYPE_SENSOR)
 		return;
 
 	/* use rigid body transform after cache start frame if objects is not being transformed */
@@ -1235,7 +1260,7 @@ void BKE_rigidbody_aftertrans_update(Object *ob, float loc[3], float rot[3], flo
 	}
 	if (rbo->physics_object) {
 		/* allow passive objects to return to original transform */
-		if (rbo->type == RBO_TYPE_PASSIVE)
+		if (rbo->type == RBO_TYPE_PASSIVE || rbo->type == RBO_TYPE_SENSOR)
 			RB_body_set_kinematic_state(rbo->physics_object, TRUE);
 		RB_body_set_loc_rot(rbo->physics_object, rbo->pos, rbo->orn);
 	}
@@ -1267,6 +1292,19 @@ void BKE_rigidbody_rebuild_world(Scene *scene, float ctime)
 	if (rbw->physics_world == NULL || rbw->numbodies != BLI_countlist(&rbw->group->gobject)) {
 		cache->flag |= PTCACHE_OUTDATED;
 	}
+	if (startframe != SFRA || endframe != EFRA) {
+		/* the simulation range has changed, force a full cache reset */
+		cache->flag |= PTCACHE_OUTDATED;
+		BKE_ptcache_id_reset(scene, &pid, PTCACHE_RESET_OUTDATED);
+		/* and change the range */
+		cache->startframe = SFRA;
+		cache->endframe = EFRA;
+		BKE_ptcache_id_time(&pid, scene, ctime, &startframe, &endframe, NULL);
+		rbw->ltime = startframe;
+		/* still mark the cache outdated because we need to initialize the first frame */
+		cache->flag |= PTCACHE_OUTDATED;
+	}
+
 
 	if (ctime <= startframe + 1 && rbw->ltime == startframe) {
 		if (cache->flag & PTCACHE_OUTDATED) {
@@ -1335,9 +1373,33 @@ void BKE_rigidbody_do_simulation(Scene *scene, float ctime)
 		/* write cache for current frame */
 		BKE_ptcache_validate(cache, (int)ctime);
 		BKE_ptcache_write(&pid, (unsigned int)ctime);
-
+		/* clear the collision pair because it is reset on each simulation step */
+		rigidbody_clear_collision_pairs(rbw);
 		rbw->ltime = ctime;
 	}
+}
+
+static void rigidbody_collision_callback(rbRigidBody *p_body0, rbRigidBody *p_body1, void *p_user)
+{
+	ListBase *list = p_user;
+	RigidBodyCollP *pair = MEM_mallocN(sizeof(RigidBodyCollP), "RigidBodyCollP");
+
+	pair->object1 = (Object *)RB_body_get_user_pointer(p_body0);
+	pair->object2 = (Object *)RB_body_get_user_pointer(p_body1);
+	BLI_addtail(list, pair);
+}
+
+/* update RigidBodyWorld.collision_pairs from Bullet cache if needed */
+void BKE_rigidbody_update_collision_pairs(struct RigidBodyWorld *rbw)
+{
+	if (rbw->physics_world == NULL || !(rbw->flag & RBW_FLAG_COLLISION_PAIR_REBUILD))
+		return;
+
+	/* The list should already be empty, but clear it just in case */
+	BLI_freelistN(&rbw->collision_pairs);
+	/* populate the list */
+	RB_dworld_get_collision_pairs(rbw->physics_world, rigidbody_collision_callback, &rbw->collision_pairs);
+	rbw->flag &= ~RBW_FLAG_COLLISION_PAIR_REBUILD;
 }
 /* ************************************** */
 
@@ -1373,6 +1435,7 @@ bool BKE_rigidbody_check_sim_running(RigidBodyWorld *rbw, float ctime) { return 
 void BKE_rigidbody_cache_reset(RigidBodyWorld *rbw) {}
 void BKE_rigidbody_rebuild_world(Scene *scene, float ctime) {}
 void BKE_rigidbody_do_simulation(Scene *scene, float ctime) {}
+void BKE_rigidbody_update_collision_pairs(struct RigidBodyWorld *rbw) {}
 
 #ifdef __GNUC__
 #  pragma GCC diagnostic pop

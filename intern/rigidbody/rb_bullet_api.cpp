@@ -83,7 +83,10 @@ struct rbDynamicsWorld {
 };
 struct rbRigidBody {
 	btRigidBody *body;
+	void *user_pointer;
 	int col_groups;
+	int col_mask;
+	int is_sensor;
 };
 
 struct rbCollisionShape {
@@ -98,11 +101,17 @@ struct rbFilterCallback : public btOverlapFilterCallback
 		rbRigidBody *rb0 = (rbRigidBody *)((btRigidBody *)proxy0->m_clientObject)->getUserPointer();
 		rbRigidBody *rb1 = (rbRigidBody *)((btRigidBody *)proxy1->m_clientObject)->getUserPointer();
 		
-		bool collides;
-		collides = (proxy0->m_collisionFilterGroup & proxy1->m_collisionFilterMask) != 0;
-		collides = collides && (proxy1->m_collisionFilterGroup & proxy0->m_collisionFilterMask);
-		collides = collides && (rb0->col_groups & rb1->col_groups);
-		
+		bool collides = true;
+		if (!rb0->is_sensor && !rb1->is_sensor) {
+			collides = (proxy0->m_collisionFilterGroup & proxy1->m_collisionFilterMask) != 0;
+			collides = collides && (proxy1->m_collisionFilterGroup & proxy0->m_collisionFilterMask);
+			collides = collides && (rb0->col_groups & rb1->col_groups);
+		} else {
+			if (rb0->is_sensor)
+				collides = collides && (rb0->col_mask & rb1->col_groups);
+			if (rb1->is_sensor)
+				collides = collides && (rb1->col_mask & rb0->col_groups);
+		}
 		return collides;
 	}
 };
@@ -233,10 +242,11 @@ void RB_dworld_export(rbDynamicsWorld *world, const char *filename)
 
 /* Setup ---------------------------- */
 
-void RB_dworld_add_body(rbDynamicsWorld *world, rbRigidBody *object, int col_groups)
+void RB_dworld_add_body(rbDynamicsWorld *world, rbRigidBody *object, int col_groups, int col_mask)
 {
 	btRigidBody *body = object->body;
 	object->col_groups = col_groups;
+	object->col_mask = col_mask;
 	
 	world->dynamicsWorld->addRigidBody(body);
 }
@@ -248,15 +258,46 @@ void RB_dworld_remove_body(rbDynamicsWorld *world, rbRigidBody *object)
 	world->dynamicsWorld->removeRigidBody(body);
 }
 
+
 /* Collision detection */
 
-void RB_world_convex_sweep_test(rbDynamicsWorld *world, rbRigidBody *object, const float loc_start[3], const float loc_end[3], float v_location[3],  float v_hitpoint[3],  float v_normal[3], int *r_hit)
+struct rbSweepResultCallback : public btCollisionWorld::ClosestConvexResultCallback
+{
+	rbRigidBody *m_self;
+	bool m_useSensor;
+	int  m_colGroups;
+
+	rbSweepResultCallback(rbRigidBody *self, const btVector3& convexFromWorld,const btVector3& convexToWorld, int col_groups, int use_sensor) :
+		btCollisionWorld::ClosestConvexResultCallback(convexFromWorld, convexToWorld)
+	{
+		m_self = self;
+		m_colGroups = col_groups;
+		m_useSensor = use_sensor;
+	}
+
+	bool needsCollision(btBroadphaseProxy* proxy0) const
+	{
+		rbRigidBody *rb0 = (rbRigidBody *)((btRigidBody *)proxy0->m_clientObject)->getUserPointer();
+		
+		if (rb0 == m_self)
+			// ignore self object shape
+			return false;
+		if (!m_useSensor && rb0->is_sensor)
+			return false;
+		bool collides = (proxy0->m_collisionFilterGroup & m_collisionFilterMask) != 0;
+		collides = collides && (m_collisionFilterGroup & proxy0->m_collisionFilterMask);
+		collides = collides && (m_colGroups & rb0->col_groups);
+		return collides;
+	}
+};
+
+void RB_world_convex_sweep_test(rbDynamicsWorld *world, rbRigidBody *object, const float loc_start[3], const float loc_end[3], float v_location[3],  float v_hitpoint[3],  float v_normal[3], int *r_hit, rbRigidBody **p_hitbody, int col_groups, int use_sensor)
 {
 	btRigidBody *body = object->body;
 	btCollisionShape *collisionShape = body->getCollisionShape();
 	/* only convex shapes are supported, but user can specify a non convex shape */
 	if (collisionShape->isConvex()) {
-		btCollisionWorld::ClosestConvexResultCallback result(btVector3(loc_start[0], loc_start[1], loc_start[2]), btVector3(loc_end[0], loc_end[1], loc_end[2]));
+		rbSweepResultCallback result(object, btVector3(loc_start[0], loc_start[1], loc_start[2]), btVector3(loc_end[0], loc_end[1], loc_end[2]), col_groups, use_sensor);
 
 		btQuaternion obRot = body->getWorldTransform().getRotation();
 		
@@ -287,6 +328,8 @@ void RB_world_convex_sweep_test(rbDynamicsWorld *world, rbRigidBody *object, con
 			v_normal[1] = result.m_hitNormalWorld[1];
 			v_normal[2] = result.m_hitNormalWorld[2];
 			
+			if (p_hitbody != NULL)
+				*p_hitbody = (rbRigidBody *)result.m_hitCollisionObject->getUserPointer();
 		}
 		else {
 			*r_hit = 0;
@@ -295,6 +338,29 @@ void RB_world_convex_sweep_test(rbDynamicsWorld *world, rbRigidBody *object, con
 	else{
 		/* we need to return a value if user passes non convex body, to report */
 		*r_hit = -2;
+	}
+}
+
+void RB_dworld_get_collision_pairs(rbDynamicsWorld *world, rbCollisionCallback callback, void *p_user)
+{
+	btDispatcher* dispatcher = world->dynamicsWorld->getDispatcher();
+	int numManifolds = dispatcher->getNumManifolds();
+	int i;
+
+	for (i=0; i<numManifolds; i++) {
+		btPersistentManifold* manifold = dispatcher->getManifoldByIndexInternal(i);
+		if (manifold->getNumContacts()) {
+			const btRigidBody* body0 = static_cast<const btRigidBody*>(manifold->getBody0());
+			const btRigidBody* body1 = static_cast<const btRigidBody*>(manifold->getBody1());
+			rbRigidBody *rb0 = (rbRigidBody *)body0->getUserPointer();
+			rbRigidBody *rb1 = (rbRigidBody *)body1->getUserPointer();
+			callback(rb0, rb1, p_user);
+			if (!dispatcher->needsResponse(body0, body1))
+				// Refresh algorithm fails sometimes when there is penetration 
+				// (usuall the case with ghost and sensor objects)
+				// Let's just clear the manifold, in any case, it is recomputed on each frame.
+				manifold->clearManifold(); 
+		}
 	}
 }
 
@@ -343,6 +409,16 @@ void RB_body_delete(rbRigidBody *object)
 	
 	delete body;
 	delete object;
+}
+
+void RB_body_set_user_pointer(rbRigidBody *object, void *user_pointer)
+{
+	object->user_pointer = user_pointer;
+}
+
+void *RB_body_get_user_pointer(rbRigidBody *object)
+{
+	return object->user_pointer;
 }
 
 /* Settings ------------------------- */
@@ -526,6 +602,20 @@ void RB_body_set_kinematic_state(rbRigidBody *object, int kinematic)
 		body->setCollisionFlags(body->getCollisionFlags() | btCollisionObject::CF_KINEMATIC_OBJECT);
 	else
 		body->setCollisionFlags(body->getCollisionFlags() & ~btCollisionObject::CF_KINEMATIC_OBJECT);
+}
+
+/* ............ */
+
+void RB_body_set_sensor_state(rbRigidBody *object, int sensor)
+{
+	btRigidBody *body = object->body;
+	if (sensor) {
+		body->setCollisionFlags(body->getCollisionFlags() | btCollisionObject::CF_NO_CONTACT_RESPONSE);
+		object->is_sensor = true;
+	} else {
+		body->setCollisionFlags(body->getCollisionFlags() & ~btCollisionObject::CF_NO_CONTACT_RESPONSE);
+		object->is_sensor = false;
+	}
 }
 
 /* ............ */

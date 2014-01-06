@@ -71,6 +71,9 @@ typedef struct RigidBodyWorld {
 	
 	/* References to Physics Sim objects. Exist at runtime only ---------------------- */
 	void *physics_world;		/* Physics sim world (i.e. btDiscreteDynamicsWorld) */
+
+	ListBase collision_pairs;	/* list of RigidBodyCollP holding the pairs of colliding
+								   objects during last simulation steps */
 } RigidBodyWorld;
 
 /* Flags for RigidBodyWorld */
@@ -80,7 +83,9 @@ typedef enum eRigidBodyWorld_Flag {
 	/* sim data needs to be rebuilt */
 	RBW_FLAG_NEEDS_REBUILD		= (1 << 1),
 	/* usse split impulse when stepping the simulation */
-	RBW_FLAG_USE_SPLIT_IMPULSE	= (1 << 2)
+	RBW_FLAG_USE_SPLIT_IMPULSE	= (1 << 2),
+	/* collision pair needs rebuild */
+	RBW_FLAG_COLLISION_PAIR_REBUILD	= (1 << 3)
 } eRigidBodyWorld_Flag;
 
 /* ******************************** */
@@ -103,7 +108,7 @@ typedef struct RigidBodyOb {
 	
 	int flag;				/* (eRigidBodyOb_Flag) */
 	int col_groups;			/* Collision groups that determines wich rigid bodies can collide with each other */
-	int pad;
+	int col_mask;			/* for sensor: determines which object group it detects */
 	
 	/* Physics Parameters */
 	float mass;				/* how much object 'weighs' (i.e. absolute 'amount of stuff' it holds) */
@@ -130,7 +135,9 @@ typedef enum eRigidBodyOb_Type {
 	/* active geometry participant in simulation. is directly controlled by sim */
 	RBO_TYPE_ACTIVE	= 0,
 	/* passive geometry participant in simulation. is directly controlled by animsys */
-	RBO_TYPE_PASSIVE
+	RBO_TYPE_PASSIVE,
+	/* sensor geometry, non participant to simulation. is driven by parent */
+	RBO_TYPE_SENSOR
 } eRigidBodyOb_Type;
 
 /* Flags for RigidBodyOb */
@@ -287,6 +294,12 @@ typedef enum eRigidBodyCon_Flag {
 } eRigidBodyCon_Flag;
 
 /* ******************************** */
+
+/* Collision Pair */
+typedef struct RigidBodyCollP {
+	struct RigidBodyCollP *next, *prev;
+	struct Object *object1, *object2;
+} RigidBodyCollP;
 
 #endif /* __DNA_RIGIDBODY_TYPES_H__ */
 

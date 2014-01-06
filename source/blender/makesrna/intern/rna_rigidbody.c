@@ -47,6 +47,7 @@
 EnumPropertyItem rigidbody_object_type_items[] = {
 	{RBO_TYPE_ACTIVE, "ACTIVE", 0, "Active", "Object is directly controlled by simulation results"},
 	{RBO_TYPE_PASSIVE, "PASSIVE", 0, "Passive", "Object is directly controlled by animation system"},
+	{RBO_TYPE_SENSOR, "SENSOR", 0, "Sensor", "Object is driven by parent, collides with all non-sensor objects except parent but does not return force"},
 	{0, NULL, 0, NULL, NULL}};
 
 /* collision shapes of objects in rigid body sim */
@@ -253,6 +254,20 @@ static void rna_RigidBodyOb_collision_groups_set(PointerRNA *ptr, const int *val
 			rbo->col_groups |= (1 << i);
 		else
 			rbo->col_groups &= ~(1 << i);
+	}
+	rbo->flag |= RBO_FLAG_NEEDS_VALIDATE;
+}
+
+static void rna_RigidBodyOb_collision_mask_set(PointerRNA *ptr, const int *values)
+{
+	RigidBodyOb *rbo = (RigidBodyOb *)ptr->data;
+	int i;
+
+	for (i = 0; i < 20; i++) {
+		if (values[i])
+			rbo->col_mask |= (1 << i);
+		else
+			rbo->col_mask &= ~(1 << i);
 	}
 	rbo->flag |= RBO_FLAG_NEEDS_VALIDATE;
 }
@@ -606,27 +621,74 @@ static void rna_RigidBodyCon_motor_ang_target_velocity_set(PointerRNA *ptr, floa
 /* Sweep test */
 static void rna_RigidBodyWorld_convex_sweep_test(
         RigidBodyWorld *rbw, ReportList *reports,
-        Object *object, float ray_start[3], float ray_end[3],
-        float r_location[3], float r_hitpoint[3], float r_normal[3], int *r_hit)
+        Object *object, float ray_start[3], float ray_end[3], int col_groups, int use_sensor,
+        float r_location[3], float r_hitpoint[3], float r_normal[3], int *r_hit, Object **r_object)
 {
 #ifdef WITH_BULLET
 	RigidBodyOb *rob = object->rigidbody_object;
+	int r_status;
 
-	if (rbw->physics_world != NULL && rob->physics_object != NULL) {
+	*r_hit = FALSE;
+	*r_object = NULL;
+
+	if (rbw->physics_world != NULL && rob != NULL && rob->physics_object != NULL) {
+		rbRigidBody *hit_object;
 		RB_world_convex_sweep_test(rbw->physics_world, rob->physics_object, ray_start, ray_end,
-		                           r_location, r_hitpoint, r_normal, r_hit);
-		if (*r_hit == -2) {
+		                           r_location, r_hitpoint, r_normal, &r_status, &hit_object, col_groups, use_sensor);
+		if (r_status == -2) {
 			BKE_report(reports, RPT_ERROR,
 			           "A non convex collision shape was passed to the function, use only convex collision shapes");
 		}
+		else if (r_status == 1) {
+			*r_hit = TRUE;
+			*r_object = (Object *)RB_body_get_user_pointer(hit_object);
+		}
 	}
 	else {
-		*r_hit = -1;
 		BKE_report(reports, RPT_ERROR, "Rigidbody world was not properly initialized, need to step the simulation first");
 	}
 #else
 	(void)rbw, (void)reports, (void)object, (void)ray_start, (void)ray_end;
 	(void)r_location, (void)r_hitpoint, (void)r_normal, (void)r_hit;
+#endif
+}
+
+static int rna_rigidbody_collision_pair_skip(CollectionPropertyIterator *UNUSED(iter), void *data)
+{
+	RigidBodyCollP *cp = (RigidBodyCollP *) data;
+
+	if (cp->object1 || cp->object2)
+		return 0;
+
+	return 1;
+}
+
+static void rna_rigidbody_collision_pairs_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)
+{
+#ifdef WITH_BULLET
+	RigidBodyWorld *rbw = (RigidBodyWorld *)ptr->data;
+
+	/* this function will update the collision_pairs list
+	   based on bullet cache. Hence, it corresponds to the last simulation
+	   step and NOT necessarily to the current frame because of the pointcache
+	   implemented in the Blender kernel.
+
+	   So the correct way to use this function is in a single sweep of the
+	   simulation:
+	   1) set the frame to first frame of the simulation
+	   2) reset the rigidbody world to clear the cache
+	      Currently that can only be done by changing something to the
+	      simulation (e.g adding an object, changing time scale)
+	      TODO: add a function to force a cache clear
+	   3) increment the frame and update the scene
+	   4) after each increment, check the collision_pairs collection
+	      to find out which object collided in that frame
+	*/
+
+	BKE_rigidbody_update_collision_pairs(rbw);
+
+	rna_iterator_listbase_begin(iter, &rbw->collision_pairs, rna_rigidbody_collision_pair_skip);
+#else
 #endif
 }
 
@@ -715,6 +777,14 @@ static void rna_def_rigidbody_world(BlenderRNA *brna)
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 	RNA_def_property_ui_text(prop, "Effector Weights", "");
 
+	/* collision pairs test */
+	prop = RNA_def_property(srna, "collision_pairs", PROP_COLLECTION, PROP_NONE);
+	RNA_def_property_struct_type(prop, "RigidBodyCollisionPair");
+	RNA_def_property_ui_text(prop, "Collision Pairs", "");
+	RNA_def_property_collection_funcs(prop, "rna_rigidbody_collision_pairs_begin", "rna_iterator_listbase_next",
+	                                  "rna_iterator_listbase_end", "rna_iterator_listbase_get",
+	                                  NULL, NULL, NULL, NULL);
+
 	/* Sweep test */
 	func = RNA_def_function(srna, "convex_sweep_test", "rna_RigidBodyWorld_convex_sweep_test");
 	RNA_def_function_ui_description(func, "Sweep test convex rigidbody against the current rigidbody world");
@@ -729,6 +799,8 @@ static void rna_def_rigidbody_world(BlenderRNA *brna)
 	RNA_def_property_flag(prop, PROP_REQUIRED);
 	prop = RNA_def_float_vector(func, "end", 3, NULL, -FLT_MAX, FLT_MAX, "", "", -1e4, 1e4);
 	RNA_def_property_flag(prop, PROP_REQUIRED);
+	prop = RNA_def_int(func, "col_groups", -1, INT_MIN, INT_MAX, "", "bit mask of the collision groups that it will detect, -1=all (default)", INT_MIN, INT_MAX);
+	prop = RNA_def_boolean(func, "use_sensor", FALSE, "", "True = sensors will be detected, False (default) = objects are ignored");
 
 	prop = RNA_def_float_vector(func, "object_location", 3, NULL, -FLT_MAX, FLT_MAX, "Location",
 	                            "The hit location of this sweep test", -1e4, 1e4);
@@ -745,8 +817,12 @@ static void rna_def_rigidbody_world(BlenderRNA *brna)
 	RNA_def_property_flag(prop, PROP_THICK_WRAP);
 	RNA_def_function_output(func, prop);
 
-	prop = RNA_def_int(func, "has_hit", 0, 0, 0, "", "If the function has found collision point, value is 1, otherwise 0", 0, 0);
+	prop = RNA_def_boolean(func, "has_hit", FALSE, "", "If the function has found collision point");
 	RNA_def_function_output(func, prop);
+
+	prop = RNA_def_pointer(func, "hit_object", "Object", "", "object that was hit");
+	RNA_def_function_output(func, prop);
+
 }
 
 static void rna_def_rigidbody_object(BlenderRNA *brna)
@@ -900,6 +976,15 @@ static void rna_def_rigidbody_object(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Collision Groups", "Collision Groups Rigid Body belongs to");
 	RNA_def_property_update(prop, NC_OBJECT | ND_POINTCACHE, "rna_RigidBodyOb_reset");
 	RNA_def_property_flag(prop, PROP_LIB_EXCEPTION);
+
+	prop = RNA_def_property(srna, "collision_mask", PROP_BOOLEAN, PROP_LAYER_MEMBER);
+	RNA_def_property_boolean_sdna(prop, NULL, "col_mask", 1);
+	RNA_def_property_array(prop, 20);
+	RNA_def_property_boolean_funcs(prop, NULL, "rna_RigidBodyOb_collision_mask_set");
+	RNA_def_property_ui_text(prop, "Collision Mask", "Collision Groups that sensor object can detect");
+	RNA_def_property_update(prop, NC_OBJECT | ND_POINTCACHE, "rna_RigidBodyOb_reset");
+	RNA_def_property_flag(prop, PROP_LIB_EXCEPTION);
+
 }
 
 static void rna_def_rigidbody_constraint(BlenderRNA *brna)
@@ -1209,11 +1294,30 @@ static void rna_def_rigidbody_constraint(BlenderRNA *brna)
 	RNA_def_property_update(prop, NC_OBJECT, "rna_RigidBodyOb_reset");
 }
 
+static void rna_def_rigidbody_collision_pair(BlenderRNA *brna)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	srna = RNA_def_struct(brna, "RigidBodyCollisionPair", NULL);
+	RNA_def_struct_sdna(srna, "RigidBodyCollP");
+	RNA_def_struct_ui_text(srna, "Rigid Body Collision Pair", "");
+
+	prop = RNA_def_property(srna, "object1", PROP_POINTER, PROP_NONE);
+	RNA_def_property_pointer_sdna(prop, NULL, "object1");
+	RNA_def_property_struct_type(prop, "Object");
+
+	prop = RNA_def_property(srna, "object2", PROP_POINTER, PROP_NONE);
+	RNA_def_property_pointer_sdna(prop, NULL, "object2");
+	RNA_def_property_struct_type(prop, "Object");
+}
+
 void RNA_def_rigidbody(BlenderRNA *brna)
 {
 	rna_def_rigidbody_world(brna);
 	rna_def_rigidbody_object(brna);
 	rna_def_rigidbody_constraint(brna);
+	rna_def_rigidbody_collision_pair(brna);
 }
 
 

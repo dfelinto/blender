@@ -5204,6 +5204,10 @@ static void lib_link_scene(FileData *fd, Main *main)
 					rbw->constraints = newlibadr(fd, sce->id.lib, rbw->constraints);
 				if (rbw->effector_weights)
 					rbw->effector_weights->group = newlibadr(fd, sce->id.lib, rbw->effector_weights->group);
+
+				/* make sure the list is empty */
+				rbw->collision_pairs.first=NULL;
+				rbw->collision_pairs.last=NULL;
 			}
 			
 			if (sce->nodetree) {
@@ -5491,6 +5495,10 @@ static void direct_link_scene(FileData *fd, Scene *sce)
 		rbw->physics_world = NULL;
 		rbw->objects = NULL;
 		rbw->numbodies = 0;
+
+		/* make sure the list is empty */
+		rbw->collision_pairs.first=NULL;
+		rbw->collision_pairs.last=NULL;
 
 		/* set effector weights */
 		rbw->effector_weights = newdataadr(fd, rbw->effector_weights);
