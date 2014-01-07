@@ -1643,7 +1643,9 @@ static void widget_state(uiWidgetType *wt, int state)
 	if (state & UI_SELECT) {
 		copy_v4_v4_char(wt->wcol.inner, wt->wcol.inner_sel);
 
-		if (state & UI_BUT_ANIMATED_KEY)
+		if (state & UI_BUT_LOCKED_KEY)
+			widget_state_blend(wt->wcol.inner, wcol_state->inner_key_lock, wcol_state->blend);
+		else if (state & UI_BUT_ANIMATED_KEY)
 			widget_state_blend(wt->wcol.inner, wcol_state->inner_key_sel, wcol_state->blend);
 		else if (state & UI_BUT_ANIMATED)
 			widget_state_blend(wt->wcol.inner, wcol_state->inner_anim_sel, wcol_state->blend);
@@ -1656,7 +1658,9 @@ static void widget_state(uiWidgetType *wt, int state)
 			SWAP(short, wt->wcol.shadetop, wt->wcol.shadedown);
 	}
 	else {
-		if (state & UI_BUT_ANIMATED_KEY)
+		if (state & UI_BUT_LOCKED_KEY)
+			widget_state_blend(wt->wcol.inner, wcol_state->inner_key_lock, wcol_state->blend);
+		else if (state & UI_BUT_ANIMATED_KEY)
 			widget_state_blend(wt->wcol.inner, wcol_state->inner_key, wcol_state->blend);
 		else if (state & UI_BUT_ANIMATED)
 			widget_state_blend(wt->wcol.inner, wcol_state->inner_anim, wcol_state->blend);
@@ -1693,7 +1697,9 @@ static void widget_state_numslider(uiWidgetType *wt, int state)
 	/* TODO: maybe we should have separate settings for the blending colors used for this case? */
 	if (state & UI_SELECT) {
 		
-		if (state & UI_BUT_ANIMATED_KEY)
+		if (state & UI_BUT_LOCKED_KEY)
+			widget_state_blend(wt->wcol.inner, wcol_state->inner_key_lock, blend);
+		else if (state & UI_BUT_ANIMATED_KEY)
 			widget_state_blend(wt->wcol.item, wcol_state->inner_key_sel, blend);
 		else if (state & UI_BUT_ANIMATED)
 			widget_state_blend(wt->wcol.item, wcol_state->inner_anim_sel, blend);
@@ -1704,7 +1710,9 @@ static void widget_state_numslider(uiWidgetType *wt, int state)
 			SWAP(short, wt->wcol.shadetop, wt->wcol.shadedown);
 	}
 	else {
-		if (state & UI_BUT_ANIMATED_KEY)
+		if (state & UI_BUT_LOCKED_KEY)
+			widget_state_blend(wt->wcol.inner, wcol_state->inner_key_lock, blend);
+		else if (state & UI_BUT_ANIMATED_KEY)
 			widget_state_blend(wt->wcol.item, wcol_state->inner_key, blend);
 		else if (state & UI_BUT_ANIMATED)
 			widget_state_blend(wt->wcol.item, wcol_state->inner_anim, blend);
@@ -2637,7 +2645,7 @@ static void widget_swatch(uiBut *but, uiWidgetColors *wcol, rcti *rect, int stat
 		
 	ui_get_but_vectorf(but, col);
 
-	if (state & (UI_BUT_ANIMATED | UI_BUT_ANIMATED_KEY | UI_BUT_DRIVEN | UI_BUT_REDALERT)) {
+	if (state & (UI_BUT_ANIMATED | UI_BUT_ANIMATED_KEY | UI_BUT_DRIVEN | UI_BUT_REDALERT | UI_BUT_LOCKED_KEY)) {
 		/* draw based on state - color for keyed etc */
 		widgetbase_draw(&wtb, wcol);
 
@@ -2669,7 +2677,7 @@ static void widget_normal(uiBut *but, uiWidgetColors *wcol, rcti *rect, int UNUS
 
 static void widget_icon_has_anim(uiBut *but, uiWidgetColors *wcol, rcti *rect, int state, int roundboxalign)
 {
-	if (state & (UI_BUT_ANIMATED | UI_BUT_ANIMATED_KEY | UI_BUT_DRIVEN | UI_BUT_REDALERT)) {
+	if (state & (UI_BUT_ANIMATED | UI_BUT_ANIMATED_KEY | UI_BUT_DRIVEN | UI_BUT_REDALERT | UI_BUT_LOCKED_KEY)) {
 		uiWidgetBase wtb;
 		float rad;
 		

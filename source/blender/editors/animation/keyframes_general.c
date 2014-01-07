@@ -172,6 +172,7 @@ void duplicate_fcurve_keys(FCurve *fcu)
 			
 			/* Select the copied key */
 			BEZ_SEL(&fcu->bezt[i]);
+			fcu->bezt[i].lock = false;
 		}
 	}
 }

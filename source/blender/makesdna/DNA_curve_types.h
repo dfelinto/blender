@@ -113,8 +113,9 @@ typedef struct BezTriple {
 	char f1, f2, f3;			/* f1, f2, f3: used for selection status */
 	char hide;					/* hide: used to indicate whether BezTriple is hidden (3D), type of keyframe (eBezTriple_KeyframeTypes) */
 	char f4;					/* f4: used to distinguish between Blender's and addon's keyframes */
-	char f5;					/* f5: used for auto handle to distinguish between normal handle and exception (extrema) */
-	char pad[6];
+	char f5;					/* f5: used for auto handle to distinguish between normal handle and exception (extrema) - internal, not in rna */
+	char lock;					/* f6: used for locking keyframes - for addons only, no UI */
+	char pad[5];
 } BezTriple;
 
 /* note; alfa location in struct is abused by Key system */
@@ -353,6 +354,7 @@ typedef enum eBezTriple_KeyframeType {
 	BEZT_KEYTYPE_EXTREME = 1,	/* 'extreme' keyframe */
 	BEZT_KEYTYPE_BREAKDOWN = 2,	/* 'breakdown' keyframe */
 	BEZT_KEYTYPE_JITTER = 3,	/* 'jitter' keyframe (for adding 'filler' secondary motion) */
+	BEZT_KEYTYPE_LOCKED = 4,	/* 'locked' keyframe */
 } eBezTriple_KeyframeType;
 
 /* checks if the given BezTriple is selected */

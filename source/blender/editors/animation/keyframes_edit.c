@@ -592,6 +592,9 @@ void bezt_remap_times(KeyframeEditData *ked, BezTriple *bezt)
 	
 	/* perform transform on all three handles unless indicated otherwise */
 	// TODO: need to include some checks for that
+
+	if (bezt->lock)
+		return;
 	
 	bezt->vec[0][0] = scale * (bezt->vec[0][0] - rmap->oldMin) + rmap->newMin;
 	bezt->vec[1][0] = scale * (bezt->vec[1][0] - rmap->oldMin) + rmap->newMin;
@@ -604,7 +607,7 @@ void bezt_remap_times(KeyframeEditData *ked, BezTriple *bezt)
 /* snaps the keyframe to the nearest frame */
 static short snap_bezier_nearest(KeyframeEditData *UNUSED(ked), BezTriple *bezt)
 {
-	if (bezt->f2 & SELECT)
+	if (bezt->f2 & SELECT && !bezt->lock)
 		bezt->vec[1][0] = (float)(floorf(bezt->vec[1][0] + 0.5f));
 	return 0;
 }
@@ -615,7 +618,7 @@ static short snap_bezier_nearestsec(KeyframeEditData *ked, BezTriple *bezt)
 	const Scene *scene = ked->scene;
 	const float secf = (float)FPS;
 	
-	if (bezt->f2 & SELECT)
+	if (bezt->f2 & SELECT && !bezt->lock)
 		bezt->vec[1][0] = ((float)floor(bezt->vec[1][0] / secf + 0.5f) * secf);
 	return 0;
 }
@@ -624,7 +627,7 @@ static short snap_bezier_nearestsec(KeyframeEditData *ked, BezTriple *bezt)
 static short snap_bezier_cframe(KeyframeEditData *ked, BezTriple *bezt)
 {
 	const Scene *scene = ked->scene;
-	if (bezt->f2 & SELECT)
+	if (bezt->f2 & SELECT && !bezt->lock)
 		bezt->vec[1][0] = (float)CFRA;
 	return 0;
 }
@@ -632,7 +635,7 @@ static short snap_bezier_cframe(KeyframeEditData *ked, BezTriple *bezt)
 /* snaps the keyframe time to the nearest marker's frame */
 static short snap_bezier_nearmarker(KeyframeEditData *ked, BezTriple *bezt)
 {
-	if (bezt->f2 & SELECT)
+	if (bezt->f2 & SELECT && !bezt->lock)
 		bezt->vec[1][0] = (float)ED_markers_find_nearest_marker_time(&ked->list, bezt->vec[1][0]);
 	return 0;
 }
@@ -640,7 +643,7 @@ static short snap_bezier_nearmarker(KeyframeEditData *ked, BezTriple *bezt)
 /* make the handles have the same value as the key */
 static short snap_bezier_horizontal(KeyframeEditData *UNUSED(ked), BezTriple *bezt)
 {
-	if (bezt->f2 & SELECT) {
+	if (bezt->f2 & SELECT && !bezt->lock) {
 		bezt->vec[0][1] = bezt->vec[2][1] = bezt->vec[1][1];
 		
 		if (ELEM3(bezt->h1, HD_AUTO, HD_AUTO_ANIM, HD_VECT)) bezt->h1 = HD_ALIGN;
@@ -685,7 +688,7 @@ static short mirror_bezier_cframe(KeyframeEditData *ked, BezTriple *bezt)
 	const Scene *scene = ked->scene;
 	float diff;
 	
-	if (bezt->f2 & SELECT) {
+	if (bezt->f2 & SELECT && !bezt->lock) {
 		diff = ((float)CFRA - bezt->vec[1][0]);
 		bezt->vec[1][0] = ((float)CFRA + diff);
 	}
@@ -697,7 +700,7 @@ static short mirror_bezier_yaxis(KeyframeEditData *UNUSED(ked), BezTriple *bezt)
 {
 	float diff;
 	
-	if (bezt->f2 & SELECT) {
+	if (bezt->f2 & SELECT && !bezt->lock) {
 		diff = (0.0f - bezt->vec[1][0]);
 		bezt->vec[1][0] = (0.0f + diff);
 	}
@@ -709,7 +712,7 @@ static short mirror_bezier_xaxis(KeyframeEditData *UNUSED(ked), BezTriple *bezt)
 {
 	float diff;
 	
-	if (bezt->f2 & SELECT) {
+	if (bezt->f2 & SELECT && !bezt->lock) {
 		diff = (0.0f - bezt->vec[1][1]);
 		bezt->vec[1][1] = (0.0f + diff);
 	}
@@ -720,7 +723,7 @@ static short mirror_bezier_xaxis(KeyframeEditData *UNUSED(ked), BezTriple *bezt)
 static short mirror_bezier_marker(KeyframeEditData *ked, BezTriple *bezt)
 {
 	/* mirroring time stored in f1 */
-	if (bezt->f2 & SELECT) {
+	if (bezt->f2 & SELECT && !bezt->lock) {
 		const float diff = (ked->f1 - bezt->vec[1][0]);
 		bezt->vec[1][0] = (ked->f1 + diff);
 	}
@@ -733,7 +736,7 @@ static short mirror_bezier_value(KeyframeEditData *ked, BezTriple *bezt)
 	float diff;
 	
 	/* value to mirror over is stored in the custom data -> first float value slot */
-	if (bezt->f2 & SELECT) {
+	if (bezt->f2 & SELECT && !bezt->lock) {
 		diff = (ked->f1 - bezt->vec[1][1]);
 		bezt->vec[1][1] = (ked->f1 + diff);
 	}

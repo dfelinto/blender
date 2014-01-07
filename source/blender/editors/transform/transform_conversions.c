@@ -3260,7 +3260,7 @@ static int count_fcurve_keys(FCurve *fcu, char side, float cfra)
 
 	/* only include points that occur on the right side of cfra */
 	for (i = 0, bezt = fcu->bezt; i < fcu->totvert; i++, bezt++) {
-		if (bezt->f2 & SELECT) {
+		if (bezt->f2 & SELECT && !bezt->lock) {
 			/* no need to adjust the handle selection since they are assumed
 			 * selected (like graph editor with SIPO_NOHANDLES) */
 			if (FrameOnMouseSide(side, bezt->vec[1][0], cfra)) {
@@ -3344,7 +3344,7 @@ static TransData *ActionFCurveToTransData(TransData *td, TransData2D **td2dv, FC
 
 	for (i = 0, bezt = fcu->bezt; i < fcu->totvert; i++, bezt++) {
 		/* only add selected keyframes (for now, proportional edit is not enabled) */
-		if (bezt->f2 & SELECT) { /* note this MUST match count_fcurve_keys(), so can't use BEZSELECTED() macro */
+		if (bezt->f2 & SELECT && !bezt->lock) { /* note this MUST match count_fcurve_keys(), so can't use BEZSELECTED() macro */
 			/* only add if on the right 'side' of the current frame */
 			if (FrameOnMouseSide(side, bezt->vec[1][0], cfra)) {
 				TimeToTransData(td, bezt->vec[1], adt);
@@ -3763,6 +3763,10 @@ static void createTransGraphEditData(bContext *C, TransInfo *t)
 				const char sel2 = bezt->f2 & SELECT;
 				const char sel1 = use_handle ? bezt->f1 & SELECT : sel2;
 				const char sel3 = use_handle ? bezt->f3 & SELECT : sel2;
+				const char lock = bezt->lock;
+
+				if (lock)
+					continue;
 
 				if (ELEM3(t->mode, TFM_TRANSLATION, TFM_TIME_TRANSLATE, TFM_TIME_SLIDE)) {
 					/* for 'normal' pivots - just include anything that is selected.
@@ -3865,9 +3869,14 @@ static void createTransGraphEditData(bContext *C, TransInfo *t)
 				const char sel2 = bezt->f2 & SELECT;
 				const char sel1 = use_handle ? bezt->f1 & SELECT : sel2;
 				const char sel3 = use_handle ? bezt->f3 & SELECT : sel2;
+				const char lock = bezt->lock;
 
 				TransDataCurveHandleFlags *hdata = NULL;
 				/* short h1=1, h2=1; */ /* UNUSED */
+
+				/* lock keyframe movement in graph editor mode */
+				if (lock)
+					continue;
 				
 				/* only include handles if selected, irrespective of the interpolation modes.
 				 * also, only treat handles specially if the center point isn't selected. 

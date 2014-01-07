@@ -67,18 +67,24 @@ static FCurve *ui_but_get_fcurve(uiBut *but, bAction **action, bool *r_driven)
 void ui_but_anim_flag(uiBut *but, float cfra)
 {
 	FCurve *fcu;
+	BezTriple *bezt;
+
 	bool driven;
 
-	but->flag &= ~(UI_BUT_ANIMATED | UI_BUT_ANIMATED_KEY | UI_BUT_DRIVEN);
+	but->flag &= ~(UI_BUT_ANIMATED | UI_BUT_ANIMATED_KEY | UI_BUT_DRIVEN | UI_BUT_LOCKED_KEY);
 
 	fcu = ui_but_get_fcurve(but, NULL, &driven);
 
 	if (fcu) {
 		if (!driven) {
 			but->flag |= UI_BUT_ANIMATED;
-			
-			if (fcurve_frame_has_keyframe(fcu, cfra, 0))
+
+			if ((bezt = fcurve_frame_has_keyframe(fcu, cfra, 0))) {
 				but->flag |= UI_BUT_ANIMATED_KEY;
+
+				if (bezt->lock)
+					but->flag |= UI_BUT_LOCKED_KEY;
+			}
 		}
 		else {
 			but->flag |= UI_BUT_DRIVEN;
