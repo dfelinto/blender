@@ -146,7 +146,7 @@ static void nupdate_ak_bezt(void *node, void *data)
 		ak->key_type = BEZT_KEYTYPE_LOCKED;
 
 	/* for keyframe type, 'proper' keyframes have priority over breakdowns (and other types for now) */
-	else if (BEZKEYTYPE(bezt) == BEZT_KEYTYPE_KEYFRAME)
+	else if (ak->key_type != BEZT_KEYTYPE_LOCKED && BEZKEYTYPE(bezt) == BEZT_KEYTYPE_KEYFRAME)
 		ak->key_type = BEZT_KEYTYPE_KEYFRAME;
 
 }
