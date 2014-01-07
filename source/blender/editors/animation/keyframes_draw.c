@@ -119,7 +119,11 @@ static DLRBT_Node *nalloc_ak_bezt(void *data)
 	/* store settings based on state of BezTriple */
 	ak->cfra = bezt->vec[1][0];
 	ak->sel = BEZSELECTED(bezt) ? SELECT : 0;
-	ak->key_type = BEZKEYTYPE(bezt);
+
+	if (bezt->lock)
+		ak->key_type = BEZT_KEYTYPE_LOCKED;
+	else
+		ak->key_type = BEZKEYTYPE(bezt);
 	
 	/* set 'modified', since this is used to identify long keyframes */
 	ak->modified = 1;
@@ -137,9 +141,14 @@ static void nupdate_ak_bezt(void *node, void *data)
 	if (BEZSELECTED(bezt)) ak->sel = SELECT;
 	ak->modified += 1;
 	
+	/* locking takes prority over everything else */
+	if (bezt->lock)
+		ak->key_type = BEZT_KEYTYPE_LOCKED;
+
 	/* for keyframe type, 'proper' keyframes have priority over breakdowns (and other types for now) */
-	if (BEZKEYTYPE(bezt) == BEZT_KEYTYPE_KEYFRAME)
+	else if (BEZKEYTYPE(bezt) == BEZT_KEYTYPE_KEYFRAME)
 		ak->key_type = BEZT_KEYTYPE_KEYFRAME;
+
 }
 
 /* ......... */
@@ -584,7 +593,8 @@ void draw_keyframe_shape(float x, float y, float xscale, float hsize, short sel,
 	/* tweak size of keyframe shape according to type of keyframe 
 	 * - 'proper' keyframes have key_type = 0, so get drawn at full size
 	 */
-	hsize -= 0.5f * key_type;
+	if (key_type != BEZT_KEYTYPE_LOCKED)
+		hsize -= 0.5f * key_type;
 	
 	/* adjust view transform before starting */
 	glTranslatef(x, y, 0.0f);
@@ -613,6 +623,12 @@ void draw_keyframe_shape(float x, float y, float xscale, float hsize, short sel,
 			{
 				if (sel) glColor4f(0.38f, 0.75f, 0.26f, alpha);
 				else glColor4f(0.58f, 0.90f, 0.46f, alpha);
+				break;
+			}
+			case BEZT_KEYTYPE_LOCKED: /* pinkish for now */
+			{
+				if (sel) glColor4f(1.0f, 0.4f, 0.8f, alpha);
+				else glColor4f(0.91f, 0.5f, 0.9f, alpha);
 				break;
 			}
 			case BEZT_KEYTYPE_KEYFRAME: /* traditional yellowish frames for now */
