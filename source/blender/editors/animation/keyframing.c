@@ -796,6 +796,7 @@ static float visualkey_get_value(PointerRNA *ptr, PropertyRNA *prop, int array_i
  */
 short insert_keyframe_direct(ReportList *reports, PointerRNA ptr, PropertyRNA *prop, FCurve *fcu, float cfra, short flag)
 {
+	BezTriple *bezt;
 	float curval = 0.0f;
 	
 	/* no F-Curve to add keyframe to? */
@@ -810,6 +811,13 @@ short insert_keyframe_direct(ReportList *reports, PointerRNA ptr, PropertyRNA *p
 		            "and try removing F-Modifiers",
 		            fcu->rna_path, fcu->array_index);
 		return 0;
+	}
+
+	if ((bezt = fcurve_frame_has_keyframe(fcu, cfra, 0))) {
+		if (bezt->lock) {
+			/* let's fail silently, we can't update locked keyframes ones */
+			return 0;
+		}
 	}
 	
 	/* if no property given yet, try to validate from F-Curve info */
