@@ -87,6 +87,9 @@ void delete_fcurve_key(FCurve *fcu, int index, short do_recalc)
 		return;
 	else if (index < 0)
 		index += fcu->totvert;
+
+	if (fcu->bezt[index].lock)
+		return;
 	
 	/* Delete this keyframe */
 	memmove(&fcu->bezt[index], &fcu->bezt[index + 1], sizeof(BezTriple) * (fcu->totvert - index - 1));
@@ -114,7 +117,7 @@ bool delete_fcurve_keys(FCurve *fcu)
 
 	/* Delete selected BezTriples */
 	for (i = 0; i < fcu->totvert; i++) {
-		if (fcu->bezt[i].f2 & SELECT) {
+		if (fcu->bezt[i].f2 & SELECT && !fcu->bezt[i].lock) {
 			memmove(&fcu->bezt[i], &fcu->bezt[i + 1], sizeof(BezTriple) * (fcu->totvert - i - 1));
 			fcu->totvert--;
 			i--;
