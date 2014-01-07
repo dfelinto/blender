@@ -7419,6 +7419,15 @@ static void do_versions_userdef(FileData *fd, BlendFileData *bfd)
 		user->walk_navigation.teleport_time = 0.2f; /* s */
 	}
 
+	if (!DNA_struct_elem_find(fd->filesdna, "uiWidgetStateColors", "char", "inner_key_lock")) {
+		bTheme *btheme;
+		
+		for (btheme = user->themes.first; btheme; btheme = btheme->next) {
+			const char color[4] = {255, 102, 204, 0};
+			copy_v4_v4_char(btheme->tui.wcol_state.inner_key_lock, &color[0]);
+		}
+	}
+
 }
 
 static void do_versions(FileData *fd, Library *lib, Main *main)

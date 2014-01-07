@@ -708,6 +708,7 @@ class USERPREF_PT_theme(Panel):
             colsub = padding.column()
             colsub.row().prop(ui_state, "inner_key")
             colsub.row().prop(ui_state, "inner_key_sel")
+            colsub.row().prop(ui_state, "inner_key_lock")
             colsub.row().prop(ui_state, "blend")
 
             col.separator()

@@ -1884,7 +1884,7 @@ int autokeyframe_cfra_can_key(Scene *scene, ID *id)
 /* --------------- API/Per-Datablock Handling ------------------- */
 
 /* Checks if some F-Curve has a keyframe for a given frame */
-short fcurve_frame_has_keyframe(FCurve *fcu, float frame, short filter)
+BezTriple *fcurve_frame_has_keyframe(FCurve *fcu, float frame, short filter)
 {
 	/* quick sanity check */
 	if (ELEM(NULL, fcu, fcu->bezt))
@@ -1901,11 +1901,11 @@ short fcurve_frame_has_keyframe(FCurve *fcu, float frame, short filter)
 		if (replace) {
 			/* sanity check: 'i' may in rare cases exceed arraylen */
 			if ((i >= 0) && (i < fcu->totvert))
-				return 1;
+				return &fcu->bezt[i];
 		}
 	}
 	
-	return 0;
+	return NULL;
 }
 
 /* Checks whether an Action has a keyframe for a given frame 
