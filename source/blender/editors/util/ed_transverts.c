@@ -72,6 +72,9 @@ void ED_transverts_update_obedit(TransVertStore *tvs, Object *obedit)
 				TransVert *tv = tvs->transverts;
 				BezTriple *bezt = nu->bezt;
 
+				if (bezt->lock)
+					continue;
+
 				while (a--) {
 					if (bezt->f1 & SELECT) tv++;
 
@@ -350,6 +353,10 @@ void ED_transverts_create_from_obedit(TransVertStore *tvs, Object *obedit, const
 			if (nu->type == CU_BEZIER) {
 				a = nu->pntsu;
 				bezt = nu->bezt;
+
+				if (bezt->lock)
+					continue;
+
 				while (a--) {
 					if (bezt->hide == 0) {
 						int skip_handle = 0;

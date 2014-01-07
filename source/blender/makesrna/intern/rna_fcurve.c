@@ -1593,6 +1593,11 @@ static void rna_def_fkeyframe(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Native", "Control point created by Blender, to be manually un-set by addons");
 	RNA_def_property_update(prop, NC_ANIMATION | ND_KEYFRAME | NA_SELECTED, NULL);
 
+	prop = RNA_def_property(srna, "lock", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "lock", 0);
+	RNA_def_property_ui_text(prop, "Lock", "Keyframe cannot be edited");
+	RNA_def_property_update(prop, NC_ANIMATION | ND_ANIMCHAN | NA_EDITED, NULL);
+
 	/* Enums */
 	prop = RNA_def_property(srna, "handle_left_type", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "h1");
