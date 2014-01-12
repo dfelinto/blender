@@ -2878,6 +2878,7 @@ static void calchandleNurb_intern(BezTriple *bezt, BezTriple *prev, BezTriple *n
 {
 	float *p1, *p2, *p3, pt[3];
 	float dvec_a[3], dvec_b[3];
+	float hvec_a[3], hvec_b[3];
 	float len, len_a, len_b;
 	const float eps = 1e-5;
 
@@ -3014,10 +3015,23 @@ static void calchandleNurb_intern(BezTriple *bezt, BezTriple *prev, BezTriple *n
 		}
 	}
 
-	if (bezt->h1 == HD_VECT) {    /* vector */
+	if (bezt->h1 == HD_FIXED_SLOPE) {
+		/* the handle keeps the same slope but its left is adjusted to 1/3 of the interval */
+		sub_v3_v3v3(hvec_a, p2, p2-3);
+		if (fabs(hvec_a[0]) > eps) {
+			madd_v3_v3v3fl(p2 - 3, p2, hvec_a, -dvec_a[0]/(3.0f*hvec_a[0]));
+		}
+	} else if (bezt->h1 == HD_VECT) {    /* vector */
 		madd_v3_v3v3fl(p2 - 3, p2, dvec_a, -1.0f / 3.0f);
 	}
-	if (bezt->h2 == HD_VECT) {
+
+	if (bezt->h2 == HD_FIXED_SLOPE) {
+		/* the handle keeps the same slope but its left is adjusted to 1/3 of the interval */
+		sub_v3_v3v3(hvec_b, p2+3, p2);
+		if (fabs(hvec_b[0]) > eps) {
+			madd_v3_v3v3fl(p2 + 3, p2, hvec_b, dvec_b[0]/(3.0f*hvec_b[0]));
+		}
+	} else if (bezt->h2 == HD_VECT) {
 		madd_v3_v3v3fl(p2 + 3, p2, dvec_b,  1.0f / 3.0f);
 	}
 
