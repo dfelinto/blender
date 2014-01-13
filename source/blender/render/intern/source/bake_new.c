@@ -106,7 +106,9 @@ void RE_populate_bake_pixels(Object *object, BakePixel pixel_array[], const int 
 	BakeData bd;
 	const int num_pixels = width * height;
 	int i, a;
+	int p_id;
 	MTFace *mtface;
+	MFace *mface;
 
 	Mesh *me = (Mesh *)object->data;
 
@@ -129,15 +131,18 @@ void RE_populate_bake_pixels(Object *object, BakePixel pixel_array[], const int 
 	BKE_mesh_tessface_calc(me);
 
 	mtface = CustomData_get_layer(&me->fdata, CD_MTFACE);
+	mface = CustomData_get_layer(&me->fdata, CD_MFACE);
 
 	if (mtface == NULL)
 		return;
 
+	p_id = -1;
 	for (i = 0; i < me->totface; i++) {
 		float vec[4][2];
 		MTFace *mtf = &mtface[i];
+		MFace *mf = &mface[i];
 
-		bd.primitive_id = i;
+		bd.primitive_id = ++p_id;
 
 		for (a = 0; a < 4; a++) {
 			/* Note, workaround for pixel aligned UVs which are common and can screw up our intersection tests
@@ -150,10 +155,11 @@ void RE_populate_bake_pixels(Object *object, BakePixel pixel_array[], const int 
 
 		zspan_scanconvert(&bd.zspan, (void *)&bd, vec[0], vec[1], vec[2], store_bake_pixel);
 
-		/* XXX TODO
-		if (...) // verts == 4
+		/* 4 vertices in the face */
+		if (mf->v4 != 0) {
+			bd.primitive_id = ++p_id;
 			zspan_scanconvert(&bd.zspan, (void *)&bd, vec[0], vec[2], vec[3], store_bake_pixel);
-		*/
+		}
 	}
 
 	zbuf_free_span(&bd.zspan);
