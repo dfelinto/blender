@@ -156,7 +156,7 @@ static bool write_external_bake_pixels(const char *filepath, float *buffer, cons
 #ifndef WIN32
 		chmod(filepath, S_IRUSR | S_IWUSR);
 #endif
-		printf("%s saving bake map: '%s'\n", __func__, filepath);
+		//printf("%s saving bake map: '%s'\n", __func__, filepath);
 	}
 
 	/* garbage collection */
@@ -254,9 +254,15 @@ static int bake_exec(bContext *C, wmOperator *op)
 				error = BLI_sprintfN("Problem saving baked map in \"%s\".", filepath);
 
 				BKE_report(op->reports, RPT_ERROR, error);
+				MEM_freeN(error);
 				op_result = OPERATOR_CANCELLED;
 			}
 			else {
+				char *msg = NULL;
+				msg = BLI_sprintfN("Baking map written to \"%s\".", filepath);
+
+				BKE_report(op->reports, RPT_INFO, msg);
+				MEM_freeN(msg);
 				op_result = OPERATOR_FINISHED;
 			}
 		}
