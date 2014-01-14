@@ -403,6 +403,7 @@ RenderData *RE_engine_get_render_data(Render *re)
 	return &re->r;
 }
 
+/* Bake */
 void RE_engine_bake_set_engine_parameters(Render *re, Main *bmain, Scene *scene)
 {
 	re->scene = scene;
@@ -410,7 +411,6 @@ void RE_engine_bake_set_engine_parameters(Render *re, Main *bmain, Scene *scene)
 	re->r = scene->r;
 }
 
-/* Bake */
 bool RE_engine_has_bake(Render *re)
 {
 	RenderEngineType *type = RE_engines_find(re->r.engine);
@@ -425,9 +425,10 @@ bool RE_engine_bake(Render *re, Object *object, BakePixel pixel_array[], int num
 
 	G.is_rendering = TRUE;
 
-	/* verify if we can render */
-	if (!type->bake)
-		return false;
+	/* set render info */
+	re->i.cfra = re->scene->r.cfra;
+	BLI_strncpy(re->i.scene_name, re->scene->id.name + 2, sizeof(re->i.scene_name));
+	re->i.totface = re->i.totvert = re->i.totstrand = re->i.totlamp = re->i.tothalo = 0;
 
 	/* render */
 	engine = re->engine;
@@ -439,6 +440,16 @@ bool RE_engine_bake(Render *re, Object *object, BakePixel pixel_array[], int num
 
 	engine->flag |= RE_ENGINE_RENDERING;
 
+	/* TODO: actually link to a parent which shouldn't happen */
+	engine->re = re;
+
+	engine->resolution_x = re->winx;
+	engine->resolution_y = re->winy;
+
+	RE_parts_init(re, FALSE);
+	engine->tile_x = re->partx;
+	engine->tile_y = re->party;
+
 	/* update is only called so we create the engine.session */
 	if (type->update)
 		type->update(engine, re->main, re->scene);
@@ -446,6 +457,8 @@ bool RE_engine_bake(Render *re, Object *object, BakePixel pixel_array[], int num
 	if (type->bake)
 		type->bake(engine, re->scene, object, pass_type, pixel_array, num_pixels, depth, result);
 
+	engine->tile_x = 0;
+	engine->tile_y = 0;
 	engine->flag &= ~RE_ENGINE_RENDERING;
 
 	/* re->engine becomes zero if user changed active render engine during render */
