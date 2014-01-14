@@ -26,18 +26,6 @@
 
 CCL_NAMESPACE_BEGIN
 
-#if 0
-struct BakePixel {
-	int primitive_id;
-	float u, v;
-	float dudx, dudy;
-	float dvdx, dvdy;
-};
-
-static void bake(Object *object, BakePixel pixel_array[], int num_pixels, int passes_bit_flag, float result[]);
-
-#endif
-
 bool MeshManager::displace(Device *device, DeviceScene *dscene, Scene *scene, Mesh *mesh, Progress& progress)
 {
 	/* verify if we have a displacement shader */
@@ -65,65 +53,6 @@ bool MeshManager::displace(Device *device, DeviceScene *dscene, Scene *scene, Me
 		}
 	}
 
-#if 0
-	/* pseudo-setup for baking API */
-	vector<bool> done(mesh->verts.size(), false);
-	device_vector<BakePixel> d_input;
-	BakePixel *d_input_data = d_input.resize(mesh->verts.size());
-	size_t d_input_size = 0;
-
-	for (size_t i = 0; i < mesh->triangles.size(); i++) {
-		Mesh::Triangle t = mesh->triangles[i];
-		Shader *shader = scene->shaders[mesh->shader[i]];
-
-		if (!shader->has_displacement)
-			continue;
-
-		for (int j = 0; j < 3; j++) {
-			if (done[t.v[j]])
-				continue;
-
-			done[t.v[j]] = true;
-			int prim = mesh->tri_offset + i;
-			float u, v;
-
-			switch (j) {
-				case 0:
-					u = 1.0f;
-					v = 0.0f;
-					break;
-				case 1:
-					u = 0.0f;
-					v = 1.0f;
-					break;
-				default:
-					u = 0.0f;
-					v = 0.0f;
-					break;
-			}
-
-			/* back */
-			BakePixel in;
-			in.u = u;
-			in.v = v;
-			in.primitive_id = prim;
-			d_input_data[d_input_size++] = in;
-		}
-	}
-
-	if(d_input_size == 0)
-		return false;
-
-	/* run device task */
-	//device_vector<float4> d_output;
-	//d_output.resize(d_input_size);
-
-	device_vector<float> d_output;
-	d_output.resize(d_input_size * 4);
-
-	bake(scene->objects[object_index], d_input_data, (int) d_input_size, (int) SHADER_EVAL_DISPLACE, d_output);
-
-#else
 	/* setup input for device task */
 	vector<bool> done(mesh->verts.size(), false);
 	device_vector<uint4> d_input;
@@ -183,8 +112,6 @@ bool MeshManager::displace(Device *device, DeviceScene *dscene, Scene *scene, Me
 	device->mem_alloc(d_input, MEM_READ_ONLY);
 	device->mem_copy_to(d_input);
 	device->mem_alloc(d_output, MEM_WRITE_ONLY);
-
-#endif
 
 	DeviceTask task(DeviceTask::SHADER);
 	task.shader_input = d_input.device_pointer;
