@@ -20,6 +20,7 @@
 #include "device.h"
 #include "scene.h"
 #include "session.h"
+#include "bake.h"
 
 #include "util_vector.h"
 
@@ -29,16 +30,6 @@ class Scene;
 class Session;
 class RenderBuffers;
 class RenderTile;
-
-struct BakePixel;
-
-/* plain copy from Blender */
-typedef struct BakePixel {
-	int primitive_id;
-	float u, v;
-	float dudx, dudy;
-	float dvdx, dvdy;
-} BakePixel;
 
 class BlenderSession {
 public:

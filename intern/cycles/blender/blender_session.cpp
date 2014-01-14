@@ -14,6 +14,8 @@
  * limitations under the License
  */
 
+#include <stdlib.h>
+
 #include "background.h"
 #include "buffers.h"
 #include "camera.h"
@@ -270,6 +272,77 @@ static PassType get_pass_type(BL::RenderPass b_pass)
 	return PASS_NONE;
 }
 
+static PassType get_pass_type(const string& s_pass_type)
+{
+	const char *pass_type = s_pass_type.c_str();
+
+	if (strcmp(pass_type, "COMBINED")==0)
+		return PASS_COMBINED;
+	else if (strcmp(pass_type, "Z")==0)
+		return PASS_DEPTH;
+
+	else if (strcmp(pass_type, "Z")==0)
+		return PASS_DEPTH;
+	else if (strcmp(pass_type, "MIST")==0)
+		return PASS_MIST;
+	else if (strcmp(pass_type, "NORMAL")==0)
+		return PASS_NORMAL;
+	else if (strcmp(pass_type, "OBJECT_INDEX")==0)
+		return PASS_OBJECT_ID;
+	else if (strcmp(pass_type, "UV")==0)
+		return PASS_UV;
+	else if (strcmp(pass_type, "VECTOR")==0)
+		return PASS_MOTION;
+	else if (strcmp(pass_type, "MATERIAL_INDEX")==0)
+		return PASS_MATERIAL_ID;
+
+	else if (strcmp(pass_type, "DIFFUSE_DIRECT")==0)
+		return PASS_DIFFUSE_DIRECT;
+	else if (strcmp(pass_type, "GLOSSY_DIRECT")==0)
+		return PASS_GLOSSY_DIRECT;
+	else if (strcmp(pass_type, "TRANSMISSION_DIRECT")==0)
+		return PASS_TRANSMISSION_DIRECT;
+	else if (strcmp(pass_type, "SUBSURFACE_DIRECT")==0)
+		return PASS_SUBSURFACE_DIRECT;
+
+	else if (strcmp(pass_type, "DIFFUSE_INDIRECT")==0)
+		return PASS_DIFFUSE_INDIRECT;
+	else if (strcmp(pass_type, "GLOSSY_INDIRECT")==0)
+		return PASS_GLOSSY_INDIRECT;
+	else if (strcmp(pass_type, "TRANSMISSION_INDIRECT")==0)
+		return PASS_TRANSMISSION_INDIRECT;
+	else if (strcmp(pass_type, "SUBSURFACE_INDIRECT")==0)
+		return PASS_SUBSURFACE_INDIRECT;
+
+	else if (strcmp(pass_type, "DIFFUSE_COLOR")==0)
+		return PASS_DIFFUSE_COLOR;
+	else if (strcmp(pass_type, "GLOSSY_COLOR")==0)
+		return PASS_GLOSSY_COLOR;
+	else if (strcmp(pass_type, "TRANSMISSION_COLOR")==0)
+		return PASS_TRANSMISSION_COLOR;
+	else if (strcmp(pass_type, "SUBSURFACE_COLOR")==0)
+		return PASS_SUBSURFACE_COLOR;
+
+	else if (strcmp(pass_type, "EMIT")==0)
+		return PASS_EMISSION;
+	else if (strcmp(pass_type, "ENVIRONMENT")==0)
+		return PASS_BACKGROUND;
+	else if (strcmp(pass_type, "AO")==0)
+		return PASS_AO;
+	else if (strcmp(pass_type, "SHADOW")==0)
+		return PASS_SHADOW;
+
+	/*
+	else if (strcmp(pass_type, "DIFFUSE")==0)
+	else if (strcmp(pass_type, "COLOR")==0)
+	else if (strcmp(pass_type, "REFRACTION")==0)
+	else if (strcmp(pass_type, "SPECULAR")==0)
+	else if (strcmp(pass_type, "REFLECTION")==0)
+		*/
+	else
+		return PASS_NONE;
+}
+
 static BL::RenderResult begin_render_result(BL::RenderEngine b_engine, int x, int y, int w, int h, const char *layername)
 {
 	return b_engine.begin_result(x, y, w, h, layername);
@@ -436,13 +509,52 @@ void BlenderSession::render()
 	sync = NULL;
 }
 
-void BlenderSession::bake(BL::Object b_object, const string& pass_type, BakePixel *pixel_array, int num_pixels, int depth, float result[])
+
+/* XXX I would like those to be in bake.cpp, but I'm running into some namespace problems for that
+   (BL:: is nowhere defined) - I can move the bake to inside 'blender', but that doesn't sound correct
+   I believe the fix is to get the bare minimum to the _bake functions, and not to pass the entire blender
+   object there.
+ */
+#if 1
+void _bake_uv(BL::Object b_object, PassType pass_type, BakePixel *pixel_array, int num_pixels, int depth, float result[])
 {
 	/* just plots the internal uv back to the results for now */
 	for (int i=0; i < num_pixels; i++) {
 		int offset = i * depth;
 		result[offset] = pixel_array[i].u;
 		result[offset + 1] = pixel_array[i].v;
+	}
+}
+#else
+void _bake_uv(BL::Object b_object, PassType pass_type, BakePixel *pixel_array, int num_pixels, int depth, float result[]) {}
+#endif
+
+void _bake_background(BL::Object b_object, PassType pass_type, BakePixel *pixel_array, int num_pixels, int depth, float result[]) {}
+
+void _bake_combined(BL::Object b_object, PassType pass_type, BakePixel *pixel_array, int num_pixels, int depth, float result[]) {}
+
+void _bake_depth(BL::Object b_object, PassType pass_type, BakePixel *pixel_array, int num_pixels, int depth, float result[]) {}
+
+void BlenderSession::bake(BL::Object b_object, const string& s_pass_type, BakePixel *pixel_array, int num_pixels, int depth, float result[])
+{
+	/* XXX temporary function until we get real pass_types (int) instead of strings */
+	PassType pass_type = get_pass_type(s_pass_type);
+
+	switch(pass_type) {
+		case PASS_UV:
+			_bake_uv(b_object, pass_type, pixel_array, num_pixels, depth, result);
+			break;
+		case PASS_BACKGROUND:
+			_bake_background(b_object, pass_type, pixel_array, num_pixels, depth, result);
+			break;
+		case PASS_COMBINED:
+			_bake_combined(b_object, pass_type, pixel_array, num_pixels, depth, result);
+			break;
+		case PASS_DEPTH:
+			_bake_depth(b_object, pass_type, pixel_array, num_pixels, depth, result);
+			break;
+		default:
+			break;
 	}
 }
 
