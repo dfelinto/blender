@@ -121,8 +121,62 @@ static int bake_break(void *UNUSED(rjv))
 	return 0;
 }
 
+static bool bake_type_needs_external(Render *UNUSED(re), ScenePassType pass_type)
+{
+	if (ELEM3(pass_type, SCE_PASS_UV, SCE_PASS_INDEXOB, SCE_PASS_INDEXMA))
+		return false;
+	return true;
+}
+
+static bool write_external_bakepixels(const char *filepath, float *buffer, const int width, const int height, const int depth)
+{
+	ImBuf *ibuf = NULL;
+	short ok = FALSE;
+	unsigned char planes;
+
+	switch (depth) {
+		case 1:
+			planes = R_IMF_PLANES_BW;
+			break;
+		case 2:
+		case 3:
+			planes = R_IMF_PLANES_RGB;
+			break;
+		case 4:
+		default:
+			planes = R_IMF_PLANES_RGBA;
+			break;
+	}
+
+	/* create a new ImBuf */
+	ibuf = IMB_allocImBuf(width, height, planes, IB_rect);
+	if (!ibuf) return NULL;
+
+	/* populates the ImBuf */
+	IMB_buffer_byte_from_float((unsigned char *) ibuf->rect, buffer, ibuf->channels, ibuf->dither, IB_PROFILE_SRGB, IB_PROFILE_SRGB,
+	                           FALSE, ibuf->x, ibuf->y, ibuf->x, ibuf->x);
+
+	/* setup the Imbuf*/
+	ibuf->ftype = JPG;
+
+	if ((ok=IMB_saveiff(ibuf, filepath, IB_rect))) {
+#ifndef WIN32
+		chmod(filepath, S_IRUSR | S_IWUSR);
+#endif
+		printf("%s saving bake map: '%s'\n", __func__, filepath);
+	}
+
+	/* garbage collection */
+	IMB_freeImBuf(ibuf);
+
+	if (ok) return true;
+	return false;
+}
+
 static int bake_exec(bContext *C, wmOperator *op)
 {
+	int op_result = OPERATOR_CANCELLED;
+	bool ok = false;
 	Scene *scene = CTX_data_scene(C);
 	Object *object = CTX_data_active_object(C);
 
@@ -132,10 +186,13 @@ static int bake_exec(bContext *C, wmOperator *op)
 
 	float *result;
 	BakePixel *pixel_array;
-	const int width = 64; //XXX get from elsewhere
-	const int height = 64; //XXX get from elsewhere
+	const int width = RNA_int_get(op->ptr, "width");
+	const int height = RNA_int_get(op->ptr, "height");
 	const int num_pixels = width * height;
-	const int depth = 1;
+	const int depth = RE_pass_depth(pass_type);
+	const bool is_external = RNA_boolean_get(op->ptr, "is_save_external");
+	char filepath[FILE_MAX];
+	RNA_string_get(op->ptr, "filepath", filepath);
 
 	RE_engine_bake_set_engine_parameters(re, CTX_data_main(C), scene);
 
@@ -146,16 +203,6 @@ static int bake_exec(bContext *C, wmOperator *op)
 
 	pixel_array = MEM_callocN(sizeof(BakePixel) * num_pixels, "bake pixels");
 	result = MEM_callocN(sizeof(float) * depth * num_pixels, "bake return pixels");
-
-#if 0
-	{
-		/* temporarily fill the result array with a normalized data */
-		int i;
-		for (i=0; i< num_pixels; i++) {
-			result[i] = (float)i / num_pixels;
-		}
-	}
-#endif
 
 	/* populate the pixel array with the face data */
 	RE_populate_bake_pixels(object, pixel_array, width, height);
@@ -216,23 +263,37 @@ static int bake_exec(bContext *C, wmOperator *op)
 	    e.g., do the image part? the cycle part? the blender internal changes? ...
 	 */
 
-	RE_engine_bake(re, object, pixel_array, num_pixels, depth, pass_type, result);
+	if (RE_engine_has_bake(re) && bake_type_needs_external(re, pass_type))
+		ok = RE_engine_bake(re, object, pixel_array, num_pixels, depth, pass_type, result);
+	else
+		ok = RE_internal_bake(re, object, pixel_array, num_pixels, depth, pass_type, result);
 
-#if 0
-	{
-		/* this is 90% likely working, but
-		    right now cycles is segfaulting on ~free, so
-		    we don't get as far as here */
-
-		int i = 0;
-		printf("RE_engine_bake output:\n");
-		printf("\n<result>\n\n");
-		for (i=0;i < num_pixels; i++) {
-			printf("%4.2f\n", result[i]);
-		}
-		printf("\n</result>\n\n");
+	if (!ok) {
+		BKE_report(op->reports, RPT_ERROR, "Problem baking object map");
+		op_result = OPERATOR_CANCELLED;
 	}
-#endif
+	else {
+		/* save the result */
+		if (is_external) {
+			/* save it externally */
+			ok = write_external_bakepixels(filepath, result, width, height, depth);
+			if (!ok) {
+				char *error = NULL;
+				error = BLI_sprintfN("Problem saving baked map in \"%s\".", filepath);
+
+				BKE_report(op->reports, RPT_ERROR, error);
+				op_result = OPERATOR_CANCELLED;
+			}
+			else {
+				op_result = OPERATOR_FINISHED;
+			}
+		}
+		else {
+			/* save it internally */
+			BKE_report(op->reports, RPT_ERROR, "Only external baking supported at the moment");
+			op_result = OPERATOR_CANCELLED;
+		}
+	}
 
 	MEM_freeN(pixel_array);
 	MEM_freeN(result);
@@ -295,7 +356,7 @@ static int bake_exec(bContext *C, wmOperator *op)
 	
 	return result;
 #endif
-	return OPERATOR_CANCELLED;
+	return op_result;
 }
 
 void OBJECT_OT_bake(wmOperatorType *ot)
@@ -312,4 +373,8 @@ void OBJECT_OT_bake(wmOperatorType *ot)
 
 	ot->prop = RNA_def_enum(ot->srna, "type", render_pass_type_items, SCE_PASS_COMBINED, "Type",
 	                        "Type of pass to bake, some of them may not be supported by the current render engine");
+	ot->prop = RNA_def_boolean(ot->srna, "is_save_external", true, "External", "Save the image externally (ignore face assigned Image datablocks)");
+	ot->prop = RNA_def_string_file_path(ot->srna, "filepath", "", FILE_MAX, "Path", "Image filepath to use when saving externally");
+	ot->prop = RNA_def_int(ot->srna, "width", 512, 1, INT_MAX, "Width", "Horizontal dimension of the baking map", 64, 4096);
+	ot->prop = RNA_def_int(ot->srna, "height", 512, 1, INT_MAX, "Height", "Vertical dimension of the baking map", 64, 4096);
 }

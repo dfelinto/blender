@@ -42,10 +42,13 @@ typedef struct BakePixel {
 } BakePixel;
 
 /* external_engine.c */
-int RE_engine_bake(struct Render *re, struct Object *object, struct BakePixel pixel_array[], int num_pixels, int depth, int pass_type, float result[]);
+bool RE_engine_has_bake(struct Render *re);
+
+bool RE_engine_bake(struct Render *re, struct Object *object, struct BakePixel pixel_array[], int num_pixels, int depth, ScenePassType pass_type, float result[]);
 
 /* bake.c */
-int RE_internal_bake(struct Render *re, struct Object *object, struct BakePixel pixel_array[], int num_pixels, int depth, int pass_type, float result[]);
+int RE_pass_depth(ScenePassType pass_type);
+bool RE_internal_bake(struct Render *re, struct Object *object, struct BakePixel pixel_array[], int num_pixels, int depth, ScenePassType pass_type, float result[]);
 
 void RE_populate_bake_pixels(struct Object *object, struct BakePixel pixel_array[], const int width, const int height);
 

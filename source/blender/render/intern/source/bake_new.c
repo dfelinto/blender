@@ -165,7 +165,102 @@ void RE_populate_bake_pixels(Object *object, BakePixel pixel_array[], const int 
 	zbuf_free_span(&bd.zspan);
 }
 
-int RE_internal_bake(Render *UNUSED(re), Object *UNUSED(object), BakePixel UNUSED(pixel_array[]), int UNUSED(num_pixels), int UNUSED(depth), int UNUSED(pass_type), float UNUSED(result[]))
+
+#if 0
+static bool bake_uv(BakePixel UNUSED(pixel_array[]), int num_pixels, int depth, float result[])
 {
-	return 0;
+	/* temporarily fill the result array with a normalized data */
+	int i, j;
+	for (i=0; i< num_pixels; i++) {
+		int offset = i * depth;
+
+		for (j=0; j< depth; j++) {
+			result[offset + j] = (float) i / num_pixels;
+		}
+	}
+	return true;
+}
+#else
+/* not the real UV, but the internal per-face UV instead
+   I'm using it to test if everything is correct */
+static bool bake_uv(BakePixel pixel_array[], int num_pixels, int depth, float result[])
+{
+	int i;
+
+	for (i=0; i < num_pixels; i++) {
+		int offset = i * depth;
+		result[offset] = pixel_array[i].u;
+		result[offset + 1] = pixel_array[i].v;
+	}
+
+	return true;
+}
+#endif
+
+bool RE_internal_bake(Render *UNUSED(re), Object *UNUSED(object), BakePixel pixel_array[], int num_pixels, int depth, ScenePassType pass_type, float result[])
+{
+	switch (pass_type) {
+		case SCE_PASS_UV:
+		{
+			return bake_uv(pixel_array, num_pixels, depth, result);
+			break;
+		}
+		default:
+			break;
+	}
+	return false;
+}
+
+int RE_pass_depth(ScenePassType pass_type)
+{
+	/* IMB_buffer_byte_from_float assumes 4 channels
+	   making it work for now - XXX */
+	return 4;
+
+	switch (pass_type) {
+		case SCE_PASS_Z:
+		case SCE_PASS_AO:
+		case SCE_PASS_MIST:
+		{
+			return 1;
+		}
+		case SCE_PASS_UV:
+		{
+			return 2;
+		}
+		case SCE_PASS_RGBA:
+		{
+			return 4;
+		}
+		case SCE_PASS_COMBINED:
+		case SCE_PASS_DIFFUSE:
+		case SCE_PASS_SPEC:
+		case SCE_PASS_SHADOW:
+		case SCE_PASS_REFLECT:
+		case SCE_PASS_NORMAL:
+		case SCE_PASS_VECTOR:
+		case SCE_PASS_REFRACT:
+		case SCE_PASS_INDEXOB:// XXX double check
+		case SCE_PASS_INDIRECT:
+		case SCE_PASS_RAYHITS: // XXX double check
+		case SCE_PASS_EMIT:
+		case SCE_PASS_ENVIRONMENT:
+		case SCE_PASS_INDEXMA:
+		case SCE_PASS_DIFFUSE_DIRECT:
+		case SCE_PASS_DIFFUSE_INDIRECT:
+		case SCE_PASS_DIFFUSE_COLOR:
+		case SCE_PASS_GLOSSY_DIRECT:
+		case SCE_PASS_GLOSSY_INDIRECT:
+		case SCE_PASS_GLOSSY_COLOR:
+		case SCE_PASS_TRANSM_DIRECT:
+		case SCE_PASS_TRANSM_INDIRECT:
+		case SCE_PASS_TRANSM_COLOR:
+		case SCE_PASS_SUBSURFACE_DIRECT:
+		case SCE_PASS_SUBSURFACE_INDIRECT:
+		case SCE_PASS_SUBSURFACE_COLOR:
+		default:
+		{
+			return 3;
+		}
+	}
 }
