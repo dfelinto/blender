@@ -121,13 +121,6 @@ static int bake_break(void *UNUSED(rjv))
 	return 0;
 }
 
-static bool bake_type_needs_external(Render *UNUSED(re), ScenePassType pass_type)
-{
-	if (ELEM3(pass_type, SCE_PASS_UV, SCE_PASS_INDEXOB, SCE_PASS_INDEXMA))
-		return false;
-	return true;
-}
-
 static bool write_external_bakepixels(const char *filepath, float *buffer, const int width, const int height, const int depth)
 {
 	ImBuf *ibuf = NULL;
@@ -263,7 +256,7 @@ static int bake_exec(bContext *C, wmOperator *op)
 	    e.g., do the image part? the cycle part? the blender internal changes? ...
 	 */
 
-	if (RE_engine_has_bake(re) && bake_type_needs_external(re, pass_type))
+	if (RE_engine_has_bake(re))
 		ok = RE_engine_bake(re, object, pixel_array, num_pixels, depth, pass_type, result);
 	else
 		ok = RE_internal_bake(re, object, pixel_array, num_pixels, depth, pass_type, result);
