@@ -63,7 +63,6 @@ EnumPropertyItem keyframe_handle_type_items[] = {
 	{HD_ALIGN, "ALIGNED", 0, "Aligned", ""},
 	{HD_AUTO, "AUTO", 0, "Automatic", ""},
 	{HD_AUTO_ANIM, "AUTO_CLAMPED", 0, "Auto Clamped", "Auto handles clamped to not overshoot"},
-	{HD_FIXED_SLOPE, "FIXED_SLOPE", 0, "Fixed Slope", "Handles keep same slope but horizontal extend is automatically adjusted"},
 	{0, NULL, 0, NULL, NULL}
 };
 

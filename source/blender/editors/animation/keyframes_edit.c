@@ -838,14 +838,6 @@ static short set_bezier_free(KeyframeEditData *UNUSED(ked), BezTriple *bezt)
 	return 0;
 }
 
-/* Sets selected bezier handles to type 'slope'  */
-static short set_bezier_slope(KeyframeEditData *UNUSED(ked), BezTriple *bezt) 
-{
-	if (bezt->f1 & SELECT) bezt->h1 = HD_FIXED_SLOPE;
-	if (bezt->f3 & SELECT) bezt->h2 = HD_FIXED_SLOPE;
-	return 0;
-}
-
 /* Set all selected Bezier Handles to a single type */
 // calchandles_fcurve
 KeyframeEditFunc ANIM_editkeyframes_handles(short code)
@@ -862,8 +854,6 @@ KeyframeEditFunc ANIM_editkeyframes_handles(short code)
 			return set_bezier_free;
 		case HD_ALIGN: /* align */
 			return set_bezier_align;
-		case HD_FIXED_SLOPE: /* slope */
-			return set_bezier_slope;
 		
 		default: /* check for toggle free or align? */
 			return bezier_isfree;

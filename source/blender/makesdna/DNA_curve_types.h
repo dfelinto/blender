@@ -332,8 +332,7 @@ typedef enum eBezTriple_Handle {
 	HD_AUTO = 1,
 	HD_VECT = 2,
 	HD_ALIGN = 3,
-	HD_AUTO_ANIM = 4, 	/* auto-clamped handles for animation */
-	HD_FIXED_SLOPE =5	/* handles that keep the slope but adjust length automatically */
+	HD_AUTO_ANIM = 4 	/* auto-clamped handles for animation */
 } eBezTriple_Handle;
 
 /* f5 (beztriple) */
