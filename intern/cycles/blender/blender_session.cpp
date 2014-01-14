@@ -438,41 +438,12 @@ void BlenderSession::render()
 
 void BlenderSession::bake(BL::Object b_object, const string& pass_type, BakePixel *pixel_array, int num_pixels, int depth, float result[])
 {
-
-	printf("Baking inside Cycles\n");
-	printf("passes: %s\n", pass_type.c_str());
-	printf("num_pixels: %d\ndepth: %d\n", num_pixels, depth);
-
-#if 1
-	{
-		/* so far so good, although in the real implementation result will be zero'ed */
-		int i = 0;
-		printf("\n<bakepixel>\n\n");
-		for (i=0;i < num_pixels; i++) {
-			if (pixel_array[i].primitive_id == -1)
-				continue;
-
-			printf("\nprimitive_id: %d\n", pixel_array[i].primitive_id);
-			printf("u: %4.2f\n", pixel_array[i].u);
-			printf("v: %4.2f\n", pixel_array[i].v);
-
-			result[i] = pixel_array[i].u + pixel_array[i].v;
-		}
-		printf("\n</bakepixel>\n\n");
+	/* just plots the internal uv back to the results for now */
+	for (int i=0; i < num_pixels; i++) {
+		int offset = i * depth;
+		result[offset] = pixel_array[i].u;
+		result[offset + 1] = pixel_array[i].v;
 	}
-#endif
-
-#if 0
-	{
-		/* so far so good, although in the real implementation result will be zero'ed */
-		int i = 0;
-		printf("\n<result>\n\n");
-		for (i=0;i < num_pixels; i++) {
-			printf("%4.2f\n", result[i]);
-		}
-		printf("\n</result>\n\n");
-	}
-#endif
 }
 
 void BlenderSession::do_write_update_render_result(BL::RenderResult b_rr, BL::RenderLayer b_rlay, RenderTile& rtile, bool do_update_only)
