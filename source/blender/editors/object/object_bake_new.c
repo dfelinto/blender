@@ -121,7 +121,7 @@ static int bake_break(void *UNUSED(rjv))
 	return 0;
 }
 
-static bool write_external_bakepixels(const char *filepath, float *buffer, const int width, const int height, const int depth)
+static bool write_external_bake_pixels(const char *filepath, float *buffer, const int width, const int height, const int depth)
 {
 	ImBuf *ibuf = NULL;
 	short ok = FALSE;
@@ -269,7 +269,7 @@ static int bake_exec(bContext *C, wmOperator *op)
 		/* save the result */
 		if (is_external) {
 			/* save it externally */
-			ok = write_external_bakepixels(filepath, result, width, height, depth);
+			ok = write_external_bake_pixels(filepath, result, width, height, depth);
 			if (!ok) {
 				char *error = NULL;
 				error = BLI_sprintfN("Problem saving baked map in \"%s\".", filepath);
