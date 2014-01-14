@@ -197,9 +197,6 @@ static int bake_exec(bContext *C, wmOperator *op)
 	pixel_array = MEM_callocN(sizeof(BakePixel) * num_pixels, "bake pixels");
 	result = MEM_callocN(sizeof(float) * depth * num_pixels, "bake return pixels");
 
-	/* populate the pixel array with the face data */
-	RE_populate_bake_pixels(object, pixel_array, width, height);
-
 	/**
 	 // PSEUDO-CODE TIME
 
@@ -233,28 +230,10 @@ static int bake_exec(bContext *C, wmOperator *op)
 	 			bakemap.image(bakemap.image, ret);
 
 	 		elif ... (vertex color?)
-	 
-	 
-	 
-	 //TODO:
-	 1. get RE_engine_bake function to actually call the cycles function
-	 (right now re->r.engine is "", while it should be 'CYCLES')
-	 <done>
-
-	 2. void BlenderSession::bake() to take BakePixel and to return float result().
-	 <next>
-	 
-	 3. write the populate_bake_pixels () function - start of duplication
-	    of existent baking code.
-	 
-	 4. void BlenderSession::bake() to actually render something
-	    (looking from the mesh_displace and the background baking it's not
-	     the critical part, it may be relatively straightforward)
-	 
-	 5. everything else ... (after getting this concept working, it'll
-	    be time to decide where to move in terms of development.
-	    e.g., do the image part? the cycle part? the blender internal changes? ...
 	 */
+
+	/* populate the pixel array with the face data */
+	RE_populate_bake_pixels(object, pixel_array, width, height);
 
 	if (RE_engine_has_bake(re))
 		ok = RE_engine_bake(re, object, pixel_array, num_pixels, depth, pass_type, result);
