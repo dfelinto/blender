@@ -38,6 +38,7 @@
 
 #include "RE_engine.h"
 #include "RE_pipeline.h"
+#include "RE_engine.h"
 
 
 EnumPropertyItem render_pass_type_items[] = {
@@ -151,7 +152,7 @@ static void engine_render(RenderEngine *engine, struct Scene *scene)
 }
 
 static void engine_bake(RenderEngine *engine, struct Scene *scene, struct Object *object, int pass_type,
-                        void *pixel_array, int num_pixels, int depth, void *result)
+                        struct BakePixel *pixel_array, int num_pixels, int depth, void *result)
 {
 	extern FunctionRNA rna_RenderEngine_bake_func;
 	PointerRNA ptr;
@@ -375,6 +376,12 @@ void rna_RenderPass_rect_set(PointerRNA *ptr, const float *values)
 	memcpy(rpass->rect, values, sizeof(float) * rpass->rectx * rpass->recty * rpass->channels);
 }
 
+static PointerRNA rna_BakePixel_next_get(PointerRNA *ptr)
+{
+	BakePixel *bp = ptr->data;
+	return rna_pointer_inherit_refine(ptr, &RNA_BakePixel, bp + 1);
+}
+
 #else /* RNA_RUNTIME */
 
 static void rna_def_render_engine(BlenderRNA *brna)
@@ -411,7 +418,7 @@ static void rna_def_render_engine(BlenderRNA *brna)
 	RNA_def_property_flag(prop, PROP_REQUIRED);
 	prop = RNA_def_enum(func, "pass_type", render_pass_type_items, 0, "Pass", "Pass to bake");
 	RNA_def_property_flag(prop, PROP_REQUIRED);
-	prop = RNA_def_pointer(func, "pixel_array", "AnyType", "", "");
+	prop = RNA_def_pointer(func, "pixel_array", "BakePixel", "", "");
 	RNA_def_property_flag(prop, PROP_REQUIRED);
 	prop = RNA_def_int(func, "num_pixels", 0, 0, INT_MAX, "Number of Pixels", "Size of the baking batch", 0, INT_MAX);
 	RNA_def_property_flag(prop, PROP_REQUIRED);
@@ -697,12 +704,59 @@ static void rna_def_render_pass(BlenderRNA *brna)
 	RNA_define_verify_sdna(1);
 }
 
+static void rna_def_render_bake_pixel(BlenderRNA *brna)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	srna = RNA_def_struct(brna, "BakePixel", NULL);
+	RNA_def_struct_ui_text(srna, "Bake Pixel", "");
+
+	RNA_define_verify_sdna(0);
+
+	prop = RNA_def_property(srna, "primitive_id", PROP_INT, PROP_NONE);
+	RNA_def_property_int_sdna(prop, NULL, "primitive_id");
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+
+	prop = RNA_def_property(srna, "u", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_float_sdna(prop, NULL, "u");
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+
+	prop = RNA_def_property(srna, "v", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_float_sdna(prop, NULL, "v");
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+
+	prop = RNA_def_property(srna, "dudx", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_float_sdna(prop, NULL, "dudx");
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+
+	prop = RNA_def_property(srna, "dudy", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_float_sdna(prop, NULL, "dudy");
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+
+	prop = RNA_def_property(srna, "dvdx", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_float_sdna(prop, NULL, "dvdx");
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+
+	prop = RNA_def_property(srna, "dvdy", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_float_sdna(prop, NULL, "dvdy");
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+
+	prop = RNA_def_property(srna, "next", PROP_POINTER, PROP_NONE);
+	RNA_def_property_struct_type(prop, "BakePixel");
+	RNA_def_property_pointer_funcs(prop, "rna_BakePixel_next_get", NULL, NULL, NULL);
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+
+	RNA_define_verify_sdna(1);
+}
+
 void RNA_def_render(BlenderRNA *brna)
 {
 	rna_def_render_engine(brna);
 	rna_def_render_result(brna);
 	rna_def_render_layer(brna);
 	rna_def_render_pass(brna);
+	rna_def_render_bake_pixel(brna);
 }
 
 #endif /* RNA_RUNTIME */

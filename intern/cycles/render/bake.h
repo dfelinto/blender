@@ -25,16 +25,6 @@
 
 CCL_NAMESPACE_BEGIN
 
-struct BakePixel;
-
-/* plain copy from Blender */
-typedef struct BakePixel {
-	int primitive_id;
-	float u, v;
-	float dudx, dudy;
-	float dvdx, dvdy;
-} BakePixel;
-
 //void do_bake(BL::Object b_object, const string& pass_type, BakePixel pixel_array[], int num_pixels, int depth, float pixels[]);
 
 CCL_NAMESPACE_END

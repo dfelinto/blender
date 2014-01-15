@@ -166,11 +166,13 @@ static PyObject *bake_func(PyObject *self, PyObject *args)
 	RNA_id_pointer_create((ID*)PyLong_AsVoidPtr(pyobject), &objectptr);
 	BL::Object b_object(objectptr);
 
-	void *b_bakepixel(PyLong_AsVoidPtr(pypixel_array));
 	void *b_result(PyLong_AsVoidPtr(pyresult));
 
-	session->bake(b_object, pass_type, (BakePixel *)b_bakepixel, num_pixels, depth, (float *)b_result);
-	//session->bake(b_object, pass_type, b_bakepixel, num_pixels, depth, (float *)b_result);
+	PointerRNA bakepixelptr;
+	RNA_id_pointer_create((ID*)PyLong_AsVoidPtr(pypixel_array), &bakepixelptr);
+	BL::BakePixel b_bake_pixel(bakepixelptr);
+
+	session->bake(b_object, pass_type, b_bake_pixel, num_pixels, depth, (float *)b_result);
 
 	Py_END_ALLOW_THREADS
 

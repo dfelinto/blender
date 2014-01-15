@@ -498,36 +498,44 @@ void BlenderSession::render()
 	sync = NULL;
 }
 
-
-/* XXX I would like those to be in bake.cpp, but I'm running into some namespace problems for that
-   (BL:: is nowhere defined) - I can move the bake to inside 'blender', but that doesn't sound correct
-   I believe the fix is to get the bare minimum to the _bake functions, and not to pass the entire blender
-   object there.
- */
-#if 1
-void _bake_uv(BL::Object b_object, PassType pass_type, BakePixel *pixel_array, int num_pixels, int depth, float result[])
+void _bake_uv(BL::Object b_object, PassType pass_type, BL::BakePixel pixel_array, int num_pixels, int depth, float result[])
 {
+	BL::BakePixel bp = pixel_array;
+
 	/* just plots the internal uv back to the results for now */
 	for (int i=0; i < num_pixels; i++) {
 		int offset = i * depth;
-		result[offset] = pixel_array[i].u;
-		result[offset + 1] = pixel_array[i].v;
+		result[offset] = bp.u();
+		result[offset + 1] = bp.v();
+
+		bp = bp.next();
 	}
 }
-#else
-void _bake_uv(BL::Object b_object, PassType pass_type, BakePixel *pixel_array, int num_pixels, int depth, float result[]) {}
-#endif
 
-void _bake_background(BL::Object b_object, PassType pass_type, BakePixel *pixel_array, int num_pixels, int depth, float result[]) {}
+void _bake_background(BL::Object b_object, PassType pass_type, BL::BakePixel pixel_array, int num_pixels, int depth, float result[]) {}
 
-void _bake_combined(BL::Object b_object, PassType pass_type, BakePixel *pixel_array, int num_pixels, int depth, float result[]) {}
+void _bake_combined(BL::Object b_object, PassType pass_type, BL::BakePixel pixel_array, int num_pixels, int depth, float result[]) {}
 
-void _bake_depth(BL::Object b_object, PassType pass_type, BakePixel *pixel_array, int num_pixels, int depth, float result[]) {}
+void _bake_depth(BL::Object b_object, PassType pass_type, BL::BakePixel pixel_array, int num_pixels, int depth, float result[]) {}
 
-void BlenderSession::bake(BL::Object b_object, const string& s_pass_type, BakePixel *pixel_array, int num_pixels, int depth, float result[])
+void BlenderSession::bake(BL::Object b_object, const string& s_pass_type, BL::BakePixel pixel_array, int num_pixels, int depth, float result[])
 {
+
 	/* XXX temporary function until we get real pass_types (int) instead of strings */
 	PassType pass_type = get_pass_type(s_pass_type);
+
+	/*****
+	 TODO LIST:
+
+	 1) get render result to be damped in float result[]
+
+	 2) convert BakePixel to position + normal list + render array.
+
+	 3) create new render camera 'BAKE'
+
+	 4) use BL::BakePixel instead of BakePixel <done> :)
+
+	 */
 
 	switch(pass_type) {
 		case PASS_UV:

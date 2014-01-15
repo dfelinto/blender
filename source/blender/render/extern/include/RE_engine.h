@@ -87,8 +87,7 @@ typedef struct RenderEngineType {
 
 	void (*update)(struct RenderEngine *engine, struct Main *bmain, struct Scene *scene);
 	void (*render)(struct RenderEngine *engine, struct Scene *scene);
-//	void (*bake)(struct RenderEngine *engine, struct Scene *scene, struct Object *object, int pass_type, struct BakePixel pixel_array[], int num_pixels, int depth, float result[]);
-	void (*bake)(struct RenderEngine *engine, struct Scene *scene, struct Object *object, int pass_type, void *pixel_array, int num_pixels, int depth, void *result);
+	void (*bake)(struct RenderEngine *engine, struct Scene *scene, struct Object *object, int pass_type, struct BakePixel *pixel_array, int num_pixels, int depth, void *result);
 
 	void (*view_update)(struct RenderEngine *engine, const struct bContext *context);
 	void (*view_draw)(struct RenderEngine *engine, const struct bContext *context);
