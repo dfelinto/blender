@@ -18,5 +18,43 @@
 
 CCL_NAMESPACE_BEGIN
 
+void BakeManager::device_free(Device *device, DeviceScene *dscene) {}
+
+void BakeManager::device_update(Device *device, DeviceScene *dscene, Scene *scene, Progress& progress)
+{
+	if(!need_update)
+		return;
+
+	if(progress.get_cancel()) return;
+
+	need_update = false;
+}
+
+BakeManager::~BakeManager()
+{
+	if (bake_data)
+		delete bake_data;
+}
+
+BakeManager::BakeManager()
+{
+	bake_data = NULL;
+	need_update = true;
+}
+
+BakeData *BakeManager::init(const int object, const int num_pixels)
+{
+	bake_data = new BakeData(object, num_pixels);
+	return bake_data;
+}
+
+bool BakeManager::bake(Device *device, DeviceScene *dscene, Scene *scene, PassType passtype, BakeData *bake_data, float result[])
+{
+
+	/* TODO adapt code from mesh_displace.cpp */
+
+	return false;
+}
+
 CCL_NAMESPACE_END
 

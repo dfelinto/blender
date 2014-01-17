@@ -21,9 +21,63 @@
 #include "device.h"
 #include "scene.h"
 #include "session.h"
-#include "bake.h"
 
 CCL_NAMESPACE_BEGIN
+
+class BakeData {
+public:
+	BakeData(const int object, const int num_pixels):
+	m_object(object),
+	m_num_pixels(num_pixels)
+	{
+		m_primitive.resize(num_pixels);
+		m_u.resize(num_pixels);
+		m_v.resize(num_pixels);
+	};
+	~BakeData()
+	{
+		m_primitive.clear();
+		m_u.clear();
+		m_v.clear();
+	};
+
+	void set(int i, int prim, float u, float v)
+	{
+		m_primitive[i] = prim;
+		m_u[i] = u;
+		m_v[i] = v;
+	}
+
+private:
+	int m_object;
+	int m_num_pixels;
+	vector<int>m_primitive;
+	vector<float>m_u;
+	vector<float>m_v;
+};
+
+class BakeManager {
+public:
+
+	bool need_update;
+
+	BakeManager();
+	~BakeManager();
+
+	BakeData *init(const int object, const int num_pixels);
+
+	bool bake(Device *device, DeviceScene *dscene, Scene *scene, PassType passtype, BakeData *bake_data, float result[]);
+
+	void device_update(Device *device, DeviceScene *dscene, Scene *scene, Progress& progress);
+	void device_free(Device *device, DeviceScene *dscene);
+	bool modified(const CurveSystemManager& CurveSystemManager);
+	void tag_update(Scene *scene);
+	void tag_update_mesh();
+
+private:
+	BakeData *bake_data;
+};
+
 
 //void do_bake(BL::Object b_object, const string& pass_type, BakePixel pixel_array[], int num_pixels, int depth, float pixels[]);
 

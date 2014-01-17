@@ -498,11 +498,10 @@ void BlenderSession::render()
 	sync = NULL;
 }
 
-void _bake_uv(BL::Object b_object, PassType pass_type, BL::BakePixel pixel_array, int num_pixels, int depth, float result[])
+void _bake_bary_uv(BL::Object b_object, PassType pass_type, BL::BakePixel pixel_array, int num_pixels, int depth, float result[])
 {
 	BL::BakePixel bp = pixel_array;
 
-	/* just plots the internal uv back to the results for now */
 	for (int i=0; i < num_pixels; i++) {
 		int offset = i * depth;
 		result[offset] = bp.u();
@@ -512,47 +511,33 @@ void _bake_uv(BL::Object b_object, PassType pass_type, BL::BakePixel pixel_array
 	}
 }
 
-void _bake_background(BL::Object b_object, PassType pass_type, BL::BakePixel pixel_array, int num_pixels, int depth, float result[]) {}
+static void populate_bake_data(BakeData *data, BL::BakePixel pixel_array, const int num_pixels)
+{
+	BL::BakePixel bp = pixel_array;
 
-void _bake_combined(BL::Object b_object, PassType pass_type, BL::BakePixel pixel_array, int num_pixels, int depth, float result[]) {}
-
-void _bake_depth(BL::Object b_object, PassType pass_type, BL::BakePixel pixel_array, int num_pixels, int depth, float result[]) {}
+	int i;
+	for (i=0; i < num_pixels; i++) {
+		data->set(i, bp.primitive_id(), bp.u(), bp.v());
+		bp = bp.next();
+	}
+}
 
 void BlenderSession::bake(BL::Object b_object, const string& s_pass_type, BL::BakePixel pixel_array, int num_pixels, int depth, float result[])
 {
+	int object = 0;
 
-	/* XXX temporary function until we get real pass_types (int) instead of strings */
 	PassType pass_type = get_pass_type(s_pass_type);
 
-	/*****
-	 TODO LIST:
+	BakeData *bake_data = scene->bake_init(object, num_pixels);
 
-	 1) get render result to be damped in float result[]
+	populate_bake_data(bake_data, pixel_array, num_pixels);
 
-	 2) convert BakePixel to position + normal list + render array.
+	scene->bake(pass_type, bake_data, result);
 
-	 3) create new render camera 'BAKE'
+	return;
 
-	 4) use BL::BakePixel instead of BakePixel <done> :)
-
-	 */
-
-	switch(pass_type) {
-		case PASS_UV:
-			_bake_uv(b_object, pass_type, pixel_array, num_pixels, depth, result);
-			break;
-		case PASS_BACKGROUND:
-			_bake_background(b_object, pass_type, pixel_array, num_pixels, depth, result);
-			break;
-		case PASS_COMBINED:
-			_bake_combined(b_object, pass_type, pixel_array, num_pixels, depth, result);
-			break;
-		case PASS_DEPTH:
-			_bake_depth(b_object, pass_type, pixel_array, num_pixels, depth, result);
-			break;
-		default:
-			break;
-	}
+	/* DEBUG call, just to show that we can read, write, and write to an image successfully */
+	_bake_bary_uv(b_object, pass_type, pixel_array, num_pixels, depth, result);
 }
 
 void BlenderSession::do_write_update_render_result(BL::RenderResult b_rr, BL::RenderLayer b_rlay, RenderTile& rtile, bool do_update_only)
