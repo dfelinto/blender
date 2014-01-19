@@ -206,7 +206,7 @@ public:
 	MotionType need_motion(bool advanced_shading = true);
 
 	BakeData *bake_init(const int object, const int num_pixels);
-	bool bake(PassType pass_type, BakeData *bake_data, float result[]);
+	bool bake(ShaderEvalType shader_type, BakeData *bake_data, float result[]);
 
 	bool need_update();
 	bool need_reset();

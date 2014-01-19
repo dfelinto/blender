@@ -227,9 +227,9 @@ BakeData *Scene::bake_init(const int object, const int num_pixels)
 	return bake_manager->init(object, num_pixels);
 }
 
-bool Scene::bake(PassType pass_type, BakeData *bake_data, float result[])
+bool Scene::bake(ShaderEvalType shader_type, BakeData *bake_data, float result[])
 {
-	return bake_manager->bake(device, &dscene, this, pass_type, bake_data, result);
+	return bake_manager->bake(device, &dscene, this, shader_type, bake_data, result);
 }
 
 Scene::MotionType Scene::need_motion(bool advanced_shading)

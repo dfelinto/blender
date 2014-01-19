@@ -33,13 +33,14 @@ public:
 		m_primitive.resize(num_pixels);
 		m_u.resize(num_pixels);
 		m_v.resize(num_pixels);
-	};
+	}
+
 	~BakeData()
 	{
 		m_primitive.clear();
 		m_u.clear();
 		m_v.clear();
-	};
+	}
 
 	void set(int i, int prim, float u, float v)
 	{
@@ -47,6 +48,25 @@ public:
 		m_u[i] = u;
 		m_v[i] = v;
 	}
+
+	int object()
+	{
+		return m_object;
+	}
+
+	int size() {
+		return m_num_pixels;
+	}
+
+	uint4 data(int i) {
+		return make_uint4(
+			m_object,
+			m_primitive[i],
+			__float_as_int(m_u[i]),
+			__float_as_int(m_v[i])
+			);
+	}
+
 
 private:
 	int m_object;
@@ -66,7 +86,7 @@ public:
 
 	BakeData *init(const int object, const int num_pixels);
 
-	bool bake(Device *device, DeviceScene *dscene, Scene *scene, PassType passtype, BakeData *bake_data, float result[]);
+	bool bake(Device *device, DeviceScene *dscene, Scene *scene, ShaderEvalType shader_type, BakeData *bake_data, float result[]);
 
 	void device_update(Device *device, DeviceScene *dscene, Scene *scene, Progress& progress);
 	void device_free(Device *device, DeviceScene *dscene);

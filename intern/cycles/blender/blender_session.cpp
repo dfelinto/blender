@@ -23,6 +23,7 @@
 #include "integrator.h"
 #include "film.h"
 #include "light.h"
+#include "object.h"
 #include "scene.h"
 #include "session.h"
 #include "shader.h"
@@ -261,9 +262,24 @@ static PassType get_pass_type(BL::RenderPass b_pass)
 	return PASS_NONE;
 }
 
-static PassType get_pass_type(const string& s_pass_type)
+static ShaderEvalType get_shader_type(const string& pass_type)
 {
-	const char *pass_type = s_pass_type.c_str();
+	const char *shader_type = pass_type.c_str();
+	if (strcmp(shader_type, "COMBINED")==0)
+		return SHADER_EVAL_COMBINED;
+	else if (strcmp(shader_type, "Z")==0)
+		return SHADER_EVAL_DEPTH;
+	else if (strcmp(shader_type, "UV")==0)
+		return SHADER_EVAL_UV;
+	else if (strcmp(shader_type, "EMIT")==0)
+		return SHADER_EVAL_EMISSION;
+	else if (strcmp(shader_type, "ENVIRONMENT")==0)
+		return SHADER_EVAL_BACKGROUND;
+	else if (strcmp(shader_type, "AO")==0)
+		return SHADER_EVAL_AO;
+	else
+		return SHADER_EVAL_BACKGROUND;
+#if 0
 
 	if (strcmp(pass_type, "COMBINED")==0)
 		return PASS_COMBINED;
@@ -330,6 +346,7 @@ static PassType get_pass_type(const string& s_pass_type)
 		*/
 	else
 		return PASS_NONE;
+#endif
 }
 
 static BL::RenderResult begin_render_result(BL::RenderEngine b_engine, int x, int y, int w, int h, const char *layername)
@@ -498,7 +515,7 @@ void BlenderSession::render()
 	sync = NULL;
 }
 
-void _bake_bary_uv(BL::Object b_object, PassType pass_type, BL::BakePixel pixel_array, int num_pixels, int depth, float result[])
+void _bake_bary_uv(BL::BakePixel pixel_array, int num_pixels, int depth, float result[])
 {
 	BL::BakePixel bp = pixel_array;
 
@@ -522,22 +539,56 @@ static void populate_bake_data(BakeData *data, BL::BakePixel pixel_array, const 
 	}
 }
 
-void BlenderSession::bake(BL::Object b_object, const string& s_pass_type, BL::BakePixel pixel_array, int num_pixels, int depth, float result[])
+void BlenderSession::bake(BL::Object b_object, const string& pass_type, BL::BakePixel pixel_array, int num_pixels, int depth, float result[])
 {
-	int object = 0;
+	ShaderEvalType shader_type = get_shader_type(pass_type);
 
-	PassType pass_type = get_pass_type(s_pass_type);
+	/* find object index. todo: is arbitrary - copied from mesh_displace.cpp */
+	size_t object_index = ~0;
+
+	for(size_t i = 0; i < scene->objects.size(); i++) {
+		if(strcmp(scene->objects[i]->name.c_str(), b_object.name().c_str()) == 0) {
+			object_index = i;
+			break;
+		}
+	}
+
+	/* create device and update scene */
+	scene->film->tag_update(scene);
+	scene->integrator->tag_update(scene);
+
+	/* update scene */
+	sync->sync_camera(b_render, b_engine.camera_override(), width, height);
+	sync->sync_data(b_v3d, b_engine.camera_override(), "");
+
+	/* get buffer parameters */
+	SessionParams session_params = BlenderSync::get_session_params(b_engine, b_userpref, b_scene, background);
+	BufferParams buffer_params = BlenderSync::get_buffer_params(b_render, b_scene, b_v3d, b_rv3d, scene->camera, width, height);
+
+	/* set number of samples per layer */
+	int samples = sync->get_layer_samples();
+	bool bound_samples = sync->get_layer_bound_samples();
+
+	if(samples != 0 && (!bound_samples || (samples < session_params.samples)))
+		session->reset(buffer_params, samples);
+	else
+		session->reset(buffer_params, session_params.samples);
+
+	session->update_scene();
+
+	/* when used, non-instanced convention: object = ~object */
+	int object = ~object_index;
 
 	BakeData *bake_data = scene->bake_init(object, num_pixels);
 
 	populate_bake_data(bake_data, pixel_array, num_pixels);
 
-	scene->bake(pass_type, bake_data, result);
+	scene->bake(shader_type, bake_data, result);
 
 	return;
 
 	/* DEBUG call, just to show that we can read, write, and write to an image successfully */
-	_bake_bary_uv(b_object, pass_type, pixel_array, num_pixels, depth, result);
+	_bake_bary_uv(pixel_array, num_pixels, depth, result);
 }
 
 void BlenderSession::do_write_update_render_result(BL::RenderResult b_rr, BL::RenderLayer b_rlay, RenderTile& rtile, bool do_update_only)
