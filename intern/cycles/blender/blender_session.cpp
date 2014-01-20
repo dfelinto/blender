@@ -265,88 +265,70 @@ static PassType get_pass_type(BL::RenderPass b_pass)
 static ShaderEvalType get_shader_type(const string& pass_type)
 {
 	const char *shader_type = pass_type.c_str();
+
 	if (strcmp(shader_type, "COMBINED")==0)
 		return SHADER_EVAL_COMBINED;
 	else if (strcmp(shader_type, "Z")==0)
 		return SHADER_EVAL_DEPTH;
+	else if (strcmp(shader_type, "MIST")==0)
+		return SHADER_EVAL_MIST;
+	else if (strcmp(shader_type, "NORMAL")==0)
+		return SHADER_EVAL_NORMAL;
+	else if (strcmp(shader_type, "OBJECT_INDEX")==0)
+		return SHADER_EVAL_OBJECT_ID;
 	else if (strcmp(shader_type, "UV")==0)
 		return SHADER_EVAL_UV;
+	else if (strcmp(shader_type, "VECTOR")==0)
+		return SHADER_EVAL_MOTION;
+	else if (strcmp(shader_type, "MATERIAL_INDEX")==0)
+		return SHADER_EVAL_MATERIAL_ID;
+
+	else if (strcmp(shader_type, "DIFFUSE_DIRECT")==0)
+		return SHADER_EVAL_DIFFUSE_DIRECT;
+	else if (strcmp(shader_type, "GLOSSY_DIRECT")==0)
+		return SHADER_EVAL_GLOSSY_DIRECT;
+	else if (strcmp(shader_type, "TRANSMISSION_DIRECT")==0)
+		return SHADER_EVAL_TRANSMISSION_DIRECT;
+	else if (strcmp(shader_type, "SUBSURFACE_DIRECT")==0)
+		return SHADER_EVAL_SUBSURFACE_DIRECT;
+
+	else if (strcmp(shader_type, "DIFFUSE_INDIRECT")==0)
+		return SHADER_EVAL_DIFFUSE_INDIRECT;
+	else if (strcmp(shader_type, "GLOSSY_INDIRECT")==0)
+		return SHADER_EVAL_GLOSSY_INDIRECT;
+	else if (strcmp(shader_type, "TRANSMISSION_INDIRECT")==0)
+		return SHADER_EVAL_TRANSMISSION_INDIRECT;
+	else if (strcmp(shader_type, "SUBSURFACE_INDIRECT")==0)
+		return SHADER_EVAL_SUBSURFACE_INDIRECT;
+
+	else if (strcmp(shader_type, "DIFFUSE_COLOR")==0)
+		return SHADER_EVAL_DIFFUSE_COLOR;
+	else if (strcmp(shader_type, "GLOSSY_COLOR")==0)
+		return SHADER_EVAL_GLOSSY_COLOR;
+	else if (strcmp(shader_type, "TRANSMISSION_COLOR")==0)
+		return SHADER_EVAL_TRANSMISSION_COLOR;
+	else if (strcmp(shader_type, "SUBSURFACE_COLOR")==0)
+		return SHADER_EVAL_SUBSURFACE_COLOR;
+
 	else if (strcmp(shader_type, "EMIT")==0)
 		return SHADER_EVAL_EMISSION;
 	else if (strcmp(shader_type, "ENVIRONMENT")==0)
 		return SHADER_EVAL_BACKGROUND;
 	else if (strcmp(shader_type, "AO")==0)
 		return SHADER_EVAL_AO;
-	else
-		return SHADER_EVAL_BACKGROUND;
-#if 0
-
-	if (strcmp(pass_type, "COMBINED")==0)
-		return PASS_COMBINED;
-	else if (strcmp(pass_type, "Z")==0)
-		return PASS_DEPTH;
-
-	else if (strcmp(pass_type, "Z")==0)
-		return PASS_DEPTH;
-	else if (strcmp(pass_type, "MIST")==0)
-		return PASS_MIST;
-	else if (strcmp(pass_type, "NORMAL")==0)
-		return PASS_NORMAL;
-	else if (strcmp(pass_type, "OBJECT_INDEX")==0)
-		return PASS_OBJECT_ID;
-	else if (strcmp(pass_type, "UV")==0)
-		return PASS_UV;
-	else if (strcmp(pass_type, "VECTOR")==0)
-		return PASS_MOTION;
-	else if (strcmp(pass_type, "MATERIAL_INDEX")==0)
-		return PASS_MATERIAL_ID;
-
-	else if (strcmp(pass_type, "DIFFUSE_DIRECT")==0)
-		return PASS_DIFFUSE_DIRECT;
-	else if (strcmp(pass_type, "GLOSSY_DIRECT")==0)
-		return PASS_GLOSSY_DIRECT;
-	else if (strcmp(pass_type, "TRANSMISSION_DIRECT")==0)
-		return PASS_TRANSMISSION_DIRECT;
-	else if (strcmp(pass_type, "SUBSURFACE_DIRECT")==0)
-		return PASS_SUBSURFACE_DIRECT;
-
-	else if (strcmp(pass_type, "DIFFUSE_INDIRECT")==0)
-		return PASS_DIFFUSE_INDIRECT;
-	else if (strcmp(pass_type, "GLOSSY_INDIRECT")==0)
-		return PASS_GLOSSY_INDIRECT;
-	else if (strcmp(pass_type, "TRANSMISSION_INDIRECT")==0)
-		return PASS_TRANSMISSION_INDIRECT;
-	else if (strcmp(pass_type, "SUBSURFACE_INDIRECT")==0)
-		return PASS_SUBSURFACE_INDIRECT;
-
-	else if (strcmp(pass_type, "DIFFUSE_COLOR")==0)
-		return PASS_DIFFUSE_COLOR;
-	else if (strcmp(pass_type, "GLOSSY_COLOR")==0)
-		return PASS_GLOSSY_COLOR;
-	else if (strcmp(pass_type, "TRANSMISSION_COLOR")==0)
-		return PASS_TRANSMISSION_COLOR;
-	else if (strcmp(pass_type, "SUBSURFACE_COLOR")==0)
-		return PASS_SUBSURFACE_COLOR;
-
-	else if (strcmp(pass_type, "EMIT")==0)
-		return PASS_EMISSION;
-	else if (strcmp(pass_type, "ENVIRONMENT")==0)
-		return PASS_BACKGROUND;
-	else if (strcmp(pass_type, "AO")==0)
-		return PASS_AO;
-	else if (strcmp(pass_type, "SHADOW")==0)
-		return PASS_SHADOW;
+	else if (strcmp(shader_type, "SHADOW")==0)
+		return SHADER_EVAL_SHADOW;
 
 	/*
-	else if (strcmp(pass_type, "DIFFUSE")==0)
-	else if (strcmp(pass_type, "COLOR")==0)
-	else if (strcmp(pass_type, "REFRACTION")==0)
-	else if (strcmp(pass_type, "SPECULAR")==0)
-	else if (strcmp(pass_type, "REFLECTION")==0)
+	else if (strcmp(shader_type, "DIFFUSE")==0)
+	else if (strcmp(shader_type, "COLOR")==0)
+	else if (strcmp(shader_type, "REFRACTION")==0)
+	else if (strcmp(shader_type, "SPECULAR")==0)
+	else if (strcmp(shader_type, "REFLECTION")==0)
 		*/
 	else
-		return PASS_NONE;
-#endif
+		return SHADER_EVAL_BACKGROUND;
+		//return SHADER_EVAL_NONE;
 }
 
 static BL::RenderResult begin_render_result(BL::RenderEngine b_engine, int x, int y, int w, int h, const char *layername)
