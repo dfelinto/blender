@@ -56,7 +56,27 @@ ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input,
 		}
 		case SHADER_EVAL_ENVIRONMENT:
 		{
-			/* TODO */
+			/* setup ray */
+			Ray ray;
+
+			ray.P = make_float3(0.0f, 0.0f, 0.0f);
+			ray.D = normalize(P);
+			ray.t = 0.0f;
+#ifdef __CAMERA_MOTION__
+			ray.time = 0.5f;
+#endif
+
+#ifdef __RAY_DIFFERENTIALS__
+			ray.dD = differential3_zero();
+			ray.dP = differential3_zero();
+#endif
+
+			/* setup shader data */
+			shader_setup_from_background(kg, &sd, &ray, 0);
+
+			/* evaluate */
+			int flag = 0; /* we can't know which type of BSDF this is for */
+			out = shader_eval_background(kg, &sd, flag, SHADER_CONTEXT_MAIN);
 			break;
 		}
 		case SHADER_EVAL_NORMAL:
