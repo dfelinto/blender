@@ -41,7 +41,31 @@ ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input,
 	switch (type) {
 		case SHADER_EVAL_COMBINED:
 		{
-			/* TODO */
+			int shader;
+			float3 Ng = triangle_normal_MT(kg, prim, &shader);
+
+			/* dummy initilizations copied from SHADER_EVAL_DISPLACE */
+			float3 I = make_float3(0.f);
+			float t = 0.f;
+			float time = TIME_INVALID;
+			int bounce = 0;
+			int segment = ~0;
+
+			shader_setup_from_sample(kg, &sd, P, Ng, I, shader, object, prim, u, v, t, time, bounce, segment);
+			shader_eval_surface(kg, &sd, 0.f, 0, SHADER_CONTEXT_MAIN);
+
+#ifdef __MULTI_CLOSURE__
+			float3 eval = make_float3(0.0f, 0.0f, 0.0f);
+
+			for(int i = 0; i< sd.num_closure; i++) {
+				const ShaderClosure *sc = &sd.closure[i];
+				eval += sc->weight;
+			}
+
+			out = eval;
+#else
+			out = sd.closure.weight;
+#endif
 			break;
 		}
 		case SHADER_EVAL_EMISSION:
