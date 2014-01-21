@@ -45,6 +45,32 @@ ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input,
 	int segment = ~0;
 
 	switch (type) {
+		/* data passes */
+		case SHADER_EVAL_NORMAL:
+		case SHADER_EVAL_UV:
+		case SHADER_EVAL_DIFFUSE_COLOR:
+		case SHADER_EVAL_GLOSSY_COLOR:
+		case SHADER_EVAL_TRANSMISSION_COLOR:
+		case SHADER_EVAL_SUBSURFACE_COLOR:
+		case SHADER_EVAL_EMISSION:
+
+		/* light passes */
+		case SHADER_EVAL_AO:
+		case SHADER_EVAL_COMBINED:
+		case SHADER_EVAL_SHADOW:
+		case SHADER_EVAL_DIFFUSE_DIRECT:
+		case SHADER_EVAL_GLOSSY_DIRECT:
+		case SHADER_EVAL_TRANSMISSION_DIRECT:
+		case SHADER_EVAL_SUBSURFACE_DIRECT:
+		case SHADER_EVAL_DIFFUSE_INDIRECT:
+		case SHADER_EVAL_GLOSSY_INDIRECT:
+		case SHADER_EVAL_TRANSMISSION_INDIRECT:
+		case SHADER_EVAL_SUBSURFACE_INDIRECT:
+
+		/* extra */
+		case SHADER_EVAL_ENVIRONMENT:
+
+#if 0
 		case SHADER_EVAL_COMBINED:
 		{
 			/* TODO it's not taking into consideration the
@@ -168,7 +194,8 @@ ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input,
 			out = sd.N;
 			break;
 		}
-		case SHADER_EVAL_BAKE:
+#endif
+
 		default:
 		{
 			/* no real shader, returning the position of the verts for debugging */

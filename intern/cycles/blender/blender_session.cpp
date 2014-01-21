@@ -266,6 +266,54 @@ static ShaderEvalType get_shader_type(const string& pass_type)
 {
 	const char *shader_type = pass_type.c_str();
 
+	/* data passes */
+	if (strcmp(shader_type, "NORMAL")==0)
+		return SHADER_EVAL_NORMAL;
+	else if (strcmp(shader_type, "UV")==0)
+		return SHADER_EVAL_UV;
+	else if (strcmp(shader_type, "DIFFUSE_COLOR")==0)
+		return SHADER_EVAL_DIFFUSE_COLOR;
+	else if (strcmp(shader_type, "GLOSSY_COLOR")==0)
+		return SHADER_EVAL_GLOSSY_COLOR;
+	else if (strcmp(shader_type, "TRANSMISSION_COLOR")==0)
+		return SHADER_EVAL_TRANSMISSION_COLOR;
+	else if (strcmp(shader_type, "SUBSURFACE_COLOR")==0)
+		return SHADER_EVAL_SUBSURFACE_COLOR;
+	else if (strcmp(shader_type, "EMIT")==0)
+		return SHADER_EVAL_EMISSION;
+
+	/* light passes */
+	else if (strcmp(shader_type, "AO")==0)
+		return SHADER_EVAL_AO;
+	else if (strcmp(shader_type, "COMBINED")==0)
+		return SHADER_EVAL_COMBINED;
+	else if (strcmp(shader_type, "SHADOW")==0)
+		return SHADER_EVAL_SHADOW;
+	else if (strcmp(shader_type, "DIFFUSE_DIRECT")==0)
+		return SHADER_EVAL_DIFFUSE_DIRECT;
+	else if (strcmp(shader_type, "GLOSSY_DIRECT")==0)
+		return SHADER_EVAL_GLOSSY_DIRECT;
+	else if (strcmp(shader_type, "TRANSMISSION_DIRECT")==0)
+		return SHADER_EVAL_TRANSMISSION_DIRECT;
+	else if (strcmp(shader_type, "SUBSURFACE_DIRECT")==0)
+		return SHADER_EVAL_SUBSURFACE_DIRECT;
+	else if (strcmp(shader_type, "DIFFUSE_INDIRECT")==0)
+		return SHADER_EVAL_DIFFUSE_INDIRECT;
+	else if (strcmp(shader_type, "GLOSSY_INDIRECT")==0)
+		return SHADER_EVAL_GLOSSY_INDIRECT;
+	else if (strcmp(shader_type, "TRANSMISSION_INDIRECT")==0)
+		return SHADER_EVAL_TRANSMISSION_INDIRECT;
+	else if (strcmp(shader_type, "SUBSURFACE_INDIRECT")==0)
+		return SHADER_EVAL_SUBSURFACE_INDIRECT;
+
+	/* extra */
+	else if (strcmp(shader_type, "ENVIRONMENT")==0)
+		return SHADER_EVAL_ENVIRONMENT;
+
+	else
+		return SHADER_EVAL_BAKE;
+
+#if 0
 	if (strcmp(shader_type, "COMBINED")==0)
 		return SHADER_EVAL_COMBINED;
 	else if (strcmp(shader_type, "Z")==0)
@@ -331,6 +379,7 @@ static ShaderEvalType get_shader_type(const string& pass_type)
 		return SHADER_EVAL_REFLECTION;
 	else
 		return SHADER_EVAL_BAKE;
+#endif
 }
 
 static BL::RenderResult begin_render_result(BL::RenderEngine b_engine, int x, int y, int w, int h, const char *layername)
