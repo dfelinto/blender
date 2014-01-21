@@ -313,7 +313,7 @@ static ShaderEvalType get_shader_type(const string& pass_type)
 	else if (strcmp(shader_type, "EMIT")==0)
 		return SHADER_EVAL_EMISSION;
 	else if (strcmp(shader_type, "ENVIRONMENT")==0)
-		return SHADER_EVAL_BACKGROUND;
+		return SHADER_EVAL_ENVIRONMENT;
 	else if (strcmp(shader_type, "AO")==0)
 		return SHADER_EVAL_AO;
 	else if (strcmp(shader_type, "SHADOW")==0)
@@ -327,8 +327,7 @@ static ShaderEvalType get_shader_type(const string& pass_type)
 	else if (strcmp(shader_type, "REFLECTION")==0)
 		*/
 	else
-		return SHADER_EVAL_BACKGROUND;
-		//return SHADER_EVAL_NONE;
+		return SHADER_EVAL_BAKE;
 }
 
 static BL::RenderResult begin_render_result(BL::RenderEngine b_engine, int x, int y, int w, int h, const char *layername)

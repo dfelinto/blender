@@ -161,6 +161,10 @@ typedef uint RNG;
 typedef enum ShaderEvalType {
 	SHADER_EVAL_DISPLACE,
 	SHADER_EVAL_BACKGROUND,
+	/* bake types */
+	SHADER_EVAL_BAKE, /* no real shade, it's used in the code to
+	                   * differentiate the type of shader eval from the above
+	                   */
 	SHADER_EVAL_COMBINED,
 	SHADER_EVAL_DEPTH,
 	SHADER_EVAL_MIST,
@@ -189,6 +193,7 @@ typedef enum ShaderEvalType {
 	SHADER_EVAL_REFRACTION,
 	SHADER_EVAL_SPECULAR,
 	SHADER_EVAL_REFLECTION,
+	SHADER_EVAL_ENVIRONMENT,
 } ShaderEvalType;
 
 /* Path Tracing

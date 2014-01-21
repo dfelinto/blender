@@ -16,8 +16,78 @@
 
 CCL_NAMESPACE_BEGIN
 
+
+ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input, ccl_global float4 *output, ShaderEvalType type, int i)
+{
+	ShaderData sd;
+	uint4 in = input[i];
+	float3 out;
+
+	int object = in.x;
+	int prim = in.y;
+	float u = __uint_as_float(in.z);
+	float v = __uint_as_float(in.w);
+
+	/* TODO: I need to offset the prim for the object/mesh
+	   if I have more than one object in the scene */
+	float3 P = triangle_point_MT(kg, prim, u, v);
+
+	if (prim == -1) {
+		/* write output */
+		output[i] = make_float4(0.0f);
+		return;
+	}
+
+	switch (type) {
+		case SHADER_EVAL_COMBINED:
+		{
+			/* TODO */
+			break;
+		}
+		case SHADER_EVAL_EMISSION:
+		{
+			/* TODO */
+			break;
+		}
+		case SHADER_EVAL_AO:
+		{
+			/* TODO */
+			break;
+		}
+		case SHADER_EVAL_ENVIRONMENT:
+		{
+			/* TODO */
+			break;
+		}
+		case SHADER_EVAL_NORMAL:
+		{
+			/* TODO: the normal needs to be
+			   evaluated inside the shader */
+			int shader;
+			out = triangle_normal_MT(kg, prim, &shader);
+			break;
+		}
+		case SHADER_EVAL_BAKE:
+		default:
+		{
+			/* no real shader, returning the position of the verts for debugging */
+			out = normalize(P);
+			break;
+		}
+	}
+
+	/* write output */
+	output[i] = make_float4(out.x, out.y, out.z, 0.0f);
+	return;
+}
+
 ccl_device void kernel_shader_evaluate(KernelGlobals *kg, ccl_global uint4 *input, ccl_global float4 *output, ShaderEvalType type, int i)
 {
+	if (type >= SHADER_EVAL_BAKE) {
+		kernel_bake_evaluate(kg, input, output, type, i);
+		return;
+	}
+
 	ShaderData sd;
 	uint4 in = input[i];
 	float3 out;

@@ -98,9 +98,6 @@ private:
 	BakeData *bake_data;
 };
 
-
-//void do_bake(BL::Object b_object, const string& pass_type, BakePixel pixel_array[], int num_pixels, int depth, float pixels[]);
-
 CCL_NAMESPACE_END
 
 #endif /* __BAKE_H__ */
