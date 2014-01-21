@@ -319,13 +319,16 @@ static ShaderEvalType get_shader_type(const string& pass_type)
 	else if (strcmp(shader_type, "SHADOW")==0)
 		return SHADER_EVAL_SHADOW;
 
-	/*
 	else if (strcmp(shader_type, "DIFFUSE")==0)
+		return SHADER_EVAL_DIFFUSE;
 	else if (strcmp(shader_type, "COLOR")==0)
+		return SHADER_EVAL_COLOR;
 	else if (strcmp(shader_type, "REFRACTION")==0)
+		return SHADER_EVAL_REFRACTION;
 	else if (strcmp(shader_type, "SPECULAR")==0)
+		return SHADER_EVAL_SPECULAR;
 	else if (strcmp(shader_type, "REFLECTION")==0)
-		*/
+		return SHADER_EVAL_REFLECTION;
 	else
 		return SHADER_EVAL_BAKE;
 }
