@@ -42,9 +42,9 @@ BakeManager::BakeManager()
 	need_update = true;
 }
 
-BakeData *BakeManager::init(const int object, const int num_pixels)
+BakeData *BakeManager::init(const int object, const int tri_offset, const int num_pixels)
 {
-	bake_data = new BakeData(object, num_pixels);
+	bake_data = new BakeData(object, tri_offset, num_pixels);
 	return bake_data;
 }
 

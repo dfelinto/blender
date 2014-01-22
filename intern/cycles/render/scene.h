@@ -205,7 +205,7 @@ public:
 	enum MotionType { MOTION_NONE = 0, MOTION_PASS, MOTION_BLUR };
 	MotionType need_motion(bool advanced_shading = true);
 
-	BakeData *bake_init(const int object, const int num_pixels);
+	BakeData *bake_init(const int object, const int tri_offset, const int num_pixels);
 	bool bake(ShaderEvalType shader_type, BakeData *bake_data, float result[]);
 
 	bool need_update();

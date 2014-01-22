@@ -16,6 +16,8 @@
 
 CCL_NAMESPACE_BEGIN
 
+#include "kernel_primitive.h"
+
 ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input, ccl_global float4 *output, ShaderEvalType type, int i)
 {
 	ShaderData sd;
@@ -27,15 +29,15 @@ ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input,
 	float u = __uint_as_float(in.z);
 	float v = __uint_as_float(in.w);
 
-	/* TODO: I need to offset the prim for the object/mesh
-	   if I have more than one object in the scene */
-	float3 P = triangle_point_MT(kg, prim, u, v);
-
 	if (prim == -1) {
 		/* write output */
 		output[i] = make_float4(0.0f);
 		return;
 	}
+
+	int shader;
+	float3 P = triangle_point_MT(kg, prim, u, v);
+	float3 Ng = triangle_normal_MT(kg, prim, &shader);
 
 	/* dummy initilizations copied from SHADER_EVAL_DISPLACE */
 	float3 I = make_float3(0.f);
@@ -44,15 +46,70 @@ ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input,
 	int bounce = 0;
 	int segment = ~0;
 
+	/* TODO, disable the closures we won't need */
+	shader_setup_from_sample(kg, &sd, P, Ng, I, shader, object, prim, u, v, t, time, bounce, segment);
+
 	switch (type) {
 		/* data passes */
 		case SHADER_EVAL_NORMAL:
+		{
+			/* TODO: code the normal in whatever space we want */
+			out = sd.N;
+			break;
+		}
 		case SHADER_EVAL_UV:
+		{
+			/* XXX not working ... no idea why */
+			shader_eval_surface(kg, &sd, 0.f, 0, SHADER_CONTEXT_MAIN);
+			out = primitive_uv(kg, &sd);
+			break;
+		}
 		case SHADER_EVAL_DIFFUSE_COLOR:
+		{
+			shader_eval_surface(kg, &sd, 0.f, 0, SHADER_CONTEXT_MAIN);
+			out = shader_bsdf_diffuse(kg, &sd);
+			break;
+		}
 		case SHADER_EVAL_GLOSSY_COLOR:
+		{
+			shader_eval_surface(kg, &sd, 0.f, 0, SHADER_CONTEXT_MAIN);
+			out = shader_bsdf_glossy(kg, &sd);
+			break;
+		}
 		case SHADER_EVAL_TRANSMISSION_COLOR:
+		{
+			shader_eval_surface(kg, &sd, 0.f, 0, SHADER_CONTEXT_MAIN);
+			out = shader_bsdf_transmission(kg, &sd);
+			break;
+		}
 		case SHADER_EVAL_SUBSURFACE_COLOR:
+		{
+			shader_eval_surface(kg, &sd, 0.f, 0, SHADER_CONTEXT_MAIN);
+			out = shader_bsdf_subsurface(kg, &sd);
+			break;
+		}
 		case SHADER_EVAL_EMISSION:
+		{
+			shader_eval_surface(kg, &sd, 0.f, 0, SHADER_CONTEXT_EMISSION);
+
+#ifdef __MULTI_CLOSURE__
+			float3 eval = make_float3(0.0f, 0.0f, 0.0f);
+
+			for(int i = 0; i< sd.num_closure; i++) {
+				const ShaderClosure *sc = &sd.closure[i];
+				if(sc->type == CLOSURE_EMISSION_ID)
+					eval += sc->weight;
+			}
+
+			out = eval;
+#else
+			if(sd.closure.type == CLOSURE_EMISSION_ID)
+				out = sd.closure.weight;
+			else
+				out = make_float3(0.0f, 0.0f, 0.0f);
+#endif
+			break;
+		}
 
 		/* light passes */
 		case SHADER_EVAL_AO:

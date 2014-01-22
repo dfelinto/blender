@@ -26,8 +26,9 @@ CCL_NAMESPACE_BEGIN
 
 class BakeData {
 public:
-	BakeData(const int object, const int num_pixels):
+	BakeData(const int object, const int tri_offset, const int num_pixels):
 	m_object(object),
+	m_tri_offset(tri_offset),
 	m_num_pixels(num_pixels)
 	{
 		m_primitive.resize(num_pixels);
@@ -44,7 +45,7 @@ public:
 
 	void set(int i, int prim, float u, float v)
 	{
-		m_primitive[i] = prim;
+		m_primitive[i] = (prim == -1 ? -1 : m_tri_offset + prim);
 		m_u[i] = u;
 		m_v[i] = v;
 	}
@@ -70,6 +71,7 @@ public:
 
 private:
 	int m_object;
+	int m_tri_offset;
 	int m_num_pixels;
 	vector<int>m_primitive;
 	vector<float>m_u;
@@ -84,7 +86,7 @@ public:
 	BakeManager();
 	~BakeManager();
 
-	BakeData *init(const int object, const int num_pixels);
+	BakeData *init(const int object, const int tri_offset, const int num_pixels);
 
 	bool bake(Device *device, DeviceScene *dscene, Scene *scene, ShaderEvalType shader_type, BakeData *bake_data, float result[]);
 

@@ -23,6 +23,7 @@
 #include "integrator.h"
 #include "film.h"
 #include "light.h"
+#include "mesh.h"
 #include "object.h"
 #include "scene.h"
 #include "session.h"
@@ -578,10 +579,12 @@ void BlenderSession::bake(BL::Object b_object, const string& pass_type, BL::Bake
 
 	/* find object index. todo: is arbitrary - copied from mesh_displace.cpp */
 	size_t object_index = ~0;
+	int tri_offset = 0;
 
 	for(size_t i = 0; i < scene->objects.size(); i++) {
 		if(strcmp(scene->objects[i]->name.c_str(), b_object.name().c_str()) == 0) {
 			object_index = i;
+			tri_offset = scene->objects[i]->mesh->tri_offset;
 			break;
 		}
 	}
@@ -612,7 +615,7 @@ void BlenderSession::bake(BL::Object b_object, const string& pass_type, BL::Bake
 	/* when used, non-instanced convention: object = ~object */
 	int object = ~object_index;
 
-	BakeData *bake_data = scene->bake_init(object, num_pixels);
+	BakeData *bake_data = scene->bake_init(object, tri_offset, num_pixels);
 
 	populate_bake_data(bake_data, pixel_array, num_pixels);
 

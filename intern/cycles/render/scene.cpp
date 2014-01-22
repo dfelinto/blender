@@ -222,9 +222,9 @@ void Scene::device_update(Device *device_, Progress& progress)
 	device->const_copy_to("__data", &dscene.data, sizeof(dscene.data));
 }
 
-BakeData *Scene::bake_init(const int object, const int num_pixels)
+BakeData *Scene::bake_init(const int object, const int tri_offset, const int num_pixels)
 {
-	return bake_manager->init(object, num_pixels);
+	return bake_manager->init(object, tri_offset, num_pixels);
 }
 
 bool Scene::bake(ShaderEvalType shader_type, BakeData *bake_data, float result[])
