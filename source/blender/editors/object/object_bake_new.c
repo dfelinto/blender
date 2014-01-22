@@ -85,6 +85,7 @@
 #include "WM_types.h"
 
 #include "ED_object.h"
+#include "ED_screen.h"
 
 #include "RE_bake.h"
 
@@ -348,6 +349,7 @@ void OBJECT_OT_bake(wmOperatorType *ot)
 	ot->exec = bake_exec;
 	ot->invoke = bake_invoke;
 	ot->modal = bake_modal;
+	ot->poll = ED_operator_object_active_editable_mesh;
 
 	ot->prop = RNA_def_enum(ot->srna, "type", render_pass_type_items, SCE_PASS_COMBINED, "Type",
 	                        "Type of pass to bake, some of them may not be supported by the current render engine");
