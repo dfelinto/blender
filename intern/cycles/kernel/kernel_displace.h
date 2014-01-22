@@ -59,8 +59,6 @@ ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input,
 		}
 		case SHADER_EVAL_UV:
 		{
-			/* XXX not working ... no idea why */
-			shader_eval_surface(kg, &sd, 0.f, 0, SHADER_CONTEXT_MAIN);
 			out = primitive_uv(kg, &sd);
 			break;
 		}

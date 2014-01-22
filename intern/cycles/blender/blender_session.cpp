@@ -576,6 +576,13 @@ void BlenderSession::bake(BL::Object b_object, const string& pass_type, BL::Bake
 		}
 	}
 
+	if (shader_type == SHADER_EVAL_UV) {
+		/* force UV to be available */
+		vector<Pass> passes;
+		Pass::add(PASS_UV, passes);
+		scene->film->tag_passes_update(scene, passes);
+	}
+
 	/* create device and update scene */
 	scene->film->tag_update(scene);
 	scene->integrator->tag_update(scene);
