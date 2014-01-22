@@ -76,7 +76,10 @@ ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input,
 
 	if (prim == -1) {
 		/* write output */
-		output[i] = make_float4(0.0f);
+		if (type == SHADER_EVAL_NORMAL)
+			output[i] = make_float4(0.5f, 0.5f, 1.f, 0.0f);
+		else
+			output[i] = make_float4(0.0f);
 		return;
 	}
 
