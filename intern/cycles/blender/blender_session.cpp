@@ -549,19 +549,6 @@ void BlenderSession::render()
 	sync = NULL;
 }
 
-void _bake_bary_uv(BL::BakePixel pixel_array, int num_pixels, int depth, float result[])
-{
-	BL::BakePixel bp = pixel_array;
-
-	for (int i=0; i < num_pixels; i++) {
-		int offset = i * depth;
-		result[offset] = bp.u();
-		result[offset + 1] = bp.v();
-
-		bp = bp.next();
-	}
-}
-
 static void populate_bake_data(BakeData *data, BL::BakePixel pixel_array, const int num_pixels)
 {
 	BL::BakePixel bp = pixel_array;
@@ -622,9 +609,6 @@ void BlenderSession::bake(BL::Object b_object, const string& pass_type, BL::Bake
 	scene->bake(shader_type, bake_data, result);
 
 	return;
-
-	/* DEBUG call, just to show that we can read, write, and write to an image successfully */
-	_bake_bary_uv(pixel_array, num_pixels, depth, result);
 }
 
 void BlenderSession::do_write_update_render_result(BL::RenderResult b_rr, BL::RenderLayer b_rlay, RenderTile& rtile, bool do_update_only)
