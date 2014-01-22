@@ -18,6 +18,51 @@ CCL_NAMESPACE_BEGIN
 
 #include "kernel_primitive.h"
 
+ccl_device void compute_light_pass(KernelGlobals *kg, ShaderData *sd, PathRadiance *L)
+{
+	RNG rng;
+	PathState hit_state;
+	Ray hit_ray;
+
+	/* initialize */
+	float3 throughput = make_float3(1.0f, 1.0f, 1.0f);
+
+	path_radiance_init(L, kernel_data.film.use_light_pass);
+
+	/* TODO: copy bounce and other settings from scene */
+	path_state_init(kg, &hit_state, &rng, 0);
+
+	hit_state.flag |= PATH_RAY_BSSRDF_ANCESTOR;
+	hit_state.rng_offset += PRNG_BOUNCE_NUM;
+
+	/* PROBLEM:
+	 1) Do I need to call shader_eval_surface()?
+	 2) kernel_path_integrate_lighting() is returning pure black for all the PathRadiance data
+	 */
+
+	shader_eval_surface(kg, sd, 0.f, 0, SHADER_CONTEXT_MAIN);
+	kernel_path_integrate_lighting(kg, &rng, sd, &throughput, &hit_state, L, &hit_ray);
+}
+
+ccl_device bool is_light_pass(ShaderEvalType type)
+{
+	switch (type) {
+		case SHADER_EVAL_COMBINED:
+		case SHADER_EVAL_SHADOW:
+		case SHADER_EVAL_DIFFUSE_DIRECT:
+		case SHADER_EVAL_GLOSSY_DIRECT:
+		case SHADER_EVAL_TRANSMISSION_DIRECT:
+		case SHADER_EVAL_SUBSURFACE_DIRECT:
+		case SHADER_EVAL_DIFFUSE_INDIRECT:
+		case SHADER_EVAL_GLOSSY_INDIRECT:
+		case SHADER_EVAL_TRANSMISSION_INDIRECT:
+		case SHADER_EVAL_SUBSURFACE_INDIRECT:
+			return true;
+		default:
+			return false;
+	}
+}
+
 ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input, ccl_global float4 *output, ShaderEvalType type, int i)
 {
 	ShaderData sd;
@@ -46,8 +91,15 @@ ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input,
 	int bounce = 0;
 	int segment = ~0;
 
+	/* light passes */
+	PathRadiance L;
+
 	/* TODO, disable the closures we won't need */
 	shader_setup_from_sample(kg, &sd, P, Ng, I, shader, object, prim, u, v, t, time, bounce, segment);
+
+	if (is_light_pass(type)){
+		compute_light_pass(kg, &sd, &L);
+	}
 
 	switch (type) {
 		/* data passes */
@@ -111,16 +163,60 @@ ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input,
 
 		/* light passes */
 		case SHADER_EVAL_AO:
+		{
+			/* TODO */
+			break;
+		}
 		case SHADER_EVAL_COMBINED:
+		{
+			out = path_radiance_sum(kg, &L);
+			break;
+		}
 		case SHADER_EVAL_SHADOW:
+		{
+			out = make_float3(L.shadow.x, L.shadow.y, L.shadow.z);
+			break;
+		}
 		case SHADER_EVAL_DIFFUSE_DIRECT:
+		{
+			out = L.direct_diffuse;
+			break;
+		}
 		case SHADER_EVAL_GLOSSY_DIRECT:
+		{
+			out = L.direct_glossy;
+			break;
+		}
 		case SHADER_EVAL_TRANSMISSION_DIRECT:
+		{
+			out = L.direct_transmission;
+			break;
+		}
 		case SHADER_EVAL_SUBSURFACE_DIRECT:
+		{
+			out = L.direct_subsurface;
+			break;
+		}
 		case SHADER_EVAL_DIFFUSE_INDIRECT:
+		{
+			out = L.indirect_diffuse;
+			break;
+		}
 		case SHADER_EVAL_GLOSSY_INDIRECT:
+		{
+			out = L.indirect_glossy;
+			break;
+		}
 		case SHADER_EVAL_TRANSMISSION_INDIRECT:
+		{
+			out = L.indirect_transmission;
+			break;
+		}
 		case SHADER_EVAL_SUBSURFACE_INDIRECT:
+		{
+			out = L.indirect_subsurface;
+			break;
+		}
 
 		/* extra */
 		case SHADER_EVAL_ENVIRONMENT:
