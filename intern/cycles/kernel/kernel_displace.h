@@ -16,13 +16,14 @@
 
 CCL_NAMESPACE_BEGIN
 
+#include "util_hash.h"
 #include "kernel_primitive.h"
 
-ccl_device void compute_light_pass(KernelGlobals *kg, ShaderData *sd, PathRadiance *L)
+ccl_device void compute_light_pass(KernelGlobals *kg, ShaderData *sd, PathRadiance *L, uint xy_hash)
 {
-	RNG rng;
-	PathState hit_state;
-	Ray hit_ray;
+	RNG rng = lcg_init(xy_hash);
+	PathState state;
+	Ray ray;
 
 	/* initialize */
 	float3 throughput = make_float3(1.0f, 1.0f, 1.0f);
@@ -30,18 +31,14 @@ ccl_device void compute_light_pass(KernelGlobals *kg, ShaderData *sd, PathRadian
 	path_radiance_init(L, kernel_data.film.use_light_pass);
 
 	/* TODO: copy bounce and other settings from scene */
-	path_state_init(kg, &hit_state, &rng, 0);
+	path_state_init(kg, &state, &rng, 0);
 
-	hit_state.flag |= PATH_RAY_BSSRDF_ANCESTOR;
-	hit_state.rng_offset += PRNG_BOUNCE_NUM;
+	//state.rng_offset += PRNG_BOUNCE_NUM;
 
-	/* PROBLEM:
-	 1) Do I need to call shader_eval_surface()?
-	 2) kernel_path_integrate_lighting() is returning pure black for all the PathRadiance data
-	 */
+	float rbsdf = path_state_rng_1D(kg, &rng, &state, PRNG_BSDF);
 
-	shader_eval_surface(kg, sd, 0.f, 0, SHADER_CONTEXT_MAIN);
-	kernel_path_integrate_lighting(kg, &rng, sd, &throughput, &hit_state, L, &hit_ray);
+	shader_eval_surface(kg, sd, rbsdf, 0, SHADER_CONTEXT_MAIN);
+	kernel_path_integrate_lighting(kg, &rng, sd, &throughput, &state, L, &ray);
 }
 
 ccl_device bool is_light_pass(ShaderEvalType type)
@@ -101,7 +98,8 @@ ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input,
 	shader_setup_from_sample(kg, &sd, P, Ng, I, shader, object, prim, u, v, t, time, bounce, segment);
 
 	if (is_light_pass(type)){
-		compute_light_pass(kg, &sd, &L);
+		uint xy_hash = ::ccl::ccl::hash_int_2d(in.x, in.y);
+		compute_light_pass(kg, &sd, &L, xy_hash);
 	}
 
 	switch (type) {
