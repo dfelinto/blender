@@ -28,6 +28,7 @@ ccl_device void compute_light_pass(KernelGlobals *kg, ShaderData *sd, PathRadian
 	/* initialize */
 	float3 throughput = make_float3(1.0f, 1.0f, 1.0f);
 
+	assert(kernel_data.film.use_light_pass);
 	path_radiance_init(L, true);
 
 	/* TODO: copy bounce and other settings from scene */
