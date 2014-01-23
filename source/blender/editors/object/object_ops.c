@@ -312,10 +312,7 @@ void ED_keymap_object(wmKeyConfig *keyconf)
 	ED_keymap_proportional_cycle(keyconf, keymap);
 	ED_keymap_proportional_obmode(keyconf, keymap);
 
-#if 0
-	/* leave P for motion trail pinning */
 	WM_keymap_add_item(keymap, "VIEW3D_OT_game_start", PKEY, KM_PRESS, 0, 0);
-#endif
 
 	kmi = WM_keymap_add_item(keymap, "OBJECT_OT_select_all", AKEY, KM_PRESS, KM_CTRL, 0);
 	RNA_enum_set(kmi->ptr, "action", SEL_TOGGLE);
