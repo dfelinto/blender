@@ -364,7 +364,7 @@ ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input,
 	}
 
 	/* write output */
-	output[i] = make_float4(out.x, out.y, out.z, 0.0f);
+	output[i] = make_float4(out.x, out.y, out.z, 1.0f);
 	return;
 }
 
