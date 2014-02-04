@@ -19,7 +19,7 @@
 
 CCL_NAMESPACE_BEGIN
 
-ccl_device void compute_light_pass(KernelGlobals *kg, ShaderData *sd, PathRadiance *L, RNG rng)
+ccl_device void compute_light_pass(KernelGlobals *kg, ShaderData *sd, PathRadiance *L, RNG rng, bool is_ao)
 {
 	int samples = kernel_data.integrator.samples;
 
@@ -45,8 +45,13 @@ ccl_device void compute_light_pass(KernelGlobals *kg, ShaderData *sd, PathRadian
 		float rbsdf = path_state_rng_1D(kg, &rng, &state, PRNG_BSDF);
 		shader_eval_surface(kg, sd, rbsdf, state.flag, SHADER_CONTEXT_MAIN);
 
+		/* sample ambient occlusion */
+		if (is_ao) {
+			kernel_path_ao(kg, sd, &L_sample, &state, &rng, throughput);
+		}
+
 		/* sample light and BSDF */
-		if (kernel_path_integrate_lighting(kg, &rng, sd, &throughput, &state, &L_sample, &ray)) {
+		else if (kernel_path_integrate_lighting(kg, &rng, sd, &throughput, &state, &L_sample, &ray)) {
 #ifdef __LAMP_MIS__
 			state.ray_t = 0.0f;
 #endif
@@ -67,6 +72,7 @@ ccl_device void compute_light_pass(KernelGlobals *kg, ShaderData *sd, PathRadian
 ccl_device bool is_light_pass(ShaderEvalType type)
 {
 	switch (type) {
+		case SHADER_EVAL_AO:
 		case SHADER_EVAL_COMBINED:
 		case SHADER_EVAL_SHADOW:
 		case SHADER_EVAL_DIFFUSE_DIRECT:
@@ -122,7 +128,7 @@ ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input,
 
 	if (is_light_pass(type)){
 		RNG rng = hash_int(i);
-		compute_light_pass(kg, &sd, &L, rng);
+		compute_light_pass(kg, &sd, &L, rng, (type == SHADER_EVAL_AO));
 	}
 
 	switch (type) {
@@ -172,7 +178,7 @@ ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input,
 		/* light passes */
 		case SHADER_EVAL_AO:
 		{
-			/* TODO */
+			out = L.ao;
 			break;
 		}
 		case SHADER_EVAL_COMBINED:

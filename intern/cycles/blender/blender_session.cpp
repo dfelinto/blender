@@ -563,6 +563,7 @@ static void populate_bake_data(BakeData *data, BL::BakePixel pixel_array, const 
 static bool is_light_pass(ShaderEvalType type)
 {
 	switch (type) {
+		case SHADER_EVAL_AO:
 		case SHADER_EVAL_COMBINED:
 		case SHADER_EVAL_SHADOW:
 		case SHADER_EVAL_DIFFUSE_DIRECT:
