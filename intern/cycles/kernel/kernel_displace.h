@@ -21,6 +21,7 @@ CCL_NAMESPACE_BEGIN
 
 ccl_device void compute_light_pass(KernelGlobals *kg, ShaderData *sd, PathRadiance *L, uint xy_hash)
 {
+	int samples = kernel_data.integrator.samples;
 	RNG rng = lcg_init(xy_hash);
 	PathState state;
 	Ray ray;
@@ -31,15 +32,37 @@ ccl_device void compute_light_pass(KernelGlobals *kg, ShaderData *sd, PathRadian
 	assert(kernel_data.film.use_light_pass);
 	path_radiance_init(L, true);
 
-	/* TODO: copy bounce and other settings from scene */
 	path_state_init(kg, &state, &rng, 0);
-
-	//state.rng_offset += PRNG_BOUNCE_NUM;
+	state.num_samples = samples;
 
 	float rbsdf = path_state_rng_1D(kg, &rng, &state, PRNG_BSDF);
 
 	shader_eval_surface(kg, sd, rbsdf, 0, SHADER_CONTEXT_MAIN);
-	kernel_path_integrate_lighting(kg, &rng, sd, &throughput, &state, L, &ray);
+	for(int i = 0; i < kernel_data.integrator.max_bounce; i++) {
+		if (kernel_path_integrate_lighting(kg, &rng, sd, &throughput, &state, L, &ray) == false)
+			break;
+	}
+
+
+	/** XXX
+		hack to see something (only runs for odd samples values, so you can turn it on/off
+	    here it starts showing something if I multiply the value by 11
+	    (i.e., set the scene render samples to 11)
+	 */
+	if (samples % 2){
+		float3 factor = make_float3(samples);
+
+		L->direct_diffuse *= factor;
+		L->direct_emission *= factor;
+		L->direct_glossy *= factor;
+		L->direct_subsurface *= factor;
+		L->direct_transmission *= factor;
+
+		L->indirect_diffuse *= factor;
+		L->indirect_glossy *= factor;
+		L->indirect_subsurface *= factor;
+		L->indirect_transmission *= factor;
+	}
 }
 
 ccl_device bool is_light_pass(ShaderEvalType type)

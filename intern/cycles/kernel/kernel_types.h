@@ -340,7 +340,8 @@ typedef enum PassType {
 	PASS_MIST = 2097152,
 	PASS_SUBSURFACE_DIRECT = 4194304,
 	PASS_SUBSURFACE_INDIRECT = 8388608,
-	PASS_SUBSURFACE_COLOR = 16777216
+	PASS_SUBSURFACE_COLOR = 16777216,
+	PASS_LIGHT = 33554432, /* no real pass, used to force use_light_pass */
 } PassType;
 
 #define PASS_ALL (~0)
@@ -929,6 +930,9 @@ typedef struct KernelIntegrator {
 	int volume_max_steps;
 	float volume_step_size;
 	int volume_samples;
+
+	/* baking */
+	int samples, pad6, pad7, pad8;
 } KernelIntegrator;
 
 typedef struct KernelBVH {

@@ -733,7 +733,8 @@ void Session::update_scene()
 		cam->tag_update();
 	}
 
-	/* number of samples is needed by multi jittered sampling pattern */
+	/* number of samples is needed by multi jittered
+	   sampling pattern and by baking */
 	Integrator *integrator = scene->integrator;
 
 	if(integrator->sampling_pattern == SAMPLING_PATTERN_CMJ) {
@@ -743,6 +744,12 @@ void Session::update_scene()
 			integrator->aa_samples = aa_samples;
 			integrator->tag_update(scene);
 		}
+	}
+
+	int samples = tile_manager.num_samples;
+	if(samples != integrator->samples) {
+		integrator->samples = samples;
+		integrator->tag_update(scene);
 	}
 
 	/* update scene */

@@ -393,6 +393,10 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
 				kfilm->pass_shadow = kfilm->pass_stride;
 				kfilm->use_light_pass = 1;
 				break;
+
+			case PASS_LIGHT:
+				kfilm->use_light_pass = 1;
+				break;
 			case PASS_NONE:
 				break;
 		}

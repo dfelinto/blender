@@ -600,7 +600,10 @@ void BlenderSession::bake(BL::Object b_object, const string& pass_type, BL::Bake
 		Pass::add(PASS_UV, scene->film->passes);
 	}
 
-	scene->film->use_light_visibility = is_light_pass(shader_type);
+	if (is_light_pass(shader_type)) {
+		/* force use_light_pass to be true */
+		Pass::add(PASS_LIGHT, scene->film->passes);
+	}
 
 	/* create device and update scene */
 	scene->film->tag_update(scene);
@@ -614,15 +617,9 @@ void BlenderSession::bake(BL::Object b_object, const string& pass_type, BL::Bake
 	SessionParams session_params = BlenderSync::get_session_params(b_engine, b_userpref, b_scene, background);
 	BufferParams buffer_params = BlenderSync::get_buffer_params(b_render, b_scene, b_v3d, b_rv3d, scene->camera, width, height);
 
-	/* set number of samples per layer */
-	int samples = sync->get_layer_samples();
-	bool bound_samples = sync->get_layer_bound_samples();
-
-	if(samples != 0 && (!bound_samples || (samples < session_params.samples)))
-		session->reset(buffer_params, samples);
-	else
-		session->reset(buffer_params, session_params.samples);
-
+	/* set number of samples */
+	session->tile_manager.set_samples(session_params.samples);
+	session->reset(buffer_params, session_params.samples);
 	session->update_scene();
 
 	/* when used, non-instanced convention: object = ~object */
