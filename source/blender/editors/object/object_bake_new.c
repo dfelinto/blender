@@ -122,7 +122,7 @@ static int bake_break(void *UNUSED(rjv))
 	return 0;
 }
 
-static bool write_external_bake_pixels(const char *filepath, float *buffer, const int width, const int height, const int depth)
+static bool write_external_bake_pixels(const char *filepath, float *buffer, const int width, const int height, const int depth, bool is_linear)
 {
 	ImBuf *ibuf = NULL;
 	short ok = FALSE;
@@ -147,8 +147,8 @@ static bool write_external_bake_pixels(const char *filepath, float *buffer, cons
 	if (!ibuf) return NULL;
 
 	/* populates the ImBuf */
-	/* TODO it now does linear => sRGB, but should not do that for non-color data passes */
-	IMB_buffer_byte_from_float((unsigned char *) ibuf->rect, buffer, ibuf->channels, ibuf->dither, IB_PROFILE_SRGB, IB_PROFILE_LINEAR_RGB,
+	IMB_buffer_byte_from_float((unsigned char *) ibuf->rect, buffer, ibuf->channels, ibuf->dither,
+	                           (is_linear?IB_PROFILE_LINEAR_RGB:IB_PROFILE_SRGB), IB_PROFILE_LINEAR_RGB,
 	                           FALSE, ibuf->x, ibuf->y, ibuf->x, ibuf->x);
 
 	/* setup the Imbuf*/
@@ -166,6 +166,18 @@ static bool write_external_bake_pixels(const char *filepath, float *buffer, cons
 
 	if (ok) return true;
 	return false;
+}
+
+static bool is_data_pass(ScenePassType pass_type)
+{
+	return ELEM7(pass_type,
+				 SCE_PASS_Z,
+				 SCE_PASS_NORMAL,
+				 SCE_PASS_VECTOR,
+				 SCE_PASS_INDEXOB,
+				 SCE_PASS_UV,
+				 SCE_PASS_RAYHITS,
+				 SCE_PASS_INDEXMA);
 }
 
 static int bake_exec(bContext *C, wmOperator *op)
@@ -186,6 +198,7 @@ static int bake_exec(bContext *C, wmOperator *op)
 	const int num_pixels = width * height;
 	const int depth = RE_pass_depth(pass_type);
 	const bool is_external = RNA_boolean_get(op->ptr, "is_save_external");
+	const bool is_linear = is_data_pass(pass_type);
 	char filepath[FILE_MAX];
 	RNA_string_get(op->ptr, "filepath", filepath);
 
@@ -250,7 +263,7 @@ static int bake_exec(bContext *C, wmOperator *op)
 		/* save the result */
 		if (is_external) {
 			/* save it externally */
-			ok = write_external_bake_pixels(filepath, result, width, height, depth);
+			ok = write_external_bake_pixels(filepath, result, width, height, depth, is_linear);
 			if (!ok) {
 				char *error = NULL;
 				error = BLI_sprintfN("Problem saving baked map in \"%s\".", filepath);
