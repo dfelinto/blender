@@ -14,54 +14,53 @@
  * limitations under the License
  */
 
-CCL_NAMESPACE_BEGIN
-
 #include "util_hash.h"
 #include "kernel_primitive.h"
 
-ccl_device void compute_light_pass(KernelGlobals *kg, ShaderData *sd, PathRadiance *L, uint xy_hash)
+CCL_NAMESPACE_BEGIN
+
+ccl_device void compute_light_pass(KernelGlobals *kg, ShaderData *sd, PathRadiance *L, RNG rng)
 {
 	int samples = kernel_data.integrator.samples;
-	RNG rng = lcg_init(xy_hash);
-	PathState state;
-	Ray ray;
 
-	/* initialize */
-	float3 throughput = make_float3(1.0f, 1.0f, 1.0f);
-
+	/* initialize master radiance accumulator */
 	assert(kernel_data.film.use_light_pass);
-	path_radiance_init(L, true);
+	path_radiance_init(L, kernel_data.film.use_light_pass);
 
-	path_state_init(kg, &state, &rng, 0);
-	state.num_samples = samples;
+	/* take multiple samples */
+	for(int sample = 0; sample < samples; sample++) {
+		PathRadiance L_sample;
+		PathState state;
+		Ray ray;
+		float3 throughput = make_float3(1.0f, 1.0f, 1.0f);
 
-	float rbsdf = path_state_rng_1D(kg, &rng, &state, PRNG_BSDF);
+		/* init radiance */
+		path_radiance_init(&L_sample, kernel_data.film.use_light_pass);
 
-	shader_eval_surface(kg, sd, rbsdf, 0, SHADER_CONTEXT_MAIN);
-	for(int i = 0; i < kernel_data.integrator.max_bounce; i++) {
-		if (kernel_path_integrate_lighting(kg, &rng, sd, &throughput, &state, L, &ray) == false)
-			break;
-	}
+		/* init path state */
+		path_state_init(kg, &state, &rng, sample);
+		state.num_samples = samples;
 
+		/* evaluate surface shader */
+		float rbsdf = path_state_rng_1D(kg, &rng, &state, PRNG_BSDF);
+		shader_eval_surface(kg, sd, rbsdf, state.flag, SHADER_CONTEXT_MAIN);
 
-	/** XXX
-		hack to see something (only runs for odd samples values, so you can turn it on/off
-	    here it starts showing something if I multiply the value by 11
-	    (i.e., set the scene render samples to 11)
-	 */
-	if (samples % 2){
-		float3 factor = make_float3(samples);
+		/* sample light and BSDF */
+		if(kernel_path_integrate_lighting(kg, &rng, sd, &throughput, &state, &L_sample, &ray)) {
+#ifdef __LAMP_MIS__
+			state.ray_t = 0.0f;
+#endif
 
-		L->direct_diffuse *= factor;
-		L->direct_emission *= factor;
-		L->direct_glossy *= factor;
-		L->direct_subsurface *= factor;
-		L->direct_transmission *= factor;
+			/* compute indirect light */
+			kernel_path_indirect(kg, &rng, ray, throughput, state.num_samples, state, &L_sample);
 
-		L->indirect_diffuse *= factor;
-		L->indirect_glossy *= factor;
-		L->indirect_subsurface *= factor;
-		L->indirect_transmission *= factor;
+			/* sum and reset indirect light pass variables for the next samples */
+			path_radiance_sum_indirect(&L_sample);
+			path_radiance_reset_indirect(&L_sample);
+		}
+
+		/* accumulate into master L */
+		path_radiance_accum_sample(L, &L_sample, samples);
 	}
 }
 
@@ -109,8 +108,8 @@ ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input,
 	float3 Ng = triangle_normal_MT(kg, prim, &shader);
 
 	/* dummy initilizations copied from SHADER_EVAL_DISPLACE */
-	float3 I = make_float3(0.f);
-	float t = 0.f;
+	float3 I = Ng;
+	float t = 0.0f;
 	float time = TIME_INVALID;
 	int bounce = 0;
 	int segment = ~0;
@@ -122,8 +121,8 @@ ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input,
 	shader_setup_from_sample(kg, &sd, P, Ng, I, shader, object, prim, u, v, t, time, bounce, segment);
 
 	if (is_light_pass(type)){
-		uint xy_hash = ::ccl::ccl::hash_int_2d(in.x, in.y);
-		compute_light_pass(kg, &sd, &L, xy_hash);
+		RNG rng = hash_int(i);
+		compute_light_pass(kg, &sd, &L, rng);
 	}
 
 	switch (type) {
@@ -166,23 +165,7 @@ ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input,
 		case SHADER_EVAL_EMISSION:
 		{
 			shader_eval_surface(kg, &sd, 0.f, 0, SHADER_CONTEXT_EMISSION);
-
-#ifdef __MULTI_CLOSURE__
-			float3 eval = make_float3(0.0f, 0.0f, 0.0f);
-
-			for(int i = 0; i< sd.num_closure; i++) {
-				const ShaderClosure *sc = &sd.closure[i];
-				if(sc->type == CLOSURE_EMISSION_ID)
-					eval += sc->weight;
-			}
-
-			out = eval;
-#else
-			if(sd.closure.type == CLOSURE_EMISSION_ID)
-				out = sd.closure.weight;
-			else
-				out = make_float3(0.0f, 0.0f, 0.0f);
-#endif
+			out = shader_emissive_eval(kg, &sd);
 			break;
 		}
 

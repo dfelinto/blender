@@ -147,11 +147,12 @@ static bool write_external_bake_pixels(const char *filepath, float *buffer, cons
 	if (!ibuf) return NULL;
 
 	/* populates the ImBuf */
-	IMB_buffer_byte_from_float((unsigned char *) ibuf->rect, buffer, ibuf->channels, ibuf->dither, IB_PROFILE_SRGB, IB_PROFILE_SRGB,
+	/* TODO it now does linear => sRGB, but should not do that for non-color data passes */
+	IMB_buffer_byte_from_float((unsigned char *) ibuf->rect, buffer, ibuf->channels, ibuf->dither, IB_PROFILE_SRGB, IB_PROFILE_LINEAR_RGB,
 	                           FALSE, ibuf->x, ibuf->y, ibuf->x, ibuf->x);
 
 	/* setup the Imbuf*/
-	ibuf->ftype = JPG;
+	ibuf->ftype = PNG;
 
 	if ((ok=IMB_saveiff(ibuf, filepath, IB_rect))) {
 #ifndef WIN32

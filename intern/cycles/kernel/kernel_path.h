@@ -212,7 +212,7 @@ ccl_device void kernel_branched_path_integrate_direct_lighting(KernelGlobals *kg
 	}
 }
 
-ccl_device void kernel_path_indirect(KernelGlobals *kg, RNG *rng, Ray ray, ccl_global float *buffer,
+ccl_device void kernel_path_indirect(KernelGlobals *kg, RNG *rng, Ray ray,
 	float3 throughput, int num_samples, PathState state, PathRadiance *L)
 {
 	/* path iteration */
@@ -805,7 +805,7 @@ ccl_device float4 kernel_path_integrate(KernelGlobals *kg, RNG *rng, int sample,
 						hit_state.ray_t = 0.0f;
 #endif
 
-						kernel_path_indirect(kg, rng, hit_ray, buffer, tp, state.num_samples, hit_state, &L);
+						kernel_path_indirect(kg, rng, hit_ray, tp, state.num_samples, hit_state, &L);
 
 						/* for render passes, sum and reset indirect light pass variables
 						 * for the next samples */
@@ -1024,7 +1024,7 @@ ccl_device_noinline void kernel_branched_path_integrate_lighting(KernelGlobals *
 			ps.ray_t = 0.0f;
 #endif
 
-			kernel_path_indirect(kg, rng, bsdf_ray, buffer, tp*num_samples_inv, num_samples, ps, L);
+			kernel_path_indirect(kg, rng, bsdf_ray, tp*num_samples_inv, num_samples, ps, L);
 
 			/* for render passes, sum and reset indirect light pass variables
 			 * for the next samples */
@@ -1112,7 +1112,7 @@ ccl_device float4 kernel_branched_path_integrate(KernelGlobals *kg, RNG *rng, in
 				if(result == VOLUME_PATH_SCATTERED) {
 					/* todo: use all-light sampling */
 					if(kernel_path_integrate_scatter_lighting(kg, rng, &volume_sd, &tp, &ps, &L, &pray, num_samples_inv)) {
-						kernel_path_indirect(kg, rng, pray, buffer, tp*num_samples_inv, num_samples, ps, &L);
+						kernel_path_indirect(kg, rng, pray, tp*num_samples_inv, num_samples, ps, &L);
 
 						/* for render passes, sum and reset indirect light pass variables
 						 * for the next samples */
