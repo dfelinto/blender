@@ -515,18 +515,8 @@ static bool is_light_pass(ShaderEvalType type)
 void BlenderSession::bake(BL::Object b_object, const string& pass_type, BL::BakePixel pixel_array, int num_pixels, int depth, float result[])
 {
 	ShaderEvalType shader_type = get_shader_type(pass_type);
-
-	/* find object index. todo: is arbitrary - copied from mesh_displace.cpp */
 	size_t object_index = ~0;
 	int tri_offset = 0;
-
-	for(size_t i = 0; i < scene->objects.size(); i++) {
-		if(strcmp(scene->objects[i]->name.c_str(), b_object.name().c_str()) == 0) {
-			object_index = i;
-			tri_offset = scene->objects[i]->mesh->tri_offset;
-			break;
-		}
-	}
 
 	if (shader_type == SHADER_EVAL_UV) {
 		/* force UV to be available */
@@ -554,6 +544,15 @@ void BlenderSession::bake(BL::Object b_object, const string& pass_type, BL::Bake
 	session->tile_manager.set_samples(session_params.samples);
 	session->reset(buffer_params, session_params.samples);
 	session->update_scene();
+
+	/* find object index. todo: is arbitrary - copied from mesh_displace.cpp */
+	for (size_t i = 0; i < scene->objects.size(); i++) {
+		if (strcmp(scene->objects[i]->name.c_str(), b_object.name().c_str()) == 0) {
+			object_index = i;
+			tri_offset = scene->objects[i]->mesh->tri_offset;
+			break;
+		}
+	}
 
 	/* when used, non-instanced convention: object = ~object */
 	int object = ~object_index;
