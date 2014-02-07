@@ -564,7 +564,14 @@ void BlenderSession::bake(BL::Object b_object, const string& pass_type, BL::Bake
 
 	scene->bake(shader_type, bake_data, result);
 
-	return;
+	/* free all memory used (host and device), so we wouldn't leave render
+	 * engine with extra memory allocated
+	 */
+
+	session->device_free();
+
+	delete sync;
+	sync = NULL;
 }
 
 void BlenderSession::do_write_update_render_result(BL::RenderResult b_rr, BL::RenderLayer b_rlay, RenderTile& rtile, bool do_update_only)
