@@ -423,8 +423,6 @@ bool RE_engine_bake(Render *re, Object *object, BakePixel pixel_array[], int num
 	RenderEngine *engine;
 	int persistent_data = re->r.mode & R_PERSISTENT_DATA;
 
-	G.is_rendering = TRUE;
-
 	/* set render info */
 	re->i.cfra = re->scene->r.cfra;
 	BLI_strncpy(re->i.scene_name, re->scene->id.name + 2, sizeof(re->i.scene_name));
