@@ -166,8 +166,10 @@ ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input,
 		}
 		case SHADER_EVAL_SUBSURFACE_COLOR:
 		{
+#ifdef __SUBSURFACE__
 			shader_eval_surface(kg, &sd, 0.f, 0, SHADER_CONTEXT_MAIN);
 			out = shader_bsdf_subsurface(kg, &sd);
+#endif
 			break;
 		}
 		case SHADER_EVAL_EMISSION:
