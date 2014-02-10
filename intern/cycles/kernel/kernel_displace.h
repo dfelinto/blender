@@ -107,7 +107,7 @@ ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input,
 		else if (type == SHADER_EVAL_AO)
 			output[i] = make_float4(1.0f, 1.0f, 1.0f, 1.0f);
 		else
-			output[i] = make_float4(0.0f);
+			output[i] = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
 		return;
 	}
 
@@ -138,7 +138,7 @@ ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input,
 		case SHADER_EVAL_NORMAL:
 		{
 			/* tangent space: normal = (2 * color) - 1 */
-			out = sd.N * 0.5f + make_float3(0.5f);
+			out = sd.N * 0.5f + make_float3(0.5f, 0.5f, 0.5f);
 			break;
 		}
 		case SHADER_EVAL_UV:
