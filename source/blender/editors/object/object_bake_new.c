@@ -122,7 +122,7 @@ static int bake_break(void *UNUSED(rjv))
 	return 0;
 }
 
-static bool write_external_bake_pixels(const char *filepath, float *buffer, const int width, const int height, const int depth, bool is_linear)
+static bool write_external_bake_pixels(const char *filepath, BakePixel pixel_array[], float *buffer, const int width, const int height, const int depth, bool is_linear, const int margin)
 {
 	ImBuf *ibuf = NULL;
 	short ok = FALSE;
@@ -153,6 +153,9 @@ static bool write_external_bake_pixels(const char *filepath, float *buffer, cons
 
 	/* setup the Imbuf*/
 	ibuf->ftype = PNG;
+
+	/* margins */
+	RE_bake_margin(pixel_array, ibuf, margin, width, height);
 
 	if ((ok=IMB_saveiff(ibuf, filepath, IB_rect))) {
 #ifndef WIN32
@@ -197,6 +200,7 @@ static int bake_exec(bContext *C, wmOperator *op)
 	const int height = RNA_int_get(op->ptr, "height");
 	const int num_pixels = width * height;
 	const int depth = RE_pass_depth(pass_type);
+	const int margin = RNA_int_get(op->ptr, "margin");
 	const bool is_external = RNA_boolean_get(op->ptr, "is_save_external");
 	const bool is_linear = is_data_pass(pass_type);
 	char filepath[FILE_MAX];
@@ -263,7 +267,7 @@ static int bake_exec(bContext *C, wmOperator *op)
 		/* save the result */
 		if (is_external) {
 			/* save it externally */
-			ok = write_external_bake_pixels(filepath, result, width, height, depth, is_linear);
+			ok = write_external_bake_pixels(filepath, pixel_array, result, width, height, depth, is_linear, margin);
 			if (!ok) {
 				char *error = NULL;
 				error = BLI_sprintfN("Problem saving baked map in \"%s\".", filepath);
@@ -371,4 +375,5 @@ void OBJECT_OT_bake(wmOperatorType *ot)
 	ot->prop = RNA_def_string_file_path(ot->srna, "filepath", "", FILE_MAX, "Path", "Image filepath to use when saving externally");
 	ot->prop = RNA_def_int(ot->srna, "width", 512, 1, INT_MAX, "Width", "Horizontal dimension of the baking map", 64, 4096);
 	ot->prop = RNA_def_int(ot->srna, "height", 512, 1, INT_MAX, "Height", "Vertical dimension of the baking map", 64, 4096);
+	ot->prop = RNA_def_int(ot->srna, "margin", 16, 0, INT_MAX, "Margin", "Extends the baked result as a post process filter", 0, 64);
 }

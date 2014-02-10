@@ -52,4 +52,6 @@ bool RE_internal_bake(struct Render *re, struct Object *object, struct BakePixel
 
 void RE_populate_bake_pixels(struct Object *object, struct BakePixel pixel_array[], const int width, const int height);
 
+void RE_bake_margin(struct BakePixel pixel_array[], struct ImBuf *ibuf, const int margin, const int width, const int height);
+
 #endif
