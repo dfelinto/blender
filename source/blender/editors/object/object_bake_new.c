@@ -256,12 +256,9 @@ static int bake_exec(bContext *C, wmOperator *op)
 
 
 	/* get the mesh as it arrives in the renderer */
-	//XXX Cycles needs that sometimes, will leave it always on for now
-	//bool need_undeformed = mesh->need_attribute(scene, ATTR_STD_GENERATED);
-	need_undeformed = 1;
 
 	//int apply_modifiers, int settings (1=preview, 2=render), int calc_tessface, int calc_undeformed
-	me = BKE_mesh_new_from_object(bmain, scene, object, 1, 2, 1, need_undeformed);
+	me = BKE_mesh_new_from_object(bmain, scene, object, 1, 2, 1, 0);
 	//TODO delete the mesh afterwards
 
 	/* populate the pixel array with the face data */
