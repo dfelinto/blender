@@ -185,7 +185,7 @@ ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input,
 		}
 		case SHADER_EVAL_COMBINED:
 		{
-			out = path_radiance_sum(kg, &L);
+			out = path_radiance_clamp_and_sum(kg, &L);
 			break;
 		}
 		case SHADER_EVAL_SHADOW:
