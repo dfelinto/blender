@@ -124,7 +124,7 @@ void RE_bake_margin(BakePixel pixel_array[], ImBuf *ibuf, const int margin, cons
 	MEM_freeN(mask_buffer);
 }
 
-void RE_populate_bake_pixels(Object *object, BakePixel pixel_array[], const int width, const int height)
+void RE_populate_bake_pixels(Mesh *me, BakePixel pixel_array[], const int width, const int height)
 {
 	BakeData bd;
 	const int num_pixels = width * height;
@@ -132,8 +132,6 @@ void RE_populate_bake_pixels(Object *object, BakePixel pixel_array[], const int 
 	int p_id;
 	MTFace *mtface;
 	MFace *mface;
-
-	Mesh *me = (Mesh *)object->data;
 
 	/* we can't bake in edit mode */
 	if (me->edit_btmesh)

@@ -185,10 +185,12 @@ static bool is_data_pass(ScenePassType pass_type)
 
 static int bake_exec(bContext *C, wmOperator *op)
 {
+	Main *bmain = CTX_data_main(C);
 	int op_result = OPERATOR_CANCELLED;
 	bool ok = false;
 	Scene *scene = CTX_data_scene(C);
 	Object *object = CTX_data_active_object(C);
+	Mesh *me = NULL;
 
 	int pass_type = RNA_enum_get(op->ptr, "type");
 
@@ -204,9 +206,10 @@ static int bake_exec(bContext *C, wmOperator *op)
 	const bool is_external = RNA_boolean_get(op->ptr, "is_save_external");
 	const bool is_linear = is_data_pass(pass_type);
 	char filepath[FILE_MAX];
+	int need_undeformed = 0;
 	RNA_string_get(op->ptr, "filepath", filepath);
 
-	RE_engine_bake_set_engine_parameters(re, CTX_data_main(C), scene);
+	RE_engine_bake_set_engine_parameters(re, bmain, scene);
 
 	G.is_break = FALSE;
 
@@ -251,8 +254,18 @@ static int bake_exec(bContext *C, wmOperator *op)
 	 		elif ... (vertex color?)
 	 */
 
+
+	/* get the mesh as it arrives in the renderer */
+	//XXX Cycles needs that sometimes, will leave it always on for now
+	//bool need_undeformed = mesh->need_attribute(scene, ATTR_STD_GENERATED);
+	need_undeformed = 1;
+
+	//int apply_modifiers, int settings (1=preview, 2=render), int calc_tessface, int calc_undeformed
+	me = BKE_mesh_new_from_object(bmain, scene, object, 1, 2, 1, need_undeformed);
+	//TODO delete the mesh afterwards
+
 	/* populate the pixel array with the face data */
-	RE_populate_bake_pixels(object, pixel_array, width, height);
+	RE_populate_bake_pixels(me, pixel_array, width, height);
 
 	if (RE_engine_has_bake(re))
 		ok = RE_engine_bake(re, object, pixel_array, num_pixels, depth, pass_type, result);
