@@ -44,6 +44,7 @@
 #include "DNA_meshdata_types.h"
 
 #include "BKE_customdata.h"
+#include "BKE_cdderivedmesh.h"
 #include "BKE_mesh.h"
 #include "BKE_global.h"
 #include "BKE_image.h"
@@ -51,6 +52,9 @@
 #include "BKE_node.h"
 #include "BKE_scene.h"
 #include "BKE_library.h"
+
+#include "BKE_bvhutils.h"
+#include "BKE_DerivedMesh.h"
 
 #include "IMB_imbuf_types.h"
 #include "IMB_imbuf.h"
@@ -124,6 +128,231 @@ void RE_bake_margin(BakePixel pixel_array[], ImBuf *ibuf, const int margin, cons
 	MEM_freeN(mask_buffer);
 }
 
+typedef struct TriTessFace
+{
+	MVert *v1;
+	MVert *v2;
+	MVert *v3;
+} TriTessFace;
+
+/*
+ * This function returns the coordinate and normal of a barycentric u,v for a face defined by the primitive_id index.
+ */
+
+static void get_point_from_barycentric(TriTessFace *triangles, int primitive_id, float u, float v, float cage_extrusion, float r_co[3], float r_dir[3])
+{
+	float data[3][3];
+	float coord[3];
+	float dir[3];
+	float cage[3];
+
+	TriTessFace *mverts = &triangles[primitive_id];
+
+	copy_v3_v3(data[0], mverts->v1->co);
+	copy_v3_v3(data[1], mverts->v2->co);
+	copy_v3_v3(data[2], mverts->v3->co);
+
+	interp_barycentric_tri_v3(data, u, v, coord);
+
+	normal_short_to_float_v3(data[0], mverts->v1->no);
+	normal_short_to_float_v3(data[1], mverts->v2->no);
+	normal_short_to_float_v3(data[2], mverts->v3->no);
+
+	interp_barycentric_tri_v3(data, u, v, dir);
+	normalize_v3_v3(cage, dir);
+	mul_v3_fl(cage, cage_extrusion);
+
+	add_v3_v3(coord, cage);
+
+	normalize_v3_v3(dir, dir);
+	mul_v3_fl(dir, -1.0f);
+
+	copy_v3_v3(r_co, coord);
+	copy_v3_v3(r_dir, dir);
+}
+
+/*
+ * Transcribed from Christer Ericson's Real-Time Collision Detection
+ *
+ * Compute barycentric coordinates (u, v, w) for
+ * point p with respect to triangle (a, b, c)
+ *
+ */
+static void Barycentric(float p[3], float a[3], float b[3], float c[3], float *u, float *v, float *w)
+{
+	float v0[3], v1[3], v2[3];
+
+	sub_v3_v3v3(v0, b, a);
+	sub_v3_v3v3(v1, c, a);
+	sub_v3_v3v3(v2, p, a);
+
+    float d00 = dot_v3v3(v0, v0);
+    float d01 = dot_v3v3(v0, v1);
+    float d11 = dot_v3v3(v1, v1);
+    float d20 = dot_v3v3(v2, v0);
+    float d21 = dot_v3v3(v2, v1);
+    float denom = d00 * d11 - d01 * d01;
+
+    *v = (d11 * d20 - d01 * d21) / denom;
+    *w = (d00 * d21 - d01 * d20) / denom;
+
+    *u = 1.0f - *v - *w;
+}
+
+/*
+ * This function returns the barycentric u,v of a face for a coordinate. The face is defined by its index.
+ */
+static void get_barycentric_from_point(TriTessFace *triangles, int index, float co[3], int *primitive_id, float *u, float *v)
+{
+	float w;
+	TriTessFace *tri = &triangles[index];
+	Barycentric(co, tri->v1->co, tri->v2->co, tri->v3->co, u, v, &w);
+	*primitive_id = index;
+}
+
+/*
+ * This function populates pixel_array and returns TRUE if things are correct
+ */
+static bool cast_ray_highpoly(BVHTreeFromMesh *treeData, TriTessFace *triangles, BakePixel *pixel_array, float co[3], float dir[3])
+{
+	int primitive_id;
+	float u;
+	float v;
+
+	BVHTreeRayHit hit;
+	hit.index = -1;
+	hit.dist = 10000.0f; /* TODO: we should use FLT_MAX here, but sweepsphere code isn't prepared for that */
+
+	/* cast ray */
+	BLI_bvhtree_ray_cast(treeData->tree, co, dir, 0.0f, &hit, treeData->raycast_callback, treeData);
+
+	if (hit.index != -1) {
+		/* cull backface */
+		const float dot = dot_v3v3(dir, hit.no);
+		if (dot >= 0.0f) {
+			pixel_array->primitive_id = -1;
+			return false;
+		}
+
+		get_barycentric_from_point(triangles, hit.index, hit.co, &primitive_id, &u, &v);
+
+		pixel_array->primitive_id = primitive_id;
+		pixel_array->u = u;
+		pixel_array->v = v;
+		return true;
+	}
+
+	pixel_array->primitive_id = -1;
+	return false;
+}
+
+/*
+ * This function populates an array of verts for the triangles of a mesh
+ */
+static void calculateTriTessFace(TriTessFace *triangles, Mesh *me, int (*lookup_id)[2])
+{
+	int i;
+	int p_id;
+	MFace *mface;
+	MVert *mvert;
+
+	mface = CustomData_get_layer(&me->fdata, CD_MFACE);
+	mvert = CustomData_get_layer(&me->vdata, CD_MVERT);
+
+	p_id = -1;
+	for (i = 0; i < me->totface; i++) {
+		MFace *mf = &mface[i];
+
+		++p_id;
+
+		if (lookup_id)
+			lookup_id[i][0] = p_id;
+
+		triangles[p_id].v1 = &mvert[mf->v1];
+		triangles[p_id].v2 = &mvert[mf->v2];
+		triangles[p_id].v3 = &mvert[mf->v3];
+
+		/* 4 vertices in the face */
+		if (mf->v4 != 0) {
+			++p_id;
+
+			if (lookup_id)
+				lookup_id[i][1] = p_id;
+
+			triangles[p_id].v1 = &mvert[mf->v1];
+			triangles[p_id].v2 = &mvert[mf->v3];
+			triangles[p_id].v3 = &mvert[mf->v4];
+		}
+		else {
+			if (lookup_id)
+				lookup_id[i][1] = -1;
+		}
+	}
+
+	BLI_assert(p_id < me->totface * 2);
+}
+
+void RE_populate_bake_pixels_from_object(Mesh *me_low, Mesh *me_high, BakePixel pixel_array[], const int num_pixels, const float cage_extrusion)
+{
+	int i;
+	int primitive_id;
+	float u, v;
+
+	/* Note: all coordinates are in local space */
+	TriTessFace *tris_low;
+	TriTessFace *tris_high;
+
+	/* assume all tessfaces can be quads */
+	tris_low = MEM_callocN(sizeof(TriTessFace) * (me_low->totface * 2), "MVerts Lowpoly Mesh");
+	tris_high = MEM_callocN(sizeof(TriTessFace) * (me_high->totface * 2), "MVerts Highpoly Mesh");
+
+	calculateTriTessFace(tris_low, me_low, NULL);
+	calculateTriTessFace(tris_high, me_high, NULL);
+
+	DerivedMesh *dm_high = CDDM_from_mesh(me_high);
+
+	BVHTreeFromMesh treeData = {NULL,};
+
+	/* Create a bvh-tree of the given target */
+	bvhtree_from_mesh_faces(&treeData, dm_high, 0.0, 2, 6);
+	if (treeData.tree == NULL) {
+		printf("Baking: Out of memory\n");
+
+		dm_high->release(dm_high);
+
+		MEM_freeN(tris_low);
+		MEM_freeN(tris_high);
+		return;
+	}
+
+	for (i=0; i < num_pixels; i++) {
+		float co[3];
+		float dir[3];
+
+		primitive_id = pixel_array[i].primitive_id;
+
+		if (primitive_id == -1)
+			continue;
+
+		u = pixel_array[i].u;
+		v = pixel_array[i].v;
+
+		/* calculate from low poly mesh cage */
+		get_point_from_barycentric(tris_low, primitive_id, u, v, cage_extrusion, co, dir);
+
+		/* cast ray */
+		cast_ray_highpoly(&treeData, tris_high, &pixel_array[i], co, dir);
+	}
+
+	/* garbage collection */
+	free_bvhtree_from_mesh(&treeData);
+
+	dm_high->release(dm_high);
+
+	MEM_freeN(tris_low);
+	MEM_freeN(tris_high);
+}
+
 void RE_populate_bake_pixels(Mesh *me, BakePixel pixel_array[], const int width, const int height)
 {
 	BakeData bd;
@@ -146,10 +375,6 @@ void RE_populate_bake_pixels(Mesh *me, BakePixel pixel_array[], const int width,
 	}
 
 	zbuf_alloc_span(&bd.zspan, width, height, R.clipcrop);
-
-	/* remove tessface to ensure we don't hold references to invalid faces */
-	BKE_mesh_tessface_clear(me);
-	BKE_mesh_tessface_calc(me);
 
 	mtface = CustomData_get_layer(&me->fdata, CD_MTFACE);
 	mface = CustomData_get_layer(&me->fdata, CD_MFACE);
@@ -187,21 +412,6 @@ void RE_populate_bake_pixels(Mesh *me, BakePixel pixel_array[], const int width,
 }
 
 
-#if 0
-static bool bake_uv(BakePixel UNUSED(pixel_array[]), int num_pixels, int depth, float result[])
-{
-	/* temporarily fill the result array with a normalized data */
-	int i, j;
-	for (i=0; i< num_pixels; i++) {
-		int offset = i * depth;
-
-		for (j=0; j< depth; j++) {
-			result[offset + j] = (float) i / num_pixels;
-		}
-	}
-	return true;
-}
-#else
 /* not the real UV, but the internal per-face UV instead
    I'm using it to test if everything is correct */
 static bool bake_uv(BakePixel pixel_array[], int num_pixels, int depth, float result[])
@@ -216,7 +426,6 @@ static bool bake_uv(BakePixel pixel_array[], int num_pixels, int depth, float re
 
 	return true;
 }
-#endif
 
 bool RE_internal_bake(Render *UNUSED(re), Object *UNUSED(object), BakePixel pixel_array[], int num_pixels, int depth, ScenePassType pass_type, float result[])
 {

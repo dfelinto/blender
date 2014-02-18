@@ -57,6 +57,7 @@
 #include "BKE_context.h"
 #include "BKE_global.h"
 #include "BKE_image.h"
+#include "BKE_library.h"
 #include "BKE_main.h"
 #include "BKE_multires.h"
 #include "BKE_report.h"
@@ -189,9 +190,19 @@ static int bake_exec(bContext *C, wmOperator *op)
 	int op_result = OPERATOR_CANCELLED;
 	bool ok = false;
 	Scene *scene = CTX_data_scene(C);
-	Object *object = CTX_data_active_object(C);
-	Mesh *me = NULL;
 
+	/* selected to active (high to low) */
+	Object *ob_render = NULL;
+	Object *ob_low = CTX_data_active_object(C);
+	Object *ob_high = NULL;
+
+	bool restrict_render_low = (ob_low->restrictflag & OB_RESTRICT_RENDER);
+	bool restrict_render_high = false;
+
+	Mesh *me_low = NULL;
+	Mesh *me_high = NULL;
+
+	ModifierData *tri_mod;
 	int pass_type = RNA_enum_get(op->ptr, "type");
 
 	Render *re = RE_NewRender(scene->id.name);
@@ -205,9 +216,28 @@ static int bake_exec(bContext *C, wmOperator *op)
 	const int margin = RNA_int_get(op->ptr, "margin");
 	const bool is_external = RNA_boolean_get(op->ptr, "is_save_external");
 	const bool is_linear = is_data_pass(pass_type);
+	const bool use_selected_to_active = RNA_boolean_get(op->ptr, "use_selected_to_active");
+	const float cage_extrusion = RNA_float_get(op->ptr, "cage_extrusion");
+
 	char filepath[FILE_MAX];
-	int need_undeformed = 0;
 	RNA_string_get(op->ptr, "filepath", filepath);
+
+	if (use_selected_to_active) {
+		CTX_DATA_BEGIN(C, Object *, ob_iter, selected_editable_objects)
+		{
+			if (ob_iter == ob_low)
+				continue;
+
+			ob_high = ob_iter;
+			break;
+		}
+		CTX_DATA_END;
+
+		if (ob_high == NULL) {
+			BKE_report(op->reports, RPT_ERROR, "No valid selected object");
+			return OPERATOR_CANCELLED;
+		}
+	}
 
 	RE_engine_bake_set_engine_parameters(re, bmain, scene);
 
@@ -256,18 +286,40 @@ static int bake_exec(bContext *C, wmOperator *op)
 
 
 	/* get the mesh as it arrives in the renderer */
-
-	//int apply_modifiers, int settings (1=preview, 2=render), int calc_tessface, int calc_undeformed
-	me = BKE_mesh_new_from_object(bmain, scene, object, 1, 2, 1, 0);
-	//TODO delete the mesh afterwards
+	me_low = BKE_mesh_new_from_object(bmain, scene, ob_low, 1, 2, 1, 0);
 
 	/* populate the pixel array with the face data */
-	RE_populate_bake_pixels(me, pixel_array, width, height);
+	RE_populate_bake_pixels(me_low, pixel_array, width, height);
+
+	/* high-poly to low-poly baking */
+	if (ob_high && (ob_high->type == OB_MESH))
+	{
+		/* triangulating it makes life so much easier ... */
+		tri_mod = ED_object_modifier_add(op->reports, bmain, scene, ob_high, "TmpTriangulate", eModifierType_Triangulate);
+
+		me_high = BKE_mesh_new_from_object(bmain, scene, ob_high, 1, 2, 1, 0);
+
+		RE_populate_bake_pixels_from_object(me_low, me_high, pixel_array, num_pixels, cage_extrusion);
+
+		/* make sure low poly doesn't render, and high poly renders */
+		restrict_render_high = (ob_high->restrictflag & OB_RESTRICT_RENDER);
+		ob_high->restrictflag &= ~OB_RESTRICT_RENDER;
+
+		ob_low->restrictflag |= OB_RESTRICT_RENDER;
+		ob_render = ob_high;
+
+		BKE_libblock_free(bmain, me_high);
+	}
+	else {
+		/* make sure low poly renders */
+		ob_low->restrictflag &= ~OB_RESTRICT_RENDER;
+		ob_render = ob_low;
+	}
 
 	if (RE_engine_has_bake(re))
-		ok = RE_engine_bake(re, object, pixel_array, num_pixels, depth, pass_type, result);
+		ok = RE_engine_bake(re, ob_render, pixel_array, num_pixels, depth, pass_type, result);
 	else
-		ok = RE_internal_bake(re, object, pixel_array, num_pixels, depth, pass_type, result);
+		ok = RE_internal_bake(re, ob_render, pixel_array, num_pixels, depth, pass_type, result);
 
 	if (!ok) {
 		BKE_report(op->reports, RPT_ERROR, "Problem baking object map");
@@ -302,11 +354,27 @@ static int bake_exec(bContext *C, wmOperator *op)
 		}
 	}
 
-	MEM_freeN(pixel_array);
-	MEM_freeN(result);
+	/* restore the restrict render settings */
+	if (!restrict_render_low)
+		ob_low->restrictflag &= ~OB_RESTRICT_RENDER;
+	else
+		ob_low->restrictflag |= OB_RESTRICT_RENDER;
+
+	if (ob_high) {
+		if (restrict_render_high)
+			ob_high->restrictflag |= OB_RESTRICT_RENDER;
+
+		if (tri_mod)
+			ED_object_modifier_remove(op->reports, bmain, ob_high, tri_mod);
+	}
 
 	RE_SetReports(re, NULL);
 
+	/* garbage collection */
+	MEM_freeN(pixel_array);
+	MEM_freeN(result);
+
+	BKE_libblock_free(bmain, me_low);
 
 #if 0
 	Main *bmain = CTX_data_main(C);
@@ -386,4 +454,6 @@ void OBJECT_OT_bake(wmOperatorType *ot)
 	ot->prop = RNA_def_int(ot->srna, "width", 512, 1, INT_MAX, "Width", "Horizontal dimension of the baking map", 64, 4096);
 	ot->prop = RNA_def_int(ot->srna, "height", 512, 1, INT_MAX, "Height", "Vertical dimension of the baking map", 64, 4096);
 	ot->prop = RNA_def_int(ot->srna, "margin", 16, 0, INT_MAX, "Margin", "Extends the baked result as a post process filter", 0, 64);
+	ot->prop = RNA_def_boolean(ot->srna, "use_selected_to_active", false, "Selected to Active", "Bake shading on the surface of selected objects to the active object");
+	ot->prop = RNA_def_float(ot->srna, "cage_extrusion", 0.0, 0.0, 1.0, "Cage Extrusion", "", 0.0, 1.0);
 }
