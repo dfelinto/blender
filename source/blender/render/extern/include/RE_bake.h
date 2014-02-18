@@ -33,6 +33,7 @@
 #define __RE_BAKE_H__
 
 struct Render;
+struct Mesh;
 
 typedef struct BakePixel {
 	int primitive_id;

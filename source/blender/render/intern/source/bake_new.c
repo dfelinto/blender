@@ -181,22 +181,23 @@ static void get_point_from_barycentric(TriTessFace *triangles, int primitive_id,
 static void Barycentric(float p[3], float a[3], float b[3], float c[3], float *u, float *v, float *w)
 {
 	float v0[3], v1[3], v2[3];
+	float d00, d01, d11, d20, d21, denom;
 
 	sub_v3_v3v3(v0, b, a);
 	sub_v3_v3v3(v1, c, a);
 	sub_v3_v3v3(v2, p, a);
 
-    float d00 = dot_v3v3(v0, v0);
-    float d01 = dot_v3v3(v0, v1);
-    float d11 = dot_v3v3(v1, v1);
-    float d20 = dot_v3v3(v2, v0);
-    float d21 = dot_v3v3(v2, v1);
-    float denom = d00 * d11 - d01 * d01;
+	d00 = dot_v3v3(v0, v0);
+	d01 = dot_v3v3(v0, v1);
+	d11 = dot_v3v3(v1, v1);
+	d20 = dot_v3v3(v2, v0);
+	d21 = dot_v3v3(v2, v1);
+	denom = d00 * d11 - d01 * d01;
 
-    *v = (d11 * d20 - d01 * d21) / denom;
-    *w = (d00 * d21 - d01 * d20) / denom;
+	*v = (d11 * d20 - d01 * d21) / denom;
+	*w = (d00 * d21 - d01 * d20) / denom;
 
-    *u = 1.0f - *v - *w;
+	*u = 1.0f - *v - *w;
 }
 
 /*
@@ -298,6 +299,9 @@ void RE_populate_bake_pixels_from_object(Mesh *me_low, Mesh *me_high, BakePixel 
 	int primitive_id;
 	float u, v;
 
+	DerivedMesh *dm_high;
+	BVHTreeFromMesh treeData = {NULL,};
+
 	/* Note: all coordinates are in local space */
 	TriTessFace *tris_low;
 	TriTessFace *tris_high;
@@ -309,9 +313,7 @@ void RE_populate_bake_pixels_from_object(Mesh *me_low, Mesh *me_high, BakePixel 
 	calculateTriTessFace(tris_low, me_low, NULL);
 	calculateTriTessFace(tris_high, me_high, NULL);
 
-	DerivedMesh *dm_high = CDDM_from_mesh(me_high);
-
-	BVHTreeFromMesh treeData = {NULL,};
+	dm_high = CDDM_from_mesh(me_high);
 
 	/* Create a bvh-tree of the given target */
 	bvhtree_from_mesh_faces(&treeData, dm_high, 0.0, 2, 6);

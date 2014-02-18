@@ -155,6 +155,10 @@ void Pass::add(PassType type, vector<Pass>& passes)
 			pass.components = 4;
 			pass.exposure = false;
 			break;
+		case PASS_LIGHT:
+			/* it should never happen */
+			assert(0);
+			break;
 	}
 
 	passes.push_back(pass);
