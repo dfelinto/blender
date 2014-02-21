@@ -542,7 +542,7 @@ static EnumPropertyItem normal_swizzle_items[] = {
 static EnumPropertyItem normal_space_items[] = {
 	{R_BAKE_SPACE_WORLD, "WORLD", 0, "World", "Bake the normals in world space"},
 	{R_BAKE_SPACE_OBJECT, "OBJECT", 0, "Object", "Bake the normals in object space"},
-	//{R_BAKE_SPACE_TANGENT, "TANGENT", 0, "Tangent", "Bake the normals in tangent space"},
+	{R_BAKE_SPACE_TANGENT, "TANGENT", 0, "Tangent", "Bake the normals in tangent space"},
 	{0, NULL, 0, NULL, NULL}
 };
 

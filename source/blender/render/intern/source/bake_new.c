@@ -86,6 +86,23 @@ typedef struct BakeData {
 	ZSpan zspan;
 } BakeData;
 
+/*
+ * struct wrapping up tangent space data
+ */
+typedef struct TSpace {
+	float tangent[3];
+	float sign;
+} TSpace;
+
+typedef struct TriTessFace {
+	MVert *v1;
+	MVert *v2;
+	MVert *v3;
+	bool smoothnormal;
+	TSpace *tspace[3];
+	float normal[3]; /* for flat faces */
+} TriTessFace;
+
 /* ************************* bake ************************ */
 static void store_bake_pixel(void *handle, int x, int y, float u, float v)
 {
@@ -128,13 +145,6 @@ void RE_bake_margin(BakePixel pixel_array[], ImBuf *ibuf, const int margin, cons
 	MEM_freeN(mask_buffer);
 }
 
-typedef struct TriTessFace
-{
-	MVert *v1;
-	MVert *v2;
-	MVert *v3;
-} TriTessFace;
-
 /*
  * This function returns the coordinate and normal of a barycentric u,v for a face defined by the primitive_id index.
  */
@@ -146,17 +156,17 @@ static void get_point_from_barycentric(TriTessFace *triangles, int primitive_id,
 	float dir[3];
 	float cage[3];
 
-	TriTessFace *mverts = &triangles[primitive_id];
+	TriTessFace *triangle = &triangles[primitive_id];
 
-	copy_v3_v3(data[0], mverts->v1->co);
-	copy_v3_v3(data[1], mverts->v2->co);
-	copy_v3_v3(data[2], mverts->v3->co);
+	copy_v3_v3(data[0], triangle->v1->co);
+	copy_v3_v3(data[1], triangle->v2->co);
+	copy_v3_v3(data[2], triangle->v3->co);
 
 	interp_barycentric_tri_v3(data, u, v, coord);
 
-	normal_short_to_float_v3(data[0], mverts->v1->no);
-	normal_short_to_float_v3(data[1], mverts->v2->no);
-	normal_short_to_float_v3(data[2], mverts->v3->no);
+	normal_short_to_float_v3(data[0], triangle->v1->no);
+	normal_short_to_float_v3(data[1], triangle->v2->no);
+	normal_short_to_float_v3(data[2], triangle->v3->no);
 
 	interp_barycentric_tri_v3(data, u, v, dir);
 	normalize_v3_v3(cage, dir);
@@ -178,8 +188,9 @@ static void get_point_from_barycentric(TriTessFace *triangles, int primitive_id,
  * point p with respect to triangle (a, b, c)
  *
  */
-static void Barycentric(float p[3], float a[3], float b[3], float c[3], float *u, float *v, float *w)
+static void Barycentric(float p[3], float a[3], float b[3], float c[3], float *u, float *v)
 {
+	float w;
 	float v0[3], v1[3], v2[3];
 	float d00, d01, d11, d20, d21, denom;
 
@@ -195,9 +206,9 @@ static void Barycentric(float p[3], float a[3], float b[3], float c[3], float *u
 	denom = d00 * d11 - d01 * d01;
 
 	*v = (d11 * d20 - d01 * d21) / denom;
-	*w = (d00 * d21 - d01 * d20) / denom;
+	w = (d00 * d21 - d01 * d20) / denom;
 
-	*u = 1.0f - *v - *w;
+	*u = 1.0f - *v - w;
 }
 
 /*
@@ -205,9 +216,8 @@ static void Barycentric(float p[3], float a[3], float b[3], float c[3], float *u
  */
 static void get_barycentric_from_point(TriTessFace *triangles, int index, float co[3], int *primitive_id, float *u, float *v)
 {
-	float w;
-	TriTessFace *tri = &triangles[index];
-	Barycentric(co, tri->v1->co, tri->v2->co, tri->v3->co, u, v, &w);
+	TriTessFace *triangle = &triangles[index];
+	Barycentric(co, triangle->v1->co, triangle->v2->co, triangle->v3->co, u, v);
 	*primitive_id = index;
 }
 
@@ -249,20 +259,39 @@ static bool cast_ray_highpoly(BVHTreeFromMesh *treeData, TriTessFace *triangles,
 
 /*
  * This function populates an array of verts for the triangles of a mesh
+ * Tangent and Normals are also stored
  */
-static void calculateTriTessFace(TriTessFace *triangles, Mesh *me, int (*lookup_id)[2])
+static void calculateTriTessFace(TriTessFace *triangles, Mesh *me, int (*lookup_id)[2], bool tangent, DerivedMesh *dm)
 {
 	int i;
 	int p_id;
 	MFace *mface;
 	MVert *mvert;
+	TSpace *tspace;
+	float *precomputed_normals;
+	bool calculate_normal;
 
 	mface = CustomData_get_layer(&me->fdata, CD_MFACE);
 	mvert = CustomData_get_layer(&me->vdata, CD_MVERT);
 
+	if (tangent) {
+		DM_ensure_normals(dm);
+		DM_add_tangent_layer(dm);
+
+		precomputed_normals = dm->getTessFaceDataArray(dm, CD_NORMAL);
+		calculate_normal = precomputed_normals ? false : true;
+
+		//mface = dm->getTessFaceArray(dm);
+		//mvert = dm->getVertArray(dm);
+
+		tspace = dm->getTessFaceDataArray(dm, CD_TANGENT);
+		BLI_assert(tspace);
+	}
+
 	p_id = -1;
 	for (i = 0; i < me->totface; i++) {
 		MFace *mf = &mface[i];
+		TSpace *ts = &tspace[i * 4];
 
 		++p_id;
 
@@ -272,6 +301,32 @@ static void calculateTriTessFace(TriTessFace *triangles, Mesh *me, int (*lookup_
 		triangles[p_id].v1 = &mvert[mf->v1];
 		triangles[p_id].v2 = &mvert[mf->v2];
 		triangles[p_id].v3 = &mvert[mf->v3];
+		triangles[p_id].smoothnormal = (mf->flag & ME_SMOOTH);
+
+		if (tangent) {
+			triangles[p_id].tspace[0] = &ts[0];
+			triangles[p_id].tspace[1] = &ts[1];
+			triangles[p_id].tspace[2] = &ts[2];
+
+			if (calculate_normal) {
+				if (mf->v4 != 0) {
+					normal_quad_v3(triangles[p_id].normal,
+					               ((MVert *) &mvert[mf->v1])->co,
+					               ((MVert *) &mvert[mf->v2])->co,
+					               ((MVert *) &mvert[mf->v3])->co,
+					               ((MVert *) &mvert[mf->v4])->co);
+				}
+				else {
+					normal_tri_v3(triangles[p_id].normal,
+					              triangles[p_id].v1->co,
+					              triangles[p_id].v2->co,
+					              triangles[p_id].v3->co);
+				}
+			}
+			else {
+				copy_v3_v3(triangles[p_id].normal, &precomputed_normals[3 * i]);
+			}
+		}
 
 		/* 4 vertices in the face */
 		if (mf->v4 != 0) {
@@ -283,6 +338,16 @@ static void calculateTriTessFace(TriTessFace *triangles, Mesh *me, int (*lookup_
 			triangles[p_id].v1 = &mvert[mf->v1];
 			triangles[p_id].v2 = &mvert[mf->v3];
 			triangles[p_id].v3 = &mvert[mf->v4];
+			triangles[p_id].smoothnormal = (mf->flag & ME_SMOOTH);
+
+			if (tangent) {
+				triangles[p_id].tspace[0] = &ts[0];
+				triangles[p_id].tspace[1] = &ts[2];
+				triangles[p_id].tspace[2] = &ts[3];
+
+				/* same normal as the other "triangle" */
+				copy_v3_v3(triangles[p_id].normal, triangles[p_id - 1].normal);
+			}
 		}
 		else {
 			if (lookup_id)
@@ -312,8 +377,8 @@ void RE_populate_bake_pixels_from_object(Mesh *me_low, Mesh *me_high,
 	tris_low = MEM_callocN(sizeof(TriTessFace) * (me_low->totface * 2), "MVerts Lowpoly Mesh");
 	tris_high = MEM_callocN(sizeof(TriTessFace) * (me_high->totface * 2), "MVerts Highpoly Mesh");
 
-	calculateTriTessFace(tris_low, me_low, NULL);
-	calculateTriTessFace(tris_high, me_high, NULL);
+	calculateTriTessFace(tris_low, me_low, NULL, false, NULL);
+	calculateTriTessFace(tris_high, me_high, NULL, false, NULL);
 
 	dm_high = CDDM_from_mesh(me_high);
 
@@ -455,49 +520,28 @@ static void normal_compress(float *out, float in[3], int normal_swizzle[3]) {
 }
 
 /*
- * struct wrapping up tangent space data
- */
-typedef struct {
-	float tangent[3];
-	float sign;
-} TSpace;
-
-/*
  * This function converts an object space normal map to a tangent space normal map for a given low poly mesh
- * XXX the mesh has to be triangulated at the moment.
  */
 void RE_normal_world_to_tangent(BakePixel pixel_array[], int num_pixels, int depth, float result[], Mesh *me, int normal_swizzle[3])
 {
 	int i;
-	TSpace *tspace;
-	MFace *mface;
-	MVert *mvert;
-	float *fnormals;
 
-	//TODO for now assuming it's triangulated - it will crash otherwise
+	TriTessFace *triangles;
 
 	DerivedMesh *dm = CDDM_from_mesh(me);
-	DM_ensure_normals(dm);
-	DM_add_tangent_layer(dm);
 
-	tspace = dm->getTessFaceDataArray(dm, CD_TANGENT);
+	triangles = MEM_callocN(sizeof(TriTessFace) * (me->totface * 2), "MVerts Mesh");
+	calculateTriTessFace(triangles, me, NULL, true, dm);
 
-	mface = dm->getTessFaceArray(dm);
-	mvert = dm->getVertArray(dm);
-
-	fnormals = dm->getTessFaceDataArray(dm, CD_NORMAL);
-
-	BLI_assert(tspace);
-	BLI_assert(fnormals);
 	BLI_assert(num_pixels >= 3);
 
 	for (i=0; i < num_pixels; i++) {
-		MFace *mf;
+		TriTessFace *triangle;
 		float tangents[3][3];
 		float normals[3][3];
 		float signs[3];
 		int j;
-		int verts[3];
+		MVert *verts[3];
 
 		float tangent[3];
 		float normal[3];
@@ -511,31 +555,32 @@ void RE_normal_world_to_tangent(BakePixel pixel_array[], int num_pixels, int dep
 		int offset;
 		float nor[3]; /* texture normal */
 
-		int primitive_id = pixel_array[i].primitive_id;
-
 		bool smoothnormal;
 
-		if (primitive_id == -1)
+		int primitive_id = pixel_array[i].primitive_id;
+
+		offset = i * depth;
+
+		if (primitive_id == -1) {
+			copy_v3_fl3(&result[offset], 0.5f, 0.5f, 1.0f);
 			continue;
+		}
 
-		mf = &mface[primitive_id];
-		smoothnormal = (mf->flag & ME_SMOOTH);
+		triangle = &triangles[primitive_id];
+		smoothnormal = triangle->smoothnormal;
 
-		verts[0] = mf->v1;
-		verts[1] = mf->v2;
-		verts[2] = mf->v3;
+		verts[0] = triangle->v1;
+		verts[1] = triangle->v2;
+		verts[2] = triangle->v3;
 
 		for (j = 0; j < 3; j++) {
 			TSpace *ts;
-			int vert = verts[j];
-
 			if (smoothnormal)
-				normal_short_to_float_v3(normals[j], mvert[vert].no);
+				normal_short_to_float_v3(normals[j], verts[j]->no);
 			else
-				//XXX using co to calculate normal manually
-				copy_v3_v3(normals[j], mvert[vert].co);
+				normal[j] = triangle->normal[j];
 
-			ts = &tspace[vert];
+			ts = triangle->tspace[j];
 			copy_v3_v3(tangents[j], ts->tangent);
 			signs[j] = ts->sign;
 		}
@@ -547,11 +592,6 @@ void RE_normal_world_to_tangent(BakePixel pixel_array[], int num_pixels, int dep
 		/* normal */
 		if (smoothnormal)
 			interp_barycentric_tri_v3(normals, u, v, normal);
-		else
-			//copy_v3_v3(normal, &fnormals[primitive_id]);
-			/* XXX not nice to calculate the normal every single time, but I had
-			   some troubles to access the face normal, so this will do for now */
-			normal_tri_v3(normal, normals[0], normals[1], normals[2]);
 
 		/* tangent */
 		interp_barycentric_tri_v3(tangents, u, v, tangent);
@@ -572,27 +612,19 @@ void RE_normal_world_to_tangent(BakePixel pixel_array[], int num_pixels, int dep
 		copy_v3_v3(tsm[2], normal);
 
 		/* texture values */
-		offset = i * depth;
 		normal_uncompress(nor, &result[offset]);
 
 		invert_m3_m3(itsm, tsm);
 		mul_m3_v3(itsm, nor);
 		normalize_v3(nor);
 
-		/* The invert of the red channel is to make
-		 * the normal map compliant with the outside world.
-		 * It needs to be done because in Blender
-		 * the normal used in the renderer points inward. It is generated
-		 * this way in calc_vertexnormals(). Should this ever change
-		 * this negate must be removed.
-		 */
-		nor[0] = -nor[0];
-
 		/* save back the values */
 		normal_compress(&result[offset], nor, normal_swizzle);
 	}
 
 	/* garbage collection */
+	MEM_freeN(triangles);
+
 	if (dm)
 		dm->release(dm);
 }
