@@ -156,8 +156,7 @@ void Pass::add(PassType type, vector<Pass>& passes)
 			pass.exposure = false;
 			break;
 		case PASS_LIGHT:
-			/* it should never happen */
-			assert(0);
+			/* ignores */
 			break;
 	}
 
