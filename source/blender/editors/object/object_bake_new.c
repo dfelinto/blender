@@ -208,7 +208,11 @@ static int bake_exec(bContext *C, wmOperator *op)
 	Render *re = RE_NewRender(scene->id.name);
 
 	float *result;
-	BakePixel *pixel_array;
+
+	BakePixel *pixel_array_low = NULL;
+	BakePixel *pixel_array_high = NULL;
+	BakePixel *pixel_array_render = NULL;
+
 	const int width = RNA_int_get(op->ptr, "width");
 	const int height = RNA_int_get(op->ptr, "height");
 	const int num_pixels = width * height;
@@ -218,6 +222,15 @@ static int bake_exec(bContext *C, wmOperator *op)
 	const bool is_linear = is_data_pass(pass_type);
 	const bool use_selected_to_active = RNA_boolean_get(op->ptr, "use_selected_to_active");
 	const float cage_extrusion = RNA_float_get(op->ptr, "cage_extrusion");
+	bool is_cage;
+	bool is_tangent;
+
+	int normal_space = RNA_enum_get(op->ptr, "normal_space");
+	int normal_swizzle[] = {
+		RNA_enum_get(op->ptr, "normal_r"),
+		RNA_enum_get(op->ptr, "normal_g"),
+		RNA_enum_get(op->ptr, "normal_b")
+	};
 
 	char filepath[FILE_MAX];
 	RNA_string_get(op->ptr, "filepath", filepath);
@@ -246,7 +259,7 @@ static int bake_exec(bContext *C, wmOperator *op)
 	RE_test_break_cb(re, NULL, bake_break);
 	RE_SetReports(re, op->reports);
 
-	pixel_array = MEM_callocN(sizeof(BakePixel) * num_pixels, "bake pixels");
+	pixel_array_low = MEM_callocN(sizeof(BakePixel) * num_pixels, "bake pixels low poly");
 	result = MEM_callocN(sizeof(float) * depth * num_pixels, "bake return pixels");
 
 	/**
@@ -284,22 +297,58 @@ static int bake_exec(bContext *C, wmOperator *op)
 	 		elif ... (vertex color?)
 	 */
 
-
-	/* get the mesh as it arrives in the renderer */
-	me_low = BKE_mesh_new_from_object(bmain, scene, ob_low, 1, 2, 1, 0);
-
-	/* populate the pixel array with the face data */
-	RE_populate_bake_pixels(me_low, pixel_array, width, height);
+	is_cage = ob_high && (ob_high->type == OB_MESH);
+	is_tangent = pass_type == SCE_PASS_NORMAL && normal_space == R_BAKE_SPACE_TANGENT;
 
 	/* high-poly to low-poly baking */
-	if (ob_high && (ob_high->type == OB_MESH))
+	if (is_cage)
 	{
+		ModifierData *md, *nmd;
+		TriangulateModifierData *tmd;
+		ListBase modifiers_tmp;
+		ListBase modifiers_original = ob_low->modifiers;
+
+		BLI_listbase_clear(&modifiers_tmp);
+
+		for (md = ob_low->modifiers.first; md; md = md->next) {
+			/* Edge Split cannot be applied in the cage,
+			 otherwise we loose interpolated normals */
+			if (md->type == eModifierType_EdgeSplit)
+				continue;
+
+			nmd = modifier_new(md->type);
+			BLI_strncpy(nmd->name, md->name, sizeof(nmd->name));
+			modifier_copyData(md, nmd);
+			BLI_addtail(&modifiers_tmp, nmd);
+		}
+
+		/* temporarily replace the modifiers */
+		ob_low->modifiers = modifiers_tmp;
+
+		/* get the cage mesh as it arrives in the renderer */
+		me_low = BKE_mesh_new_from_object(bmain, scene, ob_low, 1, 2, 1, 0);
+
+		/* populate the pixel array with the face data */
+		RE_populate_bake_pixels(me_low, pixel_array_low, width, height);
+
 		/* triangulating it makes life so much easier ... */
 		tri_mod = ED_object_modifier_add(op->reports, bmain, scene, ob_high, "TmpTriangulate", eModifierType_Triangulate);
+		tmd = (TriangulateModifierData *)tri_mod;
+		tmd->quad_method = MOD_TRIANGULATE_QUAD_FIXED;
+		tmd->ngon_method = MOD_TRIANGULATE_NGON_EARCLIP;
 
 		me_high = BKE_mesh_new_from_object(bmain, scene, ob_high, 1, 2, 1, 0);
 
-		RE_populate_bake_pixels_from_object(me_low, me_high, pixel_array, num_pixels, cage_extrusion);
+		if (is_tangent) {
+			pixel_array_high = MEM_callocN(sizeof(BakePixel) * num_pixels, "bake pixels high poly");
+			RE_populate_bake_pixels_from_object(me_low, me_high, pixel_array_low, pixel_array_high, num_pixels, cage_extrusion);
+			pixel_array_render = pixel_array_high;
+		}
+		else {
+			/* re-use the same BakePixel array */
+			RE_populate_bake_pixels_from_object(me_low, me_high, pixel_array_low, pixel_array_low, num_pixels, cage_extrusion);
+			pixel_array_render = pixel_array_low;
+		}
 
 		/* make sure low poly doesn't render, and high poly renders */
 		restrict_render_high = (ob_high->restrictflag & OB_RESTRICT_RENDER);
@@ -308,18 +357,56 @@ static int bake_exec(bContext *C, wmOperator *op)
 		ob_low->restrictflag |= OB_RESTRICT_RENDER;
 		ob_render = ob_high;
 
-		BKE_libblock_free(bmain, me_high);
+		/* reverting data back */
+		ob_low->modifiers = modifiers_original;
+
+		while ((md = BLI_pophead(&modifiers_tmp))) {
+			modifier_free(md);
+		}
 	}
 	else {
+		/* get the mesh as it arrives in the renderer */
+		me_low = BKE_mesh_new_from_object(bmain, scene, ob_low, 1, 2, 1, 0);
+
+		/* populate the pixel array with the face data */
+		RE_populate_bake_pixels(me_low, pixel_array_low, width, height);
+		pixel_array_render = pixel_array_low;
+
 		/* make sure low poly renders */
 		ob_low->restrictflag &= ~OB_RESTRICT_RENDER;
 		ob_render = ob_low;
 	}
 
 	if (RE_engine_has_bake(re))
-		ok = RE_engine_bake(re, ob_render, pixel_array, num_pixels, depth, pass_type, result);
+		ok = RE_engine_bake(re, ob_render, pixel_array_render, num_pixels, depth, pass_type, result);
 	else
-		ok = RE_internal_bake(re, ob_render, pixel_array, num_pixels, depth, pass_type, result);
+		ok = RE_internal_bake(re, ob_render, pixel_array_render, num_pixels, depth, pass_type, result);
+
+	/* normal space conversion */
+	if (pass_type == SCE_PASS_NORMAL) {
+		switch (normal_space) {
+			case R_BAKE_SPACE_WORLD:
+			{
+				/* Cycles internal format */
+				if (normal_swizzle[0] == OB_NEGX &&
+					normal_swizzle[1] == OB_NEGY &&
+					normal_swizzle[2] == OB_NEGZ)
+					break;
+				else
+					RE_normal_world_to_world(pixel_array_low, num_pixels,  depth, result, normal_swizzle);
+				break;
+			}
+			case R_BAKE_SPACE_OBJECT:
+				RE_normal_world_to_object(pixel_array_low, num_pixels, depth, result, ob_low, normal_swizzle);
+				break;
+			case R_BAKE_SPACE_TANGENT:
+				RE_normal_world_to_tangent(pixel_array_low, num_pixels, depth, result, me_low, normal_swizzle);
+				break;
+			default:
+				break;
+		}
+
+	}
 
 	if (!ok) {
 		BKE_report(op->reports, RPT_ERROR, "Problem baking object map");
@@ -329,7 +416,7 @@ static int bake_exec(bContext *C, wmOperator *op)
 		/* save the result */
 		if (is_external) {
 			/* save it externally */
-			ok = write_external_bake_pixels(filepath, pixel_array, result, width, height, depth, is_linear, margin);
+			ok = write_external_bake_pixels(filepath, pixel_array_render, result, width, height, depth, is_linear, margin);
 			if (!ok) {
 				char *error = NULL;
 				error = BLI_sprintfN("Problem saving baked map in \"%s\".", filepath);
@@ -371,10 +458,18 @@ static int bake_exec(bContext *C, wmOperator *op)
 	RE_SetReports(re, NULL);
 
 	/* garbage collection */
-	MEM_freeN(pixel_array);
-	MEM_freeN(result);
+	MEM_freeN(pixel_array_low);
 
+	if (pixel_array_high) {
+		MEM_freeN(pixel_array_high);
+	}
+
+	MEM_freeN(result);
 	BKE_libblock_free(bmain, me_low);
+
+	if (me_high) {
+		BKE_libblock_free(bmain, me_high);
+	}
 
 #if 0
 	Main *bmain = CTX_data_main(C);
@@ -434,6 +529,23 @@ static int bake_exec(bContext *C, wmOperator *op)
 	return op_result;
 }
 
+static EnumPropertyItem normal_swizzle_items[] = {
+	{OB_POSX, "POS_X", 0, "+X", ""},
+	{OB_POSY, "POS_Y", 0, "+Y", ""},
+	{OB_POSZ, "POS_Z", 0, "+Z", ""},
+	{OB_NEGX, "NEG_X", 0, "-X", ""},
+	{OB_NEGY, "NEG_Y", 0, "-Y", ""},
+	{OB_NEGZ, "NEG_Z", 0, "-Z", ""},
+	{0, NULL, 0, NULL, NULL}
+};
+
+static EnumPropertyItem normal_space_items[] = {
+	{R_BAKE_SPACE_WORLD, "WORLD", 0, "World", "Bake the normals in world space"},
+	{R_BAKE_SPACE_OBJECT, "OBJECT", 0, "Object", "Bake the normals in object space"},
+	//{R_BAKE_SPACE_TANGENT, "TANGENT", 0, "Tangent", "Bake the normals in tangent space"},
+	{0, NULL, 0, NULL, NULL}
+};
+
 void OBJECT_OT_bake(wmOperatorType *ot)
 {
 	/* identifiers */
@@ -456,4 +568,8 @@ void OBJECT_OT_bake(wmOperatorType *ot)
 	ot->prop = RNA_def_int(ot->srna, "margin", 16, 0, INT_MAX, "Margin", "Extends the baked result as a post process filter", 0, 64);
 	ot->prop = RNA_def_boolean(ot->srna, "use_selected_to_active", false, "Selected to Active", "Bake shading on the surface of selected objects to the active object");
 	ot->prop = RNA_def_float(ot->srna, "cage_extrusion", 0.0, 0.0, 1.0, "Cage Extrusion", "", 0.0, 1.0);
+	ot->prop = RNA_def_enum(ot->srna, "normal_space", normal_space_items, R_BAKE_SPACE_WORLD, "Normal Space", "Choose normal space for baking");
+	ot->prop = RNA_def_enum(ot->srna, "normal_r", normal_swizzle_items, OB_NEGX, "R", "Axis to bake in red channel");
+	ot->prop = RNA_def_enum(ot->srna, "normal_g", normal_swizzle_items, OB_NEGY, "G", "Axis to bake in green channel");
+	ot->prop = RNA_def_enum(ot->srna, "normal_b", normal_swizzle_items, OB_NEGZ, "B", "Axis to bake in blue channel");
 }

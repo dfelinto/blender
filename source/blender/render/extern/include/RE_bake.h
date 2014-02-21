@@ -51,10 +51,16 @@ bool RE_engine_bake(struct Render *re, struct Object *object, struct BakePixel p
 int RE_pass_depth(ScenePassType pass_type);
 bool RE_internal_bake(struct Render *re, struct Object *object, struct BakePixel pixel_array[], int num_pixels, int depth, ScenePassType pass_type, float result[]);
 
-void RE_populate_bake_pixels_from_object(struct Mesh *me_low, struct Mesh *me_high, struct BakePixel pixel_array[], const int num_pixels, const float cage_extrusion);
+void RE_populate_bake_pixels_from_object(struct Mesh *me_low, struct Mesh *me_high,
+                                         struct BakePixel pixel_array_from[], struct BakePixel pixel_array_to[],
+                                         const int num_pixels, const float cage_extrusion);
 
 void RE_populate_bake_pixels(struct Mesh *me, struct BakePixel pixel_array[], const int width, const int height);
 
 void RE_bake_margin(struct BakePixel pixel_array[], struct ImBuf *ibuf, const int margin, const int width, const int height);
+
+void RE_normal_world_to_object(BakePixel pixel_array[], int num_pixels,  int depth, float result[], struct Object *ob, int normal_swizzle[3]);
+void RE_normal_world_to_tangent(BakePixel pixel_array[], int num_pixels,  int depth, float result[], struct Mesh *me, int normal_swizzle[3]);
+void RE_normal_world_to_world(BakePixel pixel_array[], int num_pixels,  int depth, float result[], int normal_swizzle[3]);
 
 #endif

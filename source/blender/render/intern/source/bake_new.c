@@ -293,7 +293,9 @@ static void calculateTriTessFace(TriTessFace *triangles, Mesh *me, int (*lookup_
 	BLI_assert(p_id < me->totface * 2);
 }
 
-void RE_populate_bake_pixels_from_object(Mesh *me_low, Mesh *me_high, BakePixel pixel_array[], const int num_pixels, const float cage_extrusion)
+void RE_populate_bake_pixels_from_object(Mesh *me_low, Mesh *me_high,
+                                         BakePixel pixel_array_from[], BakePixel pixel_array_to[],
+                                         const int num_pixels, const float cage_extrusion)
 {
 	int i;
 	int primitive_id;
@@ -331,19 +333,19 @@ void RE_populate_bake_pixels_from_object(Mesh *me_low, Mesh *me_high, BakePixel 
 		float co[3];
 		float dir[3];
 
-		primitive_id = pixel_array[i].primitive_id;
+		primitive_id = pixel_array_from[i].primitive_id;
 
 		if (primitive_id == -1)
 			continue;
 
-		u = pixel_array[i].u;
-		v = pixel_array[i].v;
+		u = pixel_array_from[i].u;
+		v = pixel_array_from[i].v;
 
 		/* calculate from low poly mesh cage */
 		get_point_from_barycentric(tris_low, primitive_id, u, v, cage_extrusion, co, dir);
 
 		/* cast ray */
-		cast_ray_highpoly(&treeData, tris_high, &pixel_array[i], co, dir);
+		cast_ray_highpoly(&treeData, tris_high, &pixel_array_to[i], co, dir);
 	}
 
 	/* garbage collection */
@@ -413,9 +415,236 @@ void RE_populate_bake_pixels(Mesh *me, BakePixel pixel_array[], const int width,
 	zbuf_free_span(&bd.zspan);
 }
 
+/* ******************** NORMALS ************************ */
+
+/* convert a normalized normal to the -1.0 1.0 range
+ * the input is expected to be NEG_X, NEG_Y, NEG_Z
+ * the output is POS_X, POS_Y, POS_Z
+ */
+static void normal_uncompress(float *out, float in[3])
+{
+	for (int i=0; i < 3; i++)
+		out[i] = - (2.0f * in[i] - 1.0f);
+}
+
+static void normal_compress(float *out, float in[3], int normal_swizzle[3]) {
+	static const int swizzle[6][2] = // sign, index
+	{
+		{  1, 0, }, // OB_POSX
+		{  1, 1, }, // OB_POSY
+		{  1, 2, }, // OB_POSZ
+		{ -1, 0, }, // OB_NEGX
+		{ -1, 1, }, // OB_NEGY
+		{ -1, 2, }, // OB_NEGZ
+	};
+
+	for (int i=0; i < 3; i++) {
+		int id, sign;
+
+		sign = swizzle[normal_swizzle[i]][0];
+		id   = swizzle[normal_swizzle[i]][1];
+
+		/*
+		* There is a small 1e-5f bias for precision issues. otherwise
+		* we randomly get 127 or 128 for neutral colors in tangent maps.
+		* we choose 128 because it is the convention flat color. *
+		*/
+
+		out[i] = sign * in[id] / 2.0f + 0.5f + 1e-5f;
+	}
+}
+
+/*
+ * struct wrapping up tangent space data
+ */
+typedef struct {
+	float tangent[3];
+	float sign;
+} TSpace;
+
+/*
+ * This function converts an object space normal map to a tangent space normal map for a given low poly mesh
+ * XXX the mesh has to be triangulated at the moment.
+ */
+void RE_normal_world_to_tangent(BakePixel pixel_array[], int num_pixels, int depth, float result[], Mesh *me, int normal_swizzle[3])
+{
+	int i;
+	TSpace *tspace;
+	MFace *mface;
+	MVert *mvert;
+	float *fnormals;
+
+	//TODO for now assuming it's triangulated - it will crash otherwise
+
+	DerivedMesh *dm = CDDM_from_mesh(me);
+	DM_ensure_normals(dm);
+	DM_add_tangent_layer(dm);
+
+	tspace = dm->getTessFaceDataArray(dm, CD_TANGENT);
+
+	mface = dm->getTessFaceArray(dm);
+	mvert = dm->getVertArray(dm);
+
+	fnormals = dm->getTessFaceDataArray(dm, CD_NORMAL);
+
+	BLI_assert(tspace);
+	BLI_assert(fnormals);
+	BLI_assert(num_pixels >= 3);
+
+	for (i=0; i < num_pixels; i++) {
+		MFace *mf;
+		float tangents[3][3];
+		float normals[3][3];
+		float signs[3];
+		int j;
+		int verts[3];
+
+		float tangent[3];
+		float normal[3];
+		float binormal[3];
+		float sign;
+		float u, v, w;
+
+		float tsm[3][3]; /* tangent space matrix */
+		float itsm[3][3];
+
+		int offset;
+		float nor[3]; /* texture normal */
+
+		int primitive_id = pixel_array[i].primitive_id;
+
+		bool smoothnormal;
+
+		if (primitive_id == -1)
+			continue;
+
+		mf = &mface[primitive_id];
+		smoothnormal = (mf->flag & ME_SMOOTH);
+
+		verts[0] = mf->v1;
+		verts[1] = mf->v2;
+		verts[2] = mf->v3;
+
+		for (j = 0; j < 3; j++) {
+			TSpace *ts;
+			int vert = verts[j];
+
+			if (smoothnormal)
+				normal_short_to_float_v3(normals[j], mvert[vert].no);
+			else
+				//XXX using co to calculate normal manually
+				copy_v3_v3(normals[j], mvert[vert].co);
+
+			ts = &tspace[vert];
+			copy_v3_v3(tangents[j], ts->tangent);
+			signs[j] = ts->sign;
+		}
+
+		u = pixel_array[i].u;
+		v = pixel_array[i].v;
+		w = 1.0f - u - v;
+
+		/* normal */
+		if (smoothnormal)
+			interp_barycentric_tri_v3(normals, u, v, normal);
+		else
+			//copy_v3_v3(normal, &fnormals[primitive_id]);
+			/* XXX not nice to calculate the normal every single time, but I had
+			   some troubles to access the face normal, so this will do for now */
+			normal_tri_v3(normal, normals[0], normals[1], normals[2]);
+
+		/* tangent */
+		interp_barycentric_tri_v3(tangents, u, v, tangent);
+
+		/* sign */
+		/* The sign is the same at all face vertices for any non degenerate face.
+		 * Just in case we clamp the interpolated value though. */
+		sign = (signs[0]  * u + signs[1]  * v + signs[2] * w) < 0 ? (-1.0f) : 1.0f;
+
+		/* binormal */
+		/* B = sign * cross(N, T)  */
+		cross_v3_v3v3(binormal, normal, tangent);
+		mul_v3_fl(binormal, sign);
+
+		/* populate tangent space matrix */
+		copy_v3_v3(tsm[0], tangent);
+		copy_v3_v3(tsm[1], binormal);
+		copy_v3_v3(tsm[2], normal);
+
+		/* texture values */
+		offset = i * depth;
+		normal_uncompress(nor, &result[offset]);
+
+		invert_m3_m3(itsm, tsm);
+		mul_m3_v3(itsm, nor);
+		normalize_v3(nor);
+
+		/* The invert of the red channel is to make
+		 * the normal map compliant with the outside world.
+		 * It needs to be done because in Blender
+		 * the normal used in the renderer points inward. It is generated
+		 * this way in calc_vertexnormals(). Should this ever change
+		 * this negate must be removed.
+		 */
+		nor[0] = -nor[0];
+
+		/* save back the values */
+		normal_compress(&result[offset], nor, normal_swizzle);
+	}
+
+	/* garbage collection */
+	if (dm)
+		dm->release(dm);
+}
+
+void RE_normal_world_to_object(BakePixel pixel_array[], int num_pixels,  int depth, float result[], struct Object *ob, int normal_swizzle[3])
+{
+	int i;
+	float iobmat[4][4];
+
+	invert_m4_m4(iobmat, ob->obmat);
+
+	for (i = 0; i < num_pixels; i++) {
+		int offset;
+		float nor[3];
+
+		if (pixel_array[i].primitive_id == -1)
+			continue;
+
+		offset = i * depth;
+		normal_uncompress(nor, &result[offset]);
+
+		mul_m4_v3(iobmat, nor);
+		normalize_v3(nor);
+
+		/* save back the values */
+		normal_compress(&result[offset], nor, normal_swizzle);
+	}
+}
+
+void RE_normal_world_to_world(BakePixel pixel_array[], int num_pixels,  int depth, float result[], int normal_swizzle[3])
+{
+	int i;
+
+	for (i = 0; i < num_pixels; i++) {
+		int offset;
+		float nor[3];
+
+		if (pixel_array[i].primitive_id == -1)
+			continue;
+
+		offset = i * depth;
+		normal_uncompress(nor, &result[offset]);
+
+		/* save back the values */
+		normal_compress(&result[offset], nor, normal_swizzle);
+	}
+}
+
+/* ************************************************************* */
 
 /* not the real UV, but the internal per-face UV instead
-   I'm using it to test if everything is correct */
+ I'm using it to test if everything is correct */
 static bool bake_uv(BakePixel pixel_array[], int num_pixels, int depth, float result[])
 {
 	int i;
