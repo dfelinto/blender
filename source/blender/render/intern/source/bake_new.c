@@ -488,7 +488,8 @@ void RE_populate_bake_pixels(Mesh *me, BakePixel pixel_array[], const int width,
  */
 static void normal_uncompress(float *out, float in[3])
 {
-	for (int i=0; i < 3; i++)
+	int i;
+	for (i = 0; i < 3; i++)
 		out[i] = - (2.0f * in[i] - 1.0f);
 }
 
@@ -503,7 +504,9 @@ static void normal_compress(float *out, float in[3], int normal_swizzle[3]) {
 		{ -1, 2, }, // OB_NEGZ
 	};
 
-	for (int i=0; i < 3; i++) {
+	int i;
+
+	for (i = 0; i < 3; i++) {
 		int id, sign;
 
 		sign = swizzle[normal_swizzle[i]][0];
