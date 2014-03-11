@@ -108,12 +108,6 @@ static int bake_modal(bContext *C, wmOperator *UNUSED(op), const wmEvent *event)
 	return OPERATOR_PASS_THROUGH;
 }
 
-static int bake_invoke(bContext *UNUSED(C), wmOperator *op, const wmEvent *UNUSED(_event))
-{
-	BKE_report(op->reports, RPT_ERROR, "Baking not supported via invoke at the moment");
-	return OPERATOR_CANCELLED;
-}
-
 /* for exec() when there is no render job
  * note: this wont check for the escape key being pressed, but doing so isnt threadsafe */
 static int bake_break(void *UNUSED(rjv))
@@ -598,7 +592,6 @@ void OBJECT_OT_bake(wmOperatorType *ot)
 
 	/* api callbacks */
 	ot->exec = bake_exec;
-	ot->invoke = bake_invoke;
 	ot->modal = bake_modal;
 	ot->poll = ED_operator_object_active_editable_mesh;
 
