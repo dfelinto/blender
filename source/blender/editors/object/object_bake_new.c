@@ -196,8 +196,11 @@ static int bake_exec(bContext *C, wmOperator *op)
 	Object *ob_low = CTX_data_active_object(C);
 	Object *ob_high = NULL;
 
+	Object *ob_custom_cage = NULL;
+
 	bool restrict_render_low = (ob_low->restrictflag & OB_RESTRICT_RENDER);
 	bool restrict_render_high = false;
+	bool restrict_render_custom_cage;
 
 	Mesh *me_low = NULL;
 	Mesh *me_high = NULL;
@@ -232,6 +235,9 @@ static int bake_exec(bContext *C, wmOperator *op)
 		RNA_enum_get(op->ptr, "normal_b")
 	};
 
+	char custom_cage[NAME_MAX];
+	RNA_string_get(op->ptr, "custom_cage", custom_cage);
+
 	char filepath[FILE_MAX];
 	RNA_string_get(op->ptr, "filepath", filepath);
 
@@ -249,6 +255,18 @@ static int bake_exec(bContext *C, wmOperator *op)
 		if (ob_high == NULL) {
 			BKE_report(op->reports, RPT_ERROR, "No valid selected object");
 			return OPERATOR_CANCELLED;
+		}
+	}
+
+	if (custom_cage[0] != '\0') {
+		ob_custom_cage = (Object *)BLI_findstring(&bmain->object, custom_cage, offsetof(ID, name) + 2);
+
+		if (ob_custom_cage == NULL || ob_custom_cage->type != OB_MESH) {
+			BKE_report(op->reports, RPT_ERROR, "No valid custom cage object");
+			return OPERATOR_CANCELLED;
+		}
+		else {
+			restrict_render_custom_cage = (ob_custom_cage->restrictflag & OB_RESTRICT_RENDER);
 		}
 	}
 
@@ -301,32 +319,36 @@ static int bake_exec(bContext *C, wmOperator *op)
 	is_tangent = pass_type == SCE_PASS_NORMAL && normal_space == R_BAKE_SPACE_TANGENT;
 
 	/* high-poly to low-poly baking */
-	if (is_cage)
-	{
+	if (is_cage) {
 		ModifierData *md, *nmd;
 		TriangulateModifierData *tmd;
-		ListBase modifiers_tmp;
-		ListBase modifiers_original = ob_low->modifiers;
+		ListBase modifiers_tmp, modifiers_original;
 
-		BLI_listbase_clear(&modifiers_tmp);
-
-		for (md = ob_low->modifiers.first; md; md = md->next) {
-			/* Edge Split cannot be applied in the cage,
-			 otherwise we loose interpolated normals */
-			if (md->type == eModifierType_EdgeSplit)
-				continue;
-
-			nmd = modifier_new(md->type);
-			BLI_strncpy(nmd->name, md->name, sizeof(nmd->name));
-			modifier_copyData(md, nmd);
-			BLI_addtail(&modifiers_tmp, nmd);
+		if (ob_custom_cage) {
+			me_low = BKE_mesh_new_from_object(bmain, scene, ob_custom_cage, 1, 2, 1, 0);
 		}
+		else {
+			modifiers_original = ob_low->modifiers;
+			BLI_listbase_clear(&modifiers_tmp);
 
-		/* temporarily replace the modifiers */
-		ob_low->modifiers = modifiers_tmp;
+			for (md = ob_low->modifiers.first; md; md = md->next) {
+				/* Edge Split cannot be applied in the cage,
+				 otherwise we loose interpolated normals */
+				if (md->type == eModifierType_EdgeSplit)
+					continue;
 
-		/* get the cage mesh as it arrives in the renderer */
-		me_low = BKE_mesh_new_from_object(bmain, scene, ob_low, 1, 2, 1, 0);
+				nmd = modifier_new(md->type);
+				BLI_strncpy(nmd->name, md->name, sizeof(nmd->name));
+				modifier_copyData(md, nmd);
+				BLI_addtail(&modifiers_tmp, nmd);
+			}
+
+			/* temporarily replace the modifiers */
+			ob_low->modifiers = modifiers_tmp;
+
+			/* get the cage mesh as it arrives in the renderer */
+			me_low = BKE_mesh_new_from_object(bmain, scene, ob_low, 1, 2, 1, 0);
+		}
 
 		/* populate the pixel array with the face data */
 		RE_populate_bake_pixels(me_low, pixel_array_low, width, height);
@@ -343,6 +365,14 @@ static int bake_exec(bContext *C, wmOperator *op)
 			pixel_array_high = MEM_callocN(sizeof(BakePixel) * num_pixels, "bake pixels high poly");
 			RE_populate_bake_pixels_from_object(me_low, me_high, pixel_array_low, pixel_array_high, num_pixels, cage_extrusion);
 			pixel_array_render = pixel_array_high;
+
+			/* we need the pixel array to get normals and tangents from the original mesh */
+			if (ob_custom_cage) {
+				BKE_libblock_free(bmain, me_low);
+
+				me_low = BKE_mesh_new_from_object(bmain, scene, ob_low, 1, 2, 1, 0);
+				RE_populate_bake_pixels(me_low, pixel_array_low, width, height);
+			}
 		}
 		else {
 			/* re-use the same BakePixel array */
@@ -353,15 +383,19 @@ static int bake_exec(bContext *C, wmOperator *op)
 		/* make sure low poly doesn't render, and high poly renders */
 		restrict_render_high = (ob_high->restrictflag & OB_RESTRICT_RENDER);
 		ob_high->restrictflag &= ~OB_RESTRICT_RENDER;
-
 		ob_low->restrictflag |= OB_RESTRICT_RENDER;
 		ob_render = ob_high;
 
-		/* reverting data back */
-		ob_low->modifiers = modifiers_original;
+		if (ob_custom_cage) {
+			ob_custom_cage->restrictflag |= OB_RESTRICT_RENDER;
+		}
+		else {
+			/* reverting data back */
+			ob_low->modifiers = modifiers_original;
 
-		while ((md = BLI_pophead(&modifiers_tmp))) {
-			modifier_free(md);
+			while ((md = BLI_pophead(&modifiers_tmp))) {
+				modifier_free(md);
+			}
 		}
 	}
 	else {
@@ -405,7 +439,6 @@ static int bake_exec(bContext *C, wmOperator *op)
 			default:
 				break;
 		}
-
 	}
 
 	if (!ok) {
@@ -455,6 +488,13 @@ static int bake_exec(bContext *C, wmOperator *op)
 			ED_object_modifier_remove(op->reports, bmain, ob_high, tri_mod);
 	}
 
+	if (ob_custom_cage) {
+		if (!restrict_render_custom_cage)
+			ob_custom_cage->restrictflag &= ~OB_RESTRICT_RENDER;
+		else
+			ob_custom_cage->restrictflag |= OB_RESTRICT_RENDER;
+	}
+
 	RE_SetReports(re, NULL);
 
 	/* garbage collection */
@@ -465,7 +505,10 @@ static int bake_exec(bContext *C, wmOperator *op)
 	}
 
 	MEM_freeN(result);
-	BKE_libblock_free(bmain, me_low);
+
+	if (me_low) {
+		BKE_libblock_free(bmain, me_low);
+	}
 
 	if (me_high) {
 		BKE_libblock_free(bmain, me_high);
@@ -567,7 +610,8 @@ void OBJECT_OT_bake(wmOperatorType *ot)
 	ot->prop = RNA_def_int(ot->srna, "height", 512, 1, INT_MAX, "Height", "Vertical dimension of the baking map", 64, 4096);
 	ot->prop = RNA_def_int(ot->srna, "margin", 16, 0, INT_MAX, "Margin", "Extends the baked result as a post process filter", 0, 64);
 	ot->prop = RNA_def_boolean(ot->srna, "use_selected_to_active", false, "Selected to Active", "Bake shading on the surface of selected objects to the active object");
-	ot->prop = RNA_def_float(ot->srna, "cage_extrusion", 0.0, 0.0, 1.0, "Cage Extrusion", "", 0.0, 1.0);
+	ot->prop = RNA_def_float(ot->srna, "cage_extrusion", 0.0, 0.0, 1.0, "Cage Extrusion", "Distance to use for the inward ray cast when using selected to active", 0.0, 1.0);
+	ot->prop = RNA_def_string(ot->srna, "custom_cage", NULL, NAME_MAX, "Custom Cage", "Object to use as custom cage");
 	ot->prop = RNA_def_enum(ot->srna, "normal_space", normal_space_items, R_BAKE_SPACE_WORLD, "Normal Space", "Choose normal space for baking");
 	ot->prop = RNA_def_enum(ot->srna, "normal_r", normal_swizzle_items, OB_NEGX, "R", "Axis to bake in red channel");
 	ot->prop = RNA_def_enum(ot->srna, "normal_g", normal_swizzle_items, OB_NEGY, "G", "Axis to bake in green channel");
