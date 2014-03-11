@@ -1269,13 +1269,12 @@ class CyclesRender_PT_bake(CyclesButtonsPanel, Panel):
 
         col.separator()
         col.prop(cbk, "use_selected_to_active")
+        sub = col.column()
+        sub.active = cbk.use_selected_to_active
+        sub.prop(cbk, "cage_extrusion")
+        sub.prop_search(cbk, "custom_cage", scene, "objects")
 
         if cbk.type == 'NORMAL':
-            sub = col.column()
-            sub.active = cbk.use_selected_to_active
-            sub.prop(cbk, "cage_extrusion")
-            sub.prop_search(cbk, "custom_cage", scene, "objects")
-
             col.separator()
             col.prop(cbk, "normal_space")
 
