@@ -562,7 +562,7 @@ void OBJECT_OT_bake(wmOperatorType *ot)
 	ot->prop = RNA_def_enum(ot->srna, "type", render_pass_type_items, SCE_PASS_COMBINED, "Type",
 	                        "Type of pass to bake, some of them may not be supported by the current render engine");
 	ot->prop = RNA_def_boolean(ot->srna, "is_save_external", true, "External", "Save the image externally (ignore face assigned Image datablocks)");
-	ot->prop = RNA_def_string_file_path(ot->srna, "filepath", "", FILE_MAX, "Path", "Image filepath to use when saving externally");
+	ot->prop = RNA_def_string_file_path(ot->srna, "filepath", NULL, FILE_MAX, "Path", "Image filepath to use when saving externally");
 	ot->prop = RNA_def_int(ot->srna, "width", 512, 1, INT_MAX, "Width", "Horizontal dimension of the baking map", 64, 4096);
 	ot->prop = RNA_def_int(ot->srna, "height", 512, 1, INT_MAX, "Height", "Vertical dimension of the baking map", 64, 4096);
 	ot->prop = RNA_def_int(ot->srna, "margin", 16, 0, INT_MAX, "Margin", "Extends the baked result as a post process filter", 0, 64);
