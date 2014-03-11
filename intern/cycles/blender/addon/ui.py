@@ -1226,6 +1226,66 @@ class CyclesRender_PT_CurveRendering(CyclesButtonsPanel, Panel):
         row.prop(ccscene, "maximum_width", text="Max Ext.")
 
 
+
+
+class CyclesRender_PT_bake(CyclesButtonsPanel, Panel):
+    bl_label = "Bake"
+    bl_context = "render"
+    bl_options = {'DEFAULT_CLOSED'}
+    COMPAT_ENGINES = {'CYCLES'}
+
+    def draw(self, context):
+        layout = self.layout
+
+        scene = context.scene
+        cbk = scene.cycles.bake
+
+        props = layout.operator("object.bake", icon='RENDER_STILL')
+
+        props.type = cbk.type
+        props.is_save_external = cbk.is_save_external
+        props.filepath = cbk.filepath
+        props.width = cbk.width
+        props.height = cbk.height
+        props.margin = cbk.margin
+        props.use_selected_to_active = cbk.use_selected_to_active
+        props.cage_extrusion = cbk.cage_extrusion
+        props.custom_cage = cbk.custom_cage
+        props.normal_space = cbk.normal_space
+        props.normal_r = cbk.normal_r
+        props.normal_g = cbk.normal_g
+        props.normal_b = cbk.normal_b
+
+        col = layout.column()
+        col.prop(cbk, "type")
+        #col.prop(cbk, "is_save_external")
+        col.prop(cbk, "filepath")
+
+        row = col.row(align=True)
+        row.prop(cbk, "width")
+        row.prop(cbk, "height")
+
+        col.prop(cbk, "margin")
+
+        col.separator()
+        col.prop(cbk, "use_selected_to_active")
+
+        if cbk.type == 'NORMAL':
+            sub = col.column()
+            sub.active = cbk.use_selected_to_active
+            sub.prop(cbk, "cage_extrusion")
+            sub.prop_search(cbk, "custom_cage", scene, "objects")
+
+            col.separator()
+            col.prop(cbk, "normal_space")
+
+            row = col.row(align=True)
+            row.label(text = "Swizzle:")
+            row.prop(cbk, "normal_r", text="")
+            row.prop(cbk, "normal_g", text="")
+            row.prop(cbk, "normal_b", text="")
+
+
 class CyclesParticle_PT_CurveSettings(CyclesButtonsPanel, Panel):
     bl_label = "Cycles Hair Settings"
     bl_context = "particle"

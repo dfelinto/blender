@@ -21,7 +21,8 @@ from bpy.props import (BoolProperty,
                        EnumProperty,
                        FloatProperty,
                        IntProperty,
-                       PointerProperty)
+                       PointerProperty,
+                       StringProperty)
 
 # enums
 
@@ -112,6 +113,142 @@ enum_volume_homogeneous_sampling = (
     ('DISTANCE', "Distance", "Use Distance Sampling"),
     ('EQUI_ANGULAR', "Equi-angular", "Use Equi-angular Sampling"),
     )
+
+enum_normal_swizzle = (
+    ('POS_X', "+X", ""),
+    ('POS_Y', "+Y", ""),
+    ('POS_Z', "+Z", ""),
+    ('NEG_X', "-X", ""),
+    ('NEG_Y', "-Y", ""),
+    ('NEG_Z', "-Z", ""),
+    )
+
+
+class CyclesBakeSettings(bpy.types.PropertyGroup):
+    type = EnumProperty(
+            name="Type",
+            default='COMBINED',
+            description="Type of pass to bake",
+            items = (
+                ('COMBINED', "Combined", ""),
+                ('AO', "Ambient Occlusion", ""),
+                ('NORMAL', "Normal", ""),
+                ('UV', "UV", ""),
+                ('EMIT', "Emit", ""),
+                ('ENVIRONMENT', "Environment", ""),
+                ('DIFFUSE_DIRECT', "Diffuse Direct", ""),
+                ('DIFFUSE_INDIRECT', "Diffuse Indirect", ""),
+                ('DIFFUSE_COLOR', "Diffuse Color", ""),
+                ('GLOSSY_DIRECT', "Glossy Direct", ""),
+                ('GLOSSY_INDIRECT', "Glossy Indirect", ""),
+                ('GLOSSY_COLOR', "Glossy Color", ""),
+                ('TRANSMISSION_DIRECT', "Transmission Direct", ""),
+                ('TRANSMISSION_INDIRECT', "Transmission Indirect", ""),
+                ('TRANSMISSION_COLOR', "Transmission Color", ""),
+                ('SUBSURFACE_DIRECT', "Subsurface Direct", ""),
+                ('SUBSURFACE_INDIRECT', "Subsurface Indirect", ""),
+                ('SUBSURFACE_COLOR', "Subsurface Color", ""),
+                ),
+            )
+
+    is_save_external = BoolProperty(
+            name="External",
+            description="Save the image externally (ignore face assigned Image "
+                        "datablocks)",
+            default=True,
+            )
+
+    filepath = StringProperty(
+            subtype='FILE_PATH',
+            name="File Path",
+            default="//",
+            description="Image filepath to use when saving externally",
+            )
+
+    width = IntProperty(
+            subtype='PIXEL',
+            min=1,
+            soft_min=64,
+            soft_max=4096,
+            default=512,
+            name="Width",
+            description="Horizontal dimension of the baking map",
+            )
+
+    height = IntProperty(
+            subtype='PIXEL',
+            min=1,
+            soft_min=64,
+            soft_max=4096,
+            default=512,
+            name="Height",
+            description="Vertical dimension of the baking map",
+            )
+
+    margin = IntProperty(
+            subtype='PIXEL',
+            min=0,
+            soft_min=0,
+            soft_max=64,
+            default=16,
+            name="Margin",
+            description="Extends the baked result as a post process filter",
+            )
+
+    use_selected_to_active = BoolProperty(
+            name="Selected to Active",
+            description="Bake shading on the surface of selected objects to "
+                        "the active object",
+            default=False,
+            )
+
+    cage_extrusion = FloatProperty(
+            subtype='DISTANCE',
+            unit='LENGTH',
+            name="Cage Extrusion",
+            min=0.0,
+            soft_max=1.0,
+            default=0.0,
+            description="Distance to use for the inward ray cast when using "
+                        "selected to active",
+            )
+
+    custom_cage = StringProperty(
+            name="Custom Cage",
+            description="Name of the object to use as cage (so the rays are casted from it)",
+            )
+
+    normal_space = EnumProperty(
+            name="Normal Space",
+            default='WORLD',
+            description="Choose normal space for baking",
+            items = (
+                ('WORLD', "World", "Bake the normals in world space"),
+                ('OBJECT', "Object", "Bake the normals in object space"),
+                ('TANGENT', "Tangent", "Bake the normals in tangent space"),
+                ),
+            )
+
+    normal_r = EnumProperty(
+            name="R",
+            default='NEG_X',
+            description="Axis to bake in red channel",
+            items = enum_normal_swizzle,
+            )
+
+    normal_g = EnumProperty(
+            name="G",
+            default='NEG_Y',
+            description="Axis to bake in green channel",
+            items = enum_normal_swizzle,
+            )
+
+    normal_b = EnumProperty(
+            name="B",
+            default='NEG_Z',
+            description="Axis to bake in blue channel",
+            items = enum_normal_swizzle,
+            )
 
 
 class CyclesRenderSettings(bpy.types.PropertyGroup):
@@ -469,6 +606,11 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
                             "(this renders somewhat slower, "
                             "but time can be saved by manually stopping the render when the noise is low enough)",
                 default=False,
+                )
+        cls.bake = PointerProperty(
+                name="Cycles Bake Settings",
+                description="Cycles bake settings",
+                type=CyclesBakeSettings,
                 )
 
     @classmethod
@@ -881,6 +1023,7 @@ class CyclesCurveSettings(bpy.types.PropertyGroup):
 
 
 def register():
+    bpy.utils.register_class(CyclesBakeSettings)
     bpy.utils.register_class(CyclesRenderSettings)
     bpy.utils.register_class(CyclesCameraSettings)
     bpy.utils.register_class(CyclesMaterialSettings)
@@ -894,6 +1037,7 @@ def register():
 
 def unregister():
     bpy.utils.unregister_class(CyclesRenderSettings)
+    bpy.utils.unregister_class(CyclesBakeSettings)
     bpy.utils.unregister_class(CyclesCameraSettings)
     bpy.utils.unregister_class(CyclesMaterialSettings)
     bpy.utils.unregister_class(CyclesLampSettings)
