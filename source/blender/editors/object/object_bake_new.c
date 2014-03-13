@@ -444,6 +444,8 @@ static int bake_exec(bContext *C, wmOperator *op)
 	else {
 		/* save the result */
 		if (is_external) {
+			BLI_path_abs(filepath, bmain->name);
+
 			/* save it externally */
 			ok = write_external_bake_pixels(filepath, pixel_array_render, result, width, height, depth, is_linear, margin);
 			if (!ok) {
