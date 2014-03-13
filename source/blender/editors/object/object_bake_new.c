@@ -232,9 +232,9 @@ static int bake_exec(bContext *C, wmOperator *op)
 	};
 
 	char custom_cage[MAX_NAME];
-	RNA_string_get(op->ptr, "custom_cage", custom_cage);
-
 	char filepath[FILE_MAX];
+
+	RNA_string_get(op->ptr, "custom_cage", custom_cage);
 	RNA_string_get(op->ptr, "filepath", filepath);
 
 	if (use_selected_to_active) {
