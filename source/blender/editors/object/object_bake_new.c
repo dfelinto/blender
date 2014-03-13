@@ -40,6 +40,7 @@
 #include "DNA_object_types.h"
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
+#include "DNA_defs.h"
 
 #include "RNA_access.h"
 #include "RNA_define.h"
@@ -50,6 +51,7 @@
 #include "BLI_utildefines.h"
 #include "BLI_math.h"
 #include "BLI_math_geom.h"
+#include "BLI_path_util.h"
 
 #include "BKE_blender.h"
 #include "BKE_ccg.h"
@@ -139,7 +141,7 @@ static bool write_external_bake_pixels(const char *filepath, BakePixel pixel_arr
 
 	/* create a new ImBuf */
 	ibuf = IMB_allocImBuf(width, height, planes, IB_rect);
-	if (!ibuf) return NULL;
+	if (!ibuf) return false;
 
 	/* populates the ImBuf */
 	IMB_buffer_byte_from_float((unsigned char *) ibuf->rect, buffer, ibuf->channels, ibuf->dither,
@@ -229,7 +231,7 @@ static int bake_exec(bContext *C, wmOperator *op)
 		RNA_enum_get(op->ptr, "normal_b")
 	};
 
-	char custom_cage[NAME_MAX];
+	char custom_cage[MAX_NAME];
 	RNA_string_get(op->ptr, "custom_cage", custom_cage);
 
 	char filepath[FILE_MAX];
@@ -604,7 +606,7 @@ void OBJECT_OT_bake(wmOperatorType *ot)
 	ot->prop = RNA_def_int(ot->srna, "margin", 16, 0, INT_MAX, "Margin", "Extends the baked result as a post process filter", 0, 64);
 	ot->prop = RNA_def_boolean(ot->srna, "use_selected_to_active", false, "Selected to Active", "Bake shading on the surface of selected objects to the active object");
 	ot->prop = RNA_def_float(ot->srna, "cage_extrusion", 0.0, 0.0, 1.0, "Cage Extrusion", "Distance to use for the inward ray cast when using selected to active", 0.0, 1.0);
-	ot->prop = RNA_def_string(ot->srna, "custom_cage", NULL, NAME_MAX, "Custom Cage", "Object to use as custom cage");
+	ot->prop = RNA_def_string(ot->srna, "custom_cage", NULL, MAX_NAME, "Custom Cage", "Object to use as custom cage");
 	ot->prop = RNA_def_enum(ot->srna, "normal_space", normal_space_items, R_BAKE_SPACE_WORLD, "Normal Space", "Choose normal space for baking");
 	ot->prop = RNA_def_enum(ot->srna, "normal_r", normal_swizzle_items, OB_NEGX, "R", "Axis to bake in red channel");
 	ot->prop = RNA_def_enum(ot->srna, "normal_g", normal_swizzle_items, OB_NEGY, "G", "Axis to bake in green channel");
