@@ -400,8 +400,10 @@ void RE_populate_bake_pixels_from_object(Mesh *me_low, Mesh *me_high,
 
 		primitive_id = pixel_array_from[i].primitive_id;
 
-		if (primitive_id == -1)
+		if (primitive_id == -1) {
+			pixel_array_to[i].primitive_id = -1;
 			continue;
+		}
 
 		u = pixel_array_from[i].u;
 		v = pixel_array_from[i].v;
