@@ -429,6 +429,17 @@ void RE_populate_bake_pixels_from_object(Mesh *me_low, Mesh *me_high,
 	MEM_freeN(tris_high);
 }
 
+void RE_mask_bake_pixels(BakePixel pixel_array_from[], BakePixel pixel_array_to[], const int width, const int height)
+{
+	int i;
+	const int num_pixels = width * height;
+
+	for (i = 0; i < num_pixels; i++) {
+		if (pixel_array_from[i].primitive_id == -1)
+			pixel_array_to[i].primitive_id = -1;
+	}
+}
+
 void RE_populate_bake_pixels(Mesh *me, BakePixel pixel_array[], const int width, const int height)
 {
 	BakeData bd;

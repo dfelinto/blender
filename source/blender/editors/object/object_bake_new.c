@@ -376,6 +376,9 @@ static int bake_exec(bContext *C, wmOperator *op)
 				me_low = BKE_mesh_new_from_object(bmain, scene, ob_low, 1, 2, 1, 0);
 				RE_populate_bake_pixels(me_low, pixel_array_low, width, height);
 			}
+
+			/* need to make sure missed rays are masked out of the result */
+			RE_mask_bake_pixels(pixel_array_high, pixel_array_low, width, height);
 		}
 		else {
 			/* re-use the same BakePixel array */
