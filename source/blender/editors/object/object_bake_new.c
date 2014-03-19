@@ -127,15 +127,29 @@ static bool write_external_bake_pixels(
 	ImBuf *ibuf = NULL;
 	short ok = FALSE;
 	ImageFormatData imf;
+	bool is_float;
+
+	is_float = (int) color_depth > 8;
 
 	/* create a new ImBuf */
-	ibuf = IMB_allocImBuf(width, height, color_mode, IB_rect);
+	ibuf = IMB_allocImBuf(width, height, color_mode, (is_float ? IB_rectfloat : IB_rect));
 	if (!ibuf) return false;
 
 	/* populates the ImBuf */
-	IMB_buffer_byte_from_float((unsigned char *) ibuf->rect, buffer, ibuf->channels, ibuf->dither,
-	                           (is_linear?IB_PROFILE_LINEAR_RGB:IB_PROFILE_SRGB), IB_PROFILE_LINEAR_RGB,
-	                           FALSE, ibuf->x, ibuf->y, ibuf->x, ibuf->x);
+	if (is_float) {
+		IMB_buffer_float_from_float(
+		        ibuf->rect_float, buffer, ibuf->channels,
+		        IB_PROFILE_LINEAR_RGB, IB_PROFILE_LINEAR_RGB, false,
+		        ibuf->x, ibuf->y, ibuf->x, ibuf->y
+		        );
+	}
+	else {
+		IMB_buffer_byte_from_float(
+		        (unsigned char *) ibuf->rect, buffer, ibuf->channels, ibuf->dither,
+		        (is_linear?IB_PROFILE_LINEAR_RGB:IB_PROFILE_SRGB), IB_PROFILE_LINEAR_RGB,
+		        false, ibuf->x, ibuf->y, ibuf->x, ibuf->x
+		        );
+	}
 
 	/* setup the ImageFormatData */
 	imf.imtype = imtype;
