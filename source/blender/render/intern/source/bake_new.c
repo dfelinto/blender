@@ -140,7 +140,12 @@ void RE_bake_margin(BakePixel pixel_array[], ImBuf *ibuf, const int margin, cons
 		}
 	}
 
-	RE_bake_ibuf_filter(ibuf, mask_buffer, margin);
+	/* margin */
+	IMB_filter_extend(ibuf, mask_buffer, margin);
+
+	if (ibuf->planes != R_IMF_PLANES_RGBA)
+		/* clear alpha added by filtering */
+		IMB_rectfill_alpha(ibuf, 1.0f);
 
 	MEM_freeN(mask_buffer);
 }
