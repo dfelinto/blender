@@ -1226,6 +1226,59 @@ class CyclesRender_PT_CurveRendering(CyclesButtonsPanel, Panel):
         row.prop(ccscene, "maximum_width", text="Max Ext.")
 
 
+def template_bake_image_settings(layout, image_settings):
+    def support_quality(file_format):
+        return file_format in (
+                'JPEG',
+                'JPEG2000',
+                )
+
+    def support_compression(file_format):
+        return file_format in (
+                'PNG',
+                )
+
+    def support_multiple_depth(file_format):
+        return file_format in (
+                'TIFF',
+                'PNG',
+                'OPEN_EXR',
+                'DPX',
+                'JPEG2000',
+                )
+
+    def support_alpha(file_format):
+        return file_format in (
+                'TIFF',
+                'PNG',
+                'OPEN_EXR',
+                'TARGA',
+                'OPEN_EXR_MULTILAYER',
+                )
+
+    col = layout.column()
+    split = col.split(0.5)
+
+    split.prop(image_settings, "file_format", text="")
+    file_format = image_settings.file_format
+
+    if support_alpha(file_format):
+        sub = split.row()
+        sub.prop(image_settings, "color_mode", text="Color", expand=True)
+
+    if support_multiple_depth(file_format):
+        row = col.row()
+        row.label(text="Color Depth:")
+        row.prop(image_settings, "color_depth", expand=True)
+
+    if support_quality(file_format):
+        col.prop(image_settings, "quality")
+
+    if support_compression(file_format):
+        col.prop(image_settings, "compression")
+
+    if file_format in ('OPEN_EXR', 'OPEN_EXR_MULTILAYER'):
+        col.prop(image_settings, "exr_codec")
 
 
 class CyclesRender_PT_bake(CyclesButtonsPanel, Panel):
@@ -1256,16 +1309,30 @@ class CyclesRender_PT_bake(CyclesButtonsPanel, Panel):
         props.normal_g = cbk.normal_g
         props.normal_b = cbk.normal_b
 
+        # image format settings
+        props.file_format = cbk.image_settings.file_format
+        props.exr_codec = cbk.image_settings.exr_codec
+        props.quality = cbk.image_settings.quality
+        props.compression = cbk.image_settings.compression
+        props.color_mode = cbk.image_settings.color_mode
+        props.color_depth = cbk.image_settings.color_depth
+
         col = layout.column()
         col.prop(cbk, "type")
-        #col.prop(cbk, "is_save_external")
-        col.prop(cbk, "filepath")
 
+        col.separator()
         row = col.row(align=True)
         row.prop(cbk, "width")
         row.prop(cbk, "height")
 
         col.prop(cbk, "margin")
+
+        col.separator()
+        col.label(text="Output File:")
+        col.prop(cbk, "filepath", text="")
+
+        #template bake_image_settings
+        template_bake_image_settings(col, cbk.image_settings)
 
         col.separator()
         col.prop(cbk, "use_selected_to_active")
@@ -1276,13 +1343,16 @@ class CyclesRender_PT_bake(CyclesButtonsPanel, Panel):
 
         if cbk.type == 'NORMAL':
             col.separator()
-            col.prop(cbk, "normal_space")
+            box = col.box()
+            box.label(text="Normal Settings:")
+            box.prop(cbk, "normal_space", text="Space")
 
-            row = col.row(align=True)
+            row = box.row(align=True)
             row.label(text = "Swizzle:")
             row.prop(cbk, "normal_r", text="")
             row.prop(cbk, "normal_g", text="")
             row.prop(cbk, "normal_b", text="")
+
 
 
 class CyclesParticle_PT_CurveSettings(CyclesButtonsPanel, Panel):

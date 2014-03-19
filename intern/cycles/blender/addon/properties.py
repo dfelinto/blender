@@ -114,17 +114,107 @@ enum_volume_homogeneous_sampling = (
     ('EQUI_ANGULAR', "Equi-angular", "Use Equi-angular Sampling"),
     )
 
-enum_normal_swizzle = (
-    ('POS_X', "+X", ""),
-    ('POS_Y', "+Y", ""),
-    ('POS_Z', "+Z", ""),
-    ('NEG_X', "-X", ""),
-    ('NEG_Y', "-Y", ""),
-    ('NEG_Z', "-Z", ""),
-    )
+
+def enum_color_depth_items(self, context):
+    """"""
+    def is_float(file_format):
+        return file_format in (
+                'OPEN_EXR',
+                'OPEN_EXR_MULTILAYER',
+                'HDR',
+                )
+
+    file_formats = {
+                'PNG' : ['8','16'],
+                'TIFF' : ['8','16'],
+                'OPEN_EXR' : ['16','32'],
+                'DPX' : ['8', '10', '12', '16'],
+                'JPEG2000' : ['8', '12', '16'],
+                }
+
+    file_format = self.file_format
+    depths = file_formats.get(file_format, ['8'])
+
+    enum_color_depth_items.ret = [(e.identifier, e.name, e.description) for e in \
+            bpy.types.OBJECT_OT_bake.bl_rna.properties['color_depth'].enum_items if \
+            e.identifier in depths]
+
+    if is_float(file_format):
+        floats = {
+                '8' :"8",
+                '10' : "10",
+                '12' : "12",
+                '16' : "Float (Half)",
+                '32' : "Float (Full)",
+                }
+
+        for i, (identifier, name, description) in enumerate(enum_color_depth_items.ret):
+            enum_color_depth_items.ret[i] = (identifier, floats.get(identifier), description)
+
+    return enum_color_depth_items.ret
+
+
+bake_file_formats = ['BMP', 'PNG', 'JPEG', 'OPEN_EXR', 'TIFF', 'TARGA']
+
+class CyclesBakeImageFormatSettings(bpy.types.PropertyGroup):
+    enum_file_format_items = [(e.identifier, e.name, e.description) for e in bpy.types.OBJECT_OT_bake.bl_rna.properties['file_format'].enum_items if e.identifier in bake_file_formats]
+    enum_exr_codec_items = [(e.identifier, e.name, e.description) for e in bpy.types.OBJECT_OT_bake.bl_rna.properties['exr_codec'].enum_items]
+    enum_color_mode_items = [(e.identifier, e.name, e.description) for e in bpy.types.OBJECT_OT_bake.bl_rna.properties['color_mode'].enum_items]
+
+    file_format = EnumProperty(
+            name=bpy.types.OBJECT_OT_bake.bl_rna.properties['file_format'].name,
+            default=bpy.types.OBJECT_OT_bake.bl_rna.properties['file_format'].default,
+            description=bpy.types.OBJECT_OT_bake.bl_rna.properties['file_format'].description,
+            items=enum_file_format_items,
+            )
+
+    exr_codec = EnumProperty(
+            name=bpy.types.OBJECT_OT_bake.bl_rna.properties['exr_codec'].name,
+            default=bpy.types.OBJECT_OT_bake.bl_rna.properties['exr_codec'].default,
+            description=bpy.types.OBJECT_OT_bake.bl_rna.properties['exr_codec'].description,
+            items=enum_exr_codec_items,
+            )
+
+    color_mode = EnumProperty(
+            name=bpy.types.OBJECT_OT_bake.bl_rna.properties['color_mode'].name,
+            default=bpy.types.OBJECT_OT_bake.bl_rna.properties['color_mode'].default,
+            description=bpy.types.OBJECT_OT_bake.bl_rna.properties['color_mode'].description,
+            items=enum_color_mode_items,
+            )
+
+    color_depth = EnumProperty(
+            name=bpy.types.OBJECT_OT_bake.bl_rna.properties['color_depth'].name,
+            description=bpy.types.OBJECT_OT_bake.bl_rna.properties['color_depth'].description,
+            items=enum_color_depth_items,
+            )
+
+    quality = IntProperty(
+            subtype='PERCENTAGE',
+            name=bpy.types.OBJECT_OT_bake.bl_rna.properties['quality'].name,
+            description=bpy.types.OBJECT_OT_bake.bl_rna.properties['quality'].description,
+            default=bpy.types.OBJECT_OT_bake.bl_rna.properties['quality'].default,
+            soft_min=bpy.types.OBJECT_OT_bake.bl_rna.properties['quality'].soft_min,
+            soft_max=bpy.types.OBJECT_OT_bake.bl_rna.properties['quality'].soft_max,
+            min=bpy.types.OBJECT_OT_bake.bl_rna.properties['quality'].hard_min,
+            max=bpy.types.OBJECT_OT_bake.bl_rna.properties['quality'].hard_max,
+            )
+
+    compression = IntProperty(
+            subtype='PERCENTAGE',
+            name=bpy.types.OBJECT_OT_bake.bl_rna.properties['compression'].name,
+            description=bpy.types.OBJECT_OT_bake.bl_rna.properties['compression'].description,
+            default=bpy.types.OBJECT_OT_bake.bl_rna.properties['compression'].default,
+            soft_min=bpy.types.OBJECT_OT_bake.bl_rna.properties['compression'].soft_min,
+            soft_max=bpy.types.OBJECT_OT_bake.bl_rna.properties['compression'].soft_max,
+            min=bpy.types.OBJECT_OT_bake.bl_rna.properties['compression'].hard_min,
+            max=bpy.types.OBJECT_OT_bake.bl_rna.properties['compression'].hard_max,
+            )
 
 
 class CyclesBakeSettings(bpy.types.PropertyGroup):
+    enum_normal_space_items = [(e.identifier, e.name, e.description) for e in bpy.types.OBJECT_OT_bake.bl_rna.properties['normal_space'].enum_items]
+    enum_normal_swizzle_items = [(e.identifier, e.name, e.description) for e in bpy.types.OBJECT_OT_bake.bl_rna.properties['normal_r'].enum_items]
+
     type = EnumProperty(
             name="Type",
             default='COMBINED',
@@ -160,39 +250,48 @@ class CyclesBakeSettings(bpy.types.PropertyGroup):
 
     filepath = StringProperty(
             subtype='FILE_PATH',
-            name="File Path",
             default="//",
-            description="Image filepath to use when saving externally",
+            name=bpy.types.OBJECT_OT_bake.bl_rna.properties['filepath'].name,
+            description=bpy.types.OBJECT_OT_bake.bl_rna.properties['filepath'].description,
+            )
+
+    image_settings = PointerProperty(
+            name="Image Format Settings",
+            description="Image Format Settings",
+            type=CyclesBakeImageFormatSettings,
             )
 
     width = IntProperty(
             subtype='PIXEL',
-            min=1,
-            soft_min=64,
-            soft_max=4096,
-            default=512,
-            name="Width",
-            description="Horizontal dimension of the baking map",
+            name=bpy.types.OBJECT_OT_bake.bl_rna.properties['width'].name,
+            description=bpy.types.OBJECT_OT_bake.bl_rna.properties['width'].description,
+            default=bpy.types.OBJECT_OT_bake.bl_rna.properties['width'].default,
+            soft_min=bpy.types.OBJECT_OT_bake.bl_rna.properties['width'].soft_min,
+            soft_max=bpy.types.OBJECT_OT_bake.bl_rna.properties['width'].soft_max,
+            min=bpy.types.OBJECT_OT_bake.bl_rna.properties['width'].hard_min,
+            max=bpy.types.OBJECT_OT_bake.bl_rna.properties['width'].hard_max,
             )
 
     height = IntProperty(
             subtype='PIXEL',
-            min=1,
-            soft_min=64,
-            soft_max=4096,
-            default=512,
-            name="Height",
-            description="Vertical dimension of the baking map",
+            name=bpy.types.OBJECT_OT_bake.bl_rna.properties['height'].name,
+            description=bpy.types.OBJECT_OT_bake.bl_rna.properties['height'].description,
+            default=bpy.types.OBJECT_OT_bake.bl_rna.properties['height'].default,
+            soft_min=bpy.types.OBJECT_OT_bake.bl_rna.properties['height'].soft_min,
+            soft_max=bpy.types.OBJECT_OT_bake.bl_rna.properties['height'].soft_max,
+            min=bpy.types.OBJECT_OT_bake.bl_rna.properties['height'].hard_min,
+            max=bpy.types.OBJECT_OT_bake.bl_rna.properties['height'].hard_max,
             )
 
     margin = IntProperty(
             subtype='PIXEL',
-            min=0,
-            soft_min=0,
-            soft_max=64,
-            default=16,
-            name="Margin",
-            description="Extends the baked result as a post process filter",
+            name=bpy.types.OBJECT_OT_bake.bl_rna.properties['margin'].name,
+            description=bpy.types.OBJECT_OT_bake.bl_rna.properties['margin'].description,
+            default=bpy.types.OBJECT_OT_bake.bl_rna.properties['margin'].default,
+            soft_min=bpy.types.OBJECT_OT_bake.bl_rna.properties['margin'].soft_min,
+            soft_max=bpy.types.OBJECT_OT_bake.bl_rna.properties['margin'].soft_max,
+            min=bpy.types.OBJECT_OT_bake.bl_rna.properties['margin'].hard_min,
+            max=bpy.types.OBJECT_OT_bake.bl_rna.properties['margin'].hard_max,
             )
 
     use_selected_to_active = BoolProperty(
@@ -205,49 +304,46 @@ class CyclesBakeSettings(bpy.types.PropertyGroup):
     cage_extrusion = FloatProperty(
             subtype='DISTANCE',
             unit='LENGTH',
-            name="Cage Extrusion",
-            min=0.0,
-            soft_max=1.0,
-            default=0.0,
-            description="Distance to use for the inward ray cast when using "
-                        "selected to active",
+            name=bpy.types.OBJECT_OT_bake.bl_rna.properties['cage_extrusion'].name,
+            description=bpy.types.OBJECT_OT_bake.bl_rna.properties['cage_extrusion'].description,
+            default=bpy.types.OBJECT_OT_bake.bl_rna.properties['cage_extrusion'].default,
+            soft_min=bpy.types.OBJECT_OT_bake.bl_rna.properties['cage_extrusion'].soft_min,
+            soft_max=bpy.types.OBJECT_OT_bake.bl_rna.properties['cage_extrusion'].soft_max,
+            min=bpy.types.OBJECT_OT_bake.bl_rna.properties['cage_extrusion'].hard_min,
+            max=bpy.types.OBJECT_OT_bake.bl_rna.properties['cage_extrusion'].hard_max,
             )
 
     custom_cage = StringProperty(
-            name="Custom Cage",
-            description="Name of the object to use as cage (so the rays are casted from it)",
+            name=bpy.types.OBJECT_OT_bake.bl_rna.properties['custom_cage'].name,
+            description=bpy.types.OBJECT_OT_bake.bl_rna.properties['custom_cage'].description,
             )
 
     normal_space = EnumProperty(
-            name="Normal Space",
-            default='WORLD',
-            description="Choose normal space for baking",
-            items = (
-                ('WORLD', "World", "Bake the normals in world space"),
-                ('OBJECT', "Object", "Bake the normals in object space"),
-                ('TANGENT', "Tangent", "Bake the normals in tangent space"),
-                ),
+            name=bpy.types.OBJECT_OT_bake.bl_rna.properties['normal_space'].name,
+            description=bpy.types.OBJECT_OT_bake.bl_rna.properties['normal_space'].description,
+            default=bpy.types.OBJECT_OT_bake.bl_rna.properties['normal_space'].default,
+            items = enum_normal_space_items,
             )
 
     normal_r = EnumProperty(
-            name="R",
-            default='NEG_X',
-            description="Axis to bake in red channel",
-            items = enum_normal_swizzle,
+            name=bpy.types.OBJECT_OT_bake.bl_rna.properties['normal_r'].name,
+            description=bpy.types.OBJECT_OT_bake.bl_rna.properties['normal_r'].description,
+            default=bpy.types.OBJECT_OT_bake.bl_rna.properties['normal_r'].default,
+            items = enum_normal_swizzle_items,
             )
 
     normal_g = EnumProperty(
-            name="G",
-            default='NEG_Y',
-            description="Axis to bake in green channel",
-            items = enum_normal_swizzle,
+            name=bpy.types.OBJECT_OT_bake.bl_rna.properties['normal_g'].name,
+            description=bpy.types.OBJECT_OT_bake.bl_rna.properties['normal_g'].description,
+            default=bpy.types.OBJECT_OT_bake.bl_rna.properties['normal_g'].default,
+            items = enum_normal_swizzle_items,
             )
 
     normal_b = EnumProperty(
-            name="B",
-            default='NEG_Z',
-            description="Axis to bake in blue channel",
-            items = enum_normal_swizzle,
+            name=bpy.types.OBJECT_OT_bake.bl_rna.properties['normal_b'].name,
+            description=bpy.types.OBJECT_OT_bake.bl_rna.properties['normal_b'].description,
+            default=bpy.types.OBJECT_OT_bake.bl_rna.properties['normal_b'].default,
+            items = enum_normal_swizzle_items,
             )
 
 
@@ -1023,6 +1119,7 @@ class CyclesCurveSettings(bpy.types.PropertyGroup):
 
 
 def register():
+    bpy.utils.register_class(CyclesBakeImageFormatSettings)
     bpy.utils.register_class(CyclesBakeSettings)
     bpy.utils.register_class(CyclesRenderSettings)
     bpy.utils.register_class(CyclesCameraSettings)
@@ -1038,6 +1135,7 @@ def register():
 def unregister():
     bpy.utils.unregister_class(CyclesRenderSettings)
     bpy.utils.unregister_class(CyclesBakeSettings)
+    bpy.utils.unregister_class(CyclesBakeImageFormatSettings)
     bpy.utils.unregister_class(CyclesCameraSettings)
     bpy.utils.unregister_class(CyclesMaterialSettings)
     bpy.utils.unregister_class(CyclesLampSettings)

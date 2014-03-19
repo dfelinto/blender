@@ -119,28 +119,17 @@ static int bake_break(void *UNUSED(rjv))
 	return 0;
 }
 
-static bool write_external_bake_pixels(const char *filepath, BakePixel pixel_array[], float *buffer, const int width, const int height, const int depth, bool is_linear, const int margin)
+static bool write_external_bake_pixels(
+    const char *filepath, BakePixel pixel_array[], float *buffer,
+    const int width, const int height, bool is_linear, const int margin,
+    char imtype, char exr_codec, char quality, char compression, char color_mode, char color_depth)
 {
 	ImBuf *ibuf = NULL;
 	short ok = FALSE;
-	unsigned char planes;
-
-	switch (depth) {
-		case 1:
-			planes = R_IMF_PLANES_BW;
-			break;
-		case 2:
-		case 3:
-			planes = R_IMF_PLANES_RGB;
-			break;
-		case 4:
-		default:
-			planes = R_IMF_PLANES_RGBA;
-			break;
-	}
+	ImageFormatData imf;
 
 	/* create a new ImBuf */
-	ibuf = IMB_allocImBuf(width, height, planes, IB_rect);
+	ibuf = IMB_allocImBuf(width, height, color_mode, IB_rect);
 	if (!ibuf) return false;
 
 	/* populates the ImBuf */
@@ -148,13 +137,17 @@ static bool write_external_bake_pixels(const char *filepath, BakePixel pixel_arr
 	                           (is_linear?IB_PROFILE_LINEAR_RGB:IB_PROFILE_SRGB), IB_PROFILE_LINEAR_RGB,
 	                           FALSE, ibuf->x, ibuf->y, ibuf->x, ibuf->x);
 
-	/* setup the Imbuf*/
-	ibuf->ftype = PNG;
+	/* setup the ImageFormatData */
+	imf.imtype = imtype;
+	imf.exr_codec = exr_codec;
+	imf.quality = quality;
+	imf.compress = compression;
+	imf.depth = color_depth;
 
 	/* margins */
 	RE_bake_margin(pixel_array, ibuf, margin, width, height);
 
-	if ((ok=IMB_saveiff(ibuf, filepath, IB_rect))) {
+	if ((ok=BKE_imbuf_write(ibuf, filepath, &imf))) {
 #ifndef WIN32
 		chmod(filepath, S_IRUSR | S_IWUSR);
 #endif
@@ -444,13 +437,24 @@ static int bake_exec(bContext *C, wmOperator *op)
 	else {
 		/* save the result */
 		if (is_external) {
-			BLI_path_abs(filepath, bmain->name);
+			char name[FILE_MAX];
+			char imtype, exr_codec, quality, compression, color_mode, color_depth;
+
+			imtype = RNA_int_get(op->ptr, "file_format");
+			quality = RNA_int_get(op->ptr, "quality");
+			compression = RNA_int_get(op->ptr, "compression");
+			exr_codec = RNA_int_get(op->ptr, "exr_codec");
+			color_mode = RNA_enum_get(op->ptr, "color_mode");
+			color_depth = RNA_enum_get(op->ptr, "color_depth");
+
+			BKE_makepicstring_from_type(name, filepath, bmain->name, 0, imtype, true, false);
 
 			/* save it externally */
-			ok = write_external_bake_pixels(filepath, pixel_array_render, result, width, height, depth, is_linear, margin);
+			ok = write_external_bake_pixels(name, pixel_array_render, result, width, height, is_linear, margin, imtype, exr_codec, quality, compression, color_mode, color_depth);
+
 			if (!ok) {
 				char *error = NULL;
-				error = BLI_sprintfN("Problem saving baked map in \"%s\".", filepath);
+				error = BLI_sprintfN("Problem saving baked map in \"%s\".", name);
 
 				BKE_report(op->reports, RPT_ERROR, error);
 				MEM_freeN(error);
@@ -458,7 +462,7 @@ static int bake_exec(bContext *C, wmOperator *op)
 			}
 			else {
 				char *msg = NULL;
-				msg = BLI_sprintfN("Baking map written to \"%s\".", filepath);
+				msg = BLI_sprintfN("Baking map written to \"%s\".", name);
 
 				BKE_report(op->reports, RPT_INFO, msg);
 				MEM_freeN(msg);
@@ -587,6 +591,12 @@ static EnumPropertyItem normal_space_items[] = {
 	{0, NULL, 0, NULL, NULL}
 };
 
+static EnumPropertyItem color_mode_items[] = {
+	{R_IMF_PLANES_RGB, "RGB", 0, "RGB", "Images are saved with RGB (color) data"},
+	{R_IMF_PLANES_RGBA, "RGBA", 0, "RGBA", "Images are saved with RGB and Alpha data (if supported)"},
+	{0, NULL, 0, NULL, NULL}
+};
+
 void OBJECT_OT_bake(wmOperatorType *ot)
 {
 	/* identifiers */
@@ -613,4 +623,18 @@ void OBJECT_OT_bake(wmOperatorType *ot)
 	ot->prop = RNA_def_enum(ot->srna, "normal_r", normal_swizzle_items, OB_NEGX, "R", "Axis to bake in red channel");
 	ot->prop = RNA_def_enum(ot->srna, "normal_g", normal_swizzle_items, OB_NEGY, "G", "Axis to bake in green channel");
 	ot->prop = RNA_def_enum(ot->srna, "normal_b", normal_swizzle_items, OB_NEGZ, "B", "Axis to bake in blue channel");
+
+	/* Image Format Settings */
+	ot->prop = RNA_def_enum(ot->srna, "file_format", image_type_items, R_IMF_IMTYPE_PNG, "File Format", "File format to save the rendered images as");
+	ot->prop = RNA_def_enum(ot->srna, "exr_codec", exr_codec_items, R_IMF_EXR_CODEC_ZIP, "EXR Codec", "Codec settings for OpenEXR");
+	ot->prop = RNA_def_int(ot->srna, "quality", 90, 0, 100, "Quality", "Quality for image formats that support lossy compression", 0, 100);
+	ot->prop = RNA_def_int(ot->srna, "compression", 15, 0, 100, "Compression",
+			               "Amount of time to determine best compression: "
+	                       "0 = no compression with fast file output, "
+	                       "100 = maximum lossless compression with slow file output", 0, 100);
+	ot->prop = RNA_def_enum(ot->srna, "color_mode", color_mode_items, R_IMF_PLANES_RGB, "Color Mode",
+	                        "Choose RGB for saving red, green and blue channels, "
+	                        "and RGBA for saving red, green, blue and alpha channels");
+	ot->prop = RNA_def_enum(ot->srna, "color_depth", image_color_depth_items, R_IMF_CHAN_DEPTH_8, "Color Depth",
+	                        "Bit depth per channel");
 }
