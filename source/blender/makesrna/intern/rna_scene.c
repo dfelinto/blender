@@ -75,6 +75,17 @@
 
 #include "BLI_threads.h"
 
+#ifdef WITH_OPENEXR
+EnumPropertyItem exr_codec_items[] = {
+	{R_IMF_EXR_CODEC_NONE, "NONE", 0, "None", ""},
+	{R_IMF_EXR_CODEC_PXR24, "PXR24", 0, "Pxr24 (lossy)", ""},
+	{R_IMF_EXR_CODEC_ZIP, "ZIP", 0, "ZIP (lossless)", ""},
+	{R_IMF_EXR_CODEC_PIZ, "PIZ", 0, "PIZ (lossless)", ""},
+	{R_IMF_EXR_CODEC_RLE, "RLE", 0, "RLE (lossless)", ""},
+	{0, NULL, 0, NULL, NULL}
+};
+#endif
+
 EnumPropertyItem uv_sculpt_relaxation_items[] = {
 	{UV_SCULPT_TOOL_RELAX_LAPLACIAN, "LAPLACIAN", 0, "Laplacian", "Use Laplacian method for relaxation"},
 	{UV_SCULPT_TOOL_RELAX_HC, "HC", 0, "HC", "Use HC method for relaxation"},
@@ -3595,16 +3606,6 @@ static void rna_def_render_layers(BlenderRNA *brna, PropertyRNA *cprop)
 
 static void rna_def_scene_image_format_data(BlenderRNA *brna)
 {
-#ifdef WITH_OPENEXR
-	static EnumPropertyItem exr_codec_items[] = {
-		{R_IMF_EXR_CODEC_NONE, "NONE", 0, "None", ""},
-		{R_IMF_EXR_CODEC_PXR24, "PXR24", 0, "Pxr24 (lossy)", ""},
-		{R_IMF_EXR_CODEC_ZIP, "ZIP", 0, "ZIP (lossless)", ""},
-		{R_IMF_EXR_CODEC_PIZ, "PIZ", 0, "PIZ (lossless)", ""},
-		{R_IMF_EXR_CODEC_RLE, "RLE", 0, "RLE (lossless)", ""},
-		{0, NULL, 0, NULL, NULL}
-	};
-#endif
 
 #ifdef WITH_OPENJPEG
 	static EnumPropertyItem jp2_codec_items[] = {

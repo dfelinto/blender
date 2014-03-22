@@ -51,6 +51,8 @@ class CurveSystemManager;
 class Shader;
 class ShaderManager;
 class Progress;
+class BakeManager;
+class BakeData;
 
 /* Scene Device Data */
 
@@ -174,6 +176,7 @@ public:
 	ObjectManager *object_manager;
 	ParticleSystemManager *particle_system_manager;
 	CurveSystemManager *curve_system_manager;
+	BakeManager *bake_manager;
 
 	/* default shaders */
 	int default_surface;
@@ -201,6 +204,9 @@ public:
 
 	enum MotionType { MOTION_NONE = 0, MOTION_PASS, MOTION_BLUR };
 	MotionType need_motion(bool advanced_shading = true);
+
+	BakeData *bake_init(const int object, const int tri_offset, const int num_pixels);
+	bool bake(ShaderEvalType shader_type, BakeData *bake_data, float result[]);
 
 	bool need_update();
 	bool need_reset();

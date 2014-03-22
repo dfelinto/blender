@@ -210,37 +210,39 @@ typedef struct SceneRenderLayer {
 #define SCE_LAY_NEG_ZMASK	0x80000
 
 /* srl->passflag */
-#define SCE_PASS_COMBINED				(1<<0)
-#define SCE_PASS_Z						(1<<1)
-#define SCE_PASS_RGBA					(1<<2)
-#define SCE_PASS_DIFFUSE				(1<<3)
-#define SCE_PASS_SPEC					(1<<4)
-#define SCE_PASS_SHADOW					(1<<5)
-#define SCE_PASS_AO						(1<<6)
-#define SCE_PASS_REFLECT				(1<<7)
-#define SCE_PASS_NORMAL					(1<<8)
-#define SCE_PASS_VECTOR					(1<<9)
-#define SCE_PASS_REFRACT				(1<<10)
-#define SCE_PASS_INDEXOB				(1<<11)
-#define SCE_PASS_UV						(1<<12)
-#define SCE_PASS_INDIRECT				(1<<13)
-#define SCE_PASS_MIST					(1<<14)
-#define SCE_PASS_RAYHITS				(1<<15)
-#define SCE_PASS_EMIT					(1<<16)
-#define SCE_PASS_ENVIRONMENT			(1<<17)
-#define SCE_PASS_INDEXMA				(1<<18)
-#define SCE_PASS_DIFFUSE_DIRECT			(1<<19)
-#define SCE_PASS_DIFFUSE_INDIRECT		(1<<20)
-#define SCE_PASS_DIFFUSE_COLOR			(1<<21)
-#define SCE_PASS_GLOSSY_DIRECT			(1<<22)
-#define SCE_PASS_GLOSSY_INDIRECT		(1<<23)
-#define SCE_PASS_GLOSSY_COLOR			(1<<24)
-#define SCE_PASS_TRANSM_DIRECT			(1<<25)
-#define SCE_PASS_TRANSM_INDIRECT		(1<<26)
-#define SCE_PASS_TRANSM_COLOR			(1<<27)
-#define SCE_PASS_SUBSURFACE_DIRECT		(1<<28)
-#define SCE_PASS_SUBSURFACE_INDIRECT	(1<<29)
-#define SCE_PASS_SUBSURFACE_COLOR		(1<<30)
+typedef enum ScenePassType{
+	SCE_PASS_COMBINED                 = (1<<0),
+	SCE_PASS_Z                        = (1<<1),
+	SCE_PASS_RGBA                     = (1<<2),
+	SCE_PASS_DIFFUSE                  = (1<<3),
+	SCE_PASS_SPEC                     = (1<<4),
+	SCE_PASS_SHADOW                   = (1<<5),
+	SCE_PASS_AO                       = (1<<6),
+	SCE_PASS_REFLECT                  = (1<<7),
+	SCE_PASS_NORMAL                   = (1<<8),
+	SCE_PASS_VECTOR                   = (1<<9),
+	SCE_PASS_REFRACT                  = (1<<10),
+	SCE_PASS_INDEXOB                  = (1<<11),
+	SCE_PASS_UV                       = (1<<12),
+	SCE_PASS_INDIRECT                 = (1<<13),
+	SCE_PASS_MIST                     = (1<<14),
+	SCE_PASS_RAYHITS                  = (1<<15),
+	SCE_PASS_EMIT                     = (1<<16),
+	SCE_PASS_ENVIRONMENT              = (1<<17),
+	SCE_PASS_INDEXMA                  = (1<<18),
+	SCE_PASS_DIFFUSE_DIRECT           = (1<<19),
+	SCE_PASS_DIFFUSE_INDIRECT         = (1<<20),
+	SCE_PASS_DIFFUSE_COLOR            = (1<<21),
+	SCE_PASS_GLOSSY_DIRECT            = (1<<22),
+	SCE_PASS_GLOSSY_INDIRECT          = (1<<23),
+	SCE_PASS_GLOSSY_COLOR             = (1<<24),
+	SCE_PASS_TRANSM_DIRECT            = (1<<25),
+	SCE_PASS_TRANSM_INDIRECT          = (1<<26),
+	SCE_PASS_TRANSM_COLOR             = (1<<27),
+	SCE_PASS_SUBSURFACE_DIRECT        = (1<<28),
+	SCE_PASS_SUBSURFACE_INDIRECT      = (1<<29),
+	SCE_PASS_SUBSURFACE_COLOR         = (1<<30),
+} ScenePassType;
 
 /* note, srl->passflag is treestore element 'nr' in outliner, short still... */
 
