@@ -533,61 +533,6 @@ static int bake_exec(bContext *C, wmOperator *op)
 		BKE_libblock_free(bmain, me_high);
 	}
 
-#if 0
-	Main *bmain = CTX_data_main(C);
-	Scene *scene = CTX_data_scene(C);
-	int result = OPERATOR_CANCELLED;
-
-	if (is_multires_bake(scene)) {
-		result = multiresbake_image_exec_locked(C, op);
-	}
-	else {
-		if (test_bake_internal(C, op->reports) == 0) {
-			return OPERATOR_CANCELLED;
-		}
-		else {
-			ListBase threads;
-			BakeRender bkr = {NULL};
-
-			init_bake_internal(&bkr, C);
-			bkr.reports = op->reports;
-
-			RE_test_break_cb(bkr.re, NULL, thread_break);
-			G.is_break = FALSE;   /* blender_test_break uses this global */
-
-			RE_Database_Baking(bkr.re, bmain, scene, scene->lay, scene->r.bake_mode, (scene->r.bake_flag & R_BAKE_TO_ACTIVE) ? OBACT : NULL);
-
-			/* baking itself is threaded, cannot use test_break in threads  */
-			BLI_init_threads(&threads, do_bake_render, 1);
-			bkr.ready = 0;
-			BLI_insert_thread(&threads, &bkr);
-
-			while (bkr.ready == 0) {
-				PIL_sleep_ms(50);
-				if (bkr.ready)
-					break;
-
-				/* used to redraw in 2.4x but this is just for exec in 2.5 */
-				if (!G.background)
-					blender_test_break();
-			}
-			BLI_end_threads(&threads);
-
-			if (bkr.result == BAKE_RESULT_NO_OBJECTS)
-				BKE_report(op->reports, RPT_ERROR, "No valid images found to bake to");
-			else if (bkr.result == BAKE_RESULT_FEEDBACK_LOOP)
-				BKE_report(op->reports, RPT_ERROR, "Circular reference in texture stack");
-
-			finish_bake_internal(&bkr);
-
-			result = OPERATOR_FINISHED;
-		}
-	}
-
-	WM_event_add_notifier(C, NC_SCENE | ND_RENDER_RESULT, scene);
-	
-	return result;
-#endif
 	return op_result;
 }
 
