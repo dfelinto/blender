@@ -58,7 +58,8 @@ void RE_mask_bake_pixels(struct BakePixel pixel_array_from[],
 
 void RE_populate_bake_pixels_from_object(struct Mesh *me_low, struct Mesh *me_high,
                                          struct BakePixel pixel_array_from[], struct BakePixel pixel_array_to[],
-                                         const int num_pixels, const float cage_extrusion);
+                                         const int num_pixels, const float cage_extrusion,
+                                         float mat_low2high[4][4]);
 
 void RE_populate_bake_pixels(struct Mesh *me, struct BakePixel pixel_array[], const int width, const int height);
 

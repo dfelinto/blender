@@ -326,9 +326,13 @@ static int bake_exec(bContext *C, wmOperator *op)
 		ModifierData *md, *nmd;
 		TriangulateModifierData *tmd;
 		ListBase modifiers_tmp, modifiers_original;
+		float mat_low2high[4][4];
 
 		if (ob_custom_cage) {
 			me_low = BKE_mesh_new_from_object(bmain, scene, ob_custom_cage, 1, 2, 1, 0);
+
+			invert_m4_m4(mat_low2high, ob_high->obmat);
+			mul_m4_m4m4(mat_low2high, mat_low2high, ob_custom_cage->obmat);
 		}
 		else {
 			modifiers_original = ob_low->modifiers;
@@ -351,6 +355,9 @@ static int bake_exec(bContext *C, wmOperator *op)
 
 			/* get the cage mesh as it arrives in the renderer */
 			me_low = BKE_mesh_new_from_object(bmain, scene, ob_low, 1, 2, 1, 0);
+
+			invert_m4_m4(mat_low2high, ob_high->obmat);
+			mul_m4_m4m4(mat_low2high, mat_low2high, ob_low->obmat);
 		}
 
 		/* populate the pixel array with the face data */
@@ -366,7 +373,7 @@ static int bake_exec(bContext *C, wmOperator *op)
 
 		if (is_tangent) {
 			pixel_array_high = MEM_callocN(sizeof(BakePixel) * num_pixels, "bake pixels high poly");
-			RE_populate_bake_pixels_from_object(me_low, me_high, pixel_array_low, pixel_array_high, num_pixels, cage_extrusion);
+			RE_populate_bake_pixels_from_object(me_low, me_high, pixel_array_low, pixel_array_high, num_pixels, cage_extrusion, mat_low2high);
 			pixel_array_render = pixel_array_high;
 
 			/* we need the pixel array to get normals and tangents from the original mesh */
@@ -382,7 +389,7 @@ static int bake_exec(bContext *C, wmOperator *op)
 		}
 		else {
 			/* re-use the same BakePixel array */
-			RE_populate_bake_pixels_from_object(me_low, me_high, pixel_array_low, pixel_array_low, num_pixels, cage_extrusion);
+			RE_populate_bake_pixels_from_object(me_low, me_high, pixel_array_low, pixel_array_low, num_pixels, cage_extrusion, mat_low2high);
 			pixel_array_render = pixel_array_low;
 		}
 

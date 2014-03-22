@@ -365,7 +365,7 @@ static void calculateTriTessFace(TriTessFace *triangles, Mesh *me, int (*lookup_
 
 void RE_populate_bake_pixels_from_object(Mesh *me_low, Mesh *me_high,
                                          BakePixel pixel_array_from[], BakePixel pixel_array_to[],
-                                         const int num_pixels, const float cage_extrusion)
+                                         const int num_pixels, const float cage_extrusion, float mat_low2high[4][4])
 {
 	int i;
 	int primitive_id;
@@ -415,6 +415,9 @@ void RE_populate_bake_pixels_from_object(Mesh *me_low, Mesh *me_high,
 
 		/* calculate from low poly mesh cage */
 		get_point_from_barycentric(tris_low, primitive_id, u, v, cage_extrusion, co, dir);
+
+		/* transform the ray from the low poly to the high poly space */
+		mul_m4_v3(mat_low2high, co);
 
 		/* cast ray */
 		cast_ray_highpoly(&treeData, tris_high, &pixel_array_to[i], co, dir);
