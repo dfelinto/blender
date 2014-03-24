@@ -737,18 +737,10 @@ void Session::update_scene()
 	   sampling pattern and by baking */
 	Integrator *integrator = scene->integrator;
 
-	if(integrator->sampling_pattern == SAMPLING_PATTERN_CMJ) {
-		int aa_samples = tile_manager.num_samples;
+	int aa_samples = tile_manager.num_samples;
 
-		if(aa_samples != integrator->aa_samples) {
-			integrator->aa_samples = aa_samples;
-			integrator->tag_update(scene);
-		}
-	}
-
-	int samples = tile_manager.num_samples;
-	if(samples != integrator->samples) {
-		integrator->samples = samples;
+	if(aa_samples != integrator->aa_samples) {
+		integrator->aa_samples = aa_samples;
 		integrator->tag_update(scene);
 	}
 

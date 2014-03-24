@@ -55,7 +55,6 @@ public:
 	float sample_clamp_indirect;
 	bool motion_blur;
 
-	int samples;
 	int aa_samples;
 	int diffuse_samples;
 	int glossy_samples;

@@ -21,7 +21,7 @@ CCL_NAMESPACE_BEGIN
 
 ccl_device void compute_light_pass(KernelGlobals *kg, ShaderData *sd, PathRadiance *L, RNG rng, bool is_ao)
 {
-	int samples = kernel_data.integrator.samples;
+	int samples = kernel_data.integrator.aa_samples;
 
 	/* initialize master radiance accumulator */
 	assert(kernel_data.film.use_light_pass);

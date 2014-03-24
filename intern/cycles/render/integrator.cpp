@@ -53,7 +53,6 @@ Integrator::Integrator()
 	sample_clamp_indirect = 0.0f;
 	motion_blur = false;
 
-	samples = 1;
 	aa_samples = 0;
 	diffuse_samples = 1;
 	glossy_samples = 1;
@@ -202,8 +201,7 @@ bool Integrator::modified(const Integrator& integrator)
 		motion_blur == integrator.motion_blur &&
 		sampling_pattern == integrator.sampling_pattern &&
 		sample_all_lights_direct == integrator.sample_all_lights_direct &&
-		sample_all_lights_indirect == integrator.sample_all_lights_indirect &&
-		samples == integrator.samples);
+		sample_all_lights_indirect == integrator.sample_all_lights_indirect);
 }
 
 void Integrator::tag_update(Scene *scene)

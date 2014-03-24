@@ -930,9 +930,6 @@ typedef struct KernelIntegrator {
 	int volume_max_steps;
 	float volume_step_size;
 	int volume_samples;
-
-	/* baking */
-	int samples, pad6, pad7, pad8;
 } KernelIntegrator;
 
 typedef struct KernelBVH {
