@@ -409,6 +409,11 @@ void RE_engine_bake_set_engine_parameters(Render *re, Main *bmain, Scene *scene)
 	re->scene = scene;
 	re->main = bmain;
 	re->r = scene->r;
+
+	/* prevent crash when freeing the scene
+	 but it potentially leaves unfreed memory blocks
+	 not sure how to fix this yet -- dfelinto */
+	re->r.layers.first = re->r.layers.last = NULL;
 }
 
 bool RE_engine_has_bake(Render *re)
@@ -464,6 +469,8 @@ bool RE_engine_bake(Render *re, Object *object, BakePixel pixel_array[], int num
 		RE_engine_free(engine);
 		re->engine = NULL;
 	}
+
+	RE_parts_free(re);
 
 	if (BKE_reports_contain(re->reports, RPT_ERROR))
 		G.is_break = TRUE;
