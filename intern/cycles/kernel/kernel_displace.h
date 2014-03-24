@@ -192,42 +192,54 @@ ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input,
 		}
 		case SHADER_EVAL_DIFFUSE_DIRECT:
 		{
-			out = L.direct_diffuse;
+			shader_eval_surface(kg, &sd, 0.f, 0, SHADER_CONTEXT_MAIN);
+			out = safe_divide_color(L.direct_diffuse, shader_bsdf_diffuse(kg, &sd));
 			break;
 		}
 		case SHADER_EVAL_GLOSSY_DIRECT:
 		{
-			out = L.direct_glossy;
+			shader_eval_surface(kg, &sd, 0.f, 0, SHADER_CONTEXT_MAIN);
+			out = safe_divide_color(L.direct_glossy, shader_bsdf_glossy(kg, &sd));
 			break;
 		}
 		case SHADER_EVAL_TRANSMISSION_DIRECT:
 		{
-			out = L.direct_transmission;
+			shader_eval_surface(kg, &sd, 0.f, 0, SHADER_CONTEXT_MAIN);
+			out = safe_divide_color(L.direct_transmission, shader_bsdf_transmission(kg, &sd));
 			break;
 		}
 		case SHADER_EVAL_SUBSURFACE_DIRECT:
 		{
-			out = L.direct_subsurface;
+#ifdef __SUBSURFACE__
+			shader_eval_surface(kg, &sd, 0.f, 0, SHADER_CONTEXT_MAIN);
+			out = safe_divide_color(L.direct_subsurface, shader_bsdf_subsurface(kg, &sd));
+#endif
 			break;
 		}
 		case SHADER_EVAL_DIFFUSE_INDIRECT:
 		{
-			out = L.indirect_diffuse;
+			shader_eval_surface(kg, &sd, 0.f, 0, SHADER_CONTEXT_MAIN);
+			out = safe_divide_color(L.indirect_diffuse, shader_bsdf_diffuse(kg, &sd));
 			break;
 		}
 		case SHADER_EVAL_GLOSSY_INDIRECT:
 		{
-			out = L.indirect_glossy;
+			shader_eval_surface(kg, &sd, 0.f, 0, SHADER_CONTEXT_MAIN);
+			out = safe_divide_color(L.indirect_glossy, shader_bsdf_glossy(kg, &sd));
 			break;
 		}
 		case SHADER_EVAL_TRANSMISSION_INDIRECT:
 		{
-			out = L.indirect_transmission;
+			shader_eval_surface(kg, &sd, 0.f, 0, SHADER_CONTEXT_MAIN);
+			out = safe_divide_color(L.indirect_transmission, shader_bsdf_transmission(kg, &sd));
 			break;
 		}
 		case SHADER_EVAL_SUBSURFACE_INDIRECT:
 		{
-			out = L.indirect_subsurface;
+#ifdef __SUBSURFACE__
+			shader_eval_surface(kg, &sd, 0.f, 0, SHADER_CONTEXT_MAIN);
+			out = safe_divide_color(L.indirect_subsurface, shader_bsdf_subsurface(kg, &sd));
+#endif
 			break;
 		}
 
