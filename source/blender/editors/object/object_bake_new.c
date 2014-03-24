@@ -464,10 +464,10 @@ static int bake_exec(bContext *C, wmOperator *op)
 			char name[FILE_MAX];
 			char imtype, exr_codec, quality, compression, color_mode, color_depth;
 
-			imtype = RNA_int_get(op->ptr, "file_format");
+			imtype = RNA_enum_get(op->ptr, "file_format");
 			quality = RNA_int_get(op->ptr, "quality");
 			compression = RNA_int_get(op->ptr, "compression");
-			exr_codec = RNA_int_get(op->ptr, "exr_codec");
+			exr_codec = RNA_enum_get(op->ptr, "exr_codec");
 			color_mode = RNA_enum_get(op->ptr, "color_mode");
 			color_depth = RNA_enum_get(op->ptr, "color_depth");
 
