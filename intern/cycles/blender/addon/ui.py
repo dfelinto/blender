@@ -1292,30 +1292,39 @@ class CyclesRender_PT_bake(CyclesButtonsPanel, Panel):
 
         scene = context.scene
         cbk = scene.cycles.bake
+        cbk_attrs = (
+                "type",
+                "is_save_external",
+                "filepath",
+                "width",
+                "height",
+                "margin",
+                "use_selected_to_active",
+                "cage_extrusion",
+                "custom_cage",
+                "normal_space",
+                "normal_r",
+                "normal_g",
+                "normal_b",
+                )
+
+        # image format settings
+        cbk_imf_attrs = (
+                "file_format",
+                "exr_codec",
+                "quality",
+                "compression",
+                "color_mode",
+                "color_depth",
+                )
 
         props = layout.operator("object.bake", icon='RENDER_STILL')
 
-        props.type = cbk.type
-        props.is_save_external = cbk.is_save_external
-        props.filepath = cbk.filepath
-        props.width = cbk.width
-        props.height = cbk.height
-        props.margin = cbk.margin
-        props.use_selected_to_active = cbk.use_selected_to_active
-        props.cage_extrusion = cbk.cage_extrusion
-        props.custom_cage = cbk.custom_cage
-        props.normal_space = cbk.normal_space
-        props.normal_r = cbk.normal_r
-        props.normal_g = cbk.normal_g
-        props.normal_b = cbk.normal_b
+        for attr in cbk_attrs:
+            setattr(props, attr, getattr(cbk, attr))
 
-        # image format settings
-        props.file_format = cbk.image_settings.file_format
-        props.exr_codec = cbk.image_settings.exr_codec
-        props.quality = cbk.image_settings.quality
-        props.compression = cbk.image_settings.compression
-        props.color_mode = cbk.image_settings.color_mode
-        props.color_depth = cbk.image_settings.color_depth
+        for attr in cbk_imf_attrs:
+            setattr(props, attr, getattr(cbk.image_settings, attr))
 
         col = layout.column()
         col.prop(cbk, "type")
