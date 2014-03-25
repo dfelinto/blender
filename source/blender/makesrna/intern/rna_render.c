@@ -726,19 +726,19 @@ static void rna_def_render_bake_pixel(BlenderRNA *brna)
 	RNA_def_property_float_sdna(prop, NULL, "v");
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 
-	prop = RNA_def_property(srna, "dudx", PROP_FLOAT, PROP_NONE);
+	prop = RNA_def_property(srna, "du_dx", PROP_FLOAT, PROP_NONE);
 	RNA_def_property_float_sdna(prop, NULL, "dudx");
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 
-	prop = RNA_def_property(srna, "dudy", PROP_FLOAT, PROP_NONE);
+	prop = RNA_def_property(srna, "du_dy", PROP_FLOAT, PROP_NONE);
 	RNA_def_property_float_sdna(prop, NULL, "dudy");
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 
-	prop = RNA_def_property(srna, "dvdx", PROP_FLOAT, PROP_NONE);
+	prop = RNA_def_property(srna, "dv_dx", PROP_FLOAT, PROP_NONE);
 	RNA_def_property_float_sdna(prop, NULL, "dvdx");
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 
-	prop = RNA_def_property(srna, "dvdy", PROP_FLOAT, PROP_NONE);
+	prop = RNA_def_property(srna, "dv_dy", PROP_FLOAT, PROP_NONE);
 	RNA_def_property_float_sdna(prop, NULL, "dvdy");
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 

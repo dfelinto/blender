@@ -125,7 +125,7 @@ static bool write_external_bake_pixels(
     char imtype, char exr_codec, char quality, char compression, char color_mode, char color_depth)
 {
 	ImBuf *ibuf = NULL;
-	short ok = FALSE;
+	bool ok = false;
 	ImageFormatData imf;
 	bool is_float;
 
@@ -161,7 +161,7 @@ static bool write_external_bake_pixels(
 	/* margins */
 	RE_bake_margin(pixel_array, ibuf, margin, width, height);
 
-	if ((ok=BKE_imbuf_write(ibuf, filepath, &imf))) {
+	if ((ok = BKE_imbuf_write(ibuf, filepath, &imf))) {
 #ifndef WIN32
 		chmod(filepath, S_IRUSR | S_IWUSR);
 #endif
@@ -283,40 +283,37 @@ static int bake_exec(bContext *C, wmOperator *op)
 	pixel_array_low = MEM_callocN(sizeof(BakePixel) * num_pixels, "bake pixels low poly");
 	result = MEM_callocN(sizeof(float) * depth * num_pixels, "bake return pixels");
 
-	/**
-	 // PSEUDO-CODE TIME
+#if 0
+	/* PSEUDO-CODE TIME
+	 *
+	 * for now ignore the 'bakemap' references below
+	 * this is just to help thinking how this will fit
+	 * in the overall design and future changes
+	 * for the current bake structure just consider
+	 * that there is one bakemap made with the current
+	 * render selected options */
 
-	 // for now ignore the 'bakemap' references below
-	 // this is just to help thinking how this will fit
-	 // in the overall design and future changes
-	 // for the current bake structure just consider
-	 // that there is one bakemap made with the current
-	 // render selected options
+	for object in selected_objects:
+		BakePixels *pixel_array[];
 
-	 for object in selected_objects:
- 		BakePixels *pixel_array[];
+		/* doing this at this point means a bakemap won't have
+		 * a unique UVMap, which may be fine */
 
-	 	// doing this at this point means a bakemap won't have
-		// a unique UVMap, which may be fine
+		populate_bake_pixels(object, pixel_array);
 
-	 	populate_bake_pixels(object, pixel_array);
+		for bakemap in object.bakemaps:
+			float *ret[]
 
-	 	for bakemap in object.bakemaps:
-	 		float *ret[]
+			extern_bake(object, pixel_array, len(bp), bakemap.type, ret);
 
-	 		if bakemap.type in (A):
-	 			extern_bake(object, pixel_array, len(bp), bakemap.type, ret);
-	 		else:
-	 			intern_bake(object, pixel_array, len(bp), bakemap.type, ret);
+			if bakemap.save_external:
+				write_image(bakemap.filepath, ret);
 
-	 		if bakemap.save_external:
-	 			write_image(bakemap.filepath, ret);
+			elif bakemap.save_internal:
+				bakemap.image(bakemap.image, ret);
 
-	 		elif bakemap.save_internal:
-	 			bakemap.image(bakemap.image, ret);
-
-	 		elif ... (vertex color?)
-	 */
+			elif ... (vertex color?)
+#endif
 
 	is_cage = ob_high && (ob_high->type == OB_MESH);
 	is_tangent = pass_type == SCE_PASS_NORMAL && normal_space == R_BAKE_SPACE_TANGENT;
@@ -340,7 +337,11 @@ static int bake_exec(bContext *C, wmOperator *op)
 
 			for (md = ob_low->modifiers.first; md; md = md->next) {
 				/* Edge Split cannot be applied in the cage,
-				 otherwise we loose interpolated normals */
+				 * the cage is supposed to have interpolated normals
+				 * between the faces unless the geometry is physically
+				 * split. So we create a copy of the low poly mesh without
+				 * the eventual edge split.*/
+
 				if (md->type == eModifierType_EdgeSplit)
 					continue;
 
@@ -436,11 +437,14 @@ static int bake_exec(bContext *C, wmOperator *op)
 			{
 				/* Cycles internal format */
 				if (normal_swizzle[0] == OB_NEGX &&
-					normal_swizzle[1] == OB_NEGY &&
-					normal_swizzle[2] == OB_NEGZ)
+				    normal_swizzle[1] == OB_NEGY &&
+				    normal_swizzle[2] == OB_NEGZ)
+				{
 					break;
-				else
+				}
+				else {
 					RE_normal_world_to_world(pixel_array_low, num_pixels,  depth, result, normal_swizzle);
+				}
 				break;
 			}
 			case R_BAKE_SPACE_OBJECT:
@@ -477,19 +481,11 @@ static int bake_exec(bContext *C, wmOperator *op)
 			ok = write_external_bake_pixels(name, pixel_array_render, result, width, height, is_linear, margin, imtype, exr_codec, quality, compression, color_mode, color_depth);
 
 			if (!ok) {
-				char *error = NULL;
-				error = BLI_sprintfN("Problem saving baked map in \"%s\".", name);
-
-				BKE_report(op->reports, RPT_ERROR, error);
-				MEM_freeN(error);
+				BKE_reportf(op->reports, RPT_ERROR, "Problem saving baked map in \"%s\".", name);
 				op_result = OPERATOR_CANCELLED;
 			}
 			else {
-				char *msg = NULL;
-				msg = BLI_sprintfN("Baking map written to \"%s\".", name);
-
-				BKE_report(op->reports, RPT_INFO, msg);
-				MEM_freeN(msg);
+				BKE_reportf(op->reports, RPT_INFO, "Baking map written to \"%s\".", name);
 				op_result = OPERATOR_FINISHED;
 			}
 		}

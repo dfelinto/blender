@@ -422,7 +422,9 @@ bool RE_engine_has_bake(Render *re)
 	return (bool)(type->bake);
 }
 
-bool RE_engine_bake(Render *re, Object *object, BakePixel pixel_array[], int num_pixels, int depth, ScenePassType pass_type, float result[])
+bool RE_engine_bake(Render *re, Object *object, const BakePixel pixel_array[],
+                    const int num_pixels, const int depth,
+                    const ScenePassType pass_type, float result[])
 {
 	RenderEngineType *type = RE_engines_find(re->r.engine);
 	RenderEngine *engine;
@@ -430,7 +432,7 @@ bool RE_engine_bake(Render *re, Object *object, BakePixel pixel_array[], int num
 
 	/* set render info */
 	re->i.cfra = re->scene->r.cfra;
-	BLI_strncpy(re->i.scene_name, re->scene->id.name + 2, sizeof(re->i.scene_name));
+	BLI_strncpy(re->i.scene_name, re->scene->id.name + 2, sizeof(re->i.scene_name) - 2);
 	re->i.totface = re->i.totvert = re->i.totstrand = re->i.totlamp = re->i.tothalo = 0;
 
 	/* render */
@@ -491,7 +493,8 @@ static bool render_layer_exclude_animated(Scene *scene, SceneRenderLayer *srl)
 	return RNA_property_animated(&ptr, prop);
 }
 
-int RE_engine_render(Render *re, int do_all) {
+int RE_engine_render(Render *re, int do_all)
+{
 	RenderEngineType *type = RE_engines_find(re->r.engine);
 	RenderEngine *engine;
 	int persistent_data = re->r.mode & R_PERSISTENT_DATA;

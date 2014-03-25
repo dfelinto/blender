@@ -98,9 +98,9 @@ typedef struct TriTessFace {
 	MVert *v1;
 	MVert *v2;
 	MVert *v3;
-	bool smoothnormal;
 	TSpace *tspace[3];
 	float normal[3]; /* for flat faces */
+	bool smoothnormal;
 } TriTessFace;
 
 /* ************************* bake ************************ */
@@ -122,7 +122,7 @@ static void store_bake_pixel(void *handle, int x, int y, float u, float v)
 	0.f;
 }
 
-void RE_bake_margin(BakePixel pixel_array[], ImBuf *ibuf, const int margin, const int width, const int height)
+void RE_bake_margin(const BakePixel pixel_array[], ImBuf *ibuf, const int margin, const int width, const int height)
 {
 	char *mask_buffer = NULL;
 	const int num_pixels = width * height;
@@ -306,7 +306,7 @@ static void calculateTriTessFace(TriTessFace *triangles, Mesh *me, int (*lookup_
 		triangles[p_id].v1 = &mvert[mf->v1];
 		triangles[p_id].v2 = &mvert[mf->v2];
 		triangles[p_id].v3 = &mvert[mf->v3];
-		triangles[p_id].smoothnormal = (mf->flag & ME_SMOOTH);
+		triangles[p_id].smoothnormal = (mf->flag & ME_SMOOTH) != 0;
 
 		if (tangent) {
 			triangles[p_id].tspace[0] = &ts[0];
@@ -316,10 +316,10 @@ static void calculateTriTessFace(TriTessFace *triangles, Mesh *me, int (*lookup_
 			if (calculate_normal) {
 				if (mf->v4 != 0) {
 					normal_quad_v3(triangles[p_id].normal,
-					               ((MVert *) &mvert[mf->v1])->co,
-					               ((MVert *) &mvert[mf->v2])->co,
-					               ((MVert *) &mvert[mf->v3])->co,
-					               ((MVert *) &mvert[mf->v4])->co);
+					               mvert[mf->v1].co,
+					               mvert[mf->v2].co,
+					               mvert[mf->v3].co,
+					               mvert[mf->v4].co);
 				}
 				else {
 					normal_tri_v3(triangles[p_id].normal,
@@ -364,7 +364,7 @@ static void calculateTriTessFace(TriTessFace *triangles, Mesh *me, int (*lookup_
 }
 
 void RE_populate_bake_pixels_from_object(Mesh *me_low, Mesh *me_high,
-                                         BakePixel pixel_array_from[], BakePixel pixel_array_to[],
+                                         const BakePixel pixel_array_from[], BakePixel pixel_array_to[],
                                          const int num_pixels, const float cage_extrusion, float mat_low2high[4][4])
 {
 	int i;
@@ -432,7 +432,7 @@ void RE_populate_bake_pixels_from_object(Mesh *me_low, Mesh *me_high,
 	MEM_freeN(tris_high);
 }
 
-void RE_mask_bake_pixels(BakePixel pixel_array_from[], BakePixel pixel_array_to[], const int width, const int height)
+void RE_mask_bake_pixels(const BakePixel pixel_array_from[], BakePixel pixel_array_to[], const int width, const int height)
 {
 	int i;
 	const int num_pixels = width * height;
@@ -546,7 +546,8 @@ static void normal_compress(float *out, float in[3], int normal_swizzle[3]) {
 /*
  * This function converts an object space normal map to a tangent space normal map for a given low poly mesh
  */
-void RE_normal_world_to_tangent(BakePixel pixel_array[], int num_pixels, int depth, float result[], Mesh *me, int normal_swizzle[3])
+void RE_normal_world_to_tangent(const BakePixel pixel_array[], const int num_pixels, const int depth,
+                                float result[], Mesh *me, const int normal_swizzle[3])
 {
 	int i;
 
@@ -559,7 +560,7 @@ void RE_normal_world_to_tangent(BakePixel pixel_array[], int num_pixels, int dep
 
 	BLI_assert(num_pixels >= 3);
 
-	for (i=0; i < num_pixels; i++) {
+	for (i = 0; i < num_pixels; i++) {
 		TriTessFace *triangle;
 		float tangents[3][3];
 		float normals[3][3];
@@ -653,7 +654,8 @@ void RE_normal_world_to_tangent(BakePixel pixel_array[], int num_pixels, int dep
 		dm->release(dm);
 }
 
-void RE_normal_world_to_object(BakePixel pixel_array[], int num_pixels,  int depth, float result[], struct Object *ob, int normal_swizzle[3])
+void RE_normal_world_to_object(const BakePixel pixel_array[], const int num_pixels, const int depth,
+                               float result[], struct Object *ob, const int normal_swizzle[3])
 {
 	int i;
 	float iobmat[4][4];
@@ -678,7 +680,8 @@ void RE_normal_world_to_object(BakePixel pixel_array[], int num_pixels,  int dep
 	}
 }
 
-void RE_normal_world_to_world(BakePixel pixel_array[], int num_pixels,  int depth, float result[], int normal_swizzle[3])
+void RE_normal_world_to_world(const BakePixel pixel_array[], const int num_pixels, const int depth,
+                              float result[], const int normal_swizzle[3])
 {
 	int i;
 
@@ -714,7 +717,8 @@ static bool bake_uv(BakePixel pixel_array[], int num_pixels, int depth, float re
 	return true;
 }
 
-bool RE_internal_bake(Render *UNUSED(re), Object *UNUSED(object), BakePixel pixel_array[], int num_pixels, int depth, ScenePassType pass_type, float result[])
+bool RE_internal_bake(Render *UNUSED(re), Object *UNUSED(object), const BakePixel pixel_array[],
+                      const int num_pixels, const int depth, const ScenePassType pass_type, float result[])
 {
 	switch (pass_type) {
 		case SCE_PASS_UV:
@@ -728,7 +732,7 @@ bool RE_internal_bake(Render *UNUSED(re), Object *UNUSED(object), BakePixel pixe
 	return false;
 }
 
-int RE_pass_depth(ScenePassType pass_type)
+int RE_pass_depth(const ScenePassType pass_type)
 {
 	/* IMB_buffer_byte_from_float assumes 4 channels
 	   making it work for now - XXX */
