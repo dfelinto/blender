@@ -42,7 +42,7 @@ set(INC_SYS
 set(SRC
 	object_add.c
 	object_bake.c
-	object_bake_new.c
+	object_bake_api.c
 	object_constraint.c
 	object_edit.c
 	object_group.c
