@@ -718,12 +718,9 @@ static void rna_def_render_bake_pixel(BlenderRNA *brna)
 	RNA_def_property_int_sdna(prop, NULL, "primitive_id");
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 
-	prop = RNA_def_property(srna, "u", PROP_FLOAT, PROP_NONE);
-	RNA_def_property_float_sdna(prop, NULL, "u");
-	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
-
-	prop = RNA_def_property(srna, "v", PROP_FLOAT, PROP_NONE);
-	RNA_def_property_float_sdna(prop, NULL, "v");
+	prop = RNA_def_property(srna, "uv", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_array(prop, 2);
+	RNA_def_property_float_sdna(prop, NULL, "uv");
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 
 	prop = RNA_def_property(srna, "du_dx", PROP_FLOAT, PROP_NONE);

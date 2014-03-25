@@ -487,7 +487,7 @@ static void populate_bake_data(BakeData *data, BL::BakePixel pixel_array, const 
 
 	int i;
 	for(i=0; i < num_pixels; i++) {
-		data->set(i, bp.primitive_id(), bp.u(), bp.v());
+		data->set(i, bp.primitive_id(), bp.uv());
 		bp = bp.next();
 	}
 }

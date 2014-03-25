@@ -107,18 +107,19 @@ typedef struct TriTessFace {
 static void store_bake_pixel(void *handle, int x, int y, float u, float v)
 {
 	BakeData *bd = (BakeData *)handle;
-	BakePixel *pixel_array = bd->pixel_array;
+	BakePixel *pixel;
 	const int width = bd->width;
 	const int i = y * width + x;
 
-	pixel_array[i].primitive_id = bd->primitive_id;
-	pixel_array[i].u = u;
-	pixel_array[i].v = v;
+	pixel = &bd->pixel_array[i];
+	pixel->primitive_id = bd->primitive_id;
 
-	pixel_array[i].dudx =
-	pixel_array[i].dudy =
-	pixel_array[i].dvdx =
-	pixel_array[i].dvdy =
+	copy_v2_fl2(pixel->uv, u, v);
+
+	pixel->dudx =
+	pixel->dudy =
+	pixel->dvdx =
+	pixel->dvdy =
 	0.f;
 }
 
@@ -253,8 +254,7 @@ static bool cast_ray_highpoly(BVHTreeFromMesh *treeData, TriTessFace *triangles,
 		get_barycentric_from_point(triangles, hit.index, hit.co, &primitive_id, &u, &v);
 
 		pixel_array->primitive_id = primitive_id;
-		pixel_array->u = u;
-		pixel_array->v = v;
+		copy_v2_fl2(pixel_array->uv, u, v);
 		return true;
 	}
 
@@ -410,8 +410,8 @@ void RE_populate_bake_pixels_from_object(Mesh *me_low, Mesh *me_high,
 			continue;
 		}
 
-		u = pixel_array_from[i].u;
-		v = pixel_array_from[i].v;
+		u = pixel_array_from[i].uv[0];
+		v = pixel_array_from[i].uv[1];
 
 		/* calculate from low poly mesh cage */
 		get_point_from_barycentric(tris_low, primitive_id, u, v, cage_extrusion, co, dir);
@@ -610,8 +610,8 @@ void RE_normal_world_to_tangent(const BakePixel pixel_array[], const int num_pix
 			signs[j] = ts->sign;
 		}
 
-		u = pixel_array[i].u;
-		v = pixel_array[i].v;
+		u = pixel_array[i].uv[0];
+		v = pixel_array[i].uv[1];
 		w = 1.0f - u - v;
 
 		/* normal */
@@ -704,14 +704,13 @@ void RE_normal_world_to_world(const BakePixel pixel_array[], const int num_pixel
 
 /* not the real UV, but the internal per-face UV instead
  I'm using it to test if everything is correct */
-static bool bake_uv(BakePixel pixel_array[], int num_pixels, int depth, float result[])
+static bool bake_uv(const BakePixel pixel_array[], const int num_pixels, const int depth, float result[])
 {
 	int i;
 
 	for (i=0; i < num_pixels; i++) {
 		int offset = i * depth;
-		result[offset] = pixel_array[i].u;
-		result[offset + 1] = pixel_array[i].v;
+		copy_v2_v2(&result[offset], pixel_array[i].uv);
 	}
 
 	return true;

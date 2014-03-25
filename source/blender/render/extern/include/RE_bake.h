@@ -37,7 +37,7 @@ struct Mesh;
 
 typedef struct BakePixel {
 	int primitive_id;
-	float u, v;
+	float uv[2];
 	float dudx, dudy;
 	float dvdx, dvdy;
 } BakePixel;

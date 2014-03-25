@@ -43,11 +43,11 @@ public:
 		m_v.clear();
 	}
 
-	void set(int i, int prim, float u, float v)
+	void set(int i, int prim, float uv[2])
 	{
 		m_primitive[i] = (prim == -1 ? -1 : m_tri_offset + prim);
-		m_u[i] = u;
-		m_v[i] = v;
+		m_u[i] = uv[0];
+		m_v[i] = uv[1];
 	}
 
 	int object()
