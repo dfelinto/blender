@@ -32,7 +32,7 @@ void BakeManager::device_update(Device *device, DeviceScene *dscene, Scene *scen
 
 BakeManager::~BakeManager()
 {
-	if (bake_data)
+	if(bake_data)
 		delete bake_data;
 }
 
@@ -97,12 +97,12 @@ bool BakeManager::bake(Device *device, DeviceScene *dscene, Scene *scene, Shader
 
 	float4 *offset = (float4*)d_output.data_pointer;
 
-	int depth = 4;
+	size_t depth = 4;
 	for(size_t i = 0; i < limit; i++) {
-		int index = i * depth;
+		size_t index = i * depth;
 		float4 out = offset[k++];
 
-		for (int j=0; j < 4; j++)
+		for(size_t j=0; j < 4; j++)
 			result[index + j] = out[j];
 	}
 

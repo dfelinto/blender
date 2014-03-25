@@ -28,7 +28,7 @@ ccl_device void compute_light_pass(KernelGlobals *kg, ShaderData *sd, PathRadian
 	path_radiance_init(L, kernel_data.film.use_light_pass);
 
 	/* take multiple samples */
-	for (int sample = 0; sample < samples; sample++) {
+	for(int sample = 0; sample < samples; sample++) {
 		PathRadiance L_sample;
 		PathState state;
 		Ray ray;
@@ -46,12 +46,12 @@ ccl_device void compute_light_pass(KernelGlobals *kg, ShaderData *sd, PathRadian
 		shader_eval_surface(kg, sd, rbsdf, state.flag, SHADER_CONTEXT_MAIN);
 
 		/* sample ambient occlusion */
-		if (is_ao) {
+		if(is_ao) {
 			kernel_path_ao(kg, sd, &L_sample, &state, &rng, throughput);
 		}
 
 		/* sample light and BSDF */
-		else if (kernel_path_integrate_lighting(kg, &rng, sd, &throughput, &state, &L_sample, &ray)) {
+		else if(kernel_path_integrate_lighting(kg, &rng, sd, &throughput, &state, &L_sample, &ray)) {
 #ifdef __LAMP_MIS__
 			state.ray_t = 0.0f;
 #endif
@@ -97,14 +97,15 @@ ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input,
 
 	int object = in.x;
 	int prim = in.y;
-	float u = __uint_as_float(in.z);
-	float v = __uint_as_float(in.w);
 
-	if (prim == -1) {
+	if(prim == -1) {
 		/* write output */
 		output[i] = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
 		return;
 	}
+
+	float u = __uint_as_float(in.z);
+	float v = __uint_as_float(in.w);
 
 	int shader;
 	float3 P = triangle_point_MT(kg, prim, u, v);
@@ -123,7 +124,7 @@ ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input,
 	/* TODO, disable the closures we won't need */
 	shader_setup_from_sample(kg, &sd, P, Ng, I, shader, object, prim, u, v, t, time, bounce, segment);
 
-	if (is_light_pass(type)){
+	if(is_light_pass(type)){
 		RNG rng = hash_int(i);
 		compute_light_pass(kg, &sd, &L, rng, (type == SHADER_EVAL_AO));
 	}
@@ -284,7 +285,7 @@ ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input,
 
 ccl_device void kernel_shader_evaluate(KernelGlobals *kg, ccl_global uint4 *input, ccl_global float4 *output, ShaderEvalType type, int i)
 {
-	if (type >= SHADER_EVAL_BAKE) {
+	if(type >= SHADER_EVAL_BAKE) {
 		kernel_bake_evaluate(kg, input, output, type, i);
 		return;
 	}

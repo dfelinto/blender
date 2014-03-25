@@ -268,47 +268,47 @@ static ShaderEvalType get_shader_type(const string& pass_type)
 	const char *shader_type = pass_type.c_str();
 
 	/* data passes */
-	if (strcmp(shader_type, "NORMAL")==0)
+	if(strcmp(shader_type, "NORMAL")==0)
 		return SHADER_EVAL_NORMAL;
-	else if (strcmp(shader_type, "UV")==0)
+	else if(strcmp(shader_type, "UV")==0)
 		return SHADER_EVAL_UV;
-	else if (strcmp(shader_type, "DIFFUSE_COLOR")==0)
+	else if(strcmp(shader_type, "DIFFUSE_COLOR")==0)
 		return SHADER_EVAL_DIFFUSE_COLOR;
-	else if (strcmp(shader_type, "GLOSSY_COLOR")==0)
+	else if(strcmp(shader_type, "GLOSSY_COLOR")==0)
 		return SHADER_EVAL_GLOSSY_COLOR;
-	else if (strcmp(shader_type, "TRANSMISSION_COLOR")==0)
+	else if(strcmp(shader_type, "TRANSMISSION_COLOR")==0)
 		return SHADER_EVAL_TRANSMISSION_COLOR;
-	else if (strcmp(shader_type, "SUBSURFACE_COLOR")==0)
+	else if(strcmp(shader_type, "SUBSURFACE_COLOR")==0)
 		return SHADER_EVAL_SUBSURFACE_COLOR;
-	else if (strcmp(shader_type, "EMIT")==0)
+	else if(strcmp(shader_type, "EMIT")==0)
 		return SHADER_EVAL_EMISSION;
 
 	/* light passes */
-	else if (strcmp(shader_type, "AO")==0)
+	else if(strcmp(shader_type, "AO")==0)
 		return SHADER_EVAL_AO;
-	else if (strcmp(shader_type, "COMBINED")==0)
+	else if(strcmp(shader_type, "COMBINED")==0)
 		return SHADER_EVAL_COMBINED;
-	else if (strcmp(shader_type, "SHADOW")==0)
+	else if(strcmp(shader_type, "SHADOW")==0)
 		return SHADER_EVAL_SHADOW;
-	else if (strcmp(shader_type, "DIFFUSE_DIRECT")==0)
+	else if(strcmp(shader_type, "DIFFUSE_DIRECT")==0)
 		return SHADER_EVAL_DIFFUSE_DIRECT;
-	else if (strcmp(shader_type, "GLOSSY_DIRECT")==0)
+	else if(strcmp(shader_type, "GLOSSY_DIRECT")==0)
 		return SHADER_EVAL_GLOSSY_DIRECT;
-	else if (strcmp(shader_type, "TRANSMISSION_DIRECT")==0)
+	else if(strcmp(shader_type, "TRANSMISSION_DIRECT")==0)
 		return SHADER_EVAL_TRANSMISSION_DIRECT;
-	else if (strcmp(shader_type, "SUBSURFACE_DIRECT")==0)
+	else if(strcmp(shader_type, "SUBSURFACE_DIRECT")==0)
 		return SHADER_EVAL_SUBSURFACE_DIRECT;
-	else if (strcmp(shader_type, "DIFFUSE_INDIRECT")==0)
+	else if(strcmp(shader_type, "DIFFUSE_INDIRECT")==0)
 		return SHADER_EVAL_DIFFUSE_INDIRECT;
-	else if (strcmp(shader_type, "GLOSSY_INDIRECT")==0)
+	else if(strcmp(shader_type, "GLOSSY_INDIRECT")==0)
 		return SHADER_EVAL_GLOSSY_INDIRECT;
-	else if (strcmp(shader_type, "TRANSMISSION_INDIRECT")==0)
+	else if(strcmp(shader_type, "TRANSMISSION_INDIRECT")==0)
 		return SHADER_EVAL_TRANSMISSION_INDIRECT;
-	else if (strcmp(shader_type, "SUBSURFACE_INDIRECT")==0)
+	else if(strcmp(shader_type, "SUBSURFACE_INDIRECT")==0)
 		return SHADER_EVAL_SUBSURFACE_INDIRECT;
 
 	/* extra */
-	else if (strcmp(shader_type, "ENVIRONMENT")==0)
+	else if(strcmp(shader_type, "ENVIRONMENT")==0)
 		return SHADER_EVAL_ENVIRONMENT;
 
 	else
@@ -486,7 +486,7 @@ static void populate_bake_data(BakeData *data, BL::BakePixel pixel_array, const 
 	BL::BakePixel bp = pixel_array;
 
 	int i;
-	for (i=0; i < num_pixels; i++) {
+	for(i=0; i < num_pixels; i++) {
 		data->set(i, bp.primitive_id(), bp.u(), bp.v());
 		bp = bp.next();
 	}
@@ -518,12 +518,12 @@ void BlenderSession::bake(BL::Object b_object, const string& pass_type, BL::Bake
 	size_t object_index = ~0;
 	int tri_offset = 0;
 
-	if (shader_type == SHADER_EVAL_UV) {
+	if(shader_type == SHADER_EVAL_UV) {
 		/* force UV to be available */
 		Pass::add(PASS_UV, scene->film->passes);
 	}
 
-	if (is_light_pass(shader_type)) {
+	if(is_light_pass(shader_type)) {
 		/* force use_light_pass to be true */
 		Pass::add(PASS_LIGHT, scene->film->passes);
 	}
@@ -546,8 +546,8 @@ void BlenderSession::bake(BL::Object b_object, const string& pass_type, BL::Bake
 	session->update_scene();
 
 	/* find object index. todo: is arbitrary - copied from mesh_displace.cpp */
-	for (size_t i = 0; i < scene->objects.size(); i++) {
-		if (strcmp(scene->objects[i]->name.c_str(), b_object.name().c_str()) == 0) {
+	for(size_t i = 0; i < scene->objects.size(); i++) {
+		if(strcmp(scene->objects[i]->name.c_str(), b_object.name().c_str()) == 0) {
 			object_index = i;
 			tri_offset = scene->objects[i]->mesh->tri_offset;
 			break;
