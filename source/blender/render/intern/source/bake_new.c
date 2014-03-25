@@ -507,31 +507,42 @@ void RE_populate_bake_pixels(Mesh *me, BakePixel pixel_array[], const int width,
  * the input is expected to be NEG_X, NEG_Y, NEG_Z
  * the output is POS_X, POS_Y, POS_Z
  */
-static void normal_uncompress(float *out, float in[3])
+static void normal_uncompress(float out[3], const float in[3])
 {
 	int i;
 	for (i = 0; i < 3; i++)
 		out[i] = - (2.0f * in[i] - 1.0f);
 }
 
-static void normal_compress(float *out, float in[3], int normal_swizzle[3]) {
-	static const int swizzle[6][2] = // sign, index
+static void normal_compress(float out[3], const float in[3], const int normal_swizzle[3])
+{
+	static const int swizzle_index[6] =
 	{
-		{  1, 0, }, // OB_POSX
-		{  1, 1, }, // OB_POSY
-		{  1, 2, }, // OB_POSZ
-		{ -1, 0, }, // OB_NEGX
-		{ -1, 1, }, // OB_NEGY
-		{ -1, 2, }, // OB_NEGZ
+		0, // OB_POSX
+		1, // OB_POSY
+		2, // OB_POSZ
+		0, // OB_NEGX
+		1, // OB_NEGY
+		2, // OB_NEGZ
+	};
+	static const float swizzle_sign[6] =
+	{
+		 1.0f, // OB_POSX
+		 1.0f, // OB_POSY
+		 1.0f, // OB_POSZ
+		-1.0f, // OB_NEGX
+		-1.0f, // OB_NEGY
+		-1.0f, // OB_NEGZ
 	};
 
 	int i;
 
 	for (i = 0; i < 3; i++) {
-		int id, sign;
+		int index;
+		float sign;
 
-		sign = swizzle[normal_swizzle[i]][0];
-		id   = swizzle[normal_swizzle[i]][1];
+		sign  = swizzle_sign [normal_swizzle[i]];
+		index = swizzle_index[normal_swizzle[i]];
 
 		/*
 		* There is a small 1e-5f bias for precision issues. otherwise
@@ -539,7 +550,7 @@ static void normal_compress(float *out, float in[3], int normal_swizzle[3]) {
 		* we choose 128 because it is the convention flat color. *
 		*/
 
-		out[i] = sign * in[id] / 2.0f + 0.5f + 1e-5f;
+		out[i] = sign * in[index] / 2.0f + 0.5f + 1e-5f;
 	}
 }
 
