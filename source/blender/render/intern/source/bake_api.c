@@ -188,42 +188,12 @@ static void get_point_from_barycentric(TriTessFace *triangles, int primitive_id,
 }
 
 /*
- * Transcribed from Christer Ericson's Real-Time Collision Detection
- *
- * Compute barycentric coordinates (u, v, w) for
- * point p with respect to triangle (a, b, c)
- *
- */
-static void Barycentric(float p[3], float a[3], float b[3], float c[3], float *u, float *v)
-{
-	float w;
-	float v0[3], v1[3], v2[3];
-	float d00, d01, d11, d20, d21, denom;
-
-	sub_v3_v3v3(v0, b, a);
-	sub_v3_v3v3(v1, c, a);
-	sub_v3_v3v3(v2, p, a);
-
-	d00 = dot_v3v3(v0, v0);
-	d01 = dot_v3v3(v0, v1);
-	d11 = dot_v3v3(v1, v1);
-	d20 = dot_v3v3(v2, v0);
-	d21 = dot_v3v3(v2, v1);
-	denom = d00 * d11 - d01 * d01;
-
-	*v = (d11 * d20 - d01 * d21) / denom;
-	w = (d00 * d21 - d01 * d20) / denom;
-
-	*u = 1.0f - *v - w;
-}
-
-/*
  * This function returns the barycentric u,v of a face for a coordinate. The face is defined by its index.
  */
-static void get_barycentric_from_point(TriTessFace *triangles, int index, float co[3], int *primitive_id, float *u, float *v)
+static void get_barycentric_from_point(TriTessFace *triangles, const int index, const float co[3], int *primitive_id, float uv[2])
 {
 	TriTessFace *triangle = &triangles[index];
-	Barycentric(co, triangle->v1->co, triangle->v2->co, triangle->v3->co, u, v);
+	resolve_tri_uv_v3(uv, co, triangle->v1->co, triangle->v2->co, triangle->v3->co);
 	*primitive_id = index;
 }
 
@@ -233,8 +203,7 @@ static void get_barycentric_from_point(TriTessFace *triangles, int index, float 
 static bool cast_ray_highpoly(BVHTreeFromMesh *treeData, TriTessFace *triangles, BakePixel *pixel_array, float co[3], float dir[3])
 {
 	int primitive_id;
-	float u;
-	float v;
+	float uv[2];
 
 	BVHTreeRayHit hit;
 	hit.index = -1;
@@ -251,10 +220,10 @@ static bool cast_ray_highpoly(BVHTreeFromMesh *treeData, TriTessFace *triangles,
 			return false;
 		}
 
-		get_barycentric_from_point(triangles, hit.index, hit.co, &primitive_id, &u, &v);
-
+		get_barycentric_from_point(triangles, hit.index, hit.co, &primitive_id, uv);
 		pixel_array->primitive_id = primitive_id;
-		copy_v2_fl2(pixel_array->uv, u, v);
+		copy_v2_v2(pixel_array->uv, uv);
+
 		return true;
 	}
 
