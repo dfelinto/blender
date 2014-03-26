@@ -319,9 +319,9 @@ class CyclesBakeSettings(bpy.types.PropertyGroup):
             max=props_base['cage_extrusion'].hard_max,
             )
 
-    custom_cage = StringProperty(
-            name=props_base['custom_cage'].name,
-            description=props_base['custom_cage'].description,
+    cage = StringProperty(
+            name=props_base['cage'].name,
+            description=props_base['cage'].description,
             )
 
     normal_space = EnumProperty(

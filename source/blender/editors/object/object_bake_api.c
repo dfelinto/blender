@@ -241,7 +241,7 @@ static int bake_exec(bContext *C, wmOperator *op)
 	char custom_cage[MAX_NAME];
 	char filepath[FILE_MAX];
 
-	RNA_string_get(op->ptr, "custom_cage", custom_cage);
+	RNA_string_get(op->ptr, "cage", custom_cage);
 	RNA_string_get(op->ptr, "filepath", filepath);
 
 	if (use_selected_to_active) {
@@ -264,8 +264,9 @@ static int bake_exec(bContext *C, wmOperator *op)
 	if (custom_cage[0] != '\0') {
 		ob_custom_cage = (Object *)BLI_findstring(&bmain->object, custom_cage, offsetof(ID, name) + 2);
 
+		/* TODO check if cage object has the same topology (num of triangles and a valid UV) */
 		if (ob_custom_cage == NULL || ob_custom_cage->type != OB_MESH) {
-			BKE_report(op->reports, RPT_ERROR, "No valid custom cage object");
+			BKE_report(op->reports, RPT_ERROR, "No valid cage object");
 			return OPERATOR_CANCELLED;
 		}
 		else {
@@ -583,7 +584,7 @@ void OBJECT_OT_bake(wmOperatorType *ot)
 	ot->prop = RNA_def_int(ot->srna, "margin", 16, 0, INT_MAX, "Margin", "Extends the baked result as a post process filter", 0, 64);
 	ot->prop = RNA_def_boolean(ot->srna, "use_selected_to_active", false, "Selected to Active", "Bake shading on the surface of selected objects to the active object");
 	ot->prop = RNA_def_float(ot->srna, "cage_extrusion", 0.0, 0.0, 1.0, "Cage Extrusion", "Distance to use for the inward ray cast when using selected to active", 0.0, 1.0);
-	ot->prop = RNA_def_string(ot->srna, "custom_cage", NULL, MAX_NAME, "Custom Cage", "Object to use as custom cage");
+	ot->prop = RNA_def_string(ot->srna, "cage", NULL, MAX_NAME, "Cage", "Object to use as cage");
 	ot->prop = RNA_def_enum(ot->srna, "normal_space", normal_space_items, R_BAKE_SPACE_WORLD, "Normal Space", "Choose normal space for baking");
 	ot->prop = RNA_def_enum(ot->srna, "normal_r", normal_swizzle_items, OB_NEGX, "R", "Axis to bake in red channel");
 	ot->prop = RNA_def_enum(ot->srna, "normal_g", normal_swizzle_items, OB_NEGY, "G", "Axis to bake in green channel");
