@@ -1330,11 +1330,14 @@ class CyclesRender_PT_bake(CyclesButtonsPanel, Panel):
         col.prop(cbk, "type")
 
         col.separator()
-        row = col.row(align=True)
-        row.prop(cbk, "width")
-        row.prop(cbk, "height")
+        row = col.row()
 
-        col.prop(cbk, "margin")
+        sub = row.column(align=True)
+        sub.prop(cbk, "width")
+        sub.prop(cbk, "height")
+
+        sub = row.column()
+        sub.prop(cbk, "margin")
 
         col.separator()
         col.prop(cbk, "use_selected_to_active")
