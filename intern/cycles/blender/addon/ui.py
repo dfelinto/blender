@@ -1337,13 +1337,6 @@ class CyclesRender_PT_bake(CyclesButtonsPanel, Panel):
         col.prop(cbk, "margin")
 
         col.separator()
-        col.label(text="Output File:")
-        col.prop(cbk, "filepath", text="")
-
-        #template bake_image_settings
-        template_bake_image_settings(col, cbk.image_settings)
-
-        col.separator()
         col.prop(cbk, "use_selected_to_active")
         sub = col.column()
         sub.active = cbk.use_selected_to_active
@@ -1362,6 +1355,13 @@ class CyclesRender_PT_bake(CyclesButtonsPanel, Panel):
             row.prop(cbk, "normal_g", text="")
             row.prop(cbk, "normal_b", text="")
 
+        col.separator()
+        col.label(text="Output File:")
+        col.prop(cbk, "filepath", text="")
+
+        col.separator()
+        #template bake_image_settings
+        template_bake_image_settings(col, cbk.image_settings)
 
 
 class CyclesParticle_PT_CurveSettings(CyclesButtonsPanel, Panel):
