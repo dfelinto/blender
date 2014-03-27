@@ -151,8 +151,8 @@ static void engine_render(RenderEngine *engine, struct Scene *scene)
 	RNA_parameter_list_free(&list);
 }
 
-static void engine_bake(RenderEngine *engine, struct Scene *scene, struct Object *object, int pass_type,
-                        struct BakePixel *pixel_array, int num_pixels, int depth, void *result)
+static void engine_bake(RenderEngine *engine, struct Scene *scene, struct Object *object, const int pass_type,
+                        const struct BakePixel *pixel_array, const int num_pixels, const int depth, void *result)
 {
 	extern FunctionRNA rna_RenderEngine_bake_func;
 	PointerRNA ptr;

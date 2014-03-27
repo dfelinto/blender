@@ -15,13 +15,12 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  *
- * Contributors: 2004/2005/2006 Blender Foundation, full recode
- * Contributors: Vertex color baking, Copyright 2011 AutoCRC
+ * Contributors:
  *
  * ***** END GPL LICENSE BLOCK *****
  */
 
-/** \file blender/render/intern/source/bake.c
+/** \file blender/render/intern/source/bake_api.c
  *  \ingroup render
  */
 
@@ -360,12 +359,7 @@ void RE_populate_bake_pixels_from_object(Mesh *me_low, Mesh *me_high,
 	bvhtree_from_mesh_faces(&treeData, dm_high, 0.0, 2, 6);
 	if (treeData.tree == NULL) {
 		printf("Baking: Out of memory\n");
-
-		dm_high->release(dm_high);
-
-		MEM_freeN(tris_low);
-		MEM_freeN(tris_high);
-		return;
+		goto cleanup;
 	}
 
 	for (i=0; i < num_pixels; i++) {
@@ -393,6 +387,7 @@ void RE_populate_bake_pixels_from_object(Mesh *me_low, Mesh *me_high,
 	}
 
 	/* garbage collection */
+cleanup:
 	free_bvhtree_from_mesh(&treeData);
 
 	dm_high->release(dm_high);
@@ -485,7 +480,7 @@ static void normal_uncompress(float out[3], const float in[3])
 
 static void normal_compress(float out[3], const float in[3], const int normal_swizzle[3])
 {
-	static const int swizzle_index[6] =
+	const int swizzle_index[6] =
 	{
 		0, // OB_POSX
 		1, // OB_POSY
@@ -494,7 +489,7 @@ static void normal_compress(float out[3], const float in[3], const int normal_sw
 		1, // OB_NEGY
 		2, // OB_NEGZ
 	};
-	static const float swizzle_sign[6] =
+	const float swizzle_sign[6] =
 	{
 		 1.0f, // OB_POSX
 		 1.0f, // OB_POSY

@@ -25,7 +25,7 @@
  * ***** END GPL LICENSE BLOCK *****
  */
 
-/** \file blender/editors/object/object_bake.c
+/** \file blender/editors/object/object_bake_api.c
  *  \ingroup edobj
  */
 
