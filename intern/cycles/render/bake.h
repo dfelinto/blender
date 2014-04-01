@@ -26,48 +26,13 @@ CCL_NAMESPACE_BEGIN
 
 class BakeData {
 public:
-	BakeData(const int object, const int tri_offset, const int num_pixels):
-	m_object(object),
-	m_tri_offset(tri_offset),
-	m_num_pixels(num_pixels)
-	{
-		m_primitive.resize(num_pixels);
-		m_u.resize(num_pixels);
-		m_v.resize(num_pixels);
-	}
+	BakeData(const int object, const int tri_offset, const int num_pixels);
+	~BakeData();
 
-	~BakeData()
-	{
-		m_primitive.clear();
-		m_u.clear();
-		m_v.clear();
-	}
-
-	void set(int i, int prim, float uv[2])
-	{
-		m_primitive[i] = (prim == -1 ? -1 : m_tri_offset + prim);
-		m_u[i] = uv[0];
-		m_v[i] = uv[1];
-	}
-
-	int object()
-	{
-		return m_object;
-	}
-
-	int size() {
-		return m_num_pixels;
-	}
-
-	uint4 data(int i) {
-		return make_uint4(
-			m_object,
-			m_primitive[i],
-			__float_as_int(m_u[i]),
-			__float_as_int(m_v[i])
-			);
-	}
-
+	void set(int i, int prim, float uv[2]);
+	int object();
+	int size();
+	uint4 data(int i);
 
 private:
 	int m_object;
@@ -92,9 +57,6 @@ public:
 
 	void device_update(Device *device, DeviceScene *dscene, Scene *scene, Progress& progress);
 	void device_free(Device *device, DeviceScene *dscene);
-	bool modified(const CurveSystemManager& CurveSystemManager);
-	void tag_update(Scene *scene);
-	void tag_update_mesh();
 
 private:
 	BakeData *bake_data;

@@ -18,28 +18,58 @@
 
 CCL_NAMESPACE_BEGIN
 
-void BakeManager::device_free(Device *device, DeviceScene *dscene) {}
-
-void BakeManager::device_update(Device *device, DeviceScene *dscene, Scene *scene, Progress& progress)
+BakeData::BakeData(const int object, const int tri_offset, const int num_pixels):
+m_object(object),
+m_tri_offset(tri_offset),
+m_num_pixels(num_pixels)
 {
-	if(!need_update)
-		return;
-
-	if(progress.get_cancel()) return;
-
-	need_update = false;
+	m_primitive.resize(num_pixels);
+	m_u.resize(num_pixels);
+	m_v.resize(num_pixels);
 }
 
-BakeManager::~BakeManager()
+BakeData::~BakeData()
 {
-	if(bake_data)
-		delete bake_data;
+	m_primitive.clear();
+	m_u.clear();
+	m_v.clear();
+}
+
+void BakeData::set(int i, int prim, float uv[2])
+{
+	m_primitive[i] = (prim == -1 ? -1 : m_tri_offset + prim);
+	m_u[i] = uv[0];
+	m_v[i] = uv[1];
+}
+
+int BakeData::object()
+{
+	return m_object;
+}
+
+int BakeData::size() {
+	return m_num_pixels;
+}
+
+uint4 BakeData::data(int i) {
+	return make_uint4(
+		m_object,
+		m_primitive[i],
+		__float_as_int(m_u[i]),
+		__float_as_int(m_v[i])
+		);
 }
 
 BakeManager::BakeManager()
 {
 	bake_data = NULL;
 	need_update = true;
+}
+
+BakeManager::~BakeManager()
+{
+	if(bake_data)
+		delete bake_data;
 }
 
 BakeData *BakeManager::init(const int object, const int tri_offset, const int num_pixels)
@@ -109,5 +139,16 @@ bool BakeManager::bake(Device *device, DeviceScene *dscene, Scene *scene, Shader
 	return true;
 }
 
-CCL_NAMESPACE_END
+void BakeManager::device_update(Device *device, DeviceScene *dscene, Scene *scene, Progress& progress)
+{
+	if(!need_update)
+		return;
 
+	if(progress.get_cancel()) return;
+
+	need_update = false;
+}
+
+void BakeManager::device_free(Device *device, DeviceScene *dscene) {}
+
+CCL_NAMESPACE_END

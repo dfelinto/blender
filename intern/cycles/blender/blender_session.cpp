@@ -557,11 +557,11 @@ void BlenderSession::bake(BL::Object b_object, const string& pass_type, BL::Bake
 	/* when used, non-instanced convention: object = ~object */
 	int object = ~object_index;
 
-	BakeData *bake_data = scene->bake_init(object, tri_offset, num_pixels);
+	BakeData *bake_data = scene->bake_manager->init(object, tri_offset, num_pixels);
 
 	populate_bake_data(bake_data, pixel_array, num_pixels);
 
-	scene->bake(shader_type, bake_data, result);
+	scene->bake_manager->bake(scene->device, &scene->dscene, scene, shader_type, bake_data, result);
 
 	/* free all memory used (host and device), so we wouldn't leave render
 	 * engine with extra memory allocated

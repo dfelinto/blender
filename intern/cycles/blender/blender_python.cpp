@@ -166,7 +166,7 @@ static PyObject *bake_func(PyObject *self, PyObject *args)
 	RNA_id_pointer_create((ID*)PyLong_AsVoidPtr(pyobject), &objectptr);
 	BL::Object b_object(objectptr);
 
-	void *b_result(PyLong_AsVoidPtr(pyresult));
+	void *b_result = PyLong_AsVoidPtr(pyresult);
 
 	PointerRNA bakepixelptr;
 	RNA_id_pointer_create((ID*)PyLong_AsVoidPtr(pypixel_array), &bakepixelptr);

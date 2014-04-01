@@ -14,9 +14,6 @@
  * limitations under the License
  */
 
-#include "util_hash.h"
-#include "kernel_primitive.h"
-
 CCL_NAMESPACE_BEGIN
 
 ccl_device void compute_light_pass(KernelGlobals *kg, ShaderData *sd, PathRadiance *L, RNG rng, bool is_ao)
@@ -24,7 +21,7 @@ ccl_device void compute_light_pass(KernelGlobals *kg, ShaderData *sd, PathRadian
 	int samples = kernel_data.integrator.aa_samples;
 
 	/* initialize master radiance accumulator */
-	assert(kernel_data.film.use_light_pass);
+	kernel_assert(kernel_data.film.use_light_pass);
 	path_radiance_init(L, kernel_data.film.use_light_pass);
 
 	/* take multiple samples */
@@ -125,7 +122,7 @@ ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input,
 	shader_setup_from_sample(kg, &sd, P, Ng, I, shader, object, prim, u, v, t, time, bounce, segment);
 
 	if(is_light_pass(type)){
-		RNG rng = hash_int(i);
+		RNG rng = cmj_hash(i, 0);
 		compute_light_pass(kg, &sd, &L, rng, (type == SHADER_EVAL_AO));
 	}
 

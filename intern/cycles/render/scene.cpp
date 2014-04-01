@@ -222,16 +222,6 @@ void Scene::device_update(Device *device_, Progress& progress)
 	device->const_copy_to("__data", &dscene.data, sizeof(dscene.data));
 }
 
-BakeData *Scene::bake_init(const int object, const int tri_offset, const int num_pixels)
-{
-	return bake_manager->init(object, tri_offset, num_pixels);
-}
-
-bool Scene::bake(ShaderEvalType shader_type, BakeData *bake_data, float result[])
-{
-	return bake_manager->bake(device, &dscene, this, shader_type, bake_data, result);
-}
-
 Scene::MotionType Scene::need_motion(bool advanced_shading)
 {
 	if(integrator->motion_blur)
