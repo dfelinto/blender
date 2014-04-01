@@ -540,11 +540,6 @@ void BlenderSession::bake(BL::Object b_object, const string& pass_type, BL::Bake
 	SessionParams session_params = BlenderSync::get_session_params(b_engine, b_userpref, b_scene, background);
 	BufferParams buffer_params = BlenderSync::get_buffer_params(b_render, b_scene, b_v3d, b_rv3d, scene->camera, width, height);
 
-	/* set number of samples */
-	session->tile_manager.set_samples(session_params.samples);
-	session->reset(buffer_params, session_params.samples);
-	session->update_scene();
-
 	/* find object index. todo: is arbitrary - copied from mesh_displace.cpp */
 	for(size_t i = 0; i < scene->objects.size(); i++) {
 		if(strcmp(scene->objects[i]->name.c_str(), b_object.name().c_str()) == 0) {
@@ -560,6 +555,11 @@ void BlenderSession::bake(BL::Object b_object, const string& pass_type, BL::Bake
 	BakeData *bake_data = scene->bake_manager->init(object, tri_offset, num_pixels);
 
 	populate_bake_data(bake_data, pixel_array, num_pixels);
+
+	/* set number of samples */
+	session->tile_manager.set_samples(session_params.samples);
+	session->reset(buffer_params, session_params.samples);
+	session->update_scene();
 
 	scene->bake_manager->bake(scene->device, &scene->dscene, scene, session->progress, shader_type, bake_data, result);
 

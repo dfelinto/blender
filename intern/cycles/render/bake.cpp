@@ -62,20 +62,22 @@ uint4 BakeData::data(int i) {
 
 BakeManager::BakeManager()
 {
-	bake_data = NULL;
+	m_bake_data = NULL;
+	m_is_baking = false;
 	need_update = true;
 }
 
 BakeManager::~BakeManager()
 {
-	if(bake_data)
-		delete bake_data;
+	if(m_bake_data)
+		delete m_bake_data;
 }
 
 BakeData *BakeManager::init(const int object, const int tri_offset, const int num_pixels)
 {
-	bake_data = new BakeData(object, tri_offset, num_pixels);
-	return bake_data;
+	m_is_baking = true;
+	m_bake_data = new BakeData(object, tri_offset, num_pixels);
+	return m_bake_data;
 }
 
 bool BakeManager::bake(Device *device, DeviceScene *dscene, Scene *scene, Progress& progress, ShaderEvalType shader_type, BakeData *bake_data, float result[])
@@ -118,6 +120,7 @@ bool BakeManager::bake(Device *device, DeviceScene *dscene, Scene *scene, Progre
 	if(progress.get_cancel()) {
 		device->mem_free(d_input);
 		device->mem_free(d_output);
+		m_is_baking = false;
 		return false;
 	}
 
@@ -139,6 +142,7 @@ bool BakeManager::bake(Device *device, DeviceScene *dscene, Scene *scene, Progre
 			result[index + j] = out[j];
 	}
 
+	m_is_baking = false;
 	return true;
 }
 
@@ -153,5 +157,10 @@ void BakeManager::device_update(Device *device, DeviceScene *dscene, Scene *scen
 }
 
 void BakeManager::device_free(Device *device, DeviceScene *dscene) {}
+
+bool BakeManager::is_baking()
+{
+	return m_is_baking;
+}
 
 CCL_NAMESPACE_END

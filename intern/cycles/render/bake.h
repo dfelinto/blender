@@ -45,9 +45,6 @@ private:
 
 class BakeManager {
 public:
-
-	bool need_update;
-
 	BakeManager();
 	~BakeManager();
 
@@ -58,8 +55,12 @@ public:
 	void device_update(Device *device, DeviceScene *dscene, Scene *scene, Progress& progress);
 	void device_free(Device *device, DeviceScene *dscene);
 
+	bool is_baking();
+	bool need_update;
+
 private:
-	BakeData *bake_data;
+	BakeData *m_bake_data;
+	bool m_is_baking;
 };
 
 CCL_NAMESPACE_END
