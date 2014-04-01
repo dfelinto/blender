@@ -561,7 +561,7 @@ void BlenderSession::bake(BL::Object b_object, const string& pass_type, BL::Bake
 
 	populate_bake_data(bake_data, pixel_array, num_pixels);
 
-	scene->bake_manager->bake(scene->device, &scene->dscene, scene, shader_type, bake_data, result);
+	scene->bake_manager->bake(scene->device, &scene->dscene, scene, session->progress, shader_type, bake_data, result);
 
 	/* free all memory used (host and device), so we wouldn't leave render
 	 * engine with extra memory allocated

@@ -53,7 +53,7 @@ public:
 
 	BakeData *init(const int object, const int tri_offset, const int num_pixels);
 
-	bool bake(Device *device, DeviceScene *dscene, Scene *scene, ShaderEvalType shader_type, BakeData *bake_data, float result[]);
+	bool bake(Device *device, DeviceScene *dscene, Scene *scene, Progress& progress, ShaderEvalType shader_type, BakeData *bake_data, float result[]);
 
 	void device_update(Device *device, DeviceScene *dscene, Scene *scene, Progress& progress);
 	void device_free(Device *device, DeviceScene *dscene);

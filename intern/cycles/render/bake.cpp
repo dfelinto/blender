@@ -78,7 +78,7 @@ BakeData *BakeManager::init(const int object, const int tri_offset, const int nu
 	return bake_data;
 }
 
-bool BakeManager::bake(Device *device, DeviceScene *dscene, Scene *scene, ShaderEvalType shader_type, BakeData *bake_data, float result[])
+bool BakeManager::bake(Device *device, DeviceScene *dscene, Scene *scene, Progress& progress, ShaderEvalType shader_type, BakeData *bake_data, float result[])
 {
 	size_t limit = bake_data->size();
 
@@ -115,12 +115,15 @@ bool BakeManager::bake(Device *device, DeviceScene *dscene, Scene *scene, Shader
 	device->task_add(task);
 	device->task_wait();
 
+	if(progress.get_cancel()) {
+		device->mem_free(d_input);
+		device->mem_free(d_output);
+		return false;
+	}
+
 	device->mem_copy_from(d_output, 0, 1, d_output.size(), sizeof(float4));
 	device->mem_free(d_input);
 	device->mem_free(d_output);
-
-//	if(progress.get_cancel())
-//		return false;
 
 	/* read result */
 	int k = 0;
