@@ -276,7 +276,7 @@ static int bake_exec(bContext *C, wmOperator *op)
 
 	RE_engine_bake_set_engine_parameters(re, bmain, scene);
 
-	G.is_break = FALSE;
+	G.is_break = false;
 
 	RE_test_break_cb(re, NULL, bake_break);
 	RE_SetReports(re, op->reports);
