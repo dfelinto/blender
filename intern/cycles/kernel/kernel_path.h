@@ -1118,7 +1118,7 @@ ccl_device float4 kernel_branched_path_integrate(KernelGlobals *kg, RNG *rng, in
 				if(result == VOLUME_PATH_SCATTERED) {
 					/* todo: use all-light sampling */
 					if(kernel_path_integrate_scatter_lighting(kg, rng, &volume_sd, &tp, &ps, &L, &pray, num_samples_inv)) {
-						kernel_path_indirect(kg, rng, pray, buffer, tp*num_samples_inv, num_samples, ps, &L);
+						kernel_path_indirect(kg, rng, pray, tp*num_samples_inv, num_samples, ps, &L);
 
 						/* for render passes, sum and reset indirect light pass variables
 						 * for the next samples */

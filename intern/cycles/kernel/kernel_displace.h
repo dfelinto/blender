@@ -105,21 +105,21 @@ ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input,
 	float v = __uint_as_float(in.w);
 
 	int shader;
-	float3 P = triangle_point_MT(kg, prim, u, v);
-	float3 Ng = triangle_normal_MT(kg, prim, &shader);
+	float3 P, Ng;
+
+	triangle_point_normal(kg, prim, u, v, &P, &Ng, &shader);
 
 	/* dummy initilizations copied from SHADER_EVAL_DISPLACE */
 	float3 I = Ng;
 	float t = 0.0f;
 	float time = TIME_INVALID;
 	int bounce = 0;
-	int segment = ~0;
 
 	/* light passes */
 	PathRadiance L;
 
 	/* TODO, disable the closures we won't need */
-	shader_setup_from_sample(kg, &sd, P, Ng, I, shader, object, prim, u, v, t, time, bounce, segment);
+	shader_setup_from_sample(kg, &sd, P, Ng, I, shader, object, prim, u, v, t, time, bounce);
 
 	if(is_light_pass(type)){
 		RNG rng = cmj_hash(i, 0);
