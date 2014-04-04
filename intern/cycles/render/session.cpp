@@ -740,7 +740,7 @@ void Session::update_scene()
 	BakeManager *bake_manager = scene->bake_manager;
 
 	if(integrator->sampling_pattern == SAMPLING_PATTERN_CMJ ||
-	   bake_manager->is_baking()
+	   bake_manager->get_baking()
 	   ) {
 		int aa_samples = tile_manager.num_samples;
 

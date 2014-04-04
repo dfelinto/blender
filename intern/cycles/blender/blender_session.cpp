@@ -515,7 +515,7 @@ static bool is_light_pass(ShaderEvalType type)
 void BlenderSession::bake(BL::Object b_object, const string& pass_type, BL::BakePixel pixel_array, int num_pixels, int depth, float result[])
 {
 	ShaderEvalType shader_type = get_shader_type(pass_type);
-	size_t object_index = ~0;
+	size_t object_index = OBJECT_NONE;
 	int tri_offset = 0;
 
 	if(shader_type == SHADER_EVAL_UV) {
@@ -539,6 +539,13 @@ void BlenderSession::bake(BL::Object b_object, const string& pass_type, BL::Bake
 	/* get buffer parameters */
 	SessionParams session_params = BlenderSync::get_session_params(b_engine, b_userpref, b_scene, background);
 	BufferParams buffer_params = BlenderSync::get_buffer_params(b_render, b_scene, b_v3d, b_rv3d, scene->camera, width, height);
+
+	scene->bake_manager->set_baking(true);
+
+	/* set number of samples */
+	session->tile_manager.set_samples(session_params.samples);
+	session->reset(buffer_params, session_params.samples);
+	session->update_scene();
 
 	/* find object index. todo: is arbitrary - copied from mesh_displace.cpp */
 	for(size_t i = 0; i < scene->objects.size(); i++) {

@@ -48,6 +48,9 @@ public:
 	BakeManager();
 	~BakeManager();
 
+	bool get_baking();
+	void set_baking(const bool value);
+
 	BakeData *init(const int object, const int tri_offset, const int num_pixels);
 
 	bool bake(Device *device, DeviceScene *dscene, Scene *scene, Progress& progress, ShaderEvalType shader_type, BakeData *bake_data, float result[]);
@@ -55,7 +58,6 @@ public:
 	void device_update(Device *device, DeviceScene *dscene, Scene *scene, Progress& progress);
 	void device_free(Device *device, DeviceScene *dscene);
 
-	bool is_baking();
 	bool need_update;
 
 private:

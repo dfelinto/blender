@@ -73,9 +73,18 @@ BakeManager::~BakeManager()
 		delete m_bake_data;
 }
 
+bool BakeManager::get_baking()
+{
+	return m_is_baking;
+}
+
+void BakeManager::set_baking(const bool value)
+{
+	m_is_baking = value;
+}
+
 BakeData *BakeManager::init(const int object, const int tri_offset, const int num_pixels)
 {
-	m_is_baking = true;
 	m_bake_data = new BakeData(object, tri_offset, num_pixels);
 	return m_bake_data;
 }
@@ -157,10 +166,5 @@ void BakeManager::device_update(Device *device, DeviceScene *dscene, Scene *scen
 }
 
 void BakeManager::device_free(Device *device, DeviceScene *dscene) {}
-
-bool BakeManager::is_baking()
-{
-	return m_is_baking;
-}
 
 CCL_NAMESPACE_END
