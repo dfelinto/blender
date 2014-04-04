@@ -212,6 +212,8 @@ ccl_device void kernel_branched_path_integrate_direct_lighting(KernelGlobals *kg
 	}
 }
 
+#endif
+
 ccl_device void kernel_path_indirect(KernelGlobals *kg, RNG *rng, Ray ray,
 	float3 throughput, int num_samples, PathState state, PathRadiance *L)
 {
@@ -379,7 +381,7 @@ ccl_device void kernel_path_indirect(KernelGlobals *kg, RNG *rng, Ray ray,
 		}
 #endif
 
-#ifdef __EMISSION__
+#if defined(__EMISSION__) && defined(__BRANCHED_PATH__)
 		if(kernel_data.integrator.use_direct_light) {
 			bool all = kernel_data.integrator.sample_all_lights_indirect;
 			kernel_branched_path_integrate_direct_lighting(kg, rng, &sd, &state, throughput, 1.0f, L, all);
@@ -456,10 +458,6 @@ ccl_device void kernel_path_indirect(KernelGlobals *kg, RNG *rng, Ray ray,
 		}
 	}
 }
-
-#endif
-
-#ifdef __SUBSURFACE__
 
 ccl_device_inline bool kernel_path_integrate_lighting(KernelGlobals *kg, RNG *rng,
 	ShaderData *sd, float3 *throughput, PathState *state, PathRadiance *L, Ray *ray)
@@ -569,8 +567,6 @@ ccl_device_inline bool kernel_path_integrate_lighting(KernelGlobals *kg, RNG *rn
 		return false;
 	}
 }
-
-#endif
 
 ccl_device void kernel_path_ao(KernelGlobals *kg, ShaderData *sd, PathRadiance *L, PathState *state, RNG *rng, float3 throughput)
 {
