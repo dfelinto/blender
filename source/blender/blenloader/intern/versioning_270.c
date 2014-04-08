@@ -51,6 +51,9 @@
 #include "BKE_main.h"
 #include "BKE_node.h"
 
+#include "BLI_math.h"
+#include "BLI_string.h"
+
 #include "BLO_readfile.h"
 
 #include "readfile.h"
@@ -74,6 +77,28 @@ static void do_version_constraints_radians_degrees_270_1(ListBase *lb)
 				mul_v3_fl(data->to_min, deg_to_rad_f);
 				mul_v3_fl(data->to_max, deg_to_rad_f);
 			}
+		}
+	}
+
+	if (!DNA_struct_elem_find(fd->filesdna, "RenderData", "BakeData", "bake")) {
+		Scene *sce;
+
+		for (sce = main->scene.first; sce; sce = sce->id.next) {
+			sce->r.bake.flag = R_BAKE_SAVE_EXTERNAL;
+			sce->r.bake.width = 512;
+			sce->r.bake.height = 512;
+			sce->r.bake.margin = 16;
+			sce->r.bake.normal_space = R_BAKE_SPACE_TANGENT;
+			sce->r.bake.normal_swizzle[0] = R_BAKE_POSX;
+			sce->r.bake.normal_swizzle[1] = R_BAKE_POSY;
+			sce->r.bake.normal_swizzle[2] = R_BAKE_POSZ;
+			BLI_strncpy(sce->r.bake.filepath, U.renderdir, sizeof(sce->r.bake.filepath));
+
+			sce->r.bake.im_format.planes = R_IMF_PLANES_RGBA;
+			sce->r.bake.im_format.imtype = R_IMF_IMTYPE_PNG;
+			sce->r.bake.im_format.depth = R_IMF_CHAN_DEPTH_8;
+			sce->r.bake.im_format.quality = 90;
+			sce->r.bake.im_format.compress = 15;
 		}
 	}
 }

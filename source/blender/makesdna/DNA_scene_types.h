@@ -360,6 +360,32 @@ typedef struct ImageFormatData {
 /* ImageFormatData.cineon_flag */
 #define R_IMF_CINEON_FLAG_LOG (1<<0)  /* was R_CINEON_LOG */
 
+typedef struct BakeData {
+
+	struct ImageFormatData im_format;
+	char filepath[1024]; /* FILE_MAX */
+
+	short width, height;
+	short margin, flag;
+
+	short normal_swizzle[3];
+	short normal_space;
+
+	float cage_extrusion;
+	float pad;
+	char cage[64];  /* MAX_NAME */
+} BakeData;
+
+/* (short) normal_swizzle */
+typedef enum BakeNormalSwizzle {
+	R_BAKE_POSX = 0,
+	R_BAKE_POSY = 1,
+	R_BAKE_POSZ = 2,
+	R_BAKE_NEGX = 3,
+	R_BAKE_NEGY = 4,
+	R_BAKE_NEGZ = 5,
+} BakeNormalSwizzle;
+
 /* *************************************************************** */
 /* Render Data */
 
@@ -565,6 +591,9 @@ typedef struct RenderData {
 
 	/* render engine */
 	char engine[32];
+
+	/* Cycles baking */
+	struct BakeData bake;
 } RenderData;
 
 /* *************************************************************** */
@@ -1405,6 +1434,7 @@ enum {
 #define R_BAKE_LORES_MESH	32
 #define R_BAKE_VCOL			64
 #define R_BAKE_USERSCALE	128
+#define R_BAKE_SAVE_EXTERNAL	256
 
 /* bake_normal_space */
 #define R_BAKE_SPACE_CAMERA	 0

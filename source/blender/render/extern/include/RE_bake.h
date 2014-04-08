@@ -64,8 +64,8 @@ void RE_populate_bake_pixels(struct Mesh *me, struct BakePixel pixel_array[], co
 
 void RE_bake_margin(const BakePixel pixel_array[], struct ImBuf *ibuf, const int margin, const int width, const int height);
 
-void RE_normal_world_to_object(const BakePixel pixel_array[], const int num_pixels, const int depth, float result[], struct Object *ob, const int normal_swizzle[3]);
-void RE_normal_world_to_tangent(const BakePixel pixel_array[], const int num_pixels, const int depth, float result[], struct Mesh *me, const int normal_swizzle[3]);
-void RE_normal_world_to_world(const BakePixel pixel_array[], const int num_pixels, const int depth, float result[], const int normal_swizzle[3]);
+void RE_normal_world_to_object(const BakePixel pixel_array[], const int num_pixels, const int depth, float result[], struct Object *ob, const BakeNormalSwizzle normal_swizzle[3]);
+void RE_normal_world_to_tangent(const BakePixel pixel_array[], const int num_pixels, const int depth, float result[], struct Mesh *me, const BakeNormalSwizzle normal_swizzle[3]);
+void RE_normal_world_to_world(const BakePixel pixel_array[], const int num_pixels, const int depth, float result[], const BakeNormalSwizzle normal_swizzle[3]);
 
 #endif

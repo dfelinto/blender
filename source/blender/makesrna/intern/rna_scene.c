@@ -306,6 +306,22 @@ EnumPropertyItem image_color_depth_items[] = {
 	{0, NULL, 0, NULL, NULL}
 };
 
+EnumPropertyItem normal_space_items[] = {
+	{R_BAKE_SPACE_OBJECT, "OBJECT", 0, "Object", "Bake the normals in object space"},
+	{R_BAKE_SPACE_TANGENT, "TANGENT", 0, "Tangent", "Bake the normals in tangent space"},
+	{0, NULL, 0, NULL, NULL}
+};
+
+EnumPropertyItem normal_swizzle_items[] = {
+	{R_BAKE_POSX, "POS_X", 0, "+X", ""},
+	{R_BAKE_POSY, "POS_Y", 0, "+Y", ""},
+	{R_BAKE_POSZ, "POS_Z", 0, "+Z", ""},
+	{R_BAKE_NEGX, "NEG_X", 0, "-X", ""},
+	{R_BAKE_NEGY, "NEG_Y", 0, "-Y", ""},
+	{R_BAKE_NEGZ, "NEG_Z", 0, "-Z", ""},
+	{0, NULL, 0, NULL, NULL}
+};
+
 #ifdef RNA_RUNTIME
 
 #include "DNA_anim_types.h"
@@ -3077,6 +3093,93 @@ static void rna_def_scene_game_recast_data(BlenderRNA *brna)
 	RNA_def_property_update(prop, NC_SCENE, NULL);
 }
 
+
+static void rna_def_bake_data(BlenderRNA *brna)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	srna = RNA_def_struct(brna, "BakeSettings", NULL);
+	RNA_def_struct_sdna(srna, "BakeData");
+	RNA_def_struct_nested(brna, srna, "RenderSettings");
+	RNA_def_struct_ui_text(srna, "Bake Data", "Bake data for a Scene datablock");
+
+	prop = RNA_def_property(srna, "cage", PROP_STRING, PROP_NONE);
+	RNA_def_property_ui_text(prop, "Cage", "Object to use as cage");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+	prop = RNA_def_property(srna, "filepath", PROP_STRING, PROP_FILEPATH);
+	RNA_def_property_ui_text(prop, "File Path", "Image filepath to use when saving externally");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+	prop = RNA_def_property(srna, "width", PROP_INT, PROP_PIXEL);
+	RNA_def_property_range(prop, 4, 10000);
+	RNA_def_property_ui_text(prop, "Width", "Horizontal dimension of the baking map");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+	prop = RNA_def_property(srna, "height", PROP_INT, PROP_PIXEL);
+	RNA_def_property_range(prop, 4, 10000);
+	RNA_def_property_ui_text(prop, "Height", "Vertical dimension of the baking map");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+	prop = RNA_def_property(srna, "margin", PROP_INT, PROP_PIXEL);
+	RNA_def_property_range(prop, 0, INT_MAX);
+	RNA_def_property_ui_range(prop, 0, 64, 1, 1);
+	RNA_def_property_ui_text(prop, "Margin", "Extends the baked result as a post process filter");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+	prop = RNA_def_property(srna, "cage_extrusion", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_range(prop, 0.0, MAXFLOAT);
+	RNA_def_property_ui_range(prop, 0.0, 1.0, 1, 3);
+	RNA_def_property_ui_text(prop, "Cage Extrusion",
+	                         "Distance to use for the inward ray cast when using selected to active");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+	prop = RNA_def_property(srna, "normal_space", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_bitflag_sdna(prop, NULL, "normal_space");
+	RNA_def_property_enum_items(prop, normal_space_items);
+	RNA_def_property_ui_text(prop, "Normal Space", "Choose normal space for baking");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+	prop = RNA_def_property(srna, "normal_r", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_bitflag_sdna(prop, NULL, "normal_swizzle[0]");
+	RNA_def_property_enum_items(prop, normal_swizzle_items);
+	RNA_def_property_ui_text(prop, "Normal Space", "Axis to bake in red channel");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+	prop = RNA_def_property(srna, "normal_g", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_bitflag_sdna(prop, NULL, "normal_swizzle[1]");
+	RNA_def_property_enum_items(prop, normal_swizzle_items);
+	RNA_def_property_ui_text(prop, "Normal Space", "Axis to bake in green channel");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+	prop = RNA_def_property(srna, "normal_b", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_bitflag_sdna(prop, NULL, "normal_swizzle[2]");
+	RNA_def_property_enum_items(prop, normal_swizzle_items);
+	RNA_def_property_ui_text(prop, "Normal Space", "Axis to bake in blue channel");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+	prop = RNA_def_property(srna, "image_settings", PROP_POINTER, PROP_NONE);
+	RNA_def_property_flag(prop, PROP_NEVER_NULL);
+	RNA_def_property_pointer_sdna(prop, NULL, "im_format");
+	RNA_def_property_struct_type(prop, "ImageFormatSettings");
+	RNA_def_property_ui_text(prop, "Image Format", "");
+
+	/* flags */
+	prop = RNA_def_property(srna, "use_selected_to_active", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag", R_BAKE_TO_ACTIVE);
+	RNA_def_property_ui_text(prop, "Selected to Active",
+	                         "Bake shading on the surface of selected objects to the active object");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+	prop = RNA_def_property(srna, "is_save_external", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag", R_BAKE_SAVE_EXTERNAL);
+	RNA_def_property_ui_text(prop, "External",
+	                         "Save the image externally (ignore face assigned Image datablocks)");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+}
+
 static void rna_def_scene_game_data(BlenderRNA *brna)
 {
 	StructRNA *srna;
@@ -4876,6 +4979,21 @@ static void rna_def_scene_render_data(BlenderRNA *brna)
 	RNA_def_property_float_sdna(prop, NULL, "unit_line_thickness");
 	RNA_def_property_range(prop, 0.f, 10000.f);
 	RNA_def_property_ui_text(prop, "Line Thickness", "Line thickness in pixels");
+
+	/* Bake Settings */
+	prop = RNA_def_property(srna, "bake", PROP_POINTER, PROP_NONE);
+	RNA_def_property_flag(prop, PROP_NEVER_NULL);
+	RNA_def_property_pointer_sdna(prop, NULL, "bake");
+	RNA_def_property_struct_type(prop, "BakeSettings");
+	RNA_def_property_ui_text(prop, "Bake Data", "");
+
+	/* Nestled Data  */
+	/* *** Non-Animated *** */
+	RNA_define_animate_sdna(false);
+	rna_def_bake_data(brna);
+	RNA_define_animate_sdna(true);
+
+	/* *** Animated *** */
 
 	/* Scene API */
 	RNA_api_scene_render(srna);

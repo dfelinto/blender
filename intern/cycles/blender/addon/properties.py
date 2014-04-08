@@ -21,8 +21,7 @@ from bpy.props import (BoolProperty,
                        EnumProperty,
                        FloatProperty,
                        IntProperty,
-                       PointerProperty,
-                       StringProperty)
+                       PointerProperty)
 
 # enums
 
@@ -113,246 +112,6 @@ enum_volume_homogeneous_sampling = (
     ('DISTANCE', "Distance", "Use Distance Sampling"),
     ('EQUI_ANGULAR', "Equi-angular", "Use Equi-angular Sampling"),
     )
-
-
-def enum_color_depth_items(self, context):
-    """"""
-    def is_float(file_format):
-        return file_format in (
-                'OPEN_EXR',
-                'OPEN_EXR_MULTILAYER',
-                'HDR',
-                )
-
-    file_formats = {
-                'PNG' : ['8','16'],
-                'TIFF' : ['8','16'],
-                'OPEN_EXR' : ['16','32'],
-                'DPX' : ['8', '10', '12', '16'],
-                'JPEG2000' : ['8', '12', '16'],
-                }
-
-    file_format = self.file_format
-    depths = file_formats.get(file_format, ['8'])
-
-    enum_color_depth_items.ret = [(e.identifier, e.name, e.description) for e in \
-            bpy.types.OBJECT_OT_bake.bl_rna.properties['color_depth'].enum_items if \
-            e.identifier in depths]
-
-    if is_float(file_format):
-        floats = {
-                '8' :"8",
-                '10' : "10",
-                '12' : "12",
-                '16' : "Float (Half)",
-                '32' : "Float (Full)",
-                }
-
-        for i, (identifier, name, description) in enumerate(enum_color_depth_items.ret):
-            enum_color_depth_items.ret[i] = (identifier, floats.get(identifier), description)
-
-    return enum_color_depth_items.ret
-
-
-bake_file_formats = ['BMP', 'PNG', 'JPEG', 'OPEN_EXR', 'TIFF', 'TARGA']
-
-class CyclesBakeImageFormatSettings(bpy.types.PropertyGroup):
-    props_base = bpy.types.OBJECT_OT_bake.bl_rna.properties
-
-    enum_file_format_items = [(e.identifier, e.name, e.description) for e in props_base['file_format'].enum_items if e.identifier in bake_file_formats]
-    enum_exr_codec_items = [(e.identifier, e.name, e.description) for e in props_base['exr_codec'].enum_items]
-    enum_color_mode_items = [(e.identifier, e.name, e.description) for e in props_base['color_mode'].enum_items]
-
-    file_format = EnumProperty(
-            name=props_base['file_format'].name,
-            default=props_base['file_format'].default,
-            description=props_base['file_format'].description,
-            items=enum_file_format_items,
-            )
-
-    exr_codec = EnumProperty(
-            name=props_base['exr_codec'].name,
-            default=props_base['exr_codec'].default,
-            description=props_base['exr_codec'].description,
-            items=enum_exr_codec_items,
-            )
-
-    color_mode = EnumProperty(
-            name=props_base['color_mode'].name,
-            default=props_base['color_mode'].default,
-            description=props_base['color_mode'].description,
-            items=enum_color_mode_items,
-            )
-
-    color_depth = EnumProperty(
-            name=props_base['color_depth'].name,
-            description=props_base['color_depth'].description,
-            items=enum_color_depth_items,
-            )
-
-    quality = IntProperty(
-            subtype='PERCENTAGE',
-            name=props_base['quality'].name,
-            description=props_base['quality'].description,
-            default=props_base['quality'].default,
-            soft_min=props_base['quality'].soft_min,
-            soft_max=props_base['quality'].soft_max,
-            min=props_base['quality'].hard_min,
-            max=props_base['quality'].hard_max,
-            )
-
-    compression = IntProperty(
-            subtype='PERCENTAGE',
-            name=props_base['compression'].name,
-            description=props_base['compression'].description,
-            default=props_base['compression'].default,
-            soft_min=props_base['compression'].soft_min,
-            soft_max=props_base['compression'].soft_max,
-            min=props_base['compression'].hard_min,
-            max=props_base['compression'].hard_max,
-            )
-
-    del props_base
-
-
-class CyclesBakeSettings(bpy.types.PropertyGroup):
-    props_base = bpy.types.OBJECT_OT_bake.bl_rna.properties
-
-    enum_normal_space_items = [(e.identifier, e.name, e.description) for e in props_base['normal_space'].enum_items]
-    enum_normal_swizzle_items = [(e.identifier, e.name, e.description) for e in props_base['normal_r'].enum_items]
-
-    type = EnumProperty(
-            name="Type",
-            default='COMBINED',
-            description="Type of pass to bake",
-            items = (
-                ('COMBINED', "Combined", ""),
-                ('AO', "Ambient Occlusion", ""),
-                ('NORMAL', "Normal", ""),
-                ('UV', "UV", ""),
-                ('EMIT', "Emit", ""),
-                ('ENVIRONMENT', "Environment", ""),
-                ('DIFFUSE_DIRECT', "Diffuse Direct", ""),
-                ('DIFFUSE_INDIRECT', "Diffuse Indirect", ""),
-                ('DIFFUSE_COLOR', "Diffuse Color", ""),
-                ('GLOSSY_DIRECT', "Glossy Direct", ""),
-                ('GLOSSY_INDIRECT', "Glossy Indirect", ""),
-                ('GLOSSY_COLOR', "Glossy Color", ""),
-                ('TRANSMISSION_DIRECT', "Transmission Direct", ""),
-                ('TRANSMISSION_INDIRECT', "Transmission Indirect", ""),
-                ('TRANSMISSION_COLOR', "Transmission Color", ""),
-                ('SUBSURFACE_DIRECT', "Subsurface Direct", ""),
-                ('SUBSURFACE_INDIRECT', "Subsurface Indirect", ""),
-                ('SUBSURFACE_COLOR', "Subsurface Color", ""),
-                ),
-            )
-
-    is_save_external = BoolProperty(
-            name="External",
-            description="Save the image externally (ignore face assigned Image "
-                        "datablocks)",
-            default=True,
-            )
-
-    filepath = StringProperty(
-            subtype='FILE_PATH',
-            default="//",
-            name=props_base['filepath'].name,
-            description=props_base['filepath'].description,
-            )
-
-    image_settings = PointerProperty(
-            name="Image Format Settings",
-            description="Image Format Settings",
-            type=CyclesBakeImageFormatSettings,
-            )
-
-    width = IntProperty(
-            subtype='PIXEL',
-            name=props_base['width'].name,
-            description=props_base['width'].description,
-            default=props_base['width'].default,
-            soft_min=props_base['width'].soft_min,
-            soft_max=props_base['width'].soft_max,
-            min=props_base['width'].hard_min,
-            max=props_base['width'].hard_max,
-            )
-
-    height = IntProperty(
-            subtype='PIXEL',
-            name=props_base['height'].name,
-            description=props_base['height'].description,
-            default=props_base['height'].default,
-            soft_min=props_base['height'].soft_min,
-            soft_max=props_base['height'].soft_max,
-            min=props_base['height'].hard_min,
-            max=props_base['height'].hard_max,
-            )
-
-    margin = IntProperty(
-            subtype='PIXEL',
-            name=props_base['margin'].name,
-            description=props_base['margin'].description,
-            default=props_base['margin'].default,
-            soft_min=props_base['margin'].soft_min,
-            soft_max=props_base['margin'].soft_max,
-            min=props_base['margin'].hard_min,
-            max=props_base['margin'].hard_max,
-            )
-
-    use_selected_to_active = BoolProperty(
-            name="Selected to Active",
-            description="Bake shading on the surface of selected objects to "
-                        "the active object",
-            default=False,
-            )
-
-    cage_extrusion = FloatProperty(
-            subtype='DISTANCE',
-            unit='LENGTH',
-            name=props_base['cage_extrusion'].name,
-            description=props_base['cage_extrusion'].description,
-            default=props_base['cage_extrusion'].default,
-            soft_min=props_base['cage_extrusion'].soft_min,
-            soft_max=props_base['cage_extrusion'].soft_max,
-            min=props_base['cage_extrusion'].hard_min,
-            max=props_base['cage_extrusion'].hard_max,
-            )
-
-    cage = StringProperty(
-            name=props_base['cage'].name,
-            description=props_base['cage'].description,
-            )
-
-    normal_space = EnumProperty(
-            name=props_base['normal_space'].name,
-            description=props_base['normal_space'].description,
-            default=props_base['normal_space'].default,
-            items = enum_normal_space_items,
-            )
-
-    normal_r = EnumProperty(
-            name=props_base['normal_r'].name,
-            description=props_base['normal_r'].description,
-            default=props_base['normal_r'].default,
-            items = enum_normal_swizzle_items,
-            )
-
-    normal_g = EnumProperty(
-            name=props_base['normal_g'].name,
-            description=props_base['normal_g'].description,
-            default=props_base['normal_g'].default,
-            items = enum_normal_swizzle_items,
-            )
-
-    normal_b = EnumProperty(
-            name=props_base['normal_b'].name,
-            description=props_base['normal_b'].description,
-            default=props_base['normal_b'].default,
-            items = enum_normal_swizzle_items,
-            )
-
-    del props_base
 
 
 class CyclesRenderSettings(bpy.types.PropertyGroup):
@@ -711,11 +470,32 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
                             "but time can be saved by manually stopping the render when the noise is low enough)",
                 default=False,
                 )
-        cls.bake = PointerProperty(
-                name="Cycles Bake Settings",
-                description="Cycles bake settings",
-                type=CyclesBakeSettings,
-                )
+
+        cls.bake_type = EnumProperty(
+            name="Bake Type",
+            default='COMBINED',
+            description="Type of pass to bake",
+            items = (
+                ('COMBINED', "Combined", ""),
+                ('AO', "Ambient Occlusion", ""),
+                ('NORMAL', "Normal", ""),
+                ('UV', "UV", ""),
+                ('EMIT', "Emit", ""),
+                ('ENVIRONMENT', "Environment", ""),
+                ('DIFFUSE_DIRECT', "Diffuse Direct", ""),
+                ('DIFFUSE_INDIRECT', "Diffuse Indirect", ""),
+                ('DIFFUSE_COLOR', "Diffuse Color", ""),
+                ('GLOSSY_DIRECT', "Glossy Direct", ""),
+                ('GLOSSY_INDIRECT', "Glossy Indirect", ""),
+                ('GLOSSY_COLOR', "Glossy Color", ""),
+                ('TRANSMISSION_DIRECT', "Transmission Direct", ""),
+                ('TRANSMISSION_INDIRECT', "Transmission Indirect", ""),
+                ('TRANSMISSION_COLOR', "Transmission Color", ""),
+                ('SUBSURFACE_DIRECT', "Subsurface Direct", ""),
+                ('SUBSURFACE_INDIRECT', "Subsurface Indirect", ""),
+                ('SUBSURFACE_COLOR', "Subsurface Color", ""),
+                ),
+            )
 
     @classmethod
     def unregister(cls):
@@ -1127,8 +907,6 @@ class CyclesCurveSettings(bpy.types.PropertyGroup):
 
 
 def register():
-    bpy.utils.register_class(CyclesBakeImageFormatSettings)
-    bpy.utils.register_class(CyclesBakeSettings)
     bpy.utils.register_class(CyclesRenderSettings)
     bpy.utils.register_class(CyclesCameraSettings)
     bpy.utils.register_class(CyclesMaterialSettings)
@@ -1142,8 +920,6 @@ def register():
 
 def unregister():
     bpy.utils.unregister_class(CyclesRenderSettings)
-    bpy.utils.unregister_class(CyclesBakeSettings)
-    bpy.utils.unregister_class(CyclesBakeImageFormatSettings)
     bpy.utils.unregister_class(CyclesCameraSettings)
     bpy.utils.unregister_class(CyclesMaterialSettings)
     bpy.utils.unregister_class(CyclesLampSettings)

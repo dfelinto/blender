@@ -78,12 +78,12 @@ extern struct Render R;
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 
 
-typedef struct BakeData {
+typedef struct BakeDataZSpan {
 	BakePixel *pixel_array;
 	int width;
 	int primitive_id;
 	ZSpan zspan;
-} BakeData;
+} BakeDataZSpan;
 
 /*
  * struct wrapping up tangent space data
@@ -105,7 +105,7 @@ typedef struct TriTessFace {
 /* ************************* bake ************************ */
 static void store_bake_pixel(void *handle, int x, int y, float u, float v)
 {
-	BakeData *bd = (BakeData *)handle;
+	BakeDataZSpan *bd = (BakeDataZSpan *)handle;
 	BakePixel *pixel;
 	const int width = bd->width;
 	const int i = y * width + x;
@@ -409,7 +409,7 @@ void RE_mask_bake_pixels(const BakePixel pixel_array_from[], BakePixel pixel_arr
 
 void RE_populate_bake_pixels(Mesh *me, BakePixel pixel_array[], const int width, const int height)
 {
-	BakeData bd;
+	BakeDataZSpan bd;
 	const int num_pixels = width * height;
 	int i, a;
 	int p_id;
@@ -478,25 +478,25 @@ static void normal_uncompress(float out[3], const float in[3])
 		out[i] = - (2.0f * in[i] - 1.0f);
 }
 
-static void normal_compress(float out[3], const float in[3], const int normal_swizzle[3])
+static void normal_compress(float out[3], const float in[3], const BakeNormalSwizzle normal_swizzle[3])
 {
 	const int swizzle_index[6] =
 	{
-		0, // OB_POSX
-		1, // OB_POSY
-		2, // OB_POSZ
-		0, // OB_NEGX
-		1, // OB_NEGY
-		2, // OB_NEGZ
+		0, // R_BAKE_POSX
+		1, // R_BAKE_POSY
+		2, // R_BAKE_POSZ
+		0, // R_BAKE_NEGX
+		1, // R_BAKE_NEGY
+		2, // R_BAKE_NEGZ
 	};
 	const float swizzle_sign[6] =
 	{
-		 1.0f, // OB_POSX
-		 1.0f, // OB_POSY
-		 1.0f, // OB_POSZ
-		-1.0f, // OB_NEGX
-		-1.0f, // OB_NEGY
-		-1.0f, // OB_NEGZ
+		 1.0f, // R_BAKE_POSX
+		 1.0f, // R_BAKE_POSY
+		 1.0f, // R_BAKE_POSZ
+		-1.0f, // R_BAKE_NEGX
+		-1.0f, // R_BAKE_NEGY
+		-1.0f, // R_BAKE_NEGZ
 	};
 
 	int i;
@@ -522,7 +522,7 @@ static void normal_compress(float out[3], const float in[3], const int normal_sw
  * This function converts an object space normal map to a tangent space normal map for a given low poly mesh
  */
 void RE_normal_world_to_tangent(const BakePixel pixel_array[], const int num_pixels, const int depth,
-                                float result[], Mesh *me, const int normal_swizzle[3])
+                                float result[], Mesh *me, const BakeNormalSwizzle normal_swizzle[3])
 {
 	int i;
 
@@ -630,7 +630,7 @@ void RE_normal_world_to_tangent(const BakePixel pixel_array[], const int num_pix
 }
 
 void RE_normal_world_to_object(const BakePixel pixel_array[], const int num_pixels, const int depth,
-                               float result[], struct Object *ob, const int normal_swizzle[3])
+                               float result[], struct Object *ob, const BakeNormalSwizzle normal_swizzle[3])
 {
 	int i;
 	float iobmat[4][4];
@@ -656,7 +656,7 @@ void RE_normal_world_to_object(const BakePixel pixel_array[], const int num_pixe
 }
 
 void RE_normal_world_to_world(const BakePixel pixel_array[], const int num_pixels, const int depth,
-                              float result[], const int normal_swizzle[3])
+                              float result[], const BakeNormalSwizzle normal_swizzle[3])
 {
 	int i;
 

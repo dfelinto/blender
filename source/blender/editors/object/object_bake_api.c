@@ -122,17 +122,16 @@ static int bake_break(void *UNUSED(rjv))
 static bool write_external_bake_pixels(
     const char *filepath, BakePixel pixel_array[], float *buffer,
     const int width, const int height, bool is_linear, const int margin,
-    char imtype, char exr_codec, char quality, char compression, char color_mode, char color_depth)
+    ImageFormatData *im_format)
 {
 	ImBuf *ibuf = NULL;
 	bool ok = false;
-	ImageFormatData imf;
 	bool is_float;
 
-	is_float = (int) color_depth > 8;
+	is_float = (int) im_format->depth > 8;
 
 	/* create a new ImBuf */
-	ibuf = IMB_allocImBuf(width, height, color_mode, (is_float ? IB_rectfloat : IB_rect));
+	ibuf = IMB_allocImBuf(width, height, im_format->planes, (is_float ? IB_rectfloat : IB_rect));
 	if (!ibuf) return false;
 
 	/* populates the ImBuf */
@@ -151,17 +150,10 @@ static bool write_external_bake_pixels(
 		        );
 	}
 
-	/* setup the ImageFormatData */
-	imf.imtype = imtype;
-	imf.exr_codec = exr_codec;
-	imf.quality = quality;
-	imf.compress = compression;
-	imf.depth = color_depth;
-
 	/* margins */
 	RE_bake_margin(pixel_array, ibuf, margin, width, height);
 
-	if ((ok = BKE_imbuf_write(ibuf, filepath, &imf))) {
+	if ((ok = BKE_imbuf_write(ibuf, filepath, im_format))) {
 #ifndef WIN32
 		chmod(filepath, S_IRUSR | S_IWUSR);
 #endif
@@ -232,7 +224,7 @@ static int bake_exec(bContext *C, wmOperator *op)
 	bool is_tangent;
 
 	int normal_space = RNA_enum_get(op->ptr, "normal_space");
-	int normal_swizzle[] = {
+	BakeNormalSwizzle normal_swizzle[] = {
 		RNA_enum_get(op->ptr, "normal_r"),
 		RNA_enum_get(op->ptr, "normal_g"),
 		RNA_enum_get(op->ptr, "normal_b")
@@ -437,9 +429,9 @@ static int bake_exec(bContext *C, wmOperator *op)
 			case R_BAKE_SPACE_WORLD:
 			{
 				/* Cycles internal format */
-				if (normal_swizzle[0] == OB_NEGX &&
-				    normal_swizzle[1] == OB_NEGY &&
-				    normal_swizzle[2] == OB_NEGZ)
+				if (normal_swizzle[0] == R_BAKE_NEGX &&
+				    normal_swizzle[1] == R_BAKE_NEGY &&
+				    normal_swizzle[2] == R_BAKE_NEGZ)
 				{
 					break;
 				}
@@ -466,20 +458,13 @@ static int bake_exec(bContext *C, wmOperator *op)
 	else {
 		/* save the result */
 		if (is_external) {
+			BakeData *bake = &scene->r.bake;
 			char name[FILE_MAX];
-			char imtype, exr_codec, quality, compression, color_mode, color_depth;
 
-			imtype = RNA_enum_get(op->ptr, "file_format");
-			quality = RNA_int_get(op->ptr, "quality");
-			compression = RNA_int_get(op->ptr, "compression");
-			exr_codec = RNA_enum_get(op->ptr, "exr_codec");
-			color_mode = RNA_enum_get(op->ptr, "color_mode");
-			color_depth = RNA_enum_get(op->ptr, "color_depth");
-
-			BKE_makepicstring_from_type(name, filepath, bmain->name, 0, imtype, true, false);
+			BKE_makepicstring_from_type(name, filepath, bmain->name, 0, bake->im_format.imtype, true, false);
 
 			/* save it externally */
-			ok = write_external_bake_pixels(name, pixel_array_render, result, width, height, is_linear, margin, imtype, exr_codec, quality, compression, color_mode, color_depth);
+			ok = write_external_bake_pixels(name, pixel_array_render, result, width, height, is_linear, margin, &bake->im_format);
 
 			if (!ok) {
 				BKE_reportf(op->reports, RPT_ERROR, "Problem saving baked map in \"%s\".", name);
@@ -540,28 +525,72 @@ static int bake_exec(bContext *C, wmOperator *op)
 	return op_result;
 }
 
-static EnumPropertyItem normal_swizzle_items[] = {
-	{OB_POSX, "POS_X", 0, "+X", ""},
-	{OB_POSY, "POS_Y", 0, "+Y", ""},
-	{OB_POSZ, "POS_Z", 0, "+Z", ""},
-	{OB_NEGX, "NEG_X", 0, "-X", ""},
-	{OB_NEGY, "NEG_Y", 0, "-Y", ""},
-	{OB_NEGZ, "NEG_Z", 0, "-Z", ""},
-	{0, NULL, 0, NULL, NULL}
-};
+static int bake_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(_event))
+{
+	Scene *scene = CTX_data_scene(C);
+	BakeData *bake = &scene->r.bake;
 
-static EnumPropertyItem normal_space_items[] = {
-	{R_BAKE_SPACE_WORLD, "WORLD", 0, "World", "Bake the normals in world space"},
-	{R_BAKE_SPACE_OBJECT, "OBJECT", 0, "Object", "Bake the normals in object space"},
-	{R_BAKE_SPACE_TANGENT, "TANGENT", 0, "Tangent", "Bake the normals in tangent space"},
-	{0, NULL, 0, NULL, NULL}
-};
+	PropertyRNA *is_save_external, *filepath;
+	PropertyRNA *width, *height, *margin;
+	PropertyRNA *use_selected_to_active, *cage_extrusion, *cage;
+	PropertyRNA *normal_space, *normal_swizzle[3];
 
-static EnumPropertyItem color_mode_items[] = {
-	{R_IMF_PLANES_RGB, "RGB", 0, "RGB", "Images are saved with RGB (color) data"},
-	{R_IMF_PLANES_RGBA, "RGBA", 0, "RGBA", "Images are saved with RGB and Alpha data (if supported)"},
-	{0, NULL, 0, NULL, NULL}
-};
+	is_save_external = RNA_struct_find_property(op->ptr, "is_save_external");
+	filepath = RNA_struct_find_property(op->ptr, "filepath");
+
+	width = RNA_struct_find_property(op->ptr, "width");
+	height = RNA_struct_find_property(op->ptr, "height");
+	margin = RNA_struct_find_property(op->ptr, "margin");
+
+	use_selected_to_active = RNA_struct_find_property(op->ptr, "use_selected_to_active");
+	cage_extrusion = RNA_struct_find_property(op->ptr, "cage_extrusion");
+	cage = RNA_struct_find_property(op->ptr, "cage");
+
+	normal_space = RNA_struct_find_property(op->ptr, "normal_space");
+	normal_swizzle[0] = RNA_struct_find_property(op->ptr, "normal_r");
+	normal_swizzle[1] = RNA_struct_find_property(op->ptr, "normal_g");
+	normal_swizzle[2] = RNA_struct_find_property(op->ptr, "normal_b");
+
+	if (!RNA_property_is_set(op->ptr, is_save_external))
+		RNA_boolean_set(op->ptr, "is_save_external", (bake->flag & R_BAKE_SAVE_EXTERNAL));
+
+	if (!RNA_property_is_set(op->ptr, filepath))
+		RNA_string_set(op->ptr, "filepath", bake->filepath);
+
+	if (!RNA_property_is_set(op->ptr, width))
+		RNA_int_set(op->ptr, "width", bake->width);
+
+	if (!RNA_property_is_set(op->ptr, height))
+		RNA_int_set(op->ptr, "height", bake->height);
+
+	if (!RNA_property_is_set(op->ptr, margin))
+		RNA_int_set(op->ptr, "margin", bake->margin);
+
+	if (!RNA_property_is_set(op->ptr, use_selected_to_active))
+		RNA_boolean_set(op->ptr, "use_selected_to_active", (bake->flag & R_BAKE_TO_ACTIVE));
+
+	if (!RNA_property_is_set(op->ptr, cage_extrusion))
+		RNA_float_set(op->ptr, "cage_extrusion", bake->cage_extrusion);
+
+	if (!RNA_property_is_set(op->ptr, cage)) {
+		RNA_string_set(op->ptr, "cage", bake->cage);
+	}
+
+	if (!RNA_property_is_set(op->ptr, normal_space))
+		RNA_enum_set(op->ptr, "normal_space", bake->normal_space);
+
+	if (!RNA_property_is_set(op->ptr, normal_swizzle[0]))
+		RNA_enum_set(op->ptr, "normal_r", bake->normal_swizzle[0]);
+
+	if (!RNA_property_is_set(op->ptr, normal_swizzle[1]))
+		RNA_enum_set(op->ptr, "normal_g", bake->normal_swizzle[1]);
+
+	if (!RNA_property_is_set(op->ptr, normal_swizzle[2]))
+		RNA_enum_set(op->ptr, "normal_b", bake->normal_swizzle[2]);
+
+
+	return bake_exec(C, op);
+}
 
 void OBJECT_OT_bake(wmOperatorType *ot)
 {
@@ -573,34 +602,21 @@ void OBJECT_OT_bake(wmOperatorType *ot)
 	/* api callbacks */
 	ot->exec = bake_exec;
 	ot->modal = bake_modal;
+	ot->invoke = bake_invoke;
 	ot->poll = ED_operator_object_active_editable_mesh;
 
 	ot->prop = RNA_def_enum(ot->srna, "type", render_pass_type_items, SCE_PASS_COMBINED, "Type",
 	                        "Type of pass to bake, some of them may not be supported by the current render engine");
 	ot->prop = RNA_def_boolean(ot->srna, "is_save_external", true, "External", "Save the image externally (ignore face assigned Image datablocks)");
-	ot->prop = RNA_def_string_file_path(ot->srna, "filepath", NULL, FILE_MAX, "Path", "Image filepath to use when saving externally");
+	ot->prop = RNA_def_string_file_path(ot->srna, "filepath", NULL, FILE_MAX, "File Path", "Image filepath to use when saving externally");
 	ot->prop = RNA_def_int(ot->srna, "width", 512, 1, INT_MAX, "Width", "Horizontal dimension of the baking map", 64, 4096);
 	ot->prop = RNA_def_int(ot->srna, "height", 512, 1, INT_MAX, "Height", "Vertical dimension of the baking map", 64, 4096);
 	ot->prop = RNA_def_int(ot->srna, "margin", 16, 0, INT_MAX, "Margin", "Extends the baked result as a post process filter", 0, 64);
 	ot->prop = RNA_def_boolean(ot->srna, "use_selected_to_active", false, "Selected to Active", "Bake shading on the surface of selected objects to the active object");
 	ot->prop = RNA_def_float(ot->srna, "cage_extrusion", 0.0, 0.0, 1.0, "Cage Extrusion", "Distance to use for the inward ray cast when using selected to active", 0.0, 1.0);
 	ot->prop = RNA_def_string(ot->srna, "cage", NULL, MAX_NAME, "Cage", "Object to use as cage");
-	ot->prop = RNA_def_enum(ot->srna, "normal_space", normal_space_items, R_BAKE_SPACE_WORLD, "Normal Space", "Choose normal space for baking");
-	ot->prop = RNA_def_enum(ot->srna, "normal_r", normal_swizzle_items, OB_NEGX, "R", "Axis to bake in red channel");
-	ot->prop = RNA_def_enum(ot->srna, "normal_g", normal_swizzle_items, OB_NEGY, "G", "Axis to bake in green channel");
-	ot->prop = RNA_def_enum(ot->srna, "normal_b", normal_swizzle_items, OB_NEGZ, "B", "Axis to bake in blue channel");
-
-	/* Image Format Settings */
-	ot->prop = RNA_def_enum(ot->srna, "file_format", image_type_items, R_IMF_IMTYPE_PNG, "File Format", "File format to save the rendered images as");
-	ot->prop = RNA_def_enum(ot->srna, "exr_codec", exr_codec_items, R_IMF_EXR_CODEC_ZIP, "EXR Codec", "Codec settings for OpenEXR");
-	ot->prop = RNA_def_int(ot->srna, "quality", 90, 0, 100, "Quality", "Quality for image formats that support lossy compression", 0, 100);
-	ot->prop = RNA_def_int(ot->srna, "compression", 15, 0, 100, "Compression",
-			               "Amount of time to determine best compression: "
-	                       "0 = no compression with fast file output, "
-	                       "100 = maximum lossless compression with slow file output", 0, 100);
-	ot->prop = RNA_def_enum(ot->srna, "color_mode", color_mode_items, R_IMF_PLANES_RGB, "Color Mode",
-	                        "Choose RGB for saving red, green and blue channels, "
-	                        "and RGBA for saving red, green, blue and alpha channels");
-	ot->prop = RNA_def_enum(ot->srna, "color_depth", image_color_depth_items, R_IMF_CHAN_DEPTH_8, "Color Depth",
-	                        "Bit depth per channel");
+	ot->prop = RNA_def_enum(ot->srna, "normal_space", normal_space_items, R_BAKE_SPACE_TANGENT, "Normal Space", "Choose normal space for baking");
+	ot->prop = RNA_def_enum(ot->srna, "normal_r", normal_swizzle_items, R_BAKE_POSX, "R", "Axis to bake in red channel");
+	ot->prop = RNA_def_enum(ot->srna, "normal_g", normal_swizzle_items, R_BAKE_POSY, "G", "Axis to bake in green channel");
+	ot->prop = RNA_def_enum(ot->srna, "normal_b", normal_swizzle_items, R_BAKE_POSZ, "B", "Axis to bake in blue channel");
 }

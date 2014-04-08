@@ -1226,61 +1226,6 @@ class CyclesRender_PT_CurveRendering(CyclesButtonsPanel, Panel):
         row.prop(ccscene, "maximum_width", text="Max Ext.")
 
 
-def template_bake_image_settings(layout, image_settings):
-    def support_quality(file_format):
-        return file_format in (
-                'JPEG',
-                'JPEG2000',
-                )
-
-    def support_compression(file_format):
-        return file_format in (
-                'PNG',
-                )
-
-    def support_multiple_depth(file_format):
-        return file_format in (
-                'TIFF',
-                'PNG',
-                'OPEN_EXR',
-                'DPX',
-                'JPEG2000',
-                )
-
-    def support_alpha(file_format):
-        return file_format in (
-                'TIFF',
-                'PNG',
-                'OPEN_EXR',
-                'TARGA',
-                'OPEN_EXR_MULTILAYER',
-                )
-
-    col = layout.column()
-    split = col.split(0.5)
-
-    split.prop(image_settings, "file_format", text="")
-    file_format = image_settings.file_format
-
-    if support_alpha(file_format):
-        sub = split.row()
-        sub.prop(image_settings, "color_mode", text="Color", expand=True)
-
-    if support_multiple_depth(file_format):
-        row = col.row()
-        row.label(text="Color Depth:")
-        row.prop(image_settings, "color_depth", expand=True)
-
-    if support_quality(file_format):
-        col.prop(image_settings, "quality")
-
-    if support_compression(file_format):
-        col.prop(image_settings, "compression")
-
-    if file_format in ('OPEN_EXR', 'OPEN_EXR_MULTILAYER'):
-        col.prop(image_settings, "exr_codec")
-
-
 class CyclesRender_PT_bake(CyclesButtonsPanel, Panel):
     bl_label = "Bake"
     bl_context = "render"
@@ -1291,43 +1236,13 @@ class CyclesRender_PT_bake(CyclesButtonsPanel, Panel):
         layout = self.layout
 
         scene = context.scene
-        cbk = scene.cycles.bake
-        cbk_attrs = (
-                "type",
-                "is_save_external",
-                "filepath",
-                "width",
-                "height",
-                "margin",
-                "use_selected_to_active",
-                "cage_extrusion",
-                "cage",
-                "normal_space",
-                "normal_r",
-                "normal_g",
-                "normal_b",
-                )
+        cbk = scene.render.bake
 
-        # image format settings
-        cbk_imf_attrs = (
-                "file_format",
-                "exr_codec",
-                "quality",
-                "compression",
-                "color_mode",
-                "color_depth",
-                )
-
-        props = layout.operator("object.bake", icon='RENDER_STILL')
-
-        for attr in cbk_attrs:
-            setattr(props, attr, getattr(cbk, attr))
-
-        for attr in cbk_imf_attrs:
-            setattr(props, attr, getattr(cbk.image_settings, attr))
+        props = layout.operator("object.bake", icon='RENDER_STILL').type = \
+        scene.cycles.bake_type
 
         col = layout.column()
-        col.prop(cbk, "type")
+        col.prop(scene.cycles, "bake_type")
 
         col.separator()
         row = col.row()
@@ -1346,7 +1261,7 @@ class CyclesRender_PT_bake(CyclesButtonsPanel, Panel):
         sub.prop(cbk, "cage_extrusion")
         sub.prop_search(cbk, "cage", scene, "objects")
 
-        if cbk.type == 'NORMAL':
+        if scene.cycles.bake_type == 'NORMAL':
             col.separator()
             box = col.box()
             box.label(text="Normal Settings:")
@@ -1363,8 +1278,7 @@ class CyclesRender_PT_bake(CyclesButtonsPanel, Panel):
         col.prop(cbk, "filepath", text="")
 
         col.separator()
-        #template bake_image_settings
-        template_bake_image_settings(col, cbk.image_settings)
+        col.template_image_settings(cbk.image_settings, color_management=False)
 
 
 class CyclesParticle_PT_CurveSettings(CyclesButtonsPanel, Panel):
