@@ -38,8 +38,8 @@ struct Mesh;
 typedef struct BakePixel {
 	int primitive_id;
 	float uv[2];
-	float dudx, dudy;
-	float dvdx, dvdy;
+	float du_dx, du_dy;
+	float dv_dx, dv_dy;
 } BakePixel;
 
 /* external_engine.c */

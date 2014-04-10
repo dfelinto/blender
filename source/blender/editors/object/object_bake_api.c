@@ -132,7 +132,8 @@ static bool write_external_bake_pixels(
 
 	/* create a new ImBuf */
 	ibuf = IMB_allocImBuf(width, height, im_format->planes, (is_float ? IB_rectfloat : IB_rect));
-	if (!ibuf) return false;
+	if (!ibuf)
+		return false;
 
 	/* populates the ImBuf */
 	if (is_float) {
@@ -145,7 +146,7 @@ static bool write_external_bake_pixels(
 	else {
 		IMB_buffer_byte_from_float(
 		        (unsigned char *) ibuf->rect, buffer, ibuf->channels, ibuf->dither,
-		        (is_linear?IB_PROFILE_LINEAR_RGB:IB_PROFILE_SRGB), IB_PROFILE_LINEAR_RGB,
+		        (is_linear ? IB_PROFILE_LINEAR_RGB : IB_PROFILE_SRGB), IB_PROFILE_LINEAR_RGB,
 		        false, ibuf->x, ibuf->y, ibuf->x, ibuf->x
 		        );
 	}
@@ -193,9 +194,9 @@ static int bake_exec(bContext *C, wmOperator *op)
 
 	Object *ob_custom_cage = NULL;
 
-	bool restrict_render_low = (ob_low->restrictflag & OB_RESTRICT_RENDER);
-	bool restrict_render_high = false;
-	bool restrict_render_custom_cage;
+	char restrict_flag_low = ob_low->restrictflag;
+	char restrict_flag_high;
+	char restrict_flag_cage;
 
 	Mesh *me_low = NULL;
 	Mesh *me_high = NULL;
@@ -251,10 +252,13 @@ static int bake_exec(bContext *C, wmOperator *op)
 			BKE_report(op->reports, RPT_ERROR, "No valid selected object");
 			return OPERATOR_CANCELLED;
 		}
+		else {
+			restrict_flag_high = ob_high->restrictflag;
+		}
 	}
 
 	if (custom_cage[0] != '\0') {
-		ob_custom_cage = (Object *)BLI_findstring(&bmain->object, custom_cage, offsetof(ID, name) + 2);
+		ob_custom_cage = BLI_findstring(&bmain->object, custom_cage, offsetof(ID, name) + 2);
 
 		/* TODO check if cage object has the same topology (num of triangles and a valid UV) */
 		if (ob_custom_cage == NULL || ob_custom_cage->type != OB_MESH) {
@@ -262,7 +266,7 @@ static int bake_exec(bContext *C, wmOperator *op)
 			return OPERATOR_CANCELLED;
 		}
 		else {
-			restrict_render_custom_cage = (ob_custom_cage->restrictflag & OB_RESTRICT_RENDER);
+			restrict_flag_cage = ob_custom_cage->restrictflag;
 		}
 	}
 
@@ -388,9 +392,9 @@ static int bake_exec(bContext *C, wmOperator *op)
 		}
 
 		/* make sure low poly doesn't render, and high poly renders */
-		restrict_render_high = (ob_high->restrictflag & OB_RESTRICT_RENDER);
 		ob_high->restrictflag &= ~OB_RESTRICT_RENDER;
 		ob_low->restrictflag |= OB_RESTRICT_RENDER;
+
 		ob_render = ob_high;
 
 		if (ob_custom_cage) {
@@ -483,24 +487,17 @@ static int bake_exec(bContext *C, wmOperator *op)
 	}
 
 	/* restore the restrict render settings */
-	if (!restrict_render_low)
-		ob_low->restrictflag &= ~OB_RESTRICT_RENDER;
-	else
-		ob_low->restrictflag |= OB_RESTRICT_RENDER;
+	ob_low->restrictflag = restrict_flag_low;
 
 	if (ob_high) {
-		if (restrict_render_high)
-			ob_high->restrictflag |= OB_RESTRICT_RENDER;
+		ob_high->restrictflag = restrict_flag_high;
 
 		if (tri_mod)
 			ED_object_modifier_remove(op->reports, bmain, ob_high, tri_mod);
 	}
 
 	if (ob_custom_cage) {
-		if (!restrict_render_custom_cage)
-			ob_custom_cage->restrictflag &= ~OB_RESTRICT_RENDER;
-		else
-			ob_custom_cage->restrictflag |= OB_RESTRICT_RENDER;
+		ob_custom_cage->restrictflag = restrict_flag_cage;
 	}
 
 	RE_SetReports(re, NULL);
@@ -527,67 +524,69 @@ static int bake_exec(bContext *C, wmOperator *op)
 
 static int bake_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(_event))
 {
+	PropertyRNA *prop;
 	Scene *scene = CTX_data_scene(C);
 	BakeData *bake = &scene->r.bake;
 
-	PropertyRNA *is_save_external, *filepath;
-	PropertyRNA *width, *height, *margin;
-	PropertyRNA *use_selected_to_active, *cage_extrusion, *cage;
-	PropertyRNA *normal_space, *normal_swizzle[3];
-
-	is_save_external = RNA_struct_find_property(op->ptr, "is_save_external");
-	filepath = RNA_struct_find_property(op->ptr, "filepath");
-
-	width = RNA_struct_find_property(op->ptr, "width");
-	height = RNA_struct_find_property(op->ptr, "height");
-	margin = RNA_struct_find_property(op->ptr, "margin");
-
-	use_selected_to_active = RNA_struct_find_property(op->ptr, "use_selected_to_active");
-	cage_extrusion = RNA_struct_find_property(op->ptr, "cage_extrusion");
-	cage = RNA_struct_find_property(op->ptr, "cage");
-
-	normal_space = RNA_struct_find_property(op->ptr, "normal_space");
-	normal_swizzle[0] = RNA_struct_find_property(op->ptr, "normal_r");
-	normal_swizzle[1] = RNA_struct_find_property(op->ptr, "normal_g");
-	normal_swizzle[2] = RNA_struct_find_property(op->ptr, "normal_b");
-
-	if (!RNA_property_is_set(op->ptr, is_save_external))
+	prop = RNA_struct_find_property(op->ptr, "is_save_external");
+	if (!RNA_property_is_set(op->ptr, prop)) {
 		RNA_boolean_set(op->ptr, "is_save_external", (bake->flag & R_BAKE_SAVE_EXTERNAL));
+	}
 
-	if (!RNA_property_is_set(op->ptr, filepath))
+	prop = RNA_struct_find_property(op->ptr, "filepath");
+	if (!RNA_property_is_set(op->ptr, prop)) {
 		RNA_string_set(op->ptr, "filepath", bake->filepath);
+	}
 
-	if (!RNA_property_is_set(op->ptr, width))
+	prop =  RNA_struct_find_property(op->ptr, "width");
+	if (!RNA_property_is_set(op->ptr, prop)) {
 		RNA_int_set(op->ptr, "width", bake->width);
+	}
 
-	if (!RNA_property_is_set(op->ptr, height))
-		RNA_int_set(op->ptr, "height", bake->height);
+	prop =  RNA_struct_find_property(op->ptr, "height");
+	if (!RNA_property_is_set(op->ptr, prop)) {
+		RNA_int_set(op->ptr, "height", bake->width);
+	}
 
-	if (!RNA_property_is_set(op->ptr, margin))
+	prop = RNA_struct_find_property(op->ptr, "margin");
+	if (!RNA_property_is_set(op->ptr, prop)) {
 		RNA_int_set(op->ptr, "margin", bake->margin);
+	}
 
-	if (!RNA_property_is_set(op->ptr, use_selected_to_active))
+	prop = RNA_struct_find_property(op->ptr, "use_selected_to_active");
+	if (!RNA_property_is_set(op->ptr, prop)) {
 		RNA_boolean_set(op->ptr, "use_selected_to_active", (bake->flag & R_BAKE_TO_ACTIVE));
+	}
 
-	if (!RNA_property_is_set(op->ptr, cage_extrusion))
+	prop = RNA_struct_find_property(op->ptr, "cage_extrusion");
+	if (!RNA_property_is_set(op->ptr, prop)) {
 		RNA_float_set(op->ptr, "cage_extrusion", bake->cage_extrusion);
+	}
 
-	if (!RNA_property_is_set(op->ptr, cage)) {
+	prop = RNA_struct_find_property(op->ptr, "cage");
+	if (!RNA_property_is_set(op->ptr, prop)) {
 		RNA_string_set(op->ptr, "cage", bake->cage);
 	}
 
-	if (!RNA_property_is_set(op->ptr, normal_space))
+	prop = RNA_struct_find_property(op->ptr, "normal_space");
+	if (!RNA_property_is_set(op->ptr, prop)) {
 		RNA_enum_set(op->ptr, "normal_space", bake->normal_space);
+	}
 
-	if (!RNA_property_is_set(op->ptr, normal_swizzle[0]))
+	prop = RNA_struct_find_property(op->ptr, "normal_r");
+	if (!RNA_property_is_set(op->ptr, prop)) {
 		RNA_enum_set(op->ptr, "normal_r", bake->normal_swizzle[0]);
+	}
 
-	if (!RNA_property_is_set(op->ptr, normal_swizzle[1]))
+	prop = RNA_struct_find_property(op->ptr, "normal_g");
+	if (!RNA_property_is_set(op->ptr, prop)) {
 		RNA_enum_set(op->ptr, "normal_g", bake->normal_swizzle[1]);
+	}
 
-	if (!RNA_property_is_set(op->ptr, normal_swizzle[2]))
+	prop = RNA_struct_find_property(op->ptr, "normal_b");
+	if (!RNA_property_is_set(op->ptr, prop)) {
 		RNA_enum_set(op->ptr, "normal_b", bake->normal_swizzle[2]);
-
+	}
 
 	return bake_exec(C, op);
 }
