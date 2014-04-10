@@ -1236,13 +1236,15 @@ class CyclesRender_PT_bake(CyclesButtonsPanel, Panel):
         layout = self.layout
 
         scene = context.scene
+        cscene = scene.cycles
+
         cbk = scene.render.bake
 
-        props = layout.operator("object.bake", icon='RENDER_STILL').type = \
-        scene.cycles.bake_type
+        layout.operator("object.bake", icon='RENDER_STILL').type = \
+        cscene.bake_type
 
         col = layout.column()
-        col.prop(scene.cycles, "bake_type")
+        col.prop(cscene, "bake_type")
 
         col.separator()
         row = col.row()
@@ -1261,7 +1263,7 @@ class CyclesRender_PT_bake(CyclesButtonsPanel, Panel):
         sub.prop(cbk, "cage_extrusion")
         sub.prop_search(cbk, "cage", scene, "objects")
 
-        if scene.cycles.bake_type == 'NORMAL':
+        if cscene.bake_type == 'NORMAL':
             col.separator()
             box = col.box()
             box.label(text="Normal Settings:")
