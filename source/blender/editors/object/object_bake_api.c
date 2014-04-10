@@ -280,38 +280,6 @@ static int bake_exec(bContext *C, wmOperator *op)
 	pixel_array_low = MEM_callocN(sizeof(BakePixel) * num_pixels, "bake pixels low poly");
 	result = MEM_callocN(sizeof(float) * depth * num_pixels, "bake return pixels");
 
-#if 0
-	/* PSEUDO-CODE TIME
-	 *
-	 * for now ignore the 'bakemap' references below
-	 * this is just to help thinking how this will fit
-	 * in the overall design and future changes
-	 * for the current bake structure just consider
-	 * that there is one bakemap made with the current
-	 * render selected options */
-
-	for object in selected_objects:
-		BakePixels *pixel_array[];
-
-		/* doing this at this point means a bakemap won't have
-		 * a unique UVMap, which may be fine */
-
-		populate_bake_pixels(object, pixel_array);
-
-		for bakemap in object.bakemaps:
-			float *ret[]
-
-			extern_bake(object, pixel_array, len(bp), bakemap.type, ret);
-
-			if bakemap.save_external:
-				write_image(bakemap.filepath, ret);
-
-			elif bakemap.save_internal:
-				bakemap.image(bakemap.image, ret);
-
-			elif ... (vertex color?)
-#endif
-
 	is_cage = ob_high && (ob_high->type == OB_MESH);
 	is_tangent = pass_type == SCE_PASS_NORMAL && normal_space == R_BAKE_SPACE_TANGENT;
 
