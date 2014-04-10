@@ -128,7 +128,7 @@ static bool write_external_bake_pixels(
 	bool ok = false;
 	bool is_float;
 
-	is_float = (int) im_format->depth > 8;
+	is_float = im_format->depth > 8;
 
 	/* create a new ImBuf */
 	ibuf = IMB_allocImBuf(width, height, im_format->planes, (is_float ? IB_rectfloat : IB_rect));
