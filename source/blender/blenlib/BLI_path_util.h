@@ -166,6 +166,8 @@ void BLI_path_rel(char *file, const char *relfile) ATTR_NONNULL();
 
 bool BLI_path_is_rel(const char *path) ATTR_NONNULL() ATTR_WARN_UNUSED_RESULT;
 
+bool BLI_path_suffix(char *string, size_t maxlen, const char *suffix, const char *sep) ATTR_NONNULL();
+
 /* path string comparisons: case-insensitive for Windows, case-sensitive otherwise */
 #if defined(WIN32)
 #  define BLI_path_cmp BLI_strcasecmp
