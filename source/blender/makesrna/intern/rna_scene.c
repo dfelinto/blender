@@ -322,6 +322,12 @@ EnumPropertyItem normal_swizzle_items[] = {
 	{0, NULL, 0, NULL, NULL}
 };
 
+EnumPropertyItem bake_save_mode_items[] = {
+	{R_BAKE_SAVE_EXTERNAL, "EXTERNAL", 0, "External", "Save the baking map in an external file"},
+	{R_BAKE_SAVE_INTERNAL, "INTERNAL", 0, "Internal", "Save the baking map in an internal image datablock"},
+	{0, NULL, 0, NULL, NULL}
+};
+
 #ifdef RNA_RUNTIME
 
 #include "DNA_anim_types.h"
@@ -3165,6 +3171,12 @@ static void rna_def_bake_data(BlenderRNA *brna)
 	RNA_def_property_struct_type(prop, "ImageFormatSettings");
 	RNA_def_property_ui_text(prop, "Image Format", "");
 
+	prop = RNA_def_property(srna, "save_mode", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_bitflag_sdna(prop, NULL, "save_mode");
+	RNA_def_property_enum_items(prop, bake_save_mode_items);
+	RNA_def_property_ui_text(prop, "Save Mode", "Choose how to save the baking map");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
 	/* flags */
 	prop = RNA_def_property(srna, "use_selected_to_active", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "flag", R_BAKE_TO_ACTIVE);
@@ -3172,12 +3184,23 @@ static void rna_def_bake_data(BlenderRNA *brna)
 	                         "Bake shading on the surface of selected objects to the active object");
 	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
 
-	prop = RNA_def_property(srna, "is_save_external", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "flag", R_BAKE_SAVE_EXTERNAL);
-	RNA_def_property_ui_text(prop, "External",
-	                         "Save the image externally (ignore face assigned Image datablocks)");
+	prop = RNA_def_property(srna, "use_clear", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag", R_BAKE_CLEAR);
+	RNA_def_property_ui_text(prop, "Clear",
+	                         "Clear Images before baking (internal only)");
 	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
 
+	prop = RNA_def_property(srna, "use_split_materials", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag", R_BAKE_SPLIT_MAT);
+	RNA_def_property_ui_text(prop, "Split Materials",
+	                         "Split external images per material (external only)");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+	prop = RNA_def_property(srna, "use_automatic_name", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag", R_BAKE_AUTO_NAME);
+	RNA_def_property_ui_text(prop, "Automatic Name",
+	                         "Automatically name the output file with the pass type (external only)");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
 }
 
 static void rna_def_scene_game_data(BlenderRNA *brna)

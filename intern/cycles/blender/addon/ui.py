@@ -1250,6 +1250,7 @@ class CyclesRender_PT_bake(CyclesButtonsPanel, Panel):
         row = col.row()
 
         sub = row.column(align=True)
+        sub.active = cbk.save_mode == 'EXTERNAL'
         sub.prop(cbk, "width")
         sub.prop(cbk, "height")
 
@@ -1276,11 +1277,21 @@ class CyclesRender_PT_bake(CyclesButtonsPanel, Panel):
             row.prop(cbk, "normal_b", text="")
 
         col.separator()
-        col.label(text="Output File:")
-        col.prop(cbk, "filepath", text="")
+        col.label(text="Output:")
+        col.row().prop(cbk, "save_mode", expand=True)
 
-        col.separator()
-        col.template_image_settings(cbk.image_settings, color_management=False)
+        if cbk.save_mode == 'EXTERNAL':
+            row = col.row()
+            row.prop(cbk, "use_automatic_name")
+            row.prop(cbk, "use_split_materials")
+
+            col.separator()
+            col.prop(cbk, "filepath", text="")
+
+            col.separator()
+            col.template_image_settings(cbk.image_settings, color_management=False)
+        else:
+            col.prop(cbk, "use_clear")
 
 
 class CyclesParticle_PT_CurveSettings(CyclesButtonsPanel, Panel):

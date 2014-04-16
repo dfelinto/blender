@@ -70,6 +70,7 @@ extern EnumPropertyItem image_generated_type_items[];
 
 extern EnumPropertyItem normal_space_items[];
 extern EnumPropertyItem normal_swizzle_items[];
+extern EnumPropertyItem bake_save_mode_items[];
 
 extern EnumPropertyItem exr_codec_items[];
 extern EnumPropertyItem color_sets_items[];

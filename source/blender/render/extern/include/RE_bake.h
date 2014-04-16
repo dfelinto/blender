@@ -35,6 +35,18 @@
 struct Render;
 struct Mesh;
 
+typedef struct BakeImage {
+	struct Image *image;
+	int width;
+	int height;
+	int offset;
+} BakeImage;
+
+typedef struct BakeLookup {
+	short mat_nr;
+	int x, y;
+} BakeLookup;
+
 typedef struct BakePixel {
 	int primitive_id;
 	float uv[2];
@@ -54,18 +66,20 @@ bool RE_internal_bake(struct Render *re, struct Object *object, const BakePixel 
 
 void RE_mask_bake_pixels(const BakePixel pixel_array_from[],
                          BakePixel pixel_array_to[],
-                         const int width, const int height);
+                         const int num_pixels);
 
 void RE_populate_bake_pixels_from_object(struct Mesh *me_low, struct Mesh *me_high,
                                          const BakePixel pixel_array_from[], BakePixel pixel_array_to[],
                                          const int num_pixels, const float cage_extrusion, float mat_low2high[4][4]);
 
-void RE_populate_bake_pixels(struct Mesh *me, struct BakePixel pixel_array[], const int width, const int height);
+void RE_populate_bake_pixels(struct Mesh *me, struct BakePixel *pixel_array, const int num_pixels, const struct BakeImage *images);
 
 void RE_bake_margin(const BakePixel pixel_array[], struct ImBuf *ibuf, const int margin, const int width, const int height);
 
 void RE_normal_world_to_object(const BakePixel pixel_array[], const int num_pixels, const int depth, float result[], struct Object *ob, const BakeNormalSwizzle normal_swizzle[3]);
 void RE_normal_world_to_tangent(const BakePixel pixel_array[], const int num_pixels, const int depth, float result[], struct Mesh *me, const BakeNormalSwizzle normal_swizzle[3]);
 void RE_normal_world_to_world(const BakePixel pixel_array[], const int num_pixels, const int depth, float result[], const BakeNormalSwizzle normal_swizzle[3]);
+
+void RE_bake_ibuf_clear(struct BakeImage *images, const int tot_mat, const bool is_tangent);
 
 #endif

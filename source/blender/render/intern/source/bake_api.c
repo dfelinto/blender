@@ -80,9 +80,10 @@ extern struct Render R;
 
 typedef struct BakeDataZSpan {
 	BakePixel *pixel_array;
-	int width;
 	int primitive_id;
-	ZSpan zspan;
+	int mat_nr;
+	const BakeImage *images;
+	ZSpan *zspan;
 } BakeDataZSpan;
 
 /*
@@ -107,8 +108,10 @@ static void store_bake_pixel(void *handle, int x, int y, float u, float v)
 {
 	BakeDataZSpan *bd = (BakeDataZSpan *)handle;
 	BakePixel *pixel;
-	const int width = bd->width;
-	const int i = y * width + x;
+	const int mat_nr = bd->mat_nr;
+	const int width = bd->images[mat_nr].width;
+	const int offset = bd->images[mat_nr].offset;
+	const int i = offset + y * width + x;
 
 	pixel = &bd->pixel_array[i];
 	pixel->primitive_id = bd->primitive_id;
@@ -396,10 +399,9 @@ cleanup:
 	MEM_freeN(tris_high);
 }
 
-void RE_mask_bake_pixels(const BakePixel pixel_array_from[], BakePixel pixel_array_to[], const int width, const int height)
+void RE_mask_bake_pixels(const BakePixel pixel_array_from[], BakePixel pixel_array_to[], const int num_pixels)
 {
 	int i;
-	const int num_pixels = width * height;
 
 	for (i = 0; i < num_pixels; i++) {
 		if (pixel_array_from[i].primitive_id == -1)
@@ -407,12 +409,13 @@ void RE_mask_bake_pixels(const BakePixel pixel_array_from[], BakePixel pixel_arr
 	}
 }
 
-void RE_populate_bake_pixels(Mesh *me, BakePixel pixel_array[], const int width, const int height)
+void RE_populate_bake_pixels(Mesh *me, BakePixel pixel_array[], const int num_pixels, const BakeImage *images)
 {
 	BakeDataZSpan bd;
-	const int num_pixels = width * height;
+	const int tot_mat = me->totcol;
 	int i, a;
 	int p_id;
+
 	MTFace *mtface;
 	MFace *mface;
 
@@ -421,14 +424,17 @@ void RE_populate_bake_pixels(Mesh *me, BakePixel pixel_array[], const int width,
 		return;
 
 	bd.pixel_array = pixel_array;
-	bd.width = width;
+	bd.images = images;
+	bd.zspan = MEM_callocN(sizeof(ZSpan) * tot_mat, "bake zspan");
 
 	/* initialize all pixel arrays so we know which ones are 'blank' */
-	for (i=0; i < num_pixels; i++) {
+	for (i = 0; i < num_pixels; i++) {
 		pixel_array[i].primitive_id = -1;
 	}
 
-	zbuf_alloc_span(&bd.zspan, width, height, R.clipcrop);
+	for (i = 0; i < tot_mat; i++) {
+		zbuf_alloc_span(&bd.zspan[i], images[i].width, images[i].height, R.clipcrop);
+	}
 
 	mtface = CustomData_get_layer(&me->fdata, CD_MTFACE);
 	mface = CustomData_get_layer(&me->fdata, CD_MFACE);
@@ -441,7 +447,9 @@ void RE_populate_bake_pixels(Mesh *me, BakePixel pixel_array[], const int width,
 		float vec[4][2];
 		MTFace *mtf = &mtface[i];
 		MFace *mf = &mface[i];
+		int mat_nr = mf->mat_nr;
 
+		bd.mat_nr = mat_nr;
 		bd.primitive_id = ++p_id;
 
 		for (a = 0; a < 4; a++) {
@@ -449,20 +457,23 @@ void RE_populate_bake_pixels(Mesh *me, BakePixel pixel_array[], const int width,
 			 * where a pixel gets in between 2 faces or the middle of a quad,
 			 * camera aligned quads also have this problem but they are less common.
 			 * Add a small offset to the UVs, fixes bug #18685 - Campbell */
-			vec[a][0] = mtf->uv[a][0] * (float)width - (0.5f + 0.001f);
-			vec[a][1] = mtf->uv[a][1] * (float)height - (0.5f + 0.002f);
+			vec[a][0] = mtf->uv[a][0] * (float)images[mat_nr].width - (0.5f + 0.001f);
+			vec[a][1] = mtf->uv[a][1] * (float)images[mat_nr].height - (0.5f + 0.002f);
 		}
 
-		zspan_scanconvert(&bd.zspan, (void *)&bd, vec[0], vec[1], vec[2], store_bake_pixel);
+		zspan_scanconvert(&bd.zspan[mat_nr], (void *)&bd, vec[0], vec[1], vec[2], store_bake_pixel);
 
 		/* 4 vertices in the face */
 		if (mf->v4 != 0) {
 			bd.primitive_id = ++p_id;
-			zspan_scanconvert(&bd.zspan, (void *)&bd, vec[0], vec[2], vec[3], store_bake_pixel);
+			zspan_scanconvert(&bd.zspan[mat_nr], (void *)&bd, vec[0], vec[2], vec[3], store_bake_pixel);
 		}
 	}
 
-	zbuf_free_span(&bd.zspan);
+	for (i = 0; i < tot_mat; i++) {
+		zbuf_free_span(&bd.zspan[i]);
+	}
+	MEM_freeN(bd.zspan);
 }
 
 /* ******************** NORMALS ************************ */
@@ -672,6 +683,33 @@ void RE_normal_world_to_world(const BakePixel pixel_array[], const int num_pixel
 
 		/* save back the values */
 		normal_compress(&result[offset], nor, normal_swizzle);
+	}
+}
+
+void RE_bake_ibuf_clear(BakeImage *images, const int tot_mat, const bool is_tangent)
+{
+	ImBuf *ibuf;
+	void *lock;
+	Image *image;
+	int i;
+
+	const float vec_alpha[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+	const float vec_solid[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+	const float nor_alpha[4] = {0.5f, 0.5f, 1.0f, 0.0f};
+	const float nor_solid[4] = {0.5f, 0.5f, 1.0f, 1.0f};
+
+	for (i = 0; i < tot_mat; i ++) {
+		image = images[i].image;
+
+		ibuf = BKE_image_acquire_ibuf(image, NULL, &lock);
+		BLI_assert(ibuf);
+
+		if (is_tangent)
+			IMB_rectfill(ibuf, (ibuf->planes == R_IMF_PLANES_RGBA) ? nor_alpha : nor_solid);
+		else
+			IMB_rectfill(ibuf, (ibuf->planes == R_IMF_PLANES_RGBA) ? vec_alpha : vec_solid);
+
+		BKE_image_release_ibuf(image, ibuf, lock);
 	}
 }
 
