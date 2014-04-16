@@ -298,7 +298,7 @@ static int bake_exec(bContext *C, wmOperator *op)
 
 	Render *re = RE_NewRender(scene->id.name);
 
-	float *result;
+	float *result = NULL;
 
 	BakePixel *pixel_array_low = NULL;
 	BakePixel *pixel_array_high = NULL;
@@ -345,8 +345,7 @@ static int bake_exec(bContext *C, wmOperator *op)
 		num_pixels = get_save_internal_status(op, ob_low, images);
 
 		if (num_pixels < 0) {
-			MEM_freeN(images);
-			return OPERATOR_CANCELLED;
+			goto cleanup;
 		}
 		else if (is_clear) {
 			RE_bake_ibuf_clear(images, tot_images, is_tangent);
@@ -379,7 +378,8 @@ static int bake_exec(bContext *C, wmOperator *op)
 
 		if (ob_high == NULL) {
 			BKE_report(op->reports, RPT_ERROR, "No valid selected object");
-			return OPERATOR_CANCELLED;
+			op_result = OPERATOR_CANCELLED;
+			goto cleanup;
 		}
 		else {
 			restrict_flag_high = ob_high->restrictflag;
@@ -392,7 +392,8 @@ static int bake_exec(bContext *C, wmOperator *op)
 		/* TODO check if cage object has the same topology (num of triangles and a valid UV) */
 		if (ob_custom_cage == NULL || ob_custom_cage->type != OB_MESH) {
 			BKE_report(op->reports, RPT_ERROR, "No valid cage object");
-			return OPERATOR_CANCELLED;
+			op_result = OPERATOR_CANCELLED;
+			goto cleanup;
 		}
 		else {
 			restrict_flag_cage = ob_custom_cage->restrictflag;
@@ -634,6 +635,8 @@ static int bake_exec(bContext *C, wmOperator *op)
 		}
 	}
 
+cleanup:
+
 	/* restore the restrict render settings */
 	ob_low->restrictflag = restrict_flag_low;
 
@@ -644,29 +647,29 @@ static int bake_exec(bContext *C, wmOperator *op)
 			ED_object_modifier_remove(op->reports, bmain, ob_high, tri_mod);
 	}
 
-	if (ob_custom_cage) {
+	if (ob_custom_cage)
 		ob_custom_cage->restrictflag = restrict_flag_cage;
-	}
 
 	RE_SetReports(re, NULL);
 
 	/* garbage collection */
-	MEM_freeN(pixel_array_low);
+	if (pixel_array_low)
+		MEM_freeN(pixel_array_low);
 
-	if (pixel_array_high) {
+	if (pixel_array_high)
 		MEM_freeN(pixel_array_high);
-	}
 
-	MEM_freeN(images);
-	MEM_freeN(result);
+	if (images)
+		MEM_freeN(images);
 
-	if (me_low) {
+	if (result)
+		MEM_freeN(result);
+
+	if (me_low)
 		BKE_libblock_free(bmain, me_low);
-	}
 
-	if (me_high) {
+	if (me_high)
 		BKE_libblock_free(bmain, me_high);
-	}
 
 	return op_result;
 }
