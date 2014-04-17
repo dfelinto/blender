@@ -329,12 +329,12 @@ static int bake_exec(bContext *C, wmOperator *op)
 	char custom_cage[MAX_NAME];
 	char filepath[FILE_MAX];
 
-	RNA_string_get(op->ptr, "cage", custom_cage);
-	RNA_string_get(op->ptr, "filepath", filepath);
-
 	int num_pixels;
 	int tot_images;
 	int i;
+
+	RNA_string_get(op->ptr, "cage", custom_cage);
+	RNA_string_get(op->ptr, "filepath", filepath);
 
 	tot_images = ob_low->totcol;
 	is_tangent = pass_type == SCE_PASS_NORMAL && normal_space == R_BAKE_SPACE_TANGENT;
@@ -581,18 +581,11 @@ static int bake_exec(bContext *C, wmOperator *op)
 				BKE_makepicstring_from_type(name, filepath, bmain->name, 0, bake->im_format.imtype, true, false);
 
 				if (is_automatic_name) {
-
+					const char *identifier;
 					PropertyRNA *prop = RNA_struct_find_property(op->ptr, "type");
-					if (prop) {
-						const char *identifier;
-						RNA_property_enum_identifier(C, op->ptr, prop, pass_type, &identifier);
-						BLI_path_suffix(name, FILE_MAX, identifier, "_");
-					}
-					else {
-						/* fallback, never really happens */
-						int id = log2(pass_type);
-						BLI_path_suffix(name, FILE_MAX, render_pass_type_items[id].identifier, "_");
-					}
+
+					RNA_property_enum_identifier(C, op->ptr, prop, pass_type, &identifier);
+					BLI_path_suffix(name, FILE_MAX, identifier, "_");
 				}
 
 				if (is_split_materials) {
