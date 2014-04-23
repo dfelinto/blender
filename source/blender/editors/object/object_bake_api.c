@@ -212,13 +212,13 @@ static bool write_external_bake_pixels(
 static bool is_data_pass(ScenePassType pass_type)
 {
 	return ELEM7(pass_type,
-				 SCE_PASS_Z,
-				 SCE_PASS_NORMAL,
-				 SCE_PASS_VECTOR,
-				 SCE_PASS_INDEXOB,
-				 SCE_PASS_UV,
-				 SCE_PASS_RAYHITS,
-				 SCE_PASS_INDEXMA);
+	             SCE_PASS_Z,
+	             SCE_PASS_NORMAL,
+	             SCE_PASS_VECTOR,
+	             SCE_PASS_INDEXOB,
+	             SCE_PASS_UV,
+	             SCE_PASS_RAYHITS,
+	             SCE_PASS_INDEXMA);
 }
 
 static int get_save_internal_status(wmOperator *op, Object *ob, BakeImage *images)
@@ -236,13 +236,16 @@ static int get_save_internal_status(wmOperator *op, Object *ob, BakeImage *image
 
 		if (!image) {
 			if (ob->mat[i]) {
-				BKE_reportf(op->reports, RPT_ERROR, "No valid image in material %d (%s)", i, ob->mat[i]->id.name + 2);
+				BKE_reportf(op->reports, RPT_ERROR,
+				            "No valid image in material %d (%s)", i, ob->mat[i]->id.name + 2);
 			}
-			else if (((Mesh *) ob->data)->mat[i]){
-				BKE_reportf(op->reports, RPT_ERROR, "No valid image in material %d (%s)", i, ((Mesh *) ob->data)->mat[i]->id.name + 2);
+			else if (((Mesh *) ob->data)->mat[i]) {
+				BKE_reportf(op->reports, RPT_ERROR,
+				            "No valid image in material %d (%s)", i, ((Mesh *) ob->data)->mat[i]->id.name + 2);
 			}
 			else {
-				BKE_reportf(op->reports, RPT_ERROR, "No valid image in material %d", i);
+				BKE_reportf(op->reports, RPT_ERROR,
+				            "No valid image in material %d", i);
 			}
 
 			return -1;
@@ -667,7 +670,7 @@ cleanup:
 	return op_result;
 }
 
-static int bake_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(_event))
+static int bake_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
 {
 	PropertyRNA *prop;
 	Scene *scene = CTX_data_scene(C);
@@ -675,77 +678,77 @@ static int bake_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(_event
 
 	prop = RNA_struct_find_property(op->ptr, "filepath");
 	if (!RNA_property_is_set(op->ptr, prop)) {
-		RNA_string_set(op->ptr, "filepath", bake->filepath);
+		RNA_property_string_set(op->ptr, prop, bake->filepath);
 	}
 
 	prop =  RNA_struct_find_property(op->ptr, "width");
 	if (!RNA_property_is_set(op->ptr, prop)) {
-		RNA_int_set(op->ptr, "width", bake->width);
+		RNA_property_int_set(op->ptr, prop, bake->width);
 	}
 
 	prop =  RNA_struct_find_property(op->ptr, "height");
 	if (!RNA_property_is_set(op->ptr, prop)) {
-		RNA_int_set(op->ptr, "height", bake->width);
+		RNA_property_int_set(op->ptr, prop, bake->width);
 	}
 
 	prop = RNA_struct_find_property(op->ptr, "margin");
 	if (!RNA_property_is_set(op->ptr, prop)) {
-		RNA_int_set(op->ptr, "margin", bake->margin);
+		RNA_property_int_set(op->ptr, prop, bake->margin);
 	}
 
 	prop = RNA_struct_find_property(op->ptr, "use_selected_to_active");
 	if (!RNA_property_is_set(op->ptr, prop)) {
-		RNA_boolean_set(op->ptr, "use_selected_to_active", (bake->flag & R_BAKE_TO_ACTIVE));
+		RNA_property_boolean_set(op->ptr, prop, (bake->flag & R_BAKE_TO_ACTIVE));
 	}
 
 	prop = RNA_struct_find_property(op->ptr, "cage_extrusion");
 	if (!RNA_property_is_set(op->ptr, prop)) {
-		RNA_float_set(op->ptr, "cage_extrusion", bake->cage_extrusion);
+		RNA_property_float_set(op->ptr, prop, bake->cage_extrusion);
 	}
 
 	prop = RNA_struct_find_property(op->ptr, "cage");
 	if (!RNA_property_is_set(op->ptr, prop)) {
-		RNA_string_set(op->ptr, "cage", bake->cage);
+		RNA_property_string_set(op->ptr, prop, bake->cage);
 	}
 
 	prop = RNA_struct_find_property(op->ptr, "normal_space");
 	if (!RNA_property_is_set(op->ptr, prop)) {
-		RNA_enum_set(op->ptr, "normal_space", bake->normal_space);
+		RNA_property_enum_set(op->ptr, prop, bake->normal_space);
 	}
 
 	prop = RNA_struct_find_property(op->ptr, "normal_r");
 	if (!RNA_property_is_set(op->ptr, prop)) {
-		RNA_enum_set(op->ptr, "normal_r", bake->normal_swizzle[0]);
+		RNA_property_enum_set(op->ptr, prop, bake->normal_swizzle[0]);
 	}
 
 	prop = RNA_struct_find_property(op->ptr, "normal_g");
 	if (!RNA_property_is_set(op->ptr, prop)) {
-		RNA_enum_set(op->ptr, "normal_g", bake->normal_swizzle[1]);
+		RNA_property_enum_set(op->ptr, prop, bake->normal_swizzle[1]);
 	}
 
 	prop = RNA_struct_find_property(op->ptr, "normal_b");
 	if (!RNA_property_is_set(op->ptr, prop)) {
-		RNA_enum_set(op->ptr, "normal_b", bake->normal_swizzle[2]);
+		RNA_property_enum_set(op->ptr, prop, bake->normal_swizzle[2]);
 	}
 
 	prop = RNA_struct_find_property(op->ptr, "save_mode");
 	if (!RNA_property_is_set(op->ptr, prop)) {
-		RNA_enum_set(op->ptr, "save_mode", bake->save_mode);
+		RNA_property_enum_set(op->ptr, prop, bake->save_mode);
 	}
 
 	prop = RNA_struct_find_property(op->ptr, "use_clear");
 	if (!RNA_property_is_set(op->ptr, prop)) {
-		RNA_boolean_set(op->ptr, "use_clear", (bake->flag & R_BAKE_CLEAR));
+		RNA_property_boolean_set(op->ptr, prop, (bake->flag & R_BAKE_CLEAR));
 	}
 
 	prop = RNA_struct_find_property(op->ptr, "use_split_materials");
 	if (!RNA_property_is_set(op->ptr, prop)) {
-		RNA_boolean_set(op->ptr, "use_split_materials", (bake->flag & R_BAKE_SPLIT_MAT));
+		RNA_property_boolean_set(op->ptr, prop, (bake->flag & R_BAKE_SPLIT_MAT));
 	}
 
 	prop = RNA_struct_find_property(op->ptr, "use_automatic_name");
 	if (!RNA_property_is_set(op->ptr, prop)) {
-		RNA_boolean_set(op->ptr, "use_automatic_name", (bake->flag & R_BAKE_AUTO_NAME));
+		RNA_property_boolean_set(op->ptr, prop, (bake->flag & R_BAKE_AUTO_NAME));
 	}
 
 	return bake_exec(C, op);
