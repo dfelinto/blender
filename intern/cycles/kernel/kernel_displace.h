@@ -114,12 +114,13 @@ ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input,
 	float t = 0.0f;
 	float time = TIME_INVALID;
 	int bounce = 0;
+	int transparent_bounce = 0;
 
 	/* light passes */
 	PathRadiance L;
 
 	/* TODO, disable the closures we won't need */
-	shader_setup_from_sample(kg, &sd, P, Ng, I, shader, object, prim, u, v, t, time, bounce);
+	shader_setup_from_sample(kg, &sd, P, Ng, I, shader, object, prim, u, v, t, time, bounce, transparent_bounce);
 
 	if(is_light_pass(type)){
 		RNG rng = cmj_hash(i, 0);
@@ -260,7 +261,7 @@ ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input,
 #endif
 
 			/* setup shader data */
-			shader_setup_from_background(kg, &sd, &ray, 0);
+			shader_setup_from_background(kg, &sd, &ray, 0, 0);
 
 			/* evaluate */
 			int flag = 0; /* we can't know which type of BSDF this is for */
