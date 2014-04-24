@@ -95,11 +95,8 @@ ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input,
 	int object = in.x;
 	int prim = in.y;
 
-	if(prim == -1) {
-		/* write output */
-		output[i] = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+	if(prim == -1)
 		return;
-	}
 
 	float u = __uint_as_float(in.z);
 	float v = __uint_as_float(in.w);

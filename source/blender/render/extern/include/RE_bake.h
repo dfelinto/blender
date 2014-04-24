@@ -42,17 +42,21 @@ typedef struct BakeImage {
 	int offset;
 } BakeImage;
 
-typedef struct BakeLookup {
-	short mat_nr;
-	int x, y;
-} BakeLookup;
-
 typedef struct BakePixel {
 	int primitive_id;
 	float uv[2];
 	float du_dx, du_dy;
 	float dv_dx, dv_dy;
 } BakePixel;
+
+typedef struct BakeHighPolyData {
+	struct BakePixel *pixel_array;
+	struct Object *ob;
+	struct ModifierData *tri_mod;
+	struct Mesh *me;
+	char restrict_flag;
+	float mat_lowtohigh[4][4];
+} BakeHighPolyData;
 
 /* external_engine.c */
 bool RE_engine_has_bake(struct Render *re);
@@ -68,9 +72,9 @@ void RE_mask_bake_pixels(const BakePixel pixel_array_from[],
                          BakePixel pixel_array_to[],
                          const int num_pixels);
 
-void RE_populate_bake_pixels_from_object(struct Mesh *me_low, struct Mesh *me_high,
-                                         const BakePixel pixel_array_from[], BakePixel pixel_array_to[],
-                                         const int num_pixels, const float cage_extrusion, float mat_low2high[4][4]);
+void RE_populate_bake_pixels_from_objects(struct Mesh *me_low, BakePixel pixel_array_from[],
+                                          BakeHighPolyData highpoly[], const int tot_highpoly, const int num_pixels,
+                                          const float cage_extrusion);
 
 void RE_populate_bake_pixels(struct Mesh *me, struct BakePixel *pixel_array, const int num_pixels, const struct BakeImage *images);
 

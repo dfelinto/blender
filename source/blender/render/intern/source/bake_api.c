@@ -202,35 +202,54 @@ static void get_barycentric_from_point(TriTessFace *triangles, const int index, 
 /*
  * This function populates pixel_array and returns TRUE if things are correct
  */
-static bool cast_ray_highpoly(BVHTreeFromMesh *treeData, TriTessFace *triangles, BakePixel *pixel_array, float co[3], float dir[3])
+static bool cast_ray_highpoly(BVHTreeFromMesh *treeData, TriTessFace *triangles[], BakeHighPolyData *highpoly, float const co_low[3], const float dir[3], const int pixel_id, const int tot_highpoly)
 {
-	int primitive_id;
+	int i;
+	int primitive_id = -1;
 	float uv[2];
+	int hit_mesh = -1;
+	float hit_distance = FLT_MAX;
 
-	BVHTreeRayHit hit;
-	hit.index = -1;
-	hit.dist = 10000.0f; /* TODO: we should use FLT_MAX here, but sweepsphere code isn't prepared for that */
+	BVHTreeRayHit hits[tot_highpoly];
 
-	/* cast ray */
-	BLI_bvhtree_ray_cast(treeData->tree, co, dir, 0.0f, &hit, treeData->raycast_callback, treeData);
 
-	if (hit.index != -1) {
-		/* cull backface */
-		const float dot = dot_v3v3(dir, hit.no);
-		if (dot >= 0.0f) {
-			pixel_array->primitive_id = -1;
-			return false;
+	for (i = 0; i < tot_highpoly; i++) {
+		float co_high[3];
+		hits[i].index = -1;
+		hits[i].dist = 10000.0f; /* TODO: we should use FLT_MAX here, but sweepsphere code isn't prepared for that */
+
+		copy_v3_v3(co_high, co_low);
+
+		/* transform the ray from the lowpoly to the highpoly space */
+		mul_m4_v3(highpoly[i].mat_lowtohigh, co_high);
+
+		/* cast ray */
+		BLI_bvhtree_ray_cast(treeData[i].tree, co_high, dir, 0.0f, &hits[i], treeData[i].raycast_callback, &treeData[i]);
+
+		if (hits[i].index != -1) {
+			/* cull backface */
+			const float dot = dot_v3v3(dir, hits[i].no);
+			if (dot < 0.0f) {
+				if (hits[i].dist < hit_distance) {
+					hit_mesh = i;
+					hit_distance = hits[i].dist;
+				}
+			}
 		}
-
-		get_barycentric_from_point(triangles, hit.index, hit.co, &primitive_id, uv);
-		pixel_array->primitive_id = primitive_id;
-		copy_v2_v2(pixel_array->uv, uv);
-
-		return true;
 	}
 
-	pixel_array->primitive_id = -1;
-	return false;
+	for (i = 0; i < tot_highpoly; i++) {
+		if (hit_mesh == i) {
+			get_barycentric_from_point(triangles[i], hits[i].index, hits[i].co, &primitive_id, uv);
+			highpoly[i].pixel_array[pixel_id].primitive_id = primitive_id;
+			copy_v2_v2(highpoly[i].pixel_array[pixel_id].uv, uv);
+		}
+		else {
+			highpoly[i].pixel_array[pixel_id].primitive_id = -1;
+		}
+	}
+
+	return hit_mesh != -1;
 }
 
 /*
@@ -334,45 +353,56 @@ static void calculateTriTessFace(TriTessFace *triangles, Mesh *me, int (*lookup_
 	BLI_assert(p_id < me->totface * 2);
 }
 
-void RE_populate_bake_pixels_from_object(Mesh *me_low, Mesh *me_high,
-                                         const BakePixel pixel_array_from[], BakePixel pixel_array_to[],
-                                         const int num_pixels, const float cage_extrusion, float mat_low2high[4][4])
+void RE_populate_bake_pixels_from_objects(struct Mesh *me_low, BakePixel pixel_array_from[],
+                                          BakeHighPolyData highpoly[], const int tot_highpoly, const int num_pixels,
+                                          const float cage_extrusion)
 {
 	int i;
 	int primitive_id;
 	float u, v;
 
-	DerivedMesh *dm_high;
-	BVHTreeFromMesh treeData = {NULL,};
+	DerivedMesh **dm_highpoly;
+	BVHTreeFromMesh *treeData;
 
 	/* Note: all coordinates are in local space */
 	TriTessFace *tris_low;
-	TriTessFace *tris_high;
+	TriTessFace *tris_high[tot_highpoly];
 
-	/* assume all tessfaces can be quads */
+	/* assume all lowpoly tessfaces can be quads */
 	tris_low = MEM_callocN(sizeof(TriTessFace) * (me_low->totface * 2), "MVerts Lowpoly Mesh");
-	tris_high = MEM_callocN(sizeof(TriTessFace) * (me_high->totface * 2), "MVerts Highpoly Mesh");
+
+	/* assume all highpoly tessfaces are triangles */
+	dm_highpoly = MEM_callocN(sizeof(DerivedMesh *) * tot_highpoly, "Highpoly Derived Meshes");
+	treeData = MEM_callocN(sizeof(BVHTreeFromMesh) * tot_highpoly, "Highpoly BVH Trees");
 
 	calculateTriTessFace(tris_low, me_low, NULL, false, NULL);
-	calculateTriTessFace(tris_high, me_high, NULL, false, NULL);
 
-	dm_high = CDDM_from_mesh(me_high);
+	for (i = 0; i < tot_highpoly; i++) {
+		tris_high[i] = MEM_callocN(sizeof(TriTessFace) * highpoly[i].me->totface, "MVerts Highpoly Mesh");
+		calculateTriTessFace(tris_high[i], highpoly[i].me, NULL, false, NULL);
 
-	/* Create a bvh-tree of the given target */
-	bvhtree_from_mesh_faces(&treeData, dm_high, 0.0, 2, 6);
-	if (treeData.tree == NULL) {
-		printf("Baking: Out of memory\n");
-		goto cleanup;
+		dm_highpoly[i] = CDDM_from_mesh(highpoly[i].me);
+
+		/* Create a bvh-tree for each highpoly object */
+		bvhtree_from_mesh_faces(&treeData[i], dm_highpoly[i], 0.0, 2, 6);
+
+		if (&treeData[i].tree == NULL) {
+			printf("Baking: Out of memory\n");
+			goto cleanup;
+		}
 	}
 
-	for (i=0; i < num_pixels; i++) {
+	for (i = 0; i < num_pixels; i++) {
 		float co[3];
 		float dir[3];
 
 		primitive_id = pixel_array_from[i].primitive_id;
 
 		if (primitive_id == -1) {
-			pixel_array_to[i].primitive_id = -1;
+			int j;
+			for (j = 0; j < tot_highpoly; j++) {
+				highpoly[j].pixel_array[i].primitive_id = -1;
+			}
 			continue;
 		}
 
@@ -382,21 +412,24 @@ void RE_populate_bake_pixels_from_object(Mesh *me_low, Mesh *me_high,
 		/* calculate from low poly mesh cage */
 		get_point_from_barycentric(tris_low, primitive_id, u, v, cage_extrusion, co, dir);
 
-		/* transform the ray from the low poly to the high poly space */
-		mul_m4_v3(mat_low2high, co);
-
 		/* cast ray */
-		cast_ray_highpoly(&treeData, tris_high, &pixel_array_to[i], co, dir);
+		if (!cast_ray_highpoly(treeData, tris_high, highpoly, co, dir, i, tot_highpoly)) {
+			/* if it fails mask out the original pixel array */
+			pixel_array_from[i].primitive_id = -1;
+		}
 	}
 
 	/* garbage collection */
 cleanup:
-	free_bvhtree_from_mesh(&treeData);
-
-	dm_high->release(dm_high);
+	for (i = 0; i < tot_highpoly; i++) {
+		free_bvhtree_from_mesh(&treeData[i]);
+		dm_highpoly[i]->release(dm_highpoly[i]);
+		MEM_freeN(tris_high[i]);
+	}
 
 	MEM_freeN(tris_low);
-	MEM_freeN(tris_high);
+	MEM_freeN(treeData);
+	MEM_freeN(dm_highpoly);
 }
 
 void RE_mask_bake_pixels(const BakePixel pixel_array_from[], BakePixel pixel_array_to[], const int num_pixels)

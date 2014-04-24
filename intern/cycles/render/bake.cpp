@@ -51,6 +51,10 @@ int BakeData::size() {
 	return m_num_pixels;
 }
 
+bool BakeData::is_valid(int i) {
+	return m_primitive[i] != -1;
+}
+
 uint4 BakeData::data(int i) {
 	return make_uint4(
 		m_object,
@@ -147,8 +151,11 @@ bool BakeManager::bake(Device *device, DeviceScene *dscene, Scene *scene, Progre
 		size_t index = i * depth;
 		float4 out = offset[k++];
 
-		for(size_t j=0; j < 4; j++)
-			result[index + j] = out[j];
+		if(bake_data->is_valid(i)) {
+			for(size_t j=0; j < 4; j++) {
+				result[index + j] = out[j];
+			}
+		}
 	}
 
 	m_is_baking = false;

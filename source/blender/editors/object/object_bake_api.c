@@ -282,21 +282,18 @@ static int bake_exec(bContext *C, wmOperator *op)
 	bool ok = false;
 	Scene *scene = CTX_data_scene(C);
 
-	/* selected to active (high to low) */
-	Object *ob_render = NULL;
 	Object *ob_low = CTX_data_active_object(C);
-	Object *ob_high = NULL;
+
+	BakeHighPolyData *highpoly;
+	int tot_highpoly;
 
 	Object *ob_custom_cage = NULL;
 
 	char restrict_flag_low = ob_low->restrictflag;
-	char restrict_flag_high;
 	char restrict_flag_cage;
 
 	Mesh *me_low = NULL;
-	Mesh *me_high = NULL;
 
-	ModifierData *tri_mod;
 	int pass_type = RNA_enum_get(op->ptr, "type");
 
 	Render *re = RE_NewRender(scene->id.name);
@@ -304,8 +301,6 @@ static int bake_exec(bContext *C, wmOperator *op)
 	float *result = NULL;
 
 	BakePixel *pixel_array_low = NULL;
-	BakePixel *pixel_array_high = NULL;
-	BakePixel *pixel_array_render = NULL;
 
 	const int depth = RE_pass_depth(pass_type);
 	const int margin = RNA_int_get(op->ptr, "margin");
@@ -317,7 +312,7 @@ static int bake_exec(bContext *C, wmOperator *op)
 	const bool use_selected_to_active = RNA_boolean_get(op->ptr, "use_selected_to_active");
 	const float cage_extrusion = RNA_float_get(op->ptr, "cage_extrusion");
 
-	bool is_cage;
+	bool is_highpoly = false;
 	bool is_tangent;
 
 	BakeImage *images;
@@ -369,23 +364,24 @@ static int bake_exec(bContext *C, wmOperator *op)
 	}
 
 	if (use_selected_to_active) {
+		tot_highpoly = 0;
+
 		CTX_DATA_BEGIN(C, Object *, ob_iter, selected_editable_objects)
 		{
 			if (ob_iter == ob_low)
 				continue;
 
-			ob_high = ob_iter;
-			break;
+			tot_highpoly ++;
 		}
 		CTX_DATA_END;
 
-		if (ob_high == NULL) {
-			BKE_report(op->reports, RPT_ERROR, "No valid selected object");
+		if (tot_highpoly == 0) {
+			BKE_report(op->reports, RPT_ERROR, "No valid selected objects");
 			op_result = OPERATOR_CANCELLED;
 			goto cleanup;
 		}
 		else {
-			restrict_flag_high = ob_high->restrictflag;
+			is_highpoly = true;
 		}
 	}
 
@@ -413,20 +409,17 @@ static int bake_exec(bContext *C, wmOperator *op)
 	pixel_array_low = MEM_callocN(sizeof(BakePixel) * num_pixels, "bake pixels low poly");
 	result = MEM_callocN(sizeof(float) * depth * num_pixels, "bake return pixels");
 
-	is_cage = ob_high && (ob_high->type == OB_MESH);
-
-	/* high-poly to low-poly baking */
-	if (is_cage) {
+	if (is_highpoly) {
 		ModifierData *md, *nmd;
-		TriangulateModifierData *tmd;
 		ListBase modifiers_tmp, modifiers_original;
-		float mat_low2high[4][4];
+		float mat_low[4][4];
+		int i = 0;
+		highpoly = MEM_callocN(sizeof(BakeHighPolyData) * tot_highpoly, "bake high poly objects");
 
-		if (ob_custom_cage) {
-			me_low = BKE_mesh_new_from_object(bmain, scene, ob_custom_cage, 1, 2, 1, 0);
-
-			invert_m4_m4(mat_low2high, ob_high->obmat);
-			mul_m4_m4m4(mat_low2high, mat_low2high, ob_custom_cage->obmat);
+		/* prepare cage mesh */
+		if (ob_cage) {
+			me_low = BKE_mesh_new_from_object(bmain, scene, ob_cage, 1, 2, 1, 0);
+			copy_m4_m4(mat_low, ob_cage->obmat);
 		}
 		else {
 			modifiers_original = ob_low->modifiers;
@@ -453,55 +446,68 @@ static int bake_exec(bContext *C, wmOperator *op)
 
 			/* get the cage mesh as it arrives in the renderer */
 			me_low = BKE_mesh_new_from_object(bmain, scene, ob_low, 1, 2, 1, 0);
-
-			invert_m4_m4(mat_low2high, ob_high->obmat);
-			mul_m4_m4m4(mat_low2high, mat_low2high, ob_low->obmat);
+			copy_m4_m4(mat_low, ob_low->obmat);
 		}
+
+		/* populate highpoly array */
+		CTX_DATA_BEGIN(C, Object *, ob_iter, selected_editable_objects)
+		{
+			TriangulateModifierData *tmd;
+
+			if (ob_iter == ob_low)
+				continue;
+
+			/* initialize highpoly_data */
+			highpoly[i].ob = ob_iter;
+			highpoly[i].me = NULL;
+			highpoly[i].tri_mod = NULL;
+			highpoly[i].restrict_flag = ob_iter->restrictflag;
+			highpoly[i].pixel_array = MEM_callocN(sizeof(BakePixel) * num_pixels, "bake pixels high poly");
+
+
+			/* triangulating so BVH returns the primitive_id that will be used for rendering */
+			highpoly[i].tri_mod = ED_object_modifier_add(op->reports, bmain, scene, highpoly[i].ob, "TmpTriangulate", eModifierType_Triangulate);
+			tmd = (TriangulateModifierData *)highpoly[i].tri_mod;
+			tmd->quad_method = MOD_TRIANGULATE_QUAD_FIXED;
+			tmd->ngon_method = MOD_TRIANGULATE_NGON_EARCLIP;
+
+			highpoly[i].me = BKE_mesh_new_from_object(bmain, scene, highpoly[i].ob, 1, 2, 1, 0);
+			highpoly[i].ob->restrictflag &= ~OB_RESTRICT_RENDER;
+
+			/* lowpoly to highpoly transformation matrix */
+			invert_m4_m4(highpoly[i].mat_lowtohigh, highpoly[i].ob->obmat);
+			mul_m4_m4m4(highpoly[i].mat_lowtohigh, highpoly[i].mat_lowtohigh, mat_low);
+
+			i++;
+		}
+		CTX_DATA_END;
+
+		BLI_assert(i == tot_highpoly);
 
 		/* populate the pixel array with the face data */
 		RE_populate_bake_pixels(me_low, pixel_array_low, num_pixels, images);
 
-		/* triangulating it makes life so much easier ... */
-		tri_mod = ED_object_modifier_add(op->reports, bmain, scene, ob_high, "TmpTriangulate", eModifierType_Triangulate);
-		tmd = (TriangulateModifierData *)tri_mod;
-		tmd->quad_method = MOD_TRIANGULATE_QUAD_FIXED;
-		tmd->ngon_method = MOD_TRIANGULATE_NGON_EARCLIP;
-
-		me_high = BKE_mesh_new_from_object(bmain, scene, ob_high, 1, 2, 1, 0);
-
-		if (is_tangent) {
-			pixel_array_high = MEM_callocN(sizeof(BakePixel) * num_pixels, "bake pixels high poly");
-			RE_populate_bake_pixels_from_object(me_low, me_high, pixel_array_low, pixel_array_high, num_pixels, cage_extrusion, mat_low2high);
-			pixel_array_render = pixel_array_high;
-
-			/* we need the pixel array to get normals and tangents from the original mesh */
-			if (ob_custom_cage) {
-				BKE_libblock_free(bmain, me_low);
-
-				me_low = BKE_mesh_new_from_object(bmain, scene, ob_low, 1, 2, 1, 0);
-				RE_populate_bake_pixels(me_low, pixel_array_low, num_pixels, images);
-			}
-
-			/* need to make sure missed rays are masked out of the result */
-			RE_mask_bake_pixels(pixel_array_high, pixel_array_low, num_pixels);
-		}
-		else {
-			/* re-use the same BakePixel array */
-			RE_populate_bake_pixels_from_object(me_low, me_high, pixel_array_low, pixel_array_low, num_pixels, cage_extrusion, mat_low2high);
-			pixel_array_render = pixel_array_low;
-		}
-
-		/* make sure low poly doesn't render, and high poly renders */
-		ob_high->restrictflag &= ~OB_RESTRICT_RENDER;
 		ob_low->restrictflag |= OB_RESTRICT_RENDER;
 
-		ob_render = ob_high;
+		/* populate the pixel arrays with the corresponding face data for each high poly object */
+		RE_populate_bake_pixels_from_objects(me_low, pixel_array_low, highpoly, tot_highpoly, num_pixels, cage_extrusion);
 
-		if (ob_custom_cage) {
-			ob_custom_cage->restrictflag |= OB_RESTRICT_RENDER;
+		/* the baking itself */
+		for (i = 0; i < tot_highpoly; i++) {
+			if (RE_engine_has_bake(re))
+				ok = RE_engine_bake(re, highpoly[i].ob, highpoly[i].pixel_array, num_pixels, depth, pass_type, result);
+			else
+				ok = RE_internal_bake(re, highpoly[i].ob, highpoly[i].pixel_array, num_pixels, depth, pass_type, result);
+
+			if (!ok)
+				break;
+		}
+
+		/* reverting data back */
+		if (ob_cage) {
+			ob_cage->restrictflag |= OB_RESTRICT_RENDER;
 		}
 		else {
-			/* reverting data back */
 			ob_low->modifiers = modifiers_original;
 
 			while ((md = BLI_pophead(&modifiers_tmp))) {
@@ -515,17 +521,15 @@ static int bake_exec(bContext *C, wmOperator *op)
 
 		/* populate the pixel array with the face data */
 		RE_populate_bake_pixels(me_low, pixel_array_low, num_pixels, images);
-		pixel_array_render = pixel_array_low;
 
 		/* make sure low poly renders */
 		ob_low->restrictflag &= ~OB_RESTRICT_RENDER;
-		ob_render = ob_low;
-	}
 
-	if (RE_engine_has_bake(re))
-		ok = RE_engine_bake(re, ob_render, pixel_array_render, num_pixels, depth, pass_type, result);
-	else
-		ok = RE_internal_bake(re, ob_render, pixel_array_render, num_pixels, depth, pass_type, result);
+		if (RE_engine_has_bake(re))
+			ok = RE_engine_bake(re, ob_low, pixel_array_low, num_pixels, depth, pass_type, result);
+		else
+			ok = RE_internal_bake(re, ob_low, pixel_array_low, num_pixels, depth, pass_type, result);
+	}
 
 	/* normal space conversion */
 	if (pass_type == SCE_PASS_NORMAL) {
@@ -565,7 +569,7 @@ static int bake_exec(bContext *C, wmOperator *op)
 			BakeImage *image = &images[i];
 
 			if (is_save_internal) {
-				ok = write_internal_bake_pixels(image->image, pixel_array_render + image->offset, result + image->offset * depth, image->width, image->height, is_linear, margin);
+				ok = write_internal_bake_pixels(image->image, pixel_array_low + image->offset, result + image->offset * depth, image->width, image->height, is_linear, margin);
 
 				if (!ok) {
 					BKE_report(op->reports, RPT_ERROR, "Problem saving the bake map internally, make sure there is a Texture Image node in the current object material");
@@ -612,7 +616,7 @@ static int bake_exec(bContext *C, wmOperator *op)
 				}
 
 				/* save it externally */
-				ok = write_external_bake_pixels(name, pixel_array_render + image->offset, result + image->offset * depth, image->width, image->height, is_linear, margin, &bake->im_format);
+				ok = write_external_bake_pixels(name, pixel_array_low + image->offset, result + image->offset * depth, image->width, image->height, is_linear, margin, &bake->im_format);
 
 				if (!ok) {
 					BKE_reportf(op->reports, RPT_ERROR, "Problem saving baked map in \"%s\".", name);
@@ -633,27 +637,30 @@ static int bake_exec(bContext *C, wmOperator *op)
 
 cleanup:
 
-	/* restore the restrict render settings */
-	ob_low->restrictflag = restrict_flag_low;
+	if (is_highpoly) {
+		int i;
+		for (i = 0; i < tot_highpoly; i++) {
+			highpoly[i].ob->restrictflag = highpoly[i].restrict_flag;
 
-	if (ob_high) {
-		ob_high->restrictflag = restrict_flag_high;
+			if (highpoly[i].pixel_array)
+				MEM_freeN(highpoly[i].pixel_array);
 
-		if (tri_mod)
-			ED_object_modifier_remove(op->reports, bmain, ob_high, tri_mod);
+			if (highpoly[i].tri_mod)
+				ED_object_modifier_remove(op->reports, bmain, highpoly[i].ob, highpoly[i].tri_mod);
+
+			if (highpoly[i].me)
+				BKE_libblock_free(bmain, highpoly[i].me);
+		}
+		MEM_freeN(highpoly);
 	}
+
+	ob_low->restrictflag = restrict_flag_low;
 
 	if (ob_custom_cage)
 		ob_custom_cage->restrictflag = restrict_flag_cage;
 
-	RE_SetReports(re, NULL);
-
-	/* garbage collection */
 	if (pixel_array_low)
 		MEM_freeN(pixel_array_low);
-
-	if (pixel_array_high)
-		MEM_freeN(pixel_array_high);
 
 	if (images)
 		MEM_freeN(images);
@@ -664,8 +671,7 @@ cleanup:
 	if (me_low)
 		BKE_libblock_free(bmain, me_low);
 
-	if (me_high)
-		BKE_libblock_free(bmain, me_high);
+	RE_SetReports(re, NULL);
 
 	return op_result;
 }

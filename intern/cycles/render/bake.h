@@ -33,6 +33,7 @@ public:
 	int object();
 	int size();
 	uint4 data(int i);
+	bool is_valid(int i);
 
 private:
 	int m_object;
