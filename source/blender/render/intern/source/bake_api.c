@@ -210,8 +210,8 @@ static bool cast_ray_highpoly(BVHTreeFromMesh *treeData, TriTessFace *triangles[
 	int hit_mesh = -1;
 	float hit_distance = FLT_MAX;
 
-	BVHTreeRayHit hits[tot_highpoly];
-
+	BVHTreeRayHit *hits;
+	hits = MEM_callocN(sizeof(BVHTreeRayHit) * tot_highpoly, "Bake Highpoly to Lowpoly: BVH Rays");
 
 	for (i = 0; i < tot_highpoly; i++) {
 		float co_high[3];
@@ -249,6 +249,7 @@ static bool cast_ray_highpoly(BVHTreeFromMesh *treeData, TriTessFace *triangles[
 		}
 	}
 
+	MEM_freeN(hits);
 	return hit_mesh != -1;
 }
 
@@ -366,10 +367,11 @@ void RE_populate_bake_pixels_from_objects(struct Mesh *me_low, BakePixel pixel_a
 
 	/* Note: all coordinates are in local space */
 	TriTessFace *tris_low;
-	TriTessFace *tris_high[tot_highpoly];
+	TriTessFace **tris_high;
 
 	/* assume all lowpoly tessfaces can be quads */
 	tris_low = MEM_callocN(sizeof(TriTessFace) * (me_low->totface * 2), "MVerts Lowpoly Mesh");
+	tris_high = MEM_callocN(sizeof(TriTessFace *) * tot_highpoly, "MVerts Highpoly Mesh Array");
 
 	/* assume all highpoly tessfaces are triangles */
 	dm_highpoly = MEM_callocN(sizeof(DerivedMesh *) * tot_highpoly, "Highpoly Derived Meshes");
@@ -428,6 +430,7 @@ cleanup:
 	}
 
 	MEM_freeN(tris_low);
+	MEM_freeN(tris_high);
 	MEM_freeN(treeData);
 	MEM_freeN(dm_highpoly);
 }
