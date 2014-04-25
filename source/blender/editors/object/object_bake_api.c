@@ -552,8 +552,34 @@ static int bake_exec(bContext *C, wmOperator *op)
 				RE_normal_world_to_object(pixel_array_low, num_pixels, depth, result, ob_low, normal_swizzle);
 				break;
 			case R_BAKE_SPACE_TANGENT:
-				RE_normal_world_to_tangent(pixel_array_low, num_pixels, depth, result, me_low, normal_swizzle);
+			{
+				if (is_highpoly) {
+					RE_normal_world_to_tangent(pixel_array_low, num_pixels, depth, result, me_low, normal_swizzle);
+				}
+				else {
+					/* from multiresolution */
+					Mesh *me_nores = NULL;
+					ModifierData *md = NULL;
+					int mode;
+
+					md = modifiers_findByType(ob_low, eModifierType_Multires);
+
+					if (md) {
+						mode = md->mode;
+						md->mode &= ~eModifierMode_Render;
+					}
+
+					me_nores = BKE_mesh_new_from_object(bmain, scene, ob_low, 1, 2, 1, 0);
+					RE_populate_bake_pixels(me_nores, pixel_array_low, num_pixels, images);
+
+					RE_normal_world_to_tangent(pixel_array_low, num_pixels, depth, result, me_nores, normal_swizzle);
+					BKE_libblock_free(bmain, me_nores);
+
+					if (md)
+						md->mode = mode;
+				}
 				break;
+			}
 			default:
 				break;
 		}
