@@ -164,7 +164,7 @@ class NODE_MT_view(Menu):
 
             layout.operator("node.backimage_move", text="Backdrop move")
             layout.operator("node.backimage_zoom", text="Backdrop zoom in").factor = 1.2
-            layout.operator("node.backimage_zoom", text="Backdrop zoom out").factor = 0.833
+            layout.operator("node.backimage_zoom", text="Backdrop zoom out").factor = 0.83333
             layout.operator("node.backimage_fit", text="Fit backdrop to available space")
 
         layout.separator()
@@ -274,7 +274,6 @@ class NODE_PT_active_node_generic(Panel):
 
     @classmethod
     def poll(cls, context):
-        space = context.space_data
         return context.active_node is not None
 
     def draw(self, context):
@@ -293,7 +292,6 @@ class NODE_PT_active_node_color(Panel):
 
     @classmethod
     def poll(cls, context):
-        space = context.space_data
         return context.active_node is not None
 
     def draw_header(self, context):
@@ -323,7 +321,6 @@ class NODE_PT_active_node_properties(Panel):
 
     @classmethod
     def poll(cls, context):
-        space = context.space_data
         return context.active_node is not None
 
     def draw(self, context):

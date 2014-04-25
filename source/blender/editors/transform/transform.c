@@ -1562,7 +1562,7 @@ bool calculateTransformCenter(bContext *C, int centerMode, float cent3d[3], floa
 	}
 
 
-	/* aftertrans does insert ipos and action channels, and clears base flags, doesnt read transdata */
+	/* aftertrans does insert keyframes, and clears base flags; doesn't read transdata */
 	special_aftertrans_update(C, t);
 
 	postTrans(C, t);
@@ -2336,7 +2336,7 @@ int transformEnd(bContext *C, TransInfo *t)
 			exit_code = OPERATOR_FINISHED;
 		}
 
-		/* aftertrans does insert keyframes, and clears base flags, doesnt read transdata */
+		/* aftertrans does insert keyframes, and clears base flags; doesn't read transdata */
 		special_aftertrans_update(C, t);
 
 		/* free data */
@@ -7201,55 +7201,15 @@ static short getAnimEdit_SnapMode(TransInfo *t)
 	return autosnap;
 }
 
-/* This function is used for testing if an Animation Editor is displaying
- * its data in frames or seconds (and the data needing to be edited as such).
- * Returns 1 if in seconds, 0 if in frames
- */
-static short getAnimEdit_DrawTime(TransInfo *t)
-{
-	short drawtime;
-
-	if (t->spacetype == SPACE_ACTION) {
-		SpaceAction *saction = (SpaceAction *)t->sa->spacedata.first;
-		
-		drawtime = (saction->flag & SACTION_DRAWTIME) ? 1 : 0;
-	}
-	else if (t->spacetype == SPACE_NLA) {
-		SpaceNla *snla = (SpaceNla *)t->sa->spacedata.first;
-		
-		drawtime = (snla->flag & SNLA_DRAWTIME) ? 1 : 0;
-	}
-	else if (t->spacetype == SPACE_IPO) {
-		SpaceIpo *sipo = (SpaceIpo *)t->sa->spacedata.first;
-		
-		drawtime = (sipo->flag & SIPO_DRAWTIME) ? 1 : 0;
-	}
-	else {
-		drawtime = 0;
-	}
-
-	return drawtime;
-}
-
-
 /* This function is used by Animation Editor specific transform functions to do
  * the Snap Keyframe to Nearest Frame/Marker
  */
 static void doAnimEdit_SnapFrame(TransInfo *t, TransData *td, TransData2D *td2d, AnimData *adt, short autosnap)
 {
-	/* snap key to nearest frame? */
-	if (autosnap == SACTSNAP_FRAME) {
-
-#if 0   /* 'do_time' disabled for now */
-
+	/* snap key to nearest frame or second? */
+	if (ELEM(autosnap, SACTSNAP_FRAME, SACTSNAP_SECOND)) {
 		const Scene *scene = t->scene;
-#if 0   /* NOTE: this works, but may be confusing behavior given the option's label, hence disabled */
-		const short do_time = getAnimEdit_DrawTime(t);
-#else
-		const short do_time = 0;
-#endif
 		const double secf = FPS;
-#endif
 		double val;
 		
 		/* convert frame to nla-action time (if needed) */
@@ -7258,16 +7218,12 @@ static void doAnimEdit_SnapFrame(TransInfo *t, TransData *td, TransData2D *td2d,
 		else
 			val = *(td->val);
 		
-#if 0   /* 'do_time' disabled for now */
-
 		/* do the snapping to nearest frame/second */
-		if (do_time) {
-			val = (float)(floor((val / secf) + 0.5f) * secf);
+		if (autosnap == SACTSNAP_FRAME) {
+			val = floorf(val + 0.5);
 		}
-		else
-#endif
-		{
-			val = floor(val + 0.5);
+		else if (autosnap == SACTSNAP_SECOND) {
+			val = (float)(floor((val / secf) + 0.5) * secf);
 		}
 		
 		/* convert frame out of nla-action time */
@@ -7355,20 +7311,21 @@ static void headerTimeTranslate(TransInfo *t, char str[MAX_INFO_LEN])
 	else {
 		const Scene *scene = t->scene;
 		const short autosnap = getAnimEdit_SnapMode(t);
-		const short do_time = getAnimEdit_DrawTime(t);
 		const double secf = FPS;
 		float val = t->values[0];
 		
 		/* apply snapping + frame->seconds conversions */
 		if (autosnap == SACTSNAP_STEP) {
-			if (do_time)
-				val = floorf((double)val / secf + 0.5);
-			else
-				val = floorf(val + 0.5f);
+			/* frame step */
+			val = floorf(val + 0.5f);
+		}
+		else if (autosnap == SACTSNAP_TSTEP) {
+			/* second step */
+			val = floorf((double)val / secf + 0.5);
 		}
 		else {
-			if (do_time)
-				val = (float)((double)val / secf);
+			/* nearest frame/second/marker */
+			val = (float)((double)val / secf);
 		}
 		
 		if (autosnap == SACTSNAP_FRAME)
@@ -7386,11 +7343,9 @@ static void applyTimeTranslateValue(TransInfo *t, float UNUSED(sval))
 	TransData2D *td2d = t->data2d;
 	Scene *scene = t->scene;
 	int i;
-
-	const short do_time = getAnimEdit_DrawTime(t);
-	const double secf = FPS;
-
+	
 	const short autosnap = getAnimEdit_SnapMode(t);
+	const double secf = FPS;
 
 	float deltax, val /* , valprev */;
 
@@ -7405,14 +7360,14 @@ static void applyTimeTranslateValue(TransInfo *t, float UNUSED(sval))
 		/* valprev = *td->val; */ /* UNUSED */
 
 		/* check if any need to apply nla-mapping */
-		if (adt && t->spacetype != SPACE_SEQ) {
+		if (adt && (t->spacetype != SPACE_SEQ)) {
 			deltax = t->values[0];
 
-			if (autosnap == SACTSNAP_STEP) {
-				if (do_time)
-					deltax = (float)(floor(((double)deltax / secf) + 0.5) * secf);
-				else
-					deltax = (float)(floor(deltax + 0.5f));
+			if (autosnap == SACTSNAP_TSTEP) {
+				deltax = (float)(floor(((double)deltax / secf) + 0.5) * secf);
+			}
+			else if (autosnap == SACTSNAP_STEP) {
+				deltax = (float)(floor(deltax + 0.5f));
 			}
 
 			val = BKE_nla_tweakedit_remap(adt, td->ival, NLATIME_CONVERT_MAP);
@@ -7422,11 +7377,11 @@ static void applyTimeTranslateValue(TransInfo *t, float UNUSED(sval))
 		else {
 			deltax = val = t->values[0];
 
-			if (autosnap == SACTSNAP_STEP) {
-				if (do_time)
-					val = (float)(floor(((double)deltax / secf) + 0.5) * secf);
-				else
-					val = (float)(floor(val + 0.5f));
+			if (autosnap == SACTSNAP_TSTEP) {
+				val = (float)(floor(((double)deltax / secf) + 0.5) * secf);
+			}
+			else if (autosnap == SACTSNAP_STEP) {
+				val = (float)(floor(val + 0.5f));
 			}
 
 			*(td->val) = td->ival + val;
@@ -7674,7 +7629,6 @@ static void applyTimeScaleValue(TransInfo *t)
 	int i;
 
 	const short autosnap = getAnimEdit_SnapMode(t);
-	const short do_time = getAnimEdit_DrawTime(t);
 	const double secf = FPS;
 
 
@@ -7687,11 +7641,11 @@ static void applyTimeScaleValue(TransInfo *t)
 		float startx = CFRA;
 		float fac = t->values[0];
 
-		if (autosnap == SACTSNAP_STEP) {
-			if (do_time)
-				fac = (float)(floor((double)fac / secf + 0.5) * secf);
-			else
-				fac = (float)(floor(fac + 0.5f));
+		if (autosnap == SACTSNAP_TSTEP) {
+			fac = (float)(floor((double)fac / secf + 0.5) * secf);
+		}
+		else if (autosnap == SACTSNAP_STEP) {
+			fac = (float)(floor(fac + 0.5f));
 		}
 
 		/* check if any need to apply nla-mapping */
@@ -7733,7 +7687,7 @@ bool checkUseLocalCenter_GraphEdit(TransInfo *t)
 
 bool checkUseAxisMatrix(TransInfo *t)
 {
-	/* currenly only checks for editmode */
+	/* currently only checks for editmode */
 	if (t->flag & T_EDIT) {
 		if ((t->around == V3D_LOCAL) && (ELEM4(t->obedit->type, OB_MESH, OB_CURVE, OB_MBALL, OB_ARMATURE))) {
 			/* not all editmode supports axis-matrix */

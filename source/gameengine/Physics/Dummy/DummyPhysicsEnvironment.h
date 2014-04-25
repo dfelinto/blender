@@ -33,6 +33,7 @@
 #define __DUMMYPHYSICSENVIRONMENT_H__
 
 #include "PHY_IPhysicsEnvironment.h"
+#include "PHY_IMotionState.h"
 
 /**
  * DummyPhysicsEnvironment  is an empty placeholder
@@ -103,6 +104,25 @@ public:
 			return 0.f;
 		}
 
+	virtual void MergeEnvironment(PHY_IPhysicsEnvironment *other_env)
+	{
+		// Dummy, nothing to do here
+	}
+
+	virtual void ConvertObject(KX_GameObject* gameobj,
+						RAS_MeshObject* meshobj,
+						DerivedMesh* dm,
+						KX_Scene* kxscene,
+						PHY_ShapeProps* shapeprops,
+						PHY_MaterialProps*	smmaterial,
+						PHY_IMotionState *motionstate,
+						int activeLayerBitInfo,
+						bool isCompoundChild,
+						bool hasCompoundChildren)
+	{
+		// All we need to do is handle the motionstate (we're supposed to own it)
+		delete motionstate;
+	}
 		
 #ifdef WITH_CXX_GUARDEDALLOC
 	MEM_CXX_CLASS_ALLOC_FUNCS("GE:DummyPhysicsEnvironment")

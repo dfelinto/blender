@@ -63,7 +63,6 @@ typedef unsigned long uint_ptr;
 #include "KX_PythonInit.h"
 #include "KX_PyMath.h"
 #include "KX_PythonSeq.h"
-#include "KX_ConvertPhysicsObject.h"
 #include "SCA_IActuator.h"
 #include "SCA_ISensor.h"
 #include "SCA_IController.h"
@@ -1908,11 +1907,11 @@ PyObject *KX_GameObject::PyReinstancePhysicsMesh(PyObject *args)
 		) {
 		return NULL;
 	}
-#ifdef WITH_BULLET
+
 	/* gameobj and mesh can be NULL */
-	if (KX_ReInstanceBulletShapeFromMesh(this, gameobj, mesh))
+	if (GetPhysicsController() && GetPhysicsController()->ReinstancePhysicsShape(gameobj, mesh))
 		Py_RETURN_TRUE;
-#endif
+
 	Py_RETURN_FALSE;
 }
 

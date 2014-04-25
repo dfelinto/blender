@@ -1554,6 +1554,35 @@ static void ccgDM_foreachMappedEdge(
 	ccgEdgeIterator_free(ei);
 }
 
+static void ccgDM_foreachMappedLoop(
+        DerivedMesh *dm,
+        void (*func)(void *userData, int vertex_index, int face_index, const float co[3], const float no[3]),
+        void *userData,
+        DMForeachFlag flag)
+{
+	/* We can't use dm->getLoopDataLayout(dm) here, we want to always access dm->loopData, EditDerivedBMesh would
+	 * return loop data from bmesh itself. */
+	const float (*lnors)[3] = (flag & DM_FOREACH_USE_NORMAL) ? DM_get_loop_data_layer(dm, CD_NORMAL) : NULL;
+
+	MVert *mv = dm->getVertArray(dm);
+	MLoop *ml = dm->getLoopArray(dm);
+	MPoly *mp = dm->getPolyArray(dm);
+	const int *v_index = dm->getVertDataArray(dm, CD_ORIGINDEX);
+	const int *f_index = dm->getPolyDataArray(dm, CD_ORIGINDEX);
+	int p_idx, i;
+
+	for (p_idx = 0; p_idx < dm->numPolyData; ++p_idx, ++mp) {
+		for (i = 0; i < mp->totloop; ++i, ++ml) {
+			const int v_idx = v_index ? v_index[ml->v] : ml->v;
+			const int f_idx = f_index ? f_index[p_idx] : p_idx;
+			const float *no = lnors ? *lnors++ : NULL;
+			if (!ELEM(ORIGINDEX_NONE, v_idx, f_idx)) {
+				func(userData, v_idx, f_idx, mv[ml->v].co, no);
+			}
+		}
+	}
+}
+
 static void ccgDM_drawVerts(DerivedMesh *dm)
 {
 	CCGDerivedMesh *ccgdm = (CCGDerivedMesh *) dm;
@@ -3359,7 +3388,7 @@ static CCGDerivedMesh *getCCGDerivedMesh(CCGSubSurf *ss,
 	int index, totvert, totedge, totface;
 	int i;
 	int vertNum, edgeNum, faceNum;
-	int *vertOrigIndex, *faceOrigIndex, *polyOrigIndex, *base_polyOrigIndex; /* *edgeOrigIndex - as yet, unused  */
+	int *vertOrigIndex, *faceOrigIndex, *polyOrigIndex, *base_polyOrigIndex, *edgeOrigIndex;
 	short *edgeFlags;
 	DMFlagMat *faceFlags;
 	int *polyidx = NULL;
@@ -3369,7 +3398,7 @@ static CCGDerivedMesh *getCCGDerivedMesh(CCGSubSurf *ss,
 	BLI_array_declare(vertidx);
 #endif
 	int loopindex, loopindex2;
-	int edgeSize, has_edge_origindex;
+	int edgeSize;
 	int gridSize;
 	int gridFaces, gridCuts;
 	/*int gridSideVerts;*/
@@ -3382,6 +3411,7 @@ static CCGDerivedMesh *getCCGDerivedMesh(CCGSubSurf *ss,
 	MEdge *medge = NULL;
 	/* MFace *mface = NULL; */
 	MPoly *mpoly = NULL;
+	bool has_edge_cd;
 
 	DM_from_template(&ccgdm->dm, dm, DM_TYPE_CCGDM,
 	                 ccgSubSurf_getNumFinalVerts(ss),
@@ -3461,6 +3491,7 @@ static CCGDerivedMesh *getCCGDerivedMesh(CCGSubSurf *ss,
 	ccgdm->dm.getVertCos = ccgdm_getVertCos;
 	ccgdm->dm.foreachMappedVert = ccgDM_foreachMappedVert;
 	ccgdm->dm.foreachMappedEdge = ccgDM_foreachMappedEdge;
+	ccgdm->dm.foreachMappedLoop = ccgDM_foreachMappedLoop;
 	ccgdm->dm.foreachMappedFaceCenter = ccgDM_foreachMappedFaceCenter;
 	
 	ccgdm->dm.drawVerts = ccgDM_drawVerts;
@@ -3536,10 +3567,12 @@ static CCGDerivedMesh *getCCGDerivedMesh(CCGSubSurf *ss,
 	faceFlags = ccgdm->faceFlags = MEM_callocN(sizeof(DMFlagMat) * totface, "faceFlags");
 
 	vertOrigIndex = DM_get_vert_data_layer(&ccgdm->dm, CD_ORIGINDEX);
-	/*edgeOrigIndex = DM_get_edge_data_layer(&ccgdm->dm, CD_ORIGINDEX);*/
+	edgeOrigIndex = DM_get_edge_data_layer(&ccgdm->dm, CD_ORIGINDEX);
 
 	faceOrigIndex = DM_get_tessface_data_layer(&ccgdm->dm, CD_ORIGINDEX);
 	polyOrigIndex = DM_get_poly_data_layer(&ccgdm->dm, CD_ORIGINDEX);
+
+	has_edge_cd = ((ccgdm->dm.edgeData.totlayer - (edgeOrigIndex ? 1 : 0)) != 0);
 
 #if 0
 	/* this is not in trunk, can gives problems because colors initialize
@@ -3548,9 +3581,6 @@ static CCGDerivedMesh *getCCGDerivedMesh(CCGSubSurf *ss,
 		DM_add_tessface_layer(&ccgdm->dm, CD_MCOL, CD_CALLOC, NULL);
 	mcol = DM_get_tessface_data_layer(&ccgdm->dm, CD_MCOL);
 #endif
-
-	has_edge_origindex = CustomData_has_layer(&ccgdm->dm.edgeData, CD_ORIGINDEX);
-
 
 	loopindex = loopindex2 = 0; /* current loop index */
 	for (index = 0; index < totface; index++) {
@@ -3641,10 +3671,10 @@ static CCGDerivedMesh *getCCGDerivedMesh(CCGSubSurf *ss,
 			}
 		}
 
-		if (has_edge_origindex) {
-			for (i = 0; i < numFinalEdges; ++i)
-				*(int *)DM_get_edge_data(&ccgdm->dm, edgeNum + i,
-				                         CD_ORIGINDEX) = ORIGINDEX_NONE;
+		if (edgeOrigIndex) {
+			for (i = 0; i < numFinalEdges; ++i) {
+				edgeOrigIndex[edgeNum + i] = ORIGINDEX_NONE;
+			}
 		}
 
 		for (s = 0; s < numVerts; s++) {
@@ -3738,9 +3768,15 @@ static CCGDerivedMesh *getCCGDerivedMesh(CCGSubSurf *ss,
 			vertNum++;
 		}
 
-		for (i = 0; i < numFinalEdges; ++i) {
-			if (has_edge_origindex) {
-				*(int *)DM_get_edge_data(&ccgdm->dm, edgeNum + i, CD_ORIGINDEX) = mapIndex;
+		if (has_edge_cd) {
+			for (i = 0; i < numFinalEdges; ++i) {
+				CustomData_copy_data(&dm->edgeData, &ccgdm->dm.edgeData, mapIndex, edgeNum + i, 1);
+			}
+		}
+
+		if (edgeOrigIndex) {
+			for (i = 0; i < numFinalEdges; ++i) {
+				edgeOrigIndex[edgeNum + i] = mapIndex;
 			}
 		}
 
