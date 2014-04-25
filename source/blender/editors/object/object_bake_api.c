@@ -237,15 +237,15 @@ static int get_save_internal_status(wmOperator *op, Object *ob, BakeImage *image
 		if (!image) {
 			if (ob->mat[i]) {
 				BKE_reportf(op->reports, RPT_ERROR,
-				            "No valid image in material %d (%s)", i, ob->mat[i]->id.name + 2);
+				            "No active image found in material %d (%s)", i, ob->mat[i]->id.name + 2);
 			}
 			else if (((Mesh *) ob->data)->mat[i]) {
 				BKE_reportf(op->reports, RPT_ERROR,
-				            "No valid image in material %d (%s)", i, ((Mesh *) ob->data)->mat[i]->id.name + 2);
+				            "No active image found in material %d (%s)", i, ((Mesh *) ob->data)->mat[i]->id.name + 2);
 			}
 			else {
 				BKE_reportf(op->reports, RPT_ERROR,
-				            "No valid image in material %d", i);
+				            "No active image found in material %d", i);
 			}
 
 			return -1;
@@ -333,15 +333,32 @@ static int bake_exec(bContext *C, wmOperator *op)
 	RNA_string_get(op->ptr, "cage", custom_cage);
 	RNA_string_get(op->ptr, "filepath", filepath);
 
-	tot_images = ob_low->totcol;
 	is_tangent = pass_type == SCE_PASS_NORMAL && normal_space == R_BAKE_SPACE_TANGENT;
+	tot_images = ob_low->totcol;
+
+	if (tot_images == 0) {
+		if (is_save_internal) {
+			BKE_report(op->reports, RPT_ERROR,
+					   "No active image found. Add a material or bake to an external file");
+			goto cleanup;
+		}
+		else if (is_split_materials) {
+			BKE_report(op->reports, RPT_ERROR,
+					   "No active image found. Add a material or bake without the Split Materials option");
+			goto cleanup;
+		}
+		else {
+			/* baking externally without splitting materials */
+			tot_images = 1;
+		}
+	}
 
 	images = MEM_callocN(sizeof(BakeImage) * tot_images, "bake images dimensions (width, height, offset)");
 
 	if (is_save_internal) {
 		num_pixels = get_save_internal_status(op, ob_low, images);
 
-		if (num_pixels < 0) {
+		if (num_pixels <= 0) {
 			goto cleanup;
 		}
 		else if (is_clear) {
