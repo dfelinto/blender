@@ -3129,7 +3129,7 @@ static void rna_def_bake_data(BlenderRNA *brna)
 	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
 
 	prop = RNA_def_property(srna, "margin", PROP_INT, PROP_PIXEL);
-	RNA_def_property_range(prop, 0, INT_MAX);
+	RNA_def_property_range(prop, 0, SHRT_MAX);
 	RNA_def_property_ui_range(prop, 0, 64, 1, 1);
 	RNA_def_property_ui_text(prop, "Margin", "Extends the baked result as a post process filter");
 	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);

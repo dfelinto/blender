@@ -283,11 +283,10 @@ static int bake_exec(bContext *C, wmOperator *op)
 	Scene *scene = CTX_data_scene(C);
 
 	Object *ob_low = CTX_data_active_object(C);
+	Object *ob_cage = NULL;
 
 	BakeHighPolyData *highpoly;
 	int tot_highpoly;
-
-	Object *ob_custom_cage = NULL;
 
 	char restrict_flag_low = ob_low->restrictflag;
 	char restrict_flag_cage;
@@ -386,16 +385,16 @@ static int bake_exec(bContext *C, wmOperator *op)
 	}
 
 	if (custom_cage[0] != '\0') {
-		ob_custom_cage = BLI_findstring(&bmain->object, custom_cage, offsetof(ID, name) + 2);
+		ob_cage = BLI_findstring(&bmain->object, custom_cage, offsetof(ID, name) + 2);
 
 		/* TODO check if cage object has the same topology (num of triangles and a valid UV) */
-		if (ob_custom_cage == NULL || ob_custom_cage->type != OB_MESH) {
+		if (ob_cage == NULL || ob_cage->type != OB_MESH) {
 			BKE_report(op->reports, RPT_ERROR, "No valid cage object");
 			op_result = OPERATOR_CANCELLED;
 			goto cleanup;
 		}
 		else {
-			restrict_flag_cage = ob_custom_cage->restrictflag;
+			restrict_flag_cage = ob_cage->restrictflag;
 		}
 	}
 
@@ -682,8 +681,8 @@ cleanup:
 
 	ob_low->restrictflag = restrict_flag_low;
 
-	if (ob_custom_cage)
-		ob_custom_cage->restrictflag = restrict_flag_cage;
+	if (ob_cage)
+		ob_cage->restrictflag = restrict_flag_cage;
 
 	if (pixel_array_low)
 		MEM_freeN(pixel_array_low);
