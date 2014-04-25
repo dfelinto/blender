@@ -477,7 +477,7 @@ Scene *BKE_scene_add(Main *bmain, const char *name)
 	sce->r.bake_samples = 256;
 	sce->r.bake_biasdist = 0.001;
 
-	sce->r.bake.flag = R_BAKE_SAVE_EXTERNAL;
+	sce->r.bake.flag = R_BAKE_CLEAR;
 	sce->r.bake.width = 512;
 	sce->r.bake.height = 512;
 	sce->r.bake.margin = 16;

@@ -218,7 +218,7 @@ void blo_do_versions_270(FileData *fd, Library *UNUSED(lib), Main *main)
 		Scene *sce;
 
 		for (sce = main->scene.first; sce; sce = sce->id.next) {
-			sce->r.bake.flag = R_BAKE_SAVE_EXTERNAL;
+			sce->r.bake.flag = R_BAKE_CLEAR;
 			sce->r.bake.width = 512;
 			sce->r.bake.height = 512;
 			sce->r.bake.margin = 16;
