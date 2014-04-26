@@ -125,32 +125,28 @@ static void store_bake_pixel(void *handle, int x, int y, float u, float v)
 	0.0f;
 }
 
-void RE_bake_margin(const BakePixel pixel_array[], ImBuf *ibuf, const int margin, const int width, const int height)
+void RE_bake_mask_fill(const BakePixel pixel_array[], const int num_pixels, char *mask)
 {
-	char *mask_buffer = NULL;
-	const int num_pixels = width * height;
 	int i;
-
-	if (margin < 1)
+	if (!mask)
 		return;
-
-	mask_buffer = MEM_callocN(sizeof(char) * num_pixels, "BakeMask");
 
 	/* only extend to pixels outside the mask area */
 	for (i = 0; i < num_pixels; i++) {
 		if (pixel_array[i].primitive_id != -1) {
-			mask_buffer[i] = FILTER_MASK_USED;
+			mask[i] = FILTER_MASK_USED;
 		}
 	}
+}
 
+void RE_bake_margin(ImBuf *ibuf, char *mask, const int margin)
+{
 	/* margin */
-	IMB_filter_extend(ibuf, mask_buffer, margin);
+	IMB_filter_extend(ibuf, mask, margin);
 
 	if (ibuf->planes != R_IMF_PLANES_RGBA)
 		/* clear alpha added by filtering */
 		IMB_rectfill_alpha(ibuf, 1.0f);
-
-	MEM_freeN(mask_buffer);
 }
 
 /*

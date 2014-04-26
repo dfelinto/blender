@@ -123,18 +123,90 @@ static int bake_break(void *UNUSED(rjv))
 
 static bool write_internal_bake_pixels(
     Image *image, BakePixel pixel_array[], float *buffer,
-    const int width, const int height, const bool is_linear, const int margin)
+    const int width, const int height, const bool is_linear,
+    const int margin, const bool is_clear)
 {
 	ImBuf *ibuf;
 	void *lock;
 	bool is_float;
+	char *mask_buffer = NULL;
+	const int num_pixels = width * height;
 
 	ibuf = BKE_image_acquire_ibuf(image, NULL, &lock);
 
 	if (!ibuf)
 		return false;
 
-	is_float = false;
+	is_float = (ibuf->flags & IB_rectfloat);
+
+	if (margin > 0 || !is_clear) {
+		mask_buffer = MEM_callocN(sizeof(char) * num_pixels, "Bake Mask");
+		RE_bake_mask_fill(pixel_array, num_pixels, mask_buffer);
+	}
+
+	/* populates the ImBuf */
+	if (is_clear) {
+		if (is_float) {
+			IMB_buffer_float_from_float(
+			    ibuf->rect_float, buffer, ibuf->channels,
+			    IB_PROFILE_LINEAR_RGB, IB_PROFILE_LINEAR_RGB, false,
+			    ibuf->x, ibuf->y, ibuf->x, ibuf->y
+			    );
+		}
+		else {
+			IMB_buffer_byte_from_float(
+			    (unsigned char *) ibuf->rect, buffer, ibuf->channels, ibuf->dither,
+			    (is_linear ? IB_PROFILE_LINEAR_RGB : IB_PROFILE_SRGB), IB_PROFILE_LINEAR_RGB,
+			    false, ibuf->x, ibuf->y, ibuf->x, ibuf->x
+			    );
+		}
+	}
+	else {
+		if (is_float) {
+			IMB_buffer_float_from_float_mask(
+			    ibuf->rect_float, buffer, ibuf->channels,
+			    IB_PROFILE_LINEAR_RGB, IB_PROFILE_LINEAR_RGB, false,
+			    ibuf->x, ibuf->y, ibuf->x, ibuf->y, mask_buffer
+			    );
+		}
+		else {
+			IMB_buffer_byte_from_float_mask(
+			    (unsigned char *) ibuf->rect, buffer, ibuf->channels, ibuf->dither,
+			    (is_linear ? IB_PROFILE_LINEAR_RGB : IB_PROFILE_SRGB), IB_PROFILE_LINEAR_RGB,
+			    false, ibuf->x, ibuf->y, ibuf->x, ibuf->x, mask_buffer
+			    );
+		}
+	}
+
+	/* margins */
+	if (margin > 0)
+		RE_bake_margin(ibuf, mask_buffer, margin);
+
+	ibuf->userflags |= IB_BITMAPDIRTY;
+	BKE_image_release_ibuf(image, ibuf, NULL);
+
+	if (mask_buffer)
+		MEM_freeN(mask_buffer);
+
+	return true;
+}
+
+static bool write_external_bake_pixels(
+    const char *filepath, BakePixel pixel_array[], float *buffer,
+    const int width, const int height, bool is_linear, const int margin,
+    ImageFormatData *im_format)
+{
+	ImBuf *ibuf = NULL;
+	bool ok = false;
+	bool is_float;
+
+	is_float = im_format->depth > 8;
+
+	/* create a new ImBuf */
+	ibuf = IMB_allocImBuf(width, height, im_format->planes, (is_float ? IB_rectfloat : IB_rect));
+
+	if (!ibuf)
+		return false;
 
 	/* populates the ImBuf */
 	if (is_float) {
@@ -153,47 +225,17 @@ static bool write_internal_bake_pixels(
 	}
 
 	/* margins */
-	RE_bake_margin(pixel_array, ibuf, margin, width, height);
+	if (margin > 0) {
+		char *mask_buffer = NULL;
+		int num_pixels = width * height;
 
-	ibuf->userflags |= IB_BITMAPDIRTY;
-	BKE_image_release_ibuf(image, ibuf, NULL);
-	return true;
-}
+		mask_buffer = MEM_callocN(sizeof(char) * num_pixels, "Bake Mask");
+		RE_bake_mask_fill(pixel_array, num_pixels, mask_buffer);
+		RE_bake_margin(ibuf, mask_buffer, margin);
 
-static bool write_external_bake_pixels(
-    const char *filepath, BakePixel pixel_array[], float *buffer,
-    const int width, const int height, bool is_linear, const int margin,
-    ImageFormatData *im_format)
-{
-	ImBuf *ibuf = NULL;
-	bool ok = false;
-	bool is_float;
-
-	is_float = im_format->depth > 8;
-
-	/* create a new ImBuf */
-	ibuf = IMB_allocImBuf(width, height, im_format->planes, (is_float ? IB_rectfloat : IB_rect));
-	if (!ibuf)
-		return false;
-
-	/* populates the ImBuf */
-	if (is_float) {
-		IMB_buffer_float_from_float(
-		        ibuf->rect_float, buffer, ibuf->channels,
-		        IB_PROFILE_LINEAR_RGB, IB_PROFILE_LINEAR_RGB, false,
-		        ibuf->x, ibuf->y, ibuf->x, ibuf->y
-		        );
+		if (mask_buffer)
+			MEM_freeN(mask_buffer);
 	}
-	else {
-		IMB_buffer_byte_from_float(
-		        (unsigned char *) ibuf->rect, buffer, ibuf->channels, ibuf->dither,
-		        (is_linear ? IB_PROFILE_LINEAR_RGB : IB_PROFILE_SRGB), IB_PROFILE_LINEAR_RGB,
-		        false, ibuf->x, ibuf->y, ibuf->x, ibuf->x
-		        );
-	}
-
-	/* margins */
-	RE_bake_margin(pixel_array, ibuf, margin, width, height);
 
 	if ((ok = BKE_imbuf_write(ibuf, filepath, im_format))) {
 #ifndef WIN32
@@ -611,7 +653,7 @@ static int bake_exec(bContext *C, wmOperator *op)
 			BakeImage *image = &images[i];
 
 			if (is_save_internal) {
-				ok = write_internal_bake_pixels(image->image, pixel_array_low + image->offset, result + image->offset * depth, image->width, image->height, is_linear, margin);
+				ok = write_internal_bake_pixels(image->image, pixel_array_low + image->offset, result + image->offset * depth, image->width, image->height, is_linear, margin, is_clear);
 
 				if (!ok) {
 					BKE_report(op->reports, RPT_ERROR, "Problem saving the bake map internally, make sure there is a Texture Image node in the current object material");
