@@ -347,7 +347,6 @@ void IMB_buffer_byte_from_float_mask(uchar *rect_to, const float *rect_from,
 		di = create_dither_context(dither);
 
 	for (y = 0; y < height; y++) {
-		printf("\n");
 		float t = y * inv_height;
 
 		if (channels_from == 1) {
