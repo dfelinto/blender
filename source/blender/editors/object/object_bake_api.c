@@ -263,17 +263,17 @@ static bool is_data_pass(ScenePassType pass_type)
 	             SCE_PASS_INDEXMA);
 }
 
-static int get_save_internal_status(wmOperator *op, Object *ob, BakeImage *images)
+static bool build_image_lookup(wmOperator *op, Main *bmain, Object *ob, BakeImages *images)
 {
-	int i;
+	int i, j;
+	int tot_images = 0;
 	int tot_mat = ob->totcol;
-	int tot_size = 0;
+
+	/* error handling and tag (in case multiple materials share the same image) */
+	BKE_main_id_tag_idcode(bmain, ID_IM, false);
 
 	for (i = 0; i < tot_mat; i++) {
-		ImBuf *ibuf;
-		void *lock;
 		Image *image;
-
 		ED_object_get_active_image(ob, i + 1, &image, NULL, NULL);
 
 		if (!image) {
@@ -289,31 +289,60 @@ static int get_save_internal_status(wmOperator *op, Object *ob, BakeImage *image
 				BKE_reportf(op->reports, RPT_ERROR,
 				            "No active image found in material %d", i);
 			}
-
-			return -1;
+			return false;
 		}
 
-		ibuf = BKE_image_acquire_ibuf(image, NULL, &lock);
+		if ((image->id.flag & LIB_DOIT)) {
+			for (j = 0; j < i; j++) {
+				if (images->data[j].image == image) {
+					images->lookup[i] = j;
+					break;
+				}
+			}
+		}
+		else {
+			images->lookup[i] = tot_images;
+			images->data[tot_images].image = image;
+			image->id.flag |= LIB_DOIT;
+			tot_images++;
+		}
+	}
+
+	images->size = tot_images;
+	return true;
+}
+
+/*
+ * returns the total number of pixels
+ */
+static int initialize_internal_images(wmOperator *op, BakeImages *images)
+{
+	int i;
+	int tot_size = 0;
+
+	for (i = 0; i < images->size; i++) {
+		ImBuf *ibuf;
+		void *lock;
+
+		BakeImage *image = &images->data[i];
+		ibuf = BKE_image_acquire_ibuf(image->image, NULL, &lock);
 
 		if (ibuf) {
 			int num_pixels = ibuf->x * ibuf->y;
 
-			images[i].width = ibuf->x;
-			images[i].height = ibuf->y;
-			images[i].offset = tot_size;
-			images[i].image = image;
+			image->width = ibuf->x;
+			image->height = ibuf->y;
+			image->offset = tot_size;
 
 			tot_size += num_pixels;
 		}
 		else {
-			BKE_image_release_ibuf(image, ibuf, lock);
-			BKE_reportf(op->reports, RPT_ERROR, "Not inialized image in material '%d' (%s)", i, ob->mat[i]->id.name + 2);
-			return -1;
+			BKE_image_release_ibuf(image->image, ibuf, lock);
+			BKE_reportf(op->reports, RPT_ERROR, "Not initialized image %s", image->image->id.name + 2);
+			return 0;
 		}
-
-		BKE_image_release_ibuf(image, ibuf, lock);
+		BKE_image_release_ibuf(image->image, ibuf, lock);
 	}
-
 	return tot_size;
 }
 
@@ -356,7 +385,7 @@ static int bake_exec(bContext *C, wmOperator *op)
 	bool is_highpoly = false;
 	bool is_tangent;
 
-	BakeImage *images;
+	BakeImages images;
 
 	int normal_space = RNA_enum_get(op->ptr, "normal_space");
 	BakeNormalSwizzle normal_swizzle[] = {
@@ -369,16 +398,16 @@ static int bake_exec(bContext *C, wmOperator *op)
 	char filepath[FILE_MAX];
 
 	int num_pixels;
-	int tot_images;
+	int tot_materials;
 	int i;
 
 	RNA_string_get(op->ptr, "cage", custom_cage);
 	RNA_string_get(op->ptr, "filepath", filepath);
 
 	is_tangent = pass_type == SCE_PASS_NORMAL && normal_space == R_BAKE_SPACE_TANGENT;
-	tot_images = ob_low->totcol;
+	tot_materials = ob_low->totcol;
 
-	if (tot_images == 0) {
+	if (tot_materials == 0) {
 		if (is_save_internal) {
 			BKE_report(op->reports, RPT_ERROR,
 					   "No active image found. Add a material or bake to an external file");
@@ -391,34 +420,42 @@ static int bake_exec(bContext *C, wmOperator *op)
 		}
 		else {
 			/* baking externally without splitting materials */
-			tot_images = 1;
+			int tot_images = 1;
 		}
 	}
 
-	images = MEM_callocN(sizeof(BakeImage) * tot_images, "bake images dimensions (width, height, offset)");
+	/* we overallocate in case there is more materials than images */
+	images.data = MEM_callocN(sizeof(BakeImage) * tot_materials, "bake images dimensions (width, height, offset)");
+	images.lookup = MEM_callocN(sizeof(int) * tot_materials, "bake images lookup (from material to BakeImage)");
+
+	if(!build_image_lookup(op, bmain, ob_low, &images))
+		goto cleanup;
 
 	if (is_save_internal) {
-		num_pixels = get_save_internal_status(op, ob_low, images);
+		num_pixels = initialize_internal_images(op, &images);
 
-		if (num_pixels <= 0) {
+		if (num_pixels == 0) {
 			goto cleanup;
 		}
-		else if (is_clear) {
-			RE_bake_ibuf_clear(images, tot_images, is_tangent);
+
+		if (is_clear) {
+			RE_bake_ibuf_clear(&images, is_tangent);
 		}
 	}
 	else {
+#if 0
 		num_pixels = 0;
 		for (i = 0; i < tot_images; i++) {
-			images[i].width = RNA_int_get(op->ptr, "width");
-			images[i].height = RNA_int_get(op->ptr, "height");
-			images[i].offset = (is_split_materials ? num_pixels : 0);
-			images[i].image = NULL;
+			images.data[i].width = RNA_int_get(op->ptr, "width");
+			images.data[i].height = RNA_int_get(op->ptr, "height");
+			images.data[i].offset = (is_split_materials ? num_pixels : 0);
+			images.data[i].image = NULL;
 
-			num_pixels += images[i].width * images[i].height;
+			num_pixels += images.data[i].width * images.data[i].height;
 		}
 
-		BLI_assert(num_pixels == tot_images * images[0].width * images[0].height);
+		BLI_assert(num_pixels == tot_images * images.data[0].width * images.data[0].height);
+#endif
 	}
 
 	if (use_selected_to_active) {
@@ -543,7 +580,7 @@ static int bake_exec(bContext *C, wmOperator *op)
 		BLI_assert(i == tot_highpoly);
 
 		/* populate the pixel array with the face data */
-		RE_populate_bake_pixels(me_low, pixel_array_low, num_pixels, images);
+		RE_populate_bake_pixels(me_low, pixel_array_low, num_pixels, &images);
 
 		ob_low->restrictflag |= OB_RESTRICT_RENDER;
 
@@ -578,7 +615,7 @@ static int bake_exec(bContext *C, wmOperator *op)
 		me_low = BKE_mesh_new_from_object(bmain, scene, ob_low, 1, 2, 1, 0);
 
 		/* populate the pixel array with the face data */
-		RE_populate_bake_pixels(me_low, pixel_array_low, num_pixels, images);
+		RE_populate_bake_pixels(me_low, pixel_array_low, num_pixels, &images);
 
 		/* make sure low poly renders */
 		ob_low->restrictflag &= ~OB_RESTRICT_RENDER;
@@ -628,7 +665,7 @@ static int bake_exec(bContext *C, wmOperator *op)
 					}
 
 					me_nores = BKE_mesh_new_from_object(bmain, scene, ob_low, 1, 2, 1, 0);
-					RE_populate_bake_pixels(me_nores, pixel_array_low, num_pixels, images);
+					RE_populate_bake_pixels(me_nores, pixel_array_low, num_pixels, &images);
 
 					RE_normal_world_to_tangent(pixel_array_low, num_pixels, depth, result, me_nores, normal_swizzle);
 					BKE_libblock_free(bmain, me_nores);
@@ -649,8 +686,8 @@ static int bake_exec(bContext *C, wmOperator *op)
 	}
 	else {
 		/* save the results */
-		for (i = 0; i < tot_images; i++) {
-			BakeImage *image = &images[i];
+		for (i = 0; i < images.size; i++) {
+			BakeImage *image = &images.data[i];
 
 			if (is_save_internal) {
 				ok = write_internal_bake_pixels(image->image, pixel_array_low + image->offset, result + image->offset * depth, image->width, image->height, is_linear, margin, is_clear);
@@ -746,8 +783,11 @@ cleanup:
 	if (pixel_array_low)
 		MEM_freeN(pixel_array_low);
 
-	if (images)
-		MEM_freeN(images);
+	if (images.data)
+		MEM_freeN(images.data);
+
+	if (images.lookup)
+		MEM_freeN(images.lookup);
 
 	if (result)
 		MEM_freeN(result);
