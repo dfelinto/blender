@@ -327,6 +327,191 @@ void IMB_buffer_byte_from_float(uchar *rect_to, const float *rect_from,
 		clear_dither_context(di);
 }
 
+
+/* float to byte pixels, output 4-channel RGBA */
+void IMB_buffer_byte_from_float_mask(uchar *rect_to, const float *rect_from,
+                                int channels_from, float dither, int profile_to, int profile_from, bool predivide,
+                                int width, int height, int stride_to, int stride_from, char *mask)
+{
+	float tmp[4];
+	int x, y;
+	DitherContext *di = NULL;
+	float inv_width = 1.0f / width,
+	inv_height = 1.0f / height;
+
+	/* we need valid profiles */
+	BLI_assert(profile_to != IB_PROFILE_NONE);
+	BLI_assert(profile_from != IB_PROFILE_NONE);
+
+	if (dither)
+		di = create_dither_context(dither);
+
+	for (y = 0; y < height; y++) {
+		printf("\n");
+		float t = y * inv_height;
+
+		if (channels_from == 1) {
+			/* single channel input */
+			const float *from = rect_from + stride_from * y;
+			uchar *to = rect_to + stride_to * y * 4;
+
+			for (x = 0; x < width; x++, from++, to += 4)
+				if (*mask++ == FILTER_MASK_USED)
+					to[0] = to[1] = to[2] = to[3] = FTOCHAR(from[0]);
+		}
+		else if (channels_from == 3) {
+			/* RGB input */
+			const float *from = rect_from + stride_from * y * 3;
+			uchar *to = rect_to + stride_to * y * 4;
+
+			if (profile_to == profile_from) {
+				/* no color space conversion */
+				for (x = 0; x < width; x++, from += 3, to += 4) {
+					if (*mask++ == FILTER_MASK_USED) {
+						rgb_float_to_uchar(to, from);
+						to[3] = 255;
+					}
+				}
+			}
+			else if (profile_to == IB_PROFILE_SRGB) {
+				/* convert from linear to sRGB */
+				for (x = 0; x < width; x++, from += 3, to += 4) {
+					if (*mask++ == FILTER_MASK_USED) {
+						linearrgb_to_srgb_v3_v3(tmp, from);
+						rgb_float_to_uchar(to, tmp);
+						to[3] = 255;
+					}
+				}
+			}
+			else if (profile_to == IB_PROFILE_LINEAR_RGB) {
+				/* convert from sRGB to linear */
+				for (x = 0; x < width; x++, from += 3, to += 4) {
+					if (*mask++ == FILTER_MASK_USED) {
+						srgb_to_linearrgb_v3_v3(tmp, from);
+						rgb_float_to_uchar(to, tmp);
+						to[3] = 255;
+					}
+				}
+			}
+		}
+		else if (channels_from == 4) {
+			/* RGBA input */
+			const float *from = rect_from + stride_from * y * 4;
+			uchar *to = rect_to + stride_to * y * 4;
+
+			if (profile_to == profile_from) {
+				float straight[4];
+
+				/* no color space conversion */
+				if (dither && predivide) {
+					for (x = 0; x < width; x++, from += 4, to += 4) {
+						if (*mask++ == FILTER_MASK_USED) {
+							premul_to_straight_v4_v4(straight, from);
+							float_to_byte_dither_v4(to, straight, di, (float) x * inv_width, t);
+						}
+					}
+				}
+				else if (dither) {
+					for (x = 0; x < width; x++, from += 4, to += 4)
+						if (*mask++ == FILTER_MASK_USED)
+							float_to_byte_dither_v4(to, from, di, (float) x * inv_width, t);
+				}
+				else if (predivide) {
+					for (x = 0; x < width; x++, from += 4, to += 4) {
+						if (*mask++ == FILTER_MASK_USED) {
+							premul_to_straight_v4_v4(straight, from);
+							rgba_float_to_uchar(to, straight);
+						}
+					}
+				}
+				else {
+					for (x = 0; x < width; x++, from += 4, to += 4)
+						if (*mask++ == FILTER_MASK_USED)
+							rgba_float_to_uchar(to, from);
+				}
+			}
+			else if (profile_to == IB_PROFILE_SRGB) {
+				/* convert from linear to sRGB */
+				unsigned short us[4];
+				float straight[4];
+
+				if (dither && predivide) {
+					for (x = 0; x < width; x++, from += 4, to += 4) {
+						if (*mask++ == FILTER_MASK_USED) {
+							premul_to_straight_v4_v4(straight, from);
+							linearrgb_to_srgb_ushort4(us, from);
+							ushort_to_byte_dither_v4(to, us, di, (float) x * inv_width, t);
+						}
+					}
+				}
+				else if (dither) {
+					for (x = 0; x < width; x++, from += 4, to += 4) {
+						if (*mask++ == FILTER_MASK_USED) {
+							linearrgb_to_srgb_ushort4(us, from);
+							ushort_to_byte_dither_v4(to, us, di, (float) x * inv_width, t);
+						}
+					}
+				}
+				else if (predivide) {
+					for (x = 0; x < width; x++, from += 4, to += 4) {
+						if (*mask++ == FILTER_MASK_USED) {
+							premul_to_straight_v4_v4(straight, from);
+							linearrgb_to_srgb_ushort4(us, from);
+							ushort_to_byte_v4(to, us);
+						}
+					}
+				}
+				else {
+					for (x = 0; x < width; x++, from += 4, to += 4) {
+						if (*mask++ == FILTER_MASK_USED) {
+							linearrgb_to_srgb_ushort4(us, from);
+							ushort_to_byte_v4(to, us);
+						}
+					}
+				}
+			}
+			else if (profile_to == IB_PROFILE_LINEAR_RGB) {
+				/* convert from sRGB to linear */
+				if (dither && predivide) {
+					for (x = 0; x < width; x++, from += 4, to += 4) {
+						if (*mask++ == FILTER_MASK_USED) {
+							srgb_to_linearrgb_predivide_v4(tmp, from);
+							float_to_byte_dither_v4(to, tmp, di, (float) x * inv_width, t);
+						}
+					}
+				}
+				else if (dither) {
+					for (x = 0; x < width; x++, from += 4, to += 4) {
+						if (*mask++ == FILTER_MASK_USED) {
+							srgb_to_linearrgb_v4(tmp, from);
+							float_to_byte_dither_v4(to, tmp, di, (float) x * inv_width, t);
+						}
+					}
+				}
+				else if (predivide) {
+					for (x = 0; x < width; x++, from += 4, to += 4) {
+						if (*mask++ == FILTER_MASK_USED) {
+							srgb_to_linearrgb_predivide_v4(tmp, from);
+							rgba_float_to_uchar(to, tmp);
+						}
+					}
+				}
+				else {
+					for (x = 0; x < width; x++, from += 4, to += 4) {
+						if (*mask++ == FILTER_MASK_USED) {
+							srgb_to_linearrgb_v4(tmp, from);
+							rgba_float_to_uchar(to, tmp);
+						}
+					}
+				}
+			}
+		}
+	}
+
+	if (dither)
+		clear_dither_context(di);
+}
+
 /* byte to float pixels, input and output 4-channel RGBA  */
 void IMB_buffer_float_from_byte(float *rect_to, const uchar *rect_from,
                                 int profile_to, int profile_from, bool predivide,
@@ -460,6 +645,105 @@ void IMB_buffer_float_from_float(float *rect_to, const float *rect_from,
 				else {
 					for (x = 0; x < width; x++, from += 4, to += 4)
 						linearrgb_to_srgb_v4(to, from);
+				}
+			}
+		}
+	}
+}
+
+/* float to float pixels, output 4-channel RGBA */
+void IMB_buffer_float_from_float_mask(float *rect_to, const float *rect_from,
+                                 int channels_from, int profile_to, int profile_from, bool predivide,
+                                 int width, int height, int stride_to, int stride_from, char *mask)
+{
+	int x, y;
+
+	/* we need valid profiles */
+	BLI_assert(profile_to != IB_PROFILE_NONE);
+	BLI_assert(profile_from != IB_PROFILE_NONE);
+
+	if (channels_from == 1) {
+		/* single channel input */
+		for (y = 0; y < height; y++) {
+			const float *from = rect_from + stride_from * y;
+			float *to = rect_to + stride_to * y * 4;
+
+			for (x = 0; x < width; x++, from++, to += 4)
+				if (*mask++ == FILTER_MASK_USED)
+					to[0] = to[1] = to[2] = to[3] = from[0];
+		}
+	}
+	else if (channels_from == 3) {
+		/* RGB input */
+		for (y = 0; y < height; y++) {
+			const float *from = rect_from + stride_from * y * 3;
+			float *to = rect_to + stride_to * y * 4;
+
+			if (profile_to == profile_from) {
+				/* no color space conversion */
+				for (x = 0; x < width; x++, from += 3, to += 4) {
+					if (*mask++ == FILTER_MASK_USED) {
+						copy_v3_v3(to, from);
+						to[3] = 1.0f;
+					}
+				}
+			}
+			else if (profile_to == IB_PROFILE_LINEAR_RGB) {
+				/* convert from sRGB to linear */
+				for (x = 0; x < width; x++, from += 3, to += 4) {
+					if (*mask++ == FILTER_MASK_USED) {
+						srgb_to_linearrgb_v3_v3(to, from);
+						to[3] = 1.0f;
+					}
+				}
+			}
+			else if (profile_to == IB_PROFILE_SRGB) {
+				/* convert from linear to sRGB */
+				for (x = 0; x < width; x++, from += 3, to += 4) {
+					if (*mask++ == FILTER_MASK_USED) {
+						linearrgb_to_srgb_v3_v3(to, from);
+						to[3] = 1.0f;
+					}
+				}
+			}
+		}
+	}
+	else if (channels_from == 4) {
+		/* RGBA input */
+		for (y = 0; y < height; y++) {
+			const float *from = rect_from + stride_from * y * 4;
+			float *to = rect_to + stride_to * y * 4;
+
+			if (profile_to == profile_from) {
+				/* same profile, copy */
+				for (x = 0; x < width; x++, from += 4, to += 4)
+					if (*mask++ == FILTER_MASK_USED)
+						copy_v4_v4(to, from);
+			}
+			else if (profile_to == IB_PROFILE_LINEAR_RGB) {
+				/* convert to sRGB to linear */
+				if (predivide) {
+					for (x = 0; x < width; x++, from += 4, to += 4)
+						if (*mask++ == FILTER_MASK_USED)
+							srgb_to_linearrgb_predivide_v4(to, from);
+				}
+				else {
+					for (x = 0; x < width; x++, from += 4, to += 4)
+						if (*mask++ == FILTER_MASK_USED)
+							srgb_to_linearrgb_v4(to, from);
+				}
+			}
+			else if (profile_to == IB_PROFILE_SRGB) {
+				/* convert from linear to sRGB */
+				if (predivide) {
+					for (x = 0; x < width; x++, from += 4, to += 4)
+						if (*mask++ == FILTER_MASK_USED)
+							linearrgb_to_srgb_predivide_v4(to, from);
+				}
+				else {
+					for (x = 0; x < width; x++, from += 4, to += 4)
+						if (*mask++ == FILTER_MASK_USED)
+							linearrgb_to_srgb_v4(to, from);
 				}
 			}
 		}
