@@ -263,49 +263,57 @@ static PassType get_pass_type(BL::RenderPass b_pass)
 	return PASS_NONE;
 }
 
-#define STRINGIFY_APPEND(a, b) "" a #b
-#define STRINGIFY(x) STRINGIFY_APPEND("", x)
-
-#define SHADER_EVAL_CHECK_RET(id) \
-if (strcmp(shader_type, STRINGIFY(id)) == 0) \
-return SHADER_EVAL_##id;
-
 static ShaderEvalType get_shader_type(const string& pass_type)
 {
 	const char *shader_type = pass_type.c_str();
 
 	/* data passes */
-	SHADER_EVAL_CHECK_RET(NORMAL)
-	SHADER_EVAL_CHECK_RET(UV)
-	SHADER_EVAL_CHECK_RET(DIFFUSE_COLOR)
-	SHADER_EVAL_CHECK_RET(GLOSSY_COLOR)
-	SHADER_EVAL_CHECK_RET(TRANSMISSION_COLOR)
-	SHADER_EVAL_CHECK_RET(SUBSURFACE_COLOR)
-	SHADER_EVAL_CHECK_RET(EMIT)
+	if(strcmp(shader_type, "NORMAL")==0)
+		return SHADER_EVAL_NORMAL;
+	else if(strcmp(shader_type, "UV")==0)
+		return SHADER_EVAL_UV;
+	else if(strcmp(shader_type, "DIFFUSE_COLOR")==0)
+		return SHADER_EVAL_DIFFUSE_COLOR;
+	else if(strcmp(shader_type, "GLOSSY_COLOR")==0)
+		return SHADER_EVAL_GLOSSY_COLOR;
+	else if(strcmp(shader_type, "TRANSMISSION_COLOR")==0)
+		return SHADER_EVAL_TRANSMISSION_COLOR;
+	else if(strcmp(shader_type, "SUBSURFACE_COLOR")==0)
+		return SHADER_EVAL_SUBSURFACE_COLOR;
+	else if(strcmp(shader_type, "EMIT")==0)
+		return SHADER_EVAL_EMISSION;
 
 	/* light passes */
-	SHADER_EVAL_CHECK_RET(AO)
-	SHADER_EVAL_CHECK_RET(COMBINED)
-	SHADER_EVAL_CHECK_RET(SHADOW)
-	SHADER_EVAL_CHECK_RET(DIFFUSE_DIRECT)
-	SHADER_EVAL_CHECK_RET(GLOSSY_DIRECT)
-	SHADER_EVAL_CHECK_RET(TRANSMISSION_DIRECT)
-	SHADER_EVAL_CHECK_RET(SUBSURFACE_DIRECT)
-	SHADER_EVAL_CHECK_RET(DIFFUSE_INDIRECT)
-	SHADER_EVAL_CHECK_RET(GLOSSY_INDIRECT)
-	SHADER_EVAL_CHECK_RET(TRANSMISSION_INDIRECT)
-	SHADER_EVAL_CHECK_RET(SUBSURFACE_INDIRECT)
+	else if(strcmp(shader_type, "AO")==0)
+		return SHADER_EVAL_AO;
+	else if(strcmp(shader_type, "COMBINED")==0)
+		return SHADER_EVAL_COMBINED;
+	else if(strcmp(shader_type, "SHADOW")==0)
+		return SHADER_EVAL_SHADOW;
+	else if(strcmp(shader_type, "DIFFUSE_DIRECT")==0)
+		return SHADER_EVAL_DIFFUSE_DIRECT;
+	else if(strcmp(shader_type, "GLOSSY_DIRECT")==0)
+		return SHADER_EVAL_GLOSSY_DIRECT;
+	else if(strcmp(shader_type, "TRANSMISSION_DIRECT")==0)
+		return SHADER_EVAL_TRANSMISSION_DIRECT;
+	else if(strcmp(shader_type, "SUBSURFACE_DIRECT")==0)
+		return SHADER_EVAL_SUBSURFACE_DIRECT;
+	else if(strcmp(shader_type, "DIFFUSE_INDIRECT")==0)
+		return SHADER_EVAL_DIFFUSE_INDIRECT;
+	else if(strcmp(shader_type, "GLOSSY_INDIRECT")==0)
+		return SHADER_EVAL_GLOSSY_INDIRECT;
+	else if(strcmp(shader_type, "TRANSMISSION_INDIRECT")==0)
+		return SHADER_EVAL_TRANSMISSION_INDIRECT;
+	else if(strcmp(shader_type, "SUBSURFACE_INDIRECT")==0)
+		return SHADER_EVAL_SUBSURFACE_INDIRECT;
 
 	/* extra */
-	SHADER_EVAL_CHECK_RET(ENVIRONMENT)
+	else if(strcmp(shader_type, "ENVIRONMENT")==0)
+		return SHADER_EVAL_ENVIRONMENT;
 
-	return SHADER_EVAL_BAKE;
+	else
+		return SHADER_EVAL_BAKE;
 }
-
-#undef SHADER_EVAL_CHECK_RET
-
-#undef STRINGIFY
-#undef STRINGIFY_APPEND
 
 static BL::RenderResult begin_render_result(BL::RenderEngine b_engine, int x, int y, int w, int h, const char *layername)
 {

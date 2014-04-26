@@ -163,7 +163,7 @@ ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input,
 #endif
 			break;
 		}
-		case SHADER_EVAL_EMIT:
+		case SHADER_EVAL_EMISSION:
 		{
 			shader_eval_surface(kg, &sd, 0.f, 0, SHADER_CONTEXT_EMISSION);
 			out = shader_emissive_eval(kg, &sd);
