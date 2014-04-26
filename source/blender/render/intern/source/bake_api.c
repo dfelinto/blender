@@ -431,16 +431,6 @@ cleanup:
 	MEM_freeN(dm_highpoly);
 }
 
-void RE_mask_bake_pixels(const BakePixel pixel_array_from[], BakePixel pixel_array_to[], const int num_pixels)
-{
-	int i;
-
-	for (i = 0; i < num_pixels; i++) {
-		if (pixel_array_from[i].primitive_id == -1)
-			pixel_array_to[i].primitive_id = -1;
-	}
-}
-
 void RE_populate_bake_pixels(Mesh *me, BakePixel pixel_array[], const int num_pixels, const BakeImage *images)
 {
 	BakeDataZSpan bd;
