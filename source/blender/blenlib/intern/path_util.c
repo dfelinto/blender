@@ -720,21 +720,25 @@ bool BLI_path_suffix(char *string, size_t maxlen, const char *suffix, const char
 	const size_t sep_len = strlen(sep);
 	ssize_t a;
 	char extension[FILE_MAX];
+	bool has_extension = false;
 
 	if (string_len + sep_len + suffix_len >= maxlen)
 		return false;
 
 	for (a = string_len - 1; a >= 0; a--) {
-		if (ELEM3(string[a], '.', '/', '\\')) {
+		if (string[a] == '.') {
+			has_extension = true;
+			break;
+		}
+		else if (ELEM(string[a], '/', '\\')) {
 			break;
 		}
 	}
 
-	if ((a < 0) || (string[a] != '.')) {
+	if (!has_extension)
 		a = string_len;
-	}
 
-	strcpy(extension, string + a);
+	BLI_strncpy(extension, string + a, sizeof(extension));
 	sprintf(string + a, "%s%s%s", sep, suffix, extension);
 	return true;
 }
