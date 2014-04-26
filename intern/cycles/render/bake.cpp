@@ -47,15 +47,18 @@ int BakeData::object()
 	return m_object;
 }
 
-int BakeData::size() {
+int BakeData::size()
+{
 	return m_num_pixels;
 }
 
-bool BakeData::is_valid(int i) {
+bool BakeData::is_valid(int i)
+{
 	return m_primitive[i] != -1;
 }
 
-uint4 BakeData::data(int i) {
+uint4 BakeData::data(int i)
+{
 	return make_uint4(
 		m_object,
 		m_primitive[i],
@@ -172,6 +175,8 @@ void BakeManager::device_update(Device *device, DeviceScene *dscene, Scene *scen
 	need_update = false;
 }
 
-void BakeManager::device_free(Device *device, DeviceScene *dscene) {}
+void BakeManager::device_free(Device *device, DeviceScene *dscene)
+{
+}
 
 CCL_NAMESPACE_END
