@@ -336,12 +336,12 @@ static void time_draw_idblock_keyframes(View2D *v2d, ID *id, short onlysel)
 }
 
 /* draw keyframe lines for timeline */
-static void time_draw_keyframes(const bContext *C, SpaceTime *stime, ARegion *ar)
+static void time_draw_keyframes(const bContext *C, ARegion *ar)
 {
 	Scene *scene = CTX_data_scene(C);
 	Object *ob = CTX_data_active_object(C);
 	View2D *v2d = &ar->v2d;
-	short onlysel = (stime->flag & TIME_ONLYACTSEL);
+	bool onlysel = ((scene->flag & SCE_KEYS_NO_SELONLY) == 0);
 	
 	/* draw scene keyframes first 
 	 *	- don't try to do this when only drawing active/selected data keyframes,
@@ -516,7 +516,7 @@ static void time_main_area_draw(const bContext *C, ARegion *ar)
 	UI_view2d_view_ortho(v2d);
 	
 	/* keyframes */
-	time_draw_keyframes(C, stime, ar);
+	time_draw_keyframes(C, ar);
 	
 	/* markers */
 	UI_view2d_view_orthoSpecial(ar, v2d, 1);
