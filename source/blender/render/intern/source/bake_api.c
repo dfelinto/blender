@@ -81,11 +81,11 @@ extern struct Render R;
 typedef struct BakeDataZSpan {
 	BakePixel *pixel_array;
 	int primitive_id;
-	BakeImage *image;
+	BakeImage *bk_image;
 	ZSpan *zspan;
 } BakeDataZSpan;
 
-/*
+/**
  * struct wrapping up tangent space data
  */
 typedef struct TSpace {
@@ -102,14 +102,13 @@ typedef struct TriTessFace {
 	bool smoothnormal;
 } TriTessFace;
 
-/* ************************* bake ************************ */
 static void store_bake_pixel(void *handle, int x, int y, float u, float v)
 {
 	BakeDataZSpan *bd = (BakeDataZSpan *)handle;
 	BakePixel *pixel;
 
-	const int width = bd->image->width;
-	const int offset = bd->image->offset;
+	const int width = bd->bk_image->width;
+	const int offset = bd->bk_image->offset;
 	const int i = offset + y * width + x;
 
 	pixel = &bd->pixel_array[i];
@@ -148,11 +147,12 @@ void RE_bake_margin(ImBuf *ibuf, char *mask, const int margin)
 		IMB_rectfill_alpha(ibuf, 1.0f);
 }
 
-/*
+/**
  * This function returns the coordinate and normal of a barycentric u,v for a face defined by the primitive_id index.
  */
-
-static void get_point_from_barycentric(TriTessFace *triangles, int primitive_id, float u, float v, float cage_extrusion, float r_co[3], float r_dir[3])
+static void calc_point_from_barycentric(
+        TriTessFace *triangles, int primitive_id, float u, float v, float cage_extrusion,
+        float r_co[3], float r_dir[3])
 {
 	float data[3][3];
 	float coord[3];
@@ -184,20 +184,24 @@ static void get_point_from_barycentric(TriTessFace *triangles, int primitive_id,
 	copy_v3_v3(r_dir, dir);
 }
 
-/*
+/**
  * This function returns the barycentric u,v of a face for a coordinate. The face is defined by its index.
  */
-static void get_barycentric_from_point(TriTessFace *triangles, const int index, const float co[3], int *primitive_id, float uv[2])
+static void calc_barycentric_from_point(
+        TriTessFace *triangles, const int index, const float co[3],
+        int *r_primitive_id, float r_uv[2])
 {
 	TriTessFace *triangle = &triangles[index];
-	resolve_tri_uv_v3(uv, co, triangle->v1->co, triangle->v2->co, triangle->v3->co);
-	*primitive_id = index;
+	resolve_tri_uv_v3(r_uv, co, triangle->v1->co, triangle->v2->co, triangle->v3->co);
+	*r_primitive_id = index;
 }
 
-/*
+/**
  * This function populates pixel_array and returns TRUE if things are correct
  */
-static bool cast_ray_highpoly(BVHTreeFromMesh *treeData, TriTessFace *triangles[], BakeHighPolyData *highpoly, float const co_low[3], const float dir[3], const int pixel_id, const int tot_highpoly)
+static bool cast_ray_highpoly(
+        BVHTreeFromMesh *treeData, TriTessFace *triangles[], BakeHighPolyData *highpoly,
+        float const co_low[3], const float dir[3], const int pixel_id, const int tot_highpoly)
 {
 	int i;
 	int primitive_id = -1;
@@ -235,7 +239,7 @@ static bool cast_ray_highpoly(BVHTreeFromMesh *treeData, TriTessFace *triangles[
 
 	for (i = 0; i < tot_highpoly; i++) {
 		if (hit_mesh == i) {
-			get_barycentric_from_point(triangles[i], hits[i].index, hits[i].co, &primitive_id, uv);
+			calc_barycentric_from_point(triangles[i], hits[i].index, hits[i].co, &primitive_id, uv);
 			highpoly[i].pixel_array[pixel_id].primitive_id = primitive_id;
 			copy_v2_v2(highpoly[i].pixel_array[pixel_id].uv, uv);
 		}
@@ -248,11 +252,12 @@ static bool cast_ray_highpoly(BVHTreeFromMesh *treeData, TriTessFace *triangles[
 	return hit_mesh != -1;
 }
 
-/*
+/**
  * This function populates an array of verts for the triangles of a mesh
  * Tangent and Normals are also stored
  */
-static void calculateTriTessFace(TriTessFace *triangles, Mesh *me, int (*lookup_id)[2], bool tangent, DerivedMesh *dm)
+static void mesh_calc_tri_tessface(
+        TriTessFace *triangles, Mesh *me, int (*lookup_id)[2], bool tangent, DerivedMesh *dm)
 {
 	int i;
 	int p_id;
@@ -349,9 +354,10 @@ static void calculateTriTessFace(TriTessFace *triangles, Mesh *me, int (*lookup_
 	BLI_assert(p_id < me->totface * 2);
 }
 
-void RE_populate_bake_pixels_from_objects(struct Mesh *me_low, BakePixel pixel_array_from[],
-                                          BakeHighPolyData highpoly[], const int tot_highpoly, const int num_pixels,
-                                          const float cage_extrusion)
+void RE_bake_pixels_populate_from_objects(
+        struct Mesh *me_low, BakePixel pixel_array_from[],
+        BakeHighPolyData highpoly[], const int tot_highpoly, const int num_pixels,
+        const float cage_extrusion)
 {
 	int i;
 	int primitive_id;
@@ -372,11 +378,11 @@ void RE_populate_bake_pixels_from_objects(struct Mesh *me_low, BakePixel pixel_a
 	dm_highpoly = MEM_callocN(sizeof(DerivedMesh *) * tot_highpoly, "Highpoly Derived Meshes");
 	treeData = MEM_callocN(sizeof(BVHTreeFromMesh) * tot_highpoly, "Highpoly BVH Trees");
 
-	calculateTriTessFace(tris_low, me_low, NULL, false, NULL);
+	mesh_calc_tri_tessface(tris_low, me_low, NULL, false, NULL);
 
 	for (i = 0; i < tot_highpoly; i++) {
 		tris_high[i] = MEM_callocN(sizeof(TriTessFace) * highpoly[i].me->totface, "MVerts Highpoly Mesh");
-		calculateTriTessFace(tris_high[i], highpoly[i].me, NULL, false, NULL);
+		mesh_calc_tri_tessface(tris_high[i], highpoly[i].me, NULL, false, NULL);
 
 		dm_highpoly[i] = CDDM_from_mesh(highpoly[i].me);
 
@@ -407,7 +413,7 @@ void RE_populate_bake_pixels_from_objects(struct Mesh *me_low, BakePixel pixel_a
 		v = pixel_array_from[i].uv[1];
 
 		/* calculate from low poly mesh cage */
-		get_point_from_barycentric(tris_low, primitive_id, u, v, cage_extrusion, co, dir);
+		calc_point_from_barycentric(tris_low, primitive_id, u, v, cage_extrusion, co, dir);
 
 		/* cast ray */
 		if (!cast_ray_highpoly(treeData, tris_high, highpoly, co, dir, i, tot_highpoly)) {
@@ -415,6 +421,7 @@ void RE_populate_bake_pixels_from_objects(struct Mesh *me_low, BakePixel pixel_a
 			pixel_array_from[i].primitive_id = -1;
 		}
 	}
+
 
 	/* garbage collection */
 cleanup:
@@ -430,8 +437,9 @@ cleanup:
 	MEM_freeN(dm_highpoly);
 }
 
-void RE_populate_bake_pixels(Mesh *me, BakePixel pixel_array[],
-							 const int num_pixels, const BakeImages *images)
+void RE_bake_pixels_populate(
+        Mesh *me, BakePixel pixel_array[],
+        const int num_pixels, const BakeImages *bake_images)
 {
 	BakeDataZSpan bd;
 	int i, a;
@@ -445,15 +453,15 @@ void RE_populate_bake_pixels(Mesh *me, BakePixel pixel_array[],
 		return;
 
 	bd.pixel_array = pixel_array;
-	bd.zspan = MEM_callocN(sizeof(ZSpan) * images->size, "bake zspan");
+	bd.zspan = MEM_callocN(sizeof(ZSpan) * bake_images->size, "bake zspan");
 
 	/* initialize all pixel arrays so we know which ones are 'blank' */
 	for (i = 0; i < num_pixels; i++) {
 		pixel_array[i].primitive_id = -1;
 	}
 
-	for (i = 0; i < images->size; i++) {
-		zbuf_alloc_span(&bd.zspan[i], images->data[i].width, images->data[i].height, R.clipcrop);
+	for (i = 0; i < bake_images->size; i++) {
+		zbuf_alloc_span(&bd.zspan[i], bake_images->data[i].width, bake_images->data[i].height, R.clipcrop);
 	}
 
 	mtface = CustomData_get_layer(&me->fdata, CD_MTFACE);
@@ -468,9 +476,9 @@ void RE_populate_bake_pixels(Mesh *me, BakePixel pixel_array[],
 		MTFace *mtf = &mtface[i];
 		MFace *mf = &mface[i];
 		int mat_nr = mf->mat_nr;
-		int image_id = images->lookup[mat_nr];
+		int image_id = bake_images->lookup[mat_nr];
 
-		bd.image = &images->data[image_id];
+		bd.bk_image = &bake_images->data[image_id];
 		bd.primitive_id = ++p_id;
 
 		for (a = 0; a < 4; a++) {
@@ -478,8 +486,8 @@ void RE_populate_bake_pixels(Mesh *me, BakePixel pixel_array[],
 			 * where a pixel gets in between 2 faces or the middle of a quad,
 			 * camera aligned quads also have this problem but they are less common.
 			 * Add a small offset to the UVs, fixes bug #18685 - Campbell */
-			vec[a][0] = mtf->uv[a][0] * (float)bd.image->width - (0.5f + 0.001f);
-			vec[a][1] = mtf->uv[a][1] * (float)bd.image->height - (0.5f + 0.002f);
+			vec[a][0] = mtf->uv[a][0] * (float)bd.bk_image->width - (0.5f + 0.001f);
+			vec[a][1] = mtf->uv[a][1] * (float)bd.bk_image->height - (0.5f + 0.002f);
 		}
 
 		zspan_scanconvert(&bd.zspan[image_id], (void *)&bd, vec[0], vec[1], vec[2], store_bake_pixel);
@@ -491,7 +499,7 @@ void RE_populate_bake_pixels(Mesh *me, BakePixel pixel_array[],
 		}
 	}
 
-	for (i = 0; i < images->size; i++) {
+	for (i = 0; i < bake_images->size; i++) {
 		zbuf_free_span(&bd.zspan[i]);
 	}
 	MEM_freeN(bd.zspan);
@@ -512,23 +520,21 @@ static void normal_uncompress(float out[3], const float in[3])
 
 static void normal_compress(float out[3], const float in[3], const BakeNormalSwizzle normal_swizzle[3])
 {
-	const int swizzle_index[6] =
-	{
-		0, // R_BAKE_POSX
-		1, // R_BAKE_POSY
-		2, // R_BAKE_POSZ
-		0, // R_BAKE_NEGX
-		1, // R_BAKE_NEGY
-		2, // R_BAKE_NEGZ
+	const int swizzle_index[6] = {
+		0,  /* R_BAKE_POSX */
+		1,  /* R_BAKE_POSY */
+		2,  /* R_BAKE_POSZ */
+		0,  /* R_BAKE_NEGX */
+		1,  /* R_BAKE_NEGY */
+		2,  /* R_BAKE_NEGZ */
 	};
-	const float swizzle_sign[6] =
-	{
-		 1.0f, // R_BAKE_POSX
-		 1.0f, // R_BAKE_POSY
-		 1.0f, // R_BAKE_POSZ
-		-1.0f, // R_BAKE_NEGX
-		-1.0f, // R_BAKE_NEGY
-		-1.0f, // R_BAKE_NEGZ
+	const float swizzle_sign[6] = {
+		+1.0f,  /* R_BAKE_POSX */
+		+1.0f,  /* R_BAKE_POSY */
+		+1.0f,  /* R_BAKE_POSZ */
+		-1.0f,  /* R_BAKE_NEGX */
+		-1.0f,  /* R_BAKE_NEGY */
+		-1.0f,  /* R_BAKE_NEGZ */
 	};
 
 	int i;
@@ -537,14 +543,14 @@ static void normal_compress(float out[3], const float in[3], const BakeNormalSwi
 		int index;
 		float sign;
 
-		sign  = swizzle_sign [normal_swizzle[i]];
+		sign  = swizzle_sign[normal_swizzle[i]];
 		index = swizzle_index[normal_swizzle[i]];
 
 		/*
-		* There is a small 1e-5f bias for precision issues. otherwise
-		* we randomly get 127 or 128 for neutral colors in tangent maps.
-		* we choose 128 because it is the convention flat color. *
-		*/
+		 * There is a small 1e-5f bias for precision issues. otherwise
+		 * we randomly get 127 or 128 for neutral colors in tangent maps.
+		 * we choose 128 because it is the convention flat color. *
+		 */
 
 		out[i] = sign * in[index] / 2.0f + 0.5f + 1e-5f;
 	}
@@ -553,8 +559,9 @@ static void normal_compress(float out[3], const float in[3], const BakeNormalSwi
 /*
  * This function converts an object space normal map to a tangent space normal map for a given low poly mesh
  */
-void RE_normal_world_to_tangent(const BakePixel pixel_array[], const int num_pixels, const int depth,
-                                float result[], Mesh *me, const BakeNormalSwizzle normal_swizzle[3])
+void RE_bake_normal_world_to_tangent(
+        const BakePixel pixel_array[], const int num_pixels, const int depth,
+        float result[], Mesh *me, const BakeNormalSwizzle normal_swizzle[3])
 {
 	int i;
 
@@ -563,7 +570,7 @@ void RE_normal_world_to_tangent(const BakePixel pixel_array[], const int num_pix
 	DerivedMesh *dm = CDDM_from_mesh(me);
 
 	triangles = MEM_callocN(sizeof(TriTessFace) * (me->totface * 2), "MVerts Mesh");
-	calculateTriTessFace(triangles, me, NULL, true, dm);
+	mesh_calc_tri_tessface(triangles, me, NULL, true, dm);
 
 	BLI_assert(num_pixels >= 3);
 
@@ -661,8 +668,9 @@ void RE_normal_world_to_tangent(const BakePixel pixel_array[], const int num_pix
 		dm->release(dm);
 }
 
-void RE_normal_world_to_object(const BakePixel pixel_array[], const int num_pixels, const int depth,
-                               float result[], struct Object *ob, const BakeNormalSwizzle normal_swizzle[3])
+void RE_bake_normal_world_to_object(
+        const BakePixel pixel_array[], const int num_pixels, const int depth,
+        float result[], struct Object *ob, const BakeNormalSwizzle normal_swizzle[3])
 {
 	int i;
 	float iobmat[4][4];
@@ -687,8 +695,9 @@ void RE_normal_world_to_object(const BakePixel pixel_array[], const int num_pixe
 	}
 }
 
-void RE_normal_world_to_world(const BakePixel pixel_array[], const int num_pixels, const int depth,
-                              float result[], const BakeNormalSwizzle normal_swizzle[3])
+void RE_bake_normal_world_to_world(
+        const BakePixel pixel_array[], const int num_pixels, const int depth,
+        float result[], const BakeNormalSwizzle normal_swizzle[3])
 {
 	int i;
 
@@ -707,7 +716,7 @@ void RE_normal_world_to_world(const BakePixel pixel_array[], const int num_pixel
 	}
 }
 
-void RE_bake_ibuf_clear(BakeImages *images, const bool is_tangent)
+void RE_bake_ibuf_clear(BakeImages *bake_images, const bool is_tangent)
 {
 	ImBuf *ibuf;
 	void *lock;
@@ -719,8 +728,8 @@ void RE_bake_ibuf_clear(BakeImages *images, const bool is_tangent)
 	const float nor_alpha[4] = {0.5f, 0.5f, 1.0f, 0.0f};
 	const float nor_solid[4] = {0.5f, 0.5f, 1.0f, 1.0f};
 
-	for (i = 0; i < images->size; i ++) {
-		image = images->data[i].image;
+	for (i = 0; i < bake_images->size; i ++) {
+		image = bake_images->data[i].image;
 
 		ibuf = BKE_image_acquire_ibuf(image, NULL, &lock);
 		BLI_assert(ibuf);
@@ -737,7 +746,7 @@ void RE_bake_ibuf_clear(BakeImages *images, const bool is_tangent)
 /* ************************************************************* */
 
 /* not the real UV, but the internal per-face UV instead
- I'm using it to test if everything is correct */
+ * I'm using it to test if everything is correct */
 static bool bake_uv(const BakePixel pixel_array[], const int num_pixels, const int depth, float result[])
 {
 	int i;
@@ -750,8 +759,9 @@ static bool bake_uv(const BakePixel pixel_array[], const int num_pixels, const i
 	return true;
 }
 
-bool RE_internal_bake(Render *UNUSED(re), Object *UNUSED(object), const BakePixel pixel_array[],
-                      const int num_pixels, const int depth, const ScenePassType pass_type, float result[])
+bool RE_bake_internal(
+        Render *UNUSED(re), Object *UNUSED(object), const BakePixel pixel_array[],
+        const int num_pixels, const int depth, const ScenePassType pass_type, float result[])
 {
 	switch (pass_type) {
 		case SCE_PASS_UV:
@@ -768,7 +778,7 @@ bool RE_internal_bake(Render *UNUSED(re), Object *UNUSED(object), const BakePixe
 int RE_pass_depth(const ScenePassType pass_type)
 {
 	/* IMB_buffer_byte_from_float assumes 4 channels
-	   making it work for now - XXX */
+	 * making it work for now - XXX */
 	return 4;
 
 	switch (pass_type) {
@@ -794,9 +804,9 @@ int RE_pass_depth(const ScenePassType pass_type)
 		case SCE_PASS_NORMAL:
 		case SCE_PASS_VECTOR:
 		case SCE_PASS_REFRACT:
-		case SCE_PASS_INDEXOB:// XXX double check
+		case SCE_PASS_INDEXOB:  /* XXX double check */
 		case SCE_PASS_INDIRECT:
-		case SCE_PASS_RAYHITS: // XXX double check
+		case SCE_PASS_RAYHITS:  /* XXX double check */
 		case SCE_PASS_EMIT:
 		case SCE_PASS_ENVIRONMENT:
 		case SCE_PASS_INDEXMA:

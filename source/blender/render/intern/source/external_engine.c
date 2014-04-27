@@ -404,7 +404,7 @@ RenderData *RE_engine_get_render_data(Render *re)
 }
 
 /* Bake */
-void RE_engine_bake_set_engine_parameters(Render *re, Main *bmain, Scene *scene)
+void RE_bake_engine_set_engine_parameters(Render *re, Main *bmain, Scene *scene)
 {
 	re->scene = scene;
 	re->main = bmain;
@@ -416,15 +416,16 @@ void RE_engine_bake_set_engine_parameters(Render *re, Main *bmain, Scene *scene)
 	re->r.layers.first = re->r.layers.last = NULL;
 }
 
-bool RE_engine_has_bake(Render *re)
+bool RE_bake_has_engine(Render *re)
 {
 	RenderEngineType *type = RE_engines_find(re->r.engine);
 	return (bool)(type->bake);
 }
 
-bool RE_engine_bake(Render *re, Object *object, const BakePixel pixel_array[],
-                    const int num_pixels, const int depth,
-                    const ScenePassType pass_type, float result[])
+bool RE_bake_engine(
+        Render *re, Object *object, const BakePixel pixel_array[],
+        const int num_pixels, const int depth,
+        const ScenePassType pass_type, float result[])
 {
 	RenderEngineType *type = RE_engines_find(re->r.engine);
 	RenderEngine *engine;

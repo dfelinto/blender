@@ -253,7 +253,7 @@ static bool is_data_pass(ScenePassType pass_type)
 	             SCE_PASS_INDEXMA);
 }
 
-static bool build_image_lookup(wmOperator *op, Main *bmain, Object *ob, BakeImages *images)
+static bool build_image_lookup(wmOperator *op, Main *bmain, Object *ob, BakeImages *bake_images)
 {
 	const int tot_mat = ob->totcol;
 	int i, j;
@@ -284,54 +284,54 @@ static bool build_image_lookup(wmOperator *op, Main *bmain, Object *ob, BakeImag
 
 		if ((image->id.flag & LIB_DOIT)) {
 			for (j = 0; j < i; j++) {
-				if (images->data[j].image == image) {
-					images->lookup[i] = j;
+				if (bake_images->data[j].image == image) {
+					bake_images->lookup[i] = j;
 					break;
 				}
 			}
 		}
 		else {
-			images->lookup[i] = tot_images;
-			images->data[tot_images].image = image;
+			bake_images->lookup[i] = tot_images;
+			bake_images->data[tot_images].image = image;
 			image->id.flag |= LIB_DOIT;
 			tot_images++;
 		}
 	}
 
-	images->size = tot_images;
+	bake_images->size = tot_images;
 	return true;
 }
 
 /*
  * returns the total number of pixels
  */
-static int initialize_internal_images(wmOperator *op, BakeImages *images)
+static int initialize_internal_images(wmOperator *op, BakeImages *bake_images)
 {
 	int i;
 	int tot_size = 0;
 
-	for (i = 0; i < images->size; i++) {
+	for (i = 0; i < bake_images->size; i++) {
 		ImBuf *ibuf;
 		void *lock;
 
-		BakeImage *image = &images->data[i];
-		ibuf = BKE_image_acquire_ibuf(image->image, NULL, &lock);
+		BakeImage *bk_image = &bake_images->data[i];
+		ibuf = BKE_image_acquire_ibuf(bk_image->image, NULL, &lock);
 
 		if (ibuf) {
 			int num_pixels = ibuf->x * ibuf->y;
 
-			image->width = ibuf->x;
-			image->height = ibuf->y;
-			image->offset = tot_size;
+			bk_image->width = ibuf->x;
+			bk_image->height = ibuf->y;
+			bk_image->offset = tot_size;
 
 			tot_size += num_pixels;
 		}
 		else {
-			BKE_image_release_ibuf(image->image, ibuf, lock);
-			BKE_reportf(op->reports, RPT_ERROR, "Not initialized image %s", image->image->id.name + 2);
+			BKE_image_release_ibuf(bk_image->image, ibuf, lock);
+			BKE_reportf(op->reports, RPT_ERROR, "Not initialized image %s", bk_image->image->id.name + 2);
 			return 0;
 		}
-		BKE_image_release_ibuf(image->image, ibuf, lock);
+		BKE_image_release_ibuf(bk_image->image, ibuf, lock);
 	}
 	return tot_size;
 }
@@ -356,7 +356,7 @@ static int bake_exec(bContext *C, wmOperator *op)
 
 	int pass_type = RNA_enum_get(op->ptr, "type");
 
-	Render *re = RE_NewRender(scene->id.name);
+	Render *re;
 
 	float *result = NULL;
 
@@ -375,7 +375,7 @@ static int bake_exec(bContext *C, wmOperator *op)
 	bool is_highpoly = false;
 	bool is_tangent;
 
-	BakeImages images;
+	BakeImages bake_images;
 
 	const int normal_space = RNA_enum_get(op->ptr, "normal_space");
 	const BakeNormalSwizzle normal_swizzle[] = {
@@ -390,6 +390,8 @@ static int bake_exec(bContext *C, wmOperator *op)
 	int num_pixels;
 	int tot_materials;
 	int i;
+
+	re = RE_NewRender(scene->id.name);
 
 	RNA_string_get(op->ptr, "cage", custom_cage);
 	RNA_string_get(op->ptr, "filepath", filepath);
@@ -419,21 +421,21 @@ static int bake_exec(bContext *C, wmOperator *op)
 	}
 
 	/* we overallocate in case there is more materials than images */
-	images.data = MEM_callocN(sizeof(BakeImage) * tot_materials, "bake images dimensions (width, height, offset)");
-	images.lookup = MEM_callocN(sizeof(int) * tot_materials, "bake images lookup (from material to BakeImage)");
+	bake_images.data = MEM_callocN(sizeof(BakeImage) * tot_materials, "bake images dimensions (width, height, offset)");
+	bake_images.lookup = MEM_callocN(sizeof(int) * tot_materials, "bake images lookup (from material to BakeImage)");
 
-	if (!build_image_lookup(op, bmain, ob_low, &images))
+	if (!build_image_lookup(op, bmain, ob_low, &bake_images))
 		goto cleanup;
 
 	if (is_save_internal) {
-		num_pixels = initialize_internal_images(op, &images);
+		num_pixels = initialize_internal_images(op, &bake_images);
 
 		if (num_pixels == 0) {
 			goto cleanup;
 		}
 
 		if (is_clear) {
-			RE_bake_ibuf_clear(&images, is_tangent);
+			RE_bake_ibuf_clear(&bake_images, is_tangent);
 		}
 	}
 	else {
@@ -490,7 +492,7 @@ static int bake_exec(bContext *C, wmOperator *op)
 		}
 	}
 
-	RE_engine_bake_set_engine_parameters(re, bmain, scene);
+	RE_bake_engine_set_engine_parameters(re, bmain, scene);
 
 	G.is_break = false;
 
@@ -578,23 +580,23 @@ static int bake_exec(bContext *C, wmOperator *op)
 		BLI_assert(i == tot_highpoly);
 
 		/* populate the pixel array with the face data */
-		RE_populate_bake_pixels(me_low, pixel_array_low, num_pixels, &images);
+		RE_bake_pixels_populate(me_low, pixel_array_low, num_pixels, &bake_images);
 
 		ob_low->restrictflag |= OB_RESTRICT_RENDER;
 
 		/* populate the pixel arrays with the corresponding face data for each high poly object */
-		RE_populate_bake_pixels_from_objects(
+		RE_bake_pixels_populate_from_objects(
 		        me_low, pixel_array_low, highpoly, tot_highpoly,
 		        num_pixels, cage_extrusion);
 
 		/* the baking itself */
 		for (i = 0; i < tot_highpoly; i++) {
-			if (RE_engine_has_bake(re)) {
-				ok = RE_engine_bake(re, highpoly[i].ob, highpoly[i].pixel_array, num_pixels,
+			if (RE_bake_has_engine(re)) {
+				ok = RE_bake_engine(re, highpoly[i].ob, highpoly[i].pixel_array, num_pixels,
 				                    depth, pass_type, result);
 			}
 			else {
-				ok = RE_internal_bake(re, highpoly[i].ob, highpoly[i].pixel_array, num_pixels,
+				ok = RE_bake_internal(re, highpoly[i].ob, highpoly[i].pixel_array, num_pixels,
 				                      depth, pass_type, result);
 			}
 
@@ -619,15 +621,15 @@ static int bake_exec(bContext *C, wmOperator *op)
 		me_low = BKE_mesh_new_from_object(bmain, scene, ob_low, 1, 2, 1, 0);
 
 		/* populate the pixel array with the face data */
-		RE_populate_bake_pixels(me_low, pixel_array_low, num_pixels, &images);
+		RE_bake_pixels_populate(me_low, pixel_array_low, num_pixels, &bake_images);
 
 		/* make sure low poly renders */
 		ob_low->restrictflag &= ~OB_RESTRICT_RENDER;
 
-		if (RE_engine_has_bake(re))
-			ok = RE_engine_bake(re, ob_low, pixel_array_low, num_pixels, depth, pass_type, result);
+		if (RE_bake_has_engine(re))
+			ok = RE_bake_engine(re, ob_low, pixel_array_low, num_pixels, depth, pass_type, result);
 		else
-			ok = RE_internal_bake(re, ob_low, pixel_array_low, num_pixels, depth, pass_type, result);
+			ok = RE_bake_internal(re, ob_low, pixel_array_low, num_pixels, depth, pass_type, result);
 	}
 
 	/* normal space conversion */
@@ -643,19 +645,19 @@ static int bake_exec(bContext *C, wmOperator *op)
 					break;
 				}
 				else {
-					RE_normal_world_to_world(pixel_array_low, num_pixels,  depth, result, normal_swizzle);
+					RE_bake_normal_world_to_world(pixel_array_low, num_pixels,  depth, result, normal_swizzle);
 				}
 				break;
 			}
 			case R_BAKE_SPACE_OBJECT:
 			{
-				RE_normal_world_to_object(pixel_array_low, num_pixels, depth, result, ob_low, normal_swizzle);
+				RE_bake_normal_world_to_object(pixel_array_low, num_pixels, depth, result, ob_low, normal_swizzle);
 				break;
 			}
 			case R_BAKE_SPACE_TANGENT:
 			{
 				if (is_highpoly) {
-					RE_normal_world_to_tangent(pixel_array_low, num_pixels, depth, result, me_low, normal_swizzle);
+					RE_bake_normal_world_to_tangent(pixel_array_low, num_pixels, depth, result, me_low, normal_swizzle);
 				}
 				else {
 					/* from multiresolution */
@@ -671,9 +673,9 @@ static int bake_exec(bContext *C, wmOperator *op)
 					}
 
 					me_nores = BKE_mesh_new_from_object(bmain, scene, ob_low, 1, 2, 1, 0);
-					RE_populate_bake_pixels(me_nores, pixel_array_low, num_pixels, &images);
+					RE_bake_pixels_populate(me_nores, pixel_array_low, num_pixels, &bake_images);
 
-					RE_normal_world_to_tangent(pixel_array_low, num_pixels, depth, result, me_nores, normal_swizzle);
+					RE_bake_normal_world_to_tangent(pixel_array_low, num_pixels, depth, result, me_nores, normal_swizzle);
 					BKE_libblock_free(bmain, me_nores);
 
 					if (md)
@@ -692,15 +694,15 @@ static int bake_exec(bContext *C, wmOperator *op)
 	}
 	else {
 		/* save the results */
-		for (i = 0; i < images.size; i++) {
-			BakeImage *image = &images.data[i];
+		for (i = 0; i < bake_images.size; i++) {
+			BakeImage *bk_image = &bake_images.data[i];
 
 			if (is_save_internal) {
 				ok = write_internal_bake_pixels(
-				         image->image,
-				         pixel_array_low + image->offset,
-				         result + image->offset * depth,
-				         image->width, image->height,
+				         bk_image->image,
+				         pixel_array_low + bk_image->offset,
+				         result + bk_image->offset * depth,
+				         bk_image->width, bk_image->height,
 				         is_linear, margin, is_clear);
 
 				if (!ok) {
@@ -731,8 +733,8 @@ static int bake_exec(bContext *C, wmOperator *op)
 				}
 
 				if (is_split_materials) {
-					if (image->image) {
-						BLI_path_suffix(name, FILE_MAX, image->image->id.name + 2, "_");
+					if (bk_image->image) {
+						BLI_path_suffix(name, FILE_MAX, bk_image->image->id.name + 2, "_");
 					}
 					else {
 						if (ob_low->mat[i]) {
@@ -753,9 +755,9 @@ static int bake_exec(bContext *C, wmOperator *op)
 				/* save it externally */
 				ok = write_external_bake_pixels(
 				        name,
-				        pixel_array_low + image->offset,
-				        result + image->offset * depth,
-				        image->width, image->height,
+				        pixel_array_low + bk_image->offset,
+				        result + bk_image->offset * depth,
+				        bk_image->width, bk_image->height,
 				        is_linear, margin, &bake->im_format);
 
 				if (!ok) {
@@ -767,13 +769,13 @@ static int bake_exec(bContext *C, wmOperator *op)
 					op_result = OPERATOR_FINISHED;
 				}
 
-				/**/
 				if (!is_split_materials) {
 					break;
 				}
 			}
 		}
 	}
+
 
 cleanup:
 
@@ -802,11 +804,11 @@ cleanup:
 	if (pixel_array_low)
 		MEM_freeN(pixel_array_low);
 
-	if (images.data)
-		MEM_freeN(images.data);
+	if (bake_images.data)
+		MEM_freeN(bake_images.data);
 
-	if (images.lookup)
-		MEM_freeN(images.lookup);
+	if (bake_images.lookup)
+		MEM_freeN(bake_images.lookup);
 
 	if (result)
 		MEM_freeN(result);

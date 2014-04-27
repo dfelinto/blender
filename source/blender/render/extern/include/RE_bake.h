@@ -65,28 +65,41 @@ typedef struct BakeHighPolyData {
 } BakeHighPolyData;
 
 /* external_engine.c */
-bool RE_engine_has_bake(struct Render *re);
+bool RE_bake_has_engine(struct Render *re);
 
-bool RE_engine_bake(struct Render *re, struct Object *object, const BakePixel pixel_array[], const int num_pixels, const int depth, const ScenePassType pass_type, float result[]);
+bool RE_bake_engine(
+        struct Render *re, struct Object *object, const BakePixel pixel_array[],
+        const int num_pixels, const int depth, const ScenePassType pass_type, float result[]);
 
 /* bake.c */
 int RE_pass_depth(const ScenePassType pass_type);
-bool RE_internal_bake(struct Render *re, struct Object *object, const BakePixel pixel_array[], const int num_pixels, const int depth, const ScenePassType pass_type, float result[]);
+bool RE_bake_internal(
+        struct Render *re, struct Object *object, const BakePixel pixel_array[],
+        const int num_pixels, const int depth, const ScenePassType pass_type, float result[]);
 
-void RE_populate_bake_pixels_from_objects(struct Mesh *me_low, BakePixel pixel_array_from[],
-                                          BakeHighPolyData highpoly[], const int tot_highpoly, const int num_pixels,
-                                          const float cage_extrusion);
+void RE_bake_pixels_populate_from_objects(
+        struct Mesh *me_low, BakePixel pixel_array_from[],
+        BakeHighPolyData highpoly[], const int tot_highpoly, const int num_pixels,
+        const float cage_extrusion);
 
-void RE_populate_bake_pixels(struct Mesh *me, struct BakePixel *pixel_array, const int num_pixels, const struct BakeImages *images);
+void RE_bake_pixels_populate(
+        struct Mesh *me, struct BakePixel *pixel_array,
+        const int num_pixels, const struct BakeImages *bake_images);
 
 void RE_bake_mask_fill(const BakePixel pixel_array[], const int num_pixels, char *mask);
 
 void RE_bake_margin(struct ImBuf *ibuf, char *mask, const int margin);
 
-void RE_normal_world_to_object(const BakePixel pixel_array[], const int num_pixels, const int depth, float result[], struct Object *ob, const BakeNormalSwizzle normal_swizzle[3]);
-void RE_normal_world_to_tangent(const BakePixel pixel_array[], const int num_pixels, const int depth, float result[], struct Mesh *me, const BakeNormalSwizzle normal_swizzle[3]);
-void RE_normal_world_to_world(const BakePixel pixel_array[], const int num_pixels, const int depth, float result[], const BakeNormalSwizzle normal_swizzle[3]);
+void RE_bake_normal_world_to_object(
+        const BakePixel pixel_array[], const int num_pixels, const int depth, float result[],
+        struct Object *ob, const BakeNormalSwizzle normal_swizzle[3]);
+void RE_bake_normal_world_to_tangent(
+        const BakePixel pixel_array[], const int num_pixels, const int depth, float result[],
+        struct Mesh *me, const BakeNormalSwizzle normal_swizzle[3]);
+void RE_bake_normal_world_to_world(
+        const BakePixel pixel_array[], const int num_pixels, const int depth, float result[],
+        const BakeNormalSwizzle normal_swizzle[3]);
 
-void RE_bake_ibuf_clear(struct BakeImages *images, const bool is_tangent);
+void RE_bake_ibuf_clear(struct BakeImages *bake_images, const bool is_tangent);
 
-#endif
+#endif  /* __RE_BAKE_H__ */
