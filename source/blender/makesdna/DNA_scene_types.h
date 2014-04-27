@@ -392,8 +392,8 @@ typedef enum BakeNormalSwizzle {
 
 /* (char) save_mode */
 typedef enum BakeSaveMode {
-	R_BAKE_SAVE_EXTERNAL = 0,
-	R_BAKE_SAVE_INTERNAL = 1,
+	R_BAKE_SAVE_INTERNAL = 0,
+	R_BAKE_SAVE_EXTERNAL = 1,
 } BakeSaveMode;
 
 /* *************************************************************** */

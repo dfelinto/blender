@@ -323,8 +323,8 @@ EnumPropertyItem normal_swizzle_items[] = {
 };
 
 EnumPropertyItem bake_save_mode_items[] = {
-	{R_BAKE_SAVE_EXTERNAL, "EXTERNAL", 0, "External", "Save the baking map in an external file"},
 	{R_BAKE_SAVE_INTERNAL, "INTERNAL", 0, "Internal", "Save the baking map in an internal image datablock"},
+	{R_BAKE_SAVE_EXTERNAL, "EXTERNAL", 0, "External", "Save the baking map in an external file"},
 	{0, NULL, 0, NULL, NULL}
 };
 

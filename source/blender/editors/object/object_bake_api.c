@@ -921,7 +921,7 @@ void OBJECT_OT_bake(wmOperatorType *ot)
 	RNA_def_enum(ot->srna, "normal_r", normal_swizzle_items, R_BAKE_POSX, "R", "Axis to bake in red channel");
 	RNA_def_enum(ot->srna, "normal_g", normal_swizzle_items, R_BAKE_POSY, "G", "Axis to bake in green channel");
 	RNA_def_enum(ot->srna, "normal_b", normal_swizzle_items, R_BAKE_POSZ, "B", "Axis to bake in blue channel");
-	RNA_def_enum(ot->srna, "save_mode", bake_save_mode_items, R_BAKE_SAVE_EXTERNAL, "Save Mode",
+	RNA_def_enum(ot->srna, "save_mode", bake_save_mode_items, R_BAKE_SAVE_INTERNAL, "Save Mode",
 	             "Choose how to save the baking map");
 	RNA_def_boolean(ot->srna, "use_clear", false, "Clear",
 	                "Clear Images before baking (only for internal saving)");
