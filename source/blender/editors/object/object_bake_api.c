@@ -36,21 +36,20 @@
 #include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
 #include "DNA_space_types.h"
-#include "DNA_world_types.h"
 #include "DNA_object_types.h"
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
-#include "DNA_defs.h"
 #include "DNA_material_types.h"
 
 #include "RNA_access.h"
 #include "RNA_define.h"
 #include "RNA_enum_types.h"
 
-#include "BLI_blenlib.h"
+#include "BLI_listbase.h"
+#include "BLI_string.h"
+#include "BLI_fileops.h"
 #include "BLI_threads.h"
 #include "BLI_utildefines.h"
-#include "BLI_math.h"
 #include "BLI_math_geom.h"
 #include "BLI_path_util.h"
 
@@ -77,11 +76,8 @@
 #include "RE_shader_ext.h"
 #include "RE_multires_bake.h"
 
-#include "PIL_time.h"
-
 #include "IMB_imbuf_types.h"
 #include "IMB_imbuf.h"
-#include "IMB_colormanagement.h"
 
 #include "GPU_draw.h" /* GPU_free_image */
 
@@ -106,8 +102,9 @@ static int bake_modal(bContext *C, wmOperator *UNUSED(op), const wmEvent *event)
 	/* running render */
 	switch (event->type) {
 		case ESCKEY:
+		{
 			return OPERATOR_RUNNING_MODAL;
-			break;
+		}
 	}
 	return OPERATOR_PASS_THROUGH;
 }
@@ -122,9 +119,9 @@ static int bake_break(void *UNUSED(rjv))
 }
 
 static bool write_internal_bake_pixels(
-    Image *image, BakePixel pixel_array[], float *buffer,
-    const int width, const int height, const bool is_linear,
-    const int margin, const bool is_clear)
+        Image *image, BakePixel pixel_array[], float *buffer,
+        const int width, const int height, const bool is_linear,
+        const int margin, const bool is_clear)
 {
 	ImBuf *ibuf;
 	void *lock;
@@ -148,33 +145,29 @@ static bool write_internal_bake_pixels(
 	if (is_clear) {
 		if (is_float) {
 			IMB_buffer_float_from_float(
-			    ibuf->rect_float, buffer, ibuf->channels,
-			    IB_PROFILE_LINEAR_RGB, IB_PROFILE_LINEAR_RGB, false,
-			    ibuf->x, ibuf->y, ibuf->x, ibuf->y
-			    );
+			        ibuf->rect_float, buffer, ibuf->channels,
+			        IB_PROFILE_LINEAR_RGB, IB_PROFILE_LINEAR_RGB, false,
+			        ibuf->x, ibuf->y, ibuf->x, ibuf->y);
 		}
 		else {
 			IMB_buffer_byte_from_float(
-			    (unsigned char *) ibuf->rect, buffer, ibuf->channels, ibuf->dither,
-			    (is_linear ? IB_PROFILE_LINEAR_RGB : IB_PROFILE_SRGB), IB_PROFILE_LINEAR_RGB,
-			    false, ibuf->x, ibuf->y, ibuf->x, ibuf->x
-			    );
+			        (unsigned char *) ibuf->rect, buffer, ibuf->channels, ibuf->dither,
+			        (is_linear ? IB_PROFILE_LINEAR_RGB : IB_PROFILE_SRGB), IB_PROFILE_LINEAR_RGB,
+			        false, ibuf->x, ibuf->y, ibuf->x, ibuf->x);
 		}
 	}
 	else {
 		if (is_float) {
 			IMB_buffer_float_from_float_mask(
-			    ibuf->rect_float, buffer, ibuf->channels,
-			    IB_PROFILE_LINEAR_RGB, IB_PROFILE_LINEAR_RGB, false,
-			    ibuf->x, ibuf->y, ibuf->x, ibuf->y, mask_buffer
-			    );
+			        ibuf->rect_float, buffer, ibuf->channels,
+			        IB_PROFILE_LINEAR_RGB, IB_PROFILE_LINEAR_RGB, false,
+			        ibuf->x, ibuf->y, ibuf->x, ibuf->y, mask_buffer);
 		}
 		else {
 			IMB_buffer_byte_from_float_mask(
-			    (unsigned char *) ibuf->rect, buffer, ibuf->channels, ibuf->dither,
-			    (is_linear ? IB_PROFILE_LINEAR_RGB : IB_PROFILE_SRGB), IB_PROFILE_LINEAR_RGB,
-			    false, ibuf->x, ibuf->y, ibuf->x, ibuf->x, mask_buffer
-			    );
+			        (unsigned char *) ibuf->rect, buffer, ibuf->channels, ibuf->dither,
+			        (is_linear ? IB_PROFILE_LINEAR_RGB : IB_PROFILE_SRGB), IB_PROFILE_LINEAR_RGB,
+			        false, ibuf->x, ibuf->y, ibuf->x, ibuf->x, mask_buffer);
 		}
 	}
 
@@ -192,9 +185,9 @@ static bool write_internal_bake_pixels(
 }
 
 static bool write_external_bake_pixels(
-    const char *filepath, BakePixel pixel_array[], float *buffer,
-    const int width, const int height, bool is_linear, const int margin,
-    ImageFormatData *im_format)
+        const char *filepath, BakePixel pixel_array[], float *buffer,
+        const int width, const int height, bool is_linear, const int margin,
+        ImageFormatData *im_format)
 {
 	ImBuf *ibuf = NULL;
 	bool ok = false;
@@ -211,17 +204,15 @@ static bool write_external_bake_pixels(
 	/* populates the ImBuf */
 	if (is_float) {
 		IMB_buffer_float_from_float(
-		    ibuf->rect_float, buffer, ibuf->channels,
-		    IB_PROFILE_LINEAR_RGB, IB_PROFILE_LINEAR_RGB, false,
-		    ibuf->x, ibuf->y, ibuf->x, ibuf->y
-		    );
+		        ibuf->rect_float, buffer, ibuf->channels,
+		        IB_PROFILE_LINEAR_RGB, IB_PROFILE_LINEAR_RGB, false,
+		        ibuf->x, ibuf->y, ibuf->x, ibuf->y);
 	}
 	else {
 		IMB_buffer_byte_from_float(
-		    (unsigned char *) ibuf->rect, buffer, ibuf->channels, ibuf->dither,
-		    (is_linear ? IB_PROFILE_LINEAR_RGB : IB_PROFILE_SRGB), IB_PROFILE_LINEAR_RGB,
-		    false, ibuf->x, ibuf->y, ibuf->x, ibuf->x
-		    );
+		        (unsigned char *) ibuf->rect, buffer, ibuf->channels, ibuf->dither,
+		        (is_linear ? IB_PROFILE_LINEAR_RGB : IB_PROFILE_SRGB), IB_PROFILE_LINEAR_RGB,
+		        false, ibuf->x, ibuf->y, ibuf->x, ibuf->x);
 	}
 
 	/* margins */
@@ -247,8 +238,7 @@ static bool write_external_bake_pixels(
 	/* garbage collection */
 	IMB_freeImBuf(ibuf);
 
-	if (ok) return true;
-	return false;
+	return ok;
 }
 
 static bool is_data_pass(ScenePassType pass_type)
@@ -265,9 +255,9 @@ static bool is_data_pass(ScenePassType pass_type)
 
 static bool build_image_lookup(wmOperator *op, Main *bmain, Object *ob, BakeImages *images)
 {
+	const int tot_mat = ob->totcol;
 	int i, j;
 	int tot_images = 0;
-	int tot_mat = ob->totcol;
 
 	/* error handling and tag (in case multiple materials share the same image) */
 	BKE_main_id_tag_idcode(bmain, ID_IM, false);
@@ -387,11 +377,11 @@ static int bake_exec(bContext *C, wmOperator *op)
 
 	BakeImages images;
 
-	int normal_space = RNA_enum_get(op->ptr, "normal_space");
-	BakeNormalSwizzle normal_swizzle[] = {
-		RNA_enum_get(op->ptr, "normal_r"),
-		RNA_enum_get(op->ptr, "normal_g"),
-		RNA_enum_get(op->ptr, "normal_b")
+	const int normal_space = RNA_enum_get(op->ptr, "normal_space");
+	const BakeNormalSwizzle normal_swizzle[] = {
+	    RNA_enum_get(op->ptr, "normal_r"),
+	    RNA_enum_get(op->ptr, "normal_g"),
+	    RNA_enum_get(op->ptr, "normal_b")
 	};
 
 	char custom_cage[MAX_NAME];
@@ -410,17 +400,21 @@ static int bake_exec(bContext *C, wmOperator *op)
 	if (tot_materials == 0) {
 		if (is_save_internal) {
 			BKE_report(op->reports, RPT_ERROR,
-					   "No active image found. Add a material or bake to an external file");
+			           "No active image found. Add a material or bake to an external file");
+
 			goto cleanup;
 		}
 		else if (is_split_materials) {
 			BKE_report(op->reports, RPT_ERROR,
-					   "No active image found. Add a material or bake without the Split Materials option");
+			           "No active image found. Add a material or bake without the Split Materials option");
+
 			goto cleanup;
 		}
 		else {
+#if 0
 			/* baking externally without splitting materials */
-			int tot_images = 1;
+			tot_images = 1;
+#endif
 		}
 	}
 
@@ -428,7 +422,7 @@ static int bake_exec(bContext *C, wmOperator *op)
 	images.data = MEM_callocN(sizeof(BakeImage) * tot_materials, "bake images dimensions (width, height, offset)");
 	images.lookup = MEM_callocN(sizeof(int) * tot_materials, "bake images lookup (from material to BakeImage)");
 
-	if(!build_image_lookup(op, bmain, ob_low, &images))
+	if (!build_image_lookup(op, bmain, ob_low, &images))
 		goto cleanup;
 
 	if (is_save_internal) {
@@ -473,6 +467,7 @@ static int bake_exec(bContext *C, wmOperator *op)
 		if (tot_highpoly == 0) {
 			BKE_report(op->reports, RPT_ERROR, "No valid selected objects");
 			op_result = OPERATOR_CANCELLED;
+
 			goto cleanup;
 		}
 		else {
@@ -487,6 +482,7 @@ static int bake_exec(bContext *C, wmOperator *op)
 		if (ob_cage == NULL || ob_cage->type != OB_MESH) {
 			BKE_report(op->reports, RPT_ERROR, "No valid cage object");
 			op_result = OPERATOR_CANCELLED;
+
 			goto cleanup;
 		}
 		else {
@@ -561,7 +557,9 @@ static int bake_exec(bContext *C, wmOperator *op)
 
 
 			/* triangulating so BVH returns the primitive_id that will be used for rendering */
-			highpoly[i].tri_mod = ED_object_modifier_add(op->reports, bmain, scene, highpoly[i].ob, "TmpTriangulate", eModifierType_Triangulate);
+			highpoly[i].tri_mod = ED_object_modifier_add(
+			        op->reports, bmain, scene, highpoly[i].ob,
+			        "TmpTriangulate", eModifierType_Triangulate);
 			tmd = (TriangulateModifierData *)highpoly[i].tri_mod;
 			tmd->quad_method = MOD_TRIANGULATE_QUAD_FIXED;
 			tmd->ngon_method = MOD_TRIANGULATE_NGON_EARCLIP;
@@ -585,14 +583,20 @@ static int bake_exec(bContext *C, wmOperator *op)
 		ob_low->restrictflag |= OB_RESTRICT_RENDER;
 
 		/* populate the pixel arrays with the corresponding face data for each high poly object */
-		RE_populate_bake_pixels_from_objects(me_low, pixel_array_low, highpoly, tot_highpoly, num_pixels, cage_extrusion);
+		RE_populate_bake_pixels_from_objects(
+		        me_low, pixel_array_low, highpoly, tot_highpoly,
+		        num_pixels, cage_extrusion);
 
 		/* the baking itself */
 		for (i = 0; i < tot_highpoly; i++) {
-			if (RE_engine_has_bake(re))
-				ok = RE_engine_bake(re, highpoly[i].ob, highpoly[i].pixel_array, num_pixels, depth, pass_type, result);
-			else
-				ok = RE_internal_bake(re, highpoly[i].ob, highpoly[i].pixel_array, num_pixels, depth, pass_type, result);
+			if (RE_engine_has_bake(re)) {
+				ok = RE_engine_bake(re, highpoly[i].ob, highpoly[i].pixel_array, num_pixels,
+				                    depth, pass_type, result);
+			}
+			else {
+				ok = RE_internal_bake(re, highpoly[i].ob, highpoly[i].pixel_array, num_pixels,
+				                      depth, pass_type, result);
+			}
 
 			if (!ok)
 				break;
@@ -632,9 +636,9 @@ static int bake_exec(bContext *C, wmOperator *op)
 			case R_BAKE_SPACE_WORLD:
 			{
 				/* Cycles internal format */
-				if (normal_swizzle[0] == R_BAKE_NEGX &&
-				    normal_swizzle[1] == R_BAKE_NEGY &&
-				    normal_swizzle[2] == R_BAKE_NEGZ)
+				if ((normal_swizzle[0] == R_BAKE_NEGX) &&
+				    (normal_swizzle[1] == R_BAKE_NEGY) &&
+				    (normal_swizzle[2] == R_BAKE_NEGZ))
 				{
 					break;
 				}
@@ -644,8 +648,10 @@ static int bake_exec(bContext *C, wmOperator *op)
 				break;
 			}
 			case R_BAKE_SPACE_OBJECT:
+			{
 				RE_normal_world_to_object(pixel_array_low, num_pixels, depth, result, ob_low, normal_swizzle);
 				break;
+			}
 			case R_BAKE_SPACE_TANGENT:
 			{
 				if (is_highpoly) {
@@ -690,14 +696,22 @@ static int bake_exec(bContext *C, wmOperator *op)
 			BakeImage *image = &images.data[i];
 
 			if (is_save_internal) {
-				ok = write_internal_bake_pixels(image->image, pixel_array_low + image->offset, result + image->offset * depth, image->width, image->height, is_linear, margin, is_clear);
+				ok = write_internal_bake_pixels(
+				         image->image,
+				         pixel_array_low + image->offset,
+				         result + image->offset * depth,
+				         image->width, image->height,
+				         is_linear, margin, is_clear);
 
 				if (!ok) {
-					BKE_report(op->reports, RPT_ERROR, "Problem saving the bake map internally, make sure there is a Texture Image node in the current object material");
+					BKE_report(op->reports, RPT_ERROR,
+					           "Problem saving the bake map internally, "
+					           "make sure there is a Texture Image node in the current object material");
 					op_result = OPERATOR_CANCELLED;
 				}
 				else {
-					BKE_report(op->reports, RPT_INFO, "Baking map saved to internal image, save it externally or pack it");
+					BKE_report(op->reports, RPT_INFO,
+					           "Baking map saved to internal image, save it externally or pack it");
 					op_result = OPERATOR_FINISHED;
 				}
 			}
@@ -737,7 +751,12 @@ static int bake_exec(bContext *C, wmOperator *op)
 				}
 
 				/* save it externally */
-				ok = write_external_bake_pixels(name, pixel_array_low + image->offset, result + image->offset * depth, image->width, image->height, is_linear, margin, &bake->im_format);
+				ok = write_external_bake_pixels(
+				        name,
+				        pixel_array_low + image->offset,
+				        result + image->offset * depth,
+				        image->width, image->height,
+				        is_linear, margin, &bake->im_format);
 
 				if (!ok) {
 					BKE_reportf(op->reports, RPT_ERROR, "Problem saving baked map in \"%s\".", name);
@@ -897,22 +916,35 @@ void OBJECT_OT_bake(wmOperatorType *ot)
 	ot->invoke = bake_invoke;
 	ot->poll = ED_operator_object_active_editable_mesh;
 
-	ot->prop = RNA_def_enum(ot->srna, "type", render_pass_type_items, SCE_PASS_COMBINED, "Type",
-	                        "Type of pass to bake, some of them may not be supported by the current render engine");
-	ot->prop = RNA_def_boolean(ot->srna, "is_save_external", true, "External", "Save the image externally (ignore face assigned Image datablocks)");
-	ot->prop = RNA_def_string_file_path(ot->srna, "filepath", NULL, FILE_MAX, "File Path", "Image filepath to use when saving externally");
-	ot->prop = RNA_def_int(ot->srna, "width", 512, 1, INT_MAX, "Width", "Horizontal dimension of the baking map (external only)", 64, 4096);
-	ot->prop = RNA_def_int(ot->srna, "height", 512, 1, INT_MAX, "Height", "Vertical dimension of the baking map (external only)", 64, 4096);
-	ot->prop = RNA_def_int(ot->srna, "margin", 16, 0, INT_MAX, "Margin", "Extends the baked result as a post process filter", 0, 64);
-	ot->prop = RNA_def_boolean(ot->srna, "use_selected_to_active", false, "Selected to Active", "Bake shading on the surface of selected objects to the active object");
-	ot->prop = RNA_def_float(ot->srna, "cage_extrusion", 0.0, 0.0, 1.0, "Cage Extrusion", "Distance to use for the inward ray cast when using selected to active", 0.0, 1.0);
-	ot->prop = RNA_def_string(ot->srna, "cage", NULL, MAX_NAME, "Cage", "Object to use as cage");
-	ot->prop = RNA_def_enum(ot->srna, "normal_space", normal_space_items, R_BAKE_SPACE_TANGENT, "Normal Space", "Choose normal space for baking");
-	ot->prop = RNA_def_enum(ot->srna, "normal_r", normal_swizzle_items, R_BAKE_POSX, "R", "Axis to bake in red channel");
-	ot->prop = RNA_def_enum(ot->srna, "normal_g", normal_swizzle_items, R_BAKE_POSY, "G", "Axis to bake in green channel");
-	ot->prop = RNA_def_enum(ot->srna, "normal_b", normal_swizzle_items, R_BAKE_POSZ, "B", "Axis to bake in blue channel");
-	ot->prop = RNA_def_enum(ot->srna, "save_mode", bake_save_mode_items, R_BAKE_SAVE_EXTERNAL, "Save Mode", "Choose how to save the baking map");
-	ot->prop = RNA_def_boolean(ot->srna, "use_clear", false, "Clear", "Clear Images before baking (only for internal saving)");
-	ot->prop = RNA_def_boolean(ot->srna, "use_split_materials", false, "Split Materials", "Split baked maps per material, using material name in output file (external only)");
-	ot->prop = RNA_def_boolean(ot->srna, "use_automatic_name", false, "Automatic Name", "Automatically name the output file with the pass type");
+	RNA_def_enum(ot->srna, "type", render_pass_type_items, SCE_PASS_COMBINED, "Type",
+	             "Type of pass to bake, some of them may not be supported by the current render engine");
+	RNA_def_boolean(ot->srna, "is_save_external", true, "External",
+	                "Save the image externally (ignore face assigned Image datablocks)");
+	RNA_def_string_file_path(ot->srna, "filepath", NULL, FILE_MAX, "File Path",
+	                         "Image filepath to use when saving externally");
+	RNA_def_int(ot->srna, "width", 512, 1, INT_MAX, "Width",
+	            "Horizontal dimension of the baking map (external only)", 64, 4096);
+	RNA_def_int(ot->srna, "height", 512, 1, INT_MAX, "Height",
+	            "Vertical dimension of the baking map (external only)", 64, 4096);
+	RNA_def_int(ot->srna, "margin", 16, 0, INT_MAX, "Margin",
+	            "Extends the baked result as a post process filter", 0, 64);
+	RNA_def_boolean(ot->srna, "use_selected_to_active", false, "Selected to Active",
+	                "Bake shading on the surface of selected objects to the active object");
+	RNA_def_float(ot->srna, "cage_extrusion", 0.0, 0.0, 1.0, "Cage Extrusion",
+	              "Distance to use for the inward ray cast when using selected to active", 0.0, 1.0);
+	RNA_def_string(ot->srna, "cage", NULL, MAX_NAME, "Cage",
+	               "Object to use as cage");
+	RNA_def_enum(ot->srna, "normal_space", normal_space_items, R_BAKE_SPACE_TANGENT, "Normal Space",
+	             "Choose normal space for baking");
+	RNA_def_enum(ot->srna, "normal_r", normal_swizzle_items, R_BAKE_POSX, "R", "Axis to bake in red channel");
+	RNA_def_enum(ot->srna, "normal_g", normal_swizzle_items, R_BAKE_POSY, "G", "Axis to bake in green channel");
+	RNA_def_enum(ot->srna, "normal_b", normal_swizzle_items, R_BAKE_POSZ, "B", "Axis to bake in blue channel");
+	RNA_def_enum(ot->srna, "save_mode", bake_save_mode_items, R_BAKE_SAVE_EXTERNAL, "Save Mode",
+	             "Choose how to save the baking map");
+	RNA_def_boolean(ot->srna, "use_clear", false, "Clear",
+	                "Clear Images before baking (only for internal saving)");
+	RNA_def_boolean(ot->srna, "use_split_materials", false, "Split Materials",
+	                "Split baked maps per material, using material name in output file (external only)");
+	RNA_def_boolean(ot->srna, "use_automatic_name", false, "Automatic Name",
+	                "Automatically name the output file with the pass type");
 }
