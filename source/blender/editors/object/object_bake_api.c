@@ -393,10 +393,8 @@ static int bake_exec(bContext *C, wmOperator *op)
 			goto cleanup;
 		}
 		else {
-#if 0
 			/* baking externally without splitting materials */
-			tot_images = 1;
-#endif
+			tot_materials = 1;
 		}
 	}
 
@@ -419,19 +417,28 @@ static int bake_exec(bContext *C, wmOperator *op)
 		}
 	}
 	else {
-#if 0
-		num_pixels = 0;
-		for (i = 0; i < tot_images; i++) {
-			images.data[i].width = RNA_int_get(op->ptr, "width");
-			images.data[i].height = RNA_int_get(op->ptr, "height");
-			images.data[i].offset = (is_split_materials ? num_pixels : 0);
-			images.data[i].image = NULL;
+		int width, height;
 
-			num_pixels += images.data[i].width * images.data[i].height;
+		/* when saving extenally always use the size specified in the UI */
+		width = RNA_int_get(op->ptr, "width");
+		height = RNA_int_get(op->ptr, "height");
+
+		num_pixels = width * height * bake_images.size;
+
+		for (i = 0; i < bake_images.size; i++) {
+			bake_images.data[i].width = width;
+			bake_images.data[i].height = height;
+			bake_images.data[i].offset = (is_split_materials ? num_pixels : 0);
+			bake_images.data[i].image = NULL;
+
+			num_pixels += width * bake_images.data[i].height;
 		}
 
-		BLI_assert(num_pixels == tot_images * images.data[0].width * images.data[0].height);
-#endif
+		if (!is_split_materials) {
+			/* saving a single image */
+			for (i = 0; i < tot_materials; i++)
+				bake_images.lookup[i] = 0;
+		}
 	}
 
 	if (use_selected_to_active) {
