@@ -24,52 +24,25 @@
  *  \ingroup render
  */
 
-
-/* system includes */
-#include <stdio.h>
-#include <string.h>
-
-/* External modules: */
 #include "MEM_guardedalloc.h"
 
 #include "BLI_math.h"
-#include "BLI_blenlib.h"
-#include "BLI_threads.h"
-#include "BLI_utildefines.h"
 
-#include "DNA_image_types.h"
-#include "DNA_material_types.h"
 #include "DNA_mesh_types.h"
-#include "DNA_meshdata_types.h"
 
-#include "BKE_customdata.h"
 #include "BKE_cdderivedmesh.h"
-#include "BKE_mesh.h"
-#include "BKE_global.h"
 #include "BKE_image.h"
-#include "BKE_main.h"
 #include "BKE_node.h"
-#include "BKE_scene.h"
-#include "BKE_library.h"
-
-#include "BKE_bvhutils.h"
-#include "BKE_DerivedMesh.h"
 
 #include "IMB_imbuf_types.h"
 #include "IMB_imbuf.h"
-#include "IMB_colormanagement.h"
 
 #include "RE_bake.h"
 
 /* local include */
-#include "rayintersection.h"
-#include "rayobject.h"
 #include "render_types.h"
-#include "renderdatabase.h"
-#include "shading.h"
 #include "zbuf.h"
 
-#include "PIL_time.h"
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 /* defined in pipeline.c, is hardcopy of active dynamic allocated Render */
