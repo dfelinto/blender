@@ -198,7 +198,7 @@ static bool write_external_bake_pixels(
 	/* margins */
 	if (margin > 0) {
 		char *mask_buffer = NULL;
-		int num_pixels = width * height;
+		const int num_pixels = width * height;
 
 		mask_buffer = MEM_callocN(sizeof(char) * num_pixels, "Bake Mask");
 		RE_bake_mask_fill(pixel_array, num_pixels, mask_buffer);
@@ -298,13 +298,11 @@ static int initialize_internal_images(wmOperator *op, BakeImages *bake_images)
 		ibuf = BKE_image_acquire_ibuf(bk_image->image, NULL, &lock);
 
 		if (ibuf) {
-			int num_pixels = ibuf->x * ibuf->y;
-
 			bk_image->width = ibuf->x;
 			bk_image->height = ibuf->y;
 			bk_image->offset = tot_size;
 
-			tot_size += num_pixels;
+			tot_size += ibuf->x * ibuf->y;
 		}
 		else {
 			BKE_image_release_ibuf(bk_image->image, ibuf, lock);
@@ -430,8 +428,6 @@ static int bake_exec(bContext *C, wmOperator *op)
 			bake_images.data[i].height = height;
 			bake_images.data[i].offset = (is_split_materials ? num_pixels : 0);
 			bake_images.data[i].image = NULL;
-
-			num_pixels += width * bake_images.data[i].height;
 		}
 
 		if (!is_split_materials) {
