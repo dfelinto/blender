@@ -478,6 +478,7 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
             items = (
                 ('COMBINED', "Combined", ""),
                 ('AO', "Ambient Occlusion", ""),
+                ('SHADOW', "Shadow", ""),
                 ('NORMAL', "Normal", ""),
                 ('UV', "UV", ""),
                 ('EMIT', "Emit", ""),
