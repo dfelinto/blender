@@ -847,6 +847,10 @@ static void bake_init_api_data(wmOperator *op, bContext *C, BakeAPIRender *bkr)
 		CTX_data_selected_objects(C, &bkr->selected_objects);
 
 	bkr->reports = op->reports;
+
+	/* XXX hack to force saving to always be internal. Whether (and how) to support
+	 * external saving will be addressed later */
+	bkr->save_mode = R_BAKE_SAVE_INTERNAL;
 }
 
 static int bake_exec(bContext *C, wmOperator *op)
