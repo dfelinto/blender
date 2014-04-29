@@ -102,15 +102,13 @@ static int bake_break(void *UNUSED(rjv))
 static bool write_internal_bake_pixels(
         Image *image, BakePixel pixel_array[], float *buffer,
         const int width, const int height, const int margin,
-        const bool is_clear, const bool UNUSED(is_noncolor))
+        const bool is_clear, const bool is_noncolor)
 {
 	ImBuf *ibuf;
 	void *lock;
 	bool is_float;
 	char *mask_buffer = NULL;
 	const int num_pixels = width * height;
-	const char *from_colorspace;
-	const char *to_colorspace;
 
 	ibuf = BKE_image_acquire_ibuf(image, NULL, &lock);
 
@@ -122,17 +120,23 @@ static bool write_internal_bake_pixels(
 		RE_bake_mask_fill(pixel_array, num_pixels, mask_buffer);
 	}
 
-	/* colormanagement conversions */
 	is_float = (ibuf->flags & IB_rectfloat);
-	from_colorspace	= IMB_colormanagement_role_colorspace_name_get(COLOR_ROLE_SCENE_LINEAR);
 
-	if (is_float)
-		to_colorspace = IMB_colormanagement_get_float_colorspace(ibuf);
-	else
-		to_colorspace = IMB_colormanagement_get_rect_colorspace(ibuf);
+	/* colormanagement conversions */
+	if (!is_noncolor) {
+		const char *from_colorspace;
+		const char *to_colorspace;
 
-	if (from_colorspace != to_colorspace)
-		IMB_colormanagement_transform(buffer, ibuf->x, ibuf->y, ibuf->channels, from_colorspace, to_colorspace, false);
+		from_colorspace = IMB_colormanagement_role_colorspace_name_get(COLOR_ROLE_SCENE_LINEAR);
+
+		if (is_float)
+			to_colorspace = IMB_colormanagement_get_float_colorspace(ibuf);
+		else
+			to_colorspace = IMB_colormanagement_get_rect_colorspace(ibuf);
+
+		if (from_colorspace != to_colorspace)
+			IMB_colormanagement_transform(buffer, ibuf->x, ibuf->y, ibuf->channels, from_colorspace, to_colorspace, false);
+	}
 
 	/* populates the ImBuf */
 	if (is_clear) {
@@ -178,7 +182,7 @@ static bool write_internal_bake_pixels(
 static bool write_external_bake_pixels(
         const char *filepath, BakePixel pixel_array[], float *buffer,
         const int width, const int height, const int margin,
-        ImageFormatData *im_format, const bool UNUSED(is_noncolor))
+        ImageFormatData *im_format, const bool is_noncolor)
 {
 	ImBuf *ibuf = NULL;
 	bool ok = false;
@@ -200,10 +204,11 @@ static bool write_external_bake_pixels(
 		        ibuf->x, ibuf->y, ibuf->x, ibuf->y);
 	}
 	else {
-		const char *from_colorspace = IMB_colormanagement_role_colorspace_name_get(COLOR_ROLE_SCENE_LINEAR);
-		const char *to_colorspace = IMB_colormanagement_get_rect_colorspace(ibuf);
-
-		IMB_colormanagement_transform(buffer, ibuf->x, ibuf->y, ibuf->channels, from_colorspace, to_colorspace, false);
+		if (!is_noncolor) {
+			const char *from_colorspace = IMB_colormanagement_role_colorspace_name_get(COLOR_ROLE_SCENE_LINEAR);
+			const char *to_colorspace = IMB_colormanagement_get_rect_colorspace(ibuf);
+			IMB_colormanagement_transform(buffer, ibuf->x, ibuf->y, ibuf->channels, from_colorspace, to_colorspace, false);
+		}
 
 		IMB_buffer_byte_from_float(
 		        (unsigned char *) ibuf->rect, buffer, ibuf->channels, ibuf->dither,
