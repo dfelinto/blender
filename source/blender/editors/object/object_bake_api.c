@@ -813,6 +813,8 @@ cleanup:
 
 static void bake_init_api_data(wmOperator *op, bContext *C, BakeAPIRender *bkr)
 {
+	bool is_save_internal;
+
 	bkr->ob = CTX_data_active_object(C);
 	bkr->main = CTX_data_main(C);
 	bkr->scene = CTX_data_scene(C);
@@ -821,7 +823,7 @@ static void bake_init_api_data(wmOperator *op, bContext *C, BakeAPIRender *bkr)
 	bkr->margin = RNA_int_get(op->ptr, "margin");
 
 	bkr->save_mode = RNA_enum_get(op->ptr, "save_mode");
-	const bool is_save_internal = (bkr->save_mode == R_BAKE_SAVE_INTERNAL);
+	is_save_internal = (bkr->save_mode == R_BAKE_SAVE_INTERNAL);
 
 	bkr->is_clear = RNA_boolean_get(op->ptr, "use_clear");
 	bkr->is_split_materials = (!is_save_internal) && RNA_boolean_get(op->ptr, "use_split_materials");
@@ -975,6 +977,8 @@ static void bake_set_props(wmOperator *op, Scene *scene)
 
 static int bake_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
 {
+	wmJob *wm_job;
+	BakeAPIRender *bkr;
 	Scene *scene = CTX_data_scene(C);
 
 	bake_set_props(op, scene);
@@ -983,8 +987,7 @@ static int bake_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event)
 	if (WM_jobs_test(CTX_wm_manager(C), scene, WM_JOB_TYPE_OBJECT_BAKE_TEXTURE))
 		return OPERATOR_CANCELLED;
 
-	BakeAPIRender *bkr = MEM_callocN(sizeof(BakeAPIRender), "render bake");
-	wmJob *wm_job;
+	bkr = MEM_callocN(sizeof(BakeAPIRender), "render bake");
 
 	/* init bake render */
 	bake_init_api_data(op, C, bkr);
