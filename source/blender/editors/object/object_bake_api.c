@@ -60,7 +60,7 @@
 
 #include "IMB_imbuf_types.h"
 #include "IMB_imbuf.h"
-
+#include "IMB_colormanagement.h"
 
 #include "WM_api.h"
 #include "WM_types.h"
@@ -101,26 +101,38 @@ static int bake_break(void *UNUSED(rjv))
 
 static bool write_internal_bake_pixels(
         Image *image, BakePixel pixel_array[], float *buffer,
-        const int width, const int height, const bool is_linear,
-        const int margin, const bool is_clear)
+        const int width, const int height, const int margin,
+        const bool is_clear, const bool UNUSED(is_noncolor))
 {
 	ImBuf *ibuf;
 	void *lock;
 	bool is_float;
 	char *mask_buffer = NULL;
 	const int num_pixels = width * height;
+	const char *from_colorspace;
+	const char *to_colorspace;
 
 	ibuf = BKE_image_acquire_ibuf(image, NULL, &lock);
 
 	if (!ibuf)
 		return false;
 
-	is_float = (ibuf->flags & IB_rectfloat);
-
 	if (margin > 0 || !is_clear) {
 		mask_buffer = MEM_callocN(sizeof(char) * num_pixels, "Bake Mask");
 		RE_bake_mask_fill(pixel_array, num_pixels, mask_buffer);
 	}
+
+	/* colormanagement conversions */
+	is_float = (ibuf->flags & IB_rectfloat);
+	from_colorspace	= IMB_colormanagement_role_colorspace_name_get(COLOR_ROLE_SCENE_LINEAR);
+
+	if (is_float)
+		to_colorspace = IMB_colormanagement_get_float_colorspace(ibuf);
+	else
+		to_colorspace = IMB_colormanagement_get_rect_colorspace(ibuf);
+
+	if (from_colorspace != to_colorspace)
+		IMB_colormanagement_transform(buffer, ibuf->x, ibuf->y, ibuf->channels, from_colorspace, to_colorspace, false);
 
 	/* populates the ImBuf */
 	if (is_clear) {
@@ -133,7 +145,7 @@ static bool write_internal_bake_pixels(
 		else {
 			IMB_buffer_byte_from_float(
 			        (unsigned char *) ibuf->rect, buffer, ibuf->channels, ibuf->dither,
-			        (is_linear ? IB_PROFILE_LINEAR_RGB : IB_PROFILE_SRGB), IB_PROFILE_LINEAR_RGB,
+			        IB_PROFILE_SRGB, IB_PROFILE_SRGB,
 			        false, ibuf->x, ibuf->y, ibuf->x, ibuf->x);
 		}
 	}
@@ -141,13 +153,11 @@ static bool write_internal_bake_pixels(
 		if (is_float) {
 			IMB_buffer_float_from_float_mask(
 			        ibuf->rect_float, buffer, ibuf->channels,
-			        IB_PROFILE_LINEAR_RGB, IB_PROFILE_LINEAR_RGB, false,
 			        ibuf->x, ibuf->y, ibuf->x, ibuf->y, mask_buffer);
 		}
 		else {
 			IMB_buffer_byte_from_float_mask(
 			        (unsigned char *) ibuf->rect, buffer, ibuf->channels, ibuf->dither,
-			        (is_linear ? IB_PROFILE_LINEAR_RGB : IB_PROFILE_SRGB), IB_PROFILE_LINEAR_RGB,
 			        false, ibuf->x, ibuf->y, ibuf->x, ibuf->x, mask_buffer);
 		}
 	}
@@ -167,8 +177,8 @@ static bool write_internal_bake_pixels(
 
 static bool write_external_bake_pixels(
         const char *filepath, BakePixel pixel_array[], float *buffer,
-        const int width, const int height, bool is_linear, const int margin,
-        ImageFormatData *im_format)
+        const int width, const int height, const int margin,
+        ImageFormatData *im_format, const bool UNUSED(is_noncolor))
 {
 	ImBuf *ibuf = NULL;
 	bool ok = false;
@@ -190,9 +200,14 @@ static bool write_external_bake_pixels(
 		        ibuf->x, ibuf->y, ibuf->x, ibuf->y);
 	}
 	else {
+		const char *from_colorspace = IMB_colormanagement_role_colorspace_name_get(COLOR_ROLE_SCENE_LINEAR);
+		const char *to_colorspace = IMB_colormanagement_get_rect_colorspace(ibuf);
+
+		IMB_colormanagement_transform(buffer, ibuf->x, ibuf->y, ibuf->channels, from_colorspace, to_colorspace, false);
+
 		IMB_buffer_byte_from_float(
 		        (unsigned char *) ibuf->rect, buffer, ibuf->channels, ibuf->dither,
-		        (is_linear ? IB_PROFILE_LINEAR_RGB : IB_PROFILE_SRGB), IB_PROFILE_LINEAR_RGB,
+		        IB_PROFILE_SRGB, IB_PROFILE_SRGB,
 		        false, ibuf->x, ibuf->y, ibuf->x, ibuf->x);
 	}
 
@@ -222,7 +237,7 @@ static bool write_external_bake_pixels(
 	return ok;
 }
 
-static bool is_data_pass(ScenePassType pass_type)
+static bool is_noncolor_pass(ScenePassType pass_type)
 {
 	return ELEM7(pass_type,
 	             SCE_PASS_Z,
@@ -374,7 +389,7 @@ static int bake(Main *bmain, Scene *scene, Object *ob_low, ListBase *selected_ob
 	BakePixel *pixel_array_low = NULL;
 
 	const bool is_save_internal = (save_mode == R_BAKE_SAVE_INTERNAL);
-	const bool is_linear = is_data_pass(pass_type);
+	const bool is_noncolor = is_noncolor_pass(pass_type);
 	const int depth = RE_pass_depth(pass_type);
 
 	bool is_highpoly = false;
@@ -697,7 +712,7 @@ static int bake(Main *bmain, Scene *scene, Object *ob_low, ListBase *selected_ob
 				         pixel_array_low + bk_image->offset,
 				         result + bk_image->offset * depth,
 				         bk_image->width, bk_image->height,
-				         is_linear, margin, is_clear);
+				         margin, is_clear, is_noncolor);
 
 				if (!ok) {
 					BKE_report(reports, RPT_ERROR,
@@ -748,7 +763,7 @@ static int bake(Main *bmain, Scene *scene, Object *ob_low, ListBase *selected_ob
 				        pixel_array_low + bk_image->offset,
 				        result + bk_image->offset * depth,
 				        bk_image->width, bk_image->height,
-				        is_linear, margin, &bake->im_format);
+				        margin, &bake->im_format, is_noncolor);
 
 				if (!ok) {
 					BKE_reportf(reports, RPT_ERROR, "Problem saving baked map in \"%s\".", name);
