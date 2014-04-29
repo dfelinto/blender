@@ -72,6 +72,7 @@
 #include "ED_keyframing.h"
 #include "ED_keyframes_edit.h"
 #include "ED_screen.h"
+#include "ED_object.h"
 
 #include "UI_interface.h"
 #include "UI_resources.h"
@@ -395,11 +396,18 @@ int insert_vert_fcurve(FCurve *fcu, float x, float y, short flag)
 	beztr.vec[2][0] = x + 1.0f;
 	beztr.vec[2][1] = y;
 	beztr.f1 = beztr.f2 = beztr.f3 = SELECT;
-	beztr.h1 = beztr.h2 = U.keyhandles_new; /* use default handle type here */
-	//BEZKEYTYPE(&beztr)= scene->keytype; /* default keyframe type */
 
-	/* use default interpolation mode, with exceptions for int/discrete values */
-	beztr.ipo = U.ipo_new;
+	if (flag & INSERTKEY_NO_USERPREF) {
+		beztr.h1 = beztr.h2 = HD_AUTO_ANIM;
+		beztr.ipo = BEZT_IPO_BEZ;
+	}
+	else {
+		beztr.h1 = beztr.h2 = U.keyhandles_new; /* use default handle type here */
+		//BEZKEYTYPE(&beztr)= scene->keytype; /* default keyframe type */
+
+		/* use default interpolation mode, with exceptions for int/discrete values */
+		beztr.ipo = U.ipo_new;
+	}
 
 	if (fcu->flag & FCURVE_DISCRETE_VALUES)
 		beztr.ipo = BEZT_IPO_CONST;
@@ -1265,6 +1273,8 @@ static int modify_key_op_poll(bContext *C)
 static int insert_key_exec(bContext *C, wmOperator *op)
 {
 	Scene *scene = CTX_data_scene(C);
+	Object *ob = CTX_data_active_object(C);
+	bool ob_edit_mode = false;
 	KeyingSet *ks = NULL;
 	int type = RNA_enum_get(op->ptr, "type");
 	float cfra = (float)CFRA; // XXX for now, don't bother about all the yucky offset crap
@@ -1287,12 +1297,25 @@ static int insert_key_exec(bContext *C, wmOperator *op)
 		BKE_report(op->reports, RPT_ERROR, "No active keying set");
 		return OPERATOR_CANCELLED;
 	}
+
+	/* exit the edit mode to make sure that those object data properties that have been
+	 * updated since the last switching to the edit mode will be keyframed correctly
+	 */
+	if (ob && (ob->mode & OB_MODE_EDIT) != 0 && ANIM_keyingset_find_id(ks, (ID *)ob->data)) {
+		ED_object_toggle_modes(C, OB_MODE_EDIT);
+		ob_edit_mode = true;
+	}
 	
 	/* try to insert keyframes for the channels specified by KeyingSet */
 	success = ANIM_apply_keyingset(C, NULL, NULL, ks, MODIFYKEY_MODE_INSERT, cfra);
 	if (G.debug & G_DEBUG)
 		BKE_reportf(op->reports, RPT_INFO, "Keying set '%s' - successfully added %d keyframes", ks->name, success);
 	
+	/* restore the edit mode if necessary */
+	if (ob_edit_mode) {
+		ED_object_toggle_modes(C, OB_MODE_EDIT);
+	}
+
 	/* report failure or do updates? */
 	if (success == MODIFYKEY_INVALID_CONTEXT) {
 		BKE_report(op->reports, RPT_ERROR, "No suitable context info for active keying set");

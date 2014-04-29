@@ -88,6 +88,8 @@ void NLA_OT_tweakmode_exit(wmOperatorType *ot);
 
 /* --- */
 
+void NLA_OT_previewrange_set(wmOperatorType *ot);
+
 void NLA_OT_view_all(wmOperatorType *ot);
 void NLA_OT_view_selected(wmOperatorType *ot);
 
@@ -109,6 +111,8 @@ void NLA_OT_move_up(wmOperatorType *ot);
 void NLA_OT_move_down(wmOperatorType *ot);
 
 void NLA_OT_action_sync_length(wmOperatorType *ot);
+
+void NLA_OT_make_single_user(wmOperatorType *ot);
 
 void NLA_OT_apply_scale(wmOperatorType *ot);
 void NLA_OT_clear_scale(wmOperatorType *ot);

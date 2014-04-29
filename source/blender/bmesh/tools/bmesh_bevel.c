@@ -2821,6 +2821,7 @@ static BevVert *bevel_vert_construct(BMesh *bm, BevelParams *bp, BMVert *v)
 	 * Want edges to be ordered so that they share faces.
 	 * There may be one or more chains of shared faces broken by
 	 * gaps where there are no faces.
+	 * TODO: Want to ignore wire edges completely for edge beveling.
 	 * TODO: make following work when more than one gap.
 	 */
 
@@ -2838,7 +2839,6 @@ static BevVert *bevel_vert_construct(BMesh *bm, BevelParams *bp, BMVert *v)
 			first_bme = bme;
 		}
 		ntot++;
-
 		BM_BEVEL_EDGE_TAG_DISABLE(bme);
 	}
 	if (!first_bme)
@@ -2849,10 +2849,6 @@ static BevVert *bevel_vert_construct(BMesh *bm, BevelParams *bp, BMVert *v)
 		BM_elem_flag_disable(v, BM_ELEM_TAG);
 		return NULL;
 	}
-
-	/* avoid calling BM_vert_edge_count since we loop over edges already */
-	// ntot = BM_vert_edge_count(v);
-	// BLI_assert(ntot == BM_vert_edge_count(v));
 
 	bv = (BevVert *)BLI_memarena_alloc(bp->mem_arena, (sizeof(BevVert)));
 	bv->v = v;
@@ -2938,6 +2934,11 @@ static BevVert *bevel_vert_construct(BMesh *bm, BevelParams *bp, BMVert *v)
 		}
 	}
 
+	/* now done with tag flag */
+	BM_ITER_ELEM (bme, &iter, v, BM_EDGES_OF_VERT) {
+		BM_BEVEL_EDGE_TAG_DISABLE(bme);
+	}
+
 	/* if edge array doesn't go CCW around vertex from average normal side,
 	 * reverse the array, being careful to reverse face pointers too */
 	if (ntot > 1) {
@@ -3016,7 +3017,6 @@ static BevVert *bevel_vert_construct(BMesh *bm, BevelParams *bp, BMVert *v)
 		e->offset_l = e->offset_l_spec;
 		e->offset_r = e->offset_r_spec;
 
-		BM_BEVEL_EDGE_TAG_DISABLE(e->e);
 		if (e->fprev && e->fnext)
 			e->is_seam = !contig_ldata_across_edge(bm, e->e, e->fprev, e->fnext);
 		else

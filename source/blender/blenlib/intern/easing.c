@@ -38,6 +38,8 @@
 
 #include "BLI_strict_flags.h"
 
+/* blend if (amplitude < fabsf(change) */
+#define USE_ELASTIC_BLEND
 
 float BLI_easing_back_ease_in(float time, float begin, float change, float duration, float overshoot)
 {
@@ -141,73 +143,116 @@ float BLI_easing_cubic_ease_in_out(float time, float begin, float change, float 
 	return change / 2 * (time * time * time + 2) + begin;
 }
 
+#ifdef USE_ELASTIC_BLEND
+/**
+ * When the amplitude is less then the change, we need to blend
+ * \a f when we're close to the crossing point (int time), else we get an ugly sharp falloff.
+ */
+static float elastic_blend(float time, float change, float duration, float amplitude, float s, float f)
+{
+	if (change) {
+		/* Looks like a magic number,
+		 * but this is a part of the sine curve we need to blend from */
+		const float t = fabsf(s);
+		if (amplitude) {
+			f *= amplitude / fabsf(change);
+		}
+		else {
+			f = 0.0f;
+		}
+
+		if (fabsf(time * duration) < t) {
+			float l = fabsf(time * duration) / t;
+			f = (f * l) + (1.0f - l);
+		}
+	}
+
+	return f;
+}
+#endif
+
 float BLI_easing_elastic_ease_in(float time, float begin, float change, float duration, float amplitude, float period)
 {
 	float s;
+	float f = 1.0f;
 
 	if (time == 0.0f)
 		return begin;
 
 	if ((time /= duration) == 1.0f)
 		return begin + change;
-
+	time -= 1.0f;
 	if (!period)
 		period = duration * 0.3f;
-
 	if (!amplitude || amplitude < fabsf(change)) {
-		amplitude = change;
 		s = period / 4;
+#ifdef USE_ELASTIC_BLEND
+		f = elastic_blend(time, change, duration, amplitude, s, f);
+#endif
+		amplitude = change;
 	}
 	else
 		s = period / (2 * (float)M_PI) * asinf(change / amplitude);
 
-	time -= 1.0f;
-	return -(amplitude * powf(2, 10 * time) * sinf((time * duration - s) * (2 * (float)M_PI) / period)) + begin;
+	return (-f * (amplitude * powf(2, 10 * time) * sinf((time * duration - s) * (2 * (float)M_PI) / period))) + begin;
 }
 
 float BLI_easing_elastic_ease_out(float time, float begin, float change, float duration, float amplitude, float period)
 {
 	float s;
+	float f = 1.0f;
 
 	if (time == 0.0f)
 		return begin;
 	if ((time /= duration) == 1.0f)
 		return begin + change;
+	time = -time;
 	if (!period)
 		period = duration * 0.3f;
 	if (!amplitude || amplitude < fabsf(change)) {
-		amplitude = change;
 		s = period / 4;
+#ifdef USE_ELASTIC_BLEND
+		f = elastic_blend(time, change, duration, amplitude, s, f);
+#endif
+		amplitude = change;
 	}
 	else
 		s = period / (2 * (float)M_PI) * asinf(change / amplitude);
 
-	return (amplitude * powf(2, -10 * time) * sinf((time * duration - s) * (2 * (float)M_PI) / period) + change + begin);
+	return (f * (amplitude * powf(2, 10 * time) * sinf((time * duration - s) * (2 * (float)M_PI) / period))) + change + begin;
 }
 
 float BLI_easing_elastic_ease_in_out(float time, float begin, float change, float duration, float amplitude, float period)
 {
 	float s;
+	float f = 1.0f;
 
 	if (time == 0.0f)
 		return begin;
 	if ((time /= duration / 2) == 2.0f)
 		return begin + change;
+	time -= 1.0f;
 	if (!period)
 		period = duration * (0.3f * 1.5f);
 	if (!amplitude || amplitude < fabsf(change)) {
-		amplitude = change;
 		s = period / 4;
+#ifdef USE_ELASTIC_BLEND
+		f = elastic_blend(time, change, duration, amplitude, s, f);
+#endif
+		amplitude = change;
 	}
 	else
 		s = period / (2 * (float)M_PI) * asinf(change / amplitude);
-	if (time < 1.0f) {
-		time -= 1.0f;
-		return -0.5f * (amplitude * powf(2, 10 * time) * sinf((time * duration - s) * (2 * (float)M_PI) / period)) + begin;
-	}
 
-	time -= 1.0f;
-	return amplitude * powf(2, -10 * time) * sinf((time * duration - s) * (2 * (float)M_PI) / period) * 0.5f + change + begin;
+	if (time < 0.0f) {
+		f *= -0.5f;
+		return  (f * (amplitude * powf(2, 10 * time) * sinf((time * duration - s) * (2 * (float)M_PI) / period))) + begin;
+	}
+	else {
+		time = -time;
+		f *= 0.5f;
+		return (f * (amplitude * powf(2, 10 * time) * sinf((time * duration - s) * (2 * (float)M_PI) / period))) + change + begin;
+	}
 }
 
 float BLI_easing_expo_ease_in(float time, float begin, float change, float duration)

@@ -105,6 +105,19 @@
 #include <omp.h>
 #endif
 
+#if defined(__APPLE__) && defined _OPENMP
+#include <sys/sysctl.h>
+
+/* Query how many cores not counting HT aka physical cores we've got. */
+static int system_physical_thread_count(void)
+{
+	int pcount;
+	size_t pcount_len = sizeof(pcount);
+	sysctlbyname("hw.physicalcpu", &pcount, &pcount_len, NULL, 0);
+	return pcount;
+}
+#endif  /* __APPLE__ */
+
 void ED_sculpt_get_average_stroke(Object *ob, float stroke[3])
 {
 	if (ob->sculpt->last_stroke_valid && ob->sculpt->average_stroke_counter > 0) {
@@ -231,7 +244,7 @@ typedef struct StrokeCache {
 	float initial_mouse[2];
 
 	/* Pre-allocated temporary storage used during smoothing */
-	int num_threads;
+	int num_threads, max_threads;
 	float (**tmpgrid_co)[3], (**tmprow_co)[3];
 	float **tmpgrid_mask, **tmprow_mask;
 
@@ -768,7 +781,8 @@ static float calc_overlap(StrokeCache *cache, const char symm, const char axis, 
 	flip_v3_v3(mirror, cache->true_location, symm);
 
 	if (axis != 0) {
-		float mat[4][4] = MAT4_UNITY;
+		float mat[4][4];
+		unit_m4(mat);
 		rotate_m4(mat, axis, angle);
 		mul_m4_v3(mat, mirror);
 	}
@@ -3770,7 +3784,7 @@ static void sculpt_init_mirror_clipping(Object *ob, SculptSession *ss)
 	}
 }
 
-static void sculpt_omp_start(Scene *scene, Sculpt *sd, SculptSession *ss)
+static void sculpt_omp_start(Sculpt *sd, SculptSession *ss)
 {
 	StrokeCache *cache = ss->cache;
 
@@ -3780,14 +3794,18 @@ static void sculpt_omp_start(Scene *scene, Sculpt *sd, SculptSession *ss)
 	 * Justification: Empirically I've found that two threads per
 	 * processor gives higher throughput. */
 	if (sd->flags & SCULPT_USE_OPENMP) {
-		cache->num_threads = BKE_scene_num_omp_threads(scene);
+#if defined(__APPLE__)
+		cache->num_threads = system_physical_thread_count();
+#else
+		cache->num_threads = omp_get_num_procs();
+#endif
 	}
 	else {
 		cache->num_threads = 1;
 	}
-	omp_set_num_threads(cache->num_threads);  /* set user-defined corecount, "AUTO" = physical cores on OSX, logical cores for other OS atm.*/
+	cache->max_threads = omp_get_max_threads();
+	omp_set_num_threads(cache->num_threads);
 #else
-	(void)scene;
 	(void)sd;
 	cache->num_threads = 1;
 #endif
@@ -3817,6 +3835,9 @@ static void sculpt_omp_start(Scene *scene, Sculpt *sd, SculptSession *ss)
 
 static void sculpt_omp_done(SculptSession *ss)
 {
+#ifdef _OPENMP
+	omp_set_num_threads(ss->cache->max_threads);
+#endif
 	if (ss->multires) {
 		int i;
 
@@ -4005,7 +4026,7 @@ static void sculpt_update_cache_invariants(bContext *C, Sculpt *sd, SculptSessio
 	cache->previous_vertex_rotation = 0;
 	cache->init_dir_set = false;
 
-	sculpt_omp_start(scene, sd, ss);
+	sculpt_omp_start(sd, ss);
 }
 
 static void sculpt_update_brush_delta(UnifiedPaintSettings *ups, Object *ob, Brush *brush)

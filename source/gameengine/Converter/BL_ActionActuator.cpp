@@ -259,7 +259,8 @@ bool BL_ActionActuator::Update(double curtime, bool frame)
 
 		if (m_playtype == ACT_ACTION_PINGPONG)
 			m_flag ^= ACT_FLAG_REVERSE;
-		return false;
+		else
+			return false;
 	}
 	
 	// If a different action is playing, we've been overruled and are no longer active

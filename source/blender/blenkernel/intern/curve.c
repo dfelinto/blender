@@ -701,19 +701,13 @@ void BKE_nurb_minmax(Nurb *nu, bool use_radius, float min[3], float max[3])
 /* be sure to call makeknots after this */
 void BKE_nurb_points_add(Nurb *nu, int number)
 {
-	BPoint *tmp = nu->bp;
+	BPoint *bp;
 	int i;
-	nu->bp = (BPoint *)MEM_mallocN((nu->pntsu + number) * sizeof(BPoint), "rna_Curve_spline_points_add");
 
-	if (tmp) {
-		memmove(nu->bp, tmp, nu->pntsu * sizeof(BPoint));
-		MEM_freeN(tmp);
-	}
+	nu->bp = MEM_recallocN(nu->bp, (nu->pntsu + number) * sizeof(BPoint));
 
-	memset(nu->bp + nu->pntsu, 0, number * sizeof(BPoint));
-
-	for (i = 0, tmp = nu->bp + nu->pntsu; i < number; i++, tmp++) {
-		tmp->radius = 1.0f;
+	for (i = 0, bp = &nu->bp[nu->pntsu]; i < number; i++, bp++) {
+		bp->radius = 1.0f;
 	}
 
 	nu->pntsu += number;
@@ -721,19 +715,13 @@ void BKE_nurb_points_add(Nurb *nu, int number)
 
 void BKE_nurb_bezierPoints_add(Nurb *nu, int number)
 {
-	BezTriple *tmp = nu->bezt;
+	BezTriple *bezt;
 	int i;
-	nu->bezt = (BezTriple *)MEM_mallocN((nu->pntsu + number) * sizeof(BezTriple), "rna_Curve_spline_points_add");
 
-	if (tmp) {
-		memmove(nu->bezt, tmp, nu->pntsu * sizeof(BezTriple));
-		MEM_freeN(tmp);
-	}
+	nu->bezt = MEM_recallocN(nu->bp, (nu->pntsu + number) * sizeof(BezTriple));
 
-	memset(nu->bezt + nu->pntsu, 0, number * sizeof(BezTriple));
-
-	for (i = 0, tmp = nu->bezt + nu->pntsu; i < number; i++, tmp++) {
-		tmp->radius = 1.0f;
+	for (i = 0, bezt = &nu->bezt[nu->pntsu]; i < number; i++, bezt++) {
+		bezt->radius = 1.0f;
 	}
 
 	nu->pntsu += number;
@@ -2912,6 +2900,7 @@ static void calchandleNurb_intern(BezTriple *bezt, BezTriple *prev, BezTriple *n
 	float *p1, *p2, *p3, pt[3];
 	float dvec_a[3], dvec_b[3];
 	float len, len_a, len_b;
+	float orig_len_ratio;
 	const float eps = 1e-5;
 
 	if (bezt->h1 == 0 && bezt->h2 == 0) {
@@ -2956,6 +2945,7 @@ static void calchandleNurb_intern(BezTriple *bezt, BezTriple *prev, BezTriple *n
 	if (len_a == 0.0f) len_a = 1.0f;
 	if (len_b == 0.0f) len_b = 1.0f;
 
+	orig_len_ratio = len_a / len_b;
 
 	if (ELEM(bezt->h1, HD_AUTO, HD_AUTO_ANIM) || ELEM(bezt->h2, HD_AUTO, HD_AUTO_ANIM)) {    /* auto */
 		float tvec[3];
@@ -3016,7 +3006,7 @@ static void calchandleNurb_intern(BezTriple *bezt, BezTriple *prev, BezTriple *n
 					if ( (ydiff1 <= 0.0f && ydiff2 <= 0.0f) || (ydiff1 >= 0.0f && ydiff2 >= 0.0f) ) {
 						bezt->vec[2][1] = bezt->vec[1][1];
 					}
-					else { /* andles should not be beyond y coord of two others */
+					else { /* handles should not be beyond y coord of two others */
 						if (ydiff1 <= 0.0f) {
 							if (next->vec[1][1] < bezt->vec[2][1]) {
 								bezt->vec[2][1] = next->vec[1][1];
@@ -3092,15 +3082,11 @@ static void calchandleNurb_intern(BezTriple *bezt, BezTriple *prev, BezTriple *n
 
 	len_a = len_v3v3(p2, p2_h1);
 	len_b = len_v3v3(p2, p2_h2);
-	if (len_a == 0.0f)
-		len_a = 1.0f;
-	if (len_b == 0.0f)
-		len_b = 1.0f;
 
 	if (bezt->f1 & SELECT) { /* order of calculation */
 		if (ELEM(bezt->h2, HD_ALIGN, HD_ALIGN_DOUBLESIDE)) { /* aligned */
 			if (len_a > eps) {
-				len = len_b / len_a;
+				len = 1.0f / orig_len_ratio;
 				p2_h2[0] = p2[0] + len * (p2[0] - p2_h1[0]);
 				p2_h2[1] = p2[1] + len * (p2[1] - p2_h1[1]);
 				p2_h2[2] = p2[2] + len * (p2[2] - p2_h1[2]);
@@ -3108,7 +3094,7 @@ static void calchandleNurb_intern(BezTriple *bezt, BezTriple *prev, BezTriple *n
 		}
 		if (ELEM(bezt->h1, HD_ALIGN, HD_ALIGN_DOUBLESIDE)) {
 			if (len_b > eps) {
-				len = len_a / len_b;
+				len = orig_len_ratio;
 				p2_h1[0] = p2[0] + len * (p2[0] - p2_h2[0]);
 				p2_h1[1] = p2[1] + len * (p2[1] - p2_h2[1]);
 				p2_h1[2] = p2[2] + len * (p2[2] - p2_h2[2]);
@@ -3118,7 +3104,7 @@ static void calchandleNurb_intern(BezTriple *bezt, BezTriple *prev, BezTriple *n
 	else {
 		if (ELEM(bezt->h1, HD_ALIGN, HD_ALIGN_DOUBLESIDE)) {
 			if (len_b > eps) {
-				len = len_a / len_b;
+				len = orig_len_ratio;
 				p2_h1[0] = p2[0] + len * (p2[0] - p2_h2[0]);
 				p2_h1[1] = p2[1] + len * (p2[1] - p2_h2[1]);
 				p2_h1[2] = p2[2] + len * (p2[2] - p2_h2[2]);
@@ -3126,7 +3112,7 @@ static void calchandleNurb_intern(BezTriple *bezt, BezTriple *prev, BezTriple *n
 		}
 		if (ELEM(bezt->h2, HD_ALIGN, HD_ALIGN_DOUBLESIDE)) {   /* aligned */
 			if (len_a > eps) {
-				len = len_b / len_a;
+				len = 1.0f / orig_len_ratio;
 				p2_h2[0] = p2[0] + len * (p2[0] - p2_h1[0]);
 				p2_h2[1] = p2[1] + len * (p2[1] - p2_h1[1]);
 				p2_h2[2] = p2[2] + len * (p2[2] - p2_h1[2]);

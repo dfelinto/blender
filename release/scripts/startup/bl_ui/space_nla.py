@@ -80,6 +80,7 @@ class NLA_MT_view(Menu):
         layout.separator()
         layout.operator("anim.previewrange_set")
         layout.operator("anim.previewrange_clear")
+        layout.operator("nla.previewrange_set")
 
         layout.separator()
         layout.operator("nla.view_all")
@@ -132,7 +133,8 @@ class NLA_MT_edit(Menu):
         layout.operator_menu_enum("nla.snap", "type", text="Snap")
 
         layout.separator()
-        layout.operator("nla.duplicate")
+        layout.operator("nla.duplicate", text="Duplicate")
+        layout.operator("nla.duplicate", text="Linked Duplicate").linked = True
         layout.operator("nla.split")
         layout.operator("nla.delete")
 
@@ -143,6 +145,9 @@ class NLA_MT_edit(Menu):
         layout.operator("nla.apply_scale")
         layout.operator("nla.clear_scale")
         layout.operator("nla.action_sync_length").active = False
+
+        layout.separator()
+        layout.operator("nla.make_single_user")
 
         layout.separator()
         layout.operator("nla.swap")
