@@ -738,7 +738,7 @@ static int actionzone_modal(bContext *C, wmOperator *op, const wmEvent *event)
 			/* gesture is large enough? */
 			if (is_gesture) {
 				/* second area, for join when (sa1 != sa2) */
-				sad->sa2 = screen_areahascursor(CTX_wm_screen(C), event->x, event->y);
+				sad->sa2 = screen_areahascursor(sc, event->x, event->y);
 				/* apply sends event */
 				actionzone_apply(C, op, sad->az->type);
 				actionzone_exit(op);
@@ -1999,7 +1999,7 @@ static int frame_offset_exec(bContext *C, wmOperator *op)
 	
 	sound_seek_scene(bmain, scene);
 
-	WM_event_add_notifier(C, NC_SCENE | ND_FRAME, CTX_data_scene(C));
+	WM_event_add_notifier(C, NC_SCENE | ND_FRAME, scene);
 	
 	return OPERATOR_FINISHED;
 }
@@ -2889,6 +2889,20 @@ static int region_quadview_exec(bContext *C, wmOperator *op)
 		if (sa->spacetype == SPACE_VIEW3D) {
 			ARegion *ar_iter;
 			RegionView3D *rv3d = ar->regiondata;
+
+			/* if this is a locked view, use settings from 'User' view */
+			if (rv3d->viewlock) {
+				View3D *v3d_user;
+				ARegion *ar_user;
+
+				if (ED_view3d_context_user_region(C, &v3d_user, &ar_user)) {
+					if (ar != ar_user) {
+						SWAP(void *, ar->regiondata, ar_user->regiondata);
+						rv3d = ar->regiondata;
+					}
+				}
+			}
+
 			rv3d->viewlock_quad = RV3D_VIEWLOCK_INIT;
 			rv3d->viewlock = 0;
 			rv3d->rflag &= ~RV3D_CLIPPING;
@@ -2948,9 +2962,13 @@ static int region_quadview_exec(bContext *C, wmOperator *op)
 			region_quadview_init_rv3d(sa, ar,              viewlock, ED_view3d_lock_view_from_index(index_qsplit++), RV3D_ORTHO);
 			region_quadview_init_rv3d(sa, (ar = ar->next), viewlock, ED_view3d_lock_view_from_index(index_qsplit++), RV3D_ORTHO);
 			region_quadview_init_rv3d(sa, (ar = ar->next), viewlock, ED_view3d_lock_view_from_index(index_qsplit++), RV3D_ORTHO);
+			/* forcing camera is distracting */
+#if 0
 			if (v3d->camera) region_quadview_init_rv3d(sa, (ar = ar->next), 0, RV3D_VIEW_CAMERA, RV3D_CAMOB);
 			else             region_quadview_init_rv3d(sa, (ar = ar->next), 0, RV3D_VIEW_USER,   RV3D_PERSP);
-
+#else
+			(void)v3d;
+#endif
 		}
 		ED_area_tag_redraw(sa);
 		WM_event_add_notifier(C, NC_SCREEN | NA_EDITED, NULL);
@@ -3075,7 +3093,7 @@ static int header_toggle_menus_exec(bContext *C, wmOperator *UNUSED(op))
 
 	sa->flag = sa->flag ^ HEADER_NO_PULLDOWN;
 
-	ED_area_tag_redraw(CTX_wm_area(C));
+	ED_area_tag_redraw(sa);
 	WM_event_add_notifier(C, NC_SCREEN | NA_EDITED, NULL);	
 
 	return OPERATOR_FINISHED;
