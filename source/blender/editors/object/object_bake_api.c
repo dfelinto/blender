@@ -646,15 +646,16 @@ static int bake(Main *bmain, Scene *scene, Object *ob_low, ListBase *selected_ob
 			ok = RE_bake_internal(re, ob_low, pixel_array_low, num_pixels, depth, pass_type, result);
 	}
 
-	/* normal space conversion */
+	/* normal space conversion
+	 * the normals are expected to be in world space, +X +Y +Z */
 	if (pass_type == SCE_PASS_NORMAL) {
 		switch (normal_space) {
 			case R_BAKE_SPACE_WORLD:
 			{
 				/* Cycles internal format */
-				if ((normal_swizzle[0] == R_BAKE_NEGX) &&
-				    (normal_swizzle[1] == R_BAKE_NEGY) &&
-				    (normal_swizzle[2] == R_BAKE_NEGZ))
+				if ((normal_swizzle[0] == R_BAKE_POSX) &&
+				    (normal_swizzle[1] == R_BAKE_POSY) &&
+				    (normal_swizzle[2] == R_BAKE_POSZ))
 				{
 					break;
 				}
