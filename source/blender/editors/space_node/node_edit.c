@@ -32,30 +32,24 @@
 #include "MEM_guardedalloc.h"
 
 #include "DNA_action_types.h"
-#include "DNA_anim_types.h"
 #include "DNA_lamp_types.h"
 #include "DNA_material_types.h"
 #include "DNA_node_types.h"
-#include "DNA_object_types.h"
 #include "DNA_text_types.h"
 #include "DNA_world_types.h"
 
 #include "BLI_math.h"
 #include "BLI_blenlib.h"
 
-#include "BKE_blender.h"
 #include "BKE_context.h"
 #include "BKE_depsgraph.h"
 #include "BKE_global.h"
 #include "BKE_image.h"
 #include "BKE_library.h"
 #include "BKE_main.h"
-#include "BKE_material.h"
 #include "BKE_node.h"
-#include "BKE_paint.h"
 #include "BKE_report.h"
 #include "BKE_scene.h"
-#include "BKE_texture.h"
 
 #include "RE_engine.h"
 #include "RE_pipeline.h"
@@ -257,7 +251,6 @@ static void compo_startjob(void *cjv, short *stop, short *do_update, float *prog
 	ntree->udh = cj;
 
 	// XXX BIF_store_spare();
-	
 	/* 1 is do_previews */
 	ntreeCompositExecTree(cj->scene, ntree, &cj->scene->r, false, true, &scene->view_settings, &scene->display_settings);
 
@@ -278,6 +271,7 @@ void ED_node_composite_job(const bContext *C, struct bNodeTree *nodetree, Scene 
 {
 	wmJob *wm_job;
 	CompoJob *cj;
+	Scene *scene = CTX_data_scene(C);
 
 	/* to fix bug: [#32272] */
 	if (G.is_rendering) {
@@ -288,12 +282,14 @@ void ED_node_composite_job(const bContext *C, struct bNodeTree *nodetree, Scene 
 	G.is_break = false;
 #endif
 
+	BKE_image_backup_render(scene, BKE_image_verify_viewer(IMA_TYPE_R_RESULT, "Render Result"));
+
 	wm_job = WM_jobs_get(CTX_wm_manager(C), CTX_wm_window(C), scene_owner, "Compositing",
 	                     WM_JOB_EXCL_RENDER | WM_JOB_PROGRESS, WM_JOB_TYPE_COMPOSITE);
 	cj = MEM_callocN(sizeof(CompoJob), "compo job");
 
 	/* customdata for preview thread */
-	cj->scene = CTX_data_scene(C);
+	cj->scene = scene;
 	cj->ntree = nodetree;
 	cj->recalc_flags = compo_get_recalc_flags(C);
 

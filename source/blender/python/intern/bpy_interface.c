@@ -37,13 +37,16 @@
 
 #include <Python.h>
 
+#ifdef WIN32
+#  include "BLI_math_base.h"  /* finite */
+#endif
+
 #include "MEM_guardedalloc.h"
 
 #include "BLI_utildefines.h"
 #include "BLI_path_util.h"
 #include "BLI_fileops.h"
 #include "BLI_listbase.h"
-#include "BLI_math_base.h"
 #include "BLI_string.h"
 #include "BLI_string_utf8.h"
 #include "BLI_threads.h"
@@ -58,7 +61,6 @@
 #include "bpy_traceback.h"
 #include "bpy_intern_string.h"
 
-#include "DNA_space_types.h"
 #include "DNA_text_types.h"
 
 #include "BKE_context.h"
@@ -255,11 +257,7 @@ void BPY_python_start(int argc, const char **argv)
 	 * an error, this is highly annoying, another stumbling block for devs,
 	 * so use a more relaxed error handler and enforce utf-8 since the rest of
 	 * blender is utf-8 too - campbell */
-
-	/* XXX, update: this is unreliable! 'PYTHONIOENCODING' is ignored in MS-Windows
-	 * when dynamically linked, see: [#31555] for details.
-	 * Python doesn't expose a good way to set this. */
-	BLI_setenv("PYTHONIOENCODING", "utf-8:surrogateescape");
+	Py_SetStandardStreamEncoding("utf-8", "surrogateescape");
 
 	/* Update, Py3.3 resolves attempting to parse non-existing header */
 #if 0
@@ -274,24 +272,6 @@ void BPY_python_start(int argc, const char **argv)
 	Py_FrozenFlag = 1;
 
 	Py_Initialize();
-
-	/* THIS IS BAD: see http://bugs.python.org/issue16129 */
-	/* this clobbers the stdout on exit (no 'MEM_printmemlist_stats') */
-#if 0
-	/* until python provides a reliable way to set the env var */
-	PyRun_SimpleString("import sys, io\n"
-	                   "sys.__backup_stdio__ = sys.__stdout__, sys.__stderr__\n"  /* else we loose the FD's [#32720] */
-	                   "sys.__stdout__ = sys.stdout = io.TextIOWrapper(io.open(sys.stdout.fileno(), 'wb', -1), "
-	                   "encoding='utf-8', errors='surrogateescape', newline='\\n', line_buffering=True)\n"
-	                   "sys.__stderr__ = sys.stderr = io.TextIOWrapper(io.open(sys.stderr.fileno(), 'wb', -1), "
-	                   "encoding='utf-8', errors='surrogateescape', newline='\\n', line_buffering=True)\n");
-	if (PyErr_Occurred()) {
-		PyErr_Print();
-		PyErr_Clear();
-	}
-#endif
-	/* end the baddness */
-
 
 	// PySys_SetArgv(argc, argv);  /* broken in py3, not a huge deal */
 	/* sigh, why do python guys not have a (char **) version anymore? */
@@ -463,11 +443,16 @@ static int python_script_exec(bContext *C, const char *fn, struct Text *text,
 		bpy_text_filename_get(fn_dummy, sizeof(fn_dummy), text);
 
 		if (text->compiled == NULL) {   /* if it wasn't already compiled, do it now */
-			char *buf = txt_to_buf(text);
+			char *buf;
+			PyObject *fn_dummy_py;
 
-			text->compiled = Py_CompileString(buf, fn_dummy, Py_file_input);
+			fn_dummy_py = PyC_UnicodeFromByte(fn_dummy);
 
+			buf = txt_to_buf(text);
+			text->compiled = Py_CompileStringObject(buf, fn_dummy_py, Py_file_input, NULL, -1);
 			MEM_freeN(buf);
+
+			Py_DECREF(fn_dummy_py);
 
 			if (PyErr_Occurred()) {
 				if (do_jump) {

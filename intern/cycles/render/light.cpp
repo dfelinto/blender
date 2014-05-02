@@ -150,7 +150,6 @@ void LightManager::device_update_distribution(Device *device, DeviceScene *dscen
 	size_t num_lights = scene->lights.size();
 	size_t num_background_lights = 0;
 	size_t num_triangles = 0;
-	size_t num_curve_segments = 0;
 
 	foreach(Object *object, scene->objects) {
 		Mesh *mesh = object->mesh;
@@ -185,7 +184,7 @@ void LightManager::device_update_distribution(Device *device, DeviceScene *dscen
 		}
 	}
 
-	size_t num_distribution = num_triangles + num_curve_segments;
+	size_t num_distribution = num_triangles;
 	num_distribution += num_lights;
 
 	/* emission area */

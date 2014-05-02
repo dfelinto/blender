@@ -32,24 +32,15 @@
 #include <math.h>
 #include <string.h>
 
-#ifndef WIN32
-#include <unistd.h>
-#else
-#include <io.h>
-#endif
-#include <sys/types.h>
-
 #include "MEM_guardedalloc.h"
 
 #include "BLI_blenlib.h"
 #include "BLI_math.h"
 #include "BLI_utildefines.h"
-#include "BLI_threads.h"
 
 #include "BLF_translation.h"
 
 #include "DNA_scene_types.h"
-#include "DNA_userdef_types.h"
 
 #include "BKE_context.h"
 #include "BKE_global.h"
@@ -57,7 +48,6 @@
 #include "BKE_sequencer.h"
 #include "BKE_report.h"
 #include "BKE_sound.h"
-#include "BKE_movieclip.h"
 
 #include "IMB_imbuf.h"
 

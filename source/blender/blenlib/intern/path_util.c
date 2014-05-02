@@ -31,13 +31,10 @@
  *  \ingroup bli
  */
 
-
 #include <ctype.h>
 #include <string.h>
 #include <stdlib.h>
 #include <assert.h>
-
-#include "MEM_guardedalloc.h"
 
 #include "DNA_listBase.h"
 
@@ -53,6 +50,8 @@
 #include "GHOST_Path-api.h"
 
 #ifdef WIN32
+#  include "MEM_guardedalloc.h"
+
 #  include "utf_winfunc.h"
 #  include "utfconv.h"
 #  include <io.h>

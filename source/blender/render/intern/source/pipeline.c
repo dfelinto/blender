@@ -35,7 +35,6 @@
 #include <stdlib.h>
 #include <stddef.h>
 
-#include "DNA_group_types.h"
 #include "DNA_image_types.h"
 #include "DNA_node_types.h"
 #include "DNA_object_types.h"
@@ -80,7 +79,6 @@
 #include "RE_pipeline.h"
 
 #ifdef WITH_FREESTYLE
-#  include "BKE_library.h"
 #  include "FRS_freestyle.h"
 #endif
 
@@ -144,6 +142,7 @@ static int thread_break(void *UNUSED(arg))
 /* default callbacks, set in each new render */
 static void result_nothing(void *UNUSED(arg), RenderResult *UNUSED(rr)) {}
 static void result_rcti_nothing(void *UNUSED(arg), RenderResult *UNUSED(rr), volatile struct rcti *UNUSED(rect)) {}
+static void current_scene_nothing(void *UNUSED(arg), Scene *UNUSED(scene)) {}
 static void stats_nothing(void *UNUSED(arg), RenderStats *UNUSED(rs)) {}
 static void float_nothing(void *UNUSED(arg), float UNUSED(val)) {}
 static int default_break(void *UNUSED(arg)) { return G.is_break == true; }
@@ -395,6 +394,7 @@ void RE_InitRenderCB(Render *re)
 	re->display_init = result_nothing;
 	re->display_clear = result_nothing;
 	re->display_update = result_rcti_nothing;
+	re->current_scene_update = current_scene_nothing;
 	re->progress = float_nothing;
 	re->test_break = default_break;
 	if (G.background)
@@ -738,6 +738,11 @@ void RE_display_update_cb(Render *re, void *handle, void (*f)(void *handle, Rend
 {
 	re->display_update = f;
 	re->duh = handle;
+}
+void RE_current_scene_update_cb(Render *re, void *handle, void (*f)(void *handle, Scene *scene))
+{
+	re->current_scene_update = f;
+	re->suh = handle;
 }
 void RE_stats_draw_cb(Render *re, void *handle, void (*f)(void *handle, RenderStats *rs))
 {
@@ -1190,6 +1195,8 @@ static void do_render_3d(Render *re)
 {
 	int cfra_backup;
 
+	re->current_scene_update(re->suh, re->scene);
+
 	/* try external */
 	if (RE_engine_render(re, 0))
 		return;
@@ -1595,6 +1602,8 @@ static void render_scene(Render *re, Scene *sce, int cfra)
 	resc->tbh = re->tbh;
 	resc->stats_draw = re->stats_draw;
 	resc->sdh = re->sdh;
+	resc->current_scene_update = re->current_scene_update;
+	resc->suh = re->suh;
 	
 	do_render_fields_blur_3d(resc);
 }
@@ -2295,6 +2304,8 @@ static void do_render_seq(Render *re)
 /* main loop: doing sequence + fields + blur + 3d render + compositing */
 static void do_render_all_options(Render *re)
 {
+	re->current_scene_update(re->suh, re->scene);
+
 	BKE_scene_camera_switch_update(re->scene);
 
 	re->i.starttime = PIL_check_seconds_timer();

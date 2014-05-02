@@ -32,7 +32,6 @@
 #include "DNA_camera_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_object_types.h"
-#include "DNA_lamp_types.h"
 
 #include "MEM_guardedalloc.h"
 
@@ -52,7 +51,6 @@
 #include "BKE_main.h"
 #include "BKE_report.h"
 #include "BKE_scene.h"
-#include "BKE_screen.h"
 
 #include "BIF_gl.h"
 #include "BIF_glutil.h"
@@ -1409,6 +1407,11 @@ static int localview_exec(bContext *C, wmOperator *op)
 	if (changed) {
 		DAG_id_type_tag(bmain, ID_OB);
 		ED_area_tag_redraw(sa);
+
+		/* unselected objects become selected when exiting */
+		if (v3d->localvd == NULL) {
+			WM_event_add_notifier(C, NC_SCENE | ND_OB_SELECT, scene);
+		}
 
 		return OPERATOR_FINISHED;
 	}

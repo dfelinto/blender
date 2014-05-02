@@ -42,9 +42,7 @@
 #include "DNA_image_types.h"
 #include "DNA_movieclip_types.h"
 #include "DNA_scene_types.h"
-#include "DNA_screen_types.h"
 #include "DNA_space_types.h"
-#include "DNA_windowmanager_types.h"
 
 #include "IMB_filter.h"
 #include "IMB_imbuf.h"
@@ -66,7 +64,6 @@
 #include "BKE_colortools.h"
 #include "BKE_context.h"
 #include "BKE_image.h"
-#include "BKE_utildefines.h"
 #include "BKE_main.h"
 
 #include "RNA_define.h"
@@ -2779,21 +2776,27 @@ void IMB_partial_display_buffer_update(ImBuf *ibuf, const float *linear_buffer, 
 		ColormanageProcessor *cm_processor = NULL;
 		bool skip_transform = false;
 
-		/* byte buffer is assumed to be in imbuf's rect space, so if byte buffer
+		/* Byte buffer is assumed to be in imbuf's rect space, so if byte buffer
 		 * is known we could skip display->linear->display conversion in case
-		 * display color space matches imbuf's rect space
+		 * display color space matches imbuf's rect space.
+		 *
+		 * But if there's a float buffer it's likely operation was performed on
+		 * it first and byte buffer is likely to be out of date here.
 		 */
-		if (byte_buffer != NULL)
+		if (linear_buffer == NULL && byte_buffer != NULL) {
 			skip_transform = is_ibuf_rect_in_display_space(ibuf, view_settings, display_settings);
+		}
 
-		if (!skip_transform)
+		if (!skip_transform) {
 			cm_processor = IMB_colormanagement_display_processor_new(view_settings, display_settings);
+		}
 
 		partial_buffer_update_rect(ibuf, display_buffer, linear_buffer, byte_buffer, buffer_width, stride,
 		                           offset_x, offset_y, cm_processor, xmin, ymin, xmax, ymax);
 
-		if (cm_processor)
+		if (cm_processor) {
 			IMB_colormanagement_processor_free(cm_processor);
+		}
 
 		IMB_display_buffer_release(cache_handle);
 	}

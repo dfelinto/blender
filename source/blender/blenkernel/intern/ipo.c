@@ -60,7 +60,6 @@
 #include "DNA_world_types.h"
 #include "DNA_object_types.h"
 
-#include "BLI_math.h" /* windows needs for M_PI */
 #include "BLI_blenlib.h"
 #include "BLI_dynstr.h"
 #include "BLI_utildefines.h"
@@ -77,6 +76,10 @@
 #include "BKE_sequencer.h"
 
 #include "MEM_guardedalloc.h"
+
+#ifdef WIN32
+#  include "BLI_math_base.h"  /* M_PI */
+#endif
 
 /* *************************************************** */
 /* Old-Data Freeing Tools */

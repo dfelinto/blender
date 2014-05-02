@@ -5586,6 +5586,14 @@ void ui_panel_menu(bContext *C, ARegion *ar, Panel *pa)
 		char tmpstr[80];
 		BLI_snprintf(tmpstr, sizeof(tmpstr), "%s" UI_SEP_CHAR_S "%s", IFACE_("Pin"), IFACE_("Shift+Left Mouse"));
 		uiItemR(layout, &ptr, "use_pin", 0, tmpstr, ICON_NONE);
+
+		/* evil, force shortcut flag */
+		{
+			uiBlock *block = uiLayoutGetBlock(layout);
+			uiBut *but = block->buttons.last;
+			but->flag |= UI_BUT_HAS_SEP_CHAR;
+		}
+
 	}
 	uiPupMenuEnd(C, pup);
 }
@@ -7711,7 +7719,7 @@ static int ui_handle_menu_event(
 
 	/* check if mouse is inside block */
 	inside = BLI_rctf_isect_pt(&block->rect, mx, my);
-	inside_title = inside && ((my + (UI_UNIT_Y * 1.5f)) > block->rect.xmax);
+	inside_title = inside && ((my + (UI_UNIT_Y * 1.5f)) > block->rect.ymax);
 
 	/* if there's an active modal button, don't check events or outside, except for search menu */
 	but = ui_but_find_activated(ar);
@@ -7728,11 +7736,7 @@ static int ui_handle_menu_event(
 				sub_v2_v2v2_int(mdiff, &event->x, menu->grab_xy_prev);
 				copy_v2_v2_int(menu->grab_xy_prev, &event->x);
 
-				BLI_rcti_translate(&ar->winrct, UNPACK2(mdiff));
-
-				ED_region_update_rect(C, ar);
-
-				ED_region_tag_redraw(ar);
+				ui_popup_translate(C, ar, mdiff);
 			}
 
 			return retval;

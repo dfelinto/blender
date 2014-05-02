@@ -38,10 +38,6 @@
 #  include <unistd.h> // for read close
 #else
 #  include <io.h> // for open close read
-#  define open _open
-#  define read _read
-#  define close _close
-#  define write _write
 #endif
 
 #include <stdlib.h>
@@ -56,12 +52,9 @@
 #include "DNA_userdef_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
-#include "DNA_sequence_types.h"
-#include "DNA_sound_types.h"
 #include "DNA_windowmanager_types.h"
 
 #include "BLI_blenlib.h"
-#include "BLI_dynstr.h"
 #include "BLI_utildefines.h"
 #include "BLI_callbacks.h"
 
@@ -73,7 +66,6 @@
 #include "BKE_brush.h"
 #include "BKE_context.h"
 #include "BKE_depsgraph.h"
-#include "BKE_displist.h"
 #include "BKE_global.h"
 #include "BKE_idprop.h"
 #include "BKE_image.h"

@@ -41,11 +41,6 @@
 
 #include <time.h>
 
-#ifdef _WIN32
-#  define open _open
-#  define close _close
-#endif
-
 #include "MEM_guardedalloc.h"
 
 #include "DNA_constraint_types.h"
@@ -65,7 +60,6 @@
 #include "BLI_threads.h"
 
 #include "BKE_animsys.h"
-#include "BKE_constraint.h"
 #include "BKE_colortools.h"
 #include "BKE_library.h"
 #include "BKE_global.h"
@@ -74,7 +68,6 @@
 #include "BKE_node.h"
 #include "BKE_image.h"  /* openanim */
 #include "BKE_tracking.h"
-#include "BKE_sequencer.h"
 
 #include "IMB_colormanagement.h"
 #include "IMB_imbuf_types.h"

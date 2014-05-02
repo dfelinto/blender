@@ -44,9 +44,7 @@
 #include "DNA_material_types.h"
 #include "DNA_meta_types.h"
 #include "DNA_particle_types.h"
-#include "DNA_rigidbody_types.h"
 #include "DNA_scene_types.h"
-#include "DNA_speaker_types.h"
 #include "DNA_world_types.h"
 #include "DNA_object_types.h"
 #include "DNA_vfont_types.h"
@@ -1719,6 +1717,17 @@ static void single_object_users(Main *bmain, Scene *scene, View3D *v3d, int flag
 				/* base gets copy of object */
 				obn = BKE_object_copy(ob);
 				base->object = obn;
+
+				if (copy_groups) {
+					if (ob->flag & OB_FROMGROUP) {
+						obn->flag |= OB_FROMGROUP;
+					}
+				}
+				else {
+					/* copy already clears */
+				}
+				base->flag = obn->flag;
+
 				ob->id.us--;
 			}
 		}

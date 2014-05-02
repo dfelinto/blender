@@ -575,9 +575,6 @@ KX_GameObject* KX_Scene::AddNodeReplicaObject(class SG_IObject* node, class CVal
 		newctrl->SetNewClientInfo(newobj->getClientInfo());
 		newobj->SetPhysicsController(newctrl, newobj->IsDynamic());
 		newctrl->PostProcessReplica(motionstate, parentctrl);
-
-		if (parent)
-			parent->Release();
 	}
 
 	return newobj;
@@ -758,8 +755,6 @@ void KX_Scene::DupliGroupRecurse(CValue* obj, int level)
 		KX_GameObject *parent = gameobj->GetParent();
 		if (parent != NULL)
 		{
-			parent->Release(); // GetParent() increased the refcount
-
 			// this object is not a top parent. Either it is the child of another
 			// object in the group and it will be added automatically when the parent
 			// is added. Or it is the child of an object outside the group and the group
@@ -1742,7 +1737,7 @@ void KX_Scene::RenderFonts()
 {
 	list<KX_FontObject*>::iterator it = m_fonts.begin();
 	while (it != m_fonts.end()) {
-		(*it)->DrawText();
+		(*it)->DrawFontText();
 		++it;
 	}
 }
@@ -1869,7 +1864,7 @@ short KX_Scene::GetAnimationFPS()
 	return m_blenderScene->r.frs_sec;
 }
 
-static void MergeScene_LogicBrick(SCA_ILogicBrick* brick, KX_Scene *to)
+static void MergeScene_LogicBrick(SCA_ILogicBrick* brick, KX_Scene *from, KX_Scene *to)
 {
 	SCA_LogicManager *logicmgr= to->GetLogicManager();
 
@@ -1879,7 +1874,10 @@ static void MergeScene_LogicBrick(SCA_ILogicBrick* brick, KX_Scene *to)
 	/* near sensors have physics controllers */
 	KX_TouchSensor *touch_sensor = dynamic_cast<class KX_TouchSensor *>(brick);
 	if (touch_sensor) {
+		KX_TouchEventManager *tmgr = (KX_TouchEventManager*)from->GetLogicManager()->FindEventManager(SCA_EventManager::TOUCH_EVENTMGR);
+		touch_sensor->UnregisterSumo(tmgr);
 		touch_sensor->GetPhysicsController()->SetPhysicsEnvironment(to->GetPhysicsEnvironment());
+		touch_sensor->RegisterSumo(tmgr);
 	}
 
 	// If we end up replacing a KX_TouchEventManager, we need to make sure
@@ -1917,7 +1915,7 @@ static void MergeScene_GameObject(KX_GameObject* gameobj, KX_Scene *to, KX_Scene
 
 		for (ita = actuators.begin(); !(ita==actuators.end()); ++ita)
 		{
-			MergeScene_LogicBrick(*ita, to);
+			MergeScene_LogicBrick(*ita, from, to);
 		}
 	}
 
@@ -1928,7 +1926,7 @@ static void MergeScene_GameObject(KX_GameObject* gameobj, KX_Scene *to, KX_Scene
 
 		for (its = sensors.begin(); !(its==sensors.end()); ++its)
 		{
-			MergeScene_LogicBrick(*its, to);
+			MergeScene_LogicBrick(*its, from, to);
 		}
 	}
 
@@ -1939,17 +1937,17 @@ static void MergeScene_GameObject(KX_GameObject* gameobj, KX_Scene *to, KX_Scene
 		for (itc = controllers.begin(); !(itc==controllers.end()); ++itc)
 		{
 			SCA_IController *cont= *itc;
-			MergeScene_LogicBrick(cont, to);
+			MergeScene_LogicBrick(cont, from, to);
 
 			vector<SCA_ISensor*> linkedsensors = cont->GetLinkedSensors();
 			vector<SCA_IActuator*> linkedactuators = cont->GetLinkedActuators();
 
 			for (vector<SCA_IActuator*>::iterator ita = linkedactuators.begin();!(ita==linkedactuators.end());++ita) {
-				MergeScene_LogicBrick(*ita, to);
+				MergeScene_LogicBrick(*ita, from, to);
 			}
 
 			for (vector<SCA_ISensor*>::iterator its = linkedsensors.begin();!(its==linkedsensors.end());++its) {
-				MergeScene_LogicBrick(*its, to);
+				MergeScene_LogicBrick(*its, from, to);
 			}
 		}
 	}

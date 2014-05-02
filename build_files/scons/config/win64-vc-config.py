@@ -32,12 +32,14 @@ else:
     
 
 BF_PYTHON = LIBDIR + '/python'
-BF_PYTHON_VERSION = '3.3'
+BF_PYTHON_VERSION = '3.4'
 BF_PYTHON_INC = '${BF_PYTHON}/include/python${BF_PYTHON_VERSION}'
 BF_PYTHON_BINARY = 'python'
-BF_PYTHON_LIB = 'python33'
+BF_PYTHON_LIB = 'python${BF_PYTHON_VERSION[0]}${BF_PYTHON_VERSION[2]}'
 BF_PYTHON_DLL = '${BF_PYTHON_LIB}'
 BF_PYTHON_LIBPATH = '${BF_PYTHON}/lib'
+
+WITH_BF_PYTHON_INSTALL_NUMPY = False
 
 WITH_BF_OPENAL = True
 BF_OPENAL = LIBDIR + '/openal'
@@ -224,7 +226,7 @@ BF_BOOST_LIBPATH = '${BF_BOOST}/lib'
 #CUDA
 WITH_BF_CYCLES_CUDA_BINARIES = False
 #BF_CYCLES_CUDA_NVCC = "" # Path to the nvidia compiler
-BF_CYCLES_CUDA_BINARIES_ARCH = ['sm_20', 'sm_21', 'sm_30', 'sm_35']
+BF_CYCLES_CUDA_BINARIES_ARCH = ['sm_20', 'sm_21', 'sm_30', 'sm_35', 'sm_50']
 
 #Ray trace optimization
 WITH_BF_RAYOPTIMIZATION = True

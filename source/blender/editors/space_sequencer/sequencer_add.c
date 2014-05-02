@@ -27,17 +27,9 @@
  *  \ingroup spseq
  */
 
-
 #include <stdlib.h>
 #include <math.h>
 #include <string.h>
-
-#ifndef WIN32
-#include <unistd.h>
-#else
-#include <io.h>
-#endif
-#include <sys/types.h>
 
 #include "MEM_guardedalloc.h"
 
@@ -47,13 +39,11 @@
 
 #include "DNA_scene_types.h"
 #include "DNA_mask_types.h"
-#include "DNA_userdef_types.h"
 
 #include "BLF_translation.h"
 
 #include "BKE_context.h"
 #include "BKE_global.h"
-#include "BKE_library.h"
 #include "BKE_main.h"
 #include "BKE_sequencer.h"
 #include "BKE_movieclip.h"

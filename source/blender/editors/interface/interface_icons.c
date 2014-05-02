@@ -27,24 +27,14 @@
  *  \ingroup edinterface
  */
 
-
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
-
-#ifndef WIN32
-#  include <unistd.h>
-#else
-#  include <io.h>
-#  include <direct.h>
-#  include "BLI_winstuff.h"
-#endif
 
 #include "MEM_guardedalloc.h"
 
 #include "GPU_extensions.h"
 
-#include "BLI_math.h"
 #include "BLI_blenlib.h"
 #include "BLI_utildefines.h"
 #include "BLI_fileops_types.h"

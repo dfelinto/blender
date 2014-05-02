@@ -242,10 +242,9 @@ ccl_device void kernel_path_indirect(KernelGlobals *kg, RNG *rng, Ray ray,
 			light_ray.dP = ray.dP;
 
 			/* intersect with lamp */
-			float light_t = path_state_rng_1D(kg, rng, &state, PRNG_LIGHT);
 			float3 emission;
 
-			if(indirect_lamp_emission(kg, &state, &light_ray, light_t, &emission))
+			if(indirect_lamp_emission(kg, &state, &light_ray, &emission))
 				path_radiance_accum_emission(L, throughput, emission, state.bounce);
 		}
 #endif
@@ -654,10 +653,9 @@ ccl_device float4 kernel_path_integrate(KernelGlobals *kg, RNG *rng, int sample,
 			light_ray.dP = ray.dP;
 
 			/* intersect with lamp */
-			float light_t = path_state_rng_1D(kg, rng, &state, PRNG_LIGHT);
 			float3 emission;
 
-			if(indirect_lamp_emission(kg, &state, &light_ray, light_t, &emission))
+			if(indirect_lamp_emission(kg, &state, &light_ray, &emission))
 				path_radiance_accum_emission(&L, throughput, emission, state.bounce);
 		}
 #endif
@@ -820,7 +818,7 @@ ccl_device float4 kernel_path_integrate(KernelGlobals *kg, RNG *rng, int sample,
 		}
 #endif
 		
-		/* The following code is the same as in kernel_path_integrate_lighting(),
+		/* Same as kernel_path_integrate_lighting(kg, rng, &sd, &throughput, &state, &L, &ray),
 		   but for CUDA the function call is slower. */
 #ifdef __EMISSION__
 		if(kernel_data.integrator.use_direct_light) {

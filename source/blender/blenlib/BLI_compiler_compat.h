@@ -15,34 +15,21 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  *
- * The Original Code is Copyright (C) Blender Foundation.
- * All rights reserved.
- *
- * The Original Code is: all of this file.
- *
- * Contributor(s): none yet.
- *
  * ***** END GPL LICENSE BLOCK *****
  */
 
-/** \file ED_fluidsim.h
- *  \ingroup editors
+#ifndef __BLI_COMPILER_COMPAT_H__
+#define __BLI_COMPILER_COMPAT_H__
+
+/** \file BLI_compiler_compat.h
+ *  \ingroup bli
+ *
+ * Use to help with cross platform portability.
  */
 
-#ifndef __ED_FLUIDSIM_H__
-#define __ED_FLUIDSIM_H__
+#if defined(_MSC_VER)
+#  define __func__ __FUNCTION__
+#  define alloca _alloca
+#endif
 
-struct Object;
-struct FluidsimSettings;
-
-
-/* allocates and initializes fluidsim data */
-struct FluidsimSettings *fluidsimSettingsNew(struct Object *srcob);
-
-/* frees internal data itself */
-void fluidsimSettingsFree(struct FluidsimSettings *sb);
-
-/* duplicate internal data */
-struct FluidsimSettings *fluidsimSettingsCopy(struct FluidsimSettings *sb);
-
-#endif /* __ED_FLUIDSIM_H__ */
+#endif  /* __BLI_COMPILER_COMPAT_H__ */

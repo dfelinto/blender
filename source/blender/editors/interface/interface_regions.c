@@ -41,12 +41,10 @@
 #include "BLI_math.h"
 #include "BLI_blenlib.h"
 #include "BLI_utildefines.h"
-#include "BLI_dynstr.h"
 #include "BLI_ghash.h"
 
 #include "BKE_context.h"
 #include "BKE_screen.h"
-#include "BKE_idcode.h"
 #include "BKE_report.h"
 #include "BKE_global.h"
 
@@ -769,7 +767,7 @@ bool ui_searchbox_apply(uiBut *but, ARegion *ar)
 	
 	if (data->active != -1) {
 		const char *name = data->items.names[data->active];
-		const char *name_sep = data->use_sep ? strchr(name, UI_SEP_CHAR) : NULL;
+		const char *name_sep = data->use_sep ? strrchr(name, UI_SEP_CHAR) : NULL;
 
 		BLI_strncpy(but->editstr, name, name_sep ? (name_sep - name) : data->items.maxstrlen);
 		
@@ -875,7 +873,7 @@ void ui_searchbox_update(bContext *C, ARegion *ar, uiBut *but, const bool reset)
 		
 		for (a = 0; a < data->items.totitem; a++) {
 			const char *name = data->items.names[a];
-			const char *name_sep = data->use_sep ? strchr(name, UI_SEP_CHAR) : NULL;
+			const char *name_sep = data->use_sep ? strrchr(name, UI_SEP_CHAR) : NULL;
 			if (STREQLEN(but->editstr, name, name_sep ? (name_sep - name) : data->items.maxstrlen)) {
 				data->active = a;
 				break;
@@ -1222,10 +1220,7 @@ static void ui_block_position(wmWindow *window, ARegion *butregion, uiBut *but, 
 	short dir1 = 0, dir2 = 0;
 	
 	/* transform to window coordinates, using the source button region/block */
-	butrct = but->rect;
-
-	ui_block_to_window_fl(butregion, but->block, &butrct.xmin, &butrct.ymin);
-	ui_block_to_window_fl(butregion, but->block, &butrct.xmax, &butrct.ymax);
+	ui_block_to_window_rctf(butregion, but->block, &butrct, &but->rect);
 
 	/* widget_roundbox_set has this correction too, keep in sync */
 	if (but->type != PULLDOWN) {
@@ -1252,8 +1247,7 @@ static void ui_block_position(wmWindow *window, ARegion *butregion, uiBut *but, 
 	}
 		
 	/* aspect = (float)(BLI_rcti_size_x(&block->rect) + 4);*/ /*UNUSED*/
-	ui_block_to_window_fl(butregion, but->block, &block->rect.xmin, &block->rect.ymin);
-	ui_block_to_window_fl(butregion, but->block, &block->rect.xmax, &block->rect.ymax);
+	ui_block_to_window_rctf(butregion, but->block, &block->rect, &block->rect);
 
 	//block->rect.xmin -= 2.0; block->rect.ymin -= 2.0;
 	//block->rect.xmax += 2.0; block->rect.ymax += 2.0;
@@ -1375,8 +1369,7 @@ static void ui_block_position(wmWindow *window, ARegion *butregion, uiBut *but, 
 	/* apply offset, buttons in window coords */
 	
 	for (bt = block->buttons.first; bt; bt = bt->next) {
-		ui_block_to_window_fl(butregion, but->block, &bt->rect.xmin, &bt->rect.ymin);
-		ui_block_to_window_fl(butregion, but->block, &bt->rect.xmax, &bt->rect.ymax);
+		ui_block_to_window_rctf(butregion, but->block, &bt->rect, &bt->rect);
 
 		BLI_rctf_translate(&bt->rect, xof, yof);
 
@@ -2088,7 +2081,7 @@ static unsigned int ui_popup_string_hash(const char *str)
 {
 	/* sometimes button contains hotkey, sometimes not, strip for proper compare */
 	int hash;
-	const char *delimit = strchr(str, UI_SEP_CHAR);
+	const char *delimit = strrchr(str, UI_SEP_CHAR);
 
 	if (delimit) {
 		hash = BLI_ghashutil_strhash_n(str, delimit - str);
@@ -2143,6 +2136,29 @@ uiBut *ui_popup_menu_memory_get(uiBlock *block)
 void ui_popup_menu_memory_set(uiBlock *block, uiBut *but)
 {
 	ui_popup_menu_memory__internal(block, but);
+}
+
+/**
+ * Translate any popup regions (so we can drag them).
+ */
+void ui_popup_translate(bContext *C, ARegion *ar, const int mdiff[2])
+{
+	uiBlock *block;
+
+	BLI_rcti_translate(&ar->winrct, UNPACK2(mdiff));
+
+	ED_region_update_rect(C, ar);
+
+	ED_region_tag_redraw(ar);
+
+	/* update blocks */
+	for (block = ar->uiblocks.first; block; block = block->next) {
+		uiSafetyRct *saferct;
+		for (saferct = block->saferct.first; saferct; saferct = saferct->next) {
+			BLI_rctf_translate(&saferct->parent, UNPACK2(mdiff));
+			BLI_rctf_translate(&saferct->safety, UNPACK2(mdiff));
+		}
+	}
 }
 
 /******************** Popup Menu with callback or string **********************/

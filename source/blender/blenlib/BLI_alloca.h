@@ -28,9 +28,6 @@
  */
 
 /* BLI_array_alloca / alloca */
-#ifdef _MSC_VER
-#  define alloca _alloca
-#endif
 
 #if defined(__MINGW32__)
 #  include <malloc.h>  /* mingw needs for alloca() */
