@@ -22,6 +22,43 @@
 
 /** \file blender/render/intern/source/bake_api.c
  *  \ingroup render
+ *
+ * \brief The API itself is simple. Blender sends a populated array of BakePixels to the renderer, and gets back an
+ * array of floats with the result.
+ *
+ * \section bake_api Development Notes for External Engines
+ *
+ * The Bake API is fully implemented with Python rna functions. The operator expects/call a function:
+ *
+ * def  bake(scene, object, pass_type, pixel_array, num_pixels, depth, result)
+ * - scene: current scene (Python object)
+ * - object: object to render (Python object)
+ * - pass_type: pass to render (string, e.g., "COMBINED", "AO", "NORMAL", ...)
+ * - pixel_array: list of primitive ids and barycentric coordinates to bake(Python object, see bake_pixel)
+ * - num_pixels: size of pixel_array, number of pixels to bake (int)
+ * - depth: depth of pixels to return (int, assuming always 4 now)
+ * - result: array to be populated by the engine (float array, PyLong_AsVoidPtr)
+ *
+ * \note Normals are expected to be in World Space and in the +X, +Y, +Z orientation.
+ *
+ * \subsection bake_pixel BakePixel data structure
+ *
+ * pixel_array is a Python object storing BakePixel elements:
+
+ * struct BakePixel {
+ *     int primitive_id;
+ *     float u, v;
+ *     float dudx, dudy;
+ *     float dvdx, dvdy;
+ * };
+ *
+ * In python you have access to:
+ * - primitive_id, u, v, du_dx, du_dy, next
+ * - next() is a function that returns the next BakePixel in the array.
+ *
+ * \note Pixels that should not be baked have primitive_id = -1
+ *
+ * For a complete implementation example look at the Cycles Bake commit.
  */
 
 #include "MEM_guardedalloc.h"
