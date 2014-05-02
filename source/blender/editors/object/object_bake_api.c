@@ -861,6 +861,8 @@ static void bake_init_api_data(wmOperator *op, bContext *C, BakeAPIRender *bkr)
 	bkr->height = RNA_int_get(op->ptr, "height");
 	bkr->identifier = "";
 
+	RNA_string_get(op->ptr, "cage", bkr->custom_cage);
+
 	if ((!is_save_internal) && bkr->is_automatic_name) {
 		PropertyRNA *prop = RNA_struct_find_property(op->ptr, "type");
 		RNA_property_enum_identifier(C, op->ptr, prop, bkr->pass_type, &bkr->identifier);
