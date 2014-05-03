@@ -1248,18 +1248,21 @@ class CyclesRender_PT_bake(CyclesButtonsPanel, Panel):
         col.prop(cscene, "bake_type")
 
         col.separator()
-        split = layout.split()
+        row = col.row()
 
-        sub = split.column()
-        sub.prop(cbk, "use_clear")
+        sub = row.column(align=True)
+        sub.active = cbk.save_mode == 'EXTERNAL'
+        sub.prop(cbk, "width")
+        sub.prop(cbk, "height")
+
+        sub = row.column()
         sub.prop(cbk, "margin")
 
-        sub = split.column()
-        sub.prop(cbk, "use_selected_to_active")
-        sub = sub.column()
-
+        col.separator()
+        col.prop(cbk, "use_selected_to_active")
+        sub = col.column()
         sub.active = cbk.use_selected_to_active
-        sub.prop(cbk, "cage_extrusion", text="Distance")
+        sub.prop(cbk, "cage_extrusion")
         sub.prop_search(cbk, "cage", scene, "objects")
 
         if cscene.bake_type == 'NORMAL':
@@ -1273,6 +1276,23 @@ class CyclesRender_PT_bake(CyclesButtonsPanel, Panel):
             row.prop(cbk, "normal_r", text="")
             row.prop(cbk, "normal_g", text="")
             row.prop(cbk, "normal_b", text="")
+
+        col.separator()
+        col.label(text="Output:")
+        col.row().prop(cbk, "save_mode", expand=True)
+
+        if cbk.save_mode == 'EXTERNAL':
+            row = col.row()
+            row.prop(cbk, "use_automatic_name")
+            row.prop(cbk, "use_split_materials")
+
+            col.separator()
+            col.prop(cbk, "filepath", text="")
+
+            col.separator()
+            col.template_image_settings(cbk.image_settings, color_management=False)
+        else:
+            col.prop(cbk, "use_clear")
 
 
 class CyclesParticle_PT_CurveSettings(CyclesButtonsPanel, Panel):
