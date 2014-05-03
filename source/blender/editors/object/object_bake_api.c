@@ -740,6 +740,7 @@ static int bake(Main *bmain, Scene *scene, Object *ob_low, ListBase *selected_ob
 				BKE_makepicstring_from_type(name, filepath, bmain->name, 0, bake->im_format.imtype, true, false);
 
 				if (is_automatic_name) {
+					BLI_path_suffix(name, FILE_MAX, ob_low->id.name + 2, "_");
 					BLI_path_suffix(name, FILE_MAX, identifier, "_");
 				}
 
