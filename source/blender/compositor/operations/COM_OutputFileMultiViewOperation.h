@@ -1,5 +1,5 @@
 /*
- * Copyright 2011, Blender Foundation.
+ * Copyright 2013, Blender Foundation.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -19,27 +19,28 @@
  *		Jeroen Bakker 
  *		Monique Dewanchand
  *		Lukas Tönne
+ *		Dalai Felinto
  */
 
-#include "COM_defines.h"
-#include "COM_Node.h"
-#include "DNA_node_types.h"
-#include "DNA_image_types.h"
-extern "C" {
-#  include "RE_engine.h"
-}
+#ifndef _COM_OutputFileMultiViewOperation_h
+#define _COM_OutputFileMultiViewOperation_h
+#include "COM_NodeOperation.h"
 
-/**
- * @brief ImageNode
- * @ingroup Node
- */
-class ImageNode : public Node {
+#include "BLI_rect.h"
+#include "BLI_path_util.h"
+
+#include "DNA_color_types.h"
+
+#include "intern/openexr/openexr_multi.h"
+
+/* Writes inputs into OpenEXR multilayer channels. */
+class OutputOpenExrMultiViewOperation : public OutputOpenExrMultiLayerOperation {
 private:
-	NodeOperation *doMultilayerCheck(NodeConverter &converter, RenderLayer *rl, Image *image, ImageUser *user,
-	                                 int framenumber, int outputsocketIndex, int passindex, DataType datatype) const;
-	int getPassIndex(const CompositorContext &context, struct ListBase *passes, struct ListBase *views, int passindex, int view_id) const;
 public:
-	ImageNode(bNode *editorNode);
-	void convertToOperations(NodeConverter &converter, const CompositorContext &context) const;
+	OutputOpenExrMultiViewOperation(const RenderData *rd, const bNodeTree *tree, const char *path, char exr_codec, int actview);
 
+	void *get_handle(const char *filename);
+	void deinitExecution();
 };
+
+#endif

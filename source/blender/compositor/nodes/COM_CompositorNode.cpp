@@ -40,7 +40,7 @@ void CompositorNode::convertToOperations(NodeConverter &converter, const Composi
 	NodeInput *alphaSocket = this->getInputSocket(1);
 	NodeInput *depthSocket = this->getInputSocket(2);
 
-	CompositorOperation *compositorOperation = new CompositorOperation();
+	CompositorOperation *compositorOperation = new CompositorOperation(context.getViewId());
 	compositorOperation->setSceneName(context.getScene()->id.name);
 	compositorOperation->setRenderData(context.getRenderData());
 	compositorOperation->setbNodeTree(context.getbNodeTree());

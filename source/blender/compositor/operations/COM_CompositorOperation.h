@@ -75,8 +75,13 @@ private:
 	 * @brief operation is active for calculating final compo result
 	 */
 	bool m_active;
+	
+	/**
+	 * @brief actview view
+	 */
+	int m_actview;
 public:
-	CompositorOperation();
+	CompositorOperation(const int actview);
 	const bool isActiveCompositorOutput() const { return this->m_active; }
 	void executeRegion(rcti *rect, unsigned int tileNumber);
 	void setSceneName(const char *sceneName) { BLI_strncpy(this->m_sceneName, sceneName, sizeof(this->m_sceneName)); }

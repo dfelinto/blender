@@ -100,6 +100,7 @@ extern "C" {
 #include "COM_SplitViewerNode.h"
 #include "COM_Stabilize2dNode.h"
 #include "COM_SwitchNode.h"
+#include "COM_SwitchViewNode.h"
 #include "COM_TextureNode.h"
 #include "COM_TimeNode.h"
 #include "COM_TonemapNode.h"
@@ -326,6 +327,9 @@ Node *Converter::convert(bNode *b_node)
 			break;
 		case CMP_NODE_SWITCH:
 			node = new SwitchNode(b_node);
+			break;
+		case CMP_NODE_SWITCH_VIEW:
+			node = new SwitchViewNode(b_node);
 			break;
 		case CMP_NODE_GLARE:
 			node = new GlareNode(b_node);

@@ -23,6 +23,7 @@
 
 #include "COM_OutputFileNode.h"
 #include "COM_OutputFileOperation.h"
+#include "COM_OutputFileMultiViewOperation.h"
 #include "COM_ExecutionSystem.h"
 
 #include "BLI_path_util.h"
@@ -44,12 +45,19 @@ void OutputFileNode::convertToOperations(NodeConverter &converter, const Composi
 		return;
 	}
 	
-	if (storage->format.imtype == R_IMF_IMTYPE_MULTILAYER) {
+	if (ELEM(storage->format.imtype, R_IMF_IMTYPE_MULTILAYER, R_IMF_IMTYPE_MULTIVIEW)) {
 		/* single output operation for the multilayer file */
-		OutputOpenExrMultiLayerOperation *outputOperation = new OutputOpenExrMultiLayerOperation(
-		        context.getRenderData(), context.getbNodeTree(), storage->base_path, storage->format.exr_codec);
+		OutputOpenExrMultiLayerOperation *outputOperation;
+
+		if (storage->format.imtype == R_IMF_IMTYPE_MULTIVIEW) {
+			outputOperation = new OutputOpenExrMultiViewOperation(
+			        context.getRenderData(), context.getbNodeTree(), storage->base_path, storage->format.exr_codec, context.getViewId());
+		} else {
+			outputOperation = new OutputOpenExrMultiLayerOperation(
+		          context.getRenderData(), context.getbNodeTree(), storage->base_path, storage->format.exr_codec, context.getViewId());
+		}
 		converter.addOperation(outputOperation);
-		
+
 		int num_inputs = getNumberOfInputSockets();
 		bool previewAdded = false;
 		for (int i = 0; i < num_inputs; ++i) {
@@ -82,11 +90,10 @@ void OutputFileNode::convertToOperations(NodeConverter &converter, const Composi
 				
 				OutputSingleLayerOperation *outputOperation = new OutputSingleLayerOperation(
 				        context.getRenderData(), context.getbNodeTree(), input->getDataType(), format, path,
-				        context.getViewSettings(), context.getDisplaySettings());
+				        context.getViewSettings(), context.getDisplaySettings(), context.getViewId());
 				converter.addOperation(outputOperation);
 				
 				converter.mapInputSocket(input, outputOperation->getInputSocket(0));
-				
 				if (!previewAdded) {
 					converter.addNodeInputPreview(input);
 					previewAdded = true;

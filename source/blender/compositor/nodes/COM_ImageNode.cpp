@@ -67,6 +67,42 @@ NodeOperation *ImageNode::doMultilayerCheck(NodeConverter &converter, RenderLaye
 	return operation;
 }
 
+int ImageNode::getPassIndex(const CompositorContext &context, ListBase *passes, ListBase *views, int passindex, int view_ui) const
+{
+	if (BLI_countlist(views) < 2)
+		return passindex;
+
+	const RenderData *rd= context.getRenderData();
+	int actview = context.getViewId();
+
+	bool is_multiview = (view_ui == 0); /* if view selected == All (0) */
+	RenderView *rv;
+	const char *view = NULL;
+
+	if (! is_multiview) {
+		rv = (RenderView *)BLI_findlink(views, view_ui - 1);
+		view = rv->name;
+	}
+	else {
+		/* heuristic to match image name with scene names */
+		view = this->RenderData_get_actview_name(rd, actview);
+
+		/* this should never happen, but it doesn't hurt to be safe */
+		if (view == NULL)
+			return passindex;
+
+		/* check if the view name exists in the image */
+		if(! BLI_findstring(views, view, offsetof(RenderView, name)))
+			return passindex;
+	}
+
+	RenderPass *rpass = (RenderPass *)BLI_findlink(passes, passindex);
+	char passname[64];
+
+	sprintf(passname, "%s.%s", rpass->internal_name, view);
+	return BLI_findstringindex(passes, passname, offsetof(RenderPass, name));
+}
+
 void ImageNode::convertToOperations(NodeConverter &converter, const CompositorContext &context) const
 {
 	/// Image output
@@ -100,7 +136,7 @@ void ImageNode::convertToOperations(NodeConverter &converter, const CompositorCo
 					 */
 #if 0
 					NodeImageLayer *storage = (NodeImageLayer *)bnodeSocket->storage;*/
-					int passindex = storage->pass_index;*/
+					int passindex = getPassIndex(context, &rl->passes, &image->rr->views, storage->pass_index, imageuser->view);
 					RenderPass *rpass = (RenderPass *)BLI_findlink(&rl->passes, passindex);
 #endif
 					int passindex;
@@ -108,6 +144,13 @@ void ImageNode::convertToOperations(NodeConverter &converter, const CompositorCo
 					for (rpass = (RenderPass *)rl->passes.first, passindex = 0; rpass; rpass = rpass->next, ++passindex)
 						if (STREQ(rpass->name, bnodeSocket->identifier))
 							break;
+
+					if (BLI_countlist(&image->rr->views) > 1) {
+						NodeImageLayer *storage = (NodeImageLayer *)bnodeSocket->storage;
+						passindex = getPassIndex(context, &rl->passes, &image->rr->views, storage->pass_index, imageuser->view);
+						rpass = (RenderPass *)BLI_findlink(&rl->passes, passindex);
+					}
+
 					if (rpass) {
 						imageuser->pass = passindex;
 						switch (rpass->channels) {
