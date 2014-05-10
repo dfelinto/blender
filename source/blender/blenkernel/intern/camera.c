@@ -30,15 +30,18 @@
  */
 
 #include <stdlib.h>
+#include <stddef.h>
 
 #include "DNA_camera_types.h"
 #include "DNA_lamp_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_view3d_types.h"
+#include "DNA_ID.h"
 
 #include "BLI_math.h"
 #include "BLI_utildefines.h"
+#include "BLI_string.h"
 
 #include "BKE_animsys.h"
 #include "BKE_camera.h"
@@ -65,6 +68,10 @@ void *BKE_camera_add(Main *bmain, const char *name)
 	cam->ortho_scale = 6.0;
 	cam->flag |= CAM_SHOWPASSEPARTOUT;
 	cam->passepartalpha = 0.5f;
+
+	/* stereoscopy 3d */
+	cam->stereo.interocular_distance = 0.065;
+	cam->stereo.convergence_distance = 30.f * 0.065;
 	
 	return cam;
 }
@@ -593,3 +600,96 @@ bool BKE_camera_view_frame_fit_to_scene(Scene *scene, struct View3D *v3d, Object
 		}
 	}
 }
+
+void BKE_camera_stereo_matrices(Object *camera, float viewmat[4][4], float *shift, bool left)
+{
+	/* viewmat = MODELVIEW_MATRIX */
+	Camera *data = (Camera *)camera->data;
+	float interocular_distance, convergence_distance, angle;
+	short convergence_mode;
+	float tmpviewmat[4][4];
+
+	float transmat[4][4] = {
+	      {1,0,0,0},
+	      {0,1,0,0},
+	      {0,0,1,0},
+	      {0,0,0,1} };
+
+	interocular_distance = data->stereo.interocular_distance;
+	convergence_distance = data->stereo.convergence_distance;
+	convergence_mode = data->stereo.convergence_mode;
+
+	invert_m4_m4(tmpviewmat, camera->obmat);
+
+	/* rotate */
+	if (convergence_mode == CAM_S3D_TOE) {
+		angle = atan((interocular_distance * 0.5) / convergence_distance);
+
+		if (left)
+			angle = -angle;
+
+		transmat[0][0] = cos(angle);
+		transmat[2][0] = -sin(angle);
+		transmat[0][2] = sin(angle);
+		transmat[2][2] = cos(angle);
+	}
+
+	/* move */
+	if (left) {
+		transmat[3][0] = interocular_distance * 0.5 ;
+	}
+	else {
+		transmat[3][0] = interocular_distance * -0.5 ;
+	}
+	
+	/* apply */
+	mul_m4_m4m4( tmpviewmat, transmat, tmpviewmat) ;
+
+	/* copy  */
+	copy_m4_m4(viewmat, tmpviewmat);
+
+	/* prepare the camera shift for the projection matrix */
+	/* Note: in viewport, parallel renders as offaxis, but in render it does parallel */
+	if (ELEM(convergence_mode, CAM_S3D_OFFAXIS, CAM_S3D_PARALLEL)) {
+		if (left)
+			*shift += ((interocular_distance / data->sensor_x) * (data->lens / convergence_distance)) * 0.5;
+		else
+			*shift -= ((interocular_distance / data->sensor_x) * (data->lens / convergence_distance)) * 0.5;
+	}
+}
+
+Object *BKE_camera_multiview_advanced(Scene *scene, RenderData *rd, Object *camera, const char *suffix)
+{
+	SceneRenderView *srv;
+	char name[MAX_NAME];
+	int len_name, len_suffix;
+
+	len_name = BLI_strnlen(camera->id.name, sizeof(camera->id.name));
+
+	for (srv = rd->views.first; srv; srv = srv->next)
+	{
+		len_suffix = BLI_strnlen(srv->suffix, sizeof(srv->suffix));
+
+		if (len_name < len_suffix)
+			continue;
+
+		if (strcmp(camera->id.name + (len_name - len_suffix), srv->suffix) == 0) {
+			BLI_snprintf(name, sizeof(name), "%.*s%s", (len_name - len_suffix), camera->id.name, suffix);
+			break;
+		}
+	}
+
+	if (name[0] != '\0') {
+		Base *base;
+		Object *ob;
+		for (base = scene->base.first; base; base = base->next) {
+			ob = base->object;
+			if (strcmp(ob->id.name, name) == 0) {
+				return ob;
+			}
+		}
+	}
+
+	return camera;
+}
+
