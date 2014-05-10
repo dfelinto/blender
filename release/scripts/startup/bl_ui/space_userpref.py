@@ -406,6 +406,25 @@ class USERPREF_PT_system(Panel):
             sub.active = system.compute_device_type != 'CPU'
             sub.prop(system, "compute_device", text="")
 
+        col.separator()
+        col.separator()
+
+        col.label(text="3D Stereo Display:")
+        col.prop(system, "stereo_display", text="")
+
+        if system.stereo_display == 'ANAGLYPH':
+            col.prop(system, "stereo_anaglyph_type", text="Type")
+
+        if system.stereo_display == 'EPILEPSY':
+            col.prop(system, "stereo_epilepsy_interval")
+
+        if system.stereo_display == 'INTERLACE':
+            col.prop(system, "stereo_interlace_type", text="Type")
+            col.prop(system, "use_stereo_interlace_swap")
+
+        if system.stereo_display == 'SIDEBYSIDE':
+            col.prop(system, "use_stereo_sidebyside_crosseyed")
+
         # 2. Column
         column = split.column()
         colsplit = column.split(percentage=0.85)

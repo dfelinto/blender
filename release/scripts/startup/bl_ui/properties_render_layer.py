@@ -163,5 +163,64 @@ class RENDERLAYER_PT_layer_passes(RenderLayerButtonsPanel, Panel):
         self.draw_pass_type_buttons(col, rl, "refraction")
 
 
+class RENDERLAYER_UL_renderviews(UIList):
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
+        # assert(isinstance(item, bpy.types.SceneRenderView)
+        view = item
+        if self.layout_type in {'DEFAULT', 'COMPACT'}:
+            layout.label(view.name, icon_value=icon + (not view.use))
+            layout.prop(view, "use", text="", index=index)
+        elif self.layout_type in {'GRID'}:
+            layout.alignment = 'CENTER'
+            layout.label("", icon_value=icon + (not view.use))
+
+
+class RENDERLAYER_PT_views(RenderLayerButtonsPanel, Panel):
+    bl_label     = "Views"
+    COMPAT_ENGINES = {'BLENDER_RENDER'}
+
+    def draw_header(self, context):
+        rd = context.scene.render
+        self.layout.prop(rd, "use_multiple_views", text="")
+
+    def draw(self, context):
+        layout = self.layout
+
+        scene = context.scene
+        rd = scene.render
+        rv = rd.views.active
+
+
+        layout.active = rd.use_multiple_views
+        basic_stereo = rd.views_setup == 'SETUP_BASIC'
+
+        row = layout.row()
+        row.prop(rd, "views_setup", expand=True)
+
+        if basic_stereo:
+            row = layout.row()
+            row.template_list("RENDERLAYER_UL_renderviews", "", rd, "stereo_views", rd.views, "active_index", rows=2)
+
+            row = layout.row()
+            row.label(text="File Suffix:")
+            row.prop(rv, "file_suffix", text="")
+
+        else:
+            row = layout.row()
+            row.template_list("RENDERLAYER_UL_renderviews", "", rd, "views", rd.views, "active_index", rows=2)
+
+            col = row.column(align=True)
+            col.operator("scene.render_view_add", icon='ZOOMIN', text="")
+            col.operator("scene.render_view_remove", icon='ZOOMOUT', text="")
+
+            row = layout.row()
+            if rv and rv.name not in ('left', 'right'):
+                row.prop(rv, "name")
+
+            row = layout.row()
+            row.label(text="Camera Suffix:")
+            row.prop(rv, "camera_suffix", text="")
+
+
 if __name__ == "__main__":  # only for live edit.
     bpy.utils.register_module(__name__)
