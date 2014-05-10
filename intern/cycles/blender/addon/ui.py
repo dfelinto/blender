@@ -449,7 +449,7 @@ class CyclesRender_PT_views(CyclesButtonsPanel, Panel):
 
         else:
             row = layout.row()
-            row.template_list("RENDERLAYER_UL_renderviews", "", rd, "views", rd.views, "active_index", rows=2)
+            row.template_list("RENDERLAYER_UL_renderviews", "name", rd, "views", rd.views, "active_index", rows=2)
 
             col = row.column(align=True)
             col.operator("scene.render_view_add", icon='ZOOMIN', text="")

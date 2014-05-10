@@ -168,8 +168,12 @@ class RENDERLAYER_UL_renderviews(UIList):
         # assert(isinstance(item, bpy.types.SceneRenderView)
         view = item
         if self.layout_type in {'DEFAULT', 'COMPACT'}:
-            layout.label(view.name, icon_value=icon + (not view.use))
+            if view.name in ('left', 'right', 'Left', 'Right'): #MV remove left, right when I implement the ui names capitalized
+                layout.label(view.name, icon_value=icon + (not view.use))
+            else:
+                layout.prop(view, "name", text="", index=index, icon_value=icon, emboss=False)
             layout.prop(view, "use", text="", index=index)
+
         elif self.layout_type in {'GRID'}:
             layout.alignment = 'CENTER'
             layout.label("", icon_value=icon + (not view.use))
@@ -199,7 +203,7 @@ class RENDERLAYER_PT_views(RenderLayerButtonsPanel, Panel):
 
         if basic_stereo:
             row = layout.row()
-            row.template_list("RENDERLAYER_UL_renderviews", "", rd, "stereo_views", rd.views, "active_index", rows=2)
+            row.template_list("RENDERLAYER_UL_renderviews", "name", rd, "stereo_views", rd.views, "active_index", rows=2)
 
             row = layout.row()
             row.label(text="File Suffix:")
@@ -207,15 +211,11 @@ class RENDERLAYER_PT_views(RenderLayerButtonsPanel, Panel):
 
         else:
             row = layout.row()
-            row.template_list("RENDERLAYER_UL_renderviews", "", rd, "views", rd.views, "active_index", rows=2)
+            row.template_list("RENDERLAYER_UL_renderviews", "name", rd, "views", rd.views, "active_index", rows=2)
 
             col = row.column(align=True)
             col.operator("scene.render_view_add", icon='ZOOMIN', text="")
             col.operator("scene.render_view_remove", icon='ZOOMOUT', text="")
-
-            row = layout.row()
-            if rv and rv.name not in ('left', 'right'):
-                row.prop(rv, "name")
 
             row = layout.row()
             row.label(text="Camera Suffix:")
