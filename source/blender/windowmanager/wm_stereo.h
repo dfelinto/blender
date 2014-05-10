@@ -24,45 +24,20 @@
  * ***** END GPL LICENSE BLOCK *****
  */
 
-/** \file blender/windowmanager/wm_draw.h
+/** \file blender/windowmanager/wm_stereo.h
  *  \ingroup wm
  */
 
+#ifndef __WM_STEREO_H__
+#define __WM_STEREO_H__
 
-#ifndef __WM_DRAW_H__
-#define __WM_DRAW_H__
-
-#include <GL/glew.h>
-
-
-#define MAX_N_TEX 3
-
-typedef struct wmDrawTriple {
-	GLuint bind[MAX_N_TEX * MAX_N_TEX];
-	int x[MAX_N_TEX], y[MAX_N_TEX];
-	int nx, ny;
-	GLenum target;
-} wmDrawTriple;
-
-typedef struct wmDrawData {
-	struct wmDrawData *next, *prev;
-	wmDrawTriple *triple;
-} wmDrawData;
-
-struct bContext;
 struct wmWindow;
-struct ARegion;
+struct ReportList;
 
-/* wm_draw.c */
-void		wm_draw_update			(struct bContext *C);
-void		wm_draw_window_clear	(struct wmWindow *win);
-void		wm_draw_region_clear	(struct wmWindow *win, struct ARegion *ar);
+/* wm_stereo.c */
+void	wm_method_draw_stereo(bContext *C, wmWindow *win);
+int		wm_stereo_toggle_exec(bContext *C, struct wmOperator *op);
 
-void		wm_tag_redraw_overlay	(struct wmWindow *win, struct ARegion *ar);
 
-void		wm_triple_draw_textures	(struct wmWindow *win, struct wmDrawTriple *triple, float alpha);
-
-void		wm_draw_data_free		(struct wmWindow *win);
-
-#endif /* __WM_DRAW_H__ */
+#endif /* __WM_STEREO_H__ */
 
