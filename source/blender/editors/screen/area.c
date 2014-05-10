@@ -452,7 +452,6 @@ void ED_region_do_draw(bContext *C, ARegion *ar)
 	glDisable(GL_BLEND);
 #endif
 
-	ar->do_draw = 0;
 	memset(&ar->drawrct, 0, sizeof(ar->drawrct));
 	
 	uiFreeInactiveBlocks(C, &ar->uiblocks);
@@ -823,9 +822,12 @@ static void region_azone_tria(ScrArea *sa, AZone *az, ARegion *ar)
 }	
 
 
-static void region_azone_initialize(ScrArea *sa, ARegion *ar, AZEdge edge) 
+static void region_azone_initialize(bScreen *screen, ScrArea *sa, ARegion *ar, AZEdge edge)
 {
 	AZone *az;
+
+	if (screen->full == SCREENFULLCLEAN)
+		return;
 	
 	az = (AZone *)MEM_callocN(sizeof(AZone), "actionzone");
 	BLI_addtail(&(sa->actionzones), az);
@@ -852,18 +854,18 @@ static void region_azone_initialize(ScrArea *sa, ARegion *ar, AZEdge edge)
 
 /* *************************************************************** */
 
-static void region_azone_add(ScrArea *sa, ARegion *ar, int alignment)
+static void region_azone_add(bScreen *sc, ScrArea *sa, ARegion *ar, int alignment)
 {
 	/* edge code (t b l r) is along which area edge azone will be drawn */
 	
 	if (alignment == RGN_ALIGN_TOP)
-		region_azone_initialize(sa, ar, AE_BOTTOM_TO_TOPLEFT);
+		region_azone_initialize(sc, sa, ar, AE_BOTTOM_TO_TOPLEFT);
 	else if (alignment == RGN_ALIGN_BOTTOM)
-		region_azone_initialize(sa, ar, AE_TOP_TO_BOTTOMRIGHT);
+		region_azone_initialize(sc, sa, ar, AE_TOP_TO_BOTTOMRIGHT);
 	else if (alignment == RGN_ALIGN_RIGHT)
-		region_azone_initialize(sa, ar, AE_LEFT_TO_TOPRIGHT);
+		region_azone_initialize(sc, sa, ar, AE_LEFT_TO_TOPRIGHT);
 	else if (alignment == RGN_ALIGN_LEFT)
-		region_azone_initialize(sa, ar, AE_RIGHT_TO_TOPLEFT);
+		region_azone_initialize(sc, sa, ar, AE_RIGHT_TO_TOPLEFT);
 }
 
 /* dir is direction to check, not the splitting edge direction! */
@@ -1160,7 +1162,7 @@ static void region_rect_recursive(wmWindow *win, ScrArea *sa, ARegion *ar, rcti 
 		 * must be minimum '4' */
 	}
 	else {
-		region_azone_add(sa, ar, alignment);
+		region_azone_add(win->screen, sa, ar, alignment);
 	}
 
 	region_rect_recursive(win, sa, ar->next, remainder, quad);

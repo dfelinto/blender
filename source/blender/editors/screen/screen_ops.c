@@ -2333,6 +2333,43 @@ static void SCREEN_OT_screen_full_area(wmOperatorType *ot)
 	
 }
 
+/* special fullscreen mode. Initially intended for stereo-enabled editors
+   but useful for other editors as well */
+/* XXX no shortcut available for this
+   XXX we need a shortcut to toggle HEADER visiblity as well */
+static int screen_clean_full_area_exec(bContext *C, wmOperator *UNUSED(op))
+{
+	bScreen *screen = CTX_wm_screen(C);
+	ScrArea *sa = NULL;
+
+	/* search current screen for 'fullscreen' areas */
+	/* prevents restoring info header, when mouse is over it */
+	for (sa = screen->areabase.first; sa; sa = sa->next) {
+		if (sa->fullclean) break;
+	}
+
+	/* go fullscreen */
+	if (sa == NULL) {
+		sa = CTX_wm_area(C);
+		if (sa == NULL)
+			return OPERATOR_CANCELLED;
+	}
+
+	ED_screen_clean_toggle(C, CTX_wm_window(C), sa);
+	return OPERATOR_FINISHED;
+}
+
+static void SCREEN_OT_clean_full_area(wmOperatorType *ot)
+{
+	ot->name = "Toggle Clean Full Screen";
+	ot->description = "Toggle editor as clean fullscreen";
+	ot->idname = "SCREEN_OT_clean_full_area";
+
+	ot->exec = screen_clean_full_area_exec;
+	ot->poll = ED_operator_areaactive;
+	ot->flag = 0;
+}
+
 
 
 /* ************** join area operator ********************************************** */
@@ -3940,6 +3977,7 @@ void ED_operatortypes_screen(void)
 	WM_operatortype_append(SCREEN_OT_header_toolbox);
 	WM_operatortype_append(SCREEN_OT_screen_set);
 	WM_operatortype_append(SCREEN_OT_screen_full_area);
+	WM_operatortype_append(SCREEN_OT_clean_full_area);
 	WM_operatortype_append(SCREEN_OT_back_to_previous);
 	WM_operatortype_append(SCREEN_OT_spacedata_cleanup);
 	WM_operatortype_append(SCREEN_OT_screenshot);
@@ -4059,7 +4097,7 @@ void ED_keymap_screen(wmKeyConfig *keyconf)
 	WM_keymap_add_item(keymap, "SCREEN_OT_screen_full_area", SPACEKEY, KM_PRESS, KM_SHIFT, 0);
 	WM_keymap_add_item(keymap, "SCREEN_OT_screenshot", F3KEY, KM_PRESS, KM_CTRL, 0);
 	WM_keymap_add_item(keymap, "SCREEN_OT_screencast", F3KEY, KM_PRESS, KM_ALT, 0);
-	
+
 	/* tests */
 	WM_keymap_add_item(keymap, "SCREEN_OT_region_quadview", QKEY, KM_PRESS, KM_CTRL | KM_ALT, 0);
 	WM_keymap_verify_item(keymap, "SCREEN_OT_repeat_history", F3KEY, KM_PRESS, 0, 0);

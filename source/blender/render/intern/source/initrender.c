@@ -433,6 +433,19 @@ void make_sample_tables(Render *re)
 
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
+struct Object *RE_GetViewCamera(Render *re)
+{
+	RenderView *rv;
+	int actview = MIN2(re->actview, BLI_countlist(&re->result->views)-1);
+	int nr = 0;
+
+	for (rv=(RenderView *)re->result->views.first; rv; rv=rv->next, nr++) {
+		if (actview == nr)
+			return rv->camera;
+	}
+
+	return RE_GetCamera(re);
+}
 
 struct Object *RE_GetCamera(Render *re)
 {

@@ -1819,7 +1819,13 @@ static void rna_def_space_view3d(BlenderRNA *brna)
 		{ICON_MATCAP_24, "24", ICON_MATCAP_24, "", ""},
 		{0, NULL, 0, NULL, NULL}
 	};
-	
+
+	static EnumPropertyItem stereo_camera_items[] = {
+		{STEREO_LEFT_ID, "LEFT", ICON_RESTRICT_RENDER_OFF, "Left", ""},
+		{STEREO_RIGHT_ID, "RIGHT", ICON_RESTRICT_RENDER_OFF, "Right", ""},
+		{STEREO_3D_ID, "3D", ICON_CAMERA_STEREO, "3D", ""},
+		{0, NULL, 0, NULL, NULL}
+	};
 
 	srna = RNA_def_struct(brna, "SpaceView3D", "Space");
 	RNA_def_struct_sdna(srna, "View3D");
@@ -2156,6 +2162,30 @@ static void rna_def_space_view3d(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Matcap", "Image to use for Material Capture, active objects only");
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, "rna_SpaceView3D_matcap_update");
 
+	/* Stereo Settings */
+	prop = RNA_def_property(srna, "stereoscopy_camera", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_sdna(prop, NULL, "stereo_camera");
+	RNA_def_property_enum_items(prop, stereo_camera_items);
+	RNA_def_property_ui_text(prop, "Camera", "");
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
+
+	prop = RNA_def_property(srna, "show_stereoscopy_cameras", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "stereo_flag", V3D_S3D_DISPCAMERAS);
+	RNA_def_property_ui_text(prop, "Cameras", "Show the left and right cameras");
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
+
+	prop = RNA_def_property(srna, "show_stereoscopy_planes", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "stereo_flag", V3D_S3D_DISPPLANES);
+	RNA_def_property_ui_text(prop, "Planes", "Show the near and far planes");
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
+
+	prop = RNA_def_property(srna, "show_stereoscopy_volume", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "stereo_flag", V3D_S3D_DISPVOLUME);
+	RNA_def_property_ui_text(prop, "Volume", "Show stereo frustum volume");
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
+
+	/* *** Animated *** */
+	RNA_define_animate_sdna(true);
 	/* region */
 
 	srna = RNA_def_struct(brna, "RegionView3D", NULL);

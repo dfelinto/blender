@@ -1418,7 +1418,7 @@ static int render_new_particle_system(Render *re, ObjectRen *obr, ParticleSystem
 		bb.align = part->bb_align;
 		bb.anim = part->bb_anim;
 		bb.lock = part->draw & PART_DRAW_BB_LOCK;
-		bb.ob = (part->bb_ob ? part->bb_ob : RE_GetCamera(re));
+		bb.ob = (part->bb_ob ? part->bb_ob : RE_GetViewCamera(re));
 		bb.split_offset = part->bb_split_offset;
 		bb.totnum = totpart+totchild;
 		bb.uv_split = part->bb_uv_split;
@@ -5135,7 +5135,7 @@ void RE_Database_FromScene(Render *re, Main *bmain, Scene *scene, unsigned int l
 		re->scene_color_manage = BKE_scene_check_color_management_enabled(scene);
 	
 	/* scene needs to be set to get camera */
-	camera= RE_GetCamera(re);
+	camera = RE_GetViewCamera(re);
 	
 	/* per second, per object, stats print this */
 	re->i.infostr= "Preparing Scene data";
@@ -5316,7 +5316,7 @@ void RE_DataBase_GetView(Render *re, float mat[4][4])
 
 static void database_fromscene_vectors(Render *re, Scene *scene, unsigned int lay, int timeoffset)
 {
-	Object *camera= RE_GetCamera(re);
+	Object *camera= RE_GetViewCamera(re);
 	float mat[4][4];
 	
 	re->scene= scene;

@@ -219,6 +219,12 @@ float *RE_RenderLayerGetPass(struct RenderLayer *rl, int passtype) RET_NULL
 float RE_filter_value(int type, float x) RET_ZERO
 struct RenderLayer *RE_GetRenderLayer(struct RenderResult *rr, const char *name) RET_NULL
 
+struct Object *RE_GetViewCamera(struct Render *re) {STUB_ASSERT(0); return (struct Object *) NULL;}
+float *RE_RenderViewGetRectf(struct RenderResult *rr, int view_id) {STUB_ASSERT(0); return (float *) NULL;}
+float *RE_RenderViewGetRectz(struct RenderResult *rr, int view_id) {STUB_ASSERT(0); return (float *) NULL;}
+int RE_layers_have_name(struct RenderResult *result) {STUB_ASSERT(0); return 0;}
+void RE_engine_actview_set(struct RenderEngine *engine, int view) {STUB_ASSERT(0);}
+
 /* zbuf.c stub */
 void antialias_tagbuf(int xsize, int ysize, char *rectmove) RET_NONE
 void RE_zbuf_accumulate_vecblur(struct NodeBlurData *nbd, int xsize, int ysize, float *newrect, float *imgrect, float *vecbufrect, float *zbufrect) RET_NONE

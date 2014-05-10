@@ -517,7 +517,15 @@ typedef struct UserDef {
 	float gpencil_new_layer_col[4]; /* default color for newly created Grease Pencil layers */
 
 	short tweak_threshold;
-	char navigation_mode, pad;
+
+	/* stereoscopy 3D display */
+	short stereo_flag;
+	float stereo_epilepsy_interval; /* preferred interval in seconds for Dr. Epilepsy stereo method */
+	char stereo_display; /* stereo method for the user display */
+	char stereo_anaglyph_type; /* anaglyph scheme for the user display */
+	char stereo_interlace_type;  /* interlace type for the user display */
+
+	char navigation_mode;
 
 	char author[80];	/* author name for file formats supporting it */
 
@@ -829,6 +837,37 @@ typedef enum eImageDrawMethod {
 	IMAGE_DRAW_METHOD_2DTEXTURE = 2,
 	IMAGE_DRAW_METHOD_DRAWPIXELS = 3,
 } eImageDrawMethod;
+
+/* UserDef.stereo_display */
+typedef enum eStereoDisplayMode {
+	S3D_DISPLAY_ANAGLYPH    = 0,
+	/* S3D_DISPLAY_BLURAY      = 1, */
+	S3D_DISPLAY_EPILEPSY    = 2,
+	S3D_DISPLAY_INTERLACE   = 3,
+	S3D_DISPLAY_PAGEFLIP    = 4,
+	S3D_DISPLAY_SIDEBYSIDE  = 5,
+	S3D_DISPLAY_TOPBOTTOM   = 6,
+} eStereoDisplayMode;
+
+/* UserDef.stereo_flag */
+typedef enum eStereoFlag {
+	S3D_INTERLACE_SWAP        = (1 << 0),
+	S3D_SIDEBYSIDE_CROSSEYED  = (1 << 1),
+} eStereoFlag;
+
+/* UserDef.stereo_anaglyph_type */
+typedef enum eStereoAnaglyphType {
+	S3D_ANAGLYPH_REDCYAN = 0,
+	S3D_ANAGLYPH_GREENMAGENTA = 1,
+	S3D_ANAGLYPH_YELLOWBLUE = 2,
+} eAnaglyphType;
+
+/* UserDef.stereo_interlace_type */
+typedef enum eStereoInterlaceType {
+	S3D_INTERLACE_ROW = 0,
+	S3D_INTERLACE_COLUMN = 1,
+	S3D_INTERLACE_CHECKERBOARD = 2,
+} eInterlaceType;
 
 #ifdef __cplusplus
 }

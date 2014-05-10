@@ -5450,6 +5450,7 @@ static void direct_link_scene(FileData *fd, Scene *sce)
 	link_list(fd, &(sce->markers));
 	link_list(fd, &(sce->transform_spaces));
 	link_list(fd, &(sce->r.layers));
+	link_list(fd, &(sce->r.views));
 
 	for (srl = sce->r.layers.first; srl; srl = srl->next) {
 		link_list(fd, &(srl->freestyleConfig.modules));
@@ -5510,8 +5511,8 @@ static void direct_link_windowmanager(FileData *fd, wmWindowManager *wm)
 		BLI_listbase_clear(&win->modalhandlers);
 		BLI_listbase_clear(&win->subwindows);
 		BLI_listbase_clear(&win->gesture);
+		BLI_listbase_clear(&win->drawdata);
 		
-		win->drawdata = NULL;
 		win->drawmethod = -1;
 		win->drawfail = 0;
 		win->active = 0;

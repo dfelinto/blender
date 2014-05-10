@@ -27,6 +27,7 @@
 
 #include "BLI_utildefines.h"
 #include "BLI_compiler_attrs.h"
+#include "BLI_string.h"
 
 /* for MinGW32 definition of NULL, could use BLI_blenlib.h instead too */
 #include <stddef.h>
@@ -41,7 +42,7 @@
 #include "DNA_object_types.h"
 #include "DNA_mesh_types.h"
 #include "DNA_modifier_types.h"
-#include "DNA_linestyle_types.h"
+#include "DNA_camera_types.h"
 
 #include "DNA_genfile.h"
 
@@ -50,6 +51,7 @@
 
 #include "BKE_main.h"
 #include "BKE_node.h"
+#include "BKE_scene.h"
 
 #include "BLI_math.h"
 #include "BLI_string.h"
@@ -277,6 +279,30 @@ void blo_do_versions_270(FileData *fd, Library *UNUSED(lib), Main *main)
 			sce->r.bake.im_format.depth = R_IMF_CHAN_DEPTH_8;
 			sce->r.bake.im_format.quality = 90;
 			sce->r.bake.im_format.compress = 15;
+		}
+	}
+	{
+		Scene *scene;
+		SceneRenderView *srv;
+		Camera *cam;
+
+		if (!DNA_struct_elem_find(fd->filesdna, "RenderData", "ListBase", "views")) {
+			for (scene = main->scene.first; scene; scene = scene->id.next) {
+				BKE_scene_add_render_view(scene, STEREO_LEFT_NAME);
+				srv = (SceneRenderView *)scene->r.views.first;
+				BLI_strncpy(srv->suffix, "_L", sizeof(srv->suffix));
+
+				BKE_scene_add_render_view(scene, STEREO_RIGHT_NAME);
+				srv = (SceneRenderView *)scene->r.views.last;
+				BLI_strncpy(srv->suffix, "_R", sizeof(srv->suffix));
+			}
+		}
+
+		if (!DNA_struct_elem_find(fd->filesdna, "Camera", "CameraStereoSettings", "stereo")) {
+			for (cam = main->camera.first; cam; cam = cam->id.next) {
+				cam->stereo.interocular_distance = 0.065;
+				cam->stereo.convergence_distance = 30.f * 0.065;
+			}
 		}
 	}
 }

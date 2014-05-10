@@ -172,6 +172,7 @@ extern StructRNA RNA_CompositorNodeSepYCCA;
 extern StructRNA RNA_CompositorNodeSepYUVA;
 extern StructRNA RNA_CompositorNodeSetAlpha;
 extern StructRNA RNA_CompositorNodeSplitViewer;
+extern StructRNA RNA_CompositorNodeSwitchView;
 extern StructRNA RNA_CompositorNodeTexture;
 extern StructRNA RNA_CompositorNodeTime;
 extern StructRNA RNA_CompositorNodeTonemap;

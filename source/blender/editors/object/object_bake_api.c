@@ -762,7 +762,7 @@ static int bake(
 				BakeData *bake = &scene->r.bake;
 				char name[FILE_MAX];
 
-				BKE_makepicstring_from_type(name, filepath, bmain->name, 0, bake->im_format.imtype, true, false);
+				BKE_makepicstring_from_type(name, filepath, bmain->name, 0, bake->im_format.imtype, true, false, "");
 
 				if (is_automatic_name) {
 					BLI_path_suffix(name, FILE_MAX, ob_low->id.name + 2, "_");

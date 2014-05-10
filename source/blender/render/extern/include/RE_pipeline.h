@@ -46,6 +46,7 @@ struct ReportList;
 struct Scene;
 struct SceneRenderLayer;
 struct EnvMap;
+struct RenderResult;
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 /* this include is what is exposed of render to outside world */
@@ -65,6 +66,20 @@ typedef struct Render Render;
  *   and how it's converted
  */
 
+typedef struct RenderView {
+	struct RenderView *next, *prev;
+	char name[64];		/* amount defined in openexr_multi.h */
+	struct Object *camera;
+
+	/* if this exists, result of composited layers */
+	float *rectf;
+	/* if this exists, result of composited layers */
+	float *rectz;
+	/* optional, 32 bits version of picture, used for sequencer, ogl render and image curves */
+	int *rect32;
+
+} RenderView;
+
 typedef struct RenderPass {
 	struct RenderPass *next, *prev;
 	int passtype, channels;
@@ -72,11 +87,15 @@ typedef struct RenderPass {
 	char chan_id[8];	/* amount defined in openexr_multi.h */
 	float *rect;
 	int rectx, recty;
+
+	char internal_name[64]; /* pass name without view */
+	char view[64];		/* amount defined in openexr_multi.h */
+	int view_id;	/* MV I don't think we need that */
 } RenderPass;
 
 /* a renderlayer is a full image, but with all passes and samples */
 /* size of the rects is defined in RenderResult */
-/* after render, the Combined pass is in rectf, for renderlayers read from files it is a real pass */
+/* after render, the Combined pass is in combined, for renderlayers read from files it is a real pass */
 typedef struct RenderLayer {
 	struct RenderLayer *next, *prev;
 	
@@ -87,8 +106,7 @@ typedef struct RenderLayer {
 	
 	struct Material *mat_override;
 	struct Group *light_override;
-	
-	float *rectf;		/* 4 float, standard rgba buffer (read not above!) */
+
 	float *acolrect;	/* 4 float, optional transparent buffer, needs storage for display updates */
 	float *scolrect;	/* 4 float, optional strand buffer, needs storage for display updates */
 	int *display_buffer;	/* 4 char, optional color managed display buffer which is used when
@@ -110,10 +128,14 @@ typedef struct RenderResult {
 	short crop, sample_nr;
 	
 	/* optional, 32 bits version of picture, used for ogl render and image curves */
+	/* it is used for temporary storage only */
 	int *rect32;
+
 	/* if this exists, a copy of one of layers, or result of composited layers */
+	/* it is used for temporary storage only */
 	float *rectf;
 	/* if this exists, a copy of one of layers, or result of composited layers */
+	/* it is used for temporary storage only */
 	float *rectz;
 	
 	/* coordinates within final image (after cropping) */
@@ -124,6 +146,9 @@ typedef struct RenderResult {
 	/* the main buffers */
 	ListBase layers;
 	
+	/* multiView maps to a StringVector in OpenEXR */
+	ListBase views;
+
 	/* allowing live updates: */
 	volatile rcti renrect;
 	volatile RenderLayer *renlay;
@@ -140,6 +165,9 @@ typedef struct RenderResult {
 	/* render info text */
 	char *text;
 	
+	/* MultiView */
+	//int actview;
+
 } RenderResult;
 
 
@@ -178,7 +206,8 @@ void RE_FreeRenderResult(struct RenderResult *rr);
 struct RenderResult *RE_AcquireResultRead(struct Render *re);
 struct RenderResult *RE_AcquireResultWrite(struct Render *re);
 void RE_ReleaseResult(struct Render *re);
-void RE_AcquireResultImage(struct Render *re, struct RenderResult *rr);
+void RE_AcquireResultImage(struct Render *re, struct RenderResult *rr, const int view_id);
+void RE_AcquireResultViews(struct Render *re, struct RenderResult *rr);
 void RE_ReleaseResultImage(struct Render *re);
 void RE_SwapResult(struct Render *re, struct RenderResult **rr);
 struct RenderStats *RE_GetStats(struct Render *re);
@@ -187,12 +216,21 @@ void RE_ResultGet32(struct Render *re, unsigned int *rect);
 void RE_AcquiredResultGet32(struct Render *re, struct RenderResult *result, unsigned int *rect);
 
 struct RenderLayer *RE_GetRenderLayer(struct RenderResult *rr, const char *name);
-float *RE_RenderLayerGetPass(struct RenderLayer *rl, int passtype);
+float *RE_RenderLayerGetPass(struct RenderLayer *rl, int passtype, int view_id);
+float *RE_RenderViewGetRectf(struct RenderResult *rr, int view_id);
+float *RE_RenderViewGetRectz(struct RenderResult *rr, int view_id);
+int *RE_RenderViewGetRect32(struct RenderResult *rr, int view_id);
+void RE_RenderViewSetRectf(RenderResult *res, int view_id, float *rect);
+void RE_RenderViewSetRectz(RenderResult *res, int view_id, float *rect);
+int RE_GetActiveViewId(struct Render *re);
+int RE_HasFakeLayer(RenderResult *res);
+int RE_HasStereo3D(RenderResult *res);
 
 /* obligatory initialize call, disprect is optional */
 void RE_InitState(struct Render *re, struct Render *source, struct RenderData *rd, struct SceneRenderLayer *srl, int winx, int winy, rcti *disprect);
 
 /* set up the viewplane/perspective matrix, three choices */
+struct Object *RE_GetViewCamera(struct Render *re);
 struct Object *RE_GetCamera(struct Render *re); /* return camera override if set */
 void RE_SetCamera(struct Render *re, struct Object *camera);
 void RE_SetEnvmapCamera(struct Render *re, struct Object *cam_ob, float viewscale, float clipsta, float clipend);
@@ -240,7 +278,7 @@ void RE_SetReports(struct Render *re, struct ReportList *reports);
 void RE_PreviewRender(struct Render *re, struct Main *bmain, struct Scene *scene);
 
 bool RE_ReadRenderResult(struct Scene *scene, struct Scene *scenode);
-bool RE_WriteRenderResult(struct ReportList *reports, RenderResult *rr, const char *filename, int compress);
+bool RE_WriteRenderResult(struct ReportList *reports, RenderResult *rr, const char *filename, int compress, bool multiview, const char *view);
 struct RenderResult *RE_MultilayerConvert(void *exrhandle, const char *colorspace, bool predivide, int rectx, int recty);
 
 extern const float default_envmap_layout[];
@@ -252,7 +290,7 @@ void RE_MergeFullSample(struct Render *re, struct Main *bmain, struct Scene *sce
 /* display and event callbacks */
 void RE_display_init_cb	(struct Render *re, void *handle, void (*f)(void *handle, RenderResult *rr));
 void RE_display_clear_cb(struct Render *re, void *handle, void (*f)(void *handle, RenderResult *rr));
-void RE_display_update_cb(struct Render *re, void *handle, void (*f)(void *handle, RenderResult *rr, volatile struct rcti *rect));
+void RE_display_update_cb(struct Render *re, void *handle, void (*f)(void *handle, RenderResult *rr, volatile struct rcti *rect, const int view_id));
 void RE_stats_draw_cb	(struct Render *re, void *handle, void (*f)(void *handle, RenderStats *rs));
 void RE_progress_cb	(struct Render *re, void *handle, void (*f)(void *handle, float));
 void RE_draw_lock_cb		(struct Render *re, void *handle, void (*f)(void *handle, int));
@@ -265,6 +303,8 @@ float RE_filter_value(int type, float x);
 void RE_zbuf_accumulate_vecblur(struct NodeBlurData *nbd, int xsize, int ysize, float *newrect, float *imgrect, float *vecbufrect, float *zbufrect);
 
 int RE_seq_render_active(struct Scene *scene, struct RenderData *rd);
+
+int RE_layers_have_name(struct RenderResult *result);
 
 /* shaded view or baking options */
 #define RE_BAKE_LIGHT				0	/* not listed in rna_scene.c -> can't be enabled! */
