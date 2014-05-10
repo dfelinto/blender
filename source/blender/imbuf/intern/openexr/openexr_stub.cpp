@@ -34,24 +34,30 @@
 
 
 void   *IMB_exr_get_handle          (void) {return NULL;}
+void   *IMB_exr_get_handle_name     (const char *name) {(void)name; return NULL;}
 void    IMB_exr_add_channel         (void *handle, const char *layname, const char *channame, int xstride, int ystride, float *rect) {  (void)handle; (void)layname; (void)channame; (void)xstride; (void)ystride; (void)rect; }
 
 int     IMB_exr_begin_read          (void *handle, const char *filename, int *width, int *height) { (void)handle; (void)filename; (void)width; (void)height; return 0;}
 int     IMB_exr_begin_write         (void *handle, const char *filename, int width, int height, int compress) { (void)handle; (void)filename; (void)width; (void)height; (void)compress; return 0;}
 void    IMB_exrtile_begin_write     (void *handle, const char *filename, int mipmap, int width, int height, int tilex, int tiley) { (void)handle; (void)filename; (void)mipmap; (void)width; (void)height; (void)tilex; (void)tiley; }
+int     IMB_exrmultiview_begin_write (void *handle, const char *filename, int width, int height, int compress) { (void)handle; (void)filename; (void)width; (void)height; (void)compress; }
 
 void    IMB_exr_set_channel         (void *handle, const char *layname, const char *channame, int xstride, int ystride, float *rect) { (void)handle; (void)layname; (void)channame; (void)xstride; (void)ystride; (void)rect; }
 
 void    IMB_exr_read_channels       (void *handle) { (void)handle; }
 void    IMB_exr_write_channels      (void *handle) { (void)handle; }
-void    IMB_exrtile_write_channels  (void *handle, int partx, int party, int level) { (void)handle; (void)partx; (void)party; (void)level; }
-void    IMB_exrtile_clear_channels  (void *handle) { (void)handle; }
+void    IMB_exrtile_write_channels  (void *handle, int partx, int party, int level, int view) { (void)handle; (void)partx; (void)party; (void)level; (void)view }
+void    IMB_exrmultiview_write_channels  (void *handle) { (void)handle; }
+void    IMB_exr_clear_channels  (void *handle) { (void)handle; }
 
 void    IMB_exr_multilayer_convert  (void *handle, void *base,
                                      void * (*addlayer)(void *base, const char *str),
-                                     void (*addpass)(void *base, void *lay, const char *str, float *rect, int totchan, const char *chan_id))
+                                     void (*addpass)(void *base, void *lay, const char *str, float *rect, int totchan, const char *chan_id, const char *view, const int view_id))
 {
 	(void)handle; (void)base; (void)addlayer; (void)addpass;
 }
 
 void    IMB_exr_close               (void *handle) { (void)handle; }
+
+void    IMB_exr_get_multiView_name(void *handle, int view_id, char *view) {(void)handle; (void)view_id; (void)view;}
+int     IMB_exr_get_multiView_count(void *handle){(void)handle; return 0;}
