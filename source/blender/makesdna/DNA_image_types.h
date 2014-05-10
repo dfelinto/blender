@@ -54,13 +54,17 @@ typedef struct ImageUser {
 	int frames;					/* total amount of frames to use */
 	int offset, sfra;			/* offset within movie, start frame in global time */
 	char fie_ima, cycl;		/* fields/image in movie, cyclic flag */
-	char ok, pad;
+	char ok;
 
-	short multi_index, layer, pass;	 /* listbase indices, for menu browsing or retrieve buffer */
+	char eye;				/* multiview current eye - for internal use */
+
+	short multi_index, view, layer, pass;	 /* listbase indices, for menu browsing or retrieve buffer */
 
 	short flag;
-	
-	int pad2;
+	short pass_tmp;	/* for the UI */
+
+	short pass_left, pass_right;
+	short multi_index_left, multi_index_right;
 
 } ImageUser;
 
@@ -69,6 +73,7 @@ typedef struct ImageUser {
 #define IMA_ANIM_REFRESHED	2
 /* #define IMA_DO_PREMUL	4 */
 #define IMA_NEED_FRAME_RECALC	8
+#define IMA_STEREO3D		16
 
 typedef struct Image {
 	ID id;

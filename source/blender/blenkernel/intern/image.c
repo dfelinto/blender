@@ -1048,7 +1048,7 @@ int BKE_imtype_to_ftype(const char imtype)
 	else if (imtype == R_IMF_IMTYPE_TIFF)
 		return TIF;
 #endif
-	else if (imtype == R_IMF_IMTYPE_OPENEXR || imtype == R_IMF_IMTYPE_MULTILAYER)
+	else if (ELEM3(imtype, R_IMF_IMTYPE_OPENEXR, R_IMF_IMTYPE_MULTILAYER, R_IMF_IMTYPE_MULTIVIEW))
 		return OPENEXR;
 #ifdef WITH_CINEON
 	else if (imtype == R_IMF_IMTYPE_CINEON)
@@ -1127,7 +1127,7 @@ int BKE_imtype_supports_zbuf(const char imtype)
 {
 	switch (imtype) {
 		case R_IMF_IMTYPE_IRIZ:
-		case R_IMF_IMTYPE_OPENEXR: /* but not R_IMF_IMTYPE_MULTILAYER */
+		case R_IMF_IMTYPE_OPENEXR: /* but not R_IMF_IMTYPE_MULTILAYER or R_IMF_IMTYPE_MULTIVIEW */
 			return 1;
 	}
 	return 0;
@@ -1161,6 +1161,7 @@ int BKE_imtype_requires_linear_float(const char imtype)
 		case R_IMF_IMTYPE_RADHDR:
 		case R_IMF_IMTYPE_OPENEXR:
 		case R_IMF_IMTYPE_MULTILAYER:
+		case R_IMF_IMTYPE_MULTIVIEW:
 			return true;
 	}
 	return 0;
@@ -1182,6 +1183,7 @@ char BKE_imtype_valid_channels(const char imtype, bool write_file)
 		case R_IMF_IMTYPE_TIFF:
 		case R_IMF_IMTYPE_OPENEXR:
 		case R_IMF_IMTYPE_MULTILAYER:
+		case R_IMF_IMTYPE_MULTIVIEW:
 		case R_IMF_IMTYPE_DDS:
 		case R_IMF_IMTYPE_JP2:
 		case R_IMF_IMTYPE_QUICKTIME:
@@ -1215,6 +1217,7 @@ char BKE_imtype_valid_depths(const char imtype)
 		case R_IMF_IMTYPE_OPENEXR:
 			return R_IMF_CHAN_DEPTH_16 | R_IMF_CHAN_DEPTH_32;
 		case R_IMF_IMTYPE_MULTILAYER:
+		case R_IMF_IMTYPE_MULTIVIEW:
 			return R_IMF_CHAN_DEPTH_32;
 		/* eeh, cineon does some strange 10bits per channel */
 		case R_IMF_IMTYPE_DPX:
@@ -1258,6 +1261,7 @@ char BKE_imtype_from_arg(const char *imtype_arg)
 #ifdef WITH_OPENEXR
 	else if (!strcmp(imtype_arg, "EXR")) return R_IMF_IMTYPE_OPENEXR;
 	else if (!strcmp(imtype_arg, "MULTILAYER")) return R_IMF_IMTYPE_MULTILAYER;
+	else if (!strcmp(imtype_arg, "MULTIVIEW")) return R_IMF_IMTYPE_MULTIVIEW;
 #endif
 	else if (!strcmp(imtype_arg, "MPEG")) return R_IMF_IMTYPE_FFMPEG;
 	else if (!strcmp(imtype_arg, "FRAMESERVER")) return R_IMF_IMTYPE_FRAMESERVER;
@@ -1323,7 +1327,7 @@ static bool do_add_image_extension(char *string, const char imtype, const ImageF
 	}
 #endif
 #ifdef WITH_OPENEXR
-	else if (ELEM(imtype, R_IMF_IMTYPE_OPENEXR, R_IMF_IMTYPE_MULTILAYER)) {
+	else if (ELEM3(imtype, R_IMF_IMTYPE_OPENEXR, R_IMF_IMTYPE_MULTILAYER, R_IMF_IMTYPE_MULTIVIEW)) {
 		if (!BLI_testextensie(string, extension_test = ".exr"))
 			extension = extension_test;
 	}
@@ -1962,7 +1966,7 @@ int BKE_imbuf_write(ImBuf *ibuf, const char *name, ImageFormatData *imf)
 	}
 #endif
 #ifdef WITH_OPENEXR
-	else if (imtype == R_IMF_IMTYPE_OPENEXR || imtype == R_IMF_IMTYPE_MULTILAYER) {
+	else if (ELEM3(imtype, R_IMF_IMTYPE_OPENEXR, R_IMF_IMTYPE_MULTILAYER, R_IMF_IMTYPE_MULTIVIEW)) {
 		ibuf->ftype = OPENEXR;
 		if (imf->depth == R_IMF_CHAN_DEPTH_16)
 			ibuf->ftype |= OPENEXR_HALF;
@@ -2090,7 +2094,7 @@ int BKE_imbuf_write_stamp(Scene *scene, struct Object *camera, ImBuf *ibuf, cons
 
 
 static void do_makepicstring(char *string, const char *base, const char *relbase, int frame, const char imtype,
-                             const ImageFormatData *im_format, const short use_ext, const short use_frames)
+                             const ImageFormatData *im_format, const short use_ext, const short use_frames, const char *view)
 {
 	if (string == NULL) return;
 	BLI_strncpy(string, base, FILE_MAX - 10);   /* weak assumption */
@@ -2099,20 +2103,22 @@ static void do_makepicstring(char *string, const char *base, const char *relbase
 	if (use_frames)
 		BLI_path_frame(string, frame, 4);
 
+	BLI_path_view(string, view);
+
 	if (use_ext)
 		do_add_image_extension(string, imtype, im_format);
 }
 
 void BKE_makepicstring(char *string, const char *base, const char *relbase, int frame,
-                       const ImageFormatData *im_format, const bool use_ext, const bool use_frames)
+                       const ImageFormatData *im_format, const bool use_ext, const bool use_frames, const char *view)
 {
-	do_makepicstring(string, base, relbase, frame, im_format->imtype, im_format, use_ext, use_frames);
+	do_makepicstring(string, base, relbase, frame, im_format->imtype, im_format, use_ext, use_frames, view);
 }
 
 void BKE_makepicstring_from_type(char *string, const char *base, const char *relbase, int frame,
-                                 const char imtype, const bool use_ext, const bool use_frames)
+                                 const char imtype, const bool use_ext, const bool use_frames, const char *view)
 {
-	do_makepicstring(string, base, relbase, frame, imtype, NULL, use_ext, use_frames);
+	do_makepicstring(string, base, relbase, frame, imtype, NULL, use_ext, use_frames, view);
 }
 
 /* used by sequencer too */
@@ -2759,6 +2765,7 @@ static ImBuf *image_get_render_result(Image *ima, ImageUser *iuser, void **lock_
 	int channels, layer, pass;
 	ImBuf *ibuf;
 	int from_render = (ima->render_slot == ima->last_render_slot);
+	int actview;
 	bool byte_buffer_in_display_space = false;
 
 	if (!(iuser && iuser->scene))
@@ -2773,13 +2780,22 @@ static ImBuf *image_get_render_result(Image *ima, ImageUser *iuser, void **lock_
 	channels = 4;
 	layer = iuser->layer;
 	pass = iuser->pass;
+	actview = iuser->view;
+
+	if (iuser->flag & IMA_STEREO3D) {
+		/* view == 0 shows stereo */
+		if (actview == 0)
+			actview = iuser->eye;
+		else
+			actview = actview - 1;
+	}
 
 	if (from_render) {
-		RE_AcquireResultImage(re, &rres);
+		RE_AcquireResultImage(re, &rres, actview);
 	}
 	else if (ima->renders[ima->render_slot]) {
 		rres = *(ima->renders[ima->render_slot]);
-		rres.have_combined = rres.rectf != NULL;
+		rres.have_combined = RE_RenderViewGetRectf(&rres, actview) != NULL;
 	}
 	else
 		memset(&rres, 0, sizeof(RenderResult));
@@ -2819,24 +2835,13 @@ static ImBuf *image_get_render_result(Image *ima, ImageUser *iuser, void **lock_
 		if (rl) {
 			RenderPass *rpass;
 
-			/* there's no combined pass, is in renderlayer itself */
-			if (pass == 0) {
-				rectf = rl->rectf;
-				if (rectf == NULL) {
-					/* Happens when Save Buffers is enabled.
-					 * Use display buffer stored in the render layer.
-					 */
-					rect = (unsigned int *) rl->display_buffer;
-					byte_buffer_in_display_space = true;
-				}
-			}
-			else {
-				rpass = BLI_findlink(&rl->passes, pass - 1);
-				if (rpass) {
-					channels = rpass->channels;
-					rectf = rpass->rect;
-					dither = 0.0f; /* don't dither passes */
-				}
+			/* "there's no combined pass, is in renderlayer itself" */
+			/* -Now it does, no need to do pass - 1 (dfelinto) */
+			rpass = BLI_findlink(&rl->passes, pass);
+			if (rpass) {
+				channels = rpass->channels;
+				rectf = rpass->rect;
+				dither = 0.0f; /* don't dither passes */
 			}
 
 			for (rpass = rl->passes.first; rpass; rpass = rpass->next)

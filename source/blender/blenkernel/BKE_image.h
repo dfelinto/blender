@@ -62,9 +62,9 @@ int     BKE_imbuf_write_stamp(struct Scene *scene, struct Object *camera, struct
 int     BKE_imbuf_write(struct ImBuf *ibuf, const char *name, struct ImageFormatData *imf);
 int     BKE_imbuf_write_as(struct ImBuf *ibuf, const char *name, struct ImageFormatData *imf, const bool is_copy);
 void    BKE_makepicstring(char *string, const char *base, const char *relbase, int frame,
-                          const struct ImageFormatData *im_format, const bool use_ext, const bool use_frames);
+                          const struct ImageFormatData *im_format, const bool use_ext, const bool use_frames, const char *view);
 void    BKE_makepicstring_from_type(char *string, const char *base, const char *relbase, int frame,
-                                    const char imtype, const bool use_ext, const bool use_frames);
+                                    const char imtype, const bool use_ext, const bool use_frames, const char *view);
 int     BKE_add_image_extension(char *string, const struct ImageFormatData *im_format);
 int     BKE_add_image_extension_from_type(char *string, const char imtype);
 char    BKE_ftype_to_imtype(const int ftype);
@@ -190,6 +190,9 @@ void BKE_image_update_frame(const struct Main *bmain, int cfra);
 
 /* sets index offset for multilayer files */
 struct RenderPass *BKE_image_multilayer_index(struct RenderResult *rr, struct ImageUser *iuser);
+
+/* sets index offset for multiview files */
+struct RenderPass *BKE_image_multiview_index(struct RenderResult *rr, struct ImageUser *iuser);
 
 /* for multilayer images as well as for render-viewer */
 struct RenderResult *BKE_image_acquire_renderresult(struct Scene *scene, struct Image *ima);

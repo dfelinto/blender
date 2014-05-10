@@ -841,6 +841,19 @@ void draw_image_main(const bContext *C, ARegion *ar)
 		BLI_lock_thread(LOCK_DRAW_IMAGE);
 	}
 
+	/* view == 0 shows stereo */
+	if ((sima->iuser.flag & IMA_STEREO3D) &&
+		sima->iuser.view == 0) {
+		if (sima->iuser.eye == STEREO_LEFT_ID) {
+			sima->iuser.pass = sima->iuser.pass_left;
+			sima->iuser.multi_index = sima->iuser.multi_index_left;
+		}
+		else { //STEREO_RIGHT_ID
+			sima->iuser.pass = sima->iuser.pass_right;
+			sima->iuser.multi_index = sima->iuser.multi_index_right;
+		}
+	}
+
 	ibuf = ED_space_image_acquire_buffer(sima, &lock);
 
 	/* draw the image or grid */
