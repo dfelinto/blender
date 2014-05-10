@@ -3323,6 +3323,60 @@ static void view3d_main_area_clear(Scene *scene, View3D *v3d, ARegion *ar)
 	}
 }
 
+static bool view3d_stereo_active(const bContext *C, Scene *scene)
+{
+	wmWindow *win = CTX_wm_window(C);
+
+	if ((scene->r.scemode & R_MULTIVIEW) == 0)
+		return false;
+
+	if (WM_stereo_enabled(win, true) == false)
+		return false;
+
+	return true;
+}
+
+static void view3d_stereo_setup(Scene *scene, View3D *v3d, ARegion *ar)
+{
+	bool left;
+
+	/* show only left or right camera */
+	if (v3d->stereo_camera != STEREO_3D_ID)
+		v3d->eye = v3d->stereo_camera;
+
+	left = v3d->eye == STEREO_LEFT_ID;
+
+	/* update the viewport matrices with the new camera */
+	if (scene->r.views_setup == SCE_VIEWS_SETUP_BASIC) {
+		Camera *data;
+		float viewmat[4][4];
+		float orig_shift;
+
+		data = (Camera *)v3d->camera->data;
+		orig_shift = data->shiftx;
+
+		BKE_camera_stereo_matrices(v3d->camera, viewmat, &data->shiftx, left);
+		view3d_main_area_setup_view(scene, v3d, ar, viewmat, NULL);
+
+		/* restore the original shift */
+		data->shiftx = orig_shift;
+	}
+	else { /* SCE_VIEWS_SETUP_ADVANCED */
+		Object *orig_cam = v3d->camera;
+		SceneRenderView *srv;
+
+		if (left)
+			srv = BLI_findstring(&scene->r.views, STEREO_LEFT_NAME, offsetof(SceneRenderView, name));
+		else
+			srv = BLI_findstring(&scene->r.views, STEREO_RIGHT_NAME, offsetof(SceneRenderView, name));
+
+		v3d->camera = BKE_camera_multiview_advanced(scene, &scene->r, v3d->camera, srv->suffix);
+		view3d_main_area_setup_view(scene, v3d, ar, NULL, NULL);
+
+		/* restore the original camera */
+		v3d->camera = orig_cam;
+	}
+}
 
 #ifdef WITH_GAMEENGINE
 static void update_lods(Scene *scene, float camera_pos[3])
@@ -3370,6 +3424,10 @@ static void view3d_main_area_draw_objects(const bContext *C, Scene *scene, View3
 
 	/* clear the background */
 	view3d_main_area_clear(scene, v3d, ar);
+
+	/* change view according to stereo eye */
+	if (view3d_stereo_active(C, scene))
+		view3d_stereo_setup(scene, v3d, ar);
 
 	/* enables anti-aliasing for 3D view drawing */
 	if (U.ogl_multisamples != USER_MULTISAMPLE_NONE) {
