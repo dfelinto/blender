@@ -315,9 +315,9 @@ static ShaderEvalType get_shader_type(const string& pass_type)
 		return SHADER_EVAL_BAKE;
 }
 
-static BL::RenderResult begin_render_result(BL::RenderEngine b_engine, int x, int y, int w, int h, const char *layername)
+static BL::RenderResult begin_render_result(BL::RenderEngine b_engine, int x, int y, int w, int h, const char *layername, int view)
 {
-	return b_engine.begin_result(x, y, w, h, layername);
+	return b_engine.begin_result(x, y, w, h, layername, view);
 }
 
 static void end_render_result(BL::RenderEngine b_engine, BL::RenderResult b_rr, bool cancel, bool do_merge_results)
@@ -334,7 +334,7 @@ void BlenderSession::do_write_update_render_tile(RenderTile& rtile, bool do_upda
 	int h = params.height;
 
 	/* get render result */
-	BL::RenderResult b_rr = begin_render_result(b_engine, x, y, w, h, b_rlay_name.c_str());
+	BL::RenderResult b_rr = begin_render_result(b_engine, x, y, w, h, b_rlay_name.c_str(), b_rview_id);
 
 	/* can happen if the intersected rectangle gives 0 width or height */
 	if (b_rr.ptr.data == NULL) {
@@ -400,12 +400,13 @@ void BlenderSession::render()
 	/* render each layer */
 	BL::RenderSettings r = b_scene.render();
 	BL::RenderSettings::layers_iterator b_iter;
+	BL::RenderResult::views_iterator b_iterv;
 	
 	for(r.layers.begin(b_iter); b_iter != r.layers.end(); ++b_iter) {
 		b_rlay_name = b_iter->name();
 
-		/* temporary render result to find needed passes */
-		BL::RenderResult b_rr = begin_render_result(b_engine, 0, 0, 1, 1, b_rlay_name.c_str());
+		/* temporary render result to find needed passes and views */
+		BL::RenderResult b_rr = begin_render_result(b_engine, 0, 0, 1, 1, b_rlay_name.c_str(), -1);
 		BL::RenderResult::layers_iterator b_single_rlay;
 		b_rr.layers.begin(b_single_rlay);
 
@@ -437,9 +438,6 @@ void BlenderSession::render()
 			}
 		}
 
-		/* free result without merging */
-		end_render_result(b_engine, b_rr, true, false);
-
 		buffer_params.passes = passes;
 		scene->film->pass_alpha_threshold = b_iter->pass_alpha_threshold();
 		scene->film->tag_passes_update(scene, passes);
@@ -447,21 +445,35 @@ void BlenderSession::render()
 		scene->integrator->tag_update(scene);
 
 		/* update scene */
-		sync->sync_camera(b_render, b_engine.camera_override(), width, height);
 		sync->sync_data(b_v3d, b_engine.camera_override(), &python_thread_state, b_rlay_name.c_str());
 
-		/* update number of samples per layer */
-		int samples = sync->get_layer_samples();
-		bool bound_samples = sync->get_layer_bound_samples();
+		for(b_rr.views.begin(b_iterv), b_rview_id=0; b_iterv != b_rr.views.end(); ++b_iterv, b_rview_id++) {
 
-		if(samples != 0 && (!bound_samples || (samples < session_params.samples)))
-			session->reset(buffer_params, samples);
-		else
-			session->reset(buffer_params, session_params.samples);
+			/* set the current view */
+			b_engine.active_view_set(b_rview_id);
 
-		/* render */
-		session->start();
-		session->wait();
+			/* update scene */
+			sync->sync_camera(b_render, b_engine.camera_override(), width, height);
+
+			/* update number of samples per layer */
+			int samples = sync->get_layer_samples();
+			bool bound_samples = sync->get_layer_bound_samples();
+
+			if(samples != 0 && (!bound_samples || (samples < session_params.samples)))
+				session->reset(buffer_params, samples);
+			else
+				session->reset(buffer_params, session_params.samples);
+
+			/* render */
+			session->start();
+			session->wait();
+
+			if(session->progress.get_cancel())
+				break;
+		}
+
+		/* free result without merging */
+		end_render_result(b_engine, b_rr, true, false);
 
 		if(session->progress.get_cancel())
 			break;
@@ -611,10 +623,6 @@ void BlenderSession::do_write_update_render_result(BL::RenderResult b_rr, BL::Re
 			b_pass.rect(&pixels[0]);
 		}
 	}
-
-	/* copy combined pass */
-	if(buffers->get_pass_rect(PASS_COMBINED, exposure, rtile.sample, 4, &pixels[0]))
-		b_rlay.rect(&pixels[0]);
 
 	/* tag result as updated */
 	b_engine.update_result(b_rr);
