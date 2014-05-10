@@ -2379,20 +2379,33 @@ RenderPass *BKE_image_multilayer_index(RenderResult *rr, ImageUser *iuser)
 
 	if (iuser) {
 		short index = 0, rl_index = 0, rp_index;
+		short view;
+		bool is_stereo = RE_HasStereo3D(rr) && (iuser->flag & IMA_SHOW_STEREO);
+
+		view = is_stereo ? iuser->eye : iuser->view;
 
 		for (rl = rr->layers.first; rl; rl = rl->next, rl_index++) {
 			rp_index = 0;
-			for (rpass = rl->passes.first; rpass; rpass = rpass->next, index++, rp_index++)
-				if (iuser->layer == rl_index && iuser->pass == rp_index)
+
+			for (rpass = rl->passes.first; rpass; rpass = rpass->next, index++, rp_index++) {
+				if (iuser->layer == rl_index &&
+				    iuser->passtype == rpass->passtype &&
+				    view == rpass->view_id) {
 					break;
+				}
+			}
 			if (rpass)
 				break;
 		}
 
-		if (rpass)
+		if (rpass) {
 			iuser->multi_index = index;
-		else
+			iuser->pass = rp_index;
+		}
+		else {
 			iuser->multi_index = 0;
+			iuser->pass = 0;
+		}
 	}
 	if (rpass == NULL) {
 		rl = rr->layers.first;
@@ -2467,6 +2480,19 @@ static void image_create_multilayer(Image *ima, ImBuf *ibuf, int framenr)
 		ima->rr->framenr = framenr;
 }
 
+static void image_check_stereo(Image *ima)
+{
+	if (!ima->rr) {
+		ima->flag &= ~IMA_IS_STEREO;
+		return;
+	}
+
+	if (RE_HasStereo3D(ima->rr))
+		ima->flag |= IMA_IS_STEREO;
+	else
+		ima->flag &= ~IMA_IS_STEREO;
+}
+
 /* common stuff to do with images after loading */
 static void image_initialize_after_load(Image *ima, ImBuf *ibuf)
 {
@@ -2484,6 +2510,8 @@ static void image_initialize_after_load(Image *ima, ImBuf *ibuf)
 
 	ima->ok = IMA_OK_LOADED;
 
+	/* set proper stereo 3d flag */
+	image_check_stereo(ima);
 }
 
 static int imbuf_alpha_flags_for_image(Image *ima)
@@ -2782,7 +2810,7 @@ static ImBuf *image_get_render_result(Image *ima, ImageUser *iuser, void **lock_
 	pass = iuser->pass;
 	actview = iuser->view;
 
-	if (iuser->flag & IMA_STEREO3D) {
+	if ((iuser->flag & IMA_SHOW_STEREO) && (ima->flag & IMA_IS_STEREO)) {
 		/* view == 0 shows stereo */
 		if (actview == 0)
 			actview = iuser->eye;

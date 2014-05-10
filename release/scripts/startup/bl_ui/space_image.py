@@ -430,6 +430,10 @@ class IMAGE_HT_header(Header):
 
         if ima:
             # layers
+            if sima.is_stereo:
+                row = layout.row()
+                row.prop(sima, "show_stereo", text="")
+
             layout.template_image_layers(ima, iuser)
 
             # draw options

@@ -838,6 +838,34 @@ static void *ml_addview_cb(void *base, const char *str)
 	return rv;
 }
 
+static int order_render_passes(void *a, void *b)
+{
+	// 1 if a is after b
+	RenderPass *rpa = (RenderPass *) a;
+	RenderPass *rpb = (RenderPass *) b;
+
+	if (rpa->passtype > rpb->passtype)
+		return 1;
+	else if (rpa->passtype < rpb->passtype)
+		return 0;
+
+	/* they have the same type */
+	/* left first */
+	if (strcmp(rpa->view, STEREO_LEFT_NAME) == 0)
+		return 0;
+	else if (strcmp(rpb->view, STEREO_LEFT_NAME) == 0)
+		return 1;
+
+	/* right second */
+	if (strcmp(rpa->view, STEREO_RIGHT_NAME) == 0)
+		return 0;
+	else if (strcmp(rpb->view, STEREO_RIGHT_NAME) == 0)
+		return 1;
+
+	/* remaining in ascending id order */
+	return (rpa->view_id < rpb->view_id);
+}
+
 /* from imbuf, if a handle was returned we convert this to render result */
 RenderResult *render_result_new_from_exr(void *exrhandle, const char *colorspace, bool predivide, int rectx, int recty)
 {
@@ -855,10 +883,14 @@ RenderResult *render_result_new_from_exr(void *exrhandle, const char *colorspace
 	IMB_exr_multilayer_convert(exrhandle, rr, ml_addview_cb, ml_addlayer_cb, ml_addpass_cb);
 
 	for (rl = rr->layers.first; rl; rl = rl->next) {
+		int c=0;
 		rl->rectx = rectx;
 		rl->recty = recty;
 
+		BLI_sortlist(&rl->passes, order_render_passes);
+
 		for (rpass = rl->passes.first; rpass; rpass = rpass->next) {
+			printf("%d: %s\n", c++, rpass->name);
 			rpass->rectx = rectx;
 			rpass->recty = recty;
 

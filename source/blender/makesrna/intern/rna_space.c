@@ -34,6 +34,7 @@
 #include "BKE_key.h"
 #include "BKE_movieclip.h"
 #include "BKE_node.h"
+#include "BKE_image.h"
 
 #include "DNA_action_types.h"
 #include "DNA_key_types.h"
@@ -660,6 +661,37 @@ static PointerRNA rna_SpaceImageEditor_uvedit_get(PointerRNA *ptr)
 static void rna_SpaceImageEditor_mode_update(Main *bmain, Scene *scene, PointerRNA *UNUSED(ptr))
 {
 	ED_space_image_paint_update(bmain->wm.first, scene->toolsettings);
+}
+
+
+static void rna_SpaceImageEditor_show_stereo_set(PointerRNA *ptr, int value)
+{
+	SpaceImage *sima = (SpaceImage *)(ptr->data);
+
+	if (value)
+		sima->iuser.flag |= IMA_SHOW_STEREO;
+	else
+		sima->iuser.flag &= ~IMA_SHOW_STEREO;
+}
+
+static int rna_SpaceImageEditor_show_stereo_get(PointerRNA *ptr)
+{
+	SpaceImage *sima = (SpaceImage *)(ptr->data);
+	return (sima->iuser.flag & IMA_SHOW_STEREO);
+}
+
+static void rna_SpaceImageEditor_show_stereo_update(Main *UNUSED(bmain), Scene *UNUSED(unused), PointerRNA *ptr)
+{
+	SpaceImage *sima = (SpaceImage *)(ptr->data);
+	if (sima->image && sima->image->rr) {
+		BKE_image_multilayer_index(sima->image->rr, &sima->iuser);
+	}
+}
+
+static int rna_SpaceImageEditor_is_stereo_get(PointerRNA *ptr)
+{
+	SpaceImage *sima = (SpaceImage *)(ptr->data);
+	return sima->image && (sima->image->flag & IMA_IS_STEREO);
 }
 
 static int rna_SpaceImageEditor_show_render_get(PointerRNA *ptr)
@@ -2409,6 +2441,16 @@ static void rna_def_space_image(BlenderRNA *brna)
 	RNA_def_property_enum_funcs(prop, NULL, NULL, "rna_SpaceImageEditor_draw_channels_itemf");
 	RNA_def_property_ui_text(prop, "Draw Channels", "Channels of the image to draw");
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_IMAGE, NULL);
+
+	prop = RNA_def_property(srna, "is_stereo", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_funcs(prop, "rna_SpaceImageEditor_is_stereo_get", NULL);
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+
+	prop = RNA_def_property(srna, "show_stereo", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_funcs(prop, "rna_SpaceImageEditor_show_stereo_get", "rna_SpaceImageEditor_show_stereo_set");
+	RNA_def_property_ui_text(prop, "Show Stereo", "Display the image in Stereo 3D");
+	RNA_def_property_ui_icon(prop, ICON_CAMERA_STEREO, 0);
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_IMAGE, "rna_SpaceImageEditor_show_stereo_update");
 
 	/* uv */
 	prop = RNA_def_property(srna, "uv_editor", PROP_POINTER, PROP_NONE);

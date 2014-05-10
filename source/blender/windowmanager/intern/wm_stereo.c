@@ -376,24 +376,48 @@ static bool wm_stereo_need_fullscreen(eStereoDisplayMode stereo_display)
 	             S3D_DISPLAY_PAGEFLIP);
 }
 
-static bool wm_stereo_required(bScreen *screen)
+/*
+ * return true if any active area requires to see in 3D
+ */
+static bool wm_stereo_required(bContext *C, bScreen *screen)
 {
-	/* where there is no */
 	ScrArea *sa;
-	for (sa = screen->areabase.first; sa; sa = sa->next) {
-		SpaceLink *sl;
-		for (sl = sa->spacedata.first; sl; sl= sl->next) {
+	View3D *v3d;
+	SpaceImage *sima;
+	Scene *sce = CTX_data_scene(C);
+	const bool is_multiview = (sce->r.scemode & R_MULTIVIEW);
 
-			if (sl->spacetype == SPACE_VIEW3D) {
-				View3D *v3d = (View3D*) sl;
-				if (v3d->stereo_camera == STEREO_3D_ID)
-					return true;
+	for (sa = screen->areabase.first; sa; sa = sa->next) {
+		switch (sa->spacetype) {
+			case SPACE_VIEW3D:
+			{
+				if (!is_multiview)
+					continue;
+
+				v3d = (View3D *)sa->spacedata.first;
+				if (v3d->camera && v3d->stereo_camera == STEREO_3D_ID) {
+					ARegion *ar;
+					for (ar = sa->regionbase.first; ar; ar = ar->next) {
+						if (ar->regiondata && ar->regiontype == RGN_TYPE_WINDOW) {
+							RegionView3D *rv3d = ar->regiondata;
+							if (rv3d->persp == RV3D_CAMOB) {
+								return true;
+							}
+						}
+					}
+				}
+				break;
 			}
-			if (sl->spacetype == SPACE_IMAGE) {
-				SpaceImage *sima = (SpaceImage *) sl;
-// XXX MV - waiting to image editor refactor, basically we will know if the image is 3d AND that it has 3d selected
-//					if (sima->iuser.view == STEREO_3D_ID)
+			case SPACE_IMAGE:
+			{
+				/* images should always show in stereo, even if
+				 * the file doesn't have views enabled */
+				sima = (SpaceImage *) sa->spacedata.first;
+				if ((sima->image) && (sima->image->flag & IMA_IS_STEREO) &&
+					(sima->iuser.flag & IMA_SHOW_STEREO)) {
 					return true;
+				}
+				break;
 			}
 		}
 	}
@@ -401,11 +425,11 @@ static bool wm_stereo_required(bScreen *screen)
 	return false;
 }
 
-bool WM_stereo_enabled(wmWindow *win, bool only_fullscreen_test)
+bool WM_stereo_enabled(bContext *C, wmWindow *win, bool only_fullscreen_test)
 {
 	bScreen *screen = win->screen;
 
-	if ((only_fullscreen_test == false) && wm_stereo_required(screen) == false)
+	if ((only_fullscreen_test == false) && (wm_stereo_required(C, screen) == false))
 		return false;
 
 	if (wm_stereo_need_fullscreen(U.stereo_display))

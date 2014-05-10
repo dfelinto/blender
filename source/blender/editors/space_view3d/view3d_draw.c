@@ -3323,14 +3323,17 @@ static void view3d_main_area_clear(Scene *scene, View3D *v3d, ARegion *ar)
 	}
 }
 
-static bool view3d_stereo_active(const bContext *C, Scene *scene)
+static bool view3d_stereo_active(const bContext *C, Scene *scene, View3D *v3d, RegionView3D *rv3d)
 {
 	wmWindow *win = CTX_wm_window(C);
 
 	if ((scene->r.scemode & R_MULTIVIEW) == 0)
 		return false;
 
-	if (WM_stereo_enabled(win, true) == false)
+	if (WM_stereo_enabled(C, win, true) == false)
+		return false;
+	
+	if ((v3d->camera == NULL) || rv3d->persp != RV3D_CAMOB)
 		return false;
 
 	return true;
@@ -3426,7 +3429,7 @@ static void view3d_main_area_draw_objects(const bContext *C, Scene *scene, View3
 	view3d_main_area_clear(scene, v3d, ar);
 
 	/* change view according to stereo eye */
-	if (view3d_stereo_active(C, scene))
+	if (view3d_stereo_active(C, scene, v3d, rv3d))
 		view3d_stereo_setup(scene, v3d, ar);
 
 	/* enables anti-aliasing for 3D view drawing */

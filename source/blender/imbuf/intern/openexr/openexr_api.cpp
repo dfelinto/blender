@@ -1420,11 +1420,7 @@ static ExrPass *imb_exr_get_pass(ListBase *lb, char *passname)
 	if (pass == NULL) {
 		pass = (ExrPass *)MEM_callocN(sizeof(ExrPass), "exr pass");
 
-		/* if passname starts with "Combined" */
-		if (strstr(passname, "Combined") == passname)
-			BLI_addhead(lb, pass);
-		else
-			BLI_addtail(lb, pass);
+		BLI_addhead(lb, pass);
 	}
 
 	BLI_strncpy(pass->name, passname, EXR_LAY_MAXNAME);

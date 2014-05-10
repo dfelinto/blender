@@ -1449,7 +1449,6 @@ static void save_image_options_to_op(SaveImageOptions *simopts, wmOperator *op)
 }
 
 /* returns the pass index for the view_id */
-/* similar to get_pass_id in image_buttons.c */
 static int get_multiview_pass_id(RenderResult *rr, ImageUser *iuser, const int view_id)
 {
 	RenderLayer *rl;
@@ -1467,17 +1466,16 @@ static int get_multiview_pass_id(RenderResult *rr, ImageUser *iuser, const int v
 		rl_index ++; /* fake compo/sequencer layer */
 
 	rl = BLI_findlink(&rr->layers, rl_index);
-	if (!rl) return iuser->pass_tmp;
+	if (!rl) return iuser->pass;
 
 	rpass = BLI_findlink(&rl->passes, iuser->pass);
 	passtype = rpass->passtype;
 
 	rp_index = 0;
 	for (rpass = rl->passes.first; rpass; rpass = rpass->next, rp_index++) {
-		if (rpass->passtype == passtype) {
-			if (rpass->view_id == view_id)
-				return rp_index;
-		}
+		if (rpass->passtype == passtype &&
+		    rpass->view_id == view_id)
+			return rp_index;
 	}
 
 	return iuser->pass;

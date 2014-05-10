@@ -43,6 +43,7 @@
 #include "DNA_mesh_types.h"
 #include "DNA_modifier_types.h"
 #include "DNA_camera_types.h"
+#include "DNA_view3d_types.h"
 
 #include "DNA_genfile.h"
 
@@ -285,6 +286,7 @@ void blo_do_versions_270(FileData *fd, Library *UNUSED(lib), Main *main)
 		Scene *scene;
 		SceneRenderView *srv;
 		Camera *cam;
+		bScreen *screen;
 
 		if (!DNA_struct_elem_find(fd->filesdna, "RenderData", "ListBase", "views")) {
 			for (scene = main->scene.first; scene; scene = scene->id.next) {
@@ -295,6 +297,30 @@ void blo_do_versions_270(FileData *fd, Library *UNUSED(lib), Main *main)
 				BKE_scene_add_render_view(scene, STEREO_RIGHT_NAME);
 				srv = (SceneRenderView *)scene->r.views.last;
 				BLI_strncpy(srv->suffix, "_R", sizeof(srv->suffix));
+			}
+		}
+
+		for (screen = main->screen.first; screen; screen = screen->id.next) {
+			ScrArea *sa;
+			for (sa = screen->areabase.first; sa; sa = sa->next) {
+				SpaceLink *sl;
+
+				for (sl = sa->spacedata.first; sl; sl= sl->next) {
+					switch (sl->spacetype) {
+						case SPACE_VIEW3D:
+						{
+							View3D *v3d = (View3D*) sl;
+							v3d->stereo_camera = STEREO_3D_ID;
+							break;
+						}
+						case SPACE_IMAGE:
+						{
+							SpaceImage *sima = (SpaceImage *) sl;
+							sima->iuser.flag |= IMA_SHOW_STEREO;
+							break;
+						}
+					}
+				}
 			}
 		}
 
