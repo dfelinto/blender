@@ -585,7 +585,7 @@ static void wm_method_draw_triple(bContext *C, wmWindow *win)
 {
 	wmWindowManager *wm = CTX_wm_manager(C);
 	wmDrawTriple *triple;
-	wmDrawData *dd, *drawdata = (wmDrawData *) win->drawdata.first;
+	wmDrawData *dd, *dd_next, *drawdata = (wmDrawData *) win->drawdata.first;
 	bScreen *screen = win->screen;
 	ScrArea *sa;
 	ARegion *ar;
@@ -616,9 +616,11 @@ static void wm_method_draw_triple(bContext *C, wmWindow *win)
 
 	/* it means stereo was just turned off */
 	/* note: we are removing all drawdatas that are not the first */
-	for (dd = drawdata->next; dd; dd = dd->next) {
-		wm_draw_triple_free(dd->triple);
+	for (dd = drawdata->next; dd; dd = dd_next) {
+		dd_next = dd->next;
+
 		BLI_remlink(&win->drawdata, dd);
+		wm_draw_triple_free(dd->triple);
 		MEM_freeN(dd);
 	}
 
