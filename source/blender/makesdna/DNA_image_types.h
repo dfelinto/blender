@@ -64,12 +64,14 @@ typedef struct ImageUser {
 
 } ImageUser;
 
-/* iuser->flag */
-#define	IMA_ANIM_ALWAYS		1
-#define IMA_ANIM_REFRESHED	2
-/* #define IMA_DO_PREMUL	4 */
-#define IMA_NEED_FRAME_RECALC	8
-#define IMA_SHOW_STEREO		16
+/* ImageUser.flag */
+enum {
+	IMA_ANIM_ALWAYS         = (1 << 0),
+	IMA_ANIM_REFRESHED      = (1 << 1),
+/*	IMA_DO_PREMUL           = (1 << 2), */
+	IMA_NEED_FRAME_RECALC   = (1 << 3),
+	IMA_SHOW_STEREO         = (1 << 4),
+};
 
 typedef struct Image {
 	ID id;

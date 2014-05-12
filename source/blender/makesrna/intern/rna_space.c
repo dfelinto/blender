@@ -688,12 +688,6 @@ static void rna_SpaceImageEditor_show_stereo_update(Main *UNUSED(bmain), Scene *
 	}
 }
 
-static int rna_SpaceImageEditor_is_stereo_get(PointerRNA *ptr)
-{
-	SpaceImage *sima = (SpaceImage *)(ptr->data);
-	return sima->image && (sima->image->flag & IMA_IS_STEREO);
-}
-
 static int rna_SpaceImageEditor_show_render_get(PointerRNA *ptr)
 {
 	SpaceImage *sima = (SpaceImage *)(ptr->data);
@@ -2442,11 +2436,7 @@ static void rna_def_space_image(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Draw Channels", "Channels of the image to draw");
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_IMAGE, NULL);
 
-	prop = RNA_def_property(srna, "is_stereo", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_funcs(prop, "rna_SpaceImageEditor_is_stereo_get", NULL);
-	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
-
-	prop = RNA_def_property(srna, "show_stereo", PROP_BOOLEAN, PROP_NONE);
+	prop = RNA_def_property(srna, "show_stereo_3d", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_funcs(prop, "rna_SpaceImageEditor_show_stereo_get", "rna_SpaceImageEditor_show_stereo_set");
 	RNA_def_property_ui_text(prop, "Show Stereo", "Display the image in Stereo 3D");
 	RNA_def_property_ui_icon(prop, ICON_CAMERA_STEREO, 0);

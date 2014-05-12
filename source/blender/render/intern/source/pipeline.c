@@ -209,7 +209,7 @@ int RE_HasFakeLayer(RenderResult *res)
 	return (rv->rect32 || rv->rectf);
 }
 
-int RE_HasStereo3D(RenderResult *res)
+bool RE_RenderResult_is_stereo(RenderResult *res)
 {
 	if (! BLI_findstring(&res->views, STEREO_LEFT_NAME, offsetof(RenderView, name)))
 		return false;

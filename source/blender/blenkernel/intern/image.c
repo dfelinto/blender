@@ -2248,6 +2248,36 @@ static void image_tag_frame_recalc(Image *ima, ImageUser *iuser, void *customdat
 	}
 }
 
+static void image_init_imageuser(Image *ima, ImageUser *iuser)
+{
+	RenderResult *rr = ima->rr;
+
+	iuser->multi_index = 0;
+	iuser->layer = iuser->pass = iuser->view = 0;
+	iuser->passtype = SCE_PASS_COMBINED;
+
+	if (rr) {
+		RenderLayer *rl = rr->layers.first;
+
+		if (rl) {
+			RenderPass *rp = rl->passes.first;
+
+			if (rp)
+				iuser->passtype = rp->passtype;
+		}
+
+		BKE_image_multilayer_index(rr, iuser);
+	}
+	else {
+		iuser->flag &= ~IMA_SHOW_STEREO;
+	}
+}
+
+void BKE_image_init_imageuser(Image *ima, ImageUser *iuser)
+{
+	return image_init_imageuser(ima, iuser);
+}
+
 void BKE_image_signal(Image *ima, ImageUser *iuser, int signal)
 {
 	if (ima == NULL)
@@ -2335,8 +2365,7 @@ void BKE_image_signal(Image *ima, ImageUser *iuser, int signal)
 				iuser->ok = 1;
 				if (ima->source == IMA_SRC_FILE || ima->source == IMA_SRC_SEQUENCE) {
 					if (ima->type == IMA_TYPE_MULTILAYER) {
-						iuser->multi_index = 0;
-						iuser->layer = iuser->pass = 0;
+						image_init_imageuser(ima, iuser);
 					}
 				}
 			}
@@ -2380,7 +2409,7 @@ RenderPass *BKE_image_multilayer_index(RenderResult *rr, ImageUser *iuser)
 	if (iuser) {
 		short index = 0, rl_index = 0, rp_index;
 		short view;
-		bool is_stereo = RE_HasStereo3D(rr) && (iuser->flag & IMA_SHOW_STEREO);
+		bool is_stereo = RE_RenderResult_is_stereo(rr) && (iuser->flag & IMA_SHOW_STEREO);
 
 		view = is_stereo ? iuser->eye : iuser->view;
 
@@ -2416,19 +2445,47 @@ RenderPass *BKE_image_multilayer_index(RenderResult *rr, ImageUser *iuser)
 	return rpass;
 }
 
-RenderResult *BKE_image_acquire_renderresult(Scene *scene, Image *ima)
+bool BKE_image_is_stereo(Scene *scene, Image *ima)
 {
 	if (ima->rr) {
-		return ima->rr;
+		return (ima->flag & IMA_IS_STEREO) != 0;
+	}
+	else if (ima->type == IMA_TYPE_R_RESULT) {
+		RenderResult *rr;
+		if (ima->render_slot == ima->last_render_slot)
+			rr =  RE_AcquireResultRead(RE_GetRender(scene->id.name));
+		else
+			rr = ima->renders[ima->render_slot];
+
+		return RE_RenderResult_is_stereo(rr);
+	}
+	else
+		return false;
+}
+
+static void image_set_stereo_flag(Image *ima, RenderResult *rr)
+{
+	if (rr && RE_RenderResult_is_stereo(rr))
+		ima->flag |= IMA_IS_STEREO;
+	else
+		ima->flag &= ~IMA_IS_STEREO;
+}
+
+RenderResult *BKE_image_acquire_renderresult(Scene *scene, Image *ima)
+{
+	RenderResult *rr = NULL;
+	if (ima->rr) {
+		rr = ima->rr;
 	}
 	else if (ima->type == IMA_TYPE_R_RESULT) {
 		if (ima->render_slot == ima->last_render_slot)
-			return RE_AcquireResultRead(RE_GetRender(scene->id.name));
+			rr = RE_AcquireResultRead(RE_GetRender(scene->id.name));
 		else
-			return ima->renders[ima->render_slot];
+			rr = ima->renders[ima->render_slot];
 	}
-	else
-		return NULL;
+
+	image_set_stereo_flag(ima, rr);
+	return rr;
 }
 
 void BKE_image_release_renderresult(Scene *scene, Image *ima)
@@ -2478,6 +2535,8 @@ static void image_create_multilayer(Image *ima, ImBuf *ibuf, int framenr)
 	ibuf->userdata = NULL;
 	if (ima->rr)
 		ima->rr->framenr = framenr;
+
+	image_set_stereo_flag(ima, ima->rr);
 }
 
 static void image_check_stereo(Image *ima)
@@ -2487,7 +2546,7 @@ static void image_check_stereo(Image *ima)
 		return;
 	}
 
-	if (RE_HasStereo3D(ima->rr))
+	if (RE_RenderResult_is_stereo(ima->rr))
 		ima->flag |= IMA_IS_STEREO;
 	else
 		ima->flag &= ~IMA_IS_STEREO;
@@ -2790,7 +2849,7 @@ static ImBuf *image_get_render_result(Image *ima, ImageUser *iuser, void **lock_
 	float *rectf, *rectz;
 	unsigned int *rect;
 	float dither;
-	int channels, layer, pass;
+	int channels, layer, passtype;
 	ImBuf *ibuf;
 	int from_render = (ima->render_slot == ima->last_render_slot);
 	int actview;
@@ -2807,16 +2866,11 @@ static ImBuf *image_get_render_result(Image *ima, ImageUser *iuser, void **lock_
 
 	channels = 4;
 	layer = iuser->layer;
-	pass = iuser->pass;
+	passtype = iuser->passtype;
 	actview = iuser->view;
 
-	if ((iuser->flag & IMA_SHOW_STEREO) && (ima->flag & IMA_IS_STEREO)) {
-		/* view == 0 shows stereo */
-		if (actview == 0)
-			actview = iuser->eye;
-		else
-			actview = actview - 1;
-	}
+	if ((ima->flag & IMA_IS_STEREO) && (iuser->flag & IMA_SHOW_STEREO))
+		actview = iuser->eye;
 
 	if (from_render) {
 		RE_AcquireResultImage(re, &rres, actview);
@@ -2863,9 +2917,12 @@ static ImBuf *image_get_render_result(Image *ima, ImageUser *iuser, void **lock_
 		if (rl) {
 			RenderPass *rpass;
 
-			/* "there's no combined pass, is in renderlayer itself" */
-			/* -Now it does, no need to do pass - 1 (dfelinto) */
-			rpass = BLI_findlink(&rl->passes, pass);
+			for (rpass = rl->passes.first; rpass; rpass = rpass->next) {
+				if (passtype == rpass->passtype &&
+					actview == rpass->view_id)
+					break;
+			}
+
 			if (rpass) {
 				channels = rpass->channels;
 				rectf = rpass->rect;

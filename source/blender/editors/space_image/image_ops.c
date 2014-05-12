@@ -1108,6 +1108,7 @@ static int image_open_exec(bContext *C, wmOperator *op)
 		iuser->framenr = 1;
 		iuser->offset = frame_ofs - 1;
 		iuser->fie_ima = 2;
+		BKE_image_init_imageuser(ima, iuser);
 	}
 
 	/* XXX unpackImage frees image buffers */
@@ -1631,6 +1632,7 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 			RenderView *rv;
 			int i, orig_multi_index = sima->iuser.multi_index;
 			short orig_pass = sima->iuser.pass;
+			short orig_flag = sima->iuser.flag;
 			short orig_view = sima->iuser.view;
 			unsigned char planes = ibuf->planes;
 
@@ -1639,6 +1641,7 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 			for (i=0, rv = (RenderView *)rr->views.first; rv; rv = rv->next, i++) {
 				sima->iuser.pass = get_multiview_pass_id(rr, &sima->iuser, i);
 				sima->iuser.view = i;
+				sima->iuser.flag &= ~IMA_SHOW_STEREO;
 				BKE_image_multilayer_index(rr, &sima->iuser);
 
 				srv = BLI_findstring(&scene->r.views, rv->name, offsetof(SceneRenderView, name));
@@ -1662,6 +1665,7 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 			}
 
 			sima->iuser.pass = orig_pass;
+			sima->iuser.flag = orig_flag;
 			sima->iuser.view = orig_view;
 			sima->iuser.multi_index = orig_multi_index;
 		}

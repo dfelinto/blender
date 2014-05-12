@@ -170,6 +170,7 @@ struct Image *BKE_image_add_generated(
 struct Image *BKE_image_add_from_imbuf(struct ImBuf *ibuf);
 
 /* for reload, refresh, pack */
+void BKE_image_init_imageuser(struct Image *ima, struct ImageUser *iuser);
 void BKE_image_signal(struct Image *ima, struct ImageUser *iuser, int signal);
 
 void BKE_image_walk_all_users(const struct Main *mainp, void *customdata,
@@ -195,6 +196,7 @@ struct RenderPass *BKE_image_multilayer_index(struct RenderResult *rr, struct Im
 struct RenderPass *BKE_image_multiview_index(struct RenderResult *rr, struct ImageUser *iuser);
 
 /* for multilayer images as well as for render-viewer */
+bool BKE_image_is_stereo(struct Scene *scene, struct Image *ima);
 struct RenderResult *BKE_image_acquire_renderresult(struct Scene *scene, struct Image *ima);
 void BKE_image_release_renderresult(struct Scene *scene, struct Image *ima);
 
