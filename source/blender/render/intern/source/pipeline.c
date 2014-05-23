@@ -627,6 +627,8 @@ void RE_FreeRender(Render *re)
 	
 	BLI_remlink(&RenderGlobal.renderlist, re);
 	MEM_freeN(re->eval_ctx);
+
+	render_free_stereo(re);
 	MEM_freeN(re);
 }
 
@@ -2822,28 +2824,34 @@ static void render_initialize_stereo(Render *re, RenderData *rd)
 	     rd->views_setup == SCE_VIEWS_SETUP_BASIC) {
 		Object *camera = RE_GetCamera(re);
 
-		re->camera_left = BKE_object_copy(camera);
-		re->camera_left->data =  BKE_camera_copy(camera->data);
-		BKE_camera_multiview_basic(re->camera_left, true);
+		if (re->camera_left == NULL) {
+			re->camera_left = MEM_dupallocN(camera);
+			re->camera_left->data = MEM_dupallocN(camera->data);
+		}
 
-		re->camera_right = BKE_object_copy(camera);
-		re->camera_right->data =  BKE_camera_copy(camera->data);
+		if (re->camera_right == NULL) {
+			re->camera_right = MEM_dupallocN(camera);
+			re->camera_right->data = MEM_dupallocN(camera->data);
+		}
+
+		BKE_camera_multiview_basic(re->camera_left, true);
 		BKE_camera_multiview_basic(re->camera_right, false);
 	}
 }
 
 static void render_free_stereo(Render *re)
 {
-	//XXX MV I need a cleaner way to free the objects
-	return;
 	if (re->camera_left) {
-		BKE_camera_free(re->camera_left->data);
-		BKE_object_free(re->camera_left);
+		MEM_freeN(re->camera_left->data);
+		MEM_freeN(re->camera_left);
+		re->camera_left = NULL;
 	}
 
 	if (re->camera_right) {
-		BKE_camera_free(re->camera_right->data);
-		BKE_object_free(re->camera_right);
+		MEM_freeN(re->camera_right->data);
+		MEM_freeN(re->camera_right);
+		re->camera_right = NULL;
+
 	}
 }
 
@@ -2914,10 +2922,8 @@ static int render_initialize_from_main(Render *re, RenderData *rd, Main *bmain, 
 	}
 	
 	RE_InitState(re, NULL, &scene->r, srl, winx, winy, &disprect);
-	if (!re->ok)  /* if an error was printed, abort */ {
-		render_free_stereo(re);
+	if (!re->ok)  /* if an error was printed, abort */
 		return 0;
-	}
 	
 	/* initstate makes new result, have to send changed tags around */
 	ntreeCompositTagRender(re->scene);
@@ -2994,8 +3000,6 @@ void RE_BlenderFrame(Render *re, Main *bmain, Scene *scene, SceneRenderLayer *sr
 
 	BLI_callback_exec(re->main, (ID *)scene, G.is_break ? BLI_CB_EVT_RENDER_CANCEL : BLI_CB_EVT_RENDER_COMPLETE);
 
-	render_free_stereo(re);
-
 	/* UGLY WARNING */
 	G.is_rendering = false;
 }
@@ -3008,7 +3012,6 @@ void RE_RenderFreestyleStrokes(Render *re, Main *bmain, Scene *scene, int render
 		if (render)
 			do_render_fields_blur_3d(re);
 	}
-	render_free_stereo(re);
 	re->result_ok = 1;
 }
 #endif
@@ -3346,8 +3349,6 @@ void RE_BlenderAnim(Render *re, Main *bmain, Scene *scene, Object *camera_overri
 	re->flag &= ~R_ANIMATION;
 
 	BLI_callback_exec(re->main, (ID *)scene, G.is_break ? BLI_CB_EVT_RENDER_CANCEL : BLI_CB_EVT_RENDER_COMPLETE);
-
-	render_free_stereo(re);
 
 	/* UGLY WARNING */
 	G.is_rendering = false;
