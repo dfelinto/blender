@@ -717,7 +717,7 @@ void BKE_nurb_bezierPoints_add(Nurb *nu, int number)
 	BezTriple *bezt;
 	int i;
 
-	nu->bezt = MEM_recallocN(nu->bp, (nu->pntsu + number) * sizeof(BezTriple));
+	nu->bezt = MEM_recallocN(nu->bezt, (nu->pntsu + number) * sizeof(BezTriple));
 
 	for (i = 0, bezt = &nu->bezt[nu->pntsu]; i < number; i++, bezt++) {
 		bezt->radius = 1.0f;
@@ -3079,9 +3079,10 @@ static void calchandleNurb_intern(BezTriple *bezt, BezTriple *prev, BezTriple *n
 		return;
 	}
 
-	len_a = len_v3v3(p2, p2_h1);
-	len_b = len_v3v3(p2, p2_h2);
 	if (is_fcurve == false) {
+		len_a = len_v3v3(p2, p2_h1);
+		len_b = len_v3v3(p2, p2_h2);
+
 		if (len_a == 0.0f)
 			len_a = 1.0f;
 		if (len_b == 0.0f)
@@ -4228,8 +4229,8 @@ void BKE_curve_material_index_clear(Curve *cu)
 
 void BKE_curve_rect_from_textbox(const struct Curve *cu, const struct TextBox *tb, struct rctf *r_rect)
 {
-	r_rect->xmin = (cu->xof * cu->fsize) + tb->x;
-	r_rect->ymax = (cu->yof * cu->fsize) + tb->y + cu->fsize;
+	r_rect->xmin = cu->xof + tb->x;
+	r_rect->ymax = cu->yof + tb->y + cu->fsize;
 
 	r_rect->xmax = r_rect->xmin + tb->w;
 	r_rect->ymin = r_rect->ymax - tb->h;

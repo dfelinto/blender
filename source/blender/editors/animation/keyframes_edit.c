@@ -37,6 +37,7 @@
 #include "BLI_blenlib.h"
 #include "BLI_utildefines.h"
 #include "BLI_lasso.h"
+#include "BLI_math.h"
 
 #include "DNA_anim_types.h"
 #include "DNA_object_types.h"
@@ -222,7 +223,7 @@ static short ob_keyframes_loop(KeyframeEditData *ked, bDopeSheet *ads, Object *o
 		}
 	}
 	
-	BLI_freelistN(&anim_data);
+	ANIM_animdata_freelist(&anim_data);
 	
 	/* return return code - defaults to zero if nothing happened */
 	return ret;
@@ -264,7 +265,7 @@ static short scene_keyframes_loop(KeyframeEditData *ked, bDopeSheet *ads, Scene 
 		}
 	}
 	
-	BLI_freelistN(&anim_data);
+	ANIM_animdata_freelist(&anim_data);
 	
 	/* return return code - defaults to zero if nothing happened */
 	return ret;
@@ -300,7 +301,7 @@ static short summary_keyframes_loop(KeyframeEditData *ked, bAnimContext *ac, Key
 			break;
 	}
 	
-	BLI_freelistN(&anim_data);
+	ANIM_animdata_freelist(&anim_data);
 	
 	return ret_code;
 }
@@ -381,9 +382,6 @@ void ANIM_editkeyframes_refresh(bAnimContext *ac)
 	ListBase anim_data = {NULL, NULL};
 	bAnimListElem *ale;
 	int filter;
-	/* when not in graph view, don't use handles */
-	SpaceIpo *sipo = (ac->spacetype == SPACE_IPO) ? (SpaceIpo *)ac->sl : NULL;
-	const bool use_handle = sipo ? !(sipo->flag & SIPO_NOHANDLES) : false;
 	
 	/* filter animation data */
 	filter = ANIMFILTER_DATA_VISIBLE;
@@ -395,11 +393,11 @@ void ANIM_editkeyframes_refresh(bAnimContext *ac)
 		
 		/* make sure keyframes in F-Curve are all in order, and handles are in valid positions */
 		sort_time_fcurve(fcu);
-		testhandles_fcurve(fcu, use_handle);
+		calchandles_fcurve(fcu);
 	}
 	
 	/* free temp data */
-	BLI_freelistN(&anim_data);
+	ANIM_animdata_freelist(&anim_data);
 }
 
 /* ************************************************************************** */
@@ -709,14 +707,38 @@ KeyframeEditFunc ANIM_editkeyframes_snap(short type)
 
 /* --------- */
 
+static void mirror_bezier_xaxis_ex(BezTriple *bezt, const float center)
+{
+	float diff;
+	int i;
+
+	for (i = 0; i < 3; i++) {
+		diff = (center - bezt->vec[i][0]);
+		bezt->vec[i][0] = (center + diff);
+	}
+	swap_v3_v3(bezt->vec[0], bezt->vec[2]);
+
+	SWAP(char, bezt->h1, bezt->h2);
+	SWAP(char, bezt->f1, bezt->f3);
+}
+
+static void mirror_bezier_yaxis_ex(BezTriple *bezt, const float center)
+{
+	float diff;
+	int i;
+
+	for (i = 0; i < 3; i++) {
+		diff = (center - bezt->vec[i][1]);
+		bezt->vec[i][1] = (center + diff);
+	}
+}
+
 static short mirror_bezier_cframe(KeyframeEditData *ked, BezTriple *bezt)
 {
 	const Scene *scene = ked->scene;
-	float diff;
 	
 	if (bezt->f2 & SELECT) {
-		diff = ((float)CFRA - bezt->vec[1][0]);
-		bezt->vec[1][0] = ((float)CFRA + diff);
+		mirror_bezier_xaxis_ex(bezt, CFRA);
 	}
 	
 	return 0;
@@ -724,11 +746,8 @@ static short mirror_bezier_cframe(KeyframeEditData *ked, BezTriple *bezt)
 
 static short mirror_bezier_yaxis(KeyframeEditData *UNUSED(ked), BezTriple *bezt)
 {
-	float diff;
-	
 	if (bezt->f2 & SELECT) {
-		diff = (0.0f - bezt->vec[1][0]);
-		bezt->vec[1][0] = (0.0f + diff);
+		mirror_bezier_yaxis_ex(bezt, 0.0f);
 	}
 	
 	return 0;
@@ -736,11 +755,8 @@ static short mirror_bezier_yaxis(KeyframeEditData *UNUSED(ked), BezTriple *bezt)
 
 static short mirror_bezier_xaxis(KeyframeEditData *UNUSED(ked), BezTriple *bezt)
 {
-	float diff;
-	
 	if (bezt->f2 & SELECT) {
-		diff = (0.0f - bezt->vec[1][1]);
-		bezt->vec[1][1] = (0.0f + diff);
+		mirror_bezier_xaxis_ex(bezt, 0.0f);
 	}
 	
 	return 0;
@@ -750,8 +766,7 @@ static short mirror_bezier_marker(KeyframeEditData *ked, BezTriple *bezt)
 {
 	/* mirroring time stored in f1 */
 	if (bezt->f2 & SELECT) {
-		const float diff = (ked->f1 - bezt->vec[1][0]);
-		bezt->vec[1][0] = (ked->f1 + diff);
+		mirror_bezier_xaxis_ex(bezt, ked->f1);
 	}
 	
 	return 0;
@@ -759,12 +774,9 @@ static short mirror_bezier_marker(KeyframeEditData *ked, BezTriple *bezt)
 
 static short mirror_bezier_value(KeyframeEditData *ked, BezTriple *bezt)
 {
-	float diff;
-	
 	/* value to mirror over is stored in the custom data -> first float value slot */
 	if (bezt->f2 & SELECT) {
-		diff = (ked->f1 - bezt->vec[1][1]);
-		bezt->vec[1][1] = (ked->f1 + diff);
+		mirror_bezier_xaxis_ex(bezt, ked->f1);
 	}
 	
 	return 0;

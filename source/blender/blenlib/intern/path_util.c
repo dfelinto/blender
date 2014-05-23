@@ -365,14 +365,6 @@ void BLI_cleanup_path(const char *relabase, char *path)
 	 */
 	
 #ifdef WIN32
-	
-	/* Note, this should really be moved to the file selector,
-	 * since this function is used in many areas */
-	if (strcmp(path, ".") == 0) {  /* happens for example in FILE_MAIN */
-		get_default_root(path);
-		return;
-	}
-
 	while ( (start = strstr(path, "\\..\\")) ) {
 		eind = start + strlen("\\..\\") - 1;
 		a = start - path - 1;
@@ -400,12 +392,6 @@ void BLI_cleanup_path(const char *relabase, char *path)
 		memmove(start, eind, strlen(eind) + 1);
 	}
 #else
-	if (path[0] == '.') {  /* happens, for example in FILE_MAIN */
-		path[0] = '/';
-		path[1] = 0;
-		return;
-	}
-
 	while ( (start = strstr(path, "/../")) ) {
 		a = start - path - 1;
 		if (a > 0) {
@@ -475,8 +461,6 @@ bool BLI_path_is_unc(const char *name)
  * of a UNC path which can start with '\\' (short version)
  * or '\\?\' (long version)
  * If the path is not a UNC path, return 0
- *
- * \param name  the path name
  */
 static int BLI_path_unc_prefix_len(const char *path)
 {
@@ -2041,6 +2025,8 @@ const char *BLI_path_basename(const char *path)
 	return filename ? filename + 1 : path;
 }
 
+/* UNUSED */
+#if 0
 /**
  * Produce image export path.
  * 
@@ -2167,6 +2153,8 @@ int BLI_rebase_path(char *abs, size_t abs_len,
 
 	return BLI_REBASE_OK;
 }
+#endif
+
 
 /**
  * Returns pointer to the leftmost path separator in string. Not actually used anywhere.

@@ -2453,7 +2453,7 @@ static void gpu_update_lamps_shadows(Scene *scene, View3D *v3d)
 		
 		v3d->drawtype = OB_SOLID;
 		v3d->lay &= GPU_lamp_shadow_layer(shadow->lamp);
-		v3d->flag2 &= ~V3D_SOLID_TEX;
+		v3d->flag2 &= ~V3D_SOLID_TEX | V3D_SHOW_SOLID_MATCAP;
 		v3d->flag2 |= V3D_RENDER_OVERRIDE | V3D_RENDER_SHADOW;
 		
 		GPU_lamp_shadow_buffer_bind(shadow->lamp, viewmat, &winsize, winmat);
@@ -2726,6 +2726,10 @@ static void view3d_draw_objects(
 	if (v3d->zbuf) {
 		v3d->zbuf = false;
 		glDisable(GL_DEPTH_TEST);
+	}
+
+	if ((v3d->flag2 & V3D_RENDER_SHADOW) == 0) {
+		GPU_free_images_old();
 	}
 }
 
@@ -3106,7 +3110,7 @@ static bool view3d_main_area_draw_engine(const bContext *C, Scene *scene,
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	if (v3d->flag & V3D_DISPBGPICS)
-		view3d_draw_bgpic(scene, ar, v3d, false, true);
+		view3d_draw_bgpic_test(scene, ar, v3d, false, true);
 	else
 		fdrawcheckerboard(0, 0, ar->winx, ar->winy);
 
@@ -3115,7 +3119,7 @@ static bool view3d_main_area_draw_engine(const bContext *C, Scene *scene,
 	type->view_draw(rv3d->render_engine, C);
 
 	if (v3d->flag & V3D_DISPBGPICS)
-		view3d_draw_bgpic(scene, ar, v3d, true, true);
+		view3d_draw_bgpic_test(scene, ar, v3d, true, true);
 
 	if (clip_border) {
 		/* restore scissor as it was before */

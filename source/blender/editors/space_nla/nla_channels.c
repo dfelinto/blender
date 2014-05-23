@@ -94,7 +94,7 @@ static int mouse_nla_channels(bAnimContext *ac, float x, int channel_index, shor
 		if (G.debug & G_DEBUG)
 			printf("Error: animation channel (index = %d) not found in mouse_anim_channels()\n", channel_index);
 		
-		BLI_freelistN(&anim_data);
+		ANIM_animdata_freelist(&anim_data);
 		return 0;
 	}
 	
@@ -322,7 +322,7 @@ static int mouse_nla_channels(bAnimContext *ac, float x, int channel_index, shor
 	}
 	
 	/* free channels */
-	BLI_freelistN(&anim_data);
+	ANIM_animdata_freelist(&anim_data);
 	
 	/* return the notifier-flags set */
 	return notifierFlags;
@@ -416,8 +416,8 @@ static int nlachannels_pushdown_exec(bContext *C, wmOperator *op)
 		
 		/* active animdata block */
 		if (nla_panel_context(C, &adt_ptr, NULL, NULL) == 0 || (adt_ptr.data == NULL)) {
-			BKE_report(op->reports, RPT_ERROR, "No active AnimData block to use. " 
-			           "Select a datablock expander first or set the appropriate flags on an AnimData block");
+			BKE_report(op->reports, RPT_ERROR, "No active AnimData block to use "
+			           "(select a datablock expander first or set the appropriate flags on an AnimData block)");
 			return OPERATOR_CANCELLED;
 		}
 		else {
@@ -437,13 +437,13 @@ static int nlachannels_pushdown_exec(bContext *C, wmOperator *op)
 		/* get channel from index */
 		ale = BLI_findlink(&anim_data, channel_index);
 		if (ale == NULL) {
-			BKE_reportf(op->reports, RPT_ERROR, "No animation channel found at index = %d", channel_index);
-			BLI_freelistN(&anim_data);
+			BKE_reportf(op->reports, RPT_ERROR, "No animation channel found at index %d", channel_index);
+			ANIM_animdata_freelist(&anim_data);
 			return OPERATOR_CANCELLED;
 		}
 		else if (ale->type != ANIMTYPE_NLAACTION) {
-			BKE_reportf(op->reports, RPT_ERROR, "Animation channel at index = %d is not a NLA 'Active Action' channel", channel_index);
-			BLI_freelistN(&anim_data);
+			BKE_reportf(op->reports, RPT_ERROR, "Animation channel at index %d is not a NLA 'Active Action' channel", channel_index);
+			ANIM_animdata_freelist(&anim_data);
 			return OPERATOR_CANCELLED;
 		}
 		
@@ -451,7 +451,7 @@ static int nlachannels_pushdown_exec(bContext *C, wmOperator *op)
 		adt = ale->adt;
 		
 		/* we don't need anything here anymore, so free it all */
-		BLI_freelistN(&anim_data);
+		ANIM_animdata_freelist(&anim_data);
 	}
 	
 	/* double-check that we are free to push down here... */
@@ -460,7 +460,8 @@ static int nlachannels_pushdown_exec(bContext *C, wmOperator *op)
 		return OPERATOR_CANCELLED;
 	}
 	else if (nlaedit_is_tweakmode_on(&ac)) {
-		BKE_report(op->reports, RPT_WARNING, "Cannot push down actions while tweaking a strip's action. Exit tweakmode first");
+		BKE_report(op->reports, RPT_WARNING,
+		           "Cannot push down actions while tweaking a strip's action, exit tweak mode first");
 		return OPERATOR_CANCELLED;
 	}
 	else if (adt->action == NULL) {
@@ -538,7 +539,7 @@ bool nlaedit_add_tracks_existing(bAnimContext *ac, bool above_sel)
 	}
 	
 	/* free temp data */
-	BLI_freelistN(&anim_data);
+	ANIM_animdata_freelist(&anim_data);
 	
 	return added;
 }
@@ -571,7 +572,7 @@ bool nlaedit_add_tracks_empty(bAnimContext *ac)
 	}
 	
 	/* cleanup */
-	BLI_freelistN(&anim_data);
+	ANIM_animdata_freelist(&anim_data);
 	
 	return added;
 }
@@ -665,7 +666,7 @@ static int nlaedit_delete_tracks_exec(bContext *C, wmOperator *UNUSED(op))
 	}
 	
 	/* free temp data */
-	BLI_freelistN(&anim_data);
+	ANIM_animdata_freelist(&anim_data);
 	
 	/* set notifier that things have changed */
 	WM_event_add_notifier(C, NC_ANIMATION | ND_NLA | NA_EDITED, NULL);

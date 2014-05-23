@@ -38,19 +38,28 @@
 extern "C" {
 #endif
 
+struct FreestyleConfig;
+struct FreestyleLineSet;
+struct FreestyleModuleConfig;
+
+/* RNA aliases */
+typedef struct FreestyleSettings FreestyleSettings;
+typedef struct FreestyleModuleSettings FreestyleModuleSettings;
+
 /* FreestyleConfig */
 void BKE_freestyle_config_init(FreestyleConfig *config);
 void BKE_freestyle_config_free(FreestyleConfig *config);
 void BKE_freestyle_config_copy(FreestyleConfig *new_config, FreestyleConfig *config);
 
 /* FreestyleConfig.modules */
-void BKE_freestyle_module_add(FreestyleConfig *config);
-void BKE_freestyle_module_delete(FreestyleConfig *config, FreestyleModuleConfig *module_conf);
-void BKE_freestyle_module_move_up(FreestyleConfig *config, FreestyleModuleConfig *module_conf);
-void BKE_freestyle_module_move_down(FreestyleConfig *config, FreestyleModuleConfig *module_conf);
+FreestyleModuleConfig *BKE_freestyle_module_add(FreestyleConfig *config);
+bool BKE_freestyle_module_delete(FreestyleConfig *config, FreestyleModuleConfig *module_conf);
+bool BKE_freestyle_module_move_up(FreestyleConfig *config, FreestyleModuleConfig *module_conf);
+bool BKE_freestyle_module_move_down(FreestyleConfig *config, FreestyleModuleConfig *module_conf);
 
 /* FreestyleConfig.linesets */
-FreestyleLineSet *BKE_freestyle_lineset_add(FreestyleConfig *config);
+FreestyleLineSet *BKE_freestyle_lineset_add(FreestyleConfig *config, const char *name);
+bool BKE_freestyle_lineset_delete(FreestyleConfig *config, FreestyleLineSet *lineset);
 FreestyleLineSet *BKE_freestyle_lineset_get_active(FreestyleConfig *config);
 short BKE_freestyle_lineset_get_active_index(FreestyleConfig *config);
 void BKE_freestyle_lineset_set_active_index(FreestyleConfig *config, short index);

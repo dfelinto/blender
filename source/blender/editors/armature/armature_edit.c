@@ -209,17 +209,12 @@ float ED_rollBoneToVector(EditBone *bone, const float align_axis[3], const bool 
 
 	sub_v3_v3v3(nor, bone->tail, bone->head);
 
-	/* if tail == head! */
-	if (is_zero_v3(nor)) {
+	/* If tail == head or the bone is aligned with the axis... */
+	if (normalize_v3(nor) <= FLT_EPSILON || (fabsf(dot_v3v3(align_axis, nor)) >= (1.0f - FLT_EPSILON))) {
 		return roll;
 	}
 
-	vec_roll_to_mat3(nor, 0.0f, mat);
-
-	/* check the bone isn't aligned with the axis */
-	if (dot_v3v3(align_axis, mat[2]) >= (1.0f - FLT_EPSILON)) {
-		return roll;
-	}
+	vec_roll_to_mat3_normalized(nor, 0.0f, mat);
 
 	/* project the new_up_axis along the normal */
 	project_v3_v3v3(vec, align_axis, nor);
@@ -405,7 +400,7 @@ static int armature_calc_roll_exec(bContext *C, wmOperator *op)
 	}
 	
 	/* note, notifier might evolve */
-	WM_event_add_notifier(C, NC_OBJECT | ND_POSE, ob);
+	WM_event_add_notifier(C, NC_OBJECT | ND_BONE_SELECT, ob);
 	
 	return OPERATOR_FINISHED;
 }
@@ -1136,7 +1131,7 @@ static int armature_align_bones_exec(bContext *C, wmOperator *op)
 	}
 
 	/* note, notifier might evolve */
-	WM_event_add_notifier(C, NC_OBJECT | ND_TRANSFORM, ob);
+	WM_event_add_notifier(C, NC_OBJECT | ND_BONE_SELECT, ob);
 	
 	return OPERATOR_FINISHED;
 }

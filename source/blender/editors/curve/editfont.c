@@ -247,18 +247,8 @@ static void text_update_edited(bContext *C, Object *obedit, int mode)
 	struct Main *bmain = CTX_data_main(C);
 	Curve *cu = obedit->data;
 	EditFont *ef = cu->editfont;
-	cu->curinfo = ef->textbufinfo[ef->pos ? ef->pos - 1 : 0];
-	
-	if (obedit->totcol > 0) {
-		obedit->actcol = ef->textbufinfo[ef->pos ? ef->pos - 1 : 0].mat_nr;
 
-		/* since this array is calloc'd, it can be 0 even though we try ensure
-		 * (mat_nr > 0) almost everywhere */
-		if (obedit->actcol < 1) {
-			obedit->actcol = 1;
-		}
-	}
-
+	/* run update first since it can move the cursor */
 	if (mode == FO_EDIT) {
 		/* re-tesselllate */
 		DAG_id_tag_update(obedit->data, 0);
@@ -266,6 +256,18 @@ static void text_update_edited(bContext *C, Object *obedit, int mode)
 	else {
 		/* depsgraph runs above, but since we're not tagging for update, call direct */
 		BKE_vfont_to_curve(bmain, obedit, mode);
+	}
+
+	cu->curinfo = ef->textbufinfo[ef->pos ? ef->pos - 1 : 0];
+
+	if (obedit->totcol > 0) {
+		obedit->actcol = cu->curinfo.mat_nr;
+
+		/* since this array is calloc'd, it can be 0 even though we try ensure
+		 * (mat_nr > 0) almost everywhere */
+		if (obedit->actcol < 1) {
+			obedit->actcol = 1;
+		}
 	}
 
 	WM_event_add_notifier(C, NC_GEOM | ND_DATA, obedit->data);
@@ -1055,6 +1057,14 @@ static int move_cursor(bContext *C, int type, const bool select)
 	if      (ef->pos > ef->len)  ef->pos = ef->len;
 	else if (ef->pos >= MAXTEXT) ef->pos = MAXTEXT;
 	else if (ef->pos < 0)        ef->pos = 0;
+
+	/* apply virtical cursor motion to position immediately
+	 * otherwise the selection will lag behind */
+	if (FO_CURS_IS_MOTION(cursmove)) {
+		struct Main *bmain = CTX_data_main(C);
+		BKE_vfont_to_curve(bmain, obedit, cursmove);
+		cursmove = FO_CURS;
+	}
 
 	if (select == 0) {
 		if (ef->selstart) {

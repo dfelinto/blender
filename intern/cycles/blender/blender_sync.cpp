@@ -142,8 +142,13 @@ void BlenderSync::sync_data(BL::SpaceView3D b_v3d, BL::Object b_override, void *
 	sync_film();
 	sync_shaders();
 	sync_curve_settings();
+
+	mesh_synced.clear(); /* use for objects and motion sync */
+
 	sync_objects(b_v3d);
 	sync_motion(b_v3d, b_override, python_thread_state);
+
+	mesh_synced.clear();
 }
 
 /* Integrator */
@@ -357,9 +362,9 @@ SceneParams BlenderSync::get_scene_params(BL::Scene b_scene, bool background)
 	const bool shadingsystem = RNA_boolean_get(&cscene, "shading_system");
 
 	if(shadingsystem == 0)
-		params.shadingsystem = SceneParams::SVM;
+		params.shadingsystem = SHADINGSYSTEM_SVM;
 	else if(shadingsystem == 1)
-		params.shadingsystem = SceneParams::OSL;
+		params.shadingsystem = SHADINGSYSTEM_OSL;
 	
 	if(background)
 		params.bvh_type = SceneParams::BVH_STATIC;
@@ -369,7 +374,7 @@ SceneParams BlenderSync::get_scene_params(BL::Scene b_scene, bool background)
 	params.use_bvh_spatial_split = RNA_boolean_get(&cscene, "debug_use_spatial_splits");
 	params.use_bvh_cache = (background)? RNA_boolean_get(&cscene, "use_cache"): false;
 
-	if(background && params.shadingsystem != SceneParams::OSL)
+	if(background && params.shadingsystem != SHADINGSYSTEM_OSL)
 		params.persistent_data = r.use_persistent_data();
 	else
 		params.persistent_data = false;
@@ -506,9 +511,9 @@ SessionParams BlenderSync::get_session_params(BL::RenderEngine b_engine, BL::Use
 	const bool shadingsystem = RNA_boolean_get(&cscene, "shading_system");
 
 	if(shadingsystem == 0)
-		params.shadingsystem = SessionParams::SVM;
+		params.shadingsystem = SHADINGSYSTEM_SVM;
 	else if(shadingsystem == 1)
-		params.shadingsystem = SessionParams::OSL;
+		params.shadingsystem = SHADINGSYSTEM_OSL;
 	
 	/* color managagement */
 	params.display_buffer_linear = GLEW_ARB_half_float_pixel && b_engine.support_display_space_shader(b_scene);

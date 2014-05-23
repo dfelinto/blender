@@ -776,7 +776,7 @@ static int freestyle_lineset_add_exec(bContext *C, wmOperator *UNUSED(op))
 	Scene *scene = CTX_data_scene(C);
 	SceneRenderLayer *srl = BLI_findlink(&scene->r.layers, scene->r.actlay);
 
-	BKE_freestyle_lineset_add(&srl->freestyleConfig);
+	BKE_freestyle_lineset_add(&srl->freestyleConfig, NULL);
 
 	WM_event_add_notifier(C, NC_SCENE | ND_RENDER_OPTIONS, scene);
 
@@ -980,7 +980,7 @@ static int freestyle_color_modifier_add_exec(bContext *C, wmOperator *op)
 		return OPERATOR_CANCELLED;
 	}
 
-	if (BKE_add_linestyle_color_modifier(lineset->linestyle, type) == NULL) {
+	if (BKE_add_linestyle_color_modifier(lineset->linestyle, NULL, type) == NULL) {
 		BKE_report(op->reports, RPT_ERROR, "Unknown line color modifier type");
 		return OPERATOR_CANCELLED;
 	}
@@ -1019,7 +1019,7 @@ static int freestyle_alpha_modifier_add_exec(bContext *C, wmOperator *op)
 		return OPERATOR_CANCELLED;
 	}
 
-	if (BKE_add_linestyle_alpha_modifier(lineset->linestyle, type) == NULL) {
+	if (BKE_add_linestyle_alpha_modifier(lineset->linestyle, NULL, type) == NULL) {
 		BKE_report(op->reports, RPT_ERROR, "Unknown alpha transparency modifier type");
 		return OPERATOR_CANCELLED;
 	}
@@ -1058,7 +1058,7 @@ static int freestyle_thickness_modifier_add_exec(bContext *C, wmOperator *op)
 		return OPERATOR_CANCELLED;
 	}
 
-	if (BKE_add_linestyle_thickness_modifier(lineset->linestyle, type) == NULL) {
+	if (BKE_add_linestyle_thickness_modifier(lineset->linestyle, NULL, type) == NULL) {
 		BKE_report(op->reports, RPT_ERROR, "Unknown line thickness modifier type");
 		return OPERATOR_CANCELLED;
 	}
@@ -1097,7 +1097,7 @@ static int freestyle_geometry_modifier_add_exec(bContext *C, wmOperator *op)
 		return OPERATOR_CANCELLED;
 	}
 
-	if (BKE_add_linestyle_geometry_modifier(lineset->linestyle, type) == NULL) {
+	if (BKE_add_linestyle_geometry_modifier(lineset->linestyle, NULL, type) == NULL) {
 		BKE_report(op->reports, RPT_ERROR, "Unknown stroke geometry modifier type");
 		return OPERATOR_CANCELLED;
 	}

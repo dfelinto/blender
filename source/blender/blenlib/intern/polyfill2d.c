@@ -328,9 +328,12 @@ static bool pf_ear_tip_check(PolyFill *pf, const unsigned int index_ear_tip)
 			/* Because the polygon has clockwise winding order,
 			 * the area sign will be positive if the point is strictly inside.
 			 * It will be 0 on the edge, which we want to include as well. */
-			if ((span_tri_v2_sign(v1, v2, v) != CONCAVE) &&
-			    (span_tri_v2_sign(v2, v3, v) != CONCAVE) &&
-			    (span_tri_v2_sign(v3, v1, v) != CONCAVE))
+
+			/* note: check (v3, v1) first since it fails _far_ more often then the other 2 checks (those fail equally).
+			 * It's logical - the chance is low that points exist on the same side as the ear we're clipping off. */
+			if ((span_tri_v2_sign(v3, v1, v) != CONCAVE) &&
+			    (span_tri_v2_sign(v1, v2, v) != CONCAVE) &&
+			    (span_tri_v2_sign(v2, v3, v) != CONCAVE))
 			{
 				return false;
 			}
@@ -369,7 +372,8 @@ static unsigned int pf_index_next(const PolyFill *pf, unsigned index)
 
 /**
  * Triangulates the given (convex or concave) simple polygon to a list of triangle vertices.
- * \param vertices pairs describing vertices of the polygon, in either clockwise or counterclockwise order.
+ *
+ * \param coords pairs describing vertices of the polygon, in either clockwise or counterclockwise order.
  * \return triples of triangle indices in clockwise order.
  *         Note the returned array is reused for later calls to the same method.
  */

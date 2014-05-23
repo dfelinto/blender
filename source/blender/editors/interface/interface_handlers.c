@@ -986,6 +986,9 @@ static void ui_multibut_states_apply(bContext *C, uiHandleButtonData *data, uiBl
 					else {
 						but->active->value = mbut_state->origvalue + value_delta;
 					}
+
+					/* clamp based on soft limits, see: T40154 */
+					CLAMP(but->active->value, (double)but->softmin, (double)but->softmax);
 				}
 				ui_button_execute_end(C, ar, but, active_back);
 			}
@@ -6695,7 +6698,7 @@ static void button_activate_init(bContext *C, ARegion *ar, uiBut *but, uiButtonA
 
 	if (but->type == GRIP) {
 		const bool horizontal = (BLI_rctf_size_x(&but->rect) < BLI_rctf_size_y(&but->rect));
-		WM_cursor_modal_set(data->window, horizontal ? BC_EW_ARROWCURSOR : BC_NS_ARROWCURSOR);
+		WM_cursor_modal_set(data->window, horizontal ? CURSOR_X_MOVE : CURSOR_Y_MOVE);
 	}
 }
 

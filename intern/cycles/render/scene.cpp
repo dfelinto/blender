@@ -61,10 +61,10 @@ Scene::Scene(const SceneParams& params_, const DeviceInfo& device_info_)
 	if(device_info_.type == DEVICE_CPU)
 		shader_manager = ShaderManager::create(this, params.shadingsystem);
 	else
-		shader_manager = ShaderManager::create(this, SceneParams::SVM);
+		shader_manager = ShaderManager::create(this, SHADINGSYSTEM_SVM);
 
-	if (device_info_.type == DEVICE_CPU)
-		image_manager->set_extended_image_limits();
+	/* Extended image limits for CPU and GPUs */
+	image_manager->set_extended_image_limits(device_info_);
 }
 
 Scene::~Scene()
@@ -109,6 +109,8 @@ void Scene::free_memory(bool final)
 
 		if(!params.persistent_data || final)
 			image_manager->device_free(device, &dscene);
+		else
+			image_manager->device_free_builtin(device, &dscene);
 
 		lookup_tables->device_free(device, &dscene);
 	}
@@ -236,9 +238,9 @@ bool Scene::need_global_attribute(AttributeStandard std)
 {
 	if(std == ATTR_STD_UV)
 		return Pass::contains(film->passes, PASS_UV);
-	if(std == ATTR_STD_MOTION_VERTEX_POSITION)
+	else if(std == ATTR_STD_MOTION_VERTEX_POSITION)
 		return need_motion() != MOTION_NONE;
-	if(std == ATTR_STD_MOTION_VERTEX_NORMAL)
+	else if(std == ATTR_STD_MOTION_VERTEX_NORMAL)
 		return need_motion() == MOTION_BLUR;
 	
 	return false;

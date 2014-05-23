@@ -419,13 +419,13 @@ void RE_bake_engine_set_engine_parameters(Render *re, Main *bmain, Scene *scene)
 	/* prevent crash when freeing the scene
 	 but it potentially leaves unfreed memory blocks
 	 not sure how to fix this yet -- dfelinto */
-	re->r.layers.first = re->r.layers.last = NULL;
+	BLI_listbase_clear(&re->r.layers);
 }
 
 bool RE_bake_has_engine(Render *re)
 {
 	RenderEngineType *type = RE_engines_find(re->r.engine);
-	return (bool)(type->bake);
+	return (type->bake != NULL);
 }
 
 bool RE_bake_engine(
@@ -485,6 +485,29 @@ bool RE_bake_engine(
 		G.is_break = true;
 
 	return true;
+}
+
+void RE_engine_frame_set(RenderEngine *engine, int frame, float subframe)
+{
+	Render *re = engine->re;
+	Scene *scene = re->scene;
+	double cfra = (double)frame + (double)subframe;
+
+	CLAMP(cfra, MINAFRAME, MAXFRAME);
+	BKE_scene_frame_set(scene, cfra);
+
+#ifdef WITH_PYTHON
+	BPy_BEGIN_ALLOW_THREADS;
+#endif
+
+	/* It's possible that here we're including layers which were never visible before. */
+	BKE_scene_update_for_newframe_ex(re->eval_ctx, re->main, scene, (1 << 20) - 1, true);
+
+#ifdef WITH_PYTHON
+	BPy_END_ALLOW_THREADS;
+#endif
+
+	BKE_scene_camera_switch_update(scene);
 }
 
 /* Render */

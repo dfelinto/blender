@@ -473,10 +473,6 @@ void BlenderFileLoader::insertShapeNode(ObjectInstanceRen *obi, int id)
 	// by the near and far view planes.
 	int p;
 	for (p = 0; p < obr->totvlak; ++p) { // we parse the faces of the mesh
-#if 0
-		Lib3dsFace *f = &mesh->faceL[p];
-		Lib3dsMaterial *mat = NULL;
-#endif
 		if ((p & 255) == 0)
 			vlr = obr->vlaknodes[p>>8].vlak;
 		else
@@ -521,6 +517,11 @@ void BlenderFileLoader::insertShapeNode(ObjectInstanceRen *obi, int id)
 		}
 		else {
 			RE_vlakren_get_normal(_re, obi, vlr, facenormal);
+#ifndef NDEBUG
+			float tnor[3];
+			normal_tri_v3(tnor, v3, v2, v1);  /* normals are inverted in rendering */
+			BLI_assert(dot_v3v3(tnor, facenormal) > 0.0f);
+#endif
 			copy_v3_v3(n1, facenormal);
 			copy_v3_v3(n2, facenormal);
 			copy_v3_v3(n3, facenormal);

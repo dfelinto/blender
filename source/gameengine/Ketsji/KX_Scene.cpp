@@ -1166,8 +1166,6 @@ void KX_Scene::ReplaceMesh(class CValue* obj,void* meshobj, bool use_gfx, bool u
 #ifdef WITH_BULLET
 			bool bHasSoftBody = (!parentobj && (blendobj->gameflag & OB_SOFT_BODY));
 #endif
-			bool releaseParent = true;
-
 			
 			if (oldblendobj==NULL) {
 				if (bHasModifier || bHasShapeKey || bHasDvert || bHasArmature) {
@@ -1189,7 +1187,6 @@ void KX_Scene::ReplaceMesh(class CValue* obj,void* meshobj, bool use_gfx, bool u
 						true,
 						static_cast<BL_ArmatureObject*>( parentobj )
 					);
-					releaseParent= false;
 					modifierDeformer->LoadShapeDrivers(parentobj);
 				}
 				else
@@ -1217,7 +1214,6 @@ void KX_Scene::ReplaceMesh(class CValue* obj,void* meshobj, bool use_gfx, bool u
 						true,
 						static_cast<BL_ArmatureObject*>( parentobj )
 					);
-					releaseParent= false;
 					shapeDeformer->LoadShapeDrivers(parentobj);
 				}
 				else
@@ -1243,7 +1239,6 @@ void KX_Scene::ReplaceMesh(class CValue* obj,void* meshobj, bool use_gfx, bool u
 					true,
 					static_cast<BL_ArmatureObject*>( parentobj )
 				);
-				releaseParent= false;
 				newobj->SetDeformer(skinDeformer);
 			}
 			else if (bHasDvert)
@@ -1260,10 +1255,6 @@ void KX_Scene::ReplaceMesh(class CValue* obj,void* meshobj, bool use_gfx, bool u
 				newobj->SetDeformer(softdeformer);
 			}
 #endif
-
-			// release parent reference if its not being used 
-			if ( releaseParent && parentobj)
-				parentobj->Release();
 		}
 	}
 
@@ -1354,17 +1345,6 @@ void KX_Scene::SetCameraOnTop(KX_Camera* cam)
 	} else {
 		m_cameras.remove(cam);
 		m_cameras.push_back(cam);
-	}
-}
-
-
-void KX_Scene::UpdateMeshTransformations()
-{
-	// do this incrementally in the future
-	for (int i = 0; i < m_objectlist->GetCount(); i++)
-	{
-		KX_GameObject* gameobj = (KX_GameObject*)m_objectlist->GetValue(i);
-		gameobj->GetOpenGLMatrix();
 	}
 }
 

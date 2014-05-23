@@ -130,53 +130,20 @@ void SilhouetteGeomEngine::retrieveViewport(int viewport[4])
 	memcpy(viewport, _viewport, 4 * sizeof(int));
 }
 
-//#define HUGE 1.0e9
-
 void SilhouetteGeomEngine::ProjectSilhouette(vector<SVertex*>& ioVertices)
 {
 	Vec3r newPoint;
-#if 0
-	real min = HUGE;
-	real max = -HUGE;
-#endif
 	vector<SVertex*>::iterator sv, svend;
-	const real depth = _zfar - _znear;
-	const real fac = (depth < 1.0e-6) ? 1.0 : 1.0 / depth;
-
 	for (sv = ioVertices.begin(), svend = ioVertices.end(); sv != svend; sv++) {
 		GeomUtils::fromWorldToImage((*sv)->point3D(), newPoint, _modelViewMatrix, _projectionMatrix, _viewport);
-		newPoint[2] = (-newPoint[2] - _znear) * fac; // normalize Z between 0 and 1
 		(*sv)->setPoint2D(newPoint);
-#if 0
-		cerr << (*sv)->point2d().z() << "  ";
-		real d = (*sv)->point2d()[2];
-		if (d > max)
-			max =d;
-		if (d < min)
-			min =d;
-#endif
 	}
-#if 0
-	for (sv = ioVertices.begin(), svend = ioVertices.end(); sv != svend; sv++) {
-		Vec3r P((*sv)->point2d());
-		(*sv)->setPoint2D(Vec3r(P[0], P[1], 1.0 - (P[2] - min) / (max - min)));
-		//cerr << (*sv)->point2d()[2] << "  ";
-	}
-#endif
 }
 
 void SilhouetteGeomEngine::ProjectSilhouette(SVertex *ioVertex)
 {
 	Vec3r newPoint;
-#if 0
-	real min = HUGE;
-	real max = -HUGE;
-	vector<SVertex*>::iterator sv, svend;
-#endif
-	const real depth = _zfar - _znear;
-	const real fac = (depth < 1.0e-6) ? 1.0 : 1.0 / depth;
 	GeomUtils::fromWorldToImage(ioVertex->point3D(), newPoint, _modelViewMatrix, _projectionMatrix, _viewport);
-	newPoint[2] = (-newPoint[2] - _znear) * fac; // normalize Z between 0 and 1
 	ioVertex->setPoint2D(newPoint);
 }
 
@@ -311,11 +278,16 @@ iter:
 
 Vec3r SilhouetteGeomEngine::WorldToImage(const Vec3r& M)
 {
-	const real depth = _zfar - _znear;
-	const real fac = (depth < 1.0e-6) ? 1.0 : 1.0 / depth;
 	Vec3r newPoint;
 	GeomUtils::fromWorldToImage(M, newPoint, _transform, _viewport);
-	newPoint[2] = (-newPoint[2] - _znear) * fac; // normalize Z between 0 and 1
+	return newPoint;
+}
+
+Vec3r SilhouetteGeomEngine::CameraToImage(const Vec3r& M)
+{
+	Vec3r newPoint, p;
+	GeomUtils::fromCameraToRetina(M, p, _projectionMatrix);
+	GeomUtils::fromRetinaToImage(p, newPoint, _viewport);
 	return newPoint;
 }
 

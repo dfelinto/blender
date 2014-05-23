@@ -6943,7 +6943,11 @@ void draw_object(Scene *scene, ARegion *ar, View3D *v3d, Base *base, const short
 	}
 
 	/* matcap check - only when not painting color */
-	if ((v3d->flag2 & V3D_SOLID_MATCAP) && (dt == OB_SOLID) && (is_paint == false && is_picking == false)) {
+	if ((v3d->flag2 & V3D_SOLID_MATCAP) &&
+	    (dt == OB_SOLID) &&
+	    (is_paint == false && is_picking == false) &&
+	    ((v3d->flag2 & V3D_RENDER_SHADOW) == 0))
+	{
 		draw_object_matcap_check(v3d, ob);
 	}
 
@@ -7013,8 +7017,8 @@ void draw_object(Scene *scene, ARegion *ar, View3D *v3d, Base *base, const short
 					for (i = 0; i < cu->totbox; i++) {
 						if (cu->tb[i].w != 0.0f) {
 							UI_ThemeColor(i == (cu->actbox - 1) ? TH_ACTIVE : TH_WIRE);
-							vec1[0] = (cu->xof * cu->fsize) + cu->tb[i].x;
-							vec1[1] = (cu->yof * cu->fsize) + cu->tb[i].y + cu->fsize;
+							vec1[0] = cu->xof + cu->tb[i].x;
+							vec1[1] = cu->yof + cu->tb[i].y + cu->fsize;
 							vec1[2] = 0.001;
 							glBegin(GL_LINE_STRIP);
 							glVertex3fv(vec1);
@@ -7637,8 +7641,6 @@ void draw_object(Scene *scene, ARegion *ar, View3D *v3d, Base *base, const short
 			setlinestyle(0);
 		}
 	}
-
-	free_old_images();
 
 	ED_view3d_clear_mats_rv3d(rv3d);
 }

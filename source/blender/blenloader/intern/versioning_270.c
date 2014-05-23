@@ -254,7 +254,7 @@ void blo_do_versions_270(FileData *fd, Library *UNUSED(lib), Main *main)
 		}
 	}
 
-	if (!DNA_struct_elem_find(fd->filesdna, "Material", "int", "mode2")) { /* will be replaced with version check when other new flag is added to mode2 */
+	if (!DNA_struct_elem_find(fd->filesdna, "Material", "int", "mode2")) {
 		Material *ma;
 
 		for (ma = main->mat.first; ma; ma = ma->id.next)
@@ -282,6 +282,16 @@ void blo_do_versions_270(FileData *fd, Library *UNUSED(lib), Main *main)
 			sce->r.bake.im_format.compress = 15;
 		}
 	}
+
+	if (!DNA_struct_elem_find(fd->filesdna, "FreestyleLineStyle", "float", "texstep")) {
+		FreestyleLineStyle *linestyle;
+
+		for (linestyle = main->linestyle.first; linestyle; linestyle = linestyle->id.next) {
+			linestyle->flag |= LS_TEXTURE;
+			linestyle->texstep = 1.0;
+		}
+	}
+
 	{
 		Scene *scene;
 		SceneRenderView *srv;

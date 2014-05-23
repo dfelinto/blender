@@ -1021,7 +1021,7 @@ static void rna_def_font(BlenderRNA *UNUSED(brna), StructRNA *srna)
 	
 	prop = RNA_def_property(srna, "underline_height", PROP_FLOAT, PROP_NONE);
 	RNA_def_property_float_sdna(prop, NULL, "ulheight");
-	RNA_def_property_range(prop, -0.2f, 0.8f);
+	RNA_def_property_range(prop, 0.0f, 0.8f);
 	RNA_def_property_ui_text(prop, "Underline Thickness", "");
 	RNA_def_property_update(prop, 0, "rna_Curve_update_data");
 	
@@ -1416,14 +1416,14 @@ static void rna_def_curve(BlenderRNA *brna)
 	RNA_def_property_range(prop, 0, 1024);
 	RNA_def_property_ui_range(prop, 0, 64, 1, -1);
 	RNA_def_property_ui_text(prop, "Render Resolution U",
-	                         "Surface resolution in U direction used while rendering (zero skips this property)");
+	                         "Surface resolution in U direction used while rendering (zero uses preview resolution)");
 	
 	prop = RNA_def_property(srna, "render_resolution_v", PROP_INT, PROP_NONE);
 	RNA_def_property_int_sdna(prop, NULL, "resolv_ren");
 	RNA_def_property_ui_range(prop, 0, 64, 1, -1);
 	RNA_def_property_range(prop, 0, 1024);
 	RNA_def_property_ui_text(prop, "Render Resolution V",
-	                         "Surface resolution in V direction used while rendering (zero skips this property)");
+	                         "Surface resolution in V direction used while rendering (zero uses preview resolution)");
 	
 	
 	prop = RNA_def_property(srna, "eval_time", PROP_FLOAT, PROP_NONE);

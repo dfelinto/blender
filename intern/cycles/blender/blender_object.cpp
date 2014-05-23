@@ -446,7 +446,6 @@ void BlenderSync::sync_objects(BL::SpaceView3D b_v3d, float motion_time)
 		light_map.pre_sync();
 		mesh_map.pre_sync();
 		object_map.pre_sync();
-		mesh_synced.clear();
 		particle_system_map.pre_sync();
 		motion_times.clear();
 	}
@@ -536,7 +535,6 @@ void BlenderSync::sync_objects(BL::SpaceView3D b_v3d, float motion_time)
 			scene->object_manager->tag_update(scene);
 		if(particle_system_map.post_sync())
 			scene->particle_system_manager->tag_update(scene);
-		mesh_synced.clear();
 	}
 
 	if(motion)
@@ -578,7 +576,7 @@ void BlenderSync::sync_motion(BL::SpaceView3D b_v3d, BL::Object b_override, void
 
 		/* change frame */
 		python_thread_state_restore(python_thread_state);
-		b_scene.frame_set(frame, subframe);
+		b_engine.frame_set(frame, subframe);
 		python_thread_state_save(python_thread_state);
 
 		/* sync camera, only supports two times at the moment */
@@ -593,7 +591,7 @@ void BlenderSync::sync_motion(BL::SpaceView3D b_v3d, BL::Object b_override, void
 	 * function assumes it is being executed from python and will
 	 * try to save the thread state */
 	python_thread_state_restore(python_thread_state);
-	b_scene.frame_set(frame_center, 0.0f);
+	b_engine.frame_set(frame_center, 0.0f);
 	python_thread_state_save(python_thread_state);
 
 	/* tag camera for motion update */

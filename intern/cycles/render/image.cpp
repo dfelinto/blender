@@ -59,11 +59,16 @@ void ImageManager::set_osl_texture_system(void *texture_system)
 	osl_texture_system = texture_system;
 }
 
-void ImageManager::set_extended_image_limits(void)
+void ImageManager::set_extended_image_limits(const DeviceInfo& info)
 {
-	tex_num_images = TEX_EXTENDED_NUM_IMAGES;
-	tex_num_float_images = TEX_EXTENDED_NUM_FLOAT_IMAGES;
-	tex_image_byte_start = TEX_EXTENDED_IMAGE_BYTE_START;
+	if(info.type == DEVICE_CPU) {
+		tex_num_images = TEX_EXTENDED_NUM_IMAGES_CPU;
+		tex_num_float_images = TEX_EXTENDED_NUM_FLOAT_IMAGES;
+		tex_image_byte_start = TEX_EXTENDED_IMAGE_BYTE_START;
+	}
+	else if((info.type == DEVICE_CUDA || info.type == DEVICE_MULTI) && info.extended_images) {
+		tex_num_images = TEX_EXTENDED_NUM_IMAGES_GPU;
+	}
 }
 
 bool ImageManager::set_animation_frame_update(int frame)
@@ -443,7 +448,7 @@ bool ImageManager::file_load_float_image(Image *img, device_vector<float4>& tex_
 		builtin_image_info_cb(img->filename, img->builtin_data, is_float, width, height, depth, components);
 	}
 
-	if(!(components >= 1 && components <= 4)) {
+	if(components < 1 || width == 0 || height == 0) {
 		if(in) {
 			in->close();
 			delete in;
@@ -455,17 +460,36 @@ bool ImageManager::file_load_float_image(Image *img, device_vector<float4>& tex_
 	float *pixels = (float*)tex_img.resize(width, height, depth);
 
 	if(in) {
+		float *readpixels = pixels;
+		vector<float> tmppixels;
+
+		if(components > 4) {
+			tmppixels.resize(width*height*components);
+			readpixels = &tmppixels[0];
+		}
+
 		if(depth <= 1) {
 			int scanlinesize = width*components*sizeof(float);
 
 			in->read_image(TypeDesc::FLOAT,
-				(uchar*)pixels + (height-1)*scanlinesize,
+				(uchar*)readpixels + (height-1)*scanlinesize,
 				AutoStride,
 				-scanlinesize,
 				AutoStride);
 		}
 		else {
-			in->read_image(TypeDesc::FLOAT, (uchar*)pixels);
+			in->read_image(TypeDesc::FLOAT, (uchar*)readpixels);
+		}
+
+		if(components > 4) {
+			for(int i = width*height-1; i >= 0; i--) {
+				pixels[i*4+3] = tmppixels[i*components+3];
+				pixels[i*4+2] = tmppixels[i*components+2];
+				pixels[i*4+1] = tmppixels[i*components+1];
+				pixels[i*4+0] = tmppixels[i*components+0];
+			}
+
+			tmppixels.clear();
 		}
 
 		in->close();
@@ -737,6 +761,17 @@ void ImageManager::device_pack_images(Device *device, DeviceScene *dscene, Progr
 		}
 		device->tex_alloc("__tex_image_packed_info", dscene->tex_image_packed_info);
 	}
+}
+
+void ImageManager::device_free_builtin(Device *device, DeviceScene *dscene)
+{
+	for(size_t slot = 0; slot < images.size(); slot++)
+		if(images[slot] && images[slot]->builtin_data)
+			device_free_image(device, dscene, slot + tex_image_byte_start);
+
+	for(size_t slot = 0; slot < float_images.size(); slot++)
+		if(float_images[slot] && float_images[slot]->builtin_data)
+			device_free_image(device, dscene, slot);
 }
 
 void ImageManager::device_free(Device *device, DeviceScene *dscene)

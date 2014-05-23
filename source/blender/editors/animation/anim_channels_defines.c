@@ -344,7 +344,7 @@ static void acf_generic_idblock_name(bAnimListElem *ale, char *name)
 /* name property for ID block entries */
 static bool acf_generic_idblock_name_prop(bAnimListElem *ale, PointerRNA *ptr, PropertyRNA **prop)
 {
-	RNA_id_pointer_create(ale->id, ptr);
+	RNA_id_pointer_create(ale->data, ptr);
 	*prop = RNA_struct_name_property(ptr->type);
 	
 	return (*prop != NULL);
@@ -650,6 +650,15 @@ static void acf_object_name(bAnimListElem *ale, char *name)
 		BLI_strncpy(name, ob->id.name + 2, ANIM_CHAN_NAME_SIZE);
 }
 
+/* name property for object */
+static bool acf_object_name_prop(bAnimListElem *ale, PointerRNA *ptr, PropertyRNA **prop)
+{
+	RNA_id_pointer_create(ale->id, ptr);
+	*prop = RNA_struct_name_property(ptr->type);
+	
+	return (*prop != NULL);
+}
+
 /* check if some setting exists for this channel */
 static bool acf_object_setting_valid(bAnimContext *ac, bAnimListElem *ale, eAnimChannel_Settings setting)
 {
@@ -740,7 +749,7 @@ static bAnimChannelType ACF_OBJECT =
 	NULL,                           /* offset */
 
 	acf_object_name,                /* name */
-	acf_generic_idblock_name_prop,   /* name prop */
+	acf_object_name_prop,   		/* name prop */
 	acf_object_icon,                /* icon */
 
 	acf_object_setting_valid,       /* has setting */
@@ -3569,7 +3578,7 @@ static void achannel_setting_flush_widget_cb(bContext *C, void *ale_npoin, void 
 	ANIM_flush_setting_anim_channels(&ac, &anim_data, ale_setting, setting, on);
 	
 	/* free temp data */
-	BLI_freelistN(&anim_data);
+	ANIM_animdata_freelist(&anim_data);
 }
 
 /* callback for wrapping NLA Track "solo" toggle logic */

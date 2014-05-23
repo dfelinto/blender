@@ -2460,7 +2460,7 @@ static int edbm_knife_cut_exec(bContext *C, wmOperator *op)
 		if (ED_view3d_project_float_object(ar, bv->co, *sco, V3D_PROJ_TEST_CLIP_NEAR) != V3D_PROJ_RET_OK) {
 			copy_v2_fl(*sco, FLT_MAX);  /* set error value */
 		}
-		BM_elem_index_set(bv, i); /* set_ok */
+		BM_elem_index_set(bv, i); /* set_inline */
 		sco++;
 
 	}
@@ -2783,7 +2783,7 @@ static bool mesh_separate_loose(Main *bmain, Scene *scene, Base *base_old, BMesh
 
 		/* Walk from the single vertex, selecting everything connected
 		 * to it */
-		BMW_init(&walker, bm_old, BMW_SHELL,
+		BMW_init(&walker, bm_old, BMW_VERT_SHELL,
 		         BMW_MASK_NOP, BMW_MASK_NOP, BMW_MASK_NOP,
 		         BMW_FLAG_NOP,
 		         BMW_NIL_LAY);

@@ -361,6 +361,15 @@
 		         (((tot) - (index)) - (tot_delete)) * sizeof(*(arr))); \
 	} (void)0
 
+/* assuming a static array */
+#if defined(__GNUC__) && !defined(__cplusplus)
+#  define ARRAY_SIZE(arr)                                                     \
+	((sizeof(struct {int isnt_array : ((void *)&(arr) == &(arr)[0]);}) * 0) + \
+	 (sizeof(arr) / sizeof(*(arr))))
+#else
+#  define ARRAY_SIZE(arr)  (sizeof(arr) / sizeof(*(arr)))
+#endif
+
 /* Warning-free macros for storing ints in pointers. Use these _only_
  * for storing an int in a pointer, not a pointer in an int (64bit)! */
 #define SET_INT_IN_POINTER(i)    ((void *)(intptr_t)(i))
@@ -460,7 +469,7 @@
 #  define BLI_STATIC_ASSERT(a, msg)
 #endif
 
-/* hints for branch pradiction, only use in code that runs a _lot_ where */
+/* hints for branch prediction, only use in code that runs a _lot_ where */
 #ifdef __GNUC__
 #  define LIKELY(x)       __builtin_expect(!!(x), 1)
 #  define UNLIKELY(x)     __builtin_expect(!!(x), 0)

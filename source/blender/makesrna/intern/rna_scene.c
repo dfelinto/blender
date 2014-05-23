@@ -339,6 +339,7 @@ EnumPropertyItem bake_save_mode_items[] = {
 #include "DNA_node_types.h"
 #include "DNA_object_types.h"
 #include "DNA_mesh_types.h"
+#include "DNA_text_types.h"
 
 #include "RNA_access.h"
 
@@ -361,6 +362,7 @@ EnumPropertyItem bake_save_mode_items[] = {
 #include "BKE_screen.h"
 #include "BKE_sequencer.h"
 #include "BKE_animsys.h"
+#include "BKE_freestyle.h"
 
 #include "WM_api.h"
 
@@ -1697,6 +1699,34 @@ static void rna_FreestyleLineSet_linestyle_set(PointerRNA *ptr, PointerRNA value
 	lineset->linestyle->id.us++;
 }
 
+static FreestyleLineSet *rna_FreestyleSettings_lineset_add(ID *id, FreestyleSettings *config, const char *name)
+{
+	Scene *scene = (Scene *)id;
+	FreestyleLineSet *lineset = BKE_freestyle_lineset_add((FreestyleConfig *)config, name);
+
+	DAG_id_tag_update(&scene->id, 0);
+	WM_main_add_notifier(NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+	return lineset;
+}
+
+static void rna_FreestyleSettings_lineset_remove(ID *id, FreestyleSettings *config, ReportList *reports,
+                                                 PointerRNA *lineset_ptr)
+{
+	FreestyleLineSet *lineset = lineset_ptr->data;
+	Scene *scene = (Scene *)id;
+
+	if (!BKE_freestyle_lineset_delete((FreestyleConfig *)config, lineset)) {
+		BKE_reportf(reports, RPT_ERROR, "Line set '%s' could not be removed", lineset->name);
+		return;
+	}
+
+	RNA_POINTER_INVALIDATE(lineset_ptr);
+
+	DAG_id_tag_update(&scene->id, 0);
+	WM_main_add_notifier(NC_SCENE | ND_RENDER_OPTIONS, NULL);
+}
+
 static PointerRNA rna_FreestyleSettings_active_lineset_get(PointerRNA *ptr)
 {
 	FreestyleConfig *config = (FreestyleConfig *)ptr->data;
@@ -1723,6 +1753,37 @@ static void rna_FreestyleSettings_active_lineset_index_set(PointerRNA *ptr, int 
 {
 	FreestyleConfig *config = (FreestyleConfig *)ptr->data;
 	BKE_freestyle_lineset_set_active_index(config, value);
+}
+
+static FreestyleModuleConfig *rna_FreestyleSettings_module_add(ID *id, FreestyleSettings *config)
+{
+	Scene *scene = (Scene *)id;
+	FreestyleModuleConfig *module = BKE_freestyle_module_add((FreestyleConfig *)config);
+
+	DAG_id_tag_update(&scene->id, 0);
+	WM_main_add_notifier(NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+	return module;
+}
+
+static void rna_FreestyleSettings_module_remove(ID *id, FreestyleSettings *config, ReportList *reports,
+                                                PointerRNA *module_ptr)
+{
+	Scene *scene = (Scene *)id;
+	FreestyleModuleConfig *module = module_ptr->data;
+
+	if (!BKE_freestyle_module_delete((FreestyleConfig *)config, module)) {
+		if (module->script)
+			BKE_reportf(reports, RPT_ERROR, "Style module '%s' could not be removed", module->script->id.name + 2);
+		else
+			BKE_reportf(reports, RPT_ERROR, "Style module could not be removed");
+		return;
+	}
+
+	RNA_POINTER_INVALIDATE(module_ptr);
+
+	DAG_id_tag_update(&scene->id, 0);
+	WM_main_add_notifier(NC_SCENE | ND_RENDER_OPTIONS, NULL);
 }
 
 #else
@@ -2737,10 +2798,37 @@ void rna_def_render_layer_common(StructRNA *srna, int scene)
 	else RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 }
 
+static void rna_def_freestyle_modules(BlenderRNA *brna, PropertyRNA *cprop)
+{
+	StructRNA *srna;
+	FunctionRNA *func;
+	PropertyRNA *parm;
+
+	RNA_def_property_srna(cprop, "FreestyleModules");
+	srna = RNA_def_struct(brna, "FreestyleModules", NULL);
+	RNA_def_struct_sdna(srna, "FreestyleSettings");
+	RNA_def_struct_ui_text(srna, "Style Modules", "A list of style modules (to be applied from top to bottom)");
+
+	func = RNA_def_function(srna, "new", "rna_FreestyleSettings_module_add");
+	RNA_def_function_ui_description(func, "Add a style module to scene render layer Freestyle settings");
+	RNA_def_function_flag(func, FUNC_USE_SELF_ID);
+	parm = RNA_def_pointer(func, "module", "FreestyleModuleSettings", "", "Newly created style module");
+	RNA_def_function_return(func, parm);
+
+	func = RNA_def_function(srna, "remove", "rna_FreestyleSettings_module_remove");
+	RNA_def_function_ui_description(func, "Remove a style module from scene render layer Freestyle settings");
+	RNA_def_function_flag(func, FUNC_USE_SELF_ID | FUNC_USE_REPORTS);
+	parm = RNA_def_pointer(func, "module", "FreestyleModuleSettings", "", "Style module to remove");
+	RNA_def_property_flag(parm, PROP_REQUIRED | PROP_NEVER_NULL | PROP_RNAPTR);
+	RNA_def_property_clear_flag(parm, PROP_THICK_WRAP);
+}
+
 static void rna_def_freestyle_linesets(BlenderRNA *brna, PropertyRNA *cprop)
 {
 	StructRNA *srna;
 	PropertyRNA *prop;
+	FunctionRNA *func;
+	PropertyRNA *parm;
 
 	RNA_def_property_srna(cprop, "Linesets");
 	srna = RNA_def_struct(brna, "Linesets", NULL);
@@ -2759,6 +2847,21 @@ static void rna_def_freestyle_linesets(BlenderRNA *brna, PropertyRNA *cprop)
 	                           "rna_FreestyleSettings_active_lineset_index_range");
 	RNA_def_property_ui_text(prop, "Active Line Set Index", "Index of active line set slot");
 	RNA_def_property_update(prop, NC_SCENE, NULL);
+
+	func = RNA_def_function(srna, "new", "rna_FreestyleSettings_lineset_add");
+	RNA_def_function_ui_description(func, "Add a line set to scene render layer Freestyle settings");
+	RNA_def_function_flag(func, FUNC_USE_SELF_ID);
+	parm = RNA_def_string(func, "name", "LineSet", 0, "", "New name for the line set (not unique)");
+	RNA_def_property_flag(parm, PROP_REQUIRED);
+	parm = RNA_def_pointer(func, "lineset", "FreestyleLineSet", "", "Newly created line set");
+	RNA_def_function_return(func, parm);
+
+	func = RNA_def_function(srna, "remove", "rna_FreestyleSettings_lineset_remove");
+	RNA_def_function_ui_description(func, "Remove a line set from scene render layer Freestyle settings");
+	RNA_def_function_flag(func, FUNC_USE_SELF_ID | FUNC_USE_REPORTS);
+	parm = RNA_def_pointer(func, "lineset", "FreestyleLineSet", "", "Line set to remove");
+	RNA_def_property_flag(parm, PROP_REQUIRED | PROP_NEVER_NULL | PROP_RNAPTR);
+	RNA_def_property_clear_flag(parm, PROP_THICK_WRAP);
 }
 
 static void rna_def_freestyle_settings(BlenderRNA *brna)
@@ -3055,7 +3158,8 @@ static void rna_def_freestyle_settings(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "modules", PROP_COLLECTION, PROP_NONE);
 	RNA_def_property_collection_sdna(prop, NULL, "modules", NULL);
 	RNA_def_property_struct_type(prop, "FreestyleModuleSettings");
-	RNA_def_property_ui_text(prop, "Style modules", "A list of style modules (to be applied from top to bottom)");
+	RNA_def_property_ui_text(prop, "Style Modules", "A list of style modules (to be applied from top to bottom)");
+	rna_def_freestyle_modules(brna, prop);
 
 	prop = RNA_def_property(srna, "mode", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "mode");

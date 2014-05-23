@@ -18,6 +18,7 @@
 #define __SCENE_H__
 
 #include "image.h"
+#include "shader.h"
 
 #include "device_memory.h"
 
@@ -105,8 +106,8 @@ public:
 	/* integrator */
 	device_vector<uint> sobol_directions;
 
-	/* images */
-	device_vector<uchar4> tex_image[TEX_EXTENDED_NUM_IMAGES];
+	/* cpu images */
+	device_vector<uchar4> tex_image[TEX_EXTENDED_NUM_IMAGES_CPU];
 	device_vector<float4> tex_float_image[TEX_EXTENDED_NUM_FLOAT_IMAGES];
 
 	/* opencl images */
@@ -120,7 +121,7 @@ public:
 
 class SceneParams {
 public:
-	enum { OSL, SVM } shadingsystem;
+	ShadingSystem shadingsystem;
 	enum BVHType { BVH_DYNAMIC, BVH_STATIC } bvh_type;
 	bool use_bvh_cache;
 	bool use_bvh_spatial_split;
@@ -129,7 +130,7 @@ public:
 
 	SceneParams()
 	{
-		shadingsystem = SVM;
+		shadingsystem = SHADINGSYSTEM_SVM;
 		bvh_type = BVH_DYNAMIC;
 		use_bvh_cache = false;
 		use_bvh_spatial_split = false;

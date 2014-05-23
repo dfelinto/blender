@@ -19,6 +19,7 @@
 
 #include "buffers.h"
 #include "device.h"
+#include "shader.h"
 #include "tile.h"
 
 #include "util_progress.h"
@@ -59,7 +60,7 @@ public:
 	double reset_timeout;
 	double text_timeout;
 
-	enum { OSL, SVM } shadingsystem;
+	ShadingSystem shadingsystem;
 
 	SessionParams()
 	{
@@ -80,7 +81,7 @@ public:
 		reset_timeout = 0.1;
 		text_timeout = 1.0;
 
-		shadingsystem = SVM;
+		shadingsystem = SHADINGSYSTEM_SVM;
 		tile_order = TILE_CENTER;
 	}
 
@@ -137,7 +138,10 @@ public:
 	void set_pause(bool pause);
 
 	void update_scene();
+	void load_kernels();
+
 	void device_free();
+
 protected:
 	struct DelayedReset {
 		thread_mutex mutex;

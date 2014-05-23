@@ -127,12 +127,13 @@ static FreestyleModuleConfig *alloc_module(void)
 	return (FreestyleModuleConfig *)MEM_callocN(sizeof(FreestyleModuleConfig), "style module configuration");
 }
 
-void BKE_freestyle_module_add(FreestyleConfig *config)
+FreestyleModuleConfig *BKE_freestyle_module_add(FreestyleConfig *config)
 {
 	FreestyleModuleConfig *module_conf = alloc_module();
 	BLI_addtail(&config->modules, (void *)module_conf);
 	module_conf->script = NULL;
 	module_conf->is_displayed = 1;
+	return module_conf;
 }
 
 static void copy_module(FreestyleModuleConfig *new_module, FreestyleModuleConfig *module)
@@ -141,21 +142,30 @@ static void copy_module(FreestyleModuleConfig *new_module, FreestyleModuleConfig
 	new_module->is_displayed = module->is_displayed;
 }
 
-void BKE_freestyle_module_delete(FreestyleConfig *config, FreestyleModuleConfig *module_conf)
+bool BKE_freestyle_module_delete(FreestyleConfig *config, FreestyleModuleConfig *module_conf)
 {
+	if (BLI_findindex(&config->modules, module_conf) == -1)
+		return false;
 	BLI_freelinkN(&config->modules, module_conf);
+	return true;
 }
 
-void BKE_freestyle_module_move_up(FreestyleConfig *config, FreestyleModuleConfig *module_conf)
+bool BKE_freestyle_module_move_up(FreestyleConfig *config, FreestyleModuleConfig *module_conf)
 {
+	if (BLI_findindex(&config->modules, module_conf) == -1)
+		return false;
 	BLI_remlink(&config->modules, module_conf);
 	BLI_insertlinkbefore(&config->modules, module_conf->prev, module_conf);
+	return true;
 }
 
-void BKE_freestyle_module_move_down(FreestyleConfig *config, FreestyleModuleConfig *module_conf)
+bool BKE_freestyle_module_move_down(FreestyleConfig *config, FreestyleModuleConfig *module_conf)
 {
+	if (BLI_findindex(&config->modules, module_conf) == -1)
+		return false;
 	BLI_remlink(&config->modules, module_conf);
 	BLI_insertlinkafter(&config->modules, module_conf->next, module_conf);
+	return true;
 }
 
 void BKE_freestyle_lineset_unique_name(FreestyleConfig *config, FreestyleLineSet *lineset)
@@ -169,7 +179,7 @@ static FreestyleLineSet *alloc_lineset(void)
 	return (FreestyleLineSet *)MEM_callocN(sizeof(FreestyleLineSet), "Freestyle line set");
 }
 
-FreestyleLineSet *BKE_freestyle_lineset_add(FreestyleConfig *config)
+FreestyleLineSet *BKE_freestyle_lineset_add(FreestyleConfig *config, const char *name)
 {
 	int lineset_index = BLI_countlist(&config->linesets);
 
@@ -186,13 +196,34 @@ FreestyleLineSet *BKE_freestyle_lineset_add(FreestyleConfig *config)
 	lineset->edge_types = FREESTYLE_FE_SILHOUETTE | FREESTYLE_FE_BORDER | FREESTYLE_FE_CREASE;
 	lineset->exclude_edge_types = 0;
 	lineset->group = NULL;
-	if (lineset_index > 0)
+	if (name) {
+		BLI_strncpy(lineset->name, name, sizeof(lineset->name));
+	}
+	else if (lineset_index > 0) {
 		sprintf(lineset->name, "LineSet %i", lineset_index + 1);
-	else
+	}
+	else {
 		strcpy(lineset->name, "LineSet");
+	}
 	BKE_freestyle_lineset_unique_name(config, lineset);
 
 	return lineset;
+}
+
+bool BKE_freestyle_lineset_delete(FreestyleConfig *config, FreestyleLineSet *lineset)
+{
+	if (BLI_findindex(&config->linesets, lineset) == -1)
+		return false;
+	if (lineset->group) {
+		lineset->group->id.us--;
+	}
+	if (lineset->linestyle) {
+		lineset->linestyle->id.us--;
+	}
+	BLI_remlink(&config->linesets, lineset);
+	MEM_freeN(lineset);
+	BKE_freestyle_lineset_set_active_index(config, 0);
+	return true;
 }
 
 FreestyleLineSet *BKE_freestyle_lineset_get_active(FreestyleConfig *config)
