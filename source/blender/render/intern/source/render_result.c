@@ -584,14 +584,18 @@ RenderResult *render_result_new(Render *re, rcti *partrct, int crop, int savebuf
 	/* check renderdata for amount of views */
 	if ((re->r.scemode & R_MULTIVIEW)) {
 		for (srv = re->r.views.first; srv; srv = srv->next) {
+			bool left, right;
 
 			if (srv->viewflag & SCE_VIEW_DISABLE)
 				continue;
 
-			if (basic_stereo &&
-			    (strcmp(srv->name, STEREO_LEFT_NAME)  != 0) &&
-			    (strcmp(srv->name, STEREO_RIGHT_NAME) != 0))
-				continue;
+			if (basic_stereo) {
+				left = (strcmp(srv->name, STEREO_LEFT_NAME) == 0);
+				right = (strcmp(srv->name, STEREO_RIGHT_NAME) == 0);
+
+				if ((!left) && (!right))
+					continue;
+			}
 
 			rv = MEM_callocN(sizeof(RenderView), "new render view");
 			BLI_addtail(&rr->views, rv);
@@ -599,9 +603,9 @@ RenderResult *render_result_new(Render *re, rcti *partrct, int crop, int savebuf
 			BLI_strncpy(rv->name, srv->name, sizeof(rv->name));
 
 			if (re->r.views_setup == SCE_VIEWS_SETUP_BASIC)
-				rv->camera = RE_GetCamera(re);
+				rv->camera = RE_GetCameraStereo(re, left);
 			else
-				rv->camera = BKE_camera_multiview_advanced(re->scene ,&re->r, RE_GetCamera(re), srv->suffix);
+				rv->camera = BKE_camera_multiview_advanced(re->scene, &re->r, RE_GetCamera(re), srv->suffix);
 		}
 	}
 

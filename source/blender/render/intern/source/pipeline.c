@@ -69,6 +69,7 @@
 #include "BKE_scene.h"
 #include "BKE_sequencer.h"
 #include "BKE_writeavi.h"  /* <------ should be replaced once with generic movie module */
+#include "BKE_object.h"
 
 #include "PIL_time.h"
 #include "IMB_colormanagement.h"
@@ -132,6 +133,8 @@ Render R;
 /* ********* alloc and free ******** */
 
 static int do_write_image_or_movie(Render *re, Main *bmain, Scene *scene, bMovieHandle *mh, const char *name_override, const char *view);
+
+static void render_free_stereo(Render *re);
 
 static volatile int g_break = 0;
 static int thread_break(void *UNUSED(arg))
@@ -2810,6 +2813,40 @@ static void update_physics_cache(Render *re, Scene *scene, int UNUSED(anim_init)
 
 	BKE_ptcache_bake(&baker);
 }
+
+/* setup stereo basic cameras when needed */
+static void render_initialize_stereo(Render *re, RenderData *rd)
+{
+	/* investigate why do I need to click twice in the button */
+	if ((rd->scemode & R_MULTIVIEW) &&
+	     rd->views_setup == SCE_VIEWS_SETUP_BASIC) {
+		Object *camera = RE_GetCamera(re);
+
+		re->camera_left = BKE_object_copy(camera);
+		re->camera_left->data =  BKE_camera_copy(camera->data);
+		BKE_camera_multiview_basic(re->camera_left, true);
+
+		re->camera_right = BKE_object_copy(camera);
+		re->camera_right->data =  BKE_camera_copy(camera->data);
+		BKE_camera_multiview_basic(re->camera_right, false);
+	}
+}
+
+static void render_free_stereo(Render *re)
+{
+	//XXX MV I need a cleaner way to free the objects
+	return;
+	if (re->camera_left) {
+		BKE_camera_free(re->camera_left->data);
+		BKE_object_free(re->camera_left);
+	}
+
+	if (re->camera_right) {
+		BKE_camera_free(re->camera_right->data);
+		BKE_object_free(re->camera_right);
+	}
+}
+
 /* evaluating scene options for general Blender render */
 static int render_initialize_from_main(Render *re, RenderData *rd, Main *bmain, Scene *scene, SceneRenderLayer *srl,
                                        Object *camera_override, unsigned int lay_override, int anim, int anim_init)
@@ -2842,9 +2879,14 @@ static int render_initialize_from_main(Render *re, RenderData *rd, Main *bmain, 
 	re->scene = scene;
 	re->scene_color_manage = BKE_scene_check_color_management_enabled(scene);
 	re->camera_override = camera_override;
+	re->camera_left = NULL;
+	re->camera_right = NULL;
 	re->lay = lay_override ? lay_override : scene->lay;
 	re->i.localview = (re->lay & 0xFF000000) != 0;
-	
+
+	/* init left and right cameras */
+	render_initialize_stereo(re, rd);
+
 	/* not too nice, but it survives anim-border render */
 	if (anim) {
 		render_update_anim_renderdata(re, &scene->r);
@@ -2872,8 +2914,10 @@ static int render_initialize_from_main(Render *re, RenderData *rd, Main *bmain, 
 	}
 	
 	RE_InitState(re, NULL, &scene->r, srl, winx, winy, &disprect);
-	if (!re->ok)  /* if an error was printed, abort */
+	if (!re->ok)  /* if an error was printed, abort */ {
+		render_free_stereo(re);
 		return 0;
+	}
 	
 	/* initstate makes new result, have to send changed tags around */
 	ntreeCompositTagRender(re->scene);
@@ -2950,6 +2994,8 @@ void RE_BlenderFrame(Render *re, Main *bmain, Scene *scene, SceneRenderLayer *sr
 
 	BLI_callback_exec(re->main, (ID *)scene, G.is_break ? BLI_CB_EVT_RENDER_CANCEL : BLI_CB_EVT_RENDER_COMPLETE);
 
+	render_free_stereo(re);
+
 	/* UGLY WARNING */
 	G.is_rendering = false;
 }
@@ -2962,6 +3008,7 @@ void RE_RenderFreestyleStrokes(Render *re, Main *bmain, Scene *scene, int render
 		if (render)
 			do_render_fields_blur_3d(re);
 	}
+	render_free_stereo(re);
 	re->result_ok = 1;
 }
 #endif
@@ -3299,6 +3346,8 @@ void RE_BlenderAnim(Render *re, Main *bmain, Scene *scene, Object *camera_overri
 	re->flag &= ~R_ANIMATION;
 
 	BLI_callback_exec(re->main, (ID *)scene, G.is_break ? BLI_CB_EVT_RENDER_CANCEL : BLI_CB_EVT_RENDER_COMPLETE);
+
+	render_free_stereo(re);
 
 	/* UGLY WARNING */
 	G.is_rendering = false;

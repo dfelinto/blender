@@ -433,6 +433,12 @@ void make_sample_tables(Render *re)
 
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
+struct Object *RE_GetCameraStereo(Render *re, const bool left)
+{
+	Object *ob_cam = left ? re->camera_left : re->camera_right;
+	return ob_cam ? ob_cam : RE_GetCamera(re);
+}
+
 struct Object *RE_GetViewCamera(Render *re)
 {
 	RenderView *rv;

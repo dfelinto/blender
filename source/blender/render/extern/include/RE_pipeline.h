@@ -230,6 +230,7 @@ bool RE_RenderResult_is_stereo(RenderResult *res);
 void RE_InitState(struct Render *re, struct Render *source, struct RenderData *rd, struct SceneRenderLayer *srl, int winx, int winy, rcti *disprect);
 
 /* set up the viewplane/perspective matrix, three choices */
+struct Object *RE_GetCameraStereo(struct Render *re, const bool left);
 struct Object *RE_GetViewCamera(struct Render *re);
 struct Object *RE_GetCamera(struct Render *re); /* return camera override if set */
 void RE_SetCamera(struct Render *re, struct Object *camera);

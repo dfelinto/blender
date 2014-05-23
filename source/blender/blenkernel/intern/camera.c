@@ -601,6 +601,56 @@ bool BKE_camera_view_frame_fit_to_scene(Scene *scene, struct View3D *v3d, Object
 	}
 }
 
+/* transforms the camera matrix to the correct stereo eye to be rendered */
+void BKE_camera_multiview_basic(Object *camera, const bool left)
+{
+	Camera *data = (Camera *)camera->data;
+	float *r_shift = &data->shiftx;
+	float interocular_distance, convergence_distance, angle;
+	short convergence_mode;
+	float tmpmat[4][4];
+
+	float distance;
+	float rotmat[3][3] = MAT3_UNITY;
+
+	interocular_distance = data->stereo.interocular_distance;
+	convergence_distance = data->stereo.convergence_distance;
+	convergence_mode = data->stereo.convergence_mode;
+
+	/* rotation */
+	if (convergence_mode == CAM_S3D_TOE) {
+		angle = -atan((interocular_distance * 0.5f) / convergence_distance);
+
+		if (left)
+			angle = -angle;
+
+		rotmat[0][0] = cos(angle);
+		rotmat[2][0] = -sin(angle);
+		rotmat[0][2] = sin(angle);
+		rotmat[2][2] = cos(angle);
+	}
+
+	copy_m4_m4(tmpmat, camera->obmat);
+	mul_m4_m4m3(camera->obmat, tmpmat, rotmat);
+
+	/* translation */
+	if (left)
+		distance = -interocular_distance * 0.5f;
+	else
+		distance =  interocular_distance * 0.5f;
+
+	translate_m4(camera->obmat, distance, 0.0f, 0.0f);
+
+	/* prepare the camera shift for the projection matrix */
+	/* Note: in viewport, parallel renders as offaxis, but in render it does parallel */
+	if (convergence_mode == CAM_S3D_OFFAXIS) {
+		if (left)
+			*r_shift += ((interocular_distance / data->sensor_x) * (data->lens / convergence_distance)) * 0.5f;
+		else
+			*r_shift -= ((interocular_distance / data->sensor_x) * (data->lens / convergence_distance)) * 0.5f;
+	}
+}
+
 void BKE_camera_stereo_matrices(Object *camera, float r_viewmat[4][4], float *r_shift, const bool left)
 {
 	/* viewmat = MODELVIEW_MATRIX */
@@ -608,12 +658,7 @@ void BKE_camera_stereo_matrices(Object *camera, float r_viewmat[4][4], float *r_
 	float interocular_distance, convergence_distance, angle;
 	short convergence_mode;
 	float tmpviewmat[4][4];
-
-	float transmat[4][4] = {
-	      {1,0,0,0},
-	      {0,1,0,0},
-	      {0,0,1,0},
-	      {0,0,0,1} };
+	float transmat[4][4] = MAT4_UNITY;
 
 	interocular_distance = data->stereo.interocular_distance;
 	convergence_distance = data->stereo.convergence_distance;
@@ -621,9 +666,9 @@ void BKE_camera_stereo_matrices(Object *camera, float r_viewmat[4][4], float *r_
 
 	invert_m4_m4(tmpviewmat, camera->obmat);
 
-	/* rotate */
+	/* rotation */
 	if (convergence_mode == CAM_S3D_TOE) {
-		angle = atan((interocular_distance * 0.5) / convergence_distance);
+		angle = atan((interocular_distance * 0.5f) / convergence_distance);
 
 		if (left)
 			angle = -angle;
@@ -634,27 +679,24 @@ void BKE_camera_stereo_matrices(Object *camera, float r_viewmat[4][4], float *r_
 		transmat[2][2] = cos(angle);
 	}
 
-	/* move */
+	/* translation */
 	if (left) {
-		transmat[3][0] = interocular_distance * 0.5 ;
+		transmat[3][0] = interocular_distance * 0.5f;
 	}
 	else {
-		transmat[3][0] = interocular_distance * -0.5 ;
+		transmat[3][0] = interocular_distance * -0.5f;
 	}
 	
 	/* apply */
-	mul_m4_m4m4( tmpviewmat, transmat, tmpviewmat) ;
-
-	/* copy  */
-	copy_m4_m4(r_viewmat, tmpviewmat);
+	mul_m4_m4m4(r_viewmat, transmat, tmpviewmat);
 
 	/* prepare the camera shift for the projection matrix */
 	/* Note: in viewport, parallel renders as offaxis, but in render it does parallel */
 	if (ELEM(convergence_mode, CAM_S3D_OFFAXIS, CAM_S3D_PARALLEL)) {
 		if (left)
-			*r_shift += ((interocular_distance / data->sensor_x) * (data->lens / convergence_distance)) * 0.5;
+			*r_shift += ((interocular_distance / data->sensor_x) * (data->lens / convergence_distance)) * 0.5f;
 		else
-			*r_shift -= ((interocular_distance / data->sensor_x) * (data->lens / convergence_distance)) * 0.5;
+			*r_shift -= ((interocular_distance / data->sensor_x) * (data->lens / convergence_distance)) * 0.5f;
 	}
 }
 
