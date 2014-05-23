@@ -601,7 +601,7 @@ bool BKE_camera_view_frame_fit_to_scene(Scene *scene, struct View3D *v3d, Object
 	}
 }
 
-void BKE_camera_stereo_matrices(Object *camera, float viewmat[4][4], float *shift, bool left)
+void BKE_camera_stereo_matrices(Object *camera, float r_viewmat[4][4], float *r_shift, const bool left)
 {
 	/* viewmat = MODELVIEW_MATRIX */
 	Camera *data = (Camera *)camera->data;
@@ -646,15 +646,15 @@ void BKE_camera_stereo_matrices(Object *camera, float viewmat[4][4], float *shif
 	mul_m4_m4m4( tmpviewmat, transmat, tmpviewmat) ;
 
 	/* copy  */
-	copy_m4_m4(viewmat, tmpviewmat);
+	copy_m4_m4(r_viewmat, tmpviewmat);
 
 	/* prepare the camera shift for the projection matrix */
 	/* Note: in viewport, parallel renders as offaxis, but in render it does parallel */
 	if (ELEM(convergence_mode, CAM_S3D_OFFAXIS, CAM_S3D_PARALLEL)) {
 		if (left)
-			*shift += ((interocular_distance / data->sensor_x) * (data->lens / convergence_distance)) * 0.5;
+			*r_shift += ((interocular_distance / data->sensor_x) * (data->lens / convergence_distance)) * 0.5;
 		else
-			*shift -= ((interocular_distance / data->sensor_x) * (data->lens / convergence_distance)) * 0.5;
+			*r_shift -= ((interocular_distance / data->sensor_x) * (data->lens / convergence_distance)) * 0.5;
 	}
 }
 
