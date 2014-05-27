@@ -101,6 +101,12 @@ static void rna_def_camera_stereo_data(BlenderRNA *brna)
 		{0, NULL, 0, NULL, NULL}
 	};
 
+	static EnumPropertyItem pivot_items[] = {
+		{CAM_S3D_PIVOT_LEFT, "LEFT", 0, "Left", ""},
+		{CAM_S3D_PIVOT_RIGHT, "RIGHT", 0, "Right", ""},
+		{CAM_S3D_PIVOT_CENTER, "CENTER", 0, "Center", ""},
+	};
+
 	srna = RNA_def_struct(brna, "CameraStereoData", NULL);
 	RNA_def_struct_sdna(srna, "CameraStereoSettings");
 	RNA_def_struct_nested(brna, srna, "Camera");
@@ -109,6 +115,11 @@ static void rna_def_camera_stereo_data(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "convergence_mode", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_items(prop, convergence_mode_items);
 	RNA_def_property_ui_text(prop, "Mode", "");
+	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, NULL);
+
+	prop = RNA_def_property(srna, "pivot", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_items(prop, pivot_items);
+	RNA_def_property_ui_text(prop, "Pivot", "");
 	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, NULL);
 
 	prop = RNA_def_property(srna, "interocular_distance", PROP_FLOAT, PROP_DISTANCE);

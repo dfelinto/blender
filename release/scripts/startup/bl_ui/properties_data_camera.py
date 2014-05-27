@@ -150,6 +150,11 @@ class DATA_PT_camera_stereoscopy(CameraButtonsPanel, Panel):
         row = col.row()
         row.prop(st, "convergence_mode", expand=True)
 
+        col.separator()
+        col.label(text="Pivot:")
+        row = col.row()
+        row.prop(st, "pivot", expand=True)
+
 
 class DATA_PT_camera(CameraButtonsPanel, Panel):
     bl_label = "Camera"

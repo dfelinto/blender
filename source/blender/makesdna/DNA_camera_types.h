@@ -47,10 +47,11 @@ struct Ipo;
 /* ------------------------------------------- */
 /* Stereo Settings */
 typedef struct CameraStereoSettings {
-	 float interocular_distance;
-	 float convergence_distance;
-	 short convergence_mode;
-	 short pad, pad2, pad3;
+	float interocular_distance;
+	float convergence_distance;
+	short convergence_mode;
+	short pivot;
+	short pad, pad2;
 } CameraStereoSettings;
 
 typedef struct Camera {
@@ -137,6 +138,13 @@ enum {
 #define CAM_S3D_OFFAXIS	0
 #define CAM_S3D_PARALLEL	1
 #define CAM_S3D_TOE	2
+
+/* stereo->pivot */
+enum {
+	CAM_S3D_PIVOT_LEFT      = 0,
+	CAM_S3D_PIVOT_RIGHT     = 1,
+	CAM_S3D_PIVOT_CENTER    = 2,
+};
 
 #ifdef __cplusplus
 }
