@@ -2234,9 +2234,6 @@ static void image_init_imageuser(Image *ima, ImageUser *iuser)
 
 		BKE_image_multilayer_index(rr, iuser);
 	}
-	else {
-		iuser->flag &= ~IMA_SHOW_STEREO;
-	}
 }
 
 void BKE_image_init_imageuser(Image *ima, ImageUser *iuser)

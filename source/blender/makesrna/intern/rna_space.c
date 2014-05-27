@@ -815,6 +815,18 @@ static void rna_SpaceImageEditor_cursor_location_set(PointerRNA *ptr, const floa
 	}
 }
 
+static void rna_SpaceImageEditor_image_update(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *ptr)
+{
+	SpaceImage *sima = (SpaceImage *)ptr->data;
+
+	/* make sure all the iuser settings are valid for the sima image */
+	if (sima->image) {
+		if (BKE_image_multilayer_index(sima->image->rr, &sima->iuser) == NULL) {
+			BKE_image_init_imageuser(sima->image, &sima->iuser);
+		}
+	}
+}
+
 static void rna_SpaceImageEditor_scopes_update(Main *UNUSED(bmain), Scene *scene, PointerRNA *ptr)
 {
 	SpaceImage *sima = (SpaceImage *)ptr->data;
@@ -2385,7 +2397,7 @@ static void rna_def_space_image(BlenderRNA *brna)
 	RNA_def_property_pointer_funcs(prop, NULL, "rna_SpaceImageEditor_image_set", NULL, NULL);
 	RNA_def_property_ui_text(prop, "Image", "Image displayed and edited in this space");
 	RNA_def_property_flag(prop, PROP_EDITABLE);
-	RNA_def_property_update(prop, NC_GEOM | ND_DATA, NULL); /* is handled in image editor too */
+	RNA_def_property_update(prop, NC_GEOM | ND_DATA, "rna_SpaceImageEditor_image_update"); /* is handled in image editor too */
 
 	prop = RNA_def_property(srna, "image_user", PROP_POINTER, PROP_NONE);
 	RNA_def_property_flag(prop, PROP_NEVER_NULL);

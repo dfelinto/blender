@@ -327,6 +327,7 @@ void blo_do_versions_270(FileData *fd, Library *UNUSED(lib), Main *main)
 						{
 							SpaceImage *sima = (SpaceImage *) sl;
 							sima->iuser.flag |= IMA_SHOW_STEREO;
+							sima->iuser.passtype = SCE_PASS_COMBINED;
 							break;
 						}
 					}
