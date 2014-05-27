@@ -2202,7 +2202,7 @@ static void do_merge_fullsample(Render *re, bNodeTree *ntree)
 			ntreeCompositTagRender(re->scene);
 			ntreeCompositTagAnimated(ntree);
 			
-			for (nr=0; nr < numviews; nr++)
+			for (nr = 0; nr < numviews; nr++)
 				ntreeCompositExecTree(re->scene, ntree, &re->r, true, G.background == 0, &re->scene->view_settings, &re->scene->display_settings, nr);
 		}
 
