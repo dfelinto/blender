@@ -77,7 +77,7 @@ static void wm_method_draw_stereo_pageflip(wmWindow *win)
 	wmDrawData *drawdata;
 	int view;
 
-	for (view=0; view < 2; view ++) {
+	for (view = 0; view < 2; view ++) {
 		drawdata = BLI_findlink(&win->drawdata, (view * 2) + 1);
 
 		if (view == STEREO_LEFT_ID)
@@ -85,15 +85,15 @@ static void wm_method_draw_stereo_pageflip(wmWindow *win)
 		else //STEREO_RIGHT_ID
 			glDrawBuffer(GL_BACK_RIGHT);
 
-		wm_triple_draw_textures(win, drawdata->triple, 1.0);
+		wm_triple_draw_textures(win, drawdata->triple, 1.0f);
 	}
 }
 
 static void wm_method_draw_stereo_epilepsy(wmWindow *win)
 {
 	wmDrawData *drawdata;
-	static bool view = 0;
-	static double start = 0;
+	static bool view = false;
+	static double start = 0.0;
 
 	if( (PIL_check_seconds_timer() - start) >= U.stereo_epilepsy_interval) {
 		start = PIL_check_seconds_timer();
@@ -102,7 +102,7 @@ static void wm_method_draw_stereo_epilepsy(wmWindow *win)
 
 	drawdata = BLI_findlink(&win->drawdata, view * 2 + 1);
 
-	wm_triple_draw_textures(win, drawdata->triple, 1.0);
+	wm_triple_draw_textures(win, drawdata->triple, 1.0f);
 }
 
 static GLuint left_interlace_mask[32];
@@ -165,13 +165,13 @@ static void wm_method_draw_stereo_interlace(wmWindow *win)
 
 	wm_interlace_create_masks();
 
-	for (view=0; view < 2; view ++) {
+	for (view = 0; view < 2; view ++) {
 		drawdata = BLI_findlink(&win->drawdata, (view * 2) + 1);
 
 		glEnable(GL_POLYGON_STIPPLE);
-		glPolygonStipple(view ? right_interlace_mask : left_interlace_mask);
+		glPolygonStipple(view ? (GLubyte *) right_interlace_mask : (GLubyte *) left_interlace_mask);
 
-		wm_triple_draw_textures(win, drawdata->triple, 1.0);
+		wm_triple_draw_textures(win, drawdata->triple, 1.0f);
 		glDisable(GL_POLYGON_STIPPLE);
 	}
 }
@@ -181,7 +181,7 @@ static void wm_method_draw_stereo_anaglyph(wmWindow *win)
 	wmDrawData *drawdata;
 	int view, bit;
 
-	for (view=0; view < 2; view ++) {
+	for (view = 0; view < 2; view ++) {
 		drawdata = BLI_findlink(&win->drawdata, (view * 2) + 1);
 
 		bit = view + 1;
@@ -197,7 +197,7 @@ static void wm_method_draw_stereo_anaglyph(wmWindow *win)
 				break;
 		}
 
-		wm_triple_draw_textures(win, drawdata->triple, 1.0);
+		wm_triple_draw_textures(win, drawdata->triple, 1.0f);
 
 		glColorMask(true, true, true, true);
 	}
@@ -214,11 +214,11 @@ static void wm_method_draw_stereo_sidebyside(wmWindow *win)
 	int soffx;
 	bool cross_eyed = (U.stereo_flag & S3D_SIDEBYSIDE_CROSSEYED);
 
-	for (view=0; view < 2; view ++) {
+	for (view = 0; view < 2; view ++) {
 		drawdata = BLI_findlink(&win->drawdata, (view * 2) + 1);
 		triple = drawdata->triple;
 
-		soffx = WM_window_pixels_x(win) * 0.5;
+		soffx = WM_window_pixels_x(win) * 0.5f;
 		if (view == STEREO_LEFT_ID) {
 			if(!cross_eyed)
 				soffx = 0;
@@ -254,16 +254,16 @@ static void wm_method_draw_stereo_sidebyside(wmWindow *win)
 				glColor4f(1.0f, 1.0f, 1.0f, alpha);
 				glBegin(GL_QUADS);
 				glTexCoord2f(halfx, halfy);
-				glVertex2f(soffx + (offx * 0.5), offy);
+				glVertex2f(soffx + (offx * 0.5f), offy);
 
 				glTexCoord2f(ratiox + halfx, halfy);
-				glVertex2f(soffx + ((offx + sizex) * 0.5), offy);
+				glVertex2f(soffx + ((offx + sizex) * 0.5f), offy);
 
 				glTexCoord2f(ratiox + halfx, ratioy + halfy);
-				glVertex2f(soffx + ((offx + sizex) * 0.5), offy + sizey);
+				glVertex2f(soffx + ((offx + sizex) * 0.5f), offy + sizey);
 
 				glTexCoord2f(halfx, ratioy + halfy);
-				glVertex2f(soffx + (offx * 0.5), offy + sizey);
+				glVertex2f(soffx + (offx * 0.5f), offy + sizey);
 				glEnd();
 			}
 		}
@@ -284,12 +284,12 @@ static void wm_method_draw_stereo_topbottom(wmWindow *win)
 	int view;
 	int soffy;
 
-	for (view=0; view < 2; view ++) {
+	for (view = 0; view < 2; view ++) {
 		drawdata = BLI_findlink(&win->drawdata, (view * 2) + 1);
 		triple = drawdata->triple;
 
 		if (view == STEREO_LEFT_ID) {
-			soffy = WM_window_pixels_y(win) * 0.5;
+			soffy = WM_window_pixels_y(win) * 0.5f;
 		}
 		else { //STEREO_RIGHT_ID
 			soffy = 0;
@@ -321,16 +321,16 @@ static void wm_method_draw_stereo_topbottom(wmWindow *win)
 				glColor4f(1.0f, 1.0f, 1.0f, alpha);
 				glBegin(GL_QUADS);
 				glTexCoord2f(halfx, halfy);
-				glVertex2f(offx, soffy + (offy * 0.5));
+				glVertex2f(offx, soffy + (offy * 0.5f));
 
 				glTexCoord2f(ratiox + halfx, halfy);
-				glVertex2f(offx + sizex, soffy + (offy * 0.5));
+				glVertex2f(offx + sizex, soffy + (offy * 0.5f));
 
 				glTexCoord2f(ratiox + halfx, ratioy + halfy);
-				glVertex2f(offx + sizex, soffy + ((offy + sizey) * 0.5));
+				glVertex2f(offx + sizex, soffy + ((offy + sizey) * 0.5f));
 
 				glTexCoord2f(halfx, ratioy + halfy);
-				glVertex2f(offx, soffy + ((offy + sizey) * 0.5));
+				glVertex2f(offx, soffy + ((offy + sizey) * 0.5f));
 				glEnd();
 			}
 		}
