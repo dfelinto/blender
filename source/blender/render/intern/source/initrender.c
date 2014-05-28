@@ -442,12 +442,16 @@ struct Object *RE_GetCameraStereo(Render *re, const bool left)
 struct Object *RE_GetViewCamera(Render *re)
 {
 	RenderView *rv;
-	int actview = MIN2(re->actview, BLI_countlist(&re->result->views)-1);
+	int actview;
 	int nr = 0;
 
-	for (rv=(RenderView *)re->result->views.first; rv; rv=rv->next, nr++) {
-		if (actview == nr)
-			return rv->camera;
+	if (re->result != NULL) {
+		actview = MIN2(re->actview, BLI_countlist(&re->result->views) - 1);
+
+		for (rv=(RenderView *)re->result->views.first; rv; rv=rv->next, nr++) {
+			if (actview == nr)
+				return rv->camera;
+		}
 	}
 
 	return RE_GetCamera(re);
