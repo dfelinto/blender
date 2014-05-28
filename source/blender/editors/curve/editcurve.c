@@ -1926,7 +1926,7 @@ static void ed_curve_delete_selected(Object *obedit)
 				}
 				if (a == 0) {
 					if (cu->actnu == nuindex)
-						cu->actnu = -1;
+						cu->actnu = CU_ACT_NONE;
 
 					BLI_remlink(nubase, nu);
 					keyIndex_delNurb(editnurb, nu);
@@ -1950,7 +1950,7 @@ static void ed_curve_delete_selected(Object *obedit)
 				}
 				if (a == 0) {
 					if (cu->actnu == nuindex)
-						cu->actnu = -1;
+						cu->actnu = CU_ACT_NONE;
 
 					BLI_remlink(nubase, nu);
 					keyIndex_delNurb(editnurb, nu);
@@ -2427,11 +2427,15 @@ static int switch_direction_exec(bContext *C, wmOperator *UNUSED(op))
 	Curve *cu = (Curve *)obedit->data;
 	EditNurb *editnurb = cu->editnurb;
 	Nurb *nu;
+	int i;
 
-	for (nu = editnurb->nurbs.first; nu; nu = nu->next) {
+	for (nu = editnurb->nurbs.first, i = 0; nu; nu = nu->next, i++) {
 		if (isNurbsel(nu)) {
 			BKE_nurb_direction_switch(nu);
 			keyData_switchDirectionNurb(cu, nu);
+			if ((i == cu->actnu) && (cu->actvert != CU_ACT_NONE)) {
+				cu->actvert = (nu->pntsu - 1) - cu->actvert;
+			}
 		}
 	}
 
@@ -3916,6 +3920,7 @@ static int set_spline_type_exec(bContext *C, wmOperator *op)
 	ListBase *editnurb = object_editcurve_get(obedit);
 	Nurb *nu;
 	bool changed = false;
+	bool changed_size = false;
 	const bool use_handles = RNA_boolean_get(op->ptr, "use_handles");
 	const int type = RNA_enum_get(op->ptr, "type");
 
@@ -3926,10 +3931,16 @@ static int set_spline_type_exec(bContext *C, wmOperator *op)
 	
 	for (nu = editnurb->first; nu; nu = nu->next) {
 		if (isNurbsel(nu)) {
-			if (BKE_nurb_type_convert(nu, type, use_handles) == false)
-				BKE_report(op->reports, RPT_ERROR, "No conversion possible");
-			else
+			const int pntsu_prev = nu->pntsu;
+			if (BKE_nurb_type_convert(nu, type, use_handles)) {
 				changed = true;
+				if (pntsu_prev != nu->pntsu) {
+					changed_size = true;
+				}
+			}
+			else {
+				BKE_report(op->reports, RPT_ERROR, "No conversion possible");
+			}
 		}
 	}
 
@@ -3939,6 +3950,11 @@ static int set_spline_type_exec(bContext *C, wmOperator *op)
 
 		DAG_id_tag_update(obedit->data, 0);
 		WM_event_add_notifier(C, NC_GEOM | ND_DATA, obedit->data);
+
+		if (changed_size) {
+			Curve *cu = obedit->data;
+			cu->actvert = CU_ACT_NONE;
+		}
 
 		return OPERATOR_FINISHED;
 	}
@@ -4927,7 +4943,7 @@ static int addvert_Nurb(bContext *C, short mode, float location[3])
 
 	if ((nu == NULL) || (nu->type == CU_BEZIER && bezt == NULL) || (nu->type != CU_BEZIER && bp == NULL)) {
 		if (mode != 'e') {
-			if (cu->actnu >= 0)
+			if (cu->actnu != CU_ACT_NONE)
 				nu = BLI_findlink(&editnurb->nurbs, cu->actnu);
 
 			if (!nu || nu->type == CU_BEZIER) {

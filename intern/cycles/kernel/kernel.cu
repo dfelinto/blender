@@ -61,7 +61,7 @@
 
 /* tunable parameters */
 #define CUDA_THREADS_BLOCK_WIDTH 16
-#define CUDA_KERNEL_MAX_REGISTERS 63
+#define CUDA_KERNEL_MAX_REGISTERS 40
 #define CUDA_KERNEL_BRANCHED_MAX_REGISTERS 63
 
 /* unknown architecture */
@@ -151,6 +151,15 @@ kernel_cuda_shader(uint4 *input, float4 *output, int type, int sx)
 	int x = sx + blockDim.x*blockIdx.x + threadIdx.x;
 
 	kernel_shader_evaluate(NULL, input, output, (ShaderEvalType)type, x);
+}
+
+extern "C" __global__ void
+CUDA_LAUNCH_BOUNDS(CUDA_THREADS_BLOCK_WIDTH, CUDA_KERNEL_MAX_REGISTERS)
+kernel_cuda_bake(uint4 *input, float4 *output, int type, int sx)
+{
+	int x = sx + blockDim.x*blockIdx.x + threadIdx.x;
+
+	kernel_bake_evaluate(NULL, input, output, (ShaderEvalType)type, x);
 }
 
 #endif

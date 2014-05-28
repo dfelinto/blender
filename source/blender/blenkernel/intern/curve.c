@@ -3079,16 +3079,13 @@ static void calchandleNurb_intern(BezTriple *bezt, BezTriple *prev, BezTriple *n
 		return;
 	}
 
-	if (is_fcurve == false) {
-		len_a = len_v3v3(p2, p2_h1);
-		len_b = len_v3v3(p2, p2_h2);
+	len_a = len_v3v3(p2, p2_h1);
+	len_b = len_v3v3(p2, p2_h2);
 
-		if (len_a == 0.0f)
-			len_a = 1.0f;
-		if (len_b == 0.0f)
-			len_b = 1.0f;
-		len_ratio = len_a / len_b;
-	}
+	if (len_a == 0.0f) len_a = 1.0f;
+	if (len_b == 0.0f) len_b = 1.0f;
+
+	len_ratio = len_a / len_b;
 
 	if (bezt->f1 & SELECT) { /* order of calculation */
 		if (ELEM(bezt->h2, HD_ALIGN, HD_ALIGN_DOUBLESIDE)) { /* aligned */
@@ -3830,6 +3827,9 @@ bool BKE_nurb_order_clamp_v(struct Nurb *nu)
 	return changed;
 }
 
+/**
+ * \note caller must ensure active vertex remains valid.
+ */
 bool BKE_nurb_type_convert(Nurb *nu, const short type, const bool use_handles)
 {
 	BezTriple *bezt;
@@ -3981,7 +3981,7 @@ ListBase *BKE_curve_nurbs_get(Curve *cu)
 void BKE_curve_nurb_active_set(Curve *cu, Nurb *nu)
 {
 	if (nu == NULL) {
-		cu->actnu = -1;
+		cu->actnu = CU_ACT_NONE;
 	}
 	else {
 		ListBase *nurbs = BKE_curve_editNurbs_get(cu);
@@ -4011,13 +4011,18 @@ void BKE_curve_nurb_vert_active_set(Curve *cu, Nurb *nu, void *vert)
 	if (nu) {
 		BKE_curve_nurb_active_set(cu, nu);
 
-		if (nu->type == CU_BEZIER) {
-			BLI_assert(ARRAY_HAS_ITEM((BezTriple *)vert, nu->bezt, nu->pntsu));
-			cu->actvert = (BezTriple *)vert - nu->bezt;
+		if (vert) {
+			if (nu->type == CU_BEZIER) {
+				BLI_assert(ARRAY_HAS_ITEM((BezTriple *)vert, nu->bezt, nu->pntsu));
+				cu->actvert = (BezTriple *)vert - nu->bezt;
+			}
+			else {
+				BLI_assert(ARRAY_HAS_ITEM((BPoint *)vert, nu->bp, nu->pntsu * nu->pntsv));
+				cu->actvert = (BPoint *)vert - nu->bp;
+			}
 		}
 		else {
-			BLI_assert(ARRAY_HAS_ITEM((BPoint *)vert, nu->bp, nu->pntsu * nu->pntsv));
-			cu->actvert = (BPoint *)vert - nu->bp;
+			cu->actvert = CU_ACT_NONE;
 		}
 	}
 	else {
