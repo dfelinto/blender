@@ -729,16 +729,18 @@ static void wm_method_draw_triple_multiview(bContext *C, wmWindow *win, StereoVi
 	int id;
 
 	/* we store the triple_data in sequence to triple_all */
-	for (id=0;id < 2;id++) {
+	for (id = 0; id < 2; id++) {
 		drawdata = BLI_findlink(&win->drawdata, (sview * 2) + id);
 
 		if (drawdata && drawdata->triple) {
-			glClearColor(0, 0, 0, 0);
-			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+			if (id == 0) {
+				glClearColor(0, 0, 0, 0);
+				glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-			wmSubWindowSet(win, screen->mainwin);
+				wmSubWindowSet(win, screen->mainwin);
 
-			wm_triple_draw_textures(win, drawdata->triple, 1.0f);
+				wm_triple_draw_textures(win, drawdata->triple, 1.0f);
+			}
 		}
 		else {
 			/* we run it when we start OR when we turn stereo on */
@@ -778,6 +780,7 @@ static void wm_method_draw_triple_multiview(bContext *C, wmWindow *win, StereoVi
 			}
 		}
 
+		/* draw marked area regions */
 		for (ar = sa->regionbase.first; ar; ar = ar->next) {
 			if (ar->swinid && ar->do_draw) {
 
