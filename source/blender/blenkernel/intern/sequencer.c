@@ -3029,7 +3029,13 @@ static ImBuf *seq_render_strip_stack(const SeqRenderData *context, ListBase *seq
 				break;
 			case EARLY_DO_EFFECT:
 				if (i == 0) {
-					out = seq_render_strip(context, seq, cfra);
+					ImBuf *ibuf1 = IMB_allocImBuf(context->rectx, context->recty, 32, IB_rect);
+					ImBuf *ibuf2 = seq_render_strip(context, seq, cfra);
+
+					out = seq_render_strip_stack_apply_effect(context, seq, cfra, ibuf1, ibuf2);
+
+					IMB_freeImBuf(ibuf1);
+					IMB_freeImBuf(ibuf2);
 				}
 
 				break;
@@ -4038,19 +4044,31 @@ int BKE_sequence_swap(Sequence *seq_a, Sequence *seq_b, const char **error_str)
 	return 1;
 }
 
+/* prefix + [" + escaped_name + "] + \0 */
+#define SEQ_RNAPATH_MAXSTR ((30 + 2 + (SEQ_NAME_MAXSTR * 2) + 2) + 1)
+
+static size_t sequencer_rna_path_prefix(char str[SEQ_RNAPATH_MAXSTR], const char *name)
+{
+	char name_esc[SEQ_NAME_MAXSTR * 2];
+
+	BLI_strescape(name_esc, name, sizeof(name_esc));
+	return BLI_snprintf(str, SEQ_RNAPATH_MAXSTR, "sequence_editor.sequences_all[\"%s\"]", name_esc);
+}
+
 /* XXX - hackish function needed for transforming strips! TODO - have some better solution */
 void BKE_sequencer_offset_animdata(Scene *scene, Sequence *seq, int ofs)
 {
-	char str[SEQ_NAME_MAXSTR + 3];
+	char str[SEQ_RNAPATH_MAXSTR];
+	size_t str_len;
 	FCurve *fcu;
 
 	if (scene->adt == NULL || ofs == 0 || scene->adt->action == NULL)
 		return;
 
-	BLI_snprintf(str, sizeof(str), "[\"%s\"]", seq->name + 2);
+	str_len = sequencer_rna_path_prefix(str, seq->name + 2);
 
 	for (fcu = scene->adt->action->curves.first; fcu; fcu = fcu->next) {
-		if (strstr(fcu->rna_path, "sequence_editor.sequences_all[") && strstr(fcu->rna_path, str)) {
+		if (STREQLEN(fcu->rna_path, str, str_len)) {
 			unsigned int i;
 			if (fcu->bezt) {
 				for (i = 0; i < fcu->totvert; i++) {
@@ -4072,7 +4090,8 @@ void BKE_sequencer_offset_animdata(Scene *scene, Sequence *seq, int ofs)
 
 void BKE_sequencer_dupe_animdata(Scene *scene, const char *name_src, const char *name_dst)
 {
-	char str_from[SEQ_NAME_MAXSTR + 3];
+	char str_from[SEQ_RNAPATH_MAXSTR];
+	size_t str_from_len;
 	FCurve *fcu;
 	FCurve *fcu_last;
 	FCurve *fcu_cpy;
@@ -4081,12 +4100,12 @@ void BKE_sequencer_dupe_animdata(Scene *scene, const char *name_src, const char 
 	if (scene->adt == NULL || scene->adt->action == NULL)
 		return;
 
-	BLI_snprintf(str_from, sizeof(str_from), "[\"%s\"]", name_src);
+	str_from_len = sequencer_rna_path_prefix(str_from, name_src);
 
 	fcu_last = scene->adt->action->curves.last;
 
 	for (fcu = scene->adt->action->curves.first; fcu && fcu->prev != fcu_last; fcu = fcu->next) {
-		if (strstr(fcu->rna_path, "sequence_editor.sequences_all[") && strstr(fcu->rna_path, str_from)) {
+		if (STREQLEN(fcu->rna_path, str_from, str_from_len)) {
 			fcu_cpy = copy_fcurve(fcu);
 			BLI_addtail(&lb, fcu_cpy);
 		}
@@ -4102,18 +4121,19 @@ void BKE_sequencer_dupe_animdata(Scene *scene, const char *name_src, const char 
 /* XXX - hackish function needed to remove all fcurves belonging to a sequencer strip */
 static void seq_free_animdata(Scene *scene, Sequence *seq)
 {
-	char str[SEQ_NAME_MAXSTR + 3];
+	char str[SEQ_RNAPATH_MAXSTR];
+	size_t str_len;
 	FCurve *fcu;
 
 	if (scene->adt == NULL || scene->adt->action == NULL)
 		return;
 
-	BLI_snprintf(str, sizeof(str), "[\"%s\"]", seq->name + 2);
+	str_len = sequencer_rna_path_prefix(str, seq->name + 2);
 
 	fcu = scene->adt->action->curves.first;
 
 	while (fcu) {
-		if (strstr(fcu->rna_path, "sequence_editor.sequences_all[") && strstr(fcu->rna_path, str)) {
+		if (STREQLEN(fcu->rna_path, str, str_len)) {
 			FCurve *next_fcu = fcu->next;
 			
 			BLI_remlink(&scene->adt->action->curves, fcu);
@@ -4126,6 +4146,8 @@ static void seq_free_animdata(Scene *scene, Sequence *seq)
 		}
 	}
 }
+
+#undef SEQ_RNAPATH_MAXSTR
 
 Sequence *BKE_sequence_get_by_name(ListBase *seqbase, const char *name, bool recursive)
 {

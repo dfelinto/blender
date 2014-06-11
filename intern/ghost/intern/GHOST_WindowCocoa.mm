@@ -44,6 +44,8 @@
 #include "GHOST_SystemCocoa.h"
 #include "GHOST_Debug.h"
 
+#include <sys/sysctl.h>
+
 #if MAC_OS_X_VERSION_MAX_ALLOWED < 1070
 /* Lion style fullscreen support when building with the 10.6 SDK */
 enum {
@@ -726,14 +728,15 @@ GHOST_WindowCocoa::GHOST_WindowCocoa(
 	if (state == GHOST_kWindowStateFullScreen)
 		setState(GHOST_kWindowStateFullScreen);
 
-	//Starting with 10.9, we always use Lion fullscreen, since it
+	//Starting with 10.9 (darwin 13.x.x), we always use Lion fullscreen, since it
 	//now has proper multi-monitor support for fullscreen
-	struct { SInt32 major, minor; } systemversion;
-	Gestalt(gestaltSystemVersionMajor, &systemversion.major);
-	Gestalt(gestaltSystemVersionMinor, &systemversion.minor);
-
-	m_lionStyleFullScreen = (systemversion.major > 10 || (systemversion.major == 10 && systemversion.minor >= 9));
-		
+	char darwin_ver[10];
+	size_t len = sizeof(darwin_ver);
+	sysctlbyname("kern.osrelease", &darwin_ver, &len, NULL, 0);
+	if(darwin_ver[0] == '1' && darwin_ver[1] <= '3') {
+		m_lionStyleFullScreen = true;
+	}
+	
 	[pool drain];
 }
 

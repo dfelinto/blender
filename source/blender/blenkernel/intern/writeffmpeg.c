@@ -32,9 +32,9 @@
 
 #if defined(_WIN32) && defined(DEBUG) && !defined(__MINGW32__) && !defined(__CYGWIN__)
 /* This does not seem necessary or present on MSVC 8, but may be needed in earlier versions? */
-#if _MSC_VER < 1400
-#include <stdint.h>
-#endif
+#  if _MSC_VER < 1400
+#    include <stdint.h>
+#  endif
 #endif
 
 #include <stdlib.h>
@@ -105,6 +105,7 @@ static AUD_Device *audio_mixdown_device = 0;
 
 static void ffmpeg_dict_set_int(AVDictionary **dict, const char *key, int value);
 static void ffmpeg_dict_set_float(AVDictionary **dict, const char *key, float value);
+static void ffmpeg_set_expert_options(RenderData *rd);
 
 /* Delete a picture buffer */
 
@@ -487,6 +488,19 @@ static void set_ffmpeg_properties(RenderData *rd, AVCodecContext *c, const char 
 	IDProperty *prop;
 	void *iter;
 	IDProperty *curr;
+
+	/* TODO(sergey): This is actually rather stupid, because changing
+	 * codec settings in render panel would also set expert options.
+	 *
+	 * But we need ti here in order to get rid of deprecated settings
+	 * when opening old files in new blender.
+	 *
+	 * For as long we don't allow editing properties in the interface
+	 * it's all good. bug if we allow editing them, we'll need to
+	 * repace it with some smarter code which would port settings
+	 * from deprecated to new one.
+	 */
+	ffmpeg_set_expert_options(rd);
 
 	if (!rd->ffcodecdata.properties) {
 		return;

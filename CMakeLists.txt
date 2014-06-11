@@ -47,6 +47,11 @@ endif()
 
 cmake_minimum_required(VERSION 2.8)
 
+if(NOT (CMAKE_VERSION VERSION_LESS 3.0))
+	# keep until CMake-3.0 is min requirement
+	cmake_policy(SET CMP0043 OLD)
+endif()
+
 if(NOT EXECUTABLE_OUTPUT_PATH)
 	set(FIRST_RUN "TRUE")
 endif()
@@ -915,6 +920,9 @@ if(UNIX AND NOT APPLE)
 	endif()
 
 	set(PLATFORM_LINKFLAGS "${PLATFORM_LINKFLAGS} -pthread")
+	if(CMAKE_DL_LIBS)
+		list(APPEND PLATFORM_LINKLIBS ${CMAKE_DL_LIBS})
+	endif()
 
 	# lfs on glibc, all compilers should use
 	add_definitions(-D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE)

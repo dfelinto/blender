@@ -588,7 +588,9 @@ static void offset_meet(EdgeHalf *e1, EdgeHalf *e2, BMVert *v, BMFace *f, float 
 	if (ang < 100.0f * BEVEL_EPSILON) {
 		/* special case: e1 and e2 are parallel; put offset point perp to both, from v.
 		 * need to find a suitable plane.
-		 * if offsets are different, we're out of luck: just use e1->offset_r */
+		 * if offsets are different, we're out of luck:
+		 * use the max of the two (so get consistent looking results if the same situation
+		 * arises elsewhere in the object but with opposite roles for e1 and e2 */
 		if (f)
 			copy_v3_v3(norm_v, f->no);
 		else
@@ -596,18 +598,24 @@ static void offset_meet(EdgeHalf *e1, EdgeHalf *e2, BMVert *v, BMFace *f, float 
 		cross_v3_v3v3(norm_perp1, dir1, norm_v);
 		normalize_v3(norm_perp1);
 		copy_v3_v3(off1a, v->co);
-		madd_v3_v3fl(off1a, norm_perp1, e1->offset_r);
-		if (e2->offset_l != e1->offset_r)
-			e2->offset_l = e1->offset_r;
+		d = max_ff(e1->offset_r, e2->offset_l);
+		madd_v3_v3fl(off1a, norm_perp1, d);
+		if (e1->offset_r != d)
+			e1->offset_r = d;
+		else if (e2->offset_l != d)
+			e2->offset_l = d;
 		copy_v3_v3(meetco, off1a);
 	}
 	else if (fabsf(ang - (float)M_PI) < 100.0f * BEVEL_EPSILON) {
 		/* special case e1 and e2 are antiparallel, so bevel is into
 		 * a zero-area face.  Just make the offset point on the
 		 * common line, at offset distance from v. */
-		slide_dist(e2, v, e1->offset_r, meetco);
-		if (e2->offset_l != e1->offset_r)
-			e2->offset_l = e1->offset_r;
+		d = max_ff(e1->offset_r, e2->offset_l);
+		slide_dist(e2, v, d, meetco);
+		if (e1->offset_r != d)
+			e1->offset_r = d;
+		else if (e2->offset_l != d)
+			e2->offset_l = d;
 	}
 	else {
 		/* Get normal to plane where meet point should be,
@@ -964,7 +972,7 @@ static void move_profile_plane(BoundVert *bndv, EdgeHalf *e1, EdgeHalf *e2)
  * The original vertex should form a third point of the desired plane. */
 static void move_weld_profile_planes(BevVert *bv, BoundVert *bndv1, BoundVert *bndv2)
 {
-	float d1[3], d2[3], no[3], no2[3], no3[3], dot1, dot2;
+	float d1[3], d2[3], no[3], no2[3], no3[3], dot1, dot2, l1, l2, l3;
 
 	/* only do this if projecting, and d1, d2, and proj_dir are not coplanar */
 	if (is_zero_v3(bndv1->profile.proj_dir) || is_zero_v3(bndv2->profile.proj_dir))
@@ -972,22 +980,20 @@ static void move_weld_profile_planes(BevVert *bv, BoundVert *bndv1, BoundVert *b
 	sub_v3_v3v3(d1, bv->v->co, bndv1->nv.co);
 	sub_v3_v3v3(d2, bv->v->co, bndv2->nv.co);
 	cross_v3_v3v3(no, d1, d2);
+	l1 = normalize_v3(no);
 	/* "no" is new normal projection plane, but don't move if
-	 * it is coplanar with one or the other of the projection dirs */
+	 * it is coplanar with both of the projection dirs */
 	cross_v3_v3v3(no2, d1, bndv1->profile.proj_dir);
+	l2 = normalize_v3(no2);
 	cross_v3_v3v3(no3, d2, bndv2->profile.proj_dir);
-	if (normalize_v3(no) > BEVEL_EPSILON &&
-	    normalize_v3(no2) > BEVEL_EPSILON &&
-	    normalize_v3(no3) > BEVEL_EPSILON)
-	{
+	l3 = normalize_v3(no3);
+	if (l1 > BEVEL_EPSILON && (l2 > BEVEL_EPSILON || l3 > BEVEL_EPSILON)) {
 		dot1 = fabsf(dot_v3v3(no, no2));
 		dot2 = fabsf(dot_v3v3(no, no3));
-		if (fabsf(dot1 - 1.0f) > BEVEL_EPSILON &&
-		    fabsf(dot2 - 1.0f) > BEVEL_EPSILON)
-		{
+		if (fabsf(dot1 - 1.0f) > BEVEL_EPSILON)
 			copy_v3_v3(bndv1->profile.plane_no, no);
+		if (fabsf(dot2 - 1.0f) > BEVEL_EPSILON)
 			copy_v3_v3(bndv2->profile.plane_no, no);
-		}
 	}
 }
 
@@ -1549,8 +1555,8 @@ static void build_boundary(BevelParams *bp, BevVert *bv, bool construct)
 		calculate_profile(bp, v);
 	} while ((v = v->next) != vm->boundstart);
 
-	if (bv->selcount == 1 && bv->edgecount == 3) {
-		/* special case: snap profile to third face */
+	if (bv->selcount == 1 && bv->edgecount >= 3) {
+		/* special case: snap profile to plane of adjacent two edges */
 		v = vm->boundstart;
 		BLI_assert(v->ebev != NULL);
 		move_profile_plane(v, v->efirst, v->next->elast);
@@ -3082,19 +3088,24 @@ static bool bev_rebuild_polygon(BMesh *bm, BevelParams *bp, BMFace *f)
 	BoundVert *v, *vstart, *vend;
 	EdgeHalf *e, *eprev;
 	VMesh *vm;
-	int i, k;
+	int i, k, n;
 	bool do_rebuild = false;
 	BMVert *bmv;
+	BMEdge *bme, *bme_new, *bme_prev;
+	BMFace *f_new;
 	BMVert **vv = NULL;
 	BMVert **vv_fix = NULL;
+	BMEdge **ee = NULL;
 	BLI_array_staticdeclare(vv, BM_DEFAULT_NGON_STACK_SIZE);
 	BLI_array_staticdeclare(vv_fix, BM_DEFAULT_NGON_STACK_SIZE);
+	BLI_array_staticdeclare(ee, BM_DEFAULT_NGON_STACK_SIZE);
 
 	BM_ITER_ELEM (l, &liter, f, BM_LOOPS_OF_FACE) {
 		if (BM_elem_flag_test(l->v, BM_ELEM_TAG)) {
 			lprev = l->prev;
 			bv = find_bevvert(bp, l->v);
 			e = find_edge_half(bv, l->e);
+			bme = e->e;
 			eprev = find_edge_half(bv, lprev->e);
 			BLI_assert(e != NULL && eprev != NULL);
 			vstart = eprev->leftv;
@@ -3105,6 +3116,7 @@ static bool bev_rebuild_polygon(BMesh *bm, BevelParams *bp, BMFace *f)
 			v = vstart;
 			vm = bv->vmesh;
 			BLI_array_append(vv, v->nv.v);
+			BLI_array_append(ee, bme);
 			while (v != vend) {
 				if (vm->mesh_kind == M_NONE && v->ebev && v->ebev->seg > 1 && v->ebev != e && v->ebev != eprev) {
 					/* case of 3rd face opposite a beveled edge, with no vmesh */
@@ -3113,6 +3125,7 @@ static bool bev_rebuild_polygon(BMesh *bm, BevelParams *bp, BMFace *f)
 					for (k = 1; k < e->seg; k++) {
 						bmv = mesh_vert(vm, i, 0, k)->v;
 						BLI_array_append(vv, bmv);
+						BLI_array_append(ee, bme);
 						/* may want to merge UVs of these later */
 						if (!e->is_seam)
 							BLI_array_append(vv_fix, bmv);
@@ -3124,23 +3137,55 @@ static bool bev_rebuild_polygon(BMesh *bm, BevelParams *bp, BMFace *f)
 					for (k = vm->seg - 1; k > 0; k--) {
 						bmv = mesh_vert(vm, i, 0, k)->v;
 						BLI_array_append(vv, bmv);
+						BLI_array_append(ee, bme);
 					}
 				}
 				v = v->prev;
 				BLI_array_append(vv, v->nv.v);
+				BLI_array_append(ee, bme);
 			}
 
 			do_rebuild = true;
 		}
 		else {
 			BLI_array_append(vv, l->v);
+			BLI_array_append(ee, l->e);
 		}
 	}
 	if (do_rebuild) {
-		BMFace *f_new = bev_create_ngon(bm, vv, BLI_array_count(vv), NULL, f, true);
+		n = BLI_array_count(vv);
+		f_new = bev_create_ngon(bm, vv, n, NULL, f, true);
 
 		for (k = 0; k < BLI_array_count(vv_fix); k++) {
 			bev_merge_uvs(bm, vv_fix[k]);
+		}
+
+		/* copy attributes from old edges */
+		BLI_assert(n == BLI_array_count(ee));
+		bme_prev = ee[n - 1];
+		for (k = 0; k < n; k++) {
+			bme_new = BM_edge_exists(vv[k], vv[(k + 1) % n]);
+			BLI_assert(ee[k] && bme_new);
+			if (ee[k] != bme_new) {
+				BM_elem_attrs_copy(bm, bm, ee[k], bme_new);
+				/* want to undo seam and smooth for corner segments
+				 * if those attrs aren't contiguous around face */
+				if (k < n - 1 && ee[k] == ee[k + 1]) {
+					if (BM_elem_flag_test(ee[k], BM_ELEM_SEAM) &&
+					    !BM_elem_flag_test(bme_prev, BM_ELEM_SEAM))
+					{
+						BM_elem_flag_disable(bme_new, BM_ELEM_SEAM);
+					}
+					/* actually want "sharp" to be contiguous, so reverse the test */
+					if (!BM_elem_flag_test(ee[k], BM_ELEM_SMOOTH) &&
+					    BM_elem_flag_test(bme_prev, BM_ELEM_SMOOTH))
+					{
+						BM_elem_flag_enable(bme_new, BM_ELEM_SMOOTH);
+					}
+				}
+				else
+					bme_prev = ee[k];
+			}
 		}
 
 		/* don't select newly created boundary faces... */
@@ -3150,6 +3195,8 @@ static bool bev_rebuild_polygon(BMesh *bm, BevelParams *bp, BMFace *f)
 	}
 
 	BLI_array_free(vv);
+	BLI_array_free(vv_fix);
+	BLI_array_free(ee);
 	return do_rebuild;
 }
 
@@ -3243,6 +3290,70 @@ static void bev_merge_end_uvs(BMesh *bm, BevVert *bv, EdgeHalf *e)
 }
 
 /*
+ * Is this BevVert the special case of a weld (no vmesh) where there are
+ * four edges total, two are beveled, and the other two are on opposite sides?
+ */
+static bool bevvert_is_weld_cross(BevVert *bv)
+{
+	return (bv->edgecount == 4 && bv->selcount == 2 &&
+	        ((bv->edges[0].is_bev && bv->edges[2].is_bev) ||
+	         (bv->edges[1].is_bev && bv->edges[3].is_bev)));
+}
+
+/*
+ * Copy edge attribute data across the non-beveled crossing edges of a cross weld.
+ *
+ * Situation looks like this:
+ *
+ *      e->next
+ *        |
+ * -------3-------
+ * -------2-------
+ * -------1------- e
+ * -------0------
+ *        |
+ *      e->prev
+ *
+ * where e is the EdgeHalf of one of the beveled edges,
+ * e->next and e->prev are EdgeHalfs for the unbeveled edges of the cross
+ * and their attributes are to be copied to the edges 01, 12, 23.
+ * The vert i is mesh_vert(vm, vmindex, 0, i)->v
+ */
+static void weld_cross_attrs_copy(BMesh *bm, BevVert *bv, VMesh *vm, int vmindex, EdgeHalf *e)
+{
+	BMEdge *bme_prev, *bme_next, *bme;
+	int i, nseg;
+	bool disable_seam, enable_smooth;
+
+	bme_prev = bme_next = NULL;
+	for (i = 0; i < 4; i++) {
+		if (&bv->edges[i] == e) {
+			bme_prev = bv->edges[(i + 3) % 4].e;
+			bme_next = bv->edges[(i + 1) % 4].e;
+			break;
+		}
+	}
+	BLI_assert(bme_prev && bme_next);
+
+	/* want seams and sharp edges to cross only if that way on both sides */
+	disable_seam = BM_elem_flag_test(bme_prev, BM_ELEM_SEAM) != BM_elem_flag_test(bme_next, BM_ELEM_SEAM);
+	enable_smooth = BM_elem_flag_test(bme_prev, BM_ELEM_SMOOTH) != BM_elem_flag_test(bme_next, BM_ELEM_SMOOTH);
+
+	nseg = e->seg;
+	for (i = 0; i < nseg; i++) {
+		bme = BM_edge_exists(mesh_vert(vm, vmindex, 0, i)->v,
+		                     mesh_vert(vm, vmindex, 0, i + 1)->v);
+		BLI_assert(bme);
+		BM_elem_attrs_copy(bm, bm, bme_prev, bme);
+		if (disable_seam)
+			BM_elem_flag_disable(bme, BM_ELEM_SEAM);
+		if (enable_smooth)
+			BM_elem_flag_enable(bme, BM_ELEM_SMOOTH);
+	}
+}
+
+
+/*
  * Build the polygons along the selected Edge
  */
 static void bevel_build_edge_polygons(BMesh *bm, BevelParams *bp, BMEdge *bme)
@@ -3286,15 +3397,15 @@ static void bevel_build_edge_polygons(BMesh *bm, BevelParams *bp, BMEdge *bme)
 
 	f1 = e1->fprev;
 	f2 = e1->fnext;
+	i1 = e1->leftv->index;
+	i2 = e2->leftv->index;
+	vm1 = bv1->vmesh;
+	vm2 = bv2->vmesh;
 
 	if (nseg == 1) {
 		bev_create_quad_straddle(bm, bmv1, bmv2, bmv3, bmv4, f1, f2, e1->is_seam);
 	}
 	else {
-		i1 = e1->leftv->index;
-		i2 = e2->leftv->index;
-		vm1 = bv1->vmesh;
-		vm2 = bv2->vmesh;
 		bmv1i = bmv1;
 		bmv2i = bmv2;
 		odd = nseg % 2;
@@ -3330,6 +3441,14 @@ static void bevel_build_edge_polygons(BMesh *bm, BevelParams *bp, BMEdge *bme)
 	BLI_assert(bme1 && bme2);
 	BM_elem_attrs_copy(bm, bm, bme, bme1);
 	BM_elem_attrs_copy(bm, bm, bme, bme2);
+
+	/* If either end is a "weld cross", want continuity of edge attributes across end edge(s) */
+	if (bevvert_is_weld_cross(bv1)) {
+		weld_cross_attrs_copy(bm, bv1, vm1, i1, e1);
+	}
+	if (bevvert_is_weld_cross(bv2)) {
+		weld_cross_attrs_copy(bm, bv2, vm2, i2, e2);
+	}
 }
 
 /* Returns the square of the length of the chord from parameter u0 to parameter u1

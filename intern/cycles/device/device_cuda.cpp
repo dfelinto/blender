@@ -762,38 +762,47 @@ public:
 			if(task.get_cancel())
 				break;
 
-			/* pass in parameters */
-			int offset = 0;
-
-			cuda_assert(cuParamSetv(cuShader, offset, &d_input, sizeof(d_input)));
-			offset += sizeof(d_input);
-
-			cuda_assert(cuParamSetv(cuShader, offset, &d_output, sizeof(d_output)));
-			offset += sizeof(d_output);
-
-			int shader_eval_type = task.shader_eval_type;
-			offset = align_up(offset, __alignof(shader_eval_type));
-
-			cuda_assert(cuParamSeti(cuShader, offset, task.shader_eval_type));
-			offset += sizeof(task.shader_eval_type);
-
-			cuda_assert(cuParamSeti(cuShader, offset, shader_x));
-			offset += sizeof(shader_x);
-
-			cuda_assert(cuParamSetSize(cuShader, offset));
-
-			/* launch kernel */
-			int threads_per_block;
-			cuda_assert(cuFuncGetAttribute(&threads_per_block, CU_FUNC_ATTRIBUTE_MAX_THREADS_PER_BLOCK, cuShader));
-
 			int shader_w = min(shader_chunk_size, end - shader_x);
-			int xblocks = (shader_w + threads_per_block - 1)/threads_per_block;
 
-			cuda_assert(cuFuncSetCacheConfig(cuShader, CU_FUNC_CACHE_PREFER_L1));
-			cuda_assert(cuFuncSetBlockShape(cuShader, threads_per_block, 1, 1));
-			cuda_assert(cuLaunchGrid(cuShader, xblocks, 1));
+			for(int sample = 0; sample < task.num_samples; sample++) {
+				/* pass in parameters */
+				int offset = 0;
 
-			cuda_assert(cuCtxSynchronize());
+				cuda_assert(cuParamSetv(cuShader, offset, &d_input, sizeof(d_input)));
+				offset += sizeof(d_input);
+
+				cuda_assert(cuParamSetv(cuShader, offset, &d_output, sizeof(d_output)));
+				offset += sizeof(d_output);
+
+				int shader_eval_type = task.shader_eval_type;
+				offset = align_up(offset, __alignof(shader_eval_type));
+
+				cuda_assert(cuParamSeti(cuShader, offset, task.shader_eval_type));
+				offset += sizeof(task.shader_eval_type);
+
+				cuda_assert(cuParamSeti(cuShader, offset, shader_x));
+				offset += sizeof(shader_x);
+
+				cuda_assert(cuParamSeti(cuShader, offset, shader_w));
+				offset += sizeof(shader_w);
+
+				cuda_assert(cuParamSeti(cuShader, offset, sample));
+				offset += sizeof(sample);
+
+				cuda_assert(cuParamSetSize(cuShader, offset));
+
+				/* launch kernel */
+				int threads_per_block;
+				cuda_assert(cuFuncGetAttribute(&threads_per_block, CU_FUNC_ATTRIBUTE_MAX_THREADS_PER_BLOCK, cuShader));
+
+				int xblocks = (shader_w + threads_per_block - 1)/threads_per_block;
+
+				cuda_assert(cuFuncSetCacheConfig(cuShader, CU_FUNC_CACHE_PREFER_L1));
+				cuda_assert(cuFuncSetBlockShape(cuShader, threads_per_block, 1, 1));
+				cuda_assert(cuLaunchGrid(cuShader, xblocks, 1));
+
+				cuda_assert(cuCtxSynchronize());
+			}
 		}
 
 		cuda_pop_context();

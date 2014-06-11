@@ -145,6 +145,13 @@ typedef struct drawDMEdgesSel_userData {
 	BMEdge *eed_act;
 } drawDMEdgesSel_userData;
 
+typedef struct drawDMEdgesSelInterp_userData {
+	BMesh *bm;
+
+	unsigned char *baseCol, *selCol;
+	unsigned char *lastCol;
+} drawDMEdgesSelInterp_userData;
+
 typedef struct drawDMFacesSel_userData {
 #ifdef WITH_FREESTYLE
 	unsigned char *cols[4];
@@ -1408,8 +1415,10 @@ static void drawlamp(View3D *v3d, RegionView3D *rv3d, Base *base,
 		drawshadbuflimits(la, ob->obmat);
 	}
 	
-	UI_GetThemeColor4ubv(TH_LAMP, col);
-	glColor4ubv(col);
+	if ((dflag & DRAW_CONSTCOLOR) == 0) {
+		UI_GetThemeColor4ubv(TH_LAMP, col);
+		glColor4ubv(col);
+	}
 
 	glEnable(GL_BLEND);
 	
@@ -1448,7 +1457,9 @@ static void draw_limit_line(float sta, float end, const short dflag, unsigned in
 	if (!(dflag & DRAW_PICKING)) {
 		glPointSize(3.0);
 		glBegin(GL_POINTS);
-		cpack(col);
+		if ((dflag & DRAW_CONSTCOLOR) == 0) {
+			cpack(col);
+		}
 		glVertex3f(0.0, 0.0, -sta);
 		glVertex3f(0.0, 0.0, -end);
 		glEnd();
@@ -1942,7 +1953,29 @@ static void drawlattice__point(Lattice *lt, DispList *dl, int u, int v, int w, i
 #ifdef SEQUENCER_DAG_WORKAROUND
 static void ensure_curve_cache(Scene *scene, Object *object)
 {
-	if (object->curve_cache == NULL) {
+	bool need_recalc = object->curve_cache == NULL;
+	/* Render thread might have freed the curve cache if the
+	 * object is not visible. If the object is also used for
+	 * particles duplication, then render thread might have
+	 * also created curve_cache with only bevel and path
+	 * filled in.
+	 *
+	 * So check for curve_cache != NULL is not fully correct
+	 * here, we also need to check whether display list is
+	 * empty or not.
+	 *
+	 * The trick below tries to optimie calls to displist
+	 * creation for cases curve is empty. Meaning, if the curve
+	 * is empty (without splies) bevel list would also be empty.
+	 * And the thing is, render thread always leaves bevel list
+	 * in a proper state. So if bevel list is here and display
+	 * list is not we need to make display list.
+	 */
+	if (need_recalc == false) {
+		need_recalc = object->curve_cache->disp.first == NULL &&
+		              object->curve_cache->bev.first != NULL;
+	}
+	if (need_recalc) {
 		switch (object->type) {
 			case OB_CURVE:
 			case OB_SURF:
@@ -2345,22 +2378,47 @@ static DMDrawOption draw_dm_edges_sel_interp__setDrawOptions(void *userData, int
 }
 static void draw_dm_edges_sel_interp__setDrawInterpOptions(void *userData, int index, float t)
 {
+	drawDMEdgesSelInterp_userData *data = userData;
 	BMEdge *eed = BM_edge_at_index(((void **)userData)[0], index);
 	unsigned char **cols = userData;
-	unsigned char *col0 = cols[(BM_elem_flag_test(eed->v1, BM_ELEM_SELECT)) ? 2 : 1];
-	unsigned char *col1 = cols[(BM_elem_flag_test(eed->v2, BM_ELEM_SELECT)) ? 2 : 1];
+	unsigned int col0_id = (BM_elem_flag_test(eed->v1, BM_ELEM_SELECT)) ? 2 : 1;
+	unsigned int col1_id = (BM_elem_flag_test(eed->v2, BM_ELEM_SELECT)) ? 2 : 1;
+	unsigned char *col0 = cols[col0_id];
+	unsigned char *col1 = cols[col1_id];
+	unsigned char *col_pt;
 
-	glColor4ub(col0[0] + (col1[0] - col0[0]) * t,
-	           col0[1] + (col1[1] - col0[1]) * t,
-	           col0[2] + (col1[2] - col0[2]) * t,
-	           col0[3] + (col1[3] - col0[3]) * t);
+	if (col0_id == col1_id) {
+		col_pt = col0;
+	}
+	else if (t == 0.0f) {
+		col_pt = col0;
+	}
+	else if (t == 1.0f) {
+		col_pt = col1;
+	}
+	else {
+		unsigned char  col_blend[4];
+		interp_v4_v4v4_uchar(col_blend, col0, col1, t);
+		glColor4ubv(col_blend);
+		data->lastCol = NULL;
+		return;
+	}
+
+	if (data->lastCol != col_pt) {
+		data->lastCol = col_pt;
+		glColor4ubv(col_pt);
+	}
 }
 
 static void draw_dm_edges_sel_interp(BMEditMesh *em, DerivedMesh *dm, unsigned char *baseCol, unsigned char *selCol)
 {
-	void *cols[3] = {em->bm, baseCol, selCol};
+	drawDMEdgesSelInterp_userData data;
+	data.bm = em->bm;
+	data.baseCol = baseCol;
+	data.selCol = selCol;
+	data.lastCol = NULL;
 
-	dm->drawMappedEdgesInterp(dm, draw_dm_edges_sel_interp__setDrawOptions, draw_dm_edges_sel_interp__setDrawInterpOptions, cols);
+	dm->drawMappedEdgesInterp(dm, draw_dm_edges_sel_interp__setDrawOptions, draw_dm_edges_sel_interp__setDrawInterpOptions, &data);
 }
 
 /* Draw only seam edges */
@@ -3854,11 +3912,12 @@ static bool draw_mesh_object(Scene *scene, ARegion *ar, View3D *v3d, RegionView3
 
 /* ************** DRAW DISPLIST ****************** */
 
-static bool draw_index_wire = true;
-static bool index3_nors_incr = true;
 
-/* returns 1 when nothing was drawn */
-static bool drawDispListwire(ListBase *dlbase)
+/**
+ * \param dl_type_mask Only draw types matching this mask.
+ * \return true when nothing was drawn
+ */
+static bool drawDispListwire_ex(ListBase *dlbase, unsigned int dl_type_mask)
 {
 	DispList *dl;
 	int parts, nr;
@@ -3870,8 +3929,13 @@ static bool drawDispListwire(ListBase *dlbase)
 	glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
 	for (dl = dlbase->first; dl; dl = dl->next) {
-		if (dl->parts == 0 || dl->nr == 0)
+		if (dl->parts == 0 || dl->nr == 0) {
 			continue;
+		}
+
+		if ((dl_type_mask & (1 << dl->type)) == 0) {
+			continue;
+		}
 		
 		data = dl->verts;
 
@@ -3930,17 +3994,13 @@ static bool drawDispListwire(ListBase *dlbase)
 				break;
 
 			case DL_INDEX3:
-				if (draw_index_wire) {
-					glVertexPointer(3, GL_FLOAT, 0, dl->verts);
-					glDrawElements(GL_TRIANGLES, 3 * dl->parts, GL_UNSIGNED_INT, dl->index);
-				}
+				glVertexPointer(3, GL_FLOAT, 0, dl->verts);
+				glDrawElements(GL_TRIANGLES, 3 * dl->parts, GL_UNSIGNED_INT, dl->index);
 				break;
 
 			case DL_INDEX4:
-				if (draw_index_wire) {
-					glVertexPointer(3, GL_FLOAT, 0, dl->verts);
-					glDrawElements(GL_QUADS, 4 * dl->parts, GL_UNSIGNED_INT, dl->index);
-				}
+				glVertexPointer(3, GL_FLOAT, 0, dl->verts);
+				glDrawElements(GL_QUADS, 4 * dl->parts, GL_UNSIGNED_INT, dl->index);
 				break;
 		}
 	}
@@ -3950,6 +4010,20 @@ static bool drawDispListwire(ListBase *dlbase)
 	
 	return false;
 }
+
+static bool drawDispListwire(ListBase *dlbase, const short ob_type)
+{
+	unsigned int dl_mask = 0xffffffff;
+
+	/* skip fill-faces for curves & fonts */
+	if (ELEM(ob_type, OB_FONT, OB_CURVE)) {
+		dl_mask &= ~((1 << DL_INDEX3) | (1 << DL_INDEX4));
+	}
+
+	return drawDispListwire_ex(dlbase, dl_mask);
+}
+
+static bool index3_nors_incr = true;
 
 static void drawDispListsolid(ListBase *lb, Object *ob, const short dflag,
                               const unsigned char ob_wire_col[4], const bool use_glsl)
@@ -4143,6 +4217,7 @@ static bool drawDispList_nobackface(Scene *scene, View3D *v3d, RegionView3D *rv3
 			lb = &ob->curve_cache->disp;
 
 			if (solid) {
+				const bool has_faces = BKE_displist_has_faces(lb);
 				dl = lb->first;
 				if (dl == NULL) {
 					return true;
@@ -4151,12 +4226,18 @@ static bool drawDispList_nobackface(Scene *scene, View3D *v3d, RegionView3D *rv3
 				if (dl->nors == NULL) BKE_displist_normals_add(lb);
 				index3_nors_incr = false;
 
-				if (BKE_displist_has_faces(lb) == false) {
-					if (!render_only) {
-						draw_index_wire = false;
-						drawDispListwire(lb);
-						draw_index_wire = true;
+				if (!render_only) {
+					/* when we have faces, only draw loose-wire */
+					if (has_faces) {
+						drawDispListwire_ex(lb, (1 << DL_SEGM));
 					}
+					else {
+						drawDispListwire(lb, ob->type);
+					}
+				}
+
+				if (has_faces == false) {
+					/* pass */
 				}
 				else {
 					if (draw_glsl_material(scene, ob, v3d, dt)) {
@@ -4171,20 +4252,14 @@ static bool drawDispList_nobackface(Scene *scene, View3D *v3d, RegionView3D *rv3
 					}
 					if (cu->editnurb && cu->bevobj == NULL && cu->taperobj == NULL && cu->ext1 == 0.0f && cu->ext2 == 0.0f) {
 						cpack(0);
-						draw_index_wire = false;
-						drawDispListwire(lb);
-						draw_index_wire = true;
+						drawDispListwire(lb, ob->type);
 					}
 				}
 				index3_nors_incr = true;
 			}
 			else {
 				if (!render_only || (render_only && BKE_displist_has_faces(lb))) {
-					int retval;
-					draw_index_wire = false;
-					retval = drawDispListwire(lb);
-					draw_index_wire = true;
-					return retval;
+					return drawDispListwire(lb, ob->type);
 				}
 			}
 			break;
@@ -4212,7 +4287,7 @@ static bool drawDispList_nobackface(Scene *scene, View3D *v3d, RegionView3D *rv3
 				}
 			}
 			else {
-				return drawDispListwire(lb);
+				return drawDispListwire(lb, ob->type);
 			}
 			break;
 		case OB_MBALL:
@@ -4237,8 +4312,7 @@ static bool drawDispList_nobackface(Scene *scene, View3D *v3d, RegionView3D *rv3
 					}
 				}
 				else {
-					/* MetaBalls use DL_INDEX4 type of DispList */
-					return drawDispListwire(lb);
+					return drawDispListwire(lb, ob->type);
 				}
 			}
 			break;
@@ -4493,7 +4567,8 @@ static void draw_particle_data(ParticleSystem *psys, RegionView3D *rv3d,
 /* 6. draw the arrays						*/
 /* 7. clean up								*/
 static void draw_new_particle_system(Scene *scene, View3D *v3d, RegionView3D *rv3d,
-                                     Base *base, ParticleSystem *psys, int ob_dt)
+                                     Base *base, ParticleSystem *psys,
+                                     const char ob_dt, const short dflag)
 {
 	Object *ob = base->object;
 	ParticleEditSettings *pset = PE_settings(scene);
@@ -4571,7 +4646,9 @@ static void draw_new_particle_system(Scene *scene, View3D *v3d, RegionView3D *rv
 		copy_v3_v3(ma_col, &ma->r);
 	}
 
-	glColor3ubv(tcol);
+	if ((dflag & DRAW_CONSTCOLOR) == 0) {
+		glColor3ubv(tcol);
+	}
 
 	timestep = psys_get_timestep(&sim);
 
@@ -4906,8 +4983,10 @@ static void draw_new_particle_system(Scene *scene, View3D *v3d, RegionView3D *rv
 		if (1) { //ob_dt > OB_WIRE) {
 			glEnableClientState(GL_NORMAL_ARRAY);
 
-			if (part->draw_col == PART_DRAW_COL_MAT)
-				glEnableClientState(GL_COLOR_ARRAY);
+			if ((dflag & DRAW_CONSTCOLOR) == 0) {
+				if (part->draw_col == PART_DRAW_COL_MAT)
+					glEnableClientState(GL_COLOR_ARRAY);
+			}
 
 			glEnable(GL_LIGHTING);
 			glColorMaterial(GL_FRONT_AND_BACK, GL_DIFFUSE);
@@ -4937,8 +5016,11 @@ static void draw_new_particle_system(Scene *scene, View3D *v3d, RegionView3D *rv
 
 				if (1) { //ob_dt > OB_WIRE) {
 					glNormalPointer(GL_FLOAT, sizeof(ParticleCacheKey), path->vel);
-					if (part->draw_col == PART_DRAW_COL_MAT)
-						glColorPointer(3, GL_FLOAT, sizeof(ParticleCacheKey), path->col);
+					if ((dflag & DRAW_CONSTCOLOR) == 0) {
+						if (part->draw_col == PART_DRAW_COL_MAT) {
+							glColorPointer(3, GL_FLOAT, sizeof(ParticleCacheKey), path->col);
+						}
+					}
 				}
 
 				glDrawArrays(GL_LINE_STRIP, 0, path->steps + 1);
@@ -4953,8 +5035,11 @@ static void draw_new_particle_system(Scene *scene, View3D *v3d, RegionView3D *rv
 
 			if (1) { //ob_dt > OB_WIRE) {
 				glNormalPointer(GL_FLOAT, sizeof(ParticleCacheKey), path->vel);
-				if (part->draw_col == PART_DRAW_COL_MAT)
-					glColorPointer(3, GL_FLOAT, sizeof(ParticleCacheKey), path->col);
+				if ((dflag & DRAW_CONSTCOLOR) == 0) {
+					if (part->draw_col == PART_DRAW_COL_MAT) {
+						glColorPointer(3, GL_FLOAT, sizeof(ParticleCacheKey), path->col);
+					}
+				}
 			}
 
 			glDrawArrays(GL_LINE_STRIP, 0, path->steps + 1);
@@ -4998,21 +5083,24 @@ static void draw_new_particle_system(Scene *scene, View3D *v3d, RegionView3D *rv
 		else
 			glDisableClientState(GL_VERTEX_ARRAY);
 
-		if (select) {
-			UI_ThemeColor(TH_ACTIVE);
-			
-			if (part->draw_size)
-				glPointSize(part->draw_size + 2);
-			else
-				glPointSize(4.0);
+		if ((dflag & DRAW_CONSTCOLOR) == 0) {
+			if (select) {
+				UI_ThemeColor(TH_ACTIVE);
 
-			glLineWidth(3.0);
+				if (part->draw_size)
+					glPointSize(part->draw_size + 2);
+				else
+					glPointSize(4.0);
 
-			draw_particle_arrays(draw_as, totpoint, ob_dt, 1);
+				glLineWidth(3.0);
+
+				draw_particle_arrays(draw_as, totpoint, ob_dt, 1);
+			}
+
+			/* restore from select */
+			glColor3fv(ma_col);
 		}
 
-		/* restore from select */
-		glColor3fv(ma_col);
 		glPointSize(part->draw_size ? part->draw_size : 2.0);
 		glLineWidth(1.0);
 
@@ -5029,9 +5117,11 @@ static void draw_new_particle_system(Scene *scene, View3D *v3d, RegionView3D *rv
 			glDisable(GL_LIGHTING);
 		}
 
-		if (pdd->cdata) {
-			glEnableClientState(GL_COLOR_ARRAY);
-			glColorPointer(3, GL_FLOAT, 0, pdd->cdata);
+		if ((dflag & DRAW_CONSTCOLOR) == 0) {
+			if (pdd->cdata) {
+				glEnableClientState(GL_COLOR_ARRAY);
+				glColorPointer(3, GL_FLOAT, 0, pdd->cdata);
+			}
 		}
 
 		draw_particle_arrays(draw_as, totpoint, ob_dt, 0);
@@ -5041,8 +5131,10 @@ static void draw_new_particle_system(Scene *scene, View3D *v3d, RegionView3D *rv
 	}
 
 	if (pdd && pdd->vedata) {
-		glDisableClientState(GL_COLOR_ARRAY);
-		cpack(0xC0C0C0);
+		if ((dflag & DRAW_CONSTCOLOR) == 0) {
+			glDisableClientState(GL_COLOR_ARRAY);
+			cpack(0xC0C0C0);
+		}
 		
 		glVertexPointer(3, GL_FLOAT, 0, pdd->vedata);
 		
@@ -6545,20 +6637,19 @@ static void drawObjectSelect(Scene *scene, View3D *v3d, ARegion *ar, Base *base,
 		}
 
 		if (has_faces && ED_view3d_boundbox_clip(rv3d, ob->bb)) {
-			draw_index_wire = false;
 			if (dm) {
 				draw_mesh_object_outline(v3d, ob, dm);
 			}
 			else {
-				drawDispListwire(&ob->curve_cache->disp);
+				drawDispListwire(&ob->curve_cache->disp, ob->type);
 			}
-			draw_index_wire = true;
 		}
 	}
 	else if (ob->type == OB_MBALL) {
 		if (BKE_mball_is_basis(ob)) {
-			if ((base->flag & OB_FROMDUPLI) == 0)
-				drawDispListwire(&ob->curve_cache->disp);
+			if ((base->flag & OB_FROMDUPLI) == 0) {
+				drawDispListwire(&ob->curve_cache->disp, ob->type);
+			}
 		}
 	}
 	else if (ob->type == OB_ARMATURE) {
@@ -6586,23 +6677,18 @@ static void draw_wire_extra(Scene *scene, RegionView3D *rv3d, Object *ob, const 
 
 		if (ELEM3(ob->type, OB_FONT, OB_CURVE, OB_SURF)) {
 			if (ED_view3d_boundbox_clip(rv3d, ob->bb)) {
-				if (ob->type == OB_CURVE)
-					draw_index_wire = false;
 
 				if (ob->derivedFinal) {
 					drawCurveDMWired(ob);
 				}
 				else {
-					drawDispListwire(&ob->curve_cache->disp);
+					drawDispListwire(&ob->curve_cache->disp, ob->type);
 				}
-
-				if (ob->type == OB_CURVE)
-					draw_index_wire = true;
 			}
 		}
 		else if (ob->type == OB_MBALL) {
 			if (BKE_mball_is_basis(ob)) {
-				drawDispListwire(&ob->curve_cache->disp);
+				drawDispListwire(&ob->curve_cache->disp, ob->type);
 			}
 		}
 
@@ -6838,7 +6924,9 @@ void draw_object(Scene *scene, ARegion *ar, View3D *v3d, Base *base, const short
 		if (ob->restrictflag & OB_RESTRICT_VIEW) {
 			return;
 		}
-		else if ((ob->restrictflag & OB_RESTRICT_RENDER) && render_override) {
+		else if (render_override && ((ob->restrictflag & OB_RESTRICT_RENDER) ||
+		                             (ob->transflag & OB_DUPLI)))
+		{
 			return;
 		}
 	}
@@ -7253,7 +7341,12 @@ void draw_object(Scene *scene, ARegion *ar, View3D *v3d, Base *base, const short
 	{
 		ParticleSystem *psys;
 
-		if (col || (ob->flag & SELECT)) cpack(0xFFFFFF);    /* for visibility, also while wpaint */
+		if ((dflag & DRAW_CONSTCOLOR) == 0) {
+			/* for visibility, also while wpaint */
+			if (col || (ob->flag & SELECT)) {
+				cpack(0xFFFFFF);
+			}
+		}
 		//glDepthMask(GL_FALSE);
 
 		glLoadMatrixf(rv3d->viewmat);
@@ -7268,7 +7361,7 @@ void draw_object(Scene *scene, ARegion *ar, View3D *v3d, Base *base, const short
 					draw_update_ptcache_edit(scene, ob, edit);
 			}
 
-			draw_new_particle_system(scene, v3d, rv3d, base, psys, dt);
+			draw_new_particle_system(scene, v3d, rv3d, base, psys, dt, dflag);
 		}
 		invert_m4_m4(ob->imat, ob->obmat);
 		view3d_cached_text_draw_end(v3d, ar, 0, NULL);

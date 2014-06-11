@@ -449,14 +449,14 @@ static void bm_mesh_edges_sharp_tag(BMesh *bm, const float (*vnos)[3], const flo
 	}
 
 	{
-		char hflag = BM_LOOP;
+		char htype = BM_LOOP;
 		if (vnos) {
-			hflag |= BM_VERT;
+			htype |= BM_VERT;
 		}
 		if (fnos) {
-			hflag |= BM_FACE;
+			htype |= BM_FACE;
 		}
-		BM_mesh_elem_index_ensure(bm, hflag);
+		BM_mesh_elem_index_ensure(bm, htype);
 	}
 
 	/* This first loop checks which edges are actually smooth, and pre-populate lnos with vnos (as if they were
@@ -477,11 +477,18 @@ static void bm_mesh_edges_sharp_tag(BMesh *bm, const float (*vnos)[3], const flo
 				is_angle_smooth = (dot_v3v3(no_a, no_b) >= split_angle);
 			}
 
-			/* We only tag edges that are *really* smooth... */
+			/* We only tag edges that are *really* smooth:
+			 * If the angle between both its polys' normals is below split_angle value,
+			 * and it is tagged as such,
+			 * and both its faces are smooth,
+			 * and both its faces have compatible (non-flipped) normals, i.e. both loops on the same edge do not share
+			 *     the same vertex.
+			 */
 			if (is_angle_smooth &&
 			    BM_elem_flag_test_bool(e, BM_ELEM_SMOOTH) &&
 			    BM_elem_flag_test_bool(l_a->f, BM_ELEM_SMOOTH) &&
-			    BM_elem_flag_test_bool(l_b->f, BM_ELEM_SMOOTH))
+			    BM_elem_flag_test_bool(l_b->f, BM_ELEM_SMOOTH) &&
+			    l_a->v != l_b->v)
 			{
 				const float *no;
 				BM_elem_flag_enable(e, BM_ELEM_TAG);
@@ -508,14 +515,14 @@ static void bm_mesh_loops_calc_normals(BMesh *bm, const float (*vcos)[3], const 
 	BLI_SMALLSTACK_DECLARE(normal, float *);
 
 	{
-		char hflag = BM_LOOP;
+		char htype = BM_LOOP;
 		if (vcos) {
-			hflag |= BM_VERT;
+			htype |= BM_VERT;
 		}
 		if (fnos) {
-			hflag |= BM_FACE;
+			htype |= BM_FACE;
 		}
-		BM_mesh_elem_index_ensure(bm, hflag);
+		BM_mesh_elem_index_ensure(bm, htype);
 	}
 
 	/* We now know edges that can be smoothed (they are tagged), and edges that will be hard (they aren't).
@@ -542,6 +549,14 @@ static void bm_mesh_loops_calc_normals(BMesh *bm, const float (*vcos)[3], const 
 				const float *no = fnos ? fnos[BM_elem_index_get(f_curr)] : f_curr->no;
 				copy_v3_v3(r_lnos[BM_elem_index_get(l_curr)], no);
 			}
+			/* We *do not need* to check/tag loops as already computed!
+			 * Due to the fact a loop only links to one of its two edges, a same fan *will never be walked more than
+			 * once!*
+			 * Since we consider edges having neighbor faces with inverted (flipped) normals as sharp, we are sure that
+			 * no fan will be skipped, even only considering the case (sharp curr_edge, smooth prev_edge), and not the
+			 * alternative (smooth curr_edge, sharp prev_edge).
+			 * All this due/thanks to link between normals and loop ordering.
+			 */
 			else {
 				/* We have to fan around current vertex, until we find the other non-smooth edge,
 				 * and accumulate face normals into the vertex!
@@ -772,17 +787,26 @@ void bmesh_edit_end(BMesh *bm, BMOpTypeFlag type_flag)
 	}
 }
 
-void BM_mesh_elem_index_ensure(BMesh *bm, const char hflag)
+void BM_mesh_elem_index_ensure(BMesh *bm, const char htype)
 {
+	const char htype_needed = bm->elem_index_dirty & htype;
+
 #ifdef DEBUG
 	BM_ELEM_INDEX_VALIDATE(bm, "Should Never Fail!", __func__);
 #endif
 
-#pragma omp parallel sections if (bm->totvert + bm->totedge + bm->totface >= BM_OMP_LIMIT)
+	if (htype_needed == 0) {
+		goto finally;
+	}
+
+	/* skip if we only need to operate on one element */
+#pragma omp parallel sections if ((!ELEM5(htype_needed, BM_VERT, BM_EDGE, BM_FACE, BM_LOOP, BM_FACE | BM_LOOP)) && \
+	                              (bm->totvert + bm->totedge + bm->totface >= BM_OMP_LIMIT))
 	{
 #pragma omp section
+
 		{
-			if (hflag & BM_VERT) {
+			if (htype & BM_VERT) {
 				if (bm->elem_index_dirty & BM_VERT) {
 					BMIter iter;
 					BMElem *ele;
@@ -801,7 +825,7 @@ void BM_mesh_elem_index_ensure(BMesh *bm, const char hflag)
 
 #pragma omp section
 		{
-			if (hflag & BM_EDGE) {
+			if (htype & BM_EDGE) {
 				if (bm->elem_index_dirty & BM_EDGE) {
 					BMIter iter;
 					BMElem *ele;
@@ -820,13 +844,13 @@ void BM_mesh_elem_index_ensure(BMesh *bm, const char hflag)
 
 #pragma omp section
 		{
-			if (hflag & (BM_FACE | BM_LOOP)) {
+			if (htype & (BM_FACE | BM_LOOP)) {
 				if (bm->elem_index_dirty & (BM_FACE | BM_LOOP)) {
 					BMIter iter;
 					BMElem *ele;
 
-					const bool update_face = (hflag & BM_FACE) && (bm->elem_index_dirty & BM_FACE);
-					const bool update_loop = (hflag & BM_LOOP) && (bm->elem_index_dirty & BM_LOOP);
+					const bool update_face = (htype & BM_FACE) && (bm->elem_index_dirty & BM_FACE);
+					const bool update_loop = (htype & BM_LOOP) && (bm->elem_index_dirty & BM_LOOP);
 
 					int index;
 					int index_loop = 0;
@@ -858,7 +882,9 @@ void BM_mesh_elem_index_ensure(BMesh *bm, const char hflag)
 		}
 	}
 
-	bm->elem_index_dirty &= ~hflag;
+
+finally:
+	bm->elem_index_dirty &= ~htype;
 }
 
 
@@ -989,6 +1015,10 @@ void BM_mesh_elem_table_ensure(BMesh *bm, const char htype)
 	/* in debug mode double check we didn't need to recalculate */
 	BLI_assert(BM_mesh_elem_table_check(bm) == true);
 
+	if (htype_needed == 0) {
+		goto finally;
+	}
+
 	if (htype_needed & BM_VERT) {
 		if (bm->vtable && bm->totvert <= bm->vtable_tot && bm->totvert * 2 >= bm->vtable_tot) {
 			/* pass (re-use the array) */
@@ -1023,7 +1053,9 @@ void BM_mesh_elem_table_ensure(BMesh *bm, const char htype)
 		}
 	}
 
-#pragma omp parallel sections if (bm->totvert + bm->totedge + bm->totface >= BM_OMP_LIMIT)
+	/* skip if we only need to operate on one element */
+#pragma omp parallel sections if ((!ELEM3(htype_needed, BM_VERT, BM_EDGE, BM_FACE)) && \
+	                              (bm->totvert + bm->totedge + bm->totface >= BM_OMP_LIMIT))
 	{
 #pragma omp section
 		{
@@ -1045,19 +1077,12 @@ void BM_mesh_elem_table_ensure(BMesh *bm, const char htype)
 		}
 	}
 
+finally:
 	/* Only clear dirty flags when all the pointers and data are actually valid.
 	 * This prevents possible threading issues when dirty flag check failed but
 	 * data wasn't ready still.
 	 */
-	if (htype_needed & BM_VERT) {
-		bm->elem_table_dirty &= ~BM_VERT;
-	}
-	if (htype_needed & BM_EDGE) {
-		bm->elem_table_dirty &= ~BM_EDGE;
-	}
-	if (htype_needed & BM_FACE) {
-		bm->elem_table_dirty &= ~BM_FACE;
-	}
+	bm->elem_table_dirty &= ~htype_needed;
 }
 
 /* use BM_mesh_elem_table_ensure where possible to avoid full rebuild */

@@ -47,10 +47,12 @@
 #include "DNA_mask_types.h"
 #include "DNA_node_types.h"
 #include "DNA_object_force.h"
+#include "DNA_scene_types.h"
 #include "DNA_sequence_types.h"
 #include "DNA_screen_types.h"
 #include "DNA_speaker_types.h"
 #include "DNA_sound_types.h"
+#include "DNA_text_types.h"
 #include "DNA_vfont_types.h"
 #include "DNA_world_types.h"
 
@@ -168,6 +170,7 @@ void BKE_library_foreach_ID_link(ID *id, LibraryIDLinkCallback callback, void *u
 		case ID_SCE:
 		{
 			Scene *scene = (Scene *) id;
+			SceneRenderLayer *srl;
 			Base *base;
 
 			CALLBACK_INVOKE(scene->camera, IDWALK_NOP);
@@ -177,6 +180,31 @@ void BKE_library_foreach_ID_link(ID *id, LibraryIDLinkCallback callback, void *u
 				CALLBACK_INVOKE(scene->basact->object, IDWALK_NOP);
 			}
 			CALLBACK_INVOKE(scene->obedit, IDWALK_NOP);
+
+			for (srl = scene->r.layers.first; srl; srl = srl->next) {
+				FreestyleModuleConfig *fmc;
+				FreestyleLineSet *fls;
+
+				if (srl->mat_override) {
+					CALLBACK_INVOKE(srl->mat_override, IDWALK_NOP);
+				}
+				if (srl->light_override) {
+					CALLBACK_INVOKE(srl->light_override, IDWALK_NOP);
+				}
+				for (fmc = srl->freestyleConfig.modules.first; fmc; fmc = fmc->next) {
+					if (fmc->script) {
+						CALLBACK_INVOKE(fmc->script, IDWALK_NOP);
+					}
+				}
+				for (fls = srl->freestyleConfig.linesets.first; fls; fls = fls->next) {
+					if (fls->group) {
+						CALLBACK_INVOKE(fls->group, IDWALK_NOP);
+					}
+					if (fls->linestyle) {
+						CALLBACK_INVOKE(fls->linestyle, IDWALK_NOP);
+					}
+				}
+			}
 
 			if (scene->ed) {
 				Sequence *seq;
@@ -455,12 +483,38 @@ void BKE_library_foreach_ID_link(ID *id, LibraryIDLinkCallback callback, void *u
 		case ID_LS:
 		{
 			FreestyleLineStyle *linestyle = (FreestyleLineStyle *) id;
+			LineStyleModifier *m;
 			for (i = 0; i < MAX_MTEX; i++) {
 				if (linestyle->mtex[i]) {
 					library_foreach_mtex(&data, linestyle->mtex[i]);
 				}
 			}
 			CALLBACK_INVOKE(linestyle->nodetree, IDWALK_NOP);
+
+			for (m = (LineStyleModifier *)linestyle->color_modifiers.first; m; m = m->next) {
+				if (m->type == LS_MODIFIER_DISTANCE_FROM_OBJECT) {
+					LineStyleColorModifier_DistanceFromObject *p = (LineStyleColorModifier_DistanceFromObject *)m;
+					if (p->target) {
+						CALLBACK_INVOKE(p->target, IDWALK_NOP);
+					}
+				}
+			}
+			for (m = (LineStyleModifier *)linestyle->alpha_modifiers.first; m; m = m->next) {
+				if (m->type == LS_MODIFIER_DISTANCE_FROM_OBJECT) {
+					LineStyleAlphaModifier_DistanceFromObject *p = (LineStyleAlphaModifier_DistanceFromObject *)m;
+					if (p->target) {
+						CALLBACK_INVOKE(p->target, IDWALK_NOP);
+					}
+				}
+			}
+			for (m = (LineStyleModifier *)linestyle->thickness_modifiers.first; m; m = m->next) {
+				if (m->type == LS_MODIFIER_DISTANCE_FROM_OBJECT) {
+					LineStyleThicknessModifier_DistanceFromObject *p = (LineStyleThicknessModifier_DistanceFromObject *)m;
+					if (p->target) {
+						CALLBACK_INVOKE(p->target, IDWALK_NOP);
+					}
+				}
+			}
 			break;
 		}
 

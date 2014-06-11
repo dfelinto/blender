@@ -596,8 +596,11 @@ static int view3d_ima_empty_drop_poll(bContext *C, wmDrag *drag, const wmEvent *
 	Base *base = ED_view3d_give_base_under_cursor(C, event->mval);
 
 	/* either holding and ctrl and no object, or dropping to empty */
-	if ((event->ctrl && !base) || (base && base->object->type == OB_EMPTY))
+	if (((base == NULL) && event->ctrl) ||
+	    ((base != NULL) && base->object->type == OB_EMPTY))
+	{
 		return view3d_ima_drop_poll(C, drag, event);
+	}
 
 	return 0;
 }
@@ -760,7 +763,7 @@ static void view3d_main_area_listener(bScreen *sc, ScrArea *sa, ARegion *ar, wmN
 					break;
 				case ND_NLA:
 				case ND_KEYFRAME:
-					if (wmn->action == NA_EDITED)
+					if (ELEM3(wmn->action, NA_EDITED, NA_ADDED, NA_REMOVED))
 						ED_region_tag_redraw(ar);
 					break;
 				case ND_ANIMCHAN:
@@ -971,6 +974,7 @@ static void view3d_header_area_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa)
 				case ND_LAYER:
 				case ND_TOOLSETTINGS:
 				case ND_LAYER_CONTENT:
+				case ND_RENDER_OPTIONS:
 					ED_region_tag_redraw(ar);
 					break;
 			}
@@ -1010,7 +1014,7 @@ static void view3d_buttons_area_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa
 					break;
 				case ND_NLA:
 				case ND_KEYFRAME:
-					if (wmn->action == NA_EDITED)
+					if (ELEM3(wmn->action, NA_EDITED, NA_ADDED, NA_REMOVED))
 						ED_region_tag_redraw(ar);
 					break;
 			}
