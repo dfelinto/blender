@@ -47,7 +47,7 @@ endif()
 
 cmake_minimum_required(VERSION 2.8)
 
-if(NOT (CMAKE_VERSION VERSION_LESS 3.0))
+if(NOT (${CMAKE_VERSION} VERSION_LESS 3.0))
 	# keep until CMake-3.0 is min requirement
 	cmake_policy(SET CMP0043 OLD)
 endif()
@@ -109,6 +109,7 @@ enable_testing()
 
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin CACHE INTERNAL "" FORCE)
 set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR}/lib CACHE INTERNAL "" FORCE)
+set(TESTS_OUTPUT_DIR ${EXECUTABLE_OUTPUT_PATH}/tests CACHE INTERNAL "" FORCE)
 
 #-----------------------------------------------------------------------------
 # Set default config options
@@ -299,6 +300,9 @@ if(CMAKE_COMPILER_IS_GNUCC)
 	option(WITH_GCC_MUDFLAP			"Enable mudflap" OFF)
 	mark_as_advanced(WITH_GCC_MUDFLAP)
 endif()
+
+# Unit testsing
+option(WITH_GTESTS "Enable GTest unit testing" OFF)
 
 if(APPLE)
 	cmake_minimum_required(VERSION 2.8.8)
@@ -1042,7 +1046,7 @@ elseif(WIN32)
 			set(PLATFORM_LINKFLAGS "/MACHINE:IX86 /LARGEADDRESSAWARE ${PLATFORM_LINKFLAGS}")
 		endif()
 
-		set(PLATFORM_LINKFLAGS_DEBUG "/NODEFAULTLIB:libcmt.lib /NODEFAULTLIB:libc.lib")
+		set(PLATFORM_LINKFLAGS_DEBUG "/IGNORE:4099 /NODEFAULTLIB:libcmt.lib /NODEFAULTLIB:libc.lib")
 
 		if(NOT DEFINED LIBDIR)
 			# Setup 64bit and 64bit windows systems
@@ -1076,7 +1080,7 @@ elseif(WIN32)
 		set(ZLIB_INCLUDE_DIR ${LIBDIR}/zlib/include)
 		set(ZLIB_LIBRARY ${LIBDIR}/zlib/lib/libz_st.lib)
 		set(ZLIB_DIR ${LIBDIR}/zlib)
-		find_package(zlib) # we want to find before finding things that depend on it like png
+		#find_package(zlib) # we want to find before finding things that depend on it like png
 
 
 		find_package(png)
@@ -1085,11 +1089,11 @@ elseif(WIN32)
 			message(WARNING "Using HARDCODED libpng locations")
 			set(PNG_LIBRARIES libpng)
 			set(PNG "${LIBDIR}/png")
-			set(PNG_INCLUDE_DIR "${PNG}/include")
+			set(PNG_INCLUDE_DIRS "${PNG}/include")
 			set(PNG_LIBPATH ${PNG}/lib) # not cmake defined
 		endif()
 
-		if(MSVC90)
+		if(MSVC)
 			set(JPEG_NAMES ${JPEG_NAMES} libjpeg)
 		endif()
 		find_package(jpeg REQUIRED)
@@ -1221,6 +1225,9 @@ elseif(WIN32)
 			if(WITH_INTERNATIONAL)
 				list(APPEND boost_extra_libs locale)
 			endif(WITH_INTERNATIONAL)
+			set(Boost_USE_STATIC_RUNTIME ON) # prefix lib
+			set(Boost_USE_MULTITHREADED ON) # suffix -mt
+			set(Boost_USE_STATIC_LIBS ON) # suffix -s
 			find_package(Boost COMPONENTS date_time filesystem thread regex system ${boost_extra_libs})
 			IF(NOT Boost_FOUND)
 				message(WARNING "USING HARDCODED boost locations")
@@ -1356,7 +1363,7 @@ elseif(WIN32)
 		add_definitions(-DFREE_WINDOWS)
 
 		set(PNG "${LIBDIR}/png")
-		set(PNG_INCLUDE_DIR "${PNG}/include")
+		set(PNG_INCLUDE_DIRS "${PNG}/include")
 		set(PNG_LIBPATH ${PNG}/lib) # not cmake defined
 
 		if(WITH_MINGW64)
@@ -1776,7 +1783,7 @@ elseif(APPLE)
 	endif()
 
 	set(PNG "${LIBDIR}/png")
-	set(PNG_INCLUDE_DIR "${PNG}/include")
+	set(PNG_INCLUDE_DIRS "${PNG}/include")
 	set(PNG_LIBPATH ${PNG}/lib)
 
 	set(JPEG "${LIBDIR}/jpeg")
@@ -1882,16 +1889,24 @@ elseif(APPLE)
 		endif()
 	endif()
 	
-	if(WITH_OPENMP AND CMAKE_C_COMPILER_ID MATCHES "Clang" AND NOT ${CMAKE_C_COMPILER_VERSION} VERSION_LESS '3.4')
-		set(OPENMP_FOUND ON)
-		set(OpenMP_C_FLAGS "-fopenmp" CACHE STRING "C compiler flags for OpenMP parallization" FORCE)
-		set(OpenMP_CXX_FLAGS "-fopenmp" CACHE STRING "C++ compiler flags for OpenMP parallization" FORCE)
-		include_directories(${LIBDIR}/openmp/include)
-		LINK_DIRECTORIES(${LIBDIR}/openmp/lib)
-		execute_process(COMMAND ditto -arch ${CMAKE_OSX_ARCHITECTURES} ${LIBDIR}/openmp/lib/libiomp5.dylib ${CMAKE_BINARY_DIR}/bin/libiomp5.dylib) # for intermediate binaries, lib id is @loader_path
-	else()
-		set(OpenMP_C_FLAGS "" CACHE STRING "C compiler flags for OpenMP parallization" FORCE) # unset
-		set(OpenMP_CXX_FLAGS "" CACHE STRING "C++ compiler flags for OpenMP parallization" FORCE) # unset
+	if(WITH_OPENMP)
+		execute_process(COMMAND ${CMAKE_C_COMPILER} --version OUTPUT_VARIABLE COMPILER_VENDOR)
+		string(SUBSTRING "${COMPILER_VENDOR}" 0 5 VENDOR_NAME) # truncate output
+		if(${VENDOR_NAME} MATCHES "Apple") # Apple does not support OpenMP reliable with gcc and not with clang
+			set(WITH_OPENMP OFF)
+		else() # vanilla gcc or clang_omp support OpenMP
+			message(STATUS "Using special OpenMP enabled compiler !") # letting find_package(OpenMP) module work for gcc
+			if(CMAKE_C_COMPILER_ID MATCHES "Clang") # clang-omp in darwin libs
+				set(OPENMP_FOUND ON)
+				set(OpenMP_C_FLAGS "-fopenmp" CACHE STRING "C compiler flags for OpenMP parallization" FORCE)
+				set(OpenMP_CXX_FLAGS "-fopenmp" CACHE STRING "C++ compiler flags for OpenMP parallization" FORCE)
+				include_directories(${LIBDIR}/openmp/include)
+				link_directories(${LIBDIR}/openmp/lib)
+				# This is a workaround for our helperbinaries ( datatoc, masgfmt, ... ),
+				# They are linked also to omp lib, so we need it in builddir for runtime exexcution, TODO: remove all unneeded dependencies from these
+				execute_process(COMMAND ditto -arch ${CMAKE_OSX_ARCHITECTURES} ${LIBDIR}/openmp/lib/libiomp5.dylib ${CMAKE_BINARY_DIR}/bin/libiomp5.dylib) # for intermediate binaries, lib id @loader_path
+			endif()
+		endif()
 	endif()
 
 	set(EXETYPE MACOSX_BUNDLE)
@@ -2022,10 +2037,6 @@ if(WITH_OPENMP)
 	if(OPENMP_FOUND)
 		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
 		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
-
-		if(APPLE AND ${CMAKE_GENERATOR} MATCHES "Xcode")
-			set(CMAKE_XCODE_ATTRIBUTE_ENABLE_OPENMP_SUPPORT "YES")
-		endif()
 	else()
 		set(WITH_OPENMP OFF)
 	endif()
@@ -2149,6 +2160,10 @@ if(CMAKE_COMPILER_IS_GNUCC)
 	endif()
 
 elseif(CMAKE_C_COMPILER_ID MATCHES "Clang")
+
+	if(APPLE AND WITH_OPENMP) # we need the Intel omp lib linked here to not fail all tests due presence of -fopenmp !
+		set(CMAKE_REQUIRED_FLAGS "-L${LIBDIR}/openmp/lib -liomp5") # these are only used for the checks
+	endif()
 
 	# strange, clang complains these are not supported, but then yses them.
 	ADD_CHECK_C_COMPILER_FLAG(C_WARNINGS C_WARN_ALL -Wall)
@@ -2330,10 +2345,17 @@ endif()
 #-----------------------------------------------------------------------------
 # Libraries
 
+if(WITH_GTESTS)
+	include(GTestTesting)
+endif()
+
 if(WITH_BLENDER OR WITH_PLAYER)
-	add_subdirectory(source)
 	add_subdirectory(intern)
 	add_subdirectory(extern)
+
+	# source after intern and extern to gather all
+	# internal and external library information first, for test linking
+	add_subdirectory(source)
 elseif(WITH_CYCLES_STANDALONE)
 	add_subdirectory(intern/cycles)
 	if(NOT WITH_SYSTEM_GLEW)
@@ -2353,6 +2375,12 @@ endif()
 if(WITH_PLAYER)
 	add_subdirectory(source/blenderplayer)
 endif()
+
+
+#-----------------------------------------------------------------------------
+# Testing
+add_subdirectory(tests)
+
 
 #-----------------------------------------------------------------------------
 # CPack for generating packages

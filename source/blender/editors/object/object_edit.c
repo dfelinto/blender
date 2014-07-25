@@ -447,7 +447,7 @@ void ED_object_editmode_enter(bContext *C, int flag)
 		base = scene->basact;
 	}
 
-	if (ELEM3(NULL, base, base->object, base->object->data)) return;
+	if (ELEM(NULL, base, base->object, base->object->data)) return;
 
 	ob = base->object;
 
@@ -589,7 +589,7 @@ static int editmode_toggle_poll(bContext *C)
 	if ((ob->restrictflag & OB_RESTRICT_VIEW) && !(ob->mode & OB_MODE_EDIT))
 		return 0;
 
-	return (ELEM7(ob->type, OB_MESH, OB_ARMATURE, OB_FONT, OB_MBALL, OB_LATTICE, OB_SURF, OB_CURVE));
+	return (ELEM(ob->type, OB_MESH, OB_ARMATURE, OB_FONT, OB_MBALL, OB_LATTICE, OB_SURF, OB_CURVE));
 }
 
 void OBJECT_OT_editmode_toggle(wmOperatorType *ot)
@@ -760,7 +760,7 @@ static void copy_texture_space(Object *to, Object *ob)
 		texflag = ((Mesh *)ob->data)->texflag;
 		poin2 = ((Mesh *)ob->data)->loc;
 	}
-	else if (ELEM3(ob->type, OB_CURVE, OB_SURF, OB_FONT)) {
+	else if (ELEM(ob->type, OB_CURVE, OB_SURF, OB_FONT)) {
 		texflag = ((Curve *)ob->data)->texflag;
 		poin2 = ((Curve *)ob->data)->loc;
 	}
@@ -775,7 +775,7 @@ static void copy_texture_space(Object *to, Object *ob)
 		((Mesh *)to->data)->texflag = texflag;
 		poin1 = ((Mesh *)to->data)->loc;
 	}
-	else if (ELEM3(to->type, OB_CURVE, OB_SURF, OB_FONT)) {
+	else if (ELEM(to->type, OB_CURVE, OB_SURF, OB_FONT)) {
 		((Curve *)to->data)->texflag = texflag;
 		poin1 = ((Curve *)to->data)->loc;
 	}
@@ -1112,7 +1112,7 @@ void ED_object_check_force_modifiers(Main *bmain, Scene *scene, Object *object)
 	/* add/remove modifier as needed */
 	if (!md) {
 		if (pd && (pd->shape == PFIELD_SHAPE_SURFACE) && ELEM(pd->forcefield, PFIELD_GUIDE, PFIELD_TEXTURE) == 0)
-			if (ELEM4(object->type, OB_MESH, OB_SURF, OB_FONT, OB_CURVE))
+			if (ELEM(object->type, OB_MESH, OB_SURF, OB_FONT, OB_CURVE))
 				ED_object_modifier_add(NULL, bmain, scene, object, NULL, eModifierType_Surface);
 	}
 	else {
@@ -1453,7 +1453,7 @@ static void UNUSED_FUNCTION(image_aspect) (Scene *scene, View3D *v3d)
 									BKE_mesh_texspace_get(ob->data, NULL, NULL, size);
 									space = size[0] / size[1];
 								}
-								else if (ELEM3(ob->type, OB_CURVE, OB_FONT, OB_SURF)) {
+								else if (ELEM(ob->type, OB_CURVE, OB_FONT, OB_SURF)) {
 									float size[3];
 									BKE_curve_texspace_get(ob->data, NULL, NULL, size);
 									space = size[0] / size[1];
@@ -1500,7 +1500,7 @@ static EnumPropertyItem *object_mode_set_itemsf(bContext *C, PointerRNA *UNUSED(
 			if ((input->value == OB_MODE_EDIT && OB_TYPE_SUPPORT_EDITMODE(ob->type)) ||
 			    (input->value == OB_MODE_POSE && (ob->type == OB_ARMATURE)) ||
 			    (input->value == OB_MODE_PARTICLE_EDIT && use_mode_particle_edit) ||
-			    (ELEM4(input->value, OB_MODE_SCULPT, OB_MODE_VERTEX_PAINT,
+			    (ELEM(input->value, OB_MODE_SCULPT, OB_MODE_VERTEX_PAINT,
 			           OB_MODE_WEIGHT_PAINT, OB_MODE_TEXTURE_PAINT) && (ob->type == OB_MESH)) ||
 			    (input->value == OB_MODE_OBJECT))
 			{
@@ -1620,20 +1620,20 @@ static int object_mode_set_exec(bContext *C, wmOperator *op)
 	/* Exit current mode if it's not the mode we're setting */
 	if (mode != OB_MODE_OBJECT && (ob->mode != mode || toggle)) {
 		/* Enter new mode */
-		WM_operator_name_call(C, object_mode_op_string(mode), WM_OP_EXEC_REGION_WIN, NULL);
+		ED_object_toggle_modes(C, mode);
 	}
 
 	if (toggle) {
 		/* Special case for Object mode! */
 		if (mode == OB_MODE_OBJECT && restore_mode == OB_MODE_OBJECT && ob->restore_mode != OB_MODE_OBJECT) {
-			WM_operator_name_call(C, object_mode_op_string(ob->restore_mode), WM_OP_EXEC_REGION_WIN, NULL);
+			ED_object_toggle_modes(C, ob->restore_mode);
 		}
 		else if (ob->mode == mode) {
 			/* For toggling, store old mode so we know what to go back to */
 			ob->restore_mode = restore_mode;
 		}
 		else if (ob->restore_mode != OB_MODE_OBJECT && ob->restore_mode != mode) {
-			WM_operator_name_call(C, object_mode_op_string(ob->restore_mode), WM_OP_EXEC_REGION_WIN, NULL);
+			ED_object_toggle_modes(C, ob->restore_mode);
 		}
 	}
 
@@ -1669,24 +1669,12 @@ void OBJECT_OT_mode_set(wmOperatorType *ot)
 
 void ED_object_toggle_modes(bContext *C, int mode)
 {
-	/* Couldn't we use object_mode_op_string() here?
-	 * Also, if several bits are set in mode, several toggle ops will be called, is this expected?
-	 * If so, would be nice to explain why. ;) --mont29
-	 */
-	if (mode & OB_MODE_SCULPT)
-		WM_operator_name_call(C, "SCULPT_OT_sculptmode_toggle", WM_OP_EXEC_REGION_WIN, NULL);
-	if (mode & OB_MODE_VERTEX_PAINT)
-		WM_operator_name_call(C, "PAINT_OT_vertex_paint_toggle", WM_OP_EXEC_REGION_WIN, NULL);
-	if (mode & OB_MODE_WEIGHT_PAINT)
-		WM_operator_name_call(C, "PAINT_OT_weight_paint_toggle", WM_OP_EXEC_REGION_WIN, NULL);
-	if (mode & OB_MODE_TEXTURE_PAINT)
-		WM_operator_name_call(C, "PAINT_OT_texture_paint_toggle", WM_OP_EXEC_REGION_WIN, NULL);
-	if (mode & OB_MODE_PARTICLE_EDIT)
-		WM_operator_name_call(C, "PARTICLE_OT_particle_edit_toggle", WM_OP_EXEC_REGION_WIN, NULL);
-	if (mode & OB_MODE_POSE)
-		WM_operator_name_call(C, "OBJECT_OT_posemode_toggle", WM_OP_EXEC_REGION_WIN, NULL);
-	if (mode & OB_MODE_EDIT)
-		WM_operator_name_call(C, "OBJECT_OT_editmode_toggle", WM_OP_EXEC_REGION_WIN, NULL);
+	if (mode != OB_MODE_OBJECT) {
+		const char *opstring = object_mode_op_string(mode);
+		if (opstring) {
+			WM_operator_name_call(C, opstring, WM_OP_EXEC_REGION_WIN, NULL);
+		}
+	}
 }
 
 /************************ Game Properties ***********************/

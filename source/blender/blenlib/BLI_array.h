@@ -75,10 +75,10 @@ void _bli_array_grow_func(void **arr_p, const void *arr_static,
  * switching to dynamic heap allocation */
 #define BLI_array_staticdeclare(arr, maxstatic)                               \
 	int   _##arr##_count = 0;                                                 \
-	char  _##arr##_static[maxstatic * sizeof(arr)]
+	char  _##arr##_static[maxstatic * sizeof(*(arr))]
 
 /* this returns the logical size of the array, not including buffering. */
-#define BLI_array_count(arr) _##arr##_count
+#define BLI_array_count(arr) ((void)0, _##arr##_count)
 
 /* Grow the array by a fixed number of items.
  *
@@ -144,7 +144,7 @@ void _bli_array_grow_func(void **arr_p, const void *arr_static,
 
 /* set the count of the array, doesn't actually increase the allocated array
  * size.  don't use this unless you know what you're doing. */
-#define BLI_array_length_set(arr, count)                                      \
+#define BLI_array_count_set(arr, count)                                      \
 	{ _##arr##_count = (count); }(void)0
 
 /* only to prevent unused warnings */

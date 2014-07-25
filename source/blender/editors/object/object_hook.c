@@ -331,6 +331,8 @@ static bool object_hook_index_array(Scene *scene, Object *obedit,
 		}
 		case OB_CURVE:
 		case OB_SURF:
+			load_editNurb(obedit);
+			make_editNurb(obedit);
 			return return_editcurve_indexar(obedit, r_tot, r_indexar, r_cent);
 		case OB_LATTICE:
 		{
@@ -526,8 +528,7 @@ static int add_hook_object(Main *bmain, Scene *scene, Object *obedit, Object *ob
 	
 	invert_m4_m4(ob->imat, ob->obmat);
 	/* apparently this call goes from right to left... */
-	mul_serie_m4(hmd->parentinv, pose_mat, ob->imat, obedit->obmat,
-	             NULL, NULL, NULL, NULL, NULL);
+	mul_m4_series(hmd->parentinv, pose_mat, ob->imat, obedit->obmat);
 	
 	DAG_relations_tag_update(bmain);
 

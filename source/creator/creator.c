@@ -535,7 +535,7 @@ static void blender_crash_handler_backtrace(FILE *fp)
 	SymInitialize(process, NULL, true);
 
 	nframes = CaptureStackBackTrace(0, SIZE, stack, NULL);
-	symbolinfo = MEM_callocN(sizeof(SYMBOL_INFO) + MAXSYMBOL * sizeof( char ), "crash Symbol table");
+	symbolinfo = MEM_callocN(sizeof(SYMBOL_INFO) + MAXSYMBOL * sizeof(char), "crash Symbol table");
 	symbolinfo->MaxNameLen = MAXSYMBOL - 1;
 	symbolinfo->SizeOfStruct = sizeof(SYMBOL_INFO);
 
@@ -566,7 +566,7 @@ static void blender_crash_handler(int signum)
 		char fname[FILE_MAX];
 
 		if (!G.main->name[0]) {
-			BLI_make_file_string("/", fname, BLI_temporary_dir(), "crash.blend");
+			BLI_make_file_string("/", fname, BLI_temp_dir_base(), "crash.blend");
 		}
 		else {
 			BLI_strncpy(fname, G.main->name, sizeof(fname));
@@ -587,10 +587,10 @@ static void blender_crash_handler(int signum)
 	char fname[FILE_MAX];
 
 	if (!G.main->name[0]) {
-		BLI_join_dirfile(fname, sizeof(fname), BLI_temporary_dir(), "blender.crash.txt");
+		BLI_join_dirfile(fname, sizeof(fname), BLI_temp_dir_base(), "blender.crash.txt");
 	}
 	else {
-		BLI_join_dirfile(fname, sizeof(fname), BLI_temporary_dir(), BLI_path_basename(G.main->name));
+		BLI_join_dirfile(fname, sizeof(fname), BLI_temp_dir_base(), BLI_path_basename(G.main->name));
 		BLI_replace_extension(fname, sizeof(fname), ".crash.txt");
 	}
 
@@ -621,6 +621,8 @@ static void blender_crash_handler(int signum)
 		fclose(fp);
 	}
 
+	/* Delete content of temp dir! */
+	BLI_temp_dir_session_purge();
 
 	/* really crash */
 	signal(signum, SIG_DFL);
@@ -999,6 +1001,7 @@ static int render_frame(int argc, const char **argv, void *data)
 					break;
 			}
 
+			BLI_begin_threaded_malloc();
 			BKE_reports_init(&reports, RPT_PRINT);
 
 			frame = CLAMPIS(frame, MINAFRAME, MAXFRAME);
@@ -1006,6 +1009,7 @@ static int render_frame(int argc, const char **argv, void *data)
 			RE_SetReports(re, &reports);
 			RE_BlenderAnim(re, bmain, scene, NULL, scene->lay, frame, frame, scene->r.frame_step);
 			RE_SetReports(re, NULL);
+			BLI_end_threaded_malloc();
 			return 1;
 		}
 		else {
@@ -1027,10 +1031,12 @@ static int render_animation(int UNUSED(argc), const char **UNUSED(argv), void *d
 		Main *bmain = CTX_data_main(C);
 		Render *re = RE_NewRender(scene->id.name);
 		ReportList reports;
+		BLI_begin_threaded_malloc();
 		BKE_reports_init(&reports, RPT_PRINT);
 		RE_SetReports(re, &reports);
 		RE_BlenderAnim(re, bmain, scene, NULL, scene->lay, scene->r.sfra, scene->r.efra, scene->r.frame_step);
 		RE_SetReports(re, NULL);
+		BLI_end_threaded_malloc();
 	}
 	else {
 		printf("\nError: no blend loaded. cannot use '-a'.\n");
@@ -1666,7 +1672,7 @@ int main(
 
 		/* this is properly initialized with user defs, but this is default */
 		/* call after loading the startup.blend so we can read U.tempdir */
-		BLI_init_temporary_dir(U.tempdir);
+		BLI_temp_dir_init(U.tempdir);
 	}
 	else {
 #ifndef WITH_PYTHON_MODULE
@@ -1676,7 +1682,7 @@ int main(
 		WM_init(C, argc, (const char **)argv);
 
 		/* don't use user preferences temp dir */
-		BLI_init_temporary_dir(NULL);
+		BLI_temp_dir_init(NULL);
 	}
 #ifdef WITH_PYTHON
 	/**

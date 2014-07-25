@@ -217,6 +217,7 @@ class SpellChecker():
         "passepartout",
         "perspectively",
         "pixelate",
+        "polycount",
         "polygonization", "polygonalization",  # yuck!
         "selectability",
         "slurph",
@@ -362,6 +363,7 @@ class SpellChecker():
         "icosphere",
         "inpaint",
         "lightmap",
+        "linearlight",
         "lossless", "lossy",
         "matcap",
         "midtones",
@@ -371,6 +373,7 @@ class SpellChecker():
         "nurb", "nurbs",
         "perlin",
         "phong",
+        "pinlight",
         "qi",
         "radiosity",
         "raycasting",
@@ -378,6 +381,7 @@ class SpellChecker():
         "renderfarm",
         "scanfill",
         "shader", "shaders",
+        "softlight",
         "specular", "specularity",
         "spillmap",
         "sobel",
@@ -385,6 +389,7 @@ class SpellChecker():
         "tonemap",
         "toon",
         "timecode",
+        "vividlight",
         "voronoi",
         "voxel", "voxels",
         "vsync",
@@ -455,6 +460,7 @@ class SpellChecker():
         "uvwarp",
 
         # Algorithm names
+        "ashikhmin",  # Ashikhmin-Shirley
         "beckmann",
         "catmull",
         "catrom",

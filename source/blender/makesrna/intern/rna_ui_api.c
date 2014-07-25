@@ -700,6 +700,7 @@ void RNA_api_ui_layout(StructRNA *srna)
 	RNA_def_enum(func, "type", curve_type_items, 0, "Type", "Type of curves to display");
 	RNA_def_boolean(func, "levels", false, "", "Show black/white levels");
 	RNA_def_boolean(func, "brush", false, "", "Show brush options");
+	RNA_def_boolean(func, "use_negative_slope", false, "", "Use a negative slope by default");
 
 	func = RNA_def_function(srna, "template_color_ramp", "uiTemplateColorRamp");
 	RNA_def_function_ui_description(func, "Item. A color ramp widget");
@@ -738,6 +739,11 @@ void RNA_api_ui_layout(StructRNA *srna)
 	RNA_def_boolean(func, "lock", false, "", "Lock the color wheel display to value 1.0 regardless of actual color");
 	RNA_def_boolean(func, "lock_luminosity", false, "", "Keep the color at its original vector length");
 	RNA_def_boolean(func, "cubic", false, "", "Cubic saturation for picking values close to white");
+
+	func = RNA_def_function(srna, "template_palette", "uiTemplatePalette");
+	RNA_def_function_ui_description(func, "Item. A palette used to pick colors");
+	api_ui_item_rna_common(func);
+	RNA_def_boolean(func, "color", 0, "", "Display the colors as colors or values");
 
 	func = RNA_def_function(srna, "template_image_layers", "uiTemplateImageLayers");
 	RNA_def_function_flag(func, FUNC_USE_CONTEXT);

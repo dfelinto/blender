@@ -22,6 +22,7 @@ from bpy.types import Header, Menu, Panel
 from bl_ui.properties_paint_common import (
         UnifiedPaintPanel,
         brush_texture_settings,
+        brush_texpaint_common,
         brush_mask_texture_settings,
         )
 from bl_ui.properties_grease_pencil_common import GreasePencilPanel
@@ -31,13 +32,11 @@ from bpy.app.translations import pgettext_iface as iface_
 class ImagePaintPanel(UnifiedPaintPanel):
     bl_space_type = 'IMAGE_EDITOR'
     bl_region_type = 'TOOLS'
-    bl_category = "Tools"
 
 
-class BrushButtonsPanel:
+class BrushButtonsPanel(UnifiedPaintPanel):
     bl_space_type = 'IMAGE_EDITOR'
     bl_region_type = 'TOOLS'
-    bl_category = "Tools"
 
     @classmethod
     def poll(cls, context):
@@ -66,6 +65,7 @@ class IMAGE_MT_view(Menu):
         sima = context.space_data
         uv = sima.uv_editor
         toolsettings = context.tool_settings
+        paint = toolsettings.image_paint
 
         show_uvedit = sima.show_uvedit
         show_render = sima.show_render
@@ -80,6 +80,8 @@ class IMAGE_MT_view(Menu):
             layout.prop(toolsettings, "show_uv_local_view")
 
         layout.prop(uv, "show_other_objects")
+        if paint.brush and (context.image_paint_object or sima.mode == 'PAINT'):
+            layout.prop(uv, "show_texpaint")
 
         layout.separator()
 
@@ -140,6 +142,24 @@ class IMAGE_MT_select(Menu):
         layout.operator("uv.select_split")
 
 
+class IMAGE_MT_brush(Menu):
+    bl_label = "Brush"
+
+    def draw(self, context):
+        layout = self.layout
+        toolsettings = context.tool_settings
+        settings = toolsettings.image_paint
+        brush = settings.brush
+
+        ups = context.tool_settings.unified_paint_settings
+        layout.prop(ups, "use_unified_size", text="Unified Size")
+        layout.prop(ups, "use_unified_strength", text="Unified Strength")
+        layout.separator()
+
+        # brush tool
+        layout.prop_menu_enum(brush, "image_tool")
+
+
 class IMAGE_MT_image(Menu):
     bl_label = "Image"
 
@@ -153,6 +173,8 @@ class IMAGE_MT_image(Menu):
         layout.operator("image.open")
 
         show_render = sima.show_render
+
+        layout.operator("image.read_renderlayers")
 
         if ima:
             if not show_render:
@@ -380,7 +402,6 @@ class IMAGE_HT_header(Header):
         mode = sima.mode
 
         show_render = sima.show_render
-        # show_paint = sima.show_paint
         show_uvedit = sima.show_uvedit
         show_maskedit = sima.show_maskedit
 
@@ -399,8 +420,7 @@ class IMAGE_HT_header(Header):
             row = layout.row()
             row.template_ID(sima, "mask", new="mask.new")
 
-        if show_uvedit or show_maskedit:
-            layout.prop(sima, "pivot_point", icon_only=True)
+        layout.prop(sima, "pivot_point", icon_only=True)
 
         # uv editing
         if show_uvedit:
@@ -464,6 +484,7 @@ class MASK_MT_editor_menus(Menu):
 
         show_uvedit = sima.show_uvedit
         show_maskedit = sima.show_maskedit
+        show_paint = sima.show_paint
 
         layout.menu("IMAGE_MT_view")
 
@@ -471,6 +492,8 @@ class MASK_MT_editor_menus(Menu):
             layout.menu("IMAGE_MT_select")
         if show_maskedit:
             layout.menu("MASK_MT_select")
+        if show_paint:
+            layout.menu("IMAGE_MT_brush")
 
         if ima and ima.is_dirty:
             layout.menu("IMAGE_MT_image", text="Image*")
@@ -660,49 +683,27 @@ class IMAGE_PT_tools_transform_uvs(Panel, UVToolsPanel):
         col.operator("transform.shear")
 
 
-class IMAGE_PT_paint(Panel, ImagePaintPanel):
+class IMAGE_PT_paint(Panel, BrushButtonsPanel):
     bl_label = "Paint"
-
-    @classmethod
-    def poll(cls, context):
-        sima = context.space_data
-        return sima.show_paint
+    bl_category = "Tools"
 
     def draw(self, context):
         layout = self.layout
 
-        toolsettings = context.tool_settings.image_paint
-        brush = toolsettings.brush
+        settings = context.tool_settings.image_paint
+        brush = settings.brush
 
         col = layout.column()
-        col.template_ID_preview(toolsettings, "brush", new="brush.add", rows=2, cols=6)
+        col.template_ID_preview(settings, "brush", new="brush.add", rows=2, cols=6)
 
         if brush:
-            col = layout.column()
-
-            if brush.image_tool == 'DRAW' and brush.blend not in ('ERASE_ALPHA', 'ADD_ALPHA'):
-                col.template_color_picker(brush, "color", value_slider=True)
-                col.prop(brush, "color", text="")
-
-            row = col.row(align=True)
-            self.prop_unified_size(row, context, brush, "size", slider=True, text="Radius")
-            self.prop_unified_size(row, context, brush, "use_pressure_size")
-
-            row = col.row(align=True)
-            self.prop_unified_strength(row, context, brush, "strength", slider=True, text="Strength")
-            self.prop_unified_strength(row, context, brush, "use_pressure_strength")
-
-            col.prop(brush, "blend", text="Blend")
-
-            if brush.image_tool == 'CLONE':
-                col.separator()
-                col.prop(brush, "clone_image", text="Image")
-                col.prop(brush, "clone_alpha", text="Alpha")
+            brush_texpaint_common(self, context, layout, brush, settings)
 
 
 class IMAGE_PT_tools_brush_overlay(BrushButtonsPanel, Panel):
     bl_label = "Overlay"
     bl_options = {'DEFAULT_CLOSED'}
+    bl_category = "Options"
 
     def draw(self, context):
         layout = self.layout
@@ -756,6 +757,7 @@ class IMAGE_PT_tools_brush_overlay(BrushButtonsPanel, Panel):
 class IMAGE_PT_tools_brush_texture(BrushButtonsPanel, Panel):
     bl_label = "Texture"
     bl_options = {'DEFAULT_CLOSED'}
+    bl_category = "Tools"
 
     def draw(self, context):
         layout = self.layout
@@ -772,6 +774,7 @@ class IMAGE_PT_tools_brush_texture(BrushButtonsPanel, Panel):
 class IMAGE_PT_tools_mask_texture(BrushButtonsPanel, Panel):
     bl_label = "Texture Mask"
     bl_options = {'DEFAULT_CLOSED'}
+    bl_category = "Tools"
 
     def draw(self, context):
         layout = self.layout
@@ -788,6 +791,7 @@ class IMAGE_PT_tools_mask_texture(BrushButtonsPanel, Panel):
 class IMAGE_PT_tools_brush_tool(BrushButtonsPanel, Panel):
     bl_label = "Tool"
     bl_options = {'DEFAULT_CLOSED'}
+    bl_category = "Options"
 
     def draw(self, context):
         layout = self.layout
@@ -806,6 +810,7 @@ class IMAGE_PT_tools_brush_tool(BrushButtonsPanel, Panel):
 class IMAGE_PT_paint_stroke(BrushButtonsPanel, Panel):
     bl_label = "Paint Stroke"
     bl_options = {'DEFAULT_CLOSED'}
+    bl_category = "Tools"
 
     def draw(self, context):
         layout = self.layout
@@ -830,9 +835,18 @@ class IMAGE_PT_paint_stroke(BrushButtonsPanel, Panel):
         if brush.use_space:
             col.separator()
             row = col.row(align=True)
-            row.active = brush.use_space
             row.prop(brush, "spacing", text="Spacing")
             row.prop(brush, "use_pressure_spacing", toggle=True, text="")
+
+        if brush.use_line or brush.use_curve:
+            col.separator()
+            row = col.row(align=True)
+            row.prop(brush, "spacing", text="Spacing")
+
+        if brush.use_curve:
+            col.separator()
+            col.template_ID(brush, "paint_curve", new="paintcurve.new")
+            col.operator("paintcurve.draw")
 
         col = layout.column()
         col.separator()
@@ -848,25 +862,23 @@ class IMAGE_PT_paint_stroke(BrushButtonsPanel, Panel):
         col = layout.column()
         col.separator()
 
-        col.prop(brush, "use_smooth_stroke")
+        if brush.brush_capabilities.has_smooth_stroke:
+            col.prop(brush, "use_smooth_stroke")
 
-        sub = col.column()
-        sub.active = brush.use_smooth_stroke
-        sub.prop(brush, "smooth_stroke_radius", text="Radius", slider=True)
-        sub.prop(brush, "smooth_stroke_factor", text="Factor", slider=True)
+            sub = col.column()
+            sub.active = brush.use_smooth_stroke
+            sub.prop(brush, "smooth_stroke_radius", text="Radius", slider=True)
+            sub.prop(brush, "smooth_stroke_factor", text="Factor", slider=True)
 
-        col.separator()
+            col.separator()
 
         col.prop(toolsettings, "input_samples")
-
-        col.separator()
-
-        col.prop(brush, "use_wrap")
 
 
 class IMAGE_PT_paint_curve(BrushButtonsPanel, Panel):
     bl_label = "Paint Curve"
     bl_options = {'DEFAULT_CLOSED'}
+    bl_category = "Tools"
 
     def draw(self, context):
         layout = self.layout
@@ -876,7 +888,8 @@ class IMAGE_PT_paint_curve(BrushButtonsPanel, Panel):
 
         layout.template_curve_mapping(brush, "curve")
 
-        row = layout.row(align=True)
+        col = layout.column(align=True)
+        row = col.row(align=True)
         row.operator("brush.curve_preset", icon='SMOOTHCURVE', text="").shape = 'SMOOTH'
         row.operator("brush.curve_preset", icon='SPHERECURVE', text="").shape = 'ROUND'
         row.operator("brush.curve_preset", icon='ROOTCURVE', text="").shape = 'ROOT'
@@ -888,6 +901,7 @@ class IMAGE_PT_paint_curve(BrushButtonsPanel, Panel):
 class IMAGE_PT_tools_brush_appearance(BrushButtonsPanel, Panel):
     bl_label = "Appearance"
     bl_options = {'DEFAULT_CLOSED'}
+    bl_category = "Options"
 
     def draw(self, context):
         layout = self.layout
@@ -912,6 +926,30 @@ class IMAGE_PT_tools_brush_appearance(BrushButtonsPanel, Panel):
         sub = col.column()
         sub.active = brush.use_custom_icon
         sub.prop(brush, "icon_filepath", text="")
+
+
+class IMAGE_PT_tools_paint_options(BrushButtonsPanel, Panel):
+    bl_label = "Image Paint"
+    bl_category = "Options"
+
+    def draw(self, context):
+        layout = self.layout
+
+        toolsettings = context.tool_settings
+        brush = toolsettings.image_paint.brush
+
+        ups = toolsettings.unified_paint_settings
+
+        col = layout.column(align=True)
+
+        col.prop(brush, "use_wrap")
+        col.separator()
+
+        col.label(text="Unified Settings:")
+        row = col.row()
+        row.prop(ups, "use_unified_size", text="Size")
+        row.prop(ups, "use_unified_strength", text="Strength")
+        col.prop(ups, "use_unified_color", text="Color")
 
 
 class IMAGE_UV_sculpt_curve(Panel):

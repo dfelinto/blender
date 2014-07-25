@@ -213,7 +213,7 @@ bool EDBM_backbuf_border_init(ViewContext *vc, short xmin, short ymin, short xma
 	a = (xmax - xmin + 1) * (ymax - ymin + 1);
 	while (a--) {
 		if (*dr > 0 && *dr <= bm_vertoffs) {
-			BLI_BITMAP_SET(selbuf, *dr);
+			BLI_BITMAP_ENABLE(selbuf, *dr);
 		}
 		dr++;
 	}
@@ -230,7 +230,7 @@ bool EDBM_backbuf_check(unsigned int index)
 		return true;
 
 	if (index > 0 && index <= bm_vertoffs)
-		return BLI_BITMAP_GET_BOOL(selbuf, index);
+		return BLI_BITMAP_TEST_BOOL(selbuf, index);
 
 	return false;
 }
@@ -297,7 +297,7 @@ bool EDBM_backbuf_border_mask_init(ViewContext *vc, const int mcords[][2], short
 	a = (xmax - xmin + 1) * (ymax - ymin + 1);
 	while (a--) {
 		if (*dr > 0 && *dr <= bm_vertoffs && *dr_mask == true) {
-			BLI_BITMAP_SET(selbuf, *dr);
+			BLI_BITMAP_ENABLE(selbuf, *dr);
 		}
 		dr++; dr_mask++;
 	}
@@ -340,7 +340,7 @@ bool EDBM_backbuf_circle_init(ViewContext *vc, short xs, short ys, short rads)
 		for (xc = -rads; xc <= rads; xc++, dr++) {
 			if (xc * xc + yc * yc < radsq) {
 				if (*dr > 0 && *dr <= bm_vertoffs) {
-					BLI_BITMAP_SET(selbuf, *dr);
+					BLI_BITMAP_ENABLE(selbuf, *dr);
 				}
 			}
 		}
@@ -2807,6 +2807,13 @@ static int edbm_select_non_manifold_exec(bContext *C, wmOperator *op)
 	BMEdge *e;
 	BMIter iter;
 
+	const bool use_wire = RNA_boolean_get(op->ptr, "use_wire");
+	const bool use_boundary = RNA_boolean_get(op->ptr, "use_boundary");
+	const bool use_multi_face = RNA_boolean_get(op->ptr, "use_multi_face");
+	const bool use_non_contiguous = RNA_boolean_get(op->ptr, "use_non_contiguous");
+	const bool use_verts = RNA_boolean_get(op->ptr, "use_verts");
+
+
 	if (!RNA_boolean_get(op->ptr, "extend"))
 		EDBM_flag_disable_all(em, BM_ELEM_SELECT);
 
@@ -2819,15 +2826,30 @@ static int edbm_select_non_manifold_exec(bContext *C, wmOperator *op)
 		return OPERATOR_CANCELLED;
 	}
 	
-	BM_ITER_MESH (v, &iter, em->bm, BM_VERTS_OF_MESH) {
-		if (!BM_elem_flag_test(v, BM_ELEM_HIDDEN) && !BM_vert_is_manifold(v)) {
-			BM_vert_select_set(em->bm, v, true);
+	if (use_verts) {
+		BM_ITER_MESH (v, &iter, em->bm, BM_VERTS_OF_MESH) {
+			if (!BM_elem_flag_test(v, BM_ELEM_HIDDEN)) {
+				if (!BM_vert_is_manifold(v)) {
+					BM_vert_select_set(em->bm, v, true);
+				}
+			}
 		}
 	}
 	
-	BM_ITER_MESH (e, &iter, em->bm, BM_EDGES_OF_MESH) {
-		if (!BM_elem_flag_test(e, BM_ELEM_HIDDEN) && !BM_edge_is_manifold(e)) {
-			BM_edge_select_set(em->bm, e, true);
+	if (use_wire || use_boundary || use_multi_face || use_non_contiguous) {
+		BM_ITER_MESH (e, &iter, em->bm, BM_EDGES_OF_MESH) {
+			if (!BM_elem_flag_test(e, BM_ELEM_HIDDEN)) {
+				if ((use_wire && BM_edge_is_wire(e)) ||
+				    (use_boundary && BM_edge_is_boundary(e)) ||
+				    (use_non_contiguous && (BM_edge_is_manifold(e) && !BM_edge_is_contiguous(e))) ||
+				    (use_multi_face && (BM_edge_face_count(e) > 2)))
+				{
+					/* check we never select perfect edge (in test above) */
+					BLI_assert(!(BM_edge_is_manifold(e) && BM_edge_is_contiguous(e)));
+
+					BM_edge_select_set(em->bm, e, true);
+				}
+			}
 		}
 	}
 
@@ -2854,6 +2876,18 @@ void MESH_OT_select_non_manifold(wmOperatorType *ot)
 
 	/* props */
 	RNA_def_boolean(ot->srna, "extend", true, "Extend", "Extend the selection");
+	/* edges */
+	RNA_def_boolean(ot->srna, "use_wire", true, "Wire",
+	                "Wire edges");
+	RNA_def_boolean(ot->srna, "use_boundary", true, "Boundaries",
+	                "Boundary edges");
+	RNA_def_boolean(ot->srna, "use_multi_face", true,
+	                "Multiple Faces", "Edges shared by 3+ faces");
+	RNA_def_boolean(ot->srna, "use_non_contiguous", true, "Non Contiguous",
+	                "Edges between faces pointing in alternate directions");
+	/* verts */
+	RNA_def_boolean(ot->srna, "use_verts", true, "Vertices",
+	                "Vertices connecting multiple face regions");
 }
 
 static int edbm_select_random_exec(bContext *C, wmOperator *op)
@@ -3189,7 +3223,7 @@ void MESH_OT_region_to_loop(wmOperatorType *ot)
 }
 
 static int loop_find_region(BMLoop *l, int flag,
-                            SmallHash *fhash, BMFace ***region_out)
+                            GSet *visit_face_set, BMFace ***region_out)
 {
 	BMFace **region = NULL;
 	BMFace **stack = NULL;
@@ -3198,7 +3232,7 @@ static int loop_find_region(BMLoop *l, int flag,
 	BMFace *f;
 	
 	BLI_array_append(stack, l->f);
-	BLI_smallhash_insert(fhash, (uintptr_t)l->f, NULL);
+	BLI_gset_insert(visit_face_set, l->f);
 	
 	while (BLI_array_count(stack) > 0) {
 		BMIter liter1, liter2;
@@ -3217,11 +3251,10 @@ static int loop_find_region(BMLoop *l, int flag,
 				if (BM_elem_flag_test(l2->f, BM_ELEM_TAG)) {
 					continue;
 				}
-				if (BLI_smallhash_haskey(fhash, (uintptr_t)l2->f))
-					continue;
-				
-				BLI_array_append(stack, l2->f);
-				BLI_smallhash_insert(fhash, (uintptr_t)l2->f, NULL);
+
+				if (BLI_gset_add(visit_face_set, l2->f)) {
+					BLI_array_append(stack, l2->f);
+				}
 			}
 		}
 	}
@@ -3254,13 +3287,13 @@ static int verg_radial(const void *va, const void *vb)
  */
 static int loop_find_regions(BMEditMesh *em, const bool selbigger)
 {
-	SmallHash visithash;
+	GSet *visit_face_set;
 	BMIter iter;
 	const int edges_len = em->bm->totedgesel;
 	BMEdge *e, **edges;
 	int count = 0, i;
 	
-	BLI_smallhash_init_ex(&visithash, edges_len);
+	visit_face_set = BLI_gset_ptr_new_ex(__func__, edges_len);
 	edges = MEM_mallocN(sizeof(*edges) * edges_len, __func__);
 
 	i = 0;
@@ -3289,10 +3322,10 @@ static int loop_find_regions(BMEditMesh *em, const bool selbigger)
 			continue;
 		
 		BM_ITER_ELEM (l, &liter, e, BM_LOOPS_OF_EDGE) {
-			if (BLI_smallhash_haskey(&visithash, (uintptr_t)l->f))
+			if (BLI_gset_haskey(visit_face_set, l->f))
 				continue;
-						
-			c = loop_find_region(l, BM_ELEM_SELECT, &visithash, &region_out);
+
+			c = loop_find_region(l, BM_ELEM_SELECT, visit_face_set, &region_out);
 
 			if (!region || (selbigger ? c >= tot : c < tot)) {
 				/* this region is the best seen so far */
@@ -3327,7 +3360,7 @@ static int loop_find_regions(BMEditMesh *em, const bool selbigger)
 	}
 	
 	MEM_freeN(edges);
-	BLI_smallhash_release(&visithash);
+	BLI_gset_free(visit_face_set, NULL);
 	
 	return count;
 }

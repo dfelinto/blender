@@ -491,10 +491,7 @@ void BKE_mball_properties_copy(Scene *scene, Object *active_object)
 
 	BLI_split_name_num(basisname, &basisnr, active_object->id.name + 2, '.');
 
-	/* XXX recursion check, see scene.c, just too simple code this BKE_scene_base_iter_next() */
-	if (F_ERROR == BKE_scene_base_iter_next(eval_ctx, &iter, &sce_iter, 0, NULL, NULL))
-		return;
-	
+	BKE_scene_base_iter_next(eval_ctx, &iter, &sce_iter, 0, NULL, NULL);
 	while (BKE_scene_base_iter_next(eval_ctx, &iter, &sce_iter, 1, &base, &ob)) {
 		if (ob->type == OB_MBALL) {
 			if (ob != active_object) {
@@ -537,23 +534,17 @@ Object *BKE_mball_basis_find(Scene *scene, Object *basis)
 
 	BLI_split_name_num(basisname, &basisnr, basis->id.name + 2, '.');
 
-	/* XXX recursion check, see scene.c, just too simple code this BKE_scene_base_iter_next() */
-	if (F_ERROR == BKE_scene_base_iter_next(eval_ctx, &iter, &sce_iter, 0, NULL, NULL))
-		return NULL;
-
+	BKE_scene_base_iter_next(eval_ctx, &iter, &sce_iter, 0, NULL, NULL);
 	while (BKE_scene_base_iter_next(eval_ctx, &iter, &sce_iter, 1, &base, &ob)) {
-		if (ob->type == OB_MBALL) {
+		if ((ob->type == OB_MBALL) && !(base->flag & OB_FROMDUPLI)) {
 			if (ob != bob) {
 				BLI_split_name_num(obname, &obnr, ob->id.name + 2, '.');
 
-				/* object ob has to be in same "group" ... it means, that it has to have
-				 * same base of its name */
+				/* object ob has to be in same "group" ... it means, that it has to have same base of its name */
 				if (strcmp(obname, basisname) == 0) {
 					if (obnr < basisnr) {
-						if (!(ob->flag & OB_FROMDUPLI)) {
-							basis = ob;
-							basisnr = obnr;
-						}
+						basis = ob;
+						basisnr = obnr;
 					}
 				}
 			}
@@ -2227,10 +2218,7 @@ static void mball_count(EvaluationContext *eval_ctx, PROCESS *process, Scene *sc
 	BLI_split_name_num(basisname, &basisnr, basis->id.name + 2, '.');
 	process->totelem = 0;
 
-	/* XXX recursion check, see scene.c, just too simple code this BKE_scene_base_iter_next() */
-	if (F_ERROR == BKE_scene_base_iter_next(eval_ctx, &iter, &sce_iter, 0, NULL, NULL))
-		return;
-
+	BKE_scene_base_iter_next(eval_ctx, &iter, &sce_iter, 0, NULL, NULL);
 	while (BKE_scene_base_iter_next(eval_ctx, &iter, &sce_iter, 1, &base, &ob)) {
 		if (ob->type == OB_MBALL) {
 			if (ob == bob) {
@@ -2280,7 +2268,7 @@ void BKE_mball_polygonize(EvaluationContext *eval_ctx, Scene *scene, Object *ob,
 	mball_count(eval_ctx, &process, scene, ob);
 
 	if (process.totelem == 0) return;
-	if ((eval_ctx->for_render == false) && (mb->flag == MB_UPDATE_NEVER)) return;
+	if ((eval_ctx->mode != DAG_EVAL_RENDER) && (mb->flag == MB_UPDATE_NEVER)) return;
 	if ((G.moving & (G_TRANSFORM_OBJ | G_TRANSFORM_EDIT)) && mb->flag == MB_UPDATE_FAST) return;
 
 	process.thresh = mb->thresh;
@@ -2318,7 +2306,7 @@ void BKE_mball_polygonize(EvaluationContext *eval_ctx, Scene *scene, Object *ob,
 	}
 
 	/* width is size per polygonize cube */
-	if (eval_ctx->for_render) {
+	if (eval_ctx->mode == DAG_EVAL_RENDER) {
 		width = mb->rendersize;
 	}
 	else {
@@ -2361,8 +2349,8 @@ void BKE_mball_polygonize(EvaluationContext *eval_ctx, Scene *scene, Object *ob,
 		process.indices = NULL;
 
 		a = process.vertices.count;
-		dl->verts = co = MEM_mallocN(sizeof(float) * 3 * a, "mballverts");
-		dl->nors = no = MEM_mallocN(sizeof(float) * 3 * a, "mballnors");
+		dl->verts = co = MEM_mallocN(sizeof(float[3]) * a, "mballverts");
+		dl->nors = no = MEM_mallocN(sizeof(float[3]) * a, "mballnors");
 
 		for (a = 0; a < process.vertices.count; ptr++, a++, no += 3, co += 3) {
 			copy_v3_v3(co, ptr->co);

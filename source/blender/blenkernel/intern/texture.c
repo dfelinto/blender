@@ -145,12 +145,12 @@ void init_tex_mapping(TexMapping *texmap)
 		if (texmap->type == TEXMAP_TYPE_TEXTURE) {
 			/* to transform a texture, the inverse transform needs
 			 * to be applied to the texture coordinate */
-			mul_serie_m4(texmap->mat, tmat, rmat, smat, 0, 0, 0, 0, 0);
+			mul_m4_series(texmap->mat, tmat, rmat, smat);
 			invert_m4(texmap->mat);
 		}
 		else if (texmap->type == TEXMAP_TYPE_POINT) {
 			/* forward transform */
-			mul_serie_m4(texmap->mat, tmat, rmat, smat, 0, 0, 0, 0, 0);
+			mul_m4_series(texmap->mat, tmat, rmat, smat);
 		}
 		else if (texmap->type == TEXMAP_TYPE_VECTOR) {
 			/* no translation for vectors */
@@ -474,7 +474,8 @@ void BKE_texture_free(Tex *tex)
 
 void default_tex(Tex *tex)
 {
-	tex->type = TEX_CLOUDS;
+	tex->type = TEX_IMAGE;
+	tex->ima = NULL;
 	tex->stype = 0;
 	tex->flag = TEX_CHECKER_ODD;
 	tex->imaflag = TEX_INTERPOL | TEX_MIPMAP | TEX_USEALPHA;
@@ -592,7 +593,7 @@ Tex *add_texture(Main *bmain, const char *name)
 
 void default_mtex(MTex *mtex)
 {
-	mtex->texco = TEXCO_ORCO;
+	mtex->texco = TEXCO_UV;
 	mtex->mapto = MAP_COL;
 	mtex->object = NULL;
 	mtex->projx = PROJ_X;

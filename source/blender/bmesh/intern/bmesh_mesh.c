@@ -641,11 +641,13 @@ static void bm_mesh_loops_calc_normals(BMesh *bm, const float (*vcos)[3], const 
 						copy_v3_v3(nor, lnor);
 					}
 				}
+				else {
+					/* We still have to clear the stack! */
+					while (BLI_SMALLSTACK_POP(normal));
+				}
 			}
 		} while ((l_curr = l_curr->next) != l_first);
 	}
-
-	BLI_SMALLSTACK_FREE(normal);
 }
 
 #if 0  /* Unused currently */
@@ -800,7 +802,7 @@ void BM_mesh_elem_index_ensure(BMesh *bm, const char htype)
 	}
 
 	/* skip if we only need to operate on one element */
-#pragma omp parallel sections if ((!ELEM5(htype_needed, BM_VERT, BM_EDGE, BM_FACE, BM_LOOP, BM_FACE | BM_LOOP)) && \
+#pragma omp parallel sections if ((!ELEM(htype_needed, BM_VERT, BM_EDGE, BM_FACE, BM_LOOP, BM_FACE | BM_LOOP)) && \
 	                              (bm->totvert + bm->totedge + bm->totface >= BM_OMP_LIMIT))
 	{
 #pragma omp section
@@ -1054,7 +1056,7 @@ void BM_mesh_elem_table_ensure(BMesh *bm, const char htype)
 	}
 
 	/* skip if we only need to operate on one element */
-#pragma omp parallel sections if ((!ELEM3(htype_needed, BM_VERT, BM_EDGE, BM_FACE)) && \
+#pragma omp parallel sections if ((!ELEM(htype_needed, BM_VERT, BM_EDGE, BM_FACE)) && \
 	                              (bm->totvert + bm->totedge + bm->totface >= BM_OMP_LIMIT))
 	{
 #pragma omp section

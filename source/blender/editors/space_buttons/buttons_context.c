@@ -55,6 +55,7 @@
 #include "BKE_particle.h"
 #include "BKE_screen.h"
 #include "BKE_texture.h"
+#include "BKE_linestyle.h"
 
 #include "RNA_access.h"
 
@@ -153,7 +154,7 @@ static int buttons_context_path_linestyle(ButsContextPath *path)
 	/* if we have a scene, use the lineset's linestyle */
 	else if (buttons_context_path_scene(path)) {
 		scene = path->ptr[path->len - 1].data;
-		linestyle = CTX_data_linestyle_from_scene(scene);
+		linestyle = BKE_linestyle_active_from_scene(scene);
 		if (linestyle) {
 			RNA_id_pointer_create(&linestyle->id, &path->ptr[path->len]);
 			path->len++;
@@ -199,7 +200,7 @@ static int buttons_context_path_data(ButsContextPath *path, int type)
 
 	/* if we already have a data, we're done */
 	if (RNA_struct_is_a(ptr->type, &RNA_Mesh) && (type == -1 || type == OB_MESH)) return 1;
-	else if (RNA_struct_is_a(ptr->type, &RNA_Curve) && (type == -1 || ELEM3(type, OB_CURVE, OB_SURF, OB_FONT))) return 1;
+	else if (RNA_struct_is_a(ptr->type, &RNA_Curve) && (type == -1 || ELEM(type, OB_CURVE, OB_SURF, OB_FONT))) return 1;
 	else if (RNA_struct_is_a(ptr->type, &RNA_Armature) && (type == -1 || type == OB_ARMATURE)) return 1;
 	else if (RNA_struct_is_a(ptr->type, &RNA_MetaBall) && (type == -1 || type == OB_MBALL)) return 1;
 	else if (RNA_struct_is_a(ptr->type, &RNA_Lattice) && (type == -1 || type == OB_LATTICE)) return 1;
@@ -229,7 +230,7 @@ static int buttons_context_path_modifier(ButsContextPath *path)
 	if (buttons_context_path_object(path)) {
 		ob = path->ptr[path->len - 1].data;
 
-		if (ob && ELEM5(ob->type, OB_MESH, OB_CURVE, OB_FONT, OB_SURF, OB_LATTICE))
+		if (ob && ELEM(ob->type, OB_MESH, OB_CURVE, OB_FONT, OB_SURF, OB_LATTICE))
 			return 1;
 	}
 
@@ -637,7 +638,7 @@ static int buttons_shading_context(const bContext *C, int mainb)
 {
 	Object *ob = CTX_data_active_object(C);
 
-	if (ELEM3(mainb, BCONTEXT_MATERIAL, BCONTEXT_WORLD, BCONTEXT_TEXTURE))
+	if (ELEM(mainb, BCONTEXT_MATERIAL, BCONTEXT_WORLD, BCONTEXT_TEXTURE))
 		return 1;
 	if (mainb == BCONTEXT_DATA && ob && ELEM(ob->type, OB_LAMP, OB_CAMERA))
 		return 1;
@@ -1119,7 +1120,7 @@ void buttons_context_draw(const bContext *C, uiLayout *layout)
 			name = RNA_struct_name_get_alloc(ptr, namebuf, sizeof(namebuf), NULL);
 
 			if (name) {
-				if (!ELEM3(sbuts->mainb, BCONTEXT_RENDER, BCONTEXT_SCENE, BCONTEXT_RENDER_LAYER) && ptr->type == &RNA_Scene)
+				if (!ELEM(sbuts->mainb, BCONTEXT_RENDER, BCONTEXT_SCENE, BCONTEXT_RENDER_LAYER) && ptr->type == &RNA_Scene)
 					uiItemLDrag(row, ptr, "", icon);  /* save some space */
 				else
 					uiItemLDrag(row, ptr, name, icon);

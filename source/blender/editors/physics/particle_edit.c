@@ -616,7 +616,10 @@ static void foreach_mouse_hit_key(PEData *data, ForKeyMatFunc func, int selected
 	ParticleSystemModifierData *psmd = NULL;
 	ParticleEditSettings *pset= PE_settings(data->scene);
 	POINT_P; KEY_K;
-	float mat[4][4] = MAT4_UNITY, imat[4][4] = MAT4_UNITY;
+	float mat[4][4], imat[4][4];
+
+	unit_m4(mat);
+	unit_m4(imat);
 
 	if (edit->psys)
 		psmd= psys_get_modifier(data->ob, edit->psys);
@@ -1710,10 +1713,12 @@ int PE_lasso_select(bContext *C, const int mcords[][2], const short moves, bool 
 	ParticleSystem *psys = edit->psys;
 	ParticleSystemModifierData *psmd = psys_get_modifier(ob, psys);
 	POINT_P; KEY_K;
-	float co[3], mat[4][4] = MAT4_UNITY;
+	float co[3], mat[4][4];
 	int screen_co[2];
 
 	PEData data;
+
+	unit_m4(mat);
 
 	if (!PE_start_edit(edit))
 		return OPERATOR_CANCELLED;
@@ -3482,7 +3487,7 @@ static int brush_add(PEData *data, short number)
 			}
 			
 			pa->size= 1.0f;
-			initialize_particle(pa);
+			initialize_particle(&sim, pa);
 			reset_particle(&sim, pa, 0.0, 1.0);
 			point->flag |= PEP_EDIT_RECALC;
 			if (pe_x_mirror(ob))

@@ -44,6 +44,7 @@
 
 #include "BKE_context.h"
 #include "BKE_icons.h"
+#include "BKE_library.h"
 #include "BKE_main.h"
 #include "BKE_object.h"
 #include "BKE_scene.h"
@@ -392,7 +393,16 @@ static SpaceLink *view3d_new(const bContext *C)
 static void view3d_free(SpaceLink *sl)
 {
 	View3D *vd = (View3D *) sl;
+	BGpic *bgpic;
 
+	for (bgpic = vd->bgpicbase.first; bgpic; bgpic = bgpic->next) {
+		if (bgpic->source == V3D_BGPIC_IMAGE) {
+			id_us_min((ID *)bgpic->ima);
+		}
+		else if (bgpic->source == V3D_BGPIC_MOVIE) {
+			id_us_min((ID *)bgpic->clip);
+		}
+	}
 	BLI_freelistN(&vd->bgpicbase);
 
 	if (vd->localvd) MEM_freeN(vd->localvd);
@@ -419,6 +429,7 @@ static SpaceLink *view3d_duplicate(SpaceLink *sl)
 {
 	View3D *v3do = (View3D *)sl;
 	View3D *v3dn = MEM_dupallocN(sl);
+	BGpic *bgpic;
 	
 	/* clear or remove stuff from old */
 	
@@ -436,8 +447,16 @@ static SpaceLink *view3d_duplicate(SpaceLink *sl)
 	/* copy or clear inside new stuff */
 
 	v3dn->defmaterial = NULL;
-	
+
 	BLI_duplicatelist(&v3dn->bgpicbase, &v3do->bgpicbase);
+	for (bgpic = v3dn->bgpicbase.first; bgpic; bgpic = bgpic->next) {
+		if (bgpic->source == V3D_BGPIC_IMAGE) {
+			id_us_plus((ID *)bgpic->ima);
+		}
+		else if (bgpic->source == V3D_BGPIC_MOVIE) {
+			id_us_plus((ID *)bgpic->clip);
+		}
+	}
 
 	v3dn->properties_storage = NULL;
 	
@@ -465,6 +484,12 @@ static void view3d_main_area_init(wmWindowManager *wm, ARegion *ar)
 	WM_event_add_keymap_handler(&ar->handlers, keymap);
 	
 	keymap = WM_keymap_find(wm->defaultconf, "Object Mode", 0, 0);
+	WM_event_add_keymap_handler(&ar->handlers, keymap);
+
+	keymap = WM_keymap_find(wm->defaultconf, "Paint Curve", 0, 0);
+	WM_event_add_keymap_handler(&ar->handlers, keymap);
+
+	keymap = WM_keymap_find(wm->defaultconf, "Curve", 0, 0);
 	WM_event_add_keymap_handler(&ar->handlers, keymap);
 
 	keymap = WM_keymap_find(wm->defaultconf, "Image Paint", 0, 0);
@@ -657,7 +682,7 @@ static void view3d_dropboxes(void)
 	WM_dropbox_add(lb, "MESH_OT_drop_named_image", view3d_ima_mesh_drop_poll, view3d_id_path_drop_copy);
 	WM_dropbox_add(lb, "OBJECT_OT_drop_named_image", view3d_ima_empty_drop_poll, view3d_id_path_drop_copy);
 	WM_dropbox_add(lb, "VIEW3D_OT_background_image_add", view3d_ima_bg_drop_poll, view3d_id_path_drop_copy);
-	WM_dropbox_add(lb, "OBJECT_OT_group_instance_add", view3d_group_drop_poll, view3d_group_drop_copy);
+	WM_dropbox_add(lb, "OBJECT_OT_group_instance_add", view3d_group_drop_poll, view3d_group_drop_copy);	
 }
 
 
@@ -763,7 +788,7 @@ static void view3d_main_area_listener(bScreen *sc, ScrArea *sa, ARegion *ar, wmN
 					break;
 				case ND_NLA:
 				case ND_KEYFRAME:
-					if (ELEM3(wmn->action, NA_EDITED, NA_ADDED, NA_REMOVED))
+					if (ELEM(wmn->action, NA_EDITED, NA_ADDED, NA_REMOVED))
 						ED_region_tag_redraw(ar);
 					break;
 				case ND_ANIMCHAN:
@@ -844,14 +869,18 @@ static void view3d_main_area_listener(bScreen *sc, ScrArea *sa, ARegion *ar, wmN
 			switch (wmn->data) {
 				case ND_SHADING:
 				case ND_NODES:
+				{
+					Object *ob = OBACT;
 					if ((v3d->drawtype == OB_MATERIAL) ||
+					    (ob && (ob->mode == OB_MODE_TEXTURE_PAINT)) ||
 					    (v3d->drawtype == OB_TEXTURE &&
-					         (scene->gm.matmode == GAME_MAT_GLSL ||
-					          BKE_scene_use_new_shading_nodes(scene))))
+					     (scene->gm.matmode == GAME_MAT_GLSL ||
+					      BKE_scene_use_new_shading_nodes(scene))))
 					{
 						ED_region_tag_redraw(ar);
 					}
 					break;
+				}
 				case ND_SHADING_DRAW:
 				case ND_SHADING_LINKS:
 					ED_region_tag_redraw(ar);
@@ -889,7 +918,7 @@ static void view3d_main_area_listener(bScreen *sc, ScrArea *sa, ARegion *ar, wmN
 			ED_region_tag_redraw(ar);
 			break;
 		case NC_MOVIECLIP:
-			if (wmn->data == ND_DISPLAY)
+			if (wmn->data == ND_DISPLAY || wmn->action == NA_EDITED)
 				ED_region_tag_redraw(ar);
 			break;
 		case NC_SPACE:
@@ -1014,7 +1043,7 @@ static void view3d_buttons_area_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa
 					break;
 				case ND_NLA:
 				case ND_KEYFRAME:
-					if (ELEM3(wmn->action, NA_EDITED, NA_ADDED, NA_REMOVED))
+					if (ELEM(wmn->action, NA_EDITED, NA_ADDED, NA_REMOVED))
 						ED_region_tag_redraw(ar);
 					break;
 			}
@@ -1081,6 +1110,11 @@ static void view3d_buttons_area_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa
 			break;
 		case NC_GPENCIL:
 			if (wmn->data == ND_DATA || wmn->action == NA_EDITED)
+				ED_region_tag_redraw(ar);
+			break;
+		case NC_IMAGE:
+			/* Update for the image layers in texture paint. */
+			if (wmn->action == NA_EDITED)
 				ED_region_tag_redraw(ar);
 			break;
 	}

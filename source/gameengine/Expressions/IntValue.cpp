@@ -15,6 +15,8 @@
 *
 */
 
+#include <stdio.h>
+
 #include "IntValue.h"
 #include "ErrorValue.h"
 #include "FloatValue.h"
@@ -294,6 +296,13 @@ cInt CIntValue::GetInt()
 double CIntValue::GetNumber()
 {
 	return (double) m_int;
+}
+
+
+
+int CIntValue::GetValueType()
+{
+	return VALUE_INT_TYPE;
 }
 
 

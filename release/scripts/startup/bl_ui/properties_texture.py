@@ -227,7 +227,7 @@ class TEXTURE_PT_context_texture(TextureButtonsPanel, Panel):
 
 class TEXTURE_PT_preview(TextureButtonsPanel, Panel):
     bl_label = "Preview"
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_GAME'}
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_GAME', 'CYCLES'}
 
     def draw(self, context):
         layout = self.layout
@@ -1171,7 +1171,6 @@ class TEXTURE_PT_influence(TextureSlotPanel, Panel):
             factor_but(col, "use_map_color_diffuse", "diffuse_color_factor", "Color")
             col = split.column()
             factor_but(col, "use_map_alpha", "alpha_factor", "Alpha")
-
 
         layout.separator()
 

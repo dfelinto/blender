@@ -68,6 +68,7 @@ typedef unsigned long uint_ptr;
 #include "SCA_IController.h"
 #include "NG_NetworkScene.h" //Needed for sendMessage()
 #include "KX_ObstacleSimulation.h"
+#include "KX_Scene.h"
 
 #include "BKE_object.h"
 
@@ -928,6 +929,27 @@ KX_GameObject::SetVisible(
 	}
 }
 
+bool KX_GameObject::GetCulled()
+{
+	// If we're set to not cull, double-check with
+	// the mesh slots first. This is kind of nasty, but
+	// it allows us to get proper culling information.
+	if (!m_bCulled)
+	{
+		SG_QList::iterator<RAS_MeshSlot> mit(m_meshSlots);
+		for (mit.begin(); !mit.end(); ++mit)
+		{
+			if ((*mit)->m_bCulled)
+			{
+				m_bCulled = true;
+				break;
+			}
+		}
+	}
+
+	return m_bCulled;
+}
+
 static void setOccluder_recursive(SG_Node* node, bool v)
 {
 	NodeList& children = node->GetSGChildren();
@@ -956,6 +978,44 @@ KX_GameObject::SetOccluder(
 		if (recursive)
 			setOccluder_recursive(GetSGNode(), v);
 	}
+}
+
+static void setDebug_recursive(SG_Node *node, bool debug)
+{
+	NodeList& children = node->GetSGChildren();
+	KX_Scene *scene = KX_GetActiveScene();
+
+	for (NodeList::iterator childit = children.begin();!(childit==children.end());++childit) {
+		SG_Node *childnode = (*childit);
+		KX_GameObject *clientgameobj = static_cast<KX_GameObject*>( (*childit)->GetSGClientObject());
+		if (clientgameobj != NULL) {
+			if (debug) {
+				if (!scene->ObjectInDebugList(clientgameobj))
+					scene->AddObjectDebugProperties(clientgameobj);
+			}
+			else
+				scene->RemoveObjectDebugProperties(clientgameobj);
+		}
+
+		/* if the childobj is NULL then this may be an inverse parent link
+		 * so a non recursive search should still look down this node. */
+		setDebug_recursive(childnode, debug);
+	}
+}
+
+void KX_GameObject::SetUseDebugProperties( bool debug, bool recursive )
+{
+	KX_Scene *scene = KX_GetActiveScene();
+
+	if (debug) {
+		if (!scene->ObjectInDebugList(this))
+			scene->AddObjectDebugProperties(this);
+	}
+	else
+		scene->RemoveObjectDebugProperties(this);
+
+	if (recursive)
+		setDebug_recursive(GetSGNode(), debug);
 }
 
 void
@@ -1807,6 +1867,7 @@ PyMethodDef KX_GameObject::Methods[] = {
 	KX_PYMETHODTABLE_O(KX_GameObject, getDistanceTo),
 	KX_PYMETHODTABLE_O(KX_GameObject, getVectTo),
 	KX_PYMETHODTABLE(KX_GameObject, sendMessage),
+	KX_PYMETHODTABLE(KX_GameObject, addDebugProperty),
 
 	KX_PYMETHODTABLE_KEYWORDS(KX_GameObject, playAction),
 	KX_PYMETHODTABLE(KX_GameObject, stopAction),
@@ -1859,6 +1920,8 @@ PyAttributeDef KX_GameObject::Attributes[] = {
 	KX_PYATTRIBUTE_RO_FUNCTION("childrenRecursive",	KX_GameObject, pyattr_get_children_recursive),
 	KX_PYATTRIBUTE_RO_FUNCTION("attrDict",	KX_GameObject, pyattr_get_attrDict),
 	KX_PYATTRIBUTE_RW_FUNCTION("color", KX_GameObject, pyattr_get_obcolor, pyattr_set_obcolor),
+	KX_PYATTRIBUTE_RW_FUNCTION("debug",	KX_GameObject, pyattr_get_debug, pyattr_set_debug),
+	KX_PYATTRIBUTE_RW_FUNCTION("debugRecursive",	KX_GameObject, pyattr_get_debugRecursive, pyattr_set_debugRecursive),
 	
 	/* experimental, don't rely on these yet */
 	KX_PYATTRIBUTE_RO_FUNCTION("sensors",		KX_GameObject, pyattr_get_sensors),
@@ -2167,8 +2230,14 @@ int KX_GameObject::pyattr_set_collisionCallbacks(void *self_v, const KX_PYATTRIB
 		return PY_SET_ATTR_FAIL;
 	}
 
-	Py_XDECREF(self->m_collisionCallbacks);
+	if (self->m_collisionCallbacks == NULL) {
+		self->RegisterCollisionCallbacks();
+	} else {
+		Py_DECREF(self->m_collisionCallbacks);
+	}
+
 	Py_INCREF(value);
+
 
 	self->m_collisionCallbacks = value;
 
@@ -2769,6 +2838,52 @@ PyObject *KX_GameObject::pyattr_get_attrDict(void *self_v, const KX_PYATTRIBUTE_
 	return self->m_attr_dict;
 }
 
+PyObject *KX_GameObject::pyattr_get_debug(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef)
+{
+	KX_Scene *scene = KX_GetActiveScene();
+	KX_GameObject *self = static_cast<KX_GameObject*>(self_v);
+
+	return PyBool_FromLong(scene->ObjectInDebugList(self));
+}
+
+int KX_GameObject::pyattr_set_debug(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef, PyObject *value)
+{
+	KX_GameObject *self = static_cast<KX_GameObject*>(self_v);
+	int param = PyObject_IsTrue(value);
+
+	if (param == -1) {
+		PyErr_SetString(PyExc_AttributeError, "gameOb.debug = bool: KX_GameObject, expected True or False");
+		return PY_SET_ATTR_FAIL;
+	}
+
+	self->SetUseDebugProperties(param, false);
+
+	return PY_SET_ATTR_SUCCESS;
+}
+
+PyObject *KX_GameObject::pyattr_get_debugRecursive(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef)
+{
+	KX_Scene *scene = KX_GetActiveScene();
+	KX_GameObject *self = static_cast<KX_GameObject*>(self_v);
+
+	return PyBool_FromLong(scene->ObjectInDebugList(self));
+}
+
+int KX_GameObject::pyattr_set_debugRecursive(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef, PyObject *value)
+{
+	KX_GameObject *self = static_cast<KX_GameObject*>(self_v);
+	int param = PyObject_IsTrue(value);
+
+	if (param == -1) {
+		PyErr_SetString(PyExc_AttributeError, "gameOb.debugRecursive = bool: KX_GameObject, expected True or False");
+		return PY_SET_ATTR_FAIL;
+	}
+
+	self->SetUseDebugProperties(param, true);
+
+	return PY_SET_ATTR_SUCCESS;
+}
+
 PyObject *KX_GameObject::PyApplyForce(PyObject *args)
 {
 	int local = 0;
@@ -3007,19 +3122,20 @@ PyObject *KX_GameObject::PyApplyImpulse(PyObject *args)
 {
 	PyObject *pyattach;
 	PyObject *pyimpulse;
+	int local = 0;
 	
 	if (!m_pPhysicsController)	{
 		PyErr_SetString(PyExc_RuntimeError, "This object has no physics controller");
 		return NULL;
 	}
 	
-	if (PyArg_ParseTuple(args, "OO:applyImpulse", &pyattach, &pyimpulse))
+	if (PyArg_ParseTuple(args, "OO|i:applyImpulse", &pyattach, &pyimpulse, &local))
 	{
 		MT_Point3  attach;
 		MT_Vector3 impulse;
 		if (PyVecTo(pyattach, attach) && PyVecTo(pyimpulse, impulse))
 		{
-			m_pPhysicsController->ApplyImpulse(attach, impulse);
+			m_pPhysicsController->ApplyImpulse(attach, impulse, (local!=0));
 			Py_RETURN_NONE;
 		}
 
@@ -3586,6 +3702,29 @@ KX_PYMETHODDEF_DOC(KX_GameObject, isPlayingAction,
 	layer_check(layer, "isPlayingAction");
 
 	return PyBool_FromLong(!IsActionDone(layer));
+}
+
+
+KX_PYMETHODDEF_DOC(KX_GameObject, addDebugProperty,
+"addDebugProperty(name, visible=1)\n"
+"Added or remove a debug property to the debug list.\n")
+{
+	KX_Scene *scene = KX_GetActiveScene();
+	char *name;
+	int visible = 1;
+
+	if (!PyArg_ParseTuple(args,"s|i:debugProperty", &name , &visible))
+		return NULL;
+
+	if (visible) {
+		if (!scene->PropertyInDebugList(this, name))
+			scene->AddDebugProperty(this, name);
+	}
+	else {
+		scene->RemoveDebugProperty(this, name);
+	}
+
+	Py_RETURN_NONE;
 }
 
 

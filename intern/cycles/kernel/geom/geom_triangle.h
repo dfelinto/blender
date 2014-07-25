@@ -116,6 +116,20 @@ ccl_device_inline float3 triangle_refine_subsurface(KernelGlobals *kg, ShaderDat
 #endif
 }
 
+/* normal on triangle  */
+ccl_device_inline float3 triangle_normal(KernelGlobals *kg, ShaderData *sd)
+{
+	/* load triangle vertices */
+	float3 tri_vindex = float4_to_float3(kernel_tex_fetch(__tri_vindex, sd->prim));
+
+	float3 v0 = float4_to_float3(kernel_tex_fetch(__tri_verts, __float_as_int(tri_vindex.x)));
+	float3 v1 = float4_to_float3(kernel_tex_fetch(__tri_verts, __float_as_int(tri_vindex.y)));
+	float3 v2 = float4_to_float3(kernel_tex_fetch(__tri_verts, __float_as_int(tri_vindex.z)));
+	
+	/* return normal */
+	return normalize(cross(v1 - v0, v2 - v0));
+}
+
 /* point and normal on triangle  */
 ccl_device_inline void triangle_point_normal(KernelGlobals *kg, int prim, float u, float v, float3 *P, float3 *Ng, int *shader)
 {
@@ -130,9 +144,11 @@ ccl_device_inline void triangle_point_normal(KernelGlobals *kg, int prim, float 
 	float t = 1.0f - u - v;
 	*P = (u*v0 + v*v1 + t*v2);
 
-	float4 Nm = kernel_tex_fetch(__tri_normal, prim);
-	*Ng = make_float3(Nm.x, Nm.y, Nm.z);
-	*shader = __float_as_int(Nm.w);
+	/* compute normal */
+	*Ng = normalize(cross(v1 - v0, v2 - v0));
+
+	/* shader`*/
+	*shader = __float_as_int(kernel_tex_fetch(__tri_shader, prim));
 }
 
 /* Triangle vertex locations */
@@ -243,11 +259,20 @@ ccl_device float3 triangle_attribute_float3(KernelGlobals *kg, const ShaderData 
 
 		return sd->u*f0 + sd->v*f1 + (1.0f - sd->u - sd->v)*f2;
 	}
-	else if(elem == ATTR_ELEMENT_CORNER) {
+	else if(elem == ATTR_ELEMENT_CORNER || elem == ATTR_ELEMENT_CORNER_BYTE) {
 		int tri = offset + sd->prim*3;
-		float3 f0 = float4_to_float3(kernel_tex_fetch(__attributes_float3, tri + 0));
-		float3 f1 = float4_to_float3(kernel_tex_fetch(__attributes_float3, tri + 1));
-		float3 f2 = float4_to_float3(kernel_tex_fetch(__attributes_float3, tri + 2));
+		float3 f0, f1, f2;
+
+		if(elem == ATTR_ELEMENT_CORNER) {
+			f0 = float4_to_float3(kernel_tex_fetch(__attributes_float3, tri + 0));
+			f1 = float4_to_float3(kernel_tex_fetch(__attributes_float3, tri + 1));
+			f2 = float4_to_float3(kernel_tex_fetch(__attributes_float3, tri + 2));
+		}
+		else {
+			f0 = color_byte_to_float(kernel_tex_fetch(__attributes_uchar4, tri + 0));
+			f1 = color_byte_to_float(kernel_tex_fetch(__attributes_uchar4, tri + 1));
+			f2 = color_byte_to_float(kernel_tex_fetch(__attributes_uchar4, tri + 2));
+		}
 
 #ifdef __RAY_DIFFERENTIALS__
 		if(dx) *dx = sd->du.dx*f0 + sd->dv.dx*f1 - (sd->du.dx + sd->dv.dx)*f2;

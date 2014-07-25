@@ -894,14 +894,14 @@ void uiTemplateImageSettings(uiLayout *layout, PointerRNA *imfptr, int color_man
 	uiItemR(sub, imfptr, "color_mode", UI_ITEM_R_EXPAND, IFACE_("Color"), ICON_NONE);
 
 	/* only display depth setting if multiple depths can be used */
-	if ((ELEM7(depth_ok,
-	           R_IMF_CHAN_DEPTH_1,
-	           R_IMF_CHAN_DEPTH_8,
-	           R_IMF_CHAN_DEPTH_10,
-	           R_IMF_CHAN_DEPTH_12,
-	           R_IMF_CHAN_DEPTH_16,
-	           R_IMF_CHAN_DEPTH_24,
-	           R_IMF_CHAN_DEPTH_32)) == 0)
+	if ((ELEM(depth_ok,
+	          R_IMF_CHAN_DEPTH_1,
+	          R_IMF_CHAN_DEPTH_8,
+	          R_IMF_CHAN_DEPTH_10,
+	          R_IMF_CHAN_DEPTH_12,
+	          R_IMF_CHAN_DEPTH_16,
+	          R_IMF_CHAN_DEPTH_24,
+	          R_IMF_CHAN_DEPTH_32)) == 0)
 	{
 		row = uiLayoutRow(col, false);
 
@@ -917,7 +917,7 @@ void uiTemplateImageSettings(uiLayout *layout, PointerRNA *imfptr, int color_man
 		uiItemR(col, imfptr, "compression", 0, NULL, ICON_NONE);
 	}
 
-	if (ELEM3(imf->imtype, R_IMF_IMTYPE_OPENEXR, R_IMF_IMTYPE_MULTILAYER, R_IMF_IMTYPE_MULTIVIEW)) {
+	if (ELEM(imf->imtype, R_IMF_IMTYPE_OPENEXR, R_IMF_IMTYPE_MULTILAYER, R_IMF_IMTYPE_MULTIVIEW)) {
 		uiItemR(col, imfptr, "exr_codec", 0, NULL, ICON_NONE);
 	}
 	
@@ -998,8 +998,8 @@ void image_buttons_register(ARegionType *art)
 	strcpy(pt->idname, "IMAGE_PT_gpencil");
 	strcpy(pt->label, N_("Grease Pencil"));
 	strcpy(pt->translation_context, BLF_I18NCONTEXT_DEFAULT_BPYRNA);
-	pt->draw_header = gpencil_panel_standard_header;
-	pt->draw = gpencil_panel_standard;
+	pt->draw_header = ED_gpencil_panel_standard_header;
+	pt->draw = ED_gpencil_panel_standard;
 	BLI_strncpy(pt->category, category, BLI_strlen_utf8(category));
 	BLI_addtail(&art->paneltypes, pt);
 }

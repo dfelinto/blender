@@ -212,6 +212,10 @@ bool BKE_mesh_center_median(struct Mesh *me, float cent[3]);
 bool BKE_mesh_center_bounds(struct Mesh *me, float cent[3]);
 bool BKE_mesh_center_centroid(struct Mesh *me, float cent[3]);
 
+void BKE_mesh_calc_volume(struct MVert *mverts, int numVerts,
+                          struct MFace *mfaces, int numFaces,
+                          float *r_vol, float *r_com);
+
 /* tessface */
 void BKE_mesh_loops_to_mface_corners(
         struct CustomData *fdata, struct CustomData *ldata,
@@ -283,6 +287,7 @@ void BKE_mesh_calc_relative_deform(
 
 int BKE_mesh_validate(struct Mesh *me, const int do_verbose);
 void BKE_mesh_cd_validate(struct Mesh *me);
+int BKE_mesh_validate_material_indices(struct Mesh *me);
 
 bool BKE_mesh_validate_arrays(
         struct Mesh *me,

@@ -29,7 +29,6 @@
 #include "kernel_accumulate.h"
 #include "kernel_shader.h"
 #include "kernel_light.h"
-#include "kernel_emission.h"
 #include "kernel_passes.h"
 
 #ifdef __SUBSURFACE__
@@ -42,177 +41,11 @@
 
 #include "kernel_path_state.h"
 #include "kernel_shadow.h"
+#include "kernel_emission.h"
+#include "kernel_path_surface.h"
+#include "kernel_path_volume.h"
 
 CCL_NAMESPACE_BEGIN
-
-#ifdef __VOLUME__
-
-ccl_device_inline bool kernel_path_integrate_scatter_lighting(KernelGlobals *kg, RNG *rng,
-	ShaderData *sd, float3 *throughput, PathState *state, PathRadiance *L, Ray *ray,
-	float num_samples_adjust)
-{
-#ifdef __EMISSION__
-	if(kernel_data.integrator.use_direct_light) {
-		/* sample illumination from lights to find path contribution */
-		if(sd->flag & SD_BSDF_HAS_EVAL) {
-			float light_t = path_state_rng_1D(kg, rng, state, PRNG_LIGHT);
-			float light_u, light_v;
-			path_state_rng_2D(kg, rng, state, PRNG_LIGHT_U, &light_u, &light_v);
-
-			Ray light_ray;
-			BsdfEval L_light;
-			bool is_lamp;
-
-#ifdef __OBJECT_MOTION__
-			light_ray.time = sd->time;
-#endif
-
-			if(direct_emission(kg, sd, LAMP_NONE, light_t, light_u, light_v, &light_ray, &L_light, &is_lamp, state->bounce, state->transparent_bounce)) {
-				/* trace shadow ray */
-				float3 shadow;
-
-				if(!shadow_blocked(kg, state, &light_ray, &shadow)) {
-					/* accumulate */
-					path_radiance_accum_light(L, *throughput * num_samples_adjust, &L_light, shadow, 1.0f, state->bounce, is_lamp);
-				}
-			}
-		}
-	}
-#endif
-
-	/* sample phase function */
-	float phase_pdf;
-	BsdfEval phase_eval;
-	float3 phase_omega_in;
-	differential3 phase_domega_in;
-	float phase_u, phase_v;
-	path_state_rng_2D(kg, rng, state, PRNG_PHASE_U, &phase_u, &phase_v);
-	int label;
-
-	label = shader_volume_phase_sample(kg, sd, phase_u, phase_v, &phase_eval,
-		&phase_omega_in, &phase_domega_in, &phase_pdf);
-
-	if(phase_pdf == 0.0f || bsdf_eval_is_zero(&phase_eval))
-		return false;
-	
-	/* modify throughput */
-	path_radiance_bsdf_bounce(L, throughput, &phase_eval, phase_pdf, state->bounce, label);
-
-	/* set labels */
-	state->ray_pdf = phase_pdf;
-#ifdef __LAMP_MIS__
-	state->ray_t = 0.0f;
-#endif
-	state->min_ray_pdf = fminf(phase_pdf, state->min_ray_pdf);
-
-	/* update path state */
-	path_state_next(kg, state, label);
-
-	/* setup ray */
-	ray->P = sd->P;
-	ray->D = phase_omega_in;
-	ray->t = FLT_MAX;
-
-#ifdef __RAY_DIFFERENTIALS__
-	ray->dP = sd->dP;
-	ray->dD = phase_domega_in;
-#endif
-
-	return true;
-}
-
-#endif
-
-#if defined(__BRANCHED_PATH__) || defined(__SUBSURFACE__)
-
-ccl_device void kernel_branched_path_integrate_direct_lighting(KernelGlobals *kg, RNG *rng,
-	ShaderData *sd, PathState *state, float3 throughput, float num_samples_adjust, PathRadiance *L, bool sample_all_lights)
-{
-	/* sample illumination from lights to find path contribution */
-	if(sd->flag & SD_BSDF_HAS_EVAL) {
-		Ray light_ray;
-		BsdfEval L_light;
-		bool is_lamp;
-
-#ifdef __OBJECT_MOTION__
-		light_ray.time = sd->time;
-#endif
-
-		if(sample_all_lights) {
-			/* lamp sampling */
-			for(int i = 0; i < kernel_data.integrator.num_all_lights; i++) {
-				int num_samples = ceil_to_int(num_samples_adjust*light_select_num_samples(kg, i));
-				float num_samples_inv = num_samples_adjust/(num_samples*kernel_data.integrator.num_all_lights);
-				RNG lamp_rng = cmj_hash(*rng, i);
-
-				if(kernel_data.integrator.pdf_triangles != 0.0f)
-					num_samples_inv *= 0.5f;
-
-				for(int j = 0; j < num_samples; j++) {
-					float light_u, light_v;
-					path_branched_rng_2D(kg, &lamp_rng, state, j, num_samples, PRNG_LIGHT_U, &light_u, &light_v);
-
-					if(direct_emission(kg, sd, i, 0.0f, light_u, light_v, &light_ray, &L_light, &is_lamp, state->bounce, state->transparent_bounce)) {
-						/* trace shadow ray */
-						float3 shadow;
-
-						if(!shadow_blocked(kg, state, &light_ray, &shadow)) {
-							/* accumulate */
-							path_radiance_accum_light(L, throughput*num_samples_inv, &L_light, shadow, num_samples_inv, state->bounce, is_lamp);
-						}
-					}
-				}
-			}
-
-			/* mesh light sampling */
-			if(kernel_data.integrator.pdf_triangles != 0.0f) {
-				int num_samples = ceil_to_int(num_samples_adjust*kernel_data.integrator.mesh_light_samples);
-				float num_samples_inv = num_samples_adjust/num_samples;
-
-				if(kernel_data.integrator.num_all_lights)
-					num_samples_inv *= 0.5f;
-
-				for(int j = 0; j < num_samples; j++) {
-					float light_t = path_branched_rng_1D(kg, rng, state, j, num_samples, PRNG_LIGHT);
-					float light_u, light_v;
-					path_branched_rng_2D(kg, rng, state, j, num_samples, PRNG_LIGHT_U, &light_u, &light_v);
-
-					/* only sample triangle lights */
-					if(kernel_data.integrator.num_all_lights)
-						light_t = 0.5f*light_t;
-
-					if(direct_emission(kg, sd, LAMP_NONE, light_t, light_u, light_v, &light_ray, &L_light, &is_lamp, state->bounce, state->transparent_bounce)) {
-						/* trace shadow ray */
-						float3 shadow;
-
-						if(!shadow_blocked(kg, state, &light_ray, &shadow)) {
-							/* accumulate */
-							path_radiance_accum_light(L, throughput*num_samples_inv, &L_light, shadow, num_samples_inv, state->bounce, is_lamp);
-						}
-					}
-				}
-			}
-		}
-		else {
-			float light_t = path_state_rng_1D(kg, rng, state, PRNG_LIGHT);
-			float light_u, light_v;
-			path_state_rng_2D(kg, rng, state, PRNG_LIGHT_U, &light_u, &light_v);
-
-			/* sample random light */
-			if(direct_emission(kg, sd, LAMP_NONE, light_t, light_u, light_v, &light_ray, &L_light, &is_lamp, state->bounce, state->transparent_bounce)) {
-				/* trace shadow ray */
-				float3 shadow;
-
-				if(!shadow_blocked(kg, state, &light_ray, &shadow)) {
-					/* accumulate */
-					path_radiance_accum_light(L, throughput*num_samples_adjust, &L_light, shadow, num_samples_adjust, state->bounce, is_lamp);
-				}
-			}
-		}
-	}
-}
-
-#endif
 
 ccl_device void kernel_path_indirect(KernelGlobals *kg, RNG *rng, Ray ray,
 	float3 throughput, int num_samples, PathState state, PathRadiance *L)
@@ -255,15 +88,75 @@ ccl_device void kernel_path_indirect(KernelGlobals *kg, RNG *rng, Ray ray,
 			Ray volume_ray = ray;
 			volume_ray.t = (hit)? isect.t: FLT_MAX;
 
-			ShaderData volume_sd;
-			VolumeIntegrateResult result = kernel_volume_integrate(kg, &state,
-				&volume_sd, &volume_ray, L, &throughput, rng);
+			bool heterogeneous = volume_stack_is_heterogeneous(kg, state.volume_stack);
+			int sampling_method = volume_stack_sampling_method(kg, state.volume_stack);
+			bool decoupled = kernel_volume_use_decoupled(kg, heterogeneous, false, sampling_method);
 
-			if(result == VOLUME_PATH_SCATTERED) {
-				if(kernel_path_integrate_scatter_lighting(kg, rng, &volume_sd, &throughput, &state, L, &ray, 1.0f))
-					continue;
-				else
-					break;
+			if(decoupled) {
+				/* cache steps along volume for repeated sampling */
+				VolumeSegment volume_segment;
+				ShaderData volume_sd;
+
+				shader_setup_from_volume(kg, &volume_sd, &volume_ray, state.bounce, state.transparent_bounce);
+				kernel_volume_decoupled_record(kg, &state,
+					&volume_ray, &volume_sd, &volume_segment, heterogeneous);
+				
+				volume_segment.sampling_method = sampling_method;
+
+				/* emission */
+				if(volume_segment.closure_flag & SD_EMISSION)
+					path_radiance_accum_emission(L, throughput, volume_segment.accum_emission, state.bounce);
+
+				/* scattering */
+				VolumeIntegrateResult result = VOLUME_PATH_ATTENUATED;
+
+				if(volume_segment.closure_flag & SD_SCATTER) {
+					bool all = kernel_data.integrator.sample_all_lights_indirect;
+
+					/* direct light sampling */
+					kernel_branched_path_volume_connect_light(kg, rng, &volume_sd,
+						throughput, &state, L, 1.0f, all, &volume_ray, &volume_segment);
+
+					/* indirect sample. if we use distance sampling and take just
+					 * one sample for direct and indirect light, we could share
+					 * this computation, but makes code a bit complex */
+					float rphase = path_state_rng_1D_for_decision(kg, rng, &state, PRNG_PHASE);
+					float rscatter = path_state_rng_1D_for_decision(kg, rng, &state, PRNG_SCATTER_DISTANCE);
+
+					result = kernel_volume_decoupled_scatter(kg,
+						&state, &volume_ray, &volume_sd, &throughput,
+						rphase, rscatter, &volume_segment, NULL, true);
+				}
+
+				if(result != VOLUME_PATH_SCATTERED)
+					throughput *= volume_segment.accum_transmittance;
+
+				/* free cached steps */
+				kernel_volume_decoupled_free(kg, &volume_segment);
+
+				if(result == VOLUME_PATH_SCATTERED) {
+					if(kernel_path_volume_bounce(kg, rng, &volume_sd, &throughput, &state, L, &ray, 1.0f))
+						continue;
+					else
+						break;
+				}
+			}
+			else {
+				/* integrate along volume segment with distance sampling */
+				ShaderData volume_sd;
+				VolumeIntegrateResult result = kernel_volume_integrate(
+					kg, &state, &volume_sd, &volume_ray, L, &throughput, rng);
+
+				if(result == VOLUME_PATH_SCATTERED) {
+					/* direct lighting */
+					kernel_path_volume_connect_light(kg, rng, &volume_sd, throughput, &state, L, 1.0f);
+
+					/* indirect light bounce */
+					if(kernel_path_volume_bounce(kg, rng, &volume_sd, &throughput, &state, L, &ray, 1.0f))
+						continue;
+					else
+						break;
+				}
 			}
 		}
 #endif
@@ -383,187 +276,12 @@ ccl_device void kernel_path_indirect(KernelGlobals *kg, RNG *rng, Ray ray,
 #if defined(__EMISSION__) && defined(__BRANCHED_PATH__)
 		if(kernel_data.integrator.use_direct_light) {
 			bool all = kernel_data.integrator.sample_all_lights_indirect;
-			kernel_branched_path_integrate_direct_lighting(kg, rng, &sd, &state, throughput, 1.0f, L, all);
+			kernel_branched_path_surface_connect_light(kg, rng, &sd, &state, throughput, 1.0f, L, all);
 		}
 #endif
 
-		/* no BSDF? we can stop here */
-		if(sd.flag & SD_BSDF) {
-			/* sample BSDF */
-			float bsdf_pdf;
-			BsdfEval bsdf_eval;
-			float3 bsdf_omega_in;
-			differential3 bsdf_domega_in;
-			float bsdf_u, bsdf_v;
-			path_state_rng_2D(kg, rng, &state, PRNG_BSDF_U, &bsdf_u, &bsdf_v);
-			int label;
-
-			label = shader_bsdf_sample(kg, &sd, bsdf_u, bsdf_v, &bsdf_eval,
-				&bsdf_omega_in, &bsdf_domega_in, &bsdf_pdf);
-
-			if(bsdf_pdf == 0.0f || bsdf_eval_is_zero(&bsdf_eval))
-				break;
-
-			/* modify throughput */
-			path_radiance_bsdf_bounce(L, &throughput, &bsdf_eval, bsdf_pdf, state.bounce, label);
-
-			/* set labels */
-			if(!(label & LABEL_TRANSPARENT)) {
-				state.ray_pdf = bsdf_pdf;
-#ifdef __LAMP_MIS__
-				state.ray_t = 0.0f;
-#endif
-				state.min_ray_pdf = fminf(bsdf_pdf, state.min_ray_pdf);
-			}
-
-			/* update path state */
-			path_state_next(kg, &state, label);
-
-			/* setup ray */
-			ray.P = ray_offset(sd.P, (label & LABEL_TRANSMIT)? -sd.Ng: sd.Ng);
-			ray.D = bsdf_omega_in;
-			ray.t = FLT_MAX;
-#ifdef __RAY_DIFFERENTIALS__
-			ray.dP = sd.dP;
-			ray.dD = bsdf_domega_in;
-#endif
-
-#ifdef __VOLUME__
-			/* enter/exit volume */
-			if(label & LABEL_TRANSMIT)
-				kernel_volume_stack_enter_exit(kg, &sd, state.volume_stack);
-#endif
-		}
-#ifdef __VOLUME__
-		else if(sd.flag & SD_HAS_ONLY_VOLUME) {
-			/* no surface shader but have a volume shader? act transparent */
-
-			/* update path state, count as transparent */
-			path_state_next(kg, &state, LABEL_TRANSPARENT);
-
-			/* setup ray position, direction stays unchanged */
-			ray.P = ray_offset(sd.P, -sd.Ng);
-#ifdef __RAY_DIFFERENTIALS__
-			ray.dP = sd.dP;
-#endif
-
-			/* enter/exit volume */
-			kernel_volume_stack_enter_exit(kg, &sd, state.volume_stack);
-		}
-#endif
-		else {
-			/* no bsdf or volume? we're done */
+		if(!kernel_path_surface_bounce(kg, rng, &sd, &throughput, &state, L, &ray))
 			break;
-		}
-	}
-}
-
-ccl_device_inline bool kernel_path_integrate_lighting(KernelGlobals *kg, RNG *rng,
-	ShaderData *sd, float3 *throughput, PathState *state, PathRadiance *L, Ray *ray)
-{
-#ifdef __EMISSION__
-	if(kernel_data.integrator.use_direct_light) {
-		/* sample illumination from lights to find path contribution */
-		if(sd->flag & SD_BSDF_HAS_EVAL) {
-			float light_t = path_state_rng_1D(kg, rng, state, PRNG_LIGHT);
-			float light_u, light_v;
-			path_state_rng_2D(kg, rng, state, PRNG_LIGHT_U, &light_u, &light_v);
-
-			Ray light_ray;
-			BsdfEval L_light;
-			bool is_lamp;
-
-#ifdef __OBJECT_MOTION__
-			light_ray.time = sd->time;
-#endif
-
-			if(direct_emission(kg, sd, LAMP_NONE, light_t, light_u, light_v, &light_ray, &L_light, &is_lamp, state->bounce, state->transparent_bounce)) {
-				/* trace shadow ray */
-				float3 shadow;
-
-				if(!shadow_blocked(kg, state, &light_ray, &shadow)) {
-					/* accumulate */
-					path_radiance_accum_light(L, *throughput, &L_light, shadow, 1.0f, state->bounce, is_lamp);
-				}
-			}
-		}
-	}
-#endif
-
-	/* no BSDF? we can stop here */
-	if(sd->flag & SD_BSDF) {
-		/* sample BSDF */
-		float bsdf_pdf;
-		BsdfEval bsdf_eval;
-		float3 bsdf_omega_in;
-		differential3 bsdf_domega_in;
-		float bsdf_u, bsdf_v;
-		path_state_rng_2D(kg, rng, state, PRNG_BSDF_U, &bsdf_u, &bsdf_v);
-		int label;
-
-		label = shader_bsdf_sample(kg, sd, bsdf_u, bsdf_v, &bsdf_eval,
-			&bsdf_omega_in, &bsdf_domega_in, &bsdf_pdf);
-
-		if(bsdf_pdf == 0.0f || bsdf_eval_is_zero(&bsdf_eval))
-			return false;
-
-		/* modify throughput */
-		path_radiance_bsdf_bounce(L, throughput, &bsdf_eval, bsdf_pdf, state->bounce, label);
-
-		/* set labels */
-		if(!(label & LABEL_TRANSPARENT)) {
-			state->ray_pdf = bsdf_pdf;
-#ifdef __LAMP_MIS__
-			state->ray_t = 0.0f;
-#endif
-			state->min_ray_pdf = fminf(bsdf_pdf, state->min_ray_pdf);
-		}
-
-		/* update path state */
-		path_state_next(kg, state, label);
-
-		/* setup ray */
-		ray->P = ray_offset(sd->P, (label & LABEL_TRANSMIT)? -sd->Ng: sd->Ng);
-		ray->D = bsdf_omega_in;
-
-		if(state->bounce == 0)
-			ray->t -= sd->ray_length; /* clipping works through transparent */
-		else
-			ray->t = FLT_MAX;
-
-#ifdef __RAY_DIFFERENTIALS__
-		ray->dP = sd->dP;
-		ray->dD = bsdf_domega_in;
-#endif
-
-#ifdef __VOLUME__
-		/* enter/exit volume */
-		if(label & LABEL_TRANSMIT)
-			kernel_volume_stack_enter_exit(kg, sd, state->volume_stack);
-#endif
-		return true;
-	}
-#ifdef __VOLUME__
-	else if(sd->flag & SD_HAS_ONLY_VOLUME) {
-		/* no surface shader but have a volume shader? act transparent */
-
-		/* update path state, count as transparent */
-		path_state_next(kg, state, LABEL_TRANSPARENT);
-
-		/* setup ray position, direction stays unchanged */
-		ray->P = ray_offset(sd->P, -sd->Ng);
-#ifdef __RAY_DIFFERENTIALS__
-		ray->dP = sd->dP;
-#endif
-
-		/* enter/exit volume */
-		kernel_volume_stack_enter_exit(kg, sd, state->volume_stack);
-		return true;
-	}
-#endif
-	else {
-		/* no bsdf or volume? */
-		return false;
 	}
 }
 
@@ -664,8 +382,10 @@ ccl_device bool kernel_path_subsurface_scatter(KernelGlobals *kg, ShaderData *sd
 
 			hit_state.flag |= PATH_RAY_BSSRDF_ANCESTOR;
 			hit_state.rng_offset += PRNG_BOUNCE_NUM;
+			
+			kernel_path_surface_connect_light(kg, rng, &bssrdf_sd[hit], tp, state, L);
 
-			if(kernel_path_integrate_lighting(kg, rng, &bssrdf_sd[hit], &tp, &hit_state, L, &hit_ray)) {
+			if(kernel_path_surface_bounce(kg, rng, &bssrdf_sd[hit], &tp, &hit_state, L, &hit_ray)) {
 #ifdef __LAMP_MIS__
 				hit_state.ray_t = 0.0f;
 #endif
@@ -749,15 +469,75 @@ ccl_device float4 kernel_path_integrate(KernelGlobals *kg, RNG *rng, int sample,
 			Ray volume_ray = ray;
 			volume_ray.t = (hit)? isect.t: FLT_MAX;
 
-			ShaderData volume_sd;
-			VolumeIntegrateResult result = kernel_volume_integrate(kg, &state,
-				&volume_sd, &volume_ray, &L, &throughput, rng);
+			bool heterogeneous = volume_stack_is_heterogeneous(kg, state.volume_stack);
+			int sampling_method = volume_stack_sampling_method(kg, state.volume_stack);
+			bool decoupled = kernel_volume_use_decoupled(kg, heterogeneous, true, sampling_method);
 
-			if(result == VOLUME_PATH_SCATTERED) {
-				if(kernel_path_integrate_scatter_lighting(kg, rng, &volume_sd, &throughput, &state, &L, &ray, 1.0f))
-					continue;
-				else
-					break;
+			if(decoupled) {
+				/* cache steps along volume for repeated sampling */
+				VolumeSegment volume_segment;
+				ShaderData volume_sd;
+
+				shader_setup_from_volume(kg, &volume_sd, &volume_ray, state.bounce, state.transparent_bounce);
+				kernel_volume_decoupled_record(kg, &state,
+					&volume_ray, &volume_sd, &volume_segment, heterogeneous);
+
+				volume_segment.sampling_method = sampling_method;
+
+				/* emission */
+				if(volume_segment.closure_flag & SD_EMISSION)
+					path_radiance_accum_emission(&L, throughput, volume_segment.accum_emission, state.bounce);
+
+				/* scattering */
+				VolumeIntegrateResult result = VOLUME_PATH_ATTENUATED;
+
+				if(volume_segment.closure_flag & SD_SCATTER) {
+					bool all = false;
+
+					/* direct light sampling */
+					kernel_branched_path_volume_connect_light(kg, rng, &volume_sd,
+						throughput, &state, &L, 1.0f, all, &volume_ray, &volume_segment);
+
+					/* indirect sample. if we use distance sampling and take just
+					 * one sample for direct and indirect light, we could share
+					 * this computation, but makes code a bit complex */
+					float rphase = path_state_rng_1D_for_decision(kg, rng, &state, PRNG_PHASE);
+					float rscatter = path_state_rng_1D_for_decision(kg, rng, &state, PRNG_SCATTER_DISTANCE);
+
+					result = kernel_volume_decoupled_scatter(kg,
+						&state, &volume_ray, &volume_sd, &throughput,
+						rphase, rscatter, &volume_segment, NULL, true);
+				}
+
+				if(result != VOLUME_PATH_SCATTERED)
+					throughput *= volume_segment.accum_transmittance;
+
+				/* free cached steps */
+				kernel_volume_decoupled_free(kg, &volume_segment);
+
+				if(result == VOLUME_PATH_SCATTERED) {
+					if(kernel_path_volume_bounce(kg, rng, &volume_sd, &throughput, &state, &L, &ray, 1.0f))
+						continue;
+					else
+						break;
+				}
+			}
+			else {
+				/* integrate along volume segment with distance sampling */
+				ShaderData volume_sd;
+				VolumeIntegrateResult result = kernel_volume_integrate(
+					kg, &state, &volume_sd, &volume_ray, &L, &throughput, rng);
+
+				if(result == VOLUME_PATH_SCATTERED) {
+					/* direct lighting */
+					kernel_path_volume_connect_light(kg, rng, &volume_sd, throughput, &state, &L, 1.0f);
+
+					/* indirect light bounce */
+					if(kernel_path_volume_bounce(kg, rng, &volume_sd, &throughput, &state, &L, &ray, 1.0f))
+						continue;
+					else
+						break;
+				}
 			}
 		}
 #endif
@@ -863,112 +643,13 @@ ccl_device float4 kernel_path_integrate(KernelGlobals *kg, RNG *rng, int sample,
 				break;
 		}
 #endif
-		
-		/* Same as kernel_path_integrate_lighting(kg, rng, &sd, &throughput, &state, &L, &ray),
-		   but for CUDA the function call is slower. */
-#ifdef __EMISSION__
-		if(kernel_data.integrator.use_direct_light) {
-			/* sample illumination from lights to find path contribution */
-			if(sd.flag & SD_BSDF_HAS_EVAL) {
-				float light_t = path_state_rng_1D(kg, rng, &state, PRNG_LIGHT);
-				float light_u, light_v;
-				path_state_rng_2D(kg, rng, &state, PRNG_LIGHT_U, &light_u, &light_v);
 
-				Ray light_ray;
-				BsdfEval L_light;
-				bool is_lamp;
+		/* direct lighting */
+		kernel_path_surface_connect_light(kg, rng, &sd, throughput, &state, &L);
 
-#ifdef __OBJECT_MOTION__
-				light_ray.time = sd.time;
-#endif
-
-				if(direct_emission(kg, &sd, LAMP_NONE, light_t, light_u, light_v, &light_ray, &L_light, &is_lamp, state.bounce, state.transparent_bounce)) {
-					/* trace shadow ray */
-					float3 shadow;
-
-					if(!shadow_blocked(kg, &state, &light_ray, &shadow)) {
-						/* accumulate */
-						path_radiance_accum_light(&L, throughput, &L_light, shadow, 1.0f, state.bounce, is_lamp);
-					}
-				}
-			}
-		}
-#endif
-
-		if(sd.flag & SD_BSDF) {
-			/* sample BSDF */
-			float bsdf_pdf;
-			BsdfEval bsdf_eval;
-			float3 bsdf_omega_in;
-			differential3 bsdf_domega_in;
-			float bsdf_u, bsdf_v;
-			path_state_rng_2D(kg, rng, &state, PRNG_BSDF_U, &bsdf_u, &bsdf_v);
-			int label;
-
-			label = shader_bsdf_sample(kg, &sd, bsdf_u, bsdf_v, &bsdf_eval,
-				&bsdf_omega_in, &bsdf_domega_in, &bsdf_pdf);
-
-			if(bsdf_pdf == 0.0f || bsdf_eval_is_zero(&bsdf_eval))
-				break;
-
-			/* modify throughput */
-			path_radiance_bsdf_bounce(&L, &throughput, &bsdf_eval, bsdf_pdf, state.bounce, label);
-
-			/* set labels */
-			if(!(label & LABEL_TRANSPARENT)) {
-				state.ray_pdf = bsdf_pdf;
-#ifdef __LAMP_MIS__
-				state.ray_t = 0.0f;
-#endif
-				state.min_ray_pdf = fminf(bsdf_pdf, state.min_ray_pdf);
-			}
-
-			/* update path state */
-			path_state_next(kg, &state, label);
-
-			/* setup ray */
-			ray.P = ray_offset(sd.P, (label & LABEL_TRANSMIT)? -sd.Ng: sd.Ng);
-			ray.D = bsdf_omega_in;
-
-#ifdef __RAY_DIFFERENTIALS__
-			ray.dP = sd.dP;
-			ray.dD = bsdf_domega_in;
-#endif
-
-#ifdef __VOLUME__
-			/* enter/exit volume */
-			if(label & LABEL_TRANSMIT)
-				kernel_volume_stack_enter_exit(kg, &sd, state.volume_stack);
-#endif
-
-		}
-#ifdef __VOLUME__
-		else if(sd.flag & SD_HAS_ONLY_VOLUME) {
-			/* no surface shader but have a volume shader? act transparent */
-
-			/* update path state, count as transparent */
-			path_state_next(kg, &state, LABEL_TRANSPARENT);
-
-			/* setup ray position, direction stays unchanged */
-			ray.P = ray_offset(sd.P, -sd.Ng);
-#ifdef __RAY_DIFFERENTIALS__
-			ray.dP = sd.dP;
-#endif
-
-			/* enter/exit volume */
-			kernel_volume_stack_enter_exit(kg, &sd, state.volume_stack);
-		}
-#endif
-		else {
-			/* no bsdf or volume? we're done */
+		/* compute direct lighting and next bounce */
+		if(!kernel_path_surface_bounce(kg, rng, &sd, &throughput, &state, &L, &ray))
 			break;
-		}
-
-		/* adjust ray distance for clipping */
-		if(state.bounce == 0)
-			ray.t -= sd.ray_length; /* clipping works through transparent */
-		else
-			ray.t = FLT_MAX;
 	}
 
 	float3 L_sum = path_radiance_clamp_and_sum(kg, &L);
@@ -980,17 +661,11 @@ ccl_device float4 kernel_path_integrate(KernelGlobals *kg, RNG *rng, int sample,
 
 #ifdef __BRANCHED_PATH__
 
-ccl_device_noinline void kernel_branched_path_integrate_lighting(KernelGlobals *kg,
+/* branched path tracing: bounce off surface and integrate indirect light */
+ccl_device_noinline void kernel_branched_path_surface_indirect_light(KernelGlobals *kg,
 	RNG *rng, ShaderData *sd, float3 throughput, float num_samples_adjust,
 	PathState *state, PathRadiance *L)
 {
-#ifdef __EMISSION__
-	if(kernel_data.integrator.use_direct_light) {
-		bool all = kernel_data.integrator.sample_all_lights_direct;
-		kernel_branched_path_integrate_direct_lighting(kg, rng, sd, state, throughput, num_samples_adjust, L, all);
-	}
-#endif
-
 	for(int i = 0; i< sd->num_closure; i++) {
 		const ShaderClosure *sc = &sd->closure[i];
 
@@ -1017,58 +692,12 @@ ccl_device_noinline void kernel_branched_path_integrate_lighting(KernelGlobals *
 		RNG bsdf_rng = cmj_hash(*rng, i);
 
 		for(int j = 0; j < num_samples; j++) {
-			/* sample BSDF */
-			float bsdf_pdf;
-			BsdfEval bsdf_eval;
-			float3 bsdf_omega_in;
-			differential3 bsdf_domega_in;
-			float bsdf_u, bsdf_v;
-			path_branched_rng_2D(kg, &bsdf_rng, state, j, num_samples, PRNG_BSDF_U, &bsdf_u, &bsdf_v);
-			int label;
-
-			label = shader_bsdf_sample_closure(kg, sd, sc, bsdf_u, bsdf_v, &bsdf_eval,
-				&bsdf_omega_in, &bsdf_domega_in, &bsdf_pdf);
-
-			if(bsdf_pdf == 0.0f || bsdf_eval_is_zero(&bsdf_eval))
-				continue;
-
-			/* modify throughput */
-			float3 tp = throughput;
-			path_radiance_bsdf_bounce(L, &tp, &bsdf_eval, bsdf_pdf, state->bounce, label);
-
-			/* modify path state */
 			PathState ps = *state;
-			path_state_next(kg, &ps, label);
-
-			/* setup ray */
+			float3 tp = throughput;
 			Ray bsdf_ray;
 
-			bsdf_ray.P = ray_offset(sd->P, (label & LABEL_TRANSMIT)? -sd->Ng: sd->Ng);
-			bsdf_ray.D = bsdf_omega_in;
-			bsdf_ray.t = FLT_MAX;
-#ifdef __RAY_DIFFERENTIALS__
-			bsdf_ray.dP = sd->dP;
-			bsdf_ray.dD = bsdf_domega_in;
-#endif
-#ifdef __OBJECT_MOTION__
-			bsdf_ray.time = sd->time;
-#endif
-
-#ifdef __VOLUME__
-			/* enter/exit volume */
-			if(label & LABEL_TRANSMIT)
-				kernel_volume_stack_enter_exit(kg, sd, ps.volume_stack);
-#endif
-
-			/* branch RNG state */
-			path_state_branch(&ps, j, num_samples);
-
-			/* set MIS state */
-			ps.min_ray_pdf = fminf(bsdf_pdf, FLT_MAX);
-			ps.ray_pdf = bsdf_pdf;
-#ifdef __LAMP_MIS__
-			ps.ray_t = 0.0f;
-#endif
+			if(!kernel_branched_path_surface_bounce(kg, &bsdf_rng, sd, sc, j, num_samples, &tp, &ps, L, &bsdf_ray))
+				continue;
 
 			kernel_path_indirect(kg, rng, bsdf_ray, tp*num_samples_inv, num_samples, ps, L);
 
@@ -1111,15 +740,24 @@ ccl_device void kernel_branched_path_subsurface_scatter(KernelGlobals *kg, Shade
 
 				path_state_branch(&hit_state, j, num_samples);
 
-				kernel_branched_path_integrate_lighting(kg, rng,
-														&bssrdf_sd[hit], throughput, num_samples_inv,
-														&hit_state, L);
+#if defined(__EMISSION__) && defined(__BRANCHED_PATH__)
+				/* direct light */
+				if(kernel_data.integrator.use_direct_light) {
+					bool all = kernel_data.integrator.sample_all_lights_direct;
+					kernel_branched_path_surface_connect_light(kg, rng,
+						&bssrdf_sd[hit], &hit_state, throughput, num_samples_inv, L, all);
+				}
+#endif
+
+				/* indirect light */
+				kernel_branched_path_surface_indirect_light(kg, rng,
+					&bssrdf_sd[hit], throughput, num_samples_inv,
+					&hit_state, L);
 			}
 		}
 
 		state->flag &= ~PATH_RAY_BSSRDF_ANCESTOR;
 	}
-
 }
 #endif
 
@@ -1178,35 +816,50 @@ ccl_device float4 kernel_branched_path_integrate(KernelGlobals *kg, RNG *rng, in
 			kernel_volume_decoupled_record(kg, &state,
 				&volume_ray, &volume_sd, &volume_segment, heterogeneous);
 
-			/* sample scattering */
-			int num_samples = kernel_data.integrator.volume_samples;
-			float num_samples_inv = 1.0f/num_samples;
+			/* direct light sampling */
+			if(volume_segment.closure_flag & SD_SCATTER) {
+				volume_segment.sampling_method = volume_stack_sampling_method(kg, state.volume_stack);
 
-			for(int j = 0; j < num_samples; j++) {
-				/* workaround to fix correlation bug in T38710, can find better solution
-				 * in random number generator later, for now this is done here to not impact
-				 * performance of rendering without volumes */
-				RNG tmp_rng = cmj_hash(*rng, state.rng_offset);
+				bool all = kernel_data.integrator.sample_all_lights_direct;
 
-				PathState ps = state;
-				Ray pray = ray;
-				float3 tp = throughput;
+				kernel_branched_path_volume_connect_light(kg, rng, &volume_sd,
+					throughput, &state, &L, 1.0f, all, &volume_ray, &volume_segment);
 
-				/* branch RNG state */
-				path_state_branch(&ps, j, num_samples);
+				/* indirect light sampling */
+				int num_samples = kernel_data.integrator.volume_samples;
+				float num_samples_inv = 1.0f/num_samples;
 
-				VolumeIntegrateResult result = kernel_volume_decoupled_scatter(kg,
-					&ps, &volume_ray, &volume_sd, &tp, &tmp_rng, &volume_segment);
-				
-				if(result == VOLUME_PATH_SCATTERED) {
-					/* todo: use all-light sampling */
-					if(kernel_path_integrate_scatter_lighting(kg, rng, &volume_sd, &tp, &ps, &L, &pray, num_samples_inv)) {
-						kernel_path_indirect(kg, rng, pray, tp*num_samples_inv, num_samples, ps, &L);
+				for(int j = 0; j < num_samples; j++) {
+					/* workaround to fix correlation bug in T38710, can find better solution
+					 * in random number generator later, for now this is done here to not impact
+					 * performance of rendering without volumes */
+					RNG tmp_rng = cmj_hash(*rng, state.rng_offset);
 
-						/* for render passes, sum and reset indirect light pass variables
-						 * for the next samples */
-						path_radiance_sum_indirect(&L);
-						path_radiance_reset_indirect(&L);
+					PathState ps = state;
+					Ray pray = ray;
+					float3 tp = throughput;
+
+					/* branch RNG state */
+					path_state_branch(&ps, j, num_samples);
+
+					/* scatter sample. if we use distance sampling and take just one
+					 * sample for direct and indirect light, we could share this
+					 * computation, but makes code a bit complex */
+					float rphase = path_state_rng_1D_for_decision(kg, &tmp_rng, &ps, PRNG_PHASE);
+					float rscatter = path_state_rng_1D_for_decision(kg, &tmp_rng, &ps, PRNG_SCATTER_DISTANCE);
+
+					VolumeIntegrateResult result = kernel_volume_decoupled_scatter(kg,
+						&ps, &pray, &volume_sd, &tp, rphase, rscatter, &volume_segment, NULL, false);
+
+					if(result == VOLUME_PATH_SCATTERED) {
+						if(kernel_path_volume_bounce(kg, rng, &volume_sd, &tp, &ps, &L, &pray, num_samples_inv)) {
+							kernel_path_indirect(kg, rng, pray, tp*num_samples_inv, num_samples, ps, &L);
+
+							/* for render passes, sum and reset indirect light pass variables
+							 * for the next samples */
+							path_radiance_sum_indirect(&L);
+							path_radiance_reset_indirect(&L);
+						}
 					}
 				}
 			}
@@ -1235,12 +888,15 @@ ccl_device float4 kernel_branched_path_integrate(KernelGlobals *kg, RNG *rng, in
 				/* branch RNG state */
 				path_state_branch(&ps, j, num_samples);
 
-				VolumeIntegrateResult result = kernel_volume_integrate(kg, &ps,
-					&volume_sd, &volume_ray, &L, &tp, rng);
+				VolumeIntegrateResult result = kernel_volume_integrate(
+					kg, &ps, &volume_sd, &volume_ray, &L, &tp, rng);
 				
 				if(result == VOLUME_PATH_SCATTERED) {
-					/* todo: use all-light sampling */
-					if(kernel_path_integrate_scatter_lighting(kg, rng, &volume_sd, &tp, &ps, &L, &pray, num_samples_inv)) {
+					/* todo: support equiangular, MIS and all light sampling.
+					 * alternatively get decoupled ray marching working on the GPU */
+					kernel_path_volume_connect_light(kg, rng, &volume_sd, throughput, &state, &L, num_samples_inv);
+
+					if(kernel_path_volume_bounce(kg, rng, &volume_sd, &tp, &ps, &L, &pray, num_samples_inv)) {
 						kernel_path_indirect(kg, rng, pray, tp*num_samples_inv, num_samples, ps, &L);
 
 						/* for render passes, sum and reset indirect light pass variables
@@ -1351,8 +1007,17 @@ ccl_device float4 kernel_branched_path_integrate(KernelGlobals *kg, RNG *rng, in
 		if(!(sd.flag & SD_HAS_ONLY_VOLUME)) {
 			PathState hit_state = state;
 
-			/* lighting */
-			kernel_branched_path_integrate_lighting(kg, rng,
+#ifdef __EMISSION__
+			/* direct light */
+			if(kernel_data.integrator.use_direct_light) {
+				bool all = kernel_data.integrator.sample_all_lights_direct;
+				kernel_branched_path_surface_connect_light(kg, rng,
+					&sd, &hit_state, throughput, 1.0f, &L, all);
+			}
+#endif
+
+			/* indirect light */
+			kernel_branched_path_surface_indirect_light(kg, rng,
 				&sd, throughput, 1.0f, &hit_state, &L);
 
 			/* continue in case of transparency */
@@ -1385,11 +1050,8 @@ ccl_device_inline void kernel_path_trace_setup(KernelGlobals *kg, ccl_global uin
 {
 	float filter_u;
 	float filter_v;
-#ifdef __CMJ__
+
 	int num_samples = kernel_data.integrator.aa_samples;
-#else
-	int num_samples = 0;
-#endif
 
 	path_rng_init(kg, rng_state, sample, num_samples, rng, x, y, &filter_u, &filter_v);
 

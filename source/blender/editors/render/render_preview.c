@@ -299,7 +299,7 @@ static Scene *preview_prepare_scene(Scene *scene, ID *id, int id_type, ShaderPre
 
 		sce->r.cfra = scene->r.cfra;
 
-		if (id_type == ID_TE && ELEM(sp->pr_method, PR_ICON_RENDER, PR_NODE_RENDER)) {
+		if (id_type == ID_TE) {
 			/* Force blender internal for texture icons and nodes render,
 			 * seems commonly used render engines does not support
 			 * such kind of rendering.
@@ -1138,6 +1138,13 @@ void ED_preview_shader_job(const bContext *C, void *owner, ID *id, ID *parent, M
 	wmJob *wm_job;
 	ShaderPreview *sp;
 	Scene *scene = CTX_data_scene(C);
+	short id_type = GS(id->name);
+	bool use_new_shading = BKE_scene_use_new_shading_nodes(scene);
+
+	/* Only texture node preview is supported with Cycles. */
+	if (use_new_shading && method == PR_NODE_RENDER && id_type != ID_TE) {
+		return;
+	}
 
 	wm_job = WM_jobs_get(CTX_wm_manager(C), CTX_wm_window(C), owner, "Shader Preview",
 	                    WM_JOB_EXCL_RENDER, WM_JOB_TYPE_RENDER_PREVIEW);
@@ -1155,10 +1162,12 @@ void ED_preview_shader_job(const bContext *C, void *owner, ID *id, ID *parent, M
 
 	/* hardcoded preview .blend for cycles/internal, this should be solved
 	 * once with custom preview .blend path for external engines */
-	if (BKE_scene_use_new_shading_nodes(scene) && method != PR_NODE_RENDER)
+	if ((method != PR_NODE_RENDER) && id_type != ID_TE && use_new_shading) {
 		sp->pr_main = G_pr_main_cycles;
-	else
+	}
+	else {
 		sp->pr_main = G_pr_main;
+	}
 
 	if (ob && ob->totcol) copy_v4_v4(sp->col, ob->col);
 	else sp->col[0] = sp->col[1] = sp->col[2] = sp->col[3] = 1.0f;

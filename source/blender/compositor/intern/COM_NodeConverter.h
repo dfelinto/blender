@@ -34,6 +34,8 @@ class NodeOperationInput;
 class NodeOperationOutput;
 class NodeOperationBuilder;
 
+class ViewerOperation;
+
 /** Interface type for converting a \a Node into \a NodeOperation.
  *  This is passed to \a Node::convertToOperation methods and allows them
  *  to register any number of operations, create links between them,
@@ -68,12 +70,12 @@ public:
 	 *  This operation will be removed later and replaced
 	 *  by direct links between the connected operations.
 	 */
-	NodeOperationOutput *addInputProxy(NodeInput *input);
+	NodeOperationOutput *addInputProxy(NodeInput *input, bool use_conversion);
 	/** Create a proxy operation for a node output.
 	 *  This operation will be removed later and replaced
 	 *  by direct links between the connected operations.
 	 */
-	NodeOperationInput *addOutputProxy(NodeOutput *output);
+	NodeOperationInput *addOutputProxy(NodeOutput *output, bool use_conversion);
 	
 	/** Define a constant input value. */
 	void addInputValue(NodeOperationInput *input, float value);
@@ -101,6 +103,11 @@ public:
 	 *  @note missing image / group pointer, or missing renderlayer from EXR
 	 */
 	NodeOperation *setInvalidOutput(NodeOutput *output);
+	
+	/** Define a viewer operation as the active output, if possible */
+	void registerViewer(ViewerOperation *viewer);
+	/** The currently active viewer output operation */
+	ViewerOperation *active_viewer() const;
 	
 private:
 	/** The internal builder for storing the results of the graph construction. */

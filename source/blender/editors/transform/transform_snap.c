@@ -117,8 +117,8 @@ int BIF_snappingSupported(Object *obedit)
 {
 	int status = 0;
 	
-	if (obedit == NULL || ELEM5(obedit->type, OB_MESH, OB_ARMATURE, OB_CURVE, OB_LATTICE, OB_MBALL)) /* only support object mesh, armature, curves */
-	{
+	/* only support object mesh, armature, curves */
+	if (obedit == NULL || ELEM(obedit->type, OB_MESH, OB_ARMATURE, OB_CURVE, OB_LATTICE, OB_MBALL)) {
 		status = 1;
 	}
 	
@@ -505,7 +505,7 @@ static void initSnappingMode(TransInfo *t)
 
 		/* Edit mode */
 		if (t->tsnap.applySnap != NULL && // A snapping function actually exist
-		    (obedit != NULL && ELEM5(obedit->type, OB_MESH, OB_ARMATURE, OB_CURVE, OB_LATTICE, OB_MBALL)) ) // Temporary limited to edit mode meshes, armature, curves, mballs
+		    (obedit != NULL && ELEM(obedit->type, OB_MESH, OB_ARMATURE, OB_CURVE, OB_LATTICE, OB_MBALL)) ) // Temporary limited to edit mode meshes, armature, curves, mballs
 		{
 			/* Exclude editmesh if using proportional edit */
 			if ((obedit->type == OB_MESH) && (t->flag & T_PROP_EDIT)) {
@@ -588,7 +588,7 @@ void initSnapping(TransInfo *t, wmOperator *op)
 	}
 	/* use scene defaults only when transform is modal */
 	else if (t->flag & T_MODAL) {
-		if (ELEM3(t->spacetype, SPACE_VIEW3D, SPACE_IMAGE, SPACE_NODE)) {
+		if (ELEM(t->spacetype, SPACE_VIEW3D, SPACE_IMAGE, SPACE_NODE)) {
 			if (ts->snap_flag & SCE_SNAP) {
 				t->modifiers |= MOD_SNAP;
 			}
@@ -1489,13 +1489,12 @@ static bool snapCurve(short snap_mode, ARegion *ar, Object *ob, Curve *cu, float
 
 static bool snapDerivedMesh(short snap_mode, ARegion *ar, Object *ob, DerivedMesh *dm, BMEditMesh *em, float obmat[4][4],
                             const float ray_start[3], const float ray_normal[3], const float ray_origin[3],
-                            const float mval[2], float r_loc[3], float r_no[3], float *r_dist_px, float *r_depth)
+                            const float mval[2], float r_loc[3], float r_no[3], float *r_dist_px, float *r_depth, bool do_bb)
 {
 	bool retval = false;
 	int totvert = dm->getNumVerts(dm);
 
 	if (totvert > 0) {
-		BoundBox *bb;
 		float imat[4][4];
 		float timat[3][3]; /* transpose inverse matrix for normals */
 		float ray_start_local[3], ray_normal_local[3], local_scale, len_diff = TRANSFORM_DIST_MAX_RAY;
@@ -1513,9 +1512,11 @@ static bool snapDerivedMesh(short snap_mode, ARegion *ar, Object *ob, DerivedMes
 		/* local scale in normal direction */
 		local_scale = normalize_v3(ray_normal_local);
 
-		bb = BKE_object_boundbox_get(ob);
-		if (!BKE_boundbox_ray_hit_check(bb, ray_start_local, ray_normal_local, &len_diff)) {
-			return retval;
+		if (do_bb) {
+			BoundBox *bb = BKE_object_boundbox_get(ob);
+			if (!BKE_boundbox_ray_hit_check(bb, ray_start_local, ray_normal_local, &len_diff)) {
+				return retval;
+			}
 		}
 
 		switch (snap_mode) {
@@ -1813,17 +1814,19 @@ static bool snapObject(Scene *scene, short snap_mode, ARegion *ar, Object *ob, f
 	if (ob->type == OB_MESH) {
 		BMEditMesh *em;
 		DerivedMesh *dm;
+		bool do_bb = true;
 		
 		if (use_obedit) {
 			em = BKE_editmesh_from_object(ob);
 			dm = editbmesh_get_derived_cage(scene, ob, em, CD_MASK_BAREMESH);
+			do_bb = false;
 		}
 		else {
 			em = NULL;
 			dm = mesh_get_derived_final(scene, ob, CD_MASK_BAREMESH);
 		}
 		
-		retval = snapDerivedMesh(snap_mode, ar, ob, dm, em, obmat, ray_start, ray_normal, ray_origin, mval, r_loc, r_no, r_dist_px, r_depth);
+		retval = snapDerivedMesh(snap_mode, ar, ob, dm, em, obmat, ray_start, ray_normal, ray_origin, mval, r_loc, r_no, r_dist_px, r_depth, do_bb);
 
 		dm->release(dm);
 	}
@@ -2379,6 +2382,9 @@ static void applyGridIncrement(TransInfo *t, float *val, int max_index, float fa
 	if ((t->spacetype == SPACE_IMAGE) && (t->mode == TFM_TRANSLATION)) {
 		if (t->options & CTX_MASK) {
 			ED_space_image_get_aspect(t->sa->spacedata.first, asp, asp + 1);
+		}
+		else if (t->options & CTX_PAINT_CURVE) {
+			asp[0] = asp[1] = 1.0;
 		}
 		else {
 			ED_space_image_get_uv_aspect(t->sa->spacedata.first, asp, asp + 1);

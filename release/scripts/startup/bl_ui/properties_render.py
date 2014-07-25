@@ -273,6 +273,9 @@ class RENDER_PT_performance(RenderButtonsPanel, Panel):
         col.prop(rd, "tile_x", text="X")
         col.prop(rd, "tile_y", text="Y")
 
+        col.separator()
+        col.prop(rd, 'preview_start_resolution')
+
         col = split.column()
         col.label(text="Memory:")
         sub = col.column()
@@ -396,7 +399,9 @@ class RENDER_PT_output(RenderButtonsPanel, Panel):
         col.prop(rd, "use_overwrite")
         col.prop(rd, "use_placeholder")
 
-        split.prop(rd, "use_file_extension")
+        col = split.column()
+        col.prop(rd, "use_file_extension")
+        col.prop(rd, "use_render_cache")
 
         layout.template_image_settings(image_settings, color_management=False)
 

@@ -956,6 +956,7 @@ static BMOpDefine bmo_dissolve_verts_def = {
 	/* slots_in */
 	{{"verts", BMO_OP_SLOT_ELEMENT_BUF, {BM_VERT}},
 	 {"use_face_split", BMO_OP_SLOT_BOOL},
+	 {"use_boundary_tear", BMO_OP_SLOT_BOOL},
 	 {{'\0'}},
 	},
 	{{{'\0'}}},  /* no output */
@@ -1580,6 +1581,7 @@ static BMOpDefine bmo_bevel_def = {
 	 {"segments", BMO_OP_SLOT_INT},         /* number of segments in bevel */
 	 {"profile", BMO_OP_SLOT_FLT},          /* profile shape, 0->1 (.5=>round) */
 	 {"vertex_only", BMO_OP_SLOT_BOOL},	/* only bevel vertices, not edges */
+	 {"material", BMO_OP_SLOT_INT},         /* material for bevel faces, -1 means get from adjacent faces */
 	 {{'\0'}},
 	},
 	/* slots_out */
@@ -1904,4 +1906,4 @@ const BMOpDefine *bmo_opdefines[] = {
 	&bmo_wireframe_def,
 };
 
-const int bmo_opdefines_total = (sizeof(bmo_opdefines) / sizeof(void *));
+const int bmo_opdefines_total = ARRAY_SIZE(bmo_opdefines);

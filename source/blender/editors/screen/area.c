@@ -471,7 +471,8 @@ void ED_region_tag_redraw(ARegion *ar)
 	 * but python scripts can cause this to happen indirectly */
 	if (ar && !(ar->do_draw & RGN_DRAWING)) {
 		/* zero region means full region redraw */
-		ar->do_draw = RGN_DRAW;
+		ar->do_draw &= ~RGN_DRAW_PARTIAL;
+		ar->do_draw |= RGN_DRAW;
 		memset(&ar->drawrct, 0, sizeof(ar->drawrct));
 	}
 }
@@ -482,12 +483,19 @@ void ED_region_tag_redraw_overlay(ARegion *ar)
 		ar->do_draw_overlay = RGN_DRAW;
 }
 
+void ED_region_tag_refresh_ui(ARegion *ar)
+{
+	if (ar) {
+		ar->do_draw |= RGN_DRAW_REFRESH_UI;
+	}
+}
+
 void ED_region_tag_redraw_partial(ARegion *ar, rcti *rct)
 {
 	if (ar && !(ar->do_draw & RGN_DRAWING)) {
-		if (!ar->do_draw) {
+		if (!(ar->do_draw & RGN_DRAW)) {
 			/* no redraw set yet, set partial region */
-			ar->do_draw = RGN_DRAW_PARTIAL;
+			ar->do_draw |= RGN_DRAW_PARTIAL;
 			ar->drawrct = *rct;
 		}
 		else if (ar->drawrct.xmin != ar->drawrct.xmax) {
@@ -925,11 +933,11 @@ static bool region_is_overlap(wmWindow *win, ScrArea *sa, ARegion *ar)
 	if (U.uiflag2 & USER_REGION_OVERLAP) {
 		if (WM_is_draw_triple(win)) {
 			if (ELEM(sa->spacetype, SPACE_VIEW3D, SPACE_SEQ)) {
-				if (ELEM3(ar->regiontype, RGN_TYPE_TOOLS, RGN_TYPE_UI, RGN_TYPE_TOOL_PROPS))
+				if (ELEM(ar->regiontype, RGN_TYPE_TOOLS, RGN_TYPE_UI, RGN_TYPE_TOOL_PROPS))
 					return 1;
 			}
 			else if (sa->spacetype == SPACE_IMAGE) {
-				if (ELEM4(ar->regiontype, RGN_TYPE_TOOLS, RGN_TYPE_UI, RGN_TYPE_TOOL_PROPS, RGN_TYPE_PREVIEW))
+				if (ELEM(ar->regiontype, RGN_TYPE_TOOLS, RGN_TYPE_UI, RGN_TYPE_TOOL_PROPS, RGN_TYPE_PREVIEW))
 					return 1;
 			}
 		}
@@ -1341,10 +1349,6 @@ void ED_region_init(bContext *C, ARegion *ar)
 	region_subwindow(CTX_wm_window(C), ar);
 	
 	region_update_rect(ar);
-
-	/* UI convention */
-	wmOrtho2(-0.01f, ar->winx - 0.01f, -0.01f, ar->winy - 0.01f);
-	glLoadIdentity();
 }
 
 /* for quick toggle, can skip fades */
@@ -1764,9 +1768,7 @@ void ED_region_panels(const bContext *C, ARegion *ar, int vertical, const char *
 			break;
 		}
 	}
-	
-	BLI_SMALLSTACK_FREE(pt_stack);
-	
+
 	/* clear */
 	if (ar->overlap) {
 		/* view should be in pixelspace */

@@ -65,10 +65,15 @@
 #define WITH_CYCLES_OPTIMIZED_KERNEL_AVX
 #endif
 
+#ifdef WITH_KERNEL_AVX2
+#define WITH_CYCLES_OPTIMIZED_KERNEL_AVX2
+#endif
+
 /* MSVC 2008, no SSE41 (broken blendv intrinsic) and no AVX support */
 #if defined(_MSC_VER) && (_MSC_VER < 1700)
 #undef WITH_CYCLES_OPTIMIZED_KERNEL_SSE41
 #undef WITH_CYCLES_OPTIMIZED_KERNEL_AVX
+#undef WITH_CYCLES_OPTIMIZED_KERNEL_AVX2
 #endif
 
 #endif
@@ -101,6 +106,10 @@
 /* SSE intrinsics headers */
 #ifndef FREE_WINDOWS64
 
+#ifdef _MSC_VER
+#include <intrin.h>
+#else
+
 #ifdef __KERNEL_SSE2__
 #include <xmmintrin.h> /* SSE 1 */
 #include <emmintrin.h> /* SSE 2 */
@@ -116,6 +125,12 @@
 
 #ifdef __KERNEL_SSE41__
 #include <smmintrin.h> /* SSE 4.1 */
+#endif
+
+#ifdef __KERNEL_AVX__
+#include <immintrin.h> /* AVX */
+#endif
+
 #endif
 
 #else

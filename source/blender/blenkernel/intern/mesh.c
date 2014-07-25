@@ -115,16 +115,16 @@ static int customdata_compare(CustomData *c1, CustomData *c2, Mesh *m1, Mesh *m2
 	int i, i1 = 0, i2 = 0, tot, j;
 	
 	for (i = 0; i < c1->totlayer; i++) {
-		if (ELEM7(c1->layers[i].type, CD_MVERT, CD_MEDGE, CD_MPOLY,
-		          CD_MLOOPUV, CD_MLOOPCOL, CD_MTEXPOLY, CD_MDEFORMVERT))
+		if (ELEM(c1->layers[i].type, CD_MVERT, CD_MEDGE, CD_MPOLY,
+		         CD_MLOOPUV, CD_MLOOPCOL, CD_MTEXPOLY, CD_MDEFORMVERT))
 		{
 			i1++;
 		}
 	}
 
 	for (i = 0; i < c2->totlayer; i++) {
-		if (ELEM7(c2->layers[i].type, CD_MVERT, CD_MEDGE, CD_MPOLY,
-		          CD_MLOOPUV, CD_MLOOPCOL, CD_MTEXPOLY, CD_MDEFORMVERT))
+		if (ELEM(c2->layers[i].type, CD_MVERT, CD_MEDGE, CD_MPOLY,
+		         CD_MLOOPUV, CD_MLOOPCOL, CD_MTEXPOLY, CD_MDEFORMVERT))
 		{
 			i2++;
 		}
@@ -135,16 +135,16 @@ static int customdata_compare(CustomData *c1, CustomData *c2, Mesh *m1, Mesh *m2
 	
 	l1 = c1->layers; l2 = c2->layers;
 	tot = i1;
-	i1 = 0; i2 = 0; 
+	i1 = 0; i2 = 0;
 	for (i = 0; i < tot; i++) {
-		while (i1 < c1->totlayer && !ELEM7(l1->type, CD_MVERT, CD_MEDGE, CD_MPOLY, 
-		                                   CD_MLOOPUV, CD_MLOOPCOL, CD_MTEXPOLY, CD_MDEFORMVERT))
+		while (i1 < c1->totlayer && !ELEM(l1->type, CD_MVERT, CD_MEDGE, CD_MPOLY,
+		                                  CD_MLOOPUV, CD_MLOOPCOL, CD_MTEXPOLY, CD_MDEFORMVERT))
 		{
 			i1++, l1++;
 		}
 
-		while (i2 < c2->totlayer && !ELEM7(l2->type, CD_MVERT, CD_MEDGE, CD_MPOLY,
-		                                   CD_MLOOPUV, CD_MLOOPCOL, CD_MTEXPOLY, CD_MDEFORMVERT))
+		while (i2 < c2->totlayer && !ELEM(l2->type, CD_MVERT, CD_MEDGE, CD_MPOLY,
+		                                  CD_MLOOPUV, CD_MLOOPCOL, CD_MTEXPOLY, CD_MDEFORMVERT))
 		{
 			i2++, l2++;
 		}
@@ -2041,7 +2041,7 @@ int BKE_mesh_mselect_find(Mesh *me, int index, int type)
 {
 	int i;
 
-	BLI_assert(ELEM3(type, ME_VSEL, ME_ESEL, ME_FSEL));
+	BLI_assert(ELEM(type, ME_VSEL, ME_ESEL, ME_FSEL));
 
 	for (i = 0; i < me->totselect; i++) {
 		if ((me->mselect[i].index == index) &&
@@ -2059,7 +2059,7 @@ int BKE_mesh_mselect_find(Mesh *me, int index, int type)
  */
 int BKE_mesh_mselect_active_get(Mesh *me, int type)
 {
-	BLI_assert(ELEM3(type, ME_VSEL, ME_ESEL, ME_FSEL));
+	BLI_assert(ELEM(type, ME_VSEL, ME_ESEL, ME_FSEL));
 
 	if (me->totselect) {
 		if (me->mselect[me->totselect - 1].type == type) {
@@ -2148,7 +2148,7 @@ Mesh *BKE_mesh_new_from_object(
 			 * if it didn't the curve did not have any segments or otherwise 
 			 * would have generated an empty mesh */
 			if (tmpobj->type != OB_MESH) {
-				BKE_libblock_free_us(G.main, tmpobj);
+				BKE_libblock_free_us(bmain, tmpobj);
 				return NULL;
 			}
 
@@ -2179,7 +2179,7 @@ Mesh *BKE_mesh_new_from_object(
 				 *               implemented, this is to be rethinked.
 				 */
 				EvaluationContext eval_ctx = {0};
-				eval_ctx.for_render = render;
+				eval_ctx.mode = DAG_EVAL_RENDER;
 				BKE_displist_make_mball_forRender(&eval_ctx, sce, ob, &disp);
 				BKE_mesh_from_metaball(&disp, tmpmesh);
 				BKE_displist_free(&disp);

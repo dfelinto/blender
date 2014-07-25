@@ -192,14 +192,14 @@ static void partialvis_update_grids(Object *ob,
 				/* skip grid element if not in the effected area */
 				if (is_effected(area, planes, co, mask)) {
 					/* set or clear the hide flag */
-					BLI_BITMAP_MODIFY(gh, y * key.grid_size + x,
+					BLI_BITMAP_SET(gh, y * key.grid_size + x,
 					                  action == PARTIALVIS_HIDE);
 
 					any_changed = true;
 				}
 
 				/* keep track of whether any elements are still hidden */
-				if (BLI_BITMAP_GET(gh, y * key.grid_size + x))
+				if (BLI_BITMAP_TEST(gh, y * key.grid_size + x))
 					any_hidden = true;
 				else
 					any_visible = true;
@@ -252,14 +252,14 @@ static void partialvis_update_bmesh_verts(BMesh *bm,
 	}
 }
 
-static void partialvis_update_bmesh_faces(GSet *faces, PartialVisAction action)
+static void partialvis_update_bmesh_faces(GSet *faces)
 {
 	GSetIterator gs_iter;
 
 	GSET_ITER (gs_iter, faces) {
 		BMFace *f = BLI_gsetIterator_getKey(&gs_iter);
 
-		if ((action == PARTIALVIS_HIDE) && paint_is_bmesh_face_hidden(f))
+		if (paint_is_bmesh_face_hidden(f))
 			BM_elem_flag_enable(f, BM_ELEM_HIDDEN);
 		else
 			BM_elem_flag_disable(f, BM_ELEM_HIDDEN);
@@ -301,7 +301,7 @@ static void partialvis_update_bmesh(Object *ob,
 	                              &any_visible);
 
 	/* finally loop over node faces and tag the ones that are fully hidden */
-	partialvis_update_bmesh_faces(faces, action);
+	partialvis_update_bmesh_faces(faces);
 
 	if (any_changed) {
 		BKE_pbvh_node_mark_rebuild_draw(node);

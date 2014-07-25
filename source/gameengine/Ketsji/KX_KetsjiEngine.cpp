@@ -140,7 +140,6 @@ KX_KetsjiEngine::KX_KetsjiEngine(KX_ISystem* system)
 	m_frameTime(0.f),
 	m_clockTime(0.f),
 	m_previousClockTime(0.f),
-	m_previousAnimTime(0.f),
 
 
 	m_exitcode(KX_EXIT_REQUEST_NO_REQUEST),
@@ -164,6 +163,7 @@ KX_KetsjiEngine::KX_KetsjiEngine(KX_ISystem* system)
 	m_showProperties(false),
 	m_showBackground(false),
 	m_show_debug_properties(false),
+	m_autoAddDebugProperties(true),
 
 	m_animation_record(false),
 
@@ -514,13 +514,13 @@ void KX_KetsjiEngine::EndFrame()
 		RenderDebugProperties();
 	}
 
-	double tottime = m_logger->GetAverage(), time;
+	double tottime = m_logger->GetAverage();
 	if (tottime < 1e-6)
 		tottime = 1e-6;
 
 #ifdef WITH_PYTHON
 	for (int i = tc_first; i < tc_numCategories; ++i) {
-		time = m_logger->GetAverage((KX_TimeCategory)i);
+		double time = m_logger->GetAverage((KX_TimeCategory)i);
 		PyObject *val = PyTuple_New(2);
 		PyTuple_SetItem(val, 0, PyFloat_FromDouble(time*1000.f));
 		PyTuple_SetItem(val, 1, PyFloat_FromDouble(time/tottime * 100.f));
@@ -686,16 +686,6 @@ bool KX_KetsjiEngine::NextFrame()
 				SG_SetActiveStage(SG_STAGE_ACTUATOR_UPDATE);
 				scene->UpdateParents(m_frameTime);
 
-				// update levels of detail
-				scene->UpdateObjectLods();
-
-				if (!GetRestrictAnimationFPS())
-				{
-					m_logger->StartLog(tc_animations, m_kxsystem->GetTimeInSeconds(), true);
-					SG_SetActiveStage(SG_STAGE_ANIMATION_UPDATE);
-					scene->UpdateAnimations(m_frameTime);
-				}
-
 				m_logger->StartLog(tc_physics, m_kxsystem->GetTimeInSeconds(), true);
 				SG_SetActiveStage(SG_STAGE_PHYSICS2);
 				scene->GetPhysicsEnvironment()->BeginFrame();
@@ -795,27 +785,6 @@ bool KX_KetsjiEngine::NextFrame()
 					scene->setSuspendedTime(m_clockTime);
 
 			m_logger->StartLog(tc_services, m_kxsystem->GetTimeInSeconds(), true);
-		}
-	}
-
-		
-	// Handle the animations independently of the logic time step
-	if (GetRestrictAnimationFPS())
-	{
-		double clocktime = m_kxsystem->GetTimeInSeconds();
-		m_logger->StartLog(tc_animations, clocktime, true);
-		SG_SetActiveStage(SG_STAGE_ANIMATION_UPDATE);
-
-		double anim_timestep = 1.0/KX_GetActiveScene()->GetAnimationFPS();
-		if (clocktime - m_previousAnimTime > anim_timestep)
-		{
-			// Sanity/debug print to make sure we're actually going at the fps we want (should be close to anim_timestep)
-			// printf("Anim fps: %f\n", 1.0/(m_clockTime - m_previousAnimTime));
-			m_previousAnimTime = clocktime;
-			for (sceneit = m_scenes.begin();sceneit != m_scenes.end(); ++sceneit)
-			{
-				(*sceneit)->UpdateAnimations(clocktime);
-			}
 		}
 	}
 	
@@ -1186,7 +1155,14 @@ void KX_KetsjiEngine::RenderShadowBuffers(KX_Scene *scene)
 			raslight->BindShadowBuffer(m_canvas, cam, camtrans);
 
 			/* update scene */
+			m_logger->StartLog(tc_scenegraph, m_kxsystem->GetTimeInSeconds(), true);
 			scene->CalculateVisibleMeshes(m_rasterizer, cam, raslight->GetShadowLayer());
+
+			m_logger->StartLog(tc_animations, m_kxsystem->GetTimeInSeconds(), true);
+			scene->UpdateAnimations(GetFrameTime());
+
+			m_logger->StartLog(tc_rasterizer, m_kxsystem->GetTimeInSeconds(), true);
+
 
 			/* render */
 			m_rasterizer->ClearDepthBuffer();
@@ -1318,6 +1294,11 @@ void KX_KetsjiEngine::RenderFrame(KX_Scene* scene, KX_Camera* cam)
 	SG_SetActiveStage(SG_STAGE_CULLING);
 
 	scene->CalculateVisibleMeshes(m_rasterizer,cam);
+
+	m_logger->StartLog(tc_animations, m_kxsystem->GetTimeInSeconds(), true);
+	SG_SetActiveStage(SG_STAGE_ANIMATION_UPDATE);
+
+	scene->UpdateAnimations(GetFrameTime());
 
 	m_logger->StartLog(tc_rasterizer, m_kxsystem->GetTimeInSeconds(), true);
 	SG_SetActiveStage(SG_STAGE_RENDER);
@@ -1915,6 +1896,46 @@ void KX_KetsjiEngine::SetExitKey(short key)
 short KX_KetsjiEngine::GetExitKey()
 {
 	return m_exitkey;
+}
+
+void KX_KetsjiEngine::SetShowFramerate(bool frameRate)
+{
+	m_show_framerate = frameRate;
+}
+
+bool KX_KetsjiEngine::GetShowFramerate()
+{
+	return m_show_framerate;
+}
+
+void KX_KetsjiEngine::SetShowProfile(bool profile)
+{
+	m_show_profile = profile;
+}
+
+bool KX_KetsjiEngine::GetShowProfile()
+{
+	return m_show_profile;
+}
+
+void KX_KetsjiEngine::SetShowProperties(bool properties)
+{
+	m_show_debug_properties = properties;
+}
+
+bool KX_KetsjiEngine::GetShowProperties()
+{
+	return m_show_debug_properties;
+}
+
+void KX_KetsjiEngine::SetAutoAddDebugProperties(bool add)
+{
+	m_autoAddDebugProperties = add;
+}
+
+bool KX_KetsjiEngine::GetAutoAddDebugProperties()
+{
+	return m_autoAddDebugProperties;
 }
 
 void KX_KetsjiEngine::SetTimingDisplay(bool frameRate, bool profile, bool properties)

@@ -29,6 +29,7 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_utildefines.h"
+#include "BLI_stackdefines.h"
 #include "BLI_math.h"
 
 #include "bmesh.h"
@@ -89,7 +90,7 @@ void bmo_bisect_plane_exec(BMesh *bm, BMOperator *op)
 		plane_outer[3] = plane[3] - dist;
 		plane_inner[3] = plane[3] + dist;
 
-		STACK_INIT(vert_arr);
+		STACK_INIT(vert_arr, vert_arr_max);
 
 		BMO_ITER (v, &siter, op->slots_in, "geom", BM_VERT) {
 			if ((clear_outer && plane_point_side_v3(plane_outer, v->co) > 0.0f) ||
@@ -103,7 +104,6 @@ void bmo_bisect_plane_exec(BMesh *bm, BMOperator *op)
 			BM_vert_kill(bm, v);
 		}
 
-		STACK_FREE(vert_arr);
 		MEM_freeN(vert_arr);
 	}
 

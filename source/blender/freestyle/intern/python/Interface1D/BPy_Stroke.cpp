@@ -73,14 +73,14 @@ static int Stroke_init(BPy_Stroke *self, PyObject *args, PyObject *kwds)
 	else
 		self->s = new Stroke(*(((BPy_Stroke *)brother)->s));
 	self->py_if1D.if1D = self->s;
-	self->py_if1D.borrowed = 0;
+	self->py_if1D.borrowed = false;
 	return 0;
 }
 
 static PyObject *Stroke_iter(PyObject *self)
 {
 	StrokeInternal::StrokeVertexIterator sv_it( ((BPy_Stroke *)self)->s->strokeVerticesBegin() );
-	return BPy_StrokeVertexIterator_from_StrokeVertexIterator( sv_it, 0 );
+	return BPy_StrokeVertexIterator_from_StrokeVertexIterator(sv_it, false);
 }
 
 static Py_ssize_t Stroke_sq_length(BPy_Stroke *self)
@@ -192,7 +192,7 @@ static PyObject *Stroke_insert_vertex(BPy_Stroke *self, PyObject *args, PyObject
 	{
 		return NULL;
 	}
-	((BPy_StrokeVertex *)py_sv)->py_cp.py_if0D.borrowed = 1; /* make the wrapped StrokeVertex internal */
+	((BPy_StrokeVertex *)py_sv)->py_cp.py_if0D.borrowed = true; /* make the wrapped StrokeVertex internal */
 	StrokeVertex *sv = ((BPy_StrokeVertex *)py_sv)->sv;
 	StrokeInternal::StrokeVertexIterator sv_it(*(((BPy_StrokeVertexIterator *)py_sv_it)->sv_it));
 	self->s->InsertVertex(sv, sv_it);
@@ -286,6 +286,21 @@ static PyObject *Stroke_stroke_vertices_end(BPy_Stroke *self)
 	return BPy_StrokeVertexIterator_from_StrokeVertexIterator(sv_it, true);
 }
 
+PyDoc_STRVAR(Stroke_reversed_doc,
+".. method:: __reversed__()\n"
+"\n"
+"   Returns a StrokeVertexIterator iterating over the vertices of the Stroke\n"
+"   in the reversed order (from the last to the first).\n"
+"\n"
+"   :return: A StrokeVertexIterator pointing after the last StrokeVertex.\n"
+"   :rtype: :class:`StrokeVertexIterator`");
+
+static PyObject *Stroke_reversed(BPy_Stroke *self)
+{
+	StrokeInternal::StrokeVertexIterator sv_it(self->s->strokeVerticesEnd());
+	return BPy_StrokeVertexIterator_from_StrokeVertexIterator(sv_it, true);
+}
+
 PyDoc_STRVAR(Stroke_stroke_vertices_size_doc,
 ".. method:: stroke_vertices_size()\n"
 "\n"
@@ -310,6 +325,7 @@ static PyMethodDef BPy_Stroke_methods[] = {
 	{"stroke_vertices_begin", (PyCFunction)Stroke_stroke_vertices_begin, METH_VARARGS | METH_KEYWORDS,
 	                          Stroke_stroke_vertices_begin_doc},
 	{"stroke_vertices_end", (PyCFunction)Stroke_stroke_vertices_end, METH_NOARGS, Stroke_stroke_vertices_end_doc},
+	{"__reversed__", (PyCFunction)Stroke_reversed, METH_NOARGS, Stroke_reversed_doc},
 	{"stroke_vertices_size", (PyCFunction)Stroke_stroke_vertices_size, METH_NOARGS, Stroke_stroke_vertices_size_doc},
 	{NULL, NULL, 0, NULL}
 };

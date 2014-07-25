@@ -204,7 +204,7 @@ void ED_markers_get_minmax(ListBase *markers, short sel, float *first, float *la
 	
 	/* sanity check */
 	//printf("markers = %p -  %p, %p\n", markers, markers->first, markers->last);
-	if (ELEM3(NULL, markers, markers->first, markers->last)) {
+	if (ELEM(NULL, markers, markers->first, markers->last)) {
 		*first = 0.0f;
 		*last = 0.0f;
 		return;
@@ -846,7 +846,7 @@ static int ed_marker_move_modal(bContext *C, wmOperator *op, const wmEvent *even
 			applyNumInput(&mm->num, &value);
 
 			if (hasNumInput(&mm->num)) {
-				outputNumInput(&mm->num, str_tx);
+				outputNumInput(&mm->num, str_tx, scene->unit.scale_length);
 			}
 			else {
 				BLI_snprintf(str_tx, sizeof(str_tx), "%d", (int)value);

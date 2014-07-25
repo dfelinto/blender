@@ -402,7 +402,7 @@ void RNA_api_sequence_strip(StructRNA *srna)
 	func = RNA_def_function(srna, "update", "rna_Sequence_update_rnafunc");
 	RNA_def_function_flag(func, FUNC_USE_SELF_ID);
 	RNA_def_function_ui_description(func, "Update the strip dimensions");
-	parm = RNA_def_boolean(func, "data", false, "Frame",
+	parm = RNA_def_boolean(func, "data", false, "Data",
 	                       "Update strip data");
 
 	func = RNA_def_function(srna, "strip_elem_from_frame", "BKE_sequencer_give_stripelem");
@@ -468,6 +468,7 @@ void RNA_api_sequences(BlenderRNA *brna, PropertyRNA *cprop)
 		{SEQ_TYPE_SPEED, "SPEED", 0, "Speed", ""},
 		{SEQ_TYPE_MULTICAM, "MULTICAM", 0, "Multicam Selector", ""},
 		{SEQ_TYPE_ADJUSTMENT, "ADJUSTMENT", 0, "Adjustment Layer", ""},
+		{SEQ_TYPE_GAUSSIAN_BLUR, "GAUSSIAN_BLUR", 0, "Gaussian Blur", ""},
 		{0, NULL, 0, NULL, NULL}
 	};
 

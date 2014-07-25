@@ -663,7 +663,7 @@ void drawConstraint(TransInfo *t)
 {
 	TransCon *tc = &(t->con);
 
-	if (!ELEM3(t->spacetype, SPACE_VIEW3D, SPACE_IMAGE, SPACE_NODE))
+	if (!ELEM(t->spacetype, SPACE_VIEW3D, SPACE_IMAGE, SPACE_NODE))
 		return;
 	if (!(tc->mode & CON_APPLY))
 		return;
@@ -755,6 +755,9 @@ void drawPropCircle(const struct bContext *C, TransInfo *t)
 			if (t->options & CTX_MASK) {
 				/* untested - mask aspect is TODO */
 				ED_space_image_get_aspect(t->sa->spacedata.first, &aspx, &aspy);
+			}
+			else if (t->options & CTX_PAINT_CURVE) {
+				aspx = aspy = 1.0;
 			}
 			else {
 				ED_space_image_get_uv_aspect(t->sa->spacedata.first, &aspx, &aspy);

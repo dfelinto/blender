@@ -3704,8 +3704,8 @@ static GroupObject *add_render_lamp(Render *re, Object *ob)
 	
 	/* Annoying, lamp UI does this, but the UI might not have been used? - add here too.
 	 * make sure this matches buttons_shading.c's logic */
-	if (ELEM4(la->type, LA_AREA, LA_SPOT, LA_SUN, LA_LOCAL) && (la->mode & LA_SHAD_RAY))
-		if (ELEM3(la->type, LA_SPOT, LA_SUN, LA_LOCAL))
+	if (ELEM(la->type, LA_AREA, LA_SPOT, LA_SUN, LA_LOCAL) && (la->mode & LA_SHAD_RAY))
+		if (ELEM(la->type, LA_SPOT, LA_SUN, LA_LOCAL))
 			if (la->ray_samp_method == LA_SAMP_CONSTANT) la->ray_samp_method = LA_SAMP_HALTON;
 	
 	lar->ray_samp_method= la->ray_samp_method;
@@ -4546,8 +4546,7 @@ static void set_dupli_tex_mat(Render *re, ObjectInstanceRen *obi, DupliObject *d
 
 		obi->duplitexmat= BLI_memarena_alloc(re->memArena, sizeof(float)*4*4);
 		invert_m4_m4(imat, dob->mat);
-		mul_serie_m4(obi->duplitexmat, re->viewmat, omat, imat, re->viewinv,
-		             NULL, NULL, NULL, NULL);
+		mul_m4_series(obi->duplitexmat, re->viewmat, omat, imat, re->viewinv);
 	}
 
 	copy_v3_v3(obi->dupliorco, dob->orco);
@@ -4791,13 +4790,12 @@ static int allow_render_object(Render *re, Object *ob, int nolamps, int onlysele
 {
 	if (is_object_hidden(re, ob))
 		return 0;
-	
-	/* override not showing object when duplis are used with particles */
-	if (ob->transflag & OB_DUPLIPARTS) {
-		/* pass */  /* let particle system(s) handle showing vs. not showing */
-	}
-	else if ((ob->transflag & OB_DUPLI) && !(ob->transflag & OB_DUPLIFRAMES)) {
-		return 0;
+
+	/* Only handle dupli-hiding here if there is no particle systems. Else, let those handle show/noshow. */
+	if (!ob->particlesystem.first) {
+		if ((ob->transflag & OB_DUPLI) && !(ob->transflag & OB_DUPLIFRAMES)) {
+			return 0;
+		}
 	}
 	
 	/* don't add non-basic meta objects, ends up having renderobjects with no geometry */
@@ -4832,7 +4830,7 @@ static int allow_render_dupli_instance(Render *UNUSED(re), DupliObject *dob, Obj
 	}
 
 	for (psys=obd->particlesystem.first; psys; psys=psys->next)
-		if (!ELEM5(psys->part->ren_as, PART_DRAW_BB, PART_DRAW_LINE, PART_DRAW_PATH, PART_DRAW_OB, PART_DRAW_GR))
+		if (!ELEM(psys->part->ren_as, PART_DRAW_BB, PART_DRAW_LINE, PART_DRAW_PATH, PART_DRAW_OB, PART_DRAW_GR))
 			return 0;
 
 	/* don't allow lamp, animated duplis, or radio render */
@@ -4989,7 +4987,7 @@ static void database_init_objects(Render *re, unsigned int renderlay, int nolamp
 				 * system need to have render settings set for dupli particles */
 				dupli_render_particle_set(re, ob, timeoffset, 0, 1);
 				duplilist = object_duplilist(re->eval_ctx, re->scene, ob);
-				duplilist_apply_data = duplilist_apply_matrix(duplilist);
+				duplilist_apply_data = duplilist_apply(ob, duplilist);
 				dupli_render_particle_set(re, ob, timeoffset, 0, 0);
 
 				for (dob= duplilist->first, i = 0; dob; dob= dob->next, ++i) {
@@ -5084,7 +5082,7 @@ static void database_init_objects(Render *re, unsigned int renderlay, int nolamp
 				}
 
 				if (duplilist_apply_data) {
-					duplilist_restore_matrix(duplilist, duplilist_apply_data);
+					duplilist_restore(duplilist, duplilist_apply_data);
 					duplilist_free_apply_data(duplilist_apply_data);
 				}
 				free_object_duplilist(duplilist);
@@ -5146,8 +5144,10 @@ void RE_Database_FromScene(Render *re, Main *bmain, Scene *scene, unsigned int l
 		lay &= 0xFF000000;
 	
 	/* applies changes fully */
-	if ((re->r.scemode & (R_NO_FRAME_UPDATE|R_BUTS_PREVIEW|R_VIEWPORT_PREVIEW))==0)
+	if ((re->r.scemode & (R_NO_FRAME_UPDATE|R_BUTS_PREVIEW|R_VIEWPORT_PREVIEW))==0) {
 		BKE_scene_update_for_newframe(re->eval_ctx, re->main, re->scene, lay);
+		render_update_anim_renderdata(re, &re->scene->r);
+	}
 	
 	/* if no camera, viewmat should have been set! */
 	if (use_camera_view && camera) {
@@ -5832,8 +5832,8 @@ void RE_Database_Baking(Render *re, Main *bmain, Scene *scene, unsigned int lay,
 	Object *camera;
 	float mat[4][4];
 	float amb[3];
-	const short onlyselected= !ELEM5(type, RE_BAKE_LIGHT, RE_BAKE_ALL, RE_BAKE_SHADOW, RE_BAKE_AO, RE_BAKE_VERTEX_COLORS);
-	const short nolamps= ELEM5(type, RE_BAKE_NORMALS, RE_BAKE_TEXTURE, RE_BAKE_DISPLACEMENT, RE_BAKE_DERIVATIVE, RE_BAKE_VERTEX_COLORS);
+	const short onlyselected= !ELEM(type, RE_BAKE_LIGHT, RE_BAKE_ALL, RE_BAKE_SHADOW, RE_BAKE_AO, RE_BAKE_VERTEX_COLORS);
+	const short nolamps= ELEM(type, RE_BAKE_NORMALS, RE_BAKE_TEXTURE, RE_BAKE_DISPLACEMENT, RE_BAKE_DERIVATIVE, RE_BAKE_VERTEX_COLORS);
 
 	re->main= bmain;
 	re->scene= scene;
@@ -5857,7 +5857,7 @@ void RE_Database_Baking(Render *re, Main *bmain, Scene *scene, unsigned int lay,
 	if (type==RE_BAKE_VERTEX_COLORS)
 		re->flag |=  R_NEED_VCOL;
 
-	if (!actob && ELEM6(type, RE_BAKE_LIGHT, RE_BAKE_NORMALS, RE_BAKE_TEXTURE, RE_BAKE_DISPLACEMENT, RE_BAKE_DERIVATIVE, RE_BAKE_VERTEX_COLORS)) {
+	if (!actob && ELEM(type, RE_BAKE_LIGHT, RE_BAKE_NORMALS, RE_BAKE_TEXTURE, RE_BAKE_DISPLACEMENT, RE_BAKE_DERIVATIVE, RE_BAKE_VERTEX_COLORS)) {
 		re->r.mode &= ~R_SHADOW;
 		re->r.mode &= ~R_RAYTRACE;
 	}

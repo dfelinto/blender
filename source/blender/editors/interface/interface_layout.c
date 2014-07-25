@@ -1181,7 +1181,7 @@ void uiItemFullR(uiLayout *layout, PointerRNA *ptr, PropertyRNA *prop, int index
 	if (flag & UI_ITEM_R_ICON_ONLY) {
 		/* pass */
 	}
-	else if (ELEM4(type, PROP_INT, PROP_FLOAT, PROP_STRING, PROP_POINTER)) {
+	else if (ELEM(type, PROP_INT, PROP_FLOAT, PROP_STRING, PROP_POINTER)) {
 		name = ui_item_name_add_colon(name, namestr);
 	}
 	else if (type == PROP_BOOLEAN && is_array && index == RNA_NO_INDEX) {
@@ -1323,9 +1323,9 @@ void uiItemEnumR_string(uiLayout *layout, struct PointerRNA *ptr, const char *pr
 
 	for (a = 0; item[a].identifier; a++) {
 		if (item[a].value == ivalue) {
-			const char *item_name = CTX_IFACE_(RNA_property_translation_context(prop), item[a].name);
+			const char *item_name = name ? name : CTX_IFACE_(RNA_property_translation_context(prop), item[a].name);
 
-			uiItemFullR(layout, ptr, prop, RNA_ENUM_VALUE, ivalue, 0, item_name ? item_name : name, icon ? icon : item[a].icon);
+			uiItemFullR(layout, ptr, prop, RNA_ENUM_VALUE, ivalue, 0, item_name, icon ? icon : item[a].icon);
 			break;
 		}
 	}
@@ -1559,7 +1559,7 @@ void uiItemPointerR(uiLayout *layout, struct PointerRNA *ptr, const char *propna
 	}
 	
 	type = RNA_property_type(prop);
-	if (!ELEM3(type, PROP_POINTER, PROP_STRING, PROP_ENUM)) {
+	if (!ELEM(type, PROP_POINTER, PROP_STRING, PROP_ENUM)) {
 		RNA_warning("Property %s must be a pointer, string or enum", propname);
 		return;
 	}
@@ -1759,7 +1759,7 @@ void uiItemV(uiLayout *layout, const char *name, int icon, int argval)
 {
 	/* label */
 	uiBlock *block = layout->root->block;
-	float *retvalue = (block->handle) ? &block->handle->retvalue : NULL;
+	int *retvalue = (block->handle) ? &block->handle->retvalue : NULL;
 	int w;
 
 	uiBlockSetCurLayout(block, layout);
@@ -1772,11 +1772,11 @@ void uiItemV(uiLayout *layout, const char *name, int icon, int argval)
 	w = ui_text_icon_width(layout, name, icon, 0);
 
 	if (icon && name[0])
-		uiDefIconTextButF(block, BUT, argval, icon, name, 0, 0, w, UI_UNIT_Y, retvalue, 0.0, 0.0, 0, -1, "");
+		uiDefIconTextButI(block, BUT, argval, icon, name, 0, 0, w, UI_UNIT_Y, retvalue, 0.0, 0.0, 0, -1, "");
 	else if (icon)
-		uiDefIconButF(block, BUT, argval, icon, 0, 0, w, UI_UNIT_Y, retvalue, 0.0, 0.0, 0, -1, "");
+		uiDefIconButI(block, BUT, argval, icon, 0, 0, w, UI_UNIT_Y, retvalue, 0.0, 0.0, 0, -1, "");
 	else
-		uiDefButF(block, BUT, argval, name, 0, 0, w, UI_UNIT_Y, retvalue, 0.0, 0.0, 0, -1, "");
+		uiDefButI(block, BUT, argval, name, 0, 0, w, UI_UNIT_Y, retvalue, 0.0, 0.0, 0, -1, "");
 }
 
 /* separator item */
@@ -2982,6 +2982,8 @@ void uiLayoutSetFunc(uiLayout *layout, uiMenuHandleFunc handlefunc, void *argv)
 void uiBlockLayoutResolve(uiBlock *block, int *x, int *y)
 {
 	uiLayoutRoot *root;
+
+	BLI_assert(block->active);
 
 	if (x) *x = 0;
 	if (y) *y = 0;

@@ -142,6 +142,7 @@ void ED_operatortypes_mesh(void)
 	WM_operatortype_append(MESH_OT_noise);
 	WM_operatortype_append(MESH_OT_flip_normals);
 	WM_operatortype_append(MESH_OT_rip);
+	WM_operatortype_append(MESH_OT_rip_edge);
 	WM_operatortype_append(MESH_OT_blend_from_shape);
 	WM_operatortype_append(MESH_OT_shape_propagate_to_all);
 	
@@ -169,6 +170,7 @@ void ED_operatortypes_mesh(void)
 
 	WM_operatortype_append(MESH_OT_bridge_edge_loops);
 	WM_operatortype_append(MESH_OT_inset);
+	WM_operatortype_append(MESH_OT_face_split_by_edges);
 	WM_operatortype_append(MESH_OT_poke);
 	WM_operatortype_append(MESH_OT_wireframe);
 	WM_operatortype_append(MESH_OT_edge_split);
@@ -235,6 +237,13 @@ void ED_operatormacros_mesh(void)
 	                                  OPTYPE_UNDO | OPTYPE_REGISTER);
 	otmacro = WM_operatortype_macro_define(ot, "MESH_OT_rip");
 	RNA_boolean_set(otmacro->ptr, "use_fill", true);
+	otmacro = WM_operatortype_macro_define(ot, "TRANSFORM_OT_translate");
+	RNA_enum_set(otmacro->ptr, "proportional", 0);
+	RNA_boolean_set(otmacro->ptr, "mirror", false);
+
+	ot = WM_operatortype_append_macro("MESH_OT_rip_edge_move", "Extend Vertices", "Extend vertices and move the result",
+	                                  OPTYPE_UNDO | OPTYPE_REGISTER);
+	WM_operatortype_macro_define(ot, "MESH_OT_rip_edge");
 	otmacro = WM_operatortype_macro_define(ot, "TRANSFORM_OT_translate");
 	RNA_enum_set(otmacro->ptr, "proportional", 0);
 	RNA_boolean_set(otmacro->ptr, "mirror", false);
@@ -371,6 +380,8 @@ void ED_keymap_mesh(wmKeyConfig *keyconf)
 
 	WM_keymap_add_item(keymap, "MESH_OT_rip_move", VKEY, KM_PRESS, 0, 0);
 	WM_keymap_add_item(keymap, "MESH_OT_rip_move_fill", VKEY, KM_PRESS, KM_ALT, 0);
+
+	WM_keymap_add_item(keymap, "MESH_OT_rip_edge_move", DKEY, KM_PRESS, KM_ALT, 0);
 
 	WM_keymap_add_item(keymap, "MESH_OT_merge", MKEY, KM_PRESS, KM_ALT, 0);
 

@@ -47,6 +47,6 @@ void SwitchViewNode::convertToOperations(NodeConverter &converter, const Composi
 	if (!sock) nr --;
 
 
-	result = converter.addInputProxy(getInputSocket(nr));
+	result = converter.addInputProxy(getInputSocket(nr), false);
 	converter.mapOutputSocket(getOutputSocket(0), result);
 }

@@ -85,7 +85,7 @@ bool	 KX_TouchEventManager::newBroadphaseResponse(void *client_data,
 	PHY_IPhysicsController* ctrl2 = static_cast<PHY_IPhysicsController*>(object2);
 
 	KX_ClientObjectInfo *info1 = (ctrl1) ? static_cast<KX_ClientObjectInfo*>(ctrl1->GetNewClientInfo()) : NULL;
-	KX_ClientObjectInfo *info2 = (ctrl1) ? static_cast<KX_ClientObjectInfo*>(ctrl2->GetNewClientInfo()) : NULL;
+	KX_ClientObjectInfo *info2 = (ctrl2) ? static_cast<KX_ClientObjectInfo*>(ctrl2->GetNewClientInfo()) : NULL;
 
 	// This call back should only be called for controllers of Near and Radar sensor
 	if (!info1)
@@ -97,9 +97,14 @@ bool	 KX_TouchEventManager::newBroadphaseResponse(void *client_data,
 
 	bool has_py_callbacks = false;
 
+#ifdef WITH_PYTHON
 	// Consider callbacks for broadphase inclusion if it's a sensor object type
 	if (gobj1 && gobj2)
 		has_py_callbacks = gobj1->m_collisionCallbacks || gobj2->m_collisionCallbacks;
+#else
+	(void)gobj1;
+	(void)gobj2;
+#endif
 
 	switch (info1->m_type)
 	{

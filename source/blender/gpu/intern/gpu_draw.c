@@ -370,9 +370,9 @@ static void gpu_make_repbind(Image *ima)
 	BKE_image_release_ibuf(ima, ibuf, NULL);
 }
 
-static void gpu_clear_tpage(void)
+void GPU_clear_tpage(bool force)
 {
-	if (GTS.lasttface==NULL)
+	if (GTS.lasttface==NULL && !force)
 		return;
 	
 	GTS.lasttface= NULL;
@@ -866,7 +866,7 @@ int GPU_set_tpage(MTFace *tface, int mipmap, int alphablend)
 	
 	/* check if we need to clear the state */
 	if (tface==NULL) {
-		gpu_clear_tpage();
+		GPU_clear_tpage(false);
 		return 0;
 	}
 
@@ -1548,7 +1548,7 @@ void GPU_begin_object_materials(View3D *v3d, RegionView3D *rv3d, Scene *scene, O
 			/* setting 'do_alpha_after = true' indicates this object needs to be
 			 * drawn in a second alpha pass for improved blending */
 			if (do_alpha_after && !GMS.is_alpha_pass)
-				if (ELEM3(alphablend, GPU_BLEND_ALPHA, GPU_BLEND_ADD, GPU_BLEND_ALPHA_SORT))
+				if (ELEM(alphablend, GPU_BLEND_ALPHA, GPU_BLEND_ADD, GPU_BLEND_ALPHA_SORT))
 					*do_alpha_after = true;
 
 			GMS.alphablend[a]= alphablend;

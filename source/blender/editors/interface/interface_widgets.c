@@ -33,6 +33,7 @@
 #include <string.h>
 #include <assert.h>
 
+#include "DNA_brush_types.h"
 #include "DNA_screen_types.h"
 #include "DNA_userdef_types.h"
 
@@ -477,13 +478,17 @@ static void round_box_edges(uiWidgetBase *wt, int roundboxalign, const rcti *rec
 
 
 /* based on button rect, return scaled array of triangles */
-static void widget_num_tria(uiWidgetTrias *tria, const rcti *rect, float triasize, char where)
+static void widget_draw_tria_ex(
+        uiWidgetTrias *tria, const rcti *rect, float triasize, char where,
+        /* input data */
+        const float verts[][2], const int verts_tot,
+        const unsigned int tris[][3], const int tris_tot)
 {
 	float centx, centy, sizex, sizey, minsize;
 	int a, i1 = 0, i2 = 1;
-	
+
 	minsize = min_ii(BLI_rcti_size_x(rect), BLI_rcti_size_y(rect));
-	
+
 	/* center position and size */
 	centx = (float)rect->xmin + 0.5f * minsize;
 	centy = (float)rect->ymin + 0.5f * minsize;
@@ -502,49 +507,30 @@ static void widget_num_tria(uiWidgetTrias *tria, const rcti *rect, float triasiz
 		sizex = -sizex;
 		i2 = 0; i1 = 1;
 	}
-	
-	for (a = 0; a < 3; a++) {
-		tria->vec[a][0] = sizex * num_tria_vert[a][i1] + centx;
-		tria->vec[a][1] = sizey * num_tria_vert[a][i2] + centy;
+
+	for (a = 0; a < verts_tot; a++) {
+		tria->vec[a][0] = sizex * verts[a][i1] + centx;
+		tria->vec[a][1] = sizey * verts[a][i2] + centy;
 	}
-	
-	tria->tot = 1;
-	tria->index = num_tria_face;
+
+	tria->tot = tris_tot;
+	tria->index = tris;
+}
+
+static void widget_num_tria(uiWidgetTrias *tria, const rcti *rect, float triasize, char where)
+{
+	widget_draw_tria_ex(
+	        tria, rect, triasize, where,
+	        num_tria_vert, ARRAY_SIZE(num_tria_vert),
+	        num_tria_face, ARRAY_SIZE(num_tria_face));
 }
 
 static void widget_scroll_circle(uiWidgetTrias *tria, const rcti *rect, float triasize, char where)
 {
-	float centx, centy, sizex, sizey, minsize;
-	int a, i1 = 0, i2 = 1;
-	
-	minsize = min_ii(BLI_rcti_size_x(rect), BLI_rcti_size_y(rect));
-	
-	/* center position and size */
-	centx = (float)rect->xmin + 0.5f * minsize;
-	centy = (float)rect->ymin + 0.5f * minsize;
-	sizex = sizey = -0.5f * triasize * minsize;
-
-	if (where == 'r') {
-		centx = (float)rect->xmax - 0.5f * minsize;
-		sizex = -sizex;
-	}
-	else if (where == 't') {
-		centy = (float)rect->ymax - 0.5f * minsize;
-		sizey = -sizey;
-		i2 = 0; i1 = 1;
-	}
-	else if (where == 'b') {
-		sizex = -sizex;
-		i2 = 0; i1 = 1;
-	}
-	
-	for (a = 0; a < 16; a++) {
-		tria->vec[a][0] = sizex * scroll_circle_vert[a][i1] + centx;
-		tria->vec[a][1] = sizey * scroll_circle_vert[a][i2] + centy;
-	}
-	
-	tria->tot = 14;
-	tria->index = scroll_circle_face;
+	widget_draw_tria_ex(
+	        tria, rect, triasize, where,
+	        scroll_circle_vert, ARRAY_SIZE(scroll_circle_vert),
+	        scroll_circle_face, ARRAY_SIZE(scroll_circle_face));
 }
 
 static void widget_trias_draw(uiWidgetTrias *tria)
@@ -863,7 +849,7 @@ static void widget_draw_icon(const uiBut *but, BIFIconID icon, float alpha, cons
 	height = ICON_DEFAULT_HEIGHT / aspect;
 
 	/* calculate blend color */
-	if (ELEM4(but->type, TOG, ROW, TOGN, LISTROW)) {
+	if (ELEM(but->type, TOG, ROW, TOGN, LISTROW)) {
 		if (but->flag & UI_SELECT) {}
 		else if (but->flag & UI_ACTIVE) {}
 		else alpha = 0.5f;
@@ -2840,6 +2826,17 @@ static void widget_swatch(uiBut *but, uiWidgetColors *wcol, rcti *rect, int stat
 
 	widgetbase_draw(&wtb, wcol);
 	
+	if (but->a1 == UI_PALETTE_COLOR && but->a2 == UI_PALETTE_COLOR_ACTIVE) {
+		float width = rect->xmax - rect->xmin;
+		float height = rect->ymax - rect->ymin;
+
+		glColor4ubv((unsigned char *)wcol->outline);
+		glBegin(GL_TRIANGLES);
+		glVertex2f(rect->xmin + 0.1f * width, rect->ymin + 0.9f * height);
+		glVertex2f(rect->xmin + 0.1f * width, rect->ymin + 0.5f * height);
+		glVertex2f(rect->xmin + 0.5f * width, rect->ymin + 0.9f * height);
+		glEnd();
+	}
 }
 
 static void widget_normal(uiBut *but, uiWidgetColors *wcol, rcti *rect, int UNUSED(state), int UNUSED(roundboxalign))

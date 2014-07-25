@@ -363,6 +363,18 @@ base class --- :class:`SCA_IObject`
 
       :type: float
 
+   .. attribute:: debug
+
+      If true, the object's debug properties will be displayed on screen.
+
+      :type: boolean
+
+   .. attribute:: debugRecursive
+
+      If true, the object's and children's debug properties will be displayed on screen.
+
+      :type: boolean
+
    .. method:: endObject()
 
       Delete this object, can be used in place of the EndObject Actuator.
@@ -551,7 +563,7 @@ base class --- :class:`SCA_IObject`
 
          This is not implimented at the moment.
 
-   .. method:: applyImpulse(point, impulse)
+   .. method:: applyImpulse(point, impulse, local=False)
 
       Applies an impulse to the game object.
 
@@ -559,8 +571,14 @@ base class --- :class:`SCA_IObject`
       If point != position, applyImpulse will also change the object's angular momentum.
       Otherwise, only linear momentum will change.
 
-      :arg point: the point to apply the impulse to (in world coordinates)
-      :type point: the point to apply the impulse to (in world coordinates)
+      :arg point: the point to apply the impulse to (in world or local coordinates)
+      :type point: point [ix, iy, iz] the point to apply the impulse to (in world or local coordinates)
+      :arg impulse: impulse vector.
+      :type impulse: 3D Vector
+      :arg local:
+         * False: you get the "global" impulse ie: relative to world coordinates with world orientation.
+         * True: you get the "local" impulse ie: relative to local coordinates with object orientation.
+      :type local: boolean
 
    .. method:: suspendDynamics()
 
@@ -851,3 +869,11 @@ base class --- :class:`SCA_IObject`
       :return: Whether or not the action is playing
       :rtype: boolean
 
+   .. method:: addDebugProperty (name, debug = True)
+
+      Adds a single debug property to the debug list.
+
+      :arg name: name of the property that added to the debug list.
+      :type name: string
+      :arg debug: the debug state.
+      :type debug: boolean

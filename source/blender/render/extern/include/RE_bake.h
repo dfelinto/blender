@@ -80,14 +80,14 @@ bool RE_bake_internal(
         struct Render *re, struct Object *object, const BakePixel pixel_array[],
         const int num_pixels, const int depth, const ScenePassType pass_type, float result[]);
 
-void RE_bake_pixels_populate_from_objects(
+bool RE_bake_pixels_populate_from_objects(
         struct Mesh *me_low, BakePixel pixel_array_from[],
         BakeHighPolyData highpoly[], const int tot_highpoly, const int num_pixels, const bool is_custom_cage,
         const float cage_extrusion, float mat_low[4][4], float mat_cage[4][4], struct Mesh *me_cage);
 
 void RE_bake_pixels_populate(
         struct Mesh *me, struct BakePixel *pixel_array,
-        const int num_pixels, const struct BakeImages *bake_images);
+        const int num_pixels, const struct BakeImages *bake_images, const char *uv_layer);
 
 void RE_bake_mask_fill(const BakePixel pixel_array[], const int num_pixels, char *mask);
 

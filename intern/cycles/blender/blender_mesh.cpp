@@ -208,7 +208,7 @@ static void mikk_compute_tangents(BL::Mesh b_mesh, BL::MeshTextureFaceLayer b_la
 
 /* Create Volume Attribute */
 
-static void create_mesh_volume_attribute(BL::Object b_ob, Mesh *mesh, ImageManager *image_manager, AttributeStandard std)
+static void create_mesh_volume_attribute(BL::Object b_ob, Mesh *mesh, ImageManager *image_manager, AttributeStandard std, float frame)
 {
 	BL::SmokeDomainSettings b_domain = object_smoke_domain_find(b_ob);
 
@@ -222,22 +222,22 @@ static void create_mesh_volume_attribute(BL::Object b_ob, Mesh *mesh, ImageManag
 
 	volume_data->manager = image_manager;
 	volume_data->slot = image_manager->add_image(Attribute::standard_name(std),
-		b_ob.ptr.data, animated, is_float, is_linear, INTERPOLATION_LINEAR, true);
+		b_ob.ptr.data, animated, frame, is_float, is_linear, INTERPOLATION_LINEAR, true);
 }
 
-static void create_mesh_volume_attributes(Scene *scene, BL::Object b_ob, Mesh *mesh)
+static void create_mesh_volume_attributes(Scene *scene, BL::Object b_ob, Mesh *mesh, float frame)
 {
 	/* for smoke volume rendering */
 	if(mesh->need_attribute(scene, ATTR_STD_VOLUME_DENSITY))
-		create_mesh_volume_attribute(b_ob, mesh, scene->image_manager, ATTR_STD_VOLUME_DENSITY);
+		create_mesh_volume_attribute(b_ob, mesh, scene->image_manager, ATTR_STD_VOLUME_DENSITY, frame);
 	if(mesh->need_attribute(scene, ATTR_STD_VOLUME_COLOR))
-		create_mesh_volume_attribute(b_ob, mesh, scene->image_manager, ATTR_STD_VOLUME_COLOR);
+		create_mesh_volume_attribute(b_ob, mesh, scene->image_manager, ATTR_STD_VOLUME_COLOR, frame);
 	if(mesh->need_attribute(scene, ATTR_STD_VOLUME_FLAME))
-		create_mesh_volume_attribute(b_ob, mesh, scene->image_manager, ATTR_STD_VOLUME_FLAME);
+		create_mesh_volume_attribute(b_ob, mesh, scene->image_manager, ATTR_STD_VOLUME_FLAME, frame);
 	if(mesh->need_attribute(scene, ATTR_STD_VOLUME_HEAT))
-		create_mesh_volume_attribute(b_ob, mesh, scene->image_manager, ATTR_STD_VOLUME_HEAT);
+		create_mesh_volume_attribute(b_ob, mesh, scene->image_manager, ATTR_STD_VOLUME_HEAT, frame);
 	if(mesh->need_attribute(scene, ATTR_STD_VOLUME_VELOCITY))
-		create_mesh_volume_attribute(b_ob, mesh, scene->image_manager, ATTR_STD_VOLUME_VELOCITY);
+		create_mesh_volume_attribute(b_ob, mesh, scene->image_manager, ATTR_STD_VOLUME_VELOCITY, frame);
 }
 
 /* Create Mesh */
@@ -347,25 +347,25 @@ static void create_mesh(Scene *scene, Mesh *mesh, BL::Mesh b_mesh, const vector<
 				continue;
 
 			Attribute *attr = mesh->attributes.add(
-				ustring(l->name().c_str()), TypeDesc::TypeColor, ATTR_ELEMENT_CORNER);
+				ustring(l->name().c_str()), TypeDesc::TypeColor, ATTR_ELEMENT_CORNER_BYTE);
 
 			BL::MeshColorLayer::data_iterator c;
-			float3 *fdata = attr->data_float3();
+			uchar4 *cdata = attr->data_uchar4();
 			size_t i = 0;
 
 			for(l->data.begin(c); c != l->data.end(); ++c, ++i) {
-				fdata[0] = color_srgb_to_scene_linear(get_float3(c->color1()));
-				fdata[1] = color_srgb_to_scene_linear(get_float3(c->color2()));
-				fdata[2] = color_srgb_to_scene_linear(get_float3(c->color3()));
+				cdata[0] = color_float_to_byte(color_srgb_to_scene_linear(get_float3(c->color1())));
+				cdata[1] = color_float_to_byte(color_srgb_to_scene_linear(get_float3(c->color2())));
+				cdata[2] = color_float_to_byte(color_srgb_to_scene_linear(get_float3(c->color3())));
 
 				if(nverts[i] == 4) {
-					fdata[3] = fdata[0];
-					fdata[4] = fdata[2];
-					fdata[5] = color_srgb_to_scene_linear(get_float3(c->color4()));
-					fdata += 6;
+					cdata[3] = cdata[0];
+					cdata[4] = cdata[2];
+					cdata[5] = color_float_to_byte(color_srgb_to_scene_linear(get_float3(c->color4())));
+					cdata += 6;
 				}
 				else
-					fdata += 3;
+					cdata += 3;
 			}
 		}
 	}
@@ -561,7 +561,7 @@ Mesh *BlenderSync::sync_mesh(BL::Object b_ob, bool object_updated, bool hide_tri
 				else
 					create_mesh(scene, mesh, b_mesh, used_shaders);
 
-				create_mesh_volume_attributes(scene, b_ob, mesh);
+				create_mesh_volume_attributes(scene, b_ob, mesh, b_scene.frame_current());
 			}
 
 			if(render_layer.use_hair)

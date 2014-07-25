@@ -53,6 +53,7 @@
 #include "ED_mesh.h"
 #include "ED_node.h"
 #include "ED_object.h"
+#include "ED_paint.h"
 #include "ED_physics.h"
 #include "ED_render.h"
 #include "ED_screen.h"
@@ -143,6 +144,7 @@ void ED_spacetypes_init(void)
 	ED_operatormacros_curve();
 	ED_operatormacros_mask();
 	ED_operatormacros_sequencer();
+	ED_operatormacros_paint();
 
 	/* register dropboxes (can use macros) */
 	spacetypes = BKE_spacetypes_list();

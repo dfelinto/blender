@@ -31,6 +31,7 @@
 #include "BLI_math.h"
 #include "BLI_array.h"
 #include "BLI_alloca.h"
+#include "BLI_stackdefines.h"
 
 #include "BKE_customdata.h"
 
@@ -91,8 +92,8 @@ static void remdoubles_createface(BMesh *bm, BMFace *f, BMOpSlot *slot_targetmap
 	STACK_DECLARE(edges);
 	STACK_DECLARE(loops);
 
-	STACK_INIT(edges);
-	STACK_INIT(loops);
+	STACK_INIT(edges, f->len);
+	STACK_INIT(loops, f->len);
 
 	BM_ITER_ELEM (l, &liter, f, BM_LOOPS_OF_FACE) {
 		BMVert *v1 = l->v;
@@ -151,9 +152,6 @@ static void remdoubles_createface(BMesh *bm, BMFace *f, BMOpSlot *slot_targetmap
 			}
 		}
 	}
-
-	STACK_FREE(edges);
-	STACK_FREE(loops);
 }
 
 /**
@@ -530,6 +528,7 @@ static void bmesh_find_doubles_common(BMesh *bm, BMOperator *op,
 	int i, j, keepvert = 0;
 
 	const float dist  = BMO_slot_float_get(op->slots_in, "dist");
+	const float dist_sq = dist * dist;
 	const float dist3 = dist * 3.0f;
 
 	/* Test whether keep_verts arg exists and is non-empty */
@@ -578,7 +577,7 @@ static void bmesh_find_doubles_common(BMesh *bm, BMOperator *op,
 					continue;
 			}
 
-			if (compare_len_v3v3(v_check->co, v_other->co, dist)) {
+			if (compare_len_squared_v3v3(v_check->co, v_other->co, dist_sq)) {
 
 				/* If one vert is marked as keep, make sure it will be the target */
 				if (BMO_elem_flag_test(bm, v_other, VERT_KEEP)) {

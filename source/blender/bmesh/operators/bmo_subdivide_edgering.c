@@ -40,6 +40,7 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_utildefines.h"
+#include "BLI_stackdefines.h"
 #include "BLI_alloca.h"
 #include "BLI_math.h"
 #include "BLI_listbase.h"
@@ -969,8 +970,8 @@ static void bm_edgering_pair_subdiv(BMesh *bm,
 	BMEdge *e;
 	BMFace *f;
 
-	STACK_INIT(edges_ring_arr);
-	STACK_INIT(faces_ring_arr);
+	STACK_INIT(edges_ring_arr, stack_max);
+	STACK_INIT(faces_ring_arr, stack_max);
 
 	bm_edgeloop_vert_tag(el_store_a, false);
 	bm_edgeloop_vert_tag(el_store_b, true);

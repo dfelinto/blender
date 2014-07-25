@@ -244,6 +244,12 @@ static ShaderNode *add_node(Scene *scene, BL::BlendData b_data, BL::Scene b_scen
 	else if (b_node.is_a(&RNA_ShaderNodeCombineHSV)) {
 		node = new CombineHSVNode();
 	}
+	else if (b_node.is_a(&RNA_ShaderNodeSeparateXYZ)) {
+		node = new SeparateXYZNode();
+	}
+	else if (b_node.is_a(&RNA_ShaderNodeCombineXYZ)) {
+		node = new CombineXYZNode();
+	}
 	else if (b_node.is_a(&RNA_ShaderNodeHueSaturation)) {
 		node = new HSVNode();
 	}
@@ -312,7 +318,23 @@ static ShaderNode *add_node(Scene *scene, BL::BlendData b_data, BL::Scene b_scen
 		node = new HoldoutNode();
 	}
 	else if (b_node.is_a(&RNA_ShaderNodeBsdfAnisotropic)) {
-		node = new WardBsdfNode();
+		BL::ShaderNodeBsdfAnisotropic b_aniso_node(b_node);
+		AnisotropicBsdfNode *aniso = new AnisotropicBsdfNode();
+
+		switch (b_aniso_node.distribution())
+		{
+		case BL::ShaderNodeBsdfAnisotropic::distribution_BECKMANN:
+			aniso->distribution = ustring("Beckmann");
+			break;
+		case BL::ShaderNodeBsdfAnisotropic::distribution_GGX:
+			aniso->distribution = ustring("GGX");
+			break;
+		case BL::ShaderNodeBsdfAnisotropic::distribution_ASHIKHMIN_SHIRLEY:
+			aniso->distribution = ustring("Ashikhmin-Shirley");
+			break;
+		}
+
+		node = aniso;
 	}
 	else if (b_node.is_a(&RNA_ShaderNodeBsdfDiffuse)) {
 		node = new DiffuseBsdfNode();
@@ -346,6 +368,9 @@ static ShaderNode *add_node(Scene *scene, BL::BlendData b_data, BL::Scene b_scen
 			break;
 		case BL::ShaderNodeBsdfGlossy::distribution_GGX:
 			glossy->distribution = ustring("GGX");
+			break;
+		case BL::ShaderNodeBsdfGlossy::distribution_ASHIKHMIN_SHIRLEY:
+			glossy->distribution = ustring("Ashikhmin-Shirley");
 			break;
 		}
 		node = glossy;
@@ -547,6 +572,13 @@ static ShaderNode *add_node(Scene *scene, BL::BlendData b_data, BL::Scene b_scen
 
 			image->animated = b_image_node.image_user().use_auto_refresh();
 			image->use_alpha = b_image.use_alpha();
+
+			/* TODO(sergey): Does not work properly when we change builtin type. */
+			if (b_image.is_updated()) {
+				scene->image_manager->tag_reload_image(image->filename,
+				                                       image->builtin_data,
+				                                       (InterpolationType)b_image_node.interpolation());
+			}
 		}
 		image->color_space = ImageTextureNode::color_space_enum[(int)b_image_node.color_space()];
 		image->projection = ImageTextureNode::projection_enum[(int)b_image_node.projection()];
@@ -577,6 +609,13 @@ static ShaderNode *add_node(Scene *scene, BL::BlendData b_data, BL::Scene b_scen
 			}
 
 			env->use_alpha = b_image.use_alpha();
+
+			/* TODO(sergey): Does not work properly when we change builtin type. */
+			if (b_image.is_updated()) {
+				scene->image_manager->tag_reload_image(env->filename,
+				                                       env->builtin_data,
+				                                       INTERPOLATION_LINEAR);
+			}
 		}
 		env->color_space = EnvironmentTextureNode::color_space_enum[(int)b_env_node.color_space()];
 		env->projection = EnvironmentTextureNode::projection_enum[(int)b_env_node.projection()];
@@ -971,6 +1010,7 @@ void BlenderSync::sync_materials(bool update_all)
 			shader->use_mis = get_boolean(cmat, "sample_as_light");
 			shader->use_transparent_shadow = get_boolean(cmat, "use_transparent_shadow");
 			shader->heterogeneous_volume = !get_boolean(cmat, "homogeneous_volume");
+			shader->volume_sampling_method = RNA_enum_get(&cmat, "volume_sampling");
 
 			shader->set_graph(graph);
 			shader->tag_update(scene);
@@ -1000,6 +1040,7 @@ void BlenderSync::sync_world(bool update_all)
 			/* volume */
 			PointerRNA cworld = RNA_pointer_get(&b_world.ptr, "cycles");
 			shader->heterogeneous_volume = !get_boolean(cworld, "homogeneous_volume");
+			shader->volume_sampling_method = RNA_enum_get(&cworld, "volume_sampling");
 		}
 		else if(b_world) {
 			ShaderNode *closure, *out;

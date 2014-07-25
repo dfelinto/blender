@@ -212,25 +212,29 @@ static PyObject *CCL_initPython(void)
 #endif
 
 static struct _inittab bpy_internal_modules[] = {
-	{(char *)"mathutils", PyInit_mathutils},
-//	{(char *)"mathutils.geometry", PyInit_mathutils_geometry},
-//	{(char *)"mathutils.noise", PyInit_mathutils_noise},
-//	{(char *)"mathutils.kdtree", PyInit_mathutils_kdtree},
-	{(char *)"_bpy_path", BPyInit__bpy_path},
-	{(char *)"bgl", BPyInit_bgl},
-	{(char *)"blf", BPyInit_blf},
-	{(char *)"bmesh", BPyInit_bmesh},
-	// {(char *)"bmesh.types", BPyInit_bmesh_types},
-	// {(char *)"bmesh.utils", BPyInit_bmesh_utils},
-	// {(char *)"bmesh.utils", BPyInit_bmesh_geometry},
+	{"mathutils", PyInit_mathutils},
+#if 0
+	{"mathutils.geometry", PyInit_mathutils_geometry},
+	{"mathutils.noise", PyInit_mathutils_noise},
+	{"mathutils.kdtree", PyInit_mathutils_kdtree},
+#endif
+	{"_bpy_path", BPyInit__bpy_path},
+	{"bgl", BPyInit_bgl},
+	{"blf", BPyInit_blf},
+	{"bmesh", BPyInit_bmesh},
+#if 0
+	{"bmesh.types", BPyInit_bmesh_types},
+	{"bmesh.utils", BPyInit_bmesh_utils},
+	{"bmesh.utils", BPyInit_bmesh_geometry},
+#endif
 #ifdef WITH_AUDASPACE
-	{(char *)"aud", AUD_initPython},
+	{"aud", AUD_initPython},
 #endif
 #ifdef WITH_CYCLES
-	{(char *)"_cycles", CCL_initPython},
+	{"_cycles", CCL_initPython},
 #endif
-	{(char *)"gpu", GPU_initPython},
-	{(char *)"idprop", BPyInit_idprop},
+	{"gpu", GPU_initPython},
+	{"idprop", BPyInit_idprop},
 	{NULL, NULL}
 };
 
@@ -243,7 +247,7 @@ void BPY_python_start(int argc, const char **argv)
 
 	/* not essential but nice to set our name */
 	static wchar_t program_path_wchar[FILE_MAX]; /* python holds a reference */
-	BLI_strncpy_wchar_from_utf8(program_path_wchar, BLI_program_path(), sizeof(program_path_wchar) / sizeof(wchar_t));
+	BLI_strncpy_wchar_from_utf8(program_path_wchar, BLI_program_path(), ARRAY_SIZE(program_path_wchar));
 	Py_SetProgramName(program_path_wchar);
 
 	/* must run before python initializes */
@@ -566,15 +570,12 @@ void BPY_DECREF_RNA_INVALIDATE(void *pyob_ptr)
 	PyGILState_Release(gilstate);
 }
 
-
 /* return -1 on error, else 0 */
 int BPY_button_exec(bContext *C, const char *expr, double *value, const bool verbose)
 {
 	PyGILState_STATE gilstate;
-	PyObject *py_dict, *mod, *retval;
 	int error_ret = 0;
-	PyObject *main_mod = NULL;
-	
+
 	if (!value || !expr) return -1;
 
 	if (expr[0] == '\0') {
@@ -584,59 +585,8 @@ int BPY_button_exec(bContext *C, const char *expr, double *value, const bool ver
 
 	bpy_context_set(C, &gilstate);
 
-	PyC_MainModule_Backup(&main_mod);
+	error_ret = PyC_RunString_AsNumber(expr, value, "<blender button>");
 
-	py_dict = PyC_DefaultNameSpace("<blender button>");
-
-	mod = PyImport_ImportModule("math");
-	if (mod) {
-		PyDict_Merge(py_dict, PyModule_GetDict(mod), 0); /* 0 - don't overwrite existing values */
-		Py_DECREF(mod);
-	}
-	else { /* highly unlikely but possibly */
-		PyErr_Print();
-		PyErr_Clear();
-	}
-	
-	retval = PyRun_String(expr, Py_eval_input, py_dict, py_dict);
-	
-	if (retval == NULL) {
-		error_ret = -1;
-	}
-	else {
-		double val;
-
-		if (PyTuple_Check(retval)) {
-			/* Users my have typed in 10km, 2m
-			 * add up all values */
-			int i;
-			val = 0.0;
-
-			for (i = 0; i < PyTuple_GET_SIZE(retval); i++) {
-				const double val_item = PyFloat_AsDouble(PyTuple_GET_ITEM(retval, i));
-				if (val_item == -1 && PyErr_Occurred()) {
-					val = -1;
-					break;
-				}
-				val += val_item;
-			}
-		}
-		else {
-			val = PyFloat_AsDouble(retval);
-		}
-		Py_DECREF(retval);
-		
-		if (val == -1 && PyErr_Occurred()) {
-			error_ret = -1;
-		}
-		else if (!finite(val)) {
-			*value = 0.0;
-		}
-		else {
-			*value = val;
-		}
-	}
-	
 	if (error_ret) {
 		if (verbose) {
 			BPy_errors_to_report(CTX_wm_reports(C));
@@ -646,10 +596,8 @@ int BPY_button_exec(bContext *C, const char *expr, double *value, const bool ver
 		}
 	}
 
-	PyC_MainModule_Restore(main_mod);
-	
 	bpy_context_clear(C, &gilstate);
-	
+
 	return error_ret;
 }
 

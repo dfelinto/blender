@@ -152,6 +152,14 @@ static int blf_search_available(void)
 	return -1;
 }
 
+void BLF_default_set(int fontid)
+{
+	FontBLF *font = blf_get(fontid);
+	if (font || fontid == -1) {
+		global_font_default = fontid;
+	}
+}
+
 static int blf_global_font_init(void)
 {
 	if (global_font_default == -1) {
@@ -335,6 +343,15 @@ void BLF_unload(const char *name)
 	}
 }
 
+void BLF_unload_id(int fontid)
+{
+	FontBLF *font = blf_get(fontid);
+	if (font) {
+		blf_font_free(font);
+		global_font[fontid] = NULL;
+	}
+}
+
 void BLF_enable(int fontid, int option)
 {
 	FontBLF *font = blf_get(fontid);
@@ -460,9 +477,6 @@ void BLF_blur(int fontid, int size)
 
 void BLF_draw_default(float x, float y, float z, const char *str, size_t len)
 {
-	if (!str)
-		return;
-
 	if (!blf_global_font_init())
 		return;
 
@@ -474,9 +488,6 @@ void BLF_draw_default(float x, float y, float z, const char *str, size_t len)
 /* same as above but call 'BLF_draw_ascii' */
 void BLF_draw_default_ascii(float x, float y, float z, const char *str, size_t len)
 {
-	if (!str)
-		return;
-
 	if (!blf_global_font_init())
 		return;
 

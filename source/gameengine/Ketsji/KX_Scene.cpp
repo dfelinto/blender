@@ -595,7 +595,9 @@ KX_GameObject* KX_Scene::AddNodeReplicaObject(class SG_IObject* node, class CVal
 void KX_Scene::ReplicateLogic(KX_GameObject* newobj)
 {
 	/* add properties to debug list, for added objects and DupliGroups */
-	AddObjectDebugProperties(newobj);
+	if (KX_GetActiveEngine()->GetAutoAddDebugProperties()) {
+		AddObjectDebugProperties(newobj);
+	}
 	// also relink the controller to sensors/actuators
 	SCA_ControllerList& controllers = newobj->GetControllers();
 	//SCA_SensorList&     sensors     = newobj->GetSensors();
@@ -1005,7 +1007,7 @@ int KX_Scene::NewRemoveObject(class CValue* gameobj)
 	int ret;
 	KX_GameObject* newobj = (KX_GameObject*) gameobj;
 
-	/* remove property to debug list */
+	/* remove property from debug list */
 	RemoveObjectDebugProperties(newobj);
 
 	/* Invalidate the python reference, since the object may exist in script lists
@@ -1038,6 +1040,7 @@ int KX_Scene::NewRemoveObject(class CValue* gameobj)
 		 !(itc==controllers.end());itc++)
 	{
 		m_logicmgr->RemoveController(*itc);
+		(*itc)->ReParent(NULL);
 	}
 
 	SCA_ActuatorList& actuators = newobj->GetActuators();
@@ -1528,6 +1531,9 @@ void KX_Scene::CalculateVisibleMeshes(RAS_IRasterizer* rasty,KX_Camera* cam, int
 			MarkVisible(rasty, static_cast<KX_GameObject*>(m_objectlist->GetValue(i)), cam, layer);
 		}
 	}
+
+	// Now that we know visible meshes, update LoDs
+	UpdateObjectLods();
 }
 
 // logic stuff
@@ -1616,7 +1622,7 @@ static void update_anim_thread_func(TaskPool *pool, void *taskdata, int UNUSED(t
 		gameobj->UpdateActionManager(curtime);
 		children = gameobj->GetChildren();
 
-		if (gameobj->GetDeformer())
+		if (!gameobj->GetParent() && gameobj->GetDeformer())
 			gameobj->GetDeformer()->Update();
 
 		for (int j=0; j<children->GetCount(); ++j) {
@@ -1633,6 +1639,20 @@ static void update_anim_thread_func(TaskPool *pool, void *taskdata, int UNUSED(t
 
 void KX_Scene::UpdateAnimations(double curtime)
 {
+	KX_KetsjiEngine *engine = KX_GetActiveEngine();
+
+	if (engine->GetRestrictAnimationFPS())
+	{
+		// Handle the animations independently of the logic time step
+		double anim_timestep = 1.0 / GetAnimationFPS();
+		if (curtime - m_previousAnimTime < anim_timestep)
+			return;
+
+		// Sanity/debug print to make sure we're actually going at the fps we want (should be close to anim_timestep)
+		// printf("Anim fps: %f\n", 1.0/(m_clockTime - m_previousAnimTime));
+		m_previousAnimTime = curtime;
+	}
+
 	TaskPool *pool = BLI_task_pool_create(KX_GetActiveEngine()->GetTaskScheduler(), &curtime);
 
 	for (int i=0; i<m_animatedlist->GetCount(); ++i) {
@@ -2004,7 +2024,11 @@ bool KX_Scene::MergeScene(KX_Scene *other)
 	{
 		KX_GameObject* gameobj = (KX_GameObject*)other->GetObjectList()->GetValue(i);
 		MergeScene_GameObject(gameobj, this, other);
-		AddObjectDebugProperties(gameobj); // add properties to debug list for LibLoad objects
+
+		/* add properties to debug list for LibLoad objects */
+		if (KX_GetActiveEngine()->GetAutoAddDebugProperties()) {
+			AddObjectDebugProperties(gameobj);
+		}
 
 		gameobj->UpdateBuckets(false); /* only for active objects */
 	}

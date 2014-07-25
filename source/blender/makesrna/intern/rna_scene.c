@@ -903,7 +903,7 @@ static EnumPropertyItem *rna_ImageFormatSettings_color_depth_itemf(bContext *UNU
 	}
 	else {
 		const int depth_ok = BKE_imtype_valid_depths(imf->imtype);
-		const int is_float = ELEM4(imf->imtype, R_IMF_IMTYPE_RADHDR, R_IMF_IMTYPE_OPENEXR, R_IMF_IMTYPE_MULTILAYER, R_IMF_IMTYPE_MULTIVIEW);
+		const int is_float = ELEM(imf->imtype, R_IMF_IMTYPE_RADHDR, R_IMF_IMTYPE_OPENEXR, R_IMF_IMTYPE_MULTILAYER, R_IMF_IMTYPE_MULTIVIEW);
 
 		EnumPropertyItem *item_8bit =  &image_color_depth_items[0];
 		EnumPropertyItem *item_10bit = &image_color_depth_items[1];
@@ -1430,7 +1430,7 @@ static void object_simplify_update(Object *ob)
 	ob->id.flag &= ~LIB_DOIT;
 
 	for (md = ob->modifiers.first; md; md = md->next) {
-		if (ELEM3(md->type, eModifierType_Subsurf, eModifierType_Multires, eModifierType_ParticleSystem)) {
+		if (ELEM(md->type, eModifierType_Subsurf, eModifierType_Multires, eModifierType_ParticleSystem)) {
 			DAG_id_tag_update(&ob->id, OB_RECALC_DATA);
 		}
 	}
@@ -2234,6 +2234,11 @@ static void rna_def_unified_paint_settings(BlenderRNA  *brna)
 	RNA_def_property_ui_text(prop, "Use Unified Weight",
 	                         "Instead of per-brush weight, the weight is shared across brushes");
 
+	prop = RNA_def_property(srna, "use_unified_color", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag", UNIFIED_PAINT_COLOR);
+	RNA_def_property_ui_text(prop, "Use Unified Color",
+	                         "Instead of per-brush color, the color is shared across brushes");
+
 	/* unified paint settings that override the equivalent settings
 	 * from the active brush */
 	prop = RNA_def_property(srna, "size", PROP_INT, PROP_PIXEL);
@@ -2264,6 +2269,18 @@ static void rna_def_unified_paint_settings(BlenderRNA  *brna)
 	RNA_def_property_range(prop, 0.0f, 1.0f);
 	RNA_def_property_ui_range(prop, 0.0f, 1.0f, 0.001, 3);
 	RNA_def_property_ui_text(prop, "Weight", "Weight to assign in vertex groups");
+	RNA_def_property_update(prop, 0, "rna_UnifiedPaintSettings_update");
+
+	prop = RNA_def_property(srna, "color", PROP_FLOAT, PROP_COLOR_GAMMA);
+	RNA_def_property_range(prop, 0.0, 1.0);
+	RNA_def_property_float_sdna(prop, NULL, "rgb");
+	RNA_def_property_ui_text(prop, "Color", "");
+	RNA_def_property_update(prop, 0, "rna_UnifiedPaintSettings_update");
+
+	prop = RNA_def_property(srna, "secondary_color", PROP_FLOAT, PROP_COLOR_GAMMA);
+	RNA_def_property_range(prop, 0.0, 1.0);
+	RNA_def_property_float_sdna(prop, NULL, "secondary_rgb");
+	RNA_def_property_ui_text(prop, "Secondary Color", "");
 	RNA_def_property_update(prop, 0, "rna_UnifiedPaintSettings_update");
 
 	prop = RNA_def_property(srna, "use_pressure_size", PROP_BOOLEAN, PROP_NONE);
@@ -3332,9 +3349,9 @@ static void rna_def_bake_data(BlenderRNA *brna)
 	RNA_def_struct_nested(brna, srna, "RenderSettings");
 	RNA_def_struct_ui_text(srna, "Bake Data", "Bake data for a Scene datablock");
 
-	prop = RNA_def_property(srna, "custom_cage", PROP_STRING, PROP_NONE);
+	prop = RNA_def_property(srna, "cage_object", PROP_STRING, PROP_NONE);
 	RNA_def_property_string_sdna(prop, NULL, "cage");
-	RNA_def_property_ui_text(prop, "Custom Cage", "Object to use as cage "
+	RNA_def_property_ui_text(prop, "Cage Object", "Object to use as cage "
 	                         "instead of calculating the cage from the active object with cage extrusion");
 	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
 
@@ -4637,7 +4654,15 @@ static void rna_def_scene_render_data(BlenderRNA *brna)
 	RNA_def_property_range(prop, 8, 65536);
 	RNA_def_property_ui_text(prop, "Tile Y", "Vertical tile size to use while rendering");
 	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
-	
+
+	prop = RNA_def_property(srna, "preview_start_resolution", PROP_INT, PROP_NONE);
+	RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+	RNA_def_property_range(prop, 8, 16384);
+	RNA_def_property_int_default(prop, 64);
+	RNA_def_property_ui_text(prop, "Start Resolution", "Resolution to start rendering preview at, "
+	                                                   "progressively increasing it to the full viewport size");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
 	prop = RNA_def_property(srna, "pixel_aspect_x", PROP_FLOAT, PROP_NONE);
 	RNA_def_property_float_sdna(prop, NULL, "xasp");
 	RNA_def_property_flag(prop, PROP_PROPORTIONAL);
@@ -5010,6 +5035,14 @@ static void rna_def_scene_render_data(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Output Path",
 	                         "Directory/name to save animations, # characters defines the position "
 	                         "and length of frame numbers");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+	/* Render result EXR cache. */
+	prop = RNA_def_property(srna, "use_render_cache", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "scemode", R_EXR_CACHE_FILE);
+	RNA_def_property_ui_text(prop, "Cache Result",
+	                         "Save render cache to EXR files (useful for heavy compositing, "
+	                         "Note: affects indirectly rendered scenes)");
 	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
 
 	/* Bake */
@@ -5832,7 +5865,7 @@ void RNA_def_scene(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "gravity", PROP_FLOAT, PROP_ACCELERATION);
 	RNA_def_property_float_sdna(prop, NULL, "physics_settings.gravity");
 	RNA_def_property_array(prop, 3);
-	RNA_def_property_range(prop, -200.0f, 200.0f);
+	RNA_def_property_ui_range(prop, -200.0f, 200.0f, 1, 2);
 	RNA_def_property_ui_text(prop, "Gravity", "Constant acceleration in a given direction");
 	RNA_def_property_update(prop, 0, "rna_Physics_update");
 

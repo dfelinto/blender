@@ -1728,7 +1728,7 @@ void clip_draw_main(const bContext *C, SpaceClip *sc, ARegion *ar)
 			smat[1][1] = 1.0f / height;
 			invert_m4_m4(ismat, smat);
 
-			mul_serie_m4(sc->unistabmat, smat, sc->stabmat, ismat, NULL, NULL, NULL, NULL, NULL);
+			mul_m4_series(sc->unistabmat, smat, sc->stabmat, ismat);
 		}
 	}
 	else if ((sc->flag & SC_MUTE_FOOTAGE) == 0) {
@@ -1795,12 +1795,12 @@ void clip_draw_grease_pencil(bContext *C, int onlyv2d)
 				}
 			}
 
-			draw_gpencil_2dimage(C);
+			ED_gpencil_draw_2dimage(C);
 
 			glPopMatrix();
 		}
 	}
 	else {
-		draw_gpencil_view2d(C, 0);
+		ED_gpencil_draw_view2d(C, 0);
 	}
 }

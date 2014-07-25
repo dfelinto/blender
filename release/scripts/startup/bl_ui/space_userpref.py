@@ -436,6 +436,12 @@ class USERPREF_PT_system(Panel):
         col.prop(system, "use_gpu_mipmap")
         col.prop(system, "use_16bit_textures")
 
+        
+        if system.is_occlusion_query_supported():
+            col.separator()
+            col.label(text="Selection")
+            col.prop(system, "select_method", text="")
+
         col.separator()
 
         col.label(text="Anisotropic Filtering")
@@ -506,8 +512,10 @@ class USERPREF_PT_system(Panel):
         sub.active = system.use_weight_color_range
         sub.template_color_ramp(system, "weight_color_range", expand=True)
 
+        column.separator()
+        column.prop(system, "font_path_ui")
+
         if bpy.app.build_options.international:
-            column.separator()
             column.prop(system, "use_international_fonts")
             if system.use_international_fonts:
                 column.prop(system, "language")
@@ -882,6 +890,7 @@ class USERPREF_PT_file(Panel):
         sub.label(text="Scripts:")
         sub.label(text="Sounds:")
         sub.label(text="Temp:")
+        sub.label(text="Render Cache:")
         sub.label(text="I18n Branches:")
         sub.label(text="Image Editor:")
         sub.label(text="Animation Player:")
@@ -893,6 +902,7 @@ class USERPREF_PT_file(Panel):
         sub.prop(paths, "script_directory", text="")
         sub.prop(paths, "sound_directory", text="")
         sub.prop(paths, "temporary_directory", text="")
+        sub.prop(paths, "render_cache_directory", text="")
         sub.prop(paths, "i18n_branches_directory", text="")
         sub.prop(paths, "image_editor", text="")
         subsplit = sub.split(percentage=0.3)

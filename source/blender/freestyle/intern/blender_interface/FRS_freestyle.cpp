@@ -84,8 +84,6 @@ int freestyle_viewport[4];
 // current scene
 Scene *freestyle_scene;
 
-static string default_module_path;
-
 static void load_post_callback(struct Main *main, struct ID *id, void *arg)
 {
 	lineset_copied = false;
@@ -114,9 +112,6 @@ void FRS_initialize()
 	controller->Clear();
 	freestyle_scene = NULL;
 	lineset_copied = false;
-
-	default_module_path = pathconfig->getProjectDir() + Config::DIR_SEP + "style_modules" +
-	                      Config::DIR_SEP + "contour.py";
 
 	BLI_callback_add(&load_post_callback_funcstore, BLI_CB_EVT_LOAD_POST);
 
@@ -583,7 +578,7 @@ void FRS_init_stroke_rendering(Render *re)
 
 Render *FRS_do_stroke_rendering(Render *re, SceneRenderLayer *srl, int render)
 {
-	Main bmain = {0};
+	Main *freestyle_bmain = re->freestyle_bmain;
 	Render *freestyle_render = NULL;
 	Text *text, *next_text;
 
@@ -605,40 +600,40 @@ Render *FRS_do_stroke_rendering(Render *re, SceneRenderLayer *srl, int render)
 	//   - add style modules
 	//   - set parameters
 	//   - compute view map
-	prepare(&bmain, re, srl);
+	prepare(freestyle_bmain, re, srl);
 
 	if (re->test_break(re->tbh)) {
 		controller->CloseFile();
 		if (G.debug & G_DEBUG_FREESTYLE) {
 			cout << "Break" << endl;
 		}
-		return NULL;
 	}
+	else {
+		// render and composite Freestyle result
+		if (controller->_ViewMap) {
+			// render strokes
+			re->i.infostr = "Freestyle: Stroke rendering";
+			re->stats_draw(re->sdh, &re->i);
+			re->i.infostr = NULL;
+			freestyle_scene = re->scene;
+			controller->DrawStrokes();
+			freestyle_render = controller->RenderStrokes(re, true);
+			controller->CloseFile();
+			freestyle_scene = NULL;
 
-	// render and composite Freestyle result
-	if (controller->_ViewMap) {
-		// render strokes
-		re->i.infostr = "Freestyle: Stroke rendering";
-		re->stats_draw(re->sdh, &re->i);
-		re->i.infostr = NULL;
-		freestyle_scene = re->scene;
-		controller->DrawStrokes();
-		freestyle_render = controller->RenderStrokes(re, true);
-		controller->CloseFile();
-		freestyle_scene = NULL;
-
-		// composite result
-		FRS_composite_result(re, srl, freestyle_render);
-		RE_FreeRenderResult(freestyle_render->result);
-		freestyle_render->result = NULL;
+			// composite result
+			FRS_composite_result(re, srl, freestyle_render);
+			RE_FreeRenderResult(freestyle_render->result);
+			freestyle_render->result = NULL;
+		}
 	}
 
 	// Free temp main (currently only text blocks are stored there)
-	for (text = (Text *) bmain.text.first; text; text = next_text) {
+	for (text = (Text *)freestyle_bmain->text.first; text; text = next_text) {
 		next_text = (Text *) text->id.next;
 
-		BKE_text_unlink(&bmain, text);
-		BKE_libblock_free(&bmain, text);
+		BKE_text_unlink(freestyle_bmain, text);
+		BKE_libblock_free(freestyle_bmain, text);
 	}
 
 	return freestyle_render;

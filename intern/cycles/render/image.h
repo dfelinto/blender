@@ -29,7 +29,7 @@
 CCL_NAMESPACE_BEGIN
 
 /* generic */
-#define TEX_NUM_IMAGES			95
+#define TEX_NUM_IMAGES			94
 #define TEX_IMAGE_BYTE_START	TEX_NUM_FLOAT_IMAGES
 
 /* extended gpu */
@@ -55,9 +55,11 @@ public:
 	ImageManager();
 	~ImageManager();
 
-	int add_image(const string& filename, void *builtin_data, bool animated, bool& is_float, bool& is_linear, InterpolationType interpolation, bool use_alpha);
+	int add_image(const string& filename, void *builtin_data, bool animated, float frame,
+		bool& is_float, bool& is_linear, InterpolationType interpolation, bool use_alpha);
 	void remove_image(int slot);
 	void remove_image(const string& filename, void *builtin_data, InterpolationType interpolation);
+	void tag_reload_image(const string& filename, void *builtin_data, InterpolationType interpolation);
 	bool is_float_image(const string& filename, void *builtin_data, bool& is_linear);
 
 	void device_update(Device *device, DeviceScene *dscene, Progress& progress);
@@ -82,6 +84,7 @@ public:
 		bool use_alpha;
 		bool need_load;
 		bool animated;
+		float frame;
 		InterpolationType interpolation;
 
 		int users;

@@ -48,6 +48,7 @@
 
 #include "BKE_colortools.h"
 #include "BKE_context.h"
+#include "BKE_depsgraph.h"
 #include "BKE_icons.h"
 #include "BKE_image.h"
 #include "BKE_global.h"
@@ -72,6 +73,7 @@
 #include "RNA_enum_types.h"
 
 #include "ED_image.h"
+#include "ED_paint.h"
 #include "ED_render.h"
 #include "ED_screen.h"
 #include "ED_space_api.h"
@@ -88,7 +90,6 @@
 #include "PIL_time.h"
 
 #include "image_intern.h"
-#include "ED_sculpt.h"
 
 /******************** view navigation utilities *********************/
 
@@ -1003,7 +1004,7 @@ static int image_cmp_frame(void *a, void *b)
  * \brief Return the start (offset) and the length of the sequence of continuous frames in the list of frames
  * \param frames [in] the list of frame numbers, as a side-effect the list is sorted
  * \param ofs [out] offest, the first frame number in the sequence
- * \return the number of continuos frames in the sequence
+ * \return the number of contiguous frames in the sequence
  */
 static int image_sequence_get_len(ListBase *frames, int *ofs)
 {
@@ -1040,16 +1041,17 @@ static int image_open_exec(bContext *C, wmOperator *op)
 
 	const bool is_relative_path = RNA_boolean_get(op->ptr, "relative_path");
 
-	if (RNA_struct_property_is_set(op->ptr, "files") && RNA_struct_property_is_set(op->ptr, "directory")) {	
+	RNA_string_get(op->ptr, "filepath", path);
+
+	if (!IMB_isanim(path) && RNA_struct_property_is_set(op->ptr, "files") &&
+	    RNA_struct_property_is_set(op->ptr, "directory"))
+	{
 		ListBase frames;
 
 		BLI_listbase_clear(&frames);
 		image_sequence_get_frames(op->ptr, &frames, path, sizeof(path));
 		frame_seq_len = image_sequence_get_len(&frames, &frame_ofs);
 		BLI_freelistN(&frames);
-	}
-	else {
-		RNA_string_get(op->ptr, "filepath", path);
 	}
 
 	errno = 0;
@@ -1382,7 +1384,7 @@ static int save_image_options_init(SaveImageOptions *simopts, SpaceImage *sima, 
 		/* sanitize all settings */
 
 		/* unlikely but just in case */
-		if (ELEM3(simopts->im_format.planes, R_IMF_PLANES_BW, R_IMF_PLANES_RGB, R_IMF_PLANES_RGBA) == 0) {
+		if (ELEM(simopts->im_format.planes, R_IMF_PLANES_BW, R_IMF_PLANES_RGB, R_IMF_PLANES_RGBA) == 0) {
 			simopts->im_format.planes = R_IMF_PLANES_RGBA;
 		}
 
@@ -1992,6 +1994,7 @@ static int image_reload_exec(bContext *C, wmOperator *UNUSED(op))
 	
 	// XXX other users?
 	BKE_image_signal(ima, (sima) ? &sima->iuser : NULL, IMA_SIGNAL_RELOAD);
+	DAG_id_tag_update(&ima->id, 0);
 
 	WM_event_add_notifier(C, NC_IMAGE | NA_EDITED, ima);
 	
@@ -2028,6 +2031,7 @@ static int image_new_exec(bContext *C, wmOperator *op)
 	char *name = _name;
 	float color[4];
 	int width, height, floatbuf, gen_type, alpha;
+	bool stencil;
 
 	/* retrieve state */
 	sima = CTX_wm_space_image(C);
@@ -2047,7 +2051,8 @@ static int image_new_exec(bContext *C, wmOperator *op)
 	gen_type = RNA_enum_get(op->ptr, "generated_type");
 	RNA_float_get_array(op->ptr, "color", color);
 	alpha = RNA_boolean_get(op->ptr, "alpha");
-	
+	stencil = RNA_boolean_get(op->ptr, "texstencil");
+
 	if (!alpha)
 		color[3] = 1.0f;
 
@@ -2078,6 +2083,13 @@ static int image_new_exec(bContext *C, wmOperator *op)
 				id_us_min(&tex->ima->id);
 			tex->ima = ima;
 			ED_area_tag_redraw(CTX_wm_area(C));
+		}
+		else if (stencil) {
+			ImagePaintSettings *imapaint = &(CTX_data_tool_settings(C)->imapaint);
+
+			if (imapaint->stencil)
+				id_us_min(&imapaint->stencil->id);
+			imapaint->stencil = ima;
 		}
 	}
 
@@ -2127,6 +2139,9 @@ void IMAGE_OT_new(wmOperatorType *ot)
 	RNA_def_enum(ot->srna, "generated_type", image_generated_type_items, IMA_GENTYPE_BLANK,
 	             "Generated Type", "Fill the image with a grid for UV map testing");
 	RNA_def_boolean(ot->srna, "float", 0, "32 bit Float", "Create image with 32 bit floating point bit depth");
+	prop = RNA_def_boolean(ot->srna, "texstencil", 0, "Stencil", "Set Image as stencil");
+	RNA_def_property_flag(prop, PROP_HIDDEN);
+
 }
 
 #undef IMA_DEF_NAME
@@ -2161,7 +2176,7 @@ static int image_invert_exec(bContext *C, wmOperator *op)
 
 	if (support_undo) {
 		ED_undo_paint_push_begin(UNDO_PAINT_IMAGE, op->type->name,
-		                         ED_image_undo_restore, ED_image_undo_free);
+		                         ED_image_undo_restore, ED_image_undo_free, NULL);
 		/* not strictly needed, because we only imapaint_dirty_region to invalidate all tiles
 		 * but better do this right in case someone copies this for a tool that uses partial redraw better */
 		ED_imapaint_clear_partial_redraw();
@@ -3122,4 +3137,36 @@ void IMAGE_OT_change_frame(wmOperatorType *ot)
 
 	/* rna */
 	RNA_def_int(ot->srna, "frame", 0, MINAFRAME, MAXFRAME, "Frame", "", MINAFRAME, MAXFRAME);
+}
+
+/* Reload cached render results... */
+/* goes over all scenes, reads render layers */
+static int image_read_renderlayers_exec(bContext *C, wmOperator *UNUSED(op))
+{
+	Scene *scene = CTX_data_scene(C);
+	SpaceImage *sima = CTX_wm_space_image(C);
+	Image *ima;
+
+	ima = BKE_image_verify_viewer(IMA_TYPE_R_RESULT, "Render Result");
+	if (sima->image == NULL) {
+		ED_space_image_set(sima, scene, NULL, ima);
+	}
+
+	RE_ReadRenderResult(scene, scene);
+
+	WM_event_add_notifier(C, NC_IMAGE | NA_EDITED, ima);
+	return OPERATOR_FINISHED;
+}
+
+void IMAGE_OT_read_renderlayers(wmOperatorType *ot)
+{
+	ot->name = "Read Render Layers";
+	ot->idname = "IMAGE_OT_read_renderlayers";
+	ot->description = "Read all the current scene's render layers from cache, as needed";
+
+	ot->poll = space_image_main_area_poll;
+	ot->exec = image_read_renderlayers_exec;
+
+	/* flags */
+	ot->flag = 0;
 }

@@ -53,8 +53,8 @@
 #include "DNA_world_types.h"
 #include "DNA_linestyle_types.h"
 
-
 #include "BKE_context.h"
+#include "BKE_linestyle.h"
 #include "BKE_material.h"
 #include "BKE_modifier.h"
 #include "BKE_node.h"
@@ -352,7 +352,7 @@ static void buttons_texture_users_from_context(ListBase *users, const bContext *
 		ob = (scene->basact) ? scene->basact->object : NULL;
 		wrld = scene->world;
 		brush = BKE_paint_brush(BKE_paint_get_active_from_context(C));
-		linestyle = CTX_data_linestyle_from_scene(scene);
+		linestyle = BKE_linestyle_active_from_scene(scene);
 	}
 
 	if (ob && ob->type == OB_LAMP && !la)
@@ -442,7 +442,7 @@ void buttons_texture_context_compute(const bContext *C, SpaceButs *sbuts)
 
 	set_texture_context(C, sbuts);
 
-	if (!(BKE_scene_use_new_shading_nodes(scene) || (sbuts->texture_context == SB_TEXC_OTHER))) {
+	if (!((sbuts->texture_context == SB_TEXC_OTHER) || BKE_scene_use_new_shading_nodes(scene))) {
 		if (ct) {
 			BLI_freelistN(&ct->users);
 			MEM_freeN(ct);

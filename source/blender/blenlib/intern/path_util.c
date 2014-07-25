@@ -49,9 +49,9 @@
 
 #include "GHOST_Path-api.h"
 
-#ifdef WIN32
-#  include "MEM_guardedalloc.h"
+#include "MEM_guardedalloc.h"
 
+#ifdef WIN32
 #  include "utf_winfunc.h"
 #  include "utfconv.h"
 #  include <io.h>
@@ -66,6 +66,7 @@
 #  ifdef WITH_BINRELOC
 #    include "binreloc.h"
 #  endif
+#  include <unistd.h>  /* mkdtemp on OSX (and probably all *BSD?), not worth making specific check for this OS. */
 #endif /* WIN32 */
 
 /* local */
@@ -73,7 +74,8 @@
 
 static char bprogname[FILE_MAX];    /* full path to program executable */
 static char bprogdir[FILE_MAX];     /* full path to directory in which executable is located */
-static char btempdir[FILE_MAX];     /* temporary directory */
+static char btempdir_base[FILE_MAX];          /* persistent temporary directory */
+static char btempdir_session[FILE_MAX] = "";  /* volatile temporary directory */
 
 /* implementation */
 
@@ -1488,7 +1490,7 @@ const char *BLI_get_folder_create(int folder_id, const char *subfolder)
 	const char *path;
 
 	/* only for user folders */
-	if (!ELEM4(folder_id, BLENDER_USER_DATAFILES, BLENDER_USER_CONFIG, BLENDER_USER_SCRIPTS, BLENDER_USER_AUTOSAVE))
+	if (!ELEM(folder_id, BLENDER_USER_DATAFILES, BLENDER_USER_CONFIG, BLENDER_USER_SCRIPTS, BLENDER_USER_AUTOSAVE))
 		return NULL;
 	
 	path = BLI_get_folder(folder_id, subfolder);
@@ -1856,7 +1858,7 @@ bool BLI_replace_extension(char *path, size_t maxlen, const char *ext)
 	ssize_t a;
 
 	for (a = path_len - 1; a >= 0; a--) {
-		if (ELEM3(path[a], '.', '/', '\\')) {
+		if (ELEM(path[a], '.', '/', '\\')) {
 			break;
 		}
 	}
@@ -2394,14 +2396,21 @@ const char *BLI_program_dir(void)
  * 
  * Also make sure the temp dir has a trailing slash
  *
- * \param fullname The full path to the temp directory
+ * \param fullname The full path to the temporary temp directory
+ * \param basename The full path to the persistent temp directory (may be NULL)
  * \param maxlen The size of the fullname buffer
  * \param userdir Directory specified in user preferences 
  */
-static void BLI_where_is_temp(char *fullname, const size_t maxlen, char *userdir)
+static void BLI_where_is_temp(char *fullname, char *basename, const size_t maxlen, char *userdir)
 {
+	/* Clear existing temp dir, if needed. */
+	BLI_temp_dir_session_purge();
+
 	fullname[0] = '\0';
-	
+	if (basename) {
+		basename[0] = '\0';
+	}
+
 	if (userdir && BLI_is_dir(userdir)) {
 		BLI_strncpy(fullname, userdir, maxlen);
 	}
@@ -2443,23 +2452,59 @@ static void BLI_where_is_temp(char *fullname, const size_t maxlen, char *userdir
 		}
 #endif
 	}
+
+	/* Now that we have a valid temp dir, add system-generated unique sub-dir. */
+	if (basename) {
+		/* 'XXXXXX' is kind of tag to be replaced by mktemp-familly by an uuid. */
+		char *tmp_name = BLI_strdupcat(fullname, "blender_XXXXXX");
+		const size_t ln = strlen(tmp_name) + 1;
+		if (ln <= maxlen) {
+#ifdef WIN32
+			if (_mktemp_s(tmp_name, ln) == 0) {
+				BLI_dir_create_recursive(tmp_name);
+			}
+#else
+			mkdtemp(tmp_name);
+#endif
+		}
+		if (BLI_is_dir(tmp_name)) {
+			BLI_strncpy(basename, fullname, maxlen);
+			BLI_strncpy(fullname, tmp_name, maxlen);
+			BLI_add_slash(fullname);
+		}
+		else {
+			printf("Warning! Could not generate a temp file name for '%s', falling back to '%s'\n", tmp_name, fullname);
+		}
+
+		MEM_freeN(tmp_name);
+	}
 }
 
 /**
- * Sets btempdir to userdir if specified and is a valid directory, otherwise
+ * Sets btempdir_base to userdir if specified and is a valid directory, otherwise
  * chooses a suitable OS-specific temporary directory.
+ * Sets btempdir_session to a mkdtemp-generated sub-dir of btempdir_base.
  */
-void BLI_init_temporary_dir(char *userdir)
+void BLI_temp_dir_init(char *userdir)
 {
-	BLI_where_is_temp(btempdir, FILE_MAX, userdir);
+	BLI_where_is_temp(btempdir_session, btempdir_base, FILE_MAX, userdir);
+;
 }
 
 /**
  * Path to temporary directory (with trailing slash)
  */
-const char *BLI_temporary_dir(void)
+const char *BLI_temp_dir_session(void)
 {
-	return btempdir;
+	return btempdir_session[0] ? btempdir_session : BLI_temp_dir_base();
+}
+
+/**
+ * Path to persistent temporary directory (with trailing slash)
+ */
+const char *BLI_temp_dir_base(void)
+{
+	return btempdir_base;
 }
 
 /**
@@ -2467,7 +2512,17 @@ const char *BLI_temporary_dir(void)
  */
 void BLI_system_temporary_dir(char *dir)
 {
-	BLI_where_is_temp(dir, FILE_MAX, NULL);
+	BLI_where_is_temp(dir, NULL, FILE_MAX, NULL);
+}
+
+/**
+ * Delete content of this instance's temp dir.
+ */
+void BLI_temp_dir_session_purge(void)
+{
+	if (btempdir_session[0] && BLI_is_dir(btempdir_session)) {
+		BLI_delete(btempdir_session, true, true);
+	}
 }
 
 #ifdef WITH_ICONV

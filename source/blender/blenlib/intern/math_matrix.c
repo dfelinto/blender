@@ -274,71 +274,148 @@ void mul_m4_m3m4(float m1[4][4], float m3_[3][3], float m2_[4][4])
 	m1[2][2] = m2[2][0] * m3[0][2] + m2[2][1] * m3[1][2] + m2[2][2] * m3[2][2];
 }
 
-void mul_serie_m3(float answ[3][3],
-                  float m1[3][3], float m2[3][3], float m3[3][3],
-                  float m4[3][3], float m5[3][3], float m6[3][3],
-                  float m7[3][3], float m8[3][3])
+
+/** \name Macro helpers for: mul_m3_series
+ * \{ */
+void _va_mul_m3_series_3(
+        float r[3][3],
+        float m1[3][3], float m2[3][3])
 {
-	float temp[3][3];
-
-	if (m1 == NULL || m2 == NULL) return;
-
-	mul_m3_m3m3(answ, m2, m1);
-	if (m3) {
-		mul_m3_m3m3(temp, m3, answ);
-		if (m4) {
-			mul_m3_m3m3(answ, m4, temp);
-			if (m5) {
-				mul_m3_m3m3(temp, m5, answ);
-				if (m6) {
-					mul_m3_m3m3(answ, m6, temp);
-					if (m7) {
-						mul_m3_m3m3(temp, m7, answ);
-						if (m8) {
-							mul_m3_m3m3(answ, m8, temp);
-						}
-						else copy_m3_m3(answ, temp);
-					}
-				}
-				else copy_m3_m3(answ, temp);
-			}
-		}
-		else copy_m3_m3(answ, temp);
-	}
+	mul_m3_m3m3(r, m1, m2);
 }
-
-void mul_serie_m4(float answ[4][4], float m1[4][4],
-                  float m2[4][4], float m3[4][4], float m4[4][4],
-                  float m5[4][4], float m6[4][4], float m7[4][4],
-                  float m8[4][4])
+void _va_mul_m3_series_4(
+        float r[3][3],
+        float m1[3][3], float m2[3][3], float m3[3][3])
 {
-	float temp[4][4];
-
-	if (m1 == NULL || m2 == NULL) return;
-
-	mul_m4_m4m4(answ, m1, m2);
-	if (m3) {
-		mul_m4_m4m4(temp, answ, m3);
-		if (m4) {
-			mul_m4_m4m4(answ, temp, m4);
-			if (m5) {
-				mul_m4_m4m4(temp, answ, m5);
-				if (m6) {
-					mul_m4_m4m4(answ, temp, m6);
-					if (m7) {
-						mul_m4_m4m4(temp, answ, m7);
-						if (m8) {
-							mul_m4_m4m4(answ, temp, m8);
-						}
-						else copy_m4_m4(answ, temp);
-					}
-				}
-				else copy_m4_m4(answ, temp);
-			}
-		}
-		else copy_m4_m4(answ, temp);
-	}
+	mul_m3_m3m3(r, m1, m2);
+	mul_m3_m3m3(r, r, m3);
 }
+void _va_mul_m3_series_5(
+        float r[3][3],
+        float m1[3][3], float m2[3][3], float m3[3][3], float m4[3][3])
+{
+	mul_m3_m3m3(r, m1, m2);
+	mul_m3_m3m3(r, r, m3);
+	mul_m3_m3m3(r, r, m4);
+}
+void _va_mul_m3_series_6(
+        float r[3][3],
+        float m1[3][3], float m2[3][3], float m3[3][3], float m4[3][3],
+        float m5[3][3])
+{
+	mul_m3_m3m3(r, m1, m2);
+	mul_m3_m3m3(r, r, m3);
+	mul_m3_m3m3(r, r, m4);
+	mul_m3_m3m3(r, r, m5);
+}
+void _va_mul_m3_series_7(
+        float r[3][3],
+        float m1[3][3], float m2[3][3], float m3[3][3], float m4[3][3],
+        float m5[3][3], float m6[3][3])
+{
+	mul_m3_m3m3(r, m1, m2);
+	mul_m3_m3m3(r, r, m3);
+	mul_m3_m3m3(r, r, m4);
+	mul_m3_m3m3(r, r, m5);
+	mul_m3_m3m3(r, r, m6);
+}
+void _va_mul_m3_series_8(
+        float r[3][3],
+        float m1[3][3], float m2[3][3], float m3[3][3], float m4[3][3],
+        float m5[3][3], float m6[3][3], float m7[3][3])
+{
+	mul_m3_m3m3(r, m1, m2);
+	mul_m3_m3m3(r, r, m3);
+	mul_m3_m3m3(r, r, m4);
+	mul_m3_m3m3(r, r, m5);
+	mul_m3_m3m3(r, r, m6);
+	mul_m3_m3m3(r, r, m7);
+}
+void _va_mul_m3_series_9(
+        float r[3][3],
+        float m1[3][3], float m2[3][3], float m3[3][3], float m4[3][3],
+        float m5[3][3], float m6[3][3], float m7[3][3], float m8[3][3])
+{
+	mul_m3_m3m3(r, m1, m2);
+	mul_m3_m3m3(r, r, m3);
+	mul_m3_m3m3(r, r, m4);
+	mul_m3_m3m3(r, r, m5);
+	mul_m3_m3m3(r, r, m6);
+	mul_m3_m3m3(r, r, m7);
+	mul_m3_m3m3(r, r, m8);
+}
+/** \} */
+
+/** \name Macro helpers for: mul_m4_series
+ * \{ */
+void _va_mul_m4_series_3(
+        float r[4][4],
+        float m1[4][4], float m2[4][4])
+{
+	mul_m4_m4m4(r, m1, m2);
+}
+void _va_mul_m4_series_4(
+        float r[4][4],
+        float m1[4][4], float m2[4][4], float m3[4][4])
+{
+	mul_m4_m4m4(r, m1, m2);
+	mul_m4_m4m4(r, r, m3);
+}
+void _va_mul_m4_series_5(
+        float r[4][4],
+        float m1[4][4], float m2[4][4], float m3[4][4], float m4[4][4])
+{
+	mul_m4_m4m4(r, m1, m2);
+	mul_m4_m4m4(r, r, m3);
+	mul_m4_m4m4(r, r, m4);
+}
+void _va_mul_m4_series_6(
+        float r[4][4],
+        float m1[4][4], float m2[4][4], float m3[4][4], float m4[4][4],
+        float m5[4][4])
+{
+	mul_m4_m4m4(r, m1, m2);
+	mul_m4_m4m4(r, r, m3);
+	mul_m4_m4m4(r, r, m4);
+	mul_m4_m4m4(r, r, m5);
+}
+void _va_mul_m4_series_7(
+        float r[4][4],
+        float m1[4][4], float m2[4][4], float m3[4][4], float m4[4][4],
+        float m5[4][4], float m6[4][4])
+{
+	mul_m4_m4m4(r, m1, m2);
+	mul_m4_m4m4(r, r, m3);
+	mul_m4_m4m4(r, r, m4);
+	mul_m4_m4m4(r, r, m5);
+	mul_m4_m4m4(r, r, m6);
+}
+void _va_mul_m4_series_8(
+        float r[4][4],
+        float m1[4][4], float m2[4][4], float m3[4][4], float m4[4][4],
+        float m5[4][4], float m6[4][4], float m7[4][4])
+{
+	mul_m4_m4m4(r, m1, m2);
+	mul_m4_m4m4(r, r, m3);
+	mul_m4_m4m4(r, r, m4);
+	mul_m4_m4m4(r, r, m5);
+	mul_m4_m4m4(r, r, m6);
+	mul_m4_m4m4(r, r, m7);
+}
+void _va_mul_m4_series_9(
+        float r[4][4],
+        float m1[4][4], float m2[4][4], float m3[4][4], float m4[4][4],
+        float m5[4][4], float m6[4][4], float m7[4][4], float m8[4][4])
+{
+	mul_m4_m4m4(r, m1, m2);
+	mul_m4_m4m4(r, r, m3);
+	mul_m4_m4m4(r, r, m4);
+	mul_m4_m4m4(r, r, m5);
+	mul_m4_m4m4(r, r, m6);
+	mul_m4_m4m4(r, r, m7);
+	mul_m4_m4m4(r, r, m8);
+}
+/** \} */
 
 void mul_v2_m3v2(float r[2], float m[3][3], float v[2])
 {
@@ -2115,7 +2192,7 @@ void pseudoinverse_m4_m4(float Ainv[4][4], float A[4][4], float epsilon)
 
 	transpose_m4(V);
 
-	mul_serie_m4(Ainv, U, Wm, V, NULL, NULL, NULL, NULL, NULL);
+	mul_m4_series(Ainv, U, Wm, V);
 }
 
 void pseudoinverse_m3_m3(float Ainv[3][3], float A[3][3], float epsilon)

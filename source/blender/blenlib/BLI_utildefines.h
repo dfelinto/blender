@@ -40,6 +40,26 @@
 #include <stdio.h>
 #endif
 
+
+/* varargs macros (keep first so others can use) */
+/* --- internal helpers --- */
+#define _VA_NARGS_GLUE(x, y) x y
+#define _VA_NARGS_RETURN_COUNT(\
+	_1_, _2_, _3_, _4_, _5_, _6_, _7_, _8_, _9_, _10_, _11_, _12_, _13_, _14_, _15_, _16_, \
+	_17_, _18_, _19_, _20_, _21_, _22_, _23_, _24_, _25_, _26_, _27_, _28_, _29_, _30_, _31_, _32_, \
+	count, ...) count
+#define _VA_NARGS_EXPAND(args) _VA_NARGS_RETURN_COUNT args
+#define _VA_NARGS_COUNT_MAX16(...) _VA_NARGS_EXPAND((__VA_ARGS__, \
+	32, 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, \
+	15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0))
+#define _VA_NARGS_OVERLOAD_MACRO2(name, count) name##count
+#define _VA_NARGS_OVERLOAD_MACRO1(name, count) _VA_NARGS_OVERLOAD_MACRO2(name, count)
+#define _VA_NARGS_OVERLOAD_MACRO(name,  count) _VA_NARGS_OVERLOAD_MACRO1(name, count)
+/* --- expose for re-use --- */
+#define VA_NARGS_CALL_OVERLOAD(name, ...) \
+	_VA_NARGS_GLUE(_VA_NARGS_OVERLOAD_MACRO(name, _VA_NARGS_COUNT_MAX16(__VA_ARGS__)), (__VA_ARGS__))
+
+
 /* useful for finding bad use of min/max */
 #if 0
 /* gcc only */
@@ -147,9 +167,17 @@
 	__tmp = (__typeof(var_b) *)NULL;      \
 	(void)__tmp;                          \
 } (void)0
+
+#define CHECK_TYPE_PAIR_INLINE(var_a, var_b)  ((void)({  \
+	__typeof(var_a) *__tmp;                              \
+	__tmp = (__typeof(var_b) *)NULL;                     \
+	(void)__tmp;                                         \
+}))
+
 #else
 #  define CHECK_TYPE(var, type)
 #  define CHECK_TYPE_PAIR(var_a, var_b)
+#  define CHECK_TYPE_PAIR_INLINE(var_a, var_b) (void)0
 #endif
 
 /* can be used in simple macros */
@@ -174,17 +202,42 @@
 	(b) = (tval);                 \
 } (void)0
 
-/* ELEM#(a, ...): is the first arg equal any of the others */
-#define ELEM(a, b, c)           ((a) == (b) || (a) == (c))
-#define ELEM3(a, b, c, d)       (ELEM(a, b, c) || (a) == (d) )
-#define ELEM4(a, b, c, d, e)    (ELEM(a, b, c) || ELEM(a, d, e) )
-#define ELEM5(a, b, c, d, e, f) (ELEM(a, b, c) || ELEM3(a, d, e, f) )
-#define ELEM6(a, b, c, d, e, f, g)      (ELEM(a, b, c) || ELEM4(a, d, e, f, g) )
-#define ELEM7(a, b, c, d, e, f, g, h)   (ELEM3(a, b, c, d) || ELEM4(a, e, f, g, h) )
-#define ELEM8(a, b, c, d, e, f, g, h, i)        (ELEM4(a, b, c, d, e) || ELEM4(a, f, g, h, i) )
-#define ELEM9(a, b, c, d, e, f, g, h, i, j)        (ELEM4(a, b, c, d, e) || ELEM5(a, f, g, h, i, j) )
-#define ELEM10(a, b, c, d, e, f, g, h, i, j, k)        (ELEM4(a, b, c, d, e) || ELEM6(a, f, g, h, i, j, k) )
-#define ELEM11(a, b, c, d, e, f, g, h, i, j, k, l)        (ELEM4(a, b, c, d, e) || ELEM7(a, f, g, h, i, j, k, l) )
+/* ELEM#(v, ...): is the first arg equal any others? */
+/* internal helpers*/
+#define _VA_ELEM3(v, a, b) \
+       (((v) == (a)) || ((v) == (b)))
+#define _VA_ELEM4(v, a, b, c) \
+       (_VA_ELEM3(v, a, b) || ((v) == (c)))
+#define _VA_ELEM5(v, a, b, c, d) \
+       (_VA_ELEM4(v, a, b, c) || ((v) == (d)))
+#define _VA_ELEM6(v, a, b, c, d, e) \
+       (_VA_ELEM5(v, a, b, c, d) || ((v) == (e)))
+#define _VA_ELEM7(v, a, b, c, d, e, f) \
+       (_VA_ELEM6(v, a, b, c, d, e) || ((v) == (f)))
+#define _VA_ELEM8(v, a, b, c, d, e, f, g) \
+       (_VA_ELEM7(v, a, b, c, d, e, f) || ((v) == (g)))
+#define _VA_ELEM9(v, a, b, c, d, e, f, g, h) \
+       (_VA_ELEM8(v, a, b, c, d, e, f, g) || ((v) == (h)))
+#define _VA_ELEM10(v, a, b, c, d, e, f, g, h, i) \
+       (_VA_ELEM9(v, a, b, c, d, e, f, g, h) || ((v) == (i)))
+#define _VA_ELEM11(v, a, b, c, d, e, f, g, h, i, j) \
+       (_VA_ELEM10(v, a, b, c, d, e, f, g, h, i) || ((v) == (j)))
+#define _VA_ELEM12(v, a, b, c, d, e, f, g, h, i, j, k) \
+       (_VA_ELEM11(v, a, b, c, d, e, f, g, h, i, j) || ((v) == (k)))
+#define _VA_ELEM13(v, a, b, c, d, e, f, g, h, i, j, k, l) \
+       (_VA_ELEM12(v, a, b, c, d, e, f, g, h, i, j, k) || ((v) == (l)))
+#define _VA_ELEM14(v, a, b, c, d, e, f, g, h, i, j, k, l, m) \
+       (_VA_ELEM13(v, a, b, c, d, e, f, g, h, i, j, k, l) || ((v) == (m)))
+#define _VA_ELEM15(v, a, b, c, d, e, f, g, h, i, j, k, l, m, n) \
+       (_VA_ELEM14(v, a, b, c, d, e, f, g, h, i, j, k, l, m) || ((v) == (n)))
+#define _VA_ELEM16(v, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o) \
+       (_VA_ELEM15(v, a, b, c, d, e, f, g, h, i, j, k, l, m, n) || ((v) == (o)))
+#define _VA_ELEM17(v, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p) \
+       (_VA_ELEM16(v, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o) || ((v) == (p)))
+
+/* reusable ELEM macro */
+#define ELEM(...) VA_NARGS_CALL_OVERLOAD(_VA_ELEM, __VA_ARGS__)
+
 
 /* shift around elements */
 #define SHIFT3(type, a, b, c)  {                                              \
@@ -305,11 +358,11 @@
 
 #define IS_EQ(a, b)  ( \
 	CHECK_TYPE_INLINE(a, double), CHECK_TYPE_INLINE(b, double), \
-	((fabs((double)(a) - (b)) >= (double) FLT_EPSILON) ? false : true))
+	((fabs((double)((a) - (b))) >= (double) FLT_EPSILON) ? false : true))
 
 #define IS_EQF(a, b)  ( \
 	CHECK_TYPE_INLINE(a, float), CHECK_TYPE_INLINE(b, float), \
-	((fabsf((float)(a) - (b)) >= (float) FLT_EPSILON) ? false : true))
+	((fabsf((float)((a) - (b))) >= (float) FLT_EPSILON) ? false : true))
 
 #define IS_EQT(a, b, c) ((a > b) ? (((a - b) <= c) ? 1 : 0) : ((((b - a) <= c) ? 1 : 0)))
 #define IN_RANGE(a, b, c) ((b < c) ? ((b < a && a < c) ? 1 : 0) : ((c < a && a < b) ? 1 : 0))
@@ -324,35 +377,13 @@
 #define UNPACK3OP(op, a)  op((a)[0]), op((a)[1]), op((a)[2])
 #define UNPACK4OP(op, a)  op((a)[0]), op((a)[1]), op((a)[2]), op((a)[3])
 
-/* simple stack */
-#define STACK_DECLARE(stack)   unsigned int _##stack##_index
-#define STACK_INIT(stack)      ((void)stack, (void)((_##stack##_index) = 0))
-#define STACK_SIZE(stack)      ((void)stack, (_##stack##_index))
-#define STACK_PUSH(stack, val)  (void)((stack)[(_##stack##_index)++] = val)
-#define STACK_PUSH_RET(stack)  ((void)stack, ((stack)[(_##stack##_index)++]))
-#define STACK_PUSH_RET_PTR(stack)  ((void)stack, &((stack)[(_##stack##_index)++]))
-#define STACK_POP(stack)         ((_##stack##_index) ?  ((stack)[--(_##stack##_index)]) : NULL)
-#define STACK_POP_PTR(stack)     ((_##stack##_index) ? &((stack)[--(_##stack##_index)]) : NULL)
-#define STACK_POP_ELSE(stack, r) ((_##stack##_index) ?  ((stack)[--(_##stack##_index)]) : r)
-#define STACK_FREE(stack)      ((void)stack)
-#ifdef __GNUC__
-#define STACK_SWAP(stack_a, stack_b) { \
-	SWAP(typeof(stack_a), stack_a, stack_b); \
-	SWAP(unsigned int, _##stack_a##_index, _##stack_b##_index); \
-	} (void)0
-#else
-#define STACK_SWAP(stack_a, stack_b) { \
-	SWAP(void *, stack_a, stack_b); \
-	SWAP(unsigned int, _##stack_a##_index, _##stack_b##_index); \
-	} (void)0
-#endif
-
 /* array helpers */
-#define ARRAY_LAST_ITEM(arr_start, arr_dtype, elem_size, tot) \
-	(arr_dtype *)((char *)arr_start + (elem_size * (tot - 1)))
+#define ARRAY_LAST_ITEM(arr_start, arr_dtype, tot) \
+	(arr_dtype *)((char *)arr_start + (sizeof(*((arr_dtype *)NULL)) * (size_t)(tot - 1)))
 
-#define ARRAY_HAS_ITEM(arr_item, arr_start, tot) \
-	((unsigned int)((arr_item) - (arr_start)) < (unsigned int)(tot))
+#define ARRAY_HAS_ITEM(arr_item, arr_start, tot)  ( \
+	CHECK_TYPE_PAIR_INLINE(arr_start, arr_item), \
+	((unsigned int)((arr_item) - (arr_start)) < (unsigned int)(tot)))
 
 #define ARRAY_DELETE(arr, index, tot_delete, tot)  { \
 		BLI_assert(index + tot_delete <= tot);  \
@@ -370,13 +401,28 @@
 #  define ARRAY_SIZE(arr)  (sizeof(arr) / sizeof(*(arr)))
 #endif
 
+/* Like offsetof(typeof(), member), for non-gcc compilers */
+#define OFFSETOF_STRUCT(_struct, _member) \
+	((((char *)&((_struct)->_member)) - ((char *)(_struct))) + sizeof((_struct)->_member))
+
+/* memcpy, skipping the first part of a struct,
+ * ensures 'struct_dst' isn't const and that the offset can be computed at compile time */
+#define MEMCPY_STRUCT_OFS(struct_dst, struct_src, member)  { \
+	void *_not_const = struct_dst; \
+	(void)_not_const; \
+	((void)(struct_dst == struct_src), \
+	 memcpy((char *)(struct_dst)  + OFFSETOF_STRUCT(struct_dst, member), \
+	        (char *)(struct_src)  + OFFSETOF_STRUCT(struct_dst, member), \
+	        sizeof(*(struct_dst)) - OFFSETOF_STRUCT(struct_dst, member))); \
+} (void)0
+
 /* Warning-free macros for storing ints in pointers. Use these _only_
  * for storing an int in a pointer, not a pointer in an int (64bit)! */
 #define SET_INT_IN_POINTER(i)    ((void *)(intptr_t)(i))
-#define GET_INT_FROM_POINTER(i)  ((int)(intptr_t)(i))
+#define GET_INT_FROM_POINTER(i)  ((void)0, ((int)(intptr_t)(i)))
 
 #define SET_UINT_IN_POINTER(i)    ((void *)(uintptr_t)(i))
-#define GET_UINT_FROM_POINTER(i)  ((unsigned int)(uintptr_t)(i))
+#define GET_UINT_FROM_POINTER(i)  ((void)0, ((unsigned int)(uintptr_t)(i)))
 
 
 /* Macro to convert a value to string in the preprocessor

@@ -767,7 +767,7 @@ static void write_nodetree(WriteData *wd, bNodeTree *ntree)
 					writedata(wd, DATA, strlen(nss->bytecode)+1, nss->bytecode);
 				writestruct(wd, DATA, node->typeinfo->storagename, 1, node->storage);
 			}
-			else if (ntree->type==NTREE_COMPOSIT && ELEM4(node->type, CMP_NODE_TIME, CMP_NODE_CURVE_VEC, CMP_NODE_CURVE_RGB, CMP_NODE_HUECORRECT))
+			else if (ntree->type==NTREE_COMPOSIT && ELEM(node->type, CMP_NODE_TIME, CMP_NODE_CURVE_VEC, CMP_NODE_CURVE_RGB, CMP_NODE_HUECORRECT))
 				write_curvemapping(wd, node->storage);
 			else if (ntree->type==NTREE_TEXTURE && (node->type==TEX_NODE_CURVE_RGB || node->type==TEX_NODE_CURVE_TIME) )
 				write_curvemapping(wd, node->storage);
@@ -1236,6 +1236,9 @@ static void write_actuators(WriteData *wd, ListBase *lb)
 			break;
 		case ACT_STEERING:
 			writestruct(wd, DATA, "bSteeringActuator", 1, act->data);
+			break;
+		case ACT_MOUSE:
+			writestruct(wd, DATA, "bMouseActuator", 1, act->data);
 			break;
 		default:
 			; /* error: don't know how to write this file */
@@ -2254,6 +2257,9 @@ static void write_scenes(WriteData *wd, ListBase *scebase)
 						case SEQ_TYPE_TRANSFORM:
 							writestruct(wd, DATA, "TransformVars", 1, seq->effectdata);
 							break;
+						case SEQ_TYPE_GAUSSIAN_BLUR:
+							writestruct(wd, DATA, "GaussianBlurVars", 1, seq->effectdata);
+							break;
 						}
 					}
 					
@@ -2923,6 +2929,38 @@ static void write_brushes(WriteData *wd, ListBase *idbase)
 			
 			if (brush->curve)
 				write_curvemapping(wd, brush->curve);
+			if (brush->curve)
+				writestruct(wd, DATA, "ColorBand", 1, brush->gradient);
+		}
+	}
+}
+
+static void write_palettes(WriteData *wd, ListBase *idbase)
+{
+	Palette *palette;
+
+	for (palette = idbase->first; palette; palette = palette->id.next) {
+		if (palette->id.us > 0 || wd->current) {
+			PaletteColor *color;
+			writestruct(wd, ID_PAL, "Palette", 1, palette);
+			if (palette->id.properties) IDP_WriteProperty(palette->id.properties, wd);
+
+			for (color = palette->colors.first; color; color= color->next)
+				writestruct(wd, DATA, "PaletteColor", 1, color);
+		}
+	}
+}
+
+static void write_paintcurves(WriteData *wd, ListBase *idbase)
+{
+	PaintCurve *pc;
+
+	for (pc = idbase->first; pc; pc = pc->id.next) {
+		if (pc->id.us > 0 || wd->current) {
+			writestruct(wd, ID_PC, "PaintCurve", 1, pc);
+
+			writestruct(wd, DATA, "PaintCurvePoint", pc->tot_points, pc->points);
+			if (pc->id.properties) IDP_WriteProperty(pc->id.properties, wd);
 		}
 	}
 }
@@ -3398,6 +3436,8 @@ static int write_file_handle(Main *mainvar, int handle, MemFile *compare, MemFil
 	write_particlesettings(wd, &mainvar->particle);
 	write_nodetrees(wd, &mainvar->nodetree);
 	write_brushes  (wd, &mainvar->brush);
+	write_palettes (wd, &mainvar->palettes);
+	write_paintcurves (wd, &mainvar->paintcurves);
 	write_scripts  (wd, &mainvar->script);
 	write_gpencils (wd, &mainvar->gpencil);
 	write_linestyles(wd, &mainvar->linestyle);

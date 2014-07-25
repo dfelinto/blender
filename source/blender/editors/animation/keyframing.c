@@ -186,7 +186,7 @@ FCurve *verify_fcurve(bAction *act, const char group[], PointerRNA *ptr,
 			fcu->flag |= FCURVE_ACTIVE;  /* first one added active */
 			
 		/* store path - make copy, and store that */
-		fcu->rna_path = BLI_strdupn(rna_path, strlen(rna_path));
+		fcu->rna_path = BLI_strdup(rna_path);
 		fcu->array_index = array_index;
 		
 		/* if a group name has been provided, try to add or find a group, then add F-Curve to it */
@@ -394,23 +394,42 @@ int insert_vert_fcurve(FCurve *fcu, float x, float y, short flag)
 	beztr.vec[2][0] = x + 1.0f;
 	beztr.vec[2][1] = y;
 	beztr.f1 = beztr.f2 = beztr.f3 = SELECT;
-
+	
+	/* set default handle types and interpolation mode */
 	if (flag & INSERTKEY_NO_USERPREF) {
+		/* for Py-API, we want scripts to have predictable behaviour,
+		 * hence the option to not depend on the userpref defaults
+		 */
 		beztr.h1 = beztr.h2 = HD_AUTO_ANIM;
 		beztr.ipo = BEZT_IPO_BEZ;
 	}
 	else {
+		/* for UI usage - defaults should come from the */
 		beztr.h1 = beztr.h2 = U.keyhandles_new; /* use default handle type here */
 		//BEZKEYTYPE(&beztr)= scene->keytype; /* default keyframe type */
-
+		
 		/* use default interpolation mode, with exceptions for int/discrete values */
 		beztr.ipo = U.ipo_new;
 	}
-
-	if (fcu->flag & FCURVE_DISCRETE_VALUES)
+	
+	/* interpolation type used is constrained by the type of values the curve can take */
+	if (fcu->flag & FCURVE_DISCRETE_VALUES) {
 		beztr.ipo = BEZT_IPO_CONST;
-	else if (beztr.ipo == BEZT_IPO_BEZ && (fcu->flag & FCURVE_INT_VALUES))
+	}
+	else if ((beztr.ipo == BEZT_IPO_BEZ) && (fcu->flag & FCURVE_INT_VALUES)) {
 		beztr.ipo = BEZT_IPO_LIN;
+	}
+	
+	/* set default values for "easing" interpolation mode settings
+	 * NOTE: Even if these modes aren't currently used, if users switch
+	 *       to these later, we want these to work in a sane way out of
+	 *       the box.
+	 */
+	beztr.back = 1.70158f;     /* "back" easing - this value used to be used when overshoot=0, but that        */
+	                           /*                 introduced discontinuities in how the param worked           */
+	
+	beztr.amplitude = 0.8f;    /* "elastic" easing - values here were hand-optimised for a default duration of */
+	beztr.period = 4.1f;       /*                    ~10 frames (typical mograph motion length)                */
 	
 	/* add temp beztriple to keyframes */
 	a = insert_bezt_fcurve(fcu, &beztr, flag);
@@ -633,7 +652,7 @@ static bool visualkey_can_use(PointerRNA *ptr, PropertyRNA *prop)
 	const char *identifier = NULL;
 	
 	/* validate data */
-	if (ELEM3(NULL, ptr, ptr->data, prop))
+	if (ELEM(NULL, ptr, ptr->data, prop))
 		return 0;
 	
 	/* get first constraint and determine type of keyframe constraints to check for 
@@ -1023,7 +1042,7 @@ short insert_keyframe(ReportList *reports, ID *id, bAction *act, const char grou
 				/* for Loc/Rot/Scale and also Color F-Curves, the color of the F-Curve in the Graph Editor,
 				 * is determined by the array index for the F-Curve
 				 */
-				if (ELEM5(RNA_property_subtype(prop), PROP_TRANSLATION, PROP_XYZ, PROP_EULER, PROP_COLOR, PROP_COORDS)) {
+				if (ELEM(RNA_property_subtype(prop), PROP_TRANSLATION, PROP_XYZ, PROP_EULER, PROP_COLOR, PROP_COORDS)) {
 					fcu->color_mode = FCURVE_COLOR_AUTO_RGB;
 				}
 			}

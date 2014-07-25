@@ -35,6 +35,7 @@
 #include "DNA_text_types.h" /* for UI_OT_reports_to_text */
 
 #include "BLI_blenlib.h"
+#include "BLI_math_color.h"
 
 #include "BLF_api.h"
 #include "BLF_translation.h"
@@ -44,6 +45,7 @@
 #include "BKE_global.h"
 #include "BKE_text.h" /* for UI_OT_reports_to_text */
 #include "BKE_report.h"
+#include "BKE_paint.h"
 
 #include "RNA_access.h"
 #include "RNA_define.h"
@@ -54,6 +56,8 @@
 
 #include "WM_api.h"
 #include "WM_types.h"
+
+#include "ED_paint.h"
 
 /* only for UI_OT_editsource */
 #include "ED_screen.h"
@@ -694,6 +698,7 @@ static int edittranslation_exec(bContext *C, wmOperator *op)
 	int ret = OPERATOR_CANCELLED;
 
 	if (but) {
+		wmOperatorType *ot;
 		PointerRNA ptr;
 		char popath[FILE_MAX];
 		const char *root = U.i18ndir;
@@ -715,7 +720,8 @@ static int edittranslation_exec(bContext *C, wmOperator *op)
 			                                   "Directory' path to a valid directory");
 			return OPERATOR_CANCELLED;
 		}
-		if (!WM_operatortype_find(EDTSRC_I18N_OP_NAME, 0)) {
+		ot = WM_operatortype_find(EDTSRC_I18N_OP_NAME, 0);
+		if (ot == NULL) {
 			BKE_reportf(op->reports, RPT_ERROR, "Could not find operator '%s'! Please enable ui_translate addon "
 			                                    "in the User Preferences", EDTSRC_I18N_OP_NAME);
 			return OPERATOR_CANCELLED;
@@ -731,7 +737,7 @@ static int edittranslation_exec(bContext *C, wmOperator *op)
 		uiButGetStrInfo(C, but, &but_label, &rna_label, &enum_label, &but_tip, &rna_tip, &enum_tip,
 		                &rna_struct, &rna_prop, &rna_enum, &rna_ctxt, NULL);
 
-		WM_operator_properties_create(&ptr, EDTSRC_I18N_OP_NAME);
+		WM_operator_properties_create_ptr(&ptr, ot);
 		RNA_string_set(&ptr, "lang", uilng);
 		RNA_string_set(&ptr, "po_file", popath);
 		RNA_string_set(&ptr, "but_label", but_label.strinfo);
@@ -744,7 +750,7 @@ static int edittranslation_exec(bContext *C, wmOperator *op)
 		RNA_string_set(&ptr, "rna_prop", rna_prop.strinfo);
 		RNA_string_set(&ptr, "rna_enum", rna_enum.strinfo);
 		RNA_string_set(&ptr, "rna_ctxt", rna_ctxt.strinfo);
-		ret = WM_operator_name_call(C, EDTSRC_I18N_OP_NAME, WM_OP_INVOKE_DEFAULT, &ptr);
+		ret = WM_operator_name_call_ptr(C, ot, WM_OP_INVOKE_DEFAULT, &ptr);
 
 		/* Clean up */
 		if (but_label.strinfo)
@@ -809,6 +815,91 @@ static void UI_OT_reloadtranslation(wmOperatorType *ot)
 	ot->exec = reloadtranslation_exec;
 }
 
+int UI_drop_color_poll(struct bContext *C, wmDrag *drag, const wmEvent *UNUSED(event))
+{
+	/* should only return true for regions that include buttons, for now
+	 * return true always */
+	if (drag->type == WM_DRAG_COLOR) {
+		SpaceImage *sima = CTX_wm_space_image(C);
+		ARegion *ar = CTX_wm_region(C);
+
+		if (UI_but_active_drop_color(C))
+			return 1;
+
+		if (sima && (sima->mode == SI_MODE_PAINT) &&
+		    sima->image && (ar && ar->regiontype == RGN_TYPE_WINDOW))
+		{
+			return 1;
+		}
+	}
+
+	return 0;
+}
+
+void UI_drop_color_copy(wmDrag *drag, wmDropBox *drop)
+{
+	uiDragColorHandle *drag_info = (uiDragColorHandle *)drag->poin;
+
+	RNA_float_set_array(drop->ptr, "color", drag_info->color);
+	RNA_boolean_set(drop->ptr, "gamma", drag_info->gamma_corrected);
+}
+
+static int drop_color_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
+{
+	ARegion *ar = CTX_wm_region(C);
+	uiBut *but = NULL;
+	float color[3];
+	bool gamma;
+
+	RNA_float_get_array(op->ptr, "color", color);
+	gamma = RNA_boolean_get(op->ptr, "gamma");
+
+	/* find button under mouse, check if it has RNA color property and
+	 * if it does copy the data */
+	but = ui_but_find_activated(ar);
+
+	if (but && but->type == COLOR && but->rnaprop) {
+		if (RNA_property_subtype(but->rnaprop) == PROP_COLOR_GAMMA) {
+			if (!gamma)
+				ui_block_to_display_space_v3(but->block, color);
+			RNA_property_float_set_array(&but->rnapoin, but->rnaprop, color);
+			RNA_property_update(C, &but->rnapoin, but->rnaprop);
+		}
+		else if (RNA_property_subtype(but->rnaprop) == PROP_COLOR) {
+			if (gamma)
+				ui_block_to_scene_linear_v3(but->block, color);
+			RNA_property_float_set_array(&but->rnapoin, but->rnaprop, color);
+			RNA_property_update(C, &but->rnapoin, but->rnaprop);
+		}
+	}
+	else {
+		if (gamma) {
+			srgb_to_linearrgb_v3_v3(color, color);
+		}
+
+		ED_imapaint_bucket_fill(C, color, op);
+	}
+
+	ED_region_tag_redraw(ar);
+
+	return OPERATOR_FINISHED;
+}
+
+
+static void UI_OT_drop_color(wmOperatorType *ot)
+{
+	ot->name = "Drop Color";
+	ot->idname = "UI_OT_drop_color";
+	ot->description = "Drop colors to buttons";
+
+	ot->invoke = drop_color_invoke;
+
+	RNA_def_float_color(ot->srna, "color", 3, NULL, 0.0, FLT_MAX, "Color", "Source color", 0.0, 1.0);
+	RNA_def_boolean(ot->srna, "gamma", 0, "Gamma Corrected", "The source color is gamma corrected ");
+}
+
+
+
 /* ********************************************************* */
 /* Registration */
 
@@ -820,7 +911,7 @@ void UI_buttons_operatortypes(void)
 	WM_operatortype_append(UI_OT_unset_property_button);
 	WM_operatortype_append(UI_OT_copy_to_selected_button);
 	WM_operatortype_append(UI_OT_reports_to_textblock);  /* XXX: temp? */
-
+	WM_operatortype_append(UI_OT_drop_color);
 #ifdef WITH_PYTHON
 	WM_operatortype_append(UI_OT_editsource);
 	WM_operatortype_append(UI_OT_edittranslation_init);

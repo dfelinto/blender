@@ -276,7 +276,7 @@ int list_find_data_fcurves(ListBase *dst, ListBase *src, const char *dataPrefix,
 	int matches = 0;
 	
 	/* sanity checks */
-	if (ELEM4(NULL, dst, src, dataPrefix, dataName))
+	if (ELEM(NULL, dst, src, dataPrefix, dataName))
 		return 0;
 	else if ((dataPrefix[0] == 0) || (dataName[0] == 0))
 		return 0;
@@ -469,7 +469,7 @@ static short get_fcurve_end_keyframes(FCurve *fcu, BezTriple **first, BezTriple 
 		}
 		
 		/* find last selected */
-		bezt = ARRAY_LAST_ITEM(fcu->bezt, BezTriple, sizeof(BezTriple), fcu->totvert);
+		bezt = ARRAY_LAST_ITEM(fcu->bezt, BezTriple, fcu->totvert);
 		for (i = 0; i < fcu->totvert; bezt--, i++) {
 			if (BEZSELECTED(bezt)) {
 				*last = bezt;
@@ -481,7 +481,7 @@ static short get_fcurve_end_keyframes(FCurve *fcu, BezTriple **first, BezTriple 
 	else {
 		/* just full array */
 		*first = fcu->bezt;
-		*last = ARRAY_LAST_ITEM(fcu->bezt, BezTriple, sizeof(BezTriple), fcu->totvert);
+		*last = ARRAY_LAST_ITEM(fcu->bezt, BezTriple, fcu->totvert);
 		found = true;
 	}
 	
@@ -522,17 +522,28 @@ bool calc_fcurve_bounds(FCurve *fcu, float *xmin, float *xmax, float *ymin, floa
 			
 			/* only loop over keyframes to find extents for values if needed */
 			if (ymin || ymax) {
-				BezTriple *bezt;
+				BezTriple *bezt, *prevbezt = NULL;
 				
-				for (bezt = fcu->bezt, i = 0; i < fcu->totvert; bezt++, i++) {
-					if ((do_sel_only == false) || BEZSELECTED(bezt)) {
+				for (bezt = fcu->bezt, i = 0; i < fcu->totvert; prevbezt = bezt, bezt++, i++) {
+					if ((do_sel_only == false) || BEZSELECTED(bezt)) {	
+						/* keyframe itself */
+						yminv = min_ff(yminv, bezt->vec[1][1]);
+						ymaxv = max_ff(ymaxv, bezt->vec[1][1]);
+						
 						if (include_handles) {
-							yminv = min_ffff(yminv, bezt->vec[1][1], bezt->vec[0][1], bezt->vec[2][1]);
-							ymaxv = max_ffff(ymaxv, bezt->vec[1][1], bezt->vec[0][1], bezt->vec[2][1]);
-						}
-						else {
-							yminv = min_ff(yminv, bezt->vec[1][1]);
-							ymaxv = max_ff(ymaxv, bezt->vec[1][1]);
+							/* left handle - only if applicable 
+							 * NOTE: for the very first keyframe, the left handle actually has no bearings on anything
+							 */
+							if (prevbezt && (prevbezt->ipo == BEZT_IPO_BEZ)) {
+								yminv = min_ff(yminv, bezt->vec[0][1]);
+								ymaxv = max_ff(ymaxv, bezt->vec[0][1]);
+							}
+							
+							/* right handle - only if applicable */
+							if (bezt->ipo == BEZT_IPO_BEZ) {
+								yminv = min_ff(yminv, bezt->vec[2][1]);
+								ymaxv = min_ff(ymaxv, bezt->vec[2][1]);
+							}
 						}
 						
 						foundvert = true;

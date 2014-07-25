@@ -111,7 +111,6 @@ private:
 	double				m_frameTime;//discrete timestamp of the 'game logic frame'
 	double				m_clockTime;//current time
 	double				m_previousClockTime;//previous clock time
-	double				m_previousAnimTime; //the last time animations were updated
 	double				m_remainingTime;
 
 	static int				m_maxLogicFrame;	/* maximum number of consecutive logic frame */
@@ -175,8 +174,10 @@ private:
 	bool					m_showProperties;
 	/** Show background behind text for readability? */
 	bool					m_showBackground;
-
+	/** Show debug properties on the game display*/
 	bool					m_show_debug_properties;
+	/** Automatic add debug properties to the debug list*/
+	bool					m_autoAddDebugProperties;
 
 	/** record physics into keyframes */
 	bool					m_animation_record;
@@ -222,6 +223,7 @@ public:
 	PyObject*		GetPyProfileDict();
 #endif
 	void			SetSceneConverter(KX_ISceneConverter* sceneconverter);
+	KX_ISceneConverter* GetSceneConverter() { return m_sceneconverter; }
 	void			SetAnimRecordMode(bool animation_record, int startFrame);
 
 	RAS_IRasterizer*		GetRasterizer() { return m_rasterizer; }
@@ -352,6 +354,46 @@ public:
 	static void SetExitKey(short key);
 
 	static short GetExitKey();
+
+	/**
+	 * \Sets the display for frame rate on or off.
+	 */
+	void SetShowFramerate(bool frameRate);
+
+	/**
+	 * \Gets the display for frame rate on or off.
+	 */
+	bool GetShowFramerate();
+
+	/**
+	 * \Sets the display for individual components on or off.
+	 */
+	void SetShowProfile(bool profile);
+
+	/**
+	 * \Gets the display for individual components on or off.
+	 */
+	bool GetShowProfile();
+
+	/**
+	 * \Sets the display of scene object debug properties on or off.
+	 */
+	void SetShowProperties(bool properties);
+
+	/**
+	 * \Gets the display of scene object debug properties on or off.
+	 */
+	bool GetShowProperties();
+
+	/**
+	 * \Sets if the auto adding of scene object debug properties on or off.
+	 */
+	bool GetAutoAddDebugProperties();
+
+	/**
+	 * \Sets the auto adding of scene object debug properties on or off.
+	 */
+	void SetAutoAddDebugProperties(bool add);
 
 	/**
 	 * Activates or deactivates timing information display.

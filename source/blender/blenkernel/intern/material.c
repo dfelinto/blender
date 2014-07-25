@@ -111,6 +111,9 @@ void BKE_material_free_ex(Material *ma, bool do_id_user)
 		MEM_freeN(ma->nodetree);
 	}
 
+	if (ma->texpaintslot)
+		MEM_freeN(ma->texpaintslot);
+
 	if (ma->gpumaterial.first)
 		GPU_material_free(ma);
 }
@@ -269,7 +272,9 @@ Material *localize_material(Material *ma)
 	
 	if (ma->ramp_col) man->ramp_col = MEM_dupallocN(ma->ramp_col);
 	if (ma->ramp_spec) man->ramp_spec = MEM_dupallocN(ma->ramp_spec);
-	
+
+	if (ma->texpaintslot) man->texpaintslot = MEM_dupallocN(man->texpaintslot);
+
 	man->preview = NULL;
 	
 	if (ma->nodetree)
@@ -467,7 +472,7 @@ Material ***give_matarar(Object *ob)
 		me = ob->data;
 		return &(me->mat);
 	}
-	else if (ELEM3(ob->type, OB_CURVE, OB_FONT, OB_SURF)) {
+	else if (ELEM(ob->type, OB_CURVE, OB_FONT, OB_SURF)) {
 		cu = ob->data;
 		return &(cu->mat);
 	}
@@ -488,7 +493,7 @@ short *give_totcolp(Object *ob)
 		me = ob->data;
 		return &(me->totcol);
 	}
-	else if (ELEM3(ob->type, OB_CURVE, OB_FONT, OB_SURF)) {
+	else if (ELEM(ob->type, OB_CURVE, OB_FONT, OB_SURF)) {
 		cu = ob->data;
 		return &(cu->totcol);
 	}
@@ -780,11 +785,13 @@ void test_object_materials(Main *bmain, ID *id)
 		return;
 	}
 
+	BKE_main_lock(bmain);
 	for (ob = bmain->object.first; ob; ob = ob->id.next) {
 		if (ob->data == id) {
 			BKE_material_resize_object(ob, *totcol, false);
 		}
 	}
+	BKE_main_unlock(bmain);
 }
 
 void assign_material_id(ID *id, Material *ma, short act)
@@ -1289,7 +1296,7 @@ bool object_remove_material_slot(Object *ob)
 	}
 
 	/* check indices from mesh */
-	if (ELEM4(ob->type, OB_MESH, OB_CURVE, OB_SURF, OB_FONT)) {
+	if (ELEM(ob->type, OB_MESH, OB_CURVE, OB_SURF, OB_FONT)) {
 		material_data_index_remove_id((ID *)ob->data, actcol - 1);
 		if (ob->curve_cache) {
 			BKE_displist_free(&ob->curve_cache->disp);
@@ -1297,6 +1304,114 @@ bool object_remove_material_slot(Object *ob)
 	}
 
 	return true;
+}
+
+void BKE_texpaint_slots_clear(struct Material *ma)
+{
+
+	if (ma->texpaintslot) {
+		MEM_freeN(ma->texpaintslot);
+		ma->texpaintslot = NULL;
+	}
+	ma->tot_slots = 0;
+	ma->paint_active_slot = 0;
+	ma->paint_clone_slot = 0;
+}
+
+
+static bool get_mtex_slot_valid_texpaint(struct MTex *mtex)
+{
+	return (mtex && (mtex->texco == TEXCO_UV) &&
+	        mtex->tex && (mtex->tex->type == TEX_IMAGE) &&
+	        mtex->tex->ima);
+}
+
+void BKE_texpaint_slot_refresh_cache(Material *ma, bool use_nodes)
+{
+	MTex **mtex;
+	short count = 0;
+	short index = 0, i;
+
+	if (!ma)
+		return;
+
+	if (ma->texpaintslot) {
+		MEM_freeN(ma->texpaintslot);
+		ma->texpaintslot = NULL;
+	}
+
+	if (use_nodes) {
+		bNode *node, *active_node;
+
+		if (!(ma->use_nodes && ma->nodetree))
+			return;
+
+		for (node = ma->nodetree->nodes.first; node; node = node->next) {
+			if (node->typeinfo->nclass == NODE_CLASS_TEXTURE && node->typeinfo->type == SH_NODE_TEX_IMAGE && node->id)
+				count++;
+		}
+
+		ma->tot_slots = count;
+
+		if (count == 0) {
+			ma->paint_active_slot = 0;
+			return;
+		}
+		ma->texpaintslot = MEM_callocN(sizeof(*ma->texpaintslot) * count, "texpaint_slots");
+
+		active_node = nodeGetActiveTexture(ma->nodetree);
+
+		for (node = ma->nodetree->nodes.first; node; node = node->next) {
+			if (node->typeinfo->nclass == NODE_CLASS_TEXTURE && node->typeinfo->type == SH_NODE_TEX_IMAGE && node->id) {
+				if (active_node == node)
+					ma->paint_active_slot = index;
+				ma->texpaintslot[index++].ima = (Image *)node->id;
+			}
+		}
+	}
+	else {
+		for (mtex = ma->mtex, i = 0; i < MAX_MTEX; i++, mtex++) {
+			if (get_mtex_slot_valid_texpaint(*mtex)) {
+				count++;
+			}
+		}
+
+		ma->tot_slots = count;
+
+		if (count == 0) {
+			ma->paint_active_slot = 0;
+			return;
+		}
+
+		ma->texpaintslot = MEM_callocN(sizeof(*ma->texpaintslot) * count, "texpaint_slots");
+
+		for (mtex = ma->mtex, i = 0; i < MAX_MTEX; i++, mtex++) {
+			if (get_mtex_slot_valid_texpaint(*mtex)) {
+				ma->texpaintslot[index].ima = (*mtex)->tex->ima;
+				ma->texpaintslot[index++].uvname = (*mtex)->uvname;
+			}
+		}
+	}
+
+	if (ma->paint_active_slot >= count) {
+		ma->paint_active_slot = count - 1;
+	}
+
+	if (ma->paint_clone_slot >= count) {
+		ma->paint_clone_slot = count - 1;
+	}
+
+	return;
+}
+
+void BKE_texpaint_slots_refresh_object(struct Object *ob, bool use_nodes)
+{
+	int i;
+
+	for (i = 1; i < ob->totcol + 1; i++) {
+		Material *ma = give_current_material(ob, i);
+		BKE_texpaint_slot_refresh_cache(ma, use_nodes);
+	}
 }
 
 

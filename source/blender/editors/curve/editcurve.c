@@ -1042,7 +1042,7 @@ static void curve_rename_fcurves(Curve *cu, ListBase *orig_curves)
 {
 	int nu_index = 0, a, pt_index;
 	EditNurb *editnurb = cu->editnurb;
-	Nurb *nu = editnurb->nurbs.first;
+	Nurb *nu;
 	CVKeyIndex *keyIndex;
 	char rna_path[64], orig_rna_path[64];
 	AnimData *adt = BKE_animdata_from_id(&cu->id);
@@ -1191,7 +1191,7 @@ static int *initialize_index_map(Object *obedit, int *r_old_totvert)
 
 	for (nu = editnurb->nurbs.first, vertex_index = 0;
 	     nu != NULL;
-	     nu = nu->next, vertex_index++)
+	     nu = nu->next)
 	{
 		if (nu->bezt) {
 			BezTriple *bezt = nu->bezt;
@@ -1975,17 +1975,15 @@ static void ed_curve_delete_selected(Object *obedit)
 		next = nu->next;
 		type = 0;
 		if (nu->type == CU_BEZIER) {
-			int delta = 0;
 			bezt = nu->bezt;
 			for (a = 0; a < nu->pntsu; a++) {
 				if (BEZSELECTED_HIDDENHANDLES(cu, bezt)) {
 					memmove(bezt, bezt + 1, (nu->pntsu - a - 1) * sizeof(BezTriple));
-					keyIndex_delBezt(editnurb, bezt + delta);
+					keyIndex_delBezt(editnurb, bezt);
 					keyIndex_updateBezt(editnurb, bezt + 1, bezt, nu->pntsu - a - 1);
 					nu->pntsu--;
 					a--;
 					type = 1;
-					delta++;
 				}
 				else {
 					bezt++;
@@ -2001,18 +1999,16 @@ static void ed_curve_delete_selected(Object *obedit)
 			}
 		}
 		else if (nu->pntsv == 1) {
-			int delta = 0;
 			bp = nu->bp;
 
 			for (a = 0; a < nu->pntsu; a++) {
 				if (bp->f1 & SELECT) {
 					memmove(bp, bp + 1, (nu->pntsu - a - 1) * sizeof(BPoint));
-					keyIndex_delBP(editnurb, bp + delta);
+					keyIndex_delBP(editnurb, bp);
 					keyIndex_updateBP(editnurb, bp + 1, bp, nu->pntsu - a - 1);
 					nu->pntsu--;
 					a--;
 					type = 1;
-					delta++;
 				}
 				else {
 					bp++;
@@ -5717,7 +5713,7 @@ static int select_more_exec(bContext *C, wmOperator *UNUSED(op))
 			bp = nu->bp;
 			selbpoints = BLI_BITMAP_NEW(a, "selectlist");
 			while (a > 0) {
-				if ((!BLI_BITMAP_GET(selbpoints, a)) && (bp->hide == 0) && (bp->f1 & SELECT)) {
+				if ((!BLI_BITMAP_TEST(selbpoints, a)) && (bp->hide == 0) && (bp->f1 & SELECT)) {
 					/* upper control point */
 					if (a % nu->pntsu != 0) {
 						tempbp = bp - 1;
@@ -5730,7 +5726,7 @@ static int select_more_exec(bContext *C, wmOperator *UNUSED(op))
 						tempbp = bp + nu->pntsu;
 						if (!(tempbp->f1 & SELECT)) sel = select_bpoint(tempbp, SELECT, SELECT, VISIBLE);
 						/* make sure selected bpoint is discarded */
-						if (sel == 1) BLI_BITMAP_SET(selbpoints, a - nu->pntsu);
+						if (sel == 1) BLI_BITMAP_ENABLE(selbpoints, a - nu->pntsu);
 					}
 					
 					/* right control point */
@@ -5814,7 +5810,7 @@ static int select_less_exec(bContext *C, wmOperator *UNUSED(op))
 					}
 					else {
 						bp--;
-						if (BLI_BITMAP_GET(selbpoints, a + 1) || ((bp->hide == 0) && (bp->f1 & SELECT))) sel++;
+						if (BLI_BITMAP_TEST(selbpoints, a + 1) || ((bp->hide == 0) && (bp->f1 & SELECT))) sel++;
 						bp++;
 					}
 					
@@ -5832,7 +5828,7 @@ static int select_less_exec(bContext *C, wmOperator *UNUSED(op))
 					}
 					else {
 						bp -= nu->pntsu;
-						if (BLI_BITMAP_GET(selbpoints, a + nu->pntsu) || ((bp->hide == 0) && (bp->f1 & SELECT))) sel++;
+						if (BLI_BITMAP_TEST(selbpoints, a + nu->pntsu) || ((bp->hide == 0) && (bp->f1 & SELECT))) sel++;
 						bp += nu->pntsu;
 					}
 
@@ -5847,7 +5843,7 @@ static int select_less_exec(bContext *C, wmOperator *UNUSED(op))
 
 					if (sel != 4) {
 						select_bpoint(bp, DESELECT, SELECT, VISIBLE);
-						BLI_BITMAP_SET(selbpoints, a);
+						BLI_BITMAP_ENABLE(selbpoints, a);
 					}
 				}
 				else {
@@ -7023,7 +7019,7 @@ static int match_texture_space_poll(bContext *C)
 {
 	Object *object = CTX_data_active_object(C);
 
-	return object && ELEM3(object->type, OB_CURVE, OB_SURF, OB_FONT);
+	return object && ELEM(object->type, OB_CURVE, OB_SURF, OB_FONT);
 }
 
 static int match_texture_space_exec(bContext *C, wmOperator *UNUSED(op))

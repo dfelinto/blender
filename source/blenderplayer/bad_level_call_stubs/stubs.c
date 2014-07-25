@@ -45,6 +45,7 @@ struct ARegion;
 struct ARegionType;
 struct BMEditMesh;
 struct Base;
+struct BoundBox;
 struct Brush;
 struct CSG_FaceIteratorDescriptor;
 struct CSG_VertexIteratorDescriptor;
@@ -306,6 +307,8 @@ void ED_armature_transform(struct bArmature *arm, float mat[4][4]) RET_NONE
 struct wmEventHandler *WM_event_add_modal_handler(struct bContext *C, struct wmOperator *op) RET_NULL
 struct wmTimer *WM_event_add_timer(struct wmWindowManager *wm, struct wmWindow *win, int event_type, double timestep) RET_NULL
 void WM_event_remove_timer(struct wmWindowManager *wm, struct wmWindow *win, struct wmTimer *timer) RET_NONE
+float WM_event_tablet_data(const struct wmEvent *event, int *pen_flip, float tilt[2]) RET_ZERO
+bool WM_event_is_tablet(const struct wmEvent *event) RET_ZERO
 void ED_armature_edit_bone_remove(struct bArmature *arm, struct EditBone *exBone) RET_NONE
 void object_test_constraints(struct Object *owner) RET_NONE
 void ED_armature_ebone_to_mat4(struct EditBone *ebone, float mat[4][4]) RET_NONE
@@ -535,7 +538,7 @@ struct uiLayout *uiTemplateConstraint(struct uiLayout *layout, struct PointerRNA
 void uiTemplatePreview(struct uiLayout *layout, struct bContext *C, struct ID *id, int show_buttons, struct ID *parent,
                        struct MTex *slot, const char *preview_id) RET_NONE
 void uiTemplateIDPreview(uiLayout *layout, struct bContext *C, struct PointerRNA *ptr, const char *propname, const char *newop, const char *openop, const char *unlinkop, int rows, int cols) RET_NONE
-void uiTemplateCurveMapping(uiLayout *layout, struct PointerRNA *ptr, const char *propname, int type, int levels, int brush) RET_NONE
+void uiTemplateCurveMapping(uiLayout *layout, struct PointerRNA *ptr, const char *propname, int type, int levels, int brush, int neg_slope) RET_NONE
 void uiTemplateColorRamp(uiLayout *layout, struct PointerRNA *ptr, const char *propname, int expand) RET_NONE
 void uiTemplateLayers(uiLayout *layout, struct PointerRNA *ptr, const char *propname, PointerRNA *used_ptr, const char *used_propname, int active_layer) RET_NONE
 void uiTemplateImageLayers(struct uiLayout *layout, struct bContext *C, struct Image *ima, struct ImageUser *iuser) RET_NONE
@@ -566,6 +569,7 @@ void uiTemplateColorspaceSettings(struct uiLayout *layout, struct PointerRNA *pt
 void uiTemplateColormanagedViewSettings(struct uiLayout *layout, struct bContext *C, struct PointerRNA *ptr, const char *propname) RET_NONE
 void uiTemplateComponentMenu(struct uiLayout *layout, struct PointerRNA *ptr, const char *propname, const char *name) RET_NONE
 void uiTemplateNodeSocket(struct uiLayout *layout, struct bContext *C, float *color) RET_NONE
+void uiTemplatePalette(struct uiLayout *layout, struct PointerRNA *ptr, const char *propname, int color) RET_NONE
 
 /* rna render */
 struct RenderResult *RE_engine_begin_result(RenderEngine *engine, int x, int y, int w, int h, const char *layername) RET_NULL

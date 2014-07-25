@@ -36,6 +36,7 @@
 #include "BLI_math.h"
 #include "BLI_alloca.h"
 #include "BLI_linklist.h"
+#include "BLI_stackdefines.h"
 
 #include "bmesh.h"
 #include "intern/bmesh_private.h"
@@ -179,6 +180,26 @@ BMLoop *BM_loop_other_vert_loop(BMLoop *l, BMVert *v)
 
 
 #endif
+}
+
+/**
+ * Check if verts share a face.
+ */
+bool BM_vert_pair_share_face_check(
+        BMVert *v_a, BMVert *v_b)
+{
+	if (v_a->e && v_b->e) {
+		BMIter iter;
+		BMFace *f;
+
+		BM_ITER_ELEM (f, &iter, v_a, BM_FACES_OF_VERT) {
+			if (BM_vert_in_face(f, v_b)) {
+				return true;
+			}
+		}
+	}
+
+	return false;
 }
 
 /**
@@ -655,6 +676,19 @@ bool BM_edge_loop_pair(BMEdge *e, BMLoop **r_la, BMLoop **r_lb)
 		*r_lb = NULL;
 		return false;
 	}
+}
+
+/**
+ * Fast alternative to ``(BM_vert_edge_count(v) == 2)``
+ */
+bool BM_vert_is_edge_pair(BMVert *v)
+{
+	BMEdge *e = v->e;
+	if (e) {
+		const BMDiskLink *dl = bmesh_disk_edge_link_from_vert(e, v);
+		return (dl->next == dl->prev);
+	}
+	return false;
 }
 
 /**
@@ -2054,7 +2088,7 @@ int BM_mesh_calc_face_groups(BMesh *bm, int *r_groups_array, int (**r_group_inde
 	BMFace *f;
 	int i;
 
-	STACK_INIT(group_array);
+	STACK_INIT(group_array, bm->totface);
 
 	BLI_assert(((htype_step & ~(BM_VERT | BM_EDGE)) == 0) && (htype_step != 0));
 
@@ -2082,7 +2116,7 @@ int BM_mesh_calc_face_groups(BMesh *bm, int *r_groups_array, int (**r_group_inde
 
 		BLI_assert(tot_touch < tot_faces);
 
-		STACK_INIT(stack);
+		STACK_INIT(stack, tot_faces);
 
 		BM_ITER_MESH (f, &iter, bm, BM_FACES_OF_MESH) {
 			if (BM_elem_flag_test(f, BM_ELEM_TAG) == false) {
@@ -2210,7 +2244,7 @@ int BM_mesh_calc_edge_groups(BMesh *bm, int *r_groups_array, int (**r_group_inde
 	BMEdge *e;
 	int i;
 
-	STACK_INIT(group_array);
+	STACK_INIT(group_array, bm->totface);
 
 	/* init the array */
 	BM_ITER_MESH_INDEX (e, &iter, bm, BM_EDGES_OF_MESH, i) {
@@ -2236,7 +2270,7 @@ int BM_mesh_calc_edge_groups(BMesh *bm, int *r_groups_array, int (**r_group_inde
 
 		BLI_assert(tot_touch < tot_edges);
 
-		STACK_INIT(stack);
+		STACK_INIT(stack, tot_edges);
 
 		BM_ITER_MESH (e, &iter, bm, BM_EDGES_OF_MESH) {
 			if (BM_elem_flag_test(e, BM_ELEM_TAG) == false) {

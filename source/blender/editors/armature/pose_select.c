@@ -45,6 +45,7 @@
 #include "BKE_context.h"
 #include "BKE_depsgraph.h"
 #include "BKE_object.h"
+#include "BKE_report.h"
 
 #include "RNA_access.h"
 #include "RNA_define.h"
@@ -75,7 +76,7 @@ void ED_pose_bone_select(Object *ob, bPoseChannel *pchan, bool select)
 
 	/* sanity checks */
 	// XXX: actually, we can probably still get away with no object - at most we have no updates
-	if (ELEM4(NULL, ob, ob->pose, pchan, pchan->bone))
+	if (ELEM(NULL, ob, ob->pose, pchan, pchan->bone))
 		return;
 	
 	arm = ob->data;
@@ -242,7 +243,7 @@ static void selectconnected_posebonechildren(Object *ob, Bone *bone, int extend)
 {
 	Bone *curBone;
 	
-	/* stop when unconnected child is encontered, or when unselectable bone is encountered */
+	/* stop when unconnected child is encountered, or when unselectable bone is encountered */
 	if (!(bone->flag & BONE_CONNECTED) || (bone->flag & BONE_UNSELECTABLE))
 		return;
 	
@@ -627,6 +628,13 @@ void POSE_OT_select_hierarchy(wmOperatorType *ot)
 
 /* -------------------------------------- */
 
+/* modes for select same */
+typedef enum ePose_SelectSame_Mode {
+	POSE_SEL_SAME_LAYER      = 0,
+	POSE_SEL_SAME_GROUP      = 1,
+	POSE_SEL_SAME_KEYINGSET  = 2,
+} ePose_SelectSame_Mode;
+
 static bool pose_select_same_group(bContext *C, Object *ob, bool extend)
 {
 	bArmature *arm = (ob) ? ob->data : NULL;
@@ -636,7 +644,7 @@ static bool pose_select_same_group(bContext *C, Object *ob, bool extend)
 	bool changed = false, tagged = false;
 	
 	/* sanity checks */
-	if (ELEM3(NULL, ob, pose, arm))
+	if (ELEM(NULL, ob, pose, arm))
 		return 0;
 		
 	/* count the number of groups */
@@ -693,7 +701,7 @@ static bool pose_select_same_layer(bContext *C, Object *ob, bool extend)
 	bool changed = false;
 	int layers = 0;
 	
-	if (ELEM3(NULL, ob, pose, arm))
+	if (ELEM(NULL, ob, pose, arm))
 		return 0;
 	
 	/* figure out what bones are selected */
@@ -725,7 +733,7 @@ static bool pose_select_same_layer(bContext *C, Object *ob, bool extend)
 	return changed;
 }
 
-static bool pose_select_same_keyingset(bContext *C, Object *ob, bool extend)
+static bool pose_select_same_keyingset(bContext *C, ReportList *reports, Object *ob, bool extend)
 {
 	KeyingSet *ks = ANIM_scene_get_active_keyingset(CTX_data_scene(C));
 	KS_Path *ksp;
@@ -735,11 +743,26 @@ static bool pose_select_same_keyingset(bContext *C, Object *ob, bool extend)
 	bool changed = false;
 	
 	/* sanity checks: validate Keying Set and object */
-	if ((ks == NULL) || (ANIM_validate_keyingset(C, NULL, ks) != 0))
-		return 0;
+	if (ks == NULL) {
+		BKE_report(reports, RPT_ERROR, "No active Keying Set to use");
+		return false;
+	}
+	else if (ANIM_validate_keyingset(C, NULL, ks) != 0) {
+		if (ks->paths.first == NULL) {
+			if ((ks->flag & KEYINGSET_ABSOLUTE) == 0) {
+				BKE_report(reports, RPT_ERROR, 
+				           "Use another Keying Set, as the active one depends on the currently "
+				           "selected items or cannot find any targets due to unsuitable context");
+			}
+			else {
+				BKE_report(reports, RPT_ERROR, "Keying Set does not contain any paths");
+			}
+		}
+		return false;
+	}
 		
-	if (ELEM3(NULL, ob, pose, arm))
-		return 0;
+	if (ELEM(NULL, ob, pose, arm))
+		return false;
 		
 	/* if not extending selection, deselect all selected first */
 	if (extend == false) {
@@ -785,6 +808,7 @@ static int pose_select_grouped_exec(bContext *C, wmOperator *op)
 {
 	Object *ob = BKE_object_pose_armature_get(CTX_data_active_object(C));
 	bArmature *arm = (bArmature *)ob->data;
+	const ePose_SelectSame_Mode type = RNA_enum_get(op->ptr, "type");
 	const bool extend = RNA_boolean_get(op->ptr, "extend");
 	bool changed = false;
 	
@@ -792,18 +816,22 @@ static int pose_select_grouped_exec(bContext *C, wmOperator *op)
 	if (ob->pose == NULL)
 		return OPERATOR_CANCELLED;
 		
-	/* selection types 
-	 * NOTE: for the order of these, see the enum in POSE_OT_select_grouped()
-	 */
-	switch (RNA_enum_get(op->ptr, "type")) {
-		case 1: /* group */
+	/* selection types */
+	switch (type) {
+		case POSE_SEL_SAME_LAYER: /* layer */
+			changed = pose_select_same_layer(C, ob, extend);
+			break;
+		
+		case POSE_SEL_SAME_GROUP: /* group */
 			changed = pose_select_same_group(C, ob, extend);
 			break;
-		case 2: /* Keying Set */
-			changed = pose_select_same_keyingset(C, ob, extend);
+			
+		case POSE_SEL_SAME_KEYINGSET: /* Keying Set */
+			changed = pose_select_same_keyingset(C, op->reports, ob, extend);
 			break;
-		default: /* layer */
-			changed = pose_select_same_layer(C, ob, extend);
+		
+		default:
+			printf("pose_select_grouped() - Unknown selection type %d\n", type);
 			break;
 	}
 	
@@ -825,9 +853,9 @@ static int pose_select_grouped_exec(bContext *C, wmOperator *op)
 void POSE_OT_select_grouped(wmOperatorType *ot)
 {
 	static EnumPropertyItem prop_select_grouped_types[] = {
-		{0, "LAYER", 0, "Layer", "Shared layers"},
-		{1, "GROUP", 0, "Group", "Shared group"},
-		{2, "KEYINGSET", 0, "Keying Set", "All bones affected by active Keying Set"},
+		{POSE_SEL_SAME_LAYER, "LAYER", 0, "Layer", "Shared layers"},
+		{POSE_SEL_SAME_GROUP, "GROUP", 0, "Group", "Shared group"},
+		{POSE_SEL_SAME_KEYINGSET, "KEYINGSET", 0, "Keying Set", "All bones affected by active Keying Set"},
 		{0, NULL, 0, NULL, NULL}
 	};
 

@@ -646,8 +646,23 @@ GHOST_TSuccess GHOST_WindowWin32::setState(GHOST_TWindowState state)
 
 GHOST_TSuccess GHOST_WindowWin32::setOrder(GHOST_TWindowOrder order)
 {
-	HWND hWndInsertAfter = order == GHOST_kWindowOrderTop ? HWND_TOP : HWND_BOTTOM;
-	return ::SetWindowPos(m_hWnd, hWndInsertAfter, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE) == TRUE ? GHOST_kSuccess : GHOST_kFailure;
+	HWND hWndInsertAfter, hWndToRaise;
+
+	if (order == GHOST_kWindowOrderBottom) {
+		hWndInsertAfter = HWND_BOTTOM;
+		hWndToRaise = ::GetWindow(m_hWnd, GW_HWNDNEXT); /* the window to raise */
+	}
+	else {
+		hWndInsertAfter = HWND_TOP;
+		hWndToRaise = NULL;
+	}
+	if (::SetWindowPos(m_hWnd, hWndInsertAfter, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE) == FALSE) {
+		return GHOST_kFailure;
+	}
+	if (hWndToRaise && ::SetWindowPos(hWndToRaise, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE) == FALSE) {
+		return GHOST_kFailure;
+	}
+	return GHOST_kSuccess;
 }
 
 
@@ -1102,7 +1117,7 @@ GHOST_TSuccess GHOST_WindowWin32::setWindowCursorShape(GHOST_TStandardCursor cur
 
 void GHOST_WindowWin32::processWin32TabletInitEvent()
 {
-	if (m_wintab) {
+	if (m_wintab && m_tabletData) {
 		GHOST_WIN32_WTInfo fpWTInfo = (GHOST_WIN32_WTInfo) ::GetProcAddress(m_wintab, "WTInfoA");
 
 		// let's see if we can initialize tablet here

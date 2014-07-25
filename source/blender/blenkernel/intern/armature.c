@@ -574,7 +574,7 @@ void b_bone_spline_setup(bPoseChannel *pchan, int rest, Mat4 result_array[MAX_BB
 
 		if (do_scale) {
 			/* correct for scaling when this matrix is used in scaled space */
-			mul_serie_m4(result_array[a].mat, iscalemat, result_array[a].mat, scalemat, NULL, NULL, NULL, NULL, NULL);
+			mul_m4_series(result_array[a].mat, iscalemat, result_array[a].mat, scalemat);
 		}
 	}
 }
@@ -622,8 +622,7 @@ static void pchan_b_bone_defmats(bPoseChannel *pchan, bPoseChanDeform *pdef_info
 
 		invert_m4_m4(tmat, b_bone_rest[a].mat);
 
-		mul_serie_m4(b_bone_mats[a + 1].mat, pchan->chan_mat, bone->arm_mat, b_bone[a].mat, tmat, b_bone_mats[0].mat,
-		             NULL, NULL, NULL);
+		mul_m4_series(b_bone_mats[a + 1].mat, pchan->chan_mat, bone->arm_mat, b_bone[a].mat, tmat, b_bone_mats[0].mat);
 
 		if (use_quaternion)
 			mat4_to_dquat(&b_bone_dual_quats[a], bone->arm_mat, b_bone_mats[a + 1].mat);
@@ -1042,7 +1041,7 @@ void armature_deform_verts(Object *armOb, Object *target, DerivedMesh *dm, float
 				if (!use_quaternion) /* quaternion already is scale corrected */
 					mul_m3_fl(smat, armature_weight / contrib);
 
-				mul_serie_m3(defMats[i], tmpmat, pre, smat, post, NULL, NULL, NULL, NULL);
+				mul_m3_series(defMats[i], post, smat, pre, tmpmat);
 			}
 		}
 
@@ -1881,7 +1880,7 @@ static void splineik_init_tree_from_pchan(Scene *scene, Object *UNUSED(ob), bPos
 		 */
 
 		/* only happens on reload file, but violates depsgraph still... fix! */
-		if (ELEM3(NULL,  ikData->tar->curve_cache, ikData->tar->curve_cache->path, ikData->tar->curve_cache->path->data)) {
+		if (ELEM(NULL,  ikData->tar->curve_cache, ikData->tar->curve_cache->path, ikData->tar->curve_cache->path->data)) {
 			BKE_displist_make_curveTypes(scene, ikData->tar, 0);
 			
 			/* path building may fail in EditMode after removing verts [#33268]*/

@@ -28,7 +28,7 @@ def init():
     _cycles.init(path, user_path)
 
 
-def create(engine, data, scene, region=0, v3d=0, rv3d=0, preview_osl=False):
+def create(engine, data, scene, region=None, v3d=None, rv3d=None, preview_osl=False):
     import bpy
     import _cycles
 
@@ -64,6 +64,7 @@ def bake(engine, obj, pass_type, pixel_array, num_pixels, depth, result):
     session = getattr(engine, "session", None)
     if session is not None:
         _cycles.bake(engine.session, obj.as_pointer(), pass_type, pixel_array.as_pointer(), num_pixels, depth, result.as_pointer())
+
 
 def reset(engine, data, scene):
     import _cycles

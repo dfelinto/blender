@@ -3228,7 +3228,7 @@ void ANIM_channel_debug_print_info(bAnimListElem *ale, short indent_level)
 /* Check if some setting for a channel is enabled 
  * Returns: 1 = On, 0 = Off, -1 = Invalid
  */
-short ANIM_channel_setting_get(bAnimContext *ac, bAnimListElem *ale, int setting)
+short ANIM_channel_setting_get(bAnimContext *ac, bAnimListElem *ale, eAnimChannel_Settings setting)
 {
 	bAnimChannelType *acf = ANIM_channel_get_typeinfo(ale);
 	
@@ -3301,7 +3301,7 @@ short ANIM_channel_setting_get(bAnimContext *ac, bAnimListElem *ale, int setting
  *	- setting: eAnimChannel_Settings
  *	- mode: eAnimChannels_SetFlag
  */
-void ANIM_channel_setting_set(bAnimContext *ac, bAnimListElem *ale, int setting, short mode)
+void ANIM_channel_setting_set(bAnimContext *ac, bAnimListElem *ale, eAnimChannel_Settings setting, eAnimChannels_SetFlag mode)
 {
 	bAnimChannelType *acf = ANIM_channel_get_typeinfo(ale);
 	
@@ -3846,7 +3846,7 @@ void ANIM_channel_draw_widgets(bContext *C, bAnimContext *ac, bAnimListElem *ale
 	short offset;
 	
 	/* sanity checks - don't draw anything */
-	if (ELEM3(NULL, acf, ale, block))
+	if (ELEM(NULL, acf, ale, block))
 		return;
 	
 	/* get initial offset */

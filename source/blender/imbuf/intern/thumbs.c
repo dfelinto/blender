@@ -197,19 +197,6 @@ static void escape_uri_string(const char *string, char *escaped_string, int esca
 	*q = '\0';
 }
 
-static void to_hex_char(char *hexbytes, const unsigned char *bytes, int len)
-{
-	const unsigned char *p;
-	char *q;
-
-	for (q = hexbytes, p = bytes; len; p++) {
-		const unsigned char c = (unsigned char) *p;
-		len--;
-		*q++ = hex[c >> 4];
-		*q++ = hex[c & 15];
-	}
-}
-
 /** ----- end of adapted code from glib --- */
 
 static int uri_from_filename(const char *path, char *uri)
@@ -258,9 +245,7 @@ static void thumbname_from_uri(const char *uri, char *thumb, const int thumb_len
 
 	md5_buffer(uri, strlen(uri), digest);
 	hexdigest[0] = '\0';
-	to_hex_char(hexdigest, digest, 16);
-	hexdigest[32] = '\0';
-	BLI_snprintf(thumb, thumb_len, "%s.png", hexdigest);
+	BLI_snprintf(thumb, thumb_len, "%s.png", md5_to_hexdigest(digest, hexdigest));
 
 	// printf("%s: '%s' --> '%s'\n", __func__, uri, thumb);
 }

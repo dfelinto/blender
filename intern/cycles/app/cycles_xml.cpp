@@ -509,8 +509,10 @@ static void xml_read_shader_graph(const XMLReadState& state, Shader *shader, pug
 		else if(string_iequals(node.name(), "mapping")) {
 			snode = new MappingNode();
 		}
-		else if(string_iequals(node.name(), "ward_bsdf")) {
-			snode = new WardBsdfNode();
+		else if(string_iequals(node.name(), "anisotropic_bsdf")) {
+			AnisotropicBsdfNode *aniso = new AnisotropicBsdfNode();
+			xml_read_enum(&aniso->distribution, AnisotropicBsdfNode::distribution_enum, node, "distribution");
+			snode = aniso;
 		}
 		else if(string_iequals(node.name(), "diffuse_bsdf")) {
 			snode = new DiffuseBsdfNode();
@@ -631,6 +633,12 @@ static void xml_read_shader_graph(const XMLReadState& state, Shader *shader, pug
 			snode = new CombineHSVNode();
 		}
 		else if(string_iequals(node.name(), "separate_hsv")) {
+			snode = new SeparateHSVNode();
+		}
+		else if(string_iequals(node.name(), "combine_xyz")) {
+			snode = new CombineHSVNode();
+		}
+		else if(string_iequals(node.name(), "separate_xyz")) {
 			snode = new SeparateHSVNode();
 		}
 		else if(string_iequals(node.name(), "hsv")) {

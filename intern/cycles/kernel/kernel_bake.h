@@ -34,7 +34,6 @@ ccl_device void compute_light_pass(KernelGlobals *kg, ShaderData *sd, PathRadian
 
 	/* init path state */
 	path_state_init(kg, &state, &rng, sample);
-	state.num_samples = kernel_data.integrator.aa_samples;
 
 	/* evaluate surface shader */
 	float rbsdf = path_state_rng_1D(kg, &rng, &state, PRNG_BSDF);
@@ -69,7 +68,9 @@ ccl_device void compute_light_pass(KernelGlobals *kg, ShaderData *sd, PathRadian
 				path_radiance_accum_emission(&L_sample, throughput, emission, state.bounce);
 			}
 
-			if(kernel_path_integrate_lighting(kg, &rng, sd, &throughput, &state, &L_sample, &ray)) {
+			kernel_path_surface_connect_light(kg, &rng, sd, throughput, &state, &L_sample);
+
+			if(kernel_path_surface_bounce(kg, &rng, sd, &throughput, &state, &L_sample, &ray)) {
 #ifdef __LAMP_MIS__
 				state.ray_t = 0.0f;
 #endif
@@ -107,7 +108,17 @@ ccl_device void compute_light_pass(KernelGlobals *kg, ShaderData *sd, PathRadian
 				path_radiance_accum_emission(&L_sample, throughput, emission, state.bounce);
 			}
 
-			kernel_branched_path_integrate_lighting(kg, &rng,
+#if defined(__EMISSION__)
+			/* direct light */
+			if(kernel_data.integrator.use_direct_light) {
+				bool all = kernel_data.integrator.sample_all_lights_direct;
+				kernel_branched_path_surface_connect_light(kg, &rng,
+					sd, &state, throughput, 1.0f, &L_sample, all);
+			}
+#endif
+
+			/* indirect light */
+			kernel_branched_path_surface_indirect_light(kg, &rng,
 				sd, throughput, 1.0f, &state, &L_sample);
 		}
 	}

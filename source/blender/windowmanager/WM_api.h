@@ -119,7 +119,7 @@ void		WM_cursor_modal_set(struct wmWindow *win, int curs);
 void		WM_cursor_modal_restore(struct wmWindow *win);
 void		WM_cursor_wait		(bool val);
 void		WM_cursor_grab_enable(struct wmWindow *win, bool wrap, bool hide, int bounds[4]);
-void		WM_cursor_grab_disable(struct wmWindow *win, int mouse_ungrab_xy[2]);
+void		WM_cursor_grab_disable(struct wmWindow *win, const int mouse_ungrab_xy[2]);
 void		WM_cursor_time		(struct wmWindow *win, int nr);
 
 void		*WM_paint_cursor_activate(struct wmWindowManager *wm,
@@ -242,7 +242,8 @@ int			WM_operator_call		(struct bContext *C, struct wmOperator *op);
 int			WM_operator_call_notest(struct bContext *C, struct wmOperator *op);
 int			WM_operator_repeat		(struct bContext *C, struct wmOperator *op);
 bool        WM_operator_repeat_check(const struct bContext *C, struct wmOperator *op);
-int			WM_operator_name_call	(struct bContext *C, const char *opstring, short context, struct PointerRNA *properties);
+int         WM_operator_name_call_ptr(struct bContext *C, struct wmOperatorType *ot, short context, struct PointerRNA *properties);
+int			WM_operator_name_call(struct bContext *C, const char *opstring, short context, struct PointerRNA *properties);
 int			WM_operator_call_py(struct bContext *C, struct wmOperatorType *ot, short context, struct PointerRNA *properties, struct ReportList *reports, const bool is_undo);
 
 void		WM_operator_properties_alloc(struct PointerRNA **ptr, struct IDProperty **properties, const char *opstring); /* used for keymap and macro items */
@@ -344,8 +345,10 @@ void		WM_event_print(const struct wmEvent *event);
 void		WM_operator_region_active_win_set(struct bContext *C);
 
 			/* drag and drop */
-struct wmDrag		*WM_event_start_drag(struct bContext *C, int icon, int type, void *poin, double value);
+struct wmDrag		*WM_event_start_drag(struct bContext *C, int icon, int type, void *poin, double value, unsigned int flags);
 void				WM_event_drag_image(struct wmDrag *, struct ImBuf *, float scale, int sx, int sy);
+void                WM_drag_free(struct wmDrag *drag);
+void                WM_drag_free_list(struct ListBase *lb);
 
 struct wmDropBox	*WM_dropbox_add(ListBase *lb, const char *idname, int (*poll)(struct bContext *, struct wmDrag *, const struct wmEvent *event),
                                     void (*copy)(struct wmDrag *, struct wmDropBox *));
@@ -448,6 +451,9 @@ void        WM_event_ndof_rotate_get(const struct wmNDOFMotionData *ndof, float 
 
 float       WM_event_ndof_to_axis_angle(const struct wmNDOFMotionData *ndof, float axis[3]);
 void        WM_event_ndof_to_quat(const struct wmNDOFMotionData *ndof, float q[4]);
+
+float       WM_event_tablet_data(const struct wmEvent *event, int *pen_flip, float tilt[2]);
+bool        WM_event_is_tablet(const struct wmEvent *event);
 
 #ifdef __cplusplus
 }

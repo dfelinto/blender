@@ -611,8 +611,10 @@ void BKE_camera_multiview_basic(Object *camera, const bool left)
 	short convergence_mode, pivot;
 	float tmpmat[4][4];
 
-	float rotmat[3][3] = MAT3_UNITY;
+	float rotmat[3][3];
 	float fac = 1.0f;
+
+	unit_m3(rotmat);
 
 	interocular_distance = data->stereo.interocular_distance;
 	convergence_distance = data->stereo.convergence_distance;
@@ -672,8 +674,10 @@ void BKE_camera_stereo_matrices(Object *camera, float r_viewmat[4][4], float *r_
 	float angle = 0.0f;
 	short convergence_mode, pivot;
 	float tmpviewmat[4][4];
-	float transmat[4][4] = MAT4_UNITY;
+	float transmat[4][4];
 	float fac = 1.0f;
+
+	unit_m4(transmat);
 
 	interocular_distance = data->stereo.interocular_distance;
 	convergence_distance = data->stereo.convergence_distance;

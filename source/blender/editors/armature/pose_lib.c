@@ -189,7 +189,9 @@ static bAction *poselib_init_new(Object *ob)
 	/* init object's poselib action (unlink old one if there) */
 	if (ob->poselib)
 		id_us_min(&ob->poselib->id);
+		
 	ob->poselib = add_empty_action(G.main, "PoseLib");
+	ob->poselib->idroot = ID_OB;
 	
 	return ob->poselib;
 }
@@ -1415,7 +1417,7 @@ static void poselib_preview_init_data(bContext *C, wmOperator *op)
 		pld->marker = (pld->act) ? BLI_findlink(&pld->act->markers, pose_index) : NULL;
 	
 	/* check if valid poselib */
-	if (ELEM3(NULL, pld->ob, pld->pose, pld->arm)) {
+	if (ELEM(NULL, pld->ob, pld->pose, pld->arm)) {
 		BKE_report(op->reports, RPT_ERROR, "Pose lib is only for armatures in pose mode");
 		pld->state = PL_PREVIEW_ERROR;
 		return;
@@ -1488,7 +1490,6 @@ static void poselib_preview_cleanup(bContext *C, wmOperator *op)
 			DAG_id_tag_update(&ob->id, OB_RECALC_DATA);  /* sets recalc flags */
 		else
 			BKE_pose_where_is(scene, ob);
-		
 	}
 	else if (pld->state == PL_PREVIEW_CONFIRM) {
 		/* tag poses as appropriate */
@@ -1508,6 +1509,9 @@ static void poselib_preview_cleanup(bContext *C, wmOperator *op)
 		else
 			BKE_pose_where_is(scene, ob);
 	}
+	
+	/* Request final redraw of the view. */
+	WM_event_add_notifier(C, NC_OBJECT | ND_POSE, pld->ob);
 	
 	/* free memory used for backups and searching */
 	poselib_backup_free_data(pld);

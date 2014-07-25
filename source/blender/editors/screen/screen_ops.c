@@ -166,7 +166,7 @@ int ED_operator_objectmode(bContext *C)
 		return 0;
 	
 	/* add a check for ob->mode too? */
-	if (obact && obact->mode)
+	if (obact && (obact->mode != OB_MODE_OBJECT))
 		return 0;
 	
 	return 1;
@@ -201,7 +201,7 @@ int ED_operator_animview_active(bContext *C)
 {
 	if (ED_operator_areaactive(C)) {
 		SpaceLink *sl = (SpaceLink *)CTX_wm_space_data(C);
-		if (sl && (ELEM5(sl->spacetype, SPACE_SEQ, SPACE_ACTION, SPACE_NLA, SPACE_IPO, SPACE_TIME)))
+		if (sl && (ELEM(sl->spacetype, SPACE_SEQ, SPACE_ACTION, SPACE_NLA, SPACE_IPO, SPACE_TIME)))
 			return true;
 	}
 
@@ -267,7 +267,6 @@ int ED_operator_node_editable(bContext *C)
 	return 0;
 }
 
-/* XXX rename */
 int ED_operator_graphedit_active(bContext *C)
 {
 	return ed_spacetype_test(C, SPACE_IPO);
@@ -4193,7 +4192,8 @@ void ED_keymap_screen(wmKeyConfig *keyconf)
 	/* dropbox for entire window */
 	lb = WM_dropboxmap_find("Window", 0, 0);
 	WM_dropbox_add(lb, "WM_OT_open_mainfile", open_file_drop_poll, open_file_drop_copy);
-	
+	WM_dropbox_add(lb, "UI_OT_drop_color", UI_drop_color_poll, UI_drop_color_copy);
+
 	keymap_modal_set(keyconf);
 }
 

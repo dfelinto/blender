@@ -45,11 +45,13 @@ set(SRC
 	editmesh_bisect.c
 	editmesh_extrude.c
 	editmesh_inset.c
+	editmesh_intersect.c
 	editmesh_knife.c
 	editmesh_knife_project.c
 	editmesh_loopcut.c
 	editmesh_path.c
 	editmesh_rip.c
+	editmesh_rip_edge.c
 	editmesh_select.c
 	editmesh_tools.c
 	editmesh_utils.c

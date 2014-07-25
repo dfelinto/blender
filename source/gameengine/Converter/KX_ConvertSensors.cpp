@@ -329,12 +329,19 @@ void BL_ConvertSensors(struct Object* blenderobject,
 							gameobj);
 					} else {
 						/* give us a focus-aware sensor */
+						bool bFindMaterial = (bmouse->mode & SENS_COLLISION_MATERIAL);
+						bool bXRay = (bmouse->flag & SENS_RAY_XRAY);					
+						STR_String checkname = (bFindMaterial? bmouse->matname : bmouse->propname);
+					
 						gamesensor = new KX_MouseFocusSensor(eventmgr,
 							startx,
 							starty,
 							keytype,
 							trackfocus,
 							(bmouse->flag & SENS_MOUSE_FOCUS_PULSE) ? true:false,
+							checkname,
+							bFindMaterial,
+							bXRay,
 							kxscene,
 							kxengine,
 							gameobj); 
@@ -376,6 +383,12 @@ void BL_ConvertSensors(struct Object* blenderobject,
 					case SENS_PROP_EXPRESSION:
 						propchecktype = SCA_PropertySensor::KX_PROPSENSOR_EXPRESSION;
 						/* error */
+						break;
+					case SENS_PROP_LESSTHAN:
+						propchecktype = SCA_PropertySensor::KX_PROPSENSOR_LESSTHAN;
+						break;
+					case SENS_PROP_GREATERTHAN:
+						propchecktype = SCA_PropertySensor::KX_PROPSENSOR_GREATERTHAN;
 						break;
 					default:
 						; /* error */

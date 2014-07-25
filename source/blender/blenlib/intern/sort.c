@@ -32,10 +32,13 @@
 
 #include <stdlib.h>
 
+#ifndef __GLIBC__
+
 #include "BLI_utildefines.h"
 
 #include "BLI_sort.h"
 
+/* note: modified to use glibc arg order for callback */
 /* **** qsort based on FreeBSD source (libkern\qsort.c) **** */
 BLI_INLINE char	*med3(char *, char *, char *, BLI_sort_cmp_t, void *);
 BLI_INLINE void	 swapfunc(char *, char *, int, int);
@@ -72,7 +75,7 @@ BLI_INLINE void swapfunc(char *a, char *b, int n, int swaptype)
 		swapfunc(a, b, es, swaptype)
 
 #define vecswap(a, b, n) 	if ((n) > 0) swapfunc(a, b, n, swaptype)
-#define	CMP(t, x, y) (cmp((t), (x), (y)))
+#define	CMP(t, x, y) (cmp((x), (y), (t)))
 
 BLI_INLINE char *med3(char *a, char *b, char *c, BLI_sort_cmp_t cmp, void *thunk)
 {
@@ -86,7 +89,7 @@ BLI_INLINE char *med3(char *a, char *b, char *c, BLI_sort_cmp_t cmp, void *thunk
  *
  * \note Follows BSD arg order (incompatible with glibc).
  */
-void BLI_qsort_r(void *a, size_t n, size_t es, void *thunk, BLI_sort_cmp_t cmp)
+void BLI_qsort_r(void *a, size_t n, size_t es, BLI_sort_cmp_t cmp, void *thunk)
 {
 	char *pa, *pb, *pc, *pd, *pl, *pm, *pn;
 	int d, r, swaptype, swap_cnt;
@@ -163,7 +166,7 @@ loop:
 	r = min(pd - pc, pn - pd - es);
 	vecswap(pb, pn - r, r);
 	if ((r = pb - pa) > es)
-		BLI_qsort_r(a, r / es, es, thunk, cmp);
+		BLI_qsort_r(a, r / es, es, cmp, thunk);
 	if ((r = pd - pc) > es) {
 		/* Iterate rather than recurse to save stack space */
 		a = pn - r;
@@ -171,3 +174,5 @@ loop:
 		goto loop;
 	}
 }
+
+#endif  /* __GLIBC__ */

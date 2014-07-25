@@ -1014,7 +1014,7 @@ int BKE_imtype_to_ftype(const char imtype)
 	else if (imtype == R_IMF_IMTYPE_TIFF)
 		return TIF;
 #endif
-	else if (ELEM3(imtype, R_IMF_IMTYPE_OPENEXR, R_IMF_IMTYPE_MULTILAYER, R_IMF_IMTYPE_MULTIVIEW))
+	else if (ELEM(imtype, R_IMF_IMTYPE_OPENEXR, R_IMF_IMTYPE_MULTILAYER, R_IMF_IMTYPE_MULTIVIEW))
 		return OPENEXR;
 #ifdef WITH_CINEON
 	else if (imtype == R_IMF_IMTYPE_CINEON)
@@ -1261,7 +1261,7 @@ static bool do_add_image_extension(char *string, const char imtype, const ImageF
 			extension = extension_test;
 	}
 #endif
-	else if (ELEM5(imtype, R_IMF_IMTYPE_PNG, R_IMF_IMTYPE_FFMPEG, R_IMF_IMTYPE_H264, R_IMF_IMTYPE_THEORA, R_IMF_IMTYPE_XVID)) {
+	else if (ELEM(imtype, R_IMF_IMTYPE_PNG, R_IMF_IMTYPE_FFMPEG, R_IMF_IMTYPE_H264, R_IMF_IMTYPE_THEORA, R_IMF_IMTYPE_XVID)) {
 		if (!BLI_testextensie(string, extension_test = ".png"))
 			extension = extension_test;
 	}
@@ -1293,7 +1293,7 @@ static bool do_add_image_extension(char *string, const char imtype, const ImageF
 	}
 #endif
 #ifdef WITH_OPENEXR
-	else if (ELEM3(imtype, R_IMF_IMTYPE_OPENEXR, R_IMF_IMTYPE_MULTILAYER, R_IMF_IMTYPE_MULTIVIEW)) {
+	else if (ELEM(imtype, R_IMF_IMTYPE_OPENEXR, R_IMF_IMTYPE_MULTILAYER, R_IMF_IMTYPE_MULTIVIEW)) {
 		if (!BLI_testextensie(string, extension_test = ".exr"))
 			extension = extension_test;
 	}
@@ -1904,7 +1904,7 @@ int BKE_imbuf_write(ImBuf *ibuf, const char *name, ImageFormatData *imf)
 		ibuf->ftype = RADHDR;
 	}
 #endif
-	else if (ELEM5(imtype, R_IMF_IMTYPE_PNG, R_IMF_IMTYPE_FFMPEG, R_IMF_IMTYPE_H264, R_IMF_IMTYPE_THEORA, R_IMF_IMTYPE_XVID)) {
+	else if (ELEM(imtype, R_IMF_IMTYPE_PNG, R_IMF_IMTYPE_FFMPEG, R_IMF_IMTYPE_H264, R_IMF_IMTYPE_THEORA, R_IMF_IMTYPE_XVID)) {
 		ibuf->ftype = PNG;
 
 		if (imtype == R_IMF_IMTYPE_PNG) {
@@ -1932,7 +1932,7 @@ int BKE_imbuf_write(ImBuf *ibuf, const char *name, ImageFormatData *imf)
 	}
 #endif
 #ifdef WITH_OPENEXR
-	else if (ELEM3(imtype, R_IMF_IMTYPE_OPENEXR, R_IMF_IMTYPE_MULTILAYER, R_IMF_IMTYPE_MULTIVIEW)) {
+	else if (ELEM(imtype, R_IMF_IMTYPE_OPENEXR, R_IMF_IMTYPE_MULTILAYER, R_IMF_IMTYPE_MULTIVIEW)) {
 		ibuf->ftype = OPENEXR;
 		if (imf->depth == R_IMF_CHAN_DEPTH_16)
 			ibuf->ftype |= OPENEXR_HALF;
@@ -2027,7 +2027,7 @@ int BKE_imbuf_write(ImBuf *ibuf, const char *name, ImageFormatData *imf)
 	return(ok);
 }
 
-/* same as BKE_imbuf_write() but crappy workaround not to perminantly modify
+/* same as BKE_imbuf_write() but crappy workaround not to permanently modify
  * _some_, values in the imbuf */
 int BKE_imbuf_write_as(ImBuf *ibuf, const char *name, ImageFormatData *imf,
                        const bool save_copy)

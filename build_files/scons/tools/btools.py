@@ -14,6 +14,21 @@ import sys
 Variables = SCons.Variables
 BoolVariable = SCons.Variables.BoolVariable
 
+def get_command_output(*popenargs, **kwargs):
+    if hasattr(subprocess, "check_output"):
+        return subprocess.check_output(*popenargs, **kwargs)
+    if 'stdout' in kwargs:
+        raise ValueError('stdout argument not allowed, it will be overridden.')
+    process = subprocess.Popen(stdout=subprocess.PIPE, *popenargs, **kwargs)
+    output, unused_err = process.communicate()
+    retcode = process.poll()
+    if retcode:
+        cmd = kwargs.get("args")
+        if cmd is None:
+            cmd = popenargs[0]
+        raise subprocess.CalledProcessError(retcode, cmd)
+    return output
+
 def get_version():
     import re
 
@@ -56,7 +71,14 @@ def get_version():
     raise Exception("%s: missing version string" % fname)
 
 def get_hash():
-    build_hash = os.popen('git rev-parse --short HEAD').read().strip()
+    try:
+        build_hash = get_command_output(['git', 'rev-parse', '--short', 'HEAD']).strip()
+    except OSError:
+        build_hash = None
+        print("WARNING: could not use git to retrieve current Blender repository hash...")
+    except subprocess.CalledProcessError as e:
+        build_hash = None
+        print("WARNING: git errored while retrieving current Blender repository hash (%d)..." % e.returncode)
     if build_hash == '' or build_hash == None:
         build_hash = 'UNKNOWN'
 

@@ -218,9 +218,13 @@ public:
 	bool scattering;
 };
 
-class WardBsdfNode : public BsdfNode {
+class AnisotropicBsdfNode : public BsdfNode {
 public:
-	SHADER_NODE_CLASS(WardBsdfNode)
+	SHADER_NODE_CLASS(AnisotropicBsdfNode)
+
+	ustring distribution;
+	static ShaderEnum distribution_enum;
+
 	void attributes(Shader *shader, AttributeRequestSet *attributes);
 };
 
@@ -451,6 +455,11 @@ public:
 	SHADER_NODE_CLASS(CombineHSVNode)
 };
 
+class CombineXYZNode : public ShaderNode {
+public:
+	SHADER_NODE_CLASS(CombineXYZNode)
+};
+
 class GammaNode : public ShaderNode {
 public:
 	SHADER_NODE_CLASS(GammaNode)
@@ -469,6 +478,11 @@ public:
 class SeparateHSVNode : public ShaderNode {
 public:
 	SHADER_NODE_CLASS(SeparateHSVNode)
+};
+
+class SeparateXYZNode : public ShaderNode {
+public:
+	SHADER_NODE_CLASS(SeparateXYZNode)
 };
 
 class HSVNode : public ShaderNode {

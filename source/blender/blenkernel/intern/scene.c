@@ -733,14 +733,14 @@ void BKE_scene_set_background(Main *bmain, Scene *scene)
 /* called from creator.c */
 Scene *BKE_scene_set_name(Main *bmain, const char *name)
 {
-	Scene *sce = (Scene *)BKE_libblock_find_name(ID_SCE, name);
+	Scene *sce = (Scene *)BKE_libblock_find_name_ex(bmain, ID_SCE, name);
 	if (sce) {
 		BKE_scene_set_background(bmain, sce);
-		printf("Scene switch: '%s' in file: '%s'\n", name, G.main->name);
+		printf("Scene switch: '%s' in file: '%s'\n", name, bmain->name);
 		return sce;
 	}
 
-	printf("Can't find scene: '%s' in file: '%s'\n", name, G.main->name);
+	printf("Can't find scene: '%s' in file: '%s'\n", name, bmain->name);
 	return NULL;
 }
 
@@ -818,9 +818,7 @@ void BKE_scene_unlink(Main *bmain, Scene *sce, Scene *newsce)
 	BKE_libblock_free(bmain, sce);
 }
 
-/* used by metaballs
- * doesn't return the original duplicated object, only dupli's
- */
+/* Used by metaballs, return *all* objects (including duplis) existing in the scene (including scene's sets) */
 int BKE_scene_base_iter_next(EvaluationContext *eval_ctx, SceneBaseIter *iter,
                              Scene **scene, int val, Base **base, Object **ob)
 {
@@ -831,11 +829,12 @@ int BKE_scene_base_iter_next(EvaluationContext *eval_ctx, SceneBaseIter *iter,
 		iter->phase = F_START;
 		iter->dupob = NULL;
 		iter->duplilist = NULL;
+		iter->dupli_refob = NULL;
 	}
 	else {
 		/* run_again is set when a duplilist has been ended */
 		while (run_again) {
-			run_again = 0;
+			run_again = false;
 
 			/* the first base */
 			if (iter->phase == F_START) {
@@ -893,34 +892,46 @@ int BKE_scene_base_iter_next(EvaluationContext *eval_ctx, SceneBaseIter *iter,
 							
 							iter->dupob = iter->duplilist->first;
 
-							if (!iter->dupob)
+							if (!iter->dupob) {
 								free_object_duplilist(iter->duplilist);
+								iter->duplilist = NULL;
+							}
+							iter->dupli_refob = NULL;
 						}
 					}
 				}
 				/* handle dupli's */
 				if (iter->dupob) {
-					
-					copy_m4_m4(iter->omat, iter->dupob->ob->obmat);
-					copy_m4_m4(iter->dupob->ob->obmat, iter->dupob->mat);
-					
 					(*base)->flag |= OB_FROMDUPLI;
 					*ob = iter->dupob->ob;
 					iter->phase = F_DUPLI;
-					
+
+					if (iter->dupli_refob != *ob) {
+						if (iter->dupli_refob) {
+							/* Restore previous object's real matrix. */
+							copy_m4_m4(iter->dupli_refob->obmat, iter->omat);
+						}
+						/* Backup new object's real matrix. */
+						iter->dupli_refob = *ob;
+						copy_m4_m4(iter->omat, iter->dupli_refob->obmat);
+					}
+					copy_m4_m4((*ob)->obmat, iter->dupob->mat);
+
 					iter->dupob = iter->dupob->next;
 				}
 				else if (iter->phase == F_DUPLI) {
 					iter->phase = F_SCENE;
 					(*base)->flag &= ~OB_FROMDUPLI;
 					
-					for (iter->dupob = iter->duplilist->first; iter->dupob; iter->dupob = iter->dupob->next) {
-						copy_m4_m4(iter->dupob->ob->obmat, iter->omat);
+					if (iter->dupli_refob) {
+						/* Restore last object's real matrix. */
+						copy_m4_m4(iter->dupli_refob->obmat, iter->omat);
+						iter->dupli_refob = NULL;
 					}
 					
 					free_object_duplilist(iter->duplilist);
 					iter->duplilist = NULL;
-					run_again = 1;
+					run_again = true;
 				}
 			}
 		}
@@ -1476,7 +1487,7 @@ static void scene_update_objects(EvaluationContext *eval_ctx, Main *bmain, Scene
 	bool need_singlethread_pass;
 
 	/* Early check for whether we need to invoke all the task-based
-	 * tihngs (spawn new ppol, traverse dependency graph and so on).
+	 * things (spawn new ppol, traverse dependency graph and so on).
 	 *
 	 * Basically if there's no ID datablocks tagged for update which
 	 * corresponds to object->recalc flags (which are checked in

@@ -378,7 +378,7 @@ ScrArea *area_split(bScreen *sc, ScrArea *sa, char dir, float fac, int merge)
 	if (split == 0) return NULL;
 	
 	/* note regarding (fac > 0.5f) checks below.
-	 * notmally it shouldn't matter which is used since the copy should match the original
+	 * normally it shouldn't matter which is used since the copy should match the original
 	 * however with viewport rendering and python console this isn't the case. - campbell */
 
 	if (dir == 'h') {
@@ -1975,7 +1975,7 @@ ScrArea *ED_screen_clean_toggle(bContext *C, wmWindow *win, ScrArea *sa)
 		for (ar = newa->regionbase.first; ar; ar = ar->next) {
 			ar->flagclean = ar->flag;
 
-			if (ELEM4(ar->regiontype,
+			if (ELEM(ar->regiontype,
 					  RGN_TYPE_UI,
 					  RGN_TYPE_PREVIEW,
 					  RGN_TYPE_HEADER,

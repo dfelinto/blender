@@ -4,6 +4,7 @@
 set(SRC_OSL
 	node_add_closure.osl
 	node_ambient_occlusion.osl
+	node_anisotropic_bsdf.osl
 	node_attribute.osl
 	node_background.osl
 	node_brick_texture.osl
@@ -13,6 +14,7 @@ set(SRC_OSL
 	node_checker_texture.osl
 	node_combine_rgb.osl
 	node_combine_hsv.osl
+	node_combine_xyz.osl
 	node_convert_from_color.osl
 	node_convert_from_float.osl
 	node_convert_from_int.osl
@@ -57,6 +59,7 @@ set(SRC_OSL
 	node_rgb_ramp.osl
 	node_separate_rgb.osl
 	node_separate_hsv.osl
+	node_separate_xyz.osl
 	node_set_normal.osl
 	node_sky_texture.osl
 	node_subsurface_scattering.osl
@@ -71,7 +74,6 @@ set(SRC_OSL
 	node_vector_transform.osl
 	node_velvet_bsdf.osl
 	node_voronoi_texture.osl
-	node_ward_bsdf.osl
 	node_wavelength.osl
 	node_blackbody.osl
 	node_wave_texture.osl

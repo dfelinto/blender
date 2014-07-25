@@ -35,6 +35,7 @@
 /* allow readfile to use deprecated functionality */
 #define DNA_DEPRECATED_ALLOW
 
+#include "DNA_brush_types.h"
 #include "DNA_constraint_types.h"
 #include "DNA_sdna_types.h"
 #include "DNA_space_types.h"
@@ -42,6 +43,8 @@
 #include "DNA_object_types.h"
 #include "DNA_mesh_types.h"
 #include "DNA_modifier_types.h"
+#include "DNA_linestyle_types.h"
+#include "DNA_actuator_types.h"
 #include "DNA_camera_types.h"
 #include "DNA_view3d_types.h"
 
@@ -254,49 +257,107 @@ void blo_do_versions_270(FileData *fd, Library *UNUSED(lib), Main *main)
 		}
 	}
 
-	if (!DNA_struct_elem_find(fd->filesdna, "Material", "int", "mode2")) {
-		Material *ma;
+	if (!MAIN_VERSION_ATLEAST(main, 271, 0)) {
+		if (!DNA_struct_elem_find(fd->filesdna, "Material", "int", "mode2")) {
+			Material *ma;
 
-		for (ma = main->mat.first; ma; ma = ma->id.next)
-			ma->mode2 = MA_CASTSHADOW;
-	}
+			for (ma = main->mat.first; ma; ma = ma->id.next)
+				ma->mode2 = MA_CASTSHADOW;
+		}
 
-	if (!DNA_struct_elem_find(fd->filesdna, "RenderData", "BakeData", "bake")) {
-		Scene *sce;
+		if (!DNA_struct_elem_find(fd->filesdna, "RenderData", "BakeData", "bake")) {
+			Scene *sce;
 
-		for (sce = main->scene.first; sce; sce = sce->id.next) {
-			sce->r.bake.flag = R_BAKE_CLEAR;
-			sce->r.bake.width = 512;
-			sce->r.bake.height = 512;
-			sce->r.bake.margin = 16;
-			sce->r.bake.normal_space = R_BAKE_SPACE_TANGENT;
-			sce->r.bake.normal_swizzle[0] = R_BAKE_POSX;
-			sce->r.bake.normal_swizzle[1] = R_BAKE_POSY;
-			sce->r.bake.normal_swizzle[2] = R_BAKE_POSZ;
-			BLI_strncpy(sce->r.bake.filepath, U.renderdir, sizeof(sce->r.bake.filepath));
+			for (sce = main->scene.first; sce; sce = sce->id.next) {
+				sce->r.bake.flag = R_BAKE_CLEAR;
+				sce->r.bake.width = 512;
+				sce->r.bake.height = 512;
+				sce->r.bake.margin = 16;
+				sce->r.bake.normal_space = R_BAKE_SPACE_TANGENT;
+				sce->r.bake.normal_swizzle[0] = R_BAKE_POSX;
+				sce->r.bake.normal_swizzle[1] = R_BAKE_POSY;
+				sce->r.bake.normal_swizzle[2] = R_BAKE_POSZ;
+				BLI_strncpy(sce->r.bake.filepath, U.renderdir, sizeof(sce->r.bake.filepath));
 
-			sce->r.bake.im_format.planes = R_IMF_PLANES_RGBA;
-			sce->r.bake.im_format.imtype = R_IMF_IMTYPE_PNG;
-			sce->r.bake.im_format.depth = R_IMF_CHAN_DEPTH_8;
-			sce->r.bake.im_format.quality = 90;
-			sce->r.bake.im_format.compress = 15;
+				sce->r.bake.im_format.planes = R_IMF_PLANES_RGBA;
+				sce->r.bake.im_format.imtype = R_IMF_IMTYPE_PNG;
+				sce->r.bake.im_format.depth = R_IMF_CHAN_DEPTH_8;
+				sce->r.bake.im_format.quality = 90;
+				sce->r.bake.im_format.compress = 15;
+			}
+		}
+
+		if (!DNA_struct_elem_find(fd->filesdna, "FreestyleLineStyle", "float", "texstep")) {
+			FreestyleLineStyle *linestyle;
+
+			for (linestyle = main->linestyle.first; linestyle; linestyle = linestyle->id.next) {
+				linestyle->flag |= LS_TEXTURE;
+				linestyle->texstep = 1.0;
+			}
+		}
+
+		{
+			Scene *scene;
+			for (scene = main->scene.first; scene; scene = scene->id.next) {
+				int num_layers = BLI_countlist(&scene->r.layers);
+				scene->r.actlay = min_ff(scene->r.actlay, num_layers - 1);
+			}
 		}
 	}
 
-	if (!DNA_struct_elem_find(fd->filesdna, "FreestyleLineStyle", "float", "texstep")) {
-		FreestyleLineStyle *linestyle;
+	if (!MAIN_VERSION_ATLEAST(main, 271, 1)) {
+		if (!DNA_struct_elem_find(fd->filesdna, "Material", "float", "line_col[4]")) {
+			Material *mat;
 
-		for (linestyle = main->linestyle.first; linestyle; linestyle = linestyle->id.next) {
-			linestyle->flag |= LS_TEXTURE;
-			linestyle->texstep = 1.0;
+			for (mat = main->mat.first; mat; mat = mat->id.next) {
+				mat->line_col[0] = mat->line_col[1] = mat->line_col[2] = 0.0f;
+				mat->line_col[3] = mat->alpha;
+			}
+		}
+
+		if (!DNA_struct_elem_find(fd->filesdna, "RenderData", "int", "preview_start_resolution")) {
+			Scene *scene;
+			for (scene = main->scene.first; scene; scene = scene->id.next) {
+				scene->r.preview_start_resolution = 64;
+			}
 		}
 	}
 
-	{
+	if (!MAIN_VERSION_ATLEAST(main, 271, 2)) {
+		/* init up & track axis property of trackto actuators */
+		Object *ob;
+
+		for (ob = main->object.first; ob; ob = ob->id.next) {
+			bActuator *act;
+			for (act = ob->actuators.first; act; act = act->next) {
+				if (act->type == ACT_EDIT_OBJECT) {
+					bEditObjectActuator *eoact = act->data;
+					eoact->trackflag = ob->trackflag;
+					/* if trackflag is pointing +-Z axis then upflag should point Y axis.
+					 * Rest of trackflag cases, upflag should be point z axis */
+					if ((ob->trackflag == OB_POSZ) || (ob->trackflag == OB_NEGZ)) {
+						eoact->upflag = 1;
+					}
+					else {
+						eoact->upflag = 2;
+					}
+				}
+			}
+		}
+	}
+
+	if (!MAIN_VERSION_ATLEAST(main, 271, 3)) {
+		Brush *br;
+
+		for (br = main->brush.first; br; br = br->id.next) {
+			br->fill_threshold = 0.2f;
+		}
+	}
+
+	if (!DNA_struct_elem_find(fd->filesdna, "RenderData", "int", "preview_start_resolution")) {
 		Scene *scene;
 		for (scene = main->scene.first; scene; scene = scene->id.next) {
-			int num_layers = BLI_countlist(&scene->r.layers);
-			scene->r.actlay = min_ff(scene->r.actlay, num_layers - 1);
+			scene->r.preview_start_resolution = 64;
 		}
 	}
 

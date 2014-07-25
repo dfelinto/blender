@@ -519,6 +519,8 @@ static const char *actuator_name(int type)
 		return N_("Armature");
 	case ACT_STEERING:
 		return N_("Steering");
+	case ACT_MOUSE:
+		return N_("Mouse");
 	}
 	return N_("Unknown");
 }
@@ -1142,15 +1144,30 @@ static void draw_sensor_message(uiLayout *layout, PointerRNA *ptr)
 	uiItemR(layout, ptr, "subject", 0, NULL, ICON_NONE);
 }
 
-static void draw_sensor_mouse(uiLayout *layout, PointerRNA *ptr)
+static void draw_sensor_mouse(uiLayout *layout, PointerRNA *ptr, bContext *C)
 {
-	uiLayout *split;
+	uiLayout *split, *split2;
+	PointerRNA main_ptr;
 
 	split = uiLayoutSplit(layout, 0.8f, false);
 	uiItemR(split, ptr, "mouse_event", 0, NULL, ICON_NONE);
 
-	if (RNA_enum_get(ptr, "mouse_event") == BL_SENS_MOUSE_MOUSEOVER_ANY)
+	if (RNA_enum_get(ptr, "mouse_event") == BL_SENS_MOUSE_MOUSEOVER_ANY) {
 		uiItemR(split, ptr, "use_pulse", UI_ITEM_R_TOGGLE, NULL, ICON_NONE);
+
+		split = uiLayoutSplit(layout, 0.3f, false);
+		uiItemR(split, ptr, "use_material", 0, "", ICON_NONE);
+
+		split2 = uiLayoutSplit(split, 0.7f, false);
+		if (RNA_enum_get(ptr, "use_material") == SENS_RAY_PROPERTY) {
+			uiItemR(split2, ptr, "property", 0, "", ICON_NONE);
+		}
+		else {
+			RNA_main_pointer_create(CTX_data_main(C), &main_ptr);
+			uiItemPointerR(split2, ptr, "material", &main_ptr, "materials", "", ICON_MATERIAL_DATA);
+		}
+		uiItemR(split2, ptr, "use_x_ray", UI_ITEM_R_TOGGLE, NULL, ICON_NONE);
+	}
 }
 
 static void draw_sensor_near(uiLayout *layout, PointerRNA *ptr)
@@ -1182,9 +1199,9 @@ static void draw_sensor_property(uiLayout *layout, PointerRNA *ptr)
 			uiItemR(row, ptr, "value_max", 0, NULL, ICON_NONE);
 			break;
 		case SENS_PROP_EQUAL:
-			uiItemR(layout, ptr, "value", 0, NULL, ICON_NONE);
-			break;
 		case SENS_PROP_NEQUAL:
+		case SENS_PROP_LESSTHAN:
+		case SENS_PROP_GREATERTHAN:
 			uiItemR(layout, ptr, "value", 0, NULL, ICON_NONE);
 			break;
 		case SENS_PROP_CHANGED:
@@ -1271,7 +1288,7 @@ static void draw_brick_sensor(uiLayout *layout, PointerRNA *ptr, bContext *C)
 			draw_sensor_message(box, ptr);
 			break;
 		case SENS_MOUSE:
-			draw_sensor_mouse(box, ptr);
+			draw_sensor_mouse(box, ptr, C);
 			break;
 		case SENS_NEAR:
 			draw_sensor_near(box, ptr);
@@ -1718,6 +1735,12 @@ static void draw_actuator_edit_object(uiLayout *layout, PointerRNA *ptr)
 			sub = uiLayoutSplit(split, 0.7f, false);
 			uiItemR(sub, ptr, "time", 0, NULL, ICON_NONE);
 			uiItemR(sub, ptr, "use_3d_tracking", UI_ITEM_R_TOGGLE, NULL, ICON_NONE);
+
+			row = uiLayoutRow(layout, false);
+			uiItemR(row, ptr, "up_axis", 0, NULL, ICON_NONE);
+
+			row = uiLayoutRow(layout, false);
+			uiItemR(row, ptr, "track_axis", 0, NULL, ICON_NONE);
 			break;
 		case ACT_EDOB_DYNAMICS:
 			if (ob->type != OB_MESH) {
@@ -1809,7 +1832,7 @@ static void draw_actuator_motion(uiLayout *layout, PointerRNA *ptr)
 			uiItemR(row, ptr, "offset_rotation", 0, NULL, ICON_NONE);
 			uiItemR(split, ptr, "use_local_rotation", UI_ITEM_R_TOGGLE, NULL, ICON_NONE);
 			
-			if (ELEM3(physics_type, OB_BODY_TYPE_DYNAMIC, OB_BODY_TYPE_RIGID, OB_BODY_TYPE_SOFT)) {
+			if (ELEM(physics_type, OB_BODY_TYPE_DYNAMIC, OB_BODY_TYPE_RIGID, OB_BODY_TYPE_SOFT)) {
 				uiItemL(layout, IFACE_("Dynamic Object Settings:"), ICON_NONE);
 				split = uiLayoutSplit(layout, 0.9, false);
 				row = uiLayoutRow(split, false);
@@ -1931,6 +1954,7 @@ static void draw_actuator_property(uiLayout *layout, PointerRNA *ptr)
 
 	switch (RNA_enum_get(ptr, "mode")) {
 		case ACT_PROP_TOGGLE:
+		case ACT_PROP_LEVEL:
 			break;
 		case ACT_PROP_ADD:
 			uiItemR(layout, ptr, "value", 0, NULL, ICON_NONE);
@@ -2177,6 +2201,68 @@ static void draw_actuator_steering(uiLayout *layout, PointerRNA *ptr)
 	}
 }
 
+static void draw_actuator_mouse(uiLayout *layout, PointerRNA *ptr)
+{
+	uiLayout *row, *col, *subcol, *split, *subsplit;
+
+	uiItemR(layout, ptr, "mode", 0, NULL, 0);
+
+	switch (RNA_enum_get(ptr, "mode")) {
+		case ACT_MOUSE_VISIBILITY:
+			row = uiLayoutRow(layout, 0);
+			uiItemR(row, ptr, "visible", UI_ITEM_R_TOGGLE, NULL, 0);
+			break;
+
+		case ACT_MOUSE_LOOK:
+			/* X axis */
+			row = uiLayoutRow(layout, 0);
+			col = uiLayoutColumn(row, 1);
+
+			uiItemR(col, ptr, "use_axis_x", UI_ITEM_R_TOGGLE, NULL, 0);
+
+			subcol = uiLayoutColumn(col, 1);
+			uiLayoutSetActive(subcol, RNA_boolean_get(ptr, "use_axis_x")==1);
+			uiItemR(subcol, ptr, "sensitivity_x", 0, NULL, 0);
+			uiItemR(subcol, ptr, "threshold_x", 0, NULL, 0);
+
+			uiItemR(subcol, ptr, "min_x", 0, NULL, 0);
+			uiItemR(subcol, ptr, "max_x", 0, NULL, 0);
+
+			uiItemR(subcol, ptr, "object_axis_x", 0, NULL, 0);
+
+			/* Y Axis */
+			col = uiLayoutColumn(row, 1);
+
+			uiItemR(col, ptr, "use_axis_y", UI_ITEM_R_TOGGLE, NULL, 0);
+
+			subcol = uiLayoutColumn(col, 1);
+			uiLayoutSetActive(subcol, RNA_boolean_get(ptr, "use_axis_y")==1);
+			uiItemR(subcol, ptr, "sensitivity_y", 0, NULL, 0);
+			uiItemR(subcol, ptr, "threshold_y", 0, NULL, 0);
+
+			uiItemR(subcol, ptr, "min_y", 0, NULL, 0);
+			uiItemR(subcol, ptr, "max_y", 0, NULL, 0);
+
+			uiItemR(subcol, ptr, "object_axis_y", 0, NULL, 0);
+
+			/* Lower options */
+			row = uiLayoutRow(layout, 0);
+			split = uiLayoutSplit(row, 0.5, 0);
+
+			subsplit = uiLayoutSplit(split, 0.5, 1);
+			uiLayoutSetActive(subsplit, RNA_boolean_get(ptr, "use_axis_x")==1);
+			uiItemR(subsplit, ptr, "local_x", UI_ITEM_R_TOGGLE, NULL, 0);
+			uiItemR(subsplit, ptr, "reset_x", UI_ITEM_R_TOGGLE, NULL, 0);
+
+			subsplit = uiLayoutSplit(split, 0.5, 1);
+			uiLayoutSetActive(subsplit, RNA_boolean_get(ptr, "use_axis_y")==1);
+			uiItemR(subsplit, ptr, "local_y", UI_ITEM_R_TOGGLE, NULL, 0);
+			uiItemR(subsplit, ptr, "reset_y", UI_ITEM_R_TOGGLE, NULL, 0);
+
+			break;
+	}
+}
+
 static void draw_brick_actuator(uiLayout *layout, PointerRNA *ptr, bContext *C)
 {
 	uiLayout *box;
@@ -2241,6 +2327,10 @@ static void draw_brick_actuator(uiLayout *layout, PointerRNA *ptr, bContext *C)
 			break;
 		case ACT_STEERING:
 			draw_actuator_steering(box, ptr);
+			break;
+		case ACT_MOUSE:
+			draw_actuator_mouse(box, ptr);
+			break;
 	}
 }
 

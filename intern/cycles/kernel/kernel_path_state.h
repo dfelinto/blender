@@ -18,15 +18,11 @@ CCL_NAMESPACE_BEGIN
 
 ccl_device_inline void path_state_init(KernelGlobals *kg, PathState *state, RNG *rng, int sample)
 {
-	state->flag = PATH_RAY_CAMERA|PATH_RAY_SINGULAR|PATH_RAY_MIS_SKIP;
+	state->flag = PATH_RAY_CAMERA|PATH_RAY_MIS_SKIP;
 
 	state->rng_offset = PRNG_BASE_NUM;
 	state->sample = sample;
-#ifdef __CMJ__
 	state->num_samples = kernel_data.integrator.aa_samples;
-#else
-	state->num_samples = 0;
-#endif
 
 	state->bounce = 0;
 	state->diffuse_bounce = 0;

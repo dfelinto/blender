@@ -194,7 +194,7 @@ struct Render
 	struct Object *camera_override;
 	struct Object *camera_left; /* ghost camera, made for render in stereo */
 	struct Object *camera_right; /* ghost camera, made for render in stereo */
-	unsigned int lay;
+	unsigned int lay, layer_override;
 	
 	ListBase parts;
 	
@@ -242,7 +242,7 @@ struct Render
 	ListBase volumes;
 
 #ifdef WITH_FREESTYLE
-	struct Main freestyle_bmain;
+	struct Main *freestyle_bmain;
 	ListBase freestyle_renders;
 #endif
 

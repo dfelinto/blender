@@ -71,6 +71,7 @@
 
 #include "ED_armature.h"
 #include "ED_particle.h"
+#include "ED_keyframing.h"
 #include "ED_screen.h"
 #include "ED_transform.h"
 #include "ED_mesh.h"
@@ -183,6 +184,72 @@ bool ED_view3d_camera_lock_sync(View3D *v3d, RegionView3D *rv3d)
 	}
 }
 
+bool ED_view3d_camera_autokey(
+        Scene *scene, ID *id_key,
+        struct bContext *C, const bool do_rotate, const bool do_translate)
+{
+	if (autokeyframe_cfra_can_key(scene, id_key)) {
+		ListBase dsources = {NULL, NULL};
+
+		/* add data-source override for the camera object */
+		ANIM_relative_keyingset_add_source(&dsources, id_key, NULL, NULL);
+
+		/* insert keyframes
+		 * 1) on the first frame
+		 * 2) on each subsequent frame
+		 *    TODO: need to check in future that frame changed before doing this
+		 */
+		if (do_rotate) {
+			struct KeyingSet *ks = ANIM_builtin_keyingset_get_named(NULL, ANIM_KS_ROTATION_ID);
+			ANIM_apply_keyingset(C, &dsources, NULL, ks, MODIFYKEY_MODE_INSERT, (float)CFRA);
+		}
+		if (do_translate) {
+			struct KeyingSet *ks = ANIM_builtin_keyingset_get_named(NULL, ANIM_KS_LOCATION_ID);
+			ANIM_apply_keyingset(C, &dsources, NULL, ks, MODIFYKEY_MODE_INSERT, (float)CFRA);
+		}
+
+		/* free temp data */
+		BLI_freelistN(&dsources);
+
+		return true;
+	}
+	else {
+		return false;
+	}
+}
+
+/**
+ * Call after modifying a locked view.
+ *
+ * \note Not every view edit currently auto-keys (numpad for eg),
+ * this is complicated because of smoothview.
+ */
+bool ED_view3d_camera_lock_autokey(
+        View3D *v3d, RegionView3D *rv3d,
+        struct bContext *C, const bool do_rotate, const bool do_translate)
+{
+	/* similar to ED_view3d_cameracontrol_update */
+	if (ED_view3d_camera_lock_check(v3d, rv3d)) {
+		Scene *scene = CTX_data_scene(C);
+		ID *id_key;
+		Object *root_parent;
+		if ((U.uiflag & USER_CAM_LOCK_NO_PARENT) == 0 && (root_parent = v3d->camera->parent)) {
+			while (root_parent->parent) {
+				root_parent = root_parent->parent;
+			}
+			id_key = &root_parent->id;
+		}
+		else {
+			id_key = &v3d->camera->id;
+		}
+
+		return ED_view3d_camera_autokey(scene, id_key, C, do_rotate, do_translate);
+	}
+	else {
+		return false;
+	}
+}
+
 /**
  * For viewport operators that exit camera persp.
  *
@@ -240,12 +307,12 @@ static void view3d_boxview_clip(ScrArea *sa)
 	}
 
 	for (val = 0; val < 8; val++) {
-		if (ELEM4(val, 0, 3, 4, 7))
+		if (ELEM(val, 0, 3, 4, 7))
 			bb->vec[val][0] = -x1 - ofs[0];
 		else
 			bb->vec[val][0] =  x1 - ofs[0];
 
-		if (ELEM4(val, 0, 1, 4, 5))
+		if (ELEM(val, 0, 1, 4, 5))
 			bb->vec[val][1] = -y1 - ofs[1];
 		else
 			bb->vec[val][1] =  y1 - ofs[1];
@@ -558,7 +625,7 @@ static bool view3d_orbit_calc_center(bContext *C, float r_dyn_ofs[3])
 		 */
 		if (ob->mode & OB_MODE_SCULPT) {
 			float stroke[3];
-			ED_sculpt_get_average_stroke(ob, stroke);
+			ED_sculpt_stroke_get_average(ob, stroke);
 			copy_v3_v3(lastofs, stroke);
 		}
 		else {
@@ -1052,7 +1119,9 @@ static int viewrotate_modal(bContext *C, wmOperator *op, const wmEvent *event)
 		viewrotate_apply(vod, event->x, event->y);
 	}
 	else if (event_code == VIEW_CONFIRM) {
+		ED_view3d_camera_lock_autokey(vod->v3d, vod->rv3d, C, true, true);
 		ED_view3d_depth_tag_update(vod->rv3d);
+
 		viewops_data_free(C, op);
 
 		return OPERATOR_FINISHED;
@@ -1860,6 +1929,7 @@ static int viewmove_modal(bContext *C, wmOperator *op, const wmEvent *event)
 		viewmove_apply(vod, event->x, event->y);
 	}
 	else if (event_code == VIEW_CONFIRM) {
+		ED_view3d_camera_lock_autokey(vod->v3d, vod->rv3d, C, false, true);
 		ED_view3d_depth_tag_update(vod->rv3d);
 
 		viewops_data_free(C, op);
@@ -2125,6 +2195,7 @@ static int viewzoom_modal(bContext *C, wmOperator *op, const wmEvent *event)
 		viewzoom_apply(vod, &event->x, U.viewzoom, (U.uiflag & USER_ZOOM_INVERT) != 0);
 	}
 	else if (event_code == VIEW_CONFIRM) {
+		ED_view3d_camera_lock_autokey(vod->v3d, vod->rv3d, C, false, true);
 		ED_view3d_depth_tag_update(vod->rv3d);
 		viewops_data_free(C, op);
 
@@ -2385,6 +2456,7 @@ static int viewdolly_modal(bContext *C, wmOperator *op, const wmEvent *event)
 		viewdolly_apply(vod, event->x, event->y, (U.uiflag & USER_ZOOM_INVERT) != 0);
 	}
 	else if (event_code == VIEW_CONFIRM) {
+		ED_view3d_camera_lock_autokey(vod->v3d, vod->rv3d, C, false, true);
 		ED_view3d_depth_tag_update(vod->rv3d);
 		viewops_data_free(C, op);
 
@@ -3276,7 +3348,7 @@ static int view3d_zoom_border_exec(bContext *C, wmOperator *op)
 
 	/* Get Z Depths, needed for perspective, nice for ortho */
 	bgl_get_mats(&mats);
-	draw_depth(scene, ar, v3d, NULL, true);
+	ED_view3d_draw_depth(scene, ar, v3d, true);
 	
 	{
 		/* avoid allocating the whole depth buffer */
@@ -3867,6 +3939,7 @@ static int viewroll_modal(bContext *C, wmOperator *op, const wmEvent *event)
 		viewroll_apply(vod, event->x, event->y);
 	}
 	else if (event_code == VIEW_CONFIRM) {
+		ED_view3d_camera_lock_autokey(vod->v3d, vod->rv3d, C, true, false);
 		ED_view3d_depth_tag_update(vod->rv3d);
 		viewops_data_free(C, op);
 
@@ -4148,8 +4221,7 @@ static int background_image_add_invoke(bContext *C, wmOperator *op, const wmEven
 	if (ima) {
 		bgpic->ima = ima;
 		
-		if (ima->id.us == 0) id_us_plus(&ima->id);
-		else id_lib_extern(&ima->id);
+		id_us_plus(&ima->id);
 		
 		if (!(v3d->flag & V3D_DISPBGPICS))
 			v3d->flag |= V3D_DISPBGPICS;
@@ -4191,7 +4263,15 @@ static int background_image_remove_exec(bContext *C, wmOperator *op)
 	BGpic *bgpic_rem = BLI_findlink(&v3d->bgpicbase, index);
 
 	if (bgpic_rem) {
+		if (bgpic_rem->source == V3D_BGPIC_IMAGE) {
+			id_us_min((ID *)bgpic_rem->ima);
+		}
+		else if (bgpic_rem->source == V3D_BGPIC_MOVIE) {
+			id_us_min((ID *)bgpic_rem->clip);
+		}
+
 		ED_view3D_background_image_remove(v3d, bgpic_rem);
+
 		WM_event_add_notifier(C, NC_SPACE | ND_SPACE_VIEW3D, v3d);
 		return OPERATOR_FINISHED;
 	}
@@ -4355,20 +4435,46 @@ void ED_view3d_cursor3d_position(bContext *C, float fp[3], const int mval[2])
 	}
 }
 
-static int view3d_cursor3d_invoke(bContext *C, wmOperator *UNUSED(op), const wmEvent *event)
+void ED_view3d_cursor3d_update(bContext *C, const int mval[2])
 {
 	Scene *scene = CTX_data_scene(C);
 	View3D *v3d = CTX_wm_view3d(C);
 	float *fp = ED_view3d_cursor3d_get(scene, v3d);
 
-	ED_view3d_cursor3d_position(C, fp, event->mval);
-	
+	ED_view3d_cursor3d_position(C, fp, mval);
+
 	if (v3d && v3d->localvd)
 		WM_event_add_notifier(C, NC_SPACE | ND_SPACE_VIEW3D, v3d);
 	else
 		WM_event_add_notifier(C, NC_SCENE | NA_EDITED, scene);
-	
-	return OPERATOR_FINISHED;
+}
+
+static int view3d_cursor3d_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+{
+	ED_view3d_cursor3d_update(C, event->mval);
+	op->customdata = SET_INT_IN_POINTER(event->type);
+	WM_event_add_modal_handler(C, op);
+
+	return OPERATOR_RUNNING_MODAL;
+}
+
+static int view3d_cursor3d_modal(bContext *C, wmOperator *op, const wmEvent *event)
+{
+	int event_type = GET_INT_FROM_POINTER(op->customdata);
+
+	if (event->type == event_type) {
+		return OPERATOR_FINISHED;
+	}
+
+	switch (event->type) {
+		case MOUSEMOVE:
+			ED_view3d_cursor3d_update(C, event->mval);
+			break;
+		case LEFTMOUSE:
+			return OPERATOR_FINISHED;
+	}
+
+	return OPERATOR_RUNNING_MODAL;
 }
 
 void VIEW3D_OT_cursor3d(wmOperatorType *ot)
@@ -4381,6 +4487,7 @@ void VIEW3D_OT_cursor3d(wmOperatorType *ot)
 
 	/* api callbacks */
 	ot->invoke = view3d_cursor3d_invoke;
+	ot->modal  = view3d_cursor3d_modal;
 
 	ot->poll = ED_operator_view3d_active;
 
@@ -4511,7 +4618,7 @@ bool ED_view3d_autodist(Scene *scene, ARegion *ar, View3D *v3d,
 
 	/* Get Z Depths, needed for perspective, nice for ortho */
 	bgl_get_mats(&mats);
-	draw_depth(scene, ar, v3d, NULL, alphaoverride);
+	ED_view3d_draw_depth(scene, ar, v3d, alphaoverride);
 
 	depth_close = view_autodist_depth_margin(ar, mval, 4);
 
@@ -4543,10 +4650,10 @@ void ED_view3d_autodist_init(Scene *scene, ARegion *ar, View3D *v3d, int mode)
 	/* Get Z Depths, needed for perspective, nice for ortho */
 	switch (mode) {
 		case 0:
-			draw_depth(scene, ar, v3d, NULL, true);
+			ED_view3d_draw_depth(scene, ar, v3d, true);
 			break;
 		case 1:
-			draw_depth_gpencil(scene, ar, v3d);
+			ED_view3d_draw_depth_gpencil(scene, ar, v3d);
 			break;
 	}
 }

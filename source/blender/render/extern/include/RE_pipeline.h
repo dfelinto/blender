@@ -227,7 +227,10 @@ int RE_HasFakeLayer(RenderResult *res);
 bool RE_RenderResult_is_stereo(RenderResult *res);
 
 /* obligatory initialize call, disprect is optional */
-void RE_InitState(struct Render *re, struct Render *source, struct RenderData *rd, struct SceneRenderLayer *srl, int winx, int winy, rcti *disprect);
+void RE_InitState(struct Render *re, struct Render *source, struct RenderData *rd,
+                  struct SceneRenderLayer *srl,
+                  int winx, int winy, rcti *disprect);
+void RE_ChangeResolution(struct Render *re, int winx, int winy, rcti *disprect);
 
 /* set up the viewplane/perspective matrix, three choices */
 struct Object *RE_GetCameraStereo(struct Render *re, const bool left);

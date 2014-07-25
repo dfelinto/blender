@@ -79,13 +79,14 @@ static void edbm_bevel_update_header(wmOperator *op, bContext *C)
 
 	char msg[HEADER_LENGTH];
 	ScrArea *sa = CTX_wm_area(C);
+	Scene *sce = CTX_data_scene(C);
 
 	if (sa) {
 		BevelData *opdata = op->customdata;
 		char offset_str[NUM_STR_REP_LEN];
 
 		if (hasNumInput(&opdata->num_input)) {
-			outputNumInput(&opdata->num_input, offset_str);
+			outputNumInput(&opdata->num_input, offset_str, sce->unit.scale_length);
 		}
 		else {
 			BLI_snprintf(offset_str, NUM_STR_REP_LEN, "%f", RNA_float_get(op->ptr, "offset"));
@@ -145,15 +146,19 @@ static bool edbm_bevel_calc(wmOperator *op)
 	const int segments = RNA_int_get(op->ptr, "segments");
 	const float profile = RNA_float_get(op->ptr, "profile");
 	const bool vertex_only = RNA_boolean_get(op->ptr, "vertex_only");
+	int material = RNA_int_get(op->ptr, "material");
 
 	/* revert to original mesh */
 	if (opdata->is_modal) {
 		EDBM_redo_state_restore(opdata->mesh_backup, em, false);
 	}
 
+	if (em->ob)
+		material = CLAMPIS(material, -1, em->ob->totcol - 1);
+
 	EDBM_op_init(em, &bmop, op,
-	             "bevel geom=%hev offset=%f segments=%i vertex_only=%b offset_type=%i profile=%f",
-	             BM_ELEM_SELECT, offset, segments, vertex_only, offset_type, profile);
+	             "bevel geom=%hev offset=%f segments=%i vertex_only=%b offset_type=%i profile=%f material=%i",
+	             BM_ELEM_SELECT, offset, segments, vertex_only, offset_type, profile, material);
 
 	BMO_op_exec(em->bm, &bmop);
 
@@ -400,8 +405,21 @@ static int edbm_bevel_modal(bContext *C, wmOperator *op, const wmEvent *event)
 	return OPERATOR_RUNNING_MODAL;
 }
 
+static void mesh_ot_bevel_offset_range_func(PointerRNA *ptr, PropertyRNA *UNUSED(prop),
+                                            float *min, float *max, float *softmin, float *softmax)
+{
+	const int offset_type = RNA_enum_get(ptr, "offset_type");
+
+	*min = -FLT_MAX;
+	*max = FLT_MAX;
+	*softmin = 0.0f;
+	*softmax = (offset_type == BEVEL_AMT_PERCENT) ? 100.0f : 1.0f;
+}
+
 void MESH_OT_bevel(wmOperatorType *ot)
 {
+	PropertyRNA *prop;
+
 	static EnumPropertyItem offset_type_items[] = {
 		{BEVEL_AMT_OFFSET, "OFFSET", 0, "Offset", "Amount is offset of new edges from original"},
 		{BEVEL_AMT_WIDTH, "WIDTH", 0, "Width", "Amount is width of new face"},
@@ -426,8 +444,10 @@ void MESH_OT_bevel(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_GRAB_POINTER | OPTYPE_BLOCKING;
 
 	RNA_def_enum(ot->srna, "offset_type", offset_type_items, 0, "Amount Type", "What distance Amount measures");
-	RNA_def_float(ot->srna, "offset", 0.0f, -FLT_MAX, FLT_MAX, "Amount", "", 0.0f, 1.0f);
+	prop = RNA_def_float(ot->srna, "offset", 0.0f, -FLT_MAX, FLT_MAX, "Amount", "", 0.0f, 1.0f);
+	RNA_def_property_float_array_funcs_runtime(prop, NULL, NULL, mesh_ot_bevel_offset_range_func);
 	RNA_def_int(ot->srna, "segments", 1, 1, 50, "Segments", "Segments for curved edge", 1, 8);
 	RNA_def_float(ot->srna, "profile", 0.5f, 0.15f, 1.0f, "Profile", "Controls profile shape (0.5 = round)", 0.15f, 1.0f);
 	RNA_def_boolean(ot->srna, "vertex_only", false, "Vertex only", "Bevel only vertices");
+	RNA_def_int(ot->srna, "material", -1, -1, INT_MAX, "Material", "Material for bevel faces (-1 means use adjacent faces)", -1, 100);
 }

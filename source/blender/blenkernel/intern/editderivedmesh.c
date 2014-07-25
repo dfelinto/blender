@@ -911,7 +911,7 @@ static void emDM_drawFacesTex_common(DerivedMesh *dm,
 static void emDM_drawFacesTex(DerivedMesh *dm,
                               DMSetDrawOptionsTex setDrawOptions,
                               DMCompareDrawOptions compareDrawOptions,
-                              void *userData)
+                              void *userData, DMDrawFlag UNUSED(flag))
 {
 	emDM_drawFacesTex_common(dm, setDrawOptions, NULL, compareDrawOptions, userData);
 }
@@ -919,7 +919,7 @@ static void emDM_drawFacesTex(DerivedMesh *dm,
 static void emDM_drawMappedFacesTex(DerivedMesh *dm,
                                     DMSetDrawOptions setDrawOptions,
                                     DMCompareDrawOptions compareDrawOptions,
-                                    void *userData)
+                                    void *userData, DMDrawFlag UNUSED(flag))
 {
 	emDM_drawFacesTex_common(dm, NULL, setDrawOptions, compareDrawOptions, userData);
 }
@@ -2283,8 +2283,8 @@ static void cage_mapped_verts_callback(void *userData, int index, const float co
 {
 	struct CageUserData *data = userData;
 
-	if ((index >= 0 && index < data->totvert) && (!BLI_BITMAP_GET(data->visit_bitmap, index))) {
-		BLI_BITMAP_SET(data->visit_bitmap, index);
+	if ((index >= 0 && index < data->totvert) && (!BLI_BITMAP_TEST(data->visit_bitmap, index))) {
+		BLI_BITMAP_ENABLE(data->visit_bitmap, index);
 		copy_v3_v3(data->cos_cage[index], co);
 	}
 }

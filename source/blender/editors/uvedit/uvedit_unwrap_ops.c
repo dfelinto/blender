@@ -201,7 +201,7 @@ void uvedit_get_aspect(Scene *scene, Object *ob, BMEditMesh *em, float *aspx, fl
 
 	if (efa) {
 		if (BKE_scene_use_new_shading_nodes(scene)) {
-			ED_object_get_active_image(ob, efa->mat_nr + 1, &ima, NULL, NULL);
+			ED_object_get_active_image(ob, efa->mat_nr + 1, &ima, NULL, NULL, NULL);
 		}
 		else {
 			MTexPoly *tf = CustomData_bmesh_get(&em->bm->pdata, efa->head.data, CD_MTEXPOLY);
@@ -938,7 +938,7 @@ static void uv_map_rotation_matrix(float result[4][4], RegionView3D *rv3d, Objec
 	rotup[0][0] =  1.0f / radius;
 
 	/* calculate transforms*/
-	mul_serie_m4(result, rotup, rotside, viewmatrix, rotobj, NULL, NULL, NULL, NULL);
+	mul_m4_series(result, rotup, rotside, viewmatrix, rotobj);
 }
 
 static void uv_map_transform(bContext *C, wmOperator *op, float center[3], float rotmat[4][4])

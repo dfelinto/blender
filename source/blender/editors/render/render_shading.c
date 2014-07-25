@@ -955,10 +955,10 @@ static int freestyle_linestyle_new_exec(bContext *C, wmOperator *op)
 	}
 	if (lineset->linestyle) {
 		lineset->linestyle->id.us--;
-		lineset->linestyle = BKE_copy_linestyle(lineset->linestyle);
+		lineset->linestyle = BKE_linestyle_copy(lineset->linestyle);
 	}
 	else {
-		lineset->linestyle = BKE_new_linestyle("LineStyle", NULL);
+		lineset->linestyle = BKE_linestyle_new("LineStyle", NULL);
 	}
 	DAG_id_tag_update(&lineset->linestyle->id, 0);
 	WM_event_add_notifier(C, NC_LINESTYLE, lineset->linestyle);
@@ -992,7 +992,7 @@ static int freestyle_color_modifier_add_exec(bContext *C, wmOperator *op)
 		return OPERATOR_CANCELLED;
 	}
 
-	if (BKE_add_linestyle_color_modifier(lineset->linestyle, NULL, type) == NULL) {
+	if (BKE_linestyle_color_modifier_add(lineset->linestyle, NULL, type) == NULL) {
 		BKE_report(op->reports, RPT_ERROR, "Unknown line color modifier type");
 		return OPERATOR_CANCELLED;
 	}
@@ -1032,7 +1032,7 @@ static int freestyle_alpha_modifier_add_exec(bContext *C, wmOperator *op)
 		return OPERATOR_CANCELLED;
 	}
 
-	if (BKE_add_linestyle_alpha_modifier(lineset->linestyle, NULL, type) == NULL) {
+	if (BKE_linestyle_alpha_modifier_add(lineset->linestyle, NULL, type) == NULL) {
 		BKE_report(op->reports, RPT_ERROR, "Unknown alpha transparency modifier type");
 		return OPERATOR_CANCELLED;
 	}
@@ -1072,7 +1072,7 @@ static int freestyle_thickness_modifier_add_exec(bContext *C, wmOperator *op)
 		return OPERATOR_CANCELLED;
 	}
 
-	if (BKE_add_linestyle_thickness_modifier(lineset->linestyle, NULL, type) == NULL) {
+	if (BKE_linestyle_thickness_modifier_add(lineset->linestyle, NULL, type) == NULL) {
 		BKE_report(op->reports, RPT_ERROR, "Unknown line thickness modifier type");
 		return OPERATOR_CANCELLED;
 	}
@@ -1112,7 +1112,7 @@ static int freestyle_geometry_modifier_add_exec(bContext *C, wmOperator *op)
 		return OPERATOR_CANCELLED;
 	}
 
-	if (BKE_add_linestyle_geometry_modifier(lineset->linestyle, NULL, type) == NULL) {
+	if (BKE_linestyle_geometry_modifier_add(lineset->linestyle, NULL, type) == NULL) {
 		BKE_report(op->reports, RPT_ERROR, "Unknown stroke geometry modifier type");
 		return OPERATOR_CANCELLED;
 	}
@@ -1168,16 +1168,16 @@ static int freestyle_modifier_remove_exec(bContext *C, wmOperator *op)
 
 	switch (freestyle_get_modifier_type(&ptr)) {
 		case LS_MODIFIER_TYPE_COLOR:
-			BKE_remove_linestyle_color_modifier(lineset->linestyle, modifier);
+			BKE_linestyle_color_modifier_remove(lineset->linestyle, modifier);
 			break;
 		case LS_MODIFIER_TYPE_ALPHA:
-			BKE_remove_linestyle_alpha_modifier(lineset->linestyle, modifier);
+			BKE_linestyle_alpha_modifier_remove(lineset->linestyle, modifier);
 			break;
 		case LS_MODIFIER_TYPE_THICKNESS:
-			BKE_remove_linestyle_thickness_modifier(lineset->linestyle, modifier);
+			BKE_linestyle_thickness_modifier_remove(lineset->linestyle, modifier);
 			break;
 		case LS_MODIFIER_TYPE_GEOMETRY:
-			BKE_remove_linestyle_geometry_modifier(lineset->linestyle, modifier);
+			BKE_linestyle_geometry_modifier_remove(lineset->linestyle, modifier);
 			break;
 		default:
 			BKE_report(op->reports, RPT_ERROR, "The object the data pointer refers to is not a valid modifier");
@@ -1218,16 +1218,16 @@ static int freestyle_modifier_copy_exec(bContext *C, wmOperator *op)
 
 	switch (freestyle_get_modifier_type(&ptr)) {
 		case LS_MODIFIER_TYPE_COLOR:
-			BKE_copy_linestyle_color_modifier(lineset->linestyle, modifier);
+			BKE_linestyle_color_modifier_copy(lineset->linestyle, modifier);
 			break;
 		case LS_MODIFIER_TYPE_ALPHA:
-			BKE_copy_linestyle_alpha_modifier(lineset->linestyle, modifier);
+			BKE_linestyle_alpha_modifier_copy(lineset->linestyle, modifier);
 			break;
 		case LS_MODIFIER_TYPE_THICKNESS:
-			BKE_copy_linestyle_thickness_modifier(lineset->linestyle, modifier);
+			BKE_linestyle_thickness_modifier_copy(lineset->linestyle, modifier);
 			break;
 		case LS_MODIFIER_TYPE_GEOMETRY:
-			BKE_copy_linestyle_geometry_modifier(lineset->linestyle, modifier);
+			BKE_linestyle_geometry_modifier_copy(lineset->linestyle, modifier);
 			break;
 		default:
 			BKE_report(op->reports, RPT_ERROR, "The object the data pointer refers to is not a valid modifier");
@@ -1269,16 +1269,16 @@ static int freestyle_modifier_move_exec(bContext *C, wmOperator *op)
 
 	switch (freestyle_get_modifier_type(&ptr)) {
 		case LS_MODIFIER_TYPE_COLOR:
-			BKE_move_linestyle_color_modifier(lineset->linestyle, modifier, dir);
+			BKE_linestyle_color_modifier_move(lineset->linestyle, modifier, dir);
 			break;
 		case LS_MODIFIER_TYPE_ALPHA:
-			BKE_move_linestyle_alpha_modifier(lineset->linestyle, modifier, dir);
+			BKE_linestyle_alpha_modifier_move(lineset->linestyle, modifier, dir);
 			break;
 		case LS_MODIFIER_TYPE_THICKNESS:
-			BKE_move_linestyle_thickness_modifier(lineset->linestyle, modifier, dir);
+			BKE_linestyle_thickness_modifier_move(lineset->linestyle, modifier, dir);
 			break;
 		case LS_MODIFIER_TYPE_GEOMETRY:
-			BKE_move_linestyle_geometry_modifier(lineset->linestyle, modifier, dir);
+			BKE_linestyle_geometry_modifier_move(lineset->linestyle, modifier, dir);
 			break;
 		default:
 			BKE_report(op->reports, RPT_ERROR, "The object the data pointer refers to is not a valid modifier");

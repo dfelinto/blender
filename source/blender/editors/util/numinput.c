@@ -87,15 +87,18 @@ void initNumInput(NumInput *n)
 }
 
 /* str must be NUM_STR_REP_LEN * (idx_max + 1) length. */
-void outputNumInput(NumInput *n, char *str)
+void outputNumInput(NumInput *n, char *str, const float scale_length)
 {
-	short i, j;
+	short j;
 	const int ln = NUM_STR_REP_LEN;
 	int prec = 2; /* draw-only, and avoids too much issues with radian->degrees conversion. */
 
 	for (j = 0; j <= n->idx_max; j++) {
 		/* if AFFECTALL and no number typed and cursor not on number, use first number */
-		i = (n->flag & NUM_AFFECT_ALL && n->idx != j && !(n->val_flag[j] & NUM_EDITED)) ? 0 : j;
+		const short i = (n->flag & NUM_AFFECT_ALL && n->idx != j && !(n->val_flag[j] & NUM_EDITED)) ? 0 : j;
+
+		/* Use scale_length if needed! */
+		const float fac = ELEM(n->unit_type[j], B_UNIT_LENGTH, B_UNIT_AREA, B_UNIT_VOLUME) ? scale_length : 1.0f;
 
 		if (n->val_flag[i] & NUM_EDITED) {
 			/* Get the best precision, allows us to draw '10.0001' as '10' instead! */
@@ -118,7 +121,7 @@ void outputNumInput(NumInput *n, char *str)
 					BLI_strncpy(val, "Invalid", sizeof(val));
 				}
 				else {
-					bUnit_AsString(val, sizeof(val), (double)n->val[i], prec,
+					bUnit_AsString(val, sizeof(val), (double)(n->val[i] * fac), prec,
 					               n->unit_sys, n->unit_type[i], true, false);
 				}
 
@@ -186,14 +189,14 @@ bool applyNumInput(NumInput *n, float *vec)
 				if (n->val_flag[i] & NUM_NO_NEGATIVE && val < 0.0f) {
 					val = 0.0f;
 				}
-				if (n->val_flag[i] & NUM_NO_ZERO && val == 0.0f) {
-					val = 0.0001f;
-				}
 				if (n->val_flag[i] & NUM_NO_FRACTION && val != floorf(val)) {
 					val = floorf(val + 0.5f);
 					if (n->val_flag[i] & NUM_NO_ZERO && val == 0.0f) {
 						val = 1.0f;
 					}
+				}
+				else if (n->val_flag[i] & NUM_NO_ZERO && val == 0.0f) {
+					val = 0.0001f;
 				}
 			}
 			vec[j] = val;
@@ -256,7 +259,6 @@ bool handleNumInput(bContext *C, NumInput *n, const wmEvent *event)
 	short idx = n->idx, idx_max = n->idx_max;
 	short dir = STRCUR_DIR_NEXT, mode = STRCUR_JUMP_NONE;
 	int cur;
-	double val;
 
 	switch (event->type) {
 		case EVT_MODAL_MAP:
@@ -467,12 +469,19 @@ bool handleNumInput(bContext *C, NumInput *n, const wmEvent *event)
 	/* At this point, our value has changed, try to interpret it with python (if str is not empty!). */
 	if (n->str[0]) {
 #ifdef WITH_PYTHON
+		Scene *sce = CTX_data_scene(C);
+		double val;
+		float fac = 1.0f;
 		char str_unit_convert[NUM_STR_REP_LEN * 6];  /* Should be more than enough! */
 		const char *default_unit = NULL;
 
 		/* Make radian default unit when needed. */
 		if (n->unit_use_radians && n->unit_type[idx] == B_UNIT_ROTATION)
 			default_unit = "r";
+
+		/* Use scale_length if needed! */
+		if (ELEM(n->unit_type[idx], B_UNIT_LENGTH, B_UNIT_AREA, B_UNIT_VOLUME))
+			fac /= sce->unit.scale_length;
 
 		BLI_strncpy(str_unit_convert, n->str, sizeof(str_unit_convert));
 
@@ -481,7 +490,7 @@ bool handleNumInput(bContext *C, NumInput *n, const wmEvent *event)
 
 		/* Note: with angles, we always get values as radians here... */
 		if (BPY_button_exec(C, str_unit_convert, &val, false) != -1) {
-			n->val[idx] = (float)val;
+			n->val[idx] = (float)val * fac;
 			n->val_flag[idx] &= ~NUM_INVALID;
 		}
 		else {
@@ -489,6 +498,7 @@ bool handleNumInput(bContext *C, NumInput *n, const wmEvent *event)
 		}
 #else  /* Very unlikely, but does not harm... */
 		n->val[idx] = (float)atof(n->str);
+		(void)C;
 #endif  /* WITH_PYTHON */
 
 		if (n->val_flag[idx] & NUM_NEGATE) {

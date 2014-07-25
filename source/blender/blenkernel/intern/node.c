@@ -1777,7 +1777,7 @@ void ntreeFreeTree_ex(bNodeTree *ntree, const bool do_id_user)
 		if (tntree == ntree)
 			break;
 	if (tntree == NULL) {
-		BKE_libblock_free_data(&ntree->id);
+		BKE_libblock_free_data(G.main, &ntree->id);
 	}
 }
 /* same as ntreeFreeTree_ex but always manage users */
@@ -3496,6 +3496,8 @@ static void registerShaderNodes(void)
 	register_node_type_sh_combrgb();
 	register_node_type_sh_sephsv();
 	register_node_type_sh_combhsv();
+	register_node_type_sh_sepxyz();
+	register_node_type_sh_combxyz();
 	register_node_type_sh_hue_sat();
 
 	register_node_type_sh_attribute();

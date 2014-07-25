@@ -752,6 +752,18 @@ void combine_rgb(float r, float g, float b, out vec4 col)
 	col = vec4(r, g, b, 1.0);
 }
 
+void separate_xyz(vec3 vec, out float x, out float y, out float z)
+{
+	x = vec.r;
+	y = vec.g;
+	z = vec.b;
+}
+
+void combine_xyz(float x, float y, float z, out vec3 vec)
+{
+	vec = vec3(x, y, z);
+}
+
 void separate_hsv(vec4 col, out float h, out float s, out float v)
 {
 	vec4 hsv;
@@ -2169,7 +2181,7 @@ void node_subsurface_scattering(vec4 color, float scale, vec3 radius, float shar
 	node_bsdf_diffuse(color, 0.0, N, result);
 }
 
-void node_bsdf_hair(vec4 color, float roughnessu, float roughnessv, out vec4 result)
+void node_bsdf_hair(vec4 color, float offset, float roughnessu, float roughnessv, out vec4 result)
 {
 	result = color;
 }
@@ -2243,6 +2255,11 @@ void node_attribute(vec3 attr_uv, out vec4 outcol, out vec3 outvec, out float ou
 	outcol = vec4(attr_uv, 1.0);
 	outvec = attr_uv;
 	outf = (attr_uv.x + attr_uv.y + attr_uv.z)/3.0;
+}
+
+void node_uvmap(vec3 attr_uv, out vec3 outvec)
+{
+	outvec = attr_uv;
 }
 
 void node_geometry(vec3 I, vec3 N, mat4 toworld,

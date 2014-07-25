@@ -72,6 +72,7 @@ See the actuator's reference for available methods
    * :class:`~bge.types.KX_CameraActuator`
    * :class:`~bge.types.KX_ConstraintActuator`
    * :class:`~bge.types.KX_GameActuator`
+   * :class:`~bge.types.KX_MouseActuator`
    * :class:`~bge.types.KX_NetworkMessageActuator`
    * :class:`~bge.types.KX_ObjectActuator`
    * :class:`~bge.types.KX_ParentActuator`
@@ -507,6 +508,18 @@ Property Sensor
    
    :value: 5
 
+.. data:: KX_PROPSENSOR_LESSTHAN
+
+   Activate when the property is less than the sensor value
+
+   :value: 6
+
+.. data:: KX_PROPSENSOR_GREATERTHAN
+
+   Activate when the property is greater than the sensor value
+
+   :value: 7
+
 ------------
 Radar Sensor
 ------------
@@ -752,6 +765,16 @@ See :class:`bge.types.KX_GameActuator`
 .. data:: KX_GAME_SAVECFG
 .. data:: KX_GAME_LOADCFG
 
+.. _mouse-actuator:
+
+---------------
+Mouse Actuator
+---------------
+
+.. data:: KX_ACT_MOUSE_OBJECT_AXIS_X
+.. data:: KX_ACT_MOUSE_OBJECT_AXIS_Y
+.. data:: KX_ACT_MOUSE_OBJECT_AXIS_Z
+
 ---------------
 Parent Actuator
 ---------------
@@ -845,6 +868,23 @@ See :class:`bge.types.KX_SteeringActuator.behavior`
 
    :value: 3
 
+.. _logic-trackto-actuator:
+
+-----------------
+TrackTo Actuator
+-----------------
+
+See :class:`bge.types.KX_TrackToActuator`
+
+.. data:: KX_TRACK_UPAXIS_POS_X
+.. data:: KX_TRACK_UPAXIS_POS_Y
+.. data:: KX_TRACK_UPAXIS_POS_Z
+.. data:: KX_TRACK_TRAXIS_POS_X
+.. data:: KX_TRACK_TRAXIS_POS_Y
+.. data:: KX_TRACK_TRAXIS_POS_Z
+.. data:: KX_TRACK_TRAXIS_NEG_X
+.. data:: KX_TRACK_TRAXIS_NEG_Y
+.. data:: KX_TRACK_TRAXIS_NEG_Z
 
 =======
 Various

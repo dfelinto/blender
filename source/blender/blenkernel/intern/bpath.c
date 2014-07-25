@@ -94,7 +94,8 @@ static bool checkMissingFiles_visit_cb(void *userdata, char *UNUSED(path_dst), c
 /* high level function */
 void BKE_bpath_missing_files_check(Main *bmain, ReportList *reports)
 {
-	BKE_bpath_traverse_main(bmain, checkMissingFiles_visit_cb, BKE_BPATH_TRAVERSE_ABS, reports);
+	BKE_bpath_traverse_main(bmain, checkMissingFiles_visit_cb,
+	                        BKE_BPATH_TRAVERSE_ABS | BKE_BPATH_TRAVERSE_SKIP_PACKED, reports);
 }
 
 typedef struct BPathRemap_Data {
@@ -421,7 +422,7 @@ void BKE_bpath_traverse_id(Main *bmain, ID *id, BPathVisitor visit_cb, const int
 			Image *ima;
 			ima = (Image *)id;
 			if (ima->packedfile == NULL || (flag & BKE_BPATH_TRAVERSE_SKIP_PACKED) == 0) {
-				if (ELEM3(ima->source, IMA_SRC_FILE, IMA_SRC_MOVIE, IMA_SRC_SEQUENCE)) {
+				if (ELEM(ima->source, IMA_SRC_FILE, IMA_SRC_MOVIE, IMA_SRC_SEQUENCE)) {
 					if (rewrite_path_fixed(ima->name, visit_cb, absbase, bpath_user_data)) {
 						if (!ima->packedfile) {
 							BKE_image_signal(ima, NULL, IMA_SIGNAL_RELOAD);
@@ -695,7 +696,7 @@ bool BKE_bpath_relocate_visitor(void *pathbase_v, char *path_dst, const char *pa
 /* -------------------------------------------------------------------- */
 /**
  * Backup/Restore/Free functions,
- * \note These functions assume the data won't chane order.
+ * \note These functions assume the data won't change order.
  */
 
 struct PathStore {

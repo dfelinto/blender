@@ -57,7 +57,9 @@ typedef struct bMouseSensor {
 	short type;
 	short flag;
 	short pad1;
-	short pad2;
+	short mode;			/* flag to choose material or property */
+	char propname[64];
+	char matname[64];
 } bMouseSensor;
 
 /* DEPRECATED */
@@ -202,6 +204,8 @@ typedef struct bJoystickSensor {
 #define SENS_PROP_INTERVAL	2
 #define SENS_PROP_CHANGED	3
 #define SENS_PROP_EXPRESSION	4
+#define SENS_PROP_LESSTHAN	5
+#define SENS_PROP_GREATERTHAN	6
 
 /* raysensor->axisflag */
 /* flip x and y to make y default!!! */

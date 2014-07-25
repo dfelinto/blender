@@ -251,12 +251,12 @@ static int map_insert_vert(PBVH *bvh, GHash *map,
 
 	if (value_p == NULL) {
 		void *value;
-		if (BLI_BITMAP_GET(bvh->vert_bitmap, vertex)) {
+		if (BLI_BITMAP_TEST(bvh->vert_bitmap, vertex)) {
 			value = SET_INT_IN_POINTER(~(*face_verts));
 			++(*face_verts);
 		}
 		else {
-			BLI_BITMAP_SET(bvh->vert_bitmap, vertex);
+			BLI_BITMAP_ENABLE(bvh->vert_bitmap, vertex);
 			value = SET_INT_IN_POINTER(*uniq_verts);
 			++(*uniq_verts);
 		}
@@ -410,7 +410,7 @@ static void build_leaf(PBVH *bvh, int node_index, BBC *prim_bbc,
 }
 
 /* Return zero if all primitives in the node can be drawn with the
- * same material (including flat/smooth shading), non-zerootherwise */
+ * same material (including flat/smooth shading), non-zero otherwise */
 static int leaf_needs_material_split(PBVH *bvh, int offset, int count)
 {
 	int i, prim;

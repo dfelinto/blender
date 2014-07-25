@@ -120,11 +120,11 @@ void BKE_lattice_bitmap_from_flag(Lattice *lt, BLI_bitmap *bitmap, const short f
 	bp = lt->def;
 	for (i = 0; i < tot; i++, bp++) {
 		if ((bp->f1 & flag) && (!respecthide || !bp->hide)) {
-			BLI_BITMAP_SET(bitmap, i);
+			BLI_BITMAP_ENABLE(bitmap, i);
 		}
 		else {
 			if (clear) {
-				BLI_BITMAP_CLEAR(bitmap, i);
+				BLI_BITMAP_DISABLE(bitmap, i);
 			}
 		}
 	}
@@ -626,16 +626,19 @@ static bool calc_curve_deform(Scene *scene, Object *par, float co[3],
 	short index;
 	const bool is_neg_axis = (axis > 2);
 
-	/* to be sure, mostly after file load */
-	if (ELEM(NULL, par->curve_cache, par->curve_cache->path)) {
+	/* to be sure, mostly after file load, also cyclic dependencies */
 #ifdef CYCLIC_DEPENDENCY_WORKAROUND
+	if (par->curve_cache == NULL) {
 		BKE_displist_make_curveTypes(scene, par, false);
-#endif
-		if (par->curve_cache->path == NULL) {
-			return 0;  // happens on append and cyclic dependencies...
-		}
 	}
-	
+#endif
+
+	if (par->curve_cache->path == NULL) {
+		return 0;  /* happens on append, cyclic dependencies
+		            * and empty curves
+		            */
+	}
+
 	/* options */
 	if (is_neg_axis) {
 		index = axis - 3;

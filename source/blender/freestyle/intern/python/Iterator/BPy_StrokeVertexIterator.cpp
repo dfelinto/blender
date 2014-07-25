@@ -25,6 +25,7 @@
 #include "BPy_StrokeVertexIterator.h"
 
 #include "../BPy_Convert.h"
+#include "../Interface1D/BPy_Stroke.h"
 #include "BPy_Interface0DIterator.h"
 
 #ifdef __cplusplus
@@ -48,7 +49,7 @@ PyDoc_STRVAR(StrokeVertexIterator_doc,
 "specialized StrokeVertex type.  In this case, one should use a\n"
 "StrokeVertexIterator.  To call functions of the UnaryFuntion0D type,\n"
 "a StrokeVertexIterator can be converted to an Interface0DIterator by\n"
-"by calling Interface0DIterator(it)."
+"by calling Interface0DIterator(it).\n"
 "\n"
 ".. method:: __init__()\n"
 "\n"
@@ -63,20 +64,29 @@ PyDoc_STRVAR(StrokeVertexIterator_doc,
 
 static int StrokeVertexIterator_init(BPy_StrokeVertexIterator *self, PyObject *args, PyObject *kwds)
 {
-	static const char *kwlist[] = {"brother", NULL};
-	PyObject *brother = 0;
+	static const char *kwlist_1[] = {"brother", NULL};
+	static const char *kwlist_2[] = {"stroke", NULL};
+	PyObject *brother = 0, *stroke = 0;
 
-	if (!PyArg_ParseTupleAndKeywords(args, kwds, "|O!", (char **)kwlist, &StrokeVertexIterator_Type, &brother))
-		return -1;
-	if (!brother) {
-		self->sv_it = new StrokeInternal::StrokeVertexIterator();
+	if (PyArg_ParseTupleAndKeywords(args, kwds, "O!", (char **)kwlist_1, &StrokeVertexIterator_Type, &brother)) {
+		self->sv_it = new StrokeInternal::StrokeVertexIterator(*(((BPy_StrokeVertexIterator *)brother)->sv_it));
+		self->reversed = ((BPy_StrokeVertexIterator *)brother)->reversed;
+		self->at_start = ((BPy_StrokeVertexIterator *)brother)->at_start;
+	}
+
+	else if (PyErr_Clear(),
+	         PyArg_ParseTupleAndKeywords(args, kwds, "|O!", (char **)kwlist_2, &Stroke_Type, &stroke))
+	{
+		if (!stroke)
+			self->sv_it = new StrokeInternal::StrokeVertexIterator();
+		else
+			self->sv_it = new StrokeInternal::StrokeVertexIterator(((BPy_Stroke *)stroke)->s->strokeVerticesBegin());
 		self->reversed = false;
 		self->at_start = true;
 	}
 	else {
-		self->sv_it = new StrokeInternal::StrokeVertexIterator(*(((BPy_StrokeVertexIterator *)brother)->sv_it));
-		self->reversed = ((BPy_StrokeVertexIterator *)brother)->reversed;
-		self->at_start = ((BPy_StrokeVertexIterator *)brother)->at_start;
+		PyErr_SetString(PyExc_TypeError, "argument 1 must be StrokeVertexIterator or Stroke");
+		return -1;
 	}
 	self->py_it.it = self->sv_it;
 	return 0;
@@ -91,6 +101,12 @@ static PyObject *StrokeVertexIterator_iter(BPy_StrokeVertexIterator *self)
 
 static PyObject *StrokeVertexIterator_iternext(BPy_StrokeVertexIterator *self)
 {
+	/* Because Freestyle iterators for which it.isEnd() holds true have no valid object
+	 * (referencing it.object in this case leads to a crash), we must check if it.object
+	 * is valid after incrementing, to prevent crashes in Python.
+	 * Additionally, the at_start attribute is used to keep Freestyle iterator objects
+	 * and Python for loops in sync. */
+
 	if (self->reversed) {
 		if (self->sv_it->isBegin()) {
 			PyErr_SetNone(PyExc_StopIteration);
@@ -121,6 +137,69 @@ static PyObject *StrokeVertexIterator_iternext(BPy_StrokeVertexIterator *self)
 	return BPy_StrokeVertex_from_StrokeVertex(*sv);
 }
 
+/*----------------------StrokeVertexIterator methods ----------------------------*/
+
+PyDoc_STRVAR(StrokeVertexIterator_incremented_doc,
+".. method:: incremented()\n"
+"\n"
+"   Returns a copy of an incremented StrokeVertexIterator.\n"
+"\n"
+"   :return: A StrokeVertexIterator pointing the next StrokeVertex.\n"
+"   :rtype: :class:`StrokeVertexIterator`");
+
+static PyObject *StrokeVertexIterator_incremented(BPy_StrokeVertexIterator *self)
+{
+	if (self->sv_it->isEnd()) {
+		PyErr_SetString(PyExc_RuntimeError, "cannot increment any more");
+		return NULL;
+	}
+	StrokeInternal::StrokeVertexIterator *copy = new StrokeInternal::StrokeVertexIterator(*self->sv_it);
+	copy->increment();
+	return BPy_StrokeVertexIterator_from_StrokeVertexIterator(*copy, self->reversed);
+}
+
+PyDoc_STRVAR(StrokeVertexIterator_decremented_doc,
+".. method:: decremented()\n"
+"\n"
+"   Returns a copy of a decremented StrokeVertexIterator.\n"
+"\n"
+"   :return: A StrokeVertexIterator pointing the previous StrokeVertex.\n"
+"   :rtype: :class:`StrokeVertexIterator`");
+
+static PyObject *StrokeVertexIterator_decremented(BPy_StrokeVertexIterator *self)
+{
+	if (self->sv_it->isBegin()) {
+		PyErr_SetString(PyExc_RuntimeError, "cannot decrement any more");
+		return NULL;
+	}
+
+	StrokeInternal::StrokeVertexIterator *copy = new StrokeInternal::StrokeVertexIterator(*self->sv_it);
+	copy->decrement();
+	return BPy_StrokeVertexIterator_from_StrokeVertexIterator(*copy, self->reversed);
+}
+
+PyDoc_STRVAR(StrokeVertexIterator_reversed_doc,
+".. method:: reversed()\n"
+"\n"
+"   Returns a StrokeVertexIterator that traverses stroke vertices in the\n"
+"   reversed order.\n"
+"\n"
+"   :return: A StrokeVertexIterator traversing stroke vertices backward.\n"
+"   :rtype: :class:`StrokeVertexIterator`");
+
+static PyObject *StrokeVertexIterator_reversed(BPy_StrokeVertexIterator *self)
+{
+	StrokeInternal::StrokeVertexIterator *copy = new StrokeInternal::StrokeVertexIterator(*self->sv_it);
+	return BPy_StrokeVertexIterator_from_StrokeVertexIterator(*copy, !self->reversed);
+}
+
+static PyMethodDef BPy_StrokeVertexIterator_methods[] = {
+	{"incremented", (PyCFunction) StrokeVertexIterator_incremented, METH_NOARGS, StrokeVertexIterator_incremented_doc},
+	{"decremented", (PyCFunction)StrokeVertexIterator_decremented, METH_NOARGS, StrokeVertexIterator_decremented_doc},
+	{"reversed", (PyCFunction)StrokeVertexIterator_reversed, METH_NOARGS, StrokeVertexIterator_reversed_doc},
+	{NULL, NULL, 0, NULL}
+};
+
 /*----------------------StrokeVertexIterator get/setters ----------------------------*/
 
 PyDoc_STRVAR(StrokeVertexIterator_object_doc,
@@ -130,7 +209,7 @@ PyDoc_STRVAR(StrokeVertexIterator_object_doc,
 
 static PyObject *StrokeVertexIterator_object_get(BPy_StrokeVertexIterator *self, void *UNUSED(closure))
 {
-	if (!self->reversed && self->sv_it->isEnd()) {
+	if (self->sv_it->isEnd()) {
 		PyErr_SetString(PyExc_RuntimeError, "iteration has stopped");
 		return NULL;
 	}
@@ -198,7 +277,7 @@ PyTypeObject StrokeVertexIterator_Type = {
 	0,                              /* tp_weaklistoffset */
 	(getiterfunc)StrokeVertexIterator_iter, /* tp_iter */
 	(iternextfunc)StrokeVertexIterator_iternext, /* tp_iternext */
-	0,                              /* tp_methods */
+	BPy_StrokeVertexIterator_methods, /* tp_methods */
 	0,                              /* tp_members */
 	BPy_StrokeVertexIterator_getseters, /* tp_getset */
 	&Iterator_Type,                 /* tp_base */

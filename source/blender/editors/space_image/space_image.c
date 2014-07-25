@@ -256,6 +256,8 @@ static void image_operatortypes(void)
 	WM_operatortype_append(IMAGE_OT_toolshelf);
 
 	WM_operatortype_append(IMAGE_OT_change_frame);
+
+	WM_operatortype_append(IMAGE_OT_read_renderlayers);
 }
 
 static void image_keymap(struct wmKeyConfig *keyconf)
@@ -267,6 +269,7 @@ static void image_keymap(struct wmKeyConfig *keyconf)
 	WM_keymap_add_item(keymap, "IMAGE_OT_new", NKEY, KM_PRESS, KM_ALT, 0);
 	WM_keymap_add_item(keymap, "IMAGE_OT_open", OKEY, KM_PRESS, KM_ALT, 0);
 	WM_keymap_add_item(keymap, "IMAGE_OT_reload", RKEY, KM_PRESS, KM_ALT, 0);
+	WM_keymap_add_item(keymap, "IMAGE_OT_read_renderlayers", RKEY, KM_PRESS, KM_CTRL, 0);
 	WM_keymap_add_item(keymap, "IMAGE_OT_save", SKEY, KM_PRESS, KM_ALT, 0);
 	WM_keymap_add_item(keymap, "IMAGE_OT_save_as", F3KEY, KM_PRESS, 0, 0);
 	WM_keymap_add_item(keymap, "IMAGE_OT_properties", NKEY, KM_PRESS, 0, 0);
@@ -347,7 +350,7 @@ static void image_keymap(struct wmKeyConfig *keyconf)
 static int image_drop_poll(bContext *UNUSED(C), wmDrag *drag, const wmEvent *UNUSED(event))
 {
 	if (drag->type == WM_DRAG_PATH)
-		if (ELEM3(drag->icon, 0, ICON_FILE_IMAGE, ICON_FILE_BLANK)) /* rule might not work? */
+		if (ELEM(drag->icon, 0, ICON_FILE_IMAGE, ICON_FILE_BLANK)) /* rule might not work? */
 			return 1;
 	return 0;
 }
@@ -631,6 +634,12 @@ static void image_main_area_init(wmWindowManager *wm, ARegion *ar)
 	WM_event_add_keymap_handler_bb(&ar->handlers, keymap, &ar->v2d.mask, &ar->winrct);
 
 	/* image paint polls for mode */
+	keymap = WM_keymap_find(wm->defaultconf, "Curve", 0, 0);
+	WM_event_add_keymap_handler_bb(&ar->handlers, keymap, &ar->v2d.mask, &ar->winrct);
+
+	keymap = WM_keymap_find(wm->defaultconf, "Paint Curve", 0, 0);
+	WM_event_add_keymap_handler(&ar->handlers, keymap);
+
 	keymap = WM_keymap_find(wm->defaultconf, "Image Paint", 0, 0);
 	WM_event_add_keymap_handler_bb(&ar->handlers, keymap, &ar->v2d.mask, &ar->winrct);
 
@@ -655,6 +664,7 @@ static void image_main_area_draw(const bContext *C, ARegion *ar)
 	Object *obact = CTX_data_active_object(C);
 	Object *obedit = CTX_data_edit_object(C);
 	Mask *mask = NULL;
+	bool curve = false;
 	Scene *scene = CTX_data_scene(C);
 	View2D *v2d = &ar->v2d;
 	//View2DScrollers *scrollers;
@@ -699,6 +709,9 @@ static void image_main_area_draw(const bContext *C, ARegion *ar)
 	}
 	else if (sima->mode == SI_MODE_MASK) {
 		mask = ED_space_image_get_mask(sima);
+	}
+	else if (ED_space_image_paint_curve(C)) {
+		curve = true;
 	}
 
 	ED_region_draw_cb_draw(C, ar, REGION_DRAW_POST_VIEW);
@@ -747,6 +760,11 @@ static void image_main_area_draw(const bContext *C, ARegion *ar)
 		                    true, false,
 		                    NULL, C);
 
+		UI_view2d_view_ortho(v2d);
+		draw_image_cursor(ar, sima->cursor);
+		UI_view2d_view_restore(C);
+	}
+	else if (curve) {
 		UI_view2d_view_ortho(v2d);
 		draw_image_cursor(ar, sima->cursor);
 		UI_view2d_view_restore(C);

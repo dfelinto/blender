@@ -181,7 +181,7 @@ static void node_buts_time(uiLayout *layout, bContext *UNUSED(C), PointerRNA *pt
 	}
 #endif
 
-	uiTemplateCurveMapping(layout, ptr, "curve", 's', 0, 0);
+	uiTemplateCurveMapping(layout, ptr, "curve", 's', false, false, false);
 
 	row = uiLayoutRow(layout, true);
 	uiItemR(row, ptr, "frame_start", 0, IFACE_("Sta"), ICON_NONE);
@@ -195,7 +195,7 @@ static void node_buts_colorramp(uiLayout *layout, bContext *UNUSED(C), PointerRN
 
 static void node_buts_curvevec(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
 {
-	uiTemplateCurveMapping(layout, ptr, "mapping", 'v', 0, 0);
+	uiTemplateCurveMapping(layout, ptr, "mapping", 'v', false, false, false);
 }
 
 #define SAMPLE_FLT_ISNONE FLT_MAX
@@ -223,7 +223,7 @@ static void node_buts_curvecol(uiLayout *layout, bContext *UNUSED(C), PointerRNA
 		cumap->flag &= ~CUMA_DRAW_SAMPLE;
 	}
 
-	uiTemplateCurveMapping(layout, ptr, "mapping", 'c', 0, 0);
+	uiTemplateCurveMapping(layout, ptr, "mapping", 'c', false, false, false);
 }
 
 static void node_buts_normal(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
@@ -931,6 +931,11 @@ static void node_shader_buts_glossy(uiLayout *layout, bContext *UNUSED(C), Point
 	uiItemR(layout, ptr, "distribution", 0, "", ICON_NONE);
 }
 
+static void node_shader_buts_anisotropic(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
+{
+	uiItemR(layout, ptr, "distribution", 0, "", ICON_NONE);
+}
+
 static void node_shader_buts_subsurface(uiLayout *layout, bContext *C, PointerRNA *ptr)
 {
 	/* SSS does not work on GPU yet */
@@ -1096,6 +1101,9 @@ static void node_shader_set_butfunc(bNodeType *ntype)
 		case SH_NODE_BSDF_GLASS:
 		case SH_NODE_BSDF_REFRACTION:
 			ntype->draw_buttons = node_shader_buts_glossy;
+			break;
+		case SH_NODE_BSDF_ANISOTROPIC:
+			ntype->draw_buttons = node_shader_buts_anisotropic;
 			break;
 		case SH_NODE_SUBSURFACE_SCATTERING:
 			ntype->draw_buttons = node_shader_buts_subsurface;
@@ -1854,7 +1862,7 @@ static void node_composit_buts_huecorrect(uiLayout *layout, bContext *UNUSED(C),
 		cumap->flag &= ~CUMA_DRAW_SAMPLE;
 	}
 
-	uiTemplateCurveMapping(layout, ptr, "mapping", 'h', 0, 0);
+	uiTemplateCurveMapping(layout, ptr, "mapping", 'h', false, false, false);
 }
 
 static void node_composit_buts_ycc(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
@@ -3150,20 +3158,17 @@ void draw_nodespace_back_pix(const bContext *C, ARegion *ar, SpaceNode *snode, b
 			}
 			
 			if ((snode->nodetree->flag & NTREE_VIEWER_BORDER) &&
-			        viewer_border->xmin < viewer_border->xmax &&
-			        viewer_border->ymin < viewer_border->ymax)
+			    viewer_border->xmin < viewer_border->xmax &&
+			    viewer_border->ymin < viewer_border->ymax)
 			{
-				glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-				setlinestyle(3);
-				cpack(0x4040FF);
-				
-				glRectf(x + snode->zoom * viewer_border->xmin * ibuf->x,
-				        y + snode->zoom * viewer_border->ymin * ibuf->y,
-				        x + snode->zoom * viewer_border->xmax * ibuf->x,
-				        y + snode->zoom * viewer_border->ymax * ibuf->y);
-				
-				setlinestyle(0);
-				glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+				rcti pixel_border;
+				UI_ThemeColor(TH_ACTIVE);
+				BLI_rcti_init(&pixel_border,
+				              x + snode->zoom * viewer_border->xmin * ibuf->x,
+				              x + snode->zoom * viewer_border->xmax * ibuf->x,
+				              y + snode->zoom * viewer_border->ymin * ibuf->y,
+				              y + snode->zoom * viewer_border->ymax * ibuf->y);
+				glaDrawBorderCorners(&pixel_border, 1.0f, 1.0f);
 			}
 		}
 		

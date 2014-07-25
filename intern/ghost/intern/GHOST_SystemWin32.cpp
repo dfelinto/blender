@@ -425,15 +425,8 @@ GHOST_TSuccess GHOST_SystemWin32::exit()
 
 GHOST_TKey GHOST_SystemWin32::hardKey(GHOST_IWindow *window, RAWINPUT const& raw, int *keyDown, char *vk)
 {
-	GHOST_TKey key = GHOST_kKeyUnknown;
-
-
-	if (!keyDown)
-		return GHOST_kKeyUnknown;
-
-
 	GHOST_SystemWin32 *system = (GHOST_SystemWin32 *)getSystem();
-
+	GHOST_TKey key = GHOST_kKeyUnknown;
 	GHOST_ModifierKeys modifiers;
 	system->retrieveModifierKeys(modifiers);
 
@@ -1435,6 +1428,6 @@ int GHOST_SystemWin32::toggleConsole(int action)
 
 int GHOST_SystemWin32::confirmQuit(GHOST_IWindow *window) const
 {
-	return (MessageBox(window ? ((GHOST_WindowWin32 *)window)->getHWND() : 0, "Some changes have not been saved.\nDo you really want to quit ?",
+	return (MessageBox(window ? ((GHOST_WindowWin32 *)window)->getHWND() : 0, "Some changes have not been saved.\nDo you really want to quit?",
 	                   "Exit Blender", MB_OKCANCEL | MB_ICONWARNING | MB_TOPMOST) == IDOK);
 }

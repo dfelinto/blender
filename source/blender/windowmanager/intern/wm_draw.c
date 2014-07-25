@@ -589,7 +589,7 @@ static void wm_method_draw_triple(bContext *C, wmWindow *win)
 	bScreen *screen = win->screen;
 	ScrArea *sa;
 	ARegion *ar;
-	int copytex = false, paintcursor = true;
+	int copytex = false;
 
 	if (drawdata && drawdata->triple) {
 		glClearColor(0, 0, 0, 0);
@@ -653,7 +653,7 @@ static void wm_method_draw_triple(bContext *C, wmWindow *win)
 		wm_triple_copy_textures(win, triple);
 	}
 
-	if (paintcursor && wm->paintcursors.first) {
+	if (wm->paintcursors.first) {
 		for (sa = screen->areabase.first; sa; sa = sa->next) {
 			for (ar = sa->regionbase.first; ar; ar = ar->next) {
 				if (ar->swinid && ar->swinid == screen->subwinactive) {
@@ -702,8 +702,6 @@ static void wm_method_draw_triple(bContext *C, wmWindow *win)
 			ED_region_do_draw(C, ar);
 			ar->do_draw = false;
 			CTX_wm_menu_set(C, NULL);
-			/* when a menu is being drawn, don't do the paint cursors */
-			paintcursor = false;
 		}
 	}
 
@@ -725,7 +723,7 @@ static void wm_method_draw_triple_multiview(bContext *C, wmWindow *win, StereoVi
 	bScreen *screen = win->screen;
 	ScrArea *sa;
 	ARegion *ar;
-	int copytex = false, paintcursor = true;
+	int copytex = false;
 	int id;
 
 	/* we store the triple_data in sequence to triple_all */
@@ -807,7 +805,7 @@ static void wm_method_draw_triple_multiview(bContext *C, wmWindow *win, StereoVi
 		wm_triple_copy_textures(win, triple_data);
 	}
 
-	if (paintcursor && wm->paintcursors.first) {
+	if (wm->paintcursors.first) {
 		for (sa = screen->areabase.first; sa; sa = sa->next) {
 			for (ar = sa->regionbase.first; ar; ar = ar->next) {
 				if (ar->swinid && ar->swinid == screen->subwinactive) {
@@ -859,8 +857,6 @@ static void wm_method_draw_triple_multiview(bContext *C, wmWindow *win, StereoVi
 			if (sview == STEREO_RIGHT_ID)
 				ar->do_draw = false;
 			CTX_wm_menu_set(C, NULL);
-			/* when a menu is being drawn, don't do the paint cursors */
-			paintcursor = false;
 		}
 	}
 

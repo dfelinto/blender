@@ -1824,6 +1824,7 @@ static void lib_link_brush(FileData *fd, Main *main)
 			brush->mtex.tex = newlibadr_us(fd, brush->id.lib, brush->mtex.tex);
 			brush->mask_mtex.tex = newlibadr_us(fd, brush->id.lib, brush->mask_mtex.tex);
 			brush->clone.image = newlibadr_us(fd, brush->id.lib, brush->clone.image);
+			brush->paint_curve = newlibadr_us(fd, brush->id.lib, brush->paint_curve);
 		}
 	}
 }
@@ -1834,6 +1835,8 @@ static void direct_link_brush(FileData *fd, Brush *brush)
 
 	/* fallof curve */
 	brush->curve = newdataadr(fd, brush->curve);
+	brush->gradient = newdataadr(fd, brush->gradient);
+
 	if (brush->curve)
 		direct_link_curvemapping(fd, brush->curve);
 	else
@@ -1842,6 +1845,43 @@ static void direct_link_brush(FileData *fd, Brush *brush)
 	brush->preview = NULL;
 	brush->icon_imbuf = NULL;
 }
+
+/* ************ READ Palette *************** */
+static void lib_link_palette(FileData *UNUSED(fd), Main *main)
+{
+	Palette *palette;
+
+	/* only link ID pointers */
+	for (palette = main->palettes.first; palette; palette = palette->id.next) {
+		if (palette->id.flag & LIB_NEED_LINK) {
+			palette->id.flag -= LIB_NEED_LINK;
+		}
+	}
+}
+
+static void direct_link_palette(FileData *fd, Palette *palette)
+{
+	/* palette itself has been read */
+	link_list(fd, &palette->colors);
+}
+
+static void lib_link_paint_curve(FileData *UNUSED(fd), Main *main)
+{
+	PaintCurve *pc;
+
+	/* only link ID pointers */
+	for (pc = main->paintcurves.first; pc; pc = pc->id.next) {
+		if (pc->id.flag & LIB_NEED_LINK) {
+			pc->id.flag -= LIB_NEED_LINK;
+		}
+	}
+}
+
+static void direct_link_paint_curve(FileData *fd, PaintCurve *pc)
+{
+	pc->points = newdataadr(fd, pc->points);
+}
+
 
 static void direct_link_script(FileData *UNUSED(fd), Script *script)
 {
@@ -2664,9 +2704,9 @@ static void direct_link_nodetree(FileData *fd, bNodeTree *ntree)
 				}
 			}
 			else if (ntree->type==NTREE_COMPOSIT) {
-				if (ELEM4(node->type, CMP_NODE_TIME, CMP_NODE_CURVE_VEC, CMP_NODE_CURVE_RGB, CMP_NODE_HUECORRECT))
+				if (ELEM(node->type, CMP_NODE_TIME, CMP_NODE_CURVE_VEC, CMP_NODE_CURVE_RGB, CMP_NODE_HUECORRECT))
 					direct_link_curvemapping(fd, node->storage);
-				else if (ELEM3(node->type, CMP_NODE_IMAGE, CMP_NODE_VIEWER, CMP_NODE_SPLITVIEWER))
+				else if (ELEM(node->type, CMP_NODE_IMAGE, CMP_NODE_VIEWER, CMP_NODE_SPLITVIEWER))
 					((ImageUser *)node->storage)->ok = 1;
 			}
 			else if ( ntree->type==NTREE_TEXTURE) {
@@ -3516,7 +3556,8 @@ static void direct_link_material(FileData *fd, Material *ma)
 	for (a = 0; a < MAX_MTEX; a++) {
 		ma->mtex[a] = newdataadr(fd, ma->mtex[a]);
 	}
-	
+	ma->texpaintslot = NULL;
+
 	ma->ramp_col = newdataadr(fd, ma->ramp_col);
 	ma->ramp_spec = newdataadr(fd, ma->ramp_spec);
 	
@@ -4450,6 +4491,9 @@ static void lib_link_object(FileData *fd, Main *main)
 					steeringa->target = newlibadr(fd, ob->id.lib, steeringa->target);
 					steeringa->navmesh = newlibadr(fd, ob->id.lib, steeringa->navmesh);
 				}
+				else if(act->type == ACT_MOUSE) {
+					/* bMouseActuator *moa= act->data; */
+				}
 			}
 			
 			{
@@ -5056,6 +5100,7 @@ static void link_paint(FileData *fd, Scene *sce, Paint *p)
 {
 	if (p) {
 		p->brush = newlibadr_us(fd, sce->id.lib, p->brush);
+		p->palette = newlibadr_us(fd, sce->id.lib, p->palette);
 		p->paint_cursor = NULL;
 	}
 }
@@ -5103,6 +5148,10 @@ static void lib_link_scene(FileData *fd, Main *main)
 			if (sce->toolsettings->sculpt)
 				sce->toolsettings->sculpt->gravity_object =
 						newlibadr_us(fd, sce->id.lib, sce->toolsettings->sculpt->gravity_object);
+
+			if (sce->toolsettings->imapaint.stencil)
+				sce->toolsettings->imapaint.stencil =
+				        newlibadr_us(fd, sce->id.lib, sce->toolsettings->imapaint.stencil);
 
 			sce->toolsettings->skgen_template = newlibadr(fd, sce->id.lib, sce->toolsettings->skgen_template);
 			
@@ -5352,7 +5401,7 @@ static void direct_link_scene(FileData *fd, Scene *sce)
 			if (seq->strip && seq->strip->done==0) {
 				seq->strip->done = true;
 				
-				if (ELEM4(seq->type, SEQ_TYPE_IMAGE, SEQ_TYPE_MOVIE, SEQ_TYPE_SOUND_RAM, SEQ_TYPE_SOUND_HD)) {
+				if (ELEM(seq->type, SEQ_TYPE_IMAGE, SEQ_TYPE_MOVIE, SEQ_TYPE_SOUND_RAM, SEQ_TYPE_SOUND_HD)) {
 					seq->strip->stripdata = newdataadr(fd, seq->strip->stripdata);
 				}
 				else {
@@ -7136,6 +7185,8 @@ static const char *dataname(short id_code)
 		case ID_NT: return "Data from NT";
 		case ID_BR: return "Data from BR";
 		case ID_PA: return "Data from PA";
+		case ID_PAL: return "Data from PAL";
+		case ID_PC: return "Data from PCRV";
 		case ID_GD: return "Data from GD";
 		case ID_WM: return "Data from WM";
 		case ID_MC: return "Data from MC";
@@ -7320,6 +7371,12 @@ static BHead *read_libblock(FileData *fd, Main *main, BHead *bhead, int flag, ID
 			break;
 		case ID_LS:
 			direct_link_linestyle(fd, (FreestyleLineStyle *)id);
+			break;
+		case ID_PAL:
+			direct_link_palette(fd, (Palette *)id);
+			break;
+		case ID_PC:
+			direct_link_paint_curve(fd, (PaintCurve *)id);
 			break;
 	}
 	
@@ -7509,6 +7566,8 @@ static void lib_link_all(FileData *fd, Main *main)
 	lib_link_vfont(fd, main);
 	lib_link_nodetree(fd, main);	/* has to be done after scene/materials, this will verify group nodes */
 	lib_link_brush(fd, main);
+	lib_link_palette(fd, main);
+	lib_link_paint_curve(fd, main);
 	lib_link_particlesettings(fd, main);
 	lib_link_movieclip(fd, main);
 	lib_link_mask(fd, main);
@@ -8048,6 +8107,7 @@ static void expand_brush(FileData *fd, Main *mainvar, Brush *brush)
 	expand_doit(fd, mainvar, brush->mtex.tex);
 	expand_doit(fd, mainvar, brush->mask_mtex.tex);
 	expand_doit(fd, mainvar, brush->clone.image);
+	expand_doit(fd, mainvar, brush->paint_curve);
 }
 
 static void expand_material(FileData *fd, Main *mainvar, Material *ma)
@@ -8925,7 +8985,7 @@ static ID *append_named_part_ex(const bContext *C, Main *mainl, FileData *fd, co
 				ob->lay = v3d ? v3d->layact : scene->lay;
 			}
 			
-			ob->mode = 0;
+			ob->mode = OB_MODE_OBJECT;
 			base->lay = ob->lay;
 			base->object = ob;
 			ob->id.us++;
