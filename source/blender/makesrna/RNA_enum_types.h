@@ -146,6 +146,10 @@ extern EnumPropertyItem viewport_shade_items[];
 
 extern EnumPropertyItem navigation_mode_items[];
 
+extern EnumPropertyItem stereo_display_items[];
+extern EnumPropertyItem stereo_anaglyph_type_items[];
+extern EnumPropertyItem stereo_interlace_type_items[];
+
 int rna_node_tree_type_to_enum(struct bNodeTreeType *typeinfo);
 int rna_node_tree_idname_to_enum(const char *idname);
 struct bNodeTreeType *rna_node_tree_type_from_enum(int value);

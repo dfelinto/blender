@@ -1754,6 +1754,12 @@ static void rna_def_window(BlenderRNA *brna)
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 	RNA_def_property_ui_text(prop, "Height", "Window height");
 
+	prop = RNA_def_property(srna, "stereo_display", PROP_POINTER, PROP_NONE);
+	RNA_def_property_pointer_sdna(prop, NULL, "stereo_display");
+	RNA_def_property_flag(prop, PROP_NEVER_NULL);
+	RNA_def_property_struct_type(prop, "StereoDisplay");
+	RNA_def_property_ui_text(prop, "Stereo Display", "Settings for stereo display");
+
 	RNA_api_window(srna);
 }
 

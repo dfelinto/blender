@@ -33,6 +33,7 @@
 
 #include "DNA_listBase.h"
 #include "DNA_vec_types.h"
+#include "DNA_userdef_types.h"
 
 #include "DNA_ID.h"
 
@@ -59,6 +60,7 @@ struct PointerRNA;
 struct ReportList;
 struct Report;
 struct uiLayout;
+struct StereoDisplay;
 
 #define OP_MAX_TYPENAME 64
 #define KMAP_MAX_NAME   64
@@ -205,6 +207,8 @@ typedef struct wmWindow {
 
 	ListBase subwindows;          /* opengl stuff for sub windows, see notes in wm_subwindow.c */
 	ListBase gesture;             /* gesture stuff */
+
+	struct StereoDisplay stereo_display; /* properties for stereoscopic displays */
 } wmWindow;
 
 /* These two Lines with # tell makesdna this struct can be excluded. */

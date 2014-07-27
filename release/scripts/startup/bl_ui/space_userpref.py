@@ -409,21 +409,22 @@ class USERPREF_PT_system(Panel):
         col.separator()
         col.separator()
 
+        s3d = system.stereo_display
         col.label(text="3D Stereo Display:")
-        col.prop(system, "stereo_display", text="")
+        col.prop(s3d, "display_mode", text="")
 
-        if system.stereo_display == 'ANAGLYPH':
-            col.prop(system, "stereo_anaglyph_type", text="Type")
+        if s3d.display_mode == 'ANAGLYPH':
+            col.prop(s3d, "anaglyph_type", text="Type")
 
-        if system.stereo_display == 'EPILEPSY':
-            col.prop(system, "stereo_epilepsy_interval")
+        elif s3d.display_mode == 'EPILEPSY':
+            col.prop(s3d, "epilepsy_interval")
 
-        if system.stereo_display == 'INTERLACE':
-            col.prop(system, "stereo_interlace_type", text="Type")
-            col.prop(system, "use_stereo_interlace_swap")
+        elif s3d.display_mode == 'INTERLACE':
+            col.prop(s3d, "interlace_type", text="Type")
+            col.prop(s3d, "use_interlace_swap")
 
-        if system.stereo_display == 'SIDEBYSIDE':
-            col.prop(system, "use_stereo_sidebyside_crosseyed")
+        elif s3d.display_mode == 'SIDEBYSIDE':
+            col.prop(s3d, "use_sidebyside_crosseyed")
 
         # 2. Column
         column = split.column()

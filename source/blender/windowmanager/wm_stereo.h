@@ -31,13 +31,16 @@
 #ifndef __WM_STEREO_H__
 #define __WM_STEREO_H__
 
+struct bContext;
+struct wmEvent;
+struct wmOperator;
 struct wmWindow;
 struct ReportList;
 
 /* wm_stereo.c */
 void	wm_method_draw_stereo(bContext *C, wmWindow *win);
-int		wm_stereo_toggle_exec(bContext *C, struct wmOperator *op);
-
+int		wm_stereo_toggle_exec(bContext *C, wmOperator *op);
+int		wm_stereo_toggle_invoke(bContext *C, wmOperator *op, const wmEvent *event);
 
 #endif /* __WM_STEREO_H__ */
 

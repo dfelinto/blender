@@ -214,6 +214,9 @@ static void wm_window_match_do(bContext *C, ListBase *oldwmlist)
 						
 						BLI_strncpy(win->screenname, win->screen->id.name + 2, sizeof(win->screenname));
 						win->screen->winid = win->winid;
+
+						/* reset 3d stereo properties */
+						win->stereo_display = U.stereo_display;
 					}
 				}
 			}
@@ -267,6 +270,9 @@ static void wm_window_match_do(bContext *C, ListBase *oldwmlist)
 						win->sizey = oldwin->sizey;
 						win->posx = oldwin->posx;
 						win->posy = oldwin->posy;
+
+						/* reset 3d stereo properties */
+						win->stereo_display = U.stereo_display;
 					}
 				}
 			}

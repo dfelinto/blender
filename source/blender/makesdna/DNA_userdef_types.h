@@ -415,6 +415,15 @@ typedef struct WalkNavigation {
 	short pad[3];
 } WalkNavigation;
 
+typedef struct StereoDisplay {
+	float epilepsy_interval; /* DEPRECATED - preferred interval in seconds for Dr. Epilepsy stereo method */
+	short flag;
+	char display_mode; /* stereo mode for the user display */
+	char anaglyph_type; /* anaglyph scheme for the user display */
+	char interlace_type;  /* interlace type for the user display */
+	char pad[7];
+} StereoDisplay;
+
 typedef struct UserDef {
 	/* UserDef has separate do-version handling, and can be read from other files */
 	int versionfile, subversionfile;
@@ -522,15 +531,7 @@ typedef struct UserDef {
 	float gpencil_new_layer_col[4]; /* default color for newly created Grease Pencil layers */
 
 	short tweak_threshold;
-
-	/* stereoscopy 3D display */
-	short stereo_flag;
-	float stereo_epilepsy_interval; /* preferred interval in seconds for Dr. Epilepsy stereo method */
-	char stereo_display; /* stereo method for the user display */
-	char stereo_anaglyph_type; /* anaglyph scheme for the user display */
-	char stereo_interlace_type;  /* interlace type for the user display */
-
-	char navigation_mode;
+	char navigation_mode, pad;
 
 	char author[80];	/* author name for file formats supporting it */
 
@@ -543,6 +544,7 @@ typedef struct UserDef {
 	float pixelsize;			/* private, set by GHOST, to multiply DPI with */
 
 	struct WalkNavigation walk_navigation;
+	struct StereoDisplay stereo_display;
 } UserDef;
 
 extern UserDef U; /* from blenkernel blender.c */
@@ -852,7 +854,7 @@ typedef enum eImageDrawMethod {
 	IMAGE_DRAW_METHOD_DRAWPIXELS = 3,
 } eImageDrawMethod;
 
-/* UserDef.stereo_display */
+/* StereoDisplay.display_mode */
 typedef enum eStereoDisplayMode {
 	S3D_DISPLAY_ANAGLYPH    = 0,
 	/* S3D_DISPLAY_BLURAY      = 1, */
@@ -863,20 +865,20 @@ typedef enum eStereoDisplayMode {
 	S3D_DISPLAY_TOPBOTTOM   = 6,
 } eStereoDisplayMode;
 
-/* UserDef.stereo_flag */
+/* StereoDisplay.flag */
 typedef enum eStereoFlag {
 	S3D_INTERLACE_SWAP        = (1 << 0),
 	S3D_SIDEBYSIDE_CROSSEYED  = (1 << 1),
 } eStereoFlag;
 
-/* UserDef.stereo_anaglyph_type */
+/* StereoDisplay.anaglyph_type */
 typedef enum eStereoAnaglyphType {
 	S3D_ANAGLYPH_REDCYAN = 0,
 	S3D_ANAGLYPH_GREENMAGENTA = 1,
 	S3D_ANAGLYPH_YELLOWBLUE = 2,
 } eAnaglyphType;
 
-/* UserDef.stereo_interlace_type */
+/* StereoDisplay.interlace_type */
 typedef enum eStereoInterlaceType {
 	S3D_INTERLACE_ROW = 0,
 	S3D_INTERLACE_COLUMN = 1,

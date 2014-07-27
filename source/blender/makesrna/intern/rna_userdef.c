@@ -78,6 +78,31 @@ EnumPropertyItem navigation_mode_items[] = {
 	{0, NULL, 0, NULL, NULL}
 };
 
+EnumPropertyItem stereo_display_items[] = {
+	{S3D_DISPLAY_ANAGLYPH, "ANAGLYPH", 0, "Anaglyph", "Render two differently filtered colored images for each eye. Anaglyph glasses are required"},
+	/*		{S3D_DISPLAY_BLURAY, "BLURAY", 0, "Blu-ray", ""}, */
+	{S3D_DISPLAY_EPILEPSY, "EPILEPSY", 0, "Dr. Epilepsy", "Wiggle stereoscopy. Quickly alternate between images for left and right eye"},
+	{S3D_DISPLAY_INTERLACE, "INTERLACE", 0, "Interlace", "Render two images for each eye into one interlaced image. 3D-ready monitor is requiered"},
+	{S3D_DISPLAY_PAGEFLIP, "TIMESEQUENTIAL", 0, "Time Sequential", "Renders alternate eyes (also known as pageflip). It requires Quadbuffer support in the graphic card"},
+	{S3D_DISPLAY_SIDEBYSIDE, "SIDEBYSIDE", 0, "Side-by-Side", "Render images for left and right eye side-by-side"},
+	{S3D_DISPLAY_TOPBOTTOM, "TOPBOTTOM", 0, "Top-Bottom", "Render images for left and right eye one above another"},
+	{0, NULL, 0, NULL, NULL}
+};
+
+EnumPropertyItem stereo_anaglyph_type_items[] = {
+	{S3D_ANAGLYPH_REDCYAN, "RED_CYAN", 0, "Red-Cyan", ""},
+	{S3D_ANAGLYPH_GREENMAGENTA, "GREEN_MAGENTA", 0, "Green-Magenta", ""},
+	{S3D_ANAGLYPH_YELLOWBLUE, "YELLOW_BLUE", 0, "Yellow-Blue", ""},
+	{0, NULL, 0, NULL, NULL}
+};
+
+EnumPropertyItem stereo_interlace_type_items[] = {
+	{S3D_INTERLACE_ROW, "ROW_INTERLEAVED", 0, "Row Interleaved", ""},
+	{S3D_INTERLACE_COLUMN, "COLUMN_INTERLEAVED", 0, "Column Interleaved", ""},
+	{S3D_INTERLACE_CHECKERBOARD, "CHECKERBOARD_INTERLEAVED", 0, "Checkerboard Interleaved", ""},
+	{0, NULL, 0, NULL, NULL}
+};
+
 #ifdef RNA_RUNTIME
 
 #include "DNA_object_types.h"
@@ -3134,6 +3159,43 @@ static void rna_def_userdef_walk_navigation(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Reverse Mouse", "Reverse the mouse look");
 }
 
+static void rna_def_userdef_stereo_display(BlenderRNA *brna)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	srna = RNA_def_struct(brna, "StereoDisplay", NULL);
+	RNA_def_struct_sdna(srna, "StereoDisplay");
+	RNA_def_struct_clear_flag(srna, STRUCT_UNDO);
+	RNA_def_struct_ui_text(srna, "Stereo Display", "Settings for stereo display");
+
+	prop = RNA_def_property(srna, "display_mode", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_items(prop, stereo_display_items);
+	RNA_def_property_ui_text(prop, "Display Mode", "");
+
+	prop = RNA_def_property(srna, "anaglyph_type", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_items(prop, stereo_anaglyph_type_items);
+	RNA_def_property_ui_text(prop, "Anaglyph Type", "");
+
+	prop = RNA_def_property(srna, "interlace_type", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_items(prop, stereo_interlace_type_items);
+	RNA_def_property_ui_text(prop, "Interlace Type", "");
+
+	prop = RNA_def_property(srna, "epilepsy_interval", PROP_FLOAT, PROP_TIME);
+	RNA_def_property_range(prop, 0.01f, 10.0f);
+	RNA_def_property_ui_range(prop, 0.05f, 1.0f, 1.0f, 2);
+	RNA_def_property_ui_text(prop, "Interval", "Preferred interval in seconds between switching left/right views");
+
+	prop = RNA_def_property(srna, "use_interlace_swap", PROP_BOOLEAN, PROP_BOOLEAN);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag", S3D_INTERLACE_SWAP);
+	RNA_def_property_ui_text(prop, "Swap Left/Right", "Swap left and right stereo channels");
+
+	prop = RNA_def_property(srna, "use_sidebyside_crosseyed", PROP_BOOLEAN, PROP_BOOLEAN);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag", S3D_SIDEBYSIDE_CROSSEYED);
+	RNA_def_property_ui_text(prop, "Cross-Eyed", "Right eye should see left image and vice-versa");
+}
+
+
 static void rna_def_userdef_view(BlenderRNA *brna)
 {
 	static EnumPropertyItem timecode_styles[] = {
@@ -3723,31 +3785,6 @@ static void rna_def_userdef_system(BlenderRNA *brna)
 	    {0, NULL, 0, NULL, NULL}
 	};
 
-	static EnumPropertyItem stereo_display_items[] = {
-		{S3D_DISPLAY_ANAGLYPH, "ANAGLYPH", 0, "Anaglyph", "Render two differently filtered colored images for each eye. Anaglyph glasses are required"},
-/*		{S3D_DISPLAY_BLURAY, "BLURAY", 0, "Blu-ray", ""}, */
-		{S3D_DISPLAY_EPILEPSY, "EPILEPSY", 0, "Dr. Epilepsy", "Wiggle stereoscopy. Quickly alternate between images for left and right eye"},
-		{S3D_DISPLAY_INTERLACE, "INTERLACE", 0, "Interlace", "Render two images for each eye into one interlaced image. 3D-ready monitor is requiered"},
-		{S3D_DISPLAY_PAGEFLIP, "TIMESEQUENTIAL", 0, "Time Sequential", "Renders alternate eyes (also known as pageflip). It requires Quadbuffer support in the graphic card"},
-		{S3D_DISPLAY_SIDEBYSIDE, "SIDEBYSIDE", 0, "Side-by-Side", "Render images for left and right eye side-by-side"},
-		{S3D_DISPLAY_TOPBOTTOM, "TOPBOTTOM", 0, "Top-Bottom", "Render images for left and right eye one above another"},
-		{0, NULL, 0, NULL, NULL}
-	};
-
-	static EnumPropertyItem stereo_anaglyph_type_items[] = {
-		{S3D_ANAGLYPH_REDCYAN, "RED_CYAN", 0, "Red-Cyan", ""},
-		{S3D_ANAGLYPH_GREENMAGENTA, "GREEN_MAGENTA", 0, "Green-Magenta", ""},
-		{S3D_ANAGLYPH_YELLOWBLUE, "YELLOW_BLUE", 0, "Yellow-Blue", ""},
-		{0, NULL, 0, NULL, NULL}
-	};
-
-	static EnumPropertyItem stereo_interlace_type_items[] = {
-		{S3D_INTERLACE_ROW, "ROW_INTERLEAVED", 0, "Row Interleaved", ""},
-		{S3D_INTERLACE_COLUMN, "COLUMN_INTERLEAVED", 0, "Column Interleaved", ""},
-		{S3D_INTERLACE_CHECKERBOARD, "CHECKERBOARD_INTERLEAVED", 0, "Checkerboard Interleaved", ""},
-		{0, NULL, 0, NULL, NULL}
-	};
-
 	srna = RNA_def_struct(brna, "UserPreferencesSystem", NULL);
 	RNA_def_struct_sdna(srna, "UserDef");
 	RNA_def_struct_nested(brna, srna, "UserPreferences");
@@ -3944,6 +3981,13 @@ static void rna_def_userdef_system(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Window Draw Method", "Drawing method used by the window manager");
 	RNA_def_property_update(prop, 0, "rna_userdef_dpi_update");
 
+	/* stereo - multiview */
+	prop = RNA_def_property(srna, "stereo_display", PROP_POINTER, PROP_NONE);
+	RNA_def_property_pointer_sdna(prop, NULL, "stereo_display");
+	RNA_def_property_flag(prop, PROP_NEVER_NULL);
+	RNA_def_property_struct_type(prop, "StereoDisplay");
+	RNA_def_property_ui_text(prop, "Stereo Display", "Settings for stereo display");
+
 	prop = RNA_def_property(srna, "audio_mixing_buffer", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "mixbufsize");
 	RNA_def_property_enum_items(prop, audio_mixing_samples_items);
@@ -4013,39 +4057,7 @@ static void rna_def_userdef_system(BlenderRNA *brna)
 	RNA_def_property_boolean_sdna(prop, NULL, "uiflag2", USER_REGION_OVERLAP);
 	RNA_def_property_ui_text(prop, "Region Overlap",
 	                         "Draw tool/property regions over the main region, when using Triple Buffer");
-	RNA_def_property_update(prop, 0, "rna_userdef_dpi_update");
-	
-	/* Stereo - Multiview */
-	prop = RNA_def_property(srna, "stereo_display", PROP_ENUM, PROP_NONE);
-	RNA_def_property_enum_sdna(prop, NULL, "stereo_display");
-	RNA_def_property_enum_items(prop, stereo_display_items);
-	RNA_def_property_ui_text(prop, "Stereo Display", "");
-	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_PROPERTIES | NC_IMAGE, NULL);
-
-	prop = RNA_def_property(srna, "stereo_anaglyph_type", PROP_ENUM, PROP_NONE);
-	RNA_def_property_enum_items(prop, stereo_anaglyph_type_items);
-	RNA_def_property_ui_text(prop, "Anaglyph Type", "");
-	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_PROPERTIES, NULL);
-
-	prop = RNA_def_property(srna, "stereo_interlace_type", PROP_ENUM, PROP_NONE);
-	RNA_def_property_enum_items(prop, stereo_interlace_type_items);
-	RNA_def_property_ui_text(prop, "Interlace Type", "");
-	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_PROPERTIES, NULL);
-
-	prop = RNA_def_property(srna, "stereo_epilepsy_interval", PROP_FLOAT, PROP_TIME);
-	RNA_def_property_range(prop, 0.01f, 10.0f);
-	RNA_def_property_ui_range(prop, 0.05f, 1.0f, 1.0f, 2);
-	RNA_def_property_ui_text(prop, "Interval", "Preferred interval in seconds between switching left/right views");
-
-	prop = RNA_def_property(srna, "use_stereo_interlace_swap", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "stereo_flag", S3D_INTERLACE_SWAP);
-	RNA_def_property_ui_text(prop, "Swap Left/Right", "Swap left and right stereo channels");
-	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_PROPERTIES | NC_IMAGE, NULL);
-
-	prop = RNA_def_property(srna, "use_stereo_sidebyside_crosseyed", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "stereo_flag", S3D_SIDEBYSIDE_CROSSEYED);
-	RNA_def_property_ui_text(prop, "Cross-Eyed", "Right eye should see left image and vice-versa");
-	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_PROPERTIES | NC_IMAGE, NULL);
+	RNA_def_property_update(prop, 0, "rna_userdef_dpi_update");	
 
 #ifdef WITH_CYCLES
 	prop = RNA_def_property(srna, "compute_device_type", PROP_ENUM, PROP_NONE);
@@ -4499,6 +4511,7 @@ void RNA_def_userdef(BlenderRNA *brna)
 	rna_def_userdef_dothemes(brna);
 	rna_def_userdef_solidlight(brna);
 	rna_def_userdef_walk_navigation(brna);
+	rna_def_userdef_stereo_display(brna);
 
 	srna = RNA_def_struct(brna, "UserPreferences", NULL);
 	RNA_def_struct_sdna(srna, "UserDef");

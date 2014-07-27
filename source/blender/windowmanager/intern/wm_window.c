@@ -260,6 +260,8 @@ wmWindow *wm_window_copy(bContext *C, wmWindow *winorig)
 
 	win->drawdata.first = win->drawdata.last = NULL;
 
+	win->stereo_display = winorig->stereo_display;
+
 	return win;
 }
 
@@ -353,7 +355,7 @@ static void wm_window_add_ghostwindow(const char *title, wmWindow *win)
 		multisamples = U.ogl_multisamples;
 	
 	/* a new window is created when pageflip mode is required for a window */
-	stereo = U.stereo_display == S3D_DISPLAY_PAGEFLIP;
+	stereo = win->stereo_display.display_mode == S3D_DISPLAY_PAGEFLIP;
 
 	wm_get_screensize(&scr_w, &scr_h);
 	posy = (scr_h - win->posy - win->sizey);
@@ -503,6 +505,7 @@ wmWindow *WM_window_open(bContext *C, const rcti *rect)
 	win->sizey = BLI_rcti_size_y(rect);
 
 	win->drawmethod = U.wmdrawmethod;
+	win->stereo_display = U.stereo_display;
 
 	WM_check(C);
 	

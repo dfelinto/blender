@@ -4409,10 +4409,21 @@ static void WM_OT_stereo_toggle(wmOperatorType *ot)
 {
 	ot->name = "Toggle 3D Stereo";
 	ot->idname = "WM_OT_stereo_toggle";
-	ot->description = "Toggle 3D stereo support for current window";
+	ot->description = "Toggle 3D stereo support for current window (or change the display mode)";
 
 	ot->exec = wm_stereo_toggle_exec;
+	ot->invoke = wm_stereo_toggle_invoke;
 	ot->poll = WM_operator_winactive;
+
+	RNA_def_enum(ot->srna, "display_mode", stereo_display_items, S3D_DISPLAY_ANAGLYPH, "Display Mode", "");
+	RNA_def_enum(ot->srna, "anaglyph_type", stereo_anaglyph_type_items, S3D_ANAGLYPH_REDCYAN, "Anaglyph Type", "");
+	RNA_def_enum(ot->srna, "interlace_type", stereo_interlace_type_items, S3D_INTERLACE_ROW, "Interlace Type", "");
+	RNA_def_float(ot->srna, "epilepsy_interval", 0.1f, 0.01f, 10.0f, "Interval",
+	              "Preferred interval in seconds between switching left/right views", 0.05f, 1.0f);
+	RNA_def_boolean(ot->srna, "use_interlace_swap", false, "Swap Left/Right",
+	                "Swap left and right stereo channels");
+	RNA_def_boolean(ot->srna, "use_sidebyside_crosseyed", false, "Cross-Eyed",
+	                "Right eye should see left image and vice-versa");
 }
 
 /* ******************************************************* */
