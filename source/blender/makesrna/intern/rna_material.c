@@ -2210,7 +2210,8 @@ static void rna_def_tex_slot(BlenderRNA *brna)
 	RNA_def_property_string_maxlength(prop, 64); /* else it uses the pointer size! */
 	RNA_def_property_string_sdna(prop, NULL, "uvname");
 	RNA_def_property_ui_text(prop, "UV Map", "Name of UV map");
-	RNA_def_property_update(prop, 0, "rna_Material_update");
+	RNA_def_property_update(prop, NC_GEOM | ND_DATA, "rna_Material_update");
+
 }
 
 
@@ -2235,12 +2236,12 @@ void rna_def_texpaint_slots(BlenderRNA *brna, StructRNA *srna)
 	RNA_def_property_ui_text(prop, "Texture Slots", "Texture slots defining the mapping and influence of textures");
 
 	prop = RNA_def_property(srna, "paint_active_slot", PROP_INT, PROP_UNSIGNED);
-	RNA_def_property_range(prop, 0, INT_MAX);
+	RNA_def_property_range(prop, 0, SHRT_MAX);
 	RNA_def_property_ui_text(prop, "Active Paint Texture Index", "Index of active texture paint slot");
 	RNA_def_property_update(prop, NC_MATERIAL | ND_SHADING_LINKS, "rna_Material_active_paint_texture_index_update");
 
 	prop = RNA_def_property(srna, "paint_clone_slot", PROP_INT, PROP_UNSIGNED);
-	RNA_def_property_range(prop, 0, INT_MAX);
+	RNA_def_property_range(prop, 0, SHRT_MAX);
 	RNA_def_property_ui_text(prop, "Clone Paint Texture Index", "Index of clone texture paint slot");
 	RNA_def_property_update(prop, NC_MATERIAL | ND_SHADING_LINKS, NULL);
 }

@@ -45,6 +45,17 @@
 
 #define MAX_TREETYPE 32
 
+/* Setting zero so we can catch bugs in OpenMP/KDOPBVH.
+ * TODO(sergey): Deduplicate the limits with PBVH from BKE.
+ */
+#ifdef _OPENMP
+#  ifdef DEBUG
+#    define KDOPBVH_OMP_LIMIT 0
+#  else
+#    define KDOPBVH_OMP_LIMIT 1024
+#  endif
+#endif
+
 typedef unsigned char axis_t;
 
 typedef struct BVHNode {
@@ -749,7 +760,8 @@ static void non_recursive_bvh_div_nodes(BVHTree *tree, BVHNode *branches_array, 
 		int j;
 
 		/* Loop all branches on this level */
-#pragma omp parallel for private(j) schedule(static)
+
+#pragma omp parallel for private(j) schedule(static) if (num_leafs > KDOPBVH_OMP_LIMIT)
 		for (j = i; j < end_j; j++) {
 			int k;
 			const int parent_level_index = j - i;
@@ -1102,7 +1114,7 @@ BVHTreeOverlap *BLI_bvhtree_overlap(BVHTree *tree1, BVHTree *tree2, unsigned int
 		data[j]->stop_axis  = min_axis(tree1->stop_axis,  tree2->stop_axis);
 	}
 
-#pragma omp parallel for private(j) schedule(static)
+#pragma omp parallel for private(j) schedule(static)  if (tree1->totleaf > KDOPBVH_OMP_LIMIT)
 	for (j = 0; j < MIN2(tree1->tree_type, tree1->nodes[tree1->totleaf]->totnode); j++) {
 		traverse(data[j], tree1->nodes[tree1->totleaf]->children[j], tree2->nodes[tree2->totleaf]);
 	}

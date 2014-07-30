@@ -50,6 +50,15 @@
 
 #define STACK_FIXED_DEPTH   100
 
+/* Setting zero so we can catch bugs in OpenMP/PBVH. */
+#ifdef _OPENMP
+#  ifdef DEBUG
+#    define PBVH_OMP_LIMIT 0
+#  else
+#    define PBVH_OMP_LIMIT 8
+#  endif
+#endif
+
 typedef struct PBVHStack {
 	PBVHNode *node;
 	int revisiting;
@@ -965,7 +974,7 @@ static void pbvh_update_normals(PBVH *bvh, PBVHNode **nodes,
 	 *   can only update vertices marked with ME_VERT_PBVH_UPDATE.
 	 */
 
-#pragma omp parallel for private(n) schedule(static)
+#pragma omp parallel for private(n) schedule(static) if (totnode > PBVH_OMP_LIMIT)
 	for (n = 0; n < totnode; n++) {
 		PBVHNode *node = nodes[n];
 
@@ -1009,7 +1018,7 @@ static void pbvh_update_normals(PBVH *bvh, PBVHNode **nodes,
 		}
 	}
 
-#pragma omp parallel for private(n) schedule(static)
+#pragma omp parallel for private(n) schedule(static) if (totnode > PBVH_OMP_LIMIT)
 	for (n = 0; n < totnode; n++) {
 		PBVHNode *node = nodes[n];
 
@@ -1046,7 +1055,7 @@ void pbvh_update_BB_redraw(PBVH *bvh, PBVHNode **nodes, int totnode, int flag)
 	int n;
 
 	/* update BB, redraw flag */
-#pragma omp parallel for private(n) schedule(static)
+#pragma omp parallel for private(n) schedule(static) if (totnode > PBVH_OMP_LIMIT)
 	for (n = 0; n < totnode; n++) {
 		PBVHNode *node = nodes[n];
 
