@@ -1697,7 +1697,9 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 
 		WM_cursor_wait(0);
 	}
-	ED_space_image_release_buffer(sima, ibuf, lock);
+	else {
+		ED_space_image_release_buffer(sima, ibuf, lock);
+	}
 
 	return ok;
 }
