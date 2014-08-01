@@ -1693,6 +1693,9 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 			ED_space_image_release_buffer(sima, ibuf, lock);
 		}
 
+		WM_event_add_notifier(C, NC_IMAGE | NA_EDITED, sima->image);
+
+		WM_cursor_wait(0);
 	}
 	ED_space_image_release_buffer(sima, ibuf, lock);
 
