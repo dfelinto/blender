@@ -1640,15 +1640,17 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 
 			ED_space_image_release_buffer(sima, ibuf, lock);
 
-			for (i=0, rv = (RenderView *)rr->views.first; rv; rv = rv->next, i++) {
+			for (i = 0, rv = (RenderView *)rr->views.first; rv; rv = rv->next, i++) {
 				sima->iuser.pass = get_multiview_pass_id(rr, &sima->iuser, i);
 				sima->iuser.view = i;
 				sima->iuser.flag &= ~IMA_SHOW_STEREO;
 				BKE_image_multilayer_index(rr, &sima->iuser);
 
 				srv = BLI_findstring(&scene->r.views, rv->name, offsetof(SceneRenderView, name));
-
-				BLI_strncpy(suffix, srv->suffix, sizeof(suffix));
+				if (srv)
+					BLI_strncpy(suffix, srv->suffix, sizeof(suffix));
+				else
+					BLI_strncpy(suffix, rv->name, sizeof(suffix));
 
 				BLI_strncpy(filepath, simopts->filepath, sizeof(filepath));
 				BLI_path_view(filepath, suffix);
