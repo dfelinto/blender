@@ -1467,13 +1467,16 @@ static ExrHandle *imb_exr_begin_read_mem(MultiPartInputFile *file, int width, in
 	for (echan = (ExrChannel *)data->channels.first; echan; echan = echan->next) {
 		if (imb_exr_split_channel_name(echan, layname, passname)) {
 
-			const char *view= echan->m->view.c_str();
+			const char *view = echan->m->view.c_str();
 			char internal_name[EXR_PASS_MAXNAME];
 
 			BLI_strncpy(internal_name, passname, EXR_PASS_MAXNAME);
 
-			if (view[0] != '\0')
-				BLI_snprintf(passname, sizeof(passname), "%s.%s", passname, view);
+			if (view[0] != '\0') {
+				char tmp_pass[EXR_PASS_MAXNAME];
+				BLI_snprintf(tmp_pass, sizeof(tmp_pass), "%s.%s", passname, view);
+				BLI_strncpy(passname, tmp_pass, sizeof(passname));
+			}
 
 			ExrLayer *lay = imb_exr_get_layer(&data->layers, layname);
 			ExrPass *pass = imb_exr_get_pass(&lay->passes, passname);
