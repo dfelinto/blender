@@ -88,6 +88,12 @@ struct ColorManagedDisplay;
 
 /**
  *
+ * \attention defined in DNA_scene_types.h
+ */
+struct ImageFormatData;
+
+/**
+ *
  * \attention Defined in allocimbuf.c
  */
 void IMB_init(void);
@@ -544,6 +550,12 @@ void IMB_processor_apply_threaded(int buffer_lines, int handle_size, void *init_
 /* ffmpeg */
 void IMB_ffmpeg_init(void);
 const char *IMB_ffmpeg_last_error(void);
+
+/**
+ *
+ * \attention Defined in stereoimbuf.c
+ */
+struct ImBuf *IMB_stereoImBuf(struct ImageFormatData *im_format, struct ImBuf *left, struct ImBuf *right);
 
 #endif
 

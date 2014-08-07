@@ -973,6 +973,53 @@ void uiTemplateImageSettings(uiLayout *layout, PointerRNA *imfptr, int color_man
 	}
 }
 
+void uiTemplateImageViews(uiLayout *layout, PointerRNA *imfptr)
+{
+	ImageFormatData *imf = imfptr->data;
+	PropertyRNA *prop;
+	PointerRNA stereo_output_ptr;
+	StereoDisplay *stereo_output = &imf->stereo_output;
+
+	uiLayout *col, *box;
+
+	/* OpenEXR multiview is only to save multiview exr */
+	if (imf->imtype == R_IMF_IMTYPE_MULTIVIEW)
+		return;
+
+	col = uiLayoutColumn(layout, false);
+
+	uiItemL(col, IFACE_("Views Output:"), ICON_NONE);
+	uiItemR(uiLayoutRow(col, false), imfptr, "views_output", UI_ITEM_R_EXPAND, NULL, ICON_NONE);
+
+	prop = RNA_struct_find_property(imfptr, "stereo_output");
+	stereo_output_ptr = RNA_property_pointer_get(imfptr, prop);
+
+	box = uiLayoutBox(col);
+	uiLayoutSetActive(box, imf->views_output == R_IMF_VIEWS_STEREO_3D);
+	col = uiLayoutColumn(box, false);
+
+	uiItemR(col, &stereo_output_ptr, "stereo_mode", 0, NULL, ICON_NONE);
+
+	switch (stereo_output->display_mode) {
+		case S3D_DISPLAY_ANAGLYPH:
+		{
+			uiItemR(col, &stereo_output_ptr, "anaglyph_type", 0, NULL, ICON_NONE);
+			break;
+		}
+		case S3D_DISPLAY_INTERLACE:
+		{
+			uiItemR(col, &stereo_output_ptr, "interlace_type", 0, NULL, ICON_NONE);
+			uiItemR(col, &stereo_output_ptr, "use_interlace_swap", 0, NULL, ICON_NONE);
+			break;
+		}
+		case S3D_DISPLAY_SIDEBYSIDE:
+		{
+			uiItemR(col, &stereo_output_ptr, "use_sidebyside_crosseyed", 0, NULL, ICON_NONE);
+			break;
+		}
+	}
+}
+
 void uiTemplateImageLayers(uiLayout *layout, bContext *C, Image *ima, ImageUser *iuser)
 {
 	Scene *scene = CTX_data_scene(C);

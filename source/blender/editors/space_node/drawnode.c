@@ -1665,15 +1665,20 @@ static void node_composit_buts_file_output(uiLayout *layout, bContext *UNUSED(C)
 }
 static void node_composit_buts_file_output_ex(uiLayout *layout, bContext *C, PointerRNA *ptr)
 {
+	Scene *scene = CTX_data_scene(C);
 	PointerRNA imfptr = RNA_pointer_get(ptr, "format");
 	PointerRNA active_input_ptr, op_ptr;
 	uiLayout *row, *col;
 	int active_index;
 	int multilayer = (ELEM(RNA_enum_get(&imfptr, "file_format"), R_IMF_IMTYPE_MULTILAYER, R_IMF_IMTYPE_MULTIVIEW));
+	const bool multiview = scene->r.scemode & R_MULTIVIEW;
 	
 	node_composit_buts_file_output(layout, C, ptr);
 	uiTemplateImageSettings(layout, &imfptr, false);
 	
+	if (multiview)
+		uiTemplateImageViews(layout, &imfptr);
+
 	uiItemS(layout);
 	
 	uiItemO(layout, IFACE_("Add Input"), ICON_ZOOMIN, "NODE_OT_output_file_add_socket");
@@ -1735,6 +1740,9 @@ static void node_composit_buts_file_output_ex(uiLayout *layout, bContext *C, Poi
 			col = uiLayoutColumn(layout, false);
 			uiLayoutSetActive(col, RNA_boolean_get(&active_input_ptr, "use_node_format") == false);
 			uiTemplateImageSettings(col, &imfptr, false);
+
+			if (multiview)
+				uiTemplateImageViews(col, &imfptr);
 		}
 	}
 }

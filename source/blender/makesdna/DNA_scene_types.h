@@ -46,11 +46,13 @@ extern "C" {
 #include "DNA_listBase.h"
 #include "DNA_ID.h"
 #include "DNA_freestyle_types.h"
+#include "DNA_userdef_types.h"
 
 struct Object;
 struct Brush;
 struct World;
 struct Scene;
+struct StereoDisplay;
 struct Image;
 struct Group;
 struct Text;
@@ -306,7 +308,11 @@ typedef struct ImageFormatData {
 	char  jp2_flag;
 	char jp2_codec;
 
-	char pad[6];
+	char pad[5];
+
+	/* Multiview */
+	char views_output;
+	StereoDisplay stereo_output;
 
 	/* color management */
 	ColorManagedViewSettings view_settings;
@@ -383,6 +389,12 @@ typedef struct ImageFormatData {
 
 /* ImageFormatData.cineon_flag */
 #define R_IMF_CINEON_FLAG_LOG (1<<0)  /* was R_CINEON_LOG */
+
+/* ImageFormatData.views_output */
+enum {
+	R_IMF_VIEWS_INDIVIDUAL = 0,
+	R_IMF_VIEWS_STEREO_3D  = 1,
+};
 
 typedef struct BakeData {
 	struct ImageFormatData im_format;

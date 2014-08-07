@@ -857,7 +857,7 @@ typedef enum eImageDrawMethod {
 /* StereoDisplay.display_mode */
 typedef enum eStereoDisplayMode {
 	S3D_DISPLAY_ANAGLYPH    = 0,
-	/* S3D_DISPLAY_BLURAY      = 1, */
+	S3D_DISPLAY_BLURAY      = 1,
 	S3D_DISPLAY_EPILEPSY    = 2,
 	S3D_DISPLAY_INTERLACE   = 3,
 	S3D_DISPLAY_PAGEFLIP    = 4,
