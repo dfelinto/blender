@@ -65,7 +65,7 @@ static int EnumPixelFormats(HDC hdc);
  * and 16 depth bits.
  * When the screen color depth is set to 32 bit, we get 8 color bits
  * and 24 depth bits.
- * Just to be safe, we request high waulity settings.
+ * Just to be safe, we request high quality settings.
  */
 static PIXELFORMATDESCRIPTOR sPreferredFormat = {
 	sizeof(PIXELFORMATDESCRIPTOR),  /* size */
@@ -183,7 +183,7 @@ GHOST_WindowWin32::GHOST_WindowWin32(
 		MONITORINFO monitor;
 		GHOST_TUns32 tw, th; 
 
-#if !defined(_MSC_VER) || _MSC_VER < 1700
+#ifndef _MSC_VER
 		int cxsizeframe = GetSystemMetrics(SM_CXSIZEFRAME);
 		int cysizeframe = GetSystemMetrics(SM_CYSIZEFRAME);
 #else

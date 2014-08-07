@@ -18,7 +18,7 @@
 
 # <pep8 compliant>
 import bpy
-from bpy.types import Panel
+from bpy.types import Panel, Menu
 from rna_prop_ui import PropertyPanel
 
 
@@ -151,6 +151,16 @@ class OBJECT_PT_relations(ObjectButtonsPanel, Panel):
             sub.prop_search(ob, "parent_bone", parent.data, "bones", text="")
         sub.active = (parent is not None)
 
+class GROUP_MT_specials(Menu):
+    bl_label = "Group Specials"
+
+    def draw(self, context):
+        layout = self.layout
+
+        layout.operator("object.group_unlink", icon='X')
+        layout.operator("object.grouped_select")
+        layout.operator("object.dupli_offset_from_cursor")
+
 
 class OBJECT_PT_groups(ObjectButtonsPanel, Panel):
     bl_label = "Groups"
@@ -167,8 +177,6 @@ class OBJECT_PT_groups(ObjectButtonsPanel, Panel):
             row.operator("object.group_add", text="Add to Group")
         row.operator("object.group_add", text="", icon='ZOOMIN')
 
-        # XXX, this is bad practice, yes, I wrote it :( - campbell
-        index = 0
         obj_name = obj.name
         for group in bpy.data.groups:
             # XXX this is slow and stupid!, we need 2 checks, one thats fast
@@ -183,6 +191,7 @@ class OBJECT_PT_groups(ObjectButtonsPanel, Panel):
                 row = col.box().row()
                 row.prop(group, "name", text="")
                 row.operator("object.group_remove", text="", icon='X', emboss=False)
+                row.menu("GROUP_MT_specials", icon='DOWNARROW_HLT', text="")
 
                 split = col.box().split()
 
@@ -191,10 +200,6 @@ class OBJECT_PT_groups(ObjectButtonsPanel, Panel):
 
                 col = split.column()
                 col.prop(group, "dupli_offset", text="")
-
-                props = col.operator("object.dupli_offset_from_cursor", text="From Cursor")
-                props.group = index
-                index += 1
 
 
 class OBJECT_PT_display(ObjectButtonsPanel, Panel):

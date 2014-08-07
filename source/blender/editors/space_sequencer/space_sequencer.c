@@ -279,24 +279,40 @@ static void sequencer_refresh(const bContext *C, ScrArea *sa)
 			}
 			break;
 		case SEQ_VIEW_SEQUENCE_PREVIEW:
-			if (ar_main && (ar_main->flag & RGN_FLAG_HIDDEN)) {
-				ar_main->flag &= ~RGN_FLAG_HIDDEN;
-				ar_main->v2d.flag &= ~V2D_IS_INITIALISED;
-				view_changed = true;
-			}
-			if (ar_preview && (ar_preview->flag & RGN_FLAG_HIDDEN)) {
-				ar_preview->flag &= ~RGN_FLAG_HIDDEN;
-				ar_preview->v2d.flag &= ~V2D_IS_INITIALISED;
-				ar_preview->v2d.cur = ar_preview->v2d.tot;
-				view_changed = true;
-			}
-			if (ar_main && ar_main->alignment != RGN_ALIGN_NONE) {
-				ar_main->alignment = RGN_ALIGN_NONE;
-				view_changed = true;
-			}
-			if (ar_preview && ar_preview->alignment != RGN_ALIGN_TOP) {
-				ar_preview->alignment = RGN_ALIGN_TOP;
-				view_changed = true;
+			if (ar_main && ar_preview) {
+				/* Get available height (without DPI correction). */
+				const float height = (sa->winy - ED_area_headersize()) / UI_DPI_FAC;
+
+				/* We reuse hidden area's size, allows to find same layout as before if we just switch
+				 * between one 'full window' view and the combined one. This gets lost if we switch to both
+				 * 'full window' views before, though... Better than nothing. */
+				if (ar_main->flag & RGN_FLAG_HIDDEN) {
+					ar_main->flag &= ~RGN_FLAG_HIDDEN;
+					ar_main->v2d.flag &= ~V2D_IS_INITIALISED;
+					ar_preview->sizey = (int)(height - ar_main->sizey);
+					view_changed = true;
+				}
+				if (ar_preview->flag & RGN_FLAG_HIDDEN) {
+					ar_preview->flag &= ~RGN_FLAG_HIDDEN;
+					ar_preview->v2d.flag &= ~V2D_IS_INITIALISED;
+					ar_preview->v2d.cur = ar_preview->v2d.tot;
+					ar_main->sizey = (int)(height - ar_preview->sizey);
+					view_changed = true;
+				}
+				if (ar_main->alignment != RGN_ALIGN_NONE) {
+					ar_main->alignment = RGN_ALIGN_NONE;
+					view_changed = true;
+				}
+				if (ar_preview->alignment != RGN_ALIGN_TOP) {
+					ar_preview->alignment = RGN_ALIGN_TOP;
+					view_changed = true;
+				}
+				/* Final check that both preview and main height are reasonable! */
+				if (ar_preview->sizey < 10 || ar_main->sizey < 10 || ar_preview->sizey + ar_main->sizey > height) {
+					ar_preview->sizey = (int)(height * 0.4f + 0.5f);
+					ar_main->sizey = (int)(height - ar_preview->sizey);
+					view_changed = true;
+				}
 			}
 			break;
 	}
@@ -337,40 +353,6 @@ static void sequencer_listener(bScreen *UNUSED(sc), ScrArea *sa, wmNotifier *wmn
 				sequencer_scopes_tag_refresh(sa);
 			break;
 	}
-}
-
-/* *********************** sequencer (main) region ************************ */
-/* add handlers, stuff you only do once or on area/region changes */
-static void sequencer_main_area_init(wmWindowManager *wm, ARegion *ar)
-{
-	wmKeyMap *keymap;
-	ListBase *lb;
-	
-	UI_view2d_region_reinit(&ar->v2d, V2D_COMMONVIEW_CUSTOM, ar->winx, ar->winy);
-
-//	keymap = WM_keymap_find(wm->defaultconf, "Mask Editing", 0, 0);
-//	WM_event_add_keymap_handler_bb(&ar->handlers, keymap, &ar->v2d.mask, &ar->winrct);
-
-	keymap = WM_keymap_find(wm->defaultconf, "SequencerCommon", SPACE_SEQ, 0);
-	WM_event_add_keymap_handler_bb(&ar->handlers, keymap, &ar->v2d.mask, &ar->winrct);
-	
-	/* own keymap */
-	keymap = WM_keymap_find(wm->defaultconf, "Sequencer", SPACE_SEQ, 0);
-	WM_event_add_keymap_handler_bb(&ar->handlers, keymap, &ar->v2d.mask, &ar->winrct);
-	
-	/* add drop boxes */
-	lb = WM_dropboxmap_find("Sequencer", SPACE_SEQ, RGN_TYPE_WINDOW);
-	
-	WM_event_add_dropbox_handler(&ar->handlers, lb);
-	
-}
-
-static void sequencer_main_area_draw(const bContext *C, ARegion *ar)
-{
-//	ScrArea *sa = CTX_wm_area(C);
-	
-	/* NLE - strip editing timeline interface */
-	draw_timeline_seq(C, ar);
 }
 
 /* ************* dropboxes ************* */
@@ -439,7 +421,7 @@ static void sequencer_drop_copy(wmDrag *drag, wmDropBox *drop)
 static void sequencer_dropboxes(void)
 {
 	ListBase *lb = WM_dropboxmap_find("Sequencer", SPACE_SEQ, RGN_TYPE_WINDOW);
-	
+
 	WM_dropbox_add(lb, "SEQUENCER_OT_image_strip_add", image_drop_poll, sequencer_drop_copy);
 	WM_dropbox_add(lb, "SEQUENCER_OT_movie_strip_add", movie_drop_poll, sequencer_drop_copy);
 	WM_dropbox_add(lb, "SEQUENCER_OT_sound_strip_add", sound_drop_poll, sequencer_drop_copy);
@@ -469,16 +451,37 @@ static int sequencer_context(const bContext *C, const char *member, bContextData
 	return false;
 }
 
-
+/* *********************** sequencer (main) region ************************ */
 /* add handlers, stuff you only do once or on area/region changes */
-static void sequencer_header_area_init(wmWindowManager *UNUSED(wm), ARegion *ar)
+static void sequencer_main_area_init(wmWindowManager *wm, ARegion *ar)
 {
-	ED_region_header_init(ar);
+	wmKeyMap *keymap;
+	ListBase *lb;
+
+	UI_view2d_region_reinit(&ar->v2d, V2D_COMMONVIEW_CUSTOM, ar->winx, ar->winy);
+
+#if 0
+	keymap = WM_keymap_find(wm->defaultconf, "Mask Editing", 0, 0);
+	WM_event_add_keymap_handler_bb(&ar->handlers, keymap, &ar->v2d.mask, &ar->winrct);
+#endif
+
+	keymap = WM_keymap_find(wm->defaultconf, "SequencerCommon", SPACE_SEQ, 0);
+	WM_event_add_keymap_handler_bb(&ar->handlers, keymap, &ar->v2d.mask, &ar->winrct);
+
+	/* own keymap */
+	keymap = WM_keymap_find(wm->defaultconf, "Sequencer", SPACE_SEQ, 0);
+	WM_event_add_keymap_handler_bb(&ar->handlers, keymap, &ar->v2d.mask, &ar->winrct);
+
+	/* add drop boxes */
+	lb = WM_dropboxmap_find("Sequencer", SPACE_SEQ, RGN_TYPE_WINDOW);
+
+	WM_event_add_dropbox_handler(&ar->handlers, lb);
 }
 
-static void sequencer_header_area_draw(const bContext *C, ARegion *ar)
+static void sequencer_main_area_draw(const bContext *C, ARegion *ar)
 {
-	ED_region_header(C, ar);
+	/* NLE - strip editing timeline interface */
+	draw_timeline_seq(C, ar);
 }
 
 static void sequencer_main_area_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa), ARegion *ar, wmNotifier *wmn)
@@ -512,15 +515,29 @@ static void sequencer_main_area_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa
 	}
 }
 
+/* *********************** header region ************************ */
+/* add handlers, stuff you only do once or on area/region changes */
+static void sequencer_header_area_init(wmWindowManager *UNUSED(wm), ARegion *ar)
+{
+	ED_region_header_init(ar);
+}
+
+static void sequencer_header_area_draw(const bContext *C, ARegion *ar)
+{
+	ED_region_header(C, ar);
+}
+
 /* *********************** preview region ************************ */
 static void sequencer_preview_area_init(wmWindowManager *wm, ARegion *ar)
 {
 	wmKeyMap *keymap;
 
 	UI_view2d_region_reinit(&ar->v2d, V2D_COMMONVIEW_CUSTOM, ar->winx, ar->winy);
-	
-//	keymap = WM_keymap_find(wm->defaultconf, "Mask Editing", 0, 0);
-//	WM_event_add_keymap_handler_bb(&ar->handlers, keymap, &ar->v2d.mask, &ar->winrct);
+
+#if 0
+	keymap = WM_keymap_find(wm->defaultconf, "Mask Editing", 0, 0);
+	WM_event_add_keymap_handler_bb(&ar->handlers, keymap, &ar->v2d.mask, &ar->winrct);
+#endif
 
 	keymap = WM_keymap_find(wm->defaultconf, "SequencerCommon", SPACE_SEQ, 0);
 	WM_event_add_keymap_handler_bb(&ar->handlers, keymap, &ar->v2d.mask, &ar->winrct);
@@ -593,7 +610,6 @@ static void sequencer_preview_area_listener(bScreen *UNUSED(sc), ScrArea *UNUSED
 					break;
 			}
 			break;
-
 		case NC_MASK:
 			if (wmn->action == NA_EDITED) {
 				ED_region_tag_redraw(ar);
@@ -654,10 +670,10 @@ void ED_spacetype_sequencer(void)
 {
 	SpaceType *st = MEM_callocN(sizeof(SpaceType), "spacetype sequencer");
 	ARegionType *art;
-	
+
 	st->spaceid = SPACE_SEQ;
 	strncpy(st->name, "Sequencer", BKE_ST_MAXNAME);
-	
+
 	st->new = sequencer_new;
 	st->free = sequencer_free;
 	st->init = sequencer_init;
@@ -682,13 +698,12 @@ void ED_spacetype_sequencer(void)
 	/* preview */
 	art = MEM_callocN(sizeof(ARegionType), "spacetype sequencer region");
 	art->regionid = RGN_TYPE_PREVIEW;
-	art->prefsizey = 240; // XXX
 	art->init = sequencer_preview_area_init;
 	art->draw = sequencer_preview_area_draw;
 	art->listener = sequencer_preview_area_listener;
 	art->keymapflag = ED_KEYMAP_VIEW2D | ED_KEYMAP_FRAMES | ED_KEYMAP_GPENCIL;
 	BLI_addhead(&st->regiontypes, art);
-	
+
 	/* regions: listview/buttons */
 	art = MEM_callocN(sizeof(ARegionType), "spacetype sequencer region");
 	art->regionid = RGN_TYPE_UI;
@@ -698,7 +713,7 @@ void ED_spacetype_sequencer(void)
 	art->init = sequencer_buttons_area_init;
 	art->draw = sequencer_buttons_area_draw;
 	BLI_addhead(&st->regiontypes, art);
-	
+
 	sequencer_buttons_register(art);
 
 	/* regions: header */
@@ -706,13 +721,13 @@ void ED_spacetype_sequencer(void)
 	art->regionid = RGN_TYPE_HEADER;
 	art->prefsizey = HEADERY;
 	art->keymapflag = ED_KEYMAP_UI | ED_KEYMAP_VIEW2D | ED_KEYMAP_FRAMES | ED_KEYMAP_HEADER;
-	
+
 	art->init = sequencer_header_area_init;
 	art->draw = sequencer_header_area_draw;
 	art->listener = sequencer_main_area_listener;
-	
+
 	BLI_addhead(&st->regiontypes, art);
-	
+
 	BKE_spacetype_register(st);
 
 	/* set the sequencer callback when not in background mode */

@@ -154,7 +154,7 @@ BF_COLLADA_LIB = 'bf_collada'
 
 BF_OPENCOLLADA = LIBDIR + '/opencollada'
 BF_OPENCOLLADA_INC = '${BF_OPENCOLLADA}/include/opencollada'
-BF_OPENCOLLADA_LIB = 'OpenCOLLADAStreamWriter OpenCOLLADASaxFrameworkLoader OpenCOLLADAFramework OpenCOLLADABaseUtils GeneratedSaxParser MathMLSolver xml pcre buffer ftoa UTF'
+BF_OPENCOLLADA_LIB = 'OpenCOLLADAStreamWriter OpenCOLLADASaxFrameworkLoader OpenCOLLADAFramework OpenCOLLADABaseUtils GeneratedSaxParser MathMLSolver xml pcre buffer ftoa'
 BF_OPENCOLLADA_LIBPATH = '${BF_OPENCOLLADA}/lib/opencollada'
 
 WITH_BF_3DMOUSE = True
@@ -231,6 +231,9 @@ CCFLAGS = ['/nologo', '/J', '/W3', '/Gd', '/w34062', '/wd4018', '/wd4065', '/wd4
 CXXFLAGS = ['/EHsc']
 BGE_CXXFLAGS = ['/O2', '/Ob2', '/EHsc', '/GR', '/fp:fast', '/arch:SSE']
 
+if VC_VERSION == '12.0':
+    CCFLAGS.append('/DOIIO_STATIC_BUILD')  # OIIO api changed with 1.4 making this needed 
+
 BF_DEBUG_CCFLAGS = ['/Zi', '/Ob0', '/Od', '/FR${TARGET}.sbr']
 
 CPPFLAGS = ['-DWIN32','-D_CONSOLE', '-D_LIB', '-D_CRT_SECURE_NO_DEPRECATE', '-DOPJ_STATIC']
@@ -260,3 +263,4 @@ if VC_VERSION == '12.0':
 else:
     BF_BUILDDIR = '..\\build\\win32-vc9'
     BF_INSTALLDIR='..\\install\\win32-vc9'
+    BF_OPENCOLLADA_LIB = BF_OPENCOLLADA_LIB + ' UTF'

@@ -168,14 +168,10 @@ typedef struct PreviewImage {
 
 #ifdef __BIG_ENDIAN__
    /* big endian */
-#  define MAKE_ID2(c, d)		( (c)<<8 | (d) )
-#  define MOST_SIG_BYTE			0
-#  define BBIG_ENDIAN
+#  define MAKE_ID2(c, d)  ((c) << 8 | (d))
 #else
    /* little endian  */
-#  define MAKE_ID2(c, d)		( (d)<<8 | (c) )
-#  define MOST_SIG_BYTE			1
-#  define BLITTLE_ENDIAN
+#  define MAKE_ID2(c, d)  ((d) << 8 | (c))
 #endif
 
 /* ID from database */
@@ -237,7 +233,7 @@ typedef struct PreviewImage {
 #  undef GS
 #endif
 // #define GS(a)	(*((short *)(a)))
-#define GS(a)	(CHECK_TYPE_INLINE(a, const char *), (*((short *)(a))))
+#define GS(a)	(CHECK_TYPE_INLINE(a, char *), (*((short *)(a))))
 
 #define ID_NEW(a)		if (      (a) && (a)->id.newid ) (a) = (void *)(a)->id.newid
 #define ID_NEW_US(a)	if (      (a)->id.newid)       { (a) = (void *)(a)->id.newid;       (a)->id.us++; }

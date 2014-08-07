@@ -59,9 +59,6 @@ if env['WITH_BF_INTERNATIONAL']:
 if env['WITH_BF_BULLET']:
     SConscript (['rigidbody/SConscript'])
 
-if env['WITH_BF_COMPOSITOR']:
-    SConscript (['opencl/SConscript'])
-
 if env['OURPLATFORM'] in ('win32-vc', 'win32-mingw', 'win64-mingw', 'linuxcross', 'win64-vc'):
     SConscript(['utfconv/SConscript'])
 

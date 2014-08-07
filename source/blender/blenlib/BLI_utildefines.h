@@ -49,7 +49,7 @@
 	_17_, _18_, _19_, _20_, _21_, _22_, _23_, _24_, _25_, _26_, _27_, _28_, _29_, _30_, _31_, _32_, \
 	count, ...) count
 #define _VA_NARGS_EXPAND(args) _VA_NARGS_RETURN_COUNT args
-#define _VA_NARGS_COUNT_MAX16(...) _VA_NARGS_EXPAND((__VA_ARGS__, \
+#define _VA_NARGS_COUNT_MAX32(...) _VA_NARGS_EXPAND((__VA_ARGS__, \
 	32, 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, \
 	15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0))
 #define _VA_NARGS_OVERLOAD_MACRO2(name, count) name##count
@@ -57,8 +57,7 @@
 #define _VA_NARGS_OVERLOAD_MACRO(name,  count) _VA_NARGS_OVERLOAD_MACRO1(name, count)
 /* --- expose for re-use --- */
 #define VA_NARGS_CALL_OVERLOAD(name, ...) \
-	_VA_NARGS_GLUE(_VA_NARGS_OVERLOAD_MACRO(name, _VA_NARGS_COUNT_MAX16(__VA_ARGS__)), (__VA_ARGS__))
-
+	_VA_NARGS_GLUE(_VA_NARGS_OVERLOAD_MACRO(name, _VA_NARGS_COUNT_MAX32(__VA_ARGS__)), (__VA_ARGS__))
 
 /* useful for finding bad use of min/max */
 #if 0
@@ -157,20 +156,20 @@
  * ... the compiler optimizes away the temp var */
 #ifdef __GNUC__
 #define CHECK_TYPE(var, type)  {  \
-	__typeof(var) *__tmp;         \
+	typeof(var) *__tmp;           \
 	__tmp = (type *)NULL;         \
 	(void)__tmp;                  \
 } (void)0
 
 #define CHECK_TYPE_PAIR(var_a, var_b)  {  \
-	__typeof(var_a) *__tmp;               \
-	__tmp = (__typeof(var_b) *)NULL;      \
+	typeof(var_a) *__tmp;                 \
+	__tmp = (typeof(var_b) *)NULL;        \
 	(void)__tmp;                          \
 } (void)0
 
 #define CHECK_TYPE_PAIR_INLINE(var_a, var_b)  ((void)({  \
-	__typeof(var_a) *__tmp;                              \
-	__tmp = (__typeof(var_b) *)NULL;                     \
+	typeof(var_a) *__tmp;                                \
+	__tmp = (typeof(var_b) *)NULL;                       \
 	(void)__tmp;                                         \
 }))
 
@@ -181,8 +180,19 @@
 #endif
 
 /* can be used in simple macros */
-#define CHECK_TYPE_INLINE(val, type) \
-	((void)(((type)0) != (val)))
+#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
+#  define CHECK_TYPE_INLINE(val, type) \
+	(void)((void)(((type)0) != (0 ? (val) : ((type)0))), \
+	       _Generic((val), type: 0, const type: 0))
+#else
+#  define CHECK_TYPE_INLINE(val, type) \
+	((void)(((type)0) != (0 ? (val) : ((type)0))))
+#endif
+
+#define CHECK_TYPE_NONCONST(var)  {      \
+	void *non_const = 0 ? (var) : NULL;  \
+	(void)non_const;                     \
+} (void)0
 
 #define SWAP(type, a, b)  {    \
 	type sw_ap;                \
@@ -369,13 +379,13 @@
 #define IN_RANGE_INCL(a, b, c) ((b < c) ? ((b <= a && a <= c) ? 1 : 0) : ((c <= a && a <= b) ? 1 : 0))
 
 /* unpack vector for args */
-#define UNPACK2(a)  ((a)[0]), ((a)[1])
-#define UNPACK3(a)  ((a)[0]), ((a)[1]), ((a)[2])
-#define UNPACK4(a)  ((a)[0]), ((a)[1]), ((a)[2]), ((a)[3])
-/* op may be '&' or '*' */
-#define UNPACK2OP(op, a)  op((a)[0]), op((a)[1])
-#define UNPACK3OP(op, a)  op((a)[0]), op((a)[1]), op((a)[2])
-#define UNPACK4OP(op, a)  op((a)[0]), op((a)[1]), op((a)[2]), op((a)[3])
+#define UNPACK2(a)  ((a)[0]),   ((a)[1])
+#define UNPACK3(a)  UNPACK2(a), ((a)[2])
+#define UNPACK4(a)  UNPACK3(a), ((a)[3])
+/* pre may be '&', '*' or func, post may be '->member' */
+#define UNPACK2_EX(pre, a, post)  (pre((a)[0])post),        (pre((a)[1])post)
+#define UNPACK3_EX(pre, a, post)  UNPACK2_EX(pre, a, post), (pre((a)[2])post)
+#define UNPACK4_EX(pre, a, post)  UNPACK3_EX(pre, a, post), (pre((a)[3])post)
 
 /* array helpers */
 #define ARRAY_LAST_ITEM(arr_start, arr_dtype, tot) \
@@ -408,8 +418,7 @@
 /* memcpy, skipping the first part of a struct,
  * ensures 'struct_dst' isn't const and that the offset can be computed at compile time */
 #define MEMCPY_STRUCT_OFS(struct_dst, struct_src, member)  { \
-	void *_not_const = struct_dst; \
-	(void)_not_const; \
+	CHECK_TYPE_NONCONST(struct_dst); \
 	((void)(struct_dst == struct_src), \
 	 memcpy((char *)(struct_dst)  + OFFSETOF_STRUCT(struct_dst, member), \
 	        (char *)(struct_src)  + OFFSETOF_STRUCT(struct_dst, member), \

@@ -616,7 +616,7 @@ static GPUBuffer *gpu_buffer_setup(DerivedMesh *dm, GPUDrawObject *object,
 	}
 
 	mat_orig_to_new = MEM_mallocN(sizeof(*mat_orig_to_new) * dm->totmat,
-                                  "GPU_buffer_setup.mat_orig_to_new");
+	                              "GPU_buffer_setup.mat_orig_to_new");
 	cur_index_per_mat = MEM_mallocN(sizeof(int) * object->totmaterial,
 	                                "GPU_buffer_setup.cur_index_per_mat");
 	for (i = 0; i < object->totmaterial; i++) {
@@ -2674,11 +2674,14 @@ bool GPU_pbvh_buffers_diffuse_changed(GPU_PBVH_Buffers *buffers, GSet *bm_faces,
 	}
 	else if (buffers->use_bmesh) {
 		/* due to dynamc nature of dyntopo, only get first material */
-		GSetIterator gs_iter;
-		BMFace *f;
-		BLI_gsetIterator_init(&gs_iter, bm_faces);
-		f = BLI_gsetIterator_getKey(&gs_iter);
-		GPU_material_diffuse_get(f->mat_nr + 1, diffuse_color);
+		if (BLI_gset_size(bm_faces) > 0) {
+			GSetIterator gs_iter;
+			BMFace *f;
+
+			BLI_gsetIterator_init(&gs_iter, bm_faces);
+			f = BLI_gsetIterator_getKey(&gs_iter);
+			GPU_material_diffuse_get(f->mat_nr + 1, diffuse_color);
+		}
 	}
 	else {
 		const DMFlagMat *flags = &buffers->grid_flag_mats[buffers->grid_indices[0]];

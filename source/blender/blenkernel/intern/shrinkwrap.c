@@ -66,57 +66,6 @@
 /* Util macros */
 #define OUT_OF_MEMORY() ((void)printf("Shrinkwrap: Out of memory\n"))
 
-/* get derived mesh */
-/* TODO is anyfunction that does this? returning the derivedFinal without we caring if its in edit mode or not? */
-DerivedMesh *object_get_derived_final(Object *ob, bool for_render)
-{
-	Mesh *me = ob->data;
-	BMEditMesh *em = me->edit_btmesh;
-
-	if (for_render) {
-		/* TODO(sergey): use proper derived render here in the future. */
-		return ob->derivedFinal;
-	}
-
-	if (em) {
-		DerivedMesh *dm = em->derivedFinal;
-		return dm;
-	}
-
-	return ob->derivedFinal;
-}
-
-/* Space transform */
-void space_transform_from_matrixs(SpaceTransform *data, float local[4][4], float target[4][4])
-{
-	float itarget[4][4];
-	invert_m4_m4(itarget, target);
-	mul_m4_m4m4(data->local2target, itarget, local);
-	invert_m4_m4(data->target2local, data->local2target);
-}
-
-void space_transform_apply(const SpaceTransform *data, float co[3])
-{
-	mul_v3_m4v3(co, ((SpaceTransform *)data)->local2target, co);
-}
-
-void space_transform_invert(const SpaceTransform *data, float co[3])
-{
-	mul_v3_m4v3(co, ((SpaceTransform *)data)->target2local, co);
-}
-
-static void space_transform_apply_normal(const SpaceTransform *data, float no[3])
-{
-	mul_mat3_m4_v3(((SpaceTransform *)data)->local2target, no);
-	normalize_v3(no); /* TODO: could we just determine de scale value from the matrix? */
-}
-
-static void space_transform_invert_normal(const SpaceTransform *data, float no[3])
-{
-	mul_mat3_m4_v3(((SpaceTransform *)data)->target2local, no);
-	normalize_v3(no); /* TODO: could we just determine de scale value from the matrix? */
-}
-
 /*
  * Shrinkwrap to the nearest vertex
  *
@@ -159,7 +108,7 @@ static void shrinkwrap_calc_nearest_vertex(ShrinkwrapCalcData *calc)
 		else {
 			copy_v3_v3(tmp_co, co);
 		}
-		space_transform_apply(&calc->local2target, tmp_co);
+		BLI_space_transform_apply(&calc->local2target, tmp_co);
 
 		/* Use local proximity heuristics (to reduce the nearest search)
 		 *
@@ -185,7 +134,7 @@ static void shrinkwrap_calc_nearest_vertex(ShrinkwrapCalcData *calc)
 
 			/* Convert the coordinates back to mesh coordinates */
 			copy_v3_v3(tmp_co, nearest.co);
-			space_transform_invert(&calc->local2target, tmp_co);
+			BLI_space_transform_invert(&calc->local2target, tmp_co);
 
 			interp_v3_v3v3(co, co, tmp_co, weight);  /* linear interpolation */
 		}
@@ -224,11 +173,11 @@ bool BKE_shrinkwrap_project_normal(
 	/* Apply space transform (TODO readjust dist) */
 	if (transf) {
 		copy_v3_v3(tmp_co, vert);
-		space_transform_apply(transf, tmp_co);
+		BLI_space_transform_apply(transf, tmp_co);
 		co = tmp_co;
 
 		copy_v3_v3(tmp_no, dir);
-		space_transform_apply_normal(transf, tmp_no);
+		BLI_space_transform_apply_normal(transf, tmp_no);
 		no = tmp_no;
 
 #ifdef USE_DIST_CORRECT
@@ -247,7 +196,7 @@ bool BKE_shrinkwrap_project_normal(
 	if (hit_tmp.index != -1) {
 		/* invert the normal first so face culling works on rotated objects */
 		if (transf) {
-			space_transform_invert_normal(transf, hit_tmp.no);
+			BLI_space_transform_invert_normal(transf, hit_tmp.no);
 		}
 
 		if (options & (MOD_SHRINKWRAP_CULL_TARGET_FRONTFACE | MOD_SHRINKWRAP_CULL_TARGET_BACKFACE)) {
@@ -262,7 +211,7 @@ bool BKE_shrinkwrap_project_normal(
 
 		if (transf) {
 			/* Inverting space transform (TODO make coeherent with the initial dist readjust) */
-			space_transform_invert(transf, hit_tmp.co);
+			BLI_space_transform_invert(transf, hit_tmp.co);
 #ifdef USE_DIST_CORRECT
 			hit_tmp.dist = len_v3v3(vert, hit_tmp.co);
 #endif
@@ -327,7 +276,7 @@ static void shrinkwrap_calc_normal_projection(ShrinkwrapCalcData *calc, bool for
 		auxMesh = object_get_derived_final(calc->smd->auxTarget, for_render);
 		if (!auxMesh)
 			return;
-		SPACE_TRANSFORM_SETUP(&local2aux, calc->ob, calc->smd->auxTarget);
+		BLI_SPACE_TRANSFORM_SETUP(&local2aux, calc->ob, calc->smd->auxTarget);
 	}
 
 	/* After sucessufuly build the trees, start projection vertexs */
@@ -461,7 +410,7 @@ static void shrinkwrap_calc_nearest_surface_point(ShrinkwrapCalcData *calc)
 		else {
 			copy_v3_v3(tmp_co, co);
 		}
-		space_transform_apply(&calc->local2target, tmp_co);
+		BLI_space_transform_apply(&calc->local2target, tmp_co);
 
 		/* Use local proximity heuristics (to reduce the nearest search)
 		 *
@@ -495,7 +444,7 @@ static void shrinkwrap_calc_nearest_surface_point(ShrinkwrapCalcData *calc)
 			}
 
 			/* Convert the coordinates back to mesh coordinates */
-			space_transform_invert(&calc->local2target, tmp_co);
+			BLI_space_transform_invert(&calc->local2target, tmp_co);
 			interp_v3_v3v3(co, co, tmp_co, weight);  /* linear interpolation */
 		}
 	}
@@ -538,7 +487,7 @@ void shrinkwrapModifier_deform(ShrinkwrapModifierData *smd, Object *ob, DerivedM
 		/* TODO there might be several "bugs" on non-uniform scales matrixs
 		 * because it will no longer be nearest surface, not sphere projection
 		 * because space has been deformed */
-		SPACE_TRANSFORM_SETUP(&calc.local2target, ob, smd->target);
+		BLI_SPACE_TRANSFORM_SETUP(&calc.local2target, ob, smd->target);
 
 		/* TODO: smd->keepDist is in global units.. must change to local */
 		calc.keepDist = smd->keepDist;

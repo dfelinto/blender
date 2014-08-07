@@ -1250,7 +1250,13 @@ static bool get_path_local(char *targetpath, const char *folder_name, const char
 	}
 
 	/* try EXECUTABLE_DIR/2.5x/folder_name - new default directory for local blender installed files */
+#ifdef __APPLE__
+	static char osx_resourses[FILE_MAX]; /* due new codesign situation in OSX > 10.9.5 we must move the blender_version dir with contents to Resources */
+	sprintf(osx_resourses, "%s../Resources", bprogdir);
+	return test_path(targetpath, osx_resourses, blender_version_decimal(ver), relfolder);
+#else
 	return test_path(targetpath, bprogdir, blender_version_decimal(ver), relfolder);
+#endif
 }
 
 /**
@@ -1590,21 +1596,6 @@ void BLI_setenv_if_new(const char *env, const char *val)
 		BLI_setenv(env, val);
 }
 
-
-/**
- * Changes to the path separators to the native ones for this OS.
- */
-void BLI_clean(char *path)
-{
-#ifdef WIN32
-	if (path && BLI_strnlen(path, 3) > 2) {
-		BLI_char_switch(path + 2, '/', '\\');
-	}
-#else
-	BLI_char_switch(path + BLI_path_unc_prefix_len(path), '\\', '/');
-#endif
-}
-
 /**
  * Change every \a from in \a string into \a to. The
  * result will be in \a string
@@ -1756,7 +1747,7 @@ void BLI_make_file_string(const char *relabase, char *string, const char *dir, c
 	strcat(string, file);
 	
 	/* Push all slashes to the system preferred direction */
-	BLI_clean(string);
+	BLI_path_native_slash(string);
 }
 
 static bool testextensie_ex(const char *str, const size_t str_len,
@@ -2218,6 +2209,20 @@ void BLI_del_slash(char *string)
 			break;
 		}
 	}
+}
+
+/**
+ * Changes to the path separators to the native ones for this OS.
+ */
+void BLI_path_native_slash(char *path)
+{
+#ifdef WIN32
+	if (path && BLI_strnlen(path, 3) > 2) {
+		BLI_char_switch(path + 2, '/', '\\');
+	}
+#else
+	BLI_char_switch(path + BLI_path_unc_prefix_len(path), '\\', '/');
+#endif
 }
 
 /**

@@ -356,7 +356,7 @@ static TexPaintSlot *project_paint_face_paint_slot(const ProjPaintState *ps, int
 {
 	MFace *mf = ps->dm_mface + face_index;
 	Material *ma = ps->dm->mat[mf->mat_nr];
-	return &ma->texpaintslot[ma->paint_active_slot];
+	return ma->texpaintslot + ma->paint_active_slot;
 }
 
 static Image *project_paint_face_paint_image(const ProjPaintState *ps, int face_index)
@@ -367,7 +367,8 @@ static Image *project_paint_face_paint_image(const ProjPaintState *ps, int face_
 	else {
 		MFace *mf = ps->dm_mface + face_index;
 		Material *ma = ps->dm->mat[mf->mat_nr];
-		return ma->texpaintslot[ma->paint_active_slot].ima;
+		TexPaintSlot *slot = ma->texpaintslot + ma->paint_active_slot;
+		return slot ? slot->ima : NULL;
 	}
 }
 
@@ -2300,8 +2301,8 @@ static void project_paint_face_init(const ProjPaintState *ps, const int thread_i
 	/* Use tf_uv_pxoffset instead of tf->uv so we can offset the UV half a pixel
 	 * this is done so we can avoid offsetting all the pixels by 0.5 which causes
 	 * problems when wrapping negative coords */
-	xhalfpx = (0.5f + (PROJ_GEOM_TOLERANCE * (1.0f / 3.0f))) / ibuf_xf;
-	yhalfpx = (0.5f + (PROJ_GEOM_TOLERANCE * (1.0f / 4.0f))) / ibuf_yf;
+	xhalfpx = (0.5f + (PROJ_PIXEL_TOLERANCE * (1.0f / 3.0f))) / ibuf_xf;
+	yhalfpx = (0.5f + (PROJ_PIXEL_TOLERANCE * (1.0f / 4.0f))) / ibuf_yf;
 
 	/* Note about (PROJ_GEOM_TOLERANCE/x) above...
 	 * Needed to add this offset since UV coords are often quads aligned to pixels.
@@ -3288,18 +3289,20 @@ static void project_paint_begin(ProjPaintState *ps)
 		if (!ps->do_stencil_brush) {
 			slot = project_paint_face_paint_slot(ps, face_index);
 			/* all faces should have a valid slot, reassert here */
-			if (slot == NULL)
-				continue;
-
-			if (slot != slot_last) {
-				if (!slot->uvname || !(tf_base = CustomData_get_layer_named(&ps->dm->faceData, CD_MTFACE, slot->uvname)))
-					tf_base = CustomData_get_layer(&ps->dm->faceData, CD_MTFACE);
-				slot_last = slot;
+			if (slot == NULL) {
+				tf_base = CustomData_get_layer(&ps->dm->faceData, CD_MTFACE);
 			}
+			else {
+				if (slot != slot_last) {
+					if (!slot->uvname || !(tf_base = CustomData_get_layer_named(&ps->dm->faceData, CD_MTFACE, slot->uvname)))
+						tf_base = CustomData_get_layer(&ps->dm->faceData, CD_MTFACE);
+					slot_last = slot;
+				}
 
-			/* don't allow using the same inage for painting and stencilling */
-			if (slot->ima == ps->stencil_ima)
-				continue;
+				/* don't allow using the same inage for painting and stencilling */
+				if (slot->ima == ps->stencil_ima)
+					continue;
+			}
 		}
 
 		*tf = tf_base + face_index;
@@ -3781,7 +3784,7 @@ static void do_projectpaint_soften_f(ProjPaintState *ps, ProjPixel *projPixel, f
 			sub_v3_v3v3(rgba, projPixel->pixel.f_pt, rgba);
 
 			/* now rgba_ub contains the edge result, but this should be converted to luminance to avoid
-			 * colored speckles appearing in final image, and also to check for threshhold */
+			 * colored speckles appearing in final image, and also to check for threshold */
 			rgba[0] = rgba[1] = rgba[2] = rgb_to_grayscale(rgba);
 			if (fabsf(rgba[0]) > ps->brush->sharp_threshold) {
 				float alpha = projPixel->pixel.f_pt[3];
@@ -3842,7 +3845,7 @@ static void do_projectpaint_soften(ProjPaintState *ps, ProjPixel *projPixel, flo
 			/* subtract blurred image from normal image gives high pass filter */
 			sub_v3_v3v3(rgba, rgba_pixel, rgba);
 			/* now rgba_ub contains the edge result, but this should be converted to luminance to avoid
-			 * colored speckles appearing in final image, and also to check for threshhold */
+			 * colored speckles appearing in final image, and also to check for threshold */
 			rgba[0] = rgba[1] = rgba[2] = rgb_to_grayscale(rgba);
 			if (fabsf(rgba[0]) > ps->brush->sharp_threshold) {
 				float alpha = rgba_pixel[3];

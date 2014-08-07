@@ -56,6 +56,7 @@ struct bContext;
 struct bPoseChannel;
 struct bScreen;
 struct bglMats;
+struct rctf;
 struct rcti;
 struct wmOperator;
 struct wmOperatorType;
@@ -270,7 +271,7 @@ bool ED_view3d_autodist_depth_seg(struct ARegion *ar, const int mval_sta[2], con
 
 /* select */
 #define MAXPICKBUF      10000
-short view3d_opengl_select(struct ViewContext *vc, unsigned int *buffer, unsigned int bufsize, const rcti *input, bool do_nearest);
+short view3d_opengl_select(struct ViewContext *vc, unsigned int *buffer, unsigned int bufsize, const struct rcti *input, bool do_nearest);
 
 /* view3d_select.c */
 float ED_view3d_select_dist_px(void);
@@ -365,6 +366,6 @@ void ED_view3d_operator_properties_viewmat_get(struct wmOperator *op, int *winx,
 #endif
 
 /* render */
-void ED_view3d_shade_update(struct Main *bmain, struct View3D *v3d, struct ScrArea *sa);
+void ED_view3d_shade_update(struct Main *bmain, struct Scene *scene, struct View3D *v3d, struct ScrArea *sa);
 
 #endif /* __ED_VIEW3D_H__ */
