@@ -873,15 +873,15 @@ typedef enum eStereoFlag {
 
 /* StereoDisplay.anaglyph_type */
 typedef enum eStereoAnaglyphType {
-	S3D_ANAGLYPH_REDCYAN = 0,
+	S3D_ANAGLYPH_REDCYAN      = 0,
 	S3D_ANAGLYPH_GREENMAGENTA = 1,
-	S3D_ANAGLYPH_YELLOWBLUE = 2,
+	S3D_ANAGLYPH_YELLOWBLUE   = 2,
 } eAnaglyphType;
 
 /* StereoDisplay.interlace_type */
 typedef enum eStereoInterlaceType {
-	S3D_INTERLACE_ROW = 0,
-	S3D_INTERLACE_COLUMN = 1,
+	S3D_INTERLACE_ROW          = 0,
+	S3D_INTERLACE_COLUMN       = 1,
 	S3D_INTERLACE_CHECKERBOARD = 2,
 } eInterlaceType;
 
