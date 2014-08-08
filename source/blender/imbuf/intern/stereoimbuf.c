@@ -69,7 +69,7 @@ static void imb_stereo_anaglyph(enum eStereoAnaglyphType UNUSED(mode), ImBuf *le
 		const float *rect_right= right->rect_float;
 		float *rect_to = r_ibuf->rect_float;
 
-		/* always RGBA input */
+		/* always RGBA input/output */
 		for (y = 0; y < height; y++) {
 			float *to = rect_to + stride_to * y * 4;
 			const float *from_left = rect_left + stride_from * y * 4;
@@ -88,7 +88,7 @@ static void imb_stereo_anaglyph(enum eStereoAnaglyphType UNUSED(mode), ImBuf *le
 		const uchar *rect_right= (uchar *)right->rect;
 		uchar *rect_to = (uchar *)r_ibuf->rect;
 
-		/* always RGBA input */
+		/* always RGBA input/output */
 		for (y = 0; y < height; y++) {
 			uchar *to = rect_to + stride_to * y * 4;
 			uchar *from_left = rect_left + stride_from * y * 4;
@@ -102,6 +102,21 @@ static void imb_stereo_anaglyph(enum eStereoAnaglyphType UNUSED(mode), ImBuf *le
 			}
 		}
 	}
+}
+
+static void imb_stereo_interlace(enum eStereoInterlaceType UNUSED(mode), const bool UNUSED(swap), ImBuf *UNUSED(left), ImBuf *UNUSED(right), bool UNUSED(is_float), ImBuf *UNUSED(r_ibuf))
+{
+	BLI_assert(false);
+}
+
+static void imb_stereo_sidebyside(const bool UNUSED(crosseyed), ImBuf *UNUSED(left), ImBuf *UNUSED(right), bool UNUSED(is_float), ImBuf *UNUSED(r_ibuf))
+{
+	BLI_assert(false);
+}
+
+static void imb_stereo_topbottom(ImBuf *UNUSED(left), ImBuf *UNUSED(right), bool UNUSED(is_float), ImBuf *UNUSED(r_ibuf))
+{
+	BLI_assert(false);
 }
 
 static void imb_stereo_dimensions(enum eStereoDisplayMode mode, ImBuf *ibuf, size_t *width, size_t *height)
@@ -155,10 +170,13 @@ ImBuf *IMB_stereoImBuf(ImageFormatData *im_format, ImBuf *left, ImBuf *right)
 		case S3D_DISPLAY_BLURAY:
 			break;
 		case S3D_DISPLAY_INTERLACE:
+			imb_stereo_interlace(s3d->interlace_type, (s3d->flag & S3D_INTERLACE_SWAP), left, right, is_float, r_ibuf);
 			break;
 		case S3D_DISPLAY_SIDEBYSIDE:
+			imb_stereo_sidebyside((s3d->flag & S3D_SIDEBYSIDE_CROSSEYED), left, right, is_float, r_ibuf);
 			break;
 		case S3D_DISPLAY_TOPBOTTOM:
+			imb_stereo_topbottom(left, right, is_float, r_ibuf);
 			break;
 		default:
 			break;
