@@ -1739,8 +1739,8 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 		}
 		/* stereo (multiview) images */
 		else if (simopts->im_format.views_output == R_IMF_VIEWS_STEREO_3D) {
-			ImBuf *ibuf_stereo[3] = {NULL};
-			ImBuf *colormanaged_ibuf_stereo[3] = {NULL};
+			ImBuf *ibuf_stereo[2] = {NULL};
+			ImBuf *colormanaged_ibuf_stereo[2] = {NULL};
 			void *lock_stereo[2];
 
 			unsigned char planes = ibuf->planes;
@@ -1764,15 +1764,18 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 				}
 
 				ibuf_stereo[i]->planes = planes;
-				colormanaged_ibuf_stereo[i] = IMB_colormanagement_imbuf_for_write(ibuf_stereo[i], save_as_render, true, &imf->view_settings, &imf->display_settings, imf);
+
+				/* color manage the ImBuf leaving it ready for saving */
+				colormanaged_ibuf_stereo[i] = IMB_colormanagement_imbuf_for_write(ibuf_stereo[i], save_as_render, true,
+				                                                                  &imf->view_settings, &imf->display_settings, imf);
+
+				BKE_imbuf_prepare_write(colormanaged_ibuf_stereo[i], imf);
+				IMB_prepare_write_ImBuf(IMB_isfloat(colormanaged_ibuf_stereo[i]), colormanaged_ibuf_stereo[i]);
 			}
 
 			ED_space_image_release_buffer(sima, ibuf, lock);
 
-			ibuf_stereo[2] = IMB_stereoImBuf(imf, ibuf_stereo[0], ibuf_stereo[1]);
-
-			colormanaged_ibuf_stereo[2] = IMB_colormanagement_imbuf_for_write(ibuf_stereo[2], save_as_render, true, &imf->view_settings, &imf->display_settings, imf);
-
+			ibuf = IMB_stereoImBuf(imf, colormanaged_ibuf_stereo[0], colormanaged_ibuf_stereo[1]);
 
 			/* save via traditional path */
 			if (is_multilayer) {
@@ -1780,10 +1783,11 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 //				ok = RE_WriteRenderResult(op->reports, rr, simopts->filepath, simopts->im_format.exr_codec, false, "");
 			}
 			else {
-				ok = BKE_imbuf_write_as(colormanaged_ibuf_stereo[2], simopts->filepath, imf, save_copy);
-				save_imbuf_post(ibuf_stereo[2], colormanaged_ibuf_stereo[2]);
+				ok = BKE_imbuf_write_as(ibuf, simopts->filepath, imf, save_copy);
 			}
-			save_image_post(op, ibuf_stereo[2], ima, ok, (is_multilayer ? true : save_copy), relbase, relative, do_newpath, simopts->filepath);
+
+			//save_image_post(op, ibuf, ima, ok, (is_multilayer ? true : save_copy), relbase, relative, do_newpath, simopts->filepath);
+			IMB_freeImBuf(ibuf);
 
 			for (i = 0; i < 2; i ++) {
 				save_imbuf_post(ibuf_stereo[i], colormanaged_ibuf_stereo[i]);
