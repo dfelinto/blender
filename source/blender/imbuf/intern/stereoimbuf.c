@@ -84,21 +84,21 @@ static void imb_stereo_anaglyph(enum eStereoAnaglyphType UNUSED(mode), ImBuf *le
 		}
 	}
 	else {
-		float *rect_left = left->rect_float;
-		float *rect_right= right->rect_float;
+		const uchar *rect_left = left->rect;
+		const uchar *rect_right= right->rect;
 		uchar *rect_to = (uchar *)r_ibuf->rect;
 
 		/* always RGBA input */
 		for (y = 0; y < height; y++) {
 			uchar *to = rect_to + stride_to * y * 4;
-			float *from_left = rect_left + stride_from * y * 4;
-			float *from_right = rect_right + stride_from * y * 4;
+			uchar *from_left = rect_left + stride_from * y * 4;
+			uchar *from_right = rect_right + stride_from * y * 4;
 
 			for (x = 0; x < width; x++, from_left += 4, from_right += 4, to += 4) {
-				to[0] = FTOCHAR(from_left[0]);
-				to[1] = FTOCHAR(from_right[1]);
-				to[2] = FTOCHAR(from_right[2]);
-				to[3] = FTOCHAR(from_right[3]);
+				to[0] = from_left[0];
+				to[1] = from_right[1];
+				to[2] = from_right[2];
+				to[3] = from_right[3];
 			}
 		}
 	}
