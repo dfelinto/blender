@@ -371,6 +371,7 @@ void IMB_scaleImBuf_threaded(struct ImBuf *ibuf, unsigned int newx, unsigned int
  * \attention Defined in writeimage.c
  */
 short IMB_saveiff(struct ImBuf *ibuf, const char *filepath, int flags);
+struct ImBuf *IMB_prepare_write_ImBuf(const bool isfloat, struct ImBuf *ibuf);
 
 /**
  *
@@ -390,6 +391,12 @@ bool IMB_isanim(const char *name);
  * \attention Defined in util.c
  */
 int imb_get_anim_type(const char *name);
+
+/**
+ *
+ * \attention Defined in util.c
+ */
+bool IMB_isfloat(struct ImBuf *ibuf);
 
 /**
  *

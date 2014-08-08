@@ -60,6 +60,7 @@ void    BKE_imbuf_stamp_info(struct Scene *scene, struct Object *camera, struct 
 void    BKE_stamp_buf(struct Scene *scene, struct Object *camera, unsigned char *rect, float *rectf, int width, int height, int channels);
 bool    BKE_imbuf_alpha_test(struct ImBuf *ibuf);
 int     BKE_imbuf_write_stamp(struct Scene *scene, struct Object *camera, struct ImBuf *ibuf, const char *name, struct ImageFormatData *imf);
+void    BKE_imbuf_prepare_write(struct ImBuf *ibuf, struct ImageFormatData *imf);
 int     BKE_imbuf_write(struct ImBuf *ibuf, const char *name, struct ImageFormatData *imf);
 int     BKE_imbuf_write_as(struct ImBuf *ibuf, const char *name, struct ImageFormatData *imf, const bool is_copy);
 void    BKE_makepicstring(char *string, const char *base, const char *relbase, int frame,

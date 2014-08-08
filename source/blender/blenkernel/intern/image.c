@@ -1888,13 +1888,11 @@ bool BKE_imbuf_alpha_test(ImBuf *ibuf)
 
 /* note: imf->planes is ignored here, its assumed the image channels
  * are already set */
-int BKE_imbuf_write(ImBuf *ibuf, const char *name, ImageFormatData *imf)
+void BKE_imbuf_prepare_write(ImBuf *ibuf, ImageFormatData *imf)
 {
 	char imtype = imf->imtype;
 	char compress = imf->compress;
 	char quality = imf->quality;
-
-	int ok;
 
 	if (imtype == R_IMF_IMTYPE_IRIS) {
 		ibuf->ftype = IMAGIC;
@@ -2016,6 +2014,13 @@ int BKE_imbuf_write(ImBuf *ibuf, const char *name, ImageFormatData *imf)
 		if (quality < 10) quality = 90;
 		ibuf->ftype = JPG | quality;
 	}
+}
+
+int BKE_imbuf_write(ImBuf *ibuf, const char *name, ImageFormatData *imf)
+{
+	int ok;
+
+	BKE_imbuf_prepare_write(ibuf, imf);
 
 	BLI_make_existing_file(name);
 
