@@ -55,7 +55,7 @@
 #include "DNA_userdef_types.h"
 #include "DNA_scene_types.h"
 
-static void imb_stereo_anaglyph(enum eStereoAnaglyphType UNUSED(mode), ImBuf *left, ImBuf *right, bool is_float, ImBuf *r_ibuf)
+static void imb_stereo_anaglyph(enum eStereoAnaglyphType mode, ImBuf *left, ImBuf *right, bool is_float, ImBuf *r_ibuf)
 {
 	int x, y;
 	size_t width = r_ibuf->x;
@@ -64,41 +64,57 @@ static void imb_stereo_anaglyph(enum eStereoAnaglyphType UNUSED(mode), ImBuf *le
 	const int stride_from = width;
 	const int stride_to = width;
 
+	int anaglyph_encoding[3][3] = {
+	    {0,1,1},
+	    {1,0,1},
+	    {0,0,1},
+	};
+
+	int r, g, b;
+
+	r = anaglyph_encoding[mode][0];
+	g = anaglyph_encoding[mode][1];
+	b = anaglyph_encoding[mode][2];
+
 	if (is_float){
+		float *rect_to = r_ibuf->rect_float;
 		const float *rect_left = left->rect_float;
 		const float *rect_right= right->rect_float;
-		float *rect_to = r_ibuf->rect_float;
 
 		/* always RGBA input/output */
 		for (y = 0; y < height; y++) {
 			float *to = rect_to + stride_to * y * 4;
-			const float *from_left = rect_left + stride_from * y * 4;
-			const float*from_right = rect_right + stride_from * y * 4;
+			const float *from[2] = {
+			    rect_left + stride_from * y * 4,
+                rect_right + stride_from * y * 4,
+			};
 
-			for (x = 0; x < width; x++, from_left += 4, from_right += 4, to += 4) {
-				to[0] = from_left[0];
-				to[1] = from_right[1];
-				to[2] = from_right[2];
-				to[3] = from_right[3];
+			for (x = 0; x < width; x++, from[0] += 4, from[1] += 4, to += 4) {
+				to[0] = from[r][0];
+				to[1] = from[g][1];
+				to[2] = from[b][2];
+				to[3] = MAX2(from[0][2], from[0][2]);
 			}
 		}
 	}
 	else {
+		uchar *rect_to = (uchar *)r_ibuf->rect;
 		const uchar *rect_left = (uchar *)left->rect;
 		const uchar *rect_right= (uchar *)right->rect;
-		uchar *rect_to = (uchar *)r_ibuf->rect;
 
 		/* always RGBA input/output */
 		for (y = 0; y < height; y++) {
 			uchar *to = rect_to + stride_to * y * 4;
-			uchar *from_left = rect_left + stride_from * y * 4;
-			uchar *from_right = rect_right + stride_from * y * 4;
+			uchar *from[2] = {
+			    rect_left + stride_from * y * 4,
+				rect_right + stride_from * y * 4,
+			};
 
-			for (x = 0; x < width; x++, from_left += 4, from_right += 4, to += 4) {
-				to[0] = from_left[0];
-				to[1] = from_right[1];
-				to[2] = from_right[2];
-				to[3] = from_right[3];
+			for (x = 0; x < width; x++, from[0] += 4, from[1] += 4, to += 4) {
+				to[0] = from[r][0];
+				to[1] = from[g][1];
+				to[2] = from[b][2];
+				to[3] = MAX2(from[0][2], from[0][2]);
 			}
 		}
 	}
