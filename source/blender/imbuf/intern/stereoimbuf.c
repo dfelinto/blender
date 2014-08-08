@@ -84,8 +84,8 @@ static void imb_stereo_anaglyph(enum eStereoAnaglyphType UNUSED(mode), ImBuf *le
 		}
 	}
 	else {
-		const uchar *rect_left = left->rect;
-		const uchar *rect_right= right->rect;
+		const uchar *rect_left = (uchar *)left->rect;
+		const uchar *rect_right= (uchar *)right->rect;
 		uchar *rect_to = (uchar *)r_ibuf->rect;
 
 		/* always RGBA input */
