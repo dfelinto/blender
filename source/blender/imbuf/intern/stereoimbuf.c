@@ -130,9 +130,51 @@ static void imb_stereo_sidebyside(const bool UNUSED(crosseyed), ImBuf *UNUSED(le
 	BLI_assert(false);
 }
 
-static void imb_stereo_topbottom(ImBuf *UNUSED(left), ImBuf *UNUSED(right), bool UNUSED(is_float), ImBuf *UNUSED(r_ibuf))
+static void imb_stereo_topbottom(ImBuf *left, ImBuf *right, bool is_float, ImBuf *r_ibuf)
 {
-	BLI_assert(false);
+	int y;
+	size_t width = r_ibuf->x;
+	size_t height= r_ibuf->y / 2;
+
+	const int stride_from = width;
+	const int stride_to = width;
+
+	BLI_assert((left->y == right->y) && (left->y == r_ibuf->y / 2));
+
+	if (is_float){
+		float *rect_to = r_ibuf->rect_float;
+		const float *rect_left = left->rect_float;
+		const float *rect_right= right->rect_float;
+
+		/* always RGBA input/output */
+		for (y = 0; y < height; y++) {
+			float *to = rect_to + stride_to * y * 4;
+			float *from[2] = {
+			    rect_left + stride_from * y * 4,
+                rect_right + stride_from * y * 4,
+			};
+
+			memcpy(to, from[1], sizeof(float) * 4 * stride_from);
+			memcpy(to + 4 * height * stride_to, from[0], sizeof(float) * 4 * stride_from);
+		}
+	}
+	else {
+		uchar *rect_to = (uchar *)r_ibuf->rect;
+		const uchar *rect_left = (uchar *)left->rect;
+		const uchar *rect_right= (uchar *)right->rect;
+
+		/* always RGBA input/output */
+		for (y = 0; y < height; y++) {
+			uchar *to = rect_to + stride_to * y * 4;
+			uchar *from[2] = {
+			    rect_left + stride_from * y * 4,
+				rect_right + stride_from * y * 4,
+			};
+
+			memcpy(to, from[1], sizeof(uchar) * 4 * stride_from);
+			memcpy(to + 4 * height * stride_to, from[0], sizeof(uchar) * 4 * stride_from);
+		}
+	}
 }
 
 static void imb_stereo_dimensions(enum eStereoDisplayMode mode, ImBuf *ibuf, size_t *width, size_t *height)
