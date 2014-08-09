@@ -85,8 +85,8 @@ static void imb_stereo_anaglyph(enum eStereoAnaglyphType mode, ImBuf *left, ImBu
 		for (y = 0; y < height; y++) {
 			float *to = rect_to + stride_to * y * 4;
 			const float *from[2] = {
-			    rect_left + stride_from * y * 4,
-                rect_right + stride_from * y * 4,
+			          rect_left + stride_from * y * 4,
+			          rect_right + stride_from * y * 4,
 			};
 
 			for (x = 0; x < width; x++, from[0] += 4, from[1] += 4, to += 4) {
@@ -107,7 +107,7 @@ static void imb_stereo_anaglyph(enum eStereoAnaglyphType mode, ImBuf *left, ImBu
 			uchar *to = rect_to + stride_to * y * 4;
 			uchar *from[2] = {
 			    rect_left + stride_from * y * 4,
-				rect_right + stride_from * y * 4,
+			    rect_right + stride_from * y * 4,
 			};
 
 			for (x = 0; x < width; x++, from[0] += 4, from[1] += 4, to += 4) {
@@ -120,9 +120,136 @@ static void imb_stereo_anaglyph(enum eStereoAnaglyphType mode, ImBuf *left, ImBu
 	}
 }
 
-static void imb_stereo_interlace(enum eStereoInterlaceType UNUSED(mode), const bool UNUSED(swap), ImBuf *UNUSED(left), ImBuf *UNUSED(right), bool UNUSED(is_float), ImBuf *UNUSED(r_ibuf))
+static void imb_stereo_interlace(enum eStereoInterlaceType mode, const bool swap, ImBuf *left, ImBuf *right, bool is_float, ImBuf *r_ibuf)
 {
-	BLI_assert(false);
+	int x, y;
+	size_t width = r_ibuf->x;
+	size_t height= r_ibuf->y;
+
+	const int stride_from = width;
+	const int stride_to = width;
+
+	if (is_float){
+		float *rect_to = r_ibuf->rect_float;
+		const float *rect_left = left->rect_float;
+		const float *rect_right= right->rect_float;
+
+		switch(mode) {
+			case S3D_INTERLACE_ROW:
+			{
+				char i = (char) swap;
+				for (y = 0; y < height; y++) {
+					float *to = rect_to + stride_to * y * 4;
+					const float *from[2] = {
+					      rect_left + stride_from * y * 4,
+					      rect_right + stride_from * y * 4,
+					};
+					memcpy(to, from[i], sizeof(float) * 4 * stride_from);
+					i = !i;
+				}
+				break;
+			}
+			case S3D_INTERLACE_COLUMN:
+			{
+				for (y = 0; y < height; y++) {
+					float *to = rect_to + stride_to * y * 4;
+					const float *from[2] = {
+					      rect_left + stride_from * y * 4,
+					      rect_right + stride_from * y * 4,
+					};
+
+					char i = (char) swap;
+					for (x = 0; x < width; x++, from[0] += 4, from[1] += 4, to += 4) {
+						copy_v4_v4(to, from[i]);
+						i = !i;
+					}
+				}
+				break;
+			}
+			case S3D_INTERLACE_CHECKERBOARD:
+			{
+				char i = (char) swap;
+				for (y = 0; y < height; y++) {
+					float *to = rect_to + stride_to * y * 4;
+					const float *from[2] = {
+					      rect_left + stride_from * y * 4,
+					      rect_right + stride_from * y * 4,
+					};
+					char j = i;
+					for (x = 0; x < width; x++, from[0] += 4, from[1] += 4, to += 4) {
+						copy_v4_v4(to, from[j]);
+						j = !j;
+					}
+					i = !i;
+				}
+				break;
+			}
+			default:
+			{
+				break;
+			}
+		}
+	}
+	else {
+		uchar *rect_to = r_ibuf->rect;
+		const uchar *rect_left = left->rect;
+		const uchar *rect_right= right->rect;
+
+		switch(mode) {
+			case S3D_INTERLACE_ROW:
+			{
+				char i = (char) swap;
+				for (y = 0; y < height; y++) {
+					uchar *to = rect_to + stride_to * y * 4;
+					const uchar *from[2] = {
+					      rect_left + stride_from * y * 4,
+					      rect_right + stride_from * y * 4,
+					      };
+					memcpy(to, from[i], sizeof(uchar) * 4 * stride_from);
+					i = !i;
+				}
+				break;
+			}
+			case S3D_INTERLACE_COLUMN:
+			{
+				for (y = 0; y < height; y++) {
+					uchar *to = rect_to + stride_to * y * 4;
+					const uchar *from[2] = {
+					      rect_left + stride_from * y * 4,
+					      rect_right + stride_from * y * 4,
+					};
+					char i = (char) swap;
+					for (x = 0; x < width; x++, from[0] += 4, from[1] += 4, to += 4) {
+						copy_v4_v4_uchar(to, from[i]);
+						i = !i;
+					}
+				}
+				break;
+			}
+			case S3D_INTERLACE_CHECKERBOARD:
+			{
+				char i = (char) swap;
+				for (y = 0; y < height; y++) {
+					uchar *to = rect_to + stride_to * y * 4;
+					const uchar *from[2] = {
+					      rect_left + stride_from * y * 4,
+					      rect_right + stride_from * y * 4,
+					};
+					char j = i;
+					for (x = 0; x < width; x++, from[0] += 4, from[1] += 4, to += 4) {
+						copy_v4_v4_uchar(to, from[j]);
+						j = !j;
+					}
+					i = !i;
+				}
+				break;
+			}
+			default:
+			{
+				break;
+			}
+		}
+	}
 }
 
 static void imb_stereo_sidebyside(const bool UNUSED(crosseyed), ImBuf *UNUSED(left), ImBuf *UNUSED(right), bool UNUSED(is_float), ImBuf *UNUSED(r_ibuf))
@@ -151,7 +278,7 @@ static void imb_stereo_topbottom(ImBuf *left, ImBuf *right, bool is_float, ImBuf
 			float *to = rect_to + stride_to * y * 4;
 			float *from[2] = {
 			    rect_left + stride_from * y * 4,
-                rect_right + stride_from * y * 4,
+			    rect_right + stride_from * y * 4,
 			};
 
 			memcpy(to, from[1], sizeof(float) * 4 * stride_from);
