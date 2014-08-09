@@ -192,8 +192,8 @@ static void imb_stereo_interlace(enum eStereoInterlaceType mode, const bool swap
 	}
 	else {
 		uchar *rect_to = r_ibuf->rect;
-		const uchar *rect_left = left->rect;
-		const uchar *rect_right= right->rect;
+		const uchar *rect_left = (uchar *)left->rect;
+		const uchar *rect_right= (uchar *)right->rect;
 
 		switch(mode) {
 			case S3D_INTERLACE_ROW:
@@ -252,9 +252,54 @@ static void imb_stereo_interlace(enum eStereoInterlaceType mode, const bool swap
 	}
 }
 
-static void imb_stereo_sidebyside(const bool UNUSED(crosseyed), ImBuf *UNUSED(left), ImBuf *UNUSED(right), bool UNUSED(is_float), ImBuf *UNUSED(r_ibuf))
+static void imb_stereo_sidebyside(const bool crosseyed, ImBuf *left, ImBuf *right, bool is_float, ImBuf *r_ibuf)
 {
-	BLI_assert(false);
+	int y;
+	size_t width = r_ibuf->x / 2;
+	size_t height= r_ibuf->y;
+
+	const int stride_from = width;
+	const int stride_to = width * 2;
+
+	const int l =  (int) crosseyed;
+	const int r = !l;
+
+	BLI_assert((left->x == right->x) && (left->x == width));
+
+	if (is_float){
+		float *rect_to = r_ibuf->rect_float;
+		const float *rect_left = left->rect_float;
+		const float *rect_right= right->rect_float;
+
+		/* always RGBA input/output */
+		for (y = 0; y < height; y++) {
+			float *to = rect_to + stride_to * y * 4;
+			float *from[2] = {
+			    rect_left + stride_from * y * 4,
+			    rect_right + stride_from * y * 4,
+			};
+
+			memcpy(to, from[l], sizeof(float) * 4 * stride_from);
+			memcpy(to + 4 * stride_from, from[r], sizeof(float) * 4 * stride_from);
+		}
+	}
+	else {
+		uchar *rect_to = (uchar *)r_ibuf->rect;
+		const uchar *rect_left = (uchar *)left->rect;
+		const uchar *rect_right= (uchar *)right->rect;
+
+		/* always RGBA input/output */
+		for (y = 0; y < height; y++) {
+			uchar *to = rect_to + stride_to * y * 4;
+			uchar *from[2] = {
+			    rect_left + stride_from * y * 4,
+			    rect_right + stride_from * y * 4,
+			};
+
+			memcpy(to, from[l], sizeof(uchar) * 4 * stride_from);
+			memcpy(to + 4 * stride_from, from[r], sizeof(uchar) * 4 * stride_from);
+		}
+	}
 }
 
 static void imb_stereo_topbottom(ImBuf *left, ImBuf *right, bool is_float, ImBuf *r_ibuf)
@@ -266,7 +311,7 @@ static void imb_stereo_topbottom(ImBuf *left, ImBuf *right, bool is_float, ImBuf
 	const int stride_from = width;
 	const int stride_to = width;
 
-	BLI_assert((left->y == right->y) && (left->y == r_ibuf->y / 2));
+	BLI_assert((left->y == right->y) && (left->y == height));
 
 	if (is_float){
 		float *rect_to = r_ibuf->rect_float;
