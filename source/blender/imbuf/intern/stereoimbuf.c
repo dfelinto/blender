@@ -191,7 +191,7 @@ static void imb_stereo_interlace(enum eStereoInterlaceType mode, const bool swap
 		}
 	}
 	else {
-		uchar *rect_to = r_ibuf->rect;
+		uchar *rect_to = (uchar *)r_ibuf->rect;
 		const uchar *rect_left = (uchar *)left->rect;
 		const uchar *rect_right= (uchar *)right->rect;
 
