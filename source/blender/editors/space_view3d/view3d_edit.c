@@ -78,6 +78,7 @@
 #include "ED_view3d.h"
 #include "ED_sculpt.h"
 
+#include "UI_resources.h"
 
 #include "PIL_time.h" /* smoothview */
 
@@ -649,6 +650,39 @@ static bool view3d_orbit_calc_center(bContext *C, float r_dyn_ofs[3])
 		mul_m4_v3(ob->obmat, lastofs);
 
 		is_set = true;
+	}
+	else if (ob == NULL || ob->mode == OB_MODE_OBJECT) {
+		/* object mode use boundbox centers */
+		View3D *v3d = CTX_wm_view3d(C);
+		Base *base;
+		unsigned int tot = 0;
+		float select_center[3];
+
+		zero_v3(select_center);
+		for (base = FIRSTBASE; base; base = base->next) {
+			if (TESTBASE(v3d, base)) {
+				/* use the boundbox if we can */
+				Object *ob = base->object;
+
+				if (ob->bb && !(ob->bb->flag & BOUNDBOX_DIRTY)) {
+					float cent[3];
+
+					BKE_boundbox_calc_center_aabb(ob->bb, cent);
+
+					mul_m4_v3(ob->obmat, cent);
+					add_v3_v3(select_center, cent);
+				}
+				else {
+					add_v3_v3(select_center, ob->obmat[3]);
+				}
+				tot++;
+			}
+		}
+		if (tot) {
+			mul_v3_fl(select_center, 1.0f / (float)tot);
+			copy_v3_v3(lastofs, select_center);
+			is_set = true;
+		}
 	}
 	else {
 		/* If there's no selection, lastofs is unmodified and last value since static */
@@ -3550,13 +3584,13 @@ void VIEW3D_OT_zoom_camera_1_to_1(wmOperatorType *ot)
 /* ********************* Changing view operator ****************** */
 
 static EnumPropertyItem prop_view_items[] = {
+	{RV3D_VIEW_LEFT, "LEFT", ICON_TRIA_LEFT, "Left", "View From the Left"},
+	{RV3D_VIEW_RIGHT, "RIGHT", ICON_TRIA_RIGHT, "Right", "View From the Right"},
+	{RV3D_VIEW_BOTTOM, "BOTTOM", ICON_TRIA_DOWN, "Bottom", "View From the Bottom"},
+	{RV3D_VIEW_TOP, "TOP", ICON_TRIA_UP, "Top", "View From the Top"},
 	{RV3D_VIEW_FRONT, "FRONT", 0, "Front", "View From the Front"},
 	{RV3D_VIEW_BACK, "BACK", 0, "Back", "View From the Back"},
-	{RV3D_VIEW_LEFT, "LEFT", 0, "Left", "View From the Left"},
-	{RV3D_VIEW_RIGHT, "RIGHT", 0, "Right", "View From the Right"},
-	{RV3D_VIEW_TOP, "TOP", 0, "Top", "View From the Top"},
-	{RV3D_VIEW_BOTTOM, "BOTTOM", 0, "Bottom", "View From the Bottom"},
-	{RV3D_VIEW_CAMERA, "CAMERA", 0, "Camera", "View From the Active Camera"},
+	{RV3D_VIEW_CAMERA, "CAMERA", ICON_CAMERA_DATA, "Camera", "View From the Active Camera"},
 	{0, NULL, 0, NULL, NULL}
 };
 

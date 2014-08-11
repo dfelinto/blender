@@ -201,7 +201,16 @@ static PyObject *gp_OrigPythonSysModules= NULL;
 //#define KX_MACRO_addToDict(dict, name) PyDict_SetItemString(dict, #name, PyLong_FromLong(SCA_IInputDevice::KX_##name))
 //#define KX_MACRO_addToDict(dict, name) PyDict_SetItemString(dict, #name, item=PyLong_FromLong(name)); Py_DECREF(item)
 /* For the defines for types from logic bricks, we do stuff explicitly... */
-#define KX_MACRO_addTypesToDict(dict, name, name2) PyDict_SetItemString(dict, #name, item=PyLong_FromLong(name2)); Py_DECREF(item)
+#define KX_MACRO_addTypesToDict(dict, name, value) KX_MACRO_addTypesToDict_fn(dict, #name, value)
+static void KX_MACRO_addTypesToDict_fn(PyObject *dict, const char *name, long value)
+{
+	PyObject *item;
+
+	item = PyLong_FromLong(value);
+	PyDict_SetItemString(dict, name, item);
+	Py_DECREF(item);
+}
+
 
 
 // temporarily python stuff, will be put in another place later !
@@ -248,7 +257,7 @@ static PyObject *gPyExpandPath(PyObject *, PyObject *args)
 
 	BLI_strncpy(expanded, filename, FILE_MAX);
 	BLI_path_abs(expanded, gp_GamePythonPath);
-	return PyUnicode_DecodeFSDefault(expanded);
+	return PyC_UnicodeFromByte(expanded);
 }
 
 static char gPyStartGame_doc[] =
@@ -537,7 +546,7 @@ static PyObject *gPyGetBlendFileList(PyObject *, PyObject *args)
 	
 	while ((dirp = readdir(dp)) != NULL) {
 		if (BLI_testextensie(dirp->d_name, ".blend")) {
-			value= PyUnicode_DecodeFSDefault(dirp->d_name);
+			value = PyC_UnicodeFromByte(dirp->d_name);
 			PyList_Append(list, value);
 			Py_DECREF(value);
 		}
@@ -1965,7 +1974,7 @@ static void initPySysObjects__append(PyObject *sys_path, const char *filename)
 	BLI_split_dir_part(filename, expanded, sizeof(expanded)); /* get the dir part of filename only */
 	BLI_path_abs(expanded, gp_GamePythonPath); /* filename from lib->filename is (always?) absolute, so this may not be needed but it wont hurt */
 	BLI_cleanup_file(gp_GamePythonPath, expanded); /* Don't use BLI_cleanup_dir because it adds a slash - BREAKS WIN32 ONLY */
-	item= PyUnicode_DecodeFSDefault(expanded);
+	item = PyC_UnicodeFromByte(expanded);
 	
 //	printf("SysPath - '%s', '%s', '%s'\n", expanded, filename, gp_GamePythonPath);
 	
@@ -2270,7 +2279,6 @@ PyObject *initRasterizer(RAS_IRasterizer* rasty,RAS_ICanvas* canvas)
 
 	PyObject *m;
 	PyObject *d;
-	PyObject *item;
 
 	/* Use existing module where possible
 	 * be careful not to init any runtime vars after this */
@@ -2400,7 +2408,6 @@ PyObject *initGameKeys()
 {
 	PyObject *m;
 	PyObject *d;
-	PyObject *item;
 	
 	/* Use existing module where possible */
 	m = PyImport_ImportModule( "GameKeys" );
