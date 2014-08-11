@@ -1587,7 +1587,7 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 	void *lock;
 	ImBuf *ibuf = ED_space_image_acquire_buffer(sima, &lock);
 	Scene * scene;
-	RenderResult *rr;
+	RenderResult *rr = NULL;
 	bool ok = false;
 
 	WM_cursor_wait(1);
@@ -1665,6 +1665,7 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 					goto cleanup;
 				}
 
+				BKE_image_release_renderresult(scene, ima);
 			}
 		}
 
@@ -1688,6 +1689,7 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 			save_image_post(op, ibuf, ima, ok, (is_multilayer ? true : save_copy), relbase, relative, do_newpath, simopts->filepath);
 			ED_space_image_release_buffer(sima, ibuf, lock);
 		}
+
 		/* individual multiview images */
 		else if (simopts->im_format.views_output == R_IMF_VIEWS_INDIVIDUAL){
 			RenderView *rv;
@@ -1740,12 +1742,13 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 		/* stereo (multiview) images */
 		else if (simopts->im_format.views_output == R_IMF_VIEWS_STEREO_3D) {
 			ImBuf *ibuf_stereo[2] = {NULL};
-			ImBuf *colormanaged_ibuf_stereo[2] = {NULL};
-			void *lock_stereo[2];
 
 			unsigned char planes = ibuf->planes;
 			const char *names[2] = {STEREO_LEFT_NAME, STEREO_RIGHT_NAME};
 			int i;
+
+			/* we need to get the specific per-view buffers */
+			ED_space_image_release_buffer(sima, ibuf, lock);
 
 			for (i = 0; i < 2; i ++) {
 				ImageUser iuser = sima->iuser;
@@ -1756,26 +1759,30 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 				iuser.flag &= ~IMA_SHOW_STEREO;
 
 				BKE_image_multilayer_index(rr, &iuser);
-				ibuf_stereo[i] = BKE_image_acquire_ibuf(sima->image, &iuser, &lock_stereo[i]);
+				ibuf = BKE_image_acquire_ibuf(sima->image, &iuser, &lock);
 
-				if (ibuf_stereo[i] == NULL) {
+				if (ibuf == NULL) {
 					BKE_report(op->reports, RPT_ERROR, "Did not write, unexpected error when saving stereo image");
 					goto cleanup;
 				}
 
-				ibuf_stereo[i]->planes = planes;
+				ibuf->planes = planes;
 
 				/* color manage the ImBuf leaving it ready for saving */
-				colormanaged_ibuf_stereo[i] = IMB_colormanagement_imbuf_for_write(ibuf_stereo[i], save_as_render, true,
-				                                                                  &imf->view_settings, &imf->display_settings, imf);
+				colormanaged_ibuf = IMB_colormanagement_imbuf_for_write(ibuf, save_as_render, true,
+				                                                        &imf->view_settings, &imf->display_settings, imf);
 
-				BKE_imbuf_prepare_write(colormanaged_ibuf_stereo[i], imf);
-				IMB_prepare_write_ImBuf(IMB_isfloat(colormanaged_ibuf_stereo[i]), colormanaged_ibuf_stereo[i]);
+				BKE_imbuf_prepare_write(colormanaged_ibuf, imf);
+				IMB_prepare_write_ImBuf(IMB_isfloat(colormanaged_ibuf), colormanaged_ibuf);
+
+				/* duplicate buffer to prevent locker issue when using render result */
+				ibuf_stereo[i] = IMB_dupImBuf(colormanaged_ibuf);
+
+				save_imbuf_post(ibuf, colormanaged_ibuf);
+				BKE_image_release_ibuf(sima->image, ibuf, lock);
 			}
 
-			ED_space_image_release_buffer(sima, ibuf, lock);
-
-			ibuf = IMB_stereoImBuf(imf, colormanaged_ibuf_stereo[0], colormanaged_ibuf_stereo[1]);
+			ibuf = IMB_stereoImBuf(imf, ibuf_stereo[0], ibuf_stereo[1]);
 
 			/* save via traditional path */
 			if (is_multilayer) {
@@ -1786,12 +1793,10 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 				ok = BKE_imbuf_write_as(ibuf, simopts->filepath, imf, save_copy);
 			}
 
-			//save_image_post(op, ibuf, ima, ok, (is_multilayer ? true : save_copy), relbase, relative, do_newpath, simopts->filepath);
 			IMB_freeImBuf(ibuf);
 
 			for (i = 0; i < 2; i ++) {
-				save_imbuf_post(ibuf_stereo[i], colormanaged_ibuf_stereo[i]);
-				BKE_image_release_ibuf(sima->image, ibuf_stereo[i], lock_stereo[i]);
+				IMB_freeImBuf(ibuf_stereo[i]);
 			}
 		}
 
@@ -1800,6 +1805,9 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 	}
 	else {
 cleanup:
+		if (rr) {
+			BKE_image_release_renderresult(scene, ima);
+		}
 		ED_space_image_release_buffer(sima, ibuf, lock);
 	}
 
