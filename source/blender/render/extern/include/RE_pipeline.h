@@ -217,14 +217,7 @@ void RE_AcquiredResultGet32(struct Render *re, struct RenderResult *result, unsi
 
 struct RenderLayer *RE_GetRenderLayer(struct RenderResult *rr, const char *name);
 float *RE_RenderLayerGetPass(struct RenderLayer *rl, int passtype, int view_id);
-float *RE_RenderViewGetRectf(struct RenderResult *rr, int view_id);
-float *RE_RenderViewGetRectz(struct RenderResult *rr, int view_id);
-int *RE_RenderViewGetRect32(struct RenderResult *rr, int view_id);
-void RE_RenderViewSetRectf(RenderResult *res, int view_id, float *rect);
-void RE_RenderViewSetRectz(RenderResult *res, int view_id, float *rect);
 int RE_GetActiveViewId(struct Render *re);
-int RE_HasFakeLayer(RenderResult *res);
-bool RE_RenderResult_is_stereo(RenderResult *res);
 
 /* obligatory initialize call, disprect is optional */
 void RE_InitState(struct Render *re, struct Render *source, struct RenderData *rd,
@@ -338,6 +331,17 @@ bool RE_force_single_renderlayer(struct Scene *scene);
 bool RE_is_rendering_allowed(struct Scene *scene, struct Object *camera_override, struct ReportList *reports);
 
 bool RE_allow_render_generic_object(struct Object *ob);
+
+/******* defined in render_result.c *********/
+
+bool RE_HasFakeLayer(RenderResult *res);
+bool RE_RenderResult_is_stereo(RenderResult *res);
+
+float *RE_RenderViewGetRectf(struct RenderResult *rr, const int view_id);
+float *RE_RenderViewGetRectz(struct RenderResult *rr, const int view_id);
+int *RE_RenderViewGetRect32(struct RenderResult *rr, const int view_id);
+void RE_RenderViewSetRectf(struct RenderResult *res, const int view_id, float *rect);
+void RE_RenderViewSetRectz(struct RenderResult *res, const int view_id, float *rect);
 
 #endif /* __RE_PIPELINE_H__ */
 

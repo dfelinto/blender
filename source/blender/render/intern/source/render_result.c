@@ -1508,3 +1508,94 @@ void render_result_rect_get_pixels(RenderResult *rr, unsigned int *rect, int rec
 		memset(rect, 0, sizeof(int) * rectx * recty);
 }
 
+
+/*************************** multiview functions *****************************/
+
+bool RE_HasFakeLayer(RenderResult *res)
+{
+	RenderView *rv;
+
+	if (res == NULL)
+		return false;
+
+	rv = (RenderView *)res->views.first;
+	if (rv == NULL)
+		return false;
+
+	return (rv->rect32 || rv->rectf);
+}
+
+bool RE_RenderResult_is_stereo(RenderResult *res)
+{
+	if (! BLI_findstring(&res->views, STEREO_LEFT_NAME, offsetof(RenderView, name)))
+		return false;
+
+	if (! BLI_findstring(&res->views, STEREO_RIGHT_NAME, offsetof(RenderView, name)))
+		return false;
+
+	return true;
+}
+
+void RE_RenderViewSetRectf(RenderResult *res, const int view_id, float *rect)
+{
+	RenderView *rv;
+	size_t nr = 0;
+
+	for (nr = 0, rv = res->views.first; rv; rv = rv->next, nr++) {
+		if (nr == view_id) {
+			rv->rectf = rect;
+			return;
+		}
+	}
+}
+
+void RE_RenderViewSetRectz(RenderResult *res, const int view_id, float *rect)
+{
+	RenderView *rv;
+	size_t nr = 0;
+
+	for (nr = 0, rv = res->views.first; rv; rv = rv->next, nr++) {
+		if (nr == view_id) {
+			rv->rectz = rect;
+			return;
+		}
+	}
+}
+
+float *RE_RenderViewGetRectz(RenderResult *res, const int view_id)
+{
+	RenderView *rv;
+	size_t nr = 0;
+
+	for (nr = 0, rv = res->views.first; rv; rv = rv->next, nr++)
+		if (nr == view_id)
+			return rv->rectz;
+
+	return res->rectz;
+}
+
+float *RE_RenderViewGetRectf(RenderResult *res, const int view_id)
+{
+	RenderView *rv;
+	size_t nr = 0;
+
+	for (nr = 0, rv = res->views.first; rv; rv = rv->next, nr++)
+		if (nr == view_id)
+			return rv->rectf;
+
+	return res->rectf;
+}
+
+int *RE_RenderViewGetRect32(RenderResult *res, const int view_id)
+{
+	RenderView *rv;
+	size_t nr;
+
+	for (nr = 0, rv = res->views.first; rv; rv = rv->next, nr++)
+		if (nr == view_id)
+			return rv->rect32;
+
+	return res->rect32;
+}
+
+
