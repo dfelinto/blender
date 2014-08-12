@@ -349,7 +349,7 @@ static void imb_stereo_topbottom(ImBuf *left, ImBuf *right, bool is_float, ImBuf
 	}
 }
 
-static void imb_stereo_dimensions(enum eStereoDisplayMode mode, ImBuf *ibuf, size_t *width, size_t *height)
+void IMB_stereo_dimensions(const char mode, const size_t width, const size_t height, size_t *r_width, size_t *r_height)
 {
 	switch (mode) {
 		case S3D_DISPLAY_BLURAY:
@@ -359,25 +359,30 @@ static void imb_stereo_dimensions(enum eStereoDisplayMode mode, ImBuf *ibuf, siz
 		}
 		case S3D_DISPLAY_SIDEBYSIDE:
 		{
-			*width = ibuf->x * 2;
-			*height = ibuf->y;
+			*r_width = width * 2;
+			*r_height = height;
 			break;
 		}
 		case S3D_DISPLAY_TOPBOTTOM:
 		{
-			*width = ibuf->x;
-			*height = ibuf->y * 2;
+			*r_width = width;
+			*r_height = height * 2;
 			break;
 		}
 		case S3D_DISPLAY_ANAGLYPH:
 		case S3D_DISPLAY_INTERLACE:
 		default:
 		{
-			*width = ibuf->x;
-			*height = ibuf->y;
+			*r_width = width;
+			*r_height = height;
 			break;
 		}
 	}
+}
+
+static void imb_stereo_dimensions(const enum eStereoDisplayMode mode, ImBuf *ibuf, size_t *r_width, size_t *r_height)
+{
+	IMB_stereo_dimensions(mode, ibuf->x, ibuf->y, r_width, r_height);
 }
 
 /* left/right are always float */
