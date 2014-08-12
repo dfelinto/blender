@@ -253,37 +253,37 @@ void RE_RenderViewSetRectz(RenderResult *res, int view_id, float *rect)
 float *RE_RenderViewGetRectz(RenderResult *res, int view_id)
 {
 	RenderView *rv;
-	int nr=0;
+	size_t nr = 0;
 
 	for (nr=0, rv = res->views.first; rv; rv = rv->next, nr++)
 		if (nr == view_id)
 			return rv->rectz;
 
-	return NULL;
+	return res->rectz;
 }
 
 float *RE_RenderViewGetRectf(RenderResult *res, int view_id)
 {
 	RenderView *rv;
-	int nr=0;
+	size_t nr = 0;
 
-	for (nr=0, rv = res->views.first; rv; rv = rv->next, nr++)
+	for (nr = 0, rv = res->views.first; rv; rv = rv->next, nr++)
 		if (nr == view_id)
 			return rv->rectf;
 
-	return NULL;
+	return res->rectf;
 }
 
 int *RE_RenderViewGetRect32(RenderResult *res, int view_id)
 {
 	RenderView *rv;
-	int nr=0;
+	size_t nr;
 
-	for (nr=0, rv = res->views.first; rv; rv = rv->next, nr++)
+	for (nr = 0, rv = res->views.first; rv; rv = rv->next, nr++)
 		if (nr == view_id)
 			return rv->rect32;
 
-	return NULL;
+	return res->rect32;
 }
 
 float *RE_RenderLayerGetPass(RenderLayer *rl, int passtype, int view_id)
@@ -546,15 +546,15 @@ void RE_ResultGet32(Render *re, unsigned int *rect)
 
 	/* XXX MV SEQ to deal with that once SEQ is tackled */
 	RE_AcquireResultImage(re, &rres, 0);
-	render_result_rect_get_pixels(&rres, rect, re->rectx, re->recty, &re->scene->view_settings, &re->scene->display_settings);
+	render_result_rect_get_pixels(&rres, rect, re->rectx, re->recty, &re->scene->view_settings, &re->scene->display_settings, 0);
 	RE_ReleaseResultImage(re);
 }
 
 /* caller is responsible for allocating rect in correct size! */
 /* Only for acquired results, for lock */
-void RE_AcquiredResultGet32(Render *re, RenderResult *result, unsigned int *rect)
+void RE_AcquiredResultGet32(Render *re, RenderResult *result, unsigned int *rect, const int view_id)
 {
-	render_result_rect_get_pixels(result, rect, re->rectx, re->recty, &re->scene->view_settings, &re->scene->display_settings);
+	render_result_rect_get_pixels(result, rect, re->rectx, re->recty, &re->scene->view_settings, &re->scene->display_settings, view_id);
 }
 
 RenderStats *RE_GetStats(Render *re)
@@ -3152,13 +3152,13 @@ static int do_write_image_or_movie(Render *re, Main *bmain, Scene *scene, bMovie
 	/* write movie or image */
 	if (BKE_imtype_is_movie(scene->r.im_format.imtype)) {
 		bool do_free = false;
-		ImBuf *ibuf = render_result_rect_to_ibuf(&rres, &scene->r);
+		ImBuf *ibuf = render_result_rect_to_ibuf(&rres, &scene->r, 0);
 
 		/* note; the way it gets 32 bits rects is weak... */
 		if (ibuf->rect == NULL) {
 			ibuf->rect = MEM_mapallocN(sizeof(int) * rres.rectx * rres.recty, "temp 32 bits rect");
 			ibuf->mall |= IB_rect;
-			RE_AcquiredResultGet32(re, &rres, ibuf->rect);
+			RE_AcquiredResultGet32(re, &rres, ibuf->rect, 0);
 			do_free = true;
 		}
 
@@ -3193,7 +3193,7 @@ static int do_write_image_or_movie(Render *re, Main *bmain, Scene *scene, bMovie
 			}
 		}
 		else {
-			ImBuf *ibuf = render_result_rect_to_ibuf(&rres, &scene->r);
+			ImBuf *ibuf = render_result_rect_to_ibuf(&rres, &scene->r, view_id);
 
 			IMB_colormanagement_imbuf_for_write(ibuf, true, false, &scene->view_settings,
 			                                    &scene->display_settings, &scene->r.im_format);

@@ -1408,14 +1408,14 @@ bool render_result_exr_file_cache_read(Render *re)
 
 /*************************** Combined Pixel Rect *****************************/
 
-ImBuf *render_result_rect_to_ibuf(RenderResult *rr, RenderData *rd)
+ImBuf *render_result_rect_to_ibuf(RenderResult *rr, RenderData *rd, const int view_id)
 {
 	ImBuf *ibuf = IMB_allocImBuf(rr->rectx, rr->recty, rd->im_format.planes, 0);
 	
 	/* if not exists, BKE_imbuf_write makes one */
-	ibuf->rect = (unsigned int *)rr->rect32;
-	ibuf->rect_float = rr->rectf;
-	ibuf->zbuf_float = rr->rectz;
+	ibuf->rect = (unsigned int *) RE_RenderViewGetRect32(rr, view_id);
+	ibuf->rect_float = RE_RenderViewGetRectf(rr, view_id);
+	ibuf->zbuf_float = RE_RenderViewGetRectz(rr, view_id);
 	
 	/* float factor for random dither, imbuf takes care of it */
 	ibuf->dither = rd->dither_intensity;
@@ -1491,13 +1491,16 @@ void render_result_rect_fill_zero(RenderResult *rr)
 }
 
 void render_result_rect_get_pixels(RenderResult *rr, unsigned int *rect, int rectx, int recty,
-                                   const ColorManagedViewSettings *view_settings, const ColorManagedDisplaySettings *display_settings)
+                                   const ColorManagedViewSettings *view_settings, const ColorManagedDisplaySettings *display_settings,
+                                   const int view_id)
 {
 	if (rr->rect32) {
-		memcpy(rect, rr->rect32, sizeof(int) * rr->rectx * rr->recty);
+		int *rect32 = RE_RenderViewGetRect32(rr, view_id);
+		memcpy(rect, (rect32 ? rect32 : rr->rect32), sizeof(int) * rr->rectx * rr->recty);
 	}
 	else if (rr->rectf) {
-		IMB_display_buffer_transform_apply((unsigned char *) rect, rr->rectf, rr->rectx, rr->recty, 4,
+		float *rectf = RE_RenderViewGetRectf(rr, view_id);
+		IMB_display_buffer_transform_apply((unsigned char *) rect, (rectf ? rectf : rr->rectf), rr->rectx, rr->recty, 4,
 		                                   view_settings, display_settings, true);
 	}
 	else
