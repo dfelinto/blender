@@ -563,6 +563,8 @@ const char *IMB_ffmpeg_last_error(void);
  * \attention Defined in stereoimbuf.c
  */
 void IMB_stereo_dimensions(const char mode, const size_t width, const size_t height, size_t *r_width, size_t *r_height);
+int *IMB_stereo_from_rect(struct ImageFormatData *im_format, const size_t x, const size_t y, const size_t channels, int *left, int *right);
+float *IMB_stereo_from_rectf(struct ImageFormatData *im_format, const size_t x, const size_t y, const size_t channels, float *left, float *right);
 struct ImBuf *IMB_stereoImBuf(struct ImageFormatData *im_format, struct ImBuf *left, struct ImBuf *right);
 
 #endif
