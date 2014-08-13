@@ -986,81 +986,219 @@ static char *make_pass_name(RenderPass *rpass, int chan)
 	return name;
 }
 
-/* called from within UI, saves both rendered result as a file-read result */
-/* if view is not "" saves single view */
-bool RE_WriteRenderResult(ReportList *reports, RenderResult *rr, const char *filename, int compress, bool multiview, const char *view)
+static RenderPass *render_pass_find(ListBase *passes, const int passtype, const int view_id)
+{
+	RenderPass *rp;
+
+	for (rp = passes->first; rp; rp = rp->next) {
+		if (rp->passtype == passtype &&
+			rp->view_id == view_id)
+		{
+			return rp;
+		}
+	}
+	return NULL;
+}
+
+/* returns the number of stereo (left and right) passes in a Render Result */
+static size_t render_pass_stereo_count(RenderResult *rr)
+{
+	size_t totpasses = 0;
+
+	RenderLayer *rl;
+	RenderPass *rpass;
+
+	const char *names[2] = {STEREO_LEFT_NAME, STEREO_RIGHT_NAME};
+	int view_id[2]= {
+		BLI_findstringindex(&rr->views, names[0], offsetof(RenderView, name)),
+		BLI_findstringindex(&rr->views, names[1], offsetof(RenderView, name))
+	};
+
+	for (rl = rr->layers.first; rl; rl = rl->next) {
+		for (rpass = rl->passes.first; rpass; rpass = rpass->next) {
+			if ((rpass->view_id == view_id[0]) ||
+				(rpass->view_id == view_id[1]))
+			{
+				totpasses++;
+			}
+		}
+	}
+
+	return totpasses;
+}
+
+/* called from within UI and render pipeline, saves both rendered result as a file-read result
+ * if multiview is true saves all views in a multiview exr
+ * else if view is not NULL saves single view
+ * else saves stereo3d
+ */
+bool RE_WriteRenderResult(ReportList *reports, RenderResult *rr, const char *filename, ImageFormatData *imf, const bool multiview, const char *view)
 {
 	RenderLayer *rl;
 	RenderPass *rpass;
 	RenderView *rview;
 	void *exrhandle = IMB_exr_get_handle();
 	bool success = false;
-	int a, nr;
+	int a, nr, i;
 	const char *chan_view = NULL;
+	int compress = (imf ? imf->exr_codec : 0);
+	size_t width, height;
 
-	BLI_make_existing_file(filename);
-	
-	for (nr=0, rview = (RenderView *)rr->views.first; rview; rview=rview->next, nr++) {
+	float **rectf_stereo = NULL;
+	size_t rectf_stereo_count = 0;
+	float *rectf = NULL;
 
-		if (view[0] != '\0') {
-			if (strcmp (view, rview->name) != 0)
-				continue;
-			else
-				chan_view = "";
+	const bool is_mono = view && !multiview;
+	const bool is_stereo3d = (!view) && (!multiview);
+	const char *names[2] = {STEREO_LEFT_NAME, STEREO_RIGHT_NAME};
+
+	width = rr->rectx;
+	height = rr->recty;
+
+	if (is_stereo3d) {
+		RenderView *rv[2];
+		int view_id[2];
+		size_t totpasses;
+
+		for (i = 0; i < 2; i++) {
+			view_id[i] = BLI_findstringindex(&rr->views, names[i], offsetof(RenderView, name));
+
+			if (view_id[i] == -1) {
+				printf("Stereo 3D output is only supported in images that contain left and right views.\n");
+				goto cleanup;
+			}
 		}
-		else {
-			/* if rendered only one view, we treat as a a non-view render */
-			chan_view = rview->name;
+
+		totpasses = render_pass_stereo_count(rr);
+		/* one per stereo pair plus one for the combined pass */
+		rectf_stereo = MEM_mallocN(sizeof(float *) * ((totpasses / 2) + 1), "RenderResult stereo pairs");
+
+		IMB_exr_add_view(exrhandle, "");
+		IMB_stereo_dimensions(imf->stereo_output.display_mode, rr->rectx, rr->recty, &width, &height);
+
+		for (i = 0; i < 2; i++) {
+			rv[i] = BLI_findstring(&rr->views, names[i], offsetof(RenderView, name));
 		}
 
-		IMB_exr_add_view(exrhandle, rview->name);
+		if (rv[0]->rectf && rv[1]->rectf) {
+			rectf = IMB_stereo_from_rectf(imf, rr->rectx, rr->recty, 4,
+			                              rv[0]->rectf, rv[1]->rectf);
 
-		if (rview->rectf) {
-			for (a=0; a < 4; a++)
-				IMB_exr_add_channel(exrhandle, "Composite", name_from_passtype(SCE_PASS_COMBINED, a), chan_view, 4, 4 * rr->rectx, rview->rectf + a);
+			for (a = 0; a < 4; a++)
+				IMB_exr_add_channel(exrhandle, "Composite", name_from_passtype(SCE_PASS_COMBINED, a),
+				                    "", 4, 4 * width, rectf + a);
+
+			rectf_stereo[rectf_stereo_count++] = rectf;
+		}
+
+		/* add layers/passes and assign channels */
+		for (rl = rr->layers.first; rl; rl = rl->next) {
+			int passflag = 0;
+
+			/* passes are allocated in sync */
+			for (rpass = rl->passes.first; rpass; rpass = rpass->next) {
+				int xstride = rpass->channels;
+				RenderPass *rp[2];
+
+				/* do this once per type */
+				if ((passflag & rpass->passtype))
+					continue;
+
+				passflag |= rpass->passtype;
+
+				for (i = 0; i < 2; i++)
+					rp[i] = render_pass_find(&rl->passes, rpass->passtype, view_id[i]);
+
+				if ((rp[0] == NULL) || (rp[0]->rect == NULL) ||
+				    (rp[1] == NULL) || (rp[1]->rect == NULL))
+				{
+					/* pass with incomplete stereo 3d data */
+					continue;
+				}
+
+				rectf = IMB_stereo_from_rectf(imf, rr->rectx, rr->recty, xstride,
+				                              rp[0]->rect, rp[1]->rect);
+
+				for (a = 0; a < xstride; a++) {
+					if (rpass->passtype) {
+						IMB_exr_add_channel(exrhandle, rl->name, name_from_passtype(rpass->passtype, a), chan_view,
+						                    xstride, xstride * width, rectf + a);
+					}
+					else {
+						IMB_exr_add_channel(exrhandle, rl->name, make_pass_name(rpass, a), chan_view,
+						                    xstride, xstride * width, rectf + a);
+					}
+				}
+
+				rectf_stereo[rectf_stereo_count++] = rectf;
+			}
 		}
 	}
-
-	/* add layers/passes and assign channels */
-	for (rl = rr->layers.first; rl; rl = rl->next) {
-
-		/* passes are allocated in sync */
-		for (rpass = rl->passes.first; rpass; rpass = rpass->next) {
-			int xstride = rpass->channels;
-
-			if (view[0] != '\0') {
-				if (strcmp (view, rpass->view) != 0)
+	else {
+		for (nr = 0, rview = (RenderView *) rr->views.first; rview; rview = rview->next, nr++) {
+			if (is_mono) {
+				if (strcmp (view, rview->name) != 0)
 					continue;
 				else
 					chan_view = "";
 			}
 			else {
 				/* if rendered only one view, we treat as a a non-view render */
-				chan_view = (nr > 1 ? get_view_name(&rr->views, rpass->view_id):"");
+				chan_view = rview->name;
 			}
 
-			for (a = 0; a < xstride; a++) {
+			IMB_exr_add_view(exrhandle, rview->name);
 
-				if (rpass->passtype) {
-					IMB_exr_add_channel(exrhandle, rl->name, name_from_passtype(rpass->passtype, a), chan_view,
-					                    xstride, xstride * rr->rectx, rpass->rect + a);
+			if (rview->rectf) {
+				for (a = 0; a < 4; a++)
+					IMB_exr_add_channel(exrhandle, "Composite", name_from_passtype(SCE_PASS_COMBINED, a),
+					                    chan_view, 4, 4 * width, rview->rectf + a);
+			}
+		}
+
+		/* add layers/passes and assign channels */
+		for (rl = rr->layers.first; rl; rl = rl->next) {
+
+			/* passes are allocated in sync */
+			for (rpass = rl->passes.first; rpass; rpass = rpass->next) {
+				int xstride = rpass->channels;
+
+				if (is_mono) {
+					if (strcmp (view, rpass->view) != 0)
+						continue;
+					else
+						chan_view = "";
 				}
 				else {
-					IMB_exr_add_channel(exrhandle, rl->name, make_pass_name(rpass, a), chan_view,
-					                    xstride, xstride * rr->rectx, rpass->rect + a);
+					/* if rendered only one view, we treat as a a non-view render */
+					chan_view = (nr > 1 ? get_view_name(&rr->views, rpass->view_id):"");
+				}
+
+				for (a = 0; a < xstride; a++) {
+
+					if (rpass->passtype) {
+						IMB_exr_add_channel(exrhandle, rl->name, name_from_passtype(rpass->passtype, a), chan_view,
+						                    xstride, xstride * width, rpass->rect + a);
+					}
+					else {
+						IMB_exr_add_channel(exrhandle, rl->name, make_pass_name(rpass, a), chan_view,
+						                    xstride, xstride * width, rpass->rect + a);
+					}
 				}
 			}
 		}
 	}
 
+	BLI_make_existing_file(filename);
+
 	/* when the filename has no permissions, this can fail */
 	if (multiview) {
-		if (IMB_exrmultiview_begin_write(exrhandle, filename, rr->rectx, rr->recty, compress, false)) {
+		if (IMB_exrmultiview_begin_write(exrhandle, filename, width, height, compress, false)) {
 			IMB_exrmultiview_write_channels(exrhandle, -1);
 			success = true;
 		}
 	} else {
-		if (IMB_exr_begin_write(exrhandle, filename, rr->rectx, rr->recty, compress)) {
+		if (IMB_exr_begin_write(exrhandle, filename, width, height, compress)) {
 			IMB_exr_write_channels(exrhandle);
 			success = true;
 		}
@@ -1071,7 +1209,12 @@ bool RE_WriteRenderResult(ReportList *reports, RenderResult *rr, const char *fil
 		BKE_report(reports, RPT_ERROR, "Error writing render result (see console)");
 		success = false;
 	}
+
+cleanup:
 	IMB_exr_close(exrhandle);
+
+	for (i = 0; i < rectf_stereo_count; i++)
+		MEM_freeN(rectf_stereo[i]);
 
 	return success;
 }
@@ -1383,7 +1526,7 @@ void render_result_exr_file_cache_write(Render *re)
 	render_result_exr_file_cache_path(re->scene, root, str);
 	printf("Caching exr file, %dx%d, %s\n", rr->rectx, rr->recty, str);
 
-	RE_WriteRenderResult(NULL, rr, str, 0, true, "");
+	RE_WriteRenderResult(NULL, rr, str, NULL, true, NULL);
 }
 
 /* For cache, makes exact copy of render result */

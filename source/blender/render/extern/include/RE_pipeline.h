@@ -37,6 +37,7 @@
 
 struct bNodeTree;
 struct Image;
+struct ImageFormatData;
 struct Main;
 struct NodeBlurData;
 struct Object;
@@ -276,7 +277,7 @@ void RE_SetReports(struct Render *re, struct ReportList *reports);
 void RE_PreviewRender(struct Render *re, struct Main *bmain, struct Scene *scene);
 
 bool RE_ReadRenderResult(struct Scene *scene, struct Scene *scenode);
-bool RE_WriteRenderResult(struct ReportList *reports, RenderResult *rr, const char *filename, int compress, bool multiview, const char *view);
+bool RE_WriteRenderResult(struct ReportList *reports, RenderResult *rr, const char *filename, struct ImageFormatData *imf, const bool multiview, const char *view);
 struct RenderResult *RE_MultilayerConvert(void *exrhandle, const char *colorspace, bool predivide, int rectx, int recty);
 
 extern const float default_envmap_layout[];

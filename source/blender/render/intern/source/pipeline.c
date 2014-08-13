@@ -3128,7 +3128,7 @@ static int do_write_image_or_movie(Render *re, Main *bmain, Scene *scene, bMovie
 			                  &scene->r.im_format, (scene->r.scemode & R_EXTENSION) != 0, true, "");
 		
 		if (re->r.im_format.imtype == R_IMF_IMTYPE_MULTIVIEW) {
-			RE_WriteRenderResult(re->reports, re->result, name, scene->r.im_format.exr_codec, true, "");
+			RE_WriteRenderResult(re->reports, re->result, name, &scene->r.im_format, true, NULL);
 			printf("Saved: %s", name);
 		}
 
@@ -3150,7 +3150,7 @@ static int do_write_image_or_movie(Render *re, Main *bmain, Scene *scene, bMovie
 
 				if (re->r.im_format.imtype == R_IMF_IMTYPE_MULTILAYER) {
 					if (re->result) {
-						RE_WriteRenderResult(re->reports, re->result, name, scene->r.im_format.exr_codec, false, view);
+						RE_WriteRenderResult(re->reports, re->result, name, &scene->r.im_format, false, view);
 						printf("Saved: %s", name);
 					}
 				}
@@ -3190,63 +3190,60 @@ static int do_write_image_or_movie(Render *re, Main *bmain, Scene *scene, bMovie
 			}
 		}
 		else { /* R_IMF_VIEWS_STEREO_3D */
-			ImBuf *ibuf[2] = {NULL};
-			const char *names[2] = {STEREO_LEFT_NAME, STEREO_RIGHT_NAME};
-			int i;
-
 			BLI_assert(scene->r.im_format.views_output == R_IMF_VIEWS_STEREO_3D);
-
-			for (i = 0; i < 2; i++) {
-				int view_id = BLI_findstringindex(&rres.views, names[i], offsetof(RenderView, name));
-				ibuf[i] = render_result_rect_to_ibuf(&rres, &scene->r, view_id);
-				IMB_colormanagement_imbuf_for_write(ibuf[i], true, false, &scene->view_settings,
-				                                    &scene->display_settings, &scene->r.im_format);
-				IMB_prepare_write_ImBuf(IMB_isfloat(ibuf[i]), ibuf[i]);
-			}
-
-			ibuf[2] = IMB_stereoImBuf(&scene->r.im_format, ibuf[0], ibuf[1]);
 
 			if (re->r.im_format.imtype == R_IMF_IMTYPE_MULTILAYER) {
 				if (re->result) {
-					rres.rectf = ibuf[2]->rect_float;
-					rres.rectz = ibuf[2]->zbuf_float;
-					rres.rect32 = (int *) ibuf[2]->rect;
-
-					/* NOTE we are not stereo'ing all the layers, only the combined and depth */
-
-					RE_WriteRenderResult(re->reports, &rres, name, scene->r.im_format.exr_codec, false, "");
+					RE_WriteRenderResult(re->reports, &rres, name, &scene->r.im_format, false, NULL);
 					printf("Saved: %s", name);
 				}
 			}
 			else {
+				ImBuf *ibuf[2] = {NULL};
+				const char *names[2] = {STEREO_LEFT_NAME, STEREO_RIGHT_NAME};
+				int i;
+
+				for (i = 0; i < 2; i++) {
+					int view_id = BLI_findstringindex(&rres.views, names[i], offsetof(RenderView, name));
+					ibuf[i] = render_result_rect_to_ibuf(&rres, &scene->r, view_id);
+					IMB_colormanagement_imbuf_for_write(ibuf[i], true, false, &scene->view_settings,
+					                                    &scene->display_settings, &scene->r.im_format);
+					IMB_prepare_write_ImBuf(IMB_isfloat(ibuf[i]), ibuf[i]);
+				}
+
+				ibuf[2] = IMB_stereoImBuf(&scene->r.im_format, ibuf[0], ibuf[1]);
+
 				ok = BKE_imbuf_write_stamp(scene, camera, ibuf[2], name, &scene->r.im_format);
-			}
 
-			if (ok == 0) {
-				printf("Render error: cannot save %s\n", name);
-			}
-			else printf("Saved: %s", name);
+				if (ok == 0)
+					printf("Render error: cannot save %s\n", name);
+				else
+					printf("Saved: %s", name);
 
-			/* optional preview images for exr */
-			if (ok && scene->r.im_format.imtype == R_IMF_IMTYPE_OPENEXR && (scene->r.im_format.flag & R_IMF_FLAG_PREVIEW_JPG)) {
-				ImageFormatData imf = scene->r.im_format;
-				imf.imtype = R_IMF_IMTYPE_JPEG90;
+				/* optional preview images for exr */
+				if (ok && scene->r.im_format.imtype == R_IMF_IMTYPE_OPENEXR &&
+				    (scene->r.im_format.flag & R_IMF_FLAG_PREVIEW_JPG))
+				{
+					ImageFormatData imf = scene->r.im_format;
+					imf.imtype = R_IMF_IMTYPE_JPEG90;
 
-				if (BLI_testextensie(name, ".exr"))
-					name[strlen(name) - 4] = 0;
-				BKE_add_image_extension(name, &imf);
-				ibuf[2]->planes = 24;
+					if (BLI_testextensie(name, ".exr"))
+						name[strlen(name) - 4] = 0;
 
-				IMB_colormanagement_imbuf_for_write(ibuf[2], true, false, &scene->view_settings,
-				                                    &scene->display_settings, &imf);
+					BKE_add_image_extension(name, &imf);
+					ibuf[2]->planes = 24;
 
-				BKE_imbuf_write_stamp(scene, camera, ibuf[2], name, &imf);
-				printf("\nSaved: %s", name);
-			}
+					IMB_colormanagement_imbuf_for_write(ibuf[2], true, false, &scene->view_settings,
+					                                    &scene->display_settings, &imf);
 
-			/* imbuf knows which rects are not part of ibuf */
-			for (i = 0; i < 3; i++) {
-				IMB_freeImBuf(ibuf[i]);
+					BKE_imbuf_write_stamp(scene, camera, ibuf[2], name, &imf);
+					printf("\nSaved: %s", name);
+				}
+
+				/* imbuf knows which rects are not part of ibuf */
+				for (i = 0; i < 3; i++) {
+					IMB_freeImBuf(ibuf[i]);
+				}
 			}
 		}
 	}
