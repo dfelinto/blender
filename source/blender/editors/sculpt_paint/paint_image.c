@@ -346,7 +346,7 @@ void ED_image_undo_restore(bContext *C, ListBase *lb)
 
 		if (ima && ibuf && strcmp(tile->ibufname, ibuf->name) != 0) {
 			/* current ImBuf filename was changed, probably current frame
-			 * was changed when paiting on image sequence, rather than storing
+			 * was changed when painting on image sequence, rather than storing
 			 * full image user (which isn't so obvious, btw) try to find ImBuf with
 			 * matched file name in list of already loaded images */
 
@@ -515,10 +515,10 @@ BlurKernel *paint_new_blur_kernel(Brush *br)
 {
 	int i, j;
 	BlurKernel *kernel = MEM_mallocN(sizeof(BlurKernel), "blur kernel");
-	int pixel_len = br->blur_kernel_radius;
+	float pixel_len = br->blur_kernel_radius / 2.0f;
 	BlurKernelType type = br->blur_mode;
 
-	kernel->side = pixel_len * 2 + 1;
+	kernel->side = br->blur_kernel_radius + 1;
 	kernel->side_squared = kernel->side * kernel->side;
 	kernel->wdata = MEM_mallocN(sizeof(float) * kernel->side_squared, "blur kernel data");
 	kernel->pixel_len = pixel_len;
@@ -531,26 +531,19 @@ BlurKernel *paint_new_blur_kernel(Brush *br)
 
 		case KERNEL_GAUSSIAN:
 		{
-			float standard_dev = pixel_len / 3.0; /* at standard deviation of 3.0 kernel is at about zero */
-			int i_term = pixel_len + 1;
+			float standard_dev = pixel_len / 3.0f; /* at standard deviation of 3.0 kernel is at about zero */
 
 			/* make the necessary adjustment to the value for use in the normal distribution formula */
 			standard_dev = standard_dev * standard_dev * 2;
 
-			kernel->wdata[pixel_len + pixel_len * kernel->side] = 1.0;
-			/* fill in all four quadrants at once */
-			for (i = 0; i < i_term; i++) {
-				for (j = 0; j < pixel_len; j++) {
+			for (i = 0; i < kernel->side; i++) {
+				for (j = 0; j < kernel->side; j++) {
 					float idist = pixel_len - i;
 					float jdist = pixel_len - j;
 
 					float value = exp((idist * idist + jdist * jdist) / standard_dev);
 
-					kernel->wdata[i + j * kernel->side] =
-					kernel->wdata[(kernel->side - j - 1) + i * kernel->side] =
-					kernel->wdata[(kernel->side - i - 1) + (kernel->side - j - 1) * kernel->side] =
-					kernel->wdata[j + (kernel->side - i - 1) * kernel->side] =
-						value;
+					kernel->wdata[i + j * kernel->side] = value;
 				}
 			}
 
@@ -819,7 +812,7 @@ static void paint_stroke_update_step(bContext *C, struct PaintStroke *stroke, Po
 	}
 
 	if (pop->mode == PAINT_MODE_3D_PROJECT) {
-		paint_proj_stroke(C, pop->custom_paint, pop->prevmouse, mouse, pressure, distance, size);
+		paint_proj_stroke(C, pop->custom_paint, pop->prevmouse, mouse, eraser, pressure, distance, size);
 	}
 	else {
 		paint_2d_stroke(pop->custom_paint, pop->prevmouse, mouse, eraser, pressure, distance, size);
@@ -858,7 +851,8 @@ static void paint_stroke_done(const bContext *C, struct PaintStroke *stroke)
 				paint_2d_gradient_fill(C, brush, pop->startmouse, pop->prevmouse, pop->custom_paint);
 			}
 			else {
-				paint_proj_stroke(C, pop->custom_paint, pop->startmouse, pop->prevmouse, 1.0, 0.0, BKE_brush_size_get(scene, brush));
+				paint_proj_stroke(C, pop->custom_paint, pop->startmouse, pop->prevmouse, paint_stroke_flipped(stroke),
+				                  1.0, 0.0, BKE_brush_size_get(scene, brush));
 				/* two redraws, one for GPU update, one for notification */
 				paint_proj_redraw(C, pop->custom_paint, false);
 				paint_proj_redraw(C, pop->custom_paint, true);
@@ -872,7 +866,8 @@ static void paint_stroke_done(const bContext *C, struct PaintStroke *stroke)
 				paint_2d_bucket_fill(C, color, brush, pop->prevmouse, pop->custom_paint);
 			}
 			else {
-				paint_proj_stroke(C, pop->custom_paint, pop->startmouse, pop->prevmouse, 1.0, 0.0, BKE_brush_size_get(scene, brush));
+				paint_proj_stroke(C, pop->custom_paint, pop->startmouse, pop->prevmouse, paint_stroke_flipped(stroke),
+				                  1.0, 0.0, BKE_brush_size_get(scene, brush));
 				/* two redraws, one for GPU update, one for notification */
 				paint_proj_redraw(C, pop->custom_paint, false);
 				paint_proj_redraw(C, pop->custom_paint, true);

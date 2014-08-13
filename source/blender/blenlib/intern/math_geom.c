@@ -376,23 +376,35 @@ void closest_to_plane_v3(float r_close[3], const float plane[4], const float pt[
 	madd_v3_v3v3fl(r_close, pt, plane, -side / len_sq);
 }
 
-float dist_squared_to_plane_v3(const float pt[3], const float plane[4])
+float dist_signed_squared_to_plane_v3(const float pt[3], const float plane[4])
 {
 	const float len_sq = len_squared_v3(plane);
 	const float side = plane_point_side_v3(plane, pt);
 	const float fac = side / len_sq;
 	return copysignf(len_sq * (fac * fac), side);
 }
+float dist_squared_to_plane_v3(const float pt[3], const float plane[4])
+{
+	const float len_sq = len_squared_v3(plane);
+	const float side = plane_point_side_v3(plane, pt);
+	const float fac = side / len_sq;
+	/* only difference to code above - no 'copysignf' */
+	return len_sq * (fac * fac);
+}
 
 /**
  * Return the signed distance from the point to the plane.
  */
-float dist_to_plane_v3(const float pt[3], const float plane[4])
+float dist_signed_to_plane_v3(const float pt[3], const float plane[4])
 {
 	const float len_sq = len_squared_v3(plane);
 	const float side = plane_point_side_v3(plane, pt);
 	const float fac = side / len_sq;
 	return sqrtf(len_sq) * fac;
+}
+float dist_to_plane_v3(const float pt[3], const float plane[4])
+{
+	return fabsf(dist_signed_to_plane_v3(pt, plane));
 }
 
 /* distance v1 to line-piece l1-l2 in 3D */
@@ -2434,9 +2446,10 @@ void barycentric_weights_v2_quad(const float v1[2], const float v2[2], const flo
 /* given 2 triangles in 3D space, and a point in relation to the first triangle.
  * calculate the location of a point in relation to the second triangle.
  * Useful for finding relative positions with geometry */
-void barycentric_transform(float pt_tar[3], float const pt_src[3],
-                           const float tri_tar_p1[3], const float tri_tar_p2[3], const float tri_tar_p3[3],
-                           const float tri_src_p1[3], const float tri_src_p2[3], const float tri_src_p3[3])
+void transform_point_by_tri_v3(
+        float pt_tar[3], float const pt_src[3],
+        const float tri_tar_p1[3], const float tri_tar_p2[3], const float tri_tar_p3[3],
+        const float tri_src_p1[3], const float tri_src_p2[3], const float tri_src_p3[3])
 {
 	/* this works by moving the source triangle so its normal is pointing on the Z
 	 * axis where its barycentric weights can be calculated in 2D and its Z offset can
@@ -2471,6 +2484,19 @@ void barycentric_transform(float pt_tar[3], float const pt_src[3],
 
 	z_ofs_src = pt_src_xy[2] - tri_xy_src[0][2];
 	madd_v3_v3v3fl(pt_tar, pt_tar, no_tar, (z_ofs_src / area_src) * area_tar);
+}
+
+/**
+ * Simply re-interpolates,
+ * assumes p_src is between \a l_src_p1-l_src_p2
+ */
+void transform_point_by_seg_v3(
+        float p_dst[3], const float p_src[3],
+        const float l_dst_p1[3], const float l_dst_p2[3],
+        const float l_src_p1[3], const float l_src_p2[3])
+{
+	float t = line_point_factor_v3(p_src, l_src_p1, l_src_p2);
+	interp_v3_v3v3(p_dst, l_dst_p1, l_dst_p2, t);
 }
 
 /* given an array with some invalid values this function interpolates valid values

@@ -530,12 +530,16 @@ int GPU_verify_image(Image *ima, ImageUser *iuser, int tftile, bool compare, boo
 			 * a high precision format only if it is available */
 			use_high_bit_depth = true;
 		}
+		/* we may skip this in high precision, but if not, we need to have a valid buffer here */
+		else if (ibuf->userflags & IB_RECT_INVALID) {
+			IMB_rect_from_float(ibuf);
+		}
 
 		/* TODO unneeded when float images are correctly treated as linear always */
 		if (!is_data)
 			do_color_management = true;
 
-		if (ibuf->rect==NULL)
+		if (ibuf->rect == NULL)
 			IMB_rect_from_float(ibuf);
 	}
 
@@ -1035,21 +1039,14 @@ void GPU_paint_update_image(Image *ima, int x, int y, int w, int h)
 		 * which is much quicker for painting */
 		GLint row_length, skip_pixels, skip_rows;
 
-		glGetIntegerv(GL_UNPACK_ROW_LENGTH, &row_length);
-		glGetIntegerv(GL_UNPACK_SKIP_PIXELS, &skip_pixels);
-		glGetIntegerv(GL_UNPACK_SKIP_ROWS, &skip_rows);
-
 		/* if color correction is needed, we must update the part that needs updating. */
 		if (ibuf->rect_float) {
-			float *buffer = MEM_mallocN(w*h*sizeof(float)*4, "temp_texpaint_float_buf");
+			float *buffer = MEM_mallocN(w * h * sizeof(float) * 4, "temp_texpaint_float_buf");
 			bool is_data = (ima->tpageflag & IMA_GLBIND_IS_DATA) != 0;
 			IMB_partial_rect_from_float(ibuf, buffer, x, y, w, h, is_data);
-
+			
 			if (GPU_check_scaled_image(ibuf, ima, buffer, x, y, w, h)) {
 				MEM_freeN(buffer);
-				glPixelStorei(GL_UNPACK_ROW_LENGTH, row_length);
-				glPixelStorei(GL_UNPACK_SKIP_PIXELS, skip_pixels);
-				glPixelStorei(GL_UNPACK_SKIP_ROWS, skip_rows);
 				BKE_image_release_ibuf(ima, ibuf, NULL);
 				return;
 			}
@@ -1074,14 +1071,15 @@ void GPU_paint_update_image(Image *ima, int x, int y, int w, int h)
 		}
 
 		if (GPU_check_scaled_image(ibuf, ima, NULL, x, y, w, h)) {
-			glPixelStorei(GL_UNPACK_ROW_LENGTH, row_length);
-			glPixelStorei(GL_UNPACK_SKIP_PIXELS, skip_pixels);
-			glPixelStorei(GL_UNPACK_SKIP_ROWS, skip_rows);
 			BKE_image_release_ibuf(ima, ibuf, NULL);
 			return;
 		}
 
 		glBindTexture(GL_TEXTURE_2D, ima->bindcode);
+
+		glGetIntegerv(GL_UNPACK_ROW_LENGTH, &row_length);
+		glGetIntegerv(GL_UNPACK_SKIP_PIXELS, &skip_pixels);
+		glGetIntegerv(GL_UNPACK_SKIP_ROWS, &skip_rows);
 
 		glPixelStorei(GL_UNPACK_ROW_LENGTH, ibuf->x);
 		glPixelStorei(GL_UNPACK_SKIP_PIXELS, x);

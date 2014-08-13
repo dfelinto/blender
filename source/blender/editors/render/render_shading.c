@@ -1314,6 +1314,36 @@ void SCENE_OT_freestyle_modifier_move(wmOperatorType *ot)
 	RNA_def_enum(ot->srna, "direction", direction_items, 0, "Direction", "Direction to move, UP or DOWN");
 }
 
+static int freestyle_stroke_material_create_exec(bContext *C, wmOperator *op)
+{
+	Main *bmain = CTX_data_main(C);
+	Scene *scene = CTX_data_scene(C);
+	FreestyleLineStyle *linestyle = BKE_linestyle_active_from_scene(scene);
+
+	if (!linestyle) {
+		BKE_report(op->reports, RPT_ERROR, "No active line style in the current scene");
+		return OPERATOR_CANCELLED;
+	}
+
+	FRS_create_stroke_material(bmain, linestyle);
+
+	return OPERATOR_FINISHED;
+}
+
+void SCENE_OT_freestyle_stroke_material_create(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Create Freestyle Stroke Material";
+	ot->idname = "SCENE_OT_freestyle_stroke_material_create";
+	ot->description = "Create Freestyle stroke material for testing";
+
+	/* api callbacks */
+	ot->exec = freestyle_stroke_material_create_exec;
+
+	/* flags */
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
+
 #endif /* WITH_FREESTYLE */
 
 static int texture_slot_move_exec(bContext *C, wmOperator *op)

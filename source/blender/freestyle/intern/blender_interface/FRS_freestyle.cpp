@@ -31,6 +31,8 @@
 #include "../application/AppView.h"
 #include "../application/Controller.h"
 
+#include "BlenderStrokeRenderer.h"
+
 using namespace std;
 using namespace Freestyle;
 
@@ -41,6 +43,7 @@ extern "C" {
 #include "DNA_camera_types.h"
 #include "DNA_freestyle_types.h"
 #include "DNA_group_types.h"
+#include "DNA_material_types.h"
 #include "DNA_text_types.h"
 
 #include "BKE_freestyle.h"
@@ -729,6 +732,16 @@ void FRS_move_active_lineset_down(FreestyleConfig *config)
 		BLI_remlink(&config->linesets, lineset);
 		BLI_insertlinkafter(&config->linesets, lineset->next, lineset);
 	}
+}
+
+// Testing
+
+Material *FRS_create_stroke_material(Main *bmain, struct FreestyleLineStyle *linestyle)
+{
+	bNodeTree *nt = (linestyle->use_nodes) ? linestyle->nodetree : NULL;
+	Material *ma = BlenderStrokeRenderer::GetStrokeShader(bmain, nt, true);
+	ma->id.us = 0;
+	return ma;
 }
 
 } // extern "C"

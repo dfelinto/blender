@@ -140,6 +140,8 @@ GHOST_SystemX11(
 #undef GHOST_INTERN_ATOM
 
 	m_last_warp = 0;
+	m_last_release_keycode = 0;
+	m_last_release_time = 0;
 
 	/* compute the initial time */
 	timeval tv;
@@ -243,7 +245,7 @@ getMainDisplayDimensions(
 {
 	if (m_display) {
 		/* note, for this to work as documented,
-		 * we would need to use Xinerama check r54370 for code that did thia,
+		 * we would need to use Xinerama check r54370 for code that did this,
 		 * we've since removed since its not worth the extra dep - campbell */
 		getAllDisplayDimensions(width, height);
 	}
@@ -1249,7 +1251,7 @@ getModifierKeys(
 
 	XQueryKeymap(m_display, (char *)m_keyboard_vector);
 
-	/* now translate key symobols into keycodes and
+	/* now translate key symbols into keycodes and
 	 * test with vector. */
 
 	const static KeyCode shift_l = XKeysymToKeycode(m_display, XK_Shift_L);

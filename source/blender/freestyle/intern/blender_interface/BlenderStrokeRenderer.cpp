@@ -30,26 +30,35 @@
 extern "C" {
 #include "MEM_guardedalloc.h"
 
+#include "RNA_access.h"
+
 #include "DNA_camera_types.h"
 #include "DNA_listBase.h"
+#include "DNA_linestyle_types.h"
+#include "DNA_material_types.h"
 #include "DNA_meshdata_types.h"
 #include "DNA_mesh_types.h"
 #include "DNA_object_types.h"
 #include "DNA_screen_types.h"
+#include "DNA_scene_types.h"
 
 #include "BKE_customdata.h"
 #include "BKE_depsgraph.h"
 #include "BKE_global.h"
 #include "BKE_library.h" /* free_libblock */
-#include "BKE_main.h" /* struct Main */
 #include "BKE_material.h"
 #include "BKE_mesh.h"
+#include "BKE_node.h"
 #include "BKE_object.h"
 #include "BKE_scene.h"
 
+#include "BLI_ghash.h"
+#include "BLI_listbase.h"
 #include "BLI_utildefines.h"
 
 #include "RE_pipeline.h"
+
+#include "render_types.h"
 }
 
 #include <limits.h>
@@ -133,6 +142,15 @@ BlenderStrokeRenderer::BlenderStrokeRenderer(Render *re, int render_count) : Str
 
 	// Reset serial mesh ID (used for BlenderStrokeRenderer::NewMesh())
 	_mesh_id = 0xffffffff;
+
+	// Check if the rendering engine uses new shading nodes
+	_use_shading_nodes = BKE_scene_use_new_shading_nodes(freestyle_scene);
+
+	// Create a bNodeTree-to-Material hash table
+	if (_use_shading_nodes)
+		_nodetree_hash = BLI_ghash_ptr_new("BlenderStrokeRenderer::_nodetree_hash");
+	else
+		_nodetree_hash = NULL;
 }
 
 BlenderStrokeRenderer::~BlenderStrokeRenderer()
@@ -186,6 +204,9 @@ BlenderStrokeRenderer::~BlenderStrokeRenderer()
 		lnk = lnk->next;
 		BKE_libblock_free(freestyle_bmain, ma);
 	}
+
+	if (_use_shading_nodes)
+		BLI_ghash_free(_nodetree_hash, NULL, NULL);
 }
 
 float BlenderStrokeRenderer::get_stroke_vertex_z(void) const
@@ -206,55 +227,283 @@ unsigned int BlenderStrokeRenderer::get_stroke_mesh_id(void) const
 	return mesh_id;
 }
 
-void BlenderStrokeRenderer::RenderStrokeRep(StrokeRep *iStrokeRep) const
+Material* BlenderStrokeRenderer::GetStrokeShader(Main *bmain, bNodeTree *iNodeTree, bool do_id_user)
 {
-	bool has_mat = false;
-	int a = 0;
+	Material *ma = BKE_material_add(bmain, "stroke_shader");
+	bNodeTree *ntree;
+	bNode *output_linestyle = NULL;
+	bNodeSocket *fromsock, *tosock;
+	PointerRNA fromptr, toptr;
+	NodeShaderAttribute *storage;
 
-	// Look for a good existing material
-	for (Link *lnk = (Link *)freestyle_bmain->mat.first; lnk; lnk = lnk->next) {
-		Material *ma = (Material*) lnk;
-		bool texs_are_good = true;
-		// as soon as textures differ it's not the right one
-		for (int a = 0; a < MAX_MTEX; a++) {
-			if (ma->mtex[a] != iStrokeRep->getMTex(a)) {
-				texs_are_good = false;
+	if (iNodeTree) {
+		// make a copy of linestyle->nodetree
+		ntree = ntreeCopyTree_ex(iNodeTree, bmain, do_id_user);
+
+		// find the active Output Line Style node
+		for (bNode *node = (bNode *)ntree->nodes.first; node; node = node->next) {
+			if (node->type == SH_NODE_OUTPUT_LINESTYLE && (node->flag & NODE_DO_OUTPUT)) {
+				output_linestyle = node;
 				break;
 			}
 		}
+	}
+	else {
+		ntree = ntreeAddTree(NULL, "stroke_shader", "ShaderNodeTree");
+	}
+	ma->nodetree = ntree;
+	ma->use_nodes = 1;
 
-		if (texs_are_good) {
-			iStrokeRep->setMaterial(ma);
-			has_mat = true;
-			break; // if textures are good, no need to search anymore
+	bNode *input_attr_color = nodeAddStaticNode(NULL, ntree, SH_NODE_ATTRIBUTE);
+	input_attr_color->locx = 0.0f;
+	input_attr_color->locy = -200.0f;
+	storage = (NodeShaderAttribute *)input_attr_color->storage;
+	BLI_strncpy(storage->name, "Color", sizeof(storage->name));
+
+	bNode *mix_rgb_color = nodeAddStaticNode(NULL, ntree, SH_NODE_MIX_RGB);
+	mix_rgb_color->custom1 = MA_RAMP_BLEND; // Mix
+	mix_rgb_color->locx = 200.0f;
+	mix_rgb_color->locy = -200.0f;
+	tosock = (bNodeSocket *)BLI_findlink(&mix_rgb_color->inputs, 0); // Fac
+	RNA_pointer_create((ID *)ntree, &RNA_NodeSocket, tosock, &toptr);
+	RNA_float_set(&toptr, "default_value", 0.0f);
+
+	bNode *input_attr_alpha = nodeAddStaticNode(NULL, ntree, SH_NODE_ATTRIBUTE);
+	input_attr_alpha->locx = 400.0f;
+	input_attr_alpha->locy = 300.0f;
+	storage = (NodeShaderAttribute *)input_attr_alpha->storage;
+	BLI_strncpy(storage->name, "Alpha", sizeof(storage->name));
+
+	bNode *mix_rgb_alpha = nodeAddStaticNode(NULL, ntree, SH_NODE_MIX_RGB);
+	mix_rgb_alpha->custom1 = MA_RAMP_BLEND; // Mix
+	mix_rgb_alpha->locx = 600.0f;
+	mix_rgb_alpha->locy = 300.0f;
+	tosock = (bNodeSocket *)BLI_findlink(&mix_rgb_alpha->inputs, 0); // Fac
+	RNA_pointer_create((ID *)ntree, &RNA_NodeSocket, tosock, &toptr);
+	RNA_float_set(&toptr, "default_value", 0.0f);
+
+	bNode *shader_emission = nodeAddStaticNode(NULL, ntree, SH_NODE_EMISSION);
+	shader_emission->locx = 400.0f;
+	shader_emission->locy = -200.0f;
+
+	bNode *input_light_path = nodeAddStaticNode(NULL, ntree, SH_NODE_LIGHT_PATH);
+	input_light_path->locx = 400.0f;
+	input_light_path->locy = 100.0f;
+
+	bNode *mix_shader_color = nodeAddStaticNode(NULL, ntree, SH_NODE_MIX_SHADER);
+	mix_shader_color->locx = 600.0f;
+	mix_shader_color->locy = -100.0f;
+
+	bNode *shader_transparent = nodeAddStaticNode(NULL, ntree, SH_NODE_BSDF_TRANSPARENT);
+	shader_transparent->locx = 600.0f;
+	shader_transparent->locy = 100.0f;
+
+	bNode *mix_shader_alpha = nodeAddStaticNode(NULL, ntree, SH_NODE_MIX_SHADER);
+	mix_shader_alpha->locx = 800.0f;
+	mix_shader_alpha->locy = 100.0f;
+
+	bNode *output_material = nodeAddStaticNode(NULL, ntree, SH_NODE_OUTPUT_MATERIAL);
+	output_material->locx = 1000.0f;
+	output_material->locy = 100.0f;
+
+	fromsock = (bNodeSocket *)BLI_findlink(&input_attr_color->outputs, 0); // Color
+	tosock = (bNodeSocket *)BLI_findlink(&mix_rgb_color->inputs, 1); // Color1
+	nodeAddLink(ntree, input_attr_color, fromsock, mix_rgb_color, tosock);
+
+	fromsock = (bNodeSocket *)BLI_findlink(&mix_rgb_color->outputs, 0); // Color
+	tosock = (bNodeSocket *)BLI_findlink(&shader_emission->inputs, 0); // Color
+	nodeAddLink(ntree, mix_rgb_color, fromsock, shader_emission, tosock);
+
+	fromsock = (bNodeSocket *)BLI_findlink(&shader_emission->outputs, 0); // Emission
+	tosock = (bNodeSocket *)BLI_findlink(&mix_shader_color->inputs, 2); // Shader (second)
+	nodeAddLink(ntree, shader_emission, fromsock, mix_shader_color, tosock);
+
+	fromsock = (bNodeSocket *)BLI_findlink(&input_light_path->outputs, 0); // In Camera Ray
+	tosock = (bNodeSocket *)BLI_findlink(&mix_shader_color->inputs, 0); // Fac
+	nodeAddLink(ntree, input_light_path, fromsock, mix_shader_color, tosock);
+
+	fromsock = (bNodeSocket *)BLI_findlink(&mix_rgb_alpha->outputs, 0); // Color
+	tosock = (bNodeSocket *)BLI_findlink(&mix_shader_alpha->inputs, 0); // Fac
+	nodeAddLink(ntree, mix_rgb_alpha, fromsock, mix_shader_alpha, tosock);
+
+	fromsock = (bNodeSocket *)BLI_findlink(&input_attr_alpha->outputs, 0); // Color
+	tosock = (bNodeSocket *)BLI_findlink(&mix_rgb_alpha->inputs, 1); // Color1
+	nodeAddLink(ntree, input_attr_alpha, fromsock, mix_rgb_alpha, tosock);
+
+	fromsock = (bNodeSocket *)BLI_findlink(&shader_transparent->outputs, 0); // BSDF
+	tosock = (bNodeSocket *)BLI_findlink(&mix_shader_alpha->inputs, 1); // Shader (first)
+	nodeAddLink(ntree, shader_transparent, fromsock, mix_shader_alpha, tosock);
+
+	fromsock = (bNodeSocket *)BLI_findlink(&mix_shader_color->outputs, 0); // Shader
+	tosock = (bNodeSocket *)BLI_findlink(&mix_shader_alpha->inputs, 2); // Shader (second)
+	nodeAddLink(ntree, mix_shader_color, fromsock, mix_shader_alpha, tosock);
+
+	fromsock = (bNodeSocket *)BLI_findlink(&mix_shader_alpha->outputs, 0); // Shader
+	tosock = (bNodeSocket *)BLI_findlink(&output_material->inputs, 0); // Surface
+	nodeAddLink(ntree, mix_shader_alpha, fromsock, output_material, tosock);
+
+	if (output_linestyle) {
+		bNodeSocket *outsock;
+		bNodeLink *link;
+
+		mix_rgb_color->custom1 = output_linestyle->custom1; // blend_type
+		mix_rgb_color->custom2 = output_linestyle->custom2; // use_clamp
+
+		outsock = (bNodeSocket *)BLI_findlink(&output_linestyle->inputs, 0); // Color
+		tosock = (bNodeSocket *)BLI_findlink(&mix_rgb_color->inputs, 2); // Color2
+		link = (bNodeLink *)BLI_findptr(&ntree->links, outsock, offsetof(bNodeLink, tosock));
+		if (link) {
+			nodeAddLink(ntree, link->fromnode, link->fromsock, mix_rgb_color, tosock);
+		}
+		else {
+			float color[4];
+			RNA_pointer_create((ID *)ntree, &RNA_NodeSocket, outsock, &fromptr);
+			RNA_pointer_create((ID *)ntree, &RNA_NodeSocket, tosock, &toptr);
+			RNA_float_get_array(&fromptr, "default_value", color);
+			RNA_float_set_array(&toptr, "default_value", color);
+		}
+
+		outsock = (bNodeSocket *)BLI_findlink(&output_linestyle->inputs, 1); // Color Fac
+		tosock = (bNodeSocket *)BLI_findlink(&mix_rgb_color->inputs, 0); // Fac
+		link = (bNodeLink *)BLI_findptr(&ntree->links, outsock, offsetof(bNodeLink, tosock));
+		if (link) {
+			nodeAddLink(ntree, link->fromnode, link->fromsock, mix_rgb_color, tosock);
+		}
+		else {
+			RNA_pointer_create((ID *)ntree, &RNA_NodeSocket, outsock, &fromptr);
+			RNA_pointer_create((ID *)ntree, &RNA_NodeSocket, tosock, &toptr);
+			RNA_float_set(&toptr, "default_value", RNA_float_get(&fromptr, "default_value"));
+		}
+
+		outsock = (bNodeSocket *)BLI_findlink(&output_linestyle->inputs, 2); // Alpha
+		tosock = (bNodeSocket *)BLI_findlink(&mix_rgb_alpha->inputs, 2); // Color2
+		link = (bNodeLink *)BLI_findptr(&ntree->links, outsock, offsetof(bNodeLink, tosock));
+		if (link) {
+			nodeAddLink(ntree, link->fromnode, link->fromsock, mix_rgb_alpha, tosock);
+		}
+		else {
+			float color[4];
+			RNA_pointer_create((ID *)ntree, &RNA_NodeSocket, outsock, &fromptr);
+			RNA_pointer_create((ID *)ntree, &RNA_NodeSocket, tosock, &toptr);
+			color[0] = color[1] = color[2] = RNA_float_get(&fromptr, "default_value");
+			color[3] = 1.0f;
+			RNA_float_set_array(&toptr, "default_value", color);
+		}
+
+		outsock = (bNodeSocket *)BLI_findlink(&output_linestyle->inputs, 3); // Alpha Fac
+		tosock = (bNodeSocket *)BLI_findlink(&mix_rgb_alpha->inputs, 0); // Fac
+		link = (bNodeLink *)BLI_findptr(&ntree->links, outsock, offsetof(bNodeLink, tosock));
+		if (link) {
+			nodeAddLink(ntree, link->fromnode, link->fromsock, mix_rgb_alpha, tosock);
+		}
+		else {
+			RNA_pointer_create((ID *)ntree, &RNA_NodeSocket, outsock, &fromptr);
+			RNA_pointer_create((ID *)ntree, &RNA_NodeSocket, tosock, &toptr);
+			RNA_float_set(&toptr, "default_value", RNA_float_get(&fromptr, "default_value"));
+		}
+
+		for (bNode *node = (bNode *)ntree->nodes.first; node; node = node->next) {
+			if (node->type == SH_NODE_UVALONGSTROKE) {
+				// UV output of the UV Along Stroke node
+				bNodeSocket *sock = (bNodeSocket *)BLI_findlink(&node->outputs, 0);
+
+				// add new UV Map node
+				bNode *input_uvmap = nodeAddStaticNode(NULL, ntree, SH_NODE_UVMAP);
+				input_uvmap->locx = node->locx - 200.0f;
+				input_uvmap->locy = node->locy;
+				NodeShaderUVMap *storage = (NodeShaderUVMap *)input_uvmap->storage;
+				if (node->custom1 & 1) { // use_tips
+					BLI_strncpy(storage->uv_map, "along_stroke_tips", sizeof(storage->uv_map));
+				}
+				else {
+					BLI_strncpy(storage->uv_map, "along_stroke", sizeof(storage->uv_map));
+				}
+				fromsock = (bNodeSocket *)BLI_findlink(&input_uvmap->outputs, 0); // UV
+
+				// replace links from the UV Along Stroke node by links from the UV Map node
+				for (bNodeLink *link = (bNodeLink *)ntree->links.first; link; link = link->next) {
+					if (link->fromnode == node && link->fromsock == sock) {
+						nodeAddLink(ntree, input_uvmap, fromsock, link->tonode, link->tosock);
+					}
+				}
+				nodeRemSocketLinks(ntree, sock);
+			}
 		}
 	}
 
-	// If still no material, create one
-	if (!has_mat) {
-		Material *ma = BKE_material_add(freestyle_bmain, "stroke_material");
+	nodeSetActive(ntree, output_material);
+	ntreeUpdateTree(bmain, ntree);
 
-		ma->mode |= MA_VERTEXCOLP;
-		ma->mode |= MA_TRANSP;
-		ma->mode |= MA_SHLESS;
-		ma->vcol_alpha = 1;
+	return ma;
+}
 
-		// Textures
-		//for (int a = 0; a < MAX_MTEX; a++) {
-		while (iStrokeRep->getMTex(a)) {
-			ma->mtex[a] = (MTex *) iStrokeRep->getMTex(a);
-
-			// We'll generate both with tips and without tips
-			// coordinates, on two different UV layers.
-			if (ma->mtex[a]->texflag & MTEX_TIPS)  {
-				BLI_strncpy(ma->mtex[a]->uvname, "along_stroke_tips", sizeof(ma->mtex[a]->uvname));
-			}
-			else {
-				BLI_strncpy(ma->mtex[a]->uvname, "along_stroke", sizeof(ma->mtex[a]->uvname));
-			}
-			a++;
+void BlenderStrokeRenderer::RenderStrokeRep(StrokeRep *iStrokeRep) const
+{
+	if (_use_shading_nodes) {
+		bNodeTree *nt = iStrokeRep->getNodeTree();
+		Material *ma = (Material *)BLI_ghash_lookup(_nodetree_hash, nt);
+		if (!ma) {
+			ma = BlenderStrokeRenderer::GetStrokeShader(freestyle_bmain, nt, false);
+			BLI_ghash_insert(_nodetree_hash, nt, ma);
 		}
+
+		if (strcmp(freestyle_scene->r.engine, "CYCLES") == 0) {
+			PointerRNA scene_ptr;
+			RNA_pointer_create(NULL, &RNA_Scene, freestyle_scene, &scene_ptr);
+			PointerRNA cycles_ptr = RNA_pointer_get(&scene_ptr, "cycles");
+			RNA_boolean_set(&cycles_ptr, "film_transparent", 1);
+		}
+
 		iStrokeRep->setMaterial(ma);
+	}
+	else {
+		bool has_mat = false;
+		int a = 0;
+
+		// Look for a good existing material
+		for (Link *lnk = (Link *)freestyle_bmain->mat.first; lnk; lnk = lnk->next) {
+			Material *ma = (Material*)lnk;
+			bool texs_are_good = true;
+			// as soon as textures differ it's not the right one
+			for (int a = 0; a < MAX_MTEX; a++) {
+				if (ma->mtex[a] != iStrokeRep->getMTex(a)) {
+					texs_are_good = false;
+					break;
+				}
+			}
+
+			if (texs_are_good) {
+				iStrokeRep->setMaterial(ma);
+				has_mat = true;
+				break; // if textures are good, no need to search anymore
+			}
+		}
+
+		// If still no material, create one
+		if (!has_mat) {
+			Material *ma = BKE_material_add(freestyle_bmain, "stroke_material");
+			ma->mode |= MA_VERTEXCOLP;
+			ma->mode |= MA_TRANSP;
+			ma->mode |= MA_SHLESS;
+			ma->vcol_alpha = 1;
+
+			// Textures
+			while (iStrokeRep->getMTex(a)) {
+				ma->mtex[a] = (MTex *)iStrokeRep->getMTex(a);
+
+				// We'll generate both with tips and without tips
+				// coordinates, on two different UV layers.
+				if (ma->mtex[a]->texflag & MTEX_TIPS)  {
+					BLI_strncpy(ma->mtex[a]->uvname, "along_stroke_tips", sizeof(ma->mtex[a]->uvname));
+				}
+				else {
+					BLI_strncpy(ma->mtex[a]->uvname, "along_stroke", sizeof(ma->mtex[a]->uvname));
+				}
+				a++;
+			}
+
+			iStrokeRep->setMaterial(ma);
+		}
 	}
 
 	RenderStrokeRepBasic(iStrokeRep);
@@ -318,7 +567,7 @@ void BlenderStrokeRenderer::test_strip_visibility(Strip::vertex_container& strip
 void BlenderStrokeRenderer::RenderStrokeRepBasic(StrokeRep *iStrokeRep) const
 {
 	vector<Strip*>& strips = iStrokeRep->getStrips();
-	const bool hasTex = iStrokeRep->getMTex(0) != NULL;
+	const bool hasTex = iStrokeRep->hasTex();
 	Strip::vertex_container::iterator v[3];
 	StrokeVertexRep *svRep[3];
 	unsigned int vertex_index, edge_index, loop_index;
@@ -355,22 +604,35 @@ void BlenderStrokeRenderer::RenderStrokeRepBasic(StrokeRep *iStrokeRep) const
 
 	// vertices allocation
 	mesh->totvert = totvert; // visible_faces + visible_segments * 2;
-	mesh->mvert = (MVert *)CustomData_add_layer(&mesh->vdata, CD_MVERT, CD_CALLOC, NULL, mesh->totvert);
+	CustomData_add_layer(&mesh->vdata, CD_MVERT, CD_CALLOC, NULL, mesh->totvert);
 
 	// edges allocation
 	mesh->totedge = totedge; // visible_faces * 2 + visible_segments;
-	mesh->medge = (MEdge *)CustomData_add_layer(&mesh->edata, CD_MEDGE, CD_CALLOC, NULL, mesh->totedge);
+	CustomData_add_layer(&mesh->edata, CD_MEDGE, CD_CALLOC, NULL, mesh->totedge);
 
 	// faces allocation
 	mesh->totpoly = totpoly; // visible_faces;
-	mesh->mpoly = (MPoly *)CustomData_add_layer(&mesh->pdata, CD_MPOLY, CD_CALLOC, NULL, mesh->totpoly);
+	CustomData_add_layer(&mesh->pdata, CD_MPOLY, CD_CALLOC, NULL, mesh->totpoly);
 
 	// loops allocation
 	mesh->totloop = totloop; // visible_faces * 3;
-	mesh->mloop = (MLoop *)CustomData_add_layer(&mesh->ldata, CD_MLOOP, CD_CALLOC, NULL, mesh->totloop);
+	CustomData_add_layer(&mesh->ldata, CD_MLOOP, CD_CALLOC, NULL, mesh->totloop);
 
-	// colors allocation
-	mesh->mloopcol = (MLoopCol *)CustomData_add_layer(&mesh->ldata, CD_MLOOPCOL, CD_CALLOC, NULL, mesh->totloop);
+	// uv maps
+	MLoopUV *loopsuv[2] = { NULL };
+	if (hasTex) {
+		loopsuv[0] = (MLoopUV *)CustomData_add_layer_named(&mesh->ldata, CD_MLOOPUV, CD_CALLOC, NULL, mesh->totloop, "along_stroke");
+		loopsuv[1] = (MLoopUV *)CustomData_add_layer_named(&mesh->ldata, CD_MLOOPUV, CD_CALLOC, NULL, mesh->totloop, "along_stroke_tips");
+
+		CustomData_add_layer_named(&mesh->pdata, CD_MTEXPOLY, CD_CALLOC, NULL, mesh->totpoly, "along_stroke");
+		CustomData_add_layer_named(&mesh->pdata, CD_MTEXPOLY, CD_CALLOC, NULL, mesh->totpoly, "along_stroke_tips");
+	}
+
+	// colors and transparency (the latter represented by grayscale colors)
+	MLoopCol *colors = (MLoopCol *)CustomData_add_layer_named(&mesh->ldata, CD_MLOOPCOL, CD_CALLOC, NULL, mesh->totloop, "Color");
+	MLoopCol *transp = (MLoopCol *)CustomData_add_layer_named(&mesh->ldata, CD_MLOOPCOL, CD_CALLOC, NULL, mesh->totloop, "Alpha");
+
+	BKE_mesh_update_customdata_pointers(mesh, true);
 
 	////////////////////
 	//  Data copy
@@ -380,28 +642,6 @@ void BlenderStrokeRenderer::RenderStrokeRepBasic(StrokeRep *iStrokeRep) const
 	MEdge *edges = mesh->medge;
 	MPoly *polys = mesh->mpoly;
 	MLoop *loops = mesh->mloop;
-	MLoopCol *colors = mesh->mloopcol;
-	MLoopUV *loopsuv[2] = {NULL};
-
-	if (hasTex) {
-		// First UV layer
-		CustomData_add_layer_named(&mesh->pdata, CD_MTEXPOLY, CD_CALLOC, NULL, mesh->totpoly, "along_stroke");
-		CustomData_add_layer_named(&mesh->ldata, CD_MLOOPUV, CD_CALLOC, NULL, mesh->totloop, "along_stroke");
-		CustomData_set_layer_active(&mesh->pdata, CD_MTEXPOLY, 0);
-		CustomData_set_layer_active(&mesh->ldata, CD_MLOOPUV, 0);
-		BKE_mesh_update_customdata_pointers(mesh, true);
-
-		loopsuv[0] = mesh->mloopuv;
-
-		// Second UV layer
-		CustomData_add_layer_named(&mesh->pdata, CD_MTEXPOLY, CD_CALLOC, NULL, mesh->totpoly, "along_stroke_tips");
-		CustomData_add_layer_named(&mesh->ldata, CD_MLOOPUV, CD_CALLOC, NULL, mesh->totloop, "along_stroke_tips");
-		CustomData_set_layer_active(&mesh->pdata, CD_MTEXPOLY, 1);
-		CustomData_set_layer_active(&mesh->ldata, CD_MLOOPUV, 1);
-		BKE_mesh_update_customdata_pointers(mesh, true);
-
-		loopsuv[1] = mesh->mloopuv;
-	}
 
 	vertex_index = edge_index = loop_index = 0;
 
@@ -540,7 +780,7 @@ void BlenderStrokeRenderer::RenderStrokeRepBasic(StrokeRep *iStrokeRep) const
 					}
 				}
 
-				// colors
+				// colors and alpha transparency
 				if (is_odd) {
 					colors[0].r = (short)(255.0f * svRep[2]->color()[0]);
 					colors[0].g = (short)(255.0f * svRep[2]->color()[1]);
@@ -556,7 +796,7 @@ void BlenderStrokeRenderer::RenderStrokeRepBasic(StrokeRep *iStrokeRep) const
 					colors[2].g = (short)(255.0f * svRep[1]->color()[1]);
 					colors[2].b = (short)(255.0f * svRep[1]->color()[2]);
 					colors[2].a = (short)(255.0f * svRep[1]->alpha());
-					}
+				}
 				else {
 					colors[0].r = (short)(255.0f * svRep[2]->color()[0]);
 					colors[0].g = (short)(255.0f * svRep[2]->color()[1]);
@@ -573,7 +813,11 @@ void BlenderStrokeRenderer::RenderStrokeRepBasic(StrokeRep *iStrokeRep) const
 					colors[2].b = (short)(255.0f * svRep[0]->color()[2]);
 					colors[2].a = (short)(255.0f * svRep[0]->alpha());
 				}
+				transp[0].r = transp[0].g = transp[0].b = colors[0].a;
+				transp[1].r = transp[1].g = transp[1].b = colors[1].a;
+				transp[2].r = transp[2].g = transp[2].b = colors[2].a;
 				colors += 3;
+				transp += 3;
 			}
 		} // loop over strip vertices
 	} // loop over strips

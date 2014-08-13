@@ -5835,9 +5835,9 @@ static void lib_link_screen(FileData *fd, Main *main)
 
 /* how to handle user count on pointer restore */
 typedef enum ePointerUserMode {
-	USER_IGNORE,	/* ignore user count */
-	USER_ONE,		/* ensure at least one user (fake also counts) */
-	USER_REAL		/* ensure at least one real user (fake user ignored) */
+	USER_IGNORE = 0,  /* ignore user count */
+	USER_ONE    = 1,  /* ensure at least one user (fake also counts) */
+	USER_REAL   = 2,  /* ensure at least one real user (fake user ignored) */
 } ePointerUserMode;
 
 static bool restore_pointer(ID *id, ID *newid, ePointerUserMode user)
@@ -5862,9 +5862,9 @@ static bool restore_pointer(ID *id, ID *newid, ePointerUserMode user)
  * Only for undo files, or to restore a screen after reading without UI...
  *
  * user
- * - 0: no usercount change
- * - 1: ensure a user
- * - 2: ensure a real user (even if a fake one is set)
+ * - USER_IGNORE: no usercount change
+ * - USER_ONE: ensure a user
+ * - USER_REAL: ensure a real user (even if a fake one is set)
  */
 static void *restore_pointer_by_name(Main *mainp, ID *id, ePointerUserMode user)
 {
@@ -5961,8 +5961,12 @@ void blo_lib_link_screen_restore(Main *newmain, bScreen *curscreen, Scene *cursc
 					v3d->ob_centre = restore_pointer_by_name(newmain, (ID *)v3d->ob_centre, USER_ONE);
 					
 					for (bgpic= v3d->bgpicbase.first; bgpic; bgpic= bgpic->next) {
-						bgpic->ima = restore_pointer_by_name(newmain, (ID *)bgpic->ima, USER_ONE);
-						bgpic->clip = restore_pointer_by_name(newmain, (ID *)bgpic->clip, USER_ONE);
+						if ((bgpic->ima = restore_pointer_by_name(newmain, (ID *)bgpic->ima, USER_IGNORE))) {
+							id_us_plus((ID *)bgpic->ima);
+						}
+						if ((bgpic->clip = restore_pointer_by_name(newmain, (ID *)bgpic->clip, USER_IGNORE))) {
+							id_us_plus((ID *)bgpic->clip);
+						}
 					}
 					if (v3d->localvd) {
 						/*Base *base;*/
@@ -7541,8 +7545,9 @@ static void lib_link_all(FileData *fd, Main *main)
 	/* No load UI for undo memfiles */
 	if (fd->memfile == NULL) {
 		lib_link_windowmanager(fd, main);
-		lib_link_screen(fd, main);
 	}
+	/* DO NOT skip screens here, 3Dview may contains pointers to other ID data (like bgpic)! See T41411. */
+	lib_link_screen(fd, main);
 	lib_link_scene(fd, main);
 	lib_link_object(fd, main);
 	lib_link_curve(fd, main);

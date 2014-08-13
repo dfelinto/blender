@@ -35,6 +35,10 @@
 
 #include "DNA_linestyle_types.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define LS_MODIFIER_TYPE_COLOR      1
 #define LS_MODIFIER_TYPE_ALPHA      2
 #define LS_MODIFIER_TYPE_THICKNESS  3
@@ -43,6 +47,7 @@
 struct Main;
 struct Object;
 struct ColorBand;
+struct bContext;
 
 FreestyleLineStyle *BKE_linestyle_new(const char *name, struct Main *main);
 void                BKE_linestyle_free(FreestyleLineStyle *linestyle);
@@ -74,5 +79,13 @@ void BKE_linestyle_modifier_list_color_ramps(FreestyleLineStyle *linestyle, List
 char *BKE_linestyle_path_to_color_ramp(FreestyleLineStyle *linestyle, struct ColorBand *color_ramp);
 
 void BKE_linestyle_target_object_unlink(FreestyleLineStyle *linestyle, struct Object *ob);
+
+bool BKE_linestyle_use_textures(FreestyleLineStyle *linestyle, const bool use_shading_nodes);
+
+void BKE_linestyle_default_shader(const struct bContext *C, FreestyleLineStyle *linestyle);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif  /* __BKE_LINESTYLE_H__ */

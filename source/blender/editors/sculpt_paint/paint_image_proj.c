@@ -3763,7 +3763,9 @@ static void do_projectpaint_soften_f(ProjPaintState *ps, ProjPixel *projPixel, f
 	for (yk = 0; yk < kernel->side; yk++) {
 		for (xk = 0; xk < kernel->side; xk++) {
 			float rgba_tmp[4];
-			float co_ofs[2] = {xk - kernel->pixel_len, yk - kernel->pixel_len};
+			float x_offs = xk - kernel->pixel_len;
+			float y_offs = yk - kernel->pixel_len;
+			float co_ofs[2] = {x_offs, y_offs};
 
 			add_v2_v2(co_ofs, projPixel->projCoSS);
 
@@ -4377,7 +4379,7 @@ static bool project_paint_op(void *state, const float lastpos[2], const float po
 }
 
 
-void paint_proj_stroke(const bContext *C, void *pps, const float prev_pos[2], const float pos[2], float pressure, float distance, float size)
+void paint_proj_stroke(const bContext *C, void *pps, const float prev_pos[2], const float pos[2], const bool eraser, float pressure, float distance, float size)
 {
 	ProjPaintState *ps = pps;
 	Brush *brush = ps->brush;
@@ -4385,7 +4387,10 @@ void paint_proj_stroke(const bContext *C, void *pps, const float prev_pos[2], co
 	int a;
 
 	ps->brush_size = size;
-
+	ps->blend = brush->blend;
+	if (eraser)
+		ps->blend = IMB_BLEND_ERASE_ALPHA;
+	
 	/* clone gets special treatment here to avoid going through image initialization */
 	if (ps->tool == PAINT_TOOL_CLONE && ps->mode == BRUSH_STROKE_INVERT) {
 		View3D *v3d = ps->v3d;
@@ -4868,12 +4873,6 @@ bool proj_paint_add_slot(bContext *C, Material *ma, wmOperator *op)
 						RNA_float_get_array(op->ptr, "color", color);
 						alpha = RNA_boolean_get(op->ptr, "alpha");
 						RNA_string_get(op->ptr, "name", imagename);
-					}
-
-					if (!use_float) {
-						/* crappy workaround because we only upload straight color to OpenGL and that makes
-						 * painting result on viewport too opaque */
-						color[3] = 1.0;
 					}
 
 					ima = mtex->tex->ima = BKE_image_add_generated(bmain, width, height, imagename, alpha ? 32 : 24, use_float,

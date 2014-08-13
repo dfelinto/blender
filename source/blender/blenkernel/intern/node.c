@@ -1205,13 +1205,13 @@ static bNodeTree *ntreeCopyTree_internal(bNodeTree *ntree, Main *bmain, bool do_
 	return newtree;
 }
 
-bNodeTree *ntreeCopyTree_ex(bNodeTree *ntree, const bool do_id_user)
+bNodeTree *ntreeCopyTree_ex(bNodeTree *ntree, Main *bmain, const bool do_id_user)
 {
-	return ntreeCopyTree_internal(ntree, G.main, do_id_user, true, true);
+	return ntreeCopyTree_internal(ntree, bmain, do_id_user, true, true);
 }
 bNodeTree *ntreeCopyTree(bNodeTree *ntree)
 {
-	return ntreeCopyTree_ex(ntree, true);
+	return ntreeCopyTree_ex(ntree, G.main, true);
 }
 
 /* use when duplicating scenes */
@@ -3530,10 +3530,12 @@ static void registerShaderNodes(void)
 	register_node_type_sh_mix_shader();
 	register_node_type_sh_add_shader();
 	register_node_type_sh_uvmap();
+	register_node_type_sh_uvalongstroke();
 
 	register_node_type_sh_output_lamp();
 	register_node_type_sh_output_material();
 	register_node_type_sh_output_world();
+	register_node_type_sh_output_linestyle();
 
 	register_node_type_sh_tex_image();
 	register_node_type_sh_tex_environment();

@@ -38,6 +38,7 @@
 
 extern "C" {
 #include "DNA_material_types.h" // for MAX_MTEX
+struct bNodeTree;
 }
 
 namespace Freestyle {
@@ -185,7 +186,9 @@ protected:
 	unsigned int _textureId;
 	float _textureStep;
 	MTex *_mtex[MAX_MTEX];
+	bNodeTree *_nodeTree;
 	Material *_material;
+	bool _hasTex;
 
 	// float _averageTextureAlpha;
 
@@ -220,6 +223,16 @@ public:
 	inline Material *getMaterial() const
 	{
 		return _material;
+	}
+
+	inline bNodeTree *getNodeTree() const
+	{
+		return _nodeTree;
+	}
+
+	inline bool hasTex() const
+	{
+		return _hasTex;
 	}
 
 	inline vector<Strip*>& getStrips()

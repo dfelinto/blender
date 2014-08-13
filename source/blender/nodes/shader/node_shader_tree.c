@@ -38,6 +38,7 @@
 #include "DNA_scene_types.h"
 #include "DNA_space_types.h"
 #include "DNA_world_types.h"
+#include "DNA_linestyle_types.h"
 
 #include "BLI_listbase.h"
 #include "BLI_math.h"
@@ -48,6 +49,7 @@
 
 #include "BKE_context.h"
 #include "BKE_global.h"
+#include "BKE_linestyle.h"
 #include "BKE_main.h"
 #include "BKE_node.h"
 #include "BKE_scene.h"
@@ -97,6 +99,16 @@ static void shader_get_from_context(const bContext *C, bNodeTreeType *UNUSED(tre
 			}
 		}
 	}
+#ifdef WITH_FREESTYLE
+	else if (snode->shaderfrom == SNODE_SHADER_LINESTYLE) {
+		FreestyleLineStyle *linestyle = BKE_linestyle_active_from_scene(scene);
+		if (linestyle) {
+			*r_from = NULL;
+			*r_id = &linestyle->id;
+			*r_ntree = linestyle->nodetree;
+		}
+	}
+#endif
 	else { /* SNODE_SHADER_WORLD */
 		if (scene->world) {
 			*r_from = NULL;

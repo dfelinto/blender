@@ -154,7 +154,7 @@ typedef enum uiHandleButtonState {
  * note: half the height of a button is about right... */
 #define DRAG_MULTINUM_THRESHOLD_DRAG_X (UI_UNIT_Y / 4)
 
-/* how far to drag horizontally before we stop checkign which buttons the gesture spans (in pixels),
+/* how far to drag horizontally before we stop checking which buttons the gesture spans (in pixels),
  * locking down the buttons so we can drag freely without worrying about vertical movement. */
 #define DRAG_MULTINUM_THRESHOLD_DRAG_Y (UI_UNIT_Y / 4)
 
@@ -7940,6 +7940,9 @@ static int ui_handle_menu_button(bContext *C, const wmEvent *event, uiPopupBlock
 		 * in this case ignore mouse clicks outside the button (but Enter etc is accepted) */
 		if (event->val == KM_RELEASE) {
 			/* pass, needed so we can exit active menu-items when click-dragging out of them */
+		}
+		else if (!ui_block_is_menu(but->block)) {
+			/* pass, skip for dialogs */
 		}
 		else if (!ui_mouse_inside_region(but->active->region, event->x, event->y)) {
 			/* pass, needed to click-exit outside of non-flaoting menus */

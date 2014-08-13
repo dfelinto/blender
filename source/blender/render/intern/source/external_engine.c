@@ -682,6 +682,11 @@ int RE_engine_render(Render *re, int do_all)
 	if (BKE_reports_contain(re->reports, RPT_ERROR))
 		G.is_break = true;
 	
+#ifdef WITH_FREESTYLE
+	if (re->r.mode & R_EDGE_FRS)
+		RE_RenderFreestyleExternal(re);
+#endif
+
 	return 1;
 }
 

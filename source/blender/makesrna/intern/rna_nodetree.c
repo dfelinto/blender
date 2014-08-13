@@ -3257,6 +3257,12 @@ static void def_sh_output(StructRNA *srna)
 	RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
 }
 
+static void def_sh_output_linestyle(StructRNA *srna)
+{
+	def_sh_output(srna);
+	def_mix_rgb(srna);
+}
+
 static void def_sh_material(StructRNA *srna)
 {
 	PropertyRNA *prop;
@@ -3845,6 +3851,16 @@ static void def_sh_uvmap(StructRNA *srna)
 	RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
 
 	RNA_def_struct_sdna_from(srna, "bNode", NULL);
+}
+
+static void def_sh_uvalongstroke(StructRNA *srna)
+{
+	PropertyRNA *prop;
+
+	prop = RNA_def_property(srna, "use_tips", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "custom1", 1);
+	RNA_def_property_ui_text(prop, "Use Tips", "Lower half of the texture is for tips of the stroke");
+	RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
 }
 
 static void def_sh_normal_map(StructRNA *srna)

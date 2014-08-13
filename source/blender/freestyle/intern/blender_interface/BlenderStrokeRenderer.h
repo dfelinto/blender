@@ -29,12 +29,14 @@
 #include "../system/FreestyleConfig.h"
 
 extern "C" {
-#include "DNA_material_types.h"
-#include "DNA_scene_types.h"
-
-#include "BKE_main.h"
-
-#include "render_types.h"
+struct GHash;
+struct Main;
+struct Material;
+struct Object;
+struct Render;
+struct Scene;
+struct bContext;
+struct bNodeTree;
 }
 
 namespace Freestyle {
@@ -53,13 +55,18 @@ public:
 
 	Render *RenderScene(Render *re, bool render);
 
+	static Material* GetStrokeShader(Main *bmain, bNodeTree *iNodeTree, bool do_id_user);
+
 protected:
 	Main *freestyle_bmain;
 	Scene *old_scene;
 	Scene *freestyle_scene;
+	bContext *_context;
 	float _width, _height;
 	float _z, _z_delta;
 	unsigned int _mesh_id;
+	bool _use_shading_nodes;
+	struct GHash *_nodetree_hash;
 
 	float get_stroke_vertex_z(void) const;
 	unsigned int get_stroke_mesh_id(void) const;

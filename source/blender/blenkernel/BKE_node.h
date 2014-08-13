@@ -342,7 +342,7 @@ struct bNodeTree *ntreeAddTree(struct Main *bmain, const char *name, const char 
 /* copy/free funcs, need to manage ID users */
 void              ntreeFreeTree_ex(struct bNodeTree *ntree, const bool do_id_user);
 void              ntreeFreeTree(struct bNodeTree *ntree);
-struct bNodeTree *ntreeCopyTree_ex(struct bNodeTree *ntree, const bool do_id_user);
+struct bNodeTree *ntreeCopyTree_ex(struct bNodeTree *ntree, struct Main *bmain, const bool do_id_user);
 struct bNodeTree *ntreeCopyTree(struct bNodeTree *ntree);
 void              ntreeSwitchID_ex(struct bNodeTree *ntree, struct ID *sce_from, struct ID *sce_to, const bool do_id_user);
 void              ntreeSwitchID(struct bNodeTree *ntree, struct ID *sce_from, struct ID *sce_to);
@@ -752,6 +752,8 @@ struct ShadeResult;
 #define SH_NODE_UVMAP					187
 #define SH_NODE_SEPXYZ					188
 #define SH_NODE_COMBXYZ					189
+#define SH_NODE_OUTPUT_LINESTYLE		190
+#define SH_NODE_UVALONGSTROKE			191
 
 /* custom defines options for Material node */
 #define SH_NODE_MAT_DIFF   1
