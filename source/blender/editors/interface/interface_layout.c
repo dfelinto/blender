@@ -2121,7 +2121,7 @@ static RadialDirection ui_get_radialbut_vec(float vec[2], short itemnum)
 	BLI_assert(itemnum < 8);
 
 	dir = ui_radial_dir_order[itemnum];
-	ui_but_pie_dir_visual(dir, vec);
+	ui_but_pie_dir(dir, vec);
 
 	return dir;
 }
@@ -2171,16 +2171,16 @@ static void ui_litem_layout_radial(uiLayout *litem)
 	if (totitems < 5)
 		litem->root->block->pie_data.flags |= UI_PIE_DEGREES_RANGE_LARGE;
 
-	if (totitems == 3)
-		litem->root->block->pie_data.flags |= UI_PIE_3_ITEMS;
-
 	for (item = litem->items.first; item; item = item->next) {
 		/* not all button types are drawn in a radial menu, do filtering here */
 		if (ui_item_is_radial_displayable(item)) {
 			RadialDirection dir;
 			float vec[2];
+			float factor[2];
 
 			dir = ui_get_radialbut_vec(vec, itemnum);
+			factor[0] = (vec[0] > 0.01f) ? 0.0f : ((vec[0] < -0.01f) ? -1.0f : -0.5f);
+			factor[1] = (vec[1] > 0.99f) ? 0.0f : ((vec[1] < -0.99f) ? -1.0f : -0.5f);
 
 			itemnum++;
 
@@ -2199,7 +2199,7 @@ static void ui_litem_layout_radial(uiLayout *litem)
 
 			ui_item_size(item, &itemw, &itemh);
 
-			ui_item_position(item, x + vec[0] * pie_radius - itemw / 2, y + vec[1] * pie_radius - itemh / 2, itemw, itemh);
+			ui_item_position(item, x + vec[0] * pie_radius + factor[0] * itemw, y + vec[1] * pie_radius + factor[1] * itemh, itemw, itemh);
 
 			minx = min_ii(minx, x + vec[0] * pie_radius - itemw / 2);
 			maxx = max_ii(maxx, x + vec[0] * pie_radius + itemw / 2);
@@ -2232,7 +2232,7 @@ static void ui_litem_layout_root_radial(uiLayout *litem)
 
 		ui_item_size(item, &itemw, &itemh);
 
-		ui_item_position(item, x - itemw / 2, y + 2 * UI_UNIT_Y, itemw, itemh);
+		ui_item_position(item, x - itemw / 2, y + U.pixelsize * (U.pie_menu_threshold + 9.0f), itemw, itemh);
 	}
 }
 

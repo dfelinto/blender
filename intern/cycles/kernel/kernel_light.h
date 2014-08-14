@@ -27,7 +27,7 @@ typedef struct LightSample {
 	float pdf;			/* light sampling probability density function */
 	float eval_fac;		/* intensity multiplier */
 	int object;			/* object id for triangle/curve lights */
-	int prim;			/* primitive id for triangle/curve ligths */
+	int prim;			/* primitive id for triangle/curve lights */
 	int shader;			/* shader id */
 	int lamp;			/* lamp id */
 	LightType type;		/* type of light */
@@ -457,7 +457,7 @@ ccl_device void triangle_light_sample(KernelGlobals *kg, int prim, int object,
 	v = randv*randu;
 
 	/* triangle, so get position, normal, shader */
-	triangle_point_normal(kg, prim, u, v, &ls->P, &ls->Ng, &ls->shader);
+	triangle_point_normal(kg, object, prim, u, v, &ls->P, &ls->Ng, &ls->shader);
 	ls->object = object;
 	ls->prim = prim;
 	ls->lamp = LAMP_NONE;
@@ -544,11 +544,6 @@ ccl_device int light_select_num_samples(KernelGlobals *kg, int index)
 {
 	float4 data3 = kernel_tex_fetch(__light_data, index*LIGHT_SIZE + 3);
 	return __float_as_int(data3.x);
-}
-
-ccl_device void light_select(KernelGlobals *kg, int index, float randu, float randv, float3 P, LightSample *ls)
-{
-	lamp_light_sample(kg, index, randu, randv, P, ls);
 }
 
 ccl_device int lamp_light_eval_sample(KernelGlobals *kg, float randt)

@@ -137,7 +137,6 @@ typedef enum RadialDirection {
 
 extern const char  ui_radial_dir_order[8];
 extern const char  ui_radial_dir_to_numpad[8];
-extern const short ui_radial_dir_to_angle_visual[8];
 extern const short ui_radial_dir_to_angle[8];
 
 /* internal panel drawing defines */
@@ -167,7 +166,7 @@ extern const short ui_radial_dir_to_angle[8];
 enum {
 	UI_PIE_DEGREES_RANGE_LARGE  = (1 << 0),  /* pie menu item collision is detected at 90 degrees */
 	UI_PIE_INITIAL_DIRECTION    = (1 << 1),  /* use initial center of pie menu to calculate direction */
-	UI_PIE_3_ITEMS              = (1 << 2),  /* pie menu has only 3 items, careful when centering */
+	UI_PIE_DRAG_STYLE           = (1 << 2),  /* pie menu is drag style */
 	UI_PIE_INVALID_DIR          = (1 << 3),  /* mouse not far enough from center position  */
 	UI_PIE_FINISHED             = (1 << 4),  /* pie menu finished but we still wait for a release event  */
 	UI_PIE_CLICK_STYLE          = (1 << 5),  /* pie menu changed to click style, click to confirm  */
@@ -414,6 +413,7 @@ extern void ui_delete_linkline(uiLinkLine *line, uiBut *but);
 void ui_fontscale(short *points, float aspect);
 
 extern bool ui_block_is_menu(const uiBlock *block) ATTR_WARN_UNUSED_RESULT;
+extern bool ui_block_is_pie_menu(const uiBlock *block) ATTR_WARN_UNUSED_RESULT;
 extern void ui_block_to_window_fl(const struct ARegion *ar, uiBlock *block, float *x, float *y);
 extern void ui_block_to_window(const struct ARegion *ar, uiBlock *block, int *x, int *y);
 extern void ui_block_to_window_rctf(const struct ARegion *ar, uiBlock *block, rctf *rct_dst, const rctf *rct_src);

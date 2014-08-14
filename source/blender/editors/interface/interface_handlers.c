@@ -101,6 +101,8 @@
 /* drag popups by their header */
 #define USE_DRAG_POPUP
 
+#define UI_MAX_PASSWORD_STR 128
+
 /* proto */
 static void ui_add_smart_controller(bContext *C, uiBut *from, uiBut *to);
 static void ui_add_link(bContext *C, uiBut *from, uiBut *to);
@@ -602,7 +604,13 @@ static void ui_apply_autokey(bContext *C, uiBut *but)
 
 	/* make a little report about what we've done! */
 	if (but->rnaprop) {
-		char *buf = WM_prop_pystring_assign(C, &but->rnapoin, but->rnaprop, but->rnaindex);
+		char *buf;
+
+		if (RNA_property_subtype(but->rnaprop) == PROP_PASSWORD) {
+			return;
+		}
+
+		buf = WM_prop_pystring_assign(C, &but->rnapoin, but->rnaprop, but->rnaindex);
 		if (buf) {
 			BKE_report(CTX_wm_reports(C), RPT_PROPERTY, buf);
 			MEM_freeN(buf);
@@ -1946,28 +1954,35 @@ static void ui_but_copy_paste(bContext *C, uiBut *but, uiHandleButtonData *data,
 
 static int ui_text_position_from_hidden(uiBut *but, int pos)
 {
-	const char *strpos;
+	const char *strpos, *butstr;
 	int i;
 
-	for (i = 0, strpos = but->drawstr; i < pos; i++)
+	butstr = (but->editstr) ? but->editstr : but->drawstr;
+
+	for (i = 0, strpos = butstr; i < pos; i++)
 		strpos = BLI_str_find_next_char_utf8(strpos, NULL);
 	
-	return (strpos - but->drawstr);
+	return (strpos - butstr);
 }
 
 static int ui_text_position_to_hidden(uiBut *but, int pos)
 {
-	return BLI_strnlen_utf8(but->drawstr, pos);
+	const char *butstr = butstr = (but->editstr) ? but->editstr : but->drawstr;
+	return BLI_strnlen_utf8(butstr, pos);
 }
 
-void ui_button_text_password_hide(char password_str[UI_MAX_DRAW_STR], uiBut *but, const bool restore)
+void ui_button_text_password_hide(char password_str[UI_MAX_PASSWORD_STR], uiBut *but, const bool restore)
 {
+	char *butstr;
+
 	if (!(but->rnaprop && RNA_property_subtype(but->rnaprop) == PROP_PASSWORD))
 		return;
 
+	butstr = (but->editstr) ? but->editstr : but->drawstr;
+
 	if (restore) {
 		/* restore original string */
-		BLI_strncpy(but->drawstr, password_str, UI_MAX_DRAW_STR);
+		BLI_strncpy(butstr, password_str, UI_MAX_PASSWORD_STR);
 
 		/* remap cursor positions */
 		if (but->pos >= 0) {
@@ -1977,8 +1992,8 @@ void ui_button_text_password_hide(char password_str[UI_MAX_DRAW_STR], uiBut *but
 		}
 	}
 	else {
-		/* convert text to hidden test using asterisks (e.g. pass -> ****) */
-		const size_t len = BLI_strlen_utf8(but->drawstr);
+		/* convert text to hidden text using asterisks (e.g. pass -> ****) */
+		const size_t len = BLI_strlen_utf8(butstr);
 
 		/* remap cursor positions */
 		if (but->pos >= 0) {
@@ -1988,10 +2003,9 @@ void ui_button_text_password_hide(char password_str[UI_MAX_DRAW_STR], uiBut *but
 		}
 
 		/* save original string */
-		BLI_strncpy(password_str, but->drawstr, UI_MAX_DRAW_STR);
-
-		memset(but->drawstr, '*', len);
-		but->drawstr[len] = '\0';
+		BLI_strncpy(password_str, butstr, UI_MAX_PASSWORD_STR);
+		memset(butstr, '*', len);
+		butstr[len] = '\0';
 	}
 }
 
@@ -2027,7 +2041,7 @@ static void ui_textedit_set_cursor_pos(uiBut *but, uiHandleButtonData *data, con
 
 	float startx = but->rect.xmin;
 	float starty_dummy = 0.0f;
-	char *origstr, password_str[UI_MAX_DRAW_STR];
+	char *origstr, password_str[UI_MAX_PASSWORD_STR];
 
 	ui_block_to_window_fl(data->region, but->block, &startx, &starty_dummy);
 
@@ -6378,25 +6392,15 @@ static bool ui_but_contains_pt(uiBut *but, float mx, float my)
 	return BLI_rctf_isect_pt(&but->rect, mx, my);
 }
 
-static void ui_but_pie_dir__internal(RadialDirection dir, float vec[2], const short angles[8])
+void ui_but_pie_dir(RadialDirection dir, float vec[2])
 {
 	float angle;
 
 	BLI_assert(dir != UI_RADIAL_NONE);
 
-	angle = DEG2RADF((float)angles[dir]);
+	angle = DEG2RADF((float)ui_radial_dir_to_angle[dir]);
 	vec[0] = cosf(angle);
 	vec[1] = sinf(angle);
-}
-
-void ui_but_pie_dir_visual(RadialDirection dir, float vec[2])
-{
-	ui_but_pie_dir__internal(dir, vec, ui_radial_dir_to_angle_visual);
-}
-
-void ui_but_pie_dir(RadialDirection dir, float vec[2])
-{
-	ui_but_pie_dir__internal(dir, vec, ui_radial_dir_to_angle);
 }
 
 static bool ui_but_isect_pie_seg(uiBlock *block, uiBut *but)
@@ -7332,7 +7336,7 @@ static int ui_handle_button_event(bContext *C, const wmEvent *event, uiBut *but)
 				uiBut *but_other = ui_but_find_mouse_over(ar, event);
 				bool exit = false;
 
-				if (!ui_block_is_menu(block) &&
+				if ((!ui_block_is_menu(block) || ui_block_is_pie_menu(but->block)) &&
 				    !ui_mouse_inside_button(ar, but, event->x, event->y))
 				{
 					exit = true;
@@ -7941,7 +7945,7 @@ static int ui_handle_menu_button(bContext *C, const wmEvent *event, uiPopupBlock
 		if (event->val == KM_RELEASE) {
 			/* pass, needed so we can exit active menu-items when click-dragging out of them */
 		}
-		else if (!ui_block_is_menu(but->block)) {
+		else if (!ui_block_is_menu(but->block) || ui_block_is_pie_menu(but->block)) {
 			/* pass, skip for dialogs */
 		}
 		else if (!ui_mouse_inside_region(but->active->region, event->x, event->y)) {
@@ -8650,17 +8654,25 @@ static int ui_handler_pie(bContext *C, const wmEvent *event, uiPopupBlockHandle 
 					block->pie_data.flags |= UI_PIE_ANIMATION_FINISHED;
 				}
 
-				pie_radius *= fac;
-
 				for (but = block->buttons.first; but; but = but->next) {
 					if (but->pie_dir != UI_RADIAL_NONE) {
-						float dir[2];
+						float vec[2];
+						float center[2];
+			
+						ui_but_pie_dir(but->pie_dir, vec);
 
-						ui_but_pie_dir_visual(but->pie_dir, dir);
+						center[0] = (vec[0] > 0.01f) ? 0.5f : ((vec[0] < -0.01f) ? -0.5f : 0.0f);
+						center[1] = (vec[1] > 0.99f) ? 0.5f : ((vec[1] < -0.99f) ? -0.5f : 0.0f);
 
-						mul_v2_fl(dir, pie_radius );
-						add_v2_v2(dir, block->pie_data.pie_center_spawned);
-						BLI_rctf_recenter(&but->rect, dir[0], dir[1]);
+						center[0] *= BLI_rctf_size_x(&but->rect);
+						center[1] *= BLI_rctf_size_y(&but->rect);
+						
+						mul_v2_fl(vec, pie_radius);
+						add_v2_v2(vec, center);
+						mul_v2_fl(vec, fac);						
+						add_v2_v2(vec, block->pie_data.pie_center_spawned);
+						            
+						BLI_rctf_recenter(&but->rect, vec[0], vec[1]);
 					}
 				}
 				block->pie_data.alphafac = fac;
@@ -8692,13 +8704,16 @@ static int ui_handler_pie(bContext *C, const wmEvent *event, uiPopupBlockHandle 
 		if (event->val != KM_RELEASE) {
 			ui_handle_menu_button(C, event, menu);
 
+			if (len_squared_v2v2(event_xy, block->pie_data.pie_center_init) > PIE_CLICK_THRESHOLD_SQ) {
+				block->pie_data.flags |= UI_PIE_DRAG_STYLE;
+			}
 			/* why redraw here? It's simple, we are getting many double click events here.
 			 * Those operate like mouse move events almost */
 			ED_region_tag_redraw(ar);
 		}
 		else {
 			/* distance from initial point */
-			if (len_squared_v2v2(event_xy, block->pie_data.pie_center_init) < PIE_CLICK_THRESHOLD_SQ) {
+			if (!(block->pie_data.flags & UI_PIE_DRAG_STYLE)) {
 				block->pie_data.flags |= UI_PIE_CLICK_STYLE;
 			}
 			else if (!is_click_style) {
@@ -8714,8 +8729,12 @@ static int ui_handler_pie(bContext *C, const wmEvent *event, uiPopupBlockHandle 
 
 		switch (event->type) {
 			case MOUSEMOVE:
-				/* mouse move should always refresh the area for pie menus */
+				if (len_squared_v2v2(event_xy, block->pie_data.pie_center_init) > PIE_CLICK_THRESHOLD_SQ) {
+					block->pie_data.flags |= UI_PIE_DRAG_STYLE;
+				}
 				ui_handle_menu_button(C, event, menu);
+				
+				/* mouse move should always refresh the area for pie menus */
 				ED_region_tag_redraw(ar);
 				break;
 
