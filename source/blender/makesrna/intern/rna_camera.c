@@ -105,6 +105,7 @@ static void rna_def_camera_stereo_data(BlenderRNA *brna)
 		{CAM_S3D_PIVOT_LEFT, "LEFT", 0, "Left", ""},
 		{CAM_S3D_PIVOT_RIGHT, "RIGHT", 0, "Right", ""},
 		{CAM_S3D_PIVOT_CENTER, "CENTER", 0, "Center", ""},
+		{0, NULL, 0, NULL, NULL}
 	};
 
 	srna = RNA_def_struct(brna, "CameraStereoData", NULL);
