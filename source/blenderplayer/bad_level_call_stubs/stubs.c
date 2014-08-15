@@ -216,7 +216,7 @@ void EDBM_mesh_make(struct ToolSettings *ts, struct Object *ob) RET_NONE
 void EDBM_mesh_normals_update(struct BMEditMesh *em) RET_NONE
 void *g_system;
 
-float *RE_RenderLayerGetPass(struct RenderLayer *rl, int passtype) RET_NULL
+float *RE_RenderLayerGetPass(struct RenderLayer *rl, int passtype, int view_id) RET_NULL
 float RE_filter_value(int type, float x) RET_ZERO
 struct RenderLayer *RE_GetRenderLayer(struct RenderResult *rr, const char *name) RET_NULL
 
@@ -572,7 +572,7 @@ void uiTemplateNodeSocket(struct uiLayout *layout, struct bContext *C, float *co
 void uiTemplatePalette(struct uiLayout *layout, struct PointerRNA *ptr, const char *propname, int color) RET_NONE
 
 /* rna render */
-struct RenderResult *RE_engine_begin_result(RenderEngine *engine, int x, int y, int w, int h, const char *layername) RET_NULL
+struct RenderResult *RE_engine_begin_result(RenderEngine *engine, int x, int y, int w, int h, const char *layername, int view) RET_NULL
 struct RenderResult *RE_AcquireResultRead(struct Render *re) RET_NULL
 struct RenderResult *RE_AcquireResultWrite(struct Render *re) RET_NULL
 struct RenderStats *RE_GetStats(struct Render *re) RET_NULL
@@ -583,7 +583,7 @@ void RE_engine_end_result(RenderEngine *engine, struct RenderResult *result, int
 void RE_engine_update_stats(RenderEngine *engine, const char *stats, const char *info) RET_NONE
 void RE_layer_load_from_file(struct RenderLayer *layer, struct ReportList *reports, const char *filename, int x, int y) RET_NONE
 void RE_result_load_from_file(struct RenderResult *result, struct ReportList *reports, const char *filename) RET_NONE
-void RE_AcquireResultImage(struct Render *re, struct RenderResult *rr) RET_NONE
+void RE_AcquireResultImage(struct Render *re, struct RenderResult *rr, const int view_id) RET_NONE
 void RE_ReleaseResult(struct Render *re) RET_NONE
 void RE_ReleaseResultImage(struct Render *re) RET_NONE
 int RE_engine_test_break(struct RenderEngine *engine) RET_ZERO
@@ -697,6 +697,10 @@ struct CCLDeviceInfo *CCL_compute_device_list(int opencl) RET_NULL
 
 /* compositor */
 void COM_execute(RenderData *rd, Scene *scene, bNodeTree *editingtree, int rendering,
-                 const ColorManagedViewSettings *viewSettings, const ColorManagedDisplaySettings *displaySettings) RET_NONE
+                 const ColorManagedViewSettings *viewSettings, const ColorManagedDisplaySettings *displaySettings, const int view_id) RET_NONE
+
+/*multiview*/
+bool RE_RenderResult_is_stereo(RenderResult *res) RET_ZERO
+void uiTemplateImageViews(uiLayout *layout, struct PointerRNA *imfptr) RET_NONE
 
 #endif // WITH_GAMEENGINE
