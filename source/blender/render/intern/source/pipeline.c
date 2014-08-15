@@ -3199,7 +3199,7 @@ static int do_write_image_or_movie(Render *re, Main *bmain, Scene *scene, bMovie
 				}
 			}
 			else {
-				ImBuf *ibuf[2] = {NULL};
+				ImBuf *ibuf[3] = {NULL};
 				const char *names[2] = {STEREO_LEFT_NAME, STEREO_RIGHT_NAME};
 				int i;
 

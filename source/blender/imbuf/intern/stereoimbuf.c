@@ -426,7 +426,7 @@ static void imb_stereo_interlace(Stereo3DData *s3d, enum eStereoInterlaceType mo
 static void imb_stereo_sidebyside(Stereo3DData *s3d, const bool crosseyed)
 {
 	int y;
-	size_t width = s3d->x / 2;
+	size_t width = s3d->x;
 	size_t height= s3d->y;
 	const size_t channels = s3d->channels;
 
@@ -476,7 +476,7 @@ static void imb_stereo_topbottom(Stereo3DData *s3d)
 {
 	int y;
 	size_t width = s3d->x;
-	size_t height= s3d->y / 2;
+	size_t height= s3d->y;
 	const size_t channels = s3d->channels;
 
 	const int stride_from = width;
@@ -590,7 +590,7 @@ float *IMB_stereo_from_rectf(ImageFormatData *im_format, const size_t x, const s
 	IMB_stereo_dimensions(im_format->stereo_output.display_mode, x, y, &width, &height);
 	r_rectf = MEM_mallocN(channels * sizeof(float) * width * height, __func__);
 
-	imb_stereo_data_initialize(&s3d_data, im_format, width, height, channels, NULL, NULL, NULL, left, right, r_rectf);
+	imb_stereo_data_initialize(&s3d_data, im_format, x, y, channels, NULL, NULL, NULL, left, right, r_rectf);
 	imb_stereo_doit(&s3d_data, &im_format->stereo_output);
 
 	return r_rectf;
