@@ -810,7 +810,7 @@ void draw_image_main(const bContext *C, ARegion *ar)
 		BLI_lock_thread(LOCK_DRAW_IMAGE);
 	}
 
-	if (show_stereo3d)
+	if (show_stereo3d && !show_viewer)
 		/* update multiindex and pass for the current eye */
 		BKE_image_multilayer_index(ima->rr, &sima->iuser);
 

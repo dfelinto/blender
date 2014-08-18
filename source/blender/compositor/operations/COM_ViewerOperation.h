@@ -33,6 +33,7 @@ private:
 	float *m_depthBuffer;
 	Image *m_image;
 	ImageUser *m_imageUser;
+	int m_actview;
 	bool m_active;
 	float m_centerX;
 	float m_centerY;
@@ -67,6 +68,7 @@ public:
 	const CompositorPriority getRenderPriority() const;
 	bool isViewerOperation() const { return true; }
 	void setUseAlphaInput(bool value) { this->m_useAlphaInput = value; }
+	void setViewId(int actview) { this->m_actview = actview; }
 
 	void setViewSettings(const ColorManagedViewSettings *viewSettings) { this->m_viewSettings = viewSettings; }
 	void setDisplaySettings(const ColorManagedDisplaySettings *displaySettings) { this->m_displaySettings = displaySettings; }

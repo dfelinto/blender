@@ -124,7 +124,14 @@ void ViewerOperation::initImage()
 {
 	Image *ima = this->m_image;
 	void *lock;
-	ImBuf *ibuf = BKE_image_acquire_ibuf(ima, this->m_imageUser, &lock);
+	ImBuf *ibuf;
+	ImageUser iuser = *this->m_imageUser;
+
+	/* local changes to the original ImageUser */
+	iuser.view = this->m_actview;
+	iuser.flag &= ~IMA_SHOW_STEREO;
+
+	ibuf = BKE_image_acquire_ibuf(ima, &iuser, &lock);
 
 	if (!ibuf) return;
 	BLI_lock_thread(LOCK_DRAW_IMAGE);

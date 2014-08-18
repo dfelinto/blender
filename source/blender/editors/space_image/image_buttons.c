@@ -420,7 +420,37 @@ final:
 	BLI_assert(nr == -1);
 }
 
-static void ui_imageuser_view_menu(bContext *UNUSED(C), uiLayout *layout, void *ptrpair_p)
+static void ui_imageuser_view_menu_viewer(bContext *UNUSED(C), uiLayout *layout, void *ptrpair_p)
+{
+	void **ptrpair = ptrpair_p;
+	uiBlock *block = uiLayoutGetBlock(layout);
+	ImageUser *iuser = ptrpair[1];
+	RenderData *rd = ptrpair[3];
+	SceneRenderView *srv;
+	int nr;
+
+	uiBlockSetCurLayout(block, layout);
+	uiLayoutColumn(layout, false);
+
+	uiDefBut(block, LABEL, 0, IFACE_("View"),
+	         0, 0, UI_UNIT_X * 5, UI_UNIT_Y, NULL, 0.0, 0.0, 0, 0, "");
+
+	uiItemS(layout);
+
+	nr = 0;
+	for (srv = rd ? rd->views.first : NULL; srv; srv = srv->next) {
+		if ((srv->viewflag & SCE_VIEW_DISABLE))
+			continue;
+
+		uiDefButS(block, BUTM, B_NOP, IFACE_(srv->name), 0, 0,
+		          UI_UNIT_X * 5, UI_UNIT_X, &iuser->view, (float) nr++, 0.0, 0, -1, "");
+	}
+
+	if (iuser->view >= nr)
+		iuser->view = 0;
+}
+
+static void ui_imageuser_view_menu_rr(bContext *UNUSED(C), uiLayout *layout, void *ptrpair_p)
 {
 	void **ptrpair = ptrpair_p;
 	uiBlock *block = uiLayoutGetBlock(layout);
@@ -530,15 +560,17 @@ static void image_user_change(bContext *C, void *iuser_v, void *unused)
 }
 #endif
 
-static void uiblock_layer_pass_buttons(uiLayout *layout, RenderResult *rr, ImageUser *iuser, int w, short *render_slot)
+/* we only pass RenderData if image is stereo and from a Viewer Node */
+static void uiblock_layer_pass_buttons(uiLayout *layout, RenderResult *rr, RenderData *rd, ImageUser *iuser, int w, short *render_slot)
 {
-	static void *rnd_pt[3];  /* XXX, workaround */
+	static void *rnd_pt[4];  /* XXX, workaround */
 	uiBlock *block = uiLayoutGetBlock(layout);
 	uiBut *but;
 	RenderLayer *rl = NULL;
 	int wmenu1, wmenu2, wmenu3, wmenu4;
 	const char *fake_name;
-	const char *display_name;
+	const char *display_name = "";
+	const bool show_stereo = (iuser->flag & IMA_SHOW_STEREO);
 
 	uiLayoutRow(layout, true);
 
@@ -551,6 +583,7 @@ static void uiblock_layer_pass_buttons(uiLayout *layout, RenderResult *rr, Image
 	rnd_pt[0] = rr;
 	rnd_pt[1] = iuser;
 	rnd_pt[2] = NULL;
+	rnd_pt[3] = NULL;
 
 	/* menu buts */
 	if (render_slot) {
@@ -587,14 +620,34 @@ static void uiblock_layer_pass_buttons(uiLayout *layout, RenderResult *rr, Image
 		uiButSetMenuFromPulldown(but);
 
 		/* view */
-		if (BLI_countlist(&rr->views) > 1 && ((iuser->flag & IMA_SHOW_STEREO) == 0)) {
+		if (BLI_countlist(&rr->views) > 1 && !show_stereo) {
 			rview = BLI_findlink(&rr->views, iuser->view);
 			display_name = rview ? rview->name : "";
 
-			but = uiDefMenuBut(block, ui_imageuser_view_menu, rnd_pt, display_name, 0, 0, wmenu4, UI_UNIT_Y, TIP_("Select View"));
+			but = uiDefMenuBut(block, ui_imageuser_view_menu_rr, rnd_pt, display_name, 0, 0, wmenu4, UI_UNIT_Y, TIP_("Select View"));
 			uiButSetFunc(but, image_multi_cb, rr, iuser);
 			uiButSetMenuFromPulldown(but);
 		}
+	}
+
+	/* we only pass rd if image is stereo and showing viewer for the compositor */
+	else if (rd && !show_stereo) {
+		SceneRenderView *srv;
+		int nr = 0;
+		rnd_pt[3] = rd;
+
+		for (srv = rd->views.first; srv; srv = srv->next) {
+			if ((srv->viewflag & SCE_VIEW_DISABLE))
+				continue;
+
+			if (nr++ == iuser->view) {
+				display_name = srv->name;
+				break;
+			}
+		}
+
+		but = uiDefMenuBut(block, ui_imageuser_view_menu_viewer, rnd_pt, display_name, 0, 0, wmenu1, UI_UNIT_Y, TIP_("Select View"));
+		uiButSetMenuFromPulldown(but);
 	}
 }
 
@@ -620,7 +673,7 @@ static void uiblock_layer_pass_arrow_buttons(uiLayout *layout, RenderResult *rr,
 	but = uiDefIconBut(block, BUT, 0, ICON_TRIA_RIGHT,  0, 0, 0.90f * UI_UNIT_X, UI_UNIT_Y, NULL, 0, 0, 0, 0, TIP_("Next Layer"));
 	uiButSetFunc(but, image_multi_inclay_cb, rr, iuser);
 
-	uiblock_layer_pass_buttons(row, rr, iuser, 230 * dpi_fac, render_slot);
+	uiblock_layer_pass_buttons(row, rr, NULL, iuser, 230 * dpi_fac, render_slot);
 
 	/* decrease, increase arrows */
 	but = uiDefIconBut(block, BUT, 0, ICON_TRIA_LEFT,   0, 0, 0.85f * UI_UNIT_X, UI_UNIT_Y, NULL, 0, 0, 0, 0, TIP_("Previous Pass"));
@@ -1028,10 +1081,14 @@ void uiTemplateImageLayers(uiLayout *layout, bContext *C, Image *ima, ImageUser 
 	if (ima && iuser) {
 		const float dpi_fac = UI_DPI_FAC;
 		RenderResult *rr;
+		bool is_viewer_stereo = ima->source == IMA_SRC_VIEWER &&
+		                        ima->type == IMA_TYPE_COMPOSITE &&
+		                        (ima->flag & IMA_IS_STEREO);
 
 		/* use BKE_image_acquire_renderresult  so we get the correct slot in the menu */
 		rr = BKE_image_acquire_renderresult(scene, ima);
-		uiblock_layer_pass_buttons(layout, rr, iuser, 160 * dpi_fac, (ima->type == IMA_TYPE_R_RESULT) ? &ima->render_slot : NULL);
+		uiblock_layer_pass_buttons(layout, rr, is_viewer_stereo ? &scene->r : NULL, iuser, 160 * dpi_fac,
+		                           (ima->type == IMA_TYPE_R_RESULT) ? &ima->render_slot : NULL);
 		BKE_image_release_renderresult(scene, ima);
 	}
 }

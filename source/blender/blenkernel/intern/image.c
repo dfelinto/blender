@@ -2433,10 +2433,18 @@ bool BKE_image_is_stereo(Scene *scene, Image *ima)
 
 static void image_set_stereo_flag(Image *ima, RenderResult *rr)
 {
-	if (rr && RE_RenderResult_is_stereo(rr))
-		ima->flag |= IMA_IS_STEREO;
-	else
+	if (rr) {
+		if (RE_RenderResult_is_stereo(rr))
+			ima->flag |= IMA_IS_STEREO;
+		else
+			ima->flag &= ~IMA_IS_STEREO;
+	}
+	else if (ima->source == IMA_SRC_VIEWER &&
+	         ima->type == IMA_TYPE_COMPOSITE) {
+	}
+	else {
 		ima->flag &= ~IMA_IS_STEREO;
+	}
 }
 
 RenderResult *BKE_image_acquire_renderresult(Scene *scene, Image *ima)
@@ -3152,13 +3160,22 @@ static ImBuf *image_acquire_ibuf(Image *ima, ImageUser *iuser, void **lock_r)
 
 					/* XXX anim play for viewer nodes not yet supported */
 					frame = 0; // XXX iuser ? iuser->framenr : 0;
-					ibuf = image_get_cached_ibuf_for_index_frame(ima, 0, frame);
+
+					if ((ima->flag & IMA_IS_STEREO) &&
+					    (iuser->flag & IMA_SHOW_STEREO))
+					{
+						index = iuser->eye;
+					}
+					else {
+						index = (iuser ? iuser->view : 0);
+					}
+					ibuf = image_get_cached_ibuf_for_index_frame(ima, index, frame);
 
 					if (!ibuf) {
 						/* Composite Viewer, all handled in compositor */
 						/* fake ibuf, will be filled in compositor */
 						ibuf = IMB_allocImBuf(256, 256, 32, IB_rect);
-						image_assign_ibuf(ima, ibuf, 0, frame);
+						image_assign_ibuf(ima, ibuf, index, frame);
 					}
 				}
 			}
