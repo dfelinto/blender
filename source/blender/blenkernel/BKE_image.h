@@ -53,6 +53,7 @@ void   BKE_images_init(void);
 void   BKE_images_exit(void);
 
 void    BKE_image_free_cached_frames(struct Image *image);
+int     BKE_image_cache_count(struct Image *image);
 void    BKE_image_free_buffers(struct Image *image);
 /* call from library */
 void    BKE_image_free(struct Image *image);

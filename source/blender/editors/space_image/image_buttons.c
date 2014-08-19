@@ -647,6 +647,7 @@ static void uiblock_layer_pass_buttons(uiLayout *layout, RenderResult *rr, Rende
 		}
 
 		but = uiDefMenuBut(block, ui_imageuser_view_menu_viewer, rnd_pt, display_name, 0, 0, wmenu1, UI_UNIT_Y, TIP_("Select View"));
+		uiButSetFunc(but, image_multi_cb, rr, iuser);
 		uiButSetMenuFromPulldown(but);
 	}
 }

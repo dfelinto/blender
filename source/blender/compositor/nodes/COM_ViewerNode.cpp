@@ -38,9 +38,18 @@ static size_t ViewerNodeViewsCount(const RenderData *rd)
 	SceneRenderView *srv;
 	size_t totviews	= 0;
 
-	for (srv = (SceneRenderView *)rd->views.first; srv; srv = srv->next)
-		if ((srv->viewflag & SCE_VIEW_DISABLE) == 0)
-			totviews++;
+	if (rd->views_setup == SCE_VIEWS_SETUP_BASIC) {
+		if (BLI_findstring(&rd->views, STEREO_LEFT_NAME, offsetof(SceneRenderView, name)))
+		    totviews++;
+
+		if (BLI_findstring(&rd->views, STEREO_RIGHT_NAME, offsetof(SceneRenderView, name)))
+		    totviews++;
+	}
+	else {
+		for (srv = (SceneRenderView *)rd->views.first; srv; srv = srv->next)
+			if ((srv->viewflag & SCE_VIEW_DISABLE) == 0)
+				totviews++;
+	}
 	return totviews;
 }
 
@@ -115,7 +124,7 @@ void ViewerNode::convertToOperations(NodeConverter &converter, const CompositorC
 		}
 
 		size_t num_views = ViewerNodeViewsCount(context.getRenderData());
-		size_t num_caches = 1;
+		size_t num_caches = BKE_image_cache_count(image);
 
 		if (num_views != num_caches) {
 			BKE_image_free_cached_frames(image);

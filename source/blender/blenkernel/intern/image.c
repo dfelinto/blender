@@ -261,6 +261,14 @@ void BKE_image_free_cached_frames(Image *image)
 	image_free_cahced_frames(image);
 }
 
+int BKE_image_cache_count(Image *image)
+{
+	if (image->cache)
+		return IMB_moviecache_count(image->cache);
+	else
+		return 0;
+}
+
 /**
  * Simply free the image data from memory,
  * on display the image can load again (except for render buffers).
@@ -3167,7 +3175,7 @@ static ImBuf *image_acquire_ibuf(Image *ima, ImageUser *iuser, void **lock_r)
 					frame = 0; // XXX iuser ? iuser->framenr : 0;
 
 					if ((ima->flag & IMA_IS_STEREO) &&
-					    (iuser->flag & IMA_SHOW_STEREO))
+					    iuser && (iuser->flag & IMA_SHOW_STEREO))
 					{
 						index = iuser->eye;
 					}
@@ -3179,7 +3187,7 @@ static ImBuf *image_acquire_ibuf(Image *ima, ImageUser *iuser, void **lock_r)
 					if (!ibuf) {
 						/* Composite Viewer, all handled in compositor */
 						/* fake ibuf, will be filled in compositor */
-						ibuf = IMB_allocImBuf(256, 256, 32, IB_rect);
+						ibuf = IMB_allocImBuf(256, 256, 32, IB_rect | IB_rectfloat);
 						image_assign_ibuf(ima, ibuf, index, frame);
 					}
 				}

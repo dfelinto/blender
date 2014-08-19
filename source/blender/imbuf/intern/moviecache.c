@@ -619,3 +619,18 @@ void *IMB_moviecacheIter_getUserKey(struct MovieCacheIter *iter)
 	MovieCacheKey *key = BLI_ghashIterator_getKey((GHashIterator *) iter);
 	return key->userkey;
 }
+
+size_t IMB_moviecache_count(MovieCache *cache)
+{
+	GHashIterator *iter;
+	size_t tot = 0;
+
+	iter = BLI_ghashIterator_new(cache->hash);
+	while (!BLI_ghashIterator_done(iter)) {
+		BLI_ghashIterator_step(iter);
+		tot++;
+	}
+
+	BLI_ghashIterator_free(iter);
+	return tot;
+}
