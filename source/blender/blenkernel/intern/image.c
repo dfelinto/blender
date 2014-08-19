@@ -256,6 +256,11 @@ static void image_free_cahced_frames(Image *image)
 	}
 }
 
+void BKE_image_free_cached_frames(Image *image)
+{
+	image_free_cahced_frames(image);
+}
+
 /**
  * Simply free the image data from memory,
  * on display the image can load again (except for render buffers).

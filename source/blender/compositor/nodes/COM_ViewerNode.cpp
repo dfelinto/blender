@@ -22,6 +22,7 @@
 
 #include "COM_ViewerNode.h"
 #include "BKE_global.h"
+#include "BKE_image.h"
 #include "BLI_listbase.h"
 
 #include "COM_ViewerOperation.h"
@@ -30,6 +31,17 @@
 ViewerNode::ViewerNode(bNode *editorNode) : Node(editorNode)
 {
 	/* pass */
+}
+
+static size_t ViewerNodeViewsCount(const RenderData *rd)
+{
+	SceneRenderView *srv;
+	size_t totviews	= 0;
+
+	for (srv = (SceneRenderView *)rd->views.first; srv; srv = srv->next)
+		if ((srv->viewflag & SCE_VIEW_DISABLE) == 0)
+			totviews++;
+	return totviews;
 }
 
 static bool ViewerNodeIsStereo(const RenderData *rd)
@@ -101,6 +113,14 @@ void ViewerNode::convertToOperations(NodeConverter &converter, const CompositorC
 			image->flag &= ~IMA_IS_STEREO;
 			imageUser->flag &= ~IMA_SHOW_STEREO;
 		}
+
+		size_t num_views = ViewerNodeViewsCount(context.getRenderData());
+		size_t num_caches = 1;
+
+		if (num_views != num_caches) {
+			BKE_image_free_cached_frames(image);
+		}
+
 		BLI_unlock_thread(LOCK_DRAW_IMAGE);
 	}
 }
