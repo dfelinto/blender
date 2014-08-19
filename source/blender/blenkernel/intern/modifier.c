@@ -171,11 +171,14 @@ bool modifier_isPreview(ModifierData *md)
 {
 	ModifierTypeInfo *mti = modifierType_getInfo(md->type);
 
-	if (!(mti->flags & eModifierTypeFlag_UsesPreview))
+	/* Constructive modifiers are highly likely to also modify data like vgroups or vcol! */
+	if (!((mti->flags & eModifierTypeFlag_UsesPreview) || (mti->type == eModifierTypeType_Constructive))) {
 		return false;
+	}
 
-	if (md->mode & eModifierMode_Realtime)
+	if (md->mode & eModifierMode_Realtime) {
 		return true;
+	}
 
 	return false;
 }
@@ -350,6 +353,7 @@ int modifiers_getCageIndex(struct Scene *scene, Object *ob, int *r_lastPossibleC
 	/* Find the last modifier acting on the cage. */
 	for (i = 0; md; i++, md = md->next) {
 		ModifierTypeInfo *mti = modifierType_getInfo(md->type);
+		bool supports_mapping;
 
 		md->scene = scene;
 
@@ -357,15 +361,16 @@ int modifiers_getCageIndex(struct Scene *scene, Object *ob, int *r_lastPossibleC
 		if (!(mti->flags & eModifierTypeFlag_SupportsEditmode)) continue;
 		if (md->mode & eModifierMode_DisableTemporary) continue;
 
+		supports_mapping = modifier_supportsMapping(md);
+		if (r_lastPossibleCageIndex && supports_mapping) {
+			*r_lastPossibleCageIndex = i;
+		}
+
 		if (!(md->mode & eModifierMode_Realtime)) continue;
 		if (!(md->mode & eModifierMode_Editmode)) continue;
 
-		if (!modifier_supportsMapping(md))
+		if (!supports_mapping)
 			break;
-
-		if (r_lastPossibleCageIndex) {
-			*r_lastPossibleCageIndex = i;
-		}
 
 		if (md->mode & eModifierMode_OnCage)
 			cageIndex = i;

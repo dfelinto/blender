@@ -977,7 +977,7 @@ bool isect_line_tri_v3(const float p1[3], const float p2[3],
 
 	cross_v3_v3v3(p, d, e2);
 	a = dot_v3v3(e1, p);
-	if ((a > -0.000001f) && (a < 0.000001f)) return 0;
+	if (a == 0.0f) return 0;
 	f = 1.0f / a;
 
 	sub_v3_v3v3(s, p1, v0);
@@ -1016,7 +1016,7 @@ bool isect_line_tri_epsilon_v3(const float p1[3], const float p2[3],
 
 	cross_v3_v3v3(p, d, e2);
 	a = dot_v3v3(e1, p);
-	if ((a > -0.000001f) && (a < 0.000001f)) return 0;
+	if (a == 0.0f) return 0;
 	f = 1.0f / a;
 
 	sub_v3_v3v3(s, p1, v0);
@@ -1562,7 +1562,10 @@ bool isect_axial_line_tri_v3(const int axis, const float p1[3], const float p2[3
  * 1 - lines are coplanar, i1 is set to intersection
  * 2 - i1 and i2 are the nearest points on line 1 (v1, v2) and line 2 (v3, v4) respectively
  */
-int isect_line_line_v3(const float v1[3], const float v2[3], const float v3[3], const float v4[3], float i1[3], float i2[3])
+int isect_line_line_epsilon_v3(
+        const float v1[3], const float v2[3],
+        const float v3[3], const float v4[3], float i1[3], float i2[3],
+        const float epsilon)
 {
 	float a[3], b[3], c[3], ab[3], cb[3], dir1[3], dir2[3];
 	float d, div;
@@ -1588,7 +1591,7 @@ int isect_line_line_v3(const float v1[3], const float v2[3], const float v3[3], 
 		return 0;
 	}
 	/* test if the two lines are coplanar */
-	else if (d > -0.000001f && d < 0.000001f) {
+	else if (UNLIKELY(fabsf(d) <= epsilon)) {
 		cross_v3_v3v3(cb, c, b);
 
 		mul_v3_fl(a, dot_v3v3(cb, ab) / div);
@@ -1626,6 +1629,14 @@ int isect_line_line_v3(const float v1[3], const float v2[3], const float v3[3], 
 
 		return 2; /* two nearest points */
 	}
+}
+
+int isect_line_line_v3(
+        const float v1[3], const float v2[3],
+        const float v3[3], const float v4[3], float i1[3], float i2[3])
+{
+	const float epsilon = 0.000001f;
+	return isect_line_line_epsilon_v3(v1, v2, v3, v4, i1, i2, epsilon);
 }
 
 /** Intersection point strictly between the two lines
