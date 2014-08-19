@@ -3174,13 +3174,17 @@ static ImBuf *image_acquire_ibuf(Image *ima, ImageUser *iuser, void **lock_r)
 					/* XXX anim play for viewer nodes not yet supported */
 					frame = 0; // XXX iuser ? iuser->framenr : 0;
 
-					if ((ima->flag & IMA_IS_STEREO) &&
-					    iuser && (iuser->flag & IMA_SHOW_STEREO))
-					{
-						index = iuser->eye;
-					}
-					else {
-						index = (iuser ? iuser->view : 0);
+					if ((ima->flag & IMA_IS_STEREO)) {
+						if (iuser) {
+							if ((iuser->flag & IMA_SHOW_STEREO))
+								index = iuser->eye;
+							else
+								index = iuser->view;
+						}
+						else {
+							/* backdrop */
+							index = ima->eye;
+						}
 					}
 					ibuf = image_get_cached_ibuf_for_index_frame(ima, index, frame);
 

@@ -50,12 +50,14 @@
 #include "BIF_gl.h"
 
 #include "BKE_context.h"
+#include "BKE_image.h"
 #include "BKE_global.h"
 #include "BKE_screen.h"
 #include "BKE_report.h"
 
 #include "GHOST_C-api.h"
 
+#include "ED_node.h"
 #include "ED_view3d.h"
 #include "ED_screen.h"
 
@@ -387,6 +389,7 @@ static bool wm_stereo_required(bContext *C, bScreen *screen)
 	ScrArea *sa;
 	View3D *v3d;
 	SpaceImage *sima;
+	SpaceNode *snode;
 	Scene *sce = CTX_data_scene(C);
 	const bool is_multiview = (sce->r.scemode & R_MULTIVIEW);
 
@@ -417,10 +420,21 @@ static bool wm_stereo_required(bContext *C, bScreen *screen)
 				 * the file doesn't have views enabled */
 				sima = (SpaceImage *) sa->spacedata.first;
 				if ((sima->image) && (sima->image->flag & IMA_IS_STEREO) &&
-					(sima->iuser.flag & IMA_SHOW_STEREO)) {
+					(sima->iuser.flag & IMA_SHOW_STEREO))
+				{
 					return true;
 				}
 				break;
+			}
+			case SPACE_NODE:
+			{
+				if (!is_multiview)
+					continue;
+
+				snode = (SpaceNode *) sa->spacedata.first;
+				if ((snode->flag & SNODE_BACKDRAW) && ED_node_is_compositor(snode)) {
+					return true;
+				}
 			}
 		}
 	}

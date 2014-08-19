@@ -49,9 +49,11 @@
 #include "BIF_gl.h"
 
 #include "BKE_context.h"
+#include "BKE_image.h"
 
 #include "GHOST_C-api.h"
 
+#include "ED_node.h"
 #include "ED_view3d.h"
 #include "ED_screen.h"
 
@@ -774,6 +776,15 @@ static void wm_method_draw_triple_multiview(bContext *C, wmWindow *win, StereoVi
 			{
 				View3D *v3d = sa->spacedata.first;
 				v3d->eye = sview;
+				break;
+			}
+			case SPACE_NODE:
+			{
+				SpaceNode *snode = sa->spacedata.first;
+				if ((snode->flag & SNODE_BACKDRAW) && ED_node_is_compositor(snode)) {
+					Image *ima = BKE_image_verify_viewer(IMA_TYPE_COMPOSITE, "Viewer Node");
+					ima->eye = sview;
+				}
 				break;
 			}
 		}

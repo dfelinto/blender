@@ -120,7 +120,9 @@ typedef struct Image {
 	ColorManagedColorspaceSettings colorspace_settings;
 	char alpha_mode;
 
-	char pad[7];
+	char eye; /* for viewer node stereoscopy */
+
+	char pad[6];
 } Image;
 
 
