@@ -334,6 +334,7 @@ ccl_device VolumeIntegrateResult kernel_volume_integrate_homogeneous(KernelGloba
 	float t = ray->t;
 	float3 new_tp;
 
+#ifdef __VOLUME_SCATTER__
 	/* randomly scatter, and if we do t is shortened */
 	if(closure_flag & SD_SCATTER) {
 		/* extinction coefficient */
@@ -387,7 +388,9 @@ ccl_device VolumeIntegrateResult kernel_volume_integrate_homogeneous(KernelGloba
 			new_tp = *throughput * transmittance / pdf;
 		}
 	}
-	else if(closure_flag & SD_ABSORPTION) {
+	else 
+#endif
+	if(closure_flag & SD_ABSORPTION) {
 		/* absorption only, no sampling needed */
 		float3 transmittance = volume_color_transmittance(coeff.sigma_a, t);
 		new_tp = *throughput * transmittance;
@@ -464,6 +467,7 @@ ccl_device VolumeIntegrateResult kernel_volume_integrate_heterogeneous_distance(
 			bool scatter = false;
 
 			/* distance sampling */
+#ifdef __VOLUME_SCATTER__
 			if((closure_flag & SD_SCATTER) || (has_scatter && (closure_flag & SD_ABSORPTION))) {
 				has_scatter = true;
 
@@ -499,7 +503,9 @@ ccl_device VolumeIntegrateResult kernel_volume_integrate_heterogeneous_distance(
 					xi = 1.0f - (1.0f - xi)/sample_transmittance;
 				}
 			}
-			else if(closure_flag & SD_ABSORPTION) {
+			else 
+#endif
+			if(closure_flag & SD_ABSORPTION) {
 				/* absorption only, no sampling needed */
 				float3 sigma_a = coeff.sigma_a;
 
@@ -732,7 +738,9 @@ ccl_device void kernel_volume_decoupled_free(KernelGlobals *kg, VolumeSegment *s
  * scattering, they always scatter if there is any non-zero scattering
  * coefficient.
  *
- * these also do not do emission or modify throughput. */
+ * these also do not do emission or modify throughput. 
+ * 
+ * function is expected to return VOLUME_PATH_SCATTERED when probalistic_scatter is false */
 ccl_device VolumeIntegrateResult kernel_volume_decoupled_scatter(
 	KernelGlobals *kg, PathState *state, Ray *ray, ShaderData *sd,
 	float3 *throughput, float rphase, float rscatter,

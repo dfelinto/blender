@@ -16,7 +16,7 @@
 
 CCL_NAMESPACE_BEGIN
 
-#ifdef __VOLUME__
+#ifdef __VOLUME_SCATTER__
 
 ccl_device void kernel_path_volume_connect_light(KernelGlobals *kg, RNG *rng,
 	ShaderData *sd, float3 throughput, PathState *state, PathRadiance *L,
@@ -144,9 +144,8 @@ ccl_device void kernel_branched_path_volume_connect_light(KernelGlobals *kg, RNG
 
 				VolumeIntegrateResult result = kernel_volume_decoupled_scatter(kg,
 					state, ray, sd, &tp, rphase, rscatter, segment, (ls.t != FLT_MAX)? &ls.P: NULL, false);
-
-				if(result != VOLUME_PATH_SCATTERED)
-					continue;
+					
+				kernel_assert(result == VOLUME_PATH_SCATTERED);
 
 				/* todo: split up light_sample so we don't have to call it again with new position */
 				lamp_light_sample(kg, i, light_u, light_v, sd->P, &ls);
@@ -195,9 +194,8 @@ ccl_device void kernel_branched_path_volume_connect_light(KernelGlobals *kg, RNG
 
 				VolumeIntegrateResult result = kernel_volume_decoupled_scatter(kg,
 					state, ray, sd, &tp, rphase, rscatter, segment, (ls.t != FLT_MAX)? &ls.P: NULL, false);
-
-				if(result != VOLUME_PATH_SCATTERED)
-					continue;
+					
+				kernel_assert(result == VOLUME_PATH_SCATTERED);
 
 				/* todo: split up light_sample so we don't have to call it again with new position */
 				light_sample(kg, light_t, light_u, light_v, sd->time, sd->P, &ls);
@@ -234,9 +232,8 @@ ccl_device void kernel_branched_path_volume_connect_light(KernelGlobals *kg, RNG
 
 		VolumeIntegrateResult result = kernel_volume_decoupled_scatter(kg,
 			state, ray, sd, &tp, rphase, rscatter, segment, (ls.t != FLT_MAX)? &ls.P: NULL, false);
-
-		if(result != VOLUME_PATH_SCATTERED)
-			return;
+			
+		kernel_assert(result == VOLUME_PATH_SCATTERED);
 
 		/* todo: split up light_sample so we don't have to call it again with new position */
 		light_sample(kg, light_t, light_u, light_v, sd->time, sd->P, &ls);

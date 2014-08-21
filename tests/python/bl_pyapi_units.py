@@ -1,8 +1,7 @@
 # Apache License, Version 2.0
 
-# ./blender.bin --background -noaudio --python tests/python/bl_pyapi_units.py
+# ./blender.bin --background -noaudio --python tests/python/bl_pyapi_units.py -- --verbose
 import unittest
-from test import support
 
 from bpy.utils import units
 
@@ -23,7 +22,10 @@ class UnitsTesting(unittest.TestCase):
         ('METRIC',   'LENGTH', "33.3dm", "1", 0.1),
         ('IMPERIAL', 'LENGTH', "33.3cm", "1", 0.3048),  # ref unit is not in IMPERIAL system, default to feet...
         ('IMPERIAL', 'LENGTH', "33.3ft", "1\"", 0.0254),  # unused ref unit, since one is given already!
-        #('IMPERIAL', 'LENGTH', "", "1+1ft", 0.3048 * 2),  # Will fail with current code!
+        ('IMPERIAL', 'LENGTH', "", "1+1ft", 0.3048 * 2),  # default unit taken from current string (feet).
+        ('METRIC',   'LENGTH', "", "1+1ft", 1.3048),  # no metric units, we default to meters.
+        ('IMPERIAL', 'LENGTH', "", "3+1in+1ft", 0.3048 * 4 + 0.0254),  # bigger unit becomes default one!
+        ('IMPERIAL', 'LENGTH', "", "(3+1)in+1ft", 0.3048 + 0.0254 * 4),
     )
 
     # From 'internal' Blender value to user-friendly printing
@@ -67,16 +69,7 @@ class UnitsTesting(unittest.TestCase):
                                 "\"%s\", expected \"%s\"" % (usys, utype, val, prec, sep, compat, opt_str, output))
 
 
-def test_main():
-    try:
-        support.run_unittest(UnitsTesting)
-    except:
-        import traceback
-        traceback.print_exc()
-
-        # alert CTest we failed
-        import sys
-        sys.exit(1)
-
 if __name__ == '__main__':
-    test_main()
+    import sys
+    sys.argv = [__file__] + (sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else [])
+    unittest.main()

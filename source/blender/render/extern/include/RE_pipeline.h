@@ -225,6 +225,7 @@ void RE_InitState(struct Render *re, struct Render *source, struct RenderData *r
                   struct SceneRenderLayer *srl,
                   int winx, int winy, rcti *disprect);
 void RE_ChangeResolution(struct Render *re, int winx, int winy, rcti *disprect);
+void RE_ChangeModeFlag(struct Render *re, int flag, bool clear);
 
 /* set up the viewplane/perspective matrix, three choices */
 struct Object *RE_GetCameraStereo(struct Render *re, const bool left);

@@ -811,11 +811,26 @@ static void render_result_rescale(Render *re)
 void RE_ChangeResolution(Render *re, int winx, int winy, rcti *disprect)
 {
 	re_init_resolution(re, NULL, winx, winy, disprect);
+	RE_parts_clamp(re);
 
 	if (re->result) {
 		BLI_rw_mutex_lock(&re->resultmutex, THREAD_LOCK_WRITE);
 		render_result_rescale(re);
 		BLI_rw_mutex_unlock(&re->resultmutex);
+	}
+}
+
+/* TODO(sergey): This is a bit hackish, used to temporary disable freestyle when
+ * doing viewport render. Needs some better integration of BI viewport rendering
+ * into the pipeline.
+ */
+void RE_ChangeModeFlag(Render *re, int flag, bool clear)
+{
+	if (clear) {
+		re->r.mode &= ~flag;
+	}
+	else {
+		re->r.mode |= flag;
 	}
 }
 

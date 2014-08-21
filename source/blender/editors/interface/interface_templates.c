@@ -576,24 +576,33 @@ static void template_ID(bContext *C, uiLayout *layout, TemplateID *template, Str
 	
 	/* delete button */
 	/* don't use RNA_property_is_unlink here */
-	if (id && (flag & UI_ID_DELETE) && (RNA_property_flag(template->prop) & PROP_NEVER_UNLINK) == 0) {
+	if (id && (flag & UI_ID_DELETE)) {
+		/* allow unlink if 'unlinkop' is passed, even when 'PROP_NEVER_UNLINK' is set */
+		but = NULL;
+
 		if (unlinkop) {
 			but = uiDefIconButO(block, BUT, unlinkop, WM_OP_INVOKE_REGION_WIN, ICON_X, 0, 0, UI_UNIT_X, UI_UNIT_Y, NULL);
 			/* so we can access the template from operators, font unlinking needs this */
 			uiButSetNFunc(but, NULL, MEM_dupallocN(template), NULL);
 		}
 		else {
-			but = uiDefIconBut(block, BUT, 0, ICON_X, 0, 0, UI_UNIT_X, UI_UNIT_Y, NULL, 0, 0, 0, 0,
-			                   TIP_("Unlink datablock "
-			                        "(Shift + Click to set users to zero, data will then not be saved)"));
-			uiButSetNFunc(but, template_id_cb, MEM_dupallocN(template), SET_INT_IN_POINTER(UI_ID_DELETE));
+			if ((RNA_property_flag(template->prop) & PROP_NEVER_UNLINK) == 0) {
+				but = uiDefIconBut(block, BUT, 0, ICON_X, 0, 0, UI_UNIT_X, UI_UNIT_Y, NULL, 0, 0, 0, 0,
+				                   TIP_("Unlink datablock "
+				                        "(Shift + Click to set users to zero, data will then not be saved)"));
+				uiButSetNFunc(but, template_id_cb, MEM_dupallocN(template), SET_INT_IN_POINTER(UI_ID_DELETE));
 
-			if (RNA_property_flag(template->prop) & PROP_NEVER_NULL)
-				uiButSetFlag(but, UI_BUT_DISABLED);
+				if (RNA_property_flag(template->prop) & PROP_NEVER_NULL) {
+					uiButSetFlag(but, UI_BUT_DISABLED);
+				}
+			}
 		}
 
-		if ((idfrom && idfrom->lib) || !editable)
-			uiButSetFlag(but, UI_BUT_DISABLED);
+		if (but) {
+			if ((idfrom && idfrom->lib) || !editable) {
+				uiButSetFlag(but, UI_BUT_DISABLED);
+			}
+		}
 	}
 
 	if (idcode == ID_TE)
@@ -853,7 +862,11 @@ static uiLayout *draw_modifier(uiLayout *layout, Scene *scene, Object *ob,
 		uiBlockSetEmboss(block, UI_EMBOSS);
 		
 		/* modifier name */
+		if (mti->isDisabled && mti->isDisabled(md, 0)) {
+			uiLayoutSetRedAlert(row, true);
+		}
 		uiItemR(row, &ptr, "name", 0, "", ICON_NONE);
+		uiLayoutSetRedAlert(row, false);
 		
 		/* mode enabling buttons */
 		uiBlockBeginAlign(block);
@@ -2632,8 +2645,8 @@ static void uilist_filter_items_default(struct uiList *ui_list, struct bContext 
 
 	const char *filter_raw = ui_list->filter_byname;
 	char *filter = (char *)filter_raw, filter_buff[32], *filter_dyn = NULL;
-	bool filter_exclude = (ui_list->filter_flag & UILST_FLT_EXCLUDE) != 0;
-	bool order_by_name = (ui_list->filter_sort_flag & UILST_FLT_SORT_ALPHA) != 0;
+	const bool filter_exclude = (ui_list->filter_flag & UILST_FLT_EXCLUDE) != 0;
+	const bool order_by_name = (ui_list->filter_sort_flag & UILST_FLT_SORT_ALPHA) != 0;
 	int len = RNA_property_collection_length(dataptr, prop);
 
 	dyn_data->items_shown = dyn_data->items_len = len;
@@ -2942,8 +2955,8 @@ void uiTemplateList(uiLayout *layout, bContext *C, const char *listtype_name, co
 
 	/* Filter list items! (not for compact layout, though) */
 	if (dataptr->data && prop) {
-		int filter_exclude = ui_list->filter_flag & UILST_FLT_EXCLUDE;
-		bool order_reverse = (ui_list->filter_sort_flag & UILST_FLT_SORT_REVERSE) != 0;
+		const int filter_exclude = ui_list->filter_flag & UILST_FLT_EXCLUDE;
+		const bool order_reverse = (ui_list->filter_sort_flag & UILST_FLT_SORT_REVERSE) != 0;
 		int items_shown, idx = 0;
 #if 0
 		int prev_ii = -1, prev_i;
@@ -3483,7 +3496,7 @@ static void template_keymap_item_properties(uiLayout *layout, const char *title,
 	RNA_STRUCT_BEGIN (ptr, prop)
 	{
 		int flag = RNA_property_flag(prop);
-		bool is_set = RNA_property_is_set(ptr, prop);
+		const bool is_set = RNA_property_is_set(ptr, prop);
 		uiBut *but;
 
 		if (flag & PROP_HIDDEN)
