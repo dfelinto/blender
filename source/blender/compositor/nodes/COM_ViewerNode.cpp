@@ -24,6 +24,7 @@
 #include "BKE_global.h"
 #include "BKE_image.h"
 #include "BLI_listbase.h"
+#include "BKE_scene.h"
 
 #include "COM_ViewerOperation.h"
 #include "COM_ExecutionSystem.h"
@@ -31,40 +32,6 @@
 ViewerNode::ViewerNode(bNode *editorNode) : Node(editorNode)
 {
 	/* pass */
-}
-
-static size_t ViewerNodeViewsCount(const RenderData *rd)
-{
-	SceneRenderView *srv;
-	size_t totviews	= 0;
-
-	if (rd->views_setup == SCE_VIEWS_SETUP_BASIC) {
-		if (BLI_findstring(&rd->views, STEREO_LEFT_NAME, offsetof(SceneRenderView, name)))
-		    totviews++;
-
-		if (BLI_findstring(&rd->views, STEREO_RIGHT_NAME, offsetof(SceneRenderView, name)))
-		    totviews++;
-	}
-	else {
-		for (srv = (SceneRenderView *)rd->views.first; srv; srv = srv->next)
-			if ((srv->viewflag & SCE_VIEW_DISABLE) == 0)
-				totviews++;
-	}
-	return totviews;
-}
-
-static bool ViewerNodeIsStereo(const RenderData *rd)
-{
-	SceneRenderView *srv[2];
-
-	if ((rd->scemode & R_MULTIVIEW) == 0)
-		return false;
-
-	srv[0] = (SceneRenderView *)BLI_findstring(&rd->views, STEREO_LEFT_NAME, offsetof(SceneRenderView, name));
-	srv[1] = (SceneRenderView *)BLI_findstring(&rd->views, STEREO_RIGHT_NAME, offsetof(SceneRenderView, name));
-
-	return (srv[0] && ((srv[0]->viewflag & SCE_VIEW_DISABLE) == 0) &&
-	        srv[1] && ((srv[1]->viewflag & SCE_VIEW_DISABLE) == 0));
 }
 
 void ViewerNode::convertToOperations(NodeConverter &converter, const CompositorContext &context) const
@@ -113,9 +80,9 @@ void ViewerNode::convertToOperations(NodeConverter &converter, const CompositorC
 	if (do_output)
 		converter.registerViewer(viewerOperation);
 
-	if (image) {
+	if (image && (context.getViewId() == 0)) {
 		BLI_lock_thread(LOCK_DRAW_IMAGE);
-		if (ViewerNodeIsStereo(context.getRenderData())) {
+		if (BKE_render_is_stereo3d(context.getRenderData())) {
 			image->flag |= IMA_IS_STEREO;
 		}
 		else {
@@ -123,7 +90,7 @@ void ViewerNode::convertToOperations(NodeConverter &converter, const CompositorC
 			imageUser->flag &= ~IMA_SHOW_STEREO;
 		}
 
-		size_t num_views = ViewerNodeViewsCount(context.getRenderData());
+		size_t num_views = BKE_render_num_views(context.getRenderData());
 		size_t num_caches = BKE_image_cache_count(image);
 
 		if (num_views != num_caches) {

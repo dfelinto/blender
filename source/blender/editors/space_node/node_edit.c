@@ -226,6 +226,21 @@ static void compo_progressjob(void *cjv, float progress)
 	*(cj->progress) = progress;
 }
 
+/* XXX MV move this to a centralized place */
+static size_t get_rendered_views_count(RenderData *rd)
+{
+	SceneRenderView *srv;
+	size_t tot_views = 0;
+
+	if ((rd->scemode & R_MULTIVIEW) == 0)
+		return 1;
+
+	for (srv = rd->views.first; srv; srv = srv->next)
+		if ((srv->viewflag & SCE_VIEW_DISABLE) == 0)
+			tot_views ++;
+
+	return tot_views;
+}
 
 /* only this runs inside thread */
 static void compo_startjob(void *cjv, short *stop, short *do_update, float *progress)
@@ -233,6 +248,7 @@ static void compo_startjob(void *cjv, short *stop, short *do_update, float *prog
 	CompoJob *cj = cjv;
 	bNodeTree *ntree = cj->localtree;
 	Scene *scene = cj->scene;
+	size_t nr, numviews;
 
 	if (scene->use_nodes == false)
 		return;
@@ -252,8 +268,11 @@ static void compo_startjob(void *cjv, short *stop, short *do_update, float *prog
 
 	// XXX BIF_store_spare();
 	/* 1 is do_previews */
-	//MV XXX not sure if we can/should do multiview here as well
-	ntreeCompositExecTree(cj->scene, ntree, &cj->scene->r, false, true, &scene->view_settings, &scene->display_settings, 0);
+
+	numviews = get_rendered_views_count(&cj->scene->r);
+	for (nr = 0; nr < numviews; nr++) {
+		ntreeCompositExecTree(cj->scene, ntree, &cj->scene->r, false, true, &scene->view_settings, &scene->display_settings, nr);
+	}
 
 	ntree->test_break = NULL;
 	ntree->stats_draw = NULL;

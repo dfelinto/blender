@@ -141,6 +141,10 @@ bool BKE_scene_check_rigidbody_active(const struct Scene *scene);
 int BKE_scene_num_threads(const struct Scene *scene);
 int BKE_render_num_threads(const struct RenderData *r);
 
+/* multiview */
+bool BKE_render_is_stereo3d(const struct RenderData *rd);
+size_t BKE_render_num_views(const struct RenderData *rd);
+
 #ifdef __cplusplus
 }
 #endif

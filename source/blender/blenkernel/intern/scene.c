@@ -2026,3 +2026,40 @@ int BKE_scene_num_threads(const Scene *scene)
 {
 	return BKE_render_num_threads(&scene->r);
 }
+
+/******************** multiview *************************/
+
+size_t BKE_render_num_views(const RenderData *rd)
+{
+	SceneRenderView *srv;
+	size_t totviews	= 0;
+
+	if (rd->views_setup == SCE_VIEWS_SETUP_BASIC) {
+		if (BLI_findstring(&rd->views, STEREO_LEFT_NAME, offsetof(SceneRenderView, name)))
+		    totviews++;
+
+		if (BLI_findstring(&rd->views, STEREO_RIGHT_NAME, offsetof(SceneRenderView, name)))
+		    totviews++;
+	}
+	else {
+		for (srv = (SceneRenderView *)rd->views.first; srv; srv = srv->next)
+			if ((srv->viewflag & SCE_VIEW_DISABLE) == 0)
+				totviews++;
+	}
+	return totviews;
+}
+
+bool BKE_render_is_stereo3d(const RenderData *rd)
+{
+	SceneRenderView *srv[2];
+
+	if ((rd->scemode & R_MULTIVIEW) == 0)
+		return false;
+
+	srv[0] = (SceneRenderView *)BLI_findstring(&rd->views, STEREO_LEFT_NAME, offsetof(SceneRenderView, name));
+	srv[1] = (SceneRenderView *)BLI_findstring(&rd->views, STEREO_RIGHT_NAME, offsetof(SceneRenderView, name));
+
+	return (srv[0] && ((srv[0]->viewflag & SCE_VIEW_DISABLE) == 0) &&
+	        srv[1] && ((srv[1]->viewflag & SCE_VIEW_DISABLE) == 0));
+}
+

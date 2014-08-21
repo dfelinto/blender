@@ -3324,14 +3324,7 @@ static size_t get_videos_count(RenderData *rd)
 
 	/* R_IMF_VIEWS_INDIVIDUAL */
 	else {
-		SceneRenderView *srv;
-		size_t tot_views = 0;
-
-		for (srv = rd->views.first; srv; srv = srv->next)
-			if ((srv->viewflag & SCE_VIEW_DISABLE) == 0)
-				tot_views++;
-
-		return tot_views;
+		return BKE_render_num_views(rd);
 	}
 }
 
