@@ -55,6 +55,7 @@ void SplitViewerNode::convertToOperations(NodeConverter &converter, const Compos
 	ViewerOperation *viewerOperation = new ViewerOperation();
 	viewerOperation->setImage(image);
 	viewerOperation->setImageUser(imageUser);
+	viewerOperation->setViewId(context.getViewId());
 	viewerOperation->setViewSettings(context.getViewSettings());
 	viewerOperation->setDisplaySettings(context.getDisplaySettings());
 
