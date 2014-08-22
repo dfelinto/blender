@@ -182,6 +182,7 @@ void OutputSingleLayerOperation::deinitExecution()
 	this->m_imageInput = NULL;
 }
 
+/******************************* MultiLayer *******************************/
 
 OutputOpenExrLayer::OutputOpenExrLayer(const char *name_, DataType datatype_, bool use_layer_)
 {

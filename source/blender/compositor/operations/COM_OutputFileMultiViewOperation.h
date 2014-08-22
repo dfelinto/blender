@@ -30,6 +30,7 @@
 #include "BLI_path_util.h"
 
 #include "DNA_color_types.h"
+#include "DNA_userdef_types.h"
 
 #include "intern/openexr/openexr_multi.h"
 
@@ -39,6 +40,20 @@ private:
 public:
 	OutputOpenExrMultiViewOperation(const RenderData *rd, const bNodeTree *tree, const char *path, char exr_codec, int actview);
 
+	void *get_handle(const char *filename);
+	void deinitExecution();
+};
+
+/**/
+class OutputStereoOperation : public OutputSingleLayerOperation {
+private:
+	char m_name[FILE_MAX];
+	size_t m_channels;
+public:
+	OutputStereoOperation(const RenderData *rd, const bNodeTree *tree, DataType datatype,
+	                      struct ImageFormatData *format, const char *path, const char *name,
+	                      const ColorManagedViewSettings *viewSettings,
+	                      const ColorManagedDisplaySettings *displaySettings, int actview);
 	void *get_handle(const char *filename);
 	void deinitExecution();
 };

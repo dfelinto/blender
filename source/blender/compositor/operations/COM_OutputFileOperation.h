@@ -34,7 +34,7 @@
 
 /* Writes the image to a single-layer file. */
 class OutputSingleLayerOperation : public NodeOperation {
-private:
+protected:
 	const RenderData *m_rd;
 	const bNodeTree *m_tree;
 	

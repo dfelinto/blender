@@ -26,6 +26,8 @@
 #include "COM_OutputFileMultiViewOperation.h"
 #include "COM_ExecutionSystem.h"
 
+#include "BKE_scene.h"
+
 #include "BLI_path_util.h"
 
 OutputFileNode::OutputFileNode(bNode *editorNode) : Node(editorNode)
@@ -84,16 +86,30 @@ void OutputFileNode::convertToOperations(NodeConverter &converter, const Composi
 				NodeImageMultiFileSocket *sockdata = (NodeImageMultiFileSocket *)input->getbNodeSocket()->storage;
 				ImageFormatData *format = (sockdata->use_node_format ? &storage->format : &sockdata->format);
 				char path[FILE_MAX];
-				
+
 				/* combine file path for the input */
 				BLI_join_dirfile(path, FILE_MAX, storage->base_path, sockdata->path);
-				
-				OutputSingleLayerOperation *outputOperation = new OutputSingleLayerOperation(
-				        context.getRenderData(), context.getbNodeTree(), input->getDataType(), format, path,
-				        context.getViewSettings(), context.getDisplaySettings(), context.getViewId());
+
+				NodeOperation *outputOperation = NULL;
+
+				if (format->imtype == R_IMF_IMTYPE_MULTIVIEW) {
+					outputOperation = new OutputOpenExrMultiViewOperation(
+					        context.getRenderData(), context.getbNodeTree(), path, format->exr_codec, context.getViewId());
+				}
+				else if (format->views_output == R_IMF_VIEWS_INDIVIDUAL) {
+					outputOperation = new OutputSingleLayerOperation(
+					        context.getRenderData(), context.getbNodeTree(), input->getDataType(), format, path,
+					        context.getViewSettings(), context.getDisplaySettings(), context.getViewId());
+				}
+				else { /* R_IMF_VIEWS_STEREO_3D */
+					outputOperation = new OutputStereoOperation(
+					        context.getRenderData(), context.getbNodeTree(), input->getDataType(), format, path,
+					        sockdata->layer, context.getViewSettings(), context.getDisplaySettings(), context.getViewId());
+				}
+
 				converter.addOperation(outputOperation);
-				
 				converter.mapInputSocket(input, outputOperation->getInputSocket(0));
+
 				if (!previewAdded) {
 					converter.addNodeInputPreview(input);
 					previewAdded = true;

@@ -58,6 +58,7 @@ void    IMB_exrtile_begin_write(void *handle, const char *filename, int mipmap, 
 int     IMB_exrmultiview_begin_write(void *handle, const char *filename, int width, int height, int compress, int splitviews);
 
 void    IMB_exr_set_channel(void *handle, const char *layname, const char *passname, int xstride, int ystride, float *rect);
+float  *IMB_exr_channel_rect(void *handle, const char *layname, const char *passname, const char *view);
 
 void    IMB_exr_read_channels(void *handle);
 void    IMB_exr_write_channels(void *handle);

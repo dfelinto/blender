@@ -1056,6 +1056,34 @@ void IMB_exr_set_channel(void *handle, const char *layname, const char *passname
 		printf("IMB_exr_set_channel error %s\n", name);
 }
 
+float  *IMB_exr_channel_rect(void *handle, const char *layname, const char *passname, const char *view)
+{
+	ExrHandle *data = (ExrHandle *)handle;
+	ExrChannel *echan;
+	char name[EXR_TOT_MAXNAME + 1];
+
+	if (layname) {
+		char lay[EXR_LAY_MAXNAME + 1], pass[EXR_PASS_MAXNAME + 1];
+		BLI_strncpy(lay, layname, EXR_LAY_MAXNAME);
+		BLI_strncpy(pass, passname, EXR_PASS_MAXNAME);
+
+		BLI_snprintf(name, sizeof(name), "%s.%s", lay, pass);
+	}
+	else
+		BLI_strncpy(name, passname, EXR_TOT_MAXNAME - 1);
+
+	/* name has to be unique, thus it's a combination of layer, pass, view, and channel */
+	std::string raw_name = imb_exr_insert_view_name(name, view);
+	BLI_strncpy(name, raw_name.c_str(), sizeof(name));
+
+	echan = (ExrChannel *)BLI_findstring(&data->channels, name, offsetof(ExrChannel, name));
+
+	if (echan)
+		return echan->rect;
+
+	return NULL;
+}
+
 void IMB_exr_clear_channels(void *handle)
 {
 	ExrHandle *data = (ExrHandle *)handle;
