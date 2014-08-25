@@ -95,6 +95,9 @@ void OutputFileNode::convertToOperations(NodeConverter &converter, const Composi
 				if (format->imtype == R_IMF_IMTYPE_MULTIVIEW) {
 					outputOperation = new OutputOpenExrMultiViewOperation(
 					        context.getRenderData(), context.getbNodeTree(), path, format->exr_codec, context.getViewId());
+
+					((OutputOpenExrMultiViewOperation *)outputOperation)->add_layer(sockdata->layer, input->getDataType(), true);
+					converter.mapInputSocket(input, outputOperation->getInputSocket(0));
 				}
 				else if (format->views_output == R_IMF_VIEWS_INDIVIDUAL) {
 					outputOperation = new OutputSingleLayerOperation(
