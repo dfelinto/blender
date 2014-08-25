@@ -1697,7 +1697,9 @@ static void node_composit_buts_file_output_ex(uiLayout *layout, bContext *C, Poi
 	node_composit_buts_file_output(layout, C, ptr);
 	uiTemplateImageSettings(layout, &imfptr, false);
 	
-	if (multiview)
+	/* disable stereo output for multilayer, too much work for something that no one will use */
+	/* if someone asks for that we can implement it */
+	if (multiview && !multilayer)
 		uiTemplateImageViews(layout, &imfptr);
 
 	uiItemS(layout);
