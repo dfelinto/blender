@@ -2388,11 +2388,10 @@ RenderPass *BKE_image_multilayer_index(RenderResult *rr, ImageUser *iuser)
 		return NULL;
 
 	if (iuser) {
-		short index = 0, rl_index = 0, rp_index;
-		short view;
+		short index = 0, rv_index, rl_index = 0, rp_index;
 		bool is_stereo = RE_RenderResult_is_stereo(rr) && (iuser->flag & IMA_SHOW_STEREO);
 
-		view = is_stereo ? iuser->eye : iuser->view;
+		rv_index = is_stereo ? iuser->eye : iuser->view;
 
 		for (rl = rr->layers.first; rl; rl = rl->next, rl_index++) {
 			rp_index = 0;
@@ -2400,7 +2399,7 @@ RenderPass *BKE_image_multilayer_index(RenderResult *rr, ImageUser *iuser)
 			for (rpass = rl->passes.first; rpass; rpass = rpass->next, index++, rp_index++) {
 				if (iuser->layer == rl_index &&
 				    iuser->passtype == rpass->passtype &&
-				    view == rpass->view_id) {
+				    rv_index == rpass->view_id) {
 					break;
 				}
 			}

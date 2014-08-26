@@ -39,19 +39,19 @@ ImageNode::ImageNode(bNode *editorNode) : Node(editorNode)
 
 }
 NodeOperation *ImageNode::doMultilayerCheck(NodeConverter &converter, RenderLayer *rl, Image *image, ImageUser *user,
-                                            int framenumber, int outputsocketIndex, int passindex, DataType datatype) const
+                                            int framenumber, int outputsocketIndex, int passtype, int view, DataType datatype) const
 {
 	NodeOutput *outputSocket = this->getOutputSocket(outputsocketIndex);
 	MultilayerBaseOperation *operation = NULL;
 	switch (datatype) {
 		case COM_DT_VALUE:
-			operation = new MultilayerValueOperation(passindex);
+			operation = new MultilayerValueOperation(passtype, view);
 			break;
 		case COM_DT_VECTOR:
-			operation = new MultilayerVectorOperation(passindex);
+			operation = new MultilayerVectorOperation(passtype, view);
 			break;
 		case COM_DT_COLOR:
-			operation = new MultilayerColorOperation(passindex);
+			operation = new MultilayerColorOperation(passtype, view);
 			break;
 		default:
 			break;
@@ -65,42 +65,6 @@ NodeOperation *ImageNode::doMultilayerCheck(NodeConverter &converter, RenderLaye
 	converter.mapOutputSocket(outputSocket, operation->getOutputSocket());
 	
 	return operation;
-}
-
-int ImageNode::getPassIndex(const CompositorContext &context, ListBase *passes, ListBase *views, int passindex, int view_ui) const
-{
-	if (BLI_countlist(views) < 2)
-		return passindex;
-
-	const RenderData *rd= context.getRenderData();
-	int actview = context.getViewId();
-
-	bool is_multiview = (view_ui == 0); /* if view selected == All (0) */
-	RenderView *rv;
-	const char *view = NULL;
-
-	if (! is_multiview) {
-		rv = (RenderView *)BLI_findlink(views, view_ui - 1);
-		view = rv->name;
-	}
-	else {
-		/* heuristic to match image name with scene names */
-		view = this->RenderData_get_actview_name(rd, actview);
-
-		/* this should never happen, but it doesn't hurt to be safe */
-		if (view == NULL)
-			return passindex;
-
-		/* check if the view name exists in the image */
-		if(! BLI_findstring(views, view, offsetof(RenderView, name)))
-			return passindex;
-	}
-
-	RenderPass *rpass = (RenderPass *)BLI_findlink(passes, passindex);
-	char passname[64];
-
-	sprintf(passname, "%s.%s", rpass->internal_name, view);
-	return BLI_findstringindex(passes, passname, offsetof(RenderPass, name));
 }
 
 void ImageNode::convertToOperations(NodeConverter &converter, const CompositorContext &context) const
@@ -131,39 +95,39 @@ void ImageNode::convertToOperations(NodeConverter &converter, const CompositorCo
 					NodeOperation *operation = NULL;
 					socket = this->getOutputSocket(index);
 					bNodeSocket *bnodeSocket = socket->getbNodeSocket();
-					/* Passes in the file can differ from passes stored in sockets (#36755).
-					 * Look up the correct file pass using the socket identifier instead.
-					 */
-#if 0
-					NodeImageLayer *storage = (NodeImageLayer *)bnodeSocket->storage;*/
-					int passindex = getPassIndex(context, &rl->passes, &image->rr->views, storage->pass_index, imageuser->view);
-					RenderPass *rpass = (RenderPass *)BLI_findlink(&rl->passes, passindex);
-#endif
-					int passindex;
-					RenderPass *rpass;
-					for (rpass = (RenderPass *)rl->passes.first, passindex = 0; rpass; rpass = rpass->next, ++passindex)
-						if (STREQ(rpass->name, bnodeSocket->identifier))
-							break;
+					RenderPass *rpass = (RenderPass*) BLI_findstring(&rl->passes, bnodeSocket->identifier, offsetof(RenderPass, internal_name));
 
+					int view = (rpass ? rpass->view_id : 0);
+
+					/* returns the image view to use for the current active view */
 					if (BLI_countlist(&image->rr->views) > 1) {
-						NodeImageLayer *storage = (NodeImageLayer *)bnodeSocket->storage;
-						passindex = getPassIndex(context, &rl->passes, &image->rr->views, storage->pass_index, imageuser->view);
-						rpass = (RenderPass *)BLI_findlink(&rl->passes, passindex);
+						const int view_image = imageuser->view;
+						const bool is_allview = (view_image == 0); /* if view selected == All (0) */
+
+						if (is_allview) {
+							/* heuristic to match image name with scene names */
+							const char *view_name = this->RenderData_get_actview_name(context.getRenderData(), context.getViewId());
+
+							/* check if the view name exists in the image */
+							view = BLI_findstringindex(&image->rr->views, view_name, offsetof(RenderView, name));
+						}
+						else {
+							view = view_image - 1;
+						}
 					}
 
 					if (rpass) {
-						imageuser->pass = passindex;
 						switch (rpass->channels) {
 							case 1:
-								operation = doMultilayerCheck(converter, rl, image, imageuser, framenumber, index, passindex, COM_DT_VALUE);
+								operation = doMultilayerCheck(converter, rl, image, imageuser, framenumber, index, rpass->passtype, view, COM_DT_VALUE);
 								break;
 								/* using image operations for both 3 and 4 channels (RGB and RGBA respectively) */
 								/* XXX any way to detect actual vector images? */
 							case 3:
-								operation = doMultilayerCheck(converter, rl, image, imageuser, framenumber, index, passindex, COM_DT_VECTOR);
+								operation = doMultilayerCheck(converter, rl, image, imageuser, framenumber, index, rpass->passtype, view, COM_DT_VECTOR);
 								break;
 							case 4:
-								operation = doMultilayerCheck(converter, rl, image, imageuser, framenumber, index, passindex, COM_DT_COLOR);
+								operation = doMultilayerCheck(converter, rl, image, imageuser, framenumber, index, rpass->passtype, view, COM_DT_COLOR);
 								break;
 							default:
 								/* dummy operation is added below */

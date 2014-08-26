@@ -36,8 +36,7 @@ extern "C" {
 class ImageNode : public Node {
 private:
 	NodeOperation *doMultilayerCheck(NodeConverter &converter, RenderLayer *rl, Image *image, ImageUser *user,
-	                                 int framenumber, int outputsocketIndex, int passindex, DataType datatype) const;
-	int getPassIndex(const CompositorContext &context, struct ListBase *passes, struct ListBase *views, int passindex, int view_id) const;
+	                                 int framenumber, int outputsocketIndex, int passtype, int view, DataType datatype) const;
 public:
 	ImageNode(bNode *editorNode);
 	void convertToOperations(NodeConverter &converter, const CompositorContext &context) const;
