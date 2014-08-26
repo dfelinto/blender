@@ -1069,6 +1069,11 @@ void uiTemplateImageViews(uiLayout *layout, PointerRNA *imfptr)
 		case S3D_DISPLAY_SIDEBYSIDE:
 		{
 			uiItemR(col, &stereo_output_ptr, "use_sidebyside_crosseyed", 0, NULL, ICON_NONE);
+			/* fall-through */
+		}
+		case S3D_DISPLAY_TOPBOTTOM:
+		{
+			uiItemR(col, &stereo_output_ptr, "use_squeezed_frame", 0, NULL, ICON_NONE);
 			break;
 		}
 	}

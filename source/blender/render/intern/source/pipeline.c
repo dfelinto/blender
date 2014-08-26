@@ -3303,7 +3303,7 @@ static void get_videos_dimensions(Render *re, RenderData *rd, size_t *r_width, s
 	if ((rd->scemode & R_MULTIVIEW) &&
 	    rd->im_format.views_output == R_IMF_VIEWS_STEREO_3D)
 	{
-		IMB_stereo_dimensions(rd->im_format.stereo_output.display_mode, width, height, r_width, r_height);
+		IMB_stereo_dimensions(rd->im_format.stereo_output.display_mode, ((rd->im_format.stereo_output.flag & S3D_UNSQUEEZED_FRAME) == 0), width, height, r_width, r_height);
 	}
 	else {
 		*r_width = width;

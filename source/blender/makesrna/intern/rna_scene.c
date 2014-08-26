@@ -4089,6 +4089,10 @@ static void rna_def_image_format_stereo_output(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "use_sidebyside_crosseyed", PROP_BOOLEAN, PROP_BOOLEAN);
 	RNA_def_property_boolean_sdna(prop, NULL, "flag", S3D_SIDEBYSIDE_CROSSEYED);
 	RNA_def_property_ui_text(prop, "Cross-Eyed", "Right eye should see left image and vice-versa");
+
+	prop = RNA_def_property(srna, "use_squeezed_frame", PROP_BOOLEAN, PROP_BOOLEAN);
+	RNA_def_property_boolean_negative_sdna(prop, NULL, "flag", S3D_UNSQUEEZED_FRAME);
+	RNA_def_property_ui_text(prop, "Squeezed Frame", "Combine both views in a squeezed image");
 }
 
 /* use for render output and image save operator,
