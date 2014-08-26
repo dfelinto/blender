@@ -135,6 +135,7 @@ bool ImageManager::is_float_image(const string& filename, void *builtin_data, bo
 				              (colorspace == "" &&
 				                  (strcmp(in->format_name(), "png") == 0 ||
 				                   strcmp(in->format_name(), "tiff") == 0 ||
+				                   strcmp(in->format_name(), "dpx") == 0 ||
 				                   strcmp(in->format_name(), "jpeg2000") == 0)));
 			}
 			else {
@@ -332,7 +333,7 @@ void ImageManager::tag_reload_image(const string& filename, void *builtin_data, 
 		/* see if it's in a float texture slot */
 		for(slot = 0; slot < float_images.size(); slot++) {
 			if(float_images[slot] && image_equals(float_images[slot], filename, builtin_data, interpolation)) {
-				images[slot]->need_load = true;
+				float_images[slot]->need_load = true;
 				break;
 			}
 		}

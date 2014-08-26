@@ -976,7 +976,9 @@ class CyclesWorld_PT_settings(CyclesButtonsPanel, Panel):
 
         col = split.column()
         col.label(text="Volume:")
-        col.prop(cworld, "volume_sampling", text="")
+        sub = col.column()
+        sub.active = use_cpu(context)
+        sub.prop(cworld, "volume_sampling", text="")
         col.prop(cworld, "homogeneous_volume", text="Homogeneous")
 
 
@@ -1078,7 +1080,9 @@ class CyclesMaterial_PT_settings(CyclesButtonsPanel, Panel):
 
         col = split.column()
         col.label(text="Volume:")
-        col.prop(cmat, "volume_sampling", text="")
+        sub = col.column()
+        sub.active = use_cpu(context)
+        sub.prop(cmat, "volume_sampling", text="")
         col.prop(cmat, "homogeneous_volume", text="Homogeneous")
 
 

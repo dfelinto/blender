@@ -285,13 +285,13 @@ static float colorband_hue_interp(
 			else                                     mode = 0;
 			break;
 		}
-		case COLBAND_HUE_CW:
+		case COLBAND_HUE_CCW:
 		{
 			if (h1 > h2) mode = 2;
 			else         mode = 0;
 			break;
 		}
-		case COLBAND_HUE_CCW:
+		case COLBAND_HUE_CW:
 		{
 			if (h1 < h2) mode = 1;
 			else         mode = 0;
@@ -431,11 +431,8 @@ bool do_colorband(const ColorBand *coba, float in, float out[4])
 				if (UNLIKELY(coba->color_mode == COLBAND_BLEND_HSV)) {
 					float col1[3], col2[3];
 
-					linearrgb_to_srgb_v3_v3(col1, &cbd1->r);
-					linearrgb_to_srgb_v3_v3(col2, &cbd2->r);
-
-					rgb_to_hsv_v(col1, col1);
-					rgb_to_hsv_v(col2, col2);
+					rgb_to_hsv_v(&cbd1->r, col1);
+					rgb_to_hsv_v(&cbd2->r, col2);
 
 					out[0] = colorband_hue_interp(coba->ipotype_hue, mfac, fac, col1[0], col2[0]);
 					out[1] = mfac * col1[1] + fac * col2[1];
@@ -443,17 +440,12 @@ bool do_colorband(const ColorBand *coba, float in, float out[4])
 					out[3] = mfac * cbd1->a + fac * cbd2->a;
 
 					hsv_to_rgb_v(out, out);
-
-					srgb_to_linearrgb_v3_v3(out, out);
 				}
 				else if (UNLIKELY(coba->color_mode == COLBAND_BLEND_HSL)) {
 					float col1[3], col2[3];
 
-					linearrgb_to_srgb_v3_v3(col1, &cbd1->r);
-					linearrgb_to_srgb_v3_v3(col2, &cbd2->r);
-
-					rgb_to_hsl_v(col1, col1);
-					rgb_to_hsl_v(col2, col2);
+					rgb_to_hsl_v(&cbd1->r, col1);
+					rgb_to_hsl_v(&cbd2->r, col2);
 
 					out[0] = colorband_hue_interp(coba->ipotype_hue, mfac, fac, col1[0], col2[0]);
 					out[1] = mfac * col1[1] + fac * col2[1];
@@ -461,8 +453,6 @@ bool do_colorband(const ColorBand *coba, float in, float out[4])
 					out[3] = mfac * cbd1->a + fac * cbd2->a;
 
 					hsl_to_rgb_v(out, out);
-
-					srgb_to_linearrgb_v3_v3(out, out);
 				}
 				else {
 					/* COLBAND_BLEND_RGB */
