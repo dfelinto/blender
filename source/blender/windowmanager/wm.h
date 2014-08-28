@@ -77,7 +77,9 @@ void wm_autosave_read(bContext *C, struct ReportList *reports);
 void wm_autosave_location(char *filepath);
 
 /* wm_stereo.c */
-void wm_method_draw_stereo(bContext *C, wmWindow *win);
+void wm_method_draw_stereo(const bContext *C, wmWindow *win);
+int wm_stereo_toggle_exec(bContext *C, wmOperator *op);
+int wm_stereo_toggle_invoke(bContext *C, wmOperator *op, const wmEvent *event);
 
 /* init operator properties */
 void wm_open_init_load_ui(wmOperator *op, bool use_prefs);

@@ -217,7 +217,7 @@ void RE_ResultGet32(struct Render *re, unsigned int *rect);
 void RE_AcquiredResultGet32(struct Render *re, struct RenderResult *result, unsigned int *rect, const int view_id);
 
 struct RenderLayer *RE_GetRenderLayer(struct RenderResult *rr, const char *name);
-float *RE_RenderLayerGetPass(struct RenderLayer *rl, int passtype, int view_id);
+float *RE_RenderLayerGetPass(volatile struct RenderLayer *rl, int passtype, int view_id);
 int RE_GetActiveViewId(struct Render *re);
 
 /* obligatory initialize call, disprect is optional */

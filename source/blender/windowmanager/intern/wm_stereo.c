@@ -71,7 +71,6 @@
 #include "WM_api.h"
 #include "WM_types.h"
 #include "wm.h"
-#include "wm_stereo.h"
 #include "wm_draw.h" /* wmDrawTriple */
 #include "wm_window.h"
 #include "wm_event_system.h"
@@ -346,7 +345,7 @@ static void wm_method_draw_stereo_topbottom(wmWindow *win)
 	}
 }
 
-void wm_method_draw_stereo(bContext *UNUSED(C), wmWindow *win)
+void wm_method_draw_stereo(const bContext *UNUSED(C), wmWindow *win)
 {
 	switch (win->stereo_display.display_mode)
 	{
@@ -384,7 +383,7 @@ static bool wm_stereo_need_fullscreen(eStereoDisplayMode stereo_display)
 /*
  * return true if any active area requires to see in 3D
  */
-static bool wm_stereo_required(bContext *C, bScreen *screen)
+static bool wm_stereo_required(const bContext *C, bScreen *screen)
 {
 	ScrArea *sa;
 	View3D *v3d;
@@ -442,7 +441,7 @@ static bool wm_stereo_required(bContext *C, bScreen *screen)
 	return false;
 }
 
-bool WM_stereo_enabled(bContext *C, wmWindow *win, bool only_fullscreen_test)
+bool WM_stereo_enabled(const bContext *C, wmWindow *win, bool only_fullscreen_test)
 {
 	bScreen *screen = win->screen;
 

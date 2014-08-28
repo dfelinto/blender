@@ -144,7 +144,7 @@ static int thread_break(void *UNUSED(arg))
 
 /* default callbacks, set in each new render */
 static void result_nothing(void *UNUSED(arg), RenderResult *UNUSED(rr)) {}
-static void result_rcti_nothing(void *UNUSED(arg), RenderResult *UNUSED(rr), volatile struct rcti *UNUSED(rect)) {}
+static void result_rcti_nothing(void *UNUSED(arg), RenderResult *UNUSED(rr), volatile struct rcti *UNUSED(rect), const int UNUSED(view_id)) {}
 static void current_scene_nothing(void *UNUSED(arg), Scene *UNUSED(scene)) {}
 static void stats_nothing(void *UNUSED(arg), RenderStats *UNUSED(rs)) {}
 static void float_nothing(void *UNUSED(arg), float UNUSED(val)) {}
@@ -198,7 +198,7 @@ int RE_GetActiveViewId(Render *re)
 	return re->actview;
 }
 
-float *RE_RenderLayerGetPass(RenderLayer *rl, int passtype, int view_id)
+float *RE_RenderLayerGetPass(volatile RenderLayer *rl, int passtype, int view_id)
 {
 	RenderPass *rpass;
 	float *rect=NULL;

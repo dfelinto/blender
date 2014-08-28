@@ -111,7 +111,6 @@
 #include "wm_files.h"
 #include "wm_subwindow.h"
 #include "wm_window.h"
-#include "wm_stereo.h"
 
 static GHash *global_ops_hash = NULL;
 

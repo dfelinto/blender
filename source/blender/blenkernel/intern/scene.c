@@ -2062,6 +2062,9 @@ size_t BKE_render_num_views(const RenderData *rd)
 	SceneRenderView *srv;
 	size_t totviews	= 0;
 
+	if ((rd->scemode & R_MULTIVIEW) == 0)
+		return 1;
+
 	if (rd->views_setup == SCE_VIEWS_SETUP_BASIC) {
 		if (BLI_findstring(&rd->views, STEREO_LEFT_NAME, offsetof(SceneRenderView, name)))
 		    totviews++;

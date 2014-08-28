@@ -77,7 +77,6 @@ set(SRC
 	wm_files.h
 	wm_subwindow.h
 	wm_window.h
-	wm_stereo.h
 )
 
 add_definitions(-DGLEW_STATIC)

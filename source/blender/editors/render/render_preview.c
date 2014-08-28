@@ -545,7 +545,8 @@ static bool ed_preview_draw_rect(ScrArea *sa, int split, int first, rcti *rect, 
 
 	/* test if something rendered ok */
 	re = RE_GetRender(name);
-	/* XXX MV to investigate when this is called */
+
+	/* material preview only needs monoscopy (view 0) */
 	RE_AcquireResultImage(re, &rres, 0);
 
 	if (rres.rectf) {
@@ -559,8 +560,8 @@ static bool ed_preview_draw_rect(ScrArea *sa, int split, int first, rcti *rect, 
 				unsigned char *rect_byte = MEM_mallocN(rres.rectx * rres.recty * sizeof(int), "ed_preview_draw_rect");
 				float fx = rect->xmin + offx;
 				float fy = rect->ymin;
-				
-				/* XXX MV to investigate when this is called */
+
+				/* material preview only needs monoscopy (view 0) */
 				RE_AcquiredResultGet32(re, &rres, (unsigned int *)rect_byte, 0);
 				glaDrawPixelsSafe(fx, fy, rres.rectx, rres.recty, rres.rectx, GL_RGBA, GL_UNSIGNED_BYTE, rect_byte);
 				
@@ -622,7 +623,7 @@ void ED_preview_draw(const bContext *C, void *idp, void *parentp, void *slotp, r
 /* **************************** new shader preview system ****************** */
 
 /* inside thread, called by renderer, sets job update value */
-static void shader_preview_update(void *spv, RenderResult *UNUSED(rr), volatile struct rcti *UNUSED(rect))
+static void shader_preview_update(void *spv, RenderResult *UNUSED(rr), volatile struct rcti *UNUSED(rect), const int UNUSED(view_id))
 {
 	ShaderPreview *sp = spv;
 	
