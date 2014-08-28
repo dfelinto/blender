@@ -148,6 +148,8 @@ double BKE_scene_unit_scale(const struct UnitSettings *unit, const int unit_type
 /* multiview */
 bool BKE_render_is_stereo3d(const struct RenderData *rd);
 size_t BKE_render_num_views(const struct RenderData *rd);
+bool BKE_scene_render_view_active(const struct RenderData *rd, const struct SceneRenderView *srv);
+struct SceneRenderView *BKE_scene_render_view_findindex(const struct RenderData *rd, const int view_id);
 
 #ifdef __cplusplus
 }

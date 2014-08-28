@@ -500,6 +500,11 @@ void RE_SetEnvmapCamera(Render *re, Object *cam_ob, float viewscale, float clips
 	re_camera_params_get(re, &params, cam_ob);
 }
 
+void RE_SetOverrideCamera(Render *re, Object *camera)
+{
+	re->camera_override = camera;
+}
+
 /* call this after InitState() */
 /* per render, there's one persistent viewplane. Parts will set their own viewplanes */
 void RE_SetCamera(Render *re, Object *cam_ob)

@@ -2094,3 +2094,45 @@ bool BKE_render_is_stereo3d(const RenderData *rd)
 	        srv[1] && ((srv[1]->viewflag & SCE_VIEW_DISABLE) == 0));
 }
 
+/* return whether to render this SceneRenderView */
+bool BKE_scene_render_view_active(const RenderData *rd, const SceneRenderView *srv)
+{
+	if (srv == NULL)
+		return false;
+
+	if ((rd->scemode & R_MULTIVIEW) == 0)
+		return false;
+
+	if ((srv->viewflag & SCE_VIEW_DISABLE))
+		return false;
+
+	if (rd->views_setup == SCE_VIEWS_SETUP_ADVANCED)
+		return true;
+
+	/* SCE_VIEWS_SETUP_BASIC */
+	if ((strcmp(srv->name, STEREO_LEFT_NAME) == 0) ||
+	    (strcmp(srv->name, STEREO_RIGHT_NAME) == 0))
+	{
+		return true;
+	}
+
+	return false;
+}
+
+SceneRenderView *BKE_scene_render_view_findindex(const RenderData *rd, const int view_id)
+{
+	SceneRenderView *srv;
+	size_t nr;
+
+	if ((rd->scemode & R_MULTIVIEW) == 0)
+		return NULL;
+
+	nr = 0;
+	for (srv = rd->views.first, nr = 0; srv; srv = srv->next) {
+		if (BKE_scene_render_view_active(rd, srv)) {
+			if (nr++ == view_id)
+				return srv;
+		}
+	}
+	return srv;
+}

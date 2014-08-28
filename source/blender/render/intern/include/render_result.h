@@ -102,7 +102,6 @@ void render_result_rect_get_pixels(struct RenderResult *rr,
 	const struct ColorManagedDisplaySettings *display_settings,
 	const int view_id);
 
-int render_result_get_view_id(struct Render *re, const char *view);
 void render_result_views_shallowcopy(struct RenderResult *dst, struct RenderResult *src);
 void render_result_views_shallowdelete(struct RenderResult *rr);
 

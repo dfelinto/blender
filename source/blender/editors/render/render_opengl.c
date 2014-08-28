@@ -40,10 +40,12 @@
 #include "BLI_blenlib.h"
 #include "BLI_utildefines.h"
 #include "BLI_jitter.h"
+#include "BLI_threads.h"
 
 #include "DNA_scene_types.h"
 #include "DNA_object_types.h"
 
+#include "BKE_camera.h"
 #include "BKE_context.h"
 #include "BKE_global.h"
 #include "BKE_image.h"
@@ -101,6 +103,8 @@ typedef struct OGLRender {
 	bMovieHandle *mh;
 	int cfrao, nfra;
 
+	int view_id;
+
 	/* wm vars for timer and progress cursor */
 	wmWindowManager *wm;
 	wmWindow *win;
@@ -119,16 +123,132 @@ static unsigned int screen_opengl_layers(OGLRender *oglrender)
 	}
 }
 
-static void screen_opengl_render_apply(OGLRender *oglrender)
+static bool screen_opengl_is_multiview(OGLRender *oglrender)
+{
+	View3D *v3d = oglrender->v3d;
+	RegionView3D *rv3d = oglrender->rv3d;
+	RenderData *rd = &oglrender->scene->r;
+
+	if ((rd == NULL) || (rv3d == NULL) || (v3d == NULL))
+		return false;
+
+	return (rd->scemode & R_MULTIVIEW) && rv3d->persp == RV3D_CAMOB && v3d->camera;
+}
+
+static void screen_opengl_views_setup(OGLRender *oglrender)
+{
+	RenderResult *rr;
+	RenderView *rv;
+	SceneRenderView *srv;
+	bool is_multiview;
+	View3D *v3d = oglrender->v3d;
+
+	RenderData *rd = &oglrender->scene->r;
+
+	rr = RE_AcquireResultWrite(oglrender->re);
+
+	is_multiview = screen_opengl_is_multiview(oglrender);
+
+	if (!is_multiview) {
+		/* we only have one view when multiview is off */
+		rv = (RenderView *) rr->views.first;
+
+		if (rv == NULL) {
+			rv = MEM_callocN(sizeof(RenderView), "new opengl render view");
+			BLI_addtail(&rr->views, rv);
+		}
+
+		rv->camera = v3d ? v3d->camera : NULL;
+
+		while (rv->next) {
+			RenderView *rv_del = rv->next;
+			BLI_remlink(&rr->views, rv_del);
+
+			if (rv_del->rectf)
+				MEM_freeN(rv_del->rectf);
+
+			if (rv_del->rectz)
+				MEM_freeN(rv_del->rectz);
+
+			MEM_freeN(rv_del);
+		}
+	}
+	else {
+		RE_SetOverrideCamera(oglrender->re, V3D_CAMERA_SCENE(oglrender->scene, v3d));
+		RE_RenderInitializeStereo(oglrender->re, rd);
+
+		/* remove all the views that are not needed */
+		rv = rr->views.last;
+		while (rv) {
+			srv = BLI_findstring(&rd->views, rv->name, offsetof(SceneRenderView, name));
+			if (BKE_scene_render_view_active(rd, srv)) {
+				if (rv->rectf == NULL)
+					rv->rectf = MEM_callocN(sizeof(float) * 4 * oglrender->sizex * oglrender->sizey, "screen_opengl_render_init rect");
+				rv = rv->prev;
+			}
+			else {
+				RenderView *rv_del = rv;
+				rv  = rv_del->prev;
+
+				BLI_remlink(&rr->views, rv_del);
+
+				if (rv_del->rectf)
+					MEM_freeN(rv_del->rectf);
+
+				if (rv_del->rectz)
+					MEM_freeN(rv_del->rectz);
+
+				MEM_freeN(rv_del);
+			}
+		}
+
+		/* create all the views that are needed */
+		for (srv = rd->views.first; srv; srv = srv->next) {
+			if (BKE_scene_render_view_active(rd, srv) == false)
+				continue;
+
+			rv = BLI_findstring(&rr->views, srv->name, offsetof(SceneRenderView, name));
+
+			if (rv == NULL) {
+				rv = MEM_callocN(sizeof(RenderView), "new opengl render view");
+				BLI_strncpy(rv->name, srv->name, sizeof(rv->name));
+				BLI_addtail(&rr->views, rv);
+			}
+
+			if (rd->views_setup == SCE_VIEWS_SETUP_BASIC)
+				rv->camera = RE_GetCameraStereo(oglrender->re, (strcmp(srv->name, STEREO_LEFT_NAME) == 0));
+			else
+				rv->camera = BKE_camera_multiview_advanced(oglrender->scene, rd, v3d->camera, srv->suffix);
+		}
+	}
+
+	for (rv = rr->views.first; rv; rv = rv->next) {
+		if (rv->rectf == NULL) {
+			rv->rectf = MEM_callocN(sizeof(float) * 4 * oglrender->sizex * oglrender->sizey, "screen_opengl_render_init rect");
+		}
+	}
+
+	BLI_lock_thread(LOCK_DRAW_IMAGE);
+	if (BKE_render_is_stereo3d(rd)) {
+		oglrender->ima->flag |= IMA_IS_STEREO;
+	}
+	else {
+		oglrender->ima->flag &= ~IMA_IS_STEREO;
+		oglrender->iuser.flag &= ~IMA_SHOW_STEREO;
+	}
+	BLI_unlock_thread(LOCK_DRAW_IMAGE);
+
+	RE_ReleaseResult(oglrender->re);
+}
+
+static void screen_opengl_render_doit(OGLRender *oglrender, RenderResult *rr)
 {
 	Scene *scene = oglrender->scene;
 	ARegion *ar = oglrender->ar;
 	View3D *v3d = oglrender->v3d;
 	RegionView3D *rv3d = oglrender->rv3d;
-	RenderResult *rr;
 	Object *camera = NULL;
 	ImBuf *ibuf;
-	void *lock;
 	float winmat[4][4];
 	int sizex = oglrender->sizex;
 	int sizey = oglrender->sizey;
@@ -136,8 +256,7 @@ static void screen_opengl_render_apply(OGLRender *oglrender)
 	bool draw_bgpic = true;
 	bool draw_sky = (scene->r.alphamode == R_ADDSKY);
 	unsigned char *rect = NULL;
-
-	rr = RE_AcquireResultRead(oglrender->re);
+	const bool is_multiview = screen_opengl_is_multiview(oglrender);
 
 	if (oglrender->is_sequencer) {
 		SeqRenderData context;
@@ -151,6 +270,7 @@ static void screen_opengl_render_apply(OGLRender *oglrender)
 		ibuf = BKE_sequencer_give_ibuf(&context, CFRA, chanshown);
 
 		if (ibuf) {
+			float *rectf;
 			ImBuf *linear_ibuf;
 
 			BLI_assert((oglrender->sizex == ibuf->x) && (oglrender->sizey == ibuf->y));
@@ -171,7 +291,8 @@ static void screen_opengl_render_apply(OGLRender *oglrender)
 				BKE_sequencer_imbuf_from_sequencer_space(scene, linear_ibuf);
 			}
 
-			memcpy(rr->rectf, linear_ibuf->rect_float, sizeof(float) * 4 * oglrender->sizex * oglrender->sizey);
+			rectf = RE_RenderViewGetRectf(rr, oglrender->view_id);
+			memcpy(rectf, linear_ibuf->rect_float, sizeof(float) * 4 * oglrender->sizex * oglrender->sizey);
 
 			IMB_freeImBuf(linear_ibuf);
 		}
@@ -211,9 +332,9 @@ static void screen_opengl_render_apply(OGLRender *oglrender)
 		/* render 3d view */
 		if (rv3d->persp == RV3D_CAMOB && v3d->camera) {
 			/*int is_ortho = scene->r.mode & R_ORTHO;*/
-			camera = v3d->camera;
+			RenderView *rv = BLI_findlink(&rr->views, oglrender->view_id);
+			camera = rv->camera;
 			RE_GetCameraWindow(oglrender->re, camera, scene->r.cfra, winmat);
-			
 		}
 		else {
 			rctf viewplane;
@@ -227,7 +348,7 @@ static void screen_opengl_render_apply(OGLRender *oglrender)
 		rect = MEM_mallocN(sizex * sizey * sizeof(unsigned char) * 4, "offscreen rect");
 
 		if ((scene->r.mode & R_OSA) == 0) {
-			ED_view3d_draw_offscreen(scene, v3d, ar, sizex, sizey, NULL, winmat, draw_bgpic, draw_sky);
+			ED_view3d_draw_offscreen(scene, v3d, ar, sizex, sizey, NULL, winmat, draw_bgpic, draw_sky, is_multiview ? oglrender->view_id : STEREO_MONO_ID);
 			GPU_offscreen_read_pixels(oglrender->ofs, GL_UNSIGNED_BYTE, rect);
 		}
 		else {
@@ -240,7 +361,7 @@ static void screen_opengl_render_apply(OGLRender *oglrender)
 			BLI_jitter_init(jit_ofs, scene->r.osa);
 
 			/* first sample buffer, also initializes 'rv3d->persmat' */
-			ED_view3d_draw_offscreen(scene, v3d, ar, sizex, sizey, NULL, winmat, draw_bgpic, draw_sky);
+			ED_view3d_draw_offscreen(scene, v3d, ar, sizex, sizey, NULL, winmat, draw_bgpic, draw_sky, is_multiview ? oglrender->view_id : STEREO_MONO_ID);
 			GPU_offscreen_read_pixels(oglrender->ofs, GL_UNSIGNED_BYTE, rect);
 
 			for (i = 0; i < sizex * sizey * 4; i++)
@@ -253,7 +374,7 @@ static void screen_opengl_render_apply(OGLRender *oglrender)
 				                    (jit_ofs[j][0] * 2.0f) / sizex,
 				                    (jit_ofs[j][1] * 2.0f) / sizey);
 
-				ED_view3d_draw_offscreen(scene, v3d, ar, sizex, sizey, NULL, winmat_jitter, draw_bgpic, draw_sky);
+				ED_view3d_draw_offscreen(scene, v3d, ar, sizex, sizey, NULL, winmat_jitter, draw_bgpic, draw_sky, is_multiview ? oglrender->view_id : STEREO_MONO_ID);
 				GPU_offscreen_read_pixels(oglrender->ofs, GL_UNSIGNED_BYTE, rect);
 
 				for (i = 0; i < sizex * sizey * 4; i++)
@@ -298,6 +419,7 @@ static void screen_opengl_render_apply(OGLRender *oglrender)
 
 	if (rect) {
 		int profile_to;
+		float *rectf = RE_RenderViewGetRectf(rr, oglrender->view_id);
 		
 		if (BKE_scene_check_color_management_enabled(scene))
 			profile_to = IB_PROFILE_LINEAR_RGB;
@@ -306,45 +428,60 @@ static void screen_opengl_render_apply(OGLRender *oglrender)
 
 		/* sequencer has got trickier conversion happened above
 		 * also assume opengl's space matches byte buffer color space */
-		IMB_buffer_float_from_byte(rr->rectf, rect,
+		IMB_buffer_float_from_byte(rectf, rect,
 		                           profile_to, IB_PROFILE_SRGB, true,
 		                           oglrender->sizex, oglrender->sizey, oglrender->sizex, oglrender->sizex);
+
+		/* rr->rectf is now filled with image data */
+
+		if ((scene->r.stamp & R_STAMP_ALL) && (scene->r.stamp & R_STAMP_DRAW))
+			BKE_stamp_buf(scene, camera, rect, rectf, rr->rectx, rr->recty, 4);
+
+		MEM_freeN(rect);
+	}
+}
+
+static void screen_opengl_render_write(OGLRender *oglrender)
+{
+	Scene *scene = oglrender->scene;
+	RenderResult *rr;
+	bool ok;
+	char name[FILE_MAX];
+
+	rr = RE_AcquireResultRead(oglrender->re);
+
+	BKE_makepicstring(name, scene->r.pic, oglrender->bmain->name, scene->r.cfra,
+	                  &scene->r.im_format, (scene->r.scemode & R_EXTENSION) != 0, false, "");
+
+	/* write images as individual images or stereo */
+	ok = RE_WriteRenderViews(oglrender->reports, rr, scene, false, name);
+
+	RE_ReleaseResultImage(oglrender->re);
+
+	if (ok) printf("OpenGL Render written to '%s'\n", name);
+	else printf("OpenGL Render failed to write '%s'\n", name);
+}
+
+static void screen_opengl_render_apply(OGLRender *oglrender)
+{
+	RenderResult *rr;
+	RenderView *rv;
+	int view_id;
+
+	rr = RE_AcquireResultRead(oglrender->re);
+	for (rv = rr->views.first, view_id = 0; rv; rv = rv->next, view_id++)
+	{
+		oglrender->view_id = view_id;
+		screen_opengl_render_doit(oglrender, rr);
 	}
 
-	/* rr->rectf is now filled with image data */
-
-	if ((scene->r.stamp & R_STAMP_ALL) && (scene->r.stamp & R_STAMP_DRAW))
-		BKE_stamp_buf(scene, camera, rect, rr->rectf, rr->rectx, rr->recty, 4);
+	/* XXX MV we no longer have the option to save as BW */
 
 	RE_ReleaseResult(oglrender->re);
 
-	/* update byte from float buffer */
-	ibuf = BKE_image_acquire_ibuf(oglrender->ima, &oglrender->iuser, &lock);
-
-	if (ibuf) {
-		ibuf->userflags |= IB_DISPLAY_BUFFER_INVALID;
-
-		/* write file for animation */
-		if (oglrender->write_still) {
-			char name[FILE_MAX];
-			int ok;
-
-			if (scene->r.im_format.planes == R_IMF_CHAN_DEPTH_8) {
-				IMB_color_to_bw(ibuf);
-			}
-
-			BKE_makepicstring(name, scene->r.pic, oglrender->bmain->name, scene->r.cfra,
-			                  &scene->r.im_format, (scene->r.scemode & R_EXTENSION) != 0, false, "");
-			ok = BKE_imbuf_write_as(ibuf, name, &scene->r.im_format, true); /* no need to stamp here */
-			if (ok) printf("OpenGL Render written to '%s'\n", name);
-			else printf("OpenGL Render failed to write '%s'\n", name);
-		}
+	if (oglrender->write_still) {
+		screen_opengl_render_write(oglrender);
 	}
-	
-	BKE_image_release_ibuf(oglrender->ima, ibuf, lock);
-
-	if (rect)
-		MEM_freeN(rect);
 }
 
 static bool screen_opengl_render_init(bContext *C, wmOperator *op)
@@ -356,7 +493,6 @@ static bool screen_opengl_render_init(bContext *C, wmOperator *op)
 	Scene *scene = CTX_data_scene(C);
 	ScrArea *prevsa = CTX_wm_area(C);
 	ARegion *prevar = CTX_wm_region(C);
-	RenderResult *rr;
 	GPUOffScreen *ofs;
 	OGLRender *oglrender;
 	int sizex, sizey;
@@ -460,10 +596,9 @@ static bool screen_opengl_render_init(bContext *C, wmOperator *op)
 	/* create render result */
 	RE_InitState(oglrender->re, NULL, &scene->r, NULL, sizex, sizey, NULL);
 
-	rr = RE_AcquireResultWrite(oglrender->re);
-	if (rr->rectf == NULL)
-		rr->rectf = MEM_callocN(sizeof(float) * 4 * sizex * sizey, "screen_opengl_render_init rect");
-	RE_ReleaseResult(oglrender->re);
+	/* create render views */
+	oglrender->view_id = 0;
+	screen_opengl_views_setup(oglrender);
 
 	/* wm vars */
 	oglrender->wm = wm;
@@ -499,6 +634,8 @@ static void screen_opengl_render_end(bContext *C, OGLRender *oglrender)
 
 	CTX_wm_area_set(C, oglrender->prevsa);
 	CTX_wm_region_set(C, oglrender->prevar);
+
+	RE_RenderFreeStereo(oglrender->re);
 
 	MEM_freeN(oglrender);
 }
@@ -595,6 +732,8 @@ static bool screen_opengl_render_anim_step(bContext *C, wmOperator *op)
 
 	/* render into offscreen buffer */
 	screen_opengl_render_apply(oglrender);
+
+	//XXX MV OGL remove this and incorpoorate with the still image part
 
 	/* save to disk */
 	ibuf = BKE_image_acquire_ibuf(oglrender->ima, &oglrender->iuser, &lock);

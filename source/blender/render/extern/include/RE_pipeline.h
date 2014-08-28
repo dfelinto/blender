@@ -231,6 +231,7 @@ void RE_ChangeModeFlag(struct Render *re, int flag, bool clear);
 struct Object *RE_GetCameraStereo(struct Render *re, const bool left);
 struct Object *RE_GetViewCamera(struct Render *re);
 struct Object *RE_GetCamera(struct Render *re); /* return camera override if set */
+void RE_SetOverrideCamera(struct Render *re, struct Object *camera);
 void RE_SetCamera(struct Render *re, struct Object *camera);
 void RE_SetEnvmapCamera(struct Render *re, struct Object *cam_ob, float viewscale, float clipsta, float clipend);
 void RE_SetWindow(struct Render *re, rctf *viewplane, float clipsta, float clipend);
@@ -260,6 +261,8 @@ void RE_init_threadcount(Render *re);
 /* the main processor, assumes all was set OK! */
 void RE_TileProcessor(struct Render *re);
 
+bool RE_WriteRenderViews(struct ReportList *reports, struct RenderResult *rr, struct Scene *scene, const bool stamp, char *name);
+
 /* only RE_NewRender() needed, main Blender render calls */
 void RE_BlenderFrame(struct Render *re, struct Main *bmain, struct Scene *scene,
                      struct SceneRenderLayer *srl, struct Object *camera_override,
@@ -270,6 +273,9 @@ void RE_BlenderAnim(struct Render *re, struct Main *bmain, struct Scene *scene, 
 void RE_RenderFreestyleStrokes(struct Render *re, struct Main *bmain, struct Scene *scene, int render);
 void RE_RenderFreestyleExternal(struct Render *re);
 #endif
+
+void RE_RenderInitializeStereo(struct Render *re, struct RenderData *rd);
+void RE_RenderFreeStereo(struct Render *re);
 
 /* error reporting */
 void RE_SetReports(struct Render *re, struct ReportList *reports);

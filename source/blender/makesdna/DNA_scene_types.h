@@ -840,6 +840,7 @@ enum {
 #define STEREO_LEFT_NAME "left"
 
 typedef enum StereoViews {
+	STEREO_MONO_ID = -1,
 	STEREO_LEFT_ID = 0,
 	STEREO_RIGHT_ID = 1,
 	STEREO_3D_ID = 2,
