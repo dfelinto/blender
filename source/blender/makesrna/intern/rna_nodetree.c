@@ -2626,7 +2626,7 @@ static int rna_Node_image_has_views_get(PointerRNA *ptr)
 	return views > 1;
 }
 
-#if 0 //MV we may not need that, I don't know yet
+#if 0 //XXX MV we may not need that, I don't know yet
 static void rna_Node_image_view_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 {
 	bNode *node = (bNode *)ptr->data;

@@ -62,7 +62,7 @@ void *OutputOpenExrMultiViewOperation::get_handle(const char* filename)
 		exrhandle = IMB_exr_get_handle_name(filename);
 		if (this->m_actview > 0) return exrhandle;
 
-		/* MV are are doing very similar in
+		/* XXX MV are are doing very similar in
 		 * render_result.c::render_result_new
 		 * it could be an external shared function */
 

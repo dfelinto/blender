@@ -4059,7 +4059,7 @@ unsigned short *zbuffer_transp_shade(RenderPart *pa, RenderLayer *rl, float *pas
 	/* zero alpha pixels get speed vector max again */
 	if (addpassflag & SCE_PASS_VECTOR)
 		if (rl->layflag & SCE_LAY_SOLID) {
-			//MV probably never wants to use acolrect
+			//XXX MV probably never wants to use acolrect
 			float *rect = RE_RenderLayerGetPass(rl, SCE_PASS_COMBINED, R.actview);
 			reset_sky_speedvectors(pa, rl, rl->acolrect?rl->acolrect:rect);	/* if acolrect is set we use it */
 		}

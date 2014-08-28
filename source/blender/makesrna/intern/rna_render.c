@@ -352,6 +352,7 @@ static void rna_RenderLayer_passes_begin(CollectionPropertyIterator *iter, Point
 	rna_iterator_listbase_begin(iter, &rl->passes, NULL);
 }
 
+#if 0
 static int rna_RenderLayer_rect_get_length(PointerRNA *ptr, int length[RNA_MAX_ARRAY_DIMENSION])
 {
 	RenderLayer *rl = (RenderLayer *)ptr->data;
@@ -371,16 +372,17 @@ static void rna_RenderLayer_rect_get(PointerRNA *ptr, float *values)
 	 * or iterate via all Render and see which one contains given RenderLayer
 	 */
 
-	//MV 0 = actview
+	//XXX MV 0 = actview
 	float *rect = RE_RenderLayerGetPass(rl, SCE_PASS_COMBINED, 0);
 	memcpy(values, rect, sizeof(float) * rl->rectx * rl->recty * 4);
 }
+#endif
 
 void rna_RenderLayer_rect_set(PointerRNA *ptr, const float *values)
 {
 	RenderLayer *rl = (RenderLayer *)ptr->data;
 
-	//MV 0 = actview
+	//XXX MV 0 = actview
 	float *rect = RE_RenderLayerGetPass(rl, SCE_PASS_COMBINED, 0);
 
 	memcpy(rect, values, sizeof(float) * rl->rectx * rl->recty * 4);
@@ -725,7 +727,11 @@ static void rna_def_render_layer(BlenderRNA *brna)
 	                                  "rna_iterator_listbase_end", "rna_iterator_listbase_get",
 	                                  NULL, NULL, NULL, NULL);
 
-#if 0 //MV store actview in RL or pass as argument
+#if 0
+	/* XXX MV store actview in RL or pass as argument
+	 * Actually, as suggested by Brecht we should use string and not the int in the API
+	 * (same as we do for renderlayer)
+	 * */
 	prop = RNA_def_property(srna, "rect", PROP_FLOAT, PROP_NONE);
 	RNA_def_property_flag(prop, PROP_DYNAMIC);
 	RNA_def_property_multi_array(prop, 2, NULL);

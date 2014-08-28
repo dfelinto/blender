@@ -1363,7 +1363,7 @@ static void free_all_freestyle_renders(void);
 void RE_TileProcessor(Render *re)
 {
 	main_render_result_new(re);
-	threaded_tile_processor(re); //MV envmap could use multiview too, not implemented though
+	threaded_tile_processor(re); //XXX MV envmap could use multiview too, not implemented though
 	
 	re->i.lastframetime = PIL_check_seconds_timer() - re->i.starttime;
 	re->stats_draw(re->sdh, &re->i);
@@ -1610,7 +1610,7 @@ static void merge_renderresult_fields(RenderResult *rr, RenderResult *rr1, Rende
 		     rpass && rpass1 && rpass2;
 		     rpass = rpass->next, rpass1 = rpass1->next, rpass2 = rpass2->next)
 		{
-			//MV - it may work, I haven't tried though
+			//XXX MV - it may work, I haven't tried though
 			interleave_rect(rr, rpass->rect, rpass1->rect, rpass2->rect, rpass->channels);
 		}
 	}
@@ -3365,7 +3365,7 @@ void RE_BlenderAnim(Render *re, Main *bmain, Scene *scene, Object *camera_overri
 		for (i = 0; i < totvideos; i++){
 			mh[i] = BKE_movie_handle_get(scene->r.im_format.imtype);
 
-			/*XXX MV need to come up with a solution for the name issue, because at the moment
+			/*XXX MV MOV need to come up with a solution for the name issue, because at the moment
 			 * it's handling the name entirely inside the movie format */
 			if (!mh[i]->start_movie(scene, &re->r, width, height, re->reports))
 				G.is_break = true;
@@ -3442,7 +3442,7 @@ void RE_BlenderAnim(Render *re, Main *bmain, Scene *scene, Object *camera_overri
 					continue;
 				}
 
-				/* XXX MV we should create/touch the multiview file or at least remove
+				/* XXX MV MOV we should create/touch the multiview file or at least remove
 				 * this dummy touched file after we are done creating the stereo pairs */
 				if (scene->r.mode & R_TOUCH && !BLI_exists(name)) {
 					BLI_make_existing_file(name); /* makes the dir if its not there */
@@ -3525,6 +3525,7 @@ void RE_PreviewRender(Render *re, Main *bmain, Scene *sce)
 	re->scene_color_manage = BKE_scene_check_color_management_enabled(sce);
 	re->lay = sce->lay;
 
+	/* XXX MV need to get the correct camera */
 	camera = RE_GetCamera(re);
 	RE_SetCamera(re, camera);
 
@@ -3587,12 +3588,18 @@ void RE_init_threadcount(Render *re)
 
 /* loads in image into a result, size must match
  * x/y offsets are only used on a partial copy when dimensions don't match */
+#if 1
+void RE_layer_load_from_file(RenderLayer *UNUSED(layer), ReportList *UNUSED(reports), const char *UNUSED(filename), int UNUSED(x), int UNUSED(y))
+{
+	/* XXX MV - not sure who is using this, I'll address later */
+	printf("%s\n", __func__);
+}
+#else
 void RE_layer_load_from_file(RenderLayer *layer, ReportList *reports, const char *filename, int x, int y)
 {
 	/* OCIO_TODO: assume layer was saved in defaule color space */
 	ImBuf *ibuf = IMB_loadiffname(filename, IB_rect, NULL);
 
-#if 0 //MV - not sure who is using this, I'll address later
 	if (ibuf && (ibuf->rect || ibuf->rect_float)) {
 		if (ibuf->x == layer->rectx && ibuf->y == layer->recty) {
 			if (ibuf->rect_float == NULL)
@@ -3628,8 +3635,8 @@ void RE_layer_load_from_file(RenderLayer *layer, ReportList *reports, const char
 	else {
 		BKE_reportf(reports, RPT_ERROR, "RE_result_rect_from_file: failed to load '%s'", filename);
 	}
-#endif
 }
+#endif
 
 void RE_result_load_from_file(RenderResult *result, ReportList *reports, const char *filename)
 {
