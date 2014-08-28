@@ -315,6 +315,9 @@ enum {
 #define PNL_DEFAULT_CLOSED		1
 #define PNL_NO_HEADER			2
 
+/* Fallback panel category (only for old scripts which need updating) */
+#define PNL_CATEGORY_FALLBACK "Misc"
+
 /* uiList layout_type */
 enum {
 	UILST_LAYOUT_DEFAULT          = 0,

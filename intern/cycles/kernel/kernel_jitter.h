@@ -14,6 +14,8 @@
  * limitations under the License
  */
 
+/* TODO(sergey): Consider moving portable ctz/clz stuff to util. */
+
 CCL_NAMESPACE_BEGIN
 
 /* "Correlated Multi-Jittered Sampling"
@@ -35,8 +37,16 @@ ccl_device_inline int cmj_fast_mod_pow2(int a, int b)
 /* a must be > 0 and b must be > 1 */
 ccl_device_inline int cmj_fast_div_pow2(int a, int b)
 {
-#if defined(__KERNEL_SSE2__) && !defined(_MSC_VER)
+	kernel_assert(a > 0);
+	kernel_assert(b > 1);
+#if defined(__KERNEL_SSE2__)
+#  ifdef _MSC_VER
+	unsigned long ctz;
+	_BitScanForward(&ctz, b);
+	return a >> ctz;
+#  else
 	return a >> __builtin_ctz(b);
+#  endif
 #else
 	return a/b;
 #endif
@@ -44,8 +54,15 @@ ccl_device_inline int cmj_fast_div_pow2(int a, int b)
 
 ccl_device_inline uint cmj_w_mask(uint w)
 {
-#if defined(__KERNEL_SSE2__) && !defined(_MSC_VER)
+	kernel_assert(w > 1);
+#if defined(__KERNEL_SSE2__)
+#  ifdef _MSC_VER
+	unsigned long leading_zero;
+	_BitScanReverse(&leading_zero, w);
+	return ((1 << (1 + leading_zero)) - 1);
+#  else
 	return ((1 << (32 - __builtin_clz(w))) - 1);
+#  endif
 #else
 	w |= w >> 1;
 	w |= w >> 2;
@@ -165,7 +182,8 @@ ccl_device void cmj_sample_2D(int s, int N, int p, float *fx, float *fy)
 		smodm = cmj_fast_mod_pow2(s, m);
 	}
 	else {
-		sdivm = float_to_int(s * invm);
+		/* Doing s*inmv gives precision issues here. */
+		sdivm = s / m;
 		smodm = s - sdivm*m;
 	}
 

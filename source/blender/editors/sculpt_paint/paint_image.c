@@ -510,19 +510,32 @@ void imapaint_image_update(SpaceImage *sima, Image *image, ImBuf *ibuf, short te
 	}
 }
 
-/* paint blur kernels */
-BlurKernel *paint_new_blur_kernel(Brush *br)
+/* paint blur kernels. Projective painting enforces use of a 2x2 kernel due to lagging */
+BlurKernel *paint_new_blur_kernel(Brush *br, bool proj)
 {
 	int i, j;
 	BlurKernel *kernel = MEM_mallocN(sizeof(BlurKernel), "blur kernel");
-	float pixel_len = br->blur_kernel_radius / 2.0f;
+	float radius;
+	int side;
 	BlurKernelType type = br->blur_mode;
 
-	kernel->side = br->blur_kernel_radius + 1;
-	kernel->side_squared = kernel->side * kernel->side;
-	kernel->wdata = MEM_mallocN(sizeof(float) * kernel->side_squared, "blur kernel data");
-	kernel->pixel_len = pixel_len;
-
+	if (proj) {
+		radius = 0.5f;
+		
+		side = kernel->side = 2;
+		kernel->side_squared = kernel->side * kernel->side;
+		kernel->wdata = MEM_mallocN(sizeof(float) * kernel->side_squared, "blur kernel data");
+		kernel->pixel_len = radius;
+	}
+	else {
+		radius = br->blur_kernel_radius;
+		
+		side = kernel->side = radius * 2 + 1;
+		kernel->side_squared = kernel->side * kernel->side;
+		kernel->wdata = MEM_mallocN(sizeof(float) * kernel->side_squared, "blur kernel data");
+		kernel->pixel_len = br->blur_kernel_radius;
+	}
+	
 	switch (type) {
 		case KERNEL_BOX:
 			for (i = 0; i < kernel->side_squared; i++)
@@ -531,19 +544,19 @@ BlurKernel *paint_new_blur_kernel(Brush *br)
 
 		case KERNEL_GAUSSIAN:
 		{
-			float standard_dev = pixel_len / 3.0f; /* at standard deviation of 3.0 kernel is at about zero */
-
+			/* at standard deviation of 3.0 kernel is at about zero */			
+			float standard_dev = radius / 3.0f; 
+			
 			/* make the necessary adjustment to the value for use in the normal distribution formula */
 			standard_dev = standard_dev * standard_dev * 2;
 
-			for (i = 0; i < kernel->side; i++) {
-				for (j = 0; j < kernel->side; j++) {
-					float idist = pixel_len - i;
-					float jdist = pixel_len - j;
-
+			for (i = 0; i < side; i++) {
+				for (j = 0; j < side; j++) {
+					float idist = radius - i;
+					float jdist = radius - j;
 					float value = exp((idist * idist + jdist * jdist) / standard_dev);
-
-					kernel->wdata[i + j * kernel->side] = value;
+					
+					kernel->wdata[i + j * side] = value;
 				}
 			}
 
@@ -1349,38 +1362,40 @@ void paint_proj_mesh_data_ensure(bContext *C, Object *ob, wmOperator *op)
 {
 	Mesh *me;
 	int layernum;
-	bool add_material = false;
 	ImagePaintSettings *imapaint = &(CTX_data_tool_settings(C)->imapaint);
+	Scene *scene = CTX_data_scene(C);
 	Brush *br = BKE_paint_brush(&imapaint->paint);
 
 	/* no material, add one */
 	if (ob->totcol == 0) {
-		add_material = true;
+		Material *ma = BKE_material_add(CTX_data_main(C), "Material");
+		/* no material found, just assign to first slot */
+		assign_material(ob, ma, 1, BKE_MAT_ASSIGN_USERPREF);
+		proj_paint_add_slot(C, ma, NULL);
 	}
 	else {
 		/* there may be material slots but they may be empty, check */
-		bool has_material = false;
 		int i;
 
 		for (i = 1; i < ob->totcol + 1; i++) {
 			Material *ma = give_current_material(ob, i);
 			if (ma) {
-				has_material = true;
 				if (!ma->texpaintslot) {
-					proj_paint_add_slot(C, ma, NULL);
+					/* refresh here just in case */
+					BKE_texpaint_slot_refresh_cache(scene, ma);				
+					
+					/* if still no slots, we have to add */
+					if (!ma->texpaintslot)
+						proj_paint_add_slot(C, ma, NULL);
 				}
 			}
+			else {
+				Material *ma = BKE_material_add(CTX_data_main(C), "Material");
+				/* no material found, just assign to first slot */
+				assign_material(ob, ma, i, BKE_MAT_ASSIGN_USERPREF);
+				proj_paint_add_slot(C, ma, NULL);				
+			}
 		}
-
-		if (!has_material)
-			add_material = true;
-	}
-
-	if (add_material) {
-		Material *ma = BKE_material_add(CTX_data_main(C), "Material");
-		/* no material found, just assign to first slot */
-		assign_material(ob, ma, 1, BKE_MAT_ASSIGN_USERPREF);
-		proj_paint_add_slot(C, ma, NULL);
 	}
 
 	me = BKE_mesh_from_object(ob);
@@ -1436,10 +1451,9 @@ static int texture_paint_toggle_exec(bContext *C, wmOperator *op)
 		Main *bmain = CTX_data_main(C);
 		Material *ma;
 
-		bool use_nodes = BKE_scene_use_new_shading_nodes(scene);
 		/* This has to stay here to regenerate the texture paint
 		 * cache in case we are loading a file */
-		BKE_texpaint_slots_refresh_object(ob, use_nodes);
+		BKE_texpaint_slots_refresh_object(scene, ob);
 
 		paint_proj_mesh_data_ensure(C, ob, op);
 
@@ -1460,7 +1474,7 @@ static int texture_paint_toggle_exec(bContext *C, wmOperator *op)
 				}
 			}
 		}
-
+		
 		ob->mode |= mode_flag;
 
 		BKE_paint_init(&scene->toolsettings->imapaint.paint, PAINT_CURSOR_TEXTURE_PAINT);

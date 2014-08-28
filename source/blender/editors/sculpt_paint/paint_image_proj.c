@@ -2954,7 +2954,7 @@ static void project_paint_begin(ProjPaintState *ps)
 		ps->dm_release = true;
 	}
 
-	if (!CustomData_has_layer(&ps->dm->faceData, CD_MTFACE) ) {
+	if (!CustomData_has_layer(&ps->dm->faceData, CD_MTFACE)) {
 
 		if (ps->dm_release)
 			ps->dm->release(ps->dm);
@@ -3763,9 +3763,7 @@ static void do_projectpaint_soften_f(ProjPaintState *ps, ProjPixel *projPixel, f
 	for (yk = 0; yk < kernel->side; yk++) {
 		for (xk = 0; xk < kernel->side; xk++) {
 			float rgba_tmp[4];
-			float x_offs = xk - kernel->pixel_len;
-			float y_offs = yk - kernel->pixel_len;
-			float co_ofs[2] = {x_offs, y_offs};
+			float co_ofs[2] = {2.0f * xk - 1.0f, 2.0f * yk - 1.0f};
 
 			add_v2_v2(co_ofs, projPixel->projCoSS);
 
@@ -3821,7 +3819,7 @@ static void do_projectpaint_soften(ProjPaintState *ps, ProjPixel *projPixel, flo
 	for (yk = 0; yk < kernel->side; yk++) {
 		for (xk = 0; xk < kernel->side; xk++) {
 			float rgba_tmp[4];
-			float co_ofs[2] = {xk - kernel->pixel_len, yk - kernel->pixel_len};
+			float co_ofs[2] = {2.0f * xk - 1.0f, 2.0f * yk - 1.0f};
 
 			add_v2_v2(co_ofs, projPixel->projCoSS);
 
@@ -4455,7 +4453,7 @@ static void project_state_init(bContext *C, Object *ob, ProjPaintState *ps, int 
 			ps->mode = ((ps->mode == BRUSH_STROKE_INVERT) ^ ((brush->flag & BRUSH_DIR_IN) != 0) ?
 			            BRUSH_STROKE_INVERT : BRUSH_STROKE_NORMAL);
 
-			ps->blurkernel = paint_new_blur_kernel(brush);
+			ps->blurkernel = paint_new_blur_kernel(brush, true);
 		}
 
 		/* disable for 3d mapping also because painting on mirrored mesh can create "stripes" */
@@ -4828,7 +4826,7 @@ bool proj_paint_add_slot(bContext *C, Material *ma, wmOperator *op)
 {
 	Object *ob = CTX_data_active_object(C);
 	Scene *scene = CTX_data_scene(C);
-	bool use_nodes = BKE_scene_use_new_shading_nodes(scene);
+	bool is_bi = BKE_scene_uses_blender_internal(scene);
 
 	if (!ob)
 		return false;
@@ -4838,7 +4836,7 @@ bool proj_paint_add_slot(bContext *C, Material *ma, wmOperator *op)
 
 	if (ma) {
 
-		if (use_nodes) {
+		if (!is_bi || ma->use_nodes) {
 			/* not supported for now */
 		}
 		else {
@@ -4888,7 +4886,7 @@ bool proj_paint_add_slot(bContext *C, Material *ma, wmOperator *op)
 					ima = mtex->tex->ima = BKE_image_add_generated(bmain, width, height, imagename, alpha ? 32 : 24, use_float,
 					                                               gen_type, color);
 
-					BKE_texpaint_slot_refresh_cache(ma, false);
+					BKE_texpaint_slot_refresh_cache(scene, ma);
 					BKE_image_signal(ima, NULL, IMA_SIGNAL_USER_NEW_IMAGE);
 					WM_event_add_notifier(C, NC_TEXTURE | NA_ADDED, mtex->tex);
 					WM_event_add_notifier(C, NC_IMAGE | NA_ADDED, ima);
@@ -4965,4 +4963,60 @@ void PAINT_OT_add_texture_paint_slot(wmOperatorType *ot)
 	RNA_def_enum(ot->srna, "generated_type", image_generated_type_items, IMA_GENTYPE_BLANK,
 	             "Generated Type", "Fill the image with a grid for UV map testing");
 	RNA_def_boolean(ot->srna, "float", 0, "32 bit Float", "Create image with 32 bit floating point bit depth");
+}
+
+static int texture_paint_delete_texture_paint_slot_exec(bContext *C, wmOperator *UNUSED(op))
+{
+	Object *ob = CTX_data_active_object(C);
+	Scene *scene = CTX_data_scene(C);
+	Material *ma;
+	bool is_bi = BKE_scene_uses_blender_internal(scene);
+	TexPaintSlot *slot;
+	int i;
+	
+	/* not supported for node-based engines */
+	if (!ob || !is_bi)
+		return OPERATOR_CANCELLED;
+	
+	ma = give_current_material(ob, ob->actcol);
+	
+	if (!ma->texpaintslot || ma->use_nodes)
+		return OPERATOR_CANCELLED;
+	
+	slot = ma->texpaintslot + ma->paint_active_slot;
+	
+	/* find the material texture slot that corresponds to the current slot */
+	for (i = 0; i < MAX_MTEX; i++) {
+		if (ma->mtex[i] == slot->mtex) {
+			if (ma->mtex[i]->tex)
+				id_us_min(&ma->mtex[i]->tex->id);
+			MEM_freeN(ma->mtex[i]);
+			ma->mtex[i] = NULL;
+			
+			BKE_texpaint_slot_refresh_cache(scene, ma);
+			DAG_id_tag_update(&ma->id, 0);
+			WM_event_add_notifier(C, NC_MATERIAL, CTX_data_scene(C));
+			/* we need a notifier for data change since we change the displayed modifier uvs */
+			WM_event_add_notifier(C, NC_GEOM | ND_DATA, ob->data);			
+			return OPERATOR_FINISHED;
+		}
+	}
+	
+	return OPERATOR_CANCELLED;
+}
+
+
+void PAINT_OT_delete_texture_paint_slot(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Delete Texture Paint Slot";
+	ot->description = "Add a texture paint slot";
+	ot->idname = "PAINT_OT_delete_texture_paint_slot";
+
+	/* api callbacks */
+	ot->exec = texture_paint_delete_texture_paint_slot_exec;
+	ot->poll = ED_operator_region_view3d_active;
+
+	/* flags */
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }

@@ -873,9 +873,9 @@ bool BKE_object_is_in_wpaint_select_vert(Object *ob)
 {
 	if (ob->type == OB_MESH) {
 		Mesh *me = ob->data;
-		return ( (ob->mode & OB_MODE_WEIGHT_PAINT) &&
-		         (me->edit_btmesh == NULL) &&
-		         (ME_EDIT_PAINT_SEL_MODE(me) == SCE_SELECT_VERTEX) );
+		return ((ob->mode & OB_MODE_WEIGHT_PAINT) &&
+		        (me->edit_btmesh == NULL) &&
+		        (ME_EDIT_PAINT_SEL_MODE(me) == SCE_SELECT_VERTEX));
 	}
 
 	return false;
@@ -1526,6 +1526,18 @@ Object *BKE_object_copy(Object *ob)
 	return BKE_object_copy_ex(G.main, ob, false);
 }
 
+static void extern_local_object__modifiersForeachIDLink(
+        void *UNUSED(userData), Object *UNUSED(ob),
+        ID **idpoin)
+{
+	if (*idpoin) {
+		/* intentionally omit ID_OB */
+		if (ELEM(GS((*idpoin)->name), ID_IM, ID_TE)) {
+			id_lib_extern(*idpoin);
+		}
+	}
+}
+
 static void extern_local_object(Object *ob)
 {
 	ParticleSystem *psys;
@@ -1539,6 +1551,8 @@ static void extern_local_object(Object *ob)
 
 	for (psys = ob->particlesystem.first; psys; psys = psys->next)
 		id_lib_extern((ID *)psys->part);
+
+	modifiers_foreachIDLink(ob, extern_local_object__modifiersForeachIDLink, NULL);
 }
 
 void BKE_object_make_local(Object *ob)
@@ -2292,7 +2306,7 @@ static bool where_is_object_parslow(Object *ob, float obmat[4][4], float slowmat
 	int a;
 
 	/* include framerate */
-	fac1 = (1.0f / (1.0f + fabsf(ob->sf)) );
+	fac1 = (1.0f / (1.0f + fabsf(ob->sf)));
 	if (fac1 >= 1.0f) return 0;
 	fac2 = 1.0f - fac1;
 

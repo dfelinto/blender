@@ -41,6 +41,8 @@
 #  include "BLI_winstuff.h"
 #endif
 
+/* no BKE or DNA includes! */
+
 #define TEMP_STR_SIZE 256
 
 #define SEP_CHR		'#'

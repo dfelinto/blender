@@ -35,14 +35,6 @@ class View3DPanel():
 
 # **************** standard tool clusters ******************
 
-# History/Repeat tools
-def draw_repeat_tools(context, layout):
-    col = layout.column(align=True)
-    col.label(text="Repeat:")
-    col.operator("screen.repeat_last")
-    col.operator("screen.repeat_history", text="History...")
-
-
 # Keyframing tools
 def draw_keyframing_tools(context, layout):
     col = layout.column(align=True)
@@ -104,24 +96,6 @@ class VIEW3D_PT_tools_object(View3DPanel, Panel):
                 row = col.row(align=True)
                 row.operator("object.shade_smooth", text="Smooth")
                 row.operator("object.shade_flat", text="Flat")
-
-
-class VIEW3D_PT_tools_objectmode(View3DPanel, Panel):
-    bl_category = "Tools"
-    bl_context = "objectmode"
-    bl_label = "History"
-    bl_options = {'DEFAULT_CLOSED'}
-
-    def draw(self, context):
-        layout = self.layout
-
-        col = layout.column(align=True)
-        row = col.row(align=True)
-        row.operator("ed.undo")
-        row.operator("ed.redo")
-        col.operator("ed.undo_history")
-
-        draw_repeat_tools(context, layout)
 
 
 class VIEW3D_PT_tools_add_object(View3DPanel, Panel):
@@ -362,8 +336,6 @@ class VIEW3D_PT_tools_meshedit(View3DPanel, Panel):
         col.operator_menu_enum("mesh.merge", "type")
         col.operator("mesh.remove_doubles")
 
-        draw_repeat_tools(context, layout)
-
 
 class VIEW3D_PT_tools_meshweight(View3DPanel, Panel):
     bl_category = "Tools"
@@ -541,8 +513,6 @@ class VIEW3D_PT_tools_curveedit(View3DPanel, Panel):
         col.operator("curve.smooth")
         col.operator("object.vertex_random")
 
-        draw_repeat_tools(context, layout)
-
 
 class VIEW3D_PT_tools_add_curve_edit(View3DPanel, Panel):
     bl_category = "Create"
@@ -597,8 +567,6 @@ class VIEW3D_PT_tools_surfaceedit(View3DPanel, Panel):
         col.label(text="Deform:")
         col.operator("object.vertex_random")
 
-        draw_repeat_tools(context, layout)
-
 
 class VIEW3D_PT_tools_add_surface_edit(View3DPanel, Panel):
     bl_category = "Create"
@@ -634,8 +602,6 @@ class VIEW3D_PT_tools_textedit(View3DPanel, Panel):
         col.operator("font.style_toggle", text="Bold").style = 'BOLD'
         col.operator("font.style_toggle", text="Italic").style = 'ITALIC'
         col.operator("font.style_toggle", text="Underline").style = 'UNDERLINE'
-
-        draw_repeat_tools(context, layout)
 
 
 # ********** default tools for editmode_armature ****************
@@ -678,8 +644,6 @@ class VIEW3D_PT_tools_armatureedit(View3DPanel, Panel):
         col.label(text="Deform:")
         col.operator("object.vertex_random")
 
-        draw_repeat_tools(context, layout)
-
 
 class VIEW3D_PT_tools_armatureedit_options(View3DPanel, Panel):
     bl_category = "Options"
@@ -712,8 +676,6 @@ class VIEW3D_PT_tools_mballedit(View3DPanel, Panel):
         col = layout.column(align=True)
         col.label(text="Deform:")
         col.operator("object.vertex_random")
-
-        draw_repeat_tools(context, layout)
 
 
 class VIEW3D_PT_tools_add_mball_edit(View3DPanel, Panel):
@@ -752,8 +714,6 @@ class VIEW3D_PT_tools_latticeedit(View3DPanel, Panel):
         col = layout.column(align=True)
         col.label(text="Deform:")
         col.operator("object.vertex_random")
-
-        draw_repeat_tools(context, layout)
 
 
 # ********** default tools for pose-mode ****************
@@ -796,8 +756,6 @@ class VIEW3D_PT_tools_posemode(View3DPanel, Panel):
         row = col.row(align=True)
         row.operator("pose.paths_calculate", text="Calculate")
         row.operator("pose.paths_clear", text="Clear")
-
-        draw_repeat_tools(context, layout)
 
 
 class VIEW3D_PT_tools_posemode_options(View3DPanel, Panel):
@@ -1080,12 +1038,16 @@ class VIEW3D_PT_slots_projectpaint(View3DPanel, Panel):
                               mat, "paint_active_slot", rows=2)
 
             if (not mat.use_nodes) and (context.scene.render.engine == 'BLENDER_RENDER'):
-                col.operator_menu_enum("paint.add_texture_paint_slot", "type")
+                row = col.row(align=True)
+                row.operator_menu_enum("paint.add_texture_paint_slot", "type")
+                row.operator("paint.delete_texture_paint_slot", text="", icon='X')
 
-                slot = mat.texture_paint_slots[mat.paint_active_slot]
-                col.separator()
-                col.label("UV Map")
-                col.prop_search(slot, "uv_layer", ob.data, "uv_textures", text="")
+                if mat.texture_paint_slots:
+                    slot = mat.texture_paint_slots[mat.paint_active_slot]
+
+                    col.separator()
+                    col.label("UV Map")
+                    col.prop_search(slot, "uv_layer", ob.data, "uv_textures", text="")
 
         col.separator()
         col.operator("image.save_dirty", text="Save All Images")
@@ -1775,6 +1737,31 @@ class VIEW3D_PT_tools_grease_pencil(GreasePencilPanel, Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'TOOLS'
     bl_category = "Grease Pencil"
+
+
+# Note: moved here so that it's always in last position in 'Tools' panels!
+class VIEW3D_PT_tools_history(View3DPanel, Panel):
+    bl_category = "Tools"
+    # No bl_context, we are always available!
+    bl_label = "History"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    def draw(self, context):
+        layout = self.layout
+        obj = context.object
+
+        col = layout.column(align=True)
+        row = col.row(align=True)
+        row.operator("ed.undo")
+        row.operator("ed.redo")
+        if obj is None or obj.mode not in {'SCULPT'}:
+            # Sculpt mode does not generate an undo menu it seems...
+            col.operator("ed.undo_history")
+
+        col = layout.column(align=True)
+        col.label(text="Repeat:")
+        col.operator("screen.repeat_last")
+        col.operator("screen.repeat_history", text="History...")
 
 
 if __name__ == "__main__":  # only for live edit.

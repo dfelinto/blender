@@ -877,10 +877,8 @@ static void paint_2d_lift_soften(ImagePaintState *s, ImBuf *ibuf, ImBuf *ibufb, 
 
 			for (yk = 0; yk < kernel->side; yk++) {
 				for (xk = 0; xk < kernel->side; xk++) {
-					float x_offs = xk - kernel->pixel_len;
-					float y_offs = yk - kernel->pixel_len;
-					count += paint_2d_ibuf_add_if(ibuf, xi + signf(x_offs) * fabs(x_offs + 0.51f),
-					                               yi + signf(y_offs) * fabs(y_offs + 0.51f), outrgb, is_torus,
+					count += paint_2d_ibuf_add_if(ibuf, xi + xk - kernel->pixel_len,
+					                               yi + yk - kernel->pixel_len, outrgb, is_torus,
 					                               kernel->wdata[xk + yk * kernel->side]);
 				}
 			}
@@ -1251,7 +1249,7 @@ void *paint_2d_new_stroke(bContext *C, wmOperator *op, int mode)
 	}
 
 	if (brush->imagepaint_tool == PAINT_TOOL_SOFTEN) {
-		s->blurkernel = paint_new_blur_kernel(brush);
+		s->blurkernel = paint_new_blur_kernel(brush, false);
 	}
 
 	paint_brush_init_tex(s->brush);
