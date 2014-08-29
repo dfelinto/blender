@@ -3070,7 +3070,7 @@ bool RE_WriteRenderViews(ReportList *reports, RenderResult *rr, Scene *scene, co
 	if (!rr)
 		return false;
 
-	is_mono = (rd->scemode & R_MULTIVIEW) && BLI_countlist(&rr->views) < 2;
+	is_mono = BLI_countlist(&rr->views) < 2;
 
 	if (rd->im_format.imtype == R_IMF_IMTYPE_MULTIVIEW) {
 		RE_WriteRenderResult(reports, rr, name, &rd->im_format, true, NULL);
@@ -3078,7 +3078,7 @@ bool RE_WriteRenderViews(ReportList *reports, RenderResult *rr, Scene *scene, co
 	}
 
 	/* mono, legacy code */
-	else if ((is_mono) || (rd->im_format.views_output == R_IMF_VIEWS_INDIVIDUAL))
+	else if (is_mono || (rd->im_format.views_output == R_IMF_VIEWS_INDIVIDUAL))
 	{
 		RenderView *rv;
 		size_t view_id;
@@ -3213,12 +3213,11 @@ static int do_write_image_or_movie(Render *re, Main *bmain, Scene *scene, bMovie
 	bool is_mono;
 	
 	RE_AcquireResultImage(re, &rres, -1);
-	is_mono = (scene->r.scemode & R_MULTIVIEW) && BLI_countlist(&rres.views) < 2;
+	is_mono = BLI_countlist(&rres.views) < 2;
 
 	/* write movie or image */
 	if (BKE_imtype_is_movie(scene->r.im_format.imtype)) {
-		if ((is_mono) ||
-		    (scene->r.im_format.views_output == R_IMF_VIEWS_INDIVIDUAL))
+		if (is_mono || (scene->r.im_format.views_output == R_IMF_VIEWS_INDIVIDUAL))
 		{
 			size_t view_id;
 			for (view_id = 0; view_id < totvideos; view_id++) {
