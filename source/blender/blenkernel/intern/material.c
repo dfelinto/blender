@@ -274,8 +274,7 @@ Material *localize_material(Material *ma)
 	if (ma->ramp_col) man->ramp_col = MEM_dupallocN(ma->ramp_col);
 	if (ma->ramp_spec) man->ramp_spec = MEM_dupallocN(ma->ramp_spec);
 
-	if (ma->texpaintslot) man->texpaintslot = MEM_dupallocN(man->texpaintslot);
-
+	ma->texpaintslot = NULL;
 	man->preview = NULL;
 	
 	if (ma->nodetree)
@@ -1328,24 +1327,33 @@ void BKE_texpaint_slot_refresh_cache(Scene *scene, Material *ma)
 
 	if (ma->texpaintslot) {
 		MEM_freeN(ma->texpaintslot);
+		ma->tot_slots = 0;
 		ma->texpaintslot = NULL;
 	}
 
+	if (scene->toolsettings->imapaint.mode == IMAGEPAINT_MODE_IMAGE) {
+		ma->paint_active_slot = 0;
+		ma->paint_clone_slot = 0;
+		return;
+	}
+	
 	if (use_nodes || ma->use_nodes) {
 		bNode *node, *active_node;
 
-		if (!(ma->nodetree))
+		if (!(ma->nodetree)) {
+			ma->paint_active_slot = 0;
+			ma->paint_clone_slot = 0;
 			return;
+		}
 
 		for (node = ma->nodetree->nodes.first; node; node = node->next) {
 			if (node->typeinfo->nclass == NODE_CLASS_TEXTURE && node->typeinfo->type == SH_NODE_TEX_IMAGE && node->id)
 				count++;
 		}
 
-		ma->tot_slots = count;
-
 		if (count == 0) {
 			ma->paint_active_slot = 0;
+			ma->paint_clone_slot = 0;
 			return;
 		}
 		ma->texpaintslot = MEM_callocN(sizeof(*ma->texpaintslot) * count, "texpaint_slots");
@@ -1367,10 +1375,9 @@ void BKE_texpaint_slot_refresh_cache(Scene *scene, Material *ma)
 			}
 		}
 
-		ma->tot_slots = count;
-
 		if (count == 0) {
 			ma->paint_active_slot = 0;
+			ma->paint_clone_slot = 0;
 			return;
 		}
 
@@ -1380,13 +1387,22 @@ void BKE_texpaint_slot_refresh_cache(Scene *scene, Material *ma)
 			if (get_mtex_slot_valid_texpaint(*mtex)) {
 				ma->texpaintslot[index].ima = (*mtex)->tex->ima;
 				ma->texpaintslot[index].uvname = (*mtex)->uvname;
-				ma->texpaintslot[index].mtex = *mtex;
+				ma->texpaintslot[index].index = i;
 				
 				index++;
 			}
 		}
 	}
+	else {
+		ma->paint_active_slot = 0;
+		ma->paint_clone_slot = 0;
+		return;
+	}	
 
+
+	ma->tot_slots = count;
+	
+	
 	if (ma->paint_active_slot >= count) {
 		ma->paint_active_slot = count - 1;
 	}

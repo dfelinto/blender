@@ -181,7 +181,6 @@ static void rna_Material_active_paint_texture_index_update(Main *bmain, Scene *s
 	bScreen *sc;
 	Material *ma = ptr->id.data;
 
-
 	if (ma->use_nodes && ma->nodetree && BKE_scene_use_new_shading_nodes(scene)) {
 		struct bNode *node;
 		int index = 0;
@@ -2212,8 +2211,9 @@ static void rna_def_tex_slot(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "UV Map", "Name of UV map");
 	RNA_def_property_update(prop, NC_GEOM | ND_DATA, "rna_Material_update");
 	
-	prop = RNA_def_property(srna, "mtex", PROP_POINTER, PROP_NONE);
-	RNA_def_property_struct_type(prop, "MaterialTextureSlot");
+	prop = RNA_def_property(srna, "index", PROP_INT, PROP_NONE);
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+	RNA_def_property_ui_text(prop, "Index", "Index of MTex slot in the material");
 }
 
 

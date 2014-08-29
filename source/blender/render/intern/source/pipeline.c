@@ -2970,6 +2970,8 @@ void RE_SetReports(Render *re, ReportList *reports)
 void RE_BlenderFrame(Render *re, Main *bmain, Scene *scene, SceneRenderLayer *srl, Object *camera_override,
                      unsigned int lay_override, int frame, const bool write_still)
 {
+	BLI_callback_exec(re->main, (ID *)scene, BLI_CB_EVT_RENDER_INIT);
+
 	/* ugly global still... is to prevent preview events and signal subsurfs etc to make full resol */
 	G.is_rendering = true;
 	
@@ -3362,6 +3364,8 @@ void RE_BlenderAnim(Render *re, Main *bmain, Scene *scene, Object *camera_overri
 	int nfra, totrendered = 0, totskipped = 0;
 	const size_t totvideos = BKE_scene_num_videos(&rd);
 	
+	BLI_callback_exec(re->main, (ID *)scene, BLI_CB_EVT_RENDER_INIT);
+
 	/* do not fully call for each frame, it initializes & pops output window */
 	if (!render_initialize_from_main(re, &rd, bmain, scene, NULL, camera_override, lay_override, 0, 1))
 		return;

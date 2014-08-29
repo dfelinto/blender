@@ -512,19 +512,18 @@ CBData *colorband_element_add(struct ColorBand *coba, float position)
 	if (coba->tot == MAXCOLORBAND) {
 		return NULL;
 	}
-	else if (coba->tot > 0) {
+	else {
 		CBData *xnew;
-		float col[4];
-
-		do_colorband(coba, position, col);
 
 		xnew = &coba->data[coba->tot];
 		xnew->pos = position;
 
-		xnew->r = col[0];
-		xnew->g = col[1];
-		xnew->b = col[2];
-		xnew->a = col[3];
+		if (coba->tot != 0) {
+			do_colorband(coba, position, &xnew->r);
+		}
+		else {
+			zero_v4(&xnew->r);
+		}
 	}
 
 	coba->tot++;
@@ -852,8 +851,7 @@ Tex *localize_texture(Tex *tex)
 {
 	Tex *texn;
 	
-	texn = BKE_libblock_copy(&tex->id);
-	BLI_remlink(&G.main->tex, texn);
+	texn = BKE_libblock_copy_nolib(&tex->id, false);
 	
 	/* image texture: BKE_texture_free also doesn't decrease */
 	
