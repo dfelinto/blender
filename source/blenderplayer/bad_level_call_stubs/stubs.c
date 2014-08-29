@@ -216,7 +216,7 @@ void EDBM_mesh_make(struct ToolSettings *ts, struct Object *ob) RET_NONE
 void EDBM_mesh_normals_update(struct BMEditMesh *em) RET_NONE
 void *g_system;
 
-float *RE_RenderLayerGetPass(struct RenderLayer *rl, int passtype, int view_id) RET_NULL
+float *RE_RenderLayerGetPass(volatile struct RenderLayer *rl, int passtype, int view_id) RET_NULL
 float RE_filter_value(int type, float x) RET_ZERO
 struct RenderLayer *RE_GetRenderLayer(struct RenderResult *rr, const char *name) RET_NULL
 
