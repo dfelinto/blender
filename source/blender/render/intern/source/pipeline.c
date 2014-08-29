@@ -3061,7 +3061,7 @@ static void save_image_get_view_filepath(Scene *scene, const char *filepath, Ren
 	}
 }
 
-bool RE_WriteRenderViews(ReportList *reports, RenderResult *rr, Scene *scene, const bool stamp, char *name)
+bool RE_WriteRenderViewsImage(ReportList *reports, RenderResult *rr, Scene *scene, const bool stamp, char *name)
 {
 	bool is_mono;
 	bool ok = true;
@@ -3204,90 +3204,102 @@ bool RE_WriteRenderViews(ReportList *reports, RenderResult *rr, Scene *scene, co
 	return ok;
 }
 
+bool RE_WriteRenderViewsMovie(ReportList *reports, RenderResult *rr, Scene *scene, RenderData *rd, bMovieHandle **mh, const size_t width, const size_t height, const size_t totvideos)
+{
+	bool is_mono;
+	bool ok = true;
+
+	if (!rr)
+		return false;
+
+	is_mono = BLI_countlist(&rr->views) < 2;
+
+	if (is_mono || (scene->r.im_format.views_output == R_IMF_VIEWS_INDIVIDUAL)) {
+		size_t view_id;
+		for (view_id = 0; view_id < totvideos; view_id++) {
+			bool do_free = false;
+			ImBuf *ibuf = render_result_rect_to_ibuf(rr, &scene->r, view_id);
+
+			/* note; the way it gets 32 bits rects is weak... */
+			if (ibuf->rect == NULL) {
+				ibuf->rect = MEM_mapallocN(sizeof(int) * rr->rectx * rr->recty, "temp 32 bits rect");
+				ibuf->mall |= IB_rect;
+				render_result_rect_get_pixels(rr, ibuf->rect, width, height, &scene->view_settings, &scene->display_settings, view_id);
+				do_free = true;
+			}
+
+			IMB_colormanagement_imbuf_for_write(ibuf, true, false, &scene->view_settings,
+			                                    &scene->display_settings, &scene->r.im_format);
+
+			ok &= mh[view_id]->append_movie(rd, scene->r.sfra, scene->r.cfra, (int *) ibuf->rect,
+			                                ibuf->x, ibuf->y, reports);
+			if (do_free) {
+				MEM_freeN(ibuf->rect);
+				ibuf->rect = NULL;
+				ibuf->mall &= ~IB_rect;
+			}
+
+			/* imbuf knows which rects are not part of ibuf */
+			IMB_freeImBuf(ibuf);
+		}
+		printf("Append frame %d", scene->r.cfra);
+	}
+	else { /* R_IMF_VIEWS_STEREO_3D */
+		const char *names[2] = {STEREO_LEFT_NAME, STEREO_RIGHT_NAME};
+		ImBuf *ibuf[3] = {NULL};
+		bool do_free[2] = {false, false};
+		size_t i;
+
+		BLI_assert((totvideos == 1) && (scene->r.im_format.views_output == R_IMF_VIEWS_STEREO_3D));
+
+		for (i = 0; i < 2; i++) {
+			int view_id = BLI_findstringindex(&rr->views, names[i], offsetof(RenderView, name));
+			ibuf[i] = render_result_rect_to_ibuf(rr, &scene->r, view_id);
+
+			/* note; the way it gets 32 bits rects is weak... */
+			if (ibuf[i]->rect == NULL) {
+				ibuf[i]->rect = MEM_mapallocN(sizeof(int) * width * height, "temp 32 bits rect");
+				ibuf[i]->mall |= IB_rect;
+				render_result_rect_get_pixels(rr, ibuf[i]->rect, width, height, &scene->view_settings, &scene->display_settings, view_id);
+				do_free[i] = true;
+			}
+
+			IMB_colormanagement_imbuf_for_write(ibuf[i], true, false, &scene->view_settings,
+			                                    &scene->display_settings, &scene->r.im_format);
+		}
+
+		ibuf[2] = IMB_stereoImBuf(&scene->r.im_format, ibuf[0], ibuf[1]);
+
+		ok = mh[0]->append_movie(rd, scene->r.sfra, scene->r.cfra, (int *) ibuf[2]->rect,
+		                         ibuf[2]->x, ibuf[2]->y, reports);
+
+		for (i = 0; i < 2; i++) {
+			if (do_free[i]) {
+				MEM_freeN(ibuf[i]->rect);
+				ibuf[i]->rect = NULL;
+				ibuf[i]->mall &= ~IB_rect;
+			}
+
+			/* imbuf knows which rects are not part of ibuf */
+			IMB_freeImBuf(ibuf[i]);
+		}
+	}
+
+	return ok;
+}
+
 static int do_write_image_or_movie(Render *re, Main *bmain, Scene *scene, bMovieHandle **mh, const size_t totvideos, const char *name_override)
 {
 	char name[FILE_MAX];
 	RenderResult rres;
 	double render_time;
 	bool ok = true;
-	bool is_mono;
-	
+
 	RE_AcquireResultImage(re, &rres, -1);
-	is_mono = BLI_countlist(&rres.views) < 2;
 
 	/* write movie or image */
 	if (BKE_imtype_is_movie(scene->r.im_format.imtype)) {
-		if (is_mono || (scene->r.im_format.views_output == R_IMF_VIEWS_INDIVIDUAL))
-		{
-			size_t view_id;
-			for (view_id = 0; view_id < totvideos; view_id++) {
-				bool do_free = false;
-				ImBuf *ibuf = render_result_rect_to_ibuf(&rres, &scene->r, view_id);
-
-				/* note; the way it gets 32 bits rects is weak... */
-				if (ibuf->rect == NULL) {
-					ibuf->rect = MEM_mapallocN(sizeof(int) * rres.rectx * rres.recty, "temp 32 bits rect");
-					ibuf->mall |= IB_rect;
-					RE_AcquiredResultGet32(re, &rres, ibuf->rect, view_id);
-					do_free = true;
-				}
-
-				IMB_colormanagement_imbuf_for_write(ibuf, true, false, &scene->view_settings,
-				                                    &scene->display_settings, &scene->r.im_format);
-
-				ok = mh[view_id]->append_movie(&re->r, scene->r.sfra, scene->r.cfra, (int *) ibuf->rect,
-				                               ibuf->x, ibuf->y, re->reports);
-				if (do_free) {
-					MEM_freeN(ibuf->rect);
-					ibuf->rect = NULL;
-					ibuf->mall &= ~IB_rect;
-				}
-
-				/* imbuf knows which rects are not part of ibuf */
-				IMB_freeImBuf(ibuf);
-			}
-			printf("Append frame %d", scene->r.cfra);
-		}
-		else { /* R_IMF_VIEWS_STEREO_3D */
-			const char *names[2] = {STEREO_LEFT_NAME, STEREO_RIGHT_NAME};
-			ImBuf *ibuf[3] = {NULL};
-			bool do_free[2] = {false, false};
-			size_t i;
-
-			BLI_assert((totvideos == 1) && (scene->r.im_format.views_output == R_IMF_VIEWS_STEREO_3D));
-
-			for (i = 0; i < 2; i++) {
-				int view_id = BLI_findstringindex(&rres.views, names[i], offsetof(RenderView, name));
-				ibuf[i] = render_result_rect_to_ibuf(&rres, &scene->r, view_id);
-
-				/* note; the way it gets 32 bits rects is weak... */
-				if (ibuf[i]->rect == NULL) {
-					ibuf[i]->rect = MEM_mapallocN(sizeof(int) * rres.rectx * rres.recty, "temp 32 bits rect");
-					ibuf[i]->mall |= IB_rect;
-					RE_AcquiredResultGet32(re, &rres, ibuf[i]->rect, view_id);
-					do_free[i] = true;
-				}
-
-				IMB_colormanagement_imbuf_for_write(ibuf[i], true, false, &scene->view_settings,
-				                                    &scene->display_settings, &scene->r.im_format);
-			}
-
-			ibuf[2] = IMB_stereoImBuf(&scene->r.im_format, ibuf[0], ibuf[1]);
-
-			ok = mh[0]->append_movie(&re->r, scene->r.sfra, scene->r.cfra, (int *) ibuf[2]->rect,
-			                         ibuf[2]->x, ibuf[2]->y, re->reports);
-
-			for (i = 0; i < 2; i++) {
-				if (do_free[i]) {
-					MEM_freeN(ibuf[i]->rect);
-					ibuf[i]->rect = NULL;
-					ibuf[i]->mall &= ~IB_rect;
-				}
-
-				/* imbuf knows which rects are not part of ibuf */
-				IMB_freeImBuf(ibuf[i]);
-			}
-		}
+		RE_WriteRenderViewsMovie(re->reports, &rres, scene, &re->r, mh, re->rectx, re->recty, totvideos);
 	}
 	else {
 		if (name_override)
@@ -3297,7 +3309,7 @@ static int do_write_image_or_movie(Render *re, Main *bmain, Scene *scene, bMovie
 			                  &scene->r.im_format, (scene->r.scemode & R_EXTENSION) != 0, true, "");
 
 		/* write images as individual images or stereo */
-		ok = RE_WriteRenderViews(re->reports, &rres, scene, true, name);
+		ok = RE_WriteRenderViewsImage(re->reports, &rres, scene, true, name);
 	}
 	
 	RE_ReleaseResultImage(re);
@@ -3337,32 +3349,7 @@ static void get_videos_dimensions(Render *re, RenderData *rd, size_t *r_width, s
 		height = re->recty;
 	}
 
-	if ((rd->scemode & R_MULTIVIEW) &&
-	    rd->im_format.views_output == R_IMF_VIEWS_STEREO_3D)
-	{
-		IMB_stereo_dimensions(rd->im_format.stereo_output.display_mode, ((rd->im_format.stereo_output.flag & S3D_UNSQUEEZED_FRAME) == 0), width, height, r_width, r_height);
-	}
-	else {
-		*r_width = width;
-		*r_height = height;
-	}
-}
-
-static size_t get_videos_count(RenderData *rd)
-{
-	if (BKE_imtype_is_movie(rd->im_format.imtype) == false)
-		return 0;
-
-	if ((rd->scemode & R_MULTIVIEW) == 0)
-		return 1;
-
-	if (rd->im_format.views_output == R_IMF_VIEWS_STEREO_3D)
-		return 1;
-
-	/* R_IMF_VIEWS_INDIVIDUAL */
-	else {
-		return BKE_scene_num_views(rd);
-	}
+	BKE_scene_videos_dimensions(rd, width, height, r_width, r_height);
 }
 
 /* saves images to disk */
@@ -3373,7 +3360,7 @@ void RE_BlenderAnim(Render *re, Main *bmain, Scene *scene, Object *camera_overri
 	bMovieHandle **mh = NULL;
 	int cfrao = scene->r.cfra;
 	int nfra, totrendered = 0, totskipped = 0;
-	const size_t totvideos = get_videos_count(&rd);
+	const size_t totvideos = BKE_scene_num_videos(&rd);
 	
 	/* do not fully call for each frame, it initializes & pops output window */
 	if (!render_initialize_from_main(re, &rd, bmain, scene, NULL, camera_override, lay_override, 0, 1))
@@ -3392,8 +3379,7 @@ void RE_BlenderAnim(Render *re, Main *bmain, Scene *scene, Object *camera_overri
 	re->flag |= R_ANIMATION;
 
 	if (BKE_imtype_is_movie(scene->r.im_format.imtype)) {
-		size_t i;
-		size_t width, height;
+		size_t i, width, height;
 
 		get_videos_dimensions(re, &rd, &width, &height);
 

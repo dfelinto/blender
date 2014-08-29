@@ -100,9 +100,10 @@ typedef struct OGLRender {
 	int write_still;
 
 	ReportList *reports;
-	bMovieHandle *mh;
+	bMovieHandle **mh;
 	int cfrao, nfra;
 
+	size_t totvideos;
 	int view_id;
 
 	/* wm vars for timer and progress cursor */
@@ -454,7 +455,7 @@ static void screen_opengl_render_write(OGLRender *oglrender)
 	                  &scene->r.im_format, (scene->r.scemode & R_EXTENSION) != 0, false, "");
 
 	/* write images as individual images or stereo */
-	ok = RE_WriteRenderViews(oglrender->reports, rr, scene, false, name);
+	ok = RE_WriteRenderViewsImage(oglrender->reports, rr, scene, false, name);
 
 	RE_ReleaseResultImage(oglrender->re);
 
@@ -474,8 +475,6 @@ static void screen_opengl_render_apply(OGLRender *oglrender)
 		oglrender->view_id = view_id;
 		screen_opengl_render_doit(oglrender, rr);
 	}
-
-	/* XXX MV we no longer have the option to save as BW */
 
 	RE_ReleaseResult(oglrender->re);
 
@@ -565,7 +564,6 @@ static bool screen_opengl_render_init(bContext *C, wmOperator *op)
 		oglrender->sseq = CTX_wm_space_seq(C);
 	}
 
-
 	oglrender->prevsa = prevsa;
 	oglrender->prevar = prevar;
 
@@ -604,6 +602,9 @@ static bool screen_opengl_render_init(bContext *C, wmOperator *op)
 	oglrender->wm = wm;
 	oglrender->win = win;
 
+	oglrender->totvideos = 0;
+	oglrender->mh = NULL;
+
 	return true;
 }
 
@@ -611,10 +612,15 @@ static void screen_opengl_render_end(bContext *C, OGLRender *oglrender)
 {
 	Main *bmain = CTX_data_main(C);
 	Scene *scene = oglrender->scene;
+	size_t i;
 
 	if (oglrender->mh) {
-		if (BKE_imtype_is_movie(scene->r.im_format.imtype))
-			oglrender->mh->end_movie();
+		for (i = 0; i < oglrender->totvideos; i++){
+			if (BKE_imtype_is_movie(scene->r.im_format.imtype)) {
+				oglrender->mh[i]->end_movie();
+			}
+		}
+		MEM_freeN(oglrender->mh);
 	}
 
 	if (oglrender->timer) { /* exec will not have a timer */
@@ -654,13 +660,26 @@ static int screen_opengl_render_anim_initialize(bContext *C, wmOperator *op)
 
 	oglrender = op->customdata;
 	scene = oglrender->scene;
+	oglrender->totvideos = BKE_scene_num_videos(&scene->r);
 
 	oglrender->reports = op->reports;
-	oglrender->mh = BKE_movie_handle_get(scene->r.im_format.imtype);
+
 	if (BKE_imtype_is_movie(scene->r.im_format.imtype)) {
-		if (!oglrender->mh->start_movie(scene, &scene->r, oglrender->sizex, oglrender->sizey, oglrender->reports)) {
-			screen_opengl_render_end(C, oglrender);
-			return 0;
+		size_t i, width, height;
+
+		BKE_scene_videos_dimensions(&scene->r, oglrender->sizex, oglrender->sizey, &width, &height);
+
+		oglrender->mh = MEM_mallocN(sizeof(bMovieHandle) * oglrender->totvideos, "Movies");
+
+		for (i = 0; i < oglrender->totvideos; i++){
+			oglrender->mh[i] = BKE_movie_handle_get(scene->r.im_format.imtype);
+
+			/*XXX MV MOV need to come up with a solution for the name issue, because at the moment
+			 * it's handling the name entirely inside the movie format */
+			if (!oglrender->mh[i]->start_movie(scene, &scene->r, oglrender->sizex, oglrender->sizey, oglrender->reports)) {
+				screen_opengl_render_end(C, oglrender);
+				return 0;
+			}
 		}
 	}
 
@@ -670,18 +689,17 @@ static int screen_opengl_render_anim_initialize(bContext *C, wmOperator *op)
 
 	return 1;
 }
+
 static bool screen_opengl_render_anim_step(bContext *C, wmOperator *op)
 {
 	Main *bmain = CTX_data_main(C);
 	OGLRender *oglrender = op->customdata;
 	Scene *scene = oglrender->scene;
-	ImBuf *ibuf, *ibuf_save = NULL;
-	void *lock;
 	char name[FILE_MAX];
 	bool ok = false;
 	const bool view_context = (oglrender->v3d != NULL);
-	Object *camera = NULL;
 	bool is_movie;
+	RenderResult *rr;
 
 	/* go to next frame */
 	if (CFRA < oglrender->nfra)
@@ -720,91 +738,39 @@ static bool screen_opengl_render_anim_step(bContext *C, wmOperator *op)
 			if (BKE_scene_camera_switch_update(scene)) {
 				oglrender->v3d->camera = scene->camera;
 			}
-
-			camera = oglrender->v3d->camera;
 		}
 	}
 	else {
 		BKE_scene_camera_switch_update(scene);
-
-		camera = scene->camera;
 	}
 
 	/* render into offscreen buffer */
 	screen_opengl_render_apply(oglrender);
 
-	//XXX MV OGL remove this and incorpoorate with the still image part
-
 	/* save to disk */
-	ibuf = BKE_image_acquire_ibuf(oglrender->ima, &oglrender->iuser, &lock);
+	rr = RE_AcquireResultRead(oglrender->re);
 
-	if (ibuf) {
-		bool needs_free = false;
-
-		ibuf_save = ibuf;
-
-		if (is_movie || !BKE_imtype_requires_linear_float(scene->r.im_format.imtype)) {
-			ibuf_save = IMB_colormanagement_imbuf_for_write(ibuf, true, true, &scene->view_settings,
-			                                                &scene->display_settings, &scene->r.im_format);
-
-			needs_free = true;
+	if (is_movie) {
+		ok = RE_WriteRenderViewsMovie(oglrender->reports, rr, scene, &scene->r, oglrender->mh, oglrender->sizex, oglrender->sizey, oglrender->totvideos);
+		if (ok) {
+			printf("Append frame %d", scene->r.cfra);
+			BKE_reportf(op->reports, RPT_INFO, "Appended frame: %d", scene->r.cfra);
 		}
-
-		/* color -> grayscale */
-		/* editing directly would alter the render view */
-		if (scene->r.im_format.planes == R_IMF_PLANES_BW) {
-			ImBuf *ibuf_bw = IMB_dupImBuf(ibuf_save);
-			IMB_color_to_bw(ibuf_bw);
-
-			if (needs_free)
-				IMB_freeImBuf(ibuf_save);
-
-			ibuf_save = ibuf_bw;
+	}
+	else {
+		ok = RE_WriteRenderViewsImage(op->reports, rr, scene, true, name);
+		if (ok) {
+			printf("Saved: %s", name);
+			BKE_reportf(op->reports, RPT_INFO, "Saved file: %s", name);
 		}
 		else {
-			/* this is lightweight & doesnt re-alloc the buffers, only do this
-			 * to save the correct bit depth since the image is always RGBA */
-			ImBuf *ibuf_cpy = IMB_allocImBuf(ibuf_save->x, ibuf_save->y, scene->r.im_format.planes, 0);
-
-			ibuf_cpy->rect = ibuf_save->rect;
-			ibuf_cpy->rect_float = ibuf_save->rect_float;
-			ibuf_cpy->zbuf_float = ibuf_save->zbuf_float;
-
-			if (needs_free) {
-				ibuf_cpy->mall = ibuf_save->mall;
-				ibuf_save->mall = 0;
-				IMB_freeImBuf(ibuf_save);
-			}
-
-			ibuf_save = ibuf_cpy;
+			printf("Write error: cannot save %s\n", name);
+			BKE_reportf(op->reports, RPT_ERROR, "Write error: cannot save %s", name);
 		}
-
-		if (is_movie) {
-			ok = oglrender->mh->append_movie(&scene->r, PSFRA, CFRA, (int *)ibuf_save->rect,
-			                                 oglrender->sizex, oglrender->sizey, oglrender->reports);
-			if (ok) {
-				printf("Append frame %d", scene->r.cfra);
-				BKE_reportf(op->reports, RPT_INFO, "Appended frame: %d", scene->r.cfra);
-			}
-		}
-		else {
-			ok = BKE_imbuf_write_stamp(scene, camera, ibuf_save, name, &scene->r.im_format);
-
-			if (ok == 0) {
-				printf("Write error: cannot save %s\n", name);
-				BKE_reportf(op->reports, RPT_ERROR, "Write error: cannot save %s", name);
-			}
-			else {
-				printf("Saved: %s", name);
-				BKE_reportf(op->reports, RPT_INFO, "Saved file: %s", name);
-			}
-		}
-
-		if (needs_free)
-			IMB_freeImBuf(ibuf_save);
 	}
 
-	BKE_image_release_ibuf(oglrender->ima, ibuf, lock);
+	RE_ReleaseResult(oglrender->re);
+
 
 	/* movie stats prints have no line break */
 	printf("\n");
