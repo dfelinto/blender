@@ -253,7 +253,7 @@ static void compo_startjob(void *cjv, short *stop, short *do_update, float *prog
 	// XXX BIF_store_spare();
 	/* 1 is do_previews */
 
-	numviews = BKE_render_num_views(&cj->scene->r);
+	numviews = BKE_scene_num_views(&cj->scene->r);
 	for (nr = 0; nr < numviews; nr++) {
 		ntreeCompositExecTree(cj->scene, ntree, &cj->scene->r, false, true, &scene->view_settings, &scene->display_settings, nr);
 	}

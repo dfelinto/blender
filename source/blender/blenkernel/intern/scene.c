@@ -2057,7 +2057,7 @@ double BKE_scene_unit_scale(const UnitSettings *unit, const int unit_type, doubl
 
 /******************** multiview *************************/
 
-size_t BKE_render_num_views(const RenderData *rd)
+size_t BKE_scene_num_views(const RenderData *rd)
 {
 	SceneRenderView *srv;
 	size_t totviews	= 0;
@@ -2080,7 +2080,7 @@ size_t BKE_render_num_views(const RenderData *rd)
 	return totviews;
 }
 
-bool BKE_render_is_stereo3d(const RenderData *rd)
+bool BKE_scene_is_stereo3d(const RenderData *rd)
 {
 	SceneRenderView *srv[2];
 

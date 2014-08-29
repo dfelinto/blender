@@ -3362,7 +3362,7 @@ static size_t get_videos_count(RenderData *rd)
 
 	/* R_IMF_VIEWS_INDIVIDUAL */
 	else {
-		return BKE_render_num_views(rd);
+		return BKE_scene_num_views(rd);
 	}
 }
 

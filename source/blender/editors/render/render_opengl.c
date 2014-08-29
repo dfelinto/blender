@@ -229,7 +229,7 @@ static void screen_opengl_views_setup(OGLRender *oglrender)
 	}
 
 	BLI_lock_thread(LOCK_DRAW_IMAGE);
-	if (BKE_render_is_stereo3d(rd)) {
+	if (BKE_scene_is_stereo3d(rd)) {
 		oglrender->ima->flag |= IMA_IS_STEREO;
 	}
 	else {

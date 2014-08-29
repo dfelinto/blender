@@ -271,7 +271,7 @@ void OutputStereoOperation::deinitExecution()
 		this->m_outputBuffer = NULL;
 
 		/* create stereo ibuf */
-		if (this->m_actview >= BKE_render_num_views(this->m_rd) - 1) {
+		if (this->m_actview >= BKE_scene_num_views(this->m_rd) - 1) {
 			ImBuf *ibuf[3] = {NULL};
 			const char *names[2] = {STEREO_LEFT_NAME, STEREO_RIGHT_NAME};
 			Main *bmain = G.main; /* TODO, have this passed along */

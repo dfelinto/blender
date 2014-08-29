@@ -82,7 +82,7 @@ void ViewerNode::convertToOperations(NodeConverter &converter, const CompositorC
 
 	if (image && (context.getViewId() == 0)) {
 		BLI_lock_thread(LOCK_DRAW_IMAGE);
-		if (BKE_render_is_stereo3d(context.getRenderData())) {
+		if (BKE_scene_is_stereo3d(context.getRenderData())) {
 			image->flag |= IMA_IS_STEREO;
 		}
 		else {
@@ -90,7 +90,7 @@ void ViewerNode::convertToOperations(NodeConverter &converter, const CompositorC
 			imageUser->flag &= ~IMA_SHOW_STEREO;
 		}
 
-		size_t num_views = BKE_render_num_views(context.getRenderData());
+		size_t num_views = BKE_scene_num_views(context.getRenderData());
 		size_t num_caches = BKE_image_cache_count(image);
 
 		if (num_views != num_caches) {
