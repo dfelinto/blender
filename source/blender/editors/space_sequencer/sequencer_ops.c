@@ -109,6 +109,7 @@ void sequencer_operatortypes(void)
 	WM_operatortype_append(SEQUENCER_OT_sound_strip_add);
 	WM_operatortype_append(SEQUENCER_OT_image_strip_add);
 	WM_operatortype_append(SEQUENCER_OT_effect_strip_add);
+	WM_operatortype_append(SEQUENCER_OT_stereo3d_strip_add);
 
 	/* sequencer_buttons.c */
 	WM_operatortype_append(SEQUENCER_OT_properties);

@@ -266,6 +266,7 @@ class SEQUENCER_MT_add(Menu):
         layout.operator("sequencer.movie_strip_add", text="Movie")
         layout.operator("sequencer.image_strip_add", text="Image")
         layout.operator("sequencer.sound_strip_add", text="Sound")
+        layout.operator("sequencer.stereo3d_strip_add", text="Stereo 3D")
 
         layout.menu("SEQUENCER_MT_add_effect")
 

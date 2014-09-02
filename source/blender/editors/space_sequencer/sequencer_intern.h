@@ -148,6 +148,7 @@ void SEQUENCER_OT_mask_strip_add(struct wmOperatorType *ot);
 void SEQUENCER_OT_sound_strip_add(struct wmOperatorType *ot);
 void SEQUENCER_OT_image_strip_add(struct wmOperatorType *ot);
 void SEQUENCER_OT_effect_strip_add(struct wmOperatorType *ot);
+void SEQUENCER_OT_stereo3d_strip_add(struct wmOperatorType *ot);
 
 /* RNA enums, just to be more readable */
 enum {

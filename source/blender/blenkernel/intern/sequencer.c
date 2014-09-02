@@ -4361,6 +4361,30 @@ Sequence *BKE_sequencer_add_image_strip(bContext *C, ListBase *seqbasep, SeqLoad
 	return seq;
 }
 
+/* NOTE: this function doesn't fill in image names */
+Sequence *BKE_sequencer_add_stereo3d_strip(bContext *C, ListBase *seqbasep, SeqLoadInfo *seq_load)
+{
+	Scene *scene = CTX_data_scene(C); /* only for active seq */
+	Sequence *seq;
+	Strip *strip;
+
+	seq = BKE_sequence_alloc(seqbasep, seq_load->start_frame, seq_load->channel);
+	seq->type = SEQ_TYPE_STEREO_3D;
+	seq->blend_mode = SEQ_TYPE_CROSS; /* so alpha adjustment fade to the strip below */
+
+	/* basic defaults */
+	seq->strip = strip = MEM_callocN(sizeof(Strip), "strip");
+
+	seq->len = seq_load->len ? seq_load->len : 1;
+	strip->us = 1;
+	strip->stripdata = MEM_callocN(seq->len * sizeof(StripElem), "stripelem");
+	BLI_strncpy(strip->dir, seq_load->path, sizeof(strip->dir));
+
+	seq_load_apply(scene, seq, seq_load);
+
+	return seq;
+}
+
 #ifdef WITH_AUDASPACE
 Sequence *BKE_sequencer_add_sound_strip(bContext *C, ListBase *seqbasep, SeqLoadInfo *seq_load)
 {

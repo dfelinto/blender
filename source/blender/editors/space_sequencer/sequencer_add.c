@@ -780,6 +780,115 @@ void SEQUENCER_OT_image_strip_add(struct wmOperatorType *ot)
 }
 
 
+/* add_stereo3d_strip operator */
+
+static int sequencer_add_stereo3d_strip_exec(bContext *C, wmOperator *op)
+{
+	/* cant use the generic function for this */
+
+	Scene *scene = CTX_data_scene(C); /* only for sound */
+	Editing *ed = BKE_sequencer_editing_get(scene, true);
+	SeqLoadInfo seq_load;
+	Sequence *seq;
+
+	Strip *strip;
+	StripElem *se;
+
+	seq_load_operator_info(&seq_load, op);
+
+	/* images are unique in how they handle this - 1 per strip elem */
+	seq_load.len = RNA_property_collection_length(op->ptr, RNA_struct_find_property(op->ptr, "files"));
+
+	if (seq_load.len == 0)
+		return OPERATOR_CANCELLED;
+
+	if (seq_load.flag & SEQ_LOAD_REPLACE_SEL)
+		ED_sequencer_deselect_all(scene);
+
+
+	/* main adding function */
+	seq = BKE_sequencer_add_stereo3d_strip(C, ed->seqbasep, &seq_load);
+	strip = seq->strip;
+	se = strip->stripdata;
+
+	RNA_BEGIN (op->ptr, itemptr, "files")
+	{
+		char *filename = RNA_string_get_alloc(&itemptr, "name", NULL, 0);
+		BLI_strncpy(se->name, filename, sizeof(se->name));
+		MEM_freeN(filename);
+		se++;
+	}
+	RNA_END;
+
+	if (seq_load.len == 1) {
+		if (seq_load.start_frame < seq_load.end_frame) {
+			seq->endstill = seq_load.end_frame - seq_load.start_frame;
+		}
+	}
+
+	BKE_sequence_init_colorspace(seq);
+
+	BKE_sequence_calc_disp(scene, seq);
+
+	BKE_sequencer_sort(scene);
+
+	/* last active name */
+	BLI_strncpy(ed->act_imagedir, strip->dir, sizeof(ed->act_imagedir));
+
+	sequencer_add_apply_overlap(C, op, seq);
+
+	WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
+
+	return OPERATOR_FINISHED;
+}
+
+static int sequencer_add_stereo3d_strip_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
+{
+	/* drag drop has set the names */
+	if (RNA_struct_property_is_set(op->ptr, "files") && RNA_collection_length(op->ptr, "files")) {
+		sequencer_generic_invoke_xy__internal(C, op, SEQPROP_ENDFRAME | SEQPROP_NOPATHS, SEQ_TYPE_IMAGE);
+		return sequencer_add_stereo3d_strip_exec(C, op);
+	}
+
+	sequencer_generic_invoke_xy__internal(C, op, SEQPROP_ENDFRAME, SEQ_TYPE_IMAGE);
+
+	WM_event_add_fileselect(C, op);
+	return OPERATOR_RUNNING_MODAL;
+}
+
+static int sequencer_add_stereo3d_strip_poll(bContext *C)
+{
+	Scene *scene = CTX_data_scene(C);
+
+	if ((scene->r.scemode & R_MULTIVIEW) == 0)
+		return false;
+
+	return ED_operator_sequencer_active_editable(C);
+}
+
+void SEQUENCER_OT_stereo3d_strip_add(struct wmOperatorType *ot)
+{
+	
+	/* identifiers */
+	ot->name = "Add Stereo 3D Strip";
+	ot->idname = "SEQUENCER_OT_stereo3d_strip_add";
+	ot->description = "Add an image or image stereo 3d sequence to the sequencer";
+
+	/* api callbacks */
+	ot->invoke = sequencer_add_stereo3d_strip_invoke;
+	ot->exec = sequencer_add_stereo3d_strip_exec;
+
+	ot->poll = sequencer_add_stereo3d_strip_poll;
+	
+	/* flags */
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+	
+	WM_operator_properties_filesel(ot, FOLDERFILE | IMAGEFILE, FILE_SPECIAL, FILE_OPENFILE,
+	                               WM_FILESEL_DIRECTORY | WM_FILESEL_RELPATH | WM_FILESEL_FILES, FILE_DEFAULTDISPLAY);
+	sequencer_generic_props__internal(ot, SEQPROP_STARTFRAME | SEQPROP_ENDFRAME);
+}
+
+
 /* add_effect_strip operator */
 static int sequencer_add_effect_strip_exec(bContext *C, wmOperator *op)
 {

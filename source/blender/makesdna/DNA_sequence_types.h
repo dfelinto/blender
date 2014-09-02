@@ -408,6 +408,7 @@ enum {
 	SEQ_TYPE_SOUND_HD    = 5,
 	SEQ_TYPE_MOVIECLIP   = 6,
 	SEQ_TYPE_MASK        = 7,
+	SEQ_TYPE_STEREO_3D   = 41,
 
 	SEQ_TYPE_EFFECT      = 8,
 	SEQ_TYPE_CROSS       = 8,

@@ -505,6 +505,8 @@ static StructRNA *rna_Sequence_refine(struct PointerRNA *ptr)
 			return &RNA_MovieSequence;
 		case SEQ_TYPE_MOVIECLIP:
 			return &RNA_MovieClipSequence;
+//		case SEQ_TYPE_STEREO_3D;
+//			return &RNA_Stereo3DSequence;
 		case SEQ_TYPE_MASK:
 			return &RNA_MaskSequence;
 		case SEQ_TYPE_SOUND_RAM:
