@@ -3028,7 +3028,11 @@ void RE_RenderFreestyleExternal(Render *re)
 }
 #endif
 
-
+/* When multiview is not used the filepath is as usual (e.g., Image.jpg).
+ * When multiview is on, even if only one view is enabled the view is incorporated
+ * into the file name (e.g., Image_L.jpg). That allows for the user to re-render
+ * individual views.
+ **/
 static void save_image_get_view_filepath(Scene *scene, const char *filepath, RenderView *rv,
                                          char *r_filepath, char *r_view)
 {
@@ -3088,9 +3092,7 @@ bool RE_WriteRenderViewsImage(ReportList *reports, RenderResult *rr, Scene *scen
 		BLI_strncpy(filepath, name, sizeof(filepath));
 
 		for (view_id = 0, rv = (RenderView *) rr->views.first; rv; rv = rv->next, view_id++) {
-			if (!is_mono) {
-				save_image_get_view_filepath(scene, filepath, rv, name, view);
-			}
+			save_image_get_view_filepath(scene, filepath, rv, name, view);
 
 			if (rd->im_format.imtype == R_IMF_IMTYPE_MULTILAYER) {
 				RE_WriteRenderResult(reports, rr, name, &rd->im_format, false, view);
