@@ -29,23 +29,19 @@ SwitchViewNode::SwitchViewNode(bNode *editorNode) : Node(editorNode)
 void SwitchViewNode::convertToOperations(NodeConverter &converter, const CompositorContext &context) const
 {
 	NodeOperationOutput *result;
-	int actview = context.getViewId();
+	const char *viewName = context.getViewName();
 
 	bNodeSocket *sock;
 	bNode *bnode = this->getbNode();
 
-	const RenderData *rd = context.getRenderData();
-	const char *view = this->RenderData_get_actview_name(rd, actview); /* name of active view */
-
 	/* get the internal index of the socket with a matching name */
 	int nr = 0;
 	for (sock = (bNodeSocket *)bnode->inputs.first; sock; sock = sock->next, nr++) {
-		if (strcmp(sock->name, view) == 0)
+		if (strcmp(sock->name, viewName) == 0)
 			break;
 	}
 
 	if (!sock) nr --;
-
 
 	result = converter.addInputProxy(getInputSocket(nr), false);
 	converter.mapOutputSocket(getOutputSocket(0), result);

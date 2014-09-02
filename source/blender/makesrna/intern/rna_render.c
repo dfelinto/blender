@@ -499,9 +499,7 @@ static void rna_def_render_engine(BlenderRNA *brna)
 	prop = RNA_def_int(func, "h", 0, 0, INT_MAX, "Height", "", 0, INT_MAX);
 	RNA_def_property_flag(prop, PROP_REQUIRED);
 	RNA_def_string(func, "layer", NULL, 0, "Layer", "Single layer to get render result for");  /* NULL ok here */
-	prop = RNA_def_int(func, "view", 0, 0, INT_MAX, "View",
-	                   "index of the list of available views (not including disabled ones). -1 for all views", 0, INT_MAX);
-	RNA_def_property_flag(prop, PROP_REQUIRED);
+	RNA_def_string(func, "view", NULL, 0, "View", "Single view to get render result for");  /* NULL ok here */
 	prop = RNA_def_pointer(func, "result", "RenderResult", "Result", "");
 	RNA_def_function_return(func, prop);
 
@@ -521,10 +519,8 @@ static void rna_def_render_engine(BlenderRNA *brna)
 	RNA_def_function_ui_description(func, "Test if the render operation should been canceled, this is a fast call that should be used regularly for responsiveness");
 	prop = RNA_def_boolean(func, "do_break", 0, "Break", "");
 	RNA_def_function_return(func, prop);
-
 	func = RNA_def_function(srna, "active_view_set", "RE_engine_actview_set");
-	prop = RNA_def_int(func, "view", 0, 0, INT_MAX, "View",
-	                   "view index from the list of available views (not including disabled views)", 0, INT_MAX);
+	RNA_def_string(func, "view", NULL, 0, "View", "Single view to set as active");  /* NULL ok here */
 	RNA_def_property_flag(prop, PROP_REQUIRED);
 
 	func = RNA_def_function(srna, "update_stats", "RE_engine_update_stats");
@@ -690,9 +686,17 @@ static void rna_def_render_result(BlenderRNA *brna)
 static void rna_def_render_view(BlenderRNA *brna)
 {
 	StructRNA *srna;
+	PropertyRNA *prop;
 
 	srna = RNA_def_struct(brna, "RenderView", NULL);
 	RNA_def_struct_ui_text(srna, "Render View", "");
+
+	RNA_define_verify_sdna(0);
+
+	prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
+	RNA_def_property_string_sdna(prop, NULL, "name");
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+	RNA_def_struct_name_property(srna, prop);
 
 	RNA_define_verify_sdna(1);
 }

@@ -35,7 +35,7 @@ extern "C" {
 #include "PIL_time.h"
 
 
-CompositorOperation::CompositorOperation(const int actview) : NodeOperation()
+CompositorOperation::CompositorOperation() : NodeOperation()
 {
 	this->addInputSocket(COM_DT_COLOR);
 	this->addInputSocket(COM_DT_VALUE);
@@ -51,9 +51,8 @@ CompositorOperation::CompositorOperation(const int actview) : NodeOperation()
 	this->m_useAlphaInput = false;
 	this->m_active = false;
 
-	this->m_actview = actview;
-
 	this->m_sceneName[0] = '\0';
+	this->m_viewName = NULL;
 }
 
 void CompositorOperation::initExecution()
@@ -83,7 +82,7 @@ void CompositorOperation::deinitExecution()
 		RenderResult *rr = RE_AcquireResultWrite(re);
 
 		if (rr) {
-			RenderView *rv = (RenderView *)BLI_findlink(&rr->views, this->m_actview);
+			RenderView *rv = (RenderView *)BLI_findstring(&rr->views, this->m_viewName, offsetof(RenderView, name));
 
 			if (rv->rectf != NULL) {
 				MEM_freeN(rv->rectf);

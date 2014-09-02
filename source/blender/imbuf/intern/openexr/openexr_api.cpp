@@ -596,13 +596,6 @@ void *IMB_exr_get_handle_name(const char *name)
 
 /* multiview functions */
 } // extern "C"
-static StringVector *imb_exr_multiView(void *handle)
-{
-	ExrHandle *data = (ExrHandle *)handle;
-	return data->multiView;
-}
-
-
 
 extern "C"
 {
@@ -611,20 +604,6 @@ void IMB_exr_add_view(void *handle, const char *name)
 {
 	ExrHandle *data = (ExrHandle *)handle;
 	data->multiView->push_back(name);
-}
-
-void IMB_exr_get_multiView_name(void *handle, int view_id, char *view)
-{
-	StringVector *views = imb_exr_multiView(handle);
-	std::string retstr ( view_id >= views->size() ? "" : (*views)[view_id].c_str() );
-
-	BLI_strncpy(view, retstr.c_str(), sizeof(view));
-}
-
-int IMB_exr_get_multiView_count(void *handle)
-{
-	ExrHandle *data = (ExrHandle *) handle;
-	return data->multiView->size();
 }
 
 static int imb_exr_get_multiView_id(StringVector& views, const std::string& name)
@@ -652,7 +631,7 @@ static void imb_exr_get_views(MultiPartInputFile *file, StringVector& views)
 	}
 
 	else {
-		for(int p=0;p<file->parts();p++) {
+		for(int p = 0; p < file->parts(); p++) {
 			std::string view="";
 			if(file->header(p).hasView())
 				view=file->header(p).view();
@@ -717,7 +696,7 @@ static void imb_exr_make_unique_names (std::vector<Header> & headers)
 /* adds flattened ExrChannels */
 /* xstride, ystride and rect can be done in set_channel too, for tile writing */
 /* passname does not include view */
-void IMB_exr_add_channel(void *handle, const char *layname, const char *passname, const char *view, int xstride, int ystride, float *rect)
+void IMB_exr_add_channel(void *handle, const char *layname, const char *passname, const char *viewname, int xstride, int ystride, float *rect)
 {
 	ExrHandle *data = (ExrHandle *)handle;
 	ExrChannel *echan;
@@ -736,7 +715,7 @@ void IMB_exr_add_channel(void *handle, const char *layname, const char *passname
 
 	echan->m->internal_name = echan->m->name;
 
-	echan->m->view.assign(view ? view : "");
+	echan->m->view.assign(viewname ? viewname : "");
 
 	/* name has to be unique, thus it's a combination of layer, pass, view, and channel */
 	std::string raw_name = imb_exr_insert_view_name(echan->m->name.c_str(), echan->m->view.c_str());
@@ -1056,7 +1035,7 @@ void IMB_exr_set_channel(void *handle, const char *layname, const char *passname
 		printf("IMB_exr_set_channel error %s\n", name);
 }
 
-float  *IMB_exr_channel_rect(void *handle, const char *layname, const char *passname, const char *view)
+float  *IMB_exr_channel_rect(void *handle, const char *layname, const char *passname, const char *viewname)
 {
 	ExrHandle *data = (ExrHandle *)handle;
 	ExrChannel *echan;
@@ -1073,7 +1052,7 @@ float  *IMB_exr_channel_rect(void *handle, const char *layname, const char *pass
 		BLI_strncpy(name, passname, EXR_TOT_MAXNAME - 1);
 
 	/* name has to be unique, thus it's a combination of layer, pass, view, and channel */
-	std::string raw_name = imb_exr_insert_view_name(name, view);
+	std::string raw_name = imb_exr_insert_view_name(name, viewname);
 	BLI_strncpy(name, raw_name.c_str(), sizeof(name));
 
 	echan = (ExrChannel *)BLI_findstring(&data->channels, name, offsetof(ExrChannel, name));
@@ -1125,13 +1104,15 @@ void IMB_exr_write_channels(void *handle)
 
 /* temporary function, used for FSA and Save Buffers */
 /* called once per tile * view */
-void IMB_exrtile_write_channels(void *handle, int partx, int party, int level, int view)
+void IMB_exrtile_write_channels(void *handle, int partx, int party, int level, const char *viewname)
 {
 	ExrHandle *data = (ExrHandle *)handle;
 	FrameBuffer frameBuffer;
 	ExrChannel *echan;
+	std::string view(viewname);
+	const size_t view_id = imb_exr_get_multiView_id(*data->multiView, view);
 
-	exr_printf("\nIMB_exrtile_write_channels(view: %d)\n", view);
+	exr_printf("\nIMB_exrtile_write_channels(view: %s)\n", viewname);
 	exr_printf("%s %-6s %-22s \"%s\"\n", "p", "view", "name", "internal_name");
 	exr_printf("---------------------------------------------------------------------\n");
 
@@ -1139,7 +1120,7 @@ void IMB_exrtile_write_channels(void *handle, int partx, int party, int level, i
 
 		/* eventually we can make the parts' channels to include
 		   only the current view TODO */
-		if (view != echan->view_id)
+		if (strcmp(viewname, echan->m->view.c_str()) != 0)
 			continue;
 
 		exr_printf("%d %-6s %-22s \"%s\"\n",
@@ -1159,7 +1140,7 @@ void IMB_exrtile_write_channels(void *handle, int partx, int party, int level, i
 		                  );
 	}
 
-	TiledOutputPart out (*data->mpofile, view);
+	TiledOutputPart out (*data->mpofile, view_id);
 	out.setFrameBuffer(frameBuffer);
 
 	try {
@@ -1172,9 +1153,10 @@ void IMB_exrtile_write_channels(void *handle, int partx, int party, int level, i
 }
 
 /* called only when handle has all views */
-void IMB_exrmultiview_write_channels(void *handle, int view_id)
+void IMB_exrmultiview_write_channels(void *handle, const char *viewname)
 {
 	ExrHandle *data = (ExrHandle *)handle;
+	const size_t view_id = viewname ? imb_exr_get_multiView_id(*data->multiView, viewname) : -1;
 	int numparts = (view_id == -1? data->parts : view_id + 1);
 	std::vector <FrameBuffer> frameBuffers(numparts);
 	std::vector <OutputPart> outputParts;
@@ -1190,27 +1172,26 @@ void IMB_exrmultiview_write_channels(void *handle, int view_id)
 		if (view_id != -1 && echan->view_id != view_id)
 			continue;
 
-		part = (view_id == -1?echan->m->part_number:echan->view_id);
+		part = (view_id == -1 ? echan->m->part_number:echan->view_id);
 
 		/* last scanline, stride negative */
 		float *rect = echan->rect + echan->xstride * (data->height - 1) * data->width;
 		frameBuffers[part].insert(echan->m->internal_name,
-												   Slice(Imf::FLOAT,
-														 (char *)rect,
-														 echan->xstride * sizeof(float),
-														 -echan->ystride * sizeof(float)
-														 )
-												   );
+		                          Slice(Imf::FLOAT,
+		                                (char *)rect,
+		                                echan->xstride * sizeof(float),
+		                                -echan->ystride * sizeof(float))
+);
 	}
 
-	for (i=0; i < numparts; i++) {
+	for (i = 0; i < numparts; i++) {
 		OutputPart out(*data->mpofile, i);
 		out.setFrameBuffer(frameBuffers[i]);
 		outputParts.push_back(out);
 	}
 
 	try {
-		for (i=0; i < numparts; i++) {
+		for (i = 0; i < numparts; i++) {
 			if (view_id != -1 && i != view_id)
 				continue;
 

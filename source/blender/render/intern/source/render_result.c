@@ -49,6 +49,7 @@
 #include "BKE_main.h"
 #include "BKE_report.h"
 #include "BKE_camera.h"
+#include "BKE_scene.h"
 
 #include "IMB_imbuf.h"
 #include "IMB_imbuf_types.h"
@@ -135,6 +136,7 @@ static const char *get_view_name(ListBase *views, int view_id)
 	return "";
 }
 
+#if 0
 int render_result_get_view_id(Render *re, const char *view)
 {
 	RenderView *rv;
@@ -154,6 +156,7 @@ int render_result_get_view_id(Render *re, const char *view)
 
 	return 0;
 }
+#endif
 
 /* create a new views Listbase in rr without duplicating the memory pointers */
 void render_result_views_shallowcopy(RenderResult *dst, RenderResult *src)
@@ -547,7 +550,7 @@ static void render_layer_add_pass(RenderResult *rr, RenderLayer *rl, int channel
 /* will read info from Render *re to define layers */
 /* called in threads */
 /* re->winx,winy is coordinate space of entire image, partrct the part within */
-RenderResult *render_result_new(Render *re, rcti *partrct, int crop, int savebuffers, const char *layername, int view)
+RenderResult *render_result_new(Render *re, rcti *partrct, int crop, int savebuffers, const char *layername, const char *viewname)
 {
 	RenderResult *rr;
 	RenderLayer *rl;
@@ -556,7 +559,6 @@ RenderResult *render_result_new(Render *re, rcti *partrct, int crop, int savebuf
 	SceneRenderView *srv;
 	int rectx, recty;
 	int nr, i;
-	bool basic_stereo = re->r.views_setup == SCE_VIEWS_SETUP_BASIC;
 	
 	rectx = BLI_rcti_size_x(partrct);
 	recty = BLI_rcti_size_y(partrct);
@@ -584,18 +586,7 @@ RenderResult *render_result_new(Render *re, rcti *partrct, int crop, int savebuf
 	/* check renderdata for amount of views */
 	if ((re->r.scemode & R_MULTIVIEW)) {
 		for (srv = re->r.views.first; srv; srv = srv->next) {
-			bool left, right;
-
-			if (srv->viewflag & SCE_VIEW_DISABLE)
-				continue;
-
-			if (basic_stereo) {
-				left = (strcmp(srv->name, STEREO_LEFT_NAME) == 0);
-				right = (strcmp(srv->name, STEREO_RIGHT_NAME) == 0);
-
-				if ((!left) && (!right))
-					continue;
-			}
+			if (BKE_scene_render_view_active(&re->r, srv) == false) continue;
 
 			rv = MEM_callocN(sizeof(RenderView), "new render view");
 			BLI_addtail(&rr->views, rv);
@@ -603,7 +594,7 @@ RenderResult *render_result_new(Render *re, rcti *partrct, int crop, int savebuf
 			BLI_strncpy(rv->name, srv->name, sizeof(rv->name));
 
 			if (re->r.views_setup == SCE_VIEWS_SETUP_BASIC)
-				rv->camera = RE_GetCameraStereo(re, left);
+				rv->camera = RE_GetCameraStereo(re, strcmp(srv->name, STEREO_LEFT_NAME) == 0);
 			else
 				rv->camera = BKE_camera_multiview_advanced(re->scene, &re->r, RE_GetCamera(re), srv->suffix);
 		}
@@ -655,8 +646,9 @@ RenderResult *render_result_new(Render *re, rcti *partrct, int crop, int savebuf
 
 		for (nr = 0, rv = (RenderView *)(&rr->views)->first; rv; rv=rv->next, nr++) {
 
-			if (view != -1 && view != nr)
-				continue;
+			if (viewname && viewname[0])
+				if (strcmp(rv->name, viewname) != 0)
+					continue;
 
 			if (rr->do_exr_tile)
 				IMB_exr_add_view(rl->exrhandle, rv->name);
@@ -740,11 +732,11 @@ RenderResult *render_result_new(Render *re, rcti *partrct, int crop, int savebuf
 			rl->exrhandle = IMB_exr_get_handle();
 		}
 
-		nr = 0;
-		for (rv = (RenderView *)(&rr->views)->first; rv; rv=rv->next, nr++) {
+		for (nr = 0, rv = (RenderView *)(&rr->views)->first; rv; rv=rv->next, nr++) {
 
-			if (view != -1 && view != nr)
-				continue;
+			if (viewname && viewname[0])
+				if (strcmp(rv->name, viewname) != 0)
+					continue;
 
 			if (rr->do_exr_tile) {
 				IMB_exr_add_view(rl->exrhandle, rv->name);
@@ -774,15 +766,15 @@ RenderResult *render_result_new(Render *re, rcti *partrct, int crop, int savebuf
 }
 
 /* allocate osa new results for samples */
-RenderResult *render_result_new_full_sample(Render *re, ListBase *lb, rcti *partrct, int crop, int savebuffers, int view)
+RenderResult *render_result_new_full_sample(Render *re, ListBase *lb, rcti *partrct, int crop, int savebuffers, const char *viewname)
 {
 	int a;
 	
 	if (re->osa == 0)
-		return render_result_new(re, partrct, crop, savebuffers, RR_ALL_LAYERS, view);
+		return render_result_new(re, partrct, crop, savebuffers, RR_ALL_LAYERS, viewname);
 	
 	for (a = 0; a < re->osa; a++) {
-		RenderResult *rr = render_result_new(re, partrct, crop, savebuffers, RR_ALL_LAYERS, view);
+		RenderResult *rr = render_result_new(re, partrct, crop, savebuffers, RR_ALL_LAYERS, viewname);
 		BLI_addtail(lb, rr);
 		rr->sample_nr = a;
 	}
@@ -1194,7 +1186,7 @@ bool RE_WriteRenderResult(ReportList *reports, RenderResult *rr, const char *fil
 	/* when the filename has no permissions, this can fail */
 	if (multiview) {
 		if (IMB_exrmultiview_begin_write(exrhandle, filename, width, height, compress, false)) {
-			IMB_exrmultiview_write_channels(exrhandle, -1);
+			IMB_exrmultiview_write_channels(exrhandle, RR_ALL_VIEWS);
 			success = true;
 		}
 	} else {
@@ -1276,7 +1268,7 @@ void render_result_single_layer_end(Render *re)
 
 /************************* EXR Tile File Rendering ***************************/
 
-static void save_render_result_tile(RenderResult *rr, RenderResult *rrpart, int view_id)
+static void save_render_result_tile(RenderResult *rr, RenderResult *rrpart, const char *viewname)
 {
 	RenderLayer *rlp, *rl;
 	RenderPass *rpassp;
@@ -1328,7 +1320,7 @@ static void save_render_result_tile(RenderResult *rr, RenderResult *rrpart, int 
 			continue;
 		}
 
-		IMB_exrtile_write_channels(rl->exrhandle, partx, party, 0, view_id);
+		IMB_exrtile_write_channels(rl->exrhandle, partx, party, 0, viewname);
 	}
 
 	BLI_unlock_thread(LOCK_IMAGE);
@@ -1348,7 +1340,7 @@ static void save_empty_result_tiles(Render *re)
 				if (pa->status != PART_STATUS_READY) {
 					int party = pa->disprect.ymin - re->disprect.ymin + pa->crop;
 					int partx = pa->disprect.xmin - re->disprect.xmin + pa->crop;
-					IMB_exrtile_write_channels(rl->exrhandle, partx, party, 0, re->actview);
+					IMB_exrtile_write_channels(rl->exrhandle, partx, party, 0, re->viewname);
 				}
 			}
 		}
@@ -1395,10 +1387,10 @@ void render_result_exr_file_end(Render *re)
 }
 
 /* save part into exr file */
-void render_result_exr_file_merge(RenderResult *rr, RenderResult *rrpart, int view)
+void render_result_exr_file_merge(RenderResult *rr, RenderResult *rrpart, const char *viewname)
 {
 	for (; rr && rrpart; rr = rr->next, rrpart = rrpart->next)
-		save_render_result_tile(rr, rrpart, view);
+		save_render_result_tile(rr, rrpart, viewname);
 }
 
 /* path to temporary exr file */
@@ -1425,7 +1417,7 @@ int render_result_exr_file_read_sample(Render *re, int sample)
 	bool success = true;
 
 	RE_FreeRenderResult(re->result);
-	re->result = render_result_new(re, &re->disprect, 0, RR_USE_MEM, RR_ALL_LAYERS, -1);
+	re->result = render_result_new(re, &re->disprect, 0, RR_USE_MEM, RR_ALL_LAYERS, RR_ALL_VIEWS);
 
 	for (rl = re->result->layers.first; rl; rl = rl->next) {
 		render_result_exr_file_path(re->scene, rl->name, sample, str);
@@ -1536,7 +1528,7 @@ bool render_result_exr_file_cache_read(Render *re)
 	char *root = U.render_cachedir;
 
 	RE_FreeRenderResult(re->result);
-	re->result = render_result_new(re, &re->disprect, 0, RR_USE_MEM, RR_ALL_LAYERS, -1);
+	re->result = render_result_new(re, &re->disprect, 0, RR_USE_MEM, RR_ALL_LAYERS, RR_ALL_VIEWS);
 
 	/* First try cache. */
 	render_result_exr_file_cache_path(re->scene, root, str);

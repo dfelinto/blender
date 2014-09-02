@@ -23,6 +23,7 @@
 #include "COM_ViewerOperation.h"
 #include "BLI_listbase.h"
 #include "BKE_image.h"
+#include "BKE_scene.h"
 #include "WM_api.h"
 #include "WM_types.h"
 #include "PIL_time.h"
@@ -57,6 +58,8 @@ ViewerOperation::ViewerOperation() : NodeOperation()
 	this->m_imageInput = NULL;
 	this->m_alphaInput = NULL;
 	this->m_depthInput = NULL;
+	this->m_rd = NULL;
+	this->m_viewName = NULL;
 }
 
 void ViewerOperation::initExecution()
@@ -128,7 +131,7 @@ void ViewerOperation::initImage()
 	ImageUser iuser = *this->m_imageUser;
 
 	/* local changes to the original ImageUser */
-	iuser.view = this->m_actview;
+	iuser.view =  BKE_scene_view_get_id(this->m_rd, this->m_viewName);
 	iuser.flag &= ~IMA_SHOW_STEREO;
 
 	ibuf = BKE_image_acquire_ibuf(ima, &iuser, &lock);

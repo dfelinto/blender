@@ -38,7 +38,7 @@
 class OutputOpenExrMultiViewOperation : public OutputOpenExrMultiLayerOperation {
 private:
 public:
-	OutputOpenExrMultiViewOperation(const RenderData *rd, const bNodeTree *tree, const char *path, char exr_codec, int actview);
+	OutputOpenExrMultiViewOperation(const RenderData *rd, const bNodeTree *tree, const char *path, char exr_codec, const char *viewName);
 
 	void *get_handle(const char *filename);
 	void deinitExecution();
@@ -53,7 +53,7 @@ public:
 	OutputStereoOperation(const RenderData *rd, const bNodeTree *tree, DataType datatype,
 	                      struct ImageFormatData *format, const char *path, const char *name,
 	                      const ColorManagedViewSettings *viewSettings,
-	                      const ColorManagedDisplaySettings *displaySettings, int actview);
+	                      const ColorManagedDisplaySettings *displaySettings, const char *viewName);
 	void *get_handle(const char *filename);
 	void deinitExecution();
 };

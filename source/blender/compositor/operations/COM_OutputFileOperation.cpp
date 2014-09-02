@@ -39,31 +39,6 @@ extern "C" {
 #  include "IMB_imbuf_types.h"
 }
 
-static char *view_name(const RenderData *rd, int actview)
-{
-	SceneRenderView *srv;
-	static char name[64];
-	int nr;
-	int numviews = 0;
-
-	if ((rd->scemode & R_MULTIVIEW) == 0)
-		return NULL;
-
-	/* check renderdata for amount of views */
-	for (nr = 0, srv= (SceneRenderView *) rd->views.first; srv; srv = srv->next, nr++) {
-
-		if (srv->viewflag & SCE_VIEW_DISABLE)
-			continue;
-
-		numviews ++;
-
-		if (actview == nr)
-			BLI_strncpy(name, srv->suffix, sizeof(name));
-	}
-
-	return (numviews > 1 ? name : NULL);
-}
-
 static int get_datatype_size(DataType datatype)
 {
 	switch (datatype) {
@@ -119,7 +94,7 @@ static void write_buffer_rect(rcti *rect, const bNodeTree *tree,
 
 OutputSingleLayerOperation::OutputSingleLayerOperation(
         const RenderData *rd, const bNodeTree *tree, DataType datatype, ImageFormatData *format, const char *path,
-        const ColorManagedViewSettings *viewSettings, const ColorManagedDisplaySettings *displaySettings, int actview)
+        const ColorManagedViewSettings *viewSettings, const ColorManagedDisplaySettings *displaySettings, const char *viewName)
 {
 	this->m_rd = rd;
 	this->m_tree = tree;
@@ -135,7 +110,7 @@ OutputSingleLayerOperation::OutputSingleLayerOperation(
 
 	this->m_viewSettings = viewSettings;
 	this->m_displaySettings = displaySettings;
-	this->m_actview = actview;
+	this->m_viewName = viewName;
 }
 
 void OutputSingleLayerOperation::initExecution()
@@ -166,10 +141,8 @@ void OutputSingleLayerOperation::deinitExecution()
 		IMB_colormanagement_imbuf_for_write(ibuf, true, false, m_viewSettings, m_displaySettings,
 		                                    this->m_format);
 
-		const char *view = view_name(this->m_rd, this->m_actview);
-
 		BKE_makepicstring(filename, this->m_path, bmain->name, this->m_rd->cfra, this->m_format,
-		                  (this->m_rd->scemode & R_EXTENSION) != 0, true, view);
+		                  (this->m_rd->scemode & R_EXTENSION) != 0, true, this->m_viewName);
 		
 		if (0 == BKE_imbuf_write(ibuf, filename, this->m_format))
 			printf("Cannot save Node File Output to %s\n", filename);
@@ -196,14 +169,14 @@ OutputOpenExrLayer::OutputOpenExrLayer(const char *name_, DataType datatype_, bo
 }
 
 OutputOpenExrMultiLayerOperation::OutputOpenExrMultiLayerOperation(
-        const RenderData *rd, const bNodeTree *tree, const char *path, char exr_codec, int actview)
+        const RenderData *rd, const bNodeTree *tree, const char *path, char exr_codec, const char *viewName)
 {
 	this->m_rd = rd;
 	this->m_tree = tree;
 	
 	BLI_strncpy(this->m_path, path, sizeof(this->m_path));
 	this->m_exr_codec = exr_codec;
-	this->m_actview = actview;
+	this->m_viewName = viewName;
 }
 
 void OutputOpenExrMultiLayerOperation::add_layer(const char *name, DataType datatype, bool use_layer)
@@ -241,10 +214,8 @@ void OutputOpenExrMultiLayerOperation::deinitExecution()
 		char filename[FILE_MAX];
 		void *exrhandle = IMB_exr_get_handle();
 
-		const char *view = view_name(this->m_rd, this->m_actview);
-		
 		BKE_makepicstring_from_type(filename, this->m_path, bmain->name, this->m_rd->cfra, R_IMF_IMTYPE_MULTILAYER,
-		                            (this->m_rd->scemode & R_EXTENSION) != 0, true, view);
+		                            (this->m_rd->scemode & R_EXTENSION) != 0, true, this->m_viewName);
 		BLI_make_existing_file(filename);
 		
 		for (unsigned int i = 0; i < this->m_layers.size(); ++i) {

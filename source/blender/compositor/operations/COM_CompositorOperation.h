@@ -77,14 +77,15 @@ private:
 	bool m_active;
 	
 	/**
-	 * @brief actview view
+	 * @brief View name, used for multiview
 	 */
-	int m_actview;
+	const char *m_viewName;
 public:
-	CompositorOperation(const int actview);
+	CompositorOperation();
 	const bool isActiveCompositorOutput() const { return this->m_active; }
 	void executeRegion(rcti *rect, unsigned int tileNumber);
 	void setSceneName(const char *sceneName) { BLI_strncpy(this->m_sceneName, sceneName, sizeof(this->m_sceneName)); }
+	void setViewName(const char *viewName) { this->m_viewName = viewName; }
 	void setRenderData(const RenderData *rd) { this->m_rd = rd; }
 	bool isOutputOperation(bool rendering) const { return this->isActiveCompositorOutput(); }
 	void initExecution();

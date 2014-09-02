@@ -44,8 +44,8 @@ extern "C" {
 }
 
 OutputOpenExrMultiViewOperation::OutputOpenExrMultiViewOperation(
-        const RenderData *rd, const bNodeTree *tree, const char *path, char exr_codec, int actview):
-        OutputOpenExrMultiLayerOperation(rd, tree, path, exr_codec, actview)
+        const RenderData *rd, const bNodeTree *tree, const char *path, char exr_codec, const char *viewName):
+        OutputOpenExrMultiLayerOperation(rd, tree, path, exr_codec, viewName)
 {
 }
 
@@ -60,7 +60,8 @@ void *OutputOpenExrMultiViewOperation::get_handle(const char* filename)
 		SceneRenderView *srv;
 
 		exrhandle = IMB_exr_get_handle_name(filename);
-		if (this->m_actview > 0) return exrhandle;
+		if (!BKE_scene_render_view_first(this->m_rd, this->m_viewName))
+			return exrhandle;
 
 		/* XXX MV are are doing very similar in
 		 * render_result.c::render_result_new
@@ -134,7 +135,6 @@ void OutputOpenExrMultiViewOperation::deinitExecution()
 
 	if (width != 0 && height != 0) {
 		void *exrhandle;
-		char view[64];
 		Main *bmain = G.main; /* TODO, have this passed along */
 		char filename[FILE_MAX];
 
@@ -143,7 +143,6 @@ void OutputOpenExrMultiViewOperation::deinitExecution()
 
 		exrhandle = this->get_handle(filename);
 
-		IMB_exr_get_multiView_name(exrhandle, this->m_actview, view);
 		IMB_exr_clear_channels(exrhandle);
 
 		for (unsigned int i = 0; i < this->m_layers.size(); ++i) {
@@ -157,25 +156,25 @@ void OutputOpenExrMultiViewOperation::deinitExecution()
 			switch (this->m_layers[i].datatype) {
 				case COM_DT_VALUE:
 					strcpy(channelname_ext, ".V");
-					IMB_exr_add_channel(exrhandle, 0, channelname, view, 1, width, buf);
+					IMB_exr_add_channel(exrhandle, 0, channelname, this->m_viewName, 1, width, buf);
 					break;
 				case COM_DT_VECTOR:
 					strcpy(channelname_ext, ".X");
-					IMB_exr_add_channel(exrhandle, 0, channelname, view, 3, 3 * width, buf);
+					IMB_exr_add_channel(exrhandle, 0, channelname, this->m_viewName, 3, 3 * width, buf);
 					strcpy(channelname_ext, ".Y");
-					IMB_exr_add_channel(exrhandle, 0, channelname, view, 3, 3 * width, buf + 1);
+					IMB_exr_add_channel(exrhandle, 0, channelname, this->m_viewName, 3, 3 * width, buf + 1);
 					strcpy(channelname_ext, ".Z");
-					IMB_exr_add_channel(exrhandle, 0, channelname, view, 3, 3 * width, buf + 2);
+					IMB_exr_add_channel(exrhandle, 0, channelname, this->m_viewName, 3, 3 * width, buf + 2);
 					break;
 				case COM_DT_COLOR:
 					strcpy(channelname_ext, ".R");
-					IMB_exr_add_channel(exrhandle, 0, channelname, view, 4, 4 * width, buf);
+					IMB_exr_add_channel(exrhandle, 0, channelname, this->m_viewName, 4, 4 * width, buf);
 					strcpy(channelname_ext, ".G");
-					IMB_exr_add_channel(exrhandle, 0, channelname, view, 4, 4 * width, buf + 1);
+					IMB_exr_add_channel(exrhandle, 0, channelname, this->m_viewName, 4, 4 * width, buf + 1);
 					strcpy(channelname_ext, ".B");
-					IMB_exr_add_channel(exrhandle, 0, channelname, view, 4, 4 * width, buf + 2);
+					IMB_exr_add_channel(exrhandle, 0, channelname, this->m_viewName, 4, 4 * width, buf + 2);
 					strcpy(channelname_ext, ".A");
-					IMB_exr_add_channel(exrhandle, 0, channelname, view, 4, 4 * width, buf + 3);
+					IMB_exr_add_channel(exrhandle, 0, channelname, this->m_viewName, 4, 4 * width, buf + 3);
 					break;
 				default:
 					break;
@@ -183,7 +182,7 @@ void OutputOpenExrMultiViewOperation::deinitExecution()
 		}
 
 		/* the actual writing */
-		IMB_exrmultiview_write_channels(exrhandle, this->m_actview);
+		IMB_exrmultiview_write_channels(exrhandle, this->m_viewName);
 
 		for (unsigned int i = 0; i < this->m_layers.size(); ++i) {
 			if (this->m_layers[i].outputBuffer) {
@@ -195,7 +194,7 @@ void OutputOpenExrMultiViewOperation::deinitExecution()
 		}
 
 		/* ready to close the file */
-		if (this->m_actview >= IMB_exr_get_multiView_count(exrhandle) - 1)
+		if (BKE_scene_render_view_last(this->m_rd, this->m_viewName))
 			IMB_exr_close(exrhandle);
 	}
 }
@@ -216,8 +215,8 @@ static int get_datatype_size(DataType datatype)
 OutputStereoOperation::OutputStereoOperation(
         const RenderData *rd, const bNodeTree *tree, DataType datatype, ImageFormatData *format, const char *path,
         const char *name, const ColorManagedViewSettings *viewSettings, const ColorManagedDisplaySettings *displaySettings,
-        const int actview):
-    OutputSingleLayerOperation(rd, tree, datatype, format, path, viewSettings, displaySettings, actview)
+        const char *viewName):
+    OutputSingleLayerOperation(rd, tree, datatype, format, path, viewSettings, displaySettings, viewName)
 {
 	BLI_strncpy(this->m_name, name, sizeof(this->m_name));
 	this->m_channels = get_datatype_size(datatype);
@@ -235,9 +234,8 @@ void *OutputStereoOperation::get_handle(const char* filename)
 
 		exrhandle = IMB_exr_get_handle_name(filename);
 
-		if (this->m_actview > 0) {
+		if (!BKE_scene_render_view_first(this->m_rd, this->m_viewName))
 			return exrhandle;
-		}
 
 		IMB_exr_clear_channels(exrhandle);
 
@@ -257,21 +255,18 @@ void OutputStereoOperation::deinitExecution()
 
 	if (width != 0 && height != 0) {
 		void *exrhandle;
-		char view[64];
 
 		exrhandle = this->get_handle(m_path);
-		IMB_exr_get_multiView_name(exrhandle, this->m_actview, view);
-
 		float *buf = this->m_outputBuffer;
 
 		/* populate single EXR channel with view data */
-		IMB_exr_add_channel(exrhandle, NULL, m_name, view, 1, this-> m_channels * width * height, buf);
+		IMB_exr_add_channel(exrhandle, NULL, this->m_name, this->m_viewName, 1, this->m_channels * width * height, buf);
 
 		this->m_imageInput = NULL;
 		this->m_outputBuffer = NULL;
 
 		/* create stereo ibuf */
-		if (this->m_actview >= BKE_scene_num_views(this->m_rd) - 1) {
+		if (BKE_scene_render_view_last(this->m_rd, this->m_viewName)) {
 			ImBuf *ibuf[3] = {NULL};
 			const char *names[2] = {STEREO_LEFT_NAME, STEREO_RIGHT_NAME};
 			Main *bmain = G.main; /* TODO, have this passed along */

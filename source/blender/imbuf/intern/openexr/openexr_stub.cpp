@@ -59,6 +59,3 @@ void    IMB_exr_multilayer_convert  (void *handle, void *base,
 }
 
 void    IMB_exr_close               (void *handle) { (void)handle; }
-
-void    IMB_exr_get_multiView_name(void *handle, int view_id, char *view) {(void)handle; (void)view_id; (void)view;}
-int     IMB_exr_get_multiView_count(void *handle){(void)handle; return 0;}

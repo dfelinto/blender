@@ -192,7 +192,7 @@ static void halo_pixelstruct(HaloRen *har, RenderLayer **rlpp, int totsample, in
 				if (fullsample) {
 					for (sample=0; sample<totsample; sample++)
 						if (ps->mask & (1 << sample)) {
-							float *pass = RE_RenderLayerGetPass(rlpp[sample], SCE_PASS_COMBINED, R.actview);
+							float *pass = RE_RenderLayerGetPass(rlpp[sample], SCE_PASS_COMBINED, R.viewname);
 							addalphaAddfacFloat(pass + od*4, col, har->add);
 						}
 				}
@@ -227,7 +227,7 @@ static void halo_pixelstruct(HaloRen *har, RenderLayer **rlpp, int totsample, in
 	if (fullsample) {
 		for (sample=0; sample<totsample; sample++)
 			if (!(mask & (1 << sample))) {
-				float *pass= RE_RenderLayerGetPass(rlpp[sample], SCE_PASS_COMBINED, R.actview);
+				float *pass= RE_RenderLayerGetPass(rlpp[sample], SCE_PASS_COMBINED, R.viewname);
 				addalphaAddfacFloat(pass + od*4, col, har->add);
 			}
 	}
@@ -238,7 +238,7 @@ static void halo_pixelstruct(HaloRen *har, RenderLayer **rlpp, int totsample, in
 		col[3]= accol[3];
 		
 		for (sample=0; sample<totsample; sample++) {
-			float *pass= RE_RenderLayerGetPass(rlpp[sample], SCE_PASS_COMBINED, R.actview);
+			float *pass= RE_RenderLayerGetPass(rlpp[sample], SCE_PASS_COMBINED, R.viewname);
 			addalphaAddfacFloat(pass + od*4, col, har->add);
 		}
 	}
@@ -322,7 +322,7 @@ static void halo_tile(RenderPart *pa, RenderLayer *rl)
 								if ((zz> har->zs) || (har->mat && (har->mat->mode & MA_HALO_SOFT))) {
 									if (shadeHaloFloat(har, col, zz, dist, xn, yn, har->flarec)) {
 										for (sample=0; sample<totsample; sample++) {
-											float * rect= RE_RenderLayerGetPass(rlpp[sample], SCE_PASS_COMBINED, R.actview);
+											float * rect= RE_RenderLayerGetPass(rlpp[sample], SCE_PASS_COMBINED, R.viewname);
 											addalphaAddfacFloat(rect + od*4, col, har->add);
 										}
 									}
@@ -377,7 +377,7 @@ static void lamphalo_tile(RenderPart *pa, RenderLayer *rl)
 					if (fullsample) {
 						for (sample=0; sample<totsample; sample++) {
 							if (ps->mask & (1 << sample)) {
-								pass = RE_RenderLayerGetPass(rlpp[sample], SCE_PASS_COMBINED, R.actview);
+								pass = RE_RenderLayerGetPass(rlpp[sample], SCE_PASS_COMBINED, R.viewname);
 								pass+= od*4;
 								pass[0]+= col[0];
 								pass[1]+= col[1];
@@ -389,7 +389,7 @@ static void lamphalo_tile(RenderPart *pa, RenderLayer *rl)
 					}
 					else {
 						fac= ((float)count)/(float)R.osa;
-						pass = RE_RenderLayerGetPass(rl, SCE_PASS_COMBINED, R.actview);
+						pass = RE_RenderLayerGetPass(rl, SCE_PASS_COMBINED, R.viewname);
 						pass+= od*4;
 						pass[0]+= fac*col[0];
 						pass[1]+= fac*col[1];
@@ -411,7 +411,7 @@ static void lamphalo_tile(RenderPart *pa, RenderLayer *rl)
 						for (sample=0; sample<totsample; sample++) {
 							if (!(mask & (1 << sample))) {
 
-								pass = RE_RenderLayerGetPass(rlpp[sample], SCE_PASS_COMBINED, R.actview);
+								pass = RE_RenderLayerGetPass(rlpp[sample], SCE_PASS_COMBINED, R.viewname);
 								pass+= od*4;
 								pass[0]+= col[0];
 								pass[1]+= col[1];
@@ -423,7 +423,7 @@ static void lamphalo_tile(RenderPart *pa, RenderLayer *rl)
 					}
 					else {
 						fac= ((float)R.osa-totsamp)/(float)R.osa;
-						pass = RE_RenderLayerGetPass(rlpp[sample], SCE_PASS_COMBINED, R.actview);
+						pass = RE_RenderLayerGetPass(rlpp[sample], SCE_PASS_COMBINED, R.viewname);
 						pass+= od*4;
 						pass[0]+= fac*col[0];
 						pass[1]+= fac*col[1];
@@ -443,7 +443,7 @@ static void lamphalo_tile(RenderPart *pa, RenderLayer *rl)
 				renderspothalo(&shi, col, 1.0f);
 
 				for (sample=0; sample<totsample; sample++) {
-					pass = RE_RenderLayerGetPass(rlpp[sample], SCE_PASS_COMBINED, R.actview);
+					pass = RE_RenderLayerGetPass(rlpp[sample], SCE_PASS_COMBINED, R.viewname);
 					pass+= od*4;
 					pass[0]+= col[0];
 					pass[1]+= col[1];
@@ -719,7 +719,7 @@ static void sky_tile(RenderPart *pa, RenderLayer *rl)
 			bool done = false;
 			
 			for (sample= 0; sample<totsample; sample++) {
-				float *pass= RE_RenderLayerGetPass(rlpp[sample], SCE_PASS_COMBINED, R.actview);
+				float *pass= RE_RenderLayerGetPass(rlpp[sample], SCE_PASS_COMBINED, R.viewname);
 				pass += od;
 				
 				if (pass[3]<1.0f) {
@@ -781,8 +781,8 @@ static void atm_tile(RenderPart *pa, RenderLayer *rl)
 			int sample;
 			
 			for (sample=0; sample<totsample; sample++) {
-				const float *zrect= RE_RenderLayerGetPass(rlpp[sample], SCE_PASS_Z, R.actview) + od;
-				float *rgbrect = RE_RenderLayerGetPass(rlpp[sample], SCE_PASS_COMBINED, R.actview) + 4*od;
+				const float *zrect= RE_RenderLayerGetPass(rlpp[sample], SCE_PASS_Z, R.viewname) + od;
+				float *rgbrect = RE_RenderLayerGetPass(rlpp[sample], SCE_PASS_COMBINED, R.viewname) + 4*od;
 				float rgb[3] = {0};
 				bool done = false;
 				
@@ -1017,7 +1017,7 @@ static void clamp_alpha_rgb_range(RenderPart *pa, RenderLayer *rl)
 		return;
 	
 	for (sample= 0; sample<totsample; sample++) {
-		float *rectf= RE_RenderLayerGetPass(rlpp[sample], SCE_PASS_COMBINED, R.actview);
+		float *rectf= RE_RenderLayerGetPass(rlpp[sample], SCE_PASS_COMBINED, R.viewname);
 
 		for (y= pa->rectx*pa->recty; y>0; y--, rectf+=4) {
 			rectf[0] = MAX2(rectf[0], 0.0f);
@@ -1099,7 +1099,7 @@ static void reset_sky_speed(RenderPart *pa, RenderLayer *rl)
 	totsample= get_sample_layers(pa, rl, rlpp);
 
 	for (sample= 0; sample<totsample; sample++) {
-		fp= RE_RenderLayerGetPass(rlpp[sample], SCE_PASS_VECTOR, R.actview);
+		fp= RE_RenderLayerGetPass(rlpp[sample], SCE_PASS_VECTOR, R.viewname);
 		if (fp==NULL) break;
 
 		for (a= 4*pa->rectx*pa->recty - 1; a>=0; a--)
@@ -1210,7 +1210,7 @@ void zbufshadeDA_tile(RenderPart *pa)
 	pa->rectp= MEM_mallocN(sizeof(int)*pa->rectx*pa->recty, "rectp");
 	pa->rectz= MEM_mallocN(sizeof(int)*pa->rectx*pa->recty, "rectz");
 	for (rl= rr->layers.first; rl; rl= rl->next) {
-		float *rect = RE_RenderLayerGetPass(rl, SCE_PASS_COMBINED, R.actview);
+		float *rect = RE_RenderLayerGetPass(rl, SCE_PASS_COMBINED, R.viewname);
 
 		if ((rl->layflag & SCE_LAY_ZMASK) && (rl->layflag & SCE_LAY_NEG_ZMASK))
 			pa->rectmask= MEM_mallocN(sizeof(int)*pa->rectx*pa->recty, "rectmask");
@@ -1362,7 +1362,7 @@ void zbufshade_tile(RenderPart *pa)
 	pa->rectz= MEM_mallocN(sizeof(int)*pa->rectx*pa->recty, "rectz");
 
 	for (rl= rr->layers.first; rl; rl= rl->next) {
-		float *rect= RE_RenderLayerGetPass(rl, SCE_PASS_COMBINED, R.actview);
+		float *rect= RE_RenderLayerGetPass(rl, SCE_PASS_COMBINED, R.viewname);
 		if ((rl->layflag & SCE_LAY_ZMASK) && (rl->layflag & SCE_LAY_NEG_ZMASK))
 			pa->rectmask= MEM_mallocN(sizeof(int)*pa->rectx*pa->recty, "rectmask");
 
@@ -1698,7 +1698,7 @@ void zbufshade_sss_tile(RenderPart *pa)
 		return;
 	}
 	
-	fcol= RE_RenderLayerGetPass(rl, SCE_PASS_COMBINED, R.actview);
+	fcol= RE_RenderLayerGetPass(rl, SCE_PASS_COMBINED, R.viewname);
 
 	co= MEM_mallocN(sizeof(float)*3*handle.totps, "SSSCo");
 	color= MEM_mallocN(sizeof(float)*3*handle.totps, "SSSColor");
@@ -1991,7 +1991,7 @@ void add_halo_flare(Render *re)
 		if ((rl->layflag & SCE_LAY_HALO) == 0)
 			continue;
 
-		rect = RE_RenderLayerGetPass(rl, SCE_PASS_COMBINED, re->actview);
+		rect = RE_RenderLayerGetPass(rl, SCE_PASS_COMBINED, re->viewname);
 
 		if (rl==NULL || rect)
 			return;
@@ -2013,7 +2013,7 @@ void add_halo_flare(Render *re)
 		if (do_draw) {
 			/* weak... the display callback wants an active renderlayer pointer... */
 			rr->renlay= rl;
-			re->display_update(re->duh, rr, NULL, re->actview);
+			re->display_update(re->duh, rr, NULL, re->viewname);
 		}
 
 		R.r.mode= mode;

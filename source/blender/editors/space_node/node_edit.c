@@ -232,7 +232,7 @@ static void compo_startjob(void *cjv, short *stop, short *do_update, float *prog
 	CompoJob *cj = cjv;
 	bNodeTree *ntree = cj->localtree;
 	Scene *scene = cj->scene;
-	size_t nr, numviews;
+	SceneRenderView *srv;
 
 	if (scene->use_nodes == false)
 		return;
@@ -253,9 +253,9 @@ static void compo_startjob(void *cjv, short *stop, short *do_update, float *prog
 	// XXX BIF_store_spare();
 	/* 1 is do_previews */
 
-	numviews = BKE_scene_num_views(&cj->scene->r);
-	for (nr = 0; nr < numviews; nr++) {
-		ntreeCompositExecTree(cj->scene, ntree, &cj->scene->r, false, true, &scene->view_settings, &scene->display_settings, nr);
+	for (srv = scene->r.views.first; srv; srv = srv->next) {
+		if (BKE_scene_render_view_active(&scene->r, srv) == false) continue;
+		ntreeCompositExecTree(cj->scene, ntree, &cj->scene->r, false, true, &scene->view_settings, &scene->display_settings, srv->name);
 	}
 
 	ntree->test_break = NULL;

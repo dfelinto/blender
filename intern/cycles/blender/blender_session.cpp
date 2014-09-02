@@ -318,9 +318,9 @@ static ShaderEvalType get_shader_type(const string& pass_type)
 		return SHADER_EVAL_BAKE;
 }
 
-static BL::RenderResult begin_render_result(BL::RenderEngine b_engine, int x, int y, int w, int h, const char *layername, int view)
+static BL::RenderResult begin_render_result(BL::RenderEngine b_engine, int x, int y, int w, int h, const char *layername, const char *viewname)
 {
-	return b_engine.begin_result(x, y, w, h, layername, view);
+	return b_engine.begin_result(x, y, w, h, layername, viewname);
 }
 
 static void end_render_result(BL::RenderEngine b_engine, BL::RenderResult b_rr, bool cancel, bool do_merge_results)
@@ -337,7 +337,7 @@ void BlenderSession::do_write_update_render_tile(RenderTile& rtile, bool do_upda
 	int h = params.height;
 
 	/* get render result */
-	BL::RenderResult b_rr = begin_render_result(b_engine, x, y, w, h, b_rlay_name.c_str(), b_rview_id);
+	BL::RenderResult b_rr = begin_render_result(b_engine, x, y, w, h, b_rlay_name.c_str(), b_rview_name.c_str());
 
 	/* can happen if the intersected rectangle gives 0 width or height */
 	if (b_rr.ptr.data == NULL) {
@@ -402,14 +402,14 @@ void BlenderSession::render()
 
 	/* render each layer */
 	BL::RenderSettings r = b_scene.render();
-	BL::RenderSettings::layers_iterator b_iter;
-	BL::RenderResult::views_iterator b_iterv;
+	BL::RenderSettings::layers_iterator b_layer_iter;
+	BL::RenderResult::views_iterator b_view_iter;
 	
-	for(r.layers.begin(b_iter); b_iter != r.layers.end(); ++b_iter) {
-		b_rlay_name = b_iter->name();
+	for(r.layers.begin(b_layer_iter); b_layer_iter != r.layers.end(); ++b_layer_iter) {
+		b_rlay_name = b_layer_iter->name();
 
 		/* temporary render result to find needed passes and views */
-		BL::RenderResult b_rr = begin_render_result(b_engine, 0, 0, 1, 1, b_rlay_name.c_str(), -1);
+		BL::RenderResult b_rr = begin_render_result(b_engine, 0, 0, 1, 1, b_rlay_name.c_str(), NULL);
 		BL::RenderResult::layers_iterator b_single_rlay;
 		b_rr.layers.begin(b_single_rlay);
 
@@ -442,7 +442,7 @@ void BlenderSession::render()
 		}
 
 		buffer_params.passes = passes;
-		scene->film->pass_alpha_threshold = b_iter->pass_alpha_threshold();
+		scene->film->pass_alpha_threshold = b_layer_iter->pass_alpha_threshold();
 		scene->film->tag_passes_update(scene, passes);
 		scene->film->tag_update(scene);
 		scene->integrator->tag_update(scene);
@@ -450,10 +450,10 @@ void BlenderSession::render()
 		/* update scene */
 		sync->sync_data(b_v3d, b_engine.camera_override(), &python_thread_state, b_rlay_name.c_str());
 
-		for(b_rr.views.begin(b_iterv), b_rview_id=0; b_iterv != b_rr.views.end(); ++b_iterv, b_rview_id++) {
+		for(b_rr.views.begin(b_view_iter); b_view_iter != b_rr.views.end(); ++b_view_iter) {
 
 			/* set the current view */
-			b_engine.active_view_set(b_rview_id);
+			b_engine.active_view_set(b_view_iter->name().c_str());
 
 			/* update scene */
 			sync->sync_camera(b_render, b_engine.camera_override(), width, height);

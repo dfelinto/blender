@@ -2120,6 +2120,46 @@ bool BKE_scene_render_view_active(const RenderData *rd, const SceneRenderView *s
 	return false;
 }
 
+/* return true if viewname is the first or if the name is NULL or not found*/
+bool BKE_scene_render_view_first(const RenderData *rd, const char *viewname)
+{
+	SceneRenderView *srv;
+
+	if ((rd->scemode & R_MULTIVIEW) == 0)
+		return true;
+
+	if ((!viewname) || (!viewname[0]))
+		return true;
+
+	for (srv = rd->views.first; srv; srv = srv->next) {
+		if (BKE_scene_render_view_active(rd, srv)) {
+			return strcmp(viewname, srv->name) == 0;
+		}
+	}
+
+	return true;
+}
+
+/* return true if viewname is the last or if the name is NULL or not found */
+bool BKE_scene_render_view_last(const RenderData *rd, const char *viewname)
+{
+	SceneRenderView *srv;
+
+	if ((rd->scemode & R_MULTIVIEW) == 0)
+		return true;
+
+	if ((!viewname) || (!viewname[0]))
+		return true;
+
+	for (srv = rd->views.last; srv; srv = srv->prev) {
+		if (BKE_scene_render_view_active(rd, srv)) {
+			return strcmp(viewname, srv->name) == 0;
+		}
+	}
+
+	return true;
+}
+
 SceneRenderView *BKE_scene_render_view_findindex(const RenderData *rd, const int view_id)
 {
 	SceneRenderView *srv;
@@ -2136,6 +2176,30 @@ SceneRenderView *BKE_scene_render_view_findindex(const RenderData *rd, const int
 		}
 	}
 	return srv;
+}
+
+size_t BKE_scene_view_get_id(const RenderData *rd, const char *viewname)
+{
+	SceneRenderView *srv;
+	size_t nr;
+
+	if ((rd->scemode & R_MULTIVIEW) == 0)
+		return 0;
+
+	if ((!viewname) || (!viewname[0]))
+		return 0;
+
+	nr = 0;
+	for (srv = rd->views.first, nr = 0; srv; srv = srv->next) {
+		if (BKE_scene_render_view_active(rd, srv)) {
+			if (strcmp(viewname, srv->name) == 0)
+				return nr;
+			else
+				nr += 1;
+		}
+	}
+
+	return 0;
 }
 
 void BKE_scene_videos_dimensions(const RenderData *rd, const size_t width, const size_t height, size_t *r_width, size_t *r_height)

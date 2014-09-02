@@ -38,6 +38,7 @@
 #define RR_USE_EXR		1
 
 #define RR_ALL_LAYERS	NULL
+#define RR_ALL_VIEWS	NULL
 
 struct ImBuf;
 struct ListBase;
@@ -53,9 +54,9 @@ struct ColorManagedViewSettings;
 /* New */
 
 struct RenderResult *render_result_new(struct Render *re,
-	struct rcti *partrct, int crop, int savebuffers, const char *layername, int view);
+	struct rcti *partrct, int crop, int savebuffers, const char *layername, const char *viewname);
 struct RenderResult *render_result_new_full_sample(struct Render *re,
-	struct ListBase *lb, struct rcti *partrct, int crop, int savebuffers, int view);
+	struct ListBase *lb, struct rcti *partrct, int crop, int savebuffers, const char *viewname);
 
 struct RenderResult *render_result_new_from_exr(void *exrhandle, const char *colorspace, bool predivide, int rectx, int recty);
 
@@ -78,7 +79,7 @@ void render_result_single_layer_end(struct Render *re);
 void render_result_exr_file_begin(struct Render *re);
 void render_result_exr_file_end(struct Render *re);
 
-void render_result_exr_file_merge(struct RenderResult *rr, struct RenderResult *rrpart, int view);
+void render_result_exr_file_merge(struct RenderResult *rr, struct RenderResult *rrpart, const char *viewname);
 
 void render_result_exr_file_path(struct Scene *scene, const char *layname, int sample, char *filepath);
 int render_result_exr_file_read_sample(struct Render *re, int sample);

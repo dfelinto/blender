@@ -119,7 +119,7 @@ typedef struct RenderJob {
 } RenderJob;
 
 /* called inside thread! */
-static void image_buffer_rect_update(RenderJob *rj, RenderResult *rr, ImBuf *ibuf, ImageUser *iuser, volatile rcti *renrect, const int view_id)
+static void image_buffer_rect_update(RenderJob *rj, RenderResult *rr, ImBuf *ibuf, ImageUser *iuser, volatile rcti *renrect, const char *viewname)
 {
 	Scene *scene = rj->scene;
 	const float *rectf = NULL;
@@ -191,6 +191,7 @@ static void image_buffer_rect_update(RenderJob *rj, RenderResult *rr, ImBuf *ibu
 	 */
 	/* TODO(sergey): Need to check has_combined here? */
 	if (iuser->pass == 0) {
+		size_t view_id = BKE_scene_view_get_id(&scene->r, viewname);
 		/* find current float rect for display, first case is after composite... still weak */
 		rectf = RE_RenderViewGetRectf(rr, view_id);
 		if (rectf == NULL) {
@@ -204,7 +205,7 @@ static void image_buffer_rect_update(RenderJob *rj, RenderResult *rr, ImBuf *ibu
 			}
 			else {
 				if (rr->renlay == NULL) return;
-				rectf = RE_RenderLayerGetPass(rr->renlay, SCE_PASS_COMBINED, view_id);
+				rectf = RE_RenderLayerGetPass(rr->renlay, SCE_PASS_COMBINED, viewname);
 			}
 		}
 		if (rectf == NULL) return;
@@ -518,7 +519,7 @@ static void render_image_update_pass_and_layer(RenderJob *rj, RenderResult *rr, 
 	}
 }
 
-static void image_rect_update(void *rjv, RenderResult *rr, volatile rcti *renrect, const int view_id)
+static void image_rect_update(void *rjv, RenderResult *rr, volatile rcti *renrect, const char *viewname)
 {
 	RenderJob *rj = rjv;
 	Image *ima = rj->image;
@@ -556,7 +557,7 @@ static void image_rect_update(void *rjv, RenderResult *rr, volatile rcti *renrec
 		    ibuf->channels == 1 ||
 		    U.image_draw_method != IMAGE_DRAW_METHOD_GLSL)
 		{
-			image_buffer_rect_update(rj, rr, ibuf, &rj->iuser, renrect, view_id);
+			image_buffer_rect_update(rj, rr, ibuf, &rj->iuser, renrect, viewname);
 		}
 		
 		/* make jobs timer to send notifier */
@@ -1104,7 +1105,7 @@ static int render_view3d_break(void *rpv)
 	return *(rp->stop);
 }
 
-static void render_view3d_display_update(void *rpv, RenderResult *UNUSED(rr), volatile struct rcti *UNUSED(rect), const int UNUSED(view_id))
+static void render_view3d_display_update(void *rpv, RenderResult *UNUSED(rr), volatile struct rcti *UNUSED(rect), const char *UNUSED(viewname))
 {
 	RenderPreview *rp = rpv;
 	

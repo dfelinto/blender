@@ -54,7 +54,8 @@ void ViewerNode::convertToOperations(NodeConverter &converter, const CompositorC
 	viewerOperation->setCenterY(editorNode->custom4);
 	/* alpha socket gives either 1 or a custom alpha value if "use alpha" is enabled */
 	viewerOperation->setUseAlphaInput(ignore_alpha || alphaSocket->isLinked());
-	viewerOperation->setViewId(context.getViewId());
+	viewerOperation->setRenderData(context.getRenderData());
+	viewerOperation->setViewName(context.getViewName());
 
 	viewerOperation->setViewSettings(context.getViewSettings());
 	viewerOperation->setDisplaySettings(context.getDisplaySettings());
@@ -80,7 +81,7 @@ void ViewerNode::convertToOperations(NodeConverter &converter, const CompositorC
 	if (do_output)
 		converter.registerViewer(viewerOperation);
 
-	if (image && (context.getViewId() == 0)) {
+	if (image && BKE_scene_render_view_first(context.getRenderData(), context.getViewName())) {
 		BLI_lock_thread(LOCK_DRAW_IMAGE);
 		if (BKE_scene_is_stereo3d(context.getRenderData())) {
 			image->flag |= IMA_IS_STEREO;

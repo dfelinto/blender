@@ -105,11 +105,9 @@ void ImageNode::convertToOperations(NodeConverter &converter, const CompositorCo
 						const bool is_allview = (view_image == 0); /* if view selected == All (0) */
 
 						if (is_allview) {
-							/* heuristic to match image name with scene names */
-							const char *view_name = this->RenderData_get_actview_name(context.getRenderData(), context.getViewId());
-
-							/* check if the view name exists in the image */
-							view = BLI_findstringindex(&image->rr->views, view_name, offsetof(RenderView, name));
+							/* heuristic to match image name with scene names
+							 * check if the view name exists in the image */
+							view = BLI_findstringindex(&image->rr->views, context.getViewName(), offsetof(RenderView, name));
 						}
 						else {
 							view = view_image - 1;

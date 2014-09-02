@@ -623,7 +623,7 @@ void ED_preview_draw(const bContext *C, void *idp, void *parentp, void *slotp, r
 /* **************************** new shader preview system ****************** */
 
 /* inside thread, called by renderer, sets job update value */
-static void shader_preview_update(void *spv, RenderResult *UNUSED(rr), volatile struct rcti *UNUSED(rect), const int UNUSED(view_id))
+static void shader_preview_update(void *spv, RenderResult *UNUSED(rr), volatile struct rcti *UNUSED(rect), const char *UNUSED(viewname))
 {
 	ShaderPreview *sp = spv;
 	

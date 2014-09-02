@@ -40,9 +40,10 @@ void CompositorNode::convertToOperations(NodeConverter &converter, const Composi
 	NodeInput *alphaSocket = this->getInputSocket(1);
 	NodeInput *depthSocket = this->getInputSocket(2);
 
-	CompositorOperation *compositorOperation = new CompositorOperation(context.getViewId());
+	CompositorOperation *compositorOperation = new CompositorOperation();
 	compositorOperation->setSceneName(context.getScene()->id.name);
 	compositorOperation->setRenderData(context.getRenderData());
+	compositorOperation->setViewName(context.getViewName());
 	compositorOperation->setbNodeTree(context.getbNodeTree());
 	/* alpha socket gives either 1 or a custom alpha value if "use alpha" is enabled */
 	compositorOperation->setUseAlphaInput(ignore_alpha || alphaSocket->isLinked());

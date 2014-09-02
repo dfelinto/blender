@@ -149,7 +149,10 @@ double BKE_scene_unit_scale(const struct UnitSettings *unit, const int unit_type
 bool BKE_scene_is_stereo3d(const struct RenderData *rd);
 size_t BKE_scene_num_views(const struct RenderData *rd);
 bool BKE_scene_render_view_active(const struct RenderData *rd, const struct SceneRenderView *srv);
+bool BKE_scene_render_view_first(const struct RenderData *rd, const char *viewname);
+bool BKE_scene_render_view_last(const struct RenderData *rd, const char *viewname);
 struct SceneRenderView *BKE_scene_render_view_findindex(const struct RenderData *rd, const int view_id);
+size_t BKE_scene_view_get_id(const struct RenderData *rd, const char *viewname);
 void BKE_scene_videos_dimensions(const struct RenderData *rd, const size_t width, const size_t height, size_t *r_width, size_t *r_height);
 size_t BKE_scene_num_videos(const struct RenderData *rd);
 

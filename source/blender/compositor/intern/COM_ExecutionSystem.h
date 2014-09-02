@@ -155,7 +155,7 @@ public:
 	 */
 	ExecutionSystem(RenderData *rd, Scene *scene, bNodeTree *editingtree, bool rendering, bool fastcalculation,
 	                const ColorManagedViewSettings *viewSettings, const ColorManagedDisplaySettings *displaySettings,
-                  const int view_id);
+	                const char *viewName);
 
 	/**
 	 * Destructor

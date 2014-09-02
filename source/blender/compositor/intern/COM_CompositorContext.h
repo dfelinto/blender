@@ -88,9 +88,9 @@ private:
 	const ColorManagedDisplaySettings *m_displaySettings;
 
 	/**
-	 * @brief active view id (from all views, not only the rendering)
+	 * @brief active rendering view name
 	 */
-	int m_view_id;
+	const char *m_viewName;
 
 public:
 	/**
@@ -189,12 +189,12 @@ public:
 	/**
 	 * @brief get the active rendering view
 	 */
-	int getViewId() const { return this->m_view_id; }
+	const char *getViewName() const { return this->m_viewName; }
 
 	/**
 	 * @brief set the active rendering view
 	 */
-	void setViewId(int view_id) { this->m_view_id = view_id; }
+	void setViewName(const char *viewName) { this->m_viewName = viewName; }
 
 	int getChunksize() const { return this->getbNodeTree()->chunksize; }
 	

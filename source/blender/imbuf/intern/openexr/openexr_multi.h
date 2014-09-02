@@ -62,8 +62,8 @@ float  *IMB_exr_channel_rect(void *handle, const char *layname, const char *pass
 
 void    IMB_exr_read_channels(void *handle);
 void    IMB_exr_write_channels(void *handle);
-void    IMB_exrtile_write_channels(void *handle, int partx, int party, int level, int view);
-void    IMB_exrmultiview_write_channels(void *handle, int view_id);
+void    IMB_exrtile_write_channels(void *handle, int partx, int party, int level, const char *viewname);
+void    IMB_exrmultiview_write_channels(void *handle, const char *viewname);
 void    IMB_exr_clear_channels(void *handle);
 
 void    IMB_exr_multilayer_convert(void *handle, void *base,
@@ -74,9 +74,6 @@ void    IMB_exr_multilayer_convert(void *handle, void *base,
 void    IMB_exr_close(void *handle);
 
 void    IMB_exr_add_view(void *handle, const char *name);
-
-void    IMB_exr_get_multiView_name(void *handle, int view_id, char *view);
-int     IMB_exr_get_multiView_count(void *handle);
 
 int IMB_exr_split_token(const char *str, const char *end, const char **token);
 

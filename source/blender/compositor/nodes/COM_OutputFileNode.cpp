@@ -53,10 +53,10 @@ void OutputFileNode::convertToOperations(NodeConverter &converter, const Composi
 
 		if (storage->format.imtype == R_IMF_IMTYPE_MULTIVIEW) {
 			outputOperation = new OutputOpenExrMultiViewOperation(
-			        context.getRenderData(), context.getbNodeTree(), storage->base_path, storage->format.exr_codec, context.getViewId());
+			        context.getRenderData(), context.getbNodeTree(), storage->base_path, storage->format.exr_codec, context.getViewName());
 		} else {
 			outputOperation = new OutputOpenExrMultiLayerOperation(
-		          context.getRenderData(), context.getbNodeTree(), storage->base_path, storage->format.exr_codec, context.getViewId());
+		          context.getRenderData(), context.getbNodeTree(), storage->base_path, storage->format.exr_codec, context.getViewName());
 		}
 		converter.addOperation(outputOperation);
 
@@ -80,6 +80,7 @@ void OutputFileNode::convertToOperations(NodeConverter &converter, const Composi
 	else {  /* single layer format */
 		int num_inputs = getNumberOfInputSockets();
 		bool previewAdded = false;
+		const bool is_mono = BKE_scene_num_views(context.getRenderData()) < 2;
 		for (int i = 0; i < num_inputs; ++i) {
 			NodeInput *input = getInputSocket(i);
 			if (input->isLinked()) {
@@ -94,20 +95,20 @@ void OutputFileNode::convertToOperations(NodeConverter &converter, const Composi
 
 				if (format->imtype == R_IMF_IMTYPE_MULTIVIEW) {
 					outputOperation = new OutputOpenExrMultiViewOperation(
-					        context.getRenderData(), context.getbNodeTree(), path, format->exr_codec, context.getViewId());
+					        context.getRenderData(), context.getbNodeTree(), path, format->exr_codec, context.getViewName());
 
 					((OutputOpenExrMultiViewOperation *)outputOperation)->add_layer(sockdata->layer, input->getDataType(), true);
 					converter.mapInputSocket(input, outputOperation->getInputSocket(0));
 				}
-				else if (format->views_output == R_IMF_VIEWS_INDIVIDUAL) {
+				else if (is_mono || (format->views_output == R_IMF_VIEWS_INDIVIDUAL)) {
 					outputOperation = new OutputSingleLayerOperation(
 					        context.getRenderData(), context.getbNodeTree(), input->getDataType(), format, path,
-					        context.getViewSettings(), context.getDisplaySettings(), context.getViewId());
+					        context.getViewSettings(), context.getDisplaySettings(), context.getViewName());
 				}
 				else { /* R_IMF_VIEWS_STEREO_3D */
 					outputOperation = new OutputStereoOperation(
 					        context.getRenderData(), context.getbNodeTree(), input->getDataType(), format, path,
-					        sockdata->layer, context.getViewSettings(), context.getDisplaySettings(), context.getViewId());
+					        sockdata->layer, context.getViewSettings(), context.getDisplaySettings(), context.getViewName());
 				}
 
 				converter.addOperation(outputOperation);

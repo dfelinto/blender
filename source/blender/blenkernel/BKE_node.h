@@ -946,7 +946,7 @@ void            ntreeGPUMaterialNodes(struct bNodeTree *ntree, struct GPUMateria
 struct CompBuf;
 void ntreeCompositExecTree(struct Scene *scene, struct bNodeTree *ntree, struct RenderData *rd, int rendering, int do_previews,
                            const struct ColorManagedViewSettings *view_settings, const struct ColorManagedDisplaySettings *display_settings,
-                           int view_id);
+                           const char *view_name);
 void ntreeCompositTagRender(struct Scene *sce);
 int ntreeCompositTagAnimated(struct bNodeTree *ntree);
 void ntreeCompositTagGenerators(struct bNodeTree *ntree);

@@ -3965,7 +3965,7 @@ static void reset_sky_speedvectors(RenderPart *pa, RenderLayer *rl, float *rectf
 	float *fp, *col;
 	int a;
 	
-	fp= RE_RenderLayerGetPass(rl, SCE_PASS_VECTOR, R.actview);
+	fp = RE_RenderLayerGetPass(rl, SCE_PASS_VECTOR, R.viewname);
 	if (fp==NULL) return;
 	col= rectf+3;
 	
@@ -4060,7 +4060,7 @@ unsigned short *zbuffer_transp_shade(RenderPart *pa, RenderLayer *rl, float *pas
 	if (addpassflag & SCE_PASS_VECTOR)
 		if (rl->layflag & SCE_LAY_SOLID) {
 			//XXX MV probably never wants to use acolrect
-			float *rect = RE_RenderLayerGetPass(rl, SCE_PASS_COMBINED, R.actview);
+			float *rect = RE_RenderLayerGetPass(rl, SCE_PASS_COMBINED, R.viewname);
 			reset_sky_speedvectors(pa, rl, rl->acolrect?rl->acolrect:rect);	/* if acolrect is set we use it */
 		}
 	/* filtered render, for now we assume only 1 filter size */
@@ -4248,7 +4248,7 @@ unsigned short *zbuffer_transp_shade(RenderPart *pa, RenderLayer *rl, float *pas
 							if (alpha!=0.0f) {
 								RenderLayer *rl= ssamp.rlpp[a];
 
-								float *rect = RE_RenderLayerGetPass(rl, SCE_PASS_COMBINED, R.actview);
+								float *rect = RE_RenderLayerGetPass(rl, SCE_PASS_COMBINED, R.viewname);
 								addAlphaOverFloat(rect + 4*od, samp_shr[a].combined);
 				
 								add_transp_passes(rl, od, &samp_shr[a], alpha);

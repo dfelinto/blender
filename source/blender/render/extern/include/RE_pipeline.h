@@ -218,8 +218,7 @@ void RE_ResultGet32(struct Render *re, unsigned int *rect);
 void RE_AcquiredResultGet32(struct Render *re, struct RenderResult *result, unsigned int *rect, const int view_id);
 
 struct RenderLayer *RE_GetRenderLayer(struct RenderResult *rr, const char *name);
-float *RE_RenderLayerGetPass(volatile struct RenderLayer *rl, int passtype, int view_id);
-int RE_GetActiveViewId(struct Render *re);
+float *RE_RenderLayerGetPass(volatile struct RenderLayer *rl, int passtype, const char *viewname);
 
 /* obligatory initialize call, disprect is optional */
 void RE_InitState(struct Render *re, struct Render *source, struct RenderData *rd,
@@ -278,6 +277,7 @@ void RE_RenderFreestyleExternal(struct Render *re);
 
 void RE_RenderInitializeStereo(struct Render *re, struct RenderData *rd);
 void RE_RenderFreeStereo(struct Render *re);
+void RE_SetActiveRenderView(struct Render *re, const char *viewname);
 
 /* error reporting */
 void RE_SetReports(struct Render *re, struct ReportList *reports);
@@ -298,7 +298,7 @@ void RE_MergeFullSample(struct Render *re, struct Main *bmain, struct Scene *sce
 /* display and event callbacks */
 void RE_display_init_cb	(struct Render *re, void *handle, void (*f)(void *handle, RenderResult *rr));
 void RE_display_clear_cb(struct Render *re, void *handle, void (*f)(void *handle, RenderResult *rr));
-void RE_display_update_cb(struct Render *re, void *handle, void (*f)(void *handle, RenderResult *rr, volatile struct rcti *rect, const int view_id));
+void RE_display_update_cb(struct Render *re, void *handle, void (*f)(void *handle, RenderResult *rr, volatile struct rcti *rect, const char *viewname));
 void RE_stats_draw_cb	(struct Render *re, void *handle, void (*f)(void *handle, RenderStats *rs));
 void RE_progress_cb	(struct Render *re, void *handle, void (*f)(void *handle, float));
 void RE_draw_lock_cb		(struct Render *re, void *handle, void (*f)(void *handle, int));

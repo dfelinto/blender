@@ -89,7 +89,7 @@ public:
 	BL::SpaceView3D b_v3d;
 	BL::RegionView3D b_rv3d;
 	string b_rlay_name;
-	int b_rview_id;
+	string b_rview_name;
 
 	string last_status;
 	float last_progress;

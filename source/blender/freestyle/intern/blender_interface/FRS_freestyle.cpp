@@ -498,7 +498,7 @@ void FRS_composite_result(Render *re, SceneRenderLayer *srl, Render *freestyle_r
 		return;
 	}
 
-	src = RE_RenderLayerGetPass(rl, SCE_PASS_COMBINED, re->actview);
+	src = RE_RenderLayerGetPass(rl, SCE_PASS_COMBINED, re->viewname);
 #if 0
 	if (G.debug & G_DEBUG_FREESTYLE) {
 		cout << "src: " << rl->rectx << " x " << rl->recty << endl;
@@ -512,7 +512,7 @@ void FRS_composite_result(Render *re, SceneRenderLayer *srl, Render *freestyle_r
 		}
 		return;
 	}
-	dest = RE_RenderLayerGetPass(rl, SCE_PASS_COMBINED, re->actview);
+	dest = RE_RenderLayerGetPass(rl, SCE_PASS_COMBINED, re->viewname);
 #if 0
 	if (G.debug & G_DEBUG_FREESTYLE) {
 		cout << "dest: " << rl->rectx << " x " << rl->recty << endl;

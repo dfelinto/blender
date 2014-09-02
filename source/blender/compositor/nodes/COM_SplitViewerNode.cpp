@@ -55,9 +55,10 @@ void SplitViewerNode::convertToOperations(NodeConverter &converter, const Compos
 	ViewerOperation *viewerOperation = new ViewerOperation();
 	viewerOperation->setImage(image);
 	viewerOperation->setImageUser(imageUser);
-	viewerOperation->setViewId(context.getViewId());
 	viewerOperation->setViewSettings(context.getViewSettings());
 	viewerOperation->setDisplaySettings(context.getDisplaySettings());
+	viewerOperation->setRenderData(context.getRenderData());
+	viewerOperation->setViewName(context.getViewName());
 
 	/* defaults - the viewer node has these options but not exposed for split view
 	 * we could use the split to define an area of interest on one axis at least */
@@ -73,7 +74,7 @@ void SplitViewerNode::convertToOperations(NodeConverter &converter, const Compos
 	if (do_output)
 		converter.registerViewer(viewerOperation);
 
-	if (image && (context.getViewId() == 0)) {
+	if (image && BKE_scene_render_view_first(context.getRenderData(), context.getViewName())) {
 		BLI_lock_thread(LOCK_DRAW_IMAGE);
 		if (BKE_scene_is_stereo3d(context.getRenderData())) {
 			image->flag |= IMA_IS_STEREO;
