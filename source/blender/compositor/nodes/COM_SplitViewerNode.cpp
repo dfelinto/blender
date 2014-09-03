@@ -75,22 +75,6 @@ void SplitViewerNode::convertToOperations(NodeConverter &converter, const Compos
 		converter.registerViewer(viewerOperation);
 
 	if (image && BKE_scene_render_view_first(context.getRenderData(), context.getViewName())) {
-		BLI_lock_thread(LOCK_DRAW_IMAGE);
-		if (BKE_scene_is_stereo3d(context.getRenderData())) {
-			image->flag |= IMA_IS_STEREO;
-		}
-		else {
-			image->flag &= ~IMA_IS_STEREO;
-			imageUser->flag &= ~IMA_SHOW_STEREO;
-		}
-
-		size_t num_views = BKE_scene_num_views(context.getRenderData());
-		size_t num_caches = BKE_image_cache_count(image);
-
-		if (num_views != num_caches) {
-			BKE_image_free_cached_frames(image);
-		}
-
-		BLI_unlock_thread(LOCK_DRAW_IMAGE);
+		BKE_image_verify_viewer_cache(context.getRenderData(), image, imageUser);
 	}
 }

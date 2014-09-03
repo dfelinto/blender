@@ -101,6 +101,7 @@ void    free_old_images(void);
 /* ImageUser is in Texture, in Nodes, Background Image, Image Window, .... */
 /* should be used in conjunction with an ID * to Image. */
 struct ImageUser;
+struct RenderData;
 struct RenderPass;
 struct RenderResult;
 
@@ -182,6 +183,8 @@ void BKE_image_walk_all_users(const struct Main *mainp, void *customdata,
 
 /* ensures an Image exists for viewing nodes or render */
 struct Image *BKE_image_verify_viewer(int type, const char *name);
+/* reset viewer nodes cache when the number of cache doesn't match the needed cached views */
+void BKE_image_verify_viewer_cache(const struct RenderData *rd, struct Image *ima, struct ImageUser *iuser);
 
 /* force an ImBuf to become part of Image */
 void BKE_image_assign_ibuf(struct Image *ima, struct ImBuf *ibuf);

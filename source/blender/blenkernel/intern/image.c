@@ -2170,6 +2170,32 @@ Image *BKE_image_verify_viewer(int type, const char *name)
 	return ima;
 }
 
+/* Reset the rederout or nodes image cache when the number of cache
+ * doesn't match the needed cached views */
+void BKE_image_verify_viewer_cache(const RenderData *rd, Image *ima, ImageUser *iuser)
+{
+	size_t num_views, num_caches;
+
+	BLI_lock_thread(LOCK_DRAW_IMAGE);
+
+	if (BKE_scene_is_stereo3d(rd)) {
+		ima->flag |= IMA_IS_STEREO;
+	}
+	else {
+		ima->flag &= ~IMA_IS_STEREO;
+		iuser->flag &= ~IMA_SHOW_STEREO;
+	}
+
+	num_views = BKE_scene_num_views(rd);
+	num_caches = BKE_image_cache_count(ima);
+
+	if (num_views != num_caches) {
+		BKE_image_free_cached_frames(ima);
+	}
+
+	BLI_unlock_thread(LOCK_DRAW_IMAGE);
+}
+
 void BKE_image_assign_ibuf(Image *ima, ImBuf *ibuf)
 {
 	image_assign_ibuf(ima, ibuf, IMA_NO_INDEX, 0);
