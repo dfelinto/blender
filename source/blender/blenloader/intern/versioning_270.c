@@ -380,12 +380,9 @@ void blo_do_versions_270(FileData *fd, Library *UNUSED(lib), Main *main)
 	}
 
 	{
-		SceneRenderView *srv;
-		Camera *cam;
-		bScreen *screen;
-		Scene *scene;
-
 		if (!DNA_struct_elem_find(fd->filesdna, "RenderData", "ListBase", "views")) {
+			Scene *scene;
+			SceneRenderView *srv;
 			for (scene = main->scene.first; scene; scene = scene->id.next) {
 				BKE_scene_add_render_view(scene, STEREO_LEFT_NAME);
 				srv = (SceneRenderView *)scene->r.views.first;
@@ -397,25 +394,28 @@ void blo_do_versions_270(FileData *fd, Library *UNUSED(lib), Main *main)
 			}
 		}
 
-		for (screen = main->screen.first; screen; screen = screen->id.next) {
-			ScrArea *sa;
-			for (sa = screen->areabase.first; sa; sa = sa->next) {
-				SpaceLink *sl;
+		if (!DNA_struct_elem_find(fd->filesdna, "View3D", "char", "stereo_camera")) {
+			bScreen *screen;
+			for (screen = main->screen.first; screen; screen = screen->id.next) {
+				ScrArea *sa;
+				for (sa = screen->areabase.first; sa; sa = sa->next) {
+					SpaceLink *sl;
 
-				for (sl = sa->spacedata.first; sl; sl= sl->next) {
-					switch (sl->spacetype) {
-						case SPACE_VIEW3D:
-						{
-							View3D *v3d = (View3D*) sl;
-							v3d->stereo_camera = STEREO_3D_ID;
-							break;
-						}
-						case SPACE_IMAGE:
-						{
-							SpaceImage *sima = (SpaceImage *) sl;
-							sima->iuser.flag |= IMA_SHOW_STEREO;
-							sima->iuser.passtype = SCE_PASS_COMBINED;
-							break;
+					for (sl = sa->spacedata.first; sl; sl= sl->next) {
+						switch (sl->spacetype) {
+							case SPACE_VIEW3D:
+							{
+								View3D *v3d = (View3D*) sl;
+								v3d->stereo_camera = STEREO_3D_ID;
+								break;
+							}
+							case SPACE_IMAGE:
+							{
+								SpaceImage *sima = (SpaceImage *) sl;
+								sima->iuser.flag |= IMA_SHOW_STEREO;
+								sima->iuser.passtype = SCE_PASS_COMBINED;
+								break;
+							}
 						}
 					}
 				}
@@ -423,9 +423,17 @@ void blo_do_versions_270(FileData *fd, Library *UNUSED(lib), Main *main)
 		}
 
 		if (!DNA_struct_elem_find(fd->filesdna, "Camera", "CameraStereoSettings", "stereo")) {
+			Camera *cam;
 			for (cam = main->camera.first; cam; cam = cam->id.next) {
 				cam->stereo.interocular_distance = 0.065;
 				cam->stereo.convergence_distance = 30.f * 0.065;
+			}
+		}
+
+		if (!DNA_struct_elem_find(fd->filesdna, "Image", "ListBase", "views")) {
+			Image *ima;
+			for (ima = main->image.first; ima; ima = ima->id.next) {
+				ima->views.first = ima->views.last = NULL;
 			}
 		}
 	}

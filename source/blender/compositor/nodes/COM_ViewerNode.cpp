@@ -82,6 +82,6 @@ void ViewerNode::convertToOperations(NodeConverter &converter, const CompositorC
 		converter.registerViewer(viewerOperation);
 
 	if (image && BKE_scene_render_view_first(context.getRenderData(), context.getViewName())) {
-		BKE_image_verify_viewer_cache(context.getRenderData(), image, imageUser);
+		BKE_image_verify_viewer_views(context.getRenderData(), image, imageUser);
 	}
 }

@@ -126,14 +126,12 @@ void ViewerOperation::executeRegion(rcti *rect, unsigned int tileNumber)
 void ViewerOperation::initImage()
 {
 	Image *ima = this->m_image;
+	ImageUser iuser = *this->m_imageUser;
 	void *lock;
 	ImBuf *ibuf;
-	ImageUser iuser = *this->m_imageUser;
 
 	/* local changes to the original ImageUser */
-	iuser.view =  BKE_scene_view_get_id(this->m_rd, this->m_viewName);
-	iuser.flag &= ~IMA_SHOW_STEREO;
-
+	iuser.multi_index = BKE_scene_view_get_id(this->m_rd, this->m_viewName);
 	ibuf = BKE_image_acquire_ibuf(ima, &iuser, &lock);
 
 	if (!ibuf) return;

@@ -44,6 +44,7 @@
 #include "BKE_image.h"
 #include "BKE_node.h"
 #include "BKE_screen.h"
+#include "BKE_scene.h"
 
 #include "RE_pipeline.h"
 
@@ -420,36 +421,6 @@ final:
 	BLI_assert(nr == -1);
 }
 
-static void ui_imageuser_view_menu_viewer(bContext *UNUSED(C), uiLayout *layout, void *ptrpair_p)
-{
-	void **ptrpair = ptrpair_p;
-	uiBlock *block = uiLayoutGetBlock(layout);
-	ImageUser *iuser = ptrpair[1];
-	RenderData *rd = ptrpair[3];
-	SceneRenderView *srv;
-	int nr;
-
-	uiBlockSetCurLayout(block, layout);
-	uiLayoutColumn(layout, false);
-
-	uiDefBut(block, LABEL, 0, IFACE_("View"),
-	         0, 0, UI_UNIT_X * 5, UI_UNIT_Y, NULL, 0.0, 0.0, 0, 0, "");
-
-	uiItemS(layout);
-
-	nr = 0;
-	for (srv = rd ? rd->views.first : NULL; srv; srv = srv->next) {
-		if ((srv->viewflag & SCE_VIEW_DISABLE))
-			continue;
-
-		uiDefButS(block, BUTM, B_NOP, IFACE_(srv->name), 0, 0,
-		          UI_UNIT_X * 5, UI_UNIT_X, &iuser->view, (float) nr++, 0.0, 0, -1, "");
-	}
-
-	if (iuser->view >= nr)
-		iuser->view = 0;
-}
-
 static void ui_imageuser_view_menu_rr(bContext *UNUSED(C), uiLayout *layout, void *ptrpair_p)
 {
 	void **ptrpair = ptrpair_p;
@@ -472,19 +443,39 @@ static void ui_imageuser_view_menu_rr(bContext *UNUSED(C), uiLayout *layout, voi
 		uiDefButS(block, BUTM, B_NOP, IFACE_(rview->name), 0, 0,
 		          UI_UNIT_X * 5, UI_UNIT_X, &iuser->view, (float) nr, 0.0, 0, -1, "");
 	}
-
-	if (iuser->view >= nr)
-		iuser->view = 0;
-
-	BLI_assert(nr == -1);
 }
+
+static void ui_imageuser_view_menu_multiview(bContext *UNUSED(C), uiLayout *layout, void *ptrpair_p)
+{
+	void **ptrpair = ptrpair_p;
+	uiBlock *block = uiLayoutGetBlock(layout);
+	Image *ima = ptrpair[3];
+	ImageUser *iuser = ptrpair[1];
+	int nr;
+	ImageView *iv;
+
+	uiBlockSetCurLayout(block, layout);
+	uiLayoutColumn(layout, false);
+
+	uiDefBut(block, LABEL, 0, IFACE_("View"),
+	         0, 0, UI_UNIT_X * 5, UI_UNIT_Y, NULL, 0.0, 0.0, 0, 0, "");
+
+	uiItemS(layout);
+
+	nr = BLI_countlist(&ima->views) - 1;
+	for (iv = ima->views.last; iv; iv = iv->prev, nr--) {
+		uiDefButS(block, BUTM, B_NOP, IFACE_(iv->name), 0, 0,
+		          UI_UNIT_X * 5, UI_UNIT_X, &iuser->view, (float) nr, 0.0, 0, -1, "");
+	}
+}
+
 
 /* 5 layer button callbacks... */
 static void image_multi_cb(bContext *C, void *rr_v, void *iuser_v) 
 {
 	ImageUser *iuser = iuser_v;
 
-	BKE_image_multilayer_index(rr_v, iuser); 
+	BKE_image_multilayer_index(rr_v, iuser);
 	WM_event_add_notifier(C, NC_IMAGE | ND_DRAW, NULL);
 }
 
@@ -543,6 +534,16 @@ static void image_multi_decpass_cb(bContext *C, void *rr_v, void *iuser_v)
 	}
 }
 
+/* 5 view button callbacks... */
+static void image_multiview_cb(bContext *C, void *ima_v, void *iuser_v)
+{
+	Image *ima = ima_v;
+	ImageUser *iuser = iuser_v;
+
+	BKE_image_multiview_index(ima, iuser);
+	WM_event_add_notifier(C, NC_IMAGE | ND_DRAW, NULL);
+}
+
 #if 0
 static void image_freecache_cb(bContext *C, void *ima_v, void *unused) 
 {
@@ -560,8 +561,8 @@ static void image_user_change(bContext *C, void *iuser_v, void *unused)
 }
 #endif
 
-/* we only pass RenderData if image is stereo and from a Viewer Node */
-static void uiblock_layer_pass_buttons(uiLayout *layout, RenderResult *rr, RenderData *rd, ImageUser *iuser, int w, short *render_slot)
+//XXX TODO create uiblock_view_buttons
+static void uiblock_layer_pass_buttons(uiLayout *layout, RenderResult *rr, Image *ima, ImageUser *iuser, int w, short *render_slot)
 {
 	static void *rnd_pt[4];  /* XXX, workaround */
 	uiBlock *block = uiLayoutGetBlock(layout);
@@ -630,29 +631,28 @@ static void uiblock_layer_pass_buttons(uiLayout *layout, RenderResult *rr, Rende
 		}
 	}
 
-	/* we only pass rd if image is stereo and showing viewer for the compositor */
-	else if (rd && !show_stereo) {
-		SceneRenderView *srv;
+	/* stereo image */
+	else if (((ima->flag & IMA_IS_STEREO) && (!show_stereo)) ||
+	         ((ima->flag & IMA_IS_MULTIVIEW) && ((ima->flag & IMA_IS_STEREO) == 0)))
+	{
+		ImageView *iv;
 		int nr = 0;
-		rnd_pt[3] = rd;
+		rnd_pt[3] = ima;
 
-		for (srv = rd->views.first; srv; srv = srv->next) {
-			if ((srv->viewflag & SCE_VIEW_DISABLE))
-				continue;
-
+		for (iv = ima->views.first; iv; iv = iv->next) {
 			if (nr++ == iuser->view) {
-				display_name = srv->name;
+				display_name = iv->name;
 				break;
 			}
 		}
 
-		but = uiDefMenuBut(block, ui_imageuser_view_menu_viewer, rnd_pt, display_name, 0, 0, wmenu1, UI_UNIT_Y, TIP_("Select View"));
-		uiButSetFunc(but, image_multi_cb, rr, iuser);
+		but = uiDefMenuBut(block, ui_imageuser_view_menu_multiview, rnd_pt, display_name, 0, 0, wmenu1, UI_UNIT_Y, TIP_("Select View"));
+		uiButSetFunc(but, image_multiview_cb, ima, iuser);
 		uiButSetMenuFromPulldown(but);
 	}
 }
 
-static void uiblock_layer_pass_arrow_buttons(uiLayout *layout, RenderResult *rr, ImageUser *iuser, short *render_slot)
+static void uiblock_layer_pass_arrow_buttons(uiLayout *layout, RenderResult *rr, Image *ima, ImageUser *iuser, short *render_slot)
 {
 	uiBlock *block = uiLayoutGetBlock(layout);
 	uiLayout *row;
@@ -674,7 +674,7 @@ static void uiblock_layer_pass_arrow_buttons(uiLayout *layout, RenderResult *rr,
 	but = uiDefIconBut(block, BUT, 0, ICON_TRIA_RIGHT,  0, 0, 0.90f * UI_UNIT_X, UI_UNIT_Y, NULL, 0, 0, 0, 0, TIP_("Next Layer"));
 	uiButSetFunc(but, image_multi_inclay_cb, rr, iuser);
 
-	uiblock_layer_pass_buttons(row, rr, NULL, iuser, 230 * dpi_fac, render_slot);
+	uiblock_layer_pass_buttons(row, rr, ima, iuser, 230 * dpi_fac, render_slot);
 
 	/* decrease, increase arrows */
 	but = uiDefIconBut(block, BUT, 0, ICON_TRIA_LEFT,   0, 0, 0.85f * UI_UNIT_X, UI_UNIT_Y, NULL, 0, 0, 0, 0, TIP_("Previous Pass"));
@@ -796,7 +796,7 @@ void uiTemplateImage(uiLayout *layout, bContext *C, PointerRNA *ptr, const char 
 
 				/* use BKE_image_acquire_renderresult  so we get the correct slot in the menu */
 				rr = BKE_image_acquire_renderresult(scene, ima);
-				uiblock_layer_pass_arrow_buttons(layout, rr, iuser, &ima->render_slot);
+				uiblock_layer_pass_arrow_buttons(layout, rr, ima, iuser, &ima->render_slot);
 				BKE_image_release_renderresult(scene, ima);
 			}
 		}
@@ -829,7 +829,7 @@ void uiTemplateImage(uiLayout *layout, bContext *C, PointerRNA *ptr, const char 
 
 			/* multilayer? */
 			if (ima->type == IMA_TYPE_MULTILAYER && ima->rr) {
-				uiblock_layer_pass_arrow_buttons(layout, ima->rr, iuser, NULL);
+				uiblock_layer_pass_arrow_buttons(layout, ima->rr, ima, iuser, NULL);
 			}
 			else if (ima->source != IMA_SRC_GENERATED) {
 				if (compact == 0) {
@@ -1087,13 +1087,10 @@ void uiTemplateImageLayers(uiLayout *layout, bContext *C, Image *ima, ImageUser 
 	if (ima && iuser) {
 		const float dpi_fac = UI_DPI_FAC;
 		RenderResult *rr;
-		bool is_viewer_stereo = ima->source == IMA_SRC_VIEWER &&
-		                        ima->type == IMA_TYPE_COMPOSITE &&
-		                        (ima->flag & IMA_IS_STEREO);
 
 		/* use BKE_image_acquire_renderresult  so we get the correct slot in the menu */
 		rr = BKE_image_acquire_renderresult(scene, ima);
-		uiblock_layer_pass_buttons(layout, rr, is_viewer_stereo ? &scene->r : NULL, iuser, 160 * dpi_fac,
+		uiblock_layer_pass_buttons(layout, rr, ima, iuser, 160 * dpi_fac,
 		                           (ima->type == IMA_TYPE_R_RESULT) ? &ima->render_slot : NULL);
 		BKE_image_release_renderresult(scene, ima);
 	}

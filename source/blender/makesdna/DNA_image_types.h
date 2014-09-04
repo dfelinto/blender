@@ -73,6 +73,12 @@ enum {
 	IMA_SHOW_STEREO         = (1 << 4),
 };
 
+typedef struct ImageView {
+	struct ImageView *next, *prev;
+	char name[64];			/* MAX_NAME */
+	char filepath[1024];	/* 1024 = FILE_MAX */
+} ImageView;
+
 typedef struct Image {
 	ID id;
 	
@@ -120,9 +126,12 @@ typedef struct Image {
 	ColorManagedColorspaceSettings colorspace_settings;
 	char alpha_mode;
 
-	char eye; /* for viewer node stereoscopy */
-
 	char pad[6];
+
+	/* multiview */
+	char eye; /* for viewer node stereoscopy */
+	ListBase views;
+
 } Image;
 
 
@@ -143,6 +152,7 @@ enum {
 	IMA_VIEW_AS_RENDER      = (1 << 11),
 	IMA_IGNORE_ALPHA        = (1 << 12),
 	IMA_IS_STEREO           = (1 << 13),
+	IMA_IS_MULTIVIEW        = (1 << 14), /* similar to stereo, but a more general case */
 };
 
 #if (DNA_DEPRECATED_GCC_POISON == 1)

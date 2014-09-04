@@ -30,14 +30,21 @@
 
 #include <stddef.h>
 #include <string.h>
+#include <fcntl.h>
 #include <stdlib.h>
 #include <errno.h>
+#ifndef WIN32
+#  include <unistd.h>
+#else
+#  include <io.h>
+#endif
 
 #include "MEM_guardedalloc.h"
 
 #include "BLI_math.h"
 #include "BLI_blenlib.h"
 #include "BLI_utildefines.h"
+#include "BLI_string_utf8.h"
 
 #include "BLF_translation.h"
 
@@ -58,6 +65,7 @@
 #include "BKE_report.h"
 #include "BKE_screen.h"
 #include "BKE_sound.h"
+#include "BKE_scene.h"
 
 #include "GPU_draw.h"
 
@@ -1036,6 +1044,78 @@ static int image_sequence_get_len(ListBase *frames, int *ofs)
 	return 0;
 }
 
+/* handle the individual views case */
+static bool image_open_multiview(Scene *scene, Image *ima, ReportList *reports)
+{
+	SceneRenderView *srv;
+	char prefix[FILE_MAX] = {'\0'};
+	char *name = ima->name;
+	char *ext;
+	ImageView *iv;
+	bool ok = true;
+
+	/* begin of extension */
+	for (ext = name + strlen(name);(ext != name) && (ext[0] != '.'); ext--);
+//		for (ext = name + BLI_strlen_utf8(name); ext && (ext != ); ext = BLI_str_find_prev_char_utf8(name, ext));
+	BLI_assert(ext[0] == '.');
+
+	for (srv = scene->r.views.first; srv; srv = srv->next) {
+		if (BKE_scene_render_view_active(&scene->r, srv)) {
+			size_t len = strlen(srv->suffix);
+			if (strncmp(ext - len, srv->suffix, len) == 0) {
+				BLI_strncpy(prefix, name, strlen(name) - strlen(ext) - len + 1);
+				break;
+			}
+		}
+	}
+
+	if (prefix[0] == '\0') {
+		ok = false;
+		BKE_report(reports, RPT_ERROR, "Filename matches no scene views' suffix");
+		goto finally;
+	}
+
+	/* create all the image views */
+	for (srv = scene->r.views.first; srv; srv = srv->next) {
+		if (BKE_scene_render_view_active(&scene->r, srv)) {
+			iv = MEM_mallocN(sizeof(ImageView), "Image View (open)");
+			BLI_strncpy(iv->name, srv->name, sizeof(iv->name));
+
+			sprintf(iv->filepath, "%s%s%s", prefix, srv->suffix, ext);
+			BLI_addtail(&ima->views, iv);
+		}
+	}
+
+	/* check if the files are all available */
+	for (iv = ima->views.first; iv; iv = iv->next) {
+		int file;
+		char str[FILE_MAX];
+
+		BLI_strncpy(str, iv->filepath, sizeof(str));
+		BLI_path_abs(str, G.main->name);
+
+		/* exists? */
+		file = BLI_open(str, O_BINARY | O_RDONLY, 0);
+		if (file == -1) {
+			ok = false;
+			BKE_reportf(reports, RPT_ERROR, "File %s not found", str);
+			goto finally;
+		}
+		close(file);
+	}
+
+	/* all good */
+	ima->flag |= IMA_IS_MULTIVIEW;
+	if (BKE_scene_is_stereo3d(&scene->r))
+		ima->flag |= IMA_IS_STEREO;
+
+finally:
+	if (!ok)
+		BKE_image_free_views(ima);
+
+	return ok;
+}
+
 static int image_open_exec(bContext *C, wmOperator *op)
 {
 	Main *bmain = CTX_data_main(C);
@@ -1050,6 +1130,7 @@ static int image_open_exec(bContext *C, wmOperator *op)
 	int frame_seq_len = 0;
 	int frame_ofs = 1;
 
+	const bool is_multiview = RNA_boolean_get(op->ptr, "use_multiple_views");
 	const bool is_relative_path = RNA_boolean_get(op->ptr, "relative_path");
 
 	RNA_string_get(op->ptr, "filepath", path);
@@ -1074,6 +1155,13 @@ static int image_open_exec(bContext *C, wmOperator *op)
 		BKE_reportf(op->reports, RPT_ERROR, "Cannot read '%s': %s",
 		            path, errno ? strerror(errno) : TIP_("unsupported image format"));
 		return OPERATOR_CANCELLED;
+	}
+
+	if (is_multiview) {
+		if(!image_open_multiview(scene, ima, op->reports)) {
+			BKE_image_free(ima);
+			return OPERATOR_CANCELLED;
+		}
 	}
 
 	if (!op->customdata)
@@ -1184,6 +1272,33 @@ static int image_open_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(
 	return OPERATOR_RUNNING_MODAL;
 }
 
+static bool image_open_draw_check_prop(PointerRNA *UNUSED(ptr), PropertyRNA *prop)
+{
+	const char *prop_id = RNA_property_identifier(prop);
+
+	return !(STREQ(prop_id, "filepath") ||
+	         STREQ(prop_id, "directory") ||
+	         STREQ(prop_id, "filename")
+	         );
+}
+
+static void image_open_draw(bContext *UNUSED(C), wmOperator *op)
+{
+	uiLayout *layout = op->layout;
+	ImageFormatData *imf = op->customdata;
+	PointerRNA ptr;
+	const bool is_multiview = RNA_boolean_get(op->ptr, "use_multiple_views");
+
+	/* main draw call */
+	RNA_pointer_create(NULL, op->type->srna, op->properties, &ptr);
+	uiDefAutoButsRNA(layout, &ptr, image_open_draw_check_prop, '\0');
+
+	/* multiview template */
+	RNA_pointer_create(NULL, &RNA_ImageFormatSettings, imf, &ptr);
+	if (is_multiview)
+		uiTemplateImageViews(layout, &ptr);
+}
+
 /* called by other space types too */
 void IMAGE_OT_open(wmOperatorType *ot)
 {
@@ -1196,6 +1311,7 @@ void IMAGE_OT_open(wmOperatorType *ot)
 	ot->exec = image_open_exec;
 	ot->invoke = image_open_invoke;
 	ot->cancel = image_open_cancel;
+	ot->ui = image_open_draw;
 
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -1893,7 +2009,7 @@ static int image_save_as_invoke(bContext *C, wmOperator *op, const wmEvent *UNUS
 	memcpy(op->customdata, &simopts.im_format, sizeof(simopts.im_format));
 
 	/* show multiview save options only if image has multiviews */
-	prop = RNA_struct_find_property(op->ptr, "use_multiview");
+	prop = RNA_struct_find_property(op->ptr, "use_multiple_views");
 	if (!RNA_property_is_set(op->ptr, prop))
 		RNA_property_boolean_set(op->ptr, prop, (ima->flag & IMA_IS_STEREO));
 
@@ -1924,7 +2040,7 @@ static void image_save_as_draw(bContext *UNUSED(C), wmOperator *op)
 	uiLayout *layout = op->layout;
 	ImageFormatData *imf = op->customdata;
 	PointerRNA ptr;
-	const bool is_multiview = RNA_boolean_get(op->ptr, "use_multiview");
+	const bool is_multiview = RNA_boolean_get(op->ptr, "use_multiple_views");
 
 	/* image template */
 	RNA_pointer_create(NULL, &RNA_ImageFormatSettings, imf, &ptr);
@@ -1980,7 +2096,7 @@ void IMAGE_OT_save_as(wmOperatorType *ot)
 	/* properties */
 	RNA_def_boolean(ot->srna, "save_as_render", 0, "Save As Render", "Apply render part of display transform when saving byte image");
 	RNA_def_boolean(ot->srna, "copy", 0, "Copy", "Create a new image file without modifying the current image in blender");
-	prop = RNA_def_boolean(ot->srna, "use_multiview", 0, "Multiview", "Multiview output settings");
+	prop = RNA_def_boolean(ot->srna, "use_multiple_views", 0, "Multiview", "Multiview output settings");
 	RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 
 	WM_operator_properties_filesel(ot, FOLDERFILE | IMAGEFILE | MOVIEFILE, FILE_SPECIAL, FILE_SAVE,

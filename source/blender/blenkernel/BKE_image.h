@@ -52,8 +52,8 @@ struct Main;
 void   BKE_images_init(void);
 void   BKE_images_exit(void);
 
-void    BKE_image_free_cached_frames(struct Image *image);
 int     BKE_image_cache_count(struct Image *image);
+void    BKE_image_free_views(struct Image *image);
 void    BKE_image_free_buffers(struct Image *image);
 /* call from library */
 void    BKE_image_free(struct Image *image);
@@ -184,7 +184,7 @@ void BKE_image_walk_all_users(const struct Main *mainp, void *customdata,
 /* ensures an Image exists for viewing nodes or render */
 struct Image *BKE_image_verify_viewer(int type, const char *name);
 /* reset viewer nodes cache when the number of cache doesn't match the needed cached views */
-void BKE_image_verify_viewer_cache(const struct RenderData *rd, struct Image *ima, struct ImageUser *iuser);
+void BKE_image_verify_viewer_views(const struct RenderData *rd, struct Image *ima, struct ImageUser *iuser);
 
 /* force an ImBuf to become part of Image */
 void BKE_image_assign_ibuf(struct Image *ima, struct ImBuf *ibuf);
@@ -199,8 +199,11 @@ void BKE_image_update_frame(const struct Main *bmain, int cfra);
 /* sets index offset for multilayer files */
 struct RenderPass *BKE_image_multilayer_index(struct RenderResult *rr, struct ImageUser *iuser);
 
+/* sets index offset for multiview files */
+void BKE_image_multiview_index(struct Image *ima, struct ImageUser *iuser);
+
 /* for multilayer images as well as for render-viewer */
-bool BKE_image_is_stereo(struct Scene *scene, struct Image *ima);
+bool BKE_image_is_multilayer(struct Image *ima);
 struct RenderResult *BKE_image_acquire_renderresult(struct Scene *scene, struct Image *ima);
 void BKE_image_release_renderresult(struct Scene *scene, struct Image *ima);
 
