@@ -157,6 +157,8 @@ void ImageNode::convertToOperations(NodeConverter &converter, const CompositorCo
 			operation->setImage(image);
 			operation->setImageUser(imageuser);
 			operation->setFramenumber(framenumber);
+			operation->setRenderData(context.getRenderData());
+			operation->setViewName(context.getViewName());
 			converter.addOperation(operation);
 			
 			if (outputStraightAlpha) {
