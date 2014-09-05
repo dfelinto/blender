@@ -2087,7 +2087,7 @@ static void write_images(WriteData *wd, ListBase *idbase)
 {
 	Image *ima;
 	PackedFile * pf;
-
+	ImageView *iv;
 
 	ima= idbase->first;
 	while (ima) {
@@ -2101,6 +2101,9 @@ static void write_images(WriteData *wd, ListBase *idbase)
 				writestruct(wd, DATA, "PackedFile", 1, pf);
 				writedata(wd, DATA, pf->size, pf->data);
 			}
+
+			for (iv = ima->views.first; iv; iv = iv->next)
+				writestruct(wd, DATA, "ImageView", 1, iv);
 
 			write_previews(wd, ima->preview);
 		}
