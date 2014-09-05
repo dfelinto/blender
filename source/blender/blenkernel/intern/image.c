@@ -2642,59 +2642,122 @@ static int imbuf_alpha_flags_for_image(Image *ima)
 	return flag;
 }
 
+/* the number of files will vary according to the stereo format */
+static size_t image_num_files(Image *ima)
+{
+	const bool is_multiview = (ima->flag & IMA_IS_MULTIVIEW) != 0;
+
+	if (!is_multiview) {
+		return 1;
+	}
+	else if(false){
+		/* XXX MV not supported yet R_IMF_VIEWS_STEREO_3D */
+		return 1;
+	}
+	/* R_IMF_VIEWS_INDIVIDUAL */
+	else {
+		return BLI_countlist(&ima->views);
+	}
+}
+
 static ImBuf *image_load_sequence_file(Image *ima, ImageUser *iuser, int frame)
 {
-	struct ImBuf *ibuf;
-	char name[FILE_MAX];
+	struct ImBuf **ibuf;
+	struct ImBuf *r_ibuf;
+	char **name;
+	bool assign = false;
 	int flag;
+	const bool is_multiview = (ima->flag & IMA_IS_MULTIVIEW) != 0;
+	const size_t totfiles = image_num_files(ima);
+	const size_t totviews = is_multiview ? BLI_countlist(&ima->views) : 1;
+	size_t i;
+
+	ibuf = MEM_mallocN(sizeof(ImBuf *) * totviews, "Image Views sequence Imbufs");
+	name = MEM_mallocN(sizeof(char *) * totviews, "Image sequence filepaths");
+	for (i = 0; i < totfiles; i++)
+		name[i] = MEM_mallocN(sizeof(char) * FILE_MAX, "Image sequence filepath");
 
 	/* XXX temp stuff? */
 	if (ima->lastframe != frame)
 		ima->tpageflag |= IMA_TPAGE_REFRESH;
 
 	ima->lastframe = frame;
-	BKE_image_user_file_path(iuser, ima, name);
 
 	flag = IB_rect | IB_multilayer;
 	flag |= imbuf_alpha_flags_for_image(ima);
 
-	/* read ibuf */
-	ibuf = IMB_loadiffname(name, flag, ima->colorspace_settings.name);
+	for (i = 0; i < totfiles; i++) {
+		ImageUser iuser_t;
+
+		iuser_t = *iuser;
+		iuser_t.view = i;
+
+		/* get the correct filepath */
+		BKE_image_user_file_path(&iuser_t, ima, name[i]);
+
+		/* read ibuf */
+		ibuf[i] = IMB_loadiffname(name[i], flag, ima->colorspace_settings.name);
 
 #if 0
-	if (ibuf) {
-		printf(AT " loaded %s\n", name);
-	}
-	else {
-		printf(AT " missed %s\n", name);
-	}
-#endif
-
-	if (ibuf) {
-#ifdef WITH_OPENEXR
-		/* handle multilayer case, don't assign ibuf. will be handled in BKE_image_acquire_ibuf */
-		if (ibuf->ftype == OPENEXR && ibuf->userdata) {
-			image_create_multilayer(ima, ibuf, frame);
-			ima->type = IMA_TYPE_MULTILAYER;
-			IMB_freeImBuf(ibuf);
-			ibuf = NULL;
+		if (ibuf[i]) {
+			printf(AT " loaded %s\n", name[i]);
 		}
 		else {
-			image_initialize_after_load(ima, ibuf);
-			image_assign_ibuf(ima, ibuf, 0, frame);
+			printf(AT " missed %s\n", name[i]);
 		}
-#else
-		image_initialize_after_load(ima, ibuf);
-		image_assign_ibuf(ima, ibuf, 0, frame);
 #endif
 	}
-	else
-		ima->ok = 0;
+
+	for (i = 0; i < totfiles; i++) {
+		if (ibuf[i]) {
+#ifdef WITH_OPENEXR
+			/* handle multilayer case, don't assign ibuf. will be handled in BKE_image_acquire_ibuf */
+			if (ibuf[i]->ftype == OPENEXR && ibuf[i]->userdata) {
+				image_create_multilayer(ima, ibuf[i], frame);
+				ima->type = IMA_TYPE_MULTILAYER;
+				IMB_freeImBuf(ibuf[i]);
+				ibuf[i] = NULL;
+			}
+			else {
+				image_initialize_after_load(ima, ibuf[i]);
+				assign = true;
+			}
+	#else
+			image_initialize_after_load(ima, ibuf[i]);
+			assign = true;
+#endif
+		}
+		else
+			ima->ok = 0;
+	}
+
+	/** XXX MV S3D LOAD STEREO IMAGES
+	  * this will mean we will use ibuf[0] and make ibuf[0] = left, ibuf[1] = right
+	  * so from that point on we use totviews instead of totfiles for ibufs
+	  */
+
+	if (assign) {
+		if (!is_multiview)
+			image_assign_ibuf(ima, ibuf[0], 0, frame);
+		else
+			for (i = 0; i < totviews; i++)
+				image_assign_ibuf(ima, ibuf[i], i, frame);
+	}
+
+	/* return the original requested ImBuf */
+	r_ibuf = ibuf[is_multiview ? (iuser ? iuser->multi_index : 0) : 0];
 
 	if (iuser)
 		iuser->ok = ima->ok;
 
-	return ibuf;
+	/* cleanup */
+	MEM_freeN(ibuf);
+	for (i = 0; i < totfiles; i++) {
+		MEM_freeN(name[i]);
+	}
+	MEM_freeN(name);
+
+	return r_ibuf;
 }
 
 static ImBuf *image_load_sequence_multilayer(Image *ima, ImageUser *iuser, int frame)
@@ -2798,24 +2861,6 @@ static ImBuf *image_load_movie_file(Image *ima, ImageUser *iuser, int frame)
 	return ibuf;
 }
 
-/* the number of files will vary according to the stereo format */
-static size_t image_num_files(Image *ima)
-{
-	const bool is_multiview = (ima->flag & IMA_IS_MULTIVIEW) != 0;
-
-	if (!is_multiview) {
-		return 1;
-	}
-	else if(false){
-		/* XXX MV not supported yet R_IMF_VIEWS_STEREO_3D */
-		return 1;
-	}
-	/* R_IMF_VIEWS_INDIVIDUAL */
-	else {
-		return BLI_countlist(&ima->views);
-	}
-}
-
 /* warning, 'iuser' can be NULL */
 static ImBuf *image_load_image_file(Image *ima, ImageUser *iuser, int cfra)
 {
@@ -2857,7 +2902,7 @@ static ImBuf *image_load_image_file(Image *ima, ImageUser *iuser, int cfra)
 		flag = IB_rect | IB_multilayer | IB_metadata;
 		flag |= imbuf_alpha_flags_for_image(ima);
 
-		/* get the correct filepath  */
+		/* get the correct filepath */
 		BKE_image_user_frame_calc(iuser, cfra, 0);
 
 		for (i = 0; i < totfiles; i++) {
@@ -2879,7 +2924,6 @@ static ImBuf *image_load_image_file(Image *ima, ImageUser *iuser, int cfra)
 			if (ibuf[i]->ftype == OPENEXR && ibuf[i]->userdata) {
 				image_create_multilayer(ima, ibuf[i], cfra);
 				ima->type = IMA_TYPE_MULTILAYER;
-
 				IMB_freeImBuf(ibuf[i]);
 				ibuf[i] = NULL;
 			}
@@ -2902,28 +2946,27 @@ static ImBuf *image_load_image_file(Image *ima, ImageUser *iuser, int cfra)
 			}
 		}
 		else
-			ima->ok = false;
+			ima->ok = 0;
 	}
 
-	/** XXX MV LOAD STEREO IMAGES
+	/** XXX MV S3D LOAD STEREO IMAGES
 	  * this will mean we will use ibuf[0] and make ibuf[0] = left, ibuf[1] = right
-	  * so now we use totviews instead of totfiles
+	  * so from that point on we use totviews instead of totfiles for ibufs
 	  */
 
 	if (assign) {
 		if (!is_multiview)
 			image_assign_ibuf(ima, ibuf[0], IMA_NO_INDEX, 0);
-		else {
-			for (i = 0; i < totviews; i++) {
+		else
+			for (i = 0; i < totviews; i++)
 				image_assign_ibuf(ima, ibuf[i], i, 0);
-			}
-		}
 	}
+
+	/* return the original requested ImBuf */
+	r_ibuf = ibuf[is_multiview ? (iuser ? iuser->multi_index : 0) : 0];
 
 	if (iuser)
 		iuser->ok = ima->ok;
-
-	r_ibuf = ibuf[0];
 
 	/* cleanup */
 	MEM_freeN(ibuf);
@@ -3200,7 +3243,7 @@ static ImBuf *image_get_cached_ibuf(Image *ima, ImageUser *iuser, int *r_frame, 
 	ImBuf *ibuf = NULL;
 	int frame = 0, index = 0;
 
-	 index = image_get_multiview_index(ima, iuser);
+	index = image_get_multiview_index(ima, iuser);
 
 	/* see if we already have an appropriate ibuf, with image source and type */
 	if (ima->source == IMA_SRC_MOVIE) {
