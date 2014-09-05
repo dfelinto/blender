@@ -939,6 +939,7 @@ static void image_filesel(bContext *C, wmOperator *op, const char *path)
 typedef struct ImageOpenData {
 	PropertyPointerRNA pprop;
 	ImageUser *iuser;
+	ImageFormatData im_format;
 } ImageOpenData;
 
 typedef struct ImageFrame {
@@ -949,7 +950,6 @@ typedef struct ImageFrame {
 static void image_open_init(bContext *C, wmOperator *op)
 {
 	ImageOpenData *iod;
-
 	op->customdata = iod = MEM_callocN(sizeof(ImageOpenData), __func__);
 	iod->iuser = CTX_data_pointer_get_type(C, "image_user", &RNA_ImageUser).data;
 	uiIDContextProperty(C, &iod->pprop.ptr, &iod->pprop.prop);
@@ -1228,7 +1228,8 @@ static int image_open_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(
 	SpaceImage *sima = CTX_wm_space_image(C); /* XXX other space types can call */
 	const char *path = U.textudir;
 	Image *ima = NULL;
-
+	Scene *scene = CTX_data_scene(C);
+	PropertyRNA *prop;
 	if (sima) {
 		ima = sima->image;
 	}
@@ -1267,6 +1268,10 @@ static int image_open_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(
 	
 	image_open_init(C, op);
 
+	/* show multiview save options only if image has multiviews */
+	prop = RNA_struct_find_property(op->ptr, "use_multiple_views");
+	RNA_property_boolean_set(op->ptr, prop, (scene->r.scemode & R_MULTIVIEW));
+
 	image_filesel(C, op, path);
 
 	return OPERATOR_RUNNING_MODAL;
@@ -1285,18 +1290,21 @@ static bool image_open_draw_check_prop(PointerRNA *UNUSED(ptr), PropertyRNA *pro
 static void image_open_draw(bContext *UNUSED(C), wmOperator *op)
 {
 	uiLayout *layout = op->layout;
-	ImageFormatData *imf = op->customdata;
-	PointerRNA ptr;
+	ImageOpenData *iod = op->customdata;
+	ImageFormatData *imf = &iod->im_format;
+	PointerRNA imf_ptr, ptr;
 	const bool is_multiview = RNA_boolean_get(op->ptr, "use_multiple_views");
 
 	/* main draw call */
 	RNA_pointer_create(NULL, op->type->srna, op->properties, &ptr);
 	uiDefAutoButsRNA(layout, &ptr, image_open_draw_check_prop, '\0');
 
+	/* image template */
+	RNA_pointer_create(NULL, &RNA_ImageFormatSettings, imf, &imf_ptr);
+
 	/* multiview template */
-	RNA_pointer_create(NULL, &RNA_ImageFormatSettings, imf, &ptr);
 	if (is_multiview)
-		uiTemplateImageViews(layout, &ptr);
+		uiTemplateImageViews(layout, &imf_ptr);
 }
 
 /* called by other space types too */
@@ -1851,9 +1859,8 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 
 					save_image_get_view_filepath(scene, simopts->filepath, rv, filepath, NULL);
 
-					colormanaged_ibuf = IMB_colormanagement_imbuf_for_write(ibuf, save_as_render, true, &imf->view_settings, &imf->display_settings, imf);
-					ok_view = BKE_imbuf_write_as(colormanaged_ibuf, filepath, &simopts->im_format, save_copy);
-					save_imbuf_post(ibuf, colormanaged_ibuf);
+					IMB_colormanagement_imbuf_for_write(ibuf, save_as_render, false, &imf->view_settings, &imf->display_settings, imf);
+					ok_view = BKE_imbuf_write_as(ibuf, filepath, &simopts->im_format, save_copy);
 					save_image_post(op, ibuf, ima, ok_view, true, relbase, relative, do_newpath, filepath);
 					BKE_image_release_ibuf(sima->image, ibuf, lock);
 				}
@@ -2010,8 +2017,7 @@ static int image_save_as_invoke(bContext *C, wmOperator *op, const wmEvent *UNUS
 
 	/* show multiview save options only if image has multiviews */
 	prop = RNA_struct_find_property(op->ptr, "use_multiple_views");
-	if (!RNA_property_is_set(op->ptr, prop))
-		RNA_property_boolean_set(op->ptr, prop, (ima->flag & IMA_IS_STEREO));
+	RNA_property_boolean_set(op->ptr, prop, (ima->flag & IMA_IS_STEREO));
 
 	image_filesel(C, op, simopts.filepath);
 
@@ -2039,20 +2045,20 @@ static void image_save_as_draw(bContext *UNUSED(C), wmOperator *op)
 {
 	uiLayout *layout = op->layout;
 	ImageFormatData *imf = op->customdata;
-	PointerRNA ptr;
+	PointerRNA imf_ptr, ptr;
 	const bool is_multiview = RNA_boolean_get(op->ptr, "use_multiple_views");
 
 	/* image template */
-	RNA_pointer_create(NULL, &RNA_ImageFormatSettings, imf, &ptr);
-	uiTemplateImageSettings(layout, &ptr, false);
-
-	/* multiview template */
-	if (is_multiview)
-		uiTemplateImageViews(layout, &ptr);
+	RNA_pointer_create(NULL, &RNA_ImageFormatSettings, imf, &imf_ptr);
+	uiTemplateImageSettings(layout, &imf_ptr, false);
 
 	/* main draw call */
 	RNA_pointer_create(NULL, op->type->srna, op->properties, &ptr);
 	uiDefAutoButsRNA(layout, &ptr, image_save_as_draw_check_prop, '\0');
+
+	/* multiview template */
+	if (is_multiview)
+		uiTemplateImageViews(layout, &imf_ptr);
 }
 
 static int image_save_as_poll(bContext *C)
@@ -2075,8 +2081,6 @@ static int image_save_as_poll(bContext *C)
 
 void IMAGE_OT_save_as(wmOperatorType *ot)
 {
-	PropertyRNA *prop;
-
 	/* identifiers */
 	ot->name = "Save As Image";
 	ot->idname = "IMAGE_OT_save_as";
@@ -2096,8 +2100,6 @@ void IMAGE_OT_save_as(wmOperatorType *ot)
 	/* properties */
 	RNA_def_boolean(ot->srna, "save_as_render", 0, "Save As Render", "Apply render part of display transform when saving byte image");
 	RNA_def_boolean(ot->srna, "copy", 0, "Copy", "Create a new image file without modifying the current image in blender");
-	prop = RNA_def_boolean(ot->srna, "use_multiple_views", 0, "Multiview", "Multiview output settings");
-	RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 
 	WM_operator_properties_filesel(ot, FOLDERFILE | IMAGEFILE | MOVIEFILE, FILE_SPECIAL, FILE_SAVE,
 	                               WM_FILESEL_FILEPATH | WM_FILESEL_RELPATH, FILE_DEFAULTDISPLAY);

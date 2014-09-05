@@ -1229,8 +1229,10 @@ void WM_operator_properties_filesel(wmOperatorType *ot, int filter, short type, 
 	if (flag & WM_FILESEL_RELPATH)
 		RNA_def_boolean(ot->srna, "relative_path", true, "Relative Path", "Select the file relative to the blend file");
 
-	if ((filter & IMAGEFILE) || (filter & MOVIEFILE))
-		RNA_def_boolean(ot->srna, "use_multiple_views", false, "Views", "");
+	if ((filter & IMAGEFILE) || (filter & MOVIEFILE)) {
+		prop = RNA_def_boolean(ot->srna, "use_multiple_views", false, "Views", "");
+		RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
+	}
 
 	prop = RNA_def_enum(ot->srna, "display_type", file_display_items, display, "Display Type", "");
 	RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);

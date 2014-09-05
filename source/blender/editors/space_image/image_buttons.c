@@ -421,6 +421,7 @@ final:
 	BLI_assert(nr == -1);
 }
 
+/**************************** view menus *****************************/
 static void ui_imageuser_view_menu_rr(bContext *UNUSED(C), uiLayout *layout, void *ptrpair_p)
 {
 	void **ptrpair = ptrpair_p;
@@ -468,7 +469,6 @@ static void ui_imageuser_view_menu_multiview(bContext *UNUSED(C), uiLayout *layo
 		          UI_UNIT_X * 5, UI_UNIT_X, &iuser->view, (float) nr, 0.0, 0, -1, "");
 	}
 }
-
 
 /* 5 layer button callbacks... */
 static void image_multi_cb(bContext *C, void *rr_v, void *iuser_v) 
