@@ -779,13 +779,14 @@ static ImBuf *add_ibuf_size(unsigned int width, unsigned int height, const char 
 }
 
 /* adds new image block, creates ImBuf and initializes color */
-Image *BKE_image_add_generated(Main *bmain, unsigned int width, unsigned int height, const char *name, int depth, int floatbuf, short gen_type, const float color[4])
+Image *BKE_image_add_generated(Main *bmain, unsigned int width, unsigned int height, const char *name, int depth, int floatbuf, short gen_type, const float color[4], const bool stereo3d)
 {
 	/* on save, type is changed to FILE in editsima.c */
 	Image *ima = image_alloc(bmain, name, IMA_SRC_GENERATED, IMA_TYPE_UV_TEST);
 
 	if (ima) {
-		ImBuf *ibuf;
+		size_t view_id;
+		const char *names[2] = {STEREO_LEFT_NAME, STEREO_RIGHT_NAME};
 
 		/* BLI_strncpy(ima->name, name, FILE_MAX); */ /* don't do this, this writes in ain invalid filepath! */
 		ima->gen_x = width;
@@ -794,13 +795,24 @@ Image *BKE_image_add_generated(Main *bmain, unsigned int width, unsigned int hei
 		ima->gen_flag |= (floatbuf ? IMA_GEN_FLOAT : 0);
 		ima->gen_depth = depth;
 
-		ibuf = add_ibuf_size(width, height, ima->name, depth, floatbuf, gen_type, color, &ima->colorspace_settings);
-		image_assign_ibuf(ima, ibuf, IMA_NO_INDEX, 0);
+		for (view_id = 0; view_id < 2; view_id++) {
+			ImBuf *ibuf;
+			ImageView *iv;
+			ibuf = add_ibuf_size(width, height, ima->name, depth, floatbuf, gen_type, color, &ima->colorspace_settings);
+			image_assign_ibuf(ima, ibuf, stereo3d ? view_id : IMA_NO_INDEX, 0);
 
-		/* image_assign_ibuf puts buffer to the cache, which increments user counter. */
-		IMB_freeImBuf(ibuf);
+			/* image_assign_ibuf puts buffer to the cache, which increments user counter. */
+			IMB_freeImBuf(ibuf);
+			if (!stereo3d) break;
+
+			iv = MEM_mallocN(sizeof(ImageView), "Viewer Image View");
+			BLI_strncpy(iv->name, names[view_id], sizeof(iv->name));
+			BLI_addtail(&ima->views, iv);
+		}
 
 		ima->ok = IMA_OK_LOADED;
+		if (stereo3d)
+			ima->flag |= IMA_IS_STEREO | IMA_IS_MULTIVIEW;
 	}
 
 	return ima;
@@ -3285,7 +3297,7 @@ static ImBuf *image_get_cached_ibuf(Image *ima, ImageUser *iuser, int *r_frame, 
 			ibuf = image_get_cached_ibuf_for_index_frame(ima, index, 0);
 	}
 	else if (ima->source == IMA_SRC_GENERATED) {
-		ibuf = image_get_cached_ibuf_for_index_frame(ima, IMA_NO_INDEX, 0);
+		ibuf = image_get_cached_ibuf_for_index_frame(ima, index, 0);
 	}
 	else if (ima->source == IMA_SRC_VIEWER) {
 		/* always verify entirely, not that this shouldn't happen
@@ -3370,7 +3382,7 @@ static ImBuf *image_acquire_ibuf(Image *ima, ImageUser *iuser, void **lock_r)
 			if (ima->gen_depth == 0) ima->gen_depth = 24;
 			ibuf = add_ibuf_size(ima->gen_x, ima->gen_y, ima->name, ima->gen_depth, (ima->gen_flag & IMA_GEN_FLOAT) != 0, ima->gen_type,
 			                     color, &ima->colorspace_settings);
-			image_assign_ibuf(ima, ibuf, IMA_NO_INDEX, 0);
+			image_assign_ibuf(ima, ibuf, index, 0);
 			ima->ok = IMA_OK_LOADED;
 		}
 		else if (ima->source == IMA_SRC_VIEWER) {

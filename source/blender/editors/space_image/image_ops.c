@@ -2287,7 +2287,7 @@ static int image_new_exec(bContext *C, wmOperator *op)
 	char _name[MAX_ID_NAME - 2];
 	char *name = _name;
 	float color[4];
-	int width, height, floatbuf, gen_type, alpha;
+	int width, height, floatbuf, gen_type, alpha, stereo3d;
 
 	/* retrieve state */
 	sima = CTX_wm_space_image(C);
@@ -2307,11 +2307,12 @@ static int image_new_exec(bContext *C, wmOperator *op)
 	gen_type = RNA_enum_get(op->ptr, "generated_type");
 	RNA_float_get_array(op->ptr, "color", color);
 	alpha = RNA_boolean_get(op->ptr, "alpha");
+	stereo3d = RNA_boolean_get(op->ptr, "stereo3d");
 
 	if (!alpha)
 		color[3] = 1.0f;
 
-	ima = BKE_image_add_generated(bmain, width, height, name, alpha ? 32 : 24, floatbuf, gen_type, color);
+	ima = BKE_image_add_generated(bmain, width, height, name, alpha ? 32 : 24, floatbuf, gen_type, color, stereo3d);
 
 	if (!ima)
 		return OPERATOR_CANCELLED;
@@ -2389,6 +2390,7 @@ void IMAGE_OT_new(wmOperatorType *ot)
 	RNA_def_boolean(ot->srna, "float", 0, "32 bit Float", "Create image with 32 bit floating point bit depth");
 	prop = RNA_def_boolean(ot->srna, "texstencil", 0, "Stencil", "Set Image as stencil");
 	RNA_def_property_flag(prop, PROP_HIDDEN);
+	RNA_def_boolean(ot->srna, "stereo3d", 0, "Stereo 3D", "Create an image with left and right views");
 
 }
 

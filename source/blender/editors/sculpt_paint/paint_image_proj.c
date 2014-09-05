@@ -4930,7 +4930,7 @@ void paint_proj_mesh_data_ensure(bContext *C, Object *ob, wmOperator *op)
 
 			width = 1024;
 			height = 1024;
-			imapaint->canvas = BKE_image_add_generated(bmain, width, height, "Canvas", 32, false, IMA_GENTYPE_BLANK, color);
+			imapaint->canvas = BKE_image_add_generated(bmain, width, height, "Canvas", 32, false, IMA_GENTYPE_BLANK, color, false);
 			
 			GPU_drawobject_free(ob->derivedFinal);
 			
@@ -4971,7 +4971,7 @@ void paint_proj_mesh_data_ensure(bContext *C, Object *ob, wmOperator *op)
 
 			width = 1024;
 			height = 1024;
-			imapaint->stencil = BKE_image_add_generated(bmain, width, height, "Stencil", 32, false, IMA_GENTYPE_BLANK, color);
+			imapaint->stencil = BKE_image_add_generated(bmain, width, height, "Stencil", 32, false, IMA_GENTYPE_BLANK, color, false);
 		}
 	}
 }
@@ -5058,7 +5058,7 @@ bool proj_paint_add_slot(bContext *C, Material *ma, wmOperator *op)
 					}
 
 					ima = mtex->tex->ima = BKE_image_add_generated(bmain, width, height, imagename, alpha ? 32 : 24, use_float,
-					                                               gen_type, color);
+					                                               gen_type, color, false);
 
 					BKE_texpaint_slot_refresh_cache(scene, ma);
 					BKE_image_signal(ima, NULL, IMA_SIGNAL_USER_NEW_IMAGE);
