@@ -2689,7 +2689,11 @@ static ImBuf *image_load_sequence_file(Image *ima, ImageUser *iuser, int frame)
 	for (i = 0; i < totfiles; i++) {
 		ImageUser iuser_t;
 
-		iuser_t = *iuser;
+		if (iuser)
+			iuser_t = *iuser;
+		else
+			iuser_t.framenr = ima->lastframe;
+
 		iuser_t.view = i;
 
 		/* get the correct filepath */
@@ -2867,7 +2871,7 @@ static ImBuf *image_load_image_file(Image *ima, ImageUser *iuser, int cfra)
 	struct ImBuf **ibuf;
 	struct ImBuf *r_ibuf;
 	char **str;
-	bool assign = false;
+		bool assign = false;
 	int flag;
 	const bool is_multiview = (ima->flag & IMA_IS_MULTIVIEW) != 0;
 	const size_t totfiles = image_num_files(ima);
@@ -2908,7 +2912,11 @@ static ImBuf *image_load_image_file(Image *ima, ImageUser *iuser, int cfra)
 		for (i = 0; i < totfiles; i++) {
 			ImageUser iuser_t;
 
-			iuser_t = *iuser;
+			if (iuser)
+				iuser_t = *iuser;
+			else
+				iuser_t.framenr = ima->lastframe;
+
 			iuser_t.view = i;
 
 			BKE_image_user_file_path(&iuser_t, ima, str[i]);
@@ -3226,7 +3234,7 @@ static size_t image_get_multiview_index(Image *ima, ImageUser *iuser)
 		}
 	}
 	else if ((ima->flag & IMA_IS_MULTIVIEW)) {
-		return iuser ? iuser->multi_index : IMA_NO_INDEX;
+		return iuser ? iuser->multi_index : 0;
 	}
 
 	return IMA_NO_INDEX;
