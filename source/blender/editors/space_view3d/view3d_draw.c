@@ -1581,6 +1581,24 @@ exit:
 
 /* ************************************************************* */
 
+static void view3d_stereo_bgpic_setup(Scene *scene, View3D *v3d, Image *ima, ImageUser *iuser)
+{
+	if ((ima->flag & IMA_IS_STEREO)) {
+		iuser->flag |= IMA_SHOW_STEREO;
+
+		if ((scene->r.scemode & R_MULTIVIEW) == 0)
+			iuser->eye = STEREO_LEFT_ID;
+
+		/* show only left or right camera */
+		else if (v3d->stereo_camera != STEREO_3D_ID)
+			iuser->eye = v3d->stereo_camera;
+
+		BKE_image_multiview_index(ima, iuser);
+	}
+	else
+		iuser->flag &= ~IMA_SHOW_STEREO;
+}
+
 static void view3d_draw_bgpic(Scene *scene, ARegion *ar, View3D *v3d,
                               const bool do_foreground, const bool do_camera_frame)
 {
@@ -1621,6 +1639,7 @@ static void view3d_draw_bgpic(Scene *scene, ARegion *ar, View3D *v3d,
 					ibuf = NULL; /* frame is out of range, dont show */
 				}
 				else {
+					view3d_stereo_bgpic_setup(scene, v3d, ima, &bgpic->iuser);
 					ibuf = BKE_image_acquire_ibuf(ima, &bgpic->iuser, NULL);
 					releaseibuf = ibuf;
 				}
