@@ -98,7 +98,7 @@ static void wm_method_draw_stereo_epilepsy(wmWindow *win)
 	static bool view = false;
 	static double start = 0.0;
 
-	if( (PIL_check_seconds_timer() - start) >= win->stereo_display.epilepsy_interval) {
+	if( (PIL_check_seconds_timer() - start) >= win->stereo3d_format->epilepsy_interval) {
 		start = PIL_check_seconds_timer();
 		view = !view;
 	}
@@ -110,15 +110,15 @@ static void wm_method_draw_stereo_epilepsy(wmWindow *win)
 
 static GLuint left_interlace_mask[32];
 static GLuint right_interlace_mask[32];
-static enum eStereoInterlaceType interlace_prev_type = -1;
+static enum eStereo3dInterlaceType interlace_prev_type = -1;
 static char interlace_prev_swap = -1;
 
 static void wm_interlace_create_masks(wmWindow *win)
 {
 	GLuint pattern;
 	char i;
-	bool swap = (win->stereo_display.flag & S3D_INTERLACE_SWAP);
-	enum eStereoInterlaceType interlace_type = win->stereo_display.interlace_type;
+	bool swap = (win->stereo3d_format->flag & S3D_INTERLACE_SWAP);
+	enum eStereo3dInterlaceType interlace_type = win->stereo3d_format->interlace_type;
 
 	if (interlace_prev_type == interlace_type && interlace_prev_swap == swap)
 		return;
@@ -189,7 +189,7 @@ static void wm_method_draw_stereo_anaglyph(wmWindow *win)
 		drawdata = BLI_findlink(&win->drawdata, (view * 2) + 1);
 
 		bit = view + 1;
-		switch(win->stereo_display.anaglyph_type) {
+		switch(win->stereo3d_format->anaglyph_type) {
 			case S3D_ANAGLYPH_REDCYAN:
 				glColorMask(1&bit, 2&bit, 2&bit, false);
 				break;
@@ -216,7 +216,7 @@ static void wm_method_draw_stereo_sidebyside(wmWindow *win)
 	float alpha = 1.0f;
 	int view;
 	int soffx;
-	bool cross_eyed = (win->stereo_display.flag & S3D_SIDEBYSIDE_CROSSEYED);
+	bool cross_eyed = (win->stereo3d_format->flag & S3D_SIDEBYSIDE_CROSSEYED);
 
 	for (view = 0; view < 2; view ++) {
 		drawdata = BLI_findlink(&win->drawdata, (view * 2) + 1);
@@ -347,7 +347,7 @@ static void wm_method_draw_stereo_topbottom(wmWindow *win)
 
 void wm_method_draw_stereo(const bContext *UNUSED(C), wmWindow *win)
 {
-	switch (win->stereo_display.display_mode)
+	switch (win->stereo3d_format->display_mode)
 	{
 		case S3D_DISPLAY_ANAGLYPH:
 			wm_method_draw_stereo_anaglyph(win);
@@ -448,7 +448,7 @@ bool WM_stereo_enabled(const bContext *C, wmWindow *win, bool only_fullscreen_te
 	if ((only_fullscreen_test == false) && (wm_stereo_required(C, screen) == false))
 		return false;
 
-	if (wm_stereo_need_fullscreen(win->stereo_display.display_mode))
+	if (wm_stereo_need_fullscreen(win->stereo3d_format->display_mode))
 		return (GHOST_GetWindowState(win->ghostwin) == GHOST_kWindowStateFullScreen);
 
 	return true;
@@ -457,7 +457,7 @@ bool WM_stereo_enabled(const bContext *C, wmWindow *win, bool only_fullscreen_te
 static void wm_stereo_set_properties(bContext *C, wmOperator *op)
 {
 	wmWindow *win = CTX_wm_window(C);
-	StereoDisplay *s3d = &win->stereo_display;
+	Stereo3dFormat *s3d = win->stereo3d_format;
 
 	s3d->display_mode = RNA_enum_get(op->ptr, "display_mode");
 	s3d->anaglyph_type = RNA_enum_get(op->ptr, "anaglyph_type");
@@ -488,7 +488,7 @@ int wm_stereo_toggle_exec(bContext *C, wmOperator *op)
 	state = GHOST_GetWindowState(win->ghostwin);
 
 	/* pagelfip requires a new window to be created with the proper OS flags */
-	if (win->stereo_display.display_mode == S3D_DISPLAY_PAGEFLIP) {
+	if (win->stereo3d_format->display_mode == S3D_DISPLAY_PAGEFLIP) {
 		if (wm_window_duplicate_exec(C, op) == OPERATOR_FINISHED) {
 			wm_window_close(C, wm, win);
 			win = (wmWindow *)wm->windows.last;
@@ -499,7 +499,7 @@ int wm_stereo_toggle_exec(bContext *C, wmOperator *op)
 		}
 	}
 
-	if (wm_stereo_need_fullscreen(win->stereo_display.display_mode)) {
+	if (wm_stereo_need_fullscreen(win->stereo3d_format->display_mode)) {
 		if (state != GHOST_kWindowStateFullScreen)
 			GHOST_SetWindowState(win->ghostwin, GHOST_kWindowStateFullScreen);
 	}
@@ -511,7 +511,7 @@ int wm_stereo_toggle_exec(bContext *C, wmOperator *op)
 int wm_stereo_toggle_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
 {
 	wmWindow *win = CTX_wm_window(C);
-	StereoDisplay *s3d = &win->stereo_display;
+	Stereo3dFormat *s3d = win->stereo3d_format;
 	PropertyRNA *prop;
 
 	prop = RNA_struct_find_property(op->ptr, "display_mode");

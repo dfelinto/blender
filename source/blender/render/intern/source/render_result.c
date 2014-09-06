@@ -1066,7 +1066,7 @@ bool RE_WriteRenderResult(ReportList *reports, RenderResult *rr, const char *fil
 		rectf_stereo = MEM_mallocN(sizeof(float *) * ((totpasses / 2) + 1), "RenderResult stereo pairs");
 
 		IMB_exr_add_view(exrhandle, "");
-		IMB_stereo_dimensions(imf->stereo_output.display_mode, ((imf->stereo_output.flag & S3D_UNSQUEEZED_FRAME) == 0), rr->rectx, rr->recty, &width, &height);
+		IMB_stereo_dimensions(imf->stereo3d_format.display_mode, ((imf->stereo3d_format.flag & S3D_UNSQUEEZED_FRAME) == 0), rr->rectx, rr->recty, &width, &height);
 
 		for (i = 0; i < 2; i++) {
 			rv[i] = BLI_findstring(&rr->views, names[i], offsetof(RenderView, name));

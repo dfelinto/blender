@@ -100,7 +100,7 @@ void OutputFileNode::convertToOperations(NodeConverter &converter, const Composi
 					((OutputOpenExrMultiViewOperation *)outputOperation)->add_layer(sockdata->layer, input->getDataType(), true);
 					converter.mapInputSocket(input, outputOperation->getInputSocket(0));
 				}
-				else if (is_mono || (format->views_output == R_IMF_VIEWS_INDIVIDUAL)) {
+				else if (is_mono || (format->views_format == R_IMF_VIEWS_INDIVIDUAL)) {
 					outputOperation = new OutputSingleLayerOperation(
 					        context.getRenderData(), context.getbNodeTree(), input->getDataType(), format, path,
 					        context.getViewSettings(), context.getDisplaySettings(), context.getViewName());

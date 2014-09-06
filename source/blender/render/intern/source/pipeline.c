@@ -3082,7 +3082,7 @@ bool RE_WriteRenderViewsImage(ReportList *reports, RenderResult *rr, Scene *scen
 	}
 
 	/* mono, legacy code */
-	else if (is_mono || (rd->im_format.views_output == R_IMF_VIEWS_INDIVIDUAL))
+	else if (is_mono || (rd->im_format.views_format == R_IMF_VIEWS_INDIVIDUAL))
 	{
 		RenderView *rv;
 		size_t view_id;
@@ -3140,7 +3140,7 @@ bool RE_WriteRenderViewsImage(ReportList *reports, RenderResult *rr, Scene *scen
 		}
 	}
 	else { /* R_IMF_VIEWS_STEREO_3D */
-		BLI_assert(scene->r.im_format.views_output == R_IMF_VIEWS_STEREO_3D);
+		BLI_assert(scene->r.im_format.views_format == R_IMF_VIEWS_STEREO_3D);
 
 		if (rd->im_format.imtype == R_IMF_IMTYPE_MULTILAYER) {
 			RE_WriteRenderResult(reports, rr, name, &rd->im_format, false, NULL);
@@ -3216,7 +3216,7 @@ bool RE_WriteRenderViewsMovie(ReportList *reports, RenderResult *rr, Scene *scen
 
 	is_mono = BLI_countlist(&rr->views) < 2;
 
-	if (is_mono || (scene->r.im_format.views_output == R_IMF_VIEWS_INDIVIDUAL)) {
+	if (is_mono || (scene->r.im_format.views_format == R_IMF_VIEWS_INDIVIDUAL)) {
 		size_t view_id;
 		for (view_id = 0; view_id < totvideos; view_id++) {
 			bool do_free = false;
@@ -3252,7 +3252,7 @@ bool RE_WriteRenderViewsMovie(ReportList *reports, RenderResult *rr, Scene *scen
 		bool do_free[2] = {false, false};
 		size_t i;
 
-		BLI_assert((totvideos == 1) && (scene->r.im_format.views_output == R_IMF_VIEWS_STEREO_3D));
+		BLI_assert((totvideos == 1) && (scene->r.im_format.views_format == R_IMF_VIEWS_STEREO_3D));
 
 		for (i = 0; i < 2; i++) {
 			int view_id = BLI_findstringindex(&rr->views, names[i], offsetof(RenderView, name));

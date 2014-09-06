@@ -322,7 +322,7 @@ void BKE_image_free(Image *ima)
 	}
 
 	image_free_views(ima);
-	MEM_freeN(ima->stereo_format);
+	MEM_freeN(ima->stereo3d_format);
 }
 
 /* only image block itself */
@@ -346,7 +346,7 @@ static Image *image_alloc(Main *bmain, const char *name, short source, short typ
 			ima->flag |= IMA_VIEW_AS_RENDER;
 
 		BKE_color_managed_colorspace_settings_init(&ima->colorspace_settings);
-		ima->stereo_format = MEM_mallocN(sizeof(StereoDisplay), "Image Stereo Format");
+		ima->stereo3d_format = MEM_mallocN(sizeof(Stereo3dFormat), "Image Stereo Format");
 	}
 
 	return ima;
@@ -415,7 +415,7 @@ Image *BKE_image_copy(Main *bmain, Image *ima)
 	if (ima->packedfile)
 		nima->packedfile = dupPackedFile(ima->packedfile);
 
-	nima->stereo_format = MEM_dupallocN(ima->stereo_format);
+	nima->stereo3d_format = MEM_dupallocN(ima->stereo3d_format);
 	copy_image_views(&nima->views, &ima->views);
 
 	return nima;

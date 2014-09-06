@@ -3335,7 +3335,7 @@ static void direct_link_image(FileData *fd, Image *ima)
 
 	ima->packedfile = direct_link_packedfile(fd, ima->packedfile);
 	ima->preview = direct_link_preview_image(fd, ima->preview);
-	ima->stereo_format = newdataadr(fd, ima->stereo_format);
+	ima->stereo3d_format = newdataadr(fd, ima->stereo3d_format);
 	ima->ok = 1;
 }
 
@@ -5579,6 +5579,7 @@ static void direct_link_windowmanager(FileData *fd, wmWindowManager *wm)
 		win->cursor      = 0;
 		win->lastcursor  = 0;
 		win->modalcursor = 0;
+		win->stereo3d_format = newdataadr(fd, win->stereo3d_format);
 	}
 	
 	BLI_listbase_clear(&wm->timers);
@@ -7509,7 +7510,6 @@ static void do_versions_userdef(FileData *fd, BlendFileData *bfd)
 		user->walk_navigation.jump_height = 0.4f;      /* m */
 		user->walk_navigation.teleport_time = 0.2f; /* s */
 	}
-
 }
 
 static void do_versions(FileData *fd, Library *lib, Main *main)
@@ -7631,7 +7631,7 @@ static BHead *read_userdef(BlendFileData *bfd, FileData *fd, BHead *bhead)
 	link_list(fd, &user->user_keymaps);
 	link_list(fd, &user->addons);
 	link_list(fd, &user->autoexec_paths);
-	
+
 	for (keymap=user->user_keymaps.first; keymap; keymap=keymap->next) {
 		keymap->modal_items= NULL;
 		keymap->poll = NULL;

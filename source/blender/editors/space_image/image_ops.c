@@ -1059,7 +1059,7 @@ static void image_open_multiview(wmOperator *op, Scene *scene, Image *ima)
 	if (!is_multiview) {
 		goto monoview;
 	}
-	else if (imf->views_output == R_IMF_VIEWS_STEREO_3D) {
+	else if (imf->views_format == R_IMF_VIEWS_STEREO_3D) {
 		size_t i;
 		const char *names[2] = {STEREO_LEFT_NAME, STEREO_RIGHT_NAME};
 
@@ -1073,7 +1073,7 @@ static void image_open_multiview(wmOperator *op, Scene *scene, Image *ima)
 			BLI_addtail(&ima->views, iv);
 		}
 
-		*ima->stereo_format = imf->stereo_output;
+		*ima->stereo3d_format = imf->stereo3d_format;
 		ima->views_format = R_IMF_VIEWS_STEREO_3D;
 		return;
 	}
@@ -1809,7 +1809,7 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 			}
 		}
 		else {
-			if (imf->imtype != R_IMF_IMTYPE_MULTIVIEW && imf->views_output == R_IMF_VIEWS_STEREO_3D) {
+			if (imf->imtype != R_IMF_IMTYPE_MULTIVIEW && imf->views_format == R_IMF_VIEWS_STEREO_3D) {
 				if ((ima->flag & IMA_IS_STEREO) == 0) {
 					BKE_reportf(op->reports, RPT_ERROR, "Did not write, the image doesn't have a \"%s\" and \"%s\" views",
 					           STEREO_LEFT_NAME, STEREO_RIGHT_NAME);
@@ -1850,7 +1850,7 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 		}
 
 		/* individual multiview images */
-		else if (simopts->im_format.views_output == R_IMF_VIEWS_INDIVIDUAL){
+		else if (simopts->im_format.views_format == R_IMF_VIEWS_INDIVIDUAL){
 			RenderView *rv;
 			size_t i;
 			unsigned char planes = ibuf->planes;
@@ -1897,7 +1897,7 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 			}
 		}
 		/* stereo (multiview) images */
-		else if (simopts->im_format.views_output == R_IMF_VIEWS_STEREO_3D) {
+		else if (simopts->im_format.views_format == R_IMF_VIEWS_STEREO_3D) {
 			if (imf->imtype == R_IMF_IMTYPE_MULTILAYER) {
 				ok = RE_WriteRenderResult(op->reports, rr, simopts->filepath, imf, false, NULL);
 				save_image_post(op, ibuf, ima, ok, true, relbase, relative, do_newpath, simopts->filepath);

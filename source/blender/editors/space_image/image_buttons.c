@@ -1031,8 +1031,8 @@ void uiTemplateImageViews(uiLayout *layout, PointerRNA *imfptr)
 {
 	ImageFormatData *imf = imfptr->data;
 	PropertyRNA *prop;
-	PointerRNA stereo_output_ptr;
-	StereoDisplay *stereo_output = &imf->stereo_output;
+	PointerRNA stereo3d_format_ptr;
+	Stereo3dFormat *stereo3d_format = &imf->stereo3d_format;
 
 	uiLayout *col, *box;
 
@@ -1042,38 +1042,38 @@ void uiTemplateImageViews(uiLayout *layout, PointerRNA *imfptr)
 
 	col = uiLayoutColumn(layout, false);
 
-	uiItemL(col, IFACE_("Views Output:"), ICON_NONE);
-	uiItemR(uiLayoutRow(col, false), imfptr, "views_output", UI_ITEM_R_EXPAND, NULL, ICON_NONE);
+	uiItemL(col, IFACE_("Views Format:"), ICON_NONE);
+	uiItemR(uiLayoutRow(col, false), imfptr, "views_format", UI_ITEM_R_EXPAND, NULL, ICON_NONE);
 
-	prop = RNA_struct_find_property(imfptr, "stereo_output");
-	stereo_output_ptr = RNA_property_pointer_get(imfptr, prop);
+	prop = RNA_struct_find_property(imfptr, "stereo_3d_format");
+	stereo3d_format_ptr = RNA_property_pointer_get(imfptr, prop);
 
 	box = uiLayoutBox(col);
-	uiLayoutSetActive(box, imf->views_output == R_IMF_VIEWS_STEREO_3D);
+	uiLayoutSetActive(box, imf->views_format == R_IMF_VIEWS_STEREO_3D);
 	col = uiLayoutColumn(box, false);
 
-	uiItemR(col, &stereo_output_ptr, "stereo_mode", 0, NULL, ICON_NONE);
+	uiItemR(col, &stereo3d_format_ptr, "display_mode", 0, NULL, ICON_NONE);
 
-	switch (stereo_output->display_mode) {
+	switch (stereo3d_format->display_mode) {
 		case S3D_DISPLAY_ANAGLYPH:
 		{
-			uiItemR(col, &stereo_output_ptr, "anaglyph_type", 0, NULL, ICON_NONE);
+			uiItemR(col, &stereo3d_format_ptr, "anaglyph_type", 0, NULL, ICON_NONE);
 			break;
 		}
 		case S3D_DISPLAY_INTERLACE:
 		{
-			uiItemR(col, &stereo_output_ptr, "interlace_type", 0, NULL, ICON_NONE);
-			uiItemR(col, &stereo_output_ptr, "use_interlace_swap", 0, NULL, ICON_NONE);
+			uiItemR(col, &stereo3d_format_ptr, "interlace_type", 0, NULL, ICON_NONE);
+			uiItemR(col, &stereo3d_format_ptr, "use_interlace_swap", 0, NULL, ICON_NONE);
 			break;
 		}
 		case S3D_DISPLAY_SIDEBYSIDE:
 		{
-			uiItemR(col, &stereo_output_ptr, "use_sidebyside_crosseyed", 0, NULL, ICON_NONE);
+			uiItemR(col, &stereo3d_format_ptr, "use_sidebyside_crosseyed", 0, NULL, ICON_NONE);
 			/* fall-through */
 		}
 		case S3D_DISPLAY_TOPBOTTOM:
 		{
-			uiItemR(col, &stereo_output_ptr, "use_squeezed_frame", 0, NULL, ICON_NONE);
+			uiItemR(col, &stereo3d_format_ptr, "use_squeezed_frame", 0, NULL, ICON_NONE);
 			break;
 		}
 	}

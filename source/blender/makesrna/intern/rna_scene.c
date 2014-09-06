@@ -333,6 +333,37 @@ EnumPropertyItem bake_save_mode_items[] = {
 	{0, NULL, 0, NULL, NULL}
 };
 
+EnumPropertyItem views_format_items[] = {
+	{R_IMF_VIEWS_INDIVIDUAL, "INDIVIDUAL", 0, "Individual", ""},
+	{R_IMF_VIEWS_STEREO_3D, "STEREO_3D", 0, "Stereo 3D", ""},
+	{0, NULL, 0, NULL, NULL}
+};
+
+EnumPropertyItem stereo3d_display_items[] = {
+	{S3D_DISPLAY_ANAGLYPH, "ANAGLYPH", 0, "Anaglyph", "Render two differently filtered colored images for each eye. Anaglyph glasses are required"},
+	/*		{S3D_DISPLAY_BLURAY, "BLURAY", 0, "Blu-ray", ""}, */
+	{S3D_DISPLAY_EPILEPSY, "EPILEPSY", 0, "Dr. Epilepsy", "Wiggle stereoscopy. Quickly alternate between images for left and right eye"},
+	{S3D_DISPLAY_INTERLACE, "INTERLACE", 0, "Interlace", "Render two images for each eye into one interlaced image. 3D-ready monitor is requiered"},
+	{S3D_DISPLAY_PAGEFLIP, "TIMESEQUENTIAL", 0, "Time Sequential", "Renders alternate eyes (also known as pageflip). It requires Quadbuffer support in the graphic card"},
+	{S3D_DISPLAY_SIDEBYSIDE, "SIDEBYSIDE", 0, "Side-by-Side", "Render images for left and right eye side-by-side"},
+	{S3D_DISPLAY_TOPBOTTOM, "TOPBOTTOM", 0, "Top-Bottom", "Render images for left and right eye one above another"},
+	{0, NULL, 0, NULL, NULL}
+};
+
+EnumPropertyItem stereo3d_anaglyph_type_items[] = {
+	{S3D_ANAGLYPH_REDCYAN, "RED_CYAN", 0, "Red-Cyan", ""},
+	{S3D_ANAGLYPH_GREENMAGENTA, "GREEN_MAGENTA", 0, "Green-Magenta", ""},
+	{S3D_ANAGLYPH_YELLOWBLUE, "YELLOW_BLUE", 0, "Yellow-Blue", ""},
+	{0, NULL, 0, NULL, NULL}
+};
+
+EnumPropertyItem stereo3d_interlace_type_items[] = {
+	{S3D_INTERLACE_ROW, "ROW_INTERLEAVED", 0, "Row Interleaved", ""},
+	{S3D_INTERLACE_COLUMN, "COLUMN_INTERLEAVED", 0, "Column Interleaved", ""},
+	{S3D_INTERLACE_CHECKERBOARD, "CHECKERBOARD_INTERLEAVED", 0, "Checkerboard Interleaved", ""},
+	{0, NULL, 0, NULL, NULL}
+};
+
 #ifdef RNA_RUNTIME
 
 #include "DNA_anim_types.h"
@@ -4050,12 +4081,12 @@ static void rna_def_render_views(BlenderRNA *brna, PropertyRNA *cprop)
 	RNA_def_property_clear_flag(parm, PROP_THICK_WRAP);
 }
 
-static void rna_def_image_format_stereo_output(BlenderRNA *brna)
+static void rna_def_image_format_stereo3d_format(BlenderRNA *brna)
 {
 	StructRNA *srna;
 	PropertyRNA *prop;
 
-	static EnumPropertyItem stereo_output_items[] = {
+	static EnumPropertyItem stereo3d_display_items[] = {
 		{S3D_DISPLAY_ANAGLYPH, "ANAGLYPH", 0, "Anaglyph", "Render two differently filtered colored images for each eye. Anaglyph glasses are required"},
 		{S3D_DISPLAY_INTERLACE, "INTERLACE", 0, "Interlace", "Render two images for each eye into one interlaced image. 3D-ready monitor is requiered"},
 		{S3D_DISPLAY_SIDEBYSIDE, "SIDEBYSIDE", 0, "Side-by-Side", "Render images for left and right eye side-by-side"},
@@ -4064,22 +4095,22 @@ static void rna_def_image_format_stereo_output(BlenderRNA *brna)
 		{0, NULL, 0, NULL, NULL}
 	};
 
-	srna = RNA_def_struct(brna, "StereoOutput", NULL);
-	RNA_def_struct_sdna(srna, "StereoDisplay");
+	srna = RNA_def_struct(brna, "Stereo3dFormat", NULL);
+	RNA_def_struct_sdna(srna, "Stereo3dFormat");
 	RNA_def_struct_clear_flag(srna, STRUCT_UNDO);
 	RNA_def_struct_ui_text(srna, "Stereo Output", "Settings for stereo output");
 
-	prop = RNA_def_property(srna, "stereo_mode", PROP_ENUM, PROP_NONE);
+	prop = RNA_def_property(srna, "display_mode", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "display_mode");
-	RNA_def_property_enum_items(prop, stereo_output_items);
+	RNA_def_property_enum_items(prop, stereo3d_display_items);
 	RNA_def_property_ui_text(prop, "Stereo Mode", "");
 
 	prop = RNA_def_property(srna, "anaglyph_type", PROP_ENUM, PROP_NONE);
-	RNA_def_property_enum_items(prop, stereo_anaglyph_type_items);
+	RNA_def_property_enum_items(prop, stereo3d_anaglyph_type_items);
 	RNA_def_property_ui_text(prop, "Anaglyph Type", "");
 
 	prop = RNA_def_property(srna, "interlace_type", PROP_ENUM, PROP_NONE);
-	RNA_def_property_enum_items(prop, stereo_interlace_type_items);
+	RNA_def_property_enum_items(prop, stereo3d_interlace_type_items);
 	RNA_def_property_ui_text(prop, "Interlace Type", "");
 
 	prop = RNA_def_property(srna, "use_interlace_swap", PROP_BOOLEAN, PROP_BOOLEAN);
@@ -4111,16 +4142,10 @@ static void rna_def_scene_image_format_data(BlenderRNA *brna)
 	};
 #endif
 
-	static EnumPropertyItem views_output_items[] = {
-		{R_IMF_VIEWS_INDIVIDUAL, "INDIVIDUAL", 0, "Individual", ""},
-		{R_IMF_VIEWS_STEREO_3D, "STEREO_3D", 0, "Stereo 3D", ""},
-		{0, NULL, 0, NULL, NULL}
-	};
-
 	StructRNA *srna;
 	PropertyRNA *prop;
 
-	rna_def_image_format_stereo_output(brna);
+	rna_def_image_format_stereo3d_format(brna);
 
 	srna = RNA_def_struct(brna, "ImageFormatSettings", NULL);
 	RNA_def_struct_sdna(srna, "ImageFormatData");
@@ -4241,17 +4266,17 @@ static void rna_def_scene_image_format_data(BlenderRNA *brna)
 	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
 
 	/* multiview */
-	prop = RNA_def_property(srna, "views_output", PROP_ENUM, PROP_NONE);
-	RNA_def_property_enum_sdna(prop, NULL, "views_output");
-	RNA_def_property_enum_items(prop, views_output_items);
-	RNA_def_property_ui_text(prop, "Views Output", "Mode to save scene views");
+	prop = RNA_def_property(srna, "views_format", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_sdna(prop, NULL, "views_format");
+	RNA_def_property_enum_items(prop, views_format_items);
+	RNA_def_property_ui_text(prop, "Views Format", "Format of multiview media");
 	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
 
-	prop = RNA_def_property(srna, "stereo_output", PROP_POINTER, PROP_NONE);
-	RNA_def_property_pointer_sdna(prop, NULL, "stereo_output");
+	prop = RNA_def_property(srna, "stereo_3d_format", PROP_POINTER, PROP_NONE);
+	RNA_def_property_pointer_sdna(prop, NULL, "stereo3d_format");
 	RNA_def_property_flag(prop, PROP_NEVER_NULL);
-	RNA_def_property_struct_type(prop, "StereoOutput");
-	RNA_def_property_ui_text(prop, "Stereo Output", "Settings for stereo output");
+	RNA_def_property_struct_type(prop, "Stereo3dFormat");
+	RNA_def_property_ui_text(prop, "Stereo 3D Format", "Settings for stereo 3d");
 
 	/* color management */
 	prop = RNA_def_property(srna, "view_settings", PROP_POINTER, PROP_NONE);

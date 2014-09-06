@@ -735,6 +735,19 @@ static void rna_def_image(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Alpha Mode", "Representation of alpha information in the RGBA pixels");
 	RNA_def_property_update(prop, NC_IMAGE | ND_DISPLAY, "rna_Image_colormanage_update");
 
+	/* multiview */
+	prop = RNA_def_property(srna, "views_format", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_sdna(prop, NULL, "views_format");
+	RNA_def_property_enum_items(prop, views_format_items);
+	RNA_def_property_ui_text(prop, "Views Format", "Mode to save scene views");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+	prop = RNA_def_property(srna, "stereo_3d_format", PROP_POINTER, PROP_NONE);
+	RNA_def_property_pointer_sdna(prop, NULL, "stereo3d_format");
+	RNA_def_property_flag(prop, PROP_NEVER_NULL);
+	RNA_def_property_struct_type(prop, "Stereo3dFormat");
+	RNA_def_property_ui_text(prop, "Stereo 3D Format", "Settings for stereo 3d");
+
 	RNA_api_image(srna);
 }
 

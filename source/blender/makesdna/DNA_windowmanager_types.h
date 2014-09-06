@@ -60,7 +60,7 @@ struct PointerRNA;
 struct ReportList;
 struct Report;
 struct uiLayout;
-struct StereoDisplay;
+struct Stereo3dFormat;
 
 #define OP_MAX_TYPENAME 64
 #define KMAP_MAX_NAME   64
@@ -208,7 +208,7 @@ typedef struct wmWindow {
 	ListBase subwindows;          /* opengl stuff for sub windows, see notes in wm_subwindow.c */
 	ListBase gesture;             /* gesture stuff */
 
-	struct StereoDisplay stereo_display; /* properties for stereoscopic displays */
+	struct Stereo3dFormat *stereo3d_format; /* properties for stereoscopic displays */
 } wmWindow;
 
 /* These two Lines with # tell makesdna this struct can be excluded. */

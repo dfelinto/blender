@@ -132,7 +132,7 @@ typedef struct Image {
 	char eye; /* for viewer node stereoscopy */
 	char views_format;
 	ListBase views;
-	struct StereoDisplay *stereo_format;
+	struct Stereo3dFormat *stereo3d_format;
 } Image;
 
 

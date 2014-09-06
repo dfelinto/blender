@@ -4559,9 +4559,9 @@ static void WM_OT_stereo_toggle(wmOperatorType *ot)
 	ot->invoke = wm_stereo_toggle_invoke;
 	ot->poll = WM_operator_winactive;
 
-	RNA_def_enum(ot->srna, "display_mode", stereo_display_items, S3D_DISPLAY_ANAGLYPH, "Display Mode", "");
-	RNA_def_enum(ot->srna, "anaglyph_type", stereo_anaglyph_type_items, S3D_ANAGLYPH_REDCYAN, "Anaglyph Type", "");
-	RNA_def_enum(ot->srna, "interlace_type", stereo_interlace_type_items, S3D_INTERLACE_ROW, "Interlace Type", "");
+	RNA_def_enum(ot->srna, "display_mode", stereo3d_display_items, S3D_DISPLAY_ANAGLYPH, "Display Mode", "");
+	RNA_def_enum(ot->srna, "anaglyph_type", stereo3d_anaglyph_type_items, S3D_ANAGLYPH_REDCYAN, "Anaglyph Type", "");
+	RNA_def_enum(ot->srna, "interlace_type", stereo3d_interlace_type_items, S3D_INTERLACE_ROW, "Interlace Type", "");
 	RNA_def_float(ot->srna, "epilepsy_interval", 0.1f, 0.01f, 10.0f, "Interval",
 	              "Preferred interval in seconds between switching left/right views", 0.05f, 1.0f);
 	RNA_def_boolean(ot->srna, "use_interlace_swap", false, "Swap Left/Right",

@@ -2106,8 +2106,7 @@ static void write_images(WriteData *wd, ListBase *idbase)
 
 			for (iv = ima->views.first; iv; iv = iv->next)
 				writestruct(wd, DATA, "ImageView", 1, iv);
-			writestruct(wd, DATA, "StereoDisplay", 1, ima->stereo_format);
-
+			writestruct(wd, DATA, "Stereo3dFormat", 1, ima->stereo3d_format);
 		}
 		ima= ima->id.next;
 	}
@@ -2505,8 +2504,10 @@ static void write_windowmanagers(WriteData *wd, ListBase *lb)
 	for (wm= lb->first; wm; wm= wm->id.next) {
 		writestruct(wd, ID_WM, "wmWindowManager", 1, wm);
 		
-		for (win= wm->windows.first; win; win= win->next)
+		for (win= wm->windows.first; win; win= win->next) {
 			writestruct(wd, DATA, "wmWindow", 1, win);
+			writestruct(wd, DATA, "Stereo3dFormat", 1, win->stereo3d_format);
+		}
 	}
 }
 

@@ -209,7 +209,9 @@ void wm_window_free(bContext *C, wmWindowManager *wm, wmWindow *win)
 	wm_draw_data_free(win);
 
 	wm_ghostwindow_destroy(win);
-	
+
+	MEM_freeN(win->stereo3d_format);
+
 	MEM_freeN(win);
 }
 
@@ -233,6 +235,8 @@ wmWindow *wm_window_new(bContext *C)
 	
 	BLI_addtail(&wm->windows, win);
 	win->winid = find_free_winid(wm);
+
+	win->stereo3d_format = MEM_mallocN(sizeof(Stereo3dFormat), "Stereo 3D Format (window)");
 
 	return win;
 }
@@ -260,7 +264,7 @@ wmWindow *wm_window_copy(bContext *C, wmWindow *winorig)
 
 	win->drawdata.first = win->drawdata.last = NULL;
 
-	win->stereo_display = winorig->stereo_display;
+	win->stereo3d_format = MEM_dupallocN(winorig->stereo3d_format);
 
 	return win;
 }
@@ -355,7 +359,7 @@ static void wm_window_add_ghostwindow(const char *title, wmWindow *win)
 		multisamples = U.ogl_multisamples;
 	
 	/* a new window is created when pageflip mode is required for a window */
-	stereo = win->stereo_display.display_mode == S3D_DISPLAY_PAGEFLIP;
+	stereo = win->stereo3d_format->display_mode == S3D_DISPLAY_PAGEFLIP;
 
 	wm_get_screensize(&scr_w, &scr_h);
 	posy = (scr_h - win->posy - win->sizey);
@@ -505,7 +509,6 @@ wmWindow *WM_window_open(bContext *C, const rcti *rect)
 	win->sizey = BLI_rcti_size_y(rect);
 
 	win->drawmethod = U.wmdrawmethod;
-	win->stereo_display = U.stereo_display;
 
 	WM_check(C);
 	
