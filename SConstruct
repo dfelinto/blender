@@ -848,7 +848,7 @@ if 'blender' in B.targets or not env['WITH_BF_NOBLENDER']:
         lenv.Append(LINKFLAGS = env['PLATFORM_LINKFLAGS'])
         targetpath = B.root_build_dir + '/blender'
         launcher_obj = [env.Object(B.root_build_dir + 'source/creator/creator/creator_launch_win', ['#source/creator/creator_launch_win.c'])]
-        env.BlenderProg(B.root_build_dir, 'blender', [launcher_obj] + B.resources, [], [], 'blender')
+        env.BlenderProg(B.root_build_dir, 'blender', [launcher_obj] + B.resources, ['bf_utfconv'] + thesyslibs, [B.root_build_dir+'/lib'] + thelibincs, 'blender')
 
     env.BlenderProg(B.root_build_dir, blender_progname, creob + mainlist + thestatlibs + dobj, thesyslibs, [B.root_build_dir+'/lib'] + thelibincs, 'blender')
 if env['WITH_BF_PLAYER']:
@@ -1137,8 +1137,10 @@ if env['OURPLATFORM'] in ('win32-vc', 'win32-mingw', 'win64-vc', 'linuxcross'):
     if env['WITH_BF_PYTHON']:
         if env['BF_DEBUG']:
             dllsources.append('${BF_PYTHON_LIBPATH}/${BF_PYTHON_DLL}_d.dll')
+            dllsources.append('${BF_PYTHON_LIBPATH}/sqlite3_d.dll')
         else:
             dllsources.append('${BF_PYTHON_LIBPATH}/${BF_PYTHON_DLL}.dll')
+            dllsources.append('${BF_PYTHON_LIBPATH}/sqlite3.dll')
 
     if env['WITH_BF_ICONV']:
         if env['OURPLATFORM'] == 'win64-vc':

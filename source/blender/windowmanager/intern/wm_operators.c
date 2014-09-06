@@ -2601,13 +2601,31 @@ static int wm_link_append_exec(bContext *C, wmOperator *op)
 	return OPERATOR_FINISHED;
 }
 
-static void WM_OT_link_append(wmOperatorType *ot)
+static void wm_link_append_properties_common(wmOperatorType *ot, bool is_link)
 {
 	PropertyRNA *prop;
 
-	ot->name = "Link/Append from Library";
-	ot->idname = "WM_OT_link_append";
-	ot->description = "Link or Append from a Library .blend file";
+	/* better not save _any_ settings for this operator */
+	/* properties */
+	prop = RNA_def_boolean(ot->srna, "link", is_link,
+	                       "Link", "Link the objects or datablocks rather than appending");
+	RNA_def_property_flag(prop, PROP_SKIP_SAVE | PROP_HIDDEN);
+	prop = RNA_def_boolean(ot->srna, "autoselect", true,
+	                       "Select", "Select new objects");
+	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+	prop = RNA_def_boolean(ot->srna, "active_layer", true,
+	                       "Active Layer", "Put new objects on the active layer");
+	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+	prop = RNA_def_boolean(ot->srna, "instance_groups", is_link,
+	                       "Instance Groups", "Create Dupli-Group instances for each group");
+	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+}
+
+static void WM_OT_link(wmOperatorType *ot)
+{
+	ot->name = "Link from Library";
+	ot->idname = "WM_OT_link";
+	ot->description = "Link from a Library .blend file";
 	
 	ot->invoke = wm_link_append_invoke;
 	ot->exec = wm_link_append_exec;
@@ -2620,16 +2638,27 @@ static void WM_OT_link_append(wmOperatorType *ot)
 	        WM_FILESEL_FILEPATH | WM_FILESEL_DIRECTORY | WM_FILESEL_FILENAME | WM_FILESEL_RELPATH | WM_FILESEL_FILES,
 	        FILE_DEFAULTDISPLAY);
 	
-	/* better not save _any_ settings for this operator */
-	/* properties */
-	prop = RNA_def_boolean(ot->srna, "link", 1, "Link", "Link the objects or datablocks rather than appending");
-	RNA_def_property_flag(prop, PROP_SKIP_SAVE | PROP_HIDDEN);
-	prop = RNA_def_boolean(ot->srna, "autoselect", 1, "Select", "Select the linked objects");
-	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
-	prop = RNA_def_boolean(ot->srna, "active_layer", 1, "Active Layer", "Put the linked objects on the active layer");
-	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
-	prop = RNA_def_boolean(ot->srna, "instance_groups", 1, "Instance Groups", "Create instances for each group as a DupliGroup");
-	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+	wm_link_append_properties_common(ot, true);
+}
+
+static void WM_OT_append(wmOperatorType *ot)
+{
+	ot->name = "Append from Library";
+	ot->idname = "WM_OT_append";
+	ot->description = "Append from a Library .blend file";
+
+	ot->invoke = wm_link_append_invoke;
+	ot->exec = wm_link_append_exec;
+	ot->poll = wm_link_append_poll;
+
+	ot->flag |= OPTYPE_UNDO;
+
+	WM_operator_properties_filesel(
+		ot, FOLDERFILE | BLENDERFILE, FILE_LOADLIB, FILE_OPENFILE,
+		WM_FILESEL_FILEPATH | WM_FILESEL_DIRECTORY | WM_FILESEL_FILENAME | WM_FILESEL_FILES,
+		FILE_DEFAULTDISPLAY);
+
+	wm_link_append_properties_common(ot, false);
 }
 
 /* *************** recover last session **************** */
@@ -4562,7 +4591,8 @@ void wm_operatortype_init(void)
 	WM_operatortype_append(WM_OT_quit_blender);
 	WM_operatortype_append(WM_OT_open_mainfile);
 	WM_operatortype_append(WM_OT_revert_mainfile);
-	WM_operatortype_append(WM_OT_link_append);
+	WM_operatortype_append(WM_OT_link);
+	WM_operatortype_append(WM_OT_append);
 	WM_operatortype_append(WM_OT_recover_last_session);
 	WM_operatortype_append(WM_OT_recover_auto_save);
 	WM_operatortype_append(WM_OT_save_as_mainfile);
@@ -4790,10 +4820,8 @@ void wm_window_keymap(wmKeyConfig *keyconf)
 	WM_keymap_add_menu(keymap, "INFO_MT_file_open_recent", OKEY, KM_PRESS, KM_SHIFT | KM_CTRL, 0);
 	WM_keymap_add_item(keymap, "WM_OT_open_mainfile", OKEY, KM_PRESS, KM_CTRL, 0);
 	WM_keymap_add_item(keymap, "WM_OT_open_mainfile", F1KEY, KM_PRESS, 0, 0);
-	WM_keymap_add_item(keymap, "WM_OT_link_append", OKEY, KM_PRESS, KM_CTRL | KM_ALT, 0);
-	kmi = WM_keymap_add_item(keymap, "WM_OT_link_append", F1KEY, KM_PRESS, KM_SHIFT, 0);
-	RNA_boolean_set(kmi->ptr, "link", false);
-	RNA_boolean_set(kmi->ptr, "instance_groups", false);
+	WM_keymap_add_item(keymap, "WM_OT_link", OKEY, KM_PRESS, KM_CTRL | KM_ALT, 0);
+	WM_keymap_add_item(keymap, "WM_OT_append", F1KEY, KM_PRESS, KM_SHIFT, 0);
 
 	WM_keymap_add_item(keymap, "WM_OT_save_mainfile", SKEY, KM_PRESS, KM_CTRL, 0);
 	WM_keymap_add_item(keymap, "WM_OT_save_mainfile", WKEY, KM_PRESS, KM_CTRL, 0);

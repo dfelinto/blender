@@ -19,8 +19,7 @@ CCL_NAMESPACE_BEGIN
 #ifdef __VOLUME_SCATTER__
 
 ccl_device void kernel_path_volume_connect_light(KernelGlobals *kg, RNG *rng,
-	ShaderData *sd, float3 throughput, PathState *state, PathRadiance *L,
-	float num_samples_adjust)
+	ShaderData *sd, float3 throughput, PathState *state, PathRadiance *L)
 {
 #ifdef __EMISSION__
 	if(!kernel_data.integrator.use_direct_light)
@@ -51,7 +50,7 @@ ccl_device void kernel_path_volume_connect_light(KernelGlobals *kg, RNG *rng,
 
 		if(!shadow_blocked(kg, state, &light_ray, &shadow)) {
 			/* accumulate */
-			path_radiance_accum_light(L, throughput * num_samples_adjust, &L_light, shadow, 1.0f, state->bounce, is_lamp);
+			path_radiance_accum_light(L, throughput, &L_light, shadow, 1.0f, state->bounce, is_lamp);
 		}
 	}
 #endif
@@ -144,6 +143,7 @@ ccl_device void kernel_branched_path_volume_connect_light(KernelGlobals *kg, RNG
 				VolumeIntegrateResult result = kernel_volume_decoupled_scatter(kg,
 					state, ray, sd, &tp, rphase, rscatter, segment, (ls.t != FLT_MAX)? &ls.P: NULL, false);
 					
+				(void)result;
 				kernel_assert(result == VOLUME_PATH_SCATTERED);
 
 				/* todo: split up light_sample so we don't have to call it again with new position */
@@ -194,6 +194,7 @@ ccl_device void kernel_branched_path_volume_connect_light(KernelGlobals *kg, RNG
 				VolumeIntegrateResult result = kernel_volume_decoupled_scatter(kg,
 					state, ray, sd, &tp, rphase, rscatter, segment, (ls.t != FLT_MAX)? &ls.P: NULL, false);
 					
+				(void)result;
 				kernel_assert(result == VOLUME_PATH_SCATTERED);
 
 				/* todo: split up light_sample so we don't have to call it again with new position */
@@ -232,6 +233,7 @@ ccl_device void kernel_branched_path_volume_connect_light(KernelGlobals *kg, RNG
 		VolumeIntegrateResult result = kernel_volume_decoupled_scatter(kg,
 			state, ray, sd, &tp, rphase, rscatter, segment, (ls.t != FLT_MAX)? &ls.P: NULL, false);
 			
+		(void)result;
 		kernel_assert(result == VOLUME_PATH_SCATTERED);
 
 		/* todo: split up light_sample so we don't have to call it again with new position */

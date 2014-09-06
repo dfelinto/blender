@@ -59,11 +59,16 @@ class SEQUENCER_HT_header(Header):
         layout = self.layout
 
         st = context.space_data
+        scene = context.scene
 
         row = layout.row(align=True)
         row.template_header()
 
         SEQUENCER_MT_editor_menus.draw_collapsible(context, layout)
+
+        row = layout.row(align=True)
+        row.prop(scene, "use_preview_range", text="", toggle=True)
+        row.prop(scene, "lock_frame_selection_to_range", text="", toggle=True)
 
         layout.prop(st, "view_type", expand=True, text="")
 
@@ -122,6 +127,7 @@ class SEQUENCER_MT_editor_menus(Menu):
             layout.menu("SEQUENCER_MT_select")
             layout.menu("SEQUENCER_MT_marker")
             layout.menu("SEQUENCER_MT_add")
+            layout.menu("SEQUENCER_MT_frame")
             layout.menu("SEQUENCER_MT_strip")
 
 
@@ -203,6 +209,13 @@ class SEQUENCER_MT_select(Menu):
 
         layout.operator("sequencer.select_active_side", text="Strips to the Left").side = 'LEFT'
         layout.operator("sequencer.select_active_side", text="Strips to the Right").side = 'RIGHT'
+        op = layout.operator("sequencer.select", text="All strips to the Left")
+        op.left_right = 'LEFT'
+        op.linked_time = True
+        op = layout.operator("sequencer.select", text="All strips to the Right")
+        op.left_right = 'RIGHT'
+        op.linked_time = True
+        
         layout.separator()
         layout.operator("sequencer.select_handles", text="Surrounding Handles").side = 'BOTH'
         layout.operator("sequencer.select_handles", text="Left Handle").side = 'LEFT'
@@ -236,6 +249,15 @@ class SEQUENCER_MT_change(Menu):
         layout.operator_menu_enum("sequencer.change_effect_type", "type")
         layout.operator("sequencer.change_path", text="Path/Files")
 
+
+class SEQUENCER_MT_frame(Menu):
+    bl_label = "Frame"
+
+    def draw(self, context):
+        layout = self.layout
+
+        layout.operator("anim.previewrange_clear")
+        layout.operator("anim.previewrange_set")
 
 class SEQUENCER_MT_add(Menu):
     bl_label = "Add"

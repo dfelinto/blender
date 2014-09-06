@@ -259,11 +259,18 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
                 default=True,
                 )
 
-        cls.no_caustics = BoolProperty(
-                name="No Caustics",
-                description="Leave out caustics, resulting in a darker image with less noise",
-                default=False,
+        cls.caustics_reflective = BoolProperty(
+                name="Reflective Caustics",
+                description="Leave out reflective caustics, resulting in a darker image with less noise",
+                default=True,
                 )
+
+        cls.caustics_refractive = BoolProperty(
+                name="Refractive Caustics",
+                description="Leave out refractive caustics, resulting in a darker image with less noise",
+                default=True,
+                )
+
         cls.blur_glossy = FloatProperty(
                 name="Filter Glossy",
                 description="Adaptively blur glossy shaders after blurry bounces, "
@@ -729,6 +736,11 @@ class CyclesVisibilitySettings(bpy.types.PropertyGroup):
         cls.shadow = BoolProperty(
                 name="Shadow",
                 description="Object visibility for shadow rays",
+                default=True,
+                )
+        cls.scatter = BoolProperty(
+                name="Volume Scatter",
+                description="Object visibility for volume scatter rays",
                 default=True,
                 )
 

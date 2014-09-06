@@ -597,13 +597,13 @@ elseif(WIN32)
 		string(REPLACE "." "" _PYTHON_VERSION_NO_DOTS ${PYTHON_VERSION})
 
 		install(
-			FILES ${LIBDIR}/python/lib/python${_PYTHON_VERSION_NO_DOTS}.dll
+			FILES ${LIBDIR}/python/lib/python${_PYTHON_VERSION_NO_DOTS}.dll ${LIBDIR}/python/lib/sqlite3.dll
 			DESTINATION ${TARGETDIR}
 			CONFIGURATIONS Release;RelWithDebInfo;MinSizeRel
 		)
 
 		install(
-			FILES ${LIBDIR}/python/lib/python${_PYTHON_VERSION_NO_DOTS}_d.dll
+			FILES ${LIBDIR}/python/lib/python${_PYTHON_VERSION_NO_DOTS}_d.dll ${LIBDIR}/python/lib/sqlite3_d.dll
 			DESTINATION ${TARGETDIR}
 			CONFIGURATIONS Debug
 		)
@@ -942,7 +942,7 @@ if(WIN32 AND NOT WITH_PYTHON_MODULE)
 		../icons/winblender.rc
 	)
 	add_executable(blender-launcher ${LAUNCHER_SRC})
-	target_link_libraries(blender-launcher ${PLATFORM_LINKLIBS})
+	target_link_libraries(blender-launcher bf_intern_utfconv ${PLATFORM_LINKLIBS})
 
 	set_target_properties(blender PROPERTIES OUTPUT_NAME blender-app)
 	set_target_properties(blender-launcher PROPERTIES OUTPUT_NAME blender)

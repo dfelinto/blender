@@ -43,7 +43,8 @@ Integrator::Integrator()
 	volume_max_steps = 1024;
 	volume_step_size = 0.1f;
 
-	no_caustics = false;
+	caustics_reflective = true;
+	caustics_refractive = true;
 	filter_glossy = 0.0f;
 	seed = 0;
 	layer_flag = ~0;
@@ -86,11 +87,7 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
 	kintegrator->max_diffuse_bounce = max_diffuse_bounce + 1;
 	kintegrator->max_glossy_bounce = max_glossy_bounce + 1;
 	kintegrator->max_transmission_bounce = max_transmission_bounce + 1;
-
-	if(kintegrator->use_volumes)
-		kintegrator->max_volume_bounce = max_volume_bounce + 1;
-	else
-		kintegrator->max_volume_bounce = 1;
+	kintegrator->max_volume_bounce = max_volume_bounce + 1;
 
 	kintegrator->transparent_max_bounce = transparent_max_bounce + 1;
 	kintegrator->transparent_min_bounce = transparent_min_bounce + 1;
@@ -104,7 +101,8 @@ void Integrator::device_update(Device *device, DeviceScene *dscene, Scene *scene
 	kintegrator->volume_max_steps = volume_max_steps;
 	kintegrator->volume_step_size = volume_step_size;
 
-	kintegrator->no_caustics = no_caustics;
+	kintegrator->caustics_reflective = caustics_reflective;
+	kintegrator->caustics_refractive = caustics_refractive;
 	kintegrator->filter_glossy = (filter_glossy == 0.0f)? FLT_MAX: 1.0f/filter_glossy;
 
 	kintegrator->seed = hash_int(seed);
@@ -183,7 +181,8 @@ bool Integrator::modified(const Integrator& integrator)
 		volume_homogeneous_sampling == integrator.volume_homogeneous_sampling &&
 		volume_max_steps == integrator.volume_max_steps &&
 		volume_step_size == integrator.volume_step_size &&
-		no_caustics == integrator.no_caustics &&
+		caustics_reflective == integrator.caustics_reflective &&
+		caustics_refractive == integrator.caustics_refractive &&
 		filter_glossy == integrator.filter_glossy &&
 		layer_flag == integrator.layer_flag &&
 		seed == integrator.seed &&
