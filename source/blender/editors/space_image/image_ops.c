@@ -1045,14 +1045,40 @@ static int image_sequence_get_len(ListBase *frames, int *ofs)
 }
 
 /* handle the individual views case */
-static bool image_open_multiview(Scene *scene, Image *ima, ReportList *reports)
+static void image_open_multiview(wmOperator *op, Scene *scene, Image *ima)
 {
 	SceneRenderView *srv;
 	char prefix[FILE_MAX] = {'\0'};
 	char *name = ima->name;
 	char *ext;
 	ImageView *iv;
-	bool ok = true;
+	ImageOpenData *iod = op->customdata;
+	ImageFormatData *imf = &iod->im_format;
+	const bool is_multiview = RNA_boolean_get(op->ptr, "use_multiple_views");
+
+	if (!is_multiview) {
+		goto monoview;
+	}
+	else if (imf->views_output == R_IMF_VIEWS_STEREO_3D) {
+		size_t i;
+		const char *names[2] = {STEREO_LEFT_NAME, STEREO_RIGHT_NAME};
+
+		ima->flag |= IMA_IS_MULTIVIEW;
+		ima->flag |= IMA_IS_STEREO;
+
+		for (i = 0; i < 2; i++) {
+			iv = MEM_mallocN(sizeof(ImageView), "Image View Stereo (open)");
+			BLI_strncpy(iv->name, names[i], sizeof(iv->name));
+			BLI_strncpy(iv->filepath, ima->name, sizeof(iv->filepath));
+			BLI_addtail(&ima->views, iv);
+		}
+
+		*ima->stereo_format = imf->stereo_output;
+		ima->views_format = R_IMF_VIEWS_STEREO_3D;
+		return;
+	}
+
+	/* R_IMF_VIEWS_STEREO_3D */
 
 	/* begin of extension */
 	for (ext = name + strlen(name);(ext != name) && (ext[0] != '.'); ext--);
@@ -1070,9 +1096,7 @@ static bool image_open_multiview(Scene *scene, Image *ima, ReportList *reports)
 	}
 
 	if (prefix[0] == '\0') {
-		ok = false;
-		BKE_report(reports, RPT_ERROR, "Filename matches no scene views' suffix");
-		goto finally;
+		goto monoview;
 	}
 
 	/* create all the image views */
@@ -1097,23 +1121,29 @@ static bool image_open_multiview(Scene *scene, Image *ima, ReportList *reports)
 		/* exists? */
 		file = BLI_open(str, O_BINARY | O_RDONLY, 0);
 		if (file == -1) {
-			ok = false;
-			BKE_reportf(reports, RPT_ERROR, "File %s not found", str);
-			goto finally;
+			ImageView *iv_del = iv;
+			iv = iv_del->prev;
+			BLI_remlink(&ima->views, iv_del);
+			MEM_freeN(iv_del);
 		}
 		close(file);
 	}
 
 	/* all good */
-	ima->flag |= IMA_IS_MULTIVIEW;
-	if (BKE_scene_is_stereo3d(&scene->r))
-		ima->flag |= IMA_IS_STEREO;
-
-finally:
-	if (!ok)
+	if (BLI_countlist(&ima->views) > 1) {
+		ima->flag |= IMA_IS_MULTIVIEW;
+		if (BKE_scene_is_stereo3d(&scene->r))
+			ima->flag |= IMA_IS_STEREO;
+	}
+	else {
+monoview:
+		ima->flag &= IMA_IS_STEREO;
+		ima->flag &= IMA_IS_MULTIVIEW;
 		BKE_image_free_views(ima);
+	}
 
-	return ok;
+	/* monoview and multiview rely on individual images */
+	ima->views_format = R_IMF_VIEWS_INDIVIDUAL;
 }
 
 static int image_open_exec(bContext *C, wmOperator *op)
@@ -1130,7 +1160,6 @@ static int image_open_exec(bContext *C, wmOperator *op)
 	int frame_seq_len = 0;
 	int frame_ofs = 1;
 
-	const bool is_multiview = RNA_boolean_get(op->ptr, "use_multiple_views");
 	const bool is_relative_path = RNA_boolean_get(op->ptr, "relative_path");
 
 	RNA_string_get(op->ptr, "filepath", path);
@@ -1157,15 +1186,11 @@ static int image_open_exec(bContext *C, wmOperator *op)
 		return OPERATOR_CANCELLED;
 	}
 
-	if (is_multiview) {
-		if(!image_open_multiview(scene, ima, op->reports)) {
-			BKE_image_free(ima);
-			return OPERATOR_CANCELLED;
-		}
-	}
-
 	if (!op->customdata)
 		image_open_init(C, op);
+
+	/* handle multiview images */
+	image_open_multiview(op, scene, ima);
 
 	/* only image path after save, never ibuf */
 	if (is_relative_path) {
@@ -1268,7 +1293,7 @@ static int image_open_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(
 	
 	image_open_init(C, op);
 
-	/* show multiview save options only if image has multiviews */
+	/* show multiview save options only if scene has multiviews */
 	prop = RNA_struct_find_property(op->ptr, "use_multiple_views");
 	RNA_property_boolean_set(op->ptr, prop, (scene->r.scemode & R_MULTIVIEW));
 

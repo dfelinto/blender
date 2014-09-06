@@ -322,6 +322,7 @@ void BKE_image_free(Image *ima)
 	}
 
 	image_free_views(ima);
+	MEM_freeN(ima->stereo_format);
 }
 
 /* only image block itself */
@@ -345,7 +346,9 @@ static Image *image_alloc(Main *bmain, const char *name, short source, short typ
 			ima->flag |= IMA_VIEW_AS_RENDER;
 
 		BKE_color_managed_colorspace_settings_init(&ima->colorspace_settings);
+		ima->stereo_format = MEM_mallocN(sizeof(StereoDisplay), "Image Stereo Format");
 	}
+
 	return ima;
 }
 
@@ -376,6 +379,18 @@ static void image_assign_ibuf(Image *ima, ImBuf *ibuf, int index, int frame)
 	}
 }
 
+static void copy_image_views(ListBase *lbn, ListBase *lbo)
+{
+	ImageView *iv, *ivn;
+	lbn->first = lbn->last = NULL;
+	iv = lbo->first;
+	while(iv) {
+		ivn = MEM_dupallocN(iv);
+		BLI_addtail(lbn, ivn);
+		iv = iv->next;
+	}
+}
+
 /* empty image block, of similar type and filename */
 Image *BKE_image_copy(Main *bmain, Image *ima)
 {
@@ -399,6 +414,9 @@ Image *BKE_image_copy(Main *bmain, Image *ima)
 
 	if (ima->packedfile)
 		nima->packedfile = dupPackedFile(ima->packedfile);
+
+	nima->stereo_format = MEM_dupallocN(ima->stereo_format);
+	copy_image_views(&nima->views, &ima->views);
 
 	return nima;
 }
@@ -2662,8 +2680,7 @@ static size_t image_num_files(Image *ima)
 	if (!is_multiview) {
 		return 1;
 	}
-	else if(false){
-		/* XXX MV not supported yet R_IMF_VIEWS_STEREO_3D */
+	else if(ima->views_format == R_IMF_VIEWS_STEREO_3D){
 		return 1;
 	}
 	/* R_IMF_VIEWS_INDIVIDUAL */
@@ -2747,10 +2764,12 @@ static ImBuf *image_load_sequence_file(Image *ima, ImageUser *iuser, int frame)
 			ima->ok = 0;
 	}
 
-	/** XXX MV S3D LOAD STEREO IMAGES
-	  * this will mean we will use ibuf[0] and make ibuf[0] = left, ibuf[1] = right
-	  * so from that point on we use totviews instead of totfiles for ibufs
-	  */
+	if (ima->views_format == R_IMF_VIEWS_STEREO_3D) {
+		/** XXX MV S3D LOAD STEREO IMAGES
+		  * this will mean we will use ibuf[0] and make ibuf[0] = left, ibuf[1] = right
+		  * so from that point on we use totviews instead of totfiles for ibufs
+		  */
+	}
 
 	if (assign) {
 		if (!is_multiview)
@@ -2969,10 +2988,12 @@ static ImBuf *image_load_image_file(Image *ima, ImageUser *iuser, int cfra)
 			ima->ok = 0;
 	}
 
-	/** XXX MV S3D LOAD STEREO IMAGES
-	  * this will mean we will use ibuf[0] and make ibuf[0] = left, ibuf[1] = right
-	  * so from that point on we use totviews instead of totfiles for ibufs
-	  */
+	if (ima->views_format == R_IMF_VIEWS_STEREO_3D) {
+		/** XXX MV S3D LOAD STEREO IMAGES
+		  * this will mean we will use ibuf[0] and make ibuf[0] = left, ibuf[1] = right
+		  * so from that point on we use totviews instead of totfiles for ibufs
+		  */
+	}
 
 	if (assign) {
 		if (!is_multiview)

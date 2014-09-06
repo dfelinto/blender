@@ -66,6 +66,7 @@
 
 #include "readfile.h"
 
+#include "MEM_guardedalloc.h"
 
 static void do_version_constraints_radians_degrees_270_1(ListBase *lb)
 {
@@ -430,10 +431,10 @@ void blo_do_versions_270(FileData *fd, Library *UNUSED(lib), Main *main)
 			}
 		}
 
-		if (!DNA_struct_elem_find(fd->filesdna, "Image", "ListBase", "views")) {
+		if (!DNA_struct_elem_find(fd->filesdna, "Image", "StereoDisplay", "*stereo_format")) {
 			Image *ima;
 			for (ima = main->image.first; ima; ima = ima->id.next) {
-				ima->views.first = ima->views.last = NULL;
+				ima->stereo_format = MEM_mallocN(sizeof(StereoDisplay), "Image Stereo Format");
 			}
 		}
 	}

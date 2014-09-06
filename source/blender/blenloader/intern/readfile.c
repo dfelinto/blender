@@ -3335,6 +3335,7 @@ static void direct_link_image(FileData *fd, Image *ima)
 
 	ima->packedfile = direct_link_packedfile(fd, ima->packedfile);
 	ima->preview = direct_link_preview_image(fd, ima->preview);
+	ima->stereo_format = newdataadr(fd, ima->stereo_format);
 	ima->ok = 1;
 }
 

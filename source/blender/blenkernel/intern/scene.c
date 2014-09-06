@@ -2231,4 +2231,3 @@ size_t BKE_scene_num_videos(const RenderData *rd)
 		return BKE_scene_num_views(rd);
 	}
 }
-

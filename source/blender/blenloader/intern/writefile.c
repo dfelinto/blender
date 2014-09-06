@@ -2102,10 +2102,12 @@ static void write_images(WriteData *wd, ListBase *idbase)
 				writedata(wd, DATA, pf->size, pf->data);
 			}
 
+			write_previews(wd, ima->preview);
+
 			for (iv = ima->views.first; iv; iv = iv->next)
 				writestruct(wd, DATA, "ImageView", 1, iv);
+			writestruct(wd, DATA, "StereoDisplay", 1, ima->stereo_format);
 
-			write_previews(wd, ima->preview);
 		}
 		ima= ima->id.next;
 	}
