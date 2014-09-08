@@ -2334,7 +2334,7 @@ static int image_new_exec(bContext *C, wmOperator *op)
 	gen_type = RNA_enum_get(op->ptr, "generated_type");
 	RNA_float_get_array(op->ptr, "color", color);
 	alpha = RNA_boolean_get(op->ptr, "alpha");
-	stereo3d = RNA_boolean_get(op->ptr, "stereo3d");
+	stereo3d = RNA_boolean_get(op->ptr, "use_stereo_3d");
 
 	if (!alpha)
 		color[3] = 1.0f;
@@ -2385,6 +2385,49 @@ static int image_new_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(e
 	return WM_operator_props_dialog_popup(C, op, 15 * UI_UNIT_X, 5 * UI_UNIT_Y);
 }
 
+static void image_new_draw(bContext *C, wmOperator *op)
+{
+	uiLayout *split, *col[2];
+	uiLayout *layout = op->layout;
+	PointerRNA ptr;
+	Scene *scene = CTX_data_scene(C);
+	const bool is_multiview = (scene->r.scemode & R_MULTIVIEW);
+
+	RNA_pointer_create(NULL, op->type->srna, op->properties, &ptr);
+
+	/* copy of WM_operator_props_dialog_popup() layout */
+
+	split = uiLayoutSplit(layout, 0.5f, false);
+	col[0] = uiLayoutColumn(split, false);
+	col[1] = uiLayoutColumn(split, false);
+
+	uiItemL(col[0], IFACE_("Name"), ICON_NONE);
+	uiItemR(col[1], &ptr, "name", 0, "", ICON_NONE);
+
+	uiItemL(col[0], IFACE_("Width"), ICON_NONE);
+	uiItemR(col[1], &ptr, "width", 0, "", ICON_NONE);
+
+	uiItemL(col[0], IFACE_("Height"), ICON_NONE);
+	uiItemR(col[1], &ptr, "height", 0, "", ICON_NONE);
+
+	uiItemL(col[0], IFACE_("Color"), ICON_NONE);
+	uiItemR(col[1], &ptr, "color", 0, "", ICON_NONE);
+
+	uiItemL(col[0], "", ICON_NONE);
+	uiItemR(col[1], &ptr, "alpha", 0, NULL, ICON_NONE);
+
+	uiItemL(col[0], IFACE_("Generated Type"), ICON_NONE);
+	uiItemR(col[1], &ptr, "generated_type", 0, "", ICON_NONE);
+
+	uiItemL(col[0], "", ICON_NONE);
+	uiItemR(col[1], &ptr, "float", 0, NULL, ICON_NONE);
+
+	if (is_multiview) {
+		uiItemL(col[0], "", ICON_NONE);
+		uiItemR(col[1], &ptr, "use_stereo_3d", 0, NULL, ICON_NONE);
+	}
+}
+
 void IMAGE_OT_new(wmOperatorType *ot)
 {
 	PropertyRNA *prop;
@@ -2398,6 +2441,7 @@ void IMAGE_OT_new(wmOperatorType *ot)
 	/* api callbacks */
 	ot->exec = image_new_exec;
 	ot->invoke = image_new_invoke;
+	ot->ui = image_new_draw;
 	
 	/* flags */
 	ot->flag = OPTYPE_UNDO;
@@ -2417,8 +2461,8 @@ void IMAGE_OT_new(wmOperatorType *ot)
 	RNA_def_boolean(ot->srna, "float", 0, "32 bit Float", "Create image with 32 bit floating point bit depth");
 	prop = RNA_def_boolean(ot->srna, "texstencil", 0, "Stencil", "Set Image as stencil");
 	RNA_def_property_flag(prop, PROP_HIDDEN);
-	RNA_def_boolean(ot->srna, "stereo3d", 0, "Stereo 3D", "Create an image with left and right views");
-
+	prop = RNA_def_boolean(ot->srna, "use_stereo_3d", 0, "Stereo 3D", "Create an image with left and right views");
+	RNA_def_property_flag(prop, PROP_SKIP_SAVE | PROP_HIDDEN);
 }
 
 #undef IMA_DEF_NAME
