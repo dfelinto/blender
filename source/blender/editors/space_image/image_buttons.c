@@ -82,9 +82,9 @@ static void image_info(Scene *scene, ImageUser *iuser, Image *ima, ImBuf *ibuf, 
 	else {
 		if (ima->source == IMA_SRC_MOVIE) {
 			ofs += BLI_strncpy_rlen(str + ofs, IFACE_("Movie"), len - ofs);
-			if (ima->anim)
+			if (BKE_image_has_anim(ima))
 				ofs += BLI_snprintf(str + ofs, len - ofs, IFACE_(" %d frs"),
-				                    IMB_anim_get_duration(ima->anim, IMB_TC_RECORD_RUN));
+				                    IMB_anim_get_duration(((ImageAnim *)ima->anims.first)->anim, IMB_TC_RECORD_RUN));
 		}
 		else {
 			ofs += BLI_strncpy_rlen(str, IFACE_("Image"), len - ofs);

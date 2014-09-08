@@ -1376,10 +1376,10 @@ static int image_match_len_exec(bContext *C, wmOperator *UNUSED(op))
 		
 	}
 
-	if (!ima || !iuser || !ima->anim)
+	if (!ima || !iuser || !BKE_image_has_anim(ima))
 		return OPERATOR_CANCELLED;
 
-	iuser->frames = IMB_anim_get_duration(ima->anim, IMB_TC_RECORD_RUN);
+	iuser->frames = IMB_anim_get_duration(((ImageAnim *) ima->anims.first)->anim, IMB_TC_RECORD_RUN);
 	BKE_image_user_frame_calc(iuser, scene->r.cfra, 0);
 
 	return OPERATOR_FINISHED;

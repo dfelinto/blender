@@ -278,6 +278,19 @@ void BKE_image_free_views(Image *image)
 	image_free_views(image);
 }
 
+static void image_free_anims(Image *ima)
+{
+	while (ima->anims.last) {
+		ImageAnim *ia = ima->anims.last;
+		if (ia->anim) {
+			IMB_free_anim(ia->anim);
+			ia->anim = NULL;
+		}
+		BLI_remlink(&ima->anims, ia);
+		MEM_freeN(ia);
+	}
+}
+
 /**
  * Simply free the image data from memory,
  * on display the image can load again (except for render buffers).
@@ -286,8 +299,7 @@ void BKE_image_free_buffers(Image *ima)
 {
 	image_free_cahced_frames(ima);
 
-	if (ima->anim) IMB_free_anim(ima->anim);
-	ima->anim = NULL;
+	image_free_anims(ima);
 
 	if (ima->rr) {
 		RE_FreeRenderResult(ima->rr);
@@ -347,6 +359,7 @@ static Image *image_alloc(Main *bmain, const char *name, short source, short typ
 
 		BKE_color_managed_colorspace_settings_init(&ima->colorspace_settings);
 		ima->stereo3d_format = MEM_mallocN(sizeof(Stereo3dFormat), "Image Stereo Format");
+		ima->anims.first = ima->anims.last = NULL;
 	}
 
 	return ima;
@@ -391,6 +404,19 @@ static void copy_image_views(ListBase *lbn, ListBase *lbo)
 	}
 }
 
+static void copy_image_anims(ListBase *lbn, ListBase *lbo)
+{
+	ImageAnim *ia, *ian;
+	lbn->first = lbn->last = NULL;
+	ia = lbo->first;
+	while(ia) {
+		ian = MEM_dupallocN(ia);
+		ian->anim = NULL;
+		BLI_addtail(lbn, ian);
+		ia = ia->next;
+	}
+}
+
 /* empty image block, of similar type and filename */
 Image *BKE_image_copy(Main *bmain, Image *ima)
 {
@@ -417,6 +443,7 @@ Image *BKE_image_copy(Main *bmain, Image *ima)
 
 	nima->stereo3d_format = MEM_dupallocN(ima->stereo3d_format);
 	copy_image_views(&nima->views, &ima->views);
+	copy_image_anims(&nima->anims, &ima->anims);
 
 	return nima;
 }
@@ -716,7 +743,9 @@ Image *BKE_image_load_exists(const char *filepath)
 			BLI_path_abs(strtest, ID_BLEND_PATH(G.main, &ima->id));
 
 			if (BLI_path_cmp(strtest, str) == 0) {
-				if (ima->anim == NULL || ima->id.us == 0) {
+				if ((BKE_image_has_anim(ima) == false) ||
+					(ima->id.us == 0))
+				{
 					BLI_strncpy(ima->name, filepath, sizeof(ima->name));    /* for stringcode */
 					ima->id.us++;                                       /* officially should not, it doesn't link here! */
 					if (ima->ok == 0)
@@ -2846,50 +2875,88 @@ static ImBuf *image_load_sequence_multilayer(Image *ima, ImageUser *iuser, int f
 
 static ImBuf *image_load_movie_file(Image *ima, ImageUser *iuser, int frame)
 {
-	struct ImBuf *ibuf = NULL;
+	struct ImBuf **ibuf;
+	struct ImBuf *r_ibuf;
+	const bool is_multiview = (ima->flag & IMA_IS_MULTIVIEW) != 0;
+	const size_t totfiles = image_num_files(ima);
+	const size_t totviews = is_multiview ? BLI_countlist(&ima->views) : 1;
+	size_t i;
+	ImageAnim *ia;
 
-	ima->lastframe = frame;
+	ibuf = MEM_mallocN(sizeof(ImBuf *) * totviews, "Image Views (movie) Imbufs");
 
-	if (ima->anim == NULL) {
-		char str[FILE_MAX];
+	if ((BKE_image_has_anim(ima) == false) ||
+		BLI_countlist(&ima->anims) != totfiles)
+	{
+		image_free_anims(ima);
 
-		BKE_image_user_file_path(iuser, ima, str);
+		for (i = 0; i < totfiles; i++) {
+			char str[FILE_MAX];
+			ImageUser iuser_t;
 
-		/* FIXME: make several stream accessible in image editor, too*/
-		ima->anim = openanim(str, IB_rect, 0, ima->colorspace_settings.name);
+			/* allocate the ImageAnim */
+			ia = MEM_mallocN(sizeof(ImageAnim), "Image Anim");
+			BLI_addtail(&ima->anims, ia);
 
-		/* let's initialize this user */
-		if (ima->anim && iuser && iuser->frames == 0)
-			iuser->frames = IMB_anim_get_duration(ima->anim,
-			                                      IMB_TC_RECORD_RUN);
+			if (iuser)
+				iuser_t = *iuser;
+			else
+				iuser_t.framenr = ima->lastframe;
+
+			iuser_t.view = i;
+
+			BKE_image_user_file_path(&iuser_t, ima, str);
+
+			/* FIXME: make several stream accessible in image editor, too*/
+			ia->anim = openanim(str, IB_rect, 0, ima->colorspace_settings.name);
+
+			/* let's initialize this user */
+			if (ia->anim && iuser && iuser->frames == 0)
+				iuser->frames = IMB_anim_get_duration(ia->anim,
+			                                          IMB_TC_RECORD_RUN);
+		}
 	}
 
-	if (ima->anim) {
-		int dur = IMB_anim_get_duration(ima->anim,
-		                                IMB_TC_RECORD_RUN);
-		int fra = frame - 1;
+	if (BKE_image_has_anim(ima)) {
+		for (i = 0, ia = ima->anims.first; ia; ia = ia->next, i++) {
+			int dur = IMB_anim_get_duration(ia->anim,
+			                                IMB_TC_RECORD_RUN);
+			int fra = frame - 1;
 
-		if (fra < 0) fra = 0;
-		if (fra > (dur - 1)) fra = dur - 1;
-		ibuf = IMB_makeSingleUser(
-		    IMB_anim_absolute(ima->anim, fra,
-		                      IMB_TC_RECORD_RUN,
-		                      IMB_PROXY_NONE));
-
-		if (ibuf) {
-			image_initialize_after_load(ima, ibuf);
-			image_assign_ibuf(ima, ibuf, 0, frame);
+			if (fra < 0) fra = 0;
+			if (fra > (dur - 1)) fra = dur - 1;
+			ibuf[i] = IMB_makeSingleUser(
+			                             IMB_anim_absolute(ia->anim, fra,
+			                             IMB_TC_RECORD_RUN,
+			                             IMB_PROXY_NONE));
+			if (ibuf[i])
+				image_initialize_after_load(ima, ibuf[i]);
 		}
-		else
-			ima->ok = 0;
+
+		if ((ima->flag & IMA_IS_STEREO) && ima->views_format == R_IMF_VIEWS_STEREO_3D)
+			IMB_ImBufFromStereo(ima->stereo3d_format, &ibuf[0], &ibuf[1]);
+
+		for (i = 0; i < totviews; i++) {
+			if (ibuf[i]) {
+				image_assign_ibuf(ima, ibuf[i], i, frame);
+			}
+			else
+				ima->ok &= 0;
+		}
 	}
 	else
 		ima->ok = 0;
 
+	/* return the original requested ImBuf */
+	r_ibuf = ibuf[is_multiview ? (iuser ? iuser->multi_index : 0) : 0];
+
 	if (iuser)
 		iuser->ok = ima->ok;
 
-	return ibuf;
+	/* cleanup */
+	MEM_freeN(ibuf);
+
+	return r_ibuf;
 }
 
 /* warning, 'iuser' can be NULL */
@@ -2898,7 +2965,7 @@ static ImBuf *image_load_image_file(Image *ima, ImageUser *iuser, int cfra)
 	struct ImBuf **ibuf;
 	struct ImBuf *r_ibuf;
 	char **str;
-		bool assign = false;
+	bool assign = false;
 	int flag;
 	const bool is_multiview = (ima->flag & IMA_IS_MULTIVIEW) != 0;
 	const size_t totfiles = image_num_files(ima);
@@ -3860,6 +3927,13 @@ int BKE_image_sequence_guess_offset(Image *image)
 
 	return atoi(num);
 }
+
+
+bool BKE_image_has_anim(Image *ima)
+{
+	return (BLI_countlist(&ima->anims) > 0) && (((ImageAnim *) ima->anims.first)->anim != NULL);
+}
+
 
 /**
  * Checks the image buffer changes (not keyframed values)

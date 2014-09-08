@@ -73,6 +73,11 @@ enum {
 	IMA_SHOW_STEREO         = (1 << 4),
 };
 
+typedef struct ImageAnim {
+	struct ImageAnim *next, *prev;
+	struct anim *anim;
+} ImageAnim;
+
 typedef struct ImageView {
 	struct ImageView *next, *prev;
 	char name[64];			/* MAX_NAME */
@@ -88,7 +93,7 @@ typedef struct Image {
 	struct GPUTexture *gputexture;	/* not written in file */
 	
 	/* sources from: */
-	struct anim *anim;
+	ListBase anims;
 	struct RenderResult *rr;
 
 	struct RenderResult *renders[8]; /* IMA_MAX_RENDER_SLOT */

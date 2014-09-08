@@ -294,8 +294,8 @@ static int rna_Image_frame_duration_get(PointerRNA *ptr)
 {
 	Image *im = (Image *)ptr->data;
 
-	if (im->anim)
-		return IMB_anim_get_duration(im->anim, IMB_TC_RECORD_RUN);
+	if (BKE_image_has_anim(im))
+		return IMB_anim_get_duration(((ImageAnim *)im->anims.first)->anim, IMB_TC_RECORD_RUN);
 	return 1;
 }
 

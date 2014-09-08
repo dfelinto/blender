@@ -3315,8 +3315,7 @@ static void direct_link_image(FileData *fd, Image *ima)
 		ima->gputexture = NULL;
 		ima->rr = NULL;
 	}
-	
-	ima->anim = NULL;
+
 	ima->repbind = NULL;
 	
 	/* undo system, try to restore render buffers */
@@ -3332,6 +3331,7 @@ static void direct_link_image(FileData *fd, Image *ima)
 	}
 
 	link_list(fd, &(ima->views));
+	ima->anims.first = ima->anims.last = NULL;
 
 	ima->packedfile = direct_link_packedfile(fd, ima->packedfile);
 	ima->preview = direct_link_preview_image(fd, ima->preview);
