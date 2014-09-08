@@ -1786,10 +1786,10 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 			}
 		}
 
-		/* we need renderresult for exr and multiview */
+		/* we need renderresult for exr and rendered multiview */
 		scene = CTX_data_scene(C);
 		rr = BKE_image_acquire_renderresult(scene, ima);
-		is_mono = rr ? BLI_countlist(&rr->views) < 2 : false;
+		is_mono = rr ? BLI_countlist(&rr->views) < 2 : (ima->flag & IMA_IS_MULTIVIEW) == 0;
 
 		/* error handling */
 		if (!rr) {
@@ -1800,11 +1800,6 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 
 			else if (is_multilayer) {
 				BKE_report(op->reports, RPT_ERROR, "Did not write, no Multiview Image");
-				goto cleanup;
-			}
-
-			else if (!is_mono) {
-				BKE_report(op->reports, RPT_ERROR, "Did not write, the image doesn't have multiple views");
 				goto cleanup;
 			}
 		}
@@ -1915,13 +1910,20 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 
 				for (i = 0; i < 2; i ++) {
 					ImageUser iuser = sima->iuser;
-					int id = BLI_findstringindex(&rr->views, names[i], offsetof(RenderView, name));
-
-					iuser.pass = get_multiview_pass_id(rr, &sima->iuser, id);
-					iuser.view = id;
 					iuser.flag &= ~IMA_SHOW_STEREO;
 
-					BKE_image_multilayer_index(rr, &iuser);
+					if (rr) {
+						int id = BLI_findstringindex(&rr->views, names[i], offsetof(RenderView, name));
+						iuser.pass = get_multiview_pass_id(rr, &sima->iuser, id);
+						iuser.view = id;
+
+						BKE_image_multilayer_index(rr, &iuser);
+					}
+					else {
+						iuser.view = i;
+						BKE_image_multiview_index(ima, &iuser);
+					}
+
 					ibuf = BKE_image_acquire_ibuf(sima->image, &iuser, &lock);
 
 					if (ibuf == NULL) {
