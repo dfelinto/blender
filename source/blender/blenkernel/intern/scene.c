@@ -2183,7 +2183,7 @@ size_t BKE_scene_view_get_id(const RenderData *rd, const char *viewname)
 	SceneRenderView *srv;
 	size_t nr;
 
-	if ((rd->scemode & R_MULTIVIEW) == 0)
+	if ((!rd) || (rd->scemode & R_MULTIVIEW) == 0)
 		return 0;
 
 	if ((!viewname) || (!viewname[0]))
@@ -2207,7 +2207,7 @@ void BKE_scene_videos_dimensions(const RenderData *rd, const size_t width, const
 	if ((rd->scemode & R_MULTIVIEW) &&
 	    rd->im_format.views_format == R_IMF_VIEWS_STEREO_3D)
 	{
-		IMB_stereo_dimensions(rd->im_format.stereo3d_format.display_mode, ((rd->im_format.stereo3d_format.flag & S3D_UNSQUEEZED_FRAME) == 0), width, height, r_width, r_height);
+		IMB_stereo_write_dimensions(rd->im_format.stereo3d_format.display_mode, ((rd->im_format.stereo3d_format.flag & S3D_UNSQUEEZED_FRAME) == 0), width, height, r_width, r_height);
 	}
 	else {
 		*r_width = width;

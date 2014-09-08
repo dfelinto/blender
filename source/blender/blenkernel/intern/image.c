@@ -2764,12 +2764,8 @@ static ImBuf *image_load_sequence_file(Image *ima, ImageUser *iuser, int frame)
 			ima->ok = 0;
 	}
 
-	if (ima->views_format == R_IMF_VIEWS_STEREO_3D) {
-		/** XXX MV S3D LOAD STEREO IMAGES
-		  * this will mean we will use ibuf[0] and make ibuf[0] = left, ibuf[1] = right
-		  * so from that point on we use totviews instead of totfiles for ibufs
-		  */
-	}
+	if ((ima->flag & IMA_IS_STEREO) && ima->views_format == R_IMF_VIEWS_STEREO_3D)
+		IMB_ImBufFromStereo(ima->stereo3d_format, &ibuf[0], &ibuf[1]);
 
 	if (assign) {
 		if (!is_multiview)
@@ -2988,12 +2984,8 @@ static ImBuf *image_load_image_file(Image *ima, ImageUser *iuser, int cfra)
 			ima->ok = 0;
 	}
 
-	if (ima->views_format == R_IMF_VIEWS_STEREO_3D) {
-		/** XXX MV S3D LOAD STEREO IMAGES
-		  * this will mean we will use ibuf[0] and make ibuf[0] = left, ibuf[1] = right
-		  * so from that point on we use totviews instead of totfiles for ibufs
-		  */
-	}
+	if ((ima->flag & IMA_IS_STEREO) && ima->views_format == R_IMF_VIEWS_STEREO_3D)
+		IMB_ImBufFromStereo(ima->stereo3d_format, &ibuf[0], &ibuf[1]);
 
 	if (assign) {
 		if (!is_multiview)
