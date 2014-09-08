@@ -2183,7 +2183,7 @@ size_t BKE_scene_view_get_id(const RenderData *rd, const char *viewname)
 	SceneRenderView *srv;
 	size_t nr;
 
-	if ((!rd) || (rd->scemode & R_MULTIVIEW) == 0)
+	if ((!rd) || ((rd->scemode & R_MULTIVIEW) == 0))
 		return 0;
 
 	if ((!viewname) || (!viewname[0]))
