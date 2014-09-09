@@ -438,6 +438,20 @@ void blo_do_versions_270(FileData *fd, Library *UNUSED(lib), Main *main)
 			}
 		}
 
+		if (!DNA_struct_elem_find(fd->filesdna, "Image", "ListBase", "packedfiles")) {
+			Image *ima;
+			for (ima = main->image.first; ima; ima = ima->id.next) {
+				if (ima->packedfile) {
+					ImagePackedFile *imapf = MEM_mallocN(sizeof(ImagePackedFile), "Image Packed File");
+					BLI_addtail(&ima->packedfiles, imapf);
+
+					imapf->packedfile = ima->packedfile;
+					BLI_strncpy(imapf->filepath, ima->name, FILE_MAX);
+					ima->packedfile = NULL;
+				}
+			}
+		}
+
 		if (!DNA_struct_elem_find(fd->filesdna, "wmWindow", "Stereo3dFormat", "*stereo3d_format")) {
 			wmWindowManager *wm;
 			wmWindow *win;

@@ -1078,7 +1078,7 @@ static void image_open_multiview(wmOperator *op, Scene *scene, Image *ima)
 		return;
 	}
 
-	/* R_IMF_VIEWS_STEREO_3D */
+	/* R_IMF_VIEWS_INDIVIDUAL */
 
 	/* begin of extension */
 	for (ext = name + strlen(name);(ext != name) && (ext[0] != '.'); ext--);
@@ -1704,38 +1704,6 @@ static void save_imbuf_post(ImBuf *ibuf, ImBuf *colormanaged_ibuf)
 	}
 }
 
-static void save_image_get_view_filepath(Scene *scene, const char *filepath, RenderView *rv,
-                                         char *r_filepath, char *r_view)
-{
-	SceneRenderView *srv;
-	char suffix[FILE_MAX];
-
-	srv = BLI_findstring(&scene->r.views, rv->name, offsetof(SceneRenderView, name));
-
-	if (srv) {
-		if (r_filepath) {
-			BLI_strncpy(suffix, srv->suffix, sizeof(suffix));
-			BLI_strncpy(r_filepath, filepath, FILE_MAX);
-			BLI_path_view(r_filepath, suffix);
-		}
-
-		if (r_view) {
-			BLI_strncpy(r_view, srv->name, FILE_MAX);
-		}
-	}
-	else {
-		if (r_filepath) {
-			BLI_strncpy(suffix, rv->name, sizeof(suffix));
-			BLI_strncpy(r_filepath, filepath, FILE_MAX);
-			BLI_path_view(r_filepath, suffix);
-		}
-
-		if (r_view) {
-			BLI_strncpy(r_view, rv->name, FILE_MAX);
-		}
-	}
-}
-
 /**
  * \return success.
  * \note ``ima->name`` and ``ibuf->name`` should end up the same.
@@ -1859,10 +1827,8 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 				bool ok_view = false;
 
 				if (is_multilayer) {
-					char view[FILE_MAX];
-
-					save_image_get_view_filepath(scene, simopts->filepath, rv, filepath, view);
-					ok_view = RE_WriteRenderResult(op->reports, rr, filepath, imf, false, view);
+					BKE_scene_view_get_filepath(scene, simopts->filepath, rv->name, filepath);
+					ok_view = RE_WriteRenderResult(op->reports, rr, filepath, imf, false, rv->name);
 					save_image_post(op, ibuf, ima, ok_view, true, relbase, relative, do_newpath, filepath);
 				}
 				else {
@@ -1877,7 +1843,7 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 					ibuf = BKE_image_acquire_ibuf(sima->image, &iuser, &lock);
 					ibuf->planes = planes;
 
-					save_image_get_view_filepath(scene, simopts->filepath, rv, filepath, NULL);
+					BKE_scene_view_get_filepath(scene, simopts->filepath, rv->name, filepath);
 
 					IMB_colormanagement_imbuf_for_write(ibuf, save_as_render, false, &imf->view_settings, &imf->display_settings, imf);
 					ok_view = BKE_imbuf_write_as(ibuf, filepath, &simopts->im_format, save_copy);
@@ -2589,7 +2555,7 @@ static bool image_pack_test(bContext *C, wmOperator *op)
 
 	if (!ima)
 		return 0;
-	if (!as_png && ima->packedfile)
+	if (!as_png && BKE_image_has_packedfile(ima))
 		return 0;
 
 	if (ima->source == IMA_SRC_SEQUENCE || ima->source == IMA_SRC_MOVIE) {
@@ -2603,6 +2569,7 @@ static bool image_pack_test(bContext *C, wmOperator *op)
 static int image_pack_exec(bContext *C, wmOperator *op)
 {
 	struct Main *bmain = CTX_data_main(C);
+	Scene *scene = CTX_data_scene(C);
 	Image *ima = CTX_data_edit_image(C);
 	ImBuf *ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL);
 	const bool as_png = RNA_boolean_get(op->ptr, "as_png");
@@ -2616,9 +2583,9 @@ static int image_pack_exec(bContext *C, wmOperator *op)
 	}
 
 	if (as_png)
-		BKE_image_memorypack(ima);
+		BKE_image_memorypack(scene, ima);
 	else
-		ima->packedfile = newPackedFile(op->reports, ima->name, ID_BLEND_PATH(bmain, &ima->id));
+		BKE_image_packfiles(op->reports, ima, ID_BLEND_PATH(bmain, &ima->id));
 
 	WM_event_add_notifier(C, NC_IMAGE | NA_EDITED, ima);
 
@@ -2690,7 +2657,7 @@ static int image_unpack_exec(bContext *C, wmOperator *op)
 		if (!ima) ima = CTX_data_edit_image(C);
 	}
 	
-	if (!ima || !ima->packedfile)
+	if (!ima || !BKE_image_has_packedfile(ima))
 		return OPERATOR_CANCELLED;
 
 	if (ima->source == IMA_SRC_SEQUENCE || ima->source == IMA_SRC_MOVIE) {
@@ -2718,7 +2685,7 @@ static int image_unpack_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSE
 	if (RNA_struct_property_is_set(op->ptr, "id"))
 		return image_unpack_exec(C, op);
 		
-	if (!ima || !ima->packedfile)
+	if (!ima || !BKE_image_has_packedfile(ima))
 		return OPERATOR_CANCELLED;
 
 	if (ima->source == IMA_SRC_SEQUENCE || ima->source == IMA_SRC_MOVIE) {
@@ -2729,7 +2696,7 @@ static int image_unpack_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSE
 	if (G.fileflags & G_AUTOPACK)
 		BKE_report(op->reports, RPT_WARNING, "AutoPack is enabled, so image will be packed again on file save");
 
-	unpack_menu(C, "IMAGE_OT_unpack", ima->id.name + 2, ima->name, "textures", ima->packedfile);
+	unpack_menu(C, "IMAGE_OT_unpack", ima->id.name + 2, ima->name, "textures", BKE_image_has_packedfile(ima) ? ((ImagePackedFile *)ima->packedfiles.first)->packedfile : NULL);
 
 	return OPERATOR_FINISHED;
 }

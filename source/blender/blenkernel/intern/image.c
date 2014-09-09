@@ -98,6 +98,9 @@
 
 static SpinLock image_spin;
 
+/* prototypes */
+static size_t image_num_files(struct Image *ima);
+
 /* max int, to indicate we don't store sequences in ibuf */
 #define IMA_NO_INDEX    0x7FEFEFEF
 
@@ -264,6 +267,23 @@ int BKE_image_cache_count(Image *image)
 		return 0;
 }
 
+static void image_free_packedfiles(Image *ima)
+{
+	while (ima->packedfiles.last) {
+		ImagePackedFile *imapf = ima->packedfiles.last;
+		if (imapf->packedfile) {
+			freePackedFile(imapf->packedfile);
+		}
+		BLI_remlink(&ima->packedfiles, imapf);
+		MEM_freeN(imapf);
+	}
+}
+
+void BKE_image_free_packedfiles(Image *ima)
+{
+	image_free_packedfiles(ima);
+}
+
 static void image_free_views(Image *ima)
 {
 	while (ima->views.last) {
@@ -317,10 +337,9 @@ void BKE_image_free(Image *ima)
 	int a;
 
 	BKE_image_free_buffers(ima);
-	if (ima->packedfile) {
-		freePackedFile(ima->packedfile);
-		ima->packedfile = NULL;
-	}
+
+	image_free_packedfiles(ima);
+
 	BKE_icon_delete(&ima->id);
 	ima->id.icon_id = 0;
 
@@ -360,6 +379,8 @@ static Image *image_alloc(Main *bmain, const char *name, short source, short typ
 		BKE_color_managed_colorspace_settings_init(&ima->colorspace_settings);
 		ima->stereo3d_format = MEM_mallocN(sizeof(Stereo3dFormat), "Image Stereo Format");
 		ima->anims.first = ima->anims.last = NULL;
+		ima->packedfiles.first = ima->packedfiles.last = NULL;
+		ima->views.first = ima->views.last = NULL;
 	}
 
 	return ima;
@@ -389,6 +410,23 @@ static void image_assign_ibuf(Image *ima, ImBuf *ibuf, int index, int frame)
 			index = IMA_MAKE_INDEX(frame, index);
 
 		imagecache_put(ima, index, ibuf);
+	}
+}
+
+static void copy_image_packedfiles(ListBase *lbn, ListBase *lbo)
+{
+	ImagePackedFile *imapf, *imapfn;
+	lbn->first = lbn->last = NULL;
+	imapf = lbo->first;
+	while(imapf) {
+		imapfn = MEM_mallocN(sizeof(ImagePackedFile), "Image Packed Files (copy)");
+		BLI_strncpy(imapfn->filepath, imapf->filepath, sizeof(imapfn->filepath));
+
+		if (imapf->packedfile)
+			imapfn->packedfile = dupPackedFile(imapf->packedfile);
+
+		BLI_addtail(lbn, imapfn);
+		imapf = imapf->next;
 	}
 }
 
@@ -438,8 +476,7 @@ Image *BKE_image_copy(Main *bmain, Image *ima)
 
 	BKE_color_managed_colorspace_settings_copy(&nima->colorspace_settings, &ima->colorspace_settings);
 
-	if (ima->packedfile)
-		nima->packedfile = dupPackedFile(ima->packedfile);
+	copy_image_packedfiles(&nima->packedfiles, &ima->packedfiles);
 
 	nima->stereo3d_format = MEM_dupallocN(ima->stereo3d_format);
 	copy_image_views(&nima->views, &ima->views);
@@ -882,17 +919,76 @@ Image *BKE_image_add_from_imbuf(ImBuf *ibuf)
 	return ima;
 }
 
-/* packs rect from memory as PNG */
-void BKE_image_memorypack(Image *ima)
+/* packs rects from memory as PNG
+ * convert multiview images to R_IMF_VIEWS_INDIVIDUAL
+ */
+static void image_memorypack_multiview(Scene *scene, Image *ima)
 {
-	ImBuf *ibuf = image_get_cached_ibuf_for_index_frame(ima, IMA_NO_INDEX, 0);
+	ImageView *iv;
+	size_t i;
+	const size_t totfiles = image_num_files(ima);
+
+	image_free_packedfiles(ima);
+
+	for (i = 0, iv = ima->views.first; iv; iv = iv->next, i++) {
+		ImBuf *ibuf = image_get_cached_ibuf_for_index_frame(ima, i, 0);
+
+		ibuf->ftype = PNG;
+		ibuf->planes = R_IMF_PLANES_RGBA;
+
+		/* if the image was a R_IMF_VIEWS_STEREO_3D we need to create
+		 *  new names for the new individual views */
+		if (totfiles == 1)
+			BKE_scene_view_get_filepath(scene, ima->name, iv->name, iv->filepath);
+
+		IMB_saveiff(ibuf, iv->filepath, IB_rect | IB_mem);
+
+		if (ibuf->encodedbuffer == NULL) {
+			printf("memory save for pack error\n");
+			IMB_freeImBuf(ibuf);
+			image_free_packedfiles(ima);
+			return;
+		}
+		else {
+			ImagePackedFile *imapf;
+			PackedFile *pf = MEM_callocN(sizeof(*pf), "PackedFile");
+
+			pf->data = ibuf->encodedbuffer;
+			pf->size = ibuf->encodedsize;
+
+			imapf = MEM_mallocN(sizeof(ImagePackedFile), "Image PackedFile");
+			BLI_strncpy(imapf->filepath, iv->filepath, sizeof(imapf->filepath));
+			imapf->packedfile = pf;
+			BLI_addtail(&ima->packedfiles, imapf);
+
+			ibuf->encodedbuffer = NULL;
+			ibuf->encodedsize = 0;
+			ibuf->userflags &= ~IB_BITMAPDIRTY;
+		}
+		IMB_freeImBuf(ibuf);
+	}
+
+	if (ima->source == IMA_SRC_GENERATED) {
+		ima->source = IMA_SRC_FILE;
+		ima->type = IMA_TYPE_IMAGE;
+	}
+	ima->views_format = R_IMF_VIEWS_INDIVIDUAL;
+}
+
+/* packs rect from memory as PNG */
+void BKE_image_memorypack(Scene *scene, Image *ima)
+{
+	ImBuf *ibuf;
+
+	if ((ima->flag & IMA_IS_MULTIVIEW))
+		return image_memorypack_multiview(scene, ima);
+
+	ibuf = image_get_cached_ibuf_for_index_frame(ima, IMA_NO_INDEX, 0);
 
 	if (ibuf == NULL)
 		return;
-	if (ima->packedfile) {
-		freePackedFile(ima->packedfile);
-		ima->packedfile = NULL;
-	}
+
+	image_free_packedfiles(ima);
 
 	ibuf->ftype = PNG;
 	ibuf->planes = R_IMF_PLANES_RGBA;
@@ -902,11 +998,17 @@ void BKE_image_memorypack(Image *ima)
 		printf("memory save for pack error\n");
 	}
 	else {
+		ImagePackedFile *imapf;
 		PackedFile *pf = MEM_callocN(sizeof(*pf), "PackedFile");
 
 		pf->data = ibuf->encodedbuffer;
 		pf->size = ibuf->encodedsize;
-		ima->packedfile = pf;
+
+		imapf = MEM_mallocN(sizeof(ImagePackedFile), "Image PackedFile");
+		BLI_strncpy(imapf->filepath, ima->name, sizeof(imapf->filepath));
+		imapf->packedfile = pf;
+		BLI_addtail(&ima->packedfiles, imapf);
+
 		ibuf->encodedbuffer = NULL;
 		ibuf->encodedsize = 0;
 		ibuf->userflags &= ~IB_BITMAPDIRTY;
@@ -918,6 +1020,28 @@ void BKE_image_memorypack(Image *ima)
 	}
 
 	IMB_freeImBuf(ibuf);
+}
+
+void BKE_image_packfiles(ReportList *reports, Image *ima, const char *basepath)
+{
+	const size_t totfiles = image_num_files(ima);
+
+	if (totfiles == 1) {
+		ImagePackedFile *imapf = MEM_mallocN(sizeof(ImagePackedFile), "Image packed file");
+		BLI_addtail(&ima->packedfiles, imapf);
+		imapf->packedfile = newPackedFile(reports, ima->name, basepath);
+		BLI_strncpy(imapf->filepath, ima->name, sizeof(imapf->filepath));
+	}
+	else {
+		ImageView *iv;
+		for (iv = ima->views.first; iv; iv = iv->next) {
+			ImagePackedFile *imapf = MEM_mallocN(sizeof(ImagePackedFile), "Image packed file");
+			BLI_addtail(&ima->packedfiles, imapf);
+
+			imapf->packedfile = newPackedFile(reports, iv->filepath, basepath);
+			BLI_strncpy(imapf->filepath, iv->filepath, sizeof(imapf->filepath));
+		}
+	}
 }
 
 void BKE_image_tag_time(Image *ima)
@@ -2449,17 +2573,31 @@ void BKE_image_signal(Image *ima, ImageUser *iuser, int signal)
 
 		case IMA_SIGNAL_RELOAD:
 			/* try to repack file */
-			if (ima->packedfile) {
-				PackedFile *pf;
-				pf = newPackedFile(NULL, ima->name, ID_BLEND_PATH(G.main, &ima->id));
-				if (pf) {
-					freePackedFile(ima->packedfile);
-					ima->packedfile = pf;
-					BKE_image_free_buffers(ima);
+			if (BKE_image_has_packedfile(ima)) {
+				const size_t totfiles = image_num_files(ima);
+
+				if (totfiles != BLI_countlist(&ima->packedfiles)) {
+					/* in case there are new available files to be loaded */
+					image_free_packedfiles(ima);
+					BKE_image_packfiles(NULL, ima, ID_BLEND_PATH(G.main, &ima->id));
 				}
 				else {
-					printf("ERROR: Image not available. Keeping packed image\n");
+					ImagePackedFile *imapf;
+					for (imapf = ima->packedfiles.first; imapf; imapf = imapf->next) {
+						PackedFile *pf;
+						pf = newPackedFile(NULL, imapf->filepath, ID_BLEND_PATH(G.main, &ima->id));
+						if (pf) {
+							freePackedFile(imapf->packedfile);
+							imapf->packedfile = pf;
+						}
+						else {
+							printf("ERROR: Image \"%s\" not available. Keeping packed image\n", imapf->filepath);
+						}
+					}
 				}
+
+				if (BKE_image_has_packedfile(ima))
+					BKE_image_free_buffers(ima);
 			}
 			else
 				BKE_image_free_buffers(ima);
@@ -2970,6 +3108,7 @@ static ImBuf *image_load_image_file(Image *ima, ImageUser *iuser, int cfra)
 	const bool is_multiview = (ima->flag & IMA_IS_MULTIVIEW) != 0;
 	const size_t totfiles = image_num_files(ima);
 	const size_t totviews = is_multiview ? BLI_countlist(&ima->views) : 1;
+	const bool has_packed = BKE_image_has_packedfile(ima);
 	size_t i;
 
 	/* always ensure clean ima */
@@ -2981,20 +3120,19 @@ static ImBuf *image_load_image_file(Image *ima, ImageUser *iuser, int cfra)
 		str[i] = MEM_mallocN(sizeof(char) * FILE_MAX, "Image filepath");
 
 	/* is there a PackedFile with this image ? */
-	if (ima->packedfile) {
+	if (has_packed) {
+		ImagePackedFile *imapf;
+
 		flag = IB_rect | IB_multilayer;
 		flag |= imbuf_alpha_flags_for_image(ima);
 
-#if 0
-		//XXX MV PACK
-		for (i = 0; i < totfiles; i++) {
-			ibuf[i] = IMB_ibImageFromMemory((unsigned char *)ima->packedfile[i]->data, ima->packedfile[i]->size, flag,
+		/* XXX what to do */
+		BLI_assert(totfiles == BLI_countlist(&ima->packedfiles));
+
+		for (i = 0, imapf = ima->packedfiles.first; imapf; imapf = imapf->next, i++) {
+			ibuf[i] = IMB_ibImageFromMemory((unsigned char *)imapf->packedfile->data, imapf->packedfile->size, flag,
 			                                ima->colorspace_settings.name, "<packed data>");
 		}
-#else
-		ibuf[i] = IMB_ibImageFromMemory((unsigned char *)ima->packedfile->data, ima->packedfile->size, flag,
-		                                ima->colorspace_settings.name, "<packed data>");
-#endif
 	}
 	else {
 		flag = IB_rect | IB_multilayer | IB_metadata;
@@ -3037,14 +3175,13 @@ static ImBuf *image_load_image_file(Image *ima, ImageUser *iuser, int cfra)
 				detectBitmapFont(ibuf[i]);
 
 				/* make packed file for autopack */
-#if 0
-				//XXX MV PACK - need to initialize packedfile before ...
-				if ((ima->packedfile[i] == NULL) && (G.fileflags & G_AUTOPACK))
-					ima->packedfile[i] = newPackedFile(NULL, str[i], ID_BLEND_PATH(G.main, &ima->id));
-#else
-				if ((ima->packedfile == NULL) && (G.fileflags & G_AUTOPACK))
-					ima->packedfile = newPackedFile(NULL, str[i], ID_BLEND_PATH(G.main, &ima->id));
-#endif
+				if ((has_packed == false) && (G.fileflags & G_AUTOPACK)) {
+					ImagePackedFile *imapf;
+					imapf = MEM_mallocN(sizeof(ImagePackedFile), "Image Packefile");
+					BLI_strncpy(imapf->filepath, str[i], sizeof(imapf->filepath));
+					imapf->packedfile = newPackedFile(NULL, str[i], ID_BLEND_PATH(G.main, &ima->id));
+					BLI_addtail(&ima->packedfiles, imapf);
+				}
 			}
 		}
 		else
@@ -3928,12 +4065,15 @@ int BKE_image_sequence_guess_offset(Image *image)
 	return atoi(num);
 }
 
-
 bool BKE_image_has_anim(Image *ima)
 {
 	return (BLI_countlist(&ima->anims) > 0) && (((ImageAnim *) ima->anims.first)->anim != NULL);
 }
 
+bool BKE_image_has_packedfile(Image *ima)
+{
+	return (BLI_countlist(&ima->packedfiles) > 0) && (((ImagePackedFile *) ima->packedfiles.first)->packedfile != NULL);
+}
 
 /**
  * Checks the image buffer changes (not keyframed values)

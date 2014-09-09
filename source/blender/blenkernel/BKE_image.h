@@ -46,6 +46,7 @@ struct Object;
 struct ImageFormatData;
 struct ImagePool;
 struct Main;
+struct ReportList;
 
 #define IMA_MAX_SPACE       64
 
@@ -53,6 +54,7 @@ void   BKE_images_init(void);
 void   BKE_images_exit(void);
 
 int     BKE_image_cache_count(struct Image *image);
+void    BKE_image_free_packedfiles(struct Image *image);
 void    BKE_image_free_views(struct Image *image);
 void    BKE_image_free_buffers(struct Image *image);
 /* call from library */
@@ -219,7 +221,8 @@ void    BKE_image_free_anim_ibufs(struct Image *ima, int except_frame);
 /* does all images with type MOVIE or SEQUENCE */
 void BKE_image_all_free_anim_ibufs(int except_frame);
 
-void BKE_image_memorypack(struct Image *ima);
+void BKE_image_memorypack(struct Scene *scene, struct Image *ima);
+void BKE_image_packfiles(struct ReportList *reports, struct Image *ima, const char *basepath);
 
 /* prints memory statistics for images */
 void BKE_image_print_memlist(void);
@@ -252,6 +255,7 @@ float *BKE_image_get_float_pixels_for_frame(struct Image *image, int frame);
 /* Guess offset for the first frame in the sequence */
 int BKE_image_sequence_guess_offset(struct Image *image);
 bool BKE_image_has_anim(struct Image *image);
+bool BKE_image_has_packedfile(struct Image *image);
 bool BKE_image_is_animated(struct Image *image);
 bool BKE_image_is_dirty(struct Image *image);
 void BKE_image_file_format_set(struct Image *image, int ftype);

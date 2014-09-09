@@ -805,13 +805,13 @@ void uiTemplateImage(uiLayout *layout, bContext *C, PointerRNA *ptr, const char 
 
 			if (ima->source != IMA_SRC_GENERATED) {
 				row = uiLayoutRow(layout, true);
-				if (ima->packedfile)
+				if (BKE_image_has_packedfile(ima))
 					uiItemO(row, "", ICON_PACKAGE, "image.unpack");
 				else
 					uiItemO(row, "", ICON_UGLYPACKAGE, "image.pack");
 				
 				row = uiLayoutRow(row, true);
-				uiLayoutSetEnabled(row, ima->packedfile == NULL);
+				uiLayoutSetEnabled(row, BKE_image_has_packedfile(ima) == false);
 				uiItemR(row, &imaptr, "filepath", 0, "", ICON_NONE);
 				uiItemO(row, "", ICON_FILE_REFRESH, "image.reload");
 			}

@@ -2088,6 +2088,7 @@ static void write_images(WriteData *wd, ListBase *idbase)
 	Image *ima;
 	PackedFile * pf;
 	ImageView *iv;
+	ImagePackedFile *imapf;
 
 	ima= idbase->first;
 	while (ima) {
@@ -2096,10 +2097,13 @@ static void write_images(WriteData *wd, ListBase *idbase)
 			writestruct(wd, ID_IM, "Image", 1, ima);
 			if (ima->id.properties) IDP_WriteProperty(ima->id.properties, wd);
 
-			if (ima->packedfile) {
-				pf = ima->packedfile;
-				writestruct(wd, DATA, "PackedFile", 1, pf);
-				writedata(wd, DATA, pf->size, pf->data);
+			for (imapf = ima->packedfiles.first; imapf; imapf = imapf->next) {
+				writestruct(wd, DATA, "ImagePackedFile", 1, imapf);
+				if (imapf->packedfile) {
+					pf = imapf->packedfile;
+					writestruct(wd, DATA, "PackedFile", 1, pf);
+					writedata(wd, DATA, pf->size, pf->data);
+				}
 			}
 
 			write_previews(wd, ima->preview);

@@ -84,6 +84,12 @@ typedef struct ImageView {
 	char filepath[1024];	/* 1024 = FILE_MAX */
 } ImageView;
 
+typedef struct ImagePackedFile {
+	struct ImagePackedFile *next, *prev;
+	struct PackedFile *packedfile;
+	char filepath[1024];	/* 1024 = FILE_MAX */
+} ImagePackedFile;
+
 typedef struct Image {
 	ID id;
 	
@@ -110,7 +116,8 @@ typedef struct Image {
 	unsigned int bindcode;	/* only for current image... */
 	unsigned int *repbind;	/* for repeat of parts of images */
 	
-	struct PackedFile *packedfile;
+	struct PackedFile *packedfile; /* deprecated */
+	struct ListBase packedfiles;
 	struct PreviewImage *preview;
 
 	/* game engine tile animation */

@@ -1445,9 +1445,15 @@ void blo_make_packed_pointer_map(FileData *fd, Main *oldmain)
 	
 	fd->packedmap = oldnewmap_new();
 	
-	for (ima = oldmain->image.first; ima; ima = ima->id.next)
+	for (ima = oldmain->image.first; ima; ima = ima->id.next) {
+		ImagePackedFile *imapf;
 		if (ima->packedfile)
 			insert_packedmap(fd, ima->packedfile);
+
+		for (imapf = ima->packedfiles.first; imapf; imapf = imapf->next)
+			if (imapf->packedfile)
+				insert_packedmap(fd, imapf->packedfile);
+	}
 			
 	for (vfont = oldmain->vfont.first; vfont; vfont = vfont->id.next)
 		if (vfont->packedfile)
@@ -1480,8 +1486,13 @@ void blo_end_packed_pointer_map(FileData *fd, Main *oldmain)
 			entry->newp = NULL;
 	}
 	
-	for (ima = oldmain->image.first; ima; ima = ima->id.next)
+	for (ima = oldmain->image.first; ima; ima = ima->id.next) {
+		ImagePackedFile *imapf;
 		ima->packedfile = newpackedadr(fd, ima->packedfile);
+
+		for (imapf = ima->packedfiles.first; imapf; imapf = imapf->next)
+			imapf->packedfile = newpackedadr(fd, imapf->packedfile);
+	}
 	
 	for (vfont = oldmain->vfont.first; vfont; vfont = vfont->id.next)
 		vfont->packedfile = newpackedadr(fd, vfont->packedfile);
@@ -3302,6 +3313,8 @@ static void lib_link_image(FileData *fd, Main *main)
 
 static void direct_link_image(FileData *fd, Image *ima)
 {
+	ImagePackedFile *imapf;
+
 	/* for undo system, pointers could be restored */
 	if (fd->imamap)
 		ima->cache = newmclipadr(fd, ima->cache);
@@ -3331,8 +3344,13 @@ static void direct_link_image(FileData *fd, Image *ima)
 	}
 
 	link_list(fd, &(ima->views));
-	ima->anims.first = ima->anims.last = NULL;
+	link_list(fd, &(ima->packedfiles));
 
+	for (imapf = ima->packedfiles.first; imapf; imapf = imapf->next) {
+		imapf->packedfile = direct_link_packedfile(fd, imapf->packedfile);
+	}
+
+	ima->anims.first = ima->anims.last = NULL;
 	ima->packedfile = direct_link_packedfile(fd, ima->packedfile);
 	ima->preview = direct_link_preview_image(fd, ima->preview);
 	ima->stereo3d_format = newdataadr(fd, ima->stereo3d_format);
