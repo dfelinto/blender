@@ -1814,36 +1814,43 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 
 		/* individual multiview images */
 		else if (simopts->im_format.views_format == R_IMF_VIEWS_INDIVIDUAL){
-			RenderView *rv;
 			size_t i;
 			unsigned char planes = ibuf->planes;
+			const size_t totviews = (rr ? BLI_countlist(&rr->views) : BLI_countlist(&ima->views));
 
 			if (!is_multilayer) {
 				ED_space_image_release_buffer(sima, ibuf, lock);
 			}
 
-			for (i = 0, rv = (RenderView *) rr->views.first; rv; rv = rv->next, i++) {
+			for (i = 0; i < totviews; i++) {
 				char filepath[FILE_MAX];
 				bool ok_view = false;
+				const char *view = rr ? ((RenderView *) BLI_findlink(&rr->views, i))->name:
+				                        ((ImageView *) BLI_findlink(&ima->views, i))->name;
 
 				if (is_multilayer) {
-					BKE_scene_view_get_filepath(scene, simopts->filepath, rv->name, filepath);
-					ok_view = RE_WriteRenderResult(op->reports, rr, filepath, imf, false, rv->name);
+					BKE_scene_view_get_filepath(scene, simopts->filepath, view, filepath);
+					ok_view = RE_WriteRenderResult(op->reports, rr, filepath, imf, false, view);
 					save_image_post(op, ibuf, ima, ok_view, true, relbase, relative, do_newpath, filepath);
 				}
 				else {
 					/* copy iuser to get the correct ibuf for this view */
 					ImageUser iuser = sima->iuser;
-			        iuser.pass = get_multiview_pass_id(rr, &sima->iuser, i);
 					iuser.view = i;
 					iuser.flag &= ~IMA_SHOW_STEREO;
 
-					/* get the proper ibuf for this view */
-					BKE_image_multilayer_index(rr, &iuser);
+					if (rr) {
+						iuser.pass = get_multiview_pass_id(rr, &sima->iuser, i);
+						BKE_image_multilayer_index(rr, &iuser);
+					}
+					else {
+						BKE_image_multiview_index(ima, &iuser);
+					}
+
 					ibuf = BKE_image_acquire_ibuf(sima->image, &iuser, &lock);
 					ibuf->planes = planes;
 
-					BKE_scene_view_get_filepath(scene, simopts->filepath, rv->name, filepath);
+					BKE_scene_view_get_filepath(scene, simopts->filepath, view, filepath);
 
 					IMB_colormanagement_imbuf_for_write(ibuf, save_as_render, false, &imf->view_settings, &imf->display_settings, imf);
 					ok_view = BKE_imbuf_write_as(ibuf, filepath, &simopts->im_format, save_copy);
