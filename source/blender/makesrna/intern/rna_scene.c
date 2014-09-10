@@ -36,6 +36,8 @@
 #include "DNA_userdef_types.h"
 #include "DNA_world_types.h"
 
+#include "IMB_imbuf_types.h"
+
 #include "BLI_math.h"
 
 #include "BLF_translation.h"
@@ -1823,6 +1825,27 @@ static void rna_FreestyleSettings_module_remove(ID *id, FreestyleSettings *confi
 
 	DAG_id_tag_update(&scene->id, 0);
 	WM_main_add_notifier(NC_SCENE | ND_RENDER_OPTIONS, NULL);
+}
+
+static void rna_Stereo3dFormat_update(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *ptr)
+{
+	ID *id = ptr->id.data;
+
+	if (GS(id->name) == ID_IM) {
+		Image *ima = (Image *)id;
+		ImBuf *ibuf;
+		void *lock;
+
+		if ((ima->flag & IMA_IS_STEREO) == 0)
+			return;
+
+		ibuf = BKE_image_acquire_ibuf(ima, NULL, &lock);
+
+		if (ibuf) {
+			BKE_image_signal(ima, NULL, IMA_SIGNAL_FREE);
+		}
+		BKE_image_release_ibuf(ima, ibuf, lock);
+	}
 }
 
 #else
@@ -4104,26 +4127,32 @@ static void rna_def_image_format_stereo3d_format(BlenderRNA *brna)
 	RNA_def_property_enum_sdna(prop, NULL, "display_mode");
 	RNA_def_property_enum_items(prop, stereo3d_display_items);
 	RNA_def_property_ui_text(prop, "Stereo Mode", "");
+	RNA_def_property_update(prop, NC_IMAGE | ND_DISPLAY, "rna_Stereo3dFormat_update");
 
 	prop = RNA_def_property(srna, "anaglyph_type", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_items(prop, stereo3d_anaglyph_type_items);
 	RNA_def_property_ui_text(prop, "Anaglyph Type", "");
+	RNA_def_property_update(prop, NC_IMAGE | ND_DISPLAY, "rna_Stereo3dFormat_update");
 
 	prop = RNA_def_property(srna, "interlace_type", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_items(prop, stereo3d_interlace_type_items);
 	RNA_def_property_ui_text(prop, "Interlace Type", "");
+	RNA_def_property_update(prop, NC_IMAGE | ND_DISPLAY, "rna_Stereo3dFormat_update");
 
 	prop = RNA_def_property(srna, "use_interlace_swap", PROP_BOOLEAN, PROP_BOOLEAN);
 	RNA_def_property_boolean_sdna(prop, NULL, "flag", S3D_INTERLACE_SWAP);
 	RNA_def_property_ui_text(prop, "Swap Left/Right", "Swap left and right stereo channels");
+	RNA_def_property_update(prop, NC_IMAGE | ND_DISPLAY, "rna_Stereo3dFormat_update");
 
 	prop = RNA_def_property(srna, "use_sidebyside_crosseyed", PROP_BOOLEAN, PROP_BOOLEAN);
 	RNA_def_property_boolean_sdna(prop, NULL, "flag", S3D_SIDEBYSIDE_CROSSEYED);
 	RNA_def_property_ui_text(prop, "Cross-Eyed", "Right eye should see left image and vice-versa");
+	RNA_def_property_update(prop, NC_IMAGE | ND_DISPLAY, "rna_Stereo3dFormat_update");
 
 	prop = RNA_def_property(srna, "use_squeezed_frame", PROP_BOOLEAN, PROP_BOOLEAN);
 	RNA_def_property_boolean_negative_sdna(prop, NULL, "flag", S3D_UNSQUEEZED_FRAME);
 	RNA_def_property_ui_text(prop, "Squeezed Frame", "Combine both views in a squeezed image");
+	RNA_def_property_update(prop, NC_IMAGE | ND_DISPLAY, "rna_Stereo3dFormat_update");
 }
 
 /* use for render output and image save operator,

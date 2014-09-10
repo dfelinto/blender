@@ -1027,12 +1027,44 @@ void uiTemplateImageSettings(uiLayout *layout, PointerRNA *imfptr, int color_man
 	}
 }
 
+void uiTemplateImageStereo3d(uiLayout *layout, PointerRNA *stereo3d_format_ptr)
+{
+	Stereo3dFormat *stereo3d_format = stereo3d_format_ptr->data;
+	uiLayout *col;
+
+	col = uiLayoutColumn(layout, false);
+	uiItemR(col, stereo3d_format_ptr, "display_mode", 0, NULL, ICON_NONE);
+
+	switch (stereo3d_format->display_mode) {
+		case S3D_DISPLAY_ANAGLYPH:
+		{
+			uiItemR(col, stereo3d_format_ptr, "anaglyph_type", 0, NULL, ICON_NONE);
+			break;
+		}
+		case S3D_DISPLAY_INTERLACE:
+		{
+			uiItemR(col, stereo3d_format_ptr, "interlace_type", 0, NULL, ICON_NONE);
+			uiItemR(col, stereo3d_format_ptr, "use_interlace_swap", 0, NULL, ICON_NONE);
+			break;
+		}
+		case S3D_DISPLAY_SIDEBYSIDE:
+		{
+			uiItemR(col, stereo3d_format_ptr, "use_sidebyside_crosseyed", 0, NULL, ICON_NONE);
+			/* fall-through */
+		}
+		case S3D_DISPLAY_TOPBOTTOM:
+		{
+			uiItemR(col, stereo3d_format_ptr, "use_squeezed_frame", 0, NULL, ICON_NONE);
+			break;
+		}
+	}
+}
+
 void uiTemplateImageViews(uiLayout *layout, PointerRNA *imfptr)
 {
 	ImageFormatData *imf = imfptr->data;
 	PropertyRNA *prop;
 	PointerRNA stereo3d_format_ptr;
-	Stereo3dFormat *stereo3d_format = &imf->stereo3d_format;
 
 	uiLayout *col, *box;
 
@@ -1050,33 +1082,7 @@ void uiTemplateImageViews(uiLayout *layout, PointerRNA *imfptr)
 
 	box = uiLayoutBox(col);
 	uiLayoutSetActive(box, imf->views_format == R_IMF_VIEWS_STEREO_3D);
-	col = uiLayoutColumn(box, false);
-
-	uiItemR(col, &stereo3d_format_ptr, "display_mode", 0, NULL, ICON_NONE);
-
-	switch (stereo3d_format->display_mode) {
-		case S3D_DISPLAY_ANAGLYPH:
-		{
-			uiItemR(col, &stereo3d_format_ptr, "anaglyph_type", 0, NULL, ICON_NONE);
-			break;
-		}
-		case S3D_DISPLAY_INTERLACE:
-		{
-			uiItemR(col, &stereo3d_format_ptr, "interlace_type", 0, NULL, ICON_NONE);
-			uiItemR(col, &stereo3d_format_ptr, "use_interlace_swap", 0, NULL, ICON_NONE);
-			break;
-		}
-		case S3D_DISPLAY_SIDEBYSIDE:
-		{
-			uiItemR(col, &stereo3d_format_ptr, "use_sidebyside_crosseyed", 0, NULL, ICON_NONE);
-			/* fall-through */
-		}
-		case S3D_DISPLAY_TOPBOTTOM:
-		{
-			uiItemR(col, &stereo3d_format_ptr, "use_squeezed_frame", 0, NULL, ICON_NONE);
-			break;
-		}
-	}
+	uiTemplateImageStereo3d(box, &stereo3d_format_ptr);
 }
 
 void uiTemplateImageLayers(uiLayout *layout, bContext *C, Image *ima, ImageUser *iuser)

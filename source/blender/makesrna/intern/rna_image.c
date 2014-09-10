@@ -564,6 +564,11 @@ static void rna_def_image(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Stereo 3D", "Image has left and right views");
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 
+	prop = RNA_def_property(srna, "is_multiview", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag", IMA_IS_MULTIVIEW);
+	RNA_def_property_ui_text(prop, "Multiple Views", "Image has more than one view");
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+
 	prop = RNA_def_property(srna, "is_dirty", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_funcs(prop, "rna_Image_dirty_get", NULL);
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
@@ -740,7 +745,7 @@ static void rna_def_image(BlenderRNA *brna)
 	RNA_def_property_enum_sdna(prop, NULL, "views_format");
 	RNA_def_property_enum_items(prop, views_format_items);
 	RNA_def_property_ui_text(prop, "Views Format", "Mode to save scene views");
-	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 
 	prop = RNA_def_property(srna, "stereo_3d_format", PROP_POINTER, PROP_NONE);
 	RNA_def_property_pointer_sdna(prop, NULL, "stereo3d_format");

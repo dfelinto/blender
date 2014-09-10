@@ -665,6 +665,28 @@ class IMAGE_PT_view_properties(Panel):
             sub.row().prop(uvedit, "draw_stretch_type", expand=True)
 
 
+class IMAGE_PT_stereo_3d_properties(Panel):
+    bl_space_type = 'IMAGE_EDITOR'
+    bl_region_type = 'UI'
+    bl_label = "Stereoscopy"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    @classmethod
+    def poll(cls, context):
+        sima = context.space_data
+        image = sima.image if sima else None
+        return (sima and image and image.type == 'IMAGE' and image.is_multiview and image.views_format == 'STEREO_3D')
+
+    def draw(self, context):
+        layout = self.layout
+
+        sima = context.space_data
+        ima = sima.image
+
+        box = layout.box()
+        box.template_image_stereo_3d(ima.stereo_3d_format)
+
+
 class IMAGE_PT_tools_transform_uvs(Panel, UVToolsPanel):
     bl_label = "Transform"
 
