@@ -720,6 +720,9 @@ ImBuf *IMB_stereoImBuf(ImageFormatData *im_format, ImBuf *left, ImBuf *right)
 	IMB_stereo_write_dimensions(im_format->stereo3d_format.display_mode, false, left->x, left->y, &width, &height);
 	r_ibuf = IMB_allocImBuf(width, height, left->planes, (is_float ? IB_rectfloat : IB_rect));
 
+	/* copy flags for IB_fields and other settings */
+	r_ibuf->flags = left->flags;
+
 	imb_stereo_data_initialize(&s3d_data, is_float, left->x, left->y, 4,
 	                         (int *)left->rect, (int *)right->rect, (int *)r_ibuf->rect,
 	                         left->rect_float, right->rect_float, r_ibuf->rect_float);
@@ -1226,6 +1229,10 @@ void IMB_ImBufFromStereo(Stereo3dFormat *s3d, ImBuf **left, ImBuf **right)
 
 	*left = IMB_allocImBuf(width, height, stereo->planes, (is_float ? IB_rectfloat : IB_rect));
 	*right = IMB_allocImBuf(width, height, stereo->planes, (is_float ? IB_rectfloat : IB_rect));
+
+	/* copy flags for IB_fields and other settings */
+	(*left)->flags = stereo->flags;
+	(*right)->flags = stereo->flags;
 
 	/* we always work with unsqueezed formats */
 	IMB_stereo_write_dimensions(s3d->display_mode, ((s3d->flag & S3D_UNSQUEEZED_FRAME) != 0), stereo->x, stereo->y, &width, &height);
