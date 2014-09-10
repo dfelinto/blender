@@ -319,9 +319,10 @@ Scene *RE_GetScene(Render *re)
 	return NULL;
 }
 
-/* fill provided result struct with a COPY of thew views of what is done so far
- * remember to free the RenderResult.views ListBase after using the renderresult */
-void RE_AcquireResultViews(Render *re, RenderResult *rr)
+/* Same as RE_AcquireResultImage but creating the necessary views to store the result
+ * fill provided result struct with a copy of thew views of what is done so far the
+ * RenderResult.views ListBase needs to be freed after with RE_ReleaseResultViews */
+void RE_AcquireResultImageViews(Render *re, RenderResult *rr)
 {
 	memset(rr, 0, sizeof(RenderResult));
 
@@ -364,13 +365,20 @@ void RE_AcquireResultViews(Render *re, RenderResult *rr)
 	}
 }
 
+/* clear temporary renderresult struct */
+void RE_ReleaseResultImageViews(Render *re, RenderResult *rr)
+{
+	if (re) {
+		if (rr) {
+			render_result_views_shallowdelete(rr);
+		}
+		BLI_rw_mutex_unlock(&re->resultmutex);
+	}
+}
+
 /* fill provided result struct with what's currently active or done */
 void RE_AcquireResultImage(Render *re, RenderResult *rr, const int view_id)
 {
-	/* deal with special case separatedly */
-	if (view_id == -1)
-		return RE_AcquireResultViews(re, rr);
-
 	memset(rr, 0, sizeof(RenderResult));
 
 	if (re) {
@@ -3297,7 +3305,7 @@ static int do_write_image_or_movie(Render *re, Main *bmain, Scene *scene, bMovie
 	double render_time;
 	bool ok = true;
 
-	RE_AcquireResultImage(re, &rres, -1);
+	RE_AcquireResultImageViews(re, &rres);
 
 	/* write movie or image */
 	if (BKE_imtype_is_movie(scene->r.im_format.imtype)) {
@@ -3314,7 +3322,7 @@ static int do_write_image_or_movie(Render *re, Main *bmain, Scene *scene, bMovie
 		ok = RE_WriteRenderViewsImage(re->reports, &rres, scene, true, name);
 	}
 	
-	RE_ReleaseResultImage(re);
+	RE_ReleaseResultImageViews(re, &rres);
 
 	render_time = re->i.lastframetime;
 	re->i.lastframetime = PIL_check_seconds_timer() - re->i.starttime;

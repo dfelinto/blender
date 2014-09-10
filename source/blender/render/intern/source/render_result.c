@@ -169,7 +169,7 @@ void render_result_views_shallowcopy(RenderResult *dst, RenderResult *src)
 	for (rview = (RenderView *)src->views.first; rview; rview = rview->next) {
 		RenderView *rv;
 
-		rv = MEM_callocN(sizeof(RenderView), "new render view");
+		rv = MEM_mallocN(sizeof(RenderView), "new render view");
 		BLI_addtail(&dst->views, rv);
 
 		BLI_strncpy(rv->name, rview->name, sizeof(rv->name));
