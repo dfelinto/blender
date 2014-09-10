@@ -1048,9 +1048,6 @@ static int image_sequence_get_len(ListBase *frames, int *ofs)
 static void image_open_multiview(wmOperator *op, Scene *scene, Image *ima)
 {
 	SceneRenderView *srv;
-	char prefix[FILE_MAX] = {'\0'};
-	char *name = ima->name;
-	char *ext;
 	ImageView *iv;
 	ImageOpenData *iod = op->customdata;
 	ImageFormatData *imf = &iod->im_format;
@@ -1077,73 +1074,80 @@ static void image_open_multiview(wmOperator *op, Scene *scene, Image *ima)
 		ima->views_format = R_IMF_VIEWS_STEREO_3D;
 		return;
 	}
+	else {
+		/* R_IMF_VIEWS_INDIVIDUAL */
+		char prefix[FILE_MAX] = {'\0'};
+		char *name = ima->name;
+		char *ext;
 
-	/* R_IMF_VIEWS_INDIVIDUAL */
+		size_t index_act;
+		char *suf_act;
+		const char delims[] = {'.', '\0'};
 
-	/* begin of extension */
-	for (ext = name + strlen(name);(ext != name) && (ext[0] != '.'); ext--);
-//		for (ext = name + BLI_strlen_utf8(name); ext && (ext != ); ext = BLI_str_find_prev_char_utf8(name, ext));
-	BLI_assert(ext[0] == '.');
+		/* begin of extension */
+		index_act = BLI_str_rpartition(name, delims, &ext, &suf_act);
+		BLI_assert(index_act > 0);
 
-	for (srv = scene->r.views.first; srv; srv = srv->next) {
-		if (BKE_scene_render_view_active(&scene->r, srv)) {
-			size_t len = strlen(srv->suffix);
-			if (strncmp(ext - len, srv->suffix, len) == 0) {
-				BLI_strncpy(prefix, name, strlen(name) - strlen(ext) - len + 1);
-				break;
+		for (srv = scene->r.views.first; srv; srv = srv->next) {
+			if (BKE_scene_render_view_active(&scene->r, srv)) {
+				size_t len = strlen(srv->suffix);
+				if (STREQLEN(ext - len, srv->suffix, len)) {
+					BLI_strncpy(prefix, name, strlen(name) - strlen(ext) - len + 1);
+					break;
+				}
 			}
 		}
-	}
 
-	if (prefix[0] == '\0') {
-		goto monoview;
-	}
-
-	/* create all the image views */
-	for (srv = scene->r.views.first; srv; srv = srv->next) {
-		if (BKE_scene_render_view_active(&scene->r, srv)) {
-			iv = MEM_mallocN(sizeof(ImageView), "Image View (open)");
-			BLI_strncpy(iv->name, srv->name, sizeof(iv->name));
-
-			sprintf(iv->filepath, "%s%s%s", prefix, srv->suffix, ext);
-			BLI_addtail(&ima->views, iv);
+		if (prefix[0] == '\0') {
+			goto monoview;
 		}
-	}
 
-	/* check if the files are all available */
-	for (iv = ima->views.first; iv; iv = iv->next) {
-		int file;
-		char str[FILE_MAX];
+		/* create all the image views */
+		for (srv = scene->r.views.first; srv; srv = srv->next) {
+			if (BKE_scene_render_view_active(&scene->r, srv)) {
+				iv = MEM_mallocN(sizeof(ImageView), "Image View (open)");
+				BLI_strncpy(iv->name, srv->name, sizeof(iv->name));
 
-		BLI_strncpy(str, iv->filepath, sizeof(str));
-		BLI_path_abs(str, G.main->name);
-
-		/* exists? */
-		file = BLI_open(str, O_BINARY | O_RDONLY, 0);
-		if (file == -1) {
-			ImageView *iv_del = iv;
-			iv = iv_del->prev;
-			BLI_remlink(&ima->views, iv_del);
-			MEM_freeN(iv_del);
+				sprintf(iv->filepath, "%s%s%s", prefix, srv->suffix, ext);
+				BLI_addtail(&ima->views, iv);
+			}
 		}
-		close(file);
-	}
 
-	/* all good */
-	if (BLI_countlist(&ima->views) > 1) {
-		ima->flag |= IMA_IS_MULTIVIEW;
-		if (BKE_scene_is_stereo3d(&scene->r))
-			ima->flag |= IMA_IS_STEREO;
-	}
-	else {
-monoview:
-		ima->flag &= IMA_IS_STEREO;
-		ima->flag &= IMA_IS_MULTIVIEW;
-		BKE_image_free_views(ima);
-	}
+		/* check if the files are all available */
+		for (iv = ima->views.first; iv; iv = iv->next) {
+			int file;
+			char str[FILE_MAX];
 
-	/* monoview and multiview rely on individual images */
-	ima->views_format = R_IMF_VIEWS_INDIVIDUAL;
+			BLI_strncpy(str, iv->filepath, sizeof(str));
+			BLI_path_abs(str, G.main->name);
+
+			/* exists? */
+			file = BLI_open(str, O_BINARY | O_RDONLY, 0);
+			if (file == -1) {
+				ImageView *iv_del = iv;
+				iv = iv_del->prev;
+				BLI_remlink(&ima->views, iv_del);
+				MEM_freeN(iv_del);
+			}
+			close(file);
+		}
+
+		/* all good */
+		if (BLI_countlist(&ima->views) > 1) {
+			ima->flag |= IMA_IS_MULTIVIEW;
+			if (BKE_scene_is_stereo3d(&scene->r))
+				ima->flag |= IMA_IS_STEREO;
+		}
+		else {
+	monoview:
+			ima->flag &= IMA_IS_STEREO;
+			ima->flag &= IMA_IS_MULTIVIEW;
+			BKE_image_free_views(ima);
+		}
+
+		/* monoview and multiview rely on individual images */
+		ima->views_format = R_IMF_VIEWS_INDIVIDUAL;
+	}
 }
 
 static int image_open_exec(bContext *C, wmOperator *op)
