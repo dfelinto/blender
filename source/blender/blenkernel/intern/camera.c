@@ -734,7 +734,7 @@ void BKE_camera_stereo_matrices(Object *camera, float r_viewmat[4][4], float *r_
 Object *BKE_camera_multiview_advanced(Scene *scene, RenderData *rd, Object *camera, const char *suffix)
 {
 	SceneRenderView *srv;
-	char name[MAX_NAME];
+	char name[MAX_NAME] = {0};
 	int len_name, len_suffix;
 
 	len_name = BLI_strnlen(camera->id.name, sizeof(camera->id.name));
