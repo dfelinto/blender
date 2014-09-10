@@ -216,7 +216,7 @@ void EDBM_mesh_make(struct ToolSettings *ts, struct Object *ob) RET_NONE
 void EDBM_mesh_normals_update(struct BMEditMesh *em) RET_NONE
 void *g_system;
 
-float *RE_RenderLayerGetPass(volatile struct RenderLayer *rl, int passtype, int view_id) RET_NULL
+float *RE_RenderLayerGetPass(volatile struct RenderLayer *rl, int passtype, const char *viewname) RET_NULL
 float RE_filter_value(int type, float x) RET_ZERO
 struct RenderLayer *RE_GetRenderLayer(struct RenderResult *rr, const char *name) RET_NULL
 
@@ -224,7 +224,7 @@ struct Object *RE_GetViewCamera(struct Render *re) {STUB_ASSERT(0); return (stru
 float *RE_RenderViewGetRectf(struct RenderResult *rr, int view_id) {STUB_ASSERT(0); return (float *) NULL;}
 float *RE_RenderViewGetRectz(struct RenderResult *rr, int view_id) {STUB_ASSERT(0); return (float *) NULL;}
 int RE_layers_have_name(struct RenderResult *result) {STUB_ASSERT(0); return 0;}
-void RE_engine_actview_set(struct RenderEngine *engine, int view) {STUB_ASSERT(0);}
+void RE_engine_actview_set(struct RenderEngine *engine, const char *viewname) {STUB_ASSERT(0);}
 
 /* zbuf.c stub */
 void antialias_tagbuf(int xsize, int ysize, char *rectmove) RET_NONE
@@ -567,7 +567,7 @@ void uiTemplateNodeSocket(struct uiLayout *layout, struct bContext *C, float *co
 void uiTemplatePalette(struct uiLayout *layout, struct PointerRNA *ptr, const char *propname, int color) RET_NONE
 
 /* rna render */
-struct RenderResult *RE_engine_begin_result(RenderEngine *engine, int x, int y, int w, int h, const char *layername, int view) RET_NULL
+struct RenderResult *RE_engine_begin_result(RenderEngine *engine, int x, int y, int w, int h, const char *layername, const char *viewname) RET_NULL
 struct RenderResult *RE_AcquireResultRead(struct Render *re) RET_NULL
 struct RenderResult *RE_AcquireResultWrite(struct Render *re) RET_NULL
 struct RenderStats *RE_GetStats(struct Render *re) RET_NULL
@@ -692,7 +692,8 @@ struct CCLDeviceInfo *CCL_compute_device_list(int opencl) RET_NULL
 
 /* compositor */
 void COM_execute(RenderData *rd, Scene *scene, bNodeTree *editingtree, int rendering,
-                 const ColorManagedViewSettings *viewSettings, const ColorManagedDisplaySettings *displaySettings, const int view_id) RET_NONE
+                 const ColorManagedViewSettings *viewSettings, const ColorManagedDisplaySettings *displaySettings,
+                 const char *viewName) RET_NONE
 
 /*multiview*/
 bool RE_RenderResult_is_stereo(RenderResult *res) RET_ZERO
