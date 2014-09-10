@@ -2833,6 +2833,8 @@ static void update_physics_cache(Render *re, Scene *scene, int UNUSED(anim_init)
 /* setup stereo basic cameras when needed */
 static void render_initialize_stereo(Render *re, RenderData *rd)
 {
+	render_free_stereo(re);
+
 	/* investigate why do I need to click twice in the button */
 	if ((rd->scemode & R_MULTIVIEW) &&
 	     rd->views_setup == SCE_VIEWS_SETUP_BASIC)
@@ -2967,6 +2969,12 @@ static int render_initialize_from_main(Render *re, RenderData *rd, Main *bmain, 
 	return 1;
 }
 
+static void render_free_from_main(Render *re)
+{
+	/* remove the temporary cameras */
+	render_free_stereo(re);
+}
+
 void RE_SetReports(Render *re, ReportList *reports)
 {
 	re->reports = reports;
@@ -3008,6 +3016,8 @@ void RE_BlenderFrame(Render *re, Main *bmain, Scene *scene, SceneRenderLayer *sr
 		BLI_callback_exec(re->main, (ID *)scene, BLI_CB_EVT_RENDER_POST); /* keep after file save */
 	}
 
+	render_free_from_main(re);
+
 	BLI_callback_exec(re->main, (ID *)scene, G.is_break ? BLI_CB_EVT_RENDER_CANCEL : BLI_CB_EVT_RENDER_COMPLETE);
 
 	/* UGLY WARNING */
@@ -3022,6 +3032,8 @@ void RE_RenderFreestyleStrokes(Render *re, Main *bmain, Scene *scene, int render
 		if (render)
 			do_render_fields_blur_3d(re);
 	}
+
+	render_free_from_main(re);
 	re->result_ok = 1;
 }
 
@@ -3375,8 +3387,10 @@ void RE_BlenderAnim(Render *re, Main *bmain, Scene *scene, Object *camera_overri
 	BLI_callback_exec(re->main, (ID *)scene, BLI_CB_EVT_RENDER_INIT);
 
 	/* do not fully call for each frame, it initializes & pops output window */
-	if (!render_initialize_from_main(re, &rd, bmain, scene, NULL, camera_override, lay_override, 0, 1))
+	if (!render_initialize_from_main(re, &rd, bmain, scene, NULL, camera_override, lay_override, 0, 1)) {
+		render_free_from_main(re);
 		return;
+	}
 
 	/* we don't support Frame Server and streaming of individual views */
 	if ((rd.im_format.imtype == R_IMF_IMTYPE_FRAMESERVER) && (totvideos > 1)) {
@@ -3460,6 +3474,7 @@ void RE_BlenderAnim(Render *re, Main *bmain, Scene *scene, Object *camera_overri
 					updatelay = re->lay;
 
 				BKE_scene_update_for_newframe(re->eval_ctx, bmain, scene, updatelay);
+				render_free_from_main(re);
 				continue;
 			}
 			else
@@ -3474,6 +3489,7 @@ void RE_BlenderAnim(Render *re, Main *bmain, Scene *scene, Object *camera_overri
 				if (scene->r.mode & R_NO_OVERWRITE && BLI_exists(name)) {
 					printf("skipping existing frame \"%s\"\n", name);
 					totskipped++;
+					render_free_from_main(re);
 					continue;
 				}
 
@@ -3509,13 +3525,14 @@ void RE_BlenderAnim(Render *re, Main *bmain, Scene *scene, Object *camera_overri
 						BLI_delete(name, false, false);
 					}
 				}
-				
+				render_free_from_main(re);
 				break;
 			}
 
 			if (G.is_break == false) {
 				BLI_callback_exec(re->main, (ID *)scene, BLI_CB_EVT_RENDER_POST); /* keep after file save */
 			}
+			render_free_from_main(re);
 		}
 	}
 	
@@ -3534,6 +3551,8 @@ void RE_BlenderAnim(Render *re, Main *bmain, Scene *scene, Object *camera_overri
 	scene->r.cfra = cfrao;
 
 	re->flag &= ~R_ANIMATION;
+
+	render_free_from_main(re);
 
 	BLI_callback_exec(re->main, (ID *)scene, G.is_break ? BLI_CB_EVT_RENDER_CANCEL : BLI_CB_EVT_RENDER_COMPLETE);
 

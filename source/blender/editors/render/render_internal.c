@@ -703,6 +703,8 @@ static void render_endjob(void *rjv)
 
 		DAG_on_visible_update(G.main, false);
 	}
+
+	RE_RenderFreeStereo(rj->re);
 }
 
 /* called by render, check job 'stop' value or the global */
