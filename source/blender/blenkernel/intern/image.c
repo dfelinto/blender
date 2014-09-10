@@ -3080,6 +3080,13 @@ static ImBuf *image_load_movie_file(Image *ima, ImageUser *iuser, int frame)
 	/* return the original requested ImBuf */
 	r_ibuf = ibuf[is_multiview ? (iuser ? iuser->multi_index : 0) : 0];
 
+	/* "remove" the others (decrease their refcount) */
+	for (i = 0; i < totviews; i++) {
+		if (ibuf[i] != r_ibuf) {
+			IMB_freeImBuf(ibuf[i]);
+		}
+	}
+
 	if (iuser)
 		iuser->ok = ima->ok;
 
@@ -3193,6 +3200,13 @@ static ImBuf *image_load_image_file(Image *ima, ImageUser *iuser, int cfra)
 
 	/* return the original requested ImBuf */
 	r_ibuf = ibuf[is_multiview ? (iuser ? iuser->multi_index : 0) : 0];
+
+	/* "remove" the others (decrease their refcount) */
+	for (i = 0; i < totviews; i++) {
+		if (ibuf[i] != r_ibuf) {
+			IMB_freeImBuf(ibuf[i]);
+		}
+	}
 
 	if (iuser)
 		iuser->ok = ima->ok;
@@ -3418,28 +3432,6 @@ static ImBuf *image_get_render_result(Image *ima, ImageUser *iuser, void **lock_
 	return ibuf;
 }
 
-static void image_get_frame_and_index(Image *ima, ImageUser *iuser, int *r_frame, int *r_index)
-{
-	int frame = 0, index = 0;
-
-	/* see if we already have an appropriate ibuf, with image source and type */
-	if (ima->source == IMA_SRC_MOVIE) {
-		frame = iuser ? iuser->framenr : ima->lastframe;
-	}
-	else if (ima->source == IMA_SRC_SEQUENCE) {
-		if (ima->type == IMA_TYPE_IMAGE) {
-			frame = iuser ? iuser->framenr : ima->lastframe;
-		}
-		else if (ima->type == IMA_TYPE_MULTILAYER) {
-			frame = iuser ? iuser->framenr : ima->lastframe;
-			index = iuser ? iuser->multi_index : IMA_NO_INDEX;
-		}
-	}
-
-	*r_frame = frame;
-	*r_index = index;
-}
-
 static size_t image_get_multiview_index(Image *ima, ImageUser *iuser)
 {
 	const bool is_multilayer = BKE_image_is_multilayer(ima);
@@ -3459,6 +3451,28 @@ static size_t image_get_multiview_index(Image *ima, ImageUser *iuser)
 	}
 
 	return IMA_NO_INDEX;
+}
+
+static void image_get_frame_and_index(Image *ima, ImageUser *iuser, int *r_frame, int *r_index)
+{
+	int frame = 0, index = 0;
+	index = image_get_multiview_index(ima, iuser);
+
+	/* see if we already have an appropriate ibuf, with image source and type */
+	if (ima->source == IMA_SRC_MOVIE) {
+		frame = iuser ? iuser->framenr : ima->lastframe;
+	}
+	else if (ima->source == IMA_SRC_SEQUENCE) {
+		if (ima->type == IMA_TYPE_IMAGE) {
+			frame = iuser ? iuser->framenr : ima->lastframe;
+		}
+		else if (ima->type == IMA_TYPE_MULTILAYER) {
+			frame = iuser ? iuser->framenr : ima->lastframe;
+		}
+	}
+
+	*r_frame = frame;
+	*r_index = index;
 }
 
 /* Get the ibuf from an image cache for a given image user.
