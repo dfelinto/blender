@@ -35,6 +35,7 @@
 #include "BKE_depsgraph.h"
 #include "BKE_image.h"
 
+#include "RNA_access.h"
 #include "RNA_define.h"
 #include "RNA_enum_types.h"
 
@@ -399,6 +400,19 @@ static int rna_Image_is_float_get(PointerRNA *ptr)
 	return is_float;
 }
 
+static PointerRNA rna_Image_packed_file_get(PointerRNA *ptr)
+{
+	Image *ima = (Image *)ptr->id.data;
+
+	if (BKE_image_has_packedfile(ima)) {
+		ImagePackedFile *imapf = ima->packedfiles.first;
+		return rna_pointer_inherit_refine(ptr, &RNA_PackedFile, imapf->packedfile);
+	}
+	else {
+		return PointerRNA_NULL;
+	}
+}
+
 #else
 
 static void rna_def_imageuser(BlenderRNA *brna)
@@ -472,6 +486,27 @@ static void rna_def_imageuser(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "View", "View in multilayer image");
 }
 
+/* image.packed_files */
+static void rna_def_image_packed_files(BlenderRNA *brna)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	srna = RNA_def_struct(brna, "ImagePackedFile", NULL);
+	RNA_def_struct_sdna(srna, "ImagePackedFile");
+
+	prop = RNA_def_property(srna, "packed_file", PROP_POINTER, PROP_NONE);
+	RNA_def_property_pointer_sdna(prop, NULL, "packedfile");
+	RNA_def_property_ui_text(prop, "Packed File", "");
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+
+	prop = RNA_def_property(srna, "filepath", PROP_STRING, PROP_FILEPATH);
+	RNA_def_property_string_sdna(prop, NULL, "filepath");
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+	RNA_def_struct_name_property(srna, prop);
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+}
+
 static void rna_def_image(BlenderRNA *brna)
 {
 	StructRNA *srna;
@@ -532,15 +567,23 @@ static void rna_def_image(BlenderRNA *brna)
 	RNA_def_property_update(prop, NC_IMAGE | ND_DISPLAY, NULL);
 
 	prop = RNA_def_property(srna, "packed_file", PROP_POINTER, PROP_NONE);
+	RNA_def_property_struct_type(prop, "PackedFile");
 	RNA_def_property_pointer_sdna(prop, NULL, "packedfile");
-	RNA_def_property_ui_text(prop, "Packed File", "");
-	
+	RNA_def_property_pointer_funcs(prop, "rna_Image_packed_file_get", NULL, NULL, NULL);
+	RNA_def_property_ui_text(prop, "Packed File", "First packed file of the image");
+
+	prop = RNA_def_property(srna, "packed_files", PROP_COLLECTION, PROP_NONE);
+	RNA_def_property_collection_sdna(prop, NULL, "packedfiles", NULL);
+	RNA_def_property_struct_type(prop, "ImagePackedFile");
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+	RNA_def_property_ui_text(prop, "Packed Files", "Collection of packed images");
+
 	prop = RNA_def_property(srna, "field_order", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_bitflag_sdna(prop, NULL, "flag");
 	RNA_def_property_enum_items(prop, prop_field_order_items);
 	RNA_def_property_ui_text(prop, "Field Order", "Order of video fields (select which lines are displayed first)");
 	RNA_def_property_update(prop, NC_IMAGE | ND_DISPLAY, NULL);
-	
+
 	/* booleans */
 	prop = RNA_def_property(srna, "use_fields", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "flag", IMA_FIELDS);
@@ -760,6 +803,7 @@ void RNA_def_image(BlenderRNA *brna)
 {
 	rna_def_image(brna);
 	rna_def_imageuser(brna);
+	rna_def_image_packed_files(brna);
 }
 
 #endif
