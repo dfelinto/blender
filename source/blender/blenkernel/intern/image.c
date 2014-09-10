@@ -2927,15 +2927,19 @@ static ImBuf *image_load_sequence_file(Image *ima, ImageUser *iuser, int frame)
 		IMB_ImBufFromStereo(ima->stereo3d_format, &ibuf[0], &ibuf[1]);
 
 	if (assign) {
-		if (!is_multiview)
-			image_assign_ibuf(ima, ibuf[0], 0, frame);
-		else
-			for (i = 0; i < totviews; i++)
-				image_assign_ibuf(ima, ibuf[i], i, frame);
+		for (i = 0; i < totviews; i++)
+			image_assign_ibuf(ima, ibuf[i], i, frame);
 	}
 
 	/* return the original requested ImBuf */
 	r_ibuf = ibuf[is_multiview ? (iuser ? iuser->multi_index : 0) : 0];
+
+	/* "remove" the others (decrease their refcount) */
+	for (i = 0; i < totviews; i++) {
+		if (ibuf[i] != r_ibuf) {
+			IMB_freeImBuf(ibuf[i]);
+		}
+	}
 
 	if (iuser)
 		iuser->ok = ima->ok;
