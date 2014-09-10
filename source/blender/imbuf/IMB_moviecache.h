@@ -77,5 +77,4 @@ void IMB_moviecacheIter_step(struct MovieCacheIter *iter);
 struct ImBuf *IMB_moviecacheIter_getImBuf(struct MovieCacheIter *iter);
 void *IMB_moviecacheIter_getUserKey(struct MovieCacheIter *iter);
 
-size_t IMB_moviecache_count(struct MovieCache *cache);
 #endif

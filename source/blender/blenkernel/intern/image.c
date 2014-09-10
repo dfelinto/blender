@@ -259,14 +259,6 @@ static void image_free_cahced_frames(Image *image)
 	}
 }
 
-int BKE_image_cache_count(Image *image)
-{
-	if (image->cache)
-		return IMB_moviecache_count(image->cache);
-	else
-		return 0;
-}
-
 static void image_free_packedfiles(Image *ima)
 {
 	while (ima->packedfiles.last) {

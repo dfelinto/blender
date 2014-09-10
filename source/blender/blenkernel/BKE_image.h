@@ -53,7 +53,6 @@ struct ReportList;
 void   BKE_images_init(void);
 void   BKE_images_exit(void);
 
-int     BKE_image_cache_count(struct Image *image);
 void    BKE_image_free_packedfiles(struct Image *image);
 void    BKE_image_free_views(struct Image *image);
 void    BKE_image_free_buffers(struct Image *image);
