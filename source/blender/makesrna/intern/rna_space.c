@@ -691,8 +691,15 @@ static int rna_SpaceImageEditor_show_stereo_get(PointerRNA *ptr)
 static void rna_SpaceImageEditor_show_stereo_update(Main *UNUSED(bmain), Scene *UNUSED(unused), PointerRNA *ptr)
 {
 	SpaceImage *sima = (SpaceImage *)(ptr->data);
-	if (sima->image && sima->image->rr) {
-		BKE_image_multilayer_index(sima->image->rr, &sima->iuser);
+	Image *ima = sima->image;
+
+	if (ima) {
+		if (ima->rr) {
+			BKE_image_multilayer_index(ima->rr, &sima->iuser);
+		}
+		else {
+			BKE_image_multiview_index(ima, &sima->iuser);
+		}
 	}
 }
 
@@ -826,11 +833,17 @@ static void rna_SpaceImageEditor_cursor_location_set(PointerRNA *ptr, const floa
 static void rna_SpaceImageEditor_image_update(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *ptr)
 {
 	SpaceImage *sima = (SpaceImage *)ptr->data;
+	Image *ima = sima->image;
 
 	/* make sure all the iuser settings are valid for the sima image */
-	if (sima->image) {
-		if (BKE_image_multilayer_index(sima->image->rr, &sima->iuser) == NULL) {
-			BKE_image_init_imageuser(sima->image, &sima->iuser);
+	if (ima) {
+		if (ima->rr) {
+			if (BKE_image_multilayer_index(sima->image->rr, &sima->iuser) == NULL) {
+				BKE_image_init_imageuser(sima->image, &sima->iuser);
+			}
+		}
+		else {
+			BKE_image_multiview_index(ima, &sima->iuser);
 		}
 	}
 }
