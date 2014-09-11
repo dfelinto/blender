@@ -1044,112 +1044,6 @@ static int image_sequence_get_len(ListBase *frames, int *ofs)
 	return 0;
 }
 
-/* handle the individual views case */
-static void image_open_multiview(wmOperator *op, Scene *scene, Image *ima)
-{
-	SceneRenderView *srv;
-	ImageView *iv;
-	ImageOpenData *iod = op->customdata;
-	ImageFormatData *imf = &iod->im_format;
-	const bool is_multiview = RNA_boolean_get(op->ptr, "use_multiple_views");
-
-	if (!is_multiview) {
-		goto monoview;
-	}
-	else if (imf->views_format == R_IMF_VIEWS_STEREO_3D) {
-		size_t i;
-		const char *names[2] = {STEREO_LEFT_NAME, STEREO_RIGHT_NAME};
-
-		ima->flag |= IMA_IS_MULTIVIEW;
-		ima->flag |= IMA_IS_STEREO;
-
-		for (i = 0; i < 2; i++) {
-			iv = MEM_mallocN(sizeof(ImageView), "Image View Stereo (open)");
-			BLI_strncpy(iv->name, names[i], sizeof(iv->name));
-			BLI_strncpy(iv->filepath, ima->name, sizeof(iv->filepath));
-			BLI_addtail(&ima->views, iv);
-		}
-
-		*ima->stereo3d_format = imf->stereo3d_format;
-		ima->views_format = R_IMF_VIEWS_STEREO_3D;
-		return;
-	}
-	else {
-		/* R_IMF_VIEWS_INDIVIDUAL */
-		char prefix[FILE_MAX] = {'\0'};
-		char *name = ima->name;
-		char *ext;
-
-		size_t index_act;
-		char *suf_act;
-		const char delims[] = {'.', '\0'};
-
-		/* begin of extension */
-		index_act = BLI_str_rpartition(name, delims, &ext, &suf_act);
-		BLI_assert(index_act > 0);
-
-		for (srv = scene->r.views.first; srv; srv = srv->next) {
-			if (BKE_scene_render_view_active(&scene->r, srv)) {
-				size_t len = strlen(srv->suffix);
-				if (STREQLEN(ext - len, srv->suffix, len)) {
-					BLI_strncpy(prefix, name, strlen(name) - strlen(ext) - len + 1);
-					break;
-				}
-			}
-		}
-
-		if (prefix[0] == '\0') {
-			goto monoview;
-		}
-
-		/* create all the image views */
-		for (srv = scene->r.views.first; srv; srv = srv->next) {
-			if (BKE_scene_render_view_active(&scene->r, srv)) {
-				iv = MEM_mallocN(sizeof(ImageView), "Image View (open)");
-				BLI_strncpy(iv->name, srv->name, sizeof(iv->name));
-
-				sprintf(iv->filepath, "%s%s%s", prefix, srv->suffix, ext);
-				BLI_addtail(&ima->views, iv);
-			}
-		}
-
-		/* check if the files are all available */
-		for (iv = ima->views.first; iv; iv = iv->next) {
-			int file;
-			char str[FILE_MAX];
-
-			BLI_strncpy(str, iv->filepath, sizeof(str));
-			BLI_path_abs(str, G.main->name);
-
-			/* exists? */
-			file = BLI_open(str, O_BINARY | O_RDONLY, 0);
-			if (file == -1) {
-				ImageView *iv_del = iv;
-				iv = iv_del->prev;
-				BLI_remlink(&ima->views, iv_del);
-				MEM_freeN(iv_del);
-			}
-			close(file);
-		}
-
-		/* all good */
-		if (BLI_countlist(&ima->views) > 1) {
-			ima->flag |= IMA_IS_MULTIVIEW;
-			if (BKE_scene_is_stereo3d(&scene->r))
-				ima->flag |= IMA_IS_STEREO;
-		}
-		else {
-	monoview:
-			ima->flag &= IMA_IS_STEREO;
-			ima->flag &= IMA_IS_MULTIVIEW;
-			BKE_image_free_views(ima);
-		}
-
-		/* monoview and multiview rely on individual images */
-		ima->views_format = R_IMF_VIEWS_INDIVIDUAL;
-	}
-}
-
 static int image_open_exec(bContext *C, wmOperator *op)
 {
 	Main *bmain = CTX_data_main(C);
@@ -1157,7 +1051,7 @@ static int image_open_exec(bContext *C, wmOperator *op)
 	Scene *scene = CTX_data_scene(C);
 	Object *obedit = CTX_data_edit_object(C);
 	ImageUser *iuser = NULL;
-	ImageOpenData *iod;
+	ImageOpenData *iod = op->customdata;
 	PointerRNA idptr;
 	Image *ima = NULL;
 	char path[FILE_MAX];
@@ -1194,7 +1088,22 @@ static int image_open_exec(bContext *C, wmOperator *op)
 		image_open_init(C, op);
 
 	/* handle multiview images */
-	image_open_multiview(op, scene, ima);
+	if (RNA_boolean_get(op->ptr, "use_multiple_views")) {
+		ImageFormatData *imf = &iod->im_format;
+
+		ima->views_format = imf->views_format;
+		*ima->stereo3d_format = imf->stereo3d_format;
+
+		BKE_image_update_views_format(scene, ima);
+	}
+	else {
+		ima->flag &= IMA_IS_STEREO;
+		ima->flag &= IMA_IS_MULTIVIEW;
+		BKE_image_free_views(ima);
+
+		/* monoview and multiview rely on individual images */
+		ima->views_format = R_IMF_VIEWS_INDIVIDUAL;
+	}
 
 	/* only image path after save, never ibuf */
 	if (is_relative_path) {

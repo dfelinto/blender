@@ -203,6 +203,9 @@ struct RenderPass *BKE_image_multilayer_index(struct RenderResult *rr, struct Im
 /* sets index offset for multiview files */
 void BKE_image_multiview_index(struct Image *ima, struct ImageUser *iuser);
 
+/* called on image settings change (in ui) */
+void BKE_image_update_views_format(struct Scene *scene, struct Image *ima);
+
 /* for multilayer images as well as for render-viewer */
 bool BKE_image_is_multilayer(struct Image *ima);
 struct RenderResult *BKE_image_acquire_renderresult(struct Scene *scene, struct Image *ima);

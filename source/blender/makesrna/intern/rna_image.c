@@ -138,6 +138,22 @@ static void rna_Image_colormanage_update(Main *UNUSED(bmain), Scene *UNUSED(scen
 	WM_main_add_notifier(NC_IMAGE | NA_EDITED, &ima->id);
 }
 
+static void rna_Image_views_format_update(Main *UNUSED(bmain), Scene *scene, PointerRNA *ptr)
+{
+	Image *ima = ptr->id.data;
+	ImBuf *ibuf;
+	void *lock;
+
+	ibuf = BKE_image_acquire_ibuf(ima, NULL, &lock);
+
+	if (ibuf) {
+		BKE_image_update_views_format(scene, ima);
+		BKE_image_signal(ima, NULL, IMA_SIGNAL_FREE);
+	}
+
+	BKE_image_release_ibuf(ima, ibuf, lock);
+}
+
 static void rna_ImageUser_update(Main *UNUSED(bmain), Scene *scene, PointerRNA *ptr)
 {
 	ImageUser *iuser = ptr->data;
@@ -788,7 +804,7 @@ static void rna_def_image(BlenderRNA *brna)
 	RNA_def_property_enum_sdna(prop, NULL, "views_format");
 	RNA_def_property_enum_items(prop, views_format_items);
 	RNA_def_property_ui_text(prop, "Views Format", "Mode to save scene views");
-	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+	RNA_def_property_update(prop, NC_IMAGE | ND_DISPLAY, "rna_Image_views_format_update");
 
 	prop = RNA_def_property(srna, "stereo_3d_format", PROP_POINTER, PROP_NONE);
 	RNA_def_property_pointer_sdna(prop, NULL, "stereo3d_format");

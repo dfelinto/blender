@@ -675,7 +675,8 @@ class IMAGE_PT_stereo_3d_properties(Panel):
     def poll(cls, context):
         sima = context.space_data
         image = sima.image if sima else None
-        return (sima and image and image.type == 'IMAGE' and image.is_multiview and image.views_format == 'STEREO_3D')
+        return (sima and image and image.type == 'IMAGE' and \
+                context.scene.render.use_multiple_views)
 
     def draw(self, context):
         layout = self.layout
@@ -683,7 +684,12 @@ class IMAGE_PT_stereo_3d_properties(Panel):
         sima = context.space_data
         ima = sima.image
 
-        box = layout.box()
+        col = layout
+        col.label(text="Views Format:")
+        col.row().prop(ima, "views_format", expand=True)
+
+        box = col.box()
+        box.active = ima.views_format == 'STEREO_3D'
         box.template_image_stereo_3d(ima.stereo_3d_format)
 
 
