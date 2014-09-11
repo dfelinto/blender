@@ -1181,7 +1181,7 @@ void IMB_exrmultiview_write_channels(void *handle, const char *viewname)
 		                                (char *)rect,
 		                                echan->xstride * sizeof(float),
 		                                -echan->ystride * sizeof(float))
-);
+		);
 	}
 
 	for (i = 0; i < numparts; i++) {

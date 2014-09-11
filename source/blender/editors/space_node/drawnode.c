@@ -1663,8 +1663,8 @@ static void node_composit_buts_id_mask(uiLayout *layout, bContext *UNUSED(C), Po
 static void node_composit_buts_file_output(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
 {
 	PointerRNA imfptr = RNA_pointer_get(ptr, "format");
-	int multilayer = (ELEM(RNA_enum_get(&imfptr, "file_format"), R_IMF_IMTYPE_MULTILAYER, R_IMF_IMTYPE_MULTIVIEW));
-	
+	const bool multilayer = RNA_enum_get(&imfptr, "file_format") == R_IMF_IMTYPE_MULTILAYER;
+
 	if (multilayer)
 		uiItemL(layout, IFACE_("Path:"), ICON_NONE);
 	else
@@ -1678,7 +1678,7 @@ static void node_composit_buts_file_output_ex(uiLayout *layout, bContext *C, Poi
 	PointerRNA active_input_ptr, op_ptr;
 	uiLayout *row, *col;
 	int active_index;
-	int multilayer = (ELEM(RNA_enum_get(&imfptr, "file_format"), R_IMF_IMTYPE_MULTILAYER, R_IMF_IMTYPE_MULTIVIEW));
+	const bool multilayer = RNA_enum_get(&imfptr, "file_format") == R_IMF_IMTYPE_MULTILAYER;
 	const bool multiview = scene->r.scemode & R_MULTIVIEW;
 	
 	node_composit_buts_file_output(layout, C, ptr);
@@ -1686,7 +1686,7 @@ static void node_composit_buts_file_output_ex(uiLayout *layout, bContext *C, Poi
 	
 	/* disable stereo output for multilayer, too much work for something that no one will use */
 	/* if someone asks for that we can implement it */
-	if (multiview && !multilayer)
+	if (multiview)
 		uiTemplateImageViews(layout, &imfptr);
 
 	uiItemS(layout);
@@ -2923,7 +2923,8 @@ static void node_file_output_socket_draw(bContext *C, uiLayout *layout, PointerR
 	
 	imfptr = RNA_pointer_get(node_ptr, "format");
 	imtype = RNA_enum_get(&imfptr, "file_format");
-	if (ELEM(imtype, R_IMF_IMTYPE_MULTILAYER, R_IMF_IMTYPE_MULTIVIEW)) {
+
+	if (imtype == R_IMF_IMTYPE_MULTILAYER) {
 		NodeImageMultiFileSocket *input = sock->storage;
 		RNA_pointer_create(&ntree->id, &RNA_NodeOutputFileSlotLayer, input, &inputptr);
 		

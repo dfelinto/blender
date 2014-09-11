@@ -211,16 +211,12 @@ EnumPropertyItem snap_uv_element_items[] = {
 #endif
 
 #ifdef WITH_OPENEXR
-#  define R_IMF_ENUM_EXR_MULTIVIEW {R_IMF_IMTYPE_MULTIVIEW, "OPEN_EXR_MULTIVIEW", ICON_CAMERA_STEREO, \
-                                                          "OpenEXR MultiView", \
-                                                          "Output image in multiview OpenEXR format"},
 #  define R_IMF_ENUM_EXR_MULTILAYER  {R_IMF_IMTYPE_MULTILAYER, "OPEN_EXR_MULTILAYER", ICON_FILE_IMAGE, \
                                                           "OpenEXR MultiLayer", \
                                                           "Output image in multilayer OpenEXR format"},
 #  define R_IMF_ENUM_EXR        {R_IMF_IMTYPE_OPENEXR, "OPEN_EXR", ICON_FILE_IMAGE, "OpenEXR", \
                                                        "Output image in OpenEXR format"},
 #else
-#  define R_IMF_ENUM_EXR_MULTIVIEW
 #  define R_IMF_ENUM_EXR_MULTILAYER
 #  define R_IMF_ENUM_EXR
 #endif
@@ -250,7 +246,6 @@ EnumPropertyItem snap_uv_element_items[] = {
 	{0, "", 0, " ", NULL},                                                    \
 	R_IMF_ENUM_CINEON                                                         \
 	R_IMF_ENUM_DPX                                                            \
-	R_IMF_ENUM_EXR_MULTIVIEW                                                  \
 	R_IMF_ENUM_EXR_MULTILAYER                                                 \
 	R_IMF_ENUM_EXR                                                            \
 	R_IMF_ENUM_HDR                                                            \
@@ -334,7 +329,6 @@ EnumPropertyItem bake_save_mode_items[] = {
 	{R_BAKE_SAVE_EXTERNAL, "EXTERNAL", 0, "External", "Save the baking map in an external file"},
 	{0, NULL, 0, NULL, NULL}
 };
-
 
 #define R_IMF_VIEWS_ENUM_IND      {R_IMF_VIEWS_INDIVIDUAL, "INDIVIDUAL", 0, "Individual", "Individual files for each view with the prefix as defined by the scene views"},
 #define R_IMF_VIEWS_ENUM_S3D      {R_IMF_VIEWS_STEREO_3D, "STEREO_3D", 0, "Stereo 3D", "Single file with an encoded stereo pair"},
@@ -952,7 +946,7 @@ static EnumPropertyItem *rna_ImageFormatSettings_color_depth_itemf(bContext *UNU
 	}
 	else {
 		const int depth_ok = BKE_imtype_valid_depths(imf->imtype);
-		const int is_float = ELEM(imf->imtype, R_IMF_IMTYPE_RADHDR, R_IMF_IMTYPE_OPENEXR, R_IMF_IMTYPE_MULTILAYER, R_IMF_IMTYPE_MULTIVIEW);
+		const int is_float = ELEM(imf->imtype, R_IMF_IMTYPE_RADHDR, R_IMF_IMTYPE_OPENEXR, R_IMF_IMTYPE_MULTILAYER);
 
 		EnumPropertyItem *item_8bit =  &image_color_depth_items[0];
 		EnumPropertyItem *item_10bit = &image_color_depth_items[1];

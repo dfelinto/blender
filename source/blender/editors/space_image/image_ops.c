@@ -1682,14 +1682,9 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 				BKE_report(op->reports, RPT_ERROR, "Did not write, no Multilayer Image");
 				goto cleanup;
 			}
-
-			else if (is_multilayer) {
-				BKE_report(op->reports, RPT_ERROR, "Did not write, no Multiview Image");
-				goto cleanup;
-			}
 		}
 		else {
-			if (imf->imtype != R_IMF_IMTYPE_MULTIVIEW && imf->views_format == R_IMF_VIEWS_STEREO_3D) {
+			if (imf->views_format == R_IMF_VIEWS_STEREO_3D) {
 				if ((ima->flag & IMA_IS_STEREO) == 0) {
 					BKE_reportf(op->reports, RPT_ERROR, "Did not write, the image doesn't have a \"%s\" and \"%s\" views",
 					           STEREO_LEFT_NAME, STEREO_RIGHT_NAME);
@@ -1709,7 +1704,7 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 		}
 
 		/* fancy multiview OpenEXR */
-		if (imf->imtype == R_IMF_IMTYPE_MULTIVIEW) {
+		if ((imf->imtype == R_IMF_IMTYPE_MULTILAYER) && (imf->views_format == R_IMF_VIEWS_MULTIVIEW)) {
 			ok = RE_WriteRenderResult(op->reports, rr, simopts->filepath, imf, true, NULL);
 			save_image_post(op, ibuf, ima, ok, true, relbase, relative, do_newpath, simopts->filepath);
 			ED_space_image_release_buffer(sima, ibuf, lock);

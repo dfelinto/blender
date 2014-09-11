@@ -3084,7 +3084,7 @@ bool RE_WriteRenderViewsImage(ReportList *reports, RenderResult *rr, Scene *scen
 
 	is_mono = BLI_countlist(&rr->views) < 2;
 
-	if (rd->im_format.imtype == R_IMF_IMTYPE_MULTIVIEW) {
+	if (rd->im_format.views_format == R_IMF_VIEWS_MULTIVIEW) {
 		RE_WriteRenderResult(reports, rr, name, &rd->im_format, true, NULL);
 		printf("Saved: %s\n", name);
 	}

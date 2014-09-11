@@ -971,7 +971,7 @@ void uiTemplateImageSettings(uiLayout *layout, PointerRNA *imfptr, int color_man
 		uiItemR(col, imfptr, "compression", 0, NULL, ICON_NONE);
 	}
 
-	if (ELEM(imf->imtype, R_IMF_IMTYPE_OPENEXR, R_IMF_IMTYPE_MULTILAYER, R_IMF_IMTYPE_MULTIVIEW)) {
+	if (ELEM(imf->imtype, R_IMF_IMTYPE_OPENEXR, R_IMF_IMTYPE_MULTILAYER)) {
 		uiItemR(col, imfptr, "exr_codec", 0, NULL, ICON_NONE);
 	}
 	
@@ -1067,10 +1067,6 @@ void uiTemplateImageViews(uiLayout *layout, PointerRNA *imfptr)
 	PointerRNA stereo3d_format_ptr;
 
 	uiLayout *col, *box;
-
-	/* OpenEXR multiview is only to save multiview exr */
-	if (imf->imtype == R_IMF_IMTYPE_MULTIVIEW)
-		return;
 
 	col = uiLayoutColumn(layout, false);
 

@@ -43,13 +43,106 @@ extern "C" {
 	#include "IMB_imbuf_types.h"
 }
 
-OutputOpenExrMultiViewOperation::OutputOpenExrMultiViewOperation(
+/************************************  OpenEXR Singlelayer Multiview *****************************************/
+
+OutputOpenExrSingleLayerMultiViewOperation::OutputOpenExrSingleLayerMultiViewOperation(
+        const RenderData *rd, const bNodeTree *tree, DataType datatype, ImageFormatData *format, const char *path,
+        const ColorManagedViewSettings *viewSettings, const ColorManagedDisplaySettings *displaySettings,
+        const char *viewName):
+        OutputSingleLayerOperation(rd, tree, datatype, format, path, viewSettings, displaySettings, viewName)
+{
+}
+
+void *OutputOpenExrSingleLayerMultiViewOperation::get_handle(const char* filename)
+{
+	size_t width = this->getWidth();
+	size_t height = this->getHeight();
+	SceneRenderView *srv;
+
+	if (width != 0 && height != 0) {
+		void *exrhandle;
+
+		exrhandle = IMB_exr_get_handle_name(filename);
+
+		if (!BKE_scene_render_view_first(this->m_rd, this->m_viewName))
+			return exrhandle;
+
+		IMB_exr_clear_channels(exrhandle);
+
+		for (srv = (SceneRenderView *) this->m_rd->views.first; srv; srv = srv->next)
+			if (BKE_scene_render_view_active(this->m_rd, srv))
+				IMB_exr_add_view(exrhandle, srv->name);
+
+		return exrhandle;
+	}
+	return NULL;
+}
+
+void OutputOpenExrSingleLayerMultiViewOperation::deinitExecution()
+{
+	unsigned int width = this->getWidth();
+	unsigned int height = this->getHeight();
+
+	if (width != 0 && height != 0) {
+		void *exrhandle;
+		float *buf = this->m_outputBuffer;
+		Main *bmain = G.main; /* TODO, have this passed along */
+		char filename[FILE_MAX];
+
+		BKE_makepicstring_from_type(filename, this->m_path, bmain->name, this->m_rd->cfra, R_IMF_IMTYPE_OPENEXR,
+		                            (this->m_rd->scemode & R_EXTENSION), true, "");
+
+		exrhandle = this->get_handle(filename);
+
+		IMB_exr_clear_channels(exrhandle);
+
+		/* create channels */
+		switch (this->m_datatype) {
+			case COM_DT_VALUE:
+				IMB_exr_add_channel(exrhandle, 0, "V", this->m_viewName, 1, width, buf);
+				break;
+			case COM_DT_VECTOR:
+				IMB_exr_add_channel(exrhandle, 0, "X", this->m_viewName, 3, 3 * width, buf);
+				IMB_exr_add_channel(exrhandle, 0, "Y", this->m_viewName, 3, 3 * width, buf + 1);
+				IMB_exr_add_channel(exrhandle, 0, "Z", this->m_viewName, 3, 3 * width, buf + 2);
+				break;
+			case COM_DT_COLOR:
+				IMB_exr_add_channel(exrhandle, 0, "R", this->m_viewName, 4, 4 * width, buf);
+				IMB_exr_add_channel(exrhandle, 0, "G", this->m_viewName, 4, 4 * width, buf + 1);
+				IMB_exr_add_channel(exrhandle, 0, "B", this->m_viewName, 4, 4 * width, buf + 2);
+				IMB_exr_add_channel(exrhandle, 0, "A", this->m_viewName, 4, 4 * width, buf + 3);
+				break;
+			default:
+				break;
+		}
+
+		/* the actual writing */
+		IMB_exrmultiview_write_channels(exrhandle, this->m_viewName);
+
+		if (this->m_outputBuffer)
+			MEM_freeN(this->m_outputBuffer);
+
+		if (this->m_imageInput)
+			MEM_freeN(this->m_imageInput);
+
+		this->m_outputBuffer = NULL;
+		this->m_imageInput = NULL;
+
+		/* ready to close the file */
+		if (BKE_scene_render_view_last(this->m_rd, this->m_viewName))
+			IMB_exr_close(exrhandle);
+	}
+}
+
+/************************************  OpenEXR Multilayer Multiview *****************************************/
+
+OutputOpenExrMultiLayerMultiViewOperation::OutputOpenExrMultiLayerMultiViewOperation(
         const RenderData *rd, const bNodeTree *tree, const char *path, char exr_codec, const char *viewName):
         OutputOpenExrMultiLayerOperation(rd, tree, path, exr_codec, viewName)
 {
 }
 
-void *OutputOpenExrMultiViewOperation::get_handle(const char* filename)
+void *OutputOpenExrMultiLayerMultiViewOperation::get_handle(const char* filename)
 {
 	unsigned int width = this->getWidth();
 	unsigned int height = this->getHeight();
@@ -70,7 +163,7 @@ void *OutputOpenExrMultiViewOperation::get_handle(const char* filename)
 		/* check renderdata for amount of views */
 		for (srv= (SceneRenderView *) this->m_rd->views.first; srv; srv = srv->next) {
 
-			if (srv->viewflag & SCE_VIEW_DISABLE)
+			if (BKE_scene_render_view_active(this->m_rd, srv) == false)
 				continue;
 
 			IMB_exr_add_view(exrhandle, srv->name);
@@ -128,7 +221,7 @@ void *OutputOpenExrMultiViewOperation::get_handle(const char* filename)
 	return NULL;
 }
 
-void OutputOpenExrMultiViewOperation::deinitExecution()
+void OutputOpenExrMultiLayerMultiViewOperation::deinitExecution()
 {
 	unsigned int width = this->getWidth();
 	unsigned int height = this->getHeight();
@@ -138,7 +231,7 @@ void OutputOpenExrMultiViewOperation::deinitExecution()
 		Main *bmain = G.main; /* TODO, have this passed along */
 		char filename[FILE_MAX];
 
-		BKE_makepicstring_from_type(filename, this->m_path, bmain->name, this->m_rd->cfra, R_IMF_IMTYPE_MULTIVIEW,
+		BKE_makepicstring_from_type(filename, this->m_path, bmain->name, this->m_rd->cfra, R_IMF_IMTYPE_MULTILAYER,
 		                            (this->m_rd->scemode & R_EXTENSION), true, "");
 
 		exrhandle = this->get_handle(filename);
@@ -216,7 +309,7 @@ OutputStereoOperation::OutputStereoOperation(
         const RenderData *rd, const bNodeTree *tree, DataType datatype, ImageFormatData *format, const char *path,
         const char *name, const ColorManagedViewSettings *viewSettings, const ColorManagedDisplaySettings *displaySettings,
         const char *viewName):
-    OutputSingleLayerOperation(rd, tree, datatype, format, path, viewSettings, displaySettings, viewName)
+        OutputSingleLayerOperation(rd, tree, datatype, format, path, viewSettings, displaySettings, viewName)
 {
 	BLI_strncpy(this->m_name, name, sizeof(this->m_name));
 	this->m_channels = get_datatype_size(datatype);
@@ -256,7 +349,7 @@ void OutputStereoOperation::deinitExecution()
 	if (width != 0 && height != 0) {
 		void *exrhandle;
 
-		exrhandle = this->get_handle(m_path);
+		exrhandle = this->get_handle(this->m_path);
 		float *buf = this->m_outputBuffer;
 
 		/* populate single EXR channel with view data */

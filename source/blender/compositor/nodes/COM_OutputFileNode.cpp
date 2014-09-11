@@ -38,6 +38,7 @@ OutputFileNode::OutputFileNode(bNode *editorNode) : Node(editorNode)
 void OutputFileNode::convertToOperations(NodeConverter &converter, const CompositorContext &context) const
 {
 	NodeImageMultiFile *storage = (NodeImageMultiFile *)this->getbNode()->storage;
+	const bool is_multiview = (context.getRenderData()->scemode & R_MULTIVIEW);
 	
 	if (!context.isRendering()) {
 		/* only output files when rendering a sequence -
@@ -47,12 +48,12 @@ void OutputFileNode::convertToOperations(NodeConverter &converter, const Composi
 		return;
 	}
 	
-	if (ELEM(storage->format.imtype, R_IMF_IMTYPE_MULTILAYER, R_IMF_IMTYPE_MULTIVIEW)) {
+	if (storage->format.imtype == R_IMF_IMTYPE_MULTILAYER) {
 		/* single output operation for the multilayer file */
 		OutputOpenExrMultiLayerOperation *outputOperation;
 
-		if (storage->format.imtype == R_IMF_IMTYPE_MULTIVIEW) {
-			outputOperation = new OutputOpenExrMultiViewOperation(
+		if (is_multiview && storage->format.views_format == R_IMF_VIEWS_MULTIVIEW) {
+			outputOperation = new OutputOpenExrMultiLayerMultiViewOperation(
 			        context.getRenderData(), context.getbNodeTree(), storage->base_path, storage->format.exr_codec, context.getViewName());
 		} else {
 			outputOperation = new OutputOpenExrMultiLayerOperation(
@@ -80,7 +81,6 @@ void OutputFileNode::convertToOperations(NodeConverter &converter, const Composi
 	else {  /* single layer format */
 		int num_inputs = getNumberOfInputSockets();
 		bool previewAdded = false;
-		const bool is_mono = BKE_scene_num_views(context.getRenderData()) < 2;
 		for (int i = 0; i < num_inputs; ++i) {
 			NodeInput *input = getInputSocket(i);
 			if (input->isLinked()) {
@@ -93,14 +93,12 @@ void OutputFileNode::convertToOperations(NodeConverter &converter, const Composi
 
 				NodeOperation *outputOperation = NULL;
 
-				if (format->imtype == R_IMF_IMTYPE_MULTIVIEW) {
-					outputOperation = new OutputOpenExrMultiViewOperation(
-					        context.getRenderData(), context.getbNodeTree(), path, format->exr_codec, context.getViewName());
-
-					((OutputOpenExrMultiViewOperation *)outputOperation)->add_layer(sockdata->layer, input->getDataType(), true);
-					converter.mapInputSocket(input, outputOperation->getInputSocket(0));
+				if (is_multiview && format->views_format == R_IMF_VIEWS_MULTIVIEW) {
+					outputOperation = new OutputOpenExrSingleLayerMultiViewOperation(
+					        context.getRenderData(), context.getbNodeTree(), input->getDataType(), format, path,
+					        context.getViewSettings(), context.getDisplaySettings(), context.getViewName());
 				}
-				else if (is_mono || (format->views_format == R_IMF_VIEWS_INDIVIDUAL)) {
+				else if ((!is_multiview) || (format->views_format == R_IMF_VIEWS_INDIVIDUAL)) {
 					outputOperation = new OutputSingleLayerOperation(
 					        context.getRenderData(), context.getbNodeTree(), input->getDataType(), format, path,
 					        context.getViewSettings(), context.getDisplaySettings(), context.getViewName());

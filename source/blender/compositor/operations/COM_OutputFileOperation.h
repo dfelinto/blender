@@ -51,7 +51,7 @@ protected:
 	const char *m_viewName;
 public:
 	OutputSingleLayerOperation(const RenderData *rd, const bNodeTree *tree, DataType datatype, ImageFormatData *format, const char *path,
-	                           const ColorManagedViewSettings *viewSettings, const ColorManagedDisplaySettings *displaySettings, const char *m_viewName);
+	                           const ColorManagedViewSettings *viewSettings, const ColorManagedDisplaySettings *displaySettings, const char *viewName);
 	
 	void executeRegion(rcti *rect, unsigned int tileNumber);
 	bool isOutputOperation(bool rendering) const { return true; }
