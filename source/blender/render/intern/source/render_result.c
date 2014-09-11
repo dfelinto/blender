@@ -1185,7 +1185,7 @@ bool RE_WriteRenderResult(ReportList *reports, RenderResult *rr, const char *fil
 
 	/* when the filename has no permissions, this can fail */
 	if (multiview) {
-		if (IMB_exrmultiview_begin_write(exrhandle, filename, width, height, compress, false)) {
+		if (IMB_exrmultiview_begin_write(exrhandle, filename, width, height, compress, false, true)) {
 			IMB_exrmultiview_write_channels(exrhandle, RR_ALL_VIEWS);
 			success = true;
 		}

@@ -886,7 +886,8 @@ static int imb_exr_begin_write_multiview(void *handle, const char *filename, int
 #endif
 
 /* used for final output images */
-int IMB_exrmultiview_begin_write(void *handle, const char *filename, int width, int height, int compress, int splitviews)
+int IMB_exrmultiview_begin_write(void *handle, const char *filename, int width, int height, int compress, int splitviews,
+                                 const bool multilayer)
 {
 	ExrHandle *data = (ExrHandle *)handle;
 	Header header(width, height);
@@ -898,8 +899,12 @@ int IMB_exrmultiview_begin_write(void *handle, const char *filename, int width, 
 	data->height = height;
 
 	openexr_header_compression(&header, compress);
-	header.insert("BlenderMultiChannel", StringAttribute("Blender V2.55.1 and newer"));
-	header.insert("BlenderMultiView", StringAttribute("Blender V2.68"));
+
+	if (multilayer)
+		header.insert("BlenderMultiChannel", StringAttribute("Blender V2.55.1 and newer"));
+
+	header.insert("BlenderMultiView", StringAttribute("Blender V2.73 and newer"));
+
 	header.setType(SCANLINEIMAGE);
 
 	exr_printf("\nIMB_exrmultiview_begin_write()\n");

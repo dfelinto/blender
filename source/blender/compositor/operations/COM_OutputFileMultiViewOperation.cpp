@@ -69,11 +69,44 @@ void *OutputOpenExrSingleLayerMultiViewOperation::get_handle(const char* filenam
 
 		IMB_exr_clear_channels(exrhandle);
 
-		for (srv = (SceneRenderView *) this->m_rd->views.first; srv; srv = srv->next)
-			if (BKE_scene_render_view_active(this->m_rd, srv))
-				IMB_exr_add_view(exrhandle, srv->name);
+		for (srv = (SceneRenderView *) this->m_rd->views.first; srv; srv = srv->next) {
+			if (BKE_scene_render_view_active(this->m_rd, srv) == false)
+				continue;
 
-		return exrhandle;
+			IMB_exr_add_view(exrhandle, srv->name);
+
+			/* create channels */
+			switch (this->m_datatype) {
+				case COM_DT_VALUE:
+					IMB_exr_add_channel(exrhandle, 0, "V", srv->name, 1, width, NULL);
+					break;
+				case COM_DT_VECTOR:
+					IMB_exr_add_channel(exrhandle, 0, "X", srv->name, 3, 3 * width, NULL);
+					IMB_exr_add_channel(exrhandle, 0, "Y", srv->name, 3, 3 * width, NULL);
+					IMB_exr_add_channel(exrhandle, 0, "Z", srv->name, 3, 3 * width, NULL);
+					break;
+				case COM_DT_COLOR:
+					IMB_exr_add_channel(exrhandle, 0, "R", srv->name, 4, 4 * width, NULL);
+					IMB_exr_add_channel(exrhandle, 0, "G", srv->name, 4, 4 * width, NULL);
+					IMB_exr_add_channel(exrhandle, 0, "B", srv->name, 4, 4 * width, NULL);
+					IMB_exr_add_channel(exrhandle, 0, "A", srv->name, 4, 4 * width, NULL);
+					break;
+				default:
+					break;
+			}
+		}
+
+		BLI_make_existing_file(filename);
+
+		/* prepare the file with all the channels */
+		if (IMB_exrmultiview_begin_write(exrhandle, filename, width, height, this->m_format->exr_codec, true, false) == 0)
+		{
+			printf("Error Writing Singlelayer Multiview Openexr\n");
+			IMB_exr_close(exrhandle);
+		}
+		else {
+			return exrhandle;
+		}
 	}
 	return NULL;
 }
@@ -121,9 +154,6 @@ void OutputOpenExrSingleLayerMultiViewOperation::deinitExecution()
 
 		if (this->m_outputBuffer)
 			MEM_freeN(this->m_outputBuffer);
-
-		if (this->m_imageInput)
-			MEM_freeN(this->m_imageInput);
 
 		this->m_outputBuffer = NULL;
 		this->m_imageInput = NULL;
@@ -206,15 +236,12 @@ void *OutputOpenExrMultiLayerMultiViewOperation::get_handle(const char* filename
 		BLI_make_existing_file(filename);
 
 		/* prepare the file with all the channels */
-		if(IMB_exrmultiview_begin_write(exrhandle, filename, width, height, this->m_exr_codec, true) == 0)
+		if (IMB_exrmultiview_begin_write(exrhandle, filename, width, height, this->m_exr_codec, true, true) == 0)
 		{
-			/* TODO, get the error from openexr's exception */
-			/* XXX nice way to do report? */
-			printf("Error Writing Render Result, see console\n");
+			printf("Error Writing Multilayer Multiview Openexr\n");
 			IMB_exr_close(exrhandle);
 		}
 		else {
-			/* the actual writing */
 			return exrhandle;
 		}
 	}
