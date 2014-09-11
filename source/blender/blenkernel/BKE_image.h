@@ -211,6 +211,9 @@ bool BKE_image_is_multilayer(struct Image *ima);
 struct RenderResult *BKE_image_acquire_renderresult(struct Scene *scene, struct Image *ima);
 void BKE_image_release_renderresult(struct Scene *scene, struct Image *ima);
 
+/* for multilayer images as well as for singlelayer */
+bool BKE_image_is_openexr(struct Image *ima);
+
 /* for multiple slot render, call this before render */
 void BKE_image_backup_render(struct Scene *scene, struct Image *ima);
 	

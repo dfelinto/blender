@@ -273,6 +273,7 @@ enum {
 enum {
 	R_IMF_VIEWS_INDIVIDUAL = 0,
 	R_IMF_VIEWS_STEREO_3D  = 1,
+	R_IMF_VIEWS_MULTIVIEW  = 2,
 };
 
 typedef struct Stereo3dFormat {

@@ -335,11 +335,27 @@ EnumPropertyItem bake_save_mode_items[] = {
 	{0, NULL, 0, NULL, NULL}
 };
 
+
+#define R_IMF_VIEWS_ENUM_IND      {R_IMF_VIEWS_INDIVIDUAL, "INDIVIDUAL", 0, "Individual", "Individual files for each view with the prefix as defined by the scene views"},
+#define R_IMF_VIEWS_ENUM_S3D      {R_IMF_VIEWS_STEREO_3D, "STEREO_3D", 0, "Stereo 3D", "Single file with an encoded stereo pair"},
+#define R_IMF_VIEWS_ENUM_MV       {R_IMF_VIEWS_MULTIVIEW, "MULTIVIEW", 0, "Multi View", "Single file with all the views"},
+
 EnumPropertyItem views_format_items[] = {
-	{R_IMF_VIEWS_INDIVIDUAL, "INDIVIDUAL", 0, "Individual", ""},
-	{R_IMF_VIEWS_STEREO_3D, "STEREO_3D", 0, "Stereo 3D", ""},
+	R_IMF_VIEWS_ENUM_IND
+	R_IMF_VIEWS_ENUM_S3D
 	{0, NULL, 0, NULL, NULL}
 };
+
+EnumPropertyItem views_format_multiview_items[] = {
+	R_IMF_VIEWS_ENUM_IND
+	R_IMF_VIEWS_ENUM_S3D
+	R_IMF_VIEWS_ENUM_MV
+	{0, NULL, 0, NULL, NULL}
+};
+
+#undef R_IMF_VIEWS_ENUM_IND
+#undef R_IMF_VIEWS_ENUM_S3D
+#undef R_IMF_VIEWS_ENUM_MV
 
 EnumPropertyItem stereo3d_display_items[] = {
 	{S3D_DISPLAY_ANAGLYPH, "ANAGLYPH", 0, "Anaglyph", "Render two differently filtered colored images for each eye. Anaglyph glasses are required"},
@@ -986,6 +1002,22 @@ static EnumPropertyItem *rna_ImageFormatSettings_color_depth_itemf(bContext *UNU
 		*r_free = true;
 
 		return item;
+	}
+}
+
+static EnumPropertyItem *rna_ImageFormatSettings_views_format_itemf(bContext *UNUSED(C), PointerRNA *ptr,
+                                                                    PropertyRNA *UNUSED(prop), bool *UNUSED(r_free))
+{
+	ImageFormatData *imf = (ImageFormatData *)ptr->data;
+
+	if (imf == NULL) {
+		return views_format_items;
+	}
+	else if (ELEM(imf->imtype, R_IMF_IMTYPE_OPENEXR, R_IMF_IMTYPE_MULTILAYER)){
+		return views_format_multiview_items;
+	}
+	else {
+		return views_format_items;
 	}
 }
 
@@ -4298,6 +4330,7 @@ static void rna_def_scene_image_format_data(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "views_format", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "views_format");
 	RNA_def_property_enum_items(prop, views_format_items);
+	RNA_def_property_enum_funcs(prop, NULL, NULL, "rna_ImageFormatSettings_views_format_itemf");
 	RNA_def_property_ui_text(prop, "Views Format", "Format of multiview media");
 	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
 

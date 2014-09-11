@@ -138,6 +138,19 @@ static void rna_Image_colormanage_update(Main *UNUSED(bmain), Scene *UNUSED(scen
 	WM_main_add_notifier(NC_IMAGE | NA_EDITED, &ima->id);
 }
 
+static EnumPropertyItem *rna_Image_views_format_itemf(bContext *UNUSED(C), PointerRNA *ptr,
+                                                      PropertyRNA *UNUSED(prop), bool *UNUSED(r_free))
+{
+	Image *ima = (Image *)ptr->data;
+
+	if (BKE_image_is_openexr(ima)) {
+		return views_format_multiview_items;
+	}
+	else {
+		return views_format_items;
+	}
+}
+
 static void rna_Image_views_format_update(Main *UNUSED(bmain), Scene *scene, PointerRNA *ptr)
 {
 	Image *ima = ptr->id.data;
@@ -803,6 +816,7 @@ static void rna_def_image(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "views_format", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "views_format");
 	RNA_def_property_enum_items(prop, views_format_items);
+	RNA_def_property_enum_funcs(prop, NULL, NULL, "rna_Image_views_format_itemf");
 	RNA_def_property_ui_text(prop, "Views Format", "Mode to save scene views");
 	RNA_def_property_update(prop, NC_IMAGE | ND_DISPLAY, "rna_Image_views_format_update");
 

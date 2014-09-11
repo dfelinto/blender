@@ -2760,6 +2760,16 @@ void BKE_image_release_renderresult(Scene *scene, Image *ima)
 	}
 }
 
+bool BKE_image_is_openexr(struct Image *ima)
+{
+#ifdef WITH_OPENEXR
+	if (ELEM(ima->source, IMA_SRC_FILE, IMA_SRC_SEQUENCE)) {
+		return BLI_testextensie(ima->name, ".exr");
+	}
+#endif
+	return false;
+}
+
 void BKE_image_backup_render(Scene *scene, Image *ima)
 {
 	/* called right before rendering, ima->renders contains render
