@@ -1489,6 +1489,10 @@ static int save_image_options_init(SaveImageOptions *simopts, SpaceImage *sima, 
 			}
 		}
 
+		/* use the multiview image settings as the default */
+		simopts->im_format.stereo3d_format = *ima->stereo3d_format;
+		simopts->im_format.views_format = ima->views_format;
+
 		/* color management */
 		BKE_color_managed_display_settings_copy(&simopts->im_format.display_settings, &scene->display_settings);
 		BKE_color_managed_view_settings_copy(&simopts->im_format.view_settings, &scene->view_settings);
