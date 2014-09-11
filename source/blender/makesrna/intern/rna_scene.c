@@ -1831,7 +1831,7 @@ static void rna_Stereo3dFormat_update(Main *UNUSED(bmain), Scene *UNUSED(scene),
 {
 	ID *id = ptr->id.data;
 
-	if (GS(id->name) == ID_IM) {
+	if (id && GS(id->name) == ID_IM) {
 		Image *ima = (Image *)id;
 		ImBuf *ibuf;
 		void *lock;
