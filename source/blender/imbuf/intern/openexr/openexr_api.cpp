@@ -105,6 +105,10 @@ extern "C"
 {
 /* prototype */
 static struct ExrPass *imb_exr_get_pass(ListBase *lb, char *passname);
+static bool imb_exr_is_multiview(MultiPartInputFile *file);
+static bool imb_exr_is_multipart(MultiPartInputFile *file);
+static int exr_has_alpha(MultiPartInputFile *file);
+static int exr_has_zbuffer(MultiPartInputFile *file);
 
 static void exr_printf(const char *__restrict format, ...);
 }
@@ -622,8 +626,8 @@ static int imb_exr_get_multiView_id(StringVector& views, const std::string& name
 
 static void imb_exr_get_views(MultiPartInputFile *file, StringVector& views)
 {
-	if(file->parts() == 1) {
-		if(hasMultiView(file->header(0))) {
+	if(imb_exr_is_multipart(file) == false) {
+		if(imb_exr_is_multiview(file)) {
 			StringVector sv = multiView(file->header(0));
 			for (StringVector::const_iterator i = sv.begin(); i != sv.end(); ++i)
 				views.push_back(*i);
@@ -632,9 +636,9 @@ static void imb_exr_get_views(MultiPartInputFile *file, StringVector& views)
 
 	else {
 		for(int p = 0; p < file->parts(); p++) {
-			std::string view="";
+			std::string view = "";
 			if(file->header(p).hasView())
-				view=file->header(p).view();
+				view = file->header(p).view();
 
 			if (imb_exr_get_multiView_id(views, view) == -1)
 				views.push_back(view);
@@ -1288,6 +1292,75 @@ void IMB_exr_multilayer_convert(void *handle, void *base,
 	}
 }
 
+void IMB_exr_singlelayer_multiview_convert(void *handle, void *base,
+                                           void (*addview)(void *base, const char *str),
+                                           void (*addbuffer)(void *base, const char *str, ImBuf *ibuf, const int frame),
+                                           const int frame)
+{
+	ExrHandle *data = (ExrHandle *)handle;
+	MultiPartInputFile *file = data->ifile;
+	ExrLayer *lay;
+	ExrPass *pass;
+	ImBuf *ibuf = NULL;
+	const int is_alpha = exr_has_alpha(file);
+	Box2i dw = file->header(0).dataWindow();
+	const size_t width  = dw.max.x - dw.min.x + 1;
+	const size_t height = dw.max.y - dw.min.y + 1;
+	const bool is_depth = exr_has_zbuffer(file);
+	
+	/* add views to RenderResult */
+	for (StringVector::const_iterator i = data->multiView->begin(); i != data->multiView->end(); ++i) {
+		addview(base, (*i).c_str());
+	}
+	
+	if (BLI_listbase_is_empty(&data->layers)) {
+		printf("cannot convert multiviews, no views in handle\n");
+		return;
+	}
+	
+	/* there is one float/pass per layer (layer here is a view) */
+	BLI_assert(BLI_countlist(&data->layers) == 1);
+	lay = (ExrLayer *)data->layers.first;
+	for (pass = (ExrPass *)lay->passes.first; pass; pass = pass->next) {
+		if (STREQ(pass->chan_id, "RGB") || STREQ(pass->chan_id, "RGBA")) {
+			ibuf = IMB_allocImBuf(width, height, is_alpha ? 32 : 24, IB_rectfloat);
+
+			if (!ibuf) {
+				printf("error creating multiview buffer\n");
+				return;
+			}
+
+			IMB_buffer_float_from_float(
+			        ibuf->rect_float, pass->rect, pass->totchan,
+			        IB_PROFILE_LINEAR_RGB, IB_PROFILE_LINEAR_RGB, false,
+			        ibuf->x, ibuf->y, ibuf->x, ibuf->x);
+
+			if (hasXDensity(file->header(0))) {
+				ibuf->ppm[0] = xDensity(file->header(0)) * 39.3700787f;
+				ibuf->ppm[1] = ibuf->ppm[0] * (double)file->header(0).pixelAspectRatio();
+			}
+
+			if (is_depth) {
+				ExrPass *zpass;
+				for (zpass = (ExrPass *)lay->passes.first; zpass; zpass = zpass->next) {
+					if (STREQ(zpass->chan_id, "Z") && STREQ(zpass->view, pass->view)) {
+						addzbuffloatImBuf(ibuf);
+
+						IMB_buffer_float_from_float(
+						        ibuf->zbuf_float, zpass->rect, zpass->totchan,
+						        IB_PROFILE_LINEAR_RGB, IB_PROFILE_LINEAR_RGB, false,
+						        ibuf->x, ibuf->y, ibuf->x, ibuf->x);
+						zpass->rect = NULL;
+					}
+				}
+			}
+
+			addbuffer(base, pass->view, ibuf, frame);
+			pass->rect = NULL;
+		}
+	}
+}
+
 void IMB_exr_close(void *handle)
 {
 	ExrHandle *data = (ExrHandle *)handle;
@@ -1665,7 +1738,7 @@ static int exr_has_alpha(MultiPartInputFile *file)
 	return !(file->header(0).channels().findChannel("A") == NULL);
 }
 
-static bool exr_is_multilayer(MultiPartInputFile *file)
+static bool imb_exr_is_multilayer(MultiPartInputFile *file)
 {
 	const StringAttribute *comments = file->header(0).findTypedAttribute<StringAttribute>("BlenderMultiChannel");
 	const ChannelList &channels = file->header(0).channels();
@@ -1675,11 +1748,7 @@ static bool exr_is_multilayer(MultiPartInputFile *file)
 	channels.layers(layerNames);
 
 	if (comments || layerNames.size() > 1)
-		return 1;
-
-	/* multipart files are treated as multilayer in blender */
-	if (file->parts() > 1)
-		return 1;
+		return true;
 
 	if (layerNames.size()) {
 		/* if layerNames is not empty, it means at least one layer is non-empty,
@@ -1694,11 +1763,71 @@ static bool exr_is_multilayer(MultiPartInputFile *file)
 			size_t pos = layerName.rfind ('.');
 
 			if (pos == std::string::npos)
-				return 1;
+				return true;
 		}
 	}
 
-	return 0;
+	return false;
+}
+
+bool IMB_exr_has_singlelayer_multiview(void *handle)
+{
+	ExrHandle *data = (ExrHandle *)handle;
+	MultiPartInputFile *file = data->ifile;
+	std::set <std::string> layerNames;
+	const ChannelList &channels = file->header(0).channels();
+	const StringAttribute *comments;
+
+	if (imb_exr_is_multiview(file) == false)
+		return false;
+
+	comments = file->header(0).findTypedAttribute<StringAttribute>("BlenderMultiChannel");
+
+	if (comments)
+		return false;
+
+	/* will not include empty layer names */
+	channels.layers(layerNames);
+
+	/* returns false if any layer differs from views list */
+	if (layerNames.size())
+		for (std::set<string>::iterator i = layerNames.begin(); i != layerNames.end(); i++)
+			if (imb_exr_get_multiView_id(*data->multiView, *i) == -1)
+				return false;
+
+	return true;
+}
+
+bool IMB_exr_has_multilayer(void *handle)
+{
+	ExrHandle *data = (ExrHandle *)handle;
+	return imb_exr_is_multilayer(data->ifile);
+}
+
+static bool imb_exr_is_multiview(MultiPartInputFile *file)
+{
+	return hasMultiView(file->header(0));
+}
+
+static bool imb_exr_is_multipart(MultiPartInputFile *file)
+{
+	return file->parts() > 1;
+}
+
+/* it returns true if the file is multilayer or multiview */
+static bool imb_exr_is_multi(MultiPartInputFile *file)
+{
+	/* multipart files are treated as multilayer in blender - even if they are single layer openexr with multiview */
+	if (imb_exr_is_multipart(file))
+		return true;
+
+	if (imb_exr_is_multiview(file))
+		return true;
+
+	if (imb_exr_is_multilayer(file))
+		return true;
+
+	return false;
 }
 
 struct ImBuf *imb_load_openexr(unsigned char *mem, size_t size, int flags, char colorspace[IM_MAX_SPACE])
@@ -1726,7 +1855,7 @@ struct ImBuf *imb_load_openexr(unsigned char *mem, size_t size, int flags, char 
 		if (0) // debug
 			exr_print_filecontents(file);
 
-		is_multi = exr_is_multilayer(file);
+		is_multi = imb_exr_is_multi(file);
 
 		/* do not make an ibuf when */
 		if (is_multi && !(flags & IB_test) && !(flags & IB_multilayer)) {
