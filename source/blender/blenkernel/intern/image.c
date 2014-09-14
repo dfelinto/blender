@@ -2793,7 +2793,27 @@ static void image_add_view_cb(void *base, const char *str)
 
 	iv = MEM_mallocN(sizeof(ImageView), "Viewer Image View");
 	BLI_strncpy(iv->name, str, sizeof(iv->name));
-	BLI_addtail(&ima->views, iv);
+
+	/* For stereo drawing we need to ensure:
+	 * STEREO_LEFT_NAME  == STEREO_LEFT_ID and
+	 * STEREO_RIGHT_NAME == STEREO_RIGHT_ID */
+
+	if (STREQ(str, STEREO_LEFT_NAME)) {
+		BLI_addhead(&ima->views, iv);
+	}
+	else if (STREQ(str, STEREO_RIGHT_NAME)) {
+		ImageView *left_iv = BLI_findstring(&ima->views, STEREO_LEFT_NAME, offsetof(ImageView, name));
+
+		if (left_iv == NULL) {
+			BLI_addhead(&ima->views, iv);
+		}
+		else {
+			BLI_insertlinkafter(&ima->views, left_iv, iv);
+		}
+	}
+	else {
+		BLI_addtail(&ima->views, iv);
+	}
 }
 
 static void image_add_buffer_cb(void *base, const char *str, ImBuf *ibuf, const int frame)
@@ -2808,8 +2828,6 @@ static void image_add_buffer_cb(void *base, const char *str, ImBuf *ibuf, const 
 		return;
 	
 	id = BLI_findstringindex(&ima->views, str, offsetof(ImageView, name));
-
-	printf("%s : %s : %lu\n", __func__, str, id);
 	
 	if (id == -1)
 		return;

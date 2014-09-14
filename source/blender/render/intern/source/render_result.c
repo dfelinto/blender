@@ -765,8 +765,9 @@ static void *ml_addlayer_cb(void *base, const char *str)
 	return rl;
 }
 
-static void ml_addpass_cb(void *UNUSED(base), void *lay, const char *str, float *rect, int totchan, const char *chan_id, const char *view, const int view_id)
+static void ml_addpass_cb(void *base, void *lay, const char *str, float *rect, int totchan, const char *chan_id, const char *view)
 {
+	RenderResult *rr = base;
 	RenderLayer *rl = lay;
 	RenderPass *rpass = MEM_callocN(sizeof(RenderPass), "loaded pass");
 	int a;
@@ -782,12 +783,15 @@ static void ml_addpass_cb(void *UNUSED(base), void *lay, const char *str, float 
 		rpass->chan_id[a] = chan_id[a];
 
 	rpass->rect = rect;
-	if (view[0] != '\0')
+	if (view[0] != '\0') {
 		BLI_snprintf(rpass->name, sizeof(rpass->name), "%s.%s", str, view);
-	else
+		rpass->view_id = BLI_findstringindex(&rr->views, view, offsetof(RenderView, name));
+	}
+	else {
 		BLI_strncpy(rpass->name,  str, sizeof(rpass->name));
+		rpass->view_id = 0;
+	}
 
-	rpass->view_id = view_id;
 	BLI_strncpy(rpass->view, view, sizeof(rpass->view));
 	BLI_strncpy(rpass->internal_name, str, sizeof(rpass->internal_name));
 }
@@ -798,9 +802,29 @@ static void *ml_addview_cb(void *base, const char *str)
 	RenderView *rv;
 
 	rv = MEM_callocN(sizeof(RenderView), "new render view");
-	BLI_addtail(&rr->views, rv);
-
 	BLI_strncpy(rv->name, str, EXR_VIEW_MAXNAME);
+
+	/* For stereo drawing we need to ensure:
+	 * STEREO_LEFT_NAME  == STEREO_LEFT_ID and
+	 * STEREO_RIGHT_NAME == STEREO_RIGHT_ID */
+
+	if (STREQ(str, STEREO_LEFT_NAME)) {
+		BLI_addhead(&rr->views, rv);
+	}
+	else if (STREQ(str, STEREO_RIGHT_NAME)) {
+		RenderView *left_rv = BLI_findstring(&rr->views, STEREO_LEFT_NAME, offsetof(RenderView, name));
+
+		if (left_rv == NULL) {
+			BLI_addhead(&rr->views, rv);
+		}
+		else {
+			BLI_insertlinkafter(&rr->views, left_rv, rv);
+		}
+	}
+	else {
+		BLI_addtail(&rr->views, rv);
+	}
+
 	return rv;
 }
 

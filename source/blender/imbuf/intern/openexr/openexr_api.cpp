@@ -1265,7 +1265,7 @@ void IMB_exr_multilayer_convert(void *handle, void *base,
                                 void * (*addlayer)(void *base, const char *str),
                                 void (*addpass)(void *base, void *lay, const char *str,
                                                 float *rect, int totchan, const char *chan_id,
-                                                const char *view, const int view_id))
+                                                const char *view))
 {
 	ExrHandle *data = (ExrHandle *)handle;
 	ExrLayer *lay;
@@ -1285,7 +1285,7 @@ void IMB_exr_multilayer_convert(void *handle, void *base,
 		void *laybase = addlayer(base, lay->name);
 		if (laybase) {
 			for (pass = (ExrPass *)lay->passes.first; pass; pass = pass->next) {
-				addpass(base, laybase, pass->internal_name, pass->rect, pass->totchan, pass->chan_id, pass->view, pass->view_id);
+				addpass(base, laybase, pass->internal_name, pass->rect, pass->totchan, pass->chan_id, pass->view);
 				pass->rect = NULL;
 			}
 		}

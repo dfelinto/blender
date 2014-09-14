@@ -53,7 +53,7 @@ void    IMB_exr_clear_channels  (void *handle) { (void)handle; }
 
 void    IMB_exr_multilayer_convert  (void *handle, void *base,
                                      void * (*addlayer)(void *base, const char *str),
-                                     void (*addpass)(void *base, void *lay, const char *str, float *rect, int totchan, const char *chan_id, const char *view, const int view_id))
+                                     void (*addpass)(void *base, void *lay, const char *str, float *rect, int totchan, const char *chan_id, const char *view))
 {
 	(void)handle; (void)base; (void)addlayer; (void)addpass;
 }

@@ -70,7 +70,7 @@ void    IMB_exr_multilayer_convert(void *handle, void *base,
                                    void * (*addview)(void *base, const char *str),
                                    void * (*addlayer)(void *base, const char *str),
                                    void (*addpass)(void *base, void *lay, const char *str, float *rect, int totchan,
-                                                   const char *chan_id, const char *view, const int view_id));
+                                                   const char *chan_id, const char *view));
 
 void    IMB_exr_singlelayer_multiview_convert(void *handle, void *base,
                                               void (*addview)(void *base, const char *str),
