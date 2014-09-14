@@ -1345,11 +1345,7 @@ void IMB_exr_singlelayer_multiview_convert(void *handle, void *base,
 				for (zpass = (ExrPass *)lay->passes.first; zpass; zpass = zpass->next) {
 					if (STREQ(zpass->chan_id, "Z") && STREQ(zpass->view, pass->view)) {
 						addzbuffloatImBuf(ibuf);
-
-						IMB_buffer_float_from_float(
-						        ibuf->zbuf_float, zpass->rect, zpass->totchan,
-						        IB_PROFILE_LINEAR_RGB, IB_PROFILE_LINEAR_RGB, false,
-						        ibuf->x, ibuf->y, ibuf->x, ibuf->x);
+						memcpy(ibuf->zbuf_float, zpass->rect, sizeof(float) * ibuf->x * ibuf->y);
 						zpass->rect = NULL;
 					}
 				}
