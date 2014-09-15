@@ -565,6 +565,7 @@ void uiTemplateColormanagedViewSettings(struct uiLayout *layout, struct bContext
 void uiTemplateComponentMenu(struct uiLayout *layout, struct PointerRNA *ptr, const char *propname, const char *name) RET_NONE
 void uiTemplateNodeSocket(struct uiLayout *layout, struct bContext *C, float *color) RET_NONE
 void uiTemplatePalette(struct uiLayout *layout, struct PointerRNA *ptr, const char *propname, int color) RET_NONE
+void uiTemplateImageStereo3d(struct uiLayout *layout, struct PointerRNA *stereo3d_format_ptr) RET_NONE
 
 /* rna render */
 struct RenderResult *RE_engine_begin_result(RenderEngine *engine, int x, int y, int w, int h, const char *layername, const char *viewname) RET_NULL
