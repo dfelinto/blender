@@ -75,6 +75,9 @@
 #include "wm_window.h"
 #include "wm_event_system.h"
 
+#include "UI_interface.h"
+#include "UI_resources.h"
+
 static void wm_method_draw_stereo_pageflip(wmWindow *win)
 {
 	wmDrawData *drawdata;
@@ -383,7 +386,7 @@ static bool wm_stereo_need_fullscreen(eStereoDisplayMode stereo_display)
 /*
  * return true if any active area requires to see in 3D
  */
-static bool wm_stereo_required(const bContext *C, bScreen *screen)
+static bool wm_stereo3d_required(const bContext *C, bScreen *screen)
 {
 	ScrArea *sa;
 	View3D *v3d;
@@ -445,7 +448,7 @@ bool WM_stereo_enabled(const bContext *C, wmWindow *win, bool only_fullscreen_te
 {
 	bScreen *screen = win->screen;
 
-	if ((only_fullscreen_test == false) && (wm_stereo_required(C, screen) == false))
+	if ((only_fullscreen_test == false) && (wm_stereo3d_required(C, screen) == false))
 		return false;
 
 	if (wm_stereo_need_fullscreen(win->stereo3d_format->display_mode))
@@ -454,26 +457,75 @@ bool WM_stereo_enabled(const bContext *C, wmWindow *win, bool only_fullscreen_te
 	return true;
 }
 
-static void wm_stereo_set_properties(bContext *C, wmOperator *op)
+/************************** Stereo 3D operator **********************************/
+typedef struct Stereo3dData {
+	Stereo3dFormat stereo3d_format;
+} Stereo3dData;
+
+static bool wm_stereo3d_set_properties(bContext *C, wmOperator *op)
 {
 	wmWindow *win = CTX_wm_window(C);
 	Stereo3dFormat *s3d = win->stereo3d_format;
+	PropertyRNA *prop;
+	bool is_set = false;
 
-	s3d->display_mode = RNA_enum_get(op->ptr, "display_mode");
-	s3d->anaglyph_type = RNA_enum_get(op->ptr, "anaglyph_type");
-	s3d->interlace_type = RNA_enum_get(op->ptr, "interlace_type");
-	s3d->epilepsy_interval = RNA_float_get(op->ptr, "epilepsy_interval");
+	prop = RNA_struct_find_property(op->ptr, "display_mode");
+	if (RNA_property_is_set(op->ptr, prop)) {
+		s3d->display_mode = RNA_property_enum_get(op->ptr, prop);
+		is_set = true;
+	}
 
-	s3d->flag = 0;
+	prop = RNA_struct_find_property(op->ptr, "anaglyph_type");
+	if (RNA_property_is_set(op->ptr, prop)) {
+		s3d->anaglyph_type = RNA_property_enum_get(op->ptr, prop);
+		is_set = true;
+	}
 
-	if (RNA_boolean_get(op->ptr, "use_interlace_swap"))
-		s3d->flag |= S3D_INTERLACE_SWAP;
+	prop = RNA_struct_find_property(op->ptr, "interlace_type");
+	if (RNA_property_is_set(op->ptr, prop)) {
+		s3d->interlace_type = RNA_property_enum_get(op->ptr, prop);
+		is_set = true;
+	}
 
-	if (RNA_boolean_get(op->ptr, "use_sidebyside_crosseyed"))
-		s3d->flag |= S3D_SIDEBYSIDE_CROSSEYED;
+	prop = RNA_struct_find_property(op->ptr, "epilepsy_interval");
+	if (RNA_property_is_set(op->ptr, prop)) {
+		s3d->epilepsy_interval = RNA_property_float_get(op->ptr, prop);
+		is_set = true;
+	}
+
+	prop = RNA_struct_find_property(op->ptr, "use_interlace_swap");
+	if (RNA_property_is_set(op->ptr, prop)) {
+		if (RNA_property_boolean_get(op->ptr, prop))
+			s3d->flag |= S3D_INTERLACE_SWAP;
+		else
+			s3d->flag &= ~S3D_INTERLACE_SWAP;
+		is_set = true;
+	}
+
+	prop = RNA_struct_find_property(op->ptr, "use_sidebyside_crosseyed");
+	if (RNA_property_is_set(op->ptr, prop)) {
+		if (RNA_property_boolean_get(op->ptr, prop))
+			s3d->flag |= S3D_SIDEBYSIDE_CROSSEYED;
+		else
+			s3d->flag &= ~S3D_SIDEBYSIDE_CROSSEYED;
+		is_set = true;
+	}
+
+	return is_set;
 }
 
-int wm_stereo_toggle_exec(bContext *C, wmOperator *op)
+static void wm_stereo3d_init(bContext *C, wmOperator *op)
+{
+	Stereo3dData *s3dd;
+	wmWindow *win = CTX_wm_window(C);
+
+	op->customdata = s3dd = MEM_callocN(sizeof(Stereo3dData), __func__);
+
+	/* store the original win stereo 3d settings in case of cancel */
+	s3dd->stereo3d_format = *win->stereo3d_format;
+}
+
+int wm_stereo3d_exec(bContext *C, wmOperator *op)
 {
 	wmWindowManager *wm = CTX_wm_manager(C);
 	wmWindow *win = CTX_wm_window(C);
@@ -481,8 +533,6 @@ int wm_stereo_toggle_exec(bContext *C, wmOperator *op)
 
 	if (G.background)
 		return OPERATOR_CANCELLED;
-
-	wm_stereo_set_properties(C, op);
 
 	/* FullScreen or Normal */
 	state = GHOST_GetWindowState(win->ghostwin);
@@ -504,46 +554,84 @@ int wm_stereo_toggle_exec(bContext *C, wmOperator *op)
 			GHOST_SetWindowState(win->ghostwin, GHOST_kWindowStateFullScreen);
 	}
 
+	if (op->customdata) {
+		MEM_freeN(op->customdata);
+	}
+
 	WM_event_add_notifier(C, NC_WINDOW, NULL);
 	return OPERATOR_FINISHED;
 }
 
-int wm_stereo_toggle_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
+int wm_stereo3d_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
 {
-	wmWindow *win = CTX_wm_window(C);
-	Stereo3dFormat *s3d = win->stereo3d_format;
-	PropertyRNA *prop;
+	wm_stereo3d_init(C, op);
 
-	prop = RNA_struct_find_property(op->ptr, "display_mode");
-	if (!RNA_property_is_set(op->ptr, prop)) {
-		RNA_property_enum_set(op->ptr, prop, s3d->display_mode);
-	}
-
-	prop = RNA_struct_find_property(op->ptr, "anaglyph_type");
-	if (!RNA_property_is_set(op->ptr, prop)) {
-		RNA_property_enum_set(op->ptr, prop, s3d->anaglyph_type);
-	}
-
-	prop = RNA_struct_find_property(op->ptr, "interlace_type");
-	if (!RNA_property_is_set(op->ptr, prop)) {
-		RNA_property_enum_set(op->ptr, prop, s3d->interlace_type);
-	}
-
-	prop = RNA_struct_find_property(op->ptr, "epilepsy_interval");
-	if (!RNA_property_is_set(op->ptr, prop)) {
-		RNA_property_float_set(op->ptr, prop, s3d->epilepsy_interval);
-	}
-
-	prop = RNA_struct_find_property(op->ptr, "use_interlace_swap");
-	if (!RNA_property_is_set(op->ptr, prop)) {
-		RNA_property_boolean_set(op->ptr, prop, (s3d->flag & S3D_INTERLACE_SWAP));
-	}
-
-	prop = RNA_struct_find_property(op->ptr, "use_sidebyside_crosseyed");
-	if (!RNA_property_is_set(op->ptr, prop)) {
-		RNA_property_boolean_set(op->ptr, prop, (s3d->flag & S3D_SIDEBYSIDE_CROSSEYED));
-	}
-
-	return wm_stereo_toggle_exec(C, op);
+	if (wm_stereo3d_set_properties(C, op))
+		return wm_stereo3d_exec(C, op);
+	else
+		return WM_operator_props_dialog_popup(C, op, 250, 100);
 }
 
+void wm_stereo3d_draw(bContext *C, wmOperator *op)
+{
+	wmWindow *win = CTX_wm_window(C);
+	Stereo3dFormat *stereo3d_format;
+	PointerRNA stereo3d_format_ptr;
+	uiLayout *layout = op->layout;
+	uiLayout *col;
+
+	stereo3d_format = win->stereo3d_format;
+	RNA_pointer_create(NULL, &RNA_Stereo3dDisplay, stereo3d_format, &stereo3d_format_ptr);
+
+	col = uiLayoutColumn(layout, false);
+	uiItemR(col, &stereo3d_format_ptr, "display_mode", 0, NULL, ICON_NONE);
+
+	switch (stereo3d_format->display_mode) {
+		case S3D_DISPLAY_ANAGLYPH:
+		{
+			uiItemR(col, &stereo3d_format_ptr, "anaglyph_type", 0, NULL, ICON_NONE);
+			break;
+		}
+		case S3D_DISPLAY_EPILEPSY:
+		{
+			uiItemR(col, &stereo3d_format_ptr, "epilepsy_interval", 0, NULL, ICON_NONE);
+			break;
+		}
+		case S3D_DISPLAY_INTERLACE:
+		{
+			uiItemR(col, &stereo3d_format_ptr, "interlace_type", 0, NULL, ICON_NONE);
+			uiItemR(col, &stereo3d_format_ptr, "use_interlace_swap", 0, NULL, ICON_NONE);
+			break;
+		}
+		case S3D_DISPLAY_SIDEBYSIDE:
+		{
+			uiItemR(col, &stereo3d_format_ptr, "use_sidebyside_crosseyed", 0, NULL, ICON_NONE);
+			/* fall-through */
+		}
+		case S3D_DISPLAY_PAGEFLIP:
+		case S3D_DISPLAY_TOPBOTTOM:
+		default:
+		{
+			break;
+		}
+	}
+}
+
+bool wm_stereo3d_check(bContext *UNUSED(C), wmOperator *UNUSED(op))
+{
+	return true;
+}
+
+void wm_stereo3d_cancel(bContext *C, wmOperator *op)
+{
+	Stereo3dData *s3dd = op->customdata;
+	wmWindow *win = CTX_wm_window(C);
+
+	/* roll back to the original */
+	if (win) {
+		*win->stereo3d_format = s3dd->stereo3d_format;
+	}
+
+	MEM_freeN(op->customdata);
+	op->customdata = NULL;
+}

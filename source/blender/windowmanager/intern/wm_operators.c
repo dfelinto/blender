@@ -4549,25 +4549,36 @@ static void operatortype_ghash_free_cb(wmOperatorType *ot)
 
 /* ******************************************************* */
 /* toggle 3D for current window, turning it fullscreen if needed */
-static void WM_OT_stereo_toggle(wmOperatorType *ot)
+static void WM_OT_stereo3d(wmOperatorType *ot)
 {
-	ot->name = "Toggle 3D Stereo";
-	ot->idname = "WM_OT_stereo_toggle";
+	PropertyRNA *prop;
+
+	ot->name = "Stereo 3D";
+	ot->idname = "WM_OT_stereo_3d";
 	ot->description = "Toggle 3D stereo support for current window (or change the display mode)";
 
-	ot->exec = wm_stereo_toggle_exec;
-	ot->invoke = wm_stereo_toggle_invoke;
+	ot->exec = wm_stereo3d_exec;
+	ot->invoke = wm_stereo3d_invoke;
 	ot->poll = WM_operator_winactive;
+	ot->ui = wm_stereo3d_draw;
+	ot->check = wm_stereo3d_check;
+	ot->cancel = wm_stereo3d_cancel;
 
-	RNA_def_enum(ot->srna, "display_mode", stereo3d_display_items, S3D_DISPLAY_ANAGLYPH, "Display Mode", "");
-	RNA_def_enum(ot->srna, "anaglyph_type", stereo3d_anaglyph_type_items, S3D_ANAGLYPH_REDCYAN, "Anaglyph Type", "");
-	RNA_def_enum(ot->srna, "interlace_type", stereo3d_interlace_type_items, S3D_INTERLACE_ROW, "Interlace Type", "");
-	RNA_def_float(ot->srna, "epilepsy_interval", 0.1f, 0.01f, 10.0f, "Interval",
-	              "Preferred interval in seconds between switching left/right views", 0.05f, 1.0f);
-	RNA_def_boolean(ot->srna, "use_interlace_swap", false, "Swap Left/Right",
-	                "Swap left and right stereo channels");
-	RNA_def_boolean(ot->srna, "use_sidebyside_crosseyed", false, "Cross-Eyed",
-	                "Right eye should see left image and vice-versa");
+	prop = RNA_def_enum(ot->srna, "display_mode", stereo3d_display_items, S3D_DISPLAY_ANAGLYPH, "Display Mode", "");
+	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+	prop = RNA_def_enum(ot->srna, "anaglyph_type", stereo3d_anaglyph_type_items, S3D_ANAGLYPH_REDCYAN, "Anaglyph Type", "");
+	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+	prop = RNA_def_enum(ot->srna, "interlace_type", stereo3d_interlace_type_items, S3D_INTERLACE_ROW, "Interlace Type", "");
+	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+	prop = RNA_def_float(ot->srna, "epilepsy_interval", 0.1f, 0.01f, 10.0f, "Interval",
+	                     "Preferred interval in seconds between switching left/right views", 0.05f, 1.0f);
+	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+	prop = RNA_def_boolean(ot->srna, "use_interlace_swap", false, "Swap Left/Right",
+	                       "Swap left and right stereo channels");
+	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+	prop = RNA_def_boolean(ot->srna, "use_sidebyside_crosseyed", false, "Cross-Eyed",
+	                       "Right eye should see left image and vice-versa");
+	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
 
 /* ******************************************************* */
@@ -4612,7 +4623,7 @@ void wm_operatortype_init(void)
 	WM_operatortype_append(WM_OT_call_menu);
 	WM_operatortype_append(WM_OT_call_menu_pie);
 	WM_operatortype_append(WM_OT_radial_control);
-	WM_operatortype_append(WM_OT_stereo_toggle);
+	WM_operatortype_append(WM_OT_stereo3d);
 #if defined(WIN32)
 	WM_operatortype_append(WM_OT_console_toggle);
 #endif
