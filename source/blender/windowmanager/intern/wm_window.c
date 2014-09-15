@@ -236,7 +236,7 @@ wmWindow *wm_window_new(bContext *C)
 	BLI_addtail(&wm->windows, win);
 	win->winid = find_free_winid(wm);
 
-	win->stereo3d_format = MEM_mallocN(sizeof(Stereo3dFormat), "Stereo 3D Format (window)");
+	win->stereo3d_format = MEM_callocN(sizeof(Stereo3dFormat), "Stereo 3D Format (window)");
 
 	return win;
 }

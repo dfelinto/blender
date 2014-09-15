@@ -434,7 +434,7 @@ void blo_do_versions_270(FileData *fd, Library *UNUSED(lib), Main *main)
 		if (!DNA_struct_elem_find(fd->filesdna, "Image", "Stereo3dFormat", "*stereo3d_format")) {
 			Image *ima;
 			for (ima = main->image.first; ima; ima = ima->id.next) {
-				ima->stereo3d_format = MEM_mallocN(sizeof(Stereo3dFormat), "Image Stereo 3d Format");
+				ima->stereo3d_format = MEM_callocN(sizeof(Stereo3dFormat), "Image Stereo 3d Format");
 			}
 		}
 
@@ -458,7 +458,7 @@ void blo_do_versions_270(FileData *fd, Library *UNUSED(lib), Main *main)
 
 			for (wm = main->wm.first; wm; wm = wm->id.next) {
 				for (win = wm->windows.first; win; win = win->next) {
-					win->stereo3d_format = MEM_mallocN(sizeof(Stereo3dFormat), "Stereo Display 3d Format");
+					win->stereo3d_format = MEM_callocN(sizeof(Stereo3dFormat), "Stereo Display 3d Format");
 				}
 			}
 		}

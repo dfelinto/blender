@@ -369,7 +369,7 @@ static Image *image_alloc(Main *bmain, const char *name, short source, short typ
 			ima->flag |= IMA_VIEW_AS_RENDER;
 
 		BKE_color_managed_colorspace_settings_init(&ima->colorspace_settings);
-		ima->stereo3d_format = MEM_mallocN(sizeof(Stereo3dFormat), "Image Stereo Format");
+		ima->stereo3d_format = MEM_callocN(sizeof(Stereo3dFormat), "Image Stereo Format");
 		ima->anims.first = ima->anims.last = NULL;
 		ima->packedfiles.first = ima->packedfiles.last = NULL;
 		ima->views.first = ima->views.last = NULL;
