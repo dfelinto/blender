@@ -1346,13 +1346,11 @@ void IMB_exr_singlelayer_multiview_convert(void *handle, void *base,
 					if (STREQ(zpass->chan_id, "Z") && STREQ(zpass->view, pass->view)) {
 						addzbuffloatImBuf(ibuf);
 						memcpy(ibuf->zbuf_float, zpass->rect, sizeof(float) * ibuf->x * ibuf->y);
-						zpass->rect = NULL;
 					}
 				}
 			}
 
 			addbuffer(base, pass->view, ibuf, frame);
-			pass->rect = NULL;
 		}
 	}
 }

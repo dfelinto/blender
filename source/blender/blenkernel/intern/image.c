@@ -2837,6 +2837,7 @@ static void image_add_buffer_cb(void *base, const char *str, ImBuf *ibuf, const 
 		                              colorspace, to_colorspace, predivide);
 
 	image_assign_ibuf(ima, ibuf, id, frame);
+	IMB_freeImBuf(ibuf);
 }
 
 static void image_update_multiview_flags(Image *ima)

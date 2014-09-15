@@ -264,7 +264,7 @@ wmWindow *wm_window_copy(bContext *C, wmWindow *winorig)
 
 	win->drawdata.first = win->drawdata.last = NULL;
 
-	win->stereo3d_format = MEM_dupallocN(winorig->stereo3d_format);
+	*win->stereo3d_format = *winorig->stereo3d_format;
 
 	return win;
 }
