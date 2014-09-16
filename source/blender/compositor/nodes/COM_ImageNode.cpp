@@ -181,6 +181,8 @@ void ImageNode::convertToOperations(NodeConverter &converter, const CompositorCo
 			alphaOperation->setImage(image);
 			alphaOperation->setImageUser(imageuser);
 			alphaOperation->setFramenumber(framenumber);
+			alphaOperation->setRenderData(context.getRenderData());
+			alphaOperation->setViewName(context.getViewName());
 			converter.addOperation(alphaOperation);
 			
 			converter.mapOutputSocket(alphaImage, alphaOperation->getOutputSocket());
@@ -191,6 +193,8 @@ void ImageNode::convertToOperations(NodeConverter &converter, const CompositorCo
 			depthOperation->setImage(image);
 			depthOperation->setImageUser(imageuser);
 			depthOperation->setFramenumber(framenumber);
+			depthOperation->setRenderData(context.getRenderData());
+			depthOperation->setViewName(context.getViewName());
 			converter.addOperation(depthOperation);
 			
 			converter.mapOutputSocket(depthImage, depthOperation->getOutputSocket());
@@ -230,6 +234,7 @@ void ImageNode::convertToOperations(NodeConverter &converter, const CompositorCo
 				}
 
 				if (operation) {
+					/* not supporting multiview for this generic case */
 					converter.addOperation(operation);
 					converter.mapOutputSocket(output, operation->getOutputSocket());
 				}
