@@ -588,7 +588,7 @@ static void imb_stereo_squeeze_ImBuf(ImBuf *ibuf, Stereo3dFormat *s3d, const siz
 	if (ELEM(s3d->display_mode, S3D_DISPLAY_SIDEBYSIDE, S3D_DISPLAY_TOPBOTTOM) == false)
 		return;
 
-	if ((s3d->flag & S3D_UNSQUEEZED_FRAME))
+	if ((s3d->flag & S3D_SQUEEZED_FRAME) == 0)
 		return;
 
 	IMB_scaleImBuf_threaded(ibuf, x, y);
@@ -599,7 +599,7 @@ static void imb_stereo_unsqueeze_ImBuf(ImBuf *ibuf, Stereo3dFormat *s3d, const s
 	if (ELEM(s3d->display_mode, S3D_DISPLAY_SIDEBYSIDE, S3D_DISPLAY_TOPBOTTOM) == false)
 		return;
 
-	if ((s3d->flag & S3D_UNSQUEEZED_FRAME) != 0)
+	if ((s3d->flag & S3D_SQUEEZED_FRAME) == 0)
 		return;
 
 	IMB_scaleImBuf_threaded(ibuf, x, y);
@@ -613,7 +613,7 @@ static void imb_stereo_squeeze_rectf(float *rectf, Stereo3dFormat *s3d, const si
 	if (ELEM(s3d->display_mode, S3D_DISPLAY_SIDEBYSIDE, S3D_DISPLAY_TOPBOTTOM) == false)
 		return;
 
-	if ((s3d->flag & S3D_UNSQUEEZED_FRAME))
+	if ((s3d->flag & S3D_SQUEEZED_FRAME) == 0)
 		return;
 
 	/* creates temporary imbuf to store the rectf */
@@ -638,7 +638,7 @@ static void imb_stereo_squeeze_rect(int *rect, Stereo3dFormat *s3d, const size_t
 	if (ELEM(s3d->display_mode, S3D_DISPLAY_SIDEBYSIDE, S3D_DISPLAY_TOPBOTTOM) == false)
 		return;
 
-	if ((s3d->flag & S3D_UNSQUEEZED_FRAME))
+	if ((s3d->flag & S3D_SQUEEZED_FRAME) == 0)
 		return;
 
 	/* creates temporary imbuf to store the rectf */
@@ -1225,7 +1225,7 @@ void IMB_ImBufFromStereo(Stereo3dFormat *s3d, ImBuf **left, ImBuf **right)
 
 	stereo = *left;
 
-	IMB_stereo_read_dimensions(s3d->display_mode, ((s3d->flag & S3D_UNSQUEEZED_FRAME) != 0), stereo->x, stereo->y, &width, &height);
+	IMB_stereo_read_dimensions(s3d->display_mode, ((s3d->flag & S3D_SQUEEZED_FRAME) == 0), stereo->x, stereo->y, &width, &height);
 
 	*left = IMB_allocImBuf(width, height, stereo->planes, (is_float ? IB_rectfloat : IB_rect));
 	*right = IMB_allocImBuf(width, height, stereo->planes, (is_float ? IB_rectfloat : IB_rect));
@@ -1235,7 +1235,7 @@ void IMB_ImBufFromStereo(Stereo3dFormat *s3d, ImBuf **left, ImBuf **right)
 	(*right)->flags = stereo->flags;
 
 	/* we always work with unsqueezed formats */
-	IMB_stereo_write_dimensions(s3d->display_mode, ((s3d->flag & S3D_UNSQUEEZED_FRAME) != 0), stereo->x, stereo->y, &width, &height);
+	IMB_stereo_write_dimensions(s3d->display_mode, ((s3d->flag & S3D_SQUEEZED_FRAME) == 0), stereo->x, stereo->y, &width, &height);
 	imb_stereo_unsqueeze_ImBuf(stereo, s3d, width, height);
 
 	imb_stereo_data_initialize(&s3d_data, is_float, (*left)->x , (*left)->y, 4,

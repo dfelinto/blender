@@ -4176,7 +4176,7 @@ static void rna_def_image_format_stereo3d_format(BlenderRNA *brna)
 	RNA_def_property_update(prop, NC_IMAGE | ND_DISPLAY, "rna_Stereo3dFormat_update");
 
 	prop = RNA_def_property(srna, "use_squeezed_frame", PROP_BOOLEAN, PROP_BOOLEAN);
-	RNA_def_property_boolean_negative_sdna(prop, NULL, "flag", S3D_UNSQUEEZED_FRAME);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag", S3D_SQUEEZED_FRAME);
 	RNA_def_property_ui_text(prop, "Squeezed Frame", "Combine both views in a squeezed image");
 	RNA_def_property_update(prop, NC_IMAGE | ND_DISPLAY, "rna_Stereo3dFormat_update");
 }

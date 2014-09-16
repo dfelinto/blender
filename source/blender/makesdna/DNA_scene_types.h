@@ -300,7 +300,7 @@ typedef enum eStereoDisplayMode {
 typedef enum eStereo3dFlag {
 	S3D_INTERLACE_SWAP        = (1 << 0),
 	S3D_SIDEBYSIDE_CROSSEYED  = (1 << 1),
-	S3D_UNSQUEEZED_FRAME      = (1 << 2),
+	S3D_SQUEEZED_FRAME        = (1 << 2),
 } eStereo3dFlag;
 
 /* Stereo3dFormat.anaglyph_type */
