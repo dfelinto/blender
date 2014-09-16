@@ -336,13 +336,21 @@ static void openexr_header_metadata(Header *header, struct ImBuf *ibuf)
 		addXDensity(*header, ibuf->ppm[0] / 39.3700787); /* 1 meter = 39.3700787 inches */
 }
 
-static int imb_save_openexr_half(struct ImBuf *ibuf, const char *name, int flags)
+static bool imb_save_openexr_half(ImBuf *ibuf, const char *name, const int flags, const size_t totviews,
+                                  const char * (*getview)(void *base, size_t view_id),
+                                  ImBuf * (*getbuffer)(void *base, const size_t view_id))
 {
 	const int channels = ibuf->channels;
 	const int is_alpha = (channels >= 4) && (ibuf->planes == 32);
 	const int is_zbuf = (flags & IB_zbuffloat) && ibuf->zbuf_float != NULL; /* summarize */
 	const int width = ibuf->x;
 	const int height = ibuf->y;
+	const bool is_multiview = (flags & IB_multiview) && ibuf->userdata;
+
+	BLI_assert((!is_multiview) || (getview && getbuffer));
+
+	std::vector <string> views;
+	size_t view_id;
 
 	try
 	{
@@ -351,13 +359,22 @@ static int imb_save_openexr_half(struct ImBuf *ibuf, const char *name, int flags
 		openexr_header_compression(&header, ibuf->ftype & OPENEXR_COMPRESS);
 		openexr_header_metadata(&header, ibuf);
 
-		header.channels().insert("R", Channel(HALF));
-		header.channels().insert("G", Channel(HALF));
-		header.channels().insert("B", Channel(HALF));
-		if (is_alpha)
-			header.channels().insert("A", Channel(HALF));
-		if (is_zbuf)     // z we do as float always
-			header.channels().insert("Z", Channel(Imf::FLOAT));
+		/* create views when possible */
+		for (view_id = 0; view_id < totviews; view_id ++)
+			views.push_back(is_multiview ? getview(ibuf->userdata, view_id) : "");
+
+		if (is_multiview)
+			addMultiView(header, views);
+
+		for (view_id = 0; view_id < totviews; view_id ++) {
+			header.channels().insert(insertViewName("R", views, view_id), Channel(HALF));
+			header.channels().insert(insertViewName("G", views, view_id), Channel(HALF));
+			header.channels().insert(insertViewName("B", views, view_id), Channel(HALF));
+			if (is_alpha)
+				header.channels().insert(insertViewName("A", views, view_id), Channel(HALF));
+			if (is_zbuf)     // z we do as float always
+				header.channels().insert(insertViewName("Z", views, view_id), Channel(Imf::FLOAT));
+		}
 
 		FrameBuffer frameBuffer;
 
@@ -366,52 +383,60 @@ static int imb_save_openexr_half(struct ImBuf *ibuf, const char *name, int flags
 		OutputFile file(file_stream, header);
 
 		/* we store first everything in half array */
-		RGBAZ *pixels = new RGBAZ[height * width];
-		RGBAZ *to = pixels;
+		RGBAZ *pixels = new RGBAZ[height * width * totviews];
 		int xstride = sizeof(RGBAZ);
 		int ystride = xstride * width;
 
-		/* indicate used buffers */
-		frameBuffer.insert("R", Slice(HALF,  (char *) &pixels[0].r, xstride, ystride));
-		frameBuffer.insert("G", Slice(HALF,  (char *) &pixels[0].g, xstride, ystride));
-		frameBuffer.insert("B", Slice(HALF,  (char *) &pixels[0].b, xstride, ystride));
-		if (is_alpha)
-			frameBuffer.insert("A", Slice(HALF, (char *) &pixels[0].a, xstride, ystride));
-		if (is_zbuf)
-			frameBuffer.insert("Z", Slice(Imf::FLOAT, (char *)(ibuf->zbuf_float + (height - 1) * width),
-			                              sizeof(float), sizeof(float) * -width));
-		if (ibuf->rect_float) {
-			float *from;
+		for (view_id = 0; view_id < totviews; view_id ++) {
+			ImBuf *view_ibuf = is_multiview ? getbuffer(ibuf->userdata, view_id) : ibuf;
+			const size_t offset = view_id * width * height;
+			RGBAZ *to = pixels + offset;
 
-			for (int i = ibuf->y - 1; i >= 0; i--) {
-				from = ibuf->rect_float + channels * i * width;
+			/* indicate used buffers */
+			frameBuffer.insert(insertViewName("R", views, view_id), Slice(HALF,  (char *) &pixels[offset].r, xstride, ystride));
+			frameBuffer.insert(insertViewName("G", views, view_id), Slice(HALF,  (char *) &pixels[offset].g, xstride, ystride));
+			frameBuffer.insert(insertViewName("B", views, view_id), Slice(HALF,  (char *) &pixels[offset].b, xstride, ystride));
+			if (is_alpha)
+				frameBuffer.insert(insertViewName("A", views, view_id), Slice(HALF, (char *) &pixels[offset].a, xstride, ystride));
+			if (is_zbuf)
+				frameBuffer.insert(insertViewName("Z", views, view_id), Slice(Imf::FLOAT, (char *)(view_ibuf->zbuf_float + (height - 1) * width),
+				                   sizeof(float), sizeof(float) * -width));
+			if (view_ibuf->rect_float) {
+				float *from;
 
-				for (int j = ibuf->x; j > 0; j--) {
-					to->r = from[0];
-					to->g = (channels >= 2) ? from[1] : from[0];
-					to->b = (channels >= 3) ? from[2] : from[0];
-					to->a = (channels >= 4) ? from[3] : 1.0f;
-					to++; from += channels;
+				for (int i = view_ibuf->y - 1; i >= 0; i--) {
+					from = view_ibuf->rect_float + channels * i * width;
+
+					for (int j = view_ibuf->x; j > 0; j--) {
+						to->r = from[0];
+						to->g = (channels >= 2) ? from[1] : from[0];
+						to->b = (channels >= 3) ? from[2] : from[0];
+						to->a = (channels >= 4) ? from[3] : 1.0f;
+						to++; from += channels;
+					}
 				}
 			}
-		}
-		else {
-			unsigned char *from;
+			else {
+				unsigned char *from;
 
-			for (int i = ibuf->y - 1; i >= 0; i--) {
-				from = (unsigned char *)ibuf->rect + 4 * i * width;
+				for (int i = view_ibuf->y - 1; i >= 0; i--) {
+					from = (unsigned char *)view_ibuf->rect + 4 * i * width;
 
-				for (int j = ibuf->x; j > 0; j--) {
-					to->r = srgb_to_linearrgb((float)from[0] / 255.0f);
-					to->g = srgb_to_linearrgb((float)from[1] / 255.0f);
-					to->b = srgb_to_linearrgb((float)from[2] / 255.0f);
-					to->a = channels >= 4 ? (float)from[3] / 255.0f : 1.0f;
-					to++; from += 4;
+					for (int j = view_ibuf->x; j > 0; j--) {
+						to->r = srgb_to_linearrgb((float)from[0] / 255.0f);
+						to->g = srgb_to_linearrgb((float)from[1] / 255.0f);
+						to->b = srgb_to_linearrgb((float)from[2] / 255.0f);
+						to->a = channels >= 4 ? (float)from[3] / 255.0f : 1.0f;
+						to++; from += 4;
+					}
 				}
 			}
+
+			if (is_multiview)
+				IMB_freeImBuf(view_ibuf);
 		}
 
-//		printf("OpenEXR-save: Writing OpenEXR file of height %d.\n", height);
+		exr_printf("OpenEXR-save: Writing OpenEXR file of height %d.\n", height);
 
 		file.setFrameBuffer(frameBuffer);
 		file.writePixels(height);
@@ -422,19 +447,27 @@ static int imb_save_openexr_half(struct ImBuf *ibuf, const char *name, int flags
 	{
 		printf("OpenEXR-save: ERROR: %s\n", exc.what());
 
-		return (0);
+		return false;
 	}
 
-	return (1);
+	return true;
 }
 
-static int imb_save_openexr_float(struct ImBuf *ibuf, const char *name, int flags)
+static bool imb_save_openexr_float(ImBuf *ibuf, const char *name, const int flags, const size_t totviews,
+                                   const char * (*getview)(void *base, const size_t view_id),
+                                   ImBuf * (*getbuffer)(void *base, const size_t view_id))
 {
 	const int channels = ibuf->channels;
 	const int is_alpha = (channels >= 4) && (ibuf->planes == 32);
 	const int is_zbuf = (flags & IB_zbuffloat) && ibuf->zbuf_float != NULL; /* summarize */
 	const int width = ibuf->x;
 	const int height = ibuf->y;
+	const bool is_multiview = (flags & IB_multiview) && ibuf->userdata;
+
+	BLI_assert((!is_multiview) || (getview && getbuffer));
+
+	std::vector <string> views;
+	size_t view_id;
 
 	try
 	{
@@ -443,13 +476,22 @@ static int imb_save_openexr_float(struct ImBuf *ibuf, const char *name, int flag
 		openexr_header_compression(&header, ibuf->ftype & OPENEXR_COMPRESS);
 		openexr_header_metadata(&header, ibuf);
 
-		header.channels().insert("R", Channel(Imf::FLOAT));
-		header.channels().insert("G", Channel(Imf::FLOAT));
-		header.channels().insert("B", Channel(Imf::FLOAT));
-		if (is_alpha)
-			header.channels().insert("A", Channel(Imf::FLOAT));
-		if (is_zbuf)
-			header.channels().insert("Z", Channel(Imf::FLOAT));
+		/* create views when possible */
+		for (view_id = 0; view_id < totviews; view_id ++)
+			views.push_back(is_multiview ? getview(ibuf->userdata, view_id) : "");
+
+		if (is_multiview)
+			addMultiView(header, views);
+
+		for (view_id = 0; view_id < totviews; view_id ++) {
+			header.channels().insert(insertViewName("R", views, view_id), Channel(Imf::FLOAT));
+			header.channels().insert(insertViewName("G", views, view_id), Channel(Imf::FLOAT));
+			header.channels().insert(insertViewName("B", views, view_id), Channel(Imf::FLOAT));
+			if (is_alpha)
+				header.channels().insert(insertViewName("A", views, view_id), Channel(Imf::FLOAT));
+			if (is_zbuf)
+				header.channels().insert(insertViewName("Z", views, view_id), Channel(Imf::FLOAT));
+		}
 
 		FrameBuffer frameBuffer;
 
@@ -459,36 +501,40 @@ static int imb_save_openexr_float(struct ImBuf *ibuf, const char *name, int flag
 
 		int xstride = sizeof(float) * channels;
 		int ystride = -xstride * width;
-		float *rect[4] = {NULL, NULL, NULL, NULL};
 
-		/* last scanline, stride negative */
-		rect[0] = ibuf->rect_float + channels * (height - 1) * width;
-		rect[1] = (channels >= 2) ? rect[0] + 1 : rect[0];
-		rect[2] = (channels >= 3) ? rect[0] + 2 : rect[0];
-		rect[3] = (channels >= 4) ? rect[0] + 3 : rect[0]; /* red as alpha, is this needed since alpha isn't written? */
+		for (view_id = 0; view_id < totviews; view_id ++) {
+			float *rect[4] = {NULL, NULL, NULL, NULL};
+			ImBuf *view_ibuf = is_multiview ? getbuffer(ibuf->userdata, view_id) : ibuf;
 
-		frameBuffer.insert("R", Slice(Imf::FLOAT,  (char *)rect[0], xstride, ystride));
-		frameBuffer.insert("G", Slice(Imf::FLOAT,  (char *)rect[1], xstride, ystride));
-		frameBuffer.insert("B", Slice(Imf::FLOAT,  (char *)rect[2], xstride, ystride));
-		if (is_alpha)
-			frameBuffer.insert("A", Slice(Imf::FLOAT,  (char *)rect[3], xstride, ystride));
-		if (is_zbuf)
-			frameBuffer.insert("Z", Slice(Imf::FLOAT, (char *) (ibuf->zbuf_float + (height - 1) * width),
-			                              sizeof(float), sizeof(float) * -width));
+			/* last scanline, stride negative */
+			rect[0] = view_ibuf->rect_float + channels * (height - 1) * width;
+			rect[1] = (channels >= 2) ? rect[0] + 1 : rect[0];
+			rect[2] = (channels >= 3) ? rect[0] + 2 : rect[0];
+			rect[3] = (channels >= 4) ? rect[0] + 3 : rect[0]; /* red as alpha, is this needed since alpha isn't written? */
+
+			frameBuffer.insert(insertViewName("R", views, view_id), Slice(Imf::FLOAT,  (char *)rect[0], xstride, ystride));
+			frameBuffer.insert(insertViewName("G", views, view_id), Slice(Imf::FLOAT,  (char *)rect[1], xstride, ystride));
+			frameBuffer.insert(insertViewName("B", views, view_id), Slice(Imf::FLOAT,  (char *)rect[2], xstride, ystride));
+			if (is_alpha)
+				frameBuffer.insert(insertViewName("A", views, view_id), Slice(Imf::FLOAT,  (char *)rect[3], xstride, ystride));
+			if (is_zbuf)
+				frameBuffer.insert(insertViewName("Z", views, view_id), Slice(Imf::FLOAT, (char *) (view_ibuf->zbuf_float + (height - 1) * width),
+				                                  sizeof(float), sizeof(float) * -width));
+
+			if (is_multiview)
+				IMB_freeImBuf(view_ibuf);
+		}
 		file.setFrameBuffer(frameBuffer);
 		file.writePixels(height);
 	}
 	catch (const std::exception &exc)
 	{
 		printf("OpenEXR-save: ERROR: %s\n", exc.what());
-
-		return (0);
+		return false;
 	}
 
-	return (1);
-	//	printf("OpenEXR-save: Done.\n");
+	return true;
 }
-
 
 int imb_save_openexr(struct ImBuf *ibuf, const char *name, int flags)
 {
@@ -500,14 +546,45 @@ int imb_save_openexr(struct ImBuf *ibuf, const char *name, int flags)
 	}
 
 	if (ibuf->ftype & OPENEXR_HALF)
-		return imb_save_openexr_half(ibuf, name, flags);
+		return (int) imb_save_openexr_half(ibuf, name, flags, 1, NULL, NULL);
 	else {
 		/* when no float rect, we save as half (16 bits is sufficient) */
 		if (ibuf->rect_float == NULL)
-			return imb_save_openexr_half(ibuf, name, flags);
+			return (int) imb_save_openexr_half(ibuf, name, flags, 1, NULL, NULL);
 		else
-			return imb_save_openexr_float(ibuf, name, flags);
+			return (int) imb_save_openexr_float(ibuf, name, flags, 1, NULL, NULL);
 	}
+}
+
+static bool imb_save_multiview_openexr(ImBuf *ibuf, const char *name, const int flags, const size_t totviews,
+                                const char * (*getview)(void *base, const size_t view_id),
+                                ImBuf * (*getbuffer)(void *base, const size_t view_id))
+{
+	if (flags & IB_mem) {
+		printf("OpenEXR-save: Create multiview EXR in memory CURRENTLY NOT SUPPORTED !\n");
+		imb_addencodedbufferImBuf(ibuf);
+		ibuf->encodedsize = 0;
+		return false;
+	}
+
+	if (ibuf->ftype & OPENEXR_HALF)
+		return imb_save_openexr_half(ibuf, name, flags, totviews, getview, getbuffer);
+	else {
+		/* when no float rect, we save as half (16 bits is sufficient) */
+		if (ibuf->rect_float == NULL)
+			return imb_save_openexr_half(ibuf, name, flags, totviews, getview, getbuffer);
+		else
+			return imb_save_openexr_float(ibuf, name, flags, totviews, getview, getbuffer);
+	}
+}
+
+/* if we have more multiview formats in the future, the function below could be incorporated
+ * in our ImBuf write functions, meanwhile this is an OpenEXR special case only */
+bool IMB_exr_save_openexr_multiview(ImBuf *ibuf, const char *name, const int flags, const size_t totviews,
+                                    const char * (*getview)(void *base, size_t view_id),
+                                    ImBuf * (*getbuffer)(void *base, const size_t view_id))
+{
+	return imb_save_multiview_openexr(ibuf, name, flags, totviews, getview, getbuffer);
 }
 
 /* ********************* Nicer API, MultiLayer and with Tile file support ************************************ */
@@ -1652,6 +1729,8 @@ static void exr_printf(const char *fmt, ...)
 		std::vsprintf(output, fmt, args);
 		va_end(args);
 		printf("%s", output);
+#else
+	(void)fmt;
 #endif
 }
 

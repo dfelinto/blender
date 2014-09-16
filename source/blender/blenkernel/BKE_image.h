@@ -216,7 +216,10 @@ bool BKE_image_is_openexr(struct Image *ima);
 
 /* for multiple slot render, call this before render */
 void BKE_image_backup_render(struct Scene *scene, struct Image *ima);
-	
+
+/* for singlelayer openexr saving */
+bool BKE_image_save_openexr_multiview(struct Image *ima, struct ImBuf *ibuf, const char *filepath, const int flags);
+
 /* goes over all textures that use images */
 void    BKE_image_free_all_textures(void);
 

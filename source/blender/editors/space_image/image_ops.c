@@ -73,6 +73,7 @@
 #include "IMB_imbuf.h"
 #include "IMB_imbuf_types.h"
 #include "IMB_moviecache.h"
+#include "intern/openexr/openexr_multi.h"
 
 #include "RE_pipeline.h"
 
@@ -1775,6 +1776,12 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 			if (is_multilayer) {
 				ED_space_image_release_buffer(sima, ibuf, lock);
 			}
+		}
+		else if ((imf->imtype == R_IMF_IMTYPE_OPENEXR) && (simopts->im_format.views_format == R_IMF_VIEWS_MULTIVIEW)) {
+			/* treat special Openexr case separetely (this is the singlelayer multiview OpenEXR */
+			BKE_imbuf_prepare_write(ibuf, imf);
+			ok = BKE_image_save_openexr_multiview(ima, ibuf, simopts->filepath, (IB_rect | IB_zbuf | IB_zbuffloat | IB_multiview));
+			IMB_freeImBuf(ibuf);
 		}
 		/* stereo (multiview) images */
 		else if (simopts->im_format.views_format == R_IMF_VIEWS_STEREO_3D) {

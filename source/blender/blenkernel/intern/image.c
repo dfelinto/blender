@@ -100,6 +100,7 @@ static SpinLock image_spin;
 
 /* prototypes */
 static size_t image_num_files(struct Image *ima);
+static ImBuf *image_acquire_ibuf(Image *ima, ImageUser *iuser, void **lock_r);
 
 /* max int, to indicate we don't store sequences in ibuf */
 #define IMA_NO_INDEX    0x7FEFEFEF
@@ -2683,7 +2684,17 @@ void BKE_image_multiview_index(Image *ima, ImageUser *iuser)
 {
 	if (iuser) {
 		bool is_stereo = (ima->flag & IMA_IS_STEREO) && (iuser->flag & IMA_SHOW_STEREO);
-		iuser->multi_index = is_stereo ? iuser->eye : iuser->view;
+		if (is_stereo) {
+			iuser->multi_index = iuser->eye;
+		}
+		else {
+			if ((iuser->view < 0) || (iuser->view >= BLI_countlist(&ima->views))) {
+				iuser->multi_index = iuser->view = 0;
+			}
+			else {
+				iuser->multi_index = iuser->view;
+			}
+		}
 	}
 }
 
@@ -2786,6 +2797,43 @@ void BKE_image_backup_render(Scene *scene, Image *ima)
 	ima->last_render_slot = slot;
 }
 
+/**************************** multiview save openexr *********************************/
+static const char *image_get_view_cb(void *base, const size_t view_id)
+{
+	Image *ima = base;
+	ImageView *iv = BLI_findlink(&ima->views, view_id);
+	return iv ? iv->name : "";
+}
+
+static ImBuf *image_get_buffer_cb(void *base, const size_t view_id)
+{
+	Image *ima = base;
+	ImageUser iuser = {0};
+
+	iuser.view = view_id;
+	iuser.ok = 1;
+
+	BKE_image_multiview_index(ima, &iuser);
+
+	return image_acquire_ibuf(ima, &iuser, NULL);
+}
+
+bool BKE_image_save_openexr_multiview(Image *ima, ImBuf *ibuf, const char *filepath, const int flags)
+{
+	char name[FILE_MAX];
+	bool ok;
+
+	BLI_strncpy(name, filepath, sizeof(name));
+	BLI_path_abs(name, G.main->name);
+
+	ibuf->userdata = ima;
+	ok = IMB_exr_save_openexr_multiview(ibuf, name, flags, BLI_countlist(&ima->views), image_get_view_cb, image_get_buffer_cb);
+	ibuf->userdata = NULL;
+
+	return ok;
+}
+
+/**************************** multiview load openexr *********************************/
 static void image_add_view_cb(void *base, const char *str)
 {
 	Image *ima = base;
