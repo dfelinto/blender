@@ -1221,7 +1221,7 @@ void IMB_ImBufFromStereo(Stereo3dFormat *s3d, ImBuf **left, ImBuf **right)
 	Stereo3DData s3d_data = {{NULL}};
 	ImBuf *stereo;
 	size_t width, height;
-	const bool is_float = ((*left)->zbuf_float != NULL);
+	const bool is_float = ((*left)->rect_float != NULL);
 
 	stereo = *left;
 
