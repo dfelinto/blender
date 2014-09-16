@@ -556,9 +556,9 @@ int imb_save_openexr(struct ImBuf *ibuf, const char *name, int flags)
 	}
 }
 
-static bool imb_save_multiview_openexr(ImBuf *ibuf, const char *name, const int flags, const size_t totviews,
-                                const char * (*getview)(void *base, const size_t view_id),
-                                ImBuf * (*getbuffer)(void *base, const size_t view_id))
+static bool imb_save_openexr_multiview(ImBuf *ibuf, const char *name, const int flags, const size_t totviews,
+                                       const char * (*getview)(void *base, const size_t view_id),
+                                       ImBuf * (*getbuffer)(void *base, const size_t view_id))
 {
 	if (flags & IB_mem) {
 		printf("OpenEXR-save: Create multiview EXR in memory CURRENTLY NOT SUPPORTED !\n");
@@ -578,13 +578,14 @@ static bool imb_save_multiview_openexr(ImBuf *ibuf, const char *name, const int 
 	}
 }
 
-/* if we have more multiview formats in the future, the function below could be incorporated
+/* Save single-layer multiview OpenEXR
+ * If we have more multiview formats in the future, the function below could be incorporated
  * in our ImBuf write functions, meanwhile this is an OpenEXR special case only */
-bool IMB_exr_save_openexr_multiview(ImBuf *ibuf, const char *name, const int flags, const size_t totviews,
-                                    const char * (*getview)(void *base, size_t view_id),
-                                    ImBuf * (*getbuffer)(void *base, const size_t view_id))
+bool IMB_exr_multiview_save(ImBuf *ibuf, const char *name, const int flags, const size_t totviews,
+                            const char * (*getview)(void *base, size_t view_id),
+                            ImBuf * (*getbuffer)(void *base, const size_t view_id))
 {
-	return imb_save_multiview_openexr(ibuf, name, flags, totviews, getview, getbuffer);
+	return imb_save_openexr_multiview(ibuf, name, flags, totviews, getview, getbuffer);
 }
 
 /* ********************* Nicer API, MultiLayer and with Tile file support ************************************ */
@@ -1369,10 +1370,10 @@ void IMB_exr_multilayer_convert(void *handle, void *base,
 	}
 }
 
-void IMB_exr_singlelayer_multiview_convert(void *handle, void *base,
-                                           void (*addview)(void *base, const char *str),
-                                           void (*addbuffer)(void *base, const char *str, ImBuf *ibuf, const int frame),
-                                           const int frame)
+void IMB_exr_multiview_convert(void *handle, void *base,
+                               void (*addview)(void *base, const char *str),
+                               void (*addbuffer)(void *base, const char *str, ImBuf *ibuf, const int frame),
+                               const int frame)
 {
 	ExrHandle *data = (ExrHandle *)handle;
 	MultiPartInputFile *file = data->ifile;

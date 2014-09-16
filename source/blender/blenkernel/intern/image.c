@@ -2827,7 +2827,7 @@ bool BKE_image_save_openexr_multiview(Image *ima, ImBuf *ibuf, const char *filep
 	BLI_path_abs(name, G.main->name);
 
 	ibuf->userdata = ima;
-	ok = IMB_exr_save_openexr_multiview(ibuf, name, flags, BLI_countlist(&ima->views), image_get_view_cb, image_get_buffer_cb);
+	ok = IMB_exr_multiview_save(ibuf, name, flags, BLI_countlist(&ima->views), image_get_view_cb, image_get_buffer_cb);
 	ibuf->userdata = NULL;
 
 	return ok;
@@ -2914,7 +2914,7 @@ static void image_create_multiview(Image *ima, ImBuf *ibuf, const int frame)
 {
 	image_free_views(ima);
 
-	IMB_exr_singlelayer_multiview_convert(ibuf->userdata, ima, image_add_view_cb, image_add_buffer_cb, frame);
+	IMB_exr_multiview_convert(ibuf->userdata, ima, image_add_view_cb, image_add_buffer_cb, frame);
 
 	image_update_multiview_flags(ima);
 

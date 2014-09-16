@@ -72,14 +72,14 @@ void    IMB_exr_multilayer_convert(void *handle, void *base,
                                    void (*addpass)(void *base, void *lay, const char *str, float *rect, int totchan,
                                                    const char *chan_id, const char *view));
 
-void    IMB_exr_singlelayer_multiview_convert(void *handle, void *base,
-                                              void (*addview)(void *base, const char *str),
-                                              void (*addbuffer)(void *base, const char *str, struct ImBuf *ibuf, const int frame),
-                                              const int frame);
+void    IMB_exr_multiview_convert(void *handle, void *base,
+                                  void (*addview)(void *base, const char *str),
+                                  void (*addbuffer)(void *base, const char *str, struct ImBuf *ibuf, const int frame),
+                                  const int frame);
 
-bool    IMB_exr_save_openexr_multiview (struct ImBuf *ibuf, const char *name, const int flags, const size_t totviews,
-                                        const char * (*getview)(void *base, size_t view_id),
-                                        struct ImBuf * (*getbuffer)(void *base, const size_t view_id));
+bool    IMB_exr_multiview_save (struct ImBuf *ibuf, const char *name, const int flags, const size_t totviews,
+                                const char * (*getview)(void *base, size_t view_id),
+                                struct ImBuf * (*getbuffer)(void *base, const size_t view_id));
 
 void    IMB_exr_close(void *handle);
 
