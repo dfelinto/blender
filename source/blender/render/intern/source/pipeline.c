@@ -2998,7 +2998,7 @@ void RE_BlenderFrame(Render *re, Main *bmain, Scene *scene, SceneRenderLayer *sr
 			else {
 				char name[FILE_MAX];
 				BKE_makepicstring(name, scene->r.pic, bmain->name, scene->r.cfra,
-				                  &scene->r.im_format, (scene->r.scemode & R_EXTENSION) != 0, false, "");
+				                  &scene->r.im_format, (scene->r.scemode & R_EXTENSION) != 0, false, NULL);
 
 				/* reports only used for Movie */
 				do_write_image_or_movie(re, bmain, scene, NULL, 0, name);
@@ -3036,43 +3036,6 @@ void RE_RenderFreestyleExternal(Render *re)
 }
 #endif
 
-/* When multiview is not used the filepath is as usual (e.g., Image.jpg).
- * When multiview is on, even if only one view is enabled the view is incorporated
- * into the file name (e.g., Image_L.jpg). That allows for the user to re-render
- * individual views.
- **/
-static void save_image_get_view_filepath(Scene *scene, const char *filepath, RenderView *rv,
-                                         char *r_filepath, char *r_view)
-{
-	SceneRenderView *srv;
-	char suffix[FILE_MAX];
-
-	srv = BLI_findstring(&scene->r.views, rv->name, offsetof(SceneRenderView, name));
-
-	if (srv) {
-		if (r_filepath) {
-			BLI_strncpy(suffix, srv->suffix, sizeof(suffix));
-			BLI_strncpy(r_filepath, filepath, FILE_MAX);
-			BLI_path_view(r_filepath, suffix);
-		}
-
-		if (r_view) {
-			BLI_strncpy(r_view, srv->name, FILE_MAX);
-		}
-	}
-	else {
-		if (r_filepath) {
-			BLI_strncpy(suffix, rv->name, sizeof(suffix));
-			BLI_strncpy(r_filepath, filepath, FILE_MAX);
-			BLI_path_view(r_filepath, suffix);
-		}
-
-		if (r_view) {
-			BLI_strncpy(r_view, rv->name, FILE_MAX);
-		}
-	}
-}
-
 bool RE_WriteRenderViewsImage(ReportList *reports, RenderResult *rr, Scene *scene, const bool stamp, char *name)
 {
 	bool is_mono;
@@ -3097,16 +3060,15 @@ bool RE_WriteRenderViewsImage(ReportList *reports, RenderResult *rr, Scene *scen
 		RenderView *rv;
 		size_t view_id;
 		char filepath[FILE_MAX];
-		char view[FILE_MAX];
 
 		BLI_strncpy(filepath, name, sizeof(filepath));
 
 		for (view_id = 0, rv = (RenderView *) rr->views.first; rv; rv = rv->next, view_id++) {
-			save_image_get_view_filepath(scene, filepath, rv, name, view);
+			BKE_scene_view_get_filepath(&scene->r, filepath, rv->name, name);
 
 			if (rd->im_format.imtype == R_IMF_IMTYPE_MULTILAYER) {
 
-				RE_WriteRenderResult(reports, rr, name, &rd->im_format, false, view);
+				RE_WriteRenderResult(reports, rr, name, &rd->im_format, false, rv->name);
 				printf("Saved: %s\n", name);
 			}
 			else {
@@ -3318,7 +3280,7 @@ static int do_write_image_or_movie(Render *re, Main *bmain, Scene *scene, bMovie
 			BLI_strncpy(name, name_override, sizeof(name));
 		else
 			BKE_makepicstring(name, scene->r.pic, bmain->name, scene->r.cfra,
-			                  &scene->r.im_format, (scene->r.scemode & R_EXTENSION) != 0, true, "");
+			                  &scene->r.im_format, (scene->r.scemode & R_EXTENSION) != 0, true, NULL);
 
 		/* write images as individual images or stereo */
 		ok = RE_WriteRenderViewsImage(re->reports, &rres, scene, true, name);
@@ -3471,7 +3433,7 @@ void RE_BlenderAnim(Render *re, Main *bmain, Scene *scene, Object *camera_overri
 			if (BKE_imtype_is_movie(scene->r.im_format.imtype) == 0) {
 				if (scene->r.mode & (R_NO_OVERWRITE | R_TOUCH))
 					BKE_makepicstring(name, scene->r.pic, bmain->name, scene->r.cfra,
-					                  &scene->r.im_format, (scene->r.scemode & R_EXTENSION) != 0, true, "");
+					                  &scene->r.im_format, (scene->r.scemode & R_EXTENSION) != 0, true, NULL);
 
 				if (scene->r.mode & R_NO_OVERWRITE && BLI_exists(name)) {
 					printf("skipping existing frame \"%s\"\n", name);

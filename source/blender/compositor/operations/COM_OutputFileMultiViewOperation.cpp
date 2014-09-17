@@ -105,7 +105,7 @@ void OutputOpenExrSingleLayerMultiViewOperation::deinitExecution()
 		char filename[FILE_MAX];
 
 		BKE_makepicstring_from_type(filename, this->m_path, bmain->name, this->m_rd->cfra, R_IMF_IMTYPE_OPENEXR,
-		                            (this->m_rd->scemode & R_EXTENSION), true, "");
+		                            (this->m_rd->scemode & R_EXTENSION), true, NULL);
 
 		exrhandle = this->get_handle(filename);
 		add_exr_channels(exrhandle, NULL, this->m_datatype, this->m_viewName, width, this->m_outputBuffer);
@@ -188,7 +188,7 @@ void OutputOpenExrMultiLayerMultiViewOperation::deinitExecution()
 		char filename[FILE_MAX];
 
 		BKE_makepicstring_from_type(filename, this->m_path, bmain->name, this->m_rd->cfra, R_IMF_IMTYPE_MULTILAYER,
-		                            (this->m_rd->scemode & R_EXTENSION), true, "");
+		                            (this->m_rd->scemode & R_EXTENSION), true, NULL);
 
 		exrhandle = this->get_handle(filename);
 

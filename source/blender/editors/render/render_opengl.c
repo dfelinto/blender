@@ -452,7 +452,7 @@ static void screen_opengl_render_write(OGLRender *oglrender)
 	rr = RE_AcquireResultRead(oglrender->re);
 
 	BKE_makepicstring(name, scene->r.pic, oglrender->bmain->name, scene->r.cfra,
-	                  &scene->r.im_format, (scene->r.scemode & R_EXTENSION) != 0, false, "");
+	                  &scene->r.im_format, (scene->r.scemode & R_EXTENSION) != 0, false, NULL);
 
 	/* write images as individual images or stereo */
 	ok = RE_WriteRenderViewsImage(oglrender->reports, rr, scene, false, name);
@@ -718,7 +718,7 @@ static bool screen_opengl_render_anim_step(bContext *C, wmOperator *op)
 
 	if (!is_movie) {
 		BKE_makepicstring(name, scene->r.pic, oglrender->bmain->name, scene->r.cfra,
-		                  &scene->r.im_format, (scene->r.scemode & R_EXTENSION) != 0, true, "");
+		                  &scene->r.im_format, (scene->r.scemode & R_EXTENSION) != 0, true, NULL);
 
 		if ((scene->r.mode & R_NO_OVERWRITE) && BLI_exists(name)) {
 			BKE_reportf(op->reports, RPT_INFO, "Skipping existing frame \"%s\"", name);

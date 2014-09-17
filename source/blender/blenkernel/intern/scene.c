@@ -2202,19 +2202,35 @@ size_t BKE_scene_view_get_id(const RenderData *rd, const char *viewname)
 	return 0;
 }
 
-void BKE_scene_view_get_filepath(Scene *scene, const char *filepath, const char *view, char *r_filepath)
+/* When multiview is not used the filepath is as usual (e.g., Image.jpg).
+ * When multiview is on, even if only one view is enabled the view is incorporated
+ * into the file name (e.g., Image_L.jpg). That allows for the user to re-render
+ * individual views.
+ **/
+void BKE_scene_view_get_filepath(const RenderData *rd, const char *filepath, const char *viewname, char *r_filepath)
 {
 	SceneRenderView *srv;
 	char suffix[FILE_MAX];
 
-	srv = BLI_findstring(&scene->r.views, view, offsetof(SceneRenderView, name));
+	srv = BLI_findstring(&rd->views, viewname, offsetof(SceneRenderView, name));
 	if (srv)
 		BLI_strncpy(suffix, srv->suffix, sizeof(suffix));
 	else
-		BLI_strncpy(suffix, view, sizeof(suffix));
+		BLI_strncpy(suffix, viewname, sizeof(suffix));
 
 	BLI_strncpy(r_filepath, filepath, FILE_MAX);
 	BLI_path_view(r_filepath, suffix);
+}
+
+void BKE_scene_view_get_suffix(const RenderData *rd, const char *viewname, char *r_suffix)
+{
+	SceneRenderView *srv;
+
+	srv = BLI_findstring(&rd->views, viewname, offsetof(SceneRenderView, name));
+	if (srv)
+		BLI_strncpy(r_suffix, srv->suffix, sizeof(r_suffix));
+	else
+		BLI_strncpy(r_suffix, viewname, sizeof(r_suffix));
 }
 
 void BKE_scene_videos_dimensions(const RenderData *rd, const size_t width, const size_t height, size_t *r_width, size_t *r_height)

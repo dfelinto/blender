@@ -29,6 +29,7 @@
 #include "BKE_image.h"
 #include "BKE_global.h"
 #include "BKE_main.h"
+#include "BKE_scene.h"
 
 #include "DNA_color_types.h"
 
@@ -155,6 +156,7 @@ void OutputSingleLayerOperation::deinitExecution()
 		ImBuf *ibuf = IMB_allocImBuf(this->getWidth(), this->getHeight(), this->m_format->planes, 0);
 		Main *bmain = G.main; /* TODO, have this passed along */
 		char filename[FILE_MAX];
+		char suffix[FILE_MAX];
 		
 		ibuf->channels = size;
 		ibuf->rect_float = this->m_outputBuffer;
@@ -164,9 +166,11 @@ void OutputSingleLayerOperation::deinitExecution()
 		IMB_colormanagement_imbuf_for_write(ibuf, true, false, m_viewSettings, m_displaySettings,
 		                                    this->m_format);
 
+		BKE_scene_view_get_suffix(this->m_rd, this->m_viewName, suffix);
+
 		BKE_makepicstring(filename, this->m_path, bmain->name, this->m_rd->cfra, this->m_format,
-		                  (this->m_rd->scemode & R_EXTENSION) != 0, true, this->m_viewName);
-		
+		                  (this->m_rd->scemode & R_EXTENSION) != 0, true, suffix);
+
 		if (0 == BKE_imbuf_write(ibuf, filename, this->m_format))
 			printf("Cannot save Node File Output to %s\n", filename);
 		else
@@ -235,10 +239,12 @@ void OutputOpenExrMultiLayerOperation::deinitExecution()
 	if (width != 0 && height != 0) {
 		Main *bmain = G.main; /* TODO, have this passed along */
 		char filename[FILE_MAX];
+		char suffix[FILE_MAX];
 		void *exrhandle = IMB_exr_get_handle();
 
+		BKE_scene_view_get_suffix(this->m_rd, this->m_viewName, suffix);
 		BKE_makepicstring_from_type(filename, this->m_path, bmain->name, this->m_rd->cfra, R_IMF_IMTYPE_MULTILAYER,
-		                            (this->m_rd->scemode & R_EXTENSION) != 0, true, this->m_viewName);
+		                            (this->m_rd->scemode & R_EXTENSION) != 0, true, suffix);
 		BLI_make_existing_file(filename);
 
 		for (unsigned int i = 0; i < this->m_layers.size(); ++i) {

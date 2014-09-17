@@ -932,7 +932,7 @@ static void image_memorypack_multiview(Scene *scene, Image *ima)
 		/* if the image was a R_IMF_VIEWS_STEREO_3D we need to create
 		 *  new names for the new individual views */
 		if (totfiles == 1)
-			BKE_scene_view_get_filepath(scene, ima->name, iv->name, iv->filepath);
+			BKE_scene_view_get_filepath(&scene->r, ima->name, iv->name, iv->filepath);
 
 		IMB_saveiff(ibuf, iv->filepath, IB_rect | IB_mem);
 
