@@ -156,6 +156,7 @@ static void bm_loop_customdata_merge(
 	BLI_assert(l_a_outer->f == l_a_inner->f);
 	BLI_assert(l_b_outer->f == l_b_inner->f);
 
+	(void) e_connect;
 	BLI_assert(BM_edge_in_face(e_connect, l_a_inner->f));
 	BLI_assert(BM_edge_in_face(e_connect, l_b_inner->f));
 
@@ -189,7 +190,7 @@ static void bm_loop_customdata_merge(
 		         BM_ELEM_CD_GET_VOID_P(l_a_outer, offset),
 		         BM_ELEM_CD_GET_VOID_P(l_b_outer, offset))  == true)
 
-		/* epsilon for comparing UV's is too big, gives noticable problems */
+		    /* epsilon for comparing UV's is too big, gives noticable problems */
 #if 0
 		    &&
 		    /* check if the data ends up diverged */
@@ -587,6 +588,7 @@ void bmo_inset_region_exec(BMesh *bm, BMOperator *op)
 	else {
 		BM_mesh_elem_hflag_enable_all(bm, BM_FACE, BM_ELEM_TAG, false);
 		BMO_slot_buffer_hflag_disable(bm, op->slots_in, "faces", BM_FACE, BM_ELEM_TAG, false);
+		BMO_slot_buffer_hflag_disable(bm, op->slots_in, "faces_exclude", BM_FACE, BM_ELEM_TAG, false);
 	}
 
 	/* first count all inset edges we will split */

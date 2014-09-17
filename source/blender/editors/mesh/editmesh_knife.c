@@ -182,6 +182,9 @@ typedef struct KnifeTool_OpData {
 	BLI_mempool *refs;
 
 	float projmat[4][4];
+	float projmat_inv[4][4];
+	/* vector along view z axis (object space, normalized) */
+	float proj_zaxis[3];
 
 	KnifeColors colors;
 
@@ -249,6 +252,27 @@ static void knife_update_header(bContext *C, KnifeTool_OpData *kcd)
 static void knife_project_v2(const KnifeTool_OpData *kcd, const float co[3], float sco[2])
 {
 	ED_view3d_project_float_v2_m4(kcd->ar, co, sco, (float (*)[4])kcd->projmat);
+}
+
+/* use when lambda is in screen-space */
+static void knife_interp_v3_v3v3(
+        const KnifeTool_OpData *kcd,
+        float r_co[3], const float v1[3], const float v2[3], float lambda_ss)
+{
+	if (kcd->is_ortho) {
+		interp_v3_v3v3(r_co, v1, v2, lambda_ss);
+	}
+	else {
+		/* transform into screen-space, interp, then transform back */
+		float v1_ss[3], v2_ss[3];
+
+		mul_v3_project_m4_v3(v1_ss, (float (*)[4])kcd->projmat, v1);
+		mul_v3_project_m4_v3(v2_ss, (float (*)[4])kcd->projmat, v2);
+
+		interp_v3_v3v3(r_co, v1_ss, v2_ss, lambda_ss);
+
+		mul_project_m4_v3((float (*)[4])kcd->projmat_inv, r_co);
+	}
 }
 
 static void knife_pos_data_clear(KnifePosData *kpd)
@@ -445,19 +469,23 @@ static void knife_start_cut(KnifeTool_OpData *kcd)
 	kcd->prev = kcd->curr;
 	kcd->curr.is_space = 0; /*TODO: why do we do this? */
 
-	if (kcd->prev.vert == NULL && kcd->prev.edge == NULL && is_zero_v3(kcd->prev.cage)) {
-		/* Make prevcage a point on the view ray to mouse closest to a point on model: choose vertex 0 */
+	if (kcd->prev.vert == NULL && kcd->prev.edge == NULL) {
 		float origin[3], origin_ofs[3];
-		BMVert *v0;
+		float ofs_local[3];
+
+		negate_v3_v3(ofs_local, kcd->vc.rv3d->ofs);
+		invert_m4_m4(kcd->ob->imat, kcd->ob->obmat);
+		mul_m4_v3(kcd->ob->imat, ofs_local);
 
 		knife_input_ray_segment(kcd, kcd->curr.mval, 1.0f, origin, origin_ofs);
-		v0 = BM_vert_at_index_find(kcd->em->bm, 0);
-		if (v0) {
-			closest_to_line_v3(kcd->prev.cage, v0->co, origin_ofs, origin);
-			copy_v3_v3(kcd->prev.co, kcd->prev.cage); /*TODO: do we need this? */
-			copy_v3_v3(kcd->curr.cage, kcd->prev.cage);
-			copy_v3_v3(kcd->curr.co, kcd->prev.co);
+
+		if (!isect_line_plane_v3(kcd->prev.cage, origin, origin_ofs, ofs_local, kcd->proj_zaxis)) {
+			zero_v3(kcd->prev.cage);
 		}
+
+		copy_v3_v3(kcd->prev.co, kcd->prev.cage); /*TODO: do we need this? */
+		copy_v3_v3(kcd->curr.cage, kcd->prev.cage);
+		copy_v3_v3(kcd->curr.co, kcd->prev.co);
 	}
 }
 
@@ -1625,10 +1653,6 @@ static KnifeEdge *knife_find_closest_edge(KnifeTool_OpData *kcd, float p[3], flo
 	f = knife_find_closest_face(kcd, co, cageco, NULL);
 	*is_space = !f;
 
-	/* set p to co, in case we don't find anything, means a face cut */
-	copy_v3_v3(p, co);
-	copy_v3_v3(cagep, cageco);
-
 	kcd->curr.bmface = f;
 
 	if (f) {
@@ -1638,6 +1662,10 @@ static KnifeEdge *knife_find_closest_edge(KnifeTool_OpData *kcd, float p[3], flo
 		ListBase *lst;
 		Ref *ref;
 		float dis_sq, curdis_sq = FLT_MAX;
+
+		/* set p to co, in case we don't find anything, means a face cut */
+		copy_v3_v3(p, co);
+		copy_v3_v3(cagep, cageco);
 
 		knife_project_v2(kcd, cageco, sco);
 
@@ -1682,8 +1710,8 @@ static KnifeEdge *knife_find_closest_edge(KnifeTool_OpData *kcd, float p[3], flo
 				}
 			}
 
-			/* now we have 'lambda' calculated */
-			interp_v3_v3v3(test_cagep, kfe->v1->cageco, kfe->v2->cageco, lambda);
+			/* now we have 'lambda' calculated (in screen-space) */
+			knife_interp_v3_v3v3(kcd, test_cagep, kfe->v1->cageco, kfe->v2->cageco, lambda);
 
 			if (kcd->vc.rv3d->rflag & RV3D_CLIPPING) {
 				/* check we're in the view */
@@ -1747,9 +1775,6 @@ static KnifeVert *knife_find_closest_vert(KnifeTool_OpData *kcd, float p[3], flo
 
 	f = knife_find_closest_face(kcd, co, cageco, is_space);
 
-	/* set p to co, in case we don't find anything, means a face cut */
-	copy_v3_v3(p, co);
-	copy_v3_v3(cagep, cageco);
 	kcd->curr.bmface = f;
 
 	if (f) {
@@ -1758,6 +1783,10 @@ static KnifeVert *knife_find_closest_vert(KnifeTool_OpData *kcd, float p[3], flo
 		Ref *ref;
 		KnifeVert *curv = NULL;
 		float dis_sq, curdis_sq = FLT_MAX;
+
+		/* set p to co, in case we don't find anything, means a face cut */
+		copy_v3_v3(p, co);
+		copy_v3_v3(cagep, cageco);
 
 		knife_project_v2(kcd, cageco, sco);
 
@@ -1899,8 +1928,12 @@ static int knife_update_active(KnifeTool_OpData *kcd)
 
 		knife_input_ray_segment(kcd, kcd->curr.mval, 1.0f, origin, origin_ofs);
 
-		closest_to_line_v3(kcd->curr.cage, kcd->prev.cage, origin_ofs, origin);
-		copy_v3_v3(kcd->curr.co, kcd->curr.cage);
+		if (!isect_line_plane_v3(kcd->curr.cage, origin, origin_ofs, kcd->prev.cage, kcd->proj_zaxis)) {
+			copy_v3_v3(kcd->curr.cage, kcd->prev.cage);
+
+			/* should never fail! */
+			BLI_assert(0);
+		}
 	}
 
 	if (kcd->mode == MODE_DRAGGING) {
@@ -2597,7 +2630,11 @@ static void knife_recalc_projmat(KnifeTool_OpData *kcd)
 {
 	invert_m4_m4(kcd->ob->imat, kcd->ob->obmat);
 	ED_view3d_ob_project_mat_get(kcd->ar->regiondata, kcd->ob, kcd->projmat);
-	//mul_m4_m4m4(kcd->projmat, kcd->vc.rv3d->winmat, kcd->vc.rv3d->viewmat);
+	invert_m4_m4(kcd->projmat_inv, kcd->projmat);
+
+	copy_v3_v3(kcd->proj_zaxis, kcd->vc.rv3d->viewinv[2]);
+	mul_mat3_m4_v3(kcd->ob->imat, kcd->proj_zaxis);
+	normalize_v3(kcd->proj_zaxis);
 
 	kcd->is_ortho = ED_view3d_clip_range_get(kcd->vc.v3d, kcd->vc.rv3d,
 	                                         &kcd->clipsta, &kcd->clipend, true);

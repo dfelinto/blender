@@ -316,8 +316,10 @@ endif()
 option(WITH_GTESTS "Enable GTest unit testing" OFF)
 
 if(APPLE)
-	cmake_minimum_required(VERSION 2.8.8)
-	cmake_policy(VERSION 2.8.8)
+	if(${CMAKE_VERSION} VERSION_LESS 3.0) # else breaks setting CMP0043 policy
+		cmake_minimum_required(VERSION 2.8.8)
+		cmake_policy(VERSION 2.8.8)
+	endif()
 
 	if(NOT CMAKE_OSX_ARCHITECTURES)
 		set(CMAKE_OSX_ARCHITECTURES x86_64 CACHE STRING
@@ -2350,6 +2352,8 @@ if(WITH_BLENDER OR WITH_PLAYER)
 	add_subdirectory(source)
 elseif(WITH_CYCLES_STANDALONE)
 	add_subdirectory(intern/cycles)
+	add_subdirectory(extern/clew)
+	add_subdirectory(extern/cuew)
 	if(NOT WITH_SYSTEM_GLEW)
 		add_subdirectory(extern/glew)
 	endif()

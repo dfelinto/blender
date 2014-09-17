@@ -195,14 +195,17 @@ static void rna_Material_active_paint_texture_index_update(Main *bmain, Scene *s
 			nodeSetActive(ma->nodetree, node);
 	}
 
-	for (sc = bmain->screen.first; sc; sc = sc->id.next) {
-		ScrArea *sa;
-		for (sa = sc->areabase.first; sa; sa = sa->next) {
-			SpaceLink *sl;
-			for (sl = sa->spacedata.first; sl; sl = sl->next) {
-				if (sl->spacetype == SPACE_IMAGE) {
-					SpaceImage *sima = (SpaceImage *)sl;
-					ED_space_image_set(sima, scene, scene->obedit, ma->texpaintslot[ma->paint_active_slot].ima);
+	if (ma->texpaintslot) {
+		Image *image = ma->texpaintslot[ma->paint_active_slot].ima;
+		for (sc = bmain->screen.first; sc; sc = sc->id.next) {
+			ScrArea *sa;
+			for (sa = sc->areabase.first; sa; sa = sa->next) {
+				SpaceLink *sl;
+				for (sl = sa->spacedata.first; sl; sl = sl->next) {
+					if (sl->spacetype == SPACE_IMAGE) {
+						SpaceImage *sima = (SpaceImage *)sl;
+						ED_space_image_set(sima, scene, scene->obedit, image);
+					}
 				}
 			}
 		}
@@ -337,7 +340,7 @@ static void rna_Material_use_nodes_update(bContext *C, PointerRNA *ptr)
 	if (ma->use_nodes && ma->nodetree == NULL)
 		ED_node_shader_default(C, &ma->id);
 	
-	rna_Material_update(CTX_data_main(C), CTX_data_scene(C), ptr);
+	rna_Material_draw_update(CTX_data_main(C), CTX_data_scene(C), ptr);
 }
 
 static EnumPropertyItem *rna_Material_texture_coordinates_itemf(bContext *UNUSED(C), PointerRNA *ptr,
