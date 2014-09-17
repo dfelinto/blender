@@ -340,6 +340,12 @@ EnumPropertyItem views_format_items[] = {
 	{0, NULL, 0, NULL, NULL}
 };
 
+EnumPropertyItem views_format_multilayer_items[] = {
+	R_IMF_VIEWS_ENUM_IND
+	R_IMF_VIEWS_ENUM_MV
+	{0, NULL, 0, NULL, NULL}
+};
+
 EnumPropertyItem views_format_multiview_items[] = {
 	R_IMF_VIEWS_ENUM_IND
 	R_IMF_VIEWS_ENUM_S3D
@@ -1007,8 +1013,11 @@ static EnumPropertyItem *rna_ImageFormatSettings_views_format_itemf(bContext *UN
 	if (imf == NULL) {
 		return views_format_items;
 	}
-	else if (ELEM(imf->imtype, R_IMF_IMTYPE_OPENEXR, R_IMF_IMTYPE_MULTILAYER)){
+	else if (imf->imtype == R_IMF_IMTYPE_OPENEXR) {
 		return views_format_multiview_items;
+	}
+	else if (imf->imtype == R_IMF_IMTYPE_MULTILAYER) {
+		return views_format_multilayer_items;
 	}
 	else {
 		return views_format_items;

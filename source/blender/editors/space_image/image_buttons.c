@@ -1076,9 +1076,11 @@ void uiTemplateImageViews(uiLayout *layout, PointerRNA *imfptr)
 	prop = RNA_struct_find_property(imfptr, "stereo_3d_format");
 	stereo3d_format_ptr = RNA_property_pointer_get(imfptr, prop);
 
-	box = uiLayoutBox(col);
-	uiLayoutSetActive(box, imf->views_format == R_IMF_VIEWS_STEREO_3D);
-	uiTemplateImageStereo3d(box, &stereo3d_format_ptr);
+	if (imf->imtype != R_IMF_IMTYPE_MULTILAYER) {
+		box = uiLayoutBox(col);
+		uiLayoutSetActive(box, imf->views_format == R_IMF_VIEWS_STEREO_3D);
+		uiTemplateImageStereo3d(box, &stereo3d_format_ptr);
+	}
 }
 
 void uiTemplateImageLayers(uiLayout *layout, bContext *C, Image *ima, ImageUser *iuser)

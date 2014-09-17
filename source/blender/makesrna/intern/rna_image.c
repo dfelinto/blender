@@ -144,7 +144,10 @@ static EnumPropertyItem *rna_Image_views_format_itemf(bContext *UNUSED(C), Point
 	Image *ima = (Image *)ptr->data;
 
 	if (BKE_image_is_openexr(ima)) {
-		return views_format_multiview_items;
+		if (ima->rr)
+			return views_format_multilayer_items;
+		else
+			return views_format_multiview_items;
 	}
 	else {
 		return views_format_items;

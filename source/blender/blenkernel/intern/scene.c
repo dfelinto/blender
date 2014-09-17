@@ -2111,8 +2111,8 @@ bool BKE_scene_render_view_active(const RenderData *rd, const SceneRenderView *s
 		return true;
 
 	/* SCE_VIEWS_SETUP_BASIC */
-	if ((strcmp(srv->name, STEREO_LEFT_NAME) == 0) ||
-	    (strcmp(srv->name, STEREO_RIGHT_NAME) == 0))
+	if (STREQ(srv->name, STEREO_LEFT_NAME) ||
+	    STREQ(srv->name, STEREO_RIGHT_NAME))
 	{
 		return true;
 	}
@@ -2153,7 +2153,7 @@ bool BKE_scene_render_view_last(const RenderData *rd, const char *viewname)
 
 	for (srv = rd->views.last; srv; srv = srv->prev) {
 		if (BKE_scene_render_view_active(rd, srv)) {
-			return strcmp(viewname, srv->name) == 0;
+			return STREQ(viewname, srv->name);
 		}
 	}
 

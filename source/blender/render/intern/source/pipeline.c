@@ -3084,7 +3084,9 @@ bool RE_WriteRenderViewsImage(ReportList *reports, RenderResult *rr, Scene *scen
 
 	is_mono = BLI_countlist(&rr->views) < 2;
 
-	if (rd->im_format.views_format == R_IMF_VIEWS_MULTIVIEW) {
+	if (ELEM(rd->im_format.imtype, R_IMF_IMTYPE_OPENEXR, R_IMF_IMTYPE_MULTILAYER) &&
+	    rd->im_format.views_format == R_IMF_VIEWS_MULTIVIEW)
+	{
 		RE_WriteRenderResult(reports, rr, name, &rd->im_format, true, NULL);
 		printf("Saved: %s\n", name);
 	}
@@ -3103,6 +3105,7 @@ bool RE_WriteRenderViewsImage(ReportList *reports, RenderResult *rr, Scene *scen
 			save_image_get_view_filepath(scene, filepath, rv, name, view);
 
 			if (rd->im_format.imtype == R_IMF_IMTYPE_MULTILAYER) {
+
 				RE_WriteRenderResult(reports, rr, name, &rd->im_format, false, view);
 				printf("Saved: %s\n", name);
 			}
@@ -3151,8 +3154,7 @@ bool RE_WriteRenderViewsImage(ReportList *reports, RenderResult *rr, Scene *scen
 		BLI_assert(scene->r.im_format.views_format == R_IMF_VIEWS_STEREO_3D);
 
 		if (rd->im_format.imtype == R_IMF_IMTYPE_MULTILAYER) {
-			RE_WriteRenderResult(reports, rr, name, &rd->im_format, false, NULL);
-			printf("Saved: %s\n", name);
+			printf("Stereo 3D not support for MultiLayer image: %s\n", name);
 		}
 		else {
 			ImBuf *ibuf[3] = {NULL};

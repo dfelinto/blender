@@ -217,41 +217,30 @@ void OutputOpenExrMultiLayerOperation::deinitExecution()
 		BKE_makepicstring_from_type(filename, this->m_path, bmain->name, this->m_rd->cfra, R_IMF_IMTYPE_MULTILAYER,
 		                            (this->m_rd->scemode & R_EXTENSION) != 0, true, this->m_viewName);
 		BLI_make_existing_file(filename);
-		
+
 		for (unsigned int i = 0; i < this->m_layers.size(); ++i) {
 			OutputOpenExrLayer &layer = this->m_layers[i];
 			if (!layer.imageInput)
 				continue; /* skip unconnected sockets */
 			
-			char channelname[EXR_TOT_MAXNAME];
-			BLI_strncpy(channelname, this->m_layers[i].name, sizeof(channelname) - 2);
-			char *channelname_ext = channelname + strlen(channelname);
-			
+			const char *layername = this->m_layers[i].name;
 			float *buf = this->m_layers[i].outputBuffer;
 			
 			/* create channels */
 			switch (this->m_layers[i].datatype) {
 				case COM_DT_VALUE:
-					strcpy(channelname_ext, ".V");
-					IMB_exr_add_channel(exrhandle, 0, channelname, "", 1, width, buf);
+					IMB_exr_add_channel(exrhandle, layername, "V", "", 1, width, buf);
 					break;
 				case COM_DT_VECTOR:
-					strcpy(channelname_ext, ".X");
-					IMB_exr_add_channel(exrhandle, 0, channelname, "", 3, 3 * width, buf);
-					strcpy(channelname_ext, ".Y");
-					IMB_exr_add_channel(exrhandle, 0, channelname, "", 3, 3 * width, buf + 1);
-					strcpy(channelname_ext, ".Z");
-					IMB_exr_add_channel(exrhandle, 0, channelname, "", 3, 3 * width, buf + 2);
+					IMB_exr_add_channel(exrhandle, layername, "X", "", 3, 3 * width, buf);
+					IMB_exr_add_channel(exrhandle, layername, "Y", "", 3, 3 * width, buf + 1);
+					IMB_exr_add_channel(exrhandle, layername, "Z", "", 3, 3 * width, buf + 2);
 					break;
 				case COM_DT_COLOR:
-					strcpy(channelname_ext, ".R");
-					IMB_exr_add_channel(exrhandle, 0, channelname, "", 4, 4 * width, buf);
-					strcpy(channelname_ext, ".G");
-					IMB_exr_add_channel(exrhandle, 0, channelname, "", 4, 4 * width, buf + 1);
-					strcpy(channelname_ext, ".B");
-					IMB_exr_add_channel(exrhandle, 0, channelname, "", 4, 4 * width, buf + 2);
-					strcpy(channelname_ext, ".A");
-					IMB_exr_add_channel(exrhandle, 0, channelname, "", 4, 4 * width, buf + 3);
+					IMB_exr_add_channel(exrhandle, layername, "R", "", 4, 4 * width, buf);
+					IMB_exr_add_channel(exrhandle, layername, "G", "", 4, 4 * width, buf + 1);
+					IMB_exr_add_channel(exrhandle, layername, "B", "", 4, 4 * width, buf + 2);
+					IMB_exr_add_channel(exrhandle, layername, "A", "", 4, 4 * width, buf + 3);
 					break;
 				default:
 					break;
