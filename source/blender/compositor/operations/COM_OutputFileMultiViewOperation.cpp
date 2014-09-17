@@ -74,26 +74,7 @@ void *OutputOpenExrSingleLayerMultiViewOperation::get_handle(const char* filenam
 				continue;
 
 			IMB_exr_add_view(exrhandle, srv->name);
-
-			/* create channels */
-			switch (this->m_datatype) {
-				case COM_DT_VALUE:
-					IMB_exr_add_channel(exrhandle, NULL, "V", srv->name, 1, width, NULL);
-					break;
-				case COM_DT_VECTOR:
-					IMB_exr_add_channel(exrhandle, NULL, "X", srv->name, 3, 3 * width, NULL);
-					IMB_exr_add_channel(exrhandle, NULL, "Y", srv->name, 3, 3 * width, NULL);
-					IMB_exr_add_channel(exrhandle, NULL, "Z", srv->name, 3, 3 * width, NULL);
-					break;
-				case COM_DT_COLOR:
-					IMB_exr_add_channel(exrhandle, NULL, "R", srv->name, 4, 4 * width, NULL);
-					IMB_exr_add_channel(exrhandle, NULL, "G", srv->name, 4, 4 * width, NULL);
-					IMB_exr_add_channel(exrhandle, NULL, "B", srv->name, 4, 4 * width, NULL);
-					IMB_exr_add_channel(exrhandle, NULL, "A", srv->name, 4, 4 * width, NULL);
-					break;
-				default:
-					break;
-			}
+			add_exr_channels(exrhandle, NULL, this->m_datatype, srv->name, width, NULL);
 		}
 
 		BLI_make_existing_file(filename);
@@ -120,7 +101,6 @@ void OutputOpenExrSingleLayerMultiViewOperation::deinitExecution()
 
 	if (width != 0 && height != 0) {
 		void *exrhandle;
-		float *buf = this->m_outputBuffer;
 		Main *bmain = G.main; /* TODO, have this passed along */
 		char filename[FILE_MAX];
 
@@ -128,26 +108,7 @@ void OutputOpenExrSingleLayerMultiViewOperation::deinitExecution()
 		                            (this->m_rd->scemode & R_EXTENSION), true, "");
 
 		exrhandle = this->get_handle(filename);
-
-		/* create channels */
-		switch (this->m_datatype) {
-			case COM_DT_VALUE:
-				IMB_exr_add_channel(exrhandle, NULL, "V", this->m_viewName, 1, width, buf);
-				break;
-			case COM_DT_VECTOR:
-				IMB_exr_add_channel(exrhandle, NULL, "X", this->m_viewName, 3, 3 * width, buf);
-				IMB_exr_add_channel(exrhandle, NULL, "Y", this->m_viewName, 3, 3 * width, buf + 1);
-				IMB_exr_add_channel(exrhandle, NULL, "Z", this->m_viewName, 3, 3 * width, buf + 2);
-				break;
-			case COM_DT_COLOR:
-				IMB_exr_add_channel(exrhandle, NULL, "R", this->m_viewName, 4, 4 * width, buf);
-				IMB_exr_add_channel(exrhandle, NULL, "G", this->m_viewName, 4, 4 * width, buf + 1);
-				IMB_exr_add_channel(exrhandle, NULL, "B", this->m_viewName, 4, 4 * width, buf + 2);
-				IMB_exr_add_channel(exrhandle, NULL, "A", this->m_viewName, 4, 4 * width, buf + 3);
-				break;
-			default:
-				break;
-		}
+		add_exr_channels(exrhandle, NULL, this->m_datatype, this->m_viewName, width, this->m_outputBuffer);
 
 		if (this->m_outputBuffer)
 			MEM_freeN(this->m_outputBuffer);
@@ -197,29 +158,8 @@ void *OutputOpenExrMultiLayerMultiViewOperation::get_handle(const char* filename
 
 			IMB_exr_add_view(exrhandle, srv->name);
 
-			for (unsigned int i = 0; i < this->m_layers.size(); ++i) {
-				const char *layername = this->m_layers[i].name;
-
-				/* create channels */
-				switch (this->m_layers[i].datatype) {
-					case COM_DT_VALUE:
-						IMB_exr_add_channel(exrhandle, layername, "V", srv->name, 1, width, NULL);
-						break;
-					case COM_DT_VECTOR:
-						IMB_exr_add_channel(exrhandle, layername, "X", srv->name, 3, 3 * width, NULL);
-						IMB_exr_add_channel(exrhandle, layername, "Y", srv->name, 3, 3 * width, NULL);
-						IMB_exr_add_channel(exrhandle, layername, "Z", srv->name, 3, 3 * width, NULL);
-						break;
-					case COM_DT_COLOR:
-						IMB_exr_add_channel(exrhandle, layername, "R", srv->name, 4, 4 * width, NULL);
-						IMB_exr_add_channel(exrhandle, layername, "G", srv->name, 4, 4 * width, NULL);
-						IMB_exr_add_channel(exrhandle, layername, "B", srv->name, 4, 4 * width, NULL);
-						IMB_exr_add_channel(exrhandle, layername, "A", srv->name, 4, 4 * width, NULL);
-						break;
-					default:
-						break;
-				}
-			}
+			for (unsigned int i = 0; i < this->m_layers.size(); ++i)
+				add_exr_channels(exrhandle, this->m_layers[i].name, this->m_layers[i].datatype, srv->name, width, NULL);
 		}
 
 		BLI_make_existing_file(filename);
@@ -252,30 +192,8 @@ void OutputOpenExrMultiLayerMultiViewOperation::deinitExecution()
 
 		exrhandle = this->get_handle(filename);
 
-		for (unsigned int i = 0; i < this->m_layers.size(); ++i) {
-			float *buf = this->m_layers[i].outputBuffer;
-			const char *layername = this->m_layers[i].name;
-
-			/* create channels */
-			switch (this->m_layers[i].datatype) {
-				case COM_DT_VALUE:
-					IMB_exr_add_channel(exrhandle, layername, "V", this->m_viewName, 1, width, buf);
-					break;
-				case COM_DT_VECTOR:
-					IMB_exr_add_channel(exrhandle, layername, "X", this->m_viewName, 3, 3 * width, buf);
-					IMB_exr_add_channel(exrhandle, layername, "Y", this->m_viewName, 3, 3 * width, buf + 1);
-					IMB_exr_add_channel(exrhandle, layername, "Z", this->m_viewName, 3, 3 * width, buf + 2);
-					break;
-				case COM_DT_COLOR:
-					IMB_exr_add_channel(exrhandle, layername, "R", this->m_viewName, 4, 4 * width, buf);
-					IMB_exr_add_channel(exrhandle, layername, "G", this->m_viewName, 4, 4 * width, buf + 1);
-					IMB_exr_add_channel(exrhandle, layername, "B", this->m_viewName, 4, 4 * width, buf + 2);
-					IMB_exr_add_channel(exrhandle, layername, "A", this->m_viewName, 4, 4 * width, buf + 3);
-					break;
-				default:
-					break;
-			}
-		}
+		for (unsigned int i = 0; i < this->m_layers.size(); ++i)
+			add_exr_channels(exrhandle, this->m_layers[i].name, this->m_layers[i].datatype, this->m_viewName, width, this->m_layers[i].outputBuffer);
 
 		for (unsigned int i = 0; i < this->m_layers.size(); ++i) {
 			if (this->m_layers[i].outputBuffer) {
@@ -296,16 +214,6 @@ void OutputOpenExrMultiLayerMultiViewOperation::deinitExecution()
 
 
 /******************************** Stereo3D ******************************/
-
-static int get_datatype_size(DataType datatype)
-{
-	switch (datatype) {
-		case COM_DT_VALUE:  return 1;
-		case COM_DT_VECTOR: return 3;
-		case COM_DT_COLOR:  return 4;
-		default:            return 0;
-	}
-}
 
 OutputStereoOperation::OutputStereoOperation(
         const RenderData *rd, const bNodeTree *tree, DataType datatype, ImageFormatData *format, const char *path,

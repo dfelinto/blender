@@ -102,4 +102,7 @@ public:
 	bool isFileOutputOperation() const { return true; }
 };
 
+void add_exr_channels(void *exrhandle, const char *layerName, const DataType datatype, const char *viewName, const size_t width, float *buf);
+int get_datatype_size(DataType datatype);
+
 #endif

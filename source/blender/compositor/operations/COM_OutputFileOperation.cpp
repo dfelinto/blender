@@ -39,7 +39,30 @@ extern "C" {
 #  include "IMB_imbuf_types.h"
 }
 
-static int get_datatype_size(DataType datatype)
+void add_exr_channels(void *exrhandle, const char *layerName, const DataType datatype, const char *viewName, const size_t width, float *buf)
+{
+	/* create channels */
+	switch (datatype) {
+		case COM_DT_VALUE:
+			IMB_exr_add_channel(exrhandle, layerName, "V", viewName, 1, width, buf ? buf : NULL);
+			break;
+		case COM_DT_VECTOR:
+			IMB_exr_add_channel(exrhandle, layerName, "X", viewName, 3, 3 * width, buf ? buf : NULL);
+			IMB_exr_add_channel(exrhandle, layerName, "Y", viewName, 3, 3 * width, buf ? buf + 1 : NULL);
+			IMB_exr_add_channel(exrhandle, layerName, "Z", viewName, 3, 3 * width, buf ? buf + 2 : NULL);
+			break;
+		case COM_DT_COLOR:
+			IMB_exr_add_channel(exrhandle, layerName, "R", viewName, 4, 4 * width, buf ? buf : NULL);
+			IMB_exr_add_channel(exrhandle, layerName, "G", viewName, 4, 4 * width, buf ? buf + 1 : NULL);
+			IMB_exr_add_channel(exrhandle, layerName, "B", viewName, 4, 4 * width, buf ? buf + 2 : NULL);
+			IMB_exr_add_channel(exrhandle, layerName, "A", viewName, 4, 4 * width, buf ? buf + 3 : NULL);
+			break;
+		default:
+			break;
+	}
+}
+
+int get_datatype_size(DataType datatype)
 {
 	switch (datatype) {
 		case COM_DT_VALUE:  return 1;
@@ -223,29 +246,7 @@ void OutputOpenExrMultiLayerOperation::deinitExecution()
 			if (!layer.imageInput)
 				continue; /* skip unconnected sockets */
 			
-			const char *layername = this->m_layers[i].name;
-			float *buf = this->m_layers[i].outputBuffer;
-			
-			/* create channels */
-			switch (this->m_layers[i].datatype) {
-				case COM_DT_VALUE:
-					IMB_exr_add_channel(exrhandle, layername, "V", "", 1, width, buf);
-					break;
-				case COM_DT_VECTOR:
-					IMB_exr_add_channel(exrhandle, layername, "X", "", 3, 3 * width, buf);
-					IMB_exr_add_channel(exrhandle, layername, "Y", "", 3, 3 * width, buf + 1);
-					IMB_exr_add_channel(exrhandle, layername, "Z", "", 3, 3 * width, buf + 2);
-					break;
-				case COM_DT_COLOR:
-					IMB_exr_add_channel(exrhandle, layername, "R", "", 4, 4 * width, buf);
-					IMB_exr_add_channel(exrhandle, layername, "G", "", 4, 4 * width, buf + 1);
-					IMB_exr_add_channel(exrhandle, layername, "B", "", 4, 4 * width, buf + 2);
-					IMB_exr_add_channel(exrhandle, layername, "A", "", 4, 4 * width, buf + 3);
-					break;
-				default:
-					break;
-			}
-			
+			add_exr_channels(exrhandle, this->m_layers[i].name, this->m_layers[i].datatype, "", width, this->m_layers[i].outputBuffer);
 		}
 		
 		/* when the filename has no permissions, this can fail */
