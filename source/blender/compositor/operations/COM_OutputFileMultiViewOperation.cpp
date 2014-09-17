@@ -110,15 +110,18 @@ void OutputOpenExrSingleLayerMultiViewOperation::deinitExecution()
 		exrhandle = this->get_handle(filename);
 		add_exr_channels(exrhandle, NULL, this->m_datatype, this->m_viewName, width, this->m_outputBuffer);
 
-		if (this->m_outputBuffer)
-			MEM_freeN(this->m_outputBuffer);
-
+		/* memory can only be freed after we write all views to the file */
 		this->m_outputBuffer = NULL;
 		this->m_imageInput = NULL;
 
 		/* ready to close the file */
 		if (BKE_scene_render_view_last(this->m_rd, this->m_viewName)) {
 			IMB_exr_write_channels(exrhandle);
+
+			/* free buffer memory for all the views */
+			free_exr_channels(exrhandle, this->m_rd, NULL, this->m_datatype);
+
+			/* remove exr handle and data */
 			IMB_exr_close(exrhandle);
 		}
 	}
@@ -196,17 +199,20 @@ void OutputOpenExrMultiLayerMultiViewOperation::deinitExecution()
 			add_exr_channels(exrhandle, this->m_layers[i].name, this->m_layers[i].datatype, this->m_viewName, width, this->m_layers[i].outputBuffer);
 
 		for (unsigned int i = 0; i < this->m_layers.size(); ++i) {
-			if (this->m_layers[i].outputBuffer) {
-				MEM_freeN(this->m_layers[i].outputBuffer);
-				this->m_layers[i].outputBuffer = NULL;
-			}
-			
+			/* memory can only be freed after we write all views to the file */
+			this->m_layers[i].outputBuffer = NULL;
 			this->m_layers[i].imageInput = NULL;
 		}
 
 		/* ready to close the file */
 		if (BKE_scene_render_view_last(this->m_rd, this->m_viewName)) {
 			IMB_exr_write_channels(exrhandle);
+
+			/* free buffer memory for all the views */
+			for (unsigned int i = 0; i < this->m_layers.size(); ++i) {
+				free_exr_channels(exrhandle, this->m_rd, this->m_layers[i].name, this->m_layers[i].datatype);
+			}
+
 			IMB_exr_close(exrhandle);
 		}
 	}
@@ -242,9 +248,8 @@ void *OutputStereoOperation::get_handle(const char* filename)
 
 		IMB_exr_clear_channels(exrhandle);
 
-		for (i = 0; i < 2; i++) {
+		for (i = 0; i < 2; i++)
 			IMB_exr_add_view(exrhandle, names[i]);
-		}
 
 		return exrhandle;
 	}
@@ -300,11 +305,10 @@ void OutputStereoOperation::deinitExecution()
 
 			BKE_imbuf_write(ibuf[2], filename, this->m_format);
 
-			/* cleanup */
 			/* imbuf knows which rects are not part of ibuf */
-			for (i = 0; i < 3; i++) {
+			for (i = 0; i < 3; i++)
 				IMB_freeImBuf(ibuf[i]);
-			}
+
 			IMB_exr_close(exrhandle);
 		}
 	}

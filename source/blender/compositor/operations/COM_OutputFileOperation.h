@@ -103,6 +103,7 @@ public:
 };
 
 void add_exr_channels(void *exrhandle, const char *layerName, const DataType datatype, const char *viewName, const size_t width, float *buf);
+void free_exr_channels(void *exrhandle, const RenderData *rd, const char *layerName, const DataType datatype);
 int get_datatype_size(DataType datatype);
 
 #endif

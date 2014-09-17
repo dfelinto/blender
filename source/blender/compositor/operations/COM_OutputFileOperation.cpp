@@ -63,6 +63,36 @@ void add_exr_channels(void *exrhandle, const char *layerName, const DataType dat
 	}
 }
 
+void free_exr_channels(void *exrhandle, const RenderData *rd, const char *layerName, const DataType datatype)
+{
+	SceneRenderView *srv;
+
+	/* check renderdata for amount of views */
+	for (srv = (SceneRenderView *) rd->views.first; srv; srv = srv->next) {
+		float *rect = NULL;
+
+		if (BKE_scene_render_view_active(rd, srv) == false)
+			continue;
+
+		/* the pointer is stored in the first channel of each datatype */
+		switch (datatype) {
+			case COM_DT_VALUE:
+				rect = IMB_exr_channel_rect(exrhandle, layerName, "V", srv->name);
+				break;
+			case COM_DT_VECTOR:
+				rect = IMB_exr_channel_rect(exrhandle, layerName, "X", srv->name);
+				break;
+			case COM_DT_COLOR:
+				rect = IMB_exr_channel_rect(exrhandle, layerName, "R", srv->name);
+				break;
+			default:
+				break;
+		}
+		if (rect)
+			MEM_freeN(rect);
+	}
+}
+
 int get_datatype_size(DataType datatype)
 {
 	switch (datatype) {
