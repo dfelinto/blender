@@ -674,8 +674,10 @@ static void node_buts_image_user(uiLayout *layout, bContext *C, PointerRNA *ptr,
 	col = uiLayoutColumn(layout, false);
 
 	if (RNA_enum_get(imaptr, "type") == IMA_TYPE_MULTILAYER &&
-		RNA_boolean_get(ptr, "has_layers"))
+	    RNA_boolean_get(ptr, "has_layers"))
+	{
 		uiItemR(col, ptr, "layer", 0, NULL, ICON_NONE);
+	}
 }
 
 static void node_shader_buts_material(uiLayout *layout, bContext *C, PointerRNA *ptr)
@@ -1151,7 +1153,7 @@ static void node_buts_image_views(uiLayout *layout, bContext *UNUSED(C), Pointer
 	col = uiLayoutColumn(layout, false);
 
 	if (RNA_boolean_get(ptr, "has_views")) {
-		if(RNA_enum_get(ptr, "view") == 0)
+		if (RNA_enum_get(ptr, "view") == 0)
 			uiItemR(col, ptr, "view", 0, NULL, ICON_CAMERA_STEREO);
 		else
 			uiItemR(col, ptr, "view", 0, NULL, ICON_SCENE);

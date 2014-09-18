@@ -38,9 +38,9 @@
 #include "MEM_guardedalloc.h"
 
 extern "C" {
-	#include "IMB_imbuf.h"
-	#include "IMB_colormanagement.h"
-	#include "IMB_imbuf_types.h"
+#include "IMB_imbuf.h"
+#include "IMB_colormanagement.h"
+#include "IMB_imbuf_types.h"
 }
 
 /************************************  OpenEXR Singlelayer Multiview *****************************************/
@@ -53,7 +53,7 @@ OutputOpenExrSingleLayerMultiViewOperation::OutputOpenExrSingleLayerMultiViewOpe
 {
 }
 
-void *OutputOpenExrSingleLayerMultiViewOperation::get_handle(const char* filename)
+void *OutputOpenExrSingleLayerMultiViewOperation::get_handle(const char *filename)
 {
 	size_t width = this->getWidth();
 	size_t height = this->getHeight();
@@ -81,8 +81,7 @@ void *OutputOpenExrSingleLayerMultiViewOperation::get_handle(const char* filenam
 
 		/* prepare the file with all the channels */
 
-		if (IMB_exr_begin_write(exrhandle, filename, width, height, this->m_format->exr_codec) == 0)
-		{
+		if (IMB_exr_begin_write(exrhandle, filename, width, height, this->m_format->exr_codec) == 0) {
 			printf("Error Writing Singlelayer Multiview Openexr\n");
 			IMB_exr_close(exrhandle);
 		}
@@ -135,7 +134,7 @@ OutputOpenExrMultiLayerMultiViewOperation::OutputOpenExrMultiLayerMultiViewOpera
 {
 }
 
-void *OutputOpenExrMultiLayerMultiViewOperation::get_handle(const char* filename)
+void *OutputOpenExrMultiLayerMultiViewOperation::get_handle(const char *filename)
 {
 	unsigned int width = this->getWidth();
 	unsigned int height = this->getHeight();
@@ -231,7 +230,7 @@ OutputStereoOperation::OutputStereoOperation(
 	this->m_channels = get_datatype_size(datatype);
 }
 
-void *OutputStereoOperation::get_handle(const char* filename)
+void *OutputStereoOperation::get_handle(const char *filename)
 {
 	size_t width = this->getWidth();
 	size_t height = this->getHeight();
@@ -284,7 +283,7 @@ void OutputStereoOperation::deinitExecution()
 			/* get rectf from EXR */
 			for (i = 0; i < 2; i++) {
 				float *rectf = IMB_exr_channel_rect(exrhandle, NULL, this->m_name, names[i]);
-				ibuf[i]= IMB_allocImBuf(width, height, this->m_format->planes, 0);
+				ibuf[i] = IMB_allocImBuf(width, height, this->m_format->planes, 0);
 
 				ibuf[i]->channels = this->m_channels;
 				ibuf[i]->rect_float = rectf;

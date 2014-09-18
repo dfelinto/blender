@@ -470,8 +470,7 @@ static void screen_opengl_render_apply(OGLRender *oglrender)
 	int view_id;
 
 	rr = RE_AcquireResultRead(oglrender->re);
-	for (rv = rr->views.first, view_id = 0; rv; rv = rv->next, view_id++)
-	{
+	for (rv = rr->views.first, view_id = 0; rv; rv = rv->next, view_id++) {
 		oglrender->view_id = view_id;
 		screen_opengl_render_doit(oglrender, rr);
 	}
@@ -615,7 +614,7 @@ static void screen_opengl_render_end(bContext *C, OGLRender *oglrender)
 	size_t i;
 
 	if (oglrender->mh) {
-		for (i = 0; i < oglrender->totvideos; i++){
+		for (i = 0; i < oglrender->totvideos; i++) {
 			if (BKE_imtype_is_movie(scene->r.im_format.imtype)) {
 				oglrender->mh[i]->end_movie();
 			}
@@ -671,7 +670,7 @@ static int screen_opengl_render_anim_initialize(bContext *C, wmOperator *op)
 
 		oglrender->mh = MEM_mallocN(sizeof(bMovieHandle) * oglrender->totvideos, "Movies");
 
-		for (i = 0; i < oglrender->totvideos; i++){
+		for (i = 0; i < oglrender->totvideos; i++) {
 			oglrender->mh[i] = BKE_movie_handle_get(scene->r.im_format.imtype);
 
 			/*XXX MV MOV need to come up with a solution for the name issue, because at the moment

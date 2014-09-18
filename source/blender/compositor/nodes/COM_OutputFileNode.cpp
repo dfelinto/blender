@@ -55,7 +55,8 @@ void OutputFileNode::convertToOperations(NodeConverter &converter, const Composi
 		if (is_multiview && storage->format.views_format == R_IMF_VIEWS_MULTIVIEW) {
 			outputOperation = new OutputOpenExrMultiLayerMultiViewOperation(
 			        context.getRenderData(), context.getbNodeTree(), storage->base_path, storage->format.exr_codec, context.getViewName());
-		} else {
+		}
+		else {
 			outputOperation = new OutputOpenExrMultiLayerOperation(
 		          context.getRenderData(), context.getbNodeTree(), storage->base_path, storage->format.exr_codec, context.getViewName());
 		}

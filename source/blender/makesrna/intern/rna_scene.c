@@ -770,9 +770,11 @@ static int rna_RenderSettings_stereoViews_skip(CollectionPropertyIterator *iter,
 	ListBaseIterator *internal = &iter->internal.listbase;
 	SceneRenderView *srv = (SceneRenderView *)internal->link;
 
-	if ((strcmp(srv->name, STEREO_LEFT_NAME )==0) ||
-	    (strcmp(srv->name, STEREO_RIGHT_NAME)==0))
+	if ((strcmp(srv->name, STEREO_LEFT_NAME ) == 0) ||
+	    (strcmp(srv->name, STEREO_RIGHT_NAME) == 0))
+	{
 		return 0;
+	}
 
 	return 1;
 };
@@ -1388,8 +1390,8 @@ static void rna_RenderSettings_views_setup_set(PointerRNA *ptr, int value)
 	RenderData *rd = (RenderData *)ptr->data;
 
 	if (rd->views_setup == SCE_VIEWS_SETUP_ADVANCED &&
-	              value == SCE_VIEWS_SETUP_BASIC) {
-
+	    value == SCE_VIEWS_SETUP_BASIC)
+	{
 		/* make sure the actview is visible */
 		if (rd->actview > 1) rd->actview = 1;
 	}

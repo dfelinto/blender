@@ -95,7 +95,7 @@ void ImageNode::convertToOperations(NodeConverter &converter, const CompositorCo
 					NodeOperation *operation = NULL;
 					socket = this->getOutputSocket(index);
 					bNodeSocket *bnodeSocket = socket->getbNodeSocket();
-					RenderPass *rpass = (RenderPass*) BLI_findstring(&rl->passes, bnodeSocket->identifier, offsetof(RenderPass, internal_name));
+					RenderPass *rpass = (RenderPass *)BLI_findstring(&rl->passes, bnodeSocket->identifier, offsetof(RenderPass, internal_name));
 
 					int view = (rpass ? rpass->view_id : 0);
 

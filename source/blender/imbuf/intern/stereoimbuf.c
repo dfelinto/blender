@@ -67,16 +67,16 @@ static void imb_stereo_write_anaglyph(Stereo3DData *s3d, enum eStereo3dAnaglyphT
 {
 	int x, y;
 	size_t width = s3d->x;
-	size_t height= s3d->y;
+	size_t height = s3d->y;
 	const size_t channels = s3d->channels;
 
 	const int stride_from = width;
 	const int stride_to = width;
 
 	int anaglyph_encoding[3][3] = {
-	    {0,1,1},
-	    {1,0,1},
-	    {0,0,1},
+	    {0, 1, 1},
+	    {1, 0, 1},
+	    {0, 0, 1},
 	};
 
 	int r, g, b;
@@ -85,10 +85,10 @@ static void imb_stereo_write_anaglyph(Stereo3DData *s3d, enum eStereo3dAnaglyphT
 	g = anaglyph_encoding[mode][1];
 	b = anaglyph_encoding[mode][2];
 
-	if (s3d->is_float){
+	if (s3d->is_float) {
 		float *rect_to = s3d->rectf[2];
 		float *rect_left = s3d->rectf[0];
-		float *rect_right= s3d->rectf[1];
+		float *rect_right = s3d->rectf[1];
 
 		if (channels == 3) {
 			for (y = 0; y < height; y++) {
@@ -125,7 +125,7 @@ static void imb_stereo_write_anaglyph(Stereo3DData *s3d, enum eStereo3dAnaglyphT
 	else {
 		uchar *rect_to = s3d->rect[2];
 		uchar *rect_left = s3d->rect[0];
-		uchar *rect_right= s3d->rect[1];
+		uchar *rect_right = s3d->rect[1];
 
 		if (channels == 3) {
 			for (y = 0; y < height; y++) {
@@ -165,18 +165,18 @@ static void imb_stereo_write_interlace(Stereo3DData *s3d, enum eStereo3dInterlac
 {
 	int x, y;
 	size_t width = s3d->x;
-	size_t height= s3d->y;
+	size_t height = s3d->y;
 	const size_t channels = s3d->channels;
 
 	const int stride_from = width;
 	const int stride_to = width;
 
-	if (s3d->is_float){
+	if (s3d->is_float) {
 		float *rect_to = s3d->rectf[2];
 		const float *rect_left = s3d->rectf[0];
-		const float *rect_right= s3d->rectf[1];
+		const float *rect_right = s3d->rectf[1];
 
-		switch(mode) {
+		switch (mode) {
 			case S3D_INTERLACE_ROW:
 			{
 				char i = (char) swap;
@@ -301,9 +301,9 @@ static void imb_stereo_write_interlace(Stereo3DData *s3d, enum eStereo3dInterlac
 	else {
 		uchar *rect_to = s3d->rect[2];
 		const uchar *rect_left = s3d->rect[0];
-		const uchar *rect_right= s3d->rect[1];
+		const uchar *rect_right = s3d->rect[1];
 
-		switch(mode) {
+		switch (mode) {
 			case S3D_INTERLACE_ROW:
 			{
 				char i = (char) swap;
@@ -312,7 +312,7 @@ static void imb_stereo_write_interlace(Stereo3DData *s3d, enum eStereo3dInterlac
 					const uchar *from[2] = {
 					      rect_left + stride_from * y * channels,
 					      rect_right + stride_from * y * channels,
-					      };
+					};
 					memcpy(to, from[i], sizeof(uchar) * channels * stride_from);
 					i = !i;
 				}
@@ -429,7 +429,7 @@ static void imb_stereo_write_sidebyside(Stereo3DData *s3d, const bool crosseyed)
 {
 	int y;
 	size_t width = s3d->x;
-	size_t height= s3d->y;
+	size_t height = s3d->y;
 	const size_t channels = s3d->channels;
 
 	const int stride_from = width;
@@ -438,10 +438,10 @@ static void imb_stereo_write_sidebyside(Stereo3DData *s3d, const bool crosseyed)
 	const int l =  (int) crosseyed;
 	const int r = !l;
 
-	if (s3d->is_float){
+	if (s3d->is_float) {
 		float *rect_to = s3d->rectf[2];
 		const float *rect_left = s3d->rectf[0];
-		const float *rect_right= s3d->rectf[1];
+		const float *rect_right = s3d->rectf[1];
 
 		for (y = 0; y < height; y++) {
 			float *to = rect_to + stride_to * y * channels;
@@ -457,7 +457,7 @@ static void imb_stereo_write_sidebyside(Stereo3DData *s3d, const bool crosseyed)
 	else {
 		uchar *rect_to = s3d->rect[2];
 		const uchar *rect_left = s3d->rect[0];
-		const uchar *rect_right= s3d->rect[1];
+		const uchar *rect_right = s3d->rect[1];
 
 		for (y = 0; y < height; y++) {
 			uchar *to = rect_to + stride_to * y * channels;
@@ -477,16 +477,16 @@ static void imb_stereo_write_topbottom(Stereo3DData *s3d)
 {
 	int y;
 	size_t width = s3d->x;
-	size_t height= s3d->y;
+	size_t height = s3d->y;
 	const size_t channels = s3d->channels;
 
 	const int stride_from = width;
 	const int stride_to = width;
 
-	if (s3d->is_float){
+	if (s3d->is_float) {
 		float *rect_to = s3d->rectf[2];
 		const float *rect_left = s3d->rectf[0];
-		const float *rect_right= s3d->rectf[1];
+		const float *rect_right = s3d->rectf[1];
 
 		for (y = 0; y < height; y++) {
 			float *to = rect_to + stride_to * y * channels;
@@ -502,7 +502,7 @@ static void imb_stereo_write_topbottom(Stereo3DData *s3d)
 	else {
 		uchar *rect_to = s3d->rect[2];
 		const uchar *rect_left = s3d->rect[0];
-		const uchar *rect_right= s3d->rect[1];
+		const uchar *rect_right = s3d->rect[1];
 
 		for (y = 0; y < height; y++) {
 			uchar *to = rect_to + stride_to * y * channels;
@@ -761,16 +761,16 @@ static void imb_stereo_read_anaglyph(Stereo3DData *s3d, enum eStereo3dAnaglyphTy
 {
 	int x, y;
 	size_t width = s3d->x;
-	size_t height= s3d->y;
+	size_t height = s3d->y;
 	const size_t channels = s3d->channels;
 
 	const int stride_from = width;
 	const int stride_to = width;
 
 	int anaglyph_encoding[3][3] = {
-	    {0,1,1},
-	    {1,0,1},
-	    {0,0,1},
+	    {0, 1, 1},
+	    {1, 0, 1},
+	    {0, 0, 1},
 	};
 
 	int r, g, b;
@@ -779,10 +779,10 @@ static void imb_stereo_read_anaglyph(Stereo3DData *s3d, enum eStereo3dAnaglyphTy
 	g = anaglyph_encoding[mode][1];
 	b = anaglyph_encoding[mode][2];
 
-	if (s3d->is_float){
+	if (s3d->is_float) {
 		float *rect_from = s3d->rectf[2];
 		float *rect_left = s3d->rectf[0];
-		float *rect_right= s3d->rectf[1];
+		float *rect_right = s3d->rectf[1];
 
 		if (channels == 3) {
 			for (y = 0; y < height; y++) {
@@ -819,7 +819,7 @@ static void imb_stereo_read_anaglyph(Stereo3DData *s3d, enum eStereo3dAnaglyphTy
 	else {
 		uchar *rect_from = s3d->rect[2];
 		uchar *rect_left = s3d->rect[0];
-		uchar *rect_right= s3d->rect[1];
+		uchar *rect_right = s3d->rect[1];
 
 		if (channels == 3) {
 			for (y = 0; y < height; y++) {
@@ -859,18 +859,18 @@ static void imb_stereo_read_interlace(Stereo3DData *s3d, enum eStereo3dInterlace
 {
 	int x, y;
 	size_t width = s3d->x;
-	size_t height= s3d->y;
+	size_t height = s3d->y;
 	const size_t channels = s3d->channels;
 
 	const int stride_from = width;
 	const int stride_to = width;
 
-	if (s3d->is_float){
+	if (s3d->is_float) {
 		const float *rect_from = s3d->rectf[2];
 		float *rect_left = s3d->rectf[0];
-		float *rect_right= s3d->rectf[1];
+		float *rect_right = s3d->rectf[1];
 
-		switch(mode) {
+		switch (mode) {
 			case S3D_INTERLACE_ROW:
 			{
 				char i = (char) swap;
@@ -995,9 +995,9 @@ static void imb_stereo_read_interlace(Stereo3DData *s3d, enum eStereo3dInterlace
 	else {
 		const uchar *rect_from = s3d->rect[2];
 		uchar *rect_left = s3d->rect[0];
-		uchar *rect_right= s3d->rect[1];
+		uchar *rect_right = s3d->rect[1];
 
-		switch(mode) {
+		switch (mode) {
 			case S3D_INTERLACE_ROW:
 			{
 				char i = (char) swap;
@@ -1123,7 +1123,7 @@ static void imb_stereo_read_sidebyside(Stereo3DData *s3d, const bool crosseyed)
 {
 	int y;
 	size_t width = s3d->x;
-	size_t height= s3d->y;
+	size_t height = s3d->y;
 	const size_t channels = s3d->channels;
 
 	const int stride_from = width * 2;
@@ -1132,10 +1132,10 @@ static void imb_stereo_read_sidebyside(Stereo3DData *s3d, const bool crosseyed)
 	const int l =  (int) crosseyed;
 	const int r = !l;
 
-	if (s3d->is_float){
+	if (s3d->is_float) {
 		const float *rect_from = s3d->rectf[2];
 		float *rect_left = s3d->rectf[0];
-		float *rect_right= s3d->rectf[1];
+		float *rect_right = s3d->rectf[1];
 
 		for (y = 0; y < height; y++) {
 			const float *from = rect_from + stride_from * y * channels;
@@ -1151,7 +1151,7 @@ static void imb_stereo_read_sidebyside(Stereo3DData *s3d, const bool crosseyed)
 	else {
 		const uchar *rect_from = s3d->rect[2];
 		uchar *rect_left = s3d->rect[0];
-		uchar *rect_right= s3d->rect[1];
+		uchar *rect_right = s3d->rect[1];
 
 		/* always RGBA input/output */
 		for (y = 0; y < height; y++) {
@@ -1172,16 +1172,16 @@ static void imb_stereo_read_topbottom(Stereo3DData *s3d)
 {
 	int y;
 	size_t width = s3d->x;
-	size_t height= s3d->y;
+	size_t height = s3d->y;
 	const size_t channels = s3d->channels;
 
 	const int stride_from = width;
 	const int stride_to = width;
 
-	if (s3d->is_float){
+	if (s3d->is_float) {
 		const float *rect_from = s3d->rectf[2];
 		float *rect_left = s3d->rectf[0];
-		float *rect_right= s3d->rectf[1];
+		float *rect_right = s3d->rectf[1];
 
 		for (y = 0; y < height; y++) {
 			const float *from = rect_from + stride_from * y * channels;
@@ -1197,7 +1197,7 @@ static void imb_stereo_read_topbottom(Stereo3DData *s3d)
 	else {
 		const uchar *rect_from = s3d->rect[2];
 		uchar *rect_left = s3d->rect[0];
-		uchar *rect_right= s3d->rect[1];
+		uchar *rect_right = s3d->rect[1];
 
 		for (y = 0; y < height; y++) {
 			const uchar *from = rect_from + stride_from * y * channels;
@@ -1238,7 +1238,7 @@ void IMB_ImBufFromStereo(Stereo3dFormat *s3d, ImBuf **left, ImBuf **right)
 	IMB_stereo_write_dimensions(s3d->display_mode, ((s3d->flag & S3D_SQUEEZED_FRAME) == 0), stereo->x, stereo->y, &width, &height);
 	imb_stereo_unsqueeze_ImBuf(stereo, s3d, width, height);
 
-	imb_stereo_data_initialize(&s3d_data, is_float, (*left)->x , (*left)->y, 4,
+	imb_stereo_data_initialize(&s3d_data, is_float, (*left)->x, (*left)->y, 4,
 	                           (int *)(*left)->rect, (int *)(*right)->rect, (int *)stereo->rect,
 	                           (*left)->rect_float, (*right)->rect_float, stereo->rect_float);
 
@@ -1254,7 +1254,7 @@ void IMB_ImBufFromStereo(Stereo3dFormat *s3d, ImBuf **left, ImBuf **right)
 			addzbufImBuf(*right);
 		}
 
-		imb_stereo_data_initialize(&s3d_data, is_float, (*left)->x , (*left)->y, 1,
+		imb_stereo_data_initialize(&s3d_data, is_float, (*left)->x, (*left)->y, 1,
 		                           (int *)((*left)->zbuf), (int *)((*right)->zbuf), (int *)stereo->zbuf,
 		                           (*left)->zbuf_float, (*right)->zbuf_float, stereo->zbuf_float);
 

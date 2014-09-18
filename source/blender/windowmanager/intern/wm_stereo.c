@@ -101,7 +101,7 @@ static void wm_method_draw_stereo_epilepsy(wmWindow *win)
 	static bool view = false;
 	static double start = 0.0;
 
-	if( (PIL_check_seconds_timer() - start) >= win->stereo3d_format->epilepsy_interval) {
+	if ((PIL_check_seconds_timer() - start) >= win->stereo3d_format->epilepsy_interval) {
 		start = PIL_check_seconds_timer();
 		view = !view;
 	}
@@ -126,23 +126,23 @@ static void wm_interlace_create_masks(wmWindow *win)
 	if (interlace_prev_type == interlace_type && interlace_prev_swap == swap)
 		return;
 
-	switch(interlace_type) {
+	switch (interlace_type) {
 		case S3D_INTERLACE_ROW:
 			pattern = 0x00000000;
-			pattern = swap? ~pattern : pattern;
-			for(i = 0; i < 32; i += 2) {
+			pattern = swap ? ~pattern : pattern;
+			for (i = 0; i < 32; i += 2) {
 				left_interlace_mask[i] = pattern;
 				right_interlace_mask[i] = ~pattern;
 			}
-			for(i = 1; i < 32; i += 2) {
+			for (i = 1; i < 32; i += 2) {
 				left_interlace_mask[i] = ~pattern;
 				right_interlace_mask[i] = pattern;
 			}
 			break;
 		case S3D_INTERLACE_COLUMN:
 			pattern = 0x55555555;
-			pattern = swap? ~pattern : pattern;
-			for(i = 0; i < 32; i++) {
+			pattern = swap ? ~pattern : pattern;
+			for (i = 0; i < 32; i++) {
 				left_interlace_mask[i] = pattern;
 				right_interlace_mask[i] = ~pattern;
 			}
@@ -150,12 +150,12 @@ static void wm_interlace_create_masks(wmWindow *win)
 		case S3D_INTERLACE_CHECKERBOARD:
 		default:
 			pattern = 0x55555555;
-			pattern = swap? ~pattern : pattern;
-			for(i = 0; i < 32; i += 2) {
+			pattern = swap ? ~pattern : pattern;
+			for (i = 0; i < 32; i += 2) {
 				left_interlace_mask[i] = pattern;
 				right_interlace_mask[i] = ~pattern;
 			}
-			for(i = 1; i < 32; i += 2) {
+			for (i = 1; i < 32; i += 2) {
 				left_interlace_mask[i] = ~pattern;
 				right_interlace_mask[i] = pattern;
 			}
@@ -192,7 +192,7 @@ static void wm_method_draw_stereo_anaglyph(wmWindow *win)
 		drawdata = BLI_findlink(&win->drawdata, (view * 2) + 1);
 
 		bit = view + 1;
-		switch(win->stereo3d_format->anaglyph_type) {
+		switch (win->stereo3d_format->anaglyph_type) {
 			case S3D_ANAGLYPH_REDCYAN:
 				glColorMask(1&bit, 2&bit, 2&bit, false);
 				break;
@@ -227,11 +227,11 @@ static void wm_method_draw_stereo_sidebyside(wmWindow *win)
 
 		soffx = WM_window_pixels_x(win) * 0.5f;
 		if (view == STEREO_LEFT_ID) {
-			if(!cross_eyed)
+			if (!cross_eyed)
 				soffx = 0;
 		}
 		else { //RIGHT_LEFT_ID
-			if(cross_eyed)
+			if (cross_eyed)
 				soffx = 0;
 		}
 
@@ -350,8 +350,7 @@ static void wm_method_draw_stereo_topbottom(wmWindow *win)
 
 void wm_method_draw_stereo(const bContext *UNUSED(C), wmWindow *win)
 {
-	switch (win->stereo3d_format->display_mode)
-	{
+	switch (win->stereo3d_format->display_mode) {
 		case S3D_DISPLAY_ANAGLYPH:
 			wm_method_draw_stereo_anaglyph(win);
 			break;
@@ -422,7 +421,7 @@ static bool wm_stereo3d_required(const bContext *C, bScreen *screen)
 				 * the file doesn't have views enabled */
 				sima = (SpaceImage *) sa->spacedata.first;
 				if ((sima->image) && (sima->image->flag & IMA_IS_STEREO) &&
-					(sima->iuser.flag & IMA_SHOW_STEREO))
+				    (sima->iuser.flag & IMA_SHOW_STEREO))
 				{
 					return true;
 				}
@@ -437,6 +436,7 @@ static bool wm_stereo3d_required(const bContext *C, bScreen *screen)
 				if ((snode->flag & SNODE_BACKDRAW) && ED_node_is_compositor(snode)) {
 					return true;
 				}
+				break;
 			}
 		}
 	}
@@ -544,7 +544,8 @@ int wm_stereo3d_exec(bContext *C, wmOperator *op)
 			win = (wmWindow *)wm->windows.last;
 		}
 		else {
-			BKE_reportf(op->reports, RPT_ERROR, "Fail to create a window compatible with time sequential (page-flip) display method");
+			BKE_reportf(op->reports, RPT_ERROR,
+			            "Fail to create a window compatible with time sequential (page-flip) display method");
 			return OPERATOR_CANCELLED;
 		}
 	}

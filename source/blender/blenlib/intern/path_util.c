@@ -874,8 +874,8 @@ static void ensure_view(char *path)
 		/* found a period */
 		if (period && period > file) {
 			char *p = file;
-			for (p=file+len+1; p > period; p--) {
-				*p = *(p-1);
+			for (p = file + len + 1; p > period; p--) {
+				*p = *(p - 1);
 			}
 			*p = '%';
 		}
@@ -919,7 +919,7 @@ bool BLI_path_view(char *path, const char *view)
 		char tmp[FILE_MAX];
 		const int len = BLI_snprintf(tmp, sizeof(tmp) - 1, "%.*s%s%s", ch_sta, path, view, path + ch_end);
 
-		BLI_strncpy(path, tmp, len+1);
+		BLI_strncpy(path, tmp, len + 1);
 		strip_view_char((char *) BLI_last_slash(path));
 
 		return true;

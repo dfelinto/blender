@@ -112,12 +112,12 @@ static void init_switch_view(const bContext *C, PointerRNA *ptr)
 	int nr;
 
 	/* store scene for updates */
-	node->id = (ID*) scene;
+	node->id = (ID *)scene;
 
 	if (scene) {
 		RenderData *rd = &scene->r;
 
-		for (nr=0, srv=(SceneRenderView *)rd->views.first; srv; srv = srv->next, nr++) {
+		for (nr = 0, srv = (SceneRenderView *)rd->views.first; srv; srv = srv->next, nr++) {
 			sock = ntreeCompositSwitchViewAddSocket(ntree, node, srv->name);
 
 			if ((srv->viewflag & SCE_VIEW_DISABLE))

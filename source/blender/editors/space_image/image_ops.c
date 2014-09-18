@@ -1556,7 +1556,9 @@ static int get_multiview_pass_id(RenderResult *rr, ImageUser *iuser, const int v
 	for (rpass = rl->passes.first; rpass; rpass = rpass->next, rp_index++) {
 		if (rpass->passtype == passtype &&
 		    rpass->view_id == view_id)
+		{
 			return rp_index;
+		}
 	}
 
 	return iuser->pass;
@@ -1694,7 +1696,8 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 
 				/* it shouldn't ever happen*/
 				if ((BLI_findstring(&rr->views, STEREO_LEFT_NAME, offsetof(RenderView, name)) == NULL) ||
-				    (BLI_findstring(&rr->views, STEREO_RIGHT_NAME, offsetof(RenderView, name)) == NULL)) {
+				    (BLI_findstring(&rr->views, STEREO_RIGHT_NAME, offsetof(RenderView, name)) == NULL))
+				{
 					BKE_reportf(op->reports, RPT_ERROR, "Did not write, the image doesn't have a \"%s\" and \"%s\" views",
 					           STEREO_LEFT_NAME, STEREO_RIGHT_NAME);
 					goto cleanup;
@@ -1712,7 +1715,7 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 		}
 
 		/* mono, legacy code */
-		else if(is_mono) {
+		else if (is_mono) {
 			if (is_multilayer) {
 				ok = RE_WriteRenderResult(op->reports, rr, simopts->filepath, imf, false, NULL);
 			}
@@ -1726,7 +1729,7 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 		}
 
 		/* individual multiview images */
-		else if (simopts->im_format.views_format == R_IMF_VIEWS_INDIVIDUAL){
+		else if (simopts->im_format.views_format == R_IMF_VIEWS_INDIVIDUAL) {
 			size_t i;
 			unsigned char planes = ibuf->planes;
 			const size_t totviews = (rr ? BLI_countlist(&rr->views) : BLI_countlist(&ima->views));
@@ -1738,7 +1741,7 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 			for (i = 0; i < totviews; i++) {
 				char filepath[FILE_MAX];
 				bool ok_view = false;
-				const char *view = rr ? ((RenderView *) BLI_findlink(&rr->views, i))->name:
+				const char *view = rr ? ((RenderView *) BLI_findlink(&rr->views, i))->name :
 				                        ((ImageView *) BLI_findlink(&ima->views, i))->name;
 
 				if (is_multilayer) {

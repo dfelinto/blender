@@ -697,10 +697,10 @@ void BKE_camera_stereo_matrices(Object *camera, float r_viewmat[4][4], float *r_
 			angle = -angle;
 		}
 
-		transmat[0][0] = cosf(angle * 2.0f * fac);
-		transmat[2][0] =-sinf(angle * 2.0f * fac);
-		transmat[0][2] = sinf(angle * 2.0f * fac);
-		transmat[2][2] = cosf(angle * 2.0f * fac);
+		transmat[0][0] =  cosf(angle * 2.0f * fac);
+		transmat[2][0] = -sinf(angle * 2.0f * fac);
+		transmat[0][2] =  sinf(angle * 2.0f * fac);
+		transmat[2][2] =  cosf(angle * 2.0f * fac);
 	}
 
 	/* translation */

@@ -402,11 +402,11 @@ void blo_do_versions_270(FileData *fd, Library *UNUSED(lib), Main *main)
 				for (sa = screen->areabase.first; sa; sa = sa->next) {
 					SpaceLink *sl;
 
-					for (sl = sa->spacedata.first; sl; sl= sl->next) {
+					for (sl = sa->spacedata.first; sl; sl = sl->next) {
 						switch (sl->spacetype) {
 							case SPACE_VIEW3D:
 							{
-								View3D *v3d = (View3D*) sl;
+								View3D *v3d = (View3D *)sl;
 								v3d->stereo_camera = STEREO_3D_ID;
 								break;
 							}

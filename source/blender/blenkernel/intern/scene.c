@@ -1887,8 +1887,7 @@ bool BKE_scene_remove_render_view(Scene *scene, SceneRenderView *srv)
 	if (act == -1) {
 		return false;
 	}
-	else if (scene->r.views.first == scene->r.views.last)
-	{
+	else if (scene->r.views.first == scene->r.views.last) {
 		/* ensure 1 view is kept */
 		return false;
 	}

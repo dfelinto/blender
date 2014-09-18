@@ -411,7 +411,7 @@ static void copy_image_packedfiles(ListBase *lbn, ListBase *lbo)
 	ImagePackedFile *imapf, *imapfn;
 	lbn->first = lbn->last = NULL;
 	imapf = lbo->first;
-	while(imapf) {
+	while (imapf) {
 		imapfn = MEM_mallocN(sizeof(ImagePackedFile), "Image Packed Files (copy)");
 		BLI_strncpy(imapfn->filepath, imapf->filepath, sizeof(imapfn->filepath));
 
@@ -428,7 +428,7 @@ static void copy_image_views(ListBase *lbn, ListBase *lbo)
 	ImageView *iv, *ivn;
 	lbn->first = lbn->last = NULL;
 	iv = lbo->first;
-	while(iv) {
+	while (iv) {
 		ivn = MEM_dupallocN(iv);
 		BLI_addtail(lbn, ivn);
 		iv = iv->next;
@@ -440,7 +440,7 @@ static void copy_image_anims(ListBase *lbn, ListBase *lbo)
 	ImageAnim *ia, *ian;
 	lbn->first = lbn->last = NULL;
 	ia = lbo->first;
-	while(ia) {
+	while (ia) {
 		ian = MEM_dupallocN(ia);
 		ian->anim = NULL;
 		BLI_addtail(lbn, ian);
@@ -774,7 +774,7 @@ Image *BKE_image_load_exists(const char *filepath)
 
 			if (BLI_path_cmp(strtest, str) == 0) {
 				if ((BKE_image_has_anim(ima) == false) ||
-					(ima->id.us == 0))
+				    (ima->id.us == 0))
 				{
 					BLI_strncpy(ima->name, filepath, sizeof(ima->name));    /* for stringcode */
 					ima->id.us++;                                       /* officially should not, it doesn't link here! */
@@ -2982,7 +2982,7 @@ static size_t image_num_files(Image *ima)
 	if (!is_multiview) {
 		return 1;
 	}
-	else if(ima->views_format == R_IMF_VIEWS_STEREO_3D){
+	else if (ima->views_format == R_IMF_VIEWS_STEREO_3D) {
 		return 1;
 	}
 	/* R_IMF_VIEWS_INDIVIDUAL */
@@ -3171,7 +3171,7 @@ static ImBuf *image_load_movie_file(Image *ima, ImageUser *iuser, int frame)
 	ibuf = MEM_mallocN(sizeof(ImBuf *) * totviews, "Image Views (movie) Imbufs");
 
 	if ((BKE_image_has_anim(ima) == false) ||
-		BLI_countlist(&ima->anims) != totfiles)
+	    BLI_countlist(&ima->anims) != totfiles)
 	{
 		image_free_anims(ima);
 
@@ -3504,8 +3504,10 @@ static ImBuf *image_get_render_result(Image *ima, ImageUser *iuser, void **lock_
 
 			for (rpass = rl->passes.first; rpass; rpass = rpass->next) {
 				if (passtype == rpass->passtype &&
-					actview == rpass->view_id)
+				    actview == rpass->view_id)
+				{
 					break;
+				}
 			}
 
 			if (rpass) {
@@ -3608,7 +3610,7 @@ static size_t image_get_multiview_index(Image *ima, ImageUser *iuser)
 	if (is_multilayer) {
 		return iuser ? iuser->multi_index : IMA_NO_INDEX;
 	}
-	else if (is_backdrop){
+	else if (is_backdrop) {
 		if ((ima->flag & IMA_IS_STEREO)) {
 			/* backdrop hackaround (since there is no iuser */
 			return ima->eye;

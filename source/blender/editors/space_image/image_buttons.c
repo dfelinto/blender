@@ -306,7 +306,7 @@ static void ui_imageuser_slot_menu(bContext *UNUSED(C), uiLayout *layout, void *
 
 static const char *ui_imageuser_layer_fake_name(RenderResult *rr)
 {
-	if (RE_RenderViewGetRectf(rr, 0)){
+	if (RE_RenderViewGetRectf(rr, 0)) {
 		return IFACE_("Composite");
 	}
 	else if (RE_RenderViewGetRect32(rr, 0)) {
