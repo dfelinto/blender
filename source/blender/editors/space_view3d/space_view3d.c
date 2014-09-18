@@ -331,7 +331,7 @@ static SpaceLink *view3d_new(const bContext *C)
 	v3d->gridflag = V3D_SHOW_X | V3D_SHOW_Y | V3D_SHOW_FLOOR;
 	
 	v3d->flag = V3D_SELECT_OUTLINE;
-	v3d->flag2 = V3D_SHOW_GPENCIL;
+	v3d->flag2 = V3D_SHOW_RECONSTRUCTION | V3D_SHOW_GPENCIL;
 	
 	v3d->lens = 35.0f;
 	v3d->near = 0.01f;

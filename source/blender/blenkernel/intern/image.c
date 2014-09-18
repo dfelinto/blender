@@ -2366,8 +2366,7 @@ static void image_viewer_create_views(const RenderData *rd, Image *ima)
 	}
 }
 
-/* Reset the rederout or nodes image cache when the number of cache
- * doesn't match the needed cached views */
+/* Reset the image cache and views when the Viewer Nodes views don't match the scene views */
 void BKE_image_verify_viewer_views(const RenderData *rd, Image *ima, ImageUser *iuser)
 {
 	bool do_reset;

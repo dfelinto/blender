@@ -603,7 +603,7 @@ bool BKE_camera_view_frame_fit_to_scene(Scene *scene, struct View3D *v3d, Object
 }
 
 /* transforms the camera matrix to the correct stereo eye to be rendered */
-void BKE_camera_multiview_basic(Object *camera, const bool left)
+void BKE_camera_multiview_basic(Object *camera, const bool is_left)
 {
 	Camera *data = (Camera *)camera->data;
 	float *r_shift = &data->shiftx;
@@ -623,8 +623,8 @@ void BKE_camera_multiview_basic(Object *camera, const bool left)
 	convergence_mode = data->stereo.convergence_mode;
 	pivot = data->stereo.pivot;
 
-	if (((pivot == CAM_S3D_PIVOT_LEFT) && left) ||
-	    ((pivot == CAM_S3D_PIVOT_RIGHT) && !left))
+	if (((pivot == CAM_S3D_PIVOT_LEFT) && is_left) ||
+	    ((pivot == CAM_S3D_PIVOT_RIGHT) && !is_left))
 	{
 		return;
 	}
@@ -632,7 +632,7 @@ void BKE_camera_multiview_basic(Object *camera, const bool left)
 	if (pivot == CAM_S3D_PIVOT_CENTER)
 		fac = 0.5f;
 
-	fac_signed = left ? fac : -fac;
+	fac_signed = is_left ? fac : -fac;
 
 	/* rotation */
 	if (convergence_mode == CAM_S3D_TOE) {
@@ -669,6 +669,7 @@ void BKE_camera_stereo_matrices(Object *camera, float r_viewmat[4][4], float *r_
 	float tmpviewmat[4][4];
 	float transmat[4][4];
 	float fac = 1.0f;
+	float fac_signed;
 
 	unit_m4(transmat);
 
@@ -689,29 +690,21 @@ void BKE_camera_stereo_matrices(Object *camera, float r_viewmat[4][4], float *r_
 	if (pivot == CAM_S3D_PIVOT_CENTER)
 		fac = 0.5f;
 
+	fac_signed = is_left ? fac : -fac;
+
 	/* rotation */
 	if (convergence_mode == CAM_S3D_TOE) {
 		angle = atanf((interocular_distance * 0.5f) / convergence_distance);
 
-		if (is_left) {
-			angle = -angle;
-		}
-
-		transmat[0][0] =  cosf(angle * 2.0f * fac);
-		transmat[2][0] = -sinf(angle * 2.0f * fac);
-		transmat[0][2] =  sinf(angle * 2.0f * fac);
-		transmat[2][2] =  cosf(angle * 2.0f * fac);
+		transmat[0][0] =  cosf(angle * 2.0f * fac_signed);
+		transmat[2][0] = -sinf(angle * 2.0f * fac_signed);
+		transmat[0][2] =  sinf(angle * 2.0f * fac_signed);
+		transmat[2][2] =  cosf(angle * 2.0f * fac_signed);
 	}
 
 	/* translation */
-	if (is_left) {
-		transmat[3][0] = cosf(angle) * interocular_distance * fac;
-		transmat[3][2] = sinf(angle) * interocular_distance * fac;
-	}
-	else {
-		transmat[3][0] = -cosf(angle) * interocular_distance * fac;
-		transmat[3][2] = -sinf(angle) * interocular_distance * fac;
-	}
+	transmat[3][0] = cosf(angle) * interocular_distance * fac_signed;
+	transmat[3][2] = sinf(angle) * interocular_distance * fac_signed;
 
 	/* apply */
 	mul_m4_m4m4(r_viewmat, transmat, tmpviewmat);
@@ -719,10 +712,7 @@ void BKE_camera_stereo_matrices(Object *camera, float r_viewmat[4][4], float *r_
 	/* prepare the camera shift for the projection matrix */
 	/* Note: in viewport, parallel renders as offaxis, but in render it does parallel */
 	if (ELEM(convergence_mode, CAM_S3D_OFFAXIS, CAM_S3D_PARALLEL)) {
-		if (is_left)
-			*r_shift += (interocular_distance / data->sensor_x) * (data->lens / convergence_distance) * fac;
-		else
-			*r_shift -= (interocular_distance / data->sensor_x) * (data->lens / convergence_distance) * fac;
+		*r_shift += (interocular_distance / data->sensor_x) * (data->lens / convergence_distance) * fac_signed;
 	}
 }
 
