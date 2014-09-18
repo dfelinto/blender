@@ -274,6 +274,12 @@ else:
         "mathutils.kdtree",
         "mathutils.noise",
         "freestyle",
+        "freestyle.chainingiterators",
+        "freestyle.functions",
+        "freestyle.predicates",
+        "freestyle.shaders",
+        "freestyle.types",
+        "freestyle.utils",
         ]
 
     # ------
@@ -316,7 +322,13 @@ try:
     __import__("freestyle")
 except ImportError:
     BPY_LOGGER.debug("Warning: Built without 'freestyle' module, docs incomplete...")
-    EXCLUDE_MODULES = list(EXCLUDE_MODULES) + ["freestyle"]
+    EXCLUDE_MODULES = list(EXCLUDE_MODULES) + ["freestyle",
+                                               "freestyle.chainingiterators",
+                                               "freestyle.functions",
+                                               "freestyle.predicates",
+                                               "freestyle.shaders",
+                                               "freestyle.types",
+                                               "freestyle.utils"]
 
 # examples
 EXAMPLES_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, "examples"))
@@ -683,7 +695,7 @@ def py_descr2sphinx(ident, fw, descr, module_name, type_name, identifier):
         fw(ident + ".. data:: %s\n\n" % identifier)
         write_indented_lines(ident + "   ", fw, doc, False)
         fw("\n")
-    elif type(descr) in (MethodDescriptorType, ClassMethodDescriptorType):
+    elif type(descr) in {MethodDescriptorType, ClassMethodDescriptorType}:
         write_indented_lines(ident, fw, doc, False)
         fw("\n")
     else:
@@ -877,7 +889,7 @@ def pymodule2sphinx(basepath, module_name, module, title):
     for attribute, value, value_type in module_dir_value_type:
         if value_type == types.FunctionType:
             pyfunc2sphinx("", fw, module_name, None, attribute, value, is_class=False)
-        elif value_type in (types.BuiltinMethodType, types.BuiltinFunctionType):  # both the same at the moment but to be future proof
+        elif value_type in {types.BuiltinMethodType, types.BuiltinFunctionType}:  # both the same at the moment but to be future proof
             # note: can't get args from these, so dump the string as is
             # this means any module used like this must have fully formatted docstrings.
             py_c_func2sphinx("", fw, module_name, None, attribute, value, is_class=False)
@@ -1780,8 +1792,14 @@ def write_rst_importable_modules(basepath):
         "mathutils.geometry"   : "Geometry Utilities",
         "mathutils.kdtree"     : "KDTree Utilities",
         "mathutils.noise"      : "Noise Utilities",
-        "freestyle"            : "Freestyle Data Types & Operators",
-    }
+        "freestyle"            : "Freestyle Module",
+        "freestyle.types"      : "Freestyle Types",
+        "freestyle.predicates" : "Freestyle Predicates",
+        "freestyle.functions"  : "Freestyle Functions",
+        "freestyle.chainingiterators" : "Freestyle Chaining Iterators",
+        "freestyle.shaders"    : "Freestyle Shaders",
+        "freestyle.utils"      : "Freestyle Utilities",
+        }
     for mod_name, mod_descr in importable_modules.items():
         if mod_name not in EXCLUDE_MODULES:
             module = __import__(mod_name,
@@ -1852,8 +1870,8 @@ def rna2sphinx(basepath):
     # context
     if "bpy.context" not in EXCLUDE_MODULES:
         # one of a kind, context doc (uses ctypes to extract info!)
-        # doesn't work on mac
-        if PLATFORM != "darwin":
+        # doesn't work on mac and windows
+        if PLATFORM not in {"darwin", "windows"}:
             pycontext2sphinx(basepath)
 
     # internal modules
