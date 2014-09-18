@@ -49,6 +49,7 @@
 #include "BKE_global.h"
 #include "BKE_library.h"
 #include "BKE_main.h"
+#include "BKE_scene.h"
 #include "BKE_screen.h"
 
 /****************************** Camera Datablock *****************************/
@@ -739,7 +740,8 @@ Object *BKE_camera_multiview_advanced(Scene *scene, RenderData *rd, Object *came
 {
 	SceneRenderView *srv;
 	char name[MAX_NAME];
-	const int len_name = strlen(camera->id.name);
+	const char *camera_name = camera->id.name + 2;
+	const int len_name = strlen(camera_name);
 
 	name[0] = '\0';
 
@@ -749,20 +751,16 @@ Object *BKE_camera_multiview_advanced(Scene *scene, RenderData *rd, Object *came
 		if (len_name < len_suffix)
 			continue;
 
-		if (STREQ(camera->id.name + (len_name - len_suffix), srv->suffix)) {
-			BLI_snprintf(name, sizeof(name), "%.*s%s", (len_name - len_suffix), camera->id.name, suffix);
+		if (STREQ(camera_name + (len_name - len_suffix), srv->suffix)) {
+			BLI_snprintf(name, sizeof(name), "%.*s%s", (len_name - len_suffix), camera_name, suffix);
 			break;
 		}
 	}
 
 	if (name[0] != '\0') {
-		Base *base;
-		Object *ob;
-		for (base = scene->base.first; base; base = base->next) {
-			ob = base->object;
-			if (strcmp(ob->id.name, name) == 0) {
-				return ob;
-			}
+		Base *base = BKE_scene_base_find_by_name(scene, name);
+		if (base) {
+			return base->object;
 		}
 	}
 

@@ -72,6 +72,7 @@ void BKE_scene_free(struct Scene *sce);
 struct Scene *BKE_scene_add(struct Main *bmain, const char *name);
 
 /* base functions */
+struct Base *BKE_scene_base_find_by_name(struct Scene *scene, const char *name);
 struct Base *BKE_scene_base_find(struct Scene *scene, struct Object *ob);
 struct Base *BKE_scene_base_add(struct Scene *sce, struct Object *ob);
 void         BKE_scene_base_unlink(struct Scene *sce, struct Base *base);

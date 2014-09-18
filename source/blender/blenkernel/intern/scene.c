@@ -688,6 +688,19 @@ Scene *BKE_scene_add(Main *bmain, const char *name)
 	return sce;
 }
 
+Base *BKE_scene_base_find_by_name(struct Scene *scene, const char *name)
+{
+	Base *base;
+
+	for (base = scene->base.first; base; base = base->next) {
+		if (STREQ(base->object->id.name + 2, name)) {
+			break;
+		}
+	}
+
+	return base;
+}
+
 Base *BKE_scene_base_find(Scene *scene, Object *ob)
 {
 	return BLI_findptr(&scene->base, ob, offsetof(Base, object));
