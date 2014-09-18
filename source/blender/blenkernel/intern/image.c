@@ -2894,7 +2894,7 @@ static void image_update_multiview_flags(Image *ima)
 		ima->flag |= IMA_IS_MULTIVIEW;
 
 		if (BLI_findstring(&ima->views, STEREO_LEFT_NAME, offsetof(ImageView, name)) &&
-		    BLI_findstring(&ima->views, STEREO_LEFT_NAME, offsetof(ImageView, name)))
+		    BLI_findstring(&ima->views, STEREO_RIGHT_NAME, offsetof(ImageView, name)))
 		{
 			ima->flag |= IMA_IS_STEREO;
 		}
