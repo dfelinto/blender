@@ -623,7 +623,9 @@ void BKE_camera_multiview_basic(Object *camera, const bool left)
 
 	if (((pivot == CAM_S3D_PIVOT_LEFT) && left) ||
 	    ((pivot == CAM_S3D_PIVOT_RIGHT) && !left))
+	{
 		return;
+	}
 
 	if (pivot == CAM_S3D_PIVOT_CENTER)
 		fac = 0.5f;
@@ -635,10 +637,10 @@ void BKE_camera_multiview_basic(Object *camera, const bool left)
 		if (left)
 			angle = -angle;
 
-		rotmat[0][0] = cosf(angle * 2.0f * fac);
-		rotmat[2][0] =-sinf(angle * 2.0f * fac);
-		rotmat[0][2] = sinf(angle * 2.0f * fac);
-		rotmat[2][2] = cosf(angle * 2.0f * fac);
+		rotmat[0][0] =  cosf(angle * 2.0f * fac);
+		rotmat[2][0] = -sinf(angle * 2.0f * fac);
+		rotmat[0][2] =  sinf(angle * 2.0f * fac);
+		rotmat[2][2] =  cosf(angle * 2.0f * fac);
 	}
 
 	copy_m4_m4(tmpmat, camera->obmat);
@@ -647,13 +649,13 @@ void BKE_camera_multiview_basic(Object *camera, const bool left)
 	/* translation */
 	if (left) {
 		translate_m4(camera->obmat,
-					 -interocular_distance * cosf(angle) * fac, 0.0f,
-					 interocular_distance * sinf(angle) * fac);
+		             -interocular_distance * cosf(angle) * fac, 0.0f,
+		             interocular_distance * sinf(angle) * fac);
 	}
 	else {
 		translate_m4(camera->obmat,
-					 interocular_distance * cosf(angle) * fac, 0.0f,
-					 -interocular_distance * sinf(angle) * fac);
+		             interocular_distance * cosf(angle) * fac, 0.0f,
+		             -interocular_distance * sinf(angle) * fac);
 	}
 
 	/* prepare the camera shift for the projection matrix */
@@ -666,7 +668,7 @@ void BKE_camera_multiview_basic(Object *camera, const bool left)
 	}
 }
 
-void BKE_camera_stereo_matrices(Object *camera, float r_viewmat[4][4], float *r_shift, const bool left)
+void BKE_camera_stereo_matrices(Object *camera, float r_viewmat[4][4], float *r_shift, const bool is_left)
 {
 	/* viewmat = MODELVIEW_MATRIX */
 	Camera *data = (Camera *)camera->data;
@@ -686,8 +688,9 @@ void BKE_camera_stereo_matrices(Object *camera, float r_viewmat[4][4], float *r_
 
 	invert_m4_m4(tmpviewmat, camera->obmat);
 
-	if (((pivot == CAM_S3D_PIVOT_LEFT) && left) ||
-	    ((pivot == CAM_S3D_PIVOT_RIGHT) && !left)) {
+	if (((pivot == CAM_S3D_PIVOT_LEFT) && is_left) ||
+	    ((pivot == CAM_S3D_PIVOT_RIGHT) && !is_left))
+	{
 		copy_m4_m4(r_viewmat, tmpviewmat);
 		return;
 	}
@@ -699,8 +702,9 @@ void BKE_camera_stereo_matrices(Object *camera, float r_viewmat[4][4], float *r_
 	if (convergence_mode == CAM_S3D_TOE) {
 		angle = atanf((interocular_distance * 0.5f) / convergence_distance);
 
-		if (left)
+		if (is_left) {
 			angle = -angle;
+		}
 
 		transmat[0][0] = cosf(angle * 2.0f * fac);
 		transmat[2][0] =-sinf(angle * 2.0f * fac);
@@ -709,7 +713,7 @@ void BKE_camera_stereo_matrices(Object *camera, float r_viewmat[4][4], float *r_
 	}
 
 	/* translation */
-	if (left) {
+	if (is_left) {
 		transmat[3][0] = cosf(angle) * interocular_distance * fac;
 		transmat[3][2] = sinf(angle) * interocular_distance * fac;
 	}
@@ -724,7 +728,7 @@ void BKE_camera_stereo_matrices(Object *camera, float r_viewmat[4][4], float *r_
 	/* prepare the camera shift for the projection matrix */
 	/* Note: in viewport, parallel renders as offaxis, but in render it does parallel */
 	if (ELEM(convergence_mode, CAM_S3D_OFFAXIS, CAM_S3D_PARALLEL)) {
-		if (left)
+		if (is_left)
 			*r_shift += (interocular_distance / data->sensor_x) * (data->lens / convergence_distance) * fac;
 		else
 			*r_shift -= (interocular_distance / data->sensor_x) * (data->lens / convergence_distance) * fac;
@@ -734,19 +738,18 @@ void BKE_camera_stereo_matrices(Object *camera, float r_viewmat[4][4], float *r_
 Object *BKE_camera_multiview_advanced(Scene *scene, RenderData *rd, Object *camera, const char *suffix)
 {
 	SceneRenderView *srv;
-	char name[MAX_NAME] = {0};
-	int len_name, len_suffix;
+	char name[MAX_NAME];
+	const int len_name = strlen(camera->id.name);
 
-	len_name = BLI_strnlen(camera->id.name, sizeof(camera->id.name));
+	name[0] = '\0';
 
-	for (srv = rd->views.first; srv; srv = srv->next)
-	{
-		len_suffix = BLI_strnlen(srv->suffix, sizeof(srv->suffix));
+	for (srv = rd->views.first; srv; srv = srv->next) {
+		const int len_suffix = strlen(srv->suffix);
 
 		if (len_name < len_suffix)
 			continue;
 
-		if (strcmp(camera->id.name + (len_name - len_suffix), srv->suffix) == 0) {
+		if (STREQ(camera->id.name + (len_name - len_suffix), srv->suffix)) {
 			BLI_snprintf(name, sizeof(name), "%.*s%s", (len_name - len_suffix), camera->id.name, suffix);
 			break;
 		}
