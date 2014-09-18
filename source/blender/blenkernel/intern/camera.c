@@ -614,6 +614,7 @@ void BKE_camera_multiview_basic(Object *camera, const bool left)
 
 	float rotmat[3][3];
 	float fac = 1.0f;
+	float fac_signed;
 
 	unit_m3(rotmat);
 
@@ -631,41 +632,30 @@ void BKE_camera_multiview_basic(Object *camera, const bool left)
 	if (pivot == CAM_S3D_PIVOT_CENTER)
 		fac = 0.5f;
 
+	fac_signed = left ? fac : -fac;
+
 	/* rotation */
 	if (convergence_mode == CAM_S3D_TOE) {
 		angle = -atanf((interocular_distance * 0.5f) / convergence_distance);
 
-		if (left)
-			angle = -angle;
-
-		rotmat[0][0] =  cosf(angle * 2.0f * fac);
-		rotmat[2][0] = -sinf(angle * 2.0f * fac);
-		rotmat[0][2] =  sinf(angle * 2.0f * fac);
-		rotmat[2][2] =  cosf(angle * 2.0f * fac);
+		rotmat[0][0] =  cosf(angle * 2.0f * fac_signed);
+		rotmat[2][0] = -sinf(angle * 2.0f * fac_signed);
+		rotmat[0][2] =  sinf(angle * 2.0f * fac_signed);
+		rotmat[2][2] =  cosf(angle * 2.0f * fac_signed);
 	}
 
 	copy_m4_m4(tmpmat, camera->obmat);
 	mul_m4_m4m3(camera->obmat, tmpmat, rotmat);
 
 	/* translation */
-	if (left) {
-		translate_m4(camera->obmat,
-		             -interocular_distance * cosf(angle) * fac, 0.0f,
-		             interocular_distance * sinf(angle) * fac);
-	}
-	else {
-		translate_m4(camera->obmat,
-		             interocular_distance * cosf(angle) * fac, 0.0f,
-		             -interocular_distance * sinf(angle) * fac);
-	}
+	translate_m4(camera->obmat,
+	             -interocular_distance * cosf(angle) * fac_signed, 0.0f,
+	             interocular_distance  * sinf(angle) * fac_signed);
 
 	/* prepare the camera shift for the projection matrix */
 	/* Note: in viewport, parallel renders as offaxis, but in render it does parallel */
 	if (convergence_mode == CAM_S3D_OFFAXIS) {
-		if (left)
-			*r_shift += ((interocular_distance / data->sensor_x) * (data->lens / convergence_distance)) * fac;
-		else
-			*r_shift -= ((interocular_distance / data->sensor_x) * (data->lens / convergence_distance)) * fac;
+		*r_shift += ((interocular_distance / data->sensor_x) * (data->lens / convergence_distance)) * fac_signed;
 	}
 }
 
