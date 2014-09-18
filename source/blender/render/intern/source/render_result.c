@@ -994,7 +994,7 @@ bool RE_WriteRenderResult(ReportList *reports, RenderResult *rr, const char *fil
 	width = rr->rectx;
 	height = rr->recty;
 
-	if (imf->imtype == R_IMF_IMTYPE_OPENEXR && multiview) {
+	if (imf && imf->imtype == R_IMF_IMTYPE_OPENEXR && multiview) {
 		/* single layer OpenEXR */
 		const char *RGBAZ[] = {"R", "G", "B", "A", "Z"};
 		for (nr = 0, rview = (RenderView *) rr->views.first; rview; rview = rview->next, nr++) {
