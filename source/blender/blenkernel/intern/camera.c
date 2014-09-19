@@ -156,7 +156,7 @@ void BKE_camera_object_mode(RenderData *rd, Object *cam_ob)
 /* get the camera's dof value, takes the dof object into account */
 float BKE_camera_object_dof_distance(Object *ob)
 {
-	Camera *cam = (Camera *)ob->data; 
+	Camera *cam = ob->data;
 	if (ob->type != OB_CAMERA)
 		return 0.0f;
 	if (cam->dof_ob) {
@@ -605,10 +605,10 @@ bool BKE_camera_view_frame_fit_to_scene(Scene *scene, struct View3D *v3d, Object
 /* transforms the camera matrix to the correct stereo eye to be rendered */
 void BKE_camera_multiview_basic(Object *camera, const bool is_left)
 {
-	Camera *data = (Camera *)camera->data;
+	Camera *data = camera->data;
 	float *r_shift = &data->shiftx;
 	float interocular_distance, convergence_distance;
-	float angle = 0.0f;
+	float angle;
 	short convergence_mode, pivot;
 	float tmpmat[4][4];
 
@@ -623,7 +623,7 @@ void BKE_camera_multiview_basic(Object *camera, const bool is_left)
 	convergence_mode = data->stereo.convergence_mode;
 	pivot = data->stereo.pivot;
 
-	if (((pivot == CAM_S3D_PIVOT_LEFT) && is_left) ||
+	if (((pivot == CAM_S3D_PIVOT_LEFT)  &&  is_left) ||
 	    ((pivot == CAM_S3D_PIVOT_RIGHT) && !is_left))
 	{
 		return;
@@ -636,12 +636,19 @@ void BKE_camera_multiview_basic(Object *camera, const bool is_left)
 
 	/* rotation */
 	if (convergence_mode == CAM_S3D_TOE) {
+		float angle_sin, angle_cos;
 		angle = -atanf((interocular_distance * 0.5f) / convergence_distance);
 
-		rotmat[0][0] =  cosf(angle * 2.0f * fac_signed);
-		rotmat[2][0] = -sinf(angle * 2.0f * fac_signed);
-		rotmat[0][2] =  sinf(angle * 2.0f * fac_signed);
-		rotmat[2][2] =  cosf(angle * 2.0f * fac_signed);
+		angle_cos = cosf(angle * 2.0f * fac_signed);
+		angle_sin = sinf(angle * 2.0f * fac_signed);
+
+		rotmat[0][0] =  angle_cos;
+		rotmat[2][0] = -angle_sin;
+		rotmat[0][2] =  angle_sin;
+		rotmat[2][2] =  angle_cos;
+	}
+	else {
+		angle = 0.0f;
 	}
 
 	copy_m4_m4(tmpmat, camera->obmat);
@@ -662,9 +669,9 @@ void BKE_camera_multiview_basic(Object *camera, const bool is_left)
 void BKE_camera_stereo_matrices(Object *camera, float r_viewmat[4][4], float *r_shift, const bool is_left)
 {
 	/* viewmat = MODELVIEW_MATRIX */
-	Camera *data = (Camera *)camera->data;
+	Camera *data = camera->data;
 	float interocular_distance, convergence_distance;
-	float angle = 0.0f;
+	float angle;
 	short convergence_mode, pivot;
 	float tmpviewmat[4][4];
 	float transmat[4][4];
@@ -680,7 +687,7 @@ void BKE_camera_stereo_matrices(Object *camera, float r_viewmat[4][4], float *r_
 
 	invert_m4_m4(tmpviewmat, camera->obmat);
 
-	if (((pivot == CAM_S3D_PIVOT_LEFT) && is_left) ||
+	if (((pivot == CAM_S3D_PIVOT_LEFT)  &&  is_left) ||
 	    ((pivot == CAM_S3D_PIVOT_RIGHT) && !is_left))
 	{
 		copy_m4_m4(r_viewmat, tmpviewmat);
@@ -694,12 +701,19 @@ void BKE_camera_stereo_matrices(Object *camera, float r_viewmat[4][4], float *r_
 
 	/* rotation */
 	if (convergence_mode == CAM_S3D_TOE) {
+		float angle_sin, angle_cos;
 		angle = atanf((interocular_distance * 0.5f) / convergence_distance);
 
-		transmat[0][0] =  cosf(angle * 2.0f * fac_signed);
-		transmat[2][0] = -sinf(angle * 2.0f * fac_signed);
-		transmat[0][2] =  sinf(angle * 2.0f * fac_signed);
-		transmat[2][2] =  cosf(angle * 2.0f * fac_signed);
+		angle_cos = cosf(angle * 2.0f * fac_signed);
+		angle_sin = sinf(angle * 2.0f * fac_signed);
+
+		transmat[0][0] =  angle_cos;
+		transmat[2][0] = -angle_sin;
+		transmat[0][2] =  angle_sin;
+		transmat[2][2] =  angle_cos;
+	}
+	else {
+		angle = 0.0f;
 	}
 
 	/* translation */
