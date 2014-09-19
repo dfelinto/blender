@@ -42,6 +42,7 @@
 #include "BLI_string.h"
 #include "BLI_utildefines.h"
 
+#include "BKE_camera.h"
 #include "BKE_global.h"
 #include "BKE_report.h"
 #include "BKE_scene.h"
@@ -362,6 +363,18 @@ void RE_engine_actview_set(RenderEngine *engine, const char *viewname)
 {
 	Render *re = engine->re;
 	RE_SetActiveRenderView(re, viewname);
+}
+
+float RE_engine_get_camera_shift_x(RenderEngine *engine, Object *camera)
+{
+	Render *re = engine->re;
+	return BKE_camera_shift_x(re ? &re->r : NULL, camera, re->viewname);
+}
+
+void RE_engine_get_camera_model_matrix(RenderEngine *engine, Object *camera, float *r_modelmat)
+{
+	Render *re = engine->re;
+	BKE_camera_model_matrix(re ? &re->r : NULL, camera, re->viewname, (float (*)[4])r_modelmat);
 }
 
 void RE_engine_get_current_tiles(Render *re, int *total_tiles_r, rcti **tiles_r)

@@ -139,6 +139,8 @@ void RE_engine_update_result(RenderEngine *engine, struct RenderResult *result);
 void RE_engine_end_result(RenderEngine *engine, struct RenderResult *result, int cancel, int merge_results);
 
 void RE_engine_actview_set(RenderEngine *engine, const char *viewname);
+float RE_engine_get_camera_shift_x(RenderEngine *engine, struct Object *camera);
+void RE_engine_get_camera_model_matrix(RenderEngine *engine, struct Object *camera, float *r_modelmat);
 
 int RE_engine_test_break(RenderEngine *engine);
 void RE_engine_update_stats(RenderEngine *engine, const char *stats, const char *info);

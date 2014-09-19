@@ -484,7 +484,7 @@ void RE_SetOverrideCamera(Render *re, Object *camera)
 
 static void re_camera_params_stereo3d(Render *re, CameraParams *params, Object *cam_ob)
 {
-	params->shiftx = BKE_camera_stereo3d_shift_x(&re->r, cam_ob, re->viewname);
+	params->shiftx = BKE_camera_shift_x(&re->r, cam_ob, re->viewname);
 }
 
 /* call this after InitState() */
@@ -525,7 +525,7 @@ void RE_GetCameraWindow(struct Render *re, struct Object *camera, int frame, flo
 
 void RE_GetCameraModelMatrix(Render *re, struct Object *camera, float r_mat[4][4])
 {
-	BKE_camera_model_matrix(re->scene, camera, re->viewname, r_mat);
+	BKE_camera_model_matrix(&re->r, camera, re->viewname, r_mat);
 }
 
 /* ~~~~~~~~~~~~~~~~ part (tile) calculus ~~~~~~~~~~~~~~~~~~~~~~ */

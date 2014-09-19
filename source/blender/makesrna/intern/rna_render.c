@@ -519,8 +519,21 @@ static void rna_def_render_engine(BlenderRNA *brna)
 	RNA_def_function_ui_description(func, "Test if the render operation should been canceled, this is a fast call that should be used regularly for responsiveness");
 	prop = RNA_def_boolean(func, "do_break", 0, "Break", "");
 	RNA_def_function_return(func, prop);
+
 	func = RNA_def_function(srna, "active_view_set", "RE_engine_actview_set");
 	RNA_def_string(func, "view", NULL, 0, "View", "Single view to set as active");  /* NULL ok here */
+	RNA_def_property_flag(prop, PROP_REQUIRED);
+
+	func = RNA_def_function(srna, "camera_shift_x", "RE_engine_get_camera_shift_x");
+	prop = RNA_def_pointer(func, "camera", "Object", "", "");
+	RNA_def_property_flag(prop, PROP_REQUIRED);
+	prop = RNA_def_float(func, "shift_x", 0.0f, 0.0f, FLT_MAX, "Shift X", "", 0.0f, FLT_MAX);
+	RNA_def_function_return(func, prop);
+
+	func = RNA_def_function(srna, "camera_model_matrix", "RE_engine_get_camera_model_matrix");
+	prop = RNA_def_pointer(func, "camera", "Object", "", "");
+	RNA_def_property_flag(prop, PROP_REQUIRED);
+	prop = RNA_def_float_matrix(func, "r_model_matrix", 4, 4, NULL, 0.0f, 0.0f, "", "Model Matrix", 0.0f, 0.0f);
 	RNA_def_property_flag(prop, PROP_REQUIRED);
 
 	func = RNA_def_function(srna, "update_stats", "RE_engine_update_stats");

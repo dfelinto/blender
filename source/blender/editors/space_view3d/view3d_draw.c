@@ -3445,9 +3445,9 @@ static void view3d_stereo3d_setup(Scene *scene, View3D *v3d, ARegion *ar)
 		shiftx = data->shiftx;
 
 		BLI_lock_thread(LOCK_VIEW3D);
-		data->shiftx = BKE_camera_stereo3d_shift_x(&scene->r, v3d->camera, viewname);
+		data->shiftx = BKE_camera_shift_x(&scene->r, v3d->camera, viewname);
 
-		BKE_camera_view_matrix(scene, v3d->camera, is_left, viewmat);
+		BKE_camera_view_matrix(&scene->r, v3d->camera, is_left, viewmat);
 		view3d_main_area_setup_view(scene, v3d, ar, viewmat, NULL);
 
 		data->shiftx = shiftx;
@@ -3461,7 +3461,7 @@ static void view3d_stereo3d_setup(Scene *scene, View3D *v3d, ARegion *ar)
 		BLI_lock_thread(LOCK_VIEW3D);
 		v3d->camera = camera;
 
-		BKE_camera_view_matrix(scene, camera, false, viewmat);
+		BKE_camera_view_matrix(&scene->r, camera, false, viewmat);
 		view3d_main_area_setup_view(scene, v3d, ar, viewmat, NULL);
 
 		v3d->camera = view_ob;
@@ -3477,14 +3477,14 @@ static void view3d_stereo3d_setup_offscreen(Scene *scene, View3D *v3d, ARegion *
 		float viewmat[4][4];
 		const bool is_left = STREQ(viewname, STEREO_LEFT_NAME);
 
-		BKE_camera_view_matrix(scene, v3d->camera, is_left, viewmat);
+		BKE_camera_view_matrix(&scene->r, v3d->camera, is_left, viewmat);
 		view3d_main_area_setup_view(scene, v3d, ar, viewmat, winmat);
 	}
 	else { /* SCE_VIEWS_SETUP_ADVANCED */
 		float viewmat[4][4];
 		Object *camera = BKE_camera_render(scene, v3d->camera, viewname);
 
-		BKE_camera_view_matrix(scene, camera, false, viewmat);
+		BKE_camera_view_matrix(&scene->r, camera, false, viewmat);
 		view3d_main_area_setup_view(scene, v3d, ar, viewmat, winmat);
 	}
 }

@@ -724,14 +724,14 @@ static void camera_stereo3d_model_matrix(Object *camera, const bool is_left, flo
 	             interocular_distance  * sinf(angle) * fac_signed);
 }
 
-void BKE_camera_view_matrix(Scene *scene, Object *camera, const bool is_left, float r_viewmat[4][4])
+void BKE_camera_view_matrix(RenderData *rd, Object *camera, const bool is_left, float r_viewmat[4][4])
 {
-	const bool is_multiview = (scene->r.scemode & R_MULTIVIEW);
+	const bool is_multiview = (rd->scemode & R_MULTIVIEW);
 
 	if (!is_multiview) {
 		return camera_view_matrix(camera, r_viewmat);
 	}
-	else if (scene->r.views_setup == SCE_VIEWS_SETUP_ADVANCED) {
+	else if (rd->views_setup == SCE_VIEWS_SETUP_ADVANCED) {
 		return camera_view_matrix(camera, r_viewmat);
 	}
 	else { /* SCE_VIEWS_SETUP_BASIC */
@@ -748,14 +748,14 @@ static bool camera_is_left(const char *viewname)
 	return true;
 }
 
-void BKE_camera_model_matrix(Scene *scene, Object *camera, const char *viewname, float r_modelmat[4][4])
+void BKE_camera_model_matrix(RenderData *rd, Object *camera, const char *viewname, float r_modelmat[4][4])
 {
-	const bool is_multiview = (scene->r.scemode & R_MULTIVIEW);
+	const bool is_multiview = (rd && rd->scemode & R_MULTIVIEW);
 
 	if (!is_multiview) {
 		return camera_model_matrix(camera, r_modelmat);
 	}
-	else if (scene->r.views_setup == SCE_VIEWS_SETUP_ADVANCED) {
+	else if (rd->views_setup == SCE_VIEWS_SETUP_ADVANCED) {
 		return camera_model_matrix(camera, r_modelmat);
 	}
 	else { /* SCE_VIEWS_SETUP_BASIC */
@@ -851,9 +851,9 @@ static float camera_stereo3d_shift_x(Object *camera, const char *viewname)
 	return shift;
 }
 
-float BKE_camera_stereo3d_shift_x(RenderData *rd, Object *camera, const char *viewname)
+float BKE_camera_shift_x(RenderData *rd, Object *camera, const char *viewname)
 {
-	const bool is_multiview = (rd->scemode & R_MULTIVIEW);
+	const bool is_multiview = (rd && rd->scemode & R_MULTIVIEW);
 	Camera *data = camera->data;
 
 	if (!is_multiview) {
