@@ -186,7 +186,7 @@ void OutputSingleLayerOperation::deinitExecution()
 		ImBuf *ibuf = IMB_allocImBuf(this->getWidth(), this->getHeight(), this->m_format->planes, 0);
 		Main *bmain = G.main; /* TODO, have this passed along */
 		char filename[FILE_MAX];
-		char suffix[FILE_MAX];
+		const char *suffix;
 		
 		ibuf->channels = size;
 		ibuf->rect_float = this->m_outputBuffer;
@@ -196,7 +196,7 @@ void OutputSingleLayerOperation::deinitExecution()
 		IMB_colormanagement_imbuf_for_write(ibuf, true, false, m_viewSettings, m_displaySettings,
 		                                    this->m_format);
 
-		BKE_scene_view_get_suffix(this->m_rd, this->m_viewName, suffix);
+		suffix = BKE_scene_view_get_suffix(this->m_rd, this->m_viewName);
 
 		BKE_makepicstring(filename, this->m_path, bmain->name, this->m_rd->cfra, this->m_format,
 		                  (this->m_rd->scemode & R_EXTENSION) != 0, true, suffix);
@@ -269,10 +269,10 @@ void OutputOpenExrMultiLayerOperation::deinitExecution()
 	if (width != 0 && height != 0) {
 		Main *bmain = G.main; /* TODO, have this passed along */
 		char filename[FILE_MAX];
-		char suffix[FILE_MAX];
+		const char *suffix;
 		void *exrhandle = IMB_exr_get_handle();
 
-		BKE_scene_view_get_suffix(this->m_rd, this->m_viewName, suffix);
+		suffix = BKE_scene_view_get_suffix(this->m_rd, this->m_viewName);
 		BKE_makepicstring_from_type(filename, this->m_path, bmain->name, this->m_rd->cfra, R_IMF_IMTYPE_MULTILAYER,
 		                            (this->m_rd->scemode & R_EXTENSION) != 0, true, suffix);
 		BLI_make_existing_file(filename);

@@ -104,6 +104,8 @@ typedef struct OGLRender {
 	int cfrao, nfra;
 
 	size_t totvideos;
+
+	/* quick lookup */
 	int view_id;
 
 	/* wm vars for timer and progress cursor */
@@ -159,8 +161,6 @@ static void screen_opengl_views_setup(OGLRender *oglrender)
 			BLI_addtail(&rr->views, rv);
 		}
 
-		rv->camera = v3d ? v3d->camera : NULL;
-
 		while (rv->next) {
 			RenderView *rv_del = rv->next;
 			BLI_remlink(&rr->views, rv_del);
@@ -176,8 +176,6 @@ static void screen_opengl_views_setup(OGLRender *oglrender)
 	}
 	else {
 		RE_SetOverrideCamera(oglrender->re, V3D_CAMERA_SCENE(oglrender->scene, v3d));
-		RE_RenderInitializeStereo(oglrender->re, rd);
-
 		/* remove all the views that are not needed */
 		rv = rr->views.last;
 		while (rv) {
@@ -215,11 +213,6 @@ static void screen_opengl_views_setup(OGLRender *oglrender)
 				BLI_strncpy(rv->name, srv->name, sizeof(rv->name));
 				BLI_addtail(&rr->views, rv);
 			}
-
-			if (rd->views_setup == SCE_VIEWS_SETUP_BASIC)
-				rv->camera = RE_GetCameraStereo(oglrender->re, (strcmp(srv->name, STEREO_LEFT_NAME) == 0));
-			else
-				rv->camera = BKE_camera_multiview_advanced(oglrender->scene, rd, v3d->camera, srv->suffix);
 		}
 	}
 
@@ -258,6 +251,7 @@ static void screen_opengl_render_doit(OGLRender *oglrender, RenderResult *rr)
 	bool draw_sky = (scene->r.alphamode == R_ADDSKY);
 	unsigned char *rect = NULL;
 	const bool is_multiview = screen_opengl_is_multiview(oglrender);
+	const char *viewname = RE_GetActiveRenderView(oglrender->re);
 
 	if (oglrender->is_sequencer) {
 		SeqRenderData context;
@@ -333,8 +327,7 @@ static void screen_opengl_render_doit(OGLRender *oglrender, RenderResult *rr)
 		/* render 3d view */
 		if (rv3d->persp == RV3D_CAMOB && v3d->camera) {
 			/*int is_ortho = scene->r.mode & R_ORTHO;*/
-			RenderView *rv = BLI_findlink(&rr->views, oglrender->view_id);
-			camera = rv->camera;
+			camera = BKE_camera_render(oglrender->scene, v3d->camera, viewname);
 			RE_GetCameraWindow(oglrender->re, camera, scene->r.cfra, winmat);
 		}
 		else {
@@ -349,7 +342,7 @@ static void screen_opengl_render_doit(OGLRender *oglrender, RenderResult *rr)
 		rect = MEM_mallocN(sizex * sizey * sizeof(unsigned char) * 4, "offscreen rect");
 
 		if ((scene->r.mode & R_OSA) == 0) {
-			ED_view3d_draw_offscreen(scene, v3d, ar, sizex, sizey, NULL, winmat, draw_bgpic, draw_sky, is_multiview ? oglrender->view_id : STEREO_MONO_ID);
+			ED_view3d_draw_offscreen(scene, v3d, ar, sizex, sizey, NULL, winmat, draw_bgpic, draw_sky, viewname);
 			GPU_offscreen_read_pixels(oglrender->ofs, GL_UNSIGNED_BYTE, rect);
 		}
 		else {
@@ -362,7 +355,7 @@ static void screen_opengl_render_doit(OGLRender *oglrender, RenderResult *rr)
 			BLI_jitter_init(jit_ofs, scene->r.osa);
 
 			/* first sample buffer, also initializes 'rv3d->persmat' */
-			ED_view3d_draw_offscreen(scene, v3d, ar, sizex, sizey, NULL, winmat, draw_bgpic, draw_sky, is_multiview ? oglrender->view_id : STEREO_MONO_ID);
+			ED_view3d_draw_offscreen(scene, v3d, ar, sizex, sizey, NULL, winmat, draw_bgpic, draw_sky, viewname);
 			GPU_offscreen_read_pixels(oglrender->ofs, GL_UNSIGNED_BYTE, rect);
 
 			for (i = 0; i < sizex * sizey * 4; i++)
@@ -375,7 +368,7 @@ static void screen_opengl_render_doit(OGLRender *oglrender, RenderResult *rr)
 				                    (jit_ofs[j][0] * 2.0f) / sizex,
 				                    (jit_ofs[j][1] * 2.0f) / sizey);
 
-				ED_view3d_draw_offscreen(scene, v3d, ar, sizex, sizey, NULL, winmat_jitter, draw_bgpic, draw_sky, is_multiview ? oglrender->view_id : STEREO_MONO_ID);
+				ED_view3d_draw_offscreen(scene, v3d, ar, sizex, sizey, NULL, winmat_jitter, draw_bgpic, draw_sky, viewname);
 				GPU_offscreen_read_pixels(oglrender->ofs, GL_UNSIGNED_BYTE, rect);
 
 				for (i = 0; i < sizex * sizey * 4; i++)
@@ -448,6 +441,7 @@ static void screen_opengl_render_write(OGLRender *oglrender)
 	RenderResult *rr;
 	bool ok;
 	char name[FILE_MAX];
+	Object *camera = RE_GetCamera(oglrender->re);
 
 	rr = RE_AcquireResultRead(oglrender->re);
 
@@ -455,7 +449,7 @@ static void screen_opengl_render_write(OGLRender *oglrender)
 	                  &scene->r.im_format, (scene->r.scemode & R_EXTENSION) != 0, false, NULL);
 
 	/* write images as individual images or stereo */
-	ok = RE_WriteRenderViewsImage(oglrender->reports, rr, scene, false, name);
+	ok = RE_WriteRenderViewsImage(oglrender->reports, rr, scene, camera, false, name);
 
 	RE_ReleaseResultImage(oglrender->re);
 
@@ -471,6 +465,7 @@ static void screen_opengl_render_apply(OGLRender *oglrender)
 
 	rr = RE_AcquireResultRead(oglrender->re);
 	for (rv = rr->views.first, view_id = 0; rv; rv = rv->next, view_id++) {
+		RE_SetActiveRenderView(oglrender->re, rv->name);
 		oglrender->view_id = view_id;
 		screen_opengl_render_doit(oglrender, rr);
 	}
@@ -594,7 +589,6 @@ static bool screen_opengl_render_init(bContext *C, wmOperator *op)
 	RE_InitState(oglrender->re, NULL, &scene->r, NULL, sizex, sizey, NULL);
 
 	/* create render views */
-	oglrender->view_id = 0;
 	screen_opengl_views_setup(oglrender);
 
 	/* wm vars */
@@ -639,8 +633,6 @@ static void screen_opengl_render_end(bContext *C, OGLRender *oglrender)
 
 	CTX_wm_area_set(C, oglrender->prevsa);
 	CTX_wm_region_set(C, oglrender->prevar);
-
-	RE_RenderFreeStereo(oglrender->re);
 
 	MEM_freeN(oglrender);
 }
@@ -757,7 +749,7 @@ static bool screen_opengl_render_anim_step(bContext *C, wmOperator *op)
 		}
 	}
 	else {
-		ok = RE_WriteRenderViewsImage(op->reports, rr, scene, true, name);
+		ok = RE_WriteRenderViewsImage(op->reports, rr, scene, scene->camera, true, name);
 		if (ok) {
 			printf("Saved: %s", name);
 			BKE_reportf(op->reports, RPT_INFO, "Saved file: %s", name);

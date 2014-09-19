@@ -71,7 +71,6 @@ typedef struct Render Render;
 typedef struct RenderView {
 	struct RenderView *next, *prev;
 	char name[64];		/* amount defined in openexr_multi.h */
-	struct Object *camera;
 
 	/* if this exists, result of composited layers */
 	float *rectf;
@@ -166,9 +165,6 @@ typedef struct RenderResult {
 
 	/* render info text */
 	char *text;
-	
-	/* MultiView */
-	//int actview;
 
 } RenderResult;
 
@@ -229,8 +225,6 @@ void RE_ChangeResolution(struct Render *re, int winx, int winy, rcti *disprect);
 void RE_ChangeModeFlag(struct Render *re, int flag, bool clear);
 
 /* set up the viewplane/perspective matrix, three choices */
-struct Object *RE_GetCameraStereo(struct Render *re, const bool left);
-struct Object *RE_GetViewCamera(struct Render *re);
 struct Object *RE_GetCamera(struct Render *re); /* return camera override if set */
 void RE_SetOverrideCamera(struct Render *re, struct Object *camera);
 void RE_SetCamera(struct Render *re, struct Object *camera);
@@ -262,7 +256,7 @@ void RE_init_threadcount(Render *re);
 /* the main processor, assumes all was set OK! */
 void RE_TileProcessor(struct Render *re);
 
-bool RE_WriteRenderViewsImage(struct ReportList *reports, struct RenderResult *rr, struct Scene *scene, const bool stamp, char *name);
+bool RE_WriteRenderViewsImage(struct ReportList *reports, struct RenderResult *rr, struct Scene *scene, struct Object *camera, const bool stamp, char *name);
 bool RE_WriteRenderViewsMovie(struct ReportList *reports, struct RenderResult *rr, struct Scene *scene, struct RenderData *rd, struct bMovieHandle **mh, const size_t width, const size_t height, const size_t totvideos);
 
 /* only RE_NewRender() needed, main Blender render calls */
@@ -276,9 +270,8 @@ void RE_RenderFreestyleStrokes(struct Render *re, struct Main *bmain, struct Sce
 void RE_RenderFreestyleExternal(struct Render *re);
 #endif
 
-void RE_RenderInitializeStereo(struct Render *re, struct RenderData *rd);
-void RE_RenderFreeStereo(struct Render *re);
 void RE_SetActiveRenderView(struct Render *re, const char *viewname);
+const char *RE_GetActiveRenderView(struct Render *re);
 
 /* error reporting */
 void RE_SetReports(struct Render *re, struct ReportList *reports);
@@ -336,6 +329,7 @@ void RE_Database_Baking(struct Render *re, struct Main *bmain, struct Scene *sce
 
 void RE_DataBase_GetView(struct Render *re, float mat[4][4]);
 void RE_GetCameraWindow(struct Render *re, struct Object *camera, int frame, float mat[4][4]);
+void RE_GetCameraModelMatrix(struct Render *re, struct Object *camera, float r_mat[4][4]);
 struct Scene *RE_GetScene(struct Render *re);
 
 bool RE_force_single_renderlayer(struct Scene *scene);

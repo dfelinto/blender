@@ -220,7 +220,6 @@ float *RE_RenderLayerGetPass(volatile struct RenderLayer *rl, int passtype, cons
 float RE_filter_value(int type, float x) RET_ZERO
 struct RenderLayer *RE_GetRenderLayer(struct RenderResult *rr, const char *name) RET_NULL
 
-struct Object *RE_GetViewCamera(struct Render *re) {STUB_ASSERT(0); return (struct Object *) NULL;}
 float *RE_RenderViewGetRectf(struct RenderResult *rr, int view_id) {STUB_ASSERT(0); return (float *) NULL;}
 float *RE_RenderViewGetRectz(struct RenderResult *rr, int view_id) {STUB_ASSERT(0); return (float *) NULL;}
 int RE_layers_have_name(struct RenderResult *result) {STUB_ASSERT(0); return 0;}
@@ -248,6 +247,7 @@ void RE_sample_material_color(struct Material *mat, float color[3], float *alpha
 
 /* nodes */
 struct Render *RE_GetRender(const char *name) RET_NULL
+struct Object *RE_GetCamera(struct Render *re) RET_NULL
 float RE_lamp_get_data(struct ShadeInput *shi, struct Object *lamp_obj, float col[4], float lv[3], float *dist, float shadow[4]) RET_ZERO
 
 /* blenkernel */

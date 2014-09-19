@@ -2234,15 +2234,18 @@ void BKE_scene_view_get_filepath(const RenderData *rd, const char *filepath, con
 	BLI_path_view(r_filepath, suffix);
 }
 
-void BKE_scene_view_get_suffix(const RenderData *rd, const char *viewname, char *r_suffix)
+const char *BKE_scene_view_get_suffix(const RenderData *rd, const char *viewname)
 {
 	SceneRenderView *srv;
 
+	if ((viewname == NULL) || (viewname[0] == '\0'))
+		return viewname;
+
 	srv = BLI_findstring(&rd->views, viewname, offsetof(SceneRenderView, name));
 	if (srv)
-		BLI_strncpy(r_suffix, srv->suffix, sizeof(r_suffix));
+		return srv->suffix;
 	else
-		BLI_strncpy(r_suffix, viewname, sizeof(r_suffix));
+		return viewname;
 }
 
 void BKE_scene_videos_dimensions(const RenderData *rd, const size_t width, const size_t height, size_t *r_width, size_t *r_height)

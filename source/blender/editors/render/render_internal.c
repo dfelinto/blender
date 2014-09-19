@@ -48,6 +48,7 @@
 #include "DNA_userdef_types.h"
 
 #include "BKE_blender.h"
+#include "BKE_camera.h"
 #include "BKE_context.h"
 #include "BKE_colortools.h"
 #include "BKE_depsgraph.h"

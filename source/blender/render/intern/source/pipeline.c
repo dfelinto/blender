@@ -134,7 +134,6 @@ Render R;
 /* ********* alloc and free ******** */
 
 static int do_write_image_or_movie(Render *re, Main *bmain, Scene *scene, bMovieHandle **mh, const size_t totvideos, const char *name_override);
-static void render_free_stereo(Render *re);
 
 static volatile int g_break = 0;
 static int thread_break(void *UNUSED(arg))
@@ -517,7 +516,6 @@ void RE_FreeRender(Render *re)
 	BLI_remlink(&RenderGlobal.renderlist, re);
 	MEM_freeN(re->eval_ctx);
 
-	render_free_stereo(re);
 	MEM_freeN(re);
 }
 
@@ -2466,7 +2464,7 @@ static void renderresult_stampinfo(Render *re)
 	for (rv = (RenderView *)re->result->views.first;rv;rv=rv->next, nr++) {
 		RE_SetActiveRenderView(re, rv->name);
 		RE_AcquireResultImage(re, &rres, nr);
-		BKE_stamp_buf(re->scene, RE_GetViewCamera(re), (unsigned char *)rv->rect32, rv->rectf, rres.rectx, rres.recty, 4);
+		BKE_stamp_buf(re->scene, RE_GetCamera(re), (unsigned char *)rv->rect32, rv->rectf, rres.rectx, rres.recty, 4);
 	}
 
 	RE_ReleaseResultImage(re);
@@ -2828,61 +2826,14 @@ static void update_physics_cache(Render *re, Scene *scene, int UNUSED(anim_init)
 	BKE_ptcache_bake(&baker);
 }
 
-
-
-/* setup stereo basic cameras when needed */
-static void render_initialize_stereo(Render *re, RenderData *rd)
-{
-	/* investigate why do I need to click twice in the button */
-	if ((rd->scemode & R_MULTIVIEW) &&
-	     rd->views_setup == SCE_VIEWS_SETUP_BASIC)
-	{
-		Object *camera = RE_GetCamera(re);
-
-		if (re->camera_left == NULL) {
-			re->camera_left = MEM_dupallocN(camera);
-			re->camera_left->data = MEM_dupallocN(camera->data);
-		}
-
-		if (re->camera_right == NULL) {
-			re->camera_right = MEM_dupallocN(camera);
-			re->camera_right->data = MEM_dupallocN(camera->data);
-		}
-
-		BKE_camera_multiview_basic(re->camera_left, true);
-		BKE_camera_multiview_basic(re->camera_right, false);
-	}
-}
-
-void RE_RenderInitializeStereo(Render *re, RenderData *rd)
-{
-	render_initialize_stereo(re, rd);
-}
-
-static void render_free_stereo(Render *re)
-{
-	if (re->camera_left) {
-		MEM_freeN(re->camera_left->data);
-		MEM_freeN(re->camera_left);
-		re->camera_left = NULL;
-	}
-
-	if (re->camera_right) {
-		MEM_freeN(re->camera_right->data);
-		MEM_freeN(re->camera_right);
-		re->camera_right = NULL;
-
-	}
-}
-
-void RE_RenderFreeStereo(Render *re)
-{
-	render_free_stereo(re);
-}
-
 void RE_SetActiveRenderView(Render *re, const char *viewname)
 {
 	BLI_strncpy(re->viewname, viewname, sizeof(re->viewname));
+}
+
+const char *RE_GetActiveRenderView(Render *re)
+{
+	return re->viewname;
 }
 
 /* evaluating scene options for general Blender render */
@@ -2917,14 +2868,10 @@ static int render_initialize_from_main(Render *re, RenderData *rd, Main *bmain, 
 	re->scene = scene;
 	re->scene_color_manage = BKE_scene_check_color_management_enabled(scene);
 	re->camera_override = camera_override;
-	re->camera_left = NULL;
-	re->camera_right = NULL;
 	re->lay = lay_override ? lay_override : scene->lay;
 	re->layer_override = lay_override;
 	re->i.localview = (re->lay & 0xFF000000) != 0;
-
-	/* init left and right cameras */
-	render_initialize_stereo(re, rd);
+	re->viewname[0] = '\0';
 
 	/* not too nice, but it survives anim-border render */
 	if (anim) {
@@ -3036,7 +2983,7 @@ void RE_RenderFreestyleExternal(Render *re)
 }
 #endif
 
-bool RE_WriteRenderViewsImage(ReportList *reports, RenderResult *rr, Scene *scene, const bool stamp, char *name)
+bool RE_WriteRenderViewsImage(ReportList *reports, RenderResult *rr, Scene *scene, struct Object *camera, const bool stamp, char *name)
 {
 	bool is_mono;
 	bool ok = true;
@@ -3077,10 +3024,14 @@ bool RE_WriteRenderViewsImage(ReportList *reports, RenderResult *rr, Scene *scen
 				IMB_colormanagement_imbuf_for_write(ibuf, true, false, &scene->view_settings,
 				                                    &scene->display_settings, &rd->im_format);
 
-				if (stamp)
-					ok = BKE_imbuf_write_stamp(scene, rv->camera, ibuf, name, &rd->im_format);
-				else
+				if (stamp) {
+					/* writes the name of the individual cameras */
+					Object *view_camera = BKE_camera_render(scene, camera, rv->name);
+					ok = BKE_imbuf_write_stamp(scene, view_camera, ibuf, name, &rd->im_format);
+				}
+				else {
 					ok = BKE_imbuf_write(ibuf, name, &rd->im_format);
+				}
 
 				if (ok == false) {
 					printf("Render error: cannot save %s\n", name);
@@ -3100,10 +3051,14 @@ bool RE_WriteRenderViewsImage(ReportList *reports, RenderResult *rr, Scene *scen
 					IMB_colormanagement_imbuf_for_write(ibuf, true, false, &scene->view_settings,
 					                                    &scene->display_settings, &rd->im_format);
 
-					if (stamp)
-						ok = BKE_imbuf_write_stamp(scene, rv->camera, ibuf, name, &rd->im_format);
-					else
+					if (stamp) {
+						/* writes the name of the individual cameras */
+						Object *view_camera = BKE_camera_render(scene, camera, rv->name);
+						ok = BKE_imbuf_write_stamp(scene, view_camera, ibuf, name, &rd->im_format);
+					}
+					else {
 						ok = BKE_imbuf_write(ibuf, name, &rd->im_format);
+					}
 					printf("Saved: %s\n", name);
 				}
 
@@ -3122,7 +3077,6 @@ bool RE_WriteRenderViewsImage(ReportList *reports, RenderResult *rr, Scene *scen
 			ImBuf *ibuf[3] = {NULL};
 			const char *names[2] = {STEREO_LEFT_NAME, STEREO_RIGHT_NAME};
 			int i;
-			RenderView *rv = rr->views.first; /* only for camera */
 
 			for (i = 0; i < 2; i++) {
 				int view_id = BLI_findstringindex(&rr->views, names[i], offsetof(RenderView, name));
@@ -3135,7 +3089,7 @@ bool RE_WriteRenderViewsImage(ReportList *reports, RenderResult *rr, Scene *scen
 			ibuf[2] = IMB_stereoImBuf(&scene->r.im_format, ibuf[0], ibuf[1]);
 
 			if (stamp)
-				ok = BKE_imbuf_write_stamp(scene, rv->camera, ibuf[2], name, &rd->im_format);
+				ok = BKE_imbuf_write_stamp(scene, camera, ibuf[2], name, &rd->im_format);
 			else
 				ok = BKE_imbuf_write(ibuf[2], name, &rd->im_format);
 
@@ -3161,7 +3115,7 @@ bool RE_WriteRenderViewsImage(ReportList *reports, RenderResult *rr, Scene *scen
 				                                    &scene->display_settings, &imf);
 
 				if (stamp)
-					ok = BKE_imbuf_write_stamp(scene, rv->camera, ibuf[2], name, &rd->im_format);
+					ok = BKE_imbuf_write_stamp(scene, camera, ibuf[2], name, &rd->im_format);
 				else
 					ok = BKE_imbuf_write(ibuf[2], name, &imf);
 
@@ -3268,6 +3222,7 @@ static int do_write_image_or_movie(Render *re, Main *bmain, Scene *scene, bMovie
 	RenderResult rres;
 	double render_time;
 	bool ok = true;
+	Object *camera = RE_GetCamera(re);
 
 	RE_AcquireResultImageViews(re, &rres);
 
@@ -3283,7 +3238,7 @@ static int do_write_image_or_movie(Render *re, Main *bmain, Scene *scene, bMovie
 			                  &scene->r.im_format, (scene->r.scemode & R_EXTENSION) != 0, true, NULL);
 
 		/* write images as individual images or stereo */
-		ok = RE_WriteRenderViewsImage(re->reports, &rres, scene, true, name);
+		ok = RE_WriteRenderViewsImage(re->reports, &rres, scene, camera, true, name);
 	}
 	
 	RE_ReleaseResultImageViews(re, &rres);
@@ -3524,7 +3479,6 @@ void RE_PreviewRender(Render *re, Main *bmain, Scene *sce)
 	re->scene_color_manage = BKE_scene_check_color_management_enabled(sce);
 	re->lay = sce->lay;
 
-	/* XXX MV need to get the correct camera */
 	camera = RE_GetCamera(re);
 	RE_SetCamera(re, camera);
 

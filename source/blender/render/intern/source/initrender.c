@@ -433,27 +433,10 @@ void make_sample_tables(Render *re)
 
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
-struct Object *RE_GetCameraStereo(Render *re, const bool left)
-{
-	Object *ob_cam = left ? re->camera_left : re->camera_right;
-	return ob_cam ? ob_cam : RE_GetCamera(re);
-}
-
-struct Object *RE_GetViewCamera(Render *re)
-{
-	RenderView *rv;
-	if (re->result != NULL) {
-		rv = BLI_findstring(&re->result->views, re->viewname, offsetof(RenderView, name));
-		if (rv) {
-			return rv->camera;
-		}
-	}
-	return RE_GetCamera(re);
-}
-
 struct Object *RE_GetCamera(Render *re)
 {
-	return re->camera_override ? re->camera_override : re->scene->camera;
+	Object *camera = re->camera_override ? re->camera_override : re->scene->camera;
+	return BKE_camera_render(re->scene, camera, re->viewname);
 }
 
 static void re_camera_params_get(Render *re, CameraParams *params, Object *cam_ob)
@@ -499,6 +482,11 @@ void RE_SetOverrideCamera(Render *re, Object *camera)
 	re->camera_override = camera;
 }
 
+static void re_camera_params_stereo3d(Render *re, CameraParams *params, Object *cam_ob)
+{
+	params->shiftx = BKE_camera_stereo3d_shift_x(&re->r, cam_ob, re->viewname);
+}
+
 /* call this after InitState() */
 /* per render, there's one persistent viewplane. Parts will set their own viewplanes */
 void RE_SetCamera(Render *re, Object *cam_ob)
@@ -508,6 +496,7 @@ void RE_SetCamera(Render *re, Object *cam_ob)
 	/* setup parameters */
 	BKE_camera_params_init(&params);
 	BKE_camera_params_from_object(&params, cam_ob);
+	re_camera_params_stereo3d(re, &params, cam_ob);
 
 	params.use_fields = (re->r.mode & R_FIELDS);
 	params.field_second = (re->flag & R_SEC_FIELD);
@@ -532,6 +521,11 @@ void RE_GetCameraWindow(struct Render *re, struct Object *camera, int frame, flo
 	re->r.cfra = frame;
 	RE_SetCamera(re, camera);
 	copy_m4_m4(mat, re->winmat);
+}
+
+void RE_GetCameraModelMatrix(Render *re, struct Object *camera, float r_mat[4][4])
+{
+	BKE_camera_model_matrix(re->scene, camera, re->viewname, r_mat);
 }
 
 /* ~~~~~~~~~~~~~~~~ part (tile) calculus ~~~~~~~~~~~~~~~~~~~~~~ */

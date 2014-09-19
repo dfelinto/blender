@@ -326,7 +326,7 @@ static PointerRNA rna_RenderEngine_camera_override_get(PointerRNA *ptr)
 	RenderEngine *engine = (RenderEngine *)ptr->data;
 
 	if (engine->re) {
-		Object *cam = RE_GetViewCamera(engine->re);
+		Object *cam = RE_GetCamera(engine->re);
 		return rna_pointer_inherit_refine(ptr, &RNA_Object, cam);
 	}
 	else {

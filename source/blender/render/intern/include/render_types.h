@@ -192,8 +192,6 @@ struct Render
 	RenderData r;
 	World wrld;
 	struct Object *camera_override;
-	struct Object *camera_left; /* ghost camera, made for render in stereo */
-	struct Object *camera_right; /* ghost camera, made for render in stereo */
 	unsigned int lay, layer_override;
 	
 	ListBase parts;

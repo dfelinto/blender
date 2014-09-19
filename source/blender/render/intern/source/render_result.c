@@ -141,7 +141,6 @@ void render_result_views_shallowcopy(RenderResult *dst, RenderResult *src)
 		BLI_addtail(&dst->views, rv);
 
 		BLI_strncpy(rv->name, rview->name, sizeof(rv->name));
-		rv->camera = rview->camera;
 		rv->rectf = rview->rectf;
 		rv->rectz = rview->rectz;
 		rv->rect32 = rview->rect32;
@@ -560,11 +559,6 @@ RenderResult *render_result_new(Render *re, rcti *partrct, int crop, int savebuf
 			BLI_addtail(&rr->views, rv);
 
 			BLI_strncpy(rv->name, srv->name, sizeof(rv->name));
-
-			if (re->r.views_setup == SCE_VIEWS_SETUP_BASIC)
-				rv->camera = RE_GetCameraStereo(re, strcmp(srv->name, STEREO_LEFT_NAME) == 0);
-			else
-				rv->camera = BKE_camera_multiview_advanced(re->scene, &re->r, RE_GetCamera(re), srv->suffix);
 		}
 	}
 
@@ -572,8 +566,6 @@ RenderResult *render_result_new(Render *re, rcti *partrct, int crop, int savebuf
 	if (BLI_countlist(&rr->views) == 0) {
 		rv = MEM_callocN(sizeof(RenderView), "new render view");
 		BLI_addtail(&rr->views, rv);
-
-		rv->camera = RE_GetCamera(re);
 	}
 
 	/* check renderdata for amount of layers */
