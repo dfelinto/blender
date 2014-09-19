@@ -48,8 +48,8 @@ extern "C" {
 OutputOpenExrSingleLayerMultiViewOperation::OutputOpenExrSingleLayerMultiViewOperation(
         const RenderData *rd, const bNodeTree *tree, DataType datatype, ImageFormatData *format, const char *path,
         const ColorManagedViewSettings *viewSettings, const ColorManagedDisplaySettings *displaySettings,
-        const char *viewName):
-        OutputSingleLayerOperation(rd, tree, datatype, format, path, viewSettings, displaySettings, viewName)
+        const char *viewName)
+    : OutputSingleLayerOperation(rd, tree, datatype, format, path, viewSettings, displaySettings, viewName)
 {
 }
 
@@ -104,7 +104,7 @@ void OutputOpenExrSingleLayerMultiViewOperation::deinitExecution()
 		char filename[FILE_MAX];
 
 		BKE_makepicstring_from_type(filename, this->m_path, bmain->name, this->m_rd->cfra, R_IMF_IMTYPE_OPENEXR,
-		                            (this->m_rd->scemode & R_EXTENSION), true, NULL);
+		                            (this->m_rd->scemode & R_EXTENSION) != 0, true, NULL);
 
 		exrhandle = this->get_handle(filename);
 		add_exr_channels(exrhandle, NULL, this->m_datatype, this->m_viewName, width, this->m_outputBuffer);
@@ -129,8 +129,8 @@ void OutputOpenExrSingleLayerMultiViewOperation::deinitExecution()
 /************************************  OpenEXR Multilayer Multiview *****************************************/
 
 OutputOpenExrMultiLayerMultiViewOperation::OutputOpenExrMultiLayerMultiViewOperation(
-        const RenderData *rd, const bNodeTree *tree, const char *path, char exr_codec, const char *viewName):
-        OutputOpenExrMultiLayerOperation(rd, tree, path, exr_codec, viewName)
+        const RenderData *rd, const bNodeTree *tree, const char *path, char exr_codec, const char *viewName)
+    : OutputOpenExrMultiLayerOperation(rd, tree, path, exr_codec, viewName)
 {
 }
 
@@ -190,7 +190,7 @@ void OutputOpenExrMultiLayerMultiViewOperation::deinitExecution()
 		char filename[FILE_MAX];
 
 		BKE_makepicstring_from_type(filename, this->m_path, bmain->name, this->m_rd->cfra, R_IMF_IMTYPE_MULTILAYER,
-		                            (this->m_rd->scemode & R_EXTENSION), true, NULL);
+		                            (this->m_rd->scemode & R_EXTENSION) != 0, true, NULL);
 
 		exrhandle = this->get_handle(filename);
 
@@ -223,8 +223,8 @@ void OutputOpenExrMultiLayerMultiViewOperation::deinitExecution()
 OutputStereoOperation::OutputStereoOperation(
         const RenderData *rd, const bNodeTree *tree, DataType datatype, ImageFormatData *format, const char *path,
         const char *name, const ColorManagedViewSettings *viewSettings, const ColorManagedDisplaySettings *displaySettings,
-        const char *viewName):
-        OutputSingleLayerOperation(rd, tree, datatype, format, path, viewSettings, displaySettings, viewName)
+        const char *viewName)
+    : OutputSingleLayerOperation(rd, tree, datatype, format, path, viewSettings, displaySettings, viewName)
 {
 	BLI_strncpy(this->m_name, name, sizeof(this->m_name));
 	this->m_channels = get_datatype_size(datatype);
