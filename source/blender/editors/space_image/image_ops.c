@@ -1713,8 +1713,13 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 			save_image_post(op, ibuf, ima, ok, true, relbase, relative, do_newpath, simopts->filepath);
 			ED_space_image_release_buffer(sima, ibuf, lock);
 		}
-
-		/* mono, legacy code */
+		else if ((imf->imtype == R_IMF_IMTYPE_OPENEXR) && (imf->views_format == R_IMF_VIEWS_MULTIVIEW)) {
+			/* treat special Openexr case separetely (this is the singlelayer multiview OpenEXR */
+			BKE_imbuf_prepare_write(ibuf, imf);
+			ok = BKE_image_save_openexr_multiview(ima, ibuf, simopts->filepath, (IB_rect | IB_zbuf | IB_zbuffloat | IB_multiview));
+			ED_space_image_release_buffer(sima, ibuf, lock);
+		}
+		/* regular mono pipeline */
 		else if (is_mono) {
 			if (is_multilayer) {
 				ok = RE_WriteRenderResult(op->reports, rr, simopts->filepath, imf, false, NULL);
@@ -1727,9 +1732,8 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 			save_image_post(op, ibuf, ima, ok, (is_multilayer ? true : save_copy), relbase, relative, do_newpath, simopts->filepath);
 			ED_space_image_release_buffer(sima, ibuf, lock);
 		}
-
 		/* individual multiview images */
-		else if (simopts->im_format.views_format == R_IMF_VIEWS_INDIVIDUAL) {
+		else if (imf->views_format == R_IMF_VIEWS_INDIVIDUAL) {
 			size_t i;
 			unsigned char planes = ibuf->planes;
 			const size_t totviews = (rr ? BLI_countlist(&rr->views) : BLI_countlist(&ima->views));
@@ -1768,8 +1772,9 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 
 					BKE_scene_view_get_filepath(&scene->r, simopts->filepath, view, filepath);
 
-					IMB_colormanagement_imbuf_for_write(ibuf, save_as_render, false, &imf->view_settings, &imf->display_settings, imf);
-					ok_view = BKE_imbuf_write_as(ibuf, filepath, &simopts->im_format, save_copy);
+					colormanaged_ibuf = IMB_colormanagement_imbuf_for_write(ibuf, save_as_render, true, &imf->view_settings, &imf->display_settings, imf);
+					ok_view = BKE_imbuf_write_as(colormanaged_ibuf, filepath, &simopts->im_format, save_copy);
+					save_imbuf_post(ibuf, colormanaged_ibuf);
 					save_image_post(op, ibuf, ima, ok_view, true, relbase, relative, do_newpath, filepath);
 					BKE_image_release_ibuf(sima->image, ibuf, lock);
 				}
@@ -1779,12 +1784,6 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 			if (is_multilayer) {
 				ED_space_image_release_buffer(sima, ibuf, lock);
 			}
-		}
-		else if ((imf->imtype == R_IMF_IMTYPE_OPENEXR) && (simopts->im_format.views_format == R_IMF_VIEWS_MULTIVIEW)) {
-			/* treat special Openexr case separetely (this is the singlelayer multiview OpenEXR */
-			BKE_imbuf_prepare_write(ibuf, imf);
-			ok = BKE_image_save_openexr_multiview(ima, ibuf, simopts->filepath, (IB_rect | IB_zbuf | IB_zbuffloat | IB_multiview));
-			IMB_freeImBuf(ibuf);
 		}
 		/* stereo (multiview) images */
 		else if (simopts->im_format.views_format == R_IMF_VIEWS_STEREO_3D) {
