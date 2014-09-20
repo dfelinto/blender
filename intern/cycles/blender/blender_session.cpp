@@ -447,16 +447,13 @@ void BlenderSession::render()
 		scene->film->tag_update(scene);
 		scene->integrator->tag_update(scene);
 
-		/* update scene */
-		sync->sync_data(b_v3d, b_engine.camera_override(), &python_thread_state, b_rlay_name.c_str());
-
 		for(b_rr.views.begin(b_view_iter); b_view_iter != b_rr.views.end(); ++b_view_iter) {
-
 			/* set the current view */
 			b_engine.active_view_set(b_view_iter->name().c_str());
 
 			/* update scene */
 			sync->sync_camera(b_render, b_engine.camera_override(), width, height);
+			sync->sync_data(b_v3d, b_engine.camera_override(), &python_thread_state, b_rlay_name.c_str());
 
 			/* update number of samples per layer */
 			int samples = sync->get_layer_samples();
