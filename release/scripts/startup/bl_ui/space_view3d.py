@@ -2853,14 +2853,23 @@ class VIEW3D_PT_view3d_stereo(Panel):
         basic_stereo = context.scene.render.views_setup == 'SETUP_BASIC'
 
         col = layout.column()
-        col.row().prop(view, "stereoscopy_camera", expand=True)
+        col.row().prop(view, "stereo_3d_camera", expand=True)
 
         col.label(text="Display:")
         row = col.row()
         row.active = basic_stereo
-        row.prop(view, "show_stereoscopy_cameras")
-        col.prop(view, "show_stereoscopy_planes")
-        col.prop(view, "show_stereoscopy_volume")
+        row.prop(view, "show_stereo_3d_cameras")
+        row = col.row()
+        split = row.split()
+        split.prop(view, "show_stereo_3d_convergence_plane")
+        split = row.split()
+        split.prop(view, "stereo_3d_convergence_plane_alpha", text="Alpha")
+        split.active = view.show_stereo_3d_convergence_plane
+        row = col.row()
+        split = row.split()
+        split.prop(view, "show_stereo_3d_volume")
+        split = row.split()
+        split.prop(view, "stereo_3d_volume_alpha", text="Alpha")
 
 
 class VIEW3D_PT_view3d_shading(Panel):

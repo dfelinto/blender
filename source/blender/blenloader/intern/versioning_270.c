@@ -407,7 +407,10 @@ void blo_do_versions_270(FileData *fd, Library *UNUSED(lib), Main *main)
 							case SPACE_VIEW3D:
 							{
 								View3D *v3d = (View3D *)sl;
-								v3d->stereo_camera = STEREO_3D_ID;
+								v3d->stereo3d_camera = STEREO_3D_ID;
+								v3d->stereo3d_flag |= V3D_S3D_DISPPLANE;
+								v3d->stereo3d_convergence_alpha = 0.15f;
+								v3d->stereo3d_volume_alpha = 0.05f;
 								break;
 							}
 							case SPACE_IMAGE:

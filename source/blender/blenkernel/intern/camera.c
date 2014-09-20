@@ -604,65 +604,6 @@ bool BKE_camera_view_frame_fit_to_scene(Scene *scene, struct View3D *v3d, Object
 
 /******************* multiview matrix functions ***********************/
 
-static void camera_view_matrix(Object *camera, float r_viewmat[4][4])
-{
-	invert_m4_m4(r_viewmat, camera->obmat);
-}
-
-static void camera_stereo3d_view_matrix(Object *camera, const bool is_left, float r_viewmat[4][4])
-{
-	/* viewmat = MODELVIEW_MATRIX */
-	Camera *data = camera->data;
-	float interocular_distance, convergence_distance;
-	float angle = 0.0f;
-	short convergence_mode, pivot;
-	float tmpviewmat[4][4];
-	float transmat[4][4];
-	float fac = 1.0f;
-	float fac_signed;
-
-	unit_m4(transmat);
-
-	interocular_distance = data->stereo.interocular_distance;
-	convergence_distance = data->stereo.convergence_distance;
-	convergence_mode = data->stereo.convergence_mode;
-	pivot = data->stereo.pivot;
-
-	if (((pivot == CAM_S3D_PIVOT_LEFT)  &&  is_left) ||
-	    ((pivot == CAM_S3D_PIVOT_RIGHT) && !is_left))
-	{
-		return camera_view_matrix(camera, r_viewmat);
-	}
-
-	invert_m4_m4(tmpviewmat, camera->obmat);
-
-	if (pivot == CAM_S3D_PIVOT_CENTER)
-		fac = 0.5f;
-
-	fac_signed = is_left ? fac : -fac;
-
-	/* rotation */
-	if (convergence_mode == CAM_S3D_TOE) {
-		float angle_sin, angle_cos;
-		angle = atanf((interocular_distance * 0.5f) / convergence_distance);
-
-		angle_cos = cosf(angle * 2.0f * fac_signed);
-		angle_sin = sinf(angle * 2.0f * fac_signed);
-
-		transmat[0][0] =  angle_cos;
-		transmat[2][0] = -angle_sin;
-		transmat[0][2] =  angle_sin;
-		transmat[2][2] =  angle_cos;
-	}
-
-	/* translation */
-	transmat[3][0] = cosf(angle) * interocular_distance * fac_signed;
-	transmat[3][2] = sinf(angle) * interocular_distance * fac_signed;
-
-	/* apply */
-	mul_m4_m4m4(r_viewmat, transmat, tmpviewmat);
-}
-
 static void camera_model_matrix(Object *camera, float r_modelmat[4][4])
 {
 	copy_m4_m4(r_modelmat, camera->obmat);
@@ -672,15 +613,11 @@ static void camera_stereo3d_model_matrix(Object *camera, const bool is_left, flo
 {
 	Camera *data = (Camera *)camera->data;
 	float interocular_distance, convergence_distance;
-	float angle = 0.0f;
 	short convergence_mode, pivot;
-	float tmpmat[4][4];
+	float sizemat[4][4];
 
-	float rotmat[3][3];
 	float fac = 1.0f;
 	float fac_signed;
-
-	unit_m3(rotmat);
 
 	interocular_distance = data->stereo.interocular_distance;
 	convergence_distance = data->stereo.convergence_distance;
@@ -692,6 +629,11 @@ static void camera_stereo3d_model_matrix(Object *camera, const bool is_left, flo
 	{
 		return camera_model_matrix(camera, r_modelmat);
 	}
+	else {
+		float size[3];
+		mat4_to_size(size, camera->obmat);
+		size_to_mat4(sizemat, size);
+	}
 
 	if (pivot == CAM_S3D_PIVOT_CENTER)
 		fac = 0.5f;
@@ -700,43 +642,75 @@ static void camera_stereo3d_model_matrix(Object *camera, const bool is_left, flo
 
 	/* rotation */
 	if (convergence_mode == CAM_S3D_TOE) {
+		float angle;
 		float angle_sin, angle_cos;
-		angle = -atanf((interocular_distance * 0.5f) / convergence_distance);
+		float toeinmat[4][4];
+		float rotmat[4][4];
 
-		angle_cos = cosf(angle * 2.0f * fac_signed);
-		angle_sin = sinf(angle * 2.0f * fac_signed);
+		unit_m4(rotmat);
+
+		if (pivot == CAM_S3D_PIVOT_CENTER) {
+			fac = -fac;
+			fac_signed = -fac_signed;
+		}
+
+		angle = atanf((interocular_distance * 0.5f) / convergence_distance) / fac;
+
+		angle_cos = cosf(angle * fac_signed);
+		angle_sin = sinf(angle * fac_signed);
 
 		rotmat[0][0] =  angle_cos;
 		rotmat[2][0] = -angle_sin;
 		rotmat[0][2] =  angle_sin;
 		rotmat[2][2] =  angle_cos;
+
+		if (pivot == CAM_S3D_PIVOT_CENTER) {
+			/* set the rotation */
+			copy_m4_m4(toeinmat, rotmat);
+			/* set the translation */
+			toeinmat[3][0] = interocular_distance * fac_signed;
+
+			/* transform */
+			normalize_m4_m4(r_modelmat, camera->obmat);
+			mul_m4_m4m4(r_modelmat, r_modelmat, toeinmat);
+
+			/* scale back to the original size */
+			mul_m4_m4m4(r_modelmat, r_modelmat, sizemat);
+		}
+		else { /* CAM_S3D_PIVOT_LEFT, CAM_S3D_PIVOT_RIGHT */
+			/* rotate perpendicular to the interocular line */
+			normalize_m4_m4(r_modelmat, camera->obmat);
+			mul_m4_m4m4(r_modelmat, r_modelmat, rotmat);
+
+			/* translate along the interocular line */
+			unit_m4(toeinmat);
+			toeinmat[3][0] = -interocular_distance * fac_signed;
+			mul_m4_m4m4(r_modelmat, r_modelmat, toeinmat);
+
+			/* rotate to toe-in angle */
+			mul_m4_m4m4(r_modelmat, r_modelmat, rotmat);
+
+			/* scale back to the original size */
+			mul_m4_m4m4(r_modelmat, r_modelmat, sizemat);
+		}
 	}
+	else {
+		normalize_m4_m4(r_modelmat, camera->obmat);
 
-	copy_m4_m4(tmpmat, camera->obmat);
-	/* set the rotation */
-	mul_m4_m4m3(r_modelmat, tmpmat, rotmat);
-	/* set the translation */
-	copy_v4_v4(r_modelmat[3], tmpmat[3]);
+		/* translate - no rotation in CAM_S3D_OFFAXIS, CAM_S3D_PARALLEL */
+		translate_m4(r_modelmat, -interocular_distance * fac_signed, 0.0f, 0.0f);
 
-	/* translation */
-	translate_m4(r_modelmat,
-	             -interocular_distance * cosf(angle) * fac_signed, 0.0f,
-	             interocular_distance  * sinf(angle) * fac_signed);
+		/* scale back to the original size */
+		mul_m4_m4m4(r_modelmat, r_modelmat, sizemat);
+	}
 }
 
+/* the view matrix is used by the viewport drawing, it is basically the inverted model matrix */
 void BKE_camera_view_matrix(RenderData *rd, Object *camera, const bool is_left, float r_viewmat[4][4])
 {
-	const bool is_multiview = (rd->scemode & R_MULTIVIEW);
-
-	if (!is_multiview) {
-		return camera_view_matrix(camera, r_viewmat);
-	}
-	else if (rd->views_setup == SCE_VIEWS_SETUP_ADVANCED) {
-		return camera_view_matrix(camera, r_viewmat);
-	}
-	else { /* SCE_VIEWS_SETUP_BASIC */
-		return camera_stereo3d_view_matrix(camera, is_left, r_viewmat);
-	}
+	BKE_camera_model_matrix(rd, camera, is_left ? STEREO_LEFT_NAME : STEREO_RIGHT_NAME, r_viewmat);
+	normalize_m4(r_viewmat);
+	invert_m4(r_viewmat);
 }
 
 /* left is the default */

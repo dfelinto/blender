@@ -402,7 +402,7 @@ static bool wm_stereo3d_required(const bContext *C, bScreen *screen)
 					continue;
 
 				v3d = (View3D *)sa->spacedata.first;
-				if (v3d->camera && v3d->stereo_camera == STEREO_3D_ID) {
+				if (v3d->camera && v3d->stereo3d_camera == STEREO_3D_ID) {
 					ARegion *ar;
 					for (ar = sa->regionbase.first; ar; ar = ar->next) {
 						if (ar->regiondata && ar->regiontype == RGN_TYPE_WINDOW) {

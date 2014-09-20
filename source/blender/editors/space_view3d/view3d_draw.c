@@ -1592,8 +1592,8 @@ static void view3d_stereo_bgpic_setup(Scene *scene, View3D *v3d, Image *ima, Ima
 			iuser->eye = STEREO_LEFT_ID;
 
 		/* show only left or right camera */
-		else if (v3d->stereo_camera != STEREO_3D_ID)
-			iuser->eye = v3d->stereo_camera;
+		else if (v3d->stereo3d_camera != STEREO_3D_ID)
+			iuser->eye = v3d->stereo3d_camera;
 
 		BKE_image_multiview_index(ima, iuser);
 	}
@@ -3429,8 +3429,8 @@ static void view3d_stereo3d_setup(Scene *scene, View3D *v3d, ARegion *ar)
 	const char *viewname;
 
 	/* show only left or right camera */
-	if (v3d->stereo_camera != STEREO_3D_ID)
-		v3d->eye = v3d->stereo_camera;
+	if (v3d->stereo3d_camera != STEREO_3D_ID)
+		v3d->eye = v3d->stereo3d_camera;
 
 	is_left = v3d->eye == STEREO_LEFT_ID;
 	viewname = names[is_left ? STEREO_LEFT_ID : STEREO_RIGHT_ID];
