@@ -448,6 +448,8 @@ void BlenderSession::render()
 		scene->integrator->tag_update(scene);
 
 		for(b_rr.views.begin(b_view_iter); b_view_iter != b_rr.views.end(); ++b_view_iter) {
+			b_rview_name = b_view_iter->name();
+
 			/* set the current view */
 			b_engine.active_view_set(b_view_iter->name().c_str());
 
@@ -829,6 +831,9 @@ void BlenderSession::update_status_progress()
 		scene += " | " + b_scene.name();
 		if(b_rlay_name != "")
 			scene += ", "  + b_rlay_name;
+
+		if(b_rview_name != "")
+			scene += ", " + b_rview_name;
 	}
 	else {
 		BLI_timestr(total_time, time_str, sizeof(time_str));
