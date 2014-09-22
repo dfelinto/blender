@@ -1981,7 +1981,10 @@ static void drawcamera_stereo3d(Scene *scene, View3D *v3d, RegionView3D *rv3d, O
 				glEnable(GL_BLEND);
 				glDepthMask(0);  /* disable write in zbuffer, needed for nice transp */
 
-				glColor4f(1.0f, 1.0f, 1.0f, v3d->stereo3d_volume_alpha);
+				if (i == 0)
+					glColor4f(1.0f, 0.0f, 0.0f, v3d->stereo3d_volume_alpha);
+				else
+					glColor4f(0.0f, 1.0f, 1.0f, v3d->stereo3d_volume_alpha);
 
 				drawcamera_frame(near_plane, GL_QUADS);
 				drawcamera_frame(far_plane, GL_QUADS);
