@@ -1728,6 +1728,10 @@ static void do_render_fields_blur_3d(Render *re)
 		if (re->r.mode & R_BORDER) {
 			if ((re->r.mode & R_CROP) == 0) {
 				RenderResult *rres;
+
+				/* backup */
+				const rcti orig_disprect = re->disprect;
+				const int  orig_rectx = re->rectx, orig_recty = re->recty;
 				
 				BLI_rw_mutex_lock(&re->resultmutex, THREAD_LOCK_WRITE);
 
@@ -1750,6 +1754,11 @@ static void do_render_fields_blur_3d(Render *re)
 		
 				re->display_init(re->dih, re->result);
 				re->display_update(re->duh, re->result, NULL, re->viewname);
+
+				/* restore the disprect from border */
+				re->disprect = orig_disprect;
+				re->rectx = orig_rectx;
+				re->recty = orig_recty;
 			}
 			else {
 				/* set offset (again) for use in compositor, disprect was manipulated. */
@@ -2783,7 +2792,16 @@ bool RE_is_rendering_allowed(Scene *scene, Object *camera_override, ReportList *
 		}
 #endif
 	}
-	
+
+#ifdef WITH_FREESTYLE
+	if (scene->r.mode & R_EDGE_FRS) {
+		if (scene->r.mode & R_FIELDS) {
+			BKE_report(reports, RPT_ERROR, "Fields not supported in Freestyle");
+			return false;
+		}
+	}
+#endif
+
 	/* layer flag tests */
 	if (!render_scene_has_layers_to_render(scene)) {
 		BKE_report(reports, RPT_ERROR, "All render layers are disabled");

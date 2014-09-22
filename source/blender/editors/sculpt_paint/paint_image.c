@@ -1399,7 +1399,8 @@ static int texture_paint_toggle_exec(bContext *C, wmOperator *op)
 					if (sl->spacetype == SPACE_IMAGE) {
 						SpaceImage *sima = (SpaceImage *)sl;
 						
-						ED_space_image_set(sima, scene, scene->obedit, ima);
+						if (!sima->pin)
+							ED_space_image_set(sima, scene, scene->obedit, ima);
 					}
 				}
 			}
@@ -1482,12 +1483,17 @@ void PAINT_OT_brush_colors_flip(wmOperatorType *ot)
 
 void ED_imapaint_bucket_fill(struct bContext *C, float color[3], wmOperator *op)
 {
+	SpaceImage *sima = CTX_wm_space_image(C);
+	Image *ima = sima->image;
+
 	ED_undo_paint_push_begin(UNDO_PAINT_IMAGE, op->type->name,
 	                      ED_image_undo_restore, ED_image_undo_free, NULL);
 
 	paint_2d_bucket_fill(C, color, NULL, NULL, NULL);
 
 	ED_undo_paint_push_end(UNDO_PAINT_IMAGE);
+
+	DAG_id_tag_update(&ima->id, 0);
 }
 
 

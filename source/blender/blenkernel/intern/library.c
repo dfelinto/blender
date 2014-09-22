@@ -620,6 +620,8 @@ int set_listbasepointers(Main *main, ListBase **lb)
 	
 	lb[a] = NULL;
 
+	BLI_assert(a + 1 == MAX_LIBARRAY);
+
 	return a;
 }
 

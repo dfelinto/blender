@@ -4533,9 +4533,14 @@ static void project_state_init(bContext *C, Object *ob, ProjPaintState *ps, int 
 	                settings->imapaint.clone : NULL;
 
 	/* setup projection painting data */
-	ps->do_backfacecull = (settings->imapaint.flag & IMAGEPAINT_PROJECT_BACKFACE) ? 0 : 1;
-	ps->do_occlude = (settings->imapaint.flag & IMAGEPAINT_PROJECT_XRAY) ? 0 : 1;
-	ps->do_mask_normal = (settings->imapaint.flag & IMAGEPAINT_PROJECT_FLAT) ? 0 : 1;
+	if (ps->tool != PAINT_TOOL_FILL) {
+		ps->do_backfacecull = (settings->imapaint.flag & IMAGEPAINT_PROJECT_BACKFACE) ? 0 : 1;
+		ps->do_occlude = (settings->imapaint.flag & IMAGEPAINT_PROJECT_XRAY) ? 0 : 1;
+		ps->do_mask_normal = (settings->imapaint.flag & IMAGEPAINT_PROJECT_FLAT) ? 0 : 1;
+	}
+	else {
+		ps->do_backfacecull = ps->do_occlude = ps->do_mask_normal = 0;
+	}
 	ps->do_new_shading_nodes = BKE_scene_use_new_shading_nodes(scene); /* only cache the value */
 
 	if (ps->tool == PAINT_TOOL_CLONE)
@@ -4905,7 +4910,8 @@ void paint_proj_mesh_data_ensure(bContext *C, Object *ob, wmOperator *op)
 											if (sl->spacetype == SPACE_IMAGE) {
 												SpaceImage *sima = (SpaceImage *)sl;
 												
-												ED_space_image_set(sima, scene, scene->obedit, ma->texpaintslot[0].ima);
+												if (!sima->pin)
+													ED_space_image_set(sima, scene, scene->obedit, ma->texpaintslot[0].ima);
 											}
 										}
 									}
@@ -4945,7 +4951,8 @@ void paint_proj_mesh_data_ensure(bContext *C, Object *ob, wmOperator *op)
 						if (sl->spacetype == SPACE_IMAGE) {
 							SpaceImage *sima = (SpaceImage *)sl;
 							
-							ED_space_image_set(sima, scene, scene->obedit, imapaint->canvas);
+							if (!sima->pin)
+								ED_space_image_set(sima, scene, scene->obedit, imapaint->canvas);
 						}
 					}
 				}
