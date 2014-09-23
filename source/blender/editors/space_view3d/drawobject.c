@@ -1801,22 +1801,23 @@ static bool drawcamera_is_stereo3d(Scene *scene, View3D *v3d, Object *ob)
 {
 	return (ob == v3d->camera) &&
 	        (scene->r.scemode & R_MULTIVIEW) != 0 &&
-	        (scene->r.views_setup == SCE_VIEWS_SETUP_BASIC) &&
 	        (v3d->stereo3d_flag);
 }
 
 static void drawcamera_stereo3d(Scene *scene, View3D *v3d, RegionView3D *rv3d, Object *ob, Camera *cam,
                                 float vec[4][3], float drawsize, float scale[3])
 {
-	int i;
+	int i, j;
 	float obmat[4][4];
 	float vec_lr[2][4][3];
 	float fac = 1.0f;
 	float origin[2][3] = {{0}};
 	float tvec[3];
+	Camera *cams[2] = {cam};
+	const char *names[2] = {STEREO_LEFT_NAME, STEREO_RIGHT_NAME};
 
-	const bool is_stereo3d_cameras = (v3d->stereo3d_flag & V3D_S3D_DISPCAMERAS);
-	const bool is_stereo3d_plane = (v3d->stereo3d_flag & V3D_S3D_DISPPLANE);
+	const bool is_stereo3d_cameras = (v3d->stereo3d_flag & V3D_S3D_DISPCAMERAS) && (scene->r.views_setup == SCE_VIEWS_SETUP_BASIC);
+	const bool is_stereo3d_plane = (v3d->stereo3d_flag & V3D_S3D_DISPPLANE) && (scene->r.views_setup == SCE_VIEWS_SETUP_BASIC);
 	const bool is_stereo3d_volume = (v3d->stereo3d_flag & V3D_S3D_DISPVOLUME);
 
 	zero_v3(tvec);
@@ -1826,69 +1827,40 @@ static void drawcamera_stereo3d(Scene *scene, View3D *v3d, RegionView3D *rv3d, O
 
 	glPushMatrix();
 
-	/* left camera */
-	glLoadMatrixf(rv3d->viewmat);
-	BKE_camera_model_matrix(&scene->r, ob, STEREO_LEFT_NAME, obmat);
-	glMultMatrixf(obmat);
+	for (i = 0; i < 2; i++) {
+		ob = BKE_camera_render(scene, ob, names[i]);
+		cams[i] = ob->data;
 
-	copy_m3_m3(vec_lr[0], vec);
-	copy_v3_v3(vec_lr[0][3], vec[3]);
+		glLoadMatrixf(rv3d->viewmat);
+		BKE_camera_model_matrix(&scene->r, ob, names[i], obmat);
+		glMultMatrixf(obmat);
 
-	if (cam->stereo.convergence_mode == CAM_S3D_OFFAXIS) {
-			float shift_x = BKE_camera_shift_x(&scene->r, ob, STEREO_LEFT_NAME) - cam->shiftx;
-			shift_x *= drawsize * scale[0] * fac;
-			for (i = 0; i < 4; i++)
-				vec_lr[0][i][0] += shift_x;
+		copy_m3_m3(vec_lr[i], vec);
+		copy_v3_v3(vec_lr[i][3], vec[3]);
+
+		if (cam->stereo.convergence_mode == CAM_S3D_OFFAXIS) {
+				float shift_x = BKE_camera_shift_x(&scene->r, ob, names[i]) - cam->shiftx;
+				shift_x *= drawsize * scale[0] * fac;
+				for (j = 0; j < 4; j++)
+					vec_lr[i][j][0] += shift_x;
+		}
+
+		if (is_stereo3d_cameras) {
+			/* camera frame */
+			drawcamera_frame(vec_lr[i], GL_LINE_LOOP);
+
+			/* center point to camera frame */
+			drawcamera_framelines(vec_lr[i], tvec);
+		}
+
+		/* connecting line */
+		mul_m4_v3(obmat, origin[i]);
+
+		/* convergence plane */
+		if (is_stereo3d_plane || is_stereo3d_volume)
+			for (j = 0; j < 4; j++)
+				mul_m4_v3(obmat, vec_lr[i][j]);
 	}
-
-	if (is_stereo3d_cameras) {
-		/* camera frame */
-		drawcamera_frame(vec_lr[0], GL_LINE_LOOP);
-
-		/* center point to camera frame */
-		drawcamera_framelines(vec_lr[0], tvec);
-	}
-
-	/* connecting line */
-	mul_m4_v3(obmat, origin[0]);
-
-	/* convergence plane */
-	if (is_stereo3d_plane || is_stereo3d_volume)
-		for (i = 0; i < 4; i++)
-			mul_m4_v3(obmat, vec_lr[0][i]);
-
-
-	/* right camera */
-	glLoadMatrixf(rv3d->viewmat);
-	BKE_camera_model_matrix(&scene->r, ob, STEREO_RIGHT_NAME, obmat);
-	glMultMatrixf(obmat);
-
-	copy_m3_m3(vec_lr[1], vec);
-	copy_v3_v3(vec_lr[1][3], vec[3]);
-
-	if (cam->stereo.convergence_mode == CAM_S3D_OFFAXIS) {
-			float shift_x = BKE_camera_shift_x(&scene->r, ob, STEREO_RIGHT_NAME) - cam->shiftx;
-			shift_x *= drawsize * scale[0] * fac;
-
-			for (i = 0; i < 4; i++)
-				vec_lr[1][i][0] += shift_x;
-	}
-
-	if (is_stereo3d_cameras) {
-		/* camera frame */
-		drawcamera_frame(vec_lr[1], GL_LINE_LOOP);
-
-		/* center point to camera frame */
-		drawcamera_framelines(vec_lr[1], tvec);
-	}
-
-	/* connecting line */
-	mul_m4_v3(obmat, origin[1]);
-
-	/* convergence plane */
-	if (is_stereo3d_plane || is_stereo3d_volume)
-		for (i = 0; i < 4; i++)
-			mul_m4_v3 (obmat, vec_lr[1][i]);
 
 
 	/* the remaining drawing takes place in the view space */
@@ -1962,11 +1934,11 @@ static void drawcamera_stereo3d(Scene *scene, View3D *v3d, RegionView3D *rv3d, O
 
 			for (j = 0; j < 4; j++) {
 				sub_v3_v3v3(near_plane[j], vec_lr[i][j], origin[i]);
-				mul_v3_fl(near_plane[j], cam->clipsta / scale);
+				mul_v3_fl(near_plane[j], cams[i]->clipsta / scale);
 				add_v3_v3(near_plane[j], origin[i]);
 
 				sub_v3_v3v3(far_plane[j], vec_lr[i][j], origin[i]);
-				mul_v3_fl(far_plane[j], cam->clipend / scale);
+				mul_v3_fl(far_plane[j], cams[i]->clipend / scale);
 				add_v3_v3(far_plane[j], origin[i]);
 			}
 
@@ -1982,9 +1954,9 @@ static void drawcamera_stereo3d(Scene *scene, View3D *v3d, RegionView3D *rv3d, O
 				glDepthMask(0);  /* disable write in zbuffer, needed for nice transp */
 
 				if (i == 0)
-					glColor4f(1.0f, 0.0f, 0.0f, v3d->stereo3d_volume_alpha);
-				else
 					glColor4f(0.0f, 1.0f, 1.0f, v3d->stereo3d_volume_alpha);
+				else
+					glColor4f(1.0f, 0.0f, 0.0f, v3d->stereo3d_volume_alpha);
 
 				drawcamera_frame(near_plane, GL_QUADS);
 				drawcamera_frame(far_plane, GL_QUADS);
@@ -2014,7 +1986,7 @@ static void drawcamera(Scene *scene, View3D *v3d, RegionView3D *rv3d, Base *base
 	MovieClip *clip = BKE_object_movieclip_get(scene, base->object, false);
 
 	const bool is_stereo3d = drawcamera_is_stereo3d(scene, v3d, ob);
-	const bool is_stereo3d_cameras = is_stereo3d && (v3d->stereo3d_flag & V3D_S3D_DISPCAMERAS);
+	const bool is_stereo3d_cameras = (v3d->stereo3d_flag & V3D_S3D_DISPCAMERAS) && (scene->r.views_setup == SCE_VIEWS_SETUP_BASIC);
 
 	/* draw data for movie clip set as active for scene */
 	if (clip) {

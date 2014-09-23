@@ -2860,6 +2860,7 @@ class VIEW3D_PT_view3d_stereo(Panel):
         row.active = basic_stereo
         row.prop(view, "show_stereo_3d_cameras")
         row = col.row()
+        row.active = basic_stereo
         split = row.split()
         split.prop(view, "show_stereo_3d_convergence_plane")
         split = row.split()
