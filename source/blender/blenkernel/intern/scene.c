@@ -2078,7 +2078,7 @@ size_t BKE_scene_num_views(const RenderData *rd)
 	if ((rd->scemode & R_MULTIVIEW) == 0)
 		return 1;
 
-	if (rd->views_setup == SCE_VIEWS_SETUP_BASIC) {
+	if (rd->views_setup == SCE_VIEWS_SETUP_STEREO_3D) {
 		if (BLI_findstring(&rd->views, STEREO_LEFT_NAME, offsetof(SceneRenderView, name)))
 		    totviews++;
 
@@ -2119,7 +2119,7 @@ bool BKE_scene_render_view_active(const RenderData *rd, const SceneRenderView *s
 	if ((srv->viewflag & SCE_VIEW_DISABLE))
 		return false;
 
-	if (rd->views_setup == SCE_VIEWS_SETUP_ADVANCED)
+	if (rd->views_setup == SCE_VIEWS_SETUP_MULTIVIEW)
 		return true;
 
 	/* SCE_VIEWS_SETUP_BASIC */

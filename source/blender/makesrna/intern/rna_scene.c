@@ -332,7 +332,7 @@ EnumPropertyItem bake_save_mode_items[] = {
 
 #define R_IMF_VIEWS_ENUM_IND      {R_IMF_VIEWS_INDIVIDUAL, "INDIVIDUAL", 0, "Individual", "Individual files for each view with the prefix as defined by the scene views"},
 #define R_IMF_VIEWS_ENUM_S3D      {R_IMF_VIEWS_STEREO_3D, "STEREO_3D", 0, "Stereo 3D", "Single file with an encoded stereo pair"},
-#define R_IMF_VIEWS_ENUM_MV       {R_IMF_VIEWS_MULTIVIEW, "MULTIVIEW", 0, "Multi View", "Single file with all the views"},
+#define R_IMF_VIEWS_ENUM_MV       {R_IMF_VIEWS_MULTIVIEW, "MULTIVIEW", 0, "Multi-View", "Single file with all the views"},
 
 EnumPropertyItem views_format_items[] = {
 	R_IMF_VIEWS_ENUM_IND
@@ -1389,8 +1389,8 @@ static void rna_RenderSettings_views_setup_set(PointerRNA *ptr, int value)
 {
 	RenderData *rd = (RenderData *)ptr->data;
 
-	if (rd->views_setup == SCE_VIEWS_SETUP_ADVANCED &&
-	    value == SCE_VIEWS_SETUP_BASIC)
+	if (rd->views_setup == SCE_VIEWS_SETUP_MULTIVIEW &&
+	    value == SCE_VIEWS_SETUP_STEREO_3D)
 	{
 		/* make sure the actview is visible */
 		if (rd->actview > 1) rd->actview = 1;
@@ -4748,9 +4748,9 @@ static void rna_def_scene_render_data(BlenderRNA *brna)
 		{0, NULL, 0, NULL, NULL}};
 
 	static EnumPropertyItem views_setup_items[] = {
-		{SCE_VIEWS_SETUP_BASIC, "SETUP_BASIC", 0, "Basic Stereo",
+		{SCE_VIEWS_SETUP_STEREO_3D, "STEREO_3D", 0, "Stereo 3D",
 		                        "Single stereo camera system, adjust the stereo settings in the camera panel"},
-		{SCE_VIEWS_SETUP_ADVANCED, "SETUP_ADVANCED", 0, "Advanced Stereo",
+		{SCE_VIEWS_SETUP_MULTIVIEW, "MULTIVIEW", 0, "Multi-View",
 		                        "Multi camera system, adjust the cameras individually"},
 		{0, NULL, 0, NULL, NULL}
 	};

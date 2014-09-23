@@ -3436,7 +3436,7 @@ static void view3d_stereo3d_setup(Scene *scene, View3D *v3d, ARegion *ar)
 	viewname = names[is_left ? STEREO_LEFT_ID : STEREO_RIGHT_ID];
 
 	/* update the viewport matrices with the new camera */
-	if (scene->r.views_setup == SCE_VIEWS_SETUP_BASIC) {
+	if (scene->r.views_setup == SCE_VIEWS_SETUP_STEREO_3D) {
 		Camera *data;
 		float viewmat[4][4];
 		float shiftx;
@@ -3473,7 +3473,7 @@ static void view3d_stereo3d_setup_offscreen(Scene *scene, View3D *v3d, ARegion *
                                             float winmat[4][4], const char *viewname)
 {
 	/* update the viewport matrices with the new camera */
-	if (scene->r.views_setup == SCE_VIEWS_SETUP_BASIC) {
+	if (scene->r.views_setup == SCE_VIEWS_SETUP_STEREO_3D) {
 		float viewmat[4][4];
 		const bool is_left = STREQ(viewname, STEREO_LEFT_NAME);
 

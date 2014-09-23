@@ -2850,7 +2850,7 @@ class VIEW3D_PT_view3d_stereo(Panel):
         layout = self.layout
         view = context.space_data
 
-        basic_stereo = context.scene.render.views_setup == 'SETUP_BASIC'
+        basic_stereo = context.scene.render.views_setup == 'STEREO_3D'
 
         col = layout.column()
         col.row().prop(view, "stereo_3d_camera", expand=True)

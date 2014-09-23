@@ -265,8 +265,8 @@ typedef struct SceneRenderView {
 
 /* scene.render.views_setup */
 enum {
-	SCE_VIEWS_SETUP_BASIC = 0,
-	SCE_VIEWS_SETUP_ADVANCED = 1
+	SCE_VIEWS_SETUP_STEREO_3D = 0,
+	SCE_VIEWS_SETUP_MULTIVIEW = 1,
 };
 
 /* ImageFormatData.views_output */

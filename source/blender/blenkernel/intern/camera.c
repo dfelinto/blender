@@ -729,7 +729,7 @@ void BKE_camera_model_matrix(RenderData *rd, Object *camera, const char *viewnam
 	if (!is_multiview) {
 		return camera_model_matrix(camera, r_modelmat);
 	}
-	else if (rd->views_setup == SCE_VIEWS_SETUP_ADVANCED) {
+	else if (rd->views_setup == SCE_VIEWS_SETUP_MULTIVIEW) {
 		return camera_model_matrix(camera, r_modelmat);
 	}
 	else { /* SCE_VIEWS_SETUP_BASIC */
@@ -777,7 +777,7 @@ Object *BKE_camera_render(Scene *scene, Object *camera, const char *viewname)
 	if (!is_multiview) {
 		return camera;
 	}
-	else if (scene->r.views_setup == SCE_VIEWS_SETUP_BASIC) {
+	else if (scene->r.views_setup == SCE_VIEWS_SETUP_STEREO_3D) {
 		return camera;
 	}
 	else { /* SCE_VIEWS_SETUP_ADVANCED */
@@ -833,7 +833,7 @@ float BKE_camera_shift_x(RenderData *rd, Object *camera, const char *viewname)
 	if (!is_multiview) {
 		return data->shiftx;
 	}
-	else if (rd->views_setup == SCE_VIEWS_SETUP_ADVANCED) {
+	else if (rd->views_setup == SCE_VIEWS_SETUP_MULTIVIEW) {
 		return data->shiftx;
 	}
 	else { /* SCE_VIEWS_SETUP_BASIC */
