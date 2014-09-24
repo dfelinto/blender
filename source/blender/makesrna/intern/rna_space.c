@@ -88,6 +88,30 @@ EnumPropertyItem space_type_items[] = {
 	{0, NULL, 0, NULL, NULL}
 };
 
+#define V3D_S3D_CAMERA_LEFT        {STEREO_LEFT_ID, "LEFT", ICON_RESTRICT_RENDER_OFF, "Left", ""},
+#define V3D_S3D_CAMERA_RIGHT       {STEREO_RIGHT_ID, "RIGHT", ICON_RESTRICT_RENDER_OFF, "Right", ""},
+#define V3D_S3D_CAMERA_S3D         {STEREO_3D_ID, "S3D", ICON_CAMERA_STEREO, "3D", ""},
+#define V3D_S3D_CAMERA_VIEWS       {STEREO_MONO_ID, "MONO", ICON_RESTRICT_RENDER_OFF, "Views", ""},
+
+static EnumPropertyItem stereo3d_camera_items[] = {
+	V3D_S3D_CAMERA_LEFT
+	V3D_S3D_CAMERA_RIGHT
+	V3D_S3D_CAMERA_S3D
+	{0, NULL, 0, NULL, NULL}
+};
+
+static EnumPropertyItem multiview_camera_items[] = {
+	V3D_S3D_CAMERA_VIEWS
+	V3D_S3D_CAMERA_S3D
+	{0, NULL, 0, NULL, NULL}
+};
+
+#undef V3D_S3D_CAMERA_LEFT
+#undef V3D_S3D_CAMERA_RIGHT
+#undef V3D_S3D_CAMERA_S3D
+#undef V3D_S3D_CAMERA_VIEWS
+
+
 static EnumPropertyItem pivot_items_full[] = {
 	{V3D_CENTER, "BOUNDING_BOX_CENTER", ICON_ROTATE, "Bounding Box Center",
 	             "Pivot around bounding box center of selected object(s)"},
@@ -657,6 +681,17 @@ static EnumPropertyItem *rna_SpaceView3D_viewport_shade_itemf(bContext *UNUSED(C
 	*r_free = true;
 
 	return item;
+}
+
+static EnumPropertyItem *rna_SpaceView3D_stereo3d_camera_itemf(bContext *UNUSED(C), PointerRNA *ptr,
+                                                               PropertyRNA *UNUSED(prop), bool *UNUSED(r_free))
+{
+	Scene *scene = ((bScreen *)ptr->id.data)->scene;
+
+	if (scene->r.views_setup == SCE_VIEWS_SETUP_MULTIVIEW)
+		return multiview_camera_items;
+	else
+		return stereo3d_camera_items;
 }
 
 /* Space Image Editor */
@@ -1890,13 +1925,6 @@ static void rna_def_space_view3d(BlenderRNA *brna)
 		{0, NULL, 0, NULL, NULL}
 	};
 
-	static EnumPropertyItem stereo3d_camera_items[] = {
-		{STEREO_LEFT_ID, "LEFT", ICON_RESTRICT_RENDER_OFF, "Left", ""},
-		{STEREO_RIGHT_ID, "RIGHT", ICON_RESTRICT_RENDER_OFF, "Right", ""},
-		{STEREO_3D_ID, "3D", ICON_CAMERA_STEREO, "3D", ""},
-		{0, NULL, 0, NULL, NULL}
-	};
-
 	srna = RNA_def_struct(brna, "SpaceView3D", "Space");
 	RNA_def_struct_sdna(srna, "View3D");
 	RNA_def_struct_ui_text(srna, "3D View Space", "3D View space data");
@@ -2236,6 +2264,7 @@ static void rna_def_space_view3d(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "stereo_3d_camera", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "stereo3d_camera");
 	RNA_def_property_enum_items(prop, stereo3d_camera_items);
+	RNA_def_property_enum_funcs(prop, NULL, NULL, "rna_SpaceView3D_stereo3d_camera_itemf");
 	RNA_def_property_ui_text(prop, "Camera", "");
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
 
