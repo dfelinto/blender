@@ -196,7 +196,7 @@ class RENDERLAYER_PT_views(RenderLayerButtonsPanel, Panel):
 
 
         layout.active = rd.use_multiple_views
-        basic_stereo = rd.views_setup == 'SETUP_BASIC'
+        basic_stereo = rd.views_setup == 'STEREO_3D'
 
         row = layout.row()
         row.prop(rd, "views_setup", expand=True)
