@@ -551,9 +551,11 @@ static int view3d_setobjectascamera_exec(bContext *C, wmOperator *op)
 	View3D *v3d;
 	ARegion *ar;
 	RegionView3D *rv3d;
+	bool changed_scene = false;
 
 	Scene *scene = CTX_data_scene(C);
 	Object *ob = CTX_data_active_object(C);
+	bScreen *screen = CTX_wm_screen(C);
 
 	const int smooth_viewtx = WM_operator_smooth_viewtx_get(op);
 
@@ -565,8 +567,11 @@ static int view3d_setobjectascamera_exec(bContext *C, wmOperator *op)
 		Object *camera_old = (rv3d->persp == RV3D_CAMOB) ? V3D_CAMERA_SCENE(scene, v3d) : NULL;
 		rv3d->persp = RV3D_CAMOB;
 		v3d->camera = ob;
-		if (v3d->scenelock)
+
+		if (v3d->scenelock) {
 			scene->camera = ob;
+			changed_scene = camera_old != ob;
+		}
 
 		/* unlikely but looks like a glitch when set to the same */
 		if (camera_old != ob) {
@@ -575,6 +580,40 @@ static int view3d_setobjectascamera_exec(bContext *C, wmOperator *op)
 			ED_view3d_smooth_view(C, v3d, ar, camera_old, v3d->camera,
 			                      rv3d->ofs, rv3d->viewquat, &rv3d->dist, &v3d->lens,
 			                      smooth_viewtx);
+		}
+
+		if (changed_scene && screen) {
+			ScrArea *sa;
+			View3D *_v3d;
+
+			for (sa = screen->areabase.first; sa; sa = sa->next) {
+				if (sa->spacetype == SPACE_VIEW3D) {
+					ARegion *_ar;
+					_v3d = (View3D *)sa->spacedata.first;
+
+					if ((_v3d == v3d) ||
+					    (_v3d->scenelock == 0) ||
+					    (_v3d->camera == ob))
+					{
+						continue;
+					}
+
+					for (_ar = sa->regionbase.first; _ar; _ar = _ar->next) {
+						if (_ar->regiondata && _ar->regiontype == RGN_TYPE_WINDOW) {
+							RegionView3D *_rv3d = _ar->regiondata;
+							camera_old = (_rv3d->persp == RV3D_CAMOB) ? V3D_CAMERA_SCENE(scene, _v3d) : NULL;
+							_v3d->camera = ob;
+
+							if (_rv3d->persp != RV3D_CAMOB)
+								break;
+
+							ED_view3d_smooth_view(C, _v3d, _ar, camera_old, _v3d->camera,
+							                      _rv3d->ofs, _rv3d->viewquat, &_rv3d->dist, &_v3d->lens,
+							                      smooth_viewtx);
+						}
+					}
+				}
+			}
 		}
 
 		WM_event_add_notifier(C, NC_SCENE | ND_RENDER_OPTIONS | NC_OBJECT | ND_DRAW, CTX_data_scene(C));
