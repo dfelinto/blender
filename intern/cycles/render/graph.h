@@ -76,6 +76,7 @@ enum ShaderNodeSpecialType {
 	SHADER_SPECIAL_TYPE_NONE,
 	SHADER_SPECIAL_TYPE_PROXY,
 	SHADER_SPECIAL_TYPE_MIX_CLOSURE,
+	SHADER_SPECIAL_TYPE_MIX_RGB, /* Only Mix subtype */
 	SHADER_SPECIAL_TYPE_AUTOCONVERT,
 	SHADER_SPECIAL_TYPE_GEOMETRY,
 	SHADER_SPECIAL_TYPE_SCRIPT
@@ -248,6 +249,8 @@ public:
 
 	void remove_unneeded_nodes();
 	void finalize(bool do_bump = false, bool do_osl = false);
+
+	void dump_graph(const char *filename);
 
 protected:
 	typedef pair<ShaderNode* const, ShaderNode*> NodePair;

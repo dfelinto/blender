@@ -1181,14 +1181,14 @@ static short selectbuffer_ret_hits_15(unsigned int *UNUSED(buffer), const short 
 static short selectbuffer_ret_hits_9(unsigned int *buffer, const short hits15, const short hits9)
 {
 	const int offs = 4 * hits15;
-	memcpy(buffer, buffer + offs, 4 * offs);
+	memcpy(buffer, buffer + offs, 4 * hits9);
 	return hits9;
 }
 
 static short selectbuffer_ret_hits_5(unsigned int *buffer, const short hits15, const short hits9, const short hits5)
 {
 	const int offs = 4 * hits15 + 4 * hits9;
-	memcpy(buffer, buffer + offs, 4 * offs);
+	memcpy(buffer, buffer + offs, 4 * hits5);
 	return hits5;
 }
 
@@ -1522,7 +1522,7 @@ static bool mouse_select(bContext *C, const int mval[2],
 						}
 					}
 				}
-				else if (ED_do_pose_selectbuffer(scene, basact, buffer, hits, extend, deselect, toggle) ) {
+				else if (ED_do_pose_selectbuffer(scene, basact, buffer, hits, extend, deselect, toggle, do_nearest)) {
 					/* then bone is found */
 				
 					/* we make the armature selected: 

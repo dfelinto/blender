@@ -33,7 +33,7 @@ ccl_device void compute_light_pass(KernelGlobals *kg, ShaderData *sd, PathRadian
 	path_radiance_init(&L_sample, kernel_data.film.use_light_pass);
 
 	/* init path state */
-	path_state_init(kg, &state, &rng, sample);
+	path_state_init(kg, &state, &rng, sample, NULL);
 
 	/* evaluate surface shader */
 	float rbsdf = path_state_rng_1D(kg, &rng, &state, PRNG_BSDF);
@@ -96,7 +96,7 @@ ccl_device void compute_light_pass(KernelGlobals *kg, ShaderData *sd, PathRadian
 		/* sample subsurface scattering */
 		if((is_combined || is_sss_sample) && (sd->flag & SD_BSSRDF)) {
 			/* when mixing BSSRDF and BSDF closures we should skip BSDF lighting if scattering was successful */
-			kernel_branched_path_subsurface_scatter(kg, sd, &L_sample, &state, &rng, throughput);
+			kernel_branched_path_subsurface_scatter(kg, sd, &L_sample, &state, &rng, &ray, throughput);
 		}
 #endif
 

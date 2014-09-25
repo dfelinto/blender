@@ -1789,13 +1789,19 @@ ImBuf *BKE_tracking_distortion_exec(MovieDistortion *distortion, MovieTracking *
 	if (ibuf->rect_float) {
 		if (undistort) {
 			libmv_cameraIntrinsicsUndistortFloat(distortion->intrinsics,
-			                                     ibuf->rect_float, resibuf->rect_float,
-			                                     ibuf->x, ibuf->y, overscan, ibuf->channels);
+			                                     ibuf->rect_float,
+			                                     ibuf->x, ibuf->y,
+			                                     overscan,
+			                                     ibuf->channels,
+			                                     resibuf->rect_float);
 		}
 		else {
 			libmv_cameraIntrinsicsDistortFloat(distortion->intrinsics,
-			                                   ibuf->rect_float, resibuf->rect_float,
-			                                   ibuf->x, ibuf->y, overscan, ibuf->channels);
+			                                   ibuf->rect_float,
+			                                   ibuf->x, ibuf->y,
+			                                   overscan,
+			                                   ibuf->channels,
+			                                   resibuf->rect_float);
 		}
 
 		if (ibuf->rect)
@@ -1804,13 +1810,19 @@ ImBuf *BKE_tracking_distortion_exec(MovieDistortion *distortion, MovieTracking *
 	else {
 		if (undistort) {
 			libmv_cameraIntrinsicsUndistortByte(distortion->intrinsics,
-			                                    (unsigned char *)ibuf->rect, (unsigned char *)resibuf->rect,
-			                                    ibuf->x, ibuf->y, overscan, ibuf->channels);
+			                                    (unsigned char *)ibuf->rect,
+			                                    ibuf->x, ibuf->y,
+			                                    overscan,
+			                                    ibuf->channels,
+			                                    (unsigned char *)resibuf->rect);
 		}
 		else {
 			libmv_cameraIntrinsicsDistortByte(distortion->intrinsics,
-			                                  (unsigned char *)ibuf->rect, (unsigned char *)resibuf->rect,
-			                                  ibuf->x, ibuf->y, overscan, ibuf->channels);
+			                                  (unsigned char *)ibuf->rect,
+			                                  ibuf->x, ibuf->y,
+			                                  overscan,
+			                                  ibuf->channels,
+			                                  (unsigned char *)resibuf->rect);
 		}
 	}
 
@@ -2017,14 +2029,14 @@ ImBuf *BKE_tracking_sample_pattern(int frame_width, int frame_height, ImBuf *sea
 	}
 
 	if (search_ibuf->rect_float) {
-		libmv_samplePlanarPatch(search_ibuf->rect_float,
-		                        search_ibuf->x, search_ibuf->y, 4,
-		                        src_pixel_x, src_pixel_y,
-		                        num_samples_x, num_samples_y,
-		                        mask,
-		                        pattern_ibuf->rect_float,
-		                        &warped_position_x,
-		                        &warped_position_y);
+		libmv_samplePlanarPatchFloat(search_ibuf->rect_float,
+		                             search_ibuf->x, search_ibuf->y, 4,
+		                             src_pixel_x, src_pixel_y,
+		                             num_samples_x, num_samples_y,
+		                             mask,
+		                             pattern_ibuf->rect_float,
+		                             &warped_position_x,
+		                             &warped_position_y);
 	}
 	else {
 		libmv_samplePlanarPatchByte((unsigned char *) search_ibuf->rect,
@@ -2185,10 +2197,10 @@ void BKE_tracking_disable_channels(ImBuf *ibuf, bool disable_red, bool disable_g
 
 /* ** Channels sort comparators ** */
 
-static int channels_alpha_sort(void *a, void *b)
+static int channels_alpha_sort(const void *a, const void *b)
 {
-	MovieTrackingDopesheetChannel *channel_a = a;
-	MovieTrackingDopesheetChannel *channel_b = b;
+	const MovieTrackingDopesheetChannel *channel_a = a;
+	const MovieTrackingDopesheetChannel *channel_b = b;
 
 	if (BLI_strcasecmp(channel_a->track->name, channel_b->track->name) > 0)
 		return 1;
@@ -2196,10 +2208,10 @@ static int channels_alpha_sort(void *a, void *b)
 		return 0;
 }
 
-static int channels_total_track_sort(void *a, void *b)
+static int channels_total_track_sort(const void *a, const void *b)
 {
-	MovieTrackingDopesheetChannel *channel_a = a;
-	MovieTrackingDopesheetChannel *channel_b = b;
+	const MovieTrackingDopesheetChannel *channel_a = a;
+	const MovieTrackingDopesheetChannel *channel_b = b;
 
 	if (channel_a->total_frames > channel_b->total_frames)
 		return 1;
@@ -2207,10 +2219,10 @@ static int channels_total_track_sort(void *a, void *b)
 		return 0;
 }
 
-static int channels_longest_segment_sort(void *a, void *b)
+static int channels_longest_segment_sort(const void *a, const void *b)
 {
-	MovieTrackingDopesheetChannel *channel_a = a;
-	MovieTrackingDopesheetChannel *channel_b = b;
+	const MovieTrackingDopesheetChannel *channel_a = a;
+	const MovieTrackingDopesheetChannel *channel_b = b;
 
 	if (channel_a->max_segment > channel_b->max_segment)
 		return 1;
@@ -2218,10 +2230,10 @@ static int channels_longest_segment_sort(void *a, void *b)
 		return 0;
 }
 
-static int channels_average_error_sort(void *a, void *b)
+static int channels_average_error_sort(const void *a, const void *b)
 {
-	MovieTrackingDopesheetChannel *channel_a = a;
-	MovieTrackingDopesheetChannel *channel_b = b;
+	const MovieTrackingDopesheetChannel *channel_a = a;
+	const MovieTrackingDopesheetChannel *channel_b = b;
 
 	if (channel_a->track->error > channel_b->track->error)
 		return 1;
@@ -2229,7 +2241,7 @@ static int channels_average_error_sort(void *a, void *b)
 		return 0;
 }
 
-static int channels_alpha_inverse_sort(void *a, void *b)
+static int channels_alpha_inverse_sort(const void *a, const void *b)
 {
 	if (channels_alpha_sort(a, b))
 		return 0;
@@ -2237,7 +2249,7 @@ static int channels_alpha_inverse_sort(void *a, void *b)
 		return 1;
 }
 
-static int channels_total_track_inverse_sort(void *a, void *b)
+static int channels_total_track_inverse_sort(const void *a, const void *b)
 {
 	if (channels_total_track_sort(a, b))
 		return 0;
@@ -2245,7 +2257,7 @@ static int channels_total_track_inverse_sort(void *a, void *b)
 		return 1;
 }
 
-static int channels_longest_segment_inverse_sort(void *a, void *b)
+static int channels_longest_segment_inverse_sort(const void *a, const void *b)
 {
 	if (channels_longest_segment_sort(a, b))
 		return 0;
@@ -2253,10 +2265,10 @@ static int channels_longest_segment_inverse_sort(void *a, void *b)
 		return 1;
 }
 
-static int channels_average_error_inverse_sort(void *a, void *b)
+static int channels_average_error_inverse_sort(const void *a, const void *b)
 {
-	MovieTrackingDopesheetChannel *channel_a = a;
-	MovieTrackingDopesheetChannel *channel_b = b;
+	const MovieTrackingDopesheetChannel *channel_a = a;
+	const MovieTrackingDopesheetChannel *channel_b = b;
 
 	if (channel_a->track->error < channel_b->track->error)
 		return 1;

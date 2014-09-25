@@ -1047,10 +1047,12 @@ class IMAGE_UV_sculpt(Panel, ImagePaintPanel):
         col = layout.column()
         col.prop(toolsettings, "uv_sculpt_lock_borders")
         col.prop(toolsettings, "uv_sculpt_all_islands")
-        col.prop(toolsettings, "uv_sculpt_tool")
 
+        col.prop(toolsettings, "uv_sculpt_tool")
         if toolsettings.uv_sculpt_tool == 'RELAX':
             col.prop(toolsettings, "uv_relax_method")
+
+        col.prop(uvsculpt, "show_brush")
 
 
 class IMAGE_PT_tools_mask(MASK_PT_tools, Panel):
