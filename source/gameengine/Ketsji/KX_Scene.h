@@ -105,6 +105,7 @@ class KX_Scene : public PyObjectPlus, public SCA_IScene
 
 #ifdef WITH_PYTHON
 	PyObject*	m_attr_dict;
+	PyObject*       m_draw_call_pre_render;
 	PyObject*	m_draw_call_pre;
 	PyObject*	m_draw_call_post;
 #endif
@@ -616,12 +617,16 @@ public:
 	static PyObject*	pyattr_get_cameras(void* self_v, const KX_PYATTRIBUTE_DEF *attrdef);
 	static PyObject*	pyattr_get_active_camera(void* self_v, const KX_PYATTRIBUTE_DEF *attrdef);
 	static int			pyattr_set_active_camera(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef, PyObject *value);
+	static PyObject*	pyattr_get_drawing_callback_pre_render(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef);
+	static int			pyattr_set_drawing_callback_pre_render(void *selv_v, const KX_PYATTRIBUTE_DEF *attrdef, PyObject *value);
 	static PyObject*	pyattr_get_drawing_callback_pre(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef);
 	static int			pyattr_set_drawing_callback_pre(void *selv_v, const KX_PYATTRIBUTE_DEF *attrdef, PyObject *value);
 	static PyObject*	pyattr_get_drawing_callback_post(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef);
 	static int			pyattr_set_drawing_callback_post(void *selv_v, const KX_PYATTRIBUTE_DEF *attrdef, PyObject *value);
 	static PyObject*	pyattr_get_gravity(void* self_v, const KX_PYATTRIBUTE_DEF *attrdef);
 	static int			pyattr_set_gravity(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef, PyObject *value);
+	static PyObject*	pyattr_get_frame_type(void* self_v, const KX_PYATTRIBUTE_DEF *attrdef);
+	static int			pyattr_set_frame_type(void *selv_v, const KX_PYATTRIBUTE_DEF *attrdef, PyObject *value);
 
 	virtual PyObject *py_repr(void) { return PyUnicode_From_STR_String(GetName()); }
 	
@@ -633,7 +638,8 @@ public:
 	 * Run the registered python drawing functions.
 	 */
 	void RunDrawingCallbacks(PyObject *cb_list);
-	
+
+	PyObject* GetPreRenderCB() { return m_draw_call_pre_render; };
 	PyObject *GetPreDrawCB() { return m_draw_call_pre; }
 	PyObject *GetPostDrawCB() { return m_draw_call_post; }
 #endif

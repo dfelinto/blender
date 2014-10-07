@@ -826,6 +826,25 @@ void RAS_OpenGLRasterizer::SetProjectionMatrix(const MT_Matrix4x4 & mat)
 	m_camortho= (mat[3][3] != 0.0);
 }
 
+void RAS_OpenGLRasterizer::SetModelviewMatrix(const MT_Matrix4x4 & mat)
+{
+  	m_viewmatrix = mat;
+  	m_viewinvmatrix = m_viewmatrix;
+	m_viewinvmatrix.invert();
+
+	glMatrixMode(GL_MODELVIEW);
+	double matrix[16];
+	/* Get into argument. Looks a bit dodgy, but it's ok. */
+	mat.getValue(matrix);
+	/* Internally, MT_Matrix4x4 uses doubles (MT_Scalar). */
+	glLoadMatrixd(matrix);
+}
+
+void RAS_OpenGLRasterizer::SetCameraPosition(const MT_Point3 & pos)
+{
+	m_campos = pos;
+}
+
 MT_Matrix4x4 RAS_OpenGLRasterizer::GetFrustumMatrix(
 	float left,
 	float right,
@@ -903,66 +922,6 @@ MT_Matrix4x4 RAS_OpenGLRasterizer::GetOrthoMatrix(
 
 	return result;
 }
-
-
-// next arguments probably contain redundant info, for later...
-void RAS_OpenGLRasterizer::SetViewMatrix(const MT_Matrix4x4 &mat, 
-										 const MT_Matrix3x3 & camOrientMat3x3,
-										 const MT_Point3 & pos,
-										 bool perspective)
-{
-	m_viewmatrix = mat;
-
-	// correction for stereo
-	if (Stereo() && perspective)
-	{
-		MT_Vector3 unitViewDir(0.0, -1.0, 0.0);  // minus y direction, Blender convention
-		MT_Vector3 unitViewupVec(0.0, 0.0, 1.0);
-		MT_Vector3 viewDir, viewupVec;
-		MT_Vector3 eyeline;
-
-		// actual viewDir
-		viewDir = camOrientMat3x3 * unitViewDir;  // this is the moto convention, vector on right hand side
-		// actual viewup vec
-		viewupVec = camOrientMat3x3 * unitViewupVec;
-
-		// vector between eyes
-		eyeline = viewDir.cross(viewupVec);
-
-		switch (m_curreye) {
-			case RAS_STEREO_LEFTEYE:
-				{
-				// translate to left by half the eye distance
-				MT_Transform transform;
-				transform.setIdentity();
-				transform.translate(-(eyeline * m_eyeseparation / 2.0));
-				m_viewmatrix *= transform;
-				}
-				break;
-			case RAS_STEREO_RIGHTEYE:
-				{
-				// translate to right by half the eye distance
-				MT_Transform transform;
-				transform.setIdentity();
-				transform.translate(eyeline * m_eyeseparation / 2.0);
-				m_viewmatrix *= transform;
-				}
-				break;
-		}
-	}
-
-	m_viewinvmatrix = m_viewmatrix;
-	m_viewinvmatrix.invert();
-
-	// note: getValue gives back column major as needed by OpenGL
-	MT_Scalar glviewmat[16];
-	m_viewmatrix.getValue(glviewmat);
-
-	glMatrixMode(GL_MODELVIEW);
-	glLoadMatrixd(glviewmat);
-	m_campos = pos;
-}
-
 
 const MT_Point3& RAS_OpenGLRasterizer::GetCameraPosition()
 {
