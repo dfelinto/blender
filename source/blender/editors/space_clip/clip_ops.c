@@ -49,7 +49,7 @@
 #include "BLI_path_util.h"
 #include "BLI_math.h"
 #include "BLI_rect.h"
-#include "BLI_threads.h"
+#include "BLI_task.h"
 #include "BLI_string.h"
 
 #include "BLF_translation.h"
@@ -78,6 +78,8 @@
 #include "RNA_enum_types.h"
 
 #include "UI_view2d.h"
+
+#include "PIL_time.h"
 
 #include "clip_intern.h"	// own include
 
@@ -486,17 +488,24 @@ typedef struct ViewZoomData {
 	float zoom;
 	int event_type;
 	float location[2];
+	wmTimer *timer;
+	double timer_lastdraw;
 } ViewZoomData;
 
 static void view_zoom_init(bContext *C, wmOperator *op, const wmEvent *event)
 {
 	SpaceClip *sc = CTX_wm_space_clip(C);
 	ARegion *ar = CTX_wm_region(C);
-
 	ViewZoomData *vpd;
 
 	op->customdata = vpd = MEM_callocN(sizeof(ViewZoomData), "ClipViewZoomData");
 	WM_cursor_modal_set(CTX_wm_window(C), BC_NSEW_SCROLLCURSOR);
+
+	if (U.viewzoom == USER_ZOOM_CONT) {
+		/* needs a timer to continue redrawing */
+		vpd->timer = WM_event_add_timer(CTX_wm_manager(C), CTX_wm_window(C), TIMER, 0.01f);
+		vpd->timer_lastdraw = PIL_check_seconds_timer();
+	}
 
 	vpd->x = event->x;
 	vpd->y = event->y;
@@ -516,6 +525,10 @@ static void view_zoom_exit(bContext *C, wmOperator *op, bool cancel)
 	if (cancel) {
 		sc->zoom = vpd->zoom;
 		ED_region_tag_redraw(CTX_wm_region(C));
+	}
+
+	if (vpd->timer) {
+		WM_event_remove_timer(CTX_wm_manager(C), vpd->timer->win, vpd->timer);
 	}
 
 	WM_cursor_modal_restore(CTX_wm_window(C));
@@ -555,22 +568,61 @@ static int view_zoom_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 	}
 }
 
+static void view_zoom_apply(bContext *C,
+                            ViewZoomData *vpd,
+                            wmOperator *op,
+                            const wmEvent *event)
+{
+	float factor;
+
+	if (U.viewzoom == USER_ZOOM_CONT) {
+		SpaceClip *sclip = CTX_wm_space_clip(C);
+		double time = PIL_check_seconds_timer();
+		float time_step = (float)(time - vpd->timer_lastdraw);
+		float fac;
+		float zfac;
+
+		if (U.uiflag & USER_ZOOM_HORIZ) {
+			fac = (float)(event->x - vpd->x);
+		}
+		else {
+			fac = (float)(event->y - vpd->y);
+		}
+
+		if (U.uiflag & USER_ZOOM_INVERT) {
+			fac = -fac;
+		}
+
+		zfac = 1.0f + ((fac / 20.0f) * time_step);
+		vpd->timer_lastdraw = time;
+		factor = (sclip->zoom * zfac) / vpd->zoom;
+	}
+	else {
+		float delta = event->x - vpd->x + event->y - vpd->y;
+
+		if (U.uiflag & USER_ZOOM_INVERT) {
+			delta *= -1;
+		}
+
+		factor = 1.0f + delta / 300.0f;
+	}
+
+	RNA_float_set(op->ptr, "factor", factor);
+	sclip_zoom_set(C, vpd->zoom * factor, vpd->location);
+	ED_region_tag_redraw(CTX_wm_region(C));
+}
+
 static int view_zoom_modal(bContext *C, wmOperator *op, const wmEvent *event)
 {
 	ViewZoomData *vpd = op->customdata;
-	float delta, factor;
-
 	switch (event->type) {
+		case TIMER:
+			if (event->customdata == vpd->timer) {
+				view_zoom_apply(C, vpd, op, event);
+			}
+			break;
 		case MOUSEMOVE:
-			delta = event->x - vpd->x + event->y - vpd->y;
-
-			if (U.uiflag & USER_ZOOM_INVERT)
-				delta *= -1;
-
-			factor = 1.0f + delta / 300.0f;
-			RNA_float_set(op->ptr, "factor", factor);
-			sclip_zoom_set(C, vpd->zoom * factor, vpd->location);
-			ED_region_tag_redraw(CTX_wm_region(C));
+			view_zoom_apply(C, vpd, op, event);
 			break;
 		default:
 			if (event->type == vpd->event_type && event->val == KM_RELEASE) {
@@ -1071,10 +1123,7 @@ typedef struct ProxyQueue {
 
 typedef struct ProxyThread {
 	MovieClip *clip;
-	ProxyQueue *queue;
-
 	struct MovieDistortion *distortion;
-
 	int *build_sizes, build_count;
 	int *build_undistort_sizes, build_undistort_count;
 } ProxyThread;
@@ -1130,14 +1179,15 @@ static unsigned char *proxy_thread_next_frame(ProxyQueue *queue, MovieClip *clip
 	return mem;
 }
 
-static void *do_proxy_thread(void *data_v)
+static void proxy_task_func(TaskPool *pool, void *task_data, int UNUSED(threadid))
 {
-	ProxyThread *data = (ProxyThread *) data_v;
+	ProxyThread *data = (ProxyThread *)task_data;
+	ProxyQueue *queue = (ProxyQueue *)BLI_task_pool_userdata(pool);
 	unsigned char *mem;
 	size_t size;
 	int cfra;
 
-	while ((mem = proxy_thread_next_frame(data->queue, data->clip, &size, &cfra))) {
+	while ((mem = proxy_thread_next_frame(queue, data->clip, &size, &cfra))) {
 		ImBuf *ibuf;
 
 		ibuf = IMB_ibImageFromMemory(mem, size, IB_rect | IB_multilayer | IB_alphamode_detect,
@@ -1153,8 +1203,6 @@ static void *do_proxy_thread(void *data_v)
 
 		MEM_freeN(mem);
 	}
-
-	return NULL;
 }
 
 static void do_sequence_proxy(void *pjv, int *build_sizes, int build_count,
@@ -1164,11 +1212,17 @@ static void do_sequence_proxy(void *pjv, int *build_sizes, int build_count,
 	ProxyJob *pj = pjv;
 	MovieClip *clip = pj->clip;
 	Scene *scene = pj->scene;
+	TaskScheduler *task_scheduler = BLI_task_scheduler_get();
+	TaskPool *task_pool;
 	int sfra = SFRA, efra = EFRA;
 	ProxyThread *handles;
-	ListBase threads;
-	int i, tot_thread = BLI_system_thread_count();
+	int i, tot_thread = BLI_task_scheduler_num_threads(task_scheduler);
+	int width, height;
 	ProxyQueue queue;
+
+	if (build_undistort_count) {
+		BKE_movieclip_get_size(clip, NULL, &width, &height);
+	}
 
 	BLI_spin_init(&queue.spin);
 
@@ -1179,16 +1233,13 @@ static void do_sequence_proxy(void *pjv, int *build_sizes, int build_count,
 	queue.do_update = do_update;
 	queue.progress = progress;
 
-	handles = MEM_callocN(sizeof(ProxyThread) * tot_thread, "proxy threaded handles");
-
-	if (tot_thread > 1)
-		BLI_init_threads(&threads, do_proxy_thread, tot_thread);
-
+	task_pool = BLI_task_pool_create(task_scheduler, &queue);
+	handles = MEM_callocN(sizeof(ProxyThread) * tot_thread,
+	                      "proxy threaded handles");
 	for (i = 0; i < tot_thread; i++) {
 		ProxyThread *handle = &handles[i];
 
 		handle->clip = clip;
-		handle->queue = &queue;
 
 		handle->build_count = build_count;
 		handle->build_sizes = build_sizes;
@@ -1197,29 +1248,29 @@ static void do_sequence_proxy(void *pjv, int *build_sizes, int build_count,
 		handle->build_undistort_sizes = build_undistort_sizes;
 
 		if (build_undistort_count) {
-			int width, height;
-			BKE_movieclip_get_size(clip, NULL, &width, &height);
-			handle->distortion = BKE_tracking_distortion_new(&clip->tracking, width, height);
+			handle->distortion = BKE_tracking_distortion_new(&clip->tracking,
+			                                                 width, height);
 		}
 
-		if (tot_thread > 1)
-			BLI_insert_thread(&threads, handle);
+		BLI_task_pool_push(task_pool,
+		                   proxy_task_func,
+		                   handle,
+		                   false,
+		                   TASK_PRIORITY_LOW);
 	}
 
-	if (tot_thread > 1)
-		BLI_end_threads(&threads);
-	else
-		do_proxy_thread(handles);
-
-	MEM_freeN(handles);
+	BLI_task_pool_work_and_wait(task_pool);
+	BLI_task_pool_free(task_pool);
 
 	if (build_undistort_count) {
 		for (i = 0; i < tot_thread; i++) {
 			ProxyThread *handle = &handles[i];
-
 			BKE_tracking_distortion_free(handle->distortion);
 		}
 	}
+
+	BLI_spin_end(&queue.spin);
+	MEM_freeN(handles);
 }
 
 static void proxy_startjob(void *pjv, short *stop, short *do_update, float *progress)

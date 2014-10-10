@@ -3111,8 +3111,9 @@ static int ui_do_but_KEYEVT(bContext *C, uiBut *but, uiHandleButtonData *data, c
 		}
 	}
 	else if (data->state == BUTTON_STATE_WAIT_KEY_EVENT) {
-		if (event->type == MOUSEMOVE)
+		if (ELEM(event->type, MOUSEMOVE, INBETWEEN_MOUSEMOVE)) {
 			return WM_UI_HANDLER_CONTINUE;
+		}
 
 		if (event->val == KM_PRESS) {
 			if (WM_key_event_string(event->type)[0])
@@ -6559,7 +6560,7 @@ static bool ui_mouse_inside_button(ARegion *ar, uiBut *but, int x, int y)
 
 	ui_window_to_block_fl(ar, block, &mx, &my);
 
-	if (but->dt == UI_EMBOSSR) {
+	if (but->pie_dir != UI_RADIAL_NONE) {
 		if (!ui_but_isect_pie_seg(block, but)) {
 			return false;
 		}
@@ -8686,7 +8687,7 @@ static int ui_handler_pie(bContext *C, const wmEvent *event, uiPopupBlockHandle 
 						
 						mul_v2_fl(vec, pie_radius);
 						add_v2_v2(vec, center);
-						mul_v2_fl(vec, fac);						
+						mul_v2_fl(vec, fac);
 						add_v2_v2(vec, block->pie_data.pie_center_spawned);
 						            
 						BLI_rctf_recenter(&but->rect, vec[0], vec[1]);
@@ -8717,7 +8718,7 @@ static int ui_handler_pie(bContext *C, const wmEvent *event, uiPopupBlockHandle 
 		return WM_UI_HANDLER_BREAK;
 	}
 
-	if (event->type == block->pie_data.event) {
+	if (event->type == block->pie_data.event && !is_click_style) {
 		if (event->val != KM_RELEASE) {
 			ui_handle_menu_button(C, event, menu);
 
@@ -8733,7 +8734,7 @@ static int ui_handler_pie(bContext *C, const wmEvent *event, uiPopupBlockHandle 
 			if (!(block->pie_data.flags & UI_PIE_DRAG_STYLE)) {
 				block->pie_data.flags |= UI_PIE_CLICK_STYLE;
 			}
-			else if (!is_click_style) {
+			else {
 				uiBut *but = ui_but_find_activated(menu->region);
 
 				retval = ui_but_pie_menu_apply(C, menu, but, true, is_click_style);
@@ -8746,7 +8747,9 @@ static int ui_handler_pie(bContext *C, const wmEvent *event, uiPopupBlockHandle 
 
 		switch (event->type) {
 			case MOUSEMOVE:
-				if (len_squared_v2v2(event_xy, block->pie_data.pie_center_init) > PIE_CLICK_THRESHOLD_SQ) {
+				if (!is_click_style &&
+				    (len_squared_v2v2(event_xy, block->pie_data.pie_center_init) > PIE_CLICK_THRESHOLD_SQ))
+				{
 					block->pie_data.flags |= UI_PIE_DRAG_STYLE;
 				}
 				ui_handle_menu_button(C, event, menu);
@@ -8756,7 +8759,7 @@ static int ui_handler_pie(bContext *C, const wmEvent *event, uiPopupBlockHandle 
 				break;
 
 			case LEFTMOUSE:
-				if (event->val == KM_PRESS) {
+				if (event->val == KM_RELEASE) {
 					uiBut *but = ui_but_find_activated(menu->region);
 					retval = ui_but_pie_menu_apply(C, menu, but, false, is_click_style);
 				}

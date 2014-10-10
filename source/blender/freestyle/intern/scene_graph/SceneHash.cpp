@@ -18,36 +18,22 @@
  * ***** END GPL LICENSE BLOCK *****
  */
 
-/** \file source/blender/freestyle/intern/python/StrokeShader/BPy_streamShader.h
+/** \file blender/freestyle/intern/scene_graph/SceneHash.cpp
  *  \ingroup freestyle
  */
 
-#ifndef __FREESTYLE_PYTHON_STREAMSHADER_H__
-#define __FREESTYLE_PYTHON_STREAMSHADER_H__
+#include "SceneHash.h"
 
-#include "../BPy_StrokeShader.h"
+namespace Freestyle {
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+void SceneHash::visitIndexedFaceSet(IndexedFaceSet& ifs)
+{
+	const real *v = ifs.vertices();
+	const unsigned n = ifs.vsize();
 
-///////////////////////////////////////////////////////////////////////////////////////////
-
-extern PyTypeObject streamShader_Type;
-
-#define BPy_streamShader_Check(v) (PyObject_IsInstance((PyObject *)v, (PyObject *)&streamShader_Type))
-
-/*---------------------------Python BPy_streamShader structure definition----------*/
-typedef struct {
-	BPy_StrokeShader py_ss;
-} BPy_streamShader;
-
-
-///////////////////////////////////////////////////////////////////////////////////////////
-
-#ifdef __cplusplus
+	for (unsigned i = 0; i < n; i++) {
+		_hashcode += v[i];
+	}
 }
-#endif
 
-
-#endif /* __FREESTYLE_PYTHON_STREAMSHADER_H__ */
+} /* namespace Freestyle */

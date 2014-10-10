@@ -18,36 +18,50 @@
  * ***** END GPL LICENSE BLOCK *****
  */
 
-/** \file source/blender/freestyle/intern/python/StrokeShader/BPy_TextureAssignerShader.h
+#ifndef __FREESTYLE_SCENE_HASH_H__
+#define __FREESTYLE_SCENE_HASH_H__
+
+/** \file blender/freestyle/intern/scene_graph/SceneHash.h
  *  \ingroup freestyle
  */
 
-#ifndef __FREESTYLE_PYTHON_TEXTUREASSIGNERSHADER_H__
-#define __FREESTYLE_PYTHON_TEXTUREASSIGNERSHADER_H__
+#include "IndexedFaceSet.h"
+#include "SceneVisitor.h"
 
-#include "../BPy_StrokeShader.h"
-
-#ifdef __cplusplus
-extern "C" {
+#ifdef WITH_CXX_GUARDEDALLOC
+#include "MEM_guardedalloc.h"
 #endif
 
-///////////////////////////////////////////////////////////////////////////////////////////
+namespace Freestyle {
 
-extern PyTypeObject TextureAssignerShader_Type;
+class SceneHash : public SceneVisitor
+{
+public:
+	inline SceneHash() : SceneVisitor()
+	{
+		_hashcode = 0.0;
+	}
 
-#define BPy_TextureAssignerShader_Check(v) (PyObject_IsInstance((PyObject *)v, (PyObject *)&TextureAssignerShader_Type))
+	virtual ~SceneHash() {}
 
-/*---------------------------Python BPy_TextureAssignerShader structure definition----------*/
-typedef struct {
-	BPy_StrokeShader py_ss;
-} BPy_TextureAssignerShader;
+	VISIT_DECL(IndexedFaceSet)
 
+	inline real getValue() {
+		return _hashcode;
+	}
 
-///////////////////////////////////////////////////////////////////////////////////////////
+	inline void reset() {
+		_hashcode = 0.0;
+	}
 
-#ifdef __cplusplus
-}
+private:
+	real _hashcode;
+
+#ifdef WITH_CXX_GUARDEDALLOC
+	MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:SceneHash")
 #endif
+};
 
+} /* namespace Freestyle */
 
-#endif /* __FREESTYLE_PYTHON_TEXTUREASSIGNERSHADER_H__ */
+#endif // __FREESTYLE_SCENE_HASH_H__

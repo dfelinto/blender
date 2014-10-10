@@ -285,10 +285,10 @@ static void image_panel_preview(ScrArea *sa, short cntrl)   // IMAGE_HANDLER_PRE
 
 /* ********************* callbacks for standard image buttons *************** */
 
-static void ui_imageuser_slot_menu(bContext *UNUSED(C), uiLayout *layout, void *render_slot_p)
+static void ui_imageuser_slot_menu(bContext *UNUSED(C), uiLayout *layout, void *image_p)
 {
 	uiBlock *block = uiLayoutGetBlock(layout);
-	short *render_slot = render_slot_p;
+	Image *image = image_p;
 	int slot;
 
 	uiDefBut(block, LABEL, 0, IFACE_("Slot"),
@@ -297,10 +297,15 @@ static void ui_imageuser_slot_menu(bContext *UNUSED(C), uiLayout *layout, void *
 
 	slot = IMA_MAX_RENDER_SLOT;
 	while (slot--) {
-		char str[32];
-		BLI_snprintf(str, sizeof(str), IFACE_("Slot %d"), slot + 1);
+		char str[64];
+		if (image->render_slots[slot].name[0] != '\0') {
+			BLI_strncpy(str, image->render_slots[slot].name, sizeof(str));
+		}
+		else {
+			BLI_snprintf(str, sizeof(str), IFACE_("Slot %d"), slot + 1);
+		}
 		uiDefButS(block, BUTM, B_NOP, str, 0, 0,
-		          UI_UNIT_X * 5, UI_UNIT_X, render_slot, (float) slot, 0.0, 0, -1, "");
+		          UI_UNIT_X * 5, UI_UNIT_X, &image->render_slot, (float) slot, 0.0, 0, -1, "");
 	}
 }
 
@@ -561,8 +566,7 @@ static void image_user_change(bContext *C, void *iuser_v, void *unused)
 }
 #endif
 
-//XXX TODO create uiblock_view_buttons
-static void uiblock_layer_pass_buttons(uiLayout *layout, RenderResult *rr, Image *ima, ImageUser *iuser, int w, short *render_slot)
+static void uiblock_layer_pass_buttons(uiLayout *layout, Image *image, RenderResult *rr, ImageUser *iuser, int w, short *render_slot)
 {
 	static void *rnd_pt[4];  /* XXX, workaround */
 	uiBlock *block = uiLayoutGetBlock(layout);
@@ -589,8 +593,13 @@ static void uiblock_layer_pass_buttons(uiLayout *layout, RenderResult *rr, Image
 	/* menu buts */
 	if (render_slot) {
 		char str[64];
-		BLI_snprintf(str, sizeof(str), IFACE_("Slot %d"), *render_slot + 1);
-		but = uiDefMenuBut(block, ui_imageuser_slot_menu, render_slot, str, 0, 0, wmenu1, UI_UNIT_Y, TIP_("Select Slot"));
+		if (image->render_slots[*render_slot].name[0] != '\0') {
+			BLI_strncpy(str, image->render_slots[*render_slot].name, sizeof(str));
+		}
+		else {
+			BLI_snprintf(str, sizeof(str), IFACE_("Slot %d"), *render_slot + 1);
+		}
+		but = uiDefMenuBut(block, ui_imageuser_slot_menu, image, str, 0, 0, wmenu1, UI_UNIT_Y, TIP_("Select Slot"));
 		uiButSetFunc(but, image_multi_cb, rr, iuser);
 		uiButSetMenuFromPulldown(but);
 	}
@@ -632,14 +641,14 @@ static void uiblock_layer_pass_buttons(uiLayout *layout, RenderResult *rr, Image
 	}
 
 	/* stereo image */
-	else if (((ima->flag & IMA_IS_STEREO) && (!show_stereo)) ||
-	         ((ima->flag & IMA_IS_MULTIVIEW) && ((ima->flag & IMA_IS_STEREO) == 0)))
+	else if (((image->flag & IMA_IS_STEREO) && (!show_stereo)) ||
+	         ((image->flag & IMA_IS_MULTIVIEW) && ((image->flag & IMA_IS_STEREO) == 0)))
 	{
 		ImageView *iv;
 		int nr = 0;
-		rnd_pt[3] = ima;
+		rnd_pt[3] = image;
 
-		for (iv = ima->views.first; iv; iv = iv->next) {
+		for (iv = image->views.first; iv; iv = iv->next) {
 			if (nr++ == iuser->view) {
 				display_name = iv->name;
 				break;
@@ -647,12 +656,12 @@ static void uiblock_layer_pass_buttons(uiLayout *layout, RenderResult *rr, Image
 		}
 
 		but = uiDefMenuBut(block, ui_imageuser_view_menu_multiview, rnd_pt, display_name, 0, 0, wmenu1, UI_UNIT_Y, TIP_("Select View"));
-		uiButSetFunc(but, image_multiview_cb, ima, iuser);
+		uiButSetFunc(but, image_multiview_cb, image, iuser);
 		uiButSetMenuFromPulldown(but);
 	}
 }
 
-static void uiblock_layer_pass_arrow_buttons(uiLayout *layout, RenderResult *rr, Image *ima, ImageUser *iuser, short *render_slot)
+static void uiblock_layer_pass_arrow_buttons(uiLayout *layout, Image *image, RenderResult *rr, ImageUser *iuser, short *render_slot)
 {
 	uiBlock *block = uiLayoutGetBlock(layout);
 	uiLayout *row;
@@ -674,7 +683,7 @@ static void uiblock_layer_pass_arrow_buttons(uiLayout *layout, RenderResult *rr,
 	but = uiDefIconBut(block, BUT, 0, ICON_TRIA_RIGHT,  0, 0, 0.90f * UI_UNIT_X, UI_UNIT_Y, NULL, 0, 0, 0, 0, TIP_("Next Layer"));
 	uiButSetFunc(but, image_multi_inclay_cb, rr, iuser);
 
-	uiblock_layer_pass_buttons(row, rr, ima, iuser, 230 * dpi_fac, render_slot);
+	uiblock_layer_pass_buttons(row, image, rr, iuser, 230 * dpi_fac, render_slot);
 
 	/* decrease, increase arrows */
 	but = uiDefIconBut(block, BUT, 0, ICON_TRIA_LEFT,   0, 0, 0.85f * UI_UNIT_X, UI_UNIT_Y, NULL, 0, 0, 0, 0, TIP_("Previous Pass"));
@@ -796,7 +805,7 @@ void uiTemplateImage(uiLayout *layout, bContext *C, PointerRNA *ptr, const char 
 
 				/* use BKE_image_acquire_renderresult  so we get the correct slot in the menu */
 				rr = BKE_image_acquire_renderresult(scene, ima);
-				uiblock_layer_pass_arrow_buttons(layout, rr, ima, iuser, &ima->render_slot);
+				uiblock_layer_pass_arrow_buttons(layout, ima, rr, iuser, &ima->render_slot);
 				BKE_image_release_renderresult(scene, ima);
 			}
 		}
@@ -829,7 +838,7 @@ void uiTemplateImage(uiLayout *layout, bContext *C, PointerRNA *ptr, const char 
 
 			/* multilayer? */
 			if (ima->type == IMA_TYPE_MULTILAYER && ima->rr) {
-				uiblock_layer_pass_arrow_buttons(layout, ima->rr, ima, iuser, NULL);
+				uiblock_layer_pass_arrow_buttons(layout, ima, ima->rr, iuser, NULL);
 			}
 			else if (ima->source != IMA_SRC_GENERATED) {
 				if (compact == 0) {
@@ -914,6 +923,10 @@ void uiTemplateImage(uiLayout *layout, bContext *C, PointerRNA *ptr, const char 
 				uiItemR(col, &imaptr, "use_generated_float", 0, NULL, ICON_NONE);
 
 				uiItemR(split, &imaptr, "generated_type", UI_ITEM_R_EXPAND, NULL, ICON_NONE);
+
+				if (ima->gen_type == IMA_GENTYPE_BLANK) {
+					uiItemR(layout, &imaptr, "generated_color", 0, NULL, ICON_NONE);
+				}
 			}
 
 		}
@@ -1094,8 +1107,7 @@ void uiTemplateImageLayers(uiLayout *layout, bContext *C, Image *ima, ImageUser 
 
 		/* use BKE_image_acquire_renderresult  so we get the correct slot in the menu */
 		rr = BKE_image_acquire_renderresult(scene, ima);
-		uiblock_layer_pass_buttons(layout, rr, ima, iuser, 160 * dpi_fac,
-		                           (ima->type == IMA_TYPE_R_RESULT) ? &ima->render_slot : NULL);
+		uiblock_layer_pass_buttons(layout, ima, rr, iuser, 160 * dpi_fac, (ima->type == IMA_TYPE_R_RESULT) ? &ima->render_slot : NULL);
 		BKE_image_release_renderresult(scene, ima);
 	}
 }

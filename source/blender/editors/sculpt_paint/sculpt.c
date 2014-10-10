@@ -192,8 +192,8 @@ typedef struct StrokeCache {
 	float true_location[3];
 	float location[3];
 
-	float pen_flip;
-	float invert;
+	bool pen_flip;
+	bool invert;
 	float pressure;
 	float mouse[2];
 	float bstrength;
@@ -268,8 +268,8 @@ typedef struct {
 
 	/* Original coordinate, normal, and mask */
 	const float *co;
-	float mask;
 	const short *no;
+	float mask;
 } SculptOrigVertData;
 
 
@@ -809,10 +809,10 @@ static float brush_strength(Sculpt *sd, StrokeCache *cache, float feather, Unifi
 			return alpha * pressure * feather;
 
 		case SCULPT_TOOL_SNAKE_HOOK:
-			return feather;
+			return root_alpha * feather;
 
 		case SCULPT_TOOL_GRAB:
-			return feather;
+			return root_alpha * feather;
 
 		case SCULPT_TOOL_ROTATE:
 			return alpha * pressure * feather;
@@ -4006,14 +4006,14 @@ static void sculpt_stroke_modifiers_check(const bContext *C, Object *ob)
 typedef struct {
 	SculptSession *ss;
 	const float *ray_start, *ray_normal;
-	int hit;
+	bool hit;
 	float dist;
-	int original;
+	bool original;
 } SculptRaycastData;
 
 typedef struct {
 	const float *ray_start, *ray_normal;
-	int hit;
+	bool hit;
 	float dist;
 	float detail;
 } SculptDetailRaycastData;
@@ -4145,7 +4145,7 @@ static void sculpt_brush_init_tex(const Scene *scene, Sculpt *sd, SculptSession 
 	sculpt_update_tex(scene, sd, ss);
 }
 
-static int sculpt_brush_stroke_init(bContext *C, wmOperator *op)
+static bool sculpt_brush_stroke_init(bContext *C, wmOperator *op)
 {
 	Scene *scene = CTX_data_scene(C);
 	Object *ob = CTX_data_active_object(C);

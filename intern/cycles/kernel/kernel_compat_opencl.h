@@ -24,14 +24,6 @@
 #define CCL_NAMESPACE_BEGIN
 #define CCL_NAMESPACE_END
 
-#ifdef __KERNEL_OPENCL_AMD__
-#define __CL_NO_FLOAT3__
-#endif
-
-#ifdef __CL_NO_FLOAT3__
-#define float3 float4
-#endif
-
 #ifdef __CL_NOINLINE__
 #define ccl_noinline __attribute__((noinline))
 #else
@@ -73,11 +65,7 @@
 #endif
 
 #define make_float2(x, y) ((float2)(x, y))
-#ifdef __CL_NO_FLOAT3__
-#define make_float3(x, y, z) ((float4)(x, y, z, 0.0f))
-#else
 #define make_float3(x, y, z) ((float3)(x, y, z))
-#endif
 #define make_float4(x, y, z, w) ((float4)(x, y, z, w))
 #define make_int2(x, y) ((int2)(x, y))
 #define make_int3(x, y, z) ((int3)(x, y, z))
@@ -89,34 +77,34 @@
 #define __float_as_uint(x) as_uint(x)
 #define __int_as_float(x) as_float(x)
 #define __float_as_int(x) as_int(x)
-#define powf(x, y) pow(((float)x), ((float)y))
-#define fabsf(x) fabs(((float)x))
-#define copysignf(x, y) copysign(((float)x), ((float)y))
-#define asinf(x) asin(((float)x))
-#define acosf(x) acos(((float)x))
-#define atanf(x) atan(((float)x))
-#define floorf(x) floor(((float)x))
-#define ceilf(x) ceil(((float)x))
-#define hypotf(x, y) hypot(((float)x), ((float)y))
-#define atan2f(x, y) atan2(((float)x), ((float)y))
-#define fmaxf(x, y) fmax(((float)x), ((float)y))
-#define fminf(x, y) fmin(((float)x), ((float)y))
-#define fmodf(x, y) fmod((float)x, (float)y)
+#define powf(x, y) pow(((float)(x)), ((float)(y)))
+#define fabsf(x) fabs(((float)(x)))
+#define copysignf(x, y) copysign(((float)(x)), ((float)(y)))
+#define asinf(x) asin(((float)(x)))
+#define acosf(x) acos(((float)(x)))
+#define atanf(x) atan(((float)(x)))
+#define floorf(x) floor(((float)(x)))
+#define ceilf(x) ceil(((float)(x)))
+#define hypotf(x, y) hypot(((float)(x)), ((float)(y)))
+#define atan2f(x, y) atan2(((float)(x)), ((float)(y)))
+#define fmaxf(x, y) fmax(((float)(x)), ((float)(y)))
+#define fminf(x, y) fmin(((float)(x)), ((float)(y)))
+#define fmodf(x, y) fmod((float)(x), (float)(y))
 
 #ifndef __CL_USE_NATIVE__
-#define sinf(x) native_sin(((float)x))
-#define cosf(x) native_cos(((float)x))
-#define tanf(x) native_tan(((float)x))
-#define expf(x) native_exp(((float)x))
-#define sqrtf(x) native_sqrt(((float)x))
-#define logf(x) native_log(((float)x))
+#define sinf(x) native_sin(((float)(x)))
+#define cosf(x) native_cos(((float)(x)))
+#define tanf(x) native_tan(((float)(x)))
+#define expf(x) native_exp(((float)(x)))
+#define sqrtf(x) native_sqrt(((float)(x)))
+#define logf(x) native_log(((float)(x)))
 #else
-#define sinf(x) sin(((float)x))
-#define cosf(x) cos(((float)x))
-#define tanf(x) tan(((float)x))
-#define expf(x) exp(((float)x))
-#define sqrtf(x) sqrt(((float)x))
-#define logf(x) log(((float)x))
+#define sinf(x) sin(((float)(x)))
+#define cosf(x) cos(((float)(x)))
+#define tanf(x) tan(((float)(x)))
+#define expf(x) exp(((float)(x)))
+#define sqrtf(x) sqrt(((float)(x)))
+#define logf(x) log(((float)(x)))
 #endif
 
 /* data lookup defines */

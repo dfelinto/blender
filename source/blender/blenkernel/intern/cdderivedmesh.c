@@ -34,8 +34,6 @@
  *  \ingroup bke
  */
 
-#include "GL/glew.h"
-
 #include "BLI_math.h"
 #include "BLI_blenlib.h"
 #include "BLI_edgehash.h"
@@ -62,6 +60,7 @@
 #include "GPU_buffers.h"
 #include "GPU_draw.h"
 #include "GPU_extensions.h"
+#include "GPU_glew.h"
 #include "GPU_material.h"
 
 #include <string.h>
@@ -3014,10 +3013,17 @@ DerivedMesh *CDDM_merge_verts(DerivedMesh *dm, const int *vtargetmap, const int 
 		if (UNLIKELY(c == 0)) {
 			continue;
 		}
+		else if (UNLIKELY(c < 3)) {
+			STACK_DISCARD(oldl, c);
+			STACK_DISCARD(mloop, c);
+			continue;
+		}
+
 
 		mp_new = STACK_PUSH_RET_PTR(mpoly);
 		*mp_new = *mp;
 		mp_new->totloop = c;
+		BLI_assert(mp_new->totloop >= 3);
 		mp_new->loopstart = STACK_SIZE(mloop) - c;
 		
 		STACK_PUSH(oldp, i);
@@ -3088,7 +3094,7 @@ DerivedMesh *CDDM_merge_verts(DerivedMesh *dm, const int *vtargetmap, const int 
 	MEM_freeN(oldv);
 	MEM_freeN(olde);
 	MEM_freeN(oldl);
-	MEM_freeN(oldp);;
+	MEM_freeN(oldp);
 
 	BLI_edgehash_free(ehash, NULL);
 

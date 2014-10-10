@@ -88,6 +88,7 @@
 #include "PIL_time.h"
 
 #include "RE_pipeline.h"
+#include "RE_engine.h"
 
 #include "WM_api.h"
 #include "WM_types.h"
@@ -213,6 +214,12 @@ void ED_preview_init_dbase(void)
 #endif
 }
 
+static bool check_engine_supports_textures(Scene *scene)
+{
+	RenderEngineType *type = RE_engines_find(scene->r.engine);
+	return type->flag & RE_USE_TEXTURE_PREVIEW;
+}
+
 void ED_preview_free_dbase(void)
 {
 	if (G_pr_main)
@@ -299,7 +306,7 @@ static Scene *preview_prepare_scene(Scene *scene, ID *id, int id_type, ShaderPre
 
 		sce->r.cfra = scene->r.cfra;
 
-		if (id_type == ID_TE) {
+		if (id_type == ID_TE && !check_engine_supports_textures(scene)) {
 			/* Force blender internal for texture icons and nodes render,
 			 * seems commonly used render engines does not support
 			 * such kind of rendering.
@@ -753,12 +760,6 @@ static void shader_preview_render(ShaderPreview *sp, ID *id, int split, int firs
 		
 		if (sp->pr_rect)
 			RE_ResultGet32(re, sp->pr_rect);
-	}
-	else {
-		/* validate owner */
-		//if (ri->rect == NULL)
-		//	ri->rect= MEM_mallocN(sizeof(int) * ri->pr_rectx*ri->pr_recty, "BIF_previewrender");
-		//RE_ResultGet32(re, ri->rect);
 	}
 
 	/* unassign the pointers, reset vars */

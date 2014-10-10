@@ -302,8 +302,8 @@ bool draw_glsl_material(Scene *scene, Object *ob, View3D *v3d, const char dt)
 	if (BKE_scene_use_new_shading_nodes(scene))
 		return false;
 	
-	return ((scene->gm.matmode == GAME_MAT_GLSL && v3d->drawtype == OB_TEXTURE) || 
-			(v3d->drawtype == OB_MATERIAL)) && (dt > OB_SOLID);
+	return ((scene->gm.matmode == GAME_MAT_GLSL && v3d->drawtype == OB_TEXTURE) ||
+	        (v3d->drawtype == OB_MATERIAL)) && (dt > OB_SOLID);
 }
 
 static bool check_alpha_pass(Base *base)
@@ -5406,7 +5406,7 @@ static void draw_new_particle_system(Scene *scene, View3D *v3d, RegionView3D *rv
 		/* restore & clean up */
 		if (1) { //ob_dt > OB_WIRE) {
 			if (part->draw_col == PART_DRAW_COL_MAT)
-				glDisable(GL_COLOR_ARRAY);
+				glDisableClientState(GL_COLOR_ARRAY);
 			glDisable(GL_COLOR_MATERIAL);
 		}
 

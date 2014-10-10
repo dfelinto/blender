@@ -58,6 +58,7 @@
 #include "BKE_particle.h"
 #include "BKE_unit.h"
 #include "BKE_mask.h"
+#include "BKE_report.h"
 
 #include "BIF_gl.h"
 #include "BIF_glutil.h"
@@ -270,7 +271,8 @@ void convertViewVec(TransInfo *t, float r_vec[3], int dx, int dy)
 			r_vec[0] = dx;
 			r_vec[1] = dy;
 		}
-		else {	const float mval_f[2] = {(float)dx, (float)dy};
+		else {
+			const float mval_f[2] = {(float)dx, (float)dy};
 			ED_view3d_win_to_delta(t->ar, mval_f, r_vec, t->zfac);
 		}
 	}
@@ -2053,7 +2055,6 @@ bool initTransform(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
 	initTransInfo(C, t, op, event);
 
 	if (t->spacetype == SPACE_VIEW3D) {
-		//calc_manipulator_stats(curarea);
 		initTransformOrientation(C, t);
 
 		t->draw_handle_apply = ED_region_draw_cb_activate(t->ar->type, drawTransformApply, t, REGION_DRAW_PRE_VIEW);
@@ -4066,6 +4067,9 @@ static void initTranslation(TransInfo *t)
 {
 	if (t->spacetype == SPACE_ACTION) {
 		/* this space uses time translate */
+		BKE_report(t->reports, RPT_ERROR, 
+		           "Use 'Time_Translate' transform mode instead of 'Translation' mode "
+		           "for translating keyframes in Dope Sheet Editor");
 		t->state = TRANS_CANCEL;
 	}
 

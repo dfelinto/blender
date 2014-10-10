@@ -34,7 +34,6 @@ incs = [
     './intern', 
     '#/intern/guardedalloc',
     '#/intern/elbeem/extern',
-    '#/extern/glew/include',
     '#/intern/opennl/extern',
     '../render/extern/include',
     '../bmesh',
@@ -63,6 +62,9 @@ if env['WITH_BF_FLUID']:
 
 if env['WITH_BF_OCEANSIM']:
     defs.append('WITH_OCEANSIM')
+
+if env['WITH_BF_BULLET']:
+    defs.append('WITH_BULLET')
 
 if env['WITH_BF_GAMEENGINE']:
     incs.append('#/extern/recastnavigation')

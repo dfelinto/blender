@@ -94,9 +94,6 @@
 
 #include "bmesh.h"
 
-//XXX #include "BIF_previewrender.h"
-//XXX #include "BIF_editseq.h"
-
 #ifdef WIN32
 #else
 #  include <sys/time.h>
@@ -527,6 +524,9 @@ Scene *BKE_scene_add(Main *bmain, const char *name)
 
 	sce->r.preview_start_resolution = 64;
 	
+	sce->r.line_thickness_mode = R_LINE_THICKNESS_ABSOLUTE;
+	sce->r.unit_line_thickness = 1.0f;
+
 	sce->toolsettings = MEM_callocN(sizeof(struct ToolSettings), "Tool Settings Struct");
 	sce->toolsettings->doublimit = 0.001;
 	sce->toolsettings->uvcalc_margin = 0.001f;
@@ -2055,14 +2055,13 @@ double BKE_scene_unit_scale(const UnitSettings *unit, const int unit_type, doubl
 	switch (unit_type) {
 		case B_UNIT_LENGTH:
 			return value * (double)unit->scale_length;
-		case B_UNIT_CAMERA:
-			return value * (double)unit->scale_length;
 		case B_UNIT_AREA:
 			return value * pow(unit->scale_length, 2);
 		case B_UNIT_VOLUME:
 			return value * pow(unit->scale_length, 3);
 		case B_UNIT_MASS:
 			return value * pow(unit->scale_length, 3);
+		case B_UNIT_CAMERA:  /* *Do not* use scene's unit scale for camera focal lens! See T42026. */
 		default:
 			return value;
 	}

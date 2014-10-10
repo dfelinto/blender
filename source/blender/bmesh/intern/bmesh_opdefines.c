@@ -104,6 +104,7 @@ static BMOpDefine bmo_smooth_vert_def = {
 	"smooth_vert",
 	/* slots_in */
 	{{"verts", BMO_OP_SLOT_ELEMENT_BUF, {BM_VERT}},    /* input vertices */
+	 {"factor", BMO_OP_SLOT_FLT},           /* smoothing factor */
 	 {"mirror_clip_x", BMO_OP_SLOT_BOOL},   /* set vertices close to the x axis before the operation to 0 */
 	 {"mirror_clip_y", BMO_OP_SLOT_BOOL},   /* set vertices close to the y axis before the operation to 0 */
 	 {"mirror_clip_z", BMO_OP_SLOT_BOOL},   /* set vertices close to the z axis before the operation to 0 */
@@ -1675,7 +1676,8 @@ static BMOpDefine bmo_bevel_def = {
 	 {"offset_type", BMO_OP_SLOT_INT},      /* how to measure offset (enum) */
 	 {"segments", BMO_OP_SLOT_INT},         /* number of segments in bevel */
 	 {"profile", BMO_OP_SLOT_FLT},          /* profile shape, 0->1 (.5=>round) */
-	 {"vertex_only", BMO_OP_SLOT_BOOL},	/* only bevel vertices, not edges */
+	 {"vertex_only", BMO_OP_SLOT_BOOL},     /* only bevel vertices, not edges */
+	 {"clamp_overlap", BMO_OP_SLOT_BOOL},   /* do not allow beveled edges/vertices to overlap each other */
 	 {"material", BMO_OP_SLOT_INT},         /* material for bevel faces, -1 means get from adjacent faces */
 	 {{'\0'}},
 	},

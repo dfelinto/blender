@@ -91,8 +91,14 @@ typedef struct RenderPass {
 
 	char internal_name[64]; /* pass name without view */
 	char view[64];		/* amount defined in openexr_multi.h */
-	int view_id;	/* XXX MV I don't think we need that */
+	int view_id;	/* quick lookup */
+
+	int debug_type;
 } RenderPass;
+
+enum {
+	RENDER_PASS_DEBUG_BVH_TRAVERSAL_STEPS = 0,
+};
 
 /* a renderlayer is a full image, but with all passes and samples */
 /* size of the rects is defined in RenderResult */

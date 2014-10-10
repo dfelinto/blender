@@ -107,6 +107,7 @@
 
 #include "RE_engine.h"
 #include "RE_pipeline.h"
+#include "RE_render_ext.h"
 
 #include "ED_datafiles.h"
 #include "ED_util.h"
@@ -1529,9 +1530,9 @@ int main(
 #endif
 
 #ifdef WIN32
-    /* FMA3 support in the 2013 CRT is broken on Vista and Windows 7 RTM (fixed in SP1). Just disable it. */
+	/* FMA3 support in the 2013 CRT is broken on Vista and Windows 7 RTM (fixed in SP1). Just disable it. */
 #  if defined(_MSC_VER) && _MSC_VER >= 1800 && defined(_M_X64)
-    _set_FMA3_enable(0);
+	_set_FMA3_enable(0);
 #  endif
 
 	/* Win32 Unicode Args */
@@ -1604,26 +1605,11 @@ int main(
 
 #ifdef WITH_LIBMV
 	libmv_initLogging(argv[0]);
-#elif defined(WITH_CYCLES_DEBUG)
+#elif defined(WITH_CYCLES_LOGGING)
 	CCL_init_logging(argv[0]);
 #endif
 
 	setCallbacks();
-#if defined(__APPLE__) && !defined(WITH_PYTHON_MODULE)
-	/* patch to ignore argument finder gives us (pid?) */
-	if (argc == 2 && strncmp(argv[1], "-psn_", 5) == 0) {
-		extern int GHOST_HACK_getFirstFile(char buf[]);
-		static char firstfilebuf[512];
-
-		argc = 1;
-
-		if (GHOST_HACK_getFirstFile(firstfilebuf)) {
-			argc = 2;
-			argv[1] = firstfilebuf;
-		}
-	}
-
-#endif
 
 #ifdef __FreeBSD__
 	fpsetmask(0);
@@ -1642,6 +1628,8 @@ int main(
 	DAG_init();
 
 	BKE_brush_system_init();
+	RE_init_texture_rng();
+	
 
 	BLI_callback_global_init();
 

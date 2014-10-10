@@ -37,7 +37,7 @@
 #include <sstream>
 #include <string.h>
 
-#include <GL/glew.h>
+#include "glew-mx.h"
 
 #include <OpenColorIO/OpenColorIO.h>
 
@@ -260,7 +260,7 @@ bool OCIOImpl::setupGLSLDraw(OCIO_GLSLDrawState **state_r, OCIO_ConstProcessorRc
 		*state_r = allocateOpenGLState();
 	state = *state_r;
 
-	glGetIntegerv(GL_TEXTURE_2D, &state->last_texture);
+	glGetIntegerv(GL_TEXTURE_BINDING_2D, &state->last_texture);
 	glGetIntegerv(GL_ACTIVE_TEXTURE, &state->last_texture_unit);
 
 	if (!ensureLUT3DAllocated(state)) {

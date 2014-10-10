@@ -54,6 +54,8 @@
 #include "BLI_threads.h"
 #include "BLI_utildefines.h"
 
+#include "BLO_writefile.h"
+
 #include "BKE_blender.h"
 #include "BKE_context.h"
 #include "BKE_screen.h"
@@ -110,6 +112,7 @@
 #include "GPU_buffers.h"
 #include "GPU_extensions.h"
 #include "GPU_draw.h"
+#include "GPU_init_exit.h"
 
 #include "BKE_depsgraph.h"
 #include "BKE_sound.h"
@@ -195,7 +198,8 @@ void WM_init(bContext *C, int argc, const char **argv)
 	wm_init_reports(C); /* reports cant be initialized before the wm */
 
 	if (!G.background) {
-		GPU_extensions_init();
+		GPU_init();
+
 		GPU_set_mipmap(!(U.gameflags & USER_DISABLE_MIPMAP));
 		GPU_set_anisotropic(U.anisotropic_filter);
 		GPU_set_gpu_mipmapping(U.use_gpu_mipmap);
@@ -407,11 +411,18 @@ void WM_exit_ext(bContext *C, const bool do_python)
 			if ((U.uiflag2 & USER_KEEP_SESSION) || BKE_undo_valid(NULL)) {
 				/* save the undo state as quit.blend */
 				char filename[FILE_MAX];
-				
+				bool has_edited;
+				int fileflags = G.fileflags & ~(G_FILE_COMPRESS | G_FILE_AUTOPLAY | G_FILE_LOCK | G_FILE_SIGN | G_FILE_HISTORY);
+
 				BLI_make_file_string("/", filename, BLI_temp_dir_base(), BLENDER_QUIT_FILE);
 
-				if (BKE_undo_save_file(filename))
-					printf("Saved session recovery to '%s'\n", filename);
+				has_edited = ED_editors_flush_edits(C, false);
+
+				if ((has_edited && BLO_write_file(CTX_data_main(C), filename, fileflags, NULL, NULL)) ||
+					BKE_undo_save_file(filename))
+				{
+						printf("Saved session recovery to '%s'\n", filename);
+				}
 			}
 		}
 		
@@ -502,7 +513,8 @@ void WM_exit_ext(bContext *C, const bool do_python)
 	if (!G.background) {
 		GPU_global_buffer_pool_free();
 		GPU_free_unused_buffers();
-		GPU_extensions_exit();
+
+		GPU_exit();
 	}
 
 	BKE_reset_undo(); 

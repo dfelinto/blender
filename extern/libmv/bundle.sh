@@ -157,7 +157,7 @@ if(WITH_LIBMV)
 		../../intern/guardedalloc
 	)
 
-	set(INC_SYS
+	list(APPEND INC_SYS
 		../Eigen3
 		\${PNG_INCLUDE_DIR}
 		\${ZLIB_INCLUDE_DIRS}
@@ -166,27 +166,23 @@ if(WITH_LIBMV)
 	list(APPEND SRC
 		intern/camera_intrinsics.cc
 		intern/detector.cc
-		intern/frame_accessor.cc
 		intern/homography.cc
 		intern/image.cc
 		intern/logging.cc
 		intern/reconstruction.cc
 		intern/track_region.cc
 		intern/tracks.cc
-		intern/tracksN.cc
 ${sources}
 ${third_sources}
 
 		intern/camera_intrinsics.h
 		intern/detector.h
-		intern/frame_accessor.h
 		intern/homography.h
 		intern/image.h
 		intern/logging.h
 		intern/reconstruction.h
 		intern/track_region.h
 		intern/tracks.h
-		intern/tracksN.h
 ${headers}
 
 ${third_headers}
@@ -307,6 +303,7 @@ if env['WITH_BF_LIBMV']:
     defs.append('LIBMV_NO_FAST_DETECTOR')
 
     src = env.Glob('intern/*.cc')
+    src.remove('intern' + os.sep + 'stub.cc')
 $src
 
     incs += ' ../Eigen3 third_party/gflags third_party/glog/src third_party/ceres/include third_party/ceres/config ../../intern/guardedalloc'

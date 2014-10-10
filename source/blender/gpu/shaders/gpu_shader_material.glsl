@@ -1960,6 +1960,11 @@ void shade_mul_value(float fac, vec4 col, out vec4 outcol)
 	outcol = col*fac;
 }
 
+void shade_mul_value_v3(float fac, vec3 col, out vec3 outcol)
+{
+	outcol = col*fac;
+}
+
 void shade_obcolor(vec4 col, vec4 obcol, out vec4 outcol)
 {
 	outcol = vec4(col.rgb*obcol.rgb, col.a);

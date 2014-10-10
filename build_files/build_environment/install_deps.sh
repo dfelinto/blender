@@ -29,7 +29,7 @@ getopt \
 ver-ocio:,ver-oiio:,ver-llvm:,ver-osl:,\
 force-all,force-python,force-numpy,force-boost,force-ocio,force-oiio,force-llvm,force-osl,force-opencollada,\
 force-ffmpeg,\
-skip-python,skip-numpy,skip-boost,skip-ocio,skip-oiio,skip-llvm,skip-osl,skip-ffmpeg,skip-opencollada,\
+skip-python,skip-numpy,skip-boost,skip-ocio,skip-openexr,skip-oiio,skip-llvm,skip-osl,skip-ffmpeg,skip-opencollada,\
 required-numpy: \
 -- "$@" \
 )
@@ -40,7 +40,7 @@ SRC="$HOME/src/blender-deps"
 INST="/opt/lib"
 TMP="/tmp"
 CWD=$PWD
-INFO_PATH = CWD
+INFO_PATH=$CWD
 
 # Do not install some optional, potentially conflicting libs by default...
 WITH_ALL=false
@@ -471,9 +471,10 @@ while true; do
   esac
 done
 
-if $WITH_ALL; then
+if [ $WITH_ALL == true -a $OPENCOLLADA_SKIP == false ]; then
   WITH_OPENCOLLADA=true
 fi
+
 
 
 # This has to be done here, because user might force some versions...
@@ -1795,7 +1796,7 @@ install_DEB() {
   _packages="gawk cmake cmake-curses-gui scons build-essential libjpeg-dev libpng-dev \
              libfreetype6-dev libx11-dev libxi-dev wget libsqlite3-dev libbz2-dev \
              libncurses5-dev libssl-dev liblzma-dev libreadline-dev $OPENJPEG_DEV \
-             libopenal-dev libglew-dev yasm $THEORA_DEV $VORBIS_DEV $OGG_DEV \
+             libopenal-dev libglew-dev libglewmx-dev yasm $THEORA_DEV $VORBIS_DEV $OGG_DEV \
              libsdl1.2-dev libfftw3-dev patch bzip2 libxml2-dev libtinyxml-dev"
 
   OPENJPEG_USE=true

@@ -534,13 +534,13 @@ typedef struct UserDef {
 	
 	float fcu_inactive_alpha;	/* opacity of inactive F-Curves in F-Curve Editor */
 	float pixelsize;			/* private, set by GHOST, to multiply DPI with */
+	int virtual_pixel;			/* virtual pixelsize mode */
 
 	short pie_interaction_type;     /* if keeping a pie menu spawn button pressed after this time, it turns into
 	                             * a drag/release pie menu */
 	short pie_initial_timeout;  /* direction in the pie menu will always be calculated from the initial position
 	                             * within this time limit */
 	int pie_animation_timeout;
-	int pad2;
 	short pie_menu_radius;        /* pie menu radius */
 	short pie_menu_threshold;     /* pie menu distance from center before a direction is set */
 
@@ -847,7 +847,6 @@ typedef enum eMultiSample_Type {
 	USER_MULTISAMPLE_16	= 16,
 } eMultiSample_Type;
 	
-
 typedef enum eImageDrawMethod {
 	/* IMAGE_DRAW_METHOD_AUTO = 0, */ /* Currently unused */
 	IMAGE_DRAW_METHOD_GLSL = 1,
@@ -855,6 +854,10 @@ typedef enum eImageDrawMethod {
 	IMAGE_DRAW_METHOD_DRAWPIXELS = 3,
 } eImageDrawMethod;
 
+typedef enum eUserpref_VirtualPixel {
+	VIRTUAL_PIXEL_NATIVE = 0,
+	VIRTUAL_PIXEL_DOUBLE = 1,
+} eUserpref_VirtualPixel;
 
 #ifdef __cplusplus
 }

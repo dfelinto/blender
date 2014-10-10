@@ -43,6 +43,11 @@ void range_tree_uint_take(RangeTreeUInt *rt, unsigned v)
 	rt->take(v);
 }
 
+bool range_tree_uint_retake(RangeTreeUInt *rt, unsigned v)
+{
+	return rt->retake(v);
+}
+
 unsigned range_tree_uint_take_any(RangeTreeUInt *rt)
 {
 	return rt->take_any();
@@ -53,19 +58,20 @@ void range_tree_uint_release(RangeTreeUInt *rt, unsigned v)
 	rt->release(v);
 }
 
-int range_tree_uint_has(const RangeTreeUInt *rt, unsigned v)
+bool range_tree_uint_has(const RangeTreeUInt *rt, unsigned v)
 {
 	return rt->has(v);
 }
 
-int range_tree_uint_has_range(const RangeTreeUInt *rt,
-							  unsigned vmin,
-							  unsigned vmax)
+bool range_tree_uint_has_range(
+        const RangeTreeUInt *rt,
+        unsigned vmin,
+        unsigned vmax)
 {
 	return rt->has_range(vmin, vmax);
 }
 
-int range_tree_uint_empty(const RangeTreeUInt *rt)
+bool range_tree_uint_empty(const RangeTreeUInt *rt)
 {
 	return rt->empty();
 }

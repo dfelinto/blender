@@ -355,6 +355,20 @@ void blo_do_versions_270(FileData *fd, Library *UNUSED(lib), Main *main)
 		for (br = main->brush.first; br; br = br->id.next) {
 			br->fill_threshold = 0.2f;
 		}
+
+		if (!DNA_struct_elem_find(fd->filesdna, "BevelModifierData", "int", "mat")) {
+			Object *ob;
+			for (ob = main->object.first; ob; ob = ob->id.next) {
+				ModifierData *md;
+
+				for (md = ob->modifiers.first; md; md = md->next) {
+					if (md->type == eModifierType_Bevel) {
+						BevelModifierData *bmd = (BevelModifierData *)md;
+						bmd->mat = -1;
+					}
+				}
+			}
+		}
 	}
 
 	if (!MAIN_VERSION_ATLEAST(main, 271, 6)) {
@@ -379,6 +393,21 @@ void blo_do_versions_270(FileData *fd, Library *UNUSED(lib), Main *main)
 			for (scene = main->scene.first; scene; scene = scene->id.next) {
 				scene->r.preview_start_resolution = 64;
 			}
+		}
+	}
+	
+	if (!MAIN_VERSION_ATLEAST(main, 272, 1)) {
+		Brush *br;
+		for (br = main->brush.first; br; br = br->id.next) {
+			if ((br->ob_mode & OB_MODE_SCULPT) && ELEM(br->sculpt_tool, SCULPT_TOOL_GRAB, SCULPT_TOOL_SNAKE_HOOK))
+				br->alpha = 1.0f;
+		}
+	}
+
+	if (!DNA_struct_elem_find(fd->filesdna, "Image", "float", "gen_color")) {
+		Image *image;
+		for (image = main->image.first; image != NULL; image = image->id.next) {
+			image->gen_color[3] = 1.0f;
 		}
 	}
 

@@ -82,6 +82,8 @@ __all__ = (
     "pyNatureUP1D",
     "pyParameterUP0D",
     "pyParameterUP0DGoodOne",
+    "pyProjectedXBP1D",
+    "pyProjectedYBP1D",
     "pyShapeIdListUP1D",
     "pyShapeIdUP1D",
     "pyShuffleBP1D",
@@ -135,6 +137,8 @@ from freestyle.functions import (
     GetCurvilinearAbscissaF0D,
     GetDirectionalViewMapDensityF1D,
     GetOccludersF1D,
+    GetProjectedXF1D,
+    GetProjectedYF1D,
     GetProjectedZF1D,
     GetShapeF1D,
     GetSteerableViewMapDensityF1D,
@@ -584,13 +588,31 @@ class NotBP1D(BinaryPredicate1D):
         self._predicate = predicate
 
     def __call__(self, i1, i2):
-        return (not self._precicate(i1, i2))
+        return (not self._predicate(i1, i2))
 
 
 class pyZBP1D(BinaryPredicate1D):
     def __init__(self, iType=IntegrationType.MEAN):
         BinaryPredicate1D.__init__(self)
         self.func = GetZF1D(iType)
+
+    def __call__(self, i1, i2):
+        return (self.func(i1) > self.func(i2))
+
+
+class pyProjectedXBP1D(BinaryPredicate1D):
+    def __init__(self, iType=IntegrationType.MEAN):
+        BinaryPredicate1D.__init__(self)
+        self.func = GetProjectedXF1D(iType)
+
+    def __call__(self, i1, i2):
+        return (self.func(i1) > self.func(i2))
+
+
+class pyProjectedYBP1D(BinaryPredicate1D):
+    def __init__(self, iType=IntegrationType.MEAN):
+        BinaryPredicate1D.__init__(self)
+        self.func = GetProjectedYF1D(iType)
 
     def __call__(self, i1, i2):
         return (self.func(i1) > self.func(i2))

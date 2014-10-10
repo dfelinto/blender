@@ -1288,7 +1288,8 @@ static int edbm_do_smooth_vertex_exec(bContext *C, wmOperator *op)
 	bool mirrx = false, mirry = false, mirrz = false;
 	int i, repeat;
 	float clip_dist = 0.0f;
-	bool use_topology = (me->editflag & ME_EDIT_MIRROR_TOPO) != 0;
+	const float fac = RNA_float_get(op->ptr, "factor");
+	const bool use_topology = (me->editflag & ME_EDIT_MIRROR_TOPO) != 0;
 
 	const bool xaxis = RNA_boolean_get(op->ptr, "xaxis");
 	const bool yaxis = RNA_boolean_get(op->ptr, "yaxis");
@@ -1322,12 +1323,12 @@ static int edbm_do_smooth_vertex_exec(bContext *C, wmOperator *op)
 	repeat = RNA_int_get(op->ptr, "repeat");
 	if (!repeat)
 		repeat = 1;
-	
+
 	for (i = 0; i < repeat; i++) {
 		if (!EDBM_op_callf(em, op,
-		                   "smooth_vert verts=%hv mirror_clip_x=%b mirror_clip_y=%b mirror_clip_z=%b clip_dist=%f "
-		                   "use_axis_x=%b use_axis_y=%b use_axis_z=%b",
-		                   BM_ELEM_SELECT, mirrx, mirry, mirrz, clip_dist, xaxis, yaxis, zaxis))
+		                   "smooth_vert verts=%hv factor=%f mirror_clip_x=%b mirror_clip_y=%b mirror_clip_z=%b "
+		                   "clip_dist=%f use_axis_x=%b use_axis_y=%b use_axis_z=%b",
+		                   BM_ELEM_SELECT, fac, mirrx, mirry, mirrz, clip_dist, xaxis, yaxis, zaxis))
 		{
 			return OPERATOR_CANCELLED;
 		}
@@ -1358,7 +1359,8 @@ void MESH_OT_vertices_smooth(wmOperatorType *ot)
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
-	RNA_def_int(ot->srna, "repeat", 1, 1, 1000, "Number of times to smooth the mesh", "", 1, 100);
+	RNA_def_float(ot->srna, "factor", 0.5f, -10.0f, 10.0f, "Smoothing", "Smoothing factor", 0.0f, 1.0f);
+	RNA_def_int(ot->srna, "repeat", 1, 1, 1000, "Repeat", "Number of times to smooth the mesh", 1, 100);
 	RNA_def_boolean(ot->srna, "xaxis", 1, "X-Axis", "Smooth along the X axis");
 	RNA_def_boolean(ot->srna, "yaxis", 1, "Y-Axis", "Smooth along the Y axis");
 	RNA_def_boolean(ot->srna, "zaxis", 1, "Z-Axis", "Smooth along the Z axis");

@@ -261,6 +261,14 @@ static PassType get_pass_type(BL::RenderPass b_pass)
 		case BL::RenderPass::type_SPECULAR:
 		case BL::RenderPass::type_REFLECTION:
 			return PASS_NONE;
+#ifdef WITH_CYCLES_DEBUG
+		case BL::RenderPass::type_DEBUG:
+		{
+			if(b_pass.debug_type() == BL::RenderPass::debug_type_BVH_TRAVERSAL_STEPS)
+				return PASS_BVH_TRAVERSAL_STEPS;
+			break;
+		}
+#endif
 	}
 	
 	return PASS_NONE;
@@ -424,6 +432,9 @@ void BlenderSession::render()
 		/* add passes */
 		vector<Pass> passes;
 		Pass::add(PASS_COMBINED, passes);
+#ifdef WITH_CYCLES_DEBUG
+		Pass::add(PASS_BVH_TRAVERSAL_STEPS, passes);
+#endif
 
 		if(session_params.device.advanced_shading) {
 
@@ -826,7 +837,7 @@ void BlenderSession::update_status_progress()
 
 	if(background) {
 		if(progress>0)
-			remaining_time = (1-progress) * (total_time / progress);
+			remaining_time = (1.0 - (double)progress) * (total_time / (double)progress);
 
 		scene += " | " + b_scene.name();
 		if(b_rlay_name != "")
@@ -848,7 +859,7 @@ void BlenderSession::update_status_progress()
 		timestatus += "Remaining:" + string(time_str) + " | ";
 	}
 	
-	timestatus += string_printf("Mem:%.2fM, Peak:%.2fM", mem_used, mem_peak);
+	timestatus += string_printf("Mem:%.2fM, Peak:%.2fM", (double)mem_used, (double)mem_peak);
 
 	if(status.size() > 0)
 		status = " | " + status;

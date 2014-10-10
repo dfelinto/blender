@@ -15,39 +15,32 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  *
+ * The Original Code is Copyright (C) 2013 Blender Foundation.
+ * All rights reserved.
+ *
+ * The Original Code is: all of this file.
+ *
+ * Contributor(s): Jason Wilkins.
+ *
  * ***** END GPL LICENSE BLOCK *****
  */
 
-/** \file source/blender/freestyle/intern/python/StrokeShader/BPy_fstreamShader.h
- *  \ingroup freestyle
+/** \file blender/gpu/GPU_init_exit.h
+ *  \ingroup gpu
  */
 
-#ifndef __FREESTYLE_PYTHON_FSTREAMSHADER_H__
-#define __FREESTYLE_PYTHON_FSTREAMSHADER_H__
-
-#include "../BPy_StrokeShader.h"
+#ifndef __GPU_INIT_EXIT_H__
+#define __GPU_INIT_EXIT_H__
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-///////////////////////////////////////////////////////////////////////////////////////////
-
-extern PyTypeObject fstreamShader_Type;
-
-#define BPy_fstreamShader_Check(v) (PyObject_IsInstance((PyObject *)v, (PyObject *)&fstreamShader_Type))
-
-/*---------------------------Python BPy_fstreamShader structure definition----------*/
-typedef struct {
-	BPy_StrokeShader py_ss;
-} BPy_fstreamShader;
-
-
-///////////////////////////////////////////////////////////////////////////////////////////
+void GPU_init(void);
+void GPU_exit(void);
 
 #ifdef __cplusplus
 }
 #endif
 
-
-#endif /* __FREESTYLE_PYTHON_FSTREAMSHADER_H__ */
+#endif /* __GPU_INIT_EXIT_H__ */

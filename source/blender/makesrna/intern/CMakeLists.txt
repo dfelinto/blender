@@ -155,6 +155,9 @@ set(INC_SYS
 
 if(WITH_CYCLES)
 	add_definitions(-DWITH_CYCLES)
+	if(WITH_CYCLES_DEBUG)
+		add_definitions(-DWITH_CYCLES_DEBUG)
+	endif()
 endif()
 
 if(WITH_PYTHON)
@@ -265,6 +268,9 @@ if(WITH_BULLET)
 endif()
 
 if(WITH_FREESTYLE)
+	list(APPEND INC
+		../../freestyle
+	)
 	add_definitions(-DWITH_FREESTYLE)
 endif()
 
@@ -287,13 +293,14 @@ blender_include_dirs(
 	../../../../intern/audaspace/intern
 	../../../../intern/cycles/blender
 	../../../../intern/guardedalloc
+	../../../../intern/glew-mx
 	../../../../intern/atomic
 	../../../../intern/memutil
 	../../../../intern/smoke/extern
 )
 
 blender_include_dirs_sys(
-	${GLEW_INCLUDE_PATH}
+	"${GLEW_INCLUDE_PATH}"
 )
 
 add_executable(makesrna ${SRC} ${SRC_RNA_INC} ${SRC_DNA_INC})
@@ -321,5 +328,7 @@ set(SRC
 	rna_internal_types.h
 	rna_mesh_utils.h
 )
+
+add_definitions(${GL_DEFINITIONS})
 
 blender_add_lib(bf_rna "${SRC}" "${INC}" "${INC_SYS}")

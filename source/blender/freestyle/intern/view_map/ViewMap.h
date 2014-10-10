@@ -236,6 +236,9 @@ public:
 	/* connects a FEdge to the graph trough a SVertex */
 	//FEdge *Connect(FEdge *ioEdge, SVertex *ioVertex);
 
+	/* Clean temporary FEdges created by chaining */
+	virtual void Clean();
+
 #ifdef WITH_CXX_GUARDEDALLOC
 	MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:ViewMap")
 #endif
@@ -369,7 +372,6 @@ public:
 #ifdef WITH_CXX_GUARDEDALLOC
 	MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:ViewVertex")
 #endif
-
 };
 
 /**********************************/
@@ -642,7 +644,6 @@ public:
 #ifdef WITH_CXX_GUARDEDALLOC
 	MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:TVertex")
 #endif
-
 };
 
 
@@ -859,7 +860,6 @@ public:
 #ifdef WITH_CXX_GUARDEDALLOC
 	MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:NonTVertex")
 #endif
-
 };
 
 /**********************************/
@@ -1379,7 +1379,6 @@ public:
 #ifdef WITH_CXX_GUARDEDALLOC
 	MEM_CXX_CLASS_ALLOC_FUNCS("Freestyle:ViewEdge")
 #endif
-
 };
 
 

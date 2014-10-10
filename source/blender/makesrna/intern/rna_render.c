@@ -72,6 +72,9 @@ EnumPropertyItem render_pass_type_items[] = {
 	{SCE_PASS_SUBSURFACE_DIRECT, "SUBSURFACE_DIRECT", 0, "Subsurface Direct", ""},
 	{SCE_PASS_SUBSURFACE_INDIRECT, "SUBSURFACE_INDIRECT", 0, "Subsurface Indirect", ""},
 	{SCE_PASS_SUBSURFACE_COLOR, "SUBSURFACE_COLOR", 0, "Subsurface Color", ""},
+#ifdef WITH_CYCLES_DEBUG
+	{SCE_PASS_DEBUG, "DEBUG", 0, "Pass used for render engine debugging", ""},
+#endif
 	{0, NULL, 0, NULL, NULL}
 };
 
@@ -635,6 +638,10 @@ static void rna_def_render_engine(BlenderRNA *brna)
 	RNA_def_property_boolean_sdna(prop, NULL, "type->flag", RE_USE_PREVIEW);
 	RNA_def_property_flag(prop, PROP_REGISTER_OPTIONAL);
 
+	prop = RNA_def_property(srna, "bl_use_texture_preview", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "type->flag", RE_USE_TEXTURE_PREVIEW);
+	RNA_def_property_flag(prop, PROP_REGISTER_OPTIONAL);
+
 	prop = RNA_def_property(srna, "bl_use_postprocess", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_negative_sdna(prop, NULL, "type->flag", RE_USE_POSTPROCESS);
 	RNA_def_property_flag(prop, PROP_REGISTER_OPTIONAL);
@@ -764,6 +771,11 @@ static void rna_def_render_pass(BlenderRNA *brna)
 	StructRNA *srna;
 	PropertyRNA *prop;
 
+	static EnumPropertyItem render_pass_debug_type_items[] = {
+		{RENDER_PASS_DEBUG_BVH_TRAVERSAL_STEPS, "BVH_TRAVERSAL_STEPS", 0, "BVH Traversal Steps", ""},
+		{0, NULL, 0, NULL, NULL}
+	};
+
 	srna = RNA_def_struct(brna, "RenderPass", NULL);
 	RNA_def_struct_ui_text(srna, "Render Pass", "");
 
@@ -795,6 +807,11 @@ static void rna_def_render_pass(BlenderRNA *brna)
 
 	prop = RNA_def_property(srna, "view_id", PROP_INT, PROP_NONE);
 	RNA_def_property_int_sdna(prop, NULL, "view_id");
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+
+	prop = RNA_def_property(srna, "debug_type", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_sdna(prop, NULL, "debug_type");
+	RNA_def_property_enum_items(prop, render_pass_debug_type_items);
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 
 	RNA_define_verify_sdna(1);

@@ -72,11 +72,10 @@ static DerivedMesh *navmesh_dm_createNavMeshForVisualization(DerivedMesh *dm);
 
 #include "BLI_sys_types.h" /* for intptr_t support */
 
-#include "GL/glew.h"
-
 #include "GPU_buffers.h"
 #include "GPU_draw.h"
 #include "GPU_extensions.h"
+#include "GPU_glew.h"
 #include "GPU_material.h"
 
 /* very slow! enable for testing only! */
@@ -2603,8 +2602,6 @@ static void make_vertexcos__mapFunc(void *userData, int index, const float co[3]
 
 void mesh_get_mapped_verts_coords(DerivedMesh *dm, float (*r_cos)[3], const int totcos)
 {
-	float (*vertexcos)[3];
-
 	if (dm->foreachMappedVert) {
 		MappedUserData userData;
 		memset(r_cos, 0, sizeof(*r_cos) * totcos);
@@ -2616,7 +2613,7 @@ void mesh_get_mapped_verts_coords(DerivedMesh *dm, float (*r_cos)[3], const int 
 	else {
 		int i;
 		for (i = 0; i < totcos; i++) {
-			dm->getVertCo(dm, i, vertexcos[i]);
+			dm->getVertCo(dm, i, r_cos[i]);
 		}
 	}
 }

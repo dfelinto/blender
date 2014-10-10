@@ -142,6 +142,7 @@ struct wmWindowManager;
 #include "../../intern/dualcon/dualcon.h"
 #include "../../intern/elbeem/extern/elbeem.h"
 #include "../blender/blenkernel/BKE_modifier.h"
+#include "../blender/blenkernel/BKE_paint.h"
 #include "../blender/collada/collada.h"
 #include "../blender/compositor/COM_compositor.h"
 #include "../blender/editors/include/ED_armature.h"
@@ -168,6 +169,7 @@ struct wmWindowManager;
 #include "../blender/editors/include/UI_interface_icons.h"
 #include "../blender/editors/include/UI_resources.h"
 #include "../blender/editors/include/UI_view2d.h"
+#include "../blender/freestyle/FRS_freestyle.h"
 #include "../blender/python/BPY_extern.h"
 #include "../blender/render/extern/include/RE_engine.h"
 #include "../blender/render/extern/include/RE_pipeline.h"
@@ -219,6 +221,8 @@ void *g_system;
 float *RE_RenderLayerGetPass(volatile struct RenderLayer *rl, int passtype, const char *viewname) RET_NULL
 float RE_filter_value(int type, float x) RET_ZERO
 struct RenderLayer *RE_GetRenderLayer(struct RenderResult *rr, const char *name) RET_NULL
+void RE_init_texture_rng() RET_NONE
+void RE_exit_texture_rng() RET_NONE
 
 float *RE_RenderViewGetRectf(struct RenderResult *rr, int view_id) {STUB_ASSERT(0); return (float *) NULL;}
 float *RE_RenderViewGetRectz(struct RenderResult *rr, int view_id) {STUB_ASSERT(0); return (float *) NULL;}
@@ -236,6 +240,7 @@ void ibuf_sample(struct ImBuf *ibuf, float fx, float fy, float dx, float dy, flo
 
 /* Freestyle */
 bool ED_texture_context_check_linestyle(const struct bContext *C) RET_ZERO
+void FRS_free_view_map_cache(void) RET_NONE
 
 /* texture.c */
 int multitex_ext(struct Tex *tex, float texvec[3], float dxt[3], float dyt[3], int osatex, struct TexResult *texres, struct ImagePool *pool, bool scene_color_manage) RET_ZERO
@@ -253,6 +258,9 @@ struct Object *RE_GetCamera(struct Render *re) RET_NULL
 float RE_lamp_get_data(struct ShadeInput *shi, struct Object *lamp_obj, float col[4], float lv[3], float *dist, float shadow[4]) RET_ZERO
 
 /* blenkernel */
+bool BKE_paint_proj_mesh_data_check(struct Scene *scene, struct Object *ob, bool *uvs, bool *mat, bool *tex, bool *stencil) RET_ZERO
+
+/* render */
 void RE_FreeRenderResult(struct RenderResult *res) RET_NONE
 void RE_FreeAllRenderResults(void) RET_NONE
 struct RenderResult *RE_MultilayerConvert(void *exrhandle, const char *colorspace, bool predivide, int rectx, int recty) RET_NULL

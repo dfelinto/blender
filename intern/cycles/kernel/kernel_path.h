@@ -45,6 +45,10 @@
 #include "kernel_path_surface.h"
 #include "kernel_path_volume.h"
 
+#ifdef __KERNEL_DEBUG__
+#include "kernel_debug.h"
+#endif
+
 CCL_NAMESPACE_BEGIN
 
 ccl_device void kernel_path_indirect(KernelGlobals *kg, RNG *rng, Ray ray,
@@ -360,7 +364,7 @@ ccl_device void kernel_branched_path_ao(KernelGlobals *kg, ShaderData *sd, PathR
 
 #ifdef __SUBSURFACE__
 
-#  ifdef __VOLUME__
+#ifdef __VOLUME__
 ccl_device void kernel_path_subsurface_update_volume_stack(KernelGlobals *kg,
                                                            Ray *ray,
                                                            VolumeStack *stack)
@@ -369,29 +373,19 @@ ccl_device void kernel_path_subsurface_update_volume_stack(KernelGlobals *kg,
 
 	Ray volume_ray = *ray;
 	Intersection isect;
-	const float3 Pend = volume_ray.P + volume_ray.D*volume_ray.t;
 
-	while(
-		scene_intersect(kg, &volume_ray, PATH_RAY_ALL_VISIBILITY,
-		                &isect, NULL, 0.0f, 0.0f)) {
+	while(scene_intersect_volume(kg, &volume_ray, &isect))
+	{
 		ShaderData sd;
 		shader_setup_from_ray(kg, &sd, &isect, &volume_ray, 0, 0);
 		kernel_volume_stack_enter_exit(kg, &sd, stack);
 
 		/* Move ray forward. */
 		volume_ray.P = ray_offset(sd.P, -sd.Ng);
-		volume_ray.D = normalize_len(Pend - volume_ray.P,
-		                             &volume_ray.t);
-
-		/* TODO(sergey): Find a faster way detecting that ray_offset moved
-		 * us pass through the end point.
-		 */
-		if(dot(ray->D, volume_ray.D) < 0.0f) {
-			break;
-		}
+		volume_ray.t -= sd.ray_length;
 	}
 }
-#  endif
+#endif
 
 ccl_device bool kernel_path_subsurface_scatter(KernelGlobals *kg, ShaderData *sd, PathRadiance *L, PathState *state, RNG *rng, Ray *ray, float3 *throughput)
 {
@@ -411,6 +405,8 @@ ccl_device bool kernel_path_subsurface_scatter(KernelGlobals *kg, ShaderData *sd
 		int num_hits = subsurface_scatter_multi_step(kg, sd, bssrdf_sd, state->flag, sc, &lcg_state, bssrdf_u, bssrdf_v, false);
 #ifdef __VOLUME__
 		Ray volume_ray = *ray;
+		bool need_update_volume_stack = kernel_data.integrator.use_volumes &&
+		                                sd->flag & SD_OBJECT_INTERSECTS_VOLUME;
 #endif
 
 		/* compute lighting with the BSDF closure */
@@ -430,7 +426,7 @@ ccl_device bool kernel_path_subsurface_scatter(KernelGlobals *kg, ShaderData *sd
 #endif
 
 #ifdef __VOLUME__
-				if(kernel_data.integrator.use_volumes) {
+				if(need_update_volume_stack) {
 					/* Setup ray from previous surface point to the new one. */
 					volume_ray.D = normalize_len(hit_ray.P - volume_ray.P,
 					                             &volume_ray.t);
@@ -471,6 +467,11 @@ ccl_device float4 kernel_path_integrate(KernelGlobals *kg, RNG *rng, int sample,
 	PathState state;
 	path_state_init(kg, &state, rng, sample, &ray);
 
+#ifdef __KERNEL_DEBUG__
+	DebugData debug_data;
+	debug_data_init(&debug_data);
+#endif
+
 	/* path iteration */
 	for(;;) {
 		/* intersect scene */
@@ -495,6 +496,12 @@ ccl_device float4 kernel_path_integrate(KernelGlobals *kg, RNG *rng, int sample,
 		bool hit = scene_intersect(kg, &ray, visibility, &isect, &lcg_state, difl, extmax);
 #else
 		bool hit = scene_intersect(kg, &ray, visibility, &isect, NULL, 0.0f, 0.0f);
+#endif
+
+#ifdef __KERNEL_DEBUG__
+		if(state.flag & PATH_RAY_CAMERA) {
+			debug_data.num_bvh_traversal_steps += isect.num_traversal_steps;
+		}
 #endif
 
 #ifdef __LAMP_MIS__
@@ -717,6 +724,10 @@ ccl_device float4 kernel_path_integrate(KernelGlobals *kg, RNG *rng, int sample,
 
 	kernel_write_light_passes(kg, buffer, &L, sample);
 
+#ifdef __KERNEL_DEBUG__
+	kernel_write_debug_passes(kg, buffer, &state, &debug_data, sample);
+#endif
+
 	return make_float4(L_sum.x, L_sum.y, L_sum.z, 1.0f - L_transparent);
 }
 
@@ -800,9 +811,11 @@ ccl_device void kernel_branched_path_subsurface_scatter(KernelGlobals *kg,
 			float bssrdf_u, bssrdf_v;
 			path_branched_rng_2D(kg, &bssrdf_rng, state, j, num_samples, PRNG_BSDF_U, &bssrdf_u, &bssrdf_v);
 			int num_hits = subsurface_scatter_multi_step(kg, sd, bssrdf_sd, state->flag, sc, &lcg_state, bssrdf_u, bssrdf_v, true);
-#  ifdef __VOLUME__
+#ifdef __VOLUME__
 			Ray volume_ray = *ray;
-#  endif
+			bool need_update_volume_stack = kernel_data.integrator.use_volumes &&
+			                                sd->flag & SD_OBJECT_INTERSECTS_VOLUME;
+#endif
 
 			/* compute lighting with the BSDF closure */
 			for(int hit = 0; hit < num_hits; hit++) {
@@ -811,7 +824,7 @@ ccl_device void kernel_branched_path_subsurface_scatter(KernelGlobals *kg,
 				path_state_branch(&hit_state, j, num_samples);
 
 #ifdef __VOLUME__
-				if(kernel_data.integrator.use_volumes) {
+				if(need_update_volume_stack) {
 					/* Setup ray from previous surface point to the new one. */
 					float3 P = ray_offset(bssrdf_sd[hit].P, -bssrdf_sd[hit].Ng);
 					volume_ray.D = normalize_len(P - volume_ray.P,
@@ -860,6 +873,11 @@ ccl_device float4 kernel_branched_path_integrate(KernelGlobals *kg, RNG *rng, in
 	PathState state;
 	path_state_init(kg, &state, rng, sample, &ray);
 
+#ifdef __KERNEL_DEBUG__
+	DebugData debug_data;
+	debug_data_init(&debug_data);
+#endif
+
 	for(;;) {
 		/* intersect scene */
 		Intersection isect;
@@ -883,6 +901,12 @@ ccl_device float4 kernel_branched_path_integrate(KernelGlobals *kg, RNG *rng, in
 		bool hit = scene_intersect(kg, &ray, visibility, &isect, &lcg_state, difl, extmax);
 #else
 		bool hit = scene_intersect(kg, &ray, visibility, &isect, NULL, 0.0f, 0.0f);
+#endif
+
+#ifdef __KERNEL_DEBUG__
+		if(state.flag & PATH_RAY_CAMERA) {
+			debug_data.num_bvh_traversal_steps += isect.num_traversal_steps;
+		}
 #endif
 
 #ifdef __VOLUME__
@@ -1139,6 +1163,10 @@ ccl_device float4 kernel_branched_path_integrate(KernelGlobals *kg, RNG *rng, in
 	float3 L_sum = path_radiance_clamp_and_sum(kg, &L);
 
 	kernel_write_light_passes(kg, buffer, &L, sample);
+
+#ifdef __KERNEL_DEBUG__
+	kernel_write_debug_passes(kg, buffer, &state, &debug_data, sample);
+#endif
 
 	return make_float4(L_sum.x, L_sum.y, L_sum.z, 1.0f - L_transparent);
 }

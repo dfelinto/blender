@@ -1,3 +1,203 @@
+commit 0435246de5f45e69b2c97d244ed61bedd340215a
+Author: Sameer Agarwal <sameeragarwal@google.com>
+Date:   Wed Oct 8 18:12:53 2014 -0700
+
+    Add seene to users.rst
+    
+    Change-Id: If40726775a3d4b234b6e10517fe9943d122a3384
+
+commit fdf32b315f39553639f0becf078ad4eec763a10e
+Author: Sameer Agarwal <sameeragarwal@google.com>
+Date:   Wed Oct 8 16:04:32 2014 -0700
+
+    Fix some errant tabs.
+    
+    Change-Id: Iaf1906eaade49467ba282656cf0a10879d258b1f
+
+commit 6768b3586a027bb850c0a50e2a27380f5d80142a
+Author: Sameer Agarwal <sameeragarwal@google.com>
+Date:   Wed Oct 8 12:48:16 2014 -0700
+
+    Minor cleanups in preparation for a release.
+    
+    1. Fix the release script to ignore the version.h checking.
+    2. Fix some ceres documentation formatting errors.
+    
+    Change-Id: I3fd6b85e771b242f463d6a36c3efd8d691f9242f
+
+commit 7b6bd1cd31aa0b8cb7fb97600c1b9999846e3152
+Author: Sameer Agarwal <sameeragarwal@google.com>
+Date:   Thu Oct 2 16:16:26 2014 -0700
+
+    Documentation update.
+    
+    1. Complete restructuring of the documentation to account for
+       GradientProblemSolver.
+    2. Update the version history to account for changes since 1.9.0.
+    3. Add links and document the various examples that ship with ceres.
+    4. Documentation for GradientProblem GradientProblemSolver.
+    
+    Change-Id: If3a18f2850cbc98be1bc34435e9ea468785b8b27
+
+commit b7d321f505e936b6c09aeb43ae3f7b1252388a95
+Author: Sameer Agarwal <sameeragarwal@google.com>
+Date:   Fri Oct 3 15:47:59 2014 -0700
+
+    Relax the warning/error handing in GCC.
+    
+    Thanks to Matthew Woehlke for suggesting this.
+    
+    Change-Id: Iae754465c086b0841a7816df1a36781371d0dc9a
+
+commit 94c6e7d27b5d48d81ab54ed9cdcbc55c3c099311
+Author: Sameer Agarwal <sameeragarwal@google.com>
+Date:   Wed Oct 1 15:55:13 2014 -0700
+
+    Improve multithreading when using inner iterations.
+    
+    Inner iterations by default would use problems where the evaluator
+    was configured to use exactly one thread for doing the evaluation.
+    This is fine when there are multiple inner iteration problems
+    being executed concurrently, but every now and then there are
+    problem decompositions where there is just one parameter block
+    in the current independent set and it touches every single
+    residual block. In such cases it is essential that the evaluator
+    be configured to use multiple threads.
+    
+    We now pay attention to the size of the independent set and
+    dynamically configure the number of threads being used by the
+    outer loop and the evaluator loop.
+    
+    Thanks to William Rucklidge for reporting this issue and providing
+    a test problem to debug.
+    
+    Change-Id: Iaff9a4ab6d2658cf7b61ea213575d23aab604e3b
+
+commit 9e11cd16d09403b9270e621e839d5948b6a74b8d
+Author: Sameer Agarwal <sameeragarwal@google.com>
+Date:   Mon Sep 29 14:27:58 2014 -0700
+
+    Faster  BlockRandomAccessSparseMatrix::SymmetricRightMultiply.
+    
+    Trade a small amount of memory to improve the cache coherency of
+    the SymmetricRightMultiply operation.
+    
+    The resulting code leads to a 10-20% speedup in the linear solver
+    end to end.
+    
+    Change-Id: I8ab2fe152099e849b211b5b19e4ef9f03d8e7f1c
+
+commit 46b8461fd010c1e7ffce6bb2bdf8a84b659d5e09
+Author: Sameer Agarwal <sameeragarwal@google.com>
+Date:   Mon Sep 29 15:10:58 2014 -0700
+
+    Various minor fixes from William Rucklidge.
+    
+    Change-Id: Ibe731d5db374ad8ee148d62a9fdd8d726b607a3f
+
+commit b44cfdef25f6bf0917a23b3fd65cce38aa6a3362
+Author: Sameer Agarwal <sameeragarwal@google.com>
+Date:   Mon Sep 29 07:53:54 2014 -0700
+
+    Let ITERATIVE_SCHUR use an explicit Schur Complement matrix.
+    
+    Up till now ITERATIVE_SCHUR evaluates matrix-vector products
+    between the Schur complement and a vector implicitly by exploiting
+    the algebraic expression for the Schur complement.
+    
+    This cost of this evaluation scales with the number of non-zeros
+    in the Jacobian.
+    
+    For small to medium sized problems there is a sweet spot where
+    computing the Schur complement is cheap enough that it is much
+    more efficient to explicitly compute it and use it for evaluating
+    the matrix-vector products.
+    
+    This changes implements support for an explicit Schur complement
+    in ITERATIVE_SCHUR in combination with the SCHUR_JACOBI preconditioner.
+    
+    API wise a new bool Solver::Options::use_explicit_schur_complement
+    has been added.
+    
+    The implementation extends the SparseSchurComplementSolver to use
+    Conjugate Gradients.
+    
+    Example speedup:
+    
+    use_explicit_schur_complement = false
+    
+    Time (in seconds):
+    Preprocessor                            0.585
+    
+      Residual evaluation                   0.319
+      Jacobian evaluation                   1.590
+      Linear solver                        25.685
+    Minimizer                              27.990
+    
+    Postprocessor                           0.010
+    Total                                  28.585
+    
+    use_explicit_schur_complement = true
+    
+    Time (in seconds):
+    Preprocessor                            0.638
+    
+      Residual evaluation                   0.318
+      Jacobian evaluation                   1.507
+      Linear solver                         5.930
+    Minimizer                               8.144
+    
+    Postprocessor                           0.010
+    Total                                   8.791
+    
+    Which indicates an end-to-end speedup of more than 3x, with the linear
+    solver being sped up by > 4x.
+    
+    The idea to explore this optimization was inspired by the recent paper:
+    
+    Mining structure fragments for smart bundle adjustment
+    L. Carlone, P. Alcantarilla, H. Chiu, K. Zsolt, F. Dellaert
+    British Machine Vision Conference, 2014
+    
+    which uses a more complicated algorithm to compute parts of the
+    Schur complement to speed up the matrix-vector product.
+    
+    Change-Id: I95324af0ab351faa1600f5204039a1d2a64ae61d
+
+commit 4ad91490827f2ebebcc70d17e63ef653bf06fd0d
+Author: Sameer Agarwal <sameeragarwal@google.com>
+Date:   Wed Sep 24 23:54:18 2014 -0700
+
+    Simplify the Block Jacobi and Schur Jacobi preconditioners.
+    
+    1. Extend the implementation of BlockRandomAccessDiagonalMatrix
+    by adding Invert and RightMultiply methods.
+    
+    2. Simplify the implementation of the Schur Jacobi preconditioner
+    using these new methods.
+    
+    3. Replace the custom storage used inside Block Jacobi preconditioner
+    with BlockRandomAccessDiagonalMatrix and simplify its implementation
+    too.
+    
+    Change-Id: I9d4888b35f0f228c08244abbdda5298b3ce9c466
+
+commit 8f7be1036b853addc33224d97b92412b5a1281b6
+Author: Sameer Agarwal <sameeragarwal@google.com>
+Date:   Mon Sep 29 08:13:35 2014 -0700
+
+    Fix a formatting error TrustRegionMinimizer logging.
+    
+    Change-Id: Iad1873c51eece46c3fdee1356d154367cfd7925e
+
+commit c99872d48e322662ea19efb9010a62b7432687ae
+Author: Sameer Agarwal <sameeragarwal@google.com>
+Date:   Wed Sep 24 21:30:02 2014 -0700
+
+    Add BlockRandomAccessSparseMatrix::SymmetricRightMultiply.
+    
+    Change-Id: Ib06a22a209b4c985ba218162dfb6bf46bd93169e
+
 commit d3ecd18625ba260e0d00912a305a448b566acc59
 Author: Sameer Agarwal <sameeragarwal@google.com>
 Date:   Tue Sep 23 10:12:42 2014 -0700
@@ -471,182 +671,3 @@ Date:   Thu Jun 5 21:30:13 2014 -0700
        solve.
     
     Change-Id: I80f35cfc9f2cbf78f1df4aceace27075779d8a3a
-
-commit bd90384226a7f8629467f72fc410a9e8086a2dff
-Author: Sameer Agarwal <sameeragarwal@google.com>
-Date:   Mon Aug 18 11:27:06 2014 -0700
-
-    Lint comments from William Rucklidge.
-    
-    Also some minor refactoring of the trust_region_preprocessor_test.cc
-    
-    Change-Id: Ica28002254c95722faf93a7ef35bf3deab557f0b
-
-commit 3150321db4a0cb1bb4894961a030d95dacae3591
-Author: Sameer Agarwal <sameeragarwal@google.com>
-Date:   Tue Aug 12 22:46:51 2014 -0700
-
-    Preprocessor for the LineSearchMinimizer.
-    
-    Change-Id: Ieb5dfe1c0b96ef323c1130edd0c3a8a8b2c644cc
-
-commit f7da411ef0d0067e269629887d64cdb769368800
-Author: Sameer Agarwal <sameeragarwal@google.com>
-Date:   Thu Aug 7 14:30:33 2014 -0700
-
-    Preprocessor for the TrustRegionMinimizer.
-    
-    1. Base class for preprocessors.
-    2. A preprocessor for problems that will be solved using
-       the trust region minimizer.
-    3. Added sanity tests to the program reordering options
-       for Schur type linear solvers.
-    4. Tests for the TrustRegionPreprocessor.
-    
-    Change-Id: I88cd926f0053bbbf2bd6b11e03ec55b8bf473cf1
-
-commit 54893ba523106e38ab06eb72fb5d8748685c7797
-Author: Alex Stewart <alexs.mac@gmail.com>
-Date:   Mon Aug 11 19:04:18 2014 +0100
-
-    Add missing #include of <limits> for loss functions.
-    
-    Change-Id: Id632451429e03031a1533a9be795270debc70706
-
-commit 4a2a888905fd1ce7203e45df15762d52740bb240
-Author: Sameer Agarwal <sameeragarwal@google.com>
-Date:   Thu Aug 7 11:48:03 2014 -0700
-
-    Change ownership of pointers in Minimizer::Options.
-    
-    This is a intermediate change to clean things up
-    in preparation for a broader refactoring of the SolverImpl.
-    
-    Essentially we are replacing raw pointers in Minimizer::Options
-    with shared_ptr objects. For now this only makes things a bit
-    more complicated looking inside solver_impl.cc, but going
-    forward this will lead to considerable simplifications in
-    tracking ownership of various pointers.
-    
-    Change-Id: I21db8fc6763c29b0d15e834d7c968a0f514042a0
-
-commit 0d4e3bd664d442b700fee2895c7a8ac37717dc08
-Author: Sameer Agarwal <sameeragarwal@google.com>
-Date:   Thu Aug 7 12:19:10 2014 -0700
-
-    GradientCheckingProblem's parameter blocks are initialized correctly.
-    
-    Ensure that when a new problem object is constructed for validing
-    gradients, the parameter blocks have their data pointers point to
-    the user's parameter blocks.
-    
-    We used to do this inside solver_impl.cc, but doing this at
-    construction is the right thing to do.
-    
-    Change-Id: I3bfdc89bb0027c8d67cde937e8f2fa385d89c30c
-
-commit cfb36463f9c1f806121779d651c7105ad899bb20
-Author: Sameer Agarwal <sameeragarwal@google.com>
-Date:   Tue Aug 5 14:42:33 2014 -0700
-
-    Small fixes from William Rucklidge.
-    
-    Change-Id: I0be52f0f1e53cedccffe4807dc664a2f3fb4a8e4
-
-commit 9a41132a0523af407b53644c07900f86aa6fceac
-Author: Sameer Agarwal <sameeragarwal@google.com>
-Date:   Mon Aug 4 22:45:53 2014 -0700
-
-    Small changes from Jim Roseborough.
-    
-    Change-Id: Ic8b19ea5c5f4f8fd782eb4420b30514153087d18
-
-commit a521fc3afc11425b46992388a83ef07017d02ac9
-Author: Sameer Agarwal <sameeragarwal@google.com>
-Date:   Fri Aug 1 08:27:35 2014 -0700
-
-    Simplify, cleanup and instrument SchurComplementSolver.
-    
-    The instrumentation revealed that EIGEN_SPARSE can be upto
-    an order of magnitude slower than CX_SPARSE on some bundle
-    adjustment problems.
-    
-    The problem comes down to the quality of AMD ordering that
-    CXSparse/Eigen implements. It does particularly badly
-    on the Schur complement. In the CXSparse implementation
-    we got around this by considering the block sparsity structure
-    and computing the AMD ordering on it and lifting it to the
-    full matrix.
-    
-    This is currently not possible with the release version of
-    Eigen, as the support for using preordered/natural orderings
-    is in the master branch but has not been released yet.
-    
-    Change-Id: I25588d3e723e50606f327db5759f174f58439e29
-
-commit b43e73a03485f0fd0fe514e356ad8925731d3a81
-Author: Sameer Agarwal <sameeragarwal@google.com>
-Date:   Fri Aug 1 12:09:09 2014 -0700
-
-    Simplify the Eigen code in SparseNormalCholeskySolver.
-    
-    Simplifying some of the template handling, and remove the use
-    of SelfAdjointView as it is not needed. The solver itself takes
-    an argument for where the data is actually stored.
-    
-    The performance of SparseNormalCholesky with EIGEN_SPARSE
-    seems to be on par with CX_SPARSE.
-    
-    Change-Id: I69e22a144b447c052b6cbe59ef1aa33eae2dd9e3
-
-commit 031598295c6b2f061c171b9b2338919f41b7eb0b
-Author: Sameer Agarwal <sameeragarwal@google.com>
-Date:   Thu Jul 17 14:35:18 2014 -0700
-
-    Enable Eigen as sparse linear algebra library.
-    
-    SPARSE_NORMAL_CHOLESKY and SPARSE_SCHUR can now be used
-    with EIGEN_SPARSE as the backend.
-    
-    The performance is not as good as CXSparse. This needs to be
-    investigated. Is it because the quality of AMD ordering that
-    we are computing is not as good as the one for CXSparse? This
-    could be because we are working with the scalar matrix instead
-    of the block matrix.
-    
-    Also, the upper/lower triangular story is not completely clear.
-    Both of these issues will be benchmarked and tackled in the
-    near future.
-    
-    Also included in this change is a bunch of cleanup to the
-    SparseNormalCholeskySolver and SparseSchurComplementSolver
-    classes around the use of the of defines used to conditionally
-    compile out parts of the code.
-    
-    The system_test has been updated to test EIGEN_SPARSE also.
-    
-    Change-Id: I46a57e9c4c97782696879e0b15cfc7a93fe5496a
-
-commit 1b17145adf6aa0072db2989ad799e90313970ab3
-Author: Sameer Agarwal <sameeragarwal@google.com>
-Date:   Wed Jul 30 10:14:15 2014 -0700
-
-    Make canned loss functions more robust.
-    
-    The loss functions that ship with ceres can sometimes
-    generate a zero first derivative if the residual is too
-    large.
-    
-    In such cases Corrector fails with an ugly undebuggable
-    crash. This CL is the first in a series of fixes to
-    take care of this.
-    
-    We clamp the values of rho' from below by
-    numeric_limits<double>::min().
-    
-    Also included here is some minor cleanup where the constants
-    are treated as doubles rather than integers.
-    
-    Thanks to Pierre Moulon for reporting this problem.
-    
-    Change-Id: I3aaf375303ecc2659bbf6fb56a812e7dc3a41106

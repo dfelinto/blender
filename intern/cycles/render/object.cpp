@@ -75,8 +75,14 @@ void Object::compute_bounds(bool motion_blur)
 			bounds.grow(mbounds.transformed(&ttfm));
 		}
 	}
-	else
-		bounds = mbounds.transformed(&tfm);
+	else {
+		if(mesh->transform_applied) {
+			bounds = mbounds;
+		}
+		else {
+			bounds = mbounds.transformed(&tfm);
+		}
+	}
 }
 
 void Object::apply_transform(bool apply_to_motion)
@@ -372,8 +378,6 @@ void ObjectManager::device_update(Device *device, DeviceScene *dscene, Scene *sc
 	
 	device_free(device, dscene);
 
-	need_update = false;
-
 	if(scene->objects.size() == 0)
 		return;
 
@@ -391,6 +395,46 @@ void ObjectManager::device_update(Device *device, DeviceScene *dscene, Scene *sc
 	if(scene->params.bvh_type == SceneParams::BVH_STATIC) {
 		progress.set_status("Updating Objects", "Applying Static Transformations");
 		apply_static_transforms(dscene, scene, object_flag, progress);
+	}
+}
+
+void ObjectManager::device_update_flags(Device *device, DeviceScene *dscene,
+                                        Scene *scene, Progress& progress)
+{
+	if(!need_update)
+		return;
+
+	need_update = false;
+
+	if(scene->objects.size() == 0)
+		return;
+
+	/* object info flag */
+	uint *object_flag = dscene->object_flag.get_data();
+
+	vector<Object *> volume_objects;
+	foreach(Object *object, scene->objects) {
+		if(object->mesh->has_volume) {
+			volume_objects.push_back(object);
+		}
+	}
+
+	int object_index = 0;
+	foreach(Object *object, scene->objects) {
+		if(object->mesh->has_volume) {
+			object_flag[object_index] |= SD_OBJECT_HAS_VOLUME;
+		}
+
+		foreach(Object *volume_object, volume_objects) {
+			if(object == volume_object) {
+				continue;
+			}
+			if(object->bounds.intersects(volume_object->bounds)) {
+				object_flag[object_index] |= SD_OBJECT_INTERSECTS_VOLUME;
+				break;
+			}
+		}
+		++object_index;
 	}
 
 	/* allocate object flag */

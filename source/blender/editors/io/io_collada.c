@@ -96,7 +96,9 @@ static int wm_collada_export_exec(bContext *C, wmOperator *op)
 	int use_object_instantiation;
 	int sort_by_name;
 	int export_transformation_type;
-	int open_sim; 
+	int open_sim;
+
+	int export_count;
 
 	if (!RNA_struct_property_is_set(op->ptr, "filepath")) {
 		BKE_report(op->reports, RPT_ERROR, "No filename given");
@@ -148,33 +150,36 @@ static int wm_collada_export_exec(bContext *C, wmOperator *op)
 	ED_object_editmode_load(CTX_data_edit_object(C));
 
 
+	export_count = collada_export(CTX_data_scene(C),
+		filepath,
+		apply_modifiers,
+		export_mesh_type,
+		selected,
+		include_children,
+		include_armatures,
+		include_shapekeys,
+		deform_bones_only,
 
-	if (collada_export(CTX_data_scene(C),
-	                   filepath,
-	                   apply_modifiers,
-	                   export_mesh_type,
-	                   selected,
-	                   include_children,
-	                   include_armatures,
-	                   include_shapekeys,
-	                   deform_bones_only,
+		active_uv_only,
+		include_uv_textures,
+		include_material_textures,
+		use_texture_copies,
 
-	                   active_uv_only,
-	                   include_uv_textures,
-	                   include_material_textures,
-	                   use_texture_copies,
+		triangulate,
+		use_object_instantiation,
+		sort_by_name,
+		export_transformation_type,
+		open_sim);
 
-	                   triangulate,
-	                   use_object_instantiation,
-	                   sort_by_name,
-	                   export_transformation_type,
-	                   open_sim))
-	{
-		return OPERATOR_FINISHED;
+	if (export_count == 0) {
+		BKE_report(op->reports, RPT_WARNING, "Export file is empty");
+		return OPERATOR_CANCELLED;
 	}
 	else {
-		BKE_report(op->reports, RPT_WARNING, "Export file not created");
-		return OPERATOR_CANCELLED;
+		char buff[100];
+		sprintf(buff, "Exported %d Objects", export_count);
+		BKE_report(op->reports, RPT_INFO, buff);
+		return OPERATOR_FINISHED;
 	}
 }
 
@@ -350,8 +355,8 @@ void WM_OT_collada_export(wmOperatorType *ot)
 	RNA_def_enum(ot->srna, "export_transformation_type_selection", prop_bc_export_transformation_type, 0,
 	             "Transform", "Transformation type for translation, scale and rotation");
 
-	RNA_def_boolean(ot->srna, "open_sim", 0, "Export for OpenSim",
-	                "Compatibility mode for OpenSim and compatible online worlds");
+	RNA_def_boolean(ot->srna, "open_sim", 0, "Export to SL/OpenSim",
+	                "Compatibility mode for SL, OpenSim and other compatible online worlds");
 }
 
 

@@ -35,139 +35,73 @@
 
 CCL_NAMESPACE_BEGIN
 
-/* Approximate erf and erfinv implementations
+/* Approximate erf and erfinv implementations.
+ * Implementation comes straight from Wikipedia:
  *
- * Adapted from code (C) Copyright John Maddock 2006.
- * Use, modification and distribution are subject to the
- * Boost Software License, Version 1.0. (See accompanying file
- * LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt) */
+ * http://en.wikipedia.org/wiki/Error_function
+ *
+ * Some constants are baked into the code.
+ */
 
-ccl_device float approx_erff_impl(float z)
+ccl_device_inline float approx_erff_do(float x)
 {
-	float result;
-
-	if(z < 0.5f) {
-		if(z < 1e-10f) {
-			if(z == 0) {
-				result = 0;
-			}
-			else {
-				float c = 0.0033791670f;
-				result = z * 1.125f + z * c;
-			}
-		}
-		else {
-			float Y = 1.044948577f;
-
-			float zz = z * z;
-			float num = (((-0.007727583f * zz) + -0.050999073f)*zz + -0.338165134f)*zz + 0.083430589f;
-			float denom = (((0.000370900f * zz) + 0.008585719f)*zz + 0.087522260f)*zz + 0.455004033f;
-			result = z * (Y + num / denom);
-		}
+	/* Such a clamp doesn't give much distortion to the output value
+	 * and gives quite a few of the speedup.
+	 */
+	if(x > 3.0f) {
+		return 1.0f;
 	}
-	else if(z < 2.5f) {
-		if(z < 1.5f) {
-			float Y = 0.4059357643f;
-			float fz = z - 0.5f;
-
-			float num = (((0.088890036f * fz) + 0.191003695f)*fz + 0.178114665f)*fz + -0.098090592f;
-			float denom = (((0.123850974f * fz) + 0.578052804f)*fz + 1.426280048f)*fz + 1.847590709f;
-
-			result = Y + num / denom;
-			result *= expf(-z * z) / z;
-		}
-		else  {
-			float Y = 0.506728172f;
-			float fz = z - 1.5f;
-			float num = (((0.017567943f * fz) + 0.043948189f)*fz + 0.038654037f)*fz + -0.024350047f;
-			float denom = (((0.325732924f * fz) + 0.982403709f)*fz + 1.539914949f)*fz + 1;
-
-			result = Y + num / denom;
-			result *= expf(-z * z) / z;
-		}
-
-		result = 1 - result;
-	}
-	else {
-		result = 1;
-	}
-
-	return result;
+	float t = 1.0f / (1.0f + 0.47047f*x);
+	return  (1.0f -
+	         t*(0.3480242f + t*(-0.0958798f + t*0.7478556f)) * expf(-x*x));
 }
 
-ccl_device float approx_erff(float z)
+ccl_device_inline float approx_erff(float x)
 {
-	float s = 1.0f;
-
-	if(z < 0.0f) {
-		s = -1.0f;
-		z = -z;
-	}
-
-	return s * approx_erff_impl(z);
-}
-
-ccl_device float approx_erfinvf_impl(float p, float q)
-{
-	float result = 0;
-
-	if(p <= 0.5f) {
-		float Y = 0.089131474f;
-		float g = p * (p + 10);
-		float num = (((-0.012692614f * p) + 0.033480662f)*p + -0.008368748f)*p + -0.000508781f;
-		float denom = (((1.562215583f * p) + -1.565745582f)*p + -0.970005043f)*p + 1.0f;
-		float r = num / denom;
-		result = g * Y + g * r;
-	}
-	else if(q >= 0.25f) {
-		float Y = 2.249481201f;
-		float g = sqrtf(-2 * logf(q));
-		float xs = q - 0.25f;
-		float num = (((17.644729840f * xs) + 8.370503283f)*xs + 0.105264680f)*xs + -0.202433508f;
-		float denom = (((-28.660818049f * xs) + 3.971343795f)*xs + 6.242641248f)*xs + 1.0f;
-		float r = num / denom;
-		result = g / (Y + r);
+	if(x >= 0.0f) {
+		return approx_erff_do(x);
 	}
 	else {
-		float x = sqrtf(-logf(q));
-
-		if(x < 3) {
-			float Y = 0.807220458f;
-			float xs = x - 1.125f;
-			float num = (((0.387079738f * xs) + 0.117030156f)*xs + -0.163794047f)*xs + -0.131102781f;
-			float denom = (((4.778465929f * xs) + 5.381683457f)*xs + 3.466254072f)*xs + 1.0f;
-			float R = num / denom;
-			result = Y * x + R * x;
-		}
-		else {
-			float Y = 0.939955711f;
-			float xs = x - 3;
-			float num = (((0.009508047f * xs) + 0.018557330f)*xs + -0.002224265f)*xs + -0.035035378f;
-			float denom = (((0.220091105f * xs) + 0.762059164f)*xs + 1.365334981f)*xs + 1.0f;
-			float R = num / denom;
-			result = Y * x + R * x;
-		}
+		return -approx_erff_do(-x);
 	}
-
-	return result;
 }
 
-ccl_device float approx_erfinvf(float z)
+ccl_device_inline float approx_erfinvf_do(float x)
 {
-	float p, q, s;
-
-	if(z < 0) {
-	  p = -z;
-	  q = 1 - p;
-	  s = -1;
+	if(x <= 0.7f) {
+		const float x2 = x * x;
+		const float a1 =  0.886226899f;
+		const float a2 = -1.645349621f;
+		const float a3 =  0.914624893f;
+		const float a4 = -0.140543331f;
+		const float b1 = -2.118377725f;
+		const float b2 =  1.442710462f;
+		const float b3 = -0.329097515f;
+		const float b4 =  0.012229801f;
+		return x * (((a4 * x2 + a3) * x2 + a2) * x2 + a1) /
+		          ((((b4 * x2 + b3) * x2 + b2) * x2 + b1) * x2 + 1.0f);
 	}
 	else {
-	  p = z;
-	  q = 1 - z;
-	  s = 1;
+		const float c1 = -1.970840454f;
+		const float c2 = -1.624906493f;
+		const float c3 =  3.429567803f;
+		const float c4 =  1.641345311f;
+		const float d1 =  3.543889200f;
+		const float d2 =  1.637067800f;
+		const float z = sqrtf(-logf((1.0f - x) * 0.5f));
+		return (((c4 * z + c3) * z + c2) * z + c1) /
+		        ((d2 * z + d1) * z + 1.0f);
 	}
+}
 
-	return s * approx_erfinvf_impl(p, q);
+ccl_device_inline float approx_erfinvf(float x)
+{
+	if(x >= 0.0f) {
+		return approx_erfinvf_do(x);
+	}
+	else {
+		return -approx_erfinvf_do(-x);
+	}
 }
 
 /* Beckmann and GGX microfacet importance sampling from:
