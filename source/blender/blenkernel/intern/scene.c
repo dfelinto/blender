@@ -2189,6 +2189,16 @@ SceneRenderView *BKE_scene_render_view_findindex(const RenderData *rd, const int
 	return srv;
 }
 
+const char *BKE_scene_render_view_name(const RenderData *rd, const int view_id)
+{
+	SceneRenderView *srv = BKE_scene_render_view_findindex(rd, view_id);
+
+	if (srv)
+		return srv->name;
+	else
+		return "";
+}
+
 size_t BKE_scene_view_get_id(const RenderData *rd, const char *viewname)
 {
 	SceneRenderView *srv;

@@ -57,7 +57,7 @@ void draw_image_seq(const struct bContext *C, struct Scene *scene, struct  ARegi
 /* UNUSED */
 // void seq_reset_imageofs(struct SpaceSeq *sseq);
 
-struct ImBuf *sequencer_ibuf_get(struct Main *bmain, struct Scene *scene, struct SpaceSeq *sseq, int cfra, int frame_ofs);
+struct ImBuf *sequencer_ibuf_get(struct Main *bmain, struct Scene *scene, struct SpaceSeq *sseq, int cfra, int frame_ofs, const char *viewname);
 
 /* sequencer_edit.c */
 struct View2D;

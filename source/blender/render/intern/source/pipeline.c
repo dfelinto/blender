@@ -395,9 +395,9 @@ void RE_AcquireResultImage(Render *re, RenderResult *rr, const int view_id)
 			if (rv == NULL)
 				rv = (RenderView *)re->result->views.first;
 
-			rr->rectf = rv?rv->rectf:NULL;
-			rr->rectz = rv?rv->rectz:NULL;
-			rr->rect32 = rv?rv->rect32:NULL;
+			rr->rectf =  rv ? rv->rectf  : NULL;
+			rr->rectz =  rv ? rv->rectz  : NULL;
+			rr->rect32 = rv ? rv->rect32 : NULL;
 
 			/* active layer */
 			rl = render_get_active_layer(re, re->result);
@@ -430,9 +430,9 @@ void RE_ReleaseResultImage(Render *re)
 void RE_ResultGet32(Render *re, unsigned int *rect)
 {
 	RenderResult rres;
+	const size_t view_id = BKE_scene_view_get_id(&re->r, re->viewname);
 
-	/* XXX MV SEQ to deal with that once SEQ is tackled */
-	RE_AcquireResultImage(re, &rres, 0);
+	RE_AcquireResultImage(re, &rres, view_id);
 	render_result_rect_get_pixels(&rres, rect, re->rectx, re->recty, &re->scene->view_settings, &re->scene->display_settings, 0);
 	RE_ReleaseResultImage(re);
 }
@@ -2506,6 +2506,8 @@ static void do_render_seq(Render *re)
 	RenderResult *rr; /* don't assign re->result here as it might change during give_ibuf_seq */
 	int cfra = re->r.cfra;
 	SeqRenderData context;
+	size_t view_id;
+	RenderView *rv;
 
 	re->i.cfra = cfra;
 
@@ -2527,40 +2529,52 @@ static void do_render_seq(Render *re)
 		                                        re->result->rectx, re->result->recty, 100);
 	}
 
-	out = BKE_sequencer_give_ibuf(&context, cfra, 0);
-
-	if (out) {
-		ibuf = IMB_dupImBuf(out);
-		IMB_freeImBuf(out);
-		BKE_sequencer_imbuf_from_sequencer_space(re->scene, ibuf);
-	}
-	else {
-		ibuf = NULL;
-	}
-
-	recurs_depth--;
-
 	rr = re->result;
-	
+
 	BLI_rw_mutex_lock(&re->resultmutex, THREAD_LOCK_WRITE);
-
-	if (ibuf) {
-		/* copy ibuf into combined pixel rect */
-		render_result_rect_from_ibuf(rr, &re->r, ibuf);
-		
-		if (recurs_depth == 0) { /* with nested scenes, only free on toplevel... */
-			Editing *ed = re->scene->ed;
-			if (ed)
-				BKE_sequencer_free_imbuf(re->scene, &ed->seqbase, true);
-		}
-		IMB_freeImBuf(ibuf);
-	}
-	else {
-		/* render result is delivered empty in most cases, nevertheless we handle all cases */
-		render_result_rect_fill_zero(rr);
-	}
-
+	render_result_views_new(rr, &re->r);
 	BLI_rw_mutex_unlock(&re->resultmutex);
+
+	for (view_id = 0, rv = (RenderView *) rr->views.first; rv; rv = rv->next, view_id++) {
+		RE_SetActiveRenderView(re, rv->name);
+		context.view_id = view_id;
+
+		out = BKE_sequencer_give_ibuf(&context, cfra, 0);
+
+		if (out) {
+			ibuf = IMB_dupImBuf(out);
+			IMB_freeImBuf(out);
+			BKE_sequencer_imbuf_from_sequencer_space(re->scene, ibuf);
+		}
+		else {
+			ibuf = NULL;
+		}
+
+		recurs_depth--;
+
+		BLI_rw_mutex_lock(&re->resultmutex, THREAD_LOCK_WRITE);
+
+		if (ibuf) {
+			/* copy ibuf into combined pixel rect */
+			render_result_rect_from_ibuf(rr, &re->r, ibuf, view_id);
+
+			if (recurs_depth == 0) { /* with nested scenes, only free on toplevel... */
+				Editing *ed = re->scene->ed;
+				if (ed)
+					BKE_sequencer_free_imbuf(re->scene, &ed->seqbase, true);
+			}
+			IMB_freeImBuf(ibuf);
+		}
+		else {
+			/* render result is delivered empty in most cases, nevertheless we handle all cases */
+			render_result_rect_fill_zero(rr, view_id);
+		}
+
+		BLI_rw_mutex_unlock(&re->resultmutex);
+
+		/* would mark display buffers as invalid */
+		re->display_update(re->duh, re->result, NULL, re->viewname);
+	}
 
 	/* just in case this flag went missing at some point */
 	re->r.scemode |= R_DOSEQ;
@@ -2570,9 +2584,6 @@ static void do_render_seq(Render *re)
 		re->progress(re->prh, (float)(cfra - re->r.sfra) / (re->r.efra - re->r.sfra));
 	else
 		re->progress(re->prh, 1.0f);
-
-	/* would mark display buffers as invalid */
-	re->display_update(re->duh, re->result, NULL, re->viewname);
 }
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */

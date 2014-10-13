@@ -789,6 +789,12 @@ static void wm_method_draw_triple_multiview(bContext *C, wmWindow *win, StereoVi
 				}
 				break;
 			}
+			case SPACE_SEQ:
+			{
+				SpaceSeq *sseq = sa->spacedata.first;
+				sseq->eye = sview;
+				break;
+			}
 		}
 
 		/* draw marked area regions */

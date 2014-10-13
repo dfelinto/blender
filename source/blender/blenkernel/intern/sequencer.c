@@ -515,6 +515,7 @@ SeqRenderData BKE_sequencer_new_render_data(EvaluationContext *eval_ctx,
 	rval.eval_ctx = eval_ctx;
 	rval.skip_cache = false;
 	rval.is_proxy_render = false;
+	rval.view_id = 0;
 
 	return rval;
 }
@@ -2555,6 +2556,7 @@ static ImBuf *seq_render_scene_strip(const SeqRenderData *context, Sequence *seq
 		char err_out[256] = "unknown";
 		int width = (scene->r.xsch * scene->r.size) / 100;
 		int height = (scene->r.ysch * scene->r.size) / 100;
+		const char *viewname = BKE_scene_render_view_name(&scene->r, context->view_id);
 
 		/* for old scened this can be uninitialized,
 		 * should probably be added to do_versions at some point if the functionality stays */
@@ -2566,7 +2568,7 @@ static ImBuf *seq_render_scene_strip(const SeqRenderData *context, Sequence *seq
 		ibuf = sequencer_view3d_cb(scene, camera, width, height, IB_rect,
 		                           context->scene->r.seq_prev_type,
 		                           (context->scene->r.seq_flag & R_SEQ_SOLID_TEX) != 0,
-		                           true, scene->r.alphamode, err_out);
+		                           true, scene->r.alphamode, err_out, viewname);
 		if (ibuf == NULL) {
 			fprintf(stderr, "seq_render_scene_strip failed to get opengl buffer: %s\n", err_out);
 		}
@@ -2587,6 +2589,7 @@ static ImBuf *seq_render_scene_strip(const SeqRenderData *context, Sequence *seq
 			if (re == NULL)
 				re = RE_NewRender(scene->id.name);
 
+			RE_SetActiveRenderView(re, BKE_scene_render_view_name(&scene->r, context->view_id));
 			BKE_scene_update_for_newframe(context->eval_ctx, context->bmain, scene, scene->lay);
 			RE_BlenderFrame(re, context->bmain, scene, NULL, camera, scene->lay, frame, false);
 
@@ -2594,8 +2597,7 @@ static ImBuf *seq_render_scene_strip(const SeqRenderData *context, Sequence *seq
 			G.is_rendering = is_rendering;
 		}
 		
-		/* XXX MV SEQ */
-		RE_AcquireResultImage(re, &rres, 0);
+		RE_AcquireResultImage(re, &rres, context->view_id);
 		
 		if (rres.rectf) {
 			ibuf = IMB_allocImBuf(rres.rectx, rres.recty, 32, IB_rectfloat);

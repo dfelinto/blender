@@ -62,6 +62,22 @@
 
 /********************************** Free *************************************/
 
+static void render_result_views_free(RenderResult *res)
+{
+	while (res->views.first) {
+		RenderView *rv = res->views.first;
+		BLI_remlink(&res->views, rv);
+
+		if (rv->rectf)
+			MEM_freeN(rv->rectf);
+
+		if (rv->rectz)
+			MEM_freeN(rv->rectz);
+
+		MEM_freeN(rv);
+	}
+}
+
 void render_result_free(RenderResult *res)
 {
 	if (res == NULL) return;
@@ -83,19 +99,8 @@ void render_result_free(RenderResult *res)
 		BLI_remlink(&res->layers, rl);
 		MEM_freeN(rl);
 	}
-	
-	while (res->views.first) {
-		RenderView *rv = res->views.first;
-		BLI_remlink(&res->views, rv);
 
-		if (rv->rectf)
-			MEM_freeN(rv->rectf);
-
-		if (rv->rectz)
-			MEM_freeN(rv->rectz);
-
-		MEM_freeN(rv);
-	}
+	render_result_views_free(res);
 
 	if (res->rect32)
 		MEM_freeN(res->rect32);
@@ -550,7 +555,6 @@ RenderResult *render_result_new(Render *re, rcti *partrct, int crop, int savebuf
 	RenderLayer *rl;
 	RenderView *rv;
 	SceneRenderLayer *srl;
-	SceneRenderView *srv;
 	int rectx, recty;
 	int nr, i;
 	
@@ -577,23 +581,7 @@ RenderResult *render_result_new(Render *re, rcti *partrct, int crop, int savebuf
 		rr->do_exr_tile = true;
 	}
 
-	/* check renderdata for amount of views */
-	if ((re->r.scemode & R_MULTIVIEW)) {
-		for (srv = re->r.views.first; srv; srv = srv->next) {
-			if (BKE_scene_render_view_active(&re->r, srv) == false) continue;
-
-			rv = MEM_callocN(sizeof(RenderView), "new render view");
-			BLI_addtail(&rr->views, rv);
-
-			BLI_strncpy(rv->name, srv->name, sizeof(rv->name));
-		}
-	}
-
-	/* we always need at least one view */
-	if (BLI_countlist(&rr->views) == 0) {
-		rv = MEM_callocN(sizeof(RenderView), "new render view");
-		BLI_addtail(&rr->views, rv);
-	}
+	render_result_views_new(rr, &re->r);
 
 	/* check renderdata for amount of layers */
 	for (nr = 0, srl = re->r.layers.first; srl; srl = srl->next, nr++) {
@@ -918,6 +906,33 @@ RenderResult *render_result_new_from_exr(void *exrhandle, const char *colorspace
 	}
 	
 	return rr;
+}
+
+void render_result_views_new(RenderResult *rr, RenderData *rd)
+{
+	SceneRenderView *srv;
+	RenderView *rv;
+
+	/* clear previously existing views - for sequencer */
+	render_result_views_free(rr);
+
+	/* check renderdata for amount of views */
+	if ((rd->scemode & R_MULTIVIEW)) {
+		for (srv = rd->views.first; srv; srv = srv->next) {
+			if (BKE_scene_render_view_active(rd, srv) == false) continue;
+
+			rv = MEM_callocN(sizeof(RenderView), "new render view");
+			BLI_addtail(&rr->views, rv);
+
+			BLI_strncpy(rv->name, srv->name, sizeof(rv->name));
+		}
+	}
+
+	/* we always need at least one view */
+	if (BLI_countlist(&rr->views) == 0) {
+		rv = MEM_callocN(sizeof(RenderView), "new render view");
+		BLI_addtail(&rr->views, rv);
+	}
 }
 
 /*********************************** Merge ***********************************/
@@ -1479,43 +1494,60 @@ ImBuf *render_result_rect_to_ibuf(RenderResult *rr, RenderData *rd, const int vi
 	return ibuf;
 }
 
-void render_result_rect_from_ibuf(RenderResult *rr, RenderData *UNUSED(rd), ImBuf *ibuf)
+void render_result_rect_from_ibuf(RenderResult *rr, RenderData *UNUSED(rd), ImBuf *ibuf, const int view_id)
 {
+	RenderView *rv = BLI_findlink(&rr->views, view_id);
+
 	if (ibuf->rect_float) {
-		if (!rr->rectf)
-			rr->rectf = MEM_mallocN(4 * sizeof(float) * rr->rectx * rr->recty, "render_seq rectf");
+		if (!rv->rectf)
+			rv->rectf = MEM_mallocN(4 * sizeof(float) * rr->rectx * rr->recty, "render_seq rectf");
 		
-		memcpy(rr->rectf, ibuf->rect_float, 4 * sizeof(float) * rr->rectx * rr->recty);
+		memcpy(rv->rectf, ibuf->rect_float, 4 * sizeof(float) * rr->rectx * rr->recty);
 
 		/* TSK! Since sequence render doesn't free the *rr render result, the old rect32
 		 * can hang around when sequence render has rendered a 32 bits one before */
+		if (rv->rect32) {
+			MEM_freeN(rv->rect32);
+			rv->rect32 = NULL;
+		}
+	}
+	else if (ibuf->rect) {
+		if (!rv->rect32)
+			rv->rect32 = MEM_mallocN(sizeof(int) * rr->rectx * rr->recty, "render_seq rect");
+
+		memcpy(rv->rect32, ibuf->rect, 4 * rr->rectx * rr->recty);
+
+		/* Same things as above, old rectf can hang around from previous render. */
+		if (rv->rectf) {
+			MEM_freeN(rv->rectf);
+			rv->rectf = NULL;
+		}
+	}
+
+	/* clean up non-view buffers */
+	if (rr) {
+		if (rr->rectf) {
+			MEM_freeN(rr->rectf);
+			rr->rectf = NULL;
+		}
+
 		if (rr->rect32) {
 			MEM_freeN(rr->rect32);
 			rr->rect32 = NULL;
 		}
 	}
-	else if (ibuf->rect) {
-		if (!rr->rect32)
-			rr->rect32 = MEM_mallocN(sizeof(int) * rr->rectx * rr->recty, "render_seq rect");
-
-		memcpy(rr->rect32, ibuf->rect, 4 * rr->rectx * rr->recty);
-
-		/* Same things as above, old rectf can hang around from previous render. */
-		if (rr->rectf) {
-			MEM_freeN(rr->rectf);
-			rr->rectf = NULL;
-		}
-	}
 }
 
-void render_result_rect_fill_zero(RenderResult *rr)
+void render_result_rect_fill_zero(RenderResult *rr, const int view_id)
 {
-	if (rr->rectf)
-		memset(rr->rectf, 0, 4 * sizeof(float) * rr->rectx * rr->recty);
-	else if (rr->rect32)
-		memset(rr->rect32, 0, 4 * rr->rectx * rr->recty);
+	RenderView *rv = BLI_findlink(&rr->views, view_id);
+
+	if (rv->rectf)
+		memset(rv->rectf, 0, 4 * sizeof(float) * rr->rectx * rr->recty);
+	else if (rv->rect32)
+		memset(rv->rect32, 0, 4 * rr->rectx * rr->recty);
 	else
-		rr->rect32 = MEM_callocN(sizeof(int) * rr->rectx * rr->recty, "render_seq rect");
+		rv->rect32 = MEM_callocN(sizeof(int) * rr->rectx * rr->recty, "render_seq rect");
 }
 
 void render_result_rect_get_pixels(RenderResult *rr, unsigned int *rect, int rectx, int recty,
@@ -1566,63 +1598,44 @@ bool RE_RenderResult_is_stereo(RenderResult *res)
 
 void RE_RenderViewSetRectf(RenderResult *res, const int view_id, float *rect)
 {
-	RenderView *rv;
-	size_t nr = 0;
-
-	for (nr = 0, rv = res->views.first; rv; rv = rv->next, nr++) {
-		if (nr == view_id) {
-			rv->rectf = rect;
-			return;
-		}
+	RenderView *rv = BLI_findlink(&res->views, view_id);
+	if (rv) {
+		rv->rectf = rect;
 	}
 }
 
 void RE_RenderViewSetRectz(RenderResult *res, const int view_id, float *rect)
 {
-	RenderView *rv;
-	size_t nr = 0;
-
-	for (nr = 0, rv = res->views.first; rv; rv = rv->next, nr++) {
-		if (nr == view_id) {
-			rv->rectz = rect;
-			return;
-		}
+	RenderView *rv = BLI_findlink(&res->views, view_id);
+	if (rv) {
+		rv->rectz = rect;
 	}
 }
 
 float *RE_RenderViewGetRectz(RenderResult *res, const int view_id)
 {
-	RenderView *rv;
-	size_t nr = 0;
-
-	for (nr = 0, rv = res->views.first; rv; rv = rv->next, nr++)
-		if (nr == view_id)
-			return rv->rectz;
-
+	RenderView *rv = BLI_findlink(&res->views, view_id);
+	if (rv) {
+		return rv->rectz;
+	}
 	return res->rectz;
 }
 
 float *RE_RenderViewGetRectf(RenderResult *res, const int view_id)
 {
-	RenderView *rv;
-	size_t nr = 0;
-
-	for (nr = 0, rv = res->views.first; rv; rv = rv->next, nr++)
-		if (nr == view_id)
-			return rv->rectf;
-
+	RenderView *rv = BLI_findlink(&res->views, view_id);
+	if (rv) {
+		return rv->rectf;
+	}
 	return res->rectf;
 }
 
 int *RE_RenderViewGetRect32(RenderResult *res, const int view_id)
 {
-	RenderView *rv;
-	size_t nr;
-
-	for (nr = 0, rv = res->views.first; rv; rv = rv->next, nr++)
-		if (nr == view_id)
-			return rv->rect32;
-
+	RenderView *rv = BLI_findlink(&res->views, view_id);
+	if (rv) {
+		return rv->rect32;
+	}
 	return res->rect32;
 }
 

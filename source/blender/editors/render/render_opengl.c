@@ -131,10 +131,10 @@ static bool screen_opengl_is_multiview(OGLRender *oglrender)
 	RegionView3D *rv3d = oglrender->rv3d;
 	RenderData *rd = &oglrender->scene->r;
 
-	if ((rd == NULL) || (rv3d == NULL) || (v3d == NULL))
+	if ((rd == NULL) || ((!oglrender->is_sequencer) && ((rv3d == NULL) || (v3d == NULL))))
 		return false;
 
-	return (rd->scemode & R_MULTIVIEW) && rv3d->persp == RV3D_CAMOB && v3d->camera;
+	return (rd->scemode & R_MULTIVIEW) && ((oglrender->is_sequencer) || (rv3d->persp == RV3D_CAMOB && v3d->camera));
 }
 
 static void screen_opengl_views_setup(OGLRender *oglrender)
@@ -174,7 +174,9 @@ static void screen_opengl_views_setup(OGLRender *oglrender)
 		}
 	}
 	else {
-		RE_SetOverrideCamera(oglrender->re, V3D_CAMERA_SCENE(oglrender->scene, v3d));
+		if (!oglrender->is_sequencer)
+			RE_SetOverrideCamera(oglrender->re, V3D_CAMERA_SCENE(oglrender->scene, v3d));
+
 		/* remove all the views that are not needed */
 		rv = rr->views.last;
 		while (rv) {
@@ -261,6 +263,7 @@ static void screen_opengl_render_doit(OGLRender *oglrender, RenderResult *rr)
 		context = BKE_sequencer_new_render_data(oglrender->bmain->eval_ctx, oglrender->bmain,
 		                                        scene, oglrender->sizex, oglrender->sizey, 100.0f);
 
+		context.view_id = BKE_scene_view_get_id(&scene->r, viewname);
 		ibuf = BKE_sequencer_give_ibuf(&context, CFRA, chanshown);
 
 		if (ibuf) {
@@ -387,7 +390,7 @@ static void screen_opengl_render_doit(OGLRender *oglrender, RenderResult *rr)
 		char err_out[256] = "unknown";
 		ImBuf *ibuf_view = ED_view3d_draw_offscreen_imbuf_simple(scene, scene->camera, oglrender->sizex, oglrender->sizey,
 		                                                         IB_rect, OB_SOLID, false, true,
-		                                                         (draw_sky) ? R_ADDSKY : R_ALPHAPREMUL, err_out);
+		                                                         (draw_sky) ? R_ADDSKY : R_ALPHAPREMUL, err_out, viewname);
 		camera = scene->camera;
 
 		if (ibuf_view) {

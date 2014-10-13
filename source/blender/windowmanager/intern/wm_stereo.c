@@ -391,6 +391,7 @@ static bool wm_stereo3d_required(const bContext *C, bScreen *screen)
 	View3D *v3d;
 	SpaceImage *sima;
 	SpaceNode *snode;
+	SpaceSeq *sseq;
 	Scene *sce = CTX_data_scene(C);
 	const bool is_multiview = (sce->r.scemode & R_MULTIVIEW);
 
@@ -435,6 +436,15 @@ static bool wm_stereo3d_required(const bContext *C, bScreen *screen)
 				snode = (SpaceNode *) sa->spacedata.first;
 				if ((snode->flag & SNODE_BACKDRAW) && ED_node_is_compositor(snode)) {
 					return true;
+				}
+				break;
+			}
+			case SPACE_SEQ:
+			{
+				if (is_multiview) {
+					sseq = (SpaceSeq *) sa->spacedata.first;
+					if (ELEM(sseq->view, SEQ_VIEW_PREVIEW, SEQ_VIEW_SEQUENCE_PREVIEW))
+						return true;
 				}
 				break;
 			}

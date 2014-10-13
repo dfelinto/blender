@@ -60,6 +60,8 @@ struct RenderResult *render_result_new_full_sample(struct Render *re,
 
 struct RenderResult *render_result_new_from_exr(void *exrhandle, const char *colorspace, bool predivide, int rectx, int recty);
 
+void render_result_views_new(struct RenderResult *rr, struct RenderData *rd);
+
 /* Merge */
 
 void render_result_merge(struct RenderResult *rr, struct RenderResult *rrpart);
@@ -94,9 +96,9 @@ bool render_result_exr_file_cache_read(struct Render *re);
 
 struct ImBuf *render_result_rect_to_ibuf(struct RenderResult *rr, struct RenderData *rd, const int view_id);
 void render_result_rect_from_ibuf(struct RenderResult *rr, struct RenderData *rd,
-	struct ImBuf *ibuf);
+	struct ImBuf *ibuf, const int view_id);
 
-void render_result_rect_fill_zero(struct RenderResult *rr);
+void render_result_rect_fill_zero(struct RenderResult *rr, const int view_id);
 void render_result_rect_get_pixels(struct RenderResult *rr,
 	unsigned int *rect, int rectx, int recty,
 	const struct ColorManagedViewSettings *view_settings,
