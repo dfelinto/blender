@@ -2188,6 +2188,23 @@ static void wm_event_drag_test(wmWindowManager *wm, wmWindow *win, wmEvent *even
 	
 }
 
+/* filter out all events of the pie that spawned the last pie unless it's a release event */
+static bool wm_event_pie_filter(wmWindow *win, wmEvent *event)
+{
+	if (win->lock_pie_event && win->lock_pie_event == event->type) {
+		if (event->val == KM_RELEASE) {
+			win->lock_pie_event = EVENT_NONE;
+			return false;
+		}
+		else {
+			return true;
+		}
+	}
+	else {
+		return false;
+	}
+}
+
 /* called in main loop */
 /* goes over entire hierarchy:  events -> window -> screen -> area -> region */
 void wm_event_do_handlers(bContext *C)
@@ -2251,9 +2268,21 @@ void wm_event_do_handlers(bContext *C)
 				WM_event_print(event);
 			}
 #endif
-			
+
+			/* take care of pie event filter */
+			if (wm_event_pie_filter(win, event)) {
+#ifndef NDEBUG
+				if (G.debug & (G_DEBUG_HANDLERS | G_DEBUG_EVENTS) && !ELEM(event->type, MOUSEMOVE, INBETWEEN_MOUSEMOVE)) {
+					printf("\n%s: event filtered due to pie button pressed\n", __func__);
+				}
+#endif
+				BLI_remlink(&win->queue, event);
+				wm_event_free(event);
+				continue;
+			}
+
 			CTX_wm_window_set(C, win);
-			
+
 			/* we let modal handlers get active area/region, also wm_paintcursor_test needs it */
 			CTX_wm_area_set(C, area_event_inside(C, &event->x));
 			CTX_wm_region_set(C, region_event_inside(C, &event->x));
@@ -2262,6 +2291,7 @@ void wm_event_do_handlers(bContext *C)
 			wm_window_make_drawable(wm, win);
 			
 			wm_region_mouse_co(C, event);
+
 
 			/* first we do priority handlers, modal + some limited keymaps */
 			action |= wm_handlers_do(C, event, &win->modalhandlers);

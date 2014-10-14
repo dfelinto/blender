@@ -490,12 +490,12 @@ static void widget_draw_tria_ex(
 	minsize = min_ii(BLI_rcti_size_x(rect), BLI_rcti_size_y(rect));
 
 	/* center position and size */
-	centx = (float)rect->xmin + 0.5f * minsize;
+	centx = (float)rect->xmin + 0.4f * minsize;
 	centy = (float)rect->ymin + 0.5f * minsize;
 	sizex = sizey = -0.5f * triasize * minsize;
 
 	if (where == 'r') {
-		centx = (float)rect->xmax - 0.5f * minsize;
+		centx = (float)rect->xmax - 0.4f * minsize;
 		sizex = -sizex;
 	}
 	else if (where == 't') {
@@ -3873,6 +3873,14 @@ void ui_draw_pie_center(uiBlock *block)
 	glColor4ubv((GLubyte *)btheme->tui.wcol_pie_menu.outline);
 	glutil_draw_lined_arc(0.0f, (float)M_PI * 2.0f, pie_radius_internal, subd);
 	glutil_draw_lined_arc(0.0f, (float)M_PI * 2.0f, pie_radius_external, subd);
+
+	if (U.pie_menu_confirm > 0 && !(block->pie_data.flags & (UI_PIE_INVALID_DIR | UI_PIE_CLICK_STYLE))) {
+		float pie_confirm_radius = U.pixelsize * (pie_radius_internal + U.pie_menu_confirm);
+		float pie_confirm_external = U.pixelsize * (pie_radius_internal + U.pie_menu_confirm + 7.0f);
+
+		glColor4ub(btheme->tui.wcol_pie_menu.text_sel[0], btheme->tui.wcol_pie_menu.text_sel[1], btheme->tui.wcol_pie_menu.text_sel[2], 64);
+		draw_disk_shaded(angle - range / 2.0f, range, pie_confirm_radius, pie_confirm_external, subd, NULL, NULL, false);
+	}
 
 	glDisable(GL_BLEND);
 	glPopMatrix();

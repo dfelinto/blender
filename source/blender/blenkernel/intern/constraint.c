@@ -2613,6 +2613,8 @@ static void stretchto_new_data(void *cdata)
 	data->plane = 0;
 	data->orglength = 0.0; 
 	data->bulge = 1.0;
+	data->bulge_max = 1.0f;
+	data->bulge_min = 1.0f;
 }
 
 static void stretchto_id_looper(bConstraint *con, ConstraintIDFunc func, void *userdata)
@@ -2658,7 +2660,7 @@ static void stretchto_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *t
 	if (VALID_CONS_TARGET(ct)) {
 		float size[3], scale[3], vec[3], xx[3], zz[3], orth[3];
 		float totmat[3][3];
-		float dist;
+		float dist, bulge;
 		
 		/* store scaling before destroying obmat */
 		mat4_to_size(size, cob->matrix);
@@ -2676,7 +2678,7 @@ static void stretchto_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *t
 /*		vec[2] /= size[2];*/
 		
 /*		dist = normalize_v3(vec);*/
-		
+
 		dist = len_v3v3(cob->matrix[3], ct->matrix[3]);
 		/* Only Y constrained object axis scale should be used, to keep same length when scaling it. */
 		dist /= size[1];
@@ -2684,23 +2686,49 @@ static void stretchto_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *t
 		/* data->orglength==0 occurs on first run, and after 'R' button is clicked */
 		if (data->orglength == 0)
 			data->orglength = dist;
-		if (data->bulge == 0)
-			data->bulge = 1.0;
-		
+
 		scale[1] = dist / data->orglength;
+		
+		bulge = powf(data->orglength / dist, data->bulge);
+		
+		if (bulge > 1.0f) {
+			if (data->flag & STRETCHTOCON_USE_BULGE_MAX) {
+				float bulge_max = max_ff(data->bulge_max, 1.0f);
+				float hard = min_ff(bulge, bulge_max);
+				
+				float range = bulge_max - 1.0f;
+				float scale = (range > 0.0f) ? 1.0f / range : 0.0f;
+				float soft = 1.0f + range * atanf((bulge - 1.0f) * scale) / (0.5f * M_PI);
+				
+				bulge = interpf(soft, hard, data->bulge_smooth);
+			}
+		}
+		if (bulge < 1.0f) {
+			if (data->flag & STRETCHTOCON_USE_BULGE_MIN) {
+				float bulge_min = CLAMPIS(data->bulge_max, 0.0f, 1.0f);
+				float hard = max_ff(bulge, bulge_min);
+				
+				float range = 1.0f - bulge_min;
+				float scale = (range > 0.0f) ? 1.0f / range : 0.0f;
+				float soft = 1.0f - range * atanf((1.0f - bulge) * scale) / (0.5f * M_PI);
+				
+				bulge = interpf(soft, hard, data->bulge_smooth);
+			}
+		}
+		
 		switch (data->volmode) {
 			/* volume preserving scaling */
 			case VOLUME_XZ:
-				scale[0] = 1.0f - sqrtf(data->bulge) + sqrtf(data->bulge * (data->orglength / dist));
+				scale[0] = sqrtf(bulge);
 				scale[2] = scale[0];
 				break;
 			case VOLUME_X:
-				scale[0] = 1.0f + data->bulge * (data->orglength / dist - 1);
+				scale[0] = bulge;
 				scale[2] = 1.0;
 				break;
 			case VOLUME_Z:
 				scale[0] = 1.0;
-				scale[2] = 1.0f + data->bulge * (data->orglength / dist - 1);
+				scale[2] = bulge;
 				break;
 			/* don't care for volume */
 			case NO_VOLUME:

@@ -7736,7 +7736,7 @@ void draw_object(Scene *scene, ARegion *ar, View3D *v3d, Base *base, const short
 	}
 
 	/* draw code for smoke */
-	if ((md = modifiers_findByType(ob, eModifierType_Smoke))) {
+	if ((md = modifiers_findByType(ob, eModifierType_Smoke)) && (modifier_isEnabled(scene, md, eModifierMode_Realtime))) {
 		SmokeModifierData *smd = (SmokeModifierData *)md;
 
 		// draw collision objects

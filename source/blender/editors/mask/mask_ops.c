@@ -510,6 +510,7 @@ static bool spline_under_mouse_get(const bContext *C,
                                    MaskLayer **mask_layer_r,
                                    MaskSpline **mask_spline_r)
 {
+	const float threshold = 19.0f;
 	ScrArea *sa = CTX_wm_area(C);
 	SpaceClip *sc = CTX_wm_space_clip(C);
 	MaskLayer *mask_layer;
@@ -580,10 +581,18 @@ static bool spline_under_mouse_get(const bContext *C,
 			}
 		}
 	}
-	/* TODO(sergey): Chech whether tesellated spline point is closer
-	 * to the mouse than the spline center.
-	 */
-	if (closest_dist_squared < 32.0f * 32.0f && closest_spline != NULL) {
+	if (closest_dist_squared < SQUARE(threshold) && closest_spline != NULL) {
+		float diff_score;
+		if (ED_mask_find_nearest_diff_point(C, mask, co, threshold,
+		                                    false, NULL, true, false,
+		                                    NULL, NULL, NULL, NULL,
+		                                    &diff_score))
+		{
+			if (SQUARE(diff_score) < closest_dist_squared) {
+				return false;
+			}
+		}
+
 		*mask_layer_r = closest_layer;
 		*mask_spline_r = closest_spline;
 		return true;
@@ -1167,7 +1176,7 @@ static bool slide_spline_curvature_check(bContext *C, const wmEvent *event)
 {
 	Mask *mask = CTX_data_edit_mask(C);
 	float co[2];
-	const float threshold = 19;
+	const float threshold = 19.0f;
 
 	ED_mask_mouse_pos(CTX_wm_area(C), CTX_wm_region(C), event->mval, co);
 
@@ -1185,7 +1194,7 @@ static bool slide_spline_curvature_check(bContext *C, const wmEvent *event)
 static SlideSplineCurvatureData *slide_spline_curvature_customdata(
 	bContext *C, const wmEvent *event)
 {
-	const float threshold = 19;
+	const float threshold = 19.0f;
 
 	Mask *mask = CTX_data_edit_mask(C);
 	SlideSplineCurvatureData *slide_data;
@@ -1198,8 +1207,9 @@ static SlideSplineCurvatureData *slide_spline_curvature_customdata(
 	ED_mask_mouse_pos(CTX_wm_area(C), CTX_wm_region(C), event->mval, co);
 
 	if (!ED_mask_find_nearest_diff_point(C, mask, co, threshold, false,
+	                                     NULL, true, false,
 	                                     &mask_layer, &spline, &point, &u,
-	                                     NULL, true, false))
+	                                     NULL))
 	{
 		return NULL;
 	}

@@ -605,7 +605,7 @@ static void node_draw_reroute(const bContext *C, ARegion *ar, SpaceNode *UNUSED(
 static int node_tweak_area_reroute(bNode *node, int x, int y)
 {
 	/* square of tweak radius */
-	static const float tweak_radius_sq = 576;  /* 24 * 24 */
+	const float tweak_radius_sq = SQUARE(24);
 	
 	bNodeSocket *sock = node->inputs.first;
 	float dx = sock->locx - x;
@@ -3493,7 +3493,7 @@ void node_draw_link(View2D *v2d, SpaceNode *snode, bNodeLink *link)
 {
 	bool do_shaded = false;
 	bool do_triple = false;
-	int th_col1 = TH_HEADER, th_col2 = TH_HEADER, th_col3 = TH_WIRE;
+	int th_col1 = TH_SYNTAX_R, th_col2 = TH_SYNTAX_R, th_col3 = TH_WIRE;
 	
 	if (link->fromsock == NULL && link->tosock == NULL)
 		return;

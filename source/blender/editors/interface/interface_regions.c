@@ -2709,8 +2709,14 @@ static float uiPieTitleWidth(const char *name, int icon)
 
 uiPieMenu *uiPieMenuBegin(struct bContext *C, const char *title, int icon, const wmEvent *event)
 {
-	uiStyle *style = UI_GetStyleDraw();
-	uiPieMenu *pie = MEM_callocN(sizeof(uiPopupMenu), "pie menu");
+	uiStyle *style;
+	uiPieMenu *pie;
+	short event_type;
+
+	wmWindow *win = CTX_wm_window(C);
+
+	style = UI_GetStyleDraw();
+	pie = MEM_callocN(sizeof(uiPopupMenu), "pie menu");
 
 	pie->block_radial = uiBeginBlock(C, NULL, __func__, UI_EMBOSS);
 	/* may be useful later to allow spawning pies
@@ -2718,11 +2724,29 @@ uiPieMenu *uiPieMenuBegin(struct bContext *C, const char *title, int icon, const
 	/* pie->block_radial->flag |= UI_BLOCK_POPUP_MEMORY; */
 	pie->block_radial->puphash = ui_popup_menu_hash(title);
 	pie->block_radial->flag |= UI_BLOCK_RADIAL;
-	pie->block_radial->pie_data.event = event->type;
 
 	/* if pie is spawned by a left click, it is always assumed to be click style */
 	if (event->type == LEFTMOUSE) {
-		pie->block_radial->flag |= UI_PIE_CLICK_STYLE;
+		pie->block_radial->pie_data.flags |= UI_PIE_CLICK_STYLE;
+		pie->block_radial->pie_data.event = EVENT_NONE;
+		win->lock_pie_event = EVENT_NONE;
+	}
+	else {
+		if (win->last_pie_event != EVENT_NONE) {
+			/* original pie key has been released, so don't propagate the event */
+			if (win->lock_pie_event == EVENT_NONE) {
+				event_type = EVENT_NONE;
+				pie->block_radial->pie_data.flags |= UI_PIE_CLICK_STYLE;
+			}
+			else
+				event_type = win->last_pie_event;
+		}
+		else {
+			event_type = event->type;
+		}
+
+		pie->block_radial->pie_data.event = event_type;
+		win->lock_pie_event = event_type;
 	}
 
 	pie->layout = uiBlockLayout(pie->block_radial, UI_LAYOUT_VERTICAL, UI_LAYOUT_PIEMENU, 0, 0, 200, 0, 0, style);
@@ -2837,6 +2861,7 @@ void uiPieEnumInvoke(struct bContext *C, const char *title, const char *path,
 	}
 
 	pie = uiPieMenuBegin(C, IFACE_(title), ICON_NONE, event);
+
 	layout = uiPieMenuLayout(pie);
 
 	layout = uiLayoutRadial(layout);

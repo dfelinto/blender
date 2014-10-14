@@ -308,7 +308,7 @@ bool WM_init_game(bContext *C)
 
 		/* full screen the area */
 		if (!sa->full) {
-			ED_screen_full_toggle(C, win, sa);
+			ED_screen_state_toggle(C, win, sa, SCREENMAXIMIZED);
 		}
 
 		/* Fullscreen */
@@ -419,9 +419,9 @@ void WM_exit_ext(bContext *C, const bool do_python)
 				has_edited = ED_editors_flush_edits(C, false);
 
 				if ((has_edited && BLO_write_file(CTX_data_main(C), filename, fileflags, NULL, NULL)) ||
-					BKE_undo_save_file(filename))
+				    BKE_undo_save_file(filename))
 				{
-						printf("Saved session recovery to '%s'\n", filename);
+					printf("Saved session recovery to '%s'\n", filename);
 				}
 			}
 		}

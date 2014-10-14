@@ -36,6 +36,10 @@
 #ifdef _WIN32
 #  include <GL/wglew.h> // only for symbolic constants, do not use API functions
 #  include <tchar.h>
+#
+#  ifndef ERROR_PROFILE_DOES_NOT_MATCH_DEVICE
+#    define ERROR_PROFILE_DOES_NOT_MATCH_DEVICE 0x7E7 // Mingw64 headers may have had this
+#  endif
 #endif
 
 #include <cstdio>
@@ -111,17 +115,17 @@ bool win32_chk(bool result, const char *file, int line, const char *text)
 #ifndef NDEBUG
 		_ftprintf(
 			stderr,
-			"%s(%d):[%s] -> Win32 Error# (%d): %s",
+			"%s(%d):[%s] -> Win32 Error# (%lu): %s",
 			file,
 			line,
 			text,
-			error,
+			(unsigned long)error,
 			msg);
 #else
 		_ftprintf(
 			stderr,
-			"Win32 Error# (%d): %s",
-			error,
+			"Win32 Error# (%lu): %s",
+			(unsigned long)error,
 			msg);
 #endif
 
