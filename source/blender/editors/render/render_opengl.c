@@ -251,7 +251,6 @@ static void screen_opengl_render_doit(OGLRender *oglrender, RenderResult *rr)
 	bool draw_bgpic = true;
 	bool draw_sky = (scene->r.alphamode == R_ADDSKY);
 	unsigned char *rect = NULL;
-	const bool is_multiview = screen_opengl_is_multiview(oglrender);
 	const char *viewname = RE_GetActiveRenderView(oglrender->re);
 
 	if (oglrender->is_sequencer) {

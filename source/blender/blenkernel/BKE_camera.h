@@ -125,6 +125,7 @@ void BKE_camera_view_matrix(struct RenderData *rd, struct Object *camera, const 
 void BKE_camera_model_matrix(struct RenderData *rd, struct Object *camera, const char *viewname, float r_modelmat[4][4]);
 struct Object *BKE_camera_render(struct Scene *scene, struct Object *camera, const char *viewname);
 float BKE_camera_shift_x(struct RenderData *rd, struct Object *camera, const char *viewname);
+void BKE_camera_params_stereo3d(struct RenderData *rd, struct CameraParams *params, struct Object *camera, const char *viewname);
 #ifdef __cplusplus
 }
 #endif

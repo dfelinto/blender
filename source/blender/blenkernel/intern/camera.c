@@ -841,3 +841,7 @@ float BKE_camera_shift_x(RenderData *rd, Object *camera, const char *viewname)
 	}
 }
 
+void BKE_camera_params_stereo3d(RenderData *rd, CameraParams *params, Object *camera, const char *viewname)
+{
+	params->shiftx = BKE_camera_shift_x(rd, camera, viewname);
+}

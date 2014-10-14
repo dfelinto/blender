@@ -2946,12 +2946,14 @@ ImBuf *ED_view3d_draw_offscreen_imbuf(Scene *scene, View3D *v3d, ARegion *ar, in
 	/* render 3d view */
 	if (rv3d->persp == RV3D_CAMOB && v3d->camera) {
 		CameraParams params;
+		Object *camera = BKE_camera_render(scene, v3d->camera, viewname);
 
 		BKE_camera_params_init(&params);
 		/* fallback for non camera objects */
 		params.clipsta = v3d->near;
 		params.clipend = v3d->far;
-		BKE_camera_params_from_object(&params, v3d->camera);
+		BKE_camera_params_from_object(&params, camera);
+		BKE_camera_params_stereo3d(&scene->r, &params, camera, viewname);
 		BKE_camera_params_compute_viewplane(&params, sizex, sizey, scene->r.xasp, scene->r.yasp);
 		BKE_camera_params_compute_matrix(&params);
 
@@ -3011,9 +3013,11 @@ ImBuf *ED_view3d_draw_offscreen_imbuf_simple(Scene *scene, Object *camera, int w
 
 	{
 		CameraParams params;
+		Object *camera = BKE_camera_render(scene, v3d.camera, viewname);
 
 		BKE_camera_params_init(&params);
-		BKE_camera_params_from_object(&params, v3d.camera);
+		BKE_camera_params_from_object(&params, camera);
+		BKE_camera_params_stereo3d(&scene->r, &params, camera, viewname);
 		BKE_camera_params_compute_viewplane(&params, width, height, scene->r.xasp, scene->r.yasp);
 		BKE_camera_params_compute_matrix(&params);
 

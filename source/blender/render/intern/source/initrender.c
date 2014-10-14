@@ -484,7 +484,7 @@ void RE_SetOverrideCamera(Render *re, Object *camera)
 
 static void re_camera_params_stereo3d(Render *re, CameraParams *params, Object *cam_ob)
 {
-	params->shiftx = BKE_camera_shift_x(&re->r, cam_ob, re->viewname);
+	BKE_camera_params_stereo3d(&re->r, params, cam_ob, re->viewname);
 }
 
 /* call this after InitState() */
