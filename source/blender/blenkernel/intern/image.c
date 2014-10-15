@@ -2916,7 +2916,9 @@ static void image_create_multiview(Image *ima, ImBuf *ibuf, const int frame)
 {
 	image_free_views(ima);
 
+#ifdef WITH_OPENEXR
 	IMB_exr_multiview_convert(ibuf->userdata, ima, image_add_view_cb, image_add_buffer_cb, frame);
+#endif
 
 	image_update_multiview_flags(ima);
 
