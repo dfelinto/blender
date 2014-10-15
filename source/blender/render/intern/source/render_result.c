@@ -842,7 +842,7 @@ static void *ml_addview_cb(void *base, const char *str)
 	return rv;
 }
 
-static int order_render_passes(void *a, void *b)
+static int order_render_passes(const void *a, const void *b)
 {
 	// 1 if a is after b
 	RenderPass *rpa = (RenderPass *) a;
