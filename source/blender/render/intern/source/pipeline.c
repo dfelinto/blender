@@ -2529,8 +2529,6 @@ static void do_render_seq(Render *re)
 		                                        re->result->rectx, re->result->recty, 100);
 	}
 
-	rr = re->result;
-
 	tot_views = BKE_scene_num_views(&re->r);
 	ibuf= MEM_mallocN(sizeof(ImBuf *) * tot_views, "Sequencer Views ImBufs");
 
@@ -2551,8 +2549,9 @@ static void do_render_seq(Render *re)
 		}
 	}
 
+	rr = re->result;
+
 	BLI_rw_mutex_lock(&re->resultmutex, THREAD_LOCK_WRITE);
-	rr->views.first = rr->views.last = NULL;
 	render_result_views_new(rr, &re->r);
 	BLI_rw_mutex_unlock(&re->resultmutex);
 
