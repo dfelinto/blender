@@ -2402,7 +2402,7 @@ void BKE_image_verify_viewer_views(const RenderData *rd, Image *ima, ImageUser *
 	}
 
 	if (do_reset) {
-		image_free_cahced_frames(ima);
+		image_free_cached_frames(ima);
 		BKE_image_free_views(ima);
 
 		/* add new views */
