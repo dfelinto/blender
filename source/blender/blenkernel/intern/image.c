@@ -253,7 +253,7 @@ void BKE_image_de_interlace(Image *ima, int odd)
 
 /* ***************** ALLOC & FREE, DATA MANAGING *************** */
 
-static void image_free_cahced_frames(Image *image)
+static void image_free_cached_frames(Image *image)
 {
 	if (image->cache) {
 		IMB_moviecache_free(image->cache);
@@ -311,7 +311,7 @@ static void image_free_anims(Image *ima)
  */
 void BKE_image_free_buffers(Image *ima)
 {
-	image_free_cahced_frames(ima);
+	image_free_cached_frames(ima);
 
 	image_free_anims(ima);
 
@@ -3122,7 +3122,7 @@ static ImBuf *image_load_sequence_multilayer(Image *ima, ImageUser *iuser, int f
 			 * need to ensure there's no image buffers are hanging around
 			 * with dead links after freeing the render result.
 			 */
-			image_free_cahced_frames(ima);
+			image_free_cached_frames(ima);
 			RE_FreeRenderResult(ima->rr);
 			ima->rr = NULL;
 		}

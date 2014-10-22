@@ -498,8 +498,9 @@ void ED_region_do_draw(bContext *C, ARegion *ar)
 	
 	uiFreeInactiveBlocks(C, &ar->uiblocks);
 
-	if (sa)
+	if (sa && (win->screen->state != SCREENFULL)) {
 		region_draw_emboss(ar, &ar->winrct);
+	}
 }
 
 /* **********************************

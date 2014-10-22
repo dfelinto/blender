@@ -71,13 +71,13 @@ def get_branch(filename):
     branch = ""
 
     for token in tokens:
+        if token == "blender":
+            return branch
+
         if branch == "":
             branch = token
         else:
             branch = branch + "-" + token
-
-        if token == "blender":
-            return branch
 
     return ""
 
@@ -117,6 +117,11 @@ if platform == '':
 
 # extract
 directory = 'public_html/download'
+if not branch or branch == 'master':
+    directory = 'public_html/download'
+elif branch == 'experimental-build':
+    directory = 'public_html/download/experimental'
+# else: put 'official' branches in their own public subdir of download/ ?
 
 try:
     zf = z.open(package)

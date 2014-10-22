@@ -1507,6 +1507,7 @@ static ProjPixel *project_paint_uvpixel_init(
 						project_face_pixel(tf_other, ibuf_other, w, side, NULL, rgba);
 						premul_to_straight_v4(rgba);
 						linearrgb_to_srgb_uchar3(((ProjPixelClone *)projPixel)->clonepx.ch, rgba);
+						((ProjPixelClone *)projPixel)->clonepx.ch[3] =  rgba[3] * 255;
 					}
 					else { /* char to char */
 						project_face_pixel(tf_other, ibuf_other, w, side, ((ProjPixelClone *)projPixel)->clonepx.ch, NULL);
@@ -4103,6 +4104,7 @@ static void *do_projectpaint_thread(void *ph_v)
 							                      color_f, ps->blend);
 						}
 						else {
+							linearrgb_to_srgb_v3_v3(color_f, color_f);
 							rgba_float_to_uchar(projPixel->newColor.ch, color_f);
 							IMB_blend_color_byte(projPixel->pixel.ch_pt,  projPixel->origColor.ch_pt,
 							                     projPixel->newColor.ch, ps->blend);
@@ -5084,9 +5086,8 @@ static bool proj_paint_add_slot(bContext *C, wmOperator *op)
 					ima = mtex->tex->ima = proj_paint_image_create(op, bmain);
 				}
 
-				WM_event_add_notifier(C, NC_TEXTURE, CTX_data_scene(C));
+				WM_event_add_notifier(C, NC_TEXTURE | NA_ADDED, mtex->tex);
 			}
-			WM_event_add_notifier(C, NC_TEXTURE | NA_ADDED, mtex->tex);				
 		}
 		
 		if (ima) {
@@ -5158,7 +5159,7 @@ void PAINT_OT_add_texture_paint_slot(wmOperatorType *ot)
 	ot->poll = ED_operator_region_view3d_active;
 
 	/* flags */
-	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+	ot->flag = OPTYPE_UNDO;
 
 	/* properties */
 	prop = RNA_def_enum(ot->srna, "type", layer_type_items, 0, "Type", "Merge method to use");
