@@ -195,6 +195,10 @@ static void BKE_sequence_free_ex(Scene *scene, Sequence *seq, const bool do_cach
 		((ID *)seq->sound)->us--; 
 	}
 
+	if (seq->stereo3d_format) {
+		MEM_freeN(seq->stereo3d_format);
+	}
+
 	/* clipboard has no scene and will never have a sound handle or be active
 	 * same goes to sequences copy for proxy rebuild job
 	 */
@@ -2653,6 +2657,24 @@ static ImBuf *seq_render_scene_strip(const SeqRenderData *context, Sequence *seq
 	return ibuf;
 }
 
+/* the number of files will vary according to the stereo format */
+static size_t seq_num_files(const SeqRenderData *context, Sequence *seq)
+{
+	Scene *scene = context->scene;
+	const bool is_multiview = (scene->r.scemode & R_MULTIVIEW) != 0;
+
+	if (!is_multiview) {
+		return 1;
+	}
+	else if (seq->views_format == R_IMF_VIEWS_STEREO_3D) {
+		return 1;
+	}
+	/* R_IMF_VIEWS_INDIVIDUAL */
+	else {
+		return BKE_scene_num_views(&scene->r);
+	}
+}
+
 static ImBuf *do_render_strip_uncached(const SeqRenderData *context, Sequence *seq, float cfra)
 {
 	ImBuf *ibuf = NULL;
@@ -2718,6 +2740,7 @@ static ImBuf *do_render_strip_uncached(const SeqRenderData *context, Sequence *s
 
 		case SEQ_TYPE_IMAGE:
 		{
+			bool is_multiview = (context->scene->r.scemode & R_MULTIVIEW) != 0;
 			StripElem *s_elem = BKE_sequencer_give_stripelem(seq, cfra);
 			int flag;
 
@@ -2730,18 +2753,82 @@ static ImBuf *do_render_strip_uncached(const SeqRenderData *context, Sequence *s
 			if (seq->alpha_mode == SEQ_ALPHA_PREMUL)
 				flag |= IB_alphamode_premul;
 
-			if (s_elem && (ibuf = IMB_loadiffname(name, flag, seq->strip->colorspace_settings.name))) {
-				/* we don't need both (speed reasons)! */
-				if (ibuf->rect_float && ibuf->rect)
-					imb_freerectImBuf(ibuf);
+			if (!s_elem) {
+				/* don't do anything */
+			}
+			else if (is_multiview) {
+				size_t totfiles = seq_num_files(context, seq);
+				size_t totviews = BKE_scene_num_views(&context->scene->r);
+				struct ImBuf **ibufs;
+				char prefix[FILE_MAX] = {'\0'};
+				char *ext = NULL;
+				int i;
 
-				/* all sequencer color is done in SRGB space, linear gives odd crossfades */
-				BKE_sequencer_imbuf_to_sequencer_space(context->scene, ibuf, false);
+				ibufs = MEM_mallocN(sizeof(ImBuf *) * totviews, "Sequence Image Views Imbufs");
+				BKE_scene_view_get_prefix(context->scene, name, prefix, &ext);
 
-				copy_to_ibuf_still(context, seq, nr, ibuf);
+				for (i = 0; i < totfiles; i++) {
+					const char *viewname = BKE_scene_render_view_name(&context->scene->r, i);
+					const char *suffix = BKE_scene_view_get_suffix(&context->scene->r, viewname);
+					char str[FILE_MAX] = {'\0'};
 
-				s_elem->orig_width  = ibuf->x;
-				s_elem->orig_height = ibuf->y;
+					sprintf(str, "%s%s%s", prefix, suffix, ext);
+
+					ibufs[i] = IMB_loadiffname(str, flag, seq->strip->colorspace_settings.name);
+					if (ibufs[i] == NULL)
+						ibufs[i] = IMB_loadiffname(name, flag, seq->strip->colorspace_settings.name);
+
+					if (ibufs[i]) {
+						/* we don't need both (speed reasons)! */
+						if (ibufs[i]->rect_float && ibufs[i]->rect)
+							imb_freerectImBuf(ibufs[i]);
+					}
+				}
+
+				if (seq->views_format == R_IMF_VIEWS_STEREO_3D)
+					IMB_ImBufFromStereo(seq->stereo3d_format, &ibufs[0], &ibufs[1]);
+
+				for (i = 0; i < totviews; i++) {
+					if (ibufs[i]) {
+						SeqRenderData localcontext = *context;
+						localcontext.view_id = i;
+
+						/* all sequencer color is done in SRGB space, linear gives odd crossfades */
+						BKE_sequencer_imbuf_to_sequencer_space(context->scene, ibufs[i], false);
+						copy_to_ibuf_still(&localcontext, seq, nr, ibufs[i]);
+					}
+				}
+
+				/* return the original requested ImBuf */
+				ibuf = ibufs[context->view_id];
+				if (ibuf) {
+					s_elem->orig_width  = ibufs[0]->x;
+					s_elem->orig_height = ibufs[0]->y;
+				}
+
+				/* "remove" the others (decrease their refcount) */
+				for (i = 0; i < totviews; i++) {
+					if (ibufs[i] != ibuf) {
+						IMB_freeImBuf(ibufs[i]);
+					}
+				}
+
+				MEM_freeN(ibufs);
+			}
+			else {
+				if ((ibuf = IMB_loadiffname(name, flag, seq->strip->colorspace_settings.name))) {
+					/* we don't need both (speed reasons)! */
+					if (ibuf->rect_float && ibuf->rect)
+						imb_freerectImBuf(ibuf);
+
+					/* all sequencer color is done in SRGB space, linear gives odd crossfades */
+					BKE_sequencer_imbuf_to_sequencer_space(context->scene, ibuf, false);
+
+					copy_to_ibuf_still(context, seq, nr, ibuf);
+
+					s_elem->orig_width  = ibuf->x;
+					s_elem->orig_height = ibuf->y;
+				}
 			}
 			break;
 		}
@@ -4329,6 +4416,8 @@ Sequence *BKE_sequence_alloc(ListBase *lb, int cfra, int machine)
 	seq->pitch = 1.0f;
 	seq->scene_sound = NULL;
 
+	seq->stereo3d_format = MEM_callocN(sizeof(Stereo3dFormat), "Sequence Stereo Format");
+
 	return seq;
 }
 
@@ -4534,6 +4623,8 @@ static Sequence *seq_dupli(Scene *scene, Scene *scene_to, Sequence *seq, int dup
 
 	seq->tmp = seqn;
 	seqn->strip = MEM_dupallocN(seq->strip);
+
+	seqn->stereo3d_format = MEM_dupallocN(seq->stereo3d_format);
 
 	/* XXX: add F-Curve duplication stuff? */
 

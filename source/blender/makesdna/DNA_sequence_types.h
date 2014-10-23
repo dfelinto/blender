@@ -183,7 +183,11 @@ typedef struct Sequence {
 	int sfra;  /* starting frame according to the timeline of the scene. */
 
 	char alpha_mode;
-	char pad[3];
+	char pad[2];
+
+	/* Multiview */
+	char views_format;
+	struct Stereo3dFormat *stereo3d_format;
 
 	/* modifiers */
 	ListBase modifiers;

@@ -2383,7 +2383,9 @@ static void write_scenes(WriteData *wd, ListBase *scebase)
 							break;
 						}
 					}
-					
+
+					writestruct(wd, DATA, "Stereo3dFormat", 1, seq->stereo3d_format);
+
 					strip= seq->strip;
 					writestruct(wd, DATA, "Strip", 1, strip);
 					if (seq->flag & SEQ_USE_CROP && strip->crop) {

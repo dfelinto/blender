@@ -4418,25 +4418,9 @@ void BKE_image_update_views_format(Scene *scene, Image *ima)
 		/* R_IMF_VIEWS_INDIVIDUAL */
 		char prefix[FILE_MAX] = {'\0'};
 		char *name = ima->name;
-		char *ext;
+		char *ext = NULL;
 
-		size_t index_act;
-		char *suf_act;
-		const char delims[] = {'.', '\0'};
-
-		/* begin of extension */
-		index_act = BLI_str_rpartition(name, delims, &ext, &suf_act);
-		BLI_assert(index_act > 0);
-
-		for (srv = scene->r.views.first; srv; srv = srv->next) {
-			if (BKE_scene_render_view_active(&scene->r, srv)) {
-				size_t len = strlen(srv->suffix);
-				if (STREQLEN(ext - len, srv->suffix, len)) {
-					BLI_strncpy(prefix, name, strlen(name) - strlen(ext) - len + 1);
-					break;
-				}
-			}
-		}
+		BKE_scene_view_get_prefix(scene, name, prefix, &ext);
 
 		if (prefix[0] == '\0') {
 			goto monoview;

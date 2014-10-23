@@ -157,6 +157,7 @@ const char *BKE_scene_render_view_name(const struct RenderData *rd, const int vi
 size_t BKE_scene_view_get_id(const struct RenderData *rd, const char *viewname);
 void BKE_scene_view_get_filepath(const struct RenderData *rd, const char *filepath, const char *view, char *r_filepath);
 const char *BKE_scene_view_get_suffix(const struct RenderData *rd, const char *viewname);
+void BKE_scene_view_get_prefix(struct Scene *scene, const char *name, char *rprefix, char **rext);
 void BKE_scene_videos_dimensions(const struct RenderData *rd, const size_t width, const size_t height, size_t *r_width, size_t *r_height);
 size_t BKE_scene_num_videos(const struct RenderData *rd);
 

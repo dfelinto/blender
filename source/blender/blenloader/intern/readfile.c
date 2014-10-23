@@ -5425,6 +5425,7 @@ static void direct_link_scene(FileData *fd, Scene *sce)
 			if (seq->seq3 == NULL) seq->seq3 = seq->seq2;
 			
 			seq->effectdata = newdataadr(fd, seq->effectdata);
+			seq->stereo3d_format = newdataadr(fd, seq->stereo3d_format);
 			
 			if (seq->type & SEQ_TYPE_EFFECT)
 				seq->flag |= SEQ_EFFECT_NOT_LOADED;

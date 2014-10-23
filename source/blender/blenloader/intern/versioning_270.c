@@ -58,6 +58,7 @@
 #include "BKE_main.h"
 #include "BKE_node.h"
 #include "BKE_scene.h"
+#include "BKE_sequencer.h"
 
 #include "BLI_math.h"
 #include "BLI_string.h"
@@ -524,6 +525,18 @@ void blo_do_versions_270(FileData *fd, Library *UNUSED(lib), Main *main)
 				for (win = wm->windows.first; win; win = win->next) {
 					win->stereo3d_format = MEM_callocN(sizeof(Stereo3dFormat), "Stereo Display 3d Format");
 				}
+			}
+		}
+
+		if (!DNA_struct_elem_find(fd->filesdna, "Sequence", "Stereo3dFormat", "*stereo3d_format")) {
+			Scene *scene;
+			for (scene = main->scene.first; scene; scene = scene->id.next) {
+				Sequence *seq;
+				SEQ_BEGIN (scene->ed, seq)
+				{
+					seq->stereo3d_format = MEM_callocN(sizeof(Stereo3dFormat), "Stereo Display 3d Format");
+				}
+				SEQ_END
 			}
 		}
 	}

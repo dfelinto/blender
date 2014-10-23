@@ -2257,6 +2257,30 @@ const char *BKE_scene_view_get_suffix(const RenderData *rd, const char *viewname
 		return viewname;
 }
 
+void BKE_scene_view_get_prefix(Scene *scene, const char *name, char *rprefix, char **rext)
+{
+	SceneRenderView *srv;
+	size_t index_act;
+	char *suf_act;
+	const char delims[] = {'.', '\0'};
+
+	rprefix[0] = '\0';
+
+	/* begin of extension */
+	index_act = BLI_str_rpartition(name, delims, rext, &suf_act);
+	BLI_assert(index_act > 0);
+
+	for (srv = scene->r.views.first; srv; srv = srv->next) {
+		if (BKE_scene_render_view_active(&scene->r, srv)) {
+			size_t len = strlen(srv->suffix);
+			if (STREQLEN(*rext - len, srv->suffix, len)) {
+				BLI_strncpy(rprefix, name, strlen(name) - strlen(*rext) - len + 1);
+				break;
+			}
+		}
+	}
+}
+
 void BKE_scene_videos_dimensions(const RenderData *rd, const size_t width, const size_t height, size_t *r_width, size_t *r_height)
 {
 	if ((rd->scemode & R_MULTIVIEW) &&
