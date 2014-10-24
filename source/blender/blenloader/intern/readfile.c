@@ -5243,7 +5243,7 @@ static void lib_link_scene(FileData *fd, Main *main)
 						seq->scene_sound = sound_add_scene_sound_defaults(sce, seq);
 					}
 				}
-				seq->anim = NULL;
+				seq->anims.first = seq->anims.last = NULL;
 
 				lib_link_sequence_modifiers(fd, sce, &seq->modifiers);
 			}

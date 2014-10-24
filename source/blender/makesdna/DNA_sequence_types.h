@@ -53,6 +53,11 @@ struct MovieClip;
 
 /* strlens; 256= FILE_MAXFILE, 768= FILE_MAXDIR */
 
+typedef struct StripAnim {
+	struct StripAnim *next, *prev;
+	struct anim *anim;
+} StripAnim;
+
 typedef struct StripElem {
 	char name[256];
 	int orig_width, orig_height;
@@ -153,7 +158,8 @@ typedef struct Sequence {
 	struct MovieClip *clip;          /* for MOVIECLIP strips */
 	struct Mask      *mask;          /* for MASK strips */
 
-	struct anim *anim;      /* for MOVIE strips */
+	struct anim *anim;      /* for MOVIE strips - DEPRECATED */
+	ListBase anims;
 
 	float effect_fader;
 	float speed_fader;
