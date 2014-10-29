@@ -2476,9 +2476,8 @@ static void renderresult_stampinfo(Render *re)
 		RE_SetActiveRenderView(re, rv->name);
 		RE_AcquireResultImage(re, &rres, nr);
 		BKE_stamp_buf(re->scene, RE_GetCamera(re), (unsigned char *)rv->rect32, rv->rectf, rres.rectx, rres.recty, 4);
+		RE_ReleaseResultImage(re);
 	}
-
-	RE_ReleaseResultImage(re);
 }
 
 int RE_seq_render_active(Scene *scene, RenderData *rd)
