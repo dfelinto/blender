@@ -3179,7 +3179,7 @@ static void project_paint_begin(ProjPaintState *ps)
 	}
 
 	/* If this border is not added we get artifacts for faces that
-	 * have a parallel edge and at the bounds of the the 2D projected verts eg
+	 * have a parallel edge and at the bounds of the 2D projected verts eg
 	 * - a single screen aligned quad */
 	projMargin = (ps->screenMax[0] - ps->screenMin[0]) * 0.000001f;
 	ps->screenMax[0] += projMargin;
@@ -5027,7 +5027,7 @@ static bool proj_paint_add_slot(bContext *C, wmOperator *op)
 	Object *ob = CTX_data_active_object(C);
 	Scene *scene = CTX_data_scene(C);
 	Material *ma;
-	bool is_bi = BKE_scene_uses_blender_internal(scene);
+	bool is_bi = BKE_scene_uses_blender_internal(scene) || BKE_scene_uses_blender_game(scene);
 	Image *ima = NULL;
 
 	if (!ob)
@@ -5183,7 +5183,7 @@ static int texture_paint_delete_texture_paint_slot_exec(bContext *C, wmOperator 
 	Object *ob = CTX_data_active_object(C);
 	Scene *scene = CTX_data_scene(C);
 	Material *ma;
-	bool is_bi = BKE_scene_uses_blender_internal(scene);
+	bool is_bi = BKE_scene_uses_blender_internal(scene) || BKE_scene_uses_blender_game(scene);
 	TexPaintSlot *slot;
 	
 	/* not supported for node-based engines */

@@ -43,10 +43,11 @@ struct TimeMarker;
 /* flags for drawing markers */
 enum {
 	DRAW_MARKERS_LINES  = (1 << 0),
-	DRAW_MARKERS_LOCAL  = (1 << 1)
+	DRAW_MARKERS_LOCAL  = (1 << 1),
+	DRAW_MARKERS_MARGIN = (1 << 2),
 };
 
-void draw_markers_time(const struct bContext *C, int flag);
+void ED_markers_draw(const struct bContext *C, int flag);
 
 /* Backend API ----------------------------- */
 

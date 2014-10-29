@@ -921,12 +921,18 @@ static uiLayout *draw_modifier(uiLayout *layout, Scene *scene, Object *ob,
 		
 		uiBlockSetEmboss(block, UI_EMBOSSN);
 		/* When Modifier is a simulation, show button to switch to context rather than the delete button. */
-		if (modifier_can_delete(md) && (!modifier_is_simulation(md) || STREQ(scene->r.engine, "BLENDER_GAME")))
+		if (modifier_can_delete(md) &&
+		    (!modifier_is_simulation(md) ||
+		     STREQ(scene->r.engine, RE_engine_id_BLENDER_GAME)))
+		{
 			uiItemO(row, "", ICON_X, "OBJECT_OT_modifier_remove");
-		else if (modifier_is_simulation(md) == 1)
+		}
+		else if (modifier_is_simulation(md) == 1) {
 			uiItemStringO(row, "", ICON_BUTS, "WM_OT_properties_context_change", "context", "PHYSICS");
-		else if (modifier_is_simulation(md) == 2)
+		}
+		else if (modifier_is_simulation(md) == 2) {
 			uiItemStringO(row, "", ICON_BUTS, "WM_OT_properties_context_change", "context", "PARTICLES");
+		}
 		uiBlockSetEmboss(block, UI_EMBOSS);
 	}
 
@@ -1900,7 +1906,6 @@ static uiBlock *curvemap_clipping_func(bContext *C, ARegion *ar, void *cumap_v)
 
 	uiBlockSetDirection(block, UI_RIGHT);
 
-	uiEndBlock(C, block);
 	return block;
 }
 
@@ -1975,7 +1980,6 @@ static uiBlock *curvemap_tools_posslope_func(bContext *C, ARegion *ar, void *cum
 	uiBlockSetDirection(block, UI_RIGHT);
 	uiTextBoundsBlock(block, 50);
 
-	uiEndBlock(C, block);
 	return block;
 }
 
@@ -2003,7 +2007,6 @@ static uiBlock *curvemap_tools_negslope_func(bContext *C, ARegion *ar, void *cum
 	uiBlockSetDirection(block, UI_RIGHT);
 	uiTextBoundsBlock(block, 50);
 
-	uiEndBlock(C, block);
 	return block;
 }
 
@@ -2027,7 +2030,6 @@ static uiBlock *curvemap_brush_tools_func(bContext *C, ARegion *ar, void *cumap_
 	uiBlockSetDirection(block, UI_RIGHT);
 	uiTextBoundsBlock(block, 50);
 
-	uiEndBlock(C, block);
 	return block;
 }
 
@@ -3244,10 +3246,10 @@ static void operator_call_cb(bContext *C, void *UNUSED(arg1), void *arg2)
 
 static void operator_search_cb(const bContext *C, void *UNUSED(arg), const char *str, uiSearchItems *items)
 {
-	GHashIterator *iter = WM_operatortype_iter();
+	GHashIterator iter;
 
-	for (; !BLI_ghashIterator_done(iter); BLI_ghashIterator_step(iter)) {
-		wmOperatorType *ot = BLI_ghashIterator_getValue(iter);
+	for (WM_operatortype_iter(&iter); !BLI_ghashIterator_done(&iter); BLI_ghashIterator_step(&iter)) {
+		wmOperatorType *ot = BLI_ghashIterator_getValue(&iter);
 
 		if ((ot->flag & OPTYPE_INTERNAL) && (G.debug & G_DEBUG_WM) == 0)
 			continue;
@@ -3274,7 +3276,6 @@ static void operator_search_cb(const bContext *C, void *UNUSED(arg), const char 
 			}
 		}
 	}
-	BLI_ghashIterator_free(iter);
 }
 
 void uiOperatorSearch_But(uiBut *but)

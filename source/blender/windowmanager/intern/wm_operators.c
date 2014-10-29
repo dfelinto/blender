@@ -147,9 +147,9 @@ wmOperatorType *WM_operatortype_find(const char *idname, bool quiet)
 }
 
 /* caller must free */
-GHashIterator *WM_operatortype_iter(void)
+void WM_operatortype_iter(GHashIterator *ghi)
 {
-	return BLI_ghashIterator_new(global_ops_hash);
+	BLI_ghashIterator_init(ghi, global_ops_hash);
 }
 
 /* all ops in 1 list (for time being... needs evaluation later) */
@@ -492,6 +492,27 @@ bool WM_operatortype_remove(const char *idname)
 	WM_operatortype_remove_ptr(ot);
 
 	return true;
+}
+
+/**
+ * Remove memory of all previously executed tools.
+ */
+void WM_operatortype_last_properties_clear_all(void)
+{
+	GHashIterator iter;
+
+	for (WM_operatortype_iter(&iter);
+	     (!BLI_ghashIterator_done(&iter));
+	     (BLI_ghashIterator_step(&iter)))
+	{
+		wmOperatorType *ot = BLI_ghashIterator_getValue(&iter);
+
+		if (ot->last_properties) {
+			IDP_FreeProperty(ot->last_properties);
+			MEM_freeN(ot->last_properties);
+			ot->last_properties = NULL;
+		}
+	}
 }
 
 /* SOME_OT_op -> some.op */
@@ -1058,6 +1079,7 @@ int WM_menu_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
 		uiLayoutSetOperatorContext(layout, WM_OP_INVOKE_REGION_WIN);
 		uiItemsFullEnumO(layout, op->type->idname, RNA_property_identifier(prop), op->ptr->data, WM_OP_EXEC_REGION_WIN, 0);
 		uiPupMenuEnd(C, pup);
+		return OPERATOR_INTERFACE;
 	}
 
 	return OPERATOR_CANCELLED;
@@ -1102,7 +1124,7 @@ static uiBlock *wm_enum_search_menu(bContext *C, ARegion *ar, void *arg_op)
 int WM_enum_search_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
 {
 	uiPupBlock(C, wm_enum_search_menu, op);
-	return OPERATOR_CANCELLED;
+	return OPERATOR_INTERFACE;
 }
 
 /* Can't be used as an invoke directly, needs message arg (can be NULL) */
@@ -1124,7 +1146,7 @@ int WM_operator_confirm_message_ex(bContext *C, wmOperator *op,
 	uiItemFullO_ptr(layout, op->type, message, ICON_NONE, properties, WM_OP_EXEC_REGION_WIN, 0);
 	uiPupMenuEnd(C, pup);
 	
-	return OPERATOR_CANCELLED;
+	return OPERATOR_INTERFACE;
 }
 
 int WM_operator_confirm_message(bContext *C, wmOperator *op, const char *message)
@@ -2002,7 +2024,7 @@ static int wm_search_menu_invoke(bContext *C, wmOperator *op, const wmEvent *UNU
 {
 	uiPupBlock(C, wm_block_search_menu, op);
 	
-	return OPERATOR_CANCELLED;
+	return OPERATOR_INTERFACE;
 }
 
 /* op->poll */
@@ -2041,9 +2063,7 @@ static int wm_call_menu_exec(bContext *C, wmOperator *op)
 	char idname[BKE_ST_MAXNAME];
 	RNA_string_get(op->ptr, "name", idname);
 
-	uiPupMenuInvoke(C, idname, op->reports);
-
-	return OPERATOR_CANCELLED;
+	return uiPupMenuInvoke(C, idname, op->reports);
 }
 
 static void WM_OT_call_menu(wmOperatorType *ot)
@@ -2065,9 +2085,7 @@ static int wm_call_pie_menu_invoke(bContext *C, wmOperator *op, const wmEvent *e
 	char idname[BKE_ST_MAXNAME];
 	RNA_string_get(op->ptr, "name", idname);
 
-	uiPieMenuInvoke(C, idname, event);
-
-	return OPERATOR_CANCELLED;
+	return uiPieMenuInvoke(C, idname, event);
 }
 
 static int wm_call_pie_menu_exec(bContext *C, wmOperator *op)
@@ -2075,9 +2093,7 @@ static int wm_call_pie_menu_exec(bContext *C, wmOperator *op)
 	char idname[BKE_ST_MAXNAME];
 	RNA_string_get(op->ptr, "name", idname);
 
-	uiPieMenuInvoke(C, idname, CTX_wm_window(C)->eventstate);
-
-	return OPERATOR_CANCELLED;
+	return uiPieMenuInvoke(C, idname, CTX_wm_window(C)->eventstate);
 }
 
 static void WM_OT_call_menu_pie(wmOperatorType *ot)
