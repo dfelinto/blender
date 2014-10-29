@@ -2835,7 +2835,7 @@ static ImBuf *do_render_strip_uncached(const SeqRenderData *context, Sequence *s
 				char *ext = NULL;
 				int i;
 
-				ibufs = MEM_mallocN(sizeof(ImBuf *) * totviews, "Sequence Image Views Imbufs");
+				ibufs = MEM_callocN(sizeof(ImBuf *) * totviews, "Sequence Image Views Imbufs");
 				BKE_scene_view_get_prefix(context->scene, name, prefix, &ext);
 
 				for (i = 0; i < totfiles; i++) {
@@ -2856,7 +2856,7 @@ static ImBuf *do_render_strip_uncached(const SeqRenderData *context, Sequence *s
 					}
 				}
 
-				if (seq->views_format == R_IMF_VIEWS_STEREO_3D)
+				if (seq->views_format == R_IMF_VIEWS_STEREO_3D && ibufs[0])
 					IMB_ImBufFromStereo(seq->stereo3d_format, &ibufs[0], &ibufs[1]);
 
 				for (i = 0; i < totviews; i++) {
