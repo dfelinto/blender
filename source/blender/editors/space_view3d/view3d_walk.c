@@ -42,8 +42,10 @@
 
 #include "BLF_translation.h"
 
+#include "RNA_access.h"
 #include "RNA_define.h"
 #include "RNA_enum_types.h"
+#include "RNA_types.h"
 
 #include "BIF_gl.h"
 
@@ -116,6 +118,12 @@ typedef enum eWalkGravityState {
 	WALK_GRAVITY_STATE_START,
 	WALK_GRAVITY_STATE_ON,
 } eWalkGravityState;
+
+typedef enum eWalkMouseMode {
+	WALK_MOUSE_LOOKAROUND     = 1 << 0,
+	WALK_MOUSE_MOVEHORIZONTAL = 1 << 1,
+	WALK_MOUSE_MOVEVERTICAL   = 1 << 2,
+} eWalkMouseMode;
 
 /* called in transform_ops.c, on each regeneration of keymaps  */
 void walk_modal_keymap(wmKeyConfig *keyconf)
@@ -245,6 +253,7 @@ typedef struct WalkInfo {
 	short state;
 	bool redraw;
 
+	int init_mval[2]; /* initial 2D mouse values */
 	int prev_mval[2]; /* previous 2D mouse values */
 	int center_mval[2]; /* center mouse values */
 	int moffset[2];
@@ -265,6 +274,8 @@ typedef struct WalkInfo {
 
 	/* walk/fly */
 	eWalkMethod navigation_mode;
+
+	eWalkMouseMode mouse_mode;
 
 	/* teleport */
 	WalkTeleport teleport;
@@ -452,7 +463,7 @@ enum {
 static float base_speed = -1.f;
 static float userdef_speed = -1.f;
 
-static bool initWalkInfo(bContext *C, WalkInfo *walk, wmOperator *op)
+static bool initWalkInfo(bContext *C, WalkInfo *walk, wmOperator *op, const wmEvent *event)
 {
 	wmWindow *win = CTX_wm_window(C);
 
@@ -539,6 +550,7 @@ static bool initWalkInfo(bContext *C, WalkInfo *walk, wmOperator *op)
 
 	walk->rv3d->rflag |= RV3D_NAVIGATING;
 
+	walk->mouse_mode = RNA_enum_get(op->ptr, "mouse_mode");
 
 	walk->v3d_camera_control = ED_view3d_cameracontrol_acquire(
 	        walk->scene, walk->v3d, walk->rv3d,
@@ -550,6 +562,10 @@ static bool initWalkInfo(bContext *C, WalkInfo *walk, wmOperator *op)
 
 	copy_v2_v2_int(walk->prev_mval, walk->center_mval);
 
+	/* store the initial mouse positions */
+	walk->init_mval[0] = event->x;
+	walk->init_mval[1] = event->y;
+
 	WM_cursor_warp(win,
 	               walk->ar->winrct.xmin + walk->center_mval[0],
 	               walk->ar->winrct.ymin + walk->center_mval[1]);
@@ -557,7 +573,7 @@ static bool initWalkInfo(bContext *C, WalkInfo *walk, wmOperator *op)
 	/* remove the mouse cursor temporarily */
 	WM_cursor_modal_set(win, CURSOR_NONE);
 
-	return 1;
+	return true;
 }
 
 static int walkEnd(bContext *C, WalkInfo *walk)
@@ -590,9 +606,7 @@ static int walkEnd(bContext *C, WalkInfo *walk)
 	WM_cursor_modal_restore(win);
 
 	/* center the mouse */
-	WM_cursor_warp(win,
-	               walk->ar->winrct.xmin + walk->center_mval[0],
-	               walk->ar->winrct.ymin + walk->center_mval[1]);
+	WM_cursor_warp(win, walk->init_mval[0], walk->init_mval[1]);
 
 	if (walk->state == WALK_CONFIRM) {
 		MEM_freeN(walk);
@@ -606,7 +620,7 @@ static int walkEnd(bContext *C, WalkInfo *walk)
 static bool wm_event_is_last_mousemove(const wmEvent *event)
 {
 	while ((event = event->next)) {
-		if (ELEM(event->type, MOUSEMOVE, INBETWEEN_MOUSEMOVE)) {
+		if (ELEM(event->type, MOUSEMOVE, INBETWEEN_MOUSEMOVE, MOUSEPAN)) {
 			return false;
 		}
 	}
@@ -617,80 +631,6 @@ static void walkEvent(bContext *C, wmOperator *UNUSED(op), WalkInfo *walk, const
 {
 	if (event->type == TIMER && event->customdata == walk->timer) {
 		walk->redraw = true;
-	}
-	else if (ELEM(event->type, MOUSEMOVE, INBETWEEN_MOUSEMOVE)) {
-
-		walk->moffset[0] += event->mval[0] - walk->prev_mval[0];
-		walk->moffset[1] += event->mval[1] - walk->prev_mval[1];
-
-		copy_v2_v2_int(walk->prev_mval, event->mval);
-
-		if ((walk->center_mval[0] != event->mval[0]) ||
-		    (walk->center_mval[1] != event->mval[1]))
-		{
-			walk->redraw = true;
-
-			if (wm_event_is_last_mousemove(event)) {
-				wmWindow *win = CTX_wm_window(C);
-
-#ifdef __APPLE__
-				if ((abs(walk->prev_mval[0] - walk->center_mval[0]) > walk->center_mval[0] / 2) ||
-				    (abs(walk->prev_mval[1] - walk->center_mval[1]) > walk->center_mval[1] / 2))
-#endif
-				{
-					WM_cursor_warp(win,
-					               walk->ar->winrct.xmin + walk->center_mval[0],
-					               walk->ar->winrct.ymin + walk->center_mval[1]);
-					copy_v2_v2_int(walk->prev_mval, walk->center_mval);
-				}
-			}
-		}
-	}
-	else if (event->type == NDOF_MOTION) {
-		/* do these automagically get delivered? yes. */
-		// puts("ndof motion detected in walk mode!");
-		// static const char *tag_name = "3D mouse position";
-
-		const wmNDOFMotionData *incoming_ndof = event->customdata;
-		switch (incoming_ndof->progress) {
-			case P_STARTING:
-				/* start keeping track of 3D mouse position */
-#ifdef NDOF_WALK_DEBUG
-				puts("start keeping track of 3D mouse position");
-#endif
-				/* fall-through */
-			case P_IN_PROGRESS:
-				/* update 3D mouse position */
-#ifdef NDOF_WALK_DEBUG
-				putchar('.'); fflush(stdout);
-#endif
-				if (walk->ndof == NULL) {
-					// walk->ndof = MEM_mallocN(sizeof(wmNDOFMotionData), tag_name);
-					walk->ndof = MEM_dupallocN(incoming_ndof);
-					// walk->ndof = malloc(sizeof(wmNDOFMotionData));
-				}
-				else {
-					memcpy(walk->ndof, incoming_ndof, sizeof(wmNDOFMotionData));
-				}
-				break;
-			case P_FINISHING:
-				/* stop keeping track of 3D mouse position */
-#ifdef NDOF_WALK_DEBUG
-				puts("stop keeping track of 3D mouse position");
-#endif
-				if (walk->ndof) {
-					MEM_freeN(walk->ndof);
-					// free(walk->ndof);
-					walk->ndof = NULL;
-				}
-
-				/* update the time else the view will jump when 2D mouse/timer resume */
-				walk->time_lastdraw = PIL_check_seconds_timer();
-
-				break;
-			default:
-				break; /* should always be one of the above 3 */
-		}
 	}
 	/* handle modal keymap first */
 	else if (event->type == EVT_MODAL_MAP) {
@@ -853,6 +793,91 @@ static void walkEvent(bContext *C, wmOperator *UNUSED(op), WalkInfo *walk, const
 				break;
 		}
 	}
+	else if (ELEM(event->type, MOUSEMOVE, INBETWEEN_MOUSEMOVE, MOUSEPAN)) {
+		int xy[2], prevxy[2];
+
+		xy[0] = event->x;
+		xy[1] = event->y;
+		prevxy[0] = event->prevx;
+		prevxy[1] = event->prevy;
+
+		if ((event->type == MOUSEPAN) && U.uiflag2 & USER_TRACKPAD_NATURAL) {
+			negate_v2_int(xy);
+			negate_v2_int(prevxy);
+		}
+
+		walk->moffset[0] += xy[0] - prevxy[0];
+		walk->moffset[1] += xy[1] - prevxy[1];
+
+		copy_v2_v2_int(walk->prev_mval, xy);
+
+		if ((walk->center_mval[0] != event->mval[0]) ||
+		    (walk->center_mval[1] != event->mval[1]))
+		{
+			walk->redraw = true;
+
+			if (wm_event_is_last_mousemove(event)) {
+				wmWindow *win = CTX_wm_window(C);
+
+#ifdef __APPLE__
+				if ((abs(walk->prev_mval[0] - walk->center_mval[0]) > walk->center_mval[0] / 2) ||
+				    (abs(walk->prev_mval[1] - walk->center_mval[1]) > walk->center_mval[1] / 2))
+#endif
+				{
+					WM_cursor_warp(win,
+					               walk->ar->winrct.xmin + walk->center_mval[0],
+					               walk->ar->winrct.ymin + walk->center_mval[1]);
+					copy_v2_v2_int(walk->prev_mval, walk->center_mval);
+				}
+			}
+		}
+	}
+	else if (event->type == NDOF_MOTION) {
+		/* do these automagically get delivered? yes. */
+		// puts("ndof motion detected in walk mode!");
+		// static const char *tag_name = "3D mouse position";
+
+		const wmNDOFMotionData *incoming_ndof = event->customdata;
+		switch (incoming_ndof->progress) {
+			case P_STARTING:
+				/* start keeping track of 3D mouse position */
+#ifdef NDOF_WALK_DEBUG
+				puts("start keeping track of 3D mouse position");
+#endif
+				/* fall-through */
+			case P_IN_PROGRESS:
+				/* update 3D mouse position */
+#ifdef NDOF_WALK_DEBUG
+				putchar('.'); fflush(stdout);
+#endif
+				if (walk->ndof == NULL) {
+					// walk->ndof = MEM_mallocN(sizeof(wmNDOFMotionData), tag_name);
+					walk->ndof = MEM_dupallocN(incoming_ndof);
+					// walk->ndof = malloc(sizeof(wmNDOFMotionData));
+				}
+				else {
+					memcpy(walk->ndof, incoming_ndof, sizeof(wmNDOFMotionData));
+				}
+				break;
+			case P_FINISHING:
+				/* stop keeping track of 3D mouse position */
+#ifdef NDOF_WALK_DEBUG
+				puts("stop keeping track of 3D mouse position");
+#endif
+				if (walk->ndof) {
+					MEM_freeN(walk->ndof);
+					// free(walk->ndof);
+					walk->ndof = NULL;
+				}
+
+				/* update the time else the view will jump when 2D mouse/timer resume */
+				walk->time_lastdraw = PIL_check_seconds_timer();
+
+				break;
+			default:
+				break; /* should always be one of the above 3 */
+		}
+	}
 }
 
 static void walkMoveCamera(bContext *C, WalkInfo *walk,
@@ -871,14 +896,75 @@ static float getVelocityZeroTime(const float gravity, const float velocity)
 	return velocity / gravity;
 }
 
-static int walkApply(bContext *C, WalkInfo *walk)
-{
 #define WALK_ROTATE_FAC 2.2f /* more is faster */
 #define WALK_TOP_LIMIT DEG2RADF(85.0f)
 #define WALK_BOTTOM_LIMIT DEG2RADF(-80.0f)
 #define WALK_MOVE_SPEED base_speed
 #define WALK_BOOST_FACTOR ((void)0, walk->speed_factor)
 
+/* rotate about the Y axis- look left/right */
+static void walk_mouse_rotate_horizontal(ARegion *ar, RegionView3D *rv3d, const float mouse_speed, int moffset[2], float r_mat[3][3], float r_upvec[3])
+{
+	float x;
+	float tmp_quat[4];
+
+	/* if we're upside down invert the moffset */
+	copy_v3_fl3(r_upvec, 0.0f, 1.0f, 0.0f);
+	mul_m3_v3(r_mat, r_upvec);
+
+	if (r_upvec[2] < 0.0f)
+		moffset[0] = -moffset[0];
+
+	/* relative offset */
+	x = (float) moffset[0] / ar->winx;
+
+	/* speed factor */
+	x *= WALK_ROTATE_FAC;
+
+	/* user adjustement factor */
+	x *= mouse_speed;
+
+	copy_v3_fl3(r_upvec, 0.0f, 0.0f, 1.0f);
+
+	/* Rotate about the relative up vec */
+	axis_angle_normalized_to_quat(tmp_quat, r_upvec, x);
+	mul_qt_qtqt(rv3d->viewquat, rv3d->viewquat, tmp_quat);
+}
+
+/* rotate about the X axis- look up/down */
+static void walk_mouse_rotate_vertical(ARegion *ar, RegionView3D *rv3d, const float mouse_speed, int moffset[2], float r_mat[3][3], float r_upvec[3])
+{
+	float angle, y;
+	float tmp_quat[4];
+
+	/* relative offset */
+	y = (float) moffset[1] / ar->winy;
+
+	/* speed factor */
+	y *= WALK_ROTATE_FAC;
+
+	/* user adjustement factor */
+	y *= mouse_speed;
+
+	/* clamp the angle limits */
+	/* it ranges from 90.0f to -90.0f */
+	angle = -asinf(rv3d->viewmat[2][2]);
+
+	if (angle > WALK_TOP_LIMIT && y > 0.0f)
+		y = 0.0f;
+
+	else if (angle < WALK_BOTTOM_LIMIT && y < 0.0f)
+		y = 0.0f;
+
+	copy_v3_fl3(r_upvec, 1.0f, 0.0f, 0.0f);
+	mul_m3_v3(r_mat, r_upvec);
+	/* Rotate about the relative up vec */
+	axis_angle_to_quat(tmp_quat, r_upvec, -y);
+	mul_qt_qtqt(rv3d->viewquat, rv3d->viewquat, tmp_quat);
+}
+
+static int walkApply(bContext *C, WalkInfo *walk)
+{
 	/* walk mode - Ctrl+Shift+F
 	 * a walk loop where the user can move move the view as if they are in a walk game
 	 */
@@ -892,7 +978,6 @@ static int walkApply(bContext *C, WalkInfo *walk)
 	float upvec[3] = {0.0f, 0.0f, 0.0f}; /* stores the view's up vector */
 
 	int moffset[2]; /* mouse offset from the views center */
-	float tmp_quat[4]; /* used for rotating the view */
 
 #ifdef NDOF_WALK_DEBUG
 	{
@@ -946,63 +1031,34 @@ static int walkApply(bContext *C, WalkInfo *walk)
 
 			copy_m3_m4(mat, rv3d->viewinv);
 
-			{
-				/* rotate about the X axis- look up/down */
-				if (moffset[1]) {
-					float angle;
-					float y;
+			switch (walk->mouse_mode) {
+				case WALK_MOUSE_MOVEHORIZONTAL:
+				{
+					//if (moffset[1])
+					//	walk_mouse_move_forward();
 
-					/* relative offset */
-					y = (float) moffset[1] / ar->winy;
-
-					/* speed factor */
-					y *= WALK_ROTATE_FAC;
-
-					/* user adjustement factor */
-					y *= walk->mouse_speed;
-
-					/* clamp the angle limits */
-					/* it ranges from 90.0f to -90.0f */
-					angle = -asinf(rv3d->viewmat[2][2]);
-
-					if (angle > WALK_TOP_LIMIT && y > 0.0f)
-						y = 0.0f;
-
-					else if (angle < WALK_BOTTOM_LIMIT && y < 0.0f)
-						y = 0.0f;
-
-					copy_v3_fl3(upvec, 1.0f, 0.0f, 0.0f);
-					mul_m3_v3(mat, upvec);
-					/* Rotate about the relative up vec */
-					axis_angle_to_quat(tmp_quat, upvec, -y);
-					mul_qt_qtqt(rv3d->viewquat, rv3d->viewquat, tmp_quat);
+					if (moffset[0])
+						walk_mouse_rotate_horizontal(ar, rv3d, walk->mouse_speed, moffset, mat, upvec);
+					break;
 				}
+				case WALK_MOUSE_MOVEVERTICAL:
+				{
+					//if (moffset[1])
+					//	walk_mouse_move_upward();
 
-				/* rotate about the Y axis- look left/right */
-				if (moffset[0]) {
-					float x;
+					//if (moffset[0])
+					//	walk_mouse_move_sideways();
+					break;
+				}
+				case WALK_MOUSE_LOOKAROUND:
+				default:
+				{
+					if (moffset[1])
+						walk_mouse_rotate_vertical(ar, rv3d, walk->mouse_speed, moffset, mat, upvec);
 
-					/* if we're upside down invert the moffset */
-					copy_v3_fl3(upvec, 0.0f, 1.0f, 0.0f);
-					mul_m3_v3(mat, upvec);
-
-					if (upvec[2] < 0.0f)
-						moffset[0] = -moffset[0];
-
-					/* relative offset */
-					x = (float) moffset[0] / ar->winx;
-
-					/* speed factor */
-					x *= WALK_ROTATE_FAC;
-
-					/* user adjustement factor */
-					x *= walk->mouse_speed;
-
-					copy_v3_fl3(upvec, 0.0f, 0.0f, 1.0f);
-
-					/* Rotate about the relative up vec */
-					axis_angle_normalized_to_quat(tmp_quat, upvec, x);
-					mul_qt_qtqt(rv3d->viewquat, rv3d->viewquat, tmp_quat);
+					if (moffset[0])
+						walk_mouse_rotate_horizontal(ar, rv3d, walk->mouse_speed, moffset, mat, upvec);
+					break;
 				}
 			}
 
@@ -1220,15 +1276,16 @@ static int walkApply(bContext *C, WalkInfo *walk)
 	}
 
 	return OPERATOR_FINISHED;
-#undef WALK_ROTATE_FAC
 #undef WALK_ZUP_CORRECT_FAC
 #undef WALK_ZUP_CORRECT_ACCEL
 #undef WALK_SMOOTH_FAC
+}
+
+#undef WALK_ROTATE_FAC
 #undef WALK_TOP_LIMIT
 #undef WALK_BOTTOM_LIMIT
 #undef WALK_MOVE_SPEED
 #undef WALK_BOOST_FACTOR
-}
 
 static void walkApply_ndof(bContext *C, WalkInfo *walk)
 {
@@ -1262,7 +1319,7 @@ static int walk_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 
 	op->customdata = walk;
 
-	if (initWalkInfo(C, walk, op) == false) {
+	if (initWalkInfo(C, walk, op, event) == false) {
 		MEM_freeN(op->customdata);
 		return OPERATOR_CANCELLED;
 	}
@@ -1326,9 +1383,18 @@ static int walk_modal(bContext *C, wmOperator *op, const wmEvent *event)
 	return exit_code;
 }
 
+static EnumPropertyItem walk_navigation_mouse_mode_items[] = {
+	{WALK_MOUSE_LOOKAROUND, "LOOK_AROUND", 0, "Look Around", "Rotates the viewport camera"},
+	{WALK_MOUSE_MOVEHORIZONTAL, "MOVE_HORIZONTAL", 0, "Move Horizontally", "Moves the camera forward and backward and rotates left and right"},
+	{WALK_MOUSE_MOVEVERTICAL, "MOVE_VERTICAL", 0, "Move Vertically", "Moves the camera up and down or left and right"},
+	{0, NULL, 0, NULL, NULL}
+};
+
 void VIEW3D_OT_walk(wmOperatorType *ot)
 {
-	/* identifiers */
+	PropertyRNA *prop;
+
+/* identifiers */
 	ot->name = "Walk Navigation";
 	ot->description = "Interactively walk around the scene";
 	ot->idname = "VIEW3D_OT_walk";
@@ -1341,4 +1407,7 @@ void VIEW3D_OT_walk(wmOperatorType *ot)
 
 	/* flags */
 	ot->flag = OPTYPE_BLOCKING;
+
+	prop = RNA_def_enum(ot->srna, "mouse_mode", walk_navigation_mouse_mode_items, WALK_MOUSE_LOOKAROUND, "Mode", "");
+	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
