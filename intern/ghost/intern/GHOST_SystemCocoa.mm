@@ -1372,6 +1372,8 @@ GHOST_TSuccess GHOST_SystemCocoa::handleMouseEvent(void *eventPtr)
 			break;
 		case NSEventTypeEndGesture:
 			m_hasMultiTouchTrackpad = 0;
+			pushEvent(new GHOST_EventTrackpad([event timestamp] * 1000, window, GHOST_kTrackpadEventUntouch, 0, 0,
+			                                  0, 0));
 			break;
 			
 		case NSScrollWheel:

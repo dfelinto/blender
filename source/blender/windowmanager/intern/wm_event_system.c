@@ -3094,6 +3094,9 @@ void wm_event_add_ghostevent(wmWindowManager *wm, wmWindow *win, int type, int U
 				case GHOST_kTrackpadEventRotate:
 					event.type = MOUSEROTATE;
 					break;
+				case GHOST_kTrackpadEventUntouch:
+					event.type = MOUSEUNTOUCH;
+					break;
 				case GHOST_kTrackpadEventScroll:
 				default:
 					event.type = MOUSEPAN;
