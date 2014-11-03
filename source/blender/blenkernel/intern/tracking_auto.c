@@ -55,7 +55,7 @@ typedef struct AutoTrackOptions {
 	bool use_keyframe_match;  /* Keyframe pattern matching. */
 
 	/* TODO(sergey): A bit awkward to keep it in here, only used to
-	 * place a disabled marker once the trackign fails,
+	 * place a disabled marker once the tracking fails,
 	 * Wither find a more clear way to do it or call it track context
 	 * or state, not options.
 	 */
@@ -322,7 +322,7 @@ AutoTrackContext *BKE_autotrack_context_new(MovieClip *clip,
 		}
 
 		for (i = 0; i < track->markersnr; ++i) {
-			MovieTrackingMarker *marker = marker = track->markers + i;
+			MovieTrackingMarker *marker = track->markers + i;
 			if ((marker->flag & MARKER_DISABLED) == 0) {
 				libmv_Marker libmv_marker;
 				dna_marker_to_libmv_marker(track,
