@@ -93,14 +93,14 @@ enum {
 	WALK_MODAL_DECELERATE,
 };
 
-enum {
+typedef enum {
 	WALK_BIT_FORWARD  = 1 << 0,
 	WALK_BIT_BACKWARD = 1 << 1,
 	WALK_BIT_LEFT     = 1 << 2,
 	WALK_BIT_RIGHT    = 1 << 3,
 	WALK_BIT_UP       = 1 << 4,
 	WALK_BIT_DOWN     = 1 << 5,
-};
+} eWalkDirectionFlag;
 
 typedef enum eWalkTeleportState {
 	WALK_TELEPORT_STATE_OFF = 0,
@@ -963,6 +963,63 @@ static void walk_mouse_rotate_vertical(ARegion *ar, RegionView3D *rv3d, const fl
 	mul_qt_qtqt(rv3d->viewquat, rv3d->viewquat, tmp_quat);
 }
 
+static void walk_forward(float mat[3][3], const float speed,
+                        const bool is_world_forward, float r_dvec[3])
+{
+	float dvec_tmp[3] = {0.0f, 0.0f, speed};
+
+	mul_m3_v3(mat, dvec_tmp);
+
+	if (is_world_forward)
+		dvec_tmp[2] = 0.0f;
+
+	normalize_v3(dvec_tmp);
+	mul_v3_fl(dvec_tmp, fabsf(speed));
+	add_v3_v3(r_dvec, dvec_tmp);
+}
+
+static void walk_sideways(const float viewinvmat[4][4], const float speed, float r_dvec[3])
+{
+	float dvec_tmp[3] = {viewinvmat[0][0],
+	                     viewinvmat[0][1],
+	                     0.0f};
+
+	normalize_v3(dvec_tmp);
+	mul_v3_fl(dvec_tmp, speed);
+	add_v3_v3(r_dvec, dvec_tmp);
+}
+
+static void walk_updown(const float speed, float r_dvec[3])
+{
+	float dvec_tmp[3] = {0.0f, 0.0f, speed};
+	add_v3_v3(r_dvec, dvec_tmp);
+}
+
+static void walk_mouse_move(WalkInfo *walk, float mat[3][3], const eWalkDirectionFlag direction, float r_dvec[3])
+{
+	const float speed = 0.1f;
+	switch (direction) {
+		case WALK_BIT_UP:
+			walk_updown(-speed, r_dvec);
+			break;
+		case WALK_BIT_DOWN:
+			walk_updown(speed, r_dvec);
+			break;
+		case WALK_BIT_LEFT:
+			walk_sideways(walk->rv3d->viewinv, speed, r_dvec);
+			break;
+		case WALK_BIT_RIGHT:
+			walk_sideways(walk->rv3d->viewinv, -speed, r_dvec);
+			break;
+		case WALK_BIT_FORWARD:
+			walk_forward(mat, speed, true, r_dvec);
+			break;
+		case WALK_BIT_BACKWARD:
+			walk_forward(mat, -speed, true, r_dvec);
+			break;
+	}
+}
+
 static int walkApply(bContext *C, WalkInfo *walk)
 {
 	/* walk mode - Ctrl+Shift+F
@@ -1034,30 +1091,39 @@ static int walkApply(bContext *C, WalkInfo *walk)
 			switch (walk->mouse_mode) {
 				case WALK_MOUSE_MOVEHORIZONTAL:
 				{
-					//if (moffset[1])
-					//	walk_mouse_move_forward();
-
 					if (moffset[0])
 						walk_mouse_rotate_horizontal(ar, rv3d, walk->mouse_speed, moffset, mat, upvec);
+
+					if (moffset[1] > 0)
+						walk_mouse_move(walk, mat, WALK_BIT_FORWARD, dvec);
+					else if (moffset[1] < 0)
+						walk_mouse_move(walk, mat, WALK_BIT_BACKWARD, dvec);
+
 					break;
 				}
 				case WALK_MOUSE_MOVEVERTICAL:
 				{
-					//if (moffset[1])
-					//	walk_mouse_move_upward();
+					if (moffset[0] > 0)
+						walk_mouse_move(walk, mat, WALK_BIT_RIGHT, dvec);
+					else if (moffset[0] < 0)
+						walk_mouse_move(walk, mat, WALK_BIT_LEFT, dvec);
 
-					//if (moffset[0])
-					//	walk_mouse_move_sideways();
+					if (moffset[1] > 0)
+						walk_mouse_move(walk, mat, WALK_BIT_UP, dvec);
+					else if (moffset[1] < 0)
+						walk_mouse_move(walk, mat, WALK_BIT_DOWN, dvec);
+
 					break;
 				}
 				case WALK_MOUSE_LOOKAROUND:
 				default:
 				{
+					if (moffset[0])
+						walk_mouse_rotate_horizontal(ar, rv3d, walk->mouse_speed, moffset, mat, upvec);
+
 					if (moffset[1])
 						walk_mouse_rotate_vertical(ar, rv3d, walk->mouse_speed, moffset, mat, upvec);
 
-					if (moffset[0])
-						walk_mouse_rotate_horizontal(ar, rv3d, walk->mouse_speed, moffset, mat, upvec);
 					break;
 				}
 			}
@@ -1066,71 +1132,55 @@ static int walkApply(bContext *C, WalkInfo *walk)
 			if ((walk->active_directions) &&
 			    (walk->gravity_state == WALK_GRAVITY_STATE_OFF))
 			{
-
-				short direction;
 				zero_v3(dvec);
 
+				/* XOR */
 				if ((walk->active_directions & WALK_BIT_FORWARD) ||
 				    (walk->active_directions & WALK_BIT_BACKWARD))
 				{
-
-					direction = 0;
-
-					if ((walk->active_directions & WALK_BIT_FORWARD))
-						direction += 1;
-
-					if ((walk->active_directions & WALK_BIT_BACKWARD))
-						direction -= 1;
-
-					copy_v3_fl3(dvec_tmp, 0.0f, 0.0f, direction);
-					mul_m3_v3(mat, dvec_tmp);
-
-					if (walk->navigation_mode == WALK_MODE_GRAVITY) {
-						dvec_tmp[2] = 0.0f;
+					if ((walk->active_directions & WALK_BIT_FORWARD) &&
+					    (walk->active_directions & WALK_BIT_BACKWARD))
+					{
 					}
-
-					normalize_v3(dvec_tmp);
-					add_v3_v3(dvec, dvec_tmp);
-
+					else if ((walk->active_directions & WALK_BIT_FORWARD)) {
+						walk_forward(mat, 1.0f, (walk->navigation_mode == WALK_MODE_GRAVITY), dvec);
+					}
+					else { /* WALK_BIT_BACKWARD */
+						walk_forward(mat, -1.0f, (walk->navigation_mode == WALK_MODE_GRAVITY), dvec);
+					}
 				}
 
+				/* XOR */
 				if ((walk->active_directions & WALK_BIT_LEFT) ||
 				    (walk->active_directions & WALK_BIT_RIGHT))
 				{
-
-					direction = 0;
-
-					if ((walk->active_directions & WALK_BIT_LEFT))
-						direction += 1;
-
-					if ((walk->active_directions & WALK_BIT_RIGHT))
-						direction -= 1;
-
-					dvec_tmp[0] = direction * rv3d->viewinv[0][0];
-					dvec_tmp[1] = direction * rv3d->viewinv[0][1];
-					dvec_tmp[2] = 0.0f;
-
-					normalize_v3(dvec_tmp);
-					add_v3_v3(dvec, dvec_tmp);
-
+					if ((walk->active_directions & WALK_BIT_LEFT) &&
+					    (walk->active_directions & WALK_BIT_RIGHT))
+					{
+					}
+					else if ((walk->active_directions & WALK_BIT_LEFT)) {
+						walk_sideways(rv3d->viewinv, 1.0f, dvec);
+					}
+					else { /* WALK_BIT_RIGHT */
+						walk_sideways(rv3d->viewinv, -1.0f, dvec);
+					}
 				}
 
+				/* XOR */
 				if ((walk->active_directions & WALK_BIT_UP) ||
 				    (walk->active_directions & WALK_BIT_DOWN))
 				{
-
-					if (walk->navigation_mode == WALK_MODE_FREE) {
-
-						direction = 0;
-
-						if ((walk->active_directions & WALK_BIT_UP))
-							direction -= 1;
-
-						if ((walk->active_directions & WALK_BIT_DOWN))
-							direction = 1;
-
-						copy_v3_fl3(dvec_tmp, 0.0f, 0.0f, direction);
-						add_v3_v3(dvec, dvec_tmp);
+					if ((walk->active_directions & WALK_BIT_UP) &&
+					    (walk->active_directions & WALK_BIT_DOWN))
+					{
+					}
+					else if (walk->navigation_mode == WALK_MODE_FREE) {
+						if ((walk->active_directions & WALK_BIT_UP)) {
+							walk_updown(-1.0f, dvec);
+						}
+						else { /* WALK_BIT_DOWN */
+							walk_updown(1.0f, dvec);
+						}
 					}
 				}
 
