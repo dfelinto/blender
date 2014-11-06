@@ -1090,8 +1090,9 @@ static void scene_rebuild_rbw_recursive(Scene *scene, float ctime)
 	if (scene->set)
 		scene_rebuild_rbw_recursive(scene->set, ctime);
 
-	if (BKE_scene_check_rigidbody_active(scene))
-		BKE_rigidbody_rebuild_world(scene, ctime);
+	if (BKE_scene_check_rigidbody_active(scene)) {
+		//BKE_rigidbody_rebuild_world(scene, ctime);
+	}
 }
 
 static void scene_do_rb_simulation_recursive(Scene *scene, float ctime)

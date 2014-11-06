@@ -553,5 +553,6 @@ struct CCLDeviceInfo *CCL_compute_device_list(int opencl) { return NULL; }
 void COM_execute(struct bNodeTree *editingtree, int rendering) {}
 
 char blender_path[] = "";
+void BKE_rigidbody_rebuild_world(struct Scene *scene, float ctime) {}
 
 #endif // WITH_GAMEENGINE
