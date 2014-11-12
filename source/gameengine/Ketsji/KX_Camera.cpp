@@ -45,17 +45,24 @@ KX_Camera::KX_Camera(void* sgReplicationInfo,
     :
       KX_GameObject(sgReplicationInfo,callbacks),
       m_camdata(camdata),
+      m_current_rendering_eye(0),
       m_dirty(true),
       m_normalized(false),
       m_frustum_culling(frustum_culling),
-      m_set_projection_matrix(false),
       m_set_frustum_center(false),
       m_delete_node(delete_node)
 {
 	// setting a name would be nice...
 	m_name = "cam";
-	m_projection_matrix.setIdentity();
-	m_modelview_matrix.setIdentity();
+	for (unsigned int eye_index = 0 ; eye_index < 3 ; eye_index ++)
+	{
+	        m_set_projection_matrix[eye_index] = false;
+		m_projection_matrix[eye_index].setIdentity();
+		m_stereo_position_matrix[eye_index].setIdentity();
+		m_set_stereo_position_matrix[eye_index] = false;
+	}
+	m_camera_position_matrix.setIdentity();
+	updateModelviewMatrix();
 }
 
 
@@ -85,6 +92,14 @@ void KX_Camera::ProcessReplica()
 	KX_GameObject::ProcessReplica();
 	// replicated camera are always registered in the scene
 	m_delete_node = false;
+}
+
+/**
+* Update the modelview matrix by multiplying camera position and post-camera position matrices
+*/
+void KX_Camera::updateModelviewMatrix()
+{
+	m_modelview_matrix = m_stereo_position_matrix[m_current_rendering_eye] * m_camera_position_matrix;
 }
 
 MT_Transform KX_Camera::GetWorldToCamera() const
@@ -133,16 +148,47 @@ const MT_Quaternion KX_Camera::GetCameraOrientation() const
 
 
 /**
+* Sets the current eye for both projection and modelview matrices
+*/
+void KX_Camera::SetRenderingMatricesEye(int eye)
+{
+         if ((eye >= 0) && (eye < 3))
+         {
+	            m_current_rendering_eye = eye;
+		    updateModelviewMatrix();
+         }
+}
+
+/**
  * Sets the projection matrix that is used by the rasterizer.
  */
 void KX_Camera::SetProjectionMatrix(const MT_Matrix4x4 & mat)
 {
-	m_projection_matrix = mat;
+	SetProjectionMatrix(mat, m_current_rendering_eye);
+}
+
+
+/**
+* Sets the projection matrix that is used by the rasterizer.
+*/
+void KX_Camera::SetProjectionMatrix(const MT_Matrix4x4 & mat, int eye)
+{
+	m_projection_matrix[eye] = mat;
 	m_dirty = true;
-	m_set_projection_matrix = true;
+	m_set_projection_matrix[eye] = true;
 	m_set_frustum_center = false;
 }
 
+
+/**
+* Sets the projection matrix that is used by the rasterizer.
+*/
+void KX_Camera::SetStereoPositionMatrix(const MT_Matrix4x4 & mat, int eye)
+{
+	m_stereo_position_matrix[eye] = mat;
+	m_set_stereo_position_matrix[eye] = true;
+	updateModelviewMatrix();
+}
 
 
 /**
@@ -150,9 +196,10 @@ void KX_Camera::SetProjectionMatrix(const MT_Matrix4x4 & mat)
  */
 void KX_Camera::SetModelviewMatrix(const MT_Matrix4x4 & mat)
 {
-	m_modelview_matrix = mat;
+	m_camera_position_matrix = mat;
 	m_dirty = true;
 	m_set_frustum_center = false;
+	updateModelviewMatrix();
 }
 
 
@@ -162,10 +209,74 @@ void KX_Camera::SetModelviewMatrix(const MT_Matrix4x4 & mat)
  */
 const MT_Matrix4x4& KX_Camera::GetProjectionMatrix() const
 {
-	return m_projection_matrix;
+    return GetProjectionMatrix(m_current_rendering_eye);
 }
 
+/**
+* Gets the projection matrix that is used by the rasterizer.
+*/
+const MT_Matrix4x4& KX_Camera::GetProjectionMatrix(int eye) const
+{
+	return m_projection_matrix[eye];
+}
 
+/**
+* Gets the Post Camera matrix that is used by the rasterizer.
+*/
+const MT_Matrix4x4& KX_Camera::GetStereoPositionMatrix(int eye) const
+{
+	return m_stereo_position_matrix[eye];
+}
+
+const MT_Matrix4x4 KX_Camera::GetStereoMatrix(float eyeSeparation) const
+{
+        MT_Matrix4x4 result;
+	result.setIdentity();
+	if (m_set_stereo_position_matrix[m_current_rendering_eye]) {
+	        return m_stereo_position_matrix[m_current_rendering_eye];
+	}
+	// correction for stereo
+	if((m_current_rendering_eye != MIDDLE_EYE) && (m_camdata.m_perspective))
+	{
+	        MT_Matrix3x3 camOrientMat3x3 = NodeGetWorldOrientation();
+
+		MT_Vector3 unitViewDir(0.0, -1.0, 0.0);  // minus y direction, Blender convention
+		MT_Vector3 unitViewupVec(0.0, 0.0, 1.0);
+		MT_Vector3 viewDir, viewupVec;
+		MT_Vector3 eyeline;
+
+		// actual viewDir
+		viewDir = camOrientMat3x3 * unitViewDir;  // this is the moto convention, vector on right hand side
+		// actual viewup vec
+		viewupVec = camOrientMat3x3 * unitViewupVec;
+
+		// vector between eyes
+		eyeline = viewDir.cross(viewupVec);
+
+		switch(m_current_rendering_eye)
+		{
+			case LEFT_EYE:
+				{
+				// translate to left by half the eye distance
+				MT_Transform transform;
+				transform.setIdentity();
+				transform.translate(-(eyeline * eyeSeparation / 2.0));
+				result *= transform;
+				}
+				break;
+			case RIGHT_EYE:
+				{
+				// translate to right by half the eye distance
+				MT_Transform transform;
+				transform.setIdentity();
+				transform.translate(eyeline * eyeSeparation / 2.0);
+				result *= transform;
+				}
+				break;
+		}
+	}
+	return result;
+}
 
 /**
  * Gets the modelview matrix that is used by the rasterizer.
@@ -178,12 +289,20 @@ const MT_Matrix4x4& KX_Camera::GetModelviewMatrix() const
 
 bool KX_Camera::hasValidProjectionMatrix() const
 {
-	return m_set_projection_matrix;
+	return m_set_projection_matrix[m_current_rendering_eye];
+}
+
+void KX_Camera::InvalidateAllProjectionMatrices(bool valid)
+{
+	for (unsigned int eye_index = 0 ; eye_index < 3 ; eye_index ++)
+	{
+	        m_set_projection_matrix[eye_index] = valid;
+	}
 }
 
 void KX_Camera::InvalidateProjectionMatrix(bool valid)
 {
-	m_set_projection_matrix = valid;
+	m_set_projection_matrix[m_current_rendering_eye] = valid;
 }
 
 
@@ -250,7 +369,7 @@ void KX_Camera::ExtractClipPlanes()
 	if (!m_dirty)
 		return;
 
-	MT_Matrix4x4 m = m_projection_matrix * m_modelview_matrix;
+	MT_Matrix4x4 m = m_projection_matrix[m_current_rendering_eye] * m_modelview_matrix;
 	// Left clip plane
 	m_planes[0] = m[3] + m[0];
 	// Right clip plane
@@ -296,10 +415,10 @@ void KX_Camera::ExtractFrustumSphere()
 	// the near and far extreme frustum points are equal.
 
 	// get the transformation matrix from device coordinate to camera coordinate
-	MT_Matrix4x4 clip_camcs_matrix = m_projection_matrix;
+	MT_Matrix4x4 clip_camcs_matrix = m_projection_matrix[m_current_rendering_eye];
 	clip_camcs_matrix.invert();
 
-	if (m_projection_matrix[3][3] == MT_Scalar(0.0))
+	if (m_projection_matrix[m_current_rendering_eye][3][3] == MT_Scalar(0.0))
 	{
 		// frustrum projection
 		// detect which of the corner of the far clipping plane is the farthest to the origin
@@ -529,6 +648,16 @@ PyAttributeDef KX_Camera::Attributes[] = {
 	KX_PYATTRIBUTE_RW_FUNCTION("useViewport",	KX_Camera,	pyattr_get_use_viewport,  pyattr_set_use_viewport),
 	
 	KX_PYATTRIBUTE_RW_FUNCTION("projection_matrix",	KX_Camera,	pyattr_get_projection_matrix, pyattr_set_projection_matrix),
+	KX_PYATTRIBUTE_RW_FUNCTION("projection_matrix_left",	KX_Camera,	pyattr_get_left_projection_matrix, pyattr_set_left_projection_matrix),
+	KX_PYATTRIBUTE_RW_FUNCTION("projection_matrix_right",	KX_Camera,	pyattr_get_right_projection_matrix, pyattr_set_right_projection_matrix),
+
+	KX_PYATTRIBUTE_RW_FUNCTION("stereo_position_matrix",	KX_Camera,
+				   pyattr_get_stereo_position_matrix, pyattr_set_stereo_position_matrix),
+	KX_PYATTRIBUTE_RW_FUNCTION("stereo_position_matrix_left",	KX_Camera,
+				   pyattr_get_left_stereo_position_matrix, pyattr_set_left_stereo_position_matrix),
+	KX_PYATTRIBUTE_RW_FUNCTION("stereo_position_matrix_right",	KX_Camera,
+				   pyattr_get_right_stereo_position_matrix, pyattr_set_right_stereo_position_matrix),
+
 	KX_PYATTRIBUTE_RO_FUNCTION("modelview_matrix",	KX_Camera,	pyattr_get_modelview_matrix),
 	KX_PYATTRIBUTE_RO_FUNCTION("camera_to_world",	KX_Camera,	pyattr_get_camera_to_world),
 	KX_PYATTRIBUTE_RO_FUNCTION("world_to_camera",	KX_Camera,	pyattr_get_world_to_camera),
@@ -749,7 +878,7 @@ int KX_Camera::pyattr_set_lens(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef, 
 	}
 	
 	self->m_camdata.m_lens= param;
-	self->m_set_projection_matrix = false;
+	self->InvalidateAllProjectionMatrices();
 	return PY_SET_ATTR_SUCCESS;
 }
 
@@ -778,7 +907,7 @@ int KX_Camera::pyattr_set_fov(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef, P
 	float lens = width / (2.0 * tan(0.5 * fov));
 	
 	self->m_camdata.m_lens= lens;
-	self->m_set_projection_matrix = false;
+	self->InvalidateAllProjectionMatrices();
 	return PY_SET_ATTR_SUCCESS;
 }
 
@@ -798,7 +927,7 @@ int KX_Camera::pyattr_set_ortho_scale(void *self_v, const KX_PYATTRIBUTE_DEF *at
 	}
 	
 	self->m_camdata.m_scale= param;
-	self->m_set_projection_matrix = false;
+	self->InvalidateAllProjectionMatrices();
 	return PY_SET_ATTR_SUCCESS;
 }
 
@@ -818,7 +947,7 @@ int KX_Camera::pyattr_set_near(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef, 
 	}
 	
 	self->m_camdata.m_clipstart= param;
-	self->m_set_projection_matrix = false;
+	self->InvalidateAllProjectionMatrices();
 	return PY_SET_ATTR_SUCCESS;
 }
 
@@ -838,7 +967,7 @@ int KX_Camera::pyattr_set_far(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef, P
 	}
 	
 	self->m_camdata.m_clipend= param;
-	self->m_set_projection_matrix = false;
+	self->InvalidateAllProjectionMatrices();
 	return PY_SET_ATTR_SUCCESS;
 }
 
@@ -865,7 +994,19 @@ int KX_Camera::pyattr_set_use_viewport(void *self_v, const KX_PYATTRIBUTE_DEF *a
 PyObject *KX_Camera::pyattr_get_projection_matrix(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef)
 {
 	KX_Camera* self = static_cast<KX_Camera*>(self_v);
-	return PyObjectFrom(self->GetProjectionMatrix()); 
+	return PyObjectFrom(self->GetProjectionMatrix(MIDDLE_EYE));
+}
+
+PyObject* KX_Camera::pyattr_get_left_projection_matrix(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef)
+{
+	KX_Camera* self= static_cast<KX_Camera*>(self_v);
+	return PyObjectFrom(self->GetProjectionMatrix(LEFT_EYE));
+}
+
+PyObject* KX_Camera::pyattr_get_right_projection_matrix(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef)
+{
+	KX_Camera* self= static_cast<KX_Camera*>(self_v);
+	return PyObjectFrom(self->GetProjectionMatrix(RIGHT_EYE));
 }
 
 int KX_Camera::pyattr_set_projection_matrix(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef, PyObject *value)
@@ -875,7 +1016,80 @@ int KX_Camera::pyattr_set_projection_matrix(void *self_v, const KX_PYATTRIBUTE_D
 	if (!PyMatTo(value, mat)) 
 		return PY_SET_ATTR_FAIL;
 	
-	self->SetProjectionMatrix(mat);
+	self->SetProjectionMatrix(mat, MIDDLE_EYE);
+	return PY_SET_ATTR_SUCCESS;
+}
+
+int KX_Camera::pyattr_set_left_projection_matrix(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef, PyObject *value)
+{
+	KX_Camera* self= static_cast<KX_Camera*>(self_v);
+	MT_Matrix4x4 mat;
+	if (!PyMatTo(value, mat))
+		return PY_SET_ATTR_FAIL;
+
+	self->SetProjectionMatrix(mat, LEFT_EYE);
+	return PY_SET_ATTR_SUCCESS;
+}
+
+int KX_Camera::pyattr_set_right_projection_matrix(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef, PyObject *value)
+{
+	KX_Camera* self= static_cast<KX_Camera*>(self_v);
+	MT_Matrix4x4 mat;
+	if (!PyMatTo(value, mat))
+		return PY_SET_ATTR_FAIL;
+
+	self->SetProjectionMatrix(mat, RIGHT_EYE);
+	return PY_SET_ATTR_SUCCESS;
+}
+
+PyObject* KX_Camera::pyattr_get_stereo_position_matrix(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef)
+{
+	KX_Camera* self= static_cast<KX_Camera*>(self_v);
+	return PyObjectFrom(self->GetStereoPositionMatrix(MIDDLE_EYE));
+}
+
+PyObject* KX_Camera::pyattr_get_left_stereo_position_matrix(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef)
+{
+	KX_Camera* self= static_cast<KX_Camera*>(self_v);
+	return PyObjectFrom(self->GetStereoPositionMatrix(LEFT_EYE));
+}
+
+PyObject* KX_Camera::pyattr_get_right_stereo_position_matrix(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef)
+{
+	KX_Camera* self= static_cast<KX_Camera*>(self_v);
+	return PyObjectFrom(self->GetStereoPositionMatrix(RIGHT_EYE));
+}
+
+int KX_Camera::pyattr_set_stereo_position_matrix(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef, PyObject *value)
+{
+	KX_Camera* self= static_cast<KX_Camera*>(self_v);
+	MT_Matrix4x4 mat;
+	if (!PyMatTo(value, mat))
+		return PY_SET_ATTR_FAIL;
+
+	self->SetStereoPositionMatrix(mat, MIDDLE_EYE);
+	return PY_SET_ATTR_SUCCESS;
+}
+
+int KX_Camera::pyattr_set_left_stereo_position_matrix(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef, PyObject *value)
+{
+	KX_Camera* self= static_cast<KX_Camera*>(self_v);
+	MT_Matrix4x4 mat;
+	if (!PyMatTo(value, mat))
+		return PY_SET_ATTR_FAIL;
+
+	self->SetStereoPositionMatrix(mat, LEFT_EYE);
+	return PY_SET_ATTR_SUCCESS;
+}
+
+int KX_Camera::pyattr_set_right_stereo_position_matrix(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef, PyObject *value)
+{
+	KX_Camera* self= static_cast<KX_Camera*>(self_v);
+	MT_Matrix4x4 mat;
+	if (!PyMatTo(value, mat))
+		return PY_SET_ATTR_FAIL;
+
+	self->SetStereoPositionMatrix(mat, RIGHT_EYE);
 	return PY_SET_ATTR_SUCCESS;
 }
 

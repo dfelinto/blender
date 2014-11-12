@@ -889,7 +889,14 @@ void KX_KetsjiEngine::Render()
 	// for each scene, call the proceed functions
 	{
 		KX_Scene* scene = *sceneit;
+
+#ifdef WITH_PYTHON
+		// Run any pre-drawing python callbacks
+		scene->RunDrawingCallbacks(scene->GetPreRenderCB());
+#endif
+
 		KX_Camera* cam = scene->GetActiveCamera();
+
 		// pass the scene's worldsettings to the rasterizer
 		SetWorldSettings(scene->GetWorldInfo());
 
@@ -1222,6 +1229,17 @@ void KX_KetsjiEngine::RenderFrame(KX_Scene* scene, KX_Camera* cam)
 	
 	if (!cam)
 		return;
+
+	if (m_rasterizer->Stereo()) {
+	  if (m_rasterizer->GetEye() == RAS_IRasterizer::RAS_STEREO_LEFTEYE) {
+	    cam->SetRenderingMatricesEye(LEFT_EYE);
+	  } else {
+	    cam->SetRenderingMatricesEye(RIGHT_EYE);
+	  }
+	} else {
+	  cam->SetRenderingMatricesEye(0);
+	}
+
 	GetSceneViewport(scene, cam, area, viewport);
 
 	// store the computed viewport in the scene
@@ -1317,8 +1335,9 @@ void KX_KetsjiEngine::RenderFrame(KX_Scene* scene, KX_Camera* cam)
 	MT_Transform camtrans(cam->GetWorldToCamera());
 	MT_Matrix4x4 viewmat(camtrans);
 	
-	m_rasterizer->SetViewMatrix(viewmat, cam->NodeGetWorldOrientation(), cam->NodeGetWorldPosition(), cam->GetCameraData()->m_perspective);
 	cam->SetModelviewMatrix(viewmat);
+	m_rasterizer->SetModelviewMatrix(cam->GetStereoMatrix(m_rasterizer->GetEyeSeparation()) * viewmat);
+	m_rasterizer->SetCameraPosition(cam->NodeGetWorldPosition());
 
 	// The following actually reschedules all vertices to be
 	// redrawn. There is a cache between the actual rescheduling

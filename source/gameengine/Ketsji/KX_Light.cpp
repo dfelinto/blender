@@ -283,11 +283,11 @@ void KX_LightObject::BindShadowBuffer(RAS_IRasterizer *ras, RAS_ICanvas *canvas,
 	cam->NodeUpdateGS(0);
 
 	/* setup rasterizer transformations */
-	/* SetViewMatrix may use stereomode which we temporarily disable here */
+	/* old: SetViewMatrix may use stereomode which we temporarily disable here */
 	RAS_IRasterizer::StereoMode stereomode = ras->GetStereoMode();
 	ras->SetStereoMode(RAS_IRasterizer::RAS_STEREO_NOSTEREO);
 	ras->SetProjectionMatrix(projectionmat);
-	ras->SetViewMatrix(modelviewmat, cam->NodeGetWorldOrientation(), cam->NodeGetWorldPosition(), cam->GetCameraData()->m_perspective);
+	ras->SetModelviewMatrix(modelviewmat);
 	ras->SetStereoMode(stereomode);
 }
 

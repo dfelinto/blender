@@ -73,16 +73,31 @@ protected:
 //	}
 
 	/**
-	 * Storage for the projection matrix that is passed to the
-	 * rasterizer. */
-	MT_Matrix4x4 m_projection_matrix;
+	 * Storage for the current active matrix (ie.: [0] no stereo, [1] left eye, [2] right eye)
+	 **/
+	int m_current_rendering_eye;
+
+	/**
+	 * Storage for the projection matrix that is passed to the rasterizer.
+	 * Array of three matrix : */
+	MT_Matrix4x4 m_projection_matrix[3];
 	//MT_Matrix4x4 m_projection_matrix1;
+
+	/**
+	 * Storage for the camera position matrix that is passed to the
+	 * rasterizer after beeing mutliplied by the current post-camera position matrix. */
+	MT_Matrix4x4 m_camera_position_matrix;
 
 	/**
 	 * Storage for the modelview matrix that is passed to the
 	 * rasterizer. */
 	MT_Matrix4x4 m_modelview_matrix;
 	
+	/**
+	 * Storage for the post camera matrix that is passed to the rasterizer.
+	 * That is only used by stereoscopic rendering, for correct lightening computing.*/
+	MT_Matrix4x4 m_stereo_position_matrix[3];
+
 	/**
 	 * true if the view frustum (modelview/projection matrix)
 	 * has changed - the clip planes (m_planes) will have to be
@@ -107,8 +122,15 @@ protected:
 	
 	/**
 	 * true if this camera has a valid projection matrix.
+	 * Array of three matrix : [0] no stereo, [1] left eye, [2] right eye
 	 */
-	bool         m_set_projection_matrix;
+	bool         m_set_projection_matrix[3];
+
+	/**
+	 * true if this camera has a valid projection matrix.
+	 * Array of three matrix : [0] no stereo, [1] left eye, [2] right eye
+	 */
+	bool         m_set_stereo_position_matrix[3];
 	
 	/**
 	 * The center point of the frustum.
@@ -144,6 +166,11 @@ protected:
 		return m_planes;
 	}
 
+	/**
+	 * Update the modelview matrix by multiplying camera position and post-camera position matrices
+	 */
+	void updateModelviewMatrix();
+
 public:
 
 	enum { INSIDE, INTERSECT, OUTSIDE };
@@ -172,25 +199,49 @@ public:
 
 	/* I want the camera orientation as well. */
 	const MT_Quaternion GetCameraOrientation() const;
+
+	void                            SetRenderingMatricesEye(int eye);
 		
 	/** Sets the projection matrix that is used by the rasterizer. */
 	void				SetProjectionMatrix(const MT_Matrix4x4 & mat);
 
+	/** Sets the projection matrix that is used by the rasterizer. */
+	void				SetProjectionMatrix(const MT_Matrix4x4 & mat, int eye);
+
+	/** Sets the stereo matrix that is used by the rasterizer. */
+	void				SetStereoPositionMatrix(const MT_Matrix4x4 & mat, int eye);
+
 	/** Sets the modelview matrix that is used by the rasterizer. */
 	void				SetModelviewMatrix(const MT_Matrix4x4 & mat);
-		
-	/** Gets the projection matrix that is used by the rasterizer. */
+
+	/** Gets the projection matrix that is used by the rasterizer.
+	 * Work on current active matrix */
 	const MT_Matrix4x4&		GetProjectionMatrix() const;
 	
+	/** Gets the projection matrix that is used by the rasterizer. */
+	const MT_Matrix4x4&		GetProjectionMatrix(int eye) const;
+
+	/** Gets the Post Camera matrix that is used by the rasterizer. */
+	const MT_Matrix4x4&		GetStereoPositionMatrix(int eye) const;
+
+	/** Gets the Stereo matrix that is used by the rasterizer. */
+	const MT_Matrix4x4		GetStereoMatrix(float eyeSeparation) const;
+
 	/** returns true if this camera has been set a projection matrix. */
 	bool				hasValidProjectionMatrix() const;
 	
 	/** Sets the validity of the projection matrix.  Call this if you change camera
 	 *  data (eg lens, near plane, far plane) and require the projection matrix to be
 	 *  recalculated.
-	 */
+	 * Work on current active matrix */
 	void				InvalidateProjectionMatrix(bool valid = false);
-	
+
+	/** Sets the validity of the projection matrix.  Call this if you change camera
+	    data (eg lens, near plane, far plane) and require the projection matrix to be
+	    recalculated.
+	 */
+	void				InvalidateAllProjectionMatrices(bool valid = false);
+
 	/** Gets the modelview matrix that is used by the rasterizer. 
 	 *  \warning If the Camera is a dynamic object then this method may return garbage.  Use GetCameraToWorld() instead.
 	 */
@@ -311,8 +362,19 @@ public:
 	static int			pyattr_set_use_viewport(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef, PyObject *value);
 	
 	static PyObject*	pyattr_get_projection_matrix(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef);
+	static PyObject*	pyattr_get_left_projection_matrix(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef);
+	static PyObject*	pyattr_get_right_projection_matrix(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef);
 	static int			pyattr_set_projection_matrix(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef, PyObject *value);
-	
+	static int			pyattr_set_left_projection_matrix(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef, PyObject *value);
+	static int			pyattr_set_right_projection_matrix(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef, PyObject *value);
+
+	static PyObject*	pyattr_get_stereo_position_matrix(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef);
+	static PyObject*	pyattr_get_left_stereo_position_matrix(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef);
+	static PyObject*	pyattr_get_right_stereo_position_matrix(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef);
+	static int			pyattr_set_stereo_position_matrix(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef, PyObject *value);
+	static int			pyattr_set_left_stereo_position_matrix(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef, PyObject *value);
+	static int			pyattr_set_right_stereo_position_matrix(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef, PyObject *value);
+
 	static PyObject*	pyattr_get_modelview_matrix(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef);
 	static PyObject*	pyattr_get_camera_to_world(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef);
 	static PyObject*	pyattr_get_world_to_camera(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef);

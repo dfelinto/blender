@@ -44,6 +44,7 @@
 
 class KX_TimeCategoryLogger;
 
+#define MIDDLE_EYE  0
 #define LEFT_EYE  1
 #define RIGHT_EYE 2
 
