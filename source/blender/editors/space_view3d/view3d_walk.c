@@ -64,6 +64,7 @@
 
 /* prototypes */
 static float getVelocityZeroTime(const float gravity, const float velocity);
+static void walk_non_modal(struct bContext *C, struct wmOperator *op);
 
 /* NOTE: these defines are saved in keymap files, do not change values but just add new ones */
 enum {
@@ -101,6 +102,17 @@ typedef enum {
 	WALK_BIT_UP       = 1 << 4,
 	WALK_BIT_DOWN     = 1 << 5,
 } eWalkDirectionFlag;
+
+typedef enum eWalkKeyMode{
+	WALK_KEY_MODAL    = 0,
+	WALK_KEY_FORWARD  = 1 << 1,
+	WALK_KEY_BACKWARD = 1 << 2,
+	WALK_KEY_LEFT     = 1 << 3,
+	WALK_KEY_RIGHT    = 1 << 4,
+	WALK_KEY_UP       = 1 << 5,
+	WALK_KEY_DOWN     = 1 << 6,
+	WALK_KEY_STOP     = 1 << 7,
+} eWalkKeyMode;
 
 typedef enum eWalkTeleportState {
 	WALK_TELEPORT_STATE_OFF = 0,
@@ -277,6 +289,8 @@ typedef struct WalkInfo {
 
 	eWalkMouseMode mouse_mode;
 
+	bool is_modal;
+
 	/* teleport */
 	WalkTeleport teleport;
 
@@ -379,7 +393,9 @@ static void walk_navigation_mode_set(bContext *C, WalkInfo *walk, eWalkMethod mo
 		walk->gravity_state = WALK_GRAVITY_STATE_START;
 	}
 
-	walk_update_header(C, walk);
+	if (walk->is_modal) {
+		walk_update_header(C, walk);
+	}
 }
 
 /**
@@ -508,6 +524,9 @@ static bool initWalkInfo(bContext *C, WalkInfo *walk, wmOperator *op, const wmEv
 	walk->is_slow = false;
 	walk->grid = 1.f / walk->scene->unit.scale_length;
 
+	walk->mouse_mode = RNA_enum_get(op->ptr, "mouse_mode");
+	walk->is_modal = RNA_enum_get(op->ptr, "key_mode") == WALK_KEY_MODAL;
+
 	/* user preference settings */
 	walk->teleport.duration = U.walk_navigation.teleport_time;
 	walk->mouse_speed = U.walk_navigation.mouse_speed;
@@ -540,17 +559,15 @@ static bool initWalkInfo(bContext *C, WalkInfo *walk, wmOperator *op, const wmEv
 #endif
 	zero_v3(walk->dvec_prev);
 
-	walk->timer = WM_event_add_timer(CTX_wm_manager(C), win, TIMER, 0.01f);
+	walk->timer = NULL;
 
 	walk->ndof = NULL;
 
 	walk->time_lastdraw = PIL_check_seconds_timer();
 
-	walk->draw_handle_pixel = ED_region_draw_cb_activate(walk->ar->type, drawWalkPixel, walk, REGION_DRAW_POST_PIXEL);
+	walk->draw_handle_pixel = NULL;
 
 	walk->rv3d->rflag |= RV3D_NAVIGATING;
-
-	walk->mouse_mode = RNA_enum_get(op->ptr, "mouse_mode");
 
 	walk->v3d_camera_control = ED_view3d_cameracontrol_acquire(
 	        walk->scene, walk->v3d, walk->rv3d,
@@ -566,12 +583,18 @@ static bool initWalkInfo(bContext *C, WalkInfo *walk, wmOperator *op, const wmEv
 	walk->init_mval[0] = event->x;
 	walk->init_mval[1] = event->y;
 
-	WM_cursor_warp(win,
-	               walk->ar->winrct.xmin + walk->center_mval[0],
-	               walk->ar->winrct.ymin + walk->center_mval[1]);
+	if (walk->is_modal) {
+		walk->timer = WM_event_add_timer(CTX_wm_manager(C), win, TIMER, 0.01f);
 
-	/* remove the mouse cursor temporarily */
-	WM_cursor_modal_set(win, CURSOR_NONE);
+		walk->draw_handle_pixel = ED_region_draw_cb_activate(walk->ar->type, drawWalkPixel, walk, REGION_DRAW_POST_PIXEL);
+
+		WM_cursor_warp(win,
+		               walk->ar->winrct.xmin + walk->center_mval[0],
+		               walk->ar->winrct.ymin + walk->center_mval[1]);
+
+		/* remove the mouse cursor temporarily */
+		WM_cursor_modal_set(win, CURSOR_NONE);
+	}
 
 	return true;
 }
@@ -591,10 +614,6 @@ static int walkEnd(bContext *C, WalkInfo *walk)
 	win = CTX_wm_window(C);
 	rv3d = walk->rv3d;
 
-	WM_event_remove_timer(CTX_wm_manager(C), win, walk->timer);
-
-	ED_region_draw_cb_exit(walk->ar->type, walk->draw_handle_pixel);
-
 	ED_view3d_cameracontrol_release(walk->v3d_camera_control, walk->state == WALK_CANCEL);
 
 	rv3d->rflag &= ~RV3D_NAVIGATING;
@@ -602,11 +621,18 @@ static int walkEnd(bContext *C, WalkInfo *walk)
 	if (walk->ndof)
 		MEM_freeN(walk->ndof);
 
-	/* restore the cursor */
-	WM_cursor_modal_restore(win);
 
-	/* center the mouse */
-	WM_cursor_warp(win, walk->init_mval[0], walk->init_mval[1]);
+	if (walk->is_modal) {
+		WM_event_remove_timer(CTX_wm_manager(C), win, walk->timer);
+
+		ED_region_draw_cb_exit(walk->ar->type, walk->draw_handle_pixel);
+
+		/* restore the cursor */
+		WM_cursor_modal_restore(win);
+
+		/* center the mouse */
+		WM_cursor_warp(win, walk->init_mval[0], walk->init_mval[1]);
+	}
 
 	if (walk->state == WALK_CONFIRM) {
 		MEM_freeN(walk);
@@ -1067,14 +1093,20 @@ static int walkApply(bContext *C, WalkInfo *walk)
 			/* time how fast it takes for us to redraw,
 			 * this is so simple scenes don't walk too fast */
 			double time_current;
-			float time_redraw;
+			float time_redraw = 1.0f;
 #ifdef NDOF_WALK_DRAW_TOOMUCH
 			walk->redraw = 1;
 #endif
-			time_current = PIL_check_seconds_timer();
-			time_redraw = (float)(time_current - walk->time_lastdraw);
 
-			walk->time_lastdraw = time_current;
+			if (walk->is_modal) {
+				time_current = PIL_check_seconds_timer();
+				time_redraw = (float)(time_current - walk->time_lastdraw);
+				walk->time_lastdraw = time_current;
+			}
+			else {
+				/* TODO - handle redraw for non-modal */
+				time_redraw = 0.1f;
+			}
 
 			/* base speed in m/s */
 			walk->speed = WALK_MOVE_SPEED;
@@ -1374,6 +1406,11 @@ static int walk_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 		return OPERATOR_CANCELLED;
 	}
 
+	if (walk->is_modal == false) {
+		walk_non_modal(C, op);
+		return OPERATOR_FINISHED;
+	}
+
 	walkEvent(C, op, walk, event);
 
 	WM_event_add_modal_handler(C, op);
@@ -1433,10 +1470,63 @@ static int walk_modal(bContext *C, wmOperator *op, const wmEvent *event)
 	return exit_code;
 }
 
+static void walk_non_modal(bContext *C, wmOperator *op)
+{
+	WalkInfo *walk = op->customdata;
+
+	RegionView3D *rv3d = walk->rv3d;
+	Object *walk_object = ED_view3d_cameracontrol_object_get(walk->v3d_camera_control);
+
+	eWalkKeyMode keymode = RNA_enum_get(op->ptr, "key_mode");
+	walk->active_directions = 0;
+
+	if ((keymode & WALK_KEY_FORWARD))
+		walk->active_directions |= WALK_BIT_FORWARD;
+	else if ((keymode & WALK_KEY_BACKWARD))
+		walk->active_directions |= WALK_BIT_BACKWARD;
+
+	if ((keymode & WALK_KEY_LEFT))
+		walk->active_directions |= WALK_BIT_LEFT;
+	else if ((keymode & WALK_KEY_RIGHT))
+		walk->active_directions |= WALK_BIT_RIGHT;
+
+	if ((keymode & WALK_KEY_UP))
+		walk->active_directions |= WALK_BIT_UP;
+	else if ((keymode & WALK_KEY_DOWN))
+		walk->active_directions |= WALK_BIT_DOWN;
+
+	walkApply(C, walk);
+	walk->state = WALK_CONFIRM;
+	walkEnd(C, walk);
+
+	if (rv3d->persp == RV3D_CAMOB) {
+		WM_event_add_notifier(C, NC_OBJECT | ND_TRANSFORM, walk_object);
+	}
+
+	// puts("redraw!"); // too frequent, commented with NDOF_WALK_DRAW_TOOMUCH for now
+	ED_region_tag_redraw(CTX_wm_region(C));
+}
+
 static EnumPropertyItem walk_navigation_mouse_mode_items[] = {
 	{WALK_MOUSE_LOOKAROUND, "LOOK_AROUND", 0, "Look Around", "Rotates the viewport camera"},
 	{WALK_MOUSE_MOVEHORIZONTAL, "MOVE_HORIZONTAL", 0, "Move Horizontally", "Moves the camera forward and backward and rotates left and right"},
 	{WALK_MOUSE_MOVEVERTICAL, "MOVE_VERTICAL", 0, "Move Vertically", "Moves the camera up and down or left and right"},
+	{0, NULL, 0, NULL, NULL}
+};
+
+static EnumPropertyItem walk_navigation_key_mode_items[] = {
+	{WALK_KEY_MODAL, "MODAL", 0, "Modal", ""},
+	{WALK_KEY_FORWARD, "MOVE_FORWARD", 0, "Move Forward", ""},
+	{WALK_KEY_BACKWARD, "MOVE_BACKWARD", 0, "Move Backward", ""},
+	{WALK_KEY_LEFT, "MOVE_LEFT", 0, "Move Left", ""},
+	{WALK_KEY_RIGHT, "MOVE_RIGHT", 0, "Move Right", ""},
+	{WALK_KEY_UP, "MOVE_UP", 0, "Move Up", ""},
+	{WALK_KEY_DOWN, "MOVE_DOWN", 0, "Move Down", ""},
+	{WALK_KEY_FORWARD | WALK_KEY_LEFT, "MOVE_FORWARD_LEFT", 0, "Move Forward Left", ""},
+	{WALK_KEY_FORWARD | WALK_KEY_RIGHT, "MOVE_FORWARD_RIGHT", 0, "Move Forward Right", ""},
+	{WALK_KEY_BACKWARD | WALK_KEY_LEFT, "MOVE_BACKWARD_LEFT", 0, "Move Backward Left", ""},
+	{WALK_KEY_BACKWARD | WALK_KEY_RIGHT, "MOVE_BACKWARD_RIGHT", 0, "Move Backward Right", ""},
+	{WALK_KEY_STOP, "MOVE_STOP", 0, "Move Stop", ""},
 	{0, NULL, 0, NULL, NULL}
 };
 
@@ -1458,6 +1548,8 @@ void VIEW3D_OT_walk(wmOperatorType *ot)
 	/* flags */
 	ot->flag = OPTYPE_BLOCKING;
 
-	prop = RNA_def_enum(ot->srna, "mouse_mode", walk_navigation_mouse_mode_items, WALK_MOUSE_LOOKAROUND, "Mode", "");
+	prop = RNA_def_enum(ot->srna, "mouse_mode", walk_navigation_mouse_mode_items, WALK_MOUSE_LOOKAROUND, "Mouse Mode", "");
+	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+	prop = RNA_def_enum(ot->srna, "key_mode", walk_navigation_key_mode_items, WALK_KEY_MODAL, "Key Mode", "");
 	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
