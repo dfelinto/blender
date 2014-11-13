@@ -198,10 +198,10 @@ ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input,
 	int num_samples = kernel_data.integrator.aa_samples;
 
 	/* random number generator */
-	RNG rng = cmj_hash(offset + i, 0);
+	RNG rng = cmj_hash(offset + i, kernel_data.integrator.seed);
 
 #if 0
-	uint rng_state = cmj_hash(i, 0);
+	uint rng_state = cmj_hash(i, kernel_data.integrator.seed);
 	float filter_x, filter_y;
 	path_rng_init(kg, &rng_state, sample, num_samples, &rng, 0, 0, &filter_x, &filter_y);
 
@@ -253,6 +253,10 @@ ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input,
 		/* data passes */
 		case SHADER_EVAL_NORMAL:
 		{
+			if ((sd.flag & SD_HAS_BUMP)) {
+				shader_eval_surface(kg, &sd, 0.f, 0, SHADER_CONTEXT_MAIN);
+			}
+
 			/* compression: normal = (2 * color) - 1 */
 			out = sd.N * 0.5f + make_float3(0.5f, 0.5f, 0.5f);
 			break;

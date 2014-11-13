@@ -97,16 +97,17 @@ public:
 	bool texture(ustring filename, TextureOpt &options,
 	             OSL::ShaderGlobals *sg,
 	             float s, float t, float dsdx, float dtdx,
-	             float dsdy, float dtdy, float *result);
+	             float dsdy, float dtdy, int nchannels, float *result);
 
 	bool texture3d(ustring filename, TextureOpt &options,
 	               OSL::ShaderGlobals *sg, const OSL::Vec3 &P,
 	               const OSL::Vec3 &dPdx, const OSL::Vec3 &dPdy,
-	               const OSL::Vec3 &dPdz, float *result);
+	               const OSL::Vec3 &dPdz, int nchannels, float *result);
 
 	bool environment(ustring filename, TextureOpt &options,
 	                 OSL::ShaderGlobals *sg, const OSL::Vec3 &R,
-	                 const OSL::Vec3 &dRdx, const OSL::Vec3 &dRdy, float *result);
+	                 const OSL::Vec3 &dRdx, const OSL::Vec3 &dRdy,
+	                 int nchannels, float *result);
 
 	bool get_texture_info(OSL::ShaderGlobals *sg, ustring filename, int subimage,
 	                      ustring dataname, TypeDesc datatype, void *data);
@@ -159,70 +160,37 @@ public:
 	static ustring u_v;
 	static ustring u_empty;
 
-#if OSL_LIBRARY_VERSION_CODE < 10500
-	bool get_matrix(OSL::Matrix44 &result, OSL::TransformationPtr xform, float time) {
-		return get_matrix(NULL, result, xform, time);
+	/* Code to make OSL versions transition smooth. */
+
+#if OSL_LIBRARY_VERSION_CODE < 10600
+	inline bool texture(ustring filename, TextureOpt &options,
+	                    OSL::ShaderGlobals *sg,
+	                    float s, float t, float dsdx, float dtdx,
+	                    float dsdy, float dtdy, float *result)
+	{
+		return texture(filename, options, sg, s, t, dsdx, dtdx, dsdy, dtdy,
+		               options.nchannels, result);
 	}
 
-	bool get_inverse_matrix(OSL::Matrix44 &result, OSL::TransformationPtr xform, float time) {
-		return get_inverse_matrix(NULL, result, xform, time);
+	inline bool texture3d(ustring filename, TextureOpt &options,
+	                      OSL::ShaderGlobals *sg, const OSL::Vec3 &P,
+	                      const OSL::Vec3 &dPdx, const OSL::Vec3 &dPdy,
+	                      const OSL::Vec3 &dPdz, float *result)
+	{
+		return texture3d(filename, options, sg, P, dPdx, dPdy, dPdz,
+		                 options.nchannels, result);
 	}
 
-	bool get_matrix(OSL::Matrix44 &result, ustring from, float time) {
-		return get_matrix(NULL, result, from, time);
-	}
-
-	bool get_inverse_matrix(OSL::Matrix44 &result, ustring to, float time) {
-		return get_inverse_matrix(NULL, result, to, time);
-	}
-
-	bool get_matrix(OSL::Matrix44 &result, OSL::TransformationPtr xform) {
-		return get_matrix(NULL, result, xform);
-	}
-
-	bool get_inverse_matrix(OSL::Matrix44 &result, OSL::TransformationPtr xform) {
-		return get_inverse_matrix(NULL, result, xform);
-	}
-
-	bool get_matrix(OSL::Matrix44 &result, ustring from) {
-		return get_matrix(NULL, result, from);
-	}
-
-	bool get_inverse_matrix(OSL::Matrix44 &result, ustring to) {
-		return get_inverse_matrix(NULL, result, to);
-	}
-
-	bool get_array_attribute(void *renderstate, bool derivatives,
-	                         ustring object, TypeDesc type, ustring name,
-	                         int index, void *val) {
-		OSL::ShaderGlobals sg;
-		sg.renderstate = renderstate;
-		return get_array_attribute(&sg, derivatives,
-		                           object, type, name,
-		                           index, val);
-	}
-
-	bool get_attribute(void *renderstate, bool derivatives, ustring object_name,
-	                   TypeDesc type, ustring name, void *val) {
-		OSL::ShaderGlobals sg;
-		sg.renderstate = renderstate;
-		return get_attribute(&sg, derivatives, object_name, type, name, val);
-	}
-
-	bool has_userdata(ustring name, TypeDesc type, void *renderstate) {
-		return has_userdata(name, type, (OSL::ShaderGlobals *) renderstate);
-	}
-
-	bool get_userdata(bool derivatives, ustring name, TypeDesc type,
-	                  void *renderstate, void *val) {
-		return get_userdata(derivatives, name, type, (OSL::ShaderGlobals *) renderstate, val);
-	}
-
-	bool get_texture_info(ustring filename, int subimage,
-	                      ustring dataname, TypeDesc datatype, void *data) {
-		return get_texture_info(NULL, filename, subimage, dataname, datatype, data);
+	inline bool environment(ustring filename, TextureOpt &options,
+	                        OSL::ShaderGlobals *sg, const OSL::Vec3 &R,
+	                        const OSL::Vec3 &dRdx, const OSL::Vec3 &dRdy,
+	                        float *result)
+	{
+		return environment(filename, options, sg, R, dRdx, dRdy,
+		                   options.nchannels, result);
 	}
 #endif
+
 private:
 	KernelGlobals *kernel_globals;
 	OSL::TextureSystem *osl_ts;

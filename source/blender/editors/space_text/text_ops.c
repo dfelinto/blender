@@ -171,7 +171,7 @@ static int text_new_exec(bContext *C, wmOperator *UNUSED(op))
 	text = BKE_text_add(bmain, "Text");
 
 	/* hook into UI */
-	uiIDContextProperty(C, &ptr, &prop);
+	UI_context_active_but_prop_get_templateID(C, &ptr, &prop);
 
 	if (prop) {
 		RNA_id_pointer_create(&text->id, &idptr);
@@ -214,7 +214,7 @@ static void text_open_init(bContext *C, wmOperator *op)
 	PropertyPointerRNA *pprop;
 
 	op->customdata = pprop = MEM_callocN(sizeof(PropertyPointerRNA), "OpenPropertyPointerRNA");
-	uiIDContextProperty(C, &pprop->ptr, &pprop->prop);
+	UI_context_active_but_prop_get_templateID(C, &pprop->ptr, &pprop->prop);
 }
 
 static void text_open_cancel(bContext *UNUSED(C), wmOperator *op)
@@ -2415,6 +2415,7 @@ typedef struct SetSelection {
 	int selecting;
 	int selc, sell;
 	short old[2];
+	wmTimer *timer;  /* needed for scrolling when mouse at region bounds */
 } SetSelection;
 
 static int flatten_width(SpaceText *st, const char *str)
@@ -2629,6 +2630,29 @@ static void text_cursor_set_to_pos(SpaceText *st, ARegion *ar, int x, int y, con
 	if (!sel) txt_pop_sel(text);
 }
 
+static void text_cursor_timer_ensure(bContext *C, SetSelection *ssel)
+{
+	if (ssel->timer == NULL) {
+		wmWindowManager *wm = CTX_wm_manager(C);
+		wmWindow *win = CTX_wm_window(C);
+
+		ssel->timer = WM_event_add_timer(wm, win, TIMER, 0.02f);
+	}
+}
+
+static void text_cursor_timer_remove(bContext *C, SetSelection *ssel)
+{
+	if (ssel->timer) {
+		wmWindowManager *wm = CTX_wm_manager(C);
+		wmWindow *win = CTX_wm_window(C);
+
+		WM_event_remove_timer(wm, win, ssel->timer);
+	}
+	ssel->timer = NULL;
+}
+
+
+
 static void text_cursor_set_apply(bContext *C, wmOperator *op, const wmEvent *event)
 {
 	SpaceText *st = CTX_wm_space_text(C);
@@ -2636,32 +2660,34 @@ static void text_cursor_set_apply(bContext *C, wmOperator *op, const wmEvent *ev
 	SetSelection *ssel = op->customdata;
 
 	if (event->mval[1] < 0 || event->mval[1] > ar->winy) {
-		int d = (ssel->old[1] - event->mval[1]) * st->pix_per_line;
-		if (d) txt_screen_skip(st, ar, d);
+		text_cursor_timer_ensure(C, ssel);
 
-		text_cursor_set_to_pos(st, ar, event->mval[0], event->mval[1] < 0 ? 0 : ar->winy, 1);
-
-		text_update_cursor_moved(C);
-		WM_event_add_notifier(C, NC_TEXT | ND_CURSOR, st->text);
+		if (event->type == TIMER) {
+			text_cursor_set_to_pos(st, ar, event->mval[0], event->mval[1], 1);
+			text_scroll_to_cursor(st, ar, false);
+			WM_event_add_notifier(C, NC_TEXT | ND_CURSOR, st->text);
+		}
 	}
 	else if (!st->wordwrap && (event->mval[0] < 0 || event->mval[0] > ar->winx)) {
-		if (event->mval[0] > ar->winx) st->left++;
-		else if (event->mval[0] < 0 && st->left > 0) st->left--;
+		text_cursor_timer_ensure(C, ssel);
 		
-		text_cursor_set_to_pos(st, ar, event->mval[0], event->mval[1], 1);
-		
-		text_update_cursor_moved(C);
-		WM_event_add_notifier(C, NC_TEXT | ND_CURSOR, st->text);
-		// XXX PIL_sleep_ms(10);
+		if (event->type == TIMER) {
+			text_cursor_set_to_pos(st, ar, CLAMPIS(event->mval[0], 0, ar->winx), event->mval[1], 1);
+			text_scroll_to_cursor(st, ar, false);
+			WM_event_add_notifier(C, NC_TEXT | ND_CURSOR, st->text);
+		}
 	}
 	else {
-		text_cursor_set_to_pos(st, ar, event->mval[0], event->mval[1], 1);
+		text_cursor_timer_remove(C, ssel);
 
-		text_update_cursor_moved(C);
-		WM_event_add_notifier(C, NC_TEXT | ND_CURSOR, st->text);
+		if (event->type != TIMER) {
+			text_cursor_set_to_pos(st, ar, event->mval[0], event->mval[1], 1);
+			text_scroll_to_cursor(st, ar, false);
+			WM_event_add_notifier(C, NC_TEXT | ND_CURSOR, st->text);
 
-		ssel->old[0] = event->mval[0];
-		ssel->old[1] = event->mval[1];
+			ssel->old[0] = event->mval[0];
+			ssel->old[1] = event->mval[1];
+		}
 	}
 }
 
@@ -2681,6 +2707,7 @@ static void text_cursor_set_exit(bContext *C, wmOperator *op)
 	text_update_cursor_moved(C);
 	WM_event_add_notifier(C, NC_TEXT | ND_CURSOR, st->text);
 
+	text_cursor_timer_remove(C, ssel);
 	MEM_freeN(ssel);
 }
 
@@ -2717,6 +2744,7 @@ static int text_set_selection_modal(bContext *C, wmOperator *op, const wmEvent *
 		case RIGHTMOUSE:
 			text_cursor_set_exit(C, op);
 			return OPERATOR_FINISHED;
+		case TIMER:
 		case MOUSEMOVE:
 			text_cursor_set_apply(C, op, event);
 			break;
@@ -3144,32 +3172,32 @@ static int text_resolve_conflict_invoke(bContext *C, wmOperator *op, const wmEve
 		case 1:
 			if (text->flags & TXT_ISDIRTY) {
 				/* modified locally and externally, ahhh. offer more possibilites. */
-				pup = uiPupMenuBegin(C, IFACE_("File Modified Outside and Inside Blender"), ICON_NONE);
-				layout = uiPupMenuLayout(pup);
+				pup = UI_popup_menu_begin(C, IFACE_("File Modified Outside and Inside Blender"), ICON_NONE);
+				layout = UI_popup_menu_layout(pup);
 				uiItemEnumO_ptr(layout, op->type, IFACE_("Reload from disk (ignore local changes)"),
 				                0, "resolution", RESOLVE_RELOAD);
 				uiItemEnumO_ptr(layout, op->type, IFACE_("Save to disk (ignore outside changes)"),
 				                0, "resolution", RESOLVE_SAVE);
 				uiItemEnumO_ptr(layout, op->type, IFACE_("Make text internal (separate copy)"),
 				                0, "resolution", RESOLVE_MAKE_INTERNAL);
-				uiPupMenuEnd(C, pup);
+				UI_popup_menu_end(C, pup);
 			}
 			else {
-				pup = uiPupMenuBegin(C, IFACE_("File Modified Outside Blender"), ICON_NONE);
-				layout = uiPupMenuLayout(pup);
+				pup = UI_popup_menu_begin(C, IFACE_("File Modified Outside Blender"), ICON_NONE);
+				layout = UI_popup_menu_layout(pup);
 				uiItemEnumO_ptr(layout, op->type, IFACE_("Reload from disk"), 0, "resolution", RESOLVE_RELOAD);
 				uiItemEnumO_ptr(layout, op->type, IFACE_("Make text internal (separate copy)"),
 				                0, "resolution", RESOLVE_MAKE_INTERNAL);
 				uiItemEnumO_ptr(layout, op->type, IFACE_("Ignore"), 0, "resolution", RESOLVE_IGNORE);
-				uiPupMenuEnd(C, pup);
+				UI_popup_menu_end(C, pup);
 			}
 			break;
 		case 2:
-			pup = uiPupMenuBegin(C, IFACE_("File Deleted Outside Blender"), ICON_NONE);
-			layout = uiPupMenuLayout(pup);
+			pup = UI_popup_menu_begin(C, IFACE_("File Deleted Outside Blender"), ICON_NONE);
+			layout = UI_popup_menu_layout(pup);
 			uiItemEnumO_ptr(layout, op->type, IFACE_("Make text internal"), 0, "resolution", RESOLVE_MAKE_INTERNAL);
 			uiItemEnumO_ptr(layout, op->type, IFACE_("Recreate file"), 0, "resolution", RESOLVE_SAVE);
-			uiPupMenuEnd(C, pup);
+			UI_popup_menu_end(C, pup);
 			break;
 	}
 

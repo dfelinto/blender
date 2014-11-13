@@ -116,7 +116,6 @@ set(TESTS_OUTPUT_DIR ${EXECUTABLE_OUTPUT_PATH}/tests CACHE INTERNAL "" FORCE)
 
 get_blender_version()
 
-
 # Blender internal features
 option(WITH_BLENDER "Build blender (disable to build only the blender player)" ON)
 mark_as_advanced(WITH_BLENDER)
@@ -159,6 +158,10 @@ mark_as_advanced(WITH_GHOST_DEBUG)
 option(WITH_GHOST_SDL    "Enable building blender against SDL for windowing rather then the native APIs" OFF)
 mark_as_advanced(WITH_GHOST_SDL)
 
+if(WITH_X11)
+	option(WITH_GHOST_XDND    "Enable drag'n'drop support on X11 using XDND protocol" ON)
+endif()
+
 # Misc...
 option(WITH_HEADLESS      "Build without graphical support (renderfarm, server mode only)" OFF)
 mark_as_advanced(WITH_HEADLESS)
@@ -175,7 +178,6 @@ endif()
 if(WITH_X11)
 	option(WITH_X11_XINPUT    "Enable X11 Xinput (tablet support and unicode input)"  ON)
 	option(WITH_X11_XF86VMODE "Enable X11 video mode switching"                       ON)
-	option(WITH_GHOST_XDND    "Enable drag'n'drop support on X11 using XDND protocol" ON)
 endif()
 
 if(UNIX AND NOT APPLE)
@@ -322,13 +324,15 @@ mark_as_advanced(WITH_ASSERT_ABORT)
 
 option(WITH_BOOST					"Enable features depending on boost" ON)
 
-if(CMAKE_COMPILER_IS_GNUCC)
-	option(WITH_GCC_MUDFLAP			"Enable mudflap" OFF)
-	mark_as_advanced(WITH_GCC_MUDFLAP)
-endif()
-
 # Unit testsing
 option(WITH_GTESTS "Enable GTest unit testing" OFF)
+
+
+# Documentation
+if(UNIX AND NOT APPLE)
+	option(WITH_DOC_MANPAGE "Create a manual page (Unix manpage)" OFF)
+endif()
+
 
 # OpenGL
 
@@ -348,7 +352,7 @@ mark_as_advanced(
 	WITH_GL_PROFILE_ES20
 )
 
-if (WITH_GL_PROFILE_COMPAT)
+if(WITH_GL_PROFILE_COMPAT)
 	set(WITH_GLU ON)
 else()
 	set(WITH_GLU OFF)
@@ -363,6 +367,28 @@ if(WITH_GLEW_ES AND WITH_SYSTEM_GLEW)
 	message(WARNING Ignoring WITH_SYSTEM_GLEW and using WITH_GLEW_ES)
 	set(WITH_SYSTEM_GLEW OFF)
 endif()
+
+if(MSVC)
+	getDefaultWindowsPrefixBase(CMAKE_GENERIC_PROGRAM_FILES)
+	set(CPACK_INSTALL_PREFIX ${CMAKE_GENERIC_PROGRAM_FILES}/${})
+endif()
+
+
+# By default we want to install to the directory we are compiling our executables
+# unless specified otherwise, which we currently do not allow
+if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+	if(MSVC)
+		set(CMAKE_INSTALL_PREFIX ${EXECUTABLE_OUTPUT_PATH}/\${BUILD_TYPE} CACHE PATH "default install path" FORCE)
+	elseif(APPLE)
+		set(CMAKE_INSTALL_PREFIX ${EXECUTABLE_OUTPUT_PATH}/\${BUILD_TYPE} CACHE PATH "default install path" FORCE)
+	else()
+		if(WITH_INSTALL_PORTABLE)
+			set(CMAKE_INSTALL_PREFIX ${EXECUTABLE_OUTPUT_PATH} CACHE PATH "default install path" FORCE)
+		endif()
+	endif()
+endif()
+
+
 
 # Apple
 
@@ -516,7 +542,7 @@ if(NOT WITH_PYTHON)
 	set(WITH_CYCLES OFF)
 endif()
 
-# enable boost for cycles, booleans, audaspace or i18n
+# enable boost for cycles, audaspace or i18n
 # otherwise if the user disabled
 if(NOT WITH_BOOST)
 	# Explicitly disabled. so disable all deps.
@@ -529,13 +555,12 @@ if(NOT WITH_BOOST)
 	endmacro()
 
 	set_and_warn(WITH_CYCLES         OFF)
-	set_and_warn(WITH_MOD_BOOLEAN    OFF)
 	set_and_warn(WITH_AUDASPACE      OFF)
 	set_and_warn(WITH_INTERNATIONAL  OFF)
 
 	set_and_warn(WITH_OPENAL         OFF)  # depends on AUDASPACE
 	set_and_warn(WITH_GAMEENGINE     OFF)  # depends on AUDASPACE
-elseif(WITH_CYCLES OR WITH_OPENIMAGEIO OR WITH_MOD_BOOLEAN OR WITH_AUDASPACE OR WITH_INTERNATIONAL)
+elseif(WITH_CYCLES OR WITH_OPENIMAGEIO OR WITH_AUDASPACE OR WITH_INTERNATIONAL)
 	# Keep enabled
 else()
 	# Enabled but we don't need it
@@ -1095,30 +1120,6 @@ elseif(WIN32)
 		set(CMAKE_C_FLAGS_MINSIZEREL "/O1 /Ob1 /MT /MP" CACHE STRING "MSVC MT flags " FORCE)
 		set(CMAKE_C_FLAGS_RELWITHDEBINFO "/O2 /Ob1 /MT /Zi /MP" CACHE STRING "MSVC MT flags " FORCE)
 
-		# most msvc warnings are C & C++
-		set(_WARNINGS
-			# warning level:
-			"/W3"
-			"/w34062"  # switch statement contains 'default' but no 'case' labels
-			# disable:
-			"/wd4018"  # signed/unsigned mismatch
-			"/wd4065"  # switch statement contains 'default' but no 'case' labels
-			"/wd4127"  # conditional expression is constant
-			"/wd4181"  # qualifier applied to reference type; ignored
-			"/wd4200"  # zero-sized array in struct/union
-			"/wd4244"  # conversion from 'type1' to 'type2', possible loss of data
-			"/wd4267"  # conversion from 'size_t' to 'type', possible loss of data
-			"/wd4305"  # truncation from 'type1' to 'type2'
-			"/wd4800"  # forcing value to bool 'true' or 'false'
-			# errors:
-			"/we4013"  # 'function' undefined; assuming extern returning int
-			"/we4431"  # missing type specifier - int assumed
-		)
-
-		string(REPLACE ";" " " _WARNINGS "${_WARNINGS}")
-		set(C_WARNINGS "${_WARNINGS}")
-		set(CXX_WARNINGS "${_WARNINGS}")
-		unset(_WARNINGS)
 
 		set(PLATFORM_LINKFLAGS "/SUBSYSTEM:CONSOLE /STACK:2097152 /INCREMENTAL:NO /NODEFAULTLIB:msvcrt.lib /NODEFAULTLIB:msvcmrt.lib /NODEFAULTLIB:msvcurt.lib /NODEFAULTLIB:msvcrtd.lib")
 
@@ -1151,12 +1152,12 @@ elseif(WIN32)
 		endif()
 
 		# Add each of our libraries to our cmake_prefix_path so find_package() could work
-		FILE(GLOB children RELATIVE ${LIBDIR} ${LIBDIR}/*)
-		FOREACH(child ${children})
-		IF(IS_DIRECTORY ${LIBDIR}/${child})
-			LIST(APPEND CMAKE_PREFIX_PATH  ${LIBDIR}/${child})
-		ENDIF()
-		ENDFOREACH()
+		file(GLOB children RELATIVE ${LIBDIR} ${LIBDIR}/*)
+		foreach(child ${children})
+		if(IS_DIRECTORY ${LIBDIR}/${child})
+			list(APPEND CMAKE_PREFIX_PATH  ${LIBDIR}/${child})
+		endif()
+		endforeach()
 
 		set(ZLIB_INCLUDE_DIRS ${LIBDIR}/zlib/include)
 		set(ZLIB_LIBRARIES ${LIBDIR}/zlib/lib/libz_st.lib)
@@ -1326,7 +1327,7 @@ elseif(WIN32)
 			set(Boost_USE_MULTITHREADED ON) # suffix -mt
 			set(Boost_USE_STATIC_LIBS ON) # suffix -s
 			find_package(Boost COMPONENTS date_time filesystem thread regex system ${boost_extra_libs})
-			IF(NOT Boost_FOUND)
+			if(NOT Boost_FOUND)
 				message(WARNING "USING HARDCODED boost locations")
 				set(BOOST ${LIBDIR}/boost)
 				set(BOOST_INCLUDE_DIR ${BOOST}/include)
@@ -1672,7 +1673,7 @@ elseif(WIN32)
 	if(WITH_SDL)
 		set(SDL ${LIBDIR}/sdl)
 		set(SDL_INCLUDE_DIR ${SDL}/include)
-		set(SDL_LIBRARY SDL)
+		set(SDL_LIBRARY SDL2)
 		set(SDL_LIBPATH ${SDL}/lib)
 	endif()
 
@@ -2161,7 +2162,7 @@ elseif(WITH_GL_PROFILE_ES20)
 
 		list(APPEND BLENDER_GL_LIBRARIES "${OPENGLES_LIBRARY}")
 
-		if (NOT OPENGLES_LIBRARY)
+		if(NOT OPENGLES_LIBRARY)
 			message(FATAL_ERROR "To compile WITH_GL_EGL you need to set OPENGLES_LIBRARY to the file path of an OpenGL ES 2.0 library.")
 		endif()
 
@@ -2187,7 +2188,7 @@ elseif(WITH_GL_PROFILE_ES20)
 
 			mark_as_advanced(D3DCOMPILER_DLL)
 
-			if (D3DCOMPILER_DLL STREQUAL "")
+			if(D3DCOMPILER_DLL STREQUAL "")
 				message(FATAL_ERROR "To compile WITH_GL_ANGLE you need to set D3DCOMPILER_DLL to the file path of a copy of the DirectX redistributable DLL file: D3DCompiler_46.dll")
 			endif()
 
@@ -2213,7 +2214,7 @@ if(WITH_GL_EGL)
 
 		list(APPEND BLENDER_GL_LIBRARIES "${OPENGLES_LIBRARY}" "${OPENGLES_EGL_LIBRARY}")
 
-		if (NOT OPENGLES_EGL_LIBRARY)
+		if(NOT OPENGLES_EGL_LIBRARY)
 			message(FATAL_ERROR "To compile WITH_GL_EGL you need to set OPENGLES_EGL_LIBRARY to the file path of an EGL library.")
 		endif()
 
@@ -2494,7 +2495,31 @@ elseif(CMAKE_C_COMPILER_ID MATCHES "Intel")
 	# disable numbered, false positives
 	set(C_WARNINGS "${C_WARNINGS} -wd188,186,144,913,556")
 	set(CXX_WARNINGS "${CXX_WARNINGS} -wd188,186,144,913,556")
+elseif(CMAKE_C_COMPILER_ID MATCHES "MSVC")
+	# most msvc warnings are C & C++
+	set(_WARNINGS
+		# warning level:
+		"/W3"
+		"/w34062"  # switch statement contains 'default' but no 'case' labels
+		# disable:
+		"/wd4018"  # signed/unsigned mismatch
+		"/wd4065"  # switch statement contains 'default' but no 'case' labels
+		"/wd4127"  # conditional expression is constant
+		"/wd4181"  # qualifier applied to reference type; ignored
+		"/wd4200"  # zero-sized array in struct/union
+		"/wd4244"  # conversion from 'type1' to 'type2', possible loss of data
+		"/wd4267"  # conversion from 'size_t' to 'type', possible loss of data
+		"/wd4305"  # truncation from 'type1' to 'type2'
+		"/wd4800"  # forcing value to bool 'true' or 'false'
+		# errors:
+		"/we4013"  # 'function' undefined; assuming extern returning int
+		"/we4431"  # missing type specifier - int assumed
+	)
 
+	string(REPLACE ";" " " _WARNINGS "${_WARNINGS}")
+	set(C_WARNINGS "${_WARNINGS}")
+	set(CXX_WARNINGS "${_WARNINGS}")
+	unset(_WARNINGS)
 endif()
 
 # ensure python header is found since detection can fail, this could happen
@@ -2519,13 +2544,6 @@ if(WITH_PYTHON)
 	elseif(WITH_PYTHON_INSTALL_REQUESTS)
 		find_python_package(requests)
 	endif()
-endif()
-
-if(WITH_GCC_MUDFLAP)
-	set(PLATFORM_CFLAGS "${PLATFORM_CFLAGS} -fmudflapth -funwind-tables")
-	set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lpthread -lmudflapth -rdynamic")
-	ADD_CHECK_C_COMPILER_FLAG(C_WARNINGS     C_WARN_NO_ERROR_MUDFLAP   -Wno-error=mudflap)
-	ADD_CHECK_CXX_COMPILER_FLAG(CXX_WARNINGS CXX_WARN_NO_ERROR_MUDFLAP -Wno-error=mudflap)
 endif()
 
 # Include warnings first, so its possible to disable them with user defined flags

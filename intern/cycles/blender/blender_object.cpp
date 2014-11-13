@@ -168,6 +168,8 @@ void BlenderSync::sync_light(BL::Object b_parent, int persistent_id[OBJECT_PERSI
 	else
 		light->samples = samples;
 
+	light->max_bounces = get_int(clamp, "max_bounces");
+
 	/* visibility */
 	uint visibility = object_ray_visibility(b_ob);
 	light->use_diffuse = (visibility & PATH_RAY_DIFFUSE) != 0;
@@ -458,10 +460,10 @@ void BlenderSync::sync_objects(BL::SpaceView3D b_v3d, float motion_time)
 	BL::Scene::object_bases_iterator b_base;
 	BL::Scene b_sce = b_scene;
 	/* modifier result type (not exposed as enum in C++ API)
-     * 1 : DAG_EVAL_PREVIEW
-     * 2 : DAG_EVAL_RENDER
-     */
-    int dupli_settings = preview ? 1 : 2;
+	 * 1 : DAG_EVAL_PREVIEW
+	 * 2 : DAG_EVAL_RENDER
+	 */
+	int dupli_settings = preview ? 1 : 2;
 
 	bool cancel = false;
 

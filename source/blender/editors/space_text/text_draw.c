@@ -28,8 +28,6 @@
  *  \ingroup sptext
  */
 
-
-
 #include "MEM_guardedalloc.h"
 
 #include "BLF_api.h"
@@ -44,6 +42,7 @@
 #include "BKE_context.h"
 #include "BKE_suggestions.h"
 #include "BKE_text.h"
+#include "BKE_screen.h"
 
 #include "BIF_gl.h"
 
@@ -892,15 +891,15 @@ static void draw_textscroll(SpaceText *st, rcti *scroll, rcti *back)
 	UI_ThemeColor(TH_BACK);
 	glRecti(back->xmin, back->ymin, back->xmax, back->ymax);
 
-	uiWidgetScrollDraw(&wcol, scroll, &st->txtbar, (st->flags & ST_SCROLL_SELECT) ? UI_SCROLL_PRESSED : 0);
+	UI_draw_widget_scroll(&wcol, scroll, &st->txtbar, (st->flags & ST_SCROLL_SELECT) ? UI_SCROLL_PRESSED : 0);
 
-	uiSetRoundBox(UI_CNR_ALL);
+	UI_draw_roundbox_corner_set(UI_CNR_ALL);
 	rad = 0.4f * min_ii(BLI_rcti_size_x(&st->txtscroll), BLI_rcti_size_y(&st->txtscroll));
 	UI_GetThemeColor3ubv(TH_HILITE, col);
 	col[3] = 48;
 	glColor4ubv(col);
 	glEnable(GL_BLEND);
-	uiRoundBox(st->txtscroll.xmin + 1, st->txtscroll.ymin, st->txtscroll.xmax - 1, st->txtscroll.ymax, rad);
+	UI_draw_roundbox(st->txtscroll.xmin + 1, st->txtscroll.ymin, st->txtscroll.xmax - 1, st->txtscroll.ymax, rad);
 	glDisable(GL_BLEND);
 }
 
@@ -1034,7 +1033,7 @@ static void draw_suggestion_list(SpaceText *st, ARegion *ar)
 		x = MAX2(0, ar->winx - boxw);
 
 	/* not needed but stands out nicer */
-	uiDrawBoxShadow(220, x, y - boxh, x + boxw, y);
+	UI_draw_box_shadow(220, x, y - boxh, x + boxw, y);
 
 	UI_ThemeColor(TH_SHADE1);
 	glRecti(x - 1, y + 1, x + boxw + 1, y - boxh - 1);
@@ -1461,21 +1460,14 @@ void text_update_character_width(SpaceText *st)
 
 /* Moves the view to the cursor location,
  * also used to make sure the view isn't outside the file */
-void text_scroll_to_cursor(SpaceText *st, ScrArea *sa)
+void text_scroll_to_cursor(SpaceText *st, ARegion *ar, const bool center)
 {
 	Text *text;
-	ARegion *ar = NULL;
-	int i, x, winx = 0;
+	int i, x, winx = ar->winx;
 
 	if (ELEM(NULL, st, st->text, st->text->curl)) return;
 
 	text = st->text;
-
-	for (ar = sa->regionbase.first; ar; ar = ar->next)
-		if (ar->regiontype == RGN_TYPE_WINDOW) {
-			winx = ar->winx;
-			break;
-		}
 
 	text_update_character_width(st);
 
@@ -1486,8 +1478,19 @@ void text_scroll_to_cursor(SpaceText *st, ScrArea *sa)
 		i += offl;
 	}
 
-	if (st->top + st->viewlines <= i || st->top > i)
-		st->top = i - st->viewlines / 2;
+	if (center) {
+		if (st->top + st->viewlines <= i || st->top > i) {
+			st->top = i - st->viewlines / 2;
+		}
+	}
+	else {
+		if (st->top + st->viewlines <= i) {
+			st->top = i - (st->viewlines - 1);
+		}
+		else if (st->top > i) {
+			st->top = i;
+		}
+	}
 	
 	if (st->wordwrap) {
 		st->left = 0;
@@ -1496,8 +1499,19 @@ void text_scroll_to_cursor(SpaceText *st, ScrArea *sa)
 		x = st->cwidth * (text_get_char_pos(st, text->sell->line, text->selc) - st->left);
 		winx -= TXT_OFFSET + (st->showlinenrs ? TEXTXLOC : 0) + TXT_SCROLL_WIDTH;
 
-		if (x <= 0 || x > winx)
-			st->left += (x - winx / 2) / st->cwidth;
+		if (center) {
+			if (x <= 0 || x > winx) {
+				st->left += (x - winx / 2) / st->cwidth;
+			}
+		}
+		else {
+			if (x <= 0) {
+				st->left += ((x + 1) / st->cwidth) - 1;
+			}
+			else if (x > winx) {
+				st->left += ((x - (winx + 1)) / st->cwidth) + 1;
+			}
+		}
 	}
 
 	if (st->top < 0) st->top = 0;
@@ -1507,10 +1521,24 @@ void text_scroll_to_cursor(SpaceText *st, ScrArea *sa)
 	st->scroll_accum[1] = 0.0f;
 }
 
+/* takes an area instead of a region, use for listeners */
+void text_scroll_to_cursor__area(SpaceText *st, ScrArea *sa, const bool center)
+{
+	ARegion *ar;
+
+	if (ELEM(NULL, st, st->text, st->text->curl)) return;
+
+	ar = BKE_area_find_region_type(sa, RGN_TYPE_WINDOW);
+
+	if (ar) {
+		text_scroll_to_cursor(st, ar, center);
+	}
+}
+
 void text_update_cursor_moved(bContext *C)
 {
 	ScrArea *sa = CTX_wm_area(C);
 	SpaceText *st = CTX_wm_space_text(C);
 
-	text_scroll_to_cursor(st, sa);
+	text_scroll_to_cursor__area(st, sa, true);
 }
