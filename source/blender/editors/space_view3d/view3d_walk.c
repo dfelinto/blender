@@ -65,6 +65,7 @@
 /* prototypes */
 static float getVelocityZeroTime(const float gravity, const float velocity);
 static void walk_non_modal(struct bContext *C, struct wmOperator *op);
+static bool running_non_modal = false;
 
 /* NOTE: these defines are saved in keymap files, do not change values but just add new ones */
 enum {
@@ -101,10 +102,11 @@ typedef enum {
 	WALK_BIT_RIGHT    = 1 << 3,
 	WALK_BIT_UP       = 1 << 4,
 	WALK_BIT_DOWN     = 1 << 5,
+	WALK_BIT_INIT     = 1 << 6,
 } eWalkDirectionFlag;
 
 typedef enum eWalkKeyMode{
-	WALK_KEY_MODAL    = 0,
+	WALK_KEY_NULL    = 0,
 	WALK_KEY_FORWARD  = 1 << 1,
 	WALK_KEY_BACKWARD = 1 << 2,
 	WALK_KEY_LEFT     = 1 << 3,
@@ -132,9 +134,10 @@ typedef enum eWalkGravityState {
 } eWalkGravityState;
 
 typedef enum eWalkMouseMode {
-	WALK_MOUSE_LOOKAROUND     = 1 << 0,
-	WALK_MOUSE_MOVEHORIZONTAL = 1 << 1,
-	WALK_MOUSE_MOVEVERTICAL   = 1 << 2,
+	WALK_MOUSE_LOOKAROUND     = 0,
+	WALK_MOUSE_MOVEHORIZONTAL,
+	WALK_MOUSE_MOVEVERTICAL,
+	WALK_MOUSE_NULL,
 } eWalkMouseMode;
 
 /* called in transform_ops.c, on each regeneration of keymaps  */
@@ -289,7 +292,7 @@ typedef struct WalkInfo {
 
 	eWalkMouseMode mouse_mode;
 
-	bool is_modal;
+	bool use_mouse;
 
 	/* teleport */
 	WalkTeleport teleport;
@@ -393,7 +396,7 @@ static void walk_navigation_mode_set(bContext *C, WalkInfo *walk, eWalkMethod mo
 		walk->gravity_state = WALK_GRAVITY_STATE_START;
 	}
 
-	if (walk->is_modal) {
+	if (walk->use_mouse) {
 		walk_update_header(C, walk);
 	}
 }
@@ -478,6 +481,7 @@ enum {
 /* keep the previous speed until user changes userpreferences */
 static float base_speed = -1.f;
 static float userdef_speed = -1.f;
+static double non_modal_time = 0.0;
 
 static bool initWalkInfo(bContext *C, WalkInfo *walk, wmOperator *op, const wmEvent *event)
 {
@@ -525,7 +529,9 @@ static bool initWalkInfo(bContext *C, WalkInfo *walk, wmOperator *op, const wmEv
 	walk->grid = 1.f / walk->scene->unit.scale_length;
 
 	walk->mouse_mode = RNA_enum_get(op->ptr, "mouse_mode");
-	walk->is_modal = RNA_enum_get(op->ptr, "key_mode") == WALK_KEY_MODAL;
+	walk->use_mouse = walk->mouse_mode != WALK_MOUSE_NULL;
+
+	walk->time_lastdraw = PIL_check_seconds_timer();
 
 	/* user preference settings */
 	walk->teleport.duration = U.walk_navigation.teleport_time;
@@ -552,7 +558,7 @@ static bool initWalkInfo(bContext *C, WalkInfo *walk, wmOperator *op, const wmEv
 
 	walk->is_reversed = ((U.walk_navigation.flag & USER_WALK_MOUSE_REVERSE) != 0);
 
-	walk->active_directions = 0;
+	walk->active_directions = WALK_BIT_INIT;
 
 #ifdef NDOF_WALK_DRAW_TOOMUCH
 	walk->redraw = 1;
@@ -562,8 +568,6 @@ static bool initWalkInfo(bContext *C, WalkInfo *walk, wmOperator *op, const wmEv
 	walk->timer = NULL;
 
 	walk->ndof = NULL;
-
-	walk->time_lastdraw = PIL_check_seconds_timer();
 
 	walk->draw_handle_pixel = NULL;
 
@@ -583,9 +587,9 @@ static bool initWalkInfo(bContext *C, WalkInfo *walk, wmOperator *op, const wmEv
 	walk->init_mval[0] = event->x;
 	walk->init_mval[1] = event->y;
 
-	if (walk->is_modal) {
-		walk->timer = WM_event_add_timer(CTX_wm_manager(C), win, TIMER, 0.01f);
+	walk->timer = WM_event_add_timer(CTX_wm_manager(C), win, TIMER, 0.01f);
 
+	if (walk->use_mouse) {
 		walk->draw_handle_pixel = ED_region_draw_cb_activate(walk->ar->type, drawWalkPixel, walk, REGION_DRAW_POST_PIXEL);
 
 		WM_cursor_warp(win,
@@ -604,8 +608,12 @@ static int walkEnd(bContext *C, WalkInfo *walk)
 	wmWindow *win;
 	RegionView3D *rv3d;
 
-	if (walk->state == WALK_RUNNING)
+	if ((walk->use_mouse == false) && (walk->active_directions == 0)) {
+		walk->state = WALK_CONFIRM;
+	}
+	else if (walk->state == WALK_RUNNING) {
 		return OPERATOR_RUNNING_MODAL;
+	}
 
 #ifdef NDOF_WALK_DEBUG
 	puts("\n-- walk end --");
@@ -621,16 +629,15 @@ static int walkEnd(bContext *C, WalkInfo *walk)
 	if (walk->ndof)
 		MEM_freeN(walk->ndof);
 
+	WM_event_remove_timer(CTX_wm_manager(C), win, walk->timer);
 
-	if (walk->is_modal) {
-		WM_event_remove_timer(CTX_wm_manager(C), win, walk->timer);
-
+	if (walk->use_mouse) {
 		ED_region_draw_cb_exit(walk->ar->type, walk->draw_handle_pixel);
 
 		/* restore the cursor */
 		WM_cursor_modal_restore(win);
 
-		/* center the mouse */
+		/* restore the mouse position */
 		WM_cursor_warp(win, walk->init_mval[0], walk->init_mval[1]);
 	}
 
@@ -678,21 +685,27 @@ static void walkEvent(bContext *C, wmOperator *UNUSED(op), WalkInfo *walk, const
 			/* implement WASD keys */
 			case WALK_MODAL_DIR_FORWARD:
 				walk->active_directions |= WALK_BIT_FORWARD;
+				walk->active_directions &= ~WALK_BIT_INIT;
 				break;
 			case WALK_MODAL_DIR_BACKWARD:
 				walk->active_directions |= WALK_BIT_BACKWARD;
+				walk->active_directions &= ~WALK_BIT_INIT;
 				break;
 			case WALK_MODAL_DIR_LEFT:
 				walk->active_directions |= WALK_BIT_LEFT;
+				walk->active_directions &= ~WALK_BIT_INIT;
 				break;
 			case WALK_MODAL_DIR_RIGHT:
 				walk->active_directions |= WALK_BIT_RIGHT;
+				walk->active_directions &= ~WALK_BIT_INIT;
 				break;
 			case WALK_MODAL_DIR_UP:
 				walk->active_directions |= WALK_BIT_UP;
+				walk->active_directions &= ~WALK_BIT_INIT;
 				break;
 			case WALK_MODAL_DIR_DOWN:
 				walk->active_directions |= WALK_BIT_DOWN;
+				walk->active_directions &= ~WALK_BIT_INIT;
 				break;
 
 			case WALK_MODAL_DIR_FORWARD_STOP:
@@ -842,7 +855,7 @@ static void walkEvent(bContext *C, wmOperator *UNUSED(op), WalkInfo *walk, const
 		{
 			walk->redraw = true;
 
-			if (wm_event_is_last_mousemove(event)) {
+			if (wm_event_is_last_mousemove(event) && walk->use_mouse) {
 				wmWindow *win = CTX_wm_window(C);
 
 #ifdef __APPLE__
@@ -1043,6 +1056,8 @@ static void walk_mouse_move(WalkInfo *walk, float mat[3][3], const eWalkDirectio
 		case WALK_BIT_BACKWARD:
 			walk_forward(mat, -speed, true, r_dvec);
 			break;
+		default:
+			break;
 	}
 }
 
@@ -1098,15 +1113,9 @@ static int walkApply(bContext *C, WalkInfo *walk)
 			walk->redraw = 1;
 #endif
 
-			if (walk->is_modal) {
-				time_current = PIL_check_seconds_timer();
-				time_redraw = (float)(time_current - walk->time_lastdraw);
-				walk->time_lastdraw = time_current;
-			}
-			else {
-				/* TODO - handle redraw for non-modal */
-				time_redraw = 0.1f;
-			}
+			time_current = PIL_check_seconds_timer();
+			time_redraw = (float)(time_current - walk->time_lastdraw);
+			walk->time_lastdraw = time_current;
 
 			/* base speed in m/s */
 			walk->speed = WALK_MOVE_SPEED;
@@ -1121,6 +1130,11 @@ static int walkApply(bContext *C, WalkInfo *walk)
 			copy_m3_m4(mat, rv3d->viewinv);
 
 			switch (walk->mouse_mode) {
+				case WALK_MOUSE_NULL:
+				{
+					/* used when we enter the operator with an arrow key directly */
+					break;
+				}
 				case WALK_MOUSE_MOVEHORIZONTAL:
 				{
 					if (moffset[0])
@@ -1406,12 +1420,10 @@ static int walk_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 		return OPERATOR_CANCELLED;
 	}
 
-	if (walk->is_modal == false) {
-		walk_non_modal(C, op);
-		return OPERATOR_FINISHED;
-	}
-
 	walkEvent(C, op, walk, event);
+
+	if (walk->use_mouse == false)
+		walk->active_directions = RNA_enum_get(op->ptr, "initial_direction");
 
 	WM_event_add_modal_handler(C, op);
 
@@ -1473,60 +1485,26 @@ static int walk_modal(bContext *C, wmOperator *op, const wmEvent *event)
 static void walk_non_modal(bContext *C, wmOperator *op)
 {
 	WalkInfo *walk = op->customdata;
-
-	RegionView3D *rv3d = walk->rv3d;
-	Object *walk_object = ED_view3d_cameracontrol_object_get(walk->v3d_camera_control);
-
-	eWalkKeyMode keymode = RNA_enum_get(op->ptr, "key_mode");
-	walk->active_directions = 0;
-
-	if ((keymode & WALK_KEY_FORWARD))
-		walk->active_directions |= WALK_BIT_FORWARD;
-	else if ((keymode & WALK_KEY_BACKWARD))
-		walk->active_directions |= WALK_BIT_BACKWARD;
-
-	if ((keymode & WALK_KEY_LEFT))
-		walk->active_directions |= WALK_BIT_LEFT;
-	else if ((keymode & WALK_KEY_RIGHT))
-		walk->active_directions |= WALK_BIT_RIGHT;
-
-	if ((keymode & WALK_KEY_UP))
-		walk->active_directions |= WALK_BIT_UP;
-	else if ((keymode & WALK_KEY_DOWN))
-		walk->active_directions |= WALK_BIT_DOWN;
-
-	walkApply(C, walk);
-	walk->state = WALK_CONFIRM;
-	walkEnd(C, walk);
-
-	if (rv3d->persp == RV3D_CAMOB) {
-		WM_event_add_notifier(C, NC_OBJECT | ND_TRANSFORM, walk_object);
-	}
-
-	// puts("redraw!"); // too frequent, commented with NDOF_WALK_DRAW_TOOMUCH for now
-	ED_region_tag_redraw(CTX_wm_region(C));
+	walk->active_directions = RNA_enum_get(op->ptr, "initial_direction");
+	WM_event_add_modal_handler(C, op);
 }
 
 static EnumPropertyItem walk_navigation_mouse_mode_items[] = {
 	{WALK_MOUSE_LOOKAROUND, "LOOK_AROUND", 0, "Look Around", "Rotates the viewport camera"},
 	{WALK_MOUSE_MOVEHORIZONTAL, "MOVE_HORIZONTAL", 0, "Move Horizontally", "Moves the camera forward and backward and rotates left and right"},
 	{WALK_MOUSE_MOVEVERTICAL, "MOVE_VERTICAL", 0, "Move Vertically", "Moves the camera up and down or left and right"},
+	{WALK_MOUSE_NULL, "NONE", 0, "None", "Mouse movement is not considered"},
 	{0, NULL, 0, NULL, NULL}
 };
 
-static EnumPropertyItem walk_navigation_key_mode_items[] = {
-	{WALK_KEY_MODAL, "MODAL", 0, "Modal", ""},
-	{WALK_KEY_FORWARD, "MOVE_FORWARD", 0, "Move Forward", ""},
-	{WALK_KEY_BACKWARD, "MOVE_BACKWARD", 0, "Move Backward", ""},
-	{WALK_KEY_LEFT, "MOVE_LEFT", 0, "Move Left", ""},
-	{WALK_KEY_RIGHT, "MOVE_RIGHT", 0, "Move Right", ""},
-	{WALK_KEY_UP, "MOVE_UP", 0, "Move Up", ""},
-	{WALK_KEY_DOWN, "MOVE_DOWN", 0, "Move Down", ""},
-	{WALK_KEY_FORWARD | WALK_KEY_LEFT, "MOVE_FORWARD_LEFT", 0, "Move Forward Left", ""},
-	{WALK_KEY_FORWARD | WALK_KEY_RIGHT, "MOVE_FORWARD_RIGHT", 0, "Move Forward Right", ""},
-	{WALK_KEY_BACKWARD | WALK_KEY_LEFT, "MOVE_BACKWARD_LEFT", 0, "Move Backward Left", ""},
-	{WALK_KEY_BACKWARD | WALK_KEY_RIGHT, "MOVE_BACKWARD_RIGHT", 0, "Move Backward Right", ""},
-	{WALK_KEY_STOP, "MOVE_STOP", 0, "Move Stop", ""},
+static EnumPropertyItem walk_navigation_initial_direction_items[] = {
+	{0, "NONE", 0, "None", ""},
+	{WALK_BIT_FORWARD, "MOVE_FORWARD", 0, "Move Forward", ""},
+	{WALK_BIT_BACKWARD, "MOVE_BACKWARD", 0, "Move Backward", ""},
+	{WALK_BIT_LEFT, "MOVE_LEFT", 0, "Move Left", ""},
+	{WALK_BIT_RIGHT, "MOVE_RIGHT", 0, "Move Right", ""},
+	{WALK_BIT_UP, "MOVE_UP", 0, "Move Up", ""},
+	{WALK_BIT_DOWN, "MOVE_DOWN", 0, "Move Down", ""},
 	{0, NULL, 0, NULL, NULL}
 };
 
@@ -1550,6 +1528,6 @@ void VIEW3D_OT_walk(wmOperatorType *ot)
 
 	prop = RNA_def_enum(ot->srna, "mouse_mode", walk_navigation_mouse_mode_items, WALK_MOUSE_LOOKAROUND, "Mouse Mode", "");
 	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
-	prop = RNA_def_enum(ot->srna, "key_mode", walk_navigation_key_mode_items, WALK_KEY_MODAL, "Key Mode", "");
+	prop = RNA_def_enum(ot->srna, "initial_direction", walk_navigation_initial_direction_items, WALK_KEY_NULL, "Key Mode", "");
 	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
