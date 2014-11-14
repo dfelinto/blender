@@ -100,7 +100,6 @@ typedef enum {
 	WALK_BIT_RIGHT    = 1 << 3,
 	WALK_BIT_UP       = 1 << 4,
 	WALK_BIT_DOWN     = 1 << 5,
-	WALK_BIT_INIT     = 1 << 6,
 } eWalkDirectionFlag;
 
 typedef enum eWalkTeleportState {
@@ -542,7 +541,7 @@ static bool initWalkInfo(bContext *C, WalkInfo *walk, wmOperator *op, const wmEv
 
 	walk->is_reversed = ((U.walk_navigation.flag & USER_WALK_MOUSE_REVERSE) != 0);
 
-	walk->active_directions = WALK_BIT_INIT;
+	walk->active_directions = 0;
 
 #ifdef NDOF_WALK_DRAW_TOOMUCH
 	walk->redraw = 1;
@@ -670,27 +669,21 @@ static void walkEvent(bContext *C, wmOperator *UNUSED(op), WalkInfo *walk, const
 			/* implement WASD keys */
 			case WALK_MODAL_DIR_FORWARD:
 				walk->active_directions |= WALK_BIT_FORWARD;
-				walk->active_directions &= ~WALK_BIT_INIT;
 				break;
 			case WALK_MODAL_DIR_BACKWARD:
 				walk->active_directions |= WALK_BIT_BACKWARD;
-				walk->active_directions &= ~WALK_BIT_INIT;
 				break;
 			case WALK_MODAL_DIR_LEFT:
 				walk->active_directions |= WALK_BIT_LEFT;
-				walk->active_directions &= ~WALK_BIT_INIT;
 				break;
 			case WALK_MODAL_DIR_RIGHT:
 				walk->active_directions |= WALK_BIT_RIGHT;
-				walk->active_directions &= ~WALK_BIT_INIT;
 				break;
 			case WALK_MODAL_DIR_UP:
 				walk->active_directions |= WALK_BIT_UP;
-				walk->active_directions &= ~WALK_BIT_INIT;
 				break;
 			case WALK_MODAL_DIR_DOWN:
 				walk->active_directions |= WALK_BIT_DOWN;
-				walk->active_directions &= ~WALK_BIT_INIT;
 				break;
 
 			case WALK_MODAL_DIR_FORWARD_STOP:
