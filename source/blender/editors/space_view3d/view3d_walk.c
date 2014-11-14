@@ -64,8 +64,6 @@
 
 /* prototypes */
 static float getVelocityZeroTime(const float gravity, const float velocity);
-static void walk_non_modal(struct bContext *C, struct wmOperator *op);
-static bool running_non_modal = false;
 
 /* NOTE: these defines are saved in keymap files, do not change values but just add new ones */
 enum {
@@ -104,17 +102,6 @@ typedef enum {
 	WALK_BIT_DOWN     = 1 << 5,
 	WALK_BIT_INIT     = 1 << 6,
 } eWalkDirectionFlag;
-
-typedef enum eWalkKeyMode{
-	WALK_KEY_NULL    = 0,
-	WALK_KEY_FORWARD  = 1 << 1,
-	WALK_KEY_BACKWARD = 1 << 2,
-	WALK_KEY_LEFT     = 1 << 3,
-	WALK_KEY_RIGHT    = 1 << 4,
-	WALK_KEY_UP       = 1 << 5,
-	WALK_KEY_DOWN     = 1 << 6,
-	WALK_KEY_STOP     = 1 << 7,
-} eWalkKeyMode;
 
 typedef enum eWalkTeleportState {
 	WALK_TELEPORT_STATE_OFF = 0,
@@ -481,7 +468,6 @@ enum {
 /* keep the previous speed until user changes userpreferences */
 static float base_speed = -1.f;
 static float userdef_speed = -1.f;
-static double non_modal_time = 0.0;
 
 static bool initWalkInfo(bContext *C, WalkInfo *walk, wmOperator *op, const wmEvent *event)
 {
@@ -531,8 +517,6 @@ static bool initWalkInfo(bContext *C, WalkInfo *walk, wmOperator *op, const wmEv
 	walk->mouse_mode = RNA_enum_get(op->ptr, "mouse_mode");
 	walk->use_mouse = walk->mouse_mode != WALK_MOUSE_NULL;
 
-	walk->time_lastdraw = PIL_check_seconds_timer();
-
 	/* user preference settings */
 	walk->teleport.duration = U.walk_navigation.teleport_time;
 	walk->mouse_speed = U.walk_navigation.mouse_speed;
@@ -565,13 +549,16 @@ static bool initWalkInfo(bContext *C, WalkInfo *walk, wmOperator *op, const wmEv
 #endif
 	zero_v3(walk->dvec_prev);
 
-	walk->timer = NULL;
+	walk->timer = WM_event_add_timer(CTX_wm_manager(C), win, TIMER, 0.01f);
 
 	walk->ndof = NULL;
+
+	walk->time_lastdraw = PIL_check_seconds_timer();
 
 	walk->draw_handle_pixel = NULL;
 
 	walk->rv3d->rflag |= RV3D_NAVIGATING;
+
 
 	walk->v3d_camera_control = ED_view3d_cameracontrol_acquire(
 	        walk->scene, walk->v3d, walk->rv3d,
@@ -586,8 +573,6 @@ static bool initWalkInfo(bContext *C, WalkInfo *walk, wmOperator *op, const wmEv
 	/* store the initial mouse positions */
 	walk->init_mval[0] = event->x;
 	walk->init_mval[1] = event->y;
-
-	walk->timer = WM_event_add_timer(CTX_wm_manager(C), win, TIMER, 0.01f);
 
 	if (walk->use_mouse) {
 		walk->draw_handle_pixel = ED_region_draw_cb_activate(walk->ar->type, drawWalkPixel, walk, REGION_DRAW_POST_PIXEL);
@@ -1108,13 +1093,13 @@ static int walkApply(bContext *C, WalkInfo *walk)
 			/* time how fast it takes for us to redraw,
 			 * this is so simple scenes don't walk too fast */
 			double time_current;
-			float time_redraw = 1.0f;
+			float time_redraw;
 #ifdef NDOF_WALK_DRAW_TOOMUCH
 			walk->redraw = 1;
 #endif
-
 			time_current = PIL_check_seconds_timer();
 			time_redraw = (float)(time_current - walk->time_lastdraw);
+
 			walk->time_lastdraw = time_current;
 
 			/* base speed in m/s */
@@ -1482,13 +1467,6 @@ static int walk_modal(bContext *C, wmOperator *op, const wmEvent *event)
 	return exit_code;
 }
 
-static void walk_non_modal(bContext *C, wmOperator *op)
-{
-	WalkInfo *walk = op->customdata;
-	walk->active_directions = RNA_enum_get(op->ptr, "initial_direction");
-	WM_event_add_modal_handler(C, op);
-}
-
 static EnumPropertyItem walk_navigation_mouse_mode_items[] = {
 	{WALK_MOUSE_LOOKAROUND, "LOOK_AROUND", 0, "Look Around", "Rotates the viewport camera"},
 	{WALK_MOUSE_MOVEHORIZONTAL, "MOVE_HORIZONTAL", 0, "Move Horizontally", "Moves the camera forward and backward and rotates left and right"},
@@ -1528,6 +1506,6 @@ void VIEW3D_OT_walk(wmOperatorType *ot)
 
 	prop = RNA_def_enum(ot->srna, "mouse_mode", walk_navigation_mouse_mode_items, WALK_MOUSE_LOOKAROUND, "Mouse Mode", "");
 	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
-	prop = RNA_def_enum(ot->srna, "initial_direction", walk_navigation_initial_direction_items, WALK_KEY_NULL, "Key Mode", "");
+	prop = RNA_def_enum(ot->srna, "initial_direction", walk_navigation_initial_direction_items, 0, "Initial Direction", "");
 	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
