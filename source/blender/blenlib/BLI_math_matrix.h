@@ -125,7 +125,8 @@ void mul_m3_fl(float R[3][3], float f);
 void mul_m4_fl(float R[4][4], float f);
 void mul_mat3_m4_fl(float R[4][4], float f);
 
-void negate_m3(float R[4][4]);
+void negate_m3(float R[3][3]);
+void negate_mat3_m4(float R[4][4]);
 void negate_m4(float R[4][4]);
 
 bool invert_m3_ex(float m[3][3], const float epsilon);
@@ -144,7 +145,10 @@ void mul_v4d_m4v4d(double r[4], float M[4][4], double v[4]);
 /****************************** Linear Algebra *******************************/
 
 void transpose_m3(float R[3][3]);
+void transpose_m3_m3(float R[3][3], float A[3][3]);
+void transpose_m3_m4(float R[3][3], float A[4][4]);
 void transpose_m4(float R[4][4]);
+void transpose_m4_m4(float R[4][4], float A[4][4]);
 
 int compare_m4m4(float mat1[4][4], float mat2[4][4], float limit);
 

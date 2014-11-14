@@ -271,21 +271,21 @@ static void region_draw_azone_tab_plus(AZone *az)
 	/* add code to draw region hidden as 'too small' */
 	switch (az->edge) {
 		case AE_TOP_TO_BOTTOMRIGHT:
-			uiSetRoundBox(UI_CNR_TOP_LEFT | UI_CNR_TOP_RIGHT);
+			UI_draw_roundbox_corner_set(UI_CNR_TOP_LEFT | UI_CNR_TOP_RIGHT);
 			break;
 		case AE_BOTTOM_TO_TOPLEFT:
-			uiSetRoundBox(UI_CNR_BOTTOM_RIGHT | UI_CNR_BOTTOM_LEFT);
+			UI_draw_roundbox_corner_set(UI_CNR_BOTTOM_RIGHT | UI_CNR_BOTTOM_LEFT);
 			break;
 		case AE_LEFT_TO_TOPRIGHT:
-			uiSetRoundBox(UI_CNR_TOP_LEFT | UI_CNR_BOTTOM_LEFT);
+			UI_draw_roundbox_corner_set(UI_CNR_TOP_LEFT | UI_CNR_BOTTOM_LEFT);
 			break;
 		case AE_RIGHT_TO_TOPLEFT:
-			uiSetRoundBox(UI_CNR_TOP_RIGHT | UI_CNR_BOTTOM_RIGHT);
+			UI_draw_roundbox_corner_set(UI_CNR_TOP_RIGHT | UI_CNR_BOTTOM_RIGHT);
 			break;
 	}
 
 	glColor4f(0.05f, 0.05f, 0.05f, 0.4f);
-	uiRoundBox((float)az->x1, (float)az->y1, (float)az->x2, (float)az->y2, 4.0f);
+	UI_draw_roundbox((float)az->x1, (float)az->y1, (float)az->x2, (float)az->y2, 4.0f);
 
 	glEnable(GL_BLEND);
 
@@ -306,32 +306,32 @@ static void region_draw_azone_tab(AZone *az)
 	/* add code to draw region hidden as 'too small' */
 	switch (az->edge) {
 		case AE_TOP_TO_BOTTOMRIGHT:
-			uiSetRoundBox(UI_CNR_TOP_LEFT | UI_CNR_TOP_RIGHT | UI_RB_ALPHA);
+			UI_draw_roundbox_corner_set(UI_CNR_TOP_LEFT | UI_CNR_TOP_RIGHT | UI_RB_ALPHA);
 			
-			uiDrawBoxShade(GL_POLYGON, (float)az->x1, (float)az->y1, (float)az->x2, (float)az->y2, 4.0f, -0.3f, 0.05f);
+			UI_draw_roundbox_shade_x(GL_POLYGON, (float)az->x1, (float)az->y1, (float)az->x2, (float)az->y2, 4.0f, -0.3f, 0.05f);
 			glColor4ub(0, 0, 0, 255);
-			uiRoundRect((float)az->x1, 0.3f + (float)az->y1, (float)az->x2, 0.3f + (float)az->y2, 4.0f);
+			UI_draw_roundbox_unfilled((float)az->x1, 0.3f + (float)az->y1, (float)az->x2, 0.3f + (float)az->y2, 4.0f);
 			break;
 		case AE_BOTTOM_TO_TOPLEFT:
-			uiSetRoundBox(UI_CNR_BOTTOM_RIGHT | UI_CNR_BOTTOM_LEFT | UI_RB_ALPHA);
+			UI_draw_roundbox_corner_set(UI_CNR_BOTTOM_RIGHT | UI_CNR_BOTTOM_LEFT | UI_RB_ALPHA);
 			
-			uiDrawBoxShade(GL_POLYGON, (float)az->x1, (float)az->y1, (float)az->x2, (float)az->y2, 4.0f, -0.3f, 0.05f);
+			UI_draw_roundbox_shade_x(GL_POLYGON, (float)az->x1, (float)az->y1, (float)az->x2, (float)az->y2, 4.0f, -0.3f, 0.05f);
 			glColor4ub(0, 0, 0, 255);
-			uiRoundRect((float)az->x1, 0.3f + (float)az->y1, (float)az->x2, 0.3f + (float)az->y2, 4.0f);
+			UI_draw_roundbox_unfilled((float)az->x1, 0.3f + (float)az->y1, (float)az->x2, 0.3f + (float)az->y2, 4.0f);
 			break;
 		case AE_LEFT_TO_TOPRIGHT:
-			uiSetRoundBox(UI_CNR_TOP_LEFT | UI_CNR_BOTTOM_LEFT | UI_RB_ALPHA);
+			UI_draw_roundbox_corner_set(UI_CNR_TOP_LEFT | UI_CNR_BOTTOM_LEFT | UI_RB_ALPHA);
 			
-			uiDrawBoxShade(GL_POLYGON, (float)az->x1, (float)az->y1, (float)az->x2, (float)az->y2, 4.0f, -0.3f, 0.05f);
+			UI_draw_roundbox_shade_x(GL_POLYGON, (float)az->x1, (float)az->y1, (float)az->x2, (float)az->y2, 4.0f, -0.3f, 0.05f);
 			glColor4ub(0, 0, 0, 255);
-			uiRoundRect((float)az->x1, (float)az->y1, (float)az->x2, (float)az->y2, 4.0f);
+			UI_draw_roundbox_unfilled((float)az->x1, (float)az->y1, (float)az->x2, (float)az->y2, 4.0f);
 			break;
 		case AE_RIGHT_TO_TOPLEFT:
-			uiSetRoundBox(UI_CNR_TOP_RIGHT | UI_CNR_BOTTOM_RIGHT | UI_RB_ALPHA);
+			UI_draw_roundbox_corner_set(UI_CNR_TOP_RIGHT | UI_CNR_BOTTOM_RIGHT | UI_RB_ALPHA);
 			
-			uiDrawBoxShade(GL_POLYGON, (float)az->x1, (float)az->y1, (float)az->x2, (float)az->y2, 4.0f, -0.3f, 0.05f);
+			UI_draw_roundbox_shade_x(GL_POLYGON, (float)az->x1, (float)az->y1, (float)az->x2, (float)az->y2, 4.0f, -0.3f, 0.05f);
 			glColor4ub(0, 0, 0, 255);
-			uiRoundRect((float)az->x1, (float)az->y1, (float)az->x2, (float)az->y2, 4.0f);
+			UI_draw_roundbox_unfilled((float)az->x1, (float)az->y1, (float)az->x2, (float)az->y2, 4.0f);
 			break;
 	}
 	
@@ -496,7 +496,7 @@ void ED_region_do_draw(bContext *C, ARegion *ar)
 
 	memset(&ar->drawrct, 0, sizeof(ar->drawrct));
 	
-	uiFreeInactiveBlocks(C, &ar->uiblocks);
+	UI_blocklist_free_inactive(C, &ar->uiblocks);
 
 	if (sa && (win->screen->state != SCREENFULL)) {
 		region_draw_emboss(ar, &ar->winrct);
@@ -1314,7 +1314,7 @@ static void ed_default_handlers(wmWindowManager *wm, ScrArea *sa, ListBase *hand
 	/* XXX it would be good to have boundbox checks for some of these... */
 	if (flag & ED_KEYMAP_UI) {
 		/* user interface widgets */
-		UI_add_region_handlers(handlers);
+		UI_region_handlers_add(handlers);
 	}
 	if (flag & ED_KEYMAP_VIEW2D) {
 		/* 2d-viewport handling+manipulation */
@@ -1408,7 +1408,7 @@ void ED_area_initialize(wmWindowManager *wm, wmWindow *win, ScrArea *sa)
 		}
 		else {
 			/* prevent uiblocks to run */
-			uiFreeBlocks(NULL, &ar->uiblocks);
+			UI_blocklist_free(NULL, &ar->uiblocks);
 		}
 	}
 }
@@ -1651,7 +1651,7 @@ int ED_area_header_switchbutton(const bContext *C, uiBlock *block, int yco)
 
 	RNA_pointer_create(&(scr->id), &RNA_Area, sa, &areaptr);
 
-	uiDefButR(block, MENU, 0, "", xco, yco, 1.5 * U.widget_unit, U.widget_unit,
+	uiDefButR(block, UI_BTYPE_MENU, 0, "", xco, yco, 1.5 * U.widget_unit, U.widget_unit,
 	          &areaptr, "type", 0, 0.0f, 0.0f, 0.0f, 0.0f, "");
 
 	return xco + 1.7 * U.widget_unit;
@@ -1662,7 +1662,7 @@ int ED_area_header_switchbutton(const bContext *C, uiBlock *block, int yco)
 void ED_region_panels(const bContext *C, ARegion *ar, int vertical, const char *context, int contextnr)
 {
 	ScrArea *sa = CTX_wm_area(C);
-	uiStyle *style = UI_GetStyleDraw();
+	uiStyle *style = UI_style_get_dpi();
 	uiBlock *block;
 	PanelType *pt;
 	Panel *panel;
@@ -1760,16 +1760,16 @@ void ED_region_panels(const bContext *C, ARegion *ar, int vertical, const char *
 		w -= margin_x;
 		
 		/* create panels */
-		uiBeginPanels(C, ar);
+		UI_panels_begin(C, ar);
 
-		/* set view2d view matrix  - uiBeginBlock() stores it */
+		/* set view2d view matrix  - UI_block_begin() stores it */
 		UI_view2d_view_ortho(v2d);
 
 		BLI_SMALLSTACK_ITER_BEGIN(pt_stack, pt)
 		{
 			bool open;
 
-			panel = uiPanelFindByType(ar, pt);
+			panel = UI_panel_find_by_type(ar, pt);
 
 			if (use_category_tabs && pt->category[0] && !STREQ(category, pt->category)) {
 				if ((panel == NULL) || ((panel->flag & PNL_PIN) == 0)) {
@@ -1778,20 +1778,21 @@ void ED_region_panels(const bContext *C, ARegion *ar, int vertical, const char *
 			}
 
 			/* draw panel */
-			block = uiBeginBlock(C, ar, pt->idname, UI_EMBOSS);
-			panel = uiBeginPanel(sa, ar, block, pt, panel, &open);
+			block = UI_block_begin(C, ar, pt->idname, UI_EMBOSS);
+			panel = UI_panel_begin(sa, ar, block, pt, panel, &open);
 
 			/* bad fixed values */
 			triangle = (int)(UI_UNIT_Y * 1.1f);
 
 			if (pt->draw_header && !(pt->flag & PNL_NO_HEADER) && (open || vertical)) {
 				/* for enabled buttons */
-				panel->layout = uiBlockLayout(block, UI_LAYOUT_HORIZONTAL, UI_LAYOUT_HEADER,
-				                              triangle, (UI_UNIT_Y * 1.1f) + style->panelspace, UI_UNIT_Y, 1, 0, style);
+				panel->layout = UI_block_layout(
+				        block, UI_LAYOUT_HORIZONTAL, UI_LAYOUT_HEADER,
+				        triangle, (UI_UNIT_Y * 1.1f) + style->panelspace, UI_UNIT_Y, 1, 0, style);
 
 				pt->draw_header(C, panel);
 
-				uiBlockLayoutResolve(block, &xco, &yco);
+				UI_block_layout_resolve(block, &xco, &yco);
 				panel->labelofs = xco - triangle;
 				panel->layout = NULL;
 			}
@@ -1808,28 +1809,29 @@ void ED_region_panels(const bContext *C, ARegion *ar, int vertical, const char *
 				else
 					panelContext = UI_LAYOUT_PANEL;
 
-				panel->layout = uiBlockLayout(block, UI_LAYOUT_VERTICAL, panelContext,
-				                              style->panelspace, 0, w - 2 * style->panelspace, em, 0, style);
+				panel->layout = UI_block_layout(
+				        block, UI_LAYOUT_VERTICAL, panelContext,
+				        style->panelspace, 0, w - 2 * style->panelspace, em, 0, style);
 
 				pt->draw(C, panel);
 
-				uiBlockLayoutResolve(block, &xco, &yco);
+				UI_block_layout_resolve(block, &xco, &yco);
 				panel->layout = NULL;
 
 				yco -= 2 * style->panelspace;
-				uiEndPanel(block, w, -yco);
+				UI_panel_end(block, w, -yco);
 			}
 			else {
 				yco = 0;
-				uiEndPanel(block, w, 0);
+				UI_panel_end(block, w, 0);
 			}
 
-			uiEndBlock(C, block);
+			UI_block_end(C, block);
 		}
 		BLI_SMALLSTACK_ITER_END;
 
 		/* align panels and return size */
-		uiEndPanels(C, ar, &x, &y);
+		UI_panels_end(C, ar, &x, &y);
 		
 		/* before setting the view */
 		if (vertical) {
@@ -1854,7 +1856,7 @@ void ED_region_panels(const bContext *C, ARegion *ar, int vertical, const char *
 			 * flip +1 or -1 pixel compared to redoing the entire layout again.
 			 * Leaving in commented code for future tests */
 #if 0
-			uiScalePanels(ar, BLI_rctf_size_x(&v2d->cur));
+			UI_panels_scale(ar, BLI_rctf_size_x(&v2d->cur));
 			break;
 #endif
 		}
@@ -1882,7 +1884,7 @@ void ED_region_panels(const bContext *C, ARegion *ar, int vertical, const char *
 	UI_view2d_view_ortho(v2d);
 
 	/* draw panels */
-	uiDrawPanels(C, ar);
+	UI_panels_draw(C, ar);
 
 	/* restore view matrix */
 	UI_view2d_view_restore(C);
@@ -1909,7 +1911,7 @@ void ED_region_panels_init(wmWindowManager *wm, ARegion *ar)
 
 void ED_region_header(const bContext *C, ARegion *ar)
 {
-	uiStyle *style = UI_GetStyleDraw();
+	uiStyle *style = UI_style_get_dpi();
 	uiBlock *block;
 	uiLayout *layout;
 	HeaderType *ht;
@@ -1929,8 +1931,8 @@ void ED_region_header(const bContext *C, ARegion *ar)
 
 	/* draw all headers types */
 	for (ht = ar->type->headertypes.first; ht; ht = ht->next) {
-		block = uiBeginBlock(C, ar, ht->idname, UI_EMBOSS);
-		layout = uiBlockLayout(block, UI_LAYOUT_HORIZONTAL, UI_LAYOUT_HEADER, xco, yco, UI_UNIT_Y, 1, 0, style);
+		block = UI_block_begin(C, ar, ht->idname, UI_EMBOSS);
+		layout = UI_block_layout(block, UI_LAYOUT_HORIZONTAL, UI_LAYOUT_HEADER, xco, yco, UI_UNIT_Y, 1, 0, style);
 
 		if (ht->draw) {
 			header.type = ht;
@@ -1943,14 +1945,14 @@ void ED_region_header(const bContext *C, ARegion *ar)
 				maxco = xco;
 		}
 
-		uiBlockLayoutResolve(block, &xco, &yco);
+		UI_block_layout_resolve(block, &xco, &yco);
 		
 		/* for view2d */
 		if (xco > maxco)
 			maxco = xco;
 		
-		uiEndBlock(C, block);
-		uiDrawBlock(C, block);
+		UI_block_end(C, block);
+		UI_block_draw(C, block);
 	}
 
 	/* always as last  */
@@ -1974,7 +1976,7 @@ int ED_area_headersize(void)
 void ED_region_info_draw(ARegion *ar, const char *text, int block, float fill_color[4])
 {
 	const int header_height = UI_UNIT_Y;
-	uiStyle *style = UI_GetStyleDraw();
+	uiStyle *style = UI_style_get_dpi();
 	int fontid = style->widget.uifont_id;
 	GLint scissor[4];
 	rcti rect;
@@ -2114,7 +2116,7 @@ void ED_region_cache_draw_background(const ARegion *ar)
 
 void ED_region_cache_draw_curfra_label(const int framenr, const float x, const float y)
 {
-	uiStyle *style = UI_GetStyle();
+	uiStyle *style = UI_style_get();
 	int fontid = style->widget.uifont_id;
 	char numstr[32];
 	float font_dims[2] = {0.0f, 0.0f};

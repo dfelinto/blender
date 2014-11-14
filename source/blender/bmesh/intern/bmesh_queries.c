@@ -202,6 +202,26 @@ bool BM_vert_pair_share_face_check(
 	return false;
 }
 
+bool BM_vert_pair_share_face_check_cb(
+        BMVert *v_a, BMVert *v_b,
+        bool (*test_fn)(BMFace *, void *user_data), void *user_data)
+{
+	if (v_a->e && v_b->e) {
+		BMIter iter;
+		BMFace *f;
+
+		BM_ITER_ELEM (f, &iter, v_a, BM_FACES_OF_VERT) {
+			if (test_fn(f, user_data)) {
+				if (BM_vert_in_face(f, v_b)) {
+					return true;
+				}
+			}
+		}
+	}
+
+	return false;
+}
+
 /**
  * Given 2 verts, find the smallest face they share and give back both loops.
  */
@@ -1353,7 +1373,7 @@ float BM_vert_calc_shell_factor(BMVert *v)
 }
 /* alternate version of #BM_vert_calc_shell_factor which only
  * uses 'hflag' faces, but falls back to all if none found. */
-float BM_vert_calc_shell_factor_ex(BMVert *v, const char hflag)
+float BM_vert_calc_shell_factor_ex(BMVert *v, const float no[3], const char hflag)
 {
 	BMIter iter;
 	BMLoop *l;
@@ -1364,7 +1384,7 @@ float BM_vert_calc_shell_factor_ex(BMVert *v, const char hflag)
 	BM_ITER_ELEM (l, &iter, v, BM_LOOPS_OF_VERT) {
 		if (BM_elem_flag_test(l->f, hflag)) {  /* <-- main difference to BM_vert_calc_shell_factor! */
 			const float face_angle = BM_loop_calc_face_angle(l);
-			accum_shell += shell_v3v3_normalized_to_dist(v->no, l->f->no) * face_angle;
+			accum_shell += shell_v3v3_normalized_to_dist(no, l->f->no) * face_angle;
 			accum_angle += face_angle;
 			tot_sel++;
 		}

@@ -269,7 +269,7 @@ static void image_panel_preview(ScrArea *sa, short cntrl)   // IMAGE_HANDLER_PRE
 		return;
 	}
 	
-	block = uiBeginBlock(C, ar, __func__, UI_EMBOSS);
+	block = UI_block_begin(C, ar, __func__, UI_EMBOSS);
 	uiPanelControl(UI_PNL_SOLID | UI_PNL_CLOSE | UI_PNL_SCALE | cntrl);
 	uiSetPanelHandler(IMAGE_HANDLER_PREVIEW);  // for close and esc
 	
@@ -277,7 +277,7 @@ static void image_panel_preview(ScrArea *sa, short cntrl)   // IMAGE_HANDLER_PRE
 	ofsy = -100 + (sa->winy / 2) / sima->blockscale;
 	if (uiNewPanel(C, ar, block, "Preview", "Image", ofsx, ofsy, 300, 200) == 0) return;
 	
-	uiBlockSetDrawExtraFunc(block, preview_cb);
+	UI_but_func_drawextra_set(block, preview_cb);
 	
 }
 #endif
@@ -291,7 +291,7 @@ static void ui_imageuser_slot_menu(bContext *UNUSED(C), uiLayout *layout, void *
 	Image *image = image_p;
 	int slot;
 
-	uiDefBut(block, LABEL, 0, IFACE_("Slot"),
+	uiDefBut(block, UI_BTYPE_LABEL, 0, IFACE_("Slot"),
 	         0, 0, UI_UNIT_X * 5, UI_UNIT_Y, NULL, 0.0, 0.0, 0, 0, "");
 	uiItemS(layout);
 
@@ -304,7 +304,7 @@ static void ui_imageuser_slot_menu(bContext *UNUSED(C), uiLayout *layout, void *
 		else {
 			BLI_snprintf(str, sizeof(str), IFACE_("Slot %d"), slot + 1);
 		}
-		uiDefButS(block, BUTM, B_NOP, str, 0, 0,
+		uiDefButS(block, UI_BTYPE_BUT_MENU, B_NOP, str, 0, 0,
 		          UI_UNIT_X * 5, UI_UNIT_X, &image->render_slot, (float) slot, 0.0, 0, -1, "");
 	}
 }
@@ -341,10 +341,10 @@ static void ui_imageuser_layer_menu(bContext *UNUSED(C), uiLayout *layout, void 
 		return;
 	}
 
-	uiBlockSetCurLayout(block, layout);
+	UI_block_layout_set_current(block, layout);
 	uiLayoutColumn(layout, false);
 
-	uiDefBut(block, LABEL, 0, IFACE_("Layer"),
+	uiDefBut(block, UI_BTYPE_LABEL, 0, IFACE_("Layer"),
 	         0, 0, UI_UNIT_X * 5, UI_UNIT_Y, NULL, 0.0, 0.0, 0, 0, "");
 	uiItemS(layout);
 
@@ -358,7 +358,7 @@ static void ui_imageuser_layer_menu(bContext *UNUSED(C), uiLayout *layout, void 
 
 	for (rl = rr->layers.last; rl; rl = rl->prev, nr--) {
 final:
-		uiDefButS(block, BUTM, B_NOP, IFACE_(rl->name), 0, 0,
+		uiDefButS(block, UI_BTYPE_BUT_MENU, B_NOP, IFACE_(rl->name), 0, 0,
 		          UI_UNIT_X * 5, UI_UNIT_X, &iuser->layer, (float) nr, 0.0, 0, -1, "");
 	}
 
@@ -408,10 +408,10 @@ static void ui_imageuser_pass_menu(bContext *UNUSED(C), uiLayout *layout, void *
 
 	rl = BLI_findlink(&rr->layers, rpass_index);
 
-	uiBlockSetCurLayout(block, layout);
+	UI_block_layout_set_current(block, layout);
 	uiLayoutColumn(layout, false);
 
-	uiDefBut(block, LABEL, 0, IFACE_("Pass"),
+	uiDefBut(block, UI_BTYPE_LABEL, 0, IFACE_("Pass"),
 	         0, 0, UI_UNIT_X * 5, UI_UNIT_Y, NULL, 0.0, 0.0, 0, 0, "");
 
 	uiItemS(layout);
@@ -434,7 +434,7 @@ static void ui_imageuser_pass_menu(bContext *UNUSED(C), uiLayout *layout, void *
 		passflag |= rpass->passtype;
 
 final:
-		uiDefButS(block, BUTM, B_NOP, IFACE_(rpass->internal_name), 0, 0,
+		uiDefButS(block, UI_BTYPE_BUT_MENU, B_NOP, IFACE_(rpass->internal_name), 0, 0,
 		          UI_UNIT_X * 5, UI_UNIT_X, &iuser->passtype, (float) rpass->passtype, 0.0, 0, -1, "");
 	}
 
@@ -467,17 +467,17 @@ static void ui_imageuser_view_menu_rr(bContext *UNUSED(C), uiLayout *layout, voi
 		return;
 	}
 
-	uiBlockSetCurLayout(block, layout);
+	UI_block_layout_set_current(block, layout);
 	uiLayoutColumn(layout, false);
 
-	uiDefBut(block, LABEL, 0, IFACE_("View"),
+	uiDefBut(block, UI_BTYPE_LABEL, 0, IFACE_("View"),
 	         0, 0, UI_UNIT_X * 5, UI_UNIT_Y, NULL, 0.0, 0.0, 0, 0, "");
 
 	uiItemS(layout);
 
 	nr = (rr ? BLI_countlist(&rr->views) : 0) - 1;
 	for (rview = rr ? rr->views.last : NULL; rview; rview = rview->prev, nr--) {
-		uiDefButS(block, BUTM, B_NOP, IFACE_(rview->name), 0, 0,
+		uiDefButS(block, UI_BTYPE_BUT_MENU, B_NOP, IFACE_(rview->name), 0, 0,
 		          UI_UNIT_X * 5, UI_UNIT_X, &iuser->view, (float) nr, 0.0, 0, -1, "");
 	}
 
@@ -493,17 +493,17 @@ static void ui_imageuser_view_menu_multiview(bContext *UNUSED(C), uiLayout *layo
 	int nr;
 	ImageView *iv;
 
-	uiBlockSetCurLayout(block, layout);
+	UI_block_layout_set_current(block, layout);
 	uiLayoutColumn(layout, false);
 
-	uiDefBut(block, LABEL, 0, IFACE_("View"),
+	uiDefBut(block, UI_BTYPE_LABEL, 0, IFACE_("View"),
 	         0, 0, UI_UNIT_X * 5, UI_UNIT_Y, NULL, 0.0, 0.0, 0, 0, "");
 
 	uiItemS(layout);
 
 	nr = BLI_countlist(&image->views) - 1;
 	for (iv = image->views.last; iv; iv = iv->prev, nr--) {
-		uiDefButS(block, BUTM, B_NOP, IFACE_(iv->name), 0, 0,
+		uiDefButS(block, UI_BTYPE_BUT_MENU, B_NOP, IFACE_(iv->name), 0, 0,
 		          UI_UNIT_X * 5, UI_UNIT_X, &iuser->view, (float) nr, 0.0, 0, -1, "");
 	}
 }
@@ -632,8 +632,8 @@ static void uiblock_layer_pass_buttons(uiLayout *layout, Image *image, RenderRes
 			BLI_snprintf(str, sizeof(str), IFACE_("Slot %d"), *render_slot + 1);
 		}
 		but = uiDefMenuBut(block, ui_imageuser_slot_menu, image, str, 0, 0, wmenu1, UI_UNIT_Y, TIP_("Select Slot"));
-		uiButSetFunc(but, image_multi_cb, rr, iuser);
-		uiButSetMenuFromPulldown(but);
+		UI_but_func_set(but, image_multi_cb, rr, iuser);
+		UI_but_type_set_menu_from_pulldown(but);
 	}
 
 	if (rr) {
@@ -650,8 +650,8 @@ static void uiblock_layer_pass_buttons(uiLayout *layout, Image *image, RenderRes
 		if (RE_layers_have_name(rr)) {
 			display_name = rl ? rl->name : (fake_name ? fake_name : "");
 			but = uiDefMenuBut(block, ui_imageuser_layer_menu, rnd_pt, display_name, 0, 0, wmenu2, UI_UNIT_Y, TIP_("Select Layer"));
-			uiButSetFunc(but, image_multi_cb, rr, iuser);
-			uiButSetMenuFromPulldown(but);
+			UI_but_func_set(but, image_multi_cb, rr, iuser);
+			UI_but_type_set_menu_from_pulldown(but);
 		}
 
 		/* pass */
@@ -660,8 +660,8 @@ static void uiblock_layer_pass_buttons(uiLayout *layout, Image *image, RenderRes
 
 		display_name = rpass ? rpass->internal_name : (fake_name ? fake_name : "");
 		but = uiDefMenuBut(block, ui_imageuser_pass_menu, rnd_pt, display_name, 0, 0, wmenu3, UI_UNIT_Y, TIP_("Select Pass"));
-		uiButSetFunc(but, image_multi_cb, rr, iuser);
-		uiButSetMenuFromPulldown(but);
+		UI_but_func_set(but, image_multi_cb, rr, iuser);
+		UI_but_type_set_menu_from_pulldown(but);
 
 		/* view */
 		if (BLI_countlist(&rr->views) > 1 && !show_stereo) {
@@ -669,8 +669,8 @@ static void uiblock_layer_pass_buttons(uiLayout *layout, Image *image, RenderRes
 			display_name = rview ? rview->name : "";
 
 			but = uiDefMenuBut(block, ui_imageuser_view_menu_rr, rnd_pt, display_name, 0, 0, wmenu4, UI_UNIT_Y, TIP_("Select View"));
-			uiButSetFunc(but, image_multi_cb, rr, iuser);
-			uiButSetMenuFromPulldown(but);
+			UI_but_func_set(but, image_multi_cb, rr, iuser);
+			UI_but_type_set_menu_from_pulldown(but);
 		}
 	}
 
@@ -689,8 +689,8 @@ static void uiblock_layer_pass_buttons(uiLayout *layout, Image *image, RenderRes
 		}
 
 		but = uiDefMenuBut(block, ui_imageuser_view_menu_multiview, rnd_pt, display_name, 0, 0, wmenu1, UI_UNIT_Y, TIP_("Select View"));
-		uiButSetFunc(but, image_multiview_cb, image, iuser);
-		uiButSetMenuFromPulldown(but);
+		UI_but_func_set(but, image_multiview_cb, image, iuser);
+		UI_but_type_set_menu_from_pulldown(but);
 	}
 }
 
@@ -711,20 +711,20 @@ static void uiblock_layer_pass_arrow_buttons(uiLayout *layout, Image *image, Ren
 	}
 
 	/* decrease, increase arrows */
-	but = uiDefIconBut(block, BUT, 0, ICON_TRIA_LEFT,   0, 0, 0.85f * UI_UNIT_X, UI_UNIT_Y, NULL, 0, 0, 0, 0, TIP_("Previous Layer"));
-	uiButSetFunc(but, image_multi_declay_cb, rr, iuser);
-	but = uiDefIconBut(block, BUT, 0, ICON_TRIA_RIGHT,  0, 0, 0.90f * UI_UNIT_X, UI_UNIT_Y, NULL, 0, 0, 0, 0, TIP_("Next Layer"));
-	uiButSetFunc(but, image_multi_inclay_cb, rr, iuser);
+	but = uiDefIconBut(block, UI_BTYPE_BUT, 0, ICON_TRIA_LEFT,   0, 0, 0.85f * UI_UNIT_X, UI_UNIT_Y, NULL, 0, 0, 0, 0, TIP_("Previous Layer"));
+	UI_but_func_set(but, image_multi_declay_cb, rr, iuser);
+	but = uiDefIconBut(block, UI_BTYPE_BUT, 0, ICON_TRIA_RIGHT,  0, 0, 0.90f * UI_UNIT_X, UI_UNIT_Y, NULL, 0, 0, 0, 0, TIP_("Next Layer"));
+	UI_but_func_set(but, image_multi_inclay_cb, rr, iuser);
 
 	uiblock_layer_pass_buttons(row, image, rr, iuser, 230 * dpi_fac, render_slot);
 
 	/* decrease, increase arrows */
-	but = uiDefIconBut(block, BUT, 0, ICON_TRIA_LEFT,   0, 0, 0.85f * UI_UNIT_X, UI_UNIT_Y, NULL, 0, 0, 0, 0, TIP_("Previous Pass"));
-	uiButSetFunc(but, image_multi_decpass_cb, rr, iuser);
-	but = uiDefIconBut(block, BUT, 0, ICON_TRIA_RIGHT,  0, 0, 0.90f * UI_UNIT_X, UI_UNIT_Y, NULL, 0, 0, 0, 0, TIP_("Next Pass"));
-	uiButSetFunc(but, image_multi_incpass_cb, rr, iuser);
+	but = uiDefIconBut(block, UI_BTYPE_BUT, 0, ICON_TRIA_LEFT,   0, 0, 0.85f * UI_UNIT_X, UI_UNIT_Y, NULL, 0, 0, 0, 0, TIP_("Previous Pass"));
+	UI_but_func_set(but, image_multi_decpass_cb, rr, iuser);
+	but = uiDefIconBut(block, UI_BTYPE_BUT, 0, ICON_TRIA_RIGHT,  0, 0, 0.90f * UI_UNIT_X, UI_UNIT_Y, NULL, 0, 0, 0, 0, TIP_("Next Pass"));
+	UI_but_func_set(but, image_multi_incpass_cb, rr, iuser);
 
-	uiBlockEndAlign(block);
+	UI_block_align_end(block);
 }
 
 // XXX HACK!
@@ -802,7 +802,7 @@ void uiTemplateImage(uiLayout *layout, bContext *C, PointerRNA *ptr, const char 
 		uiTemplateID(layout, C, ptr, propname, "IMAGE_OT_new", "IMAGE_OT_open", NULL);
 
 	if (ima) {
-		uiBlockSetNFunc(block, rna_update_cb, MEM_dupallocN(cb), NULL);
+		UI_block_funcN_set(block, rna_update_cb, MEM_dupallocN(cb), NULL);
 
 		if (ima->source == IMA_SRC_VIEWER) {
 			ImBuf *ibuf = BKE_image_acquire_ibuf(ima, iuser, &lock);
@@ -817,18 +817,18 @@ void uiTemplateImage(uiLayout *layout, bContext *C, PointerRNA *ptr, const char 
 #if 0
 				iuser = ntree_get_active_iuser(scene->nodetree);
 				if (iuser) {
-					uiBlockBeginAlign(block);
-					uiDefIconTextBut(block, BUT, B_SIMA_RECORD, ICON_REC, "Record", 10, 120, 100, 20, 0, 0, 0, 0, 0, "");
-					uiDefIconTextBut(block, BUT, B_SIMA_PLAY, ICON_PLAY, "Play",    110, 120, 100, 20, 0, 0, 0, 0, 0, "");
-					but = uiDefBut(block, BUT, B_NOP, "Free Cache", 210, 120, 100, 20, 0, 0, 0, 0, 0, "");
-					uiButSetFunc(but, image_freecache_cb, ima, NULL);
+					UI_block_align_begin(block);
+					uiDefIconTextBut(block, UI_BTYPE_BUT, B_SIMA_RECORD, ICON_REC, "Record", 10, 120, 100, 20, 0, 0, 0, 0, 0, "");
+					uiDefIconTextBut(block, UI_BTYPE_BUT, B_SIMA_PLAY, ICON_PLAY, "Play",    110, 120, 100, 20, 0, 0, 0, 0, 0, "");
+					but = uiDefBut(block, UI_BTYPE_BUT, B_NOP, "Free Cache", 210, 120, 100, 20, 0, 0, 0, 0, 0, "");
+					UI_but_func_set(but, image_freecache_cb, ima, NULL);
 					
 					if (iuser->frames)
 						BLI_snprintf(str, sizeof(str), "(%d) Frames:", iuser->framenr);
 					else strcpy(str, "Frames:");
-					uiBlockBeginAlign(block);
-					uiDefButI(block, NUM, imagechanged, str,        10, 90, 150, 20, &iuser->frames, 0.0, MAXFRAMEF, 0, 0, "Number of images of a movie to use");
-					uiDefButI(block, NUM, imagechanged, "StartFr:", 160, 90, 150, 20, &iuser->sfra, 1.0, MAXFRAMEF, 0, 0, "Global starting frame of the movie");
+					UI_block_align_begin(block);
+					uiDefButI(block, UI_BTYPE_NUM, imagechanged, str,        10, 90, 150, 20, &iuser->frames, 0.0, MAXFRAMEF, 0, 0, "Number of images of a movie to use");
+					uiDefButI(block, UI_BTYPE_NUM, imagechanged, "StartFr:", 160, 90, 150, 20, &iuser->sfra, 1.0, MAXFRAMEF, 0, 0, "Global starting frame of the movie");
 				}
 #endif
 			}
@@ -964,7 +964,7 @@ void uiTemplateImage(uiLayout *layout, bContext *C, PointerRNA *ptr, const char 
 
 		}
 
-		uiBlockSetNFunc(block, NULL, NULL, NULL);
+		UI_block_funcN_set(block, NULL, NULL, NULL);
 	}
 
 	MEM_freeN(cb);

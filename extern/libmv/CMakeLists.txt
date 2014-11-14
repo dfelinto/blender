@@ -71,14 +71,20 @@ if(WITH_LIBMV)
 	)
 
 	list(APPEND SRC
+		intern/autotrack.cc
 		intern/camera_intrinsics.cc
 		intern/detector.cc
+		intern/frame_accessor.cc
 		intern/homography.cc
 		intern/image.cc
 		intern/logging.cc
 		intern/reconstruction.cc
 		intern/track_region.cc
 		intern/tracks.cc
+		intern/tracksN.cc
+		libmv/autotrack/autotrack.cc
+		libmv/autotrack/predict_tracks.cc
+		libmv/autotrack/tracks.cc
 		libmv/base/aligned_malloc.cc
 		libmv/image/array_nd.cc
 		libmv/image/convolve.cc
@@ -114,14 +120,27 @@ if(WITH_LIBMV)
 		libmv/tracking/trklt_region_tracker.cc
 
 
+		intern/autotrack.h
 		intern/camera_intrinsics.h
 		intern/detector.h
+		intern/frame_accessor.h
 		intern/homography.h
 		intern/image.h
 		intern/logging.h
 		intern/reconstruction.h
 		intern/track_region.h
 		intern/tracks.h
+		intern/tracksN.h
+		libmv/autotrack/autotrack.h
+		libmv/autotrack/callbacks.h
+		libmv/autotrack/frame_accessor.h
+		libmv/autotrack/marker.h
+		libmv/autotrack/model.h
+		libmv/autotrack/predict_tracks.h
+		libmv/autotrack/quad.h
+		libmv/autotrack/reconstruction.h
+		libmv/autotrack/region.h
+		libmv/autotrack/tracks.h
 		libmv/base/aligned_malloc.h
 		libmv/base/id_generator.h
 		libmv/base/scoped_ptr.h
@@ -171,6 +190,7 @@ if(WITH_LIBMV)
 		libmv/simple_pipeline/tracks.h
 		libmv/tracking/brute_region_tracker.h
 		libmv/tracking/hybrid_region_tracker.h
+		libmv/tracking/kalman_filter.h
 		libmv/tracking/klt_region_tracker.h
 		libmv/tracking/pyramid_region_tracker.h
 		libmv/tracking/region_tracker.h
@@ -197,6 +217,8 @@ if(WITH_LIBMV)
 	if(WITH_GTESTS)
 		blender_add_lib(libmv_test_dataset "./libmv/multiview/test_data_sets.cc" "" "")
 
+		BLENDER_SRC_GTEST("libmv_predict_tracks" "./libmv/autotrack/predict_tracks_test.cc" "libmv_test_dataset;extern_libmv;extern_ceres")
+		BLENDER_SRC_GTEST("libmv_tracks" "./libmv/autotrack/tracks_test.cc" "libmv_test_dataset;extern_libmv;extern_ceres")
 		BLENDER_SRC_GTEST("libmv_scoped_ptr" "./libmv/base/scoped_ptr_test.cc" "libmv_test_dataset;extern_libmv;extern_ceres")
 		BLENDER_SRC_GTEST("libmv_vector" "./libmv/base/vector_test.cc" "libmv_test_dataset;extern_libmv;extern_ceres")
 		BLENDER_SRC_GTEST("libmv_array_nd" "./libmv/image/array_nd_test.cc" "libmv_test_dataset;extern_libmv;extern_ceres")
@@ -240,7 +262,7 @@ if(WITH_LIBMV)
 endif()
 
 # make GLog a separate target, so it can be used for gtest as well.
-if(WITH_LIBMV OR WITH_GTESTS OR WITH_CYCLES_LOGGING)
+if(WITH_LIBMV OR WITH_GTESTS)
 	# We compile GLog together with GFlag so we don't worry about
 	# adding extra lib to linker.
 	set(GLOG_SRC

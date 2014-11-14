@@ -216,10 +216,10 @@ ccl_device float3 area_light_sample(float3 P,
 	float3 n2 = normalize(cross(v11, v01));
 	float3 n3 = normalize(cross(v01, v00));
 	/* Compute internal angles (gamma_i). */
-	float g0 = acosf(-dot(n0, n1));
-	float g1 = acosf(-dot(n1, n2));
-	float g2 = acosf(-dot(n2, n3));
-	float g3 = acosf(-dot(n3, n0));
+	float g0 = safe_acosf(-dot(n0, n1));
+	float g1 = safe_acosf(-dot(n1, n2));
+	float g2 = safe_acosf(-dot(n2, n3));
+	float g3 = safe_acosf(-dot(n3, n0));
 	/* Compute predefined constants. */
 	float b0 = n0.z;
 	float b1 = n2.z;
@@ -243,7 +243,10 @@ ccl_device float3 area_light_sample(float3 P,
 	float hv = h0 + randv * (h1 - h0), hv2 = hv * hv;
 	float yv = (hv2 < 1.0f - 1e-6f) ? (hv * d) / sqrtf(1.0f - hv2) : y1;
 
-	*pdf = 1.0f / S;
+	if(S != 0.0f)
+		*pdf = 1.0f / S;
+	else
+		*pdf = 0.0f;
 
 	/* Transform (xu, yv, z0) to world coords. */
 	return P + xu * x + yv * y + z0 * z;
@@ -289,15 +292,18 @@ ccl_device float area_light_pdf(float3 P,
 	float3 n2 = normalize(cross(v11, v01));
 	float3 n3 = normalize(cross(v01, v00));
 	/* Compute internal angles (gamma_i). */
-	float g0 = acosf(-dot(n0, n1));
-	float g1 = acosf(-dot(n1, n2));
-	float g2 = acosf(-dot(n2, n3));
-	float g3 = acosf(-dot(n3, n0));
+	float g0 = safe_acosf(-dot(n0, n1));
+	float g1 = safe_acosf(-dot(n1, n2));
+	float g2 = safe_acosf(-dot(n2, n3));
+	float g3 = safe_acosf(-dot(n3, n0));
 	/* Compute predefined constants. */
 	float k = M_2PI_F - g2 - g3;
 	/* Compute solid angle from internal angles. */
 	float S = g0 + g1 - k;
-    return 1.0f / S;
+	if(S != 0.0f)
+		return 1.0f / S;
+	else
+		return 0.0f;
 }
 
 ccl_device float spot_light_attenuation(float4 data1, float4 data2, LightSample *ls)
@@ -488,9 +494,6 @@ ccl_device bool lamp_light_eval(KernelGlobals *kg, int lamp, float3 P, float3 D,
 		/* compute pdf */
 		float invarea = data1.w;
 		ls->pdf = invarea/(costheta*costheta*costheta);
-		if(ls->t != FLT_MAX)
-			ls->pdf *= lamp_light_pdf(kg, ls->Ng, -ls->D, ls->t);
-
 		ls->eval_fac = ls->pdf;
 	}
 	else if(type == LIGHT_POINT || type == LIGHT_SPOT) {
@@ -648,7 +651,13 @@ ccl_device int light_distribution_sample(KernelGlobals *kg, float randt)
 
 /* Generic Light */
 
-ccl_device void light_sample(KernelGlobals *kg, float randt, float randu, float randv, float time, float3 P, LightSample *ls)
+ccl_device bool light_select_reached_max_bounces(KernelGlobals *kg, int index, int bounce)
+{
+	float4 data4 = kernel_tex_fetch(__light_data, index*LIGHT_SIZE + 4);
+	return (bounce > __float_as_int(data4.x));
+}
+
+ccl_device void light_sample(KernelGlobals *kg, float randt, float randu, float randv, float time, float3 P, int bounce, LightSample *ls)
 {
 	/* sample index */
 	int index = light_distribution_sample(kg, randt);
@@ -670,6 +679,12 @@ ccl_device void light_sample(KernelGlobals *kg, float randt, float randu, float 
 	}
 	else {
 		int lamp = -prim-1;
+
+		if(UNLIKELY(light_select_reached_max_bounces(kg, lamp, bounce))) {
+			ls->pdf = 0.0f;
+			return;
+		}
+
 		lamp_light_sample(kg, lamp, randu, randv, P, ls);
 	}
 }
@@ -678,23 +693,6 @@ ccl_device int light_select_num_samples(KernelGlobals *kg, int index)
 {
 	float4 data3 = kernel_tex_fetch(__light_data, index*LIGHT_SIZE + 3);
 	return __float_as_int(data3.x);
-}
-
-ccl_device int lamp_light_eval_sample(KernelGlobals *kg, float randt)
-{
-	/* sample index */
-	int index = light_distribution_sample(kg, randt);
-
-	/* fetch light data */
-	float4 l = kernel_tex_fetch(__light_distribution, index);
-	int prim = __float_as_int(l.y);
-
-	if(prim < 0) {
-		int lamp = -prim-1;
-		return lamp;
-	}
-	else
-		return LAMP_NONE;
 }
 
 CCL_NAMESPACE_END

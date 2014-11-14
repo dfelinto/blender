@@ -90,6 +90,8 @@ enum {
 
 	/* standard keyboard.
 	 * XXX from 0x0020 to 0x00ff, and 0x012c to 0x013f for function keys! */
+
+	/* NOTE: these values are saved in keymap files, do not change them but just add new ones */
 	AKEY            = 0x0061,  /* 'a' */
 	BKEY            = 0x0062,  /* 'b' */
 	CKEY            = 0x0063,  /* 'c' */
@@ -299,15 +301,20 @@ enum {
 	/* Tweak, gestures: 0x500x, 0x501x */
 	EVT_ACTIONZONE_AREA   = 0x5000,
 	EVT_ACTIONZONE_REGION = 0x5001,
-	EVT_ACTIONZONE_FULLSCREEN = 0x5002,
+	EVT_ACTIONZONE_FULLSCREEN = 0x5011,
+
+	/* NOTE: these values are saved in keymap files, do not change them but just add new ones */
+
 	/* tweak events, for L M R mousebuttons */
-	EVT_TWEAK_L           = 0x5003,
-	EVT_TWEAK_M           = 0x5004,
-	EVT_TWEAK_R           = 0x5005,
+	EVT_TWEAK_L           = 0x5002,
+	EVT_TWEAK_M           = 0x5003,
+	EVT_TWEAK_R           = 0x5004,
 	/* tweak events for action or select mousebutton */
-	EVT_TWEAK_A           = 0x5006,
-	EVT_TWEAK_S           = 0x5007,
+	EVT_TWEAK_A           = 0x5005,
+	EVT_TWEAK_S           = 0x5006,
 	EVT_GESTURE           = 0x5010,
+
+	/* 0x5011 is taken, see EVT_ACTIONZONE_FULLSCREEN */
 
 	/* Misc Blender internals: 0x502x */
 	EVT_FILESELECT        = 0x5020,
@@ -359,6 +366,7 @@ enum {
 /* ********** wmEvent.val ********** */
 
 /* Gestures */
+/* NOTE: these values are saved in keymap files, do not change them but just add new ones */
 enum {
 	/* value of tweaks and line gestures, note, KM_ANY (-1) works for this case too */
 	EVT_GESTURE_N   = 1,

@@ -52,6 +52,9 @@ BMLoop *BM_vert_find_first_loop(BMVert *v) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL(
 
 bool    BM_vert_pair_share_face_check(
         BMVert *v_a, BMVert *v_b) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
+bool    BM_vert_pair_share_face_check_cb(
+        BMVert *v_a, BMVert *v_b,
+        bool (*test_fn)(BMFace *f, void *user_data), void *user_data) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL(1, 2, 3);
 BMFace *BM_vert_pair_share_face_by_len(
         BMVert *v_a, BMVert *v_b,
         BMLoop **r_l_a, BMLoop **r_l_b,
@@ -94,7 +97,7 @@ void    BM_edge_calc_face_tangent(const BMEdge *e, const BMLoop *e_loop, float r
 
 float   BM_vert_calc_edge_angle(BMVert *v) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
 float   BM_vert_calc_shell_factor(BMVert *v) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
-float   BM_vert_calc_shell_factor_ex(BMVert *v, const char hflag) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
+float   BM_vert_calc_shell_factor_ex(BMVert *v, const float no[3], const char hflag) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
 float   BM_vert_calc_mean_tagged_edge_length(BMVert *v) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
 
 BMLoop *BM_face_find_shortest_loop(BMFace *f) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();

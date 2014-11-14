@@ -105,6 +105,9 @@
 
 #include "IMB_colormanagement.h"
 
+#include "bmesh.h"
+//#include "bmesh_tools.h"
+
 #include "paint_intern.h"
 
 /* Defines and Structs */
@@ -994,11 +997,19 @@ static bool check_seam(const ProjPaintState *ps,
 	return 1;
 }
 
+#define SMALL_NUMBER  1.e-6f
+BLI_INLINE float shell_v2v2_normal_dir_to_dist(float n[2], float d[2])
+{
+	const float angle_cos = (normalize_v2(n) < SMALL_NUMBER) ? fabsf(dot_v2v2(d, n)) : 0.0f;
+	return (UNLIKELY(angle_cos < SMALL_NUMBER)) ? 1.0f : (1.0f / angle_cos);
+}
+#undef SMALL_NUMBER
+
 /* Calculate outset UV's, this is not the same as simply scaling the UVs,
  * since the outset coords are a margin that keep an even distance from the original UV's,
  * note that the image aspect is taken into account */
 static void uv_image_outset(float (*orig_uv)[2], float (*outset_uv)[2], const float scaler,
-                            const int ibuf_x, const int ibuf_y, const bool is_quad)
+                            const int ibuf_x, const int ibuf_y, const bool is_quad, const bool cw)
 {
 	float a1, a2, a3, a4 = 0.0f;
 	float puv[4][2]; /* pixelspace uv's */
@@ -1042,26 +1053,34 @@ static void uv_image_outset(float (*orig_uv)[2], float (*outset_uv)[2], const fl
 	}
 
 	if (is_quad) {
-		a1 = shell_v2v2_mid_normalized_to_dist(dir4, dir1);
-		a2 = shell_v2v2_mid_normalized_to_dist(dir1, dir2);
-		a3 = shell_v2v2_mid_normalized_to_dist(dir2, dir3);
-		a4 = shell_v2v2_mid_normalized_to_dist(dir3, dir4);
-	}
-	else {
-		a1 = shell_v2v2_mid_normalized_to_dist(dir3, dir1);
-		a2 = shell_v2v2_mid_normalized_to_dist(dir1, dir2);
-		a3 = shell_v2v2_mid_normalized_to_dist(dir2, dir3);
-	}
+		/* here we just use the orthonormality property (a1, a2) dot (a2, -a1) = 0
+		 * to get normals from the edge directions based on the winding */
+		if (cw) {
+			no1[0] = -dir4[1] - dir1[1];
+			no1[1] = dir4[0] + dir1[0];
+			no2[0] = -dir1[1] - dir2[1];
+			no2[1] = dir1[0] + dir2[0];
+			no3[0] = -dir2[1] - dir3[1];
+			no3[1] = dir2[0] + dir3[0];
+			no4[0] = -dir3[1] - dir4[1];
+			no4[1] = dir3[0] + dir4[0];
+		}
+		else {
+			no1[0] = dir4[1] + dir1[1];
+			no1[1] = -dir4[0] - dir1[0];
+			no2[0] = dir1[1] + dir2[1];
+			no2[1] = -dir1[0] - dir2[0];
+			no3[0] = dir2[1] + dir3[1];
+			no3[1] = -dir2[0] - dir3[0];
+			no4[0] = dir3[1] + dir4[1];
+			no4[1] = -dir3[0] - dir4[0];
+		}
 
-	if (is_quad) {
-		sub_v2_v2v2(no1, dir4, dir1);
-		sub_v2_v2v2(no2, dir1, dir2);
-		sub_v2_v2v2(no3, dir2, dir3);
-		sub_v2_v2v2(no4, dir3, dir4);
-		normalize_v2(no1);
-		normalize_v2(no2);
-		normalize_v2(no3);
-		normalize_v2(no4);
+		a1 = shell_v2v2_normal_dir_to_dist(no1, dir4);
+		a2 = shell_v2v2_normal_dir_to_dist(no2, dir1);
+		a3 = shell_v2v2_normal_dir_to_dist(no3, dir2);
+		a4 = shell_v2v2_normal_dir_to_dist(no4, dir3);
+
 		mul_v2_fl(no1, a1 * scaler);
 		mul_v2_fl(no2, a2 * scaler);
 		mul_v2_fl(no3, a3 * scaler);
@@ -1076,12 +1095,27 @@ static void uv_image_outset(float (*orig_uv)[2], float (*outset_uv)[2], const fl
 		mul_v2_v2(outset_uv[3], ibuf_inv);
 	}
 	else {
-		sub_v2_v2v2(no1, dir3, dir1);
-		sub_v2_v2v2(no2, dir1, dir2);
-		sub_v2_v2v2(no3, dir2, dir3);
-		normalize_v2(no1);
-		normalize_v2(no2);
-		normalize_v2(no3);
+		if (cw) {
+			no1[0] = -dir3[1] - dir1[1];
+			no1[1] = dir3[0] + dir1[0];
+			no2[0] = -dir1[1] - dir2[1];
+			no2[1] = dir1[0] + dir2[0];
+			no3[0] = -dir2[1] - dir3[1];
+			no3[1] = dir2[0] + dir3[0];
+		}
+		else {
+			no1[0] = dir3[1] + dir1[1];
+			no1[1] = -dir3[0] - dir1[0];
+			no2[0] = dir1[1] + dir2[1];
+			no2[1] = -dir1[0] - dir2[0];
+			no3[0] = dir2[1] + dir3[1];
+			no3[1] = -dir2[0] - dir3[0];
+		}
+
+		a1 = shell_v2v2_normal_dir_to_dist(no1, dir3);
+		a2 = shell_v2v2_normal_dir_to_dist(no2, dir1);
+		a3 = shell_v2v2_normal_dir_to_dist(no3, dir2);
+
 		mul_v2_fl(no1, a1 * scaler);
 		mul_v2_fl(no2, a2 * scaler);
 		mul_v2_fl(no3, a3 * scaler);
@@ -2511,9 +2545,8 @@ static void project_paint_face_init(const ProjPaintState *ps, const int thread_i
 			float seam_subsection[4][2];
 			float fac1, fac2, ftot;
 
-
 			if (outset_uv[0][0] == FLT_MAX) /* first time initialize */
-				uv_image_outset(tf_uv_pxoffset, outset_uv, ps->seam_bleed_px, ibuf->x, ibuf->y, mf->v4 != 0);
+				uv_image_outset(tf_uv_pxoffset, outset_uv, ps->seam_bleed_px, ibuf->x, ibuf->y, mf->v4 != 0, (ps->faceWindingFlags[face_index] & PROJ_FACE_WINDING_CW) == 0);
 
 			/* ps->faceSeamUVs cant be modified when threading, now this is done we can unlock */
 			if (threaded)
@@ -5204,9 +5237,9 @@ static int texture_paint_delete_texture_paint_slot_exec(bContext *C, wmOperator 
 	
 	BKE_texpaint_slot_refresh_cache(scene, ma);
 	DAG_id_tag_update(&ma->id, 0);
-	WM_event_add_notifier(C, NC_MATERIAL, CTX_data_scene(C));
+	WM_event_add_notifier(C, NC_MATERIAL, ma);
 	/* we need a notifier for data change since we change the displayed modifier uvs */
-	WM_event_add_notifier(C, NC_GEOM | ND_DATA, ob->data);			
+	WM_event_add_notifier(C, NC_GEOM | ND_DATA, ob->data);
 	return OPERATOR_FINISHED;
 }
 
@@ -5225,3 +5258,64 @@ void PAINT_OT_delete_texture_paint_slot(wmOperatorType *ot)
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
+
+static int add_simple_uvs_exec(bContext *C, wmOperator *UNUSED(op))
+{
+	/* no checks here, poll function does them for us */
+	Object *ob = CTX_data_active_object(C);
+	Scene *scene = CTX_data_scene(C);
+	Mesh *me = ob->data;
+	bool synch_selection = (scene->toolsettings->uv_flag & UV_SYNC_SELECTION) != 0;
+
+	BMesh *bm = BM_mesh_create(&bm_mesh_allocsize_default);
+
+	/* turn synch selection off, since we are not in edit mode we need to ensure only the uv flags are tested */
+	scene->toolsettings->uv_flag &= ~UV_SYNC_SELECTION;
+
+	ED_mesh_uv_texture_ensure(me, NULL);
+
+	BM_mesh_bm_from_me(bm, me, true, false, 0);
+
+	/* select all uv loops first - pack parameters needs this to make sure charts are registered */
+	ED_uvedit_select_all(bm);
+	ED_uvedit_unwrap_cube_project(ob, bm, 1.0, false);
+	/* set the margin really quickly before the packing operation*/
+	scene->toolsettings->uvcalc_margin = 0.001f;
+	ED_uvedit_pack_islands(scene, ob, bm, false, false, true);
+	BM_mesh_bm_to_me(bm, me, false);
+	BM_mesh_free(bm);
+
+	if (synch_selection)
+		scene->toolsettings->uv_flag |= UV_SYNC_SELECTION;
+
+	DAG_id_tag_update(ob->data, 0);
+	WM_event_add_notifier(C, NC_GEOM | ND_DATA, ob->data);
+	WM_event_add_notifier(C, NC_SCENE | ND_TOOLSETTINGS, scene);
+	return OPERATOR_FINISHED;
+}
+
+static int add_simple_uvs_poll(bContext *C)
+{
+	Object *ob = CTX_data_active_object(C);
+
+	if (!ob || ob->type != OB_MESH || ob->mode != OB_MODE_TEXTURE_PAINT)
+		return false;
+
+	return true;
+}
+
+void PAINT_OT_add_simple_uvs(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Add simple UVs";
+	ot->description = "Add cube map uvs on mesh";
+	ot->idname = "PAINT_OT_add_simple_uvs";
+
+	/* api callbacks */
+	ot->exec = add_simple_uvs_exec;
+	ot->poll = add_simple_uvs_poll;
+
+	/* flags */
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
+

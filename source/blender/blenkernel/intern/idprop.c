@@ -571,23 +571,30 @@ void IDP_ReplaceGroupInGroup(IDProperty *dest, const IDProperty *src)
  * Checks if a property with the same name as prop exists, and if so replaces it.
  * Use this to preserve order!
  */
-void IDP_ReplaceInGroup(IDProperty *group, IDProperty *prop)
+void IDP_ReplaceInGroup_ex(IDProperty *group, IDProperty *prop, IDProperty *prop_exist)
 {
-	IDProperty *loop;
-
 	BLI_assert(group->type == IDP_GROUP);
 
-	if ((loop = IDP_GetPropertyFromGroup(group, prop->name))) {
-		BLI_insertlinkafter(&group->data.group, loop, prop);
+	BLI_assert(prop_exist == IDP_GetPropertyFromGroup(group, prop->name));
+
+	if ((prop_exist = IDP_GetPropertyFromGroup(group, prop->name))) {
+		BLI_insertlinkafter(&group->data.group, prop_exist, prop);
 		
-		BLI_remlink(&group->data.group, loop);
-		IDP_FreeProperty(loop);
-		MEM_freeN(loop);
+		BLI_remlink(&group->data.group, prop_exist);
+		IDP_FreeProperty(prop_exist);
+		MEM_freeN(prop_exist);
 	}
 	else {
 		group->len++;
 		BLI_addtail(&group->data.group, prop);
 	}
+}
+
+void IDP_ReplaceInGroup(IDProperty *group, IDProperty *prop)
+{
+	IDProperty *prop_exist = IDP_GetPropertyFromGroup(group, prop->name);
+
+	IDP_ReplaceInGroup_ex(group, prop, prop_exist);
 }
 
 /**
@@ -698,56 +705,6 @@ IDProperty *IDP_GetPropertyTypeFromGroup(IDProperty *prop, const char *name, con
 {
 	IDProperty *idprop = IDP_GetPropertyFromGroup(prop, name);
 	return (idprop && idprop->type == type) ? idprop : NULL;
-}
-
-typedef struct IDPIter {
-	void *next;
-	IDProperty *parent;
-} IDPIter;
-
-/**
- * Get an iterator to iterate over the members of an id property group.
- * Note that this will automatically free the iterator once iteration is complete;
- * if you stop the iteration before hitting the end, make sure to call
- * IDP_FreeIterBeforeEnd().
- */
-void *IDP_GetGroupIterator(IDProperty *prop)
-{
-	IDPIter *iter;
-
-	BLI_assert(prop->type == IDP_GROUP);
-	iter = MEM_mallocN(sizeof(IDPIter), "IDPIter");
-	iter->next = prop->data.group.first;
-	iter->parent = prop;
-	return (void *) iter;
-}
-
-/**
- * Returns the next item in the iteration.  To use, simple for a loop like the following:
- * while (IDP_GroupIterNext(iter) != NULL) {
- *     ...
- * }
- */
-IDProperty *IDP_GroupIterNext(void *vself)
-{
-	IDPIter *self = (IDPIter *) vself;
-	Link *next = (Link *) self->next;
-	if (self->next == NULL) {
-		MEM_freeN(self);
-		return NULL;
-	}
-
-	self->next = next->next;
-	return (void *) next;
-}
-
-/**
- * Frees the iterator pointed to at vself, only use this if iteration is stopped early;
- * when the iterator hits the end of the list it'll automatically free itself.\
- */
-void IDP_FreeIterBeforeEnd(void *vself)
-{
-	MEM_freeN(vself);
 }
 
 /* Ok, the way things work, Groups free the ID Property structs of their children.

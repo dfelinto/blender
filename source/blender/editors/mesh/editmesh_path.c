@@ -99,7 +99,7 @@ static bool mouse_mesh_shortest_path_vert(ViewContext *vc)
 
 		if (v_act && (v_act != v_dst)) {
 			if ((path = BM_mesh_calc_path_vert(bm, v_act, v_dst, use_length,
-			                                   &user_data, verttag_filter_cb)))
+			                                   verttag_filter_cb, &user_data)))
 			{
 				BM_select_history_remove(bm, v_act);
 			}
@@ -267,7 +267,7 @@ static bool mouse_mesh_shortest_path_edge(ViewContext *vc)
 
 		if (e_act && (e_act != e_dst)) {
 			if ((path = BM_mesh_calc_path_edge(bm, e_act, e_dst, use_length,
-			                                   &user_data, edgetag_filter_cb)))
+			                                   edgetag_filter_cb, &user_data)))
 			{
 				BM_select_history_remove(bm, e_act);
 			}
@@ -388,7 +388,7 @@ static bool mouse_mesh_shortest_path_face(ViewContext *vc)
 		if (f_act) {
 			if (f_act != f_dst) {
 				if ((path = BM_mesh_calc_path_face(bm, f_act, f_dst, use_length,
-				                                   &user_data, facetag_filter_cb)))
+				                                   facetag_filter_cb, &user_data)))
 				{
 					BM_select_history_remove(bm, f_act);
 				}
@@ -513,11 +513,6 @@ void MESH_OT_shortest_path_pick(wmOperatorType *ot)
 /* -------------------------------------------------------------------- */
 /* Select path between existing selection */
 
-static bool ele_filter_visible_cb(BMElem *ele, void *UNUSED(user_data))
-{
-	return !BM_elem_flag_test(ele, BM_ELEM_HIDDEN);
-}
-
 static int edbm_shortest_path_select_exec(bContext *C, wmOperator *op)
 {
 	Object *ob = CTX_data_edit_object(C);
@@ -577,17 +572,17 @@ static int edbm_shortest_path_select_exec(bContext *C, wmOperator *op)
 			case BM_VERT:
 				path = BM_mesh_calc_path_vert(
 				           bm, (BMVert *)ele_src, (BMVert *)ele_dst, use_length,
-				           NULL, (bool (*)(BMVert *, void *))ele_filter_visible_cb);
+				           BM_elem_cb_check_hflag_disabled_simple(BMVert *, BM_ELEM_HIDDEN));
 				break;
 			case BM_EDGE:
 				path = BM_mesh_calc_path_edge(
 				           bm, (BMEdge *)ele_src, (BMEdge *)ele_dst, use_length,
-				           NULL, (bool (*)(BMEdge *, void *))ele_filter_visible_cb);
+				           BM_elem_cb_check_hflag_disabled_simple(BMEdge *, BM_ELEM_HIDDEN));
 				break;
 			case BM_FACE:
 				path = BM_mesh_calc_path_face(
 				           bm, (BMFace *)ele_src, (BMFace *)ele_dst, use_length,
-				           NULL, (bool (*)(BMFace *, void *))ele_filter_visible_cb);
+				           BM_elem_cb_check_hflag_disabled_simple(BMFace *, BM_ELEM_HIDDEN));
 				break;
 		}
 

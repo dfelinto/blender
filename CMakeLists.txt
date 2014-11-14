@@ -117,6 +117,67 @@ set(TESTS_OUTPUT_DIR ${EXECUTABLE_OUTPUT_PATH}/tests CACHE INTERNAL "" FORCE)
 get_blender_version()
 
 
+#-----------------------------------------------------------------------------
+# Platform Specific Defaults
+
+# list of var-names
+set(_init_vars)
+
+# initialize to ON
+macro(option_defaults_init)
+	foreach(_var ${ARGV})
+		set(${_var} ON)
+		list(APPEND _init_vars "${_var}")
+	endforeach()
+	unset(_INC)
+endmacro()
+
+# remove from namespace
+macro(option_defaults_clear)
+	foreach(_var ${_init_vars})
+		unset(${_var})
+	endforeach()
+	unset(_var)
+	unset(_init_vars)
+endmacro()
+
+
+# values to initialize WITH_****
+option_defaults_init(
+	_init_BUILDINFO
+	_init_CODEC_FFMPEG
+	_init_CYCLES_OSL
+	_init_IMAGE_OPENEXR
+	_init_IMAGE_REDCODE
+	_init_INPUT_NDOF
+	_init_JACK
+	_init_LIBMV_SCHUR_SPECIALIZATION
+	_init_OPENCOLLADA
+	_init_OPENCOLORIO
+	_init_SDL
+	_init_FFTW3
+	_init_GAMEENGINE
+)
+
+# customize...
+if(UNIX AND NOT APPLE)
+	# some of these libraries are problematic on Linux
+	# disable less important dependencies by default
+	set(_init_BUILDINFO                      OFF)
+	set(_init_CODEC_FFMPEG                   OFF)
+	set(_init_CYCLES_OSL                     OFF)
+	set(_init_IMAGE_OPENEXR                  OFF)
+	set(_init_IMAGE_REDCODE                  OFF)
+	set(_init_INPUT_NDOF                     OFF)
+	set(_init_JACK                           OFF)
+	set(_init_LIBMV_SCHUR_SPECIALIZATION     OFF)
+	set(_init_OPENCOLLADA                    OFF)
+	set(_init_OPENCOLORIO                    OFF)
+	set(_init_SDL                            OFF)
+	set(_init_FFTW3                          OFF)
+	set(_init_GAMEENGINE                     OFF)
+endif()
+
 # Blender internal features
 option(WITH_BLENDER "Build blender (disable to build only the blender player)" ON)
 mark_as_advanced(WITH_BLENDER)
@@ -135,7 +196,7 @@ if(APPLE)
 	option(WITH_PYTHON_FRAMEWORK "Enable building using the Python available in the framework (OSX only)" OFF)
 endif()
 
-option(WITH_BUILDINFO     "Include extra build details (only disable for development & faster builds)" ON)
+option(WITH_BUILDINFO     "Include extra build details (only disable for development & faster builds)" ${_init_BUILDINFO})
 if(${CMAKE_VERSION} VERSION_LESS 2.8.8)
 	# add_library OBJECT arg unsupported
 	set(WITH_BUILDINFO OFF)
@@ -143,13 +204,13 @@ endif()
 
 option(WITH_IK_ITASC      "Enable ITASC IK solver (only disable for development & for incompatible C++ compilers)" ON)
 option(WITH_IK_SOLVER     "Enable Legacy IK solver (only disable for development)" ON)
-option(WITH_FFTW3         "Enable FFTW3 support (Used for smoke and audio effects)" ON)
+option(WITH_FFTW3         "Enable FFTW3 support (Used for smoke and audio effects)" ${_init_FFTW3})
 option(WITH_BULLET        "Enable Bullet (Physics Engine)" ON)
 option(WITH_SYSTEM_BULLET "Use the systems bullet library (currently unsupported due to missing features in upstream!)" )
 mark_as_advanced(WITH_SYSTEM_BULLET)
-option(WITH_GAMEENGINE    "Enable Game Engine" ON)
+option(WITH_GAMEENGINE    "Enable Game Engine" ${_init_GAMEENGINE})
 option(WITH_PLAYER        "Build Player" OFF)
-option(WITH_OPENCOLORIO   "Enable OpenColorIO color management" ON)
+option(WITH_OPENCOLORIO   "Enable OpenColorIO color management" ${_init_OPENCOLORIO})
 option(WITH_COMPOSITOR    "Enable the tile based nodal compositor" ON)
 
 # GHOST Windowing Library Options
@@ -158,6 +219,10 @@ mark_as_advanced(WITH_GHOST_DEBUG)
 
 option(WITH_GHOST_SDL    "Enable building blender against SDL for windowing rather then the native APIs" OFF)
 mark_as_advanced(WITH_GHOST_SDL)
+
+if(WITH_X11)
+	option(WITH_GHOST_XDND    "Enable drag'n'drop support on X11 using XDND protocol" ON)
+endif()
 
 # Misc...
 option(WITH_HEADLESS      "Build without graphical support (renderfarm, server mode only)" OFF)
@@ -175,7 +240,6 @@ endif()
 if(WITH_X11)
 	option(WITH_X11_XINPUT    "Enable X11 Xinput (tablet support and unicode input)"  ON)
 	option(WITH_X11_XF86VMODE "Enable X11 video mode switching"                       ON)
-	option(WITH_GHOST_XDND    "Enable drag'n'drop support on X11 using XDND protocol" ON)
 endif()
 
 if(UNIX AND NOT APPLE)
@@ -189,13 +253,7 @@ endif()
 
 
 # (unix defaults to System OpenJPEG On)
-if(UNIX AND NOT APPLE)
-	set(PLATFORM_DEFAULT ON)
-else()
-	set(PLATFORM_DEFAULT OFF)
-endif()
-option(WITH_SYSTEM_OPENJPEG "Use the operating systems OpenJPEG library" ${PLATFORM_DEFAULT})
-unset(PLATFORM_DEFAULT)
+option(WITH_SYSTEM_OPENJPEG "Use the operating systems OpenJPEG library" OFF)
 
 
 # Modifiers
@@ -208,40 +266,33 @@ option(WITH_MOD_REMESH          "Enable Remesh Modifier" ON)
 option(WITH_MOD_OCEANSIM        "Enable Ocean Modifier" OFF)
 
 # Image format support
-option(WITH_OPENIMAGEIO         "Enable OpenImageIO Support (http://www.openimageio.org)" OFF)
-option(WITH_IMAGE_OPENEXR       "Enable OpenEXR Support (http://www.openexr.com)" ON)
+option(WITH_OPENIMAGEIO         "Enable OpenImageIO Support (http://www.openimageio.org)" ON)
+option(WITH_IMAGE_OPENEXR       "Enable OpenEXR Support (http://www.openexr.com)" ${_init_IMAGE_OPENEXR})
 option(WITH_IMAGE_OPENJPEG      "Enable OpenJpeg Support (http://www.openjpeg.org)" ON)
 option(WITH_IMAGE_TIFF          "Enable LibTIFF Support" ON)
 option(WITH_IMAGE_DDS           "Enable DDS Image Support" ON)
 option(WITH_IMAGE_CINEON        "Enable CINEON and DPX Image Support" ON)
 option(WITH_IMAGE_HDR           "Enable HDR Image Support" ON)
-option(WITH_IMAGE_REDCODE       "Enable RedCode Image Support" OFF)
+option(WITH_IMAGE_REDCODE       "Enable RedCode Image Support" ${_init_IMAGE_REDCODE})
 option(WITH_IMAGE_FRAMESERVER   "Enable image FrameServer Support for rendering" ON)
 
 # Audio/Video format support
 option(WITH_CODEC_AVI           "Enable Blenders own AVI file support (raw/jpeg)" ON)
-option(WITH_CODEC_FFMPEG        "Enable FFMPeg Support (http://ffmpeg.org)" OFF)
+option(WITH_CODEC_FFMPEG        "Enable FFMPeg Support (http://ffmpeg.org)" ${_init_CODEC_FFMPEG})
 option(WITH_CODEC_SNDFILE       "Enable libsndfile Support (http://www.mega-nerd.com/libsndfile)" OFF)
 
 if(APPLE)
-	option(WITH_CODEC_FFMPEG        "Enable FFMPeg Support (http://ffmpeg.org)" ON)
 	option(WITH_CODEC_QUICKTIME     "Enable Quicktime Support" ON)
-else()
-	option(WITH_CODEC_FFMPEG        "Enable FFMPeg Support (http://ffmpeg.org)" OFF)
 endif()
 
 # 3D format support
 # Disable opencollada when we don't have precompiled libs
-if(APPLE OR WIN32)
-	option(WITH_OPENCOLLADA		"Enable OpenCollada Support (http://www.opencollada.org)" ON)
-else()
-	option(WITH_OPENCOLLADA		"Enable OpenCollada Support (http://www.opencollada.org)" OFF)
-endif()
+option(WITH_OPENCOLLADA   "Enable OpenCollada Support (http://www.opencollada.org)" ${_init_OPENCOLLADA})
 
 # Sound output
-option(WITH_SDL           "Enable SDL for sound and joystick support" ON)
+option(WITH_SDL           "Enable SDL for sound and joystick support" ${_init_SDL})
 option(WITH_OPENAL        "Enable OpenAL Support (http://www.openal.org)" ON)
-option(WITH_JACK          "Enable Jack Support (http://www.jackaudio.org)" OFF)
+option(WITH_JACK          "Enable Jack Support (http://www.jackaudio.org)" ${_init_JACK})
 if(UNIX AND NOT APPLE)
 	option(WITH_JACK_DYNLOAD  "Enable runtime dynamic Jack libraries loading" OFF)
 endif()
@@ -252,13 +303,14 @@ option(WITH_LZMA          "Enable best LZMA compression, (used for pointcache)" 
 
 # Camera/motion tracking
 option(WITH_LIBMV         "Enable libmv structure from motion library" ON)
-option(WITH_LIBMV_SCHUR_SPECIALIZATIONS "Enable fixed-size schur specializations." ON)
+option(WITH_LIBMV_SCHUR_SPECIALIZATIONS "Enable fixed-size schur specializations." ${_init_LIBMV_SCHUR_SPECIALIZATION})
+mark_as_advanced(WITH_LIBMV_SCHUR_SPECIALIZATIONS)
 
 # Freestyle
 option(WITH_FREESTYLE     "Enable Freestyle (advanced edges rendering)" ON)
 
 # Misc
-option(WITH_INPUT_NDOF "Enable NDOF input devices (SpaceNavigator and friends)" ON)
+option(WITH_INPUT_NDOF "Enable NDOF input devices (SpaceNavigator and friends)" ${_init_INPUT_NDOF})
 option(WITH_RAYOPTIMIZATION	"Enable use of SIMD (SSE) optimizations for the raytracer" ON)
 option(WITH_OPENNL        "Enable use of Open Numerical Library" ON)
 if(UNIX AND NOT APPLE)
@@ -286,7 +338,7 @@ endif()
 option(WITH_CYCLES					"Enable cycles Render Engine" ON)
 option(WITH_CYCLES_STANDALONE		"Build cycles standalone application" OFF)
 option(WITH_CYCLES_STANDALONE_GUI	"Build cycles standalone with GUI" OFF)
-option(WITH_CYCLES_OSL				"Build Cycles with OSL support" OFF)
+option(WITH_CYCLES_OSL				"Build Cycles with OSL support" ${_init_CYCLES_OSL})
 option(WITH_CYCLES_CUDA_BINARIES	"Build cycles CUDA binaries" OFF)
 set(CYCLES_CUDA_BINARIES_ARCH sm_20 sm_21 sm_30 sm_35 sm_50 CACHE STRING "CUDA architectures to build binaries for")
 mark_as_advanced(CYCLES_CUDA_BINARIES_ARCH)
@@ -322,13 +374,15 @@ mark_as_advanced(WITH_ASSERT_ABORT)
 
 option(WITH_BOOST					"Enable features depending on boost" ON)
 
-if(CMAKE_COMPILER_IS_GNUCC)
-	option(WITH_GCC_MUDFLAP			"Enable mudflap" OFF)
-	mark_as_advanced(WITH_GCC_MUDFLAP)
-endif()
-
 # Unit testsing
 option(WITH_GTESTS "Enable GTest unit testing" OFF)
+
+
+# Documentation
+if(UNIX AND NOT APPLE)
+	option(WITH_DOC_MANPAGE "Create a manual page (Unix manpage)" OFF)
+endif()
+
 
 # OpenGL
 
@@ -348,7 +402,7 @@ mark_as_advanced(
 	WITH_GL_PROFILE_ES20
 )
 
-if (WITH_GL_PROFILE_COMPAT)
+if(WITH_GL_PROFILE_COMPAT)
 	set(WITH_GLU ON)
 else()
 	set(WITH_GLU OFF)
@@ -363,6 +417,34 @@ if(WITH_GLEW_ES AND WITH_SYSTEM_GLEW)
 	message(WARNING Ignoring WITH_SYSTEM_GLEW and using WITH_GLEW_ES)
 	set(WITH_SYSTEM_GLEW OFF)
 endif()
+
+if(MSVC)
+	getDefaultWindowsPrefixBase(CMAKE_GENERIC_PROGRAM_FILES)
+	set(CPACK_INSTALL_PREFIX ${CMAKE_GENERIC_PROGRAM_FILES}/${})
+endif()
+
+# avoid using again
+option_defaults_clear()
+
+# end option(...)
+
+
+
+# By default we want to install to the directory we are compiling our executables
+# unless specified otherwise, which we currently do not allow
+if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+	if(MSVC)
+		set(CMAKE_INSTALL_PREFIX ${EXECUTABLE_OUTPUT_PATH}/\${BUILD_TYPE} CACHE PATH "default install path" FORCE)
+	elseif(APPLE)
+		set(CMAKE_INSTALL_PREFIX ${EXECUTABLE_OUTPUT_PATH}/\${BUILD_TYPE} CACHE PATH "default install path" FORCE)
+	else()
+		if(WITH_INSTALL_PORTABLE)
+			set(CMAKE_INSTALL_PREFIX ${EXECUTABLE_OUTPUT_PATH} CACHE PATH "default install path" FORCE)
+		endif()
+	endif()
+endif()
+
+
 
 # Apple
 
@@ -516,7 +598,7 @@ if(NOT WITH_PYTHON)
 	set(WITH_CYCLES OFF)
 endif()
 
-# enable boost for cycles, booleans, audaspace or i18n
+# enable boost for cycles, audaspace or i18n
 # otherwise if the user disabled
 if(NOT WITH_BOOST)
 	# Explicitly disabled. so disable all deps.
@@ -529,13 +611,12 @@ if(NOT WITH_BOOST)
 	endmacro()
 
 	set_and_warn(WITH_CYCLES         OFF)
-	set_and_warn(WITH_MOD_BOOLEAN    OFF)
 	set_and_warn(WITH_AUDASPACE      OFF)
 	set_and_warn(WITH_INTERNATIONAL  OFF)
 
 	set_and_warn(WITH_OPENAL         OFF)  # depends on AUDASPACE
 	set_and_warn(WITH_GAMEENGINE     OFF)  # depends on AUDASPACE
-elseif(WITH_CYCLES OR WITH_OPENIMAGEIO OR WITH_MOD_BOOLEAN OR WITH_AUDASPACE OR WITH_INTERNATIONAL)
+elseif(WITH_CYCLES OR WITH_OPENIMAGEIO OR WITH_AUDASPACE OR WITH_INTERNATIONAL)
 	# Keep enabled
 else()
 	# Enabled but we don't need it
@@ -555,7 +636,7 @@ endif()
 
 # auto enable llvm for cycles_osl
 if(WITH_CYCLES_OSL)
-	set(WITH_LLVM ON CACHE BOOL "ON" FORCE)
+	set(WITH_LLVM ON CACHE BOOL "" FORCE)
 endif()
 
 # don't store paths to libs for portable distribution
@@ -1073,6 +1154,9 @@ elseif(WIN32)
 			endif()
 		endif()
 
+		set(CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_SKIP TRUE)
+		include(InstallRequiredSystemLibraries)
+
 		add_definitions(-DOIIO_STATIC_BUILD)
 
 		set(CMAKE_CXX_FLAGS "/nologo /J /Gd /EHsc /MP" CACHE STRING "MSVC MT C++ flags " FORCE)
@@ -1095,30 +1179,6 @@ elseif(WIN32)
 		set(CMAKE_C_FLAGS_MINSIZEREL "/O1 /Ob1 /MT /MP" CACHE STRING "MSVC MT flags " FORCE)
 		set(CMAKE_C_FLAGS_RELWITHDEBINFO "/O2 /Ob1 /MT /Zi /MP" CACHE STRING "MSVC MT flags " FORCE)
 
-		# most msvc warnings are C & C++
-		set(_WARNINGS
-			# warning level:
-			"/W3"
-			"/w34062"  # switch statement contains 'default' but no 'case' labels
-			# disable:
-			"/wd4018"  # signed/unsigned mismatch
-			"/wd4065"  # switch statement contains 'default' but no 'case' labels
-			"/wd4127"  # conditional expression is constant
-			"/wd4181"  # qualifier applied to reference type; ignored
-			"/wd4200"  # zero-sized array in struct/union
-			"/wd4244"  # conversion from 'type1' to 'type2', possible loss of data
-			"/wd4267"  # conversion from 'size_t' to 'type', possible loss of data
-			"/wd4305"  # truncation from 'type1' to 'type2'
-			"/wd4800"  # forcing value to bool 'true' or 'false'
-			# errors:
-			"/we4013"  # 'function' undefined; assuming extern returning int
-			"/we4431"  # missing type specifier - int assumed
-		)
-
-		string(REPLACE ";" " " _WARNINGS "${_WARNINGS}")
-		set(C_WARNINGS "${_WARNINGS}")
-		set(CXX_WARNINGS "${_WARNINGS}")
-		unset(_WARNINGS)
 
 		set(PLATFORM_LINKFLAGS "/SUBSYSTEM:CONSOLE /STACK:2097152 /INCREMENTAL:NO /NODEFAULTLIB:msvcrt.lib /NODEFAULTLIB:msvcmrt.lib /NODEFAULTLIB:msvcurt.lib /NODEFAULTLIB:msvcrtd.lib")
 
@@ -1151,12 +1211,12 @@ elseif(WIN32)
 		endif()
 
 		# Add each of our libraries to our cmake_prefix_path so find_package() could work
-		FILE(GLOB children RELATIVE ${LIBDIR} ${LIBDIR}/*)
-		FOREACH(child ${children})
-		IF(IS_DIRECTORY ${LIBDIR}/${child})
-			LIST(APPEND CMAKE_PREFIX_PATH  ${LIBDIR}/${child})
-		ENDIF()
-		ENDFOREACH()
+		file(GLOB children RELATIVE ${LIBDIR} ${LIBDIR}/*)
+		foreach(child ${children})
+		if(IS_DIRECTORY ${LIBDIR}/${child})
+			list(APPEND CMAKE_PREFIX_PATH  ${LIBDIR}/${child})
+		endif()
+		endforeach()
 
 		set(ZLIB_INCLUDE_DIRS ${LIBDIR}/zlib/include)
 		set(ZLIB_LIBRARIES ${LIBDIR}/zlib/lib/libz_st.lib)
@@ -1326,7 +1386,7 @@ elseif(WIN32)
 			set(Boost_USE_MULTITHREADED ON) # suffix -mt
 			set(Boost_USE_STATIC_LIBS ON) # suffix -s
 			find_package(Boost COMPONENTS date_time filesystem thread regex system ${boost_extra_libs})
-			IF(NOT Boost_FOUND)
+			if(NOT Boost_FOUND)
 				message(WARNING "USING HARDCODED boost locations")
 				set(BOOST ${LIBDIR}/boost)
 				set(BOOST_INCLUDE_DIR ${BOOST}/include)
@@ -1672,7 +1732,7 @@ elseif(WIN32)
 	if(WITH_SDL)
 		set(SDL ${LIBDIR}/sdl)
 		set(SDL_INCLUDE_DIR ${SDL}/include)
-		set(SDL_LIBRARY SDL)
+		set(SDL_LIBRARY SDL2)
 		set(SDL_LIBPATH ${SDL}/lib)
 	endif()
 
@@ -2161,7 +2221,7 @@ elseif(WITH_GL_PROFILE_ES20)
 
 		list(APPEND BLENDER_GL_LIBRARIES "${OPENGLES_LIBRARY}")
 
-		if (NOT OPENGLES_LIBRARY)
+		if(NOT OPENGLES_LIBRARY)
 			message(FATAL_ERROR "To compile WITH_GL_EGL you need to set OPENGLES_LIBRARY to the file path of an OpenGL ES 2.0 library.")
 		endif()
 
@@ -2187,7 +2247,7 @@ elseif(WITH_GL_PROFILE_ES20)
 
 			mark_as_advanced(D3DCOMPILER_DLL)
 
-			if (D3DCOMPILER_DLL STREQUAL "")
+			if(D3DCOMPILER_DLL STREQUAL "")
 				message(FATAL_ERROR "To compile WITH_GL_ANGLE you need to set D3DCOMPILER_DLL to the file path of a copy of the DirectX redistributable DLL file: D3DCompiler_46.dll")
 			endif()
 
@@ -2213,7 +2273,7 @@ if(WITH_GL_EGL)
 
 		list(APPEND BLENDER_GL_LIBRARIES "${OPENGLES_LIBRARY}" "${OPENGLES_EGL_LIBRARY}")
 
-		if (NOT OPENGLES_EGL_LIBRARY)
+		if(NOT OPENGLES_EGL_LIBRARY)
 			message(FATAL_ERROR "To compile WITH_GL_EGL you need to set OPENGLES_EGL_LIBRARY to the file path of an EGL library.")
 		endif()
 
@@ -2494,7 +2554,31 @@ elseif(CMAKE_C_COMPILER_ID MATCHES "Intel")
 	# disable numbered, false positives
 	set(C_WARNINGS "${C_WARNINGS} -wd188,186,144,913,556")
 	set(CXX_WARNINGS "${CXX_WARNINGS} -wd188,186,144,913,556")
+elseif(CMAKE_C_COMPILER_ID MATCHES "MSVC")
+	# most msvc warnings are C & C++
+	set(_WARNINGS
+		# warning level:
+		"/W3"
+		"/w34062"  # switch statement contains 'default' but no 'case' labels
+		# disable:
+		"/wd4018"  # signed/unsigned mismatch
+		"/wd4065"  # switch statement contains 'default' but no 'case' labels
+		"/wd4127"  # conditional expression is constant
+		"/wd4181"  # qualifier applied to reference type; ignored
+		"/wd4200"  # zero-sized array in struct/union
+		"/wd4244"  # conversion from 'type1' to 'type2', possible loss of data
+		"/wd4267"  # conversion from 'size_t' to 'type', possible loss of data
+		"/wd4305"  # truncation from 'type1' to 'type2'
+		"/wd4800"  # forcing value to bool 'true' or 'false'
+		# errors:
+		"/we4013"  # 'function' undefined; assuming extern returning int
+		"/we4431"  # missing type specifier - int assumed
+	)
 
+	string(REPLACE ";" " " _WARNINGS "${_WARNINGS}")
+	set(C_WARNINGS "${_WARNINGS}")
+	set(CXX_WARNINGS "${_WARNINGS}")
+	unset(_WARNINGS)
 endif()
 
 # ensure python header is found since detection can fail, this could happen
@@ -2519,13 +2603,6 @@ if(WITH_PYTHON)
 	elseif(WITH_PYTHON_INSTALL_REQUESTS)
 		find_python_package(requests)
 	endif()
-endif()
-
-if(WITH_GCC_MUDFLAP)
-	set(PLATFORM_CFLAGS "${PLATFORM_CFLAGS} -fmudflapth -funwind-tables")
-	set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lpthread -lmudflapth -rdynamic")
-	ADD_CHECK_C_COMPILER_FLAG(C_WARNINGS     C_WARN_NO_ERROR_MUDFLAP   -Wno-error=mudflap)
-	ADD_CHECK_CXX_COMPILER_FLAG(CXX_WARNINGS CXX_WARN_NO_ERROR_MUDFLAP -Wno-error=mudflap)
 endif()
 
 # Include warnings first, so its possible to disable them with user defined flags

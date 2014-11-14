@@ -1331,7 +1331,7 @@ static void drawlamp(View3D *v3d, RegionView3D *rv3d, Base *base,
 
 		/* draw the circle/square representing spotbl */
 		if (la->type == LA_SPOT) {
-			float spotblcirc = fabsf(z) * (1.0f - powf(la->spotblend, 2));
+			float spotblcirc = fabsf(z) * (1.0f - pow2f(la->spotblend));
 			/* hide line if it is zero size or overlaps with outer border,
 			 * previously it adjusted to always to show it but that seems
 			 * confusing because it doesn't show the actual blend size */
@@ -2377,8 +2377,7 @@ static void calcDrawDMNormalScale(Object *ob, drawDMNormal_userData *data)
 		invert_m3_m3(data->imat, obmat);
 
 		/* transposed inverted matrix */
-		copy_m3_m3(data->tmat, data->imat);
-		transpose_m3(data->tmat);
+		transpose_m3_m3(data->tmat, data->imat);
 	}
 }
 

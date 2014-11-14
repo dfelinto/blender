@@ -1305,7 +1305,6 @@ static int render_new_particle_system(Render *re, ObjectRen *obr, ParticleSystem
 	int totchild=0, step_nbr;
 	int seed, path_nbr=0, orco1=0, num;
 	int totface;
-	const char **uv_name = NULL;
 
 	const int *index_mf_to_mpoly = NULL;
 	const int *index_mp_to_orig = NULL;
@@ -1427,8 +1426,7 @@ static int render_new_particle_system(Render *re, ObjectRen *obr, ParticleSystem
 /* 2.5 setup matrices */
 	mul_m4_m4m4(mat, re->viewmat, ob->obmat);
 	invert_m4_m4(ob->imat, mat);	/* need to be that way, for imat texture */
-	copy_m3_m4(nmat, ob->imat);
-	transpose_m3(nmat);
+	transpose_m3_m4(nmat, ob->imat);
 
 	if (psys->flag & PSYS_USE_IMAT) {
 		/* psys->imat is the original emitter's inverse matrix, ob->obmat is the duplicated object's matrix */
@@ -1854,9 +1852,6 @@ static int render_new_particle_system(Render *re, ObjectRen *obr, ParticleSystem
 	
 	if (sd.mcol)
 		MEM_freeN(sd.mcol);
-
-	if (uv_name)
-		MEM_freeN(uv_name);
 
 	if (states)
 		MEM_freeN(states);
@@ -2652,8 +2647,7 @@ static void init_render_curve(Render *re, ObjectRen *obr, int timeoffset)
 	negative_scale = is_negative_m4(mat);
 
 	/* local object -> world space transform for normals */
-	copy_m4_m4(nmat, mat);
-	transpose_m4(nmat);
+	transpose_m4_m4(nmat, mat);
 	invert_m4(nmat);
 
 	/* material array */
@@ -3917,7 +3911,15 @@ static bool is_object_hidden(Render *re, Object *ob)
 	if (re->r.scemode & R_VIEWPORT_PREVIEW) {
 		/* Mesh deform cages and so on mess up the preview. To avoid the problem,
 		 * viewport doesn't show mesh object if its draw type is bounding box or wireframe.
+		 * Unless it's an active smoke domain!
 		 */
+		ModifierData *md = NULL;
+
+		if ((md = modifiers_findByType(ob, eModifierType_Smoke)) &&
+		    (modifier_isEnabled(re->scene, md, eModifierMode_Realtime)))
+		{
+			return false;
+		}
 		return ELEM(ob->dt, OB_BOUNDBOX, OB_WIRE);
 	}
 	else {

@@ -877,23 +877,50 @@ static int edbm_vert_connect_exec(bContext *C, wmOperator *op)
 	BMEditMesh *em = BKE_editmesh_from_object(obedit);
 	BMesh *bm = em->bm;
 	BMOperator bmop;
-	const bool is_pair = (bm->totvertsel == 2);
+	bool is_pair = (bm->totvertsel == 2);
 	int len;
-	
+	bool check_degenerate = true;
+	const int verts_len = bm->totvertsel;
+	BMVert **verts;
+
+
+	verts = MEM_mallocN(sizeof(*verts) * verts_len, __func__);
+	{
+		BMIter iter;
+		BMVert *v;
+		int i = 0;
+
+		BM_ITER_MESH (v, &iter, bm, BM_VERTS_OF_MESH) {
+			if (BM_elem_flag_test(v, BM_ELEM_SELECT)) {
+				verts[i++] = v;
+			}
+		}
+
+		if (is_pair) {
+			if (BM_vert_pair_share_face_check_cb(
+			        verts[0], verts[1],
+			        BM_elem_cb_check_hflag_disabled_simple(BMFace *, BM_ELEM_HIDDEN)))
+			{
+				check_degenerate = false;
+				is_pair = false;
+			}
+		}
+	}
+
 	if (is_pair) {
 		if (!EDBM_op_init(em, &bmop, op,
-		                  "connect_vert_pair verts=%hv verts_exclude=%hv faces_exclude=%hf",
-		                  BM_ELEM_SELECT, BM_ELEM_HIDDEN, BM_ELEM_HIDDEN))
+		                  "connect_vert_pair verts=%eb verts_exclude=%hv faces_exclude=%hf",
+		                  verts, verts_len, BM_ELEM_HIDDEN, BM_ELEM_HIDDEN))
 		{
-			return OPERATOR_CANCELLED;
+			goto finally;
 		}
 	}
 	else {
 		if (!EDBM_op_init(em, &bmop, op,
-		                  "connect_verts verts=%hv faces_exclude=%hf check_degenerate=%b",
-		                  BM_ELEM_SELECT, BM_ELEM_HIDDEN, true))
+		                  "connect_verts verts=%eb faces_exclude=%hf check_degenerate=%b",
+		                  verts, verts_len, BM_ELEM_HIDDEN, check_degenerate))
 		{
-			return OPERATOR_CANCELLED;
+			goto finally;
 		}
 	}
 
@@ -908,15 +935,18 @@ static int edbm_vert_connect_exec(bContext *C, wmOperator *op)
 	}
 
 	if (!EDBM_op_finish(em, &bmop, op, true)) {
-		return OPERATOR_CANCELLED;
+		len = 0;
 	}
 	else {
 		EDBM_selectmode_flush(em);  /* so newly created edges get the selection state from the vertex */
 
 		EDBM_update_generic(em, true, true);
-
-		return len ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
 	}
+
+
+finally:
+	MEM_freeN(verts);
+	return len ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
 }
 
 void MESH_OT_vert_connect(wmOperatorType *ot)
@@ -2929,7 +2959,14 @@ static int edbm_fill_exec(bContext *C, wmOperator *op)
 	BMEditMesh *em = BKE_editmesh_from_object(obedit);
 	const bool use_beauty = RNA_boolean_get(op->ptr, "use_beauty");
 	BMOperator bmop;
-	
+	const int totface_orig = em->bm->totface;
+	int ret;
+
+	if (em->bm->totedgesel == 0) {
+		BKE_report(op->reports, RPT_WARNING, "No edges selected");
+		return OPERATOR_CANCELLED;
+	}
+
 	if (!EDBM_op_init(em, &bmop, op,
 	                  "triangle_fill edges=%he use_beauty=%b",
 	                  BM_ELEM_SELECT, use_beauty))
@@ -2939,17 +2976,24 @@ static int edbm_fill_exec(bContext *C, wmOperator *op)
 	
 	BMO_op_exec(em->bm, &bmop);
 	
-	/* select new geometry */
-	BMO_slot_buffer_hflag_enable(em->bm, bmop.slots_out, "geom.out", BM_FACE | BM_EDGE, BM_ELEM_SELECT, true);
-	
-	if (!EDBM_op_finish(em, &bmop, op, true)) {
-		return OPERATOR_CANCELLED;
+	if (totface_orig != em->bm->totface) {
+		/* select new geometry */
+		BMO_slot_buffer_hflag_enable(em->bm, bmop.slots_out, "geom.out", BM_FACE | BM_EDGE, BM_ELEM_SELECT, true);
+
+		EDBM_update_generic(em, true, true);
+
+		ret = OPERATOR_FINISHED;
+	}
+	else {
+		BKE_report(op->reports, RPT_WARNING, "No faces filled");
+		ret = OPERATOR_CANCELLED;
 	}
 
-	EDBM_update_generic(em, true, true);
-	
-	return OPERATOR_FINISHED;
+	if (!EDBM_op_finish(em, &bmop, op, true)) {
+		ret = OPERATOR_CANCELLED;
+	}
 
+	return ret;
 }
 
 void MESH_OT_fill(wmOperatorType *ot)
@@ -3472,10 +3516,16 @@ void MESH_OT_tris_convert_to_quads(wmOperatorType *ot)
 /* -------------------------------------------------------------------- */
 /* Dissolve */
 
-static void edbm_dissolve_prop__use_verts(wmOperatorType *ot)
+static void edbm_dissolve_prop__use_verts(wmOperatorType *ot, bool value, int flag)
 {
-	RNA_def_boolean(ot->srna, "use_verts", 0, "Dissolve Verts",
-	                "Dissolve remaining vertices");
+	PropertyRNA *prop;
+
+	prop = RNA_def_boolean(ot->srna, "use_verts", value, "Dissolve Verts",
+	                       "Dissolve remaining vertices");
+
+	if (flag) {
+		RNA_def_property_flag(prop, flag);
+	}
 }
 static void edbm_dissolve_prop__use_face_split(wmOperatorType *ot)
 {
@@ -3560,7 +3610,7 @@ void MESH_OT_dissolve_edges(wmOperatorType *ot)
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
-	edbm_dissolve_prop__use_verts(ot);
+	edbm_dissolve_prop__use_verts(ot, true, 0);
 	edbm_dissolve_prop__use_face_split(ot);
 }
 
@@ -3599,7 +3649,7 @@ void MESH_OT_dissolve_faces(wmOperatorType *ot)
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
-	edbm_dissolve_prop__use_verts(ot);
+	edbm_dissolve_prop__use_verts(ot, false, 0);
 }
 
 
@@ -3607,6 +3657,15 @@ static int edbm_dissolve_mode_exec(bContext *C, wmOperator *op)
 {
 	Object *obedit = CTX_data_edit_object(C);
 	BMEditMesh *em = BKE_editmesh_from_object(obedit);
+	PropertyRNA *prop;
+
+	prop = RNA_struct_find_property(op->ptr, "use_verts");
+	if (!RNA_property_is_set(op->ptr, prop)) {
+		/* always enable in edge-mode */
+		if ((em->selectmode & SCE_SELECT_FACE) == 0) {
+			RNA_property_boolean_set(op->ptr, prop, true);
+		}
+	}
 
 	if (em->selectmode & SCE_SELECT_VERTEX) {
 		return edbm_dissolve_verts_exec(C, op);
@@ -3633,7 +3692,7 @@ void MESH_OT_dissolve_mode(wmOperatorType *ot)
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
-	edbm_dissolve_prop__use_verts(ot);
+	edbm_dissolve_prop__use_verts(ot, false, PROP_SKIP_SAVE);
 	edbm_dissolve_prop__use_face_split(ot);
 	edbm_dissolve_prop__use_boundary_tear(ot);
 }

@@ -115,6 +115,28 @@ if builder.find('scons') != -1:
 
         retcode = subprocess.call([python_bin, 'scons/scons.py'] + scons_options)
         sys.exit(retcode)
+else:
+#cmake
+    if 'win' in builder:
+        files = [f for f in os.listdir('.') if os.path.isfile(f) and f.endswith('.zip')]
+        for f in files:
+            os.remove(f)
+        retcode = subprocess.call(['cpack', '-G','ZIP'])
+        result_file = [f for f in os.listdir('.') if os.path.isfile(f) and f.endswith('.zip')][0]
+        os.rename(result_file, "{}.zip".format(builder))
+        # create zip file
+        try:
+            upload_zip = "buildbot_upload.zip"
+            if os.path.exists(upload_zip):
+                os.remove(upload_zip)
+            z = zipfile.ZipFile(upload_zip, "w", compression=zipfile.ZIP_STORED)
+            z.write("{}.zip".format(builder))
+            z.close()
+            sys.exit(retcode)
+        except Exception, ex:
+            sys.stderr.write('Create buildbot_upload.zip failed' + str(ex) + '\n')
+            sys.exit(1)
+
 
 # clean release directory if it already exists
 release_dir = 'release'

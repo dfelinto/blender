@@ -33,9 +33,11 @@
 
 #include "DNA_mesh_types.h"
 #include "DNA_object_types.h"
+#include "DNA_key_types.h"
 
 #include "BLI_math.h"
 #include "BLI_alloca.h"
+#include "BLI_listbase.h"
 
 #include "BKE_DerivedMesh.h"
 #include "BKE_context.h"
@@ -381,6 +383,12 @@ void EDBM_mesh_load(Object *ob)
 	Mesh *me = ob->data;
 	BMesh *bm = me->edit_btmesh->bm;
 
+	/* Workaround for T42360, 'ob->shapenr' should be 1 in this case.
+	 * however this isn't synchronized between objects at the moment. */
+	if (UNLIKELY((ob->shapenr == 0) && (me->key && !BLI_listbase_is_empty(&me->key->block)))) {
+		bm->shapenr = 1;
+	}
+
 	BM_mesh_bm_to_me(bm, me, false);
 
 #ifdef USE_TESSFACE_DEFAULT
@@ -432,14 +440,14 @@ void EDBM_select_flush(BMEditMesh *em)
 	BM_mesh_select_flush(em->bm);
 }
 
-void EDBM_select_more(BMEditMesh *em)
+void EDBM_select_more(BMEditMesh *em, const bool use_face_step)
 {
 	BMOperator bmop;
-	int use_faces = em->selectmode == SCE_SELECT_FACE;
+	const bool use_faces = (em->selectmode == SCE_SELECT_FACE);
 
 	BMO_op_initf(em->bm, &bmop, BMO_FLAG_DEFAULTS,
-	             "region_extend geom=%hvef use_constrict=%b use_faces=%b",
-	             BM_ELEM_SELECT, false, use_faces);
+	             "region_extend geom=%hvef use_contract=%b use_faces=%b use_face_step=%b",
+	             BM_ELEM_SELECT, false, use_faces, use_face_step);
 	BMO_op_exec(em->bm, &bmop);
 	/* don't flush selection in edge/vertex mode  */
 	BMO_slot_buffer_hflag_enable(em->bm, bmop.slots_out, "geom.out", BM_ALL_NOLOOP, BM_ELEM_SELECT, use_faces ? true : false);
@@ -448,14 +456,14 @@ void EDBM_select_more(BMEditMesh *em)
 	EDBM_selectmode_flush(em);
 }
 
-void EDBM_select_less(BMEditMesh *em)
+void EDBM_select_less(BMEditMesh *em, const bool use_face_step)
 {
 	BMOperator bmop;
-	int use_faces = em->selectmode == SCE_SELECT_FACE;
+	const bool use_faces = (em->selectmode == SCE_SELECT_FACE);
 
 	BMO_op_initf(em->bm, &bmop, BMO_FLAG_DEFAULTS,
-	             "region_extend geom=%hvef use_constrict=%b use_faces=%b",
-	             BM_ELEM_SELECT, true, use_faces);
+	             "region_extend geom=%hvef use_contract=%b use_faces=%b use_face_step=%b",
+	             BM_ELEM_SELECT, true, use_faces, use_face_step);
 	BMO_op_exec(em->bm, &bmop);
 	/* don't flush selection in edge/vertex mode  */
 	BMO_slot_buffer_hflag_disable(em->bm, bmop.slots_out, "geom.out", BM_ALL_NOLOOP, BM_ELEM_SELECT, use_faces ? true : false);
