@@ -157,9 +157,7 @@ typedef struct Sequence {
 	struct Object    *scene_camera;  /* override scene camera */
 	struct MovieClip *clip;          /* for MOVIECLIP strips */
 	struct Mask      *mask;          /* for MASK strips */
-
-	struct anim *anim;      /* for MOVIE strips - DEPRECATED */
-	ListBase anims;
+	ListBase anims;                  /* for MOVIE strips */
 
 	float effect_fader;
 	float speed_fader;

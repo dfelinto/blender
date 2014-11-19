@@ -88,6 +88,7 @@ static ImBuf *seq_render_strip_stack(const SeqRenderData *context, ListBase *seq
 static ImBuf *seq_render_strip(const SeqRenderData *context, Sequence *seq, float cfra);
 static void seq_free_animdata(Scene *scene, Sequence *seq);
 static ImBuf *seq_render_mask(const SeqRenderData *context, Mask *mask, float nr, bool make_float);
+static size_t seq_num_files(Scene *scene, char views_format);
 
 /* **** XXX ******** */
 #define SELECT 1
@@ -174,30 +175,13 @@ static void seq_free_strip(Strip *strip)
 	MEM_freeN(strip);
 }
 
-/* Functions to free imbuf and anim data on changes */
-
-static void seq_free_anim(ListBase *anims)
-{
-	while (anims->last) {
-		StripAnim *sanim = anims->last;
-		BLI_remlink(anims, sanim);
-
-		if (sanim->anim) {
-			IMB_free_anim(sanim->anim);
-			sanim->anim = NULL;
-		}
-
-		MEM_freeN(sanim);
-	}
-}
-
 /* only give option to skip cache locally (static func) */
 static void BKE_sequence_free_ex(Scene *scene, Sequence *seq, const bool do_cache)
 {
 	if (seq->strip)
 		seq_free_strip(seq->strip);
 
-	seq_free_anim(&seq->anims);
+	BKE_sequence_free_anim(seq);
 
 	if (seq->type & SEQ_TYPE_EFFECT) {
 		struct SeqEffectHandle sh = BKE_sequence_get_effect(seq);
@@ -250,6 +234,22 @@ static void BKE_sequence_free_ex(Scene *scene, Sequence *seq, const bool do_cach
 void BKE_sequence_free(Scene *scene, Sequence *seq)
 {
 	BKE_sequence_free_ex(scene, seq, true);
+}
+
+/* Function to free imbuf and anim data on changes */
+void BKE_sequence_free_anim(Sequence *seq)
+{
+	while (seq->anims.last) {
+		StripAnim *sanim = seq->anims.last;
+		BLI_remlink(&seq->anims, sanim);
+
+		if (sanim->anim) {
+			IMB_free_anim(sanim->anim);
+			sanim->anim = NULL;
+		}
+
+		MEM_freeN(sanim);
+	}
 }
 
 /* cache must be freed before calling this function
@@ -789,7 +789,7 @@ void BKE_sequence_calc(Scene *scene, Sequence *seq)
 /* note: caller should run BKE_sequence_calc(scene, seq) after */
 void BKE_sequence_reload_new_file(Scene *scene, Sequence *seq, const bool lock_range)
 {
-	char str[FILE_MAX];
+	char path[FILE_MAX];
 	int prev_startdisp = 0, prev_enddisp = 0;
 	/* note: don't rename the strip, will break animation curves */
 
@@ -822,23 +822,66 @@ void BKE_sequence_reload_new_file(Scene *scene, Sequence *seq, const bool lock_r
 			break;
 		}
 		case SEQ_TYPE_MOVIE:
-			// XXX MV SEQ MOV
-			BLI_join_dirfile(str, sizeof(str), seq->strip->dir,
+		{
+			StripAnim *sanim;
+			const bool is_multiview = (scene->r.scemode & R_MULTIVIEW) != 0;
+
+			BLI_join_dirfile(path, sizeof(path), seq->strip->dir,
 			                 seq->strip->stripdata->name);
-			BLI_path_abs(str, G.main->name);
+			BLI_path_abs(path, G.main->name);
 
-			if (seq->anim) IMB_free_anim(seq->anim);
+			BKE_sequence_free_anim(seq);
 
-			seq->anim = openanim(str, IB_rect | ((seq->flag & SEQ_FILTERY) ? IB_animdeinterlace : 0),
-			                     seq->streamindex, seq->strip->colorspace_settings.name);
+			if (is_multiview && (seq->views_format == R_IMF_VIEWS_INDIVIDUAL)) {
+				char prefix[FILE_MAX] = {'\0'};
+				char *ext = NULL;
+				size_t totfiles = seq_num_files(scene, seq->views_format);
+				int i = 0;
 
-			if (!seq->anim) {
+				BKE_scene_view_get_prefix(scene, path, prefix, &ext);
+
+				if (prefix[0] == '\0')
+					goto monoview;
+
+				for (i = 0; i < totfiles; i++) {
+					struct anim *anim;
+					const char *viewname = BKE_scene_render_view_name(&scene->r, i);
+					const char *suffix = BKE_scene_view_get_suffix(&scene->r, viewname);
+					char str[FILE_MAX] = {'\0'};
+
+					sprintf(str, "%s%s%s", prefix, suffix, ext);
+
+					anim = openanim(str, IB_rect | ((seq->flag & SEQ_FILTERY) ? IB_animdeinterlace : 0),
+					                seq->streamindex, seq->strip->colorspace_settings.name);
+					if (anim) {
+						sanim = MEM_mallocN(sizeof(StripAnim), "Strip Anim");
+						BLI_addtail(&seq->anims, sanim);
+						sanim->anim = anim;
+					}
+				}
+			}
+			else {
+				struct anim *anim;
+monoview:
+				anim = openanim(path, IB_rect | ((seq->flag & SEQ_FILTERY) ? IB_animdeinterlace : 0),
+				                seq->streamindex, seq->strip->colorspace_settings.name);
+				if (anim) {
+					sanim = MEM_mallocN(sizeof(StripAnim), "Strip Anim");
+					BLI_addtail(&seq->anims, sanim);
+					sanim->anim = anim;
+				}
+			}
+
+			/* use the first video as reference for everything */
+			sanim = seq->anims.first;
+
+			if ((!sanim) || (!sanim->anim)) {
 				return;
 			}
 
-			seq->len = IMB_anim_get_duration(seq->anim, seq->strip->proxy ? seq->strip->proxy->tc : IMB_TC_RECORD_RUN);
-	
-			seq->anim_preseek = IMB_anim_get_preseek(seq->anim);
+			seq->len = IMB_anim_get_duration(sanim->anim, seq->strip->proxy ? seq->strip->proxy->tc : IMB_TC_RECORD_RUN);
+
+			seq->anim_preseek = IMB_anim_get_preseek(sanim->anim);
 
 			seq->len -= seq->anim_startofs;
 			seq->len -= seq->anim_endofs;
@@ -846,6 +889,7 @@ void BKE_sequence_reload_new_file(Scene *scene, Sequence *seq, const bool lock_r
 				seq->len = 0;
 			}
 			break;
+		}
 		case SEQ_TYPE_MOVIECLIP:
 			if (seq->clip == NULL)
 				return;
@@ -1381,7 +1425,7 @@ static void seq_open_anim_file(Scene *scene, Sequence *seq)
 	}
 
 	/* reset all the previously created anims */
-	seq_free_anim(&seq->anims);
+	BKE_sequence_free_anim(seq);
 
 	BLI_join_dirfile(name, sizeof(name),
 					 seq->strip->dir, seq->strip->stripdata->name);
@@ -3554,7 +3598,7 @@ static void sequence_invalidate_cache(Scene *scene, Sequence *seq, bool invalida
 		 * so for proper cache invalidation we need to
 		 * re-open the animation.
 		 */
-		seq_free_anim(&seq->anims);
+		BKE_sequence_free_anim(seq);
 		BKE_sequencer_cache_cleanup_sequence(seq);
 	}
 
@@ -3601,7 +3645,7 @@ void BKE_sequencer_free_imbuf(Scene *scene, ListBase *seqbase, bool for_render)
 
 		if (seq->strip) {
 			if (seq->type == SEQ_TYPE_MOVIE) {
-				seq_free_anim(&seq->anims);
+				BKE_sequence_free_anim(seq);
 			}
 			if (seq->type == SEQ_TYPE_SPEED) {
 				BKE_sequence_effect_speed_rebuild_map(scene, seq, true);
@@ -3648,7 +3692,7 @@ static bool update_changed_seq_recurs(Scene *scene, Sequence *seq, Sequence *cha
 	if (free_imbuf) {
 		if (ibuf_change) {
 			if (seq->type == SEQ_TYPE_MOVIE)
-				seq_free_anim(&seq->anims);
+				BKE_sequence_free_anim(seq);
 			if (seq->type == SEQ_TYPE_SPEED) {
 				BKE_sequence_effect_speed_rebuild_map(scene, seq, true);
 			}
@@ -4683,9 +4727,8 @@ Sequence *BKE_sequencer_add_movie_strip(bContext *C, ListBase *seqbasep, SeqLoad
 	char colorspace[64] = "\0"; /* MAX_COLORSPACE_NAME */
 	size_t totfiles = seq_num_files(scene, seq_load->views_format);
 	bool is_multiview = (scene->r.scemode & R_MULTIVIEW) != 0;
+	struct anim **anims;
 	int i;
-
-	struct anim **anims = NULL;
 
 	BLI_strncpy(path, seq_load->path, sizeof(path));
 	BLI_path_abs(path, G.main->name);
