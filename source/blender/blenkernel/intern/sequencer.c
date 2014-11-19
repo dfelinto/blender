@@ -4765,7 +4765,6 @@ Sequence *BKE_sequencer_add_movie_strip(bContext *C, ListBase *seqbasep, SeqLoad
 	}
 	else {
 monoview:
-		totfiles = 1;
 		anims[0] = openanim(path, IB_rect, 0, colorspace);
 
 		if (anims[0] == NULL) {
