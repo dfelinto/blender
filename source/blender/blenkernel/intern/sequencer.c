@@ -1369,12 +1369,12 @@ static size_t seq_num_files(Scene *scene, char views_format)
 	}
 }
 
-static void seq_open_anim_file(const SeqRenderData *context, Sequence *seq)
+static void seq_open_anim_file(Scene *scene, Sequence *seq)
 {
 	char dir[FILE_MAX];
 	char name[FILE_MAX];
 	StripProxy *proxy;
-	const bool is_multiview = (context->scene->r.scemode & R_MULTIVIEW) != 0;
+	const bool is_multiview = (scene->r.scemode & R_MULTIVIEW) != 0;
 
 	if ((seq->anims.first != NULL) && (((StripAnim *)seq->anims.first)->anim != NULL)) {
 		return;
@@ -1395,19 +1395,19 @@ static void seq_open_anim_file(const SeqRenderData *context, Sequence *seq)
 	}
 
 	if (is_multiview && seq->views_format == R_IMF_VIEWS_INDIVIDUAL) {
-		size_t totfiles = seq_num_files(context->scene, seq->views_format);
+		size_t totfiles = seq_num_files(scene, seq->views_format);
 		char prefix[FILE_MAX] = {'\0'};
 		char *ext = NULL;
 		int i;
 
-		BKE_scene_view_get_prefix(context->scene, name, prefix, &ext);
+		BKE_scene_view_get_prefix(scene, name, prefix, &ext);
 
 		if (prefix[0] == '\0')
 			goto monoview;
 
 		for (i = 0; i < totfiles; i++) {
-			const char *viewname = BKE_scene_render_view_name(&context->scene->r, i);
-			const char *suffix = BKE_scene_view_get_suffix(&context->scene->r, viewname);
+			const char *viewname = BKE_scene_render_view_name(&scene->r, i);
+			const char *suffix = BKE_scene_view_get_suffix(&scene->r, viewname);
 			char str[FILE_MAX] = {'\0'};
 
 			StripAnim *sanim = MEM_mallocN(sizeof(StripAnim), "Strip Anim");
@@ -1552,7 +1552,7 @@ static ImBuf *seq_proxy_fetch(const SeqRenderData *context, Sequence *seq, int c
 			return NULL;
 		}
  
-		seq_open_anim_file(context, seq);
+		seq_open_anim_file(context->scene, seq);
 		sanim = seq->anims.first;
 
 		frameno = IMB_anim_index_get_frame_index(sanim ? sanim->anim : NULL, seq->strip->proxy->tc, frameno);
@@ -1646,7 +1646,7 @@ SeqIndexBuildContext *BKE_sequencer_proxy_rebuild_context(Main *bmain, Scene *sc
 	if (nseq->type == SEQ_TYPE_MOVIE) {
 		StripAnim *sanim;
 
-		seq_open_anim_file(context, nseq);
+		seq_open_anim_file(scene, nseq);
 
 		for (sanim = nseq->anims.last; sanim; sanim = sanim->prev) {
 			if (sanim->anim) {
@@ -2916,7 +2916,7 @@ static ImBuf *do_render_strip_uncached(const SeqRenderData *context, Sequence *s
 			bool is_multiview = (context->scene->r.scemode & R_MULTIVIEW) != 0;
 
 			/* load all the videos */
-			seq_open_anim_file(context, seq);
+			seq_open_anim_file(context->scene, seq);
 
 			if (is_multiview) {
 				ImBuf **ibufs;
