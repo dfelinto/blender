@@ -41,6 +41,7 @@ struct MovieClip;
 struct Scene;
 struct Sequence;
 struct SequenceModifierData;
+struct Stereo3dFormat;
 struct Strip;
 struct StripElem;
 struct bSound;
@@ -349,6 +350,10 @@ typedef struct SeqLoadInfo {
 	int type;
 	int len;        /* only for image strips */
 	char path[1024]; /* 1024 = FILE_MAX */
+
+	/* multiview */
+	char views_format;
+	struct Stereo3dFormat *stereo3d_format;
 
 	/* return values */
 	char name[64];
