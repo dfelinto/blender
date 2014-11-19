@@ -1718,10 +1718,13 @@ void BKE_sequencer_proxy_rebuild_finish(SeqIndexBuildContext *context, bool stop
 {
 	if (context->index_context) {
 		StripAnim *sanim;
-		for (sanim = context->seq->anims.first; sanim; sanim = sanim->next) {
+
+		for (sanim = context->seq->anims.first; sanim; sanim = sanim->next)
 			IMB_close_anim_proxies(sanim->anim);
-		}
-		IMB_close_anim_proxies(context->orig_seq->anim);
+
+		for (sanim = context->orig_seq->anims.first; sanim; sanim = sanim->next)
+			IMB_close_anim_proxies(sanim->anim);
+
 		IMB_anim_index_rebuild_finish(context->index_context, stop);
 	}
 
