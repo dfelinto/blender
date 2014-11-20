@@ -786,6 +786,13 @@ void BKE_sequence_calc(Scene *scene, Sequence *seq)
 	}
 }
 
+static void seq_multiview_name(Scene *scene, const size_t view_id, const char *prefix, const char *ext, char *r_path)
+{
+	const char *viewname = BKE_scene_render_view_name(&scene->r, view_id);
+	const char *suffix = BKE_scene_view_get_suffix(&scene->r, viewname);
+	sprintf(r_path, "%s%s%s", prefix, suffix, ext);
+}
+
 /* note: caller should run BKE_sequence_calc(scene, seq) after */
 void BKE_sequence_reload_new_file(Scene *scene, Sequence *seq, const bool lock_range)
 {
@@ -845,12 +852,9 @@ void BKE_sequence_reload_new_file(Scene *scene, Sequence *seq, const bool lock_r
 
 				for (i = 0; i < totfiles; i++) {
 					struct anim *anim;
-					const char *viewname = BKE_scene_render_view_name(&scene->r, i);
-					const char *suffix = BKE_scene_view_get_suffix(&scene->r, viewname);
 					char str[FILE_MAX] = {'\0'};
 
-					sprintf(str, "%s%s%s", prefix, suffix, ext);
-
+					seq_multiview_name(scene, i, prefix, ext, str);
 					anim = openanim(str, IB_rect | ((seq->flag & SEQ_FILTERY) ? IB_animdeinterlace : 0),
 					                seq->streamindex, seq->strip->colorspace_settings.name);
 					if (anim) {
@@ -2898,16 +2902,14 @@ static ImBuf *do_render_strip_uncached(const SeqRenderData *context, Sequence *s
 				ibufs = MEM_callocN(sizeof(ImBuf *) * totviews, "Sequence Image Views Imbufs");
 
 				for (i = 0; i < totfiles; i++) {
-					if (prefix[0] != '\0') {
-						char str[FILE_MAX] = {'\0'};
-						const char *viewname = BKE_scene_render_view_name(&context->scene->r, i);
-						const char *suffix = BKE_scene_view_get_suffix(&context->scene->r, viewname);
-						sprintf(str, "%s%s%s", prefix, suffix, ext);
 
-						ibufs[i] = IMB_loadiffname(str, flag, seq->strip->colorspace_settings.name);
+					if (prefix[0] == '\0'){
+						ibufs[i] = IMB_loadiffname(name, flag, seq->strip->colorspace_settings.name);
 					}
 					else {
-						ibufs[i] = IMB_loadiffname(name, flag, seq->strip->colorspace_settings.name);
+						char str[FILE_MAX] = {'\0'};
+						seq_multiview_name(context->scene, i, prefix, ext, str);
+						ibufs[i] = IMB_loadiffname(str, flag, seq->strip->colorspace_settings.name);
 					}
 
 					if (ibufs[i]) {
@@ -4755,13 +4757,11 @@ Sequence *BKE_sequencer_add_movie_strip(bContext *C, ListBase *seqbasep, SeqLoad
 			goto monoview;
 
 		for (i = 0; i < totfiles; i++) {
-			const char *viewname = BKE_scene_render_view_name(&scene->r, i);
-			const char *suffix = BKE_scene_view_get_suffix(&scene->r, viewname);
 			char str[FILE_MAX] = {'\0'};
 
-			sprintf(str, "%s%s%s", prefix, suffix, ext);
-
+			seq_multiview_name(scene, i, prefix, ext, str);
 			anims[j] = openanim(str, IB_rect, 0, colorspace);
+
 			if (anims[j]) {
 				j++;
 			}
