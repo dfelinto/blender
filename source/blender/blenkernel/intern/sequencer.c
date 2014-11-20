@@ -2888,19 +2888,27 @@ static ImBuf *do_render_strip_uncached(const SeqRenderData *context, Sequence *s
 				char *ext = NULL;
 				int i;
 
+				if (totfiles > 1) {
+					BKE_scene_view_get_prefix(context->scene, name, prefix, &ext);
+					if (prefix[0] == '\0') {
+						goto monoview;
+					}
+				}
+
 				ibufs = MEM_callocN(sizeof(ImBuf *) * totviews, "Sequence Image Views Imbufs");
-				BKE_scene_view_get_prefix(context->scene, name, prefix, &ext);
 
 				for (i = 0; i < totfiles; i++) {
-					const char *viewname = BKE_scene_render_view_name(&context->scene->r, i);
-					const char *suffix = BKE_scene_view_get_suffix(&context->scene->r, viewname);
-					char str[FILE_MAX] = {'\0'};
+					if (prefix[0] != '\0') {
+						char str[FILE_MAX] = {'\0'};
+						const char *viewname = BKE_scene_render_view_name(&context->scene->r, i);
+						const char *suffix = BKE_scene_view_get_suffix(&context->scene->r, viewname);
+						sprintf(str, "%s%s%s", prefix, suffix, ext);
 
-					sprintf(str, "%s%s%s", prefix, suffix, ext);
-
-					ibufs[i] = IMB_loadiffname(str, flag, seq->strip->colorspace_settings.name);
-					if (ibufs[i] == NULL)
+						ibufs[i] = IMB_loadiffname(str, flag, seq->strip->colorspace_settings.name);
+					}
+					else {
 						ibufs[i] = IMB_loadiffname(name, flag, seq->strip->colorspace_settings.name);
+					}
 
 					if (ibufs[i]) {
 						/* we don't need both (speed reasons)! */
@@ -2940,6 +2948,7 @@ static ImBuf *do_render_strip_uncached(const SeqRenderData *context, Sequence *s
 				MEM_freeN(ibufs);
 			}
 			else {
+monoview:
 				if ((ibuf = IMB_loadiffname(name, flag, seq->strip->colorspace_settings.name))) {
 					/* we don't need both (speed reasons)! */
 					if (ibuf->rect_float && ibuf->rect)
