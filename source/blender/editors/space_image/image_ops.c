@@ -1543,7 +1543,7 @@ static int get_multiview_pass_id(RenderResult *rr, ImageUser *iuser, const int v
 	if (rr == NULL || iuser == NULL)
 		return 0;
 
-	if (BLI_listbase_count(&rr->views) < 2)
+	if (BLI_listbase_count_ex(&rr->views, 2) < 2)
 		return iuser->pass;
 
 	if (RE_HasFakeLayer(rr))
@@ -1680,7 +1680,7 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 		/* we need renderresult for exr and rendered multiview */
 		scene = CTX_data_scene(C);
 		rr = BKE_image_acquire_renderresult(scene, ima);
-		is_mono = rr ? BLI_listbase_count(&rr->views) < 2 : (ima->flag & IMA_IS_MULTIVIEW) == 0;
+		is_mono = rr ? BLI_listbase_count_ex(&rr->views, 2) < 2 : (ima->flag & IMA_IS_MULTIVIEW) == 0;
 
 		/* error handling */
 		if (!rr) {

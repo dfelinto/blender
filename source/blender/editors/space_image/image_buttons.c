@@ -664,7 +664,7 @@ static void uiblock_layer_pass_buttons(uiLayout *layout, Image *image, RenderRes
 		UI_but_type_set_menu_from_pulldown(but);
 
 		/* view */
-		if (BLI_listbase_count(&rr->views) > 1 && !show_stereo) {
+		if (BLI_listbase_count_ex(&rr->views, 2) > 1 && !show_stereo) {
 			rview = BLI_findlink(&rr->views, iuser->view);
 			display_name = rview ? rview->name : "";
 

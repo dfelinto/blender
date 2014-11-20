@@ -2622,8 +2622,7 @@ static int rna_Node_image_has_views_get(PointerRNA *ptr)
 
 	if (!ima || !(ima->rr)) return 0;
 
-	views = BLI_listbase_count(&ima->rr->views);
-	return views > 1;
+	return BLI_listbase_count_ex(&ima->rr->views, 2) > 1;
 }
 
 #if 0 //XXX MV we may not need that, I don't know yet

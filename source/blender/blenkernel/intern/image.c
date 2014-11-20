@@ -2567,7 +2567,7 @@ void BKE_image_signal(Image *ima, ImageUser *iuser, int signal)
 			if (BKE_image_has_packedfile(ima)) {
 				const size_t totfiles = image_num_files(ima);
 
-				if (totfiles != BLI_listbase_count(&ima->packedfiles)) {
+				if (totfiles != BLI_listbase_count_ex(&ima->packedfiles, totfiles + 1)) {
 					/* in case there are new available files to be loaded */
 					image_free_packedfiles(ima);
 					BKE_image_packfiles(NULL, ima, ID_BLEND_PATH(G.main, &ima->id));
@@ -2690,7 +2690,7 @@ void BKE_image_multiview_index(Image *ima, ImageUser *iuser)
 			iuser->multi_index = iuser->eye;
 		}
 		else {
-			if ((iuser->view < 0) || (iuser->view >= BLI_listbase_count(&ima->views))) {
+			if ((iuser->view < 0) || (iuser->view >= BLI_listbase_count_ex(&ima->views, iuser->view + 1))) {
 				iuser->multi_index = iuser->view = 0;
 			}
 			else {
@@ -2727,7 +2727,7 @@ static void image_init_multilayer_multiview_flag(Image *ima, RenderResult *rr)
 		}
 		else {
 			ima->flag &= ~IMA_IS_STEREO;
-			if (BLI_listbase_count(&rr->views) > 1)
+			if (BLI_listbase_count_ex(&rr->views, 2) > 1)
 				ima->flag |= IMA_IS_MULTIVIEW;
 			else
 				ima->flag &= IMA_IS_MULTIVIEW;
@@ -2892,7 +2892,7 @@ static void image_add_buffer_cb(void *base, const char *str, ImBuf *ibuf, const 
 
 static void image_update_multiview_flags(Image *ima)
 {
-	if (BLI_listbase_count(&ima->views) > 1) {
+	if (BLI_listbase_count_ex(&ima->views, 2) > 1) {
 		ima->flag |= IMA_IS_MULTIVIEW;
 
 		if (BLI_findstring(&ima->views, STEREO_LEFT_NAME, offsetof(ImageView, name)) &&
@@ -3175,7 +3175,7 @@ static ImBuf *image_load_movie_file(Image *ima, ImageUser *iuser, int frame)
 	ibuf = MEM_mallocN(sizeof(ImBuf *) * totviews, "Image Views (movie) Imbufs");
 
 	if ((BKE_image_has_anim(ima) == false) ||
-	    BLI_listbase_count(&ima->anims) != totfiles)
+	    totfiles != BLI_listbase_count_ex(&ima->anims, totfiles + 1))
 	{
 		image_free_anims(ima);
 
@@ -3285,7 +3285,7 @@ static ImBuf *image_load_image_file(Image *ima, ImageUser *iuser, int cfra)
 		flag |= imbuf_alpha_flags_for_image(ima);
 
 		/* XXX what to do */
-		BLI_assert(totfiles == BLI_listbase_count(&ima->packedfiles));
+		BLI_assert(totfiles == BLI_listbase_count_ex(&ima->packedfiles, totfiles + 1));
 
 		for (i = 0, imapf = ima->packedfiles.first; imapf; imapf = imapf->next, i++) {
 			ibuf[i] = IMB_ibImageFromMemory((unsigned char *)imapf->packedfile->data, imapf->packedfile->size, flag,
@@ -4246,12 +4246,12 @@ int BKE_image_sequence_guess_offset(Image *image)
 
 bool BKE_image_has_anim(Image *ima)
 {
-	return (BLI_listbase_count(&ima->anims) > 0) && (((ImageAnim *) ima->anims.first)->anim != NULL);
+	return (BLI_listbase_count_ex(&ima->anims, 1) > 0) && (((ImageAnim *) ima->anims.first)->anim != NULL);
 }
 
 bool BKE_image_has_packedfile(Image *ima)
 {
-	return (BLI_listbase_count(&ima->packedfiles) > 0) && (((ImagePackedFile *) ima->packedfiles.first)->packedfile != NULL);
+	return (BLI_listbase_count_ex(&ima->packedfiles, 1) > 0) && (((ImagePackedFile *) ima->packedfiles.first)->packedfile != NULL);
 }
 
 /**
@@ -4457,7 +4457,7 @@ void BKE_image_update_views_format(Scene *scene, Image *ima)
 		}
 
 		/* all good */
-		if (BLI_listbase_count(&ima->views) > 1) {
+		if (BLI_listbase_count_ex(&ima->views, 2) > 1) {
 			ima->flag |= IMA_IS_MULTIVIEW;
 			if (BKE_scene_is_stereo3d(&scene->r))
 				ima->flag |= IMA_IS_STEREO;

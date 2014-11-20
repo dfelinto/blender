@@ -929,7 +929,7 @@ void render_result_views_new(RenderResult *rr, RenderData *rd)
 	}
 
 	/* we always need at least one view */
-	if (BLI_listbase_count(&rr->views) == 0) {
+	if (BLI_listbase_count_ex(&rr->views, 1) == 0) {
 		rv = MEM_callocN(sizeof(RenderView), "new render view");
 		BLI_addtail(&rr->views, rv);
 	}
