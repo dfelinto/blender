@@ -2895,7 +2895,7 @@ static ImBuf *do_render_strip_uncached(const SeqRenderData *context, Sequence *s
 				if (totfiles > 1) {
 					BKE_scene_view_get_prefix(context->scene, name, prefix, &ext);
 					if (prefix[0] == '\0') {
-						goto monoview;
+						goto monoview_image;
 					}
 				}
 
@@ -2951,7 +2951,7 @@ static ImBuf *do_render_strip_uncached(const SeqRenderData *context, Sequence *s
 				MEM_freeN(ibufs);
 			}
 			else {
-monoview:
+monoview_image:
 				if ((ibuf = IMB_loadiffname(name, flag, seq->strip->colorspace_settings.name))) {
 					/* we don't need both (speed reasons)! */
 					if (ibuf->rect_float && ibuf->rect)
@@ -2979,9 +2979,14 @@ monoview:
 
 			if (is_multiview) {
 				ImBuf **ibufs;
-				size_t totviews = BKE_scene_num_views(&context->scene->r);
+				size_t totviews;
+				size_t totfiles = seq_num_files(context->scene, seq->views_format);
 				int i;
 
+				if (totfiles != BLI_listbase_count_ex(&seq->anims, totfiles + 1))
+					goto monoview_movie;
+
+				totviews = BKE_scene_num_views(&context->scene->r);
 				ibufs = MEM_callocN(sizeof(ImBuf *) * totviews, "Sequence Image Views Imbufs");
 
 				for (i = 0, sanim = seq->anims.first; sanim; sanim = sanim->next, i++) {
@@ -3030,6 +3035,7 @@ monoview:
 				MEM_freeN(ibufs);
 			}
 			else {
+monoview_movie:
 				sanim = seq->anims.first;
 				if (sanim && sanim->anim) {
 					IMB_anim_set_preseek(sanim->anim, seq->anim_preseek);
