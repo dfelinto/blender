@@ -56,6 +56,10 @@ if(WIN32 AND NOT UNIX)
 
 	add_executable(blenderplayer ${EXETYPE} bad_level_call_stubs/stubs.c ../icons/winblender.rc)
 
+	install(TARGETS blenderplayer
+			COMPONENT Blenderplayer
+			DESTINATION ".")
+
 elseif(APPLE)
 	add_executable(blenderplayer ${EXETYPE} bad_level_call_stubs/stubs.c)
 	# setup Info.plist
@@ -163,6 +167,7 @@ endif()
 		extern_wcwidth
 		extern_libmv
 		extern_glog
+		extern_sdlew
 	)
 
 	if(WITH_MOD_CLOTH_ELTOPO)

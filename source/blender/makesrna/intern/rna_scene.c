@@ -1156,7 +1156,7 @@ static int rna_RenderSettings_active_layer_index_get(PointerRNA *ptr)
 static void rna_RenderSettings_active_layer_index_set(PointerRNA *ptr, int value)
 {
 	RenderData *rd = (RenderData *)ptr->data;
-	int num_layers = BLI_countlist(&rd->layers);
+	int num_layers = BLI_listbase_count(&rd->layers);
 	rd->actlay = min_ff(value, num_layers - 1);
 }
 
@@ -1166,7 +1166,7 @@ static void rna_RenderSettings_active_layer_index_range(PointerRNA *ptr, int *mi
 	RenderData *rd = (RenderData *)ptr->data;
 
 	*min = 0;
-	*max = max_ii(0, BLI_countlist(&rd->layers) - 1);
+	*max = max_ii(0, BLI_listbase_count(&rd->layers) - 1);
 }
 
 static PointerRNA rna_RenderSettings_active_layer_get(PointerRNA *ptr)
@@ -1231,7 +1231,7 @@ static void rna_RenderSettings_active_view_index_range(PointerRNA *ptr, int *min
 	RenderData *rd = (RenderData *)ptr->data;
 
 	*min = 0;
-	*max = max_ii(0, BLI_countlist(&rd->views) - 1);
+	*max = max_ii(0, BLI_listbase_count(&rd->views) - 1);
 }
 
 static PointerRNA rna_RenderSettings_active_view_get(PointerRNA *ptr)
@@ -1412,7 +1412,7 @@ static void rna_RenderSettings_views_setup_set(PointerRNA *ptr, int value)
 
 static int rna_RenderSettings_multiple_engines_get(PointerRNA *UNUSED(ptr))
 {
-	return (BLI_countlist(&R_engines) > 1);
+	return (BLI_listbase_count(&R_engines) > 1);
 }
 
 static int rna_RenderSettings_use_shading_nodes_get(PointerRNA *ptr)
@@ -1669,7 +1669,7 @@ static KeyingSet *rna_Scene_keying_set_new(Scene *sce, ReportList *reports, cons
 	ks = BKE_keyingset_add(&sce->keyingsets, idname, name, KEYINGSET_ABSOLUTE, 0);
 	
 	if (ks) {
-		sce->active_keyingset = BLI_countlist(&sce->keyingsets);
+		sce->active_keyingset = BLI_listbase_count(&sce->keyingsets);
 		return ks;
 	}
 	else {
@@ -1829,7 +1829,7 @@ static void rna_FreestyleSettings_active_lineset_index_range(PointerRNA *ptr, in
 	FreestyleConfig *config = (FreestyleConfig *)ptr->data;
 
 	*min = 0;
-	*max = max_ii(0, BLI_countlist(&config->linesets) - 1);
+	*max = max_ii(0, BLI_listbase_count(&config->linesets) - 1);
 }
 
 static int rna_FreestyleSettings_active_lineset_index_get(PointerRNA *ptr)

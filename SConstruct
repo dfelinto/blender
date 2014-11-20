@@ -218,6 +218,8 @@ else:
 if not env['BF_FANCY']:
     B.bc.disable()
 
+if env['WITH_BF_SDL_DYNLOAD']:
+    env['BF_SDL_INC'] = '#extern/sdlew/include/SDL2'
 
 # remove install dir so old and new files are not mixed.
 # NOTE: only do the scripts directory for now, otherwise is too disruptive for developers
@@ -419,6 +421,9 @@ if env['OURPLATFORM']=='darwin':
         else:
             env.Append(LINKFLAGS=['-F/Library/Frameworks','-Xlinker','-weak_framework','-Xlinker','Jackmp'])
             print B.bc.OKGREEN + "Using Jack"
+
+    if env['WITH_BF_SDL']:
+        env.Append(LINKFLAGS=['-lazy_framework','ForceFeedback'])
 
     if env['WITH_BF_QUICKTIME'] == 1:
         env['PLATFORM_LINKFLAGS'] = env['PLATFORM_LINKFLAGS']+['-framework','QTKit']

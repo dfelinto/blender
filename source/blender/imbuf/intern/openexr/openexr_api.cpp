@@ -1257,7 +1257,7 @@ void IMB_exr_multiview_convert(void *handle, void *base,
 	}
 	
 	/* there is one float/pass per layer (layer here is a view) */
-	BLI_assert(BLI_countlist(&data->layers) == 1);
+	BLI_assert(BLI_listbase_count(&data->layers) == 1);
 	lay = (ExrLayer *)data->layers.first;
 	for (pass = (ExrPass *)lay->passes.first; pass; pass = pass->next) {
 		if (STREQ(pass->chan_id, "RGB") || STREQ(pass->chan_id, "RGBA")) {

@@ -1033,7 +1033,7 @@ static int image_sequence_get_len(ListBase *frames, int *ofs)
 {
 	ImageFrame *frame;
 
-	BLI_sortlist(frames, image_cmp_frame);
+	BLI_listbase_sort(frames, image_cmp_frame);
 
 	frame = frames->first;
 	if (frame) {
@@ -1155,7 +1155,7 @@ static int image_open_exec(bContext *C, wmOperator *op)
 	}
 
 	/* XXX unpackImage frees image buffers */
-	ED_preview_kill_jobs(C);
+	ED_preview_kill_jobs(CTX_wm_manager(C), bmain);
 	
 	BKE_image_signal(ima, iuser, IMA_SIGNAL_RELOAD);
 	WM_event_add_notifier(C, NC_IMAGE | NA_EDITED, ima);
@@ -1343,7 +1343,7 @@ static int image_replace_exec(bContext *C, wmOperator *op)
 		sima->image->source = IMA_SRC_FILE;
 
 	/* XXX unpackImage frees image buffers */
-	ED_preview_kill_jobs(C);
+	ED_preview_kill_jobs(CTX_wm_manager(C), CTX_data_main(C));
 	
 	BKE_icon_changed(BKE_icon_getid(&sima->image->id));
 	BKE_image_signal(sima->image, &sima->iuser, IMA_SIGNAL_RELOAD);
@@ -1543,7 +1543,7 @@ static int get_multiview_pass_id(RenderResult *rr, ImageUser *iuser, const int v
 	if (rr == NULL || iuser == NULL)
 		return 0;
 
-	if (BLI_countlist(&rr->views) < 2)
+	if (BLI_listbase_count(&rr->views) < 2)
 		return iuser->pass;
 
 	if (RE_HasFakeLayer(rr))
@@ -1680,7 +1680,7 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 		/* we need renderresult for exr and rendered multiview */
 		scene = CTX_data_scene(C);
 		rr = BKE_image_acquire_renderresult(scene, ima);
-		is_mono = rr ? BLI_countlist(&rr->views) < 2 : (ima->flag & IMA_IS_MULTIVIEW) == 0;
+		is_mono = rr ? BLI_listbase_count(&rr->views) < 2 : (ima->flag & IMA_IS_MULTIVIEW) == 0;
 
 		/* error handling */
 		if (!rr) {
@@ -1739,7 +1739,7 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 		else if (imf->views_format == R_IMF_VIEWS_INDIVIDUAL) {
 			size_t i;
 			unsigned char planes = ibuf->planes;
-			const size_t totviews = (rr ? BLI_countlist(&rr->views) : BLI_countlist(&ima->views));
+			const size_t totviews = (rr ? BLI_listbase_count(&rr->views) : BLI_listbase_count(&ima->views));
 
 			if (!is_multilayer) {
 				ED_space_image_release_buffer(sima, ibuf, lock);
@@ -2173,7 +2173,7 @@ static int image_reload_exec(bContext *C, wmOperator *UNUSED(op))
 		return OPERATOR_CANCELLED;
 
 	/* XXX unpackImage frees image buffers */
-	ED_preview_kill_jobs(C);
+	ED_preview_kill_jobs(CTX_wm_manager(C), CTX_data_main(C));
 	
 	// XXX other users?
 	BKE_image_signal(ima, (sima) ? &sima->iuser : NULL, IMA_SIGNAL_RELOAD);
@@ -2650,7 +2650,7 @@ static int image_unpack_exec(bContext *C, wmOperator *op)
 		BKE_report(op->reports, RPT_WARNING, "AutoPack is enabled, so image will be packed again on file save");
 	
 	/* XXX unpackImage frees image buffers */
-	ED_preview_kill_jobs(C);
+	ED_preview_kill_jobs(CTX_wm_manager(C), CTX_data_main(C));
 	
 	unpackImage(op->reports, ima, method);
 	

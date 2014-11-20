@@ -348,7 +348,7 @@ static void ui_imageuser_layer_menu(bContext *UNUSED(C), uiLayout *layout, void 
 	         0, 0, UI_UNIT_X * 5, UI_UNIT_Y, NULL, 0.0, 0.0, 0, 0, "");
 	uiItemS(layout);
 
-	nr = BLI_countlist(&rr->layers) - 1;
+	nr = BLI_listbase_count(&rr->layers) - 1;
 	fake_name = ui_imageuser_layer_fake_name(rr);
 
 	if (fake_name) {
@@ -416,7 +416,7 @@ static void ui_imageuser_pass_menu(bContext *UNUSED(C), uiLayout *layout, void *
 
 	uiItemS(layout);
 
-	nr = (rl ? BLI_countlist(&rl->passes) : 0) - 1;
+	nr = (rl ? BLI_listbase_count(&rl->passes) : 0) - 1;
 	fake_name = ui_imageuser_pass_fake_name(rl);
 
 	if (fake_name) {
@@ -475,7 +475,7 @@ static void ui_imageuser_view_menu_rr(bContext *UNUSED(C), uiLayout *layout, voi
 
 	uiItemS(layout);
 
-	nr = (rr ? BLI_countlist(&rr->views) : 0) - 1;
+	nr = (rr ? BLI_listbase_count(&rr->views) : 0) - 1;
 	for (rview = rr ? rr->views.last : NULL; rview; rview = rview->prev, nr--) {
 		uiDefButS(block, UI_BTYPE_BUT_MENU, B_NOP, IFACE_(rview->name), 0, 0,
 		          UI_UNIT_X * 5, UI_UNIT_X, &iuser->view, (float) nr, 0.0, 0, -1, "");
@@ -501,7 +501,7 @@ static void ui_imageuser_view_menu_multiview(bContext *UNUSED(C), uiLayout *layo
 
 	uiItemS(layout);
 
-	nr = BLI_countlist(&image->views) - 1;
+	nr = BLI_listbase_count(&image->views) - 1;
 	for (iv = image->views.last; iv; iv = iv->prev, nr--) {
 		uiDefButS(block, UI_BTYPE_BUT_MENU, B_NOP, IFACE_(iv->name), 0, 0,
 		          UI_UNIT_X * 5, UI_UNIT_X, &iuser->view, (float) nr, 0.0, 0, -1, "");
@@ -521,7 +521,7 @@ static void image_multi_inclay_cb(bContext *C, void *rr_v, void *iuser_v)
 {
 	RenderResult *rr = rr_v;
 	ImageUser *iuser = iuser_v;
-	int tot = BLI_countlist(&rr->layers);
+	int tot = BLI_listbase_count(&rr->layers);
 
 	if (RE_HasFakeLayer(rr))
 		tot++;  /* fake compo/sequencer layer */
@@ -549,7 +549,7 @@ static void image_multi_incpass_cb(bContext *C, void *rr_v, void *iuser_v)
 	RenderLayer *rl = BLI_findlink(&rr->layers, iuser->layer);
 
 	if (rl) {
-		int tot = BLI_countlist(&rl->passes);
+		int tot = BLI_listbase_count(&rl->passes);
 
 		if (RE_HasFakeLayer(rr))
 			tot++;  /* fake compo/sequencer layer */
@@ -664,7 +664,7 @@ static void uiblock_layer_pass_buttons(uiLayout *layout, Image *image, RenderRes
 		UI_but_type_set_menu_from_pulldown(but);
 
 		/* view */
-		if (BLI_countlist(&rr->views) > 1 && !show_stereo) {
+		if (BLI_listbase_count(&rr->views) > 1 && !show_stereo) {
 			rview = BLI_findlink(&rr->views, iuser->view);
 			display_name = rview ? rview->name : "";
 

@@ -1630,9 +1630,10 @@ bool RNA_property_animated(PointerRNA *ptr, PropertyRNA *prop)
 	if (RNA_property_array_check(prop))
 		len = RNA_property_array_length(ptr, prop);
 
-	for (index = 0; index < len; index++)
-		if (rna_get_fcurve(ptr, prop, index, NULL, &driven))
+	for (index = 0; index < len; index++) {
+		if (rna_get_fcurve(ptr, prop, index, NULL, NULL, &driven))
 			return true;
+	}
 
 	return false;
 }
@@ -4959,7 +4960,7 @@ bool RNA_enum_is_equal(bContext *C, PointerRNA *ptr, const char *name, const cha
 
 	if (prop) {
 		int i;
-		bool cmp;
+		bool cmp = false;
 
 		RNA_property_enum_items(C, ptr, prop, &item, NULL, &free);
 		i = RNA_enum_from_identifier(item, enumname);

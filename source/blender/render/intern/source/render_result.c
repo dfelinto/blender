@@ -891,7 +891,7 @@ RenderResult *render_result_new_from_exr(void *exrhandle, const char *colorspace
 		rl->rectx = rectx;
 		rl->recty = recty;
 
-		BLI_sortlist(&rl->passes, order_render_passes);
+		BLI_listbase_sort(&rl->passes, order_render_passes);
 
 		for (rpass = rl->passes.first; rpass; rpass = rpass->next) {
 			printf("%d: %s\n", c++, rpass->name);
@@ -929,7 +929,7 @@ void render_result_views_new(RenderResult *rr, RenderData *rd)
 	}
 
 	/* we always need at least one view */
-	if (BLI_countlist(&rr->views) == 0) {
+	if (BLI_listbase_count(&rr->views) == 0) {
 		rv = MEM_callocN(sizeof(RenderView), "new render view");
 		BLI_addtail(&rr->views, rv);
 	}

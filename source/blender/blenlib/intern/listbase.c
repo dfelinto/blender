@@ -211,7 +211,7 @@ void BLI_freelinkN(ListBase *listbase, void *vlink)
  * (which should return 1 iff its first arg should come after its second arg).
  * This uses insertion sort, so NOT ok for large list.
  */
-void BLI_sortlist(ListBase *listbase, int (*cmp)(const void *, const void *))
+void BLI_listbase_sort(ListBase *listbase, int (*cmp)(const void *, const void *))
 {
 	Link *current = NULL;
 	Link *previous = NULL;
@@ -233,7 +233,7 @@ void BLI_sortlist(ListBase *listbase, int (*cmp)(const void *, const void *))
 	}
 }
 
-void BLI_sortlist_r(ListBase *listbase, void *thunk, int (*cmp)(void *, const void *, const void *))
+void BLI_listbase_sort_r(ListBase *listbase, void *thunk, int (*cmp)(void *, const void *, const void *))
 {
 	Link *current = NULL;
 	Link *previous = NULL;
@@ -372,22 +372,35 @@ void BLI_freelistN(ListBase *listbase)
 	BLI_listbase_clear(listbase);
 }
 
+/**
+ * Returns the number of elements in \a listbase, up until (and including count_max)
+ *
+ * \note Use to avoid redundant looping.
+ */
+int BLI_listbase_count_ex(const ListBase *listbase, const int count_max)
+{
+	Link *link;
+	int count = 0;
+
+	for (link = listbase->first; link && count != count_max; link = link->next) {
+		count++;
+	}
+
+	return count;
+}
 
 /**
  * Returns the number of elements in \a listbase.
  */
-int BLI_countlist(const ListBase *listbase)
+int BLI_listbase_count(const ListBase *listbase)
 {
 	Link *link;
 	int count = 0;
-	
-	if (listbase) {
-		link = listbase->first;
-		while (link) {
-			count++;
-			link = link->next;
-		}
+
+	for (link = listbase->first; link; link = link->next) {
+		count++;
 	}
+
 	return count;
 }
 

@@ -699,7 +699,7 @@ void ED_node_set_active(Main *bmain, bNodeTree *ntree, bNode *node)
 				for (scene = bmain->scene.first; scene; scene = scene->id.next) {
 					if (scene->nodetree && scene->use_nodes && ntreeHasTree(scene->nodetree, ntree)) {
 						if (node->id == NULL || node->id == (ID *)scene) {
-							int num_layers = BLI_countlist(&scene->r.layers);
+							int num_layers = BLI_listbase_count(&scene->r.layers);
 							scene->r.actlay = node->custom1;
 							/* Clamp the value, because it might have come from a different
 							 * scene which could have more render layers than new one.
@@ -1146,7 +1146,7 @@ static int node_duplicate_exec(bContext *C, wmOperator *op)
 	bNodeLink *link, *newlink, *lastlink;
 	const bool keep_inputs = RNA_boolean_get(op->ptr, "keep_inputs");
 	
-	ED_preview_kill_jobs(C);
+	ED_preview_kill_jobs(CTX_wm_manager(C), CTX_data_main(C));
 	
 	lastnode = ntree->nodes.last;
 	for (node = ntree->nodes.first; node; node = node->next) {
@@ -1281,7 +1281,7 @@ static int node_read_renderlayers_exec(bContext *C, wmOperator *UNUSED(op))
 	Scene *curscene = CTX_data_scene(C), *scene;
 	bNode *node;
 
-	ED_preview_kill_jobs(C);
+	ED_preview_kill_jobs(CTX_wm_manager(C), bmain);
 
 	/* first tag scenes unread */
 	for (scene = bmain->scene.first; scene; scene = scene->id.next)
@@ -1480,7 +1480,7 @@ static int node_preview_toggle_exec(bContext *C, wmOperator *UNUSED(op))
 	if ((snode == NULL) || (snode->edittree == NULL))
 		return OPERATOR_CANCELLED;
 
-	ED_preview_kill_jobs(C);
+	ED_preview_kill_jobs(CTX_wm_manager(C), CTX_data_main(C));
 
 	node_flag_toggle_exec(snode, NODE_PREVIEW);
 
@@ -1544,7 +1544,7 @@ static int node_socket_toggle_exec(bContext *C, wmOperator *UNUSED(op))
 	if ((snode == NULL) || (snode->edittree == NULL))
 		return OPERATOR_CANCELLED;
 
-	ED_preview_kill_jobs(C);
+	ED_preview_kill_jobs(CTX_wm_manager(C), CTX_data_main(C));
 
 	/* Toggle for all selected nodes */
 	hidden = 0;
@@ -1592,7 +1592,7 @@ static int node_mute_exec(bContext *C, wmOperator *UNUSED(op))
 	SpaceNode *snode = CTX_wm_space_node(C);
 	bNode *node;
 
-	ED_preview_kill_jobs(C);
+	ED_preview_kill_jobs(CTX_wm_manager(C), CTX_data_main(C));
 
 	for (node = snode->edittree->nodes.first; node; node = node->next) {
 		/* Only allow muting of nodes having a mute func! */
@@ -1630,7 +1630,7 @@ static int node_delete_exec(bContext *C, wmOperator *UNUSED(op))
 	SpaceNode *snode = CTX_wm_space_node(C);
 	bNode *node, *next;
 	
-	ED_preview_kill_jobs(C);
+	ED_preview_kill_jobs(CTX_wm_manager(C), CTX_data_main(C));
 
 	for (node = snode->edittree->nodes.first; node; node = next) {
 		next = node->next;
@@ -1720,7 +1720,7 @@ static int node_delete_reconnect_exec(bContext *C, wmOperator *UNUSED(op))
 	SpaceNode *snode = CTX_wm_space_node(C);
 	bNode *node, *next;
 
-	ED_preview_kill_jobs(C);
+	ED_preview_kill_jobs(CTX_wm_manager(C), CTX_data_main(C));
 
 	for (node = snode->edittree->nodes.first; node; node = next) {
 		next = node->next;
@@ -1977,7 +1977,7 @@ static int node_clipboard_copy_exec(bContext *C, wmOperator *UNUSED(op))
 	bNode *node;
 	bNodeLink *link, *newlink;
 
-	ED_preview_kill_jobs(C);
+	ED_preview_kill_jobs(CTX_wm_manager(C), CTX_data_main(C));
 
 	/* clear current clipboard */
 	BKE_node_clipboard_clear();
@@ -2090,7 +2090,7 @@ static int node_clipboard_paste_exec(bContext *C, wmOperator *op)
 	if (!all_nodes_valid)
 		return OPERATOR_CANCELLED;
 
-	ED_preview_kill_jobs(C);
+	ED_preview_kill_jobs(CTX_wm_manager(C), CTX_data_main(C));
 
 	/* deselect old nodes */
 	node_deselect_all(snode);
@@ -2498,7 +2498,7 @@ static int viewer_border_exec(bContext *C, wmOperator *op)
 	void *lock;
 	ImBuf *ibuf;
 
-	ED_preview_kill_jobs(C);
+	ED_preview_kill_jobs(CTX_wm_manager(C), CTX_data_main(C));
 
 	ima = BKE_image_verify_viewer(IMA_TYPE_COMPOSITE, "Viewer Node");
 	ibuf = BKE_image_acquire_ibuf(ima, NULL, &lock);

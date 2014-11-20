@@ -2180,7 +2180,7 @@ static void do_merge_fullsample(Render *re, bNodeTree *ntree)
 	/* temporary storage of the acccumulation buffers */
 	rectfs = MEM_callocN(sizeof(ListBase), "fullsample accumulation buffers");
 
-	numviews = BLI_countlist(&re->result->views);
+	numviews = BLI_listbase_count(&re->result->views);
 	for (nr = 0; nr < numviews; nr++) {
 		rv = MEM_callocN(sizeof(RenderView), "fullsample renderview");
 
@@ -3037,7 +3037,7 @@ bool RE_WriteRenderViewsImage(ReportList *reports, RenderResult *rr, Scene *scen
 	if (!rr)
 		return false;
 
-	is_mono = BLI_countlist(&rr->views) < 2;
+	is_mono = BLI_listbase_count(&rr->views) < 2;
 
 	if (ELEM(rd->im_format.imtype, R_IMF_IMTYPE_OPENEXR, R_IMF_IMTYPE_MULTILAYER) &&
 	    rd->im_format.views_format == R_IMF_VIEWS_MULTIVIEW)
@@ -3185,7 +3185,7 @@ bool RE_WriteRenderViewsMovie(ReportList *reports, RenderResult *rr, Scene *scen
 	if (!rr)
 		return false;
 
-	is_mono = BLI_countlist(&rr->views) < 2;
+	is_mono = BLI_listbase_count(&rr->views) < 2;
 
 	if (is_mono || (scene->r.im_format.views_format == R_IMF_VIEWS_INDIVIDUAL)) {
 		size_t view_id;
@@ -3709,7 +3709,7 @@ bool RE_WriteEnvmapResult(struct ReportList *reports, Scene *scene, EnvMap *env,
 /* used in the interface to decide whether to show layers */
 int RE_layers_have_name(struct RenderResult *rr)
 {
-	switch (BLI_countlist(&rr->layers))
+	switch (BLI_listbase_count(&rr->layers))
 	{
 		case 0:
 			return false;

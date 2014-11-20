@@ -296,6 +296,9 @@ option(WITH_JACK          "Enable Jack Support (http://www.jackaudio.org)" ${_in
 if(UNIX AND NOT APPLE)
 	option(WITH_JACK_DYNLOAD  "Enable runtime dynamic Jack libraries loading" OFF)
 endif()
+if(UNIX AND NOT APPLE)
+	option(WITH_SDL_DYNLOAD  "Enable runtime dynamic SDL libraries loading" OFF)
+endif()
 
 # Compression
 option(WITH_LZO           "Enable fast LZO compression (used for pointcache)" ON)
@@ -344,7 +347,7 @@ set(CYCLES_CUDA_BINARIES_ARCH sm_20 sm_21 sm_30 sm_35 sm_50 CACHE STRING "CUDA a
 mark_as_advanced(CYCLES_CUDA_BINARIES_ARCH)
 unset(PLATFORM_DEFAULT)
 option(WITH_CYCLES_LOGGING	"Build cycles with logging support" OFF)
-option(WITH_CYCLES_DEBUG	"Build cycles with with extra debug capabilties" OFF)
+option(WITH_CYCLES_DEBUG	"Build cycles with extra debug capabilities" OFF)
 mark_as_advanced(WITH_CYCLES_LOGGING)
 mark_as_advanced(WITH_CYCLES_DEBUG)
 
@@ -767,7 +770,6 @@ endif()
 
 if(UNIX AND NOT APPLE)
 	macro(find_package_wrapper)
-		string(TOUPPER ${ARGV0} _NAME_UPPER)
 		if(WITH_STATIC_LIBS)
 			set(_cmake_find_library_suffixes_back ${CMAKE_FIND_LIBRARY_SUFFIXES})
 			set(CMAKE_FIND_LIBRARY_SUFFIXES .a ${CMAKE_FIND_LIBRARY_SUFFIXES})
@@ -827,16 +829,23 @@ if(UNIX AND NOT APPLE)
 	endif()
 
 	if(WITH_SDL)
-		find_package_wrapper(SDL)
-		mark_as_advanced(
-			SDLMAIN_LIBRARY
-			SDL_INCLUDE_DIR
-			SDL_LIBRARY
-			SDL_LIBRARY_TEMP
-		)
-		# unset(SDLMAIN_LIBRARY CACHE)
-		if(NOT SDL_FOUND)
-			set(WITH_SDL OFF)
+		if(WITH_SDL_DYNLOAD)
+			set(SDLMAIN_LIBRARY)
+			set(SDL_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/extern/sdlew/include/SDL2")
+			set(SDL_LIBRARY)
+			set(SDL_LIBRARY_TEMP)
+		else()
+			find_package_wrapper(SDL)
+			mark_as_advanced(
+				SDLMAIN_LIBRARY
+				SDL_INCLUDE_DIR
+				SDL_LIBRARY
+				SDL_LIBRARY_TEMP
+			)
+			# unset(SDLMAIN_LIBRARY CACHE)
+			if(NOT SDL_FOUND)
+				set(WITH_SDL OFF)
+			endif()
 		endif()
 	endif()
 
@@ -1041,6 +1050,9 @@ if(UNIX AND NOT APPLE)
 			message(FATAL_ERROR "LLVM not found.")
 		endif()
 
+	endif()
+
+	if(WITH_LLVM OR WITH_SDL_DYNLOAD)
 		# Fix for conflict with Mesa llvmpipe
 		set(PLATFORM_LINKFLAGS "${PLATFORM_LINKFLAGS} -Wl,--version-script=${CMAKE_SOURCE_DIR}/source/creator/blender.map")
 	endif()
@@ -1070,7 +1082,14 @@ if(UNIX AND NOT APPLE)
 	endif()
 
 	# OpenSuse needs lutil, ArchLinux not, for now keep, can avoid by using --as-needed
-	list(APPEND PLATFORM_LINKLIBS -lutil -lc -lm -lpthread)
+	list(APPEND PLATFORM_LINKLIBS -lutil -lc -lm)
+
+	find_package(Threads REQUIRED)
+	list(APPEND PLATFORM_LINKLIBS ${CMAKE_THREAD_LIBS_INIT})
+
+	if(CMAKE_DL_LIBS)
+		list(APPEND PLATFORM_LINKLIBS ${CMAKE_DL_LIBS})
+	endif()
 
 	if(CMAKE_SYSTEM_NAME MATCHES "Linux")
 		if(NOT WITH_PYTHON_MODULE)
@@ -1078,11 +1097,6 @@ if(UNIX AND NOT APPLE)
 			set(BINRELOC_INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/extern/binreloc/include)
 			set(WITH_BINRELOC ON)
 		endif()
-	endif()
-
-	set(PLATFORM_LINKFLAGS "${PLATFORM_LINKFLAGS} -pthread")
-	if(CMAKE_DL_LIBS)
-		list(APPEND PLATFORM_LINKLIBS ${CMAKE_DL_LIBS})
 	endif()
 
 	# lfs on glibc, all compilers should use
@@ -1143,21 +1157,16 @@ elseif(WIN32)
 		)
 
 		# MSVC11 needs _ALLOW_KEYWORD_MACROS to build
-		if(NOT MSVC_VERSION VERSION_LESS 1700)
-			add_definitions(-D_ALLOW_KEYWORD_MACROS)
-		endif()
+		add_definitions(-D_ALLOW_KEYWORD_MACROS)
 
 		if(CMAKE_CL_64)
 			# We want to support Vista level ABI for x64
-			if(NOT MSVC_VERSION VERSION_LESS 1700)
-				add_definitions(-D_WIN32_WINNT=0x600)
-			endif()
+			add_definitions(-D_WIN32_WINNT=0x600)
 		endif()
 
+		# Make cmake find the msvc redistributables
 		set(CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_SKIP TRUE)
 		include(InstallRequiredSystemLibraries)
-
-		add_definitions(-DOIIO_STATIC_BUILD)
 
 		set(CMAKE_CXX_FLAGS "/nologo /J /Gd /EHsc /MP" CACHE STRING "MSVC MT C++ flags " FORCE)
 		set(CMAKE_C_FLAGS   "/nologo /J /Gd /MP"       CACHE STRING "MSVC MT C++ flags " FORCE)
@@ -1195,16 +1204,10 @@ elseif(WIN32)
 			# Setup 64bit and 64bit windows systems
 			if(CMAKE_CL_64)
 				message(STATUS "64 bit compiler detected.")
-				set(LIBDIR_BASE ${CMAKE_SOURCE_DIR}/../lib/win64)
+				set(LIBDIR ${CMAKE_SOURCE_DIR}/../lib/win64_vc12)
 			else()
 				message(STATUS "32 bit compiler detected.")
-				set(LIBDIR_BASE ${CMAKE_SOURCE_DIR}/../lib/windows)
-			endif()
-			if(MSVC12)
-				message(STATUS "Visual C++ 2013 detected.")
-				set(LIBDIR ${LIBDIR_BASE}_vc12)
-			else()
-				set(LIBDIR ${LIBDIR_BASE})
+				set(LIBDIR ${CMAKE_SOURCE_DIR}/../lib/windows_vc12)
 			endif()
 		else()
 			message(STATUS using LIBDIR  ${LIBDIR})
@@ -1321,23 +1324,13 @@ elseif(WIN32)
 			set(OPENEXR_INCLUDE_DIR ${OPENEXR}/include)
 			set(OPENEXR_INCLUDE_DIRS ${OPENEXR}/include/OpenEXR)
 			set(OPENEXR_LIBPATH ${OPENEXR}/lib)
-			if(MSVC12)
-				set(OPENEXR_LIBRARIES
-					${OPENEXR_LIBPATH}/Iex-2_1.lib
-					${OPENEXR_LIBPATH}/Half.lib
-					${OPENEXR_LIBPATH}/IlmImf-2_1.lib
-					${OPENEXR_LIBPATH}/Imath-2_1.lib
-					${OPENEXR_LIBPATH}/IlmThread-2_1.lib
-				)
-			else()
-				set(OPENEXR_LIBRARIES
-					${OPENEXR_LIBPATH}/Iex.lib
-					${OPENEXR_LIBPATH}/Half.lib
-					${OPENEXR_LIBPATH}/IlmImf.lib
-					${OPENEXR_LIBPATH}/Imath.lib
-					${OPENEXR_LIBPATH}/IlmThread.lib
-				)
-			endif()
+			set(OPENEXR_LIBRARIES
+				${OPENEXR_LIBPATH}/Iex-2_1.lib
+				${OPENEXR_LIBPATH}/Half.lib
+				${OPENEXR_LIBPATH}/IlmImf-2_1.lib
+				${OPENEXR_LIBPATH}/Imath-2_1.lib
+				${OPENEXR_LIBPATH}/IlmThread-2_1.lib
+			)
 			endif(NOT OPENEXR_FOUND)
 		endif()
 
@@ -1433,6 +1426,8 @@ elseif(WIN32)
 			set(OPENIMAGEIO_LIBRARIES ${OIIO_OPTIMIZED} ${OIIO_DEBUG})
 			set(OPENIMAGEIO_LIBPATH ${OPENIMAGEIO}/lib)
 			set(OPENIMAGEIO_DEFINITIONS "-DUSE_TBB=0")
+			set(OPENCOLORIO_DEFINITIONS "-DOCIO_STATIC_BUILD")
+			add_definitions(-DOIIO_STATIC_BUILD)
 		endif()
 
 		if(WITH_LLVM)
@@ -1940,8 +1935,9 @@ elseif(APPLE)
 	if(WITH_SDL)
 		set(SDL ${LIBDIR}/sdl)
 		set(SDL_INCLUDE_DIR ${SDL}/include)
-		set(SDL_LIBRARY SDL)
+		set(SDL_LIBRARY SDL2)
 		set(SDL_LIBPATH ${SDL}/lib)
+		set(PLATFORM_LINKFLAGS "${PLATFORM_LINKFLAGS} -lazy_framework ForceFeedback")
 	endif()
 
 	set(PNG "${LIBDIR}/png")
@@ -1994,7 +1990,6 @@ elseif(APPLE)
 		set(OPENCOLORIO_INCLUDE_DIRS ${OPENCOLORIO}/include)
 		set(OPENCOLORIO_LIBRARIES OpenColorIO tinyxml yaml-cpp)
 		set(OPENCOLORIO_LIBPATH ${OPENCOLORIO}/lib)
-		set(OPENCOLORIO_DEFINITIONS "-DOCIO_STATIC_BUILD")
 	endif()
 
 	if(WITH_LLVM)
@@ -2068,7 +2063,7 @@ elseif(APPLE)
 				link_directories(${LIBDIR}/openmp/lib)
 				# This is a workaround for our helperbinaries ( datatoc, masgfmt, ... ),
 				# They are linked also to omp lib, so we need it in builddir for runtime exexcution, TODO: remove all unneeded dependencies from these
-				execute_process(COMMAND ditto -arch ${CMAKE_OSX_ARCHITECTURES} ${LIBDIR}/openmp/lib/libiomp5.dylib ${CMAKE_BINARY_DIR}/bin/libiomp5.dylib) # for intermediate binaries, lib id @loader_path
+				execute_process(COMMAND ditto -arch ${CMAKE_OSX_ARCHITECTURES} ${LIBDIR}/openmp/lib/libiomp5.dylib ${CMAKE_BINARY_DIR}/Resources/lib/libiomp5.dylib) # for intermediate binaries, in respect to lib ID
 			endif()
 		endif()
 	endif()
@@ -2758,6 +2753,7 @@ if(FIRST_RUN)
 	info_cfg_text("Audio:")
 	info_cfg_option(WITH_OPENAL)
 	info_cfg_option(WITH_SDL)
+	info_cfg_option(WITH_SDL_DYNLOAD)
 	info_cfg_option(WITH_JACK)
 	info_cfg_option(WITH_JACK_DYNLOAD)
 	info_cfg_option(WITH_CODEC_AVI)
@@ -2804,3 +2800,8 @@ if(FIRST_RUN)
 
 	message("${_config_msg}")
 endif()
+
+if(0)
+	print_all_vars()
+endif()
+

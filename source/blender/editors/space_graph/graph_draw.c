@@ -33,6 +33,7 @@
 #include <float.h>
 
 #include "BLI_blenlib.h"
+#include "BLI_math.h"
 #include "BLI_utildefines.h"
 
 #include "DNA_anim_types.h"
@@ -42,6 +43,7 @@
 #include "DNA_userdef_types.h"
 
 #include "BKE_context.h"
+#include "BKE_curve.h"
 #include "BKE_fcurve.h"
 
 
@@ -475,6 +477,7 @@ static void draw_fcurve_samples(SpaceIpo *sipo, ARegion *ar, FCurve *fcu)
 /* helper func - just draw the F-Curve by sampling the visible region (for drawing curves with modifiers) */
 static void draw_fcurve_curve(bAnimContext *ac, ID *id, FCurve *fcu, View2D *v2d, View2DGrid *grid)
 {
+	SpaceIpo *sipo = (SpaceIpo *)ac->sl;
 	ChannelDriver *driver;
 	float samplefreq;
 	float stime, etime;
@@ -502,7 +505,7 @@ static void draw_fcurve_curve(bAnimContext *ac, ID *id, FCurve *fcu, View2D *v2d
 	 *	which means that our curves can be as smooth as possible. However,
 	 *  this does mean that curves may not be fully accurate (i.e. if they have
 	 *  sudden spikes which happen at the sampling point, we may have problems).
-	 *  Also, this may introduce lower performance on less densely detailed curves,'
+	 *  Also, this may introduce lower performance on less densely detailed curves,
 	 *	though it is impossible to predict this from the modifiers!
 	 *
 	 *	If the automatically determined sampling frequency is likely to cause an infinite
@@ -512,7 +515,25 @@ static void draw_fcurve_curve(bAnimContext *ac, ID *id, FCurve *fcu, View2D *v2d
 	/* grid->dx represents the number of 'frames' between gridlines, but we divide by U.v2d_min_gridsize to get pixels-steps */
 	/* TODO: perhaps we should have 1.0 frames as upper limit so that curves don't get too distorted? */
 	samplefreq = dx / (U.v2d_min_gridsize * U.pixelsize);
-	if (samplefreq < 0.00001f) samplefreq = 0.00001f;
+	
+	if (sipo->flag & SIPO_BEAUTYDRAW_OFF) {
+		/* Low Precision = coarse lower-bound clamping
+		 * 
+		 * Although the "Beauty Draw" flag was originally for AA'd
+		 * line drawing, the sampling rate here has a much greater
+		 * impact on performance (e.g. for T40372)!
+		 *
+		 * This one still amounts to 10 sample-frames for each 1-frame interval
+		 * which should be quite a decent approximation in many situations.
+		 */
+		if (samplefreq < 0.1f)
+			samplefreq = 0.1f;
+	}
+	else {
+		/* "Higher Precision" but slower - especially on larger windows (e.g. T40372) */
+		if (samplefreq < 0.00001f)
+			samplefreq = 0.00001f;
+	}
 	
 	
 	/* the start/end times are simply the horizontal extents of the 'cur' rect */
@@ -525,12 +546,13 @@ static void draw_fcurve_curve(bAnimContext *ac, ID *id, FCurve *fcu, View2D *v2d
 	 *	  the displayed values appear correctly in the viewport
 	 */
 	glBegin(GL_LINE_STRIP);
-
-	for (i = 0, n = (etime - stime) / samplefreq + 0.5f; i < n; ++i) {
+	
+	n = (etime - stime) / samplefreq + 0.5f;
+	for (i = 0; i <= n; i++) {
 		float ctime = stime + i * samplefreq;
 		glVertex2f(ctime, evaluate_fcurve(fcu, ctime) * unitFac);
 	}
-
+	
 	glEnd();
 	
 	/* restore driver */
@@ -616,8 +638,24 @@ static void draw_fcurve_curve_samples(bAnimContext *ac, ID *id, FCurve *fcu, Vie
 	glPopMatrix();
 }
 
-#if 0
-/* helper func - draw one repeat of an F-Curve */
+/* helper func - check if the F-Curve only contains easily drawable segments 
+ * (i.e. no easing equation interpolations) 
+ */
+static bool fcurve_can_use_simple_bezt_drawing(FCurve *fcu)
+{
+	BezTriple *bezt;
+	int i;
+	
+	for (i = 0, bezt = fcu->bezt; i < fcu->totvert; i++, bezt++) {
+		if (ELEM(bezt->ipo, BEZT_IPO_CONST, BEZT_IPO_LIN, BEZT_IPO_BEZ) == false) {
+			return false;
+		}
+	}
+	
+	return true;
+}
+
+/* helper func - draw one repeat of an F-Curve (using Bezier curve approximations) */
 static void draw_fcurve_curve_bezts(bAnimContext *ac, ID *id, FCurve *fcu, View2D *v2d)
 {
 	BezTriple *prevbezt = fcu->bezt;
@@ -629,12 +667,12 @@ static void draw_fcurve_curve_bezts(bAnimContext *ac, ID *id, FCurve *fcu, View2
 	int resol;
 	float unit_scale;
 	short mapping_flag = ANIM_get_normalization_flags(ac);
-
+	
 	/* apply unit mapping */
 	glPushMatrix();
 	unit_scale = ANIM_unit_mapping_get_factor(ac->scene, id, fcu, mapping_flag);
 	glScalef(1.0f, unit_scale, 1.0f);
-
+	
 	glBegin(GL_LINE_STRIP);
 	
 	/* extrapolate to left? */
@@ -689,17 +727,19 @@ static void draw_fcurve_curve_bezts(bAnimContext *ac, ID *id, FCurve *fcu, View2
 			v1[1] = prevbezt->vec[1][1];
 			glVertex2fv(v1);
 		}
-		else {
+		else if (prevbezt->ipo == BEZT_IPO_BEZ) {
 			/* Bezier-Interpolation: draw curve as series of segments between keyframes 
 			 *	- resol determines number of points to sample in between keyframes
 			 */
 			
 			/* resol depends on distance between points (not just horizontal) OR is a fixed high res */
 			/* TODO: view scale should factor into this someday too... */
-			if (fcu->driver) 
+			if (fcu->driver) {
 				resol = 32;
-			else 
+			}
+			else {
 				resol = (int)(5.0f * len_v2v2(bezt->vec[1], prevbezt->vec[1]));
+			}
 			
 			if (resol < 2) {
 				/* only draw one */
@@ -773,7 +813,6 @@ static void draw_fcurve_curve_bezts(bAnimContext *ac, ID *id, FCurve *fcu, View2
 	glEnd();
 	glPopMatrix();
 }
-#endif
 
 /* Debugging -------------------------------- */
 
@@ -989,11 +1028,15 @@ void graph_draw_curves(bAnimContext *ac, SpaceIpo *sipo, ARegion *ar, View2DGrid
 			}
 			else if (((fcu->bezt) || (fcu->fpt)) && (fcu->totvert)) {
 				/* just draw curve based on defined data (i.e. no modifiers) */
-				if (fcu->bezt)
-					//draw_fcurve_curve_bezts(ac, ale->id, fcu, &ar->v2d);
-					draw_fcurve_curve(ac, ale->id, fcu, &ar->v2d, grid);  // XXX: better to do an optimised integration here instead, but for now, this works
-				else if (fcu->fpt)
+				if (fcu->bezt) {
+					if (fcurve_can_use_simple_bezt_drawing(fcu))
+						draw_fcurve_curve_bezts(ac, ale->id, fcu, &ar->v2d);
+					else
+						draw_fcurve_curve(ac, ale->id, fcu, &ar->v2d, grid);
+				}
+				else if (fcu->fpt) {
 					draw_fcurve_curve_samples(ac, ale->id, fcu, &ar->v2d);
+				}
 			}
 			
 			/* restore settings */

@@ -2331,7 +2331,7 @@ uiBlock *ui_block_func_COLOR(bContext *C, uiPopupBlockHandle *handle, void *arg_
 	
 	ui_block_colorpicker(block, handle->retvec, &but->rnapoin, but->rnaprop, show_picker);
 	
-	block->flag = UI_BLOCK_LOOP | UI_BLOCK_REDRAW | UI_BLOCK_KEEP_OPEN | UI_BLOCK_OUT_1 | UI_BLOCK_MOVEMOUSE_QUIT;
+	block->flag = UI_BLOCK_LOOP | UI_BLOCK_KEEP_OPEN | UI_BLOCK_OUT_1 | UI_BLOCK_MOVEMOUSE_QUIT;
 	UI_block_bounds_set_normal(block, 0.5 * UI_UNIT_X);
 	
 	block->block_event_func = ui_colorpicker_small_wheel_cb;
@@ -2504,7 +2504,7 @@ static uiBlock *ui_block_func_POPUP(bContext *C, uiPopupBlockHandle *handle, voi
 	
 	if (pup->popup) {
 		uiBut *but_activate = NULL;
-		UI_block_flag_enable(block, UI_BLOCK_LOOP | UI_BLOCK_REDRAW | UI_BLOCK_NUMSELECT);
+		UI_block_flag_enable(block, UI_BLOCK_LOOP | UI_BLOCK_NUMSELECT);
 		UI_block_direction_set(block, direction);
 
 		/* offset the mouse position, possibly based on earlier selection */
@@ -2640,7 +2640,7 @@ uiPopupMenu *UI_popup_menu_begin(bContext *C, const char *title, int icon)
 	uiBut *but;
 
 	pup->block = UI_block_begin(C, NULL, __func__, UI_EMBOSS_PULLDOWN);
-	pup->block->flag |= UI_BLOCK_POPUP_MEMORY;
+	pup->block->flag |= UI_BLOCK_POPUP_MEMORY | UI_BLOCK_IS_FLIP;
 	pup->block->puphash = ui_popup_menu_hash(title);
 	pup->layout = UI_block_layout(pup->block, UI_LAYOUT_VERTICAL, UI_LAYOUT_MENU, 0, 0, 200, 0, MENU_PADDING, style);
 
@@ -2712,7 +2712,7 @@ static uiBlock *ui_block_func_PIE(bContext *UNUSED(C), uiPopupBlockHandle *handl
 
 	UI_block_layout_resolve(block, &width, &height);
 
-	UI_block_flag_enable(block, UI_BLOCK_LOOP | UI_BLOCK_REDRAW | UI_BLOCK_NUMSELECT);
+	UI_block_flag_enable(block, UI_BLOCK_LOOP | UI_BLOCK_NUMSELECT);
 
 	block->minbounds = minwidth;
 	block->bounds = 1;

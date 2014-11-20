@@ -1152,10 +1152,10 @@ static void drawviewborder(Scene *scene, ARegion *ar, View3D *v3d)
 	if (scene->r.mode & R_BORDER) {
 		float x3, y3, x4, y4;
 
-		x3 = x1 + scene->r.border.xmin * (x2 - x1);
-		y3 = y1 + scene->r.border.ymin * (y2 - y1);
-		x4 = x1 + scene->r.border.xmax * (x2 - x1);
-		y4 = y1 + scene->r.border.ymax * (y2 - y1);
+		x3 = x1i + 1 + roundf(scene->r.border.xmin * (x2 - x1));
+		y3 = y1i + 1 + roundf(scene->r.border.ymin * (y2 - y1));
+		x4 = x1i + 1 + roundf(scene->r.border.xmax * (x2 - x1));
+		y4 = y1i + 1 + roundf(scene->r.border.ymax * (y2 - y1));
 
 		cpack(0x4040FF);
 		glRecti(x3,  y3,  x4,  y4);
@@ -1368,7 +1368,7 @@ static void backdrawview3d(Scene *scene, ARegion *ar, View3D *v3d)
 	else
 		glScissor(ar->winrct.xmin, ar->winrct.ymin, BLI_rcti_size_x(&ar->winrct), BLI_rcti_size_y(&ar->winrct));
 
-	glClearColor(0.0, 0.0, 0.0, 0.0); 
+	glClearColor(0.0, 0.0, 0.0, 0.0);
 	if (v3d->zbuf) {
 		glEnable(GL_DEPTH_TEST);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -2028,7 +2028,7 @@ static void draw_dupli_objects_color(
 
 	tbase.flag = OB_FROMDUPLI | base->flag;
 	lb = object_duplilist(G.main->eval_ctx, scene, base->object);
-	// BLI_sortlist(lb, dupli_ob_sort); /* might be nice to have if we have a dupli list with mixed objects. */
+	// BLI_listbase_sort(lb, dupli_ob_sort); /* might be nice to have if we have a dupli list with mixed objects. */
 
 	apply_data = duplilist_apply(base->object, lb);
 

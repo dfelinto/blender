@@ -2321,7 +2321,7 @@ static int screen_set_exec(bContext *C, wmOperator *op)
 	bScreen *screen_prev = screen;
 	
 	ScrArea *sa = CTX_wm_area(C);
-	int tot = BLI_countlist(&bmain->screen);
+	int tot = BLI_listbase_count(&bmain->screen);
 	int delta = RNA_int_get(op->ptr, "delta");
 	
 	/* temp screens are for userpref or render display */
@@ -2796,7 +2796,7 @@ static int spacedata_cleanup_exec(bContext *C, wmOperator *op)
 				SpaceLink *sl = sa->spacedata.first;
 
 				BLI_remlink(&sa->spacedata, sl);
-				tot += BLI_countlist(&sa->spacedata);
+				tot += BLI_listbase_count(&sa->spacedata);
 				BKE_spacedata_freelist(&sa->spacedata);
 				BLI_addtail(&sa->spacedata, sl);
 			}
@@ -2854,7 +2854,7 @@ static int repeat_history_invoke(bContext *C, wmOperator *op, const wmEvent *UNU
 	uiLayout *layout;
 	int items, i;
 	
-	items = BLI_countlist(&wm->operators);
+	items = BLI_listbase_count(&wm->operators);
 	if (items == 0)
 		return OPERATOR_CANCELLED;
 	
@@ -3524,12 +3524,14 @@ static void SCREEN_OT_animation_step(wmOperatorType *ot)
 /* find window that owns the animation timer */
 bScreen *ED_screen_animation_playing(const wmWindowManager *wm)
 {
-	wmWindow *window;
+	wmWindow *win;
 
-	for (window = wm->windows.first; window; window = window->next)
-		if (window->screen->animtimer)
-			return window->screen;
-	
+	for (win = wm->windows.first; win; win = win->next) {
+		if (win->screen->animtimer) {
+			return win->screen;
+		}
+	}
+
 	return NULL;
 }
 

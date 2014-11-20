@@ -100,7 +100,7 @@ void ImageNode::convertToOperations(NodeConverter &converter, const CompositorCo
 					int view = (rpass ? rpass->view_id : 0);
 
 					/* returns the image view to use for the current active view */
-					if (BLI_countlist(&image->rr->views) > 1) {
+					if (BLI_listbase_count(&image->rr->views) > 1) {
 						const int view_image = imageuser->view;
 						const bool is_allview = (view_image == 0); /* if view selected == All (0) */
 

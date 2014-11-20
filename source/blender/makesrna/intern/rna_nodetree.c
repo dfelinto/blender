@@ -2622,7 +2622,7 @@ static int rna_Node_image_has_views_get(PointerRNA *ptr)
 
 	if (!ima || !(ima->rr)) return 0;
 
-	views = BLI_countlist(&ima->rr->views);
+	views = BLI_listbase_count(&ima->rr->views);
 	return views > 1;
 }
 

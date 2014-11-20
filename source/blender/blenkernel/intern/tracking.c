@@ -1456,6 +1456,35 @@ MovieTrackingPlaneMarker *BKE_tracking_plane_marker_ensure(MovieTrackingPlaneTra
 	return plane_marker;
 }
 
+void BKE_tracking_plane_marker_get_subframe_corners(MovieTrackingPlaneTrack *plane_track,
+                                                    float framenr,
+                                                    float corners[4][2])
+{
+	MovieTrackingPlaneMarker *marker = BKE_tracking_plane_marker_get(plane_track, (int)framenr);
+	MovieTrackingPlaneMarker *marker_last = plane_track->markers + (plane_track->markersnr - 1);
+	int i;
+	if (marker != marker_last) {
+		MovieTrackingPlaneMarker *marker_next = marker + 1;
+		if (marker_next->framenr == marker->framenr + 1) {
+			float fac = (framenr - (int) framenr) / (marker_next->framenr - marker->framenr);
+			for (i = 0; i < 4; ++i) {
+				interp_v2_v2v2(corners[i], marker->corners[i],
+				               marker_next->corners[i], fac);
+			}
+		}
+		else {
+			for (i = 0; i < 4; ++i) {
+				copy_v2_v2(corners[i], marker->corners[i]);
+			}
+		}
+	}
+	else {
+		for (i = 0; i < 4; ++i) {
+			copy_v2_v2(corners[i], marker->corners[i]);
+		}
+	}
+}
+
 /*********************** Object *************************/
 
 MovieTrackingObject *BKE_tracking_object_add(MovieTracking *tracking, const char *name)
@@ -1475,7 +1504,7 @@ MovieTrackingObject *BKE_tracking_object_add(MovieTracking *tracking, const char
 	BLI_addtail(&tracking->objects, object);
 
 	tracking->tot_object++;
-	tracking->objectnr = BLI_countlist(&tracking->objects) - 1;
+	tracking->objectnr = BLI_listbase_count(&tracking->objects) - 1;
 
 	object->scale = 1.0f;
 	object->keyframe1 = 1;
@@ -2410,30 +2439,30 @@ static void tracking_dopesheet_channels_sort(MovieTracking *tracking, int sort_m
 
 	if (inverse) {
 		if (sort_method == TRACKING_DOPE_SORT_NAME) {
-			BLI_sortlist(&dopesheet->channels, channels_alpha_inverse_sort);
+			BLI_listbase_sort(&dopesheet->channels, channels_alpha_inverse_sort);
 		}
 		else if (sort_method == TRACKING_DOPE_SORT_LONGEST) {
-			BLI_sortlist(&dopesheet->channels, channels_longest_segment_inverse_sort);
+			BLI_listbase_sort(&dopesheet->channels, channels_longest_segment_inverse_sort);
 		}
 		else if (sort_method == TRACKING_DOPE_SORT_TOTAL) {
-			BLI_sortlist(&dopesheet->channels, channels_total_track_inverse_sort);
+			BLI_listbase_sort(&dopesheet->channels, channels_total_track_inverse_sort);
 		}
 		else if (sort_method == TRACKING_DOPE_SORT_AVERAGE_ERROR) {
-			BLI_sortlist(&dopesheet->channels, channels_average_error_inverse_sort);
+			BLI_listbase_sort(&dopesheet->channels, channels_average_error_inverse_sort);
 		}
 	}
 	else {
 		if (sort_method == TRACKING_DOPE_SORT_NAME) {
-			BLI_sortlist(&dopesheet->channels, channels_alpha_sort);
+			BLI_listbase_sort(&dopesheet->channels, channels_alpha_sort);
 		}
 		else if (sort_method == TRACKING_DOPE_SORT_LONGEST) {
-			BLI_sortlist(&dopesheet->channels, channels_longest_segment_sort);
+			BLI_listbase_sort(&dopesheet->channels, channels_longest_segment_sort);
 		}
 		else if (sort_method == TRACKING_DOPE_SORT_TOTAL) {
-			BLI_sortlist(&dopesheet->channels, channels_total_track_sort);
+			BLI_listbase_sort(&dopesheet->channels, channels_total_track_sort);
 		}
 		else if (sort_method == TRACKING_DOPE_SORT_AVERAGE_ERROR) {
-			BLI_sortlist(&dopesheet->channels, channels_average_error_sort);
+			BLI_listbase_sort(&dopesheet->channels, channels_average_error_sort);
 		}
 	}
 }

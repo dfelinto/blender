@@ -81,6 +81,10 @@ if(WITH_GAMEENGINE)
 endif()
 
 if(WITH_SDL)
+	if(WITH_SDL_DYNLOAD)
+		add_definitions(-DWITH_SDL_DYNLOAD)
+		blender_include_dirs(../../extern/sdlew/include)
+	endif()
 	add_definitions(-DWITH_SDL)
 endif()
 
@@ -813,6 +817,14 @@ elseif(APPLE)
 		MACOSX_BUNDLE_SHORT_VERSION_STRING ${BLENDER_VERSION}
 		MACOSX_BUNDLE_LONG_VERSION_STRING "${BLENDER_VERSION} ${BLENDER_DATE}")
 
+	# Gather the date in finder-style
+	execute_process(COMMAND date "+%m/%d/%Y/%H:%M"
+	OUTPUT_VARIABLE SETFILE_DATE
+	OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+	# Give the bundle actual creation/modification date
+	execute_process(COMMAND SetFile -d ${SETFILE_DATE} -m ${SETFILE_DATE} ${EXECUTABLE_OUTPUT_PATH}/blender.app)
+
 	install(
 		TARGETS blender
 		DESTINATION "."
@@ -837,7 +849,7 @@ elseif(APPLE)
 	if(WITH_OPENMP AND CMAKE_C_COMPILER_ID MATCHES "Clang" AND NOT ${CMAKE_C_COMPILER_VERSION} VERSION_LESS '3.4')
 		install(
 			FILES ${LIBDIR}/openmp/lib/libiomp5.dylib
-			DESTINATION blender.app/Contents/MacOS
+			DESTINATION blender.app/Contents/Resources/lib/
 		)
 	endif()
 
@@ -896,6 +908,9 @@ elseif(APPLE)
 			"file(REMOVE_RECURSE ${PLAYER_TARGETDIR_VER})"
 		)
 
+		# Give the bundle actual creation/modification date
+		execute_process(COMMAND SetFile -d ${SETFILE_DATE} -m ${SETFILE_DATE} ${EXECUTABLE_OUTPUT_PATH}/blenderplayer.app)
+
 		install(
 			FILES ${OSX_APP_PLAYER_SOURCEDIR}/Contents/PkgInfo
 			DESTINATION blenderplayer.app/Contents
@@ -905,6 +920,14 @@ elseif(APPLE)
 			${OSX_APP_PLAYER_SOURCEDIR}/Contents/Resources
 			blenderplayer.app/Contents/
 		)
+
+		if(WITH_OPENMP AND CMAKE_C_COMPILER_ID MATCHES "Clang" AND NOT ${CMAKE_C_COMPILER_VERSION} VERSION_LESS '3.4')
+		install(
+		FILES ${LIBDIR}/openmp/lib/libiomp5.dylib
+		DESTINATION blenderplayer.app/Contents/Resources/lib/
+		)
+		endif()
+
 
 		# python
 		if(WITH_PYTHON AND NOT WITH_PYTHON_FRAMEWORK)
@@ -963,7 +986,9 @@ if(WIN32 AND NOT WITH_PYTHON_MODULE)
 	set_target_properties(blender-launcher PROPERTIES OUTPUT_NAME blender)
 
 	install(TARGETS blender blender-launcher
+			COMPONENT Blender
 			DESTINATION ".")
+
 	if(MSVC12_REDIST_DIR)
 		if(CMAKE_CL_64)
 			set(_WIN_PLATFORM x64)

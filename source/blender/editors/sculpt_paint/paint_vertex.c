@@ -382,12 +382,12 @@ static int wpaint_mirror_vgroup_ensure(Object *ob, const int vgroup_active)
 		mirrdef = defgroup_name_index(ob, name_flip);
 		if (mirrdef == -1) {
 			if (BKE_defgroup_new(ob, name_flip)) {
-				mirrdef = BLI_countlist(&ob->defbase) - 1;
+				mirrdef = BLI_listbase_count(&ob->defbase) - 1;
 			}
 		}
 
 		/* curdef should never be NULL unless this is
-		 * a  lamp and ED_vgroup_add_name fails */
+		 * a  lamp and BKE_object_defgroup_add_name fails */
 		return mirrdef;
 	}
 
@@ -1177,7 +1177,7 @@ static EnumPropertyItem *weight_paint_sample_enum_itemf(bContext *C, PointerRNA 
 			me = BKE_mesh_from_object(vc.obact);
 
 			if (me && me->dvert && vc.v3d && vc.rv3d && vc.obact->defbase.first) {
-				const int defbase_tot = BLI_countlist(&vc.obact->defbase);
+				const int defbase_tot = BLI_listbase_count(&vc.obact->defbase);
 				const int use_vert_sel = (me->editflag & ME_EDIT_PAINT_VERT_SEL) != 0;
 				int *groups = MEM_callocN(defbase_tot * sizeof(int), "groups");
 				bool found = false;
@@ -2159,7 +2159,7 @@ static bool wpaint_ensure_data(bContext *C, wmOperator *op)
 
 	/* if nothing was added yet, we make dverts and a vertex deform group */
 	if (!me->dvert) {
-		ED_vgroup_data_create(&me->id);
+		BKE_object_defgroup_data_create(&me->id);
 		WM_event_add_notifier(C, NC_GEOM | ND_DATA, me);
 	}
 
@@ -2174,7 +2174,7 @@ static bool wpaint_ensure_data(bContext *C, wmOperator *op)
 				if (pchan) {
 					bDeformGroup *dg = defgroup_find_name(ob, pchan->name);
 					if (dg == NULL) {
-						dg = ED_vgroup_add_name(ob, pchan->name);  /* sets actdef */
+						dg = BKE_object_defgroup_add_name(ob, pchan->name);  /* sets actdef */
 					}
 					else {
 						int actdef = 1 + BLI_findindex(&ob->defbase, dg);
@@ -2186,7 +2186,7 @@ static bool wpaint_ensure_data(bContext *C, wmOperator *op)
 		}
 	}
 	if (BLI_listbase_is_empty(&ob->defbase)) {
-		ED_vgroup_add(ob);
+		BKE_object_defgroup_add(ob);
 	}
 
 	/* ensure we don't try paint onto an invalid group */
@@ -2235,10 +2235,10 @@ static bool wpaint_stroke_test_start(bContext *C, wmOperator *op, const float UN
 
 	/* set up auto-normalize, and generate map for detecting which
 	 * vgroups affect deform bones */
-	wpd->defbase_tot = BLI_countlist(&ob->defbase);
-	wpd->lock_flags = BKE_objdef_lock_flags_get(ob, wpd->defbase_tot);
+	wpd->defbase_tot = BLI_listbase_count(&ob->defbase);
+	wpd->lock_flags = BKE_object_defgroup_lock_flags_get(ob, wpd->defbase_tot);
 	if (ts->auto_normalize || ts->multipaint || wpd->lock_flags) {
-		wpd->vgroup_validmap = BKE_objdef_validmap_get(ob, wpd->defbase_tot);
+		wpd->vgroup_validmap = BKE_object_defgroup_validmap_get(ob, wpd->defbase_tot);
 	}
 
 	/* painting on subsurfs should give correct points too, this returns me->totvert amount */
@@ -2318,7 +2318,7 @@ static void wpaint_stroke_update_step(bContext *C, struct PaintStroke *stroke, P
 
 	/* *** setup WeightPaintInfo - pass onto do_weight_paint_vertex *** */
 	wpi.defbase_tot =        wpd->defbase_tot;
-	wpi.defbase_sel = BKE_objdef_selected_get(ob, wpi.defbase_tot, &wpi.defbase_tot_sel);
+	wpi.defbase_sel = BKE_object_defgroup_selected_get(ob, wpi.defbase_tot, &wpi.defbase_tot_sel);
 	if (wpi.defbase_tot_sel == 0 && ob->actdef > 0) {
 		wpi.defbase_tot_sel = 1;
 	}
