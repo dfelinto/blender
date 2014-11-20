@@ -35,6 +35,7 @@
 
 #include "RNA_access.h"
 #include "RNA_define.h"
+#include "RNA_enum_types.h"
 
 #include "rna_internal.h"
 
@@ -169,8 +170,11 @@ static Sequence *rna_Sequences_new_scene(ID *id, Editing *ed,
 }
 
 static Sequence *rna_Sequences_new_image(ID *id, Editing *ed, ReportList *reports,
-                                         const char *name, const char *file, int channel,
-                                         int frame_start)
+                                         const char *name, const char *file, int channel, int frame_start,
+                                         int UNUSED(views_format), int UNUSED(stereo_mode),
+                                         int UNUSED(anaglyph_type), int UNUSED(interlace_type),
+                                         int UNUSED(use_interlace_swap), int UNUSED(use_sidebyside_crosseyed),
+                                         int UNUSED(use_squeezed_frame))
 {
 	Scene *scene = (Scene *)id;
 	Sequence *seq;
@@ -193,8 +197,11 @@ static Sequence *rna_Sequences_new_image(ID *id, Editing *ed, ReportList *report
 }
 
 static Sequence *rna_Sequences_new_movie(ID *id, Editing *ed, ReportList *reports,
-                                         const char *name, const char *file, int channel,
-                                         int frame_start)
+                                         const char *name, const char *file, int channel, int frame_start,
+                                         int UNUSED(views_format), int UNUSED(stereo_mode),
+                                         int UNUSED(anaglyph_type), int UNUSED(interlace_type),
+                                         int UNUSED(use_interlace_swap), int UNUSED(use_sidebyside_crosseyed),
+                                         int UNUSED(use_squeezed_frame))
 {
 	Scene *scene = (Scene *)id;
 	Sequence *seq;
@@ -547,6 +554,16 @@ void RNA_api_sequences(BlenderRNA *brna, PropertyRNA *cprop)
 	parm = RNA_def_int(func, "frame_start", 0, -MAXFRAME, MAXFRAME, "",
 	                   "The start frame for the new sequence", -MAXFRAME, MAXFRAME);
 	RNA_def_property_flag(parm, PROP_REQUIRED);
+
+	/* multiview */
+	parm = RNA_def_enum(func, "views_format", views_format_items, R_IMF_VIEWS_INDIVIDUAL, "Views Format", "Format of multiview media");
+	parm = RNA_def_enum(func, "stereo_mode", stereo3d_display_items, S3D_DISPLAY_ANAGLYPH, "Stereo Mode", "");
+	parm = RNA_def_enum(func, "anaglyph_type", stereo3d_anaglyph_type_items, S3D_ANAGLYPH_REDCYAN, "Anaglyph Type", "");
+	parm = RNA_def_enum(func, "interlace_type", stereo3d_interlace_type_items, S3D_INTERLACE_ROW, "Interlace Type", "");
+	parm = RNA_def_boolean(func, "use_interlace_swap", false, "Swap Left/Right", "Swap left and right stereo channels");
+	parm = RNA_def_boolean(func, "use_sidebyside_crosseyed", false, "Cross-Eyed", "Right eye should see left image and vice-versa");
+	parm = RNA_def_boolean(func, "use_squeezed_frame", false, "Squeezed Frame", "Combine both views in a squeezed image");
+
 	/* return type */
 	parm = RNA_def_pointer(func, "sequence", "Sequence", "", "New Sequence");
 	RNA_def_function_return(func, parm);
@@ -564,6 +581,16 @@ void RNA_api_sequences(BlenderRNA *brna, PropertyRNA *cprop)
 	parm = RNA_def_int(func, "frame_start", 0, -MAXFRAME, MAXFRAME, "",
 	                   "The start frame for the new sequence", -MAXFRAME, MAXFRAME);
 	RNA_def_property_flag(parm, PROP_REQUIRED);
+
+	/* multiview */
+	parm = RNA_def_enum(func, "views_format", views_format_items, R_IMF_VIEWS_INDIVIDUAL, "Views Format", "Format of multiview media");
+	parm = RNA_def_enum(func, "stereo_mode", stereo3d_display_items, S3D_DISPLAY_ANAGLYPH, "Stereo Mode", "");
+	parm = RNA_def_enum(func, "anaglyph_type", stereo3d_anaglyph_type_items, S3D_ANAGLYPH_REDCYAN, "Anaglyph Type", "");
+	parm = RNA_def_enum(func, "interlace_type", stereo3d_interlace_type_items, S3D_INTERLACE_ROW, "Interlace Type", "");
+	parm = RNA_def_boolean(func, "use_interlace_swap", false, "Swap Left/Right", "Swap left and right stereo channels");
+	parm = RNA_def_boolean(func, "use_sidebyside_crosseyed", false, "Cross-Eyed", "Right eye should see left image and vice-versa");
+	parm = RNA_def_boolean(func, "use_squeezed_frame", false, "Squeezed Frame", "Combine both views in a squeezed image");
+
 	/* return type */
 	parm = RNA_def_pointer(func, "sequence", "Sequence", "", "New Sequence");
 	RNA_def_function_return(func, parm);
