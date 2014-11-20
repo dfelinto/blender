@@ -2886,7 +2886,7 @@ static ImBuf *do_render_strip_uncached(const SeqRenderData *context, Sequence *s
 			}
 			else if (is_multiview) {
 				size_t totfiles = seq_num_files(context->scene, seq->views_format);
-				size_t totviews = BKE_scene_num_views(&context->scene->r);
+				size_t totviews;
 				struct ImBuf **ibufs;
 				char prefix[FILE_MAX] = {'\0'};
 				char *ext = NULL;
@@ -2899,6 +2899,7 @@ static ImBuf *do_render_strip_uncached(const SeqRenderData *context, Sequence *s
 					}
 				}
 
+				totviews = BKE_scene_num_views(&context->scene->r);
 				ibufs = MEM_callocN(sizeof(ImBuf *) * totviews, "Sequence Image Views Imbufs");
 
 				for (i = 0; i < totfiles; i++) {
@@ -2988,8 +2989,8 @@ monoview:
 						IMB_anim_set_preseek(sanim->anim, seq->anim_preseek);
 
 						ibufs[i] = IMB_anim_absolute(sanim->anim, nr + seq->anim_startofs,
-												 seq->strip->proxy ? seq->strip->proxy->tc : IMB_TC_RECORD_RUN,
-												 seq_rendersize_to_proxysize(context->preview_render_size));
+						                             seq->strip->proxy ? seq->strip->proxy->tc : IMB_TC_RECORD_RUN,
+						                             seq_rendersize_to_proxysize(context->preview_render_size));
 						if (ibufs[i]) {
 							/* we don't need both (speed reasons)! */
 							if (ibufs[i]->rect_float && ibufs[i]->rect)
@@ -3034,8 +3035,8 @@ monoview:
 					IMB_anim_set_preseek(sanim->anim, seq->anim_preseek);
 
 					ibuf = IMB_anim_absolute(sanim->anim, nr + seq->anim_startofs,
-											 seq->strip->proxy ? seq->strip->proxy->tc : IMB_TC_RECORD_RUN,
-											 seq_rendersize_to_proxysize(context->preview_render_size));
+					                         seq->strip->proxy ? seq->strip->proxy->tc : IMB_TC_RECORD_RUN,
+					                         seq_rendersize_to_proxysize(context->preview_render_size));
 
 					if (ibuf) {
 						BKE_sequencer_imbuf_to_sequencer_space(context->scene, ibuf, false);
