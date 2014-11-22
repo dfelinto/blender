@@ -1432,7 +1432,7 @@ static void seq_open_anim_file(Scene *scene, Sequence *seq)
 	BKE_sequence_free_anim(seq);
 
 	BLI_join_dirfile(name, sizeof(name),
-					 seq->strip->dir, seq->strip->stripdata->name);
+	                 seq->strip->dir, seq->strip->stripdata->name);
 	BLI_path_abs(name, G.main->name);
 
 	proxy = seq->strip->proxy;
