@@ -1474,11 +1474,7 @@ static void seq_open_anim_file(Scene *scene, Sequence *seq)
 				totfiles = 1;
 			}
 
-			if (proxy == NULL) {
-				continue;
-			}
-
-			if (seq->flag & SEQ_USE_PROXY_CUSTOM_DIR) {
+			if (proxy && (seq->flag & SEQ_USE_PROXY_CUSTOM_DIR)) {
 				IMB_anim_set_index_dir(sanim->anim, dir);
 			}
 		}
