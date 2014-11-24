@@ -46,7 +46,7 @@ float  *IMB_exr_channel_rect        (void *handle, const char *layname, const ch
 
 void    IMB_exr_read_channels       (void *handle) { (void)handle; }
 void    IMB_exr_write_channels      (void *handle) { (void)handle; }
-void    IMB_exrtile_write_channels  (void *handle, int partx, int party, int level, const char *viewname) { UNUSED_VARS((void)handle, partx, party, level, viewname); }
+void    IMB_exrtile_write_channels  (void *handle, int partx, int party, int level, const char *viewname) { UNUSED_VARS(handle, partx, party, level, viewname); }
 void    IMB_exrmultiview_write_channels(void *handle, const char *viewname) { UNUSED_VARS(handle, viewname); }
 void    IMB_exr_clear_channels  (void *handle) { (void)handle; }
 
@@ -60,16 +60,18 @@ void    IMB_exr_multilayer_convert(
 	UNUSED_VARS(handle, base, addview, addlayer, addpass);
 }
 
-void    IMB_exr_multiview_convert(void *handle, void *base,
-                                  void (*addview)(void *base, const char *str),
-                                  void (*addbuffer)(void *base, const char *str, struct ImBuf *ibuf, const int frame), const int frame)
+void    IMB_exr_multiview_convert(
+        void *handle, void *base,
+        void (*addview)(void *base, const char *str),
+        void (*addbuffer)(void *base, const char *str, struct ImBuf *ibuf, const int frame), const int frame)
 {
 	UNUSED_VARS(handle, base, addview, addbuffer, frame);
 }
 
-bool    IMB_exr_multiview_save (struct ImBuf *ibuf, const char *name, const int flags, const size_t totviews,
-                                const char * (*getview)(void *base, size_t view_id),
-                                struct ImBuf * (*getbuffer)(void *base, const size_t view_id))
+bool    IMB_exr_multiview_save(
+        struct ImBuf *ibuf, const char *name, const int flags, const size_t totviews,
+        const char * (*getview)(void *base, size_t view_id),
+        struct ImBuf * (*getbuffer)(void *base, const size_t view_id))
 {
 	UNUSED_VARS(ibuf, name, flags, totviews, getview, getbuffer);
 	return false;
