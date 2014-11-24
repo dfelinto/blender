@@ -245,12 +245,37 @@ static int graphview_curves_hide_exec(bContext *C, wmOperator *op)
 		ANIM_channel_setting_set(&ac, ale, ACHANNEL_SETTING_SELECT,  ACHANNEL_SETFLAG_CLEAR);
 		
 		/* now, also flush selection status up/down as appropriate */
-		ANIM_flush_setting_anim_channels(&ac, &all_data, ale, ACHANNEL_SETTING_VISIBLE, false);
+		ANIM_flush_setting_anim_channels(&ac, &all_data, ale, ACHANNEL_SETTING_VISIBLE, ACHANNEL_SETFLAG_CLEAR);
 	}
-	
+
 	/* cleanup */
 	ANIM_animdata_freelist(&anim_data);
 	BLI_freelistN(&all_data);
+	
+	/* unhide selected */
+	if (unselected) {
+		/* turn off requirement for visible */
+		filter = ANIMFILTER_SEL | ANIMFILTER_NODUPLIS | ANIMFILTER_LIST_CHANNELS;
+
+		/* flushing has been done */
+		ANIM_animdata_filter(&ac, &anim_data, filter, ac.data, ac.datatype);
+
+		for (ale = anim_data.first; ale; ale = ale->next) {
+			/* hack: skip object channels for now, since flushing those will always flush everything, but they are always included */
+			/* TODO: find out why this is the case, and fix that */
+			if (ale->type == ANIMTYPE_OBJECT)
+				continue;
+			
+			/* change the hide setting, and unselect it... */
+			ANIM_channel_setting_set(&ac, ale, ACHANNEL_SETTING_VISIBLE, ACHANNEL_SETFLAG_ADD);
+			ANIM_channel_setting_set(&ac, ale, ACHANNEL_SETTING_SELECT,  ACHANNEL_SETFLAG_ADD);
+			
+			/* now, also flush selection status up/down as appropriate */
+			ANIM_flush_setting_anim_channels(&ac, &anim_data, ale, ACHANNEL_SETTING_VISIBLE, ACHANNEL_SETFLAG_ADD);
+		}
+		ANIM_animdata_freelist(&anim_data);	
+	}
+	
 	
 	/* send notifier that things have changed */
 	WM_event_add_notifier(C, NC_ANIMATION | ND_ANIMCHAN | NA_EDITED, NULL);
@@ -575,6 +600,19 @@ static void graphedit_keymap_keyframes(wmKeyConfig *keyconf, wmKeyMap *keymap)
 	
 	/* transform system */
 	transform_keymap_for_space(keyconf, keymap, SPACE_IPO);
+	
+	/* pivot point settings */
+	kmi = WM_keymap_add_item(keymap, "WM_OT_context_set_enum", COMMAKEY, KM_PRESS, 0, 0);
+	RNA_string_set(kmi->ptr, "data_path", "space_data.pivot_point");
+	RNA_string_set(kmi->ptr, "value", "BOUNDING_BOX_CENTER");
+	
+	kmi = WM_keymap_add_item(keymap, "WM_OT_context_set_enum", PERIODKEY, KM_PRESS, 0, 0);
+	RNA_string_set(kmi->ptr, "data_path", "space_data.pivot_point");
+	RNA_string_set(kmi->ptr, "value", "CURSOR");
+	
+	kmi = WM_keymap_add_item(keymap, "WM_OT_context_set_enum", PERIODKEY, KM_PRESS, KM_CTRL, 0);
+	RNA_string_set(kmi->ptr, "data_path", "space_data.pivot_point");
+	RNA_string_set(kmi->ptr, "value", "INDIVIDUAL_ORIGINS");
 	
 	/* special markers hotkeys for anim editors: see note in definition of this function */
 	ED_marker_keymap_animedit_conflictfree(keymap);

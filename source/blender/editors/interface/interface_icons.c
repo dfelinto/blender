@@ -51,6 +51,7 @@
 #include "BKE_context.h"
 #include "BKE_global.h"
 #include "BKE_icons.h"
+#include "BKE_appdir.h"
 
 #include "IMB_imbuf.h"
 #include "IMB_imbuf_types.h"
@@ -587,7 +588,7 @@ static void init_internal_icons(void)
 
 #if 0 // temp disabled
 	if ((btheme != NULL) && btheme->tui.iconfile[0]) {
-		char *icondir = BLI_get_folder(BLENDER_DATAFILES, "icons");
+		char *icondir = BKE_appdir_folder_id(BLENDER_DATAFILES, "icons");
 		char iconfilestr[FILE_MAX];
 		
 		if (icondir) {
@@ -702,7 +703,7 @@ static void init_iconfile_list(struct ListBase *list)
 	const char *icondir;
 
 	BLI_listbase_clear(list);
-	icondir = BLI_get_folder(BLENDER_DATAFILES, "icons");
+	icondir = BKE_appdir_folder_id(BLENDER_DATAFILES, "icons");
 
 	if (icondir == NULL)
 		return;

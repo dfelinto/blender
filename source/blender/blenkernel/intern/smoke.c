@@ -60,6 +60,7 @@
 #include "DNA_scene_types.h"
 #include "DNA_smoke_types.h"
 
+#include "BKE_appdir.h"
 #include "BKE_animsys.h"
 #include "BKE_armature.h"
 #include "BKE_bvhutils.h"
@@ -205,7 +206,7 @@ void smoke_reallocate_highres_fluid(SmokeDomainSettings *sds, float dx, int res[
 	/* smoke_turbulence_init uses non-threadsafe functions from fftw3 lib (like fftw_plan & co). */
 	BLI_lock_thread(LOCK_FFTW);
 
-	sds->wt = smoke_turbulence_init(res, sds->amplify + 1, sds->noise, BLI_temp_dir_session(), use_fire, use_colors);
+	sds->wt = smoke_turbulence_init(res, sds->amplify + 1, sds->noise, BKE_tempdir_session(), use_fire, use_colors);
 
 	BLI_unlock_thread(LOCK_FFTW);
 

@@ -780,7 +780,7 @@ class CyclesLamp_PT_lamp(CyclesButtonsPanel, Panel):
 
         col = split.column()
         col.prop(clamp, "cast_shadow")
-        col.prop(clamp, "use_multiple_importance_sampling")
+        col.prop(clamp, "use_multiple_importance_sampling", text="Multiple Importance")
 
         if lamp.type == 'HEMI':
             layout.label(text="Not supported, interpreted as sun lamp")
@@ -1067,17 +1067,6 @@ class CyclesMaterial_PT_settings(CyclesButtonsPanel, Panel):
         cmat = mat.cycles
 
         split = layout.split()
-
-        col = split.column(align=True)
-        col.prop(mat, "diffuse_color", text="Viewport Color")
-        col.prop(mat, "alpha")
-
-        col = split.column(align=True)
-        col.label()
-        col.prop(mat, "pass_index")
-
-        split = layout.split()
-
         col = split.column()
         col.label(text="Surface:")
         col.prop(cmat, "sample_as_light", text="Multiple Importance")
@@ -1090,6 +1079,22 @@ class CyclesMaterial_PT_settings(CyclesButtonsPanel, Panel):
         sub.prop(cmat, "volume_sampling", text="")
         col.prop(cmat, "volume_interpolation", text="")
         col.prop(cmat, "homogeneous_volume", text="Homogeneous")
+
+        layout.separator()
+        split = layout.split()
+
+        col = split.column(align=True)
+        col.label("Viewport Color:")
+        col.prop(mat, "diffuse_color", text="")
+        col.prop(mat, "alpha")
+
+        col.separator()
+        col.prop(mat, "pass_index")
+
+        col = split.column(align=True)
+        col.label("Viewport Specular:")
+        col.prop(mat, "specular_color", text="")
+        col.prop(mat, "specular_hardness", text="Hardness")
 
 
 class CyclesTexture_PT_context(CyclesButtonsPanel, Panel):

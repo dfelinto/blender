@@ -41,6 +41,7 @@
 
 #include "BLO_readfile.h"
 
+#include "BKE_appdir.h"
 #include "BKE_context.h"
 #include "BKE_screen.h"
 #include "BKE_global.h"
@@ -656,7 +657,7 @@ void ED_file_exit(void)
 
 void ED_file_read_bookmarks(void)
 {
-	const char * const cfgdir = BLI_get_folder(BLENDER_USER_CONFIG, NULL);
+	const char * const cfgdir = BKE_appdir_folder_id(BLENDER_USER_CONFIG, NULL);
 	
 	fsmenu_free();
 

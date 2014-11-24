@@ -42,6 +42,8 @@
 #include "BLI_path_util.h"
 #include "BLI_string.h"
 
+#include "BKE_appdir.h"
+
 #include "DNA_userdef_types.h" /* For user settings. */
 
 #include "BPY_extern.h"
@@ -62,7 +64,7 @@ unsigned char *BLF_get_unifont(int *r_unifont_size)
 {
 #ifdef WITH_INTERNATIONAL
 	if (unifont_ttf == NULL) {
-		const char * const fontpath = BLI_get_folder(BLENDER_DATAFILES, "fonts");
+		const char * const fontpath = BKE_appdir_folder_id(BLENDER_DATAFILES, "fonts");
 		if (fontpath) {
 			char unifont_path[1024];
 
@@ -97,7 +99,7 @@ unsigned char *BLF_get_unifont_mono(int *r_unifont_size)
 {
 #ifdef WITH_INTERNATIONAL
 	if (unifont_mono_ttf == NULL) {
-		const char *fontpath = BLI_get_folder(BLENDER_DATAFILES, "fonts");
+		const char *fontpath = BKE_appdir_folder_id(BLENDER_DATAFILES, "fonts");
 		if (fontpath) {
 			char unifont_path[1024];
 

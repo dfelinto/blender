@@ -42,6 +42,7 @@
 #include "BLI_path_util.h"
 #include "BLI_string.h"
 
+#include "BKE_appdir.h"
 
 #include "DNA_userdef_types.h"
 
@@ -79,7 +80,7 @@ static void free_locales(void)
 
 static void fill_locales(void)
 {
-	const char * const languages_path = BLI_get_folder(BLENDER_DATAFILES, "locale");
+	const char * const languages_path = BKE_appdir_folder_id(BLENDER_DATAFILES, "locale");
 	char languages[FILE_MAX];
 	LinkNode *lines = NULL, *line;
 	char *str;
@@ -187,7 +188,7 @@ EnumPropertyItem *BLF_RNA_lang_enum_properties(void)
 void BLF_lang_init(void)
 {
 #ifdef WITH_INTERNATIONAL
-	const char * const messagepath = BLI_get_folder(BLENDER_DATAFILES, "locale");
+	const char * const messagepath = BKE_appdir_folder_id(BLENDER_DATAFILES, "locale");
 
 	if (messagepath) {
 		bl_locale_init(messagepath, TEXT_DOMAIN_NAME);

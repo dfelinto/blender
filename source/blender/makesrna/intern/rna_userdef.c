@@ -35,6 +35,7 @@
 
 #include "BLI_utildefines.h"
 
+#include "BKE_appdir.h"
 #include "BKE_sound.h"
 #include "BKE_addon.h"
 
@@ -414,7 +415,7 @@ static void rna_userdef_pathcompare_remove(ReportList *reports, PointerRNA *path
 
 static void rna_userdef_temp_update(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *UNUSED(ptr))
 {
-	BLI_temp_dir_init(U.tempdir);
+	BKE_tempdir_init(U.tempdir);
 }
 
 static void rna_userdef_text_update(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *UNUSED(ptr))

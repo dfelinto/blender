@@ -61,6 +61,7 @@
 #include "IMB_imbuf.h"
 #include "IMB_moviecache.h"
 
+#include "BKE_appdir.h"
 #include "BKE_blender.h"
 #include "BKE_bpath.h"
 #include "BKE_brush.h"
@@ -687,7 +688,7 @@ void BKE_write_undo(bContext *C, const char *name)
 		counter = counter % U.undosteps;
 	
 		BLI_snprintf(numstr, sizeof(numstr), "%d.blend", counter);
-		BLI_make_file_string("/", filepath, BLI_temp_dir_session(), numstr);
+		BLI_make_file_string("/", filepath, BKE_tempdir_session(), numstr);
 	
 		/* success = */ /* UNUSED */ BLO_write_file(CTX_data_main(C), filepath, fileflags, NULL, NULL);
 		
