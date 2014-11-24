@@ -774,8 +774,8 @@ static int rna_RenderSettings_stereoViews_skip(CollectionPropertyIterator *iter,
 	ListBaseIterator *internal = &iter->internal.listbase;
 	SceneRenderView *srv = (SceneRenderView *)internal->link;
 
-	if ((strcmp(srv->name, STEREO_LEFT_NAME ) == 0) ||
-	    (strcmp(srv->name, STEREO_RIGHT_NAME) == 0))
+	if ((STREQ(srv->name, STEREO_LEFT_NAME)) ||
+	    (STREQ(srv->name, STEREO_RIGHT_NAME)))
 	{
 		return 0;
 	}

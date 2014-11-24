@@ -2900,7 +2900,7 @@ static ImBuf *do_render_strip_uncached(const SeqRenderData *context, Sequence *s
 
 				for (i = 0; i < totfiles; i++) {
 
-					if (prefix[0] == '\0'){
+					if (prefix[0] == '\0') {
 						ibufs[i] = IMB_loadiffname(name, flag, seq->strip->colorspace_settings.name);
 					}
 					else {

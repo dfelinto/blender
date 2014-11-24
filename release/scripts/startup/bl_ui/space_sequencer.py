@@ -1025,7 +1025,7 @@ class SEQUENCER_PT_stereo_3d(SequencerButtonsPanel, Panel):
         if not strip:
             return False
 
-        return (strip.type in {'IMAGE', 'MOVIE'} and \
+        return (strip.type in {'IMAGE', 'MOVIE'} and
                 context.scene.render.use_multiple_views)
 
     def draw(self, context):

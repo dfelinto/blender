@@ -125,16 +125,14 @@ class DATA_PT_camera_stereoscopy(CameraButtonsPanel, Panel):
 
     @classmethod
     def poll(cls, context):
-        scene = context.scene
-
-        multiview = scene.render.use_multiple_views
-        engine = scene.render.engine
-
-        return context.camera and multiview and (engine in cls.COMPAT_ENGINES)
+        render = context.scene.render
+        return (super().poll(context) and render.use_multiple_views)
 
     def draw(self, context):
         layout = self.layout
-        layout.active = context.scene.render.views_setup == 'STEREO_3D'
+        render = context.scene.render
+
+        layout.active = (render.views_setup == 'STEREO_3D')
 
         col = layout.column()
 

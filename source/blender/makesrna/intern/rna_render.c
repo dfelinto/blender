@@ -752,7 +752,7 @@ static void rna_def_render_layer(BlenderRNA *brna)
 	                                  NULL, NULL, NULL, NULL);
 
 #if 0
-	/* XXX MV store actvie in RL or pass as argument
+	/* XXX MV store active in RL or pass as argument
 	 * Actually, as suggested by Brecht we should use string and not the int in the API
 	 * (same as we do for renderlayer)
 	 * */

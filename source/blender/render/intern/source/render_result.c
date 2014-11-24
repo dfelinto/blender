@@ -627,7 +627,7 @@ RenderResult *render_result_new(Render *re, rcti *partrct, int crop, int savebuf
 			const char *view = rv->name;
 
 			if (viewname && viewname[0])
-				if (strcmp(view, viewname) != 0)
+				if (!STREQ(view, viewname))
 					continue;
 
 			if (rr->do_exr_tile)
@@ -859,15 +859,15 @@ static int order_render_passes(const void *a, const void *b)
 
 	/* they have the same type */
 	/* left first */
-	if (strcmp(rpa->view, STEREO_LEFT_NAME) == 0)
+	if (STREQ(rpa->view, STEREO_LEFT_NAME))
 		return 0;
-	else if (strcmp(rpb->view, STEREO_LEFT_NAME) == 0)
+	else if (STREQ(rpb->view, STEREO_LEFT_NAME))
 		return 1;
 
 	/* right second */
-	if (strcmp(rpa->view, STEREO_RIGHT_NAME) == 0)
+	if (STREQ(rpa->view, STEREO_RIGHT_NAME))
 		return 0;
-	else if (strcmp(rpb->view, STEREO_RIGHT_NAME) == 0)
+	else if (STREQ(rpb->view, STEREO_RIGHT_NAME))
 		return 1;
 
 	/* remaining in ascending id order */

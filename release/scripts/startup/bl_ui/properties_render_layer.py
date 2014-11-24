@@ -168,13 +168,14 @@ class RENDERLAYER_UL_renderviews(UIList):
         # assert(isinstance(item, bpy.types.SceneRenderView)
         view = item
         if self.layout_type in {'DEFAULT', 'COMPACT'}:
-            if view.name in ('left', 'right', 'Left', 'Right'): #XXX MV remove left, right when I implement the ui names capitalized
+            # XXX MV remove left, right when I implement the ui names capitalized
+            if view.name in {'left', 'right', 'Left', 'Right'}:
                 layout.label(view.name, icon_value=icon + (not view.use))
             else:
                 layout.prop(view, "name", text="", index=index, icon_value=icon, emboss=False)
             layout.prop(view, "use", text="", index=index)
 
-        elif self.layout_type in {'GRID'}:
+        elif self.layout_type == 'GRID':
             layout.alignment = 'CENTER'
             layout.label("", icon_value=icon + (not view.use))
 

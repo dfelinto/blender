@@ -682,9 +682,11 @@ class IMAGE_PT_stereo_3d_properties(Panel):
     @classmethod
     def poll(cls, context):
         sima = context.space_data
-        image = sima.image if sima else None
-        return (sima and image and image.type == 'IMAGE' and \
-                context.scene.render.use_multiple_views)
+        if sima:
+            image = sima.image
+            return (image and image.type == 'IMAGE' and
+                    context.scene.render.use_multiple_views)
+        return False
 
     def draw(self, context):
         layout = self.layout

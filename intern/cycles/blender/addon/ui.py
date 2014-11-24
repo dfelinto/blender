@@ -430,7 +430,7 @@ class CyclesRender_PT_views(CyclesButtonsPanel, Panel):
 
 
         layout.active = rd.use_multiple_views
-        basic_stereo = rd.views_setup == 'SETUP_BASIC'
+        basic_stereo = (rd.views_setup == 'SETUP_BASIC')
 
         row = layout.row()
         row.prop(rd, "views_setup", expand=True)
@@ -452,7 +452,7 @@ class CyclesRender_PT_views(CyclesButtonsPanel, Panel):
             col.operator("scene.render_view_remove", icon='ZOOMOUT', text="")
 
             row = layout.row()
-            if rv and rv.name not in ('left', 'right'):
+            if rv and rv.name not in {"left", "right"}:
                 row.prop(rv, "name")
 
             row = layout.row()

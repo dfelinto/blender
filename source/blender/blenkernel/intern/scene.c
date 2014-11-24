@@ -2195,7 +2195,7 @@ bool BKE_scene_render_view_first(const RenderData *rd, const char *viewname)
 
 	for (srv = rd->views.first; srv; srv = srv->next) {
 		if (BKE_scene_render_view_active(rd, srv)) {
-			return strcmp(viewname, srv->name) == 0;
+			return STREQ(viewname, srv->name);
 		}
 	}
 
@@ -2264,10 +2264,12 @@ size_t BKE_scene_view_get_id(const RenderData *rd, const char *viewname)
 	nr = 0;
 	for (srv = rd->views.first, nr = 0; srv; srv = srv->next) {
 		if (BKE_scene_render_view_active(rd, srv)) {
-			if (strcmp(viewname, srv->name) == 0)
+			if (STREQ(viewname, srv->name)) {
 				return nr;
-			else
+			}
+			else {
 				nr += 1;
+			}
 		}
 	}
 
