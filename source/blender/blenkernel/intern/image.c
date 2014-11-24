@@ -407,45 +407,42 @@ static void image_assign_ibuf(Image *ima, ImBuf *ibuf, int index, int frame)
 	}
 }
 
-static void copy_image_packedfiles(ListBase *lbn, ListBase *lbo)
+static void copy_image_packedfiles(ListBase *lb_dst, const ListBase *lb_src)
 {
-	ImagePackedFile *imapf, *imapfn;
-	lbn->first = lbn->last = NULL;
-	imapf = lbo->first;
-	while (imapf) {
-		imapfn = MEM_mallocN(sizeof(ImagePackedFile), "Image Packed Files (copy)");
-		BLI_strncpy(imapfn->filepath, imapf->filepath, sizeof(imapfn->filepath));
+	const ImagePackedFile *imapf_src;
 
-		if (imapf->packedfile)
-			imapfn->packedfile = dupPackedFile(imapf->packedfile);
+	BLI_listbase_clear(lb_dst);
+	for (imapf_src = lb_src->first; imapf_src; imapf_src = imapf_src->next) {
+		ImagePackedFile *imapf_dst = MEM_mallocN(sizeof(ImagePackedFile), "Image Packed Files (copy)");
+		BLI_strncpy(imapf_dst->filepath, imapf_src->filepath, sizeof(imapf_dst->filepath));
 
-		BLI_addtail(lbn, imapfn);
-		imapf = imapf->next;
+		if (imapf_src->packedfile)
+			imapf_dst->packedfile = dupPackedFile(imapf_src->packedfile);
+
+		BLI_addtail(lb_dst, imapf_dst);
 	}
 }
 
-static void copy_image_views(ListBase *lbn, ListBase *lbo)
+static void copy_image_views(ListBase *lb_dst, const ListBase *lb_src)
 {
-	ImageView *iv, *ivn;
-	lbn->first = lbn->last = NULL;
-	iv = lbo->first;
-	while (iv) {
-		ivn = MEM_dupallocN(iv);
-		BLI_addtail(lbn, ivn);
-		iv = iv->next;
+	const ImageView *iv_src;
+
+	BLI_listbase_clear(lb_dst);
+	for (iv_src = lb_src->first; iv_src; iv_src = iv_src->next) {
+		ImageView *iv_dst = MEM_dupallocN(iv_src);
+		BLI_addtail(lb_dst, iv_dst);
 	}
 }
 
-static void copy_image_anims(ListBase *lbn, ListBase *lbo)
+static void copy_image_anims(ListBase *lb_dst, const ListBase *lb_src)
 {
-	ImageAnim *ia, *ian;
-	lbn->first = lbn->last = NULL;
-	ia = lbo->first;
-	while (ia) {
-		ian = MEM_dupallocN(ia);
-		ian->anim = NULL;
-		BLI_addtail(lbn, ian);
-		ia = ia->next;
+	const ImageAnim *ia_src;
+
+	BLI_listbase_clear(lb_dst);
+	for (ia_src = lb_src->first; ia_src; ia_src = ia_src->next) {
+		ImageAnim *ia_dst = MEM_dupallocN(ia_src);
+		ia_dst->anim = NULL;
+		BLI_addtail(lb_dst, ia_dst);
 	}
 }
 
