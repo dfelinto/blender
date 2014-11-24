@@ -393,7 +393,7 @@ static bool wm_stereo3d_required(const bContext *C, bScreen *screen)
 	SpaceNode *snode;
 	SpaceSeq *sseq;
 	Scene *sce = CTX_data_scene(C);
-	const bool is_multiview = (sce->r.scemode & R_MULTIVIEW);
+	const bool is_multiview = (sce->r.scemode & R_MULTIVIEW) != 0;
 
 	for (sa = screen->areabase.first; sa; sa = sa->next) {
 		switch (sa->spacetype) {

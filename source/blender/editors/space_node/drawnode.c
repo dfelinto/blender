@@ -1681,14 +1681,14 @@ static void node_composit_buts_file_output_ex(uiLayout *layout, bContext *C, Poi
 	uiLayout *row, *col;
 	int active_index;
 	const bool multilayer = RNA_enum_get(&imfptr, "file_format") == R_IMF_IMTYPE_MULTILAYER;
-	const bool multiview = scene->r.scemode & R_MULTIVIEW;
+	const bool is_multiview = (scene->r.scemode & R_MULTIVIEW) != 0;
 	
 	node_composit_buts_file_output(layout, C, ptr);
 	uiTemplateImageSettings(layout, &imfptr, false);
 	
 	/* disable stereo output for multilayer, too much work for something that no one will use */
 	/* if someone asks for that we can implement it */
-	if (multiview)
+	if (is_multiview)
 		uiTemplateImageViews(layout, &imfptr);
 
 	uiItemS(layout);
@@ -1753,8 +1753,9 @@ static void node_composit_buts_file_output_ex(uiLayout *layout, bContext *C, Poi
 			uiLayoutSetActive(col, RNA_boolean_get(&active_input_ptr, "use_node_format") == false);
 			uiTemplateImageSettings(col, &imfptr, false);
 
-			if (multiview)
+			if (is_multiview) {
 				uiTemplateImageViews(col, &imfptr);
+			}
 		}
 	}
 }

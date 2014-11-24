@@ -724,7 +724,7 @@ static bool camera_is_left(const char *viewname)
 
 void BKE_camera_model_matrix(RenderData *rd, Object *camera, const char *viewname, float r_modelmat[4][4])
 {
-	const bool is_multiview = (rd && rd->scemode & R_MULTIVIEW);
+	const bool is_multiview = (rd && rd->scemode & R_MULTIVIEW) != 0;
 
 	if (!is_multiview) {
 		return camera_model_matrix(camera, r_modelmat);
@@ -772,7 +772,7 @@ static Object *camera_multiview_advanced(Scene *scene, Object *camera, const cha
 /* returns the camera to be used for render */
 Object *BKE_camera_render(Scene *scene, Object *camera, const char *viewname)
 {
-	const bool is_multiview = (scene->r.scemode & R_MULTIVIEW);
+	const bool is_multiview = (scene->r.scemode & R_MULTIVIEW) != 0;
 
 	if (!is_multiview) {
 		return camera;
@@ -827,7 +827,7 @@ static float camera_stereo3d_shift_x(Object *camera, const char *viewname)
 
 float BKE_camera_shift_x(RenderData *rd, Object *camera, const char *viewname)
 {
-	const bool is_multiview = (rd && rd->scemode & R_MULTIVIEW);
+	const bool is_multiview = (rd && rd->scemode & R_MULTIVIEW) != 0;
 	Camera *data = camera->data;
 
 	if (!is_multiview) {

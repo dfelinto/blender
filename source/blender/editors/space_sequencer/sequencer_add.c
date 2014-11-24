@@ -651,7 +651,7 @@ static int sequencer_add_movie_strip_invoke(bContext *C, wmOperator *op, const w
 
 	/* show multiview save options only if scene has multiviews */
 	prop = RNA_struct_find_property(op->ptr, "use_multiple_views");
-	RNA_property_boolean_set(op->ptr, prop, (scene->r.scemode & R_MULTIVIEW));
+	RNA_property_boolean_set(op->ptr, prop, (scene->r.scemode & R_MULTIVIEW) != 0);
 	
 	WM_event_add_fileselect(C, op);
 	return OPERATOR_RUNNING_MODAL;
@@ -834,7 +834,7 @@ static int sequencer_add_image_strip_invoke(bContext *C, wmOperator *op, const w
 
 	/* show multiview save options only if scene has multiviews */
 	prop = RNA_struct_find_property(op->ptr, "use_multiple_views");
-	RNA_property_boolean_set(op->ptr, prop, (scene->r.scemode & R_MULTIVIEW));
+	RNA_property_boolean_set(op->ptr, prop, (scene->r.scemode & R_MULTIVIEW) != 0);
 
 	WM_event_add_fileselect(C, op);
 	return OPERATOR_RUNNING_MODAL;

@@ -38,7 +38,7 @@ OutputFileNode::OutputFileNode(bNode *editorNode) : Node(editorNode)
 void OutputFileNode::convertToOperations(NodeConverter &converter, const CompositorContext &context) const
 {
 	NodeImageMultiFile *storage = (NodeImageMultiFile *)this->getbNode()->storage;
-	const bool is_multiview = (context.getRenderData()->scemode & R_MULTIVIEW);
+	const bool is_multiview = (context.getRenderData()->scemode & R_MULTIVIEW) != 0;
 	
 	if (!context.isRendering()) {
 		/* only output files when rendering a sequence -

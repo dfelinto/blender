@@ -1214,7 +1214,7 @@ static int image_open_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(
 
 	/* show multiview save options only if scene has multiviews */
 	prop = RNA_struct_find_property(op->ptr, "use_multiple_views");
-	RNA_property_boolean_set(op->ptr, prop, (scene->r.scemode & R_MULTIVIEW));
+	RNA_property_boolean_set(op->ptr, prop, (scene->r.scemode & R_MULTIVIEW) != 0);
 
 	image_filesel(C, op, path);
 
@@ -2335,7 +2335,7 @@ static void image_new_draw(bContext *C, wmOperator *op)
 	uiLayout *layout = op->layout;
 	PointerRNA ptr;
 	Scene *scene = CTX_data_scene(C);
-	const bool is_multiview = (scene->r.scemode & R_MULTIVIEW);
+	const bool is_multiview = (scene->r.scemode & R_MULTIVIEW) != 0;
 
 	RNA_pointer_create(NULL, op->type->srna, op->properties, &ptr);
 
