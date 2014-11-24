@@ -430,7 +430,7 @@ void RE_ReleaseResultImage(Render *re)
 void RE_ResultGet32(Render *re, unsigned int *rect)
 {
 	RenderResult rres;
-	const size_t view_id = BKE_scene_view_get_id(&re->r, re->viewname);
+	const size_t view_id = BKE_scene_view_id_get(&re->r, re->viewname);
 
 	RE_AcquireResultImage(re, &rres, view_id);
 	render_result_rect_get_pixels(&rres, rect, re->rectx, re->recty, &re->scene->view_settings, &re->scene->display_settings, 0);
@@ -2534,7 +2534,7 @@ static void do_render_seq(Render *re)
 		                                        re->result->rectx, re->result->recty, 100);
 	}
 
-	tot_views = BKE_scene_num_views(&re->r);
+	tot_views = BKE_scene_num_views_get(&re->r);
 	ibuf= MEM_mallocN(sizeof(ImBuf *) * tot_views, "Sequencer Views ImBufs");
 
 	/* the renderresult gets destroyed during the rendering, so we first collect all ibufs
@@ -3056,7 +3056,7 @@ bool RE_WriteRenderViewsImage(ReportList *reports, RenderResult *rr, Scene *scen
 		BLI_strncpy(filepath, name, sizeof(filepath));
 
 		for (view_id = 0, rv = (RenderView *) rr->views.first; rv; rv = rv->next, view_id++) {
-			BKE_scene_view_get_filepath(&scene->r, filepath, rv->name, name);
+			BKE_scene_view_filepath_get(&scene->r, filepath, rv->name, name);
 
 			if (rd->im_format.imtype == R_IMF_IMTYPE_MULTILAYER) {
 
@@ -3323,7 +3323,7 @@ static void get_videos_dimensions(Render *re, RenderData *rd, size_t *r_width, s
 		height = re->recty;
 	}
 
-	BKE_scene_videos_dimensions(rd, width, height, r_width, r_height);
+	BKE_scene_videos_dimensions_get(rd, width, height, r_width, r_height);
 }
 
 /* saves images to disk */
@@ -3334,7 +3334,7 @@ void RE_BlenderAnim(Render *re, Main *bmain, Scene *scene, Object *camera_overri
 	bMovieHandle **mh = NULL;
 	int cfrao = scene->r.cfra;
 	int nfra, totrendered = 0, totskipped = 0;
-	const size_t totvideos = BKE_scene_num_videos(&rd);
+	const size_t totvideos = BKE_scene_num_videos_get(&rd);
 	
 	BLI_callback_exec(re->main, (ID *)scene, BLI_CB_EVT_RENDER_INIT);
 

@@ -262,7 +262,7 @@ static void screen_opengl_render_doit(OGLRender *oglrender, RenderResult *rr)
 		context = BKE_sequencer_new_render_data(oglrender->bmain->eval_ctx, oglrender->bmain,
 		                                        scene, oglrender->sizex, oglrender->sizey, 100.0f);
 
-		context.view_id = BKE_scene_view_get_id(&scene->r, viewname);
+		context.view_id = BKE_scene_view_id_get(&scene->r, viewname);
 		ibuf = BKE_sequencer_give_ibuf(&context, CFRA, chanshown);
 
 		if (ibuf) {
@@ -652,14 +652,14 @@ static int screen_opengl_render_anim_initialize(bContext *C, wmOperator *op)
 
 	oglrender = op->customdata;
 	scene = oglrender->scene;
-	oglrender->totvideos = BKE_scene_num_videos(&scene->r);
+	oglrender->totvideos = BKE_scene_num_videos_get(&scene->r);
 
 	oglrender->reports = op->reports;
 
 	if (BKE_imtype_is_movie(scene->r.im_format.imtype)) {
 		size_t i, width, height;
 
-		BKE_scene_videos_dimensions(&scene->r, oglrender->sizex, oglrender->sizey, &width, &height);
+		BKE_scene_videos_dimensions_get(&scene->r, oglrender->sizex, oglrender->sizey, &width, &height);
 
 		oglrender->mh = MEM_mallocN(sizeof(bMovieHandle) * oglrender->totvideos, "Movies");
 

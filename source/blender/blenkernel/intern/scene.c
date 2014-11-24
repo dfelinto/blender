@@ -2120,7 +2120,7 @@ double BKE_scene_unit_scale(const UnitSettings *unit, const int unit_type, doubl
 
 /******************** multiview *************************/
 
-size_t BKE_scene_num_views(const RenderData *rd)
+size_t BKE_scene_num_views_get(const RenderData *rd)
 {
 	SceneRenderView *srv;
 	size_t totviews	= 0;
@@ -2240,7 +2240,7 @@ SceneRenderView *BKE_scene_render_view_findindex(const RenderData *rd, const int
 	return srv;
 }
 
-const char *BKE_scene_render_view_name(const RenderData *rd, const int view_id)
+const char *BKE_scene_render_view_name_get(const RenderData *rd, const int view_id)
 {
 	SceneRenderView *srv = BKE_scene_render_view_findindex(rd, view_id);
 
@@ -2250,7 +2250,7 @@ const char *BKE_scene_render_view_name(const RenderData *rd, const int view_id)
 		return "";
 }
 
-size_t BKE_scene_view_get_id(const RenderData *rd, const char *viewname)
+size_t BKE_scene_view_id_get(const RenderData *rd, const char *viewname)
 {
 	SceneRenderView *srv;
 	size_t nr;
@@ -2281,7 +2281,7 @@ size_t BKE_scene_view_get_id(const RenderData *rd, const char *viewname)
  * into the file name (e.g., Image_L.jpg). That allows for the user to re-render
  * individual views.
  **/
-void BKE_scene_view_get_filepath(const RenderData *rd, const char *filepath, const char *viewname, char *r_filepath)
+void BKE_scene_view_filepath_get(const RenderData *rd, const char *filepath, const char *viewname, char *r_filepath)
 {
 	SceneRenderView *srv;
 	char suffix[FILE_MAX];
@@ -2296,7 +2296,7 @@ void BKE_scene_view_get_filepath(const RenderData *rd, const char *filepath, con
 	BLI_path_view(r_filepath, suffix);
 }
 
-const char *BKE_scene_view_get_suffix(const RenderData *rd, const char *viewname)
+const char *BKE_scene_view_suffix_get(const RenderData *rd, const char *viewname)
 {
 	SceneRenderView *srv;
 
@@ -2310,7 +2310,7 @@ const char *BKE_scene_view_get_suffix(const RenderData *rd, const char *viewname
 		return viewname;
 }
 
-void BKE_scene_view_get_prefix(Scene *scene, const char *name, char *rprefix, char **rext)
+void BKE_scene_view_prefix_get(Scene *scene, const char *name, char *rprefix, char **rext)
 {
 	SceneRenderView *srv;
 	size_t index_act;
@@ -2334,7 +2334,7 @@ void BKE_scene_view_get_prefix(Scene *scene, const char *name, char *rprefix, ch
 	}
 }
 
-void BKE_scene_videos_dimensions(const RenderData *rd, const size_t width, const size_t height, size_t *r_width, size_t *r_height)
+void BKE_scene_videos_dimensions_get(const RenderData *rd, const size_t width, const size_t height, size_t *r_width, size_t *r_height)
 {
 	if ((rd->scemode & R_MULTIVIEW) &&
 	    rd->im_format.views_format == R_IMF_VIEWS_STEREO_3D)
@@ -2347,7 +2347,7 @@ void BKE_scene_videos_dimensions(const RenderData *rd, const size_t width, const
 	}
 }
 
-size_t BKE_scene_num_videos(const RenderData *rd)
+size_t BKE_scene_num_videos_get(const RenderData *rd)
 {
 	if (BKE_imtype_is_movie(rd->im_format.imtype) == false)
 		return 0;
@@ -2360,6 +2360,6 @@ size_t BKE_scene_num_videos(const RenderData *rd)
 
 	/* R_IMF_VIEWS_INDIVIDUAL */
 	else {
-		return BKE_scene_num_views(rd);
+		return BKE_scene_num_views_get(rd);
 	}
 }

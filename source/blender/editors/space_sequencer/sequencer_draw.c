@@ -870,7 +870,7 @@ ImBuf *sequencer_ibuf_get(struct Main *bmain, Scene *scene, SpaceSeq *sseq, int 
 	recty = (render_size * (float)scene->r.ysch) / 100.0f + 0.5f;
 
 	context = BKE_sequencer_new_render_data(bmain->eval_ctx, bmain, scene, rectx, recty, proxy_size);
-	context.view_id = BKE_scene_view_get_id(&scene->r, viewname);
+	context.view_id = BKE_scene_view_id_get(&scene->r, viewname);
 
 	/* sequencer could start rendering, in this case we need to be sure it wouldn't be canceled
 	 * by Esc pressed somewhere in the past

@@ -192,7 +192,7 @@ static void image_buffer_rect_update(RenderJob *rj, RenderResult *rr, ImBuf *ibu
 	 */
 	/* TODO(sergey): Need to check has_combined here? */
 	if (iuser->pass == 0) {
-		size_t view_id = BKE_scene_view_get_id(&scene->r, viewname);
+		size_t view_id = BKE_scene_view_id_get(&scene->r, viewname);
 		/* find current float rect for display, first case is after composite... still weak */
 		rectf = RE_RenderViewGetRectf(rr, view_id);
 		if (rectf == NULL) {

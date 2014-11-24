@@ -941,7 +941,7 @@ static void image_memorypack_multiview(Scene *scene, Image *ima)
 		/* if the image was a R_IMF_VIEWS_STEREO_3D we need to create
 		 *  new names for the new individual views */
 		if (totfiles == 1)
-			BKE_scene_view_get_filepath(&scene->r, ima->name, iv->name, iv->filepath);
+			BKE_scene_view_filepath_get(&scene->r, ima->name, iv->name, iv->filepath);
 
 		IMB_saveiff(ibuf, iv->filepath, IB_rect | IB_mem);
 
@@ -2393,7 +2393,7 @@ void BKE_image_verify_viewer_views(const RenderData *rd, Image *ima, ImageUser *
 	}
 
 	/* see if all scene render views are in the image view list */
-	do_reset = (BKE_scene_num_views(rd) != BLI_listbase_count(&ima->views));
+	do_reset = (BKE_scene_num_views_get(rd) != BLI_listbase_count(&ima->views));
 	if (!do_reset) {
 		SceneRenderView *srv;
 		ImageView *iv;
@@ -4450,7 +4450,7 @@ static void image_update_views_format(Scene *scene, Image *ima)
 		char *name = ima->name;
 		char *ext = NULL;
 
-		BKE_scene_view_get_prefix(scene, name, prefix, &ext);
+		BKE_scene_view_prefix_get(scene, name, prefix, &ext);
 
 		if (prefix[0] == '\0') {
 			goto monoview;

@@ -196,7 +196,7 @@ void OutputSingleLayerOperation::deinitExecution()
 		IMB_colormanagement_imbuf_for_write(ibuf, true, false, m_viewSettings, m_displaySettings,
 		                                    this->m_format);
 
-		suffix = BKE_scene_view_get_suffix(this->m_rd, this->m_viewName);
+		suffix = BKE_scene_view_suffix_get(this->m_rd, this->m_viewName);
 
 		BKE_makepicstring(filename, this->m_path, bmain->name, this->m_rd->cfra, this->m_format,
 		                  (this->m_rd->scemode & R_EXTENSION) != 0, true, suffix);
@@ -272,7 +272,7 @@ void OutputOpenExrMultiLayerOperation::deinitExecution()
 		const char *suffix;
 		void *exrhandle = IMB_exr_get_handle();
 
-		suffix = BKE_scene_view_get_suffix(this->m_rd, this->m_viewName);
+		suffix = BKE_scene_view_suffix_get(this->m_rd, this->m_viewName);
 		BKE_makepicstring_from_type(filename, this->m_path, bmain->name, this->m_rd->cfra, R_IMF_IMTYPE_MULTILAYER,
 		                            (this->m_rd->scemode & R_EXTENSION) != 0, true, suffix);
 		BLI_make_existing_file(filename);

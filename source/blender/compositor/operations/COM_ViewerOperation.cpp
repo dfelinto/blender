@@ -131,7 +131,7 @@ void ViewerOperation::initImage()
 	ImBuf *ibuf;
 
 	/* local changes to the original ImageUser */
-	iuser.multi_index = BKE_scene_view_get_id(this->m_rd, this->m_viewName);
+	iuser.multi_index = BKE_scene_view_id_get(this->m_rd, this->m_viewName);
 	ibuf = BKE_image_acquire_ibuf(ima, &iuser, &lock);
 
 	if (!ibuf) return;

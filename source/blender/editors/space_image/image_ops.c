@@ -1753,7 +1753,7 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 				                        ((ImageView *) BLI_findlink(&ima->views, i))->name;
 
 				if (is_multilayer) {
-					BKE_scene_view_get_filepath(&scene->r, simopts->filepath, view, filepath);
+					BKE_scene_view_filepath_get(&scene->r, simopts->filepath, view, filepath);
 					ok_view = RE_WriteRenderResult(op->reports, rr, filepath, imf, false, view);
 					save_image_post(op, ibuf, ima, ok_view, true, relbase, relative, do_newpath, filepath);
 				}
@@ -1774,7 +1774,7 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 					ibuf = BKE_image_acquire_ibuf(sima->image, &iuser, &lock);
 					ibuf->planes = planes;
 
-					BKE_scene_view_get_filepath(&scene->r, simopts->filepath, view, filepath);
+					BKE_scene_view_filepath_get(&scene->r, simopts->filepath, view, filepath);
 
 					colormanaged_ibuf = IMB_colormanagement_imbuf_for_write(ibuf, save_as_render, true, &imf->view_settings, &imf->display_settings, imf);
 					ok_view = BKE_imbuf_write_as(colormanaged_ibuf, filepath, &simopts->im_format, save_copy);

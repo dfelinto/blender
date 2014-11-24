@@ -788,8 +788,8 @@ void BKE_sequence_calc(Scene *scene, Sequence *seq)
 
 static void seq_multiview_name(Scene *scene, const size_t view_id, const char *prefix, const char *ext, char *r_path)
 {
-	const char *viewname = BKE_scene_render_view_name(&scene->r, view_id);
-	const char *suffix = BKE_scene_view_get_suffix(&scene->r, viewname);
+	const char *viewname = BKE_scene_render_view_name_get(&scene->r, view_id);
+	const char *suffix = BKE_scene_view_suffix_get(&scene->r, viewname);
 	sprintf(r_path, "%s%s%s", prefix, suffix, ext);
 }
 
@@ -845,7 +845,7 @@ void BKE_sequence_reload_new_file(Scene *scene, Sequence *seq, const bool lock_r
 				size_t totfiles = seq_num_files(scene, seq->views_format);
 				int i = 0;
 
-				BKE_scene_view_get_prefix(scene, path, prefix, &ext);
+				BKE_scene_view_prefix_get(scene, path, prefix, &ext);
 
 				if (prefix[0] == '\0')
 					goto monoview;
@@ -1412,7 +1412,7 @@ static size_t seq_num_files(Scene *scene, char views_format)
 	}
 	/* R_IMF_VIEWS_INDIVIDUAL */
 	else {
-		return BKE_scene_num_views(&scene->r);
+		return BKE_scene_num_views_get(&scene->r);
 	}
 }
 
@@ -1447,14 +1447,14 @@ static void seq_open_anim_file(Scene *scene, Sequence *seq)
 		char *ext = NULL;
 		int i;
 
-		BKE_scene_view_get_prefix(scene, name, prefix, &ext);
+		BKE_scene_view_prefix_get(scene, name, prefix, &ext);
 
 		if (prefix[0] == '\0')
 			goto monoview;
 
 		for (i = 0; i < totfiles; i++) {
-			const char *viewname = BKE_scene_render_view_name(&scene->r, i);
-			const char *suffix = BKE_scene_view_get_suffix(&scene->r, viewname);
+			const char *viewname = BKE_scene_render_view_name_get(&scene->r, i);
+			const char *suffix = BKE_scene_view_suffix_get(&scene->r, viewname);
 			char str[FILE_MAX] = {'\0'};
 
 			StripAnim *sanim = MEM_mallocN(sizeof(StripAnim), "Strip Anim");
@@ -2717,7 +2717,7 @@ static ImBuf *seq_render_scene_strip(const SeqRenderData *context, Sequence *seq
 		char err_out[256] = "unknown";
 		int width = (scene->r.xsch * scene->r.size) / 100;
 		int height = (scene->r.ysch * scene->r.size) / 100;
-		const char *viewname = BKE_scene_render_view_name(&scene->r, context->view_id);
+		const char *viewname = BKE_scene_render_view_name_get(&scene->r, context->view_id);
 
 		/* for old scened this can be uninitialized,
 		 * should probably be added to do_versions at some point if the functionality stays */
@@ -2750,7 +2750,7 @@ static ImBuf *seq_render_scene_strip(const SeqRenderData *context, Sequence *seq
 			if (re == NULL)
 				re = RE_NewRender(scene->id.name);
 
-			RE_SetActiveRenderView(re, BKE_scene_render_view_name(&scene->r, context->view_id));
+			RE_SetActiveRenderView(re, BKE_scene_render_view_name_get(&scene->r, context->view_id));
 			BKE_scene_update_for_newframe(context->eval_ctx, context->bmain, scene, scene->lay);
 			RE_BlenderFrame(re, context->bmain, scene, NULL, camera, scene->lay, frame, false);
 
@@ -2888,13 +2888,13 @@ static ImBuf *do_render_strip_uncached(const SeqRenderData *context, Sequence *s
 				int i;
 
 				if (totfiles > 1) {
-					BKE_scene_view_get_prefix(context->scene, name, prefix, &ext);
+					BKE_scene_view_prefix_get(context->scene, name, prefix, &ext);
 					if (prefix[0] == '\0') {
 						goto monoview_image;
 					}
 				}
 
-				totviews = BKE_scene_num_views(&context->scene->r);
+				totviews = BKE_scene_num_views_get(&context->scene->r);
 				ibufs = MEM_callocN(sizeof(ImBuf *) * totviews, "Sequence Image Views Imbufs");
 
 				for (i = 0; i < totfiles; i++) {
@@ -2981,7 +2981,7 @@ monoview_image:
 				if (totfiles != BLI_listbase_count_ex(&seq->anims, totfiles + 1))
 					goto monoview_movie;
 
-				totviews = BKE_scene_num_views(&context->scene->r);
+				totviews = BKE_scene_num_views_get(&context->scene->r);
 				ibufs = MEM_callocN(sizeof(ImBuf *) * totviews, "Sequence Image Views Imbufs");
 
 				for (i = 0, sanim = seq->anims.first; sanim; sanim = sanim->next, i++) {
@@ -4753,7 +4753,7 @@ Sequence *BKE_sequencer_add_movie_strip(bContext *C, ListBase *seqbasep, SeqLoad
 		char *ext = NULL;
 		size_t j = 0;
 
-		BKE_scene_view_get_prefix(scene, path, prefix, &ext);
+		BKE_scene_view_prefix_get(scene, path, prefix, &ext);
 
 		if (prefix[0] == '\0')
 			goto monoview;

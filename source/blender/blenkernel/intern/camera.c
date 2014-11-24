@@ -781,7 +781,7 @@ Object *BKE_camera_render(Scene *scene, Object *camera, const char *viewname)
 		return camera;
 	}
 	else { /* SCE_VIEWS_SETUP_ADVANCED */
-		const char *suffix = BKE_scene_view_get_suffix(&scene->r, viewname);
+		const char *suffix = BKE_scene_view_suffix_get(&scene->r, viewname);
 		return camera_multiview_advanced(scene, camera, suffix);
 	}
 }
