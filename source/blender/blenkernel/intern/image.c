@@ -2807,13 +2807,16 @@ void BKE_image_backup_render(Scene *scene, Image *ima)
 }
 
 /**************************** multiview save openexr *********************************/
+#ifdef WITH_OPENEXR
 static const char *image_get_view_cb(void *base, const size_t view_id)
 {
 	Image *ima = base;
 	ImageView *iv = BLI_findlink(&ima->views, view_id);
 	return iv ? iv->name : "";
 }
+#endif  /* WITH_OPENEXR */
 
+#ifdef WITH_OPENEXR
 static ImBuf *image_get_buffer_cb(void *base, const size_t view_id)
 {
 	Image *ima = base;
@@ -2826,9 +2829,11 @@ static ImBuf *image_get_buffer_cb(void *base, const size_t view_id)
 
 	return image_acquire_ibuf(ima, &iuser, NULL);
 }
+#endif  /* WITH_OPENEXR */
 
 bool BKE_image_save_openexr_multiview(Image *ima, ImBuf *ibuf, const char *filepath, const int flags)
 {
+#ifdef WITH_OPENEXR
 	char name[FILE_MAX];
 	bool ok;
 
@@ -2840,6 +2845,10 @@ bool BKE_image_save_openexr_multiview(Image *ima, ImBuf *ibuf, const char *filep
 	ibuf->userdata = NULL;
 
 	return ok;
+#else
+	UNUSED_VARS(ima, ibuf, filepath, flags);
+	return false;
+#endif
 }
 
 /**************************** multiview load openexr *********************************/
@@ -2900,6 +2909,7 @@ static void image_add_buffer_cb(void *base, const char *str, ImBuf *ibuf, const 
 }
 #endif  /* WITH_OPENEXR */
 
+#ifdef WITH_OPENEXR
 static void image_update_multiview_flags(Image *ima)
 {
 	if (BLI_listbase_count_ex(&ima->views, 2) > 1) {
@@ -2919,26 +2929,26 @@ static void image_update_multiview_flags(Image *ima)
 		ima->flag &= ~IMA_IS_MULTIVIEW;
 	}
 }
+#endif  /* WITH_OPENEXR */
 
 /* after imbuf load, openexr type can return with a exrhandle open */
 /* in that case we have to build a render-result */
+#ifdef WITH_OPENEXR
 static void image_create_multiview(Image *ima, ImBuf *ibuf, const int frame)
 {
 	image_free_views(ima);
 
-#ifdef WITH_OPENEXR
 	IMB_exr_multiview_convert(ibuf->userdata, ima, image_add_view_cb, image_add_buffer_cb, frame);
-#endif
 
 	image_update_multiview_flags(ima);
 
-#ifdef WITH_OPENEXR
 	IMB_exr_close(ibuf->userdata);
-#endif
 }
+#endif  /* WITH_OPENEXR */
 
 /* after imbuf load, openexr type can return with a exrhandle open */
 /* in that case we have to build a render-result */
+#ifdef WITH_OPENEXR
 static void image_create_multilayer(Image *ima, ImBuf *ibuf, int framenr)
 {
 	const char *colorspace = ima->colorspace_settings.name;
@@ -2946,9 +2956,7 @@ static void image_create_multilayer(Image *ima, ImBuf *ibuf, int framenr)
 
 	ima->rr = RE_MultilayerConvert(ibuf->userdata, colorspace, predivide, ibuf->x, ibuf->y);
 
-#ifdef WITH_OPENEXR
 	IMB_exr_close(ibuf->userdata);
-#endif
 
 	ibuf->userdata = NULL;
 	if (ima->rr)
@@ -2957,6 +2965,7 @@ static void image_create_multilayer(Image *ima, ImBuf *ibuf, int framenr)
 	/* set proper multiview flag */
 	image_init_multilayer_multiview_flag(ima, ima->rr);
 }
+#endif  /* WITH_OPENEXR */
 
 /* common stuff to do with images after loading */
 static void image_initialize_after_load(Image *ima, ImBuf *ibuf)
