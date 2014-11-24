@@ -1720,7 +1720,7 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 		}
 		else if ((imf->imtype == R_IMF_IMTYPE_OPENEXR) && (imf->views_format == R_IMF_VIEWS_MULTIVIEW)) {
 			/* treat special Openexr case separetely (this is the singlelayer multiview OpenEXR */
-			BKE_imbuf_prepare_write(ibuf, imf);
+			BKE_imbuf_write_prepare(ibuf, imf);
 			ok = BKE_image_save_openexr_multiview(ima, ibuf, simopts->filepath, (IB_rect | IB_zbuf | IB_zbuffloat | IB_multiview));
 			ED_space_image_release_buffer(sima, ibuf, lock);
 		}
@@ -1836,7 +1836,7 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 					colormanaged_ibuf = IMB_colormanagement_imbuf_for_write(ibuf, save_as_render, true,
 					                                                        &imf->view_settings, &imf->display_settings, imf);
 
-					BKE_imbuf_prepare_write(colormanaged_ibuf, imf);
+					BKE_imbuf_write_prepare(colormanaged_ibuf, imf);
 					IMB_prepare_write_ImBuf(IMB_isfloat(colormanaged_ibuf), colormanaged_ibuf);
 
 					/* duplicate buffer to prevent locker issue when using render result */

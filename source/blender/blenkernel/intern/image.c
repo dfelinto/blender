@@ -2092,7 +2092,7 @@ bool BKE_imbuf_alpha_test(ImBuf *ibuf)
 
 /* note: imf->planes is ignored here, its assumed the image channels
  * are already set */
-void BKE_imbuf_prepare_write(ImBuf *ibuf, ImageFormatData *imf)
+void BKE_imbuf_write_prepare(ImBuf *ibuf, ImageFormatData *imf)
 {
 	char imtype = imf->imtype;
 	char compress = imf->compress;
@@ -2224,7 +2224,7 @@ int BKE_imbuf_write(ImBuf *ibuf, const char *name, ImageFormatData *imf)
 {
 	int ok;
 
-	BKE_imbuf_prepare_write(ibuf, imf);
+	BKE_imbuf_write_prepare(ibuf, imf);
 
 	BLI_make_existing_file(name);
 
