@@ -185,7 +185,7 @@ void BKE_image_walk_all_users(const struct Main *mainp, void *customdata,
 
 /* ensures an Image exists for viewing nodes or render */
 struct Image *BKE_image_verify_viewer(int type, const char *name);
-/* reset viewer nodes cache when the number of cache doesn't match the needed cached views */
+/* ensures the view node cache is compatible with the scene views */
 void BKE_image_verify_viewer_views(const struct RenderData *rd, struct Image *ima, struct ImageUser *iuser);
 
 /* force an ImBuf to become part of Image */
