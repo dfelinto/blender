@@ -270,7 +270,7 @@ class INFO_MT_window(Menu):
             layout.operator("wm.console_toggle", icon='CONSOLE')
 
         layout.separator()
-        layout.operator("wm.stereo_3d", icon='CAMERA_STEREO')
+        layout.operator("wm.set_stereo_3d", icon='CAMERA_STEREO')
 
 
 class INFO_MT_help(Menu):

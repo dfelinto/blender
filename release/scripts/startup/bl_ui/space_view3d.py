@@ -2866,8 +2866,6 @@ class VIEW3D_PT_view3d_stereo(Panel):
         scene = context.scene
 
         multiview = scene.render.use_multiple_views
-        engine = scene.render.engine
-
         return context.space_data and multiview
 
     def draw(self, context):

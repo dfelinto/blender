@@ -524,7 +524,7 @@ static bool wm_stereo3d_set_properties(bContext *C, wmOperator *op)
 	return is_set;
 }
 
-static void wm_stereo3d_init(bContext *C, wmOperator *op)
+static void wm_set_stereo3d_init(bContext *C, wmOperator *op)
 {
 	Stereo3dData *s3dd;
 	wmWindow *win = CTX_wm_window(C);
@@ -535,7 +535,7 @@ static void wm_stereo3d_init(bContext *C, wmOperator *op)
 	s3dd->stereo3d_format = *win->stereo3d_format;
 }
 
-int wm_stereo3d_exec(bContext *C, wmOperator *op)
+int wm_set_stereo3d_exec(bContext *C, wmOperator *op)
 {
 	wmWindowManager *wm = CTX_wm_manager(C);
 	wmWindow *win = CTX_wm_window(C);
@@ -573,17 +573,17 @@ int wm_stereo3d_exec(bContext *C, wmOperator *op)
 	return OPERATOR_FINISHED;
 }
 
-int wm_stereo3d_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
+int wm_set_stereo3d_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
 {
-	wm_stereo3d_init(C, op);
+	wm_set_stereo3d_init(C, op);
 
 	if (wm_stereo3d_set_properties(C, op))
-		return wm_stereo3d_exec(C, op);
+		return wm_set_stereo3d_exec(C, op);
 	else
 		return WM_operator_props_dialog_popup(C, op, 250, 100);
 }
 
-void wm_stereo3d_draw(bContext *C, wmOperator *op)
+void wm_set_stereo3d_draw(bContext *C, wmOperator *op)
 {
 	wmWindow *win = CTX_wm_window(C);
 	Stereo3dFormat *stereo3d_format;
@@ -628,12 +628,12 @@ void wm_stereo3d_draw(bContext *C, wmOperator *op)
 	}
 }
 
-bool wm_stereo3d_check(bContext *UNUSED(C), wmOperator *UNUSED(op))
+bool wm_set_stereo3d_check(bContext *UNUSED(C), wmOperator *UNUSED(op))
 {
 	return true;
 }
 
-void wm_stereo3d_cancel(bContext *C, wmOperator *op)
+void wm_set_stereo3d_cancel(bContext *C, wmOperator *op)
 {
 	Stereo3dData *s3dd = op->customdata;
 	wmWindow *win = CTX_wm_window(C);

@@ -36,7 +36,6 @@
 extern "C" {
 #endif
 
-#include "DNA_scene_types.h"
 #include "DNA_vec_types.h"
 
 struct Camera;

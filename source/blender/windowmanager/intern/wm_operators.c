@@ -4705,20 +4705,20 @@ static void operatortype_ghash_free_cb(wmOperatorType *ot)
 
 /* ******************************************************* */
 /* toggle 3D for current window, turning it fullscreen if needed */
-static void WM_OT_stereo3d(wmOperatorType *ot)
+static void WM_OT_set_stereo3d(wmOperatorType *ot)
 {
 	PropertyRNA *prop;
 
-	ot->name = "Stereo 3D";
-	ot->idname = "WM_OT_stereo_3d";
+	ot->name = "Set Stereo 3D";
+	ot->idname = "WM_OT_set_stereo_3d";
 	ot->description = "Toggle 3D stereo support for current window (or change the display mode)";
 
-	ot->exec = wm_stereo3d_exec;
-	ot->invoke = wm_stereo3d_invoke;
+	ot->exec = wm_set_stereo3d_exec;
+	ot->invoke = wm_set_stereo3d_invoke;
 	ot->poll = WM_operator_winactive;
-	ot->ui = wm_stereo3d_draw;
-	ot->check = wm_stereo3d_check;
-	ot->cancel = wm_stereo3d_cancel;
+	ot->ui = wm_set_stereo3d_draw;
+	ot->check = wm_set_stereo3d_check;
+	ot->cancel = wm_set_stereo3d_cancel;
 
 	prop = RNA_def_enum(ot->srna, "display_mode", stereo3d_display_items, S3D_DISPLAY_ANAGLYPH, "Display Mode", "");
 	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
@@ -4779,7 +4779,7 @@ void wm_operatortype_init(void)
 	WM_operatortype_append(WM_OT_call_menu);
 	WM_operatortype_append(WM_OT_call_menu_pie);
 	WM_operatortype_append(WM_OT_radial_control);
-	WM_operatortype_append(WM_OT_stereo3d);
+	WM_operatortype_append(WM_OT_set_stereo3d);
 #if defined(WIN32)
 	WM_operatortype_append(WM_OT_console_toggle);
 #endif

@@ -180,7 +180,7 @@ class RENDERLAYER_UL_renderviews(UIList):
 
 
 class RENDERLAYER_PT_views(RenderLayerButtonsPanel, Panel):
-    bl_label     = "Views"
+    bl_label = "Views"
     COMPAT_ENGINES = {'BLENDER_RENDER'}
 
     def draw_header(self, context):
@@ -193,7 +193,6 @@ class RENDERLAYER_PT_views(RenderLayerButtonsPanel, Panel):
         scene = context.scene
         rd = scene.render
         rv = rd.views.active
-
 
         layout.active = rd.use_multiple_views
         basic_stereo = rd.views_setup == 'STEREO_3D'

@@ -71,8 +71,8 @@ void *BKE_camera_add(Main *bmain, const char *name)
 	cam->passepartalpha = 0.5f;
 
 	/* stereoscopy 3d */
-	cam->stereo.interocular_distance = 0.065;
-	cam->stereo.convergence_distance = 30.f * 0.065;
+	cam->stereo.interocular_distance = 0.065f;
+	cam->stereo.convergence_distance = 30.f * 0.065f;
 	
 	return cam;
 }
@@ -156,7 +156,7 @@ void BKE_camera_object_mode(RenderData *rd, Object *cam_ob)
 /* get the camera's dof value, takes the dof object into account */
 float BKE_camera_object_dof_distance(Object *ob)
 {
-	Camera *cam = ob->data;
+	Camera *cam = (Camera *)ob->data; 
 	if (ob->type != OB_CAMERA)
 		return 0.0f;
 	if (cam->dof_ob) {
