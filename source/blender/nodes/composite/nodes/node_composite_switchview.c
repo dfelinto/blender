@@ -49,7 +49,7 @@ static void cmp_node_switch_view_sanitycheck(bNodeTree *ntree, bNode *node)
 {
 	bNodeSocket *sock;
 
-	if (BLI_listbase_count_ex(&node->inputs, 1) > 0)
+	if (!BLI_listbase_is_empty(&node->inputs))
 		return;
 
 	sock = ntreeCompositSwitchViewAddSocket(ntree, node, "No View");

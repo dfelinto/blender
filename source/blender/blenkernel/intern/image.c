@@ -4266,12 +4266,12 @@ int BKE_image_sequence_guess_offset(Image *image)
 
 bool BKE_image_has_anim(Image *ima)
 {
-	return (BLI_listbase_count_ex(&ima->anims, 1) > 0) && (((ImageAnim *) ima->anims.first)->anim != NULL);
+	return (!BLI_listbase_is_empty(&ima->anims)) && (((ImageAnim *) ima->anims.first)->anim != NULL);
 }
 
 bool BKE_image_has_packedfile(Image *ima)
 {
-	return (BLI_listbase_count_ex(&ima->packedfiles, 1) > 0) && (((ImagePackedFile *) ima->packedfiles.first)->packedfile != NULL);
+	return (!BLI_listbase_is_empty(&ima->packedfiles)) && (((ImagePackedFile *) ima->packedfiles.first)->packedfile != NULL);
 }
 
 /**
