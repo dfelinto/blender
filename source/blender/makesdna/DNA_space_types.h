@@ -501,6 +501,9 @@ typedef struct SpaceSeq {
 	struct bGPdata *gpd;        /* grease-pencil data */
 
 	struct SequencerScopes scopes;  /* different scoped displayed in space */
+
+	char eye;				/* multiview current eye - for internal use */
+	char pad[7];
 } SpaceSeq;
 
 

@@ -46,12 +46,15 @@ struct Object;
 struct ImageFormatData;
 struct ImagePool;
 struct Main;
+struct ReportList;
 
 #define IMA_MAX_SPACE       64
 
 void   BKE_images_init(void);
 void   BKE_images_exit(void);
 
+void    BKE_image_free_packedfiles(struct Image *image);
+void    BKE_image_free_views(struct Image *image);
 void    BKE_image_free_buffers(struct Image *image);
 /* call from library */
 void    BKE_image_free(struct Image *image);
@@ -60,12 +63,13 @@ void    BKE_imbuf_stamp_info(struct Scene *scene, struct Object *camera, struct 
 void    BKE_stamp_buf(struct Scene *scene, struct Object *camera, unsigned char *rect, float *rectf, int width, int height, int channels);
 bool    BKE_imbuf_alpha_test(struct ImBuf *ibuf);
 int     BKE_imbuf_write_stamp(struct Scene *scene, struct Object *camera, struct ImBuf *ibuf, const char *name, struct ImageFormatData *imf);
+void    BKE_imbuf_prepare_write(struct ImBuf *ibuf, struct ImageFormatData *imf);
 int     BKE_imbuf_write(struct ImBuf *ibuf, const char *name, struct ImageFormatData *imf);
 int     BKE_imbuf_write_as(struct ImBuf *ibuf, const char *name, struct ImageFormatData *imf, const bool is_copy);
 void    BKE_makepicstring(char *string, const char *base, const char *relbase, int frame,
-                          const struct ImageFormatData *im_format, const bool use_ext, const bool use_frames);
+                          const struct ImageFormatData *im_format, const bool use_ext, const bool use_frames, const char *view);
 void    BKE_makepicstring_from_type(char *string, const char *base, const char *relbase, int frame,
-                                    const char imtype, const bool use_ext, const bool use_frames);
+                                    const char imtype, const bool use_ext, const bool use_frames, const char *view);
 int     BKE_add_image_extension(char *string, const struct ImageFormatData *im_format);
 int     BKE_add_image_extension_from_type(char *string, const char imtype);
 char    BKE_ftype_to_imtype(const int ftype);
@@ -98,6 +102,7 @@ void    free_old_images(void);
 /* ImageUser is in Texture, in Nodes, Background Image, Image Window, .... */
 /* should be used in conjunction with an ID * to Image. */
 struct ImageUser;
+struct RenderData;
 struct RenderPass;
 struct RenderResult;
 
@@ -167,11 +172,12 @@ struct Image *BKE_image_load_exists(const char *filepath);
 
 /* adds image, adds ibuf, generates color or pattern */
 struct Image *BKE_image_add_generated(
-        struct Main *bmain, unsigned int width, unsigned int height, const char *name, int depth, int floatbuf, short gen_type, const float color[4]);
+        struct Main *bmain, unsigned int width, unsigned int height, const char *name, int depth, int floatbuf, short gen_type, const float color[4], const bool stereo3d);
 /* adds image from imbuf, owns imbuf */
 struct Image *BKE_image_add_from_imbuf(struct ImBuf *ibuf);
 
 /* for reload, refresh, pack */
+void BKE_image_init_imageuser(struct Image *ima, struct ImageUser *iuser);
 void BKE_image_signal(struct Image *ima, struct ImageUser *iuser, int signal);
 
 void BKE_image_walk_all_users(const struct Main *mainp, void *customdata,
@@ -179,6 +185,8 @@ void BKE_image_walk_all_users(const struct Main *mainp, void *customdata,
 
 /* ensures an Image exists for viewing nodes or render */
 struct Image *BKE_image_verify_viewer(int type, const char *name);
+/* reset viewer nodes cache when the number of cache doesn't match the needed cached views */
+void BKE_image_verify_viewer_views(const struct RenderData *rd, struct Image *ima, struct ImageUser *iuser);
 
 /* force an ImBuf to become part of Image */
 void BKE_image_assign_ibuf(struct Image *ima, struct ImBuf *ibuf);
@@ -193,13 +201,26 @@ void BKE_image_update_frame(const struct Main *bmain, int cfra);
 /* sets index offset for multilayer files */
 struct RenderPass *BKE_image_multilayer_index(struct RenderResult *rr, struct ImageUser *iuser);
 
+/* sets index offset for multiview files */
+void BKE_image_multiview_index(struct Image *ima, struct ImageUser *iuser);
+
+/* called on image settings change (in ui) */
+void BKE_image_update_views_format(struct Scene *scene, struct Image *ima);
+
 /* for multilayer images as well as for render-viewer */
+bool BKE_image_is_multilayer(struct Image *ima);
 struct RenderResult *BKE_image_acquire_renderresult(struct Scene *scene, struct Image *ima);
 void BKE_image_release_renderresult(struct Scene *scene, struct Image *ima);
 
+/* for multilayer images as well as for singlelayer */
+bool BKE_image_is_openexr(struct Image *ima);
+
 /* for multiple slot render, call this before render */
 void BKE_image_backup_render(struct Scene *scene, struct Image *ima);
-	
+
+/* for singlelayer openexr saving */
+bool BKE_image_save_openexr_multiview(struct Image *ima, struct ImBuf *ibuf, const char *filepath, const int flags);
+
 /* goes over all textures that use images */
 void    BKE_image_free_all_textures(void);
 
@@ -209,7 +230,8 @@ void    BKE_image_free_anim_ibufs(struct Image *ima, int except_frame);
 /* does all images with type MOVIE or SEQUENCE */
 void BKE_image_all_free_anim_ibufs(int except_frame);
 
-void BKE_image_memorypack(struct Image *ima);
+void BKE_image_memorypack(struct Scene *scene, struct Image *ima);
+void BKE_image_packfiles(struct ReportList *reports, struct Image *ima, const char *basepath);
 
 /* prints memory statistics for images */
 void BKE_image_print_memlist(void);
@@ -241,7 +263,8 @@ float *BKE_image_get_float_pixels_for_frame(struct Image *image, int frame);
 
 /* Guess offset for the first frame in the sequence */
 int BKE_image_sequence_guess_offset(struct Image *image);
-
+bool BKE_image_has_anim(struct Image *image);
+bool BKE_image_has_packedfile(struct Image *image);
 bool BKE_image_is_animated(struct Image *image);
 bool BKE_image_is_dirty(struct Image *image);
 void BKE_image_file_format_set(struct Image *image, int ftype);

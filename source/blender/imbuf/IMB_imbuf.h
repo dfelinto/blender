@@ -88,6 +88,13 @@ struct ColorManagedDisplay;
 
 /**
  *
+ * \attention defined in DNA_scene_types.h
+ */
+struct ImageFormatData;
+struct Stereo3dFormat;
+
+/**
+ *
  * \attention Defined in allocimbuf.c
  */
 void IMB_init(void);
@@ -365,6 +372,7 @@ void IMB_scaleImBuf_threaded(struct ImBuf *ibuf, unsigned int newx, unsigned int
  * \attention Defined in writeimage.c
  */
 short IMB_saveiff(struct ImBuf *ibuf, const char *filepath, int flags);
+struct ImBuf *IMB_prepare_write_ImBuf(const bool isfloat, struct ImBuf *ibuf);
 
 /**
  *
@@ -384,6 +392,12 @@ bool IMB_isanim(const char *name);
  * \attention Defined in util.c
  */
 int imb_get_anim_type(const char *name);
+
+/**
+ *
+ * \attention Defined in util.c
+ */
+bool IMB_isfloat(struct ImBuf *ibuf);
 
 /**
  *
@@ -545,5 +559,15 @@ void IMB_processor_apply_threaded(int buffer_lines, int handle_size, void *init_
 void IMB_ffmpeg_init(void);
 const char *IMB_ffmpeg_last_error(void);
 
+/**
+ *
+ * \attention Defined in stereoimbuf.c
+ */
+void IMB_stereo_write_dimensions(const char mode, const bool is_squeezed, const size_t width, const size_t height, size_t *r_width, size_t *r_height);
+void IMB_stereo_read_dimensions(const char mode, const bool is_squeezed, const size_t width, const size_t height, size_t *r_width, size_t *r_height);
+int *IMB_stereo_from_rect(struct ImageFormatData *im_format, const size_t x, const size_t y, const size_t channels, int *left, int *right);
+float *IMB_stereo_from_rectf(struct ImageFormatData *im_format, const size_t x, const size_t y, const size_t channels, float *left, float *right);
+struct ImBuf *IMB_stereoImBuf(struct ImageFormatData *im_format, struct ImBuf *left, struct ImBuf *right);
+void IMB_ImBufFromStereo(struct Stereo3dFormat *s3d, struct ImBuf **left, struct ImBuf **right);
 #endif
 

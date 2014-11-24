@@ -5125,7 +5125,7 @@ void RE_Database_FromScene(Render *re, Main *bmain, Scene *scene, unsigned int l
 		re->scene_color_manage = BKE_scene_check_color_management_enabled(scene);
 	
 	/* scene needs to be set to get camera */
-	camera= RE_GetCamera(re);
+	camera = RE_GetCamera(re);
 	
 	/* per second, per object, stats print this */
 	re->i.infostr= "Preparing Scene data";
@@ -5158,8 +5158,8 @@ void RE_Database_FromScene(Render *re, Main *bmain, Scene *scene, unsigned int l
 		 * above call to BKE_scene_update_for_newframe, fixes bug. [#22702].
 		 * following calls don't depend on 'RE_SetCamera' */
 		RE_SetCamera(re, camera);
-
-		normalize_m4_m4(mat, camera->obmat);
+		RE_GetCameraModelMatrix(re, camera, mat);
+		normalize_m4(mat);
 		invert_m4(mat);
 		RE_SetView(re, mat);
 
@@ -5333,7 +5333,8 @@ static void database_fromscene_vectors(Render *re, Scene *scene, unsigned int la
 	
 	/* if no camera, viewmat should have been set! */
 	if (camera) {
-		normalize_m4_m4(mat, camera->obmat);
+		RE_GetCameraModelMatrix(re, camera, mat);
+		normalize_m4(mat);
 		invert_m4(mat);
 		RE_SetView(re, mat);
 	}

@@ -304,12 +304,13 @@ int ED_view3d_scene_layer_set(int lay, const int *values, int *active);
 bool ED_view3d_context_activate(struct bContext *C);
 void ED_view3d_draw_offscreen_init(struct Scene *scene, struct View3D *v3d);
 void ED_view3d_draw_offscreen(struct Scene *scene, struct View3D *v3d, struct ARegion *ar,
-                              int winx, int winy, float viewmat[4][4], float winmat[4][4], bool do_bgpic, bool do_sky);
+                              int winx, int winy, float viewmat[4][4], float winmat[4][4], bool do_bgpic, bool do_sky,
+                              const char *viewname);
 
 struct ImBuf *ED_view3d_draw_offscreen_imbuf(struct Scene *scene, struct View3D *v3d, struct ARegion *ar, int sizex, int sizey, unsigned int flag,
-                                             bool draw_background, int alpha_mode, char err_out[256]);
+                                             bool draw_background, int alpha_mode, char err_out[256], const char *viewname);
 struct ImBuf *ED_view3d_draw_offscreen_imbuf_simple(struct Scene *scene, struct Object *camera, int width, int height, unsigned int flag, int drawtype,
-                                                    bool use_solid_tex, bool draw_background, int alpha_mode, char err_out[256]);
+                                                    bool use_solid_tex, bool draw_background, int alpha_mode, char err_out[256], const char *viewname);
 void ED_view3d_offscreen_sky_color_get(struct Scene *scene, float sky_color[3]);
 
 struct Base *ED_view3d_give_base_under_cursor(struct bContext *C, const int mval[2]);

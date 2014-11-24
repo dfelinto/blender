@@ -454,6 +454,10 @@ class IMAGE_HT_header(Header):
             layout.prop_search(mesh.uv_textures, "active", mesh, "uv_textures", text="")
 
         if ima:
+            if ima.is_stereo_3d:
+                row = layout.row()
+                row.prop(sima, "show_stereo_3d", text="")
+
             # layers
             layout.template_image_layers(ima, iuser)
 
@@ -667,6 +671,34 @@ class IMAGE_PT_view_properties(Panel):
             layout.separator()
             render_slot = ima.render_slots.active
             layout.prop(render_slot, "name", text="Slot Name")
+
+
+class IMAGE_PT_stereo_3d_properties(Panel):
+    bl_space_type = 'IMAGE_EDITOR'
+    bl_region_type = 'UI'
+    bl_label = "Stereoscopy"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    @classmethod
+    def poll(cls, context):
+        sima = context.space_data
+        image = sima.image if sima else None
+        return (sima and image and image.type == 'IMAGE' and \
+                context.scene.render.use_multiple_views)
+
+    def draw(self, context):
+        layout = self.layout
+
+        sima = context.space_data
+        ima = sima.image
+
+        col = layout
+        col.label(text="Views Format:")
+        col.row().prop(ima, "views_format", expand=True)
+
+        box = col.box()
+        box.active = ima.views_format == 'STEREO_3D'
+        box.template_image_stereo_3d(ima.stereo_3d_format)
 
 
 class IMAGE_PT_tools_transform_uvs(Panel, UVToolsPanel):

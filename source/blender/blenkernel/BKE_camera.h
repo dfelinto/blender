@@ -36,6 +36,7 @@
 extern "C" {
 #endif
 
+#include "DNA_scene_types.h"
 #include "DNA_vec_types.h"
 
 struct Camera;
@@ -120,6 +121,11 @@ void BKE_camera_view_frame(struct Scene *scene, struct Camera *camera, float r_v
 bool BKE_camera_view_frame_fit_to_scene(struct Scene *scene, struct View3D *v3d, struct Object *camera_ob,
                                         float r_co[3]);
 
+void BKE_camera_view_matrix(struct RenderData *rd, struct Object *camera, const bool is_left, float r_viewmat[4][4]);
+void BKE_camera_model_matrix(struct RenderData *rd, struct Object *camera, const char *viewname, float r_modelmat[4][4]);
+struct Object *BKE_camera_render(struct Scene *scene, struct Object *camera, const char *viewname);
+float BKE_camera_shift_x(struct RenderData *rd, struct Object *camera, const char *viewname);
+void BKE_camera_params_stereo3d(struct RenderData *rd, struct CameraParams *params, struct Object *camera, const char *viewname);
 #ifdef __cplusplus
 }
 #endif

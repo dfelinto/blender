@@ -1012,5 +1012,35 @@ class SEQUENCER_PT_modifiers(SequencerButtonsPanel, Panel):
                     col.prop(mod, "contrast")
 
 
+class SEQUENCER_PT_stereo_3d(SequencerButtonsPanel, Panel):
+    bl_label = "Stereoscopy"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    @classmethod
+    def poll(cls, context):
+        if not cls.has_sequencer(context):
+            return False
+
+        strip = act_strip(context)
+        if not strip:
+            return False
+
+        return (strip.type in {'IMAGE', 'MOVIE'} and \
+                context.scene.render.use_multiple_views)
+
+    def draw(self, context):
+        layout = self.layout
+
+        strip = act_strip(context)
+
+        col = layout
+        col.label(text="Views Format:")
+        col.row().prop(strip, "views_format", expand=True)
+
+        box = col.box()
+        box.active = strip.views_format == 'STEREO_3D'
+        box.template_image_stereo_3d(strip.stereo_3d_format)
+
+
 if __name__ == "__main__":  # only for live edit.
     bpy.utils.register_module(__name__)

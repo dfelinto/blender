@@ -103,13 +103,13 @@ static void rna_Scene_update_tagged(Scene *scene)
 #endif
 }
 
-static void rna_SceneRender_get_frame_path(RenderData *rd, int frame, char *name)
+static void rna_SceneRender_get_frame_path(RenderData *rd, int frame, const char *view, char *name)
 {
 	if (BKE_imtype_is_movie(rd->im_format.imtype))
 		BKE_movie_filepath_get(name, rd);
 	else
 		BKE_makepicstring(name, rd->pic, G.main->name, (frame == INT_MIN) ? rd->cfra : frame,
-		                  &rd->im_format, (rd->scemode & R_EXTENSION) != 0, true);
+		                  &rd->im_format, (rd->scemode & R_EXTENSION) != 0, true, view);
 }
 
 static void rna_Scene_ray_cast(Scene *scene, float ray_start[3], float ray_end[3],
@@ -259,6 +259,8 @@ void RNA_api_scene_render(StructRNA *srna)
 	RNA_def_function_ui_description(func, "Return the absolute path to the filename to be written for a given frame");
 	RNA_def_int(func, "frame", INT_MIN, INT_MIN, INT_MAX, "",
 	            "Frame number to use, if unset the current frame will be used", MINAFRAME, MAXFRAME);
+	parm = RNA_def_string_file_path(func, "view", NULL, FILE_MAX, "View",
+	                                "The name of the view to use to replace the \"%\" chars");
 	parm = RNA_def_string_file_path(func, "filepath", NULL, FILE_MAX, "File Path",
 	                                "The resulting filepath from the scenes render settings");
 	RNA_def_property_flag(parm, PROP_THICK_WRAP); /* needed for string return value */

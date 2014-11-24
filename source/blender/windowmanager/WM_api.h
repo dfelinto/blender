@@ -105,6 +105,7 @@ void		WM_window_open_temp	(struct bContext *C, struct rcti *position, int type);
 			/* returns true if draw method is triple buffer */
 bool		WM_is_draw_triple(struct wmWindow *win);
 
+bool		WM_stereo_enabled(const struct bContext *C, struct wmWindow *win, bool only_fullscreen_test);
 
 
 			/* files */

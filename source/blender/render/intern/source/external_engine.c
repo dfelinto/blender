@@ -42,6 +42,7 @@
 #include "BLI_string.h"
 #include "BLI_utildefines.h"
 
+#include "BKE_camera.h"
 #include "BKE_global.h"
 #include "BKE_report.h"
 #include "BKE_scene.h"
@@ -184,7 +185,7 @@ static RenderPart *get_part_from_result(Render *re, RenderResult *result)
 	return NULL;
 }
 
-RenderResult *RE_engine_begin_result(RenderEngine *engine, int x, int y, int w, int h, const char *layername)
+RenderResult *RE_engine_begin_result(RenderEngine *engine, int x, int y, int w, int h, const char *layername, const char *viewname)
 {
 	Render *re = engine->re;
 	RenderResult *result;
@@ -207,7 +208,7 @@ RenderResult *RE_engine_begin_result(RenderEngine *engine, int x, int y, int w, 
 	disprect.ymin = y;
 	disprect.ymax = y + h;
 
-	result = render_result_new(re, &disprect, 0, RR_USE_MEM, layername);
+	result = render_result_new(re, &disprect, 0, RR_USE_MEM, layername, viewname);
 
 	/* todo: make this thread safe */
 
@@ -242,7 +243,7 @@ void RE_engine_update_result(RenderEngine *engine, RenderResult *result)
 
 	if (result) {
 		result->renlay = result->layers.first; /* weak, draws first layer always */
-		re->display_update(re->duh, result, NULL);
+		re->display_update(re->duh, result, NULL, re->viewname);
 	}
 }
 
@@ -272,7 +273,7 @@ void RE_engine_end_result(RenderEngine *engine, RenderResult *result, int cancel
 	if (!cancel || merge_results) {
 		if (re->result->do_exr_tile) {
 			if (!cancel) {
-				render_result_exr_file_merge(re->result, result);
+				render_result_exr_file_merge(re->result, result, re->viewname);
 			}
 		}
 		else if (!(re->test_break(re->tbh) && (re->r.scemode & R_BUTS_PREVIEW)))
@@ -281,7 +282,7 @@ void RE_engine_end_result(RenderEngine *engine, RenderResult *result, int cancel
 		/* draw */
 		if (!re->test_break(re->tbh)) {
 			result->renlay = result->layers.first; /* weak, draws first layer always */
-			re->display_update(re->duh, result, NULL);
+			re->display_update(re->duh, result, NULL, re->viewname);
 		}
 	}
 
@@ -356,6 +357,24 @@ void RE_engine_report(RenderEngine *engine, int type, const char *msg)
 		BKE_report(engine->re->reports, type, msg);
 	else if (engine->reports)
 		BKE_report(engine->reports, type, msg);
+}
+
+void RE_engine_actview_set(RenderEngine *engine, const char *viewname)
+{
+	Render *re = engine->re;
+	RE_SetActiveRenderView(re, viewname);
+}
+
+float RE_engine_get_camera_shift_x(RenderEngine *engine, Object *camera)
+{
+	Render *re = engine->re;
+	return BKE_camera_shift_x(re ? &re->r : NULL, camera, re->viewname);
+}
+
+void RE_engine_get_camera_model_matrix(RenderEngine *engine, Object *camera, float *r_modelmat)
+{
+	Render *re = engine->re;
+	BKE_camera_model_matrix(re ? &re->r : NULL, camera, re->viewname, (float (*)[4])r_modelmat);
 }
 
 void RE_engine_get_current_tiles(Render *re, int *total_tiles_r, rcti **tiles_r)
@@ -589,7 +608,7 @@ int RE_engine_render(Render *re, int do_all)
 
 		if ((type->flag & RE_USE_SAVE_BUFFERS) && (re->r.scemode & R_EXR_TILE_FILE))
 			savebuffers = RR_USE_EXR;
-		re->result = render_result_new(re, &re->disprect, 0, savebuffers, RR_ALL_LAYERS);
+		re->result = render_result_new(re, &re->disprect, 0, savebuffers, RR_ALL_LAYERS, RR_ALL_VIEWS);
 	}
 	BLI_rw_mutex_unlock(&re->resultmutex);
 

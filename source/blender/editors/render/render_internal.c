@@ -48,6 +48,7 @@
 #include "DNA_userdef_types.h"
 
 #include "BKE_blender.h"
+#include "BKE_camera.h"
 #include "BKE_context.h"
 #include "BKE_colortools.h"
 #include "BKE_depsgraph.h"
@@ -119,7 +120,7 @@ typedef struct RenderJob {
 } RenderJob;
 
 /* called inside thread! */
-static void image_buffer_rect_update(RenderJob *rj, RenderResult *rr, ImBuf *ibuf, ImageUser *iuser, volatile rcti *renrect)
+static void image_buffer_rect_update(RenderJob *rj, RenderResult *rr, ImBuf *ibuf, ImageUser *iuser, volatile rcti *renrect, const char *viewname)
 {
 	Scene *scene = rj->scene;
 	const float *rectf = NULL;
@@ -191,11 +192,11 @@ static void image_buffer_rect_update(RenderJob *rj, RenderResult *rr, ImBuf *ibu
 	 */
 	/* TODO(sergey): Need to check has_combined here? */
 	if (iuser->pass == 0) {
+		size_t view_id = BKE_scene_view_get_id(&scene->r, viewname);
 		/* find current float rect for display, first case is after composite... still weak */
-		if (rr->rectf)
-			rectf = rr->rectf;
-		else {
-			if (rr->rect32) {
+		rectf = RE_RenderViewGetRectf(rr, view_id);
+		if (rectf == NULL) {
+			if (RE_RenderViewGetRect32(rr, view_id)) {
 				/* special case, currently only happens with sequencer rendering,
 				 * which updates the whole frame, so we can only mark display buffer
 				 * as invalid here (sergey)
@@ -204,8 +205,8 @@ static void image_buffer_rect_update(RenderJob *rj, RenderResult *rr, ImBuf *ibu
 				return;
 			}
 			else {
-				if (rr->renlay == NULL || rr->renlay->rectf == NULL) return;
-				rectf = rr->renlay->rectf;
+				if (rr->renlay == NULL) return;
+				rectf = RE_RenderLayerGetPass(rr->renlay, SCE_PASS_COMBINED, viewname);
 			}
 		}
 		if (rectf == NULL) return;
@@ -519,7 +520,7 @@ static void render_image_update_pass_and_layer(RenderJob *rj, RenderResult *rr, 
 	}
 }
 
-static void image_rect_update(void *rjv, RenderResult *rr, volatile rcti *renrect)
+static void image_rect_update(void *rjv, RenderResult *rr, volatile rcti *renrect, const char *viewname)
 {
 	RenderJob *rj = rjv;
 	Image *ima = rj->image;
@@ -557,7 +558,7 @@ static void image_rect_update(void *rjv, RenderResult *rr, volatile rcti *renrec
 		    ibuf->channels == 1 ||
 		    U.image_draw_method != IMAGE_DRAW_METHOD_GLSL)
 		{
-			image_buffer_rect_update(rj, rr, ibuf, &rj->iuser, renrect);
+			image_buffer_rect_update(rj, rr, ibuf, &rj->iuser, renrect, viewname);
 		}
 		
 		/* make jobs timer to send notifier */
@@ -1105,7 +1106,7 @@ static int render_view3d_break(void *rpv)
 	return *(rp->stop);
 }
 
-static void render_view3d_display_update(void *rpv, RenderResult *UNUSED(rr), volatile struct rcti *UNUSED(rect))
+static void render_view3d_display_update(void *rpv, RenderResult *UNUSED(rr), volatile struct rcti *UNUSED(rect), const char *UNUSED(viewname))
 {
 	RenderPreview *rp = rpv;
 	
@@ -1481,7 +1482,8 @@ void render_view3d_draw(RenderEngine *engine, const bContext *C)
 		if (re == NULL) return;
 	}
 	
-	RE_AcquireResultImage(re, &rres);
+	/* XXX MV to investigate when this is called */
+	RE_AcquireResultImage(re, &rres, 0);
 	
 	if (rres.rectf) {
 		RegionView3D *rv3d = CTX_wm_region_view3d(C);

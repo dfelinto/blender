@@ -206,12 +206,13 @@ void wm_window_free(bContext *C, wmWindowManager *wm, wmWindow *win)
 	
 	wm_event_free_all(win);
 	wm_subwindows_free(win);
-	
-	if (win->drawdata)
-		MEM_freeN(win->drawdata);
-	
+
+	wm_draw_data_free(win);
+
 	wm_ghostwindow_destroy(win);
-	
+
+	MEM_freeN(win->stereo3d_format);
+
 	MEM_freeN(win);
 }
 
@@ -236,6 +237,8 @@ wmWindow *wm_window_new(bContext *C)
 	BLI_addtail(&wm->windows, win);
 	win->winid = find_free_winid(wm);
 
+	win->stereo3d_format = MEM_callocN(sizeof(Stereo3dFormat), "Stereo 3D Format (window)");
+
 	return win;
 }
 
@@ -259,8 +262,11 @@ wmWindow *wm_window_copy(bContext *C, wmWindow *winorig)
 	win->screen->do_draw = true;
 
 	win->drawmethod = U.wmdrawmethod;
-	win->drawdata = NULL;
-	
+
+	win->drawdata.first = win->drawdata.last = NULL;
+
+	*win->stereo3d_format = *winorig->stereo3d_format;
+
 	return win;
 }
 
@@ -358,12 +364,16 @@ static void wm_window_add_ghostwindow(wmWindowManager *wm, const char *title, wm
 	GHOST_WindowHandle ghostwin;
 	static int multisamples = -1;
 	int scr_w, scr_h, posy;
+	int stereo;
 	
 	/* force setting multisamples only once, it requires restart - and you cannot 
 	 * mix it, either all windows have it, or none (tested in OSX opengl) */
 	if (multisamples == -1)
 		multisamples = U.ogl_multisamples;
 	
+	/* a new window is created when pageflip mode is required for a window */
+	stereo = win->stereo3d_format->display_mode == S3D_DISPLAY_PAGEFLIP;
+
 	wm_get_screensize(&scr_w, &scr_h);
 	posy = (scr_h - win->posy - win->sizey);
 	
@@ -371,7 +381,7 @@ static void wm_window_add_ghostwindow(wmWindowManager *wm, const char *title, wm
 	                              win->posx, posy, win->sizex, win->sizey,
 	                              (GHOST_TWindowState)win->windowstate,
 	                              GHOST_kDrawingContextTypeOpenGL,
-	                              0 /* no stereo */,
+	                              stereo,
 	                              multisamples /* AA */);
 	
 	if (ghostwin) {
@@ -514,8 +524,7 @@ wmWindow *WM_window_open(bContext *C, const rcti *rect)
 	win->sizey = BLI_rcti_size_y(rect);
 
 	win->drawmethod = U.wmdrawmethod;
-	win->drawdata = NULL;
-	
+
 	WM_check(C);
 	
 	return win;

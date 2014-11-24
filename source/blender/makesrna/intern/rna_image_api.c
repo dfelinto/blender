@@ -146,6 +146,7 @@ static void rna_Image_save(Image *image, bContext *C, ReportList *reports)
 
 static void rna_Image_pack(Image *image, bContext *C, ReportList *reports, int as_png)
 {
+	Scene *scene = CTX_data_scene(C);
 	ImBuf *ibuf = BKE_image_acquire_ibuf(image, NULL, NULL);
 
 	if (!as_png && (ibuf && (ibuf->userflags & IB_BITMAPDIRTY))) {
@@ -153,10 +154,10 @@ static void rna_Image_pack(Image *image, bContext *C, ReportList *reports, int a
 	}
 	else {
 		if (as_png) {
-			BKE_image_memorypack(image);
+			BKE_image_memorypack(scene, image);
 		}
 		else {
-			image->packedfile = newPackedFile(reports, image->name, ID_BLEND_PATH(G.main, &image->id));
+			BKE_image_packfiles(reports, image, ID_BLEND_PATH(G.main, &image->id));
 		}
 	}
 

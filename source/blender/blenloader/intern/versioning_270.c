@@ -27,6 +27,7 @@
 
 #include "BLI_utildefines.h"
 #include "BLI_compiler_attrs.h"
+#include "BLI_string.h"
 
 /* for MinGW32 definition of NULL, could use BLI_blenlib.h instead too */
 #include <stddef.h>
@@ -46,6 +47,8 @@
 #include "DNA_particle_types.h"
 #include "DNA_linestyle_types.h"
 #include "DNA_actuator_types.h"
+#include "DNA_camera_types.h"
+#include "DNA_view3d_types.h"
 
 #include "DNA_genfile.h"
 
@@ -54,6 +57,8 @@
 
 #include "BKE_main.h"
 #include "BKE_node.h"
+#include "BKE_scene.h"
+#include "BKE_sequencer.h"
 
 #include "BLI_math.h"
 #include "BLI_string.h"
@@ -62,6 +67,7 @@
 
 #include "readfile.h"
 
+#include "MEM_guardedalloc.h"
 
 static void do_version_constraints_radians_degrees_270_1(ListBase *lb)
 {
@@ -434,6 +440,105 @@ void blo_do_versions_270(FileData *fd, Library *UNUSED(lib), Main *main)
 						do_version_constraints_stretch_to_limits(&pchan->constraints);
 					}
 				}
+			}
+		}
+	}
+
+	{
+		if (!DNA_struct_elem_find(fd->filesdna, "RenderData", "ListBase", "views")) {
+			Scene *scene;
+			SceneRenderView *srv;
+			for (scene = main->scene.first; scene; scene = scene->id.next) {
+				BKE_scene_add_render_view(scene, STEREO_LEFT_NAME);
+				srv = (SceneRenderView *)scene->r.views.first;
+				BLI_strncpy(srv->suffix, "_L", sizeof(srv->suffix));
+
+				BKE_scene_add_render_view(scene, STEREO_RIGHT_NAME);
+				srv = (SceneRenderView *)scene->r.views.last;
+				BLI_strncpy(srv->suffix, "_R", sizeof(srv->suffix));
+			}
+		}
+
+		if (!DNA_struct_elem_find(fd->filesdna, "View3D", "char", "stereo_camera")) {
+			bScreen *screen;
+			for (screen = main->screen.first; screen; screen = screen->id.next) {
+				ScrArea *sa;
+				for (sa = screen->areabase.first; sa; sa = sa->next) {
+					SpaceLink *sl;
+
+					for (sl = sa->spacedata.first; sl; sl = sl->next) {
+						switch (sl->spacetype) {
+							case SPACE_VIEW3D:
+							{
+								View3D *v3d = (View3D *)sl;
+								v3d->stereo3d_camera = STEREO_3D_ID;
+								v3d->stereo3d_flag |= V3D_S3D_DISPPLANE;
+								v3d->stereo3d_convergence_alpha = 0.15f;
+								v3d->stereo3d_volume_alpha = 0.05f;
+								break;
+							}
+							case SPACE_IMAGE:
+							{
+								SpaceImage *sima = (SpaceImage *) sl;
+								sima->iuser.flag |= IMA_SHOW_STEREO;
+								sima->iuser.passtype = SCE_PASS_COMBINED;
+								break;
+							}
+						}
+					}
+				}
+			}
+		}
+
+		if (!DNA_struct_elem_find(fd->filesdna, "Camera", "CameraStereoSettings", "stereo")) {
+			Camera *cam;
+			for (cam = main->camera.first; cam; cam = cam->id.next) {
+				cam->stereo.interocular_distance = 0.065;
+				cam->stereo.convergence_distance = 30.f * 0.065;
+			}
+		}
+
+		if (!DNA_struct_elem_find(fd->filesdna, "Image", "Stereo3dFormat", "*stereo3d_format")) {
+			Image *ima;
+			for (ima = main->image.first; ima; ima = ima->id.next) {
+				ima->stereo3d_format = MEM_callocN(sizeof(Stereo3dFormat), "Image Stereo 3d Format");
+			}
+		}
+
+		if (!DNA_struct_elem_find(fd->filesdna, "Image", "ListBase", "packedfiles")) {
+			Image *ima;
+			for (ima = main->image.first; ima; ima = ima->id.next) {
+				if (ima->packedfile) {
+					ImagePackedFile *imapf = MEM_mallocN(sizeof(ImagePackedFile), "Image Packed File");
+					BLI_addtail(&ima->packedfiles, imapf);
+
+					imapf->packedfile = ima->packedfile;
+					BLI_strncpy(imapf->filepath, ima->name, FILE_MAX);
+					ima->packedfile = NULL;
+				}
+			}
+		}
+
+		if (!DNA_struct_elem_find(fd->filesdna, "wmWindow", "Stereo3dFormat", "*stereo3d_format")) {
+			wmWindowManager *wm;
+			wmWindow *win;
+
+			for (wm = main->wm.first; wm; wm = wm->id.next) {
+				for (win = wm->windows.first; win; win = win->next) {
+					win->stereo3d_format = MEM_callocN(sizeof(Stereo3dFormat), "Stereo Display 3d Format");
+				}
+			}
+		}
+
+		if (!DNA_struct_elem_find(fd->filesdna, "Sequence", "Stereo3dFormat", "*stereo3d_format")) {
+			Scene *scene;
+			for (scene = main->scene.first; scene; scene = scene->id.next) {
+				Sequence *seq;
+				SEQ_BEGIN (scene->ed, seq)
+				{
+					seq->stereo3d_format = MEM_callocN(sizeof(Stereo3dFormat), "Stereo Display 3d Format");
+				}
+				SEQ_END
 			}
 		}
 	}

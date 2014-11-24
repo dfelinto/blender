@@ -1748,6 +1748,53 @@ static void rna_def_piemenu(BlenderRNA *brna)
 	RNA_define_verify_sdna(1); /* not in sdna */
 }
 
+static void rna_def_window_stereo3d(BlenderRNA *brna)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	static EnumPropertyItem stereo3d_display_items[] = {
+		{S3D_DISPLAY_ANAGLYPH, "ANAGLYPH", 0, "Anaglyph", "Render two differently filtered colored images for each eye. Anaglyph glasses are required"},
+		/*		{S3D_DISPLAY_BLURAY, "BLURAY", 0, "Blu-ray", ""}, */
+		{S3D_DISPLAY_EPILEPSY, "EPILEPSY", 0, "Dr. Epilepsy", "Wiggle stereoscopy. Quickly alternate between images for left and right eye"},
+		{S3D_DISPLAY_INTERLACE, "INTERLACE", 0, "Interlace", "Render two images for each eye into one interlaced image. 3D-ready monitor is requiered"},
+		{S3D_DISPLAY_PAGEFLIP, "TIMESEQUENTIAL", 0, "Time Sequential", "Renders alternate eyes (also known as pageflip). It requires Quadbuffer support in the graphic card"},
+		{S3D_DISPLAY_SIDEBYSIDE, "SIDEBYSIDE", 0, "Side-by-Side", "Render images for left and right eye side-by-side"},
+		{S3D_DISPLAY_TOPBOTTOM, "TOPBOTTOM", 0, "Top-Bottom", "Render images for left and right eye one above another"},
+		{0, NULL, 0, NULL, NULL}
+	};
+
+	srna = RNA_def_struct(brna, "Stereo3dDisplay", NULL);
+	RNA_def_struct_sdna(srna, "Stereo3dFormat");
+	RNA_def_struct_clear_flag(srna, STRUCT_UNDO);
+	RNA_def_struct_ui_text(srna, "Stereo 3d Display", "Settings for stereo 3d display");
+
+	prop = RNA_def_property(srna, "display_mode", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_items(prop, stereo3d_display_items);
+	RNA_def_property_ui_text(prop, "Display Mode", "");
+
+	prop = RNA_def_property(srna, "anaglyph_type", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_items(prop, stereo3d_anaglyph_type_items);
+	RNA_def_property_ui_text(prop, "Anaglyph Type", "");
+
+	prop = RNA_def_property(srna, "interlace_type", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_items(prop, stereo3d_interlace_type_items);
+	RNA_def_property_ui_text(prop, "Interlace Type", "");
+
+	prop = RNA_def_property(srna, "epilepsy_interval", PROP_FLOAT, PROP_TIME);
+	RNA_def_property_range(prop, 0.01f, 10.0f);
+	RNA_def_property_ui_range(prop, 0.05f, 1.0f, 1.0f, 2);
+	RNA_def_property_ui_text(prop, "Interval", "Preferred interval in seconds between switching left/right views");
+
+	prop = RNA_def_property(srna, "use_interlace_swap", PROP_BOOLEAN, PROP_BOOLEAN);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag", S3D_INTERLACE_SWAP);
+	RNA_def_property_ui_text(prop, "Swap Left/Right", "Swap left and right stereo channels");
+
+	prop = RNA_def_property(srna, "use_sidebyside_crosseyed", PROP_BOOLEAN, PROP_BOOLEAN);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag", S3D_SIDEBYSIDE_CROSSEYED);
+	RNA_def_property_ui_text(prop, "Cross-Eyed", "Right eye should see left image and vice-versa");
+}
+
 static void rna_def_window(BlenderRNA *brna)
 {
 	StructRNA *srna;
@@ -1756,6 +1803,8 @@ static void rna_def_window(BlenderRNA *brna)
 	srna = RNA_def_struct(brna, "Window", NULL);
 	RNA_def_struct_ui_text(srna, "Window", "Open window");
 	RNA_def_struct_sdna(srna, "wmWindow");
+
+	rna_def_window_stereo3d(brna);
 
 	prop = RNA_def_property(srna, "screen", PROP_POINTER, PROP_NONE);
 	RNA_def_property_flag(prop, PROP_NEVER_NULL);
@@ -1785,6 +1834,12 @@ static void rna_def_window(BlenderRNA *brna)
 	RNA_def_property_int_sdna(prop, NULL, "sizey");
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 	RNA_def_property_ui_text(prop, "Height", "Window height");
+
+	prop = RNA_def_property(srna, "stereo_3d_display", PROP_POINTER, PROP_NONE);
+	RNA_def_property_pointer_sdna(prop, NULL, "stereo3d_format");
+	RNA_def_property_flag(prop, PROP_NEVER_NULL);
+	RNA_def_property_struct_type(prop, "Stereo3dDisplay");
+	RNA_def_property_ui_text(prop, "Stereo 3D Display", "Settings for stereo 3d display");
 
 	RNA_api_window(srna);
 }
