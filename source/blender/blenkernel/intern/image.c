@@ -102,6 +102,7 @@ static SpinLock image_spin;
 /* prototypes */
 static size_t image_num_files(struct Image *ima);
 static ImBuf *image_acquire_ibuf(Image *ima, ImageUser *iuser, void **lock_r);
+static void image_update_views_format(Scene *scene, Image *ima);
 
 /* max int, to indicate we don't store sequences in ibuf */
 #define IMA_NO_INDEX    0x7FEFEFEF
@@ -2516,8 +2517,13 @@ void BKE_image_signal(Image *ima, ImageUser *iuser, int signal)
 	switch (signal) {
 		case IMA_SIGNAL_FREE:
 			BKE_image_free_buffers(ima);
-			if (iuser)
+
+			if (iuser) {
 				iuser->ok = 1;
+				if (iuser->scene) {
+					image_update_views_format(iuser->scene, ima);
+				}
+			}
 			break;
 		case IMA_SIGNAL_SRC_CHANGE:
 			if (ima->type == IMA_TYPE_UV_TEST)
@@ -2598,8 +2604,12 @@ void BKE_image_signal(Image *ima, ImageUser *iuser, int signal)
 			else
 				BKE_image_free_buffers(ima);
 
-			if (iuser)
+			if (iuser) {
 				iuser->ok = 1;
+				if (iuser->scene) {
+					image_update_views_format(iuser->scene, ima);
+				}
+			}
 
 			break;
 		case IMA_SIGNAL_USER_NEW_IMAGE:
@@ -4405,7 +4415,7 @@ ImBuf *BKE_image_get_first_ibuf(Image *image)
 	return ibuf;
 }
 
-void BKE_image_update_views_format(Scene *scene, Image *ima)
+static void image_update_views_format(Scene *scene, Image *ima)
 {
 	SceneRenderView *srv;
 	ImageView *iv;

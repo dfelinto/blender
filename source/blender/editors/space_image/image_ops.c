@@ -1098,8 +1098,6 @@ static int image_open_exec(bContext *C, wmOperator *op)
 
 		ima->views_format = imf->views_format;
 		*ima->stereo3d_format = imf->stereo3d_format;
-
-		BKE_image_update_views_format(scene, ima);
 	}
 	else {
 		ima->flag &= IMA_IS_STEREO;
@@ -1153,6 +1151,7 @@ static int image_open_exec(bContext *C, wmOperator *op)
 		iuser->framenr = 1;
 		iuser->offset = frame_ofs - 1;
 		iuser->fie_ima = 2;
+		iuser->scene = scene;
 		BKE_image_init_imageuser(ima, iuser);
 	}
 

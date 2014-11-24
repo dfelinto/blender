@@ -163,8 +163,9 @@ static void rna_Image_views_format_update(Main *UNUSED(bmain), Scene *scene, Poi
 	ibuf = BKE_image_acquire_ibuf(ima, NULL, &lock);
 
 	if (ibuf) {
-		BKE_image_update_views_format(scene, ima);
-		BKE_image_signal(ima, NULL, IMA_SIGNAL_FREE);
+		ImageUser iuser = {NULL};
+		iuser.scene = scene;
+		BKE_image_signal(ima, &iuser, IMA_SIGNAL_FREE);
 	}
 
 	BKE_image_release_ibuf(ima, ibuf, lock);
