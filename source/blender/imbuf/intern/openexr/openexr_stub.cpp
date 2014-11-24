@@ -31,7 +31,7 @@
 
 #include "openexr_api.h"
 #include "openexr_multi.h"
-
+#include "BLI_utildefines.h"  /* UNUSED_VARS */
 
 void   *IMB_exr_get_handle          (void) {return NULL;}
 void   *IMB_exr_get_handle_name     (const char *name) {(void)name; return NULL;}
@@ -42,36 +42,40 @@ int     IMB_exr_begin_write         (void *handle, const char *filename, int wid
 void    IMB_exrtile_begin_write     (void *handle, const char *filename, int mipmap, int width, int height, int tilex, int tiley) { (void)handle; (void)filename; (void)mipmap; (void)width; (void)height; (void)tilex; (void)tiley; }
 
 void    IMB_exr_set_channel         (void *handle, const char *layname, const char *passname, int xstride, int ystride, float *rect) { (void)handle; (void)layname; (void)passname; (void)xstride; (void)ystride; (void)rect; }
-float  *IMB_exr_channel_rect        (void *handle, const char *layname, const char *passname, const char *view) { (void)handle; (void)layname; (void)passname; (void)view; }
+float  *IMB_exr_channel_rect        (void *handle, const char *layname, const char *passname, const char *view) { (void)handle; (void)layname; (void)passname; (void)view; return NULL; }
 
 void    IMB_exr_read_channels       (void *handle) { (void)handle; }
 void    IMB_exr_write_channels      (void *handle) { (void)handle; }
-void    IMB_exrtile_write_channels  (void *handle, int partx, int party, int level, int view) { (void)handle; (void)partx; (void)party; (void)level; (void)view; }
-void    IMB_exrmultiview_write_channels  (void *handle) { (void)handle; }
+void    IMB_exrtile_write_channels  (void *handle, int partx, int party, int level, const char *viewname) { UNUSED_VARS((void)handle, partx, party, level, viewname); }
+void    IMB_exrmultiview_write_channels(void *handle, const char *viewname) { UNUSED_VARS(handle, viewname); }
 void    IMB_exr_clear_channels  (void *handle) { (void)handle; }
 
-void    IMB_exr_multilayer_convert  (void *handle, void *base,
-                                     void * (*addlayer)(void *base, const char *str),
-                                     void (*addpass)(void *base, void *lay, const char *str, float *rect, int totchan, const char *chan_id, const char *view))
+void    IMB_exr_multilayer_convert(
+        void *handle, void *base,
+        void * (*addview)(void *base, const char *str),
+        void * (*addlayer)(void *base, const char *str),
+        void (*addpass)(void *base, void *lay, const char *str, float *rect, int totchan,
+                        const char *chan_id, const char *view))
 {
-	(void)handle; (void)base; (void)addlayer; (void)addpass;
+	UNUSED_VARS(handle, base, addview, addlayer, addpass);
 }
 
 void    IMB_exr_multiview_convert(void *handle, void *base,
                                   void (*addview)(void *base, const char *str),
                                   void (*addbuffer)(void *base, const char *str, struct ImBuf *ibuf, const int frame), const int frame)
 {
-	(void)handle; (void)base; (void)addview; (void)addbuffer; (void)frame;
+	UNUSED_VARS(handle, base, addview, addbuffer, frame);
 }
 
 bool    IMB_exr_multiview_save (struct ImBuf *ibuf, const char *name, const int flags, const size_t totviews,
                                 const char * (*getview)(void *base, size_t view_id),
                                 struct ImBuf * (*getbuffer)(void *base, const size_t view_id))
 {
-	(void)ibuf; (void)name; (void)flags; (void)depth; (void)totviews; (void)getview; (void)getbuffer;
+	UNUSED_VARS(ibuf, name, flags, totviews, getview, getbuffer);
+	return false;
 }
 
 void    IMB_exr_close               (void *handle) { (void)handle; }
 
-bool IMB_exr_has_multilayer         (void *handle) { (void)handle; }
-bool IMB_exr_has_singlelayer_multiview  (void *handle) { (void)handle; }
+bool IMB_exr_has_multilayer(void *handle) { UNUSED_VARS(handle); return false; }
+bool IMB_exr_has_singlelayer_multiview(void *handle) { UNUSED_VARS(handle); return false; }

@@ -2780,6 +2780,8 @@ bool BKE_image_is_openexr(struct Image *ima)
 	if (ELEM(ima->source, IMA_SRC_FILE, IMA_SRC_SEQUENCE)) {
 		return BLI_testextensie(ima->name, ".exr");
 	}
+#else
+	UNUSED_VARS(ima);
 #endif
 	return false;
 }
@@ -2841,6 +2843,8 @@ bool BKE_image_save_openexr_multiview(Image *ima, ImBuf *ibuf, const char *filep
 }
 
 /**************************** multiview load openexr *********************************/
+
+#ifdef WITH_OPENEXR
 static void image_add_view_cb(void *base, const char *str)
 {
 	Image *ima = base;
@@ -2894,6 +2898,7 @@ static void image_add_buffer_cb(void *base, const char *str, ImBuf *ibuf, const 
 	image_assign_ibuf(ima, ibuf, id, frame);
 	IMB_freeImBuf(ibuf);
 }
+#endif  /* WITH_OPENEXR */
 
 static void image_update_multiview_flags(Image *ima)
 {
