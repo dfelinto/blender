@@ -2618,7 +2618,6 @@ static int rna_Node_image_has_views_get(PointerRNA *ptr)
 {
 	bNode *node = (bNode *)ptr->data;
 	Image *ima = (Image *)node->id;
-	int views;
 
 	if (!ima || !(ima->rr)) return 0;
 

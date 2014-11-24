@@ -32,7 +32,7 @@
 #ifndef __WM_DRAW_H__
 #define __WM_DRAW_H__
 
-#include <GL/glew.h>
+#include "GPU_glew.h"
 
 
 #define MAX_N_TEX 3

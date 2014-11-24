@@ -91,7 +91,9 @@ EnumPropertyItem space_type_items[] = {
 #define V3D_S3D_CAMERA_LEFT        {STEREO_LEFT_ID, "LEFT", ICON_RESTRICT_RENDER_OFF, "Left", ""},
 #define V3D_S3D_CAMERA_RIGHT       {STEREO_RIGHT_ID, "RIGHT", ICON_RESTRICT_RENDER_OFF, "Right", ""},
 #define V3D_S3D_CAMERA_S3D         {STEREO_3D_ID, "S3D", ICON_CAMERA_STEREO, "3D", ""},
+#ifdef RNA_RUNTIME
 #define V3D_S3D_CAMERA_VIEWS       {STEREO_MONO_ID, "MONO", ICON_RESTRICT_RENDER_OFF, "Views", ""},
+#endif
 
 static EnumPropertyItem stereo3d_camera_items[] = {
 	V3D_S3D_CAMERA_LEFT
@@ -100,11 +102,13 @@ static EnumPropertyItem stereo3d_camera_items[] = {
 	{0, NULL, 0, NULL, NULL}
 };
 
+#ifdef RNA_RUNTIME
 static EnumPropertyItem multiview_camera_items[] = {
 	V3D_S3D_CAMERA_VIEWS
 	V3D_S3D_CAMERA_S3D
 	{0, NULL, 0, NULL, NULL}
 };
+#endif
 
 #undef V3D_S3D_CAMERA_LEFT
 #undef V3D_S3D_CAMERA_RIGHT

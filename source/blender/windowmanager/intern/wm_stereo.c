@@ -31,7 +31,6 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include <GL/glew.h>
 
 #include "DNA_listBase.h"
 #include "DNA_screen_types.h"
@@ -61,6 +60,7 @@
 #include "ED_view3d.h"
 #include "ED_screen.h"
 
+#include "GPU_glew.h"
 #include "GPU_draw.h"
 #include "GPU_extensions.h"
 
