@@ -281,11 +281,7 @@ void BKE_image_free_packedfiles(Image *ima)
 
 static void image_free_views(Image *ima)
 {
-	while (ima->views.last) {
-		ImageView *iv = ima->views.last;
-		BLI_remlink(&ima->views, iv);
-		MEM_freeN(iv);
-	}
+	BLI_freelistN(&ima->views);
 }
 
 void BKE_image_free_views(Image *image)
