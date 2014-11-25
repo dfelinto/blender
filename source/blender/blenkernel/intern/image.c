@@ -1192,7 +1192,7 @@ int BKE_imtype_to_ftype(const char imtype)
 	else if (imtype == R_IMF_IMTYPE_TIFF)
 		return TIF;
 #endif
-	else if (ELEM(imtype, R_IMF_IMTYPE_OPENEXR, R_IMF_IMTYPE_MULTILAYER))
+	else if (imtype == R_IMF_IMTYPE_OPENEXR || imtype == R_IMF_IMTYPE_MULTILAYER)
 		return OPENEXR;
 #ifdef WITH_CINEON
 	else if (imtype == R_IMF_IMTYPE_CINEON)
@@ -1467,7 +1467,7 @@ static bool do_add_image_extension(char *string, const char imtype, const ImageF
 	}
 #endif
 #ifdef WITH_OPENEXR
-	else if (ELEM(imtype, R_IMF_IMTYPE_OPENEXR, R_IMF_IMTYPE_MULTILAYER)) {
+	else if (imtype == R_IMF_IMTYPE_OPENEXR || imtype == R_IMF_IMTYPE_MULTILAYER) {
 		if (!BLI_testextensie(string, extension_test = ".exr"))
 			extension = extension_test;
 	}
