@@ -417,29 +417,6 @@ static void copy_image_packedfiles(ListBase *lb_dst, const ListBase *lb_src)
 	}
 }
 
-static void copy_image_views(ListBase *lb_dst, const ListBase *lb_src)
-{
-	const ImageView *iv_src;
-
-	BLI_listbase_clear(lb_dst);
-	for (iv_src = lb_src->first; iv_src; iv_src = iv_src->next) {
-		ImageView *iv_dst = MEM_dupallocN(iv_src);
-		BLI_addtail(lb_dst, iv_dst);
-	}
-}
-
-static void copy_image_anims(ListBase *lb_dst, const ListBase *lb_src)
-{
-	const ImageAnim *ia_src;
-
-	BLI_listbase_clear(lb_dst);
-	for (ia_src = lb_src->first; ia_src; ia_src = ia_src->next) {
-		ImageAnim *ia_dst = MEM_dupallocN(ia_src);
-		ia_dst->anim = NULL;
-		BLI_addtail(lb_dst, ia_dst);
-	}
-}
-
 /* empty image block, of similar type and filename */
 Image *BKE_image_copy(Main *bmain, Image *ima)
 {
@@ -465,8 +442,7 @@ Image *BKE_image_copy(Main *bmain, Image *ima)
 	copy_image_packedfiles(&nima->packedfiles, &ima->packedfiles);
 
 	nima->stereo3d_format = MEM_dupallocN(ima->stereo3d_format);
-	copy_image_views(&nima->views, &ima->views);
-	copy_image_anims(&nima->anims, &ima->anims);
+	BLI_duplicatelist(&nima->views, &ima->views);
 
 	return nima;
 }
