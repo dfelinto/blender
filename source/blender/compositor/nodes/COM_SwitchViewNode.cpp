@@ -20,6 +20,7 @@
  */
 
 #include "COM_SwitchViewNode.h"
+#include "BLI_listbase.h"
 
 SwitchViewNode::SwitchViewNode(bNode *editorNode) : Node(editorNode)
 {
@@ -30,18 +31,11 @@ void SwitchViewNode::convertToOperations(NodeConverter &converter, const Composi
 {
 	NodeOperationOutput *result;
 	const char *viewName = context.getViewName();
-
-	bNodeSocket *sock;
 	bNode *bnode = this->getbNode();
 
 	/* get the internal index of the socket with a matching name */
-	int nr = 0;
-	for (sock = (bNodeSocket *)bnode->inputs.first; sock; sock = sock->next, nr++) {
-		if (strcmp(sock->name, viewName) == 0)
-			break;
-	}
-
-	if (!sock) nr --;
+	int nr = BLI_findstringindex(&bnode->inputs, viewName, offsetof(bNodeSocket, name));
+	nr = max(nr, 0);
 
 	result = converter.addInputProxy(getInputSocket(nr), false);
 	converter.mapOutputSocket(getOutputSocket(0), result);
