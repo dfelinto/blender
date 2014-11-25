@@ -520,12 +520,13 @@ static void render_image_update_pass_and_layer(RenderJob *rj, RenderResult *rr, 
 	}
 }
 
-static void image_rect_update(void *rjv, RenderResult *rr, volatile rcti *renrect, const char *viewname)
+static void image_rect_update(void *rjv, RenderResult *rr, volatile rcti *renrect)
 {
 	RenderJob *rj = rjv;
 	Image *ima = rj->image;
 	ImBuf *ibuf;
 	void *lock;
+	const char *viewname = RE_GetActiveRenderView(rj->re);
 
 	/* only update if we are displaying the slot being rendered */
 	if (ima->render_slot != ima->last_render_slot) {
@@ -1106,7 +1107,7 @@ static int render_view3d_break(void *rpv)
 	return *(rp->stop);
 }
 
-static void render_view3d_display_update(void *rpv, RenderResult *UNUSED(rr), volatile struct rcti *UNUSED(rect), const char *UNUSED(viewname))
+static void render_view3d_display_update(void *rpv, RenderResult *UNUSED(rr), volatile struct rcti *UNUSED(rect))
 {
 	RenderPreview *rp = rpv;
 	

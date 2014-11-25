@@ -925,7 +925,7 @@ void RE_display_clear_cb(Render *re, void *handle, void (*f)(void *handle, Rende
 	re->display_clear = f;
 	re->dch = handle;
 }
-void RE_display_update_cb(Render *re, void *handle, void (*f)(void *handle, RenderResult *rr, volatile rcti *rect, const char *viewname))
+void RE_display_update_cb(Render *re, void *handle, void (*f)(void *handle, RenderResult *rr, volatile rcti *rect))
 {
 	re->display_update = f;
 	re->duh = handle;
