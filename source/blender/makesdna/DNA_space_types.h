@@ -497,13 +497,15 @@ typedef struct SpaceSeq {
 	float zoom DNA_DEPRECATED;  /* deprecated, handled by View2D now */
 	int view; /* see SEQ_VIEW_* below */
 	int overlay_type;
+	int draw_flag; /* overlay an image of the editing on below the strips */
+	int pad;
 
 	struct bGPdata *gpd;        /* grease-pencil data */
 
 	struct SequencerScopes scopes;  /* different scoped displayed in space */
 
 	char eye;				/* multiview current eye - for internal use */
-	char pad[7];
+	char pad2[7];
 } SpaceSeq;
 
 
@@ -516,6 +518,12 @@ typedef enum eSpaceSeq_RegionType {
 	SEQ_DRAW_IMG_HISTOGRAM = 4,
 } eSpaceSeq_RegionType;
 
+/* sseq->draw_flag */
+typedef enum eSpaceSeq_DrawFlag {
+	SEQ_DRAW_BACKDROP              = (1 << 0),
+} eSpaceSeq_DrawFlag;
+
+
 /* sseq->flag */
 typedef enum eSpaceSeq_Flag {
 	SEQ_DRAWFRAMES              = (1 << 0),
@@ -525,6 +533,8 @@ typedef enum eSpaceSeq_Flag {
 	SEQ_SHOW_GPENCIL            = (1 << 4),
 	SEQ_NO_DRAW_CFRANUM         = (1 << 5),
 	SEQ_USE_ALPHA               = (1 << 6), /* use RGBA display mode for preview */
+	SEQ_ALL_WAVEFORMS           = (1 << 7), /* draw all waveforms */
+	SEQ_NO_WAVEFORMS            = (1 << 8), /* draw no waveforms */
 } eSpaceSeq_Flag;
 
 /* sseq->view */
