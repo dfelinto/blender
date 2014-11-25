@@ -1987,7 +1987,9 @@ static void drawcamera(Scene *scene, View3D *v3d, RegionView3D *rv3d, Base *base
 	MovieClip *clip = BKE_object_movieclip_get(scene, base->object, false);
 
 	const bool is_stereo3d = drawcamera_is_stereo3d(scene, v3d, ob);
-	const bool is_stereo3d_cameras = (v3d->stereo3d_flag & V3D_S3D_DISPCAMERAS) && (scene->r.views_setup == SCE_VIEWS_SETUP_STEREO_3D);
+	const bool is_stereo3d_cameras = (ob == scene->camera) &&
+	                                 (v3d->stereo3d_flag & V3D_S3D_DISPCAMERAS) &&
+	                                 (scene->r.views_setup == SCE_VIEWS_SETUP_STEREO_3D);
 
 	/* draw data for movie clip set as active for scene */
 	if (clip) {
