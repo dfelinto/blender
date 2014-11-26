@@ -446,7 +446,7 @@ bool IMB_isfloat(ImBuf *ibuf)
 
 	for (type = IMB_FILE_TYPES; type < IMB_FILE_TYPES_LAST; type++) {
 		if (type->ftype(type, ibuf)) {
-			return (type->flag & IM_FTYPE_FLOAT);
+			return (type->flag & IM_FTYPE_FLOAT) != 0;
 		}
 	}
 	return false;
