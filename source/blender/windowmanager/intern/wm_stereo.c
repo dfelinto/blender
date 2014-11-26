@@ -216,7 +216,7 @@ static void wm_method_draw_stereo_sidebyside(wmWindow *win)
 	wmDrawData *drawdata;
 	wmDrawTriple *triple;
 	float halfx, halfy, ratiox, ratioy;
-	int x, y, sizex, sizey, offx, offy;
+	int x, y, offx, offy;
 	float alpha = 1.0f;
 	int view;
 	int soffx;
@@ -240,8 +240,8 @@ static void wm_method_draw_stereo_sidebyside(wmWindow *win)
 
 		for (y = 0, offy = 0; y < triple->ny; offy += triple->y[y], y++) {
 			for (x = 0, offx = 0; x < triple->nx; offx += triple->x[x], x++) {
-				sizex = (x == triple->nx - 1) ? WM_window_pixels_x(win) - offx : triple->x[x];
-				sizey = (y == triple->ny - 1) ? WM_window_pixels_y(win) - offy : triple->y[y];
+				const int sizex = triple->x[x];
+				const int sizey = triple->y[y];
 
 				/* wmOrtho for the screen has this same offset */
 				ratiox = sizex;
@@ -287,7 +287,7 @@ static void wm_method_draw_stereo_topbottom(wmWindow *win)
 	wmDrawData *drawdata;
 	wmDrawTriple *triple;
 	float halfx, halfy, ratiox, ratioy;
-	int x, y, sizex, sizey, offx, offy;
+	int x, y, offx, offy;
 	float alpha = 1.0f;
 	int view;
 	int soffy;
@@ -307,8 +307,8 @@ static void wm_method_draw_stereo_topbottom(wmWindow *win)
 
 		for (y = 0, offy = 0; y < triple->ny; offy += triple->y[y], y++) {
 			for (x = 0, offx = 0; x < triple->nx; offx += triple->x[x], x++) {
-				sizex = (x == triple->nx - 1) ? WM_window_pixels_x(win) - offx : triple->x[x];
-				sizey = (y == triple->ny - 1) ? WM_window_pixels_y(win) - offy : triple->y[y];
+				const int sizex = triple->x[x];
+				const int sizey = triple->y[y];
 
 				/* wmOrtho for the screen has this same offset */
 				ratiox = sizex;
