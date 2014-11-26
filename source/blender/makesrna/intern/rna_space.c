@@ -514,7 +514,7 @@ static void rna_SpaceView3D_matcap_update(Main *UNUSED(bmain), Scene *UNUSED(sce
 			BKE_previewimg_free(&ma->preview);
 		
 		if (ma->gpumaterial.first)
-			GPU_material_free(ma);
+			GPU_material_free(&ma->gpumaterial);
 		
 		WM_main_add_notifier(NC_MATERIAL | ND_SHADING_DRAW, ma);
 	}
@@ -2646,7 +2646,7 @@ static void rna_def_space_sequencer(BlenderRNA *brna)
 
 	static EnumPropertyItem waveform_type_draw_items[] = {
 		{SEQ_NO_WAVEFORMS, "NO_WAVEFORMS", 0, "Waveforms Off",
-		 "No waveforms drawn for all sound strips"},
+		 "No waveforms drawn for any sound strips"},
 		{SEQ_ALL_WAVEFORMS, "ALL_WAVEFORMS", 0, "Waveforms On",
 		 "Waveforms drawn for all sound strips"},
 		{0, "DEFAULT_WAVEFORMS", 0, "Use Strip Option",

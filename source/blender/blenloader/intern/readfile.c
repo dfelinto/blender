@@ -3271,6 +3271,7 @@ static void direct_link_world(FileData *fd, World *wrld)
 	}
 	
 	wrld->preview = direct_link_preview_image(fd, wrld->preview);
+	BLI_listbase_clear(&wrld->gpumaterial);
 }
 
 
