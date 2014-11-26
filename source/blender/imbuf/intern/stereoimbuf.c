@@ -343,7 +343,7 @@ static void imb_stereo_write_interlace(Stereo3DData *s3d, enum eStereo3dInterlac
 						};
 						char i = (char) swap;
 						for (x = 0; x < width; x++, from[0] += 3, from[1] += 3, to += 3) {
-							copy_v3_v3_uchar(to, from[i]);
+							copy_v3_v3_char((char *)to, (char *)from[i]);
 							i = !i;
 						}
 					}
@@ -357,7 +357,7 @@ static void imb_stereo_write_interlace(Stereo3DData *s3d, enum eStereo3dInterlac
 						};
 						char i = (char) swap;
 						for (x = 0; x < width; x++, from[0] += 4, from[1] += 4, to += 4) {
-							copy_v4_v4_uchar(to, from[i]);
+							copy_v4_v4_char((char *)to, (char *)from[i]);
 							i = !i;
 						}
 					}
@@ -392,7 +392,7 @@ static void imb_stereo_write_interlace(Stereo3DData *s3d, enum eStereo3dInterlac
 						};
 						char j = i;
 						for (x = 0; x < width; x++, from[0] += 3, from[1] += 3, to += 3) {
-							copy_v3_v3_uchar(to, from[j]);
+							copy_v3_v3_char((char *)to, (char *)from[j]);
 							j = !j;
 						}
 						i = !i;
@@ -408,7 +408,7 @@ static void imb_stereo_write_interlace(Stereo3DData *s3d, enum eStereo3dInterlac
 						};
 						char j = i;
 						for (x = 0; x < width; x++, from[0] += 4, from[1] += 4, to += 4) {
-							copy_v4_v4_uchar(to, from[j]);
+							copy_v4_v4_char((char *)to, (char *)from[j]);
 							j = !j;
 						}
 						i = !i;
@@ -1037,7 +1037,7 @@ static void imb_stereo_read_interlace(Stereo3DData *s3d, enum eStereo3dInterlace
 						};
 						char i = (char) swap;
 						for (x = 0; x < width; x++, from += 3, to[0] += 3, to[1] += 3) {
-							copy_v3_v3_uchar(to[i], from);
+							copy_v3_v3_char((char *)to[i], (char *)from);
 							i = !i;
 						}
 					}
@@ -1051,7 +1051,7 @@ static void imb_stereo_read_interlace(Stereo3DData *s3d, enum eStereo3dInterlace
 						};
 						char i = (char) swap;
 						for (x = 0; x < width; x++, from += 4, to[0] += 4, to[1] += 4) {
-							copy_v4_v4_uchar(to[i], from);
+							copy_v4_v4_char((char *)to[i], (char *)from);
 							i = !i;
 						}
 					}
@@ -1086,7 +1086,7 @@ static void imb_stereo_read_interlace(Stereo3DData *s3d, enum eStereo3dInterlace
 						};
 						char j = i;
 						for (x = 0; x < width; x++, from += 3, to[0] += 3, to[1] += 3) {
-							copy_v3_v3_uchar(to[j], from);
+							copy_v3_v3_char((char *)to[j], (char *)from);
 							j = !j;
 						}
 						i = !i;
@@ -1102,7 +1102,7 @@ static void imb_stereo_read_interlace(Stereo3DData *s3d, enum eStereo3dInterlace
 						};
 						char j = i;
 						for (x = 0; x < width; x++, from += 4, to[0] += 4, to[1] += 4) {
-							copy_v4_v4_uchar(to[j], from);
+							copy_v4_v4_char((char *)to[j], (char *)from);
 							j = !j;
 						}
 						i = !i;

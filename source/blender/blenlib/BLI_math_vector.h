@@ -66,11 +66,6 @@ MINLINE void copy_v2_v2_char(char r[2], const char a[2]);
 MINLINE void copy_v3_v3_char(char r[3], const char a[3]);
 MINLINE void copy_v4_v4_char(char r[4], const char a[4]);
 
-/* unsigned char */
-MINLINE void copy_v2_v2_uchar(unsigned char r[2], const unsigned char a[2]);
-MINLINE void copy_v3_v3_uchar(unsigned char r[3], const unsigned char a[3]);
-MINLINE void copy_v4_v4_uchar(unsigned char r[4], const unsigned char a[4]);
-
 /* short */
 MINLINE void copy_v2_v2_short(short r[2], const short a[2]);
 MINLINE void copy_v3_v3_short(short r[3], const short a[3]);
