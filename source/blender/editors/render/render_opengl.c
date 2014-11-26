@@ -99,7 +99,7 @@ typedef struct OGLRender {
 	int write_still;
 
 	ReportList *reports;
-	bMovieHandle **mh;
+	bMovieHandle **mh_arr;
 	int cfrao, nfra;
 
 	size_t totvideos;
@@ -597,7 +597,7 @@ static bool screen_opengl_render_init(bContext *C, wmOperator *op)
 	oglrender->win = win;
 
 	oglrender->totvideos = 0;
-	oglrender->mh = NULL;
+	oglrender->mh_arr = NULL;
 
 	return true;
 }
@@ -608,13 +608,13 @@ static void screen_opengl_render_end(bContext *C, OGLRender *oglrender)
 	Scene *scene = oglrender->scene;
 	size_t i;
 
-	if (oglrender->mh) {
+	if (oglrender->mh_arr) {
 		for (i = 0; i < oglrender->totvideos; i++) {
 			if (BKE_imtype_is_movie(scene->r.im_format.imtype)) {
-				oglrender->mh[i]->end_movie();
+				oglrender->mh_arr[i]->end_movie();
 			}
 		}
-		MEM_freeN(oglrender->mh);
+		MEM_freeN(oglrender->mh_arr);
 	}
 
 	if (oglrender->timer) { /* exec will not have a timer */
@@ -661,14 +661,14 @@ static int screen_opengl_render_anim_initialize(bContext *C, wmOperator *op)
 
 		BKE_scene_videos_dimensions_get(&scene->r, oglrender->sizex, oglrender->sizey, &width, &height);
 
-		oglrender->mh = MEM_mallocN(sizeof(bMovieHandle) * oglrender->totvideos, "Movies");
+		oglrender->mh_arr = MEM_mallocN(sizeof(bMovieHandle) * oglrender->totvideos, "Movies");
 
 		for (i = 0; i < oglrender->totvideos; i++) {
-			oglrender->mh[i] = BKE_movie_handle_get(scene->r.im_format.imtype);
+			oglrender->mh_arr[i] = BKE_movie_handle_get(scene->r.im_format.imtype);
 
 			/*XXX MV MOV need to come up with a solution for the name issue, because at the moment
 			 * it's handling the name entirely inside the movie format */
-			if (!oglrender->mh[i]->start_movie(scene, &scene->r, oglrender->sizex, oglrender->sizey, oglrender->reports)) {
+			if (!oglrender->mh_arr[i]->start_movie(scene, &scene->r, oglrender->sizex, oglrender->sizey, oglrender->reports)) {
 				screen_opengl_render_end(C, oglrender);
 				return 0;
 			}
@@ -743,7 +743,7 @@ static bool screen_opengl_render_anim_step(bContext *C, wmOperator *op)
 	rr = RE_AcquireResultRead(oglrender->re);
 
 	if (is_movie) {
-		ok = RE_WriteRenderViewsMovie(oglrender->reports, rr, scene, &scene->r, oglrender->mh, oglrender->sizex, oglrender->sizey, oglrender->totvideos);
+		ok = RE_WriteRenderViewsMovie(oglrender->reports, rr, scene, &scene->r, oglrender->mh_arr, oglrender->sizex, oglrender->sizey, oglrender->totvideos);
 		if (ok) {
 			printf("Append frame %d", scene->r.cfra);
 			BKE_reportf(op->reports, RPT_INFO, "Appended frame: %d", scene->r.cfra);

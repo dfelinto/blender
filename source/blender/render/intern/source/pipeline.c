@@ -3119,24 +3119,24 @@ bool RE_WriteRenderViewsImage(ReportList *reports, RenderResult *rr, Scene *scen
 			printf("Stereo 3D not support for MultiLayer image: %s\n", name);
 		}
 		else {
-			ImBuf *ibuf[3] = {NULL};
+			ImBuf *ibuf_arr[3] = {NULL};
 			const char *names[2] = {STEREO_LEFT_NAME, STEREO_RIGHT_NAME};
 			int i;
 
 			for (i = 0; i < 2; i++) {
 				int view_id = BLI_findstringindex(&rr->views, names[i], offsetof(RenderView, name));
-				ibuf[i] = render_result_rect_to_ibuf(rr, rd, view_id);
-				IMB_colormanagement_imbuf_for_write(ibuf[i], true, false, &scene->view_settings,
+				ibuf_arr[i] = render_result_rect_to_ibuf(rr, rd, view_id);
+				IMB_colormanagement_imbuf_for_write(ibuf_arr[i], true, false, &scene->view_settings,
 				                                    &scene->display_settings, &scene->r.im_format);
-				IMB_prepare_write_ImBuf(IMB_isfloat(ibuf[i]), ibuf[i]);
+				IMB_prepare_write_ImBuf(IMB_isfloat(ibuf_arr[i]), ibuf_arr[i]);
 			}
 
-			ibuf[2] = IMB_stereoImBuf(&scene->r.im_format, ibuf[0], ibuf[1]);
+			ibuf_arr[2] = IMB_stereoImBuf(&scene->r.im_format, ibuf_arr[0], ibuf_arr[1]);
 
 			if (stamp)
-				ok = BKE_imbuf_write_stamp(scene, camera, ibuf[2], name, &rd->im_format);
+				ok = BKE_imbuf_write_stamp(scene, camera, ibuf_arr[2], name, &rd->im_format);
 			else
-				ok = BKE_imbuf_write(ibuf[2], name, &rd->im_format);
+				ok = BKE_imbuf_write(ibuf_arr[2], name, &rd->im_format);
 
 			if (ok == false)
 				printf("Render error: cannot save %s\n", name);
@@ -3154,22 +3154,22 @@ bool RE_WriteRenderViewsImage(ReportList *reports, RenderResult *rr, Scene *scen
 					name[strlen(name) - 4] = 0;
 
 				BKE_add_image_extension(name, &imf);
-				ibuf[2]->planes = 24;
+				ibuf_arr[2]->planes = 24;
 
-				IMB_colormanagement_imbuf_for_write(ibuf[2], true, false, &scene->view_settings,
+				IMB_colormanagement_imbuf_for_write(ibuf_arr[2], true, false, &scene->view_settings,
 				                                    &scene->display_settings, &imf);
 
 				if (stamp)
-					ok = BKE_imbuf_write_stamp(scene, camera, ibuf[2], name, &rd->im_format);
+					ok = BKE_imbuf_write_stamp(scene, camera, ibuf_arr[2], name, &rd->im_format);
 				else
-					ok = BKE_imbuf_write(ibuf[2], name, &imf);
+					ok = BKE_imbuf_write(ibuf_arr[2], name, &imf);
 
 				printf("Saved: %s\n", name);
 			}
 
 			/* imbuf knows which rects are not part of ibuf */
 			for (i = 0; i < 3; i++) {
-				IMB_freeImBuf(ibuf[i]);
+				IMB_freeImBuf(ibuf_arr[i]);
 			}
 		}
 	}
@@ -3219,7 +3219,7 @@ bool RE_WriteRenderViewsMovie(ReportList *reports, RenderResult *rr, Scene *scen
 	}
 	else { /* R_IMF_VIEWS_STEREO_3D */
 		const char *names[2] = {STEREO_LEFT_NAME, STEREO_RIGHT_NAME};
-		ImBuf *ibuf[3] = {NULL};
+		ImBuf *ibuf_arr[3] = {NULL};
 		bool do_free[2] = {false, false};
 		size_t i;
 
@@ -3227,34 +3227,34 @@ bool RE_WriteRenderViewsMovie(ReportList *reports, RenderResult *rr, Scene *scen
 
 		for (i = 0; i < 2; i++) {
 			int view_id = BLI_findstringindex(&rr->views, names[i], offsetof(RenderView, name));
-			ibuf[i] = render_result_rect_to_ibuf(rr, &scene->r, view_id);
+			ibuf_arr[i] = render_result_rect_to_ibuf(rr, &scene->r, view_id);
 
 			/* note; the way it gets 32 bits rects is weak... */
-			if (ibuf[i]->rect == NULL) {
-				ibuf[i]->rect = MEM_mapallocN(sizeof(int) * width * height, "temp 32 bits rect");
-				ibuf[i]->mall |= IB_rect;
-				render_result_rect_get_pixels(rr, ibuf[i]->rect, width, height, &scene->view_settings, &scene->display_settings, view_id);
+			if (ibuf_arr[i]->rect == NULL) {
+				ibuf_arr[i]->rect = MEM_mapallocN(sizeof(int) * width * height, "temp 32 bits rect");
+				ibuf_arr[i]->mall |= IB_rect;
+				render_result_rect_get_pixels(rr, ibuf_arr[i]->rect, width, height, &scene->view_settings, &scene->display_settings, view_id);
 				do_free[i] = true;
 			}
 
-			IMB_colormanagement_imbuf_for_write(ibuf[i], true, false, &scene->view_settings,
+			IMB_colormanagement_imbuf_for_write(ibuf_arr[i], true, false, &scene->view_settings,
 			                                    &scene->display_settings, &scene->r.im_format);
 		}
 
-		ibuf[2] = IMB_stereoImBuf(&scene->r.im_format, ibuf[0], ibuf[1]);
+		ibuf_arr[2] = IMB_stereoImBuf(&scene->r.im_format, ibuf_arr[0], ibuf_arr[1]);
 
-		ok = mh[0]->append_movie(rd, scene->r.sfra, scene->r.cfra, (int *) ibuf[2]->rect,
-		                         ibuf[2]->x, ibuf[2]->y, reports);
+		ok = mh[0]->append_movie(rd, scene->r.sfra, scene->r.cfra, (int *) ibuf_arr[2]->rect,
+		                         ibuf_arr[2]->x, ibuf_arr[2]->y, reports);
 
 		for (i = 0; i < 2; i++) {
 			if (do_free[i]) {
-				MEM_freeN(ibuf[i]->rect);
-				ibuf[i]->rect = NULL;
-				ibuf[i]->mall &= ~IB_rect;
+				MEM_freeN(ibuf_arr[i]->rect);
+				ibuf_arr[i]->rect = NULL;
+				ibuf_arr[i]->mall &= ~IB_rect;
 			}
 
 			/* imbuf knows which rects are not part of ibuf */
-			IMB_freeImBuf(ibuf[i]);
+			IMB_freeImBuf(ibuf_arr[i]);
 		}
 	}
 
