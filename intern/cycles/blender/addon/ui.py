@@ -419,7 +419,7 @@ class CyclesRender_PT_views(CyclesButtonsPanel, Panel):
 
     def draw_header(self, context):
         rd = context.scene.render
-        self.layout.prop(rd, "use_multiple_views", text="")
+        self.layout.prop(rd, "use_multiview", text="")
 
     def draw(self, context):
         layout = self.layout
@@ -429,7 +429,7 @@ class CyclesRender_PT_views(CyclesButtonsPanel, Panel):
         rv = rd.views.active
 
 
-        layout.active = rd.use_multiple_views
+        layout.active = rd.use_multiview
         basic_stereo = (rd.views_setup == 'SETUP_BASIC')
 
         row = layout.row()

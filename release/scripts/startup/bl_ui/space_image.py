@@ -685,7 +685,7 @@ class IMAGE_PT_stereo_3d_properties(Panel):
         if sima:
             image = sima.image
             return (image and image.type == 'IMAGE' and
-                    context.scene.render.use_multiple_views)
+                    context.scene.render.use_multiview)
         return False
 
     def draw(self, context):

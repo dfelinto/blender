@@ -186,7 +186,7 @@ class RENDERLAYER_PT_views(RenderLayerButtonsPanel, Panel):
 
     def draw_header(self, context):
         rd = context.scene.render
-        self.layout.prop(rd, "use_multiple_views", text="")
+        self.layout.prop(rd, "use_multiview", text="")
 
     def draw(self, context):
         layout = self.layout
@@ -195,7 +195,7 @@ class RENDERLAYER_PT_views(RenderLayerButtonsPanel, Panel):
         rd = scene.render
         rv = rd.views.active
 
-        layout.active = rd.use_multiple_views
+        layout.active = rd.use_multiview
         basic_stereo = rd.views_setup == 'STEREO_3D'
 
         row = layout.row()

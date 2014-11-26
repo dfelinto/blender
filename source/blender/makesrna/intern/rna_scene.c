@@ -5468,7 +5468,7 @@ static void rna_def_scene_render_data(BlenderRNA *brna)
 	RNA_def_property_struct_type(prop, "SceneRenderView");
 	RNA_def_property_ui_text(prop, "Render Views", "");
 
-	prop = RNA_def_property(srna, "use_multiple_views", PROP_BOOLEAN, PROP_NONE);
+	prop = RNA_def_property(srna, "use_multiview", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "scemode", R_MULTIVIEW);
 	RNA_def_property_ui_text(prop, "Multiple Views", "Use multiple views in the scene");
 	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);

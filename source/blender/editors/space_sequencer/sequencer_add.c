@@ -230,7 +230,7 @@ static void seq_load_operator_info(SeqLoadInfo *seq_load, wmOperator *op)
 		RNA_PROP_END;
 	}
 
-	if ((prop = RNA_struct_find_property(op->ptr, "use_multiple_views")) && RNA_property_boolean_get(op->ptr, prop)) {
+	if ((prop = RNA_struct_find_property(op->ptr, "use_multiview")) && RNA_property_boolean_get(op->ptr, prop)) {
 		if (op->customdata) {
 			SequencerAddData *sad = op->customdata;
 			ImageFormatData *imf = &sad->im_format;
@@ -650,7 +650,7 @@ static int sequencer_add_movie_strip_invoke(bContext *C, wmOperator *op, const w
 	sequencer_add_init(C, op);
 
 	/* show multiview save options only if scene has multiviews */
-	prop = RNA_struct_find_property(op->ptr, "use_multiple_views");
+	prop = RNA_struct_find_property(op->ptr, "use_multiview");
 	RNA_property_boolean_set(op->ptr, prop, (scene->r.scemode & R_MULTIVIEW) != 0);
 	
 	WM_event_add_fileselect(C, op);
@@ -665,7 +665,7 @@ static void sequencer_add_draw(bContext *UNUSED(C), wmOperator *op)
 	SequencerAddData *sad = op->customdata;
 	ImageFormatData *imf = &sad->im_format;
 	PointerRNA imf_ptr, ptr;
-	const bool is_multiview = RNA_boolean_get(op->ptr, "use_multiple_views");
+	const bool is_multiview = RNA_boolean_get(op->ptr, "use_multiview");
 
 	/* main draw call */
 	RNA_pointer_create(NULL, op->type->srna, op->properties, &ptr);
@@ -833,7 +833,7 @@ static int sequencer_add_image_strip_invoke(bContext *C, wmOperator *op, const w
 	sequencer_add_init(C, op);
 
 	/* show multiview save options only if scene has multiviews */
-	prop = RNA_struct_find_property(op->ptr, "use_multiple_views");
+	prop = RNA_struct_find_property(op->ptr, "use_multiview");
 	RNA_property_boolean_set(op->ptr, prop, (scene->r.scemode & R_MULTIVIEW) != 0);
 
 	WM_event_add_fileselect(C, op);

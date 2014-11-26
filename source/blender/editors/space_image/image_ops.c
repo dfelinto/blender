@@ -1093,7 +1093,7 @@ static int image_open_exec(bContext *C, wmOperator *op)
 		image_open_init(C, op);
 
 	/* handle multiview images */
-	if (RNA_boolean_get(op->ptr, "use_multiple_views")) {
+	if (RNA_boolean_get(op->ptr, "use_multiview")) {
 		ImageFormatData *imf = &iod->im_format;
 
 		ima->views_format = imf->views_format;
@@ -1212,7 +1212,7 @@ static int image_open_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(
 	image_open_init(C, op);
 
 	/* show multiview save options only if scene has multiviews */
-	prop = RNA_struct_find_property(op->ptr, "use_multiple_views");
+	prop = RNA_struct_find_property(op->ptr, "use_multiview");
 	RNA_property_boolean_set(op->ptr, prop, (scene->r.scemode & R_MULTIVIEW) != 0);
 
 	image_filesel(C, op, path);
@@ -1236,7 +1236,7 @@ static void image_open_draw(bContext *UNUSED(C), wmOperator *op)
 	ImageOpenData *iod = op->customdata;
 	ImageFormatData *imf = &iod->im_format;
 	PointerRNA imf_ptr, ptr;
-	const bool is_multiview = RNA_boolean_get(op->ptr, "use_multiple_views");
+	const bool is_multiview = RNA_boolean_get(op->ptr, "use_multiview");
 
 	/* main draw call */
 	RNA_pointer_create(NULL, op->type->srna, op->properties, &ptr);
@@ -1941,7 +1941,7 @@ static int image_save_as_invoke(bContext *C, wmOperator *op, const wmEvent *UNUS
 	memcpy(op->customdata, &simopts.im_format, sizeof(simopts.im_format));
 
 	/* show multiview save options only if image has multiviews */
-	prop = RNA_struct_find_property(op->ptr, "use_multiple_views");
+	prop = RNA_struct_find_property(op->ptr, "use_multiview");
 	RNA_property_boolean_set(op->ptr, prop, (ima->flag & IMA_IS_STEREO));
 
 	image_filesel(C, op, simopts.filepath);
@@ -1971,7 +1971,7 @@ static void image_save_as_draw(bContext *UNUSED(C), wmOperator *op)
 	uiLayout *layout = op->layout;
 	ImageFormatData *imf = op->customdata;
 	PointerRNA imf_ptr, ptr;
-	const bool is_multiview = RNA_boolean_get(op->ptr, "use_multiple_views");
+	const bool is_multiview = RNA_boolean_get(op->ptr, "use_multiview");
 
 	/* image template */
 	RNA_pointer_create(NULL, &RNA_ImageFormatSettings, imf, &imf_ptr);

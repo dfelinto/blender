@@ -1031,7 +1031,7 @@ class SEQUENCER_PT_stereo_3d(SequencerButtonsPanel, Panel):
             return False
 
         return (strip.type in {'IMAGE', 'MOVIE'} and
-                context.scene.render.use_multiple_views)
+                context.scene.render.use_multiview)
 
     def draw(self, context):
         layout = self.layout
