@@ -135,9 +135,11 @@ enum {
 #define DEFAULT_SENSOR_HEIGHT	18.0f
 
 /* stereo->convergence_mode */
-#define CAM_S3D_OFFAXIS	0
-#define CAM_S3D_PARALLEL	1
-#define CAM_S3D_TOE	2
+enum {
+	CAM_S3D_OFFAXIS    = 0,
+	CAM_S3D_PARALLEL   = 1,
+	CAM_S3D_TOE        = 2,
+};
 
 /* stereo->pivot */
 enum {
