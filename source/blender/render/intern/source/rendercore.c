@@ -2013,7 +2013,7 @@ void add_halo_flare(Render *re)
 		if (do_draw) {
 			/* weak... the display callback wants an active renderlayer pointer... */
 			rr->renlay= rl;
-			re->display_update(re->duh, rr, NULL, re->viewname);
+			re->display_update(re->duh, rr, NULL);
 		}
 
 		R.r.mode= mode;

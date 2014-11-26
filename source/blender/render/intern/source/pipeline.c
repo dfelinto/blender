@@ -143,7 +143,7 @@ static int thread_break(void *UNUSED(arg))
 
 /* default callbacks, set in each new render */
 static void result_nothing(void *UNUSED(arg), RenderResult *UNUSED(rr)) {}
-static void result_rcti_nothing(void *UNUSED(arg), RenderResult *UNUSED(rr), volatile struct rcti *UNUSED(rect), const char *UNUSED(viewname)) {}
+static void result_rcti_nothing(void *UNUSED(arg), RenderResult *UNUSED(rr), volatile struct rcti *UNUSED(rect)) {}
 static void current_scene_nothing(void *UNUSED(arg), Scene *UNUSED(scene)) {}
 static void stats_nothing(void *UNUSED(arg), RenderStats *UNUSED(rs)) {}
 static void float_nothing(void *UNUSED(arg), float UNUSED(val)) {}
@@ -1171,7 +1171,7 @@ typedef struct RenderThread {
 	
 	int number;
 
-	void (*display_update)(void *handle, RenderResult *rr, volatile rcti *rect, const char *viewname);
+	void (*display_update)(void *handle, RenderResult *rr, volatile rcti *rect);
 	void *duh;
 } RenderThread;
 
@@ -1185,7 +1185,7 @@ static void *do_render_thread(void *thread_v)
 		do_part_thread(pa);
 
 		if (thread->display_update) {
-			thread->display_update(thread->duh, pa->result, NULL, RR_ALL_VIEWS);
+			thread->display_update(thread->duh, pa->result, NULL);
 		}
 
 		BLI_thread_queue_push(thread->donequeue, pa);
@@ -1327,7 +1327,7 @@ static void threaded_tile_processor(Render *re)
 				if (render_display_update_enabled(re))
 					for (pa = re->parts.first; pa; pa = pa->next)
 						if ((pa->status == PART_STATUS_IN_PROGRESS) && pa->nr && pa->result)
-							re->display_update(re->duh, pa->result, &pa->result->renrect, re->viewname);
+							re->display_update(re->duh, pa->result, &pa->result->renrect);
 				
 				lastdraw = PIL_check_seconds_timer();
 			}
@@ -1579,7 +1579,7 @@ static void do_render_blur_3d(Render *re)
 	
 	/* weak... the display callback wants an active renderlayer pointer... */
 	re->result->renlay = render_get_active_layer(re, re->result);
-	re->display_update(re->duh, re->result, NULL, re->viewname);
+	re->display_update(re->duh, re->result, NULL);
 }
 
 
@@ -1697,7 +1697,7 @@ static void do_render_fields_3d(Render *re)
 
 	BLI_rw_mutex_unlock(&re->resultmutex);
 
-	re->display_update(re->duh, re->result, NULL, re->viewname);
+	re->display_update(re->duh, re->result, NULL);
 }
 
 /* make sure disprect is not affected by the render border */
@@ -1761,7 +1761,7 @@ static void do_render_fields_blur_3d(Render *re)
 				BLI_rw_mutex_unlock(&re->resultmutex);
 		
 				re->display_init(re->dih, re->result);
-				re->display_update(re->duh, re->result, NULL, re->viewname);
+				re->display_update(re->duh, re->result, NULL);
 
 				/* restore the disprect from border */
 				re->disprect = orig_disprect;
@@ -2261,7 +2261,8 @@ static void do_merge_fullsample(Render *re, bNodeTree *ntree)
 			if (sample != re->osa - 1) {
 				/* weak... the display callback wants an active renderlayer pointer... */
 				re->result->renlay = render_get_active_layer(re, re->result);
-				re->display_update(re->duh, re->result, NULL, rv->name);
+				RE_SetActiveRenderView(re, rv->name);
+				re->display_update(re->duh, re->result, NULL);
 			}
 		}
 	}
@@ -2467,7 +2468,7 @@ static void do_render_composite_fields_blur_3d(Render *re)
 
 	/* weak... the display callback wants an active renderlayer pointer... */
 	re->result->renlay = render_get_active_layer(re, re->result);
-	re->display_update(re->duh, re->result, NULL, 0);
+	re->display_update(re->duh, re->result, NULL);
 }
 
 static void renderresult_stampinfo(Render *re)
@@ -2583,7 +2584,8 @@ static void do_render_seq(Render *re)
 		BLI_rw_mutex_unlock(&re->resultmutex);
 
 		/* would mark display buffers as invalid */
-		re->display_update(re->duh, re->result, NULL, rv->name);
+		RE_SetActiveRenderView(re, rv->name);
+		re->display_update(re->duh, re->result, NULL);
 	}
 
 	MEM_freeN(ibuf);
@@ -2623,7 +2625,7 @@ static void do_render_all_options(Render *re)
 			do_render_seq(re);
 		
 		re->stats_draw(re->sdh, &re->i);
-		re->display_update(re->duh, re->result, NULL, re->viewname);
+		re->display_update(re->duh, re->result, NULL);
 	}
 	else {
 		re->pool = BKE_image_pool_new();
@@ -2641,7 +2643,7 @@ static void do_render_all_options(Render *re)
 	/* stamp image info here */
 	if ((re->r.stamp & R_STAMP_ALL) && (re->r.stamp & R_STAMP_DRAW)) {
 		renderresult_stampinfo(re);
-		re->display_update(re->duh, re->result, NULL, re->viewname);
+		re->display_update(re->duh, re->result, NULL);
 	}
 }
 

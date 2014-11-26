@@ -243,7 +243,7 @@ void RE_engine_update_result(RenderEngine *engine, RenderResult *result)
 
 	if (result) {
 		result->renlay = result->layers.first; /* weak, draws first layer always */
-		re->display_update(re->duh, result, NULL, re->viewname);
+		re->display_update(re->duh, result, NULL);
 	}
 }
 
@@ -282,7 +282,7 @@ void RE_engine_end_result(RenderEngine *engine, RenderResult *result, int cancel
 		/* draw */
 		if (!re->test_break(re->tbh)) {
 			result->renlay = result->layers.first; /* weak, draws first layer always */
-			re->display_update(re->duh, result, NULL, re->viewname);
+			re->display_update(re->duh, result, NULL);
 		}
 	}
 
