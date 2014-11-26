@@ -2631,7 +2631,7 @@ RenderPass *BKE_image_multilayer_index(RenderResult *rr, ImageUser *iuser)
 		short index = 0, rv_index, rl_index = 0, rp_index;
 		bool is_stereo = (iuser->flag & IMA_SHOW_STEREO) && RE_RenderResult_is_stereo(rr);
 
-		rv_index = is_stereo ? iuser->eye : iuser->view;
+		rv_index = is_stereo ? iuser->multiview_eye : iuser->view;
 
 		for (rl = rr->layers.first; rl; rl = rl->next, rl_index++) {
 			rp_index = 0;
@@ -2671,7 +2671,7 @@ void BKE_image_multiview_index(Image *ima, ImageUser *iuser)
 	if (iuser) {
 		bool is_stereo = (ima->flag & IMA_IS_STEREO) && (iuser->flag & IMA_SHOW_STEREO);
 		if (is_stereo) {
-			iuser->multi_index = iuser->eye;
+			iuser->multi_index = iuser->multiview_eye;
 		}
 		else {
 			if ((iuser->view < 0) || (iuser->view >= BLI_listbase_count_ex(&ima->views, iuser->view + 1))) {
@@ -3458,7 +3458,7 @@ static ImBuf *image_get_render_result(Image *ima, ImageUser *iuser, void **lock_
 	actview = iuser->view;
 
 	if ((ima->flag & IMA_IS_STEREO) && (iuser->flag & IMA_SHOW_STEREO))
-		actview = iuser->eye;
+		actview = iuser->multiview_eye;
 
 	if (from_render) {
 		RE_AcquireResultImage(re, &rres, actview);

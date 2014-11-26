@@ -504,7 +504,7 @@ typedef struct SpaceSeq {
 
 	struct SequencerScopes scopes;  /* different scoped displayed in space */
 
-	char eye;				/* multiview current eye - for internal use */
+	char multiview_eye;				/* multiview current eye - for internal use */
 	char pad2[7];
 } SpaceSeq;
 

@@ -213,7 +213,7 @@ typedef struct View3D {
 	/* drawflags, denoting state */
 	char zbuf, transp, xray;
 
-	char eye;				/* multiview current eye - for internal use */
+	char multiview_eye;				/* multiview current eye - for internal use */
 	char pad3[4];
 
 	void *properties_storage;		/* Nkey panel stores stuff here (runtime only!) */

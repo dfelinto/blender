@@ -769,15 +769,15 @@ static void wm_method_draw_triple_multiview(bContext *C, wmWindow *win, StereoVi
 			case SPACE_IMAGE:
 			{
 				SpaceImage *sima = sa->spacedata.first;
-				sima->iuser.eye = sview;
+				sima->iuser.multiview_eye = sview;
 				break;
 			}
 			case SPACE_VIEW3D:
 			{
 				View3D *v3d = sa->spacedata.first;
 				BGpic *bgpic = v3d->bgpicbase.first;
-				v3d->eye = sview;
-				if (bgpic) bgpic->iuser.eye = sview;
+				v3d->multiview_eye = sview;
+				if (bgpic) bgpic->iuser.multiview_eye = sview;
 				break;
 			}
 			case SPACE_NODE:
@@ -792,7 +792,7 @@ static void wm_method_draw_triple_multiview(bContext *C, wmWindow *win, StereoVi
 			case SPACE_SEQ:
 			{
 				SpaceSeq *sseq = sa->spacedata.first;
-				sseq->eye = sview;
+				sseq->multiview_eye = sview;
 				break;
 			}
 		}
