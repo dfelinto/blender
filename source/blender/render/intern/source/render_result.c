@@ -357,98 +357,97 @@ static const char *name_from_passtype(int passtype, int channel)
 
 static int passtype_from_name(const char *str)
 {
-	
-	if (strstr(str, "Combined") == str)
+	if (STRPREFIX(str, "Combined"))
 		return SCE_PASS_COMBINED;
 
-	if (strstr(str, "Depth") == str)
+	if (STRPREFIX(str, "Depth"))
 		return SCE_PASS_Z;
 
-	if (strstr(str, "Vector") == str)
+	if (STRPREFIX(str, "Vector"))
 		return SCE_PASS_VECTOR;
 
-	if (strstr(str, "Normal") == str)
+	if (STRPREFIX(str, "Normal"))
 		return SCE_PASS_NORMAL;
 
-	if (strstr(str, "UV") == str)
+	if (STRPREFIX(str, "UV"))
 		return SCE_PASS_UV;
 
-	if (strstr(str, "Color") == str)
+	if (STRPREFIX(str, "Color"))
 		return SCE_PASS_RGBA;
 
-	if (strstr(str, "Emit") == str)
+	if (STRPREFIX(str, "Emit"))
 		return SCE_PASS_EMIT;
 
-	if (strstr(str, "Diffuse") == str)
+	if (STRPREFIX(str, "Diffuse"))
 		return SCE_PASS_DIFFUSE;
 
-	if (strstr(str, "Spec") == str)
+	if (STRPREFIX(str, "Spec"))
 		return SCE_PASS_SPEC;
 
-	if (strstr(str, "Shadow") == str)
+	if (STRPREFIX(str, "Shadow"))
 		return SCE_PASS_SHADOW;
 	
-	if (strstr(str, "AO") == str)
+	if (STRPREFIX(str, "AO"))
 		return SCE_PASS_AO;
 
-	if (strstr(str, "Env") == str)
+	if (STRPREFIX(str, "Env"))
 		return SCE_PASS_ENVIRONMENT;
 
-	if (strstr(str, "Indirect") == str)
+	if (STRPREFIX(str, "Indirect"))
 		return SCE_PASS_INDIRECT;
 
-	if (strstr(str, "Reflect") == str)
+	if (STRPREFIX(str, "Reflect"))
 		return SCE_PASS_REFLECT;
 
-	if (strstr(str, "Refract") == str)
+	if (STRPREFIX(str, "Refract"))
 		return SCE_PASS_REFRACT;
 
-	if (strstr(str, "IndexOB") == str)
+	if (STRPREFIX(str, "IndexOB"))
 		return SCE_PASS_INDEXOB;
 
-	if (strstr(str, "IndexMA") == str)
+	if (STRPREFIX(str, "IndexMA"))
 		return SCE_PASS_INDEXMA;
 
-	if (strstr(str, "Mist") == str)
+	if (STRPREFIX(str, "Mist"))
 		return SCE_PASS_MIST;
 	
-	if (strstr(str, "RayHits") == str)
+	if (STRPREFIX(str, "RayHits"))
 		return SCE_PASS_RAYHITS;
 
-	if (strstr(str, "DiffDir") == str)
+	if (STRPREFIX(str, "DiffDir"))
 		return SCE_PASS_DIFFUSE_DIRECT;
 
-	if (strstr(str, "DiffInd") == str)
+	if (STRPREFIX(str, "DiffInd"))
 		return SCE_PASS_DIFFUSE_INDIRECT;
 
-	if (strstr(str, "DiffCol") == str)
+	if (STRPREFIX(str, "DiffCol"))
 		return SCE_PASS_DIFFUSE_COLOR;
 
-	if (strstr(str, "GlossDir") == str)
+	if (STRPREFIX(str, "GlossDir"))
 		return SCE_PASS_GLOSSY_DIRECT;
 
-	if (strstr(str, "GlossInd") == str)
+	if (STRPREFIX(str, "GlossInd"))
 		return SCE_PASS_GLOSSY_INDIRECT;
 
-	if (strstr(str, "GlossCol") == str)
+	if (STRPREFIX(str, "GlossCol"))
 		return SCE_PASS_GLOSSY_COLOR;
 
-	if (strstr(str, "TransDir") == str)
+	if (STRPREFIX(str, "TransDir"))
 		return SCE_PASS_TRANSM_DIRECT;
 
-	if (strstr(str, "TransInd") == str)
+	if (STRPREFIX(str, "TransInd"))
 		return SCE_PASS_TRANSM_INDIRECT;
 
-	if (strstr(str, "TransCol") == str)
+	if (STRPREFIX(str, "TransCol"))
 		return SCE_PASS_TRANSM_COLOR;
 		
-	if (strcmp(str, "SubsurfaceDir") == 0)
+	if (STRPREFIX(str, "SubsurfaceDir"))
 		return SCE_PASS_SUBSURFACE_DIRECT;
 
-	if (strcmp(str, "SubsurfaceInd") == 0)
+	if (STRPREFIX(str, "SubsurfaceInd"))
 		return SCE_PASS_SUBSURFACE_INDIRECT;
 
-	if (strcmp(str, "SubsurfaceCol") == 0)
+	if (STRPREFIX(str, "SubsurfaceCol"))
 		return SCE_PASS_SUBSURFACE_COLOR;
 
 	return 0;
