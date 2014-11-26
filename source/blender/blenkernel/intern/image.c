@@ -4431,7 +4431,7 @@ static void image_update_views_format(Scene *scene, Image *ima)
 				iv = MEM_mallocN(sizeof(ImageView), "Image View (open)");
 				BLI_strncpy(iv->name, srv->name, sizeof(iv->name));
 
-				sprintf(iv->filepath, "%s%s%s", prefix, srv->suffix, ext);
+				BLI_snprintf(iv->filepath, sizeof(iv->filepath), "%s%s%s", prefix, srv->suffix, ext);
 				BLI_addtail(&ima->views, iv);
 			}
 		}

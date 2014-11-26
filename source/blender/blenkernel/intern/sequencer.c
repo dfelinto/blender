@@ -790,7 +790,7 @@ static void seq_multiview_name(Scene *scene, const size_t view_id, const char *p
 {
 	const char *viewname = BKE_scene_render_view_name_get(&scene->r, view_id);
 	const char *suffix = BKE_scene_view_suffix_get(&scene->r, viewname);
-	sprintf(r_path, "%s%s%s", prefix, suffix, ext);
+	BLI_snprintf(r_path, sizeof(r_path), "%s%s%s", prefix, suffix, ext);
 }
 
 /* note: caller should run BKE_sequence_calc(scene, seq) after */
@@ -1460,7 +1460,7 @@ static void seq_open_anim_file(Scene *scene, Sequence *seq)
 			StripAnim *sanim = MEM_mallocN(sizeof(StripAnim), "Strip Anim");
 			BLI_addtail(&seq->anims, sanim);
 
-			sprintf(str, "%s%s%s", prefix, suffix, ext);
+			BLI_snprintf(str, sizeof(str), "%s%s%s", prefix, suffix, ext);
 
 			sanim->anim = openanim(str, IB_rect | ((seq->flag & SEQ_FILTERY) ? IB_animdeinterlace : 0),
 			                       seq->streamindex, seq->strip->colorspace_settings.name);
