@@ -3228,7 +3228,7 @@ static ImBuf *image_load_movie_file(Image *ima, ImageUser *iuser, int frame)
 				image_assign_ibuf(ima, ibuf_arr[i], i, frame);
 			}
 			else
-				ima->ok &= 0;
+				ima->ok = 0;
 		}
 	}
 	else
