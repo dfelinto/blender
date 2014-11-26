@@ -3419,7 +3419,7 @@ static bool view3d_stereo3d_active(const bContext *C, Scene *scene, View3D *v3d,
 	if ((v3d->camera == NULL) || rv3d->persp != RV3D_CAMOB)
 		return false;
 
-	if (scene->r.views_setup & SCE_VIEWS_SETUP_MULTIVIEW) {
+	if (scene->r.views_format & SCE_VIEWS_FORMAT_MULTIVIEW) {
 		if (v3d->stereo3d_camera == STEREO_MONO_ID)
 			return false;
 
@@ -3451,7 +3451,7 @@ static void view3d_stereo3d_setup(Scene *scene, View3D *v3d, ARegion *ar)
 	viewname = names[is_left ? STEREO_LEFT_ID : STEREO_RIGHT_ID];
 
 	/* update the viewport matrices with the new camera */
-	if (scene->r.views_setup == SCE_VIEWS_SETUP_STEREO_3D) {
+	if (scene->r.views_format == SCE_VIEWS_FORMAT_STEREO_3D) {
 		Camera *data;
 		float viewmat[4][4];
 		float shiftx;
@@ -3468,7 +3468,7 @@ static void view3d_stereo3d_setup(Scene *scene, View3D *v3d, ARegion *ar)
 		data->shiftx = shiftx;
 		BLI_unlock_thread(LOCK_VIEW3D);
 	}
-	else { /* SCE_VIEWS_SETUP_MULTIVIEW */
+	else { /* SCE_VIEWS_FORMAT_MULTIVIEW */
 		float viewmat[4][4];
 		Object *view_ob = v3d->camera;
 		Object *camera = BKE_camera_render(scene, v3d->camera, viewname);
@@ -3488,14 +3488,14 @@ static void view3d_stereo3d_setup_offscreen(Scene *scene, View3D *v3d, ARegion *
                                             float winmat[4][4], const char *viewname)
 {
 	/* update the viewport matrices with the new camera */
-	if (scene->r.views_setup == SCE_VIEWS_SETUP_STEREO_3D) {
+	if (scene->r.views_format == SCE_VIEWS_FORMAT_STEREO_3D) {
 		float viewmat[4][4];
 		const bool is_left = STREQ(viewname, STEREO_LEFT_NAME);
 
 		BKE_camera_view_matrix(&scene->r, v3d->camera, is_left, viewmat);
 		view3d_main_area_setup_view(scene, v3d, ar, viewmat, winmat);
 	}
-	else { /* SCE_VIEWS_SETUP_MULTIVIEW */
+	else { /* SCE_VIEWS_FORMAT_MULTIVIEW */
 		float viewmat[4][4];
 		Object *camera = BKE_camera_render(scene, v3d->camera, viewname);
 

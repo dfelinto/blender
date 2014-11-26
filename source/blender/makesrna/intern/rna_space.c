@@ -692,7 +692,7 @@ static EnumPropertyItem *rna_SpaceView3D_stereo3d_camera_itemf(bContext *UNUSED(
 {
 	Scene *scene = ((bScreen *)ptr->id.data)->scene;
 
-	if (scene->r.views_setup == SCE_VIEWS_SETUP_MULTIVIEW)
+	if (scene->r.views_format == SCE_VIEWS_FORMAT_MULTIVIEW)
 		return multiview_camera_items;
 	else
 		return stereo3d_camera_items;

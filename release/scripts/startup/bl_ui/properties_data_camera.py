@@ -132,7 +132,7 @@ class DATA_PT_camera_stereoscopy(CameraButtonsPanel, Panel):
         layout = self.layout
         render = context.scene.render
 
-        layout.active = (render.views_setup == 'STEREO_3D')
+        layout.active = (render.views_format == 'STEREO_3D')
 
         col = layout.column()
 

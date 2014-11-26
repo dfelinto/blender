@@ -264,10 +264,10 @@ typedef struct SceneRenderView {
 /* srv->viewflag */
 #define SCE_VIEW_DISABLE		(1<<0)
 
-/* scene.render.views_setup */
+/* scene.render.views_format */
 enum {
-	SCE_VIEWS_SETUP_STEREO_3D = 0,
-	SCE_VIEWS_SETUP_MULTIVIEW = 1,
+	SCE_VIEWS_FORMAT_STEREO_3D = 0,
+	SCE_VIEWS_FORMAT_MULTIVIEW = 1,
 };
 
 /* ImageFormatData.views_output */
@@ -687,7 +687,7 @@ typedef struct RenderData {
 	/* MultiView */
 	ListBase views;
 	short actview;
-	short views_setup;
+	short views_format;
 	short pad8[2];
 } RenderData;
 

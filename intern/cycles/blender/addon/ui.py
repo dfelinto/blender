@@ -430,10 +430,10 @@ class CyclesRender_PT_views(CyclesButtonsPanel, Panel):
 
 
         layout.active = rd.use_multiview
-        basic_stereo = (rd.views_setup == 'SETUP_BASIC')
+        basic_stereo = (rd.views_format == 'SETUP_BASIC')
 
         row = layout.row()
-        row.prop(rd, "views_setup", expand=True)
+        row.prop(rd, "views_format", expand=True)
 
         if basic_stereo:
             row = layout.row()

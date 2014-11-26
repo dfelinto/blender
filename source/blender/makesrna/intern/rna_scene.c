@@ -1396,18 +1396,18 @@ static char *rna_SceneRenderView_path(PointerRNA *ptr)
 	return BLI_sprintfN("render.views[\"%s\"]", srv->name);
 }
 
-static void rna_RenderSettings_views_setup_set(PointerRNA *ptr, int value)
+static void rna_RenderSettings_views_format_set(PointerRNA *ptr, int value)
 {
 	RenderData *rd = (RenderData *)ptr->data;
 
-	if (rd->views_setup == SCE_VIEWS_SETUP_MULTIVIEW &&
-	    value == SCE_VIEWS_SETUP_STEREO_3D)
+	if (rd->views_format == SCE_VIEWS_FORMAT_MULTIVIEW &&
+	    value == SCE_VIEWS_FORMAT_STEREO_3D)
 	{
 		/* make sure the actview is visible */
 		if (rd->actview > 1) rd->actview = 1;
 	}
 
-	rd->views_setup = value;
+	rd->views_format = value;
 }
 
 static int rna_RenderSettings_multiple_engines_get(PointerRNA *UNUSED(ptr))
@@ -4763,10 +4763,10 @@ static void rna_def_scene_render_data(BlenderRNA *brna)
 		                            "resolution to 480 pixels"},
 		{0, NULL, 0, NULL, NULL}};
 
-	static EnumPropertyItem views_setup_items[] = {
-		{SCE_VIEWS_SETUP_STEREO_3D, "STEREO_3D", 0, "Stereo 3D",
+	static EnumPropertyItem views_format_items[] = {
+		{SCE_VIEWS_FORMAT_STEREO_3D, "STEREO_3D", 0, "Stereo 3D",
 		                        "Single stereo camera system, adjust the stereo settings in the camera panel"},
-		{SCE_VIEWS_SETUP_MULTIVIEW, "MULTIVIEW", 0, "Multi-View",
+		{SCE_VIEWS_FORMAT_MULTIVIEW, "MULTIVIEW", 0, "Multi-View",
 		                        "Multi camera system, adjust the cameras individually"},
 		{0, NULL, 0, NULL, NULL}
 	};
@@ -5473,11 +5473,11 @@ static void rna_def_scene_render_data(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Multiple Views", "Use multiple views in the scene");
 	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
 
-	prop = RNA_def_property(srna, "views_setup", PROP_ENUM, PROP_NONE);
-	RNA_def_property_enum_items(prop, views_setup_items);
+	prop = RNA_def_property(srna, "views_format", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_items(prop, views_format_items);
 	RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
 	RNA_def_property_ui_text(prop, "Setup Stereo Mode", "");
-	RNA_def_property_enum_funcs(prop, NULL, "rna_RenderSettings_views_setup_set", NULL);
+	RNA_def_property_enum_funcs(prop, NULL, "rna_RenderSettings_views_format_set", NULL);
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
 
 	/* engine */

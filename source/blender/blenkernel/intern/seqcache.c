@@ -80,7 +80,7 @@ static bool seq_cmp_render_data(const SeqRenderData *a, const SeqRenderData *b)
 	        (a->scene != b->scene) ||
 	        (a->motion_blur_shutter != b->motion_blur_shutter) ||
 	        (a->motion_blur_samples != b->motion_blur_samples) ||
-	        (a->scene->r.views_setup != b->scene->r.views_setup) ||
+	        (a->scene->r.views_format != b->scene->r.views_format) ||
 	        (a->view_id != b->view_id));
 }
 
@@ -93,7 +93,7 @@ static unsigned int seq_hash_render_data(const SeqRenderData *a)
 	rval ^= ((intptr_t) a->scene) << 6;
 	rval ^= (int)(a->motion_blur_shutter * 100.0f) << 10;
 	rval ^= a->motion_blur_samples << 24;
-	rval ^= ((a->scene->r.views_setup * 2) + a->view_id) << 32;
+	rval ^= ((a->scene->r.views_format * 2) + a->view_id) << 32;
 
 	return rval;
 }
