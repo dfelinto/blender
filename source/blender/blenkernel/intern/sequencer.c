@@ -4896,17 +4896,7 @@ static Sequence *seq_dupli(Scene *scene, Scene *scene_to, Sequence *seq, int dup
 	else if (seq->type == SEQ_TYPE_MOVIE) {
 		seqn->strip->stripdata =
 		        MEM_dupallocN(seq->strip->stripdata);
-
-		/* no IMB_free_anim for the anims */
-		while (seqn->anims.last) {
-			StripAnim *sanim = seqn->anims.last;
-			BLI_remlink(&seqn->anims, sanim);
-
-			if (sanim->anim)
-				sanim->anim = NULL;
-
-			MEM_freeN(sanim);
-		}
+		BLI_listbase_clear(&seqn->anims);
 	}
 	else if (seq->type == SEQ_TYPE_SOUND_RAM) {
 		seqn->strip->stripdata =
