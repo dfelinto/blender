@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #ifndef __UTIL_PROGRESS_H__
@@ -46,6 +46,8 @@ public:
 		update_cb = NULL;
 		cancel = false;
 		cancel_message = "";
+		error = false;
+		error_message = "";
 		cancel_cb = NULL;
 	}
 
@@ -79,6 +81,8 @@ public:
 		sync_substatus = "";
 		cancel = false;
 		cancel_message = "";
+		error = false;
+		error_message = "";
 	}
 
 	/* cancel */
@@ -106,6 +110,28 @@ public:
 	void set_cancel_callback(boost::function<void(void)> function)
 	{
 		cancel_cb = function;
+	}
+
+	/* error */
+	void set_error(const string& error_message_)
+	{
+		thread_scoped_lock lock(progress_mutex);
+		error_message = error_message_;
+		error = true;
+		/* If error happens we also stop rendering. */
+		cancel_message = error_message_;
+		cancel = true;
+	}
+
+	bool get_error()
+	{
+		return error;
+	}
+
+	string get_error_message()
+	{
+		thread_scoped_lock lock(progress_mutex);
+		return error_message;
 	}
 
 	/* tile and timing information */
@@ -259,6 +285,9 @@ protected:
 
 	volatile bool cancel;
 	string cancel_message;
+
+	volatile bool error;
+	string error_message;
 };
 
 CCL_NAMESPACE_END

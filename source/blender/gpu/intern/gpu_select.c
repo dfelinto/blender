@@ -33,11 +33,11 @@
 #include "GPU_extensions.h"
 #include "GPU_glew.h"
  
-#include "BLI_utildefines.h"
-
 #include "MEM_guardedalloc.h"
 
 #include "DNA_userdef_types.h"
+
+#include "BLI_utildefines.h"
 
 /* Ad hoc number of queries to allocate to skip doing many glGenQueries */
 #define ALLOC_QUERIES 200

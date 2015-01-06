@@ -47,9 +47,6 @@
 #include "BKE_report.h"
 #include "BKE_scene.h"
 
-#include "IMB_imbuf.h"
-#include "IMB_imbuf_types.h"
-
 #include "RNA_access.h"
 
 #ifdef WITH_PYTHON
@@ -359,6 +356,19 @@ void RE_engine_report(RenderEngine *engine, int type, const char *msg)
 		BKE_report(engine->reports, type, msg);
 }
 
+void RE_engine_set_error_message(RenderEngine *engine, const char *msg)
+{
+	Render *re = engine->re;
+	if (re != NULL) {
+		RenderResult *rr = RE_AcquireResultRead(re);
+		if (rr->error != NULL) {
+			MEM_freeN(rr->error);
+		}
+		rr->error = BLI_strdup(msg);
+		RE_ReleaseResult(re);
+	}
+}
+
 void RE_engine_actview_set(RenderEngine *engine, const char *viewname)
 {
 	Render *re = engine->re;
@@ -376,6 +386,7 @@ void RE_engine_get_camera_model_matrix(RenderEngine *engine, Object *camera, flo
 	Render *re = engine->re;
 	BKE_camera_model_matrix(re ? &re->r : NULL, camera, re->viewname, (float (*)[4])r_modelmat);
 }
+
 
 void RE_engine_get_current_tiles(Render *re, int *total_tiles_r, rcti **tiles_r)
 {

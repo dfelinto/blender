@@ -29,10 +29,22 @@
 
 /* Can cast different mathutils types to this, use for generic funcs */
 
+#include "BLI_compiler_attrs.h"
+
 struct DynStr;
 
 extern char BaseMathObject_is_wrapped_doc[];
 extern char BaseMathObject_owner_doc[];
+
+#define BASE_MATH_NEW(struct_name, root_type, base_type) \
+	(struct_name *)((base_type ? (base_type)->tp_alloc(base_type, 0) : _PyObject_GC_New(&(root_type))));
+
+
+/* BaseMathObject.flag */
+enum {
+	BASE_MATH_FLAG_IS_WRAP    = (1 << 0),
+};
+#define BASE_MATH_FLAG_DEFAULT 0
 
 #define BASE_MATH_MEMBERS(_data)                                                                                 \
 	PyObject_VAR_HEAD                                                                                            \
@@ -42,7 +54,7 @@ extern char BaseMathObject_owner_doc[];
 	unsigned char cb_type;      /* which user funcs do we adhere to, RNA, GameObject, etc */                     \
 	unsigned char cb_subtype;   /* subtype: location, rotation...                                                \
 	                             * to avoid defining many new functions for every attribute of the same type */  \
-	unsigned char wrapped       /* wrapped data type? */                                                         \
+	unsigned char flag          /* wrapped data type? */                                                         \
 
 typedef struct {
 	BASE_MATH_MEMBERS(data);
@@ -66,9 +78,6 @@ PyMODINIT_FUNC PyInit_mathutils(void);
 
 int EXPP_FloatsAreEqual(float A, float B, int floatSteps);
 int EXPP_VectorsAreEqual(const float *vecA, const float *vecB, int size, int floatSteps);
-
-#define Py_NEW  1
-#define Py_WRAP 2
 
 typedef struct Mathutils_Callback Mathutils_Callback;
 
@@ -108,6 +117,14 @@ int mathutils_array_parse(float *array, int array_min, int array_max, PyObject *
 int mathutils_array_parse_alloc(float **array, int array_min, PyObject *value, const char *error_prefix);
 int mathutils_array_parse_alloc_v(float **array, int array_dim, PyObject *value, const char *error_prefix);
 int mathutils_any_to_rotmat(float rmat[3][3], PyObject *value, const char *error_prefix);
+
+/* zero remaining unused elements of the array */
+#define MU_ARRAY_ZERO      (1 << 30)
+/* ignore larger py sequences than requested (just use first elements),
+ * handy when using 3d vectors as 2d */
+#define MU_ARRAY_SPILL     (1 << 31)
+
+#define MU_ARRAY_FLAGS (MU_ARRAY_ZERO | MU_ARRAY_SPILL)
 
 int column_vector_multiplication(float rvec[4], VectorObject *vec, MatrixObject *mat);
 

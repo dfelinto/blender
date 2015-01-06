@@ -167,6 +167,13 @@ enum {
 	WM_INIT_KEYMAP = (1<<1),
 };
 
+/* IME is win32 only! */
+#ifndef WIN32
+#  ifdef __GNUC__
+#    define ime_data ime_data __attribute__ ((deprecated))
+#  endif
+#endif
+
 /* the savable part, rest of data is local in ghostwinlay */
 typedef struct wmWindow {
 	struct wmWindow *next, *prev;
@@ -199,6 +206,10 @@ typedef struct wmWindow {
 
 	struct wmGesture *tweak;      /* internal for wm_operators.c */
 
+	/* Input Method Editor data - complex character input (esp. for asian character input)
+	 * Currently WIN32, runtime-only data */
+	struct wmIMEData *ime_data;
+
 	int drawmethod, drawfail;     /* internal for wm_draw.c only */
 	ListBase drawdata;            /* internal for wm_draw.c only */
 
@@ -211,6 +222,10 @@ typedef struct wmWindow {
 
 	struct Stereo3dFormat *stereo3d_format; /* properties for stereoscopic displays */
 } wmWindow;
+
+#ifdef ime_data
+#  undef ime_data
+#endif
 
 /* These two Lines with # tell makesdna this struct can be excluded. */
 /* should be something like DNA_EXCLUDE 

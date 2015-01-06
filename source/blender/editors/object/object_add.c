@@ -69,7 +69,6 @@
 #include "BKE_effect.h"
 #include "BKE_font.h"
 #include "BKE_group.h"
-#include "BKE_image.h"
 #include "BKE_lamp.h"
 #include "BKE_lattice.h"
 #include "BKE_library.h"
@@ -97,7 +96,6 @@
 
 #include "ED_armature.h"
 #include "ED_curve.h"
-#include "ED_lattice.h"
 #include "ED_mball.h"
 #include "ED_mesh.h"
 #include "ED_node.h"
@@ -108,7 +106,6 @@
 #include "ED_transform.h"
 #include "ED_view3d.h"
 
-#include "UI_interface.h"
 #include "UI_resources.h"
 
 #include "GPU_material.h"
@@ -890,6 +887,8 @@ void OBJECT_OT_drop_named_image(wmOperatorType *ot)
 	/* properties */
 	prop = RNA_def_string(ot->srna, "filepath", NULL, FILE_MAX, "Filepath", "Path to image file");
 	RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
+	RNA_def_boolean(ot->srna, "relative_path", true, "Relative Path", "Select the file relative to the blend file");
+	RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 	prop = RNA_def_string(ot->srna, "name", NULL, MAX_ID_NAME - 2, "Name", "Image name to assign");
 	RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 	ED_object_add_generic_props(ot, false);
@@ -978,8 +977,11 @@ static int group_instance_add_exec(bContext *C, wmOperator *op)
 		
 		if (0 == RNA_struct_property_is_set(op->ptr, "location")) {
 			wmEvent *event = CTX_wm_window(C)->eventstate;
+			ARegion *ar = CTX_wm_region(C);
+			const int mval[2] = {event->x - ar->winrct.xmin,
+			                     event->y - ar->winrct.ymin};
 			ED_object_location_from_view(C, loc);
-			ED_view3d_cursor3d_position(C, loc, event->mval);
+			ED_view3d_cursor3d_position(C, loc, mval);
 			RNA_float_set_array(op->ptr, "location", loc);
 		}
 	}
@@ -1287,6 +1289,44 @@ static void copy_object_set_idnew(bContext *C, int dupflag)
 
 /********************* Make Duplicates Real ************************/
 
+/**
+ * \note regarding hashing dupli-objects, skip the first member of #DupliObject.persistent_id
+ * since its a unique index and we only want to know if the group objects are from the same dupli-group instance.
+ */
+static unsigned int dupliobject_hash(const void *ptr)
+{
+	const DupliObject *dob = ptr;
+	unsigned int hash = BLI_ghashutil_ptrhash(dob->ob);
+	unsigned int i;
+	for (i = 1; (i < MAX_DUPLI_RECUR) && dob->persistent_id[i] != INT_MAX; i++) {
+		hash ^= (dob->persistent_id[i] ^ i);
+	}
+	return hash;
+}
+
+static bool dupliobject_cmp(const void *a_, const void *b_)
+{
+	const DupliObject *a = a_;
+	const DupliObject *b = b_;
+	unsigned int i;
+
+	if (a->ob != b->ob) {
+		return true;
+	}
+
+	for (i = 1; (i < MAX_DUPLI_RECUR); i++) {
+		if (a->persistent_id[i] != b->persistent_id[i]) {
+			return true;
+		}
+		else if (a->persistent_id[i] == INT_MAX) {
+			break;
+		}
+	}
+
+	/* matching */
+	return false;
+}
+
 static void make_object_duplilist_real(bContext *C, Scene *scene, Base *base,
                                        const bool use_base_parent,
                                        const bool use_hierarchy)
@@ -1303,8 +1343,8 @@ static void make_object_duplilist_real(bContext *C, Scene *scene, Base *base,
 	lb = object_duplilist(bmain->eval_ctx, scene, base->object);
 
 	if (use_hierarchy || use_base_parent) {
-		dupli_gh = BLI_ghash_ptr_new("make_object_duplilist_real dupli_gh");
-		parent_gh = BLI_ghash_pair_new("make_object_duplilist_real parent_gh");
+		dupli_gh = BLI_ghash_ptr_new(__func__);
+		parent_gh = BLI_ghash_new(dupliobject_hash, dupliobject_cmp, __func__);
 	}
 
 	for (dob = lb->first; dob; dob = dob->next) {
@@ -1344,7 +1384,7 @@ static void make_object_duplilist_real(bContext *C, Scene *scene, Base *base,
 		if (dupli_gh)
 			BLI_ghash_insert(dupli_gh, dob, ob);
 		if (parent_gh)
-			BLI_ghash_insert(parent_gh, BLI_ghashutil_pairalloc(dob->ob, SET_INT_IN_POINTER(dob->persistent_id[0])), ob);
+			BLI_ghash_insert(parent_gh, dob, ob);
 
 		DAG_id_tag_update(&ob->id, OB_RECALC_DATA);
 	}
@@ -1360,9 +1400,14 @@ static void make_object_duplilist_real(bContext *C, Scene *scene, Base *base,
 
 			/* find parent that was also made real */
 			if (ob_src_par) {
-				GHashPair *pair = BLI_ghashutil_pairalloc(ob_src_par, SET_INT_IN_POINTER(dob->persistent_id[0]));
-				ob_dst_par = BLI_ghash_lookup(parent_gh, pair);
-				BLI_ghashutil_pairfree(pair);
+				/* OK to keep most of the members uninitialized,
+				 * they won't be read, this is simply for a hash lookup. */
+				DupliObject dob_key;
+				dob_key.ob = ob_src_par;
+				memcpy(&dob_key.persistent_id[1],
+				       &dob->persistent_id[1],
+				       sizeof(dob->persistent_id[1]) * (MAX_DUPLI_RECUR - 1));
+				ob_dst_par = BLI_ghash_lookup(parent_gh, &dob_key);
 			}
 
 			if (ob_dst_par) {
@@ -1425,7 +1470,7 @@ static void make_object_duplilist_real(bContext *C, Scene *scene, Base *base,
 	if (dupli_gh)
 		BLI_ghash_free(dupli_gh, NULL, NULL);
 	if (parent_gh)
-		BLI_ghash_free(parent_gh, BLI_ghashutil_pairfree, NULL);
+		BLI_ghash_free(parent_gh, NULL, NULL);
 
 	copy_object_set_idnew(C, 0);
 
@@ -2267,7 +2312,7 @@ static int add_named_exec(bContext *C, wmOperator *op)
 
 	MEM_freeN(base);
 
-	WM_event_add_notifier(C, NC_SCENE | ND_OB_SELECT, scene);
+	WM_event_add_notifier(C, NC_SCENE | ND_OB_SELECT | ND_OB_ACTIVE, scene);
 
 	return OPERATOR_FINISHED;
 }

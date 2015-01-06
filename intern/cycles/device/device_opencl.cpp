@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #ifdef WITH_OPENCL
@@ -20,12 +20,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "clew.h"
+
 #include "device.h"
 #include "device_intern.h"
 
 #include "buffers.h"
-
-#include "clew.h"
 
 #include "util_foreach.h"
 #include "util_map.h"

@@ -42,7 +42,6 @@
 #include "BLI_path_util.h"
 #include "BLI_rect.h"
 #include "BLI_string.h"
-#include "BLI_system.h"
 #include "BLI_threads.h"
 
 #include "BKE_image.h"
@@ -114,6 +113,8 @@ void render_result_free(RenderResult *res)
 		MEM_freeN(res->rectf);
 	if (res->text)
 		MEM_freeN(res->text);
+	if (res->error)
+		MEM_freeN(res->error);
 	
 	MEM_freeN(res);
 }

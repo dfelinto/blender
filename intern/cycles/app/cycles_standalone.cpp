@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #include <stdio.h>
@@ -25,6 +25,7 @@
 #include "util_args.h"
 #include "util_foreach.h"
 #include "util_function.h"
+#include "util_logging.h"
 #include "util_path.h"
 #include "util_progress.h"
 #include "util_string.h"
@@ -319,6 +320,11 @@ static void options_parse(int argc, const char **argv)
 
 	vector<DeviceType>& types = Device::available_types();
 
+	/* TODO(sergey): Here's a feedback loop happens: on the one hand we want
+	 * the device list to be printed in help message, on the other hand logging
+	 * is not initialized yet so we wouldn't have debug log happening in the
+	 * device initialization.
+	 */
 	foreach(DeviceType type, types) {
 		if(device_names != "")
 			device_names += ", ";
@@ -331,7 +337,8 @@ static void options_parse(int argc, const char **argv)
 
 	/* parse options */
 	ArgParse ap;
-	bool help = false;
+	bool help = false, debug = false;
+	int verbosity = 1;
 
 	ap.options ("Usage: cycles [options] file.xml",
 		"%*", files_parse, "",
@@ -347,6 +354,10 @@ static void options_parse(int argc, const char **argv)
 		"--width  %d", &options.width, "Window width in pixel",
 		"--height %d", &options.height, "Window height in pixel",
 		"--list-devices", &list, "List information about all available devices",
+#ifdef WITH_CYCLES_LOGGING
+		"--debug", &debug, "Enable debug logging",
+		"--verbose %d", &verbosity, "Set verbosity of the logger",
+#endif
 		"--help", &help, "Print help message",
 		NULL);
 
@@ -355,7 +366,13 @@ static void options_parse(int argc, const char **argv)
 		ap.usage();
 		exit(EXIT_FAILURE);
 	}
-	else if(list) {
+
+	if (debug) {
+		util_logging_start();
+		util_logging_verbosity_set(verbosity);
+	}
+
+	if(list) {
 		vector<DeviceInfo>& devices = Device::available_devices();
 		printf("Devices:\n");
 
@@ -435,6 +452,7 @@ using namespace ccl;
 
 int main(int argc, const char **argv)
 {
+	util_logging_init(argv[0]);
 	path_init();
 	options_parse(argc, argv);
 

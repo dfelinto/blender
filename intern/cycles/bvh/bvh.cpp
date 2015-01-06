@@ -275,67 +275,12 @@ void BVH::pack_triangle(int idx, float4 woop[3])
 	float3 v1 = vpos[vidx[1]];
 	float3 v2 = vpos[vidx[2]];
 
-	float3 r0 = v0 - v2;
-	float3 r1 = v1 - v2;
-	float3 r2 = cross(r0, r1);
-
-	if(is_zero(r0) || is_zero(r1) || is_zero(r2)) {
-		/* degenerate */
-		woop[0] = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
-		woop[1] = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
-		woop[2] = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
-	}
-	else {
-		Transform t = make_transform(
-			r0.x, r1.x, r2.x, v2.x,
-			r0.y, r1.y, r2.y, v2.y,
-			r0.z, r1.z, r2.z, v2.z,
-			0.0f, 0.0f, 0.0f, 1.0f);
-
-		t = transform_inverse(t);
-
-		woop[0] = make_float4(t.z.x, t.z.y, t.z.z, -t.z.w);
-		woop[1] = make_float4(t.x.x, t.x.y, t.x.z, t.x.w);
-		woop[2] = make_float4(t.y.x, t.y.y, t.y.z, t.y.w);
-	}
+	woop[0] = float3_to_float4(v0);
+	woop[1] = float3_to_float4(v1);
+	woop[2] = float3_to_float4(v2);
 }
 
 /* Curves*/
-
-void BVH::pack_curve_segment(int idx, float4 woop[3])
-{
-	int tob = pack.prim_object[idx];
-	const Mesh *mesh = objects[tob]->mesh;
-	int tidx = pack.prim_index[idx];
-	int segment = PRIMITIVE_UNPACK_SEGMENT(pack.prim_type[idx]);
-	int k0 = mesh->curves[tidx].first_key + segment;
-	int k1 = mesh->curves[tidx].first_key + segment + 1;
-	float3 v0 = float4_to_float3(mesh->curve_keys[k0]);
-	float3 v1 = float4_to_float3(mesh->curve_keys[k1]);
-
-	float3 d0 = v1 - v0;
-	float l =  len(d0);
-	
-	/*Plan
-	*Transform tfm = make_transform(
-	*	location <3>    , l,
-	*	extra curve data <3>    , StrID,
-	*	nextkey, flags/tip?,    0, 0);
-	*/
-	float3 tg0 = make_float3(1.0f, 0.0f, 0.0f);
-	float3 tg1 = make_float3(1.0f, 0.0f, 0.0f);
-	
-	Transform tfm = make_transform(
-		tg0.x, tg0.y, tg0.z, l,
-		tg1.x, tg1.y, tg1.z, 0,
-		0, 0, 0, 0,
-		0, 0, 0, 1);
-
-	woop[0] = tfm.x;
-	woop[1] = tfm.y;
-	woop[2] = tfm.z;
-
-}
 
 void BVH::pack_primitives()
 {
@@ -351,9 +296,7 @@ void BVH::pack_primitives()
 		if(pack.prim_index[i] != -1) {
 			float4 woop[3];
 
-			if(pack.prim_type[i] & PRIMITIVE_ALL_CURVE)
-				pack_curve_segment(i, woop);
-			else
+			if(pack.prim_type[i] & PRIMITIVE_ALL_TRIANGLE)
 				pack_triangle(i, woop);
 			
 			memcpy(&pack.tri_woop[i * nsize], woop, sizeof(float4)*3);
@@ -418,7 +361,7 @@ void BVH::pack_instances(size_t nodes_size)
 			if(mesh_map.find(mesh) == mesh_map.end()) {
 				prim_index_size += bvh->pack.prim_index.size();
 				tri_woop_size += bvh->pack.tri_woop.size();
-				nodes_size += bvh->pack.nodes.size()*nsize;
+				nodes_size += bvh->pack.nodes.size();
 
 				mesh_map[mesh] = 1;
 			}
@@ -506,7 +449,10 @@ void BVH::pack_instances(size_t nodes_size)
 
 		/* merge nodes */
 		if(bvh->pack.nodes.size()) {
-			size_t nsize_bbox = (use_qbvh)? nsize-2: nsize-1;
+			/* For QBVH we're packing a child bbox into 6 float4,
+			 * and for regular BVH they're packed into 3 float4.
+			 */
+			size_t nsize_bbox = (use_qbvh)? 6: 3;
 			int4 *bvh_nodes = &bvh->pack.nodes[0];
 			size_t bvh_nodes_size = bvh->pack.nodes.size(); 
 			int *bvh_is_leaf = (bvh->pack.is_leaf.size() != 0) ? &bvh->pack.is_leaf[0] : NULL;
@@ -533,8 +479,12 @@ void BVH::pack_instances(size_t nodes_size)
 
 				pack_nodes[pack_nodes_offset + nsize_bbox] = data;
 
-				if(use_qbvh)
-					pack_nodes[pack_nodes_offset + nsize_bbox+1] = bvh_nodes[i + nsize_bbox+1];
+				/* Usually this copies nothing, but we better
+				 * be prepared for possible node size extension.
+				 */
+				memcpy(&pack_nodes[pack_nodes_offset + nsize_bbox+1],
+				       &bvh_nodes[i + nsize_bbox+1],
+				       sizeof(int4) * (nsize - (nsize_bbox+1)));
 
 				pack_nodes_offset += nsize;
 			}
@@ -636,7 +586,7 @@ void RegularBVH::refit_nodes()
 
 void RegularBVH::refit_node(int idx, bool leaf, BoundBox& bbox, uint& visibility)
 {
-	int4 *data = &pack.nodes[idx*4];
+	int4 *data = &pack.nodes[idx*BVH_NODE_SIZE];
 
 	int c0 = data[3].x;
 	int c1 = data[3].y;
@@ -731,8 +681,6 @@ QBVH::QBVH(const BVHParams& params_, const vector<Object*>& objects_)
 : BVH(params_, objects_)
 {
 	params.use_qbvh = true;
-
-	/* todo: use visibility */
 }
 
 void QBVH::pack_leaf(const BVHStackEntry& e, const LeafNode *leaf)
@@ -751,6 +699,7 @@ void QBVH::pack_leaf(const BVHStackEntry& e, const LeafNode *leaf)
 		data[6].x = __int_as_float(leaf->m_lo);
 		data[6].y = __int_as_float(leaf->m_hi);
 	}
+	data[6].z = __uint_as_float(leaf->m_visibility);
 
 	memcpy(&pack.nodes[e.idx * BVH_QNODE_SIZE], data, sizeof(float4)*BVH_QNODE_SIZE);
 }
@@ -771,20 +720,22 @@ void QBVH::pack_inner(const BVHStackEntry& e, const BVHStackEntry *en, int num)
 		data[5][i] = bb_max.z;
 
 		data[6][i] = __int_as_float(en[i].encodeIdx());
-		data[7][i] = 0.0f;
 	}
 
 	for(int i = num; i < 4; i++) {
-		data[0][i] = 0.0f;
-		data[1][i] = 0.0f;
-		data[2][i] = 0.0f;
+		/* We store BB which would never be recorded as intersection
+		 * so kernel might safely assume there are always 4 child nodes.
+		 */
+		data[0][i] = FLT_MAX;
+		data[1][i] = -FLT_MAX;
 
-		data[3][i] = 0.0f;
-		data[4][i] = 0.0f;
-		data[5][i] = 0.0f;
+		data[2][i] = FLT_MAX;
+		data[3][i] = -FLT_MAX;
+
+		data[4][i] = FLT_MAX;
+		data[5][i] = -FLT_MAX;
 
 		data[6][i] = __int_as_float(0);
-		data[7][i] = 0.0f;
 	}
 
 	memcpy(&pack.nodes[e.idx * BVH_QNODE_SIZE], data, sizeof(float4)*BVH_QNODE_SIZE);
@@ -794,7 +745,7 @@ void QBVH::pack_inner(const BVHStackEntry& e, const BVHStackEntry *en, int num)
 
 void QBVH::pack_nodes(const array<int>& prims, const BVHNode *root)
 {
-	size_t node_size = root->getSubtreeSize(BVH_STAT_NODE_COUNT);
+	size_t node_size = root->getSubtreeSize(BVH_STAT_QNODE_COUNT);
 
 	/* resize arrays */
 	pack.nodes.clear();
@@ -865,8 +816,137 @@ void QBVH::pack_nodes(const array<int>& prims, const BVHNode *root)
 
 void QBVH::refit_nodes()
 {
-	assert(0); /* todo */
+	assert(!params.top_level);
+
+	BoundBox bbox = BoundBox::empty;
+	uint visibility = 0;
+	refit_node(0, (pack.is_leaf[0])? true: false, bbox, visibility);
+}
+
+void QBVH::refit_node(int idx, bool leaf, BoundBox& bbox, uint& visibility)
+{
+	int4 *data = &pack.nodes[idx*BVH_QNODE_SIZE];
+	int4 c = data[6];
+	if(leaf) {
+		/* Refit leaf node. */
+		for(int prim = c.x; prim < c.y; prim++) {
+			int pidx = pack.prim_index[prim];
+			int tob = pack.prim_object[prim];
+			Object *ob = objects[tob];
+
+			if(pidx == -1) {
+				/* Object instance. */
+				bbox.grow(ob->bounds);
+			}
+			else {
+				/* Primitives. */
+				const Mesh *mesh = ob->mesh;
+
+				if(pack.prim_type[prim] & PRIMITIVE_ALL_CURVE) {
+					/* Curves. */
+					int str_offset = (params.top_level)? mesh->curve_offset: 0;
+					const Mesh::Curve& curve = mesh->curves[pidx - str_offset];
+					int k = PRIMITIVE_UNPACK_SEGMENT(pack.prim_type[prim]);
+
+					curve.bounds_grow(k, &mesh->curve_keys[0], bbox);
+
+					visibility |= PATH_RAY_CURVE;
+
+					/* Motion curves. */
+					if(mesh->use_motion_blur) {
+						Attribute *attr = mesh->curve_attributes.find(ATTR_STD_MOTION_VERTEX_POSITION);
+
+						if(attr) {
+							size_t mesh_size = mesh->curve_keys.size();
+							size_t steps = mesh->motion_steps - 1;
+							float4 *key_steps = attr->data_float4();
+
+							for (size_t i = 0; i < steps; i++)
+								curve.bounds_grow(k, key_steps + i*mesh_size, bbox);
+						}
+					}
+				}
+				else {
+					/* Triangles. */
+					int tri_offset = (params.top_level)? mesh->tri_offset: 0;
+					const Mesh::Triangle& triangle = mesh->triangles[pidx - tri_offset];
+					const float3 *vpos = &mesh->verts[0];
+
+					triangle.bounds_grow(vpos, bbox);
+
+					/* Motion triangles. */
+					if(mesh->use_motion_blur) {
+						Attribute *attr = mesh->attributes.find(ATTR_STD_MOTION_VERTEX_POSITION);
+
+						if(attr) {
+							size_t mesh_size = mesh->verts.size();
+							size_t steps = mesh->motion_steps - 1;
+							float3 *vert_steps = attr->data_float3();
+
+							for (size_t i = 0; i < steps; i++)
+								triangle.bounds_grow(vert_steps + i*mesh_size, bbox);
+						}
+					}
+				}
+			}
+
+			visibility |= ob->visibility;
+		}
+
+		/* TODO(sergey): This is actually a copy of pack_leaf(),
+		 * but this chunk of code only knows actual data and has
+		 * no idea about BVHNode.
+		 *
+		 * Would be nice to de-duplicate code, but trying to make
+		 * making code more general ends up in much nastier code
+		 * in my opinion so far.
+		 *
+		 * Same applies to the inner nodes case below.
+		 */
+		float4 leaf_data[BVH_QNODE_SIZE];
+		memset(leaf_data, 0, sizeof(leaf_data));
+		leaf_data[6].x = __int_as_float(c.x);
+		leaf_data[6].y = __int_as_float(c.y);
+		leaf_data[6].z = __uint_as_float(visibility);
+		memcpy(&pack.nodes[idx * BVH_QNODE_SIZE],
+		       leaf_data,
+		       sizeof(float4)*BVH_QNODE_SIZE);
+	}
+	else {
+		/* Refit inner node, set bbox from children. */
+		BoundBox child_bbox[4] = {BoundBox::empty,
+		                          BoundBox::empty,
+		                          BoundBox::empty,
+		                          BoundBox::empty};
+		uint child_visibility[4] = {0};
+		int num_nodes = 0;
+
+		for(int i = 0; i < 4; ++i) {
+			if(c[i] != 0) {
+				refit_node((c[i] < 0)? -c[i]-1: c[i], (c[i] < 0),
+				           child_bbox[i], child_visibility[i]);
+				++num_nodes;
+				bbox.grow(child_bbox[i]);
+				visibility |= child_visibility[i];
+			}
+		}
+
+		float4 inner_data[BVH_QNODE_SIZE];
+		for(int i = 0; i < 4; ++i) {
+			float3 bb_min = child_bbox[i].min;
+			float3 bb_max = child_bbox[i].max;
+			inner_data[0][i] = bb_min.x;
+			inner_data[1][i] = bb_max.x;
+			inner_data[2][i] = bb_min.y;
+			inner_data[3][i] = bb_max.y;
+			inner_data[4][i] = bb_min.z;
+			inner_data[5][i] = bb_max.z;
+			inner_data[6][i] = __int_as_float(c[i]);
+		}
+		memcpy(&pack.nodes[idx * BVH_QNODE_SIZE],
+		       inner_data,
+		       sizeof(float4)*BVH_QNODE_SIZE);
+	}
 }
 
 CCL_NAMESPACE_END
-

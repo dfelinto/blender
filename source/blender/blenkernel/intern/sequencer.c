@@ -533,25 +533,23 @@ void BKE_sequencer_pixel_from_sequencer_space_v4(struct Scene *scene, float pixe
 
 /*********************** sequencer pipeline functions *************************/
 
-SeqRenderData BKE_sequencer_new_render_data(EvaluationContext *eval_ctx,
-                                            Main *bmain, Scene *scene, int rectx, int recty,
-                                            int preview_render_size)
+void BKE_sequencer_new_render_data(
+        EvaluationContext *eval_ctx,
+        Main *bmain, Scene *scene, int rectx, int recty,
+        int preview_render_size,
+        SeqRenderData *r_context)
 {
-	SeqRenderData rval;
-
-	rval.bmain = bmain;
-	rval.scene = scene;
-	rval.rectx = rectx;
-	rval.recty = recty;
-	rval.preview_render_size = preview_render_size;
-	rval.motion_blur_samples = 0;
-	rval.motion_blur_shutter = 0;
-	rval.eval_ctx = eval_ctx;
-	rval.skip_cache = false;
-	rval.is_proxy_render = false;
-	rval.view_id = 0;
-
-	return rval;
+	r_context->eval_ctx = eval_ctx;
+	r_context->bmain = bmain;
+	r_context->scene = scene;
+	r_context->rectx = rectx;
+	r_context->recty = recty;
+	r_context->preview_render_size = preview_render_size;
+	r_context->motion_blur_samples = 0;
+	r_context->motion_blur_shutter = 0;
+	r_context->skip_cache = false;
+	r_context->is_proxy_render = false;
+	r_context->view_id = 0;
 }
 
 /* ************************* iterator ************************** */
@@ -1588,8 +1586,8 @@ static ImBuf *seq_proxy_fetch(const SeqRenderData *context, Sequence *seq, int c
 				return NULL;
 			}
 
-			/* proxies are generated in default color space */
-			seq->strip->proxy->anim = openanim(name, IB_rect, 0, NULL);
+			seq->strip->proxy->anim = openanim(name, IB_rect, 0,
+			        seq->strip->colorspace_settings.name);
 		}
 		if (seq->strip->proxy->anim == NULL) {
 			return NULL;
@@ -1626,19 +1624,24 @@ static void seq_proxy_build_frame(const SeqRenderData *context, Sequence *seq, i
 	int quality;
 	int rectx, recty;
 	int ok;
-	ImBuf *ibuf;
+	ImBuf *ibuf_tmp, *ibuf;
 
 	if (!seq_proxy_get_fname(seq, cfra, proxy_render_size, name)) {
 		return;
 	}
 
-	ibuf = seq_render_strip(context, seq, cfra);
+	ibuf_tmp = seq_render_strip(context, seq, cfra);
 
-	rectx = (proxy_render_size * ibuf->x) / 100;
-	recty = (proxy_render_size * ibuf->y) / 100;
+	rectx = (proxy_render_size * ibuf_tmp->x) / 100;
+	recty = (proxy_render_size * ibuf_tmp->y) / 100;
 
-	if (ibuf->x != rectx || ibuf->y != recty) {
+	if (ibuf_tmp->x != rectx || ibuf_tmp->y != recty) {
+		ibuf = IMB_dupImBuf(ibuf_tmp);
+		IMB_freeImBuf(ibuf_tmp);
 		IMB_scalefastImBuf(ibuf, (short)rectx, (short)recty);
+	}
+	else {
+		ibuf = ibuf_tmp;
 	}
 
 	/* depth = 32 is intentionally left in, otherwise ALPHA channels
@@ -1729,9 +1732,12 @@ void BKE_sequencer_proxy_rebuild(SeqIndexBuildContext *context, short *stop, sho
 
 	/* fail safe code */
 
-	render_context = BKE_sequencer_new_render_data(bmain->eval_ctx, bmain, context->scene,
-	                                    (scene->r.size * (float) scene->r.xsch) / 100.0f + 0.5f,
-	                                    (scene->r.size * (float) scene->r.ysch) / 100.0f + 0.5f, 100);
+	BKE_sequencer_new_render_data(
+	        bmain->eval_ctx, bmain, context->scene,
+	        (scene->r.size * (float) scene->r.xsch) / 100.0f + 0.5f,
+	        (scene->r.size * (float) scene->r.ysch) / 100.0f + 0.5f, 100,
+	        &render_context);
+
 	render_context.skip_cache = true;
 	render_context.is_proxy_render = true;
 
@@ -2671,6 +2677,7 @@ static ImBuf *seq_render_scene_strip(const SeqRenderData *context, Sequence *seq
 	int do_seq;
 	// bool have_seq = false;  /* UNUSED */
 	bool have_comp = false;
+	bool use_gpencil = true;
 	Scene *scene;
 	int is_thread_main = BLI_thread_is_main();
 
@@ -2694,6 +2701,10 @@ static ImBuf *seq_render_scene_strip(const SeqRenderData *context, Sequence *seq
 	else {
 		BKE_scene_camera_switch_update(scene);
 		camera = scene->camera;
+	}
+	
+	if (seq->flag & SEQ_SCENE_NO_GPENCIL) {
+		use_gpencil = false;
 	}
 
 	if (have_comp == false && camera == NULL) {
@@ -2729,7 +2740,7 @@ static ImBuf *seq_render_scene_strip(const SeqRenderData *context, Sequence *seq
 		ibuf = sequencer_view3d_cb(scene, camera, width, height, IB_rect,
 		                           context->scene->r.seq_prev_type,
 		                           (context->scene->r.seq_flag & R_SEQ_SOLID_TEX) != 0,
-		                           true, scene->r.alphamode, viewname, err_out);
+		                           use_gpencil, true, scene->r.alphamode, viewname, err_out);
 		if (ibuf == NULL) {
 			fprintf(stderr, "seq_render_scene_strip failed to get opengl buffer: %s\n", err_out);
 		}
@@ -3683,7 +3694,7 @@ static bool update_changed_seq_recurs(Scene *scene, Sequence *seq, Sequence *cha
 	/* recurs downwards to see if this seq depends on the changed seq */
 	
 	if (seq == NULL)
-		return 0;
+		return false;
 	
 	if (seq == changed_seq)
 		free_imbuf = true;

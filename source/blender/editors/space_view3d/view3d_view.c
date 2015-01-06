@@ -37,9 +37,7 @@
 
 #include "BLI_math.h"
 #include "BLI_rect.h"
-#include "BLI_listbase.h"
 #include "BLI_utildefines.h"
-#include "BLI_callbacks.h"
 
 #include "BKE_anim.h"
 #include "BKE_action.h"
@@ -55,7 +53,6 @@
 #include "BIF_gl.h"
 #include "BIF_glutil.h"
 
-#include "GPU_draw.h"
 #include "GPU_select.h"
 
 #include "WM_api.h"
@@ -64,14 +61,16 @@
 #include "ED_screen.h"
 #include "ED_armature.h"
 
-#include "RE_engine.h"
 
 #ifdef WITH_GAMEENGINE
-#include "BL_System.h"
+#  include "BLI_listbase.h"
+#  include "BLI_callbacks.h"
+
+#  include "GPU_draw.h"
+
+#  include "BL_System.h"
 #endif
 
-#include "RNA_access.h"
-#include "RNA_define.h"
 
 #include "view3d_intern.h"  /* own include */
 
@@ -497,25 +496,21 @@ static int view3d_camera_to_view_selected_exec(bContext *C, wmOperator *op)
 	Object *camera_ob = v3d ? v3d->camera : scene->camera;
 
 	float r_co[3]; /* the new location to apply */
+	float r_scale; /* only for ortho cameras */
 
 	if (camera_ob == NULL) {
 		BKE_report(op->reports, RPT_ERROR, "No active camera");
 		return OPERATOR_CANCELLED;
 	}
-	else if (camera_ob->type != OB_CAMERA) {
-		BKE_report(op->reports, RPT_ERROR, "Object not a camera");
-		return OPERATOR_CANCELLED;
-	}
-	else if (((Camera *)camera_ob->data)->type == R_ORTHO) {
-		BKE_report(op->reports, RPT_ERROR, "Orthographic cameras not supported");
-		return OPERATOR_CANCELLED;
-	}
 
 	/* this function does all the important stuff */
-	if (BKE_camera_view_frame_fit_to_scene(scene, v3d, camera_ob, r_co)) {
-
+	if (BKE_camera_view_frame_fit_to_scene(scene, v3d, camera_ob, r_co, &r_scale)) {
 		ObjectTfmProtectedChannels obtfm;
 		float obmat_new[4][4];
+
+		if ((camera_ob->type == OB_CAMERA) && (((Camera *)camera_ob->data)->type == CAM_ORTHO)) {
+			((Camera *)camera_ob->data)->ortho_scale = r_scale;
+		}
 
 		copy_m4_m4(obmat_new, camera_ob->obmat);
 		copy_v3_v3(obmat_new[3], r_co);

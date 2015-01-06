@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #ifndef __BLENDER_SESSION_H__
@@ -92,6 +92,7 @@ public:
 	string b_rview_name;
 
 	string last_status;
+	string last_error;
 	float last_progress;
 
 	int width, height;

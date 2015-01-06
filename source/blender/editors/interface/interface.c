@@ -209,6 +209,11 @@ void ui_window_to_region(const ARegion *ar, int *x, int *y)
 	*y -= ar->winrct.ymin;
 }
 
+void ui_region_to_window(const ARegion *ar, int *x, int *y)
+{
+	*x += ar->winrct.xmin;
+	*y += ar->winrct.ymin;
+}
 /* ******************* block calc ************************* */
 
 void ui_block_translate(uiBlock *block, int x, int y)
@@ -722,6 +727,10 @@ static bool ui_but_update_from_old_block(const bContext *C, uiBlock *block, uiBu
 			oldbut->hardmax = but->hardmax;
 
 		ui_but_update_linklines(block, oldbut, but);
+
+		if (!BLI_listbase_is_empty(&block->butstore)) {
+			UI_butstore_register_update(block, oldbut, but);
+		}
 
 		/* move/copy string from the new button to the old */
 		/* needed for alt+mouse wheel over enums */
@@ -1710,6 +1719,9 @@ bool ui_but_is_bool(const uiBut *but)
 		return true;
 
 	if (but->rnaprop && RNA_property_type(but->rnaprop) == PROP_BOOLEAN)
+		return true;
+
+	if ((but->rnaprop && RNA_property_type(but->rnaprop) == PROP_ENUM) && (but->type == UI_BTYPE_ROW))
 		return true;
 
 	return false;

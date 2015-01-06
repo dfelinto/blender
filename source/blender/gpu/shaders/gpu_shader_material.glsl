@@ -357,6 +357,12 @@ void normal(vec3 dir, vec3 nor, out vec3 outnor, out float outdot)
 	outdot = -dot(dir, nor);
 }
 
+void normal_new_shading(vec3 dir, vec3 nor, out vec3 outnor, out float outdot)
+{
+	outnor = normalize(nor);
+	outdot = dot(normalize(dir), nor);
+}
+
 void curves_vec(float fac, vec3 vec, sampler2D curvemap, out vec3 outvec)
 {
 	outvec.x = texture2D(curvemap, vec2((vec.x + 1.0)*0.5, 0.0)).x;
@@ -2366,13 +2372,13 @@ void node_tex_coord(vec3 I, vec3 N, mat4 viewinvmat, mat4 obinvmat,
 	out vec3 generated, out vec3 normal, out vec3 uv, out vec3 object,
 	out vec3 camera, out vec3 window, out vec3 reflection)
 {
-	generated = mtex_2d_mapping(attr_orco);
+	generated = attr_orco * 0.5 + vec3(0.5);
 	normal = normalize((obinvmat*(viewinvmat*vec4(N, 0.0))).xyz);
 	uv = attr_uv;
 	object = (obinvmat*(viewinvmat*vec4(I, 1.0))).xyz;
-	camera = I;
+	camera = vec3(I.xy, -I.z);
 	vec4 projvec = gl_ProjectionMatrix * vec4(I, 1.0);
-	window = mtex_2d_mapping(projvec.xyz/projvec.w);
+	window = vec3(mtex_2d_mapping(projvec.xyz/projvec.w).xy, 0.0);
 
 	vec3 shade_I;
 	shade_view(I, shade_I);
@@ -2395,11 +2401,11 @@ void node_tex_coord_background(vec3 I, vec3 N, mat4 viewinvmat, mat4 obinvmat,
 
 	generated = coords;
 	normal = -coords;
-	uv = attr_uv;
+	uv = vec3(attr_uv.xy, 0.0);
 	object = coords;
 
-	camera = co.xyz;
-	window = mtex_2d_mapping(I);
+	camera = vec3(co.xy, -co.z);
+	window = (gl_ProjectionMatrix[3][3] == 0.0) ? vec3(mtex_2d_mapping(I).xy, 0.0) : vec3(0.5, 0.5, 0.0);
 
 	reflection = -coords;
 }

@@ -793,7 +793,16 @@ static const char *view3d_get_name(View3D *v3d, RegionView3D *rv3d)
 				if ((v3d->camera) && (v3d->camera->type == OB_CAMERA)) {
 					Camera *cam;
 					cam = v3d->camera->data;
-					name = (cam->type != CAM_ORTHO) ? IFACE_("Camera Persp") : IFACE_("Camera Ortho");
+					if (cam->type == CAM_PERSP) {
+						name = IFACE_("Camera Persp");
+					}
+					else if (cam->type == CAM_ORTHO) {
+						name = IFACE_("Camera Ortho");
+					}
+					else {
+						BLI_assert(cam->type == CAM_PANO);
+						name = IFACE_("Camera Pano");
+					}
 				}
 				else {
 					name = IFACE_("Object as Camera");
@@ -2671,10 +2680,7 @@ static void view3d_draw_objects(
 
 	if (!draw_offscreen) {
 		/* needs to be done always, gridview is adjusted in drawgrid() now, but only for ortho views. */
-		rv3d->gridview = v3d->grid;
-		if (scene->unit.system) {
-			rv3d->gridview /= scene->unit.scale_length;
-		}
+		rv3d->gridview = ED_view3d_grid_scale(scene, v3d, grid_unit);
 
 		if ((rv3d->view == RV3D_VIEW_USER) || (rv3d->persp != RV3D_ORTHO)) {
 			if ((v3d->flag2 & V3D_RENDER_OVERRIDE) == 0) {
@@ -2684,6 +2690,7 @@ static void view3d_draw_objects(
 		else {
 			if ((v3d->flag2 & V3D_RENDER_OVERRIDE) == 0) {
 				ED_region_pixelspace(ar);
+				*grid_unit = NULL;  /* drawgrid need this to detect/affect smallest valid unit... */
 				drawgrid(&scene->unit, ar, v3d, grid_unit);
 				/* XXX make function? replaces persp(1) */
 				glMatrixMode(GL_PROJECTION);
@@ -3030,6 +3037,7 @@ void ED_view3d_draw_offscreen(Scene *scene, View3D *v3d, ARegion *ar, int winx, 
                               float viewmat[4][4], float winmat[4][4],
                               bool do_bgpic, bool do_sky, const char *viewname)
 {
+	struct bThemeState theme_state;
 	int bwinx, bwiny;
 	rcti brect;
 
@@ -3047,7 +3055,7 @@ void ED_view3d_draw_offscreen(Scene *scene, View3D *v3d, ARegion *ar, int winx, 
 	ar->winrct.xmax = winx;
 	ar->winrct.ymax = winy;
 
-	/* set theme */
+	UI_Theme_Store(&theme_state);
 	UI_SetTheme(SPACE_VIEW3D, RGN_TYPE_WINDOW);
 
 	/* set flags */
@@ -3098,8 +3106,7 @@ void ED_view3d_draw_offscreen(Scene *scene, View3D *v3d, ARegion *ar, int winx, 
 
 	glPopMatrix();
 
-	/* XXX, without this the sequencer flickers with opengl draw enabled, need to find out why - campbell */
-	glColor4ub(255, 255, 255, 255);
+	UI_Theme_Restore(&theme_state);
 
 	G.f &= ~G_RENDER_OGL;
 }
@@ -3172,14 +3179,14 @@ ImBuf *ED_view3d_draw_offscreen_imbuf(Scene *scene, View3D *v3d, ARegion *ar, in
 	
 	if (ibuf->rect_float && ibuf->rect)
 		IMB_rect_from_float(ibuf);
-	
+
 	return ibuf;
 }
 
 /* creates own 3d views, used by the sequencer */
 ImBuf *ED_view3d_draw_offscreen_imbuf_simple(Scene *scene, Object *camera, int width, int height, unsigned int flag, int drawtype,
-                                             bool use_solid_tex, bool draw_background, int alpha_mode, const char *viewname,
-                                             char err_out[256])
+                                             bool use_solid_tex, bool use_gpencil, bool draw_background, int alpha_mode,
+                                             const char *viewname, char err_out[256])
 {
 	View3D v3d = {NULL};
 	ARegion ar = {NULL};
@@ -3194,6 +3201,9 @@ ImBuf *ED_view3d_draw_offscreen_imbuf_simple(Scene *scene, Object *camera, int w
 	v3d.lay = scene->lay;
 	v3d.drawtype = drawtype;
 	v3d.flag2 = V3D_RENDER_OVERRIDE;
+	
+	if (use_gpencil)
+		v3d.flag2 |= V3D_SHOW_GPENCIL;
 
 	if (use_solid_tex)
 		v3d.flag2 |= V3D_SOLID_TEX;

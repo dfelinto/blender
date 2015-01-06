@@ -44,7 +44,6 @@
 #include "DNA_scene_types.h"
 #include "DNA_space_types.h"
 
-#include "IMB_filter.h"
 #include "IMB_imbuf.h"
 #include "IMB_imbuf_types.h"
 #include "IMB_filetype.h"
@@ -53,7 +52,6 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_blenlib.h"
-#include "BLI_fileops.h"
 #include "BLI_math.h"
 #include "BLI_math_color.h"
 #include "BLI_string.h"
@@ -245,7 +243,7 @@ static ColormnaageCacheData *colormanage_cachedata_get(const ImBuf *ibuf)
 
 static unsigned int colormanage_hashhash(const void *key_v)
 {
-	ColormanageCacheKey *key = (ColormanageCacheKey *)key_v;
+	const ColormanageCacheKey *key = key_v;
 
 	unsigned int rval = (key->display << 16) | (key->view % 0xffff);
 
@@ -254,8 +252,8 @@ static unsigned int colormanage_hashhash(const void *key_v)
 
 static bool colormanage_hashcmp(const void *av, const void *bv)
 {
-	const ColormanageCacheKey *a = (ColormanageCacheKey *) av;
-	const ColormanageCacheKey *b = (ColormanageCacheKey *) bv;
+	const ColormanageCacheKey *a = av;
+	const ColormanageCacheKey *b = bv;
 
 	return ((a->view != b->view) ||
 	        (a->display != b->display));

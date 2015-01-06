@@ -611,6 +611,12 @@ static void rna_ColorManagedColorspaceSettings_reload_update(Main *UNUSED(bmain)
 
 			if (seq_found) {
 				BKE_sequence_free_anim(seq);
+
+				if (seq->strip->proxy && seq->strip->proxy->anim) {
+					IMB_free_anim(seq->strip->proxy->anim);
+					seq->strip->proxy->anim = NULL;
+				}
+
 				BKE_sequence_invalidate_cache(scene, seq);
 				BKE_sequencer_preprocessed_cache_cleanup_sequence(seq);
 			}

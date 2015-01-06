@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
  
@@ -27,6 +27,7 @@
 #include "subd_split.h"
 
 #include "util_foreach.h"
+#include "util_logging.h"
 
 #include "mikktspace.h"
 
@@ -761,11 +762,13 @@ void BlenderSync::sync_mesh_motion(BL::Object b_ob, Object *object, float motion
 		if(new_attribute) {
 			if(i != numverts || memcmp(mP, &mesh->verts[0], sizeof(float3)*numverts) == 0) {
 				/* no motion, remove attributes again */
+				VLOG(1) << "No actual motion for mesh " << b_mesh.name();
 				mesh->attributes.remove(ATTR_STD_MOTION_VERTEX_POSITION);
 				if(attr_mN)
 					mesh->attributes.remove(ATTR_STD_MOTION_VERTEX_NORMAL);
 			}
 			else if(time_index > 0) {
+				VLOG(1) << "Filling motion for mesh " << b_mesh.name();
 				/* motion, fill up previous steps that we might have skipped because
 				 * they had no motion, but we need them anyway now */
 				float3 *P = &mesh->verts[0];

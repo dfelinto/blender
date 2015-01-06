@@ -97,7 +97,7 @@ typedef struct KnifeVert {
 
 	float co[3], cageco[3], sco[2]; /* sco is screen coordinates for cageco */
 	bool is_face, in_space;
-	bool draw;
+	bool is_cut;  /* along a cut created by user input (will draw too) */
 } KnifeVert;
 
 typedef struct Ref {
@@ -111,7 +111,7 @@ typedef struct KnifeEdge {
 	ListBase faces;
 
 	BMEdge *e /* , *e_old */; /* non-NULL if this is an original edge */
-	bool draw;
+	bool is_cut;  /* along a cut created by user input (will draw too) */
 } KnifeEdge;
 
 typedef struct KnifeLineHit {
@@ -529,7 +529,7 @@ static KnifeVert *knife_split_edge(
 
 	newkfe->v1 = kfe->v1;
 	newkfe->v2 = new_knife_vert(kcd, co, cageco);
-	newkfe->v2->draw = 1;
+	newkfe->v2->is_cut = true;
 	if (kfe->e) {
 		knife_add_edge_faces_to_vert(kcd, newkfe->v2, kfe->e);
 	}
@@ -554,7 +554,7 @@ static KnifeVert *knife_split_edge(
 
 	knife_add_to_vert_edges(kcd, newkfe);
 
-	newkfe->draw = kfe->draw;
+	newkfe->is_cut = kfe->is_cut;
 	newkfe->e = kfe->e;
 
 	*r_kfe = newkfe;
@@ -603,6 +603,7 @@ static void prepare_linehits_for_cut(KnifeTool_OpData *kcd)
 {
 	KnifeLineHit *linehits, *lhi, *lhj;
 	int i, j, n;
+	bool is_double = false;
 
 	n = kcd->totlinehit;
 	linehits = kcd->linehits;
@@ -626,7 +627,11 @@ static void prepare_linehits_for_cut(KnifeTool_OpData *kcd)
 				{
 					break;
 				}
-				lhj->l = -1.0f;
+
+				if (lhi->kfe == lhj->kfe) {
+					lhj->l = -1.0f;
+					is_double = true;
+				}
 			}
 			for (j = i + 1; j < n; j++) {
 				lhj = &linehits[j];
@@ -635,37 +640,42 @@ static void prepare_linehits_for_cut(KnifeTool_OpData *kcd)
 				{
 					break;
 				}
-				if (lhj->kfe || lhi->v == lhj->v) {
+				if ((lhj->kfe && (lhi->kfe == lhj->kfe)) ||
+				    (lhi->v == lhj->v))
+				{
 					lhj->l = -1.0f;
+					is_double = true;
 				}
 			}
 		}
 	}
 
-	/* delete-in-place loop: copying from pos j to pos i+1 */
-	i = 0;
-	j = 1;
-	while (j < n) {
-		lhi = &linehits[i];
-		lhj = &linehits[j];
-		if (lhj->l == -1.0f) {
-			j++; /* skip copying this one */
-		}
-		else {
-			/* copy unless a no-op */
-			if (lhi->l == -1.0f) {
-				/* could happen if linehits[0] is being deleted */
-				memcpy(&linehits[i], &linehits[j], sizeof(KnifeLineHit));
+	if (is_double) {
+		/* delete-in-place loop: copying from pos j to pos i+1 */
+		i = 0;
+		j = 1;
+		while (j < n) {
+			lhi = &linehits[i];
+			lhj = &linehits[j];
+			if (lhj->l == -1.0f) {
+				j++; /* skip copying this one */
 			}
 			else {
-				if (i + 1 != j)
-					memcpy(&linehits[i + 1], &linehits[j], sizeof(KnifeLineHit));
-				i++;
+				/* copy unless a no-op */
+				if (lhi->l == -1.0f) {
+					/* could happen if linehits[0] is being deleted */
+					memcpy(&linehits[i], &linehits[j], sizeof(KnifeLineHit));
+				}
+				else {
+					if (i + 1 != j)
+						memcpy(&linehits[i + 1], &linehits[j], sizeof(KnifeLineHit));
+					i++;
+				}
+				j++;
 			}
-			j++;
 		}
+		kcd->totlinehit = i + 1;
 	}
-	kcd->totlinehit = i + 1;
 }
 
 /* Add hit to list of hits in facehits[f], where facehits is a map, if not already there */
@@ -683,6 +693,7 @@ static void add_hit_to_facehits(KnifeTool_OpData *kcd, GHash *facehits, BMFace *
 static void knife_add_single_cut(KnifeTool_OpData *kcd, KnifeLineHit *lh1, KnifeLineHit *lh2, BMFace *f)
 {
 	KnifeEdge *kfe, *kfe2;
+	BMEdge *e_base;
 
 	if ((lh1->v && lh1->v == lh2->v) ||
 	    (lh1->kfe && lh1->kfe == lh2->kfe))
@@ -690,15 +701,25 @@ static void knife_add_single_cut(KnifeTool_OpData *kcd, KnifeLineHit *lh1, Knife
 		return;
 	}
 
+	/* if the cut is on an edge, just tag that its a cut and return */
+	if ((lh1->v && lh2->v) &&
+	    (lh1->v->v && lh2->v && lh2->v->v) &&
+	    (e_base = BM_edge_exists(lh1->v->v, lh2->v->v)))
+	{
+		kfe = get_bm_knife_edge(kcd, e_base);
+		kfe->is_cut = true;
+		kfe->e = e_base;
+		return;
+	}
 	/* Check if edge actually lies within face (might not, if this face is concave) */
-	if ((lh1->v && !lh1->kfe) && (lh2->v && !lh2->kfe)) {
+	else if ((lh1->v && !lh1->kfe) && (lh2->v && !lh2->kfe)) {
 		if (!knife_verts_edge_in_face(lh1->v, lh2->v, f)) {
 			return;
 		}
 	}
 
 	kfe = new_knife_edge(kcd);
-	kfe->draw = true;
+	kfe->is_cut = true;
 	kfe->basef = f;
 
 	if (lh1->v) {
@@ -711,7 +732,7 @@ static void knife_add_single_cut(KnifeTool_OpData *kcd, KnifeLineHit *lh1, Knife
 	else {
 		BLI_assert(lh1->f);
 		kfe->v1 = new_knife_vert(kcd, lh1->hit, lh1->cagehit);
-		kfe->v1->draw = true;
+		kfe->v1->is_cut = true;
 		kfe->v1->is_face = true;
 		knife_append_list(kcd, &kfe->v1->faces, lh1->f);
 		lh1->v = kfe->v1;  /* record the KnifeVert for this hit */
@@ -727,7 +748,7 @@ static void knife_add_single_cut(KnifeTool_OpData *kcd, KnifeLineHit *lh1, Knife
 	else {
 		BLI_assert(lh2->f);
 		kfe->v2 = new_knife_vert(kcd, lh2->hit, lh2->cagehit);
-		kfe->v2->draw = true;
+		kfe->v2->is_cut = true;
 		kfe->v2->is_face = true;
 		knife_append_list(kcd, &kfe->v2->faces, lh2->f);
 		lh2->v = kfe->v2;  /* record the KnifeVert for this hit */
@@ -748,19 +769,13 @@ static void knife_add_single_cut(KnifeTool_OpData *kcd, KnifeLineHit *lh1, Knife
 static void knife_cut_face(KnifeTool_OpData *kcd, BMFace *f, ListBase *hits)
 {
 	Ref *r;
-	KnifeLineHit *lh, *prevlh;
 
 	if (BLI_listbase_count_ex(hits, 2) != 2)
 		return;
 
-	prevlh = NULL;
-	for (r = hits->first; r; r = r->next) {
-		lh = (KnifeLineHit *)r->ref;
-		if (prevlh)
-			knife_add_single_cut(kcd, prevlh, lh, f);
-		prevlh = lh;
+	for (r = hits->first; r->next; r = r->next) {
+		knife_add_single_cut(kcd, r->ref, r->next->ref, f);
 	}
-
 }
 
 /* User has just left-clicked after the first time.
@@ -1076,7 +1091,7 @@ static void knifetool_draw(const bContext *C, ARegion *UNUSED(ar), void *arg)
 
 		BLI_mempool_iternew(kcd->kedges, &iter);
 		for (kfe = BLI_mempool_iterstep(&iter); kfe; kfe = BLI_mempool_iterstep(&iter)) {
-			if (!kfe->draw)
+			if (!kfe->is_cut)
 				continue;
 
 			glColor3ubv(kcd->colors.line);
@@ -1098,7 +1113,7 @@ static void knifetool_draw(const bContext *C, ARegion *UNUSED(ar), void *arg)
 		glBegin(GL_POINTS);
 		BLI_mempool_iternew(kcd->kverts, &iter);
 		for (kfv = BLI_mempool_iterstep(&iter); kfv; kfv = BLI_mempool_iterstep(&iter)) {
-			if (!kfv->draw)
+			if (!kfv->is_cut)
 				continue;
 
 			glColor3ubv(kcd->colors.point);
@@ -1295,6 +1310,7 @@ static void knife_find_line_hits(KnifeTool_OpData *kcd)
 	SmallHashIter hiter;
 	KnifeLineHit hit;
 	void *val;
+	void **val_p;
 	float plane_cos[12];
 	float s[2], se1[2], se2[2], sint[2];
 	float r1[3], r2[3];
@@ -1302,7 +1318,7 @@ static void knife_find_line_hits(KnifeTool_OpData *kcd)
 	float vert_tol, vert_tol_sq;
 	float line_tol, line_tol_sq;
 	float face_tol, face_tol_sq;
-	float eps_scale;
+	float eps_scale, eps_scale_px;
 	int isect_kind;
 	unsigned int tot;
 	int i;
@@ -1383,6 +1399,11 @@ static void knife_find_line_hits(KnifeTool_OpData *kcd)
 		ls = (BMLoop **)kcd->em->looptris[result->indexA];
 		f = ls[0]->f;
 		set_lowest_face_tri(kcd, f, result->indexA);
+
+		/* occlude but never cut unselected faces (when only_select is used) */
+		if (kcd->only_select && !BM_elem_flag_test(f, BM_ELEM_SELECT)) {
+			continue;
+		}
 		/* for faces, store index of lowest hit looptri in hash */
 		if (BLI_smallhash_haskey(&faces, (uintptr_t)f)) {
 			continue;
@@ -1397,11 +1418,9 @@ static void knife_find_line_hits(KnifeTool_OpData *kcd)
 				continue;
 			BLI_smallhash_insert(&kfes, (uintptr_t)kfe, kfe);
 			v = kfe->v1;
-			if (!BLI_smallhash_haskey(&kfvs, (uintptr_t)v))
-				BLI_smallhash_insert(&kfvs, (uintptr_t)v, v);
+			BLI_smallhash_reinsert(&kfvs, (uintptr_t)v, v);
 			v = kfe->v2;
-			if (!BLI_smallhash_haskey(&kfvs, (uintptr_t)v))
-				BLI_smallhash_insert(&kfvs, (uintptr_t)v, v);
+			BLI_smallhash_reinsert(&kfvs, (uintptr_t)v, v);
 		}
 	}
 
@@ -1410,13 +1429,15 @@ static void knife_find_line_hits(KnifeTool_OpData *kcd)
 	{
 		/* Scale the epsilon by the zoom level
 		 * to compensate for projection imprecision, see T41164 */
-		float zoom_xy[2] = {kcd->vc.rv3d->winmat[0][0],
-		                    kcd->vc.rv3d->winmat[1][1]};
+		const float zoom_xy[2] = {
+		        kcd->vc.rv3d->winmat[0][0],
+		        kcd->vc.rv3d->winmat[1][1]};
 		eps_scale = len_v2(zoom_xy);
+		eps_scale_px = eps_scale * (kcd->is_interactive ? KNIFE_FLT_EPS_PX : KNIFE_FLT_EPSBIG);
 	}
 
-	vert_tol = KNIFE_FLT_EPS_PX * eps_scale;
-	line_tol = KNIFE_FLT_EPS_PX * eps_scale;
+	vert_tol = eps_scale_px;
+	line_tol = eps_scale_px;
 	face_tol = max_ff(vert_tol, line_tol);
 
 	vert_tol_sq = vert_tol * vert_tol;
@@ -1426,44 +1447,59 @@ static void knife_find_line_hits(KnifeTool_OpData *kcd)
 	/* Assume these tolerances swamp floating point rounding errors in calculations below */
 
 	/* first look for vertex hits */
-	for (val = BLI_smallhash_iternew(&kfvs, &hiter, (uintptr_t *)&v); val;
-	     val = BLI_smallhash_iternext(&hiter, (uintptr_t *)&v))
+	for (val_p = BLI_smallhash_iternew_p(&kfvs, &hiter, (uintptr_t *)&v); val_p;
+	     val_p = BLI_smallhash_iternext_p(&hiter, (uintptr_t *)&v))
 	{
 		knife_project_v2(kcd, v->cageco, s);
 		d = dist_squared_to_line_segment_v2(s, s1, s2);
-		if (d <= vert_tol_sq) {
-			if (point_is_visible(kcd, v->cageco, s, &mats)) {
-				memset(&hit, 0, sizeof(hit));
-				hit.v = v;
+		if ((d <= vert_tol_sq) &&
+		    point_is_visible(kcd, v->cageco, s, &mats))
+		{
+			memset(&hit, 0, sizeof(hit));
+			hit.v = v;
 
-				/* If this isn't from an existing BMVert, it may have been added to a BMEdge originally.
-				 * knowing if the hit comes from an edge is important for edge-in-face checks later on
-				 * see: #knife_add_single_cut -> #knife_verts_edge_in_face, T42611 */
-				if (v->v == NULL) {
-					for (ref = v->edges.first; ref; ref = ref->next) {
-						kfe = ref->ref;
-						if (kfe->e) {
-							hit.kfe = kfe;
-							break;
-						}
+			/* If this isn't from an existing BMVert, it may have been added to a BMEdge originally.
+			 * knowing if the hit comes from an edge is important for edge-in-face checks later on
+			 * see: #knife_add_single_cut -> #knife_verts_edge_in_face, T42611 */
+			if (v->v == NULL) {
+				for (ref = v->edges.first; ref; ref = ref->next) {
+					kfe = ref->ref;
+					if (kfe->e) {
+						hit.kfe = kfe;
+						break;
 					}
 				}
-
-				copy_v3_v3(hit.hit, v->co);
-				copy_v3_v3(hit.cagehit, v->cageco);
-				copy_v2_v2(hit.schit, s);
-				set_linehit_depth(kcd, &hit);
-				BLI_array_append(linehits, hit);
 			}
+
+			copy_v3_v3(hit.hit, v->co);
+			copy_v3_v3(hit.cagehit, v->cageco);
+			copy_v2_v2(hit.schit, s);
+			set_linehit_depth(kcd, &hit);
+			BLI_array_append(linehits, hit);
+		}
+		else {
+			/* note that these vertes aren't used */
+			*val_p = NULL;
 		}
 	}
+
 	/* now edge hits; don't add if a vertex at end of edge should have hit */
 	for (val = BLI_smallhash_iternew(&kfes, &hiter, (uintptr_t *)&kfe); val;
 	     val = BLI_smallhash_iternext(&hiter, (uintptr_t *)&kfe))
 	{
+		int kfe_verts_in_cut;
+		/* if we intersect both verts, don't attempt to intersect the edge */
+
+		kfe_verts_in_cut = (BLI_smallhash_lookup(&kfvs, (intptr_t)kfe->v1) != NULL) +
+		                   (BLI_smallhash_lookup(&kfvs, (intptr_t)kfe->v2) != NULL);
+
+		if (kfe_verts_in_cut == 2) {
+			continue;
+		}
+
 		knife_project_v2(kcd, kfe->v1->cageco, se1);
 		knife_project_v2(kcd, kfe->v2->cageco, se2);
-		isect_kind = isect_seg_seg_v2_point(s1, s2, se1, se2, sint);
+		isect_kind = (kfe_verts_in_cut) ? -1 : isect_seg_seg_v2_point(s1, s2, se1, se2, sint);
 		if (isect_kind == -1) {
 			/* isect_seg_seg_v2 doesn't do tolerance test around ends of s1-s2 */
 			closest_to_line_segment_v2(sint, s1, se1, se2);
@@ -1588,6 +1624,10 @@ static BMFace *knife_find_closest_face(KnifeTool_OpData *kcd, float co[3], float
 	sub_v3_v3v3(ray, origin_ofs, origin);
 
 	f = BKE_bmbvh_ray_cast(kcd->bmbvh, origin, ray, 0.0f, NULL, co, cageco);
+
+	if (f && kcd->only_select && BM_elem_flag_test(f, BM_ELEM_SELECT) == 0) {
+		f = NULL;
+	}
 
 	if (is_space)
 		*is_space = !f;
@@ -1983,34 +2023,17 @@ static int knife_update_active(KnifeTool_OpData *kcd)
 	return 1;
 }
 
-/* sort list of kverts by fraction along edge e */
-static void sort_by_frac_along(ListBase *lst, BMEdge *e)
+static int sort_verts_by_dist_cb(void *co_p, const void *cur_a_p, const void *cur_b_p)
 {
-	/* note, since we know the point is along the edge, sort from distance to v1co */
-	const float *v1co = e->v1->co;
-	Ref *cur = NULL, *prev = NULL, *next = NULL;
+	const KnifeVert *cur_a = ((const Ref *)cur_a_p)->ref;
+	const KnifeVert *cur_b = ((const Ref *)cur_b_p)->ref;
+	const float *co = co_p;
+	const float a_sq = len_squared_v3v3(co, cur_a->co);
+	const float b_sq = len_squared_v3v3(co, cur_b->co);
 
-	if (lst->first == lst->last)
-		return;
-
-	for (cur = ((Ref *)lst->first)->next; cur; cur = next) {
-		KnifeVert *vcur = cur->ref;
-		const float vcur_fac_sq = len_squared_v3v3(v1co, vcur->co);
-
-		next = cur->next;
-		prev = cur->prev;
-
-		BLI_remlink(lst, cur);
-
-		while (prev) {
-			KnifeVert *vprev = prev->ref;
-			if (len_squared_v3v3(v1co, vprev->co) <= vcur_fac_sq)
-				break;
-			prev = prev->prev;
-		}
-
-		BLI_insertlinkafter(lst, prev, cur);
-	}
+	if      (a_sq < b_sq) return -1;
+	else if (a_sq > b_sq) return  1;
+	else                  return  0;
 }
 
 /* The chain so far goes from an instantiated vertex to kfv (some may be reversed).
@@ -2341,13 +2364,22 @@ static bool knife_verts_edge_in_face(KnifeVert *v1, KnifeVert *v2, BMFace *f)
 {
 	bool v1_inside, v2_inside;
 	bool v1_inface, v2_inface;
+	BMLoop *l1, *l2;
 
 	if (!f || !v1 || !v2)
 		return false;
 
+	l1 = v1->v ? BM_face_vert_share_loop(f, v1->v) : NULL;
+	l2 = v2->v ? BM_face_vert_share_loop(f, v2->v) : NULL;
+
+	if ((l1 && l2) && BM_loop_is_adjacent(l1, l2)) {
+		/* boundary-case, always false to avoid edge-in-face checks below */
+		return false;
+	}
+
 	/* find out if v1 and v2, if set, are part of the face */
-	v1_inface = v1->v ? BM_vert_in_face(f, v1->v) : false;
-	v2_inface = v2->v ? BM_vert_in_face(f, v2->v) : false;
+	v1_inface = (l1 != NULL);
+	v2_inface = (l2 != NULL);
 
 	/* BM_face_point_inside_test uses best-axis projection so this isn't most accurate test... */
 	v1_inside = v1_inface ? false : BM_face_point_inside_test(f, v1->co);
@@ -2591,6 +2623,14 @@ static void knife_make_cuts(KnifeTool_OpData *kcd)
 	/* put list of cutting edges for a face into fhash, keyed by face */
 	BLI_mempool_iternew(kcd->kedges, &iter);
 	for (kfe = BLI_mempool_iterstep(&iter); kfe; kfe = BLI_mempool_iterstep(&iter)) {
+
+		/* select edges that lie directly on the cut */
+		if (kcd->select_result) {
+			if (kfe->e && kfe->is_cut) {
+				BM_edge_select_set(bm, kfe->e, true);
+			}
+		}
+
 		f = kfe->basef;
 		if (!f || kfe->e)
 			continue;
@@ -2627,7 +2667,8 @@ static void knife_make_cuts(KnifeTool_OpData *kcd)
 	for (lst = BLI_smallhash_iternew(ehash, &hiter, (uintptr_t *)&e); lst;
 	     lst = BLI_smallhash_iternext(&hiter, (uintptr_t *)&e))
 	{
-		sort_by_frac_along(lst, e);
+		BLI_listbase_sort_r(lst, e->v1->co, sort_verts_by_dist_cb);
+
 		for (ref = lst->first; ref; ref = ref->next) {
 			kfv = ref->ref;
 			pct = line_point_factor_v3(kfv->co, e->v1->co, e->v2->co);
@@ -2759,10 +2800,11 @@ static void knifetool_init(bContext *C, KnifeTool_OpData *kcd,
 
 	kcd->cagecos = (const float (*)[3])BKE_editmesh_vertexCos_get(kcd->em, scene, NULL);
 
-	kcd->bmbvh = BKE_bmbvh_new_from_editmesh(kcd->em,
-	                                         BMBVH_RETURN_ORIG |
-	                                         (only_select ? BMBVH_RESPECT_SELECT : BMBVH_RESPECT_HIDDEN),
-	                                         kcd->cagecos, false);
+	kcd->bmbvh = BKE_bmbvh_new_from_editmesh(
+	        kcd->em,
+	        BMBVH_RETURN_ORIG |
+	        ((only_select && cut_through) ? BMBVH_RESPECT_SELECT : BMBVH_RESPECT_HIDDEN),
+	        kcd->cagecos, false);
 
 	kcd->arena = BLI_memarena_new(MEM_SIZE_OPTIMAL(1 << 15), "knife");
 	kcd->vthresh = KMAXDIST - 1;
@@ -3120,16 +3162,14 @@ void MESH_OT_knife_tool(wmOperatorType *ot)
  * tessellation here seems way overkill,
  * but without this its very hard to know of a point is inside the face
  */
-static void edvm_mesh_knife_face_point(BMFace *f, float r_cent[3])
+static void edbm_mesh_knife_face_point(BMFace *f, float r_cent[3])
 {
 	const int tottri = f->len - 2;
 	BMLoop **loops = BLI_array_alloca(loops, f->len);
 	unsigned int  (*index)[3] = BLI_array_alloca(index, tottri);
 	int j;
-
-	const float *best_co[3] = {NULL};
-	float best_area  = -1.0f;
-	bool ok = false;
+	int j_best = 0;  /* use as fallback when unset */
+	float area_best  = -1.0f;
 
 	BM_face_calc_tessellation(f, loops, index);
 
@@ -3142,49 +3182,34 @@ static void edvm_mesh_knife_face_point(BMFace *f, float r_cent[3])
 		float cross[3];
 		cross_v3_v3v3(cross, p2, p3);
 		area = fabsf(dot_v3v3(p1, cross));
-		if (area > best_area) {
-			best_co[0] = p1;
-			best_co[1] = p2;
-			best_co[2] = p3;
-			best_area = area;
-			ok = true;
+		if (area > area_best) {
+			j_best = j;
+			area_best = area;
 		}
 	}
 
-	if (ok) {
-		mid_v3_v3v3v3(r_cent, best_co[0], best_co[1], best_co[2]);
-	}
-	else {
-		mid_v3_v3v3v3(r_cent, loops[0]->v->co, loops[1]->v->co, loops[2]->v->co);
-	}
+	mid_v3_v3v3v3(
+	        r_cent,
+	        loops[index[j_best][0]]->v->co,
+	        loops[index[j_best][1]]->v->co,
+	        loops[index[j_best][2]]->v->co);
 }
 
-static bool edbm_mesh_knife_face_isect(ARegion *ar, LinkNode *polys, BMFace *f, float projmat[4][4])
+static bool edbm_mesh_knife_point_isect(LinkNode *polys, const float cent_ss[2])
 {
-	float cent_ss[2];
-	float cent[3];
+	LinkNode *p = polys;
+	int isect = 0;
 
-	edvm_mesh_knife_face_point(f, cent);
-
-	ED_view3d_project_float_v2_m4(ar, cent, cent_ss, projmat);
-
-	/* check */
-	{
-		LinkNode *p = polys;
-		int isect = 0;
-
-		while (p) {
-			const float (*mval_fl)[2] = p->link;
-			const int mval_tot = MEM_allocN_len(mval_fl) / sizeof(*mval_fl);
-			isect += (int)isect_point_poly_v2(cent_ss, mval_fl, mval_tot - 1, false);
-			p = p->next;
-		}
-
-		if (isect % 2) {
-			return true;
-		}
+	while (p) {
+		const float (*mval_fl)[2] = p->link;
+		const int mval_tot = MEM_allocN_len(mval_fl) / sizeof(*mval_fl);
+		isect += (int)isect_point_poly_v2(cent_ss, mval_fl, mval_tot - 1, false);
+		p = p->next;
 	}
 
+	if (isect % 2) {
+		return true;
+	}
 	return false;
 }
 
@@ -3194,6 +3219,7 @@ static bool edbm_mesh_knife_face_isect(ARegion *ar, LinkNode *polys, BMFace *f, 
 void EDBM_mesh_knife(bContext *C, LinkNode *polys, bool use_tag, bool cut_through)
 {
 	KnifeTool_OpData *kcd;
+	bglMats mats;
 
 	view3d_operator_needs_opengl(C);
 
@@ -3211,6 +3237,10 @@ void EDBM_mesh_knife(bContext *C, LinkNode *polys, bool use_tag, bool cut_throug
 
 		if (use_tag) {
 			BM_mesh_elem_hflag_enable_all(kcd->em->bm, BM_EDGE, BM_ELEM_TAG, false);
+		}
+
+		if (kcd->cut_through == false) {
+			bgl_get_mats(&mats);
 		}
 	}
 
@@ -3276,7 +3306,10 @@ void EDBM_mesh_knife(bContext *C, LinkNode *polys, bool use_tag, bool cut_throug
 					BMFace *f;
 					BMIter fiter;
 					BM_ITER_ELEM (f, &fiter, e, BM_FACES_OF_EDGE) {
-						if (edbm_mesh_knife_face_isect(kcd->ar, polys, f, projmat)) {
+						float cent[3], cent_ss[2];
+						edbm_mesh_knife_face_point(f, cent);
+						knife_project_v2(kcd, cent, cent_ss);
+						if (edbm_mesh_knife_point_isect(polys, cent_ss)) {
 							BM_elem_flag_enable(f, BM_ELEM_TAG);
 						}
 					}
@@ -3309,7 +3342,12 @@ void EDBM_mesh_knife(bContext *C, LinkNode *polys, bool use_tag, bool cut_throug
 						} while ((l_iter = l_iter->next) != l_first && (found == false));
 
 						if (found) {
-							if (edbm_mesh_knife_face_isect(kcd->ar, polys, f, projmat)) {
+							float cent[3], cent_ss[2];
+							edbm_mesh_knife_face_point(f, cent);
+							knife_project_v2(kcd, cent, cent_ss);
+							if ((kcd->cut_through || point_is_visible(kcd, cent, cent_ss, &mats)) &&
+							    edbm_mesh_knife_point_isect(polys, cent_ss))
+							{
 								BM_elem_flag_enable(f, BM_ELEM_TAG);
 								keep_search = true;
 							}

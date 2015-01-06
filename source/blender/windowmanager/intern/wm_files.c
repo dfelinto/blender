@@ -97,8 +97,6 @@
 #include "ED_view3d.h"
 #include "ED_util.h"
 
-#include "RE_pipeline.h" /* only to report missing engine */
-
 #include "GHOST_C-api.h"
 #include "GHOST_Path-api.h"
 
@@ -842,7 +840,7 @@ static ImBuf *blend_file_thumb(Scene *scene, bScreen *screen, int **thumb_pt)
 	if (scene->camera) {
 		ibuf = ED_view3d_draw_offscreen_imbuf_simple(scene, scene->camera,
 		                                             BLEN_THUMB_SIZE * 2, BLEN_THUMB_SIZE * 2,
-		                                             IB_rect, OB_SOLID, false, false, R_ADDSKY, NULL, err_out);
+		                                             IB_rect, OB_SOLID, false, false, false, R_ADDSKY, NULL, err_out);
 	}
 	else {
 		ibuf = ED_view3d_draw_offscreen_imbuf(scene, v3d, ar, BLEN_THUMB_SIZE * 2, BLEN_THUMB_SIZE * 2,

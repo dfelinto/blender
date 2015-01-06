@@ -43,11 +43,7 @@
 #include "bmesh_py_types.h"
 #include "bmesh_py_types_select.h"
 
-
-
 #include "../generic/py_capi_utils.h"
-
-#include "bmesh_py_api.h" /* own include */
 
 PyDoc_STRVAR(bpy_bmeditselseq_active_doc,
 "The last selected element or None (read-only).\n\n:type: :class:`BMVert`, :class:`BMEdge` or :class:`BMFace`"

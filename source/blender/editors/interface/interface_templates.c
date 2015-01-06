@@ -31,7 +31,6 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "DNA_dynamicpaint_types.h"
 #include "DNA_node_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_object_types.h"
@@ -74,7 +73,6 @@
 #include "ED_util.h"
 
 #include "RNA_access.h"
-#include "RNA_enum_types.h"
 
 #include "WM_api.h"
 #include "WM_types.h"
@@ -156,7 +154,7 @@ static void id_search_cb(const bContext *C, void *arg_template, const char *str,
 				char name_ui[MAX_ID_NAME + 1];
 				name_uiprefix_id(name_ui, id);
 
-				iconid = ui_id_icon_get((bContext *)C, id, template->preview);
+				iconid = ui_id_icon_get(C, id, template->preview);
 
 				if (false == UI_search_item_add(items, name_ui, id, iconid))
 					break;
@@ -352,6 +350,8 @@ static const char *template_id_browse_tip(StructRNA *type)
 			case ID_BR:  return N_("Browse Brush to be linked");
 			case ID_PA:  return N_("Browse Particle Settings to be linked");
 			case ID_GD:  return N_("Browse Grease Pencil Data to be linked");
+			case ID_MC:  return N_("Browse Movie Clip to be linked");
+			case ID_MSK: return N_("Browse Mask to be linked");
 			case ID_PAL: return N_("Browse Palette Data to be linked");
 			case ID_PC:  return N_("Browse Paint Curve Data to be linked");
 		}
@@ -390,6 +390,10 @@ static const char *template_id_context(StructRNA *type)
 			case ID_BR:  return BLF_I18NCONTEXT_ID_BRUSH;
 			case ID_PA:  return BLF_I18NCONTEXT_ID_PARTICLESETTINGS;
 			case ID_GD:  return BLF_I18NCONTEXT_ID_GPENCIL;
+			case ID_MC:  return BLF_I18NCONTEXT_ID_MOVIECLIP;
+			case ID_MSK: return BLF_I18NCONTEXT_ID_MASK;
+			case ID_PAL: return BLF_I18NCONTEXT_ID_PALETTE;
+			case ID_PC:  return BLF_I18NCONTEXT_ID_PAINTCURVE;
 		}
 	}
 	return BLF_I18NCONTEXT_DEFAULT;
@@ -2668,7 +2672,7 @@ static void uilist_filter_items_default(struct uiList *ui_list, struct bContext 
 			names = MEM_callocN(sizeof(StringCmp) * len, "StringCmp");
 		}
 		if (filter_raw[0]) {
-			size_t idx = 0, slen = strlen(filter_raw);
+			size_t slen = strlen(filter_raw);
 
 			dyn_data->items_filter_flags = MEM_callocN(sizeof(int) * len, "items_filter_flags");
 			dyn_data->items_shown = 0;
@@ -2680,15 +2684,7 @@ static void uilist_filter_items_default(struct uiList *ui_list, struct bContext 
 			else {
 				filter = filter_dyn = MEM_mallocN((slen + 3) * sizeof(char), "filter_dyn");
 			}
-			if (filter_raw[idx] != '*') {
-				filter[idx++] = '*';
-			}
-			memcpy(filter + idx, filter_raw, slen);
-			idx += slen;
-			if (filter[idx - 1] != '*') {
-				filter[idx++] = '*';
-			}
-			filter[idx] = '\0';
+			BLI_strncpy_ensure_pad(filter, filter_raw, '*', slen + 3);
 		}
 
 		RNA_PROP_BEGIN (dataptr, itemptr, prop)

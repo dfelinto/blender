@@ -3189,8 +3189,8 @@ static void UV_OT_select_lasso(wmOperatorType *ot)
 
 static void uv_snap_to_pixel(float uvco[2], float w, float h)
 {
-	uvco[0] = ((float)((int)((uvco[0] * w) + 0.5f))) / w;
-	uvco[1] = ((float)((int)((uvco[1] * h) + 0.5f))) / h;
+	uvco[0] = roundf(uvco[0] * w) / w;
+	uvco[1] = roundf(uvco[1] * h) / h;
 }
 
 static void uv_snap_cursor_to_pixels(SpaceImage *sima)
@@ -3876,6 +3876,15 @@ static int uv_set_2d_cursor_invoke(bContext *C, wmOperator *op, const wmEvent *e
 {
 	ARegion *ar = CTX_wm_region(C);
 	float location[2];
+
+	if (ar->regiontype == RGN_TYPE_WINDOW) {
+		if (event->mval[1] <= 16) {
+			SpaceImage *sima = CTX_wm_space_image(C);
+			if (sima && ED_space_image_show_cache(sima)) {
+				return OPERATOR_PASS_THROUGH;
+			}
+		}
+	}
 
 	UI_view2d_region_to_view(&ar->v2d, event->mval[0], event->mval[1], &location[0], &location[1]);
 	RNA_float_set_array(op->ptr, "location", location);

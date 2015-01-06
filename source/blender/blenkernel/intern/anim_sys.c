@@ -83,7 +83,7 @@ bool id_type_can_have_animdata(ID *id)
 {
 	/* sanity check */
 	if (id == NULL)
-		return 0;
+		return false;
 
 	/* Only some ID-blocks have this info for now */
 	/* TODO: finish adding this for the other blocktypes */
@@ -100,13 +100,14 @@ bool id_type_can_have_animdata(ID *id)
 		case ID_SCE:
 		case ID_MC:
 		case ID_MSK:
+		case ID_GD:
 		{
-			return 1;
+			return true;
 		}
 		
 		/* no AnimData */
 		default:
-			return 0;
+			return false;
 	}
 }
 
@@ -193,20 +194,20 @@ bool BKE_animdata_set_action(ReportList *reports, ID *id, bAction *act)
 			/* can set */
 			adt->action = act;
 			id_us_plus((ID *)adt->action);
-			ok = 1;
+			ok = true;
 		}
 		else {
 			/* cannot set */
 			BKE_reportf(reports, RPT_ERROR,
 			            "Could not set action '%s' onto ID '%s', as it does not have suitably rooted paths "
 			            "for this purpose", act->id.name + 2, id->name);
-			/* ok = 0; */
+			/* ok = false; */
 		}
 	}
 	else {
 		/* just clearing the action... */
 		adt->action = NULL;
-		ok = 1;
+		ok = true;
 	}
 	
 	return ok;
@@ -289,7 +290,7 @@ bool BKE_copy_animdata_id(ID *id_to, ID *id_from, const bool do_action)
 	AnimData *adt;
 
 	if ((id_to && id_from) && (GS(id_to->name) != GS(id_from->name)))
-		return 0;
+		return false;
 
 	BKE_free_animdata(id_to);
 
@@ -299,7 +300,7 @@ bool BKE_copy_animdata_id(ID *id_to, ID *id_from, const bool do_action)
 		iat->adt = BKE_copy_animdata(adt, do_action);
 	}
 
-	return 1;
+	return true;
 }
 
 void BKE_copy_animdata_id_action(ID *id)
@@ -1031,6 +1032,9 @@ void BKE_animdata_main_cb(Main *mainptr, ID_AnimData_Edit_Callback func, void *u
 
 	/* line styles */
 	ANIMDATA_IDS_CB(mainptr->linestyle.first);
+	
+	/* grease pencil */
+	ANIMDATA_IDS_CB(mainptr->gpencil.first);
 }
 
 /* Fix all RNA-Paths throughout the database (directly access the Global.main version)
@@ -1118,6 +1122,9 @@ void BKE_all_animdata_fix_paths_rename(ID *ref_id, const char *prefix, const cha
 	
 	/* linestyles */
 	RENAMEFIX_ANIM_IDS(mainptr->linestyle.first);
+	
+	/* grease pencil */
+	RENAMEFIX_ANIM_IDS(mainptr->gpencil.first);
 	
 	/* scenes */
 	RENAMEFIX_ANIM_NODETREE_IDS(mainptr->scene.first, Scene);
@@ -1346,7 +1353,7 @@ static bool animsys_remap_path(AnimMapper *UNUSED(remap), char *path, char **dst
 
 	/* nothing suitable found, so just set dst to look at path (i.e. no alloc/free needed) */
 	*dst = path;
-	return 0;
+	return false;
 }
 
 
@@ -1375,7 +1382,7 @@ static bool animsys_write_rna_setting(PointerRNA *ptr, char *path, int array_ind
 					       path, array_index, array_len - 1);
 				}
 				
-				return 0;
+				return false;
 			}
 			
 			switch (RNA_property_type(prop)) {
@@ -1429,7 +1436,7 @@ static bool animsys_write_rna_setting(PointerRNA *ptr, char *path, int array_ind
 					break;
 				default:
 					/* nothing can be done here... so it is unsuccessful? */
-					return 0;
+					return false;
 			}
 			
 			/* RNA property update disabled for now - [#28525] [#28690] [#28774] [#28777] */
@@ -1468,7 +1475,7 @@ static bool animsys_write_rna_setting(PointerRNA *ptr, char *path, int array_ind
 		}
 		
 		/* successful */
-		return 1;
+		return true;
 	}
 	else {
 		/* failed to get path */
@@ -1479,7 +1486,7 @@ static bool animsys_write_rna_setting(PointerRNA *ptr, char *path, int array_ind
 			       (ptr->id.data) ? (((ID *)ptr->id.data)->name + 2) : "<No ID>",
 			       path, array_index);
 		}
-		return 0;
+		return false;
 	}
 }
 
@@ -2679,6 +2686,9 @@ void BKE_animsys_evaluate_all_animation(Main *main, Scene *scene, float ctime)
 
 	/* linestyles */
 	EVAL_ANIM_IDS(main->linestyle.first, ADT_RECALC_ANIM);
+	
+	/* grease pencil */
+	EVAL_ANIM_IDS(main->gpencil.first, ADT_RECALC_ANIM);
 	
 	/* objects */
 	/* ADT_RECALC_ANIM doesn't need to be supplied here, since object AnimData gets

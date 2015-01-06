@@ -69,11 +69,11 @@ static const char trailingBytesForUTF8[256] = {
 
 int BLI_utf8_invalid_byte(const char *str, int length)
 {
-	const unsigned char *p, *pend = (unsigned char *)str + length;
+	const unsigned char *p, *pend = (const unsigned char *)str + length;
 	unsigned char c;
 	int ab;
 
-	for (p = (unsigned char *)str; p < pend; p++) {
+	for (p = (const unsigned char *)str; p < pend; p++) {
 		c = *p;
 		if (c < 128)
 			continue;
@@ -130,7 +130,7 @@ int BLI_utf8_invalid_byte(const char *str, int length)
 
 utf8_error:
 
-	return (int)((char *)p - (char *)str) - 1;
+	return (int)((const char *)p - (const char *)str) - 1;
 }
 
 int BLI_utf8_invalid_strip(char *str, int length)
@@ -207,6 +207,22 @@ char *BLI_strncpy_utf8(char *__restrict dst, const char *__restrict src, size_t 
 	BLI_STR_UTF8_CPY(dst, src, maxncpy);
 
 	return r_dst;
+}
+
+size_t BLI_strncpy_utf8_rlen(char *__restrict dst, const char *__restrict src, size_t maxncpy)
+{
+	char *r_dst = dst;
+
+	BLI_assert(maxncpy != 0);
+
+#ifdef DEBUG_STRSIZE
+	memset(dst, 0xff, sizeof(*dst) * maxncpy);
+#endif
+
+	/* note: currently we don't attempt to deal with invalid utf8 chars */
+	BLI_STR_UTF8_CPY(dst, src, maxncpy);
+
+	return (size_t)(dst - r_dst);
 }
 
 char *BLI_strncat_utf8(char *__restrict dst, const char *__restrict src, size_t maxncpy)

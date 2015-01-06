@@ -49,9 +49,7 @@
 #include "BKE_camera.h"
 #include "BKE_context.h"
 #include "BKE_font.h"
-#include "BKE_image.h"
 #include "BKE_library.h"
-#include "BKE_main.h"
 #include "BKE_object.h"
 #include "BKE_paint.h"
 #include "BKE_report.h"
@@ -627,9 +625,9 @@ static bool view3d_orbit_calc_center(bContext *C, float r_dyn_ofs[3])
 		 * center, in other cases it's not clear what rotation center shall be
 		 * so just rotate around object origin
 		 */
-		if (ob->mode & OB_MODE_SCULPT) {
+		if (ob->mode & (OB_MODE_SCULPT | OB_MODE_TEXTURE_PAINT)) {
 			float stroke[3];
-			ED_sculpt_stroke_get_average(ob, stroke);
+			BKE_paint_stroke_get_average(scene, ob, stroke);
 			copy_v3_v3(lastofs, stroke);
 		}
 		else {
@@ -2977,8 +2975,10 @@ static int viewselected_exec(bContext *C, wmOperator *op)
 	else if (ob && (ob->mode & OB_MODE_PARTICLE_EDIT)) {
 		ok = PE_minmax(scene, min, max);
 	}
-	else if (ob && (ob->mode & OB_MODE_SCULPT)) {
-		ok = ED_sculpt_minmax(C, min, max);
+	else if (ob && (ob->mode & (OB_MODE_SCULPT | OB_MODE_TEXTURE_PAINT))) {
+		BKE_paint_stroke_get_average(scene, ob, min);
+		copy_v3_v3(max, min);
+		ok = true;
 		ok_dist = 0; /* don't zoom */
 	}
 	else {
@@ -4341,13 +4341,11 @@ static int background_image_add_exec(bContext *C, wmOperator *UNUSED(op))
 static int background_image_add_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
 {
 	View3D *v3d = CTX_wm_view3d(C);
-	Image *ima = NULL;
+	Image *ima;
 	BGpic *bgpic;
 	
 	ima = (Image *)WM_operator_drop_load_path(C, op, ID_IM);
-	if (!ima) {
-		return OPERATOR_CANCELLED;
-	}
+	/* may be NULL, continue anyway */
 
 	bgpic = background_image_add(C);
 	bgpic->ima = ima;
@@ -4378,7 +4376,7 @@ void VIEW3D_OT_background_image_add(wmOperatorType *ot)
 	
 	/* properties */
 	RNA_def_string(ot->srna, "name", "Image", MAX_ID_NAME - 2, "Name", "Image name to assign");
-	WM_operator_properties_filesel(ot, FOLDERFILE | IMAGEFILE, FILE_SPECIAL, FILE_OPENFILE,
+	WM_operator_properties_filesel(ot, FILE_TYPE_FOLDER | FILE_TYPE_IMAGE | FILE_TYPE_MOVIE, FILE_SPECIAL, FILE_OPENFILE,
 	                               WM_FILESEL_FILEPATH | WM_FILESEL_RELPATH, FILE_DEFAULTDISPLAY);
 }
 

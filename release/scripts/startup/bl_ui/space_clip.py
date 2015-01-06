@@ -21,7 +21,11 @@
 import bpy
 from bpy.types import Panel, Header, Menu, UIList
 from bpy.app.translations import pgettext_iface as iface_
-from bl_ui.properties_grease_pencil_common import GreasePencilPanel
+from bl_ui.properties_grease_pencil_common import (
+        GreasePencilDrawingToolsPanel,
+        GreasePencilStrokeEditPanel,
+        GreasePencilDataPanel
+        )
 
 
 class CLIP_UL_tracking_objects(UIList):
@@ -422,7 +426,9 @@ class CLIP_PT_tools_solve(CLIP_PT_tracking_panel, Panel):
         col = layout.column()
         row = col.row()
         row.prop(settings, "use_tripod_solver", text="Tripod")
-        row.prop(settings, "use_keyframe_selection", text="Keyframe")
+        sub = row.row()
+        sub.active = not settings.use_tripod_solver
+        sub.prop(settings, "use_keyframe_selection", text="Keyframe")
 
         col = layout.column(align=True)
         col.active = (not settings.use_tripod_solver and
@@ -1050,12 +1056,6 @@ class CLIP_PT_tools_mask(MASK_PT_tools, Panel):
 # --- end mask ---
 
 
-class CLIP_PT_tools_grease_pencil(GreasePencilPanel, Panel):
-    bl_space_type = 'CLIP_EDITOR'
-    bl_region_type = 'TOOLS'
-    bl_category = "Grease Pencil"
-
-
 class CLIP_PT_footage(CLIP_PT_clip_view_panel, Panel):
     bl_space_type = 'CLIP_EDITOR'
     bl_region_type = 'UI'
@@ -1108,6 +1108,26 @@ class CLIP_PT_tools_scenesetup(Panel):
 
         layout.operator("clip.set_viewport_background")
         layout.operator("clip.setup_tracking_scene")
+
+
+# Grease Pencil properties
+class CLIP_PT_grease_pencil(GreasePencilDataPanel, CLIP_PT_clip_view_panel, Panel):
+    bl_space_type = 'CLIP_EDITOR'
+    bl_region_type = 'UI'
+    bl_options = {'DEFAULT_CLOSED'}
+
+    # NOTE: this is just a wrapper around the generic GP Panel
+    # But, this should only be visible in "clip" view
+
+
+# Grease Pencil drawing tools
+class CLIP_PT_tools_grease_pencil_draw(GreasePencilDrawingToolsPanel, Panel):
+    bl_space_type = 'CLIP_EDITOR'
+
+
+# Grease Pencil stroke editing tools
+class CLIP_PT_tools_grease_pencil_edit(GreasePencilStrokeEditPanel, Panel):
+    bl_space_type = 'CLIP_EDITOR'
 
 
 class CLIP_MT_view(Menu):

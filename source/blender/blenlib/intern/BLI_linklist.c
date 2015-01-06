@@ -32,6 +32,8 @@
 
 
 #include "MEM_guardedalloc.h"
+
+#include "BLI_utildefines.h"
 #include "BLI_linklist.h"
 #include "BLI_memarena.h"
 #include "BLI_mempool.h"
@@ -96,7 +98,7 @@ void BLI_linklist_prepend_nlink(LinkNode **listp, void *ptr, LinkNode *nlink)
 
 void BLI_linklist_prepend(LinkNode **listp, void *ptr)
 {
-	LinkNode *nlink = MEM_mallocN(sizeof(*nlink), "nlink");
+	LinkNode *nlink = MEM_mallocN(sizeof(*nlink), __func__);
 	BLI_linklist_prepend_nlink(listp, ptr, nlink);
 }
 
@@ -135,7 +137,7 @@ void BLI_linklist_append_nlink(LinkNode **listp, void *ptr, LinkNode *nlink)
 
 void BLI_linklist_append(LinkNode **listp, void *ptr)
 {
-	LinkNode *nlink = MEM_mallocN(sizeof(*nlink), "nlink");
+	LinkNode *nlink = MEM_mallocN(sizeof(*nlink), __func__);
 	BLI_linklist_append_nlink(listp, ptr, nlink);
 }
 
@@ -177,7 +179,7 @@ void *BLI_linklist_pop_pool(struct LinkNode **listp, struct BLI_mempool *mempool
 
 void BLI_linklist_insert_after(LinkNode **listp, void *ptr)
 {
-	LinkNode *nlink = MEM_mallocN(sizeof(*nlink), "nlink");
+	LinkNode *nlink = MEM_mallocN(sizeof(*nlink), __func__);
 	LinkNode *node = *listp;
 
 	nlink->link = ptr;

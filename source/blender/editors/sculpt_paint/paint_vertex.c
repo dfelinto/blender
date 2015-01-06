@@ -66,8 +66,6 @@
 #include "WM_api.h"
 #include "WM_types.h"
 
-#include "GPU_buffers.h"
-
 #include "ED_armature.h"
 #include "ED_object.h"
 #include "ED_mesh.h"
@@ -937,7 +935,7 @@ static float calc_vp_strength_col_dl(VPaint *vp, ViewContext *vc, const float co
 			else {
 				factor = 1.0f;
 			}
-			return factor * BKE_brush_curve_strength_clamp(brush, dist, brush_size_pressure);
+			return factor * BKE_brush_curve_strength(brush, dist, brush_size_pressure);
 		}
 	}
 	if (rgba)
@@ -2074,7 +2072,7 @@ static int wpaint_mode_toggle_exec(bContext *C, wmOperator *op)
 
 		paint_cursor_start(C, weight_paint_poll);
 
-		BKE_paint_init(&wp->paint, PAINT_CURSOR_WEIGHT_PAINT);
+		BKE_paint_init(&scene->toolsettings->unified_paint_settings, &wp->paint, PAINT_CURSOR_WEIGHT_PAINT);
 
 		/* weight paint specific */
 		ED_mesh_mirror_spatial_table(ob, NULL, NULL, 's');
@@ -2682,7 +2680,7 @@ static int vpaint_mode_toggle_exec(bContext *C, wmOperator *op)
 		
 		paint_cursor_start(C, vertex_paint_poll);
 
-		BKE_paint_init(&vp->paint, PAINT_CURSOR_VERTEX_PAINT);
+		BKE_paint_init(&scene->toolsettings->unified_paint_settings, &vp->paint, PAINT_CURSOR_VERTEX_PAINT);
 	}
 	
 	/* update modifier stack for mapping requirements */
@@ -3024,7 +3022,7 @@ static void vpaint_stroke_update_step(bContext *C, struct PaintStroke *stroke, P
 		 * avoid this if we can! */
 		DAG_id_tag_update(ob->data, 0);
 	}
-	else if (!GPU_buffer_legacy(ob->derivedFinal)) {
+	else {
 		/* If using new VBO drawing, mark mcol as dirty to force colors gpu buffer refresh! */
 		ob->derivedFinal->dirty |= DM_DIRTY_MCOL_UPDATE_DRAW;
 	}
@@ -3217,7 +3215,7 @@ static void gradientVert_update(DMGradient_userData *grad_data, int index)
 	/* no need to clamp 'alpha' yet */
 
 	/* adjust weight */
-	alpha = BKE_brush_curve_strength_clamp(grad_data->brush, alpha, 1.0f);
+	alpha = BKE_brush_curve_strength(grad_data->brush, alpha, 1.0f);
 
 	if (alpha != 0.0f) {
 		MDeformVert *dv = &me->dvert[index];

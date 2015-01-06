@@ -56,6 +56,7 @@
 #include "MEM_guardedalloc.h"
 
 #include "GPU_extensions.h"
+#include "GPU_draw.h"
 #include "GPU_glew.h"
 
 extern GLubyte stipple_quarttone[128]; /* glutil.c, bad level data */
@@ -526,6 +527,7 @@ static void emDM_drawMappedFaces(DerivedMesh *dm,
 			               setDrawOptions(userData, BM_elem_index_get(efa)));
 			if (draw_option != DM_DRAW_OPTION_SKIP) {
 				const GLenum poly_type = GL_TRIANGLES; /* BMESH NOTE, this is odd but keep it for now to match trunk */
+				GPU_enable_material(efa->mat_nr + 1, NULL);
 				if (draw_option == DM_DRAW_OPTION_STIPPLE) { /* enabled with stipple */
 
 					if (poly_prev != GL_ZERO) glEnd();
@@ -607,13 +609,17 @@ static void emDM_drawMappedFaces(DerivedMesh *dm,
 			int drawSmooth;
 
 			efa = ltri[0]->f;
-			drawSmooth = lnors || ((flag & DM_DRAW_ALWAYS_SMOOTH) ? 1 : BM_elem_flag_test(efa, BM_ELEM_SMOOTH));
-
+			drawSmooth = lnors || ((flag & DM_DRAW_ALWAYS_SMOOTH) ? 1 : BM_elem_flag_test(efa, BM_ELEM_SMOOTH));			
+			
 			draw_option = (!setDrawOptions ?
 			               DM_DRAW_OPTION_NORMAL :
 			               setDrawOptions(userData, BM_elem_index_get(efa)));
+
 			if (draw_option != DM_DRAW_OPTION_SKIP) {
 				const GLenum poly_type = GL_TRIANGLES; /* BMESH NOTE, this is odd but keep it for now to match trunk */
+
+				GPU_enable_material(efa->mat_nr + 1, NULL);
+				
 				if (draw_option == DM_DRAW_OPTION_STIPPLE) { /* enabled with stipple */
 
 					if (poly_prev != GL_ZERO) glEnd();
@@ -717,7 +723,7 @@ static void bmdm_get_tri_colpreview(BMLoop *ls[3], MLoopCol *lcol[3], unsigned c
 
 static void emDM_drawFacesTex_common(DerivedMesh *dm,
                                      DMSetDrawOptionsTex drawParams,
-                                     DMSetDrawOptions drawParamsMapped,
+                                     DMSetDrawOptionsMappedTex drawParamsMapped,
                                      DMCompareDrawOptions compareDrawOptions,
                                      void *userData)
 {
@@ -785,7 +791,7 @@ static void emDM_drawFacesTex_common(DerivedMesh *dm,
 			if (drawParams)
 				draw_option = drawParams(&mtf, has_vcol, efa->mat_nr);
 			else if (drawParamsMapped)
-				draw_option = drawParamsMapped(userData, BM_elem_index_get(efa));
+				draw_option = drawParamsMapped(userData, BM_elem_index_get(efa), efa->mat_nr);
 			else
 				draw_option = DM_DRAW_OPTION_NORMAL;
 
@@ -854,7 +860,7 @@ static void emDM_drawFacesTex_common(DerivedMesh *dm,
 			if (drawParams)
 				draw_option = drawParams(&mtf, has_vcol, efa->mat_nr);
 			else if (drawParamsMapped)
-				draw_option = drawParamsMapped(userData, BM_elem_index_get(efa));
+				draw_option = drawParamsMapped(userData, BM_elem_index_get(efa), efa->mat_nr);
 			else
 				draw_option = DM_DRAW_OPTION_NORMAL;
 
@@ -916,7 +922,7 @@ static void emDM_drawFacesTex(DerivedMesh *dm,
 }
 
 static void emDM_drawMappedFacesTex(DerivedMesh *dm,
-                                    DMSetDrawOptions setDrawOptions,
+                                    DMSetDrawOptionsMappedTex setDrawOptions,
                                     DMCompareDrawOptions compareDrawOptions,
                                     void *userData, DMDrawFlag UNUSED(flag))
 {
@@ -1555,7 +1561,8 @@ static void *emDM_getTessFaceDataArray(DerivedMesh *dm, int type)
 	if (type == CD_MTFACE || type == CD_MCOL) {
 		const int type_from = (type == CD_MTFACE) ? CD_MTEXPOLY : CD_MLOOPCOL;
 		int index;
-		const char *data, *bmdata;
+		const char *bmdata;
+		char *data;
 		index = CustomData_get_layer_index(&bm->pdata, type_from);
 
 		if (index != -1) {
@@ -1580,11 +1587,11 @@ static void *emDM_getTessFaceDataArray(DerivedMesh *dm, int type)
 					// bmdata = CustomData_bmesh_get(&bm->pdata, efa->head.data, CD_MTEXPOLY);
 					bmdata = BM_ELEM_CD_GET_VOID_P(efa, cd_poly_tex_offset);
 
-					ME_MTEXFACE_CPY(((MTFace *)data), ((MTexPoly *)bmdata));
+					ME_MTEXFACE_CPY(((MTFace *)data), ((const MTexPoly *)bmdata));
 					for (j = 0; j < 3; j++) {
 						// bmdata = CustomData_bmesh_get(&bm->ldata, looptris[i][j]->head.data, CD_MLOOPUV);
 						bmdata = BM_ELEM_CD_GET_VOID_P(looptris[i][j], cd_loop_uv_offset);
-						copy_v2_v2(((MTFace *)data)->uv[j], ((MLoopUV *)bmdata)->uv);
+						copy_v2_v2(((MTFace *)data)->uv[j], ((const MLoopUV *)bmdata)->uv);
 					}
 				}
 			}
@@ -1594,7 +1601,7 @@ static void *emDM_getTessFaceDataArray(DerivedMesh *dm, int type)
 					for (j = 0; j < 3; j++) {
 						// bmdata = CustomData_bmesh_get(&bm->ldata, looptris[i][j]->head.data, CD_MLOOPCOL);
 						bmdata = BM_ELEM_CD_GET_VOID_P(looptris[i][j], cd_loop_color_offset);
-						MESH_MLOOPCOL_TO_MCOL(((MLoopCol *)bmdata), (((MCol *)data) + j));
+						MESH_MLOOPCOL_TO_MCOL(((const MLoopCol *)bmdata), (((MCol *)data) + j));
 					}
 				}
 			}

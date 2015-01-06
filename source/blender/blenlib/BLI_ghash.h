@@ -30,7 +30,6 @@
 
 /** \file BLI_ghash.h
  *  \ingroup bli
- *  \brief A general (pointer -> pointer) hash table ADT
  */
 
 #include "BLI_sys_types.h" /* for bool */
@@ -41,6 +40,7 @@ extern "C" {
 #endif
 
 typedef unsigned int  (*GHashHashFP)     (const void *key);
+/** returns false when equal */
 typedef bool          (*GHashCmpFP)      (const void *a, const void *b);
 typedef void          (*GHashKeyFreeFP)  (void *key);
 typedef void          (*GHashValFreeFP)  (void *val);

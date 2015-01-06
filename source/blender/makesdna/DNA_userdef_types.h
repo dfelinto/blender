@@ -168,7 +168,7 @@ typedef struct ThemeUI {
 
 	uiPanelColors panel; /* depricated, but we keep it for do_versions (2.66.1) */
 
-	char emboss[4];
+	char widget_emboss[4];
 
 	/* fac: 0 - 1 for blend factor, width in pixels */
 	float menu_shadow_fac;
@@ -251,6 +251,7 @@ typedef struct ThemeSpace {
 	char bone_solid[4], bone_pose[4], bone_pose_active[4];
 	char strip[4], strip_select[4];
 	char cframe[4];
+	char time_keyframe[4], time_gp_keyframe[4];
 	char freestyle_edge_mark[4], freestyle_face_mark[4];
 	
 	char nurb_uline[4], nurb_vline[4];
@@ -295,7 +296,10 @@ typedef struct ThemeSpace {
 	char bundle_solid[4];
 	char path_before[4], path_after[4];
 	char camera_path[4];
-	char hpad[3];
+	char hpad[2];
+	
+	char gp_vertex_size;
+	char gp_vertex[4], gp_vertex_select[4];
 	
 	char preview_back[4];
 	char preview_stitch_face[4];

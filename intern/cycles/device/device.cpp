@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #include <stdlib.h>
@@ -19,9 +19,6 @@
 
 #include "device.h"
 #include "device_intern.h"
-
-#include "cuew.h"
-#include "clew.h"
 
 #include "util_debug.h"
 #include "util_foreach.h"

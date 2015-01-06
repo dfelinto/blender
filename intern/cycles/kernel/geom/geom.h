@@ -20,7 +20,9 @@
 
 /* 64 object BVH + 64 mesh BVH + 64 object node splitting */
 #define BVH_STACK_SIZE 192
+#define BVH_QSTACK_SIZE 384
 #define BVH_NODE_SIZE 4
+#define BVH_QNODE_SIZE 7
 #define TRI_NODE_SIZE 3
 
 /* silly workaround for float extended precision that happens when compiling
@@ -35,6 +37,7 @@
 #include "geom_attribute.h"
 #include "geom_object.h"
 #include "geom_triangle.h"
+#include "geom_triangle_intersect.h"
 #include "geom_motion_triangle.h"
 #include "geom_motion_curve.h"
 #include "geom_curve.h"

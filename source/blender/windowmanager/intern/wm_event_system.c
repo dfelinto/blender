@@ -81,7 +81,6 @@
 #include "wm_window.h"
 #include "wm_event_system.h"
 #include "wm_event_types.h"
-#include "wm_draw.h"
 
 #ifndef NDEBUG
 #  include "RNA_enum_types.h"
@@ -3374,6 +3373,33 @@ void wm_event_add_ghostevent(wmWindowManager *wm, wmWindow *win, int type, int U
 			break;
 		}
 
+#ifdef WITH_INPUT_IME
+		case GHOST_kEventImeCompositionStart:
+		{
+			event.val = KM_PRESS;
+			win->ime_data = customdata;
+			win->ime_data->is_ime_composing = true;
+			event.type = WM_IME_COMPOSITE_START;
+			wm_event_add(win, &event);
+			break;
+		}
+		case GHOST_kEventImeComposition:
+		{
+			event.val = KM_PRESS;
+			event.type = WM_IME_COMPOSITE_EVENT;
+			wm_event_add(win, &event);
+			break;
+		}
+		case GHOST_kEventImeCompositionEnd:
+		{
+			event.val = KM_PRESS;
+			win->ime_data->is_ime_composing = false;
+			event.type = WM_IME_COMPOSITE_END;
+			wm_event_add(win, &event);
+			break;
+		}
+#endif /* WITH_INPUT_IME */
+
 	}
 
 #if 0
@@ -3480,5 +3506,13 @@ bool WM_event_is_tablet(const struct wmEvent *event)
 	return (event->tablet_data) ? true : false;
 }
 
+#ifdef WITH_INPUT_IME
+/* most os using ctrl/oskey + space to switch ime, avoid added space */
+bool WM_event_is_ime_switch(const struct wmEvent *event)
+{
+	return event->val == KM_PRESS && event->type == SPACEKEY &&
+	       (event->ctrl || event->oskey || event->shift || event->alt);
+}
+#endif
 
 /** \} */

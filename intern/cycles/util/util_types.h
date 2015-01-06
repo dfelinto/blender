@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #ifndef __UTIL_TYPES_H__
@@ -262,6 +262,19 @@ struct ccl_try_align(16) float4 {
 
 	__forceinline float operator[](int i) const { return *(&x + i); }
 	__forceinline float& operator[](int i) { return *(&x + i); }
+};
+
+template<typename T>
+class vector3
+{
+public:
+	T x, y, z;
+
+	ccl_always_inline vector3() {}
+	ccl_always_inline vector3(const T& a)
+	  : x(a), y(a), z(a) {}
+	ccl_always_inline vector3(const T& x, const T& y, const T& z)
+	  : x(x), y(y), z(z) {}
 };
 
 #endif

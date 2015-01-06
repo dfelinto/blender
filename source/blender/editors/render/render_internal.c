@@ -76,10 +76,8 @@
 #include "RE_engine.h"
 
 #include "IMB_colormanagement.h"
-#include "IMB_imbuf.h"
 #include "IMB_imbuf_types.h"
 
-#include "GPU_extensions.h"
 
 #include "BIF_gl.h"
 #include "BIF_glutil.h"
@@ -87,7 +85,6 @@
 #include "RNA_access.h"
 #include "RNA_define.h"
 
-#include "wm_window.h"
 
 #include "render_intern.h"
 
@@ -344,7 +341,11 @@ static void render_freejob(void *rjv)
 }
 
 /* str is IMA_MAX_RENDER_TEXT in size */
-static void make_renderinfo_string(RenderStats *rs, Scene *scene, bool v3d_override, char *str)
+static void make_renderinfo_string(const RenderStats *rs,
+                                   const Scene *scene,
+                                   const bool v3d_override,
+                                   const char *error,
+                                   char *str)
 {
 	char info_time_str[32]; // used to be extern to header_info.c
 	uintptr_t mem_in_use, mmap_in_use, peak_memory;
@@ -417,8 +418,12 @@ static void make_renderinfo_string(RenderStats *rs, Scene *scene, bool v3d_overr
 		spos += sprintf(spos, IFACE_("| Full Sample %d "), rs->curfsa);
 	
 	/* extra info */
-	if (rs->infostr && rs->infostr[0])
+	if (rs->infostr && rs->infostr[0]) {
 		spos += sprintf(spos, "| %s ", rs->infostr);
+	}
+	else if (error && error[0]) {
+		spos += sprintf(spos, "| %s ", error);
+	}
 
 	/* very weak... but 512 characters is quite safe */
 	if (spos >= str + IMA_MAX_RENDER_TEXT)
@@ -439,7 +444,8 @@ static void image_renderinfo_cb(void *rjv, RenderStats *rs)
 		if (rr->text == NULL)
 			rr->text = MEM_callocN(IMA_MAX_RENDER_TEXT, "rendertext");
 
-		make_renderinfo_string(rs, rj->scene, rj->v3d_override, rr->text);
+		make_renderinfo_string(rs, rj->scene, rj->v3d_override,
+		                       rr->error, rr->text);
 	}
 
 	RE_ReleaseResult(rj->re);
@@ -1123,7 +1129,7 @@ static void render_view3d_renderinfo_cb(void *rjp, RenderStats *rs)
 		*rp->stop = 1;
 	}
 	else {
-		make_renderinfo_string(rs, rp->scene, false, rp->engine->text);
+		make_renderinfo_string(rs, rp->scene, false, NULL, rp->engine->text);
 	
 		/* make jobs timer to send notifier */
 		*(rp->do_update) = true;

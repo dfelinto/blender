@@ -11,15 +11,15 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #ifndef __UTIL_XML_H__
 #define __UTIL_XML_H__
 
-/* PugiXML from OpenImageIO is used for XML parsing. */
+/* PugiXML is used for XML parsing. */
 
-#include <OpenImageIO/pugixml.hpp>
+#include <pugixml.hpp>
 
 CCL_NAMESPACE_BEGIN
 

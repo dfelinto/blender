@@ -54,8 +54,6 @@
 #include "IMB_imbuf.h"
 #include "IMB_colormanagement.h"
 
-#include "RE_bake.h"
-
 /* local include */
 #include "rayintersection.h"
 #include "rayobject.h"
@@ -374,8 +372,8 @@ static void bake_displacement(void *handle, ShadeInput *UNUSED(shi), float dist,
 			bs->vcol->b = col[2];
 		}
 		else {
-			const char *imcol = (char *)(bs->rect + bs->rectx * y + x);
-			copy_v4_v4_char((char *)imcol, (char *)col);
+			char *imcol = (char *)(bs->rect + bs->rectx * y + x);
+			copy_v4_v4_char(imcol, (char *)col);
 		}
 	}
 	if (bs->rect_mask) {

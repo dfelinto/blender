@@ -37,8 +37,6 @@
 #include "DNA_rigidbody_types.h"
 #include "DNA_scene_types.h"
 
-#include "BLI_math.h"
-
 #ifdef WITH_BULLET
 #  include "RBI_api.h"
 #endif
@@ -48,8 +46,6 @@
 #include "BKE_rigidbody.h"
 
 #include "RNA_access.h"
-#include "RNA_define.h"
-#include "RNA_enum_types.h"
 
 #include "WM_api.h"
 #include "WM_types.h"
@@ -199,5 +195,5 @@ void RIGIDBODY_OT_world_export(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER|OPTYPE_UNDO;
 
 	/* properties */
-	WM_operator_properties_filesel(ot, FOLDERFILE, FILE_SPECIAL, FILE_SAVE, FILE_RELPATH, FILE_DEFAULTDISPLAY);
+	WM_operator_properties_filesel(ot, FILE_TYPE_FOLDER, FILE_SPECIAL, FILE_SAVE, FILE_RELPATH, FILE_DEFAULTDISPLAY);
 }

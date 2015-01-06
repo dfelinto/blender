@@ -61,9 +61,16 @@
 /* global for themes */
 typedef void (*VectorDrawFunc)(int x, int y, int w, int h, float alpha);
 
-static bTheme *theme_active = NULL;
-static int theme_spacetype = SPACE_VIEW3D;
-static int theme_regionid = RGN_TYPE_WINDOW;
+/* be sure to keep 'bThemeState' in sync */
+static struct bThemeState g_theme_state = {
+    NULL,
+    SPACE_VIEW3D,
+    RGN_TYPE_WINDOW,
+};
+
+#define theme_active g_theme_state.theme
+#define theme_spacetype g_theme_state.spacetype
+#define theme_regionid g_theme_state.regionid
 
 void ui_resources_init(void)
 {
@@ -372,6 +379,10 @@ const unsigned char *UI_ThemeGetColorPtr(bTheme *btheme, int spacetype, int colo
 					cp = ts->keyborder_select; break;
 				case TH_CFRAME:
 					cp = ts->cframe; break;
+				case TH_TIME_KEYFRAME:
+					cp = ts->time_keyframe; break;
+				case TH_TIME_GP_KEYFRAME:
+					cp = ts->time_gp_keyframe; break;
 				case TH_NURB_ULINE:
 					cp = ts->nurb_uline; break;
 				case TH_NURB_VLINE:
@@ -506,6 +517,17 @@ const unsigned char *UI_ThemeGetColorPtr(bTheme *btheme, int spacetype, int colo
 				case TH_HANDLE_VERTEX_SIZE:
 					cp = &ts->handle_vertex_size;
 					break;
+					
+				case TH_GP_VERTEX:
+					cp = ts->gp_vertex;
+					break;
+				case TH_GP_VERTEX_SELECT:
+					cp = ts->gp_vertex_select;
+					break;
+				case TH_GP_VERTEX_SIZE:
+					cp = &ts->gp_vertex_size;
+					break;
+					
 				case TH_DOPESHEET_CHANNELOB:
 					cp = ts->ds_channel;
 					break;
@@ -620,8 +642,8 @@ const unsigned char *UI_ThemeGetColorPtr(bTheme *btheme, int spacetype, int colo
 					cp = ts->nla_sound_sel;
 					break;
 					
-				case TH_EMBOSS:
-					cp = btheme->tui.emboss; break;
+				case TH_WIDGET_EMBOSS:
+					cp = btheme->tui.widget_emboss; break;
 
 				case TH_AXIS_X:
 					cp = btheme->tui.xaxis; break;
@@ -664,7 +686,7 @@ const unsigned char *UI_ThemeGetColorPtr(bTheme *btheme, int spacetype, int colo
 		}
 	}
 	
-	return (unsigned char *)cp;
+	return (const unsigned char *)cp;
 }
 
 /* use this call to init new bone color sets in Theme */
@@ -821,7 +843,7 @@ void ui_theme_init_default(void)
 	
 	rgba_char_args_set(btheme->tui.wcol_tooltip.text, 255, 255, 255, 255);
 	
-	rgba_char_args_set_fl(btheme->tui.emboss, 1.0f, 1.0f, 1.0f, 0.02f);
+	rgba_char_args_set_fl(btheme->tui.widget_emboss, 1.0f, 1.0f, 1.0f, 0.02f);
 
 	rgba_char_args_set(btheme->tui.xaxis, 220,   0,   0, 255);
 	rgba_char_args_set(btheme->tui.yaxis,   0, 220,   0, 255);
@@ -893,6 +915,9 @@ void ui_theme_init_default(void)
 	rgba_char_args_set(btheme->tv3d.freestyle_face_mark, 0x7f, 0xff, 0x7f, 51);
 	rgba_char_args_set_fl(btheme->tv3d.paint_curve_handle, 0.5f, 1.0f, 0.5f, 0.5f);
 	rgba_char_args_set_fl(btheme->tv3d.paint_curve_pivot, 1.0f, 0.5f, 0.5f, 0.5f);
+	rgba_char_args_set(btheme->tv3d.gp_vertex, 0, 0, 0, 255);
+	rgba_char_args_set(btheme->tv3d.gp_vertex_select, 255, 133, 0, 255);
+	btheme->tv3d.gp_vertex_size = 3;
 
 	btheme->tv3d.facedot_size = 4;
 
@@ -1112,6 +1137,9 @@ void ui_theme_init_default(void)
 	rgba_char_args_set_fl(btheme->ttime.grid,   0.36, 0.36, 0.36, 1.0);
 	rgba_char_args_set(btheme->ttime.shade1,  173, 173, 173, 255);      /* sliders */
 	
+	rgba_char_args_set(btheme->ttime.time_keyframe, 0xDD, 0xD7, 0x00, 1.0);
+	rgba_char_args_set(btheme->ttime.time_gp_keyframe, 0xB5, 0xE6, 0x1D, 1.0);
+	
 	/* space node, re-uses syntax and console color storage */
 	btheme->tnode = btheme->tv3d;
 	rgba_char_args_set(btheme->tnode.syntaxr, 115, 115, 115, 255);  /* wire inner color */
@@ -1192,6 +1220,18 @@ void UI_SetTheme(int spacetype, int regionid)
 bTheme *UI_GetTheme(void)
 {
 	return U.themes.first;
+}
+
+/**
+ * for the rare case we need to temp swap in a different theme (offscreen render)
+ */
+void UI_Theme_Store(struct bThemeState *theme_state)
+{
+	*theme_state = g_theme_state;
+}
+void UI_Theme_Restore(struct bThemeState *theme_state)
+{
+	g_theme_state = *theme_state;
 }
 
 /* for space windows only */
@@ -2499,10 +2539,36 @@ void init_userdef_do_versions(void)
 		}
 	}
 
-	if (U.versionfile < 272 || (U.versionfile == 272 && U.subversionfile < 2)) {
+	if (U.versionfile < 272 || (U.versionfile == 272 && U.subversionfile < 3)) {
 		bTheme *btheme;
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
-			rgba_char_args_set_fl(btheme->tui.emboss, 1.0f, 1.0f, 1.0f, 0.02f);
+			rgba_char_args_set_fl(btheme->tui.widget_emboss, 1.0f, 1.0f, 1.0f, 0.02f);
+		}
+	}
+	
+	if (U.versionfile < 273 || (U.versionfile == 273 && U.subversionfile < 1)) {
+		bTheme *btheme;
+		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
+			/* Grease Pencil vertex settings */
+			rgba_char_args_set(btheme->tv3d.gp_vertex, 0, 0, 0, 255);
+			rgba_char_args_set(btheme->tv3d.gp_vertex_select, 255, 133, 0, 255);
+			btheme->tv3d.gp_vertex_size = 3;
+			
+			rgba_char_args_set(btheme->tseq.gp_vertex, 0, 0, 0, 255);
+			rgba_char_args_set(btheme->tseq.gp_vertex_select, 255, 133, 0, 255);
+			btheme->tseq.gp_vertex_size = 3;
+			
+			rgba_char_args_set(btheme->tima.gp_vertex, 0, 0, 0, 255);
+			rgba_char_args_set(btheme->tima.gp_vertex_select, 255, 133, 0, 255);
+			btheme->tima.gp_vertex_size = 3;
+			
+			rgba_char_args_set(btheme->tnode.gp_vertex, 0, 0, 0, 255);
+			rgba_char_args_set(btheme->tnode.gp_vertex_select, 255, 133, 0, 255);
+			btheme->tnode.gp_vertex_size = 3;
+			
+			/* Timeline Keyframe Indicators */
+			rgba_char_args_set(btheme->ttime.time_keyframe, 0xDD, 0xD7, 0x00, 1.0);
+			rgba_char_args_set(btheme->ttime.time_gp_keyframe, 0xB5, 0xE6, 0x1D, 1.0);
 		}
 	}
 

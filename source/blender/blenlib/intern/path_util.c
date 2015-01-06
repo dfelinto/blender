@@ -228,7 +228,8 @@ bool BLI_uniquename_cb(bool (*unique_check)(void *arg, const char *name),
 		int number;
 		int len = BLI_split_name_num(left, &number, name, delim);
 		do {
-			const int numlen = BLI_snprintf(numstr, sizeof(numstr), "%c%03d", delim, ++number);
+			/* add 1 to account for \0 */
+			const int numlen = BLI_snprintf(numstr, sizeof(numstr), "%c%03d", delim, ++number) + 1;
 
 			/* highly unlikely the string only has enough room for the number
 			 * but support anyway */
@@ -238,9 +239,8 @@ bool BLI_uniquename_cb(bool (*unique_check)(void *arg, const char *name),
 			}
 			else {
 				char *tempname_buf;
-				tempname[0] = '\0';
-				tempname_buf = BLI_strncat_utf8(tempname, left, name_len - numlen);
-				memcpy(tempname_buf, numstr, numlen + 1);
+				tempname_buf = tempname + BLI_strncpy_utf8_rlen(tempname, left, name_len - numlen);
+				memcpy(tempname_buf, numstr, numlen);
 			}
 		} while (unique_check(arg, tempname));
 
@@ -1014,8 +1014,6 @@ bool BLI_path_abs(char *path, const char *basepath)
 		BLI_strncpy(path, tmp, FILE_MAX);
 	}
 
-	BLI_cleanup_path(NULL, path);
-
 #ifdef WIN32
 	/* skip first two chars, which in case of
 	 * absolute path will be drive:/blabla and
@@ -1025,7 +1023,10 @@ bool BLI_path_abs(char *path, const char *basepath)
 	 */
 	BLI_char_switch(path + 2, '/', '\\');
 #endif
-	
+
+	/* ensure this is after correcting for path switch */
+	BLI_cleanup_path(NULL, path);
+
 	return wasrelative;
 }
 
@@ -1099,8 +1100,6 @@ void BLI_getlastdir(const char *dir, char *last, const size_t maxlen)
 }
 
 
-
-
 /**
  * Sets the specified environment variable to the specified value,
  * and clears it if val == NULL.
@@ -1163,18 +1162,22 @@ void BLI_char_switch(char *string, char from, char to)
 }
 
 /**
- * Strips off nonexistent subdirectories from the end of *dir, leaving the path of
- * the lowest-level directory that does exist.
+ * Strips off nonexistent (or non-accessible) subdirectories from the end of *dir, leaving the path of
+ * the lowest-level directory that does exist and we can read.
  */
 void BLI_make_exist(char *dir)
 {
 	int a;
+	char par_path[PATH_MAX + 3];
 
 	BLI_char_switch(dir, ALTSEP, SEP);
 
 	a = strlen(dir);
 
-	while (!BLI_is_dir(dir)) {
+	for (BLI_join_dirfile(par_path, sizeof(par_path), dir, "..");
+	     !(BLI_is_dir(dir) && BLI_exists(par_path));
+	     BLI_join_dirfile(par_path, sizeof(par_path), dir, ".."))
+	{
 		a--;
 		while (dir[a] != SEP) {
 			a--;
@@ -1329,11 +1332,10 @@ bool BLI_testextensie_n(const char *str, ...)
 	while ((ext = (const char *) va_arg(args, void *))) {
 		if (testextensie_ex(str, str_len, ext, strlen(ext))) {
 			ret = true;
-			goto finally;
+			break;
 		}
 	}
 
-finally:
 	va_end(args);
 
 	return ret;

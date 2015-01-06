@@ -450,9 +450,9 @@ bPoseChannel *BKE_pose_channel_find_name(const bPose *pose, const char *name)
 		return NULL;
 	
 	if (pose->chanhash)
-		return BLI_ghash_lookup(pose->chanhash, (void *)name);
+		return BLI_ghash_lookup(pose->chanhash, (const void *)name);
 	
-	return BLI_findstring(&((bPose *)pose)->chanbase, name, offsetof(bPoseChannel, name));
+	return BLI_findstring(&((const bPose *)pose)->chanbase, name, offsetof(bPoseChannel, name));
 }
 
 /**
@@ -1028,12 +1028,12 @@ bool action_has_motion(const bAction *act)
 	if (act) {
 		for (fcu = act->curves.first; fcu; fcu = fcu->next) {
 			if (fcu->totvert)
-				return 1;
+				return true;
 		}
 	}
 	
 	/* nothing found */
-	return 0;
+	return false;
 }
 
 /* Calculate the extents of given action */

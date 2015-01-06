@@ -220,7 +220,7 @@ static FileSelect file_select(bContext *C, const rcti *rect, FileSelType select,
 	const FileCheckType check_type = (sfile->params->flag & FILE_DIRSEL_ONLY) ? CHECK_DIRS : CHECK_ALL;
 	
 	/* flag the files as selected in the filelist */
-	filelist_select(sfile->files, &sel, select, SELECTED_FILE, check_type);
+	filelist_select(sfile->files, &sel, select, FILE_SEL_SELECTED, check_type);
 	
 	/* Don't act on multiple selected files */
 	if (sel.first != sel.last) select = 0;
@@ -259,9 +259,25 @@ static int file_border_select_modal(bContext *C, wmOperator *op, const wmEvent *
 
 		sel = file_selection_get(C, &rect, 0);
 		if ( (sel.first != params->sel_first) || (sel.last != params->sel_last) ) {
-			file_deselect_all(sfile, HILITED_FILE);
-			filelist_select(sfile->files, &sel, FILE_SEL_ADD, HILITED_FILE, CHECK_ALL);
+			int idx;
+
+			file_deselect_all(sfile, FILE_SEL_HIGHLIGHTED);
+			filelist_select(sfile->files, &sel, FILE_SEL_ADD, FILE_SEL_HIGHLIGHTED, CHECK_ALL);
 			WM_event_add_notifier(C, NC_SPACE | ND_SPACE_FILE_PARAMS, NULL);
+
+			/* dont highlight readonly file (".." or ".") on border select */
+			for (idx = sel.last; idx >= 0; idx--) {
+				struct direntry *file = filelist_file(sfile->files, idx);
+
+				if (STREQ(file->relname, "..") || STREQ(file->relname, ".")) {
+					file->selflag &= ~FILE_SEL_HIGHLIGHTED;
+				}
+
+				/* active_file gets highlighted as well - make sure it is no readonly file */
+				if (sel.last == idx) {
+					params->active_file = idx;
+				}
+			}
 		}
 		params->sel_first = sel.first; params->sel_last = sel.last;
 
@@ -269,7 +285,7 @@ static int file_border_select_modal(bContext *C, wmOperator *op, const wmEvent *
 	else {
 		params->active_file = -1;
 		params->sel_first = params->sel_last = -1;
-		file_deselect_all(sfile, HILITED_FILE);
+		file_deselect_all(sfile, FILE_SEL_HIGHLIGHTED);
 		WM_event_add_notifier(C, NC_SPACE | ND_SPACE_FILE_PARAMS, NULL);
 	}
 
@@ -289,7 +305,7 @@ static int file_border_select_exec(bContext *C, wmOperator *op)
 	if (!extend) {
 		SpaceFile *sfile = CTX_wm_space_file(C);
 
-		file_deselect_all(sfile, SELECTED_FILE);
+		file_deselect_all(sfile, FILE_SEL_SELECTED);
 	}
 
 	BLI_rcti_isect(&(ar->v2d.mask), &rect, &rect);
@@ -341,8 +357,20 @@ static int file_select_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 	if (!BLI_rcti_isect_pt(&ar->v2d.mask, rect.xmin, rect.ymin))
 		return OPERATOR_CANCELLED;
 
-	/* single select, deselect all selected first */
-	if (!extend) file_deselect_all(sfile, SELECTED_FILE);
+	if (sfile && sfile->params) {
+		int idx = sfile->params->active_file;
+
+		if (idx >= 0) {
+			struct direntry *file = filelist_file(sfile->files, idx);
+			if (STREQ(file->relname, "..") || STREQ(file->relname, ".")) {
+				/* skip - If a readonly file (".." or ".") is selected, skip deselect all! */
+			}
+			else {
+				/* single select, deselect all selected first */
+				if (!extend) file_deselect_all(sfile, FILE_SEL_SELECTED);
+			}
+		}
+	}
 
 	ret = file_select(C, &rect, extend ? FILE_SEL_TOGGLE : FILE_SEL_ADD, fill, do_diropen);
 	if (FILE_SELECT_DIR == ret)
@@ -399,11 +427,11 @@ static int file_select_all_exec(bContext *C, wmOperator *UNUSED(op))
 	}
 	/* select all only if previously no file was selected */
 	if (is_selected) {
-		filelist_select(sfile->files, &sel, FILE_SEL_REMOVE, SELECTED_FILE, CHECK_ALL);
+		filelist_select(sfile->files, &sel, FILE_SEL_REMOVE, FILE_SEL_SELECTED, CHECK_ALL);
 	}
 	else {
 		const FileCheckType check_type = (sfile->params->flag & FILE_DIRSEL_ONLY) ? CHECK_DIRS : CHECK_FILES;
-		filelist_select(sfile->files, &sel, FILE_SEL_ADD, SELECTED_FILE, check_type);
+		filelist_select(sfile->files, &sel, FILE_SEL_ADD, FILE_SEL_SELECTED, check_type);
 	}
 	ED_area_tag_redraw(sa);
 	return OPERATOR_FINISHED;
@@ -1482,7 +1510,7 @@ static int file_rename_exec(bContext *C, wmOperator *UNUSED(op))
 		int numfiles = filelist_numfiles(sfile->files);
 		if ( (0 <= idx) && (idx < numfiles) ) {
 			struct direntry *file = filelist_file(sfile->files, idx);
-			filelist_select_file(sfile->files, idx, FILE_SEL_ADD, EDITING_FILE, CHECK_ALL);
+			filelist_select_file(sfile->files, idx, FILE_SEL_ADD, FILE_SEL_EDITING, CHECK_ALL);
 			BLI_strncpy(sfile->params->renameedit, file->relname, FILE_MAXFILE);
 			sfile->params->renamefile[0] = '\0';
 		}

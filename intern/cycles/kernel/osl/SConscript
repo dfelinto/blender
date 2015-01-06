@@ -38,6 +38,7 @@ incs.append(env['BF_OIIO_INC'])
 incs.append(env['BF_BOOST_INC'])
 incs.append(env['BF_OSL_INC'])
 incs.append(env['BF_OPENEXR_INC'].split())
+incs.append('#/intern/atomic')
 
 defs.append('CCL_NAMESPACE_BEGIN=namespace ccl {')
 defs.append('CCL_NAMESPACE_END=}')
@@ -45,6 +46,17 @@ defs.append('WITH_OSL')
 
 if env['WITH_BF_CYCLES_DEBUG']:
     defs.append('WITH_CYCLES_DEBUG')
+
+if env['WITH_BF_CYCLES_LOGGING']:
+    defs.append('WITH_CYCLES_LOGGING')
+    defs.append('GOOGLE_GLOG_DLL_DECL=')
+    defs.append('CYCLES_GFLAGS_NAMESPACE=gflags')
+    if env['OURPLATFORM'] in ('win32-vc', 'win32-mingw', 'linuxcross', 'win64-vc', 'win64-mingw'):
+        incs.append('#extern/libmv/third_party/glog/src/windows')
+        incs.append('#extern/libmv/third_party/gflags')
+    else:
+        incs.append('#extern/libmv/third_party/glog/src')
+        incs.append('#extern/libmv/third_party/gflags')
 
 if env['OURPLATFORM'] in ('win32-vc', 'win64-vc'):
     cxxflags.append('-DBOOST_NO_RTTI -DBOOST_NO_TYPEID /fp:fast'.split())

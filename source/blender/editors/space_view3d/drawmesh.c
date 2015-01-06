@@ -60,7 +60,6 @@
 
 #include "UI_resources.h"
 
-#include "GPU_buffers.h"
 #include "GPU_extensions.h"
 #include "GPU_draw.h"
 #include "GPU_material.h"
@@ -97,7 +96,7 @@ typedef struct drawTFace_userData {
 BLI_INLINE int edge_vis_index(const int index) { return index * 2; }
 BLI_INLINE int edge_sel_index(const int index) { return index * 2 + 1; }
 
-static BLI_bitmap *get_tface_mesh_marked_edge_info(Mesh *me)
+static BLI_bitmap *get_tface_mesh_marked_edge_info(Mesh *me, bool draw_select_edges)
 {
 	BLI_bitmap *bitmap_edge_flags = BLI_BITMAP_NEW(me->totedge * 2, __func__);
 	MPoly *mp;
@@ -113,8 +112,17 @@ static BLI_bitmap *get_tface_mesh_marked_edge_info(Mesh *me)
 
 			ml = me->mloop + mp->loopstart;
 			for (j = 0; j < mp->totloop; j++, ml++) {
-				BLI_BITMAP_ENABLE(bitmap_edge_flags, edge_vis_index(ml->e));
-				if (select_set) BLI_BITMAP_ENABLE(bitmap_edge_flags, edge_sel_index(ml->e));
+				if ((draw_select_edges == false) &&
+				    (select_set && BLI_BITMAP_TEST(bitmap_edge_flags, edge_sel_index(ml->e))))
+				{
+					BLI_BITMAP_DISABLE(bitmap_edge_flags, edge_vis_index(ml->e));
+				}
+				else {
+					BLI_BITMAP_ENABLE(bitmap_edge_flags, edge_vis_index(ml->e));
+					if (select_set) {
+						BLI_BITMAP_ENABLE(bitmap_edge_flags, edge_sel_index(ml->e));
+					}
+				}
 			}
 		}
 	}
@@ -129,21 +137,26 @@ static DMDrawOption draw_mesh_face_select__setHiddenOpts(void *userData, int ind
 	Mesh *me = data->me;
 
 	if (me->drawflag & ME_DRAWEDGES) {
-		if ((me->drawflag & ME_HIDDENEDGES) || (BLI_BITMAP_TEST(data->edge_flags, edge_vis_index(index))))
+		if ((BLI_BITMAP_TEST(data->edge_flags, edge_vis_index(index))))
 			return DM_DRAW_OPTION_NORMAL;
 		else
 			return DM_DRAW_OPTION_SKIP;
 	}
-	else if (BLI_BITMAP_TEST(data->edge_flags, edge_sel_index(index)))
+	else if (BLI_BITMAP_TEST(data->edge_flags, edge_sel_index(index)) &&
+	         BLI_BITMAP_TEST(data->edge_flags, edge_vis_index(index)))
+	{
 		return DM_DRAW_OPTION_NORMAL;
-	else
+	}
+	else {
 		return DM_DRAW_OPTION_SKIP;
+	}
 }
 
 static DMDrawOption draw_mesh_face_select__setSelectOpts(void *userData, int index)
 {
 	drawMeshFaceSelect_userData *data = userData;
-	return (BLI_BITMAP_TEST(data->edge_flags, edge_sel_index(index))) ? DM_DRAW_OPTION_NORMAL : DM_DRAW_OPTION_SKIP;
+	return (BLI_BITMAP_TEST(data->edge_flags, edge_sel_index(index)) &&
+	        BLI_BITMAP_TEST(data->edge_flags, edge_vis_index(index))) ? DM_DRAW_OPTION_NORMAL : DM_DRAW_OPTION_SKIP;
 }
 
 /* draws unselected */
@@ -158,12 +171,12 @@ static DMDrawOption draw_mesh_face_select__drawFaceOptsInv(void *userData, int i
 		return DM_DRAW_OPTION_SKIP;
 }
 
-void draw_mesh_face_select(RegionView3D *rv3d, Mesh *me, DerivedMesh *dm)
+void draw_mesh_face_select(RegionView3D *rv3d, Mesh *me, DerivedMesh *dm, bool draw_select_edges)
 {
 	drawMeshFaceSelect_userData data;
 
 	data.me = me;
-	data.edge_flags = get_tface_mesh_marked_edge_info(me);
+	data.edge_flags = get_tface_mesh_marked_edge_info(me, draw_select_edges);
 
 	glEnable(GL_DEPTH_TEST);
 	glDisable(GL_LIGHTING);
@@ -562,14 +575,6 @@ static DMDrawOption draw_tface__set_draw_legacy(MTFace *tface, const bool has_mc
 	}
 }
 
-static DMDrawOption draw_mcol__set_draw_legacy(MTFace *UNUSED(tface), const bool has_mcol, int UNUSED(matnr))
-{
-	if (has_mcol)
-		return DM_DRAW_OPTION_NORMAL;
-	else
-		return DM_DRAW_OPTION_NO_MCOL;
-}
-
 static DMDrawOption draw_tface__set_draw(MTFace *tface, const bool UNUSED(has_mcol), int matnr)
 {
 	Material *ma = give_current_material(Gtexdraw.ob, matnr + 1);
@@ -668,48 +673,48 @@ static void update_tface_color_layer(DerivedMesh *dm)
 	}
 }
 
-static DMDrawOption draw_tface_mapped__set_draw(void *userData, int index)
+static DMDrawOption draw_tface_mapped__set_draw(void *userData, int origindex, int UNUSED(mat_nr))
 {
 	Mesh *me = ((drawTFace_userData *)userData)->me;
 
 	/* array checked for NULL before calling */
-	MPoly *mpoly = &me->mpoly[index];
+	MPoly *mpoly = &me->mpoly[origindex];
 
-	BLI_assert(index >= 0 && index < me->totpoly);
+	BLI_assert(origindex >= 0 && origindex < me->totpoly);
 
 	if (mpoly->flag & ME_HIDE) {
 		return DM_DRAW_OPTION_SKIP;
 	}
 	else {
-		MTexPoly *tpoly = (me->mtpoly) ? &me->mtpoly[index] : NULL;
+		MTexPoly *tpoly = (me->mtpoly) ? &me->mtpoly[origindex] : NULL;
 		MTFace mtf = {{{0}}};
 		int matnr = mpoly->mat_nr;
 
 		if (tpoly) {
 			ME_MTEXFACE_CPY(&mtf, tpoly);
 		}
-
+		
 		return draw_tface__set_draw(&mtf, (me->mloopcol != NULL), matnr);
 	}
 }
 
-static DMDrawOption draw_em_tf_mapped__set_draw(void *userData, int index)
+static DMDrawOption draw_em_tf_mapped__set_draw(void *userData, int origindex, int mat_nr)
 {
 	drawEMTFMapped_userData *data = userData;
 	BMEditMesh *em = data->em;
 	BMFace *efa;
 
-	if (UNLIKELY(index >= em->bm->totface))
+	if (UNLIKELY(origindex >= em->bm->totface))
 		return DM_DRAW_OPTION_NORMAL;
 
-	efa = BM_face_at_index(em->bm, index);
+	efa = BM_face_at_index(em->bm, origindex);
 
 	if (BM_elem_flag_test(efa, BM_ELEM_HIDDEN)) {
 		return DM_DRAW_OPTION_SKIP;
 	}
 	else {
 		MTFace mtf = {{{0}}};
-		int matnr = efa->mat_nr;
+		int matnr = (mat_nr != -1) ? mat_nr : efa->mat_nr;
 
 		if (data->has_mtface) {
 			MTexPoly *tpoly = CustomData_bmesh_get(&em->bm->pdata, efa->head.data, CD_MTEXPOLY);
@@ -929,24 +934,16 @@ static void draw_mesh_textured_old(Scene *scene, View3D *v3d, RegionView3D *rv3d
 			dm->drawMappedFacesTex(dm, me->mpoly ? draw_tface_mapped__set_draw : NULL, compareDrawOptions, &userData, uvflag);
 		}
 	}
-	else {
-		if (GPU_buffer_legacy(dm)) {
-			if (draw_flags & DRAW_MODIFIERS_PREVIEW)
-				dm->drawFacesTex(dm, draw_mcol__set_draw_legacy, NULL, NULL, uvflag);
-			else 
-				dm->drawFacesTex(dm, draw_tface__set_draw_legacy, NULL, NULL, uvflag);
-		}
-		else {
-			drawTFace_userData userData;
-
-			update_tface_color_layer(dm);
-
-			userData.mf = DM_get_tessface_data_layer(dm, CD_MFACE);
-			userData.tf = DM_get_tessface_data_layer(dm, CD_MTFACE);
-			userData.me = NULL;
-
-			dm->drawFacesTex(dm, draw_tface__set_draw, compareDrawOptions, &userData, uvflag);
-		}
+	else {		
+		drawTFace_userData userData;
+		
+		update_tface_color_layer(dm);
+		
+		userData.mf = DM_get_tessface_data_layer(dm, CD_MFACE);
+		userData.tf = DM_get_tessface_data_layer(dm, CD_MTFACE);
+		userData.me = NULL;
+		
+		dm->drawFacesTex(dm, draw_tface__set_draw, compareDrawOptions, &userData, uvflag);
 	}
 
 	/* draw game engine text hack */
@@ -956,8 +953,10 @@ static void draw_mesh_textured_old(Scene *scene, View3D *v3d, RegionView3D *rv3d
 	draw_textured_end();
 	
 	/* draw edges and selected faces over textured mesh */
-	if (!(ob == scene->obedit) && (draw_flags & DRAW_FACE_SELECT))
-		draw_mesh_face_select(rv3d, me, dm);
+	if (!(ob == scene->obedit) && (draw_flags & DRAW_FACE_SELECT)) {
+		bool draw_select_edges = (ob->mode & OB_MODE_TEXTURE_PAINT) == 0;
+		draw_mesh_face_select(rv3d, me, dm, draw_select_edges);
+	}
 
 	/* reset from negative scale correction */
 	glFrontFace(GL_CCW);
@@ -1153,8 +1152,10 @@ void draw_mesh_textured(Scene *scene, View3D *v3d, RegionView3D *rv3d,
 	glMatrixMode(GL_MODELVIEW);
 
 	/* faceselect mode drawing over textured mesh */
-	if (!(ob == scene->obedit) && (draw_flags & DRAW_FACE_SELECT))
-		draw_mesh_face_select(rv3d, ob->data, dm);
+	if (!(ob == scene->obedit) && (draw_flags & DRAW_FACE_SELECT)) {
+		bool draw_select_edges = (ob->mode & OB_MODE_TEXTURE_PAINT) == 0;
+		draw_mesh_face_select(rv3d, ob->data, dm, draw_select_edges);
+	}
 }
 
 /* Vertex Paint and Weight Paint */
@@ -1278,7 +1279,8 @@ void draw_mesh_paint(View3D *v3d, RegionView3D *rv3d,
 
 	/* draw face selection on top */
 	if (draw_flags & DRAW_FACE_SELECT) {
-		draw_mesh_face_select(rv3d, me, dm);
+		bool draw_select_edges = (ob->mode & OB_MODE_TEXTURE_PAINT) == 0;
+		draw_mesh_face_select(rv3d, me, dm, draw_select_edges);
 	}
 	else if ((use_light == false) || (ob->dtx & OB_DRAWWIRE)) {
 		const bool use_depth = (v3d->flag & V3D_ZBUF_SELECT) || !(ob->mode & OB_MODE_WEIGHT_PAINT);

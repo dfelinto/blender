@@ -83,13 +83,21 @@ uiBut *uiDefAutoButR(uiBlock *block, PointerRNA *ptr, PropertyRNA *prop, int ind
 			int arraylen = RNA_property_array_length(ptr, prop);
 
 			if (arraylen && index == -1) {
-				if (ELEM(RNA_property_subtype(prop), PROP_COLOR, PROP_COLOR_GAMMA))
+				if (ELEM(RNA_property_subtype(prop), PROP_COLOR, PROP_COLOR_GAMMA)) {
 					but = uiDefButR_prop(block, UI_BTYPE_COLOR, 0, name, x1, y1, x2, y2, ptr, prop, -1, 0, 0, -1, -1, NULL);
+				}
+				else {
+					return NULL;
+				}
 			}
 			else if (RNA_property_subtype(prop) == PROP_PERCENTAGE || RNA_property_subtype(prop) == PROP_FACTOR)
 				but = uiDefButR_prop(block, UI_BTYPE_NUM_SLIDER, 0, name, x1, y1, x2, y2, ptr, prop, index, 0, 0, -1, -1, NULL);
 			else
 				but = uiDefButR_prop(block, UI_BTYPE_NUM, 0, name, x1, y1, x2, y2, ptr, prop, index, 0, 0, -1, -1, NULL);
+
+			if (RNA_property_flag(prop) & PROP_TEXTEDIT_UPDATE) {
+				UI_but_flag_enable(but, UI_BUT_TEXTEDIT_UPDATE);
+			}
 			break;
 		}
 		case PROP_ENUM:
@@ -107,6 +115,10 @@ uiBut *uiDefAutoButR(uiBlock *block, PointerRNA *ptr, PropertyRNA *prop, int ind
 				but = uiDefIconTextButR_prop(block, UI_BTYPE_TEXT, 0, icon, name, x1, y1, x2, y2, ptr, prop, index, 0, 0, -1, -1, NULL);
 			else
 				but = uiDefButR_prop(block, UI_BTYPE_TEXT, 0, name, x1, y1, x2, y2, ptr, prop, index, 0, 0, -1, -1, NULL);
+
+			if (RNA_property_flag(prop) & PROP_TEXTEDIT_UPDATE) {
+				UI_but_flag_enable(but, UI_BUT_TEXTEDIT_UPDATE);
+			}
 			break;
 		case PROP_POINTER:
 		{
@@ -387,6 +399,27 @@ void UI_butstore_unregister(uiButStore *bs_handle, uiBut **but_p)
 	}
 
 	BLI_assert(0);
+}
+
+/**
+ * Update the pointer for a registered button.
+ */
+bool UI_butstore_register_update(uiBlock *block, uiBut *but_dst, const uiBut *but_src)
+{
+	uiButStore *bs_handle;
+	bool found = false;
+
+	for (bs_handle = block->butstore.first; bs_handle; bs_handle = bs_handle->next) {
+		uiButStoreElem *bs_elem;
+		for (bs_elem = bs_handle->items.first; bs_elem; bs_elem = bs_elem->next) {
+			if (*bs_elem->but_p == but_src) {
+				*bs_elem->but_p = but_dst;
+				found = true;
+			}
+		}
+	}
+
+	return found;
 }
 
 /**

@@ -628,39 +628,54 @@ elseif(WIN32)
 			install(DIRECTORY DESTINATION ${TARGETDIR_VER}/python)
 			install(DIRECTORY DESTINATION ${TARGETDIR_VER}/python/lib)
 
-			if(\"\${CMAKE_INSTALL_CONFIG_NAME}\" STREQUAL \"Debug\")
-				add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${BLENDER_VERSION}/python/lib
-					COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/${BLENDER_VERSION}/python/lib"
-					COMMAND ${CMAKE_COMMAND} -E tar xzfv "${LIBDIR}/release/python${_PYTHON_VERSION_NO_DOTS}_d.tar.gz -C ${CMAKE_CURRENT_BINARY_DIR}/${BLENDER_VERSION}/python/lib")
-			else()
-				add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${BLENDER_VERSION}/python/lib
-					COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/${BLENDER_VERSION}/python/lib"
-					COMMAND ${CMAKE_COMMAND} -E tar xzfv "${LIBDIR}/release/python${_PYTHON_VERSION_NO_DOTS}.tar.gz -C ${CMAKE_CURRENT_BINARY_DIR}/${BLENDER_VERSION}/python/lib")
-			endif()
+			# WARNING: its important that 'CMAKE_INSTALL_CONFIG_NAME' is evaluated at build time
+			# and _NOT_ configuration time, when modifying the lines below,
+			# check it works in both Release & Debug mode.
+			#
+			# Edit with extreme care! - Campbell
+
+			# extract python
+			install(
+				CODE
+				"
+				message(STATUS \"Extracting Python to: \${CMAKE_INSTALL_PREFIX}/${BLENDER_VERSION}/python\")
+				if(\"\${CMAKE_INSTALL_CONFIG_NAME}\" MATCHES \"^([Dd][Ee][Bb][Uu][Gg])$\")
+					set(PYTHON_ZIP ${LIBDIR}/release/python${_PYTHON_VERSION_NO_DOTS}_d.tar.gz)
+				else()
+					set(PYTHON_ZIP ${LIBDIR}/release/python${_PYTHON_VERSION_NO_DOTS}.tar.gz)
+				endif()
+
+				execute_process(
+					COMMAND \${CMAKE_COMMAND} -E make_directory
+					        \"\${CMAKE_INSTALL_PREFIX}/${BLENDER_VERSION}/python/lib\"
+					COMMAND \${CMAKE_COMMAND} -E
+					        chdir \"\${CMAKE_INSTALL_PREFIX}/${BLENDER_VERSION}/python/lib\"
+					        \${CMAKE_COMMAND} -E
+					        tar xzfv \"\${PYTHON_ZIP}\"
+				)
+				unset(PYTHON_ZIP)
+				"
+			)
 
 			# release/site-packages
-			install(DIRECTORY ${LIBDIR}/release/site-packages
-					DESTINATION ${BLENDER_VERSION}/python/lib
-					PATTERN ".svn" EXCLUDE
-					PATTERN "__pycache__" EXCLUDE           # * any cache *
-					PATTERN "*.pyc" EXCLUDE                 # * any cache *
-					PATTERN "*.pyo" EXCLUDE                 # * any cache *)
-					)
+			install(
+				DIRECTORY ${LIBDIR}/release/site-packages
+				DESTINATION ${BLENDER_VERSION}/python/lib
+				PATTERN ".svn" EXCLUDE
+				PATTERN "__pycache__" EXCLUDE           # * any cache *
+				PATTERN "*.pyc" EXCLUDE                 # * any cache *
+				PATTERN "*.pyo" EXCLUDE                 # * any cache *)
+			)
 
 			if(WITH_PYTHON_INSTALL_NUMPY)
 				add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${BLENDER_VERSION}/python/lib/site-packages/numpy
-					COMMAND ${CMAKE_COMMAND} -E tar xzvf "${LIBDIR}/release/python${_PYTHON_VERSION_NO_DOTS}_numpy_1.8.tar.gz"
-					DEPENDS ${LIBDIR}/release/python${_PYTHON_VERSION_NO_DOTS}_numpy_1.8.tar.gz
+					COMMAND ${CMAKE_COMMAND} -E tar xzvf "${LIBDIR}/release/python${_PYTHON_VERSION_NO_DOTS}_numpy_1.9.tar.gz"
+					DEPENDS ${LIBDIR}/release/python${_PYTHON_VERSION_NO_DOTS}_numpy_1.9.tar.gz
 					WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${BLENDER_VERSION}/python/lib/site-packages)
+				add_custom_target(python_numpy ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${BLENDER_VERSION}/python/lib/site-packages/numpy)
 				install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${BLENDER_VERSION}/python/lib/site-packages/numpy
 						DESTINATION ${BLENDER_VERSION}/python/lib/site-packages)
 			endif()
-
-
-			install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${BLENDER_VERSION}/python/lib
-					DESTINATION ${BLENDER_VERSION}/python
-					PATTERN 'site-packages/*' EXCLUDE)
-
 		endif()
 
 		unset(_PYTHON_VERSION_NO_DOTS)

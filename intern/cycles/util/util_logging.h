@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #ifndef __UTIL_LOGGING_H__
@@ -44,6 +44,10 @@ public:
 #endif
 
 struct float3;
+
+void util_logging_init(const char *argv0);
+void util_logging_start(void);
+void util_logging_verbosity_set(int verbosity);
 
 std::ostream& operator <<(std::ostream &os,
                           const float3 &value);

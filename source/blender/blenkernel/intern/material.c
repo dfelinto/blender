@@ -681,16 +681,16 @@ Material *give_current_material(Object *ob, short act)
 	/* if object cannot have material, (totcolp == NULL) */
 	totcolp = give_totcolp(ob);
 	if (totcolp == NULL || ob->totcol == 0) return NULL;
-	
-	if (act < 0) {
-		printf("Negative material index!\n");
-	}
-	
+
 	/* return NULL for invalid 'act', can happen for mesh face indices */
 	if (act > ob->totcol)
 		return NULL;
-	else if (act <= 0)
+	else if (act <= 0) {
+		if (act < 0) {
+			printf("Negative material index!\n");
+		}
 		return NULL;
+	}
 
 	if (ob->matbits && ob->matbits[act - 1]) {    /* in object */
 		ma = ob->mat[act - 1];
@@ -1137,28 +1137,28 @@ static bool material_in_nodetree(bNodeTree *ntree, Material *mat)
 		if (node->id) {
 			if (GS(node->id->name) == ID_MA) {
 				if (node->id == (ID *)mat) {
-					return 1;
+					return true;
 				}
 			}
 			else if (node->type == NODE_GROUP) {
 				if (material_in_nodetree((bNodeTree *)node->id, mat)) {
-					return 1;
+					return true;
 				}
 			}
 		}
 	}
 
-	return 0;
+	return false;
 }
 
 bool material_in_material(Material *parmat, Material *mat)
 {
 	if (parmat == mat)
-		return 1;
+		return true;
 	else if (parmat->nodetree && parmat->use_nodes)
 		return material_in_nodetree(parmat->nodetree, mat);
 	else
-		return 0;
+		return false;
 }
 
 

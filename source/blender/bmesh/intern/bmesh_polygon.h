@@ -27,6 +27,9 @@
  *  \ingroup bmesh
  */
 
+struct EdgeHash;
+struct Heap;
+
 #include "BLI_compiler_attrs.h"
 
 void  BM_bmesh_calc_tessellation(BMesh *bm, BMLoop *(*looptris)[3], int *r_looptris_tot);
@@ -56,12 +59,15 @@ void  BM_vert_normal_update_all(BMVert *v) ATTR_NONNULL();
 void  BM_face_normal_flip(BMesh *bm, BMFace *f) ATTR_NONNULL();
 bool  BM_face_point_inside_test(BMFace *f, const float co[3]) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
 
-void  BM_face_triangulate(BMesh *bm, BMFace *f,
-                          BMFace **r_faces_new,
-                          int     *r_faces_new_tot,
-                          struct MemArena *sf_arena,
-                          const int quad_method, const int ngon_method,
-                          const bool use_tag) ATTR_NONNULL(1, 2);
+void  BM_face_triangulate(
+        BMesh *bm, BMFace *f,
+        BMFace **r_faces_new,
+        int     *r_faces_new_tot,
+        const int quad_method, const int ngon_method,
+        const bool use_tag,
+        struct MemArena *pf_arena,
+        struct Heap *pf_heap, struct EdgeHash *pf_ehash
+        ) ATTR_NONNULL(1, 2);
 
 void  BM_face_splits_check_legal(BMesh *bm, BMFace *f, BMLoop *(*loops)[2], int len) ATTR_NONNULL();
 void  BM_face_splits_check_optimal(BMFace *f, BMLoop *(*loops)[2], int len) ATTR_NONNULL();

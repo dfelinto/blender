@@ -27,7 +27,7 @@
  *  \ingroup edgpencil
  */
 
- 
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -48,8 +48,6 @@
 #include "ED_gpencil.h"
 #include "ED_keyframes_edit.h"
 #include "ED_markers.h"
-
-#include "gpencil_intern.h"
 
 /* ***************************************** */
 /* NOTE ABOUT THIS FILE:
@@ -75,7 +73,7 @@ bool ED_gplayer_frames_looper(bGPDlayer *gpl, Scene *scene, short (*gpf_cb)(bGPD
 		if (gpf_cb(gpf, scene))
 			return true;
 	}
-		
+	
 	/* nothing to return */
 	return false;
 }
@@ -115,7 +113,7 @@ bool ED_gplayer_frame_select_check(bGPDlayer *gpl)
 	bGPDframe *gpf;
 	
 	/* error checking */
-	if (gpl == NULL) 
+	if (gpl == NULL)
 		return false;
 	
 	/* stop at the first one found */
@@ -153,9 +151,9 @@ void ED_gpencil_select_frames(bGPDlayer *gpl, short select_mode)
 	bGPDframe *gpf;
 	
 	/* error checking */
-	if (gpl == NULL) 
+	if (gpl == NULL)
 		return;
-		
+	
 	/* handle according to mode */
 	for (gpf = gpl->frames.first; gpf; gpf = gpf->next) {
 		gpframe_select(gpf, select_mode);
@@ -166,7 +164,7 @@ void ED_gpencil_select_frames(bGPDlayer *gpl, short select_mode)
 void ED_gplayer_frame_select_set(bGPDlayer *gpl, short mode)
 {
 	/* error checking */
-	if (gpl == NULL) 
+	if (gpl == NULL)
 		return;
 	
 	/* now call the standard function */
@@ -178,11 +176,11 @@ void ED_gpencil_select_frame(bGPDlayer *gpl, int selx, short select_mode)
 {
 	bGPDframe *gpf;
 	
-	if (gpl == NULL) 
+	if (gpl == NULL)
 		return;
-
+	
 	gpf = BKE_gpencil_layer_find_frame(gpl, selx);
-
+	
 	if (gpf) {
 		gpframe_select(gpf, select_mode);
 	}
@@ -215,7 +213,7 @@ bool ED_gplayer_frames_delete(bGPDlayer *gpl)
 	/* error checking */
 	if (gpl == NULL)
 		return false;
-		
+	
 	/* check for frames to delete */
 	for (gpf = gpl->frames.first; gpf; gpf = gpfn) {
 		gpfn = gpf->next;
@@ -223,7 +221,7 @@ bool ED_gplayer_frames_delete(bGPDlayer *gpl)
 		if (gpf->flag & GP_FRAME_SELECT)
 			changed |= gpencil_layer_delframe(gpl, gpf);
 	}
-
+	
 	return changed;
 }
 
@@ -242,13 +240,30 @@ void ED_gplayer_frames_duplicate(bGPDlayer *gpl)
 		
 		/* duplicate this frame */
 		if (gpf->flag & GP_FRAME_SELECT) {
-			bGPDframe *gpfd; 
+			bGPDframe *gpfd;
 			
 			/* duplicate frame, and deselect self */
 			gpfd = gpencil_frame_duplicate(gpf);
 			gpf->flag &= ~GP_FRAME_SELECT;
 			
 			BLI_insertlinkafter(&gpl->frames, gpf, gpfd);
+		}
+	}
+}
+
+/* Set keyframe type for selected frames from given gp-layer
+ * \param type The type of keyframe (eBezTriple_KeyframeType) to set selected frames to
+ */
+void ED_gplayer_frames_keytype_set(bGPDlayer *gpl, short type)
+{
+	bGPDframe *gpf;
+	
+	if (gpl == NULL)
+		return;
+	
+	for (gpf = gpl->frames.first; gpf; gpf = gpf->next) {
+		if (gpf->flag & GP_FRAME_SELECT) {
+			gpf->key_type = type;
 		}
 	}
 }
@@ -263,7 +278,7 @@ void ED_gplayer_frames_duplicate(bGPDlayer *gpl)
  *	the current frame and the 'first keyframe' (i.e. the earliest one in all channels).
  * - The earliest frame is calculated per copy operation.
  */
- 
+
 /* globals for copy/paste data (like for other copy/paste buffers) */
 ListBase gpcopybuf = {NULL, NULL};
 static int gpcopy_firstframe = 999999999;
@@ -271,7 +286,7 @@ static int gpcopy_firstframe = 999999999;
 /* This function frees any MEM_calloc'ed copy/paste buffer data */
 void free_gpcopybuf()
 {
-	free_gpencil_layers(&gpcopybuf); 
+	free_gpencil_layers(&gpcopybuf);
 	
 	BLI_listbase_clear(&gpcopybuf);
 	gpcopy_firstframe = 999999999;
@@ -398,8 +413,8 @@ void paste_gpdata(Scene *scene)
 				//sa = gpencil_data_findowner((bGPdata *)ale->owner);
 				sa = NULL;
 				
-				/* this should be the right frame... as it may be a pre-existing frame, 
-				 * must make sure that only compatible stroke types get copied over 
+				/* this should be the right frame... as it may be a pre-existing frame,
+				 * must make sure that only compatible stroke types get copied over
 				 *	- we cannot just add a duplicate frame, as that would cause errors
 				 *	- need to check for compatible types to minimize memory usage (copying 'junk' over)
 				 */
@@ -418,14 +433,14 @@ void paste_gpdata(Scene *scene)
 								if ((gps->flag == 0) || (gps->flag & GP_STROKE_3DSPACE))
 									stroke_ok = 1;
 								break;
-								
+							
 							case SPACE_NODE: /* Nodes Editor: either screen-aligned or view-aligned */
 							case SPACE_IMAGE: /* Image Editor: either screen-aligned or view\image-aligned */
 							case SPACE_CLIP: /* Image Editor: either screen-aligned or view\image-aligned */
 								if ((gps->flag == 0) || (gps->flag & GP_STROKE_2DSPACE))
 									stroke_ok = 1;
 								break;
-								
+							
 							case SPACE_SEQ: /* Sequence Editor: either screen-aligned or view-aligned */
 								if ((gps->flag == 0) || (gps->flag & GP_STROKE_2DIMAGE))
 									stroke_ok = 1;
@@ -567,9 +582,9 @@ static short mirror_gpf_marker(bGPDframe *gpf, Scene *scene)
 	
 	/* In order for this mirror function to work without
 	 * any extra arguments being added, we use the case
-	 * of bezt==NULL to denote that we should find the 
+	 * of bezt==NULL to denote that we should find the
 	 * marker to mirror over. The static pointer is safe
-	 * to use this way, as it will be set to null after 
+	 * to use this way, as it will be set to null after
 	 * each cycle in which this is called.
 	 */
 	

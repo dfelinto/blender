@@ -50,7 +50,6 @@
 
 #include "BLF_translation.h"
 
-#include "PIL_time.h"
 
 #include "IMB_imbuf.h"
 #include "IMB_imbuf_types.h"
@@ -62,7 +61,6 @@
 #include "DNA_object_types.h"
 
 #include "BKE_camera.h"
-#include "BKE_colortools.h"
 #include "BKE_context.h"
 #include "BKE_depsgraph.h"
 #include "BKE_DerivedMesh.h"
@@ -80,10 +78,8 @@
 #include "BKE_scene.h"
 #include "BKE_texture.h"
 
-#include "UI_view2d.h"
 #include "UI_interface.h"
 
-#include "ED_image.h"
 #include "ED_mesh.h"
 #include "ED_node.h"
 #include "ED_paint.h"
@@ -101,7 +97,6 @@
 #include "RNA_enum_types.h"
 
 #include "GPU_draw.h"
-#include "GPU_buffers.h"
 
 #include "IMB_colormanagement.h"
 
@@ -192,7 +187,7 @@ typedef struct ProjPaintImage {
 	ImagePaintPartialRedraw *partRedrawRect;
 	volatile void **undoRect; /* only used to build undo tiles during painting */
 	unsigned short **maskRect; /* the mask accumulation must happen on canvas, not on space screen bucket.
-	                  * Here we store the mask rectangle */
+	                            * Here we store the mask rectangle */
 	bool **valid; /* store flag to enforce validation of undo rectangle */
 	int touch;
 } ProjPaintImage;
@@ -1967,25 +1962,63 @@ static int float_z_sort(const void *p1, const void *p2)
 	return (((float *)p1)[2] < ((float *)p2)[2] ? -1 : 1);
 }
 
+/* assumes one point is within the rectangle */
+static void line_rect_clip(
+        rctf *rect,
+        const float l1[4], const float l2[4],
+        const float uv1[2], const float uv2[2],
+        float uv[2], bool is_ortho)
+{
+	float min = FLT_MAX, tmp;
+	if ((l1[0] - rect->xmin) * (l2[0] - rect->xmin) < 0) {
+		tmp = rect->xmin;
+		min = min_ff((tmp - l1[0]) / (l2[0] - l1[0]), min);
+	}
+	else if ((l1[0] - rect->xmax) * (l2[0] - rect->xmax) < 0) {
+		tmp = rect->xmax;
+		min = min_ff((tmp - l1[0]) / (l2[0] - l1[0]), min);
+	}
+	if ((l1[1] - rect->ymin) * (l2[1] - rect->ymin) < 0) {
+		tmp = rect->ymin;
+		min = min_ff((tmp - l1[1]) / (l2[1] - l1[1]), min);
+	}
+	else if ((l1[1] - rect->ymax) * (l2[1] - rect->ymax) < 0) {
+		tmp = rect->ymax;
+		min = min_ff((tmp - l1[1]) / (l2[1] - l1[1]), min);
+	}
+	
+	tmp = (is_ortho) ? 1.0f : (l1[3] + min * (l2[3] - l1[3]));
+	
+	uv[0] = (uv1[0] + min * (uv2[0] - uv1[0])) / tmp;
+	uv[1] = (uv1[1] + min * (uv2[1] - uv1[1])) / tmp;
+}
+
+
 static void project_bucket_clip_face(
         const bool is_ortho,
         rctf *bucket_bounds,
         float *v1coSS, float *v2coSS, float *v3coSS,
         const float *uv1co, const float *uv2co, const float *uv3co,
         float bucket_bounds_uv[8][2],
-        int *tot)
+        int *tot, bool cull)
 {
 	int inside_bucket_flag = 0;
 	int inside_face_flag = 0;
 	const int flip = ((line_point_side_v2(v1coSS, v2coSS, v3coSS) > 0.0f) != (line_point_side_v2(uv1co, uv2co, uv3co) > 0.0f));
-
+	bool colinear = false;
+	
 	float bucket_bounds_ss[4][2];
 
+	/* detect pathological case where face the three vertices are almost colinear in screen space.
+	 * mostly those will be culled but when flood filling or with smooth shading */
+	if (dist_squared_to_line_v2(v1coSS, v2coSS, v3coSS) < PROJ_PIXEL_TOLERANCE)
+		colinear = true;
+	
 	/* get the UV space bounding box */
 	inside_bucket_flag |= BLI_rctf_isect_pt_v(bucket_bounds, v1coSS);
 	inside_bucket_flag |= BLI_rctf_isect_pt_v(bucket_bounds, v2coSS) << 1;
 	inside_bucket_flag |= BLI_rctf_isect_pt_v(bucket_bounds, v3coSS) << 2;
-
+	
 	if (inside_bucket_flag == ISECT_ALL3) {
 		/* all screenspace points are inside the bucket bounding box, this means we don't need to clip and can simply return the UVs */
 		if (flip) { /* facing the back? */
@@ -1997,9 +2030,59 @@ static void project_bucket_clip_face(
 			copy_v2_v2(bucket_bounds_uv[0], uv1co);
 			copy_v2_v2(bucket_bounds_uv[1], uv2co);
 			copy_v2_v2(bucket_bounds_uv[2], uv3co);
+		}		
+		
+		*tot = 3;
+		return;
+	}
+	/* handle pathological case here, no need for further intersections below since tringle area is almost zero */
+	if (colinear) {
+		int flag;
+		
+		(*tot) = 0;
+		
+		if (cull)
+			return;
+		
+		if (inside_bucket_flag & ISECT_1) { copy_v2_v2(bucket_bounds_uv[*tot], uv1co); (*tot)++; }
+
+		flag = inside_bucket_flag & (ISECT_1 | ISECT_2);
+		if (flag && flag != (ISECT_1 | ISECT_2)) {
+			line_rect_clip(bucket_bounds, v1coSS, v2coSS, uv1co, uv2co, bucket_bounds_uv[*tot], is_ortho);
+			(*tot)++;
+		}
+		
+		if (inside_bucket_flag & ISECT_2) { copy_v2_v2(bucket_bounds_uv[*tot], uv2co); (*tot)++; }
+		
+		flag = inside_bucket_flag & (ISECT_2 | ISECT_3);
+		if (flag && flag != (ISECT_2 | ISECT_3)) {
+			line_rect_clip(bucket_bounds, v2coSS, v3coSS, uv2co, uv3co, bucket_bounds_uv[*tot], is_ortho);
+			(*tot)++;
 		}
 
-		*tot = 3;
+		if (inside_bucket_flag & ISECT_3) { copy_v2_v2(bucket_bounds_uv[*tot], uv3co); (*tot)++; }
+
+		flag = inside_bucket_flag & (ISECT_3 | ISECT_1);
+		if (flag && flag != (ISECT_3 | ISECT_1)) {
+			line_rect_clip(bucket_bounds, v3coSS, v1coSS, uv3co, uv1co, bucket_bounds_uv[*tot], is_ortho);
+			(*tot)++;
+		}
+		
+		if ((*tot) < 3) { /* no intersections to speak of */
+			*tot = 0;
+			return;
+		}
+
+		/* at this point we have all uv points needed in a row. all that's needed is to invert them if necessary */
+		if (flip) {
+			/* flip only to the middle of the array */
+			int i, max = *tot / 2;
+			for (i = 0; i < max; i++) {
+				SWAP(float, bucket_bounds_uv[i][0], bucket_bounds_uv[max - i][0]);
+				SWAP(float, bucket_bounds_uv[i][1], bucket_bounds_uv[max - i][1]);
+			}
+		}
+		
 		return;
 	}
 
@@ -2128,46 +2211,31 @@ static void project_bucket_clip_face(
 		if (flip) qsort(isectVCosSS, *tot, sizeof(float) * 3, float_z_sort_flip);
 		else      qsort(isectVCosSS, *tot, sizeof(float) * 3, float_z_sort);
 
-		/* remove doubles */
-		/* first/last check */
-		if (fabsf(isectVCosSS[0][0] - isectVCosSS[(*tot) - 1][0]) < PROJ_PIXEL_TOLERANCE &&
-		    fabsf(isectVCosSS[0][1] - isectVCosSS[(*tot) - 1][1]) < PROJ_PIXEL_TOLERANCE)
-		{
-			(*tot)--;
-		}
-
-		/* its possible there is only a few left after remove doubles */
-		if ((*tot) < 3) {
-			// printf("removed too many doubles A\n");
-			*tot = 0;
-			return;
-		}
-
 		doubles = true;
 		while (doubles == true) {
 			doubles = false;
-			for (i = 1; i < (*tot); i++) {
-				if (fabsf(isectVCosSS[i - 1][0] - isectVCosSS[i][0]) < PROJ_PIXEL_TOLERANCE &&
-				    fabsf(isectVCosSS[i - 1][1] - isectVCosSS[i][1]) < PROJ_PIXEL_TOLERANCE)
+
+			for (i = 0; i < (*tot); i++) {
+				if (fabsf(isectVCosSS[(i + 1) % *tot][0] - isectVCosSS[i][0]) < PROJ_PIXEL_TOLERANCE &&
+				    fabsf(isectVCosSS[(i + 1) % *tot][1] - isectVCosSS[i][1]) < PROJ_PIXEL_TOLERANCE)
 				{
 					int j;
-					for (j = i + 1; j < (*tot); j++) {
-						isectVCosSS[j - 1][0] = isectVCosSS[j][0];
-						isectVCosSS[j - 1][1] = isectVCosSS[j][1];
+					for (j = i; j < (*tot) - 1; j++) {
+						isectVCosSS[j][0] = isectVCosSS[j + 1][0];
+						isectVCosSS[j][1] = isectVCosSS[j + 1][1];
 					}
 					doubles = true; /* keep looking for more doubles */
 					(*tot)--;
 				}
 			}
+			
+			/* its possible there is only a few left after remove doubles */
+			if ((*tot) < 3) {
+				// printf("removed too many doubles B\n");
+				*tot = 0;
+				return;
+			}
 		}
-
-		/* its possible there is only a few left after remove doubles */
-		if ((*tot) < 3) {
-			// printf("removed too many doubles B\n");
-			*tot = 0;
-			return;
-		}
-
 
 		if (is_ortho) {
 			for (i = 0; i < (*tot); i++) {
@@ -2406,8 +2474,8 @@ static void project_paint_face_init(const ProjPaintState *ps, const int thread_i
 		        is_ortho, bucket_bounds,
 		        v1coSS, v2coSS, v3coSS,
 		        uv1co, uv2co, uv3co,
-		        uv_clip, &uv_clip_tot
-		        );
+		        uv_clip, &uv_clip_tot,
+		        ps->do_backfacecull || ps->do_occlude);
 
 		/* sometimes this happens, better just allow for 8 intersectiosn even though there should be max 6 */
 #if 0
@@ -2428,10 +2496,10 @@ static void project_paint_face_init(const ProjPaintState *ps, const int thread_i
 				CLAMP(bounds_px.ymax, 0, ibuf->y);
 			}
 
-			/*
+#if 0
 			project_paint_undo_tiles_init(&bounds_px, ps->projImages + image_index, tmpibuf,
 			                              tile_width, threaded, ps->do_masking);
-			*/
+#endif
 			/* clip face and */
 
 			has_isect = 0;
@@ -2821,7 +2889,7 @@ static bool project_bucket_face_isect(ProjPaintState *ps, int bucket_x, int buck
 	int fidx;
 
 	project_bucket_bounds(ps, bucket_x, bucket_y, &bucket_bounds);
-
+	
 	/* Is one of the faces verts in the bucket bounds? */
 
 	fidx = mf->v4 ? 3 : 2;
@@ -3092,7 +3160,7 @@ static void project_paint_begin(ProjPaintState *ps)
 
 		invert_m4_m4(ps->ob->imat, ps->ob->obmat);
 
-		if (ps->source == PROJ_SRC_VIEW) {
+		if (ELEM(ps->source, PROJ_SRC_VIEW, PROJ_SRC_VIEW_FILL)) {
 			/* normal drawing */
 			ps->winx = ps->ar->winx;
 			ps->winy = ps->ar->winy;
@@ -3230,7 +3298,7 @@ static void project_paint_begin(ProjPaintState *ps)
 		CLAMP(ps->screenMax[1], (float)(-diameter), (float)(ps->winy + diameter));
 #endif
 	}
-	else { /* re-projection, use bounds */
+	else if (ps->source != PROJ_SRC_VIEW_FILL) { /* re-projection, use bounds */
 		ps->screenMin[0] = 0;
 		ps->screenMax[0] = (float)(ps->winx);
 
@@ -3426,8 +3494,8 @@ static void project_paint_begin(ProjPaintState *ps)
 
 #ifdef PROJ_DEBUG_WINCLIP
 			/* ignore faces outside the view */
-			if (
-			    (v1coSS[0] < ps->screenMin[0] &&
+			if ((ps->source != PROJ_SRC_VIEW_FILL) &&
+			    ((v1coSS[0] < ps->screenMin[0] &&
 			     v2coSS[0] < ps->screenMin[0] &&
 			     v3coSS[0] < ps->screenMin[0] &&
 			     (mf->v4 && v4coSS[0] < ps->screenMin[0])) ||
@@ -3445,7 +3513,7 @@ static void project_paint_begin(ProjPaintState *ps)
 			    (v1coSS[1] > ps->screenMax[1] &&
 			     v2coSS[1] > ps->screenMax[1] &&
 			     v3coSS[1] > ps->screenMax[1] &&
-			     (mf->v4 && v4coSS[1] > ps->screenMax[1]))
+			     (mf->v4 && v4coSS[1] > ps->screenMax[1])))
 			    )
 			{
 				continue;
@@ -4218,7 +4286,7 @@ static void *do_projectpaint_thread(void *ph_v)
 				if (dist_sq <= brush_radius_sq) {
 					dist = sqrtf(dist_sq);
 
-					falloff = BKE_brush_curve_strength_clamp(ps->brush, dist, brush_radius);
+					falloff = BKE_brush_curve_strength(ps->brush, dist, brush_radius);
 
 					if (falloff > 0.0f) {
 						float texrgb[3];
@@ -4453,7 +4521,34 @@ static bool project_paint_op(void *state, const float lastpos[2], const float po
 			touch_any = 1;
 		}
 	}
+	
+	/* calculate pivot for rotation around seletion if needed */
+	if (U.uiflag & USER_ORBIT_SELECTION) {
+		float w[3];
+		int side, index;
+		
+		index = project_paint_PickFace(ps, pos, w, &side);
+		
+		if (index != -1) {
+			MFace *mf;
+			float world[3];
+			UnifiedPaintSettings *ups = &ps->scene->toolsettings->unified_paint_settings;
 
+			mf = ps->dm_mface + index;
+
+			if (side == 0) {
+				interp_v3_v3v3v3(world, ps->dm_mvert[(*(&mf->v1))].co, ps->dm_mvert[(*(&mf->v2))].co, ps->dm_mvert[(*(&mf->v3))].co, w);
+			}
+			else {
+				interp_v3_v3v3v3(world, ps->dm_mvert[(*(&mf->v1))].co, ps->dm_mvert[(*(&mf->v3))].co, ps->dm_mvert[(*(&mf->v4))].co, w);
+			}
+			
+			ups->average_stroke_counter++;
+			add_v3_v3(ups->average_stroke_accum, world);
+			ups->last_stroke_valid = true;
+		}
+	}
+	
 	return touch_any;
 }
 
@@ -4625,7 +4720,7 @@ void *paint_proj_new_stroke(bContext *C, Object *ob, const float mouse[2], int m
 
 	paint_brush_init_tex(ps->brush);
 
-	ps->source = PROJ_SRC_VIEW;
+	ps->source = (ps->tool == PAINT_TOOL_FILL) ? PROJ_SRC_VIEW_FILL : PROJ_SRC_VIEW;
 
 	if (ps->ob == NULL || !(ps->ob->lay & ps->v3d->lay)) {
 		MEM_freeN(ps);
@@ -4647,10 +4742,6 @@ void *paint_proj_new_stroke(bContext *C, Object *ob, const float mouse[2], int m
 	}
 
 	paint_proj_begin_clone(ps, mouse);
-
-	/* special full screen draw mode for fill tool */
-	if (ps->tool == PAINT_TOOL_FILL)
-		ps->source = PROJ_SRC_VIEW_FILL;
 
 	return ps;
 }

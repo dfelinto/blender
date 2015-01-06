@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #ifndef __SCENE_H__
@@ -26,6 +26,7 @@
 
 #include "util_param.h"
 #include "util_string.h"
+#include "util_system.h"
 #include "util_thread.h"
 #include "util_types.h"
 #include "util_vector.h"
@@ -135,11 +136,7 @@ public:
 		bvh_type = BVH_DYNAMIC;
 		use_bvh_cache = false;
 		use_bvh_spatial_split = false;
-#ifdef __QBVH__
-		use_qbvh = true;
-#else
 		use_qbvh = false;
-#endif
 		persistent_data = false;
 	}
 

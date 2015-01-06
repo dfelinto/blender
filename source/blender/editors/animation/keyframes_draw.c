@@ -39,7 +39,6 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_blenlib.h"
 #include "BLI_dlrbTree.h"
 #include "BLI_utildefines.h"
 
@@ -155,6 +154,7 @@ static DLRBT_Node *nalloc_ak_gpframe(void *data)
 	/* store settings based on state of BezTriple */
 	ak->cfra = gpf->framenum;
 	ak->sel = (gpf->flag & GP_FRAME_SELECT) ? SELECT : 0;
+	ak->key_type = gpf->key_type;
 	
 	/* set 'modified', since this is used to identify long keyframes */
 	ak->modified = 1;
@@ -171,6 +171,10 @@ static void nupdate_ak_gpframe(void *node, void *data)
 	/* set selection status and 'touched' status */
 	if (gpf->flag & GP_FRAME_SELECT) ak->sel = SELECT;
 	ak->modified += 1;
+	
+	/* for keyframe type, 'proper' keyframes have priority over breakdowns (and other types for now) */
+	if (gpf->key_type == BEZT_KEYTYPE_KEYFRAME)
+		ak->key_type = BEZT_KEYTYPE_KEYFRAME;
 }
 
 /* ......... */
@@ -732,6 +736,21 @@ void draw_action_channel(View2D *v2d, AnimData *adt, bAction *act, float ypos)
 	BLI_dlrbTree_free(&blocks);
 }
 
+void draw_gpencil_channel(View2D *v2d, bDopeSheet *ads, bGPdata *gpd, float ypos)
+{
+	DLRBT_Tree keys;
+	
+	BLI_dlrbTree_init(&keys);
+	
+	gpencil_to_keylist(ads, gpd, &keys);
+	
+	BLI_dlrbTree_linkedlist_sync(&keys);
+	
+	draw_keylist(v2d, &keys, NULL, ypos, 0);
+	
+	BLI_dlrbTree_free(&keys);
+}
+
 void draw_gpl_channel(View2D *v2d, bDopeSheet *ads, bGPDlayer *gpl, float ypos)
 {
 	DLRBT_Tree keys;
@@ -923,6 +942,20 @@ void action_to_keylist(AnimData *adt, bAction *act, DLRBT_Tree *keys, DLRBT_Tree
 	}
 }
 
+
+void gpencil_to_keylist(bDopeSheet *ads, bGPdata *gpd, DLRBT_Tree *keys)
+{
+	bGPDlayer *gpl;
+	
+	if (gpd && keys) {
+		/* for now, just aggregate out all the frames, but only for visible layers */
+		for (gpl = gpd->layers.first; gpl; gpl = gpl->next) {
+			if ((gpl->flag & GP_LAYER_HIDE) == 0) {
+				gpl_to_keylist(ads, gpl, keys);
+			}
+		}
+	}
+}
 
 void gpl_to_keylist(bDopeSheet *UNUSED(ads), bGPDlayer *gpl, DLRBT_Tree *keys)
 {

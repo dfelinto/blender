@@ -32,7 +32,6 @@
 #include "BLI_blenlib.h"
 #include "BLI_utildefines.h"
 
-#include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_windowmanager_types.h"
 
@@ -61,7 +60,6 @@
 #include "ED_space_api.h"
 #include "ED_sound.h"
 #include "ED_uvedit.h"
-#include "ED_view3d.h"
 #include "ED_mball.h"
 #include "ED_logic.h"
 #include "ED_clip.h"
@@ -155,6 +153,7 @@ void ED_spacemacros_init(void)
 	ED_operatormacros_mask();
 	ED_operatormacros_sequencer();
 	ED_operatormacros_paint();
+	ED_operatormacros_gpencil();
 
 	/* register dropboxes (can use macros) */
 	spacetypes = BKE_spacetypes_list();
@@ -318,7 +317,3 @@ void ED_spacetype_xxx(void)
 }
 
 /* ****************************** end template *********************** */
-
-
-
-

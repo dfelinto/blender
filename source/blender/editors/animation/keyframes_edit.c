@@ -41,9 +41,7 @@
 
 #include "DNA_anim_types.h"
 #include "DNA_object_types.h"
-#include "DNA_node_types.h"
 #include "DNA_scene_types.h"
-#include "DNA_space_types.h"
 
 #include "BKE_fcurve.h"
 
@@ -548,6 +546,44 @@ static short ok_bezier_region_lasso(KeyframeEditData *ked, BezTriple *bezt)
 		return 0;
 }
 
+/**
+ * only called from #ok_bezier_region_circle
+ */
+static bool bezier_region_circle_test(
+        const struct KeyframeEdit_CircleData *data_circle,
+        const float xy[2])
+{
+	if (BLI_rctf_isect_pt_v(data_circle->rectf_scaled, xy)) {
+		float xy_view[2];
+
+		BLI_rctf_transform_pt_v(data_circle->rectf_view, data_circle->rectf_scaled, xy_view, xy);
+
+		xy_view[0] = xy_view[0] - data_circle->mval[0];
+		xy_view[1] = xy_view[1] - data_circle->mval[1];
+		return len_squared_v2(xy_view) < data_circle->radius_squared;
+	}
+	
+	return false;
+}
+
+
+static short ok_bezier_region_circle(KeyframeEditData *ked, BezTriple *bezt)
+{
+	/* rect is stored in data property (it's of type rectf, but may not be set) */
+	if (ked->data) {
+		short ok = 0;
+
+#define KEY_CHECK_OK(_index) bezier_region_circle_test(ked->data, bezt->vec[_index])
+		KEYFRAME_OK_CHECKS(KEY_CHECK_OK);
+#undef KEY_CHECK_OK
+
+		/* return ok flags */
+		return ok;
+	}
+	else
+		return 0;
+}
+
 
 KeyframeEditFunc ANIM_editkeyframes_ok(short mode)
 {
@@ -567,6 +603,8 @@ KeyframeEditFunc ANIM_editkeyframes_ok(short mode)
 			return ok_bezier_region;
 		case BEZT_OK_REGION_LASSO: /* only if the point falls within KeyframeEdit_LassoData defined data */
 			return ok_bezier_region_lasso;
+		case BEZT_OK_REGION_CIRCLE: /* only if the point falls within KeyframeEdit_LassoData defined data */
+			return ok_bezier_region_circle;
 		default: /* nothing was ok */
 			return NULL;
 	}

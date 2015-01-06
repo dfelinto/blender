@@ -298,7 +298,7 @@ void WM_OT_collada_export(wmOperatorType *ot)
 
 	ot->ui = wm_collada_export_draw;
 
-	WM_operator_properties_filesel(ot, FOLDERFILE | COLLADAFILE, FILE_BLENDER, FILE_SAVE,
+	WM_operator_properties_filesel(ot, FILE_TYPE_FOLDER | FILE_TYPE_COLLADA, FILE_BLENDER, FILE_SAVE,
 	                               WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY);
 
 	RNA_def_boolean(ot->srna,
@@ -365,6 +365,9 @@ static int wm_collada_import_exec(bContext *C, wmOperator *op)
 {
 	char filename[FILE_MAX];
 	int import_units;
+	int find_chains;
+	int fix_orientation;
+	int  min_chain_length;
 
 	if (!RNA_struct_property_is_set(op->ptr, "filepath")) {
 		BKE_report(op->reports, RPT_ERROR, "No filename given");
@@ -372,10 +375,19 @@ static int wm_collada_import_exec(bContext *C, wmOperator *op)
 	}
 
 	/* Options panel */
-	import_units = RNA_boolean_get(op->ptr, "import_units");
+	import_units     = RNA_boolean_get(op->ptr, "import_units");
+	find_chains      = RNA_boolean_get(op->ptr, "find_chains");
+	fix_orientation  = RNA_boolean_get(op->ptr, "fix_orientation");
+	min_chain_length = RNA_int_get(op->ptr, "min_chain_length");
 
 	RNA_string_get(op->ptr, "filepath", filename);
-	if (collada_import(C, filename, import_units)) {
+	if (collada_import(
+	        C, filename,
+	        import_units,
+	        find_chains,
+	        fix_orientation,
+	        min_chain_length))
+	{
 		return OPERATOR_FINISHED;
 	}
 	else {
@@ -395,6 +407,19 @@ static void uiCollada_importSettings(uiLayout *layout, PointerRNA *imfptr)
 
 	row = uiLayoutRow(box, false);
 	uiItemR(row, imfptr, "import_units", 0, NULL, ICON_NONE);
+
+	box = uiLayoutBox(layout);
+	row = uiLayoutRow(box, false);
+	uiItemL(row, IFACE_("Armature Options:"), ICON_MESH_DATA);
+
+	row = uiLayoutRow(box, false);
+	uiItemR(row, imfptr, "fix_orientation", 0, NULL, ICON_NONE);
+
+	row = uiLayoutRow(box, false);
+	uiItemR(row, imfptr, "find_chains", 0, NULL, ICON_NONE);
+
+	row = uiLayoutRow(box, false);
+	uiItemR(row, imfptr, "min_chain_length", 0, NULL, ICON_NONE);
 }
 
 static void wm_collada_import_draw(bContext *UNUSED(C), wmOperator *op)
@@ -419,13 +444,31 @@ void WM_OT_collada_import(wmOperatorType *ot)
 
 	ot->ui = wm_collada_import_draw;
 
-	WM_operator_properties_filesel(ot, FOLDERFILE | COLLADAFILE, FILE_BLENDER, FILE_OPENFILE,
+	WM_operator_properties_filesel(ot, FILE_TYPE_FOLDER | FILE_TYPE_COLLADA, FILE_BLENDER, FILE_OPENFILE,
 	                               WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY);
 
 	RNA_def_boolean(ot->srna,
-	                "import_units", 0, "Import Units",
-	                "If disabled match import to Blender's current Unit settings, "
-	                "otherwise use the settings from the Imported scene");
+		"import_units", 0, "Import Units",
+		"If disabled match import to Blender's current Unit settings, "
+		"otherwise use the settings from the Imported scene");
+
+	RNA_def_boolean(ot->srna,
+		"fix_orientation", 0, "Fix Leaf Bones",
+		"Fix Orientation of Leaf Bones (Collada does only support Joints)");
+
+	RNA_def_boolean(ot->srna,
+		"find_chains", 0, "Find Bone Chains",
+		"Find best matching Bone Chains and ensure bones in chain are connected");
+
+	RNA_def_int(ot->srna,
+		"min_chain_length",
+		0,
+		0,
+		INT_MAX,
+		"Minimum Chain Length",
+		"When searching Bone Chains disregard chains of length below this value",
+		0,
+		INT_MAX);
 
 }
 #endif

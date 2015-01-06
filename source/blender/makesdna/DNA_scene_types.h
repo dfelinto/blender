@@ -1077,25 +1077,36 @@ typedef struct UnifiedPaintSettings {
 
 	/* record movement of mouse so that rake can start at an intuitive angle */
 	float last_rake[2];
+	float last_rake_angle;
+	
+	int last_stroke_valid;
+	float average_stroke_accum[3];
+	int average_stroke_counter;
+	
 
 	float brush_rotation;
+	float brush_rotation_sec;
 
 	/*********************************************************************************
 	 *  all data below are used to communicate with cursor drawing and tex sampling  *
 	 *********************************************************************************/
-	int draw_anchored;
 	int anchored_size;
-
-	char draw_inverted;
-	char pad3[7];
 
 	float overlap_factor; /* normalization factor due to accumulated value of curve along spacing.
 	                       * Calculated when brush spacing changes to dampen strength of stroke
 	                       * if space attenuation is used*/
+	char draw_inverted;
+	/* check is there an ongoing stroke right now */
+	char stroke_active;
+
+	char draw_anchored;
+	char do_linear_conversion;
+
 	float anchored_initial_mouse[2];
 
-	/* check is there an ongoing stroke right now */
-	int stroke_active;
+	/* radius of brush, premultiplied with pressure.
+	 * In case of anchored brushes contains the anchored radius */
+	float pixel_radius;
 
 	/* drawing pressure */
 	float size_pressure_value;
@@ -1107,13 +1118,7 @@ typedef struct UnifiedPaintSettings {
 	float mask_tex_mouse[2];
 
 	/* ColorSpace cache to avoid locking up during sampling */
-	int do_linear_conversion;
 	struct ColorSpace *colorspace;
-
-	/* radius of brush, premultiplied with pressure.
-	 * In case of anchored brushes contains the anchored radius */
-	float pixel_radius;
-	int pad4;
 } UnifiedPaintSettings;
 
 typedef enum {
@@ -1185,9 +1190,10 @@ typedef struct ToolSettings {
 	short autoik_chainlen;  /* runtime only */
 
 	/* Grease Pencil */
-	char gpencil_flags;
+	char gpencil_flags;		/* flags/options for how the tool works */
+	char gpencil_src;		/* for main 3D view Grease Pencil, where data comes from */
 
-	char pad[5];
+	char pad[4];
 
 	/* Image Paint (8 byttse aligned please!) */
 	struct ImagePaintSettings imapaint;
@@ -1861,6 +1867,12 @@ typedef enum ImagePaintMode {
 
 /* toolsettings->gpencil_flags */
 #define GP_TOOL_FLAG_PAINTSESSIONS_ON	(1<<0)
+
+/* toolsettings->gpencil_src */
+typedef enum eGPencil_Source_3D {
+	GP_TOOL_SOURCE_SCENE    = 0,
+	GP_TOOL_SOURCE_OBJECT   = 1
+} eGPencil_Source_3d;
 
 /* toolsettings->particle flag */
 #define PE_KEEP_LENGTHS			1

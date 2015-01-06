@@ -38,7 +38,6 @@
 #include "BLI_math.h"
 #include "BLI_rand.h"
 #include "BLI_array.h"
-#include "BLI_smallhash.h"
 
 #include "BKE_context.h"
 #include "BKE_report.h"
@@ -61,8 +60,6 @@
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
 #include "DNA_object_types.h"
-
-#include "GPU_extensions.h"
 
 #include "UI_resources.h"
 
@@ -384,8 +381,6 @@ static void findnearestvert__doClosest(void *userData, BMVert *eve, const float 
 		}
 	}
 }
-
-
 
 
 static bool findnearestvert__backbufIndextest(void *handle, unsigned int index)
@@ -711,6 +706,7 @@ static EnumPropertyItem prop_similar_types[] = {
 	{SIMFACE_PERIMETER, "PERIMETER", 0, "Perimeter", ""},
 	{SIMFACE_NORMAL, "NORMAL", 0, "Normal", ""},
 	{SIMFACE_COPLANAR, "COPLANAR", 0, "Co-planar", ""},
+	{SIMFACE_SMOOTH, "SMOOTH", 0, "Flat/Smooth", ""},
 #ifdef WITH_FREESTYLE
 	{SIMFACE_FREESTYLE, "FREESTYLE_FACE", 0, "Freestyle Face Marks", ""},
 #endif
@@ -888,7 +884,7 @@ static EnumPropertyItem *select_similar_type_itemf(bContext *C, PointerRNA *UNUS
 #ifdef WITH_FREESTYLE
 			const int a_end = SIMFACE_FREESTYLE;
 #else
-			const int a_end = SIMFACE_COPLANAR;
+			const int a_end = SIMFACE_SMOOTH;
 #endif
 			for (a = SIMFACE_MATERIAL; a <= a_end; a++) {
 				RNA_enum_items_add_value(&item, &totitem, prop_similar_types, a);
@@ -994,6 +990,7 @@ static int edbm_select_similar_region_exec(bContext *C, wmOperator *op)
 	}
 
 	MEM_freeN(groups_array);
+	MEM_freeN(group_index);
 
 	if (changed) {
 		WM_event_add_notifier(C, NC_GEOM | ND_SELECT, obedit);
@@ -3365,8 +3362,8 @@ static int loop_find_region(BMLoop *l, int flag,
 
 static int verg_radial(const void *va, const void *vb)
 {
-	BMEdge *e_a = *((BMEdge **)va);
-	BMEdge *e_b = *((BMEdge **)vb);
+	const BMEdge *e_a = *((const BMEdge **)va);
+	const BMEdge *e_b = *((const BMEdge **)vb);
 
 	int a, b;
 	a = BM_edge_face_count(e_a);

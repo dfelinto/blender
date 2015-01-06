@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #ifndef __KERNEL_TYPES_H__
@@ -57,6 +57,9 @@ CCL_NAMESPACE_BEGIN
 
 /* device capabilities */
 #ifdef __KERNEL_CPU__
+#ifdef __KERNEL_SSE2__
+#  define __QBVH__
+#endif
 #define __KERNEL_SHADING__
 #define __KERNEL_ADV_SHADING__
 #define __BRANCHED_PATH__
@@ -539,34 +542,25 @@ typedef enum AttributeStandard {
 #define MAX_CLOSURE 1
 #endif
 
-/* TODO(sergey): This is rather nasty bug happening in here, which
- * could be simply a compilers bug for which we can't find a generic
- * platform independent workaround. Also even if it's a compiler
- * issue, it's not so simple to upgrade the compiler in the release
- * environment for Linux and doing it so closer to the release is
- * rather a risky business.
- *
- * For this release it's probably safer to stick with such a rather
- * dirty solution, and look for a cleaner fix during the next release
- * cycle.
+/* This struct is to be 16 bytes aligned, we also keep some extra precautions:
+ * - All the float3 members are in the beginning of the struct, so compiler
+ *   does not put own padding trying to align this members.
+ * - We make sure OSL pointer is also 16 bytes aligned.
  */
 typedef struct ShaderClosure {
-	ClosureType type;
 	float3 weight;
-#ifndef __APPLE__
+	float3 N;
+	float3 T;
+
+	ClosureType type;
 	float sample_weight;
-#endif
 	float data0;
 	float data1;
 	float data2;
+	int pad1, pad2, pad3;
 
-	float3 N;
-	float3 T;
-#ifdef __APPLE__
-	float sample_weight;
-#endif
 #ifdef __OSL__
-	void *prim;
+	void *prim, *pad4;
 #endif
 } ShaderClosure;
 
@@ -956,8 +950,8 @@ typedef struct KernelBVH {
 	int have_motion;
 	int have_curves;
 	int have_instancing;
-
-	int pad1, pad2, pad3;
+	int use_qbvh;
+	int pad1, pad2;
 } KernelBVH;
 
 typedef enum CurveFlag {

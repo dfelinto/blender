@@ -45,8 +45,6 @@
 #include "BLI_blenlib.h"
 #include "BLI_threads.h"
 #include "BLI_utildefines.h"
-#include "BLI_math.h"
-#include "BLI_math_geom.h"
 
 #include "BKE_blender.h"
 #include "BKE_screen.h"
@@ -71,7 +69,6 @@
 
 #include "IMB_imbuf_types.h"
 #include "IMB_imbuf.h"
-#include "IMB_colormanagement.h"
 
 #include "GPU_draw.h" /* GPU_free_image */
 

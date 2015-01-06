@@ -64,7 +64,6 @@
 #include "ED_mask.h"
 #include "ED_sequencer.h"
 #include "ED_space_api.h"
-#include "ED_screen.h"
 
 #include "UI_interface.h"
 #include "UI_resources.h"
@@ -72,7 +71,6 @@
 
 #include "WM_api.h"
 
-#include "MEM_guardedalloc.h"
 
 /* own include */
 #include "sequencer_intern.h"
@@ -672,7 +670,7 @@ void draw_sequence_extensions(Scene *scene, ARegion *ar, Sequence *seq)
 		draw_shadedstrip(seq, col, x1, y1, (float)(seq->start), y2);
 		
 		/* feint pinstripes, helps see exactly which is extended and which isn't,
-			 * especially when the extension is very small */
+		 * especially when the extension is very small */
 		if (seq->flag & SELECT) UI_GetColorPtrBlendShade3ubv(col, col, col, 0.0, 24);
 		else UI_GetColorPtrShade3ubv(col, col, -16);
 		
@@ -690,7 +688,7 @@ void draw_sequence_extensions(Scene *scene, ARegion *ar, Sequence *seq)
 		draw_shadedstrip(seq, col, (float)(seq->start + seq->len), y1, x2, y2);
 		
 		/* feint pinstripes, helps see exactly which is extended and which isn't,
-			 * especially when the extension is very small */
+		 * especially when the extension is very small */
 		if (seq->flag & SELECT) UI_GetColorPtrShade3ubv(col, col, 24);
 		else UI_GetColorPtrShade3ubv(col, col, -16);
 		
@@ -739,6 +737,10 @@ static void draw_seq_strip(const bContext *C, SpaceSeq *sseq, Scene *scene, AReg
 		draw_shadedstrip(seq, background_col, x1, y1, x2, y2);
 	}
 	
+	if ((sseq->draw_flag & SEQ_DRAW_OFFSET_EXT) && !is_single_image) {
+		draw_sequence_extensions(scene, ar, seq);
+	}
+
 	draw_seq_handle(v2d, seq, handsize_clamped, SEQ_LEFTHANDLE);
 	draw_seq_handle(v2d, seq, handsize_clamped, SEQ_RIGHTHANDLE);
 	
@@ -829,17 +831,29 @@ static void draw_seq_strip(const bContext *C, SpaceSeq *sseq, Scene *scene, AReg
 
 static Sequence *special_seq_update = NULL;
 
-static void UNUSED_FUNCTION(set_special_seq_update) (int val)
+void sequencer_special_update_set(Sequence *seq)
 {
-//	int x;
+	special_seq_update = seq;
+}
 
-	/* if mouse over a sequence && LEFTMOUSE */
-	if (val) {
-// XXX		special_seq_update = find_nearest_seq(&x);
-	}
-	else {
-		special_seq_update = NULL;
-	}
+Sequence *ED_sequencer_special_preview_get(void)
+{
+	return special_seq_update;
+}
+
+void ED_sequencer_special_preview_set(bContext *C, const int mval[2])
+{
+	Scene *scene = CTX_data_scene(C);
+	ARegion *ar = CTX_wm_region(C);
+	int hand;
+	Sequence *seq;
+	seq = find_nearest_seq(scene, &ar->v2d, &hand, mval);
+	sequencer_special_update_set(seq);
+}
+
+void ED_sequencer_special_preview_clear(void)
+{
+	sequencer_special_update_set(NULL);
 }
 
 ImBuf *sequencer_ibuf_get(struct Main *bmain, Scene *scene, SpaceSeq *sseq, int cfra, int frame_ofs, const char *viewname)
@@ -852,9 +866,6 @@ ImBuf *sequencer_ibuf_get(struct Main *bmain, Scene *scene, SpaceSeq *sseq, int 
 	short is_break = G.is_break;
 
 	render_size = sseq->render_size;
-	if (render_size == 99) {
-		render_size = 100;
-	}
 	if (render_size == 0) {
 		render_size = scene->r.size;
 	}
@@ -869,7 +880,10 @@ ImBuf *sequencer_ibuf_get(struct Main *bmain, Scene *scene, SpaceSeq *sseq, int 
 	rectx = (render_size * (float)scene->r.xsch) / 100.0f + 0.5f;
 	recty = (render_size * (float)scene->r.ysch) / 100.0f + 0.5f;
 
-	context = BKE_sequencer_new_render_data(bmain->eval_ctx, bmain, scene, rectx, recty, proxy_size);
+	BKE_sequencer_new_render_data(
+	        bmain->eval_ctx, bmain, scene,
+	        rectx, recty, proxy_size,
+	        &context);
 	context.view_id = BKE_scene_view_id_get(&scene->r, viewname);
 
 	/* sequencer could start rendering, in this case we need to be sure it wouldn't be canceled
@@ -1452,6 +1466,15 @@ static void draw_seq_strips(const bContext *C, Editing *ed, ARegion *ar)
 	/* draw the last selected last (i.e. 'active' in other parts of Blender), removes some overlapping error */
 	if (last_seq)
 		draw_seq_strip(C, sseq, scene, ar, last_seq, 120, pixelx);
+
+	/* draw highlight when previewing a single strip */
+	if (special_seq_update) {
+		const Sequence *seq = special_seq_update;
+		glEnable(GL_BLEND);
+		glColor4ub(255, 255, 255, 48);
+		glRectf(seq->startdisp, seq->machine + SEQ_STRIP_OFSBOTTOM, seq->enddisp, seq->machine + SEQ_STRIP_OFSTOP);
+		glDisable(GL_BLEND);
+	}
 }
 
 static void seq_draw_sfra_efra(Scene *scene, View2D *v2d)
@@ -1531,7 +1554,6 @@ void draw_timeline_seq(const bContext *C, ARegion *ar)
 
 	if (sseq->draw_flag & SEQ_DRAW_BACKDROP) {
 		draw_image_seq(C, scene, ar, sseq, scene->r.cfra, 0, false, true);
-		UI_SetTheme(SPACE_SEQ, RGN_TYPE_WINDOW);
 		UI_view2d_view_ortho(v2d);
 	}
 		

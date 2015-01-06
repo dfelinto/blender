@@ -27,13 +27,20 @@
  *
  */
 
+#include "DNA_modifier_types.h"  /* for MOD_TRIANGULATE_NGON_BEAUTY only */
+
 #include "MEM_guardedalloc.h"
 
 #include "BLI_utildefines.h"
 #include "BLI_alloca.h"
 #include "BLI_memarena.h"
 #include "BLI_listbase.h"
-#include "BLI_scanfill.h"
+#include "BLI_heap.h"
+#include "BLI_edgehash.h"
+
+/* only for defines */
+#include "BLI_polyfill2d.h"
+#include "BLI_polyfill2d_beautify.h"
 
 #include "bmesh.h"
 
@@ -42,16 +49,25 @@
 /**
  * a version of #BM_face_triangulate that maps to #BMOpSlot
  */
-static void bm_face_triangulate_mapping(BMesh *bm, BMFace *face, MemArena *sf_arena,
-                                        const int quad_method, const int ngon_method,
-                                        const bool use_tag,
-                                        BMOperator *op, BMOpSlot *slot_facemap_out)
+static void bm_face_triangulate_mapping(
+        BMesh *bm, BMFace *face,
+        const int quad_method, const int ngon_method,
+        const bool use_tag,
+        BMOperator *op, BMOpSlot *slot_facemap_out,
+
+        MemArena *pf_arena,
+        /* use for MOD_TRIANGULATE_NGON_BEAUTY only! */
+        struct Heap *pf_heap, struct EdgeHash *pf_ehash)
 {
 	int faces_array_tot = face->len - 3;
 	BMFace  **faces_array = BLI_array_alloca(faces_array, faces_array_tot);
 	BLI_assert(face->len > 3);
 
-	BM_face_triangulate(bm, face, faces_array, &faces_array_tot, sf_arena, quad_method, ngon_method, use_tag);
+	BM_face_triangulate(
+	        bm, face, faces_array, &faces_array_tot,
+	        quad_method, ngon_method, use_tag,
+	        pf_arena,
+	        pf_heap, pf_ehash);
 
 	if (faces_array_tot) {
 		int i;
@@ -63,22 +79,39 @@ static void bm_face_triangulate_mapping(BMesh *bm, BMFace *face, MemArena *sf_ar
 }
 
 
-void BM_mesh_triangulate(BMesh *bm, const int quad_method, const int ngon_method, const bool tag_only,
-                         BMOperator *op, BMOpSlot *slot_facemap_out)
+void BM_mesh_triangulate(
+        BMesh *bm, const int quad_method, const int ngon_method, const bool tag_only,
+        BMOperator *op, BMOpSlot *slot_facemap_out)
 {
 	BMIter iter;
 	BMFace *face;
-	MemArena *sf_arena;
+	MemArena *pf_arena;
+	Heap *pf_heap;
+	EdgeHash *pf_ehash;
 
-	sf_arena = BLI_memarena_new(BLI_SCANFILL_ARENA_SIZE, __func__);
+	pf_arena = BLI_memarena_new(BLI_POLYFILL_ARENA_SIZE, __func__);
+
+	if (ngon_method == MOD_TRIANGULATE_NGON_BEAUTY) {
+		pf_heap = BLI_heap_new_ex(BLI_POLYFILL_ALLOC_NGON_RESERVE);
+		pf_ehash = BLI_edgehash_new_ex(__func__, BLI_POLYFILL_ALLOC_NGON_RESERVE);
+	}
+	else {
+		pf_heap = NULL;
+		pf_ehash = NULL;
+	}
 
 	if (slot_facemap_out) {
 		/* same as below but call: bm_face_triangulate_mapping() */
 		BM_ITER_MESH (face, &iter, bm, BM_FACES_OF_MESH) {
 			if (face->len > 3) {
 				if (tag_only == false || BM_elem_flag_test(face, BM_ELEM_TAG)) {
-					bm_face_triangulate_mapping(bm, face, sf_arena, quad_method, ngon_method, tag_only,
-					                            op, slot_facemap_out);
+					bm_face_triangulate_mapping(
+					        bm, face, quad_method,
+					        ngon_method, tag_only,
+					        op, slot_facemap_out,
+
+					        pf_arena,
+					        pf_heap, pf_ehash);
 				}
 			}
 		}
@@ -87,11 +120,20 @@ void BM_mesh_triangulate(BMesh *bm, const int quad_method, const int ngon_method
 		BM_ITER_MESH (face, &iter, bm, BM_FACES_OF_MESH) {
 			if (face->len > 3) {
 				if (tag_only == false || BM_elem_flag_test(face, BM_ELEM_TAG)) {
-					BM_face_triangulate(bm, face, NULL, NULL, sf_arena, quad_method, ngon_method, tag_only);
+					BM_face_triangulate(
+					        bm, face, NULL, NULL,
+					        quad_method, ngon_method, tag_only,
+					        pf_arena,
+					        pf_heap, pf_ehash);
 				}
 			}
 		}
 	}
 
-	BLI_memarena_free(sf_arena);
+	BLI_memarena_free(pf_arena);
+
+	if (ngon_method == MOD_TRIANGULATE_NGON_BEAUTY) {
+		BLI_heap_free(pf_heap, NULL);
+		BLI_edgehash_free(pf_ehash, NULL);
+	}
 }

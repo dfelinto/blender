@@ -390,6 +390,10 @@ def creator(env):
         incs.append('#/extern/libmv')
         defs.append('WITH_LIBMV')
 
+    if env['WITH_BF_CYCLES'] and env['WITH_BF_CYCLES_LOGGING']:
+        incs.append('#/intern/cycles/blender')
+        defs.append('WITH_CYCLES_LOGGING')
+
     if env['WITH_BF_FFMPEG']:
         defs.append('WITH_FFMPEG')
 
@@ -650,7 +654,7 @@ def WinPyBundle(target=None, source=None, env=None):
     # Extract Numpy
     if env['WITH_BF_PYTHON_INSTALL_NUMPY']:
         py_tar = env.subst(env['LCGDIR']).lstrip("#")
-        py_tar += '/release/python' + env['BF_PYTHON_VERSION'].replace('.','') + '_numpy_1.8.tar.gz'
+        py_tar += '/release/python' + env['BF_PYTHON_VERSION'].replace('.','') + '_numpy_1.9.tar.gz'
 
         py_target = env.subst(env['BF_INSTALLDIR']).lstrip("#")
         py_target = os.path.join(py_target, VERSION, 'python', 'lib', 'site-packages')

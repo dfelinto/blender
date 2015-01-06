@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #include <stdio.h>
@@ -25,6 +25,7 @@
 
 #include "cuew.h"
 #include "util_debug.h"
+#include "util_logging.h"
 #include "util_map.h"
 #include "util_opengl.h"
 #include "util_path.h"
@@ -76,7 +77,7 @@ public:
 	{
 		if(first_error) {
 			fprintf(stderr, "\nRefer to the Cycles GPU rendering documentation for possible solutions:\n");
-			fprintf(stderr, "http://wiki.blender.org/index.php/Doc:2.6/Manual/Render/Cycles/GPU_Rendering\n\n");
+			fprintf(stderr, "http://www.blender.org/manual/render/cycles/gpu_rendering.html\n\n");
 			first_error = false;
 		}
 	}
@@ -202,31 +203,18 @@ public:
 		/* compute cubin name */
 		int major, minor;
 		cuDeviceComputeCapability(&major, &minor, cuDevId);
-		
 		string cubin;
-
-		/* ToDo: We don't bundle sm_52 kernel yet */
-		if(major == 5 && minor == 2) {
-			if(experimental)
-				cubin = path_get(string_printf("lib/kernel_experimental_sm_%d%d.cubin", major, minor));
-			else
-				cubin = path_get(string_printf("lib/kernel_sm_%d%d.cubin", major, minor));
-
-			if(path_exists(cubin))
-				/* self build sm_52 kernel? Use it. */
-				return cubin;
-			else
-				/* use 5.0 kernel as workaround */
-				minor = 0;
-		}
 
 		/* attempt to use kernel provided with blender */
 		if(experimental)
 			cubin = path_get(string_printf("lib/kernel_experimental_sm_%d%d.cubin", major, minor));
 		else
 			cubin = path_get(string_printf("lib/kernel_sm_%d%d.cubin", major, minor));
-		if(path_exists(cubin))
+		VLOG(1) << "Testing for pre-compiled kernel " << cubin;
+		if(path_exists(cubin)) {
+			VLOG(1) << "Using precompiled kernel";
 			return cubin;
+		}
 
 		/* not found, try to use locally compiled kernel */
 		string kernel_path = path_get("kernel");
@@ -237,10 +225,12 @@ public:
 		else
 			cubin = string_printf("cycles_kernel_sm%d%d_%s.cubin", major, minor, md5.c_str());
 		cubin = path_user_get(path_join("cache", cubin));
-
+		VLOG(1) << "Testing for locally compiled kernel " << cubin;
 		/* if exists already, use it */
-		if(path_exists(cubin))
+		if(path_exists(cubin)) {
+			VLOG(1) << "Using locally compiled kernel";
 			return cubin;
+		}
 
 #ifdef _WIN32
 		if(have_precompiled_kernels()) {
@@ -261,6 +251,7 @@ public:
 		}
 
 		int cuda_version = cuewCompilerVersion();
+		VLOG(1) << "Found nvcc " << nvcc << ", CUDA version " << cuda_version;
 
 		if(cuda_version == 0) {
 			cuda_error_message("CUDA nvcc compiler version could not be parsed.");
@@ -1042,14 +1033,29 @@ bool device_cuda_init(void)
 		return result;
 
 	initialized = true;
-
-	if (cuewInit() == CUEW_SUCCESS) {
-		if(CUDADevice::have_precompiled_kernels())
+	int cuew_result = cuewInit();
+	if (cuew_result == CUEW_SUCCESS) {
+		VLOG(1) << "CUEW initialization succeeded";
+		if(CUDADevice::have_precompiled_kernels()) {
+			VLOG(1) << "Found precompiled  kernels";
 			result = true;
+		}
 #ifndef _WIN32
-		else if(cuewCompilerPath() != NULL)
+		else if(cuewCompilerPath() != NULL) {
+			VLOG(1) << "Found CUDA compiled " << cuewCompilerPath();
 			result = true;
+		}
+		else {
+			VLOG(1) << "Neither precompiled kernels nor CUDA compiler wad found,"
+			        << " unable to use CUDA";
+		}
 #endif
+	}
+	else {
+		VLOG(1) << "CUEW initialization failed: "
+		        << ((cuew_result == CUEW_ERROR_ATEXIT_FAILED)
+		            ? "Error setting up atexit() handler"
+		            : "Error opening the library");
 	}
 
 	return result;

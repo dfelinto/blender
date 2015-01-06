@@ -101,6 +101,8 @@
 
 #include "PIL_time.h"
 
+#include "RE_engine.h"
+
 #include "image_intern.h"
 
 /******************** view navigation utilities *********************/
@@ -1268,7 +1270,7 @@ void IMAGE_OT_open(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
 	/* properties */
-	WM_operator_properties_filesel(ot, FOLDERFILE | IMAGEFILE | MOVIEFILE, FILE_SPECIAL, FILE_OPENFILE,
+	WM_operator_properties_filesel(ot, FILE_TYPE_FOLDER | FILE_TYPE_IMAGE | FILE_TYPE_MOVIE, FILE_SPECIAL, FILE_OPENFILE,
 	                               WM_FILESEL_FILEPATH | WM_FILESEL_DIRECTORY | WM_FILESEL_FILES | WM_FILESEL_RELPATH, FILE_DEFAULTDISPLAY);
 }
 
@@ -1387,7 +1389,7 @@ void IMAGE_OT_replace(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
 	/* properties */
-	WM_operator_properties_filesel(ot, FOLDERFILE | IMAGEFILE | MOVIEFILE, FILE_SPECIAL, FILE_OPENFILE,
+	WM_operator_properties_filesel(ot, FILE_TYPE_FOLDER | FILE_TYPE_IMAGE | FILE_TYPE_MOVIE, FILE_SPECIAL, FILE_OPENFILE,
 	                               WM_FILESEL_FILEPATH | WM_FILESEL_RELPATH, FILE_DEFAULTDISPLAY);
 }
 
@@ -2026,7 +2028,7 @@ void IMAGE_OT_save_as(wmOperatorType *ot)
 	RNA_def_boolean(ot->srna, "save_as_render", 0, "Save As Render", "Apply render part of display transform when saving byte image");
 	RNA_def_boolean(ot->srna, "copy", 0, "Copy", "Create a new image file without modifying the current image in blender");
 
-	WM_operator_properties_filesel(ot, FOLDERFILE | IMAGEFILE | MOVIEFILE, FILE_SPECIAL, FILE_SAVE,
+	WM_operator_properties_filesel(ot, FILE_TYPE_FOLDER | FILE_TYPE_IMAGE | FILE_TYPE_MOVIE, FILE_SPECIAL, FILE_SAVE,
 	                               WM_FILESEL_FILEPATH | WM_FILESEL_RELPATH, FILE_DEFAULTDISPLAY);
 }
 
@@ -2922,8 +2924,9 @@ static int image_sample_invoke(bContext *C, wmOperator *op, const wmEvent *event
 	ImageSampleInfo *info;
 
 	if (ar->regiontype == RGN_TYPE_WINDOW) {
-		if (event->mval[1] <= 16)
+		if (event->mval[1] <= 16 && ED_space_image_show_cache(sima)) {
 			return OPERATOR_PASS_THROUGH;
+		}
 	}
 
 	if (!ED_space_image_has_buffer(sima))
@@ -3357,8 +3360,10 @@ static int change_frame_invoke(bContext *C, wmOperator *op, const wmEvent *event
 	ARegion *ar = CTX_wm_region(C);
 
 	if (ar->regiontype == RGN_TYPE_WINDOW) {
-		if (event->mval[1] > 16)
+		SpaceImage *sima = CTX_wm_space_image(C);
+		if (event->mval[1] > 16 || !ED_space_image_show_cache(sima)) {
 			return OPERATOR_PASS_THROUGH;
+		}
 	}
 
 	RNA_int_set(op->ptr, "frame", frame_from_event(C, event));
@@ -3450,7 +3455,20 @@ static int render_border_exec(bContext *C, wmOperator *op)
 {
 	ARegion *ar = CTX_wm_region(C);
 	Scene *scene = CTX_data_scene(C);
+	Render *re = RE_GetRender(scene->id.name);
+	RenderData *rd;
 	rctf border;
+
+	if (re == NULL) {
+		/* Shouldn't happen, but better be safe close to the release. */
+		return OPERATOR_CANCELLED;
+	}
+
+	rd = RE_engine_get_render_data(re);
+	if ((rd->mode & (R_BORDER | R_CROP)) == (R_BORDER | R_CROP)) {
+		BKE_report(op->reports, RPT_INFO, "Can not set border from a cropped render");
+		return OPERATOR_CANCELLED;
+	}
 
 	/* get rectangle from operator */
 	WM_operator_properties_border_to_rctf(op, &border);

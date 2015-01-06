@@ -37,7 +37,6 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_blenlib.h"
 #include "BLI_math.h"
 #include "BLI_kdopbvh.h"
 #include "BLI_utildefines.h"
@@ -328,7 +327,7 @@ bool do_colorband(const ColorBand *coba, float in, float out[4])
 	int ipotype;
 	int a;
 	
-	if (coba == NULL || coba->tot == 0) return 0;
+	if (coba == NULL || coba->tot == 0) return false;
 	
 	cbd1 = coba->data;
 
@@ -464,7 +463,7 @@ bool do_colorband(const ColorBand *coba, float in, float out[4])
 			}
 		}
 	}
-	return 1;   /* OK */
+	return true;   /* OK */
 }
 
 void colorband_table_RGBA(ColorBand *coba, float **array, int *size)
@@ -756,6 +755,8 @@ void default_mtex(MTex *mtex)
 	mtex->fieldfac = 1.0f;
 	mtex->normapspace = MTEX_NSPACE_TANGENT;
 	mtex->brush_map_mode = MTEX_MAP_MODE_TILED;
+	mtex->random_angle = 2.0f * M_PI;
+	mtex->brush_angle_mode = 0;
 }
 
 
@@ -1305,7 +1306,7 @@ bool has_current_material_texture(Material *ma)
 		node = nodeGetActiveID(ma->nodetree, ID_TE);
 
 		if (node)
-			return 1;
+			return true;
 	}
 
 	return (ma != NULL);
@@ -1599,17 +1600,17 @@ void BKE_free_oceantex(struct OceanTex *ot)
 bool BKE_texture_dependsOnTime(const struct Tex *texture)
 {
 	if (texture->ima && BKE_image_is_animated(texture->ima)) {
-		return 1;
+		return true;
 	}
 	else if (texture->adt) {
 		/* assume anything in adt means the texture is animated */
-		return 1;
+		return true;
 	}
 	else if (texture->type == TEX_NOISE) {
 		/* noise always varies with time */
-		return 1;
+		return true;
 	}
-	return 0;
+	return false;
 }
 
 /* ------------------------------------------------------------------------- */

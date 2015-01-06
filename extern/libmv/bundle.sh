@@ -75,7 +75,7 @@ for x in $src_dir $src_third_dir; do
     fi
   fi
 
-  if test `echo $x | grep -c windows ` -eq 0; then
+  if test `echo $x | grep -c "windows\|gflags" ` -eq 0; then
     if [ -z "$src" ]; then
       src=$t
     else
@@ -130,27 +130,10 @@ set(SRC
 	libmv-capi.h
 )
 
-if(WITH_LIBMV)
-	add_definitions(
-		-DWITH_LIBMV_GUARDED_ALLOC
-		-DGOOGLE_GLOG_DLL_DECL=
-		-DLIBMV_NO_FAST_DETECTOR=
-	)
-
-	TEST_SHARED_PTR_SUPPORT()
-	if(SHARED_PTR_FOUND)
-		if(SHARED_PTR_TR1_MEMORY_HEADER)
-			add_definitions(-DCERES_TR1_MEMORY_HEADER)
-		endif()
-		if(SHARED_PTR_TR1_NAMESPACE)
-			add_definitions(-DCERES_TR1_SHARED_PTR)
-		endif()
-	else()
-		message(FATAL_ERROR "Unable to find shared_ptr.")
-	endif()
-
+if(WITH_LIBMV OR WITH_GTESTS OR (WITH_CYCLES AND WITH_CYCLES_LOGGING))
 	list(APPEND INC
 		third_party/gflags
+		third_party/gflags/gflags
 		third_party/glog/src
 		third_party/ceres/include
 		third_party/ceres/config
@@ -162,6 +145,38 @@ if(WITH_LIBMV)
 		\${PNG_INCLUDE_DIRS}
 		\${ZLIB_INCLUDE_DIRS}
 	)
+
+	if(WIN32)
+		list(APPEND INC
+			third_party/glog/src/windows
+		)
+
+		if(NOT MINGW)
+			list(APPEND INC
+				third_party/msinttypes
+			)
+		endif()
+	endif()
+
+	add_definitions(
+		-DWITH_LIBMV_GUARDED_ALLOC
+		-DGOOGLE_GLOG_DLL_DECL=
+		-DLIBMV_NO_FAST_DETECTOR=
+	)
+endif()
+
+if(WITH_LIBMV)
+	TEST_SHARED_PTR_SUPPORT()
+	if(SHARED_PTR_FOUND)
+		if(SHARED_PTR_TR1_MEMORY_HEADER)
+			add_definitions(-DCERES_TR1_MEMORY_HEADER)
+		endif()
+		if(SHARED_PTR_TR1_NAMESPACE)
+			add_definitions(-DCERES_TR1_SHARED_PTR)
+		endif()
+	else()
+		message(FATAL_ERROR "Unable to find shared_ptr.")
+	endif()
 
 	list(APPEND SRC
 		intern/autotrack.cc
@@ -194,17 +209,6 @@ ${headers}
 ${third_headers}
 	)
 
-	if(WIN32)
-		list(APPEND INC
-			third_party/glog/src/windows
-		)
-
-		if(NOT MINGW)
-			list(APPEND INC
-				third_party/msinttypes
-			)
-		endif()
-	endif()
 
 	if(WITH_GTESTS)
 		blender_add_lib(libmv_test_dataset "./libmv/multiview/test_data_sets.cc" "${INC}" "${INC_SYS}")
@@ -213,7 +217,7 @@ ${tests}
 	endif()
 else()
 	list(APPEND SRC
-		libmv-capi_stub.cc
+		intern/stub.cc
 	)
 endif()
 
@@ -224,7 +228,7 @@ if(WITH_LIBMV)
 endif()
 
 # make GLog a separate target, so it can be used for gtest as well.
-if(WITH_LIBMV OR WITH_GTESTS OR WITH_CYCLES_LOGGING)
+if(WITH_LIBMV OR WITH_GTESTS OR (WITH_CYCLES AND WITH_CYCLES_LOGGING))
 	# We compile GLog together with GFlag so we don't worry about
 	# adding extra lib to linker.
 	set(GLOG_SRC
@@ -258,6 +262,9 @@ ${third_gflags_headers}
 			third_party/glog/src/windows/glog/log_severity.h
 			third_party/glog/src/windows/port.h
 			third_party/glog/src/windows/config.h
+
+			third_party/gflags/windows_port.cc
+			third_party/gflags/windows_port.h
 		)
 	else()
 		list(APPEND GLOG_SRC
@@ -267,15 +274,7 @@ ${third_glog_headers}
 		)
 	endif()
 
-	set(GLOG_INC
-		third_party/gflags
-		third_party/glog/src
-	)
-
-	set(GLOG_INC_SYS
-	)
-
-	blender_add_lib(extern_glog "\${GLOG_SRC}" "\${GLOG_INC}" "\${GLOG_INC_SYS}")
+	blender_add_lib(extern_glog "\${GLOG_SRC}" "\${INC}" "\${INC_SYS}")
 endif()
 EOF
 
@@ -294,6 +293,22 @@ Import('env')
 defs = []
 incs = '.'
 
+if env['WITH_BF_LIBMV'] or (env['WITH_BF_CYCLES'] and env['WITH_BF_CYCLES_LOGGING']):
+    defs.append('GOOGLE_GLOG_DLL_DECL=')
+    defs.append('WITH_LIBMV_GUARDED_ALLOC')
+    defs.append('LIBMV_NO_FAST_DETECTOR')
+
+    incs += ' ../Eigen3 third_party/gflags third_party/gflags/gflags third_party/glog/src third_party/ceres/include third_party/ceres/config ../../intern/guardedalloc'
+    incs += ' ' + env['BF_PNG_INC']
+    incs += ' ' + env['BF_ZLIB_INC']
+
+    if env['OURPLATFORM'] in ('win32-vc', 'win32-mingw', 'linuxcross', 'win64-vc', 'win64-mingw'):
+        incs += ' ./third_party/glog/src/windows ./third_party/glog/src/windows/glog'
+        if env['OURPLATFORM'] in ('win32-vc', 'win64-vc'):
+            incs += ' ./third_party/msinttypes'
+    else:
+        incs += ' ./third_party/glog/src'
+
 if env['WITH_BF_LIBMV']:
     if not env['WITH_SHARED_PTR_SUPPORT']:
         print("-- Unable to find shared_ptr which is required for compilation.")
@@ -304,34 +319,27 @@ if env['WITH_BF_LIBMV']:
     if env['SHARED_PTR_NAMESPACE'] == 'std::tr1':
         defs.append('CERES_TR1_SHARED_PTR')
 
-    defs.append('GOOGLE_GLOG_DLL_DECL=')
-    defs.append('WITH_LIBMV_GUARDED_ALLOC')
-    defs.append('LIBMV_NO_FAST_DETECTOR')
-
     src = env.Glob('intern/*.cc')
     src.remove('intern' + os.sep + 'stub.cc')
 $src
-
-    incs += ' ../Eigen3 third_party/gflags third_party/glog/src third_party/ceres/include third_party/ceres/config ../../intern/guardedalloc'
-    incs += ' ' + env['BF_PNG_INC']
-    incs += ' ' + env['BF_ZLIB_INC']
-
-    if env['OURPLATFORM'] in ('win32-vc', 'win32-mingw', 'linuxcross', 'win64-vc', 'win64-mingw'):
-        incs += ' ./third_party/glog/src/windows ./third_party/glog/src/windows/glog'
-        if env['OURPLATFORM'] in ('win32-vc', 'win64-vc'):
-            incs += ' ./third_party/msinttypes'
-${win_src}
-        src += ['./third_party/glog/src/logging.cc', './third_party/glog/src/raw_logging.cc', './third_party/glog/src/utilities.cc', './third_party/glog/src/vlog_is_on.cc']
-        src += ['./third_party/glog/src/windows/port.cc']
-    else:
-        src += env.Glob("third_party/glog/src/*.cc")
-        incs += ' ./third_party/glog/src'
 else:
     src = env.Glob("intern/stub.cc")
 
 src = [src for src in src if src.find('_test.cc') == -1]
 
-env.BlenderLib ( libname = 'extern_libmv', sources=src, includes=Split(incs), defines=defs, libtype=['extern', 'player'], priority=[20,137] )
+env.BlenderLib(libname = 'extern_libmv', sources=src, includes=Split(incs), defines=defs, libtype=['extern', 'player'], priority=[20,137])
+
+if env['WITH_BF_LIBMV'] or (env['WITH_BF_CYCLES'] and env['WITH_BF_CYCLES_LOGGING']):
+    glog_src = []
+    glog_src += env.Glob("third_party/gflags/*.cc")
+    if env['OURPLATFORM'] in ('win32-vc', 'win32-mingw', 'linuxcross', 'win64-vc', 'win64-mingw'):
+        glog_src += ['./third_party/glog/src/logging.cc', './third_party/glog/src/raw_logging.cc', './third_party/glog/src/utilities.cc', './third_party/glog/src/vlog_is_on.cc']
+        glog_src += ['./third_party/glog/src/windows/port.cc']
+    else:
+        glog_src.remove('third_party/gflags/windows_port.cc')
+        glog_src += env.Glob("third_party/glog/src/*.cc")
+
+    env.BlenderLib(libname = 'extern_glog', sources=glog_src, includes=Split(incs), defines=defs, libtype=['extern', 'player'], priority=[20,137])
 
 if env['WITH_BF_LIBMV']:
     SConscript(['third_party/SConscript'])

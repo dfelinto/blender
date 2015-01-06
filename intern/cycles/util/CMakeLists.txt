@@ -5,7 +5,7 @@ set(INC
 )
 
 set(INC_SYS
-	${GLEW_INCLUDE_PATH}
+	${GLEW_INCLUDE_DIR}
 )
 
 set(SRC
@@ -21,6 +21,10 @@ set(SRC
 	util_transform.cpp
 )
 
+if(NOT CYCLES_STANDALONE_REPOSITORY)
+	add_definitions(-DWITH_GLEW_MX)
+endif()
+
 if(WITH_CYCLES_STANDALONE AND WITH_CYCLES_STANDALONE_GUI)
 	list(APPEND SRC
 		util_view.cpp
@@ -30,6 +34,7 @@ endif()
 set(SRC_HEADERS
 	util_algorithm.h
 	util_args.h
+	util_atomic.h
 	util_boundbox.h
 	util_cache.h
 	util_debug.h

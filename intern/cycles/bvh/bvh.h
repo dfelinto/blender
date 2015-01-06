@@ -36,7 +36,7 @@ class Object;
 class Progress;
 
 #define BVH_NODE_SIZE	4
-#define BVH_QNODE_SIZE	8
+#define BVH_QNODE_SIZE	7
 #define BVH_ALIGN		4096
 #define TRI_NODE_SIZE	3
 
@@ -106,7 +106,6 @@ protected:
 	/* triangles and strands*/
 	void pack_primitives();
 	void pack_triangle(int idx, float4 woop[3]);
-	void pack_curve_segment(int idx, float4 woop[3]);
 
 	/* merge instance BVH's */
 	void pack_instances(size_t nodes_size);
@@ -154,6 +153,7 @@ protected:
 
 	/* refit */
 	void refit_nodes();
+	void refit_node(int idx, bool leaf, BoundBox& bbox, uint& visibility);
 };
 
 CCL_NAMESPACE_END

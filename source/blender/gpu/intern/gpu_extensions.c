@@ -49,7 +49,6 @@
 #include "GPU_extensions.h"
 #include "GPU_simple_shader.h"
 
-#include "intern/gpu_codegen.h"
 #include "intern/gpu_extensions_private.h"
 
 #include <stdlib.h>
@@ -269,7 +268,7 @@ int GPU_print_error(const char *str)
 {
 	GLenum errCode;
 
-	if (G.debug & G_DEBUG) {
+	if ((G.debug & G_DEBUG)) {
 		if ((errCode = glGetError()) != GL_NO_ERROR) {
 			fprintf(stderr, "%s opengl error: %s\n", str, gluErrorString(errCode));
 			return 1;
@@ -463,15 +462,8 @@ static GPUTexture *GPU_texture_create_nD(int w, int h, int n, float *fpixels, in
 	}
 
 	if (tex->target != GL_TEXTURE_1D) {
-		/* CLAMP_TO_BORDER is an OpenGL 1.3 core feature */
-		GLenum wrapmode = (depth || tex->h == 1)? GL_CLAMP_TO_EDGE: GL_CLAMP_TO_BORDER;
-		glTexParameteri(tex->target, GL_TEXTURE_WRAP_S, wrapmode);
-		glTexParameteri(tex->target, GL_TEXTURE_WRAP_T, wrapmode);
-
-#if 0
-		float borderColor[] = { 1.0f, 1.0f, 1.0f, 1.0f };
-		glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor); 
-#endif
+		glTexParameteri(tex->target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(tex->target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	}
 	else
 		glTexParameteri(tex->target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -749,8 +741,8 @@ void GPU_texture_bind(GPUTexture *tex, int number)
 		return;
 	}
 
-	if (tex->fb) {
-		if (tex->fb->object == GG.currentfb) {
+	if ((G.debug & G_DEBUG)) {
+		if (tex->fb && tex->fb->object == GG.currentfb) {
 			fprintf(stderr, "Feedback loop warning!: Attempting to bind texture attached to current framebuffer!\n");
 		}
 	}
@@ -885,8 +877,10 @@ int GPU_framebuffer_texture_attach(GPUFrameBuffer *fb, GPUTexture *tex, int slot
 		return 0;
 	}
 
-	if (tex->number != -1) {
-		fprintf(stderr, "Feedback loop warning!: Attempting to attach texture to framebuffer while still bound to texture unit for drawing!");
+	if ((G.debug & G_DEBUG)) {
+		if (tex->number != -1) {
+			fprintf(stderr, "Feedback loop warning!: Attempting to attach texture to framebuffer while still bound to texture unit for drawing!");
+		}
 	}
 
 	if (tex->depth)
@@ -968,10 +962,16 @@ void GPU_texture_bind_as_framebuffer(GPUTexture *tex)
 	/* bind framebuffer */
 	glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, tex->fb->object);
 
-	/* last bound prevails here, better allow explicit control here too */
-	glDrawBuffer(GL_COLOR_ATTACHMENT0_EXT + tex->fb_attachment);
-	glReadBuffer(GL_COLOR_ATTACHMENT0_EXT + tex->fb_attachment);
-
+	if (tex->depth) {
+		glDrawBuffer(GL_NONE);
+		glReadBuffer(GL_NONE);
+	}
+	else {
+		/* last bound prevails here, better allow explicit control here too */
+		glDrawBuffer(GL_COLOR_ATTACHMENT0_EXT + tex->fb_attachment);
+		glReadBuffer(GL_COLOR_ATTACHMENT0_EXT + tex->fb_attachment);
+	}
+	
 	/* push matrices and set default viewport and matrix */
 	glViewport(0, 0, tex->w, tex->h);
 	GG.currentfb = tex->fb->object;
@@ -1097,6 +1097,10 @@ void GPU_framebuffer_blur(GPUFrameBuffer *fb, GPUTexture *tex, GPUFrameBuffer *b
 	/* We do the bind ourselves rather than using GPU_framebuffer_texture_bind() to avoid
 	 * pushing unnecessary matrices onto the OpenGL stack. */
 	glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, blurfb->object);
+	glDrawBuffer(GL_COLOR_ATTACHMENT0);
+	
+	/* avoid warnings from texture binding */
+	GG.currentfb = blurfb->object;
 
 	GPU_shader_bind(blur_shader);
 	GPU_shader_uniform_vector(blur_shader, scale_uniform, 2, 1, (float *)scaleh);
@@ -1126,6 +1130,10 @@ void GPU_framebuffer_blur(GPUFrameBuffer *fb, GPUTexture *tex, GPUFrameBuffer *b
 	/* Blurring vertically */
 
 	glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, fb->object);
+	glDrawBuffer(GL_COLOR_ATTACHMENT0);
+	
+	GG.currentfb = fb->object;
+	
 	glViewport(0, 0, GPU_texture_opengl_width(tex), GPU_texture_opengl_height(tex));
 	GPU_shader_uniform_vector(blur_shader, scale_uniform, 2, 1, (float *)scalev);
 	GPU_shader_uniform_texture(blur_shader, texture_source_uniform, blurtex);
@@ -1253,8 +1261,8 @@ static void shader_print_errors(const char *task, char *log, const char **code, 
 	for (i = 0; i < totcode; i++) {
 		const char *c, *pos, *end = code[i] + strlen(code[i]);
 		int line = 1;
-				
-		if (G.debug & G_DEBUG) {
+
+		if ((G.debug & G_DEBUG)) {
 			fprintf(stderr, "===== shader string %d ====\n", i + 1);
 
 			c = code[i];

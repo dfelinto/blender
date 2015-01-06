@@ -27,8 +27,6 @@
  *  \ingroup edinterface
  */
 
-
-
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
@@ -54,7 +52,6 @@
 #include "WM_types.h"
 #include "wm_draw.h"
 #include "wm_subwindow.h"
-#include "wm_window.h"
 
 #include "RNA_access.h"
 
@@ -365,7 +362,8 @@ ARegion *ui_tooltip_create(bContext *C, ARegion *butregion, uiBut *but)
 
 		/* special case enum rna buttons */
 		if ((but->type & UI_BTYPE_ROW) && but->rnaprop && RNA_property_flag(but->rnaprop) & PROP_ENUM_FLAG) {
-			BLI_strncpy(data->lines[data->totline], IFACE_("(Shift-click to select multiple)"), sizeof(data->lines[0]));
+			BLI_strncpy(data->lines[data->totline], IFACE_("(Shift-Click/Drag to select multiple)"),
+			            sizeof(data->lines[0]));
 
 			data->format[data->totline].color_id = UI_TIP_LC_NORMAL;
 			data->totline++;

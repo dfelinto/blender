@@ -49,7 +49,6 @@ struct Heap {
 	unsigned int bufsize;
 	MemArena *arena;
 	HeapNode *freenodes;
-	HeapNode *nodes;
 	HeapNode **tree;
 };
 
@@ -139,9 +138,9 @@ Heap *BLI_heap_new(void)
 
 void BLI_heap_free(Heap *heap, HeapFreeFP ptrfreefp)
 {
-	unsigned int i;
-
 	if (ptrfreefp) {
+		unsigned int i;
+
 		for (i = 0; i < heap->size; i++) {
 			ptrfreefp(heap->tree[i]->ptr);
 		}
@@ -150,6 +149,21 @@ void BLI_heap_free(Heap *heap, HeapFreeFP ptrfreefp)
 	MEM_freeN(heap->tree);
 	BLI_memarena_free(heap->arena);
 	MEM_freeN(heap);
+}
+
+void BLI_heap_clear(Heap *heap, HeapFreeFP ptrfreefp)
+{
+	if (ptrfreefp) {
+		unsigned int i;
+
+		for (i = 0; i < heap->size; i++) {
+			ptrfreefp(heap->tree[i]->ptr);
+		}
+	}
+
+	heap->size = 0;
+	BLI_memarena_clear(heap->arena);
+	heap->freenodes = NULL;
 }
 
 HeapNode *BLI_heap_insert(Heap *heap, float value, void *ptr)
@@ -163,7 +177,7 @@ HeapNode *BLI_heap_insert(Heap *heap, float value, void *ptr)
 
 	if (heap->freenodes) {
 		node = heap->freenodes;
-		heap->freenodes = (HeapNode *)(((HeapNode *)heap->freenodes)->ptr);
+		heap->freenodes = heap->freenodes->ptr;
 	}
 	else {
 		node = (HeapNode *)BLI_memarena_alloc(heap->arena, sizeof(*node));
@@ -206,13 +220,8 @@ void *BLI_heap_popmin(Heap *heap)
 	heap->tree[0]->ptr = heap->freenodes;
 	heap->freenodes = heap->tree[0];
 
-	if (UNLIKELY(heap->size == 1)) {
-		heap->size--;
-	}
-	else {
-		heap_swap(heap, 0, heap->size - 1);
-		heap->size--;
-
+	if (--heap->size) {
+		heap_swap(heap, 0, heap->size);
 		heap_down(heap, 0);
 	}
 

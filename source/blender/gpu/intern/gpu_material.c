@@ -1736,7 +1736,7 @@ void GPU_materials_free(void)
 		GPU_material_free(&ma->gpumaterial);
 
 	for (wo=G.main->world.first; wo; wo=wo->id.next)
-		GPU_material_free(&ma->gpumaterial);
+		GPU_material_free(&wo->gpumaterial);
 	
 	GPU_material_free(&defmaterial.gpumaterial);
 
@@ -1953,10 +1953,15 @@ GPULamp *GPU_lamp_from_blender(Scene *scene, Object *ob, Object *par)
 				return lamp;
 			}
 			
+			/* we need to properly bind to test for completeness */
+			GPU_texture_bind_as_framebuffer(lamp->blurtex);
+			
 			if (!GPU_framebuffer_check_valid(lamp->blurfb, NULL)) {
 				gpu_lamp_shadow_free(lamp);
-				return lamp;				
-			}			
+				return lamp;
+			}
+			
+			GPU_framebuffer_texture_unbind(lamp->blurfb, lamp->blurtex);
 		}
 		else {
 			lamp->tex = GPU_texture_create_depth(lamp->size, lamp->size, NULL);

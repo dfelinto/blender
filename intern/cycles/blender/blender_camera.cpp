@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #include "camera.h"
@@ -19,6 +19,8 @@
 
 #include "blender_sync.h"
 #include "blender_util.h"
+
+#include "util_logging.h"
 
 CCL_NAMESPACE_BEGIN
 
@@ -405,6 +407,7 @@ void BlenderSync::sync_camera_motion(BL::Object b_ob, float motion_time)
 	tfm = blender_camera_matrix(tfm, cam->type);
 
 	if(tfm != cam->matrix) {
+		VLOG(1) << "Camera " << b_ob.name() << " motion detected.";
 		if(motion_time == -1.0f) {
 			cam->motion.pre = tfm;
 			cam->use_motion = true;

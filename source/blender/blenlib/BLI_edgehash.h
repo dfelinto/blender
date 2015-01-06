@@ -26,7 +26,6 @@
 /** \file BLI_edgehash.h
  *  \ingroup bli
  *  \author Daniel Dunbar
- *  \brief A general unordered 2-int pair hash table ADT.
  */
 
 #include "BLI_compiler_attrs.h"
@@ -55,6 +54,9 @@ bool            BLI_edgehash_reinsert(EdgeHash *eh, unsigned int v0, unsigned in
 void           *BLI_edgehash_lookup(EdgeHash *eh, unsigned int v0, unsigned int v1) ATTR_WARN_UNUSED_RESULT;
 void           *BLI_edgehash_lookup_default(EdgeHash *eh, unsigned int v0, unsigned int v1, void *val_default) ATTR_WARN_UNUSED_RESULT;
 void          **BLI_edgehash_lookup_p(EdgeHash *eh, unsigned int v0, unsigned int v1) ATTR_WARN_UNUSED_RESULT;
+bool            BLI_edgehash_remove(EdgeHash *eh, unsigned int v0, unsigned int v1, EdgeHashFreeFP valfreefp);
+
+void           *BLI_edgehash_popkey(EdgeHash *eh, unsigned int v0, unsigned int v1) ATTR_WARN_UNUSED_RESULT;
 bool            BLI_edgehash_haskey(EdgeHash *eh, unsigned int v0, unsigned int v1) ATTR_WARN_UNUSED_RESULT;
 int             BLI_edgehash_size(EdgeHash *eh) ATTR_WARN_UNUSED_RESULT;
 void            BLI_edgehash_clear_ex(EdgeHash *eh, EdgeHashFreeFP valfreefp,

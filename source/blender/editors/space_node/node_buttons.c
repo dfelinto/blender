@@ -57,6 +57,7 @@
 
 /* ******************* node space & buttons ************** */
 
+#if 0
 /* poll for active nodetree */
 static int active_nodetree_poll(const bContext *C, PanelType *UNUSED(pt))
 {
@@ -64,6 +65,7 @@ static int active_nodetree_poll(const bContext *C, PanelType *UNUSED(pt))
 	
 	return (snode && snode->nodetree);
 }
+#endif
 
 static int node_sockets_poll(const bContext *C, PanelType *UNUSED(pt))
 {
@@ -196,15 +198,6 @@ void node_buttons_register(ARegionType *art)
 	strcpy(pt->translation_context, BLF_I18NCONTEXT_DEFAULT_BPYRNA);
 	pt->draw = node_tree_interface_panel;
 	pt->poll = node_tree_interface_poll;
-	BLI_addtail(&art->paneltypes, pt);
-
-	pt = MEM_callocN(sizeof(PanelType), "spacetype node panel gpencil");
-	strcpy(pt->idname, "NODE_PT_gpencil");
-	strcpy(pt->label, N_("Grease Pencil"));
-	strcpy(pt->translation_context, BLF_I18NCONTEXT_DEFAULT_BPYRNA);
-	pt->draw_header = ED_gpencil_panel_standard_header;
-	pt->draw = ED_gpencil_panel_standard;
-	pt->poll = active_nodetree_poll;
 	BLI_addtail(&art->paneltypes, pt);
 }
 

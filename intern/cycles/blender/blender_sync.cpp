@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #include "background.h"
@@ -353,7 +353,7 @@ void BlenderSync::sync_render_layers(BL::SpaceView3D b_v3d, const char *layer)
 
 /* Scene Parameters */
 
-SceneParams BlenderSync::get_scene_params(BL::Scene b_scene, bool background)
+SceneParams BlenderSync::get_scene_params(BL::Scene b_scene, bool background, bool is_cpu)
 {
 	BL::RenderSettings r = b_scene.render();
 	SceneParams params;
@@ -377,6 +377,16 @@ SceneParams BlenderSync::get_scene_params(BL::Scene b_scene, bool background)
 		params.persistent_data = r.use_persistent_data();
 	else
 		params.persistent_data = false;
+
+#if !(defined(__GNUC__) && (defined(i386) || defined(_M_IX86)))
+	if(is_cpu) {
+		params.use_qbvh = system_cpu_support_sse2();
+	}
+	else
+#endif
+	{
+		params.use_qbvh = false;
+	}
 
 	return params;
 }

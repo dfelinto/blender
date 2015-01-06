@@ -299,7 +299,7 @@ void CLIP_OT_open(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
 	/* properties */
-	WM_operator_properties_filesel(ot, FOLDERFILE | IMAGEFILE | MOVIEFILE, FILE_SPECIAL, FILE_OPENFILE,
+	WM_operator_properties_filesel(ot, FILE_TYPE_FOLDER | FILE_TYPE_IMAGE | FILE_TYPE_MOVIE, FILE_SPECIAL, FILE_OPENFILE,
 	                               WM_FILESEL_RELPATH | WM_FILESEL_FILES | WM_FILESEL_DIRECTORY, FILE_DEFAULTDISPLAY);
 }
 
@@ -1307,7 +1307,14 @@ static void proxy_endjob(void *pjv)
 	if (pj->index_context)
 		IMB_anim_index_rebuild_finish(pj->index_context, pj->stop);
 
-	BKE_movieclip_reload(pj->clip);
+	if (pj->clip->source == MCLIP_SRC_MOVIE) {
+		/* Timecode might have changed, so do a full reload to deal with this. */
+		BKE_movieclip_reload(pj->clip);
+	}
+	else {
+		/* For image sequences we'll preserve original cache. */
+		BKE_movieclip_clear_proxy_cache(pj->clip);
+	}
 
 	WM_main_add_notifier(NC_MOVIECLIP | ND_DISPLAY, pj->clip);
 }
