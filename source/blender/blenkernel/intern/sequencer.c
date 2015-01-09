@@ -2893,7 +2893,7 @@ static ImBuf *do_render_strip_uncached(const SeqRenderData *context, Sequence *s
 			else if (is_multiview) {
 				size_t totfiles = seq_num_files(context->scene, seq->views_format);
 				size_t totviews;
-				struct ImBuf **ibufs;
+				struct ImBuf **ibufs_arr;
 				char prefix[FILE_MAX] = {'\0'};
 				char *ext = NULL;
 				int i;
@@ -2906,55 +2906,55 @@ static ImBuf *do_render_strip_uncached(const SeqRenderData *context, Sequence *s
 				}
 
 				totviews = BKE_scene_num_views_get(&context->scene->r);
-				ibufs = MEM_callocN(sizeof(ImBuf *) * totviews, "Sequence Image Views Imbufs");
+				ibufs_arr = MEM_callocN(sizeof(ImBuf *) * totviews, "Sequence Image Views Imbufs");
 
 				for (i = 0; i < totfiles; i++) {
 
 					if (prefix[0] == '\0') {
-						ibufs[i] = IMB_loadiffname(name, flag, seq->strip->colorspace_settings.name);
+						ibufs_arr[i] = IMB_loadiffname(name, flag, seq->strip->colorspace_settings.name);
 					}
 					else {
 						char str[FILE_MAX] = {'\0'};
 						seq_multiview_name(context->scene, i, prefix, ext, str);
-						ibufs[i] = IMB_loadiffname(str, flag, seq->strip->colorspace_settings.name);
+						ibufs_arr[i] = IMB_loadiffname(str, flag, seq->strip->colorspace_settings.name);
 					}
 
-					if (ibufs[i]) {
+					if (ibufs_arr[i]) {
 						/* we don't need both (speed reasons)! */
-						if (ibufs[i]->rect_float && ibufs[i]->rect)
-							imb_freerectImBuf(ibufs[i]);
+						if (ibufs_arr[i]->rect_float && ibufs_arr[i]->rect)
+							imb_freerectImBuf(ibufs_arr[i]);
 					}
 				}
 
-				if (seq->views_format == R_IMF_VIEWS_STEREO_3D && ibufs[0])
-					IMB_ImBufFromStereo(seq->stereo3d_format, &ibufs[0], &ibufs[1]);
+				if (seq->views_format == R_IMF_VIEWS_STEREO_3D && ibufs_arr[0])
+					IMB_ImBufFromStereo(seq->stereo3d_format, &ibufs_arr[0], &ibufs_arr[1]);
 
 				for (i = 0; i < totviews; i++) {
-					if (ibufs[i]) {
+					if (ibufs_arr[i]) {
 						SeqRenderData localcontext = *context;
 						localcontext.view_id = i;
 
 						/* all sequencer color is done in SRGB space, linear gives odd crossfades */
-						BKE_sequencer_imbuf_to_sequencer_space(context->scene, ibufs[i], false);
-						copy_to_ibuf_still(&localcontext, seq, nr, ibufs[i]);
+						BKE_sequencer_imbuf_to_sequencer_space(context->scene, ibufs_arr[i], false);
+						copy_to_ibuf_still(&localcontext, seq, nr, ibufs_arr[i]);
 					}
 				}
 
 				/* return the original requested ImBuf */
-				ibuf = ibufs[context->view_id];
+				ibuf = ibufs_arr[context->view_id];
 				if (ibuf) {
-					s_elem->orig_width  = ibufs[0]->x;
-					s_elem->orig_height = ibufs[0]->y;
+					s_elem->orig_width  = ibufs_arr[0]->x;
+					s_elem->orig_height = ibufs_arr[0]->y;
 				}
 
 				/* "remove" the others (decrease their refcount) */
 				for (i = 0; i < totviews; i++) {
-					if (ibufs[i] != ibuf) {
-						IMB_freeImBuf(ibufs[i]);
+					if (ibufs_arr[i] != ibuf) {
+						IMB_freeImBuf(ibufs_arr[i]);
 					}
 				}
 
-				MEM_freeN(ibufs);
+				MEM_freeN(ibufs_arr);
 			}
 			else {
 monoview_image:
