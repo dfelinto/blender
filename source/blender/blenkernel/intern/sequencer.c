@@ -1502,7 +1502,7 @@ monoview:
 	}
 }
 
-static bool seq_proxy_get_fname(Sequence *seq, int cfra, int render_size, char *name)
+static bool seq_proxy_get_fname(Sequence *seq, int cfra, int render_size, char *name, const size_t view_id)
 {
 	int frameno;
 	char dir[PROXY_MAXFILE];
@@ -1533,6 +1533,7 @@ static bool seq_proxy_get_fname(Sequence *seq, int cfra, int render_size, char *
 		BLI_join_dirfile(name, PROXY_MAXFILE,
 		                 dir, seq->strip->proxy->file);
 		BLI_path_abs(name, G.main->name);
+		BLI_snprintf(name, PROXY_MAXFILE, "%s_%zu", name, view_id);
 
 		return true;
 	}
@@ -1540,13 +1541,13 @@ static bool seq_proxy_get_fname(Sequence *seq, int cfra, int render_size, char *
 	/* generate a separate proxy directory for each preview size */
 
 	if (seq->type == SEQ_TYPE_IMAGE) {
-		BLI_snprintf(name, PROXY_MAXFILE, "%s/images/%d/%s_proxy", dir, render_size,
-		             BKE_sequencer_give_stripelem(seq, cfra)->name);
+		BLI_snprintf(name, PROXY_MAXFILE, "%s/images/%d/%s_proxy_%zu", dir, render_size,
+		             BKE_sequencer_give_stripelem(seq, cfra)->name, view_id);
 		frameno = 1;
 	}
 	else {
 		frameno = (int)give_stripelem_index(seq, cfra) + seq->anim_startofs;
-		BLI_snprintf(name, PROXY_MAXFILE, "%s/proxy_misc/%d/####", dir, render_size);
+		BLI_snprintf(name, PROXY_MAXFILE, "%s/proxy_misc/%d/####_%zu", dir, render_size, view_id);
 	}
 
 	BLI_path_abs(name, G.main->name);
@@ -1584,7 +1585,7 @@ static ImBuf *seq_proxy_fetch(const SeqRenderData *context, Sequence *seq, int c
 		StripAnim *sanim;
 		int frameno = (int)give_stripelem_index(seq, cfra) + seq->anim_startofs;
 		if (seq->strip->proxy->anim == NULL) {
-			if (seq_proxy_get_fname(seq, cfra, render_size, name) == 0) {
+			if (seq_proxy_get_fname(seq, cfra, render_size, name, context->view_id) == 0) {
 				return NULL;
 			}
 
@@ -1603,7 +1604,7 @@ static ImBuf *seq_proxy_fetch(const SeqRenderData *context, Sequence *seq, int c
 		return IMB_anim_absolute(seq->strip->proxy->anim, frameno, IMB_TC_NONE, IMB_PROXY_NONE);
 	}
  
-	if (seq_proxy_get_fname(seq, cfra, render_size, name) == 0) {
+	if (seq_proxy_get_fname(seq, cfra, render_size, name, context->view_id) == 0) {
 		return NULL;
 	}
 
@@ -1628,7 +1629,7 @@ static void seq_proxy_build_frame(const SeqRenderData *context, Sequence *seq, i
 	int ok;
 	ImBuf *ibuf_tmp, *ibuf;
 
-	if (!seq_proxy_get_fname(seq, cfra, proxy_render_size, name)) {
+	if (!seq_proxy_get_fname(seq, cfra, proxy_render_size, name, context->view_id)) {
 		return;
 	}
 
@@ -1714,6 +1715,8 @@ void BKE_sequencer_proxy_rebuild(SeqIndexBuildContext *context, short *stop, sho
 	Scene *scene = context->scene;
 	Main *bmain = context->bmain;
 	int cfra;
+	const size_t num_views = BKE_scene_num_views_get(&scene->r);
+	size_t view_id;
 
 	if (seq->type == SEQ_TYPE_MOVIE) {
 		if (context->index_context) {
@@ -1743,22 +1746,30 @@ void BKE_sequencer_proxy_rebuild(SeqIndexBuildContext *context, short *stop, sho
 	render_context.skip_cache = true;
 	render_context.is_proxy_render = true;
 
-	for (cfra = seq->startdisp + seq->startstill;  cfra < seq->enddisp - seq->endstill; cfra++) {
-		if (context->size_flags & IMB_PROXY_25) {
-			seq_proxy_build_frame(&render_context, seq, cfra, 25);
-		}
-		if (context->size_flags & IMB_PROXY_50) {
-			seq_proxy_build_frame(&render_context, seq, cfra, 50);
-		}
-		if (context->size_flags & IMB_PROXY_75) {
-			seq_proxy_build_frame(&render_context, seq, cfra, 75);
-		}
-		if (context->size_flags & IMB_PROXY_100) {
-			seq_proxy_build_frame(&render_context, seq, cfra, 100);
-		}
+	for (view_id = 0; view_id < num_views; view_id++) {
+		render_context.view_id = view_id;
 
-		*progress = (float) (cfra - seq->startdisp - seq->startstill) / (seq->enddisp - seq->endstill - seq->startdisp - seq->startstill);
-		*do_update = true;
+		for (cfra = seq->startdisp + seq->startstill;  cfra < seq->enddisp - seq->endstill; cfra++) {
+			if (context->size_flags & IMB_PROXY_25) {
+				seq_proxy_build_frame(&render_context, seq, cfra, 25);
+			}
+			if (context->size_flags & IMB_PROXY_50) {
+				seq_proxy_build_frame(&render_context, seq, cfra, 50);
+			}
+			if (context->size_flags & IMB_PROXY_75) {
+				seq_proxy_build_frame(&render_context, seq, cfra, 75);
+			}
+			if (context->size_flags & IMB_PROXY_100) {
+				seq_proxy_build_frame(&render_context, seq, cfra, 100);
+			}
+
+			*progress = (float) (cfra - seq->startdisp - seq->startstill) / (seq->enddisp - seq->endstill - seq->startdisp - seq->startstill);
+			*progress = (*progress + (float) view_id) / num_views;
+			*do_update = true;
+
+			if (*stop || G.is_break)
+				break;
+		}
 
 		if (*stop || G.is_break)
 			break;
