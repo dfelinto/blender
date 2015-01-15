@@ -3831,9 +3831,9 @@ static void createTransGraphEditData(bContext *C, TransInfo *t)
 		/* only include BezTriples whose 'keyframe' occurs on the same side of the current frame as mouse */
 		for (i = 0, bezt = fcu->bezt; i < fcu->totvert; i++, bezt++) {
 			if (FrameOnMouseSide(t->frame_side, bezt->vec[1][0], cfra)) {
-				const bool sel2 = bezt->f2 & SELECT;
-				const bool sel1 = use_handle ? bezt->f1 & SELECT : sel2;
-				const bool sel3 = use_handle ? bezt->f3 & SELECT : sel2;
+				const bool sel2 = (bezt->f2 & SELECT) != 0;
+				const bool sel1 = use_handle ? (bezt->f1 & SELECT) != 0 : sel2;
+				const bool sel3 = use_handle ? (bezt->f3 & SELECT) != 0 : sel2;
 
 				if (!is_translation_mode || !(sel2)) {
 					if (sel1) {
@@ -3917,9 +3917,9 @@ static void createTransGraphEditData(bContext *C, TransInfo *t)
 		/* only include BezTriples whose 'keyframe' occurs on the same side of the current frame as mouse (if applicable) */
 		for (i = 0, bezt = fcu->bezt; i < fcu->totvert; i++, bezt++) {
 			if (FrameOnMouseSide(t->frame_side, bezt->vec[1][0], cfra)) {
-				const bool sel2 = bezt->f2 & SELECT;
-				const bool sel1 = use_handle ? bezt->f1 & SELECT : sel2;
-				const bool sel3 = use_handle ? bezt->f3 & SELECT : sel2;
+				const bool sel2 = (bezt->f2 & SELECT) != 0;
+				const bool sel1 = use_handle ? (bezt->f1 & SELECT) != 0 : sel2;
+				const bool sel3 = use_handle ? (bezt->f3 & SELECT) != 0 : sel2;
 
 				TransDataCurveHandleFlags *hdata = NULL;
 				/* short h1=1, h2=1; */ /* UNUSED */
@@ -4751,7 +4751,7 @@ static void createTransSeqData(bContext *C, TransInfo *t)
 	TransData2D *td2d = NULL;
 	TransDataSeq *tdsq = NULL;
 	TransSeq *ts = NULL;
-	float xmouse, ymouse;
+	int xmouse;
 
 	int count = 0;
 
@@ -4762,7 +4762,7 @@ static void createTransSeqData(bContext *C, TransInfo *t)
 
 	t->customFree = freeSeqData;
 
-	UI_view2d_region_to_view(v2d, t->imval[0], t->imval[1], &xmouse, &ymouse);
+	xmouse = (int)UI_view2d_region_to_view_x(v2d, t->imval[0]);
 
 	/* which side of the current frame should be allowed */
 	if (t->mode == TFM_TIME_EXTEND) {

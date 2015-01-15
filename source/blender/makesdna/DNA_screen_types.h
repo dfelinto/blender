@@ -57,24 +57,23 @@ typedef struct bScreen {
 	struct Scene *scene;
 	struct Scene *newscene;				/* temporary when switching */
 	
-	int redraws_flag;					/* user-setting for which editors get redrawn during anim playback (used to be time->redraws) */
-	int pad1;
-	
-	short state;						/* temp screen for image render display or fileselect */
-	short temp;							/* temp screen in a temp window, don't save (like user prefs) */
 	short winid;						/* winid from WM, starts with 1 */
-	short do_draw;						/* notifier for drawing edges */
-	short do_refresh;					/* notifier for scale screen, changed screen, etc */
-	short do_draw_gesture;				/* notifier for gesture draw. */
-	short do_draw_paintcursor;			/* notifier for paint cursor draw. */
-	short do_draw_drag;					/* notifier for dragging draw. */
-	short swap;							/* indicator to survive swap-exchange systems */
+	short redraws_flag;					/* user-setting for which editors get redrawn during anim playback (used to be time->redraws) */
+
+	char temp;							/* temp screen in a temp window, don't save (like user prefs) */
+	char state;							/* temp screen for image render display or fileselect */
+	char do_draw;						/* notifier for drawing edges */
+	char do_refresh;					/* notifier for scale screen, changed screen, etc */
+	char do_draw_gesture;				/* notifier for gesture draw. */
+	char do_draw_paintcursor;			/* notifier for paint cursor draw. */
+	char do_draw_drag;					/* notifier for dragging draw. */
+	char swap;							/* indicator to survive swap-exchange systems */
+	char skip_handling;					/* set to delay screen handling after switching back from maximized area */
+	char pad[7];
 	
 	short mainwin;						/* screensize subwindow, for screenedges and global menus */
 	short subwinactive;					/* active subwindow */
-	
-	short pad;
-	
+
 	struct wmTimer *animtimer;			/* if set, screen has timer handler added in window */
 	void *context;						/* context callback */
 } bScreen;
@@ -215,7 +214,7 @@ typedef struct ScrArea {
 	short do_refresh;				/* private, for spacetype refresh callback */
 	short flag;
 	short region_active_win;		/* index of last used region of 'RGN_TYPE_WINDOW'
-									 * runtuime variable, updated by executing operators */
+									 * runtime variable, updated by executing operators */
 	char temp, pad;
 	
 	struct SpaceType *type;		/* callbacks for this space type */
@@ -272,12 +271,16 @@ typedef struct ARegion {
 // #define WIN_EQUAL		3  // UNUSED
 
 /* area->flag */
-#define HEADER_NO_PULLDOWN      (1 << 0)
-#define AREA_FLAG_DRAWJOINTO    (1 << 1)
-#define AREA_FLAG_DRAWJOINFROM  (1 << 2)
-#define AREA_TEMP_INFO          (1 << 3)
-#define AREA_FLAG_DRAWSPLIT_H   (1 << 4)
-#define AREA_FLAG_DRAWSPLIT_V   (1 << 5)
+enum {
+	HEADER_NO_PULLDOWN      = (1 << 0),
+	AREA_FLAG_DRAWJOINTO    = (1 << 1),
+	AREA_FLAG_DRAWJOINFROM  = (1 << 2),
+	AREA_TEMP_INFO          = (1 << 3),
+	AREA_FLAG_DRAWSPLIT_H   = (1 << 4),
+	AREA_FLAG_DRAWSPLIT_V   = (1 << 5),
+	/* used to check if we should switch back to prevspace (of a different type) */
+	AREA_FLAG_TEMP_TYPE	    = (1 << 6),
+};
 
 #define EDGEWIDTH	1
 #define AREAGRID	4

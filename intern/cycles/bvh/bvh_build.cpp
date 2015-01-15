@@ -34,6 +34,21 @@
 
 CCL_NAMESPACE_BEGIN
 
+#if !defined(__KERNEL_SSE2__)
+/* TODO(sergey): Move to some generic header so all code
+ * can use bitscan on non-SSE processors.
+ */
+ccl_device_inline int bitscan(int value)
+{
+	assert(value != 0);
+	int bit = 0;
+	while (value >>= 1) {
+		++bit;
+	}
+	return bit;
+}
+#endif
+
 /* BVH Build Task */
 
 class BVHBuildTask : public Task {
@@ -449,61 +464,119 @@ BVHNode *BVHBuild::create_object_leaf_nodes(const BVHReference *ref, int start, 
 	}
 }
 
-BVHNode* BVHBuild::create_leaf_node(const BVHRange& range)
+BVHNode *BVHBuild::create_primitive_leaf_node(const int *p_type,
+                                              const int *p_index,
+                                              const int *p_object,
+                                              const BoundBox& bounds,
+                                              uint visibility,
+                                              int start,
+                                              int num)
 {
-	vector<int>& p_type = prim_type;
-	vector<int>& p_index = prim_index;
-	vector<int>& p_object = prim_object;
-	BoundBox bounds = BoundBox::empty;
-	int num = 0, ob_num = 0;
-	uint visibility = 0;
-
-	for(int i = 0; i < range.size(); i++) {
-		BVHReference& ref = references[range.start() + i];
-
-		if(ref.prim_index() != -1) {
-			if(range.start() + num == prim_index.size()) {
-				assert(params.use_spatial_split);
-
-				p_type.push_back(ref.prim_type());
-				p_index.push_back(ref.prim_index());
-				p_object.push_back(ref.prim_object());
-			}
-			else {
-				p_type[range.start() + num] = ref.prim_type();
-				p_index[range.start() + num] = ref.prim_index();
-				p_object[range.start() + num] = ref.prim_object();
-			}
-
-			bounds.grow(ref.bounds());
-			visibility |= objects[ref.prim_object()]->visibility;
-			num++;
+	for(int i = 0; i < num; ++i) {
+		if(start + i == prim_index.size()) {
+			assert(params.use_spatial_split);
+			prim_type.push_back(p_type[i]);
+			prim_index.push_back(p_index[i]);
+			prim_object.push_back(p_object[i]);
 		}
 		else {
-			if(ob_num < i)
+			prim_type[start + i] = p_type[i];
+			prim_index[start + i] = p_index[i];
+			prim_object[start + i] = p_object[i];
+		}
+	}
+	return new LeafNode(bounds, visibility, start, start + num);
+}
+
+BVHNode* BVHBuild::create_leaf_node(const BVHRange& range)
+{
+#define MAX_LEAF_SIZE 8
+	int p_num[PRIMITIVE_NUM_TOTAL] = {0};
+	int p_type[PRIMITIVE_NUM_TOTAL][MAX_LEAF_SIZE];
+	int p_index[PRIMITIVE_NUM_TOTAL][MAX_LEAF_SIZE];
+	int p_object[PRIMITIVE_NUM_TOTAL][MAX_LEAF_SIZE];
+	uint visibility[PRIMITIVE_NUM_TOTAL] = {0};
+	/* NOTE: Keep initializtion in sync with actual number of primitives. */
+	BoundBox bounds[PRIMITIVE_NUM_TOTAL] = {BoundBox::empty,
+	                                        BoundBox::empty,
+	                                        BoundBox::empty,
+	                                        BoundBox::empty};
+	int ob_num = 0;
+
+	/* Fill in per-type type/index array. */
+	for(int i = 0; i < range.size(); i++) {
+		BVHReference& ref = references[range.start() + i];
+		if(ref.prim_index() != -1) {
+			int type_index = bitscan(ref.prim_type() & PRIMITIVE_ALL);
+			int idx = p_num[type_index];
+			p_type[type_index][idx] = ref.prim_type();
+			p_index[type_index][idx] = ref.prim_index();
+			p_object[type_index][idx] = ref.prim_object();
+			++p_num[type_index];
+
+			bounds[type_index].grow(ref.bounds());
+			visibility[type_index] |= objects[ref.prim_object()]->visibility;
+		}
+		else {
+			if(ob_num < i) {
 				references[range.start() + ob_num] = ref;
+			}
 			ob_num++;
 		}
 	}
 
-	BVHNode *leaf = NULL;
-	
-	if(num > 0) {
-		leaf = new LeafNode(bounds, visibility, range.start(), range.start() + num);
-
-		if(num == range.size())
-			return leaf;
+	/* Create leaf nodes for every existing primitive. */
+	BVHNode *leaves[PRIMITIVE_NUM_TOTAL + 1] = {NULL};
+	int num_leaves = 0;
+	int start = range.start();
+	for(int i = 0; i < PRIMITIVE_NUM_TOTAL; ++i) {
+		if(p_num[i] != 0) {
+			leaves[num_leaves] = create_primitive_leaf_node(p_type[i],
+			                                                p_index[i],
+			                                                p_object[i],
+			                                                bounds[i],
+			                                                visibility[i],
+			                                                start,
+			                                                p_num[i]);
+			++num_leaves;
+			start += p_num[i];
+		}
 	}
 
-	/* while there may be multiple triangles in a leaf, for object primitives
-	 * we want there to be the only one, so we keep splitting */
-	const BVHReference *ref = (ob_num)? &references[range.start()]: NULL;
-	BVHNode *oleaf = create_object_leaf_nodes(ref, range.start() + num, ob_num);
-	
-	if(leaf)
-		return new InnerNode(range.bounds(), leaf, oleaf);
-	else
-		return oleaf;
+	/* Create leaf node for object. */
+	if(num_leaves == 0 || ob_num) {
+		/* Only create object leaf nodes if there are objects or no other
+		 * nodes created.
+		 */
+		const BVHReference *ref = (ob_num)? &references[range.start()]: NULL;
+		leaves[num_leaves] = create_object_leaf_nodes(ref, start, ob_num);
+		++num_leaves;
+	}
+
+	if(num_leaves == 1) {
+		/* Simplest case: single leaf, just return it.
+		 * In all the rest cases we'll be creating intermediate inner node with
+		 * an appropriate bounding box.
+		 */
+		return leaves[0];
+	}
+	else if(num_leaves == 2) {
+		return new InnerNode(range.bounds(), leaves[0], leaves[1]);
+	}
+	else if(num_leaves == 3) {
+		BoundBox inner_bounds = merge(bounds[1], bounds[2]);
+		BVHNode *inner = new InnerNode(inner_bounds, leaves[1], leaves[2]);
+		return new InnerNode(range.bounds(), leaves[0], inner);
+	} else /*if(num_leaves == 4)*/ {
+		/* Shpuld be doing more branches if more primitive types added. */
+		assert(num_leaves == 4);
+		BoundBox inner_bounds_a = merge(bounds[0], bounds[1]);
+		BoundBox inner_bounds_b = merge(bounds[2], bounds[3]);
+		BVHNode *inner_a = new InnerNode(inner_bounds_a, leaves[0], leaves[1]);
+		BVHNode *inner_b = new InnerNode(inner_bounds_b, leaves[2], leaves[3]);
+		return new InnerNode(range.bounds(), inner_a, inner_b);
+	}
+#undef AMX_LEAF_SIZE
 }
 
 /* Tree Rotations */
@@ -588,4 +661,3 @@ void BVHBuild::rotate(BVHNode *node, int max_depth)
 }
 
 CCL_NAMESPACE_END
-

@@ -109,7 +109,7 @@ static void rna_Scene_mat_convert_space(Object *ob, ReportList *reports, bPoseCh
 		}
 	}
 
-	BKE_constraint_mat_convertspace(ob, pchan, (float (*)[4])mat_ret, from, to);
+	BKE_constraint_mat_convertspace(ob, pchan, (float (*)[4])mat_ret, from, to, false);
 }
 
 static void rna_Object_calc_matrix_camera(
@@ -225,10 +225,9 @@ static void rna_Object_free_duplilist(Object *ob)
 static PointerRNA rna_Object_shape_key_add(Object *ob, bContext *C, ReportList *reports,
                                            const char *name, int from_mix)
 {
-	Scene *scene = CTX_data_scene(C);
 	KeyBlock *kb = NULL;
 
-	if ((kb = BKE_object_insert_shape_key(scene, ob, name, from_mix))) {
+	if ((kb = BKE_object_insert_shape_key(ob, name, from_mix))) {
 		PointerRNA keyptr;
 
 		RNA_pointer_create((ID *)ob->data, &RNA_ShapeKey, kb, &keyptr);

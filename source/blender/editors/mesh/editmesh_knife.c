@@ -75,10 +75,16 @@
 
 #define KMAXDIST    10  /* max mouse distance from edge before not detecting it */
 
+/* WARNING: knife float precision is fragile:
+ * be careful before making changes here see: (T43229, T42864, T42459, T41164).
+ */
 #define KNIFE_FLT_EPS          0.00001f
 #define KNIFE_FLT_EPS_SQUARED  (KNIFE_FLT_EPS * KNIFE_FLT_EPS)
 #define KNIFE_FLT_EPSBIG       0.0005f
-#define KNIFE_FLT_EPS_PX       0.2f
+
+#define KNIFE_FLT_EPS_PX_VERT  0.5f
+#define KNIFE_FLT_EPS_PX_EDGE  0.05f
+#define KNIFE_FLT_EPS_PX_FACE  0.05f
 
 typedef struct KnifeColors {
 	unsigned char line[3];
@@ -1221,9 +1227,82 @@ static void calc_ortho_extent(KnifeTool_OpData *kcd)
 	kcd->ortho_extent = max_xyz;
 }
 
-/* Check if p is visible (not clipped, not occluded by another face).
- * s in screen projection of p. */
-static bool point_is_visible(KnifeTool_OpData *kcd, const float p[3], const float s[2], bglMats *mats)
+static BMElem *bm_elem_from_knife_vert(KnifeVert *kfv, KnifeEdge **r_kfe)
+{
+	BMElem *ele_test;
+	KnifeEdge *kfe = NULL;
+
+	/* vert? */
+	ele_test = (BMElem *)kfv->v;
+
+	if (r_kfe || ele_test == NULL) {
+		if (kfv->v == NULL) {
+			Ref *ref;
+			for (ref = kfv->edges.first; ref; ref = ref->next) {
+				kfe = ref->ref;
+				if (kfe->e) {
+					*r_kfe = kfe;
+					break;
+				}
+			}
+		}
+	}
+
+	/* edge? */
+	if (ele_test == NULL) {
+		if (kfe) {
+			ele_test = (BMElem *)kfe->e;
+		}
+	}
+
+	/* face? */
+	if (ele_test == NULL) {
+		if (BLI_listbase_is_single(&kfe->faces)) {
+			ele_test = ((Ref *)kfe->faces.first)->ref;
+		}
+	}
+
+	return ele_test;
+}
+
+static BMElem *bm_elem_from_knife_edge(KnifeEdge *kfe)
+{
+	BMElem *ele_test;
+
+	ele_test = (BMElem *)kfe->e;
+
+	if (ele_test == NULL) {
+		ele_test = (BMElem *)kfe->basef;
+	}
+
+	return ele_test;
+}
+
+static bool bm_ray_cast_cb_elem_not_in_face_check(BMFace *f, void *user_data)
+{
+	switch (((BMElem *)user_data)->head.htype) {
+		case BM_FACE:
+			return (BMFace *)user_data != f;
+		case BM_EDGE:
+			return !BM_edge_in_face((BMEdge *)user_data, f);
+		case BM_VERT:
+			return !BM_vert_in_face((BMVert *)user_data, f);
+		default:
+			return true;
+	}
+}
+
+
+/**
+ * Check if \a p is visible (not clipped, not occluded by another face).
+ * s in screen projection of p.
+ *
+ * \param ele_test  Optional vert/edge/face to use when \a p is on the surface of the geometry,
+ * intersecting faces matching this face (or connected when an vert/edge) will be ignored.
+ */
+static bool point_is_visible(
+        KnifeTool_OpData *kcd, const float p[3], const float s[2], bglMats *mats,
+        BMElem *ele_test)
 {
 	BMFace *f_hit;
 
@@ -1247,7 +1326,7 @@ static bool point_is_visible(KnifeTool_OpData *kcd, const float p[3], const floa
 		/* make p_ofs a little towards view, so ray doesn't hit p's face. */
 		sub_v3_v3(view, p);
 		dist = normalize_v3(view);
-		madd_v3_v3v3fl(p_ofs, p, view, KNIFE_FLT_EPSBIG * 3.0f);
+		copy_v3_v3(p_ofs, p);
 
 		/* avoid projecting behind the viewpoint */
 		if (kcd->is_ortho && (kcd->vc.rv3d->persp != RV3D_CAMOB)) {
@@ -1266,9 +1345,19 @@ static bool point_is_visible(KnifeTool_OpData *kcd, const float p[3], const floa
 		}
 
 		/* see if there's a face hit between p1 and the view */
-		f_hit = BKE_bmbvh_ray_cast(kcd->bmbvh, p_ofs, view, KNIFE_FLT_EPS, &dist, NULL, NULL);
-		if (f_hit)
+		if (ele_test) {
+			f_hit = BKE_bmbvh_ray_cast_filter(
+			            kcd->bmbvh, p_ofs, view, KNIFE_FLT_EPS, &dist, NULL, NULL,
+			            bm_ray_cast_cb_elem_not_in_face_check, ele_test);
+		}
+		else {
+			f_hit = BKE_bmbvh_ray_cast(
+			            kcd->bmbvh, p_ofs, view, KNIFE_FLT_EPS, &dist, NULL, NULL);
+		}
+
+		if (f_hit) {
 			return false;
+		}
 	}
 
 	return true;
@@ -1318,7 +1407,6 @@ static void knife_find_line_hits(KnifeTool_OpData *kcd)
 	float vert_tol, vert_tol_sq;
 	float line_tol, line_tol_sq;
 	float face_tol, face_tol_sq;
-	float eps_scale, eps_scale_px;
 	int isect_kind;
 	unsigned int tot;
 	int i;
@@ -1426,19 +1514,10 @@ static void knife_find_line_hits(KnifeTool_OpData *kcd)
 
 	/* Now go through the candidates and find intersections */
 	/* These tolerances, in screen space, are for intermediate hits, as ends are already snapped to screen */
-	{
-		/* Scale the epsilon by the zoom level
-		 * to compensate for projection imprecision, see T41164 */
-		const float zoom_xy[2] = {
-		        kcd->vc.rv3d->winmat[0][0],
-		        kcd->vc.rv3d->winmat[1][1]};
-		eps_scale = len_v2(zoom_xy);
-		eps_scale_px = eps_scale * (kcd->is_interactive ? KNIFE_FLT_EPS_PX : KNIFE_FLT_EPSBIG);
-	}
 
-	vert_tol = eps_scale_px;
-	line_tol = eps_scale_px;
-	face_tol = max_ff(vert_tol, line_tol);
+	vert_tol = KNIFE_FLT_EPS_PX_VERT;
+	line_tol = KNIFE_FLT_EPS_PX_EDGE;
+	face_tol = KNIFE_FLT_EPS_PX_FACE;
 
 	vert_tol_sq = vert_tol * vert_tol;
 	line_tol_sq = line_tol * line_tol;
@@ -1450,25 +1529,21 @@ static void knife_find_line_hits(KnifeTool_OpData *kcd)
 	for (val_p = BLI_smallhash_iternew_p(&kfvs, &hiter, (uintptr_t *)&v); val_p;
 	     val_p = BLI_smallhash_iternext_p(&hiter, (uintptr_t *)&v))
 	{
+		KnifeEdge *kfe_hit = NULL;
+
 		knife_project_v2(kcd, v->cageco, s);
 		d = dist_squared_to_line_segment_v2(s, s1, s2);
 		if ((d <= vert_tol_sq) &&
-		    point_is_visible(kcd, v->cageco, s, &mats))
+		    (point_is_visible(kcd, v->cageco, s, &mats, bm_elem_from_knife_vert(v, &kfe_hit))))
 		{
 			memset(&hit, 0, sizeof(hit));
 			hit.v = v;
 
 			/* If this isn't from an existing BMVert, it may have been added to a BMEdge originally.
-			 * knowing if the hit comes from an edge is important for edge-in-face checks later on
-			 * see: #knife_add_single_cut -> #knife_verts_edge_in_face, T42611 */
-			if (v->v == NULL) {
-				for (ref = v->edges.first; ref; ref = ref->next) {
-					kfe = ref->ref;
-					if (kfe->e) {
-						hit.kfe = kfe;
-						break;
-					}
-				}
+				 * knowing if the hit comes from an edge is important for edge-in-face checks later on
+				 * see: #knife_add_single_cut -> #knife_verts_edge_in_face, T42611 */
+			if (kfe_hit) {
+				hit.kfe = kfe_hit;
 			}
 
 			copy_v3_v3(hit.hit, v->co);
@@ -1522,7 +1597,7 @@ static void knife_find_line_hits(KnifeTool_OpData *kcd)
 				 * Need to find 3d intersection of ray through sint */
 				knife_input_ray_segment(kcd, sint, 1.0f, r1, r2);
 				isect_kind = isect_line_line_v3(kfe->v1->cageco, kfe->v2->cageco, r1, r2, p_cage, p_cage_tmp);
-				if (isect_kind >= 1 && point_is_visible(kcd, p_cage, sint, &mats)) {
+				if (isect_kind >= 1 && point_is_visible(kcd, p_cage, sint, &mats, bm_elem_from_knife_edge(kfe))) {
 					memset(&hit, 0, sizeof(hit));
 					if (kcd->snap_midpoints) {
 						/* choose intermediate point snap too */
@@ -1551,7 +1626,7 @@ static void knife_find_line_hits(KnifeTool_OpData *kcd)
 		float p[3], p_cage[3];
 
 		if (use_hit_prev && knife_ray_intersect_face(kcd, s1, v1, v3, f, face_tol_sq, p, p_cage)) {
-			if (point_is_visible(kcd, p_cage, s1, &mats)) {
+			if (point_is_visible(kcd, p_cage, s1, &mats, (BMElem *)f)) {
 				memset(&hit, 0, sizeof(hit));
 				hit.f = f;
 				copy_v3_v3(hit.hit, p);
@@ -1563,7 +1638,7 @@ static void knife_find_line_hits(KnifeTool_OpData *kcd)
 		}
 
 		if (use_hit_curr && knife_ray_intersect_face(kcd, s2, v2, v4, f, face_tol_sq, p, p_cage)) {
-			if (point_is_visible(kcd, p_cage, s2, &mats)) {
+			if (point_is_visible(kcd, p_cage, s2, &mats, (BMElem *)f)) {
 				memset(&hit, 0, sizeof(hit));
 				hit.f = f;
 				copy_v3_v3(hit.hit, p);
@@ -3345,7 +3420,7 @@ void EDBM_mesh_knife(bContext *C, LinkNode *polys, bool use_tag, bool cut_throug
 							float cent[3], cent_ss[2];
 							edbm_mesh_knife_face_point(f, cent);
 							knife_project_v2(kcd, cent, cent_ss);
-							if ((kcd->cut_through || point_is_visible(kcd, cent, cent_ss, &mats)) &&
+							if ((kcd->cut_through || point_is_visible(kcd, cent, cent_ss, &mats, (BMElem *)f)) &&
 							    edbm_mesh_knife_point_isect(polys, cent_ss))
 							{
 								BM_elem_flag_enable(f, BM_ELEM_TAG);

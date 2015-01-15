@@ -37,6 +37,11 @@ struct Lattice;
 struct Curve;
 struct Object;
 struct Mesh;
+struct bContext;
+struct StructRNA;
+struct wmOperator;
+
+struct ModifierData;
 struct HookModifierData;
 
 /* add hook menu */
@@ -155,6 +160,12 @@ void GROUP_OT_objects_add_active(struct wmOperatorType *ot);
 void GROUP_OT_objects_remove_active(struct wmOperatorType *ot);
 
 /* object_modifier.c */
+int edit_modifier_poll_generic(struct bContext *C, struct StructRNA *rna_type, int obtype_flag);
+int edit_modifier_poll(struct bContext *C);
+void edit_modifier_properties(struct wmOperatorType *ot);
+int edit_modifier_invoke_properties(struct bContext *C, struct wmOperator *op);
+struct ModifierData *edit_modifier_property_get(struct wmOperator *op, struct Object *ob, int type);
+
 void OBJECT_OT_modifier_add(struct wmOperatorType *ot);
 void OBJECT_OT_modifier_remove(struct wmOperatorType *ot);
 void OBJECT_OT_modifier_move_up(struct wmOperatorType *ot);
@@ -214,7 +225,6 @@ void OBJECT_OT_vertex_group_remove_from(struct wmOperatorType *ot);
 void OBJECT_OT_vertex_group_select(struct wmOperatorType *ot);
 void OBJECT_OT_vertex_group_deselect(struct wmOperatorType *ot);
 void OBJECT_OT_vertex_group_copy_to_linked(struct wmOperatorType *ot);
-void OBJECT_OT_vertex_group_transfer_weight(struct wmOperatorType *ot);
 void OBJECT_OT_vertex_group_copy_to_selected(struct wmOperatorType *ot);
 void OBJECT_OT_vertex_group_copy(struct wmOperatorType *ot);
 void OBJECT_OT_vertex_group_normalize(struct wmOperatorType *ot);
@@ -265,6 +275,10 @@ void OBJECT_OT_lod_remove(struct wmOperatorType *ot);
 
 /* object_random.c */
 void OBJECT_OT_vertex_random(struct wmOperatorType *ot);
+
+/* object_transfer_data.c */
+void OBJECT_OT_data_transfer(struct wmOperatorType *ot);
+void OBJECT_OT_datalayout_transfer(struct wmOperatorType *ot);
 
 #endif /* __OBJECT_INTERN_H__ */
 

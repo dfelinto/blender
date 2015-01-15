@@ -446,7 +446,7 @@ Text *BKE_text_load(Main *bmain, const char *file, const char *relpath)
 	return BKE_text_load_ex(bmain, file, relpath, false);
 }
 
-Text *BKE_text_copy(Text *ta)
+Text *BKE_text_copy(Main *bmain, Text *ta)
 {
 	Text *tan;
 	TextLine *line, *tmp;
@@ -455,8 +455,7 @@ Text *BKE_text_copy(Text *ta)
 	
 	/* file name can be NULL */
 	if (ta->name) {
-		tan->name = MEM_mallocN(strlen(ta->name) + 1, "text_name");
-		strcpy(tan->name, ta->name);
+		tan->name = BLI_strdup(ta->name);
 	}
 	else {
 		tan->name = NULL;
@@ -489,6 +488,10 @@ Text *BKE_text_copy(Text *ta)
 	tan->curc = tan->selc = 0;
 
 	init_undo_text(tan);
+
+	if (ta->id.lib) {
+		BKE_id_lib_local_paths(bmain, ta->id.lib, &tan->id);
+	}
 
 	return tan;
 }

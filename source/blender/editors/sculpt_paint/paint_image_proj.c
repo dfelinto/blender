@@ -1334,7 +1334,7 @@ static float project_paint_uvpixel_mask(
 
 		/* now we can use the normal as a mask */
 		if (ps->is_ortho) {
-			angle = angle_normalized_v3v3((float *)ps->viewDir, no);
+			angle = angle_normalized_v3v3(ps->viewDir, no);
 		}
 		else {
 			/* Annoying but for the perspective view we need to get the pixels location in 3D space :/ */
@@ -4544,6 +4544,7 @@ static bool project_paint_op(void *state, const float lastpos[2], const float po
 			}
 			
 			ups->average_stroke_counter++;
+			mul_m4_v3(ps->ob->obmat, world);
 			add_v3_v3(ups->average_stroke_accum, world);
 			ups->last_stroke_valid = true;
 		}

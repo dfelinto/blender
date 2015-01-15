@@ -55,7 +55,7 @@ class FILEBROWSER_HT_header(Header):
             layout.prop(params, "display_type", expand=True, text="")
             layout.prop(params, "sort_method", expand=True, text="")
 
-            layout.prop(params, "show_hidden")
+            layout.prop(params, "show_hidden", text="", icon='FILE_HIDDEN')
             layout.prop(params, "use_filter", text="", icon='FILTER')
 
             row = layout.row(align=True)
@@ -78,7 +78,7 @@ class FILEBROWSER_HT_header(Header):
                 row.prop(params, "use_filter_text", text="")
 
             row.separator()
-            row.prop(params, "filter_search", text="")
+            row.prop(params, "filter_search", text="", icon='VIEWZOOM')
 
 
 if __name__ == "__main__":  # only for live edit.

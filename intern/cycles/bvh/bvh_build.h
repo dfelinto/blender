@@ -70,6 +70,15 @@ protected:
 	BVHNode *create_leaf_node(const BVHRange& range);
 	BVHNode *create_object_leaf_nodes(const BVHReference *ref, int start, int num);
 
+	/* Leaf node type splitting. */
+	BVHNode *create_primitive_leaf_node(const int *p_type,
+	                                    const int *p_index,
+	                                    const int *p_object,
+	                                    const BoundBox& bounds,
+	                                    uint visibility,
+	                                    int start,
+	                                    int nun);
+
 	bool range_within_max_leaf_size(const BVHRange& range);
 
 	/* threads */
@@ -116,4 +125,3 @@ protected:
 CCL_NAMESPACE_END
 
 #endif /* __BVH_BUILD_H__ */
-

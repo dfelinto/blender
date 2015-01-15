@@ -504,12 +504,20 @@ RegularBVH::RegularBVH(const BVHParams& params_, const vector<Object*>& objects_
 
 void RegularBVH::pack_leaf(const BVHStackEntry& e, const LeafNode *leaf)
 {
-	if(leaf->num_triangles() == 1 && pack.prim_index[leaf->m_lo] == -1)
+	if(leaf->num_triangles() == 1 && pack.prim_index[leaf->m_lo] == -1) {
 		/* object */
-		pack_node(e.idx, leaf->m_bounds, leaf->m_bounds, ~(leaf->m_lo), 0, leaf->m_visibility, leaf->m_visibility);
-	else
-		/* triangle */
-		pack_node(e.idx, leaf->m_bounds, leaf->m_bounds, leaf->m_lo, leaf->m_hi, leaf->m_visibility, leaf->m_visibility);
+		pack_node(e.idx, leaf->m_bounds, leaf->m_bounds, ~(leaf->m_lo), 0,
+		          leaf->m_visibility, leaf->m_visibility);
+	}
+	else {
+		int prim_type = leaf->num_triangles() ? pack.prim_type[leaf->m_lo] : 0;
+		/* Triangle/curve primitive leaf.  */
+		pack_node(e.idx, leaf->m_bounds, leaf->m_bounds,
+		          leaf->m_lo, leaf->m_hi,
+		          leaf->m_visibility,
+		          prim_type);
+	}
+
 }
 
 void RegularBVH::pack_inner(const BVHStackEntry& e, const BVHStackEntry& e0, const BVHStackEntry& e1)
@@ -657,7 +665,7 @@ void RegularBVH::refit_node(int idx, bool leaf, BoundBox& bbox, uint& visibility
 			visibility |= ob->visibility;
 		}
 
-		pack_node(idx, bbox, bbox, c0, c1, visibility, visibility);
+		pack_node(idx, bbox, bbox, c0, c1, visibility, data[3].w);
 	}
 	else {
 		/* refit inner node, set bbox from children */
@@ -700,6 +708,9 @@ void QBVH::pack_leaf(const BVHStackEntry& e, const LeafNode *leaf)
 		data[6].y = __int_as_float(leaf->m_hi);
 	}
 	data[6].z = __uint_as_float(leaf->m_visibility);
+	if(leaf->num_triangles() != 0) {
+		data[6].w = __uint_as_float(pack.prim_type[leaf->m_lo]);
+	}
 
 	memcpy(&pack.nodes[e.idx * BVH_QNODE_SIZE], data, sizeof(float4)*BVH_QNODE_SIZE);
 }
@@ -908,6 +919,7 @@ void QBVH::refit_node(int idx, bool leaf, BoundBox& bbox, uint& visibility)
 		leaf_data[6].x = __int_as_float(c.x);
 		leaf_data[6].y = __int_as_float(c.y);
 		leaf_data[6].z = __uint_as_float(visibility);
+		leaf_data[6].w = __uint_as_float(c.w);
 		memcpy(&pack.nodes[idx * BVH_QNODE_SIZE],
 		       leaf_data,
 		       sizeof(float4)*BVH_QNODE_SIZE);

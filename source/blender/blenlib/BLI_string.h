@@ -48,7 +48,7 @@ char *BLI_strdupcat(const char *__restrict str1, const char *__restrict str2) AT
 
 char *BLI_strncpy(char *__restrict dst, const char *__restrict src, const size_t maxncpy) ATTR_NONNULL();
 
-char *BLI_strncpy_ensure_pad(char *dst, const char *src, const char pad, size_t maxncpy) ATTR_NONNULL();
+char *BLI_strncpy_ensure_pad(char *__restrict dst, const char *__restrict src, const char pad, size_t maxncpy) ATTR_NONNULL();
 
 size_t BLI_strncpy_rlen(char *__restrict dst, const char *__restrict src, const size_t maxncpy) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
 
@@ -84,6 +84,9 @@ int BLI_str_rstrip_float_zero(char *str, const char pad) ATTR_NONNULL();
 
 int BLI_str_index_in_array_n(const char *__restrict str, const char **__restrict str_array, const int str_array_len) ATTR_NONNULL();
 int BLI_str_index_in_array(const char *__restrict str, const char **__restrict str_array) ATTR_NONNULL();
+
+bool BLI_str_endswith(const char *__restrict str, const char *__restrict end) ATTR_NONNULL();
+bool BLI_strn_endswith(const char *__restrict str, const char *__restrict end, size_t length) ATTR_NONNULL();
 
 size_t BLI_str_partition(const char *str, const char delim[], char **sep, char **suf) ATTR_NONNULL();
 size_t BLI_str_rpartition(const char *str, const char delim[], char **sep, char **suf) ATTR_NONNULL();

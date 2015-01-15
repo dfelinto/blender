@@ -49,8 +49,6 @@ public:
 	/* QBVH */
 	int use_qbvh;
 
-	int pad;
-
 	/* fixed parameters */
 	enum {
 		MAX_DEPTH = 64,
@@ -75,7 +73,6 @@ public:
 		top_level = false;
 		use_cache = false;
 		use_qbvh = false;
-		pad = false;
 	}
 
 	/* SAH costs */

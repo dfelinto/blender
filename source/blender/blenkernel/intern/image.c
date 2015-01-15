@@ -450,6 +450,10 @@ Image *BKE_image_copy(Main *bmain, Image *ima)
 	nima->stereo3d_format = MEM_dupallocN(ima->stereo3d_format);
 	BLI_duplicatelist(&nima->views, &ima->views);
 
+	if (ima->id.lib) {
+		BKE_id_lib_local_paths(bmain, ima->id.lib, &nima->id);
+	}
+
 	return nima;
 }
 
