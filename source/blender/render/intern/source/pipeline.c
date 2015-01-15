@@ -3201,6 +3201,7 @@ bool RE_WriteRenderViewsMovie(ReportList *reports, RenderResult *rr, Scene *scen
 		size_t view_id;
 		for (view_id = 0; view_id < totvideos; view_id++) {
 			bool do_free = false;
+			const char *suffix = BKE_scene_view_id_suffix_get(&scene->r, view_id);
 			ImBuf *ibuf = render_result_rect_to_ibuf(rr, &scene->r, view_id);
 
 			/* note; the way it gets 32 bits rects is weak... */
@@ -3215,7 +3216,7 @@ bool RE_WriteRenderViewsMovie(ReportList *reports, RenderResult *rr, Scene *scen
 			                                    &scene->display_settings, &scene->r.im_format);
 
 			ok &= mh[view_id]->append_movie(rd, scene->r.sfra, scene->r.cfra, (int *) ibuf->rect,
-			                                ibuf->x, ibuf->y, reports);
+			                                ibuf->x, ibuf->y, suffix, reports);
 			if (do_free) {
 				MEM_freeN(ibuf->rect);
 				ibuf->rect = NULL;
@@ -3254,7 +3255,7 @@ bool RE_WriteRenderViewsMovie(ReportList *reports, RenderResult *rr, Scene *scen
 		ibuf_arr[2] = IMB_stereoImBuf(&scene->r.im_format, ibuf_arr[0], ibuf_arr[1]);
 
 		ok = mh[0]->append_movie(rd, scene->r.sfra, scene->r.cfra, (int *) ibuf_arr[2]->rect,
-		                         ibuf_arr[2]->x, ibuf_arr[2]->y, reports);
+		                         ibuf_arr[2]->x, ibuf_arr[2]->y, "", reports);
 
 		for (i = 0; i < 2; i++) {
 			if (do_free[i]) {
@@ -3372,11 +3373,11 @@ void RE_BlenderAnim(Render *re, Main *bmain, Scene *scene, Object *camera_overri
 		mh = MEM_mallocN(sizeof(bMovieHandle) * totvideos, "Movies");
 
 		for (i = 0; i < totvideos; i++){
+			const char *suffix = BKE_scene_view_id_suffix_get(&re->r, i);
+
 			mh[i] = BKE_movie_handle_get(scene->r.im_format.imtype);
 
-			/*XXX MV MOV need to come up with a solution for the name issue, because at the moment
-			 * it's handling the name entirely inside the movie format */
-			if (!mh[i]->start_movie(scene, &re->r, width, height, re->reports))
+			if (!mh[i]->start_movie(scene, &re->r, width, height, suffix, re->reports))
 				G.is_break = true;
 		}
 	}

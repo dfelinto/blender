@@ -122,7 +122,7 @@ static void rna_Scene_update_tagged(Scene *scene)
 static void rna_SceneRender_get_frame_path(RenderData *rd, int frame, const char *view, char *name)
 {
 	if (BKE_imtype_is_movie(rd->im_format.imtype))
-		BKE_movie_filepath_get(name, rd);
+		BKE_movie_filepath_get(name, rd, view);
 	else
 		BKE_makepicstring(name, rd->pic, G.main->name, (frame == INT_MIN) ? rd->cfra : frame,
 		                  &rd->im_format, (rd->scemode & R_EXTENSION) != 0, true, view);

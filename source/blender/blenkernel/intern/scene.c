@@ -2310,6 +2310,16 @@ const char *BKE_scene_view_suffix_get(const RenderData *rd, const char *viewname
 		return viewname;
 }
 
+const char *BKE_scene_view_id_suffix_get(const RenderData *rd, const size_t view_id)
+{
+	if ((rd->scemode & R_MULTIVIEW) == 0)
+		return "";
+	else {
+		const char *viewname = BKE_scene_render_view_name_get(rd, view_id);
+		return BKE_scene_view_suffix_get(rd, viewname);
+	}
+}
+
 void BKE_scene_view_prefix_get(Scene *scene, const char *name, char *rprefix, char **rext)
 {
 	SceneRenderView *srv;

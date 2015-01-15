@@ -667,11 +667,10 @@ static int screen_opengl_render_anim_initialize(bContext *C, wmOperator *op)
 		oglrender->mh_arr = MEM_mallocN(sizeof(bMovieHandle) * oglrender->totvideos, "Movies");
 
 		for (i = 0; i < oglrender->totvideos; i++) {
+			const char *suffix = BKE_scene_view_id_suffix_get(&scene->r, i);
 			oglrender->mh_arr[i] = BKE_movie_handle_get(scene->r.im_format.imtype);
 
-			/*XXX MV MOV need to come up with a solution for the name issue, because at the moment
-			 * it's handling the name entirely inside the movie format */
-			if (!oglrender->mh_arr[i]->start_movie(scene, &scene->r, oglrender->sizex, oglrender->sizey, oglrender->reports)) {
+			if (!oglrender->mh_arr[i]->start_movie(scene, &scene->r, oglrender->sizex, oglrender->sizey, suffix, oglrender->reports)) {
 				screen_opengl_render_end(C, oglrender);
 				return 0;
 			}

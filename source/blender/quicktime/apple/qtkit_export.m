@@ -234,7 +234,7 @@ void makeqtstring(RenderData *rd, char *string)
 	}
 }
 
-void filepath_qt(char *string, RenderData *rd)
+void filepath_qt(char *string, RenderData *rd, const char *suffix)
 {
 	if (string == NULL) return;
 	
@@ -254,6 +254,8 @@ void filepath_qt(char *string, RenderData *rd)
 			BLI_path_frame_range(string, rd->sfra, rd->efra, 4);
 		}
 	}
+
+	BLI_path_view(string, suffix);
 }
 
 

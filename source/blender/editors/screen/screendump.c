@@ -344,7 +344,7 @@ static void screenshot_startjob(void *sjv, short *stop, short *do_update, float 
 	rd.frs_sec_base = 1.0f;
 	
 	if (BKE_imtype_is_movie(rd.im_format.imtype)) {
-		if (!mh->start_movie(sj->scene, &rd, sj->dumpsx, sj->dumpsy, &sj->reports)) {
+		if (!mh->start_movie(sj->scene, &rd, sj->dumpsx, sj->dumpsy, "", &sj->reports)) {
 			printf("screencast job stopped\n");
 			return;
 		}
@@ -363,7 +363,7 @@ static void screenshot_startjob(void *sjv, short *stop, short *do_update, float 
 			
 			if (mh) {
 				if (mh->append_movie(&rd, rd.sfra, rd.cfra, (int *)sj->dumprect,
-				                     sj->dumpsx, sj->dumpsy, &sj->reports))
+				                     sj->dumpsx, sj->dumpsy, "", &sj->reports))
 				{
 					BKE_reportf(&sj->reports, RPT_INFO, "Appended frame: %d", rd.cfra);
 					printf("Appended frame %d\n", rd.cfra);

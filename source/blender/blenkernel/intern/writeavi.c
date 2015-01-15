@@ -65,11 +65,11 @@ static int append_stub(RenderData *UNUSED(rd), int UNUSED(start_frame), int UNUS
 #  include "AVI_avi.h"
 
 /* callbacks */
-static int start_avi(Scene *scene, RenderData *rd, int rectx, int recty, ReportList *reports);
+static int start_avi(Scene *scene, RenderData *rd, int rectx, int recty, const char *suffix, ReportList *reports);
 static void end_avi(void);
 static int append_avi(RenderData *rd, int start_frame, int frame, int *pixels,
-                      int rectx, int recty, ReportList *reports);
-static void filepath_avi(char *string, RenderData *rd);
+                      int rectx, int recty, const char *suffix, ReportList *reports);
+static void filepath_avi(char *string, RenderData *rd, const char *suffix);
 #endif  /* WITH_AVI */
 
 #ifdef WITH_QUICKTIME
@@ -141,7 +141,7 @@ bMovieHandle *BKE_movie_handle_get(const char imtype)
 
 static AviMovie *avi = NULL;
 
-static void filepath_avi(char *string, RenderData *rd)
+static void filepath_avi(char *string, RenderData *rd, const char *suffix)
 {
 	if (string == NULL) return;
 
@@ -161,9 +161,11 @@ static void filepath_avi(char *string, RenderData *rd)
 			BLI_path_frame_range(string, rd->sfra, rd->efra, 4);
 		}
 	}
+
+	BLI_path_view(string, suffix);
 }
 
-static int start_avi(Scene *scene, RenderData *rd, int rectx, int recty, ReportList *reports)
+static int start_avi(Scene *scene, RenderData *rd, int rectx, int recty, const char *suffix, ReportList *reports)
 {
 	int x, y;
 	char name[256];
@@ -173,7 +175,7 @@ static int start_avi(Scene *scene, RenderData *rd, int rectx, int recty, ReportL
 	
 	(void)scene; /* unused */
 	
-	filepath_avi(name, rd);
+	filepath_avi(name, rd, suffix);
 
 	x = rectx;
 	y = recty;
@@ -208,7 +210,7 @@ static int start_avi(Scene *scene, RenderData *rd, int rectx, int recty, ReportL
 }
 
 static int append_avi(RenderData *UNUSED(rd), int start_frame, int frame, int *pixels,
-                      int rectx, int recty, ReportList *UNUSED(reports))
+                      int rectx, int recty, const char *UNUSED(suffix), ReportList *UNUSED(reports))
 {
 	unsigned int *rt1, *rt2, *rectot;
 	int x, y;
@@ -254,11 +256,11 @@ static void end_avi(void)
 #endif  /* WITH_AVI */
 
 /* similar to BKE_makepicstring() */
-void BKE_movie_filepath_get(char *string, RenderData *rd)
+void BKE_movie_filepath_get(char *string, RenderData *rd, const char *suffix)
 {
 	bMovieHandle *mh = BKE_movie_handle_get(rd->im_format.imtype);
 	if (mh->get_movie_path)
-		mh->get_movie_path(string, rd);
+		mh->get_movie_path(string, rd, suffix);
 	else
 		string[0] = '\0';
 }

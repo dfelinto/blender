@@ -798,7 +798,7 @@ static void ffmpeg_dict_set_float(AVDictionary **dict, const char *key, float va
 	av_dict_set(dict, key, buffer, 0);
 }
 
-static int start_ffmpeg_impl(struct RenderData *rd, int rectx, int recty, ReportList *reports)
+static int start_ffmpeg_impl(struct RenderData *rd, int rectx, int recty, const char *suffix, ReportList *reports)
 {
 	/* Handle to the output file */
 	AVFormatContext *of;
@@ -816,7 +816,7 @@ static int start_ffmpeg_impl(struct RenderData *rd, int rectx, int recty, Report
 	ffmpeg_autosplit = rd->ffcodecdata.flags & FFMPEG_AUTOSPLIT_OUTPUT;
 	
 	/* Determine the correct filename */
-	BKE_ffmpeg_filepath_get(name, rd);
+	BKE_ffmpeg_filepath_get(name, rd, suffix);
 	PRINT("Starting output to %s(ffmpeg)...\n"
 	        "  Using type=%d, codec=%d, audio_codec=%d,\n"
 	        "  video_bitrate=%d, audio_bitrate=%d,\n"
@@ -1028,7 +1028,7 @@ static void flush_ffmpeg(void)
  * ********************************************************************** */
 
 /* Get the output filename-- similar to the other output formats */
-void BKE_ffmpeg_filepath_get(char *string, RenderData *rd)
+void BKE_ffmpeg_filepath_get(char *string, RenderData *rd, const char *suffix)
 {
 	char autosplit[20];
 
@@ -1075,15 +1075,17 @@ void BKE_ffmpeg_filepath_get(char *string, RenderData *rd)
 
 		strcat(string, autosplit);
 	}
+
+	BLI_path_view(string, suffix);
 }
 
-int BKE_ffmpeg_start(struct Scene *scene, RenderData *rd, int rectx, int recty, ReportList *reports)
+int BKE_ffmpeg_start(struct Scene *scene, RenderData *rd, int rectx, int recty, const char *suffix, ReportList *reports)
 {
 	int success;
 
 	ffmpeg_autosplit_count = 0;
 
-	success = start_ffmpeg_impl(rd, rectx, recty, reports);
+	success = start_ffmpeg_impl(rd, rectx, recty, suffix, reports);
 #ifdef WITH_AUDASPACE
 	if (audio_stream) {
 		AVCodecContext *c = audio_stream->codec;
@@ -1138,7 +1140,8 @@ static void write_audio_frames(double to_pts)
 }
 #endif
 
-int BKE_ffmpeg_append(RenderData *rd, int start_frame, int frame, int *pixels, int rectx, int recty, ReportList *reports)
+int BKE_ffmpeg_append(RenderData *rd, int start_frame, int frame, int *pixels, int rectx, int recty,
+                      const char *suffix, ReportList *reports)
 {
 	AVFrame *avframe;
 	int success = 1;
@@ -1156,7 +1159,7 @@ int BKE_ffmpeg_append(RenderData *rd, int start_frame, int frame, int *pixels, i
 			if (avio_tell(outfile->pb) > FFMPEG_AUTOSPLIT_SIZE) {
 				end_ffmpeg_impl(true);
 				ffmpeg_autosplit_count++;
-				success &= start_ffmpeg_impl(rd, rectx, recty, reports);
+				success &= start_ffmpeg_impl(rd, rectx, recty, suffix, reports);
 			}
 		}
 	}
