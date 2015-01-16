@@ -215,7 +215,7 @@ static int write_audio_frame(FFMpegContext *context)
 #endif // #ifdef WITH_AUDASPACE
 
 /* Allocate a temporary frame */
-static AVFrame *alloc_picture(FFMpegContext *context, int pix_fmt, int width, int height)
+static AVFrame *alloc_picture(int pix_fmt, int width, int height)
 {
 	AVFrame *f;
 	uint8_t *buf;
@@ -362,7 +362,7 @@ static AVFrame *generate_video_frame(FFMpegContext *context, uint8_t *pixels, Re
 	AVFrame *rgb_frame;
 
 	if (c->pix_fmt != PIX_FMT_BGR32) {
-		rgb_frame = alloc_picture(context, PIX_FMT_BGR32, width, height);
+		rgb_frame = alloc_picture(PIX_FMT_BGR32, width, height);
 		if (!rgb_frame) {
 			BKE_report(reports, RPT_ERROR, "Could not allocate temporary frame");
 			return NULL;
@@ -657,7 +657,7 @@ static AVStream *alloc_video_stream(FFMpegContext *context, RenderData *rd, int 
 	}
 	av_dict_free(&opts);
 
-	context->current_frame = alloc_picture(context, c->pix_fmt, c->width, c->height);
+	context->current_frame = alloc_picture(c->pix_fmt, c->width, c->height);
 
 	context->img_convert_ctx = sws_getContext(c->width, c->height, PIX_FMT_BGR32, c->width, c->height, c->pix_fmt, SWS_BICUBIC,
 	                                 NULL, NULL, NULL);

@@ -181,17 +181,15 @@ static void filepath_avi(char *string, RenderData *rd, const char *suffix)
 	BLI_path_view(string, suffix);
 }
 
-static int start_avi(void *context_v, Scene *scene, RenderData *rd, int rectx, int recty, const char *suffix, ReportList *reports)
+static int start_avi(void *context_v, Scene *UNUSED(scene), RenderData *rd, int rectx, int recty, const char *suffix, ReportList *reports)
 {
 	int x, y;
 	char name[256];
 	AviFormat format;
 	int quality;
 	double framerate;
-	
-	(void)scene; /* unused */
 	AviMovie *avi = context_v;
-	
+
 	filepath_avi(name, rd, suffix);
 
 	x = rectx;
