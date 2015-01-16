@@ -98,7 +98,7 @@ typedef struct OGLRender {
 	int write_still;
 
 	ReportList *reports;
-	bMovieHandle **mh_arr;
+	bMovieHandle *mh;
 	int cfrao, nfra;
 
 	size_t totvideos;
@@ -111,6 +111,7 @@ typedef struct OGLRender {
 	wmWindow *win;
 
 	wmTimer *timer; /* use to check if running modal or not (invoke'd or exec'd)*/
+	void **movie_ctx_arr;
 } OGLRender;
 
 /* added because v3d is not always valid */
@@ -600,7 +601,8 @@ static bool screen_opengl_render_init(bContext *C, wmOperator *op)
 	oglrender->win = win;
 
 	oglrender->totvideos = 0;
-	oglrender->mh_arr = NULL;
+	oglrender->mh = NULL;
+	oglrender->movie_ctx_arr = NULL;
 
 	return true;
 }
@@ -611,13 +613,17 @@ static void screen_opengl_render_end(bContext *C, OGLRender *oglrender)
 	Scene *scene = oglrender->scene;
 	size_t i;
 
-	if (oglrender->mh_arr) {
-		for (i = 0; i < oglrender->totvideos; i++) {
-			if (BKE_imtype_is_movie(scene->r.im_format.imtype)) {
-				oglrender->mh_arr[i]->end_movie();
+	if (oglrender->mh) {
+		if (BKE_imtype_is_movie(scene->r.im_format.imtype)) {
+			for (i = 0; i < oglrender->totvideos; i++) {
+				oglrender->mh->end_movie(oglrender->movie_ctx_arr[i]);
+				oglrender->mh->context_free(oglrender->movie_ctx_arr[i]);
 			}
 		}
-		MEM_freeN(oglrender->mh_arr);
+
+		if (oglrender->movie_ctx_arr) {
+			MEM_freeN(oglrender->movie_ctx_arr);
+		}
 	}
 
 	if (oglrender->timer) { /* exec will not have a timer */
@@ -663,14 +669,15 @@ static int screen_opengl_render_anim_initialize(bContext *C, wmOperator *op)
 		size_t i, width, height;
 
 		BKE_scene_videos_dimensions_get(&scene->r, oglrender->sizex, oglrender->sizey, &width, &height);
-
-		oglrender->mh_arr = MEM_mallocN(sizeof(bMovieHandle) * oglrender->totvideos, "Movies");
+		oglrender->movie_ctx_arr = MEM_mallocN(sizeof(void *) * oglrender->totvideos, "Movies");
+		oglrender->mh = BKE_movie_handle_get(scene->r.im_format.imtype);
 
 		for (i = 0; i < oglrender->totvideos; i++) {
 			const char *suffix = BKE_scene_view_id_suffix_get(&scene->r, i);
-			oglrender->mh_arr[i] = BKE_movie_handle_get(scene->r.im_format.imtype);
 
-			if (!oglrender->mh_arr[i]->start_movie(scene, &scene->r, oglrender->sizex, oglrender->sizey, suffix, oglrender->reports)) {
+			oglrender->movie_ctx_arr[i] = oglrender->mh->context_create();
+			if (!oglrender->mh->start_movie(oglrender->movie_ctx_arr[i], scene, &scene->r, oglrender->sizex,
+			                                oglrender->sizey, suffix, oglrender->reports)) {
 				screen_opengl_render_end(C, oglrender);
 				return 0;
 			}
@@ -745,7 +752,8 @@ static bool screen_opengl_render_anim_step(bContext *C, wmOperator *op)
 	rr = RE_AcquireResultRead(oglrender->re);
 
 	if (is_movie) {
-		ok = RE_WriteRenderViewsMovie(oglrender->reports, rr, scene, &scene->r, oglrender->mh_arr, oglrender->sizex, oglrender->sizey, oglrender->totvideos);
+		ok = RE_WriteRenderViewsMovie(oglrender->reports, rr, scene, &scene->r, oglrender->mh, oglrender->sizex,
+		                              oglrender->sizey, oglrender->movie_ctx_arr, oglrender->totvideos);
 		if (ok) {
 			printf("Append frame %d", scene->r.cfra);
 			BKE_reportf(op->reports, RPT_INFO, "Appended frame: %d", scene->r.cfra);

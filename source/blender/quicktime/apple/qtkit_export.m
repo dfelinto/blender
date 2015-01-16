@@ -98,8 +98,6 @@ typedef struct QuicktimeExport {
 	
 } QuicktimeExport;
 
-static struct QuicktimeExport *qtexport;
-
 #define AUDIOOUTPUTBUFFERSIZE 65536
 
 #pragma mark rna helper functions
@@ -258,6 +256,19 @@ void filepath_qt(char *string, RenderData *rd, const char *suffix)
 	BLI_path_view(string, suffix);
 }
 
+void *context_create_qt(void)
+{
+	QuicktimeExport *qtexport = MEM_callocN(sizeof(QuicktimeExport), "QuicktimeExport");
+	return qtexport;
+}
+
+void context_free_qt(void *context_v)
+{
+	QuicktimeExport *qtexport = context_v;
+	if (qtexport) {
+		MEM_freeN(qtexport);
+	}
+}
 
 #pragma mark audio export functions
 
@@ -282,12 +293,13 @@ static OSStatus	write_cookie(AudioConverterRef converter, AudioFileID outfile)
 }
 
 /* AudioConverter input stream callback */
-static OSStatus AudioConverterInputCallback(AudioConverterRef inAudioConverter, 
+static OSStatus AudioConverterInputCallback(AudioConverterRef inAudioConverter,
 						 UInt32* ioNumberDataPackets,
 						 AudioBufferList* ioData,
 						 AudioStreamPacketDescription**	outDataPacketDescription,
 						 void* inUserData)
-{	
+{
+	QuicktimeExport *qtexport = inUserData;
 	if (qtexport->audioTotalExportedFrames >= qtexport->audioLastFrame) { /* EOF */
 		*ioNumberDataPackets = 0;
 		return noErr;
@@ -314,16 +326,15 @@ static OSStatus AudioConverterInputCallback(AudioConverterRef inAudioConverter,
 
 #pragma mark export functions
 
-int start_qt(struct Scene *scene, struct RenderData *rd, int rectx, int recty, ReportList *reports)
+int start_qt(void *context_v, struct Scene *scene, struct RenderData *rd, int rectx, int recty, const char *UNUSED(suffix), ReportList *reports)
 {
 	NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
 	NSError *error;
 	char name[1024];
 	int success = 1;
 	OSStatus err = noErr;
+	QuicktimeExport *qtexport = context_v;
 
-	if (qtexport == NULL) qtexport = MEM_callocN(sizeof(QuicktimeExport), "QuicktimeExport");
-	
 	[QTMovie enterQTKitOnThread];
 	
 	/* Check first if the QuickTime 7.2.1 initToWritableFile: method is available */
@@ -609,7 +620,7 @@ int start_qt(struct Scene *scene, struct RenderData *rd, int rectx, int recty, R
 	return success;
 }
 
-int append_qt(struct RenderData *rd, int start_frame, int frame, int *pixels, int rectx, int recty, ReportList *reports)
+int append_qt(void *context_v, struct RenderData *rd, int start_frame, int frame, int *pixels, int rectx, int recty, const char *UNUSED(suffix), ReportList *reports)
 {
 	NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
 	NSBitmapImageRep *blBitmapFormatImage;
@@ -617,6 +628,7 @@ int append_qt(struct RenderData *rd, int start_frame, int frame, int *pixels, in
 	OSStatus err = noErr;
 	unsigned char *from_Ptr,*to_Ptr;
 	int y,from_i,to_i;
+	QuicktimeExport *qtexport = context_v;
 	
 	/* Create bitmap image rep in blender format (32bit RGBA) */
 	blBitmapFormatImage = [[NSBitmapImageRep alloc] initWithBitmapDataPlanes:NULL
@@ -674,7 +686,7 @@ int append_qt(struct RenderData *rd, int start_frame, int frame, int *pixels, in
 			audioPacketsConverted = 1; 
 			
 			err = AudioConverterFillComplexBuffer(qtexport->audioConverter, AudioConverterInputCallback,
-			                                      NULL, &audioPacketsConverted, &qtexport->audioBufferList, qtexport->audioOutputPktDesc);
+			                                      qtexport, &audioPacketsConverted, &qtexport->audioBufferList, qtexport->audioOutputPktDesc);
 			if (audioPacketsConverted) {
 				AudioFileWritePackets(qtexport->audioFile, false, qtexport->audioBufferList.mBuffers[0].mDataByteSize,
 				        qtexport->audioOutputPktDesc, qtexport->audioOutputPktPos, &audioPacketsConverted, qtexport->audioOutputBuffer);
@@ -707,9 +719,11 @@ int append_qt(struct RenderData *rd, int start_frame, int frame, int *pixels, in
 }
 
 
-void end_qt(void)
+void end_qt(void *context_v)
 {
 	NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+	QuicktimeExport *qtexport = context_v;
+
 	if (qtexport->movie) {
 		
 		if (qtexport->audioFile)
@@ -800,11 +814,6 @@ void end_qt(void)
 	}
 	
 	[QTMovie exitQTKitOnThread];
-
-	if (qtexport) {
-		MEM_freeN(qtexport);
-		qtexport = NULL;
-	}
 	[pool drain];
 }
 

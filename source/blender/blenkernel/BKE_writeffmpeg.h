@@ -69,9 +69,9 @@ struct RenderData;
 struct ReportList;
 struct Scene;
 
-int BKE_ffmpeg_start(struct Scene *scene, struct RenderData *rd, int rectx, int recty, const char *suffix, struct ReportList *reports);
-void BKE_ffmpeg_end(void);
-int BKE_ffmpeg_append(struct RenderData *rd, int start_frame, int frame, int *pixels,
+int BKE_ffmpeg_start(void *context_v, struct Scene *scene, struct RenderData *rd, int rectx, int recty, const char *suffix, struct ReportList *reports);
+void BKE_ffmpeg_end(void *context_v);
+int BKE_ffmpeg_append(void *context_v, struct RenderData *rd, int start_frame, int frame, int *pixels,
                       int rectx, int recty, const char *suffix, struct ReportList *reports);
 void BKE_ffmpeg_filepath_get(char *string, struct RenderData *rd, const char *suffix);
 
@@ -82,6 +82,9 @@ bool BKE_ffmpeg_alpha_channel_is_supported(struct RenderData *rd);
 
 int BKE_ffmpeg_property_add_string(struct RenderData *rd, const char *type, const char *str);
 void BKE_ffmpeg_property_del(struct RenderData *rd, void *type, void *prop_);
+
+void *BKE_ffmpeg_context_create(void);
+void BKE_ffmpeg_context_free(void *context_v);
 
 #ifdef __cplusplus
 }

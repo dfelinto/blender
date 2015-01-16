@@ -132,7 +132,7 @@ Render R;
 
 /* ********* alloc and free ******** */
 
-static int do_write_image_or_movie(Render *re, Main *bmain, Scene *scene, bMovieHandle **mh_arr, const size_t totvideos, const char *name_override);
+static int do_write_image_or_movie(Render *re, Main *bmain, Scene *scene, bMovieHandle *mh, const size_t totvideos, const char *name_override);
 
 static volatile int g_break = 0;
 static int thread_break(void *UNUSED(arg))
@@ -3187,8 +3187,8 @@ bool RE_WriteRenderViewsImage(ReportList *reports, RenderResult *rr, Scene *scen
 	return ok;
 }
 
-bool RE_WriteRenderViewsMovie(ReportList *reports, RenderResult *rr, Scene *scene, RenderData *rd, bMovieHandle **mh_arr,
-                              const size_t width, const size_t height, const size_t totvideos)
+bool RE_WriteRenderViewsMovie(ReportList *reports, RenderResult *rr, Scene *scene, RenderData *rd, bMovieHandle *mh,
+                              const size_t width, const size_t height, void **movie_ctx_arr, const size_t totvideos)
 {
 	bool is_mono;
 	bool ok = true;
@@ -3216,8 +3216,9 @@ bool RE_WriteRenderViewsMovie(ReportList *reports, RenderResult *rr, Scene *scen
 			IMB_colormanagement_imbuf_for_write(ibuf, true, false, &scene->view_settings,
 			                                    &scene->display_settings, &scene->r.im_format);
 
-			ok &= mh_arr[view_id]->append_movie(rd, scene->r.sfra, scene->r.cfra, (int *) ibuf->rect,
-			                                ibuf->x, ibuf->y, suffix, reports);
+			ok &= mh->append_movie(movie_ctx_arr[view_id], rd, scene->r.sfra, scene->r.cfra,
+			                       (int *) ibuf->rect, ibuf->x, ibuf->y, suffix, reports);
+
 			if (do_free) {
 				MEM_freeN(ibuf->rect);
 				ibuf->rect = NULL;
@@ -3255,8 +3256,8 @@ bool RE_WriteRenderViewsMovie(ReportList *reports, RenderResult *rr, Scene *scen
 
 		ibuf_arr[2] = IMB_stereoImBuf(&scene->r.im_format, ibuf_arr[0], ibuf_arr[1]);
 
-		ok = mh_arr[0]->append_movie(rd, scene->r.sfra, scene->r.cfra, (int *) ibuf_arr[2]->rect,
-		                         ibuf_arr[2]->x, ibuf_arr[2]->y, "", reports);
+		ok = mh->append_movie(movie_ctx_arr[0], rd, scene->r.sfra, scene->r.cfra, (int *) ibuf_arr[2]->rect,
+		                      ibuf_arr[2]->x, ibuf_arr[2]->y, "", reports);
 
 		for (i = 0; i < 2; i++) {
 			if (do_free[i]) {
@@ -3273,7 +3274,7 @@ bool RE_WriteRenderViewsMovie(ReportList *reports, RenderResult *rr, Scene *scen
 	return ok;
 }
 
-static int do_write_image_or_movie(Render *re, Main *bmain, Scene *scene, bMovieHandle **mh_arr, const size_t totvideos, const char *name_override)
+static int do_write_image_or_movie(Render *re, Main *bmain, Scene *scene, bMovieHandle *mh, const size_t totvideos, const char *name_override)
 {
 	char name[FILE_MAX];
 	RenderResult rres;
@@ -3285,7 +3286,7 @@ static int do_write_image_or_movie(Render *re, Main *bmain, Scene *scene, bMovie
 
 	/* write movie or image */
 	if (BKE_imtype_is_movie(scene->r.im_format.imtype)) {
-		RE_WriteRenderViewsMovie(re->reports, &rres, scene, &re->r, mh_arr, re->rectx, re->recty, totvideos);
+		RE_WriteRenderViewsMovie(re->reports, &rres, scene, &re->r, mh, re->rectx, re->recty, re->movie_ctx_arr, totvideos);
 	}
 	else {
 		if (name_override)
@@ -3343,11 +3344,12 @@ void RE_BlenderAnim(Render *re, Main *bmain, Scene *scene, Object *camera_overri
                     unsigned int lay_override, int sfra, int efra, int tfra)
 {
 	RenderData rd = scene->r;
-	bMovieHandle **mh_arr = NULL;
+	bMovieHandle *mh = NULL;
 	int cfrao = scene->r.cfra;
 	int nfra, totrendered = 0, totskipped = 0;
 	const size_t totvideos = BKE_scene_num_videos_get(&rd);
-	
+	const bool is_movie = BKE_imtype_is_movie(scene->r.im_format.imtype);
+
 	BLI_callback_exec(re->main, (ID *)scene, BLI_CB_EVT_RENDER_INIT);
 
 	/* do not fully call for each frame, it initializes & pops output window */
@@ -3366,31 +3368,34 @@ void RE_BlenderAnim(Render *re, Main *bmain, Scene *scene, Object *camera_overri
 
 	re->flag |= R_ANIMATION;
 
-	if (BKE_imtype_is_movie(scene->r.im_format.imtype)) {
+	if (is_movie) {
 		size_t i, width, height;
 
 		get_videos_dimensions(re, &rd, &width, &height);
 
-		mh_arr = MEM_mallocN(sizeof(bMovieHandle) * totvideos, "Movies");
+		mh = BKE_movie_handle_get(scene->r.im_format.imtype);
+		re->movie_ctx_arr = MEM_mallocN(sizeof(void *) * totvideos, "Movies' Context");
 
 		for (i = 0; i < totvideos; i++){
 			const char *suffix = BKE_scene_view_id_suffix_get(&re->r, i);
 
-			mh_arr[i] = BKE_movie_handle_get(scene->r.im_format.imtype);
+			re->movie_ctx_arr[i] = mh->context_create();
 
-			if (!mh_arr[i]->start_movie(scene, &re->r, width, height, suffix, re->reports))
+			if (!mh->start_movie(re->movie_ctx_arr[i], scene, &re->r, width, height, suffix, re->reports))
 				G.is_break = true;
 		}
 	}
 
-	if (mh_arr && mh_arr[0]->get_next_frame) {
+	if (mh && mh->get_next_frame) {
 		/* in case a new video format is added that implements get_next_frame multiview has to be addressed
 		 * or the error throwing for R_IMF_IMTYPE_FRAMESERVER has to be extended for those cases as well
 		 */
 		BLI_assert(totvideos < 2);
 
+		/* MV MOV need to adapt this for multiview */
+
 		while (!(G.is_break == 1)) {
-			int nf = mh_arr[0]->get_next_frame(&re->r, re->reports);
+			int nf = mh->get_next_frame(re->movie_ctx_arr[0], &re->r, re->reports);
 			if (nf >= 0 && nf >= scene->r.sfra && nf <= scene->r.efra) {
 				scene->r.cfra = re->r.cfra = nf;
 
@@ -3400,7 +3405,7 @@ void RE_BlenderAnim(Render *re, Main *bmain, Scene *scene, Object *camera_overri
 				totrendered++;
 
 				if (re->test_break(re->tbh) == 0) {
-					if (!do_write_image_or_movie(re, bmain, scene, mh_arr, totvideos, NULL))
+					if (!do_write_image_or_movie(re, bmain, scene, mh, totvideos, NULL))
 						G.is_break = true;
 				}
 
@@ -3443,7 +3448,7 @@ void RE_BlenderAnim(Render *re, Main *bmain, Scene *scene, Object *camera_overri
 				nfra += tfra;
 
 			/* Touch/NoOverwrite options are only valid for image's */
-			if (BKE_imtype_is_movie(scene->r.im_format.imtype) == 0) {
+			if (is_movie == false) {
 				if (scene->r.mode & (R_NO_OVERWRITE | R_TOUCH))
 					BKE_makepicstring(name, scene->r.pic, bmain->name, scene->r.cfra,
 					                  &scene->r.im_format, (scene->r.scemode & R_EXTENSION) != 0, true, NULL);
@@ -3473,7 +3478,7 @@ void RE_BlenderAnim(Render *re, Main *bmain, Scene *scene, Object *camera_overri
 			
 			if (re->test_break(re->tbh) == 0) {
 				if (!G.is_break)
-					if (!do_write_image_or_movie(re, bmain, scene, mh_arr, totvideos, NULL))
+					if (!do_write_image_or_movie(re, bmain, scene, mh, totvideos, NULL))
 						G.is_break = true;
 			}
 			else
@@ -3481,7 +3486,7 @@ void RE_BlenderAnim(Render *re, Main *bmain, Scene *scene, Object *camera_overri
 		
 			if (G.is_break == true) {
 				/* remove touched file */
-				if (BKE_imtype_is_movie(scene->r.im_format.imtype) == 0) {
+				if (is_movie == false) {
 					if ((scene->r.mode & R_TOUCH) && (BLI_file_size(name) == 0)) {
 						/* BLI_exists(name) is implicit */
 						BLI_delete(name, false, false);
@@ -3499,12 +3504,16 @@ void RE_BlenderAnim(Render *re, Main *bmain, Scene *scene, Object *camera_overri
 	}
 	
 	/* end movie */
-	if (BKE_imtype_is_movie(scene->r.im_format.imtype)) {
+	if (is_movie) {
 		size_t i;
 		for (i = 0; i < totvideos; i++){
-			mh_arr[i]->end_movie();
+			mh->end_movie(re->movie_ctx_arr[i]);
+			mh->context_free(re->movie_ctx_arr[i]);
 		}
-		MEM_freeN(mh_arr);
+
+		if (re->movie_ctx_arr) {
+			MEM_freeN(re->movie_ctx_arr);
+		}
 	}
 	
 	if (totskipped && totrendered == 0)

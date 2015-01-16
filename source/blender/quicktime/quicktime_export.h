@@ -56,10 +56,12 @@ struct ReportList;
 struct Scene;
 struct wmOperatorType;
 
-int start_qt(struct Scene *scene, struct RenderData *rd, int rectx, int recty, struct ReportList *reports);	//for movie handle (BKE writeavi.c now)
-int append_qt(struct RenderData *rd, int start_frame, int frame, int *pixels, int rectx, int recty, struct ReportList *reports);
-void end_qt(void);
+int start_qt(void *context_v, struct Scene *scene, struct RenderData *rd, int rectx, int recty, const char *suffix, struct ReportList *reports);	//for movie handle (BKE writeavi.c now)
+int append_qt(void *context_v, struct RenderData *rd, int start_frame, int frame, int *pixels, int rectx, int recty, const char *suffix, struct ReportList *reports);
+void end_qt(void *context_v);
 void filepath_qt(char *string, struct RenderData *rd, const char *suffix);
+void *context_create_qt(void);
+void context_free_qt(void *context_v);
 
 /*RNA helper functions */
 void quicktime_verify_image_type(struct RenderData *rd, struct ImageFormatData *imf); //used by RNA for defaults values init, if needed
