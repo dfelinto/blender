@@ -787,9 +787,7 @@ void BKE_sequence_calc(Scene *scene, Sequence *seq)
 static void seq_multiview_name(Scene *scene, const size_t view_id, const char *prefix,
                                const char *ext, char *r_path, size_t r_size)
 {
-	const char *viewname = BKE_scene_render_view_name_get(&scene->r, view_id);
-	const char *suffix = BKE_scene_view_suffix_get(&scene->r, viewname);
-
+	const char *suffix = BKE_scene_view_id_suffix_get(&scene->r, view_id);
 	BLI_snprintf(r_path, r_size, "%s%s%s", prefix, suffix, ext);
 }
 
@@ -1453,8 +1451,7 @@ static void seq_open_anim_file(Scene *scene, Sequence *seq)
 			goto monoview;
 
 		for (i = 0; i < totfiles; i++) {
-			const char *viewname = BKE_scene_render_view_name_get(&scene->r, i);
-			const char *suffix = BKE_scene_view_suffix_get(&scene->r, viewname);
+			const char *suffix = BKE_scene_view_id_suffix_get(&scene->r, i);
 			char str[FILE_MAX] = {'\0'};
 
 			StripAnim *sanim = MEM_mallocN(sizeof(StripAnim), "Strip Anim");
