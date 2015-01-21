@@ -1514,6 +1514,7 @@ static bool seq_proxy_get_fname(Sequence *seq, int cfra, int render_size, char *
 {
 	int frameno;
 	char dir[PROXY_MAXFILE];
+	char suffix[24] = {'\0'};
 
 	if (!seq->strip->proxy) {
 		return false;
@@ -1537,11 +1538,14 @@ static bool seq_proxy_get_fname(Sequence *seq, int cfra, int render_size, char *
 		return false;
 	}
 
+	if (view_id > 0)
+		BLI_snprintf(suffix, sizeof(suffix), "_%zu", view_id);
+
 	if (seq->flag & SEQ_USE_PROXY_CUSTOM_FILE) {
 		BLI_join_dirfile(name, PROXY_MAXFILE,
 		                 dir, seq->strip->proxy->file);
 		BLI_path_abs(name, G.main->name);
-		BLI_snprintf(name, PROXY_MAXFILE, "%s_%zu", name, view_id);
+		BLI_snprintf(name, PROXY_MAXFILE, "%s_%s", name, suffix);
 
 		return true;
 	}
@@ -1549,13 +1553,13 @@ static bool seq_proxy_get_fname(Sequence *seq, int cfra, int render_size, char *
 	/* generate a separate proxy directory for each preview size */
 
 	if (seq->type == SEQ_TYPE_IMAGE) {
-		BLI_snprintf(name, PROXY_MAXFILE, "%s/images/%d/%s_proxy_%zu", dir, render_size,
-		             BKE_sequencer_give_stripelem(seq, cfra)->name, view_id);
+		BLI_snprintf(name, PROXY_MAXFILE, "%s/images/%d/%s_proxy%s", dir, render_size,
+		             BKE_sequencer_give_stripelem(seq, cfra)->name, suffix);
 		frameno = 1;
 	}
 	else {
 		frameno = (int)give_stripelem_index(seq, cfra) + seq->anim_startofs;
-		BLI_snprintf(name, PROXY_MAXFILE, "%s/proxy_misc/%d/####_%zu", dir, render_size, view_id);
+		BLI_snprintf(name, PROXY_MAXFILE, "%s/proxy_misc/%d/####%s", dir, render_size, suffix);
 	}
 
 	BLI_path_abs(name, G.main->name);
