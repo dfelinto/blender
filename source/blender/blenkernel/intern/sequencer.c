@@ -53,6 +53,12 @@
 #include "BLI_threads.h"
 #include "BLI_utildefines.h"
 
+#ifdef WIN32
+#  include "BLI_winstuff.h"
+#else
+#  include <unistd.h>
+#endif
+
 #include "BLF_translation.h"
 
 #include "BKE_animsys.h"
@@ -1668,6 +1674,41 @@ static void seq_proxy_build_frame(const SeqRenderData *context, Sequence *seq, i
 	IMB_freeImBuf(ibuf);
 }
 
+/* returns whether the file this context would read from even exist, if not, don't create the context
+*/
+static bool seq_proxy_multiview_context_invalid(Sequence *seq, Scene *scene, const size_t view_id)
+{
+	if ((scene->r.scemode & R_MULTIVIEW) == 0)
+		return false;
+
+	if ((seq->type == SEQ_TYPE_IMAGE) && (seq->views_format == R_IMF_VIEWS_INDIVIDUAL)) {
+		static char prefix[FILE_MAX] = {'\0'};
+		static char *ext = NULL;
+		char str[FILE_MAX] = {'\0'};
+
+		if (view_id == 0) {
+			char path[FILE_MAX];
+			BLI_join_dirfile(path, sizeof(path), seq->strip->dir,
+			                 seq->strip->stripdata->name);
+			BLI_path_abs(path, G.main->name);
+			BKE_scene_view_prefix_get(scene, path, prefix, &ext);
+		}
+
+		if (prefix[0] == '\0')
+			return view_id != 0;
+
+		seq_multiview_name(scene, view_id, prefix, ext, str, FILE_MAX);
+
+		if (BLI_access(str, R_OK) == 0)
+			return false;
+		else
+			return view_id != 0;
+	}
+	return false;
+}
+
+/** This returns the maximum possible number of required contexts
+*/
 static size_t seq_proxy_context_count(Sequence *seq, Scene *scene)
 {
 	size_t num_views = 1;
@@ -1722,6 +1763,9 @@ void BKE_sequencer_proxy_rebuild_context(Main *bmain, Scene *scene, Sequence *se
 	num_files = seq_proxy_context_count(seq, scene);
 
 	for (i = 0; i < num_files; i++) {
+		if (seq_proxy_multiview_context_invalid(seq, scene, i))
+			continue;
+
 		context = MEM_callocN(sizeof(SeqIndexBuildContext), "seq proxy rebuild context");
 
 		nseq = BKE_sequence_dupli_recursive(scene, scene, seq, 0);
