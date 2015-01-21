@@ -274,9 +274,9 @@ bool IMB_anim_get_fps(struct anim *anim,
  * \attention Defined in anim_movie.c
  */
 struct anim *IMB_open_anim(const char *name, int ib_flags, int streamindex, char colorspace[IM_MAX_SPACE]);
+void IMB_suffix_anim(struct anim *anim, const char *suffix);
 void IMB_close_anim(struct anim *anim);
 void IMB_close_anim_proxies(struct anim *anim);
-
 
 /**
  *

@@ -89,6 +89,7 @@ static ImBuf *seq_render_strip(const SeqRenderData *context, Sequence *seq, floa
 static void seq_free_animdata(Scene *scene, Sequence *seq);
 static ImBuf *seq_render_mask(const SeqRenderData *context, Mask *mask, float nr, bool make_float);
 static size_t seq_num_files(Scene *scene, char views_format);
+static void seq_anim_add_suffix(Scene *scene, struct anim *anim, const size_t view_id);
 
 /* **** XXX ******** */
 #define SELECT 1
@@ -855,6 +856,8 @@ void BKE_sequence_reload_new_file(Scene *scene, Sequence *seq, const bool lock_r
 					seq_multiview_name(scene, i, prefix, ext, str, FILE_MAX);
 					anim = openanim(str, IB_rect | ((seq->flag & SEQ_FILTERY) ? IB_animdeinterlace : 0),
 					                seq->streamindex, seq->strip->colorspace_settings.name);
+					seq_anim_add_suffix(scene, anim, i);
+
 					if (anim) {
 						sanim = MEM_mallocN(sizeof(StripAnim), "Strip Anim");
 						BLI_addtail(&seq->anims, sanim);
@@ -1358,6 +1361,7 @@ typedef struct SeqIndexBuildContext {
 	int tc_flags;
 	int size_flags;
 	int quality;
+	size_t view_id;
 
 	Main *bmain;
 	Scene *scene;
@@ -1453,14 +1457,15 @@ static void seq_open_anim_file(Scene *scene, Sequence *seq)
 		for (i = 0; i < totfiles; i++) {
 			const char *suffix = BKE_scene_view_id_suffix_get(&scene->r, i);
 			char str[FILE_MAX] = {'\0'};
-
 			StripAnim *sanim = MEM_mallocN(sizeof(StripAnim), "Strip Anim");
+
 			BLI_addtail(&seq->anims, sanim);
 
 			BLI_snprintf(str, sizeof(str), "%s%s%s", prefix, suffix, ext);
 
 			sanim->anim = openanim(str, IB_rect | ((seq->flag & SEQ_FILTERY) ? IB_animdeinterlace : 0),
 			                       seq->streamindex, seq->strip->colorspace_settings.name);
+			seq_anim_add_suffix(scene, sanim->anim, i);
 
 			if (sanim->anim == NULL) {
 				sanim->anim = openanim(name, IB_rect | ((seq->flag & SEQ_FILTERY) ? IB_animdeinterlace : 0),
@@ -1663,46 +1668,89 @@ static void seq_proxy_build_frame(const SeqRenderData *context, Sequence *seq, i
 	IMB_freeImBuf(ibuf);
 }
 
-SeqIndexBuildContext *BKE_sequencer_proxy_rebuild_context(Main *bmain, Scene *scene, Sequence *seq)
+static size_t seq_proxy_context_count(Sequence *seq, Scene *scene)
+{
+	size_t num_views = 1;
+
+	if ((scene->r.scemode & R_MULTIVIEW) == 0)
+		return 1;
+
+	switch (seq->type) {
+		case SEQ_TYPE_MOVIE:
+		{
+			num_views = BLI_listbase_count(&seq->anims);
+			break;
+		}
+		case SEQ_TYPE_IMAGE:
+		{
+			switch (seq->views_format) {
+				case R_IMF_VIEWS_INDIVIDUAL:
+					num_views = BKE_scene_num_views_get(&scene->r);
+					break;
+				case R_IMF_VIEWS_STEREO_3D:
+					num_views = 2;
+					break;
+				case R_IMF_VIEWS_MULTIVIEW:
+				/* not supported at the moment */
+				/* fall through */
+				default:
+					num_views = 1;
+			}
+			break;
+		}
+	}
+
+	return num_views;
+}
+
+void BKE_sequencer_proxy_rebuild_context(Main *bmain, Scene *scene, Sequence *seq, ListBase *queue)
 {
 	SeqIndexBuildContext *context;
 	Sequence *nseq;
+	LinkData *link;
+	size_t i;
+	size_t num_files;
 
 	if (!seq->strip || !seq->strip->proxy) {
-		return NULL;
+		return;
 	}
 
 	if (!(seq->flag & SEQ_USE_PROXY)) {
-		return NULL;
+		return;
 	}
 
-	context = MEM_callocN(sizeof(SeqIndexBuildContext), "seq proxy rebuild context");
+	num_files = seq_proxy_context_count(seq, scene);
 
-	nseq = BKE_sequence_dupli_recursive(scene, scene, seq, 0);
+	for (i = 0; i < num_files; i++) {
+		context = MEM_callocN(sizeof(SeqIndexBuildContext), "seq proxy rebuild context");
 
-	context->tc_flags   = nseq->strip->proxy->build_tc_flags;
-	context->size_flags = nseq->strip->proxy->build_size_flags;
-	context->quality    = nseq->strip->proxy->quality;
+		nseq = BKE_sequence_dupli_recursive(scene, scene, seq, 0);
 
-	context->bmain = bmain;
-	context->scene = scene;
-	context->orig_seq = seq;
-	context->seq = nseq;
+		context->tc_flags   = nseq->strip->proxy->build_tc_flags;
+		context->size_flags = nseq->strip->proxy->build_size_flags;
+		context->quality    = nseq->strip->proxy->quality;
 
-	if (nseq->type == SEQ_TYPE_MOVIE) {
-		StripAnim *sanim;
+		context->bmain = bmain;
+		context->scene = scene;
+		context->orig_seq = seq;
+		context->seq = nseq;
+		context->view_id = i; /* only for images */
 
-		seq_open_anim_file(scene, nseq);
+		link = BLI_genericNodeN(context);
+		BLI_addtail(queue, link);
 
-		for (sanim = nseq->anims.last; sanim; sanim = sanim->prev) {
+		if (nseq->type == SEQ_TYPE_MOVIE) {
+			StripAnim *sanim;
+
+			seq_open_anim_file(scene, nseq);
+			sanim = BLI_findlink(&nseq->anims,  i);
+
 			if (sanim->anim) {
 				context->index_context = IMB_anim_index_rebuild_context(sanim->anim,
 				        context->tc_flags, context->size_flags, context->quality);
 			}
 		}
 	}
-
-	return context;
 }
 
 void BKE_sequencer_proxy_rebuild(SeqIndexBuildContext *context, short *stop, short *do_update, float *progress)
@@ -1712,8 +1760,6 @@ void BKE_sequencer_proxy_rebuild(SeqIndexBuildContext *context, short *stop, sho
 	Scene *scene = context->scene;
 	Main *bmain = context->bmain;
 	int cfra;
-	const size_t num_views = BKE_scene_num_views_get(&scene->r);
-	size_t view_id;
 
 	if (seq->type == SEQ_TYPE_MOVIE) {
 		if (context->index_context) {
@@ -1742,31 +1788,24 @@ void BKE_sequencer_proxy_rebuild(SeqIndexBuildContext *context, short *stop, sho
 
 	render_context.skip_cache = true;
 	render_context.is_proxy_render = true;
+	render_context.view_id = context->view_id;
 
-	for (view_id = 0; view_id < num_views; view_id++) {
-		render_context.view_id = view_id;
-
-		for (cfra = seq->startdisp + seq->startstill;  cfra < seq->enddisp - seq->endstill; cfra++) {
-			if (context->size_flags & IMB_PROXY_25) {
-				seq_proxy_build_frame(&render_context, seq, cfra, 25);
-			}
-			if (context->size_flags & IMB_PROXY_50) {
-				seq_proxy_build_frame(&render_context, seq, cfra, 50);
-			}
-			if (context->size_flags & IMB_PROXY_75) {
-				seq_proxy_build_frame(&render_context, seq, cfra, 75);
-			}
-			if (context->size_flags & IMB_PROXY_100) {
-				seq_proxy_build_frame(&render_context, seq, cfra, 100);
-			}
-
-			*progress = (float) (cfra - seq->startdisp - seq->startstill) / (seq->enddisp - seq->endstill - seq->startdisp - seq->startstill);
-			*progress = (*progress + (float) view_id) / num_views;
-			*do_update = true;
-
-			if (*stop || G.is_break)
-				break;
+	for (cfra = seq->startdisp + seq->startstill;  cfra < seq->enddisp - seq->endstill; cfra++) {
+		if (context->size_flags & IMB_PROXY_25) {
+			seq_proxy_build_frame(&render_context, seq, cfra, 25);
 		}
+		if (context->size_flags & IMB_PROXY_50) {
+			seq_proxy_build_frame(&render_context, seq, cfra, 50);
+		}
+		if (context->size_flags & IMB_PROXY_75) {
+			seq_proxy_build_frame(&render_context, seq, cfra, 75);
+		}
+		if (context->size_flags & IMB_PROXY_100) {
+			seq_proxy_build_frame(&render_context, seq, cfra, 100);
+		}
+
+		*progress = (float) (cfra - seq->startdisp - seq->startstill) / (seq->enddisp - seq->endstill - seq->startdisp - seq->startstill);
+		*do_update = true;
 
 		if (*stop || G.is_break)
 			break;
@@ -2994,7 +3033,7 @@ monoview_image:
 			seq_open_anim_file(context->scene, seq);
 
 			if (is_multiview) {
-				ImBuf **ibufs;
+				ImBuf **ibuf_arr;
 				size_t totviews;
 				size_t totfiles = seq_num_files(context->scene, seq->views_format);
 				int i;
@@ -3003,39 +3042,47 @@ monoview_image:
 					goto monoview_movie;
 
 				totviews = BKE_scene_num_views_get(&context->scene->r);
-				ibufs = MEM_callocN(sizeof(ImBuf *) * totviews, "Sequence Image Views Imbufs");
+				ibuf_arr = MEM_callocN(sizeof(ImBuf *) * totviews, "Sequence Image Views Imbufs");
 
 				for (i = 0, sanim = seq->anims.first; sanim; sanim = sanim->next, i++) {
 					if (sanim->anim) {
 						IMB_anim_set_preseek(sanim->anim, seq->anim_preseek);
 
-						ibufs[i] = IMB_anim_absolute(sanim->anim, nr + seq->anim_startofs,
+						ibuf_arr[i] = IMB_anim_absolute(sanim->anim, nr + seq->anim_startofs,
 						                             seq->strip->proxy ? seq->strip->proxy->tc : IMB_TC_RECORD_RUN,
 						                             seq_rendersize_to_proxysize(context->preview_render_size));
-						if (ibufs[i]) {
+						if (ibuf_arr[i]) {
 							/* we don't need both (speed reasons)! */
-							if (ibufs[i]->rect_float && ibufs[i]->rect)
-								imb_freerectImBuf(ibufs[i]);
+							if (ibuf_arr[i]->rect_float && ibuf_arr[i]->rect)
+								imb_freerectImBuf(ibuf_arr[i]);
 						}
 					}
 				}
 
-				if (seq->views_format == R_IMF_VIEWS_STEREO_3D)
-					IMB_ImBufFromStereo(seq->stereo3d_format, &ibufs[0], &ibufs[1]);
+				if (seq->views_format == R_IMF_VIEWS_STEREO_3D) {
+					if (ibuf_arr[0]) {
+						IMB_ImBufFromStereo(seq->stereo3d_format, &ibuf_arr[0], &ibuf_arr[1]);
+					}
+					else {
+						/* probably proxy hasn't been created yet */
+						MEM_freeN(ibuf_arr);
+						break;
+					}
+				}
 
 				for (i = 0; i < totviews; i++) {
 					SeqRenderData localcontext = *context;
 					localcontext.view_id = i;
 
-					if (ibufs[i]) {
+					if (ibuf_arr[i]) {
 						/* all sequencer color is done in SRGB space, linear gives odd crossfades */
-						BKE_sequencer_imbuf_to_sequencer_space(context->scene, ibufs[i], false);
+						BKE_sequencer_imbuf_to_sequencer_space(context->scene, ibuf_arr[i], false);
 					}
-					copy_to_ibuf_still(&localcontext, seq, nr, ibufs[i]);
+					copy_to_ibuf_still(&localcontext, seq, nr, ibuf_arr[i]);
 				}
 
 				/* return the original requested ImBuf */
-				ibuf = ibufs[context->view_id];
+				ibuf = ibuf_arr[context->view_id];
 				if (ibuf) {
 					seq->strip->stripdata->orig_width = ibuf->x;
 					seq->strip->stripdata->orig_height = ibuf->y;
@@ -3043,12 +3090,12 @@ monoview_image:
 
 				/* "remove" the others (decrease their refcount) */
 				for (i = 0; i < totviews; i++) {
-					if (ibufs[i] != ibuf) {
-						IMB_freeImBuf(ibufs[i]);
+					if (ibuf_arr[i] != ibuf) {
+						IMB_freeImBuf(ibuf_arr[i]);
 					}
 				}
 
-				MEM_freeN(ibufs);
+				MEM_freeN(ibuf_arr);
 			}
 			else {
 monoview_movie:
@@ -4750,6 +4797,12 @@ Sequence *BKE_sequencer_add_sound_strip(bContext *C, ListBase *seqbasep, SeqLoad
 }
 #endif // WITH_AUDASPACE
 
+static void seq_anim_add_suffix(Scene *scene, struct anim *anim, const size_t view_id)
+{
+	const char *suffix = BKE_scene_view_id_suffix_get(&scene->r, view_id);
+	IMB_suffix_anim(anim, suffix);
+}
+
 Sequence *BKE_sequencer_add_movie_strip(bContext *C, ListBase *seqbasep, SeqLoadInfo *seq_load)
 {
 	Scene *scene = CTX_data_scene(C); /* only for sound */
@@ -4761,13 +4814,13 @@ Sequence *BKE_sequencer_add_movie_strip(bContext *C, ListBase *seqbasep, SeqLoad
 	char colorspace[64] = "\0"; /* MAX_COLORSPACE_NAME */
 	size_t totfiles = seq_num_files(scene, seq_load->views_format);
 	bool is_multiview = (scene->r.scemode & R_MULTIVIEW) != 0;
-	struct anim **anims;
+	struct anim **anim_arr;
 	int i;
 
 	BLI_strncpy(path, seq_load->path, sizeof(path));
 	BLI_path_abs(path, G.main->name);
 
-	anims = MEM_callocN(sizeof(struct anim *) * totfiles, "Video files");
+	anim_arr = MEM_callocN(sizeof(struct anim *) * totfiles, "Video files");
 
 	if (is_multiview && (seq_load->views_format == R_IMF_VIEWS_INDIVIDUAL)) {
 		char prefix[FILE_MAX] = {'\0'};
@@ -4783,24 +4836,25 @@ Sequence *BKE_sequencer_add_movie_strip(bContext *C, ListBase *seqbasep, SeqLoad
 			char str[FILE_MAX] = {'\0'};
 
 			seq_multiview_name(scene, i, prefix, ext, str, FILE_MAX);
-			anims[j] = openanim(str, IB_rect, 0, colorspace);
+			anim_arr[j] = openanim(str, IB_rect, 0, colorspace);
+			seq_anim_add_suffix(scene, anim_arr[j], i);
 
-			if (anims[j]) {
+			if (anim_arr[j]) {
 				j++;
 			}
 		}
 
 		if (j == 0) {
-			MEM_freeN(anims);
+			MEM_freeN(anim_arr);
 			return NULL;
 		}
 	}
 	else {
 monoview:
-		anims[0] = openanim(path, IB_rect, 0, colorspace);
+		anim_arr[0] = openanim(path, IB_rect, 0, colorspace);
 
-		if (anims[0] == NULL) {
-			MEM_freeN(anims);
+		if (anim_arr[0] == NULL) {
+			MEM_freeN(anim_arr);
 			return NULL;
 		}
 	}
@@ -4817,23 +4871,23 @@ monoview:
 	seq->blend_mode = SEQ_TYPE_CROSS; /* so alpha adjustment fade to the strip below */
 
 	for (i = 0; i < totfiles; i++) {
-		if (anims[i]) {
+		if (anim_arr[i]) {
 			StripAnim *sanim = MEM_mallocN(sizeof(StripAnim), "Strip Anim");
 			BLI_addtail(&seq->anims, sanim);
-			sanim->anim = anims[i];
+			sanim->anim = anim_arr[i];
 		}
 		else {
 			break;
 		}
 	}
 
-	seq->anim_preseek = IMB_anim_get_preseek(anims[0]);
+	seq->anim_preseek = IMB_anim_get_preseek(anim_arr[0]);
 	BLI_strncpy(seq->name + 2, "Movie", SEQ_NAME_MAXSTR - 2);
 	BKE_sequence_base_unique_name_recursive(&scene->ed->seqbase, seq);
 
 	/* basic defaults */
 	seq->strip = strip = MEM_callocN(sizeof(Strip), "strip");
-	seq->len = IMB_anim_get_duration(anims[0], IMB_TC_RECORD_RUN);
+	seq->len = IMB_anim_get_duration(anim_arr[0], IMB_TC_RECORD_RUN);
 	strip->us = 1;
 
 	BLI_strncpy(seq->strip->colorspace_settings.name, colorspace, sizeof(seq->strip->colorspace_settings.name));
@@ -4861,7 +4915,7 @@ monoview:
 	/* can be NULL */
 	seq_load_apply(scene, seq, seq_load);
 
-	MEM_freeN(anims);
+	MEM_freeN(anim_arr);
 	return seq;
 }
 
