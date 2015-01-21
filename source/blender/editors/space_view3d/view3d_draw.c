@@ -592,20 +592,26 @@ static void draw_view_axis(RegionView3D *rv3d, rcti *rect)
 	float ydisp = 0.0;          /* vertical displacement to allow obj info text */
 	int bright = - 20 * (10 - U.rvibright); /* axis alpha offset (rvibright has range 0-10) */
 	float vec[3];
-	char axis_text[2] = "x";
 	float dx, dy;
-	int i;
-	
+
+	int axis_order[3] = {0, 1, 2};
+	int axis_i;
+
 	startx += rect->xmin;
 	starty += rect->ymin;
-	
+
+	axis_sort_v3(rv3d->viewinv[2], axis_order);
+
 	/* thickness of lines is proportional to k */
 	glLineWidth(2);
 
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-	for (i = 0; i < 3; i++) {
+	for (axis_i = 0; axis_i < 3; axis_i++) {
+		int i = axis_order[axis_i];
+		const char axis_text[2] = {'x' + i, '\0'};
+
 		zero_v3(vec);
 		vec[i] = 1.0f;
 		mul_qt_v3(rv3d->viewquat, vec);
@@ -621,8 +627,6 @@ static void draw_view_axis(RegionView3D *rv3d, rcti *rect)
 		if (fabsf(dx) > toll || fabsf(dy) > toll) {
 			BLF_draw_default_ascii(startx + dx + 2, starty + dy + ydisp + 2, 0.0f, axis_text, 1);
 		}
-
-		axis_text[0]++;
 
 		/* BLF_draw_default disables blending */
 		glEnable(GL_BLEND);
@@ -1072,14 +1076,13 @@ static void drawviewborder_triangle(float x1, float x2, float y1, float y2, cons
 
 static void drawviewborder(Scene *scene, ARegion *ar, View3D *v3d)
 {
-	float hmargin, vmargin;
 	float x1, x2, y1, y2;
 	float x1i, x2i, y1i, y2i;
 
 	rctf viewborder;
 	Camera *ca = NULL;
 	RegionView3D *rv3d = ar->regiondata;
-	
+
 	if (v3d->camera == NULL)
 		return;
 	if (v3d->camera->type == OB_CAMERA)
@@ -1231,17 +1234,20 @@ static void drawviewborder(Scene *scene, ARegion *ar, View3D *v3d)
 			drawviewborder_triangle(x1, x2, y1, y2, 1, 'B');
 		}
 
-		if (ca->flag & CAM_SHOWTITLESAFE) {
-			UI_ThemeColorBlendShade(TH_VIEW_OVERLAY, TH_BACK, 0.25, 0);
+		if (ca->flag & CAM_SHOW_SAFE_MARGINS) {
+			UI_draw_safe_areas(
+			        x1, x2, y1, y2,
+			        scene->safe_areas.title,
+			        scene->safe_areas.action);
 
-			hmargin = 0.1f  * (x2 - x1);
-			vmargin = 0.05f * (y2 - y1);
-			UI_draw_roundbox_gl_mode(GL_LINE_LOOP, x1 + hmargin, y1 + vmargin, x2 - hmargin, y2 - vmargin, 2.0f);
-
-			hmargin = 0.035f * (x2 - x1);
-			vmargin = 0.035f * (y2 - y1);
-			UI_draw_roundbox_gl_mode(GL_LINE_LOOP, x1 + hmargin, y1 + vmargin, x2 - hmargin, y2 - vmargin, 2.0f);
+			if (ca->flag & CAM_SHOW_SAFE_CENTER) {
+				UI_draw_safe_areas(
+				        x1, x2, y1, y2,
+				        scene->safe_areas.title_center,
+				        scene->safe_areas.action_center);
+			}
 		}
+
 		if (ca->flag & CAM_SHOWSENSOR) {
 			/* determine sensor fit, and get sensor x/y, for auto fit we
 			 * assume and square sensor and only use sensor_x */
@@ -1285,8 +1291,9 @@ static void drawviewborder(Scene *scene, ARegion *ar, View3D *v3d)
 	/* camera name - draw in highlighted text color */
 	if (ca && (ca->flag & CAM_SHOWNAME)) {
 		UI_ThemeColor(TH_TEXT_HI);
-		BLF_draw_default(x1i, y1i - 15, 0.0f, v3d->camera->id.name + 2, sizeof(v3d->camera->id.name) - 2);
-		UI_ThemeColor(TH_WIRE);
+		BLF_draw_default(
+		        x1i, y1i - (0.7f * U.widget_unit), 0.0f,
+		        v3d->camera->id.name + 2, sizeof(v3d->camera->id.name) - 2);
 	}
 }
 
@@ -3707,9 +3714,13 @@ void view3d_main_area_draw(const bContext *C, ARegion *ar)
 	/* draw viewport using opengl */
 	if (v3d->drawtype != OB_RENDER || !view3d_main_area_do_render_draw(scene) || clip_border) {
 		view3d_main_area_draw_objects(C, scene, v3d, ar, &grid_unit);
+		
 #ifdef DEBUG_DRAW
 		bl_debug_draw();
 #endif
+		if (G.debug & G_DEBUG_SIMDATA)
+			draw_sim_debug_data(scene, v3d, ar);
+		
 		ED_region_pixelspace(ar);
 	}
 

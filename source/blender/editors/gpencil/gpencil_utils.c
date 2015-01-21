@@ -90,6 +90,42 @@ bool gp_stroke_inside_circle(const int mval[2], const int UNUSED(mvalo[2]),
 
 /* ******************************************************** */
 
+/* Check whether given stroke can be edited given the supplied context */
+// XXX: do we need additional flags for screenspace vs dataspace?
+bool ED_gpencil_stroke_can_use_direct(const ScrArea *sa, const bGPDstroke *gps)
+{
+	/* sanity check */
+	if (ELEM(NULL, sa, gps))
+		return false;
+
+	/* filter stroke types by flags + spacetype */
+	if (gps->flag & GP_STROKE_3DSPACE) {
+		/* 3D strokes - only in 3D view */
+		return (sa->spacetype == SPACE_VIEW3D);
+	}
+	else if (gps->flag & GP_STROKE_2DIMAGE) {
+		/* Special "image" strokes - only in Image Editor */
+		return (sa->spacetype == SPACE_IMAGE);
+	}
+	else if (gps->flag & GP_STROKE_2DSPACE) {
+		/* 2D strokes (dataspace) - for any 2D view (i.e. everything other than 3D view) */
+		return (sa->spacetype != SPACE_VIEW3D);
+	}
+	else {
+		/* view aligned - anything goes */
+		return true;
+	}
+}
+
+/* Check whether given stroke can be edited in the current context */
+bool ED_gpencil_stroke_can_use(const bContext *C, const bGPDstroke *gps)
+{
+	ScrArea *sa = CTX_wm_area(C);
+	return ED_gpencil_stroke_can_use_direct(sa, gps);
+}
+
+/* ******************************************************** */
+
 /* Init handling for space-conversion function (from passed-in parameters) */
 void gp_point_conversion_init(bContext *C, GP_SpaceConversion *r_gsc)
 {
@@ -127,7 +163,9 @@ void gp_point_conversion_init(bContext *C, GP_SpaceConversion *r_gsc)
 }
 
 
-/* Convert Grease Pencil points to screen-space values */
+/* Convert Grease Pencil points to screen-space values
+ * WARNING: This assumes that the caller has already checked whether the stroke in question can be drawn
+ */
 void gp_point_to_xy(GP_SpaceConversion *gsc, bGPDstroke *gps, bGPDspoint *pt,
                     int *r_x, int *r_y)
 {
@@ -135,7 +173,12 @@ void gp_point_to_xy(GP_SpaceConversion *gsc, bGPDstroke *gps, bGPDspoint *pt,
 	View2D *v2d = gsc->v2d;
 	rctf *subrect = gsc->subrect;
 	int xyval[2];
-
+	
+	/* sanity checks */
+	BLI_assert(!(gps->flag & GP_STROKE_3DSPACE) || (gsc->sa->spacetype == SPACE_VIEW3D));
+	BLI_assert(!(gps->flag & GP_STROKE_2DSPACE) || (gsc->sa->spacetype != SPACE_VIEW3D));
+	
+	
 	if (gps->flag & GP_STROKE_3DSPACE) {
 		if (ED_view3d_project_int_global(ar, &pt->x, xyval, V3D_PROJ_TEST_NOP) == V3D_PROJ_RET_OK) {
 			*r_x = xyval[0];
@@ -152,11 +195,13 @@ void gp_point_to_xy(GP_SpaceConversion *gsc, bGPDstroke *gps, bGPDspoint *pt,
 		UI_view2d_view_to_region_clip(v2d, vec[0], vec[1], r_x, r_y);
 	}
 	else {
-		if (subrect == NULL) { /* normal 3D view */
+		if (subrect == NULL) {
+			/* normal 3D view (or view space) */
 			*r_x = (int)(pt->x / 100 * ar->winx);
 			*r_y = (int)(pt->y / 100 * ar->winy);
 		}
-		else { /* camera view, use subrect */
+		else {
+			/* camera view, use subrect */
 			*r_x = (int)((pt->x / 100) * BLI_rctf_size_x(subrect)) + subrect->xmin;
 			*r_y = (int)((pt->y / 100) * BLI_rctf_size_y(subrect)) + subrect->ymin;
 		}

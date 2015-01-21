@@ -40,17 +40,20 @@
 #include "BLI_math.h"
 #include "BLI_listbase.h"
 #include "BLI_utildefines.h"
+#include "BLI_string.h"
 
 #include "BKE_context.h"
 #include "BKE_depsgraph.h"
 #include "BKE_DerivedMesh.h"
 #include "BKE_cdderivedmesh.h"
 #include "BKE_global.h"
+#include "BKE_library.h"
 #include "BKE_main.h"
+#include "BKE_modifier.h"
+#include "BKE_object.h"
 #include "BKE_particle.h"
 #include "BKE_pointcache.h"
 #include "BKE_report.h"
-
 
 #include "RNA_access.h"
 #include "RNA_define.h"
@@ -62,7 +65,36 @@
 #include "ED_screen.h"
 #include "ED_object.h"
 
+#include "UI_resources.h"
+
 #include "physics_intern.h"
+
+extern void PE_create_particle_edit(Scene *scene, Object *ob, PointCache *cache, ParticleSystem *psys);
+extern void PTCacheUndo_clear(PTCacheEdit *edit);
+extern void recalc_lengths(PTCacheEdit *edit);
+extern void recalc_emitter_field(Object *ob, ParticleSystem *psys);
+extern void update_world_cos(Object *ob, PTCacheEdit *edit);
+
+#define KEY_K					PTCacheEditKey *key; int k
+#define POINT_P					PTCacheEditPoint *point; int p
+#define LOOP_POINTS				for (p=0, point=edit->points; p<edit->totpoint; p++, point++)
+#if 0
+#define LOOP_VISIBLE_POINTS		for (p=0, point=edit->points; p<edit->totpoint; p++, point++) if (!(point->flag & PEP_HIDE))
+#define LOOP_SELECTED_POINTS	for (p=0, point=edit->points; p<edit->totpoint; p++, point++) if (point_is_selected(point))
+#define LOOP_UNSELECTED_POINTS	for (p=0, point=edit->points; p<edit->totpoint; p++, point++) if (!point_is_selected(point))
+#define LOOP_EDITED_POINTS		for (p=0, point=edit->points; p<edit->totpoint; p++, point++) if (point->flag & PEP_EDIT_RECALC)
+#define LOOP_TAGGED_POINTS		for (p=0, point=edit->points; p<edit->totpoint; p++, point++) if (point->flag & PEP_TAG)
+#endif
+#define LOOP_KEYS				for (k=0, key=point->keys; k<point->totkey; k++, key++)
+#if 0
+#define LOOP_VISIBLE_KEYS		for (k=0, key=point->keys; k<point->totkey; k++, key++) if (!(key->flag & PEK_HIDE))
+#define LOOP_SELECTED_KEYS		for (k=0, key=point->keys; k<point->totkey; k++, key++) if ((key->flag & PEK_SELECT) && !(key->flag & PEK_HIDE))
+#define LOOP_TAGGED_KEYS		for (k=0, key=point->keys; k<point->totkey; k++, key++) if (key->flag & PEK_TAG)
+
+#define KEY_WCO					(key->flag & PEK_USE_WCO ? key->world_co : key->co)
+#endif
+
+static float I[4][4] = {{1.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 0.0f, 1.0f}};
 
 /********************** particle system slot operators *********************/
 
@@ -623,38 +655,50 @@ void PARTICLE_OT_disconnect_hair(wmOperatorType *ot)
 	RNA_def_boolean(ot->srna, "all", 0, "All hair", "Disconnect all hair systems from the emitter mesh");
 }
 
-static bool connect_hair(Scene *scene, Object *ob, ParticleSystem *psys)
+/* from/to_world_space : whether from/to particles are in world or hair space
+ * from/to_mat : additional transform for from/to particles (e.g. for using object space copying)
+ */
+static bool remap_hair_emitter(Scene *scene, Object *ob, ParticleSystem *psys,
+                               Object *target_ob, ParticleSystem *target_psys, PTCacheEdit *target_edit,
+                               float from_mat[4][4], float to_mat[4][4])
 {
-	ParticleSystemModifierData *psmd = psys_get_modifier(ob, psys);
-	ParticleData *pa;
-	PTCacheEdit *edit;
-	PTCacheEditPoint *point;
-	PTCacheEditKey *ekey = NULL;
-	HairKey *key;
+	ParticleSystemModifierData *target_psmd = psys_get_modifier(target_ob, target_psys);
+	ParticleData *pa, *tpa;
+	PTCacheEditPoint *edit_point;
+	PTCacheEditKey *ekey;
 	BVHTreeFromMesh bvhtree= {NULL};
-	BVHTreeNearest nearest;
 	MFace *mface = NULL, *mf;
 	MEdge *medge = NULL, *me;
 	MVert *mvert;
-	DerivedMesh *dm = NULL;
+	DerivedMesh *dm, *target_dm;
 	int numverts;
 	int i, k;
-	float hairmat[4][4], imat[4][4];
-	float v[4][3], vec[3];
+	float from_ob_imat[4][4], to_ob_imat[4][4];
+	float from_imat[4][4], to_imat[4][4];
 
-	if (!psys || !psys->part || psys->part->type != PART_HAIR || !psmd->dm)
+	if (!target_psmd->dm)
+		return false;
+	if (!psys->part || psys->part->type != PART_HAIR)
+		return false;
+	if (!target_psys->part || target_psys->part->type != PART_HAIR)
 		return false;
 	
-	edit= psys->edit;
-	point=  edit ? edit->points : NULL;
+	edit_point = target_edit ? target_edit->points : NULL;
 	
-	if (psmd->dm->deformedOnly) {
-		/* we don't want to mess up psmd->dm when converting to global coordinates below */
-		dm = psmd->dm;
+	invert_m4_m4(from_ob_imat, ob->obmat);
+	invert_m4_m4(to_ob_imat, target_ob->obmat);
+	invert_m4_m4(from_imat, from_mat);
+	invert_m4_m4(to_imat, to_mat);
+	
+	if (target_psmd->dm->deformedOnly) {
+		/* we don't want to mess up target_psmd->dm when converting to global coordinates below */
+		dm = target_psmd->dm;
 	}
 	else {
-		dm = mesh_get_derived_deform(scene, ob, CD_MASK_BAREMESH);
+		/* warning: this rebuilds target_psmd->dm! */
+		dm = mesh_get_derived_deform(scene, target_ob, CD_MASK_BAREMESH);
 	}
+	target_dm = target_psmd->dm;
 	/* don't modify the original vertices */
 	dm = CDDM_copy(dm);
 
@@ -662,12 +706,11 @@ static bool connect_hair(Scene *scene, Object *ob, ParticleSystem *psys)
 	DM_ensure_tessface(dm);
 
 	numverts = dm->getNumVerts(dm);
-
 	mvert = dm->getVertArray(dm);
 
 	/* convert to global coordinates */
 	for (i=0; i<numverts; i++)
-		mul_m4_v3(ob->obmat, mvert[i].co);
+		mul_m4_v3(to_mat, mvert[i].co);
 
 	if (dm->getNumTessFaces(dm) != 0) {
 		mface = dm->getTessFaceArray(dm);
@@ -682,13 +725,23 @@ static bool connect_hair(Scene *scene, Object *ob, ParticleSystem *psys)
 		return false;
 	}
 
-	for (i=0, pa= psys->particles; i<psys->totpart; i++, pa++) {
-		key = pa->hair;
+	for (i = 0, tpa = target_psys->particles, pa = psys->particles;
+	     i < target_psys->totpart;
+	     i++, tpa++, pa++) {
+
+		float from_co[3];
+		BVHTreeNearest nearest;
+
+		if (psys->flag & PSYS_GLOBAL_HAIR)
+			mul_v3_m4v3(from_co, from_ob_imat, pa->hair[0].co);
+		else
+			mul_v3_m4v3(from_co, from_ob_imat, pa->hair[0].world_co);
+		mul_m4_v3(from_mat, from_co);
 
 		nearest.index = -1;
 		nearest.dist_sq = FLT_MAX;
 
-		BLI_bvhtree_find_nearest(bvhtree.tree, key->co, &nearest, bvhtree.nearest_callback, &bvhtree);
+		BLI_bvhtree_find_nearest(bvhtree.tree, from_co, &nearest, bvhtree.nearest_callback, &bvhtree);
 
 		if (nearest.index == -1) {
 			if (G.debug & G_DEBUG)
@@ -697,6 +750,8 @@ static bool connect_hair(Scene *scene, Object *ob, ParticleSystem *psys)
 		}
 
 		if (mface) {
+			float v[4][3];
+			
 			mf = &mface[nearest.index];
 
 			copy_v3_v3(v[0], mvert[mf->v1].co);
@@ -704,44 +759,80 @@ static bool connect_hair(Scene *scene, Object *ob, ParticleSystem *psys)
 			copy_v3_v3(v[2], mvert[mf->v3].co);
 			if (mf->v4) {
 				copy_v3_v3(v[3], mvert[mf->v4].co);
-				interp_weights_poly_v3(pa->fuv, v, 4, nearest.co);
+				interp_weights_poly_v3(tpa->fuv, v, 4, nearest.co);
 			}
 			else
-				interp_weights_poly_v3(pa->fuv, v, 3, nearest.co);
+				interp_weights_poly_v3(tpa->fuv, v, 3, nearest.co);
+			tpa->foffset = 0.0f;
 
-			pa->num = nearest.index;
-			pa->num_dmcache = psys_particle_dm_face_lookup(ob, psmd->dm, pa->num, pa->fuv, NULL);
+			tpa->num = nearest.index;
+			tpa->num_dmcache = psys_particle_dm_face_lookup(target_ob, target_dm, tpa->num, tpa->fuv, NULL);
 		}
 		else {
 			me = &medge[nearest.index];
 
-			pa->fuv[1] = line_point_factor_v3(nearest.co,
-			                                  mvert[me->v2].co,
-			                                  mvert[me->v2].co);
-			pa->fuv[0] = 1.0f - pa->fuv[1];
-			pa->fuv[2] = pa->fuv[3] = 0.0f;
+			tpa->fuv[1] = line_point_factor_v3(nearest.co,
+			                                   mvert[me->v1].co,
+			                                   mvert[me->v2].co);
+			tpa->fuv[0] = 1.0f - tpa->fuv[1];
+			tpa->fuv[2] = tpa->fuv[3] = 0.0f;
+			tpa->foffset = 0.0f;
 
-			pa->num = nearest.index;
-			pa->num_dmcache = -1;
+			tpa->num = nearest.index;
+			tpa->num_dmcache = -1;
 		}
 
-		psys_mat_hair_to_global(ob, psmd->dm, psys->part->from, pa, hairmat);
-		invert_m4_m4(imat, hairmat);
-
-		sub_v3_v3v3(vec, nearest.co, key->co);
-
-		if (point) {
-			ekey = point->keys;
-			point++;
-		}
-
-		for (k=0, key=pa->hair; k<pa->totkey; k++, key++) {
-			add_v3_v3(key->co, vec);
-			mul_m4_v3(imat, key->co);
-
-			if (ekey) {
-				ekey->flag |= PEK_USE_WCO;
-				ekey++;
+		/* translate hair keys */
+		{
+			HairKey *key, *tkey;
+			float hairmat[4][4], imat[4][4];
+			float offset[3];
+			
+			if (target_psys->flag & PSYS_GLOBAL_HAIR)
+				copy_m4_m4(imat, target_ob->obmat);
+			else {
+				/* note: using target_dm here, which is in target_ob object space and has full modifiers */
+				psys_mat_hair_to_object(target_ob, target_dm, target_psys->part->from, tpa, hairmat);
+				invert_m4_m4(imat, hairmat);
+			}
+			mul_m4_m4m4(imat, imat, to_imat);
+			
+			/* offset in world space */
+			sub_v3_v3v3(offset, nearest.co, from_co);
+			
+			if (edit_point) {
+				for (k=0, key=pa->hair, tkey=tpa->hair, ekey = edit_point->keys; k<tpa->totkey; k++, key++, tkey++, ekey++) {
+					float co_orig[3];
+					
+					if (psys->flag & PSYS_GLOBAL_HAIR)
+						mul_v3_m4v3(co_orig, from_ob_imat, key->co);
+					else
+						mul_v3_m4v3(co_orig, from_ob_imat, key->world_co);
+					mul_m4_v3(from_mat, co_orig);
+					
+					add_v3_v3v3(tkey->co, co_orig, offset);
+					
+					mul_m4_v3(imat, tkey->co);
+					
+					ekey->flag |= PEK_USE_WCO;
+				}
+				
+				edit_point++;
+			}
+			else {
+				for (k=0, key=pa->hair, tkey=tpa->hair; k<tpa->totkey; k++, key++, tkey++) {
+					float co_orig[3];
+					
+					if (psys->flag & PSYS_GLOBAL_HAIR)
+						mul_v3_m4v3(co_orig, from_ob_imat, key->co);
+					else
+						mul_v3_m4v3(co_orig, from_ob_imat, key->world_co);
+					mul_m4_v3(from_mat, co_orig);
+					
+					add_v3_v3v3(tkey->co, co_orig, offset);
+					
+					mul_m4_v3(imat, tkey->co);
+				}
 			}
 		}
 	}
@@ -749,13 +840,24 @@ static bool connect_hair(Scene *scene, Object *ob, ParticleSystem *psys)
 	free_bvhtree_from_mesh(&bvhtree);
 	dm->release(dm);
 
-	psys_free_path_cache(psys, psys->edit);
+	psys_free_path_cache(target_psys, target_edit);
 
-	psys->flag &= ~PSYS_GLOBAL_HAIR;
-
-	PE_update_object(scene, ob, 0);
+	PE_update_object(scene, target_ob, 0);
 
 	return true;
+}
+
+static bool connect_hair(Scene *scene, Object *ob, ParticleSystem *psys)
+{
+	float (*from_mat)[4] = psys->flag & PSYS_GLOBAL_HAIR ? I : ob->obmat;
+	float (*to_mat)[4] = ob->obmat;
+	
+	if (!psys)
+		return false;
+	
+	psys->flag &= ~PSYS_GLOBAL_HAIR;
+	
+	return remap_hair_emitter(scene, ob, psys, ob, psys, psys->edit, from_mat, to_mat);
 }
 
 static int connect_hair_exec(bContext *C, wmOperator *op)
@@ -805,3 +907,284 @@ void PARTICLE_OT_connect_hair(wmOperatorType *ot)
 	RNA_def_boolean(ot->srna, "all", 0, "All hair", "Connect all hair systems to the emitter mesh");
 }
 
+/************************ particle system copy operator *********************/
+
+typedef enum eCopyParticlesSpace {
+	PAR_COPY_SPACE_OBJECT   = 0,
+	PAR_COPY_SPACE_WORLD    = 1,
+} eCopyParticlesSpace;
+
+static void copy_particle_edit(Scene *scene, Object *ob, ParticleSystem *psys, ParticleSystem *psys_from)
+{
+	PTCacheEdit *edit_from = psys_from->edit, *edit;
+	ParticleData *pa;
+	KEY_K;
+	POINT_P;
+	
+	if (!edit_from)
+		return;
+	
+	edit = MEM_dupallocN(edit_from);
+	edit->psys = psys;
+	psys->edit = edit;
+	
+	edit->pathcache = NULL;
+	BLI_listbase_clear(&edit->pathcachebufs);
+	
+	edit->emitter_field = NULL;
+	edit->emitter_cosnos = NULL;
+	
+	BLI_listbase_clear(&edit->undo);
+	edit->curundo = NULL;
+	
+	edit->points = MEM_dupallocN(edit_from->points);
+	pa = psys->particles;
+	LOOP_POINTS {
+		HairKey *hkey = pa->hair;
+		
+		point->keys= MEM_dupallocN(point->keys);
+		LOOP_KEYS {
+			key->co = hkey->co;
+			key->time = &hkey->time;
+			key->flag = hkey->editflag;
+			if (!(psys->flag & PSYS_GLOBAL_HAIR)) {
+				key->flag |= PEK_USE_WCO;
+				hkey->editflag |= PEK_USE_WCO;
+			}
+			
+			hkey++;
+		}
+		
+		pa++;
+	}
+	update_world_cos(ob, edit);
+	
+	UI_GetThemeColor3ubv(TH_EDGE_SELECT, edit->sel_col);
+	UI_GetThemeColor3ubv(TH_WIRE, edit->nosel_col);
+	
+	recalc_lengths(edit);
+	recalc_emitter_field(ob, psys);
+	PE_update_object(scene, ob, true);
+	
+	PTCacheUndo_clear(edit);
+	PE_undo_push(scene, "Original");
+}
+
+static void remove_particle_systems_from_object(Object *ob_to)
+{
+	ModifierData *md, *md_next;
+	
+	if (ob_to->type != OB_MESH)
+		return;
+	if (!ob_to->data || ((ID *)ob_to->data)->lib)
+		return;
+	
+	for (md = ob_to->modifiers.first; md; md = md_next) {
+		md_next = md->next;
+		
+		/* remove all particle system modifiers as well,
+		 * these need to sync to the particle system list
+		 */
+		if (ELEM(md->type, eModifierType_ParticleSystem, eModifierType_DynamicPaint, eModifierType_Smoke)) {
+			BLI_remlink(&ob_to->modifiers, md);
+			modifier_free(md);
+		}
+	}
+	
+	BKE_object_free_particlesystems(ob_to);
+}
+
+/* single_psys_from is optional, if NULL all psys of ob_from are copied */
+static bool copy_particle_systems_to_object(Scene *scene, Object *ob_from, ParticleSystem *single_psys_from, Object *ob_to, int space)
+{
+	ModifierData *md;
+	ParticleSystem *psys_start, *psys, *psys_from;
+	ParticleSystem **tmp_psys;
+	DerivedMesh *final_dm;
+	CustomDataMask cdmask;
+	int i, totpsys;
+	
+	if (ob_to->type != OB_MESH)
+		return false;
+	if (!ob_to->data || ((ID *)ob_to->data)->lib)
+		return false;
+	
+	/* For remapping we need a valid DM.
+	 * Because the modifiers are appended at the end it's safe to use
+	 * the final DM of the object without particles.
+	 * However, when evaluating the DM all the particle modifiers must be valid,
+	 * i.e. have the psys assigned already.
+	 * To break this hen/egg problem we create all psys separately first (to collect required customdata masks),
+	 * then create the DM, then add them to the object and make the psys modifiers ...
+	 */
+	#define PSYS_FROM_FIRST (single_psys_from ? single_psys_from : ob_from->particlesystem.first)
+	#define PSYS_FROM_NEXT(cur) (single_psys_from ? NULL : (cur)->next)
+	totpsys = single_psys_from ? 1 : BLI_listbase_count(&ob_from->particlesystem);
+	
+	tmp_psys = MEM_mallocN(sizeof(ParticleSystem*) * totpsys, "temporary particle system array");
+	
+	cdmask = 0;
+	for (psys_from = PSYS_FROM_FIRST, i = 0;
+	     psys_from;
+	     psys_from = PSYS_FROM_NEXT(psys_from), ++i) {
+		
+		psys = BKE_object_copy_particlesystem(psys_from);
+		tmp_psys[i] = psys;
+		
+		if (psys_start == NULL)
+			psys_start = psys;
+		
+		cdmask |= psys_emitter_customdata_mask(psys);
+	}
+	/* to iterate source and target psys in sync,
+	 * we need to know where the newly added psys start
+	 */
+	psys_start = totpsys > 0 ? tmp_psys[0] : NULL;
+	
+	/* get the DM (psys and their modifiers have not been appended yet) */
+	final_dm = mesh_get_derived_final(scene, ob_to, cdmask);
+	
+	/* now append psys to the object and make modifiers */
+	for (i = 0, psys_from = PSYS_FROM_FIRST;
+	     i < totpsys;
+	     ++i, psys_from = PSYS_FROM_NEXT(psys_from)) {
+		
+		ParticleSystemModifierData *psmd;
+		
+		psys = tmp_psys[i];
+		
+		/* append to the object */
+		BLI_addtail(&ob_to->particlesystem, psys);
+		
+		/* add a particle system modifier for each system */
+		md = modifier_new(eModifierType_ParticleSystem);
+		psmd = (ParticleSystemModifierData *)md;
+		/* push on top of the stack, no use trying to reproduce old stack order */
+		BLI_addtail(&ob_to->modifiers, md);
+		
+		BLI_snprintf(md->name, sizeof(md->name), "ParticleSystem %i", i);
+		modifier_unique_name(&ob_to->modifiers, (ModifierData *)psmd);
+		
+		psmd->psys = psys;
+		psmd->dm = CDDM_copy(final_dm);
+		CDDM_calc_normals(psmd->dm);
+		DM_ensure_tessface(psmd->dm);
+		
+		if (psys_from->edit)
+			copy_particle_edit(scene, ob_to, psys, psys_from);
+	}
+	MEM_freeN(tmp_psys);
+	
+	/* note: do this after creating DM copies for all the particle system modifiers,
+	 * the remapping otherwise makes final_dm invalid!
+	 */
+	for (psys = psys_start, psys_from = PSYS_FROM_FIRST, i = 0;
+	     psys;
+	     psys = psys->next, psys_from = PSYS_FROM_NEXT(psys_from), ++i) {
+		
+		float (*from_mat)[4], (*to_mat)[4];
+		
+		switch (space) {
+			case PAR_COPY_SPACE_OBJECT:
+				from_mat = I;
+				to_mat = I;
+				break;
+			case PAR_COPY_SPACE_WORLD:
+				from_mat = ob_from->obmat;
+				to_mat = ob_to->obmat;
+				break;
+			default:
+				/* should not happen */
+				BLI_assert(false);
+				break;
+		}
+		
+		remap_hair_emitter(scene, ob_from, psys_from, ob_to, psys, psys->edit, from_mat, to_mat);
+		
+		/* tag for recalc */
+//		psys->recalc |= PSYS_RECALC_RESET;
+	}
+	
+	#undef PSYS_FROM_FIRST
+	#undef PSYS_FROM_NEXT
+	
+	DAG_id_tag_update(&ob_to->id, OB_RECALC_DATA);
+	WM_main_add_notifier(NC_OBJECT | ND_PARTICLE | NA_EDITED, ob_to);
+	return true;
+}
+
+static int copy_particle_systems_poll(bContext *C)
+{
+	Object *ob;
+	if (!ED_operator_object_active_editable(C))
+		return false;
+	
+	ob = ED_object_active_context(C);
+	if (BLI_listbase_is_empty(&ob->particlesystem))
+		return false;
+	
+	return true;
+}
+
+static int copy_particle_systems_exec(bContext *C, wmOperator *op)
+{
+	const int space = RNA_enum_get(op->ptr, "space");
+	const bool remove_target_particles = RNA_boolean_get(op->ptr, "remove_target_particles");
+	const bool use_active = RNA_boolean_get(op->ptr, "use_active");
+	Scene *scene = CTX_data_scene(C);
+	Object *ob_from = ED_object_active_context(C);
+	ParticleSystem *psys_from = use_active ? CTX_data_pointer_get_type(C, "particle_system", &RNA_ParticleSystem).data : NULL;
+	
+	int changed_tot = 0;
+	int fail = 0;
+	
+	CTX_DATA_BEGIN (C, Object *, ob_to, selected_editable_objects)
+	{
+		if (ob_from != ob_to) {
+			bool changed = false;
+			if (remove_target_particles) {
+				remove_particle_systems_from_object(ob_to);
+				changed = true;
+			}
+			if (copy_particle_systems_to_object(scene, ob_from, psys_from, ob_to, space))
+				changed = true;
+			else
+				fail++;
+			
+			if (changed)
+				changed_tot++;
+		}
+	}
+	CTX_DATA_END;
+	
+	if ((changed_tot == 0 && fail == 0) || fail) {
+		BKE_reportf(op->reports, RPT_ERROR,
+		            "Copy particle systems to selected: %d done, %d failed",
+		            changed_tot, fail);
+	}
+	
+	return OPERATOR_FINISHED;
+}
+
+void PARTICLE_OT_copy_particle_systems(wmOperatorType *ot)
+{
+	static EnumPropertyItem space_items[] = {
+		{PAR_COPY_SPACE_OBJECT, "OBJECT", 0, "Object", "Copy inside each object's local space"},
+		{PAR_COPY_SPACE_WORLD, "WORLD", 0, "World", "Copy in world space"},
+		{0, NULL, 0, NULL, NULL}
+	};
+	
+	ot->name = "Copy Particle Systems";
+	ot->description = "Copy particle systems from the active object to selected objects";
+	ot->idname = "PARTICLE_OT_copy_particle_systems";
+	
+	ot->poll = copy_particle_systems_poll;
+	ot->exec = copy_particle_systems_exec;
+	
+	/* flags */
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+	
+	RNA_def_enum(ot->srna, "space", space_items, PAR_COPY_SPACE_OBJECT, "Space", "Space transform for copying from one object to another");
+	RNA_def_boolean(ot->srna, "remove_target_particles", true, "Remove Target Particles", "Remove particle systems on the target objects");
+	RNA_def_boolean(ot->srna, "use_active", false, "Use Active", "Use the active particle system from the context");
+}

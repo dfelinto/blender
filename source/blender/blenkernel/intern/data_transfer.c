@@ -690,13 +690,19 @@ static bool data_transfer_layersmapping_generate(
 			return true;
 		}
 		else if (cddata_type == CD_FAKE_MDEFORMVERT) {
+			bool ret;
+
 			cd_src = dm_src->getVertDataLayout(dm_src);
 			cd_dst = dm_dst ? dm_dst->getVertDataLayout(dm_dst) : &me_dst->vdata;
 
-			return data_transfer_layersmapping_vgroups(r_map, mix_mode, mix_factor, mix_weights,
-			                                           num_elem_dst, use_create, use_delete,
-			                                           ob_src, ob_dst, cd_src, cd_dst, dm_dst != NULL,
-			                                           fromlayers, tolayers);
+			ret = data_transfer_layersmapping_vgroups(r_map, mix_mode, mix_factor, mix_weights,
+			                                          num_elem_dst, use_create, use_delete,
+			                                          ob_src, ob_dst, cd_src, cd_dst, dm_dst != NULL,
+			                                          fromlayers, tolayers);
+
+			/* Mesh stores its dvert in a specific pointer too. :( */
+			me_dst->dvert = CustomData_get_layer(&me_dst->vdata, CD_MDEFORMVERT);
+			return ret;
 		}
 		else if (cddata_type == CD_FAKE_SHAPEKEY) {
 			/* TODO: leaving shapekeys asside for now, quite specific case, since we can't access them from MVert :/ */
@@ -957,7 +963,7 @@ bool BKE_object_data_transfer_dm(
 #define DATAMAX 4
 
 	DerivedMesh *dm_src;
-	Mesh *me_dst;
+	Mesh *me_dst, *me_src;
 	bool dirty_nors_dst = true;  /* Assumed always true if not using a dm as destination. */
 	int i;
 
@@ -977,6 +983,7 @@ bool BKE_object_data_transfer_dm(
 	BLI_assert((ob_src != ob_dst) && (ob_src->type == OB_MESH) && (ob_dst->type == OB_MESH));
 
 	me_dst = ob_dst->data;
+	me_src = ob_src->data;
 	if (dm_dst) {
 		dirty_nors_dst = (dm_dst->dirty & DM_DIRTY_NORMALS) != 0;
 		use_create = false;  /* Never create needed custom layers on DM (modifier case). */
@@ -1133,8 +1140,10 @@ bool BKE_object_data_transfer_dm(
 				        map_loop_mode, space_transform, max_distance, ray_radius,
 				        verts_dst, num_verts_dst, edges_dst, num_edges_dst,
 				        loops_dst, num_loops_dst, polys_dst, num_polys_dst,
-				        ldata_dst, pdata_dst, me_dst->smoothresh, dirty_nors_dst,
-				        dm_src, island_callback, islands_handling_precision, &geom_map[LDATA]);
+				        ldata_dst, pdata_dst,
+				        (me_dst->flag & ME_AUTOSMOOTH) != 0, me_dst->smoothresh, dirty_nors_dst,
+				        dm_src, (me_src->flag & ME_AUTOSMOOTH) != 0, me_src->smoothresh,
+				        island_callback, islands_handling_precision, &geom_map[LDATA]);
 				geom_map_init[LDATA] = true;
 			}
 

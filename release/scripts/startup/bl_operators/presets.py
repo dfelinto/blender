@@ -277,6 +277,26 @@ class AddPresetCamera(AddPresetBase, Operator):
         return preset_values
 
 
+class AddPresetSafeAreas(AddPresetBase, Operator):
+    """Add or remove a Safe Areas Preset"""
+    bl_idname = "safe_areas.preset_add"
+    bl_label = "Add Safe Area Preset"
+    preset_menu = "SAFE_AREAS_MT_presets"
+
+    preset_defines = [
+        "safe_areas = bpy.context.scene.safe_areas"
+    ]
+
+    preset_values = [
+        "safe_areas.title",
+        "safe_areas.action",
+        "safe_areas.title_center",
+        "safe_areas.action_center",
+    ]
+
+    preset_subdir = "safe_areas"
+
+
 class AddPresetSSS(AddPresetBase, Operator):
     """Add or remove a Subsurface Scattering Preset"""
     bl_idname = "material.sss_preset_add"
@@ -343,6 +363,36 @@ class AddPresetFluid(AddPresetBase, Operator):
         ]
 
     preset_subdir = "fluid"
+
+
+class AddPresetHairDynamics(AddPresetBase, Operator):
+    """Add or remove a Hair Dynamics Preset"""
+    bl_idname = "particle.hair_dynamics_preset_add"
+    bl_label = "Add Hair Dynamics Preset"
+    preset_menu = "PARTICLE_MT_hair_dynamics_presets"
+
+    preset_defines = [
+        "psys = bpy.context.particle_system",
+        "cloth = bpy.context.particle_system.cloth",
+        "settings = bpy.context.particle_system.cloth.settings",
+        "collision = bpy.context.particle_system.cloth.collision_settings",
+    ]
+
+    preset_subdir = "hair_dynamics"
+
+    preset_values = [
+        "settings.quality",
+        "settings.mass",
+        "settings.bending_stiffness",
+        "psys.settings.bending_random",
+        "settings.bending_damping",
+        "settings.air_damping",
+        "settings.internal_friction",
+        "settings.density_target",
+        "settings.density_strength",
+        "settings.voxel_cell_size",
+        "settings.pin_stiffness",
+        ]
 
 
 class AddPresetSunSky(AddPresetBase, Operator):

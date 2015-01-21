@@ -392,9 +392,9 @@ void DM_ensure_normals(DerivedMesh *dm)
 	BLI_assert((dm->dirty & DM_DIRTY_NORMALS) == 0);
 }
 
-static void DM_calc_loop_normals(DerivedMesh *dm, float split_angle)
+static void DM_calc_loop_normals(DerivedMesh *dm, const bool use_split_normals, float split_angle)
 {
-	dm->calcLoopNormals(dm, split_angle);
+	dm->calcLoopNormals(dm, use_split_normals, split_angle);
 	dm->dirty |= DM_DIRTY_TESS_CDLAYERS;
 }
 
@@ -1500,7 +1500,7 @@ static void mesh_calc_modifiers(Scene *scene, Object *ob, float (*inputVertexCos
 	/* XXX Same as above... For now, only weights preview in WPaint mode. */
 	const bool do_mod_wmcol = do_init_wmcol;
 
-	const bool do_loop_normals = (me->flag & ME_AUTOSMOOTH);
+	const bool do_loop_normals = (me->flag & ME_AUTOSMOOTH) != 0;
 	const float loop_normals_split_angle = me->smoothresh;
 
 	VirtualModifierData virtualModifierData;
@@ -1906,7 +1906,7 @@ static void mesh_calc_modifiers(Scene *scene, Object *ob, float (*inputVertexCos
 
 	if (do_loop_normals) {
 		/* Compute loop normals (note: will compute poly and vert normals as well, if needed!) */
-		DM_calc_loop_normals(finaldm, loop_normals_split_angle);
+		DM_calc_loop_normals(finaldm, do_loop_normals, loop_normals_split_angle);
 	}
 
 	{
@@ -2006,7 +2006,7 @@ static void editbmesh_calc_modifiers(Scene *scene, Object *ob, BMEditMesh *em, D
 	const bool do_mod_wmcol = do_init_wmcol;
 	VirtualModifierData virtualModifierData;
 
-	const bool do_loop_normals = (((Mesh *)(ob->data))->flag & ME_AUTOSMOOTH);
+	const bool do_loop_normals = (((Mesh *)(ob->data))->flag & ME_AUTOSMOOTH) != 0;
 	const float loop_normals_split_angle = ((Mesh *)(ob->data))->smoothresh;
 
 	modifiers_clearErrors(ob);
@@ -2222,9 +2222,9 @@ static void editbmesh_calc_modifiers(Scene *scene, Object *ob, BMEditMesh *em, D
 
 	if (do_loop_normals) {
 		/* Compute loop normals */
-		DM_calc_loop_normals(*final_r, loop_normals_split_angle);
+		DM_calc_loop_normals(*final_r, do_loop_normals, loop_normals_split_angle);
 		if (cage_r && *cage_r && (*cage_r != *final_r)) {
-			DM_calc_loop_normals(*cage_r, loop_normals_split_angle);
+			DM_calc_loop_normals(*cage_r, do_loop_normals, loop_normals_split_angle);
 		}
 	}
 
@@ -3077,6 +3077,69 @@ void DM_vertex_attributes_from_gpu(DerivedMesh *dm, GPUVertexAttribs *gattribs, 
 			attribs->orco.gl_index = gattribs->layer[b].glindex;
 			attribs->orco.gl_texco = gattribs->layer[b].gltexco;
 		}
+	}
+}
+
+/* Set vertex shader attribute inputs for a particular tessface vert
+ *
+ * a: tessface index
+ * index: vertex index
+ * vert: corner index (0, 1, 2, 3)
+ */
+void DM_draw_attrib_vertex(DMVertexAttribs *attribs, int a, int index, int vert)
+{
+	const float zero[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+	int b;
+
+	/* orco texture coordinates */
+	if (attribs->totorco) {
+		/*const*/ float (*array)[3] = attribs->orco.array;
+		const float *orco = (array) ? array[index] : zero;
+
+		if (attribs->orco.gl_texco)
+			glTexCoord3fv(orco);
+		else
+			glVertexAttrib3fvARB(attribs->orco.gl_index, orco);
+	}
+
+	/* uv texture coordinates */
+	for (b = 0; b < attribs->tottface; b++) {
+		const float *uv;
+
+		if (attribs->tface[b].array) {
+			MTFace *tf = &attribs->tface[b].array[a];
+			uv = tf->uv[vert];
+		}
+		else {
+			uv = zero;
+		}
+
+		if (attribs->tface[b].gl_texco)
+			glTexCoord2fv(uv);
+		else
+			glVertexAttrib2fvARB(attribs->tface[b].gl_index, uv);
+	}
+
+	/* vertex colors */
+	for (b = 0; b < attribs->totmcol; b++) {
+		GLubyte col[4];
+
+		if (attribs->mcol[b].array) {
+			MCol *cp = &attribs->mcol[b].array[a * 4 + vert];
+			col[0] = cp->b; col[1] = cp->g; col[2] = cp->r; col[3] = cp->a;
+		}
+		else {
+			col[0] = 0; col[1] = 0; col[2] = 0; col[3] = 0;
+		}
+
+		glVertexAttrib4ubvARB(attribs->mcol[b].gl_index, col);
+	}
+
+	/* tangent for normal mapping */
+	if (attribs->tottang) {
+		/*const*/ float (*array)[4] = attribs->tang.array;
+		const float *tang = (array) ? array[a * 4 + vert] : zero;
+		glVertexAttrib4fvARB(attribs->tang.gl_index, tang);
 	}
 }
 

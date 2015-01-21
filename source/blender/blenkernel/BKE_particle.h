@@ -39,6 +39,8 @@
 #include "DNA_particle_types.h"
 #include "DNA_object_types.h"
 
+#include "BKE_customdata.h"
+
 struct ParticleSystemModifierData;
 struct ParticleSystem;
 struct ParticleKey;
@@ -110,7 +112,7 @@ typedef struct ParticleTexture {
 	float ivel;                           /* used in reset */
 	float time, life, exist, size;        /* used in init */
 	float damp, gravity, field;           /* used in physics */
-	float length, clump, kink, effector;  /* used in path caching */
+	float length, clump, kink_freq, kink_amp, effector;  /* used in path caching */
 	float rough1, rough2, roughe;         /* used in path caching */
 } ParticleTexture;
 
@@ -126,7 +128,7 @@ typedef struct ParticleCacheKey {
 	float rot[4];
 	float col[3];
 	float time;
-	int steps;
+	int segments;
 } ParticleCacheKey;
 
 typedef struct ParticleThreadContext {
@@ -145,12 +147,12 @@ typedef struct ParticleThreadContext {
 	float maxweight;
 	int *index, *skip, jitlevel;
 
-	int from, cfrom, distr;
+	int cfrom, distr;
 
 	struct ParticleData *tpars;
 
 	/* path caching */
-	int editupdate, between, steps;
+	int editupdate, between, segments, extra_segments;
 	int totchild, totparent, parent_pass;
 
 	float cfra;
@@ -160,11 +162,11 @@ typedef struct ParticleThreadContext {
 	float *vg_effector;
 } ParticleThreadContext;
 
-typedef struct ParticleThread {
+typedef struct ParticleTask {
 	ParticleThreadContext *ctx;
 	struct RNG *rng, *rng_path;
-	int num, tot;
-} ParticleThread;
+	int begin, end;
+} ParticleTask;
 
 typedef struct ParticleBillboardData {
 	struct Object *ob;
@@ -279,6 +281,9 @@ BLI_INLINE void psys_frand_vec(ParticleSystem *psys, unsigned int seed, float ve
 int count_particles(struct ParticleSystem *psys);
 int count_particles_mod(struct ParticleSystem *psys, int totgr, int cur);
 
+int psys_get_child_number(struct Scene *scene, struct ParticleSystem *psys);
+int psys_get_tot_child(struct Scene *scene, struct ParticleSystem *psys);
+
 struct ParticleSystem *psys_get_current(struct Object *ob);
 /* for rna */
 short psys_get_current_num(struct Object *ob);
@@ -302,7 +307,6 @@ void psys_free(struct Object *ob, struct ParticleSystem *psys);
 
 void psys_render_set(struct Object *ob, struct ParticleSystem *psys, float viewmat[4][4], float winmat[4][4], int winx, int winy, int timeoffset);
 void psys_render_restore(struct Object *ob, struct ParticleSystem *psys);
-int psys_render_simplify_distribution(struct ParticleThreadContext *ctx, int tot);
 bool psys_render_simplify_params(struct ParticleSystem *psys, struct ChildParticle *cpa, float *params);
 
 void psys_interpolate_uvs(const struct MTFace *tface, int quad, const float w[4], float uvco[2]);
@@ -310,6 +314,7 @@ void psys_interpolate_mcol(const struct MCol *mcol, int quad, const float w[4], 
 
 void copy_particle_key(struct ParticleKey *to, struct ParticleKey *from, int time);
 
+CustomDataMask psys_emitter_customdata_mask(struct ParticleSystem *psys);
 void psys_particle_on_emitter(struct ParticleSystemModifierData *psmd, int distr, int index, int index_dmcache,
                               float fuv[4], float foffset, float vec[3], float nor[3],
                               float utan[3], float vtan[3], float orco[3], float ornor[3]);
@@ -328,13 +333,20 @@ void psys_find_parents(struct ParticleSimulationData *sim);
 void psys_cache_paths(struct ParticleSimulationData *sim, float cfra);
 void psys_cache_edit_paths(struct Scene *scene, struct Object *ob, struct PTCacheEdit *edit, float cfra);
 void psys_cache_child_paths(struct ParticleSimulationData *sim, float cfra, int editupdate);
-int do_guides(struct ListBase *effectors, ParticleKey *state, int pa_num, float time);
+int do_guides(struct ParticleSettings *part, struct ListBase *effectors, ParticleKey *state, int pa_num, float time);
 void precalc_guides(struct ParticleSimulationData *sim, struct ListBase *effectors);
 float psys_get_timestep(struct ParticleSimulationData *sim);
 float psys_get_child_time(struct ParticleSystem *psys, struct ChildParticle *cpa, float cfra, float *birthtime, float *dietime);
 float psys_get_child_size(struct ParticleSystem *psys, struct ChildParticle *cpa, float cfra, float *pa_time);
 void psys_get_particle_on_path(struct ParticleSimulationData *sim, int pa_num, struct ParticleKey *state, const bool vel);
 int psys_get_particle_state(struct ParticleSimulationData *sim, int p, struct ParticleKey *state, int always);
+
+/* child paths */
+void BKE_particlesettings_clump_curve_init(struct ParticleSettings *part);
+void BKE_particlesettings_rough_curve_init(struct ParticleSettings *part);
+void psys_apply_child_modifiers(struct ParticleThreadContext *ctx, struct ListBase *modifiers,
+                                struct ChildParticle *cpa, struct ParticleTexture *ptex, const float orco[3], const float ornor[3], float hairmat[4][4],
+                                struct ParticleCacheKey *keys, struct ParticleCacheKey *parent_keys, const float parent_orco[3]);
 
 void psys_sph_init(struct ParticleSimulationData *sim, struct SPHData *sphdata);
 void psys_sph_finalise(struct SPHData *sphdata);
@@ -347,8 +359,10 @@ void psys_get_dupli_texture(struct ParticleSystem *psys, struct ParticleSettings
 void psys_get_dupli_path_transform(struct ParticleSimulationData *sim, struct ParticleData *pa, struct ChildParticle *cpa,
                                    struct ParticleCacheKey *cache, float mat[4][4], float *scale);
 
-ParticleThread *psys_threads_create(struct ParticleSimulationData *sim);
-void psys_threads_free(ParticleThread *threads);
+void psys_thread_context_init(struct ParticleThreadContext *ctx, struct ParticleSimulationData *sim);
+void psys_thread_context_free(struct ParticleThreadContext *ctx);
+void psys_tasks_create(struct ParticleThreadContext *ctx, int totpart, struct ParticleTask **r_tasks, int *r_numtasks);
+void psys_tasks_free(struct ParticleTask *tasks, int numtasks);
 
 void psys_make_billboard(ParticleBillboardData *bb, float xvec[3], float yvec[3], float zvec[3], float center[3]);
 void psys_apply_hair_lattice(struct Scene *scene, struct Object *ob, struct ParticleSystem *psys);
@@ -403,6 +417,7 @@ void psys_particle_on_dm(struct DerivedMesh *dm, int from, int index, int index_
                          float orco[3], float ornor[3]);
 
 /* particle_system.c */
+void distribute_particles(struct ParticleSimulationData *sim, int from);
 void initialize_particle(struct ParticleSimulationData *sim, struct ParticleData *pa);
 void psys_calc_dmcache(struct Object *ob, struct DerivedMesh *dm, struct ParticleSystem *psys);
 int psys_particle_dm_face_lookup(struct Object *ob, struct DerivedMesh *dm, int index, const float fw[4], struct LinkNode *node);
@@ -410,6 +425,33 @@ int psys_particle_dm_face_lookup(struct Object *ob, struct DerivedMesh *dm, int 
 void reset_particle(struct ParticleSimulationData *sim, struct ParticleData *pa, float dtime, float cfra);
 
 float psys_get_current_display_percentage(struct ParticleSystem *psys);
+
+typedef struct ParticleRenderElem {
+	int curchild, totchild, reduce;
+	float lambda, t, scalemin, scalemax;
+} ParticleRenderElem;
+
+typedef struct ParticleRenderData {
+	ChildParticle *child;
+	ParticleCacheKey **pathcache;
+	ParticleCacheKey **childcache;
+	ListBase pathcachebufs, childcachebufs;
+	int totchild, totcached, totchildcache;
+	struct DerivedMesh *dm;
+	int totdmvert, totdmedge, totdmface;
+
+	float mat[4][4];
+	float viewmat[4][4], winmat[4][4];
+	int winx, winy;
+
+	int do_simplify;
+	int timeoffset;
+	ParticleRenderElem *elems;
+
+	/* ORIGINDEX */
+	const int *index_mf_to_mpoly;
+	const int *index_mp_to_orig;
+} ParticleRenderData;
 
 /* psys_reset */
 #define PSYS_RESET_ALL          1

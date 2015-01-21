@@ -197,7 +197,7 @@ struct DerivedMesh {
 	void (*calcNormals)(DerivedMesh *dm);
 
 	/** Calculate loop (split) normals */
-	void (*calcLoopNormals)(DerivedMesh *dm, const float split_angle);
+	void (*calcLoopNormals)(DerivedMesh *dm, const bool use_split_normals, const float split_angle);
 
 	/** Recalculates mesh tessellation */
 	void (*recalcTessellation)(DerivedMesh *dm);
@@ -745,6 +745,8 @@ typedef struct DMVertexAttribs {
 
 void DM_vertex_attributes_from_gpu(DerivedMesh *dm,
                                    struct GPUVertexAttribs *gattribs, DMVertexAttribs *attribs);
+
+void DM_draw_attrib_vertex(DMVertexAttribs *attribs, int a, int index, int vert);
 
 void DM_add_tangent_layer(DerivedMesh *dm);
 void DM_calc_auto_bump_scale(DerivedMesh *dm);

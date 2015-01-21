@@ -51,16 +51,19 @@
 #include "IMB_imbuf.h"
 #include "IMB_imbuf_types.h"
 
+#include "BKE_cloth.h"
 #include "BKE_global.h"
 #include "BKE_image.h"
 #include "BKE_main.h"
 #include "BKE_modifier.h"
 
 #include "smoke_API.h"
+#include "BPH_mass_spring.h"
 
 #include "DNA_texture_types.h"
 #include "DNA_object_force.h"
 #include "DNA_object_types.h"
+#include "DNA_particle_types.h"
 #include "DNA_modifier_types.h"
 #include "DNA_smoke_types.h"
 
@@ -364,6 +367,27 @@ static void init_frame_smoke(VoxelData *vd, int cfra)
 #endif
 }
 
+static void init_frame_hair(VoxelData *vd, int UNUSED(cfra))
+{
+	Object *ob;
+	ModifierData *md;
+	bool found = false;
+	
+	vd->dataset = NULL;
+	if (vd->object == NULL) return;
+	ob = vd->object;
+	
+	if ((md = (ModifierData *)modifiers_findByType(ob, eModifierType_ParticleSystem))) {
+		ParticleSystemModifierData *pmd = (ParticleSystemModifierData *)md;
+		
+		if (pmd->psys && pmd->psys->clmd) {
+			found |= BPH_cloth_solver_get_texture_data(ob, pmd->psys->clmd, vd);
+		}
+	}
+	
+	vd->ok = found;
+}
+
 void cache_voxeldata(Tex *tex, int scene_frame)
 {	
 	VoxelData *vd = tex->vd;
@@ -396,6 +420,9 @@ void cache_voxeldata(Tex *tex, int scene_frame)
 			return;
 		case TEX_VD_SMOKE:
 			init_frame_smoke(vd, scene_frame);
+			return;
+		case TEX_VD_HAIR:
+			init_frame_hair(vd, scene_frame);
 			return;
 		case TEX_VD_BLENDERVOXEL:
 			BLI_path_abs(path, G.main->name);

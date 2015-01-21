@@ -1465,6 +1465,7 @@ def get_panels():
         "DATA_PT_camera",
         "DATA_PT_camera_display",
         "DATA_PT_camera_stereoscopy",
+        "DATA_PT_camera_safe_areas",
         "DATA_PT_lens",
         "DATA_PT_speaker",
         "DATA_PT_distance",

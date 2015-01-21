@@ -81,6 +81,8 @@ typedef struct CollPair {
 	float pa[3], pb[3]; // collision point p1 on face1, p2 on face2
 	int flag;
 	float time; // collision time, from 0 up to 1
+
+	/* mesh-mesh collision */
 #ifdef WITH_ELTOPO /*either ap* or bp* can be set, but not both*/
 	float bary[3];
 	int ap1, ap2, ap3, collp, bp1, bp2, bp3;
@@ -134,6 +136,8 @@ void bvhtree_update_from_mvert(BVHTree *bvhtree, struct MFace *faces, int numfac
 // move Collision modifier object inter-frame with step = [0,1]
 // defined in collisions.c
 void collision_move_object(struct CollisionModifierData *collmd, float step, float prevstep);
+
+void collision_get_collider_velocity(float vel_old[3], float vel_new[3], struct CollisionModifierData *collmd, struct CollPair *collpair);
 
 /////////////////////////////////////////////////
 // used in effect.c

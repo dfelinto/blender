@@ -46,6 +46,7 @@
 #include "BKE_data_transfer.h"
 #include "BKE_DerivedMesh.h"
 #include "BKE_dynamicpaint.h"
+#include "BKE_effect.h"
 #include "BKE_mesh_mapping.h"
 #include "BKE_mesh_remap.h"
 #include "BKE_multires.h"
@@ -2465,9 +2466,29 @@ static void rna_def_modifier_cloth(BlenderRNA *brna)
 	RNA_def_property_pointer_sdna(prop, NULL, "coll_parms");
 	RNA_def_property_ui_text(prop, "Cloth Collision Settings", "");
 	
+	prop = RNA_def_property(srna, "solver_result", PROP_POINTER, PROP_NONE);
+	RNA_def_property_struct_type(prop, "ClothSolverResult");
+	RNA_def_property_pointer_sdna(prop, NULL, "solver_result");
+	RNA_def_property_ui_text(prop, "Solver Result", "");
+	
 	prop = RNA_def_property(srna, "point_cache", PROP_POINTER, PROP_NONE);
 	RNA_def_property_flag(prop, PROP_NEVER_NULL);
 	RNA_def_property_ui_text(prop, "Point Cache", "");
+
+	prop = RNA_def_property(srna, "hair_grid_min", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_float_sdna(prop, NULL, "hair_grid_min");
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+	RNA_def_property_ui_text(prop, "Hair Grid Minimum", "");
+
+	prop = RNA_def_property(srna, "hair_grid_max", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_float_sdna(prop, NULL, "hair_grid_max");
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+	RNA_def_property_ui_text(prop, "Hair Grid Maximum", "");
+
+	prop = RNA_def_property(srna, "hair_grid_resolution", PROP_INT, PROP_NONE);
+	RNA_def_property_int_sdna(prop, NULL, "hair_grid_res");
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+	RNA_def_property_ui_text(prop, "Hair Grid Resolution", "");
 }
 
 static void rna_def_modifier_smoke(BlenderRNA *brna)

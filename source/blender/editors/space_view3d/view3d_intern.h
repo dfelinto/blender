@@ -48,9 +48,11 @@ struct bMotionPath;
 struct bPoseChannel;
 struct bScreen;
 struct Mesh;
+struct SimDebugData;
 struct wmNDOFMotionData;
 struct wmOperatorType;
 struct wmWindowManager;
+struct wmKeyConfig;
 
 /* drawing flags: */
 enum {
@@ -176,6 +178,9 @@ void draw_mesh_paint_weight_edges(RegionView3D *rv3d, struct DerivedMesh *dm,
                                   void *edgemask_cb, void *user_data);
 void draw_mesh_paint(View3D *v3d, RegionView3D *rv3d,
                      struct Object *ob, struct DerivedMesh *dm, const int draw_flags);
+
+/* drawsimdebug.c */
+void draw_sim_debug_data(Scene *scene, View3D *v3d, ARegion *ar);
 
 /* view3d_draw.c */
 void view3d_main_area_draw(const struct bContext *C, struct ARegion *ar);

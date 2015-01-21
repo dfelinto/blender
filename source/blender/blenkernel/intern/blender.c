@@ -146,10 +146,6 @@ void initglobals(void)
 	else
 		BLI_snprintf(versionstr, sizeof(versionstr), "v%d.%02d", BLENDER_VERSION / 100, BLENDER_VERSION % 100);
 
-#ifdef _WIN32
-	G.windowstate = 0;
-#endif
-
 #ifndef WITH_PYTHON_SECURITY /* default */
 	G.f |= G_SCRIPT_AUTOEXEC;
 #else
@@ -271,6 +267,17 @@ static void setup_app_data(bContext *C, BlendFileData *bfd, const char *filepath
 		BKE_userdef_free();
 		
 		U = *bfd->user;
+
+		/* Security issue: any blend file could include a USER block.
+		 *
+		 * Currently we load prefs from BLENDER_STARTUP_FILE and later on load BLENDER_USERPREF_FILE,
+		 * to load the preferences defined in the users home dir.
+		 *
+		 * This means we will never accidentally (or maliciously)
+		 * enable scripts auto-execution by loading a '.blend' file.
+		 */
+		U.flag |= USER_SCRIPT_AUTOEXEC_DISABLE;
+
 		MEM_freeN(bfd->user);
 	}
 	
@@ -280,8 +287,6 @@ static void setup_app_data(bContext *C, BlendFileData *bfd, const char *filepath
 		CTX_data_scene_set(C, curscene);
 	}
 	else {
-		G.winpos = bfd->winpos;
-		G.displaymode = bfd->displaymode;
 		G.fileflags = bfd->fileflags;
 		CTX_wm_manager_set(C, G.main->wm.first);
 		CTX_wm_screen_set(C, bfd->curscreen);

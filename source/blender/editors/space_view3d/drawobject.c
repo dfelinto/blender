@@ -5371,7 +5371,7 @@ static void draw_new_particle_system(Scene *scene, View3D *v3d, RegionView3D *rv
 		cache = psys->pathcache;
 		for (a = 0, pa = psys->particles; a < totpart; a++, pa++) {
 			path = cache[a];
-			if (path->steps > 0) {
+			if (path->segments > 0) {
 				glVertexPointer(3, GL_FLOAT, sizeof(ParticleCacheKey), path->co);
 
 				if (1) { //ob_dt > OB_WIRE) {
@@ -5383,7 +5383,136 @@ static void draw_new_particle_system(Scene *scene, View3D *v3d, RegionView3D *rv
 					}
 				}
 
-				glDrawArrays(GL_LINE_STRIP, 0, path->steps + 1);
+				glDrawArrays(GL_LINE_STRIP, 0, path->segments + 1);
+			}
+		}
+
+		if (part->type ==  PART_HAIR) {
+			if (part->draw & PART_DRAW_GUIDE_HAIRS) {
+				DerivedMesh *hair_dm = psys->hair_out_dm;
+				
+				glDisable(GL_LIGHTING);
+				glDisable(GL_COLOR_MATERIAL);
+				glDisableClientState(GL_NORMAL_ARRAY);
+				glDisableClientState(GL_COLOR_ARRAY);
+				
+				for (a = 0, pa = psys->particles; a < totpart; a++, pa++) {
+					if (pa->totkey > 1) {
+						HairKey *hkey = pa->hair;
+						
+						glVertexPointer(3, GL_FLOAT, sizeof(HairKey), hkey->world_co);
+						
+						// XXX use proper theme color here
+//						UI_ThemeColor(TH_NORMAL);
+						glColor3f(0.58f, 0.67f, 1.0f);
+						
+						glDrawArrays(GL_LINE_STRIP, 0, pa->totkey);
+					}
+				}
+				
+				if (hair_dm) {
+					MVert *mvert = hair_dm->getVertArray(hair_dm);
+					int i;
+					
+					glColor3f(0.9f, 0.4f, 0.4f);
+					
+					glBegin(GL_LINES);
+					for (a = 0, pa = psys->particles; a < totpart; a++, pa++) {
+						for (i = 1; i < pa->totkey; ++i) {
+							float v1[3], v2[3];
+							
+							copy_v3_v3(v1, mvert[pa->hair_index + i - 1].co);
+							copy_v3_v3(v2, mvert[pa->hair_index + i].co);
+							
+							mul_m4_v3(ob->obmat, v1);
+							mul_m4_v3(ob->obmat, v2);
+							
+							glVertex3fv(v1);
+							glVertex3fv(v2);
+						}
+					}
+					glEnd();
+				}
+				
+				glEnable(GL_LIGHTING);
+				glEnable(GL_COLOR_MATERIAL);
+				glEnableClientState(GL_NORMAL_ARRAY);
+				if ((dflag & DRAW_CONSTCOLOR) == 0)
+					if (part->draw_col == PART_DRAW_COL_MAT)
+						glEnableClientState(GL_COLOR_ARRAY);
+			}
+			
+			if (part->draw & PART_DRAW_HAIR_GRID) {
+				ClothModifierData *clmd = psys->clmd;
+				if (clmd) {
+					float *a = clmd->hair_grid_min;
+					float *b = clmd->hair_grid_max;
+					int *res = clmd->hair_grid_res;
+					int i;
+					
+					glDisable(GL_LIGHTING);
+					glDisable(GL_COLOR_MATERIAL);
+					glDisableClientState(GL_NORMAL_ARRAY);
+					glDisableClientState(GL_COLOR_ARRAY);
+					
+					if (select)
+						UI_ThemeColor(TH_ACTIVE);
+					else
+						UI_ThemeColor(TH_WIRE);
+					glBegin(GL_LINES);
+					glVertex3f(a[0], a[1], a[2]); glVertex3f(b[0], a[1], a[2]);
+					glVertex3f(b[0], a[1], a[2]); glVertex3f(b[0], b[1], a[2]);
+					glVertex3f(b[0], b[1], a[2]); glVertex3f(a[0], b[1], a[2]);
+					glVertex3f(a[0], b[1], a[2]); glVertex3f(a[0], a[1], a[2]);
+					
+					glVertex3f(a[0], a[1], b[2]); glVertex3f(b[0], a[1], b[2]);
+					glVertex3f(b[0], a[1], b[2]); glVertex3f(b[0], b[1], b[2]);
+					glVertex3f(b[0], b[1], b[2]); glVertex3f(a[0], b[1], b[2]);
+					glVertex3f(a[0], b[1], b[2]); glVertex3f(a[0], a[1], b[2]);
+					
+					glVertex3f(a[0], a[1], a[2]); glVertex3f(a[0], a[1], b[2]);
+					glVertex3f(b[0], a[1], a[2]); glVertex3f(b[0], a[1], b[2]);
+					glVertex3f(a[0], b[1], a[2]); glVertex3f(a[0], b[1], b[2]);
+					glVertex3f(b[0], b[1], a[2]); glVertex3f(b[0], b[1], b[2]);
+					glEnd();
+					
+					if (select)
+						UI_ThemeColorShadeAlpha(TH_ACTIVE, 0, -100);
+					else
+						UI_ThemeColorShadeAlpha(TH_WIRE, 0, -100);
+					glEnable(GL_BLEND);
+					glBegin(GL_LINES);
+					for (i = 1; i < res[0]-1; ++i) {
+						float f = interpf(b[0], a[0], (float)i / (float)(res[0]-1));
+						glVertex3f(f, a[1], a[2]); glVertex3f(f, b[1], a[2]);
+						glVertex3f(f, b[1], a[2]); glVertex3f(f, b[1], b[2]);
+						glVertex3f(f, b[1], b[2]); glVertex3f(f, a[1], b[2]);
+						glVertex3f(f, a[1], b[2]); glVertex3f(f, a[1], a[2]);
+					}
+					for (i = 1; i < res[1]-1; ++i) {
+						float f = interpf(b[1], a[1], (float)i / (float)(res[1]-1));
+						glVertex3f(a[0], f, a[2]); glVertex3f(b[0], f, a[2]);
+						glVertex3f(b[0], f, a[2]); glVertex3f(b[0], f, b[2]);
+						glVertex3f(b[0], f, b[2]); glVertex3f(a[0], f, b[2]);
+						glVertex3f(a[0], f, b[2]); glVertex3f(a[0], f, a[2]);
+					}
+					for (i = 1; i < res[2]-1; ++i) {
+						float f = interpf(b[2], a[2], (float)i / (float)(res[2]-1));
+						glVertex3f(a[0], a[1], f); glVertex3f(b[0], a[1], f);
+						glVertex3f(b[0], a[1], f); glVertex3f(b[0], b[1], f);
+						glVertex3f(b[0], b[1], f); glVertex3f(a[0], b[1], f);
+						glVertex3f(a[0], b[1], f); glVertex3f(a[0], a[1], f);
+					}
+					glEnd();
+					glDisable(GL_BLEND);
+					
+					glEnable(GL_LIGHTING);
+					glEnable(GL_COLOR_MATERIAL);
+					glEnableClientState(GL_NORMAL_ARRAY);
+					if ((dflag & DRAW_CONSTCOLOR) == 0)
+						if (part->draw_col == PART_DRAW_COL_MAT)
+							glEnableClientState(GL_COLOR_ARRAY);
+				}
 			}
 		}
 		
@@ -5402,7 +5531,7 @@ static void draw_new_particle_system(Scene *scene, View3D *v3d, RegionView3D *rv
 				}
 			}
 
-			glDrawArrays(GL_LINE_STRIP, 0, path->steps + 1);
+			glDrawArrays(GL_LINE_STRIP, 0, path->segments + 1);
 		}
 
 
@@ -5554,7 +5683,7 @@ static void draw_ptcache_edit(Scene *scene, View3D *v3d, PTCacheEdit *edit)
 	PTCacheEditKey *key;
 	ParticleEditSettings *pset = PE_settings(scene);
 	int i, k, totpoint = edit->totpoint, timed = pset->flag & PE_FADE_TIME ? pset->fade_frames : 0;
-	int steps = 1;
+	int totkeys = 1;
 	float sel_col[3];
 	float nosel_col[3];
 	float *pathcol = NULL, *pcol;
@@ -5573,10 +5702,10 @@ static void draw_ptcache_edit(Scene *scene, View3D *v3d, PTCacheEdit *edit)
 	UI_GetThemeColor3fv(TH_VERTEX, nosel_col);
 
 	/* draw paths */
-	steps = (*edit->pathcache)->steps + 1;
+	totkeys = (*edit->pathcache)->segments + 1;
 
 	glEnable(GL_BLEND);
-	pathcol = MEM_callocN(steps * 4 * sizeof(float), "particle path color data");
+	pathcol = MEM_callocN(totkeys * 4 * sizeof(float), "particle path color data");
 
 	glEnableClientState(GL_VERTEX_ARRAY);
 	glEnableClientState(GL_COLOR_ARRAY);
@@ -5596,7 +5725,7 @@ static void draw_ptcache_edit(Scene *scene, View3D *v3d, PTCacheEdit *edit)
 		glVertexPointer(3, GL_FLOAT, sizeof(ParticleCacheKey), path->co);
 
 		if (point->flag & PEP_HIDE) {
-			for (k = 0, pcol = pathcol; k < steps; k++, pcol += 4) {
+			for (k = 0, pcol = pathcol; k < totkeys; k++, pcol += 4) {
 				copy_v3_v3(pcol, path->col);
 				pcol[3] = 0.25f;
 			}
@@ -5604,7 +5733,7 @@ static void draw_ptcache_edit(Scene *scene, View3D *v3d, PTCacheEdit *edit)
 			glColorPointer(4, GL_FLOAT, 4 * sizeof(float), pathcol);
 		}
 		else if (timed) {
-			for (k = 0, pcol = pathcol, pkey = path; k < steps; k++, pkey++, pcol += 4) {
+			for (k = 0, pcol = pathcol, pkey = path; k < totkeys; k++, pkey++, pcol += 4) {
 				copy_v3_v3(pcol, pkey->col);
 				pcol[3] = 1.0f - fabsf((float)(CFRA) -pkey->time) / (float)pset->fade_frames;
 			}
@@ -5614,7 +5743,7 @@ static void draw_ptcache_edit(Scene *scene, View3D *v3d, PTCacheEdit *edit)
 		else
 			glColorPointer(3, GL_FLOAT, sizeof(ParticleCacheKey), path->col);
 
-		glDrawArrays(GL_LINE_STRIP, 0, path->steps + 1);
+		glDrawArrays(GL_LINE_STRIP, 0, path->segments + 1);
 	}
 
 	if (pathcol) { MEM_freeN(pathcol); pathcol = pcol = NULL; }

@@ -45,6 +45,7 @@
 
 #include "BKE_global.h"
 
+#include "BIF_gl.h"
 
 #include "BLF_api.h"
 #ifdef WITH_INTERNATIONAL
@@ -147,8 +148,9 @@ static uiFont *uifont_to_blfont(int id)
 /* *************** draw ************************ */
 
 
-void UI_fontstyle_draw_ex(uiFontStyle *fs, const rcti *rect, const char *str,
-                        size_t len, float *r_xofs, float *r_yofs)
+void UI_fontstyle_draw_ex(
+        const uiFontStyle *fs, const rcti *rect, const char *str,
+        size_t len, float *r_xofs, float *r_yofs)
 {
 	float height;
 	int xofs = 0, yofs;
@@ -194,15 +196,17 @@ void UI_fontstyle_draw_ex(uiFontStyle *fs, const rcti *rect, const char *str,
 	*r_yofs = yofs;
 }
 
-void UI_fontstyle_draw(uiFontStyle *fs, const rcti *rect, const char *str)
+void UI_fontstyle_draw(const uiFontStyle *fs, const rcti *rect, const char *str)
 {
 	float xofs, yofs;
-	UI_fontstyle_draw_ex(fs, rect, str,
-	                   BLF_DRAW_STR_DUMMY_MAX, &xofs, &yofs);
+
+	UI_fontstyle_draw_ex(
+	        fs, rect, str,
+	        BLF_DRAW_STR_DUMMY_MAX, &xofs, &yofs);
 }
 
 /* drawn same as above, but at 90 degree angle */
-void UI_fontstyle_draw_rotated(uiFontStyle *fs, const rcti *rect, const char *str)
+void UI_fontstyle_draw_rotated(const uiFontStyle *fs, const rcti *rect, const char *str)
 {
 	float height;
 	int xofs, yofs;
@@ -255,6 +259,66 @@ void UI_fontstyle_draw_rotated(uiFontStyle *fs, const rcti *rect, const char *st
 		BLF_disable(fs->uifont_id, BLF_KERNING_DEFAULT);
 }
 
+/**
+ * Similar to #UI_fontstyle_draw
+ * but ignore alignment, shadow & no clipping rect.
+ *
+ * For drawing on-screen labels.
+ */
+void UI_fontstyle_draw_simple(const uiFontStyle *fs, float x, float y, const char *str)
+{
+	if (fs->kerning == 1)
+		BLF_enable(fs->uifont_id, BLF_KERNING_DEFAULT);
+
+	UI_fontstyle_set(fs);
+	BLF_position(fs->uifont_id, x, y, 0.0f);
+	BLF_draw(fs->uifont_id, str, BLF_DRAW_STR_DUMMY_MAX);
+
+	if (fs->kerning == 1)
+		BLF_disable(fs->uifont_id, BLF_KERNING_DEFAULT);
+}
+
+/**
+ * Same as #UI_fontstyle_draw but draw a colored backdrop.
+ */
+void UI_fontstyle_draw_simple_backdrop(
+        const uiFontStyle *fs, float x, float y, const char *str,
+        const unsigned char fg[4], const unsigned char bg[4])
+{
+	if (fs->kerning == 1)
+		BLF_enable(fs->uifont_id, BLF_KERNING_DEFAULT);
+
+	UI_fontstyle_set(fs);
+
+	{
+		const float width = BLF_width(fs->uifont_id, str, BLF_DRAW_STR_DUMMY_MAX);
+		const float height = BLF_height_max(fs->uifont_id);
+		const float decent = BLF_descender(fs->uifont_id);
+		const float margin = height / 4.0f;
+
+		/* backdrop */
+		glColor4ubv(bg);
+
+		UI_draw_roundbox_corner_set(UI_CNR_ALL | UI_RB_ALPHA);
+		UI_draw_roundbox(
+		        x - margin,
+		        (y + decent) - margin,
+		        x + width + margin,
+		        (y + decent) + height + margin,
+		        margin);
+
+		glColor4ubv(fg);
+	}
+
+
+	BLF_position(fs->uifont_id, x, y, 0.0f);
+	BLF_draw(fs->uifont_id, str, BLF_DRAW_STR_DUMMY_MAX);
+
+	if (fs->kerning == 1)
+		BLF_disable(fs->uifont_id, BLF_KERNING_DEFAULT);
+}
+
+
 /* ************** helpers ************************ */
 /* XXX: read a style configure */
 uiStyle *UI_style_get(void)
@@ -291,40 +355,28 @@ uiStyle *UI_style_get_dpi(void)
 	return &_style;
 }
 
-/* temporarily, does widget font */
-int UI_fontstyle_string_width(const char *str)
+int UI_fontstyle_string_width(const uiFontStyle *fs, const char *str)
 {
-	uiStyle *style = UI_style_get();
-	uiFontStyle *fstyle = &style->widget;
 	int width;
 	
-	if (fstyle->kerning == 1) /* for BLF_width */
-		BLF_enable(fstyle->uifont_id, BLF_KERNING_DEFAULT);
+	if (fs->kerning == 1) /* for BLF_width */
+		BLF_enable(fs->uifont_id, BLF_KERNING_DEFAULT);
 	
-	UI_fontstyle_set(fstyle);
-	width = BLF_width(fstyle->uifont_id, str, BLF_DRAW_STR_DUMMY_MAX);
+	UI_fontstyle_set(fs);
+	width = BLF_width(fs->uifont_id, str, BLF_DRAW_STR_DUMMY_MAX);
 	
-	if (fstyle->kerning == 1)
-		BLF_disable(fstyle->uifont_id, BLF_KERNING_DEFAULT);
+	if (fs->kerning == 1)
+		BLF_disable(fs->uifont_id, BLF_KERNING_DEFAULT);
 	
 	return width;
 }
 
-/* temporarily, does widget font */
-void UI_draw_string(float x, float y, const char *str)
+int UI_fontstyle_height_max(const uiFontStyle *fs)
 {
-	uiStyle *style = UI_style_get();
-	
-	if (style->widget.kerning == 1)
-		BLF_enable(style->widget.uifont_id, BLF_KERNING_DEFAULT);
-
-	UI_fontstyle_set(&style->widget);
-	BLF_position(style->widget.uifont_id, x, y, 0.0f);
-	BLF_draw(style->widget.uifont_id, str, BLF_DRAW_STR_DUMMY_MAX);
-
-	if (style->widget.kerning == 1)
-		BLF_disable(style->widget.uifont_id, BLF_KERNING_DEFAULT);
+	UI_fontstyle_set(fs);
+	return BLF_height_max(fs->uifont_id);
 }
+
 
 /* ************** init exit ************************ */
 
@@ -398,10 +450,9 @@ void uiStyleInit(void)
 			if (font->blf_id == -1) {
 				font->blf_id = BLF_load_mem("default", (unsigned char *)datatoc_bfont_ttf, datatoc_bfont_ttf_size);
 			}
-			else {
-				BLF_default_set(font->blf_id);
-			}
 		}
+
+		BLF_default_set(font->blf_id);
 
 		if (font->blf_id == -1) {
 			if (G.debug & G_DEBUG)
@@ -453,7 +504,7 @@ void uiStyleInit(void)
 	BLF_size(blf_mono_font_render, 12 * U.pixelsize, 72);
 }
 
-void UI_fontstyle_set(uiFontStyle *fs)
+void UI_fontstyle_set(const uiFontStyle *fs)
 {
 	uiFont *font = uifont_to_blfont(fs->uifont_id);
 	

@@ -564,4 +564,74 @@ void blo_do_versions_270(FileData *fd, Library *UNUSED(lib), Main *main)
 			}
 		}
 	}
+
+	/* Customizable Safe Areas */
+	if (!MAIN_VERSION_ATLEAST(main, 273, 2)) {
+		if (!DNA_struct_elem_find(fd->filesdna, "Scene", "DisplaySafeAreas", "safe_areas")) {
+			Scene *scene;
+
+			for (scene = main->scene.first; scene; scene = scene->id.next) {
+				copy_v2_fl2(scene->safe_areas.title, 3.5f / 100.0f, 3.5f / 100.0f);
+				copy_v2_fl2(scene->safe_areas.action, 10.0f / 100.0f, 5.0f / 100.0f);
+				copy_v2_fl2(scene->safe_areas.title_center, 17.5f / 100.0f, 5.0f / 100.0f);
+				copy_v2_fl2(scene->safe_areas.action_center, 15.0f / 100.0f, 5.0f / 100.0f);
+			}
+		}
+	}
+	
+	if (!DNA_struct_elem_find(fd->filesdna, "ClothSimSettings", "float", "bending_damping")) {
+		Object *ob;
+		ModifierData *md;
+		for (ob = main->object.first; ob; ob = ob->id.next) {
+			for (md = ob->modifiers.first; md; md = md->next) {
+				if (md->type == eModifierType_Cloth) {
+					ClothModifierData *clmd = (ClothModifierData*) md;
+					clmd->sim_parms->bending_damping = 0.5f;
+				}
+				else if (md->type == eModifierType_ParticleSystem) {
+					ParticleSystemModifierData *pmd = (ParticleSystemModifierData*) md;
+					if (pmd->psys->clmd) {
+						pmd->psys->clmd->sim_parms->bending_damping = 0.5f;
+					}
+				}
+			}
+		}
+	}
+
+	if (!DNA_struct_elem_find(fd->filesdna, "ParticleSettings", "float", "clump_noise_size")) {
+		ParticleSettings *part;
+		for (part = main->particle.first; part; part = part->id.next) {
+			part->clump_noise_size = 1.0f;
+		}
+	}
+
+	if (!DNA_struct_elem_find(fd->filesdna, "ParticleSettings", "int", "kink_extra_steps")) {
+		ParticleSettings *part;
+		for (part = main->particle.first; part; part = part->id.next) {
+			part->kink_extra_steps = 4;
+		}
+	}
+
+	if (!DNA_struct_elem_find(fd->filesdna, "MTex", "float", "kinkampfac")) {
+		ParticleSettings *part;
+		for (part = main->particle.first; part; part = part->id.next) {
+			int a;
+			for (a = 0; a < MAX_MTEX; a++) {
+				MTex *mtex = part->mtex[a];
+				if (mtex) {
+					mtex->kinkampfac = 1.0f;
+				}
+			}
+		}
+	}
+
+	if (!MAIN_VERSION_ATLEAST(main, 273, 3)) {
+		ParticleSettings *part;
+		for (part = main->particle.first; part; part = part->id.next) {
+			if (part->clumpcurve)
+				part->child_flag |= PART_CHILD_USE_CLUMP_CURVE;
+			if (part->roughcurve)
+				part->child_flag |= PART_CHILD_USE_ROUGH_CURVE;
+		}
+	}
 }

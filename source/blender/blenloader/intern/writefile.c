@@ -1108,6 +1108,11 @@ static void write_particlesettings(WriteData *wd, ListBase *idbase)
 			writestruct(wd, DATA, "PartDeflect", 1, part->pd2);
 			writestruct(wd, DATA, "EffectorWeights", 1, part->effector_weights);
 
+			if (part->clumpcurve)
+				write_curvemapping(wd, part->clumpcurve);
+			if (part->roughcurve)
+				write_curvemapping(wd, part->roughcurve);
+			
 			dw = part->dupliweights.first;
 			for (; dw; dw=dw->next) {
 				/* update indices */
@@ -3450,7 +3455,7 @@ static void write_global(WriteData *wd, int fileflags, Main *mainvar)
 	char subvstr[8];
 	
 	/* prevent mem checkers from complaining */
-	fg.pads= 0;
+	memset(fg.pad, 0, sizeof(fg.pad));
 	memset(fg.filename, 0, sizeof(fg.filename));
 	memset(fg.build_hash, 0, sizeof(fg.build_hash));
 
@@ -3459,8 +3464,6 @@ static void write_global(WriteData *wd, int fileflags, Main *mainvar)
 	/* XXX still remap G */
 	fg.curscreen= screen;
 	fg.curscene= screen ? screen->scene : NULL;
-	fg.displaymode= G.displaymode;
-	fg.winpos= G.winpos;
 
 	/* prevent to save this, is not good convention, and feature with concerns... */
 	fg.fileflags= (fileflags & ~G_FILE_FLAGS_RUNTIME);

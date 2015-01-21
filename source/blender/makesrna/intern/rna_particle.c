@@ -131,6 +131,7 @@ static EnumPropertyItem part_hair_ren_as_items[] = {
 
 #include "BKE_context.h"
 #include "BKE_cloth.h"
+#include "BKE_colortools.h"
 #include "BKE_deform.h"
 #include "BKE_depsgraph.h"
 #include "BKE_DerivedMesh.h"
@@ -356,13 +357,15 @@ static void rna_ParticleSystem_co_hair(ParticleSystem *particlesystem, Object *o
 		return;
 
 	if (part->ren_as == PART_DRAW_PATH && particlesystem->pathcache)
-		path_nbr = (int)pow(2.0, step_nbr);
+		path_nbr = 1 << step_nbr;
+	if (part->kink == PART_KINK_SPIRAL)
+		path_nbr += part->kink_extra_steps;
 
 	if (particle_no < totpart) {
 
 		if (path_nbr) {
 			cache = particlesystem->pathcache[particle_no];
-			max_k = (int)cache->steps;
+			max_k = (int)cache->segments;
 		}
 
 	}
@@ -371,10 +374,10 @@ static void rna_ParticleSystem_co_hair(ParticleSystem *particlesystem, Object *o
 		if (path_nbr) {
 			cache = particlesystem->childcache[particle_no - totpart];
 
-			if (cache->steps < 0)
+			if (cache->segments < 0)
 				max_k = 0;
 			else
-				max_k = (int)cache->steps;
+				max_k = (int)cache->segments;
 		}
 	}
 
@@ -645,6 +648,15 @@ static void rna_Particle_redo_child(Main *bmain, Scene *scene, PointerRNA *ptr)
 	particle_recalc(bmain, scene, ptr, PSYS_RECALC_CHILD);
 }
 
+static void rna_Particle_cloth_update(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *ptr)
+{
+	Object *ob = (Object *)ptr->id.data;
+
+	DAG_id_tag_update(&ob->id, OB_RECALC_DATA);
+	WM_main_add_notifier(NC_OBJECT | ND_MODIFIER, ob);
+}
+
+
 static ParticleSystem *rna_particle_system_for_target(Object *ob, ParticleTarget *target)
 {
 	ParticleSystem *psys;
@@ -716,6 +728,7 @@ static void rna_Particle_hair_dynamics(Main *bmain, Scene *scene, PointerRNA *pt
 		psys->clmd->sim_parms->goalspring = 0.0f;
 		psys->clmd->sim_parms->flags |= CLOTH_SIMSETTINGS_FLAG_GOAL | CLOTH_SIMSETTINGS_FLAG_NO_SPRING_COMPRESS;
 		psys->clmd->coll_parms->flags &= ~CLOTH_COLLSETTINGS_FLAG_SELF;
+		psys->clmd->coll_parms->flags |= CLOTH_COLLSETTINGS_FLAG_POINTS;
 		rna_Particle_redo(bmain, scene, ptr);
 	}
 	else
@@ -862,6 +875,32 @@ static int rna_PartSettings_is_fluid_get(PointerRNA *ptr)
 	ParticleSettings *part = (ParticleSettings *)ptr->data;
 
 	return part->type == PART_FLUID;
+}
+
+static void rna_ParticleSettings_use_clump_curve_update(Main *bmain, Scene *scene, PointerRNA *ptr)
+{
+	ParticleSettings *part = ptr->data;
+	
+	if (part->child_flag & PART_CHILD_USE_CLUMP_CURVE) {
+		if (!part->clumpcurve) {
+			BKE_particlesettings_clump_curve_init(part);
+		}
+	}
+	
+	rna_Particle_redo_child(bmain, scene, ptr);
+}
+
+static void rna_ParticleSettings_use_roughness_curve_update(Main *bmain, Scene *scene, PointerRNA *ptr)
+{
+	ParticleSettings *part = ptr->data;
+	
+	if (part->child_flag & PART_CHILD_USE_ROUGH_CURVE) {
+		if (!part->roughcurve) {
+			BKE_particlesettings_rough_curve_init(part);
+		}
+	}
+	
+	rna_Particle_redo_child(bmain, scene, ptr);
 }
 
 static void rna_ParticleSystem_name_set(PointerRNA *ptr, const char *value)
@@ -1776,9 +1815,14 @@ static void rna_def_particle_settings_mtex(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Clump", "Affect the child clumping");
 	RNA_def_property_update(prop, 0, "rna_Particle_reset");
 
-	prop = RNA_def_property(srna, "use_map_kink", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "mapto", PAMAP_KINK);
-	RNA_def_property_ui_text(prop, "Kink", "Affect the child kink");
+	prop = RNA_def_property(srna, "use_map_kink_amp", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "mapto", PAMAP_KINK_AMP);
+	RNA_def_property_ui_text(prop, "Kink Amplitude", "Affect the child kink amplitude");
+	RNA_def_property_update(prop, 0, "rna_Particle_redo_child");
+
+	prop = RNA_def_property(srna, "use_map_kink_freq", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "mapto", PAMAP_KINK_FREQ);
+	RNA_def_property_ui_text(prop, "Kink Frequency", "Affect the child kink frequency");
 	RNA_def_property_update(prop, 0, "rna_Particle_redo_child");
 
 	prop = RNA_def_property(srna, "use_map_rough", PROP_BOOLEAN, PROP_NONE);
@@ -1855,10 +1899,16 @@ static void rna_def_particle_settings_mtex(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Clump Factor", "Amount texture affects child clump");
 	RNA_def_property_update(prop, 0, "rna_Particle_redo_child");
 
-	prop = RNA_def_property(srna, "kink_factor", PROP_FLOAT, PROP_NONE);
+	prop = RNA_def_property(srna, "kink_amp_factor", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_float_sdna(prop, NULL, "kinkampfac");
+	RNA_def_property_ui_range(prop, 0, 1, 10, 3);
+	RNA_def_property_ui_text(prop, "Kink Amplitude Factor", "Amount texture affects child kink amplitude");
+	RNA_def_property_update(prop, 0, "rna_Particle_redo_child");
+
+	prop = RNA_def_property(srna, "kink_freq_factor", PROP_FLOAT, PROP_NONE);
 	RNA_def_property_float_sdna(prop, NULL, "kinkfac");
 	RNA_def_property_ui_range(prop, 0, 1, 10, 3);
-	RNA_def_property_ui_text(prop, "Kink Factor", "Amount texture affects child kink");
+	RNA_def_property_ui_text(prop, "Kink Frequency Factor", "Amount texture affects child kink frequency");
 	RNA_def_property_update(prop, 0, "rna_Particle_redo_child");
 
 	prop = RNA_def_property(srna, "rough_factor", PROP_FLOAT, PROP_NONE);
@@ -1944,6 +1994,7 @@ static void rna_def_particle_settings(BlenderRNA *brna)
 		{PART_KINK_RADIAL, "RADIAL", 0, "Radial", ""},
 		{PART_KINK_WAVE, "WAVE", 0, "Wave", ""},
 		{PART_KINK_BRAID, "BRAID", 0, "Braid", ""},
+		{PART_KINK_SPIRAL, "SPIRAL", 0, "Spiral", ""},
 		{0, NULL, 0, NULL, NULL}
 	};
 
@@ -2176,6 +2227,16 @@ static void rna_def_particle_settings(BlenderRNA *brna)
 	RNA_def_property_update(prop, 0, "rna_Particle_reset");
 
 	/*draw flag*/
+	prop = RNA_def_property(srna, "show_guide_hairs", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "draw", PART_DRAW_GUIDE_HAIRS);
+	RNA_def_property_ui_text(prop, "Guide Hairs", "Show guide hairs");
+	RNA_def_property_update(prop, 0, "rna_Particle_redo");
+
+	prop = RNA_def_property(srna, "show_hair_grid", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "draw", PART_DRAW_HAIR_GRID);
+	RNA_def_property_ui_text(prop, "Guide Hairs", "Show guide hairs");
+	RNA_def_property_update(prop, 0, "rna_Particle_redo");
+
 	prop = RNA_def_property(srna, "show_velocity", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "draw", PART_DRAW_VEL);
 	RNA_def_property_ui_text(prop, "Velocity", "Show particle velocity");
@@ -2307,6 +2368,11 @@ static void rna_def_particle_settings(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Segments", "Number of hair segments");
 	RNA_def_property_update(prop, 0, "rna_Particle_reset");
 
+	prop = RNA_def_property(srna, "bending_random", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_float_sdna(prop, NULL, "bending_random");
+	RNA_def_property_range(prop, 0.0f, 1.0f);
+	RNA_def_property_ui_text(prop, "Random Bending Stiffness", "Random stiffness of hairs");
+	RNA_def_property_update(prop, 0, "rna_Particle_cloth_update");
 
 	/*TODO: not found in UI, readonly? */
 	prop = RNA_def_property(srna, "keys_step", PROP_INT, PROP_NONE);
@@ -2772,6 +2838,29 @@ static void rna_def_particle_settings(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Shape", "Shape of clumping");
 	RNA_def_property_update(prop, 0, "rna_Particle_redo_child");
 
+	prop = RNA_def_property(srna, "use_clump_curve", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "child_flag", PART_CHILD_USE_CLUMP_CURVE);
+	RNA_def_property_ui_text(prop, "Use Clump Curve", "Use a curve to define clump tapering");
+	RNA_def_property_update(prop, 0, "rna_ParticleSettings_use_clump_curve_update");
+
+	prop = RNA_def_property(srna, "clump_curve", PROP_POINTER, PROP_NONE);
+	RNA_def_property_pointer_sdna(prop, NULL, "clumpcurve");
+	RNA_def_property_struct_type(prop, "CurveMapping");
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+	RNA_def_property_ui_text(prop, "Clump Curve", "Curve defining clump tapering");
+	RNA_def_property_update(prop, 0, "rna_Particle_redo_child");
+
+	prop = RNA_def_property(srna, "use_clump_noise", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "child_flag", PART_CHILD_USE_CLUMP_NOISE);
+	RNA_def_property_ui_text(prop, "Use Clump Noise", "Create random clumps around the parent");
+	RNA_def_property_update(prop, 0, "rna_Particle_redo_child");
+
+	prop = RNA_def_property(srna, "clump_noise_size", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_float_sdna(prop, NULL, "clump_noise_size");
+	RNA_def_property_range(prop, 0.00001f, 100000.0f);
+	RNA_def_property_ui_range(prop, 0.01f, 10.0f, 0.1f, 3);
+	RNA_def_property_ui_text(prop, "Clump Noise Size", "Size of clump noise");
+	RNA_def_property_update(prop, 0, "rna_Particle_redo_child");
 
 	/* kink */
 	prop = RNA_def_property(srna, "kink_amplitude", PROP_FLOAT, PROP_NONE);
@@ -2785,6 +2874,12 @@ static void rna_def_particle_settings(BlenderRNA *brna)
 	RNA_def_property_float_sdna(prop, NULL, "kink_amp_clump");
 	RNA_def_property_range(prop, 0.0f, 1.0f);
 	RNA_def_property_ui_text(prop, "Amplitude Clump", "How much clump affects kink amplitude");
+	RNA_def_property_update(prop, 0, "rna_Particle_redo_child");
+
+	prop = RNA_def_property(srna, "kink_amplitude_random", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_float_sdna(prop, NULL, "kink_amp_random");
+	RNA_def_property_range(prop, 0.0f, 1.0f);
+	RNA_def_property_ui_text(prop, "Amplitude Random", "Random variation of the amplitude");
 	RNA_def_property_update(prop, 0, "rna_Particle_redo_child");
 
 	prop = RNA_def_property(srna, "kink_frequency", PROP_FLOAT, PROP_NONE);
@@ -2802,6 +2897,17 @@ static void rna_def_particle_settings(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "kink_flat", PROP_FLOAT, PROP_NONE);
 	RNA_def_property_range(prop, 0.0f, 1.0f);
 	RNA_def_property_ui_text(prop, "Flatness", "How flat the hairs are");
+	RNA_def_property_update(prop, 0, "rna_Particle_redo_child");
+
+	prop = RNA_def_property(srna, "kink_extra_steps", PROP_INT, PROP_NONE);
+	RNA_def_property_range(prop, 1, INT_MAX);
+	RNA_def_property_ui_range(prop, 1, 100, 1, -1);
+	RNA_def_property_ui_text(prop, "Extra Steps", "Extra steps for resolution of special kink features");
+	RNA_def_property_update(prop, 0, "rna_Particle_redo_child");
+
+	prop = RNA_def_property(srna, "kink_axis_random", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_range(prop, 0.0f, 1.0f);
+	RNA_def_property_ui_text(prop, "Axis Random", "Random variation of the orientation");
 	RNA_def_property_update(prop, 0, "rna_Particle_redo_child");
 
 	/* rough */
@@ -2850,6 +2956,18 @@ static void rna_def_particle_settings(BlenderRNA *brna)
 	RNA_def_property_float_sdna(prop, NULL, "rough_end_shape");
 	RNA_def_property_range(prop, 0.0f, 10.0f);
 	RNA_def_property_ui_text(prop, "Shape", "Shape of end point rough");
+	RNA_def_property_update(prop, 0, "rna_Particle_redo_child");
+
+	prop = RNA_def_property(srna, "use_roughness_curve", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "child_flag", PART_CHILD_USE_ROUGH_CURVE);
+	RNA_def_property_ui_text(prop, "Use Roughness Curve", "Use a curve to define roughness");
+	RNA_def_property_update(prop, 0, "rna_ParticleSettings_use_roughness_curve_update");
+
+	prop = RNA_def_property(srna, "roughness_curve", PROP_POINTER, PROP_NONE);
+	RNA_def_property_pointer_sdna(prop, NULL, "roughcurve");
+	RNA_def_property_struct_type(prop, "CurveMapping");
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+	RNA_def_property_ui_text(prop, "Roughness Curve", "Curve defining roughness");
 	RNA_def_property_update(prop, 0, "rna_Particle_redo_child");
 
 	prop = RNA_def_property(srna, "child_length", PROP_FLOAT, PROP_NONE);

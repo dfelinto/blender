@@ -823,6 +823,16 @@ static void view3d_main_area_listener(bScreen *sc, ScrArea *sa, ARegion *ar, wmN
 				case ND_WORLD:
 					/* handled by space_view3d_listener() for v3d access */
 					break;
+				case ND_DRAW_RENDER_VIEWPORT:
+				{
+					if (v3d->camera && (scene == wmn->reference)) {
+						RegionView3D *rv3d = ar->regiondata;
+						if (rv3d->persp == RV3D_CAMOB) {
+							ED_region_tag_redraw(ar);
+						}
+					}
+					break;
+				}
 			}
 			if (wmn->action == NA_EDITED)
 				ED_region_tag_redraw(ar);
@@ -860,6 +870,20 @@ static void view3d_main_area_listener(bScreen *sc, ScrArea *sa, ARegion *ar, wmN
 				case NA_EDITED:
 					ED_region_tag_redraw(ar);
 					break;
+			}
+			break;
+		case NC_CAMERA:
+			switch (wmn->data) {
+				case ND_DRAW_RENDER_VIEWPORT:
+				{
+					if (v3d->camera && (v3d->camera->data == wmn->reference)) {
+						RegionView3D *rv3d = ar->regiondata;
+						if (rv3d->persp == RV3D_CAMOB) {
+							ED_region_tag_redraw(ar);
+						}
+					}
+					break;
+				}
 			}
 			break;
 		case NC_GROUP:

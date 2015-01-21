@@ -2160,4 +2160,3 @@ void ED_region_cache_draw_cached_segments(const ARegion *ar, const int num_segme
 		}
 	}
 }
-
