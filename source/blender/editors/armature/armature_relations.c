@@ -29,12 +29,16 @@
  *  \ingroup edarmature
  */
 
+#include "MEM_guardedalloc.h"
+
+#include "DNA_anim_types.h"
 #include "DNA_armature_types.h"
 #include "DNA_constraint_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
 #include "BLI_blenlib.h"
+#include "BLI_ghash.h"
 #include "BLI_math.h"
 
 #include "BLF_translation.h"
@@ -44,6 +48,7 @@
 #include "BKE_constraint.h"
 #include "BKE_context.h"
 #include "BKE_depsgraph.h"
+#include "BKE_fcurve.h"
 #include "BKE_global.h"
 #include "BKE_main.h"
 #include "BKE_report.h"
@@ -99,33 +104,122 @@ static void joined_armature_fix_links_constraints(
 
 		/* action constraint? (pose constraints only) */
 		if (con->type == CONSTRAINT_TYPE_ACTION) {
-			bActionConstraint *data = con->data; // XXX old animation system
-			bAction *act;
-			bActionChannel *achan;
+			bActionConstraint *data = con->data;
 
 			if (data->act) {
-				act = data->act;
-
-				for (achan = act->chanbase.first; achan; achan = achan->next) {
-					if (STREQ(achan->name, pchan->name)) {
-						BLI_strncpy(achan->name, curbone->name, sizeof(achan->name));
-					}
-				}
+				BKE_action_fix_paths_rename(&tarArm->id, data->act, "pose.bones[", 
+				                            pchan->name, curbone->name, 0, 0, false);
 			}
 		}
 
 	}
 }
 
+/* userdata for joined_armature_fix_animdata_cb() */
+typedef struct tJoinArmature_AdtFixData {
+	Object *srcArm;
+	Object *tarArm;
+	
+	GHash *names_map;
+} tJoinArmature_AdtFixData;
+
+/* Callback to pass to void BKE_animdata_main_cb() for fixing driver ID's to point to the new ID */
+/* FIXME: For now, we only care about drivers here. When editing rigs, it's very rare to have animation
+ *        on the rigs being edited already, so it should be safe to skip these.
+ */
+static void joined_armature_fix_animdata_cb(ID *id, AnimData *adt, void *user_data)
+{
+	tJoinArmature_AdtFixData *afd = (tJoinArmature_AdtFixData *)user_data;
+	ID *src_id = &afd->srcArm->id;
+	ID *dst_id = &afd->tarArm->id;
+	
+	GHashIterator gh_iter;
+	FCurve *fcu;
+	
+	/* Fix paths - If this is the target object, it will have some "dirty" paths */
+	if (id == src_id) {
+		/* Fix drivers */
+		for (fcu = adt->drivers.first; fcu; fcu = fcu->next) {
+			/* skip driver if it doesn't affect the bones */
+			if (strstr(fcu->rna_path, "pose.bones[") == NULL) {
+				continue;
+			}
+			
+			// FIXME: this is too crude... it just does everything!
+			GHASH_ITER(gh_iter, afd->names_map) {
+				const char *old_name = BLI_ghashIterator_getKey(&gh_iter);
+				const char *new_name = BLI_ghashIterator_getValue(&gh_iter);
+				
+				/* only remap if changed; this still means there will be some waste if there aren't many drivers/keys */
+				if (strcmp(old_name, new_name) && strstr(fcu->rna_path, old_name)) {
+					fcu->rna_path = BKE_animsys_fix_rna_path_rename(id, fcu->rna_path, "pose.bones",
+					                                                old_name, new_name, 0, 0, false);
+					
+					/* we don't want to apply a second remapping on this driver now, 
+					 * so stop trying names, but keep fixing drivers
+					 */
+					break;
+				}
+			}
+		}
+	}
+	
+	
+	/* Driver targets */
+	for (fcu = adt->drivers.first; fcu; fcu = fcu->next) {
+		ChannelDriver *driver = fcu->driver;
+		DriverVar *dvar;
+		
+		/* Fix driver references to invalid ID's */
+		for (dvar = driver->variables.first; dvar; dvar = dvar->next) {
+			/* only change the used targets, since the others will need fixing manually anyway */
+			DRIVER_TARGETS_USED_LOOPER(dvar)
+			{
+				/* change the ID's used... */
+				if (dtar->id == src_id) {
+					dtar->id = dst_id;
+					
+					/* also check on the subtarget...
+					 * XXX: We duplicate the logic from drivers_path_rename_fix() here, with our own
+					 *      little twists so that we know that it isn't going to clobber the wrong data
+					 */
+					if ((dtar->rna_path && strstr(dtar->rna_path, "pose.bones[")) || (dtar->pchan_name[0])) {
+						GHASH_ITER(gh_iter, afd->names_map) {
+							const char *old_name = BLI_ghashIterator_getKey(&gh_iter);
+							const char *new_name = BLI_ghashIterator_getValue(&gh_iter);
+							
+							/* only remap if changed */
+							if (strcmp(old_name, new_name)) {
+								if ((dtar->rna_path) && strstr(dtar->rna_path, old_name)) {
+									/* Fix up path */
+									dtar->rna_path = BKE_animsys_fix_rna_path_rename(id, dtar->rna_path, "pose.bones",
+									                                                 old_name, new_name, 0, 0, false);
+									break; /* no need to try any more names for bone path */
+								}
+								else if (strcmp(dtar->pchan_name, old_name) == 0) {
+									/* Change target bone name */
+									BLI_strncpy(dtar->pchan_name, new_name, sizeof(dtar->pchan_name));
+									break; /* no need to try any more names for bone subtarget */
+								}
+							}
+						}
+					}
+				}
+			}
+			DRIVER_TARGETS_LOOPER_END
+		}
+	}
+}
+
 /* Helper function for armature joining - link fixing */
-static void joined_armature_fix_links(Object *tarArm, Object *srcArm, bPoseChannel *pchan, EditBone *curbone)
+static void joined_armature_fix_links(Main *bmain, Object *tarArm, Object *srcArm, bPoseChannel *pchan, EditBone *curbone)
 {
 	Object *ob;
 	bPose *pose;
 	bPoseChannel *pchant;
 	
 	/* let's go through all objects in database */
-	for (ob = G.main->object.first; ob; ob = ob->id.next) {
+	for (ob = bmain->object.first; ob; ob = ob->id.next) {
 		/* do some object-type specific things */
 		if (ob->type == OB_ARMATURE) {
 			pose = ob->pose;
@@ -199,34 +293,16 @@ int join_armature_exec(bContext *C, wmOperator *op)
 	CTX_DATA_BEGIN(C, Base *, base, selected_editable_bases)
 	{
 		if ((base->object->type == OB_ARMATURE) && (base->object != ob)) {
+			tJoinArmature_AdtFixData afd = {NULL};
 			bArmature *curarm = base->object->data;
 			
 			/* we assume that each armature datablock is only used in a single place */
 			BLI_assert(ob->data != base->object->data);
 			
-			/* copy over animdata first, so that the link fixing can access and fix the links */
-			if (base->object->adt) {
-				if (ob->adt == NULL) {
-					/* no animdata, so just use a copy of the whole thing */
-					ob->adt = BKE_copy_animdata(base->object->adt, false);
-				}
-				else {
-					/* merge in data - we'll fix the drivers manually */
-					BKE_animdata_merge_copy(&ob->id, &base->object->id, ADT_MERGECOPY_KEEP_DST, false);
-				}
-			}
-			
-			if (curarm->adt) {
-				if (arm->adt == NULL) {
-					/* no animdata, so just use a copy of the whole thing */
-					arm->adt = BKE_copy_animdata(curarm->adt, false);
-				}
-				else {
-					/* merge in data - we'll fix the drivers manually */
-					BKE_animdata_merge_copy(&arm->id, &curarm->id, ADT_MERGECOPY_KEEP_DST, false);
-				}
-			}
-			
+			/* init callback data for fixing up AnimData links later */
+			afd.srcArm = base->object;
+			afd.tarArm = ob;
+			afd.names_map = BLI_ghash_str_new("join_armature_adt_fix");
 			
 			/* Make a list of editbones in current armature */
 			ED_armature_to_edit(base->object->data);
@@ -247,6 +323,7 @@ int join_armature_exec(bContext *C, wmOperator *op)
 				
 				/* Get new name */
 				unique_editbone_name(arm->edbo, curbone->name, NULL);
+				BLI_ghash_insert(afd.names_map, BLI_strdup(pchan->name), curbone->name);
 				
 				/* Transform the bone */
 				{
@@ -277,7 +354,7 @@ int join_armature_exec(bContext *C, wmOperator *op)
 				}
 				
 				/* Fix Constraints and Other Links to this Bone and Armature */
-				joined_armature_fix_links(ob, base->object, pchan, curbone);
+				joined_armature_fix_links(bmain, ob, base->object, pchan, curbone);
 				
 				/* Rename pchan */
 				BLI_strncpy(pchan->name, curbone->name, sizeof(pchan->name));
@@ -292,6 +369,37 @@ int join_armature_exec(bContext *C, wmOperator *op)
 				BKE_pose_channels_hash_free(pose);
 			}
 			
+			/* Fix all the drivers (and animation data) */
+			BKE_animdata_main_cb(bmain, joined_armature_fix_animdata_cb, &afd);
+			BLI_ghash_free(afd.names_map, MEM_freeN, NULL);
+			
+			/* Only copy over animdata now, after all the remapping has been done, 
+			 * so that we don't have to worry about ambiguities re which armature
+			 * a bone came from!
+			 */
+			if (base->object->adt) {
+				if (ob->adt == NULL) {
+					/* no animdata, so just use a copy of the whole thing */
+					ob->adt = BKE_copy_animdata(base->object->adt, false);
+				}
+				else {
+					/* merge in data - we'll fix the drivers manually */
+					BKE_animdata_merge_copy(&ob->id, &base->object->id, ADT_MERGECOPY_KEEP_DST, false);
+				}
+			}
+			
+			if (curarm->adt) {
+				if (arm->adt == NULL) {
+					/* no animdata, so just use a copy of the whole thing */
+					arm->adt = BKE_copy_animdata(curarm->adt, false);
+				}
+				else {
+					/* merge in data - we'll fix the drivers manually */
+					BKE_animdata_merge_copy(&arm->id, &curarm->id, ADT_MERGECOPY_KEEP_DST, false);
+				}
+			}
+			
+			/* Free the old object data */
 			ED_base_object_free_and_unlink(bmain, scene, base);
 		}
 	}

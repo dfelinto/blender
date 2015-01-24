@@ -3514,10 +3514,14 @@ static void def_sh_tex_image(StructRNA *srna)
 	};
 
 	static const EnumPropertyItem prop_projection_items[] = {
-		{SHD_PROJ_FLAT, "FLAT", 0, "Flat",
-		                "Image is projected flat using the X and Y coordinates of the texture vector"},
-		{SHD_PROJ_BOX,  "BOX", 0, "Box",
-		                "Image is projected using different components for each side of the object space bounding box"},
+		{SHD_PROJ_FLAT,   "FLAT", 0, "Flat",
+		                  "Image is projected flat using the X and Y coordinates of the texture vector"},
+		{SHD_PROJ_BOX,    "BOX", 0, "Box",
+		                  "Image is projected using different components for each side of the object space bounding box"},
+		{SHD_PROJ_SPHERE, "SPHERE", 0, "Sphere",
+		                  "Image is projected spherically using the Z axis as central"},
+		{SHD_PROJ_TUBE,   "TUBE", 0, "Tube",
+		                  "Image is projected from the tube using the Z axis as central"},
 		{0, NULL, 0, NULL, NULL}
 	};
 
@@ -7216,7 +7220,13 @@ static void rna_def_node(BlenderRNA *brna)
 	static EnumPropertyItem dummy_static_type_items[] = {
 		{NODE_CUSTOM, "CUSTOM", 0, "Custom", "Custom Node"},
 		{0, NULL, 0, NULL, NULL}};
-	
+
+	static EnumPropertyItem node_shading_compatibilities[] = {
+		{NODE_OLD_SHADING, "OLD_SHADING", 0, "Old Shading", "Old shading system compatibility"},
+		{NODE_NEW_SHADING, "NEW_SHADING", 0, "New Shading", "New shading system compatibility"},
+		{0, NULL, 0, NULL, NULL}
+	};
+
 	srna = RNA_def_struct(brna, "Node", NULL);
 	RNA_def_struct_ui_text(srna, "Node", "Node in a node tree");
 	RNA_def_struct_sdna(srna, "bNode");
@@ -7355,6 +7365,12 @@ static void rna_def_node(BlenderRNA *brna)
 	RNA_def_function_flag(func, FUNC_NO_SELF | FUNC_USE_SELF_TYPE);
 	parm = RNA_def_boolean(func, "result", false, "Result", "");
 	RNA_def_function_return(func, parm);
+
+	prop = RNA_def_property(srna, "shading_compatibility", PROP_ENUM, PROP_NONE);
+	RNA_def_property_flag(prop, PROP_ENUM_FLAG);
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+	RNA_def_property_enum_sdna(prop, NULL, "typeinfo->compatibility");
+	RNA_def_property_enum_items(prop, node_shading_compatibilities);
 
 	/* registration */
 	prop = RNA_def_property(srna, "bl_idname", PROP_STRING, PROP_NONE);

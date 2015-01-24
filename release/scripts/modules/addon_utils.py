@@ -36,6 +36,15 @@ error_encoding = False
 addons_fake_modules = {}
 
 
+# called only once at startup, avoids calling 'reset_all', correct but slower.
+def _initialize():
+    path_list = paths()
+    for path in path_list:
+        _bpy.utils._sys_path_ensure(path)
+    for addon in _user_preferences.addons:
+        enable(addon.module)
+
+
 def paths():
     # RELEASE SCRIPTS: official scripts distributed in Blender releases
     addon_paths = _bpy.utils.script_paths("addons")
@@ -150,7 +159,7 @@ def modules_refresh(module_cache=addons_fake_modules):
             force_support = None
 
         for mod_name, mod_path in _bpy.path.module_names(path):
-            modules_stale -= {mod_name}
+            modules_stale.discard(mod_name)
             mod = module_cache.get(mod_name)
             if mod:
                 if mod.__file__ != mod_path:
@@ -182,14 +191,16 @@ def modules_refresh(module_cache=addons_fake_modules):
 
 
 def modules(module_cache=addons_fake_modules, refresh=True):
-    if refresh:
+    if refresh or ((module_cache is addons_fake_modules) and modules._is_first):
         modules_refresh(module_cache)
+        modules._is_first = False
 
     mod_list = list(module_cache.values())
     mod_list.sort(key=lambda mod: (mod.bl_info["category"],
                                    mod.bl_info["name"],
                                    ))
     return mod_list
+modules._is_first = True
 
 
 def check(module_name):
@@ -240,7 +251,7 @@ def _addon_remove(module_name):
             addons.remove(addon)
 
 
-def enable(module_name, default_set=True, persistent=False, handle_error=None):
+def enable(module_name, default_set=False, persistent=False, handle_error=None):
     """
     Enables an addon by name.
 
@@ -267,11 +278,11 @@ def enable(module_name, default_set=True, persistent=False, handle_error=None):
         mtime_orig = getattr(mod, "__time__", 0)
         mtime_new = os.path.getmtime(mod.__file__)
         if mtime_orig != mtime_new:
-            import imp
+            import importlib
             print("module changed on disk:", mod.__file__, "reloading...")
 
             try:
-                imp.reload(mod)
+                importlib.reload(mod)
             except:
                 handle_error()
                 del sys.modules[module_name]
@@ -297,7 +308,8 @@ def enable(module_name, default_set=True, persistent=False, handle_error=None):
             mod.__addon_enabled__ = False
         except:
             handle_error()
-            _addon_remove(module_name)
+            if default_set:
+                _addon_remove(module_name)
             return None
 
         # 2) try register collected modules
@@ -311,7 +323,8 @@ def enable(module_name, default_set=True, persistent=False, handle_error=None):
                   getattr(mod, "__file__", module_name))
             handle_error()
             del sys.modules[module_name]
-            _addon_remove(module_name)
+            if default_set:
+                _addon_remove(module_name)
             return None
 
     # * OK loaded successfully! *
@@ -384,10 +397,10 @@ def reset_all(reload_scripts=False):
 
             # first check if reload is needed before changing state.
             if reload_scripts:
-                import imp
+                import importlib
                 mod = sys.modules.get(mod_name)
                 if mod:
-                    imp.reload(mod)
+                    importlib.reload(mod)
 
             if is_enabled == is_loaded:
                 pass

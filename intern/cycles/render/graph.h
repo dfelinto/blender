@@ -79,7 +79,8 @@ enum ShaderNodeSpecialType {
 	SHADER_SPECIAL_TYPE_MIX_RGB, /* Only Mix subtype */
 	SHADER_SPECIAL_TYPE_AUTOCONVERT,
 	SHADER_SPECIAL_TYPE_GEOMETRY,
-	SHADER_SPECIAL_TYPE_SCRIPT
+	SHADER_SPECIAL_TYPE_SCRIPT,
+	SHADER_SPECIAL_TYPE_BACKGROUND,
 };
 
 /* Enum
@@ -246,6 +247,7 @@ public:
 
 	void connect(ShaderOutput *from, ShaderInput *to);
 	void disconnect(ShaderInput *to);
+	void relink(vector<ShaderInput*> inputs, vector<ShaderInput*> outputs, ShaderOutput *output);
 
 	void remove_unneeded_nodes();
 	void finalize(bool do_bump = false, bool do_osl = false);
