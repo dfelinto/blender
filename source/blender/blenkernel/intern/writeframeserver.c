@@ -406,7 +406,7 @@ void BKE_frameserver_end(void *context_v)
 	shutdown_socket_system();
 }
 
-void *BKE_frameserver_context_create()
+void *BKE_frameserver_context_create(void)
 {
 	FrameserverContext *context = MEM_mallocN(sizeof(FrameserverContext), "Frameserver Context");
 	return context;

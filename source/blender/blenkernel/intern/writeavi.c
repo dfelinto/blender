@@ -268,7 +268,7 @@ static void end_avi(void *context_v)
 	AVI_close_compress(avi);
 }
 
-static void *context_create_avi()
+static void *context_create_avi(void)
 {
 	AviMovie *avi = MEM_mallocN(sizeof(AviMovie), "avimovie");
 	return avi;

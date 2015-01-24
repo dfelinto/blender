@@ -1663,7 +1663,7 @@ bool BKE_ffmpeg_alpha_channel_is_supported(RenderData *rd)
 	return false;
 }
 
-void *BKE_ffmpeg_context_create()
+void *BKE_ffmpeg_context_create(void)
 {
 	FFMpegContext *context;
 
