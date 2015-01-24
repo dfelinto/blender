@@ -382,8 +382,9 @@ static void screenshot_startjob(void *sjv, short *stop, short *do_update, float 
 				char name[FILE_MAX];
 				int ok;
 				
-				BKE_makepicstring(name, rd.pic, sj->bmain->name, rd.cfra,
-				                  &rd.im_format, (rd.scemode & R_EXTENSION) != 0, true, NULL);
+				BKE_image_path_from_imformat(
+				        name, rd.pic, sj->bmain->name, rd.cfra,
+				        &rd.im_format, (rd.scemode & R_EXTENSION) != 0, true, NULL);
 				
 				ibuf->rect = sj->dumprect;
 				ok = BKE_imbuf_write(ibuf, name, &rd.im_format);

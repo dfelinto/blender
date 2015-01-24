@@ -103,8 +103,9 @@ void OutputOpenExrSingleLayerMultiViewOperation::deinitExecution()
 		Main *bmain = G.main; /* TODO, have this passed along */
 		char filename[FILE_MAX];
 
-		BKE_makepicstring_from_type(filename, this->m_path, bmain->name, this->m_rd->cfra, R_IMF_IMTYPE_OPENEXR,
-		                            (this->m_rd->scemode & R_EXTENSION) != 0, true, NULL);
+		BKE_image_path_from_imtype(
+		        filename, this->m_path, bmain->name, this->m_rd->cfra, R_IMF_IMTYPE_OPENEXR,
+		        (this->m_rd->scemode & R_EXTENSION) != 0, true, NULL);
 
 		exrhandle = this->get_handle(filename);
 		add_exr_channels(exrhandle, NULL, this->m_datatype, this->m_viewName, width, this->m_outputBuffer);
@@ -189,8 +190,9 @@ void OutputOpenExrMultiLayerMultiViewOperation::deinitExecution()
 		Main *bmain = G.main; /* TODO, have this passed along */
 		char filename[FILE_MAX];
 
-		BKE_makepicstring_from_type(filename, this->m_path, bmain->name, this->m_rd->cfra, R_IMF_IMTYPE_MULTILAYER,
-		                            (this->m_rd->scemode & R_EXTENSION) != 0, true, NULL);
+		BKE_image_path_from_imtype(
+		        filename, this->m_path, bmain->name, this->m_rd->cfra, R_IMF_IMTYPE_MULTILAYER,
+		        (this->m_rd->scemode & R_EXTENSION) != 0, true, NULL);
 
 		exrhandle = this->get_handle(filename);
 
@@ -299,8 +301,9 @@ void OutputStereoOperation::deinitExecution()
 			/* create stereo buffer */
 			ibuf[2] = IMB_stereoImBuf(this->m_format, ibuf[0], ibuf[1]);
 
-			BKE_makepicstring(filename, this->m_path, bmain->name, this->m_rd->cfra, this->m_format,
-			                  (this->m_rd->scemode & R_EXTENSION) != 0, true, NULL);
+			BKE_image_path_from_imformat(
+			        filename, this->m_path, bmain->name, this->m_rd->cfra, this->m_format,
+			        (this->m_rd->scemode & R_EXTENSION) != 0, true, NULL);
 
 			BKE_imbuf_write(ibuf[2], filename, this->m_format);
 

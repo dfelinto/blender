@@ -1178,7 +1178,7 @@ void BKE_image_all_free_anim_ibufs(int cfra)
 
 /* *********** READ AND WRITE ************** */
 
-int BKE_imtype_to_ftype(const char imtype)
+int BKE_image_imtype_to_ftype(const char imtype)
 {
 	if (imtype == R_IMF_IMTYPE_TARGA)
 		return TGA;
@@ -1218,7 +1218,7 @@ int BKE_imtype_to_ftype(const char imtype)
 		return JPG | 90;
 }
 
-char BKE_ftype_to_imtype(const int ftype)
+char BKE_image_ftype_to_imtype(const int ftype)
 {
 	if (ftype == 0)
 		return R_IMF_IMTYPE_TARGA;
@@ -1535,12 +1535,12 @@ static bool do_add_image_extension(char *string, const char imtype, const ImageF
 	}
 }
 
-int BKE_add_image_extension(char *string, const ImageFormatData *im_format)
+int BKE_image_path_ensure_ext_from_imformat(char *string, const ImageFormatData *im_format)
 {
 	return do_add_image_extension(string, im_format->imtype, im_format);
 }
 
-int BKE_add_image_extension_from_type(char *string, const char imtype)
+int BKE_image_path_ensure_ext_from_imtype(char *string, const char imtype)
 {
 	return do_add_image_extension(string, imtype, NULL);
 }
@@ -1818,7 +1818,7 @@ static void stampdata(Scene *scene, Object *camera, StampData *stamp_data, int d
 	}
 }
 
-void BKE_stamp_buf(Scene *scene, Object *camera, unsigned char *rect, float *rectf, int width, int height, int channels)
+void BKE_image_stamp_buf(Scene *scene, Object *camera, unsigned char *rect, float *rectf, int width, int height, int channels)
 {
 	struct StampData stamp_data;
 	float w, h, pad;
@@ -2264,14 +2264,16 @@ static void do_makepicstring(char *string, const char *base, const char *relbase
 		do_add_image_extension(string, imtype, im_format);
 }
 
-void BKE_makepicstring(char *string, const char *base, const char *relbase, int frame,
-                       const ImageFormatData *im_format, const bool use_ext, const bool use_frames, const char *view)
+void BKE_image_path_from_imformat(
+        char *string, const char *base, const char *relbase, int frame,
+        const ImageFormatData *im_format, const bool use_ext, const bool use_frames, const char *view)
 {
 	do_makepicstring(string, base, relbase, frame, im_format->imtype, im_format, use_ext, use_frames, view);
 }
 
-void BKE_makepicstring_from_type(char *string, const char *base, const char *relbase, int frame,
-                                 const char imtype, const bool use_ext, const bool use_frames, const char *view)
+void BKE_image_path_from_imtype(
+        char *string, const char *base, const char *relbase, int frame,
+        const char imtype, const bool use_ext, const bool use_frames, const char *view)
 {
 	do_makepicstring(string, base, relbase, frame, imtype, NULL, use_ext, use_frames, view);
 }

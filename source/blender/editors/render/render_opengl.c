@@ -434,7 +434,7 @@ static void screen_opengl_render_doit(OGLRender *oglrender, RenderResult *rr)
 		/* rr->rectf is now filled with image data */
 
 		if ((scene->r.stamp & R_STAMP_ALL) && (scene->r.stamp & R_STAMP_DRAW))
-			BKE_stamp_buf(scene, camera, rect, rectf, rr->rectx, rr->recty, 4);
+			BKE_image_stamp_buf(scene, camera, rect, rectf, rr->rectx, rr->recty, 4);
 
 		MEM_freeN(rect);
 	}
@@ -450,8 +450,9 @@ static void screen_opengl_render_write(OGLRender *oglrender)
 
 	rr = RE_AcquireResultRead(oglrender->re);
 
-	BKE_makepicstring(name, scene->r.pic, oglrender->bmain->name, scene->r.cfra,
-	                  &scene->r.im_format, (scene->r.scemode & R_EXTENSION) != 0, false, NULL);
+	BKE_image_path_from_imformat(
+	        name, scene->r.pic, oglrender->bmain->name, scene->r.cfra,
+	        &scene->r.im_format, (scene->r.scemode & R_EXTENSION) != 0, false, NULL);
 
 	/* write images as individual images or stereo */
 	ok = RE_WriteRenderViewsImage(oglrender->reports, rr, scene, camera, false, name);
@@ -718,8 +719,9 @@ static bool screen_opengl_render_anim_step(bContext *C, wmOperator *op)
 	is_movie = BKE_imtype_is_movie(scene->r.im_format.imtype);
 
 	if (!is_movie) {
-		BKE_makepicstring(name, scene->r.pic, oglrender->bmain->name, scene->r.cfra,
-		                  &scene->r.im_format, (scene->r.scemode & R_EXTENSION) != 0, true, NULL);
+		BKE_image_path_from_imformat(
+		        name, scene->r.pic, oglrender->bmain->name, scene->r.cfra,
+		        &scene->r.im_format, (scene->r.scemode & R_EXTENSION) != 0, true, NULL);
 
 		if ((scene->r.mode & R_NO_OVERWRITE) && BLI_exists(name)) {
 			BKE_reportf(op->reports, RPT_INFO, "Skipping existing frame \"%s\"", name);

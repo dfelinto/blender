@@ -2481,7 +2481,7 @@ static void renderresult_stampinfo(Render *re)
 	for (rv = (RenderView *)re->result->views.first;rv;rv=rv->next, nr++) {
 		RE_SetActiveRenderView(re, rv->name);
 		RE_AcquireResultImage(re, &rres, nr);
-		BKE_stamp_buf(re->scene, RE_GetCamera(re), (unsigned char *)rv->rect32, rv->rectf, rres.rectx, rres.recty, 4);
+		BKE_image_stamp_buf(re->scene, RE_GetCamera(re), (unsigned char *)rv->rect32, rv->rectf, rres.rectx, rres.recty, 4);
 		RE_ReleaseResultImage(re);
 	}
 }
@@ -2996,8 +2996,9 @@ void RE_BlenderFrame(Render *re, Main *bmain, Scene *scene, SceneRenderLayer *sr
 			}
 			else {
 				char name[FILE_MAX];
-				BKE_makepicstring(name, scene->r.pic, bmain->name, scene->r.cfra,
-				                  &scene->r.im_format, (scene->r.scemode & R_EXTENSION) != 0, false, NULL);
+				BKE_image_path_from_imformat(
+				        name, scene->r.pic, bmain->name, scene->r.cfra,
+				        &scene->r.im_format, (scene->r.scemode & R_EXTENSION) != 0, false, NULL);
 
 				/* reports only used for Movie */
 				do_write_image_or_movie(re, bmain, scene, NULL, 0, name);
@@ -3100,7 +3101,7 @@ bool RE_WriteRenderViewsImage(ReportList *reports, RenderResult *rr, Scene *scen
 
 					if (BLI_testextensie(name, ".exr"))
 						name[strlen(name) - 4] = 0;
-					BKE_add_image_extension(name, &imf);
+					BKE_image_path_ensure_ext_from_imformat(name, &imf);
 					ibuf->planes = 24;
 
 					IMB_colormanagement_imbuf_for_write(ibuf, true, false, &scene->view_settings,
@@ -3163,7 +3164,7 @@ bool RE_WriteRenderViewsImage(ReportList *reports, RenderResult *rr, Scene *scen
 				if (BLI_testextensie(name, ".exr"))
 					name[strlen(name) - 4] = 0;
 
-				BKE_add_image_extension(name, &imf);
+				BKE_image_path_ensure_ext_from_imformat(name, &imf);
 				ibuf_arr[2]->planes = 24;
 
 				IMB_colormanagement_imbuf_for_write(ibuf_arr[2], true, false, &scene->view_settings,
@@ -3292,8 +3293,9 @@ static int do_write_image_or_movie(Render *re, Main *bmain, Scene *scene, bMovie
 		if (name_override)
 			BLI_strncpy(name, name_override, sizeof(name));
 		else
-			BKE_makepicstring(name, scene->r.pic, bmain->name, scene->r.cfra,
-			                  &scene->r.im_format, (scene->r.scemode & R_EXTENSION) != 0, true, NULL);
+			BKE_image_path_from_imformat(
+			        name, scene->r.pic, bmain->name, scene->r.cfra,
+			        &scene->r.im_format, (scene->r.scemode & R_EXTENSION) != 0, true, NULL);
 
 		/* write images as individual images or stereo */
 		ok = RE_WriteRenderViewsImage(re->reports, &rres, scene, camera, true, name);
@@ -3450,8 +3452,9 @@ void RE_BlenderAnim(Render *re, Main *bmain, Scene *scene, Object *camera_overri
 			/* Touch/NoOverwrite options are only valid for image's */
 			if (is_movie == false) {
 				if (scene->r.mode & (R_NO_OVERWRITE | R_TOUCH))
-					BKE_makepicstring(name, scene->r.pic, bmain->name, scene->r.cfra,
-					                  &scene->r.im_format, (scene->r.scemode & R_EXTENSION) != 0, true, NULL);
+					BKE_image_path_from_imformat(
+					        name, scene->r.pic, bmain->name, scene->r.cfra,
+					        &scene->r.im_format, (scene->r.scemode & R_EXTENSION) != 0, true, NULL);
 
 				if (scene->r.mode & R_NO_OVERWRITE && BLI_exists(name)) {
 					printf("skipping existing frame \"%s\"\n", name);
