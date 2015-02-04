@@ -1063,6 +1063,23 @@ class SEQUENCER_PT_modifiers(SequencerButtonsPanel, Panel):
                     col.prop(mod, "contrast")
 
 
+class SEQUENCER_PT_grease_pencil(GreasePencilDataPanel, SequencerButtonsPanel_Output, Panel):
+    bl_space_type = 'SEQUENCE_EDITOR'
+    bl_region_type = 'UI'
+
+    # NOTE: this is just a wrapper around the generic GP Panel
+    # But, it should only show up when there are images in the preview region
+
+
+class SEQUENCER_PT_grease_pencil_tools(GreasePencilToolsPanel, SequencerButtonsPanel_Output, Panel):
+    bl_space_type = 'SEQUENCE_EDITOR'
+    bl_region_type = 'UI'
+
+    # NOTE: this is just a wrapper around the generic GP tools panel
+	# It contains access to some essential tools usually found only in
+	# toolbar, which doesn't exist here...
+
+
 class SEQUENCER_PT_stereo_3d(SequencerButtonsPanel, Panel):
     bl_label = "Stereoscopy"
     bl_options = {'DEFAULT_CLOSED'}
