@@ -1425,7 +1425,7 @@ static size_t seq_num_files(Scene *scene, char views_format)
 	}
 }
 
-static void seq_open_anim_file(Scene *scene, Sequence *seq)
+static void seq_open_anim_file(Scene *scene, Sequence *seq, bool openfile)
 {
 	char dir[FILE_MAX];
 	char name[FILE_MAX];
@@ -1470,13 +1470,26 @@ static void seq_open_anim_file(Scene *scene, Sequence *seq)
 
 			BLI_snprintf(str, sizeof(str), "%s%s%s", prefix, suffix, ext);
 
-			sanim->anim = openanim(str, IB_rect | ((seq->flag & SEQ_FILTERY) ? IB_animdeinterlace : 0),
-			                       seq->streamindex, seq->strip->colorspace_settings.name);
+			if (openfile) {
+				sanim->anim = openanim(str, IB_rect | ((seq->flag & SEQ_FILTERY) ? IB_animdeinterlace : 0),
+				                       seq->streamindex, seq->strip->colorspace_settings.name);
+			}
+			else {
+				sanim->anim = openanim_noload(str, IB_rect | ((seq->flag & SEQ_FILTERY) ? IB_animdeinterlace : 0),
+				                              seq->streamindex, seq->strip->colorspace_settings.name);
+			}
+
 			seq_anim_add_suffix(scene, sanim->anim, i);
 
 			if (sanim->anim == NULL) {
-				sanim->anim = openanim(name, IB_rect | ((seq->flag & SEQ_FILTERY) ? IB_animdeinterlace : 0),
-				                       seq->streamindex, seq->strip->colorspace_settings.name);
+				if (openfile) {
+					sanim->anim = openanim(name, IB_rect | ((seq->flag & SEQ_FILTERY) ? IB_animdeinterlace : 0),
+					                       seq->streamindex, seq->strip->colorspace_settings.name);
+				}
+				else {
+					sanim->anim = openanim_noload(name, IB_rect | ((seq->flag & SEQ_FILTERY) ? IB_animdeinterlace : 0),
+					                              seq->streamindex, seq->strip->colorspace_settings.name);
+				}
 
 				/* no individual view files - monoscopic, stereo 3d or exr multiview */
 				totfiles = 1;
@@ -1494,8 +1507,14 @@ monoview:
 		sanim = MEM_mallocN(sizeof(StripAnim), "Strip Anim");
 		BLI_addtail(&seq->anims, sanim);
 
-		sanim->anim = openanim(name, IB_rect | ((seq->flag & SEQ_FILTERY) ? IB_animdeinterlace : 0),
-		                       seq->streamindex, seq->strip->colorspace_settings.name);
+		if (openfile) {
+			sanim->anim = openanim(name, IB_rect | ((seq->flag & SEQ_FILTERY) ? IB_animdeinterlace : 0),
+			                       seq->streamindex, seq->strip->colorspace_settings.name);
+		}
+		else {
+			sanim->anim = openanim_noload(name, IB_rect | ((seq->flag & SEQ_FILTERY) ? IB_animdeinterlace : 0),
+			                              seq->streamindex, seq->strip->colorspace_settings.name);
+		}
 
 		if (sanim->anim == NULL) {
 			return;
@@ -1609,7 +1628,7 @@ static ImBuf *seq_proxy_fetch(const SeqRenderData *context, Sequence *seq, int c
 			return NULL;
 		}
  
-		seq_open_anim_file(context->scene, seq);
+		seq_open_anim_file(context->scene, seq, true);
 		sanim = seq->anims.first;
 
 		frameno = IMB_anim_index_get_frame_index(sanim ? sanim->anim : NULL, seq->strip->proxy->tc, frameno);
@@ -1789,6 +1808,7 @@ void BKE_sequencer_proxy_rebuild_context(Main *bmain, Scene *scene, Sequence *se
 		context->scene = scene;
 		context->orig_seq = seq;
 		context->seq = nseq;
+
 		context->view_id = i; /* only for images */
 
 		link = BLI_genericNodeN(context);
@@ -1797,7 +1817,7 @@ void BKE_sequencer_proxy_rebuild_context(Main *bmain, Scene *scene, Sequence *se
 		if (nseq->type == SEQ_TYPE_MOVIE) {
 			StripAnim *sanim;
 
-			seq_open_anim_file(scene, nseq);
+			seq_open_anim_file(scene, nseq, true);
 			sanim = BLI_findlink(&nseq->anims,  i);
 
 			if (sanim->anim) {
@@ -3103,7 +3123,7 @@ monoview_image:
 			bool is_multiview = (context->scene->r.scemode & R_MULTIVIEW) != 0;
 
 			/* load all the videos */
-			seq_open_anim_file(context->scene, seq);
+			seq_open_anim_file(context->scene, seq, false);
 
 			if (is_multiview) {
 				ImBuf **ibuf_arr;

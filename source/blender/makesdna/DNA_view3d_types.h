@@ -74,10 +74,11 @@ typedef struct BGpic {
 	struct ImageUser iuser;
 	struct MovieClip *clip;
 	struct MovieClipUser cuser;
-	float xof, yof, size, blend;
+	float xof, yof, size, blend, rotation;
 	short view;
 	short flag;
-	short source, pad;
+	short source;
+	char pad[6];
 } BGpic;
 
 /* ********************************* */
@@ -354,7 +355,11 @@ enum {
 
 	/* Camera framing options */
 	V3D_BGPIC_CAMERA_ASPECT = (1 << 5),  /* don't stretch to fit the camera view  */
-	V3D_BGPIC_CAMERA_CROP   = (1 << 6)   /* crop out the image */
+	V3D_BGPIC_CAMERA_CROP   = (1 << 6),  /* crop out the image */
+
+	/* Axis flip options */
+	V3D_BGPIC_FLIP_X        = (1 << 7),
+	V3D_BGPIC_FLIP_Y        = (1 << 8),
 };
 
 #define V3D_BGPIC_EXPANDED (V3D_BGPIC_EXPANDED | V3D_BGPIC_CAMERACLIP)
