@@ -3127,8 +3127,8 @@ monoview_image:
 						                             proxy_size);
 
 					/* fetching for requested proxy sze failed, try fetching the original isntead */
-					if (!ibuf && proxy_size != IMB_PROXY_NONE) {
-						ibuf = IMB_anim_absolute(sanim->anim, nr + seq->anim_startofs,
+					if (!ibuf_arr[i] && proxy_size != IMB_PROXY_NONE) {
+						ibuf_arr[i] = IMB_anim_absolute(sanim->anim, nr + seq->anim_startofs,
 						                         seq->strip->proxy ? seq->strip->proxy->tc : IMB_TC_RECORD_RUN,
 						                         IMB_PROXY_NONE);
 					}
