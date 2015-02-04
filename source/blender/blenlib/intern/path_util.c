@@ -1191,9 +1191,9 @@ void BLI_make_exist(char *dir)
 
 	a = strlen(dir);
 
-	for (BLI_join_dirfile(par_path, sizeof(par_path), dir, "..");
+	for (BLI_join_dirfile(par_path, sizeof(par_path), dir, FILENAME_PARENT);
 	     !(BLI_is_dir(dir) && BLI_exists(par_path));
-	     BLI_join_dirfile(par_path, sizeof(par_path), dir, ".."))
+	     BLI_join_dirfile(par_path, sizeof(par_path), dir, FILENAME_PARENT))
 	{
 		a--;
 		while (dir[a] != SEP) {
@@ -1444,9 +1444,7 @@ bool BLI_ensure_extension(char *path, size_t maxlen, const char *ext)
 	ssize_t a;
 
 	/* first check the extension is already there */
-	if (    (ext_len <= path_len) &&
-	        (strcmp(path + (path_len - ext_len), ext) == 0))
-	{
+	if ((ext_len <= path_len) && (STREQ(path + (path_len - ext_len), ext))) {
 		return true;
 	}
 

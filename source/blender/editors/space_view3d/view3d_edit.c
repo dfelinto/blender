@@ -1034,7 +1034,7 @@ static void viewrotate_apply(ViewOpsData *vod, int x, int y)
 		 * - of rotation is linearly proportional
 		 * - to the distance that the mouse is
 		 * - dragged. */
-		phi = si * (float)(M_PI / 2.0);
+		phi = si * (float)M_PI_2;
 
 		q1[0] = cosf(phi);
 		mul_v3_fl(q1 + 1, sinf(phi));
@@ -3373,7 +3373,8 @@ void VIEW3D_OT_render_border(wmOperatorType *ot)
 	/* rna */
 	WM_operator_properties_border(ot);
 
-	prop = RNA_def_boolean(ot->srna, "camera_only", 0, "Camera Only", "Set render border for camera view and final render only");
+	prop = RNA_def_boolean(ot->srna, "camera_only", false, "Camera Only",
+	                       "Set render border for camera view and final render only");
 	RNA_def_property_flag(prop, PROP_HIDDEN);
 }
 

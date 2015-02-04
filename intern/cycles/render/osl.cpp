@@ -189,7 +189,7 @@ void OSLShaderManager::shading_system_init()
 	if(ss_shared_users == 0) {
 		services_shared = new OSLRenderServices();
 
-		ss_shared = OSL::ShadingSystem::create(services_shared, ts_shared, &errhandler);
+		ss_shared = new OSL::ShadingSystem(services_shared, ts_shared, &errhandler);
 		ss_shared->attribute("lockgeom", 1);
 		ss_shared->attribute("commonspace", "world");
 		ss_shared->attribute("searchpath:shader", path_get("shader"));
@@ -238,7 +238,7 @@ void OSLShaderManager::shading_system_free()
 	ss_shared_users--;
 
 	if(ss_shared_users == 0) {
-		OSL::ShadingSystem::destroy(ss_shared);
+		delete ss_shared;
 		ss_shared = NULL;
 
 		delete services_shared;
@@ -270,7 +270,7 @@ bool OSLShaderManager::osl_compile(const string& inputfile, const string& output
 	stdosl_path = path_get("shader/stdosl.h");
 
 	/* compile */
-	OSL::OSLCompiler *compiler = OSL::OSLCompiler::create();
+	OSL::OSLCompiler *compiler = new OSL::OSLCompiler();
 	bool ok = compiler->compile(string_view(inputfile), options, string_view(stdosl_path));
 	delete compiler;
 
@@ -567,6 +567,10 @@ void OSLCompiler::add(ShaderNode *node, const char *name, bool isfilepath)
 		if(node->has_spatial_varying())
 			current_shader->has_heterogeneous_volume = true;
 	}
+
+	if(node->has_object_dependency()) {
+		current_shader->has_object_dependency = true;
+	}
 }
 
 void OSLCompiler::parameter(const char *name, float f)
@@ -808,6 +812,7 @@ void OSLCompiler::compile(OSLGlobals *og, Shader *shader)
 		shader->has_volume = false;
 		shader->has_displacement = false;
 		shader->has_heterogeneous_volume = false;
+		shader->has_object_dependency = false;
 
 		/* generate surface shader */
 		if(shader->used && graph && output->input("Surface")->link) {

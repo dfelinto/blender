@@ -28,7 +28,7 @@ from bl_ui.properties_paint_common import (
 from bl_ui.properties_grease_pencil_common import (
         GreasePencilDrawingToolsPanel,
         GreasePencilStrokeEditPanel,
-        GreasePencilDataPanel
+        GreasePencilDataPanel,
         )
 from bpy.app.translations import pgettext_iface as iface_
 
@@ -136,7 +136,7 @@ class IMAGE_MT_select(Menu):
         layout.separator()
 
         layout.operator("uv.select_pinned")
-        layout.operator("uv.select_linked")
+        layout.operator("uv.select_linked").extend = False
 
         layout.separator()
 
@@ -519,12 +519,14 @@ class MASK_MT_editor_menus(Menu):
 # Mask (similar code in space_clip.py, keep in sync)
 # note! - panel placement does _not_ fit well with image panels... need to fix
 
-from bl_ui.properties_mask_common import (MASK_PT_mask,
-                                          MASK_PT_layers,
-                                          MASK_PT_spline,
-                                          MASK_PT_point,
-                                          MASK_PT_display,
-                                          MASK_PT_tools)
+from bl_ui.properties_mask_common import (
+        MASK_PT_mask,
+        MASK_PT_layers,
+        MASK_PT_spline,
+        MASK_PT_point,
+        MASK_PT_display,
+        MASK_PT_tools,
+        )
 
 
 class IMAGE_PT_mask(MASK_PT_mask, Panel):
@@ -1075,7 +1077,8 @@ class IMAGE_PT_tools_mask(MASK_PT_tools, Panel):
 
 # --- end mask ---
 
-class ImageScopesPanel():
+
+class ImageScopesPanel:
     @classmethod
     def poll(cls, context):
         sima = context.space_data
@@ -1088,6 +1091,7 @@ class ImageScopesPanel():
         if ob and ob.mode in {'TEXTURE_PAINT'}:
             return False
         return True
+
 
 class IMAGE_PT_view_histogram(ImageScopesPanel, Panel):
     bl_space_type = 'IMAGE_EDITOR'
@@ -1181,6 +1185,7 @@ class IMAGE_PT_grease_pencil(GreasePencilDataPanel, Panel):
     bl_region_type = 'UI'
 
     # NOTE: this is just a wrapper around the generic GP Panel
+
 
 # Grease Pencil drawing tools
 class IMAGE_PT_tools_grease_pencil_draw(GreasePencilDrawingToolsPanel, Panel):

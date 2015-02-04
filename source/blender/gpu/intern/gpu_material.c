@@ -101,6 +101,7 @@ struct GPUMaterial {
 	int viewmatloc, invviewmatloc;
 	int obmatloc, invobmatloc;
 	int obcolloc, obautobumpscaleloc;
+	int cameratexcofacloc;
 
 	ListBase lamps;
 };
@@ -228,6 +229,8 @@ static int GPU_material_construct_end(GPUMaterial *material, const char *passnam
 			material->obcolloc = GPU_shader_get_uniform(shader, GPU_builtin_name(GPU_OBCOLOR));
 		if (material->builtins & GPU_AUTO_BUMPSCALE)
 			material->obautobumpscaleloc = GPU_shader_get_uniform(shader, GPU_builtin_name(GPU_AUTO_BUMPSCALE));
+		if (material->builtins & GPU_CAMERA_TEXCO_FACTORS)
+			material->cameratexcofacloc = GPU_shader_get_uniform(shader, GPU_builtin_name(GPU_CAMERA_TEXCO_FACTORS));
 		return 1;
 	}
 
@@ -277,7 +280,7 @@ bool GPU_lamp_override_visible(GPULamp *lamp, SceneRenderLayer *srl, Material *m
 		return true;
 }
 
-void GPU_material_bind(GPUMaterial *material, int oblay, int viewlay, double time, int mipmap, float viewmat[4][4], float viewinv[4][4], bool scenelock)
+void GPU_material_bind(GPUMaterial *material, int oblay, int viewlay, double time, int mipmap, float viewmat[4][4], float viewinv[4][4], float camerafactors[4], bool scenelock)
 {
 	if (material->pass) {
 		LinkData *nlink;
@@ -336,6 +339,16 @@ void GPU_material_bind(GPUMaterial *material, int oblay, int viewlay, double tim
 		}
 		if (material->builtins & GPU_INVERSE_VIEW_MATRIX) {
 			GPU_shader_uniform_vector(shader, material->invviewmatloc, 16, 1, (float*)viewinv);
+		}
+		if (material->builtins & GPU_CAMERA_TEXCO_FACTORS) {
+			if (camerafactors) {
+				GPU_shader_uniform_vector(shader, material->cameratexcofacloc, 4, 1, (float*)camerafactors);
+			}
+			else {
+				/* use default, no scaling no offset */
+				float borders[4] = {1.0f, 1.0f, 0.0f, 0.0f};
+				GPU_shader_uniform_vector(shader, material->cameratexcofacloc, 4, 1, (float*)borders);
+			}
 		}
 
 		GPU_pass_update_uniforms(material->pass);
@@ -2096,13 +2109,14 @@ int GPU_lamp_shadow_layer(GPULamp *lamp)
 		return -1;
 }
 
-GPUNodeLink *GPU_lamp_get_data(GPUMaterial *mat, GPULamp *lamp, GPUNodeLink **col, GPUNodeLink **lv, GPUNodeLink **dist, GPUNodeLink **shadow)
+GPUNodeLink *GPU_lamp_get_data(GPUMaterial *mat, GPULamp *lamp, GPUNodeLink **col, GPUNodeLink **lv, GPUNodeLink **dist, GPUNodeLink **shadow, GPUNodeLink **energy)
 {
 	GPUNodeLink *visifac;
 
 	*col = GPU_dynamic_uniform(lamp->dyncol, GPU_DYNAMIC_LAMP_DYNCOL, lamp->ob);
+	*energy = GPU_dynamic_uniform(&lamp->dynenergy, GPU_DYNAMIC_LAMP_DYNENERGY, lamp->ob);
 	visifac = lamp_get_visibility(mat, lamp, lv, dist);
-	/* looks like it's not used? psy-fi */
+
 	shade_light_textures(mat, lamp, col);
 
 	if (GPU_lamp_has_shadow_buffer(lamp)) {
@@ -2208,29 +2222,45 @@ GPUShaderExport *GPU_shader_export(struct Scene *scene, struct Material *ma)
 						glBindTexture(GL_TEXTURE_2D, lastbindcode);
 					}
 					break;
+
+				case GPU_NONE:
+				case GPU_FLOAT:
+				case GPU_VEC2:
+				case GPU_VEC3:
+				case GPU_VEC4:
+				case GPU_MAT3:
+				case GPU_MAT4:
+				case GPU_ATTRIB:
+					break;
 				}
 			}
 			else {
 				uniform->type = input->dynamictype;
 				BLI_strncpy(uniform->varname, input->shadername, sizeof(uniform->varname));
 				switch (input->type) {
-				case 1:
+				case GPU_FLOAT:
 					uniform->datatype = GPU_DATA_1F;
 					break;
-				case 2:
+				case GPU_VEC2:
 					uniform->datatype = GPU_DATA_2F;
 					break;
-				case 3:
+				case GPU_VEC3:
 					uniform->datatype = GPU_DATA_3F;
 					break;
-				case 4:
+				case GPU_VEC4:
 					uniform->datatype = GPU_DATA_4F;
 					break;
-				case 9:
+				case GPU_MAT3:
 					uniform->datatype = GPU_DATA_9F;
 					break;
-				case 16:
+				case GPU_MAT4:
 					uniform->datatype = GPU_DATA_16F;
+					break;
+
+				case GPU_NONE:
+				case GPU_TEX2D:
+				case GPU_SHADOW2D:
+				case GPU_ATTRIB:
 					break;
 				}
 

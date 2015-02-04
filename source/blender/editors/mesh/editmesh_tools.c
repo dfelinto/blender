@@ -964,6 +964,40 @@ void MESH_OT_vert_connect(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
+static int edbm_vert_connect_concave_exec(bContext *C, wmOperator *op)
+{
+	Object *obedit = CTX_data_edit_object(C);
+	BMEditMesh *em = BKE_editmesh_from_object(obedit);
+
+	if (!EDBM_op_call_and_selectf(
+	             em, op,
+	             "faces.out", true,
+	             "connect_verts_concave faces=%hf",
+	             BM_ELEM_SELECT))
+	{
+		return OPERATOR_CANCELLED;
+	}
+
+
+	EDBM_update_generic(em, true, true);
+	return OPERATOR_FINISHED;
+}
+
+void MESH_OT_vert_connect_concave(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Split Concave Faces";
+	ot->idname = "MESH_OT_vert_connect_concave";
+	ot->description = "Make all faces convex";
+
+	/* api callbacks */
+	ot->exec = edbm_vert_connect_concave_exec;
+	ot->poll = ED_operator_editmesh;
+
+	/* flags */
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
+
 
 static int edbm_vert_connect_nonplaner_exec(bContext *C, wmOperator *op)
 {
@@ -4541,7 +4575,7 @@ static int edbm_noise_exec(bContext *C, wmOperator *op)
 		BM_ITER_MESH (eve, &iter, em->bm, BM_VERTS_OF_MESH) {
 			if (BM_elem_flag_test(eve, BM_ELEM_SELECT)) {
 				float tin, dum;
-				externtex(ma->mtex[0], eve->co, &tin, &dum, &dum, &dum, &dum, 0, NULL);
+				externtex(ma->mtex[0], eve->co, &tin, &dum, &dum, &dum, &dum, 0, NULL, false);
 				eve->co[2] += fac * tin;
 			}
 		}

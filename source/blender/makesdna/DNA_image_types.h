@@ -169,8 +169,9 @@ enum {
 	IMA_USER_FRAME_IN_RANGE = (1 << 10), /* for image user, but these flags are mixed */
 	IMA_VIEW_AS_RENDER      = (1 << 11),
 	IMA_IGNORE_ALPHA        = (1 << 12),
-	IMA_IS_STEREO           = (1 << 13),
-	IMA_IS_MULTIVIEW        = (1 << 14), /* similar to stereo, but a more general case */
+	IMA_DEINTERLACE         = (1 << 13),
+	IMA_IS_STEREO           = (1 << 14),
+	IMA_IS_MULTIVIEW        = (1 << 15), /* similar to stereo, but a more general case */
 };
 
 #if (DNA_DEPRECATED_GCC_POISON == 1)

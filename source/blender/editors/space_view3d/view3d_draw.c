@@ -168,15 +168,15 @@ static void view3d_draw_clipping(RegionView3D *rv3d)
 
 		/* fill in zero alpha for rendering & re-projection [#31530] */
 		unsigned char col[4];
-		UI_GetThemeColorShade3ubv(TH_BACK, -8, col);
-		col[3] = 0;
+		UI_GetThemeColor4ubv(TH_V3D_CLIPPING_BORDER, col);
 		glColor4ubv(col);
 
+		glEnable(GL_BLEND);
 		glEnableClientState(GL_VERTEX_ARRAY);
 		glVertexPointer(3, GL_FLOAT, 0, bb->vec);
 		glDrawElements(GL_QUADS, sizeof(clipping_index) / sizeof(unsigned int), GL_UNSIGNED_INT, clipping_index);
 		glDisableClientState(GL_VERTEX_ARRAY);
-
+		glDisable(GL_BLEND);
 	}
 }
 
@@ -2598,6 +2598,7 @@ CustomDataMask ED_view3d_screen_datamask(bScreen *screen)
 void ED_view3d_update_viewmat(Scene *scene, View3D *v3d, ARegion *ar, float viewmat[4][4], float winmat[4][4])
 {
 	RegionView3D *rv3d = ar->regiondata;
+	rctf cameraborder;
 
 	/* setup window matrices */
 	if (winmat)
@@ -2615,7 +2616,23 @@ void ED_view3d_update_viewmat(Scene *scene, View3D *v3d, ARegion *ar, float view
 	mul_m4_m4m4(rv3d->persmat, rv3d->winmat, rv3d->viewmat);
 	invert_m4_m4(rv3d->persinv, rv3d->persmat);
 	invert_m4_m4(rv3d->viewinv, rv3d->viewmat);
+	
+	/* calculate GLSL view dependent values */
 
+	/* store window coordinates scaling/offset */
+	if (rv3d->persp == RV3D_CAMOB && v3d->camera) {
+		ED_view3d_calc_camera_border(scene, ar, v3d, rv3d, &cameraborder, false);
+		rv3d->viewcamtexcofac[0] = (float)ar->winx / BLI_rctf_size_x(&cameraborder);
+		rv3d->viewcamtexcofac[1] = (float)ar->winy / BLI_rctf_size_y(&cameraborder);
+		
+		rv3d->viewcamtexcofac[2] = -rv3d->viewcamtexcofac[0] * cameraborder.xmin / (float)ar->winx;
+		rv3d->viewcamtexcofac[3] = -rv3d->viewcamtexcofac[1] * cameraborder.ymin / (float)ar->winy;
+	}
+	else {
+		rv3d->viewcamtexcofac[0] = rv3d->viewcamtexcofac[1] = 1.0f;
+		rv3d->viewcamtexcofac[2] = rv3d->viewcamtexcofac[3] = 0.0f;
+	}
+	
 	/* calculate pixelsize factor once, is used for lamps and obcenters */
 	{
 		/* note:  '1.0f / len_v3(v1)'  replaced  'len_v3(rv3d->viewmat[0])'
@@ -2847,15 +2864,15 @@ static void view3d_main_area_clear(Scene *scene, View3D *v3d, ARegion *ar, bool 
 {
 	/* clear background */
 	if (scene->world && ((v3d->flag3 & V3D_SHOW_WORLD) || force)) {
-		float alpha = (force) ? 1.0f : 0.0;
+		float alpha = (force) ? 1.0f : 0.0f;
 		bool glsl = GPU_glsl_support() && BKE_scene_use_new_shading_nodes(scene) && scene->world->nodetree && scene->world->use_nodes;
 		
 		if (glsl) {
 			RegionView3D *rv3d = ar->regiondata;
 			GPUMaterial *gpumat = GPU_material_world(scene, scene->world);
-			
+
 			/* calculate full shader for background */
-			GPU_material_bind(gpumat, 1, 1, 1.0, false, rv3d->viewmat, rv3d->viewinv, (v3d->scenelock != 0));
+			GPU_material_bind(gpumat, 1, 1, 1.0, false, rv3d->viewmat, rv3d->viewinv, rv3d->viewcamtexcofac, (v3d->scenelock != 0));
 			
 			glEnable(GL_DEPTH_TEST);
 			glDepthFunc(GL_ALWAYS);
@@ -3116,15 +3133,6 @@ void ED_view3d_draw_offscreen(Scene *scene, View3D *v3d, ARegion *ar, int winx, 
 	UI_Theme_Restore(&theme_state);
 
 	G.f &= ~G_RENDER_OGL;
-}
-
-/* get a color used for offscreen sky, returns color in sRGB space */
-void ED_view3d_offscreen_sky_color_get(Scene *scene, float sky_color[3])
-{
-	if (scene->world)
-		linearrgb_to_srgb_v3_v3(sky_color, &scene->world->horr);
-	else
-		UI_GetThemeColor3fv(TH_BACK, sky_color);
 }
 
 /* utility func for ED_view3d_draw_offscreen */

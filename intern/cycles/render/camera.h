@@ -76,6 +76,7 @@ public:
 
 	/* border */
 	BoundBox2D border;
+	BoundBox2D viewport_camera_border;
 
 	/* transformation */
 	Transform matrix;
@@ -115,6 +116,7 @@ public:
 	void update();
 
 	void device_update(Device *device, DeviceScene *dscene, Scene *scene);
+	void device_update_volume(Device *device, DeviceScene *dscene, Scene *scene);
 	void device_free(Device *device, DeviceScene *dscene);
 
 	bool modified(const Camera& cam);
@@ -123,6 +125,7 @@ public:
 
 	BoundBox viewplane_bounds_get();
 	float3 transform_raster_to_world(float raster_x, float raster_y);
+	Transform transform_from_viewplane(BoundBox2D &viewplane);
 };
 
 CCL_NAMESPACE_END

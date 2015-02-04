@@ -196,7 +196,7 @@ class NODE_MT_select(Menu):
     def draw(self, context):
         layout = self.layout
 
-        layout.operator("node.select_border")
+        layout.operator("node.select_border").tweak = False
         layout.operator("node.select_circle")
 
         layout.separator()
@@ -207,7 +207,7 @@ class NODE_MT_select(Menu):
 
         layout.separator()
 
-        layout.operator("node.select_grouped")
+        layout.operator("node.select_grouped").extend = False
         layout.operator("node.select_same_type_step").prev = True
         layout.operator("node.select_same_type_step").prev = False
 
@@ -239,14 +239,14 @@ class NODE_MT_node(Menu):
 
         layout.separator()
 
-        layout.operator("node.link_make")
+        layout.operator("node.link_make").replace = False
         layout.operator("node.link_make", text="Make and Replace Links").replace = True
         layout.operator("node.links_cut")
         layout.operator("node.links_detach")
 
         layout.separator()
 
-        layout.operator("node.group_edit")
+        layout.operator("node.group_edit").exit = False
         layout.operator("node.group_ungroup")
         layout.operator("node.group_make")
         layout.operator("node.group_insert")
@@ -464,8 +464,8 @@ class NODE_PT_grease_pencil_tools(GreasePencilToolsPanel, Panel):
     bl_options = {'DEFAULT_CLOSED'}
 
     # NOTE: this is just a wrapper around the generic GP tools panel
-	# It contains access to some essential tools usually found only in
-	# toolbar, but which may not necessarily be open
+    # It contains access to some essential tools usually found only in
+    # toolbar, but which may not necessarily be open
 
 
 # Tool Shelf ------------------
@@ -483,6 +483,7 @@ class NODE_PT_tools_grease_pencil_edit(GreasePencilStrokeEditPanel, Panel):
     bl_region_type = 'TOOLS'
 
 # -----------------------------
+
 
 def node_draw_tree_view(layout, context):
     pass

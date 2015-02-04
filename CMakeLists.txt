@@ -1343,11 +1343,11 @@ elseif(WIN32)
 			set(OPENEXR_INCLUDE_DIRS ${OPENEXR}/include/OpenEXR)
 			set(OPENEXR_LIBPATH ${OPENEXR}/lib)
 			set(OPENEXR_LIBRARIES
-				${OPENEXR_LIBPATH}/Iex-2_1.lib
+				${OPENEXR_LIBPATH}/Iex-2_2.lib
 				${OPENEXR_LIBPATH}/Half.lib
-				${OPENEXR_LIBPATH}/IlmImf-2_1.lib
-				${OPENEXR_LIBPATH}/Imath-2_1.lib
-				${OPENEXR_LIBPATH}/IlmThread-2_1.lib
+				${OPENEXR_LIBPATH}/IlmImf-2_2.lib
+				${OPENEXR_LIBPATH}/Imath-2_2.lib
+				${OPENEXR_LIBPATH}/IlmThread-2_2.lib
 			)
 			endif(NOT OPENEXR_FOUND)
 		endif()
@@ -1494,6 +1494,13 @@ elseif(WIN32)
 			)
 		endif()
 
+		if(WITH_SDL)
+			set(SDL ${LIBDIR}/sdl)
+			set(SDL_INCLUDE_DIR ${SDL}/include)
+			set(SDL_LIBRARY SDL2)
+			set(SDL_LIBPATH ${SDL}/lib)
+		endif()
+
 		# used in many places so include globally, like OpenGL
 		blender_include_dirs_sys("${PTHREADS_INCLUDE_DIRS}")
 
@@ -1515,7 +1522,7 @@ elseif(WIN32)
 			if (GCC_VERSION VERSION_GREATER 4.9 OR GCC_VERSION VERSION_EQUAL 4.9)
 				set(LIBDIR ${CMAKE_SOURCE_DIR}/../lib/mingw64_gcc49)
 			else()
-				set(LIBDIR ${CMAKE_SOURCE_DIR}/../lib/mingw)
+				set(LIBDIR ${CMAKE_SOURCE_DIR}/../lib/mingw64)
 			endif()
 		else()
 			message(STATUS "Compiling for 32 bit with MinGW-w32.")
@@ -1723,6 +1730,13 @@ elseif(WIN32)
 			set(OPENCOLORIO_DEFINITIONS)
 		endif()
 
+		if(WITH_SDL)
+			set(SDL ${LIBDIR}/sdl)
+			set(SDL_INCLUDE_DIR ${SDL}/include)
+			set(SDL_LIBRARY SDL)
+			set(SDL_LIBPATH ${SDL}/lib)
+		endif()
+
 		set(PLATFORM_LINKFLAGS "-Xlinker --stack=2097152")
 
 		## DISABLE - causes linking errors 
@@ -1752,13 +1766,6 @@ elseif(WIN32)
 		set(SNDFILE_INCLUDE_DIRS ${SNDFILE}/include)
 		set(SNDFILE_LIBRARIES libsndfile-1)
 		set(SNDFILE_LIBPATH ${SNDFILE}/lib) # TODO, deprecate
-	endif()
-
-	if(WITH_SDL)
-		set(SDL ${LIBDIR}/sdl)
-		set(SDL_INCLUDE_DIR ${SDL}/include)
-		set(SDL_LIBRARY SDL2)
-		set(SDL_LIBPATH ${SDL}/lib)
 	endif()
 
 	if(WITH_RAYOPTIMIZATION AND SUPPORT_SSE_BUILD)

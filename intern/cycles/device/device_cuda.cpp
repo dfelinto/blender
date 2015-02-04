@@ -276,11 +276,16 @@ public:
 		path_create_directories(cubin);
 
 		string command = string_printf("\"%s\" -arch=sm_%d%d -m%d --cubin \"%s\" "
-			"-o \"%s\" --ptxas-options=\"-v\" -I\"%s\" -DNVCC -D__KERNEL_CUDA_VERSION__=%d",
+			"-o \"%s\" --ptxas-options=\"-v\" --use_fast_math -I\"%s\" "
+			"-DNVCC -D__KERNEL_CUDA_VERSION__=%d",
 			nvcc, major, minor, machine, kernel.c_str(), cubin.c_str(), include.c_str(), cuda_version);
 		
 		if(experimental)
 			command += " -D__KERNEL_CUDA_EXPERIMENTAL__";
+
+		if(getenv("CYCLES_CUDA_EXTRA_CFLAGS")) {
+			command += string(" ") + getenv("CYCLES_CUDA_EXTRA_CFLAGS");
+		}
 
 #ifdef WITH_CYCLES_DEBUG
 		command += " -D__KERNEL_DEBUG__";

@@ -223,8 +223,11 @@ static void KX_MACRO_addTypesToDict_fn(PyObject *dict, const char *name, long va
 // List of methods defined in the module
 
 static PyObject *ErrorObject;
-static const char *gPyGetRandomFloat_doc="getRandomFloat returns a random floating point value in the range [0..1]";
 
+PyDoc_STRVAR(gPyGetRandomFloat_doc,
+"getRandomFloat()\n"
+"returns a random floating point value in the range [0..1]"
+);
 static PyObject *gPyGetRandomFloat(PyObject *)
 {
 	return PyFloat_FromDouble(MT_random());
@@ -242,15 +245,15 @@ static PyObject *gPySetGravity(PyObject *, PyObject *value)
 	Py_RETURN_NONE;
 }
 
-static char gPyExpandPath_doc[] =
-"(path) - Converts a blender internal path into a proper file system path.\n\
-path - the string path to convert.\n\n\
-Use / as directory separator in path\n\
-You can use '//' at the start of the string to define a relative path;\n\
-Blender replaces that string by the directory of the current .blend or runtime\n\
-file to make a full path name.\n\
-The function also converts the directory separator to the local file system format.";
-
+PyDoc_STRVAR(gPyExpandPath_doc,
+"expandPath(path)\n"
+"Converts a blender internal path into a proper file system path.\n"
+" path - the string path to convert.\n"
+"Use / as directory separator in path\n"
+"You can use '//' at the start of the string to define a relative path."
+"Blender replaces that string by the directory of the current .blend or runtime file to make a full path name.\n"
+"The function also converts the directory separator to the local file system format."
+);
 static PyObject *gPyExpandPath(PyObject *, PyObject *args)
 {
 	char expanded[FILE_MAX];
@@ -264,10 +267,10 @@ static PyObject *gPyExpandPath(PyObject *, PyObject *args)
 	return PyC_UnicodeFromByte(expanded);
 }
 
-static char gPyStartGame_doc[] =
-"startGame(blend)\n\
-Loads the blend file";
-
+PyDoc_STRVAR(gPyStartGame_doc,
+"startGame(blend)\n"
+"Loads the blend file"
+);
 static PyObject *gPyStartGame(PyObject *, PyObject *args)
 {
 	char* blendfile;
@@ -281,10 +284,10 @@ static PyObject *gPyStartGame(PyObject *, PyObject *args)
 	Py_RETURN_NONE;
 }
 
-static char gPyEndGame_doc[] =
-"endGame()\n\
-Ends the current game";
-
+PyDoc_STRVAR(gPyEndGame_doc,
+"endGame()\n"
+"Ends the current game"
+);
 static PyObject *gPyEndGame(PyObject *)
 {
 	gp_KetsjiEngine->RequestExit(KX_EXIT_REQUEST_QUIT_GAME);
@@ -294,10 +297,10 @@ static PyObject *gPyEndGame(PyObject *)
 	Py_RETURN_NONE;
 }
 
-static char gPyRestartGame_doc[] =
-"restartGame()\n\
-Restarts the current game by reloading the .blend file";
-
+PyDoc_STRVAR(gPyRestartGame_doc,
+"restartGame()\n"
+"Restarts the current game by reloading the .blend file"
+);
 static PyObject *gPyRestartGame(PyObject *)
 {
 	gp_KetsjiEngine->RequestExit(KX_EXIT_REQUEST_RESTART_GAME);
@@ -306,10 +309,10 @@ static PyObject *gPyRestartGame(PyObject *)
 	Py_RETURN_NONE;
 }
 
-static char gPySaveGlobalDict_doc[] =
-	"saveGlobalDict()\n"
-	"Saves bge.logic.globalDict to a file";
-
+PyDoc_STRVAR(gPySaveGlobalDict_doc,
+"saveGlobalDict()\n"
+"Saves bge.logic.globalDict to a file"
+);
 static PyObject *gPySaveGlobalDict(PyObject *)
 {
 	char marshal_path[512];
@@ -343,10 +346,10 @@ static PyObject *gPySaveGlobalDict(PyObject *)
 	Py_RETURN_NONE;
 }
 
-static char gPyLoadGlobalDict_doc[] =
-	"LoadGlobalDict()\n"
-	"Loads bge.logic.globalDict from a file";
-
+PyDoc_STRVAR(gPyLoadGlobalDict_doc,
+"LoadGlobalDict()\n"
+"Loads bge.logic.globalDict from a file"
+);
 static PyObject *gPyLoadGlobalDict(PyObject *)
 {
 	char marshal_path[512];
@@ -384,23 +387,23 @@ static PyObject *gPyLoadGlobalDict(PyObject *)
 	Py_RETURN_NONE;
 }
 
-static char gPyGetProfileInfo_doc[] =
+PyDoc_STRVAR(gPyGetProfileInfo_doc,
 "getProfileInfo()\n"
-"returns a dictionary with profiling information";
-
+"returns a dictionary with profiling information"
+);
 static PyObject *gPyGetProfileInfo(PyObject *)
 {
 	return gp_KetsjiEngine->GetPyProfileDict();
 }
 
-static char gPySendMessage_doc[] = 
-"sendMessage(subject, [body, to, from])\n\
-sends a message in same manner as a message actuator\
-subject = Subject of the message\
-body = Message body\
-to = Name of object to send the message to\
-from = Name of object to send the string from";
-
+PyDoc_STRVAR(gPySendMessage_doc,
+"sendMessage(subject, [body, to, from])\n"
+"sends a message in same manner as a message actuator"
+" subject = Subject of the message"
+" body = Message body"
+" to = Name of object to send the message to"
+" from = Name of object to send the string from"
+);
 static PyObject *gPySendMessage(PyObject *, PyObject *args)
 {
 	char* subject;
@@ -560,11 +563,12 @@ static PyObject *gPyGetBlendFileList(PyObject *, PyObject *args)
 	return list;
 }
 
-static char gPyAddScene_doc[] = 
-"addScene(name, [overlay])\n\
-adds a scene to the game engine\n\
-name = Name of the scene\n\
-overlay = Overlay or underlay";
+PyDoc_STRVAR(gPyAddScene_doc,
+"addScene(name, [overlay])\n"
+"Adds a scene to the game engine.\n"
+" name = Name of the scene\n"
+" overlay = Overlay or underlay"
+);
 static PyObject *gPyAddScene(PyObject *, PyObject *args)
 {
 	char* name;
@@ -578,17 +582,19 @@ static PyObject *gPyAddScene(PyObject *, PyObject *args)
 	Py_RETURN_NONE;
 }
 
-static const char *gPyGetCurrentScene_doc =
+PyDoc_STRVAR(gPyGetCurrentScene_doc,
 "getCurrentScene()\n"
-"Gets a reference to the current scene.\n";
+"Gets a reference to the current scene."
+);
 static PyObject *gPyGetCurrentScene(PyObject *self)
 {
 	return gp_KetsjiScene->GetProxy();
 }
 
-static const char *gPyGetSceneList_doc =
+PyDoc_STRVAR(gPyGetSceneList_doc,
 "getSceneList()\n"
-"Return a list of converted scenes.\n";
+"Return a list of converted scenes."
+);
 static PyObject *gPyGetSceneList(PyObject *self)
 {
 	KX_KetsjiEngine* m_engine = KX_GetActiveEngine();
@@ -1484,6 +1490,9 @@ static PyObject *gPyClearDebugList(PyObject *)
 	Py_RETURN_NONE;
 }
 
+PyDoc_STRVAR(Rasterizer_module_documentation,
+"This is the Python API for the game engine of Rasterizer"
+);
 
 static struct PyMethodDef rasterizer_methods[] = {
 	{"getWindowWidth",(PyCFunction) gPyGetWindowWidth,
@@ -1541,15 +1550,11 @@ static struct PyMethodDef rasterizer_methods[] = {
 	{ NULL, (PyCFunction) NULL, 0, NULL }
 };
 
-// Initialization function for the module (*must* be called initGameLogic)
 
-static char GameLogic_module_documentation[] =
+
+PyDoc_STRVAR(GameLogic_module_documentation,
 "This is the Python API for the game engine of bge.logic"
-;
-
-static char Rasterizer_module_documentation[] =
-"This is the Python API for the game engine of Rasterizer"
-;
+);
 
 static struct PyModuleDef GameLogic_module_def = {
 	{}, /* m_base */
@@ -1563,17 +1568,14 @@ static struct PyModuleDef GameLogic_module_def = {
 	0,  /* m_free */
 };
 
-PyObject *initGameLogic(KX_KetsjiEngine *engine, KX_Scene* scene) // quick hack to get gravity hook
+PyMODINIT_FUNC initGameLogicPythonBinding()
 {
 	PyObject *m;
 	PyObject *d;
 	PyObject *item; /* temp PyObject *storage */
-	
-	gp_KetsjiEngine = engine;
-	gp_KetsjiScene = scene;
 
 	gUseVisibilityTemp=false;
-	
+
 	PyObjectPlus::ClearDeprecationWarning(); /* Not that nice to call here but makes sure warnings are reset between loading scenes */
 	
 	/* Use existing module where possible
@@ -2069,7 +2071,61 @@ void removeImportMain(struct Main *maggie)
 	bpy_import_main_extra_remove(maggie);
 }
 
-// Copied from bpy_interface.c
+
+PyDoc_STRVAR(BGE_module_documentation,
+	"This module contains submodules for the Blender Game Engine.\n"
+);
+
+static struct PyModuleDef BGE_module_def = {
+	PyModuleDef_HEAD_INIT,
+	"bge",  /* m_name */
+	BGE_module_documentation,  /* m_doc */
+	0,  /* m_size */
+	NULL,  /* m_methods */
+	NULL,  /* m_reload */
+	NULL,  /* m_traverse */
+	NULL,  /* m_clear */
+	NULL,  /* m_free */
+};
+
+PyMODINIT_FUNC initBGE(void)
+{
+	PyObject *mod;
+	PyObject *submodule;
+	PyObject *sys_modules = PyThreadState_GET()->interp->modules;
+
+	mod = PyModule_Create(&BGE_module_def);
+
+	PyModule_AddObject(mod, "constraints", (submodule = initConstraintPythonBinding()));
+	PyDict_SetItemString(sys_modules, PyModule_GetName(submodule), submodule);
+	Py_INCREF(submodule);
+
+	PyModule_AddObject(mod, "events", (submodule = initGameKeysPythonBinding()));
+	PyDict_SetItemString(sys_modules, PyModule_GetName(submodule), submodule);
+	Py_INCREF(submodule);
+
+	PyModule_AddObject(mod, "logic", (submodule = initGameLogicPythonBinding()));
+	PyDict_SetItemString(sys_modules, PyModule_GetName(submodule), submodule);
+	Py_INCREF(submodule);
+
+	PyModule_AddObject(mod, "render", (submodule = initRasterizerPythonBinding()));
+	PyDict_SetItemString(sys_modules, PyModule_GetName(submodule), submodule);
+	Py_INCREF(submodule);
+
+	PyModule_AddObject(mod, "texture", (submodule = initVideoTexturePythonBinding()));
+	PyDict_SetItemString(sys_modules, PyModule_GetName(submodule), submodule);
+	Py_INCREF(submodule);
+
+	/* GameTypes is initted *after* in initPyTypes() */
+	PyModule_AddObject(mod, "types", (submodule = initGameTypesPythonBinding()));
+	PyDict_SetItemString(sys_modules, PyModule_GetName(submodule), submodule);
+	Py_INCREF(submodule);
+
+	return mod;
+}
+
+
+/* minimal required blender modules to run blenderplayer */
 static struct _inittab bge_internal_modules[] = {
 	{"mathutils", PyInit_mathutils},
 	{"bgl", BPyInit_bgl},
@@ -2082,7 +2138,7 @@ static struct _inittab bge_internal_modules[] = {
  * Python is not initialized.
  * see bpy_interface.c's BPY_python_start() which shares the same functionality in blender.
  */
-PyObject *initGamePlayerPythonScripting(const STR_String& progname, TPythonSecurityLevel level, Main *maggie, int argc, char** argv)
+PyObject *initGamePlayerPythonScripting(Main *maggie, int argc, char** argv)
 {
 	/* Yet another gotcha in the py api
 	 * Cant run PySys_SetArgv more than once because this adds the
@@ -2093,14 +2149,20 @@ PyObject *initGamePlayerPythonScripting(const STR_String& progname, TPythonSecur
 	static bool first_time = true;
 	const char * const py_path_bundle = BKE_appdir_folder_id(BLENDER_SYSTEM_PYTHON, NULL);
 
-#if 0 // TODO - py3
-	STR_String pname = progname;
-	Py_SetProgramName(pname.Ptr());
-#endif
+	/* not essential but nice to set our name */
+	static wchar_t program_path_wchar[FILE_MAX]; /* python holds a reference */
+	BLI_strncpy_wchar_from_utf8(program_path_wchar, BKE_appdir_program_path(), ARRAY_SIZE(program_path_wchar));
+	Py_SetProgramName(program_path_wchar);
 
+	/* Update, Py3.3 resolves attempting to parse non-existing header */
+	#if 0
+	/* Python 3.2 now looks for '2.xx/python/include/python3.2d/pyconfig.h' to
+	 * parse from the 'sysconfig' module which is used by 'site',
+	 * so for now disable site. alternatively we could copy the file. */
 	if (py_path_bundle != NULL) {
-		Py_NoSiteFlag = 1;
+		Py_NoSiteFlag = 1; /* inhibits the automatic importing of 'site' */
 	}
+	#endif
 
 	Py_FrozenFlag = 1;
 
@@ -2124,11 +2186,17 @@ PyObject *initGamePlayerPythonScripting(const STR_String& progname, TPythonSecur
 		PySys_SetObject("argv", py_argv);
 		Py_DECREF(py_argv);
 	}
-	
+
 	/* Initialize thread support (also acquires lock) */
 	PyEval_InitThreads();
 
 	bpy_import_init(PyEval_GetBuiltins());
+
+	bpy_import_main_set(maggie);
+
+	initPySysObjects(maggie);
+
+	PyDict_SetItemString(PyImport_GetModuleDict(), "bge", initBGE());
 
 	/* mathutils types are used by the BGE even if we don't import them */
 	{
@@ -2145,11 +2213,7 @@ PyObject *initGamePlayerPythonScripting(const STR_String& progname, TPythonSecur
 #endif
 
 	initPyTypes();
-	
-	bpy_import_main_set(maggie);
-	
-	initPySysObjects(maggie);
-	
+
 	first_time = false;
 	
 	PyObjectPlus::ClearDeprecationWarning();
@@ -2186,12 +2250,11 @@ void exitGamePlayerPythonScripting()
 /**
  * Python is already initialized.
  */
-PyObject *initGamePythonScripting(const STR_String& progname, TPythonSecurityLevel level, Main *maggie)
+PyObject *initGamePythonScripting(Main *maggie)
 {
-#if 0 // XXX TODO Py3
-	STR_String pname = progname;
-	Py_SetProgramName(pname.Ptr());
-#endif
+	/* no need to Py_SetProgramName, it was already taken care of in BPY_python_start */
+
+	PyDict_SetItemString(PyImport_GetModuleDict(), "bge", initBGE());
 
 #ifdef WITH_AUDASPACE
 	/* accessing a SoundActuator's sound results in a crash if aud is not initialized... */
@@ -2238,51 +2301,32 @@ void exitGamePythonScripting()
 void setupGamePython(KX_KetsjiEngine* ketsjiengine, KX_Scene *startscene, Main *blenderdata,
                      PyObject *pyGlobalDict, PyObject **gameLogic, PyObject **gameLogic_keys, int argc, char** argv)
 {
-	PyObject *dictionaryobject;
+	PyObject *modules, *dictionaryobject;
+
+	gp_Canvas = ketsjiengine->GetCanvas();
+	gp_Rasterizer = ketsjiengine->GetRasterizer();
+	gp_KetsjiEngine = ketsjiengine;
+	gp_KetsjiScene = startscene;
 
 	if (argv) /* player only */
-		dictionaryobject= initGamePlayerPythonScripting("Ketsji", psl_Lowest, blenderdata, argc, argv);
+		dictionaryobject= initGamePlayerPythonScripting(blenderdata, argc, argv);
 	else
-		dictionaryobject= initGamePythonScripting("Ketsji", psl_Lowest, blenderdata);
+		dictionaryobject= initGamePythonScripting(blenderdata);
 
 	ketsjiengine->SetPyNamespace(dictionaryobject);
-	initRasterizer(ketsjiengine->GetRasterizer(), ketsjiengine->GetCanvas());
-	*gameLogic = initGameLogic(ketsjiengine, startscene);
 
-	/* is set in initGameLogic so only set here if we want it to persist between scenes */
+	modules = PyImport_GetModuleDict();
+
+	*gameLogic = PyDict_GetItemString(modules, "GameLogic");
+	/* is set in initGameLogicPythonBinding so only set here if we want it to persist between scenes */
 	if (pyGlobalDict)
 		PyDict_SetItemString(PyModule_GetDict(*gameLogic), "globalDict", pyGlobalDict); // Same as importing the module.
 
 	*gameLogic_keys = PyDict_Keys(PyModule_GetDict(*gameLogic));
-
-	initGameKeys();
-	initPythonConstraintBinding();
-	initVideoTexture();
-
-	/* could be done a lot more nicely, but for now a quick way to get bge.* working */
-	PyRun_SimpleString("sys = __import__('sys');"
-	                   "bge = type(sys)('bge');"
-	                   "bge.__dict__.update({'logic':__import__('GameLogic'), "
-	                                        "'render':__import__('Rasterizer'), "
-	                                        "'events':__import__('GameKeys'), "
-	                                        "'constraints':__import__('PhysicsConstraints'), "
-	                                        "'physics':__import__('PhysicsConstraints'),"
-	                                        "'types':__import__('GameTypes'), "
-	                                        "'texture':__import__('VideoTexture')});"
-	                   /* so we can do 'import bge.foo as bar' */
-	                   "sys.modules.update({'bge': bge, "
-	                                       "'bge.logic':bge.logic, "
-	                                       "'bge.render':bge.render, "
-	                                       "'bge.events':bge.events, "
-	                                       "'bge.constraints':bge.constraints, "
-	                                       "'bge.physics':bge.physics,"
-	                                       "'bge.types':bge.types, "
-	                                       "'bge.texture':bge.texture})"
-	                   );
 }
 
 static struct PyModuleDef Rasterizer_module_def = {
-	{}, /* m_base */
+	PyModuleDef_HEAD_INIT,
 	"Rasterizer",  /* m_name */
 	Rasterizer_module_documentation,  /* m_doc */
 	0,  /* m_size */
@@ -2293,12 +2337,8 @@ static struct PyModuleDef Rasterizer_module_def = {
 	0,  /* m_free */
 };
 
-PyObject *initRasterizer(RAS_IRasterizer* rasty,RAS_ICanvas* canvas)
+PyMODINIT_FUNC initRasterizerPythonBinding()
 {
-	gp_Canvas = canvas;
-	gp_Rasterizer = rasty;
-
-
 	PyObject *m;
 	PyObject *d;
 
@@ -2348,7 +2388,7 @@ PyObject *initRasterizer(RAS_IRasterizer* rasty,RAS_ICanvas* canvas)
 		Py_FatalError("can't initialize module Rasterizer");
 	}
 
-	return d;
+	return m;
 }
 
 
@@ -2357,13 +2397,14 @@ PyObject *initRasterizer(RAS_IRasterizer* rasty,RAS_ICanvas* canvas)
 /* GameKeys: symbolic constants for key mapping                              */
 /* ------------------------------------------------------------------------- */
 
-static char GameKeys_module_documentation[] =
+PyDoc_STRVAR(GameKeys_module_documentation,
 "This modules provides defines for key-codes"
-;
+);
 
-static char gPyEventToString_doc[] =
-"EventToString(event) - Take a valid event from the GameKeys module or Keyboard Sensor and return a name"
-;
+PyDoc_STRVAR(gPyEventToString_doc,
+"EventToString(event)\n"
+"Take a valid event from the GameKeys module or Keyboard Sensor and return a name"
+);
 
 static PyObject *gPyEventToString(PyObject *, PyObject *value)
 {
@@ -2391,9 +2432,11 @@ static PyObject *gPyEventToString(PyObject *, PyObject *value)
 	return ret;
 }
 
-static char gPyEventToCharacter_doc[] =
-"EventToCharacter(event, is_shift) - Take a valid event from the GameKeys module or Keyboard Sensor and return a character"
-;
+
+PyDoc_STRVAR(gPyEventToCharacter_doc,
+"EventToCharacter(event, is_shift)\n"
+"Take a valid event from the GameKeys module or Keyboard Sensor and return a character"
+);
 
 static PyObject *gPyEventToCharacter(PyObject *, PyObject *args)
 {
@@ -2419,7 +2462,7 @@ static struct PyMethodDef gamekeys_methods[] = {
 };
 
 static struct PyModuleDef GameKeys_module_def = {
-	{}, /* m_base */
+	PyModuleDef_HEAD_INIT,
 	"GameKeys",  /* m_name */
 	GameKeys_module_documentation,  /* m_doc */
 	0,  /* m_size */
@@ -2430,11 +2473,11 @@ static struct PyModuleDef GameKeys_module_def = {
 	0,  /* m_free */
 };
 
-PyObject *initGameKeys()
+PyMODINIT_FUNC initGameKeysPythonBinding()
 {
 	PyObject *m;
 	PyObject *d;
-	
+
 	/* Use existing module where possible */
 	m = PyImport_ImportModule( "GameKeys" );
 	if (m) {
@@ -2443,7 +2486,7 @@ PyObject *initGameKeys()
 	}
 	else {
 		PyErr_Clear();
-	
+
 		// Create the module and add the functions
 		m = PyModule_Create(&GameKeys_module_def);
 		PyDict_SetItemString(PySys_GetObject("modules"), GameKeys_module_def.m_name, m);
@@ -2592,7 +2635,7 @@ PyObject *initGameKeys()
 		Py_FatalError("can't initialize module GameKeys");
 	}
 
-	return d;
+	return m;
 }
 
 // utility function for loading and saving the globalDict

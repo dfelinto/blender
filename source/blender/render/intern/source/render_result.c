@@ -591,7 +591,7 @@ RenderResult *render_result_new(Render *re, rcti *partrct, int crop, int savebuf
 	for (nr = 0, srl = re->r.layers.first; srl; srl = srl->next, nr++) {
 
 		if (layername && layername[0])
-			if (strcmp(srl->name, layername) != 0)
+			if (!STREQ(srl->name, layername))
 				continue;
 
 		if (re->r.scemode & R_SINGLE_LAYER) {

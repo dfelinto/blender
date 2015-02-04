@@ -20,9 +20,10 @@
 import bpy
 from bpy.types import Panel, UIList
 
-from bl_ui.properties_physics_common import (point_cache_ui,
-                                             effector_weights_ui,
-                                             )
+from bl_ui.properties_physics_common import (
+        point_cache_ui,
+        effector_weights_ui,
+        )
 
 
 class PHYSICS_UL_dynapaint_surfaces(UIList):
@@ -46,7 +47,7 @@ class PHYSICS_UL_dynapaint_surfaces(UIList):
             row.label(text="", icon_value=sticon)
 
 
-class PhysicButtonsPanel():
+class PhysicButtonsPanel:
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
     bl_context = "physics"

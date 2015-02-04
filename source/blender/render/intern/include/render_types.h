@@ -427,6 +427,7 @@ typedef struct HaloRen {
 	unsigned int lay;
 	struct Material *mat;
 	struct ImagePool *pool;
+	bool skip_load_image;
 } HaloRen;
 
 /* ------------------------------------------------------------------------- */

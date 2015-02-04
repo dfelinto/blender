@@ -116,12 +116,12 @@ if builder.find('scons') != -1:
         retcode = subprocess.call([python_bin, 'scons/scons.py'] + scons_options)
         sys.exit(retcode)
 else:
-#cmake
+    # CMake
     if 'win' in builder:
         files = [f for f in os.listdir('.') if os.path.isfile(f) and f.endswith('.zip')]
         for f in files:
             os.remove(f)
-        retcode = subprocess.call(['cpack', '-G','ZIP'])
+        retcode = subprocess.call(['cpack', '-G', 'ZIP'])
         result_file = [f for f in os.listdir('.') if os.path.isfile(f) and f.endswith('.zip')][0]
         os.rename(result_file, "{}.zip".format(builder))
         # create zip file
@@ -133,7 +133,7 @@ else:
             z.write("{}.zip".format(builder))
             z.close()
             sys.exit(retcode)
-        except Exception, ex:
+        except Exception as ex:
             sys.stderr.write('Create buildbot_upload.zip failed' + str(ex) + '\n')
             sys.exit(1)
 
@@ -149,7 +149,7 @@ if os.path.exists(release_dir):
 # create release package
 try:
     subprocess.call(['make', 'package_archive'])
-except Exception, ex:
+except Exception as ex:
     sys.stderr.write('Make package release failed' + str(ex) + '\n')
     sys.exit(1)
 
@@ -180,6 +180,6 @@ try:
     z = zipfile.ZipFile(upload_zip, "w", compression=zipfile.ZIP_STORED)
     z.write(filepath, arcname=file)
     z.close()
-except Exception, ex:
+except Exception as ex:
     sys.stderr.write('Create buildbot_upload.zip failed' + str(ex) + '\n')
     sys.exit(1)

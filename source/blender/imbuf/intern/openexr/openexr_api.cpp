@@ -60,6 +60,8 @@ _CRTIMP void __cdecl _invalid_parameter_noinfo(void)
 #include "BLI_math_color.h"
 #include "BLI_threads.h"
 
+#include "BKE_idprop.h"
+
 #include "IMB_imbuf_types.h"
 #include "IMB_imbuf.h"
 #include "IMB_allocimbuf.h"
@@ -328,10 +330,15 @@ static void openexr_header_compression(Header *header, int compression)
 
 static void openexr_header_metadata(Header *header, struct ImBuf *ibuf)
 {
-	ImMetaData *info;
+	if (ibuf->metadata) {
+		IDProperty *prop;
 
-	for (info = ibuf->metadata; info; info = info->next)
-		header->insert(info->key, StringAttribute(info->value));
+		for (prop = (IDProperty *)ibuf->metadata->data.group.first; prop; prop = prop->next) {
+			if (prop->type == IDP_STRING) {
+				header->insert(prop->name, StringAttribute(IDP_String(prop)));
+			}
+		}
+	}
 
 	if (ibuf->ppm[0] > 0.0)
 		addXDensity(*header, ibuf->ppm[0] / 39.3700787); /* 1 meter = 39.3700787 inches */
@@ -1160,7 +1167,7 @@ void IMB_exr_read_channels(void *handle)
 
 	/* check if exr was saved with previous versions of blender which flipped images */
 	const StringAttribute *ta = data->ifile->header(0).findTypedAttribute <StringAttribute> ("BlenderMultiChannel");
-	short flip = (ta && strncmp(ta->value().c_str(), "Blender V2.43", 13) == 0); /* 'previous multilayer attribute, flipped */
+	short flip = (ta && STREQLEN(ta->value().c_str(), "Blender V2.43", 13)); /* 'previous multilayer attribute, flipped */
 
 	exr_printf("\nIMB_exr_read_channels\n%s %-6s %-22s \"%s\"\n---------------------------------------------------------------------\n", "p", "view", "name", "internal_name");
 
@@ -1443,7 +1450,10 @@ static ExrPass *imb_exr_get_pass(ListBase *lb, char *passname)
 	if (pass == NULL) {
 		pass = (ExrPass *)MEM_callocN(sizeof(ExrPass), "exr pass");
 
-		BLI_addhead(lb, pass);
+		if (STREQ(passname, "Combined"))
+			BLI_addhead(lb, pass);
+		else
+			BLI_addtail(lb, pass);
 	}
 
 	BLI_strncpy(pass->name, passname, EXR_LAY_MAXNAME);

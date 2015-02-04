@@ -20,14 +20,16 @@
 import bpy
 from bpy.types import Menu, Panel, UIList
 
-from bpy.types import (Brush,
-                       Lamp,
-                       Material,
-                       Object,
-                       ParticleSettings,
-                       FreestyleLineStyle,
-                       Texture,
-                       World)
+from bpy.types import (
+        Brush,
+        FreestyleLineStyle,
+        Lamp,
+        Material,
+        Object,
+        ParticleSettings,
+        Texture,
+        World,
+        )
 
 from rna_prop_ui import PropertyPanel
 
@@ -114,7 +116,7 @@ def id_tex_datablock(bid):
     return bid
 
 
-class TextureButtonsPanel():
+class TextureButtonsPanel:
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
     bl_context = "texture"
@@ -133,8 +135,8 @@ class TEXTURE_PT_context_texture(TextureButtonsPanel, Panel):
     @classmethod
     def poll(cls, context):
         engine = context.scene.render.engine
-        #if not (hasattr(context, "texture_slot") or hasattr(context, "texture_node")):
-            #return False
+        # if not (hasattr(context, "texture_slot") or hasattr(context, "texture_node")):
+        #     return False
         return ((context.material or
                  context.world or
                  context.lamp or

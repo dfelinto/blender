@@ -177,6 +177,30 @@ static PyObject *Quaternion_to_axis_angle(QuaternionObject *self)
 	return ret;
 }
 
+PyDoc_STRVAR(Quaternion_to_exponential_map_doc,
+".. method:: to_exponential_map()\n"
+"\n"
+"   Return the exponential map representation of the quaternion.\n"
+"\n"
+"   This representation consist of the rotation axis multiplied by the rotation angle."
+"   Such a representation is useful for interpolation between multiple orientations.\n"
+"\n"
+"   :return: exponential map.\n"
+"   :rtype: :class:`Vector` of size 3\n"
+"\n"
+"   To convert back to a quaternion, pass it to the :class:`Quaternion` constructor.\n"
+);
+static PyObject *Quaternion_to_exponential_map(QuaternionObject *self)
+{
+	float expmap[3];
+
+	if (BaseMath_ReadCallback(self) == -1)
+		return NULL;
+
+	quat_to_expmap(expmap, self->quat);
+	return Vector_CreatePyObject(expmap, 3, NULL);
+}
+
 PyDoc_STRVAR(Quaternion_cross_doc,
 ".. method:: cross(other)\n"
 "\n"
@@ -334,7 +358,8 @@ static PyObject *Quaternion_rotate(QuaternionObject *self, PyObject *value)
 }
 
 /* ----------------------------Quaternion.normalize()---------------- */
-/* normalize the axis of rotation of [theta, vector] */
+/* Normalize the quaternion. This may change the angle as well as the
+ * rotation axis, as all of (w, x, y, z) are scaled. */
 PyDoc_STRVAR(Quaternion_normalize_doc,
 ".. function:: normalize()\n"
 "\n"
@@ -1076,9 +1101,24 @@ static PyObject *Quaternion_new(PyTypeObject *type, PyObject *args, PyObject *kw
 		case 0:
 			break;
 		case 1:
-			if (mathutils_array_parse(quat, QUAT_SIZE, QUAT_SIZE, seq, "mathutils.Quaternion()") == -1)
+		{
+			int size;
+
+			if ((size = mathutils_array_parse(quat, 3, QUAT_SIZE, seq, "mathutils.Quaternion()")) == -1) {
 				return NULL;
+			}
+
+			if (size == 4) {
+				/* 4d: Quaternion (common case) */
+			}
+			else {
+				/* 3d: Interpret as exponential map */
+				BLI_assert(size == 3);
+				expmap_to_quat(quat, quat);
+			}
+
 			break;
+		}
 		case 2:
 		{
 			float axis[3];
@@ -1155,6 +1195,7 @@ static struct PyMethodDef Quaternion_methods[] = {
 	{"to_euler", (PyCFunction) Quaternion_to_euler, METH_VARARGS, Quaternion_to_euler_doc},
 	{"to_matrix", (PyCFunction) Quaternion_to_matrix, METH_NOARGS, Quaternion_to_matrix_doc},
 	{"to_axis_angle", (PyCFunction) Quaternion_to_axis_angle, METH_NOARGS, Quaternion_to_axis_angle_doc},
+	{"to_exponential_map", (PyCFunction) Quaternion_to_exponential_map, METH_NOARGS, Quaternion_to_exponential_map_doc},
 
 	/* operation between 2 or more types  */
 	{"cross", (PyCFunction) Quaternion_cross, METH_O, Quaternion_cross_doc},
@@ -1187,7 +1228,29 @@ static PyGetSetDef Quaternion_getseters[] = {
 
 /* ------------------PY_OBECT DEFINITION-------------------------- */
 PyDoc_STRVAR(quaternion_doc,
-"This object gives access to Quaternions in Blender."
+".. class:: Quaternion([seq, [angle]])\n"
+"\n"
+"   This object gives access to Quaternions in Blender.\n"
+"\n"
+"   :param seq: size 3 or 4\n"
+"   :type seq: :class:`Vector`\n"
+"   :param angle: rotation angle, in radians\n"
+"   :type angle: float\n"
+"\n"
+"   The constructor takes arguments in various forms:\n"
+"\n"
+"   (), *no args*\n"
+"       Create an identity quaternion\n"
+"   (*wxyz*)\n"
+"       Create a quaternion from a ``(w, x, y, z)`` vector.\n"
+"   (*exponential_map*)\n"
+"       Create a quaternion from a 3d exponential map vector.\n"
+"\n"
+"       .. seealso:: :meth:`to_exponential_map`\n"
+"   (*axis, angle*)\n"
+"       Create a quaternion representing a rotation of *angle* radians over *axis*.\n"
+"\n"
+"       .. seealso:: :meth:`to_axis_angle`\n"
 );
 PyTypeObject quaternion_Type = {
 	PyVarObject_HEAD_INIT(NULL, 0)

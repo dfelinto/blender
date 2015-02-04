@@ -1003,15 +1003,16 @@ class CLIP_PT_proxy(CLIP_PT_clip_view_panel, Panel):
 # -----------------------------------------------------------------------------
 # Mask (similar code in space_image.py, keep in sync)
 
-
-from bl_ui.properties_mask_common import (MASK_PT_mask,
-                                          MASK_PT_layers,
-                                          MASK_PT_spline,
-                                          MASK_PT_point,
-                                          MASK_PT_display,
-                                          MASK_PT_tools,
-                                          MASK_PT_transforms,
-                                          MASK_PT_add)
+from bl_ui.properties_mask_common import (
+        MASK_PT_mask,
+        MASK_PT_layers,
+        MASK_PT_spline,
+        MASK_PT_point,
+        MASK_PT_display,
+        MASK_PT_tools,
+        MASK_PT_transforms,
+        MASK_PT_add,
+        )
 
 
 class CLIP_PT_mask_layers(MASK_PT_layers, Panel):
@@ -1214,14 +1215,17 @@ class CLIP_MT_track(Menu):
         layout.operator("clip.solve_camera")
 
         layout.separator()
-        layout.operator("clip.clear_track_path",
-                        text="Clear After").action = 'REMAINED'
+        props = layout.operator("clip.clear_track_path", text="Clear After")
+        props.clear_active = False
+        props.action = 'REMAINED'
 
-        layout.operator("clip.clear_track_path",
-                        text="Clear Before").action = 'UPTO'
+        props = layout.operator("clip.clear_track_path", text="Clear Before")
+        props.clear_active = False
+        props.action = 'UPTO'
 
-        layout.operator("clip.clear_track_path",
-                        text="Clear Track Path").action = 'ALL'
+        props = layout.operator("clip.clear_track_path", text="Clear Track Path")
+        props.clear_active = False
+        props.action = 'ALL'
 
         layout.separator()
         layout.operator("clip.join_tracks")
@@ -1234,16 +1238,21 @@ class CLIP_MT_track(Menu):
         layout.operator("clip.paste_tracks")
 
         layout.separator()
-        layout.operator("clip.track_markers",
-                        text="Track Frame Backwards").backwards = True
+        props = layout.operator("clip.track_markers", text="Track Frame Backwards")
+        props.backwards = True
+        props.sequence = False
 
         props = layout.operator("clip.track_markers", text="Track Backwards")
         props.backwards = True
         props.sequence = True
 
-        layout.operator("clip.track_markers",
-                        text="Track Forwards").sequence = True
-        layout.operator("clip.track_markers", text="Track Frame Forwards")
+        props = layout.operator("clip.track_markers", text="Track Forwards")
+        props.backwards = False
+        props.sequence = True
+
+        props = layout.operator("clip.track_markers", text="Track Frame Forwards")
+        props.backwards = False
+        props.sequence = False
 
         layout.separator()
         layout.operator("clip.delete_track")
@@ -1285,10 +1294,8 @@ class CLIP_MT_track_visibility(Menu):
         layout = self.layout
 
         layout.operator("clip.hide_tracks_clear", text="Show Hidden")
-        layout.operator("clip.hide_tracks", text="Hide Selected")
-
-        layout.operator("clip.hide_tracks",
-                        text="Hide Unselected").unselected = True
+        layout.operator("clip.hide_tracks", text="Hide Selected").unselected = False
+        layout.operator("clip.hide_tracks", text="Hide Unselected").unselected = True
 
 
 class CLIP_MT_track_transform(Menu):

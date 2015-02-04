@@ -134,7 +134,6 @@ class DOPESHEET_HT_header(Header):
         row.operator("action.paste", text="", icon='PASTEFLIPDOWN').flipped = True
 
 
-
 class DOPESHEET_MT_editor_menus(Menu):
     bl_idname = "DOPESHEET_MT_editor_menus"
     bl_label = ""
@@ -216,8 +215,12 @@ class DOPESHEET_MT_select(Menu):
         layout.operator("action.select_column", text="Between Selected Markers").mode = 'MARKERS_BETWEEN'
 
         layout.separator()
-        layout.operator("action.select_leftright", text="Before Current Frame").mode = 'LEFT'
-        layout.operator("action.select_leftright", text="After Current Frame").mode = 'RIGHT'
+        props = layout.operator("action.select_leftright", text="Before Current Frame")
+        props.extend = False
+        props.mode = 'LEFT'
+        props = layout.operator("action.select_leftright", text="After Current Frame")
+        props.extend = False
+        props.mode = 'RIGHT'
 
         # FIXME: grease pencil mode isn't supported for these yet, so skip for that mode only
         if context.space_data.mode != 'GPENCIL':

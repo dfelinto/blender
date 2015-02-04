@@ -157,10 +157,14 @@ static void registerAllTypes(void)
 	pyFilterTypes.add(&FilterBGR24Type, "FilterBGR24");
 }
 
+PyDoc_STRVAR(VideoTexture_module_documentation,
+"Module that allows to play video files on textures in GameBlender."
+);
+
 static struct PyModuleDef VideoTexture_module_def = {
-	{}, /* m_base */
+	PyModuleDef_HEAD_INIT,
 	"VideoTexture",  /* m_name */
-	"Module that allows to play video files on textures in GameBlender.",  /* m_doc */
+	VideoTexture_module_documentation,  /* m_doc */
 	0,  /* m_size */
 	moduleMethods,  /* m_methods */
 	0,  /* m_reload */
@@ -169,7 +173,7 @@ static struct PyModuleDef VideoTexture_module_def = {
 	0,  /* m_free */
 };
 
-PyObject *initVideoTexture(void)
+PyMODINIT_FUNC initVideoTexturePythonBinding(void)
 {
 	PyObject *m;
 	

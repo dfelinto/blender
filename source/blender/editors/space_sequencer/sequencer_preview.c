@@ -95,9 +95,9 @@ static void preview_startjob(void *data, short *stop, short *do_update, float *p
 				sound = previewjb->sound;
 
 				/* make sure we cleanup the loading flag! */
-				BLI_mutex_lock(sound->mutex);
+				BLI_spin_lock(sound->spinlock);
 				sound->flags &= ~SOUND_FLAGS_WAVEFORM_LOADING;
-				BLI_mutex_unlock(sound->mutex);
+				BLI_spin_unlock(sound->spinlock);
 				
 				BLI_mutex_lock(pj->mutex);
 				previewjb = previewjb->next;
@@ -117,7 +117,7 @@ static void preview_startjob(void *data, short *stop, short *do_update, float *p
 		BLI_freelinkN(&pj->previews, previewjb);
 		previewjb = preview_next;
 		pj->processed++;		
-		*progress = (pj->total > 0) ? (float)pj->processed / (float)pj->total : 1.0;
+		*progress = (pj->total > 0) ? (float)pj->processed / (float)pj->total : 1.0f;
 		*do_update = true;
 		BLI_mutex_unlock(pj->mutex);
 	}

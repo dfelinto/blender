@@ -1027,14 +1027,14 @@ void BKE_image_packfiles(ReportList *reports, Image *ima, const char *basepath)
 
 void BKE_image_tag_time(Image *ima)
 {
-	ima->lastused = (int)PIL_check_seconds_timer();
+	ima->lastused = PIL_check_seconds_timer_i();
 }
 
 #if 0
 static void tag_all_images_time()
 {
 	Image *ima;
-	int ctime = (int)PIL_check_seconds_timer();
+	int ctime = PIL_check_seconds_timer_i();
 
 	ima = G.main->image.first;
 	while (ima) {
@@ -1390,37 +1390,37 @@ char BKE_imtype_valid_depths(const char imtype)
  * creator.c help info */
 char BKE_imtype_from_arg(const char *imtype_arg)
 {
-	if      (!strcmp(imtype_arg, "TGA")) return R_IMF_IMTYPE_TARGA;
-	else if (!strcmp(imtype_arg, "IRIS")) return R_IMF_IMTYPE_IRIS;
+	if      (STREQ(imtype_arg, "TGA")) return R_IMF_IMTYPE_TARGA;
+	else if (STREQ(imtype_arg, "IRIS")) return R_IMF_IMTYPE_IRIS;
 #ifdef WITH_DDS
-	else if (!strcmp(imtype_arg, "DDS")) return R_IMF_IMTYPE_DDS;
+	else if (STREQ(imtype_arg, "DDS")) return R_IMF_IMTYPE_DDS;
 #endif
-	else if (!strcmp(imtype_arg, "JPEG")) return R_IMF_IMTYPE_JPEG90;
-	else if (!strcmp(imtype_arg, "IRIZ")) return R_IMF_IMTYPE_IRIZ;
-	else if (!strcmp(imtype_arg, "RAWTGA")) return R_IMF_IMTYPE_RAWTGA;
-	else if (!strcmp(imtype_arg, "AVIRAW")) return R_IMF_IMTYPE_AVIRAW;
-	else if (!strcmp(imtype_arg, "AVIJPEG")) return R_IMF_IMTYPE_AVIJPEG;
-	else if (!strcmp(imtype_arg, "PNG")) return R_IMF_IMTYPE_PNG;
-	else if (!strcmp(imtype_arg, "QUICKTIME")) return R_IMF_IMTYPE_QUICKTIME;
-	else if (!strcmp(imtype_arg, "BMP")) return R_IMF_IMTYPE_BMP;
+	else if (STREQ(imtype_arg, "JPEG")) return R_IMF_IMTYPE_JPEG90;
+	else if (STREQ(imtype_arg, "IRIZ")) return R_IMF_IMTYPE_IRIZ;
+	else if (STREQ(imtype_arg, "RAWTGA")) return R_IMF_IMTYPE_RAWTGA;
+	else if (STREQ(imtype_arg, "AVIRAW")) return R_IMF_IMTYPE_AVIRAW;
+	else if (STREQ(imtype_arg, "AVIJPEG")) return R_IMF_IMTYPE_AVIJPEG;
+	else if (STREQ(imtype_arg, "PNG")) return R_IMF_IMTYPE_PNG;
+	else if (STREQ(imtype_arg, "QUICKTIME")) return R_IMF_IMTYPE_QUICKTIME;
+	else if (STREQ(imtype_arg, "BMP")) return R_IMF_IMTYPE_BMP;
 #ifdef WITH_HDR
-	else if (!strcmp(imtype_arg, "HDR")) return R_IMF_IMTYPE_RADHDR;
+	else if (STREQ(imtype_arg, "HDR")) return R_IMF_IMTYPE_RADHDR;
 #endif
 #ifdef WITH_TIFF
-	else if (!strcmp(imtype_arg, "TIFF")) return R_IMF_IMTYPE_TIFF;
+	else if (STREQ(imtype_arg, "TIFF")) return R_IMF_IMTYPE_TIFF;
 #endif
 #ifdef WITH_OPENEXR
-	else if (!strcmp(imtype_arg, "EXR")) return R_IMF_IMTYPE_OPENEXR;
-	else if (!strcmp(imtype_arg, "MULTILAYER")) return R_IMF_IMTYPE_MULTILAYER;
+	else if (STREQ(imtype_arg, "EXR")) return R_IMF_IMTYPE_OPENEXR;
+	else if (STREQ(imtype_arg, "MULTILAYER")) return R_IMF_IMTYPE_MULTILAYER;
 #endif
-	else if (!strcmp(imtype_arg, "MPEG")) return R_IMF_IMTYPE_FFMPEG;
-	else if (!strcmp(imtype_arg, "FRAMESERVER")) return R_IMF_IMTYPE_FRAMESERVER;
+	else if (STREQ(imtype_arg, "MPEG")) return R_IMF_IMTYPE_FFMPEG;
+	else if (STREQ(imtype_arg, "FRAMESERVER")) return R_IMF_IMTYPE_FRAMESERVER;
 #ifdef WITH_CINEON
-	else if (!strcmp(imtype_arg, "CINEON")) return R_IMF_IMTYPE_CINEON;
-	else if (!strcmp(imtype_arg, "DPX")) return R_IMF_IMTYPE_DPX;
+	else if (STREQ(imtype_arg, "CINEON")) return R_IMF_IMTYPE_CINEON;
+	else if (STREQ(imtype_arg, "DPX")) return R_IMF_IMTYPE_DPX;
 #endif
 #ifdef WITH_OPENJPEG
-	else if (!strcmp(imtype_arg, "JP2")) return R_IMF_IMTYPE_JP2;
+	else if (STREQ(imtype_arg, "JP2")) return R_IMF_IMTYPE_JP2;
 #endif
 	else return R_IMF_IMTYPE_INVALID;
 }
@@ -3187,7 +3187,12 @@ static ImBuf *image_load_movie_file(Image *ima, ImageUser *iuser, int frame)
 	if ((BKE_image_has_anim(ima) == false) ||
 	    totfiles != BLI_listbase_count_ex(&ima->anims, totfiles + 1))
 	{
+		int flags = IB_rect;
 		image_free_anims(ima);
+
+		if (ima->flag & IMA_DEINTERLACE) {
+			flags |= IB_animdeinterlace;
+		}
 
 		for (i = 0; i < totfiles; i++) {
 			char str[FILE_MAX];
@@ -3207,12 +3212,12 @@ static ImBuf *image_load_movie_file(Image *ima, ImageUser *iuser, int frame)
 			BKE_image_user_file_path(&iuser_t, ima, str);
 
 			/* FIXME: make several stream accessible in image editor, too*/
-			ia->anim = openanim(str, IB_rect, 0, ima->colorspace_settings.name);
+			ia->anim = openanim(str, flags, 0, ima->colorspace_settings.name);
 
 			/* let's initialize this user */
 			if (ia->anim && iuser && iuser->frames == 0)
 				iuser->frames = IMB_anim_get_duration(ia->anim,
-			                                          IMB_TC_RECORD_RUN);
+				                                      IMB_TC_RECORD_RUN);
 		}
 	}
 

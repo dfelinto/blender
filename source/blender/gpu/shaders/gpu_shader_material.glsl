@@ -169,9 +169,9 @@ void camera(vec3 co, out vec3 outview, out float outdepth, out float outdist)
 	outview = normalize(co);
 }
 
-void lamp(vec4 col, vec3 lv, float dist, vec3 shadow, float visifac, out vec4 outcol, out vec3 outlv, out float outdist, out vec4 outshadow, out float outvisifac)
+void lamp(vec4 col, float energy, vec3 lv, float dist, vec3 shadow, float visifac, out vec4 outcol, out vec3 outlv, out float outdist, out vec4 outshadow, out float outvisifac)
 {
-	outcol = col;
+	outcol = col * energy;
 	outlv = lv;
 	outdist = dist;
 	outshadow = vec4(shadow, 1.0);
@@ -297,6 +297,10 @@ void math_modulo(float val1, float val2, out float outval)
 		outval = 0.0;
 	else
 		outval = mod(val1, val2);
+
+	/* change sign to match C convention, mod in GLSL will take absolute for negative numbers,
+	 * see https://www.opengl.org/sdk/docs/man/html/mod.xhtml */
+	outval = (val1 > 0.0) ? outval : -outval;
 }
 
 void math_abs(float val1, out float outval)
@@ -2368,7 +2372,7 @@ void node_geometry(vec3 I, vec3 N, mat4 toworld,
 	backfacing = (gl_FrontFacing)? 0.0: 1.0;
 }
 
-void node_tex_coord(vec3 I, vec3 N, mat4 viewinvmat, mat4 obinvmat,
+void node_tex_coord(vec3 I, vec3 N, mat4 viewinvmat, mat4 obinvmat, vec4 camerafac,
 	vec3 attr_orco, vec3 attr_uv,
 	out vec3 generated, out vec3 normal, out vec3 uv, out vec3 object,
 	out vec3 camera, out vec3 window, out vec3 reflection)
@@ -2379,7 +2383,7 @@ void node_tex_coord(vec3 I, vec3 N, mat4 viewinvmat, mat4 obinvmat,
 	object = (obinvmat*(viewinvmat*vec4(I, 1.0))).xyz;
 	camera = vec3(I.xy, -I.z);
 	vec4 projvec = gl_ProjectionMatrix * vec4(I, 1.0);
-	window = vec3(mtex_2d_mapping(projvec.xyz/projvec.w).xy, 0.0);
+	window = vec3(mtex_2d_mapping(projvec.xyz/projvec.w).xy * camerafac.xy + camerafac.zw, 0.0);
 
 	vec3 shade_I;
 	shade_view(I, shade_I);
@@ -2387,7 +2391,7 @@ void node_tex_coord(vec3 I, vec3 N, mat4 viewinvmat, mat4 obinvmat,
 	reflection = (viewinvmat*vec4(view_reflection, 0.0)).xyz;
 }
 
-void node_tex_coord_background(vec3 I, vec3 N, mat4 viewinvmat, mat4 obinvmat,
+void node_tex_coord_background(vec3 I, vec3 N, mat4 viewinvmat, mat4 obinvmat, vec4 camerafac,
 	vec3 attr_orco, vec3 attr_uv,
 	out vec3 generated, out vec3 normal, out vec3 uv, out vec3 object,
 	out vec3 camera, out vec3 window, out vec3 reflection)
@@ -2406,7 +2410,9 @@ void node_tex_coord_background(vec3 I, vec3 N, mat4 viewinvmat, mat4 obinvmat,
 	object = coords;
 
 	camera = vec3(co.xy, -co.z);
-	window = (gl_ProjectionMatrix[3][3] == 0.0) ? vec3(mtex_2d_mapping(I).xy, 0.0) : vec3(0.5, 0.5, 0.0);
+	window = (gl_ProjectionMatrix[3][3] == 0.0) ? 
+	              vec3(mtex_2d_mapping(I).xy * camerafac.xy + camerafac.zw, 0.0) : 
+	              vec3(vec2(0.5) * camerafac.xy + camerafac.zw, 0.0);
 
 	reflection = -coords;
 }

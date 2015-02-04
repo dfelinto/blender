@@ -38,6 +38,7 @@
 #include "BLI_math.h"
 
 #include "BKE_global.h"
+#include "BKE_idprop.h"
 
 #include "MEM_guardedalloc.h"
 
@@ -397,24 +398,25 @@ int imb_savepng(struct ImBuf *ibuf, const char *name, int flags)
 	/* image text info */
 	if (ibuf->metadata) {
 		png_text *metadata;
-		ImMetaData *iptr;
+		IDProperty *prop;
+
 		int num_text = 0;
-		iptr = ibuf->metadata;
-		while (iptr) {
-			num_text++;
-			iptr = iptr->next;
+
+		for (prop = ibuf->metadata->data.group.first; prop; prop = prop->next) {
+			if (prop->type == IDP_STRING) {
+				num_text++;
+			}
 		}
 		
 		metadata = MEM_callocN(num_text * sizeof(png_text), "png_metadata");
-		iptr = ibuf->metadata;
 		num_text = 0;
-		while (iptr) {
-			
-			metadata[num_text].compression = PNG_TEXT_COMPRESSION_NONE;
-			metadata[num_text].key = iptr->key;
-			metadata[num_text].text = iptr->value;
-			num_text++;
-			iptr = iptr->next;
+		for (prop = ibuf->metadata->data.group.first; prop; prop = prop->next) {
+			if (prop->type == IDP_STRING) {
+				metadata[num_text].compression = PNG_TEXT_COMPRESSION_NONE;
+				metadata[num_text].key = prop->name;
+				metadata[num_text].text = IDP_String(prop);
+				num_text++;
+			}
 		}
 		
 		png_set_text(png_ptr, info_ptr, metadata, num_text);
@@ -490,7 +492,7 @@ static void imb_png_warning(png_structp UNUSED(png_ptr), png_const_charp message
 	 * and with new libpng it became too much picky, giving a warning on
 	 * the splash screen even.
 	 */
-	if ((G.debug & G_DEBUG) == 0 && !strncmp(message, "iCCP", 4)) {
+	if ((G.debug & G_DEBUG) == 0 && STREQLEN(message, "iCCP", 4)) {
 		return;
 	}
 	fprintf(stderr, "libpng warning: %s\n", message);

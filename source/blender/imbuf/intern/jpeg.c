@@ -37,8 +37,11 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "BLI_utildefines.h"
 #include "BLI_string.h"
 #include "BLI_fileops.h"
+
+#include "BKE_idprop.h"
 
 #include "imbuf.h"
 #include "IMB_imbuf_types.h"
@@ -267,7 +270,7 @@ handle_app1(j_decompress_ptr cinfo)
 	if (length < 16) {
 		for (i = 0; i < length; i++) INPUT_BYTE(cinfo, neogeo[i], return false);
 		length = 0;
-		if (strncmp(neogeo, "NeoGeo", 6) == 0) memcpy(&ibuf_ftype, neogeo + 6, 4);
+		if (STREQLEN(neogeo, "NeoGeo", 6)) memcpy(&ibuf_ftype, neogeo + 6, 4);
 		ibuf_ftype = BIG_LONG(ibuf_ftype);
 	}
 	INPUT_SYNC(cinfo);  /* do before skip_input_data */
@@ -385,7 +388,7 @@ static ImBuf *ibJpegImageFromCinfo(struct jpeg_decompress_struct *cinfo, int fla
 				 * That is why we need split it to the
 				 * common key/value here.
 				 */
-				if (strncmp(str, "Blender", 7)) {
+				if (!STREQLEN(str, "Blender", 7)) {
 					/*
 					 * Maybe the file have text that
 					 * we don't know "what it's", in that
@@ -478,7 +481,6 @@ static void write_jpeg(struct jpeg_compress_struct *cinfo, struct ImBuf *ibuf)
 	uchar *rect;
 	int x, y;
 	char neogeo[128];
-	ImMetaData *iptr;
 	char *text;
 
 	jpeg_start_compress(cinfo, true);
@@ -490,28 +492,28 @@ static void write_jpeg(struct jpeg_compress_struct *cinfo, struct ImBuf *ibuf)
 	jpeg_write_marker(cinfo, 0xe1, (JOCTET *) neogeo, 10);
 
 	if (ibuf->metadata) {
+		IDProperty *prop;
 		/* key + max value + "Blender" */
 		text = MEM_mallocN(530, "stamp info read");
-		iptr = ibuf->metadata;
-		while (iptr) {
-			if (!strcmp(iptr->key, "None")) {
-				jpeg_write_marker(cinfo, JPEG_COM, (JOCTET *) iptr->value, strlen(iptr->value) + 1);
-				goto next_stamp_info;
-			}
+		for (prop = ibuf->metadata->data.group.first; prop; prop = prop->next) {
+			if (prop->type == IDP_STRING) {
+				int text_len;
+				if (!strcmp(prop->name, "None")) {
+					jpeg_write_marker(cinfo, JPEG_COM, (JOCTET *) IDP_String(prop), prop->len + 1);
+				}
 
-			/*
-			 * The JPEG format don't support a pair "key/value"
-			 * like PNG, so we "encode" the stamp in a
-			 * single string:
-			 *	"Blender:key:value"
-			 *
-			 * The first "Blender" is a simple identify to help
-			 * in the read process.
-			 */
-			sprintf(text, "Blender:%s:%s", iptr->key, iptr->value);
-			jpeg_write_marker(cinfo, JPEG_COM, (JOCTET *) text, strlen(text) + 1);
-next_stamp_info:
-			iptr = iptr->next;
+				/*
+				 * The JPEG format don't support a pair "key/value"
+				 * like PNG, so we "encode" the stamp in a
+				 * single string:
+				 *	"Blender:key:value"
+				 *
+				 * The first "Blender" is a simple identify to help
+				 * in the read process.
+				 */
+				text_len = sprintf(text, "Blender:%s:%s", prop->name, IDP_String(prop));
+				jpeg_write_marker(cinfo, JPEG_COM, (JOCTET *) text, text_len + 1);
+			}
 		}
 		MEM_freeN(text);
 	}

@@ -539,7 +539,7 @@ static void histogram_draw_one(float r, float g, float b, float alpha,
 		glColor4f(r, g, b, alpha);
 
 		glShadeModel(GL_FLAT);
-		glBegin(GL_QUAD_STRIP);
+		glBegin(GL_TRIANGLE_STRIP);
 		glVertex2f(x, y);
 		glVertex2f(x, y + (data[0] * h));
 		for (i = 1; i < res; i++) {
@@ -822,8 +822,8 @@ static void vectorscope_draw_target(float centerx, float centery, float diam, co
 	if (u > 0 && v >= 0) tangle = atanf(v / u);
 	else if (u > 0 && v < 0) tangle = atanf(v / u) + 2.0f * (float)M_PI;
 	else if (u < 0) tangle = atanf(v / u) + (float)M_PI;
-	else if (u == 0 && v > 0.0f) tangle = (float)M_PI / 2.0f;
-	else if (u == 0 && v < 0.0f) tangle = -(float)M_PI / 2.0f;
+	else if (u == 0 && v > 0.0f) tangle = M_PI_2;
+	else if (u == 0 && v < 0.0f) tangle = -M_PI_2;
 	tampli = sqrtf(u * u + v * v);
 
 	/* small target vary by 2.5 degree and 2.5 IRE unit */
@@ -1147,7 +1147,7 @@ void ui_draw_but_COLORBAND(uiBut *but, uiWidgetColors *UNUSED(wcol), const rcti 
 	v1[1] = y1 + sizey_solid;
 	v2[1] = rect->ymax;
 	
-	glBegin(GL_QUAD_STRIP);
+	glBegin(GL_TRIANGLE_STRIP);
 	for (a = 0; a <= sizex; a++) {
 		pos = ((float)a) / sizex;
 		do_colorband(coba, pos, colf);
@@ -1166,7 +1166,7 @@ void ui_draw_but_COLORBAND(uiBut *but, uiWidgetColors *UNUSED(wcol), const rcti 
 	v1[1] = y1;
 	v2[1] = y1 + sizey_solid;
 
-	glBegin(GL_QUAD_STRIP);
+	glBegin(GL_TRIANGLE_STRIP);
 	for (a = 0; a <= sizex; a++) {
 		pos = ((float)a) / sizex;
 		do_colorband(coba, pos, colf);

@@ -414,8 +414,7 @@ void free_hair(Object *UNUSED(ob), ParticleSystem *psys, int dynamics)
 	if (psys->clmd) {
 		if (dynamics) {
 			BKE_ptcache_free_list(&psys->ptcaches);
-			psys->clmd->point_cache = psys->pointcache = NULL;
-			BLI_listbase_clear(&psys->clmd->ptcaches);
+			psys->pointcache = NULL;
 
 			modifier_free((ModifierData *)psys->clmd);
 			
@@ -3410,7 +3409,7 @@ static void get_cpa_texture(DerivedMesh *dm, ParticleSystem *psys, ParticleSetti
 					break;
 			}
 
-			externtex(mtex, texvec, &value, rgba, rgba + 1, rgba + 2, rgba + 3, 0, NULL);
+			externtex(mtex, texvec, &value, rgba, rgba + 1, rgba + 2, rgba + 3, 0, NULL, false);
 
 			if ((event & mtex->mapto) & PAMAP_ROUGH)
 				ptex->rough1 = ptex->rough2 = ptex->roughe = texture_value_blend(def, ptex->rough1, value, mtex->roughfac, blend);
@@ -3493,7 +3492,7 @@ void psys_get_texture(ParticleSimulationData *sim, ParticleData *pa, ParticleTex
 					break;
 			}
 
-			externtex(mtex, texvec, &value, rgba, rgba + 1, rgba + 2, rgba + 3, 0, NULL);
+			externtex(mtex, texvec, &value, rgba, rgba + 1, rgba + 2, rgba + 3, 0, NULL, false);
 
 			if ((event & mtex->mapto) & PAMAP_TIME) {
 				/* the first time has to set the base value for time regardless of blend mode */
@@ -4059,8 +4058,8 @@ void psys_get_dupli_path_transform(ParticleSimulationData *sim, ParticleData *pa
 		normalize_v3(nor);
 
 		/* make sure that we get a proper side vector */
-		if (fabsf(dot_v3v3(nor, vec)) > 0.999999) {
-			if (fabsf(dot_v3v3(nor, xvec)) > 0.999999) {
+		if (fabsf(dot_v3v3(nor, vec)) > 0.999999f) {
+			if (fabsf(dot_v3v3(nor, xvec)) > 0.999999f) {
 				nor[0] = 0.0f;
 				nor[1] = 1.0f;
 				nor[2] = 0.0f;

@@ -22,7 +22,7 @@ from bpy.types import Panel, Menu
 from rna_prop_ui import PropertyPanel
 
 
-class CameraButtonsPanel():
+class CameraButtonsPanel:
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
     bl_context = "data"
@@ -109,11 +109,11 @@ class DATA_PT_lens(CameraButtonsPanel, Panel):
                 elif ccam.panorama_type == 'EQUIRECTANGULAR':
                     row = layout.row()
                     sub = row.column(align=True)
-                    sub.prop(ccam, "latitude_min");
-                    sub.prop(ccam, "latitude_max");
+                    sub.prop(ccam, "latitude_min")
+                    sub.prop(ccam, "latitude_max")
                     sub = row.column(align=True)
-                    sub.prop(ccam, "longitude_min");
-                    sub.prop(ccam, "longitude_max");
+                    sub.prop(ccam, "longitude_min")
+                    sub.prop(ccam, "longitude_max")
             elif engine == 'BLENDER_RENDER':
                 row = col.row()
                 if cam.lens_unit == 'MILLIMETERS':
@@ -265,9 +265,10 @@ class DATA_PT_camera_safe_areas(CameraButtonsPanel, Panel):
 
     def draw(self, context):
         layout = self.layout
-        cam = context.camera
+        safe_data = context.scene.safe_areas
+        camera = context.camera
 
-        draw_display_safe_settings(layout, cam)
+        draw_display_safe_settings(layout, safe_data, camera)
 
 
 class DATA_PT_custom_props_camera(CameraButtonsPanel, PropertyPanel, Panel):
@@ -276,9 +277,7 @@ class DATA_PT_custom_props_camera(CameraButtonsPanel, PropertyPanel, Panel):
     _property_type = bpy.types.Camera
 
 
-def draw_display_safe_settings(layout, settings):
-
-    safe_data = bpy.context.scene.safe_areas
+def draw_display_safe_settings(layout, safe_data, settings):
     show_safe_areas = settings.show_safe_areas
     show_safe_center = settings.show_safe_center
 

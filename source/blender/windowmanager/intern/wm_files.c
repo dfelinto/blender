@@ -355,7 +355,7 @@ static int wm_read_exotic(Scene *UNUSED(scene), const char *name)
 		else {
 			len = gzread(gzfile, header, sizeof(header));
 			gzclose(gzfile);
-			if (len == sizeof(header) && strncmp(header, "BLENDER", 7) == 0) {
+			if (len == sizeof(header) && STREQLEN(header, "BLENDER", 7)) {
 				retval = BKE_READ_EXOTIC_OK_BLEND;
 			}
 			else {
@@ -535,11 +535,13 @@ bool WM_file_read(bContext *C, const char *filepath, ReportList *reports)
 }
 
 
-/* called on startup,  (context entirely filled with NULLs) */
-/* or called for 'New File' */
-/* both startup.blend and userpref.blend are checked */
-/* the optional paramater custom_file points to an alterntive startup page */
-/* custom_file can be NULL */
+/**
+ * called on startup,  (context entirely filled with NULLs)
+ * or called for 'New File'
+ * both startup.blend and userpref.blend are checked
+ * the optional parameter custom_file points to an alternative startup page
+ * custom_file can be NULL
+ */
 int wm_homefile_read(bContext *C, ReportList *reports, bool from_memory, const char *custom_file)
 {
 	ListBase wmbase;
@@ -844,11 +846,11 @@ static ImBuf *blend_file_thumb(Scene *scene, bScreen *screen, int **thumb_pt)
 	if (scene->camera) {
 		ibuf = ED_view3d_draw_offscreen_imbuf_simple(scene, scene->camera,
 		                                             BLEN_THUMB_SIZE * 2, BLEN_THUMB_SIZE * 2,
-		                                             IB_rect, OB_SOLID, false, false, false, R_ADDSKY, NULL, err_out);
+		                                             IB_rect, OB_SOLID, false, false, false, R_ALPHAPREMUL, NULL, err_out);
 	}
 	else {
 		ibuf = ED_view3d_draw_offscreen_imbuf(scene, v3d, ar, BLEN_THUMB_SIZE * 2, BLEN_THUMB_SIZE * 2,
-		                                      IB_rect, false, R_ADDSKY, NULL, err_out);
+		                                      IB_rect, false, R_ALPHAPREMUL, NULL, err_out);
 	}
 
 	if (ibuf) {

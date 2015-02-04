@@ -86,6 +86,7 @@ struct anim;
 
 struct ColorManagedDisplay;
 
+struct GSet;
 /**
  *
  * \attention defined in DNA_scene_types.h
@@ -243,11 +244,14 @@ void IMB_anim_set_index_dir(struct anim *anim, const char *dir);
 int IMB_anim_index_get_frame_index(struct anim *anim, IMB_Timecode_Type tc,
                                    int position);
 
+IMB_Proxy_Size IMB_anim_proxy_get_existing(struct anim *anim);
+
 struct IndexBuildContext;
 
 /* prepare context for proxies/imecodes builder */
 struct IndexBuildContext *IMB_anim_index_rebuild_context(struct anim *anim, IMB_Timecode_Type tcs_in_use,
-                                                         IMB_Proxy_Size proxy_sizes_in_use, int quality);
+                                                         IMB_Proxy_Size proxy_sizes_in_use, int quality,
+                                                         const bool overwite, struct GSet *file_list);
 
 /* will rebuild all used indices and proxies at once */
 void IMB_anim_index_rebuild(struct IndexBuildContext *context,

@@ -343,7 +343,7 @@ static void rna_KeyingSet_name_set(PointerRNA *ptr, const char *value)
 	KeyingSet *ks = (KeyingSet *)ptr->data;
 	
 	/* update names of corresponding groups if name changes */
-	if (strcmp(ks->name, value)) {
+	if (!STREQ(ks->name, value)) {
 		KS_Path *ksp;
 		
 		for (ksp = ks->paths.first; ksp; ksp = ksp->next) {
@@ -359,7 +359,7 @@ static void rna_KeyingSet_name_set(PointerRNA *ptr, const char *value)
 					 * conflicts
 					 */
 					for (agrp = adt->action->groups.first; agrp; agrp = agrp->next) {
-						if (strcmp(ks->name, agrp->name) == 0) {
+						if (STREQ(ks->name, agrp->name)) {
 							/* there should only be one of these in the action, so can stop... */
 							BLI_strncpy(agrp->name, value, sizeof(agrp->name));
 							break;
@@ -554,16 +554,46 @@ static FCurve *rna_Driver_from_existing(AnimData *adt, bContext *C, FCurve *src_
 #else
 
 /* helper function for Keying Set -> keying settings */
-/* TODO: use reg option! */
-static void rna_def_common_keying_flags(StructRNA *srna, short UNUSED(reg))
+static void rna_def_common_keying_flags(StructRNA *srna, short reg)
 {
 	PropertyRNA *prop;
-
-	prop = RNA_def_property(srna, "bl_options", PROP_ENUM, PROP_NONE);
-	RNA_def_property_enum_sdna(prop, NULL, "keyingflag");
-	RNA_def_property_enum_items(prop, keying_flag_items);
-	RNA_def_property_flag(prop, PROP_REGISTER_OPTIONAL | PROP_ENUM_FLAG);
-	RNA_def_property_ui_text(prop, "Options",  "Keying set options");
+	
+	/* override scene/userpref defaults? */
+	prop = RNA_def_property(srna, "use_insertkey_override_needed", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "keyingoverride", INSERTKEY_NEEDED);
+	RNA_def_property_ui_text(prop, "Override Insert Keyframes Default- Only Needed", 
+	                         "Override default setting to only insert keyframes where they're needed in the relevant F-Curves");
+	if (reg) RNA_def_property_flag(prop, PROP_REGISTER_OPTIONAL);
+	
+	prop = RNA_def_property(srna, "use_insertkey_override_visual", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "keyingoverride", INSERTKEY_MATRIX);
+	RNA_def_property_ui_text(prop, "Override Insert Keyframes Default - Visual", 
+	                         "Override default setting to insert keyframes based on 'visual transforms'");
+	if (reg) RNA_def_property_flag(prop, PROP_REGISTER_OPTIONAL);
+	
+	prop = RNA_def_property(srna, "use_insertkey_override_xyz_to_rgb", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "keyingoverride", INSERTKEY_XYZ2RGB);
+	RNA_def_property_ui_text(prop, "Override F-Curve Colors - XYZ to RGB",
+	                        "Override default setting to set color for newly added transformation F-Curves (Location, Rotation, Scale) "
+							"to be based on the transform axis");
+	if (reg) RNA_def_property_flag(prop, PROP_REGISTER_OPTIONAL);
+	
+	
+	/* value to override defaults with */
+	prop = RNA_def_property(srna, "use_insertkey_needed", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "keyingflag", INSERTKEY_NEEDED);
+	RNA_def_property_ui_text(prop, "Insert Keyframes - Only Needed", "Only insert keyframes where they're needed in the relevant F-Curves");
+	if (reg) RNA_def_property_flag(prop, PROP_REGISTER_OPTIONAL);
+	
+	prop = RNA_def_property(srna, "use_insertkey_visual", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "keyingflag", INSERTKEY_MATRIX);
+	RNA_def_property_ui_text(prop, "Insert Keyframes - Visual", "Insert keyframes based on 'visual transforms'");
+	if (reg) RNA_def_property_flag(prop, PROP_REGISTER_OPTIONAL);
+	
+	prop = RNA_def_property(srna, "use_insertkey_xyz_to_rgb", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "keyingflag", INSERTKEY_XYZ2RGB);
+	RNA_def_property_ui_text(prop, "F-Curve Colors - XYZ to RGB", "Color for newly added transformation F-Curves (Location, Rotation, Scale) is based on the transform axis");
+	if (reg) RNA_def_property_flag(prop, PROP_REGISTER_OPTIONAL);
 }
 
 /* --- */
@@ -610,7 +640,20 @@ static void rna_def_keyingset_info(BlenderRNA *brna)
 	RNA_def_property_flag(prop, PROP_REGISTER_OPTIONAL);
 	RNA_def_property_ui_text(prop, "Description", "A short description of the keying set");
 	
-	rna_def_common_keying_flags(srna, 1); /* '1' arg here is to indicate that we need these to be set on registering */
+	/* Regarding why we don't use rna_def_common_keying_flags() here:
+	 * - Using it would keep this case in sync with the other places 
+	 *   where these options are exposed (which are optimised for being
+	 *   used in the UI).
+	 * - Unlike all the other places, this case is used for defining
+	 *   new "built in" Keying Sets via the Python API. In that case,
+	 *   it makes more sense to expose these in a way more similar to
+	 *   other places featuring bl_idname/label/description (i.e. operators)
+	 */
+	prop = RNA_def_property(srna, "bl_options", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_sdna(prop, NULL, "keyingflag");
+	RNA_def_property_enum_items(prop, keying_flag_items);
+	RNA_def_property_flag(prop, PROP_REGISTER_OPTIONAL | PROP_ENUM_FLAG);
+	RNA_def_property_ui_text(prop, "Options",  "Keying Set options to use when inserting keyframes");
 	
 	RNA_define_verify_sdna(1);
 	

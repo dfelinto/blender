@@ -167,6 +167,7 @@ static void warpModifier_do(WarpModifierData *wmd, Object *ob,
 
 	float tmat[4][4];
 
+	const float falloff_radius_sq = SQUARE(wmd->falloff_radius);
 	float strength = wmd->strength;
 	float fac = 1.0f, weight;
 	int i;
@@ -179,6 +180,9 @@ static void warpModifier_do(WarpModifierData *wmd, Object *ob,
 		return;
 
 	modifier_get_vgroup(ob, dm, wmd->defgrp_name, &dvert, &defgrp_index);
+	if (dvert == NULL) {
+		defgrp_index = -1;
+	}
 
 	if (wmd->curfalloff == NULL) /* should never happen, but bad lib linking could cause it */
 		wmd->curfalloff = curvemapping_add(1, 0.0f, 0.0f, 1.0f, 1.0f);
@@ -222,17 +226,15 @@ static void warpModifier_do(WarpModifierData *wmd, Object *ob,
 		float *co = vertexCos[i];
 
 		if (wmd->falloff_type == eWarp_Falloff_None ||
-		    ((fac = len_v3v3(co, mat_from[3])) < wmd->falloff_radius &&
-		     (fac = (wmd->falloff_radius - fac) / wmd->falloff_radius)))
+		    ((fac = len_squared_v3v3(co, mat_from[3])) < falloff_radius_sq &&
+		     (fac = (wmd->falloff_radius - sqrtf(fac)) / wmd->falloff_radius)))
 		{
 			/* skip if no vert group found */
-			if (dvert && defgrp_index != -1) {
+			if (defgrp_index != -1) {
 				dv = &dvert[i];
-
-				if (dv) {
-					weight = defvert_find_weight(dv, defgrp_index) * strength;
-					if (weight <= 0.0f) /* Should never occure... */
-						continue;
+				weight = defvert_find_weight(dv, defgrp_index) * strength;
+				if (weight <= 0.0f) {
+					continue;
 				}
 			}
 
@@ -263,6 +265,9 @@ static void warpModifier_do(WarpModifierData *wmd, Object *ob,
 				case eWarp_Falloff_Sphere:
 					fac = sqrtf(2 * fac - fac * fac);
 					break;
+				case eWarp_Falloff_InvSquare:
+					fac = fac * (2.0f - fac);
+					break;
 			}
 
 			fac *= weight;
@@ -274,27 +279,29 @@ static void warpModifier_do(WarpModifierData *wmd, Object *ob,
 				fac *= texres.tin;
 			}
 
-			/* into the 'from' objects space */
-			mul_m4_v3(mat_from_inv, co);
+			if (fac != 0.0f) {
+				/* into the 'from' objects space */
+				mul_m4_v3(mat_from_inv, co);
 
-			if (fac >= 1.0f) {
-				mul_m4_v3(mat_final, co);
-			}
-			else if (fac > 0.0f) {
-				if (wmd->flag & MOD_WARP_VOLUME_PRESERVE) {
-					/* interpolate the matrix for nicer locations */
-					blend_m4_m4m4(tmat, mat_unit, mat_final, fac);
-					mul_m4_v3(tmat, co);
+				if (fac == 1.0f) {
+					mul_m4_v3(mat_final, co);
 				}
 				else {
-					float tvec[3];
-					mul_v3_m4v3(tvec, mat_final, co);
-					interp_v3_v3v3(co, co, tvec, fac);
+					if (wmd->flag & MOD_WARP_VOLUME_PRESERVE) {
+						/* interpolate the matrix for nicer locations */
+						blend_m4_m4m4(tmat, mat_unit, mat_final, fac);
+						mul_m4_v3(tmat, co);
+					}
+					else {
+						float tvec[3];
+						mul_v3_m4v3(tvec, mat_final, co);
+						interp_v3_v3v3(co, co, tvec, fac);
+					}
 				}
-			}
 
-			/* out of the 'from' objects space */
-			mul_m4_v3(mat_from, co);
+				/* out of the 'from' objects space */
+				mul_m4_v3(mat_from, co);
+			}
 		}
 	}
 

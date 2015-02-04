@@ -1367,6 +1367,7 @@ typedef struct SeqIndexBuildContext {
 	int tc_flags;
 	int size_flags;
 	int quality;
+	bool overwrite;
 	size_t view_id;
 
 	Main *bmain;
@@ -1633,7 +1634,8 @@ static ImBuf *seq_proxy_fetch(const SeqRenderData *context, Sequence *seq, int c
 	}
 }
 
-static void seq_proxy_build_frame(const SeqRenderData *context, Sequence *seq, int cfra, int proxy_render_size)
+static void seq_proxy_build_frame(const SeqRenderData *context, Sequence *seq, int cfra,
+                                  int proxy_render_size, const bool overwrite)
 {
 	char name[PROXY_MAXFILE];
 	int quality;
@@ -1642,6 +1644,10 @@ static void seq_proxy_build_frame(const SeqRenderData *context, Sequence *seq, i
 	ImBuf *ibuf_tmp, *ibuf;
 
 	if (!seq_proxy_get_fname(seq, cfra, proxy_render_size, name, context->view_id)) {
+		return;
+	}
+
+	if (!overwrite && BLI_exists(name)) {
 		return;
 	}
 
@@ -1748,7 +1754,7 @@ static size_t seq_proxy_context_count(Sequence *seq, Scene *scene)
 	return num_views;
 }
 
-void BKE_sequencer_proxy_rebuild_context(Main *bmain, Scene *scene, Sequence *seq, ListBase *queue)
+void BKE_sequencer_proxy_rebuild_context(Main *bmain, Scene *scene, Sequence *seq, struct GSet *file_list, ListBase *queue)
 {
 	SeqIndexBuildContext *context;
 	Sequence *nseq;
@@ -1777,6 +1783,7 @@ void BKE_sequencer_proxy_rebuild_context(Main *bmain, Scene *scene, Sequence *se
 		context->tc_flags   = nseq->strip->proxy->build_tc_flags;
 		context->size_flags = nseq->strip->proxy->build_size_flags;
 		context->quality    = nseq->strip->proxy->quality;
+		context->overwrite = (nseq->strip->proxy->build_flags & SEQ_PROXY_SKIP_EXISTING) == 0;
 
 		context->bmain = bmain;
 		context->scene = scene;
@@ -1795,7 +1802,8 @@ void BKE_sequencer_proxy_rebuild_context(Main *bmain, Scene *scene, Sequence *se
 
 			if (sanim->anim) {
 				context->index_context = IMB_anim_index_rebuild_context(sanim->anim,
-				        context->tc_flags, context->size_flags, context->quality);
+				        context->tc_flags, context->size_flags, context->quality,
+				        context->overwrite, file_list);
 			}
 		}
 	}
@@ -1803,6 +1811,7 @@ void BKE_sequencer_proxy_rebuild_context(Main *bmain, Scene *scene, Sequence *se
 
 void BKE_sequencer_proxy_rebuild(SeqIndexBuildContext *context, short *stop, short *do_update, float *progress)
 {
+	const bool overwrite = context->overwrite;
 	SeqRenderData render_context;
 	Sequence *seq = context->seq;
 	Scene *scene = context->scene;
@@ -1840,16 +1849,16 @@ void BKE_sequencer_proxy_rebuild(SeqIndexBuildContext *context, short *stop, sho
 
 	for (cfra = seq->startdisp + seq->startstill;  cfra < seq->enddisp - seq->endstill; cfra++) {
 		if (context->size_flags & IMB_PROXY_25) {
-			seq_proxy_build_frame(&render_context, seq, cfra, 25);
+			seq_proxy_build_frame(&render_context, seq, cfra, 25, overwrite);
 		}
 		if (context->size_flags & IMB_PROXY_50) {
-			seq_proxy_build_frame(&render_context, seq, cfra, 50);
+			seq_proxy_build_frame(&render_context, seq, cfra, 50, overwrite);
 		}
 		if (context->size_flags & IMB_PROXY_75) {
-			seq_proxy_build_frame(&render_context, seq, cfra, 75);
+			seq_proxy_build_frame(&render_context, seq, cfra, 75, overwrite);
 		}
 		if (context->size_flags & IMB_PROXY_100) {
-			seq_proxy_build_frame(&render_context, seq, cfra, 100);
+			seq_proxy_build_frame(&render_context, seq, cfra, 100, overwrite);
 		}
 
 		*progress = (float) (cfra - seq->startdisp - seq->startstill) / (seq->enddisp - seq->endstill - seq->startdisp - seq->startstill);
@@ -1877,6 +1886,22 @@ void BKE_sequencer_proxy_rebuild_finish(SeqIndexBuildContext *context, bool stop
 	seq_free_sequence_recurse(NULL, context->seq);
 
 	MEM_freeN(context);
+}
+
+void BKE_sequencer_proxy_set(struct Sequence *seq, bool value)
+{
+	if (value) {
+		seq->flag |= SEQ_USE_PROXY;
+		if (seq->strip->proxy == NULL) {
+			seq->strip->proxy = MEM_callocN(sizeof(struct StripProxy), "StripProxy");
+			seq->strip->proxy->quality = 90;
+			seq->strip->proxy->build_tc_flags = SEQ_PROXY_TC_ALL;
+			seq->strip->proxy->build_size_flags = SEQ_PROXY_IMAGE_SIZE_25;
+		}
+	}
+	else {
+		seq->flag ^= SEQ_USE_PROXY;
+	}	
 }
 
 /*********************** color balance *************************/
@@ -2854,7 +2879,7 @@ static ImBuf *seq_render_scene_strip(const SeqRenderData *context, Sequence *seq
 		 * When rendering from command line renderer is called from main thread, in this
 		 * case it's always safe to render scene here
 		 */
-		if (!is_thread_main || is_rendering == false || is_background) {
+		if (!is_thread_main || is_rendering == false || is_background || context->eval_ctx->mode == DAG_EVAL_RENDER) {
 			if (re == NULL)
 				re = RE_NewRender(scene->id.name);
 
@@ -3094,11 +3119,19 @@ monoview_image:
 
 				for (i = 0, sanim = seq->anims.first; sanim; sanim = sanim->next, i++) {
 					if (sanim->anim) {
+						IMB_Proxy_Size proxy_size = seq_rendersize_to_proxysize(context->preview_render_size);
 						IMB_anim_set_preseek(sanim->anim, seq->anim_preseek);
 
 						ibuf_arr[i] = IMB_anim_absolute(sanim->anim, nr + seq->anim_startofs,
 						                             seq->strip->proxy ? seq->strip->proxy->tc : IMB_TC_RECORD_RUN,
-						                             seq_rendersize_to_proxysize(context->preview_render_size));
+						                             proxy_size);
+
+					/* fetching for requested proxy sze failed, try fetching the original isntead */
+					if (!ibuf && proxy_size != IMB_PROXY_NONE) {
+						ibuf = IMB_anim_absolute(sanim->anim, nr + seq->anim_startofs,
+						                         seq->strip->proxy ? seq->strip->proxy->tc : IMB_TC_RECORD_RUN,
+						                         IMB_PROXY_NONE);
+					}
 						if (ibuf_arr[i]) {
 							/* we don't need both (speed reasons)! */
 							if (ibuf_arr[i]->rect_float && ibuf_arr[i]->rect)
@@ -3149,12 +3182,19 @@ monoview_image:
 monoview_movie:
 				sanim = seq->anims.first;
 				if (sanim && sanim->anim) {
+					IMB_Proxy_Size proxy_size = seq_rendersize_to_proxysize(context->preview_render_size);
 					IMB_anim_set_preseek(sanim->anim, seq->anim_preseek);
 
 					ibuf = IMB_anim_absolute(sanim->anim, nr + seq->anim_startofs,
 					                         seq->strip->proxy ? seq->strip->proxy->tc : IMB_TC_RECORD_RUN,
-					                         seq_rendersize_to_proxysize(context->preview_render_size));
+					                         proxy_size);
 
+					/* fetching for requested proxy sze failed, try fetching the original isntead */
+					if (!ibuf && proxy_size != IMB_PROXY_NONE) {
+						ibuf = IMB_anim_absolute(sanim->anim, nr + seq->anim_startofs,
+						                         seq->strip->proxy ? seq->strip->proxy->tc : IMB_TC_RECORD_RUN,
+						                         IMB_PROXY_NONE);
+					}
 					if (ibuf) {
 						BKE_sequencer_imbuf_to_sequencer_space(context->scene, ibuf, false);
 

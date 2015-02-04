@@ -420,8 +420,9 @@ static void PE_create_shape_tree(PEData *data, Object *shapeob)
 	
 	memset(&data->shape_bvh, 0, sizeof(data->shape_bvh));
 	
-	if (!shapeob || !shapeob->derivedFinal)
+	if (!dm) {
 		return;
+	}
 	
 	DM_ensure_tessface(dm);
 	bvhtree_from_mesh_faces(&data->shape_bvh, dm, 0.0f, 4, 8);
@@ -3250,7 +3251,7 @@ static void brush_puff(PEData *data, int point_index)
 
 static void BKE_brush_weight_get(PEData *data, float UNUSED(mat[4][4]), float UNUSED(imat[4][4]), int point_index, int key_index, PTCacheEditKey *UNUSED(key))
 {
-	/* roots have full weight allways */
+	/* roots have full weight always */
 	if (key_index) {
 		PTCacheEdit *edit = data->edit;
 		ParticleSystem *psys = edit->psys;

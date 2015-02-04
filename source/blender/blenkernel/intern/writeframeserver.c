@@ -218,7 +218,7 @@ static int handle_request(FrameserverContext *context, RenderData *rd, char *req
 
 	*p = 0;
 
-	if (strcmp(path, "/index.html") == 0 || strcmp(path, "/") == 0) {
+	if (STREQ(path, "/index.html") || strcmp(path, "/")) {
 		safe_puts(context->connsock, index_page);
 		return -1;
 	}
@@ -230,7 +230,7 @@ static int handle_request(FrameserverContext *context, RenderData *rd, char *req
 		context->write_ppm = 1;
 		return atoi(path + 12);
 	}
-	if (strcmp(path, "/info.txt") == 0) {
+	if (STREQ(path, "/info.txt")) {
 		char buf[4096];
 
 		sprintf(buf,
@@ -254,7 +254,7 @@ static int handle_request(FrameserverContext *context, RenderData *rd, char *req
 		safe_puts(context->connsock, buf);
 		return -1;
 	}
-	if (strcmp(path, "/close.txt") == 0) {
+	if (STREQ(path, "/close.txt")) {
 		safe_puts(context->connsock, good_bye);
 		G.is_break = true;  /* Abort render */
 		return -1;
