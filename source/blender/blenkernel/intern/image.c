@@ -103,6 +103,7 @@ static SpinLock image_spin;
 static size_t image_num_files(struct Image *ima);
 static ImBuf *image_acquire_ibuf(Image *ima, ImageUser *iuser, void **lock_r);
 static void image_update_views_format(Scene *scene, Image *ima);
+static void image_add_view(Image *ima, const char *viewname, const char *filepath);
 
 /* max int, to indicate we don't store sequences in ibuf */
 #define IMA_NO_INDEX    0x7FEFEFEF
@@ -862,7 +863,6 @@ Image *BKE_image_add_generated(Main *bmain, unsigned int width, unsigned int hei
 
 		for (view_id = 0; view_id < 2; view_id++) {
 			ImBuf *ibuf;
-			ImageView *iv;
 			ibuf = add_ibuf_size(width, height, ima->name, depth, floatbuf, gen_type, color, &ima->colorspace_settings);
 			image_assign_ibuf(ima, ibuf, stereo3d ? view_id : IMA_NO_INDEX, 0);
 
@@ -870,9 +870,7 @@ Image *BKE_image_add_generated(Main *bmain, unsigned int width, unsigned int hei
 			IMB_freeImBuf(ibuf);
 			if (!stereo3d) break;
 
-			iv = MEM_mallocN(sizeof(ImageView), "Viewer Image View");
-			BLI_strncpy(iv->name, names[view_id], sizeof(iv->name));
-			BLI_addtail(&ima->views, iv);
+			image_add_view(ima, names[view_id], "");
 		}
 
 		ima->ok = IMA_OK_LOADED;
@@ -2354,13 +2352,10 @@ Image *BKE_image_verify_viewer(int type, const char *name)
 static void image_viewer_create_views(const RenderData *rd, Image *ima)
 {
 	SceneRenderView *srv;
-	ImageView *iv;
 	for (srv = rd->views.first; srv; srv = srv->next) {
 		if (BKE_scene_render_view_active(rd, srv) == false)
 			continue;
-		iv = MEM_mallocN(sizeof(ImageView), "Viewer Image View");
-		BLI_strncpy(iv->name, srv->name, sizeof(iv->name));
-		BLI_addtail(&ima->views, iv);
+		image_add_view(ima, srv->name, "");
 	}
 }
 
@@ -2852,23 +2847,22 @@ bool BKE_image_save_openexr_multiview(Image *ima, ImBuf *ibuf, const char *filep
 
 /**************************** multiview load openexr *********************************/
 
-#ifdef WITH_OPENEXR
-static void image_add_view_cb(void *base, const char *str)
+static void image_add_view(Image *ima, const char *viewname, const char *filepath)
 {
-	Image *ima = base;
 	ImageView *iv;
 
 	iv = MEM_mallocN(sizeof(ImageView), "Viewer Image View");
-	BLI_strncpy(iv->name, str, sizeof(iv->name));
+	BLI_strncpy(iv->name, viewname, sizeof(iv->name));
+	BLI_strncpy(iv->filepath, filepath, sizeof(iv->filepath));
 
 	/* For stereo drawing we need to ensure:
 	 * STEREO_LEFT_NAME  == STEREO_LEFT_ID and
 	 * STEREO_RIGHT_NAME == STEREO_RIGHT_ID */
 
-	if (STREQ(str, STEREO_LEFT_NAME)) {
+	if (STREQ(viewname, STEREO_LEFT_NAME)) {
 		BLI_addhead(&ima->views, iv);
 	}
-	else if (STREQ(str, STEREO_RIGHT_NAME)) {
+	else if (STREQ(viewname, STEREO_RIGHT_NAME)) {
 		ImageView *left_iv = BLI_findstring(&ima->views, STEREO_LEFT_NAME, offsetof(ImageView, name));
 
 		if (left_iv == NULL) {
@@ -2881,6 +2875,13 @@ static void image_add_view_cb(void *base, const char *str)
 	else {
 		BLI_addtail(&ima->views, iv);
 	}
+}
+
+#ifdef WITH_OPENEXR
+static void image_add_view_cb(void *base, const char *str)
+{
+	Image *ima = base;
+	image_add_view(ima, str, ima->name);
 }
 
 static void image_add_buffer_cb(void *base, const char *str, ImBuf *ibuf, const int frame)
@@ -4429,10 +4430,7 @@ static void image_update_views_format(Scene *scene, Image *ima)
 		ima->flag |= IMA_IS_STEREO;
 
 		for (i = 0; i < 2; i++) {
-			iv = MEM_mallocN(sizeof(ImageView), "Image View Stereo (open)");
-			BLI_strncpy(iv->name, names[i], sizeof(iv->name));
-			BLI_strncpy(iv->filepath, ima->name, sizeof(iv->filepath));
-			BLI_addtail(&ima->views, iv);
+			image_add_view(ima, names[i], ima->name);
 		}
 
 		ima->views_format = R_IMF_VIEWS_STEREO_3D;
@@ -4453,11 +4451,9 @@ static void image_update_views_format(Scene *scene, Image *ima)
 		/* create all the image views */
 		for (srv = scene->r.views.first; srv; srv = srv->next) {
 			if (BKE_scene_render_view_active(&scene->r, srv)) {
-				iv = MEM_mallocN(sizeof(ImageView), "Image View (open)");
-				BLI_strncpy(iv->name, srv->name, sizeof(iv->name));
-
-				BLI_snprintf(iv->filepath, sizeof(iv->filepath), "%s%s%s", prefix, srv->suffix, ext);
-				BLI_addtail(&ima->views, iv);
+				char filepath[FILE_MAX];
+				BLI_snprintf(filepath, sizeof(filepath), "%s%s%s", prefix, srv->suffix, ext);
+				image_add_view(ima, srv->name, filepath);
 			}
 		}
 
