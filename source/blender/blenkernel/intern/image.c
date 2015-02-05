@@ -4484,8 +4484,8 @@ static void image_update_views_format(Scene *scene, Image *ima)
 		}
 		else {
 monoview:
-			ima->flag &= IMA_IS_STEREO;
-			ima->flag &= IMA_IS_MULTIVIEW;
+			ima->flag &= ~IMA_IS_STEREO;
+			ima->flag &= ~IMA_IS_MULTIVIEW;
 			BKE_image_free_views(ima);
 		}
 
