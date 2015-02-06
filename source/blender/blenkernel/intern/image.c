@@ -3279,27 +3279,17 @@ static ImBuf *image_load_movie_file(Image *ima, ImageUser *iuser, int frame)
 	return r_ibuf;
 }
 
-/* warning, 'iuser' can be NULL */
-static ImBuf *image_load_image_file(Image *ima, ImageUser *iuser, int cfra)
+static struct ImBuf *load_image_single(Image *ima, ImageUser *iuser, int cfra,
+                                       const size_t view_id,
+                                       const bool has_packed,
+                                       bool *r_assign)
 {
-	struct ImBuf **ibuf_arr;
-	struct ImBuf *r_ibuf;
-	char **filepath_arr;
-	bool assign = false;
+	char filepath[FILE_MAX];
+	struct ImBuf *ibuf = NULL;
 	int flag;
-	const bool is_multiview = (ima->flag & IMA_IS_MULTIVIEW) != 0;
-	const size_t totfiles = image_num_files(ima);
-	const size_t totviews = is_multiview ? BLI_listbase_count(&ima->views) : 1;
-	const bool has_packed = BKE_image_has_packedfile(ima);
-	size_t i;
+	ImageView *iv;
 
-	/* always ensure clean ima */
-	BKE_image_free_buffers(ima);
-
-	ibuf_arr = MEM_mallocN(sizeof(ImBuf *) * totviews, "Image Views Imbufs");
-	filepath_arr = MEM_mallocN(sizeof(char *) * totviews, "Image filepaths");
-	for (i = 0; i < totfiles; i++)
-		filepath_arr[i] = MEM_mallocN(sizeof(char) * FILE_MAX, "Image filepath");
+	iv = BLI_findlink(&ima->views, view_id);
 
 	/* is there a PackedFile with this image ? */
 	if (has_packed) {
@@ -3308,113 +3298,138 @@ static ImBuf *image_load_image_file(Image *ima, ImageUser *iuser, int cfra)
 		flag = IB_rect | IB_multilayer;
 		flag |= imbuf_alpha_flags_for_image(ima);
 
-		/* XXX what to do */
-		BLI_assert(totfiles == BLI_listbase_count_ex(&ima->packedfiles, totfiles + 1));
-
-		for (i = 0, imapf = ima->packedfiles.first; imapf; imapf = imapf->next, i++) {
-			ibuf_arr[i] = IMB_ibImageFromMemory(
-			        (unsigned char *)imapf->packedfile->data, imapf->packedfile->size, flag,
-			        ima->colorspace_settings.name, "<packed data>");
-		}
+		imapf = BLI_findlink(&ima->packedfiles, view_id);
+		ibuf = IMB_ibImageFromMemory(
+			       (unsigned char *)imapf->packedfile->data, imapf->packedfile->size, flag,
+			       ima->colorspace_settings.name, "<packed data>");
 	}
 	else {
+		ImageUser iuser_t;
+
 		flag = IB_rect | IB_multilayer | IB_metadata;
 		flag |= imbuf_alpha_flags_for_image(ima);
 
 		/* get the correct filepath */
 		BKE_image_user_frame_calc(iuser, cfra, 0);
 
-		for (i = 0; i < totfiles; i++) {
-			ImageUser iuser_t;
+		if (iuser)
+			iuser_t = *iuser;
+		else
+			iuser_t.framenr = ima->lastframe;
 
-			if (iuser)
-				iuser_t = *iuser;
-			else
-				iuser_t.framenr = ima->lastframe;
+		iuser_t.view = view_id;
 
-			iuser_t.view = i;
+		BKE_image_user_file_path(&iuser_t, ima, filepath);
 
-			BKE_image_user_file_path(&iuser_t, ima, filepath_arr[i]);
-
-			/* read ibuf */
-			ibuf_arr[i] = IMB_loadiffname(filepath_arr[i], flag, ima->colorspace_settings.name);
-		}
+		/* read ibuf */
+		ibuf = IMB_loadiffname(filepath, flag, ima->colorspace_settings.name);
 	}
 
-	for (i = 0; i < totfiles; i++) {
-		if (ibuf_arr[i]) {
-#ifdef WITH_OPENEXR
-			if (ibuf_arr[i]->ftype == OPENEXR && ibuf_arr[i]->userdata) {
+	if (ibuf) {
+		if (ibuf->ftype == OPENEXR && ibuf->userdata) {
+			if (IMB_exr_has_singlelayer_multiview(ibuf->userdata)) {
 				/* handle singlelayer multiview case assign ibuf based on available views */
-				if (IMB_exr_has_singlelayer_multiview(ibuf_arr[i]->userdata)) {
-					image_create_multiview(ima, ibuf_arr[i], cfra);
-					IMB_freeImBuf(ibuf_arr[i]);
-					ibuf_arr[i] = NULL;
-				}
-				else if (IMB_exr_has_multilayer(ibuf_arr[i]->userdata)) {
-					/* handle multilayer case, don't assign ibuf. will be handled in BKE_image_acquire_ibuf */
-					image_create_multilayer(ima, ibuf_arr[i], cfra);
-					ima->type = IMA_TYPE_MULTILAYER;
-					IMB_freeImBuf(ibuf_arr[i]);
-					ibuf_arr[i] = NULL;
-				}
+				image_create_multiview(ima, ibuf, cfra);
+				IMB_freeImBuf(ibuf);
+				ibuf = NULL;
 			}
-			else {
-				image_initialize_after_load(ima, ibuf_arr[i]);
-				assign = true;
-
-				/* check if the image is a font image... */
-				detectBitmapFont(ibuf_arr[i]);
-
-				/* make packed file for autopack */
-				if ((has_packed == false) && (G.fileflags & G_AUTOPACK)) {
-					ImagePackedFile *imapf;
-					imapf = MEM_mallocN(sizeof(ImagePackedFile), "Image Packefile");
-					BLI_strncpy(imapf->filepath, filepath_arr[i], sizeof(imapf->filepath));
-					imapf->packedfile = newPackedFile(NULL, filepath_arr[i], ID_BLEND_PATH(G.main, &ima->id));
-					BLI_addtail(&ima->packedfiles, imapf);
-				}
+			else if (IMB_exr_has_multilayer(ibuf->userdata)) {
+				/* handle multilayer case, don't assign ibuf. will be handled in BKE_image_acquire_ibuf */
+				image_create_multilayer(ima, ibuf, cfra);
+				ima->type = IMA_TYPE_MULTILAYER;
+				IMB_freeImBuf(ibuf);
+				ibuf = NULL;
 			}
-#else
-			image_initialize_after_load(ima, ibuf_arr[i]);
-			assign = true;
-#endif
 		}
-		else
-			ima->ok = 0;
+		else {
+			image_initialize_after_load(ima, ibuf);
+			*r_assign = true;
+
+			/* check if the image is a font image... */
+			detectBitmapFont(ibuf);
+
+			/* make packed file for autopack */
+			if ((has_packed == false) && (G.fileflags & G_AUTOPACK)) {
+				ImagePackedFile *imapf = MEM_mallocN(sizeof(ImagePackedFile), "Image Packefile");
+				BLI_addtail(&ima->packedfiles, imapf);
+
+				BLI_strncpy(imapf->filepath, filepath, sizeof(imapf->filepath));
+				imapf->packedfile = newPackedFile(NULL, filepath, ID_BLEND_PATH(G.main, &ima->id));
+			}
+		}
+	}
+	else {
+		ima->ok = 0;
 	}
 
-	if ((ima->flag & IMA_IS_STEREO) && ima->views_format == R_IMF_VIEWS_STEREO_3D)
-		IMB_ImBufFromStereo(ima->stereo3d_format, &ibuf_arr[0], &ibuf_arr[1]);
+	return ibuf;
+}
 
-	if (assign) {
-		if (!is_multiview)
-			image_assign_ibuf(ima, ibuf_arr[0], IMA_NO_INDEX, 0);
-		else
-			for (i = 0; i < totviews; i++)
+/* warning, 'iuser' can be NULL
+ * note: Image->views was already populated (in image_update_views_format)
+ */
+static ImBuf *image_load_image_file(Image *ima, ImageUser *iuser, int cfra)
+{
+	struct ImBuf *ibuf = NULL;
+	bool assign = false;
+	const bool is_multiview = (ima->flag & IMA_IS_MULTIVIEW) != 0;
+	const size_t totfiles = image_num_files(ima);
+	bool has_packed = BKE_image_has_packedfile(ima);
+
+	/* always ensure clean ima */
+	BKE_image_free_buffers(ima);
+
+	/* this should never happen, but just playing safe */
+	if (has_packed) {
+		if (totfiles != BLI_listbase_count_ex(&ima->packedfiles, totfiles + 1)) {
+			image_free_packedfiles(ima);
+			has_packed = false;
+		}
+	}
+
+	if (!is_multiview) {
+		ibuf = load_image_single(ima, iuser, cfra, 0, has_packed, &assign);
+		if (assign) {
+			image_assign_ibuf(ima, ibuf, IMA_NO_INDEX, 0);
+		}
+	}
+	else {
+		size_t i;
+		struct ImBuf **ibuf_arr;
+		const size_t totviews = BLI_listbase_count(&ima->views);
+
+		ibuf_arr = MEM_mallocN(sizeof(ImBuf *) * totviews, "Image Views Imbufs");
+
+		for (i = 0; i < totfiles; i++)
+			ibuf_arr[i] = load_image_single(ima, iuser, cfra, i, has_packed, &assign);
+
+		if ((ima->flag & IMA_IS_STEREO) && ima->views_format == R_IMF_VIEWS_STEREO_3D)
+			IMB_ImBufFromStereo(ima->stereo3d_format, &ibuf_arr[0], &ibuf_arr[1]);
+
+		/* return the original requested ImBuf */
+		ibuf = ibuf_arr[(iuser ? iuser->multi_index : 0)];
+
+		if (assign) {
+			for (i = 0; i < totviews; i++) {
 				image_assign_ibuf(ima, ibuf_arr[i], i, 0);
-	}
-
-	/* return the original requested ImBuf */
-	r_ibuf = ibuf_arr[is_multiview ? (iuser ? iuser->multi_index : 0) : 0];
-
-	/* "remove" the others (decrease their refcount) */
-	for (i = 0; i < totviews; i++) {
-		if (ibuf_arr[i] != r_ibuf) {
-			IMB_freeImBuf(ibuf_arr[i]);
+			}
 		}
+
+		/* "remove" the others (decrease their refcount) */
+		for (i = 0; i < totviews; i++) {
+			if (ibuf_arr[i] != ibuf) {
+				IMB_freeImBuf(ibuf_arr[i]);
+			}
+		}
+
+		/* cleanup */
+		MEM_freeN(ibuf_arr);
 	}
 
 	if (iuser)
 		iuser->ok = ima->ok;
 
-	/* cleanup */
-	MEM_freeN(ibuf_arr);
-	for (i = 0; i < totfiles; i++)
-		MEM_freeN(filepath_arr[i]);
-	MEM_freeN(filepath_arr);
-
-	return r_ibuf;
+	return ibuf;
 }
 
 static ImBuf *image_get_ibuf_multilayer(Image *ima, ImageUser *iuser)
