@@ -38,6 +38,7 @@
 #include "DNA_armature_types.h"
 #include "DNA_constraint_types.h"
 #include "DNA_camera_types.h"
+#include "DNA_gpencil_types.h"
 #include "DNA_group_types.h"
 #include "DNA_key_types.h"
 #include "DNA_lamp_types.h"
@@ -196,7 +197,7 @@ void outliner_cleanup_tree(SpaceOops *soops)
 }
 
 /* Find specific item from the treestore */
-static TreeElement *outliner_find_tree_element(ListBase *lb, TreeStoreElem *store_elem)
+TreeElement *outliner_find_tree_element(ListBase *lb, TreeStoreElem *store_elem)
 {
 	TreeElement *te, *tes;
 	for (te = lb->first; te; te = te->next) {
@@ -430,6 +431,8 @@ static void outliner_add_scene_contents(SpaceOops *soops, ListBase *lb, Scene *s
 	// TODO: move this to the front?
 	if (outliner_animdata_test(sce->adt))
 		outliner_add_element(soops, lb, sce, te, TSE_ANIM_DATA, 0);
+		
+	outliner_add_element(soops, lb, sce->gpd, te, 0, 0);
 	
 	outliner_add_element(soops,  lb, sce->world, te, 0, 0);
 
@@ -451,6 +454,8 @@ static void outliner_add_object_contents(SpaceOops *soops, TreeElement *te, Tree
 	
 	if (ob->proxy && ob->id.lib == NULL)
 		outliner_add_element(soops, &te->subtree, ob->proxy, te, TSE_PROXY, 0);
+		
+	outliner_add_element(soops, &te->subtree, ob->gpd, te, 0, 0);
 	
 	outliner_add_element(soops, &te->subtree, ob->data, te, 0, 0);
 	
@@ -809,6 +814,21 @@ static void outliner_add_id_contents(SpaceOops *soops, TreeElement *te, TreeStor
 			}
 			break;
 		}
+		case ID_GD:
+		{
+			bGPdata *gpd = (bGPdata *)id;
+			bGPDlayer *gpl;
+			int a = 0;
+			
+			if (outliner_animdata_test(gpd->adt))
+				outliner_add_element(soops, &te->subtree, gpd, te, TSE_ANIM_DATA, 0);
+			
+			// TODO: base element for layers?
+			for (gpl = gpd->layers.first; gpl; gpl = gpl->next) {
+				outliner_add_element(soops, &te->subtree, gpl, te, TSE_GP_LAYER, a);
+				a++;
+			}
+		}
 	}
 }
 
@@ -854,6 +874,9 @@ static TreeElement *outliner_add_element(SpaceOops *soops, ListBase *lb, void *i
 		/* pass */
 	}
 	else if (type == TSE_ANIM_DATA) {
+		/* pass */
+	}
+	else if (type == TSE_GP_LAYER) {
 		/* pass */
 	}
 	else if (type == TSE_ID_BASE) {
@@ -937,6 +960,12 @@ static TreeElement *outliner_add_element(SpaceOops *soops, ListBase *lb, void *i
 				}
 			}
 		}
+	}
+	else if (type == TSE_GP_LAYER) {
+		bGPDlayer *gpl = (bGPDlayer *)idv;
+		
+		te->name = gpl->info;
+		te->directdata = gpl;
 	}
 	else if (type == TSE_SEQUENCE) {
 		Sequence *seq = (Sequence *) idv;

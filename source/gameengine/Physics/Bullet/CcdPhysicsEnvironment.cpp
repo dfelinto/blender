@@ -174,26 +174,27 @@ public:
 
 	virtual void	GetWheelPosition(int wheelIndex,float& posX,float& posY,float& posZ) const
 	{
-		btTransform	trans = m_vehicle->getWheelTransformWS(wheelIndex);
-		posX = trans.getOrigin().x();
-		posY = trans.getOrigin().y();
-		posZ = trans.getOrigin().z();
+		if ((wheelIndex>=0) && (wheelIndex< m_vehicle->getNumWheels()))
+		{
+			btVector3 origin = m_vehicle->getWheelTransformWS(wheelIndex).getOrigin();
+
+			posX = origin.x();
+			posY = origin.y();
+			posZ = origin.z();
+		}
 	}
+
 	virtual void	GetWheelOrientationQuaternion(int wheelIndex,float& quatX,float& quatY,float& quatZ,float& quatW) const
 	{
-		btTransform	trans = m_vehicle->getWheelTransformWS(wheelIndex);
-		btQuaternion quat = trans.getRotation();
-		btMatrix3x3 orn2(quat);
+		if ((wheelIndex>=0) && (wheelIndex< m_vehicle->getNumWheels()))
+		{
+			btQuaternion quat = m_vehicle->getWheelTransformWS(wheelIndex).getRotation();
 
-		quatX = trans.getRotation().x();
-		quatY = trans.getRotation().y();
-		quatZ = trans.getRotation().z();
-		quatW = trans.getRotation()[3];
-
-
-		//printf("test");
-
-
+			quatX = quat.x();
+			quatY = quat.y();
+			quatZ = quat.z();
+			quatW = quat.w();
+		}
 	}
 
 	virtual float	GetWheelRotation(int wheelIndex) const
@@ -205,8 +206,8 @@ public:
 			btWheelInfo& info = m_vehicle->getWheelInfo(wheelIndex);
 			rotation = info.m_rotation;
 		}
-		return rotation;
 
+		return rotation;
 	}
 
 
@@ -223,12 +224,16 @@ public:
 
 	virtual	void	SetSteeringValue(float steering,int wheelIndex)
 	{
-		m_vehicle->setSteeringValue(steering,wheelIndex);
+		if ((wheelIndex>=0) && (wheelIndex< m_vehicle->getNumWheels())) {
+			m_vehicle->setSteeringValue(steering,wheelIndex);
+		}
 	}
 
 	virtual	void	ApplyEngineForce(float force,int wheelIndex)
 	{
-		m_vehicle->applyEngineForce(force,wheelIndex);
+		if ((wheelIndex>=0) && (wheelIndex< m_vehicle->getNumWheels())) {
+			m_vehicle->applyEngineForce(force,wheelIndex);
+		}
 	}
 
 	virtual	void	ApplyBraking(float braking,int wheelIndex)
@@ -2261,6 +2266,7 @@ void	CcdPhysicsEnvironment::CallbackTriggers()
 	int numManifolds = dispatcher->getNumManifolds();
 	for (int i=0;i<numManifolds;i++)
 	{
+		bool colliding_ctrl0 = true;
 		btPersistentManifold* manifold = dispatcher->getManifoldByIndexInternal(i);
 		int numContacts = manifold->getNumContacts();
 		if (!numContacts) continue;
@@ -2289,12 +2295,27 @@ void	CcdPhysicsEnvironment::CallbackTriggers()
 		if (iter == m_triggerControllers.end())
 		{
 			iter = m_triggerControllers.find(ctrl1);
+			colliding_ctrl0 = false;
 		}
 
 		if (iter != m_triggerControllers.end())
 		{
+			static PHY_CollData coll_data;
+			const btManifoldPoint &cp = manifold->getContactPoint(0);
+
+			/* Make sure that "point1" is always on the object we report on, and
+			 * "point2" on the other object. Also ensure the normal is oriented
+			 * correctly. */
+			btVector3 point1 = colliding_ctrl0 ? cp.m_positionWorldOnA : cp.m_positionWorldOnB;
+			btVector3 point2 = colliding_ctrl0 ? cp.m_positionWorldOnB : cp.m_positionWorldOnA;
+			btVector3 normal = colliding_ctrl0 ? -cp.m_normalWorldOnB : cp.m_normalWorldOnB;
+
+			coll_data.m_point1 = MT_Vector3(point1.m_floats);
+			coll_data.m_point2 = MT_Vector3(point2.m_floats);
+			coll_data.m_normal = MT_Vector3(normal.m_floats);
+
 			m_triggerCallbacks[PHY_OBJECT_RESPONSE](m_triggerCallbacksUserPtrs[PHY_OBJECT_RESPONSE],
-				ctrl0,ctrl1,0);
+				ctrl0, ctrl1, &coll_data);
 		}
 		// Bullet does not refresh the manifold contact point for object without contact response
 		// may need to remove this when a newer Bullet version is integrated

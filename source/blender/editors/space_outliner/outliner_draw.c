@@ -31,6 +31,7 @@
 
 #include "DNA_anim_types.h"
 #include "DNA_armature_types.h"
+#include "DNA_gpencil_types.h"
 #include "DNA_group_types.h"
 #include "DNA_lamp_types.h"
 #include "DNA_object_types.h"
@@ -346,6 +347,11 @@ static void restrictbutton_ebone_visibility_cb(bContext *C, void *UNUSED(poin), 
 	WM_event_add_notifier(C, NC_OBJECT | ND_POSE, NULL);
 }
 
+static void restrictbutton_gp_layer_flag_cb(bContext *C, void *UNUSED(poin), void *UNUSED(poin2))
+{
+	WM_event_add_notifier(C, NC_GPENCIL | ND_DATA, NULL);
+}
+
 static int group_restrict_flag(Group *gr, int flag)
 {
 	GroupObject *gob;
@@ -447,7 +453,7 @@ static void namebutton_cb(bContext *C, void *tsep, char *oldname)
 	TreeStoreElem *tselem = tsep;
 	
 	if (ts && tselem) {
-		TreeElement *te = outliner_find_tse(soops, tselem);
+		TreeElement *te = outliner_find_tree_element(&soops->tree, tselem);
 		
 		if (tselem->type == 0) {
 			test_idbutton(tselem->id->name);  // library.c, unique name and alpha sort
@@ -547,6 +553,17 @@ static void namebutton_cb(bContext *C, void *tsep, char *oldname)
 					BLI_uniquename(&ob->pose->agroups, grp, CTX_DATA_(BLF_I18NCONTEXT_ID_ACTION, "Group"), '.',
 					               offsetof(bActionGroup, name), sizeof(grp->name));
 					WM_event_add_notifier(C, NC_OBJECT | ND_POSE, ob);
+					break;
+				}
+				case TSE_GP_LAYER:
+				{
+					bGPdata *gpd = (bGPdata *)tselem->id; // id = GP Datablock
+					bGPDlayer *gpl = te->directdata;
+					
+					// XXX: name needs translation stuff
+					BLI_uniquename(&gpd->layers, gpl, "GP Layer", '.',
+					               offsetof(bGPDlayer, info), sizeof(gpl->info));
+					WM_event_add_notifier(C, NC_GPENCIL | ND_DATA, gpd);
 					break;
 				}
 				case TSE_R_LAYER:
@@ -742,6 +759,29 @@ static void outliner_draw_restrictbuts(uiBlock *block, Scene *scene, ARegion *ar
 
 				UI_block_emboss_set(block, UI_EMBOSS);
 			}
+			else if (tselem->type == TSE_GP_LAYER) {
+				bGPDlayer *gpl = (bGPDlayer *)te->directdata;
+				
+				UI_block_emboss_set(block, UI_EMBOSS_NONE);
+				
+				bt = uiDefIconButBitS(block, UI_BTYPE_ICON_TOGGLE, GP_LAYER_HIDE, 0, ICON_RESTRICT_VIEW_OFF,
+				                      (int)(ar->v2d.cur.xmax - OL_TOG_RESTRICT_VIEWX), te->ys, UI_UNIT_X,
+				                      UI_UNIT_Y, &gpl->flag, 0, 0, 0, 0,
+				                      TIP_("Restrict/Allow visibility in the 3D View"));
+				UI_but_func_set(bt, restrictbutton_gp_layer_flag_cb, NULL, gpl);
+				UI_but_flag_enable(bt, UI_BUT_DRAG_LOCK);
+				
+				bt = uiDefIconButBitS(block, UI_BTYPE_ICON_TOGGLE, GP_LAYER_LOCKED, 0, ICON_UNLOCKED,
+				                      (int)(ar->v2d.cur.xmax - OL_TOG_RESTRICT_SELECTX), te->ys, UI_UNIT_X,
+				                      UI_UNIT_Y, &gpl->flag, 0, 0, 0, 0,
+				                      TIP_("Restrict/Allow editing of strokes and keyframes in this layer"));
+				UI_but_func_set(bt, restrictbutton_gp_layer_flag_cb, NULL, gpl);
+				UI_but_flag_enable(bt, UI_BUT_DRAG_LOCK);
+				
+				/* TODO: visibility in renders */
+				
+				UI_block_emboss_set(block, UI_EMBOSS);
+			}
 		}
 		
 		if (TSELEM_OPEN(tselem, soops)) outliner_draw_restrictbuts(block, scene, ar, soops, &te->subtree);
@@ -875,6 +915,36 @@ static void tselem_draw_icon_uibut(struct DrawIconArg *arg, int icon)
 			UI_but_drag_set_id(but, arg->id);
 	}
 
+}
+
+static void tselem_draw_gp_icon_uibut(struct DrawIconArg *arg, ID *id, bGPDlayer *gpl)
+{
+	/* restrict column clip - skip it for now... */
+	if (arg->x >= arg->xmax) {
+		/* pass */
+	}
+	else {
+		PointerRNA ptr;
+		float w = 0.85f * U.widget_unit;
+		float h = 0.85f * UI_UNIT_Y;
+		
+		RNA_pointer_create(id, &RNA_GPencilLayer, gpl, &ptr);
+		
+		UI_block_align_begin(arg->block);
+		
+		UI_block_emboss_set(arg->block, RNA_boolean_get(&ptr, "is_stroke_visible") ? UI_EMBOSS : UI_EMBOSS_NONE);
+		uiDefButR(arg->block, UI_BTYPE_COLOR, 1, "", arg->xb, arg->yb, w, h,
+		          &ptr, "color", -1,
+		          0, 0, 0, 0, NULL);
+		
+		UI_block_emboss_set(arg->block, RNA_boolean_get(&ptr, "is_fill_visible") ? UI_EMBOSS : UI_EMBOSS_NONE);
+		uiDefButR(arg->block, UI_BTYPE_COLOR, 1, "", arg->xb, arg->yb, w, h,
+		          &ptr, "fill_color", -1,
+		          0, 0, 0, 0, NULL);
+		
+		UI_block_emboss_set(arg->block, UI_EMBOSS_NONE);
+		UI_block_align_end(arg->block);
+	}
 }
 
 static void tselem_draw_icon(uiBlock *block, int xmax, float x, float y, TreeStoreElem *tselem, TreeElement *te,
@@ -1020,6 +1090,8 @@ static void tselem_draw_icon(uiBlock *block, int xmax, float x, float y, TreeSto
 						UI_icon_draw(x, y, ICON_MOD_MESHDEFORM); break;  /* XXX, needs own icon */
 					case eModifierType_DataTransfer:
 						UI_icon_draw(x, y, ICON_MOD_DATA_TRANSFER); break;
+					case eModifierType_NormalEdit:
+						UI_icon_draw(x, y, ICON_MOD_NORMALEDIT); break;
 					/* Default */
 					case eModifierType_None:
 					case eModifierType_ShapeKey:
@@ -1071,6 +1143,9 @@ static void tselem_draw_icon(uiBlock *block, int xmax, float x, float y, TreeSto
 				}
 				else
 					UI_icon_draw(x, y, RNA_struct_ui_icon(te->rnaptr.type));
+				break;
+			case TSE_GP_LAYER:
+				tselem_draw_gp_icon_uibut(&arg, tselem->id, te->directdata);
 				break;
 			default:
 				UI_icon_draw(x, y, ICON_DOT); break;
@@ -1165,6 +1240,8 @@ static void tselem_draw_icon(uiBlock *block, int xmax, float x, float y, TreeSto
 				tselem_draw_icon_uibut(&arg, ICON_LIBRARY_DATA_DIRECT); break;
 			case ID_LS:
 				tselem_draw_icon_uibut(&arg, ICON_LINE_DATA); break;
+			case ID_GD:
+				tselem_draw_icon_uibut(&arg, ICON_GREASEPENCIL); break;
 		}
 	}
 }

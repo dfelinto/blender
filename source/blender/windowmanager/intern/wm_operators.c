@@ -1682,7 +1682,7 @@ int WM_operator_ui_popup(bContext *C, wmOperator *op, int width, int height)
 /**
  * For use by #WM_operator_props_popup_call, #WM_operator_props_popup only.
  *
- * \note operator menu needs undo flag enabled , for redo callback */
+ * \note operator menu needs undo flag enabled, for redo callback */
 static int wm_operator_props_popup_ex(bContext *C, wmOperator *op,
                                       const bool do_call, const bool do_redo)
 {
@@ -3821,8 +3821,8 @@ void WM_OT_straightline_gesture(wmOperatorType *ot)
 
 /* *********************** radial control ****************** */
 
-#define WM_RADIAL_CONTROL_DISPLAY_SIZE 200
-#define WM_RADIAL_CONTROL_DISPLAY_MIN_SIZE 35
+#define WM_RADIAL_CONTROL_DISPLAY_SIZE (200 * U.pixelsize)
+#define WM_RADIAL_CONTROL_DISPLAY_MIN_SIZE (35 * U.pixelsize)
 #define WM_RADIAL_CONTROL_DISPLAY_WIDTH (WM_RADIAL_CONTROL_DISPLAY_SIZE - WM_RADIAL_CONTROL_DISPLAY_MIN_SIZE)
 #define WM_RADIAL_CONTROL_HEADER_LENGTH 180
 #define WM_RADIAL_MAX_STR 6
@@ -3873,7 +3873,7 @@ static void radial_control_set_initial_mouse(RadialControl *rc, const wmEvent *e
 		case PROP_DISTANCE:
 		case PROP_PERCENTAGE:
 		case PROP_PIXEL:
-			d[0] = rc->initial_value;
+			d[0] = rc->initial_value * U.pixelsize;
 			break;
 		case PROP_FACTOR:
 			d[0] = (1 - rc->initial_value) * WM_RADIAL_CONTROL_DISPLAY_WIDTH + WM_RADIAL_CONTROL_DISPLAY_MIN_SIZE;
@@ -3982,8 +3982,8 @@ static void radial_control_paint_cursor(bContext *C, int x, int y, void *customd
 		case PROP_DISTANCE:
 		case PROP_PERCENTAGE:
 		case PROP_PIXEL:
-			r1 = rc->current_value;
-			r2 = rc->initial_value;
+			r1 = rc->current_value * U.pixelsize;
+			r2 = rc->initial_value * U.pixelsize;
 			tex_radius = r1;
 			alpha = 0.75;
 			break;
@@ -4007,11 +4007,6 @@ static void radial_control_paint_cursor(bContext *C, int x, int y, void *customd
 			alpha = 0.75;
 			break;
 	}
-
-	/* adjust for DPI, like BKE_brush_size_get */
-	r1 *= U.pixelsize;
-	r2 *= U.pixelsize;
-	tex_radius *= U.pixelsize;
 
 	/* Keep cursor in the original place */
 	x = rc->initial_mouse[0] - ar->winrct.xmin;
@@ -4430,6 +4425,7 @@ static int radial_control_modal(bContext *C, wmOperator *op, const wmEvent *even
 						case PROP_PIXEL:
 							new_value = dist;
 							if (snap) new_value = ((int)new_value + 5) / 10 * 10;
+							new_value /= U.pixelsize;
 							break;
 						case PROP_FACTOR:
 							new_value = (WM_RADIAL_CONTROL_DISPLAY_SIZE - dist) / WM_RADIAL_CONTROL_DISPLAY_WIDTH;

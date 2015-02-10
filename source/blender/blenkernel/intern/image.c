@@ -881,7 +881,9 @@ Image *BKE_image_add_generated(Main *bmain, unsigned int width, unsigned int hei
 	return ima;
 }
 
-/* creates an image image owns the imbuf passed */
+/* Create an image image from ibuf. The refcount of ibuf is increased,
+ * caller should take care to drop its reference by calling
+ * IMB_freeImBuf if needed. */
 Image *BKE_image_add_from_imbuf(ImBuf *ibuf)
 {
 	/* on save, type is changed to FILE in editsima.c */
@@ -2400,11 +2402,6 @@ void BKE_image_verify_viewer_views(const RenderData *rd, Image *ima, ImageUser *
 	}
 
 	BLI_unlock_thread(LOCK_DRAW_IMAGE);
-}
-
-void BKE_image_assign_ibuf(Image *ima, ImBuf *ibuf)
-{
-	image_assign_ibuf(ima, ibuf, IMA_NO_INDEX, 0);
 }
 
 void BKE_image_walk_all_users(const Main *mainp, void *customdata,

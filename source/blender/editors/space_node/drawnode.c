@@ -703,11 +703,10 @@ static void node_buts_image_user(uiLayout *layout, bContext *C, PointerRNA *ptr,
 		uiItemR(col, ptr, "use_auto_refresh", 0, NULL, ICON_NONE);
 	}
 
-	col = uiLayoutColumn(layout, false);
-
 	if (RNA_enum_get(imaptr, "type") == IMA_TYPE_MULTILAYER &&
 	    RNA_boolean_get(ptr, "has_layers"))
 	{
+		col = uiLayoutColumn(layout, false);
 		uiItemR(col, ptr, "layer", 0, NULL, ICON_NONE);
 	}
 }
@@ -842,10 +841,51 @@ static void node_shader_buts_tex_environment(uiLayout *layout, bContext *C, Poin
 
 	uiLayoutSetContextPointer(layout, "image_user", &iuserptr);
 	uiTemplateID(layout, C, ptr, "image", NULL, "IMAGE_OT_open", NULL);
-	uiItemR(layout, ptr, "color_space", 0, "", ICON_NONE);
-	uiItemR(layout, ptr, "projection", 0, "", ICON_NONE);
 
 	node_buts_image_user(layout, C, &iuserptr, &imaptr, &iuserptr);
+
+	uiItemR(layout, ptr, "color_space", 0, "", ICON_NONE);
+	uiItemR(layout, ptr, "projection", 0, "", ICON_NONE);
+}
+
+static void node_shader_buts_tex_environment_ex(uiLayout *layout, bContext *C, PointerRNA *ptr)
+{
+	PointerRNA imaptr = RNA_pointer_get(ptr, "image");
+	PointerRNA iuserptr = RNA_pointer_get(ptr, "image_user");
+	Image *ima = imaptr.data;
+
+	uiLayoutSetContextPointer(layout, "image_user", &iuserptr);
+	uiTemplateID(layout, C, ptr, "image", ima ? NULL : "IMAGE_OT_new", "IMAGE_OT_open", NULL);
+
+	if (!ima)
+		return;
+
+	uiItemR(layout, &imaptr, "source", 0, IFACE_("Source"), ICON_NONE);
+
+	if (!(ELEM(ima->source, IMA_SRC_GENERATED, IMA_SRC_VIEWER))) {
+		uiLayout *row = uiLayoutRow(layout, true);
+
+		if (ima->packedfile)
+			uiItemO(row, "", ICON_PACKAGE, "image.unpack");
+		else
+			uiItemO(row, "", ICON_UGLYPACKAGE, "image.pack");
+
+		row = uiLayoutRow(row, true);
+		uiLayoutSetEnabled(row, ima->packedfile == NULL);
+		uiItemR(row, &imaptr, "filepath", 0, "", ICON_NONE);
+		uiItemO(row, "", ICON_FILE_REFRESH, "image.reload");
+	}
+
+	/* multilayer? */
+	if (ima->type == IMA_TYPE_MULTILAYER && ima->rr) {
+		uiTemplateImageLayers(layout, C, ima, iuserptr.data);
+	}
+	else if (ima->source != IMA_SRC_GENERATED) {
+		uiTemplateImageInfo(layout, C, ima, iuserptr.data);
+	}
+
+	uiItemR(layout, ptr, "color_space", 0, IFACE_("Color Space"), ICON_NONE);
+	uiItemR(layout, ptr, "projection", 0, IFACE_("Projection"), ICON_NONE);
 }
 
 static void node_shader_buts_tex_sky(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
@@ -1109,6 +1149,7 @@ static void node_shader_set_butfunc(bNodeType *ntype)
 			break;
 		case SH_NODE_TEX_ENVIRONMENT:
 			ntype->draw_buttons = node_shader_buts_tex_environment;
+			ntype->draw_buttons_ex = node_shader_buts_tex_environment_ex;
 			break;
 		case SH_NODE_TEX_GRADIENT:
 			ntype->draw_buttons = node_shader_buts_tex_gradient;

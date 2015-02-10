@@ -190,9 +190,6 @@ struct Image *BKE_image_verify_viewer(int type, const char *name);
 /* ensures the view node cache is compatible with the scene views */
 void BKE_image_verify_viewer_views(const struct RenderData *rd, struct Image *ima, struct ImageUser *iuser);
 
-/* force an ImBuf to become part of Image */
-void BKE_image_assign_ibuf(struct Image *ima, struct ImBuf *ibuf);
-
 /* called on frame change or before render */
 void BKE_image_user_frame_calc(struct ImageUser *iuser, int cfra, int fieldnr);
 void BKE_image_user_check_frame_calc(struct ImageUser *iuser, int cfra, int fieldnr);

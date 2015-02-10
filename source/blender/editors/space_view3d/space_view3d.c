@@ -570,7 +570,7 @@ static void view3d_main_area_exit(wmWindowManager *wm, ARegion *ar)
 static int view3d_ob_drop_poll(bContext *UNUSED(C), wmDrag *drag, const wmEvent *UNUSED(event))
 {
 	if (drag->type == WM_DRAG_ID) {
-		ID *id = (ID *)drag->poin;
+		ID *id = drag->poin;
 		if (GS(id->name) == ID_OB)
 			return 1;
 	}
@@ -580,7 +580,7 @@ static int view3d_ob_drop_poll(bContext *UNUSED(C), wmDrag *drag, const wmEvent 
 static int view3d_group_drop_poll(bContext *UNUSED(C), wmDrag *drag, const wmEvent *UNUSED(event))
 {
 	if (drag->type == WM_DRAG_ID) {
-		ID *id = (ID *)drag->poin;
+		ID *id = drag->poin;
 		if (GS(id->name) == ID_GR)
 			return 1;
 	}
@@ -590,7 +590,7 @@ static int view3d_group_drop_poll(bContext *UNUSED(C), wmDrag *drag, const wmEve
 static int view3d_mat_drop_poll(bContext *UNUSED(C), wmDrag *drag, const wmEvent *UNUSED(event))
 {
 	if (drag->type == WM_DRAG_ID) {
-		ID *id = (ID *)drag->poin;
+		ID *id = drag->poin;
 		if (GS(id->name) == ID_MA)
 			return 1;
 	}
@@ -600,7 +600,7 @@ static int view3d_mat_drop_poll(bContext *UNUSED(C), wmDrag *drag, const wmEvent
 static int view3d_ima_drop_poll(bContext *UNUSED(C), wmDrag *drag, const wmEvent *UNUSED(event))
 {
 	if (drag->type == WM_DRAG_ID) {
-		ID *id = (ID *)drag->poin;
+		ID *id = drag->poin;
 		if (GS(id->name) == ID_IM)
 			return 1;
 	}
@@ -647,14 +647,14 @@ static int view3d_ima_mesh_drop_poll(bContext *C, wmDrag *drag, const wmEvent *e
 
 static void view3d_ob_drop_copy(wmDrag *drag, wmDropBox *drop)
 {
-	ID *id = (ID *)drag->poin;
+	ID *id = drag->poin;
 
 	RNA_string_set(drop->ptr, "name", id->name + 2);
 }
 
 static void view3d_group_drop_copy(wmDrag *drag, wmDropBox *drop)
 {
-	ID *id = (ID *)drag->poin;
+	ID *id = drag->poin;
 	
 	drop->opcontext = WM_OP_EXEC_DEFAULT;
 	RNA_string_set(drop->ptr, "name", id->name + 2);
@@ -662,14 +662,14 @@ static void view3d_group_drop_copy(wmDrag *drag, wmDropBox *drop)
 
 static void view3d_id_drop_copy(wmDrag *drag, wmDropBox *drop)
 {
-	ID *id = (ID *)drag->poin;
+	ID *id = drag->poin;
 	
 	RNA_string_set(drop->ptr, "name", id->name + 2);
 }
 
 static void view3d_id_path_drop_copy(wmDrag *drag, wmDropBox *drop)
 {
-	ID *id = (ID *)drag->poin;
+	ID *id = drag->poin;
 	
 	if (id) {
 		RNA_string_set(drop->ptr, "name", id->name + 2);

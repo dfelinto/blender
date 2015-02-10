@@ -106,15 +106,14 @@ static int brush_scale_size_exec(bContext *C, wmOperator *op)
 			const int old_size = BKE_brush_size_get(scene, brush);
 			int size = (int)(scalar * old_size);
 
-			if (old_size == size) {
+			if (abs(old_size - size) < U.pixelsize) {
 				if (scalar > 1) {
-					size++;
+					size += U.pixelsize;
 				}
 				else if (scalar < 1) {
-					size--;
+					size -= U.pixelsize;
 				}
 			}
-			CLAMP(size, 1, 2000); // XXX magic number
 
 			BKE_brush_size_set(scene, brush, size);
 		}
@@ -128,6 +127,8 @@ static int brush_scale_size_exec(bContext *C, wmOperator *op)
 
 			BKE_brush_unprojected_radius_set(scene, brush, unprojected_radius);
 		}
+
+		WM_main_add_notifier(NC_BRUSH | NA_EDITED, brush);
 	}
 
 	return OPERATOR_FINISHED;

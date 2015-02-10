@@ -873,6 +873,9 @@ eOLDrawState tree_element_type_active(
 			return tree_element_active_sequence_dup(scene, te, tselem, set);
 		case TSE_KEYMAP_ITEM:
 			return tree_element_active_keymap_item(C, te, tselem, set);
+		case TSE_GP_LAYER:
+			//return tree_element_active_gplayer(C, scene, te, tselem, set);
+			break;
 			
 	}
 	return OL_DRAWSEL_NONE;
@@ -915,7 +918,7 @@ static bool do_outliner_item_activate(bContext *C, Scene *scene, ARegion *ar, Sp
 			if (tselem->type != TSE_SEQUENCE && tselem->type != TSE_SEQ_STRIP && tselem->type != TSE_SEQUENCE_DUP)
 				tree_element_set_active_object(C, scene, soops, te,
 				                               (extend && tselem->type == 0) ? OL_SETSEL_EXTEND : OL_SETSEL_NORMAL,
-				                               recursive && tselem->type == 0 );
+				                               recursive && tselem->type == 0);
 			
 			if (tselem->type == 0) { // the lib blocks
 				/* editmode? */

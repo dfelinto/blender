@@ -3279,7 +3279,7 @@ static void proj_paint_state_vert_flags_init(ProjPaintState *ps)
 #ifndef PROJ_DEBUG_NOSEAMBLEED
 static void project_paint_bleed_add_face_user(
         const ProjPaintState *ps, MemArena *arena,
-		const MFace *mf, const int face_index)
+        const MFace *mf, const int face_index)
 {
 	/* add face user if we have bleed enabled, set the UV seam flags later */
 	/* annoying but we need to add all faces even ones we never use elsewhere */
@@ -4923,7 +4923,7 @@ void *paint_proj_new_stroke(bContext *C, Object *ob, const float mouse[2], int m
 
 	/* Don't allow brush size below 2 */
 	if (BKE_brush_size_get(ps->scene, ps->brush) < 2)
-		BKE_brush_size_set(ps->scene, ps->brush, 2);
+		BKE_brush_size_set(ps->scene, ps->brush, 2 * U.pixelsize);
 
 	/* allocate and initialize spatial data structures */
 	project_paint_begin(ps);
@@ -5042,7 +5042,7 @@ static int texture_paint_camera_project_exec(bContext *C, wmOperator *op)
 	ps.is_maskbrush = false;
 	ps.do_masking = false;
 	orig_brush_size = BKE_brush_size_get(scene, ps.brush);
-	BKE_brush_size_set(scene, ps.brush, 32); /* cover the whole image */
+	BKE_brush_size_set(scene, ps.brush, 32 * U.pixelsize); /* cover the whole image */
 
 	ps.tool = PAINT_TOOL_DRAW; /* so pixels are initialized with minimal info */
 
@@ -5135,6 +5135,9 @@ static int texture_paint_image_from_view_exec(bContext *C, wmOperator *op)
 	}
 
 	image = BKE_image_add_from_imbuf(ibuf);
+
+	/* Drop reference to ibuf so that the image owns it */
+	IMB_freeImBuf(ibuf);
 
 	if (image) {
 		/* now for the trickyness. store the view projection here!

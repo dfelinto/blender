@@ -529,11 +529,9 @@ static int curvesurf_prim_add(bContext *C, wmOperator *op, int type, int isSurf)
 	if (newob && enter_editmode)
 		ED_undo_push(C, "Enter Editmode");
 
-	ED_object_new_primitive_matrix(C, obedit, loc, rot, mat, false);
+	ED_object_new_primitive_matrix(C, obedit, loc, rot, mat);
 	dia = RNA_float_get(op->ptr, "radius");
-	mat[0][0] *= dia;
-	mat[1][1] *= dia;
-	mat[2][2] *= dia;
+	mul_mat3_m4_fl(mat, dia);
 
 	nu = add_nurbs_primitive(C, obedit, mat, type, newob);
 	editnurb = object_editcurve_get(obedit);

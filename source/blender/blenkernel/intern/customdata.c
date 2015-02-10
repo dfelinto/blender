@@ -300,6 +300,49 @@ static void layerInterp_mdeformvert(void **sources, const float *weights,
 	}
 }
 
+static void layerInterp_normal(void **sources, const float *weights,
+                               const float *UNUSED(sub_weights), int count, void *dest)
+{
+	float no[3] = {0.0f};
+
+	while (count--) {
+		madd_v3_v3fl(no, (float *)sources[count], weights[count]);
+	}
+
+	copy_v3_v3((float *)dest, no);
+}
+
+static void layerCopyValue_normal(const void *source, void *dest, const int mixmode, const float mixfactor)
+{
+	const float *no_src = source;
+	float *no_dst = dest;
+	float no_tmp[3];
+
+	if (ELEM(mixmode, CDT_MIX_NOMIX, CDT_MIX_REPLACE_ABOVE_THRESHOLD, CDT_MIX_REPLACE_BELOW_THRESHOLD)) {
+		/* Above/below threshold modes are not supported here, fallback to nomix (just in case). */
+		copy_v3_v3(no_dst, no_src);
+	}
+	else {  /* Modes that support 'real' mix factor. */
+		/* Since we normalize in the end, MIX and ADD are the same op here. */
+		if (ELEM(mixmode, CDT_MIX_MIX, CDT_MIX_ADD)) {
+			add_v3_v3v3(no_tmp, no_dst, no_src);
+			normalize_v3(no_tmp);
+		}
+		else if (mixmode == CDT_MIX_SUB) {
+			sub_v3_v3v3(no_tmp, no_dst, no_src);
+			normalize_v3(no_tmp);
+		}
+		else if (mixmode == CDT_MIX_MUL) {
+			mul_v3_v3v3(no_tmp, no_dst, no_src);
+			normalize_v3(no_tmp);
+		}
+		else {
+			copy_v3_v3(no_tmp, no_src);
+		}
+		interp_v3_v3v3_slerp_safe(no_dst, no_dst, no_tmp, mixfactor);
+	}
+}
+
 static void layerCopy_tface(const void *source, void *dest, int count)
 {
 	const MTFace *source_tf = (const MTFace *)source;
@@ -1165,7 +1208,8 @@ static const LayerTypeInfo LAYERTYPEINFO[CD_NUMTYPES] = {
 	{sizeof(int), "", 0, NULL, NULL, NULL, NULL, NULL, layerDefault_origindex},
 	/* 8: CD_NORMAL */
 	/* 3 floats per normal vector */
-	{sizeof(float) * 3, "vec3f", 1, NULL, NULL, NULL, NULL, NULL, NULL},
+	{sizeof(float) * 3, "vec3f", 1, NULL, NULL, NULL, layerInterp_normal, NULL, NULL,
+	 NULL, NULL, NULL, NULL, NULL, layerCopyValue_normal},
 	/* 9: CD_POLYINDEX (deprecated) */
 	{sizeof(int), "", 0, NULL, NULL, NULL, NULL, NULL, NULL},
 	/* 10: CD_PROP_FLT */
@@ -1255,6 +1299,8 @@ static const LayerTypeInfo LAYERTYPEINFO[CD_NUMTYPES] = {
 	{sizeof(float[4]), "", 0, NULL, NULL, NULL, NULL, NULL, NULL},
 	/* 40: CD_TESSLOOPNORMAL */
 	{sizeof(short[4][3]), "", 0, NULL, NULL, NULL, NULL, layerSwap_flnor, NULL},
+	/* 41: CD_CUSTOMLOOPNORMAL */
+	{sizeof(short[2]), "vec2s", 1, NULL, NULL, NULL, NULL, NULL, NULL},
 };
 
 /* note, numbers are from trunk and need updating for bmesh */
@@ -1270,7 +1316,8 @@ static const char *LAYERTYPENAMES[CD_NUMTYPES] = {
 	/* 25-29 */ "CDMPoly", "CDMLoop", "CDShapeKeyIndex", "CDShapeKey", "CDBevelWeight",
 	/* 30-34 */ "CDSubSurfCrease", "CDOrigSpaceLoop", "CDPreviewLoopCol", "CDBMElemPyPtr", "CDPaintMask",
 	/* 35-36 */ "CDGridPaintMask", "CDMVertSkin",
-	/* 37-40 */ "CDFreestyleEdge", "CDFreestyleFace", "CDMLoopTangent", "CDTessLoopNormal",
+	/* 37-38 */ "CDFreestyleEdge", "CDFreestyleFace",
+	/* 39-41 */ "CDMLoopTangent", "CDTessLoopNormal", "CDCustomLoopNormal",
 };
 
 
@@ -1282,26 +1329,29 @@ const CustomDataMask CD_MASK_MESH =
     CD_MASK_PROP_FLT | CD_MASK_PROP_INT | CD_MASK_PROP_STR | CD_MASK_MDISPS |
     CD_MASK_MLOOPUV | CD_MASK_MLOOPCOL | CD_MASK_MPOLY | CD_MASK_MLOOP |
     CD_MASK_MTEXPOLY | CD_MASK_RECAST | CD_MASK_PAINT_MASK |
-    CD_MASK_GRID_PAINT_MASK | CD_MASK_MVERT_SKIN | CD_MASK_FREESTYLE_EDGE | CD_MASK_FREESTYLE_FACE;
+    CD_MASK_GRID_PAINT_MASK | CD_MASK_MVERT_SKIN | CD_MASK_FREESTYLE_EDGE | CD_MASK_FREESTYLE_FACE |
+    CD_MASK_CUSTOMLOOPNORMAL;
 const CustomDataMask CD_MASK_EDITMESH =
     CD_MASK_MSTICKY | CD_MASK_MDEFORMVERT | CD_MASK_MTFACE | CD_MASK_MLOOPUV |
     CD_MASK_MLOOPCOL | CD_MASK_MTEXPOLY | CD_MASK_SHAPE_KEYINDEX |
     CD_MASK_MCOL | CD_MASK_PROP_FLT | CD_MASK_PROP_INT | CD_MASK_PROP_STR |
     CD_MASK_MDISPS | CD_MASK_SHAPEKEY | CD_MASK_RECAST | CD_MASK_PAINT_MASK |
-    CD_MASK_GRID_PAINT_MASK | CD_MASK_MVERT_SKIN;
+    CD_MASK_GRID_PAINT_MASK | CD_MASK_MVERT_SKIN | CD_MASK_CUSTOMLOOPNORMAL;
 const CustomDataMask CD_MASK_DERIVEDMESH =
     CD_MASK_MSTICKY | CD_MASK_MDEFORMVERT | CD_MASK_MTFACE |
     CD_MASK_MCOL | CD_MASK_PROP_FLT | CD_MASK_PROP_INT | CD_MASK_CLOTH_ORCO |
     CD_MASK_MLOOPUV | CD_MASK_MLOOPCOL | CD_MASK_MTEXPOLY | CD_MASK_PREVIEW_MLOOPCOL |
     CD_MASK_PROP_STR | CD_MASK_ORIGSPACE | CD_MASK_ORIGSPACE_MLOOP | CD_MASK_ORCO | CD_MASK_TANGENT |
     CD_MASK_PREVIEW_MCOL | CD_MASK_SHAPEKEY | CD_MASK_RECAST |
-    CD_MASK_ORIGINDEX | CD_MASK_MVERT_SKIN | CD_MASK_FREESTYLE_EDGE | CD_MASK_FREESTYLE_FACE;
+    CD_MASK_ORIGINDEX | CD_MASK_MVERT_SKIN | CD_MASK_FREESTYLE_EDGE | CD_MASK_FREESTYLE_FACE |
+    CD_MASK_CUSTOMLOOPNORMAL;
 const CustomDataMask CD_MASK_BMESH =
     CD_MASK_MLOOPUV | CD_MASK_MLOOPCOL | CD_MASK_MTEXPOLY |
     CD_MASK_MSTICKY | CD_MASK_MDEFORMVERT | CD_MASK_PROP_FLT | CD_MASK_PROP_INT |
     CD_MASK_PROP_STR | CD_MASK_SHAPEKEY | CD_MASK_SHAPE_KEYINDEX | CD_MASK_MDISPS |
     CD_MASK_CREASE | CD_MASK_BWEIGHT | CD_MASK_RECAST | CD_MASK_PAINT_MASK |
-    CD_MASK_GRID_PAINT_MASK | CD_MASK_MVERT_SKIN | CD_MASK_FREESTYLE_EDGE | CD_MASK_FREESTYLE_FACE;
+    CD_MASK_GRID_PAINT_MASK | CD_MASK_MVERT_SKIN | CD_MASK_FREESTYLE_EDGE | CD_MASK_FREESTYLE_FACE |
+    CD_MASK_CUSTOMLOOPNORMAL;
 const CustomDataMask CD_MASK_FACECORNERS =  /* XXX Not used anywhere! */
     CD_MASK_MTFACE | CD_MASK_MCOL | CD_MASK_MTEXPOLY | CD_MASK_MLOOPUV |
     CD_MASK_MLOOPCOL | CD_MASK_NORMAL | CD_MASK_MLOOPTANGENT;
@@ -1316,7 +1366,7 @@ const CustomDataMask CD_MASK_EVERYTHING =
     /* BMESH ONLY END */
     CD_MASK_PAINT_MASK | CD_MASK_GRID_PAINT_MASK | CD_MASK_MVERT_SKIN |
     CD_MASK_FREESTYLE_EDGE | CD_MASK_FREESTYLE_FACE |
-    CD_MASK_MLOOPTANGENT | CD_MASK_TESSLOOPNORMAL;
+    CD_MASK_MLOOPTANGENT | CD_MASK_TESSLOOPNORMAL | CD_MASK_CUSTOMLOOPNORMAL;
 
 static const LayerTypeInfo *layerType_getInfo(int type)
 {
