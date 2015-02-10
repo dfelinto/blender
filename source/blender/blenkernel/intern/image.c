@@ -3177,7 +3177,7 @@ static ImBuf *image_load_sequence_multilayer(Image *ima, ImageUser *iuser, int f
 	return ibuf;
 }
 
-static struct ImBuf *load_movie_single(Image *ima, ImageUser *iuser, int frame, const size_t view_id)
+static ImBuf *load_movie_single(Image *ima, ImageUser *iuser, int frame, const size_t view_id)
 {
 	struct ImBuf *ibuf = NULL;
 	ImageAnim *ia;
@@ -3272,7 +3272,7 @@ static ImBuf *image_load_movie_file(Image *ima, ImageUser *iuser, int frame)
 				image_assign_ibuf(ima, ibuf_arr[i], i, frame);
 			}
 			else {
-				ima->ok &= 0;
+				ima->ok = 0;
 			}
 		}
 
@@ -3296,10 +3296,10 @@ static ImBuf *image_load_movie_file(Image *ima, ImageUser *iuser, int frame)
 	return ibuf;
 }
 
-static struct ImBuf *load_image_single(Image *ima, ImageUser *iuser, int cfra,
-                                       const size_t view_id,
-                                       const bool has_packed,
-                                       bool *r_assign)
+static ImBuf *load_image_single(Image *ima, ImageUser *iuser, int cfra,
+                                const size_t view_id,
+                                const bool has_packed,
+                                bool *r_assign)
 {
 	char filepath[FILE_MAX];
 	struct ImBuf *ibuf = NULL;
