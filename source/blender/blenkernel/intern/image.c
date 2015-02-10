@@ -3011,22 +3011,12 @@ static size_t image_num_files(Image *ima)
 	}
 }
 
-static ImBuf *image_load_sequence_file(Image *ima, ImageUser *iuser, int frame)
+static ImBuf *load_sequence_single(Image *ima, ImageUser *iuser, int frame, const size_t view_id, bool *r_assign)
 {
-	struct ImBuf **ibuf_arr;
-	struct ImBuf *r_ibuf;
-	char **filepath_arr;
-	bool assign = false;
+	struct ImBuf *ibuf;
+	char name[FILE_MAX];
 	int flag;
-	const bool is_multiview = (ima->flag & IMA_IS_MULTIVIEW) != 0;
-	const size_t totfiles = image_num_files(ima);
-	const size_t totviews = is_multiview ? BLI_listbase_count(&ima->views) : 1;
-	size_t i;
-
-	ibuf_arr = MEM_mallocN(sizeof(ImBuf *) * totviews, "Image Views sequence Imbufs");
-	filepath_arr = MEM_mallocN(sizeof(char *) * totviews, "Image sequence filepaths");
-	for (i = 0; i < totfiles; i++)
-		filepath_arr[i] = MEM_mallocN(sizeof(char) * FILE_MAX, "Image sequence filepath");
+	ImageUser iuser_t;
 
 	/* XXX temp stuff? */
 	if (ima->lastframe != frame)
@@ -3034,95 +3024,105 @@ static ImBuf *image_load_sequence_file(Image *ima, ImageUser *iuser, int frame)
 
 	ima->lastframe = frame;
 
+	if (iuser)
+		iuser_t = *iuser;
+
+	iuser_t.view = view_id;
+	BKE_image_user_file_path(&iuser_t, ima, name);
+
 	flag = IB_rect | IB_multilayer;
 	flag |= imbuf_alpha_flags_for_image(ima);
 
-	for (i = 0; i < totfiles; i++) {
-		ImageUser iuser_t;
-
-		if (iuser)
-			iuser_t = *iuser;
-		else
-			iuser_t.framenr = ima->lastframe;
-
-		iuser_t.view = i;
-
-		/* get the correct filepath */
-		BKE_image_user_file_path(&iuser_t, ima, filepath_arr[i]);
-
-		/* read ibuf */
-		ibuf_arr[i] = IMB_loadiffname(filepath_arr[i], flag, ima->colorspace_settings.name);
+	/* read ibuf */
+	ibuf = IMB_loadiffname(name, flag, ima->colorspace_settings.name);
 
 #if 0
-		if (ibuf_arr[i]) {
-			printf(AT " loaded %s\n", filepath_arr[i]);
+	if (ibuf) {
+		printf(AT " loaded %s\n", name);
+	}
+	else {
+		printf(AT " missed %s\n", name);
+	}
+#endif
+
+	if (ibuf) {
+#ifdef WITH_OPENEXR
+		/* handle multilayer case, don't assign ibuf. will be handled in BKE_image_acquire_ibuf */
+		if (ibuf->ftype == OPENEXR && ibuf->userdata) {
+			/* handle singlelayer multiview case assign ibuf based on available views */
+			if (IMB_exr_has_singlelayer_multiview(ibuf->userdata)) {
+				image_create_multiview(ima, ibuf, frame);
+				IMB_freeImBuf(ibuf);
+				ibuf = NULL;
+			}
+			else if (IMB_exr_has_multilayer(ibuf->userdata)) {
+				/* handle multilayer case, don't assign ibuf. will be handled in BKE_image_acquire_ibuf */
+				image_create_multilayer(ima, ibuf, frame);
+				ima->type = IMA_TYPE_MULTILAYER;
+				IMB_freeImBuf(ibuf);
+				ibuf = NULL;
+			}
 		}
 		else {
-			printf(AT " missed %s\n", filepath_arr[i]);
+			image_initialize_after_load(ima, ibuf);
+			*r_assign = true;
 		}
-#endif
-	}
-
-	for (i = 0; i < totfiles; i++) {
-		if (ibuf_arr[i]) {
-#ifdef WITH_OPENEXR
-			if (ibuf_arr[i]->ftype == OPENEXR && ibuf_arr[i]->userdata) {
-				/* handle singlelayer multiview case assign ibuf based on available views */
-				if (IMB_exr_has_singlelayer_multiview(ibuf_arr[i]->userdata)) {
-					image_create_multiview(ima, ibuf_arr[i], frame);
-					IMB_freeImBuf(ibuf_arr[i]);
-					ibuf_arr[i] = NULL;
-				}
-				else if (IMB_exr_has_multilayer(ibuf_arr[i]->userdata)) {
-					/* handle multilayer case, don't assign ibuf. will be handled in BKE_image_acquire_ibuf */
-					image_create_multilayer(ima, ibuf_arr[i], frame);
-					ima->type = IMA_TYPE_MULTILAYER;
-					IMB_freeImBuf(ibuf_arr[i]);
-					ibuf_arr[i] = NULL;
-				}
-			}
-			else {
-				image_initialize_after_load(ima, ibuf_arr[i]);
-				assign = true;
-			}
 #else
-			image_initialize_after_load(ima, ibuf_arr[i]);
-			assign = true;
+		image_initialize_after_load(ima, ibuf);
+		*r_assign = true;
 #endif
-		}
-		else
-			ima->ok = 0;
 	}
 
-	if ((ima->flag & IMA_IS_STEREO) && ima->views_format == R_IMF_VIEWS_STEREO_3D)
-		IMB_ImBufFromStereo(ima->stereo3d_format, &ibuf_arr[0], &ibuf_arr[1]);
+	return ibuf;
+}
 
-	if (assign) {
-		for (i = 0; i < totviews; i++)
-			image_assign_ibuf(ima, ibuf_arr[i], i, frame);
-	}
+static ImBuf *image_load_sequence_file(Image *ima, ImageUser *iuser, int frame)
+{
+	struct ImBuf *ibuf = NULL;
+	const bool is_multiview = (ima->flag & IMA_IS_MULTIVIEW) != 0;
+	const size_t totfiles = image_num_files(ima);
+	bool assign = false;
 
-	/* return the original requested ImBuf */
-	r_ibuf = ibuf_arr[is_multiview ? (iuser ? iuser->multi_index : 0) : 0];
-
-	/* "remove" the others (decrease their refcount) */
-	for (i = 0; i < totviews; i++) {
-		if (ibuf_arr[i] != r_ibuf) {
-			IMB_freeImBuf(ibuf_arr[i]);
+	if (!is_multiview) {
+		ibuf = load_sequence_single(ima, iuser, frame, 0, &assign);
+		if (assign) {
+			image_assign_ibuf(ima, ibuf, 0, frame);
 		}
 	}
+	else {
+		size_t i;
+		struct ImBuf **ibuf_arr;
+		const size_t totviews = BLI_listbase_count(&ima->views);
 
-	if (iuser)
-		iuser->ok = ima->ok;
+		ibuf_arr = MEM_mallocN(sizeof(ImBuf *) * totviews, "Image Views Imbufs");
 
-	/* cleanup */
-	MEM_freeN(ibuf_arr);
-	for (i = 0; i < totfiles; i++) {
-		MEM_freeN(filepath_arr[i]);
+		for (i = 0; i < totfiles; i++)
+			ibuf_arr[i] = load_sequence_single(ima, iuser, frame, i, &assign);
+
+		if ((ima->flag & IMA_IS_STEREO) && ima->views_format == R_IMF_VIEWS_STEREO_3D)
+			IMB_ImBufFromStereo(ima->stereo3d_format, &ibuf_arr[0], &ibuf_arr[1]);
+
+		/* return the original requested ImBuf */
+		ibuf = ibuf_arr[(iuser ? iuser->multi_index : 0)];
+
+		if (assign) {
+			for (i = 0; i < totviews; i++) {
+				image_assign_ibuf(ima, ibuf_arr[i], i, frame);
+			}
+		}
+
+		/* "remove" the others (decrease their refcount) */
+		for (i = 0; i < totviews; i++) {
+			if (ibuf_arr[i] != ibuf) {
+				IMB_freeImBuf(ibuf_arr[i]);
+			}
+		}
+
+		/* cleanup */
+		MEM_freeN(ibuf_arr);
 	}
-	MEM_freeN(filepath_arr);
 
-	return r_ibuf;
+	return ibuf;
 }
 
 static ImBuf *image_load_sequence_multilayer(Image *ima, ImageUser *iuser, int frame)
