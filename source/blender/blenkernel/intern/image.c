@@ -3177,70 +3177,91 @@ static ImBuf *image_load_sequence_multilayer(Image *ima, ImageUser *iuser, int f
 	return ibuf;
 }
 
-
-static ImBuf *image_load_movie_file(Image *ima, ImageUser *iuser, int frame)
+static struct ImBuf *load_movie_single(Image *ima, ImageUser *iuser, int frame, const size_t view_id)
 {
-	struct ImBuf **ibuf_arr;
-	struct ImBuf *r_ibuf;
-	const bool is_multiview = (ima->flag & IMA_IS_MULTIVIEW) != 0;
-	const size_t totfiles = image_num_files(ima);
-	const size_t totviews = is_multiview ? BLI_listbase_count(&ima->views) : 1;
-	size_t i;
+	struct ImBuf *ibuf = NULL;
 	ImageAnim *ia;
 
-	ibuf_arr = MEM_mallocN(sizeof(ImBuf *) * totviews, "Image Views (movie) Imbufs");
+	ia = BLI_findlink(&ima->anims, view_id);
 
-	if ((BKE_image_has_anim(ima) == false) ||
-	    totfiles != BLI_listbase_count_ex(&ima->anims, totfiles + 1))
-	{
+	if (ia->anim == NULL) {
+		char str[FILE_MAX];
 		int flags = IB_rect;
-		image_free_anims(ima);
+		ImageUser iuser_t;
 
 		if (ima->flag & IMA_DEINTERLACE) {
 			flags |= IB_animdeinterlace;
 		}
 
+		if (iuser)
+			iuser_t = *iuser;
+
+		iuser_t.view = view_id;
+
+		BKE_image_user_file_path(&iuser_t, ima, str);
+
+		/* FIXME: make several stream accessible in image editor, too*/
+		ia->anim = openanim(str, flags, 0, ima->colorspace_settings.name);
+
+		/* let's initialize this user */
+		if (ia->anim && iuser && iuser->frames == 0)
+			iuser->frames = IMB_anim_get_duration(ia->anim,
+			                                      IMB_TC_RECORD_RUN);
+	}
+
+	if (ia->anim) {
+		int dur = IMB_anim_get_duration(ia->anim,
+		                                IMB_TC_RECORD_RUN);
+		int fra = frame - 1;
+
+		if (fra < 0) fra = 0;
+		if (fra > (dur - 1)) fra = dur - 1;
+		ibuf = IMB_makeSingleUser(
+		    IMB_anim_absolute(ia->anim, fra,
+		                      IMB_TC_RECORD_RUN,
+		                      IMB_PROXY_NONE));
+
+		if (ibuf) {
+			image_initialize_after_load(ima, ibuf);
+		}
+		else
+			ima->ok = 0;
+	}
+	else
+		ima->ok = 0;
+
+	return ibuf;
+}
+
+static ImBuf *image_load_movie_file(Image *ima, ImageUser *iuser, int frame)
+{
+	struct ImBuf *ibuf = NULL;
+	const bool is_multiview = (ima->flag & IMA_IS_MULTIVIEW) != 0;
+	const size_t totfiles = image_num_files(ima);
+	size_t i;
+
+	if (totfiles != BLI_listbase_count_ex(&ima->anims, totfiles + 1)) {
+		image_free_anims(ima);
+
 		for (i = 0; i < totfiles; i++) {
-			char str[FILE_MAX];
-			ImageUser iuser_t;
-
 			/* allocate the ImageAnim */
-			ia = MEM_mallocN(sizeof(ImageAnim), "Image Anim");
+			ImageAnim *ia = MEM_callocN(sizeof(ImageAnim), "Image Anim");
 			BLI_addtail(&ima->anims, ia);
-
-			if (iuser)
-				iuser_t = *iuser;
-			else
-				iuser_t.framenr = ima->lastframe;
-
-			iuser_t.view = i;
-
-			BKE_image_user_file_path(&iuser_t, ima, str);
-
-			/* FIXME: make several stream accessible in image editor, too*/
-			ia->anim = openanim(str, flags, 0, ima->colorspace_settings.name);
-
-			/* let's initialize this user */
-			if (ia->anim && iuser && iuser->frames == 0)
-				iuser->frames = IMB_anim_get_duration(ia->anim,
-				                                      IMB_TC_RECORD_RUN);
 		}
 	}
 
-	if (BKE_image_has_anim(ima)) {
-		for (i = 0, ia = ima->anims.first; ia; ia = ia->next, i++) {
-			int dur = IMB_anim_get_duration(ia->anim,
-			                                IMB_TC_RECORD_RUN);
-			int fra = frame - 1;
+	if (!is_multiview) {
+		ibuf = load_movie_single(ima, iuser, frame, 0);
+		image_assign_ibuf(ima, ibuf, 0, frame);
+	}
+	else {
+		struct ImBuf **ibuf_arr;
+		const size_t totviews = BLI_listbase_count(&ima->views);
 
-			if (fra < 0) fra = 0;
-			if (fra > (dur - 1)) fra = dur - 1;
-			ibuf_arr[i] = IMB_makeSingleUser(
-			                             IMB_anim_absolute(ia->anim, fra,
-			                             IMB_TC_RECORD_RUN,
-			                             IMB_PROXY_NONE));
-			if (ibuf_arr[i])
-				image_initialize_after_load(ima, ibuf_arr[i]);
+		ibuf_arr = MEM_mallocN(sizeof(ImBuf *) * totviews, "Image Views (movie) Imbufs");
+
+		for (i = 0; i < totfiles; i++) {
+			ibuf_arr[i] = load_movie_single(ima, iuser, frame, i);
 		}
 
 		if ((ima->flag & IMA_IS_STEREO) && ima->views_format == R_IMF_VIEWS_STEREO_3D)
@@ -3250,30 +3271,29 @@ static ImBuf *image_load_movie_file(Image *ima, ImageUser *iuser, int frame)
 			if (ibuf_arr[i]) {
 				image_assign_ibuf(ima, ibuf_arr[i], i, frame);
 			}
-			else
-				ima->ok = 0;
+			else {
+				ima->ok &= 0;
+			}
 		}
-	}
-	else
-		ima->ok = 0;
 
-	/* return the original requested ImBuf */
-	r_ibuf = ibuf_arr[is_multiview ? (iuser ? iuser->multi_index : 0) : 0];
+		/* return the original requested ImBuf */
+		ibuf = ibuf_arr[(iuser ? iuser->multi_index : 0)];
 
-	/* "remove" the others (decrease their refcount) */
-	for (i = 0; i < totviews; i++) {
-		if (ibuf_arr[i] != r_ibuf) {
-			IMB_freeImBuf(ibuf_arr[i]);
+		/* "remove" the others (decrease their refcount) */
+		for (i = 0; i < totviews; i++) {
+			if (ibuf_arr[i] != ibuf) {
+				IMB_freeImBuf(ibuf_arr[i]);
+			}
 		}
+
+		/* cleanup */
+		MEM_freeN(ibuf_arr);
 	}
 
 	if (iuser)
 		iuser->ok = ima->ok;
 
-	/* cleanup */
-	MEM_freeN(ibuf_arr);
-
-	return r_ibuf;
+	return ibuf;
 }
 
 static struct ImBuf *load_image_single(Image *ima, ImageUser *iuser, int cfra,
