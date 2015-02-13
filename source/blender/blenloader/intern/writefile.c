@@ -2324,6 +2324,12 @@ static void write_view_settings(WriteData *wd, ColorManagedViewSettings *view_se
 	}
 }
 
+static void write_paint(WriteData *wd, Paint *p)
+{
+	if (p->cavity_curve)
+		write_curvemapping(wd, p->cavity_curve);
+}
+
 static void write_scenes(WriteData *wd, ListBase *scebase)
 {
 	Scene *sce;
@@ -2360,18 +2366,22 @@ static void write_scenes(WriteData *wd, ListBase *scebase)
 		writestruct(wd, DATA, "ToolSettings", 1, tos);
 		if (tos->vpaint) {
 			writestruct(wd, DATA, "VPaint", 1, tos->vpaint);
+			write_paint (wd, &tos->vpaint->paint);
 		}
 		if (tos->wpaint) {
 			writestruct(wd, DATA, "VPaint", 1, tos->wpaint);
+			write_paint (wd, &tos->wpaint->paint);
 		}
 		if (tos->sculpt) {
 			writestruct(wd, DATA, "Sculpt", 1, tos->sculpt);
+			write_paint (wd, &tos->sculpt->paint);
 		}
 		if (tos->uvsculpt) {
 			writestruct(wd, DATA, "UvSculpt", 1, tos->uvsculpt);
+			write_paint (wd, &tos->uvsculpt->paint);
 		}
 
-		// write_paint(wd, &tos->imapaint.paint);
+		write_paint(wd, &tos->imapaint.paint);
 
 		ed= sce->ed;
 		if (ed) {
@@ -2689,6 +2699,11 @@ static void write_screens(WriteData *wd, ListBase *scrbase)
 					for (bgpic= v3d->bgpicbase.first; bgpic; bgpic= bgpic->next)
 						writestruct(wd, DATA, "BGpic", 1, bgpic);
 					if (v3d->localvd) writestruct(wd, DATA, "View3D", 1, v3d->localvd);
+
+					if (v3d->fx_settings.ssao)
+						writestruct(wd, DATA, "GPUSSAOSettings", 1, v3d->fx_settings.ssao);
+					if (v3d->fx_settings.dof)
+						writestruct(wd, DATA, "GPUDOFSettings", 1, v3d->fx_settings.dof);
 				}
 				else if (sl->spacetype==SPACE_IPO) {
 					SpaceIpo *sipo= (SpaceIpo *)sl;
@@ -3086,7 +3101,7 @@ static void write_brushes(WriteData *wd, ListBase *idbase)
 			
 			if (brush->curve)
 				write_curvemapping(wd, brush->curve);
-			if (brush->curve)
+			if (brush->gradient)
 				writestruct(wd, DATA, "ColorBand", 1, brush->gradient);
 		}
 	}

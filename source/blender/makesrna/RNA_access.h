@@ -241,6 +241,7 @@ extern StructRNA RNA_FModifierNoise;
 extern StructRNA RNA_FModifierPython;
 extern StructRNA RNA_FModifierStepped;
 extern StructRNA RNA_FieldSettings;
+extern StructRNA RNA_FileBrowserFSMenuEntry;
 extern StructRNA RNA_FileSelectParams;
 extern StructRNA RNA_FloatProperty;
 extern StructRNA RNA_FloorConstraint;

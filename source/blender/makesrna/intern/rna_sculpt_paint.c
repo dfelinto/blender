@@ -475,6 +475,17 @@ static void rna_def_paint(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Symmetry Feathering",
 	                         "Reduce the strength of the brush where it overlaps symmetrical daubs");
 	RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
+
+	prop = RNA_def_property(srna, "cavity_curve", PROP_POINTER, PROP_NONE);
+	RNA_def_property_flag(prop, PROP_NEVER_NULL);
+	RNA_def_property_ui_text(prop, "Curve", "Editable cavity curve");
+	RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
+
+	prop = RNA_def_property(srna, "use_cavity", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "flags", PAINT_USE_CAVITY_MASK);
+	RNA_def_property_ui_text(prop, "Cavity Mask", "Mask painting according to mesh geometry cavity");
+	RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
+
 }
 
 static void rna_def_sculpt(BlenderRNA  *brna)
@@ -681,7 +692,7 @@ static void rna_def_image_paint(BlenderRNA *brna)
 	RNA_def_property_boolean_sdna(prop, NULL, "flag", IMAGEPAINT_PROJECT_LAYER_STENCIL);
 	RNA_def_property_ui_text(prop, "Stencil Layer", "Set the mask layer from the UV map buttons");
 	RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, "rna_ImaPaint_viewport_update");
-	
+
 	prop = RNA_def_property(srna, "invert_stencil", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "flag", IMAGEPAINT_PROJECT_LAYER_STENCIL_INV);
 	RNA_def_property_ui_text(prop, "Invert", "Invert the stencil layer");

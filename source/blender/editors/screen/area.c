@@ -1477,7 +1477,7 @@ void region_toggle_hidden(bContext *C, ARegion *ar, const bool do_fade)
 /* exported to all editors, uses fading default */
 void ED_region_toggle_hidden(bContext *C, ARegion *ar)
 {
-	region_toggle_hidden(C, ar, 1);
+	region_toggle_hidden(C, ar, true);
 }
 
 /**

@@ -95,6 +95,7 @@
 #include "GPU_draw.h"
 #include "GPU_material.h"
 #include "GPU_extensions.h"
+#include "GPU_compositing.h"
 
 #include "view3d_intern.h"  /* own include */
 
@@ -300,7 +301,7 @@ static void drawgrid(UnitSettings *unit, ARegion *ar, View3D *v3d, const char **
 	dx = fabs(x - (wx) * fx / fw);
 	if (dx == 0) dx = fabs(y - (wy) * fy / fw);
 	
-	glDepthMask(0);     /* disable write in zbuffer */
+	glDepthMask(GL_FALSE);     /* disable write in zbuffer */
 
 	/* check zoom out */
 	UI_ThemeColor(TH_GRID);
@@ -439,7 +440,7 @@ static void drawgrid(UnitSettings *unit, ARegion *ar, View3D *v3d, const char **
 
 	fdrawline(x, 0.0, x, (float)ar->winy); 
 
-	glDepthMask(1);  /* enable write in zbuffer */
+	glDepthMask(GL_TRUE);  /* enable write in zbuffer */
 }
 #undef GRID_MIN_PX
 
@@ -481,8 +482,7 @@ static void drawfloor(Scene *scene, View3D *v3d, const char **grid_unit)
 	grid_scale = ED_view3d_grid_scale(scene, v3d, grid_unit);
 	grid = gridlines * grid_scale;
 
-	if (v3d->zbuf && scene->obedit)
-		glDepthMask(0);  /* for zbuffer-select */
+	glDepthMask(GL_FALSE);
 
 	UI_GetThemeColor3ubv(TH_GRID, col_grid);
 
@@ -551,7 +551,7 @@ static void drawfloor(Scene *scene, View3D *v3d, const char **grid_unit)
 		}
 	}
 	
-	if (v3d->zbuf && scene->obedit) glDepthMask(1);
+	glDepthMask(GL_TRUE);
 }
 
 
@@ -1380,7 +1380,7 @@ static void backdrawview3d(Scene *scene, ARegion *ar, View3D *v3d)
 	}
 
 	if (rv3d->gpuoffscreen)
-		GPU_offscreen_bind(rv3d->gpuoffscreen);
+		GPU_offscreen_bind(rv3d->gpuoffscreen, true);
 	else
 		glScissor(ar->winrct.xmin, ar->winrct.ymin, BLI_rcti_size_x(&ar->winrct), BLI_rcti_size_y(&ar->winrct));
 
@@ -1403,7 +1403,7 @@ static void backdrawview3d(Scene *scene, ARegion *ar, View3D *v3d)
 		draw_object_backbufsel(scene, v3d, rv3d, base->object);
 	
 	if (rv3d->gpuoffscreen)
-		GPU_offscreen_unbind(rv3d->gpuoffscreen);
+		GPU_offscreen_unbind(rv3d->gpuoffscreen, true);
 	else
 		ar->swap = 0; /* mark invalid backbuf for wm draw */
 
@@ -1429,10 +1429,10 @@ void view3d_opengl_read_pixels(ARegion *ar, int x, int y, int w, int h, int form
 	RegionView3D *rv3d = ar->regiondata;
 
 	if (rv3d->gpuoffscreen) {
-		GPU_offscreen_bind(rv3d->gpuoffscreen);
+		GPU_offscreen_bind(rv3d->gpuoffscreen, true);
 		glReadBuffer(GL_COLOR_ATTACHMENT0_EXT);
 		glReadPixels(x, y, w, h, format, type, data);
-		GPU_offscreen_unbind(rv3d->gpuoffscreen);
+		GPU_offscreen_unbind(rv3d->gpuoffscreen, true);
 	}
 	else {
 		glReadPixels(ar->winrct.xmin + x, ar->winrct.ymin + y, w, h, format, type, data);
@@ -2557,7 +2557,10 @@ static void gpu_update_lamps_shadows(Scene *scene, View3D *v3d)
 		invert_m4_m4(rv3d.persinv, rv3d.viewinv);
 
 		/* no need to call ED_view3d_draw_offscreen_init since shadow buffers were already updated */
-		ED_view3d_draw_offscreen(scene, v3d, &ar, winsize, winsize, viewmat, winmat, false, false, NULL);
+		ED_view3d_draw_offscreen(
+		            scene, v3d, &ar, winsize, winsize, viewmat, winmat,
+		            false, false, true,
+		            NULL, NULL, NULL, NULL);
 		GPU_lamp_shadow_buffer_unbind(shadow->lamp);
 		
 		v3d->drawtype = drawtype;
@@ -2689,6 +2692,8 @@ static void view3d_draw_objects(
 	RegionView3D *rv3d = ar->regiondata;
 	Base *base;
 	const bool do_camera_frame = !draw_offscreen;
+	const bool draw_floor = (rv3d->view == RV3D_VIEW_USER) || (rv3d->persp != RV3D_ORTHO);
+	const bool draw_grids = !draw_offscreen && (v3d->flag2 & V3D_RENDER_OVERRIDE) == 0;
 
 	if (!draw_offscreen) {
 		ED_region_draw_cb_draw(C, ar, REGION_DRAW_PRE_VIEW);
@@ -2719,26 +2724,21 @@ static void view3d_draw_objects(
 		glEnable(GL_DEPTH_TEST);
 	}
 
-	if (!draw_offscreen) {
+	/* ortho grid goes first, does not write to depth buffer and doesn't need depth test so it will override
+	 * objects if done last */
+	if (draw_grids) {
 		/* needs to be done always, gridview is adjusted in drawgrid() now, but only for ortho views. */
 		rv3d->gridview = ED_view3d_grid_scale(scene, v3d, grid_unit);
 
-		if ((rv3d->view == RV3D_VIEW_USER) || (rv3d->persp != RV3D_ORTHO)) {
-			if ((v3d->flag2 & V3D_RENDER_OVERRIDE) == 0) {
-				drawfloor(scene, v3d, grid_unit);
-			}
-		}
-		else {
-			if ((v3d->flag2 & V3D_RENDER_OVERRIDE) == 0) {
-				ED_region_pixelspace(ar);
-				*grid_unit = NULL;  /* drawgrid need this to detect/affect smallest valid unit... */
-				drawgrid(&scene->unit, ar, v3d, grid_unit);
-				/* XXX make function? replaces persp(1) */
-				glMatrixMode(GL_PROJECTION);
-				glLoadMatrixf(rv3d->winmat);
-				glMatrixMode(GL_MODELVIEW);
-				glLoadMatrixf(rv3d->viewmat);
-			}
+		if (!draw_floor) {
+			ED_region_pixelspace(ar);
+			*grid_unit = NULL;  /* drawgrid need this to detect/affect smallest valid unit... */
+			drawgrid(&scene->unit, ar, v3d, grid_unit);
+			/* XXX make function? replaces persp(1) */
+			glMatrixMode(GL_PROJECTION);
+			glLoadMatrixf(rv3d->winmat);
+			glMatrixMode(GL_MODELVIEW);
+			glLoadMatrixf(rv3d->viewmat);
 		}
 	}
 
@@ -2826,6 +2826,11 @@ static void view3d_draw_objects(
 	if (v3d->afterdraw_transp.first)     view3d_draw_transp(scene, ar, v3d);
 	if (v3d->afterdraw_xray.first)       view3d_draw_xray(scene, ar, v3d, true);
 	if (v3d->afterdraw_xraytransp.first) view3d_draw_xraytransp(scene, ar, v3d, true);
+
+	/* perspective floor goes last to use scene depth and avoid writing to depth buffer */
+	if (draw_grids && draw_floor) {
+		drawfloor(scene, v3d, grid_unit);
+	}
 
 	if (!draw_offscreen) {
 		ED_region_draw_cb_draw(C, ar, REGION_DRAW_POST_VIEW);
@@ -3074,13 +3079,19 @@ static void view3d_main_area_clear(Scene *scene, View3D *v3d, ARegion *ar, bool 
 /* ED_view3d_draw_offscreen_init should be called before this to initialize
  * stuff like shadow buffers
  */
-void ED_view3d_draw_offscreen(Scene *scene, View3D *v3d, ARegion *ar, int winx, int winy,
-                              float viewmat[4][4], float winmat[4][4],
-                              bool do_bgpic, bool do_sky, const char *viewname)
+void ED_view3d_draw_offscreen(
+        Scene *scene, View3D *v3d, ARegion *ar, int winx, int winy,
+        float viewmat[4][4], float winmat[4][4],
+        bool do_bgpic, bool do_sky, bool is_persp,
+        GPUOffScreen *ofs,
+        GPUFX *fx, GPUFXSettings *fx_settings,
+        const char *viewname)
 {
 	struct bThemeState theme_state;
 	int bwinx, bwiny;
 	rcti brect;
+	bool do_compositing = false;
+	RegionView3D *rv3d = ar->regiondata;
 
 	glPushMatrix();
 
@@ -3108,11 +3119,16 @@ void ED_view3d_draw_offscreen(Scene *scene, View3D *v3d, ARegion *ar, int winx, 
 		GPU_free_images_anim();
 	}
 
-	/* setup view matrices */
+	/* setup view matrices before fx or unbinding the offscreen buffers will cause issues */
 	if ((viewname != NULL) && (viewmat == NULL))
 		view3d_stereo3d_setup_offscreen(scene, v3d, ar, winmat, viewname);
 	else
 		view3d_main_area_setup_view(scene, v3d, ar, viewmat, winmat);
+
+	/* framebuffer fx needed, we need to draw offscreen first */
+	if (v3d->fx_settings.fx_flag && fx) {
+		do_compositing = GPU_fx_compositor_initialize_passes(fx, &ar->winrct, NULL, fx_settings);
+	}
 
 	/* clear opengl buffers */
 	if (do_sky) {
@@ -3125,6 +3141,13 @@ void ED_view3d_draw_offscreen(Scene *scene, View3D *v3d, ARegion *ar, int winx, 
 
 	/* main drawing call */
 	view3d_draw_objects(NULL, scene, v3d, ar, NULL, do_bgpic, true);
+
+	/* post process */
+	if (do_compositing) {
+		if (!winmat)
+			is_persp = rv3d->is_persp;
+		GPU_fx_do_composite_pass(fx, winmat, is_persp, scene, ofs);
+	}
 
 	if ((v3d->flag2 & V3D_RENDER_SHADOW) == 0) {
 		/* draw grease-pencil stuff */
@@ -3160,7 +3183,7 @@ ImBuf *ED_view3d_draw_offscreen_imbuf(Scene *scene, View3D *v3d, ARegion *ar, in
 	ImBuf *ibuf;
 	GPUOffScreen *ofs;
 	bool draw_sky = (alpha_mode == R_ADDSKY);
-	
+
 	/* state changes make normal drawing go weird otherwise */
 	glPushAttrib(GL_LIGHTING_BIT);
 
@@ -3173,11 +3196,12 @@ ImBuf *ED_view3d_draw_offscreen_imbuf(Scene *scene, View3D *v3d, ARegion *ar, in
 
 	ED_view3d_draw_offscreen_init(scene, v3d);
 
-	GPU_offscreen_bind(ofs);
+	GPU_offscreen_bind(ofs, true);
 
 	/* render 3d view */
 	if (rv3d->persp == RV3D_CAMOB && v3d->camera) {
 		CameraParams params;
+		GPUFXSettings fx_settings = {0};
 		Object *camera = BKE_camera_render(scene, v3d->camera, viewname);
 
 		BKE_camera_params_init(&params);
@@ -3189,10 +3213,18 @@ ImBuf *ED_view3d_draw_offscreen_imbuf(Scene *scene, View3D *v3d, ARegion *ar, in
 		BKE_camera_params_compute_viewplane(&params, sizex, sizey, scene->r.xasp, scene->r.yasp);
 		BKE_camera_params_compute_matrix(&params);
 
-		ED_view3d_draw_offscreen(scene, v3d, ar, sizex, sizey, NULL, params.winmat, draw_background, draw_sky, viewname);
+		BKE_camera_to_gpu_dof(camera, &fx_settings);
+
+		ED_view3d_draw_offscreen(
+            scene, v3d, ar, sizex, sizey, NULL, params.winmat,
+		        draw_background, draw_sky, !params.is_ortho,
+		        ofs, NULL, &fx_settings, viewname);
 	}
 	else {
-		ED_view3d_draw_offscreen(scene, v3d, ar, sizex, sizey, NULL, NULL, draw_background, draw_sky, viewname);
+		ED_view3d_draw_offscreen(
+		        scene, v3d, ar, sizex, sizey, NULL, NULL,
+		        draw_background, draw_sky, true,
+		        ofs, NULL, NULL, viewname);
 	}
 
 	/* read in pixels & stamp */
@@ -3204,7 +3236,7 @@ ImBuf *ED_view3d_draw_offscreen_imbuf(Scene *scene, View3D *v3d, ARegion *ar, in
 		GPU_offscreen_read_pixels(ofs, GL_UNSIGNED_BYTE, ibuf->rect);
 
 	/* unbind */
-	GPU_offscreen_unbind(ofs);
+	GPU_offscreen_unbind(ofs, true);
 	GPU_offscreen_free(ofs);
 
 	glPopAttrib();
@@ -3588,7 +3620,10 @@ static void view3d_main_area_draw_objects(const bContext *C, Scene *scene, View3
 {
 	RegionView3D *rv3d = ar->regiondata;
 	unsigned int lay_used = v3d->lay_used;
-
+	
+	/* post processing */
+	bool do_compositing = false;
+	
 	/* shadow buffers, before we setup matrices */
 	if (draw_glsl_material(scene, NULL, v3d, v3d->drawtype))
 		gpu_update_lamps_shadows(scene, v3d);
@@ -3615,6 +3650,22 @@ static void view3d_main_area_draw_objects(const bContext *C, Scene *scene, View3
 	}
 #endif
 
+	/* framebuffer fx needed, we need to draw offscreen first */
+	if (v3d->fx_settings.fx_flag) {
+		GPUFXSettings fx_settings;
+		BKE_screen_gpu_fx_validate(&v3d->fx_settings);
+		fx_settings = v3d->fx_settings;
+		if (!rv3d->compositor)
+			rv3d->compositor = GPU_fx_compositor_create();
+		
+		if (rv3d->persp == RV3D_CAMOB && v3d->camera)
+			BKE_camera_to_gpu_dof(v3d->camera, &fx_settings);
+		else {
+			fx_settings.dof = NULL;
+		}
+		do_compositing = GPU_fx_compositor_initialize_passes(rv3d->compositor, &ar->winrct, &ar->drawrct, &fx_settings);
+	}
+	
 	/* clear the background */
 	view3d_main_area_clear(scene, v3d, ar, false);
 
@@ -3625,6 +3676,11 @@ static void view3d_main_area_draw_objects(const bContext *C, Scene *scene, View3
 
 	/* main drawing call */
 	view3d_draw_objects(C, scene, v3d, ar, grid_unit, true, false);
+
+	/* post process */
+	if (do_compositing) {
+		GPU_fx_do_composite_pass(rv3d->compositor, rv3d->winmat, rv3d->is_persp, scene, NULL);
+	}
 
 	/* Disable back anti-aliasing */
 	if (U.ogl_multisamples != USER_MULTISAMPLE_NONE) {

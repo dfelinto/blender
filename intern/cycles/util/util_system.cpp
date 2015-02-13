@@ -135,23 +135,41 @@ struct CPUCapabilities {
 	bool bmi2;
 };
 
+static void system_cpu_capabilities_override(CPUCapabilities *caps)
+{
+	/* Only capabilities which affects on cycles kernel. */
+	if(getenv("CYCLES_CPU_NO_AVX2")) {
+		caps->avx2 = false;
+	}
+	if(getenv("CYCLES_CPU_NO_AVX")) {
+		caps->avx = false;
+	}
+	if(getenv("CYCLES_CPU_NO_SSE41")) {
+		caps->sse41 = false;
+	}
+	if(getenv("CYCLES_CPU_NO_SSE3")) {
+		caps->sse3 = false;
+	}
+	if(getenv("CYCLES_CPU_NO_SSE2")) {
+		caps->sse2 = false;
+	}
+	if(getenv("CYCLES_CPU_NO_SSE")) {
+		caps->sse = false;
+	}
+}
+
 static CPUCapabilities& system_cpu_capabilities()
 {
 	static CPUCapabilities caps;
 	static bool caps_init = false;
 
 	if(!caps_init) {
-		int result[4], num; //, num_ex;
+		int result[4], num;
 
 		memset(&caps, 0, sizeof(caps));
 
 		__cpuid(result, 0);
 		num = result[0];
-
-#if 0
-		__cpuid(result, 0x80000000);
-		num_ex = result[0];
-#endif
 
 		if(num >= 1) {
 			__cpuid(result, 0x00000001);
@@ -190,15 +208,7 @@ static CPUCapabilities& system_cpu_capabilities()
 			caps.avx2 = (result[1] & ((int)1 << 5)) != 0;
 		}
 
-#if 0
-		if(num_ex >= 0x80000001) {
-			__cpuid(result, 0x80000001);
-			caps.x64 = (result[3] & ((int)1 << 29)) != 0;
-			caps.sse4a = (result[2] & ((int)1 <<  6)) != 0;
-			caps.fma4 = (result[2] & ((int)1 << 16)) != 0;
-			caps.xop = (result[2] & ((int)1 << 11)) != 0;
-		}
-#endif
+		system_cpu_capabilities_override(&caps);
 
 		caps_init = true;
 	}

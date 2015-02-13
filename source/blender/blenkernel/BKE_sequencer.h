@@ -256,25 +256,25 @@ typedef enum {
 	SEQ_STRIPELEM_IBUF_COMP,
 	SEQ_STRIPELEM_IBUF_STARTSTILL,
 	SEQ_STRIPELEM_IBUF_ENDSTILL
-} seq_stripelem_ibuf_t;
+} eSeqStripElemIBuf;
 
 void BKE_sequencer_cache_destruct(void);
 void BKE_sequencer_cache_cleanup(void);
 
 /* returned ImBuf is properly refed and has to be freed */
-struct ImBuf *BKE_sequencer_cache_get(const SeqRenderData *context, struct Sequence *seq, float cfra, seq_stripelem_ibuf_t type);
+struct ImBuf *BKE_sequencer_cache_get(const SeqRenderData *context, struct Sequence *seq, float cfra, eSeqStripElemIBuf type);
 
 /* passed ImBuf is properly refed, so ownership is *not* 
  * transferred to the cache.
  * you can pass the same ImBuf multiple times to the cache without problems.
  */
 
-void BKE_sequencer_cache_put(const SeqRenderData *context, struct Sequence *seq, float cfra, seq_stripelem_ibuf_t type, struct ImBuf *nval);
+void BKE_sequencer_cache_put(const SeqRenderData *context, struct Sequence *seq, float cfra, eSeqStripElemIBuf type, struct ImBuf *nval);
 
 void BKE_sequencer_cache_cleanup_sequence(struct Sequence *seq);
 
-struct ImBuf *BKE_sequencer_preprocessed_cache_get(const SeqRenderData *context, struct Sequence *seq, float cfra, seq_stripelem_ibuf_t type);
-void BKE_sequencer_preprocessed_cache_put(const SeqRenderData *context, struct Sequence *seq, float cfra, seq_stripelem_ibuf_t type, struct ImBuf *ibuf);
+struct ImBuf *BKE_sequencer_preprocessed_cache_get(const SeqRenderData *context, struct Sequence *seq, float cfra, eSeqStripElemIBuf type);
+void BKE_sequencer_preprocessed_cache_put(const SeqRenderData *context, struct Sequence *seq, float cfra, eSeqStripElemIBuf type, struct ImBuf *ibuf);
 void BKE_sequencer_preprocessed_cache_cleanup(void);
 void BKE_sequencer_preprocessed_cache_cleanup_sequence(struct Sequence *seq);
 
@@ -317,7 +317,11 @@ struct Sequence *BKE_sequence_metastrip(ListBase *seqbase /* = ed->seqbase */, s
 
 void BKE_sequencer_offset_animdata(struct Scene *scene, struct Sequence *seq, int ofs);
 void BKE_sequencer_dupe_animdata(struct Scene *scene, const char *name_src, const char *name_dst);
-bool BKE_sequence_base_shuffle(struct ListBase *seqbasep, struct Sequence *test, struct Scene *evil_scene);
+bool BKE_sequence_base_shuffle_ex(
+        struct ListBase *seqbasep, struct Sequence *test, struct Scene *evil_scene,
+        int channel_delta);
+bool BKE_sequence_base_shuffle(
+        struct ListBase *seqbasep, struct Sequence *test, struct Scene *evil_scene);
 bool BKE_sequence_base_shuffle_time(ListBase *seqbasep, struct Scene *evil_scene);
 bool BKE_sequence_base_isolated_sel_check(struct ListBase *seqbase);
 void BKE_sequencer_free_imbuf(struct Scene *scene, struct ListBase *seqbasep, bool for_render);

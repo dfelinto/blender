@@ -5615,6 +5615,12 @@ void special_aftertrans_update(bContext *C, TransInfo *t)
 					sld->perc = 0.0;
 					projectEdgeSlideData(t, false);
 				}
+				else if (t->mode == TFM_VERT_SLIDE) {
+					VertSlideData *sld = t->customData;
+
+					sld->perc = 0.0;
+					projectVertSlideData(t, false);
+				}
 			}
 		}
 	}
@@ -7496,6 +7502,12 @@ static void createTransGPencil(bContext *C, TransInfo *t)
 							
 							if (pt->flag & GP_SPOINT_SELECT)
 								td->flag |= TD_SELECTED;
+								
+							/* for other transform modes (e.g. shrink-fatten), need to additional data */
+							if (t->mode == TFM_GPENCIL_SHRINKFATTEN) {
+								td->val = &pt->pressure;
+								td->ival = pt->pressure;
+							}
 							
 							/* configure 2D points so that they don't play up... */
 							if (gps->flag & (GP_STROKE_2DSPACE | GP_STROKE_2DIMAGE)) {

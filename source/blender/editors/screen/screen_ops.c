@@ -2043,6 +2043,48 @@ static void SCREEN_OT_region_scale(wmOperatorType *ot)
 
 /* ************** frame change operator ***************************** */
 
+static void areas_do_frame_follow(bContext *C, bool middle)
+{
+	bScreen *scr = CTX_wm_screen(C);
+	Scene *scene = CTX_data_scene(C);
+	wmWindowManager *wm = CTX_wm_manager(C);
+	wmWindow *window;
+	for (window = wm->windows.first; window; window = window->next) {
+		ScrArea *sa;
+		for (sa = window->screen->areabase.first; sa; sa = sa->next) {
+			ARegion *ar;
+			for (ar = sa->regionbase.first; ar; ar = ar->next) {
+				/* do follow here if editor type supports it */
+				if ((scr->redraws_flag & TIME_FOLLOW)) {
+					if ((ar->regiontype == RGN_TYPE_WINDOW &&
+					     ELEM(sa->spacetype, SPACE_SEQ, SPACE_TIME, SPACE_IPO, SPACE_ACTION, SPACE_NLA)) ||
+					    (sa->spacetype == SPACE_CLIP && ar->regiontype == RGN_TYPE_PREVIEW))
+					{
+						float w = BLI_rctf_size_x(&ar->v2d.cur);
+
+						if (middle) {
+							if ((scene->r.cfra < ar->v2d.cur.xmin) || (scene->r.cfra > ar->v2d.cur.xmax)) {
+								ar->v2d.cur.xmax = scene->r.cfra + (w / 2);
+								ar->v2d.cur.xmin = scene->r.cfra - (w / 2);
+							}
+						}
+						else {
+							if (scene->r.cfra < ar->v2d.cur.xmin) {
+								ar->v2d.cur.xmax = scene->r.cfra;
+								ar->v2d.cur.xmin = ar->v2d.cur.xmax - w;
+							}
+							else if (scene->r.cfra > ar->v2d.cur.xmax) {
+								ar->v2d.cur.xmin = scene->r.cfra;
+								ar->v2d.cur.xmax = ar->v2d.cur.xmin + w;
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
 /* function to be called outside UI context, or for redo */
 static int frame_offset_exec(bContext *C, wmOperator *op)
 {
@@ -2056,6 +2098,8 @@ static int frame_offset_exec(bContext *C, wmOperator *op)
 	FRAMENUMBER_MIN_CLAMP(CFRA);
 	SUBFRA = 0.f;
 	
+	areas_do_frame_follow(C, false);
+
 	sound_seek_scene(bmain, scene);
 
 	WM_event_add_notifier(C, NC_SCENE | ND_FRAME, scene);
@@ -2106,6 +2150,8 @@ static int frame_jump_exec(bContext *C, wmOperator *op)
 		else
 			CFRA = PSFRA;
 		
+		areas_do_frame_follow(C, true);
+
 		sound_seek_scene(bmain, scene);
 
 		WM_event_add_notifier(C, NC_SCENE | ND_FRAME, scene);
@@ -2210,6 +2256,8 @@ static int keyframe_jump_exec(bContext *C, wmOperator *op)
 		return OPERATOR_CANCELLED;
 	}
 	else {
+		areas_do_frame_follow(C, true);
+
 		sound_seek_scene(bmain, scene);
 
 		WM_event_add_notifier(C, NC_SCENE | ND_FRAME, scene);
@@ -2269,6 +2317,8 @@ static int marker_jump_exec(bContext *C, wmOperator *op)
 	}
 	else {
 		CFRA = closest;
+
+		areas_do_frame_follow(C, true);
 
 		sound_seek_scene(bmain, scene);
 
@@ -3483,11 +3533,15 @@ static int screen_animation_step(bContext *C, wmOperator *UNUSED(op), const wmEv
 						/* do follow here if editor type supports it */
 						if ((sad->redraws & TIME_FOLLOW)) {
 							if ((ar->regiontype == RGN_TYPE_WINDOW &&
-							    ELEM (sa->spacetype, SPACE_SEQ, SPACE_TIME, SPACE_IPO, SPACE_ACTION, SPACE_NLA)) ||
+							     ELEM(sa->spacetype, SPACE_SEQ, SPACE_TIME, SPACE_IPO, SPACE_ACTION, SPACE_NLA)) ||
 							    (sa->spacetype == SPACE_CLIP && ar->regiontype == RGN_TYPE_PREVIEW))
 							{
 								float w = BLI_rctf_size_x(&ar->v2d.cur);
-								if (scene->r.cfra < ar->v2d.cur.xmin || scene->r.cfra > (ar->v2d.cur.xmax)) {
+								if (scene->r.cfra < ar->v2d.cur.xmin) {
+									ar->v2d.cur.xmax = scene->r.cfra;
+									ar->v2d.cur.xmin = ar->v2d.cur.xmax - w;
+								}
+								else if (scene->r.cfra > ar->v2d.cur.xmax) {
 									ar->v2d.cur.xmin = scene->r.cfra;
 									ar->v2d.cur.xmax = ar->v2d.cur.xmin + w;
 								}

@@ -1721,6 +1721,10 @@ class VIEW3D_PT_tools_projectpaint(View3DPaintPanel, Panel):
         sub.active = (ipaint.use_normal_falloff)
         sub.prop(ipaint, "normal_angle", text="")
 
+        layout.prop(ipaint, "use_cavity")
+        if ipaint.use_cavity:
+            layout.template_curve_mapping(ipaint, "cavity_curve", brush=True)
+
         layout.prop(ipaint, "seam_bleed")
         layout.prop(ipaint, "dither")
         self.unified_paint_settings(layout, context)

@@ -305,11 +305,14 @@ static void rna_Sequence_channel_set(PointerRNA *ptr, int value)
 	Scene *scene = (Scene *)ptr->id.data;
 	Editing *ed = BKE_sequencer_editing_get(scene, false);
 	ListBase *seqbase = BKE_sequence_seqbase(&ed->seqbase, seq);
-
-	seq->machine = value;
 	
+	/* check channel increment or decrement */
+	const int channel_delta = (value >= seq->machine) ? 1 : -1;
+	seq->machine = value;
+
 	if (BKE_sequence_test_overlap(seqbase, seq)) {
-		BKE_sequence_base_shuffle(seqbase, seq, scene);  /* XXX - BROKEN!, uses context seqbasep */
+		/* XXX - BROKEN!, uses context seqbasep */
+		BKE_sequence_base_shuffle_ex(seqbase, seq, scene, channel_delta);
 	}
 	BKE_sequencer_sort(scene);
 }
@@ -1511,7 +1514,7 @@ static void rna_def_sequence(BlenderRNA *brna)
 	
 	prop = RNA_def_property(srna, "channel", PROP_INT, PROP_UNSIGNED);
 	RNA_def_property_int_sdna(prop, NULL, "machine");
-	RNA_def_property_range(prop, 0, MAXSEQ - 1);
+	RNA_def_property_range(prop, 1, MAXSEQ);
 	RNA_def_property_ui_text(prop, "Channel", "Y position of the sequence strip");
 	RNA_def_property_int_funcs(prop, NULL, "rna_Sequence_channel_set", NULL); /* overlap test */
 	RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_Sequence_update");

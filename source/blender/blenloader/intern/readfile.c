@@ -5449,12 +5449,26 @@ static void link_recurs_seq(FileData *fd, ListBase *lb)
 	}
 }
 
-static void direct_link_paint(FileData *fd, Paint **paint)
+static void direct_link_paint(FileData *fd, Paint *p)
+{
+	if (p->num_input_samples < 1)
+		p->num_input_samples = 1;
+
+	p->cavity_curve = newdataadr(fd, p->cavity_curve);
+	if (p->cavity_curve)
+		direct_link_curvemapping(fd, p->cavity_curve);
+	else
+		BKE_paint_cavity_curve_preset(p, CURVE_PRESET_LINE);
+}
+
+static void direct_link_paint_helper(FileData *fd, Paint **paint)
 {
 	/* TODO. is this needed */
 	(*paint) = newdataadr(fd, (*paint));
-	if (*paint && (*paint)->num_input_samples < 1)
-		(*paint)->num_input_samples = 1;
+
+	if (*paint) {
+		direct_link_paint(fd, *paint);
+	}
 }
 
 static void direct_link_sequence_modifiers(FileData *fd, ListBase *lb)
@@ -5520,11 +5534,13 @@ static void direct_link_scene(FileData *fd, Scene *sce)
 	
 	sce->toolsettings= newdataadr(fd, sce->toolsettings);
 	if (sce->toolsettings) {
-		direct_link_paint(fd, (Paint**)&sce->toolsettings->sculpt);
-		direct_link_paint(fd, (Paint**)&sce->toolsettings->vpaint);
-		direct_link_paint(fd, (Paint**)&sce->toolsettings->wpaint);
-		direct_link_paint(fd, (Paint**)&sce->toolsettings->uvsculpt);
+		direct_link_paint_helper(fd, (Paint**)&sce->toolsettings->sculpt);
+		direct_link_paint_helper(fd, (Paint**)&sce->toolsettings->vpaint);
+		direct_link_paint_helper(fd, (Paint**)&sce->toolsettings->wpaint);
+		direct_link_paint_helper(fd, (Paint**)&sce->toolsettings->uvsculpt);
 		
+		direct_link_paint(fd, &sce->toolsettings->imapaint.paint);
+
 		sce->toolsettings->imapaint.paintcursor = NULL;
 		sce->toolsettings->particle.paintcursor = NULL;
 		sce->toolsettings->particle.scene = NULL;
@@ -6429,6 +6445,7 @@ static void direct_link_region(FileData *fd, ARegion *ar, int spacetype)
 				rv3d->render_engine = NULL;
 				rv3d->sms = NULL;
 				rv3d->smooth_timer = NULL;
+				rv3d->compositor = NULL;
 			}
 		}
 	}
@@ -6536,7 +6553,7 @@ static bool direct_link_screen(FileData *fd, bScreen *sc)
 		/* add local view3d too */
 		else if (sa->spacetype == SPACE_VIEW3D)
 			blo_do_versions_view3d_split_250(sa->spacedata.first, &sa->regionbase);
-		
+
 		/* incase we set above */
 		sa->butspacetype = sa->spacetype;
 
@@ -6583,6 +6600,11 @@ static bool direct_link_screen(FileData *fd, bScreen *sc)
 				/* render can be quite heavy, set to solid on load */
 				if (v3d->drawtype == OB_RENDER)
 					v3d->drawtype = OB_SOLID;
+
+				if (v3d->fx_settings.dof)
+					v3d->fx_settings.dof = newdataadr(fd, v3d->fx_settings.dof);
+				if (v3d->fx_settings.ssao)
+					v3d->fx_settings.ssao = newdataadr(fd, v3d->fx_settings.ssao);
 				
 				blo_do_versions_view3d_split_250(v3d, &sl->regionbase);
 			}

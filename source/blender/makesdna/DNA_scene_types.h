@@ -46,8 +46,10 @@ extern "C" {
 #include "DNA_listBase.h"
 #include "DNA_ID.h"
 #include "DNA_freestyle_types.h"
+#include "DNA_gpu_types.h"
 #include "DNA_userdef_types.h"
 
+struct CurveMapping;
 struct Object;
 struct Brush;
 struct World;
@@ -905,6 +907,7 @@ typedef struct TimeMarker {
 typedef struct Paint {
 	struct Brush *brush;
 	struct Palette *palette;
+	struct CurveMapping *cavity_curve; /* cavity curve */
 
 	/* WM Paint cursor */
 	void *paint_cursor;
@@ -1786,7 +1789,8 @@ enum {
 typedef enum {
 	PAINT_SHOW_BRUSH = (1 << 0),
 	PAINT_FAST_NAVIGATE = (1 << 1),
-	PAINT_SHOW_BRUSH_ON_SURFACE = (1 << 2)
+	PAINT_SHOW_BRUSH_ON_SURFACE = (1 << 2),
+	PAINT_USE_CAVITY_MASK = (1 << 3)
 } PaintFlags;
 
 /* Paint.symmetry_flags
@@ -1847,12 +1851,13 @@ typedef enum ImagePaintMode {
 // #define IMAGEPAINT_DRAW_TOOL_DRAWING	4 // deprecated
 
 /* projection painting only */
-#define IMAGEPAINT_PROJECT_XRAY			16
-#define IMAGEPAINT_PROJECT_BACKFACE		32
-#define IMAGEPAINT_PROJECT_FLAT			64
-#define IMAGEPAINT_PROJECT_LAYER_CLONE	128
-#define IMAGEPAINT_PROJECT_LAYER_STENCIL	256
-#define IMAGEPAINT_PROJECT_LAYER_STENCIL_INV	512
+#define IMAGEPAINT_PROJECT_XRAY			(1 << 4)
+#define IMAGEPAINT_PROJECT_BACKFACE		(1 << 5)
+#define IMAGEPAINT_PROJECT_FLAT			(1 << 6)
+#define IMAGEPAINT_PROJECT_LAYER_CLONE	(1 << 7)
+#define IMAGEPAINT_PROJECT_LAYER_STENCIL	(1 << 8)
+#define IMAGEPAINT_PROJECT_LAYER_STENCIL_INV	(1 << 9)
+
 
 #define IMAGEPAINT_MISSING_UVS       (1 << 0)
 #define IMAGEPAINT_MISSING_MATERIAL  (1 << 1)

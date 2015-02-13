@@ -1594,6 +1594,8 @@ static int sequencer_slip_modal(bContext *C, wmOperator *op, const wmEvent *even
 		}
 
 		case LEFTMOUSE:
+		case RETKEY:
+		case SPACEKEY:
 		{
 			ED_region_draw_cb_exit(ar->type, data->draw_handle);
 			MEM_freeN(data->seq_array);
@@ -3499,7 +3501,10 @@ static int sequencer_enable_proxies_exec(bContext *C, wmOperator *op)
 		if ((seq->flag & SELECT)) {
 			if (ELEM(seq->type, SEQ_TYPE_MOVIE, SEQ_TYPE_IMAGE, SEQ_TYPE_META, SEQ_TYPE_SCENE, SEQ_TYPE_MULTICAM)) {
 				BKE_sequencer_proxy_set(seq, turnon);
-				
+				if (seq->strip->proxy == NULL) {
+					continue;
+				}
+
 				if (proxy_25)
 					seq->strip->proxy->build_size_flags |= SEQ_PROXY_IMAGE_SIZE_25;
 				else 

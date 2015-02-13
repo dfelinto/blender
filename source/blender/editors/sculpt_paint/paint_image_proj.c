@@ -62,6 +62,7 @@
 
 #include "BKE_camera.h"
 #include "BKE_context.h"
+#include "BKE_colortools.h"
 #include "BKE_depsgraph.h"
 #include "BKE_DerivedMesh.h"
 #include "BKE_idprop.h"
@@ -214,10 +215,12 @@ typedef struct ProjPaintState {
 
 	DerivedMesh    *dm;
 	int dm_totface;
+	int dm_totedge;
 	int dm_totvert;
 	int dm_release;
 
 	MVert          *dm_mvert;
+	MEdge          *dm_medge;
 	MFace          *dm_mface;
 	MTFace         **dm_mtface;
 	MTFace         **dm_mtface_clone;    /* other UV map, use for cloning between layers */
@@ -250,7 +253,7 @@ typedef struct ProjPaintState {
 	int image_tot;              /* size of projectImages array */
 
 	float (*screenCoords)[4];   /* verts projected into floating point screen space */
-
+	float *cavities;            /* cavity amount for vertices */
 	float screenMin[2];         /* 2D bounds for mesh verts on the screen's plane (screenspace) */
 	float screenMax[2];
 	float screen_width;         /* Calculated from screenMin & screenMax */
@@ -267,6 +270,7 @@ typedef struct ProjPaintState {
 	bool  do_occlude;               /* Use raytraced occlusion? - ortherwise will paint right through to the back*/
 	bool  do_backfacecull;          /* ignore faces with normals pointing away, skips a lot of raycasts if your normals are correctly flipped */
 	bool  do_mask_normal;           /* mask out pixels based on their normals */
+	bool  do_mask_cavity;           /* mask out pixels based on cavity */
 	bool  do_new_shading_nodes;     /* cache BKE_scene_use_new_shading_nodes value */
 	float normal_angle;             /* what angle to mask at*/
 	float normal_angle_inner;
@@ -301,6 +305,7 @@ typedef struct ProjPaintState {
 	/* redraw */
 	bool need_redraw;
 
+	struct CurveMapping *cavity_curve;
 	BlurKernel *blurkernel;
 
 	SpinLock *tile_lock;
@@ -1298,6 +1303,25 @@ static float project_paint_uvpixel_mask(
 	}
 	else {
 		mask = 1.0f;
+	}
+
+	if (ps->do_mask_cavity) {
+		MFace *mf = &ps->dm_mface[face_index];
+		float ca1, ca2, ca3, ca_mask;
+		ca1 = ps->cavities[mf->v1];
+		if (side == 1) {
+			ca2 = ps->cavities[mf->v3];
+			ca3 = ps->cavities[mf->v4];
+		}
+		else {
+			ca2 = ps->cavities[mf->v2];
+			ca3 = ps->cavities[mf->v3];
+		}
+
+		ca_mask = w[0] * ca1 + w[1] * ca2 + w[2] * ca3;
+		ca_mask = curvemapping_evaluateF(ps->cavity_curve, 0, ca_mask);
+		CLAMP(ca_mask, 0.0, 1.0);
+		mask *= ca_mask;
 	}
 
 	/* calculate mask */
@@ -3203,6 +3227,45 @@ static void proj_paint_state_screen_coords_init(ProjPaintState *ps, const int di
 	}
 }
 
+static void proj_paint_state_cavity_init(ProjPaintState *ps)
+{
+	MVert *mv;
+	MEdge *me;
+	float *cavities;
+	int a;
+
+	if (ps->do_mask_cavity) {
+		int *counter = MEM_callocN(sizeof(int) * ps->dm_totvert, "counter");
+		float (*edges)[3] = MEM_callocN(sizeof(float) * 3 * ps->dm_totvert, "edges");
+		ps->cavities = MEM_mallocN(sizeof(float) * ps->dm_totvert, "ProjectPaint Cavities");
+		cavities = ps->cavities;
+
+		for (a = 0, me = ps->dm_medge; a < ps->dm_totedge; a++, me++) {
+			float e[3];
+			sub_v3_v3v3(e, ps->dm_mvert[me->v1].co, ps->dm_mvert[me->v2].co);
+			normalize_v3(e);
+			add_v3_v3(edges[me->v2], e);
+			counter[me->v2]++;
+			sub_v3_v3(edges[me->v1], e);
+			counter[me->v1]++;
+		}
+		for (a = 0, mv = ps->dm_mvert; a < ps->dm_totvert; a++, mv++) {
+			if (counter[a] > 0) {
+				float no[3];
+				mul_v3_fl(edges[a], 1.0f / counter[a]);
+				normal_short_to_float_v3(no, mv->no);
+				/* augment the diffe*/
+				cavities[a] = saacos(10.0f * dot_v3v3(no, edges[a])) * M_1_PI;
+			}
+			else
+				cavities[a] = 0.0;
+		}
+
+		MEM_freeN(counter);
+		MEM_freeN(edges);
+	}
+}
+
 #ifndef PROJ_DEBUG_NOSEAMBLEED
 static void proj_paint_state_seam_bleed_init(ProjPaintState *ps)
 {
@@ -3329,9 +3392,14 @@ static bool proj_paint_state_dm_init(ProjPaintState *ps)
 	DM_update_materials(ps->dm, ps->ob);
 
 	ps->dm_totvert = ps->dm->getNumVerts(ps->dm);
+	ps->dm_totedge = ps->dm->getNumEdges(ps->dm);
 	ps->dm_totface = ps->dm->getNumTessFaces(ps->dm);
 
 	ps->dm_mvert = ps->dm->getVertArray(ps->dm);
+
+	if (ps->do_mask_cavity)
+		ps->dm_medge = ps->dm->getEdgeArray(ps->dm);
+
 	ps->dm_mface = ps->dm->getTessFaceArray(ps->dm);
 	ps->dm_mtface = MEM_mallocN(ps->dm_totface * sizeof(MTFace *), "proj_paint_mtfaces");
 
@@ -3733,6 +3801,8 @@ static void project_paint_begin(ProjPaintState *ps)
 	/* when using subsurf or multires, mface arrays are thrown away, we need to keep a copy */
 	proj_paint_state_non_cddm_init(ps);
 
+	proj_paint_state_cavity_init(ps);
+
 	proj_paint_state_viewport_init(ps);
 
 	/* calculate vert screen coords
@@ -3828,6 +3898,10 @@ static void project_paint_end(ProjPaintState *ps)
 	if (ps->blurkernel) {
 		paint_delete_blur_kernel(ps->blurkernel);
 		MEM_freeN(ps->blurkernel);
+	}
+
+	if (ps->do_mask_cavity) {
+		MEM_freeN(ps->cavities);
 	}
 
 	if (ps->vertFlags) MEM_freeN(ps->vertFlags);
@@ -4271,6 +4345,15 @@ static void do_projectpaint_mask_f(ProjPaintState *ps, ProjPixel *projPixel, flo
 	}
 }
 
+static void image_paint_partial_redraw_expand(ImagePaintPartialRedraw *cell,
+											  const ProjPixel *projPixel)
+{
+	cell->x1 = min_ii(cell->x1, (int)projPixel->x_px);
+	cell->y1 = min_ii(cell->y1, (int)projPixel->y_px);
+
+	cell->x2 = max_ii(cell->x2, (int)projPixel->x_px + 1);
+	cell->y2 = max_ii(cell->y2, (int)projPixel->y_px + 1);
+}
 
 /* run this for single and multithreaded painting */
 static void *do_projectpaint_thread(void *ph_v)
@@ -4424,11 +4507,7 @@ static void *do_projectpaint_thread(void *ph_v)
 					}
 
 					last_partial_redraw_cell = last_projIma->partRedrawRect + projPixel->bb_cell_index;
-					last_partial_redraw_cell->x1 = min_ii(last_partial_redraw_cell->x1, (int)projPixel->x_px);
-					last_partial_redraw_cell->y1 = min_ii(last_partial_redraw_cell->y1, (int)projPixel->y_px);
-
-					last_partial_redraw_cell->x2 = max_ii(last_partial_redraw_cell->x2, (int)projPixel->x_px + 1);
-					last_partial_redraw_cell->y2 = max_ii(last_partial_redraw_cell->y2, (int)projPixel->y_px + 1);
+					image_paint_partial_redraw_expand(last_partial_redraw_cell, projPixel);
 				}
 				else {
 					if (is_floatbuf) {
@@ -4562,11 +4641,7 @@ static void *do_projectpaint_thread(void *ph_v)
 							*projPixel->valid = true;
 
 							last_partial_redraw_cell = last_projIma->partRedrawRect + projPixel->bb_cell_index;
-							last_partial_redraw_cell->x1 = min_ii(last_partial_redraw_cell->x1, (int)projPixel->x_px);
-							last_partial_redraw_cell->y1 = min_ii(last_partial_redraw_cell->y1, (int)projPixel->y_px);
-
-							last_partial_redraw_cell->x2 = max_ii(last_partial_redraw_cell->x2, (int)projPixel->x_px + 1);
-							last_partial_redraw_cell->y2 = max_ii(last_partial_redraw_cell->y2, (int)projPixel->y_px + 1);
+							image_paint_partial_redraw_expand(last_partial_redraw_cell, projPixel);
 
 							/* texrgb is not used for clone, smear or soften */
 							switch (tool) {
@@ -4853,11 +4928,14 @@ static void project_state_init(bContext *C, Object *ob, ProjPaintState *ps, int 
 	ps->clone_ima = (!ps->do_material_slots) ? 
 	                settings->imapaint.clone : NULL;
 
+	ps->do_mask_cavity = (settings->imapaint.paint.flags & PAINT_USE_CAVITY_MASK) ? true : false;
+	ps->cavity_curve = settings->imapaint.paint.cavity_curve;
+
 	/* setup projection painting data */
 	if (ps->tool != PAINT_TOOL_FILL) {
-		ps->do_backfacecull = (settings->imapaint.flag & IMAGEPAINT_PROJECT_BACKFACE) ? 0 : 1;
-		ps->do_occlude = (settings->imapaint.flag & IMAGEPAINT_PROJECT_XRAY) ? 0 : 1;
-		ps->do_mask_normal = (settings->imapaint.flag & IMAGEPAINT_PROJECT_FLAT) ? 0 : 1;
+		ps->do_backfacecull = (settings->imapaint.flag & IMAGEPAINT_PROJECT_BACKFACE) ? false : true;
+		ps->do_occlude = (settings->imapaint.flag & IMAGEPAINT_PROJECT_XRAY) ? false : true;
+		ps->do_mask_normal = (settings->imapaint.flag & IMAGEPAINT_PROJECT_FLAT) ? false : true;
 	}
 	else {
 		ps->do_backfacecull = ps->do_occlude = ps->do_mask_normal = 0;

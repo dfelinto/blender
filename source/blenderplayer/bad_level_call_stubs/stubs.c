@@ -364,7 +364,16 @@ void ED_area_tag_redraw_regiontype(struct ScrArea *sa, int regiontype) RET_NONE
 void ED_render_engine_changed(struct Main *bmain) RET_NONE
 
 void ED_file_read_bookmarks(void) RET_NONE
+void ED_file_change_dir(struct bContext *C, const bool checkdir) RET_NONE
 void ED_preview_kill_jobs(struct wmWindowManager *wm, struct Main *bmain) RET_NONE
+struct FSMenu *ED_fsmenu_get(void) RET_NULL
+struct FSMenuEntry *ED_fsmenu_get_category(struct FSMenu *fsmenu, FSMenuCategory category) RET_NULL
+int ED_fsmenu_get_nentries(struct FSMenu *fsmenu, FSMenuCategory category) RET_ZERO
+struct FSMenuEntry *ED_fsmenu_get_entry(struct FSMenu *fsmenu, FSMenuCategory category, int index) RET_NULL
+char *ED_fsmenu_entry_get_path(struct FSMenuEntry *fsentry) RET_NULL
+void ED_fsmenu_entry_set_path(struct FSMenuEntry *fsentry, const char *name) RET_NONE
+char *ED_fsmenu_entry_get_name(struct FSMenuEntry *fsentry) RET_NULL
+void ED_fsmenu_entry_set_name(struct FSMenuEntry *fsentry, const char *name) RET_NONE
 
 struct PTCacheEdit *PE_get_current(struct Scene *scene, struct Object *ob) RET_NULL
 void PE_current_changed(struct Scene *scene, struct Object *ob) RET_NONE
@@ -556,7 +565,7 @@ void uiTemplateLayers(uiLayout *layout, struct PointerRNA *ptr, const char *prop
 void uiTemplateImageLayers(struct uiLayout *layout, struct bContext *C, struct Image *ima, struct ImageUser *iuser) RET_NONE
 void uiTemplateList(struct uiLayout *layout, struct bContext *C, const char *listtype_name, const char *list_id,
                     PointerRNA *dataptr, const char *propname, PointerRNA *active_dataptr, const char *active_propname,
-                    int rows, int maxrows, int layout_type, int columns) RET_NONE
+                    const char *item_dyntip_propname, int rows, int maxrows, int layout_type, int columns) RET_NONE
 void uiTemplateRunningJobs(struct uiLayout *layout, struct bContext *C) RET_NONE
 void uiTemplateOperatorSearch(struct uiLayout *layout) RET_NONE
 void uiTemplateHeader3D(struct uiLayout *layout, struct bContext *C) RET_NONE
