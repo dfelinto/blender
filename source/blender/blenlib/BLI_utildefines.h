@@ -515,6 +515,11 @@ extern "C" {
 
 
 /* generic strcmp macros */
+#if defined(_MSC_VER)
+#  define strcasecmp _stricmp
+#  define strncasecmp _strnicmp
+#endif
+
 #define STREQ(a, b) (strcmp(a, b) == 0)
 #define STRCASEEQ(a, b) (strcasecmp(a, b) == 0)
 #define STREQLEN(a, b, n) (strncmp(a, b, n) == 0)
@@ -541,14 +546,13 @@ extern "C" {
 /**
  * UNUSED_VARS#(a, ...): quiet unused warnings
  *
- * <pre>
+ * \code{.py}
  * for i in range(16):
  *     args = [(chr(ord('a') + (c % 26)) + (chr(ord('0') + (c // 26)))) for c in range(i + 1)]
  *     print("#define _VA_UNUSED_VARS_%d(%s) \\" % (i + 1, ", ".join(args)))
  *     print("\t((void)(%s)%s)" %
  *             (args[0], ((", _VA_UNUSED_VARS_" + str(i) + "(%s)") if i else "%s") % ", ".join((args[1:]))))
- * </pre>
- *
+ * \endcode
  */
 
 #define _VA_UNUSED_VARS_1(a0) \

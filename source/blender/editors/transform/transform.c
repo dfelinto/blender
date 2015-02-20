@@ -44,6 +44,7 @@
 #include "DNA_movieclip_types.h"
 #include "DNA_scene_types.h"  /* PET modes */
 
+#include "BLI_alloca.h"
 #include "BLI_utildefines.h"
 #include "BLI_math.h"
 #include "BLI_rect.h"
@@ -1973,8 +1974,8 @@ void saveTransform(bContext *C, TransInfo *t, wmOperator *op)
 		}
 	}
 	
-	if (RNA_struct_find_property(op->ptr, "proportional")) {
-		RNA_enum_set(op->ptr, "proportional", proportional);
+	if ((prop = RNA_struct_find_property(op->ptr, "proportional"))) {
+		RNA_property_enum_set(op->ptr, prop, proportional);
 		RNA_enum_set(op->ptr, "proportional_edit_falloff", t->prop_mode);
 		RNA_float_set(op->ptr, "proportional_size", t->prop_size);
 	}
@@ -5269,9 +5270,12 @@ static void slide_origdata_create_data(
 
 		sod->arena = BLI_memarena_new(BLI_MEMARENA_STD_BUFSIZE, __func__);
 
+		sod->origverts = BLI_ghash_ptr_new_ex(__func__, v_num);
+
 		for (i = 0; i < v_num; i++, sv = (void *)(((char *)sv) + v_stride)) {
 			BMIter fiter;
 			BMFace *f;
+			bool has_faces = false;
 
 			/* copy face data */
 			BM_ITER_ELEM (f, &fiter, sv->v, BM_FACES_OF_VERT) {
@@ -5279,14 +5283,78 @@ static void slide_origdata_create_data(
 					BMFace *f_copy = BM_face_copy(sod->bm_origfaces, bm, f, true, true);
 					BLI_ghash_insert(sod->origfaces, f, f_copy);
 				}
+				has_faces = true;
 			}
 
 			/* store cd_loop_groups */
-			sv->cd_loop_groups = BLI_memarena_alloc(sod->arena, layer_groups_array_size);
-			for (j = 0; j < layer_index_dst; j++) {
-				const int layer_nr = layer_math_map[j];
-				sv->cd_loop_groups[j] = BM_vert_loop_groups_data_layer_create(bm, sv->v, layer_nr, sod->arena);
+			if (has_faces) {
+				sv->cd_loop_groups = BLI_memarena_alloc(sod->arena, layer_groups_array_size);
+				for (j = 0; j < layer_index_dst; j++) {
+					const int layer_nr = layer_math_map[j];
+					sv->cd_loop_groups[j] = BM_vert_loop_groups_data_layer_create(bm, sv->v, layer_nr, sod->arena);
+				}
 			}
+			else {
+				sv->cd_loop_groups = NULL;
+			}
+
+			BLI_ghash_insert(sod->origverts, sv->v, sv);
+		}
+	}
+}
+
+/**
+ * If we're sliding the vert, return its original location, if not, the current location is good.
+ */
+static const float *slide_origdata_orig_vert_co(SlideOrigData *sod, BMVert *v)
+{
+	TransDataGenericSlideVert *sv = BLI_ghash_lookup(sod->origverts, v);
+	return sv ? sv->co_orig_3d : v->co;
+}
+
+static void slide_origdata_interp_data_vert(
+        SlideOrigData *sod, BMesh *bm, bool is_final,
+        TransDataGenericSlideVert *sv)
+{
+	BMIter liter;
+	BMLoop *l;
+	int j;
+	float *loop_weights;
+	const bool do_loop_weight = (len_squared_v3v3(sv->v->co, sv->co_orig_3d) > FLT_EPSILON);
+
+	// BM_ITER_ELEM (l, &liter, sv->v, BM_LOOPS_OF_VERT) {
+	l = BM_iter_new(&liter, bm, BM_LOOPS_OF_VERT, sv->v);
+	loop_weights = do_loop_weight ? BLI_array_alloca(loop_weights, liter.count) : NULL;
+	for (j = 0 ; l; l = BM_iter_step(&liter), j++) {
+		BMFace *f_copy;  /* the copy of 'f' */
+
+		f_copy = BLI_ghash_lookup(sod->origfaces, l->f);
+
+		/* only loop data, no vertex data since that contains shape keys,
+		 * and we do not want to mess up other shape keys */
+		BM_loop_interp_from_face(bm, l, f_copy, false, is_final);
+
+		/* make sure face-attributes are correct (e.g. MTexPoly) */
+		BM_elem_attrs_copy(sod->bm_origfaces, bm, f_copy, l->f);
+
+		/* weight the loop */
+		if (do_loop_weight) {
+			const float *v_prev = slide_origdata_orig_vert_co(sod, l->prev->v);
+			const float *v_next = slide_origdata_orig_vert_co(sod, l->next->v);
+			const float dist = dist_signed_squared_to_corner_v3v3v3(sv->v->co, v_prev, sv->co_orig_3d, v_next, f_copy->no);
+			const float eps = 0.00001f;
+			loop_weights[j] = (dist >= 0.0f) ? 1.0f : ((dist <= -eps) ? 0.0f : (1.0f + (dist / eps)));
+		}
+	}
+
+	if (do_loop_weight) {
+		for (j = 0; j < sod->layer_math_map_num; j++) {
+			 BM_vert_loop_groups_data_layer_merge_weights(bm, sv->cd_loop_groups[j], sod->layer_math_map[j], loop_weights);
+		}
+	}
+	else {
+		for (j = 0; j < sod->layer_math_map_num; j++) {
+			 BM_vert_loop_groups_data_layer_merge(bm, sv->cd_loop_groups[j], sod->layer_math_map[j]);
 		}
 	}
 }
@@ -5298,30 +5366,13 @@ static void slide_origdata_interp_data(
 {
 	if (sod->use_origfaces) {
 		BMEditMesh *em = BKE_editmesh_from_object(t->obedit);
+		BMesh *bm = em->bm;
 		unsigned int i;
 
-		const int *layer_math_map = sod->layer_math_map;
-
 		for (i = 0; i < v_num; i++, sv = (void *)(((char *)sv) + v_stride)) {
-			BMIter fiter;
-			BMLoop *l;
-			int j;
 
-			BM_ITER_ELEM (l, &fiter, sv->v, BM_LOOPS_OF_VERT) {
-				BMFace *f_copy;  /* the copy of 'f' */
-
-				f_copy = BLI_ghash_lookup(sod->origfaces, l->f);
-
-				/* only loop data, no vertex data since that contains shape keys,
-				 * and we do not want to mess up other shape keys */
-				BM_loop_interp_from_face(em->bm, l, f_copy, false, is_final);
-
-				/* make sure face-attributes are correct (e.g. MTexPoly) */
-				BM_elem_attrs_copy(sod->bm_origfaces, em->bm, f_copy, l->f);
-			}
-
-			for (j = 0; j < sod->layer_math_map_num; j++) {
-				 BM_vert_loop_groups_data_layer_merge(em->bm, sv->cd_loop_groups[j], layer_math_map[j]);
+			if (sv->cd_loop_groups) {
+				slide_origdata_interp_data_vert(sod, bm, is_final, sv);
 			}
 		}
 	}
@@ -5339,6 +5390,11 @@ static void slide_origdata_free_date(
 		if (sod->origfaces) {
 			BLI_ghash_free(sod->origfaces, NULL, NULL);
 			sod->origfaces = NULL;
+		}
+
+		if (sod->origverts) {
+			BLI_ghash_free(sod->origverts, NULL, NULL);
+			sod->origverts = NULL;
 		}
 
 		if (sod->arena) {

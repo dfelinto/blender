@@ -292,6 +292,7 @@ typedef enum eSpaceOutliner_Mode {
 	SO_DATABLOCKS = 11,
 	SO_USERDEF = 12,
 	/* SO_KEYMAP = 13, */        /* deprecated! */
+	SO_ID_ORPHANS = 14,
 } eSpaceOutliner_Mode;
 
 /* SpaceOops->storeflag */
@@ -370,8 +371,6 @@ typedef enum eGraphEdit_Flag {
 	/* normalize curves on display */
 	SIPO_NORMALIZE            = (1 << 14),
 	SIPO_NORMALIZE_FREEZE     = (1 << 15),
-	/* automatically set view on selection */
-	SIPO_AUTO_VIEW_SELECTED   = (1 << 16),
 } eGraphEdit_Flag;
 
 /* SpaceIpo->mode (Graph Editor Mode) */
@@ -495,7 +494,7 @@ typedef struct SpaceSeq {
 	
 	float xof DNA_DEPRECATED, yof DNA_DEPRECATED;   /* deprecated: offset for drawing the image preview */
 	short mainb;    /* weird name for the sequencer subtype (seq, image, luma... etc) */
-	short render_size;
+	short render_size;  /* eSpaceSeq_Proxy_RenderSize */
 	short chanshown;
 	short zebra;
 	int flag;
@@ -651,7 +650,8 @@ typedef struct FSMenuEntry {
 	char *path;
 	char name[256];  /* FILE_MAXFILE */
 	short save;
-	short pad[3];
+	short valid;
+	short pad[2];
 } FSMenuEntry;
 
 /* FileSelectParams.display */

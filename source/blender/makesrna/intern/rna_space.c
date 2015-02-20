@@ -1513,13 +1513,6 @@ static int rna_FileBrowser_FSMenuEntry_name_get_editable(PointerRNA *ptr)
 	return fsm->save;
 }
 
-static int rna_FileBrowser_FSMenuEntry_is_valid_get(PointerRNA *ptr)
-{
-	char *path = ED_fsmenu_entry_get_path(ptr->data);
-
-	return path ? BLI_is_dir(path) : false;  /* For now, no path = invalid. */
-}
-
 static void rna_FileBrowser_FSMenu_next(CollectionPropertyIterator *iter)
 {
 	ListBaseIterator *internal = &iter->internal.listbase;
@@ -1931,6 +1924,8 @@ static void rna_def_space_outliner(BlenderRNA *brna)
 		{SO_LIBRARIES, "LIBRARIES", 0, "Blender File", "Display data of current file and linked libraries"},
 		{SO_DATABLOCKS, "DATABLOCKS", 0, "Datablocks", "Display all raw datablocks"},
 		{SO_USERDEF, "USER_PREFERENCES", 0, "User Preferences", "Display the user preference datablocks"},
+		{SO_ID_ORPHANS, "ORPHANED_DATABLOCKS", 0, "Orphaned Datablocks", 
+		                "Display datablocks which are unused and/or will be lost when the file is reloaded"},
 		{0, NULL, 0, NULL, NULL}
 	};
 	
@@ -3021,7 +3016,7 @@ static void rna_def_space_sequencer(BlenderRNA *brna)
 	RNA_def_property_int_sdna(prop, NULL, "chanshown");
 	RNA_def_property_ui_text(prop, "Display Channel",
 	                         "The channel number shown in the image preview. 0 is the result of all strips combined");
-	RNA_def_property_range(prop, 1, MAXSEQ);
+	RNA_def_property_range(prop, -5, MAXSEQ);
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_SEQUENCER, NULL);
 
 	prop = RNA_def_property(srna, "preview_channels", PROP_ENUM, PROP_NONE);
@@ -3413,12 +3408,6 @@ static void rna_def_space_graph(BlenderRNA *brna)
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 	RNA_def_property_ui_text(prop, "Has Ghost Curves", "Graph Editor instance has some ghost curves stored");
 
-	/* auto view */
-	prop = RNA_def_property(srna, "use_auto_view_selected", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "flag", SIPO_AUTO_VIEW_SELECTED);
-	RNA_def_property_ui_text(prop, "Auto View Selected", "Automatically adjust view based on selection");
-	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_GRAPH, NULL);
-
 	/* nromalize curves */
 	prop = RNA_def_property(srna, "use_normalization", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "flag", SIPO_NORMALIZE);
@@ -3773,8 +3762,8 @@ static void rna_def_filemenu_entry(BlenderRNA *brna)
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 
 	prop = RNA_def_property(srna, "is_valid", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_funcs(prop, "rna_FileBrowser_FSMenuEntry_is_valid_get", NULL);
-	RNA_def_property_ui_text(prop, "Save", "Whether this path is saved in bookmarks, or generated from OS");
+	RNA_def_property_boolean_sdna(prop, NULL, "valid", 1);
+	RNA_def_property_ui_text(prop, "Valid", "Whether this path is currently reachable");
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 }
 

@@ -117,10 +117,12 @@ short ED_fileselect_set_params(SpaceFile *sfile)
 
 		BLI_strncpy_utf8(params->title, RNA_struct_ui_name(op->type->srna), sizeof(params->title));
 
-		if (RNA_struct_find_property(op->ptr, "filemode"))
-			params->type = RNA_int_get(op->ptr, "filemode");
-		else
+		if ((prop = RNA_struct_find_property(op->ptr, "filemode"))) {
+			params->type = RNA_property_int_get(op->ptr, prop);
+		}
+		else {
 			params->type = FILE_SPECIAL;
+		}
 
 		if (is_filepath && RNA_struct_property_is_set_ex(op->ptr, "filepath", false)) {
 			char name[FILE_MAX];
@@ -210,8 +212,9 @@ short ED_fileselect_set_params(SpaceFile *sfile)
 			params->flag |= RNA_boolean_get(op->ptr, "active_layer") ? FILE_ACTIVELAY : 0;
 		}
 
-		if (RNA_struct_find_property(op->ptr, "display_type"))
-			params->display = RNA_enum_get(op->ptr, "display_type");
+		if ((prop = RNA_struct_find_property(op->ptr, "display_type"))) {
+			params->display = RNA_property_enum_get(op->ptr, prop);
+		}
 
 		if (params->display == FILE_DEFAULTDISPLAY) {
 			if (U.uiflag & USER_SHOW_THUMBNAILS) {
@@ -226,8 +229,10 @@ short ED_fileselect_set_params(SpaceFile *sfile)
 		}
 
 		if (is_relative_path) {
-			if (!RNA_struct_property_is_set_ex(op->ptr, "relative_path", false)) {
-				RNA_boolean_set(op->ptr, "relative_path", U.flag & USER_RELPATHS);
+			if ((prop = RNA_struct_find_property(op->ptr, "relative_path"))) {
+				if (!RNA_property_is_set_ex(op->ptr, prop, false)) {
+					RNA_property_boolean_set(op->ptr, prop, (U.flag & USER_RELPATHS) != 0);
+				}
 			}
 		}
 	}
@@ -620,7 +625,7 @@ void ED_file_change_dir(bContext *C, const bool checkdir)
 
 		folderlist_pushdir(sfile->folders_prev, sfile->params->dir);
 
-		file_draw_check_cb(C, NULL, NULL);
+		file_draw_check(C);
 	}
 }
 
@@ -637,7 +642,8 @@ int file_select_match(struct SpaceFile *sfile, const char *pattern, char *matche
 	 */
 	for (i = 0; i < n; i++) {
 		file = filelist_file(sfile->files, i);
-		if (fnmatch(pattern, file->relname, 0) == 0) {
+		/* use same rule as 'FileCheckType.CHECK_FILES' */
+		if (S_ISREG(file->type) && (fnmatch(pattern, file->relname, 0) == 0)) {
 			file->selflag |= FILE_SEL_SELECTED;
 			if (!match) {
 				BLI_strncpy(matched_file, file->relname, FILE_MAX);

@@ -293,9 +293,9 @@ void psys_set_current_num(Object *ob, int index);
 
 struct LatticeDeformData *psys_create_lattice_deform_data(struct ParticleSimulationData *sim);
 
-int psys_in_edit_mode(struct Scene *scene, struct ParticleSystem *psys);
-int psys_check_enabled(struct Object *ob, struct ParticleSystem *psys);
-int psys_check_edited(struct ParticleSystem *psys);
+bool psys_in_edit_mode(struct Scene *scene, struct ParticleSystem *psys);
+bool psys_check_enabled(struct Object *ob, struct ParticleSystem *psys);
+bool psys_check_edited(struct ParticleSystem *psys);
 
 void psys_check_group_weights(struct ParticleSettings *part);
 int psys_uses_gravity(struct ParticleSimulationData *sim);
@@ -403,7 +403,7 @@ float psys_get_dietime_from_cache(struct PointCache *cache, int index);
 void psys_free_pdd(struct ParticleSystem *psys);
 
 float *psys_cache_vgroup(struct DerivedMesh *dm, struct ParticleSystem *psys, int vgroup);
-bool psys_get_texture(struct ParticleSimulationData *sim, struct ParticleData *pa, struct ParticleTexture *ptex, int event, float cfra);
+void psys_get_texture(struct ParticleSimulationData *sim, struct ParticleData *pa, struct ParticleTexture *ptex, int event, float cfra);
 void psys_interpolate_face(struct MVert *mvert, struct MFace *mface, struct MTFace *tface,
                            float (*orcodata)[3], float w[4], float vec[3], float nor[3], float utan[3], float vtan[3],
                            float orco[3], float ornor[3]);

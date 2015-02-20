@@ -125,13 +125,14 @@ def CLIP_default_settings_from_track(clip, track, framenr):
 
 
 class CLIP_OT_filter_tracks(bpy.types.Operator):
+    """Filter tracks which has weirdly looking spikes in motion curves"""
     bl_label = "Filter Tracks"
     bl_idname = "clip.filter_tracks"
     bl_options = {'UNDO', 'REGISTER'}
 
     track_threshold = FloatProperty(
             name="Track Threshold",
-            description="Filter Threshold to select problematic track",
+            description="Filter Threshold to select problematic tracks",
             default=5.0,
             )
 

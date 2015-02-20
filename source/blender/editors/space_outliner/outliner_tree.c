@@ -1227,6 +1227,84 @@ static void outliner_add_seq_dup(SpaceOops *soops, Sequence *seq, TreeElement *t
 	}
 }
 
+
+/* ----------------------------------------------- */
+
+
+static void outliner_add_library_contents(Main *mainvar, SpaceOops *soops, TreeElement *te, Library *lib)
+{
+	TreeElement *ten;
+	ListBase *lbarray[MAX_LIBARRAY];
+	int a, tot;
+	
+	tot = set_listbasepointers(mainvar, lbarray);
+	for (a = 0; a < tot; a++) {
+		if (lbarray[a]->first) {
+			ID *id = lbarray[a]->first;
+			
+			/* check if there's data in current lib */
+			for (; id; id = id->next)
+				if (id->lib == lib)
+					break;
+			
+			if (id) {
+				ten = outliner_add_element(soops, &te->subtree, (void *)lbarray[a], NULL, TSE_ID_BASE, 0);
+				ten->directdata = lbarray[a];
+				
+				ten->name = (char *)BKE_idcode_to_name_plural(GS(id->name));
+				if (ten->name == NULL)
+					ten->name = "UNKNOWN";
+				
+				for (id = lbarray[a]->first; id; id = id->next) {
+					if (id->lib == lib)
+						outliner_add_element(soops, &ten->subtree, id, ten, 0, 0);
+				}
+			}
+		}
+	}
+	
+}
+
+static void outliner_add_orphaned_datablocks(Main *mainvar, SpaceOops *soops)
+{
+	TreeElement *ten;
+	ListBase *lbarray[MAX_LIBARRAY];
+	int a, tot;
+	
+	tot = set_listbasepointers(mainvar, lbarray);
+	for (a = 0; a < tot; a++) {
+		if (lbarray[a]->first) {
+			ID *id = lbarray[a]->first;
+			
+			/* check if there are any datablocks of this type which are orphans */
+			for (; id; id = id->next) {
+				if (ID_REAL_USERS(id) <= 0)
+					break;
+			}
+			
+			if (id) {
+				/* header for this type of datablock */
+				/* TODO's:
+				 *   - Add a parameter to BKE_idcode_to_name_plural to get a sane "user-visible" name instead?
+				 *   - Ensure that this uses nice icons for the datablock type involved instead of the dot?
+				 */
+				ten = outliner_add_element(soops, &soops->tree, (void *)lbarray[a], NULL, TSE_ID_BASE, 0);
+				ten->directdata = lbarray[a];
+				
+				ten->name = (char *)BKE_idcode_to_name_plural(GS(id->name));
+				if (ten->name == NULL)
+					ten->name = "UNKNOWN";
+				
+				/* add the orphaned datablocks - these will not be added with any subtrees attached */
+				for (id = lbarray[a]->first; id; id = id->next) {
+					if (ID_REAL_USERS(id) <= 0)
+						outliner_add_element(soops, &ten->subtree, id, ten, 0, 0);
+				}
+			}
+		}
+	}
+}
+
 /* ======================================================= */
 /* Generic Tree Building helpers - order these are called is top to bottom */
 
@@ -1474,42 +1552,6 @@ static int outliner_filter_tree(SpaceOops *soops, ListBase *lb)
 	return (BLI_listbase_is_empty(lb) == false);
 }
 
-static void outliner_add_library_contents(Main *mainvar, SpaceOops *soops, TreeElement *te, Library *lib)
-{
-	TreeElement *ten;
-	ListBase *lbarray[MAX_LIBARRAY];
-	int a, tot;
-	
-	tot = set_listbasepointers(mainvar, lbarray);
-	for (a = 0; a < tot; a++) {
-		if (lbarray[a]->first) {
-			ID *id = lbarray[a]->first;
-			
-			/* check if there's data in current lib */
-			for (; id; id = id->next)
-				if (id->lib == lib)
-					break;
-			
-			if (id) {
-				
-				ten = outliner_add_element(soops, &te->subtree, (void *)lbarray[a], NULL, TSE_ID_BASE, 0);
-				ten->directdata = lbarray[a];
-				
-				ten->name = (char *)BKE_idcode_to_name_plural(GS(id->name));
-				if (ten->name == NULL)
-					ten->name = "UNKNOWN";
-				
-				for (id = lbarray[a]->first; id; id = id->next) {
-					if (id->lib == lib)
-						outliner_add_element(soops, &ten->subtree, id, ten, 0, 0);
-				}
-			}
-		}
-	}
-	
-}
-
-
 /* ======================================================= */
 /* Main Tree Building API */
 
@@ -1712,6 +1754,9 @@ void outliner_build_tree(Main *mainvar, Scene *scene, SpaceOops *soops)
 			tselem = TREESTORE(ten);
 			tselem->flag &= ~TSE_CLOSED;
 		}
+	}
+	else if (soops->outlinevis == SO_ID_ORPHANS) {
+		outliner_add_orphaned_datablocks(mainvar, soops);
 	}
 	else {
 		ten = outliner_add_element(soops, &soops->tree, OBACT, NULL, 0, 0);

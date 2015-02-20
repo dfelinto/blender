@@ -34,6 +34,7 @@
 struct DynStr;
 
 extern char BaseMathObject_is_wrapped_doc[];
+extern char BaseMathObject_is_frozen_doc[];
 extern char BaseMathObject_owner_doc[];
 
 #define BASE_MATH_NEW(struct_name, root_type, base_type) \
@@ -43,6 +44,7 @@ extern char BaseMathObject_owner_doc[];
 /* BaseMathObject.flag */
 enum {
 	BASE_MATH_FLAG_IS_WRAP    = (1 << 0),
+	BASE_MATH_FLAG_IS_FROZEN  = (1 << 1),
 };
 #define BASE_MATH_FLAG_DEFAULT 0
 
@@ -69,6 +71,10 @@ typedef struct {
 
 PyObject *BaseMathObject_owner_get(BaseMathObject *self, void *);
 PyObject *BaseMathObject_is_wrapped_get(BaseMathObject *self, void *);
+PyObject *BaseMathObject_is_frozen_get(BaseMathObject *self, void *);
+
+extern char BaseMathObject_freeze_doc[];
+PyObject *BaseMathObject_freeze(BaseMathObject *self);
 
 int BaseMathObject_traverse(BaseMathObject *self, visitproc visit, void *arg);
 int BaseMathObject_clear(BaseMathObject *self);
@@ -102,6 +108,9 @@ int _BaseMathObject_WriteCallback(BaseMathObject *self);
 int _BaseMathObject_ReadIndexCallback(BaseMathObject *self, int index);
 int _BaseMathObject_WriteIndexCallback(BaseMathObject *self, int index);
 
+void _BaseMathObject_RaiseFrozenExc(const BaseMathObject *self);
+void _BaseMathObject_RaiseNotFrozenExc(const BaseMathObject *self);
+
 /* since this is called so often avoid where possible */
 #define BaseMath_ReadCallback(_self) \
 	(((_self)->cb_user ?	_BaseMathObject_ReadCallback((BaseMathObject *)_self):0))
@@ -112,11 +121,30 @@ int _BaseMathObject_WriteIndexCallback(BaseMathObject *self, int index);
 #define BaseMath_WriteIndexCallback(_self, _index) \
 	(((_self)->cb_user ?	_BaseMathObject_WriteIndexCallback((BaseMathObject *)_self, _index):0))
 
+/* support BASE_MATH_FLAG_IS_FROZEN */
+#define BaseMath_ReadCallback_ForWrite(_self) \
+	(UNLIKELY((_self)->flag & BASE_MATH_FLAG_IS_FROZEN) ? \
+	(_BaseMathObject_RaiseFrozenExc((BaseMathObject *)_self), -1) : (BaseMath_ReadCallback(_self)))
+
+#define BaseMath_ReadIndexCallback_ForWrite(_self, _index) \
+	(UNLIKELY((_self)->flag & BASE_MATH_FLAG_IS_FROZEN) ? \
+	(_BaseMathObject_RaiseFrozenExc((BaseMathObject *)_self), -1) : (BaseMath_ReadIndexCallback(_self, _index)))
+
+#define BaseMath_Prepare_ForWrite(_self) \
+	(UNLIKELY((_self)->flag & BASE_MATH_FLAG_IS_FROZEN) ? \
+	(_BaseMathObject_RaiseFrozenExc((BaseMathObject *)_self), -1) : 0)
+
+#define BaseMathObject_Prepare_ForHash(_self) \
+	(UNLIKELY(((_self)->flag & BASE_MATH_FLAG_IS_FROZEN) == 0) ? \
+	 (_BaseMathObject_RaiseNotFrozenExc((BaseMathObject *)_self), -1) : 0)
+
 /* utility func */
 int mathutils_array_parse(float *array, int array_min, int array_max, PyObject *value, const char *error_prefix);
 int mathutils_array_parse_alloc(float **array, int array_min, PyObject *value, const char *error_prefix);
 int mathutils_array_parse_alloc_v(float **array, int array_dim, PyObject *value, const char *error_prefix);
 int mathutils_any_to_rotmat(float rmat[3][3], PyObject *value, const char *error_prefix);
+
+Py_hash_t mathutils_array_hash(const float *float_array, size_t array_len);
 
 /* zero remaining unused elements of the array */
 #define MU_ARRAY_ZERO      (1 << 30)

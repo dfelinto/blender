@@ -176,16 +176,20 @@ static void restrictbutton_recursive_child(bContext *C, Scene *scene, Object *ob
 {
 	Main *bmain = CTX_data_main(C);
 	Object *ob;
+
 	for (ob = bmain->object.first; ob; ob = ob->id.next) {
 		if (BKE_object_is_child_recursive(ob_parent, ob)) {
-			if (state) {
-				ob->restrictflag |= flag;
-				if (deselect) {
-					ED_base_object_select(BKE_scene_base_find(scene, ob), BA_DESELECT);
+			/* only do if child object is selectable */
+			if ((flag == OB_RESTRICT_SELECT) || (ob->restrictflag & OB_RESTRICT_SELECT) == 0) {
+				if (state) {
+					ob->restrictflag |= flag;
+					if (deselect) {
+						ED_base_object_select(BKE_scene_base_find(scene, ob), BA_DESELECT);
+					}
 				}
-			}
-			else {
-				ob->restrictflag &= ~flag;
+				else {
+					ob->restrictflag &= ~flag;
+				}
 			}
 
 			if (rnapropname) {
@@ -349,7 +353,7 @@ static void restrictbutton_ebone_visibility_cb(bContext *C, void *UNUSED(poin), 
 
 static void restrictbutton_gp_layer_flag_cb(bContext *C, void *UNUSED(poin), void *UNUSED(poin2))
 {
-	WM_event_add_notifier(C, NC_GPENCIL | ND_DATA, NULL);
+	WM_event_add_notifier(C, NC_GPENCIL | ND_DATA | NA_EDITED, NULL);
 }
 
 static int group_restrict_flag(Group *gr, int flag)
@@ -441,6 +445,20 @@ static void restrictbutton_gr_restrict_render(bContext *C, void *poin, void *poi
 {
 	restrictbutton_gr_restrict_flag(poin, poin2, OB_RESTRICT_RENDER);
 	WM_event_add_notifier(C, NC_GROUP, NULL);
+}
+
+static void restrictbutton_id_user_toggle(bContext *UNUSED(C), void *poin, void *UNUSED(poin2))
+{
+	ID *id = (ID *)poin;
+	
+	BLI_assert(id != NULL);
+	
+	if (id->flag & LIB_FAKEUSER) {
+		id_us_plus(id);
+	}
+	else {
+		id_us_min(id);
+	}
 }
 
 
@@ -785,6 +803,66 @@ static void outliner_draw_restrictbuts(uiBlock *block, Scene *scene, ARegion *ar
 		}
 		
 		if (TSELEM_OPEN(tselem, soops)) outliner_draw_restrictbuts(block, scene, ar, soops, &te->subtree);
+	}
+}
+
+static void outliner_draw_userbuts(uiBlock *block, ARegion *ar, SpaceOops *soops, ListBase *lb)
+{
+	uiBut *bt;
+	TreeElement *te;
+	TreeStoreElem *tselem;
+
+	for (te = lb->first; te; te = te->next) {
+		tselem = TREESTORE(te);
+		if (te->ys + 2 * UI_UNIT_Y >= ar->v2d.cur.ymin && te->ys <= ar->v2d.cur.ymax) {
+			if (tselem->type == 0) {
+				ID *id = tselem->id;
+				const char *tip = NULL;
+				int icon = ICON_NONE;
+				char buf[16] = "";
+				int but_flag = UI_BUT_DRAG_LOCK;
+
+				if (id->lib)
+					but_flag |= UI_BUT_DISABLED;
+
+				UI_block_emboss_set(block, UI_EMBOSS_NONE);
+
+				if (id->flag & LIB_FAKEUSER) {
+					icon = ICON_FILE_TICK;
+					tip  = TIP_("Datablock will be retained using a fake user");
+				}
+				else {
+					icon = ICON_X;
+					tip  = TIP_("Datablock has no users and will be deleted");
+				}
+				bt = uiDefIconButBitS(block, UI_BTYPE_TOGGLE, LIB_FAKEUSER, 1, icon,
+				                      (int)(ar->v2d.cur.xmax - OL_TOG_RESTRICT_VIEWX), te->ys, UI_UNIT_X, UI_UNIT_Y,
+				                      &id->flag, 0, 0, 0, 0, tip);
+				UI_but_func_set(bt, restrictbutton_id_user_toggle, id, NULL);
+				UI_but_flag_enable(bt, but_flag);
+				
+				
+				BLI_str_format_int_grouped(buf, id->us);
+				bt = uiDefBut(block, UI_BTYPE_BUT, 1, buf, 
+				              (int)(ar->v2d.cur.xmax - OL_TOG_RESTRICT_SELECTX), te->ys, 
+				              UI_UNIT_X, UI_UNIT_Y, NULL, 0.0, 0.0, 0, 0,
+				              TIP_("Number of users of this datablock"));
+				UI_but_flag_enable(bt, but_flag);
+				
+				
+				bt = uiDefButBitS(block, UI_BTYPE_TOGGLE, LIB_FAKEUSER, 1, (id->flag & LIB_FAKEUSER) ? "F" : " ",
+				                  (int)(ar->v2d.cur.xmax - OL_TOG_RESTRICT_RENDERX), te->ys, UI_UNIT_X, UI_UNIT_Y,
+				                  &id->flag, 0, 0, 0, 0,
+				                  TIP_("Datablock has a 'fake' user which will keep it in the file "
+				                       "even if nothing else uses it"));
+				UI_but_func_set(bt, restrictbutton_id_user_toggle, id, NULL);
+				UI_but_flag_enable(bt, but_flag);
+				
+				UI_block_emboss_set(block, UI_EMBOSS);
+			}
+		}
+		
+		if (TSELEM_OPEN(tselem, soops)) outliner_draw_userbuts(block, ar, soops, &te->subtree);
 	}
 }
 
@@ -1774,6 +1852,11 @@ void draw_outliner(const bContext *C)
 		/* draw rna buttons */
 		outliner_draw_rnacols(ar, sizex_rna);
 		outliner_draw_rnabuts(block, scene, ar, soops, sizex_rna, &soops->tree);
+	}
+	else if ((soops->outlinevis == SO_ID_ORPHANS) && !(soops->flag & SO_HIDE_RESTRICTCOLS)) {
+		/* draw user toggle columns */
+		outliner_draw_restrictcols(ar);
+		outliner_draw_userbuts(block, ar, soops, &soops->tree);
 	}
 	else if (!(soops->flag & SO_HIDE_RESTRICTCOLS)) {
 		/* draw restriction columns */

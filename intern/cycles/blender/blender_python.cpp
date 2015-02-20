@@ -73,8 +73,9 @@ static const char *PyC_UnicodeAsByte(PyObject *py_str, PyObject **coerce)
 static PyObject *init_func(PyObject *self, PyObject *args)
 {
 	PyObject *path, *user_path;
+	int headless;
 
-	if(!PyArg_ParseTuple(args, "OO", &path, &user_path)) {
+	if(!PyArg_ParseTuple(args, "OOi", &path, &user_path, &headless)) {
 		return NULL;
 	}
 
@@ -84,16 +85,18 @@ static PyObject *init_func(PyObject *self, PyObject *args)
 	Py_XDECREF(path_coerce);
 	Py_XDECREF(user_path_coerce);
 
+	BlenderSession::headless = headless;
+
 	Py_RETURN_NONE;
 }
 
 static PyObject *create_func(PyObject *self, PyObject *args)
 {
 	PyObject *pyengine, *pyuserpref, *pydata, *pyscene, *pyregion, *pyv3d, *pyrv3d;
-	int preview_osl, background;
+	int preview_osl;
 
-	if(!PyArg_ParseTuple(args, "OOOOOOOii", &pyengine, &pyuserpref, &pydata, &pyscene,
-	                     &pyregion, &pyv3d, &pyrv3d, &preview_osl, &background))
+	if(!PyArg_ParseTuple(args, "OOOOOOOi", &pyengine, &pyuserpref, &pydata, &pyscene,
+	                     &pyregion, &pyv3d, &pyrv3d, &preview_osl))
 	{
 		return NULL;
 	}
@@ -144,12 +147,6 @@ static PyObject *create_func(PyObject *self, PyObject *args)
 
 			RNA_boolean_set(&cscene, "shading_system", preview_osl);
 			RNA_boolean_set(&cscene, "use_progressive_refine", true);
-		}
-
-		/* Use more optimal tile order when rendering from the command line. */
-		if(background) {
-			PointerRNA cscene = RNA_pointer_get(&sceneptr, "cycles");
-			RNA_enum_set(&cscene, "tile_order", (int)TILE_BOTTOM_TO_TOP);
 		}
 
 		/* offline session or preview render */

@@ -157,6 +157,12 @@ static void file_init(wmWindowManager *UNUSED(wm), ScrArea *sa)
 	/* refresh system directory list */
 	fsmenu_refresh_system_category(ED_fsmenu_get());
 
+	/* Update bookmarks 'valid' state.
+	 * Done here, because it seems BLI_is_dir() can have huge impact on performances
+	 * in some cases, on win systems... See T43684.
+	 */
+	fsmenu_refresh_bookmarks_status(ED_fsmenu_get());
+
 	if (sfile->layout) sfile->layout->dirty = true;
 }
 
@@ -653,7 +659,7 @@ void ED_spacetype_file(void)
 	art = MEM_callocN(sizeof(ARegionType), "spacetype file operator region");
 	art->regionid = RGN_TYPE_TOOL_PROPS;
 	art->prefsizex = 0;
-	art->prefsizey = 240;
+	art->prefsizey = 360;
 	art->keymapflag = ED_KEYMAP_UI;
 	art->listener = file_tools_area_listener;
 	art->init = file_tools_area_init;

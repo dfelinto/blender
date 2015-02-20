@@ -508,7 +508,9 @@ static EnumPropertyItem *rna_Object_collision_bounds_itemf(bContext *UNUSED(C), 
 	EnumPropertyItem *item = NULL;
 	int totitem = 0;
 
-	RNA_enum_items_add_value(&item, &totitem, collision_bounds_items, OB_BOUND_TRIANGLE_MESH);
+	if (ob->body_type != OB_BODY_TYPE_CHARACTER) {
+		RNA_enum_items_add_value(&item, &totitem, collision_bounds_items, OB_BOUND_TRIANGLE_MESH);
+	}
 	RNA_enum_items_add_value(&item, &totitem, collision_bounds_items, OB_BOUND_CONVEX_HULL);
 
 	if (ob->body_type != OB_BODY_TYPE_SOFT) {
@@ -1183,7 +1185,7 @@ static void rna_GameObjectSettings_col_group_get(PointerRNA *ptr, int *values)
 	int i;
 
 	for (i = 0; i < OB_MAX_COL_MASKS; i++) {
-		values[i] = (ob->col_group & (1 << i));
+		values[i] = (ob->col_group & (1 << i)) != 0;
 	}
 }
 
@@ -1212,7 +1214,7 @@ static void rna_GameObjectSettings_col_mask_get(PointerRNA *ptr, int *values)
 	int i;
 
 	for (i = 0; i < OB_MAX_COL_MASKS; i++) {
-		values[i] = (ob->col_mask & (1 << i));
+		values[i] = (ob->col_mask & (1 << i)) != 0;
 	}
 }
 

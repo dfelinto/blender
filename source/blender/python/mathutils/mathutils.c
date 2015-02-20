@@ -79,6 +79,37 @@ static int mathutils_array_parse_fast(float *array,
 	return size;
 }
 
+/**
+ * helper function that returns a Python ``__hash__``.
+ *
+ * \note consistent with the equivalent tuple of floats (CPython's 'tuplehash')
+ */
+Py_hash_t mathutils_array_hash(const float *array, size_t array_len)
+{
+	int i;
+	Py_uhash_t x;  /* Unsigned for defined overflow behavior. */
+	Py_hash_t y;
+	Py_uhash_t mult;
+	Py_ssize_t len;
+
+	mult = _PyHASH_MULTIPLIER;
+	len = array_len;
+	x = 0x345678UL;
+	i = 0;
+	while (--len >= 0) {
+		y = _Py_HashDouble((double)(array[i++]));
+		if (y == -1)
+			return -1;
+		x = (x ^ y) * mult;
+		/* the cast might truncate len; that doesn't change hash stability */
+		mult += (Py_hash_t)(82520UL + len + len);
+	}
+	x += 97531UL;
+	if (x == (Py_uhash_t)-1)
+		x = -2;
+	return x;
+}
+
 /* helper functionm returns length of the 'value', -1 on error */
 int mathutils_array_parse(float *array, int array_min, int array_max, PyObject *value, const char *error_prefix)
 {
@@ -452,6 +483,20 @@ int _BaseMathObject_WriteIndexCallback(BaseMathObject *self, int index)
 	return -1;
 }
 
+void _BaseMathObject_RaiseFrozenExc(const BaseMathObject *self)
+{
+	PyErr_Format(PyExc_TypeError,
+	             "%s is frozen (immutable)",
+	             Py_TYPE(self)->tp_name);
+}
+
+void _BaseMathObject_RaiseNotFrozenExc(const BaseMathObject *self)
+{
+	PyErr_Format(PyExc_TypeError,
+	             "%s is not frozen (mutable), call freeze first",
+	             Py_TYPE(self)->tp_name);
+}
+
 /* BaseMathObject generic functions for all mathutils types */
 char BaseMathObject_owner_doc[] = "The item this is wrapping or None  (read-only).";
 PyObject *BaseMathObject_owner_get(BaseMathObject *self, void *UNUSED(closure))
@@ -464,6 +509,33 @@ char BaseMathObject_is_wrapped_doc[] = "True when this object wraps external dat
 PyObject *BaseMathObject_is_wrapped_get(BaseMathObject *self, void *UNUSED(closure))
 {
 	return PyBool_FromLong((self->flag & BASE_MATH_FLAG_IS_WRAP) != 0);
+}
+
+char BaseMathObject_is_frozen_doc[] = "True when this object has been frozen (read-only).\n\n:type: boolean";
+PyObject *BaseMathObject_is_frozen_get(BaseMathObject *self, void *UNUSED(closure))
+{
+	return PyBool_FromLong((self->flag & BASE_MATH_FLAG_IS_FROZEN) != 0);
+}
+
+char BaseMathObject_freeze_doc[] =
+".. function:: freeze()\n"
+"\n"
+"   Make this object immutable.\n"
+"\n"
+"   After this the object can be hashed, used in dictionaries & sets.\n"
+"\n"
+"   :return: An instance of this object.\n"
+;
+PyObject *BaseMathObject_freeze(BaseMathObject *self)
+{
+	if (self->flag & BASE_MATH_FLAG_IS_WRAP) {
+		PyErr_SetString(PyExc_TypeError, "Cannot freeze wrapped data");
+		return NULL;
+	}
+
+	self->flag |= BASE_MATH_FLAG_IS_FROZEN;
+
+	return Py_INCREF_RET((PyObject *)self);;
 }
 
 int BaseMathObject_traverse(BaseMathObject *self, visitproc visit, void *arg)

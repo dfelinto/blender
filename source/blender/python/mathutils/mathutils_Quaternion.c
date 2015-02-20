@@ -340,7 +340,7 @@ static PyObject *Quaternion_rotate(QuaternionObject *self, PyObject *value)
 	float self_rmat[3][3], other_rmat[3][3], rmat[3][3];
 	float tquat[4], length;
 
-	if (BaseMath_ReadCallback(self) == -1)
+	if (BaseMath_ReadCallback_ForWrite(self) == -1)
 		return NULL;
 
 	if (mathutils_any_to_rotmat(other_rmat, value, "Quaternion.rotate(value)") == -1)
@@ -367,7 +367,7 @@ PyDoc_STRVAR(Quaternion_normalize_doc,
 );
 static PyObject *Quaternion_normalize(QuaternionObject *self)
 {
-	if (BaseMath_ReadCallback(self) == -1)
+	if (BaseMath_ReadCallback_ForWrite(self) == -1)
 		return NULL;
 
 	normalize_qt(self->quat);
@@ -395,7 +395,7 @@ PyDoc_STRVAR(Quaternion_invert_doc,
 );
 static PyObject *Quaternion_invert(QuaternionObject *self)
 {
-	if (BaseMath_ReadCallback(self) == -1)
+	if (BaseMath_ReadCallback_ForWrite(self) == -1)
 		return NULL;
 
 	invert_qt(self->quat);
@@ -425,7 +425,7 @@ PyDoc_STRVAR(Quaternion_identity_doc,
 );
 static PyObject *Quaternion_identity(QuaternionObject *self)
 {
-	if (BaseMath_ReadCallback(self) == -1)
+	if (BaseMath_ReadCallback_ForWrite(self) == -1)
 		return NULL;
 
 	unit_qt(self->quat);
@@ -443,7 +443,7 @@ PyDoc_STRVAR(Quaternion_negate_doc,
 );
 static PyObject *Quaternion_negate(QuaternionObject *self)
 {
-	if (BaseMath_ReadCallback(self) == -1)
+	if (BaseMath_ReadCallback_ForWrite(self) == -1)
 		return NULL;
 
 	mul_qt_fl(self->quat, -1.0f);
@@ -459,7 +459,7 @@ PyDoc_STRVAR(Quaternion_conjugate_doc,
 );
 static PyObject *Quaternion_conjugate(QuaternionObject *self)
 {
-	if (BaseMath_ReadCallback(self) == -1)
+	if (BaseMath_ReadCallback_ForWrite(self) == -1)
 		return NULL;
 
 	conjugate_qt(self->quat);
@@ -575,6 +575,17 @@ static PyObject *Quaternion_richcmpr(PyObject *a, PyObject *b, int op)
 	return Py_INCREF_RET(res);
 }
 
+static Py_hash_t Quaternion_hash(QuaternionObject *self)
+{
+	if (BaseMath_ReadCallback(self) == -1)
+		return -1;
+
+	if (BaseMathObject_Prepare_ForHash(self) == -1)
+		return -1;
+
+	return mathutils_array_hash(self->quat, QUAT_SIZE);
+}
+
 /* ---------------------SEQUENCE PROTOCOLS------------------------ */
 /* ----------------------------len(object)------------------------ */
 /* sequence length */
@@ -605,8 +616,14 @@ static PyObject *Quaternion_item(QuaternionObject *self, int i)
 /* sequence accessor (set) */
 static int Quaternion_ass_item(QuaternionObject *self, int i, PyObject *ob)
 {
-	float scalar = (float)PyFloat_AsDouble(ob);
-	if (scalar == -1.0f && PyErr_Occurred()) { /* parsed item not a number */
+	float f;
+
+	if (BaseMath_Prepare_ForWrite(self) == -1)
+		return -1;
+
+	f = (float)PyFloat_AsDouble(ob);
+
+	if (f == -1.0f && PyErr_Occurred()) { /* parsed item not a number */
 		PyErr_SetString(PyExc_TypeError,
 		                "quaternion[index] = x: "
 		                "assigned value not a number");
@@ -621,7 +638,7 @@ static int Quaternion_ass_item(QuaternionObject *self, int i, PyObject *ob)
 		                "array assignment index out of range");
 		return -1;
 	}
-	self->quat[i] = scalar;
+	self->quat[i] = f;
 
 	if (BaseMath_WriteIndexCallback(self, i) == -1)
 		return -1;
@@ -657,7 +674,7 @@ static int Quaternion_ass_slice(QuaternionObject *self, int begin, int end, PyOb
 	int i, size;
 	float quat[QUAT_SIZE];
 
-	if (BaseMath_ReadCallback(self) == -1)
+	if (BaseMath_ReadCallback_ForWrite(self) == -1)
 		return -1;
 
 	CLAMP(begin, 0, QUAT_SIZE);
@@ -1004,7 +1021,7 @@ static int Quaternion_angle_set(QuaternionObject *self, PyObject *value, void *U
 	float axis[3], angle_dummy;
 	float angle;
 
-	if (BaseMath_ReadCallback(self) == -1)
+	if (BaseMath_ReadCallback_ForWrite(self) == -1)
 		return -1;
 
 	len = normalize_qt_qt(tquat, self->quat);
@@ -1060,7 +1077,7 @@ static int Quaternion_axis_vector_set(QuaternionObject *self, PyObject *value, v
 	float axis[3];
 	float angle;
 
-	if (BaseMath_ReadCallback(self) == -1)
+	if (BaseMath_ReadCallback_ForWrite(self) == -1)
 		return -1;
 
 	len = normalize_qt_qt(tquat, self->quat);
@@ -1204,6 +1221,9 @@ static struct PyMethodDef Quaternion_methods[] = {
 	{"slerp", (PyCFunction) Quaternion_slerp, METH_VARARGS, Quaternion_slerp_doc},
 	{"rotate", (PyCFunction) Quaternion_rotate, METH_O, Quaternion_rotate_doc},
 
+	/* base-math methods */
+	{"freeze", (PyCFunction)BaseMathObject_freeze, METH_NOARGS, BaseMathObject_freeze_doc},
+
 	{"copy", (PyCFunction) Quaternion_copy, METH_NOARGS, Quaternion_copy_doc},
 	{"__copy__", (PyCFunction) Quaternion_copy, METH_NOARGS, Quaternion_copy_doc},
 	{"__deepcopy__", (PyCFunction) Quaternion_deepcopy, METH_VARARGS, Quaternion_copy_doc},
@@ -1222,6 +1242,7 @@ static PyGetSetDef Quaternion_getseters[] = {
 	{(char *)"angle", (getter)Quaternion_angle_get, (setter)Quaternion_angle_set, Quaternion_angle_doc, NULL},
 	{(char *)"axis", (getter)Quaternion_axis_vector_get, (setter)Quaternion_axis_vector_set, Quaternion_axis_vector_doc, NULL},
 	{(char *)"is_wrapped", (getter)BaseMathObject_is_wrapped_get, (setter)NULL, BaseMathObject_is_wrapped_doc, NULL},
+	{(char *)"is_frozen",  (getter)BaseMathObject_is_frozen_get,  (setter)NULL, BaseMathObject_is_frozen_doc, NULL},
 	{(char *)"owner", (getter)BaseMathObject_owner_get, (setter)NULL, BaseMathObject_owner_doc, NULL},
 	{NULL, NULL, NULL, NULL, NULL}  /* Sentinel */
 };
@@ -1266,7 +1287,7 @@ PyTypeObject quaternion_Type = {
 	&Quaternion_NumMethods,             /* tp_as_number */
 	&Quaternion_SeqMethods,             /* tp_as_sequence */
 	&Quaternion_AsMapping,              /* tp_as_mapping */
-	NULL,                               /* tp_hash */
+	(hashfunc)Quaternion_hash,          /* tp_hash */
 	NULL,                               /* tp_call */
 #ifndef MATH_STANDALONE
 	(reprfunc) Quaternion_str,          /* tp_str */

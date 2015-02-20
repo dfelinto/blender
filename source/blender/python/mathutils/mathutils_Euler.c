@@ -182,6 +182,9 @@ PyDoc_STRVAR(Euler_zero_doc,
 );
 static PyObject *Euler_zero(EulerObject *self)
 {
+	if (BaseMath_Prepare_ForWrite(self) == -1)
+		return NULL;
+
 	zero_v3(self->eul);
 
 	if (BaseMath_WriteCallback(self) == -1)
@@ -220,7 +223,7 @@ static PyObject *Euler_rotate_axis(EulerObject *self, PyObject *args)
 		return NULL;
 	}
 
-	if (BaseMath_ReadCallback(self) == -1)
+	if (BaseMath_ReadCallback_ForWrite(self) == -1)
 		return NULL;
 
 
@@ -243,7 +246,7 @@ static PyObject *Euler_rotate(EulerObject *self, PyObject *value)
 {
 	float self_rmat[3][3], other_rmat[3][3], rmat[3][3];
 
-	if (BaseMath_ReadCallback(self) == -1)
+	if (BaseMath_ReadCallback_ForWrite(self) == -1)
 		return NULL;
 
 	if (mathutils_any_to_rotmat(other_rmat, value, "euler.rotate(value)") == -1)
@@ -270,7 +273,7 @@ static PyObject *Euler_make_compatible(EulerObject *self, PyObject *value)
 {
 	float teul[EULER_SIZE];
 
-	if (BaseMath_ReadCallback(self) == -1)
+	if (BaseMath_ReadCallback_ForWrite(self) == -1)
 		return NULL;
 
 	if (mathutils_array_parse(teul, EULER_SIZE, EULER_SIZE, value,
@@ -386,6 +389,17 @@ static PyObject *Euler_richcmpr(PyObject *a, PyObject *b, int op)
 	return Py_INCREF_RET(res);
 }
 
+static Py_hash_t Euler_hash(EulerObject *self)
+{
+	if (BaseMath_ReadCallback(self) == -1)
+		return -1;
+
+	if (BaseMathObject_Prepare_ForHash(self) == -1)
+		return -1;
+
+	return mathutils_array_hash(self->eul, EULER_SIZE);
+}
+
 /* ---------------------SEQUENCE PROTOCOLS------------------------ */
 /* ----------------------------len(object)------------------------ */
 /* sequence length */
@@ -416,8 +430,12 @@ static PyObject *Euler_item(EulerObject *self, int i)
 /* sequence accessor (set) */
 static int Euler_ass_item(EulerObject *self, int i, PyObject *value)
 {
-	float f = PyFloat_AsDouble(value);
+	float f;
 
+	if (BaseMath_Prepare_ForWrite(self) == -1)
+		return -1;
+
+	f = PyFloat_AsDouble(value);
 	if (f == -1 && PyErr_Occurred()) {  /* parsed item not a number */
 		PyErr_SetString(PyExc_TypeError,
 		                "euler[attribute] = x: "
@@ -470,7 +488,7 @@ static int Euler_ass_slice(EulerObject *self, int begin, int end, PyObject *seq)
 	int i, size;
 	float eul[EULER_SIZE];
 
-	if (BaseMath_ReadCallback(self) == -1)
+	if (BaseMath_ReadCallback_ForWrite(self) == -1)
 		return -1;
 
 	CLAMP(begin, 0, EULER_SIZE);
@@ -615,11 +633,17 @@ static PyObject *Euler_order_get(EulerObject *self, void *UNUSED(closure))
 
 static int Euler_order_set(EulerObject *self, PyObject *value, void *UNUSED(closure))
 {
-	const char *order_str = _PyUnicode_AsString(value);
-	short order = euler_order_from_string(order_str, "euler.order");
+	const char *order_str;
+	short order;
 
-	if (order == -1)
+	if (BaseMath_Prepare_ForWrite(self) == -1)
 		return -1;
+
+	if (((order_str = _PyUnicode_AsString(value)) == NULL) ||
+	    ((order = euler_order_from_string(order_str, "euler.order")) == -1))
+	{
+		return -1;
+	}
 
 	self->order = order;
 	(void)BaseMath_WriteCallback(self); /* order can be written back */
@@ -636,6 +660,7 @@ static PyGetSetDef Euler_getseters[] = {
 	{(char *)"order", (getter)Euler_order_get, (setter)Euler_order_set, Euler_order_doc, (void *)NULL},
 
 	{(char *)"is_wrapped", (getter)BaseMathObject_is_wrapped_get, (setter)NULL, BaseMathObject_is_wrapped_doc, NULL},
+	{(char *)"is_frozen",  (getter)BaseMathObject_is_frozen_get,  (setter)NULL, BaseMathObject_is_frozen_doc, NULL},
 	{(char *)"owner", (getter)BaseMathObject_owner_get, (setter)NULL, BaseMathObject_owner_doc, NULL},
 	{NULL, NULL, NULL, NULL, NULL}  /* Sentinel */
 };
@@ -652,6 +677,9 @@ static struct PyMethodDef Euler_methods[] = {
 	{"copy", (PyCFunction) Euler_copy, METH_NOARGS, Euler_copy_doc},
 	{"__copy__", (PyCFunction) Euler_copy, METH_NOARGS, Euler_copy_doc},
 	{"__deepcopy__", (PyCFunction) Euler_deepcopy, METH_VARARGS, Euler_copy_doc},
+
+	/* base-math methods */
+	{"freeze", (PyCFunction)BaseMathObject_freeze, METH_NOARGS, BaseMathObject_freeze_doc},
 	{NULL, NULL, 0, NULL}
 };
 
@@ -680,7 +708,7 @@ PyTypeObject euler_Type = {
 	NULL,                           /* tp_as_number */
 	&Euler_SeqMethods,              /* tp_as_sequence */
 	&Euler_AsMapping,               /* tp_as_mapping */
-	NULL,                           /* tp_hash */
+	(hashfunc)Euler_hash,           /* tp_hash */
 	NULL,                           /* tp_call */
 #ifndef MATH_STANDALONE
 	(reprfunc) Euler_str,           /* tp_str */

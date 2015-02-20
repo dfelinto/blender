@@ -76,6 +76,7 @@ public:
 	void update_bake_progress();
 
 	bool background;
+	static bool headless;
 	Session *session;
 	Scene *scene;
 	BlenderSync *sync;

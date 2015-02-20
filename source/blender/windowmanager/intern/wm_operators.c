@@ -3176,14 +3176,16 @@ static int border_apply_rect(wmOperator *op)
 
 static int border_apply(bContext *C, wmOperator *op, int gesture_mode)
 {
+	PropertyRNA *prop;
+
 	int retval;
 
 	if (!border_apply_rect(op))
 		return 0;
 	
 	/* XXX weak; border should be configured for this without reading event types */
-	if (RNA_struct_find_property(op->ptr, "gesture_mode")) {
-		RNA_int_set(op->ptr, "gesture_mode", gesture_mode);
+	if ((prop = RNA_struct_find_property(op->ptr, "gesture_mode"))) {
+		RNA_property_int_set(op->ptr, prop, gesture_mode);
 	}
 
 	retval = op->type->exec(C, op);
@@ -3503,6 +3505,8 @@ void wm_tweakevent_test(bContext *C, wmEvent *event, int action)
 
 int WM_gesture_lasso_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
+	PropertyRNA *prop;
+
 	op->customdata = WM_gesture_new(C, event, WM_GESTURE_LASSO);
 	
 	/* add modal handler */
@@ -3510,8 +3514,8 @@ int WM_gesture_lasso_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 	
 	wm_gesture_tag_redraw(C);
 	
-	if (RNA_struct_find_property(op->ptr, "cursor")) {
-		WM_cursor_modal_set(CTX_wm_window(C), RNA_int_get(op->ptr, "cursor"));
+	if ((prop = RNA_struct_find_property(op->ptr, "cursor"))) {
+		WM_cursor_modal_set(CTX_wm_window(C), RNA_property_int_get(op->ptr, prop));
 	}
 	
 	return OPERATOR_RUNNING_MODAL;
@@ -3519,6 +3523,8 @@ int WM_gesture_lasso_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 
 int WM_gesture_lines_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
+	PropertyRNA *prop;
+
 	op->customdata = WM_gesture_new(C, event, WM_GESTURE_LINES);
 	
 	/* add modal handler */
@@ -3526,8 +3532,8 @@ int WM_gesture_lines_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 	
 	wm_gesture_tag_redraw(C);
 	
-	if (RNA_struct_find_property(op->ptr, "cursor")) {
-		WM_cursor_modal_set(CTX_wm_window(C), RNA_int_get(op->ptr, "cursor"));
+	if ((prop = RNA_struct_find_property(op->ptr, "cursor"))) {
+		WM_cursor_modal_set(CTX_wm_window(C), RNA_property_int_get(op->ptr, prop));
 	}
 	
 	return OPERATOR_RUNNING_MODAL;
@@ -3733,6 +3739,8 @@ static int straightline_apply(bContext *C, wmOperator *op)
 
 int WM_gesture_straightline_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
+	PropertyRNA *prop;
+
 	op->customdata = WM_gesture_new(C, event, WM_GESTURE_STRAIGHTLINE);
 	
 	/* add modal handler */
@@ -3740,8 +3748,8 @@ int WM_gesture_straightline_invoke(bContext *C, wmOperator *op, const wmEvent *e
 	
 	wm_gesture_tag_redraw(C);
 	
-	if (RNA_struct_find_property(op->ptr, "cursor")) {
-		WM_cursor_modal_set(CTX_wm_window(C), RNA_int_get(op->ptr, "cursor"));
+	if ((prop = RNA_struct_find_property(op->ptr, "cursor"))) {
+		WM_cursor_modal_set(CTX_wm_window(C), RNA_property_int_get(op->ptr, prop));
 	}
 		
 	return OPERATOR_RUNNING_MODAL;

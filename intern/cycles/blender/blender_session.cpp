@@ -41,6 +41,8 @@
 
 CCL_NAMESPACE_BEGIN
 
+bool BlenderSession::headless = false;
+
 BlenderSession::BlenderSession(BL::RenderEngine b_engine_, BL::UserPreferences b_userpref_,
 	BL::BlendData b_data_, BL::Scene b_scene_)
 : b_engine(b_engine_), b_userpref(b_userpref_), b_data(b_data_), b_render(b_engine_.render()), b_scene(b_scene_),
