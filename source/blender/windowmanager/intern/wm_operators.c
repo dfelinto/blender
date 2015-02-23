@@ -5215,7 +5215,7 @@ void wm_window_keymap(wmKeyConfig *keyconf)
 	(void)data_path;
 
 
-	WM_keymap_add_item(keymap, "WM_OT_stereo_toggle", DKEY, KM_PRESS, 0, 0);
+	WM_keymap_add_item(keymap, "WM_OT_set_stereo_3d", DKEY, KM_PRESS, 0, 0);
 
 	gesture_circle_modal_keymap(keyconf);
 	gesture_border_modal_keymap(keyconf);
