@@ -1098,16 +1098,15 @@ static int image_open_exec(bContext *C, wmOperator *op)
 	if (RNA_boolean_get(op->ptr, "use_multiview")) {
 		ImageFormatData *imf = &iod->im_format;
 
+		ima->flag |= IMA_USE_VIEWS;
 		ima->views_format = imf->views_format;
 		*ima->stereo3d_format = imf->stereo3d_format;
 	}
 	else {
+		ima->flag &= ~IMA_USE_VIEWS;
 		ima->flag &= ~IMA_IS_STEREO;
 		ima->flag &= ~IMA_IS_MULTIVIEW;
 		BKE_image_free_views(ima);
-
-		/* monoview and multiview rely on individual images */
-		ima->views_format = R_IMF_VIEWS_INDIVIDUAL;
 	}
 
 	/* only image path after save, never ibuf */
