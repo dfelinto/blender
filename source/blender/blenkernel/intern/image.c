@@ -102,7 +102,7 @@ static SpinLock image_spin;
 /* prototypes */
 static size_t image_num_files(struct Image *ima);
 static ImBuf *image_acquire_ibuf(Image *ima, ImageUser *iuser, void **lock_r);
-static void image_update_views_format(Scene *scene, Image *ima);
+static void image_update_views_format(Image *ima, ImageUser *iuser);
 static void image_add_view(Image *ima, const char *viewname, const char *filepath);
 
 /* max int, to indicate we don't store sequences in ibuf */
@@ -2501,7 +2501,7 @@ void BKE_image_signal(Image *ima, ImageUser *iuser, int signal)
 			if (iuser) {
 				iuser->ok = 1;
 				if (iuser->scene) {
-					image_update_views_format(iuser->scene, ima);
+					image_update_views_format(ima, iuser);
 				}
 			}
 			break;
@@ -2587,7 +2587,7 @@ void BKE_image_signal(Image *ima, ImageUser *iuser, int signal)
 			if (iuser) {
 				iuser->ok = 1;
 				if (iuser->scene) {
-					image_update_views_format(iuser->scene, ima);
+					image_update_views_format(ima, iuser);
 				}
 			}
 
@@ -4441,11 +4441,13 @@ ImBuf *BKE_image_get_first_ibuf(Image *image)
 	return ibuf;
 }
 
-static void image_update_views_format(Scene *scene, Image *ima)
+static void image_update_views_format(Image *ima, ImageUser *iuser)
 {
 	SceneRenderView *srv;
 	ImageView *iv;
-	const bool is_multiview = (scene->r.scemode & R_MULTIVIEW) != 0;
+	Scene *scene = iuser->scene;
+	const bool is_multiview = ((scene->r.scemode & R_MULTIVIEW) != 0) &&
+	                          ((ima->flag & IMA_USE_VIEWS) != 0);
 
 	/* reset the image views */
 	BKE_image_free_views(ima);
@@ -4519,8 +4521,5 @@ monoview:
 			ima->flag &= ~IMA_IS_MULTIVIEW;
 			BKE_image_free_views(ima);
 		}
-
-		/* monoview and multiview rely on individual images */
-		ima->views_format = R_IMF_VIEWS_INDIVIDUAL;
 	}
 }

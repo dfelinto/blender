@@ -904,6 +904,17 @@ void uiTemplateImage(uiLayout *layout, bContext *C, PointerRNA *ptr, const char 
 						uiItemR(row, &imaptr, "alpha_mode", 0, IFACE_("Alpha"), ICON_NONE);
 					}
 
+					if ((scene->r.scemode & R_MULTIVIEW) != 0) {
+						uiItemS(layout);
+
+						col = uiLayoutColumn(layout, false);
+						uiItemR(col, &imaptr, "use_multiview", 0, NULL, ICON_NONE);
+
+						col = uiLayoutColumn(layout, false);
+						uiLayoutSetActive(col, RNA_boolean_get(&imaptr, "use_multiview"));
+						uiTemplateImageViews(col, &imaptr);
+					}
+
 					if (ima->source == IMA_SRC_MOVIE) {
 						col = uiLayoutColumn(layout, false);
 						uiItemR(col, &imaptr, "use_deinterlace", 0, IFACE_("Deinterlace"), ICON_NONE);
@@ -1107,26 +1118,65 @@ void uiTemplateImageStereo3d(uiLayout *layout, PointerRNA *stereo3d_format_ptr)
 	}
 }
 
-void uiTemplateImageViews(uiLayout *layout, PointerRNA *imfptr)
+static void uiTemplateViewsFormat(uiLayout *layout, PointerRNA *ptr, PointerRNA *stereo3d_format_ptr)
 {
-	ImageFormatData *imf = imfptr->data;
-	PropertyRNA *prop;
-	PointerRNA stereo3d_format_ptr;
-
 	uiLayout *col, *box;
 
 	col = uiLayoutColumn(layout, false);
 
 	uiItemL(col, IFACE_("Views Format:"), ICON_NONE);
-	uiItemR(uiLayoutRow(col, false), imfptr, "views_format", UI_ITEM_R_EXPAND, NULL, ICON_NONE);
+	uiItemR(uiLayoutRow(col, false), ptr, "views_format", UI_ITEM_R_EXPAND, NULL, ICON_NONE);
 
-	prop = RNA_struct_find_property(imfptr, "stereo_3d_format");
-	stereo3d_format_ptr = RNA_property_pointer_get(imfptr, prop);
+	if (stereo3d_format_ptr) {
+		box = uiLayoutBox(col);
+		uiLayoutSetActive(box, RNA_enum_get(ptr, "views_format") == R_IMF_VIEWS_STEREO_3D);
+		uiTemplateImageStereo3d(box, stereo3d_format_ptr);
+	}
+}
+
+void uiTemplateImageViews(uiLayout *layout, PointerRNA *imaptr)
+{
+	Image *ima = imaptr->data;
+
+	if (ima->type != IMA_TYPE_MULTILAYER) {
+		PropertyRNA *prop;
+		PointerRNA stereo3d_format_ptr;
+
+		prop = RNA_struct_find_property(imaptr, "stereo_3d_format");
+		stereo3d_format_ptr = RNA_property_pointer_get(imaptr, prop);
+
+		uiTemplateViewsFormat(layout, imaptr, &stereo3d_format_ptr);
+	}
+	else {
+		uiTemplateViewsFormat(layout, imaptr, NULL);
+	}
+}
+
+void uiTemplateImageFormatViews(uiLayout *layout, PointerRNA *imfptr, PointerRNA *ptr)
+{
+	ImageFormatData *imf = imfptr->data;
+	uiLayout *col;
+
+	if (ptr){
+		uiItemR(layout, ptr, "use_multiview", 0, NULL, ICON_NONE);
+		col = uiLayoutColumn(layout, false);
+		uiLayoutSetActive(col, RNA_boolean_get(ptr, "use_multiview"));
+	}
+	else {
+		col = uiLayoutColumn(layout, false);
+	}
 
 	if (imf->imtype != R_IMF_IMTYPE_MULTILAYER) {
-		box = uiLayoutBox(col);
-		uiLayoutSetActive(box, imf->views_format == R_IMF_VIEWS_STEREO_3D);
-		uiTemplateImageStereo3d(box, &stereo3d_format_ptr);
+		PropertyRNA *prop;
+		PointerRNA stereo3d_format_ptr;
+
+		prop = RNA_struct_find_property(imfptr, "stereo_3d_format");
+		stereo3d_format_ptr = RNA_property_pointer_get(imfptr, prop);
+
+		uiTemplateViewsFormat(col, imfptr, &stereo3d_format_ptr);
+	}
+	else {
+		uiTemplateViewsFormat(col, imfptr, NULL);
 	}
 }
 
