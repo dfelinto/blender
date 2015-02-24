@@ -2725,7 +2725,7 @@ static void image_init_multilayer_multiview_flag(Image *ima, RenderResult *rr)
 			if (BLI_listbase_count_ex(&rr->views, 2) > 1)
 				ima->flag |= IMA_IS_MULTIVIEW;
 			else
-				ima->flag &= IMA_IS_MULTIVIEW;
+				ima->flag &= ~IMA_IS_MULTIVIEW;
 		}
 	}
 	else {

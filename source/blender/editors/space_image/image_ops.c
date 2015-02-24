@@ -1102,8 +1102,8 @@ static int image_open_exec(bContext *C, wmOperator *op)
 		*ima->stereo3d_format = imf->stereo3d_format;
 	}
 	else {
-		ima->flag &= IMA_IS_STEREO;
-		ima->flag &= IMA_IS_MULTIVIEW;
+		ima->flag &= ~IMA_IS_STEREO;
+		ima->flag &= ~IMA_IS_MULTIVIEW;
 		BKE_image_free_views(ima);
 
 		/* monoview and multiview rely on individual images */
