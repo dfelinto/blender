@@ -1944,7 +1944,7 @@ static int image_save_as_invoke(bContext *C, wmOperator *op, const wmEvent *UNUS
 
 	/* show multiview save options only if image has multiviews */
 	prop = RNA_struct_find_property(op->ptr, "use_multiview");
-	RNA_property_boolean_set(op->ptr, prop, (ima->flag & IMA_IS_STEREO));
+	RNA_property_boolean_set(op->ptr, prop, (ima->flag & IMA_IS_MULTIVIEW) != 0);
 
 	image_filesel(C, op, simopts.filepath);
 
