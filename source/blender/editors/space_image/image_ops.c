@@ -1214,7 +1214,7 @@ static int image_open_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(
 	image_open_init(C, op);
 
 	/* show multiview save options only if scene has multiviews */
-	prop = RNA_struct_find_property(op->ptr, "use_multiview");
+	prop = RNA_struct_find_property(op->ptr, "show_multiview");
 	RNA_property_boolean_set(op->ptr, prop, (scene->r.scemode & R_MULTIVIEW) != 0);
 
 	image_filesel(C, op, path);
@@ -1234,11 +1234,10 @@ static bool image_open_draw_check_prop(PointerRNA *UNUSED(ptr), PropertyRNA *pro
 
 static void image_open_draw(bContext *UNUSED(C), wmOperator *op)
 {
-	uiLayout *layout = op->layout;
+	uiLayout *col, *layout = op->layout;
 	ImageOpenData *iod = op->customdata;
 	ImageFormatData *imf = &iod->im_format;
 	PointerRNA imf_ptr, ptr;
-	const bool is_multiview = RNA_boolean_get(op->ptr, "use_multiview");
 
 	/* main draw call */
 	RNA_pointer_create(NULL, op->type->srna, op->properties, &ptr);
@@ -1248,8 +1247,14 @@ static void image_open_draw(bContext *UNUSED(C), wmOperator *op)
 	RNA_pointer_create(NULL, &RNA_ImageFormatSettings, imf, &imf_ptr);
 
 	/* multiview template */
-	if (is_multiview)
-		uiTemplateImageViews(layout, &imf_ptr);
+	if (RNA_boolean_get(op->ptr, "show_multiview")) {
+		col = uiLayoutColumn(layout, false);
+		uiItemR(col, op->ptr, "use_multiview", 0, NULL, ICON_NONE);
+
+		col = uiLayoutColumn(layout, false);
+		uiLayoutSetActive(col, RNA_boolean_get(op->ptr, "use_multiview"));
+		uiTemplateImageFormatViews(col, &imf_ptr);
+	}
 }
 
 /* called by other space types too */
@@ -1943,6 +1948,8 @@ static int image_save_as_invoke(bContext *C, wmOperator *op, const wmEvent *UNUS
 	memcpy(op->customdata, &simopts.im_format, sizeof(simopts.im_format));
 
 	/* show multiview save options only if image has multiviews */
+	prop = RNA_struct_find_property(op->ptr, "show_multiview");
+	RNA_property_boolean_set(op->ptr, prop, (ima->flag & IMA_IS_MULTIVIEW) != 0);
 	prop = RNA_struct_find_property(op->ptr, "use_multiview");
 	RNA_property_boolean_set(op->ptr, prop, (ima->flag & IMA_IS_MULTIVIEW) != 0);
 
@@ -1985,7 +1992,7 @@ static void image_save_as_draw(bContext *UNUSED(C), wmOperator *op)
 
 	/* multiview template */
 	if (is_multiview)
-		uiTemplateImageViews(layout, &imf_ptr);
+		uiTemplateImageFormatViews(layout, &imf_ptr);
 }
 
 static int image_save_as_poll(bContext *C)

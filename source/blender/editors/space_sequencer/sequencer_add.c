@@ -674,7 +674,7 @@ static void sequencer_add_draw(bContext *UNUSED(C), wmOperator *op)
 
 	/* multiview template */
 	if (is_multiview)
-		uiTemplateImageViews(layout, &imf_ptr);
+		uiTemplateImageFormatViews(layout, &imf_ptr);
 }
 
 void SEQUENCER_OT_movie_strip_add(struct wmOperatorType *ot)
