@@ -106,8 +106,8 @@ typedef struct Image {
 
 	struct RenderResult *renders[8]; /* IMA_MAX_RENDER_SLOT */
 	short render_slot, last_render_slot;
-	
-	short ok, flag;
+
+	int flag;
 	short source, type;
 	int lastframe;
 
@@ -126,7 +126,8 @@ typedef struct Image {
 	float lastupdate;
 	int lastused;
 	short animspeed;
-	short pad2;
+
+	short ok;
 	
 	/* for generated images */
 	int gen_x, gen_y;
@@ -170,8 +171,9 @@ enum {
 	IMA_VIEW_AS_RENDER      = (1 << 11),
 	IMA_IGNORE_ALPHA        = (1 << 12),
 	IMA_DEINTERLACE         = (1 << 13),
-	IMA_IS_STEREO           = (1 << 14),
-	IMA_IS_MULTIVIEW        = (1 << 15), /* similar to stereo, but a more general case */
+	IMA_USE_VIEWS           = (1 << 14),
+	IMA_IS_STEREO           = (1 << 15),
+	IMA_IS_MULTIVIEW        = (1 << 16), /* similar to stereo, but a more general case */
 };
 
 #if (DNA_DEPRECATED_GCC_POISON == 1)
