@@ -94,7 +94,7 @@ static ImBuf *seq_render_strip_stack(const SeqRenderData *context, ListBase *seq
 static ImBuf *seq_render_strip(const SeqRenderData *context, Sequence *seq, float cfra);
 static void seq_free_animdata(Scene *scene, Sequence *seq);
 static ImBuf *seq_render_mask(const SeqRenderData *context, Mask *mask, float nr, bool make_float);
-static size_t seq_num_files(Scene *scene, char views_format);
+static size_t seq_num_files(Scene *scene, char views_format, const bool is_multiview);
 static void seq_anim_add_suffix(Scene *scene, struct anim *anim, const size_t view_id);
 
 /* **** XXX ******** */
@@ -836,7 +836,8 @@ void BKE_sequence_reload_new_file(Scene *scene, Sequence *seq, const bool lock_r
 		case SEQ_TYPE_MOVIE:
 		{
 			StripAnim *sanim;
-			const bool is_multiview = (scene->r.scemode & R_MULTIVIEW) != 0;
+			const bool is_multiview = (seq->flag & SEQ_USE_VIEWS) != 0 &&
+			                          (scene->r.scemode & R_MULTIVIEW) != 0;
 
 			BLI_join_dirfile(path, sizeof(path), seq->strip->dir,
 			                 seq->strip->stripdata->name);
@@ -847,7 +848,7 @@ void BKE_sequence_reload_new_file(Scene *scene, Sequence *seq, const bool lock_r
 			if (is_multiview && (seq->views_format == R_IMF_VIEWS_INDIVIDUAL)) {
 				char prefix[FILE_MAX] = {'\0'};
 				char *ext = NULL;
-				size_t totfiles = seq_num_files(scene, seq->views_format);
+				size_t totfiles = seq_num_files(scene, seq->views_format, true);
 				int i = 0;
 
 				BKE_scene_view_prefix_get(scene, path, prefix, &ext);
@@ -1409,10 +1410,8 @@ static double seq_rendersize_to_scale_factor(int size)
 }
 
 /* the number of files will vary according to the stereo format */
-static size_t seq_num_files(Scene *scene, char views_format)
+static size_t seq_num_files(Scene *scene, char views_format, const bool is_multiview)
 {
-	const bool is_multiview = (scene->r.scemode & R_MULTIVIEW) != 0;
-
 	if (!is_multiview) {
 		return 1;
 	}
@@ -1430,7 +1429,7 @@ static void seq_open_anim_file(Scene *scene, Sequence *seq, bool openfile)
 	char dir[FILE_MAX];
 	char name[FILE_MAX];
 	StripProxy *proxy;
-	const bool is_multiview = (scene->r.scemode & R_MULTIVIEW) != 0;
+	const bool is_multiview = (seq->flag & SEQ_USE_VIEWS) != 0 && (scene->r.scemode & R_MULTIVIEW) != 0;
 
 	if ((seq->anims.first != NULL) && (((StripAnim *)seq->anims.first)->anim != NULL)) {
 		return;
@@ -1451,7 +1450,7 @@ static void seq_open_anim_file(Scene *scene, Sequence *seq, bool openfile)
 	}
 
 	if (is_multiview && seq->views_format == R_IMF_VIEWS_INDIVIDUAL) {
-		size_t totfiles = seq_num_files(scene, seq->views_format);
+		size_t totfiles = seq_num_files(scene, seq->views_format, true);
 		char prefix[FILE_MAX] = {'\0'};
 		char *ext = NULL;
 		int i;
@@ -3016,7 +3015,8 @@ static ImBuf *do_render_strip_uncached(const SeqRenderData *context, Sequence *s
 
 		case SEQ_TYPE_IMAGE:
 		{
-			bool is_multiview = (context->scene->r.scemode & R_MULTIVIEW) != 0;
+			bool is_multiview = (seq->flag & SEQ_USE_VIEWS) != 0 &&
+			                    (context->scene->r.scemode & R_MULTIVIEW) != 0;
 			StripElem *s_elem = BKE_sequencer_give_stripelem(seq, cfra);
 			int flag;
 
@@ -3033,7 +3033,7 @@ static ImBuf *do_render_strip_uncached(const SeqRenderData *context, Sequence *s
 				/* don't do anything */
 			}
 			else if (is_multiview) {
-				size_t totfiles = seq_num_files(context->scene, seq->views_format);
+				size_t totfiles = seq_num_files(context->scene, seq->views_format, true);
 				size_t totviews;
 				struct ImBuf **ibufs_arr;
 				char prefix[FILE_MAX] = {'\0'};
@@ -3120,7 +3120,8 @@ monoview_image:
 		case SEQ_TYPE_MOVIE:
 		{
 			StripAnim *sanim;
-			bool is_multiview = (context->scene->r.scemode & R_MULTIVIEW) != 0;
+			bool is_multiview = (seq->flag & SEQ_USE_VIEWS) != 0 &&
+			                    (context->scene->r.scemode & R_MULTIVIEW) != 0;
 
 			/* load all the videos */
 			seq_open_anim_file(context->scene, seq, false);
@@ -3128,7 +3129,7 @@ monoview_image:
 			if (is_multiview) {
 				ImBuf **ibuf_arr;
 				size_t totviews;
-				size_t totfiles = seq_num_files(context->scene, seq->views_format);
+				size_t totfiles = seq_num_files(context->scene, seq->views_format, true);
 				int i;
 
 				if (totfiles != BLI_listbase_count_ex(&seq->anims, totfiles + 1))
@@ -4832,6 +4833,7 @@ Sequence *BKE_sequencer_add_image_strip(bContext *C, ListBase *seqbasep, SeqLoad
 		*seq->stereo3d_format = *seq_load->stereo3d_format;
 
 	seq->views_format = seq_load->views_format;
+	seq->flag |= seq_load->flag & SEQ_USE_VIEWS;
 
 	seq_load_apply(scene, seq, seq_load);
 
@@ -4927,8 +4929,8 @@ Sequence *BKE_sequencer_add_movie_strip(bContext *C, ListBase *seqbasep, SeqLoad
 	Strip *strip;
 	StripElem *se;
 	char colorspace[64] = "\0"; /* MAX_COLORSPACE_NAME */
-	size_t totfiles = seq_num_files(scene, seq_load->views_format);
-	bool is_multiview = (scene->r.scemode & R_MULTIVIEW) != 0;
+	bool is_multiview = (seq_load->flag & SEQ_USE_VIEWS) != 0;
+	size_t totfiles = seq_num_files(scene, seq_load->views_format, is_multiview);
 	struct anim **anim_arr;
 	int i;
 
@@ -4981,6 +4983,7 @@ monoview:
 		*seq->stereo3d_format = *seq_load->stereo3d_format;
 		seq->views_format = seq_load->views_format;
 	}
+	seq->flag |= seq_load->flag & SEQ_USE_VIEWS;
 
 	seq->type = SEQ_TYPE_MOVIE;
 	seq->blend_mode = SEQ_TYPE_CROSS; /* so alpha adjustment fade to the strip below */

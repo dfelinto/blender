@@ -234,6 +234,7 @@ static void seq_load_operator_info(SeqLoadInfo *seq_load, wmOperator *op)
 			ImageFormatData *imf = &sad->im_format;
 
 			seq_load->views_format = imf->views_format;
+			seq_load->flag |= SEQ_USE_VIEWS;
 
 			/* operator custom data is always released after the SeqLoadInfo, no need to handle the memory here */
 			seq_load->stereo3d_format = &imf->stereo3d_format;
@@ -648,9 +649,9 @@ static int sequencer_add_movie_strip_invoke(bContext *C, wmOperator *op, const w
 	sequencer_add_init(C, op);
 
 	/* show multiview save options only if scene has multiviews */
-	prop = RNA_struct_find_property(op->ptr, "use_multiview");
+	prop = RNA_struct_find_property(op->ptr, "show_multiview");
 	RNA_property_boolean_set(op->ptr, prop, (scene->r.scemode & R_MULTIVIEW) != 0);
-	
+
 	WM_event_add_fileselect(C, op);
 	return OPERATOR_RUNNING_MODAL;
 
@@ -663,7 +664,6 @@ static void sequencer_add_draw(bContext *UNUSED(C), wmOperator *op)
 	SequencerAddData *sad = op->customdata;
 	ImageFormatData *imf = &sad->im_format;
 	PointerRNA imf_ptr, ptr;
-	const bool is_multiview = RNA_boolean_get(op->ptr, "use_multiview");
 
 	/* main draw call */
 	RNA_pointer_create(NULL, op->type->srna, op->properties, &ptr);
@@ -673,8 +673,8 @@ static void sequencer_add_draw(bContext *UNUSED(C), wmOperator *op)
 	RNA_pointer_create(NULL, &RNA_ImageFormatSettings, imf, &imf_ptr);
 
 	/* multiview template */
-	if (is_multiview)
-		uiTemplateImageFormatViews(layout, &imf_ptr);
+	if (RNA_boolean_get(op->ptr, "show_multiview"))
+		uiTemplateImageFormatViews(layout, &imf_ptr, op->ptr);
 }
 
 void SEQUENCER_OT_movie_strip_add(struct wmOperatorType *ot)
@@ -831,7 +831,7 @@ static int sequencer_add_image_strip_invoke(bContext *C, wmOperator *op, const w
 	sequencer_add_init(C, op);
 
 	/* show multiview save options only if scene has multiviews */
-	prop = RNA_struct_find_property(op->ptr, "use_multiview");
+	prop = RNA_struct_find_property(op->ptr, "show_multiview");
 	RNA_property_boolean_set(op->ptr, prop, (scene->r.scemode & R_MULTIVIEW) != 0);
 
 	WM_event_add_fileselect(C, op);

@@ -376,6 +376,7 @@ enum {
 	
 	/* don't include Grease Pencil in OpenGL previews of Scene strips */
 	SEQ_SCENE_NO_GPENCIL        = (1 << 28),
+	SEQ_USE_VIEWS               = (1 << 29),
 
 	SEQ_INVALID_EFFECT          = (1 << 31),
 };

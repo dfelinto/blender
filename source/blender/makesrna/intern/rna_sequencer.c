@@ -1814,6 +1814,11 @@ static void rna_def_image(BlenderRNA *brna)
 	RNA_api_sequence_elements(brna, prop);
 
 	/* multiview */
+	prop = RNA_def_property(srna, "use_multiview", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag", SEQ_USE_VIEWS);
+	RNA_def_property_ui_text(prop, "Use Multi-View", "Use Multiple Views (when available)");
+	RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_Sequence_views_format_update");
+
 	prop = RNA_def_property(srna, "views_format", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "views_format");
 	RNA_def_property_enum_items(prop, views_format_items);
@@ -1919,6 +1924,11 @@ static void rna_def_movie(BlenderRNA *brna)
 	RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_Sequence_filepath_update");
 
 	/* multiview */
+	prop = RNA_def_property(srna, "use_multiview", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag", SEQ_USE_VIEWS);
+	RNA_def_property_ui_text(prop, "Use Multi-View", "Use Multiple Views (when available)");
+	RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_Sequence_views_format_update");
+
 	prop = RNA_def_property(srna, "views_format", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "views_format");
 	RNA_def_property_enum_items(prop, views_format_items);
