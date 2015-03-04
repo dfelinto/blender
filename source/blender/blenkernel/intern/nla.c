@@ -299,13 +299,12 @@ NlaStrip *add_nlastrip(bAction *act)
 	
 	/* generic settings 
 	 *	- selected flag to highlight this to the user
-	 *	- auto-blends to ensure that blend in/out values are automatically 
-	 *	  determined by overlaps of strips
+	 *	- (XXX) disabled Auto-Blends, as this was often causing some unwanted effects
 	 *	- (XXX) synchronization of strip-length in accordance with changes to action-length
 	 *	  is not done though, since this should only really happens in editmode for strips now
 	 *	  though this decision is still subject to further review...
 	 */
-	strip->flag = NLASTRIP_FLAG_SELECT | NLASTRIP_FLAG_AUTO_BLENDS;
+	strip->flag = NLASTRIP_FLAG_SELECT;
 	
 	/* assign the action reference */
 	strip->act = act;
@@ -1021,6 +1020,10 @@ bool BKE_nlatrack_add_strip(NlaTrack *nlt, NlaStrip *strip)
 	if (ELEM(NULL, nlt, strip))
 		return false;
 		
+	/* do not allow adding strips if this track is locked */
+	if (nlt->flag & NLATRACK_PROTECTED)
+		return false;
+	
 	/* try to add the strip to the track using a more generic function */
 	return BKE_nlastrips_add_strip(&nlt->strips, strip);
 }
@@ -1524,6 +1527,88 @@ void BKE_nla_validate_state(AnimData *adt)
 	}
 }
 
+/* Action Stashing -------------------------------------- */
+
+/* name of stashed tracks - the translation stuff is included here to save extra work */
+#define STASH_TRACK_NAME  DATA_("[Action Stash]")
+
+/* Check if an action is "stashed" in the NLA already
+ *
+ * The criteria for this are:
+ *   1) The action in question lives in a "stash" track
+ *   2) We only check first-level strips. That is, we will not check inside meta strips.
+ */
+bool BKE_nla_action_is_stashed(AnimData *adt, bAction *act)
+{
+	NlaTrack *nlt;
+	NlaStrip *strip;
+	
+	for (nlt = adt->nla_tracks.first; nlt; nlt = nlt->next) {
+		if (strstr(nlt->name, STASH_TRACK_NAME)) {
+			for (strip = nlt->strips.first; strip; strip = strip->next) {
+				if (strip->act == act)
+					return true;
+			}
+		}
+	}
+	
+	return false;
+}
+
+/* "Stash" an action (i.e. store it as a track/layer in the NLA, but non-contributing)
+ * to retain it in the file for future uses
+ */
+bool BKE_nla_action_stash(AnimData *adt)
+{
+	NlaTrack *prev_track = NULL;
+	NlaTrack *nlt;
+	NlaStrip *strip;
+	
+	/* sanity check */
+	if (ELEM(NULL, adt, adt->action)) {
+		printf("%s: Invalid argument - %p %p\n", __func__, adt, adt->action);
+		return false;
+	}
+	
+	/* do not add if it is already stashed */
+	if (BKE_nla_action_is_stashed(adt, adt->action))
+		return false;
+	
+	/* create a new track, and add this immediately above the previous stashing track */
+	for (prev_track = adt->nla_tracks.last; prev_track; prev_track = prev_track->prev) {
+		if (strstr(prev_track->name, STASH_TRACK_NAME)) {
+			break;
+		}
+	}
+	
+	nlt = add_nlatrack(adt, prev_track);
+	BLI_assert(nlt != NULL);
+	
+	BLI_strncpy(nlt->name, STASH_TRACK_NAME, sizeof(nlt->name));
+	BLI_uniquename(&adt->nla_tracks, nlt, STASH_TRACK_NAME, '.', offsetof(NlaTrack, name), sizeof(nlt->name));
+	
+	/* add the action as a strip in this new track
+	 * NOTE: a new user is created here
+	 */
+	strip = add_nlastrip(adt->action);
+	BLI_assert(strip != NULL);
+	
+	BKE_nlatrack_add_strip(nlt, strip);
+	BKE_nlastrip_validate_name(adt, strip);
+	
+	/* mark the stash track and strip so that they doesn't disturb the stack animation,
+	 * and are unlikely to draw attention to itself (or be accidentally bumped around)
+	 * 
+	 * NOTE: this must be done *after* adding the strip to the track, or else
+	 *       the strip locking will prevent the strip from getting added
+	 */
+	nlt->flag = (NLATRACK_MUTED | NLATRACK_PROTECTED);
+	strip->flag &= ~(NLASTRIP_FLAG_SELECT | NLASTRIP_FLAG_ACTIVE);
+	
+	/* succeeded */
+	return true;
+}
+
 /* Core Tools ------------------------------------------- */
 
 /* For the given AnimData block, add the active action to the NLA
@@ -1575,7 +1660,6 @@ void BKE_nla_action_pushdown(AnimData *adt)
 		BKE_nlastrip_set_active(adt, strip);
 	}
 }
-
 
 /* Find the active strip + track combo, and set them up as the tweaking track,
  * and return if successful or not.

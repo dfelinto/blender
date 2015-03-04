@@ -74,7 +74,9 @@ float cross_poly_v2(const float verts[][2], unsigned int nr);
 /********************************* Planes **********************************/
 
 void  plane_from_point_normal_v3(float r_plane[4], const float plane_co[3], const float plane_no[3]);
-void  plane_to_point_normal_v3(const float plane[4], float r_plane_co[3], float r_plane_no[3]);
+void  plane_to_point_vector_v3(const float plane[4], float r_plane_co[3], float r_plane_no[3]);
+void  plane_to_point_vector_v3_normalized(const float plane[4], float r_plane_co[3], float r_plane_no[3]);
+
 MINLINE float plane_point_side_v3(const float plane[4], const float co[3]);
 
 /********************************* Volume **********************************/
@@ -107,7 +109,7 @@ float         dist_to_line_v3(const float p[3], const float l1[3], const float l
 float dist_signed_squared_to_corner_v3v3v3(
         const float p[3],
         const float v1[3], const float v2[3], const float v3[3],
-        const float axis_fallback[3]);
+        const float axis_ref[3]);
 float closest_to_line_v3(float r[3], const float p[3], const float l1[3], const float l2[3]);
 float closest_to_line_v2(float r[2], const float p[2], const float l1[2], const float l2[2]);
 void closest_to_line_segment_v3(float r_close[3], const float p[3], const float l1[3], const float l2[3]);

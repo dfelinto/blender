@@ -250,9 +250,15 @@ bool GPG_Application::startScreenSaverPreview(
 		int windowWidth = rc.right - rc.left;
 		int windowHeight = rc.bottom - rc.top;
 		STR_String title = "";
-							
+		GHOST_GLSettings glSettings = {0};
+
+		if (stereoVisual) {
+			glSettings.flags |= GHOST_glStereoVisual;
+		}
+		glSettings.numOfAASamples = samples;
+
 		m_mainWindow = fSystem->createWindow(title, 0, 0, windowWidth, windowHeight, GHOST_kWindowStateMinimized,
-			GHOST_kDrawingContextTypeOpenGL, stereoVisual, samples);
+		                                     GHOST_kDrawingContextTypeOpenGL, glSettings);
 		if (!m_mainWindow) {
 			printf("error: could not create main window\n");
 			exit(-1);
@@ -323,11 +329,16 @@ bool GPG_Application::startWindow(
         const int stereoMode,
         const GHOST_TUns16 samples)
 {
+	GHOST_GLSettings glSettings = {0};
 	bool success;
 	// Create the main window
 	//STR_String title ("Blender Player - GHOST");
+	if (stereoVisual)
+		glSettings.flags |= GHOST_glStereoVisual;
+	glSettings.numOfAASamples = samples;
+
 	m_mainWindow = fSystem->createWindow(title, windowLeft, windowTop, windowWidth, windowHeight, GHOST_kWindowStateNormal,
-	                                     GHOST_kDrawingContextTypeOpenGL, stereoVisual, false, samples);
+	                                     GHOST_kDrawingContextTypeOpenGL, glSettings);
 	if (!m_mainWindow) {
 		printf("error: could not create main window\n");
 		exit(-1);
@@ -354,10 +365,16 @@ bool GPG_Application::startEmbeddedWindow(
         const GHOST_TUns16 samples)
 {
 	GHOST_TWindowState state = GHOST_kWindowStateNormal;
+	GHOST_GLSettings glSettings = {0};
+
+	if (stereoVisual)
+		glSettings.flags |= GHOST_glStereoVisual;
+	glSettings.numOfAASamples = samples;
+
 	if (parentWindow != 0)
 		state = GHOST_kWindowStateEmbedded;
 	m_mainWindow = fSystem->createWindow(title, 0, 0, 0, 0, state,
-	                                     GHOST_kDrawingContextTypeOpenGL, stereoVisual, false, samples, parentWindow);
+	                                     GHOST_kDrawingContextTypeOpenGL, glSettings, parentWindow);
 
 	if (!m_mainWindow) {
 		printf("error: could not create main window\n");

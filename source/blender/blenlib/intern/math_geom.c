@@ -257,14 +257,22 @@ void plane_from_point_normal_v3(float r_plane[4], const float plane_co[3], const
 }
 
 /**
- * Get a point and a normal from a plane.
+ * Get a point and a direction from a plane.
  */
-void plane_to_point_normal_v3(const float plane[4], float r_plane_co[3], float r_plane_no[3])
+void plane_to_point_vector_v3(const float plane[4], float r_plane_co[3], float r_plane_no[3])
 {
-	const float length = normalize_v3_v3(r_plane_no, plane);
-	madd_v3_v3v3fl(r_plane_co, r_plane_no, r_plane_no, (-plane[3] / length) - 1.0f);
+	mul_v3_v3fl(r_plane_co, plane, (-plane[3] / len_squared_v3(plane)));
+	copy_v3_v3(r_plane_no, plane);
 }
 
+/**
+ * version of #plane_to_point_vector_v3 that gets a unit length vector.
+ */
+void plane_to_point_vector_v3_normalized(const float plane[4], float r_plane_co[3], float r_plane_no[3])
+{
+	const float length = normalize_v3_v3(r_plane_no, plane);
+	mul_v3_v3fl(r_plane_co, r_plane_no, (-plane[3] / length));
+}
 
 /********************************* Volume **********************************/
 
@@ -481,7 +489,7 @@ float dist_to_line_v3(const float v1[3], const float l1[3], const float l2[3])
  * Check if \a p is inside the 2x planes defined by ``(v1, v2, v3)``
  * where the 3x points define 2x planes.
  *
- * \param axis_fallback used when v1,v2,v3 form a line.
+ * \param axis_ref used when v1,v2,v3 form a line and to check if the corner is concave/convex.
  *
  * \note the distance from \a v1 & \a v3 to \a v2 doesnt matter
  * (it just defines the planes).
@@ -503,23 +511,30 @@ float dist_to_line_v3(const float v1[3], const float l1[3], const float l2[3])
 float dist_signed_squared_to_corner_v3v3v3(
         const float p[3],
         const float v1[3], const float v2[3], const float v3[3],
-        const float axis_fallback[3])
+        const float axis_ref[3])
 {
 	float dir_a[3], dir_b[3];
 	float plane_a[4], plane_b[4];
+	float dist_a, dist_b;
 	float axis[3];
+	bool flip = false;
 
 	sub_v3_v3v3(dir_a, v1, v2);
 	sub_v3_v3v3(dir_b, v3, v2);
 
 	cross_v3_v3v3(axis, dir_a, dir_b);
 
-	if ((len_squared_v3(axis) < FLT_EPSILON) && axis_fallback) {
-		copy_v3_v3(axis, axis_fallback);
+	if ((len_squared_v3(axis) < FLT_EPSILON)) {
+		copy_v3_v3(axis, axis_ref);
+	}
+	else if (dot_v3v3(axis, axis_ref) < 0.0f) {
+		/* concave */
+		flip = true;
+		negate_v3(axis);
 	}
 
-	cross_v3_v3v3(plane_a, axis, dir_a);
-	cross_v3_v3v3(plane_b, dir_b, axis);
+	cross_v3_v3v3(plane_a, dir_a, axis);
+	cross_v3_v3v3(plane_b, axis, dir_b);
 
 #if 0
 	plane_from_point_normal_v3(plane_a, center, l1);
@@ -530,8 +545,15 @@ float dist_signed_squared_to_corner_v3v3v3(
 	plane_b[3] = -dot_v3v3(plane_b, v2);
 #endif
 
-	return min_ff(dist_signed_squared_to_plane_v3(p, plane_a),
-	              dist_signed_squared_to_plane_v3(p, plane_b));
+	dist_a = dist_signed_squared_to_plane_v3(p, plane_a);
+	dist_b = dist_signed_squared_to_plane_v3(p, plane_b);
+
+	if (flip) {
+		return min_ff(dist_a, dist_b);
+	}
+	else {
+		return max_ff(dist_a, dist_b);
+	}
 }
 
 /* Adapted from "Real-Time Collision Detection" by Christer Ericson,

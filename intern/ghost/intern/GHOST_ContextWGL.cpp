@@ -48,6 +48,7 @@ HGLRC GHOST_ContextWGL::s_sharedHGLRC = NULL;
 int   GHOST_ContextWGL::s_sharedCount = 0;
 
 bool GHOST_ContextWGL::s_singleContextMode = false;
+bool GHOST_ContextWGL::s_warn_old = false;
 
 
 /* Intel video-cards don't work fine with multiple contexts and
@@ -732,13 +733,17 @@ GHOST_TSuccess GHOST_ContextWGL::initializeDrawingContext()
 
 	iPixelFormat = choose_pixel_format(m_stereoVisual, m_numOfAASamples, needAlpha, needStencil, sRGB);
 
-	if (iPixelFormat == 0)
-		goto error;
+	if (iPixelFormat == 0) {
+		::wglMakeCurrent(prevHDC, prevHGLRC);
+		return GHOST_kFailure;
+	}
 
 	lastPFD = ::DescribePixelFormat(m_hDC, iPixelFormat, sizeof(PIXELFORMATDESCRIPTOR), &chosenPFD);
 
-	if (!WIN32_CHK(lastPFD != 0))
-		goto error;
+	if (!WIN32_CHK(lastPFD != 0)) {
+		::wglMakeCurrent(prevHDC, prevHGLRC);
+		return GHOST_kFailure;
+	}
 
 	if (needAlpha && chosenPFD.cAlphaBits == 0)
 		fprintf(stderr, "Warning! Unable to find a pixel format with an alpha channel.\n");
@@ -746,8 +751,10 @@ GHOST_TSuccess GHOST_ContextWGL::initializeDrawingContext()
 	if (needStencil && chosenPFD.cStencilBits == 0)
 		fprintf(stderr, "Warning! Unable to find a pixel format with a stencil buffer.\n");
 
-	if (!WIN32_CHK(::SetPixelFormat(m_hDC, iPixelFormat, &chosenPFD)))
-		goto error;
+	if (!WIN32_CHK(::SetPixelFormat(m_hDC, iPixelFormat, &chosenPFD))) {
+		::wglMakeCurrent(prevHDC, prevHGLRC);
+		return GHOST_kFailure;
+	}
 
 	activateWGLEW();
 
@@ -844,37 +851,65 @@ GHOST_TSuccess GHOST_ContextWGL::initializeDrawingContext()
 			m_hGLRC = s_sharedHGLRC;
 	}
 
-	if (!WIN32_CHK(m_hGLRC != NULL))
-		goto error;
+	if (!WIN32_CHK(m_hGLRC != NULL)) {
+		::wglMakeCurrent(prevHDC, prevHGLRC);
+		return GHOST_kFailure;
+	}
 
 	if (s_sharedHGLRC == NULL)
 		s_sharedHGLRC = m_hGLRC;
 
 	s_sharedCount++;
 
-	if (!s_singleContextMode && s_sharedHGLRC != m_hGLRC && !WIN32_CHK(::wglShareLists(s_sharedHGLRC, m_hGLRC)))
-		goto error;
+	if (!s_singleContextMode && s_sharedHGLRC != m_hGLRC && !WIN32_CHK(::wglShareLists(s_sharedHGLRC, m_hGLRC))) {
+		::wglMakeCurrent(prevHDC, prevHGLRC);
+		return GHOST_kFailure;
+	}
 
-	if (!WIN32_CHK(::wglMakeCurrent(m_hDC, m_hGLRC)))
-		goto error;
+	if (!WIN32_CHK(::wglMakeCurrent(m_hDC, m_hGLRC))) {
+		::wglMakeCurrent(prevHDC, prevHGLRC);
+		return GHOST_kFailure;
+	}
 
 	initContextGLEW();
 
 	initClearGL();
 	::SwapBuffers(m_hDC);
 
+	const char *vendor = reinterpret_cast<const char*>(glGetString(GL_VENDOR));
+	const char *renderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
+	const char *version = reinterpret_cast<const char*>(glGetString(GL_VERSION));
+
 #ifndef NDEBUG
-	reportContextString("Vendor",   m_dummyVendor,   reinterpret_cast<const char*>(glGetString(GL_VENDOR)));
-	reportContextString("Renderer", m_dummyRenderer, reinterpret_cast<const char*>(glGetString(GL_RENDERER)));
-	reportContextString("Version",  m_dummyVersion,  reinterpret_cast<const char*>(glGetString(GL_VERSION)));
+	reportContextString("Vendor",   m_dummyVendor,   vendor);
+	reportContextString("Renderer", m_dummyRenderer, renderer);
+	reportContextString("Version",  m_dummyVersion,  version);
 #endif
 
+	if (!s_warn_old) {
+		if ((strcmp(vendor, "Microsoft Corporation") == 0 ||
+		    strcmp(renderer, "GDI Generic") == 0) && version[0] == '1' && version[0] == '1')
+		{
+			MessageBox(m_hWnd, "Your system does not use 3D hardware acceleration.\n"
+			                   "Such systems can cause stability problems in Blender and they are unsupported.\n\n"
+			                   "This may be caused by:\n"
+			                   "* A missing or faulty graphics driver installation.\n"
+			                   "  Blender needs a graphics card driver to work correctly.\n"
+			                   "* Accessing Blender through a remote connection.\n"
+			                   "* Using Blender through a virtual machine.\n\n"
+			                   "Disable this message in <User Preferences - Interface - Warn On Deprecated OpenGL>",
+			                   "Blender - Can't detect 3D hardware accelerated Driver!", MB_OK | MB_ICONWARNING);
+		}
+		else if (version[0] == '1' && version[2] < '4') {
+			MessageBox(m_hWnd, "The OpenGL version provided by your graphics driver version is too low\n"
+			                   "Blender requires version 1.4 and may not work correctly\n\n"
+			                   "Disable this message in <User Preferences - Interface - Warn On Deprecated OpenGL>",
+			                   "Blender - Unsupported Graphics Driver!", MB_OK | MB_ICONWARNING);
+		}
+		s_warn_old = true;
+	}
+
 	return GHOST_kSuccess;
-
-error:
-	::wglMakeCurrent(prevHDC, prevHGLRC);
-
-	return GHOST_kFailure;
 }
 
 

@@ -214,6 +214,8 @@ static void cloth_setup_constraints(ClothModifierData *clmd, ColliderContacts *c
 	
 	const float ZERO[3] = {0.0f, 0.0f, 0.0f};
 	
+	BPH_mass_spring_clear_constraints(data);
+	
 	for (v = 0; v < numverts; v++) {
 		if (verts[v].flags & CLOTH_VERT_FLAG_PINNED) {
 			/* pinned vertex constraints */
@@ -848,6 +850,89 @@ static void cloth_calc_volume_force(ClothModifierData *clmd)
 }
 #endif
 
+/* old collision stuff for cloth, use for continuity
+ * until a good replacement is ready
+ */
+static void cloth_collision_solve_extra(Object *ob, ClothModifierData *clmd, ListBase *effectors, float frame, float step, float dt)
+{
+	Cloth *cloth = clmd->clothObject;
+	Implicit_Data *id = cloth->implicit;
+	ClothVertex *verts = cloth->verts;
+	int numverts = cloth->numverts;
+	const float spf = (float)clmd->sim_parms->stepsPerFrame / clmd->sim_parms->timescale;;
+	
+	bool do_extra_solve;
+	int i;
+	
+	if (!(clmd->coll_parms->flags & CLOTH_COLLSETTINGS_FLAG_ENABLED))
+		return;
+	if (!clmd->clothObject->bvhtree)
+		return;
+	
+	// update verts to current positions
+	for (i = 0; i < numverts; i++) {
+		BPH_mass_spring_get_new_position(id, i, verts[i].tx);
+		
+		sub_v3_v3v3(verts[i].tv, verts[i].tx, verts[i].txold);
+		copy_v3_v3(verts[i].v, verts[i].tv);
+	}
+	
+#if 0 /* unused */
+	for (i=0, cv=cloth->verts; i<cloth->numverts; i++, cv++) {
+		copy_v3_v3(initial_cos[i], cv->tx);
+	}
+#endif
+	
+	// call collision function
+	// TODO: check if "step" or "step+dt" is correct - dg
+	do_extra_solve = cloth_bvh_objcollision(ob, clmd, step/clmd->sim_parms->timescale, dt/clmd->sim_parms->timescale);
+	
+	// copy corrected positions back to simulation
+	for (i = 0; i < numverts; i++) {
+		float curx[3];
+		BPH_mass_spring_get_position(id, i, curx);
+		// correct velocity again, just to be sure we had to change it due to adaptive collisions
+		sub_v3_v3v3(verts[i].tv, verts[i].tx, curx);
+	}
+	
+	if (do_extra_solve) {
+//		cloth_calc_helper_forces(ob, clmd, initial_cos, step/clmd->sim_parms->timescale, dt/clmd->sim_parms->timescale);
+		
+		for (i = 0; i < numverts; i++) {
+		
+			float newv[3];
+			
+			if ((clmd->sim_parms->flags & CLOTH_SIMSETTINGS_FLAG_GOAL) && (verts [i].flags & CLOTH_VERT_FLAG_PINNED))
+				continue;
+			
+			BPH_mass_spring_set_new_position(id, i, verts[i].tx);
+			mul_v3_v3fl(newv, verts[i].tv, spf);
+			BPH_mass_spring_set_new_velocity(id, i, newv);
+		}
+	}
+	
+	// X = Xnew;
+	BPH_mass_spring_apply_result(id);
+	
+	if (do_extra_solve) {
+		ImplicitSolverResult result;
+		
+		/* initialize forces to zero */
+		BPH_mass_spring_clear_forces(id);
+		
+		// calculate forces
+		cloth_calc_force(clmd, frame, effectors, step);
+		
+		// calculate new velocity and position
+		BPH_mass_spring_solve_velocities(id, dt, &result);
+//		cloth_record_result(clmd, &result, clmd->sim_parms->stepsPerFrame);
+		
+		/* note: positions are advanced only once in the main solver step! */
+		
+		BPH_mass_spring_apply_result(id);
+	}
+}
+
 static void cloth_clear_result(ClothModifierData *clmd)
 {
 	ClothSolverResult *sres = clmd->solver_result;
@@ -890,6 +975,12 @@ static void cloth_record_result(ClothModifierData *clmd, ImplicitSolverResult *r
 
 int BPH_cloth_solve(Object *ob, float frame, ClothModifierData *clmd, ListBase *effectors)
 {
+	/* Hair currently is a cloth sim in disguise ...
+	 * Collision detection and volumetrics work differently then.
+	 * Bad design, TODO
+	 */
+	const bool is_hair = (clmd->hairdata != NULL);
+	
 	unsigned int i=0;
 	float step=0.0f, tf=clmd->sim_parms->timescale;
 	Cloth *cloth = clmd->clothObject;
@@ -921,25 +1012,28 @@ int BPH_cloth_solve(Object *ob, float frame, ClothModifierData *clmd, ListBase *
 	while (step < tf) {
 		ImplicitSolverResult result;
 		
-		/* initialize forces to zero */
-		BPH_mass_spring_clear_forces(id);
-		BPH_mass_spring_clear_constraints(id);
-		
 		/* copy velocities for collision */
 		for (i = 0; i < numverts; i++) {
 			BPH_mass_spring_get_motion_state(id, i, NULL, verts[i].tv);
 			copy_v3_v3(verts[i].v, verts[i].tv);
 		}
 		
-		/* determine contact points */
-		if (clmd->coll_parms->flags & CLOTH_COLLSETTINGS_FLAG_ENABLED) {
-			if (clmd->coll_parms->flags & CLOTH_COLLSETTINGS_FLAG_POINTS) {
+		if (is_hair) {
+			/* determine contact points */
+			if (clmd->coll_parms->flags & CLOTH_COLLSETTINGS_FLAG_ENABLED) {
 				cloth_find_point_contacts(ob, clmd, 0.0f, tf, &contacts, &totcolliders);
 			}
+			
+			/* setup vertex constraints for pinned vertices and contacts */
+			cloth_setup_constraints(clmd, contacts, totcolliders, dt);
+		}
+		else {
+			/* setup vertex constraints for pinned vertices */
+			cloth_setup_constraints(clmd, NULL, 0, dt);
 		}
 		
-		/* setup vertex constraints for pinned vertices and contacts */
-		cloth_setup_constraints(clmd, contacts, totcolliders, dt);
+		/* initialize forces to zero */
+		BPH_mass_spring_clear_forces(id);
 		
 		// damping velocity for artistic reasons
 		// this is a bad way to do it, should be removed imo - lukas_t
@@ -959,9 +1053,15 @@ int BPH_cloth_solve(Object *ob, float frame, ClothModifierData *clmd, ListBase *
 		BPH_mass_spring_solve_velocities(id, dt, &result);
 		cloth_record_result(clmd, &result, clmd->sim_parms->stepsPerFrame);
 		
-		cloth_continuum_step(clmd, dt);
+		if (is_hair) {
+			cloth_continuum_step(clmd, dt);
+		}
 		
 		BPH_mass_spring_solve_positions(id, dt);
+		
+		if (!is_hair) {
+			cloth_collision_solve_extra(ob, clmd, effectors, frame, step, dt);
+		}
 		
 		BPH_mass_spring_apply_result(id);
 		

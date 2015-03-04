@@ -105,6 +105,11 @@ void BKE_nla_validate_state(struct AnimData *adt);
 
 /* ............ */
 
+bool BKE_nla_action_is_stashed(struct AnimData *adt, struct bAction *act);
+bool BKE_nla_action_stash(struct AnimData *adt);
+
+/* ............ */
+
 void BKE_nla_action_pushdown(struct AnimData *adt);
 
 bool BKE_nla_tweakmode_enter(struct AnimData *adt);

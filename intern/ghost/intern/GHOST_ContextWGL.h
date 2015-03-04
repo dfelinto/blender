@@ -118,6 +118,8 @@ public:
 	 */
 	GHOST_TSuccess getSwapInterval(int &intervalOut);
 
+	static void unSetWarningOld(){s_warn_old = true;}
+
 protected:
 	inline void activateWGLEW() const {
 #ifdef WITH_GLEW_MX 
@@ -158,8 +160,8 @@ private:
 
 	void initContextWGLEW(PIXELFORMATDESCRIPTOR &preferredPFD);
 
-	HDC  m_hDC;
 	HWND m_hWnd;
+	HDC  m_hDC;
 
 	const int m_contextProfileMask;
 	const int m_contextMajorVersion;
@@ -183,6 +185,7 @@ private:
 	static int   s_sharedCount;
 
 	static bool s_singleContextMode;
+	static bool s_warn_old;
 };
 
 #endif  // __GHOST_CONTEXTWGL_H__

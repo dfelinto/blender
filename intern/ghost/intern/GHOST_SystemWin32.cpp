@@ -31,11 +31,6 @@
  * \author	Maarten Gribnau
  */
 
-#ifdef WITH_GHOST_DEBUG
-#  include <iostream>
-#endif
-
-#include <stdio.h> // [mce] temporary debug, remove soon!
 
 #include "GHOST_SystemWin32.h"
 #include "GHOST_EventDragnDrop.h"
@@ -152,7 +147,7 @@ static void initRawInput()
 	if (RegisterRawInputDevices(devices, DEVICE_COUNT, sizeof(RAWINPUTDEVICE)))
 		;  // yay!
 	else
-		printf("could not register for RawInput: %d\n", (int)GetLastError());
+		GHOST_PRINTF("could not register for RawInput: %d\n", (int)GetLastError());
 
 #undef DEVICE_COUNT
 }
@@ -231,12 +226,11 @@ GHOST_IWindow *GHOST_SystemWin32::createWindow(
         GHOST_TInt32 left, GHOST_TInt32 top,
         GHOST_TUns32 width, GHOST_TUns32 height,
         GHOST_TWindowState state, GHOST_TDrawingContextType type,
-        bool wantStereoVisual,
+        GHOST_GLSettings glSettings,
         const bool exclusive,
-        const GHOST_TUns16 wantNumOfAASamples,
         const GHOST_TEmbedderWindowID parentWindow)
 {
-	GHOST_Window *window =
+	GHOST_WindowWin32 *window =
 		new GHOST_WindowWin32(
 		        this,
 		        title,
@@ -246,8 +240,9 @@ GHOST_IWindow *GHOST_SystemWin32::createWindow(
 		        height,
 		        state,
 		        type,
-		        wantStereoVisual,
-		        wantNumOfAASamples,
+		        ((glSettings.flags & GHOST_glStereoVisual) != 0),
+	            ((glSettings.flags & GHOST_glWarnSupport) != 0),
+		        glSettings.numOfAASamples,
 		        parentWindow);
 
 	if (window->getValid()) {
@@ -432,7 +427,7 @@ GHOST_TSuccess GHOST_SystemWin32::exit()
 	return GHOST_System::exit();
 }
 
-GHOST_TKey GHOST_SystemWin32::hardKey(GHOST_IWindow *window, RAWINPUT const &raw, int *keyDown, char *vk)
+GHOST_TKey GHOST_SystemWin32::hardKey(RAWINPUT const &raw, int *keyDown, char *vk)
 {
 	GHOST_SystemWin32 *system = (GHOST_SystemWin32 *)getSystem();
 	GHOST_TKey key = GHOST_kKeyUnknown;
@@ -444,7 +439,7 @@ GHOST_TKey GHOST_SystemWin32::hardKey(GHOST_IWindow *window, RAWINPUT const &raw
 	unsigned int msg = raw.data.keyboard.Message;
 	*keyDown = !(raw.data.keyboard.Flags & RI_KEY_BREAK) && msg != WM_KEYUP && msg != WM_SYSKEYUP;
 
-	key = this->convertKey(window, raw.data.keyboard.VKey, raw.data.keyboard.MakeCode, (raw.data.keyboard.Flags & (RI_KEY_E1 | RI_KEY_E0)));
+	key = this->convertKey(raw.data.keyboard.VKey, raw.data.keyboard.MakeCode, (raw.data.keyboard.Flags & (RI_KEY_E1 | RI_KEY_E0)));
 	
 	// extra handling of modifier keys: don't send repeats out from GHOST
 	if (key >= GHOST_kKeyLeftShift && key <= GHOST_kKeyRightAlt) {
@@ -509,7 +504,7 @@ GHOST_TKey GHOST_SystemWin32::hardKey(GHOST_IWindow *window, RAWINPUT const &raw
 //! note: this function can be extended to include other exotic cases as they arise.
 // This function was added in response to bug [#25715]
 // This is going to be a long list [T42426]
-GHOST_TKey GHOST_SystemWin32::processSpecialKey(GHOST_IWindow *window, short vKey, short scanCode) const
+GHOST_TKey GHOST_SystemWin32::processSpecialKey(short vKey, short scanCode) const
 {
 	GHOST_TKey key = GHOST_kKeyUnknown;
 	switch (PRIMARYLANGID(m_langId)) {
@@ -525,7 +520,7 @@ GHOST_TKey GHOST_SystemWin32::processSpecialKey(GHOST_IWindow *window, short vKe
 	return key;
 }
 
-GHOST_TKey GHOST_SystemWin32::convertKey(GHOST_IWindow *window, short vKey, short scanCode, short extend) const
+GHOST_TKey GHOST_SystemWin32::convertKey(short vKey, short scanCode, short extend) const
 {
 	GHOST_TKey key;
 
@@ -633,7 +628,7 @@ GHOST_TKey GHOST_SystemWin32::convertKey(GHOST_IWindow *window, short vKey, shor
 			case VK_SCROLL: key = GHOST_kKeyScrollLock; break;
 			case VK_CAPITAL: key = GHOST_kKeyCapsLock; break;
 			case VK_OEM_8:
-				key = ((GHOST_SystemWin32 *)getSystem())->processSpecialKey(window, vKey, scanCode);
+				key = ((GHOST_SystemWin32 *)getSystem())->processSpecialKey(vKey, scanCode);
 				break;
 			case VK_MEDIA_PLAY_PAUSE: key = GHOST_kKeyMediaPlay; break;
 			case VK_MEDIA_STOP: key = GHOST_kKeyMediaStop; break;
@@ -650,18 +645,17 @@ GHOST_TKey GHOST_SystemWin32::convertKey(GHOST_IWindow *window, short vKey, shor
 
 GHOST_EventButton *GHOST_SystemWin32::processButtonEvent(
         GHOST_TEventType type,
-        GHOST_IWindow *window,
+        GHOST_WindowWin32 *window,
         GHOST_TButtonMask mask)
 {
 	return new GHOST_EventButton(getSystem()->getMilliSeconds(), type, window, mask);
 }
 
 
-GHOST_EventCursor *GHOST_SystemWin32::processCursorEvent(GHOST_TEventType type, GHOST_IWindow *Iwindow)
+GHOST_EventCursor *GHOST_SystemWin32::processCursorEvent(GHOST_TEventType type, GHOST_WindowWin32 *window)
 {
 	GHOST_TInt32 x_screen, y_screen;
 	GHOST_SystemWin32 *system = (GHOST_SystemWin32 *) getSystem();
-	GHOST_WindowWin32 *window = (GHOST_WindowWin32 *) Iwindow;
 	
 	system->getCursorPosition(x_screen, y_screen);
 
@@ -713,7 +707,7 @@ GHOST_EventCursor *GHOST_SystemWin32::processCursorEvent(GHOST_TEventType type, 
 }
 
 
-GHOST_EventWheel *GHOST_SystemWin32::processWheelEvent(GHOST_IWindow *window, WPARAM wParam, LPARAM lParam)
+GHOST_EventWheel *GHOST_SystemWin32::processWheelEvent(GHOST_WindowWin32 *window, WPARAM wParam, LPARAM lParam)
 {
 	// short fwKeys = LOWORD(wParam);			// key flags
 	int zDelta = (short) HIWORD(wParam);    // wheel rotation
@@ -728,12 +722,12 @@ GHOST_EventWheel *GHOST_SystemWin32::processWheelEvent(GHOST_IWindow *window, WP
 }
 
 
-GHOST_EventKey *GHOST_SystemWin32::processKeyEvent(GHOST_IWindow *window, RAWINPUT const &raw)
+GHOST_EventKey *GHOST_SystemWin32::processKeyEvent(GHOST_WindowWin32 *window, RAWINPUT const &raw)
 {
 	int keyDown = 0;
 	char vk;
 	GHOST_SystemWin32 *system = (GHOST_SystemWin32 *)getSystem();
-	GHOST_TKey key = system->hardKey(window, raw, &keyDown, &vk);
+	GHOST_TKey key = system->hardKey(raw, &keyDown, &vk);
 	GHOST_EventKey *event;
 
 	if (key != GHOST_kKeyUnknown) {
@@ -768,10 +762,8 @@ GHOST_EventKey *GHOST_SystemWin32::processKeyEvent(GHOST_IWindow *window, RAWINP
 		}
 
 		event = new GHOST_EventKey(system->getMilliSeconds(), keyDown ? GHOST_kEventKeyDown : GHOST_kEventKeyUp, window, key, ascii, utf8_char);
-		
-#ifdef GHOST_DEBUG
-		std::cout << ascii << std::endl;
-#endif
+
+		// GHOST_PRINTF("%c\n", ascii); // we already get this info via EventPrinter
 	}
 	else {
 		event = 0;
@@ -780,22 +772,22 @@ GHOST_EventKey *GHOST_SystemWin32::processKeyEvent(GHOST_IWindow *window, RAWINP
 }
 
 
-GHOST_Event *GHOST_SystemWin32::processWindowEvent(GHOST_TEventType type, GHOST_IWindow *window)
+GHOST_Event *GHOST_SystemWin32::processWindowEvent(GHOST_TEventType type, GHOST_WindowWin32 *window)
 {
-	GHOST_System *system = (GHOST_System *)getSystem();
+	GHOST_SystemWin32 *system = (GHOST_SystemWin32 *)getSystem();
 
 	if (type == GHOST_kEventWindowActivate) {
 		system->getWindowManager()->setActiveWindow(window);
-		((GHOST_WindowWin32 *)window)->bringTabletContextToFront();
+		window->bringTabletContextToFront();
 	}
 
 	return new GHOST_Event(system->getMilliSeconds(), type, window);
 }
 
 #ifdef WITH_INPUT_IME
-GHOST_Event *GHOST_SystemWin32::processImeEvent(GHOST_TEventType type, GHOST_IWindow *window, GHOST_TEventImeData *data)
+GHOST_Event *GHOST_SystemWin32::processImeEvent(GHOST_TEventType type, GHOST_WindowWin32 *window, GHOST_TEventImeData *data)
 {
-	GHOST_System *system = (GHOST_System *)getSystem();
+	GHOST_SystemWin32 *system = (GHOST_SystemWin32 *)getSystem();
 	return new GHOST_EventIME(system->getMilliSeconds(), type, window, data);
 }
 #endif
@@ -804,11 +796,11 @@ GHOST_Event *GHOST_SystemWin32::processImeEvent(GHOST_TEventType type, GHOST_IWi
 GHOST_TSuccess GHOST_SystemWin32::pushDragDropEvent(
         GHOST_TEventType eventType,
         GHOST_TDragnDropTypes draggedObjectType,
-        GHOST_IWindow *window,
+        GHOST_WindowWin32 *window,
         int mouseX, int mouseY,
         void *data)
 {
-	GHOST_SystemWin32 *system = ((GHOST_SystemWin32 *)getSystem());
+	GHOST_SystemWin32 *system = (GHOST_SystemWin32 *)getSystem();
 	return system->pushEvent(new GHOST_EventDragnDrop(system->getMilliSeconds(),
 	                                                  eventType,
 	                                                  draggedObjectType,
@@ -838,7 +830,7 @@ bool GHOST_SystemWin32::processNDOF(RAWINPUT const &raw)
 		if (info.dwType == RIM_TYPEHID)
 			m_ndofManager->setDevice(info.hid.dwVendorId, info.hid.dwProductId);
 		else
-			puts("<!> not a HID device... mouse/kb perhaps?");
+			GHOST_PRINT("<!> not a HID device... mouse/kb perhaps?\n");
 
 		firstEvent = false;
 	}
@@ -883,7 +875,7 @@ bool GHOST_SystemWin32::processNDOF(RAWINPUT const &raw)
 				m_ndofManager->updateRotation(r, now);
 
 				// I've never gotten one of these, has anyone else?
-				puts("ndof: combined T + R");
+				GHOST_PRINT("ndof: combined T + R\n");
 			}
 			break;
 		}
@@ -912,7 +904,7 @@ LRESULT WINAPI GHOST_SystemWin32::s_wndProc(HWND hwnd, UINT msg, WPARAM wParam, 
 	bool eventHandled = false;
 
 	LRESULT lResult = 0;
-	GHOST_SystemWin32 *system = ((GHOST_SystemWin32 *)getSystem());
+	GHOST_SystemWin32 *system = (GHOST_SystemWin32 *)getSystem();
 	GHOST_EventManager *eventManager = system->getEventManager();
 	GHOST_ASSERT(system, "GHOST_SystemWin32::s_wndProc(): system not initialized");
 
@@ -970,47 +962,51 @@ LRESULT WINAPI GHOST_SystemWin32::s_wndProc(HWND hwnd, UINT msg, WPARAM wParam, 
 				////////////////////////////////////////////////////////////////////////
 				case WM_IME_SETCONTEXT:
 				{
-					window->getImeInput()->SetInputLanguage();
-					window->getImeInput()->CreateImeWindow(window->getHWND());
-					window->getImeInput()->CleanupComposition(window->getHWND());
-					window->getImeInput()->CheckFirst(window->getHWND());
+					GHOST_ImeWin32 *ime = window->getImeInput();
+					ime->SetInputLanguage();
+					ime->CreateImeWindow(hwnd);
+					ime->CleanupComposition(hwnd);
+					ime->CheckFirst(hwnd);
 					break;
 				}
 				case WM_IME_STARTCOMPOSITION:
 				{
+					GHOST_ImeWin32 *ime = window->getImeInput();
 					eventHandled = true;
 					/* remove input event before start comp event, avoid redundant input */
 					eventManager->removeTypeEvents(GHOST_kEventKeyDown, window);
-					window->getImeInput()->CreateImeWindow(window->getHWND());
-					window->getImeInput()->ResetComposition(window->getHWND());
+					ime->CreateImeWindow(hwnd);
+					ime->ResetComposition(hwnd);
 					event = processImeEvent(
 					        GHOST_kEventImeCompositionStart,
 					        window,
-					        &window->getImeInput()->eventImeData);
+					        &ime->eventImeData);
 					break;
 				}
 				case WM_IME_COMPOSITION:
 				{
+					GHOST_ImeWin32 *ime = window->getImeInput();
 					eventHandled = true;
-					window->getImeInput()->UpdateImeWindow(window->getHWND());
-					window->getImeInput()->UpdateInfo(window->getHWND());
+					ime->UpdateImeWindow(hwnd);
+					ime->UpdateInfo(hwnd);
 					event = processImeEvent(
 					        GHOST_kEventImeComposition,
 					        window,
-					        &window->getImeInput()->eventImeData);
+					        &ime->eventImeData);
 					break;
 				}
 				case WM_IME_ENDCOMPOSITION:
 				{
+					GHOST_ImeWin32 *ime = window->getImeInput();
 					eventHandled = true;
 					/* remove input event after end comp event, avoid redundant input */
 					eventManager->removeTypeEvents(GHOST_kEventKeyDown, window);
-					window->getImeInput()->ResetComposition(window->getHWND());
-					window->getImeInput()->DestroyImeWindow(window->getHWND());
+					ime->ResetComposition(hwnd);
+					ime->DestroyImeWindow(hwnd);
 					event = processImeEvent(
 					        GHOST_kEventImeCompositionEnd,
 					        window,
-					        &window->getImeInput()->eventImeData);
+					        &ime->eventImeData);
 					break;
 				}
 #endif /* WITH_INPUT_IME */
@@ -1064,11 +1060,11 @@ LRESULT WINAPI GHOST_SystemWin32::s_wndProc(HWND hwnd, UINT msg, WPARAM wParam, 
 				// Tablet events, processed
 				////////////////////////////////////////////////////////////////////////
 				case WT_PACKET:
-					((GHOST_WindowWin32 *)window)->processWin32TabletEvent(wParam, lParam);
+					window->processWin32TabletEvent(wParam, lParam);
 					break;
 				case WT_CSRCHANGE:
 				case WT_PROXIMITY:
-					((GHOST_WindowWin32 *)window)->processWin32TabletInitEvent();
+					window->processWin32TabletInitEvent();
 					break;
 				////////////////////////////////////////////////////////////////////////
 				// Mouse events, processed
@@ -1128,7 +1124,7 @@ LRESULT WINAPI GHOST_SystemWin32::s_wndProc(HWND hwnd, UINT msg, WPARAM wParam, 
 					 * until it finds a window that processes it.
 					 */
 
-					/* Get the winow under the mouse and send event to it's queue. */
+					/* Get the window under the mouse and send event to its queue. */
 					POINT mouse_pos = {GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
 					HWND mouse_hwnd = ChildWindowFromPoint(HWND_DESKTOP, mouse_pos);
 					GHOST_WindowWin32 *mouse_window = (GHOST_WindowWin32 *)::GetWindowLongPtr(mouse_hwnd, GWLP_USERDATA);
@@ -1136,7 +1132,7 @@ LRESULT WINAPI GHOST_SystemWin32::s_wndProc(HWND hwnd, UINT msg, WPARAM wParam, 
 						event = processWheelEvent(mouse_window, wParam, lParam);
 					}
 					else {
-						/* Happens when wmouse is not over of any of blender windows. */
+						/* Happens when mouse is not over any of blender's windows. */
 						event = processWheelEvent(window, wParam, lParam);
 					}
 
