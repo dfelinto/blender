@@ -2248,7 +2248,8 @@ int BKE_imbuf_write_stamp(Scene *scene, struct Object *camera, ImBuf *ibuf, cons
 
 
 static void do_makepicstring(char *string, const char *base, const char *relbase, int frame, const char imtype,
-                             const ImageFormatData *im_format, const short use_ext, const short use_frames, const char *view)
+                             const ImageFormatData *im_format, const short use_ext, const short use_frames,
+                             const char *suffix)
 {
 	if (string == NULL) return;
 	BLI_strncpy(string, base, FILE_MAX - 10);   /* weak assumption */
@@ -2257,7 +2258,8 @@ static void do_makepicstring(char *string, const char *base, const char *relbase
 	if (use_frames)
 		BLI_path_frame(string, frame, 4);
 
-	BLI_path_view(string, view);
+	if (suffix)
+		BLI_path_suffix(string, FILE_MAX, suffix, "");
 
 	if (use_ext)
 		do_add_image_extension(string, imtype, im_format);
@@ -2265,9 +2267,9 @@ static void do_makepicstring(char *string, const char *base, const char *relbase
 
 void BKE_image_path_from_imformat(
         char *string, const char *base, const char *relbase, int frame,
-        const ImageFormatData *im_format, const bool use_ext, const bool use_frames, const char *view)
+        const ImageFormatData *im_format, const bool use_ext, const bool use_frames, const char *suffix)
 {
-	do_makepicstring(string, base, relbase, frame, im_format->imtype, im_format, use_ext, use_frames, view);
+	do_makepicstring(string, base, relbase, frame, im_format->imtype, im_format, use_ext, use_frames, suffix);
 }
 
 void BKE_image_path_from_imtype(

@@ -1082,7 +1082,7 @@ static void ffmpeg_filepath_get(FFMpegContext *context, char *string, RenderData
 		strcat(string, autosplit);
 	}
 
-	BLI_path_view(string, suffix);
+	BLI_path_suffix(string, FILE_MAX, suffix, "");
 }
 
 void BKE_ffmpeg_filepath_get(char *string, RenderData *rd, const char *suffix)

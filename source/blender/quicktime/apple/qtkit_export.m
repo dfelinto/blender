@@ -253,7 +253,7 @@ void filepath_qt(char *string, RenderData *rd, const char *suffix)
 		}
 	}
 
-	BLI_path_view(string, suffix);
+	BLI_path_suffix(string, FILE_MAX, suffix, "");
 }
 
 void *context_create_qt(void)

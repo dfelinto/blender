@@ -2299,7 +2299,7 @@ void BKE_scene_view_filepath_get(const RenderData *rd, const char *filepath, con
 		BLI_strncpy(suffix, viewname, sizeof(suffix));
 
 	BLI_strncpy(r_filepath, filepath, FILE_MAX);
-	BLI_path_view(r_filepath, suffix);
+	BLI_path_suffix(r_filepath, FILE_MAX, suffix, "");
 }
 
 const char *BKE_scene_view_suffix_get(const RenderData *rd, const char *viewname)

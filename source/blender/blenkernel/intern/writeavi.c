@@ -178,7 +178,7 @@ static void filepath_avi(char *string, RenderData *rd, const char *suffix)
 		}
 	}
 
-	BLI_path_view(string, suffix);
+	BLI_path_suffix(string, FILE_MAX, suffix, "");
 }
 
 static int start_avi(void *context_v, Scene *UNUSED(scene), RenderData *rd, int rectx, int recty, const char *suffix, ReportList *reports)

@@ -68,10 +68,10 @@ int     BKE_imbuf_write(struct ImBuf *ibuf, const char *name, struct ImageFormat
 int     BKE_imbuf_write_as(struct ImBuf *ibuf, const char *name, struct ImageFormatData *imf, const bool is_copy);
 void    BKE_image_path_from_imformat(
         char *string, const char *base, const char *relbase, int frame,
-        const struct ImageFormatData *im_format, const bool use_ext, const bool use_frames, const char *view);
+        const struct ImageFormatData *im_format, const bool use_ext, const bool use_frames, const char *suffix);
 void    BKE_image_path_from_imtype(
         char *string, const char *base, const char *relbase, int frame,
-        const char imtype, const bool use_ext, const bool use_frames, const char *view);
+        const char imtype, const bool use_ext, const bool use_frames, const char *suffix);
 int     BKE_image_path_ensure_ext_from_imformat(char *string, const struct ImageFormatData *im_format);
 int     BKE_image_path_ensure_ext_from_imtype(char *string, const char imtype);
 char    BKE_image_ftype_to_imtype(const int ftype);

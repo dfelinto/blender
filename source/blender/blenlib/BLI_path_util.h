@@ -126,7 +126,6 @@ bool BLI_parent_dir(char *path) ATTR_NONNULL();
  * \retval Returns true if the path was relative (started with "//").
  */
 bool BLI_path_abs(char *path, const char *basepath)  ATTR_NONNULL();
-bool BLI_path_view(char *path, const char *view) ATTR_NONNULL(1);
 bool BLI_path_frame(char *path, int frame, int digits) ATTR_NONNULL();
 bool BLI_path_frame_range(char *path, int sta, int end, int digits) ATTR_NONNULL();
 bool BLI_path_frame_check_chars(const char *path) ATTR_NONNULL();
