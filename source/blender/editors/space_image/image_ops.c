@@ -2367,10 +2367,12 @@ static void image_new_draw(bContext *C, wmOperator *op)
 	uiItemL(col[0], "", ICON_NONE);
 	uiItemR(col[1], &ptr, "float", 0, NULL, ICON_NONE);
 
+#if 0
 	if (is_multiview) {
 		uiItemL(col[0], "", ICON_NONE);
 		uiItemR(col[1], &ptr, "use_stereo_3d", 0, NULL, ICON_NONE);
 	}
+#endif
 }
 
 void IMAGE_OT_new(wmOperatorType *ot)
