@@ -880,6 +880,8 @@ enum {
 /* Stereo Flags */
 #define STEREO_RIGHT_NAME "right"
 #define STEREO_LEFT_NAME "left"
+#define STEREO_RIGHT_SUFFIX "_R"
+#define STEREO_LEFT_SUFFIX "_L"
 
 typedef enum StereoViews {
 	STEREO_LEFT_ID = 0,

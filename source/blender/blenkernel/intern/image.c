@@ -902,11 +902,10 @@ Image *BKE_image_add_from_imbuf(ImBuf *ibuf)
 /* packs rects from memory as PNG
  * convert multiview images to R_IMF_VIEWS_INDIVIDUAL
  */
-static void image_memorypack_multiview(Scene *scene, Image *ima)
+static void image_memorypack_multiview(Image *ima)
 {
 	ImageView *iv;
 	size_t i;
-	const size_t totfiles = image_num_files(ima);
 
 	image_free_packedfiles(ima);
 
@@ -916,10 +915,11 @@ static void image_memorypack_multiview(Scene *scene, Image *ima)
 		ibuf->ftype = PNG;
 		ibuf->planes = R_IMF_PLANES_RGBA;
 
-		/* if the image was a R_IMF_VIEWS_STEREO_3D we need to create
-		 *  new names for the new individual views */
-		if (totfiles == 1)
-			BKE_scene_view_filepath_get(&scene->r, ima->name, iv->name, iv->filepath);
+		/* if the image was a R_IMF_VIEWS_STEREO_3D we force _L, _R suffices */
+		if (ima->stereo3d_format == R_IMF_VIEWS_STEREO_3D) {
+			const char *suffix[2] = {STEREO_LEFT_SUFFIX, STEREO_RIGHT_SUFFIX};
+			BLI_path_suffix(iv->filepath, FILE_MAX, suffix[i], "");
+		}
 
 		IMB_saveiff(ibuf, iv->filepath, IB_rect | IB_mem);
 
@@ -956,12 +956,12 @@ static void image_memorypack_multiview(Scene *scene, Image *ima)
 }
 
 /* packs rect from memory as PNG */
-void BKE_image_memorypack(Scene *scene, Image *ima)
+void BKE_image_memorypack(Image *ima)
 {
 	ImBuf *ibuf;
 
 	if ((ima->flag & IMA_IS_MULTIVIEW))
-		return image_memorypack_multiview(scene, ima);
+		return image_memorypack_multiview(ima);
 
 	ibuf = image_get_cached_ibuf_for_index_frame(ima, IMA_NO_INDEX, 0);
 

@@ -226,7 +226,7 @@ void    BKE_image_free_anim_ibufs(struct Image *ima, int except_frame);
 /* does all images with type MOVIE or SEQUENCE */
 void BKE_image_all_free_anim_ibufs(int except_frame);
 
-void BKE_image_memorypack(struct Scene *scene, struct Image *ima);
+void BKE_image_memorypack(struct Image *ima);
 void BKE_image_packfiles(struct ReportList *reports, struct Image *ima, const char *basepath);
 
 /* prints memory statistics for images */

@@ -146,7 +146,6 @@ static void rna_Image_pack(
         Image *image, Main *bmain, bContext *C, ReportList *reports,
         int as_png, const char *data, int data_len)
 {
-	Scene *scene = CTX_data_scene(C);
 	ImBuf *ibuf = BKE_image_acquire_ibuf(image, NULL, NULL);
 
 	if (!as_png && (ibuf && (ibuf->userflags & IB_BITMAPDIRTY))) {
@@ -158,7 +157,7 @@ static void rna_Image_pack(
 			image->packedfile = NULL;
 		}
 		if (as_png) {
-			BKE_image_memorypack(scene, image);
+			BKE_image_memorypack(image);
 		}
 		else if (data) {
 			char *data_dup = MEM_mallocN(sizeof(*data_dup) * (size_t)data_len, __func__);
