@@ -1638,7 +1638,7 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 	Image *ima = ED_space_image(sima);
 	void *lock;
 	ImBuf *ibuf = ED_space_image_acquire_buffer(sima, &lock);
-	Scene * scene;
+	Scene *scene;
 	RenderResult *rr = NULL;
 	bool ok = false;
 

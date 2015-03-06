@@ -1817,7 +1817,9 @@ static void stampdata(Scene *scene, Object *camera, StampData *stamp_data, int d
 	}
 }
 
-void BKE_image_stamp_buf(Scene *scene, Object *camera, unsigned char *rect, float *rectf, int width, int height, int channels)
+void BKE_image_stamp_buf(
+        Scene *scene, Object *camera,
+        unsigned char *rect, float *rectf, int width, int height, int channels)
 {
 	struct StampData stamp_data;
 	float w, h, pad;
@@ -2247,9 +2249,10 @@ int BKE_imbuf_write_stamp(Scene *scene, struct Object *camera, ImBuf *ibuf, cons
 }
 
 
-static void do_makepicstring(char *string, const char *base, const char *relbase, int frame, const char imtype,
-                             const ImageFormatData *im_format, const short use_ext, const short use_frames,
-                             const char *suffix)
+static void do_makepicstring(
+        char *string, const char *base, const char *relbase, int frame, const char imtype,
+        const ImageFormatData *im_format, const short use_ext, const short use_frames,
+        const char *suffix)
 {
 	if (string == NULL) return;
 	BLI_strncpy(string, base, FILE_MAX - 10);   /* weak assumption */
@@ -2889,12 +2892,12 @@ static void image_add_buffer_cb(void *base, const char *str, ImBuf *ibuf, const 
 	bool predivide = (ima->alpha_mode == IMA_ALPHA_PREMUL);
 	const char *colorspace = ima->colorspace_settings.name;
 	const char *to_colorspace = IMB_colormanagement_role_colorspace_name_get(COLOR_ROLE_SCENE_LINEAR);
-	
+
 	if (ibuf == NULL)
 		return;
-	
+
 	id = BLI_findstringindex(&ima->views, str, offsetof(ImageView, name));
-	
+
 	if (id == -1)
 		return;
 
@@ -2981,6 +2984,7 @@ static void image_initialize_after_load(Image *ima, ImBuf *ibuf)
 	BKE_image_tag_time(ima);
 
 	ima->ok = IMA_OK_LOADED;
+
 }
 
 static int imbuf_alpha_flags_for_image(Image *ima)
