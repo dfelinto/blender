@@ -241,6 +241,7 @@ void ED_view3d_calc_camera_border_size(struct Scene *scene, struct ARegion *ar,
 bool ED_view3d_calc_render_border(struct Scene *scene, struct View3D *v3d,
                                   struct ARegion *ar, struct rcti *rect);
 
+void ED_view3d_clipping_calc_from_boundbox(float clip[6][4], const struct BoundBox *clipbb, const bool is_flip);
 void ED_view3d_clipping_calc(struct BoundBox *bb, float planes[4][4], struct bglMats *mats, const struct rcti *rect);
 void ED_view3d_clipping_local(struct RegionView3D *rv3d, float mat[4][4]);
 bool ED_view3d_clipping_test(struct RegionView3D *rv3d, const float co[3], const bool is_local);
@@ -326,6 +327,7 @@ void ED_view3d_update_viewmat(struct Scene *scene, struct View3D *v3d, struct AR
 bool ED_view3d_quat_from_axis_view(const char view, float quat[4]);
 char ED_view3d_quat_to_axis_view(const float quat[4], const float epsilon);
 char ED_view3d_lock_view_from_index(int index);
+char ED_view3d_axis_view_opposite(char view);
 bool ED_view3d_lock(struct RegionView3D *rv3d);
 
 uint64_t ED_view3d_datamask(struct Scene *scene, struct View3D *v3d);

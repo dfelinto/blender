@@ -112,6 +112,7 @@ public:
 class RenderLayersAOOperation : public RenderLayersBaseProg {
 public:
 	RenderLayersAOOperation();
+	void executePixelSampled(float output[4], float x, float y, PixelSampler sampler);
 };
 
 class RenderLayersAlphaProg : public RenderLayersBaseProg {

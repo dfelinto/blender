@@ -104,11 +104,11 @@ void RenderLayersBaseProg::doInterpolation(float output[4], float x, float y, Pi
 		}
 
 		case COM_PS_BILINEAR:
-			BLI_bilinear_interpolation_fl(this->m_inputBuffer, output, width, height, this->m_elementsize, x - 0.5f, y - 0.5f);
+			BLI_bilinear_interpolation_fl(this->m_inputBuffer, output, width, height, this->m_elementsize, x, y);
 			break;
 
 		case COM_PS_BICUBIC:
-			BLI_bicubic_interpolation_fl(this->m_inputBuffer, output, width, height, this->m_elementsize, x - 0.5f, y - 0.5f);
+			BLI_bicubic_interpolation_fl(this->m_inputBuffer, output, width, height, this->m_elementsize, x, y);
 			break;
 	}
 }
@@ -133,6 +133,27 @@ void RenderLayersBaseProg::executePixelSampled(float output[4], float x, float y
 
 	int ix = x - dx;
 	int iy = y - dy;
+#endif
+
+#ifndef NDEBUG
+	{
+		const DataType data_type = this->getOutputSocket()->getDataType();
+		int actual_element_size = this->m_elementsize;
+		int expected_element_size;
+		if (data_type == COM_DT_VALUE) {
+			expected_element_size = 1;
+		}
+		else if (data_type == COM_DT_VECTOR) {
+			expected_element_size = 3;
+		}
+		else if (data_type == COM_DT_COLOR) {
+			expected_element_size = 4;
+		}
+		else {
+			BLI_assert(!"Something horribly wrong just happened");
+		}
+		BLI_assert(expected_element_size == actual_element_size);
+	}
 #endif
 
 	if (this->m_inputBuffer == NULL) {
@@ -191,6 +212,19 @@ void RenderLayersBaseProg::determineResolution(unsigned int resolution[2], unsig
 RenderLayersAOOperation::RenderLayersAOOperation() : RenderLayersBaseProg(SCE_PASS_AO, 3)
 {
 	this->addOutputSocket(COM_DT_COLOR);
+}
+
+
+void RenderLayersAOOperation::executePixelSampled(float output[4], float x, float y, PixelSampler sampler)
+{
+	float *inputBuffer = this->getInputBuffer();
+	if (inputBuffer == NULL) {
+		zero_v3(output);
+	}
+	else {
+		doInterpolation(output, x, y, sampler);
+	}
+	output[3] = 1.0f;
 }
 
 /* ******** Render Layers Alpha Operation ******** */

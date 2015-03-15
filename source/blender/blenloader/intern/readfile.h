@@ -93,6 +93,9 @@ typedef struct FileData {
 	
 	struct BHeadSort *bheadmap;
 	int tot_bheadmap;
+
+	/* see: USE_GHASH_BHEAD */
+	struct GHash *bhead_idname_hash;
 	
 	ListBase *mainlist;
 	
@@ -146,7 +149,7 @@ BHead *blo_firstbhead(FileData *fd);
 BHead *blo_nextbhead(FileData *fd, BHead *thisblock);
 BHead *blo_prevbhead(FileData *fd, BHead *thisblock);
 
-char *bhead_id_name(FileData *fd, BHead *bhead);
+const char *bhead_id_name(const FileData *fd, const BHead *bhead);
 
 /* do versions stuff */
 

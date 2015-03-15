@@ -103,10 +103,10 @@ void MovieClipBaseOperation::executePixelSampled(float output[4], float x, float
 				nearest_interpolation_color(ibuf, NULL, output, x, y);
 				break;
 			case COM_PS_BILINEAR:
-				bilinear_interpolation_color(ibuf, NULL, output, x - 0.5f, y - 0.5f);
+				bilinear_interpolation_color(ibuf, NULL, output, x, y);
 				break;
 			case COM_PS_BICUBIC:
-				bicubic_interpolation_color(ibuf, NULL, output, x - 0.5f, y - 0.5f);
+				bicubic_interpolation_color(ibuf, NULL, output, x, y);
 				break;
 		}
 	}
@@ -124,9 +124,7 @@ MovieClipAlphaOperation::MovieClipAlphaOperation() : MovieClipBaseOperation()
 
 void MovieClipAlphaOperation::executePixelSampled(float output[4], float x, float y, PixelSampler sampler)
 {
-	MovieClipBaseOperation::executePixelSampled(output, x, y, sampler);
-	output[0] = output[3];
-	output[1] = 0.0f;
-	output[2] = 0.0f;
-	output[3] = 0.0f;
+	float result[4];
+	MovieClipBaseOperation::executePixelSampled(result, x, y, sampler);
+	output[0] = result[3];
 }

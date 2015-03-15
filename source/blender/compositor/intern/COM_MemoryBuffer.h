@@ -222,7 +222,7 @@ public:
 			int v = y;
 			this->wrap_pixel(u, v, extend_x, extend_y);
 			const int offset = (this->m_width * y + x) * this->m_num_channels;
-			float* buffer = &this->m_buffer[offset];
+			float *buffer = &this->m_buffer[offset];
 			memcpy(result, buffer, sizeof(float) * this->m_num_channels);
 		}
 	}
@@ -259,7 +259,7 @@ public:
 		float u = x;
 		float v = y;
 		this->wrap_pixel(u, v, extend_x, extend_y);
-		BLI_bilinear_interpolation_fl(this->m_buffer, result, this->m_width, this->m_height, this->m_num_channels, u - 0.5f, v - 0.5f);
+		BLI_bilinear_interpolation_fl(this->m_buffer, result, this->m_width, this->m_height, this->m_num_channels, u, v);
 	}
 
 	void readEWA(float *result, const float uv[2], const float derivatives[2][2], PixelSampler sampler);

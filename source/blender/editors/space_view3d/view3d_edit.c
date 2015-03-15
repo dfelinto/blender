@@ -3703,22 +3703,6 @@ static void axis_set_view(bContext *C, View3D *v3d, ARegion *ar,
 	}
 
 	if (align_active == false) {
-		/* normal operation */
-		if (rv3d->viewlock & RV3D_LOCKED) {
-			/* only pass on if */
-
-			/* nice confusing if-block */
-			if (!((rv3d->view == RV3D_VIEW_FRONT  && view == RV3D_VIEW_BACK)  ||
-			      (rv3d->view == RV3D_VIEW_BACK   && view == RV3D_VIEW_FRONT) ||
-			      (rv3d->view == RV3D_VIEW_RIGHT  && view == RV3D_VIEW_LEFT)  ||
-			      (rv3d->view == RV3D_VIEW_LEFT   && view == RV3D_VIEW_RIGHT) ||
-			      (rv3d->view == RV3D_VIEW_BOTTOM && view == RV3D_VIEW_TOP)   ||
-			      (rv3d->view == RV3D_VIEW_TOP    && view == RV3D_VIEW_BOTTOM)))
-			{
-				return;
-			}
-		}
-
 		rv3d->view = view;
 	}
 
@@ -3764,10 +3748,6 @@ static int viewnumpad_exec(bContext *C, wmOperator *op)
 
 	viewnum = RNA_enum_get(op->ptr, "type");
 	align_active = RNA_boolean_get(op->ptr, "align_active");
-
-	/* set this to zero, gets handled in axis_set_view */
-	if (rv3d->viewlock & RV3D_LOCKED)
-		align_active = false;
 
 	/* Use this to test if we started out with a camera */
 
@@ -3894,23 +3874,37 @@ static int vieworbit_exec(bContext *C, wmOperator *op)
 	ARegion *ar;
 	RegionView3D *rv3d;
 	int orbitdir;
+	char view_opposite;
+	PropertyRNA *prop_angle = RNA_struct_find_property(op->ptr, "angle");
+	float angle = RNA_property_is_set(op->ptr, prop_angle) ?
+	              RNA_property_float_get(op->ptr, prop_angle) : DEG2RADF((float)U.pad_rot_angle);
 
 	/* no NULL check is needed, poll checks */
-	ED_view3d_context_user_region(C, &v3d, &ar);
+	v3d = CTX_wm_view3d(C);
+	ar = CTX_wm_region(C);
 	rv3d = ar->regiondata;
 
+	/* support for switching to the opposite view (even when in locked views) */
+	view_opposite = (fabsf(angle) == (float)M_PI) ? ED_view3d_axis_view_opposite(rv3d->view) : RV3D_VIEW_USER;
 	orbitdir = RNA_enum_get(op->ptr, "type");
 
-	if ((rv3d->viewlock & RV3D_LOCKED) == 0) {
+	if ((rv3d->viewlock & RV3D_LOCKED) && (view_opposite == RV3D_VIEW_USER)) {
+		/* no NULL check is needed, poll checks */
+		ED_view3d_context_user_region(C, &v3d, &ar);
+		rv3d = ar->regiondata;
+	}
+
+	if ((rv3d->viewlock & RV3D_LOCKED) == 0 || (view_opposite != RV3D_VIEW_USER)) {
 		if ((rv3d->persp != RV3D_CAMOB) || ED_view3d_camera_lock_check(v3d, rv3d)) {
 			int smooth_viewtx = WM_operator_smooth_viewtx_get(op);
-			float angle = DEG2RADF((float)U.pad_rot_angle);
 			float quat_mul[4];
 			float quat_new[4];
 			float ofs_new[3];
 			float *ofs_new_pt = NULL;
 
-			view3d_ensure_persp(v3d, ar);
+			if (view_opposite == RV3D_VIEW_USER) {
+				view3d_ensure_persp(v3d, ar);
+			}
 
 			if (ELEM(orbitdir, V3D_VIEW_STEPLEFT, V3D_VIEW_STEPRIGHT)) {
 				const float zvec[3] = {0.0f, 0.0f, 1.0f};
@@ -3933,7 +3927,15 @@ static int vieworbit_exec(bContext *C, wmOperator *op)
 			}
 
 			mul_qt_qtqt(quat_new, rv3d->viewquat, quat_mul);
-			rv3d->view = RV3D_VIEW_USER;
+
+			if (view_opposite != RV3D_VIEW_USER) {
+				rv3d->view = view_opposite;
+				/* avoid float in-precision, just get a new orientation */
+				ED_view3d_quat_from_axis_view(view_opposite, quat_new);
+			}
+			else {
+				rv3d->view = RV3D_VIEW_USER;
+			}
 
 			if (U.uiflag & USER_ORBIT_SELECTION) {
 				float dyn_ofs[3];
@@ -3964,6 +3966,8 @@ static int vieworbit_exec(bContext *C, wmOperator *op)
 
 void VIEW3D_OT_view_orbit(wmOperatorType *ot)
 {
+	PropertyRNA *prop;
+
 	/* identifiers */
 	ot->name = "View Orbit";
 	ot->description = "Orbit the view";
@@ -3977,7 +3981,11 @@ void VIEW3D_OT_view_orbit(wmOperatorType *ot)
 	ot->flag = 0;
 	
 	/* properties */
+	prop = RNA_def_float(ot->srna, "angle", 0, -FLT_MAX, FLT_MAX, "Roll", "", -FLT_MAX, FLT_MAX);
+	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+
 	ot->prop = RNA_def_enum(ot->srna, "type", prop_view_orbit_items, 0, "Orbit", "Direction of View Orbit");
+
 }
 
 
@@ -4429,20 +4437,6 @@ void VIEW3D_OT_background_image_remove(wmOperatorType *ot)
 
 /* ********************* set clipping operator ****************** */
 
-static void calc_clipping_plane(float clip[6][4], const BoundBox *clipbb, const bool is_flip)
-{
-	int val;
-
-	for (val = 0; val < 4; val++) {
-		normal_tri_v3(clip[val], clipbb->vec[val], clipbb->vec[val == 3 ? 0 : val + 1], clipbb->vec[val + 4]);
-		if (UNLIKELY(is_flip)) {
-			negate_v3(clip[val]);
-		}
-
-		clip[val][3] = -dot_v3v3(clip[val], clipbb->vec[val]);
-	}
-}
-
 static void calc_local_clipping(float clip_local[6][4], BoundBox *clipbb, float mat[4][4])
 {
 	BoundBox clipbb_local;
@@ -4455,7 +4449,7 @@ static void calc_local_clipping(float clip_local[6][4], BoundBox *clipbb, float 
 		mul_v3_m4v3(clipbb_local.vec[i], imat, clipbb->vec[i]);
 	}
 
-	calc_clipping_plane(clip_local, &clipbb_local, is_negative_m4(mat));
+	ED_view3d_clipping_calc_from_boundbox(clip_local, &clipbb_local, is_negative_m4(mat));
 }
 
 void ED_view3d_clipping_local(RegionView3D *rv3d, float mat[4][4])

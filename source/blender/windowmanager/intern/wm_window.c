@@ -369,7 +369,9 @@ static void wm_window_add_ghostwindow(wmWindowManager *wm, const char *title, wm
 	/* force setting multisamples only once, it requires restart - and you cannot 
 	 * mix it, either all windows have it, or none (tested in OSX opengl) */
 	if (multisamples == -1)
-		glSettings.numOfAASamples = U.ogl_multisamples;
+		multisamples = U.ogl_multisamples;
+
+	glSettings.numOfAASamples = multisamples;
 
 	/* a new window is created when pageflip mode is required for a window */
 	if (win->stereo3d_format->display_mode == S3D_DISPLAY_PAGEFLIP)

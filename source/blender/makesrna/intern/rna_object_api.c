@@ -557,7 +557,7 @@ void RNA_api_object(StructRNA *srna)
 	func = RNA_def_function(srna, "shape_key_add", "rna_Object_shape_key_add");
 	RNA_def_function_ui_description(func, "Add shape key to an object");
 	RNA_def_function_flag(func, FUNC_USE_CONTEXT | FUNC_USE_REPORTS);
-	RNA_def_string(func, "name", "Key", 0, "", "Unique name for the new keylock"); /* optional */
+	RNA_def_string(func, "name", "Key", 0, "", "Unique name for the new keyblock"); /* optional */
 	RNA_def_boolean(func, "from_mix", 1, "", "Create new shape from existing mix of shapes");
 	parm = RNA_def_pointer(func, "key", "ShapeKey", "", "New shape keyblock");
 	RNA_def_property_flag(parm, PROP_RNAPTR);
@@ -655,6 +655,9 @@ void RNA_api_object(StructRNA *srna)
 	RNA_def_function_ui_description(func, "Load the objects edit-mode data intp the object data");
 	parm = RNA_def_boolean(func, "result", 0, "", "Success");
 	RNA_def_function_return(func, parm);
+
+	func = RNA_def_function(srna, "cache_release", "BKE_object_free_caches");
+	RNA_def_function_ui_description(func, "Release memory used by caches associated with this object. Intended to be used by render engines only");
 }
 
 

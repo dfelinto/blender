@@ -206,6 +206,9 @@
  * - initialize FileGlobal and copy pointers to Global
  */
 
+/* use GHash for BHead name-based lookups (speeds up linking) */
+#define USE_GHASH_BHEAD
+
 /***/
 
 typedef struct OldNew {
@@ -225,6 +228,8 @@ typedef struct OldNewMap {
 static void *read_struct(FileData *fd, BHead *bh, const char *blockname);
 static void direct_link_modifiers(FileData *fd, ListBase *lb);
 static void convert_tface_mt(FileData *fd, Main *main);
+static BHead *find_bhead_from_code_name(FileData *fd, const short idcode, const char *name);
+static BHead *find_bhead_from_idname(FileData *fd, const char *idname);
 
 /* this function ensures that reports are printed,
  * in the case of libraray linking errors this is important!
@@ -291,15 +296,9 @@ static void oldnewmap_insert(OldNewMap *onm, void *oldaddr, void *newaddr, int n
 	
 	if (oldaddr==NULL || newaddr==NULL) return;
 	
-	if (onm->nentries == onm->entriessize) {
-		int osize = onm->entriessize;
-		OldNew *oentries = onm->entries;
-		
+	if (UNLIKELY(onm->nentries == onm->entriessize)) {
 		onm->entriessize *= 2;
-		onm->entries = MEM_mallocN(sizeof(*onm->entries)*onm->entriessize, "OldNewMap.entries");
-		
-		memcpy(onm->entries, oentries, sizeof(*oentries)*osize);
-		MEM_freeN(oentries);
+		onm->entries = MEM_reallocN(onm->entries, sizeof(*onm->entries) * onm->entriessize);
 	}
 
 	entry = &onm->entries[onm->nentries++];
@@ -507,6 +506,44 @@ static void read_file_version(FileData *fd, Main *main)
 		}
 	}
 }
+
+#ifdef USE_GHASH_BHEAD
+static void read_file_bhead_idname_map_create(FileData *fd)
+{
+	BHead *bhead;
+
+	/* dummy values */
+	bool is_link = false;
+	int code_prev = ENDB;
+	unsigned int reserve = 0;
+
+	for (bhead = blo_firstbhead(fd); bhead; bhead = blo_nextbhead(fd, bhead)) {
+		if (code_prev != bhead->code) {
+			code_prev = bhead->code;
+			is_link = BKE_idcode_is_valid(code_prev) ? BKE_idcode_is_linkable(code_prev) : false;
+		}
+
+		if (is_link) {
+			reserve += 1;
+		}
+	}
+
+	BLI_assert(fd->bhead_idname_hash == NULL);
+
+	fd->bhead_idname_hash = BLI_ghash_str_new_ex(__func__, reserve);
+
+	for (bhead = blo_firstbhead(fd); bhead; bhead = blo_nextbhead(fd, bhead)) {
+		if (code_prev != bhead->code) {
+			code_prev = bhead->code;
+			is_link = BKE_idcode_is_valid(code_prev) ? BKE_idcode_is_linkable(code_prev) : false;
+		}
+
+		if (is_link) {
+			BLI_ghash_insert(fd->bhead_idname_hash, (void *)bhead_id_name(fd, bhead), bhead);
+		}
+	}
+}
+#endif
 
 
 static Main *blo_find_main(FileData *fd, const char *filepath, const char *relabase)
@@ -736,7 +773,7 @@ BHead *blo_firstbhead(FileData *fd)
 
 BHead *blo_prevbhead(FileData *UNUSED(fd), BHead *thisblock)
 {
-	BHeadN *bheadn = (BHeadN *) (((char *) thisblock) - offsetof(BHeadN, bhead));
+	BHeadN *bheadn = (BHeadN *)POINTER_OFFSET(thisblock, -offsetof(BHeadN, bhead));
 	BHeadN *prev = bheadn->prev;
 	
 	return (prev) ? &prev->bhead : NULL;
@@ -750,7 +787,7 @@ BHead *blo_nextbhead(FileData *fd, BHead *thisblock)
 	if (thisblock) {
 		/* bhead is actually a sub part of BHeadN
 		 * We calculate the BHeadN pointer from the BHead pointer below */
-		new_bhead = (BHeadN *) (((char *) thisblock) - offsetof(BHeadN, bhead));
+		new_bhead = (BHeadN *)POINTER_OFFSET(thisblock, -offsetof(BHeadN, bhead));
 		
 		/* get the next BHeadN. If it doesn't exist we read in the next one */
 		new_bhead = new_bhead->next;
@@ -920,7 +957,7 @@ static int fd_read_from_memfile(FileData *filedata, void *buffer, unsigned int s
 			if (chunkoffset+readsize > chunk->size)
 				readsize= chunk->size-chunkoffset;
 			
-			memcpy((char *)buffer + totread, chunk->buf + chunkoffset, readsize);
+			memcpy(POINTER_OFFSET(buffer, totread), chunk->buf + chunkoffset, readsize);
 			totread += readsize;
 			filedata->seek += readsize;
 			seek += readsize;
@@ -1133,6 +1170,12 @@ void blo_freefiledata(FileData *fd)
 		if (fd->bheadmap)
 			MEM_freeN(fd->bheadmap);
 		
+#ifdef USE_GHASH_BHEAD
+		if (fd->bhead_idname_hash) {
+			BLI_ghash_free(fd->bhead_idname_hash, NULL, NULL);
+		}
+#endif
+
 		MEM_freeN(fd);
 	}
 }
@@ -3788,25 +3831,26 @@ static void lib_link_particlesettings(FileData *fd, Main *main)
 				BoidRule *rule;
 				for (; state; state=state->next) {
 					rule = state->rules.first;
-				for (; rule; rule=rule->next)
-					switch (rule->type) {
-						case eBoidRuleType_Goal:
-						case eBoidRuleType_Avoid:
-						{
-							BoidRuleGoalAvoid *brga = (BoidRuleGoalAvoid*)rule;
-							brga->ob = newlibadr(fd, part->id.lib, brga->ob);
-							break;
-						}
-						case eBoidRuleType_FollowLeader:
-						{
-							BoidRuleFollowLeader *brfl = (BoidRuleFollowLeader*)rule;
-							brfl->ob = newlibadr(fd, part->id.lib, brfl->ob);
-							break;
+					for (; rule; rule=rule->next) {
+						switch (rule->type) {
+							case eBoidRuleType_Goal:
+							case eBoidRuleType_Avoid:
+							{
+								BoidRuleGoalAvoid *brga = (BoidRuleGoalAvoid*)rule;
+								brga->ob = newlibadr(fd, part->id.lib, brga->ob);
+								break;
+							}
+							case eBoidRuleType_FollowLeader:
+							{
+								BoidRuleFollowLeader *brfl = (BoidRuleFollowLeader*)rule;
+								brfl->ob = newlibadr(fd, part->id.lib, brfl->ob);
+								break;
+							}
 						}
 					}
 				}
 			}
-			
+
 			for (a = 0; a < MAX_MTEX; a++) {
 				mtex= part->mtex[a];
 				if (mtex) {
@@ -5628,7 +5672,7 @@ static void direct_link_scene(FileData *fd, Scene *sce)
 		/* link metastack, slight abuse of structs here, have to restore pointer to internal part in struct */
 		{
 			Sequence temp;
-			char *poin;
+			void *poin;
 			intptr_t offset;
 			
 			offset = ((intptr_t)&(temp.seqbase)) - ((intptr_t)&temp);
@@ -5638,12 +5682,11 @@ static void direct_link_scene(FileData *fd, Scene *sce)
 				ed->seqbasep = &ed->seqbase;
 			}
 			else {
-				poin = (char *)ed->seqbasep;
-				poin -= offset;
+				poin = POINTER_OFFSET(ed->seqbasep, -offset);
 				
 				poin = newdataadr(fd, poin);
 				if (poin)
-					ed->seqbasep = (ListBase *)(poin+offset);
+					ed->seqbasep = (ListBase *)POINTER_OFFSET(poin, offset);
 				else
 					ed->seqbasep = &ed->seqbase;
 			}
@@ -5656,11 +5699,10 @@ static void direct_link_scene(FileData *fd, Scene *sce)
 				if (ms->oldbasep == old_seqbasep)
 					ms->oldbasep= &ed->seqbase;
 				else {
-					poin = (char *)ms->oldbasep;
-					poin -= offset;
+					poin = POINTER_OFFSET(ms->oldbasep, -offset);
 					poin = newdataadr(fd, poin);
 					if (poin) 
-						ms->oldbasep = (ListBase *)(poin+offset);
+						ms->oldbasep = (ListBase *)POINTER_OFFSET(poin, offset);
 					else 
 						ms->oldbasep = &ed->seqbase;
 				}
@@ -5862,6 +5904,12 @@ static void lib_link_screen(FileData *fd, Main *main)
 		if (sc->id.flag & LIB_NEED_LINK) {
 			sc->id.us = 1;
 			sc->scene = newlibadr(fd, sc->id.lib, sc->scene);
+
+			/* this should not happen, but apparently it does somehow. Until we figure out the cause,
+			 * just assign first available scene */
+			if (!sc->scene)
+				sc->scene = main->scene.first;
+
 			sc->animtimer = NULL; /* saved in rare cases */
 			
 			for (sa = sc->areabase.first; sa; sa = sa->next) {
@@ -8053,9 +8101,48 @@ static BHead *find_bhead(FileData *fd, void *old)
 	return NULL;
 }
 
-char *bhead_id_name(FileData *fd, BHead *bhead)
+static BHead *find_bhead_from_code_name(FileData *fd, const short idcode, const char *name)
 {
-	return ((char *)(bhead+1)) + fd->id_name_offs;
+#ifdef USE_GHASH_BHEAD
+
+	char idname_full[MAX_ID_NAME];
+
+	*((short *)idname_full) = idcode;
+	BLI_strncpy(idname_full + 2, name, sizeof(idname_full) - 2);
+
+	return BLI_ghash_lookup(fd->bhead_idname_hash, idname_full);
+
+#else
+	BHead *bhead;
+
+	for (bhead = blo_firstbhead(fd); bhead; bhead = blo_nextbhead(fd, bhead)) {
+		if (bhead->code == idcode) {
+			const char *idname_test = bhead_id_name(fd, bhead);
+			if (STREQ(idname_test + 2, name)) {
+				return bhead;
+			}
+		}
+		else if (bhead->code == ENDB) {
+			break;
+		}
+	}
+
+	return NULL;
+#endif
+}
+
+static BHead *find_bhead_from_idname(FileData *fd, const char *idname)
+{
+#ifdef USE_GHASH_BHEAD
+	return BLI_ghash_lookup(fd->bhead_idname_hash, idname);
+#else
+	return find_bhead_from_code_name(fd, GS(idname), idname + 2);
+#endif
+}
+
+const char *bhead_id_name(const FileData *fd, const BHead *bhead)
+{
+	return (const char *)POINTER_OFFSET(bhead, sizeof(*bhead) + fd->id_name_offs);
 }
 
 static ID *is_yet_read(FileData *fd, Main *mainvar, BHead *bhead)
@@ -9062,7 +9149,7 @@ static void give_base_to_objects(Main *mainvar, Scene *sce, Library *lib, const 
 					do_it = true;
 				}
 				else if (idcode==ID_GR) {
-					if (ob->id.us == 1 && is_link == false && ob->id.lib == lib) {
+					if ((is_link == false) && (ob->id.lib == lib)) {
 						if ((ob->flag & OB_FROMGROUP) && object_in_any_scene(mainvar, ob)==0) {
 							do_it = true;
 						}
@@ -9071,7 +9158,7 @@ static void give_base_to_objects(Main *mainvar, Scene *sce, Library *lib, const 
 				else {
 					/* when appending, make sure any indirectly loaded objects
 					 * get a base else they cant be accessed at all [#27437] */
-					if (ob->id.us==1 && is_link == false && ob->id.lib == lib) {
+					if ((is_link == false) && (ob->id.lib == lib)) {
 						/* we may be appending from a scene where we already
 						 *  have a linked object which is not in any scene [#27616] */
 						if ((ob->id.flag & LIB_PRE_EXISTING)==0) {
@@ -9091,7 +9178,9 @@ static void give_base_to_objects(Main *mainvar, Scene *sce, Library *lib, const 
 					base->lay = ob->lay;
 					base->object = ob;
 					base->flag = ob->flag;
-					ob->id.us = 1;
+
+					CLAMP_MIN(ob->id.us, 0);
+					ob->id.us += 1;
 					
 					ob->id.flag -= LIB_INDIRECT;
 					ob->id.flag |= LIB_EXTERN;
@@ -9139,50 +9228,40 @@ static void give_base_to_groups(Main *mainvar, Scene *scene)
  * but it may already have already been appended/linked */
 static ID *append_named_part(Main *mainl, FileData *fd, const char *idname, const short idcode)
 {
-	BHead *bhead;
-	ID *id = NULL;
-	int found = 0;
+	BHead *bhead = find_bhead_from_code_name(fd, idcode, idname);
+	ID *id;
 
-	for (bhead = blo_firstbhead(fd); bhead; bhead = blo_nextbhead(fd, bhead)) {
-		if (bhead->code == idcode) {
-			const char *idname_test= bhead_id_name(fd, bhead);
-			
-			if (STREQ(idname_test + 2, idname)) {
-				found = 1;
-				id = is_yet_read(fd, mainl, bhead);
-				if (id == NULL) {
-					/* not read yet */
-					read_libblock(fd, mainl, bhead, LIB_TESTEXT, &id);
-					
-					if (id) {
-						/* sort by name in list */
-						ListBase *lb = which_libbase(mainl, idcode);
-						id_sort_by_name(lb, id);
-					}
-				}
-				else {
-					/* already linked */
-					if (G.debug)
-						printf("append: already linked\n");
-					oldnewmap_insert(fd->libmap, bhead->old, id, bhead->code);
-					if (id->flag & LIB_INDIRECT) {
-						id->flag -= LIB_INDIRECT;
-						id->flag |= LIB_EXTERN;
-					}
-				}
-				
-				break;
+	if (bhead) {
+		id = is_yet_read(fd, mainl, bhead);
+		if (id == NULL) {
+			/* not read yet */
+			read_libblock(fd, mainl, bhead, LIB_TESTEXT, &id);
+
+			if (id) {
+				/* sort by name in list */
+				ListBase *lb = which_libbase(mainl, idcode);
+				id_sort_by_name(lb, id);
 			}
 		}
-		else if (bhead->code == ENDB) {
-			break;
+		else {
+			/* already linked */
+			if (G.debug)
+				printf("append: already linked\n");
+			oldnewmap_insert(fd->libmap, bhead->old, id, bhead->code);
+			if (id->flag & LIB_INDIRECT) {
+				id->flag -= LIB_INDIRECT;
+				id->flag |= LIB_EXTERN;
+			}
 		}
+	}
+	else {
+		id = NULL;
 	}
 	
 	/* if we found the id but the id is NULL, this is really bad */
-	BLI_assert((found != 0) == (id != NULL));
+	BLI_assert((bhead != NULL) == (id != NULL));
 	
-	return (found) ? id : NULL;
+	return id;
 }
 
 /* simple reader for copy/paste buffers */
@@ -9263,22 +9342,13 @@ ID *BLO_library_append_named_part_ex(const bContext *C, Main *mainl, BlendHandle
 
 static void append_id_part(FileData *fd, Main *mainvar, ID *id, ID **r_id)
 {
-	BHead *bhead;
-	
-	for (bhead = blo_firstbhead(fd); bhead; bhead = blo_nextbhead(fd, bhead)) {
-		if (bhead->code == GS(id->name)) {
-			
-			if (STREQ(id->name, bhead_id_name(fd, bhead))) {
-				id->flag &= ~LIB_READ;
-				id->flag |= LIB_NEED_EXPAND;
-//				printf("read lib block %s\n", id->name);
-				read_libblock(fd, mainvar, bhead, id->flag, r_id);
-				
-				break;
-			}
-		}
-		else if (bhead->code==ENDB)
-			break;
+	BHead *bhead = find_bhead_from_idname(fd, id->name);
+
+	if (bhead) {
+		id->flag &= ~LIB_READ;
+		id->flag |= LIB_NEED_EXPAND;
+		// printf("read lib block %s\n", id->name);
+		read_libblock(fd, mainvar, bhead, id->flag, r_id);
 	}
 }
 
@@ -9302,6 +9372,9 @@ static Main *library_append_begin(Main *mainvar, FileData **fd, const char *file
 	/* needed for do_version */
 	mainl->versionfile = (*fd)->fileversion;
 	read_file_version(*fd, mainl);
+#ifdef USE_GHASH_BHEAD
+	read_file_bhead_idname_map_create(*fd);
+#endif
 	
 	return mainl;
 }
@@ -9508,6 +9581,10 @@ static void read_libraries(FileData *basefd, ListBase *mainlist)
 						
 						/* subversion */
 						read_file_version(fd, mainptr);
+#ifdef USE_GHASH_BHEAD
+						read_file_bhead_idname_map_create(fd);
+#endif
+
 					}
 					else {
 						mainptr->curlib->filedata = NULL;

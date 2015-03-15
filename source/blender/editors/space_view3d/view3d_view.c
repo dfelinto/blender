@@ -609,6 +609,20 @@ void VIEW3D_OT_object_as_camera(wmOperatorType *ot)
 
 /* ********************************** */
 
+void ED_view3d_clipping_calc_from_boundbox(float clip[4][4], const BoundBox *bb, const bool is_flip)
+{
+	int val;
+
+	for (val = 0; val < 4; val++) {
+		normal_tri_v3(clip[val], bb->vec[val], bb->vec[val == 3 ? 0 : val + 1], bb->vec[val + 4]);
+		if (UNLIKELY(is_flip)) {
+			negate_v3(clip[val]);
+		}
+
+		clip[val][3] = -dot_v3v3(clip[val], bb->vec[val]);
+	}
+}
+
 void ED_view3d_clipping_calc(BoundBox *bb, float planes[4][4], bglMats *mats, const rcti *rect)
 {
 	float modelview[4][4];
@@ -644,16 +658,7 @@ void ED_view3d_clipping_calc(BoundBox *bb, float planes[4][4], bglMats *mats, co
 		((float *)modelview)[a] = mats->modelview[a];
 	flip_sign = is_negative_m4(modelview);
 
-	/* then plane equations */
-	for (val = 0; val < 4; val++) {
-
-		normal_tri_v3(planes[val], bb->vec[val], bb->vec[val == 3 ? 0 : val + 1], bb->vec[val + 4]);
-
-		if (flip_sign)
-			negate_v3(planes[val]);
-
-		planes[val][3] = -dot_v3v3(planes[val], bb->vec[val]);
-	}
+	ED_view3d_clipping_calc_from_boundbox(planes, bb, flip_sign);
 }
 
 static bool view3d_boundbox_clip_m4(const BoundBox *bb, float persmatob[4][4])
@@ -890,6 +895,21 @@ char ED_view3d_lock_view_from_index(int index)
 	}
 
 }
+
+char ED_view3d_axis_view_opposite(char view)
+{
+	switch (view) {
+		case RV3D_VIEW_FRONT:   return RV3D_VIEW_BACK;
+		case RV3D_VIEW_BACK:    return RV3D_VIEW_FRONT;
+		case RV3D_VIEW_LEFT:    return RV3D_VIEW_RIGHT;
+		case RV3D_VIEW_RIGHT:   return RV3D_VIEW_LEFT;
+		case RV3D_VIEW_TOP:     return RV3D_VIEW_BOTTOM;
+		case RV3D_VIEW_BOTTOM:  return RV3D_VIEW_TOP;
+	}
+
+	return RV3D_VIEW_USER;
+}
+
 
 bool ED_view3d_lock(RegionView3D *rv3d)
 {
