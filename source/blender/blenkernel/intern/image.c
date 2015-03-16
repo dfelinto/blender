@@ -916,7 +916,7 @@ static void image_memorypack_multiview(Image *ima)
 		ibuf->planes = R_IMF_PLANES_RGBA;
 
 		/* if the image was a R_IMF_VIEWS_STEREO_3D we force _L, _R suffices */
-		if (ima->stereo3d_format == R_IMF_VIEWS_STEREO_3D) {
+		if (ima->views_format == R_IMF_VIEWS_STEREO_3D) {
 			const char *suffix[2] = {STEREO_LEFT_SUFFIX, STEREO_RIGHT_SUFFIX};
 			BLI_path_suffix(iv->filepath, FILE_MAX, suffix[i], "");
 		}
