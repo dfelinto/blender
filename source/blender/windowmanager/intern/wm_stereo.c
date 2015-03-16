@@ -96,22 +96,6 @@ static void wm_method_draw_stereo_pageflip(wmWindow *win)
 	}
 }
 
-static void wm_method_draw_stereo_epilepsy(wmWindow *win)
-{
-	wmDrawData *drawdata;
-	static bool view = false;
-	static double start = 0.0;
-
-	if ((PIL_check_seconds_timer() - start) >= win->stereo3d_format->epilepsy_interval) {
-		start = PIL_check_seconds_timer();
-		view = !view;
-	}
-
-	drawdata = BLI_findlink(&win->drawdata, view * 2 + 1);
-
-	wm_triple_draw_textures(win, drawdata->triple, 1.0f);
-}
-
 static GLuint left_interlace_mask[32];
 static GLuint right_interlace_mask[32];
 static enum eStereo3dInterlaceType interlace_prev_type = -1;
@@ -355,9 +339,6 @@ void wm_method_draw_stereo(const bContext *UNUSED(C), wmWindow *win)
 		case S3D_DISPLAY_ANAGLYPH:
 			wm_method_draw_stereo_anaglyph(win);
 			break;
-		case S3D_DISPLAY_EPILEPSY:
-			wm_method_draw_stereo_epilepsy(win);
-			break;
 		case S3D_DISPLAY_INTERLACE:
 			wm_method_draw_stereo_interlace(win);
 			break;
@@ -498,12 +479,6 @@ static bool wm_stereo3d_set_properties(bContext *C, wmOperator *op)
 		is_set = true;
 	}
 
-	prop = RNA_struct_find_property(op->ptr, "epilepsy_interval");
-	if (RNA_property_is_set(op->ptr, prop)) {
-		s3d->epilepsy_interval = RNA_property_float_get(op->ptr, prop);
-		is_set = true;
-	}
-
 	prop = RNA_struct_find_property(op->ptr, "use_interlace_swap");
 	if (RNA_property_is_set(op->ptr, prop)) {
 		if (RNA_property_boolean_get(op->ptr, prop))
@@ -602,11 +577,6 @@ void wm_set_stereo3d_draw(bContext *C, wmOperator *op)
 		case S3D_DISPLAY_ANAGLYPH:
 		{
 			uiItemR(col, &stereo3d_format_ptr, "anaglyph_type", 0, NULL, ICON_NONE);
-			break;
-		}
-		case S3D_DISPLAY_EPILEPSY:
-		{
-			uiItemR(col, &stereo3d_format_ptr, "epilepsy_interval", 0, NULL, ICON_NONE);
 			break;
 		}
 		case S3D_DISPLAY_INTERLACE:
