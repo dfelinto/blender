@@ -3429,7 +3429,8 @@ static ImBuf *image_load_image_file(Image *ima, ImageUser *iuser, int cfra)
 			IMB_ImBufFromStereo(ima->stereo3d_format, &ibuf_arr[0], &ibuf_arr[1]);
 
 		/* return the original requested ImBuf */
-		ibuf = ibuf_arr[(iuser ? iuser->multi_index : 0)];
+		i = MIN2(iuser ? iuser->multi_index : 0, totviews - 1);
+		ibuf = ibuf_arr[i];
 
 		if (assign) {
 			for (i = 0; i < totviews; i++) {
