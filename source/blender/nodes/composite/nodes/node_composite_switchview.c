@@ -63,7 +63,7 @@ static void cmp_node_switch_view_update(bNodeTree *ntree, bNode *node)
 	Scene *scene = (Scene *)node->id;
 
 	/* only update when called from the operator button */
-	if (node->update != NODE_UPDATE_RNA)
+	if (node->update != NODE_UPDATE_OPERATOR)
 		return;
 
 	if (scene == NULL) {

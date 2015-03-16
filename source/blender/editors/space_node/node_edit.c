@@ -1695,9 +1695,8 @@ static int node_switch_view_exec(bContext *C, wmOperator *UNUSED(op))
 	for (node = snode->edittree->nodes.first; node; node = next) {
 		next = node->next;
 		if (node->flag & SELECT) {
-
 			/* call the update function from the Switch View node */
-			node->update = NODE_UPDATE_RNA;
+			node->update = NODE_UPDATE_OPERATOR;
 		}
 	}
 
