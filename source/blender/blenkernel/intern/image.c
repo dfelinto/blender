@@ -4481,8 +4481,6 @@ static void image_update_views_format(Image *ima, ImageUser *iuser)
 		for (i = 0; i < 2; i++) {
 			image_add_view(ima, names[i], ima->name);
 		}
-
-		ima->views_format = R_IMF_VIEWS_STEREO_3D;
 		return;
 	}
 	else {
@@ -4507,7 +4505,8 @@ static void image_update_views_format(Image *ima, ImageUser *iuser)
 		}
 
 		/* check if the files are all available */
-		for (iv = ima->views.first; iv; iv = iv->next) {
+		iv = ima->views.last;
+		while (iv) {
 			int file;
 			char str[FILE_MAX];
 
@@ -4518,9 +4517,12 @@ static void image_update_views_format(Image *ima, ImageUser *iuser)
 			file = BLI_open(str, O_BINARY | O_RDONLY, 0);
 			if (file == -1) {
 				ImageView *iv_del = iv;
-				iv = iv_del->prev;
+				iv = iv->prev;
 				BLI_remlink(&ima->views, iv_del);
 				MEM_freeN(iv_del);
+			}
+			else {
+				iv = iv->prev;
 			}
 			close(file);
 		}
