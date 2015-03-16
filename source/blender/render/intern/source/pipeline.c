@@ -2691,10 +2691,49 @@ static bool check_valid_compositing_camera(Scene *scene, Object *camera_override
 	}
 }
 
+static bool check_valid_camera_multiview(Scene *scene, Object *camera, ReportList *reports)
+{
+	SceneRenderView *srv;
+	bool active_view = false;
+
+	if ((scene->r.scemode & R_MULTIVIEW) == 0)
+		return true;
+
+	for (srv = scene->r.views.first; srv; srv = srv->next) {
+		if (BKE_scene_render_view_active(&scene->r, srv)) {
+			active_view = true;
+
+			if (scene->r.views_format == SCE_VIEWS_FORMAT_MULTIVIEW) {
+				Object *view_camera;
+				view_camera = BKE_camera_render(scene, camera, srv->name);
+
+				if (view_camera == camera) {
+					/* if the suffix is not in the camera, means we are using the fallback camera */
+					if (!BLI_str_endswith(view_camera->id.name + 2, srv->suffix)) {
+						BKE_reportf(reports, RPT_ERROR, "No multi-view camera found for view \"%s\" of camera \"%s\"",
+						            srv->name, camera->id.name + 2);
+						return false;
+					}
+				}
+			}
+		}
+	}
+
+	if (!active_view) {
+		BKE_reportf(reports, RPT_ERROR, "No active view found in scene \"%s\"", scene->id.name + 2);
+		return false;
+	}
+
+	return true;
+}
+
 static int check_valid_camera(Scene *scene, Object *camera_override, ReportList *reports)
 {
 	if (camera_override == NULL && scene->camera == NULL)
 		scene->camera = BKE_scene_camera_find(scene);
+
+	if (!check_valid_camera_multiview(scene, scene->camera, reports))
+		return false;
 
 	if (RE_seq_render_active(scene, &scene->r)) {
 		if (scene->ed) {
@@ -2713,6 +2752,8 @@ static int check_valid_camera(Scene *scene, Object *camera_override, ReportList 
 							}
 						}
 					}
+					else if (!check_valid_camera_multiview(seq->scene, seq->scene_camera, reports))
+						return false;
 				}
 
 				seq = seq->next;
