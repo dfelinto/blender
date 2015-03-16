@@ -143,6 +143,7 @@ bNodeSocket *Node::getEditorOutputSocket(int editorNodeInputSocketIndex)
 	return NULL;
 }
 
+
 /*******************
  **** NodeInput ****
  *******************/
@@ -213,4 +214,3 @@ void NodeOutput::getEditorValueVector(float *value)
 	RNA_pointer_create((ID *)getNode()->getbNodeTree(), &RNA_NodeSocket, getbNodeSocket(), &ptr);
 	return RNA_float_get_array(&ptr, "default_value", value);
 }
-

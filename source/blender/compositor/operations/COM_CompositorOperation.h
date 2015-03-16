@@ -75,7 +75,7 @@ private:
 	 * @brief operation is active for calculating final compo result
 	 */
 	bool m_active;
-	
+
 	/**
 	 * @brief View name, used for multiview
 	 */
