@@ -876,7 +876,7 @@ Object *BKE_camera_render(Scene *scene, Object *camera, const char *viewname)
 	else if (scene->r.views_format == SCE_VIEWS_FORMAT_STEREO_3D) {
 		return camera;
 	}
-	else { /* SCE_VIEWS_SETUP_ADVANCED */
+	else { /* SCE_VIEWS_FORMAT_MULTIVIEW */
 		const char *suffix = BKE_scene_view_suffix_get(&scene->r, viewname);
 		return camera_multiview_advanced(scene, camera, suffix);
 	}
