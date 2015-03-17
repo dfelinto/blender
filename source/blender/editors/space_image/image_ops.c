@@ -2330,13 +2330,15 @@ static int image_new_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(e
 	return WM_operator_props_dialog_popup(C, op, 15 * UI_UNIT_X, 5 * UI_UNIT_Y);
 }
 
-static void image_new_draw(bContext *C, wmOperator *op)
+static void image_new_draw(bContext *UNUSED(C), wmOperator *op)
 {
 	uiLayout *split, *col[2];
 	uiLayout *layout = op->layout;
 	PointerRNA ptr;
+#if 0
 	Scene *scene = CTX_data_scene(C);
 	const bool is_multiview = (scene->r.scemode & R_MULTIVIEW) != 0;
+#endif
 
 	RNA_pointer_create(NULL, op->type->srna, op->properties, &ptr);
 
