@@ -3345,6 +3345,7 @@ static ImBuf *load_image_single(Image *ima, ImageUser *iuser, int cfra,
 	}
 
 	if (ibuf) {
+#ifdef WITH_OPENEXR
 		if (ibuf->ftype == OPENEXR && ibuf->userdata) {
 			if (IMB_exr_has_singlelayer_multiview(ibuf->userdata)) {
 				/* handle singlelayer multiview case assign ibuf based on available views */
@@ -3376,6 +3377,10 @@ static ImBuf *load_image_single(Image *ima, ImageUser *iuser, int cfra,
 				imapf->packedfile = newPackedFile(NULL, filepath, ID_BLEND_PATH(G.main, &ima->id));
 			}
 		}
+#else
+		image_initialize_after_load(ima, ibuf);
+		*r_assign = true;
+#endif
 	}
 	else {
 		ima->ok = 0;
