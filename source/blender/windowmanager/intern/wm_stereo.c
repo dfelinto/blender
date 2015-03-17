@@ -389,8 +389,8 @@ static bool wm_stereo3d_required(bScreen *screen)
 				/* images should always show in stereo, even if
 				 * the file doesn't have views enabled */
 				sima = sa->spacedata.first;
-				if (sima->image && (sima->image->flag & IMA_IS_STEREO) &&
-				    (sima->iuser.flag & IMA_SHOW_STEREO))
+				if (sima->image && (sima->image->flag & IMA_IS_STEREO) != 0 &&
+				    (sima->iuser.flag & IMA_SHOW_STEREO) != 0)
 				{
 					return true;
 				}
@@ -404,7 +404,7 @@ static bool wm_stereo3d_required(bScreen *screen)
 					continue;
 
 				snode = sa->spacedata.first;
-				if ((snode->flag & SNODE_BACKDRAW) && ED_node_is_compositor(snode)) {
+				if ((snode->flag & SNODE_BACKDRAW) != 0 && ED_node_is_compositor(snode)) {
 					return true;
 				}
 				break;
