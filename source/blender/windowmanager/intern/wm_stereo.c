@@ -367,24 +367,22 @@ static bool wm_stereo_need_fullscreen(eStereoDisplayMode stereo_display)
 /*
  * return true if any active area requires to see in 3D
  */
-static bool wm_stereo3d_required(const bContext *C, bScreen *screen)
+static bool wm_stereo3d_required(bScreen *screen)
 {
 	ScrArea *sa;
-	View3D *v3d;
-	SpaceImage *sima;
-	SpaceNode *snode;
-	SpaceSeq *sseq;
-	Scene *sce = CTX_data_scene(C);
+	Scene *sce = screen->scene;
 	const bool is_multiview = (sce->r.scemode & R_MULTIVIEW) != 0;
 
 	for (sa = screen->areabase.first; sa; sa = sa->next) {
 		switch (sa->spacetype) {
 			case SPACE_VIEW3D:
 			{
+				View3D *v3d;
+
 				if (!is_multiview)
 					continue;
 
-				v3d = (View3D *)sa->spacedata.first;
+				v3d = sa->spacedata.first;
 				if (v3d->camera && v3d->stereo3d_camera == STEREO_3D_ID) {
 					ARegion *ar;
 					for (ar = sa->regionbase.first; ar; ar = ar->next) {
@@ -400,9 +398,11 @@ static bool wm_stereo3d_required(const bContext *C, bScreen *screen)
 			}
 			case SPACE_IMAGE:
 			{
+				SpaceImage *sima;
+
 				/* images should always show in stereo, even if
 				 * the file doesn't have views enabled */
-				sima = (SpaceImage *) sa->spacedata.first;
+				sima = sa->spacedata.first;
 				if ((sima->image) && (sima->image->flag & IMA_IS_STEREO) &&
 				    (sima->iuser.flag & IMA_SHOW_STEREO))
 				{
@@ -412,10 +412,12 @@ static bool wm_stereo3d_required(const bContext *C, bScreen *screen)
 			}
 			case SPACE_NODE:
 			{
+				SpaceNode *snode;
+
 				if (!is_multiview)
 					continue;
 
-				snode = (SpaceNode *) sa->spacedata.first;
+				snode = sa->spacedata.first;
 				if ((snode->flag & SNODE_BACKDRAW) && ED_node_is_compositor(snode)) {
 					return true;
 				}
@@ -423,10 +425,14 @@ static bool wm_stereo3d_required(const bContext *C, bScreen *screen)
 			}
 			case SPACE_SEQ:
 			{
-				if (is_multiview) {
-					sseq = (SpaceSeq *) sa->spacedata.first;
-					if (ELEM(sseq->view, SEQ_VIEW_PREVIEW, SEQ_VIEW_SEQUENCE_PREVIEW))
-						return true;
+				SpaceSeq *sseq;
+
+				if (!is_multiview)
+					continue;
+
+				sseq = sa->spacedata.first;
+				if (ELEM(sseq->view, SEQ_VIEW_PREVIEW, SEQ_VIEW_SEQUENCE_PREVIEW)) {
+					return true;
 				}
 				break;
 			}
@@ -436,11 +442,11 @@ static bool wm_stereo3d_required(const bContext *C, bScreen *screen)
 	return false;
 }
 
-bool WM_stereo_enabled(const bContext *C, wmWindow *win, bool only_fullscreen_test)
+bool WM_stereo_enabled(wmWindow *win, bool only_fullscreen_test)
 {
 	bScreen *screen = win->screen;
 
-	if ((only_fullscreen_test == false) && (wm_stereo3d_required(C, screen) == false))
+	if ((only_fullscreen_test == false) && (wm_stereo3d_required(screen) == false))
 		return false;
 
 	if (wm_stereo_need_fullscreen(win->stereo3d_format->display_mode))
@@ -527,7 +533,7 @@ int wm_set_stereo3d_exec(bContext *C, wmOperator *op)
 	if (win->stereo3d_format->display_mode == S3D_DISPLAY_PAGEFLIP) {
 		if (wm_window_duplicate_exec(C, op) == OPERATOR_FINISHED) {
 			wm_window_close(C, wm, win);
-			win = (wmWindow *)wm->windows.last;
+			win = wm->windows.last;
 		}
 		else {
 			BKE_reportf(op->reports, RPT_ERROR,

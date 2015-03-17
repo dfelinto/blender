@@ -69,7 +69,7 @@ void *OutputOpenExrSingleLayerMultiViewOperation::get_handle(const char *filenam
 
 		IMB_exr_clear_channels(exrhandle);
 
-		for (srv = (SceneRenderView *) this->m_rd->views.first; srv; srv = srv->next) {
+		for (srv = (SceneRenderView *)this->m_rd->views.first; srv; srv = srv->next) {
 			if (BKE_scene_render_view_active(this->m_rd, srv) == false)
 				continue;
 

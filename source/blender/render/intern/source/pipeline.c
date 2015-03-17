@@ -337,7 +337,7 @@ void RE_AcquireResultImageViews(Render *re, RenderResult *rr)
 			/* creates a temporary duplication of views */
 			render_result_views_shallowcopy(rr, re->result);
 
-			rv = (RenderView *)rr->views.first;
+			rv = rr->views.first;
 
 			rr->have_combined = (rv->rectf != NULL);
 
@@ -2478,7 +2478,7 @@ static void renderresult_stampinfo(Render *re)
 
 	/* this is the basic trick to get the displayed float or char rect from render result */
 	nr = 0;
-	for (rv = (RenderView *)re->result->views.first;rv;rv=rv->next, nr++) {
+	for (rv = re->result->views.first;rv;rv = rv->next, nr++) {
 		RE_SetActiveRenderView(re, rv->name);
 		RE_AcquireResultImage(re, &rres, nr);
 		BKE_image_stamp_buf(re->scene, RE_GetCamera(re), (unsigned char *)rv->rect32, rv->rectf, rres.rectx, rres.recty, 4);
@@ -3107,7 +3107,7 @@ bool RE_WriteRenderViewsImage(ReportList *reports, RenderResult *rr, Scene *scen
 
 		BLI_strncpy(filepath, name, sizeof(filepath));
 
-		for (view_id = 0, rv = (RenderView *) rr->views.first; rv; rv = rv->next, view_id++) {
+		for (view_id = 0, rv = rr->views.first; rv; rv = rv->next, view_id++) {
 			BKE_scene_view_filepath_get(&scene->r, filepath, rv->name, name);
 
 			if (rd->im_format.imtype == R_IMF_IMTYPE_MULTILAYER) {

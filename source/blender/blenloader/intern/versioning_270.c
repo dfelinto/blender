@@ -475,11 +475,11 @@ void blo_do_versions_270(FileData *fd, Library *UNUSED(lib), Main *main)
 			SceneRenderView *srv;
 			for (scene = main->scene.first; scene; scene = scene->id.next) {
 				BKE_scene_add_render_view(scene, STEREO_LEFT_NAME);
-				srv = (SceneRenderView *)scene->r.views.first;
+				srv = scene->r.views.first;
 				BLI_strncpy(srv->suffix, STEREO_LEFT_SUFFIX, sizeof(srv->suffix));
 
 				BKE_scene_add_render_view(scene, STEREO_RIGHT_NAME);
-				srv = (SceneRenderView *)scene->r.views.last;
+				srv = scene->r.views.last;
 				BLI_strncpy(srv->suffix, STEREO_RIGHT_SUFFIX, sizeof(srv->suffix));
 			}
 		}

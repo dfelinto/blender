@@ -156,7 +156,7 @@ static void screen_opengl_views_setup(OGLRender *oglrender)
 
 	if (!is_multiview) {
 		/* we only have one view when multiview is off */
-		rv = (RenderView *) rr->views.first;
+		rv = rr->views.first;
 
 		if (rv == NULL) {
 			rv = MEM_callocN(sizeof(RenderView), "new opengl render view");

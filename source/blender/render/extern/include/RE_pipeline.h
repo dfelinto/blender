@@ -352,9 +352,9 @@ bool RE_RenderResult_is_stereo(RenderResult *res);
 
 float *RE_RenderViewGetRectf(struct RenderResult *rr, const int view_id);
 float *RE_RenderViewGetRectz(struct RenderResult *rr, const int view_id);
-int *RE_RenderViewGetRect32(struct RenderResult *rr, const int view_id);
-void RE_RenderViewSetRectf(struct RenderResult *res, const int view_id, float *rect);
-void RE_RenderViewSetRectz(struct RenderResult *res, const int view_id, float *rect);
+int   *RE_RenderViewGetRect32(struct RenderResult *rr, const int view_id);
+void   RE_RenderViewSetRectf(struct RenderResult *res, const int view_id, float *rect);
+void   RE_RenderViewSetRectz(struct RenderResult *res, const int view_id, float *rect);
 
 #endif /* __RE_PIPELINE_H__ */
 

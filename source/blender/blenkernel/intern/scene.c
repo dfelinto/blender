@@ -637,11 +637,11 @@ Scene *BKE_scene_add(Main *bmain, const char *name)
 
 	/* multiview - stereo */
 	BKE_scene_add_render_view(sce, STEREO_LEFT_NAME);
-	srv = (SceneRenderView *)sce->r.views.first;
+	srv = sce->r.views.first;
 	BLI_strncpy(srv->suffix, STEREO_LEFT_SUFFIX, sizeof(srv->suffix));
 
 	BKE_scene_add_render_view(sce, STEREO_RIGHT_NAME);
-	srv = (SceneRenderView *)sce->r.views.last;
+	srv = sce->r.views.last;
 	BLI_strncpy(srv->suffix, STEREO_RIGHT_SUFFIX, sizeof(srv->suffix));
 
 	/* game data */
@@ -2135,16 +2135,20 @@ size_t BKE_scene_num_views_get(const RenderData *rd)
 		return 1;
 
 	if (rd->views_format == SCE_VIEWS_FORMAT_STEREO_3D) {
-		if (BLI_findstring(&rd->views, STEREO_LEFT_NAME, offsetof(SceneRenderView, name)))
-		    totviews++;
+		if (BLI_findstring(&rd->views, STEREO_LEFT_NAME, offsetof(SceneRenderView, name))) {
+			totviews++;
+		}
 
-		if (BLI_findstring(&rd->views, STEREO_RIGHT_NAME, offsetof(SceneRenderView, name)))
-		    totviews++;
+		if (BLI_findstring(&rd->views, STEREO_RIGHT_NAME, offsetof(SceneRenderView, name))) {
+			totviews++;
+		}
 	}
 	else {
-		for (srv = (SceneRenderView *)rd->views.first; srv; srv = srv->next)
-			if ((srv->viewflag & SCE_VIEW_DISABLE) == 0)
+		for (srv = rd->views.first; srv; srv = srv->next) {
+			if ((srv->viewflag & SCE_VIEW_DISABLE) == 0) {
 				totviews++;
+			}
+		}
 	}
 	return totviews;
 }

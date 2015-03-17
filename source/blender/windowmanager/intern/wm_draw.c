@@ -587,7 +587,7 @@ static void wm_method_draw_triple(bContext *C, wmWindow *win)
 {
 	wmWindowManager *wm = CTX_wm_manager(C);
 	wmDrawTriple *triple;
-	wmDrawData *dd, *dd_next, *drawdata = (wmDrawData *) win->drawdata.first;
+	wmDrawData *dd, *dd_next, *drawdata = win->drawdata.first;
 	bScreen *screen = win->screen;
 	ScrArea *sa;
 	ARegion *ar;
@@ -1043,7 +1043,7 @@ void wm_draw_update(bContext *C)
 			else if (drawmethod == USER_DRAW_OVERLAP_FLIP)
 				wm_method_draw_overlap_all(C, win, 1);
 			else { /* USER_DRAW_TRIPLE */
-				if ((WM_stereo_enabled(C, win, false)) == false)
+				if ((WM_stereo_enabled(win, false)) == false)
 					wm_method_draw_triple(C, win);
 				else {
 					wm_method_draw_triple_multiview(C, win, STEREO_LEFT_ID);
@@ -1067,7 +1067,7 @@ void wm_draw_data_free(wmWindow *win)
 {
 	wmDrawData *dd;
 
-	for (dd = (wmDrawData *)win->drawdata.first; dd; dd = dd->next) {
+	for (dd = win->drawdata.first; dd; dd = dd->next) {
 		wm_draw_triple_free(dd->triple);
 	}
 	BLI_freelistN(&win->drawdata);

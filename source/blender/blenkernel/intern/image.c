@@ -3309,9 +3309,6 @@ static ImBuf *load_image_single(Image *ima, ImageUser *iuser, int cfra,
 	char filepath[FILE_MAX];
 	struct ImBuf *ibuf = NULL;
 	int flag;
-	ImageView *iv;
-
-	iv = BLI_findlink(&ima->views, view_id);
 
 	/* is there a PackedFile with this image ? */
 	if (has_packed) {

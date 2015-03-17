@@ -144,7 +144,7 @@ void render_result_views_shallowcopy(RenderResult *dst, RenderResult *src)
 	if (dst == NULL || src == NULL)
 		return;
 
-	for (rview = (RenderView *)src->views.first; rview; rview = rview->next) {
+	for (rview = src->views.first; rview; rview = rview->next) {
 		RenderView *rv;
 
 		rv = MEM_mallocN(sizeof(RenderView), "new render view");
@@ -623,7 +623,7 @@ RenderResult *render_result_new(Render *re, rcti *partrct, int crop, int savebuf
 			rl->exrhandle = IMB_exr_get_handle();
 		}
 
-		for (rv = (RenderView *)(&rr->views)->first; rv; rv=rv->next) {
+		for (rv = rr->views.first; rv; rv = rv->next) {
 			const char *view = rv->name;
 
 			if (viewname && viewname[0])
@@ -719,7 +719,7 @@ RenderResult *render_result_new(Render *re, rcti *partrct, int crop, int savebuf
 			rl->exrhandle = IMB_exr_get_handle();
 		}
 
-		for (rv = (RenderView *)(&rr->views)->first; rv; rv=rv->next) {
+		for (rv = rr->views.first; rv; rv = rv->next) {
 			const char *view = rv->name;
 
 			if (viewname && viewname[0])
@@ -1039,7 +1039,7 @@ bool RE_WriteRenderResult(ReportList *reports, RenderResult *rr, const char *fil
 	if (imf && imf->imtype == R_IMF_IMTYPE_OPENEXR && multiview) {
 		/* single layer OpenEXR */
 		const char *RGBAZ[] = {"R", "G", "B", "A", "Z"};
-		for (nr = 0, rview = (RenderView *) rr->views.first; rview; rview = rview->next, nr++) {
+		for (nr = 0, rview = rr->views.first; rview; rview = rview->next, nr++) {
 			IMB_exr_add_view(exrhandle, rview->name);
 
 			if (rview->rectf) {
@@ -1053,7 +1053,7 @@ bool RE_WriteRenderResult(ReportList *reports, RenderResult *rr, const char *fil
 		}
 	}
 	else {
-		for (nr = 0, rview = (RenderView *) rr->views.first; rview; rview = rview->next, nr++) {
+		for (nr = 0, rview = rr->views.first; rview; rview = rview->next, nr++) {
 			if (is_mono) {
 				if (strcmp (view, rview->name) != 0)
 					continue;
@@ -1582,7 +1582,7 @@ bool RE_HasFakeLayer(RenderResult *res)
 	if (res == NULL)
 		return false;
 
-	rv = (RenderView *)res->views.first;
+	rv = res->views.first;
 	if (rv == NULL)
 		return false;
 
