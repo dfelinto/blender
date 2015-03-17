@@ -2122,7 +2122,7 @@ static void node_composit_buts_switch(uiLayout *layout, bContext *UNUSED(C), Poi
 	uiItemR(layout, ptr, "check", 0, NULL, ICON_NONE);
 }
 
-static void node_composit_buts_switch_view(uiLayout *layout, bContext *UNUSED(C), PointerRNA *UNUSED(ptr))
+static void node_composit_buts_switch_view_ex(uiLayout *layout, bContext *UNUSED(C), PointerRNA *UNUSED(ptr))
 {
 	PointerRNA op_ptr;
 	wmOperatorType *ot = WM_operatortype_find("NODE_OT_switch_view_update", 1);
@@ -2632,7 +2632,7 @@ static void node_composit_set_butfunc(bNodeType *ntype)
 			ntype->draw_buttons = node_composit_buts_switch;
 			break;
 		case CMP_NODE_SWITCH_VIEW:
-			ntype->draw_buttons = node_composit_buts_switch_view;
+			ntype->draw_buttons_ex = node_composit_buts_switch_view_ex;
 			break;
 		case CMP_NODE_MASK_BOX:
 			ntype->draw_buttons = node_composit_buts_boxmask;

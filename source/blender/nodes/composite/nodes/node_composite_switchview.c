@@ -74,15 +74,23 @@ static void cmp_node_switch_view_update(bNodeTree *ntree, bNode *node)
 	}
 
 	/* remove the views that were removed */
-	for (sock = node->inputs.first; sock; sock = sock->next) {
+	sock = node->inputs.last;
+	while (sock) {
 		srv = BLI_findstring(&scene->r.views, sock->name, offsetof(SceneRenderView, name));
 
-		if (srv == NULL)
-			nodeRemoveSocket(ntree, node, sock);
-		else if (srv->viewflag & SCE_VIEW_DISABLE)
-			sock->flag |= SOCK_HIDDEN;
-		else
-			sock->flag &= ~SOCK_HIDDEN;
+		if (srv == NULL) {
+			bNodeSocket *sock_del = sock;
+			sock = sock->prev;
+			nodeRemoveSocket(ntree, node, sock_del);
+		}
+		else {
+			if (srv->viewflag & SCE_VIEW_DISABLE)
+				sock->flag |= SOCK_HIDDEN;
+			else
+				sock->flag &= ~SOCK_HIDDEN;
+
+			sock = sock->prev;
+		}
 	}
 
 	/* add the new views */
