@@ -1808,16 +1808,17 @@ static bool drawcamera_is_stereo3d(Scene *scene, View3D *v3d, Object *ob)
 	        (v3d->stereo3d_flag);
 }
 
-static void drawcamera_stereo3d(Scene *scene, View3D *v3d, RegionView3D *rv3d, Object *ob, Camera *cam,
-                                float vec[4][3], float drawsize, float scale[3])
+static void drawcamera_stereo3d(
+        Scene *scene, View3D *v3d, RegionView3D *rv3d, Object *ob, const Camera *cam,
+        float vec[4][3], float drawsize, const float scale[3])
 {
 	int i, j;
 	float obmat[4][4];
 	float vec_lr[2][4][3];
-	float fac = 1.0f;
+	const float fac = (cam->stereo.pivot == CAM_S3D_PIVOT_CENTER) ? 2.0f : 1.0f;
 	float origin[2][3] = {{0}};
 	float tvec[3];
-	Camera *cams[2] = {cam};
+	const Camera *cam_lr[2];
 	const char *names[2] = {STEREO_LEFT_NAME, STEREO_RIGHT_NAME};
 
 	const bool is_stereo3d_cameras = (v3d->stereo3d_flag & V3D_S3D_DISPCAMERAS) && (scene->r.views_format == SCE_VIEWS_FORMAT_STEREO_3D);
@@ -1826,14 +1827,11 @@ static void drawcamera_stereo3d(Scene *scene, View3D *v3d, RegionView3D *rv3d, O
 
 	zero_v3(tvec);
 
-	if (cam->stereo.pivot == CAM_S3D_PIVOT_CENTER)
-		fac = 2.0f;
-
 	glPushMatrix();
 
 	for (i = 0; i < 2; i++) {
 		ob = BKE_camera_multiview_render(scene, ob, names[i]);
-		cams[i] = ob->data;
+		cam_lr[i] = ob->data;
 
 		glLoadMatrixf(rv3d->viewmat);
 		BKE_camera_multiview_model_matrix(&scene->r, ob, names[i], obmat);
@@ -1843,10 +1841,13 @@ static void drawcamera_stereo3d(Scene *scene, View3D *v3d, RegionView3D *rv3d, O
 		copy_v3_v3(vec_lr[i][3], vec[3]);
 
 		if (cam->stereo.convergence_mode == CAM_S3D_OFFAXIS) {
-				float shift_x = BKE_camera_multiview_shift_x(&scene->r, ob, names[i]) - cam->shiftx;
-				shift_x *= drawsize * scale[0] * fac;
-				for (j = 0; j < 4; j++)
-					vec_lr[i][j][0] += shift_x;
+			const float shift_x =
+			        ((BKE_camera_multiview_shift_x(&scene->r, ob, names[i]) - cam->shiftx) *
+			         (drawsize * scale[0] * fac));
+
+			for (j = 0; j < 4; j++) {
+				vec_lr[i][j][0] += shift_x;
+			}
 		}
 
 		if (is_stereo3d_cameras) {
@@ -1861,9 +1862,11 @@ static void drawcamera_stereo3d(Scene *scene, View3D *v3d, RegionView3D *rv3d, O
 		mul_m4_v3(obmat, origin[i]);
 
 		/* convergence plane */
-		if (is_stereo3d_plane || is_stereo3d_volume)
-			for (j = 0; j < 4; j++)
+		if (is_stereo3d_plane || is_stereo3d_volume) {
+			for (j = 0; j < 4; j++) {
 				mul_m4_v3(obmat, vec_lr[i][j]);
+			}
+		}
 	}
 
 
@@ -1889,7 +1892,7 @@ static void drawcamera_stereo3d(Scene *scene, View3D *v3d, RegionView3D *rv3d, O
 		float axis_center[3], screen_center[3];
 		float world_plane[4][3];
 		float local_plane[4][3];
-		float scale;
+		float offset;
 
 		mid_v3_v3v3(axis_center, origin[0], origin[1]);
 
@@ -1899,10 +1902,10 @@ static void drawcamera_stereo3d(Scene *scene, View3D *v3d, RegionView3D *rv3d, O
 		}
 
 		mid_v3_v3v3(screen_center, world_plane[0], world_plane[2]);
-		scale = cam->stereo.convergence_distance / len_v3v3(screen_center, axis_center);
+		offset = cam->stereo.convergence_distance / len_v3v3(screen_center, axis_center);
 
 		for (i = 0; i < 4; i++) {
-			mul_v3_fl(local_plane[i], scale);
+			mul_v3_fl(local_plane[i], offset);
 			add_v3_v3(local_plane[i], axis_center);
 		}
 
@@ -1928,21 +1931,21 @@ static void drawcamera_stereo3d(Scene *scene, View3D *v3d, RegionView3D *rv3d, O
 	if (is_stereo3d_volume) {
 		float screen_center[3];
 		float near_plane[4][3], far_plane[4][3];
-		float scale;
+		float offset;
 		int j;
 
 		for (i = 0; i < 2; i++) {
 			mid_v3_v3v3(screen_center, vec_lr[i][0], vec_lr[i][2]);
 
-			scale = len_v3v3(screen_center, origin[i]);
+			offset = len_v3v3(screen_center, origin[i]);
 
 			for (j = 0; j < 4; j++) {
 				sub_v3_v3v3(near_plane[j], vec_lr[i][j], origin[i]);
-				mul_v3_fl(near_plane[j], cams[i]->clipsta / scale);
+				mul_v3_fl(near_plane[j], cam_lr[i]->clipsta / offset);
 				add_v3_v3(near_plane[j], origin[i]);
 
 				sub_v3_v3v3(far_plane[j], vec_lr[i][j], origin[i]);
-				mul_v3_fl(far_plane[j], cams[i]->clipend / scale);
+				mul_v3_fl(far_plane[j], cam_lr[i]->clipend / offset);
 				add_v3_v3(far_plane[j], origin[i]);
 			}
 
@@ -2097,8 +2100,9 @@ static void drawcamera(Scene *scene, View3D *v3d, RegionView3D *rv3d, Base *base
 	}
 
 	/* stereo cameras drawing */
-	if (is_stereo3d)
+	if (is_stereo3d) {
 		drawcamera_stereo3d(scene, v3d, rv3d, ob, cam, vec, drawsize, scale);
+	}
 }
 
 /* flag similar to draw_object() */

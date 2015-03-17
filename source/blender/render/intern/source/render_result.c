@@ -1055,10 +1055,10 @@ bool RE_WriteRenderResult(ReportList *reports, RenderResult *rr, const char *fil
 	else {
 		for (nr = 0, rview = rr->views.first; rview; rview = rview->next, nr++) {
 			if (is_mono) {
-				if (strcmp (view, rview->name) != 0)
+				if (!STREQ(view, rview->name)) {
 					continue;
-				else
-					chan_view = "";
+				}
+				chan_view = "";
 			}
 			else {
 				/* if rendered only one view, we treat as a a non-view render */
@@ -1079,13 +1079,13 @@ bool RE_WriteRenderResult(ReportList *reports, RenderResult *rr, const char *fil
 
 			/* passes are allocated in sync */
 			for (rpass = rl->passes.first; rpass; rpass = rpass->next) {
-				int xstride = rpass->channels;
+				const int xstride = rpass->channels;
 
 				if (is_mono) {
-					if (strcmp (view, rpass->view) != 0)
+					if (!STREQ(view, rpass->view)) {
 						continue;
-					else
-						chan_view = "";
+					}
+					chan_view = "";
 				}
 				else {
 					/* if rendered only one view, we treat as a a non-view render */
@@ -1205,7 +1205,8 @@ static void save_render_result_tile(RenderResult *rr, RenderResult *rrpart, cons
 
 		/* passes are allocated in sync */
 		for (rpassp = rlp->passes.first; rpassp; rpassp = rpassp->next) {
-			int a, xstride = rpassp->channels;
+			const int xstride = rpassp->channels;
+			int a;
 			char passname[EXR_PASS_MAXNAME];
 
 			for (a = 0; a < xstride; a++) {
@@ -1374,7 +1375,8 @@ int render_result_exr_file_read_path(RenderResult *rr, RenderLayer *rl_single, c
 		
 		/* passes are allocated in sync */
 		for (rpass = rl->passes.first; rpass; rpass = rpass->next) {
-			int a, xstride = rpass->channels;
+			const int xstride = rpass->channels;
+			int a;
 			char passname[EXR_PASS_MAXNAME];
 
 			for (a = 0; a < xstride; a++) {

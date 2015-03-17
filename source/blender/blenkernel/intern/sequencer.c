@@ -1760,8 +1760,8 @@ static size_t seq_proxy_context_count(Sequence *seq, Scene *scene)
 					num_views = 2;
 					break;
 				case R_IMF_VIEWS_MULTIVIEW:
-				/* not supported at the moment */
-				/* fall through */
+					/* not supported at the moment */
+					/* pass through */
 				default:
 					num_views = 1;
 			}

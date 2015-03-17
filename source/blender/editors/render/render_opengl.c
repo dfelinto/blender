@@ -704,7 +704,8 @@ static int screen_opengl_render_anim_initialize(bContext *C, wmOperator *op)
 
 			oglrender->movie_ctx_arr[i] = oglrender->mh->context_create();
 			if (!oglrender->mh->start_movie(oglrender->movie_ctx_arr[i], scene, &scene->r, oglrender->sizex,
-			                                oglrender->sizey, suffix, oglrender->reports)) {
+			                                oglrender->sizey, suffix, oglrender->reports))
+			{
 				screen_opengl_render_end(C, oglrender);
 				return 0;
 			}

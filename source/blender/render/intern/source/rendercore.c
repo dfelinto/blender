@@ -217,7 +217,7 @@ static void halo_pixelstruct(HaloRen *har, RenderLayer **rlpp, int totsample, in
 	if (fullsample) {
 		for (sample=0; sample<totsample; sample++)
 			if (!(mask & (1 << sample))) {
-				float *pass= RE_RenderLayerGetPass(rlpp[sample], SCE_PASS_COMBINED, R.viewname);
+				float *pass = RE_RenderLayerGetPass(rlpp[sample], SCE_PASS_COMBINED, R.viewname);
 				addalphaAddfacFloat(pass + od*4, col, har->add);
 			}
 	}
@@ -228,7 +228,7 @@ static void halo_pixelstruct(HaloRen *har, RenderLayer **rlpp, int totsample, in
 		col[3]= accol[3];
 		
 		for (sample=0; sample<totsample; sample++) {
-			float *pass= RE_RenderLayerGetPass(rlpp[sample], SCE_PASS_COMBINED, R.viewname);
+			float *pass = RE_RenderLayerGetPass(rlpp[sample], SCE_PASS_COMBINED, R.viewname);
 			addalphaAddfacFloat(pass + od*4, col, har->add);
 		}
 	}
@@ -368,7 +368,7 @@ static void lamphalo_tile(RenderPart *pa, RenderLayer *rl)
 						for (sample=0; sample<totsample; sample++) {
 							if (ps->mask & (1 << sample)) {
 								pass = RE_RenderLayerGetPass(rlpp[sample], SCE_PASS_COMBINED, R.viewname);
-								pass+= od*4;
+								pass += od * 4;
 								pass[0]+= col[0];
 								pass[1]+= col[1];
 								pass[2]+= col[2];
@@ -380,7 +380,7 @@ static void lamphalo_tile(RenderPart *pa, RenderLayer *rl)
 					else {
 						fac= ((float)count)/(float)R.osa;
 						pass = RE_RenderLayerGetPass(rl, SCE_PASS_COMBINED, R.viewname);
-						pass+= od*4;
+						pass += od * 4;
 						pass[0]+= fac*col[0];
 						pass[1]+= fac*col[1];
 						pass[2]+= fac*col[2];
@@ -402,7 +402,7 @@ static void lamphalo_tile(RenderPart *pa, RenderLayer *rl)
 							if (!(mask & (1 << sample))) {
 
 								pass = RE_RenderLayerGetPass(rlpp[sample], SCE_PASS_COMBINED, R.viewname);
-								pass+= od*4;
+								pass += od * 4;
 								pass[0]+= col[0];
 								pass[1]+= col[1];
 								pass[2]+= col[2];
@@ -414,7 +414,7 @@ static void lamphalo_tile(RenderPart *pa, RenderLayer *rl)
 					else {
 						fac= ((float)R.osa-totsamp)/(float)R.osa;
 						pass = RE_RenderLayerGetPass(rlpp[sample], SCE_PASS_COMBINED, R.viewname);
-						pass+= od*4;
+						pass += od * 4;
 						pass[0]+= fac*col[0];
 						pass[1]+= fac*col[1];
 						pass[2]+= fac*col[2];
@@ -434,7 +434,7 @@ static void lamphalo_tile(RenderPart *pa, RenderLayer *rl)
 
 				for (sample=0; sample<totsample; sample++) {
 					pass = RE_RenderLayerGetPass(rlpp[sample], SCE_PASS_COMBINED, R.viewname);
-					pass+= od*4;
+					pass += od * 4;
 					pass[0]+= col[0];
 					pass[1]+= col[1];
 					pass[2]+= col[2];
@@ -577,9 +577,8 @@ static void add_passes(RenderLayer *rl, int offset, ShadeInput *shi, ShadeResult
 	float *fp;
 
 #if 0
-	/* copy combined to rl->rectf to use for preview
-	   */
-	fp= rl->rectf + 4 * offset;
+	/* copy combined to rl->rectf to use for preview */
+	fp = rl->rectf + 4 * offset;
 	copy_v4_v4(fp, shr->combined);
 #endif
 
@@ -709,7 +708,7 @@ static void sky_tile(RenderPart *pa, RenderLayer *rl)
 			bool done = false;
 			
 			for (sample= 0; sample<totsample; sample++) {
-				float *pass= RE_RenderLayerGetPass(rlpp[sample], SCE_PASS_COMBINED, R.viewname);
+				float *pass = RE_RenderLayerGetPass(rlpp[sample], SCE_PASS_COMBINED, R.viewname);
 				pass += od;
 				
 				if (pass[3]<1.0f) {
@@ -1007,7 +1006,7 @@ static void clamp_alpha_rgb_range(RenderPart *pa, RenderLayer *rl)
 		return;
 	
 	for (sample= 0; sample<totsample; sample++) {
-		float *rectf= RE_RenderLayerGetPass(rlpp[sample], SCE_PASS_COMBINED, R.viewname);
+		float *rectf = RE_RenderLayerGetPass(rlpp[sample], SCE_PASS_COMBINED, R.viewname);
 
 		for (y= pa->rectx*pa->recty; y>0; y--, rectf+=4) {
 			rectf[0] = MAX2(rectf[0], 0.0f);
@@ -1252,7 +1251,7 @@ void zbufshadeDA_tile(RenderPart *pa)
 					
 					/* swap for live updates, and it is used in zbuf.c!!! */
 					SWAP(float *, rl->acolrect, rect);
-					ztramask= zbuffer_transp_shade(pa, rl, rect, &psmlist);
+					ztramask = zbuffer_transp_shade(pa, rl, rect, &psmlist);
 					SWAP(float *, rl->acolrect, rect);
 					
 					/* zbuffer transp only returns ztramask if there's solid rendered */
@@ -1376,7 +1375,7 @@ void zbufshade_tile(RenderPart *pa)
 			rr->renlay= rl;
 			
 			if (rl->layflag & SCE_LAY_SOLID) {
-				const float *fcol= rect;
+				const float *fcol = rect;
 				const int *ro= pa->recto, *rp= pa->rectp, *rz= pa->rectz;
 				int x, y, offs=0, seed;
 				

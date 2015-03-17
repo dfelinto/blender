@@ -1157,7 +1157,7 @@ void uiTemplateImageFormatViews(uiLayout *layout, PointerRNA *imfptr, PointerRNA
 	ImageFormatData *imf = imfptr->data;
 	uiLayout *col;
 
-	if (ptr){
+	if (ptr) {
 		uiItemR(layout, ptr, "use_multiview", 0, NULL, ICON_NONE);
 		col = uiLayoutColumn(layout, false);
 		uiLayoutSetActive(col, RNA_boolean_get(ptr, "use_multiview"));
