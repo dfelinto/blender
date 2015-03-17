@@ -430,14 +430,14 @@ class CyclesRender_PT_views(CyclesButtonsPanel, Panel):
 
 
         layout.active = rd.use_multiview
-        basic_stereo = (rd.views_format == 'SETUP_BASIC')
+        basic_stereo = (rd.views_format == 'STEREO_3D')
 
         row = layout.row()
         row.prop(rd, "views_format", expand=True)
 
         if basic_stereo:
             row = layout.row()
-            row.template_list("RENDERLAYER_UL_renderviews", "", rd, "stereo_views", rd.views, "active_index", rows=2)
+            row.template_list("RENDERLAYER_UL_renderviews", "name", rd, "stereo_views", rd.views, "active_index", rows=2)
 
             row = layout.row()
             row.label(text="File Suffix:")
@@ -450,10 +450,6 @@ class CyclesRender_PT_views(CyclesButtonsPanel, Panel):
             col = row.column(align=True)
             col.operator("scene.render_view_add", icon='ZOOMIN', text="")
             col.operator("scene.render_view_remove", icon='ZOOMOUT', text="")
-
-            row = layout.row()
-            if rv and rv.name not in {"left", "right"}:
-                row.prop(rv, "name")
 
             row = layout.row()
             row.label(text="Camera Suffix:")
