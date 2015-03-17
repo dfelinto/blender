@@ -3540,7 +3540,7 @@ static bool view3d_stereo3d_active(const bContext *C, Scene *scene, View3D *v3d,
 		if (v3d->stereo3d_camera == STEREO_MONO_ID)
 			return false;
 
-		return BKE_scene_is_stereo3d(&scene->r);
+		return BKE_scene_multiview_is_stereo3d(&scene->r);
 	}
 
 	return true;

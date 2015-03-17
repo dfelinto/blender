@@ -920,7 +920,7 @@ void render_result_views_new(RenderResult *rr, RenderData *rd)
 	/* check renderdata for amount of views */
 	if ((rd->scemode & R_MULTIVIEW)) {
 		for (srv = rd->views.first; srv; srv = srv->next) {
-			if (BKE_scene_render_view_active(rd, srv) == false) continue;
+			if (BKE_scene_multiview_is_render_view_active(rd, srv) == false) continue;
 
 			rv = MEM_callocN(sizeof(RenderView), "new render view");
 			BLI_addtail(&rr->views, rv);

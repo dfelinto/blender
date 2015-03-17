@@ -889,7 +889,7 @@ ImBuf *sequencer_ibuf_get(struct Main *bmain, Scene *scene, SpaceSeq *sseq, int 
 	        bmain->eval_ctx, bmain, scene,
 	        rectx, recty, proxy_size,
 	        &context);
-	context.view_id = BKE_scene_view_id_get(&scene->r, viewname);
+	context.view_id = BKE_scene_multiview_view_id_get(&scene->r, viewname);
 
 	/* sequencer could start rendering, in this case we need to be sure it wouldn't be canceled
 	 * by Esc pressed somewhere in the past

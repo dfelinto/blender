@@ -2359,7 +2359,7 @@ static void image_viewer_create_views(const RenderData *rd, Image *ima)
 {
 	SceneRenderView *srv;
 	for (srv = rd->views.first; srv; srv = srv->next) {
-		if (BKE_scene_render_view_active(rd, srv) == false)
+		if (BKE_scene_multiview_is_render_view_active(rd, srv) == false)
 			continue;
 		image_add_view(ima, srv->name, "");
 	}
@@ -2372,7 +2372,7 @@ void BKE_image_verify_viewer_views(const RenderData *rd, Image *ima, ImageUser *
 
 	BLI_lock_thread(LOCK_DRAW_IMAGE);
 
-	if (BKE_scene_is_stereo3d(rd)) {
+	if (BKE_scene_multiview_is_stereo3d(rd)) {
 		ima->flag |= IMA_IS_STEREO;
 		ima->flag |= IMA_IS_MULTIVIEW;
 	}
@@ -2383,14 +2383,14 @@ void BKE_image_verify_viewer_views(const RenderData *rd, Image *ima, ImageUser *
 	}
 
 	/* see if all scene render views are in the image view list */
-	do_reset = (BKE_scene_num_views_get(rd) != BLI_listbase_count(&ima->views));
+	do_reset = (BKE_scene_multiview_num_views_get(rd) != BLI_listbase_count(&ima->views));
 	if (!do_reset) {
 		SceneRenderView *srv;
 		ImageView *iv;
 
 		for (iv = ima->views.first; iv; iv = iv->next) {
 			srv = BLI_findstring(&rd->views, iv->name, offsetof(SceneRenderView, name));
-			if ((srv == NULL) || (BKE_scene_render_view_active(rd, srv) == false)) {
+			if ((srv == NULL) || (BKE_scene_multiview_is_render_view_active(rd, srv) == false)) {
 				do_reset = true;
 				break;
 			}
@@ -4487,7 +4487,7 @@ static void image_update_views_format(Image *ima, ImageUser *iuser)
 		char *name = ima->name;
 		char *ext = NULL;
 
-		BKE_scene_view_prefix_get(scene, name, prefix, &ext);
+		BKE_scene_multiview_view_prefix_get(scene, name, prefix, &ext);
 
 		if (prefix[0] == '\0') {
 			goto monoview;
@@ -4495,7 +4495,7 @@ static void image_update_views_format(Image *ima, ImageUser *iuser)
 
 		/* create all the image views */
 		for (srv = scene->r.views.first; srv; srv = srv->next) {
-			if (BKE_scene_render_view_active(&scene->r, srv)) {
+			if (BKE_scene_multiview_is_render_view_active(&scene->r, srv)) {
 				char filepath[FILE_MAX];
 				BLI_snprintf(filepath, sizeof(filepath), "%s%s%s", prefix, srv->suffix, ext);
 				image_add_view(ima, srv->name, filepath);
@@ -4528,7 +4528,7 @@ static void image_update_views_format(Image *ima, ImageUser *iuser)
 		/* all good */
 		if (BLI_listbase_count_ex(&ima->views, 2) > 1) {
 			ima->flag |= IMA_IS_MULTIVIEW;
-			if (BKE_scene_is_stereo3d(&scene->r))
+			if (BKE_scene_multiview_is_stereo3d(&scene->r))
 				ima->flag |= IMA_IS_STEREO;
 		}
 		else {

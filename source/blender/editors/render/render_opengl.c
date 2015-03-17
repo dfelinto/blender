@@ -184,7 +184,7 @@ static void screen_opengl_views_setup(OGLRender *oglrender)
 		rv = rr->views.last;
 		while (rv) {
 			srv = BLI_findstring(&rd->views, rv->name, offsetof(SceneRenderView, name));
-			if (BKE_scene_render_view_active(rd, srv)) {
+			if (BKE_scene_multiview_is_render_view_active(rd, srv)) {
 				if (rv->rectf == NULL)
 					rv->rectf = MEM_callocN(sizeof(float) * 4 * oglrender->sizex * oglrender->sizey, "screen_opengl_render_init rect");
 				rv = rv->prev;
@@ -207,7 +207,7 @@ static void screen_opengl_views_setup(OGLRender *oglrender)
 
 		/* create all the views that are needed */
 		for (srv = rd->views.first; srv; srv = srv->next) {
-			if (BKE_scene_render_view_active(rd, srv) == false)
+			if (BKE_scene_multiview_is_render_view_active(rd, srv) == false)
 				continue;
 
 			rv = BLI_findstring(&rr->views, srv->name, offsetof(SceneRenderView, name));
@@ -227,7 +227,7 @@ static void screen_opengl_views_setup(OGLRender *oglrender)
 	}
 
 	BLI_lock_thread(LOCK_DRAW_IMAGE);
-	if (BKE_scene_is_stereo3d(rd)) {
+	if (BKE_scene_multiview_is_stereo3d(rd)) {
 		oglrender->ima->flag |= IMA_IS_STEREO;
 	}
 	else {
@@ -267,7 +267,7 @@ static void screen_opengl_render_doit(OGLRender *oglrender, RenderResult *rr)
 		        oglrender->sizex, oglrender->sizey, 100.0f,
 		        &context);
 
-		context.view_id = BKE_scene_view_id_get(&scene->r, viewname);
+		context.view_id = BKE_scene_multiview_view_id_get(&scene->r, viewname);
 		ibuf = BKE_sequencer_give_ibuf(&context, CFRA, chanshown);
 
 		if (ibuf) {
@@ -688,19 +688,19 @@ static int screen_opengl_render_anim_initialize(bContext *C, wmOperator *op)
 
 	oglrender = op->customdata;
 	scene = oglrender->scene;
-	oglrender->totvideos = BKE_scene_num_videos_get(&scene->r);
+	oglrender->totvideos = BKE_scene_multiview_num_videos_get(&scene->r);
 
 	oglrender->reports = op->reports;
 
 	if (BKE_imtype_is_movie(scene->r.im_format.imtype)) {
 		size_t i, width, height;
 
-		BKE_scene_videos_dimensions_get(&scene->r, oglrender->sizex, oglrender->sizey, &width, &height);
+		BKE_scene_multiview_videos_dimensions_get(&scene->r, oglrender->sizex, oglrender->sizey, &width, &height);
 		oglrender->movie_ctx_arr = MEM_mallocN(sizeof(void *) * oglrender->totvideos, "Movies");
 		oglrender->mh = BKE_movie_handle_get(scene->r.im_format.imtype);
 
 		for (i = 0; i < oglrender->totvideos; i++) {
-			const char *suffix = BKE_scene_view_id_suffix_get(&scene->r, i);
+			const char *suffix = BKE_scene_multiview_view_id_suffix_get(&scene->r, i);
 
 			oglrender->movie_ctx_arr[i] = oglrender->mh->context_create();
 			if (!oglrender->mh->start_movie(oglrender->movie_ctx_arr[i], scene, &scene->r, oglrender->sizex,

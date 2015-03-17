@@ -251,7 +251,7 @@ static void compo_startjob(void *cjv, short *stop, short *do_update, float *prog
 	/* 1 is do_previews */
 
 	for (srv = scene->r.views.first; srv; srv = srv->next) {
-		if (BKE_scene_render_view_active(&scene->r, srv) == false) continue;
+		if (BKE_scene_multiview_is_render_view_active(&scene->r, srv) == false) continue;
 		ntreeCompositExecTree(cj->scene, ntree, &cj->scene->r, false, true, &scene->view_settings, &scene->display_settings, srv->name);
 	}
 

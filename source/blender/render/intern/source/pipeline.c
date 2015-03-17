@@ -429,7 +429,7 @@ void RE_ReleaseResultImage(Render *re)
 void RE_ResultGet32(Render *re, unsigned int *rect)
 {
 	RenderResult rres;
-	const size_t view_id = BKE_scene_view_id_get(&re->r, re->viewname);
+	const size_t view_id = BKE_scene_multiview_view_id_get(&re->r, re->viewname);
 
 	RE_AcquireResultImage(re, &rres, view_id);
 	render_result_rect_get_pixels(&rres, rect, re->rectx, re->recty, &re->scene->view_settings, &re->scene->display_settings, 0);
@@ -2535,7 +2535,7 @@ static void do_render_seq(Render *re)
 		re_y = re->result->recty;
 	}
 
-	tot_views = BKE_scene_num_views_get(&re->r);
+	tot_views = BKE_scene_multiview_num_views_get(&re->r);
 	ibuf_arr = MEM_mallocN(sizeof(ImBuf *) * tot_views, "Sequencer Views ImBufs");
 
 	BKE_sequencer_new_render_data(
@@ -2700,7 +2700,7 @@ static bool check_valid_camera_multiview(Scene *scene, Object *camera, ReportLis
 		return true;
 
 	for (srv = scene->r.views.first; srv; srv = srv->next) {
-		if (BKE_scene_render_view_active(&scene->r, srv)) {
+		if (BKE_scene_multiview_is_render_view_active(&scene->r, srv)) {
 			active_view = true;
 
 			if (scene->r.views_format == SCE_VIEWS_FORMAT_MULTIVIEW) {
@@ -3108,7 +3108,7 @@ bool RE_WriteRenderViewsImage(ReportList *reports, RenderResult *rr, Scene *scen
 		BLI_strncpy(filepath, name, sizeof(filepath));
 
 		for (view_id = 0, rv = rr->views.first; rv; rv = rv->next, view_id++) {
-			BKE_scene_view_filepath_get(&scene->r, filepath, rv->name, name);
+			BKE_scene_multiview_view_filepath_get(&scene->r, filepath, rv->name, name);
 
 			if (rd->im_format.imtype == R_IMF_IMTYPE_MULTILAYER) {
 
@@ -3244,7 +3244,7 @@ bool RE_WriteRenderViewsMovie(ReportList *reports, RenderResult *rr, Scene *scen
 		size_t view_id;
 		for (view_id = 0; view_id < totvideos; view_id++) {
 			bool do_free = false;
-			const char *suffix = BKE_scene_view_id_suffix_get(&scene->r, view_id);
+			const char *suffix = BKE_scene_multiview_view_id_suffix_get(&scene->r, view_id);
 			ImBuf *ibuf = render_result_rect_to_ibuf(rr, &scene->r, view_id);
 
 			/* note; the way it gets 32 bits rects is weak... */
@@ -3379,7 +3379,7 @@ static void get_videos_dimensions(Render *re, RenderData *rd, size_t *r_width, s
 		height = re->recty;
 	}
 
-	BKE_scene_videos_dimensions_get(rd, width, height, r_width, r_height);
+	BKE_scene_multiview_videos_dimensions_get(rd, width, height, r_width, r_height);
 }
 
 /* saves images to disk */
@@ -3390,7 +3390,7 @@ void RE_BlenderAnim(Render *re, Main *bmain, Scene *scene, Object *camera_overri
 	bMovieHandle *mh = NULL;
 	int cfrao = scene->r.cfra;
 	int nfra, totrendered = 0, totskipped = 0;
-	const size_t totvideos = BKE_scene_num_videos_get(&rd);
+	const size_t totvideos = BKE_scene_multiview_num_videos_get(&rd);
 	const bool is_movie = BKE_imtype_is_movie(scene->r.im_format.imtype);
 
 	BLI_callback_exec(re->main, (ID *)scene, BLI_CB_EVT_RENDER_INIT);
@@ -3420,7 +3420,7 @@ void RE_BlenderAnim(Render *re, Main *bmain, Scene *scene, Object *camera_overri
 		re->movie_ctx_arr = MEM_mallocN(sizeof(void *) * totvideos, "Movies' Context");
 
 		for (i = 0; i < totvideos; i++){
-			const char *suffix = BKE_scene_view_id_suffix_get(&re->r, i);
+			const char *suffix = BKE_scene_multiview_view_id_suffix_get(&re->r, i);
 
 			re->movie_ctx_arr[i] = mh->context_create();
 

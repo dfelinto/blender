@@ -71,7 +71,7 @@ void free_exr_channels(void *exrhandle, const RenderData *rd, const char *layerN
 	for (srv = (SceneRenderView *) rd->views.first; srv; srv = srv->next) {
 		float *rect = NULL;
 
-		if (BKE_scene_render_view_active(rd, srv) == false)
+		if (BKE_scene_multiview_is_render_view_active(rd, srv) == false)
 			continue;
 
 		/* the pointer is stored in the first channel of each datatype */
@@ -196,7 +196,7 @@ void OutputSingleLayerOperation::deinitExecution()
 		IMB_colormanagement_imbuf_for_write(ibuf, true, false, m_viewSettings, m_displaySettings,
 		                                    this->m_format);
 
-		suffix = BKE_scene_view_suffix_get(this->m_rd, this->m_viewName);
+		suffix = BKE_scene_multiview_view_suffix_get(this->m_rd, this->m_viewName);
 
 		BKE_image_path_from_imformat(
 		        filename, this->m_path, bmain->name, this->m_rd->cfra, this->m_format,
@@ -273,7 +273,7 @@ void OutputOpenExrMultiLayerOperation::deinitExecution()
 		const char *suffix;
 		void *exrhandle = IMB_exr_get_handle();
 
-		suffix = BKE_scene_view_suffix_get(this->m_rd, this->m_viewName);
+		suffix = BKE_scene_multiview_view_suffix_get(this->m_rd, this->m_viewName);
 		BKE_image_path_from_imtype(
 		        filename, this->m_path, bmain->name, this->m_rd->cfra, R_IMF_IMTYPE_MULTILAYER,
 		        (this->m_rd->scemode & R_EXTENSION) != 0, true, suffix);

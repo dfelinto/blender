@@ -64,13 +64,13 @@ void *OutputOpenExrSingleLayerMultiViewOperation::get_handle(const char *filenam
 
 		exrhandle = IMB_exr_get_handle_name(filename);
 
-		if (!BKE_scene_render_view_first(this->m_rd, this->m_viewName))
+		if (!BKE_scene_multiview_is_render_view_first(this->m_rd, this->m_viewName))
 			return exrhandle;
 
 		IMB_exr_clear_channels(exrhandle);
 
 		for (srv = (SceneRenderView *)this->m_rd->views.first; srv; srv = srv->next) {
-			if (BKE_scene_render_view_active(this->m_rd, srv) == false)
+			if (BKE_scene_multiview_is_render_view_active(this->m_rd, srv) == false)
 				continue;
 
 			IMB_exr_add_view(exrhandle, srv->name);
@@ -115,7 +115,7 @@ void OutputOpenExrSingleLayerMultiViewOperation::deinitExecution()
 		this->m_imageInput = NULL;
 
 		/* ready to close the file */
-		if (BKE_scene_render_view_last(this->m_rd, this->m_viewName)) {
+		if (BKE_scene_multiview_is_render_view_last(this->m_rd, this->m_viewName)) {
 			IMB_exr_write_channels(exrhandle);
 
 			/* free buffer memory for all the views */
@@ -148,7 +148,7 @@ void *OutputOpenExrMultiLayerMultiViewOperation::get_handle(const char *filename
 		/* get a new global handle */
 		exrhandle = IMB_exr_get_handle_name(filename);
 
-		if (!BKE_scene_render_view_first(this->m_rd, this->m_viewName))
+		if (!BKE_scene_multiview_is_render_view_first(this->m_rd, this->m_viewName))
 			return exrhandle;
 
 		IMB_exr_clear_channels(exrhandle);
@@ -156,7 +156,7 @@ void *OutputOpenExrMultiLayerMultiViewOperation::get_handle(const char *filename
 		/* check renderdata for amount of views */
 		for (srv = (SceneRenderView *) this->m_rd->views.first; srv; srv = srv->next) {
 
-			if (BKE_scene_render_view_active(this->m_rd, srv) == false)
+			if (BKE_scene_multiview_is_render_view_active(this->m_rd, srv) == false)
 				continue;
 
 			IMB_exr_add_view(exrhandle, srv->name);
@@ -206,7 +206,7 @@ void OutputOpenExrMultiLayerMultiViewOperation::deinitExecution()
 		}
 
 		/* ready to close the file */
-		if (BKE_scene_render_view_last(this->m_rd, this->m_viewName)) {
+		if (BKE_scene_multiview_is_render_view_last(this->m_rd, this->m_viewName)) {
 			IMB_exr_write_channels(exrhandle);
 
 			/* free buffer memory for all the views */
@@ -244,7 +244,7 @@ void *OutputStereoOperation::get_handle(const char *filename)
 
 		exrhandle = IMB_exr_get_handle_name(filename);
 
-		if (!BKE_scene_render_view_first(this->m_rd, this->m_viewName))
+		if (!BKE_scene_multiview_is_render_view_first(this->m_rd, this->m_viewName))
 			return exrhandle;
 
 		IMB_exr_clear_channels(exrhandle);
@@ -275,7 +275,7 @@ void OutputStereoOperation::deinitExecution()
 		this->m_outputBuffer = NULL;
 
 		/* create stereo ibuf */
-		if (BKE_scene_render_view_last(this->m_rd, this->m_viewName)) {
+		if (BKE_scene_multiview_is_render_view_last(this->m_rd, this->m_viewName)) {
 			ImBuf *ibuf[3] = {NULL};
 			const char *names[2] = {STEREO_LEFT_NAME, STEREO_RIGHT_NAME};
 			Main *bmain = G.main; /* TODO, have this passed along */
