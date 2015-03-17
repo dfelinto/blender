@@ -242,8 +242,8 @@
                    wire="#000000"
                    wire_edit="#808080"
                    gp_vertex="#000000"
-                   gp_vertex_select="#000000"
-                   gp_vertex_size="1"
+                   gp_vertex_select="#ff8500"
+                   gp_vertex_size="3"
                    lamp="#00000028"
                    speaker="#000000"
                    camera="#000000"
@@ -299,6 +299,7 @@
                    bundle_solid="#c8c8c8"
                    camera_path="#000000"
                    skin_root="#b44d4d"
+                   clipping_border_3d="#313131ff"
                    paint_curve_handle="#7fff7f7f"
                    paint_curve_pivot="#ff7f7f7f">
         <space>
@@ -546,8 +547,8 @@
     </dopesheet_editor>
     <image_editor>
       <ThemeImageEditor gp_vertex="#000000"
-                        gp_vertex_select="#000000"
-                        gp_vertex_size="1"
+                        gp_vertex_select="#ff8500"
+                        gp_vertex_size="3"
                         vertex="#000000"
                         vertex_select="#ff8500"
                         vertex_size="3"
@@ -612,8 +613,8 @@
     </image_editor>
     <sequence_editor>
       <ThemeSequenceEditor gp_vertex="#000000"
-                           gp_vertex_select="#000000"
-                           gp_vertex_size="1"
+                           gp_vertex_select="#ff8500"
+                           gp_vertex_size="3"
                            grid="#404040"
                            window_sliders="#a0a0a0"
                            movie_strip="#516987"
@@ -726,8 +727,8 @@
     <timeline>
       <ThemeTimeline grid="#5b5b5b"
                      frame_current="#60c040"
-                     time_keyframe="#000000"
-                     time_grease_pencil="#000000">
+                     time_keyframe="#ddd700"
+                     time_grease_pencil="#b5e61d">
         <space>
           <ThemeSpaceGeneric back="#727272"
                              title="#000000"
@@ -757,8 +758,8 @@
     </timeline>
     <node_editor>
       <ThemeNodeEditor gp_vertex="#000000"
-                       gp_vertex_select="#000000"
-                       gp_vertex_size="1"
+                       gp_vertex_select="#ff8500"
+                       gp_vertex_size="3"
                        node_selected="#f15800"
                        node_active="#f15800"
                        wire="#a7a7a7"
@@ -1144,31 +1145,31 @@
     <panel_title>
       <ThemeFontStyle points="12"
                       font_kerning_style="FITTED"
-                      shadow="2"
-                      shadow_offset_x="2"
-                      shadow_offset_y="-2"
-                      shadow_alpha="0.1"
+                      shadow="1"
+                      shadow_offset_x="0"
+                      shadow_offset_y="-1"
+                      shadow_alpha="0.15"
                       shadow_value="1">
       </ThemeFontStyle>
     </panel_title>
     <widget_label>
       <ThemeFontStyle points="11"
                       font_kerning_style="FITTED"
-                      shadow="1"
-                      shadow_offset_x="1"
+                      shadow="3"
+                      shadow_offset_x="0"
                       shadow_offset_y="-1"
-                      shadow_alpha="0.2"
+                      shadow_alpha="0.15"
                       shadow_value="1">
       </ThemeFontStyle>
     </widget_label>
     <widget>
       <ThemeFontStyle points="11"
                       font_kerning_style="FITTED"
-                      shadow="1"
-                      shadow_offset_x="1"
-                      shadow_offset_y="-1"
-                      shadow_alpha="0.1"
-                      shadow_value="1">
+                      shadow="0"
+                      shadow_offset_x="0"
+                      shadow_offset_y="0"
+                      shadow_alpha="0.25"
+                      shadow_value="0">
       </ThemeFontStyle>
     </widget>
   </ThemeStyle>
