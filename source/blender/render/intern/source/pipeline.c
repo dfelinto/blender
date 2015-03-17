@@ -317,9 +317,11 @@ Scene *RE_GetScene(Render *re)
 	return NULL;
 }
 
-/* Same as RE_AcquireResultImage but creating the necessary views to store the result
+/**
+ * Same as #RE_AcquireResultImage but creating the necessary views to store the result
  * fill provided result struct with a copy of thew views of what is done so far the
- * RenderResult.views ListBase needs to be freed after with RE_ReleaseResultViews */
+ * #RenderResult.views #ListBase needs to be freed after with #RE_ReleaseResultImageViews
+*/
 void RE_AcquireResultImageViews(Render *re, RenderResult *rr)
 {
 	memset(rr, 0, sizeof(RenderResult));
@@ -346,13 +348,15 @@ void RE_AcquireResultImageViews(Render *re, RenderResult *rr)
 
 			if (rl) {
 				if (rv->rectf == NULL) {
-					for (rview = (RenderView *)rr->views.first; rview; rview = rview->next)
+					for (rview = (RenderView *)rr->views.first; rview; rview = rview->next) {
 						rview->rectf = RE_RenderLayerGetPass(rl, SCE_PASS_COMBINED, rview->name);
+					}
 				}
 
 				if (rv->rectz == NULL) {
-					for (rview = (RenderView *)rr->views.first; rview; rview = rview->next)
+					for (rview = (RenderView *)rr->views.first; rview; rview = rview->next) {
 						rview->rectz = RE_RenderLayerGetPass(rl, SCE_PASS_Z, rview->name);
+					}
 				}
 			}
 
@@ -3419,7 +3423,7 @@ void RE_BlenderAnim(Render *re, Main *bmain, Scene *scene, Object *camera_overri
 		mh = BKE_movie_handle_get(scene->r.im_format.imtype);
 		re->movie_ctx_arr = MEM_mallocN(sizeof(void *) * totvideos, "Movies' Context");
 
-		for (i = 0; i < totvideos; i++){
+		for (i = 0; i < totvideos; i++) {
 			const char *suffix = BKE_scene_multiview_view_id_suffix_get(&re->r, i);
 
 			re->movie_ctx_arr[i] = mh->context_create();
@@ -3550,7 +3554,7 @@ void RE_BlenderAnim(Render *re, Main *bmain, Scene *scene, Object *camera_overri
 	/* end movie */
 	if (is_movie) {
 		size_t i;
-		for (i = 0; i < totvideos; i++){
+		for (i = 0; i < totvideos; i++) {
 			mh->end_movie(re->movie_ctx_arr[i]);
 			mh->context_free(re->movie_ctx_arr[i]);
 		}
@@ -3774,7 +3778,7 @@ bool RE_WriteEnvmapResult(struct ReportList *reports, Scene *scene, EnvMap *env,
 }
 
 /* used in the interface to decide whether to show layers */
-int RE_layers_have_name(struct RenderResult *rr)
+bool RE_layers_have_name(struct RenderResult *rr)
 {
 	switch (BLI_listbase_count_ex(&rr->layers, 2)) {
 		case 0:

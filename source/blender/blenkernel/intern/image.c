@@ -3301,10 +3301,11 @@ static ImBuf *image_load_movie_file(Image *ima, ImageUser *iuser, int frame)
 	return ibuf;
 }
 
-static ImBuf *load_image_single(Image *ima, ImageUser *iuser, int cfra,
-                                const size_t view_id,
-                                const bool has_packed,
-                                bool *r_assign)
+static ImBuf *load_image_single(
+        Image *ima, ImageUser *iuser, int cfra,
+        const size_t view_id,
+        const bool has_packed,
+        bool *r_assign)
 {
 	char filepath[FILE_MAX];
 	struct ImBuf *ibuf = NULL;
@@ -3319,8 +3320,8 @@ static ImBuf *load_image_single(Image *ima, ImageUser *iuser, int cfra,
 
 		imapf = BLI_findlink(&ima->packedfiles, view_id);
 		ibuf = IMB_ibImageFromMemory(
-			       (unsigned char *)imapf->packedfile->data, imapf->packedfile->size, flag,
-			       ima->colorspace_settings.name, "<packed data>");
+		       (unsigned char *)imapf->packedfile->data, imapf->packedfile->size, flag,
+		       ima->colorspace_settings.name, "<packed data>");
 	}
 	else {
 		ImageUser iuser_t;
