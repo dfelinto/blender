@@ -339,7 +339,7 @@ static void screen_opengl_render_doit(OGLRender *oglrender, RenderResult *rr)
 		/* render 3d view */
 		if (rv3d->persp == RV3D_CAMOB && v3d->camera) {
 			/*int is_ortho = scene->r.mode & R_ORTHO;*/
-			camera = BKE_camera_render(oglrender->scene, v3d->camera, viewname);
+			camera = BKE_camera_multiview_render(oglrender->scene, v3d->camera, viewname);
 			RE_GetCameraWindow(oglrender->re, camera, scene->r.cfra, winmat);
 			is_persp = true;
 			BKE_camera_to_gpu_dof(camera, &fx_settings);

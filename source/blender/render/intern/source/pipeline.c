@@ -2705,7 +2705,7 @@ static bool check_valid_camera_multiview(Scene *scene, Object *camera, ReportLis
 
 			if (scene->r.views_format == SCE_VIEWS_FORMAT_MULTIVIEW) {
 				Object *view_camera;
-				view_camera = BKE_camera_render(scene, camera, srv->name);
+				view_camera = BKE_camera_multiview_render(scene, camera, srv->name);
 
 				if (view_camera == camera) {
 					/* if the suffix is not in the camera, means we are using the fallback camera */
@@ -3123,7 +3123,7 @@ bool RE_WriteRenderViewsImage(ReportList *reports, RenderResult *rr, Scene *scen
 
 				if (stamp) {
 					/* writes the name of the individual cameras */
-					Object *view_camera = BKE_camera_render(scene, camera, rv->name);
+					Object *view_camera = BKE_camera_multiview_render(scene, camera, rv->name);
 					ok = BKE_imbuf_write_stamp(scene, view_camera, ibuf, name, &rd->im_format);
 				}
 				else {
@@ -3150,7 +3150,7 @@ bool RE_WriteRenderViewsImage(ReportList *reports, RenderResult *rr, Scene *scen
 
 					if (stamp) {
 						/* writes the name of the individual cameras */
-						Object *view_camera = BKE_camera_render(scene, camera, rv->name);
+						Object *view_camera = BKE_camera_multiview_render(scene, camera, rv->name);
 						ok = BKE_imbuf_write_stamp(scene, view_camera, ibuf, name, &rd->im_format);
 					}
 					else {

@@ -1832,18 +1832,18 @@ static void drawcamera_stereo3d(Scene *scene, View3D *v3d, RegionView3D *rv3d, O
 	glPushMatrix();
 
 	for (i = 0; i < 2; i++) {
-		ob = BKE_camera_render(scene, ob, names[i]);
+		ob = BKE_camera_multiview_render(scene, ob, names[i]);
 		cams[i] = ob->data;
 
 		glLoadMatrixf(rv3d->viewmat);
-		BKE_camera_model_matrix(&scene->r, ob, names[i], obmat);
+		BKE_camera_multiview_model_matrix(&scene->r, ob, names[i], obmat);
 		glMultMatrixf(obmat);
 
 		copy_m3_m3(vec_lr[i], vec);
 		copy_v3_v3(vec_lr[i][3], vec[3]);
 
 		if (cam->stereo.convergence_mode == CAM_S3D_OFFAXIS) {
-				float shift_x = BKE_camera_shift_x(&scene->r, ob, names[i]) - cam->shiftx;
+				float shift_x = BKE_camera_multiview_shift_x(&scene->r, ob, names[i]) - cam->shiftx;
 				shift_x *= drawsize * scale[0] * fac;
 				for (j = 0; j < 4; j++)
 					vec_lr[i][j][0] += shift_x;

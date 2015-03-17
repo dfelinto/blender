@@ -802,9 +802,9 @@ static void camera_stereo3d_model_matrix(Object *camera, const bool is_left, flo
 }
 
 /* the view matrix is used by the viewport drawing, it is basically the inverted model matrix */
-void BKE_camera_view_matrix(RenderData *rd, Object *camera, const bool is_left, float r_viewmat[4][4])
+void BKE_camera_multiview_view_matrix(RenderData *rd, Object *camera, const bool is_left, float r_viewmat[4][4])
 {
-	BKE_camera_model_matrix(rd, camera, is_left ? STEREO_LEFT_NAME : STEREO_RIGHT_NAME, r_viewmat);
+	BKE_camera_multiview_model_matrix(rd, camera, is_left ? STEREO_LEFT_NAME : STEREO_RIGHT_NAME, r_viewmat);
 	normalize_m4(r_viewmat);
 	invert_m4(r_viewmat);
 }
@@ -818,7 +818,7 @@ static bool camera_is_left(const char *viewname)
 	return true;
 }
 
-void BKE_camera_model_matrix(RenderData *rd, Object *camera, const char *viewname, float r_modelmat[4][4])
+void BKE_camera_multiview_model_matrix(RenderData *rd, Object *camera, const char *viewname, float r_modelmat[4][4])
 {
 	const bool is_multiview = (rd && rd->scemode & R_MULTIVIEW) != 0;
 
@@ -866,7 +866,7 @@ static Object *camera_multiview_advanced(Scene *scene, Object *camera, const cha
 }
 
 /* returns the camera to be used for render */
-Object *BKE_camera_render(Scene *scene, Object *camera, const char *viewname)
+Object *BKE_camera_multiview_render(Scene *scene, Object *camera, const char *viewname)
 {
 	const bool is_multiview = (scene->r.scemode & R_MULTIVIEW) != 0;
 
@@ -921,7 +921,7 @@ static float camera_stereo3d_shift_x(Object *camera, const char *viewname)
 	return shift;
 }
 
-float BKE_camera_shift_x(RenderData *rd, Object *camera, const char *viewname)
+float BKE_camera_multiview_shift_x(RenderData *rd, Object *camera, const char *viewname)
 {
 	const bool is_multiview = (rd && rd->scemode & R_MULTIVIEW) != 0;
 	Camera *data = camera->data;
@@ -937,9 +937,9 @@ float BKE_camera_shift_x(RenderData *rd, Object *camera, const char *viewname)
 	}
 }
 
-void BKE_camera_params_stereo3d(RenderData *rd, CameraParams *params, Object *camera, const char *viewname)
+void BKE_camera_multiview_params(RenderData *rd, CameraParams *params, Object *camera, const char *viewname)
 {
-	params->shiftx = BKE_camera_shift_x(rd, camera, viewname);
+	params->shiftx = BKE_camera_multiview_shift_x(rd, camera, viewname);
 }
 
 void BKE_camera_to_gpu_dof(struct Object *camera, struct GPUFXSettings *r_fx_settings)

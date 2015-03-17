@@ -429,7 +429,7 @@ void make_sample_tables(Render *re)
 struct Object *RE_GetCamera(Render *re)
 {
 	Object *camera = re->camera_override ? re->camera_override : re->scene->camera;
-	return BKE_camera_render(re->scene, camera, re->viewname);
+	return BKE_camera_multiview_render(re->scene, camera, re->viewname);
 }
 
 static void re_camera_params_get(Render *re, CameraParams *params, Object *cam_ob)
@@ -477,7 +477,7 @@ void RE_SetOverrideCamera(Render *re, Object *camera)
 
 static void re_camera_params_stereo3d(Render *re, CameraParams *params, Object *cam_ob)
 {
-	BKE_camera_params_stereo3d(&re->r, params, cam_ob, re->viewname);
+	BKE_camera_multiview_params(&re->r, params, cam_ob, re->viewname);
 }
 
 /* call this after InitState() */
@@ -518,7 +518,7 @@ void RE_GetCameraWindow(struct Render *re, struct Object *camera, int frame, flo
 
 void RE_GetCameraModelMatrix(Render *re, struct Object *camera, float r_mat[4][4])
 {
-	BKE_camera_model_matrix(&re->r, camera, re->viewname, r_mat);
+	BKE_camera_multiview_model_matrix(&re->r, camera, re->viewname, r_mat);
 }
 
 /* ~~~~~~~~~~~~~~~~ part (tile) calculus ~~~~~~~~~~~~~~~~~~~~~~ */

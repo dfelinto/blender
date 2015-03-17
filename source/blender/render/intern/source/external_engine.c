@@ -378,13 +378,13 @@ void RE_engine_actview_set(RenderEngine *engine, const char *viewname)
 float RE_engine_get_camera_shift_x(RenderEngine *engine, Object *camera)
 {
 	Render *re = engine->re;
-	return BKE_camera_shift_x(re ? &re->r : NULL, camera, re->viewname);
+	return BKE_camera_multiview_shift_x(re ? &re->r : NULL, camera, re->viewname);
 }
 
 void RE_engine_get_camera_model_matrix(RenderEngine *engine, Object *camera, float *r_modelmat)
 {
 	Render *re = engine->re;
-	BKE_camera_model_matrix(re ? &re->r : NULL, camera, re->viewname, (float (*)[4])r_modelmat);
+	BKE_camera_multiview_model_matrix(re ? &re->r : NULL, camera, re->viewname, (float (*)[4])r_modelmat);
 }
 
 
