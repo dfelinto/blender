@@ -2714,8 +2714,8 @@ static bool check_valid_camera_multiview(Scene *scene, Object *camera, ReportLis
 				if (view_camera == camera) {
 					/* if the suffix is not in the camera, means we are using the fallback camera */
 					if (!BLI_str_endswith(view_camera->id.name + 2, srv->suffix)) {
-						BKE_reportf(reports, RPT_ERROR, "No multi-view camera found for view \"%s\" of camera \"%s\"",
-						            srv->name, camera->id.name + 2);
+						BKE_reportf(reports, RPT_ERROR, "Camera \"%s\" is not a multi-view camera",
+						            camera->id.name + 2);
 						return false;
 					}
 				}
