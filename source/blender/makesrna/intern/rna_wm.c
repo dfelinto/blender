@@ -1779,11 +1779,6 @@ static void rna_def_window_stereo3d(BlenderRNA *brna)
 	RNA_def_property_enum_items(prop, stereo3d_interlace_type_items);
 	RNA_def_property_ui_text(prop, "Interlace Type", "");
 
-	prop = RNA_def_property(srna, "epilepsy_interval", PROP_FLOAT, PROP_TIME);
-	RNA_def_property_range(prop, 0.01f, 10.0f);
-	RNA_def_property_ui_range(prop, 0.05f, 1.0f, 1.0f, 2);
-	RNA_def_property_ui_text(prop, "Interval", "Preferred interval in seconds between switching left/right views");
-
 	prop = RNA_def_property(srna, "use_interlace_swap", PROP_BOOLEAN, PROP_BOOLEAN);
 	RNA_def_property_boolean_sdna(prop, NULL, "flag", S3D_INTERLACE_SWAP);
 	RNA_def_property_ui_text(prop, "Swap Left/Right", "Swap left and right stereo channels");

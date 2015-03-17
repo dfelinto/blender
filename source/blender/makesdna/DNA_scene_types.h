@@ -280,12 +280,11 @@ enum {
 };
 
 typedef struct Stereo3dFormat {
-	float epilepsy_interval; /* DEPRECATED - preferred interval in seconds for Dr. Epilepsy stereo method */
 	short flag;
 	char display_mode; /* encoding mode */
 	char anaglyph_type; /* anaglyph scheme for the user display */
 	char interlace_type;  /* interlace type for the user display */
-	char pad[7];
+	char pad[3];
 } Stereo3dFormat;
 
 /* Stereo3dFormat.display_mode */

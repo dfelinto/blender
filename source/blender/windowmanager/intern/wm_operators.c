@@ -4859,9 +4859,6 @@ static void WM_OT_set_stereo3d(wmOperatorType *ot)
 	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 	prop = RNA_def_enum(ot->srna, "interlace_type", stereo3d_interlace_type_items, S3D_INTERLACE_ROW, "Interlace Type", "");
 	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
-	prop = RNA_def_float(ot->srna, "epilepsy_interval", 0.1f, 0.01f, 10.0f, "Interval",
-	                     "Preferred interval in seconds between switching left/right views", 0.05f, 1.0f);
-	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 	prop = RNA_def_boolean(ot->srna, "use_interlace_swap", false, "Swap Left/Right",
 	                       "Swap left and right stereo channels");
 	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
