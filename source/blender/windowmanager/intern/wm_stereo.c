@@ -105,7 +105,7 @@ static void wm_interlace_create_masks(wmWindow *win)
 {
 	GLuint pattern;
 	char i;
-	bool swap = (win->stereo3d_format->flag & S3D_INTERLACE_SWAP);
+	bool swap = (win->stereo3d_format->flag & S3D_INTERLACE_SWAP) != 0;
 	enum eStereo3dInterlaceType interlace_type = win->stereo3d_format->interlace_type;
 
 	if (interlace_prev_type == interlace_type && interlace_prev_swap == swap)
@@ -204,7 +204,7 @@ static void wm_method_draw_stereo_sidebyside(wmWindow *win)
 	float alpha = 1.0f;
 	int view;
 	int soffx;
-	bool cross_eyed = (win->stereo3d_format->flag & S3D_SIDEBYSIDE_CROSSEYED);
+	bool cross_eyed = (win->stereo3d_format->flag & S3D_SIDEBYSIDE_CROSSEYED) != 0;
 
 	for (view = 0; view < 2; view ++) {
 		drawdata = BLI_findlink(&win->drawdata, (view * 2) + 1);

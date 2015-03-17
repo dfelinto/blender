@@ -751,10 +751,10 @@ static void imb_stereo_write_doit(Stereo3DData *s3d_data, Stereo3dFormat *s3d)
 		case S3D_DISPLAY_BLURAY:
 			break;
 		case S3D_DISPLAY_INTERLACE:
-			imb_stereo_write_interlace(s3d_data, s3d->interlace_type, (s3d->flag & S3D_INTERLACE_SWAP));
+			imb_stereo_write_interlace(s3d_data, s3d->interlace_type, (s3d->flag & S3D_INTERLACE_SWAP) != 0);
 			break;
 		case S3D_DISPLAY_SIDEBYSIDE:
-			imb_stereo_write_sidebyside(s3d_data, (s3d->flag & S3D_SIDEBYSIDE_CROSSEYED));
+			imb_stereo_write_sidebyside(s3d_data, (s3d->flag & S3D_SIDEBYSIDE_CROSSEYED) != 0);
 			break;
 		case S3D_DISPLAY_TOPBOTTOM:
 			imb_stereo_write_topbottom(s3d_data);
@@ -1291,10 +1291,10 @@ static void imb_stereo_read_doit(Stereo3DData *s3d_data, Stereo3dFormat *s3d)
 		case S3D_DISPLAY_BLURAY:
 			break;
 		case S3D_DISPLAY_INTERLACE:
-			imb_stereo_read_interlace(s3d_data, s3d->interlace_type, (s3d->flag & S3D_INTERLACE_SWAP));
+			imb_stereo_read_interlace(s3d_data, s3d->interlace_type, (s3d->flag & S3D_INTERLACE_SWAP) != 0);
 			break;
 		case S3D_DISPLAY_SIDEBYSIDE:
-			imb_stereo_read_sidebyside(s3d_data, (s3d->flag & S3D_SIDEBYSIDE_CROSSEYED));
+			imb_stereo_read_sidebyside(s3d_data, (s3d->flag & S3D_SIDEBYSIDE_CROSSEYED) != 0);
 			break;
 		case S3D_DISPLAY_TOPBOTTOM:
 			imb_stereo_read_topbottom(s3d_data);
