@@ -95,9 +95,9 @@ static void rna_def_camera_stereo_data(BlenderRNA *brna)
 	PropertyRNA *prop;
 
 	static EnumPropertyItem convergence_mode_items[] = {
-		{CAM_S3D_OFFAXIS, "OFFAXIS", 0, "Off-Axis", ""},
-		{CAM_S3D_PARALLEL, "PARALLEL", 0, "Parallel", ""},
-		{CAM_S3D_TOE, "TOE", 0, "Toe-in", ""},
+		{CAM_S3D_OFFAXIS, "OFFAXIS", 0, "Off-Axis", "Off-axis frustrums converging in a plane"},
+		{CAM_S3D_PARALLEL, "PARALLEL", 0, "Parallel", "Parallel cameras with no convergence"},
+		{CAM_S3D_TOE, "TOE", 0, "Toe-in", "Rotated cameras, looking at the convergence distance"},
 		{0, NULL, 0, NULL, NULL}
 	};
 
@@ -133,6 +133,13 @@ static void rna_def_camera_stereo_data(BlenderRNA *brna)
 	RNA_def_property_range(prop, 0.00001f, FLT_MAX);
 	RNA_def_property_ui_range(prop, 0.0f, 15.f, 1, 2);
 	RNA_def_property_ui_text(prop, "Convergence Plane Distance", "The converge point for the stereo cameras (often the distance between a projector and the projection screen)");
+	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, NULL);
+
+	prop = RNA_def_property(srna, "viewport_convergence", PROP_FLOAT, PROP_DISTANCE);
+	RNA_def_property_float_sdna(prop, NULL, "convergence_distance");
+	RNA_def_property_range(prop, 0.00001f, FLT_MAX);
+	RNA_def_property_ui_range(prop, 0.0f, 15.f, 1, 2);
+	RNA_def_property_ui_text(prop, "Viewport Convergence", "Preview convergence distance for the stereo effect in the viewport. It doesn't affect the render!");
 	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, NULL);
 }
 
