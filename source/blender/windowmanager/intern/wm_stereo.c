@@ -34,47 +34,33 @@
 #include <string.h>
 
 #include "DNA_listBase.h"
-#include "DNA_screen_types.h"
-#include "DNA_windowmanager_types.h"
-#include "DNA_userdef_types.h"
-#include "DNA_view3d_types.h"
 
 #include "RNA_access.h"
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_blenlib.h"
+#include "BLI_listbase.h"
+#include "BLI_rect.h"
 #include "BLI_utildefines.h"
-#include "BLI_math_base.h"
 
 #include "BIF_gl.h"
 
 #include "BKE_context.h"
-#include "BKE_image.h"
 #include "BKE_global.h"
-#include "BKE_screen.h"
 #include "BKE_report.h"
 
 #include "GHOST_C-api.h"
 
 #include "ED_node.h"
-#include "ED_view3d.h"
 #include "ED_screen.h"
 
 #include "GPU_glew.h"
-#include "GPU_draw.h"
-#include "GPU_extensions.h"
-
-#include "PIL_time.h"
-
-#include "RE_engine.h"
 
 #include "WM_api.h"
 #include "WM_types.h"
 #include "wm.h"
 #include "wm_draw.h" /* wmDrawTriple */
 #include "wm_window.h"
-#include "wm_event_system.h"
 
 #include "UI_interface.h"
 #include "UI_resources.h"
@@ -403,7 +389,7 @@ static bool wm_stereo3d_required(bScreen *screen)
 				/* images should always show in stereo, even if
 				 * the file doesn't have views enabled */
 				sima = sa->spacedata.first;
-				if ((sima->image) && (sima->image->flag & IMA_IS_STEREO) &&
+				if (sima->image && (sima->image->flag & IMA_IS_STEREO) &&
 				    (sima->iuser.flag & IMA_SHOW_STEREO))
 				{
 					return true;

@@ -263,7 +263,7 @@ wmWindow *wm_window_copy(bContext *C, wmWindow *winorig)
 
 	win->drawmethod = U.wmdrawmethod;
 
-	win->drawdata.first = win->drawdata.last = NULL;
+	BLI_listbase_clear(&win->drawdata);
 
 	*win->stereo3d_format = *winorig->stereo3d_format;
 
