@@ -519,7 +519,9 @@ static void imb_stereo_write_topbottom(Stereo3DData *s3d)
 
 /**************************** dimension utils ****************************************/
 
-void IMB_stereo_write_dimensions(const char mode, const bool is_squeezed, const size_t width, const size_t height, size_t *r_width, size_t *r_height)
+void IMB_stereo_write_dimensions(
+        const char mode, const bool is_squeezed, const size_t width, const size_t height,
+        size_t *r_width, size_t *r_height)
 {
 	switch (mode) {
 		case S3D_DISPLAY_BLURAY:
@@ -550,7 +552,9 @@ void IMB_stereo_write_dimensions(const char mode, const bool is_squeezed, const 
 	}
 }
 
-void IMB_stereo_read_dimensions(const char mode, const bool is_squeezed, const size_t width, const size_t height, size_t *r_width, size_t *r_height)
+void IMB_stereo_read_dimensions(
+        const char mode, const bool is_squeezed, const size_t width, const size_t height,
+        size_t *r_width, size_t *r_height)
 {
 	switch (mode) {
 		case S3D_DISPLAY_BLURAY:
@@ -621,9 +625,9 @@ static void imb_stereo_squeeze_rectf(float *rectf, Stereo3dFormat *s3d, const si
 	ibuf = IMB_allocImBuf(width, height, channels, IB_rectfloat);
 
 	IMB_buffer_float_from_float(
-	           ibuf->rect_float, rectf, channels,
-	           IB_PROFILE_LINEAR_RGB, IB_PROFILE_LINEAR_RGB, false,
-	           width, height, width, width);
+	        ibuf->rect_float, rectf, channels,
+	        IB_PROFILE_LINEAR_RGB, IB_PROFILE_LINEAR_RGB, false,
+	        width, height, width, width);
 
 	IMB_scaleImBuf_threaded(ibuf, x, y);
 	rectf = MEM_dupallocN(ibuf->rect_float);
@@ -646,9 +650,9 @@ static void imb_stereo_squeeze_rect(int *rect, Stereo3dFormat *s3d, const size_t
 	ibuf = IMB_allocImBuf(width, height, channels, IB_rect);
 
 	IMB_buffer_byte_from_byte(
-	            (unsigned char *)ibuf->rect, (unsigned char *)rect,
-	            IB_PROFILE_SRGB, IB_PROFILE_SRGB, false,
-	            width, height, width, width);
+	        (unsigned char *)ibuf->rect, (unsigned char *)rect,
+	        IB_PROFILE_SRGB, IB_PROFILE_SRGB, false,
+	        width, height, width, width);
 
 	IMB_scaleImBuf_threaded(ibuf, x, y);
 	rect = MEM_dupallocN(ibuf->rect);
@@ -658,24 +662,27 @@ static void imb_stereo_squeeze_rect(int *rect, Stereo3dFormat *s3d, const size_t
 
 /*************************** preparing to call the write functions **************************/
 
-static void imb_stereo_data_initialize(Stereo3DData *s3d_data, const bool is_float,
-                                       const size_t x, const size_t y, const size_t channels,
-                                       int *left_rect, int *right_rect, int *stereo_rect,
-                                       float *left_rectf, float *right_rectf, float *stereo_rectf)
+static void imb_stereo_data_initialize(
+        Stereo3DData *s3d_data, const bool is_float,
+        const size_t x, const size_t y, const size_t channels,
+        int *rect_left, int *rect_right, int *rect_stereo,
+        float *rectf_left, float *rectf_right, float *rectf_stereo)
 {
 	s3d_data->is_float = is_float;
 	s3d_data->x = x;
 	s3d_data->y = y;
 	s3d_data->channels = channels;
-	s3d_data->rect[0] = (uchar *)left_rect;
-	s3d_data->rect[1] = (uchar *)right_rect;
-	s3d_data->rect[2] = (uchar *)stereo_rect;
-	s3d_data->rectf[0] = left_rectf;
-	s3d_data->rectf[1] = right_rectf;
-	s3d_data->rectf[2] = stereo_rectf;
+	s3d_data->rect[0] = (uchar *)rect_left;
+	s3d_data->rect[1] = (uchar *)rect_right;
+	s3d_data->rect[2] = (uchar *)rect_stereo;
+	s3d_data->rectf[0] = rectf_left;
+	s3d_data->rectf[1] = rectf_right;
+	s3d_data->rectf[2] = rectf_stereo;
 }
 
-int *IMB_stereo_from_rect(ImageFormatData *im_format, const size_t x, const size_t y, const size_t channels, int *left, int *right)
+int *IMB_stereo_from_rect(
+        ImageFormatData *im_format, const size_t x, const size_t y, const size_t channels,
+        int *rect_left, int *rect_right)
 {
 	int *r_rect;
 	Stereo3DData s3d_data = {{NULL}};
@@ -685,14 +692,16 @@ int *IMB_stereo_from_rect(ImageFormatData *im_format, const size_t x, const size
 	IMB_stereo_write_dimensions(im_format->stereo3d_format.display_mode, false, x, y, &width, &height);
 	r_rect = MEM_mallocN(channels * sizeof(int) * width * height, __func__);
 
-	imb_stereo_data_initialize(&s3d_data, is_float, x, y, channels, left, right, r_rect, NULL, NULL, NULL);
+	imb_stereo_data_initialize(&s3d_data, is_float, x, y, channels, rect_left, rect_right, r_rect, NULL, NULL, NULL);
 	imb_stereo_write_doit(&s3d_data, &im_format->stereo3d_format);
 	imb_stereo_squeeze_rect(r_rect, &im_format->stereo3d_format, x, y, channels);
 
 	return r_rect;
 }
 
-float *IMB_stereo_from_rectf(ImageFormatData *im_format, const size_t x, const size_t y, const size_t channels, float *left, float *right)
+float *IMB_stereo_from_rectf(
+        ImageFormatData *im_format, const size_t x, const size_t y, const size_t channels,
+        float *rectf_left, float *rectf_right)
 {
 	float *r_rectf;
 	Stereo3DData s3d_data = {{NULL}};
@@ -702,7 +711,7 @@ float *IMB_stereo_from_rectf(ImageFormatData *im_format, const size_t x, const s
 	IMB_stereo_write_dimensions(im_format->stereo3d_format.display_mode, false, x, y, &width, &height);
 	r_rectf = MEM_mallocN(channels * sizeof(float) * width * height, __func__);
 
-	imb_stereo_data_initialize(&s3d_data, is_float, x, y, channels, NULL, NULL, NULL, left, right, r_rectf);
+	imb_stereo_data_initialize(&s3d_data, is_float, x, y, channels, NULL, NULL, NULL, rectf_left, rectf_right, r_rectf);
 	imb_stereo_write_doit(&s3d_data, &im_format->stereo3d_format);
 	imb_stereo_squeeze_rectf(r_rectf, &im_format->stereo3d_format, x, y, channels);
 
@@ -710,25 +719,25 @@ float *IMB_stereo_from_rectf(ImageFormatData *im_format, const size_t x, const s
 }
 
 /* left/right are always float */
-ImBuf *IMB_stereoImBuf(ImageFormatData *im_format, ImBuf *left, ImBuf *right)
+ImBuf *IMB_stereoImBuf(ImageFormatData *im_format, ImBuf *ibuf_left, ImBuf *ibuf_right)
 {
 	ImBuf *r_ibuf = NULL;
 	Stereo3DData s3d_data = {{NULL}};
 	size_t width, height;
 	const bool is_float = im_format->depth > 8;
 
-	IMB_stereo_write_dimensions(im_format->stereo3d_format.display_mode, false, left->x, left->y, &width, &height);
-	r_ibuf = IMB_allocImBuf(width, height, left->planes, (is_float ? IB_rectfloat : IB_rect));
+	IMB_stereo_write_dimensions(im_format->stereo3d_format.display_mode, false, ibuf_left->x, ibuf_left->y, &width, &height);
+	r_ibuf = IMB_allocImBuf(width, height, ibuf_left->planes, (is_float ? IB_rectfloat : IB_rect));
 
 	/* copy flags for IB_fields and other settings */
-	r_ibuf->flags = left->flags;
+	r_ibuf->flags = ibuf_left->flags;
 
-	imb_stereo_data_initialize(&s3d_data, is_float, left->x, left->y, 4,
-	                         (int *)left->rect, (int *)right->rect, (int *)r_ibuf->rect,
-	                         left->rect_float, right->rect_float, r_ibuf->rect_float);
+	imb_stereo_data_initialize(&s3d_data, is_float, ibuf_left->x, ibuf_left->y, 4,
+	                         (int *)ibuf_left->rect, (int *)ibuf_right->rect, (int *)r_ibuf->rect,
+	                         ibuf_left->rect_float, ibuf_right->rect_float, r_ibuf->rect_float);
 
 	imb_stereo_write_doit(&s3d_data, &im_format->stereo3d_format);
-	imb_stereo_squeeze_ImBuf(r_ibuf, &im_format->stereo3d_format, left->x, left->y);
+	imb_stereo_squeeze_ImBuf(r_ibuf, &im_format->stereo3d_format, ibuf_left->x, ibuf_left->y);
 
 	return r_ibuf;
 }
@@ -1216,52 +1225,61 @@ static void imb_stereo_read_topbottom(Stereo3DData *s3d)
 /*************************** preparing to call the read functions **************************/
 
 /* reading a stereo encoded ibuf (*left) and generating two ibufs from it (*left and *right) */
-void IMB_ImBufFromStereo(Stereo3dFormat *s3d, ImBuf **left, ImBuf **right)
+void IMB_ImBufFromStereo(
+        Stereo3dFormat *s3d, ImBuf *ibuf_stereo,
+        ImBuf **r_ibuf_left, ImBuf **r_ibuf_right)
 {
 	Stereo3DData s3d_data = {{NULL}};
-	ImBuf *stereo;
+	ImBuf *ibuf_left, *ibuf_right;
 	size_t width, height;
-	const bool is_float = ((*left)->rect_float != NULL);
+	const bool is_float = (ibuf_stereo->rect_float != NULL);
 
-	stereo = *left;
+	IMB_stereo_read_dimensions(
+	        s3d->display_mode, ((s3d->flag & S3D_SQUEEZED_FRAME) == 0), ibuf_stereo->x, ibuf_stereo->y,
+	        &width, &height);
 
-	IMB_stereo_read_dimensions(s3d->display_mode, ((s3d->flag & S3D_SQUEEZED_FRAME) == 0), stereo->x, stereo->y, &width, &height);
-
-	*left = IMB_allocImBuf(width, height, stereo->planes, (is_float ? IB_rectfloat : IB_rect));
-	*right = IMB_allocImBuf(width, height, stereo->planes, (is_float ? IB_rectfloat : IB_rect));
+	ibuf_left = IMB_allocImBuf(width, height, ibuf_stereo->planes, (is_float ? IB_rectfloat : IB_rect));
+	ibuf_right = IMB_allocImBuf(width, height, ibuf_stereo->planes, (is_float ? IB_rectfloat : IB_rect));
 
 	/* copy flags for IB_fields and other settings */
-	(*left)->flags = stereo->flags;
-	(*right)->flags = stereo->flags;
+	ibuf_left->flags = ibuf_stereo->flags;
+	ibuf_right->flags = ibuf_stereo->flags;
 
 	/* we always work with unsqueezed formats */
-	IMB_stereo_write_dimensions(s3d->display_mode, ((s3d->flag & S3D_SQUEEZED_FRAME) == 0), stereo->x, stereo->y, &width, &height);
-	imb_stereo_unsqueeze_ImBuf(stereo, s3d, width, height);
+	IMB_stereo_write_dimensions(
+	        s3d->display_mode, ((s3d->flag & S3D_SQUEEZED_FRAME) == 0), ibuf_stereo->x, ibuf_stereo->y,
+	        &width, &height);
+	imb_stereo_unsqueeze_ImBuf(ibuf_stereo, s3d, width, height);
 
-	imb_stereo_data_initialize(&s3d_data, is_float, (*left)->x, (*left)->y, 4,
-	                           (int *)(*left)->rect, (int *)(*right)->rect, (int *)stereo->rect,
-	                           (*left)->rect_float, (*right)->rect_float, stereo->rect_float);
+	imb_stereo_data_initialize(
+	        &s3d_data, is_float, ibuf_left->x, ibuf_left->y, 4,
+	        (int *)ibuf_left->rect, (int *)ibuf_right->rect, (int *)ibuf_stereo->rect,
+	        ibuf_left->rect_float, ibuf_right->rect_float, ibuf_stereo->rect_float);
 
 	imb_stereo_read_doit(&s3d_data, s3d);
 
-	if ((stereo->flags & IB_zbuf) || (stereo->flags & IB_zbuffloat)) {
+	if (ibuf_stereo->flags & (IB_zbuf | IB_zbuffloat)) {
 		if (is_float) {
-			addzbuffloatImBuf(*left);
-			addzbuffloatImBuf(*right);
+			addzbuffloatImBuf(ibuf_left);
+			addzbuffloatImBuf(ibuf_right);
 		}
 		else {
-			addzbufImBuf(*left);
-			addzbufImBuf(*right);
+			addzbufImBuf(ibuf_left);
+			addzbufImBuf(ibuf_right);
 		}
 
-		imb_stereo_data_initialize(&s3d_data, is_float, (*left)->x, (*left)->y, 1,
-		                           (int *)((*left)->zbuf), (int *)((*right)->zbuf), (int *)stereo->zbuf,
-		                           (*left)->zbuf_float, (*right)->zbuf_float, stereo->zbuf_float);
+		imb_stereo_data_initialize(
+		        &s3d_data, is_float, ibuf_left->x, ibuf_left->y, 1,
+		        (int *)ibuf_left->zbuf, (int *)ibuf_right->zbuf, (int *)ibuf_stereo->zbuf,
+		        ibuf_left->zbuf_float, ibuf_right->zbuf_float, ibuf_stereo->zbuf_float);
 
 		imb_stereo_read_doit(&s3d_data, s3d);
 	}
 
-	IMB_freeImBuf(stereo);
+	IMB_freeImBuf(ibuf_stereo);
+
+	*r_ibuf_left = ibuf_left;
+	*r_ibuf_right = ibuf_right;
 }
 
 static void imb_stereo_read_doit(Stereo3DData *s3d_data, Stereo3dFormat *s3d)

@@ -3105,7 +3105,7 @@ static ImBuf *image_load_sequence_file(Image *ima, ImageUser *iuser, int frame)
 			ibuf_arr[i] = load_sequence_single(ima, iuser, frame, i, &assign);
 
 		if ((ima->flag & IMA_IS_STEREO) && ima->views_format == R_IMF_VIEWS_STEREO_3D)
-			IMB_ImBufFromStereo(ima->stereo3d_format, &ibuf_arr[0], &ibuf_arr[1]);
+			IMB_ImBufFromStereo(ima->stereo3d_format, ibuf_arr[0], &ibuf_arr[0], &ibuf_arr[1]);
 
 		/* return the original requested ImBuf */
 		ibuf = ibuf_arr[(iuser ? iuser->multi_index : 0)];
@@ -3270,7 +3270,7 @@ static ImBuf *image_load_movie_file(Image *ima, ImageUser *iuser, int frame)
 		}
 
 		if ((ima->flag & IMA_IS_STEREO) && ima->views_format == R_IMF_VIEWS_STEREO_3D)
-			IMB_ImBufFromStereo(ima->stereo3d_format, &ibuf_arr[0], &ibuf_arr[1]);
+			IMB_ImBufFromStereo(ima->stereo3d_format, ibuf_arr[0], &ibuf_arr[0], &ibuf_arr[1]);
 
 		for (i = 0; i < totviews; i++) {
 			if (ibuf_arr[i]) {
@@ -3423,7 +3423,7 @@ static ImBuf *image_load_image_file(Image *ima, ImageUser *iuser, int cfra)
 			ibuf_arr[i] = load_image_single(ima, iuser, cfra, i, has_packed, &assign);
 
 		if ((ima->flag & IMA_IS_STEREO) && ima->views_format == R_IMF_VIEWS_STEREO_3D)
-			IMB_ImBufFromStereo(ima->stereo3d_format, &ibuf_arr[0], &ibuf_arr[1]);
+			IMB_ImBufFromStereo(ima->stereo3d_format, ibuf_arr[0], &ibuf_arr[0], &ibuf_arr[1]);
 
 		/* return the original requested ImBuf */
 		i = MIN2(iuser ? iuser->multi_index : 0, totviews - 1);
