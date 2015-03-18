@@ -27,6 +27,8 @@ CCL_NAMESPACE_BEGIN
 #  define __motion_as_decoupled_const_ptr(motion) ((const DecompMotionTransform*)(motion))
 #endif
 
+#define __OCULUS__
+
 /* Perspective Camera */
 
 ccl_device float2 camera_sample_aperture(KernelGlobals *kg, float u, float v)
@@ -226,27 +228,41 @@ ccl_device void camera_sample_panorama(KernelGlobals *kg, float raster_x, float 
 		                             ray->time);
 #endif
 
-	ray->P = transform_point(&cameratoworld, ray->P);
-	ray->D = transform_direction(&cameratoworld, ray->D);
+#ifdef __OCULUS__
 	float3 tP = transform_point(&cameratoworld, ray->P);
 	float3 tD = transform_direction(&cameratoworld, ray->D);
 	ray->P = panorama_stereo_position(kg, tD, tP);
 	ray->D = panorama_stereo_direction(kg, tD, tP, ray->P);
+#else
+	ray->P = transform_point(&cameratoworld, ray->P);
+	ray->D = transform_direction(&cameratoworld, ray->D);
+#endif
 	ray->D = normalize(ray->D);
 
 #ifdef __RAY_DIFFERENTIALS__
 	/* ray differential */
 	ray->dP = differential3_zero();
 
+#ifdef __OCULUS__
 	tP = transform_perspective(&rastertocamera, make_float3(raster_x + 1.0f, raster_y, 0.0f));
 	tD = transform_direction(&cameratoworld, panorama_to_direction(kg, Pcamera.x, Pcamera.y)) - ray->D;
 	Pcamera = panorama_stereo_position(kg, tD, tP);
 	ray->dD.dx = normalize(panorama_stereo_direction(kg, tD, tP, Pcamera));
+#else
+	Pcamera = transform_perspective(&rastertocamera, make_float3(raster_x + 1.0f, raster_y, 0.0f));
+	ray->dD.dx = normalize(transform_direction(&cameratoworld, panorama_to_direction(kg, Pcamera.x, Pcamera.y))) - ray->D;
+#endif
 
+#ifdef __OCULUS__
 	tP = transform_perspective(&rastertocamera, make_float3(raster_x, raster_y + 1.0f, 0.0f));
 	tD = transform_direction(&cameratoworld, panorama_to_direction(kg, Pcamera.x, Pcamera.y)) - ray->D;
 	Pcamera = panorama_stereo_position(kg, tD, tP);
 	ray->dD.dy = normalize(panorama_stereo_direction(kg, tD, tP, Pcamera));
+#else
+	Pcamera = transform_perspective(&rastertocamera, make_float3(raster_x, raster_y + 1.0f, 0.0f));
+	ray->dD.dy = normalize(transform_direction(&cameratoworld, panorama_to_direction(kg, Pcamera.x, Pcamera.y))) - ray->D;
+#endif
+
 #endif
 }
 
