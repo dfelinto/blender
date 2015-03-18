@@ -1706,8 +1706,6 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 					           STEREO_LEFT_NAME, STEREO_RIGHT_NAME);
 					goto cleanup;
 				}
-
-				BKE_image_release_renderresult(scene, ima);
 			}
 		}
 
