@@ -430,6 +430,13 @@ enum PanoramaType {
 	PANORAMA_FISHEYE_EQUISOLID
 };
 
+/* Stereo Type */
+enum StereoEye {
+	STEREO_NONE,
+	STEREO_LEFT,
+	STEREO_RIGHT
+};
+
 /* Differential */
 
 typedef struct differential3 {
@@ -768,6 +775,12 @@ typedef struct KernelCamera {
 	float fisheye_fov;
 	float fisheye_lens;
 	float4 equirectangular_range;
+
+	/* stereo */
+	int stereo_eye;
+	int pad;
+	float interocular_distance;
+	float convergence_distance;
 
 	/* matrices */
 	Transform cameratoworld;

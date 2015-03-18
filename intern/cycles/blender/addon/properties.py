@@ -610,6 +610,12 @@ class CyclesCameraSettings(bpy.types.PropertyGroup):
                 subtype='ANGLE',
                 default=math.pi,
                 )
+        cls.use_spherical_stereo = BoolProperty(
+                name="Spherical Stereo",
+                description="Render every pixel rotating the camera around the "
+                            "middle of the interocular distance",
+                default=True,
+                )
 
     @classmethod
     def unregister(cls):

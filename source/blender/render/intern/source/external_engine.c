@@ -369,6 +369,12 @@ void RE_engine_set_error_message(RenderEngine *engine, const char *msg)
 	}
 }
 
+const char *RE_engine_active_view_get(RenderEngine *engine)
+{
+	Render *re = engine->re;
+	return RE_GetActiveRenderView(re);
+}
+
 void RE_engine_active_view_set(RenderEngine *engine, const char *viewname)
 {
 	Render *re = engine->re;
