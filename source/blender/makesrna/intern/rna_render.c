@@ -522,6 +522,10 @@ static void rna_def_render_engine(BlenderRNA *brna)
 	prop = RNA_def_boolean(func, "do_break", 0, "Break", "");
 	RNA_def_function_return(func, prop);
 
+	func = RNA_def_function(srna, "active_view_get", "RE_engine_actview_get");
+	prop = RNA_def_string(func, "view", NULL, 0, "View", "Single view active");  /* NULL ok here */
+	RNA_def_function_return(func, prop);
+
 	func = RNA_def_function(srna, "active_view_set", "RE_engine_actview_set");
 	RNA_def_string(func, "view", NULL, 0, "View", "Single view to set as active");  /* NULL ok here */
 	RNA_def_property_flag(prop, PROP_REQUIRED);

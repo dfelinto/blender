@@ -52,6 +52,9 @@ Camera::Camera()
 	longitude_min = -M_PI_F;
 	longitude_max = M_PI_F;
 	fov = M_PI_4_F;
+	stereo_eye = STEREO_NONE;
+	interocular_distance = 0.065f;
+	convergence_distance = 30.f * 0.065f;
 
 	sensorwidth = 0.036f;
 	sensorheight = 0.024f;
@@ -260,6 +263,10 @@ void Camera::device_update(Device *device, DeviceScene *dscene, Scene *scene)
 	kcam->fisheye_lens = fisheye_lens;
 	kcam->equirectangular_range = make_float4(longitude_min - longitude_max, -longitude_min,
 	                                          latitude_min -  latitude_max, -latitude_min + M_PI_2_F);
+
+	kcam->stereo_eye = stereo_eye;
+	kcam->interocular_distance = interocular_distance;
+	kcam->convergence_distance = convergence_distance;
 
 	/* sensor size */
 	kcam->sensorwidth = sensorwidth;

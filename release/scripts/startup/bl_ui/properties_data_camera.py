@@ -147,8 +147,14 @@ class DATA_PT_camera_stereoscopy(CameraButtonsPanel, Panel):
     def draw(self, context):
         layout = self.layout
         render = context.scene.render
+        cam = context.camera
+        engine = context.scene.render.engine
+        is_panorama = cam.type == 'PANO' and engine == 'CYCLES'
 
-        layout.active = (render.views_format == 'STEREO_3D')
+        layout.active = render.views_format == 'STEREO_3D'
+
+        if is_panorama:
+            layout.prop(cam.cycles, "use_spherical_stereo")
 
         col = layout.column()
 
@@ -156,17 +162,21 @@ class DATA_PT_camera_stereoscopy(CameraButtonsPanel, Panel):
         row = col.row(align=True)
         row.prop(st, "interocular_distance")
 
-        if st.convergence_mode == 'PARALLEL':
-            row.prop(st, "viewport_convergence")
-        else:
+        if is_panorama or st.convergence_mode != 'PARALLEL':
             row.prop(st, "convergence_distance")
+        else:
+            row.prop(st, "viewport_convergence")
+
+        traditional_stereo = not (is_panorama and cam.cycles.use_spherical_stereo)
 
         row = col.row()
+        row.active = traditional_stereo
         row.prop(st, "convergence_mode", expand=True)
 
         col.separator()
         col.label(text="Pivot:")
         row = col.row()
+        row.active = traditional_stereo
         row.prop(st, "pivot", expand=True)
 
 

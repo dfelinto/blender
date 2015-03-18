@@ -214,6 +214,47 @@ ccl_device float2 direction_to_panorama(KernelGlobals *kg, float3 dir)
 	}
 }
 
+
+ccl_device float3 panorama_stereo_position(KernelGlobals *kg, float3 dir, float3 pos)
+{
+	float3 up, side;
+
+	if(kernel_data.cam.stereo_eye == STEREO_NONE)
+		return pos;
+
+	up = make_float3(0.0f, 0.0f, 1.0f);
+	side = normalize(cross(dir, up));
+
+	switch(kernel_data.cam.stereo_eye) {
+		case STEREO_LEFT:
+			return pos + (side * kernel_data.cam.interocular_distance * 0.5f);
+			break;
+		case STEREO_RIGHT:
+			return pos - (side * kernel_data.cam.interocular_distance * 0.5f);
+			break;
+	}
+	return pos;
+}
+
+ccl_device float3 panorama_stereo_direction(KernelGlobals *kg, float3 dir, float3 pos, float3 newpos)
+{
+	float3 screenpos, dirnew;
+
+	if(kernel_data.cam.stereo_eye == STEREO_NONE)
+		return dir;
+
+	screenpos = pos + (normalize(dir) * kernel_data.cam.convergence_distance);
+	dirnew = screenpos - newpos;
+
+	switch(kernel_data.cam.stereo_eye) {
+		case STEREO_LEFT:
+			return dirnew;
+		case STEREO_RIGHT:
+			return dirnew;
+	}
+	return dir;
+}
+
 CCL_NAMESPACE_END
 
 #endif /* __KERNEL_PROJECTION_CL__ */
