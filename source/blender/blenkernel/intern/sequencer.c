@@ -847,7 +847,7 @@ void BKE_sequence_reload_new_file(Scene *scene, Sequence *seq, const bool lock_r
 			BKE_sequence_free_anim(seq);
 
 			if (is_multiview && (seq->views_format == R_IMF_VIEWS_INDIVIDUAL)) {
-				char prefix[FILE_MAX] = {'\0'};
+				char prefix[FILE_MAX];
 				char *ext = NULL;
 				size_t totfiles = seq_num_files(scene, seq->views_format, true);
 				int i = 0;
@@ -857,7 +857,7 @@ void BKE_sequence_reload_new_file(Scene *scene, Sequence *seq, const bool lock_r
 				if (prefix[0] != '\0') {
 					for (i = 0; i < totfiles; i++) {
 						struct anim *anim;
-						char str[FILE_MAX] = {'\0'};
+						char str[FILE_MAX];
 
 						seq_multiview_name(scene, i, prefix, ext, str, FILE_MAX);
 						anim = openanim(str, IB_rect | ((seq->flag & SEQ_FILTERY) ? IB_animdeinterlace : 0),
@@ -1453,7 +1453,7 @@ static void seq_open_anim_file(Scene *scene, Sequence *seq, bool openfile)
 
 	if (is_multiview && seq->views_format == R_IMF_VIEWS_INDIVIDUAL) {
 		size_t totfiles = seq_num_files(scene, seq->views_format, true);
-		char prefix[FILE_MAX] = {'\0'};
+		char prefix[FILE_MAX];
 		char *ext = NULL;
 		int i;
 
@@ -1462,7 +1462,7 @@ static void seq_open_anim_file(Scene *scene, Sequence *seq, bool openfile)
 		if (prefix[0] != '\0') {
 			for (i = 0; i < totfiles; i++) {
 				const char *suffix = BKE_scene_multiview_view_id_suffix_get(&scene->r, i);
-				char str[FILE_MAX] = {'\0'};
+				char str[FILE_MAX];
 				StripAnim *sanim = MEM_mallocN(sizeof(StripAnim), "Strip Anim");
 
 				BLI_addtail(&seq->anims, sanim);
@@ -1718,9 +1718,9 @@ static bool seq_proxy_multiview_context_invalid(Sequence *seq, Scene *scene, con
 		return false;
 
 	if ((seq->type == SEQ_TYPE_IMAGE) && (seq->views_format == R_IMF_VIEWS_INDIVIDUAL)) {
-		static char prefix[FILE_MAX] = {'\0'};
+		static char prefix[FILE_MAX];
 		static char *ext = NULL;
-		char str[FILE_MAX] = {'\0'};
+		char str[FILE_MAX];
 
 		if (view_id == 0) {
 			char path[FILE_MAX];
@@ -3044,7 +3044,7 @@ static ImBuf *do_render_strip_uncached(const SeqRenderData *context, Sequence *s
 				size_t totfiles = seq_num_files(context->scene, seq->views_format, true);
 				size_t totviews;
 				struct ImBuf **ibufs_arr;
-				char prefix[FILE_MAX] = {'\0'};
+				char prefix[FILE_MAX];
 				char *ext = NULL;
 				int i;
 
@@ -3064,7 +3064,7 @@ static ImBuf *do_render_strip_uncached(const SeqRenderData *context, Sequence *s
 						ibufs_arr[i] = IMB_loadiffname(name, flag, seq->strip->colorspace_settings.name);
 					}
 					else {
-						char str[FILE_MAX] = {'\0'};
+						char str[FILE_MAX];
 						seq_multiview_name(context->scene, i, prefix, ext, str, FILE_MAX);
 						ibufs_arr[i] = IMB_loadiffname(str, flag, seq->strip->colorspace_settings.name);
 					}
@@ -4949,7 +4949,7 @@ Sequence *BKE_sequencer_add_movie_strip(bContext *C, ListBase *seqbasep, SeqLoad
 	anim_arr = MEM_callocN(sizeof(struct anim *) * totfiles, "Video files");
 
 	if (is_multiview && (seq_load->views_format == R_IMF_VIEWS_INDIVIDUAL)) {
-		char prefix[FILE_MAX] = {'\0'};
+		char prefix[FILE_MAX];
 		char *ext = NULL;
 		size_t j = 0;
 
@@ -4957,7 +4957,7 @@ Sequence *BKE_sequencer_add_movie_strip(bContext *C, ListBase *seqbasep, SeqLoad
 
 		if (prefix[0] != '\0') {
 			for (i = 0; i < totfiles; i++) {
-				char str[FILE_MAX] = {'\0'};
+				char str[FILE_MAX];
 
 				seq_multiview_name(scene, i, prefix, ext, str, FILE_MAX);
 				anim_arr[j] = openanim(str, IB_rect, 0, colorspace);
