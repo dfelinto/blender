@@ -284,7 +284,9 @@ macro(SETUP_LIBDIRS)
 	if(WITH_MEM_JEMALLOC)
 		link_directories(${JEMALLOC_LIBPATH})
 	endif()
-
+	if(WITH_DECKLINK)
+		link_directories(${NVIDIA_GPUDIRECT_LIBPATH})
+	endif()
 	if(WIN32 AND NOT UNIX)
 		link_directories(${PTHREADS_LIBPATH})
 	endif()
@@ -382,6 +384,9 @@ macro(setup_liblinks
 	endif()
 	if(WITH_CODEC_FFMPEG)
 		target_link_libraries(${target} ${FFMPEG_LIBRARIES})
+	endif()
+	if(WIN32 AND WITH_DECKLINK)
+		target_link_libraries(${target} ${NVIDIA_GPUDIRECT_LIBRARIES})
 	endif()
 	if(WITH_OPENCOLLADA)
 		if(WIN32 AND NOT UNIX)
@@ -564,7 +569,6 @@ macro(SETUP_BLENDER_SORTED_LIBS)
 		bf_intern_mikktspace
 		bf_intern_dualcon
 		bf_intern_cycles
-		bf_intern_decklink
 		cycles_render
 		cycles_bvh
 		cycles_device
@@ -654,6 +658,10 @@ macro(SETUP_BLENDER_SORTED_LIBS)
 
 	if(WITH_BULLET AND NOT WITH_SYSTEM_BULLET)
 		list_insert_after(BLENDER_SORTED_LIBS "ge_logic_ngnetwork" "extern_bullet")
+	endif()
+
+	if(WIN32)
+		list(APPEND BLENDER_SORTED_LIBS bf_intern_decklink)
 	endif()
 
 	foreach(SORTLIB ${BLENDER_SORTED_LIBS})

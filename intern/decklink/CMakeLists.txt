@@ -32,14 +32,16 @@ set(INC_SYS
 )
 
 set(SRC
-	DeckLinkAPIDispatch.cpp
+	DeckLinkAPI.cpp
 	DeckLinkAPI.h
-	LinuxCOM.h
-	DeckLinkAPITypes.h
-	DeckLinkAPIModes.h
-	DeckLinkAPIDiscovery.h
-	DeckLinkAPIConfiguration.h
-	DeckLinkAPIDeckControl.h
 )
+
+if (WIN32)
+	list(APPEND SRC
+		win/DeckLinkAPI_h.h
+		win/DeckLinkAPI_i.c
+	)
+endif()
+
 
 blender_add_lib(bf_intern_decklink "${SRC}" "${INC}" "${INC_SYS}")

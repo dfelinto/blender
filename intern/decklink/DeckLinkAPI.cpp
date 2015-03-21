@@ -20,20 +20,27 @@
 * ***** END GPL LICENSE BLOCK *****
 */
 
-/** \file decklink/DeckLinkAPI.h
+/** \file decklink/DeckLinkAPI.cpp
 *  \ingroup decklink
 */
 
-#ifndef __DECKLINKAPI_H__
-#define __DECKLINKAPI_H__
-
-/* Include the OS specific Declink headers */
-
 #ifdef WIN32
-	#include "win/DeckLinkAPI_h.h"
+#include <windows.h>
+#include <objbase.h>
+#include <comutil.h>
 #endif
 
-/* OS independent function to get the device iterator */
-IDeckLinkIterator* BMD_CreateDeckLinkIterator(void);
+#include "DeckLinkAPI.h"
 
+#ifdef WIN32
+IDeckLinkIterator* BMD_CreateDeckLinkIterator(void)
+{
+	HRESULT result;
+	IDeckLinkIterator* pDLIterator = NULL;
+
+	result = CoCreateInstance(CLSID_CDeckLinkIterator, NULL, CLSCTX_ALL, IID_IDeckLinkIterator, (void**)&pDLIterator);
+	if (FAILED(result))
+		return NULL;
+	return pDLIterator;
+}
 #endif

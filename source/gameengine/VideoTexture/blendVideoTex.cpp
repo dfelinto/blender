@@ -124,6 +124,9 @@ static PyMethodDef moduleMethods[] =
 extern PyTypeObject VideoFFmpegType;
 extern PyTypeObject ImageFFmpegType;
 #endif
+#ifdef WITH_DECKLINK
+extern PyTypeObject VideoDeckLinkType;
+#endif
 extern PyTypeObject FilterBlueScreenType;
 extern PyTypeObject FilterGrayType;
 extern PyTypeObject FilterColorType;
@@ -140,6 +143,9 @@ static void registerAllTypes(void)
 #ifdef WITH_FFMPEG
 	pyImageTypes.add(&VideoFFmpegType, "VideoFFmpeg");
 	pyImageTypes.add(&ImageFFmpegType, "ImageFFmpeg");
+#endif
+#ifdef WITH_DECKLINK
+	pyImageTypes.add(&VideoDeckLinkType, "VideoDeckLink");
 #endif
 	pyImageTypes.add(&ImageBuffType, "ImageBuff");
 	pyImageTypes.add(&ImageMixType, "ImageMix");

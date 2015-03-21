@@ -28,6 +28,7 @@
  *  \ingroup bgevideotex
  */
 
+#ifdef WITH_DECKLINK
 
 // INT64_C fix for some linux machines (C99ism)
 #ifndef __STDC_CONSTANT_MACROS
@@ -36,6 +37,8 @@
 #include <stdint.h>
 
 #include "VideoDeckLink.h"
+#include "GL/glew.h"
+#include "dvpapi_gl.h"
 
 #include "MEM_guardedalloc.h"
 #include "PIL_time.h"
@@ -265,4 +268,5 @@ PyTypeObject VideoDeckLinkType =
 };
 
 
+#endif		// WITH_DECKLINK
 
