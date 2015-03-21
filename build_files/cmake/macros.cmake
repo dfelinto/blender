@@ -564,6 +564,7 @@ macro(SETUP_BLENDER_SORTED_LIBS)
 		bf_intern_mikktspace
 		bf_intern_dualcon
 		bf_intern_cycles
+		bf_intern_decklink
 		cycles_render
 		cycles_bvh
 		cycles_device

@@ -104,6 +104,7 @@ endif()
 		bf_intern_string 
 		bf_intern_ghost
 		bf_intern_ghostndof3dconnexion
+		bf_intern_decklink
 		bf_rna
 		bf_blenkernel
 		bf_physics

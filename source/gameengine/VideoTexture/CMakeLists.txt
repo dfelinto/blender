@@ -45,6 +45,7 @@ set(INC
 	../../../intern/glew-mx
 	../../../intern/guardedalloc
 	../../../intern/string
+	../../../intern/decklink
 )
 
 set(INC_SYS
@@ -70,6 +71,7 @@ set(SRC
 	Texture.cpp
 	VideoBase.cpp
 	VideoFFmpeg.cpp
+	VideoDeckLink.cpp
 	blendVideoTex.cpp
 
 	BlendType.h
@@ -89,6 +91,7 @@ set(SRC
 	Texture.h
 	VideoBase.h
 	VideoFFmpeg.h
+	VideoDeckLink.h
 )
 
 if(WITH_CODEC_FFMPEG)
