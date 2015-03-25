@@ -46,7 +46,7 @@
 	throw Exception (err, macroHRslt, __FILE__, __LINE__); \
 }
 
-#define THRWEXCP(err,hRslt) throw Exception (err, hRslt, __FILE__, __LINE__);
+#define THRWEXCP(err,hRslt) throw Exception (err, hRslt, __FILE__, __LINE__)
 
 
 #if defined WIN32

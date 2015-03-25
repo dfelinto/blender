@@ -285,11 +285,11 @@ void BL_Shader::UnloadShader()
 
 bool BL_Shader::LinkProgram()
 {
-	int vertlen = 0, fraglen=0, proglen=0;
-	int vertstatus=0, fragstatus=0, progstatus=0;
-	unsigned int tmpVert=0, tmpFrag=0, tmpProg=0;
-	int char_len=0;
-	char *logInf =0;
+	int vertlen = 0, fraglen = 0, proglen = 0;
+	int vertstatus = 0, fragstatus = 0, progstatus = 0;
+	unsigned int tmpVert = 0, tmpFrag = 0, tmpProg = 0;
+	int char_len = 0;
+	char *logInf = 0;
 
 	if (mError)
 		goto programError;
@@ -298,67 +298,78 @@ bool BL_Shader::LinkProgram()
 		spit("Invalid GLSL sources");
 		return false;
 	}
-	if ( !GLEW_ARB_fragment_shader) {
+	if (!GLEW_ARB_fragment_shader) {
 		spit("Fragment shaders not supported");
 		return false;
 	}
-	if ( !GLEW_ARB_vertex_shader) {
+	if (!GLEW_ARB_vertex_shader) {
 		spit("Vertex shaders not supported");
 		return false;
 	}
-	
-	// -- vertex shader ------------------
-	tmpVert = glCreateShaderObjectARB(GL_VERTEX_SHADER_ARB);
-	glShaderSourceARB(tmpVert, 1, (const char**)&vertProg, 0);
-	glCompileShaderARB(tmpVert);
-	glGetObjectParameterivARB(tmpVert, GL_OBJECT_INFO_LOG_LENGTH_ARB,(GLint*) &vertlen);
-	
-	// print info if any
-	if ( vertlen > 0 && vertlen < MAX_LOG_LEN) {
-		logInf = (char*)MEM_mallocN(vertlen, "vert-log");
-		glGetInfoLogARB(tmpVert, vertlen, (GLsizei*)&char_len, logInf);
-		if (char_len >0) {
-			spit("---- Vertex Shader Error ----");
-			spit(logInf);
+	if (vertProg[0] != 0)
+	{
+		// -- vertex shader ------------------
+		tmpVert = glCreateShaderObjectARB(GL_VERTEX_SHADER_ARB);
+		glShaderSourceARB(tmpVert, 1, (const char**)&vertProg, 0);
+		glCompileShaderARB(tmpVert);
+		glGetObjectParameterivARB(tmpVert, GL_OBJECT_INFO_LOG_LENGTH_ARB, (GLint*)&vertlen);
+
+		// print info if any
+		if (vertlen > 0 && vertlen < MAX_LOG_LEN) {
+			logInf = (char*)MEM_mallocN(vertlen, "vert-log");
+			glGetInfoLogARB(tmpVert, vertlen, (GLsizei*)&char_len, logInf);
+			if (char_len > 0) {
+				spit("---- Vertex Shader Error ----");
+				spit(logInf);
+			}
+			MEM_freeN(logInf);
+			logInf = 0;
 		}
-		MEM_freeN(logInf);
-		logInf=0;
+		// check for compile errors
+		glGetObjectParameterivARB(tmpVert, GL_OBJECT_COMPILE_STATUS_ARB, (GLint*)&vertstatus);
+		if (!vertstatus) {
+			spit("---- Vertex shader failed to compile ----");
+			goto programError;
+		}
 	}
-	// check for compile errors
-	glGetObjectParameterivARB(tmpVert, GL_OBJECT_COMPILE_STATUS_ARB,(GLint*)&vertstatus);
-	if (!vertstatus) {
-		spit("---- Vertex shader failed to compile ----");
+
+	if (fragProg[0] != 0)
+	{
+		// -- fragment shader ----------------
+		tmpFrag = glCreateShaderObjectARB(GL_FRAGMENT_SHADER_ARB);
+		glShaderSourceARB(tmpFrag, 1, (const char**)&fragProg, 0);
+		glCompileShaderARB(tmpFrag);
+		glGetObjectParameterivARB(tmpFrag, GL_OBJECT_INFO_LOG_LENGTH_ARB, (GLint*)&fraglen);
+		if (fraglen > 0 && fraglen < MAX_LOG_LEN) {
+			logInf = (char*)MEM_mallocN(fraglen, "frag-log");
+			glGetInfoLogARB(tmpFrag, fraglen, (GLsizei*)&char_len, logInf);
+			if (char_len > 0) {
+				spit("---- Fragment Shader Error ----");
+				spit(logInf);
+			}
+			MEM_freeN(logInf);
+			logInf = 0;
+		}
+
+		glGetObjectParameterivARB(tmpFrag, GL_OBJECT_COMPILE_STATUS_ARB, (GLint*)&fragstatus);
+		if (!fragstatus) {
+			spit("---- Fragment shader failed to compile ----");
+			goto programError;
+		}
+	}
+	
+	if (!tmpFrag && !tmpVert)
+	{
+		spit("---- No shader given ----");
 		goto programError;
 	}
-
-	// -- fragment shader ----------------
-	tmpFrag = glCreateShaderObjectARB(GL_FRAGMENT_SHADER_ARB);
-	glShaderSourceARB(tmpFrag, 1,(const char**)&fragProg, 0);
-	glCompileShaderARB(tmpFrag);
-	glGetObjectParameterivARB(tmpFrag, GL_OBJECT_INFO_LOG_LENGTH_ARB, (GLint*) &fraglen);
-	if (fraglen >0 && fraglen < MAX_LOG_LEN) {
-		logInf = (char*)MEM_mallocN(fraglen, "frag-log");
-		glGetInfoLogARB(tmpFrag, fraglen,(GLsizei*) &char_len, logInf);
-		if (char_len >0) {
-			spit("---- Fragment Shader Error ----");
-			spit(logInf);
-		}
-		MEM_freeN(logInf);
-		logInf=0;
-	}
-
-	glGetObjectParameterivARB(tmpFrag, GL_OBJECT_COMPILE_STATUS_ARB, (GLint*) &fragstatus);
-	if (!fragstatus) {
-		spit("---- Fragment shader failed to compile ----");
-		goto programError;
-	}
-
-	
 	// -- program ------------------------
 	//  set compiled vert/frag shader & link
 	tmpProg = glCreateProgramObjectARB();
-	glAttachObjectARB(tmpProg, tmpVert);
-	glAttachObjectARB(tmpProg, tmpFrag);
+	if (tmpVert)
+		glAttachObjectARB(tmpProg, tmpVert);
+	if (tmpFrag)
+		glAttachObjectARB(tmpProg, tmpFrag);
 	glLinkProgramARB(tmpProg);
 	glGetObjectParameterivARB(tmpProg, GL_OBJECT_INFO_LOG_LENGTH_ARB, (GLint*) &proglen);
 	glGetObjectParameterivARB(tmpProg, GL_OBJECT_LINK_STATUS_ARB, (GLint*) &progstatus);
@@ -382,8 +393,10 @@ bool BL_Shader::LinkProgram()
 
 	// set
 	mShader = tmpProg;
-	glDeleteObjectARB(tmpVert);
-	glDeleteObjectARB(tmpFrag);
+	if (tmpVert)
+		glDeleteObjectARB(tmpVert);
+	if (tmpFrag)
+		glDeleteObjectARB(tmpFrag);
 	mOk		= 1;
 	mError = 0;
 	return true;

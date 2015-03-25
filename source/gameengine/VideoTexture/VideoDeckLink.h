@@ -39,6 +39,7 @@
 #endif
 #include <map>
 #include <set>
+
 extern "C" {
 #include <pthread.h>
 #include "DNA_listBase.h"
@@ -46,10 +47,30 @@ extern "C" {
 #include "BLI_blenlib.h"
 }
 #include "GL/glew.h"
+#ifdef WIN32
+#include "dvpapi_gl.h"
+#endif
 #include "DeckLinkAPI.h"
 #include "VideoBase.h"
 
 class PinnedMemoryAllocator;
+
+struct TextureDesc
+{
+	u_int		width;
+	u_int		height;
+	u_int		stride;
+	GLenum		format;
+	GLenum		type;
+	TextureDesc()
+	{
+		width = 0;
+		height = 0;
+		stride = 0;
+		format = 0;
+		type = 0;
+	}
+};
 
 // type VideoDeckLink declaration
 class VideoDeckLink : public VideoBase
@@ -61,8 +82,6 @@ public:
 	/// destructor
 	virtual ~VideoDeckLink ();
 
-	/// set initial parameters
-	void initParams (short width, short height, float rate, bool image=false);
 	/// open video/image file
 	virtual void openFile(char *file);
 	/// open video capture device
@@ -103,18 +122,9 @@ private:
 	BMDDisplayMode			mDisplayMode;
 	BMDPixelFormat			mPixelFormat;
 	bool					mUse3D;
-	bool					mHasDvp;
-	bool					mHasAMDPinnedMemory;
-	bool					mFastTransferAvailable;
 	u_int					mFrameWidth;
 	u_int					mFrameHeight;
-	u_int					mTextureWidth;
-	u_int					mTextureHeight;
-	u_int					mTextureStride;
-	GLenum					mTextureFormat;
-	GLenum					mTextureType;
-	GLuint					mUnpinnedTextureBuffer;
-	GLuint					mCaptureTexture;
+	TextureDesc				mTextureDesc;
 	PinnedMemoryAllocator*	mpAllocator;
 	CaptureDelegate*		mpCaptureDelegate;
 
@@ -122,6 +132,7 @@ private:
 	// keep only one frame in cache because we just want to keep up with real time
 	pthread_mutex_t			mCacheMutex;
 	IDeckLinkVideoInputFrame* mpCacheFrame;
+	bool					mClosing;
 
 };
 
@@ -131,17 +142,41 @@ inline VideoDeckLink *getDeckLink(PyImage *self)
 }
 
 ////////////////////////////////////////////
+// TextureTransfer : Abstract class to perform a transfer to GPU memory using fast transfer if available
+////////////////////////////////////////////
+class TextureTransfer
+{
+public:
+	TextureTransfer() {}
+	virtual ~TextureTransfer() { }
+
+	virtual void PerformTransfer() = 0;
+};
+
+////////////////////////////////////////////
 // PinnedMemoryAllocator
 ////////////////////////////////////////////
+
+// PinnedMemoryAllocator implements the IDeckLinkMemoryAllocator interface and can be used instead of the
+// built-in frame allocator, by setting with SetVideoInputFrameMemoryAllocator() or SetVideoOutputFrameMemoryAllocator().
+//
+// For this sample application a custom frame memory allocator is used to ensure each address
+// of frame memory is aligned on a 4kB boundary required by the OpenGL pinned memory extension.
+// If the pinned memory extension is not available, this allocator will still be used and
+// demonstrates how to cache frame allocations for efficiency.
+//
+// The frame cache delays the releasing of buffers until the cache fills up, thereby avoiding an
+// allocate plus pin operation for every frame, followed by an unpin and deallocate on every frame.
+
+
 class PinnedMemoryAllocator : public IDeckLinkMemoryAllocator
 {
 public:
-	PinnedMemoryAllocator(unsigned cacheSize);
+	PinnedMemoryAllocator(unsigned cacheSize, size_t memSize);
 	virtual ~PinnedMemoryAllocator();
 
-	void UnpinBuffer(void* address);
-	bool PinBuffer(void *address);
-	
+	void TransferBuffer(void* address, TextureDesc* texDesc, GLuint texId);
+
 	// IUnknown methods
 	virtual HRESULT STDMETHODCALLTYPE	QueryInterface(REFIID iid, LPVOID *ppv);
 	virtual ULONG STDMETHODCALLTYPE		AddRef(void);
@@ -154,6 +189,12 @@ public:
 	virtual HRESULT STDMETHODCALLTYPE	Decommit();
 
 private:
+	static bool				mGPUDirectInitialized;
+	static bool				mHasDvp;
+	static bool				mHasAMDPinnedMemory;
+	static size_t			mReservedProcessMemory;
+	static bool ReserveMemory(size_t size);
+
 	void Lock()
 	{
 		pthread_mutex_lock(&mMutex);
@@ -162,15 +203,23 @@ private:
 	{
 		pthread_mutex_unlock(&mMutex);
 	}
+	void _UnpinBuffer(void* address, u_int size);
+	bool _PinBuffer(void *address, u_int size);
+	HRESULT _ReleaseBuffer(void* buffer);
 
 	int									mRefCount;
+	// protect the cache and the allocated map, 
+	// not the pinnedBuffer map as it is only used from main thread
 	pthread_mutex_t						mMutex;
 	std::map<void*, u_int>				mAllocatedSize;
-	std::set<void *>					mPinnedBuffer;
 	std::vector<void*>					mBufferCache;
 	u_int								mBufferCacheSize;
+	std::map<void *, TextureTransfer*>	mPinnedBuffer;
+	GLuint								mUnpinnedTextureBuffer;
+#ifdef WIN32
+	DVPBufferHandle						mDvpCaptureTextureHandle;
+#endif
 };
-
 
 ////////////////////////////////////////////
 // Capture Delegate Class
