@@ -41,6 +41,8 @@
 #include "PIL_time.h"
 #include "VideoDeckLink.h"
 #include "Exception.h"
+#include "KX_KetsjiEngine.h"
+#include "KX_PythonInit.h"
 
 static struct 
 {
@@ -213,8 +215,8 @@ public:
 	}
 	~TextureTransferDvp()
 	{
-		DVP_CHECK(dvpUnbindFromGLCtx(mDvpSysMemHandle));
-		DVP_CHECK(dvpDestroyBuffer(mDvpSysMemHandle));
+		dvpUnbindFromGLCtx(mDvpSysMemHandle);
+		dvpDestroyBuffer(mDvpSysMemHandle);
 		delete mExtSync;
 		delete mGpuSync;
 	}
@@ -626,20 +628,28 @@ VideoDeckLink::~VideoDeckLink ()
 	LockCache();
 	mClosing = true;
 	if (mpCacheFrame)
+	{
 		mpCacheFrame->Release();
+		mpCacheFrame = NULL;
+	}
 	UnlockCache();
 	if (mDLInput != NULL)
 	{
 		// Cleanup for Capture
 		mDLInput->StopStreams();
 		mDLInput->SetCallback(NULL);
-		mDLInput->Release();
+		mDLInput->DisableVideoInput();
+		mDLInput->FlushStreams();
+		if (mDLInput->Release() != 0)
+			THRWEXCP(VideoDeckLinkInternalError, S_OK);
 		mDLInput = NULL;
 	}
 	
 	if (mpAllocator)
 	{
-		delete mpAllocator;
+		// if the device was properly cleared, this should be 0
+		if (mpAllocator->Release() != 0)
+			THRWEXCP(VideoDeckLinkInternalError, S_OK);
 		mpAllocator = NULL;
 	}
 	if (mpCaptureDelegate)
@@ -939,46 +949,58 @@ void VideoDeckLink::calcImage (unsigned int texId, double ts)
 	UnlockCache();
 	if (pFrame)
 	{
-		u_int rowSize = pFrame->GetRowBytes();
-		u_int textureSize = rowSize * pFrame->GetHeight();
-		u_int expectedSize;
-		void* videoPixels = NULL;
-		void* rightEyePixels = NULL;
-		if (!mTextureDesc.stride)
+		// BUG: the dvpBindToGLCtx function fails the first time it is used, don't know why.
+		// This causes an exception to be thrown.
+		// This should be fixed but in the meantime we will catch the exception because
+		// it is crucial that we release the frame to keep the reference count right on the DeckLink device
+		try
 		{
-			// we could not compute the texture size earlier (unknown pixel size)
-			// let's do it now
-			mTextureDesc.stride = rowSize;
-			mTextureDesc.width = mTextureDesc.stride / 4;
-		}
-		if (mTextureDesc.stride != rowSize)
-		{
-			// unexpected frame size, ignore
-			// TBD: print a warning
-		}
-		else
-		{
-			pFrame->GetBytes(&videoPixels);
-			if (mUse3D) {
-				IDeckLinkVideoFrame3DExtensions *if3DExtensions = NULL;
-				IDeckLinkVideoFrame *rightEyeFrame = NULL;
-				if (pFrame->QueryInterface(&if3DExtensions) == S_OK &&
-					if3DExtensions->GetFrameForRightEye(&rightEyeFrame) == S_OK) {
-					rightEyeFrame->GetBytes(&rightEyePixels);
-					textureSize += ((uint64_t)rightEyePixels - (uint64_t)videoPixels);
-				}
-				if (rightEyeFrame)
-					rightEyeFrame->Release();
-				if (if3DExtensions)
-					if3DExtensions->Release();
-			}
-			expectedSize = mTextureDesc.width * mTextureDesc.height * 4;
-			if (expectedSize == textureSize)
+			u_int rowSize = pFrame->GetRowBytes();
+			u_int textureSize = rowSize * pFrame->GetHeight();
+			u_int expectedSize;
+			void* videoPixels = NULL;
+			void* rightEyePixels = NULL;
+			if (!mTextureDesc.stride)
 			{
-				// this means that both left and right frame are contiguous and that there is no padding
-				// do the transfer
-				mpAllocator->TransferBuffer(videoPixels, &mTextureDesc, texId);
+				// we could not compute the texture size earlier (unknown pixel size)
+				// let's do it now
+				mTextureDesc.stride = rowSize;
+				mTextureDesc.width = mTextureDesc.stride / 4;
 			}
+			if (mTextureDesc.stride != rowSize)
+			{
+				// unexpected frame size, ignore
+				// TBD: print a warning
+			}
+			else
+			{
+				pFrame->GetBytes(&videoPixels);
+				if (mUse3D) {
+					IDeckLinkVideoFrame3DExtensions *if3DExtensions = NULL;
+					IDeckLinkVideoFrame *rightEyeFrame = NULL;
+					if (pFrame->QueryInterface(&if3DExtensions) == S_OK &&
+						if3DExtensions->GetFrameForRightEye(&rightEyeFrame) == S_OK) {
+						rightEyeFrame->GetBytes(&rightEyePixels);
+						textureSize += ((uint64_t)rightEyePixels - (uint64_t)videoPixels);
+					}
+					if (rightEyeFrame)
+						rightEyeFrame->Release();
+					if (if3DExtensions)
+						if3DExtensions->Release();
+				}
+				expectedSize = mTextureDesc.width * mTextureDesc.height * 4;
+				if (expectedSize == textureSize)
+				{
+					// this means that both left and right frame are contiguous and that there is no padding
+					// do the transfer
+					mpAllocator->TransferBuffer(videoPixels, &mTextureDesc, texId);
+				}
+			}
+		} 
+		catch (Exception & exp)
+		{
+			pFrame->Release();
+			throw;
 		}
 		// this will trigger PinnedMemoryAllocator::RealaseBuffer
 		pFrame->Release();

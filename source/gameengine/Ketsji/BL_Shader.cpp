@@ -32,6 +32,7 @@
 #include "MT_Matrix4x4.h"
 #include "MT_Matrix3x3.h"
 #include "KX_PyMath.h"
+#include "KX_PythonInit.h"
 #include "MEM_guardedalloc.h"
 
 #include "RAS_GLExtensionManager.h"
@@ -81,6 +82,12 @@ void BL_Uniform::Apply(class BL_Shader *shader)
 			float *f = (float*)mData;
 			glUniform1fARB(mLoc,(GLfloat)*f);
 			break;
+		}
+		case UNI_FLOAT_EYE:
+		{
+			float *f = (float*)mData;
+			*f = (KX_GetActiveEngine()->GetRasterizer()->GetEye() == RAS_IRasterizer::RAS_STEREO_LEFTEYE) ? 0.0f : 0.5f;
+			glUniform1fARB(mLoc, (GLfloat)*f);
 		}
 		case UNI_INT:
 		{
@@ -794,6 +801,7 @@ PyMethodDef BL_Shader::Methods[] =
 	KX_PYMETHODTABLE( BL_Shader, validate),
 	/// access functions
 	KX_PYMETHODTABLE( BL_Shader, isValid),
+	KX_PYMETHODTABLE( BL_Shader, setUniformEyef),
 	KX_PYMETHODTABLE( BL_Shader, setUniform1f ),
 	KX_PYMETHODTABLE( BL_Shader, setUniform2f ),
 	KX_PYMETHODTABLE( BL_Shader, setUniform3f ),
@@ -1063,6 +1071,29 @@ KX_PYMETHODDEF_DOC( BL_Shader, setUniform4f, "setUniform4f(name, fx,fy,fz, fw) "
 	return NULL;
 }
 
+
+KX_PYMETHODDEF_DOC(BL_Shader, setUniformEyef, "setUniformEyef(name)")
+{
+	if (mError) {
+		Py_RETURN_NONE;
+	}
+	const char *uniform;
+	float value = 0.0f;
+	if (PyArg_ParseTuple(args, "s:setUniformEyef", &uniform))
+	{
+		int loc = GetUniformLocation(uniform);
+		if (loc != -1)
+		{
+#ifdef SORT_UNIFORMS
+			SetUniformfv(loc, BL_Uniform::UNI_FLOAT_EYE, &value, sizeof(float));
+#else
+			SetUniform(loc, (int)value);
+#endif
+		}
+		Py_RETURN_NONE;
+	}
+	return NULL;
+}
 
 KX_PYMETHODDEF_DOC( BL_Shader, setUniform1i, "setUniform1i(name, ix)" )
 {
