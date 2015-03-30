@@ -68,14 +68,16 @@ BL_Uniform::~BL_Uniform()
 #endif
 }
 
-void BL_Uniform::Apply(class BL_Shader *shader)
+bool BL_Uniform::Apply(class BL_Shader *shader)
 {
 #ifdef SORT_UNIFORMS
+	RAS_IRasterizer *ras;
 	MT_assert(mType > UNI_NONE && mType < UNI_MAX && mData);
 
 	if (!mDirty)
-		return;
+		return false;
 
+	mDirty = false;
 	switch (mType) {
 		case UNI_FLOAT:
 		{
@@ -86,8 +88,11 @@ void BL_Uniform::Apply(class BL_Shader *shader)
 		case UNI_FLOAT_EYE:
 		{
 			float *f = (float*)mData;
-			*f = (KX_GetActiveEngine()->GetRasterizer()->GetEye() == RAS_IRasterizer::RAS_STEREO_LEFTEYE) ? 0.0f : 0.5f;
+			ras = KX_GetActiveEngine()->GetRasterizer();
+			*f = (ras->GetEye() == RAS_IRasterizer::RAS_STEREO_LEFTEYE) ? 0.0f : 0.5f;
 			glUniform1fARB(mLoc, (GLfloat)*f);
+			mDirty = (ras->Stereo()) ? true : false;
+			break;
 		}
 		case UNI_INT:
 		{
@@ -144,7 +149,7 @@ void BL_Uniform::Apply(class BL_Shader *shader)
 			break;
 		}
 	}
-	mDirty = false;
+	return mDirty;
 #endif
 }
 
@@ -277,10 +282,9 @@ void BL_Shader::ApplyShader()
 	if (!mDirty) 
 		return;
 
-	for (unsigned int i=0; i<mUniforms.size(); i++)
-		mUniforms[i]->Apply(this);
-
 	mDirty = false;
+	for (unsigned int i=0; i<mUniforms.size(); i++)
+		mDirty |= mUniforms[i]->Apply(this);
 #endif
 }
 

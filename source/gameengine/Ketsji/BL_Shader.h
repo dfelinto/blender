@@ -52,7 +52,7 @@ public:
 	~BL_Uniform();
 	
 
-	void Apply(class BL_Shader *shader);
+	bool Apply(class BL_Shader *shader);
 	void SetData(int location, int type, bool transpose=false);
 
 	enum UniformTypes {
