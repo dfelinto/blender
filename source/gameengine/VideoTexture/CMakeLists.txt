@@ -69,6 +69,7 @@ set(SRC
 	ImageViewport.cpp
 	PyTypeList.cpp
 	Texture.cpp
+	DeckLink.cpp
 	VideoBase.cpp
 	VideoFFmpeg.cpp
 	VideoDeckLink.cpp
@@ -89,6 +90,7 @@ set(SRC
 	ImageViewport.h
 	PyTypeList.h
 	Texture.h
+	DeckLink.h
 	VideoBase.h
 	VideoFFmpeg.h
 	VideoDeckLink.h
@@ -103,6 +105,8 @@ if(WITH_CODEC_FFMPEG)
 
 	remove_strict_flags_file(
 		VideoFFmpeg.cpp
+		VideoDeckLink
+		DeckLink
 	)
 endif()
 
