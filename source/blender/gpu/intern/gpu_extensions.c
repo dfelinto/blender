@@ -40,6 +40,7 @@
 #include "BLI_blenlib.h"
 #include "BLI_utildefines.h"
 #include "BLI_math_base.h"
+#include "BLI_math_vector.h"
 
 #include "BKE_global.h"
 
@@ -113,6 +114,9 @@ static struct GPUGlobal {
 	GPUTexture *invalid_tex_1D; /* texture used in place of invalid textures (not loaded correctly, missing) */
 	GPUTexture *invalid_tex_2D;
 	GPUTexture *invalid_tex_3D;
+	float dfdyfactors[2]; /* workaround for different calculation of dfdy factors on GPUs. Some GPUs/drivers
+	                         calculate dfdy in shader differently when drawing to an offscreen buffer. First
+	                         number is factor on screen and second is off-screen */
 } GG = {1, 0};
 
 /* Number of maximum output slots. We support 4 outputs for now (usually we wouldn't need more to preserve fill rate) */
@@ -144,10 +148,15 @@ int GPU_max_texture_size(void)
 	return GG.maxtexsize;
 }
 
+void GPU_get_dfdy_factors(float fac[2])
+{
+	copy_v2_v2(fac, GG.dfdyfactors);
+}
+
 void gpu_extensions_init(void)
 {
 	GLint r, g, b;
-	const char *vendor, *renderer;
+	const char *vendor, *renderer, *version;
 
 	/* glewIsSupported("GL_VERSION_2_0") */
 
@@ -164,10 +173,11 @@ void gpu_extensions_init(void)
 	glGetIntegerv(GL_RED_BITS, &r);
 	glGetIntegerv(GL_GREEN_BITS, &g);
 	glGetIntegerv(GL_BLUE_BITS, &b);
-	GG.colordepth = r+g+b; /* assumes same depth for RGB */
+	GG.colordepth = r + g + b; /* assumes same depth for RGB */
 
 	vendor = (const char *)glGetString(GL_VENDOR);
 	renderer = (const char *)glGetString(GL_RENDERER);
+	version = (const char *)glGetString(GL_VERSION);
 
 	if (strstr(vendor, "ATI")) {
 		GG.device = GPU_DEVICE_ATI;
@@ -244,6 +254,21 @@ void gpu_extensions_init(void)
 #endif
 
 
+	/* df/dy calculation factors, those are dependent on driver */
+	if ((strstr(vendor, "ATI") && strstr(version, "3.3.10750"))) {
+		GG.dfdyfactors[0] = 1.0;
+		GG.dfdyfactors[1] = -1.0;
+	}
+	else if (GG.device == GPU_DEVICE_INTEL && GG.os == GPU_OS_WIN) {
+		GG.dfdyfactors[0] = -1.0;
+		GG.dfdyfactors[1] = 1.0;
+	}
+	else {
+		GG.dfdyfactors[0] = 1.0;
+		GG.dfdyfactors[1] = 1.0;
+	}
+
+
 	GPU_invalid_tex_init();
 	GPU_simple_shaders_init();
 }
@@ -299,34 +324,34 @@ int GPU_color_depth(void)
 
 static void GPU_print_framebuffer_error(GLenum status, char err_out[256])
 {
-	const char *err= "unknown";
+	const char *err = "unknown";
 
 	switch (status) {
 		case GL_FRAMEBUFFER_COMPLETE_EXT:
 			break;
 		case GL_INVALID_OPERATION:
-			err= "Invalid operation";
+			err = "Invalid operation";
 			break;
 		case GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT_EXT:
-			err= "Incomplete attachment";
+			err = "Incomplete attachment";
 			break;
 		case GL_FRAMEBUFFER_UNSUPPORTED_EXT:
-			err= "Unsupported framebuffer format";
+			err = "Unsupported framebuffer format";
 			break;
 		case GL_FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT_EXT:
-			err= "Missing attachment";
+			err = "Missing attachment";
 			break;
 		case GL_FRAMEBUFFER_INCOMPLETE_DIMENSIONS_EXT:
-			err= "Attached images must have same dimensions";
+			err = "Attached images must have same dimensions";
 			break;
 		case GL_FRAMEBUFFER_INCOMPLETE_FORMATS_EXT:
-			err= "Attached images must have same format";
+			err = "Attached images must have same format";
 			break;
 		case GL_FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER_EXT:
-			err= "Missing draw buffer";
+			err = "Missing draw buffer";
 			break;
 		case GL_FRAMEBUFFER_INCOMPLETE_READ_BUFFER_EXT:
-			err= "Missing read buffer";
+			err = "Missing read buffer";
 			break;
 	}
 
@@ -343,28 +368,28 @@ static void GPU_print_framebuffer_error(GLenum status, char err_out[256])
 /* GPUTexture */
 
 struct GPUTexture {
-	int w, h;				/* width/height */
-	int number;				/* number for multitexture binding */
-	int refcount;			/* reference count */
-	GLenum target;			/* GL_TEXTURE_* */
-	GLuint bindcode;		/* opengl identifier for texture */
-	int fromblender;		/* we got the texture from Blender */
+	int w, h;           /* width/height */
+	int number;         /* number for multitexture binding */
+	int refcount;       /* reference count */
+	GLenum target;      /* GL_TEXTURE_* */
+	GLuint bindcode;    /* opengl identifier for texture */
+	int fromblender;    /* we got the texture from Blender */
 
-	GPUFrameBuffer *fb;		/* GPUFramebuffer this texture is attached to */
-	int fb_attachment;		/* slot the texture is attached to */
-	int depth;				/* is a depth texture? if 3D how deep? */
+	GPUFrameBuffer *fb; /* GPUFramebuffer this texture is attached to */
+	int fb_attachment;  /* slot the texture is attached to */
+	int depth;          /* is a depth texture? if 3D how deep? */
 };
 
 static unsigned char *GPU_texture_convert_pixels(int length, const float *fpixels)
 {
 	unsigned char *pixels, *p;
 	const float *fp = fpixels;
-	const int len = 4*length;
+	const int len = 4 * length;
 	int a;
 
-	p = pixels = MEM_callocN(sizeof(unsigned char)*len, "GPUTexturePixels");
+	p = pixels = MEM_callocN(sizeof(unsigned char) * len, "GPUTexturePixels");
 
-	for (a=0; a<len; a++, p++, fp++)
+	for (a = 0; a < len; a++, p++, fp++)
 		*p = FTOCHAR((*fp));
 
 	return pixels;
@@ -372,7 +397,7 @@ static unsigned char *GPU_texture_convert_pixels(int length, const float *fpixel
 
 static void GPU_glTexSubImageEmpty(GLenum target, GLenum format, int x, int y, int w, int h)
 {
-	void *pixels = MEM_callocN(sizeof(char)*4*w*h, "GPUTextureEmptyPixels");
+	void *pixels = MEM_callocN(sizeof(char) * 4 * w * h, "GPUTextureEmptyPixels");
 
 	if (target == GL_TEXTURE_1D)
 		glTexSubImage1D(target, 0, x, w, format, GL_UNSIGNED_BYTE, pixels);
@@ -573,8 +598,10 @@ GPUTexture *GPU_texture_create_3D(int w, int h, int depth, int channels, const f
 		internalformat = GL_INTENSITY;
 	}
 
-	//if (fpixels)
-	//	pixels = GPU_texture_convert_pixels(w*h*depth, fpixels);
+#if 0
+	if (fpixels)
+		pixels = GPU_texture_convert_pixels(w*h*depth, fpixels);
+#endif
 
 	glTexImage3D(tex->target, 0, internalformat, tex->w, tex->h, tex->depth, 0, format, type, NULL);
 
@@ -972,7 +999,7 @@ GPUFrameBuffer *GPU_framebuffer_create(void)
 	if (!GLEW_EXT_framebuffer_object)
 		return NULL;
 	
-	fb= MEM_callocN(sizeof(GPUFrameBuffer), "GPUFrameBuffer");
+	fb = MEM_callocN(sizeof(GPUFrameBuffer), "GPUFrameBuffer");
 	glGenFramebuffersEXT(1, &fb->object);
 
 	if (!fb->object) {
@@ -1065,8 +1092,7 @@ void GPU_framebuffer_texture_detach(GPUTexture *tex)
 		attachment = GL_COLOR_ATTACHMENT0_EXT + tex->fb_attachment;
 	}
 
-	glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, attachment,
-		tex->target, 0, 0);
+	glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, attachment, tex->target, 0, 0);
 
 	tex->fb = NULL;
 	tex->fb_attachment = -1;
@@ -1116,7 +1142,7 @@ void GPU_framebuffer_slots_bind(GPUFrameBuffer *fb, int slot)
 		return;
 	}
 	
-	for (i = 0 ; i < 4; i++) {
+	for (i = 0; i < 4; i++) {
 		if (fb->colortex[i]) {
 			attachments[numslots] = GL_COLOR_ATTACHMENT0_EXT + i;
 			numslots++;
@@ -1306,7 +1332,7 @@ GPUOffScreen *GPU_offscreen_create(int width, int height, char err_out[256])
 {
 	GPUOffScreen *ofs;
 
-	ofs= MEM_callocN(sizeof(GPUOffScreen), "GPUOffScreen");
+	ofs = MEM_callocN(sizeof(GPUOffScreen), "GPUOffScreen");
 
 	ofs->fb = GPU_framebuffer_create();
 	if (!ofs->fb) {
@@ -1395,24 +1421,24 @@ int GPU_offscreen_height(const GPUOffScreen *ofs)
 /* GPUShader */
 
 struct GPUShader {
-	GLhandleARB object;		/* handle for full shader */
-	GLhandleARB vertex;		/* handle for vertex shader */
-	GLhandleARB fragment;	/* handle for fragment shader */
-	GLhandleARB geometry;	/* handle for geometry shader */
-	GLhandleARB lib;		/* handle for libment shader */
-	int totattrib;			/* total number of attributes */
-	int uniforms;			/* required uniforms */
+	GLhandleARB object;   /* handle for full shader */
+	GLhandleARB vertex;   /* handle for vertex shader */
+	GLhandleARB fragment; /* handle for fragment shader */
+	GLhandleARB geometry; /* handle for geometry shader */
+	GLhandleARB lib;      /* handle for libment shader */
+	int totattrib;        /* total number of attributes */
+	int uniforms;         /* required uniforms */
 };
 
 static void shader_print_errors(const char *task, char *log, const char **code, int totcode)
 {
 	int i;
+	int line = 1;
 
 	fprintf(stderr, "GPUShader: %s error:\n", task);
 
 	for (i = 0; i < totcode; i++) {
 		const char *c, *pos, *end = code[i] + strlen(code[i]);
-		int line = 1;
 
 		if ((G.debug & G_DEBUG)) {
 			fprintf(stderr, "===== shader string %d ====\n", i + 1);
@@ -1420,8 +1446,8 @@ static void shader_print_errors(const char *task, char *log, const char **code, 
 			c = code[i];
 			while ((c < end) && (pos = strchr(c, '\n'))) {
 				fprintf(stderr, "%2d  ", line);
-				fwrite(c, (pos+1)-c, 1, stderr);
-				c = pos+1;
+				fwrite(c, (pos + 1) - c, 1, stderr);
+				c = pos + 1;
 				line++;
 			}
 			
@@ -1447,7 +1473,7 @@ static const char *gpu_shader_version(void)
 
 static void gpu_shader_standard_extensions(char defines[MAX_EXT_DEFINE_LENGTH])
 {
-	/* need this extensions for high quality bump mapping */
+	/* need this extension for high quality bump mapping */
 	if (GPU_bicubic_bump_support())
 		strcat(defines, "#extension GL_ARB_texture_query_lod: enable\n");
 
@@ -1818,7 +1844,7 @@ GPUShader *GPU_shader_get_builtin_fx_shader(int effects, bool persp)
 	if (!GG.shaders.fx_shaders[offset]) {
 		GPUShader *shader;
 
-		switch(effects) {
+		switch (effects) {
 			case GPU_SHADER_FX_SSAO:
 				GG.shaders.fx_shaders[offset] = GPU_shader_create(datatoc_gpu_shader_fx_vert_glsl, datatoc_gpu_shader_fx_ssao_frag_glsl, NULL, datatoc_gpu_shader_fx_lib_glsl, defines, 0, 0, 0);
 				break;
@@ -1896,7 +1922,8 @@ void GPU_shader_free_builtin_shaders(void)
 	}
 }
 
-#if 0
+#if 0 /* unused */
+
 /* GPUPixelBuffer */
 
 typedef struct GPUPixelBuffer {
@@ -1922,7 +1949,7 @@ GPUPixelBuffer *gpu_pixelbuffer_create(int x, int y, int halffloat, int numbuffe
 		return NULL;
 	
 	pb = MEM_callocN(sizeof(GPUPixelBuffer), "GPUPBO");
-	pb->datasize = x*y*4*((halffloat)? 16: 8);
+	pb->datasize = x * y * 4 * (halffloat ? 16 : 8);
 	pb->numbuffers = numbuffers;
 	pb->halffloat = halffloat;
 
@@ -1950,10 +1977,13 @@ void GPU_pixelbuffer_texture(GPUTexture *tex, GPUPixelBuffer *pb)
 		GL_STREAM_DRAW_ARB);
 
 		pixels = glMapBufferARB(GL_PIXEL_UNPACK_BUFFER_EXT, GL_WRITE_ONLY);
-		/*memcpy(pixels, _oImage.data(), pb->datasize);*/
+
+#  if 0
+		memcpy(pixels, _oImage.data(), pb->datasize);
+#  endif
 
 		if (!glUnmapBufferARB(GL_PIXEL_UNPACK_BUFFER_EXT)) {
-			fprintf(stderr, "Could not unmap opengl PBO\n");
+			fprintf(stderr, "Could not unmap OpenGL PBO\n");
 			break;
 		}
 	}
@@ -1971,7 +2001,7 @@ static int pixelbuffer_map_into_gpu(GLuint bindcode)
 	/* do stuff in pixels */
 
 	if (!glUnmapBufferARB(GL_PIXEL_UNPACK_BUFFER_EXT)) {
-		fprintf(stderr, "Could not unmap opengl PBO\n");
+		fprintf(stderr, "Could not unmap OpenGL PBO\n");
 		return 0;
 	}
 	
@@ -1984,8 +2014,7 @@ static void pixelbuffer_copy_to_texture(GPUTexture *tex, GPUPixelBuffer *pb, GLu
 	glBindTexture(GL_TEXTURE_RECTANGLE_EXT, tex->bindcode);
 	glBindBufferARB(GL_PIXEL_UNPACK_BUFFER_EXT, bindcode);
 
-	glTexSubImage2D(GL_TEXTURE_RECTANGLE_EXT, 0, 0, 0, tex->w, tex->h,
-					GL_RGBA, type, NULL);
+	glTexSubImage2D(GL_TEXTURE_RECTANGLE_EXT, 0, 0, 0, tex->w, tex->h, GL_RGBA, type, NULL);
 
 	glBindBufferARB(GL_PIXEL_UNPACK_BUFFER_EXT, 0);
 	glBindTexture(GL_TEXTURE_RECTANGLE_EXT, 0);
@@ -2000,12 +2029,12 @@ void GPU_pixelbuffer_async_to_gpu(GPUTexture *tex, GPUPixelBuffer *pb)
 		pixelbuffer_map_into_gpu(pb->bindcode[0]);
 	}
 	else {
-		pb->current = (pb->current+1)%pb->numbuffers;
-		newbuffer = (pb->current+1)%pb->numbuffers;
+		pb->current = (pb->current + 1) % pb->numbuffers;
+		newbuffer = (pb->current + 1) % pb->numbuffers;
 
 		pixelbuffer_map_into_gpu(pb->bindcode[newbuffer]);
 		pixelbuffer_copy_to_texture(tex, pb, pb->bindcode[pb->current]);
 	}
 }
-#endif
+#endif /* unused */
 

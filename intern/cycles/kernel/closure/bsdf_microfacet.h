@@ -35,79 +35,7 @@
 
 CCL_NAMESPACE_BEGIN
 
-/* Approximate erf and erfinv implementations.
- * Implementation comes straight from Wikipedia:
- *
- * http://en.wikipedia.org/wiki/Error_function
- *
- * Some constants are baked into the code.
- */
-
-ccl_device_inline float approx_erff_do(float x)
-{
-	/* Such a clamp doesn't give much distortion to the output value
-	 * and gives quite a few of the speedup.
-	 */
-	if(x > 3.0f) {
-		return 1.0f;
-	}
-	float t = 1.0f / (1.0f + 0.47047f*x);
-	return  (1.0f -
-	         t*(0.3480242f + t*(-0.0958798f + t*0.7478556f)) * expf(-x*x));
-}
-
-ccl_device_inline float approx_erff(float x)
-{
-	if(x >= 0.0f) {
-		return approx_erff_do(x);
-	}
-	else {
-		return -approx_erff_do(-x);
-	}
-}
-
-ccl_device_inline float approx_erfinvf_do(float x)
-{
-	if(x <= 0.7f) {
-		const float x2 = x * x;
-		const float a1 =  0.886226899f;
-		const float a2 = -1.645349621f;
-		const float a3 =  0.914624893f;
-		const float a4 = -0.140543331f;
-		const float b1 = -2.118377725f;
-		const float b2 =  1.442710462f;
-		const float b3 = -0.329097515f;
-		const float b4 =  0.012229801f;
-		return x * (((a4 * x2 + a3) * x2 + a2) * x2 + a1) /
-		          ((((b4 * x2 + b3) * x2 + b2) * x2 + b1) * x2 + 1.0f);
-	}
-	else {
-		const float c1 = -1.970840454f;
-		const float c2 = -1.624906493f;
-		const float c3 =  3.429567803f;
-		const float c4 =  1.641345311f;
-		const float d1 =  3.543889200f;
-		const float d2 =  1.637067800f;
-		const float z = sqrtf(-logf((1.0f - x) * 0.5f));
-		return (((c4 * z + c3) * z + c2) * z + c1) /
-		        ((d2 * z + d1) * z + 1.0f);
-	}
-}
-
-ccl_device_inline float approx_erfinvf(float x)
-{
-	if(x >= 0.0f) {
-		return approx_erfinvf_do(x);
-	}
-	else {
-		return -approx_erfinvf_do(-x);
-	}
-}
-
-/* Beckmann and GGX microfacet importance sampling from:
- * 
- * Importance Sampling Microfacet-Based BSDFs using the Distribution of Visible Normals.
- * E. Heitz and E. d'Eon, EGSR 2014 */
+/* Beckmann and GGX microfacet importance sampling. */
 
 ccl_device_inline void microfacet_beckmann_sample_slopes(
 	KernelGlobals *kg,
@@ -128,63 +56,70 @@ ccl_device_inline void microfacet_beckmann_sample_slopes(
 	/* precomputations */
 	const float tan_theta_i = sin_theta_i/cos_theta_i;
 	const float inv_a = tan_theta_i;
-	const float a = 1.0f/inv_a;
-	const float erf_a = approx_erff(a);
-	const float exp_a2 = expf(-a*a);
+	const float cot_theta_i = 1.0f/tan_theta_i;
+	const float erf_a = fast_erff(cot_theta_i);
+	const float exp_a2 = expf(-cot_theta_i*cot_theta_i);
 	const float SQRT_PI_INV = 0.56418958354f;
 	const float Lambda = 0.5f*(erf_a - 1.0f) + (0.5f*SQRT_PI_INV)*(exp_a2*inv_a);
 	const float G1 = 1.0f/(1.0f + Lambda); /* masking */
 
 	*G1i = G1;
 
-#if 0
-	const float C = 1.0f - G1 * erf_a;
+#if defined(__KERNEL_GPU__)
+	/* Based on paper from Wenzel Jakob
+	 * An Improved Visible Normal Sampling Routine for the Beckmann Distribution
+	 *
+	 * http://www.mitsuba-renderer.org/~wenzel/files/visnormal.pdf
+	 *
+	 * Reformulation from OpenShadingLanguage which avoids using inverse
+	 * trigonometric functions.
+	 */
 
-	/* sample slope X */
-	if(randu < C) {
-		/* rescale randu */
-		randu = randu / C;
-		const float w_1 = 0.5f * SQRT_PI_INV * sin_theta_i * exp_a2;
-		const float w_2 = cos_theta_i * (0.5f - 0.5f*erf_a);
-		const float p = w_1 / (w_1 + w_2);
+	/* Sample slope X.
+	 *
+	 * Compute a coarse approximation using the approximation:
+	 *   exp(-ierf(x)^2) ~= 1 - x * x
+	 *   solve y = 1 + b + K * (1 - b * b)
+	 */
+	float K = tan_theta_i * SQRT_PI_INV;
+	float y_approx = randu * (1.0f + erf_a + K * (1 - erf_a * erf_a));
+	float y_exact  = randu * (1.0f + erf_a + K * exp_a2);
+	float b = K > 0 ? (0.5f - sqrtf(K * (K - y_approx + 1.0f) + 0.25f)) / K : y_approx - 1.0f;
 
-		if(randu < p) {
-			randu = randu / p;
-			*slope_x = -sqrtf(-logf(randu*exp_a2));
-		}
-		else {
-			randu = (randu - p) / (1.0f - p);
-			*slope_x = approx_erfinvf(randu - 1.0f - randu*erf_a);
-		}
+	/* Perform newton step to refine toward the true root. */
+	float inv_erf = fast_ierff(b);
+	float value  = 1.0f + b + K * expf(-inv_erf * inv_erf) - y_exact;
+	/* Check if we are close enough already,
+	 * this also avoids NaNs as we get close to the root.
+	 */
+	if(fabsf(value) > 1e-6f) {
+		b -= value / (1.0f - inv_erf * tan_theta_i); /* newton step 1. */
+		inv_erf = fast_ierff(b);
+		value  = 1.0f + b + K * expf(-inv_erf * inv_erf) - y_exact;
+		b -= value / (1.0f - inv_erf * tan_theta_i); /* newton step 2. */
+		/* Compute the slope from the refined value. */
+		*slope_x = fast_ierff(b);
 	}
 	else {
-		/* rescale randu */
-		randu = (randu - C) / (1.0f - C);
-		*slope_x = approx_erfinvf((-1.0f + 2.0f*randu)*erf_a);
-
-		const float p = (-(*slope_x)*sin_theta_i + cos_theta_i) / (2.0f*cos_theta_i);
-
-		if(randv > p) {
-			*slope_x = -(*slope_x);
-			randv = (randv - p) / (1.0f - p);
-		}
-		else
-			randv = randv / p;
+		/* We are close enough already. */
+		*slope_x = inv_erf;
 	}
-
-	/* sample slope Y */
-	*slope_y = approx_erfinvf(2.0f*randv - 1.0f);
+	*slope_y = fast_ierff(2.0f*randv - 1.0f);
 #else
-	/* use precomputed table, because it better preserves stratification
-	 * of the random number pattern */
+	/* Use precomputed table on CPU, it gives better perfomance. */
 	int beckmann_table_offset = kernel_data.tables.beckmann_offset;
 
 	*slope_x = lookup_table_read_2D(kg, randu, cos_theta_i,
 		beckmann_table_offset, BECKMANN_TABLE_SIZE, BECKMANN_TABLE_SIZE);
-	*slope_y = approx_erfinvf(2.0f*randv - 1.0f);
+	*slope_y = fast_ierff(2.0f*randv - 1.0f);
 #endif
-
 }
+
+/* GGX microfacet importance sampling from:
+ *
+ * Importance Sampling Microfacet-Based BSDFs using the Distribution of Visible Normals.
+ * E. Heitz and E. d'Eon, EGSR 2014
+ */
 
 ccl_device_inline void microfacet_ggx_sample_slopes(
 	const float cos_theta_i, const float sin_theta_i,

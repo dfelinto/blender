@@ -58,7 +58,7 @@
 #include "KX_LibLoadStatus.h"
 #include "KX_BlenderScalarInterpolator.h"
 #include "BL_BlenderDataConversion.h"
-#include "BlenderWorldInfo.h"
+#include "KX_WorldInfo.h"
 
 /* This little block needed for linking to Blender... */
 #ifdef WIN32
@@ -675,7 +675,7 @@ void	KX_BlenderSceneConverter::WritePhysicsObjectToAnimationIpo(int frameNumber)
 			if (blenderObject && blenderObject->parent==NULL && gameObj->IsRecordAnimation()) {
 
 				if (blenderObject->adt==NULL)
-					BKE_id_add_animdata(&blenderObject->id);
+					BKE_animdata_add_id(&blenderObject->id);
 
 				if (blenderObject->adt)
 				{

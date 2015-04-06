@@ -40,11 +40,9 @@
 
 struct ARegion;
 struct bContext;
-struct IDProperty;
 struct uiHandleButtonData;
 struct wmEvent;
 struct wmOperatorType;
-struct wmWindow;
 struct wmTimer;
 struct uiStyle;
 struct uiWidgetColors;
@@ -588,7 +586,6 @@ void ui_popup_block_free(struct bContext *C, uiPopupBlockHandle *handle);
 
 int ui_but_menu_step(uiBut *but, int step);
 
-struct AutoComplete;
 
 /* interface_panel.c */
 extern int ui_handler_panel_region(struct bContext *C, const struct wmEvent *event, struct ARegion *ar);
@@ -635,7 +632,7 @@ uiBut *ui_but_find_new(uiBlock *block_old, const uiBut *but_new);
 
 #ifdef WITH_INPUT_IME
 void ui_but_ime_reposition(uiBut *but, int x, int y, bool complete);
-struct wmIMEData *ui_but_get_ime_data(uiBut *but);
+struct wmIMEData *ui_but_ime_data_get(uiBut *but);
 #endif
 
 /* interface_widgets.c */

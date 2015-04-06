@@ -301,7 +301,7 @@ static void wm_init_userdef(bContext *C, const bool from_memory)
 	UI_init_userdef();
 	
 	MEM_CacheLimiter_set_maximum(((size_t)U.memcachelimit) * 1024 * 1024);
-	sound_init(bmain);
+	BKE_sound_init(bmain);
 
 	/* needed so loading a file from the command line respects user-pref [#26156] */
 	BKE_BIT_TEST_SET(G.fileflags, U.flag & USER_FILENOUI, G_FILE_NO_UI);
@@ -846,11 +846,11 @@ static ImBuf *blend_file_thumb(Scene *scene, bScreen *screen, int **thumb_pt)
 	if (scene->camera) {
 		ibuf = ED_view3d_draw_offscreen_imbuf_simple(scene, scene->camera,
 		                                             BLEN_THUMB_SIZE * 2, BLEN_THUMB_SIZE * 2,
-		                                             IB_rect, OB_SOLID, false, false, false, R_ALPHAPREMUL, err_out);
+		                                             IB_rect, OB_SOLID, false, false, false, R_ALPHAPREMUL, NULL, err_out);
 	}
 	else {
 		ibuf = ED_view3d_draw_offscreen_imbuf(scene, v3d, ar, BLEN_THUMB_SIZE * 2, BLEN_THUMB_SIZE * 2,
-		                                      IB_rect, false, R_ALPHAPREMUL, err_out);
+		                                      IB_rect, false, R_ALPHAPREMUL, NULL, err_out);
 	}
 
 	if (ibuf) {
@@ -1086,7 +1086,7 @@ void wm_autosave_location(char *filepath)
 	if (G.main && G.relbase_valid) {
 		const char *basename = BLI_path_basename(G.main->name);
 		int len = strlen(basename) - 6;
-		BLI_snprintf(path, sizeof(path), "%.*s-%d.blend", len, basename, pid);
+		BLI_snprintf(path, sizeof(path), "%.*s.blend", len, basename);
 	}
 	else {
 		BLI_snprintf(path, sizeof(path), "%d.blend", pid);

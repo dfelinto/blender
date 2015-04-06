@@ -42,17 +42,15 @@ struct GPUDOFSettings;
 struct GPUSSAOSettings;
 struct GPUOffScreen;
 struct GPUFXSettings;
-struct RegionView3D;
 struct rcti;
 struct Scene;
-struct View3D;
 enum eGPUFXFlags;
 
 /**** Public API *****/
 
 typedef enum GPUFXShaderEffect {
 	/* Screen space ambient occlusion shader */
-	GPU_SHADER_FX_SSAO           = 1,
+	GPU_SHADER_FX_SSAO = 1,
 
 	/* depth of field passes. Yep, quite a complex effect */
 	GPU_SHADER_FX_DEPTH_OF_FIELD_PASS_ONE = 2,

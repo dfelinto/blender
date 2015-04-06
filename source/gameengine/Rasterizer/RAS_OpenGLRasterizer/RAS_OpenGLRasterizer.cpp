@@ -194,112 +194,51 @@ bool RAS_OpenGLRasterizer::Init()
 }
 
 
-void RAS_OpenGLRasterizer::SetAmbientColor(float red, float green, float blue)
+void RAS_OpenGLRasterizer::SetAmbientColor(float color[3])
 {
-	m_ambr = red;
-	m_ambg = green;
-	m_ambb = blue;
+	m_ambr = color[0];
+	m_ambg = color[1];
+	m_ambb = color[2];
 }
-
 
 void RAS_OpenGLRasterizer::SetAmbient(float factor)
 {
-	float ambient[] = { m_ambr*factor, m_ambg*factor, m_ambb*factor, 1.0f };
+	float ambient[] = {m_ambr * factor, m_ambg * factor, m_ambb * factor, 1.0f};
 	glLightModelfv(GL_LIGHT_MODEL_AMBIENT, ambient);
 }
 
-
-void RAS_OpenGLRasterizer::SetBackColor(float red,
-										float green,
-										float blue,
-										float alpha)
+void RAS_OpenGLRasterizer::SetBackColor(float color[3])
 {
-	m_redback = red;
-	m_greenback = green;
-	m_blueback = blue;
-	m_alphaback = alpha;
+	m_redback = color[0];
+	m_greenback = color[1];
+	m_blueback = color[2];
+	m_alphaback = 1.0f;
 }
 
-
-
-void RAS_OpenGLRasterizer::SetFogColor(float r,
-									   float g,
-									   float b)
+void RAS_OpenGLRasterizer::SetFog(short type, float start, float dist, float intensity, float color[3])
 {
-	m_fogr = r;
-	m_fogg = g;
-	m_fogb = b;
-	m_fogenabled = true;
+	float params[4] = {color[0], color[1], color[2], 1.0f};
+	glFogi(GL_FOG_MODE, GL_LINEAR);
+	glFogf(GL_FOG_DENSITY, intensity / 10.0f);
+	glFogf(GL_FOG_START, start);
+	glFogf(GL_FOG_END, start + dist);
+	glFogfv(GL_FOG_COLOR, params);
 }
 
-
-
-void RAS_OpenGLRasterizer::SetFogStart(float start)
+void RAS_OpenGLRasterizer::EnableFog(bool enable)
 {
-	m_fogstart = start;
-	m_fogenabled = true;
+	m_fogenabled = enable;
 }
-
-
-
-void RAS_OpenGLRasterizer::SetFogEnd(float fogend)
-{
-	m_fogdist = fogend;
-	m_fogenabled = true;
-}
-
-
-
-void RAS_OpenGLRasterizer::SetFog(float start,
-								  float dist,
-								  float r,
-								  float g,
-								  float b)
-{
-	m_fogstart = start;
-	m_fogdist = dist;
-	m_fogr = r;
-	m_fogg = g;
-	m_fogb = b;
-	m_fogenabled = true;
-}
-
-
-
-void RAS_OpenGLRasterizer::DisableFog()
-{
-	m_fogenabled = false;
-}
-
-bool RAS_OpenGLRasterizer::IsFogEnabled()
-{
-	return m_fogenabled;
-}
-
 
 void RAS_OpenGLRasterizer::DisplayFog()
 {
-	if ((m_drawingmode >= KX_SOLID) && m_fogenabled)
-	{
-		float params[5];
-		glFogi(GL_FOG_MODE, GL_LINEAR);
-		glFogf(GL_FOG_DENSITY, 0.1f);
-		glFogf(GL_FOG_START, m_fogstart);
-		glFogf(GL_FOG_END, m_fogstart + m_fogdist);
-		params[0] = m_fogr;
-		params[1] = m_fogg;
-		params[2] = m_fogb;
-		params[3] = 0.0;
-		glFogfv(GL_FOG_COLOR, params); 
+	if ((m_drawingmode >= KX_SOLID) && m_fogenabled) {
 		glEnable(GL_FOG);
-	} 
-	else
-	{
+	}
+	else {
 		glDisable(GL_FOG);
 	}
 }
-
-
 
 bool RAS_OpenGLRasterizer::SetMaterial(const RAS_IPolyMaterial& mat)
 {

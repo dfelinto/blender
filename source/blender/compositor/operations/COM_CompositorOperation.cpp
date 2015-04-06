@@ -52,6 +52,7 @@ CompositorOperation::CompositorOperation() : NodeOperation()
 	this->m_active = false;
 
 	this->m_sceneName[0] = '\0';
+	this->m_viewName = NULL;
 }
 
 void CompositorOperation::initExecution()
@@ -81,14 +82,16 @@ void CompositorOperation::deinitExecution()
 		RenderResult *rr = RE_AcquireResultWrite(re);
 
 		if (rr) {
-			if (rr->rectf != NULL) {
-				MEM_freeN(rr->rectf);
+			RenderView *rv = (RenderView *)BLI_findstring(&rr->views, this->m_viewName, offsetof(RenderView, name));
+
+			if (rv->rectf != NULL) {
+				MEM_freeN(rv->rectf);
 			}
-			rr->rectf = this->m_outputBuffer;
-			if (rr->rectz != NULL) {
-				MEM_freeN(rr->rectz);
+			rv->rectf = this->m_outputBuffer;
+			if (rv->rectz != NULL) {
+				MEM_freeN(rv->rectz);
 			}
-			rr->rectz = this->m_depthBuffer;
+			rv->rectz = this->m_depthBuffer;
 		}
 		else {
 			if (this->m_outputBuffer) {
@@ -125,7 +128,7 @@ void CompositorOperation::deinitExecution()
 }
 
 
-void CompositorOperation::executeRegion(rcti *rect, unsigned int tileNumber)
+void CompositorOperation::executeRegion(rcti *rect, unsigned int /*tileNumber*/)
 {
 	float color[8]; // 7 is enough
 	float *buffer = this->m_outputBuffer;

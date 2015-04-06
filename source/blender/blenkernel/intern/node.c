@@ -1418,7 +1418,7 @@ static void node_preview_sync(bNodePreview *to, bNodePreview *from)
 	if (to->rect && from->rect) {
 		int xsize = to->xsize;
 		int ysize = to->ysize;
-		memcpy(to->rect, from->rect, 4 * xsize + xsize * ysize * sizeof(char) * 4);
+		memcpy(to->rect, from->rect, xsize * ysize * sizeof(char) * 4);
 	}
 }
 
@@ -1733,7 +1733,7 @@ void ntreeFreeTree_ex(bNodeTree *ntree, const bool do_id_user)
 	/* unregister associated RNA types */
 	ntreeInterfaceTypeFree(ntree);
 	
-	BKE_free_animdata((ID *)ntree);
+	BKE_animdata_free((ID *)ntree);
 	
 	id_us_min((ID *)ntree->gpd);
 
@@ -3475,6 +3475,7 @@ static void registerCompositNodes(void)
 	register_node_type_cmp_bokehimage();
 	register_node_type_cmp_bokehblur();
 	register_node_type_cmp_switch();
+	register_node_type_cmp_switch_view();
 	register_node_type_cmp_pixelate();
 
 	register_node_type_cmp_mask();

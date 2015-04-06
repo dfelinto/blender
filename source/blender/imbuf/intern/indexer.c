@@ -374,6 +374,13 @@ static void get_index_dir(struct anim *anim, char *index_dir, size_t index_dir_l
 	}
 }
 
+void IMB_anim_get_fname(struct anim *anim, char *file, int size)
+{
+	char fname[FILE_MAXFILE];
+	BLI_split_dirfile(anim->name, file, fname, size, sizeof(fname));
+	BLI_strncpy(file, fname, size);
+}
+
 static void get_proxy_filename(struct anim *anim, IMB_Proxy_Size preview_size,
                                char *fname, bool temp)
 {
@@ -381,8 +388,8 @@ static void get_proxy_filename(struct anim *anim, IMB_Proxy_Size preview_size,
 	int i = IMB_proxy_size_to_array_index(preview_size);
 
 	char proxy_name[256];
-	char proxy_temp_name[256];
 	char stream_suffix[20];
+	const char *name = (temp) ? "proxy_%d%s_part.avi" : "proxy_%d%s.avi";
 	
 	stream_suffix[0] = 0;
 
@@ -390,15 +397,12 @@ static void get_proxy_filename(struct anim *anim, IMB_Proxy_Size preview_size,
 		BLI_snprintf(stream_suffix, sizeof(stream_suffix), "_st%d", anim->streamindex);
 	}
 
-	BLI_snprintf(proxy_name, sizeof(proxy_name), "proxy_%d%s.avi",
-	             (int) (proxy_fac[i] * 100), stream_suffix);
-	BLI_snprintf(proxy_temp_name, sizeof(proxy_temp_name), "proxy_%d%s_part.avi",
-	             (int) (proxy_fac[i] * 100), stream_suffix);
+	BLI_snprintf(proxy_name, sizeof(proxy_name), name,
+	             (int) (proxy_fac[i] * 100), stream_suffix, anim->suffix);
 
 	get_index_dir(anim, index_dir, sizeof(index_dir));
 
-	BLI_join_dirfile(fname, FILE_MAXFILE + FILE_MAXDIR, index_dir, 
-	                 temp ? proxy_temp_name : proxy_name);
+	BLI_join_dirfile(fname, FILE_MAXFILE + FILE_MAXDIR, index_dir, proxy_name);
 }
 
 static void get_tc_filename(struct anim *anim, IMB_Timecode_Type tc,
@@ -407,10 +411,10 @@ static void get_tc_filename(struct anim *anim, IMB_Timecode_Type tc,
 	char index_dir[FILE_MAXDIR];
 	int i = IMB_timecode_to_array_index(tc);
 	const char *index_names[] = {
-		"record_run%s.blen_tc",
-		"free_run%s.blen_tc",
-		"interp_free_run%s.blen_tc",
-		"record_run_no_gaps%s.blen_tc"
+		"record_run%s%s.blen_tc",
+		"free_run%s%s.blen_tc",
+		"interp_free_run%s%s.blen_tc",
+		"record_run_no_gaps%s%s.blen_tc"
 	};
 
 	char stream_suffix[20];
@@ -422,7 +426,7 @@ static void get_tc_filename(struct anim *anim, IMB_Timecode_Type tc,
 		BLI_snprintf(stream_suffix, 20, "_st%d", anim->streamindex);
 	}
 	
-	BLI_snprintf(index_name, 256, index_names[i], stream_suffix);
+	BLI_snprintf(index_name, 256, index_names[i], stream_suffix, anim->suffix);
 
 	get_index_dir(anim, index_dir, sizeof(index_dir));
 	

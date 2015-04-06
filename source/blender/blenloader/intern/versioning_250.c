@@ -795,15 +795,19 @@ void blo_do_versions_250(FileData *fd, Library *lib, Main *main)
 						char str[FILE_MAX];
 						BLI_join_dirfile(str, sizeof(str), seq->strip->dir, seq->strip->stripdata->name);
 						BLI_path_abs(str, main->name);
-						seq->sound = sound_new_file(main, str);
+						seq->sound = BKE_sound_new_file(main, str);
 					}
+#define SEQ_USE_PROXY_CUSTOM_DIR (1 << 19)
+#define SEQ_USE_PROXY_CUSTOM_FILE (1 << 21)
 					/* don't know, if anybody used that this way, but just in case, upgrade to new way... */
 					if ((seq->flag & SEQ_USE_PROXY_CUSTOM_FILE) &&
 					   !(seq->flag & SEQ_USE_PROXY_CUSTOM_DIR))
 					{
 						BLI_snprintf(seq->strip->proxy->dir, FILE_MAXDIR, "%s/BL_proxy", seq->strip->dir);
 					}
-				}
+#undef SEQ_USE_PROXY_CUSTOM_DIR
+#undef SEQ_USE_PROXY_CUSTOM_FILE
+			}
 				SEQ_END
 			}
 		}
@@ -1648,8 +1652,8 @@ void blo_do_versions_250(FileData *fd, Library *lib, Main *main)
 
 		/* brush texture changes */
 		for (brush = main->brush.first; brush; brush = brush->id.next) {
-			default_mtex(&brush->mtex);
-			default_mtex(&brush->mask_mtex);
+			BKE_texture_mtex_default(&brush->mtex);
+			BKE_texture_mtex_default(&brush->mask_mtex);
 		}
 
 		for (ma = main->mat.first; ma; ma = ma->id.next) {

@@ -53,6 +53,11 @@ struct MovieClip;
 
 /* strlens; 256= FILE_MAXFILE, 768= FILE_MAXDIR */
 
+typedef struct StripAnim {
+	struct StripAnim *next, *prev;
+	struct anim *anim;
+} StripAnim;
+
 typedef struct StripElem {
 	char name[256];
 	int orig_width, orig_height;
@@ -95,7 +100,8 @@ typedef struct StripProxy {
 	short build_tc_flags;  // time code flags (see below) of all tc indices
 	                       // to build
 	short build_flags;
-	char pad[6];
+	char storage;
+	char pad[5];
 } StripProxy;
 
 typedef struct Strip {
@@ -155,8 +161,7 @@ typedef struct Sequence {
 	struct Object    *scene_camera;  /* override scene camera */
 	struct MovieClip *clip;          /* for MOVIECLIP strips */
 	struct Mask      *mask;          /* for MASK strips */
-
-	struct anim *anim;      /* for MOVIE strips */
+	ListBase anims;                  /* for MOVIE strips */
 
 	float effect_fader;
 	float speed_fader;
@@ -186,7 +191,13 @@ typedef struct Sequence {
 	int sfra;  /* starting frame according to the timeline of the scene. */
 
 	char alpha_mode;
-	char pad[3];
+	char pad[2];
+
+	/* Multiview */
+	char views_format;
+	struct Stereo3dFormat *stereo3d_format;
+
+	struct IDProperty *prop;
 
 	/* modifiers */
 	ListBase modifiers;
@@ -209,9 +220,10 @@ typedef struct Editing {
 	Sequence *act_seq;
 	char act_imagedir[1024]; /* 1024 = FILE_MAX */
 	char act_sounddir[1024]; /* 1024 = FILE_MAX */
+	char proxy_dir[1024]; /* 1024 = FILE_MAX */
 
 	int over_ofs, over_cfra;
-	int over_flag, pad;
+	int over_flag, proxy_storage;
 	rctf over_border;
 } Editing;
 
@@ -326,6 +338,10 @@ typedef struct SequencerScopes {
 #define SEQ_STRIP_OFSBOTTOM     0.2f
 #define SEQ_STRIP_OFSTOP        0.8f
 
+/* Editor->proxy_storage */
+/* store proxies in project directory */
+#define SEQ_EDIT_PROXY_DIR_STORAGE 1
+
 /* SpeedControlVars->flags */
 #define SEQ_SPEED_INTEGRATE      1
 /* #define SEQ_SPEED_BLEND          2 */ /* DEPRECATED */
@@ -354,9 +370,9 @@ enum {
 	SEQ_USE_TRANSFORM           = (1 << 16),
 	SEQ_USE_CROP                = (1 << 17),
 	/* SEQ_USE_COLOR_BALANCE       = (1 << 18), */ /* DEPRECATED */
-	SEQ_USE_PROXY_CUSTOM_DIR    = (1 << 19),
+	/* SEQ_USE_PROXY_CUSTOM_DIR    = (1 << 19), */ /* DEPRECATED */
 
-	SEQ_USE_PROXY_CUSTOM_FILE   = (1 << 21),
+	/* SEQ_USE_PROXY_CUSTOM_FILE   = (1 << 21), */ /* DEPRECATED */
 	SEQ_USE_EFFECT_DEFAULT_FADE = (1 << 22),
 	SEQ_USE_LINEAR_MODIFIERS    = (1 << 23),
 
@@ -368,8 +384,15 @@ enum {
 	
 	/* don't include Grease Pencil in OpenGL previews of Scene strips */
 	SEQ_SCENE_NO_GPENCIL        = (1 << 28),
+	SEQ_USE_VIEWS               = (1 << 29),
 
 	SEQ_INVALID_EFFECT          = (1 << 31),
+};
+
+/* StripProxy->storage */
+enum {
+	SEQ_STORAGE_PROXY_CUSTOM_FILE   = (1 << 1), /* store proxy in custom directory */
+	SEQ_STORAGE_PROXY_CUSTOM_DIR    = (1 << 2), /* store proxy in custom file */
 };
 
 #if (DNA_DEPRECATED_GCC_POISON == 1)

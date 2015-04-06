@@ -4746,7 +4746,7 @@ static int sculpt_dynamic_topology_toggle_invoke(bContext *C, wmOperator *op, co
 
 		/* exception for shape keys because we can edit those */
 		for (; md; md = md->next) {
-			ModifierTypeInfo *mti = modifierType_getInfo(md->type);
+			const ModifierTypeInfo *mti = modifierType_getInfo(md->type);
 			if (!modifier_isEnabled(scene, md, eModifierMode_Realtime)) continue;
 
 			if (mti->type == eModifierTypeType_Constructive) {
@@ -4912,7 +4912,7 @@ static int sculpt_mode_toggle_exec(bContext *C, wmOperator *op)
 		/* Leave sculptmode */
 		ob->mode &= ~mode_flag;
 
-		BKE_free_sculptsession(ob);
+		BKE_sculptsession_free(ob);
 
 		paint_cursor_delete_textures();
 	}
@@ -4950,7 +4950,7 @@ static int sculpt_mode_toggle_exec(bContext *C, wmOperator *op)
 
 		/* Create sculpt mode session data */
 		if (ob->sculpt)
-			BKE_free_sculptsession(ob);
+			BKE_sculptsession_free(ob);
 
 		sculpt_init_session(scene, ob);
 

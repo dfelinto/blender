@@ -120,9 +120,9 @@ GHOST_ContextWGL::~GHOST_ContextWGL()
 #endif
 
 #ifndef NDEBUG
-	delete m_dummyRenderer;
-	delete m_dummyVendor;
-	delete m_dummyVersion;
+	free(m_dummyRenderer);
+	free(m_dummyVendor);
+	free(m_dummyVersion);
 #endif
 }
 
@@ -393,9 +393,9 @@ void GHOST_ContextWGL::initContextWGLEW(PIXELFORMATDESCRIPTOR &preferredPFD)
 	// the following are not technially WGLEW, but they also require a context to work
 
 #ifndef NDEBUG
-	delete m_dummyRenderer;
-	delete m_dummyVendor;
-	delete m_dummyVersion;
+	free(m_dummyRenderer);
+	free(m_dummyVendor);
+	free(m_dummyVersion);
 
 	m_dummyRenderer = _strdup(reinterpret_cast<const char *>(glGetString(GL_RENDERER)));
 	m_dummyVendor   = _strdup(reinterpret_cast<const char *>(glGetString(GL_VENDOR)));
@@ -888,7 +888,7 @@ GHOST_TSuccess GHOST_ContextWGL::initializeDrawingContext()
 
 	if (!s_warn_old) {
 		if ((strcmp(vendor, "Microsoft Corporation") == 0 ||
-		    strcmp(renderer, "GDI Generic") == 0) && version[0] == '1' && version[0] == '1')
+		    strcmp(renderer, "GDI Generic") == 0) && version[0] == '1' && version[2] == '1')
 		{
 			MessageBox(m_hWnd, "Your system does not use 3D hardware acceleration.\n"
 			                   "Such systems can cause stability problems in Blender and they are unsupported.\n\n"

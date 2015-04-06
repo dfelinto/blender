@@ -28,6 +28,7 @@ TileManager::TileManager(bool progressive_, int num_samples_, int2 tile_size_, i
 	tile_size = tile_size_;
 	tile_order = tile_order_;
 	start_resolution = start_resolution_;
+	num_samples = num_samples_;
 	num_devices = num_devices_;
 	preserve_tile_device = preserve_tile_device_;
 	background = background_;
@@ -234,7 +235,7 @@ bool TileManager::next_tile(Tile& tile, int device)
 {
 	list<Tile>::iterator tile_it;
 	
-	if (background)
+	if(background)
 		tile_it = next_background_tile(device, tile_order);
 	else
 		tile_it = next_viewport_tile(device);

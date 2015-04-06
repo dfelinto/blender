@@ -1933,6 +1933,10 @@ class VIEW3D_MT_pose_propagate(Menu):
 
         layout.separator()
 
+        layout.operator("pose.propagate", text="On Selected Keyframes").mode = 'SELECTED_KEYS'
+
+        layout.separator()
+
         layout.operator("pose.propagate", text="On Selected Markers").mode = 'SELECTED_MARKERS'
 
 
@@ -2568,10 +2572,6 @@ class VIEW3D_MT_edit_font(Menu):
         layout.operator("font.style_toggle", text="Toggle Underline").style = 'UNDERLINE'
         layout.operator("font.style_toggle", text="Toggle Small Caps").style = 'SMALL_CAPS'
 
-        layout.separator()
-
-        layout.operator("font.insert_lorem")
-
 
 class VIEW3D_MT_edit_text_chars(Menu):
     bl_label = "Special Characters"
@@ -2936,16 +2936,50 @@ class VIEW3D_PT_view3d_display(Panel):
             row.prop(region, "use_box_clip")
 
 
-class VIEW3D_PT_view3d_shading(Panel):
+class VIEW3D_PT_view3d_stereo(Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
-    bl_label = "Shading"
+    bl_label = "Stereoscopy"
     bl_options = {'DEFAULT_CLOSED'}
 
     @classmethod
     def poll(cls, context):
+        scene = context.scene
+
+        multiview = scene.render.use_multiview
+        return context.space_data and multiview
+
+    def draw(self, context):
+        layout = self.layout
         view = context.space_data
-        return (view)
+
+        basic_stereo = context.scene.render.views_format == 'STEREO_3D'
+
+        col = layout.column()
+        col.row().prop(view, "stereo_3d_camera", expand=True)
+
+        col.label(text="Display:")
+        row = col.row()
+        row.active = basic_stereo
+        row.prop(view, "show_stereo_3d_cameras")
+        row = col.row()
+        row.active = basic_stereo
+        split = row.split()
+        split.prop(view, "show_stereo_3d_convergence_plane")
+        split = row.split()
+        split.prop(view, "stereo_3d_convergence_plane_alpha", text="Alpha")
+        split.active = view.show_stereo_3d_convergence_plane
+        row = col.row()
+        split = row.split()
+        split.prop(view, "show_stereo_3d_volume")
+        split = row.split()
+        split.prop(view, "stereo_3d_volume_alpha", text="Alpha")
+
+
+class VIEW3D_PT_view3d_shading(Panel):
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_label = "Shading"
 
     def draw(self, context):
         layout = self.layout
@@ -2975,12 +3009,14 @@ class VIEW3D_PT_view3d_shading(Panel):
             if obj and obj.mode == 'EDIT':
                 col.prop(view, "show_occlude_wire")
 
-            fx_settings = view.fx_settings
 
-            sub = col.column()
-            sub.active = view.region_3d.view_perspective == 'CAMERA'
-            sub.prop(fx_settings, "use_dof")
+        fx_settings = view.fx_settings
 
+        sub = col.column()
+        sub.active = view.region_3d.view_perspective == 'CAMERA'
+        sub.prop(fx_settings, "use_dof")
+
+        if view.viewport_shade not in {'BOUNDBOX', 'WIREFRAME'}:
             col.prop(fx_settings, "use_ssao", text="Ambient Occlusion")
             if fx_settings.use_ssao:
                 ssao_settings = fx_settings.ssao

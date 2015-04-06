@@ -45,7 +45,6 @@ struct ARegion;
 struct ARegionType;
 struct Scene;
 struct Main;
-struct SequencePreview;
 
 /* space_sequencer.c */
 struct ARegion *sequencer_has_buttons_region(struct ScrArea *sa);
@@ -63,7 +62,7 @@ void sequencer_special_update_set(Sequence *seq);
 /* UNUSED */
 // void seq_reset_imageofs(struct SpaceSeq *sseq);
 
-struct ImBuf *sequencer_ibuf_get(struct Main *bmain, struct Scene *scene, struct SpaceSeq *sseq, int cfra, int frame_ofs);
+struct ImBuf *sequencer_ibuf_get(struct Main *bmain, struct Scene *scene, struct SpaceSeq *sseq, int cfra, int frame_ofs, const char *viewname);
 
 /* sequencer_edit.c */
 struct View2D;

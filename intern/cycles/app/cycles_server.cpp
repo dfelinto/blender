@@ -24,6 +24,7 @@
 #include "util_stats.h"
 #include "util_string.h"
 #include "util_task.h"
+#include "util_logging.h"
 
 using namespace ccl;
 
@@ -66,7 +67,7 @@ int main(int argc, const char **argv)
 		exit(EXIT_FAILURE);
 	}
 
-	if (debug) {
+	if(debug) {
 		util_logging_start();
 		util_logging_verbosity_set(verbosity);
 	}

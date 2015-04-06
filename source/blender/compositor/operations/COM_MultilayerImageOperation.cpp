@@ -27,18 +27,27 @@ extern "C" {
 #  include "IMB_imbuf_types.h"
 }
 
-MultilayerBaseOperation::MultilayerBaseOperation(int passindex) : BaseImageOperation()
+MultilayerBaseOperation::MultilayerBaseOperation(int passtype, int view) : BaseImageOperation()
 {
-	this->m_passId = passindex;
+	this->m_passtype = passtype;
+	this->m_view = view;
 }
+
 ImBuf *MultilayerBaseOperation::getImBuf()
 {
-	RenderPass *rpass = (RenderPass *)BLI_findlink(&this->m_renderlayer->passes, this->m_passId);
-	if (rpass) {
-		this->m_imageUser->pass = m_passId;
-		BKE_image_multilayer_index(this->m_image->rr, this->m_imageUser);
-		return BaseImageOperation::getImBuf();
+	/* temporarily changes the view to get the right ImBuf */
+	int view = this->m_imageUser->view;
+
+	this->m_imageUser->view = this->m_view;
+	this->m_imageUser->passtype = this->m_passtype;
+
+	if (BKE_image_multilayer_index(this->m_image->rr, this->m_imageUser)) {
+		ImBuf *ibuf = BaseImageOperation::getImBuf();
+		this->m_imageUser->view = view;
+		return ibuf;
 	}
+
+	this->m_imageUser->view = view;
 	return NULL;
 }
 
@@ -74,7 +83,7 @@ void MultilayerColorOperation::executePixelSampled(float output[4], float x, flo
 	}
 }
 
-void MultilayerValueOperation::executePixelSampled(float output[4], float x, float y, PixelSampler sampler)
+void MultilayerValueOperation::executePixelSampled(float output[4], float x, float y, PixelSampler /*sampler*/)
 {
 	if (this->m_imageFloatBuffer == NULL) {
 		output[0] = 0.0f;
@@ -91,7 +100,7 @@ void MultilayerValueOperation::executePixelSampled(float output[4], float x, flo
 	}
 }
 
-void MultilayerVectorOperation::executePixelSampled(float output[4], float x, float y, PixelSampler sampler)
+void MultilayerVectorOperation::executePixelSampled(float output[4], float x, float y, PixelSampler /*sampler*/)
 {
 	if (this->m_imageFloatBuffer == NULL) {
 		output[0] = 0.0f;

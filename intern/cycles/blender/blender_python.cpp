@@ -25,6 +25,7 @@
 #include "util_md5.h"
 #include "util_opengl.h"
 #include "util_path.h"
+#include "util_types.h"
 
 #ifdef WITH_OSL
 #include "osl.h"
@@ -70,7 +71,7 @@ static const char *PyC_UnicodeAsByte(PyObject *py_str, PyObject **coerce)
 	return "";
 }
 
-static PyObject *init_func(PyObject *self, PyObject *args)
+static PyObject *init_func(PyObject * /*self*/, PyObject *args)
 {
 	PyObject *path, *user_path;
 	int headless;
@@ -90,7 +91,7 @@ static PyObject *init_func(PyObject *self, PyObject *args)
 	Py_RETURN_NONE;
 }
 
-static PyObject *create_func(PyObject *self, PyObject *args)
+static PyObject *create_func(PyObject * /*self*/, PyObject *args)
 {
 	PyObject *pyengine, *pyuserpref, *pydata, *pyscene, *pyregion, *pyv3d, *pyrv3d;
 	int preview_osl;
@@ -162,14 +163,14 @@ static PyObject *create_func(PyObject *self, PyObject *args)
 	return PyLong_FromVoidPtr(session);
 }
 
-static PyObject *free_func(PyObject *self, PyObject *value)
+static PyObject *free_func(PyObject * /*self*/, PyObject *value)
 {
 	delete (BlenderSession*)PyLong_AsVoidPtr(value);
 
 	Py_RETURN_NONE;
 }
 
-static PyObject *render_func(PyObject *self, PyObject *value)
+static PyObject *render_func(PyObject * /*self*/, PyObject *value)
 {
 	BlenderSession *session = (BlenderSession*)PyLong_AsVoidPtr(value);
 
@@ -183,7 +184,7 @@ static PyObject *render_func(PyObject *self, PyObject *value)
 }
 
 /* pixel_array and result passed as pointers */
-static PyObject *bake_func(PyObject *self, PyObject *args)
+static PyObject *bake_func(PyObject * /*self*/, PyObject *args)
 {
 	PyObject *pysession, *pyobject;
 	PyObject *pypixel_array, *pyresult;
@@ -214,7 +215,7 @@ static PyObject *bake_func(PyObject *self, PyObject *args)
 	Py_RETURN_NONE;
 }
 
-static PyObject *draw_func(PyObject *self, PyObject *args)
+static PyObject *draw_func(PyObject * /*self*/, PyObject *args)
 {
 	PyObject *pysession, *pyv3d, *pyrv3d;
 
@@ -234,7 +235,7 @@ static PyObject *draw_func(PyObject *self, PyObject *args)
 	Py_RETURN_NONE;
 }
 
-static PyObject *reset_func(PyObject *self, PyObject *args)
+static PyObject *reset_func(PyObject * /*self*/, PyObject *args)
 {
 	PyObject *pysession, *pydata, *pyscene;
 
@@ -260,7 +261,7 @@ static PyObject *reset_func(PyObject *self, PyObject *args)
 	Py_RETURN_NONE;
 }
 
-static PyObject *sync_func(PyObject *self, PyObject *value)
+static PyObject *sync_func(PyObject * /*self*/, PyObject *value)
 {
 	BlenderSession *session = (BlenderSession*)PyLong_AsVoidPtr(value);
 
@@ -273,7 +274,7 @@ static PyObject *sync_func(PyObject *self, PyObject *value)
 	Py_RETURN_NONE;
 }
 
-static PyObject *available_devices_func(PyObject *self, PyObject *args)
+static PyObject *available_devices_func(PyObject * /*self*/, PyObject * /*args*/)
 {
 	vector<DeviceInfo>& devices = Device::available_devices();
 	PyObject *ret = PyTuple_New(devices.size());
@@ -288,7 +289,7 @@ static PyObject *available_devices_func(PyObject *self, PyObject *args)
 
 #ifdef WITH_OSL
 
-static PyObject *osl_update_node_func(PyObject *self, PyObject *args)
+static PyObject *osl_update_node_func(PyObject * /*self*/, PyObject *args)
 {
 	PyObject *pynodegroup, *pynode;
 	const char *filepath = NULL;
@@ -390,7 +391,7 @@ static PyObject *osl_update_node_func(PyObject *self, PyObject *args)
 
 		/* find socket socket */
 		BL::NodeSocket b_sock(PointerRNA_NULL);
-		if (param->isoutput) {
+		if(param->isoutput) {
 			b_sock = b_node.outputs[param->name.string()];
 			/* remove if type no longer matches */
 			if(b_sock && b_sock.bl_idname() != socket_type) {
@@ -444,7 +445,7 @@ static PyObject *osl_update_node_func(PyObject *self, PyObject *args)
 
 		removed = false;
 
-		for (b_node.inputs.begin(b_input); b_input != b_node.inputs.end(); ++b_input) {
+		for(b_node.inputs.begin(b_input); b_input != b_node.inputs.end(); ++b_input) {
 			if(used_sockets.find(b_input->ptr.data) == used_sockets.end()) {
 				b_node.inputs.remove(*b_input);
 				removed = true;
@@ -452,7 +453,7 @@ static PyObject *osl_update_node_func(PyObject *self, PyObject *args)
 			}
 		}
 
-		for (b_node.outputs.begin(b_output); b_output != b_node.outputs.end(); ++b_output) {
+		for(b_node.outputs.begin(b_output); b_output != b_node.outputs.end(); ++b_output) {
 			if(used_sockets.find(b_output->ptr.data) == used_sockets.end()) {
 				b_node.outputs.remove(*b_output);
 				removed = true;
@@ -464,7 +465,7 @@ static PyObject *osl_update_node_func(PyObject *self, PyObject *args)
 	Py_RETURN_TRUE;
 }
 
-static PyObject *osl_compile_func(PyObject *self, PyObject *args)
+static PyObject *osl_compile_func(PyObject * /*self*/, PyObject *args)
 {
 	const char *inputfile = NULL, *outputfile = NULL;
 
@@ -479,7 +480,7 @@ static PyObject *osl_compile_func(PyObject *self, PyObject *args)
 }
 #endif
 
-static PyObject *system_info_func(PyObject *self, PyObject *value)
+static PyObject *system_info_func(PyObject * /*self*/, PyObject * /*value*/)
 {
 	string system_info = Device::device_capabilities();
 	return PyUnicode_FromString(system_info.c_str());

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-/* Triangle/Ray intersections .
+/* Triangle/Ray intersections.
  *
  * For BVH ray intersection we use a precomputed triangle storage to accelerate
  * intersection at the cost of more memory usage.
@@ -98,7 +98,6 @@ ccl_device_inline bool triangle_intersect(KernelGlobals *kg,
                                           const IsectPrecalc *isect_precalc,
                                           Intersection *isect,
                                           float3 P,
-                                          float3 dir,
                                           uint visibility,
                                           int object,
                                           int triAddr)
@@ -155,8 +154,8 @@ ccl_device_inline bool triangle_intersect(KernelGlobals *kg,
 	 */
 	const float T = (U * A_kz + V * B_kz + W * C_kz) * Sz;
 	const float sign_T = xor_signmast(T, sign_mask);
-	if ((sign_T < 0.0f) ||
-	    (sign_T > isect->t * xor_signmast(det, sign_mask)))
+	if((sign_T < 0.0f) ||
+	   (sign_T > isect->t * xor_signmast(det, sign_mask)))
 	{
 		return false;
 	}
@@ -191,7 +190,6 @@ ccl_device_inline void triangle_intersect_subsurface(
         const IsectPrecalc *isect_precalc,
         Intersection *isect_array,
         float3 P,
-        float3 dir,
         int object,
         int triAddr,
         float tmax,
@@ -249,13 +247,10 @@ ccl_device_inline void triangle_intersect_subsurface(
 	/* Calculate scaled z−coordinates of vertices and use them to calculate
 	 * the hit distance.
 	 */
-	const float Az = Sz * A_kz;
-	const float Bz = Sz * B_kz;
-	const float Cz = Sz * C_kz;
-	const float T = U * Az + V * Bz + W * Cz;
-
-	if ((xor_signmast(T, sign_mask) < 0.0f) ||
-	    (xor_signmast(T, sign_mask) > tmax * xor_signmast(det, sign_mask)))
+	const float T = (U * A_kz + V * B_kz + W * C_kz) * Sz;
+	const float sign_T = xor_signmast(T, sign_mask);
+	if((sign_T < 0.0f) ||
+	   (sign_T > tmax * xor_signmast(det, sign_mask)))
 	{
 		return;
 	}

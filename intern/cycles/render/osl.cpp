@@ -67,7 +67,7 @@ OSLShaderManager::~OSLShaderManager()
 	texture_system_free();
 }
 
-void OSLShaderManager::reset(Scene *scene)
+void OSLShaderManager::reset(Scene * /*scene*/)
 {
 	shading_system_free();
 	shading_system_init();
@@ -414,7 +414,7 @@ string OSLCompiler::compatible_name(ShaderNode *node, ShaderInput *input)
 	
 	/* if output exists with the same name, add "In" suffix */
 	foreach(ShaderOutput *output, node->outputs) {
-		if (strcmp(input->name, output->name)==0) {
+		if(strcmp(input->name, output->name)==0) {
 			sname += "In";
 			break;
 		}
@@ -434,7 +434,7 @@ string OSLCompiler::compatible_name(ShaderNode *node, ShaderOutput *output)
 	
 	/* if input exists with the same name, add "Out" suffix */
 	foreach(ShaderInput *input, node->inputs) {
-		if (strcmp(input->name, output->name)==0) {
+		if(strcmp(input->name, output->name)==0) {
 			sname += "Out";
 			break;
 		}
@@ -860,75 +860,75 @@ void OSLCompiler::compile(OSLGlobals *og, Shader *shader)
 
 #else
 
-void OSLCompiler::add(ShaderNode *node, const char *name, bool isfilepath)
+void OSLCompiler::add(ShaderNode * /*node*/, const char * /*name*/, bool /*isfilepath*/)
 {
 }
 
-void OSLCompiler::parameter(const char *name, float f)
+void OSLCompiler::parameter(const char * /*name*/, float /*f*/)
 {
 }
 
-void OSLCompiler::parameter_color(const char *name, float3 f)
+void OSLCompiler::parameter_color(const char * /*name*/, float3 /*f*/)
 {
 }
 
-void OSLCompiler::parameter_vector(const char *name, float3 f)
+void OSLCompiler::parameter_vector(const char * /*name*/, float3 /*f*/)
 {
 }
 
-void OSLCompiler::parameter_point(const char *name, float3 f)
+void OSLCompiler::parameter_point(const char * /*name*/, float3 /*f*/)
 {
 }
 
-void OSLCompiler::parameter_normal(const char *name, float3 f)
+void OSLCompiler::parameter_normal(const char * /*name*/, float3 /*f*/)
 {
 }
 
-void OSLCompiler::parameter(const char *name, int f)
+void OSLCompiler::parameter(const char * /*name*/, int /*f*/)
 {
 }
 
-void OSLCompiler::parameter(const char *name, const char *s)
+void OSLCompiler::parameter(const char * /*name*/, const char * /*s*/)
 {
 }
 
-void OSLCompiler::parameter(const char *name, ustring s)
+void OSLCompiler::parameter(const char * /*name*/, ustring /*s*/)
 {
 }
 
-void OSLCompiler::parameter(const char *name, const Transform& tfm)
+void OSLCompiler::parameter(const char * /*name*/, const Transform& /*tfm*/)
 {
 }
 
-void OSLCompiler::parameter_array(const char *name, const float f[], int arraylen)
+void OSLCompiler::parameter_array(const char * /*name*/, const float /*f*/[], int /*arraylen*/)
 {
 }
 
-void OSLCompiler::parameter_color_array(const char *name, const float f[][3], int arraylen)
+void OSLCompiler::parameter_color_array(const char * /*name*/, const float /*f*/[][3], int /*arraylen*/)
 {
 }
 
-void OSLCompiler::parameter_vector_array(const char *name, const float f[][3], int arraylen)
+void OSLCompiler::parameter_vector_array(const char * /*name*/, const float /*f*/[][3], int /*arraylen*/)
 {
 }
 
-void OSLCompiler::parameter_normal_array(const char *name, const float f[][3], int arraylen)
+void OSLCompiler::parameter_normal_array(const char * /*name*/, const float /*f*/[][3], int /*arraylen*/)
 {
 }
 
-void OSLCompiler::parameter_point_array(const char *name, const float f[][3], int arraylen)
+void OSLCompiler::parameter_point_array(const char * /*name*/, const float /*f*/[][3], int /*arraylen*/)
 {
 }
 
-void OSLCompiler::parameter_array(const char *name, const int f[], int arraylen)
+void OSLCompiler::parameter_array(const char * /*name*/, const int /*f*/[], int /*arraylen*/)
 {
 }
 
-void OSLCompiler::parameter_array(const char *name, const char * const s[], int arraylen)
+void OSLCompiler::parameter_array(const char * /*name*/, const char * const /*s*/[], int /*arraylen*/)
 {
 }
 
-void OSLCompiler::parameter_array(const char *name, const Transform tfm[], int arraylen)
+void OSLCompiler::parameter_array(const char * /*name*/, const Transform /*tfm*/[], int /*arraylen*/)
 {
 }
 

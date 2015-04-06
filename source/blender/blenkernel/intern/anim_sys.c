@@ -134,7 +134,7 @@ AnimData *BKE_animdata_from_id(ID *id)
  * the AnimData pointer is stored immediately after the given ID-block in the struct,
  * as per IdAdtTemplate. Also note that 
  */
-AnimData *BKE_id_add_animdata(ID *id)
+AnimData *BKE_animdata_add_id(ID *id)
 {
 	/* Only some ID-blocks have this info for now, so we cast the 
 	 * types that do to be of type IdAdtTemplate, and add the AnimData
@@ -216,7 +216,7 @@ bool BKE_animdata_set_action(ReportList *reports, ID *id, bAction *act)
 /* Freeing -------------------------------------------- */
 
 /* Free AnimData used by the nominated ID-block, and clear ID-block's AnimData pointer */
-void BKE_free_animdata(ID *id)
+void BKE_animdata_free(ID *id)
 {
 	/* Only some ID-blocks have this info for now, so we cast the 
 	 * types that do to be of type IdAdtTemplate
@@ -253,7 +253,7 @@ void BKE_free_animdata(ID *id)
 /* Copying -------------------------------------------- */
 
 /* Make a copy of the given AnimData - to be used when copying datablocks */
-AnimData *BKE_copy_animdata(AnimData *adt, const bool do_action)
+AnimData *BKE_animdata_copy(AnimData *adt, const bool do_action)
 {
 	AnimData *dadt;
 	
@@ -285,25 +285,25 @@ AnimData *BKE_copy_animdata(AnimData *adt, const bool do_action)
 	return dadt;
 }
 
-bool BKE_copy_animdata_id(ID *id_to, ID *id_from, const bool do_action)
+bool BKE_animdata_copy_id(ID *id_to, ID *id_from, const bool do_action)
 {
 	AnimData *adt;
 
 	if ((id_to && id_from) && (GS(id_to->name) != GS(id_from->name)))
 		return false;
 
-	BKE_free_animdata(id_to);
+	BKE_animdata_free(id_to);
 
 	adt = BKE_animdata_from_id(id_from);
 	if (adt) {
 		IdAdtTemplate *iat = (IdAdtTemplate *)id_to;
-		iat->adt = BKE_copy_animdata(adt, do_action);
+		iat->adt = BKE_animdata_copy(adt, do_action);
 	}
 
 	return true;
 }
 
-void BKE_copy_animdata_id_action(ID *id)
+void BKE_animdata_copy_id_action(ID *id)
 {
 	AnimData *adt = BKE_animdata_from_id(id);
 	if (adt) {
@@ -426,7 +426,7 @@ void BKE_animdata_make_local(AnimData *adt)
 /* When duplicating data (i.e. objects), drivers referring to the original data will 
  * get updated to point to the duplicated data (if drivers belong to the new data)
  */
-void BKE_relink_animdata(AnimData *adt)
+void BKE_animdata_relink(AnimData *adt)
 {
 	/* sanity check */
 	if (adt == NULL)
@@ -571,7 +571,7 @@ void BKE_animdata_separate_by_basepath(ID *srcID, ID *dstID, ListBase *basepaths
 	
 	/* get animdata from src, and create for destination (if needed) */
 	srcAdt = BKE_animdata_from_id(srcID);
-	dstAdt = BKE_id_add_animdata(dstID);
+	dstAdt = BKE_animdata_add_id(dstID);
 	
 	if (ELEM(NULL, srcAdt, dstAdt)) {
 		if (G.debug & G_DEBUG)
@@ -1167,7 +1167,7 @@ void BKE_animdata_main_cb(Main *mainptr, ID_AnimData_Edit_Callback func, void *u
  *      i.e. pose.bones["Bone"]
  */
 /* TODO: use BKE_animdata_main_cb for looping over all data  */
-void BKE_all_animdata_fix_paths_rename(ID *ref_id, const char *prefix, const char *oldName, const char *newName)
+void BKE_animdata_fix_paths_rename_all(ID *ref_id, const char *prefix, const char *oldName, const char *newName)
 {
 	Main *mainptr = G.main;
 	ID *id;
@@ -1496,8 +1496,11 @@ static bool animsys_write_rna_setting(PointerRNA *ptr, char *path, int array_ind
 	
 	/* get property to write to */
 	if (RNA_path_resolve_property(ptr, path, &new_ptr, &prop)) {
-		/* set value - only for animatable numerical values */
-		if (RNA_property_animateable(&new_ptr, prop)) {
+		/* set value for animatable numerical values only
+		 * HACK: some local F-Curves (e.g. those on NLA Strips) are evaluated
+		 *       without an ID provided, which causes the animateable test to fail!
+		 */
+		if (RNA_property_animateable(&new_ptr, prop) || (ptr->id.data == NULL)) {
 			int array_len = RNA_property_array_length(&new_ptr, prop);
 			bool written = false;
 			
@@ -1797,12 +1800,6 @@ static float nlastrip_get_influence(NlaStrip *strip, float cframe)
 /* evaluate the evaluation time and influence for the strip, storing the results in the strip */
 static void nlastrip_evaluate_controls(NlaStrip *strip, float ctime)
 {
-	/* firstly, analytically generate values for influence and time (if applicable) */
-	if ((strip->flag & NLASTRIP_FLAG_USR_TIME) == 0)
-		strip->strip_time = nlastrip_get_frame(strip, ctime, NLATIME_CONVERT_EVAL);
-	if ((strip->flag & NLASTRIP_FLAG_USR_INFLUENCE) == 0)
-		strip->influence = nlastrip_get_influence(strip, ctime);
-	
 	/* now strip's evaluate F-Curves for these settings (if applicable) */
 	if (strip->fcurves.first) {
 		PointerRNA strip_ptr;
@@ -1813,6 +1810,15 @@ static void nlastrip_evaluate_controls(NlaStrip *strip, float ctime)
 		/* execute these settings as per normal */
 		animsys_evaluate_fcurves(&strip_ptr, &strip->fcurves, NULL, ctime);
 	}
+	
+	/* analytically generate values for influence and time (if applicable)
+	 *  - we do this after the F-Curves have been evaluated to override the effects of those
+	 *    in case the override has been turned off.
+	 */
+	if ((strip->flag & NLASTRIP_FLAG_USR_TIME) == 0)
+		strip->strip_time = nlastrip_get_frame(strip, ctime, NLATIME_CONVERT_EVAL);
+	if ((strip->flag & NLASTRIP_FLAG_USR_INFLUENCE) == 0)
+		strip->influence = nlastrip_get_influence(strip, ctime);
 
 	/* if user can control the evaluation time (using F-Curves), consider the option which allows this time to be clamped
 	 * to lie within extents of the action-clip, so that a steady changing rate of progress through several cycles of the clip

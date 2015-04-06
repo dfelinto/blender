@@ -307,7 +307,7 @@ void BKE_lattice_free(Lattice *lt)
 	
 	/* free animation data */
 	if (lt->adt) {
-		BKE_free_animdata(&lt->id);
+		BKE_animdata_free(&lt->id);
 		lt->adt = NULL;
 	}
 }
@@ -1069,7 +1069,7 @@ void BKE_lattice_modifiers_calc(Scene *scene, Object *ob)
 	}
 
 	for (; md; md = md->next) {
-		ModifierTypeInfo *mti = modifierType_getInfo(md->type);
+		const ModifierTypeInfo *mti = modifierType_getInfo(md->type);
 
 		md->scene = scene;
 		

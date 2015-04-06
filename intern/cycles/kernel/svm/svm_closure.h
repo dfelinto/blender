@@ -27,8 +27,11 @@ ccl_device void svm_node_glass_setup(ShaderData *sd, ShaderClosure *sc, int type
 			sc->data2 = 0.0f;
 			sd->flag |= bsdf_refraction_setup(sc);
 		}
-		else
+		else {
+			sc->data0 = 0.0f;
+			sc->data1 = 0.0f;
 			sd->flag |= bsdf_reflection_setup(sc);
+		}
 	}
 	else if(type == CLOSURE_BSDF_MICROFACET_BECKMANN_GLASS_ID) {
 		sc->data0 = roughness;
@@ -328,9 +331,9 @@ ccl_device void svm_node_closure_bsdf(KernelGlobals *kg, ShaderData *sd, float *
 
 				sc->data2 = 0.0f;
 
-				if (type == CLOSURE_BSDF_MICROFACET_BECKMANN_ANISO_ID)
+				if(type == CLOSURE_BSDF_MICROFACET_BECKMANN_ANISO_ID)
 					sd->flag |= bsdf_microfacet_beckmann_aniso_setup(sc);
-				else if (type == CLOSURE_BSDF_MICROFACET_GGX_ANISO_ID)
+				else if(type == CLOSURE_BSDF_MICROFACET_GGX_ANISO_ID)
 					sd->flag |= bsdf_microfacet_ggx_aniso_setup(sc);
 				else
 					sd->flag |= bsdf_ashikhmin_shirley_aniso_setup(sc);
@@ -362,7 +365,7 @@ ccl_device void svm_node_closure_bsdf(KernelGlobals *kg, ShaderData *sd, float *
 				sc->data1 = param2;
 				sc->data2 = 0.0f;
 				
-				if (type == CLOSURE_BSDF_DIFFUSE_TOON_ID)
+				if(type == CLOSURE_BSDF_DIFFUSE_TOON_ID)
 					sd->flag |= bsdf_diffuse_toon_setup(sc);
 				else
 					sd->flag |= bsdf_glossy_toon_setup(sc);
@@ -384,6 +387,8 @@ ccl_device void svm_node_closure_bsdf(KernelGlobals *kg, ShaderData *sd, float *
 					 * spawned by transmission from the front */
 					sc->weight = make_float3(1.0f, 1.0f, 1.0f);
 					sc->N = N;
+					sc->data0 = 0.0f;
+					sc->data1 = 0.0f;
 					sd->flag |= bsdf_transparent_setup(sc);
 				}
 			}
@@ -529,6 +534,7 @@ ccl_device void svm_node_closure_volume(KernelGlobals *kg, ShaderData *sd, float
 
 			if(sc) {
 				sc->data0 = param2; /* g */
+				sc->data1 = 0.0f;
 				sd->flag |= volume_henyey_greenstein_setup(sc);
 			}
 			break;

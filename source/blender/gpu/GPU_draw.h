@@ -36,6 +36,7 @@
 extern "C" {
 #endif
 
+struct ImBuf;
 struct Image;
 struct ImageUser;
 struct MTFace;
@@ -84,6 +85,7 @@ int GPU_get_material_alpha_blend(void);
 
 int GPU_set_tpage(struct MTFace *tface, int mipmap, int transp);
 void GPU_clear_tpage(bool force);
+
 /* Lights
  * - returns how many lights were enabled
  * - this affects fixed functions materials and texface, not glsl */
@@ -119,7 +121,7 @@ void GPU_set_gpu_mipmapping(int gpu_mipmap);
 /* Image updates and free
  * - these deal with images bound as opengl textures */
 
-void GPU_paint_update_image(struct Image *ima, int x, int y, int w, int h);
+void GPU_paint_update_image(struct Image *ima, ImageUser *iuser, int x, int y, int w, int h);
 void GPU_update_images_framechange(void);
 int GPU_update_image_time(struct Image *ima, double time);
 int GPU_verify_image(struct Image *ima, struct ImageUser *iuser, int tftile, bool compare, bool mipmap, bool is_data);

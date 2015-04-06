@@ -104,7 +104,7 @@ static void constraint_bone_name_fix(Object *ob, ListBase *conlist, const char *
 	bConstraintTarget *ct;
 	
 	for (curcon = conlist->first; curcon; curcon = curcon->next) {
-		bConstraintTypeInfo *cti = BKE_constraint_typeinfo_get(curcon);
+		const bConstraintTypeInfo *cti = BKE_constraint_typeinfo_get(curcon);
 		ListBase targets = {NULL, NULL};
 		
 		/* constraint targets */
@@ -270,7 +270,7 @@ void ED_armature_bone_rename(bArmature *arm, const char *oldnamep, const char *n
 		// XXX: the ID here is for armatures, but most bone drivers are actually on the object instead...
 		{
 			
-			BKE_all_animdata_fix_paths_rename(&arm->id, "pose.bones", oldname, newname);
+			BKE_animdata_fix_paths_rename_all(&arm->id, "pose.bones", oldname, newname);
 		}
 		
 		/* correct view locking */

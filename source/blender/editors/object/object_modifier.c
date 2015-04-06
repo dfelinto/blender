@@ -96,7 +96,7 @@ static void modifier_skin_customdata_delete(struct Object *ob);
 ModifierData *ED_object_modifier_add(ReportList *reports, Main *bmain, Scene *scene, Object *ob, const char *name, int type)
 {
 	ModifierData *md = NULL, *new_md = NULL;
-	ModifierTypeInfo *mti = modifierType_getInfo(type);
+	const ModifierTypeInfo *mti = modifierType_getInfo(type);
 	
 	/* only geometry objects should be able to get modifiers [#25291] */
 	if (!ELEM(ob->type, OB_MESH, OB_CURVE, OB_SURF, OB_FONT, OB_LATTICE)) {
@@ -368,10 +368,10 @@ void ED_object_modifier_clear(Main *bmain, Object *ob)
 int ED_object_modifier_move_up(ReportList *reports, Object *ob, ModifierData *md)
 {
 	if (md->prev) {
-		ModifierTypeInfo *mti = modifierType_getInfo(md->type);
+		const ModifierTypeInfo *mti = modifierType_getInfo(md->type);
 
 		if (mti->type != eModifierTypeType_OnlyDeform) {
-			ModifierTypeInfo *nmti = modifierType_getInfo(md->prev->type);
+			const ModifierTypeInfo *nmti = modifierType_getInfo(md->prev->type);
 
 			if (nmti->flags & eModifierTypeFlag_RequiresOriginalData) {
 				BKE_report(reports, RPT_WARNING, "Cannot move above a modifier requiring original data");
@@ -389,10 +389,10 @@ int ED_object_modifier_move_up(ReportList *reports, Object *ob, ModifierData *md
 int ED_object_modifier_move_down(ReportList *reports, Object *ob, ModifierData *md)
 {
 	if (md->next) {
-		ModifierTypeInfo *mti = modifierType_getInfo(md->type);
+		const ModifierTypeInfo *mti = modifierType_getInfo(md->type);
 
 		if (mti->flags & eModifierTypeFlag_RequiresOriginalData) {
-			ModifierTypeInfo *nmti = modifierType_getInfo(md->next->type);
+			const ModifierTypeInfo *nmti = modifierType_getInfo(md->next->type);
 
 			if (nmti->type != eModifierTypeType_OnlyDeform) {
 				BKE_report(reports, RPT_WARNING, "Cannot move beyond a non-deforming modifier");
@@ -518,7 +518,7 @@ int ED_object_modifier_convert(ReportList *UNUSED(reports), Main *bmain, Scene *
 
 static int modifier_apply_shape(ReportList *reports, Scene *scene, Object *ob, ModifierData *md)
 {
-	ModifierTypeInfo *mti = modifierType_getInfo(md->type);
+	const ModifierTypeInfo *mti = modifierType_getInfo(md->type);
 
 	md->scene = scene;
 
@@ -578,7 +578,7 @@ static int modifier_apply_shape(ReportList *reports, Scene *scene, Object *ob, M
 
 static int modifier_apply_obdata(ReportList *reports, Scene *scene, Object *ob, ModifierData *md)
 {
-	ModifierTypeInfo *mti = modifierType_getInfo(md->type);
+	const ModifierTypeInfo *mti = modifierType_getInfo(md->type);
 
 	md->scene = scene;
 
@@ -742,7 +742,7 @@ static EnumPropertyItem *modifier_add_itemf(bContext *C, PointerRNA *UNUSED(ptr)
 {	
 	Object *ob = ED_object_active_context(C);
 	EnumPropertyItem *item = NULL, *md_item, *group_item = NULL;
-	ModifierTypeInfo *mti;
+	const ModifierTypeInfo *mti;
 	int totitem = 0, a;
 	
 	if (!ob)
@@ -1815,6 +1815,73 @@ void OBJECT_OT_skin_armature_create(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_INTERNAL;
 	edit_modifier_properties(ot);
 }
+/************************ delta mush bind operator *********************/
+
+static int correctivesmooth_poll(bContext *C)
+{
+	return edit_modifier_poll_generic(C, &RNA_CorrectiveSmoothModifier, 0);
+}
+
+static int correctivesmooth_bind_exec(bContext *C, wmOperator *op)
+{
+	Scene *scene = CTX_data_scene(C);
+	Object *ob = ED_object_active_context(C);
+	CorrectiveSmoothModifierData *csmd = (CorrectiveSmoothModifierData *)edit_modifier_property_get(op, ob, eModifierType_CorrectiveSmooth);
+	bool is_bind;
+
+	if (!csmd) {
+		return OPERATOR_CANCELLED;
+	}
+
+	if (!modifier_isEnabled(scene, &csmd->modifier, eModifierMode_Realtime)) {
+		BKE_report(op->reports, RPT_ERROR, "Modifier is disabled");
+		return OPERATOR_CANCELLED;
+	}
+
+	is_bind = (csmd->bind_coords != NULL);
+
+	MEM_SAFE_FREE(csmd->bind_coords);
+	MEM_SAFE_FREE(csmd->delta_cache);
+
+	if (is_bind) {
+		/* toggle off */
+		csmd->bind_coords_num = 0;
+	}
+	else {
+		/* signal to modifier to recalculate */
+		csmd->bind_coords_num = (unsigned int)-1;
+	}
+
+	DAG_id_tag_update(&ob->id, OB_RECALC_DATA);
+	WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER, ob);
+
+	return OPERATOR_FINISHED;
+}
+
+static int correctivesmooth_bind_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
+{
+	if (edit_modifier_invoke_properties(C, op))
+		return correctivesmooth_bind_exec(C, op);
+	else
+		return OPERATOR_CANCELLED;
+}
+
+void OBJECT_OT_correctivesmooth_bind(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Corrective Smooth Bind";
+	ot->description = "Bind base pose in delta mush modifier";
+	ot->idname = "OBJECT_OT_correctivesmooth_bind";
+
+	/* api callbacks */
+	ot->poll = correctivesmooth_poll;
+	ot->invoke = correctivesmooth_bind_invoke;
+	ot->exec = correctivesmooth_bind_exec;
+
+	/* flags */
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_INTERNAL;
+	edit_modifier_properties(ot);
+}
 
 /************************ mdef bind operator *********************/
 
@@ -1978,7 +2045,7 @@ static void init_ocean_modifier_bake(struct Ocean *oc, struct OceanModifierData 
 	do_normals = (omd->flag & MOD_OCEAN_GENERATE_NORMALS);
 	do_jacobian = (omd->flag & MOD_OCEAN_GENERATE_FOAM);
 	
-	BKE_init_ocean(oc, omd->resolution * omd->resolution, omd->resolution * omd->resolution, omd->spatial_size, omd->spatial_size,
+	BKE_ocean_init(oc, omd->resolution * omd->resolution, omd->resolution * omd->resolution, omd->spatial_size, omd->spatial_size,
 	               omd->wind_velocity, omd->smallest_wave, 1.0, omd->wave_direction, omd->damp, omd->wave_alignment,
 	               omd->depth, omd->time,
 	               do_heightfield, do_chop, do_normals, do_jacobian,
@@ -2036,7 +2103,7 @@ static void oceanbake_startjob(void *customdata, short *stop, short *do_update, 
 	
 	G.is_break = false;   /* XXX shared with render - replace with job 'stop' switch */
 	
-	BKE_bake_ocean(oj->ocean, oj->och, oceanbake_update, (void *)oj);
+	BKE_ocean_bake(oj->ocean, oj->och, oceanbake_update, (void *)oj);
 	
 	*do_update = true;
 	*stop = 0;
@@ -2047,7 +2114,7 @@ static void oceanbake_endjob(void *customdata)
 	OceanBakeJob *oj = customdata;
 	
 	if (oj->ocean) {
-		BKE_free_ocean(oj->ocean);
+		BKE_ocean_free(oj->ocean);
 		oj->ocean = NULL;
 	}
 	
@@ -2078,7 +2145,7 @@ static int ocean_bake_exec(bContext *C, wmOperator *op)
 		return OPERATOR_FINISHED;
 	}
 
-	och = BKE_init_ocean_cache(omd->cachepath, modifier_path_relbase(ob),
+	och = BKE_ocean_init_cache(omd->cachepath, modifier_path_relbase(ob),
 	                           omd->bakestart, omd->bakeend, omd->wave_scale,
 	                           omd->chop_amount, omd->foam_coverage, omd->foam_fade, omd->resolution);
 	
@@ -2112,11 +2179,11 @@ static int ocean_bake_exec(bContext *C, wmOperator *op)
 	}
 	
 	/* make a copy of ocean to use for baking - threadsafety */
-	ocean = BKE_add_ocean();
+	ocean = BKE_ocean_add();
 	init_ocean_modifier_bake(ocean, omd);
 	
 #if 0
-	BKE_bake_ocean(ocean, och);
+	BKE_ocean_bake(ocean, och);
 	
 	omd->oceancache = och;
 	omd->cached = true;

@@ -116,7 +116,7 @@ static void init_render_texture(Render *re, Tex *tex)
 			if (G.is_rendering && re) {
 				if (re->r.mode & R_ENVMAP)
 					if (tex->env->stype==ENV_ANIM)
-						BKE_free_envmapdata(tex->env);
+						BKE_texture_envmap_free_data(tex->env);
 			}
 		}
 	}
@@ -1348,7 +1348,7 @@ int multitex_ext_safe(Tex *tex, float texvec[3], TexResult *texres, struct Image
 /* fact = texture strength, facg = button strength value */
 void texture_rgb_blend(float in[3], const float tex[3], const float out[3], float fact, float facg, int blendtype)
 {
-	float facm, col;
+	float facm;
 	
 	switch (blendtype) {
 	case MTEX_BLEND:
@@ -1435,13 +1435,10 @@ void texture_rgb_blend(float in[3], const float tex[3], const float out[3], floa
 
 	case MTEX_LIGHT:
 		fact*= facg;
-		
-		col= fact*tex[0];
-		if (col > out[0]) in[0]= col; else in[0]= out[0];
-		col= fact*tex[1];
-		if (col > out[1]) in[1]= col; else in[1]= out[1];
-		col= fact*tex[2];
-		if (col > out[2]) in[2]= col; else in[2]= out[2];
+
+		in[0] = max_ff(fact * tex[0], out[0]);
+		in[1] = max_ff(fact * tex[1], out[1]);
+		in[2] = max_ff(fact * tex[2], out[2]);
 		break;
 		
 	case MTEX_BLEND_HUE:
@@ -3493,7 +3490,7 @@ void render_realtime_texture(ShadeInput *shi, Image *ima)
 		if (firsttime) {
 			for (a=0; a<BLENDER_MAX_THREADS; a++) {
 				memset(&imatex[a], 0, sizeof(Tex));
-				default_tex(&imatex[a]);
+				BKE_texture_default(&imatex[a]);
 				imatex[a].type= TEX_IMAGE;
 			}
 
@@ -3614,7 +3611,7 @@ Material *RE_init_sample_material(Material *orig_mat, Scene *scene)
 			}
 
 			/* copy texture */
-			tex= mtex->tex = localize_texture(cur_tex);
+			tex= mtex->tex = BKE_texture_localize(cur_tex);
 
 			/* update texture anims */
 			BKE_animsys_evaluate_animdata(scene, &tex->id, tex->adt, BKE_scene_frame_get(scene), ADT_RECALC_ANIM);
@@ -3631,7 +3628,7 @@ Material *RE_init_sample_material(Material *orig_mat, Scene *scene)
 				unit_m4(dummy_re.viewmat);
 				unit_m4(dummy_re.winmat);
 				dummy_re.winx = dummy_re.winy = 128;
-				cache_pointdensity(&dummy_re, tex);
+				cache_pointdensity(&dummy_re, tex->pd);
 			}
 
 			/* update image sequences and movies */

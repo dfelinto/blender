@@ -54,7 +54,6 @@ void ED_operatortypes_curve(void)
 {
 	WM_operatortype_append(FONT_OT_text_insert);
 	WM_operatortype_append(FONT_OT_line_break);
-	WM_operatortype_append(FONT_OT_insert_lorem);
 
 	WM_operatortype_append(FONT_OT_case_toggle);
 	WM_operatortype_append(FONT_OT_case_set);
@@ -231,7 +230,7 @@ void ED_keymap_curve(wmKeyConfig *keyconf)
 	
 	WM_keymap_add_item(keymap, "CURVE_OT_handle_type_set", VKEY, KM_PRESS, 0, 0);
 
-	WM_keymap_add_item(keymap, "CURVE_OT_vertex_add", ACTIONMOUSE, KM_CLICK, KM_CTRL, 0);
+	WM_keymap_add_item(keymap, "CURVE_OT_vertex_add", ACTIONMOUSE, KM_PRESS, KM_CTRL, 0);
 
 	kmi = WM_keymap_add_item(keymap, "CURVE_OT_select_all", AKEY, KM_PRESS, 0, 0);
 	RNA_enum_set(kmi->ptr, "action", SEL_TOGGLE);

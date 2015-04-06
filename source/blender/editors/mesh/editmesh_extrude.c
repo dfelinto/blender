@@ -510,7 +510,7 @@ static int edbm_dupli_extrude_cursor_invoke(bContext *C, wmOperator *op, const w
 	float min[3], max[3];
 	bool done = false;
 	bool use_proj;
-	
+
 	em_setup_viewcontext(C, &vc);
 
 	ED_view3d_init_mats_rv3d(vc.obedit, vc.rv3d);

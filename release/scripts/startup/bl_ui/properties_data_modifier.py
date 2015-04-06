@@ -1384,7 +1384,32 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
         row.prop_search(md, "vertex_group", ob, "vertex_groups", text="")
         sub = row.row(align=True)
         sub.active = has_vgroup
-        sub.prop(md, "use_invert_vertex_group", text="", icon='ARROW_LEFTRIGHT')
+        sub.prop(md, "invert_vertex_group", text="", icon='ARROW_LEFTRIGHT')
+
+    def CORRECTIVE_SMOOTH(self, layout, ob, md):
+        is_bind = md.is_bind
+
+        layout.prop(md, "factor", text="Factor")
+        layout.prop(md, "iterations")
+
+        row = layout.row()
+        row.prop(md, "smooth_type")
+
+        split = layout.split()
+
+        col = split.column()
+        col.label(text="Vertex Group:")
+        row = col.row(align=True)
+        row.prop_search(md, "vertex_group", ob, "vertex_groups", text="")
+        row.prop(md, "invert_vertex_group", text="", icon='ARROW_LEFTRIGHT')
+
+        col = split.column()
+        col.prop(md, "use_only_smooth")
+        col.prop(md, "use_pin_boundary")
+
+        layout.prop(md, "rest_source")
+        if md.rest_source == 'BIND':
+            layout.operator("object.correctivesmooth_bind", text="Unbind" if is_bind else "Bind")
 
 
 if __name__ == "__main__":  # only for live edit.

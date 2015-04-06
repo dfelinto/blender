@@ -32,7 +32,6 @@
  *  \since March 2001
  *  \author nzc
  */
-struct EvaluationContext;
 struct Main;
 struct MetaBall;
 struct Object;
@@ -48,7 +47,6 @@ void BKE_mball_make_local(struct MetaBall *mb);
 
 void BKE_mball_cubeTable_free(void);
 
-void BKE_mball_polygonize(struct EvaluationContext *eval_ctx, struct Scene *scene, struct Object *ob, struct ListBase *dispbase);
 bool BKE_mball_is_basis_for(struct Object *ob1, struct Object *ob2);
 bool BKE_mball_is_basis(struct Object *ob);
 struct Object *BKE_mball_basis_find(struct Scene *scene, struct Object *ob);

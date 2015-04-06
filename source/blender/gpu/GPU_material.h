@@ -45,10 +45,7 @@ struct Image;
 struct ImageUser;
 struct Material;
 struct Object;
-struct Lamp;
 struct Image;
-struct bNode;
-struct LinkNode;
 struct Scene;
 struct SceneRenderLayer;
 struct GPUVertexAttribs;
@@ -92,7 +89,7 @@ typedef enum GPUBuiltin {
 	GPU_VIEW_NORMAL =           (1 << 5),
 	GPU_OBCOLOR =               (1 << 6),
 	GPU_AUTO_BUMPSCALE =        (1 << 7),
-	GPU_CAMERA_TEXCO_FACTORS =       (1 << 8),
+	GPU_CAMERA_TEXCO_FACTORS =  (1 << 8),
 } GPUBuiltin;
 
 typedef enum GPUOpenGLBuiltin {
@@ -149,6 +146,14 @@ typedef enum GPUDynamicType {
 	GPU_DYNAMIC_LAMP_ATT2 = 18,
 	GPU_DYNAMIC_LAMP_SPOTSIZE = 19,
 	GPU_DYNAMIC_LAMP_SPOTBLEND = 20,
+	GPU_DYNAMIC_MIST_ENABLE = 21,
+	GPU_DYNAMIC_MIST_START = 22,
+	GPU_DYNAMIC_MIST_DISTANCE = 23,
+	GPU_DYNAMIC_MIST_INTENSITY = 24,
+	GPU_DYNAMIC_MIST_TYPE = 25,
+	GPU_DYNAMIC_MIST_COLOR = 26,
+	GPU_DYNAMIC_HORIZON_COLOR = 27,
+	GPU_DYNAMIC_AMBIENT_COLOR = 28,
 } GPUDynamicType;
 
 GPUNodeLink *GPU_attribute(CustomDataType type, const char *name);
@@ -213,7 +218,7 @@ void GPU_shaderesult_set(GPUShadeInput *shi, GPUShadeResult *shr);
 
 typedef enum GPUDataType {
 	GPU_DATA_NONE = 0,
-	GPU_DATA_1I = 1,	// 1 integer
+	GPU_DATA_1I = 1,   /* 1 integer */
 	GPU_DATA_1F = 2,
 	GPU_DATA_2F = 3,
 	GPU_DATA_3F = 4,
@@ -226,23 +231,23 @@ typedef enum GPUDataType {
 /* this structure gives information of each uniform found in the shader */
 typedef struct GPUInputUniform {
 	struct GPUInputUniform *next, *prev;
-	char varname[32];		/* name of uniform in shader */
-	GPUDynamicType type;	/* type of uniform, data format and calculation derive from it */
-	GPUDataType datatype;	/* type of uniform data */
-	struct Object *lamp;	/* when type=GPU_DYNAMIC_LAMP_... or GPU_DYNAMIC_SAMPLER_2DSHADOW */
-	struct Image *image;	/* when type=GPU_DYNAMIC_SAMPLER_2DIMAGE */
-	int texnumber;			/* when type=GPU_DYNAMIC_SAMPLER, texture number: 0.. */
-	unsigned char *texpixels;	/* for internally generated texture, pixel data in RGBA format */
-	int texsize;			/* size in pixel of the texture in texpixels buffer: for 2D textures, this is S and T size (square texture) */
+	char varname[32];         /* name of uniform in shader */
+	GPUDynamicType type;      /* type of uniform, data format and calculation derive from it */
+	GPUDataType datatype;     /* type of uniform data */
+	struct Object *lamp;      /* when type=GPU_DYNAMIC_LAMP_... or GPU_DYNAMIC_SAMPLER_2DSHADOW */
+	struct Image *image;      /* when type=GPU_DYNAMIC_SAMPLER_2DIMAGE */
+	int texnumber;            /* when type=GPU_DYNAMIC_SAMPLER, texture number: 0.. */
+	unsigned char *texpixels; /* for internally generated texture, pixel data in RGBA format */
+	int texsize;              /* size in pixel of the texture in texpixels buffer: for 2D textures, this is S and T size (square texture) */
 } GPUInputUniform;
 
 typedef struct GPUInputAttribute {
 	struct GPUInputAttribute *next, *prev;
-	char varname[32];	/* name of attribute in shader */
-	int type;			/* from CustomData.type, data type derives from it */
-	GPUDataType datatype;	/* type of attribute data */
-	const char *name;	/* layer name */
-	int number;			/* generic attribute number */
+	char varname[32];     /* name of attribute in shader */
+	int type;             /* from CustomData.type, data type derives from it */
+	GPUDataType datatype; /* type of attribute data */
+	const char *name;     /* layer name */
+	int number;           /* generic attribute number */
 } GPUInputAttribute;
 
 typedef struct GPUShaderExport {
@@ -272,6 +277,12 @@ void GPU_lamp_update_distance(GPULamp *lamp, float distance, float att1, float a
 void GPU_lamp_update_spot(GPULamp *lamp, float spotsize, float spotblend);
 int GPU_lamp_shadow_layer(GPULamp *lamp);
 GPUNodeLink *GPU_lamp_get_data(GPUMaterial *mat, GPULamp *lamp, GPUNodeLink **col, GPUNodeLink **lv, GPUNodeLink **dist, GPUNodeLink **shadow, GPUNodeLink **energy);
+
+/* World */
+void GPU_mist_update_enable(short enable);
+void GPU_mist_update_values(int type, float start, float dist, float inten, float color[3]);
+void GPU_horizon_update_color(float color[3]);
+void GPU_ambient_update_color(float color[3]);
 
 #ifdef __cplusplus
 }

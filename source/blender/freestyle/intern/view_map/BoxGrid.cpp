@@ -71,18 +71,18 @@ void BoxGrid::Cell::indexPolygons()
 // Iterator
 //////////////////
 
-BoxGrid::Iterator::Iterator (BoxGrid& grid, Vec3r& center, real epsilon)
+BoxGrid::Iterator::Iterator (BoxGrid& grid, Vec3r& center, real /*epsilon*/)
 : _target(grid.transform(center)), _foundOccludee(false)
 {
 	// Find target cell
 	_cell = grid.findCell(_target);
-	#if BOX_GRID_LOGGING
+#if BOX_GRID_LOGGING
 		if (G.debug & G_DEBUG_FREESTYLE) {
 			cout << "Searching for occluders of edge centered at " << _target << " in cell [" <<
 			        1_cell->boundary[0] << ", " << _cell->boundary[1] << ", " << _cell->boundary[2] <<
 			        ", " << _cell->boundary[3] << "] (" << _cell->faces.size() << " occluders)" << endl;
 		}
-	#endif
+#endif
 
 	// Set iterator
 	_current = _cell->faces.begin();
@@ -122,7 +122,7 @@ BoxGrid::BoxGrid(OccluderSource& source, GridDensityProvider& density, ViewMap *
 
 BoxGrid::~BoxGrid() {}
 
-void BoxGrid::assignCells (OccluderSource& source, GridDensityProvider& density, ViewMap *viewMap)
+void BoxGrid::assignCells (OccluderSource& /*source*/, GridDensityProvider& density, ViewMap *viewMap)
 {
 	_cellSize = density.cellSize();
 	_cellsX = density.cellsX();

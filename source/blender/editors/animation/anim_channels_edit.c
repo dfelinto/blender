@@ -101,6 +101,7 @@ void ANIM_set_active_channel(bAnimContext *ac, void *data, eAnimCont_Types datat
 				break;
 			}
 			case ANIMTYPE_FCURVE:
+			case ANIMTYPE_NLACURVE:
 			{
 				FCurve *fcu = (FCurve *)ale->data;
 				
@@ -157,6 +158,7 @@ void ANIM_set_active_channel(bAnimContext *ac, void *data, eAnimCont_Types datat
 				break;
 			}
 			case ANIMTYPE_FCURVE:
+			case ANIMTYPE_NLACURVE:
 			{
 				FCurve *fcu = (FCurve *)channel_data;
 				fcu->flag |= FCURVE_ACTIVE;
@@ -255,6 +257,7 @@ void ANIM_deselect_anim_channels(bAnimContext *ac, void *data, eAnimCont_Types d
 						sel = ACHANNEL_SETFLAG_CLEAR;
 					break;
 				case ANIMTYPE_FCURVE:
+				case ANIMTYPE_NLACURVE:
 					if (ale->flag & FCURVE_SELECTED)
 						sel = ACHANNEL_SETFLAG_CLEAR;
 					break;
@@ -339,6 +342,7 @@ void ANIM_deselect_anim_channels(bAnimContext *ac, void *data, eAnimCont_Types d
 				break;
 			}
 			case ANIMTYPE_FCURVE:
+			case ANIMTYPE_NLACURVE:
 			{
 				FCurve *fcu = (FCurve *)ale->data;
 				
@@ -444,7 +448,7 @@ void ANIM_flush_setting_anim_channels(bAnimContext *ac, ListBase *anim_data, bAn
 		return;
 	}
 	else {
-		bAnimChannelType *acf = ANIM_channel_get_typeinfo(ale_setting);
+		const bAnimChannelType *acf = ANIM_channel_get_typeinfo(ale_setting);
 		
 		if (acf == NULL) {
 			printf("ERROR: no channel info for the changed channel\n");
@@ -473,7 +477,7 @@ void ANIM_flush_setting_anim_channels(bAnimContext *ac, ListBase *anim_data, bAn
 	{
 		/* go backwards in the list, until the highest-ranking element (by indention has been covered) */
 		for (ale = match->prev; ale; ale = ale->prev) {
-			bAnimChannelType *acf = ANIM_channel_get_typeinfo(ale);
+			const bAnimChannelType *acf = ANIM_channel_get_typeinfo(ale);
 			int level;
 			
 			/* if no channel info was found, skip, since this type might not have any useful info */
@@ -517,7 +521,7 @@ void ANIM_flush_setting_anim_channels(bAnimContext *ac, ListBase *anim_data, bAn
 	{
 		/* go forwards in the list, until the lowest-ranking element (by indention has been covered) */
 		for (ale = match->next; ale; ale = ale->next) {
-			bAnimChannelType *acf = ANIM_channel_get_typeinfo(ale);
+			const bAnimChannelType *acf = ANIM_channel_get_typeinfo(ale);
 			int level;
 			
 			/* if no channel info was found, skip, since this type might not have any useful info */
@@ -847,6 +851,7 @@ static void rearrange_animchannel_add_to_islands(ListBase *islands, ListBase *sr
 			break;
 		}
 		case ANIMTYPE_FCURVE:
+		case ANIMTYPE_NLACURVE:
 		{
 			FCurve *fcu = (FCurve *)channel;
 			
@@ -1191,6 +1196,40 @@ static void rearrange_action_channels(bAnimContext *ac, bAction *act, eRearrange
 
 /* ------------------- */
 
+static void rearrange_nla_control_channels(bAnimContext *ac, AnimData *adt, eRearrangeAnimChan_Mode mode)
+{
+	ListBase anim_data_visible = {NULL, NULL};
+	
+	NlaTrack *nlt;
+	NlaStrip *strip;
+	
+	/* get rearranging function */
+	AnimChanRearrangeFp rearrange_func = rearrange_get_mode_func(mode);
+	
+	if (rearrange_func == NULL)
+		return;
+		
+	/* skip if these curves aren't being shown */
+	if (adt->flag & ADT_NLA_SKEYS_COLLAPSED)
+		return;
+	
+	/* Filter visible data. */
+	rearrange_animchannels_filter_visible(&anim_data_visible, ac, ANIMTYPE_NLACURVE);
+	
+	/* we cannot rearrange between strips, but within each strip, we can rearrange those curves */
+	for (nlt = adt->nla_tracks.first; nlt; nlt = nlt->next) {
+		for (strip = nlt->strips.first; strip; strip = strip->next) {
+			rearrange_animchannel_islands(&strip->fcurves, rearrange_func, mode, ANIMTYPE_NLACURVE,
+				                          &anim_data_visible);
+		}
+	}
+	
+	/* free temp data */
+	BLI_freelistN(&anim_data_visible);
+}
+
+/* ------------------- */
+
 static void rearrange_gpencil_channels(bAnimContext *ac, eRearrangeAnimChan_Mode mode)
 {
 	ListBase anim_data = {NULL, NULL};
@@ -1278,13 +1317,29 @@ static int animchannels_rearrange_exec(bContext *C, wmOperator *op)
 					rearrange_driver_channels(&ac, adt, mode);
 					break;
 				
+				case ANIMCONT_ACTION: /* Single Action only... */
 				case ANIMCONT_SHAPEKEY: // DOUBLE CHECK ME...
-				default: /* some collection of actions */
+				{
 					if (adt->action)
 						rearrange_action_channels(&ac, adt->action, mode);
 					else if (G.debug & G_DEBUG)
 						printf("Animdata has no action\n");
 					break;
+				}
+				
+				default: /* DopeSheet/Graph Editor - Some Actions + NLA Control Curves */
+				{
+					/* NLA Control Curves */
+					if (adt->nla_tracks.first)
+						rearrange_nla_control_channels(&ac, adt, mode);
+					
+					/* Action */
+					if (adt->action)
+						rearrange_action_channels(&ac, adt->action, mode);
+					else if (G.debug & G_DEBUG)
+						printf("Animdata has no action\n");
+					break;
+				}
 			}
 		}
 		
@@ -1600,6 +1655,27 @@ static int animchannels_delete_exec(bContext *C, wmOperator *UNUSED(op))
 				
 				/* try to free F-Curve */
 				ANIM_fcurve_delete_from_animdata(&ac, adt, fcu);
+				break;
+			}
+			case ANIMTYPE_NLACURVE:
+			{
+				/* NLA Control Curve - Deleting it should disable the corresponding setting... */
+				NlaStrip *strip = (NlaStrip *)ale->owner;
+				FCurve *fcu = (FCurve *)ale->data;
+				
+				if (STREQ(fcu->rna_path, "strip_time")) {
+					strip->flag &= ~NLASTRIP_FLAG_USR_TIME;
+				}
+				else if (STREQ(fcu->rna_path, "influence")) {
+					strip->flag &= ~NLASTRIP_FLAG_USR_INFLUENCE;
+				}
+				else {
+					printf("ERROR: Trying to delete NLA Control Curve for unknown property '%s'\n", fcu->rna_path);
+				}
+				
+				/* unlink and free the F-Curve */
+				BLI_remlink(&strip->fcurves, fcu);
+				free_fcurve(fcu);
 				break;
 			}
 			case ANIMTYPE_GPLAYER:
@@ -2041,7 +2117,7 @@ static int animchannels_clean_empty_exec(bContext *C, wmOperator *UNUSED(op))
 		
 		/* remove AnimData? */
 		if (action_empty && nla_empty && drivers_empty) {
-			BKE_free_animdata(id);
+			BKE_animdata_free(id);
 		}
 	}
 	
@@ -2423,7 +2499,7 @@ static void ANIM_OT_channels_select_border(wmOperatorType *ot)
 static void rename_anim_channels(bAnimContext *ac, int channel_index)
 {
 	ListBase anim_data = {NULL, NULL};
-	bAnimChannelType *acf;
+	const bAnimChannelType *acf;
 	bAnimListElem *ale;
 	int filter;
 	
@@ -2727,7 +2803,8 @@ static int mouse_anim_channels(bContext *C, bAnimContext *ac, int channel_index,
 			notifierFlags |= (ND_ANIMCHAN | NA_SELECTED);
 			break;
 		}
-		case ANIMTYPE_FCURVE: 
+		case ANIMTYPE_FCURVE:
+		case ANIMTYPE_NLACURVE:
 		{
 			FCurve *fcu = (FCurve *)ale->data;
 			
@@ -2744,7 +2821,7 @@ static int mouse_anim_channels(bContext *C, bAnimContext *ac, int channel_index,
 			
 			/* if F-Curve is selected now, make F-Curve the 'active' one in the visible list */
 			if (fcu->flag & FCURVE_SELECTED)
-				ANIM_set_active_channel(ac, ac->data, ac->datatype, filter, fcu, ANIMTYPE_FCURVE);
+				ANIM_set_active_channel(ac, ac->data, ac->datatype, filter, fcu, ale->type);
 				
 			notifierFlags |= (ND_ANIMCHAN | NA_SELECTED);
 			break;
@@ -2765,6 +2842,19 @@ static int mouse_anim_channels(bContext *C, bAnimContext *ac, int channel_index,
 			}
 				
 			notifierFlags |= (ND_ANIMCHAN | NA_SELECTED);
+			break;
+		}
+		case ANIMTYPE_NLACONTROLS:
+		{
+			AnimData *adt = (AnimData *)ale->data;
+			
+			/* toggle expand
+			 *   - Although the triangle widget already allows this, since there's nothing else that can be done here now,
+			 *     let's just use it for easier expand/collapse for now
+			 */
+			adt->flag ^= ADT_NLA_SKEYS_COLLAPSED;
+			
+			notifierFlags |= (ND_ANIMCHAN | NA_EDITED);
 			break;
 		}
 		case ANIMTYPE_GPDATABLOCK:

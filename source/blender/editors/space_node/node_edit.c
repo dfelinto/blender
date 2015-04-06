@@ -93,7 +93,6 @@ typedef struct CompoJob {
 	const short *stop;
 	short *do_update;
 	float *progress;
-	short need_sync;
 	int recalc_flags;
 } CompoJob;
 
@@ -162,13 +161,12 @@ static int compo_breakjob(void *cjv)
 	        );
 }
 
-/* called by compo, wmJob sends notifier, old compositor system only */
-static void compo_statsdrawjob(void *cjv, char *UNUSED(str))
+/* called by compo, wmJob sends notifier */
+static void compo_statsdrawjob(void *cjv, const char *UNUSED(str))
 {
 	CompoJob *cj = cjv;
 	
 	*(cj->do_update) = true;
-	cj->need_sync = true;
 }
 
 /* called by compo, wmJob sends notifier */
@@ -202,17 +200,8 @@ static void compo_initjob(void *cjv)
 }
 
 /* called before redraw notifiers, it moves finished previews over */
-static void compo_updatejob(void *cjv)
+static void compo_updatejob(void *UNUSED(cjv))
 {
-	CompoJob *cj = cjv;
-
-	if (cj->need_sync) {
-		/* was used by old compositor system only */
-		ntreeLocalSync(cj->localtree, cj->ntree);
-
-		cj->need_sync = false;
-	}
-
 	WM_main_add_notifier(NC_SCENE | ND_COMPO_RESULT, NULL);
 }
 
@@ -223,13 +212,13 @@ static void compo_progressjob(void *cjv, float progress)
 	*(cj->progress) = progress;
 }
 
-
 /* only this runs inside thread */
 static void compo_startjob(void *cjv, short *stop, short *do_update, float *progress)
 {
 	CompoJob *cj = cjv;
 	bNodeTree *ntree = cj->localtree;
 	Scene *scene = cj->scene;
+	SceneRenderView *srv;
 
 	if (scene->use_nodes == false)
 		return;
@@ -249,7 +238,11 @@ static void compo_startjob(void *cjv, short *stop, short *do_update, float *prog
 
 	// XXX BIF_store_spare();
 	/* 1 is do_previews */
-	ntreeCompositExecTree(cj->scene, ntree, &cj->scene->r, false, true, &scene->view_settings, &scene->display_settings);
+
+	for (srv = scene->r.views.first; srv; srv = srv->next) {
+		if (BKE_scene_multiview_is_render_view_active(&scene->r, srv) == false) continue;
+		ntreeCompositExecTree(cj->scene, ntree, &cj->scene->r, false, true, &scene->view_settings, &scene->display_settings, srv->name);
+	}
 
 	ntree->test_break = NULL;
 	ntree->stats_draw = NULL;
@@ -1667,6 +1660,54 @@ void NODE_OT_delete(wmOperatorType *ot)
 	ot->exec = node_delete_exec;
 	ot->poll = ED_operator_node_editable;
 	
+	/* flags */
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
+
+/* ****************** Switch View ******************* */
+
+static int node_switch_view_poll(bContext *C)
+{
+	SpaceNode *snode = CTX_wm_space_node(C);
+
+	if (snode && snode->edittree)
+		return true;
+
+	return false;
+}
+
+static int node_switch_view_exec(bContext *C, wmOperator *UNUSED(op))
+{
+	SpaceNode *snode = CTX_wm_space_node(C);
+	bNode *node, *next;
+
+	for (node = snode->edittree->nodes.first; node; node = next) {
+		next = node->next;
+		if (node->flag & SELECT) {
+			/* call the update function from the Switch View node */
+			node->update = NODE_UPDATE_OPERATOR;
+		}
+	}
+
+	ntreeUpdateTree(CTX_data_main(C), snode->edittree);
+
+	snode_notify(C, snode);
+	snode_dag_update(C, snode);
+
+	return OPERATOR_FINISHED;
+}
+
+void NODE_OT_switch_view_update(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Update Views";
+	ot->description = "Update views of selected node";
+	ot->idname = "NODE_OT_switch_view_update";
+
+	/* api callbacks */
+	ot->exec = node_switch_view_exec;
+	ot->poll = node_switch_view_poll;
+
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }

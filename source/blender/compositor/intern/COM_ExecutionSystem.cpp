@@ -43,8 +43,10 @@ extern "C" {
 #endif
 
 ExecutionSystem::ExecutionSystem(RenderData *rd, Scene *scene, bNodeTree *editingtree, bool rendering, bool fastcalculation,
-                                 const ColorManagedViewSettings *viewSettings, const ColorManagedDisplaySettings *displaySettings)
+                                 const ColorManagedViewSettings *viewSettings, const ColorManagedDisplaySettings *displaySettings,
+                                 const char *viewName)
 {
+	this->m_context.setViewName(viewName);
 	this->m_context.setScene(scene);
 	this->m_context.setbNodeTree(editingtree);
 	this->m_context.setPreviewHash(editingtree->previews);
@@ -75,6 +77,8 @@ ExecutionSystem::ExecutionSystem(RenderData *rd, Scene *scene, bNodeTree *editin
 	bool use_viewer_border = (editingtree->flag & NTREE_VIEWER_BORDER) &&
 	                         viewer_border->xmin < viewer_border->xmax &&
 	                         viewer_border->ymin < viewer_border->ymax;
+
+	editingtree->stats_draw(editingtree->sdh, "Compositing | Determining resolution");
 
 	for (index = 0; index < this->m_groups.size(); index++) {
 		resolution[0] = 0;
@@ -124,6 +128,9 @@ void ExecutionSystem::set_operations(const Operations &operations, const Groups 
 
 void ExecutionSystem::execute()
 {
+	const bNodeTree *editingtree = this->m_context.getbNodeTree();
+	editingtree->stats_draw(editingtree->sdh, (char *)"Compositing | Initializing execution");
+
 	DebugInfo::execute_started(this);
 	
 	unsigned int order = 0;
@@ -178,6 +185,7 @@ void ExecutionSystem::execute()
 	WorkScheduler::finish();
 	WorkScheduler::stop();
 
+	editingtree->stats_draw(editingtree->sdh, (char *)"Compositing | Deinitializing execution");
 	for (index = 0; index < this->m_operations.size(); index++) {
 		NodeOperation *operation = this->m_operations[index];
 		operation->deinitExecution();

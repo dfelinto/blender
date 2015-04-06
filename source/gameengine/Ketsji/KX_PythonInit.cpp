@@ -1029,108 +1029,21 @@ static PyObject *gPyGetStereoEye(PyObject *, PyObject *, PyObject *)
 
 static PyObject *gPySetBackgroundColor(PyObject *, PyObject *value)
 {
-	
 	MT_Vector4 vec;
 	if (!PyVecTo(value, vec))
 		return NULL;
-	
-	if (gp_Canvas)
-	{
-		gp_Rasterizer->SetBackColor((float)vec[0], (float)vec[1], (float)vec[2], (float)vec[3]);
-	}
 
 	KX_WorldInfo *wi = gp_KetsjiScene->GetWorldInfo();
-	if (wi->hasWorld())
-		wi->setBackColor((float)vec[0], (float)vec[1], (float)vec[2]);
-
-	Py_RETURN_NONE;
-}
-
-
-
-static PyObject *gPySetMistColor(PyObject *, PyObject *value)
-{
-	
-	MT_Vector3 vec;
-	if (!PyVecTo(value, vec))
-		return NULL;
-	
-	if (!gp_Rasterizer) {
-		PyErr_SetString(PyExc_RuntimeError, "Rasterizer.setMistColor(color), Rasterizer not available");
+	if (!wi->hasWorld()) {
+		PyErr_SetString(PyExc_RuntimeError, "bge.render.SetBackgroundColor(color), World not available");
 		return NULL;
 	}
-	gp_Rasterizer->SetFogColor((float)vec[0], (float)vec[1], (float)vec[2]);
-	
+
+	ShowDeprecationWarning("setBackgroundColor()", "KX_WorldInfo.background_color");
+	wi->setBackColor((float)vec[0], (float)vec[1], (float)vec[2]);
+
 	Py_RETURN_NONE;
 }
-
-static PyObject *gPyDisableMist(PyObject *)
-{
-	
-	if (!gp_Rasterizer) {
-		PyErr_SetString(PyExc_RuntimeError, "Rasterizer.setMistColor(color), Rasterizer not available");
-		return NULL;
-	}
-	gp_Rasterizer->DisableFog();
-	
-	Py_RETURN_NONE;
-}
-
-static PyObject *gPySetMistStart(PyObject *, PyObject *args)
-{
-
-	float miststart;
-	if (!PyArg_ParseTuple(args,"f:setMistStart",&miststart))
-		return NULL;
-	
-	if (!gp_Rasterizer) {
-		PyErr_SetString(PyExc_RuntimeError, "Rasterizer.setMistStart(float), Rasterizer not available");
-		return NULL;
-	}
-	
-	gp_Rasterizer->SetFogStart(miststart);
-	
-	Py_RETURN_NONE;
-}
-
-
-
-static PyObject *gPySetMistEnd(PyObject *, PyObject *args)
-{
-
-	float mistend;
-	if (!PyArg_ParseTuple(args,"f:setMistEnd",&mistend))
-		return NULL;
-	
-	if (!gp_Rasterizer) {
-		PyErr_SetString(PyExc_RuntimeError, "Rasterizer.setMistEnd(float), Rasterizer not available");
-		return NULL;
-	}
-	
-	gp_Rasterizer->SetFogEnd(mistend);
-	
-	Py_RETURN_NONE;
-}
-
-
-static PyObject *gPySetAmbientColor(PyObject *, PyObject *value)
-{
-	
-	MT_Vector3 vec;
-	if (!PyVecTo(value, vec))
-		return NULL;
-	
-	if (!gp_Rasterizer) {
-		PyErr_SetString(PyExc_RuntimeError, "Rasterizer.setAmbientColor(color), Rasterizer not available");
-		return NULL;
-	}
-	gp_Rasterizer->SetAmbientColor((float)vec[0], (float)vec[1], (float)vec[2]);
-	
-	Py_RETURN_NONE;
-}
-
-
-
 
 static PyObject *gPyMakeScreenshot(PyObject *, PyObject *args)
 {
@@ -1508,11 +1421,6 @@ static struct PyMethodDef rasterizer_methods[] = {
 	{"setMousePosition",(PyCFunction) gPySetMousePosition,
 	 METH_VARARGS, "setMousePosition(int x,int y)"},
 	{"setBackgroundColor",(PyCFunction)gPySetBackgroundColor,METH_O,"set Background Color (rgb)"},
-	{"setAmbientColor",(PyCFunction)gPySetAmbientColor,METH_O,"set Ambient Color (rgb)"},
-	{"disableMist",(PyCFunction)gPyDisableMist,METH_NOARGS,"turn off mist"},
-	{"setMistColor",(PyCFunction)gPySetMistColor,METH_O,"set Mist Color (rgb)"},
-	{"setMistStart",(PyCFunction)gPySetMistStart,METH_VARARGS,"set Mist Start(rgb)"},
-	{"setMistEnd",(PyCFunction)gPySetMistEnd,METH_VARARGS,"set Mist End(rgb)"},
 	{"enableMotionBlur",(PyCFunction)gPyEnableMotionBlur,METH_VARARGS,"enable motion blur"},
 	{"disableMotionBlur",(PyCFunction)gPyDisableMotionBlur,METH_NOARGS,"disable motion blur"},
 
@@ -2149,14 +2057,14 @@ PyObject *initGamePlayerPythonScripting(Main *maggie, int argc, char** argv)
 	Py_SetProgramName(program_path_wchar);
 
 	/* Update, Py3.3 resolves attempting to parse non-existing header */
-	#if 0
+#if 0
 	/* Python 3.2 now looks for '2.xx/python/include/python3.2d/pyconfig.h' to
 	 * parse from the 'sysconfig' module which is used by 'site',
 	 * so for now disable site. alternatively we could copy the file. */
 	if (py_path_bundle != NULL) {
 		Py_NoSiteFlag = 1; /* inhibits the automatic importing of 'site' */
 	}
-	#endif
+#endif
 
 	Py_FrozenFlag = 1;
 

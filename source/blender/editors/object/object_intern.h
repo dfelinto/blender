@@ -32,17 +32,12 @@
 #define __OBJECT_INTERN_H__
 
 struct wmOperatorType;
-struct KeyBlock;
-struct Lattice;
-struct Curve;
 struct Object;
-struct Mesh;
 struct bContext;
 struct StructRNA;
 struct wmOperator;
 
 struct ModifierData;
-struct HookModifierData;
 
 /* add hook menu */
 enum eObject_Hook_Add_Mode {
@@ -179,6 +174,7 @@ void OBJECT_OT_multires_higher_levels_delete(struct wmOperatorType *ot);
 void OBJECT_OT_multires_base_apply(struct wmOperatorType *ot);
 void OBJECT_OT_multires_external_save(struct wmOperatorType *ot);
 void OBJECT_OT_multires_external_pack(struct wmOperatorType *ot);
+void OBJECT_OT_correctivesmooth_bind(struct wmOperatorType *ot);
 void OBJECT_OT_meshdeform_bind(struct wmOperatorType *ot);
 void OBJECT_OT_explode_refresh(struct wmOperatorType *ot);
 void OBJECT_OT_ocean_bake(struct wmOperatorType *ot);

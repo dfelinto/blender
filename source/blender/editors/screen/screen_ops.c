@@ -717,7 +717,7 @@ static void actionzone_apply(bContext *C, wmOperator *op, int type)
 	else
 		event.type = EVT_ACTIONZONE_REGION;
 
-	event.val = 0;
+	event.val = KM_NOTHING;
 	event.customdata = op->customdata;
 	event.customdatafree = true;
 	op->customdata = NULL;
@@ -990,6 +990,7 @@ static int area_dupli_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 	rect.ymax = rect.ymin + BLI_rcti_size_y(&rect) / U.pixelsize;
 
 	newwin = WM_window_open(C, &rect);
+	*newwin->stereo3d_format = *win->stereo3d_format;
 	
 	/* allocs new screen and adds to newly created window, using window size */
 	newsc = ED_screen_add(newwin, CTX_data_scene(C), sc->id.name + 2);
@@ -2099,7 +2100,7 @@ static int frame_offset_exec(bContext *C, wmOperator *op)
 	
 	areas_do_frame_follow(C, false);
 
-	sound_seek_scene(bmain, scene);
+	BKE_sound_seek_scene(bmain, scene);
 
 	WM_event_add_notifier(C, NC_SCENE | ND_FRAME, scene);
 	
@@ -2151,7 +2152,7 @@ static int frame_jump_exec(bContext *C, wmOperator *op)
 		
 		areas_do_frame_follow(C, true);
 
-		sound_seek_scene(bmain, scene);
+		BKE_sound_seek_scene(bmain, scene);
 
 		WM_event_add_notifier(C, NC_SCENE | ND_FRAME, scene);
 	}
@@ -2257,7 +2258,7 @@ static int keyframe_jump_exec(bContext *C, wmOperator *op)
 	else {
 		areas_do_frame_follow(C, true);
 
-		sound_seek_scene(bmain, scene);
+		BKE_sound_seek_scene(bmain, scene);
 
 		WM_event_add_notifier(C, NC_SCENE | ND_FRAME, scene);
 
@@ -2319,7 +2320,7 @@ static int marker_jump_exec(bContext *C, wmOperator *op)
 
 		areas_do_frame_follow(C, true);
 
-		sound_seek_scene(bmain, scene);
+		BKE_sound_seek_scene(bmain, scene);
 
 		WM_event_add_notifier(C, NC_SCENE | ND_FRAME, scene);
 
@@ -3413,9 +3414,16 @@ static int match_region_with_redraws(int spacetype, int regiontype, int redraws)
 	return 0;
 }
 
+//#define PROFILE_AUDIO_SYNCH
+
 static int screen_animation_step(bContext *C, wmOperator *UNUSED(op), const wmEvent *event)
 {
 	bScreen *screen = CTX_wm_screen(C);
+
+#ifdef PROFILE_AUDIO_SYNCH
+	static int old_frame = 0;
+	int newfra_int;
+#endif
 
 	if (screen->animtimer && screen->animtimer == event->customdata) {
 		Main *bmain = CTX_data_main(C);
@@ -3435,14 +3443,27 @@ static int screen_animation_step(bContext *C, wmOperator *UNUSED(op), const wmEv
 		
 		if ((scene->audio.flag & AUDIO_SYNC) &&
 		    (sad->flag & ANIMPLAY_FLAG_REVERSE) == false &&
-		    finite(time = sound_sync_scene(scene)))
+		    finite(time = BKE_sound_sync_scene(scene)))
 		{
 			double newfra = (double)time * FPS;
+
 			/* give some space here to avoid jumps */
 			if (newfra + 0.5 > scene->r.cfra && newfra - 0.5 < scene->r.cfra)
 				scene->r.cfra++;
 			else
 				scene->r.cfra = newfra + 0.5;
+
+#ifdef PROFILE_AUDIO_SYNCH
+			newfra_int = scene->r.cfra;
+			if (newfra_int < old_frame) {
+				printf("back jump detected, frame %d!\n", newfra_int);
+			}
+			else if (newfra_int > old_frame + 1) {
+				printf("forward jump detected, frame %d!\n", newfra_int);
+			}
+			fflush(stdout);
+			old_frame = newfra_int;
+#endif
 		}
 		else {
 			if (sync) {
@@ -3509,8 +3530,12 @@ static int screen_animation_step(bContext *C, wmOperator *UNUSED(op), const wmEv
 			sad->flag |= ANIMPLAY_FLAG_JUMPED;
 		}
 		
-		if (sad->flag & ANIMPLAY_FLAG_JUMPED)
-			sound_seek_scene(bmain, scene);
+		if (sad->flag & ANIMPLAY_FLAG_JUMPED) {
+			BKE_sound_seek_scene(bmain, scene);
+#ifdef PROFILE_AUDIO_SYNCH
+			old_frame = CFRA;
+#endif
+		}
 		
 		/* since we follow drawflags, we can't send notifier but tag regions ourselves */
 		ED_update_for_newframe(bmain, scene, 1);
@@ -3610,7 +3635,7 @@ int ED_screen_animation_play(bContext *C, int sync, int mode)
 	if (ED_screen_animation_playing(CTX_wm_manager(C))) {
 		/* stop playback now */
 		ED_screen_animation_timer(C, 0, 0, 0, 0);
-		sound_stop_scene(scene);
+		BKE_sound_stop_scene(scene);
 
 		WM_event_add_notifier(C, NC_SCENE | ND_FRAME, scene);
 	}
@@ -3618,7 +3643,7 @@ int ED_screen_animation_play(bContext *C, int sync, int mode)
 		int refresh = SPACE_TIME; /* these settings are currently only available from a menu in the TimeLine */
 		
 		if (mode == 1)  /* XXX only play audio forwards!? */
-			sound_play_scene(scene);
+			BKE_sound_play_scene(scene);
 		
 		ED_screen_animation_timer(C, screen->redraws_flag, refresh, sync, mode);
 		

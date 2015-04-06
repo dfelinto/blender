@@ -127,7 +127,7 @@ void BKE_armature_free(bArmature *arm)
 
 		/* free animation data */
 		if (arm->adt) {
-			BKE_free_animdata(&arm->id);
+			BKE_animdata_free(&arm->id);
 			arm->adt = NULL;
 		}
 	}
@@ -1700,7 +1700,7 @@ static void pose_proxy_synchronize(Object *ob, Object *from, int layer_protected
 			
 			/* constraints - set target ob pointer to own object */
 			for (con = pchanw.constraints.first; con; con = con->next) {
-				bConstraintTypeInfo *cti = BKE_constraint_typeinfo_get(con);
+				const bConstraintTypeInfo *cti = BKE_constraint_typeinfo_get(con);
 				ListBase targets = {NULL, NULL};
 				bConstraintTarget *ct;
 				
@@ -2238,7 +2238,7 @@ static void splineik_evaluate_bone(tSplineIK_Tree *tree, Scene *scene, Object *o
 					}
 					
 					/* compute scale factor for xz axes from this value */
-					final_scale = sqrt(bulge);
+					final_scale = sqrtf(bulge);
 				}
 				else {
 					/* no scaling, so scale factor is simple */

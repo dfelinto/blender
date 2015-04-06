@@ -44,6 +44,7 @@ set(SRC
 	intern/BLI_array.c
 	intern/BLI_dial.c
 	intern/BLI_dynstr.c
+	intern/BLI_filelist.c
 	intern/BLI_ghash.c
 	intern/BLI_heap.c
 	intern/BLI_kdopbvh.c
@@ -205,10 +206,14 @@ if(WIN32)
 	)
 endif()
 
-blender_add_lib(bf_blenlib "${SRC}" "${INC}" "${INC_SYS}")
+# no need to compile object files for inline headers.
+set_source_files_properties(
+	intern/math_base_inline.c
+	intern/math_color_blend_inline.c
+	intern/math_color_inline.c
+	intern/math_geom_inline.c
+	intern/math_vector_inline.c
+	PROPERTIES HEADER_FILE_ONLY TRUE
+)
 
-if(MSVC)
-	# Quiet warning about inline math library files that do not export symbols.
-	# (normally you'd exclude from project, but we still want to see the files in MSVC)
-	set_target_properties(bf_blenlib PROPERTIES STATIC_LIBRARY_FLAGS /ignore:4221)
-endif()
+blender_add_lib(bf_blenlib "${SRC}" "${INC}" "${INC_SYS}")

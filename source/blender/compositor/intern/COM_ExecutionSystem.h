@@ -27,13 +27,10 @@ class ExecutionGroup;
 
 #include "DNA_color_types.h"
 #include "DNA_node_types.h"
-#include <vector>
 #include "COM_Node.h"
 #include "BKE_text.h"
 #include "COM_ExecutionGroup.h"
 #include "COM_NodeOperation.h"
-
-using namespace std;
 
 /**
  * @page execution Execution model
@@ -154,7 +151,8 @@ public:
 	 * @param rendering [true false]
 	 */
 	ExecutionSystem(RenderData *rd, Scene *scene, bNodeTree *editingtree, bool rendering, bool fastcalculation,
-	                const ColorManagedViewSettings *viewSettings, const ColorManagedDisplaySettings *displaySettings);
+	                const ColorManagedViewSettings *viewSettings, const ColorManagedDisplaySettings *displaySettings,
+	                const char *viewName);
 
 	/**
 	 * Destructor

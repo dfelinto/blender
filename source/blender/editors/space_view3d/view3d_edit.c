@@ -28,7 +28,6 @@
  *  \ingroup spview3d
  */
 
-
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
@@ -38,7 +37,6 @@
 #include "DNA_curve_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
-#include "DNA_camera_types.h"
 
 #include "MEM_guardedalloc.h"
 
@@ -75,7 +73,6 @@
 #include "ED_transform.h"
 #include "ED_mesh.h"
 #include "ED_view3d.h"
-#include "ED_sculpt.h"
 
 #include "UI_resources.h"
 
@@ -4704,16 +4701,24 @@ bool ED_view3d_autodist(Scene *scene, ARegion *ar, View3D *v3d,
 	bglMats mats; /* ZBuffer depth vars */
 	float depth_close;
 	double cent[2],  p[3];
+	int margin_arr[] = {0, 2, 4};
+	int i;
+	bool depth_ok = false;
 
 	/* Get Z Depths, needed for perspective, nice for ortho */
 	bgl_get_mats(&mats);
 	ED_view3d_draw_depth(scene, ar, v3d, alphaoverride);
 
-	depth_close = view_autodist_depth_margin(ar, mval, 4);
+	/* Attempt with low margin's first */
+	i = 0;
+	do {
+		depth_close = view_autodist_depth_margin(ar, mval, margin_arr[i++] * U.pixelsize);
+		depth_ok = (depth_close != FLT_MAX);
+	} while ((depth_ok == false) && (i < ARRAY_SIZE(margin_arr)));
 
-	if (depth_close != FLT_MAX) {
-		cent[0] = (double)mval[0];
-		cent[1] = (double)mval[1];
+	if (depth_ok) {
+		cent[0] = (double)mval[0] + 0.5;
+		cent[1] = (double)mval[1] + 0.5;
 
 		if (gluUnProject(cent[0], cent[1], depth_close,
 		                 mats.modelview, mats.projection, (GLint *)mats.viewport, &p[0], &p[1], &p[2]))
@@ -4764,8 +4769,8 @@ bool ED_view3d_autodist_simple(ARegion *ar, const int mval[2], float mouse_world
 	if (depth == FLT_MAX)
 		return false;
 
-	cent[0] = (double)mval[0];
-	cent[1] = (double)mval[1];
+	cent[0] = (double)mval[0] + 0.5;
+	cent[1] = (double)mval[1] + 0.5;
 
 	bgl_get_mats(&mats);
 

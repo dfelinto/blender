@@ -309,19 +309,23 @@ int list_find_data_fcurves(ListBase *dst, ListBase *src, const char *dataPrefix,
 	return matches;
 }
 
-FCurve *rna_get_fcurve(PointerRNA *ptr, PropertyRNA *prop, int rnaindex, AnimData **adt, bAction **action, bool *r_driven)
+FCurve *rna_get_fcurve(PointerRNA *ptr, PropertyRNA *prop, int rnaindex, AnimData **adt, 
+                       bAction **action, bool *r_driven, bool *r_special)
 {
-	return rna_get_fcurve_context_ui(NULL, ptr, prop, rnaindex, adt, action, r_driven);
+	return rna_get_fcurve_context_ui(NULL, ptr, prop, rnaindex, adt, action, r_driven, r_special);
 }
 
-FCurve *rna_get_fcurve_context_ui(bContext *C, PointerRNA *ptr, PropertyRNA *prop, int rnaindex,
-                                  AnimData **animdata, bAction **action, bool *r_driven)
+FCurve *rna_get_fcurve_context_ui(bContext *C, PointerRNA *ptr, PropertyRNA *prop, int rnaindex, AnimData **animdata,
+                                  bAction **action, bool *r_driven, bool *r_special)
 {
 	FCurve *fcu = NULL;
 	PointerRNA tptr = *ptr;
 	
 	if (animdata) *animdata = NULL;
 	*r_driven = false;
+	*r_special = false;
+	
+	if (action) *action = NULL;
 	
 	/* there must be some RNA-pointer + property combon */
 	if (prop && tptr.id.data && RNA_property_animateable(&tptr, prop)) {
@@ -342,10 +346,15 @@ FCurve *rna_get_fcurve_context_ui(bContext *C, PointerRNA *ptr, PropertyRNA *pro
 					path = RNA_path_from_ID_to_property(&tptr, prop);
 				}
 				
+				// XXX: the logic here is duplicated with a function up above
 				if (path) {
 					/* animation takes priority over drivers */
-					if (adt->action && adt->action->curves.first)
+					if (adt->action && adt->action->curves.first) {
 						fcu = list_find_fcurve(&adt->action->curves, path, rnaindex);
+						
+						if (fcu && action)
+							*action = adt->action;
+					}
 					
 					/* if not animated, check if driven */
 					if (!fcu && (adt->drivers.first)) {
@@ -371,6 +380,32 @@ FCurve *rna_get_fcurve_context_ui(bContext *C, PointerRNA *ptr, PropertyRNA *pro
 						}
 						else {
 							adt = NULL;
+						}
+					}
+				}
+			}
+			
+			/* if we still haven't found anything, check whether it's a "special" property */
+			if ((fcu == NULL) && (adt && adt->nla_tracks.first)) {
+				NlaTrack *nlt;
+				const char *propname = RNA_property_identifier(prop);
+				
+				for (nlt = adt->nla_tracks.first; nlt; nlt = nlt->next) {
+					NlaStrip *strip;
+					
+					if (fcu)
+						break;
+					
+					/* FIXME: need to do recursive search here for correctness, 
+					 * but this will do for most use cases (i.e. interactive editing),
+					 * where nested strips can't be easily edited
+					 */
+					for (strip = nlt->strips.first; strip; strip = strip->next) {
+						fcu = list_find_fcurve(&strip->fcurves, propname, rnaindex);
+						
+						if (fcu) {
+							*r_special = true;
+							break;
 						}
 					}
 				}
@@ -1496,7 +1531,7 @@ static DriverVarTypeInfo dvar_types[MAX_DVAR_TYPES] = {
 };
 
 /* Get driver variable typeinfo */
-static DriverVarTypeInfo *get_dvar_typeinfo(int type)
+static const DriverVarTypeInfo *get_dvar_typeinfo(int type)
 {
 	/* check if valid type */
 	if ((type >= 0) && (type < MAX_DVAR_TYPES))
@@ -1540,7 +1575,7 @@ void driver_free_variable(ChannelDriver *driver, DriverVar *dvar)
 /* Change the type of driver variable */
 void driver_change_variable_type(DriverVar *dvar, int type)
 {
-	DriverVarTypeInfo *dvti = get_dvar_typeinfo(type);
+	const DriverVarTypeInfo *dvti = get_dvar_typeinfo(type);
 	
 	/* sanity check */
 	if (ELEM(NULL, dvar, dvti))
@@ -1664,7 +1699,7 @@ ChannelDriver *fcurve_copy_driver(ChannelDriver *driver)
 /* Evaluate a Driver Variable to get a value that contributes to the final */
 float driver_get_variable_value(ChannelDriver *driver, DriverVar *dvar)
 {
-	DriverVarTypeInfo *dvti;
+	const DriverVarTypeInfo *dvti;
 
 	/* sanity check */
 	if (ELEM(NULL, driver, dvar))

@@ -135,6 +135,35 @@ class DATA_PT_lens(CameraButtonsPanel, Panel):
         col.prop(cam, "clip_end", text="End")
 
 
+class DATA_PT_camera_stereoscopy(CameraButtonsPanel, Panel):
+    bl_label = "Stereoscopy"
+    COMPAT_ENGINES = {'BLENDER_RENDER'}
+
+    @classmethod
+    def poll(cls, context):
+        render = context.scene.render
+        return (super().poll(context) and render.use_multiview \
+                and render.views_format == 'STEREO_3D')
+
+    def draw(self, context):
+        layout = self.layout
+        render = context.scene.render
+        st = context.camera.stereo
+
+        col = layout.column()
+        col.row().prop(st, "convergence_mode", expand=True)
+
+        if st.convergence_mode == 'PARALLEL':
+            col.prop(st, "viewport_convergence")
+        else:
+            col.prop(st, "convergence_distance")
+
+        col.prop(st, "interocular_distance")
+
+        col.label(text="Pivot:")
+        col.row().prop(st, "pivot", expand=True)
+
+
 class DATA_PT_camera(CameraButtonsPanel, Panel):
     bl_label = "Camera"
     COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_GAME'}
@@ -184,16 +213,18 @@ class DATA_PT_camera_dof(CameraButtonsPanel, Panel):
         col = split.column()
         col.label(text="Focus:")
         col.prop(cam, "dof_object", text="")
-        col.prop(dof_options, "use_high_quality")
-
-        col = split.column()
-        col.prop(dof_options, "fstop")
-
         sub = col.column()
         sub.active = (cam.dof_object is None)
         sub.prop(cam, "dof_distance", text="Distance")
 
-        if dof_options.use_high_quality:
+        hq_support = dof_options.is_hq_supported
+        col = split.column(align=True)
+        col.label("Viewport:")
+        sub = col.column()
+        sub.active = hq_support
+        sub.prop(dof_options, "use_high_quality")
+        col.prop(dof_options, "fstop")
+        if dof_options.use_high_quality and hq_support:
             col.prop(dof_options, "blades")
 
 
