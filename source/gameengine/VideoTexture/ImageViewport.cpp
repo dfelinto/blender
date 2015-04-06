@@ -133,7 +133,7 @@ void ImageViewport::calcImage (unsigned int texId, double ts)
 		// reset image
 		init(m_capSize[0], m_capSize[1]);
 	// if texture wasn't initialized
-	if (!m_texInit) {
+	if (!m_texInit && texId != 0) {
 		// initialize it
 		loadTexture(texId, m_image, m_size);
 		m_texInit = true;
