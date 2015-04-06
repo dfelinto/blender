@@ -242,7 +242,6 @@ public:
 };
 
 
-
 #endif	/* WITH_DECKLINK */
 
 #endif  /* __VIDEODECKLINK_H__ */

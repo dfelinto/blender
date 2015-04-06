@@ -52,6 +52,17 @@ struct DeckLink
 
 	// last refresh
 	double m_lastClock;
+	// decklink card to which we output
+	IDeckLinkOutput * mDLOutput;
+	IDeckLinkKeyer * mKeyer;
+	IDeckLinkMutableVideoFrame *mFrame;
+	bool mUse3D;
+	bool mUseKeying;
+	bool mUseExtend;
+	bool mKeyingSupported;
+	bool mHDKeyingSupported;
+	BMDDisplayMode mDisplayMode;
+	short mSize[2];
 
 	// image source
 	PyImage * m_source;
@@ -60,6 +71,10 @@ struct DeckLink
 
 // DeckLink type description
 extern PyTypeObject DeckLinkType;
+
+// helper function
+HRESULT decklink_ReadDisplayMode(const char *format, size_t len, BMDDisplayMode *displayMode);
+HRESULT decklink_ReadPixelFormat(const char *format, size_t len, BMDPixelFormat *displayMode);
 
 #endif	/* WITH_DECKLINK */
 

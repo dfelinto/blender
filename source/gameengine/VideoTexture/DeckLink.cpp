@@ -57,6 +57,211 @@
 #define CATCH_EXCP catch (Exception & exp) \
 { exp.report(); return NULL; }
 
+static struct
+{
+	const char *name;
+	BMDDisplayMode mode;
+} sModeStringTab[] = {
+	{ "NTSC", bmdModeNTSC },
+	{ "NTSC2398", bmdModeNTSC2398 },
+	{ "PAL", bmdModePAL },
+	{ "NTSCp", bmdModeNTSCp },
+	{ "PALp", bmdModePALp },
+
+	/* HD 1080 Modes */
+
+	{ "HD1080p2398", bmdModeHD1080p2398 },
+	{ "HD1080p24", bmdModeHD1080p24 },
+	{ "HD1080p25", bmdModeHD1080p25 },
+	{ "HD1080p2997", bmdModeHD1080p2997 },
+	{ "HD1080p30", bmdModeHD1080p30 },
+	{ "HD1080i50", bmdModeHD1080i50 },
+	{ "HD1080i5994", bmdModeHD1080i5994 },
+	{ "HD1080i6000", bmdModeHD1080i6000 },
+	{ "HD1080p50", bmdModeHD1080p50 },
+	{ "HD1080p5994", bmdModeHD1080p5994 },
+	{ "HD1080p6000", bmdModeHD1080p6000 },
+
+	/* HD 720 Modes */
+
+	{ "HD720p50", bmdModeHD720p50 },
+	{ "HD720p5994", bmdModeHD720p5994 },
+	{ "HD720p60", bmdModeHD720p60 },
+
+	/* 2k Modes */
+
+	{ "2k2398", bmdMode2k2398 },
+	{ "2k24", bmdMode2k24 },
+	{ "2k25", bmdMode2k25 },
+
+	/* DCI Modes (output only) */
+
+	{ "2kDCI2398", bmdMode2kDCI2398 },
+	{ "2kDCI24", bmdMode2kDCI24 },
+	{ "2kDCI25", bmdMode2kDCI25 },
+
+	/* 4k Modes */
+
+	{ "4K2160p2398", bmdMode4K2160p2398 },
+	{ "4K2160p24", bmdMode4K2160p24 },
+	{ "4K2160p25", bmdMode4K2160p25 },
+	{ "4K2160p2997", bmdMode4K2160p2997 },
+	{ "4K2160p30", bmdMode4K2160p30 },
+	{ "4K2160p50", bmdMode4K2160p50 },
+	{ "4K2160p5994", bmdMode4K2160p5994 },
+	{ "4K2160p60", bmdMode4K2160p60 },
+	// sentinel
+	{ NULL }
+};
+
+static struct
+{
+	const char *name;
+	BMDPixelFormat format;
+} sFormatStringTab[] = {
+	{ "8BitYUV", bmdFormat8BitYUV },
+	{ "10BitYUV", bmdFormat10BitYUV },
+	{ "8BitARGB", bmdFormat8BitARGB },
+	{ "8BitBGRA", bmdFormat8BitBGRA },
+	{ "10BitRGB", bmdFormat10BitRGB },
+	{ "12BitRGB", bmdFormat12BitRGB },
+	{ "12BitRGBLE", bmdFormat12BitRGBLE },
+	{ "10BitRGBXLE", bmdFormat10BitRGBXLE },
+	{ "10BitRGBX", bmdFormat10BitRGBX },
+	// sentinel
+	{ NULL }
+};
+
+ExceptionID DeckLinkBadDisplayMode, DeckLinkBadPixelFormat;
+ExpDesc DeckLinkBadDisplayModeDesc(DeckLinkBadDisplayMode, "Invalid or unsupported display mode");
+ExpDesc DeckLinkBadPixelFormatDesc(DeckLinkBadPixelFormat, "Invalid or unsupported pixel format");
+
+HRESULT decklink_ReadDisplayMode(const char *format, size_t len, BMDDisplayMode *displayMode)
+{
+	int i;
+
+	if (len == 0)
+		len = strlen(format);
+	for (i = 0; sModeStringTab[i].name != NULL; i++) {
+		if (strlen(sModeStringTab[i].name) == len &&
+			!strncmp(sModeStringTab[i].name, format, len))
+		{
+			*displayMode = sModeStringTab[i].mode;
+			return S_OK;
+		}
+	}
+	if (len != 4)
+		THRWEXCP(DeckLinkBadDisplayMode, S_OK);
+	// assume the user entered directly the mode value as a 4 char string
+	*displayMode = (BMDDisplayMode)((((u_int)format[0]) << 24) + (((u_int)format[1]) << 16) + (((u_int)format[2]) << 8) + ((u_int)format[3]));
+	return S_OK;
+}
+
+HRESULT decklink_ReadPixelFormat(const char *format, size_t len, BMDPixelFormat *pixelFormat)
+{
+	int i;
+
+	if (!len)
+		len = strlen(format);
+	for (i = 0; sFormatStringTab[i].name != NULL; i++)
+	{
+		if (strlen(sFormatStringTab[i].name) == len &&
+			!strncmp(sFormatStringTab[i].name, format, len))
+		{
+			*pixelFormat = sFormatStringTab[i].format;
+			return S_OK;
+		}
+	}
+	if (len != 4)
+		THRWEXCP(DeckLinkBadPixelFormat, S_OK);
+	// assume the user entered directly the mode value as a 4 char string
+	*pixelFormat = (BMDPixelFormat)((((u_int)format[0]) << 24) + (((u_int)format[1]) << 16) + (((u_int)format[2]) << 8) + ((u_int)format[3]));
+	return S_OK;
+}
+
+static void decklink_Reset(DeckLink *self)
+{
+	self->m_lastClock = 0.0;
+	self->mDLOutput = NULL;
+	self->mUse3D = false;
+	self->mDisplayMode = bmdModeUnknown;
+	self->mKeyingSupported = false;
+	self->mHDKeyingSupported = false;
+	self->mSize[0] = 0;
+	self->mSize[1] = 0;
+	self->mFrame = NULL;
+	self->mKeyer = NULL;
+	self->mUseKeying = false;
+}
+
+#ifdef __BIG_ENDIAN__
+#define CONV_PIXEL(o,i)	(o=((i)>>8)+(((i)&0xFF)<<24))
+#else
+#define CONV_PIXEL(o,i)	(o=((i)<<8)+(((i)&0xFF000000)>>24))
+#endif
+
+// adapt the pixel format from VideoTexture (RGBA) to DeckLink (ARGB)
+static void decklink_ConvImage(u_int *dest, const short *destSize, u_int *source, const short *srcSize, bool extend)
+{
+	short w, h, x, y;
+	u_int *s, *d;
+
+	if ((destSize[0] == srcSize[0] && destSize[1] == srcSize[1]) || !extend)
+	{
+		// here we convert pixel by pixel
+		w = (destSize[0] < srcSize[0]) ? destSize[0] : srcSize[0];
+		h = (destSize[1] < srcSize[1]) ? destSize[1] : srcSize[1];
+		for (y = 0; y < h; ++y)
+		{
+			s = source + y*srcSize[0];
+			d = dest + y*destSize[0];
+			for (x = 0; x < w; ++x, ++s, ++d)
+				CONV_PIXEL(*d, *s);
+		}
+	}
+	else
+	{
+		// here we scale
+		// interpolation accumulator
+		int accHeight = srcSize[1] >> 1;
+		d = dest;
+		s = source;
+		// process image rows
+		for (y = 0; y < srcSize[1]; ++y)
+		{
+			// increase height accum
+			accHeight += destSize[1];
+			// if pixel row has to be drawn
+			if (accHeight >= srcSize[1])
+			{
+				// decrease accum
+				accHeight -= srcSize[1];
+				// width accum
+				int accWidth = srcSize[0] >> 1;
+				// process row
+				for (x = 0; x < srcSize[0]; ++x, ++s)
+				{
+					// increase width accum
+					accWidth += destSize[0];
+					// if pixel has to be drawn
+					if (accWidth >= srcSize[0])
+					{
+						// decrease accum
+						accWidth -= srcSize[0];
+						// convert pixel
+						CONV_PIXEL(*d, *s);
+						// next pixel
+						++d;
+					}
+				}
+			}
+			// if pixel row will not be drawn
+			else
+				// move source pointer to next row
+				s += srcSize[0];
+		}
+	}
+}
 
 // DeckLink object allocation
 static PyObject *DeckLink_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
@@ -64,8 +269,9 @@ static PyObject *DeckLink_new(PyTypeObject *type, PyObject *args, PyObject *kwds
 	// allocate object
 	DeckLink * self = reinterpret_cast<DeckLink*>(type->tp_alloc(type, 0));
 	// initialize object structure
+	decklink_Reset(self);
+	// m_source is a python object, it's handled by python
 	self->m_source = NULL;
-	self->m_lastClock = 0.0;
 	// return allocated object
 	return reinterpret_cast<PyObject*>(self);
 }
@@ -89,14 +295,30 @@ static void DeckLink_dealloc(DeckLink *self)
 }
 
 
-ExceptionID AutoDetectionNotAvail;
+ExceptionID AutoDetectionNotAvail, DeckLinkOpenCard, DeckLinkBadFormat, DeckLinkInternalError;
 ExpDesc AutoDetectionNotAvailDesc(AutoDetectionNotAvail, "Auto detection not yet available");
+ExpDesc DeckLinkOpenCardDesc(DeckLinkOpenCard, "Cannot open card for output");
+ExpDesc DeckLinkBadFormatDesc(DeckLinkBadFormat, "Invalid or unsupported output format, use <mode>[/3D]");
+ExpDesc DeckLinkInternalErrorDesc(DeckLinkInternalError, "DeckLink API internal error, please report");
 
 // DeckLink object initialization
 static int DeckLink_init(DeckLink *self, PyObject *args, PyObject *kwds)
 {
-	// parameters - game object with video texture
-	PyObject *obj = NULL;
+	IDeckLinkIterator*				pIterator;
+	IDeckLinkAttributes*			pAttributes;
+	IDeckLinkDisplayModeIterator*	pDisplayModeIterator;
+	IDeckLinkDisplayMode*			pDisplayMode;
+	IDeckLink*						pDL;
+	char*							p3D;
+	BOOL							flag;
+	size_t							len;
+	int								i;
+	u_int							displayFlags;
+	BMDVideoOutputFlags				outputFlags;
+	BMDDisplayModeSupport			support;
+	u_int*							bytes;
+
+
 	// material ID
 	short cardIdx = 0;
 	// texture ID
@@ -107,11 +329,107 @@ static int DeckLink_init(DeckLink *self, PyObject *args, PyObject *kwds)
 	if (!PyArg_ParseTupleAndKeywords(args, kwds, "|hs",
 		const_cast<char**>(kwlist), &cardIdx, &format))
 		return -1; 
-
 	
-	if (format == NULL)
+	try
 	{
-		THRWEXCP(AutoDetectionNotAvail, S_OK);
+		if (format == NULL)
+		{
+			THRWEXCP(AutoDetectionNotAvail, S_OK);
+		}
+
+		if ((p3D = strchr(format, '/')) != NULL && strcmp(p3D, "/3D"))
+			THRWEXCP(DeckLinkBadFormat, S_OK);
+		self->mUse3D = (p3D) ? true : false;
+		// read the mode
+		len = (p3D) ? (size_t)(p3D - format) : strlen(format);
+		// throws if bad mode
+		decklink_ReadDisplayMode(format, len, &self->mDisplayMode);
+
+		pIterator = BMD_CreateDeckLinkIterator();
+		pDL = NULL;
+		if (pIterator)
+		{
+			i = 0;
+			while (pIterator->Next(&pDL) == S_OK)
+			{
+				if (i == cardIdx)
+				{
+					break;
+				}
+				i++;
+				pDL->Release();
+				pDL = NULL;
+			}
+			pIterator->Release();
+		}
+
+		if (!pDL)
+		{
+			THRWEXCP(DeckLinkOpenCard, S_OK);
+		}
+		// detect the capabilities
+		if (pDL->QueryInterface(IID_IDeckLinkAttributes, (void**)&pAttributes) == S_OK)
+		{
+			if (pAttributes->GetFlag(BMDDeckLinkSupportsInternalKeying, &flag) == S_OK && flag)
+			{
+				self->mKeyingSupported = true;
+				if (pAttributes->GetFlag(BMDDeckLinkSupportsHDKeying, &flag) == S_OK && flag)
+					self->mHDKeyingSupported = true;
+			}
+			pAttributes->Release();
+		}
+
+		if (pDL->QueryInterface(IID_IDeckLinkOutput, (void**)&self->mDLOutput) != S_OK)
+			self->mDLOutput = NULL;
+		if (self->mKeyingSupported)
+			pDL->QueryInterface(IID_IDeckLinkKeyer, (void **)&self->mKeyer);
+		// we don't need the device anymore, release to avoid leaking
+		pDL->Release();
+
+		if (!self->mDLOutput)
+			THRWEXCP(DeckLinkOpenCard, S_OK);
+
+		if (self->mDLOutput->GetDisplayModeIterator(&pDisplayModeIterator) != S_OK)
+			THRWEXCP(DeckLinkInternalError, S_OK);
+
+		displayFlags = (self->mUse3D) ? bmdDisplayModeSupports3D : 0;
+		outputFlags = (self->mUse3D) ? bmdVideoOutputDualStream3D : bmdVideoOutputFlagDefault;
+		pDisplayMode = NULL;
+		while (pDisplayModeIterator->Next(&pDisplayMode) == S_OK)
+		{
+			if (pDisplayMode->GetDisplayMode() == self->mDisplayMode
+				&& (pDisplayMode->GetFlags() & displayFlags) == displayFlags
+				&& self->mDLOutput->DoesSupportVideoMode(self->mDisplayMode, bmdFormat8BitARGB, outputFlags, &support, NULL) == S_OK
+				&& (support == bmdDisplayModeSupported || support == bmdDisplayModeSupportedWithConversion))
+			{
+				break;
+			}
+			pDisplayMode->Release();
+			pDisplayMode = NULL;
+		}
+		pDisplayModeIterator->Release();
+
+		if (!pDisplayMode)
+			THRWEXCP(DeckLinkBadFormat, S_OK);
+		self->mSize[0] = pDisplayMode->GetWidth();
+		self->mSize[1] = pDisplayMode->GetHeight();
+		pDisplayMode->Release();
+		if (self->mDLOutput->EnableVideoOutput(self->mDisplayMode, outputFlags) != S_OK)
+			// this shouldn't fail
+			THRWEXCP(DeckLinkOpenCard, S_OK);
+
+		if (self->mDLOutput->CreateVideoFrame(self->mSize[0], self->mSize[1], self->mSize[0] * 4, bmdFormat8BitARGB, bmdFrameFlagFlipVertical, &self->mFrame) != S_OK)
+			THRWEXCP(DeckLinkInternalError, S_OK);
+
+		// clear alpha channel in the frame buffer
+		self->mFrame->GetBytes((void **)&bytes);
+		memset(bytes, 0, 4 * self->mSize[0] * self->mSize[1]);
+	}
+	catch (Exception & exp)
+	{ 
+		exp.report(); 
+		// normally, the object should be deallocated
+		return -1;
 	}
 	// initialization succeeded
 	return 0;
@@ -121,6 +439,13 @@ static int DeckLink_init(DeckLink *self, PyObject *args, PyObject *kwds)
 // close added decklink
 PyObject *DeckLink_close(DeckLink * self)
 {
+	if (self->mFrame)
+		self->mFrame->Release();
+	if (self->mKeyer)
+		self->mKeyer->Release();
+	if (self->mDLOutput)
+		self->mDLOutput->Release();
+	decklink_Reset(self);
 	Py_RETURN_NONE;
 }
 
@@ -151,14 +476,20 @@ static PyObject *DeckLink_refresh(DeckLink *self, PyObject *args)
 		try
 		{
 			// if source is available
-			if (self->m_source != NULL)
+			if (self->m_source != NULL && self->mFrame != NULL)
 			{
 				// get texture
-				unsigned int * texture = self->m_source->m_image->getImage(0, ts);
+				unsigned int * image = self->m_source->m_image->getImage(0, ts);
 				// if texture is available
-				if (texture != NULL)
+				if (image != NULL)
 				{
-					;
+					// we must adapt the image to the frame 1) in size 2) in byte order
+					// VideoTexture frame are RGBA, Decklink ARGB (or BGRA but it doesn't help)
+					short * srcSize = self->m_source->m_image->getSize();
+					u_int *dest;
+					self->mFrame->GetBytes((void **)&dest);
+					decklink_ConvImage(dest, self->mSize, image, srcSize, self->mUseExtend);
+					self->mDLOutput->DisplayVideoFrameSync(self->mFrame);
 				}
 				// refresh texture source, if required
 				if (refreshSource) self->m_source->m_image->refresh();
@@ -203,6 +534,56 @@ int DeckLink_setSource(DeckLink *self, PyObject *value, void *closure)
 	return 0;
 }
 
+static PyObject *DeckLink_getKeying(DeckLink *self, PyObject *value, void *closure)
+{
+	if (self->mUseKeying) Py_RETURN_TRUE;
+	else Py_RETURN_FALSE;
+}
+
+static int DeckLink_setKeying(DeckLink *self, PyObject *value, void *closure)
+{
+	if (value == NULL || !PyBool_Check(value))
+	{
+		PyErr_SetString(PyExc_TypeError, "The value must be a bool");
+		return -1;
+	}
+	if (self->mKeyer != NULL)
+	{
+		if (value == Py_True)
+		{
+			if (self->mKeyer->Enable(false) != S_OK)
+			{
+				PyErr_SetString(PyExc_RuntimeError, "Error enabling keyer");
+				return -1;
+			}
+			self->mUseKeying = true;
+		}
+		else
+		{
+			self->mKeyer->Disable();
+			self->mUseKeying = false;
+		}
+	}
+	// success
+	return 0;
+}
+
+static PyObject *DeckLink_getExtend(DeckLink *self, PyObject *value, void *closure)
+{
+	if (self->mUseExtend) Py_RETURN_TRUE;
+	else Py_RETURN_FALSE;
+}
+
+static int DeckLink_setExtend(DeckLink *self, PyObject *value, void *closure)
+{
+	if (value == NULL || !PyBool_Check(value))
+	{
+		PyErr_SetString(PyExc_TypeError, "The value must be a bool");
+		return -1;
+	}
+	self->mUseExtend = (value == Py_True);
+	return 0;
+}
 
 // class DeckLink methods
 static PyMethodDef decklinkMethods[] =
@@ -216,7 +597,9 @@ static PyMethodDef decklinkMethods[] =
 static PyGetSetDef decklinkGetSets[] =
 { 
 	{(char*)"source", (getter)DeckLink_getSource, (setter)DeckLink_setSource, (char*)"source of decklink", NULL},
-	{NULL}
+	{ (char*)"keying", (getter)DeckLink_getKeying, (setter)DeckLink_setKeying, (char*)"whether keying is enabled", NULL },
+	{ (char*)"extend", (getter)DeckLink_getExtend, (setter)DeckLink_setExtend, (char*)"whether image should stretched to fit frame", NULL },
+	{ NULL }
 };
 
 

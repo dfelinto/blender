@@ -40,91 +40,16 @@
 #include "MEM_guardedalloc.h"
 #include "PIL_time.h"
 #include "VideoDeckLink.h"
+#include "DeckLink.h"
 #include "Exception.h"
 #include "KX_KetsjiEngine.h"
 #include "KX_PythonInit.h"
 
-static struct 
-{
-	const char *name;
-	BMDDisplayMode mode;
-} sModeStringTab[] = {
-	{ "NTSC", bmdModeNTSC },
-	{ "NTSC2398", bmdModeNTSC2398 },
-	{ "PAL", bmdModePAL },
-	{ "NTSCp", bmdModeNTSCp },
-	{ "PALp", bmdModePALp },
-
-	/* HD 1080 Modes */
-
-	{ "HD1080p2398", bmdModeHD1080p2398 },
-	{ "HD1080p24", bmdModeHD1080p24 },
-	{ "HD1080p25", bmdModeHD1080p25 },
-	{ "HD1080p2997", bmdModeHD1080p2997 },
-	{ "HD1080p30", bmdModeHD1080p30 },
-	{ "HD1080i50", bmdModeHD1080i50 },
-	{ "HD1080i5994", bmdModeHD1080i5994 },
-	{ "HD1080i6000", bmdModeHD1080i6000 },
-	{ "HD1080p50", bmdModeHD1080p50 },
-	{ "HD1080p5994", bmdModeHD1080p5994 },
-	{ "HD1080p6000", bmdModeHD1080p6000 },
-
-	/* HD 720 Modes */
-
-	{ "HD720p50", bmdModeHD720p50 },
-	{ "HD720p5994", bmdModeHD720p5994 },
-	{ "HD720p60", bmdModeHD720p60 },
-
-	/* 2k Modes */
-
-	{ "2k2398", bmdMode2k2398 },
-	{ "2k24", bmdMode2k24 },
-	{ "2k25", bmdMode2k25 },
-
-	/* DCI Modes (output only) */
-
-	{ "2kDCI2398", bmdMode2kDCI2398 },
-	{ "2kDCI24", bmdMode2kDCI24 },
-	{ "2kDCI25", bmdMode2kDCI25 },
-
-	/* 4k Modes */
-
-	{ "4K2160p2398", bmdMode4K2160p2398 },
-	{ "4K2160p24", bmdMode4K2160p24 },
-	{ "4K2160p25", bmdMode4K2160p25 },
-	{ "4K2160p2997", bmdMode4K2160p2997 },
-	{ "4K2160p30", bmdMode4K2160p30 },
-	{ "4K2160p50", bmdMode4K2160p50 },
-	{ "4K2160p5994", bmdMode4K2160p5994 },
-	{ "4K2160p60", bmdMode4K2160p60 },
-	// sentinel
-	{ NULL }
-};
-
-
-static struct 
-{
-	const char *name;
-	BMDPixelFormat format;
-} sFormatStringTab[] = {
-	{ "8BitYUV", bmdFormat8BitYUV },
-	{ "10BitYUV", bmdFormat10BitYUV },
-	{ "8BitARGB", bmdFormat8BitARGB },
-	{ "8BitBGRA", bmdFormat8BitBGRA },
-	{ "10BitRGB", bmdFormat10BitRGB },
-	{ "12BitRGB", bmdFormat12BitRGB },
-	{ "12BitRGBLE", bmdFormat12BitRGBLE },
-	{ "10BitRGBXLE", bmdFormat10BitRGBXLE },
-	{ "10BitRGBX", bmdFormat10BitRGBX },
-	// sentinel
-	{ NULL }
-};
-
-ExceptionID SourceVideoOnlyCapture, VideoDeckLinkBadFormat, VideoDeckLinkOpenCard, VideoDeckLinkInternalError, VideoDeckLinkDvpInternalError;
+extern ExceptionID DeckLinkInternalError;
+ExceptionID SourceVideoOnlyCapture, VideoDeckLinkBadFormat, VideoDeckLinkOpenCard, VideoDeckLinkDvpInternalError;
 ExpDesc SourceVideoOnlyCaptureDesc(SourceVideoOnlyCapture, "This video source only allows live capture");
 ExpDesc VideoDeckLinkBadFormatDesc(VideoDeckLinkBadFormat, "Invalid or unsupported capture format, should be <mode>/<pixel>[/3D]");
 ExpDesc VideoDeckLinkOpenCardDesc(VideoDeckLinkOpenCard, "Cannot open capture card, check if driver installed");
-ExpDesc VideoDeckLinkInternalErrorDesc(VideoDeckLinkInternalError, "DeckLink API internal error, please report");
 ExpDesc VideoDeckLinkDvpInternalErrorDesc(VideoDeckLinkDvpInternalError, "DVP API internal error, please report");
 
 
@@ -641,7 +566,7 @@ VideoDeckLink::~VideoDeckLink ()
 		mDLInput->DisableVideoInput();
 		mDLInput->FlushStreams();
 		if (mDLInput->Release() != 0)
-			THRWEXCP(VideoDeckLinkInternalError, S_OK);
+			THRWEXCP(DeckLinkInternalError, S_OK);
 		mDLInput = NULL;
 	}
 	
@@ -649,7 +574,7 @@ VideoDeckLink::~VideoDeckLink ()
 	{
 		// if the device was properly cleared, this should be 0
 		if (mpAllocator->Release() != 0)
-			THRWEXCP(VideoDeckLinkInternalError, S_OK);
+			THRWEXCP(DeckLinkInternalError, S_OK);
 		mpAllocator = NULL;
 	}
 	if (mpCaptureDelegate)
@@ -694,26 +619,6 @@ void VideoDeckLink::openCam (char *format, short camIdx)
 	size_t len;
 	int i;
 
-	// open the card
-	pIterator = BMD_CreateDeckLinkIterator();
-	pDL = NULL;
-	if (pIterator) 
-	{
-		i = 0;
-		while (pIterator->Next(&pDL) == S_OK) 
-		{
-			if (i == camIdx) 
-			{
-				if (pDL->QueryInterface(IID_IDeckLinkInput, (void**)&mDLInput) != S_OK)
-					mDLInput = NULL;
-				break;
-			}
-			i++;
-		}
-	}
-	if (!mDLInput)
-		THRWEXCP(VideoDeckLinkOpenCard, S_OK);
-
 	// format is constructed as <displayMode>/<pixelFormat>[/3D]
 	// <displayMode> takes the form of BMDDisplayMode identifier minus the 'bmdMode' prefix.
 	//               This implementation understands all the modes defined in SDK 10.3.1 but you can alternatively
@@ -733,45 +638,41 @@ void VideoDeckLink::openCam (char *format, short camIdx)
 	mUse3D = (p3D) ? true : false;
 	// read the mode
 	len = (size_t)(pPixel - format);
+	// throws if bad mode
+	decklink_ReadDisplayMode(format, len, &mDisplayMode);
+	// skip /
 	pPixel++;
-	for (i = 0; sModeStringTab[i].name != NULL; i++) {
-		if (strlen(sModeStringTab[i].name) == len &&
-			!strncmp(sModeStringTab[i].name, format, len)) 
-		{
-			mDisplayMode = sModeStringTab[i].mode;
-			break;
-		}
-	}
-	if (!mDisplayMode) 
-	{
-		if (len != 4)
-			THRWEXCP(VideoDeckLinkBadFormat, S_OK);
-		// assume the user entered directly the mode value as a 4 char string
-		mDisplayMode = (BMDDisplayMode)((((u_int)format[0]) << 24) + (((u_int)format[1]) << 16) + (((u_int)format[2]) << 8) + ((u_int)format[3]));
-	}
-	// read the pixel
 	len = ((mUse3D) ? (size_t)(p3D - pPixel) : strlen(pPixel));
-	for (i = 0; sFormatStringTab[i].name != NULL; i++) 
+	// throws if bad format
+	decklink_ReadPixelFormat(pPixel, len, &mPixelFormat);
+
+	// Caution: DeckLink API used from this point, make sure entity are released before throwing
+	// open the card
+	pIterator = BMD_CreateDeckLinkIterator();
+	if (pIterator) 
 	{
-		if (strlen(sFormatStringTab[i].name) == len &&
-			!strncmp(sFormatStringTab[i].name, format, len)) 
+		i = 0;
+		while (pIterator->Next(&pDL) == S_OK) 
 		{
-			mPixelFormat = sFormatStringTab[i].format;
-			break;
+			if (i == camIdx) 
+			{
+				if (pDL->QueryInterface(IID_IDeckLinkInput, (void**)&mDLInput) != S_OK)
+					mDLInput = NULL;
+				pDL->Release();
+				break;
+			}
+			i++;
+			pDL->Release();
 		}
+		pIterator->Release();
 	}
-	if (!mPixelFormat) 
-	{
-		if (len != 4)
-			THRWEXCP(VideoDeckLinkBadFormat, S_OK);
-		// assume the user entered directly the mode value as a 4 char string
-		mPixelFormat = (BMDPixelFormat)((((u_int)pPixel[0]) << 24) + (((u_int)pPixel[1]) << 16) + (((u_int)pPixel[2]) << 8) + ((u_int)pPixel[3]));
-	}
-	
+	if (!mDLInput)
+		THRWEXCP(VideoDeckLinkOpenCard, S_OK);
+
 	
 	// check if display mode and pixel format are supported
 	if (mDLInput->GetDisplayModeIterator(&pDLDisplayModeIterator) != S_OK)
-		THRWEXCP(VideoDeckLinkInternalError, S_OK);
+		THRWEXCP(DeckLinkInternalError, S_OK);
 
 	pDLDisplayMode = NULL;
 	displayFlags = (mUse3D) ? bmdDisplayModeSupports3D : 0;
@@ -795,6 +696,7 @@ void VideoDeckLink::openCam (char *format, short camIdx)
 	mFrameHeight = pDLDisplayMode->GetHeight();
 	mTextureDesc.height = (mUse3D) ? 2 * mFrameHeight : mFrameHeight;
 	pDLDisplayMode->GetFrameRate(&frameDuration, &frameTimescale);
+	pDLDisplayMode->Release();
 	// for information, in case the application wants to know
 	m_size[0] = mFrameWidth;
 	m_size[1] = mTextureDesc.height;
@@ -865,15 +767,15 @@ void VideoDeckLink::openCam (char *format, short camIdx)
 	mpAllocator = new PinnedMemoryAllocator(3, mFrameWidth*mTextureDesc.height * 4 * 10);
 
 	if (mDLInput->SetVideoInputFrameMemoryAllocator(mpAllocator) != S_OK)
-		THRWEXCP(VideoDeckLinkInternalError, S_OK);
+		THRWEXCP(DeckLinkInternalError, S_OK);
 
 	if (mDLInput->EnableVideoInput(mDisplayMode, mPixelFormat, ((mUse3D) ? bmdVideoInputDualStream3D : bmdVideoInputFlagDefault)) != S_OK)
 		// this shouldn't failed, we tested above
-		THRWEXCP(VideoDeckLinkInternalError, S_OK); 
+		THRWEXCP(DeckLinkInternalError, S_OK); 
 
 	mpCaptureDelegate = new CaptureDelegate(this);
 	if (mDLInput->SetCallback(mpCaptureDelegate) != S_OK)
-		THRWEXCP(VideoDeckLinkInternalError, S_OK);
+		THRWEXCP(DeckLinkInternalError, S_OK);
 
 	// open base class
 	VideoBase::openCam(format, camIdx);
@@ -997,7 +899,7 @@ void VideoDeckLink::calcImage (unsigned int texId, double ts)
 				}
 			}
 		} 
-		catch (Exception & exp)
+		catch (Exception &)
 		{
 			pFrame->Release();
 			throw;
