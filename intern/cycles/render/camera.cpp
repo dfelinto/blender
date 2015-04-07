@@ -54,7 +54,7 @@ Camera::Camera()
 	fov = M_PI_4_F;
 	stereo_eye = STEREO_NONE;
 	interocular_distance = 0.065f;
-	convergence_distance = 30.f * 0.065f;
+	convergence_distance = 30.0f * 0.065f;
 
 	sensorwidth = 0.036f;
 	sensorheight = 0.024f;
