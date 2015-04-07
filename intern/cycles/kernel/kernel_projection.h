@@ -246,13 +246,7 @@ ccl_device float3 panorama_stereo_direction(KernelGlobals *kg, float3 dir, float
 	screenpos = pos + (normalize(dir) * kernel_data.cam.convergence_distance);
 	dirnew = screenpos - newpos;
 
-	switch(kernel_data.cam.stereo_eye) {
-		case STEREO_LEFT:
-			return dirnew;
-		case STEREO_RIGHT:
-			return dirnew;
-	}
-	return dir;
+	return dirnew;
 }
 
 CCL_NAMESPACE_END
