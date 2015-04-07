@@ -761,13 +761,6 @@ elseif(WIN32)
 		)
 	endif()
 
-	if(WITH_DECKLINK)
-		install(FILES
-				${LIBDIR}/NVIDIA_GPUDirect/lib/dvp.dll
-			DESTINATION "."
-		)
-	endif()
-
 	if(WITH_SDL)
 		install(
 			FILES ${LIBDIR}/sdl/lib/SDL2.dll

@@ -242,6 +242,7 @@ mUnpinnedTextureBuffer(0)
 		// we must use special DVP API only available for Quadro cards
 		const char* renderer = (const char *)glGetString(GL_RENDERER);
 		mHasDvp = (strstr(renderer, "Quadro") != NULL);
+
 		if (mHasDvp)
 		{
 			DVP_CHECK(dvpInitGLContext(DVP_DEVICE_FLAGS_SHARE_APP_CONTEXT));

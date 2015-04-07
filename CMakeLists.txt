@@ -1351,8 +1351,6 @@ elseif(WIN32)
 			)
 		endif()
 
-		set(NVIDIA_GPUDIRECT_INCLUDE_DIRS ${LIBDIR}/NVIDIA_GPUDirect/include)
-
 		if(WITH_CODEC_FFMPEG)
 			set(FFMPEG_INCLUDE_DIRS
 				${LIBDIR}/ffmpeg/include
@@ -1371,15 +1369,6 @@ elseif(WIN32)
 					${LIBDIR}/ffmpeg/lib/swscale-2.lib
 					)
 			endif()
-		endif()
-
-		if(WITH_DECKLINK)
-			set(NVIDIA_GPUDIRECT_LIBRARIES
-				${LIBDIR}/NVIDIA_GPUDirect/lib/dvp.lib
-			)
-			set(NVIDIA_GPUDIRECT_LIBPATH
-				${LIBDIR}/NVIDIA_GPUDirect/lib
-			)
 		endif()
 
 		if(WITH_IMAGE_OPENEXR)

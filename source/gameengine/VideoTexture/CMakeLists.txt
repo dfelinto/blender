@@ -46,6 +46,7 @@ set(INC
 	../../../intern/guardedalloc
 	../../../intern/string
 	../../../intern/decklink
+	../../../intern/gpudirect
 )
 
 set(INC_SYS
@@ -111,9 +112,6 @@ if(WITH_CODEC_FFMPEG)
 endif()
 
 if(WITH_DECKLINK)
-	list(APPEND INC_SYS
-		${NVIDIA_GPUDIRECT_INCLUDE_DIRS}
-	)
 	add_definitions(-DWITH_DECKLINK)
 endif()
 

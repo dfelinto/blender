@@ -48,7 +48,7 @@ extern "C" {
 }
 #include "GL/glew.h"
 #ifdef WIN32
-#include "dvpapi_gl.h"
+#include "dvpapi.h"
 #endif
 #include "DeckLinkAPI.h"
 #include "VideoBase.h"
