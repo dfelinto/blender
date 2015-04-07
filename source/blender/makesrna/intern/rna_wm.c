@@ -49,7 +49,6 @@ static EnumPropertyItem event_keymouse_value_items[] = {
 	{KM_PRESS, "PRESS", 0, "Press", ""},
 	{KM_RELEASE, "RELEASE", 0, "Release", ""},
 	{KM_CLICK, "CLICK", 0, "Click", ""},
-	{KM_HOLD, "HOLD", 0, "Hold", ""},
 	{KM_DBL_CLICK, "DOUBLE_CLICK", 0, "Double Click", ""},
 	{0, NULL, 0, NULL, NULL}
 };
@@ -381,7 +380,6 @@ EnumPropertyItem event_value_items[] = {
 	{KM_PRESS, "PRESS", 0, "Press", ""},
 	{KM_RELEASE, "RELEASE", 0, "Release", ""},
 	{KM_CLICK, "CLICK", 0, "Click", ""},
-	{KM_HOLD, "HOLD", 0, "Hold", ""},
 	{KM_DBL_CLICK, "DOUBLE_CLICK", 0, "Double Click", ""},
 	{EVT_GESTURE_N, "NORTH", 0, "North", ""},
 	{EVT_GESTURE_NE, "NORTH_EAST", 0, "North-East", ""},
@@ -1758,7 +1756,7 @@ static void rna_def_window_stereo3d(BlenderRNA *brna)
 	srna = RNA_def_struct(brna, "Stereo3dDisplay", NULL);
 	RNA_def_struct_sdna(srna, "Stereo3dFormat");
 	RNA_def_struct_clear_flag(srna, STRUCT_UNDO);
-	RNA_def_struct_ui_text(srna, "Stereo 3d Display", "Settings for stereo 3d display");
+	RNA_def_struct_ui_text(srna, "Stereo 3D Display", "Settings for stereo 3D display");
 
 	prop = RNA_def_property(srna, "display_mode", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_items(prop, stereo3d_display_items);

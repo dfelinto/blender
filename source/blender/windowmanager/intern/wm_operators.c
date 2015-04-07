@@ -4855,6 +4855,7 @@ static void WM_OT_stereo3d_set(wmOperatorType *ot)
 	ot->invoke = wm_stereo3d_set_invoke;
 	ot->poll = WM_operator_winactive;
 	ot->ui = wm_stereo3d_set_draw;
+	ot->check = wm_stereo3d_set_check;
 	ot->cancel = wm_stereo3d_set_cancel;
 
 	prop = RNA_def_enum(ot->srna, "display_mode", stereo3d_display_items, S3D_DISPLAY_ANAGLYPH, "Display Mode", "");
@@ -5149,7 +5150,7 @@ void wm_window_keymap(wmKeyConfig *keyconf)
 	WM_keymap_verify_item(keymap, "WM_OT_debug_menu", DKEY, KM_PRESS, KM_ALT | KM_CTRL, 0);
 
 	/* menus that can be accessed anywhere in blender */
-	WM_keymap_verify_item(keymap, "WM_OT_search_menu", SPACEKEY, KM_CLICK, 0, 0);
+	WM_keymap_verify_item(keymap, "WM_OT_search_menu", SPACEKEY, KM_PRESS, 0, 0);
 	WM_keymap_add_menu(keymap, "USERPREF_MT_ndof_settings", NDOF_BUTTON_MENU, KM_PRESS, 0, 0);
 
 	/* Space switching */
