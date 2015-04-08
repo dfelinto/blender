@@ -104,8 +104,6 @@ endif()
 		bf_intern_string 
 		bf_intern_ghost
 		bf_intern_ghostndof3dconnexion
-		bf_intern_decklink
-		bf_intern_gpudirect
 		bf_rna
 		bf_blenkernel
 		bf_physics
@@ -210,6 +208,14 @@ endif()
 	if(WITH_INTERNATIONAL)
 		list(APPEND BLENDER_SORTED_LIBS bf_intern_locale)
 	endif()
+
+        if(WITH_DECKLINK)
+                list(APPEND BLENDER_SORTED_LIBS bf_intern_decklink)
+        endif()
+
+        if(WIN32)
+                list(APPEND BLENDER_SORTED_LIBS bf_intern_gpudirect)
+        endif()
 
 	foreach(SORTLIB ${BLENDER_SORTED_LIBS})
 		set(REMLIB ${SORTLIB})

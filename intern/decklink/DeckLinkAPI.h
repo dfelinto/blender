@@ -31,7 +31,16 @@
 
 #ifdef WIN32
 	#include "win/DeckLinkAPI_h.h"
+    typedef unsigned long   dl_size_t;
+#else
+    #include "linux/DeckLinkAPI.h"
+    /* Windows COM API uses BOOL, linux uses bool */
+    #define BOOL bool
+    typedef uint32_t    dl_size_t;
 #endif
+
+
+
 
 /* OS independent function to get the device iterator */
 IDeckLinkIterator* BMD_CreateDeckLinkIterator(void);

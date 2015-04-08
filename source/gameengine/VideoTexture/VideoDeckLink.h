@@ -72,6 +72,8 @@ struct TextureDesc
 	}
 };
 
+class CaptureDelegate;
+
 // type VideoDeckLink declaration
 class VideoDeckLink : public VideoBase
 {
@@ -183,7 +185,7 @@ public:
 	virtual ULONG STDMETHODCALLTYPE		Release(void);
 
 	// IDeckLinkMemoryAllocator methods
-	virtual HRESULT STDMETHODCALLTYPE	AllocateBuffer(unsigned long bufferSize, void* *allocatedBuffer);
+    virtual HRESULT STDMETHODCALLTYPE	AllocateBuffer(dl_size_t bufferSize, void* *allocatedBuffer);
 	virtual HRESULT STDMETHODCALLTYPE	ReleaseBuffer(void* buffer);
 	virtual HRESULT STDMETHODCALLTYPE	Commit();
 	virtual HRESULT STDMETHODCALLTYPE	Decommit();

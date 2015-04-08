@@ -393,7 +393,7 @@ ULONG STDMETHODCALLTYPE		PinnedMemoryAllocator::Release(void)
 }
 
 // IDeckLinkMemoryAllocator methods
-HRESULT STDMETHODCALLTYPE	PinnedMemoryAllocator::AllocateBuffer(unsigned long bufferSize, void* *allocatedBuffer)
+HRESULT STDMETHODCALLTYPE	PinnedMemoryAllocator::AllocateBuffer(dl_size_t bufferSize, void* *allocatedBuffer)
 {
 	Lock();
 	if (mBufferCache.empty())
@@ -881,7 +881,7 @@ void VideoDeckLink::calcImage (unsigned int texId, double ts)
 				if (mUse3D) {
 					IDeckLinkVideoFrame3DExtensions *if3DExtensions = NULL;
 					IDeckLinkVideoFrame *rightEyeFrame = NULL;
-					if (pFrame->QueryInterface(&if3DExtensions) == S_OK &&
+                    if (pFrame->QueryInterface(IID_IDeckLinkVideoFrame3DExtensions, (void **)&if3DExtensions) == S_OK &&
 						if3DExtensions->GetFrameForRightEye(&rightEyeFrame) == S_OK) {
 						rightEyeFrame->GetBytes(&rightEyePixels);
 						textureSize += ((uint64_t)rightEyePixels - (uint64_t)videoPixels);

@@ -43,5 +43,19 @@ if (WIN32)
 	)
 endif()
 
+if (UNIX AND NOT APPLE)
+        list(APPEND SRC
+                linux/DeckLinkAPI.h
+                linux/DeckLinkAPIConfiguration.h
+                linux/DeckLinkAPIDeckControl.h
+                linux/DeckLinkAPIDiscovery.h
+                linux/DeckLinkAPIDispatch.cpp
+                linux/DeckLinkAPIModes.h
+                linux/DeckLinkAPIVersion.h
+                linux/DeckLinkAPITypes.h
+                linux/LinuxCOM.h
+        )
+endif()
+
 
 blender_add_lib(bf_intern_decklink "${SRC}" "${INC}" "${INC_SYS}")

@@ -43,4 +43,9 @@ IDeckLinkIterator* BMD_CreateDeckLinkIterator(void)
 		return NULL;
 	return pDLIterator;
 }
-#endif
+#else
+IDeckLinkIterator* BMD_CreateDeckLinkIterator(void)
+{
+    return CreateDeckLinkIteratorInstance();
+}
+#endif  // WIN32
