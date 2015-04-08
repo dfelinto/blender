@@ -61,6 +61,7 @@ struct DeckLink
 	bool mUseExtend;
 	bool mKeyingSupported;
 	bool mHDKeyingSupported;
+	uint8_t mKeyingLevel;
 	BMDDisplayMode mDisplayMode;
 	short mSize[2];
 

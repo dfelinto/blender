@@ -192,6 +192,7 @@ static void decklink_Reset(DeckLink *self)
 	self->mFrame = NULL;
 	self->mKeyer = NULL;
 	self->mUseKeying = false;
+	self->mKeyingLevel = 255;
 }
 
 #ifdef __BIG_ENDIAN__
@@ -557,11 +558,43 @@ static int DeckLink_setKeying(DeckLink *self, PyObject *value, void *closure)
 				return -1;
 			}
 			self->mUseKeying = true;
+			self->mKeyer->SetLevel(self->mKeyingLevel);
 		}
 		else
 		{
 			self->mKeyer->Disable();
 			self->mUseKeying = false;
+		}
+	}
+	// success
+	return 0;
+}
+
+static PyObject *DeckLink_getLevel(DeckLink *self, PyObject *value, void *closure)
+{
+	return Py_BuildValue("h", self->mKeyingLevel);
+}
+
+static int DeckLink_setLevel(DeckLink *self, PyObject *value, void *closure)
+{
+	long level;
+	if (value == NULL || !PyLong_Check(value))
+	{
+		PyErr_SetString(PyExc_TypeError, "The value must be an integer from 0 to 255");
+		return -1;
+	}
+	level = PyLong_AsLong(value);
+	if (level > 255)
+		level = 255;
+	else if (level < 0)
+		level = 0;
+	self->mKeyingLevel = (uint8_t)level;
+	if (self->mUseKeying)
+	{
+		if (self->mKeyer->SetLevel(self->mKeyingLevel) != S_OK)
+		{
+			PyErr_SetString(PyExc_RuntimeError, "Error changin level of keyer");
+			return -1;
 		}
 	}
 	// success
@@ -597,7 +630,8 @@ static PyMethodDef decklinkMethods[] =
 static PyGetSetDef decklinkGetSets[] =
 { 
 	{(char*)"source", (getter)DeckLink_getSource, (setter)DeckLink_setSource, (char*)"source of decklink", NULL},
-	{ (char*)"keying", (getter)DeckLink_getKeying, (setter)DeckLink_setKeying, (char*)"whether keying is enabled", NULL },
+	{ (char*)"keying", (getter)DeckLink_getKeying, (setter)DeckLink_setKeying, (char*)"whether keying is enabled (frame is alpha-composited with passthrough output)", NULL },
+	{ (char*)"level", (getter)DeckLink_getLevel, (setter)DeckLink_setLevel, (char*)"change the level of keying (overall alpha level of key frame, 0 to 255)", NULL },
 	{ (char*)"extend", (getter)DeckLink_getExtend, (setter)DeckLink_setExtend, (char*)"whether image should stretched to fit frame", NULL },
 	{ NULL }
 };
