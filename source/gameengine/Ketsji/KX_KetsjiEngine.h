@@ -194,6 +194,8 @@ private:
 	float					m_overrideFrameColorG;
 	/** Blue component of framing bar color. */
 	float					m_overrideFrameColorB;
+	/** alpha component of framing bar color. */
+	float					m_overrideFrameColorA;
 
 	/** Settings that doesn't go away with Game Actuator */
 	GlobalSettings m_globalsettings;
@@ -439,7 +441,7 @@ public:
 	 * \param g Green component of the override color.
 	 * \param b Blue component of the override color.
 	 */
-	void SetOverrideFrameColor(float r, float g, float b);
+	void SetOverrideFrameColor(float r, float g, float b, float a);
 
 	/** 
 	 * Returns the color used for framing bar color instead of the one in the Blender file's scenes.
@@ -447,7 +449,7 @@ public:
 	 * \param g Green component of the override color.
 	 * \param b Blue component of the override color.
 	 */
-	void GetOverrideFrameColor(float& r, float& g, float& b) const;
+	void GetOverrideFrameColor(float& r, float& g, float& b, float& a) const;
 
 	KX_Scene*		CreateScene(const STR_String& scenename);
 	KX_Scene*		CreateScene(Scene *scene, bool libloading=false);

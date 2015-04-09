@@ -1,5 +1,4 @@
-/*
- * ***** BEGIN GPL LICENSE BLOCK *****
+/* ***** BEGIN GPL LICENSE BLOCK *****
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -241,8 +240,9 @@ public:
 	 * \param   height          The height the window.
 	 * \param   state           The state of the window when opened.
 	 * \param   type            The type of drawing context installed in this window.
-	 * \param   stereoVisual    Create a stereo visual for quad buffered stereo.
-	 * \param   numOfAASamples  Number of samples used for AA (zero if no AA)
+	 * \param   stereoVisual    (in glSettings) Create a stereo visual for quad buffered stereo.
+	 * \param   alphaBackground (in glSettings) Enable transparency of the window with the display background
+	 * \param   numOfAASamples  (in glSettings) Number of samples used for AA (zero if no AA)
 	 * \param   parentWindow    Parent (embedder) window
 	 * \return  The new window (or 0 if creation failed).
 	 */
@@ -277,7 +277,7 @@ public:
 	 */
 	virtual GHOST_TSuccess beginFullScreen(
 	        const GHOST_DisplaySetting& setting, GHOST_IWindow **window,
-	        const bool stereoVisual, const GHOST_TUns16 numOfAASamples = 0) = 0;
+	        const bool stereoVisual, const bool alphaBackground = 0, const GHOST_TUns16 numOfAASamples = 0) = 0;
 
 	/**
 	 * Updates the resolution while in fullscreen mode.

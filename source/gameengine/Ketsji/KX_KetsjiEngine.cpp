@@ -172,6 +172,7 @@ KX_KetsjiEngine::KX_KetsjiEngine(KX_ISystem* system)
 	m_overrideFrameColorR(0.0),
 	m_overrideFrameColorG(0.0),
 	m_overrideFrameColorB(0.0),
+	m_overrideFrameColorA(0.0),
 
 	m_usedome(false)
 {
@@ -375,7 +376,7 @@ void KX_KetsjiEngine::RenderDome()
 			m_overrideFrameColorR,
 			m_overrideFrameColorG,
 			m_overrideFrameColorB,
-			1.0
+			m_overrideFrameColorA
 			);
 	}
 	else
@@ -795,7 +796,7 @@ void KX_KetsjiEngine::Render()
 				m_overrideFrameColorR,
 				m_overrideFrameColorG,
 				m_overrideFrameColorB,
-				1.0
+				m_overrideFrameColorA
 				);
 		}
 		else
@@ -1921,19 +1922,21 @@ bool KX_KetsjiEngine::GetUseOverrideFrameColor(void) const
 }
 
 
-void KX_KetsjiEngine::SetOverrideFrameColor(float r, float g, float b)
+void KX_KetsjiEngine::SetOverrideFrameColor(float r, float g, float b, float a)
 {
 	m_overrideFrameColorR = r;
 	m_overrideFrameColorG = g;
 	m_overrideFrameColorB = b;
+	m_overrideFrameColorA = a;
 }
 
 
-void KX_KetsjiEngine::GetOverrideFrameColor(float& r, float& g, float& b) const
+void KX_KetsjiEngine::GetOverrideFrameColor(float& r, float& g, float& b, float& a) const
 {
 	r = m_overrideFrameColorR;
 	g = m_overrideFrameColorG;
 	b = m_overrideFrameColorB;
+	a = m_overrideFrameColorA;
 }
 
 

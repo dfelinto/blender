@@ -39,6 +39,7 @@
 #include <cassert>
 #include <cstdio>
 #include <cstring>
+#include <iostream>
 
 
 #ifdef WITH_GLEW_MX
@@ -55,6 +56,7 @@ GHOST_ContextGLX::GHOST_ContextGLX(
         Window window,
         Display *display,
         XVisualInfo *visualInfo,
+        GLXFBConfig fbconfig,
         int contextProfileMask,
         int contextMajorVersion,
         int contextMinorVersion,
@@ -63,6 +65,7 @@ GHOST_ContextGLX::GHOST_ContextGLX(
     : GHOST_Context(stereoVisual, numOfAASamples),
       m_display(display),
       m_visualInfo(visualInfo),
+      m_fbconfig(fbconfig),
       m_window(window),
       m_contextProfileMask(contextProfileMask),
       m_contextMajorVersion(contextMajorVersion),
@@ -152,7 +155,25 @@ GHOST_TSuccess GHOST_ContextGLX::initializeDrawingContext()
 	XIOErrorHandler old_handler_io = XSetIOErrorHandler(GHOST_X11_ApplicationIOErrorHandler);
 #endif
 
-	m_context = glXCreateContext(m_display, m_visualInfo, s_sharedContext, True);
+
+#ifdef WITH_X11_ALPHA
+	if(m_fbconfig
+	   && (glXCreateContextAttribsARB ||
+		   (glXCreateContextAttribsARB = (PFNGLXCREATECONTEXTATTRIBSARBPROC)glXGetProcAddressARB((const GLubyte *)"glXCreateContextAttribsARB")) != NULL)
+	   ) {
+		std::cout << "Detected GLXEW_ARB_create_context" << std::endl;
+		int context_attribs[] =
+		{
+			GLX_CONTEXT_MAJOR_VERSION_ARB, 3,
+			GLX_CONTEXT_MINOR_VERSION_ARB, 0,
+			//GLX_CONTEXT_FLAGS_ARB        , GLX_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB,
+			None
+		};
+		m_context = glXCreateContextAttribsARB( m_display, m_fbconfig, 0, True, context_attribs );
+	}
+#endif
+	if (!m_context)
+		m_context = glXCreateContext(m_display, m_visualInfo, s_sharedContext, True);
 
 	GHOST_TSuccess success;
 

@@ -242,6 +242,7 @@ GHOST_IWindow *GHOST_SystemWin32::createWindow(
 		        type,
 		        ((glSettings.flags & GHOST_glStereoVisual) != 0),
 	            ((glSettings.flags & GHOST_glWarnSupport) != 0),
+				((glSettings.flags & GHOST_glAlphaBackground) != 0),
 		        glSettings.numOfAASamples,
 		        parentWindow);
 
@@ -408,7 +409,11 @@ GHOST_TSuccess GHOST_SystemWin32::init()
 			::LoadIcon(NULL, IDI_APPLICATION);
 		}
 		wc.hCursor = ::LoadCursor(0, IDC_ARROW);
-		wc.hbrBackground = 0;
+		wc.hbrBackground = 
+#ifdef INW32_COMPISITING
+			(HBRUSH)CreateSolidBrush
+#endif
+			(0x00000000);
 		wc.lpszMenuName = 0;
 		wc.lpszClassName = L"GHOST_WindowClass";
 

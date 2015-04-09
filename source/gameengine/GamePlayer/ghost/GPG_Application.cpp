@@ -303,7 +303,7 @@ bool GPG_Application::startScreenSaverFullScreen(
 		const int stereoMode,
 		const GHOST_TUns16 samples)
 {
-	bool ret = startFullScreen(width, height, bpp, frequency, stereoVisual, stereoMode, samples);
+	bool ret = startFullScreen(width, height, bpp, frequency, stereoVisual, stereoMode, 0, samples);
 	if (ret)
 	{
 		HWND ghost_hwnd = findGhostWindowHWND(m_mainWindow);
@@ -327,6 +327,7 @@ bool GPG_Application::startWindow(
         int windowHeight,
         const bool stereoVisual,
         const int stereoMode,
+		const int alphaBackground,
         const GHOST_TUns16 samples)
 {
 	GHOST_GLSettings glSettings = {0};
@@ -335,6 +336,8 @@ bool GPG_Application::startWindow(
 	//STR_String title ("Blender Player - GHOST");
 	if (stereoVisual)
 		glSettings.flags |= GHOST_glStereoVisual;
+	if (alphaBackground)
+		glSettings.flags |= GHOST_glAlphaBackground;
 	glSettings.numOfAASamples = samples;
 
 	m_mainWindow = fSystem->createWindow(title, windowLeft, windowTop, windowWidth, windowHeight, GHOST_kWindowStateNormal,
@@ -362,6 +365,7 @@ bool GPG_Application::startEmbeddedWindow(
         const GHOST_TEmbedderWindowID parentWindow,
         const bool stereoVisual,
         const int stereoMode,
+		const int alphaBackground,
         const GHOST_TUns16 samples)
 {
 	GHOST_TWindowState state = GHOST_kWindowStateNormal;
@@ -369,6 +373,8 @@ bool GPG_Application::startEmbeddedWindow(
 
 	if (stereoVisual)
 		glSettings.flags |= GHOST_glStereoVisual;
+	if (alphaBackground)
+		glSettings.flags |= GHOST_glAlphaBackground;
 	glSettings.numOfAASamples = samples;
 
 	if (parentWindow != 0)
@@ -396,6 +402,7 @@ bool GPG_Application::startFullScreen(
         int bpp,int frequency,
         const bool stereoVisual,
         const int stereoMode,
+        const int alphaBackground,
         const GHOST_TUns16 samples,
         bool useDesktop)
 {
@@ -409,7 +416,7 @@ bool GPG_Application::startFullScreen(
 	setting.bpp = bpp;
 	setting.frequency = frequency;
 
-	fSystem->beginFullScreen(setting, &m_mainWindow, stereoVisual, samples);
+	fSystem->beginFullScreen(setting, &m_mainWindow, stereoVisual, alphaBackground, samples);
 	m_mainWindow->setCursorVisibility(false);
 	/* note that X11 ignores this (it uses a window internally for fullscreen) */
 	m_mainWindow->setState(GHOST_kWindowStateFullScreen);

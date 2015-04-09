@@ -283,6 +283,7 @@ getAllDisplayDimensions(
  * \param	stereoVisual	Stereo visual for quad buffered stereo.
  * \param	exclusive	Use to show the window ontop and ignore others
  *						(used fullscreen).
+ * \param	alphaBackground	Enable transparency of window with display background
  * \param	numOfAASamples	Number of samples used for AA (zero if no AA)
  * \param	parentWindow    Parent (embedder) window
  * \return	The new window (or 0 if creation failed).
@@ -308,6 +309,7 @@ createWindow(const STR_String& title,
 	                             left, top, width, height,
 	                             state, parentWindow, type,
 	                             ((glSettings.flags & GHOST_glStereoVisual) != 0), exclusive,
+								 ((glSettings.flags & GHOST_glAlphaBackground) != 0),
 	                             glSettings.numOfAASamples);
 
 	if (window) {

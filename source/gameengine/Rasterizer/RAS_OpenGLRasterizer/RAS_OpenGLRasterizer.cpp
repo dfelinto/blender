@@ -212,7 +212,7 @@ void RAS_OpenGLRasterizer::SetBackColor(float color[3])
 	m_redback = color[0];
 	m_greenback = color[1];
 	m_blueback = color[2];
-	m_alphaback = 1.0f;
+	m_alphaback = 0.0f;
 }
 
 void RAS_OpenGLRasterizer::SetFog(short type, float start, float dist, float intensity, float color[3])
