@@ -203,7 +203,7 @@ public:
 	// IUnknown
 	virtual HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, LPVOID *ppv)
 	{
-		if (iid == IID_IDeckLinkVideoFrame3DExtensions)
+		if (!memcmp(&iid, &IID_IDeckLinkVideoFrame3DExtensions, sizeof(iid)))
 		{
 			if (mpRightEye)
 			{
