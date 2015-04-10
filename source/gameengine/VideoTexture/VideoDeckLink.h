@@ -209,7 +209,7 @@ private:
 	bool _PinBuffer(void *address, u_int size);
 	HRESULT _ReleaseBuffer(void* buffer);
 
-	int									mRefCount;
+	uint32_t							mRefCount;
 	// protect the cache and the allocated map, 
 	// not the pinnedBuffer map as it is only used from main thread
 	pthread_mutex_t						mMutex;

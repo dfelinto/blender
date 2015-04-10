@@ -44,6 +44,7 @@
 #include "Exception.h"
 #include "KX_KetsjiEngine.h"
 #include "KX_PythonInit.h"
+#include "atomic_ops.h"
 
 extern ExceptionID DeckLinkInternalError;
 ExceptionID SourceVideoOnlyCapture, VideoDeckLinkBadFormat, VideoDeckLinkOpenCard, VideoDeckLinkDvpInternalError;
@@ -226,7 +227,7 @@ bool PinnedMemoryAllocator::ReserveMemory(size_t size)
 }
 
 PinnedMemoryAllocator::PinnedMemoryAllocator(unsigned cacheSize, size_t memSize) :
-mRefCount(1),
+mRefCount(1U),
 mBufferCacheSize(cacheSize),
 mUnpinnedTextureBuffer(0)
 #ifdef WIN32
@@ -374,19 +375,12 @@ HRESULT STDMETHODCALLTYPE	PinnedMemoryAllocator::QueryInterface(REFIID /*iid*/, 
 
 ULONG STDMETHODCALLTYPE		PinnedMemoryAllocator::AddRef(void)
 {
-	ULONG newCount;
-	Lock();
-	newCount = ++mRefCount;
-	Unlock();
-	return newCount;
+	return atomic_add_uint32(&mRefCount, 1U);
 }
 
 ULONG STDMETHODCALLTYPE		PinnedMemoryAllocator::Release(void)
 {
-	int newCount;
-	Lock();
-	newCount = --mRefCount;
-	Unlock();
+	uint32_t newCount = atomic_sub_uint32(&mRefCount, 1U);
 	if (newCount == 0)
 		delete this;
 	return (ULONG)newCount;

@@ -47,6 +47,7 @@ set(INC
 	../../../intern/string
 	../../../intern/decklink
 	../../../intern/gpudirect
+	../../../intern/atomic
 )
 
 set(INC_SYS

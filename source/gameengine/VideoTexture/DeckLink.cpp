@@ -33,23 +33,10 @@
 // implementation
 
 #include "PyObjectPlus.h"
-#include <structmember.h>
-
-#include "KX_GameObject.h"
-#include "KX_Light.h"
-#include "RAS_MeshObject.h"
-#include "RAS_ILightObject.h"
-#include "DNA_mesh_types.h"
-#include "DNA_meshdata_types.h"
-#include "DNA_image_types.h"
-#include "IMB_imbuf_types.h"
-#include "BKE_image.h"
-
-#include "MEM_guardedalloc.h"
-
 #include "KX_KetsjiEngine.h"
 #include "KX_PythonInit.h"
 #include "DeckLink.h"
+#include "atomic_ops.h"
 
 #include <memory.h>
 
@@ -179,6 +166,90 @@ HRESULT decklink_ReadPixelFormat(const char *format, size_t len, BMDPixelFormat 
 	return S_OK;
 }
 
+class DeckLinkFrameWrapper : public IDeckLinkVideoFrame
+{
+public:
+	// From IUknown
+	virtual HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, LPVOID *ppv)	{ return E_NOTIMPL;	}
+	virtual ULONG STDMETHODCALLTYPE AddRef(void)	{ return 1U; }
+	virtual ULONG STDMETHODCALLTYPE Release(void)	{ return 1U; }
+	// From IDeckLinkVideoFrame
+	virtual long STDMETHODCALLTYPE GetWidth(void) { return mpFrame->GetWidth(); }
+	virtual long STDMETHODCALLTYPE GetHeight(void) { return mpFrame->GetHeight(); }
+	virtual long STDMETHODCALLTYPE GetRowBytes(void) { return mpFrame->GetRowBytes(); }
+	virtual BMDPixelFormat STDMETHODCALLTYPE GetPixelFormat(void) { return mpFrame->GetPixelFormat(); }
+	virtual BMDFrameFlags STDMETHODCALLTYPE GetFlags(void) { return mpFrame->GetFlags(); }
+	// this is the only function that is modified: return our buffer instead
+	virtual HRESULT STDMETHODCALLTYPE GetBytes(void **buffer) { *buffer = mpBuffer; return S_OK; }
+	virtual HRESULT STDMETHODCALLTYPE GetTimecode(BMDTimecodeFormat format, IDeckLinkTimecode **timecode) 
+		{ return mpFrame->GetTimecode(format, timecode); }
+	virtual HRESULT STDMETHODCALLTYPE GetAncillaryData(IDeckLinkVideoFrameAncillary **ancillary)
+		{ return mpFrame->GetAncillaryData(ancillary); }
+	// constructor
+	DeckLinkFrameWrapper(IDeckLinkVideoFrame *theFrame, void *theBuffer)
+	{
+		mpBuffer = theBuffer;
+		mpFrame = theFrame;
+	}
+	// no destructor, it's just a wrapper
+private:
+	IDeckLinkVideoFrame *mpFrame;
+	void *mpBuffer;
+};
+
+class DeckLink3DFrameWrapper : public IDeckLinkVideoFrame, IDeckLinkVideoFrame3DExtensions
+{
+public:
+	// IUnknown
+	virtual HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, LPVOID *ppv)
+	{
+		if (iid == IID_IDeckLinkVideoFrame3DExtensions)
+		{
+			if (mpRightEye)
+			{
+				*ppv = (IDeckLinkVideoFrame3DExtensions*)this;
+				return S_OK;
+			}
+		}
+		return E_NOTIMPL;
+	}
+	virtual ULONG STDMETHODCALLTYPE AddRef(void) { return 1U;  }
+	virtual ULONG STDMETHODCALLTYPE Release(void) { return 1U; }
+	// IDeckLinkVideoFrame
+	virtual long STDMETHODCALLTYPE GetWidth(void) {	return mpLeftEye->GetWidth(); }
+	virtual long STDMETHODCALLTYPE GetHeight(void) { return mpLeftEye->GetHeight(); }
+	virtual long STDMETHODCALLTYPE GetRowBytes(void) { return mpLeftEye->GetRowBytes(); }
+	virtual BMDPixelFormat STDMETHODCALLTYPE GetPixelFormat(void) { return mpLeftEye->GetPixelFormat(); }
+	virtual BMDFrameFlags STDMETHODCALLTYPE GetFlags(void) { return mpLeftEye->GetFlags(); }
+	virtual HRESULT STDMETHODCALLTYPE GetBytes(void **buffer) { return mpLeftEye->GetBytes(buffer); }
+	virtual HRESULT STDMETHODCALLTYPE GetTimecode(BMDTimecodeFormat format,IDeckLinkTimecode **timecode)
+		{ return mpLeftEye->GetTimecode(format, timecode); }
+	virtual HRESULT STDMETHODCALLTYPE GetAncillaryData(IDeckLinkVideoFrameAncillary **ancillary) 
+		{ return mpLeftEye->GetAncillaryData(ancillary); }
+	// IDeckLinkVideoFrame3DExtensions
+	virtual BMDVideo3DPackingFormat STDMETHODCALLTYPE Get3DPackingFormat(void)
+	{
+		return bmdVideo3DPackingLeftOnly;
+	}
+	virtual HRESULT STDMETHODCALLTYPE GetFrameForRightEye(
+		/* [out] */ IDeckLinkVideoFrame **rightEyeFrame)
+	{
+		mpRightEye->AddRef();
+		*rightEyeFrame = mpRightEye;
+		return S_OK;
+	}
+	// Constructor
+	DeckLink3DFrameWrapper(IDeckLinkVideoFrame *leftEye, IDeckLinkVideoFrame *rightEye)
+	{
+		mpLeftEye = leftEye;
+		mpRightEye = rightEye;
+	}
+	// no need for a destructor, it's just a wrapper
+private:
+	IDeckLinkVideoFrame *mpLeftEye;
+	IDeckLinkVideoFrame *mpRightEye;
+};
+
 static void decklink_Reset(DeckLink *self)
 {
 	self->m_lastClock = 0.0;
@@ -189,35 +260,57 @@ static void decklink_Reset(DeckLink *self)
 	self->mHDKeyingSupported = false;
 	self->mSize[0] = 0;
 	self->mSize[1] = 0;
-	self->mFrame = NULL;
+	self->mLeftFrame = NULL;
+	self->mRightFrame = NULL;
 	self->mKeyer = NULL;
 	self->mUseKeying = false;
 	self->mKeyingLevel = 255;
+	self->mUseExtend = false;
+	self->mUseSwap = false;
 }
 
 #ifdef __BIG_ENDIAN__
-#define CONV_PIXEL(o,i)	(o=((i)>>8)+(((i)&0xFF)<<24))
+#define CONV_PIXEL(i)	((((i)>>16)&0xFF00)+(((i)&0xFF00)<<16)+((i)&0xFF00FF))
 #else
-#define CONV_PIXEL(o,i)	(o=((i)<<8)+(((i)&0xFF000000)>>24))
+#define CONV_PIXEL(i)	((((i)&0xFF)<<16)+(((i)>>16)&0xFF)+((i)&0xFF00FF00))
 #endif
 
-// adapt the pixel format from VideoTexture (RGBA) to DeckLink (ARGB)
-static void decklink_ConvImage(u_int *dest, const short *destSize, u_int *source, const short *srcSize, bool extend)
+// adapt the pixel format from VideoTexture (RGBA) to DeckLink (BGRA)
+// return false if no conversion at all is necessary
+static bool decklink_ConvImage(u_int *dest, const short *destSize, const u_int *source, const short *srcSize, bool extend, bool swap)
 {
 	short w, h, x, y;
-	u_int *s, *d;
+	const u_int *s;
+	u_int *d;
+	bool sameSize = (destSize[0] == srcSize[0] && destSize[1] == srcSize[1]);
 
-	if ((destSize[0] == srcSize[0] && destSize[1] == srcSize[1]) || !extend)
+	if (sameSize || !extend)
 	{
-		// here we convert pixel by pixel
-		w = (destSize[0] < srcSize[0]) ? destSize[0] : srcSize[0];
-		h = (destSize[1] < srcSize[1]) ? destSize[1] : srcSize[1];
-		for (y = 0; y < h; ++y)
+		if (sameSize && !swap)
 		{
-			s = source + y*srcSize[0];
-			d = dest + y*destSize[0];
-			for (x = 0; x < w; ++x, ++s, ++d)
-				CONV_PIXEL(*d, *s);
+			//memcpy(dest, source, 4 * srcSize[0] * srcSize[1]);
+			//return true;
+			return false;
+		}
+		else
+		{
+			// here we convert pixel by pixel
+			w = (destSize[0] < srcSize[0]) ? destSize[0] : srcSize[0];
+			h = (destSize[1] < srcSize[1]) ? destSize[1] : srcSize[1];
+			for (y = 0; y < h; ++y)
+			{
+				s = source + y*srcSize[0];
+				d = dest + y*destSize[0];
+				if (swap)
+				{
+					for (x = 0; x < w; ++x, ++s, ++d)
+						*d = CONV_PIXEL(*s);
+				}
+				else
+				{
+					memcpy(d, s, 4 * w);
+				}
+			}
 		}
 	}
 	else
@@ -250,7 +343,7 @@ static void decklink_ConvImage(u_int *dest, const short *destSize, u_int *source
 						// decrease accum
 						accWidth -= srcSize[0];
 						// convert pixel
-						CONV_PIXEL(*d, *s);
+						*d = (swap) ? CONV_PIXEL(*s) : *s;
 						// next pixel
 						++d;
 					}
@@ -262,6 +355,7 @@ static void decklink_ConvImage(u_int *dest, const short *destSize, u_int *source
 				s += srcSize[0];
 		}
 	}
+	return true;
 }
 
 // DeckLink object allocation
@@ -271,8 +365,8 @@ static PyObject *DeckLink_new(PyTypeObject *type, PyObject *args, PyObject *kwds
 	DeckLink * self = reinterpret_cast<DeckLink*>(type->tp_alloc(type, 0));
 	// initialize object structure
 	decklink_Reset(self);
-	// m_source is a python object, it's handled by python
-	self->m_source = NULL;
+	// m_leftEye is a python object, it's handled by python
+	self->m_leftEye = NULL;
 	// return allocated object
 	return reinterpret_cast<PyObject*>(self);
 }
@@ -287,7 +381,7 @@ int DeckLink_setSource(DeckLink *self, PyObject *value, void *closure);
 static void DeckLink_dealloc(DeckLink *self)
 {
 	// release renderer
-	Py_XDECREF(self->m_source);
+	Py_XDECREF(self->m_leftEye);
 	// close decklink
 	PyObject *ret = DeckLink_close(self);
 	Py_DECREF(ret);
@@ -400,7 +494,7 @@ static int DeckLink_init(DeckLink *self, PyObject *args, PyObject *kwds)
 		{
 			if (pDisplayMode->GetDisplayMode() == self->mDisplayMode
 				&& (pDisplayMode->GetFlags() & displayFlags) == displayFlags
-				&& self->mDLOutput->DoesSupportVideoMode(self->mDisplayMode, bmdFormat8BitARGB, outputFlags, &support, NULL) == S_OK
+				&& self->mDLOutput->DoesSupportVideoMode(self->mDisplayMode, bmdFormat8BitBGRA, outputFlags, &support, NULL) == S_OK
 				&& (support == bmdDisplayModeSupported || support == bmdDisplayModeSupportedWithConversion))
 			{
 				break;
@@ -419,12 +513,19 @@ static int DeckLink_init(DeckLink *self, PyObject *args, PyObject *kwds)
 			// this shouldn't fail
 			THRWEXCP(DeckLinkOpenCard, S_OK);
 
-		if (self->mDLOutput->CreateVideoFrame(self->mSize[0], self->mSize[1], self->mSize[0] * 4, bmdFormat8BitARGB, bmdFrameFlagFlipVertical, &self->mFrame) != S_OK)
+		if (self->mDLOutput->CreateVideoFrame(self->mSize[0], self->mSize[1], self->mSize[0] * 4, bmdFormat8BitBGRA, bmdFrameFlagFlipVertical, &self->mLeftFrame) != S_OK)
 			THRWEXCP(DeckLinkInternalError, S_OK);
-
 		// clear alpha channel in the frame buffer
-		self->mFrame->GetBytes((void **)&bytes);
+		self->mLeftFrame->GetBytes((void **)&bytes);
 		memset(bytes, 0, 4 * self->mSize[0] * self->mSize[1]);
+		if (self->mUse3D)
+		{
+			if (self->mDLOutput->CreateVideoFrame(self->mSize[0], self->mSize[1], self->mSize[0] * 4, bmdFormat8BitBGRA, bmdFrameFlagFlipVertical, &self->mRightFrame) != S_OK)
+				THRWEXCP(DeckLinkInternalError, S_OK);
+			// clear alpha channel in the frame buffer
+			self->mRightFrame->GetBytes((void **)&bytes);
+			memset(bytes, 0, 4 * self->mSize[0] * self->mSize[1]);
+		}
 	}
 	catch (Exception & exp)
 	{ 
@@ -440,8 +541,10 @@ static int DeckLink_init(DeckLink *self, PyObject *args, PyObject *kwds)
 // close added decklink
 PyObject *DeckLink_close(DeckLink * self)
 {
-	if (self->mFrame)
-		self->mFrame->Release();
+	if (self->mLeftFrame)
+		self->mLeftFrame->Release();
+	if (self->mRightFrame)
+		self->mRightFrame->Release();
 	if (self->mKeyer)
 		self->mKeyer->Release();
 	if (self->mDLOutput)
@@ -473,27 +576,55 @@ static PyObject *DeckLink_refresh(DeckLink *self, PyObject *args)
 		self->m_lastClock = engine->GetClockTime();
 		// set source refresh
 		bool refreshSource = (param == Py_True);
+		unsigned int *leftEye = NULL;
+		unsigned int *rightEye = NULL;
 		// try to process key frame from source
 		try
 		{
 			// if source is available
-			if (self->m_source != NULL && self->mFrame != NULL)
+			if (self->m_leftEye != NULL)
+				leftEye = self->m_leftEye->m_image->getImage(0, ts);
+			if (self->m_rightEye != NULL)
+				rightEye = self->m_rightEye->m_image->getImage(0, ts);
+			if (leftEye != NULL)
 			{
-				// get texture
-				unsigned int * image = self->m_source->m_image->getImage(0, ts);
-				// if texture is available
-				if (image != NULL)
+				DeckLinkFrameWrapper leftFrame(self->mLeftFrame, leftEye);
+				// we must adapt the image to the frame 1) in size 2) in byte order
+				// VideoTexture frame are RGBA, DecklinkBGRA
+				short * srcSize = self->m_leftEye->m_image->getSize();
+				u_int *dest;
+				self->mLeftFrame->GetBytes((void **)&dest);
+				bool leftConverted = decklink_ConvImage(dest, self->mSize, leftEye, srcSize, self->mUseExtend, self->mUseSwap);
+				if (self->mUse3D)
 				{
-					// we must adapt the image to the frame 1) in size 2) in byte order
-					// VideoTexture frame are RGBA, Decklink ARGB (or BGRA but it doesn't help)
-					short * srcSize = self->m_source->m_image->getSize();
-					u_int *dest;
-					self->mFrame->GetBytes((void **)&dest);
-					decklink_ConvImage(dest, self->mSize, image, srcSize, self->mUseExtend);
-					self->mDLOutput->DisplayVideoFrameSync(self->mFrame);
+					DeckLinkFrameWrapper rightFrame(self->mRightFrame, rightEye);
+					bool rightConverted = false;
+					if (rightEye != NULL)
+					{
+						self->mRightFrame->GetBytes((void **)&dest);
+						srcSize = self->m_rightEye->m_image->getSize();
+						rightConverted = decklink_ConvImage(dest, self->mSize, rightEye, srcSize, self->mUseExtend, self->mUseSwap);
+					}
+					{
+						DeckLink3DFrameWrapper frame(
+							((leftConverted) ? (IDeckLinkVideoFrame*)self->mLeftFrame : (IDeckLinkVideoFrame*)&leftFrame),
+							((rightConverted) ? (IDeckLinkVideoFrame*)self->mRightFrame :
+							(IDeckLinkVideoFrame*)((rightEye) ? &rightFrame : NULL)));
+						self->mDLOutput->DisplayVideoFrameSync(&frame);
+					}
 				}
-				// refresh texture source, if required
-				if (refreshSource) self->m_source->m_image->refresh();
+				else 
+				{
+					self->mDLOutput->DisplayVideoFrameSync((leftConverted) ? (IDeckLinkVideoFrame*)self->mLeftFrame : (IDeckLinkVideoFrame*)&leftFrame);
+				}
+			}
+			// refresh texture source, if required
+			if (refreshSource) 
+			{
+				if (self->m_leftEye)
+					self->m_leftEye->m_image->refresh();
+				if (self->m_rightEye)
+					self->m_rightEye->m_image->refresh();
 			}
 		}
 		CATCH_EXCP;
@@ -505,10 +636,10 @@ static PyObject *DeckLink_refresh(DeckLink *self, PyObject *args)
 static PyObject *DeckLink_getSource(DeckLink *self, PyObject *value, void *closure)
 {
 	// if source exists
-	if (self->m_source != NULL)
+	if (self->m_leftEye != NULL)
 	{
-		Py_INCREF(self->m_source);
-		return reinterpret_cast<PyObject*>(self->m_source);
+		Py_INCREF(self->m_leftEye);
+		return reinterpret_cast<PyObject*>(self->m_leftEye);
 	}
 	// otherwise return None
 	Py_RETURN_NONE;
@@ -528,12 +659,47 @@ int DeckLink_setSource(DeckLink *self, PyObject *value, void *closure)
 	// increase ref count for new value
 	Py_INCREF(value);
 	// release previous
-	Py_XDECREF(self->m_source);
+	Py_XDECREF(self->m_leftEye);
 	// set new value
-	self->m_source = reinterpret_cast<PyImage*>(value);
+	self->m_leftEye = reinterpret_cast<PyImage*>(value);
 	// return success
 	return 0;
 }
+
+// get source object
+static PyObject *DeckLink_getRight(DeckLink *self, PyObject *value, void *closure)
+{
+	// if source exists
+	if (self->m_rightEye != NULL)
+	{
+		Py_INCREF(self->m_rightEye);
+		return reinterpret_cast<PyObject*>(self->m_rightEye);
+	}
+	// otherwise return None
+	Py_RETURN_NONE;
+}
+
+
+// set source object
+int DeckLink_setRight(DeckLink *self, PyObject *value, void *closure)
+{
+	// check new value
+	if (value == NULL || !pyImageTypes.in(Py_TYPE(value)))
+	{
+		// report value error
+		PyErr_SetString(PyExc_TypeError, "Invalid type of value");
+		return -1;
+	}
+	// increase ref count for new value
+	Py_INCREF(value);
+	// release previous
+	Py_XDECREF(self->m_rightEye);
+	// set new value
+	self->m_rightEye = reinterpret_cast<PyImage*>(value);
+	// return success
+	return 0;
+}
+
 
 static PyObject *DeckLink_getKeying(DeckLink *self, PyObject *value, void *closure)
 {
@@ -618,6 +784,23 @@ static int DeckLink_setExtend(DeckLink *self, PyObject *value, void *closure)
 	return 0;
 }
 
+static PyObject *DeckLink_getSwap(DeckLink *self, PyObject *value, void *closure)
+{
+	if (self->mUseSwap) Py_RETURN_TRUE;
+	else Py_RETURN_FALSE;
+}
+
+static int DeckLink_setSwap(DeckLink *self, PyObject *value, void *closure)
+{
+	if (value == NULL || !PyBool_Check(value))
+	{
+		PyErr_SetString(PyExc_TypeError, "The value must be a bool");
+		return -1;
+	}
+	self->mUseSwap = (value == Py_True);
+	return 0;
+}
+
 // class DeckLink methods
 static PyMethodDef decklinkMethods[] =
 {
@@ -629,10 +812,12 @@ static PyMethodDef decklinkMethods[] =
 // class DeckLink attributes
 static PyGetSetDef decklinkGetSets[] =
 { 
-	{(char*)"source", (getter)DeckLink_getSource, (setter)DeckLink_setSource, (char*)"source of decklink", NULL},
+	{ (char*)"source", (getter)DeckLink_getSource, (setter)DeckLink_setSource, (char*)"source of decklink (left eye)", NULL},
+	{ (char*)"right", (getter)DeckLink_getRight, (setter)DeckLink_setRight, (char*)"source of decklink (right eye)", NULL },
 	{ (char*)"keying", (getter)DeckLink_getKeying, (setter)DeckLink_setKeying, (char*)"whether keying is enabled (frame is alpha-composited with passthrough output)", NULL },
 	{ (char*)"level", (getter)DeckLink_getLevel, (setter)DeckLink_setLevel, (char*)"change the level of keying (overall alpha level of key frame, 0 to 255)", NULL },
 	{ (char*)"extend", (getter)DeckLink_getExtend, (setter)DeckLink_setExtend, (char*)"whether image should stretched to fit frame", NULL },
+	{ (char*)"swap", (getter)DeckLink_getSwap, (setter)DeckLink_setSwap, (char*)"whether R & B channel should be swaped", NULL },
 	{ NULL }
 };
 

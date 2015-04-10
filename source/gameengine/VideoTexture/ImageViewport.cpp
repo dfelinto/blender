@@ -176,11 +176,23 @@ void ImageViewport::calcImage (unsigned int texId, double ts)
 
 				// get frame buffer data
 				if (m_alpha) {
-					glReadPixels(m_upLeft[0], m_upLeft[1], (GLsizei)m_capSize[0], (GLsizei)m_capSize[1], GL_RGBA,
-					        GL_UNSIGNED_BYTE, m_viewportImage);
-					// filter loaded data
-					FilterRGBA32 filt;
-					filterImage(filt, m_viewportImage, m_capSize);
+					// as we are reading the pixel in the native format, we can read directly in the image buffer
+					// if we are sure that no processing is needed on the image
+					if (m_size[0] == m_capSize[0] &&
+						m_size[1] == m_capSize[1] &&
+						!m_flip &&
+						!m_pyfilter) {
+						glReadPixels(m_upLeft[0], m_upLeft[1], (GLsizei)m_capSize[0], (GLsizei)m_capSize[1], GL_RGBA,
+							GL_UNSIGNED_BYTE, m_image);
+						m_avail = true;
+					}
+					else {
+						glReadPixels(m_upLeft[0], m_upLeft[1], (GLsizei)m_capSize[0], (GLsizei)m_capSize[1], GL_RGBA,
+							GL_UNSIGNED_BYTE, m_viewportImage);
+						// filter loaded data
+						FilterRGBA32 filt;
+						filterImage(filt, m_viewportImage, m_capSize);
+					}
 				}
 				else {
 					glReadPixels(m_upLeft[0], m_upLeft[1], (GLsizei)m_capSize[0], (GLsizei)m_capSize[1], GL_RGB,

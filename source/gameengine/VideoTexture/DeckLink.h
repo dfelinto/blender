@@ -55,18 +55,21 @@ struct DeckLink
 	// decklink card to which we output
 	IDeckLinkOutput * mDLOutput;
 	IDeckLinkKeyer * mKeyer;
-	IDeckLinkMutableVideoFrame *mFrame;
+	IDeckLinkMutableVideoFrame *mLeftFrame;
+	IDeckLinkMutableVideoFrame *mRightFrame;
 	bool mUse3D;
 	bool mUseKeying;
 	bool mUseExtend;
 	bool mKeyingSupported;
 	bool mHDKeyingSupported;
+	bool mUseSwap;
 	uint8_t mKeyingLevel;
 	BMDDisplayMode mDisplayMode;
 	short mSize[2];
 
 	// image source
-	PyImage * m_source;
+	PyImage * m_leftEye;
+	PyImage * m_rightEye;
 };
 
 
