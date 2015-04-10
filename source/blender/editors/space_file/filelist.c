@@ -654,7 +654,7 @@ ImBuf *filelist_geticon(struct FileList *filelist, const int index)
 	if (file->flags & FILE_TYPE_BLENDER) {
 		ibuf = gSpecialFileImages[SPECIAL_IMG_BLENDFILE];
 	}
-	else if ((file->flags & FILE_TYPE_MOVIE) || (file->flags & FILE_TYPE_MOVIE_ICON)) {
+	else if (file->flags & FILE_TYPE_MOVIE) {
 		ibuf = gSpecialFileImages[SPECIAL_IMG_MOVIEFILE];
 	}
 	else if (file->flags & FILE_TYPE_SOUND) {
@@ -900,7 +900,6 @@ static void filelist_setfiletypes(struct FileList *filelist)
 	file = filelist->filelist;
 
 	for (num = 0; num < filelist->numfiles; num++, file++) {
-		file->type = file->s.st_mode;  /* restore the mess below */
 #ifndef __APPLE__
 		/* Don't check extensions for directories, allow in OSX cause bundles have extensions*/
 		if (file->type & S_IFDIR) {
@@ -1334,20 +1333,23 @@ static void thumbnails_startjob(void *tjv, short *stop, short *do_update, float 
 	tj->do_update = do_update;
 
 	while ((*stop == 0) && (limg)) {
+		ThumbSource source = 0;
+
+		BLI_assert(limg->flags & (FILE_TYPE_IMAGE | FILE_TYPE_MOVIE | FILE_TYPE_FTFONT |
+		                          FILE_TYPE_BLENDER | FILE_TYPE_BLENDER_BACKUP));
 		if (limg->flags & FILE_TYPE_IMAGE) {
-			limg->img = IMB_thumb_manage(limg->path, THB_NORMAL, THB_SOURCE_IMAGE);
+			source = THB_SOURCE_IMAGE;
 		}
 		else if (limg->flags & (FILE_TYPE_BLENDER | FILE_TYPE_BLENDER_BACKUP)) {
-			limg->img = IMB_thumb_manage(limg->path, THB_NORMAL, THB_SOURCE_BLEND);
+			source = THB_SOURCE_BLEND;
 		}
 		else if (limg->flags & FILE_TYPE_MOVIE) {
-			limg->img = IMB_thumb_manage(limg->path, THB_NORMAL, THB_SOURCE_MOVIE);
-			if (!limg->img) {
-				/* remember that file can't be loaded via IMB_open_anim */
-				limg->flags &= ~FILE_TYPE_MOVIE;
-				limg->flags |= FILE_TYPE_MOVIE_ICON;
-			}
+			source = THB_SOURCE_MOVIE;
 		}
+		else if (limg->flags & FILE_TYPE_FTFONT) {
+			source = THB_SOURCE_FONT;
+		}
+		limg->img = IMB_thumb_manage(limg->path, THB_NORMAL, source);
 		*do_update = true;
 		PIL_sleep_ms(10);
 		limg = limg->next;
@@ -1363,11 +1365,6 @@ static void thumbnails_update(void *tjv)
 		while (limg) {
 			if (!limg->done && limg->img) {
 				tj->filelist->filelist[limg->index].image = IMB_dupImBuf(limg->img);
-				/* update flag for movie files where thumbnail can't be created */
-				if (limg->flags & FILE_TYPE_MOVIE_ICON) {
-					tj->filelist->filelist[limg->index].flags &= ~FILE_TYPE_MOVIE;
-					tj->filelist->filelist[limg->index].flags |= FILE_TYPE_MOVIE_ICON;
-				}
 				limg->done = true;
 				IMB_freeImBuf(limg->img);
 				limg->img = NULL;
@@ -1408,7 +1405,7 @@ void thumbnails_start(FileList *filelist, const bContext *C)
 			continue;
 		}
 		if (!filelist->filelist[idx].image) {
-			if (filelist->filelist[idx].flags & (FILE_TYPE_IMAGE | FILE_TYPE_MOVIE |
+			if (filelist->filelist[idx].flags & (FILE_TYPE_IMAGE | FILE_TYPE_MOVIE | FILE_TYPE_FTFONT |
 			                                     FILE_TYPE_BLENDER | FILE_TYPE_BLENDER_BACKUP))
 			{
 				FileImage *limg = MEM_callocN(sizeof(*limg), __func__);

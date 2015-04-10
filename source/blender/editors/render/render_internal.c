@@ -893,6 +893,7 @@ static int screen_render_invoke(bContext *C, wmOperator *op, const wmEvent *even
 	rj->write_still = is_write_still && !is_animation;
 	rj->iuser.scene = scene;
 	rj->iuser.ok = 1;
+	rj->iuser.passtype = SCE_PASS_COMBINED;
 	rj->reports = op->reports;
 	rj->orig_layer = 0;
 	rj->last_layer = 0;
@@ -1229,10 +1230,10 @@ static void render_view3d_startjob(void *customdata, short *stop, short *do_upda
 	if ((update_flag & (PR_UPDATE_RENDERSIZE | PR_UPDATE_DATABASE)) || rstats->convertdone == 0) {
 		RenderData rdata;
 
-		/* no osa, blur, seq, layers, etc for preview render */
+		/* no osa, blur, seq, layers, savebuffer etc for preview render */
 		rdata = rp->scene->r;
 		rdata.mode &= ~(R_OSA | R_MBLUR | R_BORDER | R_PANORAMA);
-		rdata.scemode &= ~(R_DOSEQ | R_DOCOMP | R_FREE_IMAGE);
+		rdata.scemode &= ~(R_DOSEQ | R_DOCOMP | R_FREE_IMAGE | R_EXR_TILE_FILE | R_FULL_SAMPLE);
 		rdata.scemode |= R_VIEWPORT_PREVIEW;
 
 		/* we do use layers, but only active */

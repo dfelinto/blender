@@ -121,13 +121,19 @@ static void rna_Scene_update_tagged(Scene *scene)
 
 static void rna_SceneRender_get_frame_path(RenderData *rd, int frame, int preview, const char *view, char *name)
 {
+	const char *suffix = BKE_scene_multiview_view_suffix_get(rd, view);
+
+	/* avoid NULL pointer */
+	if (!suffix)
+		suffix = "";
+
 	if (BKE_imtype_is_movie(rd->im_format.imtype)) {
-		BKE_movie_filepath_get(name, rd, preview != 0, view);
+		BKE_movie_filepath_get(name, rd, preview != 0, suffix);
 	}
 	else {
 		BKE_image_path_from_imformat(
 		        name, rd->pic, G.main->name, (frame == INT_MIN) ? rd->cfra : frame,
-		        &rd->im_format, (rd->scemode & R_EXTENSION) != 0, true, view);
+		        &rd->im_format, (rd->scemode & R_EXTENSION) != 0, true, suffix);
 	}
 }
 

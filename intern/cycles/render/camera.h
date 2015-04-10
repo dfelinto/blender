@@ -129,9 +129,12 @@ public:
 	bool motion_modified(const Camera& cam);
 	void tag_update();
 
+	/* Public utility functions. */
 	BoundBox viewplane_bounds_get();
+
+private:
+	/* Private utility functions. */
 	float3 transform_raster_to_world(float raster_x, float raster_y);
-	Transform transform_from_viewplane(BoundBox2D &viewplane);
 };
 
 CCL_NAMESPACE_END

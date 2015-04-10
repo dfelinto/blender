@@ -493,6 +493,8 @@ static void screen_opengl_render_apply(OGLRender *oglrender)
 	RenderResult *rr;
 	RenderView *rv;
 	int view_id;
+	ImBuf *ibuf;
+	void *lock;
 
 	rr = RE_AcquireResultRead(oglrender->re);
 	for (rv = rr->views.first, view_id = 0; rv; rv = rv->next, view_id++) {
@@ -502,6 +504,12 @@ static void screen_opengl_render_apply(OGLRender *oglrender)
 	}
 
 	RE_ReleaseResult(oglrender->re);
+
+	ibuf = BKE_image_acquire_ibuf(oglrender->ima, &oglrender->iuser, &lock);
+	if (ibuf) {
+		ibuf->userflags |= IB_DISPLAY_BUFFER_INVALID;
+	}
+	BKE_image_release_ibuf(oglrender->ima, ibuf, lock);
 
 	if (oglrender->write_still) {
 		screen_opengl_render_write(oglrender);
@@ -787,7 +795,7 @@ static bool screen_opengl_render_anim_step(bContext *C, wmOperator *op)
 
 	if (is_movie) {
 		ok = RE_WriteRenderViewsMovie(oglrender->reports, rr, scene, &scene->r, oglrender->mh, oglrender->sizex,
-		                              oglrender->sizey, oglrender->movie_ctx_arr, oglrender->totvideos);
+		                              oglrender->sizey, oglrender->movie_ctx_arr, oglrender->totvideos, PRVRANGEON != 0);
 		if (ok) {
 			printf("Append frame %d", scene->r.cfra);
 			BKE_reportf(op->reports, RPT_INFO, "Appended frame: %d", scene->r.cfra);

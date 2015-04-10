@@ -202,7 +202,7 @@ float *RE_RenderLayerGetPass(volatile RenderLayer *rl, int passtype, const char 
 
 			if (viewname == NULL)
 				break;
-			else if (strcmp(rpass->view, viewname) == 0)
+			else if (STREQ(rpass->view, viewname))
 				break;
 		}
 	}
@@ -776,7 +776,7 @@ static void render_result_rescale(Render *re)
 	if (src_rectf == NULL) {
 		RenderLayer *rl = render_get_active_layer(re, re->result);
 		if (rl != NULL) {
-			src_rectf = RE_RenderLayerGetPass(rl, SCE_PASS_COMBINED, "");
+			src_rectf = RE_RenderLayerGetPass(rl, SCE_PASS_COMBINED, NULL);
 		}
 	}
 
@@ -795,7 +795,7 @@ static void render_result_rescale(Render *re)
 				RenderLayer *rl;
 				rl = render_get_active_layer(re, re->result);
 				if (rl != NULL) {
-					dst_rectf = RE_RenderLayerGetPass(rl, SCE_PASS_COMBINED, "");
+					dst_rectf = RE_RenderLayerGetPass(rl, SCE_PASS_COMBINED, NULL);
 				}
 			}
 
@@ -812,9 +812,8 @@ static void render_result_rescale(Render *re)
 				}
 			}
 		}
+		render_result_free(result);
 	}
-
-	render_result_free(result);
 }
 
 void RE_ChangeResolution(Render *re, int winx, int winy, rcti *disprect)
@@ -2249,9 +2248,9 @@ static void do_merge_fullsample(Render *re, bNodeTree *ntree)
 				
 				for (x = 0; x < re->rectx; x++, rf += 4, col += 4) {
 					/* clamping to 1.0 is needed for correct AA */
-					if (col[0] < 0.0f) col[0] = 0.0f; else if (col[0] > 1.0f) col[0] = 1.0f;
-					if (col[1] < 0.0f) col[1] = 0.0f; else if (col[1] > 1.0f) col[1] = 1.0f;
-					if (col[2] < 0.0f) col[2] = 0.0f; else if (col[2] > 1.0f) col[2] = 1.0f;
+					CLAMP(col[0], 0.0, 1.0f);
+					CLAMP(col[1], 0.0, 1.0f);
+					CLAMP(col[2], 0.0, 1.0f);
 					
 					add_filt_fmask_coord(filt, col, rf, re->rectx, re->recty, x, y);
 				}
@@ -3233,7 +3232,7 @@ bool RE_WriteRenderViewsImage(ReportList *reports, RenderResult *rr, Scene *scen
 }
 
 bool RE_WriteRenderViewsMovie(ReportList *reports, RenderResult *rr, Scene *scene, RenderData *rd, bMovieHandle *mh,
-                              const size_t width, const size_t height, void **movie_ctx_arr, const size_t totvideos)
+                              const size_t width, const size_t height, void **movie_ctx_arr, const size_t totvideos, bool preview)
 {
 	bool is_mono;
 	bool ok = true;
@@ -3261,7 +3260,7 @@ bool RE_WriteRenderViewsMovie(ReportList *reports, RenderResult *rr, Scene *scen
 			IMB_colormanagement_imbuf_for_write(ibuf, true, false, &scene->view_settings,
 			                                    &scene->display_settings, &scene->r.im_format);
 
-			ok &= mh->append_movie(movie_ctx_arr[view_id], rd, scene->r.sfra, scene->r.cfra,
+			ok &= mh->append_movie(movie_ctx_arr[view_id], rd, preview ? scene->r.psfra : scene->r.sfra, scene->r.cfra,
 			                       (int *) ibuf->rect, ibuf->x, ibuf->y, suffix, reports);
 
 			if (do_free) {
@@ -3301,7 +3300,7 @@ bool RE_WriteRenderViewsMovie(ReportList *reports, RenderResult *rr, Scene *scen
 
 		ibuf_arr[2] = IMB_stereo3d_ImBuf(&scene->r.im_format, ibuf_arr[0], ibuf_arr[1]);
 
-		ok = mh->append_movie(movie_ctx_arr[0], rd, scene->r.sfra, scene->r.cfra, (int *) ibuf_arr[2]->rect,
+		ok = mh->append_movie(movie_ctx_arr[0], rd, preview ? scene->r.psfra : scene->r.sfra, scene->r.cfra, (int *) ibuf_arr[2]->rect,
 		                      ibuf_arr[2]->x, ibuf_arr[2]->y, "", reports);
 
 		for (i = 0; i < 2; i++) {
@@ -3331,7 +3330,7 @@ static int do_write_image_or_movie(Render *re, Main *bmain, Scene *scene, bMovie
 
 	/* write movie or image */
 	if (BKE_imtype_is_movie(scene->r.im_format.imtype)) {
-		RE_WriteRenderViewsMovie(re->reports, &rres, scene, &re->r, mh, re->rectx, re->recty, re->movie_ctx_arr, totvideos);
+		RE_WriteRenderViewsMovie(re->reports, &rres, scene, &re->r, mh, re->rectx, re->recty, re->movie_ctx_arr, totvideos, false);
 	}
 	else {
 		if (name_override)
