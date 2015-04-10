@@ -129,7 +129,6 @@ void BlenderSession::create_session()
 		 * do some basic syncing here, no objects or materials for speed */
 		sync->sync_render_layers(b_v3d, NULL);
 		sync->sync_integrator();
-		sync->sync_camera(b_render, b_engine.camera_override(), width, height);
 	}
 
 	/* set buffer parameters */
@@ -184,7 +183,6 @@ void BlenderSession::reset_session(BL::BlendData b_data_, BL::Scene b_scene_)
 	 * do some basic syncing here, no objects or materials for speed */
 	sync->sync_render_layers(b_v3d, NULL);
 	sync->sync_integrator();
-	sync->sync_camera(b_render, b_engine.camera_override(), width, height);
 
 	BufferParams buffer_params = BlenderSync::get_buffer_params(b_render, PointerRNA_NULL, PointerRNA_NULL, scene->camera, width, height);
 	session->reset(buffer_params, session_params.samples);
@@ -470,7 +468,7 @@ void BlenderSession::render()
 			b_engine.active_view_set(b_rview_name.c_str());
 
 			/* update scene */
-			sync->sync_camera(b_render, b_engine.camera_override(), width, height);
+			sync->sync_camera(b_render, b_engine.camera_override(), width, height, b_rview_name.c_str());
 			sync->sync_data(b_v3d, b_engine.camera_override(), &python_thread_state, b_rlay_name.c_str());
 
 			/* update number of samples per layer */
@@ -549,7 +547,7 @@ void BlenderSession::bake(BL::Object b_object, const string& pass_type, BL::Bake
 	scene->integrator->tag_update(scene);
 
 	/* update scene */
-	sync->sync_camera(b_render, b_engine.camera_override(), width, height);
+	sync->sync_camera(b_render, b_engine.camera_override(), width, height, "");
 	sync->sync_data(b_v3d, b_engine.camera_override(), &python_thread_state);
 
 	/* get buffer parameters */
@@ -698,7 +696,7 @@ void BlenderSession::synchronize()
 	if(b_rv3d)
 		sync->sync_view(b_v3d, b_rv3d, width, height);
 	else
-		sync->sync_camera(b_render, b_engine.camera_override(), width, height);
+		sync->sync_camera(b_render, b_engine.camera_override(), width, height, "");
 
 	/* unlock */
 	session->scene->mutex.unlock();

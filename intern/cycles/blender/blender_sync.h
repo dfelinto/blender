@@ -56,7 +56,7 @@ public:
 	void sync_data(BL::SpaceView3D b_v3d, BL::Object b_override, void **python_thread_state, const char *layer = 0);
 	void sync_render_layers(BL::SpaceView3D b_v3d, const char *layer);
 	void sync_integrator();
-	void sync_camera(BL::RenderSettings b_render, BL::Object b_override, int width, int height);
+	void sync_camera(BL::RenderSettings b_render, BL::Object b_override, int width, int height, const char *viewname);
 	void sync_view(BL::SpaceView3D b_v3d, BL::RegionView3D b_rv3d, int width, int height);
 	int get_layer_samples() { return render_layer.samples; }
 	int get_layer_bound_samples() { return render_layer.bound_samples; }

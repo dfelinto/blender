@@ -344,7 +344,8 @@ bool Camera::modified(const Camera& cam)
 		(latitude_min == cam.latitude_min) &&
 		(latitude_max == cam.latitude_max) &&
 		(longitude_min == cam.longitude_min) &&
-		(longitude_max == cam.longitude_max));
+		(longitude_max == cam.longitude_max) &&
+		(stereo_eye == cam.stereo_eye));
 }
 
 bool Camera::motion_modified(const Camera& cam)

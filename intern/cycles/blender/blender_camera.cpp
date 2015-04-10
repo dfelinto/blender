@@ -331,7 +331,7 @@ static void blender_camera_viewplane(BlenderCamera *bcam, int width, int height,
 	}
 }
 
-static void blender_camera_sync(Camera *cam, BlenderCamera *bcam, int width, int height)
+static void blender_camera_sync(Camera *cam, BlenderCamera *bcam, int width, int height, const char *viewname)
 {
 	/* copy camera to compare later */
 	Camera prevcam = *cam;
@@ -389,9 +389,18 @@ static void blender_camera_sync(Camera *cam, BlenderCamera *bcam, int width, int
 	cam->longitude_max = bcam->longitude_max;
 
 	/* panorama stereo */
-	cam->use_spherical_stereo = bcam->use_spherical_stereo;
 	cam->interocular_distance = bcam->interocular_distance;
 	cam->convergence_distance = bcam->convergence_distance;
+	cam->use_spherical_stereo = bcam->use_spherical_stereo;
+
+	if(cam->use_spherical_stereo) {
+		if(strcmp(viewname, "left") == 0)
+			cam->stereo_eye = STEREO_LEFT;
+		else if(strcmp(viewname, "right") == 0)
+			cam->stereo_eye = STEREO_RIGHT;
+		else
+			cam->stereo_eye = STEREO_NONE;
+	}
 
 	/* anamorphic lens bokeh */
 	cam->aperture_ratio = bcam->aperture_ratio;
@@ -421,7 +430,7 @@ static void blender_camera_sync(Camera *cam, BlenderCamera *bcam, int width, int
 
 /* Sync Render Camera */
 
-void BlenderSync::sync_camera(BL::RenderSettings b_render, BL::Object b_override, int width, int height)
+void BlenderSync::sync_camera(BL::RenderSettings b_render, BL::Object b_override, int width, int height, const char *viewname)
 {
 	BlenderCamera bcam;
 	blender_camera_init(&bcam, b_render);
@@ -454,22 +463,7 @@ void BlenderSync::sync_camera(BL::RenderSettings b_render, BL::Object b_override
 
 	/* sync */
 	Camera *cam = scene->camera;
-	blender_camera_sync(cam, &bcam, width, height);
-
-	/* multiview panorama */
-	if(cam->use_spherical_stereo) {
-		const char *active_view = b_engine.active_view_get();
-
-		if(strcmp(active_view, "left") == 0)
-			cam->stereo_eye = STEREO_LEFT;
-		else if(strcmp(active_view, "right") == 0)
-			cam->stereo_eye = STEREO_RIGHT;
-		else
-			cam->stereo_eye = STEREO_NONE;
-	}
-
-	/* force update to update the kernel camera */
-	cam->tag_update();
+	blender_camera_sync(cam, &bcam, width, height, viewname);
 }
 
 void BlenderSync::sync_camera_motion(BL::Object b_ob, float motion_time)
@@ -670,7 +664,7 @@ void BlenderSync::sync_view(BL::SpaceView3D b_v3d, BL::RegionView3D b_rv3d, int 
 	blender_camera_from_view(&bcam, b_engine, b_scene, b_v3d, b_rv3d, width, height);
 	blender_camera_border(&bcam, b_engine, b_scene.render(), b_scene, b_v3d, b_rv3d, width, height);
 
-	blender_camera_sync(scene->camera, &bcam, width, height);
+	blender_camera_sync(scene->camera, &bcam, width, height, "");
 }
 
 BufferParams BlenderSync::get_buffer_params(BL::RenderSettings b_render, BL::SpaceView3D b_v3d, BL::RegionView3D b_rv3d, Camera *cam, int width, int height)
