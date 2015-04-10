@@ -135,7 +135,7 @@ static float blender_camera_focal_distance(BL::RenderEngine b_engine, BL::Object
 static bool blender_camera_use_spherical_stereo(BL::RenderSettings b_render, BlenderCamera *bcam, PointerRNA *ccamera)
 {
 	if(b_render.use_multiview() &&
-	   b_render.views_format() == 0 && /* STEREO_3D */
+	   b_render.views_format() == BL::RenderSettings::views_format_STEREO_3D &&
 	   bcam->type == CAMERA_PANORAMA &&
 	   RNA_boolean_get(ccamera, "use_spherical_stereo"))
 	{
