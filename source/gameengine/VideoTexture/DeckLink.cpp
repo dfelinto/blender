@@ -281,7 +281,7 @@ static bool decklink_ConvImage(u_int *dest, const short *destSize, const u_int *
 {
 	short w, h, x, y;
 	const u_int *s;
-	u_int *d;
+	u_int *d, p;
 	bool sameSize = (destSize[0] == srcSize[0] && destSize[1] == srcSize[1]);
 
 	if (sameSize || !extend)
@@ -337,21 +337,27 @@ static bool decklink_ConvImage(u_int *dest, const short *destSize, const u_int *
 				{
 					// increase width accum
 					accWidth += destSize[0];
-					// if pixel has to be drawn
-					if (accWidth >= srcSize[0])
+					// convert pixel
+					p = (swap) ? CONV_PIXEL(*s) : *s;
+					// if pixel has to be drown one or more times
+					while (accWidth >= srcSize[0])
 					{
 						// decrease accum
 						accWidth -= srcSize[0];
-						// convert pixel
-						*d = (swap) ? CONV_PIXEL(*s) : *s;
-						// next pixel
-						++d;
+						*d++ = p;
 					}
 				}
+				// if there should be more identical lines
+				while (accHeight >= srcSize[1])
+				{
+					accHeight -= srcSize[1];
+					// copy previous line
+					memcpy(d, d - destSize[0], 4 * destSize[0]);
+					d += destSize[0];
+				}
 			}
-			// if pixel row will not be drawn
 			else
-				// move source pointer to next row
+				// if we skip a source line
 				s += srcSize[0];
 		}
 	}
