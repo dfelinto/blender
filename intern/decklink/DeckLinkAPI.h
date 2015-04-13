@@ -31,7 +31,7 @@
 
 #ifdef WIN32
 	#include "win/DeckLinkAPI_h.h"
-    typedef unsigned long   dl_size_t;
+    typedef unsigned int   dl_size_t;
 #else
     #include "linux/DeckLinkAPI.h"
     /* Windows COM API uses BOOL, linux uses bool */

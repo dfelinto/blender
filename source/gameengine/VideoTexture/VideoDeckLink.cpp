@@ -110,41 +110,54 @@ public:
 	TextureTransferDvp(DVPBufferHandle dvpTextureHandle, TextureDesc *pDesc, void *address)
 	{
 		DVPSysmemBufferDesc sysMemBuffersDesc;
+		DVPStatus status;
 
-		if (!mBufferAddrAlignment)
+		mExtSync = NULL;
+		mGpuSync = NULL;
+		mDvpSysMemHandle = 0;
+		mDvpTextureHandle = 0;
+		mTextureHeight = 0;
+
+		try
 		{
-			DVP_CHECK(dvpGetRequiredConstantsGLCtx(&mBufferAddrAlignment, &mBufferGpuStrideAlignment,
-				&mSemaphoreAddrAlignment, &mSemaphoreAllocSize,
-				&mSemaphorePayloadOffset, &mSemaphorePayloadSize));
+			if (!mBufferAddrAlignment)
+			{
+				DVP_CHECK(dvpGetRequiredConstantsGLCtx(&mBufferAddrAlignment, &mBufferGpuStrideAlignment,
+					&mSemaphoreAddrAlignment, &mSemaphoreAllocSize,
+					&mSemaphorePayloadOffset, &mSemaphorePayloadSize));
+			}
+			mExtSync = new SyncInfo(mSemaphoreAllocSize, mSemaphoreAddrAlignment);
+			mGpuSync = new SyncInfo(mSemaphoreAllocSize, mSemaphoreAddrAlignment);
+			sysMemBuffersDesc.width = pDesc->width;
+			sysMemBuffersDesc.height = pDesc->height;
+			sysMemBuffersDesc.stride = pDesc->stride;
+			if (pDesc->format == GL_RED_INTEGER)
+			{
+				sysMemBuffersDesc.format = DVP_RED_INTEGER;
+				sysMemBuffersDesc.type = DVP_UNSIGNED_INT;
+			}
+			else
+			{
+				sysMemBuffersDesc.format = DVP_BGRA;
+				sysMemBuffersDesc.type = (pDesc->type == GL_UNSIGNED_INT_8_8_8_8) ? DVP_UNSIGNED_INT_8_8_8_8 : DVP_UNSIGNED_INT_8_8_8_8_REV;
+			}
+			sysMemBuffersDesc.size = pDesc->width * pDesc->height * 4;
+			sysMemBuffersDesc.bufAddr = address;
+			DVP_CHECK(dvpCreateBuffer(&sysMemBuffersDesc, &mDvpSysMemHandle));
+			status = dvpBindToGLCtx(mDvpSysMemHandle);
+			DVP_CHECK(status);
+			mDvpTextureHandle = dvpTextureHandle;
+			mTextureHeight = pDesc->height; 7680 / 1920;
 		}
-		mExtSync = new SyncInfo(mSemaphoreAllocSize, mSemaphoreAddrAlignment);
-		mGpuSync = new SyncInfo(mSemaphoreAllocSize, mSemaphoreAddrAlignment);
-		sysMemBuffersDesc.width = pDesc->width;
-		sysMemBuffersDesc.height = pDesc->height;
-		sysMemBuffersDesc.stride = pDesc->stride;
-		if (pDesc->format == GL_RED_INTEGER)
+		catch (Exception &)
 		{
-			sysMemBuffersDesc.format = DVP_RED_INTEGER;
-			sysMemBuffersDesc.type = DVP_UNSIGNED_INT;
+			clean();
+			throw;
 		}
-		else
-		{
-			sysMemBuffersDesc.format = DVP_BGRA;
-			sysMemBuffersDesc.type = (pDesc->type == GL_UNSIGNED_INT_8_8_8_8) ? DVP_UNSIGNED_INT_8_8_8_8 : DVP_UNSIGNED_INT_8_8_8_8_REV;
-		}
-		sysMemBuffersDesc.size = pDesc->width * pDesc->height * 4;
-		sysMemBuffersDesc.bufAddr = address;
-		DVP_CHECK(dvpCreateBuffer(&sysMemBuffersDesc, &mDvpSysMemHandle));
-		DVP_CHECK(dvpBindToGLCtx(mDvpSysMemHandle));
-		mDvpTextureHandle = dvpTextureHandle;
-		mTextureHeight = pDesc->height;
 	}
 	~TextureTransferDvp()
 	{
-		dvpUnbindFromGLCtx(mDvpSysMemHandle);
-		dvpDestroyBuffer(mDvpSysMemHandle);
-		delete mExtSync;
-		delete mGpuSync;
+		clean();
 	}
 
 	virtual void PerformTransfer()
@@ -173,6 +186,18 @@ private:
 	static uint32_t			mSemaphorePayloadOffset;
 	static uint32_t			mSemaphorePayloadSize;
 
+	void clean()
+	{
+		if (mDvpSysMemHandle)
+		{
+			dvpUnbindFromGLCtx(mDvpSysMemHandle);
+			dvpDestroyBuffer(mDvpSysMemHandle);
+		}
+		if (mExtSync)
+			delete mExtSync;
+		if (mGpuSync)
+			delete mGpuSync;
+	}
 	SyncInfo*				mExtSync;
 	SyncInfo*				mGpuSync;
 	DVPBufferHandle			mDvpSysMemHandle;
@@ -375,13 +400,13 @@ HRESULT STDMETHODCALLTYPE	PinnedMemoryAllocator::QueryInterface(REFIID /*iid*/, 
 
 ULONG STDMETHODCALLTYPE		PinnedMemoryAllocator::AddRef(void)
 {
-	return atomic_add_uint32(&mRefCount, 1U);
+	return atomic_add_uint32(&mRefCount, 1U)+1U;
 }
 
 ULONG STDMETHODCALLTYPE		PinnedMemoryAllocator::Release(void)
 {
 	uint32_t newCount = atomic_sub_uint32(&mRefCount, 1U);
-	if (newCount == 0)
+	if (--newCount == 0)
 		delete this;
 	return (ULONG)newCount;
 }
