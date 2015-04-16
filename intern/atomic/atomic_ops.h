@@ -102,13 +102,13 @@ atomic_cas_uint64(uint64_t *v, uint64_t old, uint64_t _new)
 ATOMIC_INLINE uint64_t
 atomic_add_uint64(uint64_t *p, uint64_t x)
 {
-	return InterlockedExchangeAdd64((int64_t *)p, (int64_t)x);
+    return InterlockedExchangeAdd64((int64_t *)p, (int64_t)x)+x;
 }
 
 ATOMIC_INLINE uint64_t
 atomic_sub_uint64(uint64_t *p, uint64_t x)
 {
-	return InterlockedExchangeAdd64((int64_t *)p, -((int64_t)x));
+    return InterlockedExchangeAdd64((int64_t *)p, -((int64_t)x))-((int64_t)x);
 }
 
 ATOMIC_INLINE uint64_t
@@ -140,24 +140,25 @@ atomic_cas_uint64(uint64_t *v, uint64_t old, uint64_t _new)
 ATOMIC_INLINE uint64_t
 atomic_add_uint64(uint64_t *p, uint64_t x)
 {
+    uint64_t ret = x;
 	asm volatile (
 	    "lock; xaddq %0, %1;"
-	    : "+r" (x), "=m" (*p) /* Outputs. */
+        : "+r" (ret), "=m" (*p) /* Outputs. */
 	    : "m" (*p) /* Inputs. */
 	    );
-	return x;
+    return ret+x;
 }
 
 ATOMIC_INLINE uint64_t
 atomic_sub_uint64(uint64_t *p, uint64_t x)
 {
-	x = (uint64_t)(-(int64_t)x);
+    uint64_t ret = (uint64_t)(-(int64_t)x);
 	asm volatile (
 	    "lock; xaddq %0, %1;"
-	    : "+r" (x), "=m" (*p) /* Outputs. */
+        : "+r" (ret), "=m" (*p) /* Outputs. */
 	    : "m" (*p) /* Inputs. */
 	    );
-	return x;
+    return ret-x;
 }
 
 ATOMIC_INLINE uint64_t
@@ -247,13 +248,13 @@ atomic_cas_uint32(uint32_t *v, uint32_t old, uint32_t _new)
 ATOMIC_INLINE uint32_t
 atomic_add_uint32(uint32_t *p, uint32_t x)
 {
-	return InterlockedExchangeAdd(p, x);
+    return InterlockedExchangeAdd(p, x)+x;
 }
 
 ATOMIC_INLINE uint32_t
 atomic_sub_uint32(uint32_t *p, uint32_t x)
 {
-	return InterlockedExchangeAdd(p, -((int32_t)x));
+    return InterlockedExchangeAdd(p, -((int32_t)x))-((int32_t)x);
 }
 
 ATOMIC_INLINE uint32_t
@@ -285,24 +286,25 @@ atomic_cas_uint32(uint32_t *v, uint32_t old, uint32_t _new)
 ATOMIC_INLINE uint32_t
 atomic_add_uint32(uint32_t *p, uint32_t x)
 {
+    uint32_t ret = x;
 	asm volatile (
 	    "lock; xaddl %0, %1;"
-	    : "+r" (x), "=m" (*p) /* Outputs. */
+        : "+r" (ret), "=m" (*p) /* Outputs. */
 	    : "m" (*p) /* Inputs. */
 	    );
-	return x;
+    return ret+x;
 }
 
 ATOMIC_INLINE uint32_t
 atomic_sub_uint32(uint32_t *p, uint32_t x)
 {
-	x = (uint32_t)(-(int32_t)x);
+    uint32_t ret = (uint32_t)(-(int32_t)x);
 	asm volatile (
 	    "lock; xaddl %0, %1;"
-	    : "+r" (x), "=m" (*p) /* Outputs. */
+        : "+r" (ret), "=m" (*p) /* Outputs. */
 	    : "m" (*p) /* Inputs. */
 	    );
-	return x;
+    return ret-x;
 }
 
 ATOMIC_INLINE uint32_t
