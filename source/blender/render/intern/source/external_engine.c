@@ -462,6 +462,16 @@ bool RE_bake_has_engine(Render *re)
 	return (type->bake != NULL);
 }
 
+int RE_bake_object_id_get(Render *re)
+{
+	return re->baking_object_id;
+}
+
+void RE_bake_object_id_set(Render *re, int object_id)
+{
+	re->baking_object_id = object_id;
+}
+
 bool RE_bake_engine(
         Render *re, Object *object, const BakePixel pixel_array[],
         const size_t num_pixels, const int depth,

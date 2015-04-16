@@ -32,6 +32,8 @@
 #include "BLI_utildefines.h"
 #include "BLI_path_util.h"
 
+#include "BKE_global.h"
+
 #include "RNA_define.h"
 #include "RNA_enum_types.h"
 
@@ -392,6 +394,14 @@ static RenderPass *rna_RenderPass_find_by_type(RenderLayer *rl, int passtype, co
 		}
 	}
 	return NULL;
+}
+
+static int rna_BakePixel_primitive_id_get(BakePixel *bp, RenderEngine *engine)
+{
+	if (RE_bake_object_id_get(engine->re) == bp->object_id)
+		return bp->primitive_id;
+	else
+		return -1;
 }
 
 #else /* RNA_RUNTIME */
@@ -813,15 +823,13 @@ static void rna_def_render_bake_pixel(BlenderRNA *brna)
 {
 	StructRNA *srna;
 	PropertyRNA *prop;
+	FunctionRNA *func;
+	PropertyRNA *parm;
 
 	srna = RNA_def_struct(brna, "BakePixel", NULL);
 	RNA_def_struct_ui_text(srna, "Bake Pixel", "");
 
 	RNA_define_verify_sdna(0);
-
-	prop = RNA_def_property(srna, "primitive_id", PROP_INT, PROP_NONE);
-	RNA_def_property_int_sdna(prop, NULL, "primitive_id");
-	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 
 	prop = RNA_def_property(srna, "uv", PROP_FLOAT, PROP_NONE);
 	RNA_def_property_array(prop, 2);
@@ -848,6 +856,12 @@ static void rna_def_render_bake_pixel(BlenderRNA *brna)
 	RNA_def_property_struct_type(prop, "BakePixel");
 	RNA_def_property_pointer_funcs(prop, "rna_BakePixel_next_get", NULL, NULL, NULL);
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+
+	func = RNA_def_function(srna, "primitive_id", "rna_BakePixel_primitive_id_get");
+	RNA_def_function_ui_description(func, "Get the primitive id for the current Bake Pixel");
+	parm = RNA_def_pointer(func, "engine", "RenderEngine", "", "Render Engine");
+	parm = RNA_def_int(func, "object_id", 0, -1, INT_MAX, "Object ID", "", -1, INT_MAX);
+	RNA_def_function_return(func, parm);
 
 	RNA_define_verify_sdna(1);
 }

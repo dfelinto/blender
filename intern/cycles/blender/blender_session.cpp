@@ -511,13 +511,13 @@ void BlenderSession::render()
 	sync = NULL;
 }
 
-static void populate_bake_data(BakeData *data, BL::BakePixel pixel_array, const int num_pixels)
+static void populate_bake_data(BL::RenderEngine b_engine, BakeData *data, BL::BakePixel pixel_array, const int num_pixels)
 {
 	BL::BakePixel bp = pixel_array;
 
 	int i;
 	for(i=0; i < num_pixels; i++) {
-		data->set(i, bp.primitive_id(), bp.uv(), bp.du_dx(), bp.du_dy(), bp.dv_dx(), bp.dv_dy());
+		data->set(i, bp.primitive_id(b_engine), bp.uv(), bp.du_dx(), bp.du_dy(), bp.dv_dx(), bp.dv_dy());
 		bp = bp.next();
 	}
 }
@@ -578,7 +578,7 @@ void BlenderSession::bake(BL::Object b_object, const string& pass_type, BL::Bake
 
 	BakeData *bake_data = scene->bake_manager->init(object, tri_offset, num_pixels);
 
-	populate_bake_data(bake_data, pixel_array, num_pixels);
+	populate_bake_data(b_engine, bake_data, pixel_array, num_pixels);
 
 	/* set number of samples */
 	session->tile_manager.set_samples(session_params.samples);
