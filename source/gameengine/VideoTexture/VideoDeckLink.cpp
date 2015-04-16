@@ -47,11 +47,12 @@
 #include "atomic_ops.h"
 
 extern ExceptionID DeckLinkInternalError;
-ExceptionID SourceVideoOnlyCapture, VideoDeckLinkBadFormat, VideoDeckLinkOpenCard, VideoDeckLinkDvpInternalError;
+ExceptionID SourceVideoOnlyCapture, VideoDeckLinkBadFormat, VideoDeckLinkOpenCard, VideoDeckLinkDvpInternalError, VideoDeckLinkPinMemoryError;
 ExpDesc SourceVideoOnlyCaptureDesc(SourceVideoOnlyCapture, "This video source only allows live capture");
 ExpDesc VideoDeckLinkBadFormatDesc(VideoDeckLinkBadFormat, "Invalid or unsupported capture format, should be <mode>/<pixel>[/3D]");
 ExpDesc VideoDeckLinkOpenCardDesc(VideoDeckLinkOpenCard, "Cannot open capture card, check if driver installed");
 ExpDesc VideoDeckLinkDvpInternalErrorDesc(VideoDeckLinkDvpInternalError, "DVP API internal error, please report");
+ExpDesc VideoDeckLinkPinMemoryErrorDesc(VideoDeckLinkPinMemoryError, "Error pinning memory");
 
 
 #ifdef WIN32
@@ -107,7 +108,7 @@ struct SyncInfo
 class TextureTransferDvp : public TextureTransfer
 {
 public:
-	TextureTransferDvp(DVPBufferHandle dvpTextureHandle, TextureDesc *pDesc, void *address)
+	TextureTransferDvp(DVPBufferHandle dvpTextureHandle, TextureDesc *pDesc, void *address, u_int allocatedSize)
 	{
 		DVPSysmemBufferDesc sysMemBuffersDesc;
 		DVPStatus status;
@@ -117,6 +118,13 @@ public:
 		mDvpSysMemHandle = 0;
 		mDvpTextureHandle = 0;
 		mTextureHeight = 0;
+		mAllocatedSize = 0;
+		mBuffer = NULL;
+
+		if (!_PinBuffer(address, allocatedSize))
+			THRWEXCP(VideoDeckLinkPinMemoryError, S_OK);
+		mAllocatedSize = allocatedSize;
+		mBuffer = address;
 
 		try
 		{
@@ -142,12 +150,12 @@ public:
 				sysMemBuffersDesc.type = (pDesc->type == GL_UNSIGNED_INT_8_8_8_8) ? DVP_UNSIGNED_INT_8_8_8_8 : DVP_UNSIGNED_INT_8_8_8_8_REV;
 			}
 			sysMemBuffersDesc.size = pDesc->width * pDesc->height * 4;
-			sysMemBuffersDesc.bufAddr = address;
+			sysMemBuffersDesc.bufAddr = mBuffer;
 			DVP_CHECK(dvpCreateBuffer(&sysMemBuffersDesc, &mDvpSysMemHandle));
 			status = dvpBindToGLCtx(mDvpSysMemHandle);
 			DVP_CHECK(status);
 			mDvpTextureHandle = dvpTextureHandle;
-			mTextureHeight = pDesc->height; 7680 / 1920;
+			mTextureHeight = pDesc->height;
 		}
 		catch (Exception &)
 		{
@@ -197,12 +205,16 @@ private:
 			delete mExtSync;
 		if (mGpuSync)
 			delete mGpuSync;
+		if (mBuffer)
+			_UnpinBuffer(mBuffer, mAllocatedSize);
 	}
 	SyncInfo*				mExtSync;
 	SyncInfo*				mGpuSync;
 	DVPBufferHandle			mDvpSysMemHandle;
 	DVPBufferHandle			mDvpTextureHandle;
 	u_int					mTextureHeight;
+	u_int					mAllocatedSize;
+	void*					mBuffer;
 };
 
 uint32_t	TextureTransferDvp::mBufferAddrAlignment;
@@ -213,6 +225,64 @@ uint32_t	TextureTransferDvp::mSemaphorePayloadOffset;
 uint32_t	TextureTransferDvp::mSemaphorePayloadSize;
 
 #endif
+
+class TextureTransferOGL : public TextureTransfer
+{
+public:
+	TextureTransferOGL(GLuint texId, TextureDesc *pDesc, void *address)
+	{
+		memcpy(&mDesc, pDesc, sizeof(mDesc));
+		mTexId = texId;
+		mBuffer = address;
+
+		// as we cache transfer object, we will create one texture to hold the buffer
+		glGenBuffers(1, &mUnpinnedTextureBuffer);
+		// create a storage for it
+		glBindBuffer(GL_PIXEL_UNPACK_BUFFER, mUnpinnedTextureBuffer);
+		glBufferData(GL_PIXEL_UNPACK_BUFFER, pDesc->size, NULL, GL_DYNAMIC_DRAW);
+		glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+	}
+	~TextureTransferOGL()
+	{
+		glDeleteBuffers(1, &mUnpinnedTextureBuffer);
+	}
+
+	virtual void PerformTransfer()
+	{
+		glBindBuffer(GL_PIXEL_UNPACK_BUFFER, mUnpinnedTextureBuffer);
+		glBufferSubData(GL_PIXEL_UNPACK_BUFFER, 0, mDesc.size, mBuffer);
+		glBindTexture(GL_TEXTURE_2D, mTexId);
+		// NULL for last arg indicates use current GL_PIXEL_UNPACK_BUFFER target as texture data
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, mDesc.width, mDesc.height, mDesc.format, mDesc.type, NULL);
+		glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+	}
+private:
+	// intermediate texture to receive the buffer
+	GLuint mUnpinnedTextureBuffer;
+	// target texture to receive the image
+	GLuint mTexId;
+	// buffer
+	void *mBuffer;
+	// characteristic of the image
+	TextureDesc mDesc;
+};
+
+bool TextureTransfer::_PinBuffer(void *address, u_int size)
+{
+#ifdef WIN32
+	return VirtualLock(address, size);
+#else
+	// Linux doesn't have the equivalent?
+	return true;
+#endif
+}
+
+void TextureTransfer::_UnpinBuffer(void* address, u_int size)
+{
+#ifdef WIN32
+	VirtualUnlock(address, size);
+#endif
+}
 
 
 
@@ -253,11 +323,10 @@ bool PinnedMemoryAllocator::ReserveMemory(size_t size)
 
 PinnedMemoryAllocator::PinnedMemoryAllocator(unsigned cacheSize, size_t memSize) :
 mRefCount(1U),
-mBufferCacheSize(cacheSize),
-mUnpinnedTextureBuffer(0)
 #ifdef WIN32
-, mDvpCaptureTextureHandle(0)
+mDvpCaptureTextureHandle(0),
 #endif
+mBufferCacheSize(cacheSize)
 {
 	pthread_mutex_init(&mMutex, NULL);
 	// do it once
@@ -279,12 +348,7 @@ mUnpinnedTextureBuffer(0)
 
 		mGPUDirectInitialized = true;
 	}
-	if (!mHasDvp && !mHasAMDPinnedMemory)
-	{
-		// if we cannot use GPUDirect, we will send the video to the GPU using OGL buffer
-		glGenBuffers(1, &mUnpinnedTextureBuffer);
-	}
-	else
+	if (mHasDvp || mHasAMDPinnedMemory)
 	{
 		ReserveMemory(memSize);
 	}
@@ -307,28 +371,9 @@ PinnedMemoryAllocator::~PinnedMemoryAllocator()
 		_ReleaseBuffer(address);
 	}
 
-	if (mUnpinnedTextureBuffer)
-		glDeleteBuffers(1, &mUnpinnedTextureBuffer);
 #ifdef WIN32
 	if (mDvpCaptureTextureHandle)
 		dvpDestroyBuffer(mDvpCaptureTextureHandle);
-#endif
-}
-
-bool PinnedMemoryAllocator::_PinBuffer(void *address, u_int size)
-{
-#ifdef WIN32
-	return VirtualLock(address, size);
-#else
-	// Linux doesn't have the equivalent?
-	return true;
-#endif
-}
-
-void PinnedMemoryAllocator::_UnpinBuffer(void* address, u_int size)
-{
-#ifdef WIN32
-	VirtualUnlock(address, size);
 #endif
 }
 
@@ -367,9 +412,7 @@ void PinnedMemoryAllocator::TransferBuffer(void* address, TextureDesc* texDesc, 
 		Unlock();
 		if (!pTransfer)
 		{
-			if (!_PinBuffer(address, allocatedSize))
-				return;
-			pTransfer = new TextureTransferDvp(mDvpCaptureTextureHandle, texDesc, address);
+			pTransfer = new TextureTransferDvp(mDvpCaptureTextureHandle, texDesc, address, allocatedSize);
 			if (pTransfer)
 			{
 				Lock();
@@ -386,7 +429,22 @@ void PinnedMemoryAllocator::TransferBuffer(void* address, TextureDesc* texDesc, 
 	}
 	else
 	{
-		pTransfer = NULL;
+		Lock();
+		if (mPinnedBuffer.count(address) > 0)
+		{
+			pTransfer = mPinnedBuffer[address];
+		}
+		Unlock();
+		if (!pTransfer)
+		{
+			pTransfer = new TextureTransferOGL(texId, texDesc, address);
+			if (pTransfer)
+			{
+				Lock();
+				mPinnedBuffer[address] = pTransfer;
+				Unlock();
+			}
+		}
 	}
 	if (pTransfer)
 		pTransfer->PerformTransfer();
@@ -400,13 +458,13 @@ HRESULT STDMETHODCALLTYPE	PinnedMemoryAllocator::QueryInterface(REFIID /*iid*/, 
 
 ULONG STDMETHODCALLTYPE		PinnedMemoryAllocator::AddRef(void)
 {
-	return atomic_add_uint32(&mRefCount, 1U)+1U;
+    return atomic_add_uint32(&mRefCount, 1U);
 }
 
 ULONG STDMETHODCALLTYPE		PinnedMemoryAllocator::Release(void)
 {
 	uint32_t newCount = atomic_sub_uint32(&mRefCount, 1U);
-	if (--newCount == 0)
+    if (newCount == 0)
 		delete this;
 	return (ULONG)newCount;
 }
@@ -419,7 +477,7 @@ HRESULT STDMETHODCALLTYPE	PinnedMemoryAllocator::AllocateBuffer(dl_size_t buffer
 	{
 		// Allocate memory on a page boundary
 		// Note: aligned alloc exist in Blender but only for small alignment, use direct allocation then.
-		// Note: the DeckLink API tries to allocate up to 65 buffer in advance, we will limit this to 3
+		// Note: the DeckLink API tries to allocate up to 65 buffer in advance, we will limit this to 5
 		//       because we don't need any caching
 		if (mAllocatedSize.size() >= 5)
 			*allocatedBuffer = NULL;
@@ -463,7 +521,6 @@ HRESULT STDMETHODCALLTYPE PinnedMemoryAllocator::ReleaseBuffer(void* buffer)
 
 HRESULT PinnedMemoryAllocator::_ReleaseBuffer(void* buffer)
 {
-	u_int allocatedSize = 0;
 	TextureTransfer *pTransfer;
 	if (mAllocatedSize.count(buffer) == 0)
 	{
@@ -473,10 +530,8 @@ HRESULT PinnedMemoryAllocator::_ReleaseBuffer(void* buffer)
 	else
 	{
 		// No room left in cache, so un-pin (if it was pinned) and free this buffer
-		allocatedSize = mAllocatedSize[buffer];
 		if (mPinnedBuffer.count(buffer) > 0)
 		{
-			_UnpinBuffer(buffer, allocatedSize);
 			pTransfer = mPinnedBuffer[buffer];
 			mPinnedBuffer.erase(buffer);
 			delete pTransfer;
@@ -780,11 +835,10 @@ void VideoDeckLink::openCam (char *format, short camIdx)
 		if (mTextureDesc.stride != mTextureDesc.width * 4)
 			THRWEXCP(VideoDeckLinkBadFormat, S_OK);
 	}
-
 	// custom allocator, 3 frame in cache should be enough
 	// make sure we allow up to 10 frame in memory for pinning
 	// note: some pixel format take more than 4 bytes but the difference is small (9/8 versus 1)
-	mpAllocator = new PinnedMemoryAllocator(3, mFrameWidth*mTextureDesc.height * 4 * 10);
+    mpAllocator = new PinnedMemoryAllocator(3, mFrameWidth*mTextureDesc.height * 4 * 10);
 
 	if (mDLInput->SetVideoInputFrameMemoryAllocator(mpAllocator) != S_OK)
 		THRWEXCP(DeckLinkInternalError, S_OK);
@@ -879,7 +933,6 @@ void VideoDeckLink::calcImage (unsigned int texId, double ts)
 		{
 			u_int rowSize = pFrame->GetRowBytes();
 			u_int textureSize = rowSize * pFrame->GetHeight();
-			u_int expectedSize;
 			void* videoPixels = NULL;
 			void* rightEyePixels = NULL;
 			if (!mTextureDesc.stride)
@@ -910,8 +963,8 @@ void VideoDeckLink::calcImage (unsigned int texId, double ts)
 					if (if3DExtensions)
 						if3DExtensions->Release();
 				}
-				expectedSize = mTextureDesc.width * mTextureDesc.height * 4;
-				if (expectedSize == textureSize)
+                mTextureDesc.size = mTextureDesc.width * mTextureDesc.height * 4;
+				if (mTextureDesc.size == textureSize)
 				{
 					// this means that both left and right frame are contiguous and that there is no padding
 					// do the transfer

@@ -60,6 +60,7 @@ struct TextureDesc
 	u_int		width;
 	u_int		height;
 	u_int		stride;
+	u_int		size;
 	GLenum		format;
 	GLenum		type;
 	TextureDesc()
@@ -67,6 +68,7 @@ struct TextureDesc
 		width = 0;
 		height = 0;
 		stride = 0;
+		size = 0;
 		format = 0;
 		type = 0;
 	}
@@ -153,6 +155,9 @@ public:
 	virtual ~TextureTransfer() { }
 
 	virtual void PerformTransfer() = 0;
+private:
+	static bool _PinBuffer(void *address, u_int size);
+	static void _UnpinBuffer(void* address, u_int size);
 };
 
 ////////////////////////////////////////////
@@ -205,8 +210,6 @@ private:
 	{
 		pthread_mutex_unlock(&mMutex);
 	}
-	void _UnpinBuffer(void* address, u_int size);
-	bool _PinBuffer(void *address, u_int size);
 	HRESULT _ReleaseBuffer(void* buffer);
 
 	uint32_t							mRefCount;
@@ -215,12 +218,11 @@ private:
 	pthread_mutex_t						mMutex;
 	std::map<void*, u_int>				mAllocatedSize;
 	std::vector<void*>					mBufferCache;
-	u_int								mBufferCacheSize;
 	std::map<void *, TextureTransfer*>	mPinnedBuffer;
-	GLuint								mUnpinnedTextureBuffer;
 #ifdef WIN32
 	DVPBufferHandle						mDvpCaptureTextureHandle;
 #endif
+	u_int								mBufferCacheSize;
 };
 
 ////////////////////////////////////////////
