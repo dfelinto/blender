@@ -799,9 +799,8 @@ static int bake(
 
 		/* the baking itself */
 		for (i = 0; i < tot_highpoly; i++) {
-			RE_bake_object_id_set(re, i);
-			ok = RE_bake_engine(re, highpoly[i].ob, pixel_array_high, num_pixels,
-			                    depth, pass_type, result);
+			ok = RE_bake_engine(re, highpoly[i].ob, i, pixel_array_high,
+			                    num_pixels, depth, pass_type, result);
 			if (!ok) {
 				BKE_reportf(reports, RPT_ERROR, "Error baking from object \"%s\"", highpoly[i].ob->id.name + 2);
 				goto cage_cleanup;
@@ -827,8 +826,7 @@ cage_cleanup:
 		ob_low->restrictflag &= ~OB_RESTRICT_RENDER;
 
 		if (RE_bake_has_engine(re)) {
-			RE_bake_object_id_set(re, 0);
-			ok = RE_bake_engine(re, ob_low, pixel_array_low, num_pixels, depth, pass_type, result);
+			ok = RE_bake_engine(re, ob_low, 0, pixel_array_low, num_pixels, depth, pass_type, result);
 		}
 		else {
 			BKE_report(reports, RPT_ERROR, "Current render engine does not support baking");

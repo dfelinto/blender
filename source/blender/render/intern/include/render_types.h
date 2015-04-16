@@ -277,9 +277,6 @@ struct Render {
 
 	void **movie_ctx_arr;
 	char viewname[MAX_NAME];
-
-	/* current object being baked - used by Bake API only */
-	int baking_object_id;
 };
 
 /* ------------------------------------------------------------------------- */

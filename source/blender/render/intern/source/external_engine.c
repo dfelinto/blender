@@ -462,18 +462,9 @@ bool RE_bake_has_engine(Render *re)
 	return (type->bake != NULL);
 }
 
-int RE_bake_object_id_get(Render *re)
-{
-	return re->baking_object_id;
-}
-
-void RE_bake_object_id_set(Render *re, int object_id)
-{
-	re->baking_object_id = object_id;
-}
-
 bool RE_bake_engine(
-        Render *re, Object *object, const BakePixel pixel_array[],
+        Render *re, Object *object,
+        const int object_id, const BakePixel pixel_array[],
         const size_t num_pixels, const int depth,
         const ScenePassType pass_type, float result[])
 {
@@ -511,7 +502,7 @@ bool RE_bake_engine(
 		type->update(engine, re->main, re->scene);
 
 	if (type->bake)
-		type->bake(engine, re->scene, object, pass_type, pixel_array, num_pixels, depth, result);
+		type->bake(engine, re->scene, object, pass_type, object_id, pixel_array, num_pixels, depth, result);
 
 	engine->tile_x = 0;
 	engine->tile_y = 0;
