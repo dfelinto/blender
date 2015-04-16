@@ -75,6 +75,8 @@ enum _BMDDeckLinkConfigurationID {
     bmdDeckLinkConfigSingleLinkVideoOutput                       = /* 'sglo' */ 0x73676C6F,
     bmdDeckLinkConfigBlackVideoOutputDuringCapture               = /* 'bvoc' */ 0x62766F63,
     bmdDeckLinkConfigLowLatencyVideoOutput                       = /* 'llvo' */ 0x6C6C766F,
+    bmdDeckLinkConfigDownConversionOnAllAnalogOutput             = /* 'caao' */ 0x6361616F,
+    bmdDeckLinkConfigSMPTELevelAOutput                           = /* 'smta' */ 0x736D7461,
 
     /* Video Output Integers */
 
@@ -144,7 +146,16 @@ enum _BMDDeckLinkConfigurationID {
     bmdDeckLinkConfigAnalogAudioOutputScaleChannel2              = /* 'aos2' */ 0x616F7332,
     bmdDeckLinkConfigAnalogAudioOutputScaleChannel3              = /* 'aos3' */ 0x616F7333,
     bmdDeckLinkConfigAnalogAudioOutputScaleChannel4              = /* 'aos4' */ 0x616F7334,
-    bmdDeckLinkConfigDigitalAudioOutputScale                     = /* 'daos' */ 0x64616F73
+    bmdDeckLinkConfigDigitalAudioOutputScale                     = /* 'daos' */ 0x64616F73,
+
+    /* Device Information Strings */
+
+    bmdDeckLinkConfigDeviceInformationLabel                      = /* 'dila' */ 0x64696C61,
+    bmdDeckLinkConfigDeviceInformationSerialNumber               = /* 'disn' */ 0x6469736E,
+    bmdDeckLinkConfigDeviceInformationCompany                    = /* 'dico' */ 0x6469636F,
+    bmdDeckLinkConfigDeviceInformationPhone                      = /* 'diph' */ 0x64697068,
+    bmdDeckLinkConfigDeviceInformationEmail                      = /* 'diem' */ 0x6469656D,
+    bmdDeckLinkConfigDeviceInformationDate                       = /* 'dida' */ 0x64696461
 };
 
 // Forward Declarations

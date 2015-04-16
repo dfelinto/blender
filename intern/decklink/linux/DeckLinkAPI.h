@@ -292,6 +292,9 @@ enum _BMDDeckLinkAttributeID {
     BMDDeckLinkSupportsClockTimingAdjustment                     = /* 'ctad' */ 0x63746164,
     BMDDeckLinkSupportsFullDuplex                                = /* 'fdup' */ 0x66647570,
     BMDDeckLinkSupportsFullFrameReferenceInputTimingOffset       = /* 'frin' */ 0x6672696E,
+    BMDDeckLinkSupportsSMPTELevelAOutput                         = /* 'lvla' */ 0x6C766C61,
+    BMDDeckLinkSupportsDualLinkSDI                               = /* 'sdls' */ 0x73646C73,
+    BMDDeckLinkSupportsIdleOutput                                = /* 'idou' */ 0x69646F75,
 
     /* Integers */
 
@@ -756,8 +759,7 @@ extern "C" {
     IDeckLinkAPIInformation* CreateDeckLinkAPIInformationInstance (void);
     IDeckLinkGLScreenPreviewHelper* CreateOpenGLScreenPreviewHelper (void);
     IDeckLinkVideoConversion* CreateVideoConversionInstance (void);
-	bool IsDeckLinkAPIPresent (void);
-
+    bool IsDeckLinkAPIPresent (void);
 }
 
 
