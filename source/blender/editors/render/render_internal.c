@@ -189,11 +189,15 @@ static void image_buffer_rect_update(RenderJob *rj, RenderResult *rr, ImBuf *ibu
 	 */
 	/* TODO(sergey): Need to check has_combined here? */
 	if (iuser->passtype == SCE_PASS_COMBINED) {
+		RenderView *rv;
 		size_t view_id = BKE_scene_multiview_view_id_get(&scene->r, viewname);
+		rv = RE_RenderViewGetById(rr, view_id);
+
 		/* find current float rect for display, first case is after composite... still weak */
-		rectf = RE_RenderViewGetRectf(rr, view_id);
-		if (rectf == NULL) {
-			if (RE_RenderViewGetRect32(rr, view_id)) {
+		if (rv->rectf)
+			rectf = rv->rectf;
+		else {
+			if (rv->rect32) {
 				/* special case, currently only happens with sequencer rendering,
 				 * which updates the whole frame, so we can only mark display buffer
 				 * as invalid here (sergey)
@@ -1478,6 +1482,7 @@ void render_view3d_draw(RenderEngine *engine, const bContext *C)
 {
 	Render *re = engine->re;
 	RenderResult rres;
+	RenderView *rv;
 	char name[32];
 	
 	render_view3d_do(engine, C);
@@ -1491,8 +1496,9 @@ void render_view3d_draw(RenderEngine *engine, const bContext *C)
 	
 	/* Viewport render preview doesn't support multiview, view hardcoded to 0 */
 	RE_AcquireResultImage(re, &rres, 0);
-	
-	if (rres.rectf) {
+	rv = RE_RenderViewGetById(&rres, 0);
+
+	if (rv->rectf) {
 		RegionView3D *rv3d = CTX_wm_region_view3d(C);
 		View3D *v3d = CTX_wm_view3d(C);
 		Scene *scene = CTX_data_scene(C);
@@ -1527,7 +1533,7 @@ void render_view3d_draw(RenderEngine *engine, const bContext *C)
 				glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
 				glPixelZoom(scale_x, scale_y);
 				glaDrawPixelsTex(xof, yof, rres.rectx, rres.recty,
-				                 GL_RGBA, GL_FLOAT, GL_NEAREST, rres.rectf);
+				                 GL_RGBA, GL_FLOAT, GL_NEAREST, rv->rectf);
 				glPixelZoom(1.0f, 1.0f);
 				glDisable(GL_BLEND);
 
@@ -1541,7 +1547,7 @@ void render_view3d_draw(RenderEngine *engine, const bContext *C)
 			unsigned char *display_buffer = MEM_mallocN(4 * rres.rectx * rres.recty * sizeof(char),
 			                                            "render_view3d_draw");
 
-			IMB_colormanagement_buffer_make_display_space(rres.rectf, display_buffer, rres.rectx, rres.recty,
+			IMB_colormanagement_buffer_make_display_space(rv->rectf, display_buffer, rres.rectx, rres.recty,
 			                                              4, dither, &scene->view_settings, &scene->display_settings);
 
 			glEnable(GL_BLEND);

@@ -395,23 +395,17 @@ void RE_AcquireResultImage(Render *re, RenderResult *rr, const int view_id)
 			rr->recty = re->result->recty;
 			
 			/* actview view */
-			rv = BLI_findlink(&re->result->views, view_id);
-			if (rv == NULL)
-				rv = (RenderView *)re->result->views.first;
-
-			rr->rectf =  rv ? rv->rectf  : NULL;
-			rr->rectz =  rv ? rv->rectz  : NULL;
-			rr->rect32 = rv ? rv->rect32 : NULL;
+			rv = RE_RenderViewGetById(re->result, view_id);
 
 			/* active layer */
 			rl = render_get_active_layer(re, re->result);
 
 			if (rl && rv) {
 				if (rv->rectf == NULL)
-					rr->rectf = RE_RenderLayerGetPass(rl, SCE_PASS_COMBINED, rv->name);
+					rv->rectf = RE_RenderLayerGetPass(rl, SCE_PASS_COMBINED, rv->name);
 
 				if (rv->rectz == NULL)
-					rr->rectz = RE_RenderLayerGetPass(rl, SCE_PASS_Z, rv->name);
+					rv->rectz = RE_RenderLayerGetPass(rl, SCE_PASS_Z, rv->name);
 			}
 
 			rr->have_combined = rv ? (rv->rectf != NULL) : false;
@@ -769,11 +763,14 @@ void RE_InitState(Render *re, Render *source, RenderData *rd,
 static void render_result_rescale(Render *re)
 {
 	RenderResult *result = re->result;
+	RenderView *rv;
 	int x, y;
 	float scale_x, scale_y;
 	float *src_rectf;
 
-	src_rectf = result->rectf;
+	rv = RE_RenderViewGetById(result, 0);
+	src_rectf = rv->rectf;
+
 	if (src_rectf == NULL) {
 		RenderLayer *rl = render_get_active_layer(re, re->result);
 		if (rl != NULL) {
@@ -791,7 +788,7 @@ static void render_result_rescale(Render *re)
 		                               "");
 
 		if (re->result != NULL) {
-			dst_rectf = re->result->rectf;
+			dst_rectf = RE_RenderViewGetById(re->result, 0)->rectf;
 			if (dst_rectf == NULL) {
 				RenderLayer *rl;
 				rl = render_get_active_layer(re, re->result);
@@ -2245,7 +2242,7 @@ static void do_merge_fullsample(Render *re, bNodeTree *ntree)
 
 			for (y = 0; y < re->recty; y++) {
 				float *rf = rectf + 4 * y * re->rectx;
-				float *col = rres.rectf + 4 * y * re->rectx;
+				float *col = rectf + 4 * y * re->rectx;
 				
 				for (x = 0; x < re->rectx; x++, rf += 4, col += 4) {
 					/* clamping to 1.0 is needed for correct AA */
@@ -2477,14 +2474,18 @@ static void renderresult_stampinfo(Render *re)
 {
 	RenderResult rres;
 	RenderView *rv;
+	RenderView *rv_result; /* it may be the result of compositor or sequencer */
 	int nr;
 
 	/* this is the basic trick to get the displayed float or char rect from render result */
 	nr = 0;
 	for (rv = re->result->views.first;rv;rv = rv->next, nr++) {
 		RE_SetActiveRenderView(re, rv->name);
+
 		RE_AcquireResultImage(re, &rres, nr);
-		BKE_image_stamp_buf(re->scene, RE_GetCamera(re), (unsigned char *)rres.rect32, rres.rectf, rres.rectx, rres.recty, 4);
+		rv_result = RE_RenderViewGetById(re->result, nr);
+
+		BKE_image_stamp_buf(re->scene, RE_GetCamera(re), (unsigned char *)rv_result->rect32, rv_result->rectf, rres.rectx, rres.recty, 4);
 		RE_ReleaseResultImage(re);
 	}
 }

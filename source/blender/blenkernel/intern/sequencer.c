@@ -3214,26 +3214,28 @@ static ImBuf *seq_render_scene_strip(const SeqRenderData *context, Sequence *seq
 		for (i = 0; i < totviews; i++) {
 			SeqRenderData localcontext = *context;
 			RenderResult rres;
+			RenderView *rv;
 
 			localcontext.view_id = i;
 
 			RE_AcquireResultImage(re, &rres, i);
+			rv = RE_RenderViewGetById(&rres, i);
 
-			if (rres.rectf) {
+			if (rv->rectf) {
 				ibufs_arr[i] = IMB_allocImBuf(rres.rectx, rres.recty, 32, IB_rectfloat);
-				memcpy(ibufs_arr[i]->rect_float, rres.rectf, 4 * sizeof(float) * rres.rectx * rres.recty);
+				memcpy(ibufs_arr[i]->rect_float, rv->rectf, 4 * sizeof(float) * rres.rectx * rres.recty);
 
-				if (rres.rectz) {
+				if (rv->rectz) {
 					addzbuffloatImBuf(ibufs_arr[i]);
-					memcpy(ibufs_arr[i]->zbuf_float, rres.rectz, sizeof(float) * rres.rectx * rres.recty);
+					memcpy(ibufs_arr[i]->zbuf_float, rv->rectz, sizeof(float) * rres.rectx * rres.recty);
 				}
 
 				/* float buffers in the sequencer are not linear */
 				BKE_sequencer_imbuf_to_sequencer_space(context->scene, ibufs_arr[i], false);
 			}
-			else if (rres.rect32) {
+			else if (rv->rect32) {
 				ibufs_arr[i] = IMB_allocImBuf(rres.rectx, rres.recty, 32, IB_rect);
-				memcpy(ibufs_arr[i]->rect, rres.rect32, 4 * rres.rectx * rres.recty);
+				memcpy(ibufs_arr[i]->rect, rv->rect32, 4 * rres.rectx * rres.recty);
 			}
 
 			if (i != context->view_id) {

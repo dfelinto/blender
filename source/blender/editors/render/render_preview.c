@@ -526,6 +526,7 @@ static bool ed_preview_draw_rect(ScrArea *sa, int split, int first, rcti *rect, 
 {
 	Render *re;
 	RenderResult rres;
+	RenderView *rv;
 	char name[32];
 	int offx = 0;
 	int newx = BLI_rcti_size_x(rect);
@@ -551,8 +552,9 @@ static bool ed_preview_draw_rect(ScrArea *sa, int split, int first, rcti *rect, 
 
 	/* material preview only needs monoscopy (view 0) */
 	RE_AcquireResultImage(re, &rres, 0);
+	rv = RE_RenderViewGetById(&rres, 0);
 
-	if (rres.rectf) {
+	if (rv->rectf) {
 		
 		if (ABS(rres.rectx - newx) < 2 && ABS(rres.recty - newy) < 2) {
 

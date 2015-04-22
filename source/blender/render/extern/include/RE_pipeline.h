@@ -137,14 +137,7 @@ typedef struct RenderResult {
 	/* target image size */
 	int rectx, recty;
 	short crop, sample_nr;
-	
-	/* optional, 32 bits version of picture, used for ogl render and image curves */
-	int *rect32;
-	/* if this exists, a copy of one of layers, or result of composited layers */
-	float *rectf;
-	/* if this exists, a copy of one of layers, or result of composited layers */
-	float *rectz;
-	
+
 	/* coordinates within final image (after cropping) */
 	rcti tilerect;
 	/* offset to apply to get a border render in full image */
@@ -353,12 +346,8 @@ bool RE_allow_render_generic_object(struct Object *ob);
 
 bool RE_HasFakeLayer(RenderResult *res);
 bool RE_RenderResult_is_stereo(RenderResult *res);
-
-float *RE_RenderViewGetRectf(struct RenderResult *rr, const int view_id);
-float *RE_RenderViewGetRectz(struct RenderResult *rr, const int view_id);
-int   *RE_RenderViewGetRect32(struct RenderResult *rr, const int view_id);
-void   RE_RenderViewSetRectf(struct RenderResult *res, const int view_id, float *rect);
-void   RE_RenderViewSetRectz(struct RenderResult *res, const int view_id, float *rect);
+struct RenderView *RE_RenderViewGetById(struct RenderResult *res, const int view_id);
+struct RenderView *RE_RenderViewGetByName(struct RenderResult *res, const char *viewname);
 
 #endif /* __RE_PIPELINE_H__ */
 
