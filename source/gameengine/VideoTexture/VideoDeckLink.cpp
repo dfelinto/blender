@@ -151,8 +151,7 @@ public:
 			sysMemBuffersDesc.size = pDesc->width * pDesc->height * 4;
 			sysMemBuffersDesc.bufAddr = mBuffer;
 			DVP_CHECK(dvpCreateBuffer(&sysMemBuffersDesc, &mDvpSysMemHandle));
-			status = dvpBindToGLCtx(mDvpSysMemHandle);
-			DVP_CHECK(status);
+			DVP_CHECK(dvpBindToGLCtx(mDvpSysMemHandle));
 			mDvpTextureHandle = dvpTextureHandle;
 			mTextureHeight = pDesc->height;
 		}
