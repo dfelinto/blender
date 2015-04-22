@@ -111,7 +111,6 @@ public:
 	TextureTransferDvp(DVPBufferHandle dvpTextureHandle, TextureDesc *pDesc, void *address, u_int allocatedSize)
 	{
 		DVPSysmemBufferDesc sysMemBuffersDesc;
-		DVPStatus status;
 
 		mExtSync = NULL;
 		mGpuSync = NULL;
@@ -401,6 +400,7 @@ void PinnedMemoryAllocator::TransferBuffer(void* address, TextureDesc* texDesc, 
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
 			glTexImage2D(GL_TEXTURE_2D, 0, ((texDesc->format == GL_RED_INTEGER) ? GL_R32UI : GL_RGBA), texDesc->width, texDesc->height, 0, texDesc->format, texDesc->type, NULL);
+			glBindTexture(GL_TEXTURE_2D, 0);
 			// bind DVP to the OGL texture
 			DVP_CHECK(dvpCreateGPUTextureGL(texId, &mDvpCaptureTextureHandle));
 		}
