@@ -2234,10 +2234,13 @@ static void do_merge_fullsample(Render *re, bNodeTree *ntree)
 		}
 
 		for (nr = 0, rv = rectfs->first; rv; rv = rv->next, nr++) {
+			RenderView *rv_from;
 			rectf = rv->rectf;
 
 			/* ensure we get either composited result or the active layer */
 			RE_AcquireResultImage(re, &rres, nr);
+
+			rm_from = RE_RenderViewGetById(&rres, nr);
 
 			/* accumulate with filter, and clip */
 			mask = (1 << sample);
@@ -2245,7 +2248,7 @@ static void do_merge_fullsample(Render *re, bNodeTree *ntree)
 
 			for (y = 0; y < re->recty; y++) {
 				float *rf = rectf + 4 * y * re->rectx;
-				float *col = rectf + 4 * y * re->rectx;
+				float *col = rv_from->rectf + 4 * y * re->rectx;
 				
 				for (x = 0; x < re->rectx; x++, rf += 4, col += 4) {
 					/* clamping to 1.0 is needed for correct AA */
