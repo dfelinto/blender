@@ -1463,12 +1463,13 @@ bool render_result_exr_file_cache_read(Render *re)
 ImBuf *render_result_rect_to_ibuf(RenderResult *rr, RenderData *rd, const int view_id)
 {
 	ImBuf *ibuf = IMB_allocImBuf(rr->rectx, rr->recty, rd->im_format.planes, 0);
-	
+	RenderView *rv = RE_RenderViewGetById(rr, view_id);
+
 	/* if not exists, BKE_imbuf_write makes one */
-	ibuf->rect = (unsigned int *) RE_RenderViewGetRect32(rr, view_id);
-	ibuf->rect_float = RE_RenderViewGetRectf(rr, view_id);
-	ibuf->zbuf_float = RE_RenderViewGetRectz(rr, view_id);
-	
+	ibuf->rect = (unsigned int *) rv->rect32;
+	ibuf->rect_float = rv->rectf;
+	ibuf->zbuf_float = rv->rectz;
+
 	/* float factor for random dither, imbuf takes care of it */
 	ibuf->dither = rd->dither_intensity;
 	
@@ -1505,7 +1506,7 @@ ImBuf *render_result_rect_to_ibuf(RenderResult *rr, RenderData *rd, const int vi
 
 void render_result_rect_from_ibuf(RenderResult *rr, RenderData *UNUSED(rd), ImBuf *ibuf, const int view_id)
 {
-	RenderView *rv = BLI_findlink(&rr->views, view_id);
+	RenderView *rv = RE_RenderViewGetById(rr, view_id);
 
 	if (ibuf->rect_float) {
 		if (!rv->rectf)
@@ -1526,15 +1527,11 @@ void render_result_rect_from_ibuf(RenderResult *rr, RenderData *UNUSED(rd), ImBu
 		/* Same things as above, old rectf can hang around from previous render. */
 		MEM_SAFE_FREE(rv->rectf);
 	}
-
-	/* clean up non-view buffers */
-	MEM_SAFE_FREE(rr->rect32);
-	MEM_SAFE_FREE(rr->rectf);
 }
 
 void render_result_rect_fill_zero(RenderResult *rr, const int view_id)
 {
-	RenderView *rv = BLI_findlink(&rr->views, view_id);
+	RenderView *rv = RE_RenderViewGetById(rr, view_id);
 
 	if (rv->rectf)
 		memset(rv->rectf, 0, 4 * sizeof(float) * rr->rectx * rr->recty);
@@ -1548,15 +1545,13 @@ void render_result_rect_get_pixels(RenderResult *rr, unsigned int *rect, int rec
                                    const ColorManagedViewSettings *view_settings, const ColorManagedDisplaySettings *display_settings,
                                    const int view_id)
 {
-	if (rr->rect32) {
-		int *rect32 = RE_RenderViewGetRect32(rr, view_id);
-		memcpy(rect, (rect32 ? rect32 : rr->rect32), sizeof(int) * rr->rectx * rr->recty);
-	}
-	else if (rr->rectf) {
-		float *rectf = RE_RenderViewGetRectf(rr, view_id);
-		IMB_display_buffer_transform_apply((unsigned char *) rect, (rectf ? rectf : rr->rectf), rr->rectx, rr->recty, 4,
+	RenderView *rv = RE_RenderViewGetById(rr, view_id);
+
+	if (rv->rect32)
+		memcpy(rect, rv->rect32, sizeof(int) * rr->rectx * rr->recty);
+	else if (rv->rectf)
+		IMB_display_buffer_transform_apply((unsigned char *) rect, rv->rectf, rr->rectx, rr->recty, 4,
 		                                   view_settings, display_settings, true);
-	}
 	else
 		/* else fill with black */
 		memset(rect, 0, sizeof(int) * rectx * recty);
@@ -1590,47 +1585,16 @@ bool RE_RenderResult_is_stereo(RenderResult *res)
 	return true;
 }
 
-void RE_RenderViewSetRectf(RenderResult *res, const int view_id, float *rect)
+RenderView *RE_RenderViewGetById(RenderResult *res, const int view_id)
 {
 	RenderView *rv = BLI_findlink(&res->views, view_id);
-	if (rv) {
-		rv->rectf = rect;
-	}
+	BLI_assert(res->views.first);
+	return rv ? rv : res->views.first;
 }
 
-void RE_RenderViewSetRectz(RenderResult *res, const int view_id, float *rect)
+RenderView *RE_RenderViewGetByName(RenderResult *res, const char *viewname)
 {
-	RenderView *rv = BLI_findlink(&res->views, view_id);
-	if (rv) {
-		rv->rectz = rect;
-	}
+	RenderView *rv = BLI_findstring(&res->views, viewname, offsetof(RenderView, name));
+	BLI_assert(res->views.first);
+	return rv ? rv : res->views.first;
 }
-
-float *RE_RenderViewGetRectz(RenderResult *res, const int view_id)
-{
-	RenderView *rv = BLI_findlink(&res->views, view_id);
-	if (rv) {
-		return rv->rectz;
-	}
-	return res->rectz;
-}
-
-float *RE_RenderViewGetRectf(RenderResult *res, const int view_id)
-{
-	RenderView *rv = BLI_findlink(&res->views, view_id);
-	if (rv) {
-		return rv->rectf;
-	}
-	return res->rectf;
-}
-
-int *RE_RenderViewGetRect32(RenderResult *res, const int view_id)
-{
-	RenderView *rv = BLI_findlink(&res->views, view_id);
-	if (rv) {
-		return rv->rect32;
-	}
-	return res->rect32;
-}
-
-
