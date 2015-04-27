@@ -389,18 +389,21 @@ void RE_AcquireResultImage(Render *re, RenderResult *rr, const int view_id)
 
 		if (re->result) {
 			RenderLayer *rl;
-			RenderView *rv;
+			RenderView *rv, *rv_from;
 			
 			rr->rectx = re->result->rectx;
 			rr->recty = re->result->recty;
 			
 			/* actview view */
-			rv = RE_RenderViewGetById(re->result, view_id);
+			rv = MEM_callocN(sizeof(RenderView), "new render view");
+			BLI_addtail(&rr->views, rv);
+
+			rv_from = RE_RenderViewGetById(re->result, view_id);
 
 			/* active layer */
 			rl = render_get_active_layer(re, re->result);
 
-			if (rl && rv) {
+			if (rl && rv_from) {
 				if (rv->rectf == NULL)
 					rv->rectf = RE_RenderLayerGetPass(rl, SCE_PASS_COMBINED, rv->name);
 
