@@ -431,7 +431,7 @@ void RE_ResultGet32(Render *re, unsigned int *rect)
 	const size_t view_id = BKE_scene_multiview_view_id_get(&re->r, re->viewname);
 
 	RE_AcquireResultImage(re, &rres, view_id);
-	render_result_rect_get_pixels(&rres, rect, re->rectx, re->recty, &re->scene->view_settings, &re->scene->display_settings, 0);
+	render_result_rect_get_pixels(&rres, rect, re->rectx, re->recty, &re->scene->view_settings, &re->scene->display_settings, view_id);
 	RE_ReleaseResultImage(re);
 }
 
@@ -2283,7 +2283,7 @@ static void do_merge_fullsample(Render *re, bNodeTree *ntree)
 
 		/* store the final result */
 		BLI_rw_mutex_lock(&re->resultmutex, THREAD_LOCK_WRITE);
-		rv = BLI_findlink(&re->result->views, nr);
+		rv = RE_RenderViewGetById(re->result, nr);
 		if (rv->rectf)
 			MEM_freeN(rv->rectf);
 		rv->rectf = rectf;
@@ -2571,7 +2571,7 @@ static void do_render_seq(Render *re)
 	BLI_rw_mutex_unlock(&re->resultmutex);
 
 	for (view_id = 0; view_id < tot_views; view_id++) {
-		RenderView *rv = BLI_findlink(&rr->views, view_id);
+		RenderView *rv = RE_RenderViewGetById(rr, view_id);
 		BLI_rw_mutex_lock(&re->resultmutex, THREAD_LOCK_WRITE);
 
 		if (ibuf_arr[view_id]) {

@@ -1500,7 +1500,7 @@ ImBuf *render_result_rect_to_ibuf(RenderResult *rr, RenderData *rd, const int vi
 
 void render_result_rect_from_ibuf(RenderResult *rr, RenderData *UNUSED(rd), ImBuf *ibuf, const int view_id)
 {
-	RenderView *rv = BLI_findlink(&rr->views, view_id);
+	RenderView *rv = RE_RenderViewGetById(rr, view_id);
 
 	if (ibuf->rect_float) {
 		if (!rv->rectf)
@@ -1525,7 +1525,7 @@ void render_result_rect_from_ibuf(RenderResult *rr, RenderData *UNUSED(rd), ImBu
 
 void render_result_rect_fill_zero(RenderResult *rr, const int view_id)
 {
-	RenderView *rv = BLI_findlink(&rr->views, view_id);
+	RenderView *rv = RE_RenderViewGetById(rr, view_id);
 
 	if (rv->rectf)
 		memset(rv->rectf, 0, 4 * sizeof(float) * rr->rectx * rr->recty);
@@ -1539,7 +1539,7 @@ void render_result_rect_get_pixels(RenderResult *rr, unsigned int *rect, int rec
                                    const ColorManagedViewSettings *view_settings, const ColorManagedDisplaySettings *display_settings,
                                    const int view_id)
 {
-	RenderView *rv = BLI_findlink(&rr->views, view_id);
+	RenderView *rv = RE_RenderViewGetById(rr, view_id);
 
 	if (rv->rect32)
 		memcpy(rect, rv->rect32, sizeof(int) * rr->rectx * rr->recty);
