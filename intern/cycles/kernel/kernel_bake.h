@@ -175,7 +175,7 @@ ccl_device_inline float bake_clamp_mirror_repeat(float u)
 }
 
 ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input, ccl_global float4 *output,
-                                     ShaderEvalType type, int i, int offset, int sample)
+                                     ShaderEvalType type, Transform *tfm, int i, int offset, int sample)
 {
 	ShaderData sd;
 	uint4 in = input[i * 2];
@@ -223,6 +223,10 @@ ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input,
 	float3 P, Ng;
 
 	triangle_point_normal(kg, object, prim, u, v, &P, &Ng, &shader);
+
+	/* transformation matrix for dupli objects */
+	/* Ng = tfm * Ng; TODO */
+	/* P = tfm * P; TODO */
 
 	/* dummy initilizations copied from SHADER_EVAL_DISPLACE */
 	float3 I = Ng;

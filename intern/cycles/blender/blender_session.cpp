@@ -526,11 +526,13 @@ static void populate_bake_data(BakeData *data, const int object_id, BL::BakePixe
 	}
 }
 
-void BlenderSession::bake(BL::Object b_object, const string& pass_type, const int object_id, BL::BakePixel pixel_array, const size_t num_pixels, const int /*depth*/, float result[])
+void BlenderSession::bake(BL::Object b_object, const string& pass_type, const int object_id, BL::BakePixel pixel_array,
+                          const size_t num_pixels, const int /*depth*/, BL::Array<float, 16> matrix, float result[])
 {
 	ShaderEvalType shader_type = get_shader_type(pass_type);
 	size_t object_index = OBJECT_NONE;
 	int tri_offset = 0;
+	Transform tfm = get_transform(matrix);
 
 	/* ensure kernels are loaded before we do any scene updates */
 	session->load_kernels();
@@ -591,7 +593,7 @@ void BlenderSession::bake(BL::Object b_object, const string& pass_type, const in
 
 	session->progress.set_update_callback(function_bind(&BlenderSession::update_bake_progress, this));
 
-	scene->bake_manager->bake(scene->device, &scene->dscene, scene, session->progress, shader_type, bake_data, result);
+	scene->bake_manager->bake(scene->device, &scene->dscene, scene, session->progress, shader_type, &tfm, bake_data, result);
 
 	/* free all memory used (host and device), so we wouldn't leave render
 	 * engine with extra memory allocated

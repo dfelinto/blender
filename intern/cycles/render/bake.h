@@ -63,7 +63,8 @@ public:
 
 	void set_shader_limit(const size_t x, const size_t y);
 
-	bool bake(Device *device, DeviceScene *dscene, Scene *scene, Progress& progress, ShaderEvalType shader_type, BakeData *bake_data, float result[]);
+	bool bake(Device *device, DeviceScene *dscene, Scene *scene, Progress& progress, ShaderEvalType shader_type,
+	          Transform *tfm, BakeData *bake_data, float result[]);
 
 	void device_update(Device *device, DeviceScene *dscene, Scene *scene, Progress& progress);
 	void device_free(Device *device, DeviceScene *dscene);

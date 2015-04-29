@@ -131,7 +131,8 @@ void BakeManager::set_shader_limit(const size_t x, const size_t y)
 	m_shader_limit = (size_t)pow(2, ceil(log(m_shader_limit)/log(2)));
 }
 
-bool BakeManager::bake(Device *device, DeviceScene *dscene, Scene *scene, Progress& progress, ShaderEvalType shader_type, BakeData *bake_data, float result[])
+bool BakeManager::bake(Device *device, DeviceScene *dscene, Scene *scene, Progress& progress, ShaderEvalType shader_type,
+                       Transform* tfm, BakeData *bake_data, float result[])
 {
 	size_t num_pixels = bake_data->size();
 
@@ -183,6 +184,7 @@ bool BakeManager::bake(Device *device, DeviceScene *dscene, Scene *scene, Progre
 		task.shader_input = d_input.device_pointer;
 		task.shader_output = d_output.device_pointer;
 		task.shader_eval_type = shader_type;
+		task.tfm = *tfm;
 		task.shader_x = 0;
 		task.offset = shader_offset;
 		task.shader_w = d_output.size();

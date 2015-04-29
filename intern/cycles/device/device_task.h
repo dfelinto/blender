@@ -22,6 +22,7 @@
 #include "util_function.h"
 #include "util_list.h"
 #include "util_task.h"
+#include "util_transform.h"
 
 CCL_NAMESPACE_BEGIN
 
@@ -48,6 +49,7 @@ public:
 	device_ptr shader_input;
 	device_ptr shader_output;
 	int shader_eval_type;
+	Transform tfm;
 	int shader_x, shader_w;
 
 	DeviceTask(Type type = PATH_TRACE);

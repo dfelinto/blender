@@ -774,6 +774,7 @@ static int bake(
 			/* lowpoly to highpoly transformation matrix */
 			copy_m4_m4(highpoly[i].obmat, highpoly[i].ob->obmat);
 			invert_m4_m4(highpoly[i].imat, highpoly[i].obmat);
+			unit_m4(highpoly[i].mat);
 
 			highpoly[i].is_flip_object = is_negative_m4(highpoly[i].ob->obmat);
 
@@ -796,7 +797,7 @@ static int bake(
 		/* the baking itself */
 		for (i = 0; i < tot_highpoly; i++) {
 			ok = RE_bake_engine(re, highpoly[i].ob, i, pixel_array_high,
-			                    num_pixels, depth, pass_type, result);
+			                    num_pixels, depth, pass_type, highpoly[i].mat, result);
 			if (!ok) {
 				BKE_reportf(reports, RPT_ERROR, "Error baking from object \"%s\"", highpoly[i].ob->id.name + 2);
 				goto cage_cleanup;
@@ -822,7 +823,9 @@ cage_cleanup:
 		ob_low->restrictflag &= ~OB_RESTRICT_RENDER;
 
 		if (RE_bake_has_engine(re)) {
-			ok = RE_bake_engine(re, ob_low, 0, pixel_array_low, num_pixels, depth, pass_type, result);
+			float matrix[4][4];
+			unit_m4(matrix);
+			ok = RE_bake_engine(re, ob_low, 0, pixel_array_low, num_pixels, depth, pass_type, matrix, result);
 		}
 		else {
 			BKE_report(reports, RPT_ERROR, "Current render engine does not support baking");
