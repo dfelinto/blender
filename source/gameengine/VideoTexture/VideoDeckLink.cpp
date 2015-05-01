@@ -36,6 +36,11 @@
 #endif
 #include <stdint.h>
 #include <string.h>
+#ifndef WIN32
+#include <sys/time.h>
+#include <sys/resource.h>
+#include <sys/mman.h>
+#endif
 
 #include "MEM_guardedalloc.h"
 #include "PIL_time.h"
@@ -276,11 +281,14 @@ private:
 class TextureTransferPMD : public TextureTransfer
 {
 public:
-	TextureTransferPMD(GLuint texId, TextureDesc *pDesc, void *address)
+    TextureTransferPMD(GLuint texId, TextureDesc *pDesc, void *address, u_int allocatedSize)
 	{
 		memcpy(&mDesc, pDesc, sizeof(mDesc));
 		mTexId = texId;
 		mBuffer = address;
+        mAllocatedSize = allocatedSize;
+
+        _PinBuffer(address, allocatedSize);
 
 		// as we cache transfer object, we will create one texture to hold the buffer
 		glGenBuffers(1, &mPinnedTextureBuffer);
@@ -292,7 +300,9 @@ public:
 	~TextureTransferPMD()
 	{
 		glDeleteBuffers(1, &mPinnedTextureBuffer);
-	}
+        if (mBuffer)
+            _UnpinBuffer(mBuffer, mAllocatedSize);
+    }
 
 	virtual void PerformTransfer()
 	{
@@ -300,6 +310,7 @@ public:
 		glBindTexture(GL_TEXTURE_2D, mTexId);
 		// NULL for last arg indicates use current GL_PIXEL_UNPACK_BUFFER target as texture data
 		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, mDesc.width, mDesc.height, mDesc.format, mDesc.type, NULL);
+        // wait for the trasnfer to complete
 		GLsync fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
 		glClientWaitSync(fence, GL_SYNC_FLUSH_COMMANDS_BIT, 40 * 1000 * 1000);	// timeout in nanosec
 		glDeleteSync(fence);
@@ -312,7 +323,9 @@ private:
 	GLuint mTexId;
 	// buffer
 	void *mBuffer;
-	// characteristic of the image
+    // the allocated size
+    u_int mAllocatedSize;
+    // characteristic of the image
 	TextureDesc mDesc;
 };
 
@@ -320,9 +333,8 @@ bool TextureTransfer::_PinBuffer(void *address, u_int size)
 {
 #ifdef WIN32
 	return VirtualLock(address, size);
-#else
-	// Linux doesn't have the equivalent?
-	return true;
+#elif defined(_POSIX_MEMLOCK_RANGE)
+    return !mlock(address, size);
 #endif
 }
 
@@ -330,6 +342,8 @@ void TextureTransfer::_UnpinBuffer(void* address, u_int size)
 {
 #ifdef WIN32
 	VirtualUnlock(address, size);
+#elif defined(_POSIX_MEMLOCK_RANGE)
+    munlock(address, size);
 #endif
 }
 
@@ -366,8 +380,21 @@ bool PinnedMemoryAllocator::ReserveMemory(size_t size)
 		return false;
 	mReservedProcessMemory = size;
 	CloseHandle(hProcess);
+    return true;
+#else
+    struct rlimit rlim;
+    if (getrlimit(RLIMIT_MEMLOCK, &rlim) == 0)
+    {
+        if (rlim.rlim_cur < size)
+        {
+            if (rlim.rlim_max < size)
+                rlim.rlim_max = size;
+            rlim.rlim_cur = size;
+            return !setrlimit(RLIMIT_MEMLOCK, &rlim);
+        }
+    }
+    return false;
 #endif
-	return true;
 }
 
 PinnedMemoryAllocator::PinnedMemoryAllocator(unsigned cacheSize, size_t memSize) :
@@ -476,7 +503,7 @@ void PinnedMemoryAllocator::TransferBuffer(void* address, TextureDesc* texDesc, 
 #endif
 		if (mHasAMDPinnedMemory)
 		{
-			pTransfer = new TextureTransferPMD(texId, texDesc, address);
+            pTransfer = new TextureTransferPMD(texId, texDesc, address, allocatedSize);
 		}
 		else
 		{
@@ -520,9 +547,9 @@ HRESULT STDMETHODCALLTYPE	PinnedMemoryAllocator::AllocateBuffer(dl_size_t buffer
 	{
 		// Allocate memory on a page boundary
 		// Note: aligned alloc exist in Blender but only for small alignment, use direct allocation then.
-		// Note: the DeckLink API tries to allocate up to 65 buffer in advance, we will limit this to 5
+        // Note: the DeckLink API tries to allocate up to 65 buffer in advance, we will limit this to 3
 		//       because we don't need any caching
-		if (mAllocatedSize.size() >= 5)
+        if (mAllocatedSize.size() >= mBufferCacheSize)
 			*allocatedBuffer = NULL;
 		else 
 		{
@@ -879,9 +906,9 @@ void VideoDeckLink::openCam (char *format, short camIdx)
 			THRWEXCP(VideoDeckLinkBadFormat, S_OK);
 	}
 	// custom allocator, 3 frame in cache should be enough
-	// make sure we allow up to 10 frame in memory for pinning
+    // make sure we allow up to 5 frame in memory for pinning
 	// note: some pixel format take more than 4 bytes but the difference is small (9/8 versus 1)
-    mpAllocator = new PinnedMemoryAllocator(3, mFrameWidth*mTextureDesc.height * 4 * 10);
+    mpAllocator = new PinnedMemoryAllocator(3, mFrameWidth*mTextureDesc.height * 4 * 4);
 
 	if (mDLInput->SetVideoInputFrameMemoryAllocator(mpAllocator) != S_OK)
 		THRWEXCP(DeckLinkInternalError, S_OK);

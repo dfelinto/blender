@@ -155,7 +155,7 @@ public:
 	virtual ~TextureTransfer() { }
 
 	virtual void PerformTransfer() = 0;
-private:
+protected:
 	static bool _PinBuffer(void *address, u_int size);
 	static void _UnpinBuffer(void* address, u_int size);
 };
