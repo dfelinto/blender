@@ -222,6 +222,8 @@ private:
 #ifdef WIN32
 	DVPBufferHandle						mDvpCaptureTextureHandle;
 #endif
+	// target texture in GPU
+	GLuint								mTexId;
 	u_int								mBufferCacheSize;
 };
 

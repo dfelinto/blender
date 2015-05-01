@@ -102,7 +102,7 @@ struct SyncInfo
 };
 
 ////////////////////////////////////////////
-// TextureTransferDvp
+// TextureTransferDvp: transfer with GPUDirect
 ////////////////////////////////////////////
 
 class TextureTransferDvp : public TextureTransfer
@@ -224,6 +224,10 @@ uint32_t	TextureTransferDvp::mSemaphorePayloadSize;
 
 #endif
 
+////////////////////////////////////////////
+// TextureTransferOGL: transfer using standard OGL buffers
+////////////////////////////////////////////
+
 class TextureTransferOGL : public TextureTransfer
 {
 public:
@@ -257,6 +261,53 @@ public:
 private:
 	// intermediate texture to receive the buffer
 	GLuint mUnpinnedTextureBuffer;
+	// target texture to receive the image
+	GLuint mTexId;
+	// buffer
+	void *mBuffer;
+	// characteristic of the image
+	TextureDesc mDesc;
+};
+
+////////////////////////////////////////////
+// TextureTransferPMB: transfer using pinned memory buffer
+////////////////////////////////////////////
+
+class TextureTransferPMD : public TextureTransfer
+{
+public:
+	TextureTransferPMD(GLuint texId, TextureDesc *pDesc, void *address)
+	{
+		memcpy(&mDesc, pDesc, sizeof(mDesc));
+		mTexId = texId;
+		mBuffer = address;
+
+		// as we cache transfer object, we will create one texture to hold the buffer
+		glGenBuffers(1, &mPinnedTextureBuffer);
+		// create a storage for it
+		glBindBuffer(GL_EXTERNAL_VIRTUAL_MEMORY_BUFFER_AMD, mPinnedTextureBuffer);
+		glBufferData(GL_EXTERNAL_VIRTUAL_MEMORY_BUFFER_AMD, pDesc->size, address, GL_STREAM_DRAW);
+		glBindBuffer(GL_EXTERNAL_VIRTUAL_MEMORY_BUFFER_AMD, 0);
+	}
+	~TextureTransferPMD()
+	{
+		glDeleteBuffers(1, &mPinnedTextureBuffer);
+	}
+
+	virtual void PerformTransfer()
+	{
+		glBindBuffer(GL_PIXEL_UNPACK_BUFFER, mPinnedTextureBuffer);
+		glBindTexture(GL_TEXTURE_2D, mTexId);
+		// NULL for last arg indicates use current GL_PIXEL_UNPACK_BUFFER target as texture data
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, mDesc.width, mDesc.height, mDesc.format, mDesc.type, NULL);
+		GLsync fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+		glClientWaitSync(fence, GL_SYNC_FLUSH_COMMANDS_BIT, 40 * 1000 * 1000);	// timeout in nanosec
+		glDeleteSync(fence);
+		glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+	}
+private:
+	// intermediate texture to receive the buffer
+	GLuint mPinnedTextureBuffer;
 	// target texture to receive the image
 	GLuint mTexId;
 	// buffer
@@ -324,6 +375,7 @@ mRefCount(1U),
 #ifdef WIN32
 mDvpCaptureTextureHandle(0),
 #endif
+mTexId(0),
 mBufferCacheSize(cacheSize)
 {
 	pthread_mutex_init(&mMutex, NULL);
@@ -387,62 +439,54 @@ void PinnedMemoryAllocator::TransferBuffer(void* address, TextureDesc* texDesc, 
 	if (!allocatedSize)
 		// internal error!!
 		return;
+	if (mTexId != texId)
+	{
+		// first time we try to send data to the GPU, allocate a buffer for the texture
+		glBindTexture(GL_TEXTURE_2D, texId);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+		glTexImage2D(GL_TEXTURE_2D, 0, ((texDesc->format == GL_RED_INTEGER) ? GL_R32UI : GL_RGBA), texDesc->width, texDesc->height, 0, texDesc->format, texDesc->type, NULL);
+		glBindTexture(GL_TEXTURE_2D, 0);
+		mTexId = texId;
+	}
 #ifdef WIN32
 	if (mHasDvp)
 	{
 		if (!mDvpCaptureTextureHandle)
 		{
-			// first time we try to send data to the GPU, allocate a buffer for the texture
-			glBindTexture(GL_TEXTURE_2D, texId);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
-			glTexImage2D(GL_TEXTURE_2D, 0, ((texDesc->format == GL_RED_INTEGER) ? GL_R32UI : GL_RGBA), texDesc->width, texDesc->height, 0, texDesc->format, texDesc->type, NULL);
-			glBindTexture(GL_TEXTURE_2D, 0);
 			// bind DVP to the OGL texture
 			DVP_CHECK(dvpCreateGPUTextureGL(texId, &mDvpCaptureTextureHandle));
 		}
-		Lock();
-		if (mPinnedBuffer.count(address) > 0)
-		{
-			pTransfer = mPinnedBuffer[address];
-		}
-		Unlock();
-		if (!pTransfer)
-		{
-			pTransfer = new TextureTransferDvp(mDvpCaptureTextureHandle, texDesc, address, allocatedSize);
-			if (pTransfer)
-			{
-				Lock();
-				mPinnedBuffer[address] = pTransfer;
-				Unlock();
-			}
-		}
 	}
-	else
 #endif
-	if (mHasAMDPinnedMemory)
+	Lock();
+	if (mPinnedBuffer.count(address) > 0)
 	{
-		pTransfer = NULL;
+		pTransfer = mPinnedBuffer[address];
 	}
-	else
+	Unlock();
+	if (!pTransfer)
 	{
-		Lock();
-		if (mPinnedBuffer.count(address) > 0)
+#ifdef WIN32
+		if (mHasDvp)
+			pTransfer = new TextureTransferDvp(mDvpCaptureTextureHandle, texDesc, address, allocatedSize);
+		else
+#endif
+		if (mHasAMDPinnedMemory)
 		{
-			pTransfer = mPinnedBuffer[address];
+			pTransfer = new TextureTransferPMD(texId, texDesc, address);
 		}
-		Unlock();
-		if (!pTransfer)
+		else
 		{
 			pTransfer = new TextureTransferOGL(texId, texDesc, address);
-			if (pTransfer)
-			{
-				Lock();
-				mPinnedBuffer[address] = pTransfer;
-				Unlock();
-			}
+		}
+		if (pTransfer)
+		{
+			Lock();
+			mPinnedBuffer[address] = pTransfer;
+			Unlock();
 		}
 	}
 	if (pTransfer)
