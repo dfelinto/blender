@@ -493,12 +493,18 @@ void FRS_composite_result(Render *re, SceneRenderLayer *srl, Render *freestyle_r
 	rl = render_get_active_layer( freestyle_render, freestyle_render->result );
 	if (!rl) {
 		if (G.debug & G_DEBUG_FREESTYLE) {
-			cout << "No Freestyle result image to composite" << endl;
+			cout << "No source render layer to composite" << endl;
 		}
 		return;
 	}
 
-	src = RE_RenderLayerGetPass(rl, SCE_PASS_COMBINED, re->viewname);
+	src = RE_RenderLayerGetPass(rl, SCE_PASS_COMBINED, freestyle_render->viewname);
+	if (!src) {
+		if (G.debug & G_DEBUG_FREESTYLE) {
+			cout << "No source result image to composite" << endl;
+		}
+		return;
+	}
 #if 0
 	if (G.debug & G_DEBUG_FREESTYLE) {
 		cout << "src: " << rl->rectx << " x " << rl->recty << endl;
@@ -506,13 +512,19 @@ void FRS_composite_result(Render *re, SceneRenderLayer *srl, Render *freestyle_r
 #endif
 
 	rl = RE_GetRenderLayer(re->result, srl->name);
-	if (!rl || src == NULL) {
+	if (!rl) {
 		if (G.debug & G_DEBUG_FREESTYLE) {
-			cout << "No layer to composite to" << endl;
+			cout << "No destination render layer to composite to" << endl;
 		}
 		return;
 	}
 	dest = RE_RenderLayerGetPass(rl, SCE_PASS_COMBINED, re->viewname);
+	if (!dest) {
+		if (G.debug & G_DEBUG_FREESTYLE) {
+			cout << "No destination result image to composite to" << endl;
+		}
+		return;
+	}
 #if 0
 	if (G.debug & G_DEBUG_FREESTYLE) {
 		cout << "dest: " << rl->rectx << " x " << rl->recty << endl;
@@ -564,7 +576,7 @@ int FRS_is_freestyle_enabled(SceneRenderLayer *srl)
 	return (!(srl->layflag & SCE_LAY_DISABLE) && srl->layflag & SCE_LAY_FRS && displayed_layer_count(srl) > 0);
 }
 
-void FRS_init_stroke_rendering(Render *re)
+void FRS_init_stroke_renderer(Render *re)
 {
 	if (G.debug & G_DEBUG_FREESTYLE) {
 		cout << endl;
@@ -574,9 +586,13 @@ void FRS_init_stroke_rendering(Render *re)
 	}
 
 	init_view(re);
-	init_camera(re);
 
 	controller->ResetRenderCount();
+}
+
+void FRS_begin_stroke_rendering(Render *re)
+{
+	init_camera(re);
 }
 
 Render *FRS_do_stroke_rendering(Render *re, SceneRenderLayer *srl, int render)
@@ -633,7 +649,7 @@ Render *FRS_do_stroke_rendering(Render *re, SceneRenderLayer *srl, int render)
 	return freestyle_render;
 }
 
-void FRS_finish_stroke_rendering(Render * /*re*/)
+void FRS_end_stroke_rendering(Render * /*re*/)
 {
 	// clear canvas
 	controller->Clear();

@@ -101,7 +101,7 @@ static SpinLock image_spin;
 
 /* prototypes */
 static size_t image_num_files(struct Image *ima);
-static ImBuf *image_acquire_ibuf(Image *ima, ImageUser *iuser, void **lock_r);
+static ImBuf *image_acquire_ibuf(Image *ima, ImageUser *iuser, void **r_lock);
 static void image_update_views_format(Image *ima, ImageUser *iuser);
 static void image_add_view(Image *ima, const char *viewname, const char *filepath);
 
@@ -338,7 +338,7 @@ void BKE_image_free(Image *ima)
 
 	image_free_packedfiles(ima);
 
-	BKE_icon_delete(&ima->id);
+	BKE_icon_id_delete(&ima->id);
 	ima->id.icon_id = 0;
 
 	BKE_previewimg_free(&ima->preview);
@@ -883,12 +883,16 @@ Image *BKE_image_add_generated(Main *bmain, unsigned int width, unsigned int hei
 /* Create an image image from ibuf. The refcount of ibuf is increased,
  * caller should take care to drop its reference by calling
  * IMB_freeImBuf if needed. */
-Image *BKE_image_add_from_imbuf(ImBuf *ibuf)
+Image *BKE_image_add_from_imbuf(ImBuf *ibuf, const char *name)
 {
 	/* on save, type is changed to FILE in editsima.c */
 	Image *ima;
 
-	ima = image_alloc(G.main, BLI_path_basename(ibuf->name), IMA_SRC_FILE, IMA_TYPE_IMAGE);
+	if (name == NULL) {
+		name = BLI_path_basename(ibuf->name);
+	}
+
+	ima = image_alloc(G.main, name, IMA_SRC_FILE, IMA_TYPE_IMAGE);
 
 	if (ima) {
 		BLI_strncpy(ima->name, ibuf->name, FILE_MAX);
@@ -2394,6 +2398,7 @@ static void image_viewer_create_views(const RenderData *rd, Image *ima)
 void BKE_image_verify_viewer_views(const RenderData *rd, Image *ima, ImageUser *iuser)
 {
 	bool do_reset;
+	const bool is_multiview = (rd->scemode & R_MULTIVIEW) != 0;
 
 	BLI_lock_thread(LOCK_DRAW_IMAGE);
 
@@ -2409,7 +2414,9 @@ void BKE_image_verify_viewer_views(const RenderData *rd, Image *ima, ImageUser *
 
 	/* see if all scene render views are in the image view list */
 	do_reset = (BKE_scene_multiview_num_views_get(rd) != BLI_listbase_count(&ima->views));
-	if (!do_reset) {
+
+	/* multiview also needs to be sure all the views are synced */
+	if (is_multiview && !do_reset) {
 		SceneRenderView *srv;
 		ImageView *iv;
 
@@ -2423,11 +2430,15 @@ void BKE_image_verify_viewer_views(const RenderData *rd, Image *ima, ImageUser *
 	}
 
 	if (do_reset) {
+		BLI_spin_lock(&image_spin);
+
 		image_free_cached_frames(ima);
 		BKE_image_free_views(ima);
 
 		/* add new views */
 		image_viewer_create_views(rd, ima);
+
+		BLI_spin_unlock(&image_spin);
 	}
 
 	BLI_unlock_thread(LOCK_DRAW_IMAGE);
@@ -2993,7 +3004,7 @@ static void image_initialize_after_load(Image *ima, ImBuf *ibuf)
 {
 	/* preview is NULL when it has never been used as an icon before */
 	if (G.background == 0 && ima->preview == NULL)
-		BKE_icon_changed(BKE_icon_getid(&ima->id));
+		BKE_icon_changed(BKE_icon_id_ensure(&ima->id));
 
 	/* fields */
 	if (ima->flag & IMA_FIELDS) {
@@ -3518,7 +3529,7 @@ static ImBuf *image_get_ibuf_multilayer(Image *ima, ImageUser *iuser)
 /* showing RGBA result itself (from compo/sequence) or
  * like exr, using layers etc */
 /* always returns a single ibuf, also during render progress */
-static ImBuf *image_get_render_result(Image *ima, ImageUser *iuser, void **lock_r)
+static ImBuf *image_get_render_result(Image *ima, ImageUser *iuser, void **r_lock)
 {
 	Render *re;
 	RenderResult rres;
@@ -3536,7 +3547,7 @@ static ImBuf *image_get_render_result(Image *ima, ImageUser *iuser, void **lock_
 		return NULL;
 
 	/* if we the caller is not going to release the lock, don't give the image */
-	if (!lock_r)
+	if (!r_lock)
 		return NULL;
 
 	re = RE_GetRender(iuser->scene->id.name);
@@ -3554,7 +3565,7 @@ static ImBuf *image_get_render_result(Image *ima, ImageUser *iuser, void **lock_
 	}
 	else if (ima->renders[ima->render_slot]) {
 		rres = *(ima->renders[ima->render_slot]);
-		rres.have_combined = RE_RenderViewGetRectf(&rres, actview) != NULL;
+		rres.have_combined = ((RenderView *)rres.views.first)->rectf != NULL;
 	}
 	else
 		memset(&rres, 0, sizeof(RenderResult));
@@ -3565,10 +3576,10 @@ static ImBuf *image_get_render_result(Image *ima, ImageUser *iuser, void **lock_
 		return NULL;
 	}
 
-	/* release is done in BKE_image_release_ibuf using lock_r */
+	/* release is done in BKE_image_release_ibuf using r_lock */
 	if (from_render) {
 		BLI_lock_thread(LOCK_VIEWER);
-		*lock_r = re;
+		*r_lock = re;
 		rv = NULL;
 	}
 	else {
@@ -3619,6 +3630,15 @@ static ImBuf *image_get_render_result(Image *ima, ImageUser *iuser, void **lock_
 			if (rpass) {
 				channels = rpass->channels;
 				rectf = rpass->rect;
+
+				if (!rectf) {
+					/* Happens when Save Buffers is enabled.
+					 * Use display buffer stored in the render layer.
+					 */
+					rect = (unsigned int *) rl->display_buffer;
+					byte_buffer_in_display_space = true;
+				}
+
 				dither = 0.0f; /* don't dither passes */
 			}
 
@@ -3712,9 +3732,10 @@ static size_t image_get_multiview_index(Image *ima, ImageUser *iuser)
 {
 	const bool is_multilayer = BKE_image_is_multilayer(ima);
 	const bool is_backdrop = (ima->source == IMA_SRC_VIEWER) && (ima->type ==  IMA_TYPE_COMPOSITE) && (iuser == NULL);
+	int index = BKE_image_is_animated(ima) ? 0 : IMA_NO_INDEX;
 
 	if (is_multilayer) {
-		return iuser ? iuser->multi_index : IMA_NO_INDEX;
+		return iuser ? iuser->multi_index : index;
 	}
 	else if (is_backdrop) {
 		if ((ima->flag & IMA_IS_STEREO)) {
@@ -3723,16 +3744,15 @@ static size_t image_get_multiview_index(Image *ima, ImageUser *iuser)
 		}
 	}
 	else if ((ima->flag & IMA_IS_MULTIVIEW)) {
-		return iuser ? iuser->multi_index : 0;
+		return iuser ? iuser->multi_index : index;
 	}
 
-	return IMA_NO_INDEX;
+	return index;
 }
 
 static void image_get_frame_and_index(Image *ima, ImageUser *iuser, int *r_frame, int *r_index)
 {
-	int frame = 0, index = 0;
-	index = image_get_multiview_index(ima, iuser);
+	int frame = 0, index = image_get_multiview_index(ima, iuser);
 
 	/* see if we already have an appropriate ibuf, with image source and type */
 	if (ima->source == IMA_SRC_MOVIE) {
@@ -3760,9 +3780,7 @@ static void image_get_frame_and_index(Image *ima, ImageUser *iuser, int *r_frame
 static ImBuf *image_get_cached_ibuf(Image *ima, ImageUser *iuser, int *r_frame, int *r_index)
 {
 	ImBuf *ibuf = NULL;
-	int frame = 0, index = 0;
-
-	index = image_get_multiview_index(ima, iuser);
+	int frame = 0, index = image_get_multiview_index(ima, iuser);
 
 	/* see if we already have an appropriate ibuf, with image source and type */
 	if (ima->source == IMA_SRC_MOVIE) {
@@ -3842,13 +3860,13 @@ BLI_INLINE bool image_quick_test(Image *ima, ImageUser *iuser)
  *
  * not thread-safe, so callee should worry about thread locks
  */
-static ImBuf *image_acquire_ibuf(Image *ima, ImageUser *iuser, void **lock_r)
+static ImBuf *image_acquire_ibuf(Image *ima, ImageUser *iuser, void **r_lock)
 {
 	ImBuf *ibuf = NULL;
 	int frame = 0, index = 0;
 
-	if (lock_r)
-		*lock_r = NULL;
+	if (r_lock)
+		*r_lock = NULL;
 
 	/* quick reject tests */
 	if (!image_quick_test(ima, iuser))
@@ -3897,14 +3915,14 @@ static ImBuf *image_acquire_ibuf(Image *ima, ImageUser *iuser, void **lock_r)
 			if (ima->type == IMA_TYPE_R_RESULT) {
 				/* always verify entirely, and potentially
 				 * returns pointer to release later */
-				ibuf = image_get_render_result(ima, iuser, lock_r);
+				ibuf = image_get_render_result(ima, iuser, r_lock);
 			}
 			else if (ima->type == IMA_TYPE_COMPOSITE) {
 				/* requires lock/unlock, otherwise don't return image */
-				if (lock_r) {
+				if (r_lock) {
 					/* unlock in BKE_image_release_ibuf */
 					BLI_lock_thread(LOCK_VIEWER);
-					*lock_r = ima;
+					*r_lock = ima;
 
 					/* XXX anim play for viewer nodes not yet supported */
 					frame = 0; // XXX iuser ? iuser->framenr : 0;
@@ -3938,13 +3956,13 @@ static ImBuf *image_acquire_ibuf(Image *ima, ImageUser *iuser, void **lock_r)
  *
  * references the result, BKE_image_release_ibuf should be used to de-reference
  */
-ImBuf *BKE_image_acquire_ibuf(Image *ima, ImageUser *iuser, void **lock_r)
+ImBuf *BKE_image_acquire_ibuf(Image *ima, ImageUser *iuser, void **r_lock)
 {
 	ImBuf *ibuf;
 
 	BLI_spin_lock(&image_spin);
 
-	ibuf = image_acquire_ibuf(ima, iuser, lock_r);
+	ibuf = image_acquire_ibuf(ima, iuser, r_lock);
 
 	BLI_spin_unlock(&image_spin);
 

@@ -70,7 +70,9 @@ def GlobalBB_HQ(obj):
 
     # Initialize the variables with the last vertex
 
-    verts = obj.data.vertices
+    me = obj.to_mesh(scene=bpy.context.scene, apply_modifiers=True, settings='PREVIEW')
+    verts = me.vertices
+    bpy.data.meshes.remove(me)
 
     val = matrix_world * verts[-1].co
 
@@ -338,7 +340,10 @@ def align_objects(context,
     return True
 
 
-from bpy.props import EnumProperty, BoolProperty
+from bpy.props import (
+        EnumProperty,
+        BoolProperty
+        )
 
 
 class AlignObjects(Operator):

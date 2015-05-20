@@ -303,7 +303,7 @@ bNodeTreeType *ntreeTypeFind(const char *idname)
 
 void ntreeTypeAdd(bNodeTreeType *nt)
 {
-	BLI_ghash_insert(nodetreetypes_hash, (void *)nt->idname, nt);
+	BLI_ghash_insert(nodetreetypes_hash, nt->idname, nt);
 	/* XXX pass Main to register function? */
 	update_typeinfo(G.main, NULL, nt, NULL, NULL, false);
 }
@@ -317,7 +317,7 @@ static void ntree_free_type(void *treetype_v)
 	MEM_freeN(treetype);
 }
 
-void ntreeTypeFreeLink(bNodeTreeType *nt)
+void ntreeTypeFreeLink(const bNodeTreeType *nt)
 {
 	BLI_ghash_remove(nodetreetypes_hash, nt->idname, NULL, ntree_free_type);
 }
@@ -378,7 +378,7 @@ void nodeRegisterType(bNodeType *nt)
 	BLI_assert(nt->idname[0] != '\0');
 	BLI_assert(nt->poll != NULL);
 	
-	BLI_ghash_insert(nodetypes_hash, (void *)nt->idname, nt);
+	BLI_ghash_insert(nodetypes_hash, nt->idname, nt);
 	/* XXX pass Main to register function? */
 	update_typeinfo(G.main, NULL, NULL, nt, NULL, false);
 }
@@ -3082,10 +3082,14 @@ void nodeSynchronizeID(bNode *node, bool copy_to_id)
 		bNodeSocket *sock;
 		Material *ma = (Material *)node->id;
 		int a;
+		short check_flags = SOCK_UNAVAIL;
+
+		if (!copy_to_id)
+			check_flags |= SOCK_HIDDEN;
 		
 		/* hrmf, case in loop isn't super fast, but we don't edit 100s of material at same time either! */
 		for (a = 0, sock = node->inputs.first; sock; sock = sock->next, a++) {
-			if (!nodeSocketIsHidden(sock)) {
+			if (!(sock->flag & check_flags)) {
 				if (copy_to_id) {
 					switch (a) {
 						case MAT_IN_COLOR:

@@ -451,8 +451,9 @@ extern void ui_but_hsv_set(uiBut *but);
 extern void ui_but_v3_get(uiBut *but, float vec[3]);
 extern void ui_but_v3_set(uiBut *but, const float vec[3]);
 
-extern void ui_hsvcircle_vals_from_pos(float *val_rad, float *val_dist, const rcti *rect,
-                                       const float mx, const float my);
+extern void ui_hsvcircle_vals_from_pos(
+        float *val_rad, float *val_dist, const rcti *rect,
+        const float mx, const float my);
 extern void ui_hsvcircle_pos_from_vals(struct uiBut *but, const rcti *rect, float *hsv, float *xpos, float *ypos);
 extern void ui_hsvcube_pos_from_vals(struct uiBut *but, const rcti *rect, float *hsv, float *xp, float *yp);
 bool ui_but_is_colorpicker_display_space(struct uiBut *but);
@@ -464,6 +465,8 @@ extern bool ui_but_string_set(struct bContext *C, uiBut *but, const char *str) A
 extern bool ui_but_string_set_eval_num(struct bContext *C, uiBut *but, const char *str, double *value) ATTR_NONNULL();
 extern int  ui_but_string_get_max_length(uiBut *but);
 extern uiBut *ui_but_drag_multi_edit_get(uiBut *but);
+
+void ui_def_but_icon(uiBut *but, const int icon, const int flag);
 extern uiButExtraIconType ui_but_icon_extra_get(uiBut *but);
 
 extern void ui_but_default_set(struct bContext *C, const bool all, const bool use_afterfunc);
@@ -581,14 +584,17 @@ bool ui_searchbox_apply(uiBut *but, struct ARegion *ar);
 void ui_searchbox_free(struct bContext *C, struct ARegion *ar);
 void ui_but_search_refresh(uiBut *but);
 
-uiBlock *ui_popup_block_refresh(struct bContext *C, uiPopupBlockHandle *handle,
-                                ARegion *butregion, uiBut *but);
+uiBlock *ui_popup_block_refresh(
+        struct bContext *C, uiPopupBlockHandle *handle,
+        ARegion *butregion, uiBut *but);
 
-uiPopupBlockHandle *ui_popup_block_create(struct bContext *C, struct ARegion *butregion, uiBut *but,
-                                          uiBlockCreateFunc create_func, uiBlockHandleCreateFunc handle_create_func,
-                                          void *arg);
-uiPopupBlockHandle *ui_popup_menu_create(struct bContext *C, struct ARegion *butregion, uiBut *but,
-                                         uiMenuCreateFunc create_func, void *arg);
+uiPopupBlockHandle *ui_popup_block_create(
+        struct bContext *C, struct ARegion *butregion, uiBut *but,
+        uiBlockCreateFunc create_func, uiBlockHandleCreateFunc handle_create_func,
+        void *arg);
+uiPopupBlockHandle *ui_popup_menu_create(
+        struct bContext *C, struct ARegion *butregion, uiBut *but,
+        uiMenuCreateFunc create_func, void *arg);
 
 void ui_popup_block_free(struct bContext *C, uiPopupBlockHandle *handle);
 
@@ -669,6 +675,7 @@ void ui_draw_preview_item(struct uiFontStyle *fstyle, rcti *rect, const char *na
 void uiStyleInit(void);
 
 /* interface_icons.c */
+void ui_icon_ensure_deferred(const struct bContext *C, const int icon_id, const bool big);
 int ui_id_icon_get(const struct bContext *C, struct ID *id, const bool big);
 
 /* resources.c */

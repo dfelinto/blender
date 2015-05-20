@@ -263,8 +263,12 @@ void gpu_extensions_init(void)
 		GG.dfdyfactors[0] = 1.0;
 		GG.dfdyfactors[1] = -1.0;
 	}
-	else if (GG.device == GPU_DEVICE_INTEL && GG.os == GPU_OS_WIN &&
-	         (strstr(version, "4.0.0 - Build 9.18.10.3165"))) {
+	else if (GG.device == GPU_DEVICE_INTEL && GG.os == GPU_OS_WIN  &&
+	        (strstr(version, "4.0.0 - Build 9.18.10.3186") ||
+	         strstr(version, "4.0.0 - Build 9.18.10.3165") ||
+	         strstr(version, "3.1.0 - Build 9.17.10.3347") ||
+	         strstr(version, "3.1.0 - Build 9.17.10.4101")))
+	{
 		GG.dfdyfactors[0] = -1.0;
 		GG.dfdyfactors[1] = 1.0;
 	}

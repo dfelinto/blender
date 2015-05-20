@@ -407,9 +407,9 @@ class VIEW3D_PT_tools_shading(View3DPanel, Panel):
         row.operator("mesh.mark_sharp", text="Sharp")
         col.label(text="Vertices:")
         row = col.row(align=True)
-        op = row.operator("mesh.mark_sharp", text="Smooth")
-        op.use_verts = True
-        op.clear = True
+        props = row.operator("mesh.mark_sharp", text="Smooth")
+        props.use_verts = True
+        props.clear = True
         row.operator("mesh.mark_sharp", text="Sharp").use_verts = True
 
         col = layout.column(align=True)
@@ -573,6 +573,7 @@ class VIEW3D_PT_tools_surfaceedit(View3DPanel, Panel):
         col = layout.column(align=True)
         col.label(text="Modeling:")
         col.operator("curve.extrude", text="Extrude")
+        col.operator("curve.spin")
         col.operator("curve.subdivide")
 
         col = layout.column(align=True)
@@ -1471,6 +1472,8 @@ class VIEW3D_PT_sculpt_dyntopo(Panel, View3DPaintPanel):
             row = sub.row(align=True)
             row.prop(sculpt, "constant_detail")
             row.operator("sculpt.sample_detail_size", text="", icon='EYEDROPPER')
+        elif (sculpt.detail_type_method == 'BRUSH'):
+            sub.prop(sculpt, "detail_percent")
         else:
             sub.prop(sculpt, "detail_size")
         sub.prop(sculpt, "detail_refine_method", text="")
@@ -1605,9 +1608,9 @@ class VIEW3D_PT_tools_weightpaint(View3DPanel, Panel):
 
         col = layout.column()
         col.operator("paint.weight_gradient")
-        prop = col.operator("object.data_transfer", text="Transfer Weights")
-        prop.use_reverse_transfer = True
-        prop.data_type = 'VGROUP_WEIGHTS'
+        props = col.operator("object.data_transfer", text="Transfer Weights")
+        props.use_reverse_transfer = True
+        props.data_type = 'VGROUP_WEIGHTS'
 
 
 class VIEW3D_PT_tools_weightpaint_options(Panel, View3DPaintPanel):

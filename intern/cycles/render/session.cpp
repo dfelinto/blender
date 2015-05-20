@@ -20,6 +20,7 @@
 #include "buffers.h"
 #include "camera.h"
 #include "device.h"
+#include "graph.h"
 #include "integrator.h"
 #include "scene.h"
 #include "session.h"
@@ -77,6 +78,9 @@ Session::Session(const SessionParams& params_)
 	gpu_need_tonemap = false;
 	pause = false;
 	kernels_loaded = false;
+
+	/* TODO(sergey): Check if it's indeed optimal value for the split kernel. */
+	max_closure_global = 1;
 }
 
 Session::~Session()
@@ -405,6 +409,11 @@ bool Session::acquire_tile(Device *tile_device, RenderTile& rtile)
 		if(tile_buffers.size() == 0)
 			tile_buffers.resize(tile_manager.state.num_tiles, NULL);
 
+		/* In certain circumstances number of tiles in the tile manager could
+		 * be changed. This is not supported by the progressive refine feature.
+		 */
+		assert(tile_buffers.size() == tile_manager.state.num_tiles);
+
 		tilebuffers = tile_buffers[tile.index];
 		if(tilebuffers == NULL) {
 			tilebuffers = new RenderBuffers(tile_device);
@@ -593,6 +602,25 @@ void Session::run_cpu()
 		update_progressive_refine(true);
 }
 
+DeviceRequestedFeatures Session::get_requested_device_features()
+{
+	DeviceRequestedFeatures requested_features;
+	requested_features.experimental = params.experimental;
+	if(!params.background) {
+		requested_features.max_closure = 64;
+		requested_features.max_nodes_group = NODE_GROUP_LEVEL_2;
+		requested_features.nodes_features = NODE_FEATURE_ALL;
+	}
+	else {
+		requested_features.max_closure = get_max_closure_count();
+		scene->shader_manager->get_requested_features(
+		        scene,
+		        requested_features.max_nodes_group,
+		        requested_features.nodes_features);
+	}
+	return requested_features;
+}
+
 void Session::load_kernels()
 {
 	thread_scoped_lock scene_lock(scene->mutex);
@@ -600,7 +628,7 @@ void Session::load_kernels()
 	if(!kernels_loaded) {
 		progress.set_status("Loading render kernels (may take a few minutes the first time)");
 
-		if(!device->load_kernels(params.experimental)) {
+		if(!device->load_kernels(get_requested_device_features())) {
 			string message = device->error_message();
 			if(message.empty())
 				message = "Failed loading render kernel, see console for errors";
@@ -784,7 +812,10 @@ void Session::update_status_time(bool show_pause, bool show_done)
 
 		substatus = string_printf("Path Tracing Tile %d/%d", tile, num_tiles);
 
-		if((is_gpu && !is_multidevice) || (is_cpu && num_tiles == 1)) {
+		if(((is_gpu && !is_multidevice) || (is_cpu && num_tiles == 1)) && !device->info.use_split_kernel) {
+			/* When using split-kernel (OpenCL) each thread in a tile will be working on a different
+			 * sample. Can't display sample number when device uses split-kernel
+			 */
 			/* when rendering on GPU multithreading happens within single tile, as in
 			 * tiles are handling sequentially and in this case we could display
 			 * currently rendering sample number
@@ -852,6 +883,7 @@ void Session::path_trace()
 	task.update_progress_sample = function_bind(&Session::update_progress_sample, this);
 	task.need_finish_queue = params.progressive_refine;
 	task.integrator_branched = scene->integrator->method == Integrator::BRANCHED_PATH;
+	task.requested_tile_size = params.tile_size;
 
 	device->task_add(task);
 }
@@ -901,10 +933,14 @@ bool Session::update_progressive_refine(bool cancel)
 			rtile.buffers = buffers;
 			rtile.sample = sample;
 
-			if(write)
-				write_render_tile_cb(rtile);
-			else
-				update_render_tile_cb(rtile);
+			if(write) {
+				if(write_render_tile_cb)
+					write_render_tile_cb(rtile);
+			}
+			else {
+				if(update_render_tile_cb)
+					update_render_tile_cb(rtile);
+			}
 		}
 	}
 
@@ -925,6 +961,17 @@ void Session::device_free()
 	/* used from background render only, so no need to
 	 * re-create render/display buffers here
 	 */
+}
+
+int Session::get_max_closure_count()
+{
+	int max_closures = 0;
+	for(int i = 0; i < scene->shaders.size(); i++) {
+		int num_closures = scene->shaders[i]->graph->get_num_closures();
+		max_closures = max(max_closures, num_closures);
+	}
+	max_closure_global = max(max_closure_global, max_closures);
+	return max_closure_global;
 }
 
 CCL_NAMESPACE_END

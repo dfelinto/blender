@@ -748,7 +748,7 @@ static int mesh_customdata_clear_exec__internal(bContext *C,
 }
 
 /* Clear Mask */
-static int mesh_customdata_clear_mask_poll(bContext *C)
+static int mesh_customdata_mask_clear_poll(bContext *C)
 {
 	Object *ob = ED_object_context(C);
 	if (ob && ob->type == OB_MESH) {
@@ -772,7 +772,7 @@ static int mesh_customdata_clear_mask_poll(bContext *C)
 	}
 	return false;
 }
-static int mesh_customdata_clear_mask_exec(bContext *C, wmOperator *UNUSED(op))
+static int mesh_customdata_mask_clear_exec(bContext *C, wmOperator *UNUSED(op))
 {
 	int ret_a = mesh_customdata_clear_exec__internal(C, BM_VERT, CD_PAINT_MASK);
 	int ret_b = mesh_customdata_clear_exec__internal(C, BM_LOOP, CD_GRID_PAINT_MASK);
@@ -787,24 +787,24 @@ static int mesh_customdata_clear_mask_exec(bContext *C, wmOperator *UNUSED(op))
 	}
 }
 
-void MESH_OT_customdata_clear_mask(wmOperatorType *ot)
+void MESH_OT_customdata_mask_clear(wmOperatorType *ot)
 {
 
 	/* identifiers */
 	ot->name = "Clear Sculpt-Mask Data";
-	ot->idname = "MESH_OT_customdata_clear_mask";
+	ot->idname = "MESH_OT_customdata_mask_clear";
 	ot->description = "Clear vertex sculpt masking data from the mesh";
 
 	/* api callbacks */
-	ot->exec = mesh_customdata_clear_mask_exec;
-	ot->poll = mesh_customdata_clear_mask_poll;
+	ot->exec = mesh_customdata_mask_clear_exec;
+	ot->poll = mesh_customdata_mask_clear_poll;
 
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
 /* Clear Skin */
-static int mesh_customdata_clear_skin_poll(bContext *C)
+static bool mesh_customdata_skin_has(bContext *C)
 {
 	Object *ob = ED_object_context(C);
 
@@ -819,21 +819,60 @@ static int mesh_customdata_clear_skin_poll(bContext *C)
 	}
 	return false;
 }
-static int mesh_customdata_clear_skin_exec(bContext *C, wmOperator *UNUSED(op))
+
+static int mesh_customdata_skin_add_poll(bContext *C)
+{
+	return !mesh_customdata_skin_has(C);
+}
+
+static int mesh_customdata_skin_add_exec(bContext *C, wmOperator *UNUSED(op))
+{
+	Object *ob = ED_object_context(C);
+	Mesh *me = ob->data;
+
+	BKE_mesh_ensure_skin_customdata(me);
+
+	DAG_id_tag_update(&me->id, 0);
+	WM_event_add_notifier(C, NC_GEOM | ND_DATA, me);
+
+	return OPERATOR_FINISHED;
+}
+
+void MESH_OT_customdata_skin_add(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Add Skin Data";
+	ot->idname = "MESH_OT_customdata_skin_add";
+	ot->description = "Add a vertex skin layer";
+
+	/* api callbacks */
+	ot->exec = mesh_customdata_skin_add_exec;
+	ot->poll = mesh_customdata_skin_add_poll;
+
+	/* flags */
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
+
+static int mesh_customdata_skin_clear_poll(bContext *C)
+{
+	return mesh_customdata_skin_has(C);
+}
+
+static int mesh_customdata_skin_clear_exec(bContext *C, wmOperator *UNUSED(op))
 {
 	return mesh_customdata_clear_exec__internal(C, BM_VERT, CD_MVERT_SKIN);
 }
 
-void MESH_OT_customdata_clear_skin(wmOperatorType *ot)
+void MESH_OT_customdata_skin_clear(wmOperatorType *ot)
 {
 	/* identifiers */
 	ot->name = "Clear Skin Data";
-	ot->idname = "MESH_OT_customdata_clear_skin";
+	ot->idname = "MESH_OT_customdata_skin_clear";
 	ot->description = "Clear vertex skin layer";
 
 	/* api callbacks */
-	ot->exec = mesh_customdata_clear_skin_exec;
-	ot->poll = mesh_customdata_clear_skin_poll;
+	ot->exec = mesh_customdata_skin_clear_exec;
+	ot->poll = mesh_customdata_skin_clear_poll;
 
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;

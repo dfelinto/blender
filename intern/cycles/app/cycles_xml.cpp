@@ -55,6 +55,16 @@ struct XMLReadState {
 	string base;		/* base path to current file*/
 	float dicing_rate;	/* current dicing rate */
 	Mesh::DisplacementMethod displacement_method;
+
+	XMLReadState()
+	  : scene(NULL),
+	    smooth(false),
+	    shader(0),
+	    dicing_rate(0.0f),
+	    displacement_method(Mesh::DISPLACE_BUMP)
+	{
+		tfm = transform_identity();
+	}
 };
 
 /* Attribute Reading */
@@ -493,10 +503,6 @@ static void xml_read_shader_graph(const XMLReadState& state, Shader *shader, pug
 			xml_read_int(&magic->depth, node, "depth");
 			snode = magic;
 		}
-		else if(string_iequals(node.name(), "noise_texture")) {
-			NoiseTextureNode *dist = new NoiseTextureNode();
-			snode = dist;
-		}
 		else if(string_iequals(node.name(), "wave_texture")) {
 			WaveTextureNode *wave = new WaveTextureNode();
 			xml_read_enum(&wave->type, WaveTextureNode::type_enum, node, "type");
@@ -637,10 +643,10 @@ static void xml_read_shader_graph(const XMLReadState& state, Shader *shader, pug
 			snode = new SeparateHSVNode();
 		}
 		else if(string_iequals(node.name(), "combine_xyz")) {
-			snode = new CombineHSVNode();
+			snode = new CombineXYZNode();
 		}
 		else if(string_iequals(node.name(), "separate_xyz")) {
-			snode = new SeparateHSVNode();
+			snode = new SeparateXYZNode();
 		}
 		else if(string_iequals(node.name(), "hsv")) {
 			snode = new HSVNode();
@@ -1028,12 +1034,27 @@ static void xml_read_light(const XMLReadState& state, pugi::xml_node node)
 	xml_read_float(&light->sizev, node, "sizev");
 	xml_read_float3(&light->axisu, node, "axisu");
 	xml_read_float3(&light->axisv, node, "axisv");
-	
+
+	/* Portal? (Area light only) */
+	xml_read_bool(&light->is_portal, node, "is_portal");
+
 	/* Generic */
 	xml_read_float(&light->size, node, "size");
 	xml_read_float3(&light->dir, node, "dir");
 	xml_read_float3(&light->co, node, "P");
 	light->co = transform_point(&state.tfm, light->co);
+
+	/* Settings */
+	xml_read_bool(&light->cast_shadow, node, "cast_shadow");
+	xml_read_bool(&light->use_mis, node, "use_mis");
+	xml_read_int(&light->samples, node, "samples");
+	xml_read_int(&light->max_bounces, node, "max_bounces");
+
+	/* Ray Visibility */
+	xml_read_bool(&light->use_diffuse, node, "use_diffuse");
+	xml_read_bool(&light->use_glossy, node, "use_glossy");
+	xml_read_bool(&light->use_transmission, node, "use_transmission");
+	xml_read_bool(&light->use_scatter, node, "use_scatter");
 
 	state.scene->lights.push_back(light);
 }
@@ -1178,7 +1199,8 @@ static void xml_read_include(const XMLReadState& state, const string& src)
 		XMLReadState substate = state;
 		substate.base = path_dirname(path);
 
-		xml_read_scene(substate, doc);
+		pugi::xml_node cycles = doc.child("cycles");
+		xml_read_scene(substate, cycles);
 	}
 	else {
 		fprintf(stderr, "%s read error: %s\n", src.c_str(), parse_result.description());

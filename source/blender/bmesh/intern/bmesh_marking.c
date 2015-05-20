@@ -73,9 +73,9 @@ static void recount_totsels(BMesh *bm)
 /** \name BMesh helper functions for selection flushing.
  * \{ */
 
-static bool bm_vert_is_edge_select_any_other(BMVert *v, BMEdge *e_first)
+static bool bm_vert_is_edge_select_any_other(const BMVert *v, const BMEdge *e_first)
 {
-	BMEdge *e_iter = e_first;
+	const BMEdge *e_iter = e_first;
 
 	/* start by stepping over the current edge */
 	while ((e_iter = bmesh_disk_edge_next(e_iter, v)) != e_first) {
@@ -87,10 +87,10 @@ static bool bm_vert_is_edge_select_any_other(BMVert *v, BMEdge *e_first)
 }
 
 #if 0
-static bool bm_vert_is_edge_select_any(BMVert *v)
+static bool bm_vert_is_edge_select_any(const BMVert *v)
 {
 	if (v->e) {
-		BMEdge *e_iter, *e_first;
+		const BMEdge *e_iter, *e_first;
 		e_iter = e_first = v->e;
 		do {
 			if (BM_elem_flag_test(e_iter, BM_ELEM_SELECT)) {
@@ -104,7 +104,7 @@ static bool bm_vert_is_edge_select_any(BMVert *v)
 
 static bool bm_edge_is_face_select_any_other(BMLoop *l_first)
 {
-	BMLoop *l_iter = l_first;
+	const BMLoop *l_iter = l_first;
 
 	/* start by stepping over the current face */
 	while ((l_iter = l_iter->radial_next) != l_first) {
@@ -116,10 +116,10 @@ static bool bm_edge_is_face_select_any_other(BMLoop *l_first)
 }
 
 #if 0
-static bool bm_edge_is_face_select_any(BMEdge *e)
+static bool bm_edge_is_face_select_any(const BMEdge *e)
 {
 	if (e->l) {
-		BMLoop *l_iter, *l_first;
+		const BMLoop *l_iter, *l_first;
 		l_iter = l_first = e->l;
 		do {
 			if (BM_elem_flag_test(l_iter->f, BM_ELEM_SELECT)) {
@@ -914,6 +914,12 @@ void _bm_select_history_store_notest(BMesh *bm, BMHeader *ele)
 	BLI_addtail(&(bm->selected), ese);
 }
 
+void _bm_select_history_store_head_notest(BMesh *bm, BMHeader *ele)
+{
+	BMEditSelection *ese = bm_select_history_create(ele);
+	BLI_addhead(&(bm->selected), ese);
+}
+
 void _bm_select_history_store(BMesh *bm, BMHeader *ele)
 {
 	if (!BM_select_history_check(bm, (BMElem *)ele)) {
@@ -921,6 +927,12 @@ void _bm_select_history_store(BMesh *bm, BMHeader *ele)
 	}
 }
 
+void _bm_select_history_store_head(BMesh *bm, BMHeader *ele)
+{
+	if (!BM_select_history_check(bm, (BMElem *)ele)) {
+		BM_select_history_store_head_notest(bm, (BMElem *)ele);
+	}
+}
 
 void _bm_select_history_store_after_notest(BMesh *bm, BMEditSelection *ese_ref, BMHeader *ele)
 {

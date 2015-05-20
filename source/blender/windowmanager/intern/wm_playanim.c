@@ -71,6 +71,12 @@
 
 #include "WM_api.h"  /* only for WM_main_playanim */
 
+/* simple limiter to avoid flooding memory */
+#define USE_FRAME_CACHE_LIMIT
+#ifdef USE_FRAME_CACHE_LIMIT
+#  define PLAY_FRAME_CACHE_MAX 30
+#endif
+
 struct PlayState;
 static void playanim_window_zoom(struct PlayState *ps, const float zoom_offset);
 
@@ -160,11 +166,11 @@ static struct WindowStateGlobal {
 	eWS_Qual qual;
 } g_WS = {NULL};
 
-static void playanim_window_get_size(int *width_r, int *height_r)
+static void playanim_window_get_size(int *r_width, int *r_height)
 {
 	GHOST_RectangleHandle bounds = GHOST_GetClientBounds(g_WS.ghost_window);
-	*width_r = GHOST_GetWidthRectangle(bounds);
-	*height_r = GHOST_GetHeightRectangle(bounds);
+	*r_width = GHOST_GetWidthRectangle(bounds);
+	*r_height = GHOST_GetHeightRectangle(bounds);
 	GHOST_DisposeRectangle(bounds);
 }
 
@@ -222,8 +228,14 @@ typedef struct PlayAnimPict {
 } PlayAnimPict;
 
 static struct ListBase picsbase = {NULL, NULL};
+/* frames in memory - store them here to for easy deallocation later */
 static bool fromdisk = false;
 static double ptottime = 0.0, swaptime = 0.04;
+
+#ifdef USE_FRAME_CACHE_LIMIT
+static struct ListBase inmempicsbase = {NULL, NULL};
+static int added_images = 0;
+#endif
 
 static PlayAnimPict *playanim_step(PlayAnimPict *playanim, int step)
 {
@@ -1130,10 +1142,38 @@ static char *wm_main_playanim_intern(int argc, const char **argv)
 			}
 
 			if (ibuf) {
+#ifdef USE_FRAME_CACHE_LIMIT
+				LinkData *node;
+#endif
 
 #ifdef USE_IMB_CACHE
 				ps.picture->ibuf = ibuf;
 #endif
+
+#ifdef USE_FRAME_CACHE_LIMIT
+				/* really basic memory conservation scheme. Keep frames in a fifo queue */
+				node = inmempicsbase.last;
+
+				while (added_images > PLAY_FRAME_CACHE_MAX) {
+					PlayAnimPict *pic = node->data;
+
+					if (pic->ibuf != ibuf) {
+						LinkData *node_tmp;
+						IMB_freeImBuf(pic->ibuf);
+						pic->ibuf = NULL;
+						node_tmp = node->prev;
+						BLI_freelinkN(&inmempicsbase, node);
+						added_images--;
+						node = node_tmp;
+					}
+					else {
+						node = node->prev;
+					}
+				}
+
+				BLI_addhead(&inmempicsbase, BLI_genericNodeN(ps.picture));
+				added_images++;
+#endif  /* USE_FRAME_CACHE_LIMIT */
 
 				BLI_strncpy(ibuf->name, ps.picture->name, sizeof(ibuf->name));
 

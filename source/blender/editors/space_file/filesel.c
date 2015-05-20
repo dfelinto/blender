@@ -102,6 +102,8 @@ short ED_fileselect_set_params(SpaceFile *sfile)
 		/* set path to most recently opened .blend */
 		BLI_split_dirfile(G.main->name, sfile->params->dir, sfile->params->file, sizeof(sfile->params->dir), sizeof(sfile->params->file));
 		sfile->params->filter_glob[0] = '\0';
+		/* set the default thumbnails size */
+		sfile->params->thumbnail_size = 128;
 	}
 
 	params = sfile->params;
@@ -396,58 +398,6 @@ void ED_fileselect_layout_tilepos(FileLayout *layout, int tile, int *x, int *y)
 	}
 }
 
-/* Shorten a string to a given width w. 
- * If front is set, shorten from the front,
- * otherwise shorten from the end. */
-float file_shorten_string(char *string, float w, int front)
-{	
-	char temp[FILE_MAX];
-	short shortened = 0;
-	float sw = 0;
-	float pad = 0;
-
-	if (w <= 0) {
-		*string = '\0';
-		return 0.0;
-	}
-
-	sw = file_string_width(string);
-	if (front == 1) {
-		const char *s = string;
-		BLI_strncpy(temp, "...", 4);
-		pad = file_string_width(temp);
-		while ((*s) && (sw + pad > w)) {
-			s++;
-			sw = file_string_width(s);
-			shortened = 1;
-		}
-		if (shortened) {
-			int slen = strlen(s);
-			BLI_strncpy(temp + 3, s, slen + 1);
-			temp[slen + 4] = '\0';
-			BLI_strncpy(string, temp, slen + 4);
-		}
-	}
-	else {
-		const char *s = string;
-		while (sw > w) {
-			int slen = strlen(string);
-			string[slen - 1] = '\0';
-			sw = file_string_width(s);
-			shortened = 1;
-		}
-
-		if (shortened) {
-			int slen = strlen(string);
-			if (slen > 3) {
-				BLI_strncpy(string + slen - 3, "...", 4);
-			}
-		}
-	}
-	
-	return sw;
-}
-
 float file_string_width(const char *str)
 {
 	uiStyle *style = UI_style_get();
@@ -527,8 +477,8 @@ void ED_fileselect_init_layout(struct SpaceFile *sfile, ARegion *ar)
 	layout->textheight = textheight;
 
 	if (params->display == FILE_IMGDISPLAY) {
-		layout->prv_w = 4.8f * UI_UNIT_X;
-		layout->prv_h = 4.8f * UI_UNIT_Y;
+		layout->prv_w = ((float)params->thumbnail_size / 20.0f) * UI_UNIT_X;
+		layout->prv_h = ((float)params->thumbnail_size / 20.0f) * UI_UNIT_Y;
 		layout->tile_border_x = 0.3f * UI_UNIT_X;
 		layout->tile_border_y = 0.3f * UI_UNIT_X;
 		layout->prv_border_x = 0.3f * UI_UNIT_X;

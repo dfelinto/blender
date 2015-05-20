@@ -47,6 +47,7 @@
 #include "BKE_action.h"
 #include "BKE_armature.h"
 #include "BKE_gpencil.h"
+#include "BKE_screen.h"
 #include "BKE_sequencer.h"
 
 #include "RNA_access.h"
@@ -58,6 +59,18 @@
 #include "UI_interface.h"
 
 #include "screen_intern.h"
+
+static unsigned int context_layers(bScreen *sc, Scene *scene, ScrArea *sa_ctx)
+{
+	/* needed for 'USE_ALLSELECT' define, otherwise we end up editing off-screen layers. */
+	if (sc && sa_ctx && (sa_ctx->spacetype == SPACE_BUTS)) {
+		const unsigned int lay = BKE_screen_view3d_layer_all(sc);
+		if (lay) {
+			return lay;
+		}
+	}
+	return scene->lay;
+}
 
 const char *screen_context_dir[] = {
 	"scene", "visible_objects", "visible_bases", "selectable_objects", "selectable_bases",
@@ -81,7 +94,6 @@ int ed_screen_context(const bContext *C, const char *member, bContextDataResult 
 	ScrArea *sa = CTX_wm_area(C);
 	Scene *scene = sc->scene;
 	Base *base;
-	unsigned int lay = scene->lay;
 
 #if 0  /* Using the context breaks adding objects in the UI. Need to find out why - campbell */
 	Object *obact = CTX_data_active_object(C);
@@ -102,10 +114,11 @@ int ed_screen_context(const bContext *C, const char *member, bContextDataResult 
 		return 1;
 	}
 	else if (CTX_data_equals(member, "visible_objects") || CTX_data_equals(member, "visible_bases")) {
+		const unsigned int lay = context_layers(sc, scene, sa);
 		int visible_objects = CTX_data_equals(member, "visible_objects");
 
 		for (base = scene->base.first; base; base = base->next) {
-			if (((base->object->restrictflag & OB_RESTRICT_VIEW) == 0) && (base->lay & scene->lay)) {
+			if (((base->object->restrictflag & OB_RESTRICT_VIEW) == 0) && (base->lay & lay)) {
 				if (visible_objects)
 					CTX_data_id_list_add(result, &base->object->id);
 				else
@@ -116,6 +129,7 @@ int ed_screen_context(const bContext *C, const char *member, bContextDataResult 
 		return 1;
 	}
 	else if (CTX_data_equals(member, "selectable_objects") || CTX_data_equals(member, "selectable_bases")) {
+		const unsigned int lay = context_layers(sc, scene, sa);
 		int selectable_objects = CTX_data_equals(member, "selectable_objects");
 
 		for (base = scene->base.first; base; base = base->next) {
@@ -132,10 +146,11 @@ int ed_screen_context(const bContext *C, const char *member, bContextDataResult 
 		return 1;
 	}
 	else if (CTX_data_equals(member, "selected_objects") || CTX_data_equals(member, "selected_bases")) {
+		const unsigned int lay = context_layers(sc, scene, sa);
 		int selected_objects = CTX_data_equals(member, "selected_objects");
 
 		for (base = scene->base.first; base; base = base->next) {
-			if ((base->flag & SELECT) && (base->lay & scene->lay)) {
+			if ((base->flag & SELECT) && (base->lay & lay)) {
 				if (selected_objects)
 					CTX_data_id_list_add(result, &base->object->id);
 				else
@@ -146,10 +161,11 @@ int ed_screen_context(const bContext *C, const char *member, bContextDataResult 
 		return 1;
 	}
 	else if (CTX_data_equals(member, "selected_editable_objects") || CTX_data_equals(member, "selected_editable_bases")) {
+		const unsigned int lay = context_layers(sc, scene, sa);
 		int selected_editable_objects = CTX_data_equals(member, "selected_editable_objects");
 
 		for (base = scene->base.first; base; base = base->next) {
-			if ((base->flag & SELECT) && (base->lay & scene->lay)) {
+			if ((base->flag & SELECT) && (base->lay & lay)) {
 				if ((base->object->restrictflag & OB_RESTRICT_VIEW) == 0) {
 					if (0 == BKE_object_is_libdata(base->object)) {
 						if (selected_editable_objects)

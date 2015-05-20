@@ -115,6 +115,8 @@
 #include "BKE_texture.h"
 #include "BKE_world.h"
 
+#include "DEG_depsgraph.h"
+
 #include "RNA_access.h"
 
 #ifdef WITH_PYTHON
@@ -865,18 +867,24 @@ static void BKE_library_free(Library *lib)
 
 static void (*free_windowmanager_cb)(bContext *, wmWindowManager *) = NULL;
 
-void set_free_windowmanager_cb(void (*func)(bContext *C, wmWindowManager *) )
+void BKE_library_callback_free_window_manager_set(void (*func)(bContext *C, wmWindowManager *) )
 {
 	free_windowmanager_cb = func;
 }
 
 static void (*free_notifier_reference_cb)(const void *) = NULL;
 
-void set_free_notifier_reference_cb(void (*func)(const void *) )
+void BKE_library_callback_free_notifier_reference_set(void (*func)(const void *) )
 {
 	free_notifier_reference_cb = func;
 }
 
+static void (*free_editor_id_reference_cb)(const ID *) = NULL;
+
+void BKE_library_callback_free_editor_id_reference_set(void (*func)(const ID *))
+{
+	free_editor_id_reference_cb = func;
+}
 
 static void animdata_dtar_clear_cb(ID *UNUSED(id), AnimData *adt, void *userdata)
 {
@@ -1034,8 +1042,13 @@ void BKE_libblock_free_ex(Main *bmain, void *idv, bool do_id_user)
 	/* avoid notifying on removed data */
 	BKE_main_lock(bmain);
 
-	if (free_notifier_reference_cb)
+	if (free_notifier_reference_cb) {
 		free_notifier_reference_cb(id);
+	}
+
+	if (free_editor_id_reference_cb) {
+		free_editor_id_reference_cb(id);
+	}
 
 	BLI_remlink(lb, id);
 
@@ -1070,8 +1083,7 @@ void BKE_libblock_free_us(Main *bmain, void *idv)      /* test users */
 Main *BKE_main_new(void)
 {
 	Main *bmain = MEM_callocN(sizeof(Main), "new main");
-	bmain->eval_ctx = MEM_callocN(sizeof(EvaluationContext),
-	                              "EvaluationContext");
+	bmain->eval_ctx = DEG_evaluation_context_new(DAG_EVAL_VIEWPORT);
 	bmain->lock = MEM_mallocN(sizeof(SpinLock), "main lock");
 	BLI_spin_init((SpinLock *)bmain->lock);
 	return bmain;
@@ -1138,7 +1150,7 @@ void BKE_main_free(Main *mainvar)
 
 	BLI_spin_end((SpinLock *)mainvar->lock);
 	MEM_freeN(mainvar->lock);
-	MEM_freeN(mainvar->eval_ctx);
+	DEG_evaluation_context_free(mainvar->eval_ctx);
 	MEM_freeN(mainvar);
 }
 
@@ -1404,16 +1416,11 @@ void id_clear_lib_data(Main *bmain, ID *id)
 	/* internal bNodeTree blocks inside ID types below
 	 * also stores id->lib, make sure this stays in sync.
 	 */
-	switch (GS(id->name)) {
-		case ID_SCE:	ntree = ((Scene *)id)->nodetree;		break;
-		case ID_MA:		ntree = ((Material *)id)->nodetree;		break;
-		case ID_LA:		ntree = ((Lamp *)id)->nodetree;			break;
-		case ID_WO:		ntree = ((World *)id)->nodetree;		break;
-		case ID_TE:		ntree = ((Tex *)id)->nodetree;			break;
-		case ID_LS:		ntree = ((FreestyleLineStyle *)id)->nodetree; break;
-	}
-	if (ntree)
+	ntree = ntreeFromID(id);
+
+	if (ntree) {
 		ntree->id.lib = NULL;
+	}
 }
 
 /* next to indirect usage in read/writefile also in editobject.c scene.c */

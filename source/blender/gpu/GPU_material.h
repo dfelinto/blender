@@ -154,6 +154,14 @@ typedef enum GPUDynamicType {
 	GPU_DYNAMIC_MIST_COLOR = 26,
 	GPU_DYNAMIC_HORIZON_COLOR = 27,
 	GPU_DYNAMIC_AMBIENT_COLOR = 28,
+	GPU_DYNAMIC_MAT_DIFFRGB = 29,
+	GPU_DYNAMIC_MAT_REF = 30,
+	GPU_DYNAMIC_MAT_SPECRGB = 31,
+	GPU_DYNAMIC_MAT_SPEC = 32,
+	GPU_DYNAMIC_MAT_HARD = 33,
+	GPU_DYNAMIC_MAT_EMIT = 34,
+	GPU_DYNAMIC_MAT_AMB = 35,
+	GPU_DYNAMIC_MAT_ALPHA = 36,
 } GPUDynamicType;
 
 GPUNodeLink *GPU_attribute(CustomDataType type, const char *name);
@@ -186,7 +194,7 @@ bool GPU_lamp_override_visible(GPULamp *lamp, struct SceneRenderLayer *srl, stru
 void GPU_material_bind(GPUMaterial *material, int oblay, int viewlay, double time, int mipmap, float viewmat[4][4], float viewinv[4][4], float cameraborder[4], bool scenelock);
 void GPU_material_bind_uniforms(GPUMaterial *material, float obmat[4][4], float obcol[4], float autobumpscale);
 void GPU_material_unbind(GPUMaterial *material);
-int GPU_material_bound(GPUMaterial *material);
+bool GPU_material_bound(GPUMaterial *material);
 struct Scene *GPU_material_scene(GPUMaterial *material);
 GPUMatType GPU_Material_get_type(GPUMaterial *material);
 

@@ -24,6 +24,13 @@
 #define __KERNEL_CPU__
 #endif
 
+/* TODO(sergey): This is only to make it possible to include this header
+ * from outside of the kernel. but this could be done somewhat cleaner?
+ */
+#ifndef ccl_addr_space
+#define ccl_addr_space
+#endif
+
 CCL_NAMESPACE_BEGIN
 
 /* constants */
@@ -37,12 +44,6 @@ CCL_NAMESPACE_BEGIN
 
 #define BSSRDF_MIN_RADIUS			1e-8f
 #define BSSRDF_MAX_HITS				4
-
-#define BB_DRAPER				800.0f
-#define BB_MAX_TABLE_RANGE		12000.0f
-#define BB_TABLE_XPOWER			1.5f
-#define BB_TABLE_YPOWER			5.0f
-#define BB_TABLE_SPACING		2.0f
 
 #define BECKMANN_TABLE_SIZE		256
 
@@ -72,6 +73,7 @@ CCL_NAMESPACE_BEGIN
 #define __VOLUME_DECOUPLED__
 #define __VOLUME_SCATTER__
 #define __SHADOW_RECORD_ALL__
+#define __VOLUME_RECORD_ALL__
 #endif
 
 #ifdef __KERNEL_CUDA__
@@ -82,7 +84,7 @@ CCL_NAMESPACE_BEGIN
 #define __VOLUME_SCATTER__
 
 /* Experimental on GPU */
-#ifdef __KERNEL_CUDA_EXPERIMENTAL__
+#ifdef __KERNEL_EXPERIMENTAL__
 #define __SUBSURFACE__
 #define __CMJ__
 #endif
@@ -94,38 +96,58 @@ CCL_NAMESPACE_BEGIN
 /* keep __KERNEL_ADV_SHADING__ in sync with opencl_kernel_use_advanced_shading! */
 
 #ifdef __KERNEL_OPENCL_NVIDIA__
-#define __KERNEL_SHADING__
-#define __KERNEL_ADV_SHADING__
+#  define __KERNEL_SHADING__
+/* TODO(sergey): Advanced shading code still requires work
+ * for split kernel.
+ */
+#  ifndef __SPLIT_KERNEL__
+#    define __KERNEL_ADV_SHADING__
+#  else
+#    define __MULTI_CLOSURE__
+#    define __TRANSPARENT_SHADOWS__
+#    define __PASSES__
+#    define __BACKGROUND_MIS__
+#    define __LAMP_MIS__
+#    define __AO__
+#    define __HAIR__
+#    define __CAMERA_MOTION__
+#  endif
+#  ifdef __KERNEL_EXPERIMENTAL__
+#    define __CMJ__
+#  endif
 #endif
 
 #ifdef __KERNEL_OPENCL_APPLE__
-#define __KERNEL_SHADING__
+#  define __KERNEL_SHADING__
 //#define __KERNEL_ADV_SHADING__
 #endif
 
 #ifdef __KERNEL_OPENCL_AMD__
-#define __CL_USE_NATIVE__
-#define __KERNEL_SHADING__
-//__KERNEL_ADV_SHADING__
-#define __MULTI_CLOSURE__
-#define __TRANSPARENT_SHADOWS__
-#define __PASSES__
-#define __BACKGROUND_MIS__
-#define __LAMP_MIS__
-#define __AO__
-//#define __CAMERA_MOTION__
+#  define __CL_USE_NATIVE__
+#  define __KERNEL_SHADING__
+#  define __MULTI_CLOSURE__
+#  define __PASSES__
+#  define __BACKGROUND_MIS__
+#  define __LAMP_MIS__
+#  define __AO__
+#  ifdef __KERNEL_EXPERIMENTAL__
+#    define __CAMERA_MOTION__
+#    define __HAIR__
+#  endif
 //#define __OBJECT_MOTION__
-//#define __HAIR__
-//end __KERNEL_ADV_SHADING__
+//#define __TRANSPARENT_SHADOWS__
 #endif
 
 #ifdef __KERNEL_OPENCL_INTEL_CPU__
-#define __CL_USE_NATIVE__
-#define __KERNEL_SHADING__
-#define __KERNEL_ADV_SHADING__
+#  define __CL_USE_NATIVE__
+#  define __KERNEL_SHADING__
+#  define __KERNEL_ADV_SHADING__
+#  ifdef __KERNEL_EXPERIMENTAL__
+#    define __CMJ__
+#  endif
 #endif
 
-#endif
+#endif // __KERNEL_OPENCL__
 
 /* kernel features */
 #define __SOBOL__
@@ -269,9 +291,7 @@ enum PathRayFlag {
 
 	PATH_RAY_MIS_SKIP = 2048,
 	PATH_RAY_DIFFUSE_ANCESTOR = 4096,
-	PATH_RAY_GLOSSY_ANCESTOR = 8192,
-	PATH_RAY_BSSRDF_ANCESTOR = 16384,
-	PATH_RAY_SINGLE_PASS_DONE = 32768,
+	PATH_RAY_SINGLE_PASS_DONE = 8192,
 
 	/* we need layer member flags to be the 20 upper bits */
 	PATH_RAY_LAYER_SHIFT = (32-20)
@@ -329,7 +349,7 @@ typedef enum PassType {
 
 #ifdef __PASSES__
 
-typedef struct PathRadiance {
+typedef ccl_addr_space struct PathRadiance {
 	int use_light_pass;
 
 	float3 emission;
@@ -381,7 +401,7 @@ typedef struct BsdfEval {
 
 #else
 
-typedef float3 PathRadiance;
+typedef ccl_addr_space float3 PathRadiance;
 typedef float3 BsdfEval;
 
 #endif
@@ -446,10 +466,26 @@ typedef struct differential {
 /* Ray */
 
 typedef struct Ray {
+/* TODO(sergey): This is only needed because current AMD
+ * compiler has hard time building the kernel with this
+ * reshuffle. And at the same time reshuffle will cause
+ * less optimal CPU code in certain places.
+ *
+ * We'll get rid of this nasty exception once AMD compiler
+ * is fixed.
+ */
+#ifndef __KERNEL_OPENCL_AMD__
 	float3 P;		/* origin */
 	float3 D;		/* direction */
+
 	float t;		/* length of the ray */
 	float time;		/* time (for motion blur) */
+#else
+	float t;		/* length of the ray */
+	float time;		/* time (for motion blur) */
+	float3 P;		/* origin */
+	float3 D;		/* direction */
+#endif
 
 #ifdef __RAY_DIFFERENTIALS__
 	differential3 dP;
@@ -459,7 +495,7 @@ typedef struct Ray {
 
 /* Intersection */
 
-typedef struct Intersection {
+typedef ccl_addr_space struct Intersection {
 	float t, u, v;
 	int prim;
 	int object;
@@ -544,7 +580,11 @@ typedef enum AttributeStandard {
 /* Closure data */
 
 #ifdef __MULTI_CLOSURE__
-#define MAX_CLOSURE 64
+#  ifndef __MAX_CLOSURE__
+#     define MAX_CLOSURE 64
+#  else
+#    define MAX_CLOSURE __MAX_CLOSURE__
+#  endif
 #else
 #define MAX_CLOSURE 1
 #endif
@@ -554,7 +594,7 @@ typedef enum AttributeStandard {
  *   does not put own padding trying to align this members.
  * - We make sure OSL pointer is also 16 bytes aligned.
  */
-typedef struct ShaderClosure {
+typedef ccl_addr_space struct ShaderClosure {
 	float3 weight;
 	float3 N;
 	float3 T;
@@ -639,78 +679,23 @@ enum ShaderDataFlag {
 
 struct KernelGlobals;
 
-typedef struct ShaderData {
-	/* position */
-	float3 P;
-	/* smooth normal for shading */
-	float3 N;
-	/* true geometric normal */
-	float3 Ng;
-	/* view/incoming direction */
-	float3 I;
-	/* shader id */
-	int shader;
-	/* booleans describing shader, see ShaderDataFlag */
-	int flag;
-
-	/* primitive id if there is one, ~0 otherwise */
-	int prim;
-
-	/* combined type and curve segment for hair */
-	int type;
-
-	/* parametric coordinates
-	 * - barycentric weights for triangles */
-	float u, v;
-	/* object id if there is one, ~0 otherwise */
-	int object;
-
-	/* motion blur sample time */
-	float time;
-	
-	/* length of the ray being shaded */
-	float ray_length;
-	
-	/* ray bounce depth */
-	int ray_depth;
-
-	/* ray transparent depth */
-	int transparent_depth;
-
-#ifdef __RAY_DIFFERENTIALS__
-	/* differential of P. these are orthogonal to Ng, not N */
-	differential3 dP;
-	/* differential of I */
-	differential3 dI;
-	/* differential of u, v */
-	differential du;
-	differential dv;
-#endif
-#ifdef __DPDU__
-	/* differential of P w.r.t. parametric coordinates. note that dPdu is
-	 * not readily suitable as a tangent for shading on triangles. */
-	float3 dPdu, dPdv;
+#ifdef __SPLIT_KERNEL__
+#define SD_VAR(type, what) ccl_global type *what;
+#define SD_CLOSURE_VAR(type, what, max_closure) type *what;
+#define TIDX (get_global_id(1) * get_global_size(0) + get_global_id(0))
+#define ccl_fetch(s, t) (s->t[TIDX])
+#define ccl_fetch_array(s, t, index) (&s->t[TIDX * MAX_CLOSURE + index])
+#else
+#define SD_VAR(type, what) type what;
+#define SD_CLOSURE_VAR(type, what, max_closure) type what[max_closure];
+#define ccl_fetch(s, t) (s->t)
+#define ccl_fetch_array(s, t, index) (&s->t[index])
 #endif
 
-#ifdef __OBJECT_MOTION__
-	/* object <-> world space transformations, cached to avoid
-	 * re-interpolating them constantly for shading */
-	Transform ob_tfm;
-	Transform ob_itfm;
-#endif
+typedef ccl_addr_space struct ShaderData {
 
-	/* Closure data, we store a fixed array of closures */
-	ShaderClosure closure[MAX_CLOSURE];
-	int num_closure;
-	float randb_closure;
+#include "kernel_shaderdata_vars.h"
 
-	/* ray start position, only set for backgrounds */
-	float3 ray_P;
-	differential3 ray_dP;
-
-#ifdef __OSL__
-	struct KernelGlobals *osl_globals;
-#endif
 } ShaderData;
 
 /* Path State */
@@ -988,9 +973,8 @@ typedef struct KernelCurves {
 } KernelCurves;
 
 typedef struct KernelTables {
-	int blackbody_offset;
 	int beckmann_offset;
-	int pad1, pad2;
+	int pad1, pad2, pad3;
 } KernelTables;
 
 typedef struct KernelData {
@@ -1004,12 +988,61 @@ typedef struct KernelData {
 } KernelData;
 
 #ifdef __KERNEL_DEBUG__
-typedef struct DebugData {
+typedef ccl_addr_space struct DebugData {
 	// Total number of BVH node traversal steps and primitives intersections
 	// for the camera rays.
 	int num_bvh_traversal_steps;
 } DebugData;
 #endif
+
+/* Declarations required for split kernel */
+
+/* Macro for queues */
+/* Value marking queue's empty slot */
+#define QUEUE_EMPTY_SLOT -1
+
+/*
+* Queue 1 - Active rays
+* Queue 2 - Background queue
+* Queue 3 - Shadow ray cast kernel - AO
+* Queeu 4 - Shadow ray cast kernel - direct lighting
+*/
+#define NUM_QUEUES 4
+
+/* Queue names */
+enum QueueNumber {
+	QUEUE_ACTIVE_AND_REGENERATED_RAYS,         /* All active rays and regenerated rays are enqueued here */
+	QUEUE_HITBG_BUFF_UPDATE_TOREGEN_RAYS,      /* All
+	                                            * 1.Background-hit rays,
+	                                            * 2.Rays that has exited path-iteration but needs to update output buffer
+	                                            * 3.Rays to be regenerated
+	                                            * are enqueued here */
+	QUEUE_SHADOW_RAY_CAST_AO_RAYS,             /* All rays for which a shadow ray should be cast to determine radiance
+	                                              contribution for AO are enqueued here */
+	QUEUE_SHADOW_RAY_CAST_DL_RAYS,             /* All rays for which a shadow ray should be cast to determine radiance
+	                                              contributuin for direct lighting are enqueued here */
+};
+
+/* We use RAY_STATE_MASK to get ray_state (enums 0 to 5) */
+#define RAY_STATE_MASK 0x007
+#define RAY_FLAG_MASK 0x0F8
+enum RayState {
+	RAY_ACTIVE = 0,             // Denotes ray is actively involved in path-iteration
+	RAY_INACTIVE = 1,           // Denotes ray has completed processing all samples and is inactive
+	RAY_UPDATE_BUFFER = 2,      // Denoted ray has exited path-iteration and needs to update output buffer
+	RAY_HIT_BACKGROUND = 3,     // Donotes ray has hit background
+	RAY_TO_REGENERATE = 4,      // Denotes ray has to be regenerated
+	RAY_REGENERATED = 5,        // Denotes ray has been regenerated
+	RAY_SKIP_DL = 6,            // Denotes ray should skip direct lighting
+	RAY_SHADOW_RAY_CAST_AO = 16, // Flag's ray has to execute shadow blocked function in AO part
+	RAY_SHADOW_RAY_CAST_DL = 32 // Flag's ray has to execute shadow blocked function in direct lighting part
+};
+
+#define ASSIGN_RAY_STATE(ray_state, ray_index, state) (ray_state[ray_index] = ((ray_state[ray_index] & RAY_FLAG_MASK) | state))
+#define IS_STATE(ray_state, ray_index, state) ((ray_state[ray_index] & RAY_STATE_MASK) == state)
+#define ADD_RAY_FLAG(ray_state, ray_index, flag) (ray_state[ray_index] = (ray_state[ray_index] | flag))
+#define REMOVE_RAY_FLAG(ray_state, ray_index, flag) (ray_state[ray_index] = (ray_state[ray_index] & (~flag)))
+#define IS_FLAG(ray_state, ray_index, flag) (ray_state[ray_index] & flag)
 
 CCL_NAMESPACE_END
 

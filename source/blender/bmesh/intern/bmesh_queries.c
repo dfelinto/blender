@@ -38,6 +38,8 @@
 #include "BLI_linklist.h"
 #include "BLI_stackdefines.h"
 
+#include "BKE_customdata.h"
+
 #include "bmesh.h"
 #include "intern/bmesh_private.h"
 
@@ -240,6 +242,36 @@ BMFace *BM_vert_pair_share_face_by_len(
 		BM_ITER_ELEM (l_a, &iter, v_a, BM_LOOPS_OF_VERT) {
 			if ((f_cur == NULL) || (l_a->f->len < f_cur->len)) {
 				l_b = BM_face_vert_share_loop(l_a->f, v_b);
+				if (l_b && (allow_adjacent || !BM_loop_is_adjacent(l_a, l_b))) {
+					f_cur = l_a->f;
+					l_cur_a = l_a;
+					l_cur_b = l_b;
+				}
+			}
+		}
+	}
+
+	*r_l_a = l_cur_a;
+	*r_l_b = l_cur_b;
+
+	return f_cur;
+}
+
+BMFace *BM_edge_pair_share_face_by_len(
+        BMEdge *e_a, BMEdge *e_b,
+        BMLoop **r_l_a, BMLoop **r_l_b,
+        const bool allow_adjacent)
+{
+	BMLoop *l_cur_a = NULL, *l_cur_b = NULL;
+	BMFace *f_cur = NULL;
+
+	if (e_a->l && e_b->l) {
+		BMIter iter;
+		BMLoop *l_a, *l_b;
+
+		BM_ITER_ELEM (l_a, &iter, e_a, BM_LOOPS_OF_EDGE) {
+			if ((f_cur == NULL) || (l_a->f->len < f_cur->len)) {
+				l_b = BM_face_edge_share_loop(l_a->f, e_b);
 				if (l_b && (allow_adjacent || !BM_loop_is_adjacent(l_a, l_b))) {
 					f_cur = l_a->f;
 					l_cur_a = l_a;
@@ -861,9 +893,9 @@ bool BM_vert_is_wire(const BMVert *v)
  */
 bool BM_vert_is_manifold(const BMVert *v)
 {
-	BMEdge *e, *e_old;
-	BMLoop *l;
-	int len, count, flag;
+	BMEdge *e_iter, *e_first, *e_prev;
+	BMLoop *l_iter, *l_first;
+	int loop_num = 0, loop_num_region = 0, boundary_num = 0;
 
 	if (v->e == NULL) {
 		/* loose vert */
@@ -871,50 +903,150 @@ bool BM_vert_is_manifold(const BMVert *v)
 	}
 
 	/* count edges while looking for non-manifold edges */
-	len = 0;
-	e_old = e = v->e;
+	e_first = e_iter = v->e;
+	l_first = e_iter->l ? e_iter->l : NULL;
 	do {
 		/* loose edge or edge shared by more than two faces,
 		 * edges with 1 face user are OK, otherwise we could
 		 * use BM_edge_is_manifold() here */
-		if (e->l == NULL || bmesh_radial_length(e->l) > 2) {
+		if (e_iter->l == NULL || (e_iter->l != e_iter->l->radial_next->radial_next)) {
 			return false;
 		}
-		len++;
-	} while ((e = bmesh_disk_edge_next(e, v)) != e_old);
 
-	count = 1;
-	flag = 1;
-	e = NULL;
-	e_old = v->e;
-	l = e_old->l;
-	while (e != e_old) {
-		l = (l->v == v) ? l->prev : l->next;
-		e = l->e;
-		count++; /* count the edges */
-
-		if (flag && l->radial_next == l) {
-			/* we've hit the edge of an open mesh, reset once */
-			flag = 0;
-			count = 1;
-			e_old = e;
-			e = NULL;
-			l = e_old->l;
+		/* count radial loops */
+		if (e_iter->l->v == v) {
+			loop_num += 1;
 		}
-		else if (l->radial_next == l) {
-			/* break the loop */
-			e = e_old;
+
+		if (!BM_edge_is_boundary(e_iter)) {
+			/* non boundary check opposite loop */
+			if (e_iter->l->radial_next->v == v) {
+				loop_num += 1;
+			}
 		}
 		else {
-			l = l->radial_next;
+			/* start at the boundary */
+			l_first = e_iter->l;
+			boundary_num += 1;
+			/* >2 boundaries cant be manifold */
+			if (boundary_num == 3) {
+				return false;
+			}
 		}
-	}
+	} while ((e_iter = bmesh_disk_edge_next(e_iter, v)) != e_first);
 
-	if (count < len) {
-		/* vert shared by multiple regions */
-		return false;
-	}
+	e_first = l_first->e;
+	l_first = (l_first->v == v) ? l_first : l_first->next;
+	BLI_assert(l_first->v == v);
 
+	l_iter = l_first;
+	e_prev = e_first;
+
+	do {
+		loop_num_region += 1;
+	} while (((l_iter = BM_vert_step_fan_loop(l_iter, &e_prev)) != l_first) && (l_iter != NULL));
+
+	return (loop_num == loop_num_region);
+}
+
+#define LOOP_VISIT _FLAG_WALK
+#define EDGE_VISIT _FLAG_WALK
+
+static int bm_loop_region_count__recursive(BMEdge *e, BMVert *v)
+{
+	BMLoop *l_iter, *l_first;
+	int count = 0;
+
+	BLI_assert(!BM_ELEM_API_FLAG_TEST(e, EDGE_VISIT));
+	BM_ELEM_API_FLAG_ENABLE(e, EDGE_VISIT);
+
+	l_iter = l_first = e->l;
+	do {
+		if (l_iter->v == v) {
+			BMEdge *e_other = l_iter->prev->e;
+			if (!BM_ELEM_API_FLAG_TEST(l_iter, LOOP_VISIT)) {
+				BM_ELEM_API_FLAG_ENABLE(l_iter, LOOP_VISIT);
+				count += 1;
+			}
+			if (!BM_ELEM_API_FLAG_TEST(e_other, EDGE_VISIT)) {
+				count += bm_loop_region_count__recursive(e_other, v);
+			}
+		}
+		else if (l_iter->next->v == v) {
+			BMEdge *e_other = l_iter->next->e;
+			if (!BM_ELEM_API_FLAG_TEST(l_iter->next, LOOP_VISIT)) {
+				BM_ELEM_API_FLAG_ENABLE(l_iter->next, LOOP_VISIT);
+				count += 1;
+			}
+			if (!BM_ELEM_API_FLAG_TEST(e_other, EDGE_VISIT)) {
+				count += bm_loop_region_count__recursive(e_other, v);
+			}
+		}
+		else {
+			BLI_assert(0);
+		}
+	} while ((l_iter = l_iter->radial_next) != l_first);
+
+	return count;
+}
+
+static int bm_loop_region_count__clear(BMLoop *l)
+{
+	int count = 0;
+	BMEdge *e_iter, *e_first;
+
+	/* clear flags */
+	e_iter = e_first = l->e;
+	do {
+		BM_ELEM_API_FLAG_DISABLE(e_iter, EDGE_VISIT);
+		if (e_iter->l) {
+			BMLoop *l_iter, *l_first;
+			l_iter = l_first = e_iter->l;
+			do {
+				if (l_iter->v == l->v) {
+					BM_ELEM_API_FLAG_DISABLE(l_iter, LOOP_VISIT);
+					count += 1;
+				}
+			} while ((l_iter = l_iter->radial_next) != l_first);
+		}
+	} while ((e_iter = BM_DISK_EDGE_NEXT(e_iter, l->v)) != e_first);
+
+	return count;
+}
+
+/**
+ * The number of loops connected to this loop (not including disconnected regions).
+ */
+int BM_loop_region_loops_count_ex(BMLoop *l, int *r_loop_total)
+{
+	const int count       = bm_loop_region_count__recursive(l->e, l->v);
+	const int count_total = bm_loop_region_count__clear(l);
+	if (r_loop_total) {
+		*r_loop_total = count_total;
+	}
+	return count;
+}
+
+#undef LOOP_VISIT
+#undef EDGE_VISIT
+
+int BM_loop_region_loops_count(BMLoop *l)
+{
+	return BM_loop_region_loops_count_ex(l, NULL);
+}
+
+/**
+ * A version of #BM_vert_is_manifold
+ * which only checks if we're connected to multiple isolated regions.
+ */
+bool BM_vert_is_manifold_region(const BMVert *v)
+{
+	BMLoop *l_first = BM_vert_find_first_loop((BMVert *)v);
+	if (l_first) {
+		int count, count_total;
+		count = BM_loop_region_loops_count_ex(l_first, &count_total);
+		return (count == count_total);
+	}
 	return true;
 }
 
@@ -935,6 +1067,53 @@ bool BM_edge_is_convex(const BMEdge *e)
 			sub_v3_v3v3(l_dir, l1->next->v->co, l1->v->co);
 			return (dot_v3v3(l_dir, cross) > 0.0f);
 		}
+	}
+	return true;
+}
+
+/**
+ * Returms true when loop customdata is contiguous.
+ */
+bool BM_edge_is_contiguous_loop_cd(
+        const BMEdge *e,
+        const int cd_loop_type, const int cd_loop_offset)
+{
+	BLI_assert(cd_loop_offset != -1);
+
+	if (e->l && e->l->radial_next != e->l) {
+		const BMLoop *l_base_v1 = e->l;
+		const BMLoop *l_base_v2 = e->l->next;
+		const void *l_base_cd_v1 = BM_ELEM_CD_GET_VOID_P(l_base_v1, cd_loop_offset);
+		const void *l_base_cd_v2 = BM_ELEM_CD_GET_VOID_P(l_base_v2, cd_loop_offset);
+		const BMLoop *l_iter = e->l->radial_next;
+		do {
+			const BMLoop *l_iter_v1;
+			const BMLoop *l_iter_v2;
+			const void *l_iter_cd_v1;
+			const void *l_iter_cd_v2;
+
+			if (l_iter->v == l_base_v1->v) {
+				l_iter_v1 = l_iter;
+				l_iter_v2 = l_iter->next;
+			}
+			else {
+				l_iter_v1 = l_iter->next;
+				l_iter_v2 = l_iter;
+			}
+			BLI_assert((l_iter_v1->v == l_base_v1->v) &&
+			           (l_iter_v2->v == l_base_v2->v));
+
+			l_iter_cd_v1 = BM_ELEM_CD_GET_VOID_P(l_iter_v1, cd_loop_offset);
+			l_iter_cd_v2 = BM_ELEM_CD_GET_VOID_P(l_iter_v2, cd_loop_offset);
+
+
+			if ((CustomData_data_equals(cd_loop_type, l_base_cd_v1, l_iter_cd_v1) == 0) ||
+			    (CustomData_data_equals(cd_loop_type, l_base_cd_v2, l_iter_cd_v2) == 0))
+			{
+				return false;
+			}
+
+		} while ((l_iter = l_iter->radial_next) != e->l);
 	}
 	return true;
 }

@@ -1858,7 +1858,7 @@ static PyObject *Matrix_zero(MatrixObject *self)
 	if (BaseMath_Prepare_ForWrite(self) == -1)
 		return NULL;
 
-	fill_vn_fl(self->matrix, self->num_col * self->num_row, 0.0f);
+	copy_vn_fl(self->matrix, self->num_col * self->num_row, 0.0f);
 
 	if (BaseMath_WriteCallback(self) == -1)
 		return NULL;
@@ -2757,7 +2757,7 @@ PyDoc_STRVAR(matrix_doc,
 "   matrices from 2x2 up to 4x4.\n"
 "\n"
 "   :param rows: Sequence of rows.\n"
-"   When ommitted, a 4x4 identity matrix is constructed.\n"
+"      When ommitted, a 4x4 identity matrix is constructed.\n"
 "   :type rows: 2d number sequence\n"
 );
 PyTypeObject matrix_Type = {

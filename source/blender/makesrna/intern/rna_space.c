@@ -1348,6 +1348,19 @@ static void rna_BackgroundImage_opacity_set(PointerRNA *ptr, float value)
 	bgpic->blend = 1.0f - value;
 }
 
+/* radius internally (expose as a distance value) */
+static float rna_BackgroundImage_size_get(PointerRNA *ptr)
+{
+	BGpic *bgpic = ptr->data;
+	return bgpic->size * 2.0f;
+}
+
+static void rna_BackgroundImage_size_set(PointerRNA *ptr, float value)
+{
+	BGpic *bgpic = ptr->data;
+	bgpic->size = value * 0.5f;
+}
+
 static BGpic *rna_BackgroundImage_new(View3D *v3d)
 {
 	BGpic *bgpic = ED_view3D_background_image_new(v3d);
@@ -2108,15 +2121,16 @@ static void rna_def_background_image(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Y Offset", "Offset image vertically from the world origin");
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
 	
-	prop = RNA_def_property(srna, "size", PROP_FLOAT, PROP_NONE);
+	prop = RNA_def_property(srna, "size", PROP_FLOAT, PROP_DISTANCE);
 	RNA_def_property_float_sdna(prop, NULL, "size");
-	RNA_def_property_ui_text(prop, "Size", "Scaling factor for the background image");
+	RNA_def_property_float_funcs(prop, "rna_BackgroundImage_size_get", "rna_BackgroundImage_size_set", NULL);
+	RNA_def_property_ui_text(prop, "Size", "Size of the background image (ortho view only)");
 	RNA_def_property_range(prop, 0.0, FLT_MAX);
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
 
 	prop = RNA_def_property(srna, "rotation", PROP_FLOAT, PROP_EULER);
 	RNA_def_property_float_sdna(prop, NULL, "rotation");
-	RNA_def_property_ui_text(prop, "Rotation", "Rotation for the background image");
+	RNA_def_property_ui_text(prop, "Rotation", "Rotation for the background image (ortho view only)");
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
 
 	prop = RNA_def_property(srna, "use_flip_x", PROP_BOOLEAN, PROP_NONE);
@@ -3060,6 +3074,11 @@ static void rna_def_space_sequencer(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Center-Cut Safe Areas", "Show safe areas to fit content in a different aspect ratio");
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_SEQUENCER, NULL);
 
+	prop = RNA_def_property(srna, "show_metadata", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag", 	SEQ_SHOW_METADATA);
+	RNA_def_property_ui_text(prop, "Show Metadata", "Show metadata of first visible strip");
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_SEQUENCER, NULL);
+
 	prop = RNA_def_property(srna, "show_seconds", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_negative_sdna(prop, NULL, "flag", SEQ_DRAWFRAMES);
 	RNA_def_property_ui_text(prop, "Show Seconds", "Show timing in seconds not frames");
@@ -3684,6 +3703,14 @@ static void rna_def_fileselect_params(BlenderRNA *brna)
 		{0, NULL, 0, NULL, NULL}
 	};
 
+	static EnumPropertyItem thumbnail_size_items[] = {
+	    {32,    "TINY",     0,      "Tiny", ""},
+	    {64,    "SMALL",    0,      "Small", ""},
+	    {128,   "NORMAL",   0,      "Normal", ""},
+	    {256,   "LARGE",    0,      "Large", ""},
+	    {0, NULL, 0, NULL, NULL}
+	};
+
 	srna = RNA_def_struct(brna, "FileSelectParams", NULL);
 	RNA_def_struct_ui_text(srna, "File Select Parameters", "File Select Parameters");
 
@@ -3787,6 +3814,12 @@ static void rna_def_fileselect_params(BlenderRNA *brna)
 	RNA_def_property_string_sdna(prop, NULL, "filter_search");
 	RNA_def_property_ui_text(prop, "Name Filter", "Filter by name, supports '*' wildcard");
 	RNA_def_property_flag(prop, PROP_TEXTEDIT_UPDATE);
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_FILE_LIST, NULL);
+
+	prop = RNA_def_property(srna, "thumbnail_size", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_sdna(prop, NULL, "thumbnail_size");
+	RNA_def_property_enum_items(prop, thumbnail_size_items);
+	RNA_def_property_ui_text(prop, "Thumbnails Size", "Change the size of the thumbnails");
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_FILE_LIST, NULL);
 }
 

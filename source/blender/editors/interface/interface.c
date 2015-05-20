@@ -2315,6 +2315,7 @@ bool ui_but_string_set(bContext *C, uiBut *but, const char *str)
 		double value;
 
 		if (ui_but_string_set_eval_num(C, but, str, &value) == false) {
+			WM_report_banner_show(C);
 			return false;
 		}
 
@@ -3105,9 +3106,10 @@ void ui_block_cm_to_scene_linear_v3(uiBlock *block, float pixel[3])
  * - \a a2 Number of decimal point values to display. 0 defaults to 3 (0.000)
  *      1,2,3, and a maximum of 4, all greater values will be clamped to 4.
  */
-static uiBut *ui_def_but(uiBlock *block, int type, int retval, const char *str,
-                         int x, int y, short width, short height,
-                         void *poin, float min, float max, float a1, float a2, const char *tip)
+static uiBut *ui_def_but(
+        uiBlock *block, int type, int retval, const char *str,
+        int x, int y, short width, short height,
+        void *poin, float min, float max, float a1, float a2, const char *tip)
 {
 	uiBut *but;
 	int slen;
@@ -3234,6 +3236,19 @@ static uiBut *ui_def_but(uiBlock *block, int type, int retval, const char *str,
 #endif
 
 	return but;
+}
+
+void ui_def_but_icon(uiBut *but, const int icon, const int flag)
+{
+	if (icon) {
+		ui_icon_ensure_deferred(but->block->evil_C, icon, (flag & UI_BUT_ICON_PREVIEW) != 0);
+	}
+	but->icon = (BIFIconID)icon;
+	but->flag |= flag;
+
+	if (but->str && but->str[0]) {
+		but->drawflag |= UI_BUT_ICON_LEFT;
+	}
 }
 
 static void ui_def_but_rna__disable(uiBut *but)
@@ -3375,10 +3390,11 @@ static void ui_def_but_rna__menu(bContext *UNUSED(C), uiLayout *layout, void *bu
  * When this kind of change won't disrupt branches, best look into making more
  * of our UI functions take prop rather then propname.
  */
-static uiBut *ui_def_but_rna(uiBlock *block, int type, int retval, const char *str,
-                             int x, int y, short width, short height,
-                             PointerRNA *ptr, PropertyRNA *prop, int index,
-                             float min, float max, float a1, float a2,  const char *tip)
+static uiBut *ui_def_but_rna(
+        uiBlock *block, int type, int retval, const char *str,
+        int x, int y, short width, short height,
+        PointerRNA *ptr, PropertyRNA *prop, int index,
+        float min, float max, float a1, float a2,  const char *tip)
 {
 	const PropertyType proptype = RNA_property_type(prop);
 	uiBut *but;
@@ -3498,11 +3514,7 @@ static uiBut *ui_def_but_rna(uiBlock *block, int type, int retval, const char *s
 		but->rnaindex = 0;
 
 	if (icon) {
-		but->icon = (BIFIconID)icon;
-		but->flag |= UI_HAS_ICON;
-		if (str[0]) {
-			but->drawflag |= UI_BUT_ICON_LEFT;
-		}
+		ui_def_but_icon(but, icon, UI_HAS_ICON);
 	}
 	
 	if ((type == UI_BTYPE_MENU) && (but->dt == UI_EMBOSS_PULLDOWN)) {
@@ -3689,8 +3701,7 @@ int UI_autocomplete_end(AutoComplete *autocpl, char *autoname)
 static void ui_but_update_and_icon_set(uiBut *but, int icon)
 {
 	if (icon) {
-		but->icon = (BIFIconID) icon;
-		but->flag |= UI_HAS_ICON;
+		ui_def_but_icon(but, icon, UI_HAS_ICON);
 	}
 
 	ui_but_update(but);
@@ -4064,7 +4075,7 @@ void UI_but_drag_set_value(uiBut *but)
 void UI_but_drag_set_image(uiBut *but, const char *path, int icon, struct ImBuf *imb, float scale)
 {
 	but->dragtype = WM_DRAG_PATH;
-	but->icon = icon; /* no flag UI_HAS_ICON, so icon doesnt draw in button */
+	ui_def_but_icon(but, icon, 0);  /* no flag UI_HAS_ICON, so icon doesnt draw in button */
 	but->dragpoin = (void *)path;
 	but->imb = imb;
 	but->imb_scale = scale;
@@ -4218,8 +4229,7 @@ uiBut *uiDefIconTextMenuBut(uiBlock *block, uiMenuCreateFunc func, void *arg, in
 {
 	uiBut *but = ui_def_but(block, UI_BTYPE_PULLDOWN, 0, str, x, y, width, height, arg, 0.0, 0.0, 0.0, 0.0, tip);
 
-	but->icon = (BIFIconID) icon;
-	but->flag |= UI_HAS_ICON;
+	ui_def_but_icon(but, icon, UI_HAS_ICON);
 
 	but->drawflag |= UI_BUT_ICON_LEFT;
 	but->flag |= UI_BUT_ICON_SUBMENU;
@@ -4234,8 +4244,7 @@ uiBut *uiDefIconMenuBut(uiBlock *block, uiMenuCreateFunc func, void *arg, int ic
 {
 	uiBut *but = ui_def_but(block, UI_BTYPE_PULLDOWN, 0, "", x, y, width, height, arg, 0.0, 0.0, 0.0, 0.0, tip);
 
-	but->icon = (BIFIconID) icon;
-	but->flag |= UI_HAS_ICON;
+	ui_def_but_icon(but, icon, UI_HAS_ICON);
 	but->drawflag &= ~UI_BUT_ICON_LEFT;
 
 	but->menu_create_func = func;
@@ -4251,7 +4260,7 @@ uiBut *uiDefIconTextBlockBut(uiBlock *block, uiBlockCreateFunc func, void *arg, 
 	
 	/* XXX temp, old menu calls pass on icon arrow, which is now UI_BUT_ICON_SUBMENU flag */
 	if (icon != ICON_RIGHTARROW_THIN) {
-		but->icon = (BIFIconID) icon;
+		ui_def_but_icon(but, icon, 0);
 		but->drawflag |= UI_BUT_ICON_LEFT;
 	}
 	but->flag |= UI_HAS_ICON;
@@ -4268,9 +4277,8 @@ uiBut *uiDefIconBlockBut(uiBlock *block, uiBlockCreateFunc func, void *arg, int 
 {
 	uiBut *but = ui_def_but(block, UI_BTYPE_BLOCK, retval, "", x, y, width, height, arg, 0.0, 0.0, 0.0, 0.0, tip);
 	
-	but->icon = (BIFIconID) icon;
-	but->flag |= UI_HAS_ICON;
-	
+	ui_def_but_icon(but, icon, UI_HAS_ICON);
+
 	but->drawflag |= UI_BUT_ICON_LEFT;
 	
 	but->block_create_func = func;
@@ -4303,9 +4311,8 @@ uiBut *uiDefSearchBut(uiBlock *block, void *arg, int retval, int icon, int maxle
 {
 	uiBut *but = ui_def_but(block, UI_BTYPE_SEARCH_MENU, retval, "", x, y, width, height, arg, 0.0, maxlen, a1, a2, tip);
 	
-	but->icon = (BIFIconID) icon;
-	but->flag |= UI_HAS_ICON;
-	
+	ui_def_but_icon(but, icon, UI_HAS_ICON);
+
 	but->drawflag |= UI_BUT_ICON_LEFT | UI_BUT_TEXT_LEFT;
 	
 	ui_but_update(but);
@@ -4386,9 +4393,10 @@ static void operator_enum_call_cb(struct bContext *UNUSED(C), void *but, void *a
 
 /* Same parameters as for uiDefSearchBut, with additional operator type and properties, used by callback
  * to call again the right op with the right options (properties values). */
-uiBut *uiDefSearchButO_ptr(uiBlock *block, wmOperatorType *ot, IDProperty *properties,
-                           void *arg, int retval, int icon, int maxlen, int x, int y,
-                           short width, short height, float a1, float a2, const char *tip)
+uiBut *uiDefSearchButO_ptr(
+        uiBlock *block, wmOperatorType *ot, IDProperty *properties,
+        void *arg, int retval, int icon, int maxlen, int x, int y,
+        short width, short height, float a1, float a2, const char *tip)
 {
 	uiBut *but;
 

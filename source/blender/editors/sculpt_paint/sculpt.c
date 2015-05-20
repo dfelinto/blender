@@ -2747,7 +2747,7 @@ static void do_clay_brush(Sculpt *sd, Object *ob, PBVHNode **nodes, int totnode)
 						/* note, the normal from the vertices is ignored,
 						 * causes glitch with planes, see: T44390 */
 						const float fade = bstrength * tex_strength(ss, brush, vd.co, sqrtf(test.dist),
-						                                            NULL, area_no, vd.mask ? *vd.mask : 0.0f);
+						                                            vd.no, vd.fno, vd.mask ? *vd.mask : 0.0f);
 
 						mul_v3_v3fl(proxy[vd.i], val, fade);
 
@@ -2851,7 +2851,7 @@ static void do_clay_strips_brush(Sculpt *sd, Object *ob, PBVHNode **nodes, int t
 						 * causes glitch with planes, see: T44390 */
 						const float fade = bstrength * tex_strength(ss, brush, vd.co,
 						                                            ss->cache->radius * test.dist,
-						                                            NULL, area_no, vd.mask ? *vd.mask : 0.0f);
+						                                            vd.no, vd.fno, vd.mask ? *vd.mask : 0.0f);
 
 						mul_v3_v3fl(proxy[vd.i], val, fade);
 
@@ -3126,9 +3126,11 @@ static void sculpt_topology_update(Sculpt *sd, Object *ob, Brush *brush, Unified
 		}
 
 		if (BKE_pbvh_type(ss->pbvh) == PBVH_BMESH) {
-			BKE_pbvh_bmesh_update_topology(ss->pbvh, mode,
-			                               ss->cache->location,
-			                               ss->cache->radius);
+			BKE_pbvh_bmesh_update_topology(
+			        ss->pbvh, mode,
+			        ss->cache->location,
+			        (brush->flag & BRUSH_FRONTFACE) ? ss->cache->view_normal : NULL,
+			        ss->cache->radius);
 		}
 
 		MEM_freeN(nodes);
@@ -4379,6 +4381,9 @@ static void sculpt_stroke_update_step(bContext *C, struct PaintStroke *UNUSED(st
 	if (sd->flags & SCULPT_DYNTOPO_DETAIL_CONSTANT) {
 		BKE_pbvh_bmesh_detail_size_set(ss->pbvh, sd->constant_detail / 100.0f);
 	}
+	else if (sd->flags & SCULPT_DYNTOPO_DETAIL_BRUSH) {
+		BKE_pbvh_bmesh_detail_size_set(ss->pbvh, ss->cache->radius * sd->detail_percent / 100.0f);
+	}
 	else {
 		BKE_pbvh_bmesh_detail_size_set(
 		        ss->pbvh,
@@ -5072,10 +5077,10 @@ static int sculpt_mode_toggle_exec(bContext *C, wmOperator *op)
 			ts->sculpt->flags |= SCULPT_DYNTOPO_SUBDIVIDE | SCULPT_DYNTOPO_COLLAPSE;
 		}
 
-		if (!ts->sculpt->detail_size) {
+		if (!ts->sculpt->detail_size)
 			ts->sculpt->detail_size = 12;
-		}
-
+		if (!ts->sculpt->detail_percent)
+			ts->sculpt->detail_percent = 25;
 		if (ts->sculpt->constant_detail == 0.0f)
 			ts->sculpt->constant_detail = 30.0f;
 
@@ -5164,7 +5169,10 @@ static int sculpt_detail_flood_fill_exec(bContext *C, wmOperator *UNUSED(op))
 	sculpt_undo_push_begin("Dynamic topology flood fill");
 	sculpt_undo_push_node(ob, NULL, SCULPT_UNDO_COORDS);
 
-	while (BKE_pbvh_bmesh_update_topology(ss->pbvh, PBVH_Collapse | PBVH_Subdivide, bb_min, size)) {
+	while (BKE_pbvh_bmesh_update_topology(
+	               ss->pbvh, PBVH_Collapse | PBVH_Subdivide,
+	               bb_min, NULL, size))
+	{
 		for (i = 0; i < totnodes; i++)
 			BKE_pbvh_node_mark_topology_update(nodes[i]);
 	}
@@ -5307,6 +5315,10 @@ static int sculpt_set_detail_size_exec(bContext *C, wmOperator *UNUSED(op))
 	if (sd->flags & SCULPT_DYNTOPO_DETAIL_CONSTANT) {
 		set_brush_rc_props(&props_ptr, "sculpt", "constant_detail", NULL, 0);
 		RNA_string_set(&props_ptr, "data_path_primary", "tool_settings.sculpt.constant_detail");
+	}
+	else if (sd->flags & SCULPT_DYNTOPO_DETAIL_BRUSH) {
+		set_brush_rc_props(&props_ptr, "sculpt", "constant_detail", NULL, 0);
+		RNA_string_set(&props_ptr, "data_path_primary", "tool_settings.sculpt.detail_percent");
 	}
 	else {
 		set_brush_rc_props(&props_ptr, "sculpt", "detail_size", NULL, 0);

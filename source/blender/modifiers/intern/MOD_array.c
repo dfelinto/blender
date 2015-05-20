@@ -135,6 +135,28 @@ static void updateDepgraph(ModifierData *md, DagForest *forest,
 	}
 }
 
+static void updateDepsgraph(ModifierData *md,
+                            struct Main *UNUSED(bmain),
+                            struct Scene *scene,
+                            Object *UNUSED(ob),
+                            struct DepsNodeHandle *node)
+{
+	ArrayModifierData *amd = (ArrayModifierData *)md;
+	if (amd->start_cap != NULL) {
+		DEG_add_object_relation(node, amd->start_cap, DEG_OB_COMP_TRANSFORM, "Hook Modifier Start Cap");
+	}
+	if (amd->end_cap != NULL) {
+		DEG_add_object_relation(node, amd->end_cap, DEG_OB_COMP_TRANSFORM, "Hook Modifier End Cap");
+	}
+	if (amd->curve_ob) {
+		DEG_add_object_relation(node, amd->end_cap, DEG_OB_COMP_GEOMETRY, "Hook Modifier Curve");
+		DEG_add_special_eval_flag(scene->depsgraph, &amd->curve_ob->id, DAG_EVAL_NEED_CURVE_PATH);
+	}
+	if (amd->offset_ob != NULL) {
+		DEG_add_object_relation(node, amd->offset_ob, DEG_OB_COMP_TRANSFORM, "Hook Modifier Offset");
+	}
+}
+
 static float vertarray_size(const MVert *mvert, int numVerts, int axis)
 {
 	int i;
@@ -364,22 +386,22 @@ static void dm_merge_transform(
 	/* set origindex */
 	index_orig = result->getVertDataArray(result, CD_ORIGINDEX);
 	if (index_orig) {
-		fill_vn_i(index_orig + cap_verts_index, cap_nverts, ORIGINDEX_NONE);
+		copy_vn_i(index_orig + cap_verts_index, cap_nverts, ORIGINDEX_NONE);
 	}
 
 	index_orig = result->getEdgeDataArray(result, CD_ORIGINDEX);
 	if (index_orig) {
-		fill_vn_i(index_orig + cap_edges_index, cap_nedges, ORIGINDEX_NONE);
+		copy_vn_i(index_orig + cap_edges_index, cap_nedges, ORIGINDEX_NONE);
 	}
 
 	index_orig = result->getPolyDataArray(result, CD_ORIGINDEX);
 	if (index_orig) {
-		fill_vn_i(index_orig + cap_polys_index, cap_npolys, ORIGINDEX_NONE);
+		copy_vn_i(index_orig + cap_polys_index, cap_npolys, ORIGINDEX_NONE);
 	}
 
 	index_orig = result->getLoopDataArray(result, CD_ORIGINDEX);
 	if (index_orig) {
-		fill_vn_i(index_orig + cap_loops_index, cap_nloops, ORIGINDEX_NONE);
+		copy_vn_i(index_orig + cap_loops_index, cap_nloops, ORIGINDEX_NONE);
 	}
 }
 
@@ -525,7 +547,7 @@ static DerivedMesh *arrayModifier_doArray(
 	if (use_merge) {
 		/* Will need full_doubles_map for handling merge */
 		full_doubles_map = MEM_mallocN(sizeof(int) * result_nverts, "mod array doubles map");
-		fill_vn_i(full_doubles_map, result_nverts, -1);
+		copy_vn_i(full_doubles_map, result_nverts, -1);
 	}
 
 	/* copy customdata to original geometry */
@@ -771,6 +793,7 @@ ModifierTypeInfo modifierType_Array = {
 	/* freeData */          NULL,
 	/* isDisabled */        NULL,
 	/* updateDepgraph */    updateDepgraph,
+	/* updateDepsgraph */   updateDepsgraph,
 	/* dependsOnTime */     NULL,
 	/* dependsOnNormals */	NULL,
 	/* foreachObjectLink */ foreachObjectLink,

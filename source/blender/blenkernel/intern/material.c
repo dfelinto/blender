@@ -106,7 +106,7 @@ void BKE_material_free_ex(Material *ma, bool do_id_user)
 	
 	if (ma->preview)
 		BKE_previewimg_free(&ma->preview);
-	BKE_icon_delete((struct ID *)ma);
+	BKE_icon_id_delete((struct ID *)ma);
 	ma->id.icon_id = 0;
 	
 	/* is no lib link block, but material extension */
@@ -937,7 +937,7 @@ void BKE_material_remap_object(Object *ob, const unsigned int *remap)
 		BLI_array_permute(ob->matbits, ob->totcol, remap);
 	}
 
-	if(matar) {
+	if (matar) {
 		BLI_array_permute(*matar, *totcol_p, remap);
 	}
 

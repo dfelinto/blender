@@ -155,7 +155,7 @@ bool BKE_image_has_ibuf(struct Image *ima, struct ImageUser *iuser);
 
 /* same as above, but can be used to retrieve images being rendered in
  * a thread safe way, always call both acquire and release */
-struct ImBuf *BKE_image_acquire_ibuf(struct Image *ima, struct ImageUser *iuser, void **lock_r);
+struct ImBuf *BKE_image_acquire_ibuf(struct Image *ima, struct ImageUser *iuser, void **r_lock);
 void BKE_image_release_ibuf(struct Image *ima, struct ImBuf *ibuf, void *lock);
 
 struct ImagePool *BKE_image_pool_new(void);
@@ -177,7 +177,7 @@ struct Image *BKE_image_load_exists(const char *filepath);
 struct Image *BKE_image_add_generated(
         struct Main *bmain, unsigned int width, unsigned int height, const char *name, int depth, int floatbuf, short gen_type, const float color[4], const bool stereo3d);
 /* adds image from imbuf, owns imbuf */
-struct Image *BKE_image_add_from_imbuf(struct ImBuf *ibuf);
+struct Image *BKE_image_add_from_imbuf(struct ImBuf *ibuf, const char *name);
 
 /* for reload, refresh, pack */
 void BKE_image_init_imageuser(struct Image *ima, struct ImageUser *iuser);

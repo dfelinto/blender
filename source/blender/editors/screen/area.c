@@ -1263,16 +1263,22 @@ static void region_rect_recursive(wmWindow *win, ScrArea *sa, ARegion *ar, rcti 
 	if (ar->flag & (RGN_FLAG_HIDDEN | RGN_FLAG_TOO_SMALL)) {
 		ar->winrct = *remainder;
 		
-		if (alignment == RGN_ALIGN_TOP)
-			ar->winrct.ymin = ar->winrct.ymax;
-		else if (alignment == RGN_ALIGN_BOTTOM)
-			ar->winrct.ymax = ar->winrct.ymin;
-		else if (alignment == RGN_ALIGN_RIGHT)
-			ar->winrct.xmin = ar->winrct.xmax;
-		else if (alignment == RGN_ALIGN_LEFT)
-			ar->winrct.xmax = ar->winrct.xmin;
-		else /* prevent winrct to be valid */
-			ar->winrct.xmax = ar->winrct.xmin;
+		switch (alignment) {
+			case RGN_ALIGN_TOP:
+				ar->winrct.ymin = ar->winrct.ymax;
+				break;
+			case RGN_ALIGN_BOTTOM:
+				ar->winrct.ymax = ar->winrct.ymin;
+				break;
+			case RGN_ALIGN_RIGHT:
+				ar->winrct.xmin = ar->winrct.xmax;
+				break;
+			case RGN_ALIGN_LEFT:
+			default:
+				/* prevent winrct to be valid */
+				ar->winrct.xmax = ar->winrct.xmin;
+				break;
+		}
 	}
 
 	/* restore prev-split exception */
@@ -2069,7 +2075,7 @@ void ED_region_info_draw(ARegion *ar, const char *text, int block, float fill_co
 
 #define MAX_METADATA_STR    1024
 
-const char *meta_data_list[] =
+static const char *meta_data_list[] =
 {
 	"File",
 	"Strip",
@@ -2088,7 +2094,7 @@ BLI_INLINE bool metadata_is_valid(ImBuf *ibuf, char *r_str, short index, int off
 	return (IMB_metadata_get_field(ibuf, meta_data_list[index], r_str + offset, MAX_METADATA_STR - offset) && r_str[0]);
 }
 
-static void metadata_draw_imbuf(ImBuf *ibuf, rcti rect, int fontid, const bool is_top, float factor)
+static void metadata_draw_imbuf(ImBuf *ibuf, rctf rect, int fontid, const bool is_top)
 {
 	char temp_str[MAX_METADATA_STR];
 	int line_width;
@@ -2096,6 +2102,7 @@ static void metadata_draw_imbuf(ImBuf *ibuf, rcti rect, int fontid, const bool i
 	short i;
 	int len;
 	const float height = BLF_height_max(fontid);
+	const float vertical_offset = height + (0.1f * U.widget_unit);
 
 	if (is_top) {
 		for (i = 0; i < 4; i++) {
@@ -2105,7 +2112,7 @@ static void metadata_draw_imbuf(ImBuf *ibuf, rcti rect, int fontid, const bool i
 				len = BLI_snprintf_rlen(temp_str, MAX_METADATA_STR, "%s: ", meta_data_list[0]);
 				if (metadata_is_valid(ibuf, temp_str, 0, len)) {
 					BLF_position(fontid, rect.xmin + (0.2f * U.widget_unit),
-					             rect.ymax - factor * (1.5f * U.widget_unit - UI_UNIT_Y), 0.0f);
+					             rect.ymax - vertical_offset, 0.0f);
 					BLF_draw(fontid, temp_str, BLF_DRAW_STR_DUMMY_MAX);
 					do_newline = true;
 				}
@@ -2114,21 +2121,21 @@ static void metadata_draw_imbuf(ImBuf *ibuf, rcti rect, int fontid, const bool i
 				if (metadata_is_valid(ibuf, temp_str, 1, len)) {
 					line_width = BLF_width(fontid, temp_str, BLF_DRAW_STR_DUMMY_MAX);
 					BLF_position(fontid, rect.xmax - line_width - (0.2f * U.widget_unit),
-					             rect.ymax - factor * (1.5f * U.widget_unit - UI_UNIT_Y), 0.0f);
+					             rect.ymax - vertical_offset, 0.0f);
 					BLF_draw(fontid, temp_str, BLF_DRAW_STR_DUMMY_MAX);
 					do_newline = true;
 				}
 
 				if (do_newline)
-					ofs_y += (height + (0.2f * U.widget_unit));
+					ofs_y += vertical_offset;
 			}
 			else if (i == 1) {
 				len = BLI_snprintf_rlen(temp_str, MAX_METADATA_STR, "%s: ", meta_data_list[i + 1]);
 				if (metadata_is_valid(ibuf, temp_str, i + 1, len)) {
 					BLF_position(fontid, rect.xmin + (0.2f * U.widget_unit),
-					             rect.ymax - factor * (1.5f * U.widget_unit - UI_UNIT_Y) - ofs_y, 0.0f);
+					             rect.ymax - vertical_offset - ofs_y, 0.0f);
 					BLF_draw(fontid, temp_str, BLF_DRAW_STR_DUMMY_MAX);
-					ofs_y += (height + (0.2f * U.widget_unit));
+					ofs_y += vertical_offset;
 				}
 			}
 			else {
@@ -2136,9 +2143,9 @@ static void metadata_draw_imbuf(ImBuf *ibuf, rcti rect, int fontid, const bool i
 				if (metadata_is_valid(ibuf, temp_str, i + 1, len)) {
 					line_width = BLF_width(fontid, temp_str, BLF_DRAW_STR_DUMMY_MAX);
 					BLF_position(fontid, rect.xmax  - line_width -  (0.2f * U.widget_unit),
-					             rect.ymax - factor * (1.5f * U.widget_unit - UI_UNIT_Y) - ofs_y, 0.0f);
+					             rect.ymax - vertical_offset - ofs_y, 0.0f);
 					BLF_draw(fontid, temp_str, BLF_DRAW_STR_DUMMY_MAX);
-					ofs_y += (height + (0.2f * U.widget_unit));
+					ofs_y += vertical_offset;
 				}
 			}
 		}
@@ -2148,9 +2155,8 @@ static void metadata_draw_imbuf(ImBuf *ibuf, rcti rect, int fontid, const bool i
 		for (i = 5; i < 10; i++) {
 			len = BLI_snprintf_rlen(temp_str, MAX_METADATA_STR, "%s: ", meta_data_list[i]);
 			if (metadata_is_valid(ibuf, temp_str, i, len)) {
-				const int line_height = height;
 				BLF_position(fontid, rect.xmin + (0.2f * U.widget_unit) + ofs_x,
-				             rect.ymin - line_height + factor * (U.widget_unit), 0.0f);
+				             rect.ymin + (0.3f * U.widget_unit), 0.0f);
 				BLF_draw(fontid, temp_str, BLF_DRAW_STR_DUMMY_MAX);
 	
 				ofs_x += BLF_width(fontid, temp_str, BLF_DRAW_STR_DUMMY_MAX) + UI_UNIT_X;
@@ -2161,9 +2167,9 @@ static void metadata_draw_imbuf(ImBuf *ibuf, rcti rect, int fontid, const bool i
 
 static float metadata_box_height_get(ImBuf *ibuf, int fontid, const bool is_top)
 {
-	char str[MAX_METADATA_STR];
+	char str[MAX_METADATA_STR] = "";
 	short i, count = 0;
-	const float height = BLF_height_max(fontid) + 0.2f * U.widget_unit;
+	const float height = BLF_height_max(fontid) + 0.1f * U.widget_unit;
 
 	if (is_top) {
 		if (metadata_is_valid(ibuf, str, 0, 0) || metadata_is_valid(ibuf, str, 1, 0)) {
@@ -2184,7 +2190,7 @@ static float metadata_box_height_get(ImBuf *ibuf, int fontid, const bool is_top)
 	}
 
 	if (count) {
-		return (height * count + (0.2f * U.widget_unit));
+		return (height * count + (0.1f * U.widget_unit));
 	}
 
 	return 0;
@@ -2192,70 +2198,66 @@ static float metadata_box_height_get(ImBuf *ibuf, int fontid, const bool is_top)
 
 #undef MAX_METADATA_STR
 
-void ED_region_image_metadata_draw(ARegion *ar, ImBuf *ibuf, float zoomx, float zoomy)
+void ED_region_image_metadata_draw(int x, int y, ImBuf *ibuf, rctf frame, float zoomx, float zoomy)
 {
-	uiStyle *style = UI_style_get_dpi();
-	int fontid = style->widget.uifont_id;
 	float box_y;
-	rcti rect;
-	int x, y;
+	rctf rect;
+	uiStyle *style = UI_style_get_dpi();
 
 	if (!ibuf->metadata)
 		return;
 
 	/* find window pixel coordinates of origin */
-	UI_view2d_view_to_region(&ar->v2d, 0.0f, 0.0f, &x, &y);
-
 	glPushMatrix();
 
 	/* offset and zoom using ogl */
 	glTranslatef(x, y, 0.0f);
 	glScalef(zoomx, zoomy, 1.0f);
 
-	BLF_size(fontid, style->widgetlabel.points, U.dpi * zoomy);
+	BLF_size(blf_mono_font, style->widgetlabel.points * 1.5f, U.dpi);
 
 	/* *** upper box*** */
 
 	/* get needed box height */
-	box_y = metadata_box_height_get(ibuf, fontid, true);
+	box_y = metadata_box_height_get(ibuf, blf_mono_font, true);
 
 	if (box_y) {
 		UI_ThemeColor(TH_METADATA_BG);
 
 		/* set up rect */
-		BLI_rcti_init(&rect, 0, ibuf->x, ibuf->y, ibuf->y + box_y);
+		BLI_rctf_init(&rect, frame.xmin, frame.xmax, frame.ymax, frame.ymax + box_y);
 		/* draw top box */
-		glRecti(rect.xmin, rect.ymin, rect.xmax, rect.ymax);
+		glRectf(rect.xmin, rect.ymin, rect.xmax, rect.ymax);
 
-		BLF_clipping(fontid, rect.xmin, rect.ymin, rect.xmax, rect.ymax);
-		BLF_enable(fontid, BLF_CLIPPING);
+		BLF_clipping(blf_mono_font, rect.xmin, rect.ymin, rect.xmax, rect.ymax);
+		BLF_enable(blf_mono_font, BLF_CLIPPING);
 
 		UI_ThemeColor(TH_METADATA_TEXT);
-		metadata_draw_imbuf(ibuf, rect, fontid, true, zoomy);
+		metadata_draw_imbuf(ibuf, rect, blf_mono_font, true);
 
-		BLF_disable(fontid, BLF_CLIPPING);
+		BLF_disable(blf_mono_font, BLF_CLIPPING);
 	}
 
 
 	/* *** lower box*** */
 
-	box_y = metadata_box_height_get(ibuf, fontid, false);
+	box_y = metadata_box_height_get(ibuf, blf_mono_font, false);
 
 	if (box_y) {
 		UI_ThemeColor(TH_METADATA_BG);
 
 		/* set up box rect */
-		BLI_rcti_init(&rect, 0, ibuf->x, -box_y, 0);
+		BLI_rctf_init(&rect, frame.xmin, frame.xmax, frame.ymin - box_y, frame.ymin);
 		/* draw top box */
-		glRecti(rect.xmin, rect.ymin, rect.xmax, rect.ymax);
+		glRectf(rect.xmin, rect.ymin, rect.xmax, rect.ymax);
 
-		BLF_clipping(fontid, rect.xmin, rect.ymin, rect.xmax, rect.ymax);
-		BLF_enable(fontid, BLF_CLIPPING);
+		BLF_clipping(blf_mono_font, rect.xmin, rect.ymin, rect.xmax, rect.ymax);
+		BLF_enable(blf_mono_font, BLF_CLIPPING);
 
 		UI_ThemeColor(TH_METADATA_TEXT);
-		metadata_draw_imbuf(ibuf, rect, fontid, false, zoomy);
+		metadata_draw_imbuf(ibuf, rect, blf_mono_font, false);
 
-		BLF_disable(fontid, BLF_CLIPPING);
+		BLF_disable(blf_mono_font, BLF_CLIPPING);
 	}
 
 	glPopMatrix();

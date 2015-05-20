@@ -620,8 +620,9 @@ static int view_zoom_poll(bContext *C)
 }
  
 /* apply transform to view (i.e. adjust 'cur' rect) */
-static void view_zoomstep_apply_ex(bContext *C, v2dViewZoomData *vzd, const bool use_mousepos,
-                                   const float facx, const float facy)
+static void view_zoomstep_apply_ex(
+        bContext *C, v2dViewZoomData *vzd, const bool use_mousepos,
+        const float facx, const float facy)
 {
 	ARegion *ar = CTX_wm_region(C);
 	View2D *v2d = &ar->v2d;
@@ -1406,8 +1407,9 @@ static float smooth_view_rect_to_fac(const rctf *rect_a, const rctf *rect_b)
 
 /* will start timer if appropriate */
 /* the arguments are the desired situation */
-void UI_view2d_smooth_view(bContext *C, ARegion *ar,
-                           const rctf *cur, const int smooth_viewtx)
+void UI_view2d_smooth_view(
+        bContext *C, ARegion *ar,
+        const rctf *cur, const int smooth_viewtx)
 {
 	wmWindowManager *wm = CTX_wm_manager(C);
 	wmWindow *win = CTX_wm_window(C);
@@ -1464,21 +1466,6 @@ void UI_view2d_smooth_view(bContext *C, ARegion *ar,
 		ED_region_tag_redraw(ar);
 		UI_view2d_sync(CTX_wm_screen(C), CTX_wm_area(C), v2d, V2D_LOCK_COPY);
 	}
-}
-
-void UI_view2d_center_frame(struct bContext *C, int smooth_viewtx)
-{
-	ARegion *ar = CTX_wm_region(C);
-	Scene *scene = CTX_data_scene(C);
-	float w = BLI_rctf_size_x(&ar->v2d.cur);
-	rctf newrct;
-
-	newrct.xmax = scene->r.cfra + (w / 2);
-	newrct.xmin = scene->r.cfra - (w / 2);
-	newrct.ymax = ar->v2d.cur.ymax;
-	newrct.ymin = ar->v2d.cur.ymin;
-
-	UI_view2d_smooth_view(C, ar, &newrct, smooth_viewtx);
 }
 
 /* only meant for timer usage */

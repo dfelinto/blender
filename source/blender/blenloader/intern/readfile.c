@@ -111,6 +111,7 @@
 
 #include "BLF_translation.h"
 
+#include "BKE_action.h"
 #include "BKE_armature.h"
 #include "BKE_brush.h"
 #include "BKE_cloth.h"
@@ -3009,7 +3010,7 @@ static void lib_link_pose(FileData *fd, Main *bmain, Object *ob, bPose *pose)
 	
 	if (rebuild) {
 		DAG_id_tag_update_ex(bmain, &ob->id, OB_RECALC_OB | OB_RECALC_DATA | OB_RECALC_TIME);
-		pose->flag |= POSE_RECALC;
+		BKE_pose_tag_recalc(bmain, pose);
 	}
 }
 
@@ -5566,6 +5567,7 @@ static void direct_link_scene(FileData *fd, Scene *sce)
 	SceneRenderLayer *srl;
 	
 	sce->theDag = NULL;
+	sce->depsgraph = NULL;
 	sce->obedit = NULL;
 	sce->stats = NULL;
 	sce->fps_info = NULL;
@@ -5975,6 +5977,9 @@ static void lib_link_screen(FileData *fd, Main *main)
 					else if (sl->spacetype == SPACE_BUTS) {
 						SpaceButs *sbuts = (SpaceButs *)sl;
 						sbuts->pinid = newlibadr(fd, sc->id.lib, sbuts->pinid);
+						if (sbuts->pinid == NULL) {
+							sbuts->flag &= ~SB_PIN_CONTEXT;
+						}
 					}
 					else if (sl->spacetype == SPACE_FILE) {
 						;
@@ -6048,7 +6053,7 @@ static void lib_link_screen(FileData *fd, Main *main)
 							}
 							if (so->treehash) {
 								/* rebuild hash table, because it depends on ids too */
-								BKE_outliner_treehash_rebuild_from_treestore(so->treehash, so->treestore);
+								so->storeflag |= SO_TREESTORE_REBUILD;
 							}
 						}
 					}
@@ -6304,6 +6309,9 @@ void blo_lib_link_screen_restore(Main *newmain, bScreen *curscreen, Scene *cursc
 				else if (sl->spacetype == SPACE_BUTS) {
 					SpaceButs *sbuts = (SpaceButs *)sl;
 					sbuts->pinid = restore_pointer_by_name(newmain, sbuts->pinid, USER_IGNORE);
+					if (sbuts->pinid == NULL) {
+						sbuts->flag &= ~SB_PIN_CONTEXT;
+					}
 
 					/* TODO: restore path pointers: T40046
 					 * (complicated because this contains data pointers too, not just ID)*/
@@ -6399,7 +6407,7 @@ void blo_lib_link_screen_restore(Main *newmain, bScreen *curscreen, Scene *cursc
 						}
 						if (so->treehash) {
 							/* rebuild hash table, because it depends on ids too */
-							BKE_outliner_treehash_rebuild_from_treestore(so->treehash, so->treestore);
+							so->storeflag |= SO_TREESTORE_REBUILD;
 						}
 					}
 				}
@@ -7805,12 +7813,12 @@ static void do_versions(FileData *fd, Library *lib, Main *main)
 	if (G.debug & G_DEBUG) {
 		char build_commit_datetime[32];
 		time_t temp_time = main->build_commit_timestamp;
-		struct tm *tm = gmtime(&temp_time);
+		struct tm *tm = (temp_time) ? gmtime(&temp_time) : NULL;
 		if (LIKELY(tm)) {
 			strftime(build_commit_datetime, sizeof(build_commit_datetime), "%Y-%m-%d %H:%M", tm);
 		}
 		else {
-			BLI_strncpy(build_commit_datetime, "date-unknown", sizeof(build_commit_datetime));
+			BLI_strncpy(build_commit_datetime, "unknown", sizeof(build_commit_datetime));
 		}
 
 		printf("read file %s\n  Version %d sub %d date %s hash %s\n",
@@ -9241,7 +9249,6 @@ static void give_base_to_groups(Main *mainvar, Scene *scene)
 			/* assign the group */
 			ob->dup_group = group;
 			ob->transflag |= OB_DUPLIGROUP;
-			rename_id(&ob->id, group->id.name + 2);
 			copy_v3_v3(ob->loc, scene->cursor);
 		}
 	}

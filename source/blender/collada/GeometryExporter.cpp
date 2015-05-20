@@ -82,9 +82,6 @@ void GeometryExporter::operator()(Object *ob)
 					this->export_settings->apply_modifiers,
 					this->export_settings->triangulate);
 
-	Mesh *mesh = (Mesh *) ob->data;
-	me->flag = mesh->flag;
-
 	std::string geom_id = get_geometry_id(ob, use_instantiation);
 	std::vector<Normal> nor;
 	std::vector<BCPolygonNormalsIndices> norind;
@@ -609,17 +606,20 @@ void GeometryExporter::create_normals(std::vector<Normal> &normals, std::vector<
 
 	MVert *verts  = me->mvert;
 	MLoop *mloops = me->mloop;
-	float(*lnors)[3];
+	float(*lnors)[3] = NULL;
+	bool use_custom_normals = false;
 
 	BKE_mesh_calc_normals_split(me);
 	if (CustomData_has_layer(&me->ldata, CD_NORMAL)) {
 		lnors = (float(*)[3])CustomData_get_layer(&me->ldata, CD_NORMAL);
+		use_custom_normals = true;
 	}
 
 	for (int poly_index = 0; poly_index < me->totpoly; poly_index++) {
 		MPoly *mpoly  = &me->mpoly[poly_index];
+		bool use_vertex_normals = use_custom_normals || mpoly->flag & ME_SMOOTH;
 
-		if (!(mpoly->flag & ME_SMOOTH)) {
+		if (!use_vertex_normals) {
 			// For flat faces use face normal as vertex normal:
 
 			float vector[3];
@@ -630,14 +630,19 @@ void GeometryExporter::create_normals(std::vector<Normal> &normals, std::vector<
 			last_normal_index++;
 		}
 
-		MLoop *mloop = mloops + mpoly->loopstart;
 		BCPolygonNormalsIndices poly_indices;
 		for (int loop_index = 0; loop_index < mpoly->totloop; loop_index++) {
 			unsigned int loop_idx = mpoly->loopstart + loop_index;
-			if (mpoly->flag & ME_SMOOTH) {
-
+			if (use_vertex_normals) {
 				float normalized[3];
-				normalize_v3_v3(normalized, lnors[loop_idx]);
+
+				if (use_custom_normals) {
+					normalize_v3_v3(normalized, lnors[loop_idx]);
+				}
+				else {
+					normal_short_to_float_v3(normalized, verts[mloops[loop_index].v].no);
+					normalize_v3(normalized);
+				}
 				Normal n = { normalized[0], normalized[1], normalized[2] };
 
 				if (shared_normal_indices.find(n) != shared_normal_indices.end()) {

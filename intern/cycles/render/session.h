@@ -32,6 +32,7 @@ CCL_NAMESPACE_BEGIN
 class BufferParams;
 class Device;
 class DeviceScene;
+class DeviceRequestedFeatures;
 class DisplayBuffer;
 class Progress;
 class RenderBuffers;
@@ -204,6 +205,16 @@ protected:
 	bool update_progressive_refine(bool cancel);
 
 	vector<RenderBuffers *> tile_buffers;
+
+	DeviceRequestedFeatures get_requested_device_features();
+
+	/* ** Split kernel routines ** */
+
+	/* Maximumnumber of closure during session lifetime. */
+	int max_closure_global;
+
+	/* Get maximum number of closures to be used in kernel. */
+	int get_max_closure_count();
 };
 
 CCL_NAMESPACE_END

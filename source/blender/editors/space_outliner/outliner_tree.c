@@ -104,6 +104,8 @@ static void outliner_storage_cleanup(SpaceOops *soops)
 		/* cleanup only after reading file or undo step, and always for
 		 * RNA datablocks view in order to save memory */
 		if (soops->storeflag & SO_TREESTORE_CLEANUP) {
+			soops->storeflag &= ~SO_TREESTORE_CLEANUP;
+
 			BLI_mempool_iternew(ts, &iter);
 			while ((tselem = BLI_mempool_iterstep(&iter))) {
 				if (tselem->id == NULL) unused++;
@@ -855,6 +857,11 @@ static TreeElement *outliner_add_element(SpaceOops *soops, ListBase *lb, void *i
 		return NULL;
 	}
 
+	if (type == 0) {
+		/* Zero type means real ID, ensure we do not get non-outliner ID types here... */
+		BLI_assert(TREESTORE_ID_TYPE(id));
+	}
+
 	te = MEM_callocN(sizeof(TreeElement), "tree elem");
 	/* add to the visual tree */
 	BLI_addtail(lb, te);
@@ -1572,6 +1579,11 @@ void outliner_build_tree(Main *mainvar, Scene *scene, SpaceOops *soops)
 		soops->search_flags |= SO_SEARCH_RECURSIVE;
 	else
 		soops->search_flags &= ~SO_SEARCH_RECURSIVE;
+
+	if (soops->treehash && (soops->storeflag & SO_TREESTORE_REBUILD)) {
+		soops->storeflag &= ~SO_TREESTORE_REBUILD;
+		BKE_outliner_treehash_rebuild_from_treestore(soops->treehash, soops->treestore);
+	}
 
 	if (soops->tree.first && (soops->storeflag & SO_TREESTORE_REDRAW))
 		return;

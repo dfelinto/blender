@@ -1006,7 +1006,7 @@ bool BM_mesh_intersect(
 					    !BM_vert_splice_check_double(v_prev, vi) &&
 					    !BM_vert_pair_share_face_check(v_prev, vi))
 					{
-						BM_vert_splice(bm, v_prev, vi);
+						BM_vert_splice(bm, vi, v_prev);
 					}
 					else {
 						copy_v3_v3(v_prev->co, vi->co);
@@ -1228,7 +1228,7 @@ bool BM_mesh_intersect(
 						if (!BM_edge_exists(UNPACK2(splice_ls[i])) &&
 						    !BM_vert_splice_check_double(UNPACK2(splice_ls[i])))
 						{
-							BM_vert_splice(bm, UNPACK2(splice_ls[i]));
+							BM_vert_splice(bm, splice_ls[i][1], splice_ls[i][0]);
 						}
 					}
 				}
@@ -1267,10 +1267,8 @@ bool BM_mesh_intersect(
 			face_edges_split(bm, f, e_ls_base);
 		}
 	}
-#else
-	(void)totface_orig;
 #endif  /* USE_NET */
-
+	(void)totface_orig;
 
 #ifdef USE_SEPARATE
 	if (use_separate) {

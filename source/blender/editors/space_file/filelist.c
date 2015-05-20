@@ -1234,7 +1234,7 @@ static void filelist_from_main(struct FileList *filelist)
 
 		files = filelist->filelist;
 
-		if (!filelist->filter_data.hide_parent) {
+		if (files && !filelist->filter_data.hide_parent) {
 			memset(&(filelist->filelist[0]), 0, sizeof(struct direntry));
 			filelist->filelist[0].relname = BLI_strdup(FILENAME_PARENT);
 			filelist->filelist[0].type |= S_IFDIR;
@@ -1246,7 +1246,7 @@ static void filelist_from_main(struct FileList *filelist)
 		for (id = lb->first; id; id = id->next) {
 			ok = 1;
 			if (ok) {
-				if (!filelist->filter_data.hide_dot || id->name[2] != '.') {
+				if (files && (!filelist->filter_data.hide_dot || id->name[2] != '.')) {
 					memset(files, 0, sizeof(struct direntry));
 					if (id->lib == NULL) {
 						files->relname = BLI_strdup(id->name + 2);
@@ -1349,7 +1349,7 @@ static void thumbnails_startjob(void *tjv, short *stop, short *do_update, float 
 		else if (limg->flags & FILE_TYPE_FTFONT) {
 			source = THB_SOURCE_FONT;
 		}
-		limg->img = IMB_thumb_manage(limg->path, THB_NORMAL, source);
+		limg->img = IMB_thumb_manage(limg->path, THB_LARGE, source);
 		*do_update = true;
 		PIL_sleep_ms(10);
 		limg = limg->next;

@@ -1215,7 +1215,6 @@ static void ui_panel_drag_collapse(bContext *C, uiPanelDragCollapseHandle *dragc
 		rect.ymin = rect.ymax;
 		rect.ymax = rect.ymin + PNL_HEADER;
 		if (pa->flag & PNL_CLOSEDX) {
-			rect.xmin = rect.xmin;
 			rect.xmax = rect.xmin + PNL_HEADER;
 		}
 
@@ -1508,10 +1507,11 @@ void UI_panel_category_clear_all(ARegion *ar)
 }
 
 /* based on UI_draw_roundbox_gl_mode, check on making a version which allows us to skip some sides */
-static void ui_panel_category_draw_tab(int mode, float minx, float miny, float maxx, float maxy, float rad,
-                                       int roundboxtype,
-                                       const bool use_highlight, const bool use_shadow,
-                                       const unsigned char highlight_fade[3])
+static void ui_panel_category_draw_tab(
+        int mode, float minx, float miny, float maxx, float maxy, float rad,
+        int roundboxtype,
+        const bool use_highlight, const bool use_shadow,
+        const unsigned char highlight_fade[3])
 {
 	float vec[4][2] = {
 	    {0.195, 0.02},

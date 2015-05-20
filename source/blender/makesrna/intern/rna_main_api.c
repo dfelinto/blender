@@ -35,6 +35,7 @@
 
 #include "DNA_ID.h"
 #include "DNA_modifier_types.h"
+#include "DNA_space_types.h"
 
 #include "BLI_utildefines.h"
 #include "BLI_path_util.h"
@@ -58,9 +59,11 @@
 #include "BKE_library.h"
 #include "BKE_object.h"
 #include "BKE_material.h"
+#include "BKE_icons.h"
 #include "BKE_image.h"
 #include "BKE_texture.h"
 #include "BKE_scene.h"
+#include "BKE_sound.h"
 #include "BKE_text.h"
 #include "BKE_action.h"
 #include "BKE_group.h"
@@ -87,6 +90,7 @@
 #include "DNA_mesh_types.h"
 #include "DNA_object_types.h"
 #include "DNA_speaker_types.h"
+#include "DNA_sound_types.h"
 #include "DNA_text_types.h"
 #include "DNA_texture_types.h"
 #include "DNA_group_types.h"
@@ -548,6 +552,25 @@ static void rna_Main_speakers_remove(Main *bmain, ReportList *reports, PointerRN
 	}
 }
 
+static bSound *rna_Main_sounds_load(Main *bmain, const char *name)
+{
+	bSound *sound = BKE_sound_new_file(bmain, name);
+	id_us_min(&sound->id);
+	return sound;
+}
+static void rna_Main_sounds_remove(Main *bmain, ReportList *reports, PointerRNA *sound_ptr)
+{
+	Speaker *sound = sound_ptr->data;
+	if (ID_REAL_USERS(sound) <= 0) {
+		BKE_libblock_free(bmain, sound);
+		RNA_POINTER_INVALIDATE(sound_ptr);
+	}
+	else {
+		BKE_reportf(reports, RPT_ERROR, "Sound '%s' must have zero users to be removed, found %d",
+		            sound->id.name + 2, ID_REAL_USERS(sound));
+	}
+}
+
 static Text *rna_Main_texts_new(Main *bmain, const char *name)
 {
 	return BKE_text_add(bmain, name);
@@ -786,11 +809,12 @@ static int rna_Main_linestyle_is_updated_get(PointerRNA *ptr) { return DAG_id_ty
 
 #else
 
-void RNA_api_main(StructRNA *srna)
+void RNA_api_main(StructRNA *UNUSED(srna))
 {
 #if 0
 	FunctionRNA *func;
 	PropertyRNA *parm;
+
 	/* maybe we want to add functions in 'bpy.data' still?
 	 * for now they are all in collections bpy.data.images.new(...) */
 	func = RNA_def_function(srna, "add_image", "rna_Main_add_image");
@@ -799,8 +823,6 @@ void RNA_api_main(StructRNA *srna)
 	RNA_def_property_flag(parm, PROP_REQUIRED);
 	parm = RNA_def_pointer(func, "image", "Image", "", "New image");
 	RNA_def_function_return(func, parm);
-#else
-	(void)srna;
 #endif
 }
 
@@ -1585,7 +1607,21 @@ void RNA_def_main_sounds(BlenderRNA *brna, PropertyRNA *cprop)
 	RNA_def_struct_sdna(srna, "Main");
 	RNA_def_struct_ui_text(srna, "Main Sounds", "Collection of sounds");
 
-	/* TODO, 'load' */
+	/* load func */
+	func = RNA_def_function(srna, "load", "rna_Main_sounds_load");
+	RNA_def_function_ui_description(func, "Add a new sound to the main database from a file");
+	parm = RNA_def_string_file_path(func, "filepath", "Path", FILE_MAX, "", "path for the datablock");
+	RNA_def_property_flag(parm, PROP_REQUIRED);
+	/* return type */
+	parm = RNA_def_pointer(func, "sound", "Sound", "", "New text datablock");
+	RNA_def_function_return(func, parm);
+
+	func = RNA_def_function(srna, "remove", "rna_Main_sounds_remove");
+	RNA_def_function_flag(func, FUNC_USE_REPORTS);
+	RNA_def_function_ui_description(func, "Remove a sound from the current blendfile");
+	parm = RNA_def_pointer(func, "sound", "Sound", "", "Sound to remove");
+	RNA_def_property_flag(parm, PROP_REQUIRED | PROP_NEVER_NULL | PROP_RNAPTR);
+	RNA_def_property_clear_flag(parm, PROP_THICK_WRAP);
 
 	func = RNA_def_function(srna, "tag", "rna_Main_sounds_tag");
 	parm = RNA_def_boolean(func, "value", 0, "Value", "");

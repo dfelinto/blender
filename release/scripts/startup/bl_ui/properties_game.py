@@ -100,7 +100,6 @@ class PHYSICS_PT_game_physics(PhysicsButtonsPanel, Panel):
             sub.prop(game, "damping", text="Translation", slider=True)
             sub.prop(game, "rotation_damping", text="Rotation", slider=True)
 
-        if physics_type == 'RIGID_BODY':
             layout.separator()
 
             split = layout.split()
@@ -111,6 +110,7 @@ class PHYSICS_PT_game_physics(PhysicsButtonsPanel, Panel):
             col.prop(game, "lock_location_y", text="Y")
             col.prop(game, "lock_location_z", text="Z")
 
+        if physics_type == 'RIGID_BODY':
             col = split.column()
             col.label(text="Lock Rotation:")
             col.prop(game, "lock_rotation_x", text="X")
@@ -213,15 +213,17 @@ class PHYSICS_PT_game_collision_bounds(PhysicsButtonsPanel, Panel):
         layout = self.layout
 
         game = context.active_object.game
-        layout.active = game.use_collision_bounds
+        split = layout.split()
+        split.active = game.use_collision_bounds
 
-        layout.prop(game, "collision_bounds_type", text="Bounds")
+        col = split.column()
+        col.prop(game, "collision_bounds_type", text="Bounds")
 
-        row = layout.row()
+        row = col.row()
         row.prop(game, "collision_margin", text="Margin", slider=True)
 
         sub = row.row()
-        sub.active = game.physics_type  not in {'SOFT_BODY', 'CHARACTER'}
+        sub.active = game.physics_type not in {'SOFT_BODY', 'CHARACTER'}
         sub.prop(game, "use_collision_compound", text="Compound")
 
         layout.separator()

@@ -1666,9 +1666,9 @@ class VIEW3D_MT_paint_weight(Menu):
         layout.operator("object.vertex_group_quantize", text="Quantize")
         layout.operator("object.vertex_group_levels", text="Levels")
         layout.operator("object.vertex_group_blend", text="Blend")
-        prop = layout.operator("object.data_transfer", text="Transfer Weights")
-        prop.use_reverse_transfer = True
-        prop.data_type = 'VGROUP_WEIGHTS'
+        props = layout.operator("object.data_transfer", text="Transfer Weights")
+        props.use_reverse_transfer = True
+        props.data_type = 'VGROUP_WEIGHTS'
         layout.operator("object.vertex_group_limit_total", text="Limit Total")
         layout.operator("object.vertex_group_fix", text="Fix Deforms")
 
@@ -2277,13 +2277,6 @@ class VIEW3D_MT_edit_mesh_vertices(Menu):
 
         layout.separator()
 
-        op = layout.operator("mesh.mark_sharp", text="Shade Smooth")
-        op.use_verts = True
-        op.clear = True
-        layout.operator("mesh.mark_sharp", text="Shade Sharp").use_verts = True
-
-        layout.separator()
-
         layout.operator("mesh.bevel").vertex_only = True
         layout.operator("mesh.convex_hull")
         layout.operator("mesh.vertices_smooth")
@@ -2306,6 +2299,8 @@ class VIEW3D_MT_edit_mesh_edges(Menu):
     def draw(self, context):
         layout = self.layout
 
+        toolsettings = context.tool_settings
+
         with_freestyle = bpy.app.build_options.freestyle
 
         layout.operator_context = 'INVOKE_REGION_WIN'
@@ -2326,8 +2321,16 @@ class VIEW3D_MT_edit_mesh_edges(Menu):
 
         layout.separator()
 
-        layout.operator("mesh.mark_sharp")
-        layout.operator("mesh.mark_sharp", text="Clear Sharp").clear = True
+        if not toolsettings.mesh_select_mode[0]:
+            # edge mode
+            layout.operator("mesh.mark_sharp")
+            layout.operator("mesh.mark_sharp", text="Clear Sharp").clear = True
+        else:
+            # vert mode
+            layout.operator("mesh.mark_sharp").use_verts = True
+            props = layout.operator("mesh.mark_sharp", text="Clear Sharp")
+            props.use_verts = True
+            props.clear = True
 
         layout.separator()
 
@@ -2482,6 +2485,7 @@ def draw_curve(self, context):
     layout.separator()
 
     layout.operator("curve.extrude_move")
+    layout.operator("curve.spin")
     layout.operator("curve.duplicate_move")
     layout.operator("curve.split")
     layout.operator("curve.separate")
@@ -3022,11 +3026,10 @@ class VIEW3D_PT_view3d_shading(Panel):
 
         fx_settings = view.fx_settings
 
-        sub = col.column()
-        sub.active = view.region_3d.view_perspective == 'CAMERA'
-        sub.prop(fx_settings, "use_dof")
-
         if view.viewport_shade not in {'BOUNDBOX', 'WIREFRAME'}:
+            sub = col.column()
+            sub.active = view.region_3d.view_perspective == 'CAMERA'
+            sub.prop(fx_settings, "use_dof")
             col.prop(fx_settings, "use_ssao", text="Ambient Occlusion")
             if fx_settings.use_ssao:
                 ssao_settings = fx_settings.ssao

@@ -415,6 +415,7 @@ public:
 
 	void attributes(Shader *shader, AttributeRequestSet *attributes);
 	bool has_spatial_varying() { return true; }
+	virtual int get_feature() { return NODE_FEATURE_HAIR; }
 };
 
 class ValueNode : public ShaderNode {
@@ -549,8 +550,6 @@ public:
 class BlackbodyNode : public ShaderNode {
 public:
 	SHADER_NODE_CLASS(BlackbodyNode)
-	
-	bool has_converter_blackbody() { return true; }
 };
 
 class MathNode : public ShaderNode {
