@@ -22,6 +22,10 @@
  * Contributor(s): Based on original depsgraph.c code - Blender Foundation (2005-2013)
  *
  * ***** END GPL LICENSE BLOCK *****
+ */
+
+/** \file blender/depsgraph/intern/depsgraph_build_relations.cc
+ *  \ingroup depsgraph
  *
  * Methods for constructing depsgraph
  */
@@ -104,14 +108,15 @@ extern "C" {
 
 /* **** General purpose functions ****  */
 
-RNAPathKey::RNAPathKey(ID *id, const string &path) :
+RNAPathKey::RNAPathKey(ID *id, const char *path) :
     id(id)
 {
 	/* create ID pointer for root of path lookup */
 	PointerRNA id_ptr;
 	RNA_id_pointer_create(id, &id_ptr);
 	/* try to resolve path... */
-	if (!RNA_path_resolve(&id_ptr, path.c_str(), &this->ptr, &this->prop)) {
+	int index;
+	if (!RNA_path_resolve_full(&id_ptr, path, &this->ptr, &this->prop, &index)) {
 		this->ptr = PointerRNA_NULL;
 		this->prop = NULL;
 	}

@@ -104,6 +104,8 @@ static void drawVertSlide(TransInfo *t);
 static void len_v3_ensure(float v[3], const float length);
 static void postInputRotation(TransInfo *t, float values[3]);
 
+static void ElementRotation(TransInfo *t, TransData *td, float mat[3][3], short around);
+
 
 /* Transform Callbacks */
 static void initBend(TransInfo *t);
@@ -2022,6 +2024,18 @@ void saveTransform(bContext *C, TransInfo *t, wmOperator *op)
 
 		RNA_property_boolean_set_array(op->ptr, prop, constraint_axis);
 	}
+
+	{
+		const char *prop_id = NULL;
+		if (t->mode == TFM_SHRINKFATTEN) {
+			prop_id = "use_even_offset";
+		}
+
+		if (prop_id && (prop = RNA_struct_find_property(op->ptr, prop_id))) {
+
+			RNA_property_boolean_set(op->ptr, prop, (t->flag & T_ALT_TRANSFORM) != 0);
+		}
+	}
 }
 
 /* note: caller needs to free 't' on a 0 return */
@@ -2827,7 +2841,7 @@ static void initBend(TransInfo *t)
 	t->num.unit_type[0] = B_UNIT_ROTATION;
 	t->num.unit_type[1] = B_UNIT_LENGTH;
 
-	t->flag |= T_NO_CONSTRAINT;
+	t->flag |= T_NO_CONSTRAINT | T_FREE_CUSTOMDATA;
 
 	//copy_v3_v3(t->center, ED_view3d_cursor3d_get(t->scene, t->view));
 	calculateCenterCursor(t, t->center);
@@ -2978,6 +2992,13 @@ static void Bend(TransInfo *t, const int UNUSED(mval[2]))
 		add_v3_v3(vec, pivot);
 
 		mul_m3_v3(td->smtx, vec);
+
+		/* rotation */
+		if ((t->flag & T_POINTS) == 0) {
+			ElementRotation(t, td, mat, V3D_LOCAL);
+		}
+
+		/* location */
 		copy_v3_v3(td->loc, vec);
 	}
 	

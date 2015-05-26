@@ -47,6 +47,12 @@
 #define USE_TRIANGULATE
 #define USE_VERT_NORMAL_INTERP  /* has the advantage that flipped faces don't mess up vertex normals */
 
+/* if the cost from #BLI_quadric_evaluate is 'noise', fallback to topology */
+#define USE_TOPOLOGY_FALLBACK
+#ifdef  USE_TOPOLOGY_FALLBACK
+#  define   TOPOLOGY_FALLBACK_EPS  FLT_EPSILON
+#endif
+
 /* these checks are for rare cases that we can't avoid since they are valid meshes still */
 #define USE_SAFETY_CHECKS
 
@@ -77,12 +83,15 @@ static void bm_decim_build_quadrics(BMesh *bm, Quadric *vquadrics)
 		BMLoop *l_first;
 		BMLoop *l_iter;
 
-		const float *co = BM_FACE_FIRST_LOOP(f)->v->co;
-		const float *no = f->no;
-		const float offset = -dot_v3v3(no, co);
+		float center[3];
+		double plane_db[4];
 		Quadric q;
 
-		BLI_quadric_from_v3_dist(&q, no, offset);
+		BM_face_calc_center_mean(f, center);
+		copy_v3db_v3fl(plane_db, f->no);
+		plane_db[3] = -dot_v3db_v3fl(plane_db, center);
+
+		BLI_quadric_from_plane(&q, plane_db);
 
 		l_iter = l_first = BM_FACE_FIRST_LOOP(f);
 		do {
@@ -94,14 +103,22 @@ static void bm_decim_build_quadrics(BMesh *bm, Quadric *vquadrics)
 	BM_ITER_MESH (e, &iter, bm, BM_EDGES_OF_MESH) {
 		if (UNLIKELY(BM_edge_is_boundary(e))) {
 			float edge_vector[3];
-			float edge_cross[3];
+			float edge_plane[3];
+			double edge_plane_db[4];
 			sub_v3_v3v3(edge_vector, e->v2->co, e->v1->co);
 			f = e->l->f;
-			cross_v3_v3v3(edge_cross, edge_vector, f->no);
 
-			if (normalize_v3(edge_cross) > FLT_EPSILON) {
+			cross_v3_v3v3(edge_plane, edge_vector, f->no);
+			copy_v3db_v3fl(edge_plane_db, edge_plane);
+
+			if (normalize_v3_d(edge_plane_db) > FLT_EPSILON) {
 				Quadric q;
-				BLI_quadric_from_v3_dist(&q, edge_cross, -dot_v3v3(edge_cross, e->v1->co));
+				float center[3];
+
+				mid_v3_v3v3(center, e->v1->co, e->v2->co);
+
+				edge_plane_db[3] = -dot_v3db_v3fl(edge_plane_db, center);
+				BLI_quadric_from_plane(&q, edge_plane_db);
 				BLI_quadric_mul(&q, BOUNDARY_PRESERVE_WEIGHT);
 
 				BLI_quadric_add_qu_qu(&vquadrics[BM_elem_index_get(e->v1)], &q);
@@ -163,13 +180,15 @@ static bool bm_edge_collapse_is_degenerate_flip(BMEdge *e, const float optimize_
 				cross_v3_v3v3(cross_exist, vec_other, vec_exist);
 				cross_v3_v3v3(cross_optim, vec_other, vec_optim);
 
-				/* normalize isn't really needed, but ensures the value at a unit we can compare against */
-				normalize_v3(cross_exist);
-				normalize_v3(cross_optim);
+				/* avoid normalize */
+				if (dot_v3v3(cross_exist, cross_optim) <=
+				    (len_squared_v3(cross_exist) + len_squared_v3(cross_optim)) * 0.01f)
+				{
+					return true;
+				}
 #else
 				normal_tri_v3(cross_exist, v->co,       co_prev, co_next);
 				normal_tri_v3(cross_optim, optimize_co, co_prev, co_next);
-#endif
 
 				/* use a small value rather then zero so we don't flip a face in multiple steps
 				 * (first making it zero area, then flipping again) */
@@ -177,12 +196,27 @@ static bool bm_edge_collapse_is_degenerate_flip(BMEdge *e, const float optimize_
 					//printf("no flip\n");
 					return true;
 				}
+#endif
+
 			}
 		}
 	}
 
 	return false;
 }
+
+#ifdef USE_TOPOLOGY_FALLBACK
+/**
+ * when the cost is so small that its not useful (flat surfaces),
+ * fallback to using a 'topology' cost.
+ *
+ * This avoids cases where a flat (or near flat) areas get very un-even geometry.
+ */
+static float bm_decim_build_edge_cost_single__topology(BMEdge *e)
+{
+	return fabsf(dot_v3v3(e->v1->no, e->v2->no)) / min_ff(-len_squared_v3v3(e->v1->co, e->v2->co), -FLT_EPSILON);
+}
+#endif  /* USE_TOPOLOGY_FALLBACK */
 
 static void bm_decim_build_edge_cost_single(
         BMEdge *e,
@@ -254,6 +288,19 @@ static void bm_decim_build_edge_cost_single(
 	/* note, 'cost' shouldn't be negative but happens sometimes with small values.
 	 * this can cause faces that make up a flat surface to over-collapse, see [#37121] */
 	cost = fabsf(cost);
+
+#ifdef USE_TOPOLOGY_FALLBACK
+	if (UNLIKELY(cost < TOPOLOGY_FALLBACK_EPS)) {
+		/* subtract existing cost to further differentiate edges from one another
+		 *
+		 * keep topology cost below 0.0 so their values don't interfere with quadric cost,
+		 * (and they get handled first).
+		 * */
+		cost = bm_decim_build_edge_cost_single__topology(e) - cost;
+		BLI_assert(cost <= 0.0f);
+	}
+#endif
+
 	eheap_table[BM_elem_index_get(e)] = BLI_heap_insert(eheap, cost, e);
 }
 
@@ -444,7 +491,7 @@ static void bm_decim_triangulate_end(BMesh *bm)
 #ifdef USE_CUSTOMDATA
 
 /**
- * \param v is the target to merge into.
+ * \param l: defines the vert to collapse into.
  */
 static void bm_edge_collapse_loop_customdata(
         BMesh *bm, BMLoop *l, BMVert *v_clear, BMVert *v_other,
@@ -456,8 +503,6 @@ static void bm_edge_collapse_loop_customdata(
 	BMLoop *l_clear, *l_other;
 	const bool is_manifold = BM_edge_is_manifold(l->e);
 	int side;
-
-	/* l defines the vert to collapse into  */
 
 	/* first find the loop of 'v_other' thats attached to the face of 'l' */
 	if (l->v == v_clear) {
@@ -700,8 +745,8 @@ static bool bm_edge_collapse_is_degenerate_topology(BMEdge *e_first)
  *
  * Important - dont add vert/edge/face data on collapsing!
  *
- * \param e_clear_other let caller know what edges we remove besides \a e_clear
- * \param customdata_flag merge factor, scales from 0 - 1 ('v_clear' -> 'v_other')
+ * \param r_e_clear_other: Let caller know what edges we remove besides \a e_clear
+ * \param customdata_flag: Merge factor, scales from 0 - 1 ('v_clear' -> 'v_other')
  */
 static bool bm_edge_collapse(
         BMesh *bm, BMEdge *e_clear, BMVert *v_clear, int r_e_clear_other[2],

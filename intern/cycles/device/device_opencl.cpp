@@ -748,7 +748,7 @@ public:
 			}
 			else {
 
-				string init_kernel_source = "#include \"kernel.cl\" // " + kernel_md5 + "\n";
+				string init_kernel_source = "#include \"kernels/opencl/kernel.cl\" // " + kernel_md5 + "\n";
 
 				/* if does not exist or loading binary failed, compile kernel */
 				if(!compile_kernel(kernel_path, init_kernel_source, "", &cpProgram, debug_src))
@@ -1322,7 +1322,7 @@ public:
 				/* Kernel loaded from binary, nothing to do. */
 			}
 			else {
-				string init_kernel_source = "#include \"kernel.cl\" // " +
+				string init_kernel_source = "#include \"kernels/opencl/kernel.cl\" // " +
 				                            kernel_md5 + "\n";
 				/* If does not exist or loading binary failed, compile kernel. */
 				if(!compile_kernel(kernel_path,
@@ -1514,11 +1514,11 @@ public:
 	cl_kernel ckPathTraceKernel_lamp_emission;
 	cl_kernel ckPathTraceKernel_queue_enqueue;
 	cl_kernel ckPathTraceKernel_background_buffer_update;
-	cl_kernel ckPathTraceKernel_shader_lighting;
+	cl_kernel ckPathTraceKernel_shader_eval;
 	cl_kernel ckPathTraceKernel_holdout_emission_blurring_pathtermination_ao;
 	cl_kernel ckPathTraceKernel_direct_lighting;
-	cl_kernel ckPathTraceKernel_shadow_blocked_direct_lighting;
-	cl_kernel ckPathTraceKernel_setup_next_iteration;
+	cl_kernel ckPathTraceKernel_shadow_blocked;
+	cl_kernel ckPathTraceKernel_next_iteration_setup;
 	cl_kernel ckPathTraceKernel_sum_all_radiance;
 
 	/* cl_program declaration. */
@@ -1528,7 +1528,7 @@ public:
 	cl_program queue_enqueue_program;
 	cl_program background_buffer_update_program;
 	cl_program shader_eval_program;
-	cl_program holdout_emission_blurring_termination_ao_program;
+	cl_program holdout_emission_blurring_pathtermination_ao_program;
 	cl_program direct_lighting_program;
 	cl_program shadow_blocked_program;
 	cl_program next_iteration_setup_program;
@@ -1675,8 +1675,6 @@ public:
 	OpenCLDeviceSplitKernel(DeviceInfo& info, Stats &stats, bool background_)
 	: OpenCLDeviceBase(info, stats, background_)
 	{
-
-		info.use_split_kernel = true;
 		background = background_;
 
 		/* Initialize kernels. */
@@ -1684,11 +1682,11 @@ public:
 		ckPathTraceKernel_scene_intersect = NULL;
 		ckPathTraceKernel_lamp_emission = NULL;
 		ckPathTraceKernel_background_buffer_update = NULL;
-		ckPathTraceKernel_shader_lighting = NULL;
+		ckPathTraceKernel_shader_eval = NULL;
 		ckPathTraceKernel_holdout_emission_blurring_pathtermination_ao = NULL;
 		ckPathTraceKernel_direct_lighting = NULL;
-		ckPathTraceKernel_shadow_blocked_direct_lighting = NULL;
-		ckPathTraceKernel_setup_next_iteration = NULL;
+		ckPathTraceKernel_shadow_blocked = NULL;
+		ckPathTraceKernel_next_iteration_setup = NULL;
 		ckPathTraceKernel_sum_all_radiance = NULL;
 		ckPathTraceKernel_queue_enqueue = NULL;
 
@@ -1699,7 +1697,7 @@ public:
 		queue_enqueue_program = NULL;
 		background_buffer_update_program = NULL;
 		shader_eval_program = NULL;
-		holdout_emission_blurring_termination_ao_program = NULL;
+		holdout_emission_blurring_pathtermination_ao_program = NULL;
 		direct_lighting_program = NULL;
 		shadow_blocked_program = NULL;
 		next_iteration_setup_program = NULL;
@@ -1838,15 +1836,13 @@ public:
 	                       string kernel_init_source,
 	                       string clbin,
 	                       string custom_kernel_build_options,
-	                       cl_program *program)
+	                       cl_program *program,
+	                       const string *debug_src = NULL)
 	{
 		if(!opencl_version_check())
 			return false;
 
 		clbin = path_user_get(path_join("cache", clbin));
-
-		/* Path to preprocessed source for debugging. */
-		string *debug_src = NULL;
 
 		/* If exists already, try use it. */
 		if(path_exists(clbin) && load_binary(kernel_path,
@@ -1861,7 +1857,8 @@ public:
 			if(!compile_kernel(kernel_path,
 			                   kernel_init_source,
 			                   custom_kernel_build_options,
-			                   program))
+			                   program,
+			                   debug_src))
 			{
 				return false;
 			}
@@ -1961,19 +1958,26 @@ public:
 			return false;
 		}
 
-		string svm_build_options = "";
-		string max_closure_build_option = "";
-		string compute_device_type_build_option = "";
+		string kernel_path = path_get("kernel");
+		string kernel_md5 = path_files_md5_hash(kernel_path);
+		string device_md5;
+		string build_options;
+		string kernel_init_source;
+		string clbin;
+		string clsrc, *debug_src = NULL;
 
-		/* Set svm_build_options. */
-		svm_build_options += " -D__NODES_MAX_GROUP__=" +
+		build_options += "-D__SPLIT_KERNEL__";
+#ifdef __WORK_STEALING__
+		build_options += " -D__WORK_STEALING__";
+#endif
+		if(requested_features.experimental) {
+			build_options += " -D__KERNEL_EXPERIMENTAL__";
+		}
+		build_options += " -D__NODES_MAX_GROUP__=" +
 			string_printf("%d", requested_features.max_nodes_group);
-		svm_build_options += " -D__NODES_FEATURES__=" +
+		build_options += " -D__NODES_FEATURES__=" +
 			string_printf("%d", requested_features.nodes_features);
-
-		/* Set max closure build option. */
-		max_closure_build_option += string_printf("-D__MAX_CLOSURE__=%d ",
-		                                          max_closure);
+		build_options += string_printf(" -D__MAX_CLOSURE__=%d", max_closure);
 
 		/* Set compute device build option. */
 		cl_device_type device_type;
@@ -1984,83 +1988,69 @@ public:
 		                        NULL);
 		assert(ciErr == CL_SUCCESS);
 		if(device_type == CL_DEVICE_TYPE_GPU) {
-			compute_device_type_build_option = "-D__COMPUTE_DEVICE_GPU__ ";
+			build_options += " -D__COMPUTE_DEVICE_GPU__";
 		}
 
-		string kernel_path = path_get("kernel");
-		string kernel_md5 = path_files_md5_hash(kernel_path);
-		string device_md5;
-		string custom_kernel_build_options;
-		string kernel_init_source;
-		string clbin;
-
-		string common_custom_build_options = "";
-		common_custom_build_options += "-D__SPLIT_KERNEL__ ";
-		common_custom_build_options += max_closure_build_option;;
-#ifdef __WORK_STEALING__
-		common_custom_build_options += "-D__WORK_STEALING__ ";
-#endif
-		if(requested_features.experimental) {
-			common_custom_build_options += "-D__KERNEL_EXPERIMENTAL__ ";
-		}
-
-#define LOAD_KERNEL(program, name) \
+#define GLUE(a, b) a ## b
+#define LOAD_KERNEL(name) \
 	do { \
-		kernel_init_source = "#include \"kernel_" name ".cl\" // " + \
+		kernel_init_source = "#include \"kernels/opencl/kernel_" #name ".cl\" // " + \
 		                     kernel_md5 + "\n"; \
-		custom_kernel_build_options = common_custom_build_options; \
-		device_md5 = device_md5_hash(custom_kernel_build_options); \
-		clbin = string_printf("cycles_kernel_%s_%s_" name ".clbin", \
+		device_md5 = device_md5_hash(build_options); \
+		clbin = string_printf("cycles_kernel_%s_%s_" #name ".clbin", \
 		                      device_md5.c_str(), kernel_md5.c_str()); \
+		if(opencl_kernel_use_debug()) { \
+			clsrc = string_printf("cycles_kernel_%s_%s_" #name ".cl", \
+			                      device_md5.c_str(), kernel_md5.c_str()); \
+			clsrc = path_user_get(path_join("cache", clsrc)); \
+			debug_src = &clsrc; \
+		} \
 		if(!load_split_kernel(kernel_path, kernel_init_source, clbin, \
-		                      custom_kernel_build_options, &program)) \
+		                      build_options, \
+		                      &GLUE(name, _program), \
+		                      debug_src)) \
 		{ \
+			fprintf(stderr, "Faled to compile %s\n", #name); \
 			return false; \
 		} \
 	} while(false)
 
-		/* TODO(sergey): If names are unified we can save some more bits of
-		 * code here.
-		 */
-		LOAD_KERNEL(data_init_program, "data_init");
-		LOAD_KERNEL(scene_intersect_program, "scene_intersect");
-		LOAD_KERNEL(lamp_emission_program, "lamp_emission");
-		LOAD_KERNEL(queue_enqueue_program, "queue_enqueue");
-		LOAD_KERNEL(background_buffer_update_program, "background_buffer_update");
-		LOAD_KERNEL(shader_eval_program, "shader_eval");
-		LOAD_KERNEL(holdout_emission_blurring_termination_ao_program,
-		            "holdout_emission_blurring_pathtermination_ao");
-		LOAD_KERNEL(direct_lighting_program, "direct_lighting");
-		LOAD_KERNEL(shadow_blocked_program, "shadow_blocked");
-		LOAD_KERNEL(next_iteration_setup_program, "next_iteration_setup");
-		LOAD_KERNEL(sum_all_radiance_program, "sum_all_radiance");
+		LOAD_KERNEL(data_init);
+		LOAD_KERNEL(scene_intersect);
+		LOAD_KERNEL(lamp_emission);
+		LOAD_KERNEL(queue_enqueue);
+		LOAD_KERNEL(background_buffer_update);
+		LOAD_KERNEL(shader_eval);
+		LOAD_KERNEL(holdout_emission_blurring_pathtermination_ao);
+		LOAD_KERNEL(direct_lighting);
+		LOAD_KERNEL(shadow_blocked);
+		LOAD_KERNEL(next_iteration_setup);
+		LOAD_KERNEL(sum_all_radiance);
 
 #undef LOAD_KERNEL
 
-#define GLUE(a, b) a ## b
-#define FIND_KERNEL(kernel, program, function) \
+#define FIND_KERNEL(name) \
 	do { \
-		GLUE(ckPathTraceKernel_, kernel) = \
-			clCreateKernel(GLUE(program, _program), \
-			               "kernel_ocl_path_trace_"  function, &ciErr); \
+		GLUE(ckPathTraceKernel_, name) = \
+			clCreateKernel(GLUE(name, _program), \
+			               "kernel_ocl_path_trace_"  #name, &ciErr); \
 		if(opencl_error(ciErr)) { \
+			fprintf(stderr,"Missing kernel kernel_ocl_path_trace_%s\n", #name); \
 			return false; \
 		} \
 	} while(false)
 
-		FIND_KERNEL(data_init, data_init, "data_initialization");
-		FIND_KERNEL(scene_intersect, scene_intersect, "scene_intersect");
-		FIND_KERNEL(lamp_emission, lamp_emission, "lamp_emission");
-		FIND_KERNEL(queue_enqueue, queue_enqueue, "queue_enqueue");
-		FIND_KERNEL(background_buffer_update, background_buffer_update, "background_buffer_update");
-		FIND_KERNEL(shader_lighting, shader_eval, "shader_evaluation");
-		FIND_KERNEL(holdout_emission_blurring_pathtermination_ao,
-		            holdout_emission_blurring_termination_ao,
-		            "holdout_emission_blurring_pathtermination_ao");
-		FIND_KERNEL(direct_lighting, direct_lighting, "direct_lighting");
-		FIND_KERNEL(shadow_blocked_direct_lighting, shadow_blocked, "shadow_blocked_direct_lighting");
-		FIND_KERNEL(setup_next_iteration, next_iteration_setup, "setup_next_iteration");
-		FIND_KERNEL(sum_all_radiance, sum_all_radiance, "sum_all_radiance");
+		FIND_KERNEL(data_init);
+		FIND_KERNEL(scene_intersect);
+		FIND_KERNEL(lamp_emission);
+		FIND_KERNEL(queue_enqueue);
+		FIND_KERNEL(background_buffer_update);
+		FIND_KERNEL(shader_eval);
+		FIND_KERNEL(holdout_emission_blurring_pathtermination_ao);
+		FIND_KERNEL(direct_lighting);
+		FIND_KERNEL(shadow_blocked);
+		FIND_KERNEL(next_iteration_setup);
+		FIND_KERNEL(sum_all_radiance);
 #undef FIND_KERNEL
 #undef GLUE
 
@@ -2079,11 +2069,11 @@ public:
 		release_kernel_safe(ckPathTraceKernel_lamp_emission);
 		release_kernel_safe(ckPathTraceKernel_queue_enqueue);
 		release_kernel_safe(ckPathTraceKernel_background_buffer_update);
-		release_kernel_safe(ckPathTraceKernel_shader_lighting);
+		release_kernel_safe(ckPathTraceKernel_shader_eval);
 		release_kernel_safe(ckPathTraceKernel_holdout_emission_blurring_pathtermination_ao);
 		release_kernel_safe(ckPathTraceKernel_direct_lighting);
-		release_kernel_safe(ckPathTraceKernel_shadow_blocked_direct_lighting);
-		release_kernel_safe(ckPathTraceKernel_setup_next_iteration);
+		release_kernel_safe(ckPathTraceKernel_shadow_blocked);
+		release_kernel_safe(ckPathTraceKernel_next_iteration_setup);
 		release_kernel_safe(ckPathTraceKernel_sum_all_radiance);
 
 		/* Release global memory */
@@ -2189,7 +2179,7 @@ public:
 		release_program_safe(queue_enqueue_program);
 		release_program_safe(background_buffer_update_program);
 		release_program_safe(shader_eval_program);
-		release_program_safe(holdout_emission_blurring_termination_ao_program);
+		release_program_safe(holdout_emission_blurring_pathtermination_ao_program);
 		release_program_safe(direct_lighting_program);
 		release_program_safe(shadow_blocked_program);
 		release_program_safe(next_iteration_setup_program);
@@ -2598,7 +2588,7 @@ public:
 #endif
 		                 num_parallel_samples);
 
-		kernel_set_args(ckPathTraceKernel_shader_lighting,
+		kernel_set_args(ckPathTraceKernel_shader_eval,
 		                0,
 		                kgbuffer,
 		                d_data,
@@ -2658,7 +2648,7 @@ public:
 		                Queue_index,
 		                dQueue_size);
 
-		kernel_set_args(ckPathTraceKernel_shadow_blocked_direct_lighting,
+		kernel_set_args(ckPathTraceKernel_shadow_blocked,
 		                0,
 		                kgbuffer,
 		                d_data,
@@ -2674,7 +2664,7 @@ public:
 		                dQueue_size,
 		                total_num_rays);
 
-		kernel_set_args(ckPathTraceKernel_setup_next_iteration,
+		kernel_set_args(ckPathTraceKernel_next_iteration_setup,
 		                0,
 		                kgbuffer,
 		                d_data,
@@ -2744,11 +2734,11 @@ public:
 				ENQUEUE_SPLIT_KERNEL(lamp_emission, global_size, local_size);
 				ENQUEUE_SPLIT_KERNEL(queue_enqueue, global_size, local_size);
 				ENQUEUE_SPLIT_KERNEL(background_buffer_update, global_size, local_size);
-				ENQUEUE_SPLIT_KERNEL(shader_lighting, global_size, local_size);
+				ENQUEUE_SPLIT_KERNEL(shader_eval, global_size, local_size);
 				ENQUEUE_SPLIT_KERNEL(holdout_emission_blurring_pathtermination_ao, global_size, local_size);
 				ENQUEUE_SPLIT_KERNEL(direct_lighting, global_size, local_size);
-				ENQUEUE_SPLIT_KERNEL(shadow_blocked_direct_lighting, global_size_shadow_blocked, local_size);
-				ENQUEUE_SPLIT_KERNEL(setup_next_iteration, global_size, local_size);
+				ENQUEUE_SPLIT_KERNEL(shadow_blocked, global_size_shadow_blocked, local_size);
+				ENQUEUE_SPLIT_KERNEL(next_iteration_setup, global_size, local_size);
 			}
 
 			/* Read ray-state into Host memory to decide if we should exit
@@ -3335,6 +3325,7 @@ Device *device_opencl_create(DeviceInfo& info, Stats &stats, bool background)
 		{
 			/* If the device is an AMD GPU, take split kernel path. */
 			VLOG(1) << "Using split kernel";
+			info.use_split_kernel = true;
 			return new OpenCLDeviceSplitKernel(info, stats, background);
 		} else {
 			/* For any other device, take megakernel path. */
@@ -3424,7 +3415,7 @@ void device_opencl_info(vector<DeviceInfo>& devices)
 			DeviceInfo info;
 
 			info.type = DEVICE_OPENCL;
-			info.description = string(name);
+			info.description = string_remove_trademark(string(name));
 			info.num = num_base + num;
 			info.id = string_printf("OPENCL_%d", info.num);
 			/* we don't know if it's used for display, but assume it is */

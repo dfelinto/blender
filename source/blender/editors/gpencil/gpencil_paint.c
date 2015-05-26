@@ -1440,11 +1440,13 @@ static void gpencil_draw_exit(bContext *C, wmOperator *op)
 		if (p->paintmode == GP_PAINTMODE_ERASER) {
 			/* turn off radial brush cursor */
 			gpencil_draw_toggle_eraser_cursor(C, p, false);
-			
-			/* if successful, store the new eraser size to be used again next time */
-			if (p->status == GP_STATUS_DONE)
-				U.gp_eraser = p->radius;
 		}
+		
+		/* always store the new eraser size to be used again next time
+		 * NOTE: Do this even when not in eraser mode, as eraser may
+		 *       have been toggled at some point.
+		 */
+		U.gp_eraser = p->radius;
 		
 		/* cleanup */
 		gp_paint_cleanup(p);

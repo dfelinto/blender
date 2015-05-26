@@ -97,7 +97,7 @@ static int wm_operator_call_internal(bContext *C, wmOperatorType *ot, PointerRNA
 
 /* ************ event management ************** */
 
-void wm_event_add(wmWindow *win, const wmEvent *event_to_add)
+void wm_event_add_ex(wmWindow *win, const wmEvent *event_to_add, const wmEvent *event_to_add_after)
 {
 	wmEvent *event = MEM_mallocN(sizeof(wmEvent), "wmEvent");
 	
@@ -105,7 +105,18 @@ void wm_event_add(wmWindow *win, const wmEvent *event_to_add)
 
 	update_tablet_data(win, event);
 
-	BLI_addtail(&win->queue, event);
+	if (event_to_add_after == NULL) {
+		BLI_addtail(&win->queue, event);
+	}
+	else {
+		/* note, strictly speaking this breaks const-correctness, however we're only changing 'next' member */
+		BLI_insertlinkafter(&win->queue, (void *)event_to_add_after, event);
+	}
+}
+
+void wm_event_add(wmWindow *win, const wmEvent *event_to_add)
+{
+	wm_event_add_ex(win, event_to_add, NULL);
 }
 
 void wm_event_free(wmEvent *event)
@@ -2896,7 +2907,7 @@ static int convert_key(GHOST_TKey key)
 static void wm_eventemulation(wmEvent *event)
 {
 	/* Store last mmb/rmb event value to make emulation work when modifier keys
-	 * are released first. This really should be in a data structure somwhere. */
+	 * are released first. This really should be in a data structure somewhere. */
 	static int emulating_event = EVENT_NONE;
 	
 	/* middlemouse and rightmouse emulation */

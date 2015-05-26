@@ -24,6 +24,10 @@
  * ***** END GPL LICENSE BLOCK *****
  */
 
+/** \file blender/depsgraph/intern/depsnode.cc
+ *  \ingroup depsgraph
+ */
+
 #include <stdio.h>
 #include <string.h>
 
@@ -114,7 +118,7 @@ void TimeSourceDepsNode::tag_update(Depsgraph *graph)
 
 /* Root Node ============================================== */
 
-RootDepsNode::RootDepsNode() : time_source(NULL)
+RootDepsNode::RootDepsNode() : scene(NULL), time_source(NULL)
 {
 }
 

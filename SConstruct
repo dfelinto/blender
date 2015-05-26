@@ -470,6 +470,14 @@ if env['OURPLATFORM']=='darwin':
 ###################  End Automatic configuration for OSX   ##################
 #############################################################################
 
+if env['OURPLATFORM'] == 'linux' and not env['C_COMPILER_ID']:
+    command = ["%s"%env['CC'], "--version"]
+    line = btools.get_command_output(command)
+    if line.startswith('gcc'):
+        env['C_COMPILER_ID'] = 'gcc'
+    elif 'clang' in line[0]:
+        env['C_COMPILER_ID'] = 'clang'
+
 if env['WITH_BF_OPENMP'] == 1:
         if env['OURPLATFORM'] in ('win32-vc', 'win64-vc'):
                 env['CCFLAGS'].append('/openmp')
@@ -1020,14 +1028,16 @@ if env['OURPLATFORM']!='darwin':
             dir=os.path.join(env['BF_INSTALLDIR'], VERSION, 'scripts', 'addons','cycles', 'kernel')
             source=os.listdir('intern/cycles/kernel')
             if '__pycache__' in source: source.remove('__pycache__')
-            source.remove('kernel.cpp')
             source.remove('CMakeLists.txt')
+            source.remove('SConscript')
             source.remove('svm')
             source.remove('closure')
             source.remove('geom')
             source.remove('shaders')
             source.remove('osl')
+            source.remove('split')
             source=['intern/cycles/kernel/'+s for s in source]
+            source.append('intern/cycles/util/util_atomic.h')
             source.append('intern/cycles/util/util_color.h')
             source.append('intern/cycles/util/util_half.h')
             source.append('intern/cycles/util/util_math.h')
@@ -1052,6 +1062,12 @@ if env['OURPLATFORM']!='darwin':
             source=os.listdir('intern/cycles/kernel/geom')
             if '__pycache__' in source: source.remove('__pycache__')
             source=['intern/cycles/kernel/geom/'+s for s in source]
+            scriptinstall.append(env.Install(dir=dir,source=source))
+            # split
+            dir=os.path.join(env['BF_INSTALLDIR'], VERSION, 'scripts', 'addons','cycles', 'kernel', 'split')
+            source=os.listdir('intern/cycles/kernel/split')
+            if '__pycache__' in source: source.remove('__pycache__')
+            source=['intern/cycles/kernel/split/'+s for s in source]
             scriptinstall.append(env.Install(dir=dir,source=source))
 
             # licenses

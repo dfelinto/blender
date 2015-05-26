@@ -878,12 +878,14 @@ class MATERIAL_PT_transp_game(MaterialButtonsPanel, Panel):
         base_mat = context.material
         mat = active_node_mat(base_mat)
 
+        layout.active = mat.use_transparency
+
         if simple_material(base_mat):
             row = layout.row()
-            row.active = mat.use_transparency
             row.prop(mat, "transparency_method", expand=True)
 
         layout.prop(mat, "alpha")
+        layout.prop(mat, "specular_alpha", text="Specular")
 
 
 class VolumeButtonsPanel:

@@ -162,6 +162,11 @@ typedef enum uiHandleButtonState {
 
 
 #ifdef USE_ALLSELECT
+
+/* Unfortunately theres no good way handle more generally:
+ * (propagate single clicks on layer buttons to other objects) */
+#define USE_ALLSELECT_LAYER_HACK
+
 typedef struct uiSelectContextElem {
 	PointerRNA ptr;
 	union {
@@ -1487,6 +1492,39 @@ static void ui_selectcontext_apply(
 				delta.b = RNA_property_boolean_get(&but->rnapoin, prop);  /* not a delta infact */
 			}
 		}
+
+#ifdef USE_ALLSELECT_LAYER_HACK
+		/* make up for not having 'handle_layer_buttons' */
+		{
+			PropertySubType subtype = RNA_property_subtype(prop);
+
+			if ((rna_type == PROP_BOOLEAN) &&
+			    ELEM(subtype, PROP_LAYER, PROP_LAYER_MEMBER) &&
+			    is_array &&
+			    /* could check for 'handle_layer_buttons' */
+			    but->func)
+			{
+				wmWindow *win = CTX_wm_window(C);
+				if (!win->eventstate->shift) {
+					const int len = RNA_property_array_length(&but->rnapoin, prop);
+					int *tmparray = MEM_callocN(sizeof(int) * len, __func__);
+
+					tmparray[index] = true;
+
+					for (i = 0; i < selctx_data->elems_len; i++) {
+						uiSelectContextElem *other = &selctx_data->elems[i];
+						PointerRNA lptr = other->ptr;
+						RNA_property_boolean_set_array(&lptr, lprop, tmparray);
+						RNA_property_update(C, &lptr, lprop);
+					}
+
+					MEM_freeN(tmparray);
+
+					return;
+				}
+			}
+		}
+#endif
 
 		for (i = 0; i < selctx_data->elems_len; i++) {
 			uiSelectContextElem *other = &selctx_data->elems[i];
@@ -3136,6 +3174,9 @@ static void ui_do_but_textedit(bContext *C, uiBlock *block, uiBut *but, uiHandle
 					ui_searchbox_event(C, data->searchbox, but, event);
 					break;
 				}
+				if (event->type == WHEELDOWNMOUSE) {
+					break;
+				}
 				/* fall-through */
 			case ENDKEY:
 				ui_textedit_move(but, data, STRCUR_DIR_NEXT,
@@ -3149,6 +3190,9 @@ static void ui_do_but_textedit(bContext *C, uiBlock *block, uiBut *but, uiHandle
 					ui_mouse_motion_keynav_init(&data->searchbox_keynav_state, event);
 #endif
 					ui_searchbox_event(C, data->searchbox, but, event);
+					break;
+				}
+				if (event->type == WHEELUPMOUSE) {
 					break;
 				}
 				/* fall-through */
@@ -3727,7 +3771,7 @@ static int ui_do_but_TOG(bContext *C, uiBut *but, uiHandleButtonData *data, cons
 			button_activate_state(C, but, BUTTON_STATE_EXIT);
 			return WM_UI_HANDLER_BREAK;
 		}
-		else if (ELEM(event->type, WHEELDOWNMOUSE, WHEELUPMOUSE) && event->alt) {
+		else if (ELEM(event->type, WHEELDOWNMOUSE, WHEELUPMOUSE) && event->ctrl) {
 			/* Support alt+wheel on expanded enum rows */
 			if (but->type == UI_BTYPE_ROW) {
 				const int direction = (event->type == WHEELDOWNMOUSE) ? -1 : 1;
@@ -4077,11 +4121,11 @@ static int ui_do_but_NUM(bContext *C, uiBlock *block, uiBut *but, uiHandleButton
 		/* XXX hardcoded keymap check.... */
 		if (type == MOUSEPAN && event->alt)
 			retval = WM_UI_HANDLER_BREAK; /* allow accumulating values, otherwise scrolling gets preference */
-		else if (type == WHEELDOWNMOUSE && event->alt) {
+		else if (type == WHEELDOWNMOUSE && event->ctrl) {
 			mx = but->rect.xmin;
 			click = 1;
 		}
-		else if (type == WHEELUPMOUSE && event->alt) {
+		else if (type == WHEELUPMOUSE && event->ctrl) {
 			mx = but->rect.xmax;
 			click = 1;
 		}
@@ -4366,11 +4410,11 @@ static int ui_do_but_SLI(bContext *C, uiBlock *block, uiBut *but, uiHandleButton
 		/* XXX hardcoded keymap check.... */
 		if (type == MOUSEPAN && event->alt)
 			retval = WM_UI_HANDLER_BREAK; /* allow accumulating values, otherwise scrolling gets preference */
-		else if (type == WHEELDOWNMOUSE && event->alt) {
+		else if (type == WHEELDOWNMOUSE && event->ctrl) {
 			mx = but->rect.xmin;
 			click = 2;
 		}
-		else if (type == WHEELUPMOUSE && event->alt) {
+		else if (type == WHEELUPMOUSE && event->ctrl) {
 			mx = but->rect.xmax;
 			click = 2;
 		}
@@ -4676,7 +4720,7 @@ static int ui_do_but_BLOCK(bContext *C, uiBut *but, uiHandleButtonData *data, co
 			return WM_UI_HANDLER_BREAK;
 		}
 		else if (but->type == UI_BTYPE_MENU) {
-			if (ELEM(event->type, WHEELDOWNMOUSE, WHEELUPMOUSE) && event->alt) {
+			if (ELEM(event->type, WHEELDOWNMOUSE, WHEELUPMOUSE) && event->ctrl) {
 				const int direction = (event->type == WHEELDOWNMOUSE) ? -1 : 1;
 
 				data->value = ui_but_menu_step(but, direction);
@@ -4851,7 +4895,7 @@ static int ui_do_but_COLOR(bContext *C, uiBut *but, uiHandleButtonData *data, co
 			button_activate_state(C, but, BUTTON_STATE_MENU_OPEN);
 			return WM_UI_HANDLER_BREAK;
 		}
-		else if (ELEM(event->type, MOUSEPAN, WHEELDOWNMOUSE, WHEELUPMOUSE) && event->alt) {
+		else if (ELEM(event->type, MOUSEPAN, WHEELDOWNMOUSE, WHEELUPMOUSE) && event->ctrl) {
 			ColorPicker *cpicker = but->custom_data;
 			float hsv_static[3] = {0.0f};
 			float *hsv = cpicker ? cpicker->color_data : hsv_static;
@@ -6614,7 +6658,7 @@ static bool ui_but_menu(bContext *C, uiBut *but)
 	}
 
 	/* Show header tools for header buttons. */
-	{
+	if (ui_block_is_menu(but->block) == false) {
 		ARegion *ar = CTX_wm_region(C);
 		if (ar && (ar->regiontype == RGN_TYPE_HEADER)) {
 			uiItemMenuF(layout, IFACE_("Header"), ICON_NONE, ED_screens_header_tools_menu_create, NULL);
@@ -7979,7 +8023,8 @@ static int ui_handle_button_event(bContext *C, const wmEvent *event, uiBut *but)
 				uiBut *but_other = ui_but_find_mouse_over(ar, event);
 				bool exit = false;
 
-				if ((!ui_block_is_menu(block) || ui_block_is_pie_menu(but->block)) &&
+				/* always deactivate button for pie menus, else moving to blank space will leave activated */
+				if ((!ui_block_is_menu(block) || ui_block_is_pie_menu(block)) &&
 				    !ui_but_contains_point_px(ar, but, event->x, event->y))
 				{
 					exit = true;
@@ -8188,7 +8233,7 @@ static int ui_handle_list_event(bContext *C, const wmEvent *event, ARegion *ar)
 
 	if (val == KM_PRESS) {
 		if (ELEM(type, UPARROWKEY, DOWNARROWKEY) ||
-		    ((ELEM(type, WHEELUPMOUSE, WHEELDOWNMOUSE) && event->alt)))
+		    ((ELEM(type, WHEELUPMOUSE, WHEELDOWNMOUSE) && event->ctrl)))
 		{
 			const int value_orig = RNA_property_int_get(&but->rnapoin, but->rnaprop);
 			int value, min, max, inc;

@@ -487,17 +487,19 @@ static BMOpDefine bmo_create_vert_def = {
  * Join Triangles.
  *
  * Tries to intelligently join triangles according
- * to various settings and stuff.
+ * to angle threshold and delimiters.
  */
 static BMOpDefine bmo_join_triangles_def = {
 	"join_triangles",
 	/* slots_in */
 	{{"faces", BMO_OP_SLOT_ELEMENT_BUF, {BM_FACE}},    /* input geometry. */
+	 {"cmp_seam", BMO_OP_SLOT_BOOL},
 	 {"cmp_sharp", BMO_OP_SLOT_BOOL},
 	 {"cmp_uvs", BMO_OP_SLOT_BOOL},
 	 {"cmp_vcols", BMO_OP_SLOT_BOOL},
 	 {"cmp_materials", BMO_OP_SLOT_BOOL},
-	 {"limit", BMO_OP_SLOT_FLT},
+	 {"angle_face_threshold", BMO_OP_SLOT_FLT},
+	 {"angle_shape_threshold", BMO_OP_SLOT_FLT},
 	 {{'\0'}},
 	},
 	/* slots_out */
