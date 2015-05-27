@@ -782,7 +782,7 @@ static int bake(
 			}
 		}
 
-		tot_mesh_objects = tot_highpoly + tot_dupli;
+		tot_mesh_objects = tot_highpoly;
 		/* we overallocate in case all objects are unique */
 		meshes_lookup_arr = MEM_callocN(sizeof(BakeHighPolyMesh *) * tot_mesh_objects, "Bake Mesh Lookup All");
 	}
@@ -888,6 +888,9 @@ static int bake(
 			}
 		}
 
+		BLI_assert(i == tot_highpoly);
+		BLI_assert(j == tot_dupli);
+
 		if (dupli_list_arr)
 			MEM_freeN(dupli_list_arr);
 
@@ -897,11 +900,7 @@ static int bake(
 				break;
 			}
 		}
-
 		tot_mesh_objects = i;
-
-		BLI_assert(i == tot_highpoly);
-		BLI_assert(j == tot_dupli);
 
 		ob_low->restrictflag |= OB_RESTRICT_RENDER;
 
