@@ -769,7 +769,7 @@ static int bake(
 				if (ob_iter == ob_low)
 					continue;
 
-				if ((ob_iter->transflag & OB_DUPLI) == 0) {
+				if ((ob_iter->transflag & OB_DUPLI) != 0) {
 					dupli_list_arr[i] = object_duplilist(bmain->eval_ctx, scene, ob_iter);
 
 					for (dob = dupli_list_arr[i]->first; dob; dob = dob->next) {
