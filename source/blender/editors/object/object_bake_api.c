@@ -773,7 +773,7 @@ static int bake(
 					dupli_list_arr[i] = object_duplilist(bmain->eval_ctx, scene, ob_iter);
 
 					for (dob = dupli_list_arr[i]->first; dob; dob = dob->next) {
-						if (dob->ob->type == 'MESH') {
+						if (dob->ob->type == OB_MESH) {
 							tot_highpoly ++;
 						}
 					}
@@ -869,7 +869,7 @@ static int bake(
 				float imat[4][4];
 				invert_m4_m4(imat, ob_iter->obmat);
 				for (dob = dupli_list_arr[j]->first; dob; dob = dob->next) {
-					if (dob->ob->type == 'MESH') {
+					if (dob->ob->type == OB_MESH) {
 						float obmat[4][4];
 
 						/* calculate the corresponding global matrix */
