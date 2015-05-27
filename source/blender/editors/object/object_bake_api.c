@@ -46,6 +46,7 @@
 #include "BLI_math_geom.h"
 #include "BLI_path_util.h"
 
+#include "BKE_anim.h"
 #include "BKE_context.h"
 #include "BKE_global.h"
 #include "BKE_image.h"
@@ -548,6 +549,73 @@ static size_t initialize_internal_images(BakeImages *bake_images, ReportList *re
 	return tot_size;
 }
 
+static ModifierData *bake_triangulate_modifier(Main *bmain, Scene *scene, Object *ob, ReportList *reports)
+{
+	ModifierData *tri_mod;
+	TriangulateModifierData *tmd;
+
+	/* triangulating so BVH returns the primitive_id that will be used for rendering */
+	tri_mod = ED_object_modifier_add(
+	              reports, bmain, scene, ob,
+	              "TmpTriangulate", eModifierType_Triangulate);
+
+	tmd = (TriangulateModifierData *)tri_mod;
+	tmd->quad_method = MOD_TRIANGULATE_QUAD_FIXED;
+	tmd->ngon_method = MOD_TRIANGULATE_NGON_EARCLIP;
+
+	return tri_mod;
+}
+
+/* get the lookup mesh id, creates one entry if necessary */
+static int bake_mesh_get(Main *bmain, Scene *scene, BakeHighPolyMesh **meshes, Object *ob, ReportList *reports)
+{
+	BakeHighPolyMesh *mesh;
+	int i = 0;
+
+	while ((mesh = meshes[i])) {
+		if (mesh->ob == ob) {
+			return i;
+		}
+		i++;
+	}
+
+	mesh = MEM_callocN(sizeof(BakeHighPolyMesh), "Bake Mesh Lookup Entry");
+	mesh->ob = ob;
+	mesh->restrict_flag = ob->restrictflag;
+	mesh->tri_mod = bake_triangulate_modifier(bmain, scene, ob, reports);
+
+	mesh->me = BKE_mesh_new_from_object(bmain, scene, ob, 1, 2, 0, 0);
+	BKE_mesh_split_faces(mesh->me);
+	BKE_mesh_tessface_ensure(mesh->me);
+
+	meshes[i] = mesh;
+	return i;
+}
+
+static void bake_highpoly_setup(
+        Main *bmain, Scene *scene,
+        BakeHighPolyData *highpoly,
+        BakeHighPolyMesh **meshes,
+        Object *ob, float obmat[4][4],
+        const char *name, const bool is_dupli,
+        ReportList *reports)
+{
+	/* initialize highpoly_data */
+	highpoly->ob = ob;
+	highpoly->name = name;
+
+	if (!is_dupli) {
+		highpoly->ob->restrictflag &= ~OB_RESTRICT_RENDER;
+	}
+
+	/* lowpoly to highpoly transformation matrix */
+	copy_m4_m4(highpoly->obmat, obmat);
+	invert_m4_m4(highpoly->imat, highpoly->obmat);
+
+	highpoly->is_flip_object = is_negative_m4(obmat);
+	highpoly->mesh_lookup_id = bake_mesh_get(bmain, scene, meshes, ob, reports);
+}
+
 static int bake(
         Render *re, Main *bmain, Scene *scene, Object *ob_low, ListBase *selected_objects, ReportList *reports,
         const ScenePassType pass_type, const int margin,
@@ -564,6 +632,8 @@ static int bake(
 
 	BakeHighPolyData *highpoly = NULL;
 	int tot_highpoly;
+	int tot_dupli;
+	int tot_mesh_objects;
 
 	char restrict_flag_low = ob_low->restrictflag;
 	char restrict_flag_cage = 0;
@@ -585,6 +655,9 @@ static int bake(
 	size_t num_pixels;
 	int tot_materials;
 	int i;
+
+	ListBase **dupli_list_arr = NULL;
+	BakeHighPolyMesh **meshes_lookup_arr = NULL;
 
 	RE_bake_engine_set_engine_parameters(re, bmain, scene);
 
@@ -658,6 +731,7 @@ static int bake(
 	if (is_selected_to_active) {
 		CollectionPointerLink *link;
 		tot_highpoly = 0;
+		tot_dupli = 0;
 
 		for (link = selected_objects->first; link; link = link->next) {
 			Object *ob_iter = link->ptr.data;
@@ -665,7 +739,10 @@ static int bake(
 			if (ob_iter == ob_low)
 				continue;
 
-			tot_highpoly ++;
+			if ((ob_iter->transflag & OB_DUPLI) == 0)
+				tot_highpoly ++;
+			else
+				tot_dupli ++;
 		}
 
 		if (is_cage && custom_cage[0] != '\0') {
@@ -680,6 +757,34 @@ static int bake(
 				ob_cage->restrictflag |= OB_RESTRICT_RENDER;
 			}
 		}
+
+		if (tot_dupli > 0) {
+			DupliObject *dob;
+			int i = 0;
+			dupli_list_arr = MEM_callocN(sizeof(ListBase *) * tot_dupli, "bake dupli object lists");
+
+			for (link = selected_objects->first; link; link = link->next) {
+				Object *ob_iter = link->ptr.data;
+
+				if (ob_iter == ob_low)
+					continue;
+
+				if ((ob_iter->transflag & OB_DUPLI) == 0) {
+					dupli_list_arr[i] = object_duplilist(bmain->eval_ctx, scene, ob_iter);
+
+					for (dob = dupli_list_arr[i]->first; dob; dob = dob->next) {
+						if (dob->ob->type == 'MESH') {
+							tot_highpoly ++;
+						}
+					}
+					i++;
+				}
+			}
+		}
+
+		tot_mesh_objects = tot_highpoly + tot_dupli;
+		/* we overallocate in case all objects are unique */
+		meshes_lookup_arr = MEM_callocN(sizeof(BakeHighPolyMesh *) * tot_mesh_objects, "Bake Mesh Lookup All");
 	}
 
 	pixel_array_low = MEM_mallocN(sizeof(BakePixel) * num_pixels, "bake pixels low poly");
@@ -700,7 +805,8 @@ static int bake(
 		CollectionPointerLink *link;
 		ModifierData *md, *nmd;
 		ListBase modifiers_tmp, modifiers_original;
-		int i = 0;
+		int i = 0; /* highpoly object index */
+		int j = 0; /* duplilist index */
 
 		/* prepare cage mesh */
 		if (ob_cage) {
@@ -748,50 +854,78 @@ static int bake(
 
 		/* populate highpoly array */
 		for (link = selected_objects->first; link; link = link->next) {
-			TriangulateModifierData *tmd;
 			Object *ob_iter = link->ptr.data;
 
 			if (ob_iter == ob_low)
 				continue;
 
-			/* initialize highpoly_data */
-			highpoly[i].ob = ob_iter;
-			highpoly[i].restrict_flag = ob_iter->restrictflag;
+			if ((ob_iter->transflag & OB_DUPLI) == 0) {
+				bake_highpoly_setup(bmain, scene, &highpoly[i], meshes_lookup_arr, ob_iter, ob_iter->obmat, ob_iter->id.name, false, reports);
+				unit_m4(highpoly[i].mat);
+				i++;
+			}
+			else {
+				DupliObject *dob;
+				float imat[4][4];
+				invert_m4_m4(imat, ob_iter->obmat);
+				for (dob = dupli_list_arr[j]->first; dob; dob = dob->next) {
+					if (dob->ob->type == 'MESH') {
+						float obmat[4][4];
 
-			/* triangulating so BVH returns the primitive_id that will be used for rendering */
-			highpoly[i].tri_mod = ED_object_modifier_add(
-			        reports, bmain, scene, highpoly[i].ob,
-			        "TmpTriangulate", eModifierType_Triangulate);
-			tmd = (TriangulateModifierData *)highpoly[i].tri_mod;
-			tmd->quad_method = MOD_TRIANGULATE_QUAD_FIXED;
-			tmd->ngon_method = MOD_TRIANGULATE_NGON_EARCLIP;
+						/* calculate the corresponding global matrix */
+						mul_m4_m4m4(obmat, ob_iter->obmat, dob->mat);
 
-			highpoly[i].me = BKE_mesh_new_from_object(bmain, scene, highpoly[i].ob, 1, 2, 0, 0);
-			highpoly[i].ob->restrictflag &= ~OB_RESTRICT_RENDER;
-			BKE_mesh_split_faces(highpoly[i].me);
-			BKE_mesh_tessface_ensure(highpoly[i].me);
+						bake_highpoly_setup(bmain, scene, &highpoly[i], meshes_lookup_arr, dob->ob, obmat, ob_iter->id.name, true, reports);
 
-			/* lowpoly to highpoly transformation matrix */
-			copy_m4_m4(highpoly[i].obmat, highpoly[i].ob->obmat);
-			invert_m4_m4(highpoly[i].imat, highpoly[i].obmat);
-			unit_m4(highpoly[i].mat);
+						/* calculate the baking matrix (from the original object to the dupli) */
+						mul_m4_m4m4(highpoly[i].imat, imat, dob->mat);
 
-			highpoly[i].is_flip_object = is_negative_m4(highpoly[i].ob->obmat);
-
-			i++;
+						i++;
+					}
+				}
+				free_object_duplilist(dupli_list_arr[j]);
+				j++;
+			}
 		}
 
+		if (dupli_list_arr)
+			MEM_freeN(dupli_list_arr);
+
+		/* get real mesh count */
+		for (i = 0; i < tot_mesh_objects; i++) {
+			if (meshes_lookup_arr[i] == NULL) {
+				break;
+			}
+		}
+
+		tot_mesh_objects = i;
+
 		BLI_assert(i == tot_highpoly);
+		BLI_assert(j == tot_dupli);
 
 		ob_low->restrictflag |= OB_RESTRICT_RENDER;
 
 		/* populate the pixel arrays with the corresponding face data for each high poly object */
 		if (!RE_bake_pixels_populate_from_objects(
-		            me_low, pixel_array_low, pixel_array_high, highpoly, tot_highpoly, num_pixels, ob_cage != NULL,
-		            cage_extrusion, ob_low->obmat, (ob_cage ? ob_cage->obmat : ob_low->obmat), me_cage))
+		            me_low, pixel_array_low, pixel_array_high,
+				    meshes_lookup_arr, tot_mesh_objects,
+		            highpoly, tot_highpoly,
+		            num_pixels, ob_cage != NULL,
+		            cage_extrusion, ob_low->obmat,
+		            (ob_cage ? ob_cage->obmat : ob_low->obmat), me_cage))
 		{
 			BKE_report(reports, RPT_ERROR, "Error handling selected objects");
 			goto cage_cleanup;
+		}
+
+		/* free some memory before the baking */
+		if (meshes_lookup_arr) {
+			for (i = 0; i < tot_mesh_objects; i++) {
+				if (meshes_lookup_arr[i]->me) {
+					BKE_libblock_free(bmain, meshes_lookup_arr[i]->me);
+					meshes_lookup_arr[i]->me = NULL;
+				}
+			}
 		}
 
 		/* the baking itself */
@@ -799,7 +933,7 @@ static int bake(
 			ok = RE_bake_engine(re, highpoly[i].ob, i, pixel_array_high,
 			                    num_pixels, depth, pass_type, highpoly[i].mat, result);
 			if (!ok) {
-				BKE_reportf(reports, RPT_ERROR, "Error baking from object \"%s\"", highpoly[i].ob->id.name + 2);
+				BKE_reportf(reports, RPT_ERROR, "Error baking from object \"%s\"", highpoly[i].name + 2);
 				goto cage_cleanup;
 			}
 		}
@@ -984,18 +1118,28 @@ cage_cleanup:
 
 cleanup:
 
-	if (highpoly) {
-		int i;
-		for (i = 0; i < tot_highpoly; i++) {
-			highpoly[i].ob->restrictflag = highpoly[i].restrict_flag;
-
-			if (highpoly[i].tri_mod)
-				ED_object_modifier_remove(reports, bmain, highpoly[i].ob, highpoly[i].tri_mod);
-
-			if (highpoly[i].me)
-				BKE_libblock_free(bmain, highpoly[i].me);
-		}
+	if (highpoly)
 		MEM_freeN(highpoly);
+
+	if (meshes_lookup_arr) {
+		int i;
+		for (i = 0; i < tot_mesh_objects; i++) {
+			if (meshes_lookup_arr[i]) {
+
+				meshes_lookup_arr[i]->ob->restrictflag = meshes_lookup_arr[i]->restrict_flag;
+
+				if (meshes_lookup_arr[i]->tri_mod) {
+					ED_object_modifier_remove(reports, bmain, meshes_lookup_arr[i]->ob, meshes_lookup_arr[i]->tri_mod);
+				}
+
+				if (meshes_lookup_arr[i]->me) {
+					BKE_libblock_free(bmain, meshes_lookup_arr[i]->me);
+				}
+
+				MEM_freeN(meshes_lookup_arr[i]);
+			}
+		}
+		MEM_freeN(meshes_lookup_arr);
 	}
 
 	ob_low->restrictflag = restrict_flag_low;

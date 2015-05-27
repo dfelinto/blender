@@ -291,6 +291,7 @@ static bool cast_ray_highpoly(
 
 	for (i = 0; i < tot_highpoly; i++) {
 		float co_high[3], dir_high[3];
+		int mesh_id = highpoly[i].mesh_lookup_id;
 
 		hits[i].index = -1;
 		/* TODO: we should use FLT_MAX here, but sweepsphere code isn't prepared for that */
@@ -304,8 +305,8 @@ static bool cast_ray_highpoly(
 		normalize_v3(dir_high);
 
 		/* cast ray */
-		if (treeData[i].tree) {
-			BLI_bvhtree_ray_cast(treeData[i].tree, co_high, dir_high, 0.0f, &hits[i], treeData[i].raycast_callback, &treeData[i]);
+		if (treeData[mesh_id].tree) {
+			BLI_bvhtree_ray_cast(treeData[mesh_id].tree, co_high, dir_high, 0.0f, &hits[i], treeData[mesh_id].raycast_callback, &treeData[mesh_id]);
 		}
 
 		if (hits[i].index != -1) {
@@ -443,7 +444,9 @@ static void mesh_calc_tri_tessface(
 
 bool RE_bake_pixels_populate_from_objects(
         struct Mesh *me_low, BakePixel pixel_array_from[],  BakePixel pixel_array_to[],
-        BakeHighPolyData highpoly[], const int tot_highpoly, const size_t num_pixels, const bool is_custom_cage,
+        BakeHighPolyMesh **highpoly_meshes, const int tot_highpoly_meshes,
+        BakeHighPolyData highpoly_objects[], const int tot_highpoly_objects,
+        const size_t num_pixels, const bool is_custom_cage,
         const float cage_extrusion, float mat_low[4][4], float mat_cage[4][4], struct Mesh *me_cage)
 {
 	size_t i;
@@ -463,11 +466,11 @@ bool RE_bake_pixels_populate_from_objects(
 	TriTessFace **tris_high;
 
 	/* assume all lowpoly tessfaces can be quads */
-	tris_high = MEM_callocN(sizeof(TriTessFace *) * tot_highpoly, "MVerts Highpoly Mesh Array");
+	tris_high = MEM_callocN(sizeof(TriTessFace *) * tot_highpoly_meshes, "MVerts Highpoly Mesh Array");
 
 	/* assume all highpoly tessfaces are triangles */
-	dm_highpoly = MEM_mallocN(sizeof(DerivedMesh *) * tot_highpoly, "Highpoly Derived Meshes");
-	treeData = MEM_callocN(sizeof(BVHTreeFromMesh) * tot_highpoly, "Highpoly BVH Trees");
+	dm_highpoly = MEM_mallocN(sizeof(DerivedMesh *) * tot_highpoly_meshes, "Highpoly Derived Meshes");
+	treeData = MEM_callocN(sizeof(BVHTreeFromMesh) * tot_highpoly_meshes, "Highpoly BVH Trees");
 
 	if (!is_cage) {
 		dm_low = CDDM_from_mesh(me_low);
@@ -488,18 +491,18 @@ bool RE_bake_pixels_populate_from_objects(
 
 	invert_m4_m4(imat_low, mat_low);
 
-	for (i = 0; i < tot_highpoly; i++) {
-		tris_high[i] = MEM_mallocN(sizeof(TriTessFace) * highpoly[i].me->totface, "MVerts Highpoly Mesh");
-		mesh_calc_tri_tessface(tris_high[i], highpoly[i].me, false, NULL);
+	for (i = 0; i < tot_highpoly_meshes; i++) {
+		tris_high[i] = MEM_mallocN(sizeof(TriTessFace) * highpoly_meshes[i]->me->totface, "MVerts Highpoly Mesh");
+		mesh_calc_tri_tessface(tris_high[i], highpoly_meshes[i]->me, false, NULL);
 
-		dm_highpoly[i] = CDDM_from_mesh(highpoly[i].me);
+		dm_highpoly[i] = CDDM_from_mesh(highpoly_meshes[i]->me);
 
 		if (dm_highpoly[i]->getNumTessFaces(dm_highpoly[i]) != 0) {
 			/* Create a bvh-tree for each highpoly object */
 			bvhtree_from_mesh_faces(&treeData[i], dm_highpoly[i], 0.0, 2, 6);
 
 			if (treeData[i].tree == NULL) {
-				printf("Baking: out of memory while creating BHVTree for object \"%s\"\n", highpoly[i].ob->id.name + 2);
+				printf("Baking: out of memory while creating BHVTree for object \"%s\"\n", highpoly_meshes[i]->ob->id.name + 2);
 				result = false;
 				goto cleanup;
 			}
@@ -532,7 +535,8 @@ bool RE_bake_pixels_populate_from_objects(
 		}
 
 		/* cast ray */
-		if (!cast_ray_highpoly(treeData, tris_high, pixel_array_to, highpoly, co, dir, i, tot_highpoly,
+		if (!cast_ray_highpoly(treeData, tris_high, pixel_array_to, highpoly_objects,
+		                       co, dir, i, tot_highpoly_objects,
 		                       pixel_array_from[i].du_dx, pixel_array_from[i].du_dy,
 		                       pixel_array_from[i].dv_dx, pixel_array_from[i].dv_dy)) {
 			/* if it fails mask out the original pixel array */
@@ -543,7 +547,7 @@ bool RE_bake_pixels_populate_from_objects(
 
 	/* garbage collection */
 cleanup:
-	for (i = 0; i < tot_highpoly; i++) {
+	for (i = 0; i < tot_highpoly_meshes; i++) {
 		free_bvhtree_from_mesh(&treeData[i]);
 
 		if (dm_highpoly[i]) {

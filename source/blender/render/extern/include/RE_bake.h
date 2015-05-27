@@ -56,13 +56,18 @@ typedef struct BakePixel {
 	float dv_dx, dv_dy;
 } BakePixel;
 
-typedef struct BakeHighPolyData {
+typedef struct BakeHighPolyMesh {
 	struct Object *ob;
 	struct ModifierData *tri_mod;
-	struct Mesh *me;
 	char restrict_flag;
-	bool is_flip_object;
+	struct Mesh *me;
+} BakeHighPolyMesh;
 
+typedef struct BakeHighPolyData {
+	struct Object *ob;
+	const char *name; /* for error messages */
+	int mesh_lookup_id;
+	bool is_flip_object;
 	float obmat[4][4];
 	float imat[4][4];
 	float mat[4][4];
@@ -83,7 +88,9 @@ bool RE_bake_internal(
 
 bool RE_bake_pixels_populate_from_objects(
         struct Mesh *me_low, BakePixel pixel_array_from[], BakePixel pixel_array_to[],
-        BakeHighPolyData highpoly[], const int tot_highpoly, const size_t num_pixels, const bool is_custom_cage,
+        BakeHighPolyMesh **highpoly_meshes, const int tot_highpoly_meshes,
+        BakeHighPolyData *highpoly_objects, const int tot_highpoly_objects,
+        const size_t num_pixels, const bool is_custom_cage,
         const float cage_extrusion, float mat_low[4][4], float mat_cage[4][4], struct Mesh *me_cage);
 
 void RE_bake_pixels_populate(
