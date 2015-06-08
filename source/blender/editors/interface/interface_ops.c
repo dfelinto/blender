@@ -365,7 +365,10 @@ bool UI_context_copy_to_selected_list(
 						/* avoid prepending 'data' to the path */
 						RNA_id_pointer_create(id_data, &link->ptr);
 					}
-					id_data->flag &= ~LIB_DOIT;
+
+					if (id_data) {
+						id_data->flag &= ~LIB_DOIT;
+					}
 				}
 			}
 
@@ -756,10 +759,12 @@ static void UI_OT_editsource(wmOperatorType *ot)
 }
 
 /* ------------------------------------------------------------------------- */
-/* EditTranslation utility funcs and operator,
- * Note: this includes utility functions and button matching checks.
- *       this only works in conjunction with a py operator! */
 
+/**
+ * EditTranslation utility funcs and operator,
+ * \note: this includes utility functions and button matching checks.
+ * this only works in conjunction with a py operator!
+ */
 static void edittranslation_find_po_file(const char *root, const char *uilng, char *path, const size_t maxlen)
 {
 	char tstr[32]; /* Should be more than enough! */

@@ -678,7 +678,11 @@ LONG WINAPI windows_exception_handler(EXCEPTION_POINTERS *ExceptionInfo)
 	/* If this is a stack overflow then we can't walk the stack, so just show
 	 * where the error happened */
 	if (EXCEPTION_STACK_OVERFLOW != ExceptionInfo->ExceptionRecord->ExceptionCode) {
+#ifdef NDEBUG
+		TerminateProcess(GetCurrentProcess(), SIGSEGV);
+#else
 		blender_crash_handler(SIGSEGV);
+#endif
 	}
 
 	return EXCEPTION_EXECUTE_HANDLER;
@@ -938,6 +942,7 @@ static int set_threads(int argc, const char **argv, void *UNUSED(data))
 
 static int depsgraph_use_new(int UNUSED(argc), const char **UNUSED(argv), void *UNUSED(data))
 {
+	printf("Using new dependency graph.\n");
 	DEG_depsgraph_switch_to_new();
 	return 0;
 }

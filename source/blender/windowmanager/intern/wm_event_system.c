@@ -566,10 +566,9 @@ void WM_event_print(const wmEvent *event)
 		RNA_enum_identifier(event_type_items, event->type, &type_id);
 		RNA_enum_identifier(event_value_items, event->val, &val_id);
 
-		printf("wmEvent  type:%d / %s, val:%d / %s, \n"
-		       "         shift:%d, ctrl:%d, alt:%d, oskey:%d, keymodifier:%d, \n"
-		       "         mouse:(%d,%d), ascii:'%c', utf8:'%.*s', "
-		       "         keymap_idname:%s, pointer:%p\n",
+		printf("wmEvent  type:%d / %s, val:%d / %s,\n"
+		       "         shift:%d, ctrl:%d, alt:%d, oskey:%d, keymodifier:%d,\n"
+		       "         mouse:(%d,%d), ascii:'%c', utf8:'%.*s', keymap_idname:%s, pointer:%p\n",
 		       event->type, type_id, event->val, val_id,
 		       event->shift, event->ctrl, event->alt, event->oskey, event->keymodifier,
 		       event->x, event->y, event->ascii,
@@ -579,16 +578,18 @@ void WM_event_print(const wmEvent *event)
 		if (ISNDOF(event->type)) {
 			const wmNDOFMotionData *ndof = event->customdata;
 			if (event->type == NDOF_MOTION) {
-				printf("   ndof: rot: (%.4f %.4f %.4f),\n"
-				       "          tx: (%.4f %.4f %.4f),\n"
-				       "          dt: %.4f, progress: %d\n",
-				       UNPACK3(ndof->rvec),
-				       UNPACK3(ndof->tvec),
-				       ndof->dt, ndof->progress);
+				printf("   ndof: rot: (%.4f %.4f %.4f), tx: (%.4f %.4f %.4f), dt: %.4f, progress: %d\n",
+				       UNPACK3(ndof->rvec), UNPACK3(ndof->tvec), ndof->dt, ndof->progress);
 			}
 			else {
 				/* ndof buttons printed already */
 			}
+		}
+
+		if (event->tablet_data) {
+			const wmTabletData *wmtab = event->tablet_data;
+			printf(" tablet: active: %d, pressure %.4f, tilt: (%.4f %.4f)\n",
+			       wmtab->Active, wmtab->Pressure, wmtab->Xtilt, wmtab->Ytilt);
 		}
 	}
 	else {
@@ -615,6 +616,11 @@ void WM_report_banner_show(const bContext *C)
 
 	rti = MEM_callocN(sizeof(ReportTimerInfo), "ReportTimerInfo");
 	wm_reports->reporttimer->customdata = rti;
+}
+
+bool WM_event_is_absolute(const wmEvent *event)
+{
+	return (event->tablet_data != NULL);
 }
 
 static void wm_add_reports(const bContext *C, ReportList *reports)
@@ -702,7 +708,8 @@ static void wm_operator_reports(bContext *C, wmOperator *op, int retval, bool ca
 	wm_add_reports(C, op->reports);
 }
 
-/* this function is mainly to check that the rules for freeing
+/**
+ * This function is mainly to check that the rules for freeing
  * an operator are kept in sync.
  */
 static bool wm_operator_register_check(wmWindowManager *wm, wmOperatorType *ot)
@@ -821,23 +828,29 @@ int WM_operator_call(bContext *C, wmOperator *op)
 	return WM_operator_call_ex(C, op, false);
 }
 
-/* this is intended to be used when an invoke operator wants to call exec on its self
+/**
+ * This is intended to be used when an invoke operator wants to call exec on its self
  * and is basically like running op->type->exec() directly, no poll checks no freeing,
- * since we assume whoever called invoke will take care of that */
+ * since we assume whoever called invoke will take care of that
+ */
 int WM_operator_call_notest(bContext *C, wmOperator *op)
 {
 	return wm_operator_exec_notest(C, op);
 }
 
-/* do this operator again, put here so it can share above code */
+/**
+ * Execute this operator again, put here so it can share above code
+ */
 int WM_operator_repeat(bContext *C, wmOperator *op)
 {
 	return wm_operator_exec(C, op, true, true);
 }
-/* true if WM_operator_repeat can run
+/**
+ * \return true if #WM_operator_repeat can run
  * simple check for now but may become more involved.
- * To be sure the operator can run call WM_operator_poll(C, op->type) also, since this call
- * checks if WM_operator_repeat() can run at all, not that it WILL run at any time. */
+ * To be sure the operator can run call `WM_operator_poll(C, op->type)` also, since this call
+ * checks if WM_operator_repeat() can run at all, not that it WILL run at any time.
+ */
 bool WM_operator_repeat_check(const bContext *UNUSED(C), wmOperator *op)
 {
 	if (op->type->exec != NULL) {
@@ -1043,8 +1056,9 @@ bool WM_operator_last_properties_store(wmOperator *UNUSED(op))
 
 #endif
 
-static int wm_operator_invoke(bContext *C, wmOperatorType *ot, wmEvent *event,
-                              PointerRNA *properties, ReportList *reports, const bool poll_only)
+static int wm_operator_invoke(
+        bContext *C, wmOperatorType *ot, wmEvent *event,
+        PointerRNA *properties, ReportList *reports, const bool poll_only)
 {
 	int retval = OPERATOR_PASS_THROUGH;
 
@@ -1141,7 +1155,7 @@ static int wm_operator_invoke(bContext *C, wmOperatorType *ot, wmEvent *event,
 				}
 
 				if (wrap) {
-					rcti *winrect = NULL;
+					const rcti *winrect = NULL;
 					ARegion *ar = CTX_wm_region(C);
 					ScrArea *sa = CTX_wm_area(C);
 
@@ -1150,7 +1164,7 @@ static int wm_operator_invoke(bContext *C, wmOperatorType *ot, wmEvent *event,
 					{
 						winrect = &ar->winrct;
 					}
-					else if (sa) {
+					else if (sa && BLI_rcti_isect_pt_v(&sa->totrct, &event->x)) {
 						winrect = &sa->totrct;
 					}
 
@@ -1179,12 +1193,15 @@ static int wm_operator_invoke(bContext *C, wmOperatorType *ot, wmEvent *event,
 	return retval;
 }
 
-/* WM_operator_name_call is the main accessor function
+/**
+ * #WM_operator_name_call is the main accessor function
  * this is for python to access since its done the operator lookup
  * 
- * invokes operator in context */
-static int wm_operator_call_internal(bContext *C, wmOperatorType *ot, PointerRNA *properties, ReportList *reports,
-                                     const short context, const bool poll_only)
+ * invokes operator in context
+ */
+static int wm_operator_call_internal(
+        bContext *C, wmOperatorType *ot, PointerRNA *properties, ReportList *reports,
+        const short context, const bool poll_only)
 {
 	wmEvent *event;
 	
@@ -1324,13 +1341,16 @@ int WM_operator_name_call(bContext *C, const char *opstring, short context, Poin
 	return 0;
 }
 
-/* Similar to WM_operator_name_call called with WM_OP_EXEC_DEFAULT context.
- * - wmOperatorType is used instead of operator name since python already has the operator type
- * - poll() must be called by python before this runs.
- * - reports can be passed to this function (so python can report them as exceptions)
+/**
+ * Similar to #WM_operator_name_call called with #WM_OP_EXEC_DEFAULT context.
+ *
+ * - #wmOperatorType is used instead of operator name since python already has the operator type.
+ * - `poll()` must be called by python before this runs.
+ * - reports can be passed to this function (so python can report them as exceptions).
  */
-int WM_operator_call_py(bContext *C, wmOperatorType *ot, short context,
-                        PointerRNA *properties, ReportList *reports, const bool is_undo)
+int WM_operator_call_py(
+        bContext *C, wmOperatorType *ot, short context,
+        PointerRNA *properties, ReportList *reports, const bool is_undo)
 {
 	int retval = OPERATOR_CANCELLED;
 
@@ -1573,7 +1593,8 @@ static void wm_event_modalkeymap(const bContext *C, wmOperator *op, wmEvent *eve
 	}
 }
 
-/* Check whether operator is allowed to run in case interface is locked,
+/**
+ * Check whether operator is allowed to run in case interface is locked,
  * If interface is unlocked, will always return truth.
  */
 static bool wm_operator_check_locked_interface(bContext *C, wmOperatorType *ot)
@@ -1772,7 +1793,11 @@ static int wm_handler_fileselect_do(bContext *C, ListBase *handlers, wmEventHand
 			BLI_remlink(handlers, handler);
 
 			if (val != EVT_FILESELECT_EXTERNAL_CANCEL) {
-				ED_screen_full_prevspace(C, CTX_wm_area(C));
+				ScrArea *sa = CTX_wm_area(C);
+				const SpaceLink *sl = sa->spacedata.first;
+				const bool was_prev_temp = (sl->next && sl->next->spacetype == SPACE_IMAGE);
+
+				ED_screen_full_prevspace(C, sa, was_prev_temp);
 			}
 
 			wm_handler_op_context(C, handler, CTX_wm_window(C)->eventstate);
@@ -2511,11 +2536,12 @@ void WM_event_fileselect_event(wmWindowManager *wm, void *ophandle, int eventval
 /* operator is supposed to have a filled "path" property */
 /* optional property: filetype (XXX enum?) */
 
-/* Idea is to keep a handler alive on window queue, owning the operator.
+/**
+ * The idea here is to keep a handler alive on window queue, owning the operator.
  * The filewindow can send event to make it execute, thus ensuring
  * executing happens outside of lower level queues, with UI refreshed.
- * Should also allow multiwin solutions */
-
+ * Should also allow multiwin solutions
+ */
 void WM_event_add_fileselect(bContext *C, wmOperator *op)
 {
 	wmEventHandler *handler, *handlernext;
@@ -2661,7 +2687,7 @@ void WM_event_remove_keymap_handler(ListBase *handlers, wmKeyMap *keymap)
 wmEventHandler *WM_event_add_ui_handler(
         const bContext *C, ListBase *handlers,
         wmUIHandlerFunc ui_handle, wmUIHandlerRemoveFunc ui_remove,
-        void *userdata, const bool accept_dbl_click)
+        void *userdata, const char flag)
 {
 	wmEventHandler *handler = MEM_callocN(sizeof(wmEventHandler), "event ui handler");
 	handler->ui_handle = ui_handle;
@@ -2678,9 +2704,8 @@ wmEventHandler *WM_event_add_ui_handler(
 		handler->ui_menu    = NULL;
 	}
 
-	if (accept_dbl_click) {
-		handler->flag |= WM_HANDLER_ACCEPT_DBL_CLICK;
-	}
+	BLI_assert((flag & WM_HANDLER_DO_FREE) == 0);
+	handler->flag = flag;
 	
 	BLI_addhead(handlers, handler);
 	

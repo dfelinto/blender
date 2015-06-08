@@ -638,7 +638,7 @@ typedef struct ExrHandle {
 	struct ExrHandle *next, *prev;
 	char name[FILE_MAX];
 
-	IFileStream *ifile_stream;
+	IStream *ifile_stream;
 	MultiPartInputFile *ifile;
 
 	OFileStream *ofile_stream;
@@ -829,7 +829,7 @@ void IMB_exr_add_channel(void *handle, const char *layname, const char *passname
 }
 
 /* used for output files (from RenderResult) (single and multilayer, single and multiview) */
-int IMB_exr_begin_write(void *handle, const char *filename, int width, int height, int compress, struct StampData *stamp)
+int IMB_exr_begin_write(void *handle, const char *filename, int width, int height, int compress, const StampData *stamp)
 {
 	ExrHandle *data = (ExrHandle *)handle;
 	Header header(width, height);
@@ -1345,6 +1345,7 @@ void IMB_exr_close(void *handle)
 	delete data->ofile;
 	delete data->mpofile;
 	delete data->ofile_stream;
+	delete data->multiView;
 
 	data->ifile = NULL;
 	data->ifile_stream = NULL;
@@ -1495,7 +1496,7 @@ static ExrPass *imb_exr_get_pass(ListBase *lb, char *passname)
 }
 
 /* creates channels, makes a hierarchy and assigns memory to channels */
-static ExrHandle *imb_exr_begin_read_mem(MultiPartInputFile& file, int width, int height)
+static ExrHandle *imb_exr_begin_read_mem(IStream &file_stream, MultiPartInputFile &file, int width, int height)
 {
 	ExrLayer *lay;
 	ExrPass *pass;
@@ -1504,7 +1505,9 @@ static ExrHandle *imb_exr_begin_read_mem(MultiPartInputFile& file, int width, in
 	int a;
 	char layname[EXR_TOT_MAXNAME], passname[EXR_TOT_MAXNAME];
 
+	data->ifile_stream = &file_stream;
 	data->ifile = &file;
+
 	data->width = width;
 	data->height = height;
 
@@ -1855,6 +1858,7 @@ static bool imb_exr_is_multi(MultiPartInputFile& file)
 struct ImBuf *imb_load_openexr(unsigned char *mem, size_t size, int flags, char colorspace[IM_MAX_SPACE])
 {
 	struct ImBuf *ibuf = NULL;
+	Mem_IStream *membuf = NULL;
 	MultiPartInputFile *file = NULL;
 
 	if (imb_is_a_openexr(mem) == 0) return(NULL);
@@ -1863,8 +1867,9 @@ struct ImBuf *imb_load_openexr(unsigned char *mem, size_t size, int flags, char 
 
 	try
 	{
-		Mem_IStream *membuf = new Mem_IStream(mem, size);
 		bool is_multi;
+
+		membuf = new Mem_IStream(mem, size);
 		file = new MultiPartInputFile(*membuf);
 
 		Box2i dw = file->header(0).dataWindow();
@@ -1914,7 +1919,7 @@ struct ImBuf *imb_load_openexr(unsigned char *mem, size_t size, int flags, char 
 
 				if (is_multi && ((flags & IB_thumbnail) == 0)) { /* only enters with IB_multilayer flag set */
 					/* constructs channels for reading, allocates memory in channels */
-					ExrHandle *handle = imb_exr_begin_read_mem(*file, width, height);
+					ExrHandle *handle = imb_exr_begin_read_mem(*membuf, *file, width, height);
 					if (handle) {
 						IMB_exr_read_channels(handle);
 						ibuf->userdata = handle;         /* potential danger, the caller has to check for this! */
@@ -1998,6 +2003,7 @@ struct ImBuf *imb_load_openexr(unsigned char *mem, size_t size, int flags, char 
 					}
 
 					/* file is no longer needed */
+					delete membuf;
 					delete file;
 				}
 			}
@@ -2012,6 +2018,7 @@ struct ImBuf *imb_load_openexr(unsigned char *mem, size_t size, int flags, char 
 		std::cerr << exc.what() << std::endl;
 		if (ibuf) IMB_freeImBuf(ibuf);
 		delete file;
+		delete membuf;
 
 		return (0);
 	}

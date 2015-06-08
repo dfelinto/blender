@@ -248,7 +248,7 @@ bool BKE_object_support_modifier_type_check(Object *ob, int modifier_type)
 	return true;
 }
 
-void BKE_object_link_modifiers(struct Object *ob_dst, struct Object *ob_src)
+void BKE_object_link_modifiers(struct Object *ob_dst, const struct Object *ob_src)
 {
 	ModifierData *md;
 	BKE_object_free_modifiers(ob_dst);
@@ -264,8 +264,6 @@ void BKE_object_link_modifiers(struct Object *ob_dst, struct Object *ob_src)
 
 		if (ELEM(md->type,
 		         eModifierType_Hook,
-		         eModifierType_Softbody,
-		         eModifierType_ParticleInstance,
 		         eModifierType_Collision))
 		{
 			continue;
@@ -273,10 +271,15 @@ void BKE_object_link_modifiers(struct Object *ob_dst, struct Object *ob_src)
 
 		if (!BKE_object_support_modifier_type_check(ob_dst, md->type))
 			continue;
-		
-		if (md->type == eModifierType_Skin) {
-			/* ensure skin-node customdata exists */
-			BKE_mesh_ensure_skin_customdata(ob_dst->data);
+
+		switch (md->type) {
+			case eModifierType_Softbody:
+				BKE_object_copy_softbody(ob_dst, ob_src);
+				break;
+			case eModifierType_Skin:
+				/* ensure skin-node customdata exists */
+				BKE_mesh_ensure_skin_customdata(ob_dst->data);
+				break;
 		}
 
 		nmd = modifier_new(md->type);
@@ -293,7 +296,6 @@ void BKE_object_link_modifiers(struct Object *ob_dst, struct Object *ob_src)
 	}
 
 	BKE_object_copy_particlesystems(ob_dst, ob_src);
-	BKE_object_copy_softbody(ob_dst, ob_src);
 
 	/* TODO: smoke?, cloth? */
 }
@@ -1207,7 +1209,7 @@ struct Object *BKE_object_lod_matob_get(Object *ob, Scene *scene)
 #endif  /* WITH_GAMEENGINE */
 
 
-SoftBody *copy_softbody(SoftBody *sb, bool copy_caches)
+SoftBody *copy_softbody(const SoftBody *sb, bool copy_caches)
 {
 	SoftBody *sbn;
 	
@@ -1331,24 +1333,24 @@ ParticleSystem *BKE_object_copy_particlesystem(ParticleSystem *psys)
 	return psysn;
 }
 
-void BKE_object_copy_particlesystems(Object *obn, Object *ob)
+void BKE_object_copy_particlesystems(Object *ob_dst, const Object *ob_src)
 {
 	ParticleSystem *psys, *npsys;
 	ModifierData *md;
 
-	if (obn->type != OB_MESH) {
+	if (ob_dst->type != OB_MESH) {
 		/* currently only mesh objects can have soft body */
 		return;
 	}
 
-	BLI_listbase_clear(&obn->particlesystem);
-	for (psys = ob->particlesystem.first; psys; psys = psys->next) {
+	BLI_listbase_clear(&ob_dst->particlesystem);
+	for (psys = ob_src->particlesystem.first; psys; psys = psys->next) {
 		npsys = BKE_object_copy_particlesystem(psys);
 
-		BLI_addtail(&obn->particlesystem, npsys);
+		BLI_addtail(&ob_dst->particlesystem, npsys);
 
 		/* need to update particle modifiers too */
-		for (md = obn->modifiers.first; md; md = md->next) {
+		for (md = ob_dst->modifiers.first; md; md = md->next) {
 			if (md->type == eModifierType_ParticleSystem) {
 				ParticleSystemModifierData *psmd = (ParticleSystemModifierData *)md;
 				if (psmd->psys == psys)
@@ -1376,10 +1378,12 @@ void BKE_object_copy_particlesystems(Object *obn, Object *ob)
 	}
 }
 
-void BKE_object_copy_softbody(Object *obn, Object *ob)
+void BKE_object_copy_softbody(Object *ob_dst, const Object *ob_src)
 {
-	if (ob->soft)
-		obn->soft = copy_softbody(ob->soft, false);
+	if (ob_src->soft) {
+		ob_dst->softflag = ob_src->softflag;
+		ob_dst->soft = copy_softbody(ob_src->soft, false);
+	}
 }
 
 static void copy_object_pose(Object *obn, Object *ob)
@@ -2077,7 +2081,7 @@ static void ob_parcurve(Scene *scene, Object *ob, Object *par, float mat[4][4])
 	unit_m4(mat);
 	
 	cu = par->data;
-	if (ELEM(NULL, par->curve_cache, par->curve_cache->path, par->curve_cache->path->data)) /* only happens on reload file, but violates depsgraph still... fix! */
+	if (par->curve_cache == NULL) /* only happens on reload file, but violates depsgraph still... fix! */
 		BKE_displist_make_curveTypes(scene, par, 0);
 	if (par->curve_cache->path == NULL) return;
 	
@@ -2112,7 +2116,7 @@ static void ob_parcurve(Scene *scene, Object *ob, Object *par, float mat[4][4])
 	}
 	
 	/* vec: 4 items! */
-	if (where_on_path(par, ctime, vec, dir, cu->flag & CU_FOLLOW ? quat : NULL, &radius, NULL)) {
+	if (where_on_path(par, ctime, vec, dir, (cu->flag & CU_FOLLOW) ? quat : NULL, &radius, NULL)) {
 
 		if (cu->flag & CU_FOLLOW) {
 #if 0
@@ -3354,7 +3358,7 @@ static KeyBlock *insert_curvekey(Object *ob, const char *name, const bool from_m
 	return kb;
 }
 
-KeyBlock *BKE_object_insert_shape_key(Object *ob, const char *name, const bool from_mix)
+KeyBlock *BKE_object_shapekey_insert(Object *ob, const char *name, const bool from_mix)
 {	
 	switch (ob->type) {
 		case OB_MESH:
@@ -3368,6 +3372,85 @@ KeyBlock *BKE_object_insert_shape_key(Object *ob, const char *name, const bool f
 			return NULL;
 	}
 
+}
+
+bool BKE_object_shapekey_free(Main *bmain, Object *ob)
+{
+	Key **key_p, *key;
+
+	key_p = BKE_key_from_object_p(ob);
+	if (ELEM(NULL, key_p, *key_p)) {
+		return false;
+	}
+
+	key = *key_p;
+	*key_p = NULL;
+
+	BKE_libblock_free_us(bmain, key);
+
+	return false;
+}
+
+bool BKE_object_shapekey_remove(Main *bmain, Object *ob, KeyBlock *kb)
+{
+	KeyBlock *rkb;
+	Key *key = BKE_key_from_object(ob);
+	short kb_index;
+
+	if (key == NULL) {
+		return false;
+	}
+
+	kb_index = BLI_findindex(&key->block, kb);
+	BLI_assert(kb_index != -1);
+
+	for (rkb = key->block.first; rkb; rkb = rkb->next) {
+		if (rkb->relative == kb_index) {
+			/* remap to the 'Basis' */
+			rkb->relative = 0;
+		}
+		else if (rkb->relative >= kb_index) {
+			/* Fix positional shift of the keys when kb is deleted from the list */
+			rkb->relative -= 1;
+		}
+	}
+
+	BLI_remlink(&key->block, kb);
+	key->totkey--;
+	if (key->refkey == kb) {
+		key->refkey = key->block.first;
+
+		if (key->refkey) {
+			/* apply new basis key on original data */
+			switch (ob->type) {
+				case OB_MESH:
+					BKE_keyblock_convert_to_mesh(key->refkey, ob->data);
+					break;
+				case OB_CURVE:
+				case OB_SURF:
+					BKE_keyblock_convert_to_curve(key->refkey, ob->data, BKE_curve_nurbs_get(ob->data));
+					break;
+				case OB_LATTICE:
+					BKE_keyblock_convert_to_lattice(key->refkey, ob->data);
+					break;
+			}
+		}
+	}
+
+	if (kb->data) {
+		MEM_freeN(kb->data);
+	}
+	MEM_freeN(kb);
+
+	if (ob->shapenr > 1) {
+		ob->shapenr--;
+	}
+
+	if (key->totkey == 0) {
+		BKE_object_shapekey_free(bmain, ob);
+	}
+
+	return true;
 }
 
 bool BKE_object_flag_test_recursive(const Object *ob, short flag)

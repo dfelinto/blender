@@ -919,7 +919,7 @@ public:
 				draw_params.bind_display_space_shader_cb();
 			}
 
-			if (!vertex_buffer)
+			if(!vertex_buffer)
 				glGenBuffers(1, &vertex_buffer);
 
 			glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer);
@@ -928,7 +928,7 @@ public:
 
 			vpointer = (float *)glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
 
-			if (vpointer) {
+			if(vpointer) {
 				/* texture coordinate - vertex pair */
 				vpointer[0] = 0.0f;
 				vpointer[1] = 0.0f;
@@ -1163,7 +1163,7 @@ string device_cuda_capabilities(void)
 		if(result != CUDA_ERROR_NO_DEVICE) {
 			return string("Error initializing CUDA: ") + cuewErrorString(result);
 		}
-		return "No CUDA device found";
+		return "No CUDA device found\n";
 	}
 
 	int count;

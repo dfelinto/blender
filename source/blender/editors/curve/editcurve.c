@@ -1188,7 +1188,7 @@ static int *initialize_index_map(Object *obedit, int *r_old_totvert)
 
 			while (a--) {
 				keyIndex = getCVKeyIndex(editnurb, bezt);
-				if (keyIndex && keyIndex->vertex_index * 3 < old_totvert) {
+				if (keyIndex && keyIndex->vertex_index + 2 < old_totvert) {
 					if (keyIndex->switched) {
 						old_to_new_map[keyIndex->vertex_index] = vertex_index + 2;
 						old_to_new_map[keyIndex->vertex_index + 1] = vertex_index + 1;
@@ -1538,6 +1538,7 @@ void CURVE_OT_separate(wmOperatorType *ot)
 	ot->description = "Separate selected points from connected unselected points into a new object";
 	
 	/* api callbacks */
+	ot->invoke = WM_operator_confirm;
 	ot->exec = separate_exec;
 	ot->poll = ED_operator_editsurfcurve;
 	

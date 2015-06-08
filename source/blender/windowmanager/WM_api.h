@@ -151,7 +151,7 @@ typedef void (*wmUIHandlerRemoveFunc)(struct bContext *C, void *userdata);
 struct wmEventHandler *WM_event_add_ui_handler(
         const struct bContext *C, ListBase *handlers,
         wmUIHandlerFunc ui_handle, wmUIHandlerRemoveFunc ui_remove,
-        void *userdata,  const bool accept_dbl_click);
+        void *userdata, const char flag);
 void WM_event_remove_ui_handler(
         ListBase *handlers,
         wmUIHandlerFunc ui_handle, wmUIHandlerRemoveFunc ui_remove,
@@ -165,11 +165,21 @@ void WM_event_free_ui_handler_all(
 struct wmEventHandler *WM_event_add_modal_handler(struct bContext *C, struct wmOperator *op);
 void		WM_event_remove_handlers(struct bContext *C, ListBase *handlers);
 
+/* handler flag */
+enum {
+	WM_HANDLER_BLOCKING             = (1 << 0),  /* after this handler all others are ignored */
+	WM_HANDLER_ACCEPT_DBL_CLICK     = (1 << 1),  /* handler accepts double key press events */
+
+	/* internal */
+	WM_HANDLER_DO_FREE              = (1 << 7),  /* handler tagged to be freed in wm_handlers_do() */
+};
+
 struct wmEventHandler *WM_event_add_dropbox_handler(ListBase *handlers, ListBase *dropboxes);
 
 			/* mouse */
 void		WM_event_add_mousemove(struct bContext *C);
 bool        WM_modal_tweak_exit(const struct wmEvent *event, int tweak_event);
+bool		WM_event_is_absolute(const struct wmEvent *event);
 
 			/* notifiers */
 void		WM_event_add_notifier(const struct bContext *C, unsigned int type, void *reference);

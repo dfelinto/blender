@@ -57,6 +57,7 @@
 #  include <shlobj.h>
 #  include "BLI_winstuff.h"
 #  include "MEM_guardedalloc.h"
+#  include "BLI_alloca.h"
 #else
 #  include "unistd.h"
 #endif /* WIN32 */
@@ -858,6 +859,111 @@ bool BLI_path_frame_range(char *path, int sta, int end, int digits)
 }
 
 /**
+ * Get the frame from a filename formatted by blender's frame scheme
+ */
+bool BLI_path_frame_get(char *path, int *r_frame, int *r_numdigits)
+{
+	if (path && *path) {
+		char *file = (char *)BLI_last_slash(path);
+		char *c;
+		int len, numdigits;
+
+		numdigits = *r_numdigits = 0;
+
+		if (file == NULL)
+			file = path;
+
+		/* first get the extension part */
+		len = strlen(file);
+
+		c = file + len;
+
+		/* isolate extension */
+		while (--c != file) {
+			if (*c == '.') {
+				c--;
+				break;
+			}
+		}
+
+		/* find start of number */
+		while (c != (file - 1) && isdigit(*c)) {
+			c--;
+			numdigits++;
+		}
+
+		if (numdigits) {
+			char prevchar;
+
+			c++;
+			prevchar = c[numdigits];
+			c[numdigits] = 0;
+
+			/* was the number really an extension? */
+			*r_frame = atoi(c);
+			c[numdigits] = prevchar;
+
+			*r_numdigits = numdigits;
+
+			return true;
+		}
+	}
+
+	return false;
+}
+
+void BLI_path_frame_strip(char *path, bool setsharp, char *ext)
+{
+	if (path && *path) {
+		char *file = (char *)BLI_last_slash(path);
+		char *c, *suffix;
+		int len;
+		int numdigits = 0;
+
+		if (file == NULL)
+			file = path;
+
+		/* first get the extension part */
+		len = strlen(file);
+
+		c = file + len;
+
+		/* isolate extension */
+		while (--c != file) {
+			if (*c == '.') {
+				c--;
+				break;
+			}
+		}
+
+		suffix = c + 1;
+
+		/* find start of number */
+		while (c != (file - 1) && isdigit(*c)) {
+			c--;
+			numdigits++;
+		}
+
+		c++;
+
+		if (numdigits) {
+			/* replace the number with the suffix and terminate the string */
+			while (numdigits--) {
+				if (ext) *ext++ = *suffix;
+
+				if (setsharp) *c++ = '#';
+				else *c++ = *suffix;
+
+				suffix++;
+			}
+			*c = 0;
+			if (ext) *ext = 0;
+		}
+	}
+}
+
+
+/**
  * Check if we have '#' chars, usable for #BLI_path_frame, #BLI_path_frame_range
  */
 bool BLI_path_frame_check_chars(const char *path)
@@ -1033,31 +1139,36 @@ bool BLI_path_program_extensions_add_win32(char *name, const size_t maxlen)
 
 	type = BLI_exists(name);
 	if ((type == 0) || S_ISDIR(type)) {
-		char filename[FILE_MAX];
-		char ext[FILE_MAX];
-		const char *extensions = getenv("PATHEXT");
-		if (extensions) {
-			const char *temp;
-			do {
-				strcpy(filename, name);
-				temp = strchr(extensions, ';');
-				if (temp) {
-					strncpy(ext, extensions, temp - extensions);
-					ext[temp - extensions] = 0;
-					extensions = temp + 1;
-					strcat(filename, ext);
-				}
-				else {
-					strcat(filename, extensions);
-				}
+		/* typically 3-5, ".EXE", ".BAT"... etc */
+		const int ext_max = 12;
+		const char *ext = getenv("PATHEXT");
+		if (ext) {
+			const int name_len = strlen(name);
+			char *filename = alloca(name_len + ext_max);
+			char *filename_ext;
+			const char *ext_next;
 
-				type = BLI_exists(filename);
-				if (type && (!S_ISDIR(type))) {
-					retval = true;
-					BLI_strncpy(name, filename, maxlen);
-					break;
+			/* null terminated in the loop */
+			memcpy(filename, name, name_len);
+			filename_ext = filename + name_len;
+
+			do {
+				int ext_len;
+				ext_next = strchr(ext, ';');
+				ext_len = ext_next ? ((ext_next++) - ext) : strlen(ext);
+
+				if (LIKELY(ext_len < ext_max)) {
+					memcpy(filename_ext, ext, ext_len);
+					filename_ext[ext_len] = '\0';
+
+					type = BLI_exists(filename);
+					if (type && (!S_ISDIR(type))) {
+						retval = true;
+						BLI_strncpy(name, filename, maxlen);
+						break;
+					}
 				}
-			} while (temp);
+			} while ((ext = ext_next));
 		}
 	}
 	else {

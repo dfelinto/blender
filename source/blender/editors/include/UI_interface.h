@@ -322,7 +322,7 @@ void UI_draw_widget_scroll(struct uiWidgetColors *wcol, const struct rcti *rect,
 /* Shortening string helper. */
 float UI_text_clip_middle_ex(
         struct uiFontStyle *fstyle, char *str, float okwidth, const float minwidth,
-        const size_t max_len, const char *rpart_sep);
+        const size_t max_len, const char rpart_sep);
 
 /* Callbacks
  *
@@ -401,7 +401,7 @@ void UI_popup_block_invoke_ex(struct bContext *C, uiBlockCreateFunc func, void *
 void UI_popup_block_ex(struct bContext *C, uiBlockCreateFunc func, uiBlockHandleFunc popup_func, uiBlockCancelFunc cancel_func, void *arg);
 /* void uiPupBlockOperator(struct bContext *C, uiBlockCreateFunc func, struct wmOperator *op, int opcontext); */ /* UNUSED */
 
-void UI_popup_block_close(struct bContext *C, uiBlock *block);
+void UI_popup_block_close(struct bContext *C, struct wmWindow *win, uiBlock *block);
 
 /* Blocks
  *
@@ -746,7 +746,7 @@ void                       UI_panel_category_draw_all(struct ARegion *ar, const 
  * as screen/ if ED_KEYMAP_UI is set, or internally in popup functions. */
 
 void UI_region_handlers_add(struct ListBase *handlers);
-void UI_popup_handlers_add(struct bContext *C, struct ListBase *handlers, uiPopupBlockHandle *popup, const bool accept_dbl_click);
+void UI_popup_handlers_add(struct bContext *C, struct ListBase *handlers, uiPopupBlockHandle *popup, const char flag);
 void UI_popup_handlers_remove(struct ListBase *handlers, uiPopupBlockHandle *popup);
 void UI_popup_handlers_remove_all(struct bContext *C, struct ListBase *handlers);
 

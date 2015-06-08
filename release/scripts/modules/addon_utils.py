@@ -74,40 +74,43 @@ def modules_refresh(module_cache=addons_fake_modules):
             print("fake_module", mod_path, mod_name)
         import ast
         ModuleType = type(ast)
-        file_mod = open(mod_path, "r", encoding='UTF-8')
-        if speedy:
-            lines = []
-            line_iter = iter(file_mod)
-            l = ""
-            while not l.startswith("bl_info"):
-                try:
-                    l = line_iter.readline()
-                except UnicodeDecodeError as e:
-                    if not error_encoding:
-                        error_encoding = True
-                        print("Error reading file as UTF-8:", mod_path, e)
-                    file_mod.close()
-                    return None
+        try:
+            file_mod = open(mod_path, "r", encoding='UTF-8')
+        except OSError as e:
+            print("Error opening file %r: %s" % (mod_path, e))
+            return None
 
-                if len(l) == 0:
-                    break
-            while l.rstrip():
-                lines.append(l)
-                try:
-                    l = line_iter.readline()
-                except UnicodeDecodeError as e:
-                    if not error_encoding:
-                        error_encoding = True
-                        print("Error reading file as UTF-8:", mod_path, e)
-                    file_mod.close()
-                    return None
+        with file_mod:
+            if speedy:
+                lines = []
+                line_iter = iter(file_mod)
+                l = ""
+                while not l.startswith("bl_info"):
+                    try:
+                        l = line_iter.readline()
+                    except UnicodeDecodeError as e:
+                        if not error_encoding:
+                            error_encoding = True
+                            print("Error reading file as UTF-8:", mod_path, e)
+                        return None
 
-            data = "".join(lines)
+                    if len(l) == 0:
+                        break
+                while l.rstrip():
+                    lines.append(l)
+                    try:
+                        l = line_iter.readline()
+                    except UnicodeDecodeError as e:
+                        if not error_encoding:
+                            error_encoding = True
+                            print("Error reading file as UTF-8:", mod_path, e)
+                        return None
 
-        else:
-            data = file_mod.read()
+                data = "".join(lines)
 
-        file_mod.close()
+            else:
+                data = file_mod.read()
+        del file_mod
 
         try:
             ast_data = ast.parse(data, filename=mod_path)
@@ -416,19 +419,21 @@ def reset_all(reload_scripts=False):
                 disable(mod_name)
 
 
-def module_bl_info(mod, info_basis={"name": "",
-                                    "author": "",
-                                    "version": (),
-                                    "blender": (),
-                                    "location": "",
-                                    "description": "",
-                                    "wiki_url": "",
-                                    "support": 'COMMUNITY',
-                                    "category": "",
-                                    "warning": "",
-                                    "show_expanded": False,
-                                    }
-                   ):
+def module_bl_info(mod, info_basis=None):
+    if info_basis is None:
+        info_basis = {
+            "name": "",
+            "author": "",
+            "version": (),
+            "blender": (),
+            "location": "",
+            "description": "",
+            "wiki_url": "",
+            "support": 'COMMUNITY',
+            "category": "",
+            "warning": "",
+            "show_expanded": False,
+            }
 
     addon_info = getattr(mod, "bl_info", {})
 

@@ -27,7 +27,10 @@
  *  \ingroup bmesh
  */
 
-void BM_mesh_decimate_collapse(BMesh *bm, const float factor, float *vweights, const bool do_triangulate);
+void BM_mesh_decimate_collapse(
+        BMesh *bm, const float factor,
+        float *vweights, float vweight_factor,
+        const bool do_triangulate);
 
 void BM_mesh_decimate_unsubdivide_ex(BMesh *bm, const int iterations, const bool tag_only);
 void BM_mesh_decimate_unsubdivide(BMesh *bm, const int iterations);
@@ -41,9 +44,5 @@ void BM_mesh_decimate_dissolve_ex(
 void BM_mesh_decimate_dissolve(
         BMesh *bm, const float angle_limit, const bool do_dissolve_boundaries,
         const BMO_Delimit delimit);
-
-/* these weights are accumulated so too high values may reach 'inf' too quickly */
-#define BM_MESH_DECIM_WEIGHT_MAX 100000.0f
-#define BM_MESH_DECIM_WEIGHT_EPS (1.0f / BM_MESH_DECIM_WEIGHT_MAX)
 
 #endif /* __BMESH_DECIMATE_H__ */

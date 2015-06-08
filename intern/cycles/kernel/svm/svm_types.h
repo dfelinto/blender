@@ -39,11 +39,17 @@ CCL_NAMESPACE_BEGIN
 #define NODE_GROUP_LEVEL_0    0
 #define NODE_GROUP_LEVEL_1    1
 #define NODE_GROUP_LEVEL_2    2
-#define NODE_GROUP_LEVEL_MAX  NODE_GROUP_LEVEL_2
+#define NODE_GROUP_LEVEL_3    3
+#define NODE_GROUP_LEVEL_MAX  NODE_GROUP_LEVEL_3
 
 #define NODE_FEATURE_VOLUME     (1 << 0)
 #define NODE_FEATURE_HAIR       (1 << 1)
-#define NODE_FEATURE_ALL        (NODE_FEATURE_VOLUME|NODE_FEATURE_HAIR)
+#define NODE_FEATURE_BUMP       (1 << 2)
+/* TODO(sergey): Consider using something like ((uint)(-1)).
+ * Need to ceck carefully operand types around usage of this
+ * define first.
+ */
+#define NODE_FEATURE_ALL        (NODE_FEATURE_VOLUME|NODE_FEATURE_HAIR|NODE_FEATURE_BUMP)
 
 typedef enum NodeType {
 	NODE_END = 0,
@@ -272,27 +278,6 @@ typedef enum NodeConvert {
 	NODE_CONVERT_IF,
 	NODE_CONVERT_IV
 } NodeConvert;
-
-typedef enum NodeDistanceMetric {
-	NODE_VORONOI_DISTANCE_SQUARED,
-	NODE_VORONOI_ACTUAL_DISTANCE,
-	NODE_VORONOI_MANHATTAN,
-	NODE_VORONOI_CHEBYCHEV,
-	NODE_VORONOI_MINKOVSKY_H,
-	NODE_VORONOI_MINKOVSKY_4,
-	NODE_VORONOI_MINKOVSKY
-} NodeDistanceMetric;
-
-typedef enum NodeNoiseBasis {
-	NODE_NOISE_PERLIN,
-	NODE_NOISE_VORONOI_F1,
-	NODE_NOISE_VORONOI_F2,
-	NODE_NOISE_VORONOI_F3,
-	NODE_NOISE_VORONOI_F4,
-	NODE_NOISE_VORONOI_F2_F1,
-	NODE_NOISE_VORONOI_CRACKLE,
-	NODE_NOISE_CELL_NOISE
-} NodeNoiseBasis;
 
 typedef enum NodeMusgraveType {
 	NODE_MUSGRAVE_MULTIFRACTAL,
