@@ -225,8 +225,8 @@ ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input,
 	triangle_point_normal(kg, object, prim, u, v, &P, &Ng, &shader);
 
 	/* transformation matrix for dupli objects */
-	/* Ng = tfm * Ng; TODO */
-	/* P = tfm * P; TODO */
+	P = transform_point(tfm, P);
+	Ng = normalize(transform_direction(tfm, Ng));
 
 	/* dummy initilizations copied from SHADER_EVAL_DISPLACE */
 	float3 I = Ng;
