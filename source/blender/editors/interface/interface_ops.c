@@ -33,6 +33,7 @@
 
 #include "DNA_screen_types.h"
 #include "DNA_text_types.h" /* for UI_OT_reports_to_text */
+#include "DNA_object_types.h" /* for OB_DATA_SUPPORT_ID */
 
 #include "BLI_blenlib.h"
 #include "BLI_math_color.h"
@@ -43,6 +44,7 @@
 #include "BKE_context.h"
 #include "BKE_screen.h"
 #include "BKE_global.h"
+#include "BKE_node.h"
 #include "BKE_text.h" /* for UI_OT_reports_to_text */
 #include "BKE_report.h"
 
@@ -261,7 +263,7 @@ static void UI_OT_unset_property_button(wmOperatorType *ot)
 
 /* Copy To Selected Operator ------------------------ */
 
-static bool copy_to_selected_list(
+bool UI_context_copy_to_selected_list(
         bContext *C, PointerRNA *ptr, PropertyRNA *prop,
         ListBase *r_lb, bool *r_use_path_from_id, char **r_path)
 {
@@ -277,6 +279,49 @@ static bool copy_to_selected_list(
 	else if (RNA_struct_is_a(ptr->type, &RNA_Sequence)) {
 		*r_lb = CTX_data_collection_get(C, "selected_editable_sequences");
 	}
+	else if (RNA_struct_is_a(ptr->type, &RNA_Node) ||
+	         RNA_struct_is_a(ptr->type, &RNA_NodeSocket))
+	{
+		ListBase lb = {NULL, NULL};
+		char *path = NULL;
+		bNode *node = NULL;
+
+		/* Get the node we're editing */
+		if (RNA_struct_is_a(ptr->type, &RNA_NodeSocket)) {
+			bNodeTree *ntree = ptr->id.data;
+			bNodeSocket *sock = ptr->data;
+			if (nodeFindNode(ntree, sock, &node, NULL)) {
+				if ((path = RNA_path_resolve_from_type_to_property(ptr, prop, &RNA_Node)) != NULL) {
+					/* we're good! */
+				}
+				else {
+					node = NULL;
+				}
+			}
+		}
+		else {
+			node = ptr->data;
+		}
+
+		/* Now filter by type */
+		if (node) {
+			CollectionPointerLink *link, *link_next;
+			lb = CTX_data_collection_get(C, "selected_nodes");
+
+			for (link = lb.first; link; link = link_next) {
+				bNode *node_data = link->ptr.data;
+				link_next = link->next;
+
+				if (node_data->type != node->type) {
+					BLI_remlink(&lb, link);
+					MEM_freeN(link);
+				}
+			}
+		}
+
+		*r_lb = lb;
+		*r_path = path;
+	}
 	else if (ptr->id.data) {
 		ID *id = ptr->id.data;
 
@@ -284,6 +329,51 @@ static bool copy_to_selected_list(
 			*r_lb = CTX_data_collection_get(C, "selected_editable_objects");
 			*r_use_path_from_id = true;
 			*r_path = RNA_path_from_ID_to_property(ptr, prop);
+		}
+		else if (OB_DATA_SUPPORT_ID(GS(id->name))) {
+			/* check we're using the active object */
+			const short id_code = GS(id->name);
+			ListBase lb = CTX_data_collection_get(C, "selected_editable_objects");
+			char *path = RNA_path_from_ID_to_property(ptr, prop);
+
+			/* de-duplicate obdata */
+			if (!BLI_listbase_is_empty(&lb)) {
+				CollectionPointerLink *link, *link_next;
+
+				for (link = lb.first; link; link = link->next) {
+					Object *ob = link->ptr.id.data;
+					if (ob->data) {
+						ID *id_data = ob->data;
+						id_data->flag |= LIB_DOIT;
+					}
+				}
+
+				for (link = lb.first; link; link = link_next) {
+					Object *ob = link->ptr.id.data;
+					ID *id_data = ob->data;
+					link_next = link->next;
+
+					if ((id_data == NULL) ||
+					    (id_data->flag & LIB_DOIT) == 0 ||
+					    (id_data->lib) ||
+					    (GS(id_data->name) != id_code))
+					{
+						BLI_remlink(&lb, link);
+						MEM_freeN(link);
+					}
+					else {
+						/* avoid prepending 'data' to the path */
+						RNA_id_pointer_create(id_data, &link->ptr);
+					}
+
+					if (id_data) {
+						id_data->flag &= ~LIB_DOIT;
+					}
+				}
+			}
+
+			*r_lb = lb;
+			*r_path = path;
 		}
 		else if (GS(id->name) == ID_SCE) {
 			/* Sequencer's ID is scene :/ */
@@ -325,7 +415,7 @@ static bool copy_to_selected_button(bContext *C, bool all, bool poll)
 		CollectionPointerLink *link;
 		ListBase lb;
 
-		if (!copy_to_selected_list(C, &ptr, prop, &lb, &use_path_from_id, &path))
+		if (!UI_context_copy_to_selected_list(C, &ptr, prop, &lb, &use_path_from_id, &path))
 			return success;
 
 		for (link = lb.first; link; link = link->next) {
@@ -553,8 +643,9 @@ void UI_editsource_active_but_test(uiBut *but)
 	BLI_ghash_insert(ui_editsource_info->hash, but, but_store);
 }
 
-static int editsource_text_edit(bContext *C, wmOperator *op,
-                                char filepath[FILE_MAX], int line)
+static int editsource_text_edit(
+        bContext *C, wmOperator *op,
+        char filepath[FILE_MAX], int line)
 {
 	struct Main *bmain = CTX_data_main(C);
 	Text *text;
@@ -668,10 +759,12 @@ static void UI_OT_editsource(wmOperatorType *ot)
 }
 
 /* ------------------------------------------------------------------------- */
-/* EditTranslation utility funcs and operator,
- * Note: this includes utility functions and button matching checks.
- *       this only works in conjunction with a py operator! */
 
+/**
+ * EditTranslation utility funcs and operator,
+ * \note: this includes utility functions and button matching checks.
+ * this only works in conjunction with a py operator!
+ */
 static void edittranslation_find_po_file(const char *root, const char *uilng, char *path, const size_t maxlen)
 {
 	char tstr[32]; /* Should be more than enough! */

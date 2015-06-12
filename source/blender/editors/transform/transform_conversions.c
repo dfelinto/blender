@@ -31,6 +31,7 @@
 
 #include <string.h>
 #include <math.h>
+#include <limits.h>
 
 #include "DNA_anim_types.h"
 #include "DNA_brush_types.h"
@@ -341,20 +342,20 @@ static void createTransEdge(TransInfo *t)
 	BMIter iter;
 	float mtx[3][3], smtx[3][3];
 	int count = 0, countsel = 0;
-	int propmode = t->flag & T_PROP_EDIT;
+	const bool is_prop_edit = (t->flag & T_PROP_EDIT) != 0;
 	int cd_edge_float_offset;
 
 	BM_ITER_MESH (eed, &iter, em->bm, BM_EDGES_OF_MESH) {
 		if (!BM_elem_flag_test(eed, BM_ELEM_HIDDEN)) {
 			if (BM_elem_flag_test(eed, BM_ELEM_SELECT)) countsel++;
-			if (propmode) count++;
+			if (is_prop_edit) count++;
 		}
 	}
 
 	if (countsel == 0)
 		return;
 
-	if (propmode) {
+	if (is_prop_edit) {
 		t->total = count;
 	}
 	else {
@@ -380,7 +381,7 @@ static void createTransEdge(TransInfo *t)
 	BLI_assert(cd_edge_float_offset != -1);
 
 	BM_ITER_MESH (eed, &iter, em->bm, BM_EDGES_OF_MESH) {
-		if (!BM_elem_flag_test(eed, BM_ELEM_HIDDEN) && (BM_elem_flag_test(eed, BM_ELEM_SELECT) || propmode)) {
+		if (!BM_elem_flag_test(eed, BM_ELEM_HIDDEN) && (BM_elem_flag_test(eed, BM_ELEM_SELECT) || is_prop_edit)) {
 			float *fl_ptr;
 			/* need to set center for center calculations */
 			mid_v3_v3v3(td->center, eed->v1->co, eed->v2->co);
@@ -1330,18 +1331,18 @@ static void createTransMBallVerts(TransInfo *t)
 	TransDataExtension *tx;
 	float mtx[3][3], smtx[3][3];
 	int count = 0, countsel = 0;
-	int propmode = t->flag & T_PROP_EDIT;
+	const bool is_prop_edit = (t->flag & T_PROP_EDIT) != 0;
 
 	/* count totals */
 	for (ml = mb->editelems->first; ml; ml = ml->next) {
 		if (ml->flag & SELECT) countsel++;
-		if (propmode) count++;
+		if (is_prop_edit) count++;
 	}
 
 	/* note: in prop mode we need at least 1 selected */
 	if (countsel == 0) return;
 
-	if (propmode) t->total = count;
+	if (is_prop_edit) t->total = count;
 	else t->total = countsel;
 
 	td = t->data = MEM_callocN(t->total * sizeof(TransData), "TransObData(MBall EditMode)");
@@ -1351,7 +1352,7 @@ static void createTransMBallVerts(TransInfo *t)
 	pseudoinverse_m3_m3(smtx, mtx, PSEUDOINVERSE_EPSILON);
 
 	for (ml = mb->editelems->first; ml; ml = ml->next) {
-		if (propmode || (ml->flag & SELECT)) {
+		if (is_prop_edit || (ml->flag & SELECT)) {
 			td->loc = &ml->x;
 			copy_v3_v3(td->iloc, td->loc);
 			copy_v3_v3(td->center, td->loc);
@@ -1464,7 +1465,7 @@ static void createTransCurveVerts(TransInfo *t)
 	float mtx[3][3], smtx[3][3];
 	int a;
 	int count = 0, countsel = 0;
-	int propmode = t->flag & T_PROP_EDIT;
+	const bool is_prop_edit = (t->flag & T_PROP_EDIT) != 0;
 	short hide_handles = (cu->drawflag & CU_HIDE_HANDLES);
 	ListBase *nurbs;
 
@@ -1479,13 +1480,13 @@ static void createTransCurveVerts(TransInfo *t)
 				if (bezt->hide == 0) {
 					if (hide_handles) {
 						if (bezt->f2 & SELECT) countsel += 3;
-						if (propmode) count += 3;
+						if (is_prop_edit) count += 3;
 					}
 					else {
 						if (bezt->f1 & SELECT) countsel++;
 						if (bezt->f2 & SELECT) countsel++;
 						if (bezt->f3 & SELECT) countsel++;
-						if (propmode) count += 3;
+						if (is_prop_edit) count += 3;
 					}
 				}
 			}
@@ -1493,7 +1494,7 @@ static void createTransCurveVerts(TransInfo *t)
 		else {
 			for (a = nu->pntsu * nu->pntsv, bp = nu->bp; a > 0; a--, bp++) {
 				if (bp->hide == 0) {
-					if (propmode) count++;
+					if (is_prop_edit) count++;
 					if (bp->f1 & SELECT) countsel++;
 				}
 			}
@@ -1502,7 +1503,7 @@ static void createTransCurveVerts(TransInfo *t)
 	/* note: in prop mode we need at least 1 selected */
 	if (countsel == 0) return;
 
-	if (propmode) t->total = count;
+	if (is_prop_edit) t->total = count;
 	else t->total = countsel;
 	t->data = MEM_callocN(t->total * sizeof(TransData), "TransObData(Curve EditMode)");
 
@@ -1537,7 +1538,7 @@ static void createTransCurveVerts(TransInfo *t)
 						}
 					}
 
-					if (propmode ||
+					if (is_prop_edit ||
 					    ((bezt->f2 & SELECT) && hide_handles) ||
 					    ((bezt->f1 & SELECT) && hide_handles == 0))
 					{
@@ -1571,7 +1572,7 @@ static void createTransCurveVerts(TransInfo *t)
 					}
 
 					/* This is the Curve Point, the other two are handles */
-					if (propmode || (bezt->f2 & SELECT)) {
+					if (is_prop_edit || (bezt->f2 & SELECT)) {
 						copy_v3_v3(td->iloc, bezt->vec[1]);
 						td->loc = bezt->vec[1];
 						copy_v3_v3(td->center, td->loc);
@@ -1607,7 +1608,7 @@ static void createTransCurveVerts(TransInfo *t)
 						count++;
 						tail++;
 					}
-					if (propmode ||
+					if (is_prop_edit ||
 					    ((bezt->f2 & SELECT) && hide_handles) ||
 					    ((bezt->f3 & SELECT) && hide_handles == 0))
 					{
@@ -1644,12 +1645,12 @@ static void createTransCurveVerts(TransInfo *t)
 
 					(void)hdata;  /* quiet warning */
 				}
-				else if (propmode && head != tail) {
+				else if (is_prop_edit && head != tail) {
 					calc_distanceCurveVerts(head, tail - 1);
 					head = tail;
 				}
 			}
-			if (propmode && head != tail)
+			if (is_prop_edit && head != tail)
 				calc_distanceCurveVerts(head, tail - 1);
 
 			/* TODO - in the case of tilt and radius we can also avoid allocating the initTransDataCurveHandles
@@ -1664,7 +1665,7 @@ static void createTransCurveVerts(TransInfo *t)
 			head = tail = td;
 			for (a = nu->pntsu * nu->pntsv, bp = nu->bp; a > 0; a--, bp++) {
 				if (bp->hide == 0) {
-					if (propmode || (bp->f1 & SELECT)) {
+					if (is_prop_edit || (bp->f1 & SELECT)) {
 						copy_v3_v3(td->iloc, bp->vec);
 						td->loc = bp->vec;
 						copy_v3_v3(td->center, td->loc);
@@ -1689,12 +1690,12 @@ static void createTransCurveVerts(TransInfo *t)
 						tail++;
 					}
 				}
-				else if (propmode && head != tail) {
+				else if (is_prop_edit && head != tail) {
 					calc_distanceCurveVerts(head, tail - 1);
 					head = tail;
 				}
 			}
-			if (propmode && head != tail)
+			if (is_prop_edit && head != tail)
 				calc_distanceCurveVerts(head, tail - 1);
 		}
 	}
@@ -1710,14 +1711,14 @@ static void createTransLatticeVerts(TransInfo *t)
 	float mtx[3][3], smtx[3][3];
 	int a;
 	int count = 0, countsel = 0;
-	int propmode = t->flag & T_PROP_EDIT;
+	const bool is_prop_edit = (t->flag & T_PROP_EDIT) != 0;
 
 	bp = latt->def;
 	a  = latt->pntsu * latt->pntsv * latt->pntsw;
 	while (a--) {
 		if (bp->hide == 0) {
 			if (bp->f1 & SELECT) countsel++;
-			if (propmode) count++;
+			if (is_prop_edit) count++;
 		}
 		bp++;
 	}
@@ -1725,7 +1726,7 @@ static void createTransLatticeVerts(TransInfo *t)
 	/* note: in prop mode we need at least 1 selected */
 	if (countsel == 0) return;
 
-	if (propmode) t->total = count;
+	if (is_prop_edit) t->total = count;
 	else t->total = countsel;
 	t->data = MEM_callocN(t->total * sizeof(TransData), "TransObData(Lattice EditMode)");
 
@@ -1736,7 +1737,7 @@ static void createTransLatticeVerts(TransInfo *t)
 	bp = latt->def;
 	a  = latt->pntsu * latt->pntsv * latt->pntsw;
 	while (a--) {
-		if (propmode || (bp->f1 & SELECT)) {
+		if (is_prop_edit || (bp->f1 & SELECT)) {
 			if (bp->hide == 0) {
 				copy_v3_v3(td->iloc, bp->vec);
 				td->loc = bp->vec;
@@ -1777,7 +1778,7 @@ static void createTransParticleVerts(bContext *C, TransInfo *t)
 	float mat[4][4];
 	int i, k, transformparticle;
 	int count = 0, hasselected = 0;
-	int propmode = t->flag & T_PROP_EDIT;
+	const bool is_prop_edit = (t->flag & T_PROP_EDIT) != 0;
 
 	if (edit == NULL || t->settings->particle.selectmode == SCE_SELECT_PATH) return;
 
@@ -1799,7 +1800,7 @@ static void createTransParticleVerts(bContext *C, TransInfo *t)
 						hasselected = 1;
 						transformparticle = 1;
 					}
-					else if (propmode)
+					else if (is_prop_edit)
 						transformparticle = 1;
 				}
 			}
@@ -1849,7 +1850,7 @@ static void createTransParticleVerts(bContext *C, TransInfo *t)
 
 			if (key->flag & PEK_SELECT)
 				td->flag |= TD_SELECTED;
-			else if (!propmode)
+			else if (!is_prop_edit)
 				td->flag |= TD_SKIP;
 
 			unit_m3(td->mtx);
@@ -1878,7 +1879,7 @@ static void createTransParticleVerts(bContext *C, TransInfo *t)
 				tx++;
 			tail++;
 		}
-		if (propmode && head != tail)
+		if (is_prop_edit && head != tail)
 			calc_distanceCurveVerts(head, tail - 1);
 	}
 }
@@ -1894,7 +1895,8 @@ void flushTransParticles(TransInfo *t)
 	PTCacheEditKey *key;
 	TransData *td;
 	float mat[4][4], imat[4][4], co[3];
-	int i, k, propmode = t->flag & T_PROP_EDIT;
+	int i, k;
+	const bool is_prop_edit = (t->flag & T_PROP_EDIT) != 0;
 
 	if (psys)
 		psmd = psys_get_modifier(ob, psys);
@@ -1915,7 +1917,7 @@ void flushTransParticles(TransInfo *t)
 
 
 				/* optimization for proportional edit */
-				if (!propmode || !compare_v3v3(key->co, co, 0.0001f)) {
+				if (!is_prop_edit || !compare_v3v3(key->co, co, 0.0001f)) {
 					copy_v3_v3(key->co, co);
 					point->flag |= PEP_EDIT_RECALC;
 				}
@@ -2122,7 +2124,7 @@ static struct TransIslandData *editmesh_islands_info_calc(BMEditMesh *em, int *r
 	vert_map = MEM_mallocN(sizeof(*vert_map) * bm->totvert, __func__);
 	/* we shouldn't need this, but with incorrect selection flushing
 	 * its possible we have a selected vertex thats not in a face, for now best not crash in that case. */
-	fill_vn_i(vert_map, bm->totvert, -1);
+	copy_vn_i(vert_map, bm->totvert, -1);
 
 	BM_mesh_elem_table_ensure(bm, htype);
 	ele_array = (htype == BM_FACE) ? (void **)bm->ftable : (void **)bm->etable;
@@ -2282,7 +2284,7 @@ static void createTransEditVerts(TransInfo *t)
 	float mtx[3][3], smtx[3][3], (*defmats)[3][3] = NULL, (*defcos)[3] = NULL;
 	float *dists = NULL;
 	int a;
-	int propmode = (t->flag & T_PROP_EDIT) ? (t->flag & T_PROP_EDIT_ALL) : 0;
+	const int prop_mode = (t->flag & T_PROP_EDIT) ? (t->flag & T_PROP_EDIT_ALL) : 0;
 	int mirror = 0;
 	int cd_vert_bweight_offset = -1;
 	bool use_topology = (me->editflag & ME_EDIT_MIRROR_TOPO) != 0;
@@ -2322,7 +2324,7 @@ static void createTransEditVerts(TransInfo *t)
 		cd_vert_bweight_offset = CustomData_get_offset(&bm->vdata, CD_BWEIGHT);
 	}
 
-	if (propmode) {
+	if (prop_mode) {
 		unsigned int count = 0;
 		BM_ITER_MESH (eve, &iter, bm, BM_VERTS_OF_MESH) {
 			if (!BM_elem_flag_test(eve, BM_ELEM_HIDDEN)) {
@@ -2333,7 +2335,7 @@ static void createTransEditVerts(TransInfo *t)
 		t->total = count;
 
 		/* allocating scratch arrays */
-		if (propmode & T_PROP_CONNECTED)
+		if (prop_mode & T_PROP_CONNECTED)
 			dists = MEM_mallocN(em->bm->totvert * sizeof(float), "scratch nears");
 	}
 	else {
@@ -2355,7 +2357,7 @@ static void createTransEditVerts(TransInfo *t)
 	 * matrix inversion still works and we can still moving along the other */
 	pseudoinverse_m3_m3(smtx, mtx, PSEUDOINVERSE_EPSILON);
 
-	if (propmode & T_PROP_CONNECTED) {
+	if (prop_mode & T_PROP_CONNECTED) {
 		editmesh_set_connectivity_distance(em->bm, mtx, dists);
 	}
 
@@ -2384,7 +2386,7 @@ static void createTransEditVerts(TransInfo *t)
 		{
 			mappedcos = BKE_crazyspace_get_mapped_editverts(t->scene, t->obedit);
 			quats = MEM_mallocN(em->bm->totvert * sizeof(*quats), "crazy quats");
-			BKE_crazyspace_set_quats_editmesh(em, defcos, mappedcos, quats, !propmode);
+			BKE_crazyspace_set_quats_editmesh(em, defcos, mappedcos, quats, !prop_mode);
 			if (mappedcos)
 				MEM_freeN(mappedcos);
 		}
@@ -2409,7 +2411,7 @@ static void createTransEditVerts(TransInfo *t)
 
 	BM_ITER_MESH_INDEX (eve, &iter, bm, BM_VERTS_OF_MESH, a) {
 		if (!BM_elem_flag_test(eve, BM_ELEM_HIDDEN)) {
-			if (propmode || BM_elem_flag_test(eve, BM_ELEM_SELECT)) {
+			if (prop_mode || BM_elem_flag_test(eve, BM_ELEM_SELECT)) {
 				struct TransIslandData *v_island = (island_info && island_vert_map[a] != -1) ?
 				                                   &island_info[island_vert_map[a]] : NULL;
 				float *bweight = (cd_vert_bweight_offset != -1) ? BM_ELEM_CD_GET_VOID_P(eve, cd_vert_bweight_offset) : NULL;
@@ -2422,8 +2424,8 @@ static void createTransEditVerts(TransInfo *t)
 				if (BM_elem_flag_test(eve, BM_ELEM_SELECT))
 					tob->flag |= TD_SELECTED;
 
-				if (propmode) {
-					if (propmode & T_PROP_CONNECTED) {
+				if (prop_mode) {
+					if (prop_mode & T_PROP_CONNECTED) {
 						tob->dist = dists[a];
 					}
 					else {
@@ -2728,15 +2730,15 @@ static void createTransUVs(bContext *C, TransInfo *t)
 	UvElementMap *elementmap = NULL;
 	BLI_bitmap *island_enabled = NULL;
 	int count = 0, countsel = 0, count_rejected = 0;
-	const bool propmode = (t->flag & T_PROP_EDIT) != 0;
-	const bool propconnected = (t->flag & T_PROP_CONNECTED) != 0;
+	const bool is_prop_edit = (t->flag & T_PROP_EDIT) != 0;
+	const bool is_prop_connected = (t->flag & T_PROP_CONNECTED) != 0;
 
 	const int cd_loop_uv_offset = CustomData_get_offset(&em->bm->ldata, CD_MLOOPUV);
 
 	if (!ED_space_image_show_uvedit(sima, t->obedit)) return;
 
 	/* count */
-	if (propconnected) {
+	if (is_prop_connected) {
 		/* create element map with island information */
 		if (ts->uv_flag & UV_SYNC_SELECTION) {
 			elementmap = BM_uv_element_map_create(em->bm, false, true);
@@ -2760,14 +2762,14 @@ static void createTransUVs(bContext *C, TransInfo *t)
 			if (uvedit_uv_select_test(scene, l, cd_loop_uv_offset)) {
 				countsel++;
 
-				if (propconnected) {
+				if (is_prop_connected) {
 					UvElement *element = BM_uv_element_get(elementmap, efa, l);
 					BLI_BITMAP_ENABLE(island_enabled, element->island);
 				}
 
 			}
 
-			if (propmode) {
+			if (is_prop_edit) {
 				count++;
 			}
 		}
@@ -2775,13 +2777,13 @@ static void createTransUVs(bContext *C, TransInfo *t)
 
 	/* note: in prop mode we need at least 1 selected */
 	if (countsel == 0) {
-		if (propconnected) {
+		if (is_prop_connected) {
 			MEM_freeN(island_enabled);
 		}
 		return;
 	}
 
-	t->total = (propmode) ? count : countsel;
+	t->total = (is_prop_edit) ? count : countsel;
 	t->data = MEM_callocN(t->total * sizeof(TransData), "TransObData(UV Editing)");
 	/* for each 2d uv coord a 3d vector is allocated, so that they can be
 	 * treated just as if they were 3d verts */
@@ -2798,10 +2800,10 @@ static void createTransUVs(bContext *C, TransInfo *t)
 			continue;
 
 		BM_ITER_ELEM (l, &liter, efa, BM_LOOPS_OF_FACE) {
-			if (!propmode && !uvedit_uv_select_test(scene, l, cd_loop_uv_offset))
+			if (!is_prop_edit && !uvedit_uv_select_test(scene, l, cd_loop_uv_offset))
 				continue;
 
-			if (propconnected) {
+			if (is_prop_connected) {
 				UvElement *element = BM_uv_element_get(elementmap, efa, l);
 				if (!BLI_BITMAP_TEST(island_enabled, element->island)) {
 					count_rejected++;
@@ -2814,7 +2816,7 @@ static void createTransUVs(bContext *C, TransInfo *t)
 		}
 	}
 
-	if (propconnected) {
+	if (is_prop_connected) {
 		t->total -= count_rejected;
 		BM_uv_element_map_free(elementmap);
 		MEM_freeN(island_enabled);
@@ -3186,7 +3188,7 @@ static void posttrans_gpd_clean(bGPdata *gpd)
 		bGPDframe *gpf, *gpfn;
 		bool is_double = false;
 
-		BLI_listbase_sort_r(&gpl->frames, &is_double, gpf_cmp_frame);
+		BLI_listbase_sort_r(&gpl->frames, gpf_cmp_frame, &is_double);
 
 		if (is_double) {
 			for (gpf = gpl->frames.first; gpf; gpf = gpfn) {
@@ -3213,7 +3215,7 @@ static void posttrans_mask_clean(Mask *mask)
 		MaskLayerShape *masklay_shape, *masklay_shape_next;
 		bool is_double = false;
 
-		BLI_listbase_sort_r(&masklay->splines_shapes, &is_double, masklay_shape_cmp_frame);
+		BLI_listbase_sort_r(&masklay->splines_shapes, masklay_shape_cmp_frame, &is_double);
 
 		if (is_double) {
 			for (masklay_shape = masklay->splines_shapes.first; masklay_shape; masklay_shape = masklay_shape_next) {
@@ -3329,7 +3331,7 @@ static void posttrans_action_clean(bAnimContext *ac, bAction *act)
 /* ----------------------------- */
 
 /* fully select selected beztriples, but only include if it's on the right side of cfra */
-static int count_fcurve_keys(FCurve *fcu, char side, float cfra, bool propedit)
+static int count_fcurve_keys(FCurve *fcu, char side, float cfra, bool is_prop_edit)
 {
 	BezTriple *bezt;
 	int i, count = 0, count_all = 0;
@@ -3349,13 +3351,13 @@ static int count_fcurve_keys(FCurve *fcu, char side, float cfra, bool propedit)
 		}
 	}
 
-	if (propedit && count > 0)
+	if (is_prop_edit && count > 0)
 		return count_all;
 	else return count;
 }
 
 /* fully select selected beztriples, but only include if it's on the right side of cfra */
-static int count_gplayer_frames(bGPDlayer *gpl, char side, float cfra, bool propedit)
+static int count_gplayer_frames(bGPDlayer *gpl, char side, float cfra, bool is_prop_edit)
 {
 	bGPDframe *gpf;
 	int count = 0, count_all = 0;
@@ -3372,14 +3374,14 @@ static int count_gplayer_frames(bGPDlayer *gpl, char side, float cfra, bool prop
 		}
 	}
 	
-	if (propedit && count > 0)
+	if (is_prop_edit && count > 0)
 		return count_all;
 	else
 		return count;
 }
 
 /* fully select selected beztriples, but only include if it's on the right side of cfra */
-static int count_masklayer_frames(MaskLayer *masklay, char side, float cfra, bool propedit)
+static int count_masklayer_frames(MaskLayer *masklay, char side, float cfra, bool is_prop_edit)
 {
 	MaskLayerShape *masklayer_shape;
 	int count = 0, count_all = 0;
@@ -3396,7 +3398,7 @@ static int count_masklayer_frames(MaskLayer *masklay, char side, float cfra, boo
 		}
 	}
 
-	if (propedit && count > 0)
+	if (is_prop_edit && count > 0)
 		return count_all;
 	else
 		return count;
@@ -3426,7 +3428,7 @@ static void TimeToTransData(TransData *td, float *time, AnimData *adt, float ypo
  * The 'side' argument is needed for the extend mode. 'B' = both sides, 'R'/'L' mean only data
  * on the named side are used.
  */
-static TransData *ActionFCurveToTransData(TransData *td, TransData2D **td2dv, FCurve *fcu, AnimData *adt, char side, float cfra, bool propedit, float ypos)
+static TransData *ActionFCurveToTransData(TransData *td, TransData2D **td2dv, FCurve *fcu, AnimData *adt, char side, float cfra, bool is_prop_edit, float ypos)
 {
 	BezTriple *bezt;
 	TransData2D *td2d = *td2dv;
@@ -3437,7 +3439,7 @@ static TransData *ActionFCurveToTransData(TransData *td, TransData2D **td2dv, FC
 
 	for (i = 0, bezt = fcu->bezt; i < fcu->totvert; i++, bezt++) {
 		/* only add selected keyframes (for now, proportional edit is not enabled) */
-		if (propedit || (bezt->f2 & SELECT)) { /* note this MUST match count_fcurve_keys(), so can't use BEZSELECTED() macro */
+		if (is_prop_edit || (bezt->f2 & SELECT)) { /* note this MUST match count_fcurve_keys(), so can't use BEZSELECTED() macro */
 			/* only add if on the right 'side' of the current frame */
 			if (FrameOnMouseSide(side, bezt->vec[1][0], cfra)) {
 				TimeToTransData(td, bezt->vec[1], adt, ypos);
@@ -3495,14 +3497,14 @@ void flushTransIntFrameActionData(TransInfo *t)
  * The 'side' argument is needed for the extend mode. 'B' = both sides, 'R'/'L' mean only data
  * on the named side are used.
  */
-static int GPLayerToTransData(TransData *td, tGPFtransdata *tfd, bGPDlayer *gpl, char side, float cfra, bool propedit, float ypos)
+static int GPLayerToTransData(TransData *td, tGPFtransdata *tfd, bGPDlayer *gpl, char side, float cfra, bool is_prop_edit, float ypos)
 {
 	bGPDframe *gpf;
 	int count = 0;
 	
 	/* check for select frames on right side of current frame */
 	for (gpf = gpl->frames.first; gpf; gpf = gpf->next) {
-		if (propedit || (gpf->flag & GP_FRAME_SELECT)) {
+		if (is_prop_edit || (gpf->flag & GP_FRAME_SELECT)) {
 			if (FrameOnMouseSide(side, (float)gpf->framenum, cfra)) {
 				/* memory is calloc'ed, so that should zero everything nicely for us */
 				td->val = &tfd->val;
@@ -3526,14 +3528,14 @@ static int GPLayerToTransData(TransData *td, tGPFtransdata *tfd, bGPDlayer *gpl,
 }
 
 /* refer to comment above #GPLayerToTransData, this is the same but for masks */
-static int MaskLayerToTransData(TransData *td, tGPFtransdata *tfd, MaskLayer *masklay, char side, float cfra, bool propedit, float ypos)
+static int MaskLayerToTransData(TransData *td, tGPFtransdata *tfd, MaskLayer *masklay, char side, float cfra, bool is_prop_edit, float ypos)
 {
 	MaskLayerShape *masklay_shape;
 	int count = 0;
 
 	/* check for select frames on right side of current frame */
 	for (masklay_shape = masklay->splines_shapes.first; masklay_shape; masklay_shape = masklay_shape->next) {
-		if (propedit || (masklay_shape->flag & MASK_SHAPE_SELECT)) {
+		if (is_prop_edit || (masklay_shape->flag & MASK_SHAPE_SELECT)) {
 			if (FrameOnMouseSide(side, (float)masklay_shape->frame, cfra)) {
 				/* memory is calloc'ed, so that should zero everything nicely for us */
 				td->val = &tfd->val;
@@ -3576,7 +3578,7 @@ static void createTransActionData(bContext *C, TransInfo *t)
 	ListBase anim_data = {NULL, NULL};
 	bAnimListElem *ale;
 	int filter;
-	const bool propedit = (t->flag & T_PROP_EDIT) != 0;
+	const bool is_prop_edit = (t->flag & T_PROP_EDIT) != 0;
 
 	int count = 0;
 	float cfra;
@@ -3619,11 +3621,11 @@ static void createTransActionData(bContext *C, TransInfo *t)
 			cfra = (float)CFRA;
 		
 		if (ELEM(ale->type, ANIMTYPE_FCURVE, ANIMTYPE_NLACURVE))
-			adt_count = count_fcurve_keys(ale->key_data, t->frame_side, cfra, propedit);
+			adt_count = count_fcurve_keys(ale->key_data, t->frame_side, cfra, is_prop_edit);
 		else if (ale->type == ANIMTYPE_GPLAYER)
-			adt_count = count_gplayer_frames(ale->data, t->frame_side, cfra, propedit);
+			adt_count = count_gplayer_frames(ale->data, t->frame_side, cfra, is_prop_edit);
 		else if (ale->type == ANIMTYPE_MASKLAYER)
-			adt_count = count_masklayer_frames(ale->data, t->frame_side, cfra, propedit);
+			adt_count = count_masklayer_frames(ale->data, t->frame_side, cfra, is_prop_edit);
 		else
 			BLI_assert(0);
 
@@ -3669,7 +3671,7 @@ static void createTransActionData(bContext *C, TransInfo *t)
 	for (ale = anim_data.first; ale; ale = ale->next) {
 		AnimData *adt;
 
-		if (propedit && !ale->tag)
+		if (is_prop_edit && !ale->tag)
 			continue;
 
 		adt = ANIM_nla_mapping_get(&ac, ale);
@@ -3682,7 +3684,7 @@ static void createTransActionData(bContext *C, TransInfo *t)
 			bGPDlayer *gpl = (bGPDlayer *)ale->data;
 			int i;
 			
-			i = GPLayerToTransData(td, tfd, gpl, t->frame_side, cfra, propedit, ypos);
+			i = GPLayerToTransData(td, tfd, gpl, t->frame_side, cfra, is_prop_edit, ypos);
 			td += i;
 			tfd += i;
 		}
@@ -3690,7 +3692,7 @@ static void createTransActionData(bContext *C, TransInfo *t)
 			MaskLayer *masklay = (MaskLayer *)ale->data;
 			int i;
 
-			i = MaskLayerToTransData(td, tfd, masklay, t->frame_side, cfra, propedit, ypos);
+			i = MaskLayerToTransData(td, tfd, masklay, t->frame_side, cfra, is_prop_edit, ypos);
 			td += i;
 			tfd += i;
 		}
@@ -3698,7 +3700,7 @@ static void createTransActionData(bContext *C, TransInfo *t)
 			AnimData *adt = ANIM_nla_mapping_get(&ac, ale);
 			FCurve *fcu = (FCurve *)ale->key_data;
 			
-			td = ActionFCurveToTransData(td, &td2d, fcu, adt, t->frame_side, cfra, propedit, ypos);
+			td = ActionFCurveToTransData(td, &td2d, fcu, adt, t->frame_side, cfra, is_prop_edit, ypos);
 		}
 	}
 	
@@ -3728,7 +3730,7 @@ static void createTransActionData(bContext *C, TransInfo *t)
 	}
 
 	/* calculate distances for proportional editing */
-	if (propedit) {
+	if (is_prop_edit) {
 		td = t->data;
 
 		for (ale = anim_data.first; ale; ale = ale->next) {
@@ -3754,13 +3756,14 @@ static void createTransActionData(bContext *C, TransInfo *t)
 					}
 					else {
 						bGPDframe *gpf_iter;
-						float min = FLT_MAX;
+						int min = INT_MAX;
 						for (gpf_iter = gpl->frames.first; gpf_iter; gpf_iter = gpf->next) {
 							if (gpf_iter->flag & GP_FRAME_SELECT) {
 								if (FrameOnMouseSide(t->frame_side, (float)gpf_iter->framenum, cfra)) {
-									float val = fabs(gpf->framenum - gpf_iter->framenum);
-									if (val < min)
+									int val = abs(gpf->framenum - gpf_iter->framenum);
+									if (val < min) {
 										min = val;
+									}
 								}
 							}
 						}
@@ -3780,13 +3783,14 @@ static void createTransActionData(bContext *C, TransInfo *t)
 						}
 						else {
 							MaskLayerShape *masklay_iter;
-							float min = FLT_MAX;
+							int min = INT_MAX;
 							for (masklay_iter = masklay->splines_shapes.first; masklay_iter; masklay_iter = masklay_iter->next) {
 								if (masklay_iter->flag & MASK_SHAPE_SELECT) {
 									if (FrameOnMouseSide(t->frame_side, (float)masklay_iter->frame, cfra)) {
-										float val = fabs(masklay_shape->frame - masklay_iter->frame);
-										if (val < min)
+										int val = abs(masklay_shape->frame - masklay_iter->frame);
+										if (val < min) {
 											min = val;
+										}
 									}
 								}
 							}
@@ -3836,6 +3840,7 @@ static void createTransActionData(bContext *C, TransInfo *t)
 
 typedef struct TransDataGraph {
 	float unit_scale;
+	float offset;
 } TransDataGraph;
 
 /* Helper function for createTransGraphEditData, which is responsible for associating
@@ -3844,7 +3849,7 @@ typedef struct TransDataGraph {
 static void bezt_to_transdata(TransData *td, TransData2D *td2d, TransDataGraph *tdg,
                               AnimData *adt, BezTriple *bezt,
                               int bi, bool selected, bool ishandle, bool intvals,
-                              float mtx[3][3], float smtx[3][3], float unit_scale)
+                              float mtx[3][3], float smtx[3][3], float unit_scale, float offset)
 {
 	float *loc = bezt->vec[bi];
 	const float *cent = bezt->vec[1];
@@ -3858,26 +3863,26 @@ static void bezt_to_transdata(TransData *td, TransData2D *td2d, TransDataGraph *
 	
 	if (adt) {
 		td2d->loc[0] = BKE_nla_tweakedit_remap(adt, loc[0], NLATIME_CONVERT_MAP);
-		td2d->loc[1] = loc[1] * unit_scale;
+		td2d->loc[1] = (loc[1] + offset) * unit_scale;
 		td2d->loc[2] = 0.0f;
 		td2d->loc2d = loc;
 		
 		td->loc = td2d->loc;
 		td->center[0] = BKE_nla_tweakedit_remap(adt, cent[0], NLATIME_CONVERT_MAP);
-		td->center[1] = cent[1] * unit_scale;
+		td->center[1] = (cent[1] + offset) * unit_scale;
 		td->center[2] = 0.0f;
 		
 		copy_v3_v3(td->iloc, td->loc);
 	}
 	else {
 		td2d->loc[0] = loc[0];
-		td2d->loc[1] = loc[1] * unit_scale;
+		td2d->loc[1] = (loc[1] + offset) * unit_scale;
 		td2d->loc[2] = 0.0f;
 		td2d->loc2d = loc;
 		
 		td->loc = td2d->loc;
 		copy_v3_v3(td->center, cent);
-		td->center[1] *= unit_scale;
+		td->center[1] = (td->center[1] + offset) * unit_scale;
 		copy_v3_v3(td->iloc, td->loc);
 	}
 
@@ -3917,6 +3922,7 @@ static void bezt_to_transdata(TransData *td, TransData2D *td2d, TransDataGraph *
 	copy_m3_m3(td->smtx, smtx);
 
 	tdg->unit_scale = unit_scale;
+	tdg->offset = offset;
 }
 
 static bool graph_edit_is_translation_mode(TransInfo *t)
@@ -3974,7 +3980,7 @@ static void createTransGraphEditData(bContext *C, TransInfo *t)
 	const bool is_translation_mode = graph_edit_is_translation_mode(t);
 	const bool use_handle = !(sipo->flag & SIPO_NOHANDLES);
 	const bool use_local_center = graph_edit_use_local_center(t);
-	const bool propedit = (t->flag & T_PROP_EDIT) != 0;
+	const bool is_prop_edit = (t->flag & T_PROP_EDIT) != 0;
 	short anim_map_flag = ANIM_UNITCONV_ONLYSEL | ANIM_UNITCONV_SELVERTS;
 	
 	/* determine what type of data we are operating on */
@@ -4028,7 +4034,7 @@ static void createTransGraphEditData(bContext *C, TransInfo *t)
 				const bool sel1 = use_handle ? (bezt->f1 & SELECT) != 0 : sel2;
 				const bool sel3 = use_handle ? (bezt->f3 & SELECT) != 0 : sel2;
 
-				if (propedit) {
+				if (is_prop_edit) {
 					curvecount += 3;
 					if (sel2 || sel1 || sel3)
 						selected = true;
@@ -4052,7 +4058,7 @@ static void createTransGraphEditData(bContext *C, TransInfo *t)
 			}
 		}
 
-		if (propedit) {
+		if (is_prop_edit) {
 			if (selected) {
 				count += curvecount;
 				ale->tag = true;
@@ -4104,11 +4110,11 @@ static void createTransGraphEditData(bContext *C, TransInfo *t)
 		AnimData *adt = ANIM_nla_mapping_get(&ac, ale);
 		FCurve *fcu = (FCurve *)ale->key_data;
 		bool intvals = (fcu->flag & FCURVE_INT_VALUES) != 0;
-		float unit_scale;
+		float unit_scale, offset;
 		float cfra;
 
 		/* F-Curve may not have any keyframes */
-		if (fcu->bezt == NULL || (propedit && ale->tag == 0))
+		if (fcu->bezt == NULL || (is_prop_edit && ale->tag == 0))
 			continue;
 
 		/* convert current-frame to action-time (slightly less accurate, especially under
@@ -4119,7 +4125,7 @@ static void createTransGraphEditData(bContext *C, TransInfo *t)
 		else
 			cfra = (float)CFRA;
 
-		unit_scale = ANIM_unit_mapping_get_factor(ac.scene, ale->id, ale->key_data, anim_map_flag);
+		unit_scale = ANIM_unit_mapping_get_factor(ac.scene, ale->id, ale->key_data, anim_map_flag, &offset);
 
 		/* only include BezTriples whose 'keyframe' occurs on the same side of the current frame as mouse (if applicable) */
 		for (i = 0, bezt = fcu->bezt; i < fcu->totvert; i++, bezt++) {
@@ -4131,15 +4137,15 @@ static void createTransGraphEditData(bContext *C, TransInfo *t)
 				TransDataCurveHandleFlags *hdata = NULL;
 				/* short h1=1, h2=1; */ /* UNUSED */
 				
-				if (propedit) {
+				if (is_prop_edit) {
 					bool is_sel = (sel2 || sel1 || sel3);
 					/* we always select all handles for proportional editing if central handle is selected */
 					initTransDataCurveHandles(td, bezt);
-					bezt_to_transdata(td++, td2d++, tdg++, adt, bezt, 0, is_sel, true, intvals, mtx, smtx, unit_scale);
+					bezt_to_transdata(td++, td2d++, tdg++, adt, bezt, 0, is_sel, true, intvals, mtx, smtx, unit_scale, offset);
 					initTransDataCurveHandles(td, bezt);
-					bezt_to_transdata(td++, td2d++, tdg++, adt, bezt, 1, is_sel, false, intvals, mtx, smtx, unit_scale);
+					bezt_to_transdata(td++, td2d++, tdg++, adt, bezt, 1, is_sel, false, intvals, mtx, smtx, unit_scale, offset);
 					initTransDataCurveHandles(td, bezt);
-					bezt_to_transdata(td++, td2d++, tdg++, adt, bezt, 2, is_sel, true, intvals, mtx, smtx, unit_scale);
+					bezt_to_transdata(td++, td2d++, tdg++, adt, bezt, 2, is_sel, true, intvals, mtx, smtx, unit_scale, offset);
 				}
 				else {
 					/* only include handles if selected, irrespective of the interpolation modes.
@@ -4148,7 +4154,7 @@ static void createTransGraphEditData(bContext *C, TransInfo *t)
 					if (!is_translation_mode || !(sel2)) {
 						if (sel1) {
 							hdata = initTransDataCurveHandles(td, bezt);
-							bezt_to_transdata(td++, td2d++, tdg++, adt, bezt, 0, sel1, true, intvals, mtx, smtx, unit_scale);
+							bezt_to_transdata(td++, td2d++, tdg++, adt, bezt, 0, sel1, true, intvals, mtx, smtx, unit_scale, offset);
 						}
 						else {
 							/* h1 = 0; */ /* UNUSED */
@@ -4157,7 +4163,7 @@ static void createTransGraphEditData(bContext *C, TransInfo *t)
 						if (sel3) {
 							if (hdata == NULL)
 								hdata = initTransDataCurveHandles(td, bezt);
-							bezt_to_transdata(td++, td2d++, tdg++, adt, bezt, 2, sel3, true, intvals, mtx, smtx, unit_scale);
+							bezt_to_transdata(td++, td2d++, tdg++, adt, bezt, 2, sel3, true, intvals, mtx, smtx, unit_scale, offset);
 						}
 						else {
 							/* h2 = 0; */ /* UNUSED */
@@ -4178,7 +4184,7 @@ static void createTransGraphEditData(bContext *C, TransInfo *t)
 								hdata = initTransDataCurveHandles(td, bezt);
 						}
 
-						bezt_to_transdata(td++, td2d++, tdg++, adt, bezt, 1, sel2, false, intvals, mtx, smtx, unit_scale);
+						bezt_to_transdata(td++, td2d++, tdg++, adt, bezt, 1, sel2, false, intvals, mtx, smtx, unit_scale, offset);
 
 					}
 					/* special hack (must be done after initTransDataCurveHandles(), as that stores handle settings to restore...):
@@ -4203,7 +4209,7 @@ static void createTransGraphEditData(bContext *C, TransInfo *t)
 		testhandles_fcurve(fcu, use_handle);
 	}
 
-	if (propedit) {
+	if (is_prop_edit) {
 		/* loop 2: build transdata arrays */
 		td = t->data;
 
@@ -4543,7 +4549,7 @@ void flushTransGraphData(TransInfo *t)
 		if (td->flag & TD_INTVALUES)
 			td2d->loc2d[1] = floorf(td2d->loc[1] + 0.5f);
 		else
-			td2d->loc2d[1] = td2d->loc[1] * inv_unit_scale;
+			td2d->loc2d[1] = td2d->loc[1] * inv_unit_scale - tdg->offset;
 		
 		if ((td->flag & TD_MOVEHANDLE1) && td2d->h1) {
 			td2d->h1[0] = td2d->ih1[0] + td->loc[0] - td->iloc[0];
@@ -5356,7 +5362,9 @@ static void set_trans_object_base_flags(TransInfo *t)
 	}
 
 	/* all recalc flags get flushed to all layers, so a layer flip later on works fine */
+#ifdef WITH_LEGACY_DEPSGRAPH
 	DAG_scene_flush_update(G.main, t->scene, -1, 0);
+#endif
 
 	/* and we store them temporal in base (only used for transform code) */
 	/* this because after doing updates, the object->recalc is cleared */
@@ -5433,7 +5441,9 @@ static int count_proportional_objects(TransInfo *t)
 
 	/* all recalc flags get flushed to all layers, so a layer flip later on works fine */
 	DAG_scene_relations_update(G.main, t->scene);
+#ifdef WITH_LEGACY_DEPSGRAPH
 	DAG_scene_flush_update(G.main, t->scene, -1, 0);
+#endif
 
 	/* and we store them temporal in base (only used for transform code) */
 	/* this because after doing updates, the object->recalc is cleared */
@@ -6315,7 +6325,7 @@ static void createTransObject(bContext *C, TransInfo *t)
 
 	TransData *td = NULL;
 	TransDataExtension *tx;
-	int propmode = t->flag & T_PROP_EDIT;
+	const bool is_prop_edit = (t->flag & T_PROP_EDIT) != 0;
 
 	set_trans_object_base_flags(t);
 
@@ -6328,7 +6338,7 @@ static void createTransObject(bContext *C, TransInfo *t)
 		return;
 	}
 	
-	if (propmode) {
+	if (is_prop_edit) {
 		t->total += count_proportional_objects(t);
 	}
 
@@ -6361,7 +6371,7 @@ static void createTransObject(bContext *C, TransInfo *t)
 	}
 	CTX_DATA_END;
 	
-	if (propmode) {
+	if (is_prop_edit) {
 		View3D *v3d = t->view;
 		Base *base;
 
@@ -7118,9 +7128,10 @@ static void MaskHandleToTransData(MaskSplinePoint *point, eMaskWhichHandle which
 	}
 }
 
-static void MaskPointToTransData(Scene *scene, MaskSplinePoint *point,
-                                 TransData *td, TransData2D *td2d, TransDataMasking *tdm,
-                                 const int propmode, const float asp[2])
+static void MaskPointToTransData(
+        Scene *scene, MaskSplinePoint *point,
+        TransData *td, TransData2D *td2d, TransDataMasking *tdm,
+        const bool is_prop_edit, const float asp[2])
 {
 	BezTriple *bezt = &point->bezt;
 	const bool is_sel_point = MASKPOINT_ISSEL_KNOT(point);
@@ -7130,7 +7141,7 @@ static void MaskPointToTransData(Scene *scene, MaskSplinePoint *point,
 	BKE_mask_point_parent_matrix_get(point, CFRA, parent_matrix);
 	invert_m3_m3(parent_inverse_matrix, parent_matrix);
 
-	if (propmode || is_sel_point) {
+	if (is_prop_edit || is_sel_point) {
 		int i;
 
 		tdm->point = point;
@@ -7250,7 +7261,7 @@ static void createTransMaskingData(bContext *C, TransInfo *t)
 	TransData2D *td2d = NULL;
 	TransDataMasking *tdm = NULL;
 	int count = 0, countsel = 0;
-	int propmode = t->flag & T_PROP_EDIT;
+	const bool is_prop_edit = (t->flag & T_PROP_EDIT);
 	float asp[2];
 
 	t->total = 0;
@@ -7300,7 +7311,7 @@ static void createTransMaskingData(bContext *C, TransInfo *t)
 					}
 				}
 
-				if (propmode)
+				if (is_prop_edit)
 					count += 3;
 			}
 		}
@@ -7313,7 +7324,7 @@ static void createTransMaskingData(bContext *C, TransInfo *t)
 
 	ED_mask_get_aspect(t->sa, t->ar, &asp[0], &asp[1]);
 
-	t->total = (propmode) ? count : countsel;
+	t->total = (is_prop_edit) ? count : countsel;
 	td = t->data = MEM_callocN(t->total * sizeof(TransData), "TransObData(Mask Editing)");
 	/* for each 2d uv coord a 3d vector is allocated, so that they can be
 	 * treated just as if they were 3d verts */
@@ -7336,10 +7347,10 @@ static void createTransMaskingData(bContext *C, TransInfo *t)
 			for (i = 0; i < spline->tot_point; i++) {
 				MaskSplinePoint *point = &spline->points[i];
 
-				if (propmode || MASKPOINT_ISSEL_ANY(point)) {
-					MaskPointToTransData(scene, point, td, td2d, tdm, propmode, asp);
+				if (is_prop_edit || MASKPOINT_ISSEL_ANY(point)) {
+					MaskPointToTransData(scene, point, td, td2d, tdm, is_prop_edit, asp);
 
-					if (propmode || MASKPOINT_ISSEL_KNOT(point)) {
+					if (is_prop_edit || MASKPOINT_ISSEL_KNOT(point)) {
 						td += 3;
 						td2d += 3;
 						tdm += 3;
@@ -7582,8 +7593,8 @@ static void createTransGPencil(bContext *C, TransInfo *t)
 	const Scene *scene = CTX_data_scene(C);
 	const int cfra = CFRA;
 	
-	const int propedit = (t->flag & T_PROP_EDIT);
-	const int propedit_connected = (t->flag & T_PROP_CONNECTED);
+	const bool is_prop_edit = (t->flag & T_PROP_EDIT) != 0;
+	const bool is_prop_edit_connected = (t->flag & T_PROP_CONNECTED) != 0;
 	
 	
 	/* == Grease Pencil Strokes to Transform Data ==
@@ -7614,9 +7625,9 @@ static void createTransGPencil(bContext *C, TransInfo *t)
 					continue;
 				}
 				
-				if (propedit) {
+				if (is_prop_edit) {
 					/* Proportional Editing... */
-					if (propedit_connected) {
+					if (is_prop_edit_connected) {
 						/* connected only - so only if selected */
 						if (gps->flag & GP_STROKE_SELECT)
 							t->total += gps->totpoints;
@@ -7723,8 +7734,8 @@ static void createTransGPencil(bContext *C, TransInfo *t)
 				}
 				
 				/* What we need to include depends on proportional editing settings... */
-				if (propedit) {
-					if (propedit_connected) {
+				if (is_prop_edit) {
+					if (is_prop_edit_connected) {
 						/* A) "Connected" - Only those in selected strokes */
 						stroke_ok = (gps->flag & GP_STROKE_SELECT) != 0;
 					}
@@ -7743,7 +7754,7 @@ static void createTransGPencil(bContext *C, TransInfo *t)
 					bGPDspoint *pt;
 					int i;
 					
-#if 0	/* XXX: this isn't needed anymore; cannot calculate center this way or propedit breaks */				
+#if 0	/* XXX: this isn't needed anymore; cannot calculate center this way or is_prop_edit breaks */
 					const float ninv = 1.0f / gps->totpoints;
 					float center[3] = {0.0f};
 					
@@ -7758,7 +7769,7 @@ static void createTransGPencil(bContext *C, TransInfo *t)
 						bool point_ok;
 						
 						/* include point? */
-						if (propedit) {
+						if (is_prop_edit) {
 							/* Always all points in strokes that get included */
 							point_ok = true;
 						}
@@ -7801,7 +7812,7 @@ static void createTransGPencil(bContext *C, TransInfo *t)
 					}
 					
 					/* March over these points, and calculate the proportional editing distances */
-					if (propedit && (head != tail)) {
+					if (is_prop_edit && (head != tail)) {
 						/* XXX: for now, we are similar enough that this works... */
 						calc_distanceCurveVerts(head, tail - 1);
 					}

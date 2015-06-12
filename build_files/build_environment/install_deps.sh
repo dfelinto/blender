@@ -510,7 +510,7 @@ OSL_SOURCE_REPO_UID="22ee5ea298fd215430dfbd160b5aefd507f06db0"
 OSL_SOURCE_REPO_BRANCH="blender-fixes"
 
 OPENCOLLADA_SOURCE=( "https://github.com/KhronosGroup/OpenCOLLADA.git" )
-OPENCOLLADA_REPO_UID="18da7f4109a8eafaa290a33f5550501cc4c8bae8"
+OPENCOLLADA_REPO_UID="3335ac164e68b2512a40914b14c74db260e6ff7d"
 FFMPEG_SOURCE=( "http://ffmpeg.org/releases/ffmpeg-$FFMPEG_VERSION.tar.bz2" )
 
 
@@ -1374,7 +1374,7 @@ EOF
     cmake_d="$cmake_d -D CMAKE_INSTALL_PREFIX=$_inst"
     cmake_d="$cmake_d -D LLVM_ENABLE_FFI=ON"
     cmake_d="$cmake_d -D LLVM_TARGETS_TO_BUILD=X86"
-    cmake_d="$cmake_d -D -DLLVM_ENABLE_TERMINFO=OFF"
+    cmake_d="$cmake_d -D LLVM_ENABLE_TERMINFO=OFF"
 
     if [ -d $_FFI_INCLUDE_DIR ]; then
       cmake_d="$cmake_d -D FFI_INCLUDE_DIR=$_FFI_INCLUDE_DIR"
@@ -1537,7 +1537,7 @@ clean_OpenCOLLADA() {
 
 compile_OpenCOLLADA() {
   # To be changed each time we make edits that would modify the compiled results!
-  opencollada_magic=8
+  opencollada_magic=9
   _init_opencollada
 
   # Clean install if needed!
@@ -2287,7 +2287,7 @@ install_RPM() {
   OGG_DEV="libogg-devel"
   THEORA_DEV="libtheora-devel"
 
-  _packages="gcc gcc-c++ make scons libtiff-devel freetype-devel libjpeg-devel\
+  _packages="gcc gcc-c++ make scons libtiff-devel libjpeg-devel\
              libpng-devel libX11-devel libXi-devel wget ncurses-devel \
              readline-devel $OPENJPEG_DEV openal-soft-devel \
              glew-devel yasm $THEORA_DEV $VORBIS_DEV $OGG_DEV patch \
@@ -2301,7 +2301,7 @@ install_RPM() {
   if [ $RPM = "FEDORA" -o $RPM = "RHEL" ]; then
     OPENEXR_DEV="openexr-devel"
 
-    _packages="$_packages libsqlite3x-devel fftw-devel SDL-devel"
+    _packages="$_packages freetype-devel libsqlite3x-devel fftw-devel SDL-devel"
 
     if $WITH_ALL; then
       _packages="$_packages jack-audio-connection-kit-devel"
@@ -2339,7 +2339,7 @@ install_RPM() {
   elif [ $RPM = "SUSE" ]; then
     OPENEXR_DEV="libopenexr-devel"
 
-    _packages="$_packages cmake sqlite3-devel fftw3-devel libSDL-devel"
+    _packages="$_packages cmake freetype2-devel sqlite3-devel fftw3-devel libSDL-devel"
 
     PRINT ""
     install_packages_RPM $_packages

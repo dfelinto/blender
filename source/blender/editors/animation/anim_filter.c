@@ -1301,7 +1301,7 @@ static size_t animfilter_nla(bAnimContext *UNUSED(ac), ListBase *anim_data, bDop
 		 *	- active track should still get shown though (even though it has disabled flag set)
 		 */
 		// FIXME: the channels after should still get drawn, just 'differently', and after an active-action channel
-		if ((adt->flag & ADT_NLA_EDIT_ON) && (nlt->flag & NLATRACK_DISABLED) && !(nlt->flag & NLATRACK_ACTIVE))
+		if ((adt->flag & ADT_NLA_EDIT_ON) && (nlt->flag & NLATRACK_DISABLED) && (adt->act_track != nlt))
 			continue;
 		
 		/* only work with this channel and its subchannels if it is editable */
@@ -1310,6 +1310,30 @@ static size_t animfilter_nla(bAnimContext *UNUSED(ac), ListBase *anim_data, bDop
 			if (ANIMCHANNEL_SELOK(SEL_NLT(nlt))) {
 				/* only include if this track is active */
 				if (!(filter_mode & ANIMFILTER_ACTIVE) || (nlt->flag & NLATRACK_ACTIVE)) {
+					/* name based filtering... */
+					if (((ads) && (ads->filterflag & ADS_FILTER_BY_FCU_NAME)) && (owner_id)) {
+						bool track_ok = false, strip_ok = false;
+						
+						/* check if the name of the track, or the strips it has are ok... */
+						track_ok = BLI_strcasestr(nlt->name, ads->searchstr);
+						
+						if (track_ok == false) {
+							NlaStrip *strip;
+							for (strip = nlt->strips.first; strip; strip = strip->next) {
+								if (BLI_strcasestr(strip->name, ads->searchstr)) {
+									strip_ok = true;
+									break;
+								}
+							}
+						}
+						
+						/* skip if both fail this test... */
+						if (!track_ok && !strip_ok) {
+							continue;
+						}
+					}
+					
+					/* add the track now that it has passed all our tests */
 					ANIMCHANNEL_NEW_CHANNEL(nlt, ANIMTYPE_NLATRACK, owner_id);
 				}
 			}
@@ -1390,7 +1414,7 @@ static size_t animfilter_nla_controls(ListBase *anim_data, bDopeSheet *ads, Anim
 		items += tmp_items;
 	}
 	
-	/* return the numebr of items added ot the list */
+	/* return the numebr of items added to the list */
 	return items;
 }
 

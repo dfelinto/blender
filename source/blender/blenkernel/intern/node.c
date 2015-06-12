@@ -303,7 +303,7 @@ bNodeTreeType *ntreeTypeFind(const char *idname)
 
 void ntreeTypeAdd(bNodeTreeType *nt)
 {
-	BLI_ghash_insert(nodetreetypes_hash, (void *)nt->idname, nt);
+	BLI_ghash_insert(nodetreetypes_hash, nt->idname, nt);
 	/* XXX pass Main to register function? */
 	update_typeinfo(G.main, NULL, nt, NULL, NULL, false);
 }
@@ -317,7 +317,7 @@ static void ntree_free_type(void *treetype_v)
 	MEM_freeN(treetype);
 }
 
-void ntreeTypeFreeLink(bNodeTreeType *nt)
+void ntreeTypeFreeLink(const bNodeTreeType *nt)
 {
 	BLI_ghash_remove(nodetreetypes_hash, nt->idname, NULL, ntree_free_type);
 }
@@ -378,7 +378,7 @@ void nodeRegisterType(bNodeType *nt)
 	BLI_assert(nt->idname[0] != '\0');
 	BLI_assert(nt->poll != NULL);
 	
-	BLI_ghash_insert(nodetypes_hash, (void *)nt->idname, nt);
+	BLI_ghash_insert(nodetypes_hash, nt->idname, nt);
 	/* XXX pass Main to register function? */
 	update_typeinfo(G.main, NULL, NULL, nt, NULL, false);
 }
@@ -1109,7 +1109,7 @@ bNodeTree *ntreeAddTree(Main *bmain, const char *name, const char *idname)
  * copying for internal use (threads for eg), where you wont want it to modify the
  * scene data.
  */
-static bNodeTree *ntreeCopyTree_internal(bNodeTree *ntree, Main *bmain, bool do_id_user, bool do_make_extern, bool copy_previews)
+static bNodeTree *ntreeCopyTree_internal(bNodeTree *ntree, Main *bmain, bool skip_database, bool do_id_user, bool do_make_extern, bool copy_previews)
 {
 	bNodeTree *newtree;
 	bNode *node /*, *nnode */ /* UNUSED */, *last;
@@ -1119,7 +1119,7 @@ static bNodeTree *ntreeCopyTree_internal(bNodeTree *ntree, Main *bmain, bool do_
 	if (ntree == NULL) return NULL;
 	
 	/* is ntree part of library? */
-	if (bmain && BLI_findindex(&bmain->nodetree, ntree) >= 0) {
+	if (bmain && !skip_database && BLI_findindex(&bmain->nodetree, ntree) >= 0) {
 		newtree = BKE_libblock_copy(&ntree->id);
 	}
 	else {
@@ -1211,7 +1211,7 @@ static bNodeTree *ntreeCopyTree_internal(bNodeTree *ntree, Main *bmain, bool do_
 
 bNodeTree *ntreeCopyTree_ex(bNodeTree *ntree, Main *bmain, const bool do_id_user)
 {
-	return ntreeCopyTree_internal(ntree, bmain, do_id_user, true, true);
+	return ntreeCopyTree_internal(ntree, bmain, false, do_id_user, true, true);
 }
 bNodeTree *ntreeCopyTree(bNodeTree *ntree)
 {
@@ -1980,7 +1980,7 @@ bNodeTree *ntreeLocalize(bNodeTree *ntree)
 		/* Make full copy.
 		 * Note: previews are not copied here.
 		 */
-		ltree = ntreeCopyTree_internal(ntree, NULL, false, false, false);
+		ltree = ntreeCopyTree_internal(ntree, G.main, true, false, false, false);
 		ltree->flag |= NTREE_IS_LOCALIZED;
 		
 		for (node = ltree->nodes.first; node; node = node->next) {
@@ -3082,10 +3082,14 @@ void nodeSynchronizeID(bNode *node, bool copy_to_id)
 		bNodeSocket *sock;
 		Material *ma = (Material *)node->id;
 		int a;
+		short check_flags = SOCK_UNAVAIL;
+
+		if (!copy_to_id)
+			check_flags |= SOCK_HIDDEN;
 		
 		/* hrmf, case in loop isn't super fast, but we don't edit 100s of material at same time either! */
 		for (a = 0, sock = node->inputs.first; sock; sock = sock->next, a++) {
-			if (!nodeSocketIsHidden(sock)) {
+			if (!(sock->flag & check_flags)) {
 				if (copy_to_id) {
 					switch (a) {
 						case MAT_IN_COLOR:

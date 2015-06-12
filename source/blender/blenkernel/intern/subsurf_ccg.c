@@ -300,7 +300,11 @@ static int ss_sync_from_uv(CCGSubSurf *ss, CCGSubSurf *origss, DerivedMesh *dm, 
 	float uv[3] = {0.0f, 0.0f, 0.0f}; /* only first 2 values are written into */
 
 	limit[0] = limit[1] = STD_UV_CONNECT_LIMIT;
-	vmap = BKE_mesh_uv_vert_map_create(mpoly, mloop, mloopuv, totface, totvert, 0, limit);
+	/* previous behavior here is without accounting for winding, however this causes stretching in
+	 * UV map in really simple cases with mirror + subsurf, see second part of T44530. Also, initially
+	 * intention is to treat merged vertices from mirror modifier as seams, see code below with ME_VERT_MERGED
+	 * This fixes a very old regression (2.49 was correct here) */
+	vmap = BKE_mesh_uv_vert_map_create(mpoly, mloop, mloopuv, totface, totvert, limit, false, true);
 	if (!vmap)
 		return 0;
 	
@@ -1762,7 +1766,7 @@ static void ccgDM_drawFacesSolid(DerivedMesh *dm, float (*partial_redraw_planes)
 	ccgdm_pbvh_update(ccgdm);
 
 	if (ccgdm->pbvh && ccgdm->multires.mmd && !fast) {
-		if (dm->numTessFaceData) {
+		if (BKE_pbvh_has_faces(ccgdm->pbvh)) {
 			BKE_pbvh_draw(ccgdm->pbvh, partial_redraw_planes, NULL,
 			              setMaterial, false);
 			glShadeModel(GL_FLAT);
@@ -2796,7 +2800,6 @@ static void ccgDM_release(DerivedMesh *dm)
 		if (ccgdm->reverseFaceMap) MEM_freeN(ccgdm->reverseFaceMap);
 		if (ccgdm->gridFaces) MEM_freeN(ccgdm->gridFaces);
 		if (ccgdm->gridData) MEM_freeN(ccgdm->gridData);
-		if (ccgdm->gridAdjacency) MEM_freeN(ccgdm->gridAdjacency);
 		if (ccgdm->gridOffset) MEM_freeN(ccgdm->gridOffset);
 		if (ccgdm->gridFlagMats) MEM_freeN(ccgdm->gridFlagMats);
 		if (ccgdm->gridHidden) {
@@ -3107,46 +3110,11 @@ static int ccgDM_getGridSize(DerivedMesh *dm)
 	return ccgSubSurf_getGridSize(ccgdm->ss);
 }
 
-static int ccgdm_adjacent_grid(int *gridOffset, CCGFace *f, int S, int offset)
-{
-	CCGFace *adjf;
-	CCGEdge *e;
-	int i, j = 0, numFaces, fIndex, numEdges = 0;
-
-	e = ccgSubSurf_getFaceEdge(f, S);
-	numFaces = ccgSubSurf_getEdgeNumFaces(e);
-
-	if (numFaces != 2)
-		return -1;
-
-	for (i = 0; i < numFaces; i++) {
-		adjf = ccgSubSurf_getEdgeFace(e, i);
-
-		if (adjf != f) {
-			numEdges = ccgSubSurf_getFaceNumVerts(adjf);
-			for (j = 0; j < numEdges; j++)
-				if (ccgSubSurf_getFaceEdge(adjf, j) == e)
-					break;
-
-			if (j != numEdges)
-				break;
-		}
-	}
-
-	if (numEdges == 0)
-		return -1;
-	
-	fIndex = GET_INT_FROM_POINTER(ccgSubSurf_getFaceFaceHandle(adjf));
-
-	return gridOffset[fIndex] + (j + offset) % numEdges;
-}
-
 static void ccgdm_create_grids(DerivedMesh *dm)
 {
 	CCGDerivedMesh *ccgdm = (CCGDerivedMesh *)dm;
 	CCGSubSurf *ss = ccgdm->ss;
 	CCGElem **gridData;
-	DMGridAdjacency *gridAdjacency, *adj;
 	DMFlagMat *gridFlagMats;
 	CCGFace **gridFaces;
 	int *gridOffset;
@@ -3172,7 +3140,6 @@ static void ccgdm_create_grids(DerivedMesh *dm)
 
 	/* compute grid data */
 	gridData = MEM_mallocN(sizeof(CCGElem *) * numGrids, "ccgdm.gridData");
-	gridAdjacency = MEM_mallocN(sizeof(DMGridAdjacency) * numGrids, "ccgdm.gridAdjacency");
 	gridFaces = MEM_mallocN(sizeof(CCGFace *) * numGrids, "ccgdm.gridFaces");
 	gridFlagMats = MEM_mallocN(sizeof(DMFlagMat) * numGrids, "ccgdm.gridFlagMats");
 
@@ -3183,29 +3150,14 @@ static void ccgdm_create_grids(DerivedMesh *dm)
 		int numVerts = ccgSubSurf_getFaceNumVerts(f);
 
 		for (S = 0; S < numVerts; S++, gIndex++) {
-			int prevS = (S - 1 + numVerts) % numVerts;
-			int nextS = (S + 1 + numVerts) % numVerts;
-
 			gridData[gIndex] = ccgSubSurf_getFaceGridDataArray(ss, f, S);
 			gridFaces[gIndex] = f;
 			gridFlagMats[gIndex] = ccgdm->faceFlags[index];
-
-			adj = &gridAdjacency[gIndex];
-
-			adj->index[0] = gIndex - S + nextS;
-			adj->rotation[0] = 3;
-			adj->index[1] = ccgdm_adjacent_grid(gridOffset, f, prevS, 0);
-			adj->rotation[1] = 1;
-			adj->index[2] = ccgdm_adjacent_grid(gridOffset, f, S, 1);
-			adj->rotation[2] = 3;
-			adj->index[3] = gIndex - S + prevS;
-			adj->rotation[3] = 1;
 		}
 	}
 
 	ccgdm->gridData = gridData;
 	ccgdm->gridFaces = gridFaces;
-	ccgdm->gridAdjacency = gridAdjacency;
 	ccgdm->gridOffset = gridOffset;
 	ccgdm->gridFlagMats = gridFlagMats;
 }
@@ -3216,14 +3168,6 @@ static CCGElem **ccgDM_getGridData(DerivedMesh *dm)
 
 	ccgdm_create_grids(dm);
 	return ccgdm->gridData;
-}
-
-static DMGridAdjacency *ccgDM_getGridAdjacency(DerivedMesh *dm)
-{
-	CCGDerivedMesh *ccgdm = (CCGDerivedMesh *)dm;
-
-	ccgdm_create_grids(dm);
-	return ccgdm->gridAdjacency;
 }
 
 static int *ccgDM_getGridOffset(DerivedMesh *dm)
@@ -3308,7 +3252,7 @@ static struct PBVH *ccgDM_getPBVH(Object *ob, DerivedMesh *dm)
 			 * when the ccgdm gets remade, the assumption is that the topology
 			 * does not change. */
 			ccgdm_create_grids(dm);
-			BKE_pbvh_grids_update(ob->sculpt->pbvh, ccgdm->gridData, ccgdm->gridAdjacency, (void **)ccgdm->gridFaces,
+			BKE_pbvh_grids_update(ob->sculpt->pbvh, ccgdm->gridData, (void **)ccgdm->gridFaces,
 			                      ccgdm->gridFlagMats, ccgdm->gridHidden);
 		}
 
@@ -3327,7 +3271,7 @@ static struct PBVH *ccgDM_getPBVH(Object *ob, DerivedMesh *dm)
 		numGrids = ccgDM_getNumGrids(dm);
 
 		ob->sculpt->pbvh = ccgdm->pbvh = BKE_pbvh_new();
-		BKE_pbvh_build_grids(ccgdm->pbvh, ccgdm->gridData, ccgdm->gridAdjacency,
+		BKE_pbvh_build_grids(ccgdm->pbvh, ccgdm->gridData,
 		                     numGrids, &key, (void **) ccgdm->gridFaces, ccgdm->gridFlagMats, ccgdm->gridHidden);
 	}
 	else if (ob->type == OB_MESH) {
@@ -3455,7 +3399,6 @@ static CCGDerivedMesh *getCCGDerivedMesh(CCGSubSurf *ss,
 	ccgdm->dm.getNumGrids = ccgDM_getNumGrids;
 	ccgdm->dm.getGridSize = ccgDM_getGridSize;
 	ccgdm->dm.getGridData = ccgDM_getGridData;
-	ccgdm->dm.getGridAdjacency = ccgDM_getGridAdjacency;
 	ccgdm->dm.getGridOffset = ccgDM_getGridOffset;
 	ccgdm->dm.getGridKey = ccgDM_getGridKey;
 	ccgdm->dm.getGridFlagMats = ccgDM_getGridFlagMats;
@@ -3820,7 +3763,7 @@ struct DerivedMesh *subsurf_make_derived_from_derived(
         SubsurfFlags flags)
 {
 	int useSimple = (smd->subdivType == ME_SIMPLE_SUBSURF) ? CCG_SIMPLE_SUBDIV : 0;
-	CCGFlags useAging = smd->flags & eSubsurfModifierFlag_DebugIncr ? CCG_USE_AGING : 0;
+	CCGFlags useAging = (smd->flags & eSubsurfModifierFlag_DebugIncr) ? CCG_USE_AGING : 0;
 	int useSubsurfUv = smd->flags & eSubsurfModifierFlag_SubsurfUv;
 	int drawInteriorEdges = !(smd->flags & eSubsurfModifierFlag_ControlEdges);
 	CCGDerivedMesh *result;
@@ -3828,7 +3771,7 @@ struct DerivedMesh *subsurf_make_derived_from_derived(
 	/* note: editmode calculation can only run once per
 	 * modifier stack evaluation (uses freed cache) [#36299] */
 	if (flags & SUBSURF_FOR_EDIT_MODE) {
-		int levels = (smd->modifier.scene) ? get_render_subsurf_level(&smd->modifier.scene->r, smd->levels) : smd->levels;
+		int levels = (smd->modifier.scene) ? get_render_subsurf_level(&smd->modifier.scene->r, smd->levels, false) : smd->levels;
 
 		smd->emCache = _getSubSurf(smd->emCache, levels, 3, useSimple | useAging | CCG_CALC_NORMALS);
 		ss_sync_from_derivedmesh(smd->emCache, dm, vertCos, useSimple);
@@ -3840,7 +3783,7 @@ struct DerivedMesh *subsurf_make_derived_from_derived(
 	else if (flags & SUBSURF_USE_RENDER_PARAMS) {
 		/* Do not use cache in render mode. */
 		CCGSubSurf *ss;
-		int levels = (smd->modifier.scene) ? get_render_subsurf_level(&smd->modifier.scene->r, smd->renderLevels) : smd->renderLevels;
+		int levels = (smd->modifier.scene) ? get_render_subsurf_level(&smd->modifier.scene->r, smd->renderLevels, true) : smd->renderLevels;
 
 		if (levels == 0)
 			return dm;
@@ -3856,7 +3799,7 @@ struct DerivedMesh *subsurf_make_derived_from_derived(
 	}
 	else {
 		int useIncremental = (smd->flags & eSubsurfModifierFlag_Incremental);
-		int levels = (smd->modifier.scene) ? get_render_subsurf_level(&smd->modifier.scene->r, smd->levels) : smd->levels;
+		int levels = (smd->modifier.scene) ? get_render_subsurf_level(&smd->modifier.scene->r, smd->levels, false) : smd->levels;
 		CCGSubSurf *ss;
 
 		/* It is quite possible there is a much better place to do this. It

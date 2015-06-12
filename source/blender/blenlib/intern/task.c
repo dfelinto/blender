@@ -417,6 +417,16 @@ void BLI_task_pool_work_and_wait(TaskPool *pool)
 	BLI_mutex_unlock(&pool->num_mutex);
 }
 
+int BLI_pool_get_num_threads(TaskPool *pool)
+{
+	if (pool->num_threads != 0) {
+		return pool->num_threads;
+	}
+	else {
+		return BLI_task_scheduler_num_threads(pool->scheduler);
+	}
+}
+
 void BLI_pool_set_num_threads(TaskPool *pool, int num_threads)
 {
 	/* NOTE: Don't try to modify threads while tasks are running! */
@@ -498,16 +508,14 @@ BLI_INLINE bool parallel_range_next_iter_get(
         int * __restrict iter, int * __restrict count)
 {
 	bool result = false;
+	BLI_spin_lock(&state->lock);
 	if (state->iter < state->stop) {
-		BLI_spin_lock(&state->lock);
-		if (state->iter < state->stop) {
-			*count = min_ii(state->chunk_size, state->stop - state->iter);
-			*iter = state->iter;
-			state->iter += *count;
-			result = true;
-		}
-		BLI_spin_unlock(&state->lock);
+		*count = min_ii(state->chunk_size, state->stop - state->iter);
+		*iter = state->iter;
+		state->iter += *count;
+		result = true;
 	}
+	BLI_spin_unlock(&state->lock);
 	return result;
 }
 

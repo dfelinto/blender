@@ -319,6 +319,11 @@ void UI_draw_safe_areas(
 #define UI_SCROLL_NO_OUTLINE    (1 << 2)
 void UI_draw_widget_scroll(struct uiWidgetColors *wcol, const struct rcti *rect, const struct rcti *slider, int state);
 
+/* Shortening string helper. */
+float UI_text_clip_middle_ex(
+        struct uiFontStyle *fstyle, char *str, float okwidth, const float minwidth,
+        const size_t max_len, const char rpart_sep);
+
 /* Callbacks
  *
  * UI_block_func_handle_set/ButmFunc are for handling events through a callback.
@@ -396,7 +401,7 @@ void UI_popup_block_invoke_ex(struct bContext *C, uiBlockCreateFunc func, void *
 void UI_popup_block_ex(struct bContext *C, uiBlockCreateFunc func, uiBlockHandleFunc popup_func, uiBlockCancelFunc cancel_func, void *arg);
 /* void uiPupBlockOperator(struct bContext *C, uiBlockCreateFunc func, struct wmOperator *op, int opcontext); */ /* UNUSED */
 
-void UI_popup_block_close(struct bContext *C, uiBlock *block);
+void UI_popup_block_close(struct bContext *C, struct wmWindow *win, uiBlock *block);
 
 /* Blocks
  *
@@ -483,6 +488,14 @@ bool    UI_but_active_only(const struct bContext *C, struct ARegion *ar, uiBlock
 
 void    UI_but_execute(const struct bContext *C, uiBut *but);
 
+bool UI_but_online_manual_id(
+        const uiBut *but,
+        char *r_str, size_t maxlength)
+        ATTR_WARN_UNUSED_RESULT;
+bool UI_but_online_manual_id_from_active(
+        const struct bContext *C,
+        char *r_str, size_t maxlength)
+        ATTR_WARN_UNUSED_RESULT;
 
 /* Buttons
  *
@@ -675,6 +688,7 @@ void    UI_but_func_drawextra_set(
         void *arg1, void *arg2);
 
 void    UI_but_func_tooltip_set(uiBut *but, uiButToolTipFunc func, void *argN);
+void    UI_but_tooltip_timer_remove(struct bContext *C, uiBut *but);
 
 bool UI_textbutton_activate_rna(const struct bContext *C, struct ARegion *ar,
                                 const void *rna_poin_data, const char *rna_prop_id);
@@ -732,7 +746,7 @@ void                       UI_panel_category_draw_all(struct ARegion *ar, const 
  * as screen/ if ED_KEYMAP_UI is set, or internally in popup functions. */
 
 void UI_region_handlers_add(struct ListBase *handlers);
-void UI_popup_handlers_add(struct bContext *C, struct ListBase *handlers, uiPopupBlockHandle *popup, const bool accept_dbl_click);
+void UI_popup_handlers_add(struct bContext *C, struct ListBase *handlers, uiPopupBlockHandle *popup, const char flag);
 void UI_popup_handlers_remove(struct ListBase *handlers, uiPopupBlockHandle *popup);
 void UI_popup_handlers_remove_all(struct bContext *C, struct ListBase *handlers);
 
@@ -875,7 +889,7 @@ uiLayout *uiTemplateConstraint(uiLayout *layout, struct PointerRNA *ptr);
 void uiTemplatePreview(uiLayout *layout, struct bContext *C, struct ID *id, int show_buttons, struct ID *parent,
                        struct MTex *slot, const char *preview_id);
 void uiTemplateColorRamp(uiLayout *layout, struct PointerRNA *ptr, const char *propname, int expand);
-void uiTemplateIconView(uiLayout *layout, struct PointerRNA *ptr, const char *propname);
+void uiTemplateIconView(uiLayout *layout, struct PointerRNA *ptr, const char *propname, int show_labels);
 void uiTemplateHistogram(uiLayout *layout, struct PointerRNA *ptr, const char *propname);
 void uiTemplateWaveform(uiLayout *layout, struct PointerRNA *ptr, const char *propname);
 void uiTemplateVectorscope(uiLayout *layout, struct PointerRNA *ptr, const char *propname);
@@ -967,13 +981,17 @@ void ED_button_operatortypes(void);
 void UI_drop_color_copy(struct wmDrag *drag, struct wmDropBox *drop);
 int UI_drop_color_poll(struct bContext *C, struct wmDrag *drag, const struct wmEvent *event);
 
+bool UI_context_copy_to_selected_list(
+        struct bContext *C, struct PointerRNA *ptr, struct PropertyRNA *prop,
+        struct ListBase *r_lb, bool *r_use_path_from_id, char **r_path);
+
 /* Helpers for Operators */
 uiBut *UI_context_active_but_get(const struct bContext *C);
 void UI_context_active_but_prop_get(const struct bContext *C, struct PointerRNA *ptr, struct PropertyRNA **prop, int *index);
 void UI_context_active_but_prop_handle(struct bContext *C);
 struct wmOperator *UI_context_active_operator_get(const struct bContext *C);
 void UI_context_update_anim_flag(const struct bContext *C);
-void UI_context_active_but_prop_get_filebrowser(const struct bContext *C, struct PointerRNA *ptr, struct PropertyRNA **prop);
+void UI_context_active_but_prop_get_filebrowser(const struct bContext *C, struct PointerRNA *r_ptr, struct PropertyRNA **r_prop, bool *r_is_undo);
 void UI_context_active_but_prop_get_templateID(struct bContext *C, struct PointerRNA *ptr, struct PropertyRNA **prop);
 
 /* Styled text draw */

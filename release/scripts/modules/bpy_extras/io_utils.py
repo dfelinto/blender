@@ -35,7 +35,11 @@ __all__ = (
     )
 
 import bpy
-from bpy.props import StringProperty, BoolProperty, EnumProperty
+from bpy.props import (
+        StringProperty,
+        BoolProperty,
+        EnumProperty,
+        )
 
 
 def _check_axis_conversion(op):
@@ -60,6 +64,12 @@ class ExportHelper:
             default=True,
             options={'HIDDEN'},
             )
+
+    # needed for mix-ins
+    order = [
+        "filepath",
+        "check_existing",
+        ]
 
     # subclasses can override with decorator
     # True == use ext, False == no ext, None == do nothing.
@@ -109,6 +119,11 @@ class ImportHelper:
             subtype='FILE_PATH',
             )
 
+    # needed for mix-ins
+    order = [
+        "filepath",
+        ]
+
     def invoke(self, context, event):
         context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
@@ -153,6 +168,11 @@ def orientation_helper_factory(name, axis_forward='Y', axis_up='Z'):
             default=axis_up,
             update=_update_axis_up,
             )
+
+    members["order"] = [
+        "axis_forward",
+        "axis_up",
+        ]
 
     return type(name, (object,), members)
 
@@ -352,7 +372,7 @@ def unpack_list(list_of_tuples):
 
 # same as above except that it adds 0 for triangle faces
 def unpack_face_list(list_of_tuples):
-    #allocate the entire list
+    # allocate the entire list
     flat_ls = [0] * (len(list_of_tuples) * 4)
     i = 0
 

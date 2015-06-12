@@ -98,7 +98,7 @@ static void deformVerts(ModifierData *md, Object *ob, DerivedMesh *derivedData, 
 	if (derivedData == NULL && clmd->sim_parms->shapekey_rest) {
 		KeyBlock *kb = BKE_keyblock_from_key(BKE_key_from_object(ob),
 		                                     clmd->sim_parms->shapekey_rest);
-		if (kb->data != NULL) {
+		if (kb && kb->data != NULL) {
 			float (*layerorco)[3];
 			if (!(layerorco = DM_get_vert_data_layer(dm, CD_CLOTH_ORCO))) {
 				DM_add_vert_layer(dm, CD_CLOTH_ORCO, CD_CALLOC, NULL);
@@ -134,6 +134,27 @@ static void updateDepgraph(ModifierData *md, DagForest *forest,
 				if (coll_clmd) {
 					DagNode *curNode = dag_get_node(forest, ob1);
 					dag_add_relation(forest, curNode, obNode, DAG_RL_DATA_DATA | DAG_RL_OB_DATA, "Cloth Collision");
+				}
+			}
+		}
+	}
+}
+
+static void updateDepsgraph(ModifierData *md,
+                            struct Main *UNUSED(bmain),
+                            struct Scene *scene,
+                            Object *ob,
+                            struct DepsNodeHandle *node)
+{
+	ClothModifierData *clmd = (ClothModifierData *)md;
+	if (clmd != NULL) {
+		Base *base;
+		for (base = scene->base.first; base; base = base->next) {
+			Object *ob1 = base->object;
+			if (ob1 != ob) {
+				CollisionModifierData *coll_clmd = (CollisionModifierData *)modifiers_findByType(ob1, eModifierType_Collision);
+				if (coll_clmd) {
+					DEG_add_object_relation(node, ob1, DEG_OB_COMP_TRANSFORM, "Cloth Modifier");
 				}
 			}
 		}
@@ -251,6 +272,7 @@ ModifierTypeInfo modifierType_Cloth = {
 	/* freeData */          freeData,
 	/* isDisabled */        NULL,
 	/* updateDepgraph */    updateDepgraph,
+	/* updateDepsgraph */   updateDepsgraph,
 	/* dependsOnTime */     dependsOnTime,
 	/* dependsOnNormals */	NULL,
 	/* foreachObjectLink */ NULL,

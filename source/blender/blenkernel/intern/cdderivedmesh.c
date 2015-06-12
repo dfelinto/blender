@@ -470,7 +470,7 @@ static void cdDM_drawFacesSolid(DerivedMesh *dm,
 	int a;
 
 	if (cddm->pbvh && cddm->pbvh_draw) {
-		if (dm->numTessFaceData) {
+		if (BKE_pbvh_has_faces(cddm->pbvh)) {
 			float (*face_nors)[3] = CustomData_get_layer(&dm->faceData, CD_NORMAL);
 
 			BKE_pbvh_draw(cddm->pbvh, partial_redraw_planes, face_nors,
@@ -527,7 +527,7 @@ static void cdDM_drawFacesTex_common(DerivedMesh *dm,
 	 *       (the same as it'll display without UV maps in textured view)
 	 */
 	if (cddm->pbvh && cddm->pbvh_draw && BKE_pbvh_type(cddm->pbvh) == PBVH_BMESH) {
-		if (dm->numTessFaceData) {
+		if (BKE_pbvh_has_faces(cddm->pbvh)) {
 			GPU_set_tpage(NULL, false, false);
 			BKE_pbvh_draw(cddm->pbvh, NULL, NULL, NULL, false);
 		}
@@ -793,7 +793,7 @@ static void cdDM_drawMappedFaces(DerivedMesh *dm,
 		else {
 			/* we need to check if the next material changes */
 			int next_actualFace = dm->drawObject->triangle_to_mface[0];
-			int prev_mat_nr = -1;
+			short prev_mat_nr = -1;
 			
 			for (i = 0; i < tottri; i++) {
 				//int actualFace = dm->drawObject->triangle_to_mface[i];
@@ -912,7 +912,7 @@ static void cdDM_drawMappedFacesGLSL(DerivedMesh *dm,
 	 *       works fine for matcap
 	 */
 	if (cddm->pbvh && cddm->pbvh_draw && BKE_pbvh_type(cddm->pbvh) == PBVH_BMESH) {
-		if (dm->numTessFaceData) {
+		if (BKE_pbvh_has_faces(cddm->pbvh)) {
 			setMaterial(1, &gattribs);
 			BKE_pbvh_draw(cddm->pbvh, NULL, NULL, NULL, false);
 		}
@@ -1246,7 +1246,7 @@ static void cdDM_drawMappedFacesMat(DerivedMesh *dm,
 	 *       works fine for matcap
 	 */
 	if (cddm->pbvh && cddm->pbvh_draw && BKE_pbvh_type(cddm->pbvh) == PBVH_BMESH) {
-		if (dm->numTessFaceData) {
+		if (BKE_pbvh_has_faces(cddm->pbvh)) {
 			setMaterial(userData, 1, &gattribs);
 			BKE_pbvh_draw(cddm->pbvh, NULL, NULL, NULL, false);
 		}

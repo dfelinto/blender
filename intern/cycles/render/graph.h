@@ -81,6 +81,10 @@ enum ShaderNodeSpecialType {
 	SHADER_SPECIAL_TYPE_GEOMETRY,
 	SHADER_SPECIAL_TYPE_SCRIPT,
 	SHADER_SPECIAL_TYPE_BACKGROUND,
+	SHADER_SPECIAL_TYPE_IMAGE_SLOT,
+	SHADER_SPECIAL_TYPE_CLOSURE,
+	SHADER_SPECIAL_TYPE_EMISSION,
+	SHADER_SPECIAL_TYPE_BUMP,
 };
 
 /* Enum
@@ -193,7 +197,6 @@ public:
 	virtual bool has_surface_emission() { return false; }
 	virtual bool has_surface_transparent() { return false; }
 	virtual bool has_surface_bssrdf() { return false; }
-	virtual bool has_converter_blackbody() { return false; }
 	virtual bool has_bssrdf_bump() { return false; }
 	virtual bool has_spatial_varying() { return false; }
 	virtual bool has_object_dependency() { return false; }
@@ -206,6 +209,24 @@ public:
 	ShaderBump bump; /* for bump mapping utility */
 	
 	ShaderNodeSpecialType special_type;	/* special node type */
+
+	/* ** Selective nodes compilation ** */
+
+	/* TODO(sergey): More explicitly mention in the function names
+	 * that those functions are for selective compilation only?
+	 */
+
+	/* Nodes are split into several groups, group of level 0 contains
+	 * nodes which are most commonly used, further levels are extension
+	 * of previous one and includes less commonly used nodes.
+	 */
+	virtual int get_group() { return NODE_GROUP_LEVEL_0; }
+
+	/* Node feature are used to disable huge nodes inside the group,
+	 * so it's possible to disable huge nodes inside of the required
+	 * nodes group.
+	 */
+	virtual int get_feature() { return bump == SHADER_BUMP_NONE ? 0 : NODE_FEATURE_BUMP; }
 };
 
 
@@ -252,6 +273,8 @@ public:
 
 	void remove_unneeded_nodes();
 	void finalize(bool do_bump = false, bool do_osl = false);
+
+	int get_num_closures();
 
 	void dump_graph(const char *filename);
 

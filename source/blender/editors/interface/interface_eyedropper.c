@@ -36,6 +36,8 @@
 #include "BLI_blenlib.h"
 #include "BLI_math_vector.h"
 
+#include "BLF_translation.h"
+
 #include "BKE_context.h"
 #include "BKE_screen.h"
 #include "BKE_report.h"
@@ -176,8 +178,8 @@ static void eyedropper_color_sample_fl(bContext *C, Eyedropper *UNUSED(eye), int
 
 	if (sa) {
 		if (sa->spacetype == SPACE_IMAGE) {
-			ARegion *ar = BKE_area_find_region_type(sa, RGN_TYPE_WINDOW);
-			if (ar && BLI_rcti_isect_pt(&ar->winrct, mx, my)) {
+			ARegion *ar = BKE_area_find_region_xy(sa, RGN_TYPE_WINDOW, mx, my);
+			if (ar) {
 				SpaceImage *sima = sa->spacedata.first;
 				int mval[2] = {mx - ar->winrct.xmin,
 				               my - ar->winrct.ymin};
@@ -188,8 +190,8 @@ static void eyedropper_color_sample_fl(bContext *C, Eyedropper *UNUSED(eye), int
 			}
 		}
 		else if (sa->spacetype == SPACE_NODE) {
-			ARegion *ar = BKE_area_find_region_type(sa, RGN_TYPE_WINDOW);
-			if (ar && BLI_rcti_isect_pt(&ar->winrct, mx, my)) {
+			ARegion *ar = BKE_area_find_region_xy(sa, RGN_TYPE_WINDOW, mx, my);
+			if (ar) {
 				SpaceNode *snode = sa->spacedata.first;
 				int mval[2] = {mx - ar->winrct.xmin,
 				               my - ar->winrct.ymin};
@@ -200,8 +202,8 @@ static void eyedropper_color_sample_fl(bContext *C, Eyedropper *UNUSED(eye), int
 			}
 		}
 		else if (sa->spacetype == SPACE_CLIP) {
-			ARegion *ar = BKE_area_find_region_type(sa, RGN_TYPE_WINDOW);
-			if (ar && BLI_rcti_isect_pt(&ar->winrct, mx, my)) {
+			ARegion *ar = BKE_area_find_region_xy(sa, RGN_TYPE_WINDOW, mx, my);
+			if (ar) {
 				SpaceClip *sc = sa->spacedata.first;
 				int mval[2] = {mx - ar->winrct.xmin,
 				               my - ar->winrct.ymin};
@@ -379,12 +381,11 @@ void UI_OT_eyedropper_color(wmOperatorType *ot)
 
 
 /* -------------------------------------------------------------------- */
-/* Data Dropper
- *
- * note: datadropper is only internal name to avoid confusion in this file
- */
+/* Data Dropper */
 
 /** \name Eyedropper (ID data-blocks)
+ *
+ * \note: datadropper is only internal name to avoid confusion in this file.
  * \{ */
 
 typedef struct DataDropper {
@@ -436,7 +437,8 @@ static int datadropper_init(bContext *C, wmOperator *op)
 	type = RNA_property_pointer_type(&ddr->ptr, ddr->prop);
 	ddr->idcode = RNA_type_to_ID_code(type);
 	BLI_assert(ddr->idcode != 0);
-	ddr->idcode_name = BKE_idcode_to_name(ddr->idcode);
+	/* Note we can translate here (instead of on draw time), because this struct has very short lifetime. */
+	ddr->idcode_name = TIP_(BKE_idcode_to_name(ddr->idcode));
 
 	return true;
 }
@@ -456,6 +458,8 @@ static void datadropper_exit(bContext *C, wmOperator *op)
 
 		op->customdata = NULL;
 	}
+
+	WM_event_add_mousemove(C);
 }
 
 static void datadropper_cancel(bContext *C, wmOperator *op)
@@ -482,8 +486,8 @@ static void datadropper_id_sample_pt(bContext *C, DataDropper *ddr, int mx, int 
 
 	if (sa) {
 		if (sa->spacetype == SPACE_VIEW3D) {
-			ARegion *ar = BKE_area_find_region_type(sa, RGN_TYPE_WINDOW);
-			if (ar && BLI_rcti_isect_pt(&ar->winrct, mx, my)) {
+			ARegion *ar = BKE_area_find_region_xy(sa, RGN_TYPE_WINDOW, mx, my);
+			if (ar) {
 				const int mval[2] = {
 				    mx - ar->winrct.xmin,
 				    my - ar->winrct.ymin};
@@ -651,12 +655,11 @@ void UI_OT_eyedropper_id(wmOperatorType *ot)
 
 
 /* -------------------------------------------------------------------- */
-/* Depth Dropper
- *
- * note: depthdropper is only internal name to avoid confusion in this file
- */
+/* Depth Dropper */
 
 /** \name Eyedropper (Depth)
+ *
+ * \note: depthdropper is only internal name to avoid confusion in this file.
  * \{ */
 
 typedef struct DepthDropper {
@@ -765,8 +768,8 @@ static void depthdropper_depth_sample_pt(bContext *C, DepthDropper *ddr, int mx,
 
 	if (sa) {
 		if (sa->spacetype == SPACE_VIEW3D) {
-			ARegion *ar = BKE_area_find_region_type(sa, RGN_TYPE_WINDOW);
-			if (ar && BLI_rcti_isect_pt(&ar->winrct, mx, my)) {
+			ARegion *ar = BKE_area_find_region_xy(sa, RGN_TYPE_WINDOW, mx, my);
+			if (ar) {
 				View3D *v3d = sa->spacedata.first;
 				RegionView3D *rv3d = ar->regiondata;
 				/* weak, we could pass in some reference point */

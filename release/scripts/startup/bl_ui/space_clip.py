@@ -37,7 +37,7 @@ class CLIP_UL_tracking_objects(UIList):
             layout.prop(tobj, "name", text="", emboss=False,
                         icon='CAMERA_DATA' if tobj.is_camera
                         else 'OBJECT_DATA')
-        elif self.layout_type in {'GRID'}:
+        elif self.layout_type == 'GRID':
             layout.alignment = 'CENTER'
             layout.label(text="",
                          icon='CAMERA_DATA' if tobj.is_camera
@@ -147,7 +147,7 @@ class CLIP_HT_header(Header):
 
         sc = context.space_data
 
-        if sc.mode in {'TRACKING'}:
+        if sc.mode == 'TRACKING':
             self._draw_tracking(context)
         else:
             self._draw_masking(context)
@@ -716,7 +716,7 @@ class CLIP_PT_tracking_camera(Panel):
         if CLIP_PT_clip_view_panel.poll(context):
             sc = context.space_data
 
-            return sc.mode in {'TRACKING'} and sc.clip
+            return sc.mode == 'TRACKING' and sc.clip
 
         return False
 
@@ -756,7 +756,7 @@ class CLIP_PT_tracking_lens(Panel):
         if CLIP_PT_clip_view_panel.poll(context):
             sc = context.space_data
 
-            return sc.mode in {'TRACKING'} and sc.clip
+            return sc.mode == 'TRACKING' and sc.clip
 
         return False
 
@@ -893,7 +893,7 @@ class CLIP_PT_stabilization(CLIP_PT_reconstruction_panel, Panel):
         if CLIP_PT_clip_view_panel.poll(context):
             sc = context.space_data
 
-            return sc.mode in {'TRACKING'} and sc.clip
+            return sc.mode == 'TRACKING' and sc.clip
 
         return False
 
@@ -987,7 +987,9 @@ class CLIP_PT_proxy(CLIP_PT_clip_view_panel, Panel):
         if clip.use_proxy_custom_directory:
             col.prop(clip.proxy, "directory")
 
-        col.operator("clip.rebuild_proxy", text="Build Proxy")
+        col.operator("clip.rebuild_proxy",
+                     text="Build Proxy / Timecode" if clip.source == 'MOVIE'
+                                                   else "Build Proxy")
 
         if clip.source == 'MOVIE':
             col2 = col.column()
@@ -1147,6 +1149,7 @@ class CLIP_MT_view(Menu):
 
             layout.operator("clip.view_selected")
             layout.operator("clip.view_all")
+            layout.operator("clip.view_all", text="View Fit").fit_view = True
 
             layout.separator()
             layout.operator("clip.view_zoom_in")

@@ -90,6 +90,7 @@
 #include "BKE_modifier.h"
 #include "BKE_scene.h"
 #include "BKE_bvhutils.h"
+#include "BKE_depsgraph.h"
 
 #include "PIL_time.h"
 
@@ -297,7 +298,7 @@ int psys_get_child_number(Scene *scene, ParticleSystem *psys)
 	else
 		nbr= psys->part->child_nbr;
 
-	return get_render_child_particle_number(&scene->r, nbr);
+	return get_render_child_particle_number(&scene->r, nbr, psys->renderdata != NULL);
 }
 
 int psys_get_tot_child(Scene *scene, ParticleSystem *psys)
@@ -559,17 +560,24 @@ static void initialize_all_particles(ParticleSimulationData *sim)
 	ParticleSystem *psys = sim->psys;
 	PARTICLE_P;
 
+	LOOP_PARTICLES {
+		initialize_particle(sim, pa);
+	}
+}
+
+static void free_unexisting_particles(ParticleSimulationData *sim)
+{
+	ParticleSystem *psys = sim->psys;
+	PARTICLE_P;
+
 	psys->totunexist = 0;
 
 	LOOP_PARTICLES {
-		if ((pa->flag & PARS_UNEXIST)==0)
-			initialize_particle(sim, pa);
-
-		if (pa->flag & PARS_UNEXIST)
+		if (pa->flag & PARS_UNEXIST) {
 			psys->totunexist++;
+		}
 	}
 
-	/* Free unexisting particles. */
 	if (psys->totpart && psys->totunexist == psys->totpart) {
 		if (psys->particles->boid)
 			MEM_freeN(psys->particles->boid);
@@ -3790,6 +3798,7 @@ static void system_step(ParticleSimulationData *sim, float cfra)
 		initialize_all_particles(sim);
 		/* reset only just created particles (on startframe all particles are recreated) */
 		reset_all_particles(sim, 0.0, cfra, oldtotpart);
+		free_unexisting_particles(sim);
 
 		if (psys->fluid_springs) {
 			MEM_freeN(psys->fluid_springs);
@@ -4136,6 +4145,7 @@ void particle_system_update(Scene *scene, Object *ob, ParticleSystem *psys)
 				{
 					PARTICLE_P;
 					float disp = psys_get_current_display_percentage(psys);
+					bool free_unexisting = false;
 
 					/* Particles without dynamics haven't been reset yet because they don't use pointcache */
 					if (psys->recalc & PSYS_RECALC_RESET)
@@ -4145,6 +4155,7 @@ void particle_system_update(Scene *scene, Object *ob, ParticleSystem *psys)
 						free_keyed_keys(psys);
 						distribute_particles(&sim, part->from);
 						initialize_all_particles(&sim);
+						free_unexisting = true;
 
 						/* flag for possible explode modifiers after this system */
 						sim.psmd->flag |= eParticleSystemFlag_Pars;
@@ -4162,6 +4173,10 @@ void particle_system_update(Scene *scene, Object *ob, ParticleSystem *psys)
 						else
 							pa->flag &= ~PARS_NO_DISP;
 					}
+
+					/* free unexisting after reseting particles */
+					if (free_unexisting)
+						free_unexisting_particles(&sim);
 
 					if (part->phystype == PART_PHYS_KEYED) {
 						psys_count_keyed_targets(&sim);
@@ -4195,3 +4210,13 @@ void particle_system_update(Scene *scene, Object *ob, ParticleSystem *psys)
 		invert_m4_m4(psys->imat, ob->obmat);
 }
 
+/* **** Depsgraph evaluation **** */
+
+void BKE_particle_system_eval(EvaluationContext *UNUSED(eval_ctx),
+                              Object *ob,
+                              ParticleSystem *psys)
+{
+	if (G.debug & G_DEBUG_DEPSGRAPH) {
+		printf("%s on %s:%s\n", __func__, ob->id.name, psys->name);
+	}
+}

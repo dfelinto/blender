@@ -295,11 +295,11 @@ void DM_init(DerivedMesh *dm, DerivedMeshType type, int numVerts, int numEdges,
 	dm->dirty = 0;
 
 	/* don't use CustomData_reset(...); because we dont want to touch customdata */
-	fill_vn_i(dm->vertData.typemap, CD_NUMTYPES, -1);
-	fill_vn_i(dm->edgeData.typemap, CD_NUMTYPES, -1);
-	fill_vn_i(dm->faceData.typemap, CD_NUMTYPES, -1);
-	fill_vn_i(dm->loopData.typemap, CD_NUMTYPES, -1);
-	fill_vn_i(dm->polyData.typemap, CD_NUMTYPES, -1);
+	copy_vn_i(dm->vertData.typemap, CD_NUMTYPES, -1);
+	copy_vn_i(dm->edgeData.typemap, CD_NUMTYPES, -1);
+	copy_vn_i(dm->faceData.typemap, CD_NUMTYPES, -1);
+	copy_vn_i(dm->loopData.typemap, CD_NUMTYPES, -1);
+	copy_vn_i(dm->polyData.typemap, CD_NUMTYPES, -1);
 }
 
 void DM_from_template(DerivedMesh *dm, DerivedMesh *source, DerivedMeshType type,
@@ -1011,8 +1011,9 @@ static float (*get_orco_coords_dm(Object *ob, BMEditMesh *em, int layer, int *fr
 			ClothModifierData *clmd = (ClothModifierData *)modifiers_findByType(ob, eModifierType_Cloth);
 			KeyBlock *kb = BKE_keyblock_from_key(BKE_key_from_object(ob), clmd->sim_parms->shapekey_rest);
 
-			if (kb->data)
+			if (kb && kb->data) {
 				return kb->data;
+			}
 		}
 
 		return NULL;
@@ -1275,7 +1276,7 @@ static void calc_weightpaint_vert_array(Object *ob, DerivedMesh *dm, int const d
 		else {
 			weightpaint_color(col, dm_wcinfo, 0.0f);
 		}
-		fill_vn_i((int *)r_wtcol_v, numVerts, *((int *)col));
+		copy_vn_i((int *)r_wtcol_v, numVerts, *((int *)col));
 	}
 }
 
@@ -1938,7 +1939,7 @@ static void mesh_calc_modifiers(Scene *scene, Object *ob, float (*inputVertexCos
 		DM_calc_loop_normals(finaldm, do_loop_normals, loop_normals_split_angle);
 	}
 
-	{
+	if (sculpt_dyntopo == false) {
 		DM_ensure_tessface(finaldm);
 
 		/* without this, drawing ngon tri's faces will show ugly tessellated face
@@ -2291,13 +2292,8 @@ static void editbmesh_calc_modifiers(Scene *scene, Object *ob, BMEditMesh *em, D
 }
 
 static void mesh_build_data(Scene *scene, Object *ob, CustomDataMask dataMask,
-                            int build_shapekey_layers)
+                            int build_shapekey_layers, int needMapping)
 {
-	Object *obact = scene->basact ? scene->basact->object : NULL;
-	bool editing = BKE_paint_select_face_test(ob);
-	/* weight paint and face select need original indices because of selection buffer drawing */
-	int needMapping = (ob == obact) && (editing || (ob->mode & (OB_MODE_WEIGHT_PAINT | OB_MODE_VERTEX_PAINT | OB_MODE_TEXTURE_PAINT)));
-
 	BLI_assert(ob->type == OB_MESH);
 
 	BKE_object_free_derived_caches(ob);
@@ -2312,6 +2308,7 @@ static void mesh_build_data(Scene *scene, Object *ob, CustomDataMask dataMask,
 	ob->derivedFinal->needsFree = 0;
 	ob->derivedDeform->needsFree = 0;
 	ob->lastDataMask = dataMask;
+	ob->lastNeedMapping = needMapping;
 
 	if ((ob->mode & OB_MODE_SCULPT) && ob->sculpt) {
 		/* create PBVH immediately (would be created on the fly too,
@@ -2340,14 +2337,23 @@ static void editbmesh_build_data(Scene *scene, Object *obedit, BMEditMesh *em, C
 	BLI_assert(!(em->derivedFinal->dirty & DM_DIRTY_NORMALS));
 }
 
-static CustomDataMask object_get_datamask(const Scene *scene, Object *ob)
+static CustomDataMask object_get_datamask(const Scene *scene, Object *ob, int *r_needmapping)
 {
 	Object *actob = scene->basact ? scene->basact->object : NULL;
 	CustomDataMask mask = ob->customdata_mask;
+	bool editing = BKE_paint_select_face_test(ob);
+
+	if (r_needmapping)
+		*r_needmapping = 0;
 
 	if (ob == actob) {
+
+		/* weight paint and face select need original indices because of selection buffer drawing */
+		if (r_needmapping)
+			*r_needmapping = (editing || (ob->mode & (OB_MODE_WEIGHT_PAINT | OB_MODE_VERTEX_PAINT)));
+
 		/* check if we need tfaces & mcols due to face select or texture paint */
-		if (BKE_paint_select_face_test(ob) || (ob->mode & OB_MODE_TEXTURE_PAINT)) {
+		if ((ob->mode & OB_MODE_TEXTURE_PAINT) || editing) {
 			mask |= CD_MASK_MTFACE | CD_MASK_MCOL;
 		}
 
@@ -2370,13 +2376,14 @@ static CustomDataMask object_get_datamask(const Scene *scene, Object *ob)
 void makeDerivedMesh(Scene *scene, Object *ob, BMEditMesh *em,
                      CustomDataMask dataMask, int build_shapekey_layers)
 {
-	dataMask |= object_get_datamask(scene, ob);
+	int needMapping;
+	dataMask |= object_get_datamask(scene, ob, &needMapping);
 
 	if (em) {
 		editbmesh_build_data(scene, ob, em, dataMask);
 	}
 	else {
-		mesh_build_data(scene, ob, dataMask, build_shapekey_layers);
+		mesh_build_data(scene, ob, dataMask, build_shapekey_layers, needMapping);
 	}
 }
 
@@ -2387,10 +2394,11 @@ DerivedMesh *mesh_get_derived_final(Scene *scene, Object *ob, CustomDataMask dat
 	/* if there's no derived mesh or the last data mask used doesn't include
 	 * the data we need, rebuild the derived mesh
 	 */
-	dataMask |= object_get_datamask(scene, ob);
+	int needMapping;
+	dataMask |= object_get_datamask(scene, ob, &needMapping);
 
-	if (!ob->derivedFinal || (dataMask & ob->lastDataMask) != dataMask)
-		mesh_build_data(scene, ob, dataMask, 0);
+	if (!ob->derivedFinal || (dataMask & ob->lastDataMask) != dataMask || (needMapping != ob->lastNeedMapping))
+		mesh_build_data(scene, ob, dataMask, 0, needMapping);
 
 	if (ob->derivedFinal) { BLI_assert(!(ob->derivedFinal->dirty & DM_DIRTY_NORMALS)); }
 	return ob->derivedFinal;
@@ -2401,10 +2409,12 @@ DerivedMesh *mesh_get_derived_deform(Scene *scene, Object *ob, CustomDataMask da
 	/* if there's no derived mesh or the last data mask used doesn't include
 	 * the data we need, rebuild the derived mesh
 	 */
-	dataMask |= object_get_datamask(scene, ob);
+	int needmapping;
 
-	if (!ob->derivedDeform || (dataMask & ob->lastDataMask) != dataMask)
-		mesh_build_data(scene, ob, dataMask, 0);
+	dataMask |= object_get_datamask(scene, ob, &needmapping);
+
+	if (!ob->derivedDeform || (dataMask & ob->lastDataMask) != dataMask || (needmapping != ob->lastNeedMapping))
+		mesh_build_data(scene, ob, dataMask, 0, needmapping);
 
 	return ob->derivedDeform;
 }
@@ -2493,7 +2503,7 @@ DerivedMesh *editbmesh_get_derived_cage_and_final(Scene *scene, Object *obedit, 
 	/* if there's no derived mesh or the last data mask used doesn't include
 	 * the data we need, rebuild the derived mesh
 	 */
-	dataMask |= object_get_datamask(scene, obedit);
+	dataMask |= object_get_datamask(scene, obedit, NULL);
 
 	if (!em->derivedCage ||
 	    (em->lastDataMask & dataMask) != dataMask)
@@ -2511,7 +2521,7 @@ DerivedMesh *editbmesh_get_derived_cage(Scene *scene, Object *obedit, BMEditMesh
 	/* if there's no derived mesh or the last data mask used doesn't include
 	 * the data we need, rebuild the derived mesh
 	 */
-	dataMask |= object_get_datamask(scene, obedit);
+	dataMask |= object_get_datamask(scene, obedit, NULL);
 
 	if (!em->derivedCage ||
 	    (em->lastDataMask & dataMask) != dataMask)

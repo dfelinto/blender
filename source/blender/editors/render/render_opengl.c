@@ -146,6 +146,7 @@ static void screen_opengl_views_setup(OGLRender *oglrender)
 	RenderView *rv;
 	SceneRenderView *srv;
 	bool is_multiview;
+	Object *camera;
 	View3D *v3d = oglrender->v3d;
 
 	RenderData *rd = &oglrender->scene->r;
@@ -236,6 +237,15 @@ static void screen_opengl_views_setup(OGLRender *oglrender)
 	}
 	BLI_unlock_thread(LOCK_DRAW_IMAGE);
 
+	/* will only work for non multiview correctly */
+	if (v3d) {
+		camera = BKE_camera_multiview_render(oglrender->scene, v3d->camera, "new opengl render view");
+		BKE_render_result_stamp_info(oglrender->scene, camera, rr);
+	}
+	else {
+		BKE_render_result_stamp_info(oglrender->scene, oglrender->scene->camera, rr);
+	}
+
 	RE_ReleaseResult(oglrender->re);
 }
 
@@ -248,6 +258,7 @@ static void screen_opengl_render_doit(OGLRender *oglrender, RenderResult *rr)
 	Object *camera = NULL;
 	ImBuf *ibuf;
 	float winmat[4][4];
+	float *rectf = RE_RenderViewGetById(rr, oglrender->view_id)->rectf;
 	int sizex = oglrender->sizex;
 	int sizey = oglrender->sizey;
 	const short view_context = (v3d != NULL);
@@ -271,7 +282,6 @@ static void screen_opengl_render_doit(OGLRender *oglrender, RenderResult *rr)
 		ibuf = BKE_sequencer_give_ibuf(&context, CFRA, chanshown);
 
 		if (ibuf) {
-			float *rectf;
 			ImBuf *linear_ibuf;
 
 			BLI_assert((oglrender->sizex == ibuf->x) && (oglrender->sizey == ibuf->y));
@@ -292,7 +302,6 @@ static void screen_opengl_render_doit(OGLRender *oglrender, RenderResult *rr)
 				BKE_sequencer_imbuf_from_sequencer_space(scene, linear_ibuf);
 			}
 
-			rectf = RE_RenderViewGetRectf(rr, oglrender->view_id);
 			memcpy(rectf, linear_ibuf->rect_float, sizeof(float) * 4 * oglrender->sizex * oglrender->sizey);
 
 			IMB_freeImBuf(linear_ibuf);
@@ -317,10 +326,12 @@ static void screen_opengl_render_doit(OGLRender *oglrender, RenderResult *rr)
 			gp_rect = MEM_mallocN(sizex * sizey * sizeof(unsigned char) * 4, "offscreen rect");
 			GPU_offscreen_read_pixels(oglrender->ofs, GL_UNSIGNED_BYTE, gp_rect);
 
+			BLI_assert(rectf != NULL);
+
 			for (i = 0; i < sizex * sizey * 4; i += 4) {
 				float  col_src[4];
 				rgba_uchar_to_float(col_src, &gp_rect[i]);
-				blend_color_mix_float(&rr->rectf[i], &rr->rectf[i], col_src);
+				blend_color_mix_float(&rectf[i], &rectf[i], col_src);
 			}
 			GPU_offscreen_unbind(oglrender->ofs, true);
 
@@ -338,7 +349,9 @@ static void screen_opengl_render_doit(OGLRender *oglrender, RenderResult *rr)
 
 		/* render 3d view */
 		if (rv3d->persp == RV3D_CAMOB && v3d->camera) {
-			/*int is_ortho = scene->r.mode & R_ORTHO;*/
+#if 0
+			const bool is_ortho = (scene->r.mode & R_ORTHO) != 0;
+#endif
 			camera = BKE_camera_multiview_render(oglrender->scene, v3d->camera, viewname);
 			RE_GetCameraWindow(oglrender->re, camera, scene->r.cfra, winmat);
 			if (camera->type == OB_CAMERA) {
@@ -443,8 +456,8 @@ static void screen_opengl_render_doit(OGLRender *oglrender, RenderResult *rr)
 
 	if (rect) {
 		int profile_to;
-		float *rectf = RE_RenderViewGetRectf(rr, oglrender->view_id);
-		
+		float *rectf = RE_RenderViewGetById(rr, oglrender->view_id)->rectf;
+
 		if (BKE_scene_check_color_management_enabled(scene))
 			profile_to = IB_PROFILE_LINEAR_RGB;
 		else
@@ -471,7 +484,6 @@ static void screen_opengl_render_write(OGLRender *oglrender)
 	RenderResult *rr;
 	bool ok;
 	char name[FILE_MAX];
-	Object *camera = RE_GetCamera(oglrender->re);
 
 	rr = RE_AcquireResultRead(oglrender->re);
 
@@ -480,7 +492,8 @@ static void screen_opengl_render_write(OGLRender *oglrender)
 	        &scene->r.im_format, (scene->r.scemode & R_EXTENSION) != 0, false, NULL);
 
 	/* write images as individual images or stereo */
-	ok = RE_WriteRenderViewsImage(oglrender->reports, rr, scene, camera, false, name);
+	BKE_render_result_stamp_info(scene, scene->camera, rr);
+	ok = RE_WriteRenderViewsImage(oglrender->reports, rr, scene, false, name);
 
 	RE_ReleaseResultImage(oglrender->re);
 
@@ -802,7 +815,8 @@ static bool screen_opengl_render_anim_step(bContext *C, wmOperator *op)
 		}
 	}
 	else {
-		ok = RE_WriteRenderViewsImage(op->reports, rr, scene, scene->camera, true, name);
+		BKE_render_result_stamp_info(scene, scene->camera, rr);
+		ok = RE_WriteRenderViewsImage(op->reports, rr, scene, true, name);
 		if (ok) {
 			printf("Saved: %s", name);
 			BKE_reportf(op->reports, RPT_INFO, "Saved file: %s", name);

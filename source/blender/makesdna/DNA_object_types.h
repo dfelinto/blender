@@ -191,7 +191,8 @@ typedef struct Object {
 	/* dupli-frame settings */
 	int dupon, dupoff, dupsta, dupend;
 
-	int pad;
+	/* did last modifier stack generation need mapping support? */
+	int lastNeedMapping;
 
 	/* during realtime */
 
@@ -530,7 +531,7 @@ enum {
 #define OB_MAX_STATES       30
 
 /* collision masks */
-#define OB_MAX_COL_MASKS    8
+#define OB_MAX_COL_MASKS    16
 
 /* ob->gameflag */
 enum {

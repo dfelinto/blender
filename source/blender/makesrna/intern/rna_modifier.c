@@ -1433,7 +1433,7 @@ static void rna_def_modifier_mirror(BlenderRNA *brna)
 	RNA_def_property_float_sdna(prop, NULL, "tolerance");
 	RNA_def_property_range(prop, 0, FLT_MAX);
 	RNA_def_property_ui_range(prop, 0, 1, 0.01, 6);
-	RNA_def_property_ui_text(prop, "Merge Limit", "Distance from axis within which mirrored vertices are merged");
+	RNA_def_property_ui_text(prop, "Merge Limit", "Distance within which mirrored vertices are merged");
 	RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
 	prop = RNA_def_property(srna, "mirror_object", PROP_POINTER, PROP_NONE);
@@ -1505,6 +1505,13 @@ static void rna_def_modifier_decimate(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "use_collapse_triangulate", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "flag", MOD_DECIM_FLAG_TRIANGULATE);
 	RNA_def_property_ui_text(prop, "Triangulate", "Keep triangulated faces resulting from decimation (collapse only)");
+	RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+	prop = RNA_def_property(srna, "vertex_group_factor", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_float_sdna(prop, NULL, "defgrp_factor");
+	RNA_def_property_range(prop, 0, 1000);
+	RNA_def_property_ui_range(prop, 0, 10, 1, 4);
+	RNA_def_property_ui_text(prop, "Factor", "Vertex group strength");
 	RNA_def_property_update(prop, 0, "rna_Modifier_update");
 	/* end collapse-only option */
 

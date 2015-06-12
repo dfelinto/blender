@@ -84,7 +84,7 @@ static void createVertsTrisData(bContext *C, LinkNode *obs,
 	for (oblink = obs; oblink; oblink = oblink->next) {
 		ob = (Object *) oblink->link;
 		dm = mesh_create_derived_no_virtual(scene, ob, NULL, CD_MASK_MESH);
-		BLI_linklist_append(&dms, (void *)dm);
+		BLI_linklist_prepend(&dms, dm);
 
 		nverts += dm->getNumVerts(dm);
 		nfaces = dm->getNumTessFaces(dm);
@@ -325,7 +325,7 @@ static Object *createRepresentation(bContext *C, struct recast_polyMesh *pmesh, 
 
 	if (createob) {
 		/* create new object */
-		obedit = ED_object_add_type(C, OB_MESH, co, rot, false, lay);
+		obedit = ED_object_add_type(C, OB_MESH, "Navmesh", co, rot, false, lay);
 	}
 	else {
 		obedit = base->object;
@@ -429,7 +429,6 @@ static Object *createRepresentation(bContext *C, struct recast_polyMesh *pmesh, 
 		obedit->gameflag &= ~OB_COLLISION;
 		obedit->gameflag |= OB_NAVMESH;
 		obedit->body_type = OB_BODY_TYPE_NAVMESH;
-		rename_id((ID *)obedit, "Navmesh");
 	}
 
 	BKE_mesh_ensure_navmesh(obedit->data);
@@ -452,7 +451,7 @@ static int navmesh_create_exec(bContext *C, wmOperator *op)
 				}
 			}
 			else {
-				BLI_linklist_append(&obs, (void *)base->object);
+				BLI_linklist_prepend(&obs, base->object);
 			}
 		}
 	}

@@ -96,7 +96,7 @@ static int edbm_subdivide_exec(bContext *C, wmOperator *op)
 	}
 	
 	BM_mesh_esubdivide(em->bm, BM_ELEM_SELECT,
-	                   smooth, SUBD_FALLOFF_ROOT, false,
+	                   smooth, SUBD_FALLOFF_INVSQUARE, false,
 	                   fractal, along_normal,
 	                   cuts,
 	                   SUBDIV_SELECT_ORIG, RNA_enum_get(op->ptr, "quadcorner"),
@@ -492,7 +492,7 @@ static int edbm_collapse_edge_exec(bContext *C, wmOperator *op)
 	Object *obedit = CTX_data_edit_object(C);
 	BMEditMesh *em = BKE_editmesh_from_object(obedit);
 
-	if (!EDBM_op_callf(em, op, "collapse edges=%he", BM_ELEM_SELECT))
+	if (!EDBM_op_callf(em, op, "collapse edges=%he uvs=%b", BM_ELEM_SELECT, true))
 		return OPERATOR_CANCELLED;
 
 	EDBM_update_generic(em, true, true);
@@ -1109,28 +1109,111 @@ static bool bm_vert_connect_select_history(BMesh *bm)
 	return false;
 }
 
+/**
+ * Convert an edge selection to a temp vertex selection
+ * (which must be cleared after use as a path to connect).
+ */
+static bool bm_vert_connect_select_history_edge_to_vert_path(BMesh *bm, ListBase *r_selected)
+{
+	ListBase selected_orig = {NULL, NULL};
+	BMEditSelection *ese;
+	int edges_len = 0;
+	bool side = false;
+
+	/* first check all edges are OK */
+	for (ese = bm->selected.first; ese; ese = ese->next) {
+		if (ese->htype == BM_EDGE) {
+			edges_len += 1;
+		}
+		else {
+			return false;
+		}
+	}
+	/* if this is a mixed selection, bail out! */
+	if (bm->totedgesel != edges_len) {
+		return false;
+	}
+
+	SWAP(ListBase, bm->selected, selected_orig);
+
+	/* convert edge selection into 2 ordered loops (where the first edge ends up in the middle) */
+	for (ese = selected_orig.first; ese; ese = ese->next) {
+		BMEdge *e_curr = (BMEdge *)ese->ele;
+		BMEdge *e_prev = ese->prev ? (BMEdge *)ese->prev->ele : NULL;
+		BMLoop *l_curr;
+		BMLoop *l_prev;
+		BMVert *v;
+
+		if (e_prev) {
+			BMFace *f = BM_edge_pair_share_face_by_len(e_curr, e_prev, &l_curr, &l_prev, true);
+			if (f) {
+				if ((e_curr->v1 != l_curr->v) == (e_prev->v1 != l_prev->v)) {
+					side = !side;
+				}
+			}
+			else if (is_quad_flip_v3(e_curr->v1->co, e_curr->v2->co, e_prev->v2->co, e_prev->v1->co)) {
+				side = !side;
+			}
+		}
+
+		v = (&e_curr->v1)[side];
+		if (!bm->selected.last || (BMVert *)((BMEditSelection *)bm->selected.last)->ele != v) {
+			BM_select_history_store_notest(bm, v);
+		}
+
+		v = (&e_curr->v1)[!side];
+		if (!bm->selected.first || (BMVert *)((BMEditSelection *)bm->selected.first)->ele != v) {
+			BM_select_history_store_head_notest(bm, v);
+		}
+
+		e_prev = e_curr;
+	}
+
+	*r_selected = bm->selected;
+	bm->selected = selected_orig;
+
+	return true;
+}
 
 static int edbm_vert_connect_path_exec(bContext *C, wmOperator *op)
 {
 	Object *obedit = CTX_data_edit_object(C);
 	BMEditMesh *em = BKE_editmesh_from_object(obedit);
+	BMesh *bm = em->bm;
 	bool is_pair = (em->bm->totvertsel == 2);
+	ListBase selected_orig = {NULL, NULL};
+	int retval;
 
 	/* when there is only 2 vertices, we can ignore selection order */
 	if (is_pair) {
 		return edbm_vert_connect_exec(C, op);
 	}
 
-	if (bm_vert_connect_select_history(em->bm)) {
+	if (bm->selected.first) {
+		BMEditSelection *ese = bm->selected.first;
+		if (ese->htype == BM_EDGE) {
+			if (bm_vert_connect_select_history_edge_to_vert_path(bm, &selected_orig)) {
+				SWAP(ListBase, bm->selected, selected_orig);
+			}
+		}
+	}
+
+	if (bm_vert_connect_select_history(bm)) {
 		EDBM_selectmode_flush(em);
 		EDBM_update_generic(em, true, true);
-
-		return OPERATOR_FINISHED;
+		retval = OPERATOR_FINISHED;
 	}
 	else {
 		BKE_report(op->reports, RPT_ERROR, "Invalid selection order");
-		return OPERATOR_CANCELLED;
+		retval = OPERATOR_CANCELLED;
 	}
+
+	if (!BLI_listbase_is_empty(&selected_orig)) {
+		BM_select_history_clear(bm);
+		bm->selected = selected_orig;
+	}
+
+	return retval;
 }
 
 void MESH_OT_vert_connect_path(wmOperatorType *ot)
@@ -1224,6 +1307,44 @@ void MESH_OT_vert_connect_nonplanar(wmOperatorType *ot)
 	prop = RNA_def_float_rotation(ot->srna, "angle_limit", 0, NULL, 0.0f, DEG2RADF(180.0f),
 	                              "Max Angle", "Angle limit", 0.0f, DEG2RADF(180.0f));
 	RNA_def_property_float_default(prop, DEG2RADF(5.0f));
+}
+
+static int edbm_face_make_planar_exec(bContext *C, wmOperator *op)
+{
+	Object *obedit = CTX_data_edit_object(C);
+	BMEditMesh *em = BKE_editmesh_from_object(obedit);
+	const int repeat = RNA_int_get(op->ptr, "repeat");
+	const float fac = RNA_float_get(op->ptr, "factor");
+
+	if (!EDBM_op_callf(
+	        em, op, "planar_faces faces=%hf iterations=%i factor=%f",
+	        BM_ELEM_SELECT, repeat, fac))
+	{
+		return OPERATOR_CANCELLED;
+	}
+
+	EDBM_update_generic(em, true, true);
+	return OPERATOR_FINISHED;
+}
+
+void MESH_OT_face_make_planar(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Make Planar Faces";
+	ot->idname = "MESH_OT_face_make_planar";
+	ot->description = "Flatten selected faces";
+
+	/* api callbacks */
+	ot->exec = edbm_face_make_planar_exec;
+	ot->poll = ED_operator_editmesh;
+
+	/* flags */
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+	/* props */
+	RNA_def_float(ot->srna, "factor", 0.5f, -10.0f, 10.0f, "Factor", "", 0.0f, 1.0f);
+	RNA_def_int(ot->srna, "repeat", 1, 1, 200,
+	            "Number of iterations to flatten faces", "", 1, 200);
 }
 
 
@@ -2049,9 +2170,7 @@ static int edbm_merge_exec(bContext *C, wmOperator *op)
 			ok = merge_firstlast(em, true, uvs, op);
 			break;
 		case 5:
-			ok = true;
-			if (!EDBM_op_callf(em, op, "collapse edges=%he", BM_ELEM_SELECT))
-				ok = false;
+			ok = EDBM_op_callf(em, op, "collapse edges=%he uvs=%b", BM_ELEM_SELECT, uvs);
 			break;
 		default:
 			BLI_assert(0);
@@ -2408,7 +2527,7 @@ void MESH_OT_blend_from_shape(wmOperatorType *ot)
 	/* properties */
 	prop = RNA_def_enum(ot->srna, "shape", DummyRNA_NULL_items, 0, "Shape", "Shape key to use for blending");
 	RNA_def_enum_funcs(prop, shape_itemf);
-	RNA_def_property_flag(prop, PROP_ENUM_NO_TRANSLATE);
+	RNA_def_property_flag(prop, PROP_ENUM_NO_TRANSLATE | PROP_NEVER_UNLINK);
 	RNA_def_float(ot->srna, "blend", 1.0f, -FLT_MAX, FLT_MAX, "Blend", "Blending factor", -2.0f, 2.0f);
 	RNA_def_boolean(ot->srna, "add", 1, "Add", "Add rather than blend between shapes");
 }
@@ -3678,19 +3797,45 @@ static int edbm_tris_convert_to_quads_exec(bContext *C, wmOperator *op)
 {
 	Object *obedit = CTX_data_edit_object(C);
 	BMEditMesh *em = BKE_editmesh_from_object(obedit);
-	int dosharp, douvs, dovcols, domaterials;
-	const float limit = RNA_float_get(op->ptr, "limit");
+	bool do_seam, do_sharp, do_uvs, do_vcols, do_materials;
+	float angle_face_threshold, angle_shape_threshold;
+	PropertyRNA *prop;
 
-	dosharp = RNA_boolean_get(op->ptr, "sharp");
-	douvs = RNA_boolean_get(op->ptr, "uvs");
-	dovcols = RNA_boolean_get(op->ptr, "vcols");
-	domaterials = RNA_boolean_get(op->ptr, "materials");
+	/* When joining exactly 2 faces, no limit.
+	 * this is useful for one off joins while editing. */
+	prop = RNA_struct_find_property(op->ptr, "face_threshold");
+	if ((em->bm->totfacesel == 2) &&
+	    (RNA_property_is_set(op->ptr, prop) == false))
+	{
+		angle_face_threshold = DEG2RADF(180.0f);
+	}
+	else {
+		angle_face_threshold = RNA_property_float_get(op->ptr, prop);
+	}
+
+	prop = RNA_struct_find_property(op->ptr, "shape_threshold");
+	if ((em->bm->totfacesel == 2) &&
+	    (RNA_property_is_set(op->ptr, prop) == false))
+	{
+		angle_shape_threshold = DEG2RADF(180.0f);
+	}
+	else {
+		angle_shape_threshold = RNA_property_float_get(op->ptr, prop);
+	}
+
+	do_seam = RNA_boolean_get(op->ptr, "seam");
+	do_sharp = RNA_boolean_get(op->ptr, "sharp");
+	do_uvs = RNA_boolean_get(op->ptr, "uvs");
+	do_vcols = RNA_boolean_get(op->ptr, "vcols");
+	do_materials = RNA_boolean_get(op->ptr, "materials");
 
 	if (!EDBM_op_call_and_selectf(
 	        em, op,
 	        "faces.out", true,
-	        "join_triangles faces=%hf limit=%f cmp_sharp=%b cmp_uvs=%b cmp_vcols=%b cmp_materials=%b",
-	        BM_ELEM_SELECT, limit, dosharp, douvs, dovcols, domaterials))
+	        "join_triangles faces=%hf angle_face_threshold=%f angle_shape_threshold=%f "
+	        "cmp_seam=%b cmp_sharp=%b cmp_uvs=%b cmp_vcols=%b cmp_materials=%b",
+	        BM_ELEM_SELECT, angle_face_threshold, angle_shape_threshold,
+	        do_seam, do_sharp, do_uvs, do_vcols, do_materials))
 	{
 		return OPERATOR_CANCELLED;
 	}
@@ -3704,12 +3849,19 @@ static void join_triangle_props(wmOperatorType *ot)
 {
 	PropertyRNA *prop;
 
-	prop = RNA_def_float_rotation(ot->srna, "limit", 0, NULL, 0.0f, DEG2RADF(180.0f),
-	                              "Max Angle", "Angle Limit", 0.0f, DEG2RADF(180.0f));
+	prop = RNA_def_float_rotation(
+	        ot->srna, "face_threshold", 0, NULL, 0.0f, DEG2RADF(180.0f),
+	        "Max Face Angle", "Face angle limit", 0.0f, DEG2RADF(180.0f));
+	RNA_def_property_float_default(prop, DEG2RADF(40.0f));
+
+	prop = RNA_def_float_rotation(
+	        ot->srna, "shape_threshold", 0, NULL, 0.0f, DEG2RADF(180.0f),
+	        "Max Shape Angle", "Shape angle limit", 0.0f, DEG2RADF(180.0f));
 	RNA_def_property_float_default(prop, DEG2RADF(40.0f));
 
 	RNA_def_boolean(ot->srna, "uvs", 0, "Compare UVs", "");
 	RNA_def_boolean(ot->srna, "vcols", 0, "Compare VCols", "");
+	RNA_def_boolean(ot->srna, "seam", 0, "Compare Seam", "");
 	RNA_def_boolean(ot->srna, "sharp", 0, "Compare Sharp", "");
 	RNA_def_boolean(ot->srna, "materials", 0, "Compare Materials", "");
 }
@@ -5072,11 +5224,16 @@ static int edbm_convex_hull_exec(bContext *C, wmOperator *op)
 
 	/* Merge adjacent triangles */
 	if (RNA_boolean_get(op->ptr, "join_triangles")) {
-		if (!EDBM_op_call_and_selectf(em, op,
-		                              "faces.out", true,
-		                              "join_triangles faces=%S limit=%f",
-		                              &bmop, "geom.out",
-		                              RNA_float_get(op->ptr, "limit")))
+		float angle_face_threshold = RNA_float_get(op->ptr, "face_threshold");
+		float angle_shape_threshold = RNA_float_get(op->ptr, "shape_threshold");
+
+		if (!EDBM_op_call_and_selectf(
+		        em, op,
+		        "faces.out", true,
+		        "join_triangles faces=%S "
+		        "angle_face_threshold=%f angle_shape_threshold=%f",
+		        &bmop, "geom.out",
+		        angle_face_threshold, angle_shape_threshold))
 		{
 			EDBM_op_finish(em, &bmop, op, true);
 			return OPERATOR_CANCELLED;

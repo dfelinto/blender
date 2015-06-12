@@ -28,6 +28,7 @@ set(INC
 	../blenfont
 	../blenlib
 	../blenloader
+	../depsgraph
 	../gpu
 	../ikplugin
 	../imbuf
@@ -67,6 +68,7 @@ set(SRC
 	intern/anim_sys.c
 	intern/appdir.c
 	intern/armature.c
+	intern/armature_update.c
 	intern/autoexec.c
 	intern/blender.c
 	intern/bmfont.c
@@ -134,6 +136,7 @@ set(SRC
 	intern/object.c
 	intern/object_deform.c
 	intern/object_dupli.c
+	intern/object_update.c
 	intern/ocean.c
 	intern/outliner_treehash.c
 	intern/packedFile.c
@@ -479,5 +482,9 @@ endif()
 #if(MSVC)
 #	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /WX")
 #endif()
+
+if(WITH_LEGACY_DEPSGRAPH)
+	add_definitions(-DWITH_LEGACY_DEPSGRAPH)
+endif()
 
 blender_add_lib(bf_blenkernel "${SRC}" "${INC}" "${INC_SYS}")

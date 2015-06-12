@@ -38,6 +38,7 @@
 #include "BKE_context.h"
 #include "BKE_global.h"
 #include "BKE_report.h"
+#include "BKE_editmesh.h"
 
 #include "RNA_access.h"
 #include "RNA_define.h"
@@ -63,23 +64,23 @@ typedef struct TransformModeItem {
 
 static const float VecOne[3] = {1, 1, 1};
 
-static char OP_TRANSLATION[] = "TRANSFORM_OT_translate";
-static char OP_ROTATION[] = "TRANSFORM_OT_rotate";
-static char OP_TOSPHERE[] = "TRANSFORM_OT_tosphere";
-static char OP_RESIZE[] = "TRANSFORM_OT_resize";
-static char OP_SKIN_RESIZE[] = "TRANSFORM_OT_skin_resize";
-static char OP_SHEAR[] = "TRANSFORM_OT_shear";
-static char OP_BEND[] = "TRANSFORM_OT_bend";
-static char OP_SHRINK_FATTEN[] = "TRANSFORM_OT_shrink_fatten";
-static char OP_PUSH_PULL[] = "TRANSFORM_OT_push_pull";
-static char OP_TILT[] = "TRANSFORM_OT_tilt";
-static char OP_TRACKBALL[] = "TRANSFORM_OT_trackball";
-static char OP_MIRROR[] = "TRANSFORM_OT_mirror";
-static char OP_EDGE_SLIDE[] = "TRANSFORM_OT_edge_slide";
-static char OP_VERT_SLIDE[] = "TRANSFORM_OT_vert_slide";
-static char OP_EDGE_CREASE[] = "TRANSFORM_OT_edge_crease";
-static char OP_EDGE_BWEIGHT[] = "TRANSFORM_OT_edge_bevelweight";
-static char OP_SEQ_SLIDE[] = "TRANSFORM_OT_seq_slide";
+static const char OP_TRANSLATION[] = "TRANSFORM_OT_translate";
+static const char OP_ROTATION[] = "TRANSFORM_OT_rotate";
+static const char OP_TOSPHERE[] = "TRANSFORM_OT_tosphere";
+static const char OP_RESIZE[] = "TRANSFORM_OT_resize";
+static const char OP_SKIN_RESIZE[] = "TRANSFORM_OT_skin_resize";
+static const char OP_SHEAR[] = "TRANSFORM_OT_shear";
+static const char OP_BEND[] = "TRANSFORM_OT_bend";
+static const char OP_SHRINK_FATTEN[] = "TRANSFORM_OT_shrink_fatten";
+static const char OP_PUSH_PULL[] = "TRANSFORM_OT_push_pull";
+static const char OP_TILT[] = "TRANSFORM_OT_tilt";
+static const char OP_TRACKBALL[] = "TRANSFORM_OT_trackball";
+static const char OP_MIRROR[] = "TRANSFORM_OT_mirror";
+static const char OP_EDGE_SLIDE[] = "TRANSFORM_OT_edge_slide";
+static const char OP_VERT_SLIDE[] = "TRANSFORM_OT_vert_slide";
+static const char OP_EDGE_CREASE[] = "TRANSFORM_OT_edge_crease";
+static const char OP_EDGE_BWEIGHT[] = "TRANSFORM_OT_edge_bevelweight";
+static const char OP_SEQ_SLIDE[] = "TRANSFORM_OT_seq_slide";
 
 static void TRANSFORM_OT_translate(struct wmOperatorType *ot);
 static void TRANSFORM_OT_rotate(struct wmOperatorType *ot);
@@ -488,7 +489,7 @@ static int transform_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 		/* add temp handler */
 		WM_event_add_modal_handler(C, op);
 
-		op->flag |= OP_GRAB_POINTER; // XXX maybe we want this with the manipulator only?
+		op->flag |= OP_IS_MODAL_GRAB_CURSOR; // XXX maybe we want this with the manipulator only?
 		return OPERATOR_RUNNING_MODAL;
 	}
 }
@@ -790,6 +791,8 @@ static void TRANSFORM_OT_shrink_fatten(struct wmOperatorType *ot)
 
 	RNA_def_float(ot->srna, "value", 0, -FLT_MAX, FLT_MAX, "Offset", "", -FLT_MAX, FLT_MAX);
 
+	RNA_def_boolean(ot->srna, "use_even_offset", true, "Offset Even", "Scale the offset to give more even thickness");
+
 	Transform_Properties(ot, P_PROPORTIONAL | P_MIRROR | P_SNAP);
 }
 
@@ -845,9 +848,9 @@ static void TRANSFORM_OT_edge_slide(struct wmOperatorType *ot)
 	ot->exec   = transform_exec;
 	ot->modal  = transform_modal;
 	ot->cancel = transform_cancel;
-	ot->poll   = ED_operator_editmesh;
+	ot->poll   = ED_operator_editmesh_region_view3d;
 
-	RNA_def_float_factor(ot->srna, "value", 0, -1.0f, 1.0f, "Factor", "", -1.0f, 1.0f);
+	RNA_def_float_factor(ot->srna, "value", 0, -10.0f, 10.0f, "Factor", "", -1.0f, 1.0f);
 
 	Transform_Properties(ot, P_MIRROR | P_SNAP | P_CORRECT_UV);
 }
@@ -865,7 +868,7 @@ static void TRANSFORM_OT_vert_slide(struct wmOperatorType *ot)
 	ot->exec   = transform_exec;
 	ot->modal  = transform_modal;
 	ot->cancel = transform_cancel;
-	ot->poll   = ED_operator_editmesh;
+	ot->poll   = ED_operator_editmesh_region_view3d;
 
 	RNA_def_float_factor(ot->srna, "value", 0, -10.0f, 10.0f, "Factor", "", -1.0f, 1.0f);
 
@@ -1118,7 +1121,7 @@ void transform_keymap_for_space(wmKeyConfig *keyconf, wmKeyMap *keymap, int spac
 			kmi = WM_keymap_add_item(keymap, "WM_OT_context_toggle", TABKEY, KM_PRESS, KM_SHIFT, 0);
 			RNA_string_set(kmi->ptr, "data_path", "tool_settings.use_snap");
 			kmi = WM_keymap_add_item(keymap, "WM_OT_context_menu_enum", TABKEY, KM_PRESS, KM_SHIFT | KM_CTRL, 0);
-			RNA_string_set(kmi->ptr, "data_path", "tool_settings.snap_element");
+			RNA_string_set(kmi->ptr, "data_path", "tool_settings.snap_node_element");
 			break;
 		case SPACE_SEQ:
 			WM_keymap_add_item(keymap, OP_SEQ_SLIDE, GKEY, KM_PRESS, 0, 0);

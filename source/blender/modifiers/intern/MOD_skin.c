@@ -104,6 +104,9 @@ typedef struct Frame {
 		/* Merge to target frame/corner (no merge if frame is null) */
 		struct Frame *frame;
 		int corner;
+		/* checked to avoid chaining.
+		 * (merging when we're already been referenced), see T39775 */
+		unsigned int is_target : 1;
 	} merge[4];
 
 	/* For hull frames, whether each vertex is detached or not */
@@ -249,6 +252,7 @@ static bool build_hull(SkinOutput *so, Frame **frames, int totframe)
 
 	/* Apply face attributes to hull output */
 	BMO_ITER (f, &oiter, op.slots_out, "geom.out", BM_FACE) {
+		BM_face_normal_update(f);
 		if (so->smd->flag & MOD_SKIN_SMOOTH_SHADING)
 			BM_elem_flag_enable(f, BM_ELEM_SMOOTH);
 		f->mat_nr = so->mat_nr;
@@ -362,7 +366,7 @@ static void merge_frame_corners(Frame **frames, int totframe)
 
 				/* Compare with each corner of all other frames... */
 				for (l = 0; l < 4; l++) {
-					if (frames[k]->merge[l].frame)
+					if (frames[k]->merge[l].frame || frames[k]->merge[l].is_target)
 						continue;
 
 					/* Some additional concerns that could be checked
@@ -392,6 +396,7 @@ static void merge_frame_corners(Frame **frames, int totframe)
 
 						frames[k]->merge[l].frame = frames[i];
 						frames[k]->merge[l].corner = j;
+						frames[i]->merge[j].is_target = true;
 
 						/* Can't merge another corner into the same
 						 * frame corner, so move on to frame k+1 */
@@ -960,6 +965,7 @@ static void add_poly(SkinOutput *so,
 	BLI_assert(v1 && v2 && v3);
 
 	f = BM_face_create_verts(so->bm, verts, v4 ? 4 : 3, NULL, BM_CREATE_NO_DOUBLE, true);
+	BM_face_normal_update(f);
 	if (so->smd->flag & MOD_SKIN_SMOOTH_SHADING)
 		BM_elem_flag_enable(f, BM_ELEM_SMOOTH);
 	f->mat_nr = so->mat_nr;
@@ -1421,6 +1427,9 @@ static void hull_merge_triangles(SkinOutput *so, const SkinModifierData *smd)
 			if (adj[0]->len == 3 && adj[1]->len == 3) {
 				BMVert *quad[4];
 
+				BLI_assert(BM_face_is_normal_valid(adj[0]));
+				BLI_assert(BM_face_is_normal_valid(adj[1]));
+
 				/* Construct quad using the two triangles adjacent to
 				 * the edge */
 				quad_from_tris(e, adj, quad);
@@ -1783,6 +1792,9 @@ static BMesh *build_skin(SkinNode *skin_nodes,
 	skin_output_connections(&so, skin_nodes, medge, totedge);
 	hull_merge_triangles(&so, smd);
 
+	bmesh_edit_end(so.bm, 0);
+	BMO_pop(so.bm);
+
 	return so.bm;
 }
 
@@ -1793,7 +1805,7 @@ static void skin_set_orig_indices(DerivedMesh *dm)
 	totpoly = dm->getNumPolys(dm);
 	orig = CustomData_add_layer(&dm->polyData, CD_ORIGINDEX,
 	                            CD_CALLOC, NULL, totpoly);
-	fill_vn_i(orig, totpoly, ORIGINDEX_NONE);
+	copy_vn_i(orig, totpoly, ORIGINDEX_NONE);
 }
 
 /*
@@ -1844,7 +1856,6 @@ static DerivedMesh *base_skin(DerivedMesh *origdm,
 	result = CDDM_from_bmesh(bm, false);
 	BM_mesh_free(bm);
 
-	CDDM_calc_edges(result);
 	result->dirty |= DM_DIRTY_NORMALS;
 
 	skin_set_orig_indices(result);
@@ -1930,6 +1941,7 @@ ModifierTypeInfo modifierType_Skin = {
 	/* freeData */          NULL,
 	/* isDisabled */        NULL,
 	/* updateDepgraph */    NULL,
+	/* updateDepsgraph */   NULL,
 	/* dependsOnTime */     NULL,
 	/* dependsOnNormals */	NULL,
 	/* foreachObjectLink */ NULL,

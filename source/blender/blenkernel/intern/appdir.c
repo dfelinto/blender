@@ -501,54 +501,6 @@ const char *BKE_appdir_folder_id_version(const int folder_id, const int ver, con
 /* Preset paths */
 
 /**
- * Tries appending each of the semicolon-separated extensions in the PATHEXT
- * environment variable (Windows-only) onto *name in turn until such a file is found.
- * Returns success/failure.
- */
-static int add_win32_extension(char *name)
-{
-	int retval = 0;
-	int type;
-
-	type = BLI_exists(name);
-	if ((type == 0) || S_ISDIR(type)) {
-#ifdef _WIN32
-		char filename[FILE_MAX];
-		char ext[FILE_MAX];
-		const char *extensions = getenv("PATHEXT");
-		if (extensions) {
-			char *temp;
-			do {
-				strcpy(filename, name);
-				temp = strstr(extensions, ";");
-				if (temp) {
-					strncpy(ext, extensions, temp - extensions);
-					ext[temp - extensions] = 0;
-					extensions = temp + 1;
-					strcat(filename, ext);
-				}
-				else {
-					strcat(filename, extensions);
-				}
-
-				type = BLI_exists(filename);
-				if (type && (!S_ISDIR(type))) {
-					retval = 1;
-					strcpy(name, filename);
-					break;
-				}
-			} while (temp);
-		}
-#endif
-	}
-	else {
-		retval = 1;
-	}
-
-	return (retval);
-}
-
-/**
  * Checks if name is a fully qualified filename to an executable.
  * If not it searches $PATH for the file. On Windows it also
  * adds the correct extension (.com .exe etc) from
@@ -562,39 +514,34 @@ static int add_win32_extension(char *name)
  */
 static void bli_where_am_i(char *fullname, const size_t maxlen, const char *name)
 {
-	char filename[FILE_MAX];
-	const char *path = NULL, *temp;
-
-#ifdef _WIN32
-	const char *separator = ";";
-#else
-	const char *separator = ":";
-#endif
-
-	
 #ifdef WITH_BINRELOC
 	/* linux uses binreloc since argv[0] is not reliable, call br_init( NULL ) first */
-	path = br_find_exe(NULL);
-	if (path) {
-		BLI_strncpy(fullname, path, maxlen);
-		free((void *)path);
-		return;
+	{
+		const char *path = NULL;
+		path = br_find_exe(NULL);
+		if (path) {
+			BLI_strncpy(fullname, path, maxlen);
+			free((void *)path);
+			return;
+		}
 	}
 #endif
 
 #ifdef _WIN32
-	wchar_t *fullname_16 = MEM_mallocN(maxlen * sizeof(wchar_t), "ProgramPath");
-	if (GetModuleFileNameW(0, fullname_16, maxlen)) {
-		conv_utf_16_to_8(fullname_16, fullname, maxlen);
-		if (!BLI_exists(fullname)) {
-			printf("path can't be found: \"%.*s\"\n", (int)maxlen, fullname);
-			MessageBox(NULL, "path contains invalid characters or is too long (see console)", "Error", MB_OK);
+	{
+		wchar_t *fullname_16 = MEM_mallocN(maxlen * sizeof(wchar_t), "ProgramPath");
+		if (GetModuleFileNameW(0, fullname_16, maxlen)) {
+			conv_utf_16_to_8(fullname_16, fullname, maxlen);
+			if (!BLI_exists(fullname)) {
+				printf("path can't be found: \"%.*s\"\n", (int)maxlen, fullname);
+				MessageBox(NULL, "path contains invalid characters or is too long (see console)", "Error", MB_OK);
+			}
+			MEM_freeN(fullname_16);
+			return;
 		}
-		MEM_freeN(fullname_16);
-		return;
-	}
 
-	MEM_freeN(fullname_16);
+		MEM_freeN(fullname_16);
+	}
 #endif
 
 	/* unix and non linux */
@@ -611,34 +558,19 @@ static void bli_where_am_i(char *fullname, const size_t maxlen, const char *name
 			else
 				BLI_join_dirfile(fullname, maxlen, wdir, name);
 
-			add_win32_extension(fullname); /* XXX, doesnt respect length */
+#ifdef _WIN32
+			BLI_path_program_extensions_add_win32(fullname, maxlen);
+#endif
 		}
 		else if (BLI_last_slash(name)) {
 			// full path
 			BLI_strncpy(fullname, name, maxlen);
-			add_win32_extension(fullname);
+#ifdef _WIN32
+			BLI_path_program_extensions_add_win32(fullname, maxlen);
+#endif
 		}
 		else {
-			// search for binary in $PATH
-			path = getenv("PATH");
-			if (path) {
-				do {
-					temp = strstr(path, separator);
-					if (temp) {
-						strncpy(filename, path, temp - path);
-						filename[temp - path] = 0;
-						path = temp + 1;
-					}
-					else {
-						strncpy(filename, path, sizeof(filename));
-					}
-					BLI_path_append(fullname, maxlen, name);
-					if (add_win32_extension(filename)) {
-						BLI_strncpy(fullname, filename, maxlen);
-						break;
-					}
-				} while (temp);
-			}
+			BLI_path_program_search(fullname, maxlen, name);
 		}
 #if defined(DEBUG)
 		if (!STREQ(name, fullname)) {
@@ -668,6 +600,58 @@ const char *BKE_appdir_program_path(void)
 const char *BKE_appdir_program_dir(void)
 {
 	return bprogdir;
+}
+
+bool BKE_appdir_program_python_search(
+        char *fullpath, const size_t fullpath_len,
+        const int version_major, const int version_minor)
+{
+	const char *basename = "python";
+	char python_ver[16];
+	/* check both possible names */
+	const char *python_names[] = {basename, python_ver};
+	int i;
+
+	bool is_found = false;
+
+	BLI_snprintf(python_ver, sizeof(python_ver), "%s%d.%d", basename, version_major, version_minor);
+
+	{
+		const char *python_bin_dir = BKE_appdir_folder_id(BLENDER_SYSTEM_PYTHON, "bin");
+		if (python_bin_dir) {
+
+			for (i = 0; i < ARRAY_SIZE(python_names); i++) {
+				BLI_join_dirfile(fullpath, fullpath_len, python_bin_dir, python_names[i]);
+
+				if (
+#ifdef _WIN32
+				    BLI_path_program_extensions_add_win32(fullpath, fullpath_len)
+#else
+				    BLI_exists(fullpath)
+#endif
+				    )
+				{
+					is_found = true;
+					break;
+				}
+			}
+		}
+	}
+
+	if (is_found == false) {
+		for (i = 0; i < ARRAY_SIZE(python_names); i++) {
+			if (BLI_path_program_search(fullpath, fullpath_len, python_names[i])) {
+				is_found = true;
+				break;
+			}
+		}
+	}
+
+	if (is_found == false) {
+		*fullpath = '\0';
+	}
+
+	return is_found;
 }
 
 /**

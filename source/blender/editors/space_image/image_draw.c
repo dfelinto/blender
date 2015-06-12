@@ -836,14 +836,30 @@ void draw_image_main(const bContext *C, ARegion *ar)
 	ibuf = ED_space_image_acquire_buffer(sima, &lock);
 
 	/* draw the image or grid */
-	if (ibuf == NULL)
+	if (ibuf == NULL) {
 		ED_region_grid_draw(ar, zoomx, zoomy);
-	else if (sima->flag & SI_DRAW_TILE)
-		draw_image_buffer_repeated(C, sima, ar, scene, ima, ibuf, zoomx, zoomy);
-	else if (ima && (ima->tpageflag & IMA_TILES))
-		draw_image_buffer_tiled(sima, ar, scene, ima, ibuf, 0.0f, 0.0, zoomx, zoomy);
-	else
-		draw_image_buffer(C, sima, ar, scene, ibuf, 0.0f, 0.0f, zoomx, zoomy);
+	}
+	else {
+
+		if (sima->flag & SI_DRAW_TILE)
+			draw_image_buffer_repeated(C, sima, ar, scene, ima, ibuf, zoomx, zoomy);
+		else if (ima && (ima->tpageflag & IMA_TILES))
+			draw_image_buffer_tiled(sima, ar, scene, ima, ibuf, 0.0f, 0.0, zoomx, zoomy);
+		else
+			draw_image_buffer(C, sima, ar, scene, ibuf, 0.0f, 0.0f, zoomx, zoomy);
+		
+		if (sima->flag & SI_DRAW_METADATA) {
+			int x, y;
+			rctf frame;
+
+			BLI_rctf_init(&frame, 0.0f, ibuf->x, 0.0f, ibuf->y);
+			UI_view2d_view_to_region(&ar->v2d, 0.0f, 0.0f, &x, &y);
+
+			ED_region_image_metadata_draw(x, y, ibuf, frame, zoomx, zoomy);
+		}
+	}
+
+	ED_space_image_release_buffer(sima, ibuf, lock);
 
 	/* paint helpers */
 	if (show_paint)
@@ -865,8 +881,6 @@ void draw_image_main(const bContext *C, ARegion *ar)
 		}
 	}
 #endif
-
-	ED_space_image_release_buffer(sima, ibuf, lock);
 
 	if (show_viewer) {
 		BLI_unlock_thread(LOCK_DRAW_IMAGE);

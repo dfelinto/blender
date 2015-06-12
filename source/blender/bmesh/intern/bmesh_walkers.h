@@ -76,10 +76,11 @@ typedef struct BMWalker {
 
 /* initialize a walker.  searchmask restricts some (not all) walkers to
  * elements with a specific tool flag set.  flags is specific to each walker.*/
-void BMW_init(struct BMWalker *walker, BMesh *bm, int type,
-              short mask_vert, short mask_edge, short mask_face,
-              BMWFlag flag,
-              int layer);
+void BMW_init(
+        struct BMWalker *walker, BMesh *bm, int type,
+        short mask_vert, short mask_edge, short mask_face,
+        BMWFlag flag,
+        int layer);
 void *BMW_begin(BMWalker *walker, void *start);
 void *BMW_step(struct BMWalker *walker);
 void  BMW_end(struct BMWalker *walker);
@@ -91,6 +92,11 @@ void *BMW_state_add(BMWalker *walker);
 void  BMW_state_remove(BMWalker *walker);
 void *BMW_walk(BMWalker *walker);
 void  BMW_reset(BMWalker *walker);
+
+#define BMW_ITER(ele, walker, data) \
+	for (BM_CHECK_TYPE_ELEM_ASSIGN(ele) = BMW_begin(walker, (BM_CHECK_TYPE_ELEM(data), data)); \
+	     ele; \
+	     BM_CHECK_TYPE_ELEM_ASSIGN(ele) = BMW_step(walker))
 
 /*
  * example of usage, walking over an island of tool flagged faces:
@@ -108,8 +114,10 @@ void  BMW_reset(BMWalker *walker);
 
 enum {
 	BMW_VERT_SHELL,
+	BMW_LOOP_SHELL,
+	BMW_LOOP_SHELL_WIRE,
 	BMW_FACE_SHELL,
-	BMW_LOOP,
+	BMW_EDGELOOP,
 	BMW_FACELOOP,
 	BMW_EDGERING,
 	BMW_EDGEBOUNDARY,

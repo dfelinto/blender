@@ -3251,17 +3251,17 @@ static PyObject *bpy_bmloop_repr(BPy_BMLoop *self)
 /* Types
  * ===== */
 
-PyTypeObject BPy_BMesh_Type     = {{{0}}};
-PyTypeObject BPy_BMVert_Type    = {{{0}}};
-PyTypeObject BPy_BMEdge_Type    = {{{0}}};
-PyTypeObject BPy_BMFace_Type    = {{{0}}};
-PyTypeObject BPy_BMLoop_Type    = {{{0}}};
-PyTypeObject BPy_BMElemSeq_Type = {{{0}}};
-PyTypeObject BPy_BMVertSeq_Type = {{{0}}};
-PyTypeObject BPy_BMEdgeSeq_Type = {{{0}}};
-PyTypeObject BPy_BMFaceSeq_Type = {{{0}}};
-PyTypeObject BPy_BMLoopSeq_Type = {{{0}}};
-PyTypeObject BPy_BMIter_Type    = {{{0}}};
+PyTypeObject BPy_BMesh_Type;
+PyTypeObject BPy_BMVert_Type;
+PyTypeObject BPy_BMEdge_Type;
+PyTypeObject BPy_BMFace_Type;
+PyTypeObject BPy_BMLoop_Type;
+PyTypeObject BPy_BMElemSeq_Type;
+PyTypeObject BPy_BMVertSeq_Type;
+PyTypeObject BPy_BMEdgeSeq_Type;
+PyTypeObject BPy_BMFaceSeq_Type;
+PyTypeObject BPy_BMLoopSeq_Type;
+PyTypeObject BPy_BMIter_Type;
 
 
 
@@ -3757,10 +3757,11 @@ void bpy_bm_generic_invalidate(BPy_BMGeneric *self)
  *
  * The 'bm_r' value is assigned when empty, and used when set.
  */
-void *BPy_BMElem_PySeq_As_Array(BMesh **r_bm, PyObject *seq, Py_ssize_t min, Py_ssize_t max, Py_ssize_t *r_size,
-                                const char htype,
-                                const bool do_unique_check, const bool do_bm_check,
-                                const char *error_prefix)
+void *BPy_BMElem_PySeq_As_Array(
+        BMesh **r_bm, PyObject *seq, Py_ssize_t min, Py_ssize_t max, Py_ssize_t *r_size,
+        const char htype,
+        const bool do_unique_check, const bool do_bm_check,
+        const char *error_prefix)
 {
 	BMesh *bm = (r_bm && *r_bm) ? *r_bm : NULL;
 	PyObject *seq_fast;

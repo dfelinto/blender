@@ -63,7 +63,7 @@ static ScrArea *biggest_non_image_area(bContext *C)
 	for (sa = sc->areabase.first; sa; sa = sa->next) {
 		if (sa->winx > 30 && sa->winy > 30) {
 			size = sa->winx * sa->winy;
-			if (sa->spacetype == SPACE_BUTS) {
+			if (!sa->full && sa->spacetype == SPACE_BUTS) {
 				if (foundwin == 0 && size > bwmaxsize) {
 					bwmaxsize = size;
 					big = sa;
@@ -197,7 +197,7 @@ ScrArea *render_view_open(bContext *C, int mx, int my)
 
 				/* we already had a fullscreen here -> mark new space as a stacked fullscreen */
 				if (sa->full) {
-					sa->flag |= AREA_FLAG_STACKED_FULLSCREEN;
+					sa->flag |= (AREA_FLAG_STACKED_FULLSCREEN | AREA_FLAG_TEMP_TYPE);
 				}
 			}
 			else {
@@ -245,6 +245,11 @@ static int render_view_cancel_exec(bContext *C, wmOperator *UNUSED(op))
 	ScrArea *sa = CTX_wm_area(C);
 	SpaceImage *sima = sa->spacedata.first;
 
+	/* ensure image editor fullscreen and area fullscreen states are in sync */
+	if ((sima->flag & SI_FULLWINDOW) && !sa->full) {
+		sima->flag &= ~SI_FULLWINDOW;
+	}
+
 	/* test if we have a temp screen in front */
 	if (win->screen->temp) {
 		wm_window_lower(win);
@@ -256,10 +261,11 @@ static int render_view_cancel_exec(bContext *C, wmOperator *UNUSED(op))
 
 		if (sima->flag & SI_FULLWINDOW) {
 			sima->flag &= ~SI_FULLWINDOW;
-			ED_screen_full_prevspace(C, sa);
+			ED_screen_full_prevspace(C, sa, false);
 		}
-		else
+		else {
 			ED_area_prevspace(C, sa);
+		}
 
 		return OPERATOR_FINISHED;
 	}
@@ -320,7 +326,7 @@ static int render_view_show_invoke(bContext *C, wmOperator *UNUSED(op), const wm
 
 					if (sima->flag & SI_FULLWINDOW) {
 						sima->flag &= ~SI_FULLWINDOW;
-						ED_screen_full_prevspace(C, sa);
+						ED_screen_full_prevspace(C, sa, false);
 					}
 					else if (sima->next) {
 						/* workaround for case of double prevspace, render window

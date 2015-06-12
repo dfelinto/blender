@@ -125,9 +125,7 @@ EnumPropertyItem brush_image_tool_items[] = {
 static int rna_SculptToolCapabilities_has_accumulate_get(PointerRNA *ptr)
 {
 	Brush *br = (Brush *)ptr->data;
-	return ELEM(br->sculpt_tool,
-	            SCULPT_TOOL_BLOB, SCULPT_TOOL_CLAY, SCULPT_TOOL_CREASE,
-	            SCULPT_TOOL_DRAW, SCULPT_TOOL_INFLATE, SCULPT_TOOL_LAYER);
+	return SCULPT_TOOL_HAS_ACCUMULATE(br->sculpt_tool);
 }
 
 static int rna_SculptToolCapabilities_has_auto_smooth_get(PointerRNA *ptr)
@@ -155,7 +153,7 @@ static int rna_SculptToolCapabilities_has_jitter_get(PointerRNA *ptr)
 static int rna_SculptToolCapabilities_has_normal_weight_get(PointerRNA *ptr)
 {
 	Brush *br = (Brush *)ptr->data;
-	return ELEM(br->sculpt_tool, SCULPT_TOOL_GRAB, SCULPT_TOOL_SNAKE_HOOK);
+	return SCULPT_TOOL_HAS_NORMAL_WEIGHT(br->sculpt_tool);
 }
 
 static int rna_BrushCapabilities_has_overlay_get(PointerRNA *ptr)
@@ -344,8 +342,8 @@ static void rna_Brush_reset_icon(Brush *br, const char *UNUSED(type))
 		return;
 
 	if (id->icon_id >= BIFICONID_LAST) {
-		BKE_icon_delete(id);
-		BKE_previewimg_free_id(id);
+		BKE_icon_id_delete(id);
+		BKE_previewimg_id_free(id);
 	}
 
 	id->icon_id = 0;
@@ -417,8 +415,8 @@ static void rna_Brush_icon_update(Main *UNUSED(bmain), Scene *UNUSED(scene), Poi
 	br->id.icon_id = 0;
 
 	if (br->flag & BRUSH_CUSTOM_ICON) {
-		BKE_previewimg_get(&br->id);
-		BKE_icon_changed(BKE_icon_getid(&br->id));
+		BKE_previewimg_id_ensure(&br->id);
+		BKE_icon_changed(BKE_icon_id_ensure(&br->id));
 	}
 
 	WM_main_add_notifier(NC_BRUSH | NA_EDITED, br);

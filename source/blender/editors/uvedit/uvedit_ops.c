@@ -53,6 +53,8 @@
 #include "BLI_blenlib.h"
 #include "BLI_array.h"
 
+#include "BLF_translation.h"
+
 #include "BKE_context.h"
 #include "BKE_customdata.h"
 #include "BKE_depsgraph.h"
@@ -80,6 +82,8 @@
 #include "WM_api.h"
 #include "WM_types.h"
 
+#include "UI_interface.h"
+#include "UI_resources.h"
 #include "UI_view2d.h"
 
 #include "uvedit_intern.h"
@@ -1028,7 +1032,7 @@ static int uv_select_edgeloop(Scene *scene, Image *ima, BMEditMesh *em, NearestH
 
 	/* setup */
 	BM_mesh_elem_table_ensure(em->bm, BM_FACE);
-	vmap = BM_uv_vert_map_create(em->bm, 0, limit);
+	vmap = BM_uv_vert_map_create(em->bm, limit, false, false);
 
 	BM_mesh_elem_index_ensure(em->bm, BM_VERT | BM_FACE);
 
@@ -1131,7 +1135,7 @@ static void uv_select_linked(Scene *scene, Image *ima, BMEditMesh *em, const flo
 	const int cd_poly_tex_offset = CustomData_get_offset(&em->bm->pdata, CD_MTEXPOLY);
 
 	BM_mesh_elem_table_ensure(em->bm, BM_FACE); /* we can use this too */
-	vmap = BM_uv_vert_map_create(em->bm, !select_faces, limit);
+	vmap = BM_uv_vert_map_create(em->bm, limit, !select_faces, false);
 
 	if (vmap == NULL)
 		return;
@@ -2120,7 +2124,7 @@ static int uv_mouse_select(bContext *C, const float co[2], bool extend, bool loo
 		/* mark 1 vertex as being hit */
 		hitv  = BLI_array_alloca(hitv,  hit.efa->len);
 		hituv = BLI_array_alloca(hituv, hit.efa->len);
-		fill_vn_i(hitv, hit.efa->len, 0xFFFFFFFF);
+		copy_vn_i(hitv, hit.efa->len, 0xFFFFFFFF);
 
 		hitv[hit.lindex] = BM_elem_index_get(hit.l->v);
 		hituv[hit.lindex] = hit.luv->uv;
@@ -2137,7 +2141,7 @@ static int uv_mouse_select(bContext *C, const float co[2], bool extend, bool loo
 		/* mark 2 edge vertices as being hit */
 		hitv  = BLI_array_alloca(hitv,  hit.efa->len);
 		hituv = BLI_array_alloca(hituv, hit.efa->len);
-		fill_vn_i(hitv, hit.efa->len, 0xFFFFFFFF);
+		copy_vn_i(hitv, hit.efa->len, 0xFFFFFFFF);
 
 		hitv[hit.lindex] = BM_elem_index_get(hit.l->v);
 		hitv[(hit.lindex + 1) % hit.efa->len] = BM_elem_index_get(hit.l->next->v);
@@ -2714,7 +2718,7 @@ static void uv_select_flush_from_tag_face(SpaceImage *sima, Scene *scene, Object
 		uvedit_pixel_to_float(sima, limit, 0.05);
 		
 		BM_mesh_elem_table_ensure(em->bm, BM_FACE);
-		vmap = BM_uv_vert_map_create(em->bm, 0, limit);
+		vmap = BM_uv_vert_map_create(em->bm, limit, false, false);
 		if (vmap == NULL) {
 			return;
 		}
@@ -2805,7 +2809,7 @@ static void uv_select_flush_from_tag_loop(SpaceImage *sima, Scene *scene, Object
 		uvedit_pixel_to_float(sima, limit, 0.05);
 
 		BM_mesh_elem_table_ensure(em->bm, BM_FACE);
-		vmap = BM_uv_vert_map_create(em->bm, 0, limit);
+		vmap = BM_uv_vert_map_create(em->bm, limit, false, false);
 		if (vmap == NULL) {
 			return;
 		}
@@ -3098,9 +3102,10 @@ static bool do_lasso_select_mesh_uv(bContext *C, const int mcords[][2], short mo
 	Scene *scene = CTX_data_scene(C);
 	ToolSettings *ts = scene->toolsettings;
 	BMEditMesh *em = BKE_editmesh_from_object(obedit);
-	const int use_face_center = (ts->uv_flag & UV_SYNC_SELECTION) ?
-	                            (ts->selectmode == SCE_SELECT_FACE) :
-	                            (ts->uv_selectmode == UV_SELECT_FACE);
+	const bool use_face_center = (
+	        (ts->uv_flag & UV_SYNC_SELECTION) ?
+	        (ts->selectmode == SCE_SELECT_FACE) :
+	        (ts->uv_selectmode == UV_SELECT_FACE));
 
 	const int cd_loop_uv_offset  = CustomData_get_offset(&em->bm->ldata, CD_MLOOPUV);
 	const int cd_poly_tex_offset = CustomData_get_offset(&em->bm->pdata, CD_MTEXPOLY);
@@ -4036,7 +4041,7 @@ static int uv_seams_from_islands_exec(bContext *C, wmOperator *op)
 
 	/* This code sets editvert->tmp.l to the index. This will be useful later on. */
 	BM_mesh_elem_table_ensure(bm, BM_FACE);
-	vmap = BM_uv_vert_map_create(bm, 0, limit);
+	vmap = BM_uv_vert_map_create(bm, limit, false, false);
 
 	BM_ITER_MESH (editedge, &iter, bm, BM_EDGES_OF_MESH) {
 		/* flags to determine if we uv is separated from first editface match */
@@ -4141,7 +4146,7 @@ static void UV_OT_seams_from_islands(wmOperatorType *ot)
 	RNA_def_boolean(ot->srna, "mark_sharp", 0, "Mark Sharp", "Mark boundary edges as sharp");
 }
 
-static int uv_mark_seam_exec(bContext *C, wmOperator *UNUSED(op))
+static int uv_mark_seam_exec(bContext *C, wmOperator *op)
 {
 	Object *ob = CTX_data_edit_object(C);
 	Scene *scene = CTX_data_scene(C);
@@ -4151,13 +4156,17 @@ static int uv_mark_seam_exec(bContext *C, wmOperator *UNUSED(op))
 	BMFace *efa;
 	BMLoop *loop;
 	BMIter iter, liter;
+	bool clear = RNA_boolean_get(op->ptr, "clear");
 
 	const int cd_loop_uv_offset = CustomData_get_offset(&bm->ldata, CD_MLOOPUV);
 
 	BM_ITER_MESH (efa, &iter, bm, BM_FACES_OF_MESH) {
 		BM_ITER_ELEM (loop, &liter, efa, BM_LOOPS_OF_FACE) {
 			if (uvedit_edge_select_test(scene, loop, cd_loop_uv_offset)) {
-				BM_elem_flag_enable(loop->e, BM_ELEM_SEAM);
+				if (clear)
+					BM_elem_flag_disable(loop->e, BM_ELEM_SEAM);
+				else
+					BM_elem_flag_enable(loop->e, BM_ELEM_SEAM);
 			}
 		}
 	}
@@ -4173,10 +4182,27 @@ static int uv_mark_seam_exec(bContext *C, wmOperator *UNUSED(op))
 	return OPERATOR_FINISHED;
 }
 
+static int uv_mark_seam_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
+{
+	uiPopupMenu *pup;
+	uiLayout *layout;
+
+	pup = UI_popup_menu_begin(C, IFACE_("Edges"), ICON_NONE);
+	layout = UI_popup_menu_layout(pup);
+
+	uiLayoutSetOperatorContext(layout, WM_OP_EXEC_DEFAULT);
+	uiItemBooleanO(layout, CTX_IFACE_(BLF_I18NCONTEXT_OPERATOR_DEFAULT, "Mark Seam"), ICON_NONE, op->type->idname, "clear", false);
+	uiItemBooleanO(layout, CTX_IFACE_(BLF_I18NCONTEXT_OPERATOR_DEFAULT, "Clear Seam"), ICON_NONE, op->type->idname, "clear", true);
+
+	UI_popup_menu_end(C, pup);
+
+	return OPERATOR_INTERFACE;
+}
+
 static void UV_OT_mark_seam(wmOperatorType *ot)
 {
 	/* identifiers */
-	ot->name = "Mark Seams";
+	ot->name = "Mark Seam";
 	ot->description = "Mark selected UV edges as seams";
 	ot->idname = "UV_OT_mark_seam";
 
@@ -4185,7 +4211,10 @@ static void UV_OT_mark_seam(wmOperatorType *ot)
 
 	/* api callbacks */
 	ot->exec = uv_mark_seam_exec;
+	ot->invoke = uv_mark_seam_invoke;
 	ot->poll = ED_operator_uvedit;
+
+	RNA_def_boolean(ot->srna, "clear", false, "Clear Seams", "Clear instead of marking seams");
 }
 
 

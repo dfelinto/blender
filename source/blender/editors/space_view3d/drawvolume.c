@@ -105,7 +105,7 @@ void draw_smoke_volume(SmokeDomainSettings *sds, Object *ob,
 	float cor[3] = {1.0f, 1.0f, 1.0f};
 	int gl_depth = 0, gl_blend = 0;
 
-	int use_fire = (sds->active_fields & SM_ACTIVE_FIRE);
+	const bool use_fire = (sds->active_fields & SM_ACTIVE_FIRE) != 0;
 
 	/* draw slices of smoke is adapted from c++ code authored
 	 * by: Johannes Schmid and Ingemar Rask, 2006, johnny@grob.org */
@@ -253,8 +253,7 @@ void draw_smoke_volume(SmokeDomainSettings *sds, Object *ob,
 	glGetBooleanv(GL_BLEND, (GLboolean *)&gl_blend);
 	glGetBooleanv(GL_DEPTH_TEST, (GLboolean *)&gl_depth);
 
-	glDepthMask(GL_FALSE);
-	glDisable(GL_DEPTH_TEST);
+	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_BLEND);
 
 	/* find cube vertex that is closest to the viewer */
@@ -437,8 +436,6 @@ void draw_smoke_volume(SmokeDomainSettings *sds, Object *ob,
 	if (gl_depth) {
 		glEnable(GL_DEPTH_TEST);
 	}
-
-	glDepthMask(GL_TRUE);
 }
 
 #ifdef SMOKE_DEBUG_VELOCITY

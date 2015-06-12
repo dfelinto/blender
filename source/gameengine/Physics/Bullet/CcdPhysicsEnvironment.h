@@ -54,6 +54,7 @@ class btOverlappingPairCache;
 class btIDebugDraw;
 class PHY_IVehicle;
 class CcdOverlapFilterCallBack;
+class CcdShapeConstructionInfo;
 
 /** CcdPhysicsEnvironment is an experimental mainloop for physics simulation using optional continuous collision detection.
  * Physics Environment takes care of stepping the simulation and is a container for physics entities.
@@ -221,15 +222,21 @@ protected:
 
 		void	UpdateCcdPhysicsController(CcdPhysicsController* ctrl, btScalar newMass, int newCollisionFlags, short int newCollisionGroup, short int newCollisionMask);
 
-		void	DisableCcdPhysicsController(CcdPhysicsController* ctrl);
-
-		void	EnableCcdPhysicsController(CcdPhysicsController* ctrl);
-
 		void	RefreshCcdPhysicsController(CcdPhysicsController* ctrl);
+
+		bool	IsActiveCcdPhysicsController(CcdPhysicsController *ctrl);
 
 		void	AddCcdGraphicController(CcdGraphicController* ctrl);
 
 		void	RemoveCcdGraphicController(CcdGraphicController* ctrl);
+
+		/** 
+		 * Update all physics controllers shape which use the same shape construction info.
+		 * Call RecreateControllerShape on controllers which use the same shape
+		 * construction info that argument shapeInfo.
+		 * You need to call this function when the shape construction info changed.
+		 */
+		void	UpdateCcdPhysicsControllerShape(CcdShapeConstructionInfo *shapeInfo);
 
 		btBroadphaseInterface*	GetBroadphase();
 		btDbvtBroadphase*	GetCullingTree() { return m_cullingTree; }

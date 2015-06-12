@@ -69,11 +69,13 @@ def region_2d_to_origin_3d(region, rv3d, coord, clamp=None):
 
     .. note::
 
-       Orthographic views have a less obvious origin, the far clip is used to define the viewport near/far extents.
-       Since far clip can be a very large value, the result may give with numeric precision issues.
+       Orthographic views have a less obvious origin,
+       the far clip is used to define the viewport near/far extents.
+       Since far clip can be a very large value,
+       the result may give with numeric precision issues.
 
-       To avoid this problem, you can optionally clamp the far clip to a smaller value
-       based on the data you're operating on.
+       To avoid this problem, you can optionally clamp the far clip to a
+       smaller value based on the data you're operating on.
 
     :arg region: region of the 3D viewport, typically bpy.context.region.
     :type region: :class:`bpy.types.Region`
@@ -160,7 +162,7 @@ def region_2d_to_location_3d(region, rv3d, coord, depth_location):
                                     )[0]
 
 
-def location_3d_to_region_2d(region, rv3d, coord):
+def location_3d_to_region_2d(region, rv3d, coord, default=None):
     """
     Return the *region* relative 2d location of a 3d position.
 
@@ -170,8 +172,10 @@ def location_3d_to_region_2d(region, rv3d, coord):
     :type rv3d: :class:`bpy.types.RegionView3D`
     :arg coord: 3d worldspace location.
     :type coord: 3d vector
+    :arg default: Return this value if ``coord``
+       is behind the origin of a perspective view.
     :return: 2d location
-    :rtype: :class:`mathutils.Vector`
+    :rtype: :class:`mathutils.Vector` or ``default`` argument.
     """
     from mathutils import Vector
 
@@ -184,4 +188,4 @@ def location_3d_to_region_2d(region, rv3d, coord):
                        height_half + height_half * (prj.y / prj.w),
                        ))
     else:
-        return None
+        return default

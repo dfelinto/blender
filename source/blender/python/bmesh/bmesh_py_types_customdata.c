@@ -116,6 +116,9 @@ PyDoc_STRVAR(bpy_bmlayeraccess_collection__color_doc,
 PyDoc_STRVAR(bpy_bmlayeraccess_collection__skin_doc,
 "Accessor for skin layer.\n\ntype: :class:`BMLayerCollection`"
 );
+PyDoc_STRVAR(bpy_bmlayeraccess_collection__paint_mask_doc,
+"Accessor for paint mask layer.\n\ntype: :class:`BMLayerCollection`"
+);
 #ifdef WITH_FREESTYLE
 PyDoc_STRVAR(bpy_bmlayeraccess_collection__freestyle_edge_doc,
 "Accessor for Freestyle edge layer.\n\ntype: :class:`BMLayerCollection`"
@@ -196,6 +199,7 @@ static PyGetSetDef bpy_bmlayeraccess_vert_getseters[] = {
 	{(char *)"shape",        (getter)bpy_bmlayeraccess_collection_get, (setter)NULL, (char *)bpy_bmlayeraccess_collection__shape_doc, (void *)CD_SHAPEKEY},
 	{(char *)"bevel_weight", (getter)bpy_bmlayeraccess_collection_get, (setter)NULL, (char *)bpy_bmlayeraccess_collection__bevel_weight_doc, (void *)CD_BWEIGHT},
 	{(char *)"skin",         (getter)bpy_bmlayeraccess_collection_get, (setter)NULL, (char *)bpy_bmlayeraccess_collection__skin_doc, (void *)CD_MVERT_SKIN},
+	{(char *)"paint_mask",   (getter)bpy_bmlayeraccess_collection_get, (setter)NULL, (char *)bpy_bmlayeraccess_collection__paint_mask_doc, (void *)CD_PAINT_MASK},
 
 	{NULL, NULL, NULL, NULL, NULL} /* Sentinel */
 };
@@ -787,12 +791,12 @@ PyDoc_STRVAR(bpy_bmlayeritem_type_doc,
 );
 
 
-PyTypeObject BPy_BMLayerAccessVert_Type     = {{{0}}}; /* bm.verts.layers */
-PyTypeObject BPy_BMLayerAccessEdge_Type     = {{{0}}}; /* bm.edges.layers */
-PyTypeObject BPy_BMLayerAccessFace_Type     = {{{0}}}; /* bm.faces.layers */
-PyTypeObject BPy_BMLayerAccessLoop_Type     = {{{0}}}; /* bm.loops.layers */
-PyTypeObject BPy_BMLayerCollection_Type     = {{{0}}}; /* bm.loops.layers.uv */
-PyTypeObject BPy_BMLayerItem_Type           = {{{0}}}; /* bm.loops.layers.uv["UVMap"] */
+PyTypeObject BPy_BMLayerAccessVert_Type; /* bm.verts.layers */
+PyTypeObject BPy_BMLayerAccessEdge_Type; /* bm.edges.layers */
+PyTypeObject BPy_BMLayerAccessFace_Type; /* bm.faces.layers */
+PyTypeObject BPy_BMLayerAccessLoop_Type; /* bm.loops.layers */
+PyTypeObject BPy_BMLayerCollection_Type; /* bm.loops.layers.uv */
+PyTypeObject BPy_BMLayerItem_Type;       /* bm.loops.layers.uv["UVMap"] */
 
 
 PyObject *BPy_BMLayerAccess_CreatePyObject(BMesh *bm, const char htype)
@@ -984,6 +988,7 @@ PyObject *BPy_BMLayerItem_GetItem(BPy_BMElem *py_ele, BPy_BMLayerItem *py_layer)
 			break;
 		}
 		case CD_PROP_FLT:
+		case CD_PAINT_MASK:
 		{
 			ret = PyFloat_FromDouble(*(float *)value);
 			break;
@@ -1061,6 +1066,7 @@ int BPy_BMLayerItem_SetItem(BPy_BMElem *py_ele, BPy_BMLayerItem *py_layer, PyObj
 			break;
 		}
 		case CD_PROP_FLT:
+		case CD_PAINT_MASK:
 		{
 			float tmp_val = PyFloat_AsDouble(py_value);
 			if (UNLIKELY(tmp_val == -1 && PyErr_Occurred())) {

@@ -104,7 +104,7 @@ void ED_space_image_set_mask(bContext *C, SpaceImage *sima, Mask *mask)
 	}
 }
 
-ImBuf *ED_space_image_acquire_buffer(SpaceImage *sima, void **lock_r)
+ImBuf *ED_space_image_acquire_buffer(SpaceImage *sima, void **r_lock)
 {
 	ImBuf *ibuf;
 
@@ -114,7 +114,7 @@ ImBuf *ED_space_image_acquire_buffer(SpaceImage *sima, void **lock_r)
 			return BIF_render_spare_imbuf();
 		else
 #endif
-		ibuf = BKE_image_acquire_ibuf(sima->image, &sima->iuser, lock_r);
+		ibuf = BKE_image_acquire_ibuf(sima->image, &sima->iuser, r_lock);
 
 		if (ibuf) {
 			if (ibuf->rect || ibuf->rect_float)
@@ -124,7 +124,7 @@ ImBuf *ED_space_image_acquire_buffer(SpaceImage *sima, void **lock_r)
 		}
 	}
 	else
-		*lock_r = NULL;
+		*r_lock = NULL;
 
 	return NULL;
 }
@@ -299,7 +299,7 @@ void ED_space_image_scopes_update(const struct bContext *C, struct SpaceImage *s
 	/* scope update can be expensive, don't update during paint modes */
 	if (sima->mode == SI_MODE_PAINT)
 		return;
-	if (ob && ((ob->mode & OB_MODE_TEXTURE_PAINT) != 0))
+	if (ob && ((ob->mode & (OB_MODE_TEXTURE_PAINT | OB_MODE_EDIT)) != 0))
 		return;
 	
 	scopes_update(&sima->scopes, ibuf, use_view_settings ? &scene->view_settings : NULL, &scene->display_settings);

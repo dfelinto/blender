@@ -64,7 +64,7 @@ def _gen_check_ctxt(settings):
 
 
 def _diff_check_ctxt(check_ctxt, minus_check_ctxt):
-    """Returns check_ctxt - minus_check_ctxt"""
+    """Removes minus_check_ctxt from check_ctxt"""
     for key in check_ctxt:
         if isinstance(check_ctxt[key], set):
             for warning in minus_check_ctxt[key]:
@@ -576,8 +576,9 @@ def dump_py_messages_from_files(msgs, reports, files, settings):
     #print(func_translate_args)
 
     # Break recursive nodes look up on some kind of nodes.
-    # E.g. we don’t want to get strings inside subscripts (blah["foo"])!
-    stopper_nodes = {ast.Subscript}
+    # E.g. we don't want to get strings inside subscripts (blah["foo"])!
+    #      we don't want to get strings from comparisons (foo.type == 'BAR').
+    stopper_nodes = {ast.Subscript, ast.Compare}
     # Consider strings separate: ("a" if test else "b")
     separate_nodes = {ast.IfExp}
 
@@ -897,7 +898,7 @@ def dump_addon_messages(module_name, do_checks, settings):
             del msgs[key]
 
     if check_ctxt:
-        check_ctxt = _diff_check_ctxt(check_ctxt, minus_check_ctxt)
+        _diff_check_ctxt(check_ctxt, minus_check_ctxt)
 
     # and we are done with those!
     del minus_pot
@@ -924,18 +925,18 @@ def main():
         return
 
     import sys
-    back_argv = sys.argv
-    # Get rid of Blender args!
-    sys.argv = sys.argv[sys.argv.index("--") + 1:]
-
     import argparse
+
+    # Get rid of Blender args!
+    argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
+
     parser = argparse.ArgumentParser(description="Process UI messages from inside Blender.")
     parser.add_argument('-c', '--no_checks', default=True, action="store_false", help="No checks over UI messages.")
     parser.add_argument('-m', '--no_messages', default=True, action="store_false", help="No export of UI messages.")
     parser.add_argument('-o', '--output', default=None, help="Output POT file path.")
     parser.add_argument('-s', '--settings', default=None,
                         help="Override (some) default settings. Either a JSon file name, or a JSon string.")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     settings = settings_i18n.I18nSettings()
     settings.from_json(args.settings)
@@ -944,8 +945,6 @@ def main():
         settings.FILE_NAME_POT = args.output
 
     dump_messages(do_messages=args.no_messages, do_checks=args.no_checks, settings=settings)
-
-    sys.argv = back_argv
 
 
 if __name__ == "__main__":

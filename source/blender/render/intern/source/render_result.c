@@ -115,7 +115,9 @@ void render_result_free(RenderResult *res)
 		MEM_freeN(res->text);
 	if (res->error)
 		MEM_freeN(res->error);
-	
+	if (res->stamp_data)
+		MEM_freeN(res->stamp_data);
+
 	MEM_freeN(res);
 }
 
@@ -484,7 +486,7 @@ static RenderPass *render_layer_add_pass(RenderResult *rr, RenderLayer *rl, int 
 	const size_t view_id = BLI_findstringindex(&rr->views, viewname, offsetof(RenderView, name));
 	const char *typestr = name_from_passtype(passtype, -1);
 	RenderPass *rpass = MEM_callocN(sizeof(RenderPass), typestr);
-	int rectsize = rr->rectx * rr->recty * channels;
+	size_t rectsize = ((size_t)rr->rectx) * rr->recty * channels;
 	
 	BLI_addtail(&rl->passes, rpass);
 	rpass->passtype = passtype;
@@ -529,6 +531,10 @@ static const char *debug_pass_type_name_get(int debug_type)
 	switch (debug_type) {
 		case RENDER_PASS_DEBUG_BVH_TRAVERSAL_STEPS:
 			return "BVH Traversal Steps";
+		case RENDER_PASS_DEBUG_BVH_TRAVERSED_INSTANCES:
+			return "BVH Traversed Instances";
+		case RENDER_PASS_DEBUG_RAY_BOUNCES:
+			return "Ray Bounces";
 	}
 	return "Unknown";
 }
@@ -545,6 +551,7 @@ static RenderPass *render_layer_add_debug_pass(RenderResult *rr,
 	BLI_strncpy(rpass->name,
 	            debug_pass_type_name_get(debug_type),
 	            sizeof(rpass->name));
+	BLI_strncpy(rpass->internal_name, rpass->name, sizeof(rpass->internal_name));
 	return rpass;
 }
 #endif
@@ -560,7 +567,7 @@ RenderResult *render_result_new(Render *re, rcti *partrct, int crop, int savebuf
 	RenderView *rv;
 	SceneRenderLayer *srl;
 	int rectx, recty;
-	int nr, i;
+	int nr;
 	
 	rectx = BLI_rcti_size_x(partrct);
 	recty = BLI_rcti_size_y(partrct);
@@ -700,7 +707,7 @@ RenderResult *render_result_new(Render *re, rcti *partrct, int crop, int savebuf
 #ifdef WITH_CYCLES_DEBUG
 			if (BKE_scene_use_new_shading_nodes(re->scene)) {
 				render_layer_add_debug_pass(rr, rl, 1, SCE_PASS_DEBUG,
-				        RENDER_PASS_DEBUG_BVH_TRAVERSAL_STEPS, view);
+				        re->r.debug_pass_type, view);
 			}
 #endif
 		}
@@ -726,15 +733,11 @@ RenderResult *render_result_new(Render *re, rcti *partrct, int crop, int savebuf
 				if (strcmp(view, viewname) != 0)
 					continue;
 
-			if (rr->do_exr_tile) {
+			if (rr->do_exr_tile)
 				IMB_exr_add_view(rl->exrhandle, view);
 
-				for (i=0; i < 4; i++)
-					IMB_exr_add_channel(rl->exrhandle, rl->name, name_from_passtype(SCE_PASS_COMBINED, i), view, 0, 0, NULL);
-			}
-			else {
-				render_layer_add_pass(rr, rl, 4, SCE_PASS_COMBINED, view);
-			}
+			/* a renderlayer should always have a Combined pass */
+			render_layer_add_pass(rr, rl, 4, SCE_PASS_COMBINED, view);
 		}
 
 		/* note, this has to be in sync with scene.c */
@@ -909,10 +912,16 @@ RenderResult *render_result_new_from_exr(void *exrhandle, const char *colorspace
 	return rr;
 }
 
+void render_result_view_new(RenderResult *rr, const char *viewname)
+{
+	RenderView *rv = MEM_callocN(sizeof(RenderView), "new render view");
+	BLI_addtail(&rr->views, rv);
+	BLI_strncpy(rv->name, viewname, sizeof(rv->name));
+}
+
 void render_result_views_new(RenderResult *rr, RenderData *rd)
 {
 	SceneRenderView *srv;
-	RenderView *rv;
 
 	/* clear previously existing views - for sequencer */
 	render_result_views_free(rr);
@@ -920,19 +929,15 @@ void render_result_views_new(RenderResult *rr, RenderData *rd)
 	/* check renderdata for amount of views */
 	if ((rd->scemode & R_MULTIVIEW)) {
 		for (srv = rd->views.first; srv; srv = srv->next) {
-			if (BKE_scene_multiview_is_render_view_active(rd, srv) == false) continue;
-
-			rv = MEM_callocN(sizeof(RenderView), "new render view");
-			BLI_addtail(&rr->views, rv);
-
-			BLI_strncpy(rv->name, srv->name, sizeof(rv->name));
+			if (BKE_scene_multiview_is_render_view_active(rd, srv) == false)
+				continue;
+			render_result_view_new(rr, srv->name);
 		}
 	}
 
 	/* we always need at least one view */
 	if (BLI_listbase_count_ex(&rr->views, 1) == 0) {
-		rv = MEM_callocN(sizeof(RenderView), "new render view");
-		BLI_addtail(&rr->views, rv);
+		render_result_view_new(rr, "");
 	}
 }
 
@@ -940,22 +945,23 @@ void render_result_views_new(RenderResult *rr, RenderData *rd)
 
 static void do_merge_tile(RenderResult *rr, RenderResult *rrpart, float *target, float *tile, int pixsize)
 {
-	int y, ofs, copylen, tilex, tiley;
+	int y, tilex, tiley;
+	size_t ofs, copylen;
 	
 	copylen = tilex = rrpart->rectx;
 	tiley = rrpart->recty;
 	
 	if (rrpart->crop) { /* filters add pixel extra */
-		tile += pixsize * (rrpart->crop + rrpart->crop * tilex);
+		tile += pixsize * (rrpart->crop + ((size_t)rrpart->crop) * tilex);
 		
 		copylen = tilex - 2 * rrpart->crop;
 		tiley -= 2 * rrpart->crop;
 		
-		ofs = (rrpart->tilerect.ymin + rrpart->crop) * rr->rectx + (rrpart->tilerect.xmin + rrpart->crop);
+		ofs = (((size_t)rrpart->tilerect.ymin) + rrpart->crop) * rr->rectx + (rrpart->tilerect.xmin + rrpart->crop);
 		target += pixsize * ofs;
 	}
 	else {
-		ofs = (rrpart->tilerect.ymin * rr->rectx + rrpart->tilerect.xmin);
+		ofs = (((size_t)rrpart->tilerect.ymin) * rr->rectx + rrpart->tilerect.xmin);
 		target += pixsize * ofs;
 	}
 
@@ -1025,7 +1031,7 @@ bool RE_WriteRenderResult(ReportList *reports, RenderResult *rr, const char *fil
 	RenderPass *rpass;
 	RenderView *rview;
 	void *exrhandle = IMB_exr_get_handle();
-	bool success = false;
+	bool success;
 	int a, nr;
 	const char *chan_view = NULL;
 	int compress = (imf ? imf->exr_codec : 0);
@@ -1109,8 +1115,9 @@ bool RE_WriteRenderResult(ReportList *reports, RenderResult *rr, const char *fil
 
 	BLI_make_existing_file(filename);
 
-	if (IMB_exr_begin_write(exrhandle, filename, width, height, compress)) {
+	if (IMB_exr_begin_write(exrhandle, filename, width, height, compress, rr->stamp_data)) {
 		IMB_exr_write_channels(exrhandle);
+		success = true;
 	}
 	else {
 		/* TODO, get the error from openexr's exception */
@@ -1460,12 +1467,13 @@ bool render_result_exr_file_cache_read(Render *re)
 ImBuf *render_result_rect_to_ibuf(RenderResult *rr, RenderData *rd, const int view_id)
 {
 	ImBuf *ibuf = IMB_allocImBuf(rr->rectx, rr->recty, rd->im_format.planes, 0);
-	
+	RenderView *rv = RE_RenderViewGetById(rr, view_id);
+
 	/* if not exists, BKE_imbuf_write makes one */
-	ibuf->rect = (unsigned int *) RE_RenderViewGetRect32(rr, view_id);
-	ibuf->rect_float = RE_RenderViewGetRectf(rr, view_id);
-	ibuf->zbuf_float = RE_RenderViewGetRectz(rr, view_id);
-	
+	ibuf->rect = (unsigned int *) rv->rect32;
+	ibuf->rect_float = rv->rectf;
+	ibuf->zbuf_float = rv->rectz;
+
 	/* float factor for random dither, imbuf takes care of it */
 	ibuf->dither = rd->dither_intensity;
 	
@@ -1502,7 +1510,7 @@ ImBuf *render_result_rect_to_ibuf(RenderResult *rr, RenderData *rd, const int vi
 
 void render_result_rect_from_ibuf(RenderResult *rr, RenderData *UNUSED(rd), ImBuf *ibuf, const int view_id)
 {
-	RenderView *rv = BLI_findlink(&rr->views, view_id);
+	RenderView *rv = RE_RenderViewGetById(rr, view_id);
 
 	if (ibuf->rect_float) {
 		if (!rv->rectf)
@@ -1523,15 +1531,11 @@ void render_result_rect_from_ibuf(RenderResult *rr, RenderData *UNUSED(rd), ImBu
 		/* Same things as above, old rectf can hang around from previous render. */
 		MEM_SAFE_FREE(rv->rectf);
 	}
-
-	/* clean up non-view buffers */
-	MEM_SAFE_FREE(rr->rect32);
-	MEM_SAFE_FREE(rr->rectf);
 }
 
 void render_result_rect_fill_zero(RenderResult *rr, const int view_id)
 {
-	RenderView *rv = BLI_findlink(&rr->views, view_id);
+	RenderView *rv = RE_RenderViewGetById(rr, view_id);
 
 	if (rv->rectf)
 		memset(rv->rectf, 0, 4 * sizeof(float) * rr->rectx * rr->recty);
@@ -1545,15 +1549,13 @@ void render_result_rect_get_pixels(RenderResult *rr, unsigned int *rect, int rec
                                    const ColorManagedViewSettings *view_settings, const ColorManagedDisplaySettings *display_settings,
                                    const int view_id)
 {
-	if (rr->rect32) {
-		int *rect32 = RE_RenderViewGetRect32(rr, view_id);
-		memcpy(rect, (rect32 ? rect32 : rr->rect32), sizeof(int) * rr->rectx * rr->recty);
-	}
-	else if (rr->rectf) {
-		float *rectf = RE_RenderViewGetRectf(rr, view_id);
-		IMB_display_buffer_transform_apply((unsigned char *) rect, (rectf ? rectf : rr->rectf), rr->rectx, rr->recty, 4,
+	RenderView *rv = RE_RenderViewGetById(rr, view_id);
+
+	if (rv->rect32)
+		memcpy(rect, rv->rect32, sizeof(int) * rr->rectx * rr->recty);
+	else if (rv->rectf)
+		IMB_display_buffer_transform_apply((unsigned char *) rect, rv->rectf, rr->rectx, rr->recty, 4,
 		                                   view_settings, display_settings, true);
-	}
 	else
 		/* else fill with black */
 		memset(rect, 0, sizeof(int) * rectx * recty);
@@ -1587,47 +1589,16 @@ bool RE_RenderResult_is_stereo(RenderResult *res)
 	return true;
 }
 
-void RE_RenderViewSetRectf(RenderResult *res, const int view_id, float *rect)
+RenderView *RE_RenderViewGetById(RenderResult *res, const int view_id)
 {
 	RenderView *rv = BLI_findlink(&res->views, view_id);
-	if (rv) {
-		rv->rectf = rect;
-	}
+	BLI_assert(res->views.first);
+	return rv ? rv : res->views.first;
 }
 
-void RE_RenderViewSetRectz(RenderResult *res, const int view_id, float *rect)
+RenderView *RE_RenderViewGetByName(RenderResult *res, const char *viewname)
 {
-	RenderView *rv = BLI_findlink(&res->views, view_id);
-	if (rv) {
-		rv->rectz = rect;
-	}
+	RenderView *rv = BLI_findstring(&res->views, viewname, offsetof(RenderView, name));
+	BLI_assert(res->views.first);
+	return rv ? rv : res->views.first;
 }
-
-float *RE_RenderViewGetRectz(RenderResult *res, const int view_id)
-{
-	RenderView *rv = BLI_findlink(&res->views, view_id);
-	if (rv) {
-		return rv->rectz;
-	}
-	return res->rectz;
-}
-
-float *RE_RenderViewGetRectf(RenderResult *res, const int view_id)
-{
-	RenderView *rv = BLI_findlink(&res->views, view_id);
-	if (rv) {
-		return rv->rectf;
-	}
-	return res->rectf;
-}
-
-int *RE_RenderViewGetRect32(RenderResult *res, const int view_id)
-{
-	RenderView *rv = BLI_findlink(&res->views, view_id);
-	if (rv) {
-		return rv->rect32;
-	}
-	return res->rect32;
-}
-
-

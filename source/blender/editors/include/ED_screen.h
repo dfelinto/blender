@@ -66,6 +66,7 @@ void    ED_region_header_init(struct ARegion *ar);
 void    ED_region_header(const struct bContext *C, struct ARegion *ar);
 void    ED_region_toggle_hidden(struct bContext *C, struct ARegion *ar);
 void    ED_region_info_draw(struct ARegion *ar, const char *text, int block, float fill_color[4]);
+void    ED_region_image_metadata_draw(int x, int y, struct ImBuf *ibuf, rctf frame, float zoomx, float zoomy);
 void    ED_region_grid_draw(struct ARegion *ar, float zoomx, float zoomy);
 float	ED_region_blend_factor(struct ARegion *ar);
 void	ED_region_visible_rect(struct ARegion *ar, struct rcti *rect);
@@ -74,7 +75,6 @@ void	ED_region_visible_rect(struct ARegion *ar, struct rcti *rect);
 /* spaces */
 void    ED_spacetypes_keymap(struct wmKeyConfig *keyconf);
 int     ED_area_header_switchbutton(const struct bContext *C, struct uiBlock *block, int yco);
-
 
 /* areas */
 void    ED_area_initialize(struct wmWindowManager *wm, struct wmWindow *win, struct ScrArea *sa);
@@ -85,6 +85,7 @@ void    ED_area_tag_redraw(ScrArea *sa);
 void    ED_area_tag_redraw_regiontype(ScrArea *sa, int type);
 void    ED_area_tag_refresh(ScrArea *sa);
 void    ED_area_do_refresh(struct bContext *C, ScrArea *sa);
+void    ED_area_azones_update(ScrArea *sa, const int mouse_xy[]);
 void    ED_area_headerprint(ScrArea *sa, const char *str);
 void    ED_area_newspace(struct bContext *C, ScrArea *sa, int type);
 void    ED_area_prevspace(struct bContext *C, ScrArea *sa);
@@ -108,7 +109,7 @@ void    ED_screen_animation_timer(struct bContext *C, int redraws, int refresh, 
 void    ED_screen_animation_timer_update(struct bScreen *screen, int redraws, int refresh);
 void    ED_screen_restore_temp_type(struct bContext *C, ScrArea *sa);
 ScrArea *ED_screen_full_newspace(struct bContext *C, ScrArea *sa, int type);
-void    ED_screen_full_prevspace(struct bContext *C, ScrArea *sa);
+void    ED_screen_full_prevspace(struct bContext *C, ScrArea *sa, const bool was_prev_temp);
 void    ED_screen_full_restore(struct bContext *C, ScrArea *sa);
 struct ScrArea *ED_screen_state_toggle(struct bContext *C, struct wmWindow *win, struct ScrArea *sa, const short state);
 void    ED_screens_header_tools_menu_create(struct bContext *C, struct uiLayout *layout, void *arg);

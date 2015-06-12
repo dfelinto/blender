@@ -65,6 +65,7 @@
 #include "BKE_curve.h"
 #include "BKE_effect.h"
 #include "BKE_depsgraph.h"
+#include "BKE_global.h"
 #include "BKE_image.h"
 #include "BKE_lattice.h"
 #include "BKE_library.h"
@@ -318,7 +319,7 @@ void OBJECT_OT_hide_render_set(wmOperatorType *ot)
  * Load EditMode data back into the object,
  * optionally freeing the editmode data.
  */
-static bool ED_object_editmode_load_ex(Object *obedit, const bool freedata)
+static bool ED_object_editmode_load_ex(Main *bmain, Object *obedit, const bool freedata)
 {
 	if (obedit == NULL) {
 		return false;
@@ -348,6 +349,11 @@ static bool ED_object_editmode_load_ex(Object *obedit, const bool freedata)
 		ED_armature_from_edit(obedit->data);
 		if (freedata)
 			ED_armature_edit_free(obedit->data);
+		/* TODO(sergey): Pose channels might have been changed, so need
+		 * to inform dependency graph about this. But is it really the
+		 * best place to do this?
+		 */
+		DAG_relations_tag_update(bmain);
 	}
 	else if (ELEM(obedit->type, OB_CURVE, OB_SURF)) {
 		load_editNurb(obedit);
@@ -376,7 +382,8 @@ static bool ED_object_editmode_load_ex(Object *obedit, const bool freedata)
 
 bool ED_object_editmode_load(Object *obedit)
 {
-	return ED_object_editmode_load_ex(obedit, false);
+	/* TODO(sergey): use proper main here? */
+	return ED_object_editmode_load_ex(G.main, obedit, false);
 }
 
 void ED_object_editmode_exit(bContext *C, int flag)
@@ -389,7 +396,7 @@ void ED_object_editmode_exit(bContext *C, int flag)
 
 	if (flag & EM_WAITCURSOR) waitcursor(1);
 
-	if (ED_object_editmode_load_ex(obedit, freedata) == false) {
+	if (ED_object_editmode_load_ex(CTX_data_main(C), obedit, freedata) == false) {
 		/* in rare cases (background mode) its possible active object
 		 * is flagged for editmode, without 'obedit' being set [#35489] */
 		if (UNLIKELY(scene->basact && (scene->basact->object->mode & OB_MODE_EDIT))) {
@@ -1768,6 +1775,77 @@ void OBJECT_OT_game_property_remove(wmOperatorType *ot)
 
 	RNA_def_int(ot->srna, "index", 0, 0, INT_MAX, "Index", "Property index to remove ", 0, INT_MAX);
 }
+
+#define GAME_PROPERTY_MOVE_UP    1
+#define GAME_PROPERTY_MOVE_DOWN -1
+
+static int game_property_move(bContext *C, wmOperator *op)
+{
+	Object *ob = CTX_data_active_object(C);
+	bProperty *prop;
+	bProperty *otherprop = NULL;
+	const int index = RNA_int_get(op->ptr, "index");
+	const int dir = RNA_enum_get(op->ptr, "direction");
+
+	if (ob == NULL)
+		return OPERATOR_CANCELLED;
+
+	prop = BLI_findlink(&ob->prop, index);
+	/* invalid index */
+	if (prop == NULL)
+		return OPERATOR_CANCELLED;
+
+	if (dir == GAME_PROPERTY_MOVE_UP) {
+		otherprop = prop->prev;
+	}
+	else if (dir == GAME_PROPERTY_MOVE_DOWN) {
+		otherprop = prop->next;
+	}
+	else {
+		BLI_assert(0);
+	}
+
+	if (prop && otherprop) {
+		BLI_listbase_swaplinks(&ob->prop, prop, otherprop);
+
+		WM_event_add_notifier(C, NC_LOGIC, NULL);
+		return OPERATOR_FINISHED;
+	}
+	else {
+		return OPERATOR_CANCELLED;
+	}
+}
+
+void OBJECT_OT_game_property_move(wmOperatorType *ot)
+{
+	static EnumPropertyItem direction_property_move[] = {
+		{GAME_PROPERTY_MOVE_UP,   "UP",   0, "Up",   ""},
+		{GAME_PROPERTY_MOVE_DOWN, "DOWN", 0, "Down", ""},
+		{0, NULL, 0, NULL, NULL}
+	};
+	PropertyRNA *prop;
+
+	/* identifiers */
+	ot->name = "Move Game Property";
+	ot->description = "Move game property";
+	ot->idname = "OBJECT_OT_game_property_move";
+
+	/* api callbacks */
+	ot->exec = game_property_move;
+	ot->poll = ED_operator_object_active_editable;
+
+	/* flags */
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+	/* properties */
+	prop = RNA_def_int(ot->srna, "index", 0, 0, INT_MAX, "Index", "Property index to move", 0, INT_MAX);
+	RNA_def_property_flag(prop, PROP_HIDDEN);
+	RNA_def_enum(ot->srna, "direction", direction_property_move, 0, "Direction",
+	             "Direction for moving the property");
+}
+
+#undef GAME_PROPERTY_MOVE_UP
+#undef GAME_PROPERTY_MOVE_DOWN
 
 #define COPY_PROPERTIES_REPLACE 1
 #define COPY_PROPERTIES_MERGE   2

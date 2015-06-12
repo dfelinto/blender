@@ -190,14 +190,16 @@ static bool ghashutil_bmelem_indexcmp(const void *a, const void *b)
 	return (a != b);
 }
 
-static GHash *ghash_bmelem_new_ex(const char *info,
-                                  const unsigned int nentries_reserve)
+static GHash *ghash_bmelem_new_ex(
+        const char *info,
+        const unsigned int nentries_reserve)
 {
 	return BLI_ghash_new_ex(ghashutil_bmelem_indexhash, ghashutil_bmelem_indexcmp, info, nentries_reserve);
 }
 
-static GSet *gset_bmelem_new_ex(const char *info,
-                             const unsigned int nentries_reserve)
+static GSet *gset_bmelem_new_ex(
+        const char *info,
+        const unsigned int nentries_reserve)
 {
 	return BLI_gset_new_ex(ghashutil_bmelem_indexhash, ghashutil_bmelem_indexcmp, info, nentries_reserve);
 }
@@ -419,8 +421,8 @@ static void bm_uuidwalk_rehash(
 	UUID_Int *uuid_store;
 	unsigned int i;
 
-	unsigned int rehash_store_len_new = (unsigned int)MAX2(BLI_ghash_size(uuidwalk->verts_uuid),
-	                                                       BLI_ghash_size(uuidwalk->faces_uuid));
+	unsigned int rehash_store_len_new = MAX2(BLI_ghash_size(uuidwalk->verts_uuid),
+	                                         BLI_ghash_size(uuidwalk->faces_uuid));
 
 	bm_uuidwalk_rehash_reserve(uuidwalk, rehash_store_len_new);
 	uuid_store = uuidwalk->cache.rehash_store;
@@ -509,7 +511,7 @@ static void bm_uuidwalk_pass_add(
 
 	UUIDFaceStep *fstep;
 
-	BLI_assert(faces_pass_len == (unsigned int)BLI_linklist_length(faces_pass));
+	BLI_assert(faces_pass_len == (unsigned int)BLI_linklist_count(faces_pass));
 
 	/* rehash faces now all their verts have been added */
 	bm_uuidwalk_rehash_facelinks(uuidwalk, faces_pass, faces_pass_len, true);
@@ -862,7 +864,7 @@ static BMFace **bm_mesh_region_match_pair(
 			break;
 		}
 
-		found = ((unsigned int)BLI_ghash_size(w_dst->faces_uuid) == faces_src_region_len);
+		found = (BLI_ghash_size(w_dst->faces_uuid) == faces_src_region_len);
 		if (found) {
 			break;
 		}
@@ -875,7 +877,7 @@ static BMFace **bm_mesh_region_match_pair(
 
 	if (found) {
 		GHashIterator gh_iter;
-		const unsigned int faces_result_len = (unsigned int)BLI_ghash_size(w_dst->faces_uuid);
+		const unsigned int faces_result_len = BLI_ghash_size(w_dst->faces_uuid);
 		unsigned int i;
 
 		faces_result = MEM_mallocN(sizeof(*faces_result) * (faces_result_len + 1), __func__);

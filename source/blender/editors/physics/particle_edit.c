@@ -400,12 +400,12 @@ static void PE_set_view3d_data(bContext *C, PEData *data)
 	/* note, the object argument means the modelview matrix does not account for the objects matrix, use viewmat rather than (obmat * viewmat) */
 	view3d_get_transformation(data->vc.ar, data->vc.rv3d, NULL, &data->mats);
 
-	if ((data->vc.v3d->drawtype>OB_WIRE) && (data->vc.v3d->flag & V3D_ZBUF_SELECT)) {
+	if (V3D_IS_ZBUF(data->vc.v3d)) {
 		if (data->vc.v3d->flag & V3D_INVALID_BACKBUF) {
 			/* needed or else the draw matrix can be incorrect */
 			view3d_operator_needs_opengl(C);
 
-			view3d_validate_backbuf(&data->vc);
+			ED_view3d_backbuf_validate(&data->vc);
 			/* we may need to force an update here by setting the rv3d as dirty
 			 * for now it seems ok, but take care!:
 			 * rv3d->depths->dirty = 1; */
@@ -414,18 +414,18 @@ static void PE_set_view3d_data(bContext *C, PEData *data)
 	}
 }
 
-static void PE_create_shape_tree(PEData *data, Object *shapeob)
+static bool PE_create_shape_tree(PEData *data, Object *shapeob)
 {
 	DerivedMesh *dm = shapeob->derivedFinal;
 	
 	memset(&data->shape_bvh, 0, sizeof(data->shape_bvh));
 	
 	if (!dm) {
-		return;
+		return false;
 	}
 	
 	DM_ensure_tessface(dm);
-	bvhtree_from_mesh_faces(&data->shape_bvh, dm, 0.0f, 4, 8);
+	return bvhtree_from_mesh_faces(&data->shape_bvh, dm, 0.0f, 4, 8);
 }
 
 static void PE_free_shape_tree(PEData *data)
@@ -443,8 +443,8 @@ static bool key_test_depth(PEData *data, const float co[3], const int screen_co[
 	float depth;
 
 	/* nothing to do */
-	if ((v3d->drawtype<=OB_WIRE) || (v3d->flag & V3D_ZBUF_SELECT)==0)
-		return 1;
+	if (!V3D_IS_ZBUF(v3d))
+		return true;
 
 	/* used to calculate here but all callers have  the screen_co already, so pass as arg */
 #if 0
@@ -4059,11 +4059,12 @@ void PARTICLE_OT_brush_edit(wmOperatorType *ot)
 static int shape_cut_poll(bContext *C)
 {
 	if (PE_hair_poll(C)) {
-		Scene *scene= CTX_data_scene(C);
-		ParticleEditSettings *pset= PE_settings(scene);
+		Scene *scene = CTX_data_scene(C);
+		ParticleEditSettings *pset = PE_settings(scene);
 		
-		if (pset->shape_object)
+		if (pset->shape_object && (pset->shape_object->type == OB_MESH)) {
 			return true;
+		}
 	}
 	
 	return false;
@@ -4179,7 +4180,10 @@ static int shape_cut_exec(bContext *C, wmOperator *UNUSED(op))
 		int removed;
 		
 		PE_set_data(C, &data);
-		PE_create_shape_tree(&data, shapeob);
+		if (!PE_create_shape_tree(&data, shapeob)) {
+			/* shapeob may not have faces... */
+			return OPERATOR_CANCELLED;
+		}
 		
 		if (selected)
 			foreach_selected_point(&data, shape_cut);
@@ -4445,7 +4449,7 @@ void PE_undo_step(Scene *scene, int step)
 	DAG_id_tag_update(&OBACT->id, OB_RECALC_DATA);
 }
 
-int PE_undo_valid(Scene *scene)
+bool PE_undo_is_valid(Scene *scene)
 {
 	PTCacheEdit *edit= PE_get_current(scene, OBACT);
 	
@@ -4496,18 +4500,19 @@ void PE_undo_number(Scene *scene, int nr)
 
 /* get name of undo item, return null if no item with this index */
 /* if active pointer, set it to 1 if true */
-const char *PE_undo_get_name(Scene *scene, int nr, int *active)
+const char *PE_undo_get_name(Scene *scene, int nr, bool *r_active)
 {
 	PTCacheEdit *edit= PE_get_current(scene, OBACT);
 	PTCacheUndo *undo;
 	
-	if (active) *active= 0;
+	if (r_active) *r_active = false;
 	
 	if (edit) {
 		undo= BLI_findlink(&edit->undo, nr);
 		if (undo) {
-			if (active && undo==edit->curundo)
-				*active= 1;
+			if (r_active && (undo == edit->curundo)) {
+				*r_active = true;
+			}
 			return undo->name;
 		}
 	}

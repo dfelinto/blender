@@ -152,6 +152,10 @@ bAction *verify_adt_action(ID *id, short add)
 		 * to the wrong places
 		 */
 		adt->action->idroot = GS(id->name);
+
+		/* tag depsgraph to be rebuilt to include time dependency */
+		/* XXX: we probably should have bmain passed down, but that involves altering too many API's */
+		DAG_relations_tag_update(G.main);
 	}
 		
 	/* return the action */
@@ -1696,7 +1700,7 @@ static int insert_key_button_exec(bContext *C, wmOperator *op)
 	char *path;
 	float cfra = (float)CFRA;
 	short success = 0;
-	int a, index, length;
+	int index;
 	const bool all = RNA_boolean_get(op->ptr, "all");
 	short flag = 0;
 	
@@ -1715,7 +1719,7 @@ static int insert_key_button_exec(bContext *C, wmOperator *op)
 			NlaStrip *strip = (NlaStrip *)ptr.data;
 			FCurve *fcu = list_find_fcurve(&strip->fcurves, RNA_property_identifier(prop), flag);
 			
-			success += insert_keyframe_direct(op->reports, ptr, prop, fcu, cfra, 0);
+			success = insert_keyframe_direct(op->reports, ptr, prop, fcu, cfra, 0);
 		}
 		else {
 			/* standard properties */
@@ -1723,16 +1727,11 @@ static int insert_key_button_exec(bContext *C, wmOperator *op)
 			
 			if (path) {
 				if (all) {
-					length = RNA_property_array_length(&ptr, prop);
-					
-					if (length) index = 0;
-					else length = 1;
+					/* -1 indicates operating on the entire array (or the property itself otherwise) */
+					index = -1;
 				}
-				else
-					length = 1;
 				
-				for (a = 0; a < length; a++)
-					success += insert_keyframe(op->reports, ptr.id.data, NULL, NULL, path, index + a, cfra, flag);
+				success = insert_keyframe(op->reports, ptr.id.data, NULL, NULL, path, index, cfra, flag);
 				
 				MEM_freeN(path);
 			}
@@ -1795,7 +1794,7 @@ static int delete_key_button_exec(bContext *C, wmOperator *op)
 	char *path;
 	float cfra = (float)CFRA; // XXX for now, don't bother about all the yucky offset crap
 	short success = 0;
-	int a, index, length;
+	int index;
 	const bool all = RNA_boolean_get(op->ptr, "all");
 	
 	/* try to insert keyframe using property retrieved from UI */
@@ -1806,17 +1805,11 @@ static int delete_key_button_exec(bContext *C, wmOperator *op)
 		
 		if (path) {
 			if (all) {
-				length = RNA_property_array_length(&ptr, prop);
-				
-				if (length) index = 0;
-				else length = 1;
+				/* -1 indicates operating on the entire array (or the property itself otherwise) */
+				index = -1;
 			}
-			else
-				length = 1;
 			
-			for (a = 0; a < length; a++)
-				success += delete_keyframe(op->reports, ptr.id.data, NULL, NULL, path, index + a, cfra, 0);
-			
+			success = delete_keyframe(op->reports, ptr.id.data, NULL, NULL, path, index, cfra, 0);
 			MEM_freeN(path);
 		}
 		else if (G.debug & G_DEBUG)
@@ -1865,7 +1858,7 @@ static int clear_key_button_exec(bContext *C, wmOperator *op)
 	PropertyRNA *prop = NULL;
 	char *path;
 	short success = 0;
-	int a, index, length;
+	int index;
 	const bool all = RNA_boolean_get(op->ptr, "all");
 
 	/* try to insert keyframe using property retrieved from UI */
@@ -1876,17 +1869,11 @@ static int clear_key_button_exec(bContext *C, wmOperator *op)
 		
 		if (path) {
 			if (all) {
-				length = RNA_property_array_length(&ptr, prop);
-				
-				if (length) index = 0;
-				else length = 1;
+				/* -1 indicates operating on the entire array (or the property itself otherwise) */
+				index = -1;
 			}
-			else
-				length = 1;
 			
-			for (a = 0; a < length; a++)
-				success += clear_keyframe(op->reports, ptr.id.data, NULL, NULL, path, index + a, 0);
-			
+			success += clear_keyframe(op->reports, ptr.id.data, NULL, NULL, path, index, 0);
 			MEM_freeN(path);
 		}
 		else if (G.debug & G_DEBUG)

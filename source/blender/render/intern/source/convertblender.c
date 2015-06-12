@@ -1209,8 +1209,7 @@ static void particle_normal_ren(short ren_as, ParticleSettings *part, Render *re
 			sd->time = 0.0f;
 			sd->size = hasize;
 
-			copy_v3_v3(vel, state->vel);
-			mul_mat3_m4_v3(re->viewmat, vel);
+			mul_v3_mat3_m4v3(vel, re->viewmat, state->vel);
 			normalize_v3(vel);
 
 			if (part->draw & PART_DRAW_VEL_LENGTH)
@@ -3280,12 +3279,13 @@ static void init_render_mesh(Render *re, ObjectRen *obr, int timeoffset)
 			for (a1=0; (a1<ob->totcol || (a1==0 && ob->totcol==0)); a1++) {
 
 				ma= give_render_material(re, ob, a1+1);
-				
+
 				/* test for 100% transparent */
 				ok = 1;
 				if ((ma->alpha == 0.0f) &&
 				    (ma->spectra == 0.0f) &&
-				    (ma->filter == 0.0f) &&
+				    /* No need to test filter here, it's only active with MA_RAYTRANSP and we check against it below. */
+				    /* (ma->filter == 0.0f) && */
 				    (ma->mode & MA_TRANSP) &&
 				    (ma->mode & (MA_RAYTRANSP | MA_RAYMIRROR)) == 0)
 				{
@@ -5853,9 +5853,11 @@ void RE_Database_Baking(Render *re, Main *bmain, Scene *scene, unsigned int lay,
 
 	/* renderdata setup and exceptions */
 	BLI_freelistN(&re->r.layers);
+	BLI_freelistN(&re->r.views);
 	re->r = scene->r;
 	BLI_duplicatelist(&re->r.layers, &scene->r.layers);
-	
+	BLI_duplicatelist(&re->r.views, &scene->r.views);
+
 	RE_init_threadcount(re);
 	
 	re->flag |= R_BAKING;

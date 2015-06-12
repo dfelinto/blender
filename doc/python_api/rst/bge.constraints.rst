@@ -11,51 +11,54 @@ Physics Constraints (bge.constraints)
 .. literalinclude:: ../examples/bge.constraints.py
    :lines: 6-
 
-.. function:: createConstraint(physicsid, physicsid2, constrainttype, [pivotX, pivotY, pivotZ, [axisX, axisY, axisZ, [flag]]]])
+.. function:: createConstraint(physicsid_1, physicsid_2, constraint_type, pivot_X, pivot_y, pivot_z, axis_x, axis_y, axis_z, flag)
 
    Creates a constraint.
 
-   :arg physicsid: the physics id of the first object in constraint
-   :type physicsid: int
+   Constraints types:
+      - :class:`POINTTOPOINT_CONSTRAINT`
+      - :class:`LINEHINGE_CONSTRAINT`
+      - :class:`ANGULAR_CONSTRAINT`
+      - :class:`CONETWIST_CONSTRAINT`
+      - :class:`VEHICLE_CONSTRAINT`
+      - :class:`GENERIC_6DOF_CONSTRAINT` 
 
-   :arg physicsid2: the physics id of the second object in constraint
-   :type physicsid2: int
+   :arg physicsid_1: the physics id of the first object in constraint.
+   :type physicsid_1: int
 
-   :arg constrainttype: the type of the constraint. The constraint types are:
+   :arg physicsid_2: the physics id of the second object in constraint.
+   :type physicsid_2: int
 
-   - :class:`POINTTOPOINT_CONSTRAINT`
-   - :class:`LINEHINGE_CONSTRAINT`
-   - :class:`ANGULAR_CONSTRAINT`
-   - :class:`CONETWIST_CONSTRAINT`
-   - :class:`VEHICLE_CONSTRAINT`
-   - :class:`GENERIC_6DOF_CONSTRAINT`
-
+   :arg constrainttype: the type of the constraint.
    :type constrainttype: int
 
-   :arg pivotX: pivot X position
-   :type pivotX: float
+   :arg pivot_X: pivot X position (optional).
+   :type pivot_X: float
 
-   :arg pivotY: pivot Y position
-   :type pivotY: float
+   :arg pivot_Y: pivot Y position (optional).
+   :type pivot_Y: float
 
-   :arg pivotZ: pivot Z position
-   :type pivotZ: float
+   :arg pivot_Z: pivot Z position (optional).
+   :type pivot_Z: float
 
-   :arg axisX: X axis
-   :type axisX: float
+   :arg axis_X: X axis angle in degrees (optional).
+   :type axis_X: float
 
-   :arg axisY: Y axis
-   :type axisY: float
+   :arg axis_Y: Y axis angle in degrees (optional).
+   :type axis_Y: float
 
-   :arg axisZ: Z axis
-   :type axisZ: float
+   :arg axis_Z: Z axis angle in degrees (optional).
+   :type axis_Z: float
 
-   :arg flag: 128 to disable collision between linked bodies
+   :arg flag: 128 to disable collision between linked bodies (optional).
    :type flag: int
+
+   :return: a constraint wrapper.
+   :rtype: :class:`bge.types.KX_ConstraintWrapper`
 
 .. attribute:: error
 
-   Simbolic constant string that indicates error.
+   Symbolic constant string that indicates error.
 
 .. function:: exportBulletFile(filename)
 

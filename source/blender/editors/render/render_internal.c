@@ -188,12 +188,16 @@ static void image_buffer_rect_update(RenderJob *rj, RenderResult *rr, ImBuf *ibu
 	 *                                              - sergey -
 	 */
 	/* TODO(sergey): Need to check has_combined here? */
-	if (iuser->pass == 0) {
+	if (iuser->passtype == SCE_PASS_COMBINED) {
+		RenderView *rv;
 		size_t view_id = BKE_scene_multiview_view_id_get(&scene->r, viewname);
+		rv = RE_RenderViewGetById(rr, view_id);
+
 		/* find current float rect for display, first case is after composite... still weak */
-		rectf = RE_RenderViewGetRectf(rr, view_id);
-		if (rectf == NULL) {
-			if (RE_RenderViewGetRect32(rr, view_id)) {
+		if (rv->rectf)
+			rectf = rv->rectf;
+		else {
+			if (rv->rect32) {
 				/* special case, currently only happens with sequencer rendering,
 				 * which updates the whole frame, so we can only mark display buffer
 				 * as invalid here (sergey)
@@ -519,7 +523,6 @@ static void render_image_update_pass_and_layer(RenderJob *rj, RenderResult *rr, 
 			}
 		}
 
-		iuser->pass = sima->iuser.pass;
 		iuser->layer = sima->iuser.layer;
 
 		RE_ReleaseResult(rj->re);

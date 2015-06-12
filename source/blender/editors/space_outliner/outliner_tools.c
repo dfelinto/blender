@@ -427,8 +427,7 @@ static void group_instance_cb(bContext *C, Scene *scene, TreeElement *UNUSED(te)
 {
 	Group *group = (Group *)tselem->id;
 
-	Object *ob = ED_object_add_type(C, OB_EMPTY, scene->cursor, NULL, false, scene->layact);
-	rename_id(&ob->id, group->id.name + 2);
+	Object *ob = ED_object_add_type(C, OB_EMPTY, group->id.name + 2, scene->cursor, NULL, false, scene->layact);
 	ob->dup_group = group;
 	ob->transflag |= OB_DUPLIGROUP;
 	id_lib_extern(&group->id);
@@ -1654,8 +1653,13 @@ static int outliner_operation(bContext *C, wmOperator *UNUSED(op), const wmEvent
 	Scene *scene = CTX_data_scene(C);
 	ARegion *ar = CTX_wm_region(C);
 	SpaceOops *soops = CTX_wm_space_outliner(C);
+	uiBut *but = UI_context_active_but_get(C);
 	TreeElement *te;
 	float fmval[2];
+
+	if (but) {
+		UI_but_tooltip_timer_remove(C, but);
+	}
 
 	UI_view2d_region_to_view(&ar->v2d, event->mval[0], event->mval[1], &fmval[0], &fmval[1]);
 	

@@ -125,6 +125,7 @@ class GRAPH_MT_view(Menu):
         layout.separator()
         layout.operator("graph.view_all")
         layout.operator("graph.view_selected")
+        layout.operator("graph.view_frame")
 
         layout.separator()
         layout.operator("screen.area_dupli")
@@ -279,6 +280,7 @@ class GRAPH_MT_key_transform(Menu):
         layout.operator("transform.transform", text="Extend").mode = 'TIME_EXTEND'
         layout.operator("transform.rotate", text="Rotate")
         layout.operator("transform.resize", text="Scale")
+
 
 class GRAPH_MT_delete(Menu):
     bl_label = "Delete"

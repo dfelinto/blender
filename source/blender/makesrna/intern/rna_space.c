@@ -237,6 +237,7 @@ static EnumPropertyItem buttons_texture_context_items[] = {
 #include "BKE_colortools.h"
 #include "BKE_context.h"
 #include "BKE_depsgraph.h"
+#include "BKE_nla.h"
 #include "BKE_paint.h"
 #include "BKE_scene.h"
 #include "BKE_screen.h"
@@ -1223,15 +1224,51 @@ static void rna_SpaceDopeSheetEditor_action_update(Main *UNUSED(bmain), Scene *s
 		}
 		
 		/* set action */
+		// FIXME: this overlaps a lot with the BKE_animdata_set_action() API method
 		if (adt) {
-			/* fix id-count of action we're replacing */
-			id_us_min(&adt->action->id);
+			/* Don't do anything if old and new actions are the same... */
+			if (adt->action != saction->action) {
+				/* NLA Tweak Mode needs special handling... */
+				if (adt->flag & ADT_NLA_EDIT_ON) {
+					/* Exit editmode first - we cannot change actions while in tweakmode 
+					 * NOTE: This will clear the action ref properly
+					 */
+					BKE_nla_tweakmode_exit(adt);
+					
+					/* Assign new action, and adjust the usercounts accordingly */
+					adt->action = saction->action;
+					id_us_plus((ID *)adt->action);
+				}
+				else {
+					/* Handle old action... */
+					if (adt->action) {
+						/* Fix id-count of action we're replacing */
+						id_us_min(&adt->action->id);
+						
+						/* To prevent data loss (i.e. if users flip between actions using the Browse menu),
+						 * stash this action if nothing else uses it.
+						 *
+						 * EXCEPTION:
+						 * This callback runs when unlinking actions. In that case, we don't want to
+						 * stash the action, as the user is signalling that they want to detach it.
+						 * This can be reviewed again later, but it could get annoying if we keep these instead.
+						 */
+						if ((adt->action->id.us <= 0) && (saction->action != NULL)) {
+							/* XXX: Things here get dodgy if this action is only partially completed,
+							 *      and the user then uses the browse menu to get back to this action,
+							 *      assigning it as the active action (i.e. the stash strip gets out of sync)
+							 */
+							BKE_nla_action_stash(adt);
+						}
+					}
+					
+					/* Assign new action, and adjust the usercounts accordingly */
+					adt->action = saction->action;
+					id_us_plus((ID *)adt->action);
+				}
+			}
 			
-			/* assign new action, and adjust the usercounts accordingly */
-			adt->action = saction->action;
-			id_us_plus(&adt->action->id);
-			
-			/* force update of animdata */
+			/* Force update of animdata */
 			adt->recalc |= ADT_RECALC_ANIM;
 		}
 		
@@ -1309,6 +1346,19 @@ static void rna_BackgroundImage_opacity_set(PointerRNA *ptr, float value)
 {
 	BGpic *bgpic = (BGpic *)ptr->data;
 	bgpic->blend = 1.0f - value;
+}
+
+/* radius internally (expose as a distance value) */
+static float rna_BackgroundImage_size_get(PointerRNA *ptr)
+{
+	BGpic *bgpic = ptr->data;
+	return bgpic->size * 2.0f;
+}
+
+static void rna_BackgroundImage_size_set(PointerRNA *ptr, float value)
+{
+	BGpic *bgpic = ptr->data;
+	bgpic->size = value * 0.5f;
 }
 
 static BGpic *rna_BackgroundImage_new(View3D *v3d)
@@ -1880,6 +1930,11 @@ static void rna_def_space_image_uv(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Draw Other Objects", "Draw other selected objects that share the same image");
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_IMAGE, NULL);
 
+	prop = RNA_def_property(srna, "show_metadata", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag", SI_DRAW_METADATA);
+	RNA_def_property_ui_text(prop, "Show Metadata", "Draw metadata properties of the image");
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_IMAGE, NULL);
+
 	prop = RNA_def_property(srna, "show_texpaint", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_negative_sdna(prop, NULL, "flag", SI_NO_DRAW_TEXPAINT);
 	RNA_def_property_ui_text(prop, "Draw Texture Paint UVs", "Draw overlay of texture paint uv layer");
@@ -2066,15 +2121,16 @@ static void rna_def_background_image(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Y Offset", "Offset image vertically from the world origin");
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
 	
-	prop = RNA_def_property(srna, "size", PROP_FLOAT, PROP_NONE);
+	prop = RNA_def_property(srna, "size", PROP_FLOAT, PROP_DISTANCE);
 	RNA_def_property_float_sdna(prop, NULL, "size");
-	RNA_def_property_ui_text(prop, "Size", "Scaling factor for the background image");
+	RNA_def_property_float_funcs(prop, "rna_BackgroundImage_size_get", "rna_BackgroundImage_size_set", NULL);
+	RNA_def_property_ui_text(prop, "Size", "Size of the background image (ortho view only)");
 	RNA_def_property_range(prop, 0.0, FLT_MAX);
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
 
 	prop = RNA_def_property(srna, "rotation", PROP_FLOAT, PROP_EULER);
 	RNA_def_property_float_sdna(prop, NULL, "rotation");
-	RNA_def_property_ui_text(prop, "Rotation", "Rotation for the background image");
+	RNA_def_property_ui_text(prop, "Rotation", "Rotation for the background image (ortho view only)");
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
 
 	prop = RNA_def_property(srna, "use_flip_x", PROP_BOOLEAN, PROP_NONE);
@@ -3018,6 +3074,11 @@ static void rna_def_space_sequencer(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Center-Cut Safe Areas", "Show safe areas to fit content in a different aspect ratio");
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_SEQUENCER, NULL);
 
+	prop = RNA_def_property(srna, "show_metadata", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag", 	SEQ_SHOW_METADATA);
+	RNA_def_property_ui_text(prop, "Show Metadata", "Show metadata of first visible strip");
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_SEQUENCER, NULL);
+
 	prop = RNA_def_property(srna, "show_seconds", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_negative_sdna(prop, NULL, "flag", SEQ_DRAWFRAMES);
 	RNA_def_property_ui_text(prop, "Show Seconds", "Show timing in seconds not frames");
@@ -3642,6 +3703,14 @@ static void rna_def_fileselect_params(BlenderRNA *brna)
 		{0, NULL, 0, NULL, NULL}
 	};
 
+	static EnumPropertyItem thumbnail_size_items[] = {
+	    {32,    "TINY",     0,      "Tiny", ""},
+	    {64,    "SMALL",    0,      "Small", ""},
+	    {128,   "NORMAL",   0,      "Normal", ""},
+	    {256,   "LARGE",    0,      "Large", ""},
+	    {0, NULL, 0, NULL, NULL}
+	};
+
 	srna = RNA_def_struct(brna, "FileSelectParams", NULL);
 	RNA_def_struct_ui_text(srna, "File Select Parameters", "File Select Parameters");
 
@@ -3745,6 +3814,12 @@ static void rna_def_fileselect_params(BlenderRNA *brna)
 	RNA_def_property_string_sdna(prop, NULL, "filter_search");
 	RNA_def_property_ui_text(prop, "Name Filter", "Filter by name, supports '*' wildcard");
 	RNA_def_property_flag(prop, PROP_TEXTEDIT_UPDATE);
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_FILE_LIST, NULL);
+
+	prop = RNA_def_property(srna, "thumbnail_size", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_sdna(prop, NULL, "thumbnail_size");
+	RNA_def_property_enum_items(prop, thumbnail_size_items);
+	RNA_def_property_ui_text(prop, "Thumbnails Size", "Change the size of the thumbnails");
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_FILE_LIST, NULL);
 }
 

@@ -121,7 +121,7 @@ static void gp_draw_stroke_buffer(tGPspoint *points, int totpoints, short thickn
 		/* draw stroke curve */
 		if (G.debug & G_DEBUG) setlinestyle(2);
 		
-		glLineWidth(oldpressure * thickness);
+		glLineWidth(max_ff(oldpressure * thickness, 1.0));
 		glBegin(GL_LINE_STRIP);
 		
 		for (i = 0, pt = points; i < totpoints && pt; i++, pt++) {
@@ -130,7 +130,7 @@ static void gp_draw_stroke_buffer(tGPspoint *points, int totpoints, short thickn
 			 */
 			if (fabsf(pt->pressure - oldpressure) > 0.2f) {
 				glEnd();
-				glLineWidth(pt->pressure * thickness);
+				glLineWidth(max_ff(pt->pressure * thickness, 1.0f));
 				glBegin(GL_LINE_STRIP);
 				
 				/* need to roll-back one point to ensure that there are no gaps in the stroke */
@@ -415,7 +415,7 @@ static void gp_draw_stroke_3d(bGPDspoint *points, int totpoints, short thickness
 	int i;
 	
 	/* draw stroke curve */
-	glLineWidth(curpressure * thickness);
+	glLineWidth(max_ff(curpressure * thickness, 1.0f));
 	glBegin(GL_LINE_STRIP);
 	for (i = 0, pt = points; i < totpoints && pt; i++, pt++) {
 		/* if there was a significant pressure change, stop the curve, change the thickness of the stroke,
@@ -425,7 +425,7 @@ static void gp_draw_stroke_3d(bGPDspoint *points, int totpoints, short thickness
 		if (fabsf(pt->pressure - curpressure) > 0.2f / (float)thickness) {
 			glEnd();
 			curpressure = pt->pressure;
-			glLineWidth(curpressure * thickness);
+			glLineWidth(max_ff(curpressure * thickness, 1.0f));
 			glBegin(GL_LINE_STRIP);
 			
 			/* need to roll-back one point to ensure that there are no gaps in the stroke */
@@ -443,6 +443,8 @@ static void gp_draw_stroke_3d(bGPDspoint *points, int totpoints, short thickness
 	/* draw debug points of curve on top? */
 	/* XXX: for now, we represent "selected" strokes in the same way as debug, which isn't used anymore */
 	if (debug) {
+		glPointSize((float)(thickness + 2));
+		
 		glBegin(GL_POINTS);
 		for (i = 0, pt = points; i < totpoints && pt; i++, pt++)
 			glVertex3fv(&pt->x);
@@ -617,6 +619,8 @@ static void gp_draw_stroke_2d(bGPDspoint *points, int totpoints, short thickness
 		bGPDspoint *pt;
 		int i;
 		
+		glPointSize((float)(thickness_s + 2));
+		
 		glBegin(GL_POINTS);
 		for (i = 0, pt = points; i < totpoints && pt; i++, pt++) {
 			float co[2];
@@ -757,7 +761,7 @@ static void gp_draw_strokes_edit(bGPDframe *gpf, int offsx, int offsy, int winx,
 {
 	bGPDstroke *gps;
 	
-	const int no_xray = (dflag & GP_DRAWDATA_NO_XRAY);
+	const bool no_xray = (dflag & GP_DRAWDATA_NO_XRAY) != 0;
 	int mask_orig = 0;
 	
 	/* set up depth masks... */
@@ -876,7 +880,7 @@ static void gp_draw_strokes_edit(bGPDframe *gpf, int offsx, int offsy, int winx,
 
 /* draw onion-skinning for a layer */
 static void gp_draw_onionskins(bGPDlayer *gpl, bGPDframe *gpf, int offsx, int offsy, int winx, int winy,
-                               int UNUSED(cfra), int dflag, short debug, short lthick)
+                               int UNUSED(cfra), int dflag, bool debug, short lthick)
 {
 	const float alpha = gpl->color[3];
 	float color[4];

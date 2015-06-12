@@ -158,7 +158,7 @@ class VIEW3D_MT_editor_menus(Menu):
         if edit_object:
             layout.menu("VIEW3D_MT_edit_%s" % edit_object.type.lower())
         elif obj:
-            if mode_string not in {'PAINT_TEXTURE'}:
+            if mode_string != 'PAINT_TEXTURE':
                 layout.menu("VIEW3D_MT_%s" % mode_string.lower())
             if mode_string in {'SCULPT', 'PAINT_VERTEX', 'PAINT_WEIGHT', 'PAINT_TEXTURE'}:
                 layout.menu("VIEW3D_MT_brush")
@@ -208,8 +208,10 @@ class VIEW3D_MT_transform_base(Menu):
         layout.operator("transform.shear", text="Shear")
         layout.operator("transform.bend", text="Bend")
         layout.operator("transform.push_pull", text="Push/Pull")
-        layout.operator("object.vertex_warp", text="Warp")
-        layout.operator("object.vertex_random", text="Randomize")
+
+        if context.mode != 'OBJECT':
+            layout.operator("transform.vertex_warp", text="Warp")
+            layout.operator("transform.vertex_random", text="Randomize")
 
 
 # Generic transform menu - geometry types
@@ -935,7 +937,7 @@ class VIEW3D_MT_angle_control(Menu):
         settings = UnifiedPaintPanel.paint_settings(context)
         brush = settings.brush
 
-        sculpt = (context.sculpt_object != None)
+        sculpt = (context.sculpt_object is not None)
 
         tex_slot = brush.texture_slot
 
@@ -1043,6 +1045,17 @@ class INFO_MT_armature_add(Menu):
         layout.operator("object.armature_add", text="Single Bone", icon='BONE_DATA')
 
 
+class INFO_MT_lamp_add(Menu):
+    bl_idname = "INFO_MT_lamp_add"
+    bl_label = "Lamp"
+
+    def draw(self, context):
+        layout = self.layout
+
+        layout.operator_context = 'INVOKE_REGION_WIN'
+        layout.operator_enum("object.lamp_add", "type")
+
+
 class INFO_MT_add(Menu):
     bl_label = "Add"
 
@@ -1075,7 +1088,7 @@ class INFO_MT_add(Menu):
         layout.separator()
 
         layout.operator("object.camera_add", text="Camera", icon='OUTLINER_OB_CAMERA')
-        layout.operator_menu_enum("object.lamp_add", "type", text="Lamp", icon='OUTLINER_OB_LAMP')
+        layout.menu("INFO_MT_lamp_add", icon='OUTLINER_OB_LAMP')
         layout.separator()
 
         layout.operator_menu_enum("object.effector_add", "type", text="Force Field", icon='OUTLINER_OB_EMPTY')
@@ -1655,9 +1668,9 @@ class VIEW3D_MT_paint_weight(Menu):
         layout.operator("object.vertex_group_quantize", text="Quantize")
         layout.operator("object.vertex_group_levels", text="Levels")
         layout.operator("object.vertex_group_blend", text="Blend")
-        prop = layout.operator("object.data_transfer", text="Transfer Weights")
-        prop.use_reverse_transfer = True
-        prop.data_type = 'VGROUP_WEIGHTS'
+        props = layout.operator("object.data_transfer", text="Transfer Weights")
+        props.use_reverse_transfer = True
+        props.data_type = 'VGROUP_WEIGHTS'
         layout.operator("object.vertex_group_limit_total", text="Limit Total")
         layout.operator("object.vertex_group_fix", text="Fix Deforms")
 
@@ -2266,13 +2279,6 @@ class VIEW3D_MT_edit_mesh_vertices(Menu):
 
         layout.separator()
 
-        op = layout.operator("mesh.mark_sharp", text="Shade Smooth")
-        op.use_verts = True
-        op.clear = True
-        layout.operator("mesh.mark_sharp", text="Shade Sharp").use_verts = True
-
-        layout.separator()
-
         layout.operator("mesh.bevel").vertex_only = True
         layout.operator("mesh.convex_hull")
         layout.operator("mesh.vertices_smooth")
@@ -2295,6 +2301,8 @@ class VIEW3D_MT_edit_mesh_edges(Menu):
     def draw(self, context):
         layout = self.layout
 
+        toolsettings = context.tool_settings
+
         with_freestyle = bpy.app.build_options.freestyle
 
         layout.operator_context = 'INVOKE_REGION_WIN'
@@ -2315,8 +2323,16 @@ class VIEW3D_MT_edit_mesh_edges(Menu):
 
         layout.separator()
 
-        layout.operator("mesh.mark_sharp")
-        layout.operator("mesh.mark_sharp", text="Clear Sharp").clear = True
+        if not toolsettings.mesh_select_mode[0]:
+            # edge mode
+            layout.operator("mesh.mark_sharp")
+            layout.operator("mesh.mark_sharp", text="Clear Sharp").clear = True
+        else:
+            # vert mode
+            layout.operator("mesh.mark_sharp").use_verts = True
+            props = layout.operator("mesh.mark_sharp", text="Clear Sharp")
+            props.use_verts = True
+            props.clear = True
 
         layout.separator()
 
@@ -2423,6 +2439,7 @@ class VIEW3D_MT_edit_mesh_clean(Menu):
 
         layout.operator("mesh.dissolve_degenerate")
         layout.operator("mesh.dissolve_limited")
+        layout.operator("mesh.face_make_planar")
         layout.operator("mesh.vert_connect_nonplanar")
         layout.operator("mesh.vert_connect_concave")
         layout.operator("mesh.fill_holes")
@@ -2471,6 +2488,7 @@ def draw_curve(self, context):
     layout.separator()
 
     layout.operator("curve.extrude_move")
+    layout.operator("curve.spin")
     layout.operator("curve.duplicate_move")
     layout.operator("curve.split")
     layout.operator("curve.separate")
@@ -3009,14 +3027,12 @@ class VIEW3D_PT_view3d_shading(Panel):
             if obj and obj.mode == 'EDIT':
                 col.prop(view, "show_occlude_wire")
 
-
         fx_settings = view.fx_settings
 
-        sub = col.column()
-        sub.active = view.region_3d.view_perspective == 'CAMERA'
-        sub.prop(fx_settings, "use_dof")
-
         if view.viewport_shade not in {'BOUNDBOX', 'WIREFRAME'}:
+            sub = col.column()
+            sub.active = view.region_3d.view_perspective == 'CAMERA'
+            sub.prop(fx_settings, "use_dof")
             col.prop(fx_settings, "use_ssao", text="Ambient Occlusion")
             if fx_settings.use_ssao:
                 ssao_settings = fx_settings.ssao

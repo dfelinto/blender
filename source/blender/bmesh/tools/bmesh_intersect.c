@@ -804,7 +804,7 @@ bool BM_mesh_intersect(
 	s.edgetri_cache = BLI_ghash_new(BLI_ghashutil_inthash_v4_p, BLI_ghashutil_inthash_v4_cmp, __func__);
 
 	s.edge_verts = BLI_ghash_ptr_new(__func__);
-	s.face_edges = BLI_ghash_ptr_new(__func__);
+	s.face_edges = BLI_ghash_int_new(__func__);
 	s.wire_edges = BLI_gset_ptr_new(__func__);
 	s.vert_dissolve = NULL;
 
@@ -1006,7 +1006,7 @@ bool BM_mesh_intersect(
 					    !BM_vert_splice_check_double(v_prev, vi) &&
 					    !BM_vert_pair_share_face_check(v_prev, vi))
 					{
-						BM_vert_splice(bm, v_prev, vi);
+						BM_vert_splice(bm, vi, v_prev);
 					}
 					else {
 						copy_v3_v3(v_prev->co, vi->co);
@@ -1040,8 +1040,8 @@ bool BM_mesh_intersect(
 			}
 		}
 
-		splice_ls = MEM_mallocN((unsigned int)BLI_gset_size(s.wire_edges) * sizeof(*splice_ls), __func__);
-		STACK_INIT(splice_ls, (unsigned int)BLI_gset_size(s.wire_edges));
+		splice_ls = MEM_mallocN(BLI_gset_size(s.wire_edges) * sizeof(*splice_ls), __func__);
+		STACK_INIT(splice_ls, BLI_gset_size(s.wire_edges));
 
 		for (node = s.vert_dissolve; node; node = node->next) {
 			BMEdge *e_pair[2];
@@ -1228,7 +1228,7 @@ bool BM_mesh_intersect(
 						if (!BM_edge_exists(UNPACK2(splice_ls[i])) &&
 						    !BM_vert_splice_check_double(UNPACK2(splice_ls[i])))
 						{
-							BM_vert_splice(bm, UNPACK2(splice_ls[i]));
+							BM_vert_splice(bm, splice_ls[i][1], splice_ls[i][0]);
 						}
 					}
 				}
@@ -1267,10 +1267,8 @@ bool BM_mesh_intersect(
 			face_edges_split(bm, f, e_ls_base);
 		}
 	}
-#else
-	(void)totface_orig;
 #endif  /* USE_NET */
-
+	(void)totface_orig;
 
 #ifdef USE_SEPARATE
 	if (use_separate) {

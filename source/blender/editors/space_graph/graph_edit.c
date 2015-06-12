@@ -109,7 +109,7 @@ void get_graph_keyframe_extents(bAnimContext *ac, float *xmin, float *xmax, floa
 			AnimData *adt = ANIM_nla_mapping_get(ac, ale);
 			FCurve *fcu = (FCurve *)ale->key_data;
 			float txmin, txmax, tymin, tymax;
-			float unitFac;
+			float unitFac, offset;
 			
 			/* get range */
 			if (calc_fcurve_bounds(fcu, &txmin, &txmax, &tymin, &tymax, do_sel_only, include_handles)) {
@@ -122,7 +122,9 @@ void get_graph_keyframe_extents(bAnimContext *ac, float *xmin, float *xmax, floa
 				}
 				
 				/* apply unit corrections */
-				unitFac = ANIM_unit_mapping_get_factor(ac->scene, ale->id, fcu, mapping_flag);
+				unitFac = ANIM_unit_mapping_get_factor(ac->scene, ale->id, fcu, mapping_flag, &offset);
+				tymin += offset;
+				tymax += offset;
 				tymin *= unitFac;
 				tymax *= unitFac;
 				
@@ -256,6 +258,14 @@ static int graphkeys_view_selected_exec(bContext *C, wmOperator *op)
 	return graphkeys_viewall(C, true, include_handles, smooth_viewtx);
 }
 
+static int graphkeys_view_frame_exec(bContext *C, wmOperator *op)
+{
+	const int smooth_viewtx = WM_operator_smooth_viewtx_get(op);
+	ANIM_center_frame(C, smooth_viewtx);
+	return OPERATOR_FINISHED;
+}
+
+
 void GRAPH_OT_view_all(wmOperatorType *ot)
 {
 	/* identifiers */
@@ -294,6 +304,21 @@ void GRAPH_OT_view_selected(wmOperatorType *ot)
 	                           "Include handles of keyframes when calculating extents");
 }
 
+void GRAPH_OT_view_frame(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "View Frame";
+	ot->idname = "GRAPH_OT_view_frame";
+	ot->description = "Reset viewable area to show range around current frame";
+
+	/* api callbacks */
+	ot->exec = graphkeys_view_frame_exec;
+	ot->poll = ED_operator_graphedit_active; /* XXX: unchecked poll to get fsamples working too, but makes modifier damage trickier... */
+
+	/* flags */
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
+
 /* ******************** Create Ghost-Curves Operator *********************** */
 /* This operator samples the data of the selected F-Curves to F-Points, storing them
  * as 'ghost curves' in the active Graph Editor
@@ -327,7 +352,7 @@ static void create_ghost_curves(bAnimContext *ac, int start, int end)
 		AnimData *adt = ANIM_nla_mapping_get(ac, ale);
 		ChannelDriver *driver = fcu->driver;
 		FPoint *fpt;
-		float unitFac;
+		float unitFac, offset;
 		int cfra;
 		SpaceIpo *sipo = (SpaceIpo *) ac->sl;
 		short mapping_flag = ANIM_get_normalization_flags(ac);
@@ -336,7 +361,7 @@ static void create_ghost_curves(bAnimContext *ac, int start, int end)
 		fcu->driver = NULL;
 		
 		/* calculate unit-mapping factor */
-		unitFac = ANIM_unit_mapping_get_factor(ac->scene, ale->id, fcu, mapping_flag);
+		unitFac = ANIM_unit_mapping_get_factor(ac->scene, ale->id, fcu, mapping_flag, &offset);
 		
 		/* create samples, but store them in a new curve 
 		 *	- we cannot use fcurve_store_samples() as that will only overwrite the original curve 
@@ -349,7 +374,7 @@ static void create_ghost_curves(bAnimContext *ac, int start, int end)
 			float cfrae = BKE_nla_tweakedit_remap(adt, cfra, NLATIME_CONVERT_UNMAP);
 			
 			fpt->vec[0] = cfrae;
-			fpt->vec[1] = fcurve_samplingcb_evalcurve(fcu, NULL, cfrae) * unitFac;
+			fpt->vec[1] = (fcurve_samplingcb_evalcurve(fcu, NULL, cfrae) + offset) * unitFac;
 		}
 		
 		/* set color of ghost curve 
@@ -587,7 +612,7 @@ static int graphkeys_click_insert_exec(bContext *C, wmOperator *op)
 		ListBase anim_data;
 
 		short mapping_flag = ANIM_get_normalization_flags(&ac);
-
+		float scale, offset;
 		/* get frame and value from props */
 		frame = RNA_float_get(op->ptr, "frame");
 		val = RNA_float_get(op->ptr, "value");
@@ -597,8 +622,10 @@ static int graphkeys_click_insert_exec(bContext *C, wmOperator *op)
 		frame = BKE_nla_tweakedit_remap(adt, frame, NLATIME_CONVERT_UNMAP);
 		
 		/* apply inverse unit-mapping to value to get correct value for F-Curves */
-		val *= ANIM_unit_mapping_get_factor(ac.scene, ale->id, fcu, mapping_flag | ANIM_UNITCONV_RESTORE);
-		
+		scale = ANIM_unit_mapping_get_factor(ac.scene, ale->id, fcu, mapping_flag | ANIM_UNITCONV_RESTORE, &offset);
+
+		val = val * scale - offset;
+
 		/* insert keyframe on the specified frame + value */
 		insert_vert_fcurve(fcu, frame, val, 0);
 		
@@ -856,13 +883,6 @@ static int graphkeys_duplicate_exec(bContext *C, wmOperator *UNUSED(op))
 	return OPERATOR_FINISHED;
 }
 
-static int graphkeys_duplicate_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
-{
-	graphkeys_duplicate_exec(C, op);
-
-	return OPERATOR_FINISHED;
-}
- 
 void GRAPH_OT_duplicate(wmOperatorType *ot)
 {
 	/* identifiers */
@@ -871,7 +891,6 @@ void GRAPH_OT_duplicate(wmOperatorType *ot)
 	ot->description = "Make a copy of all selected keyframes";
 	
 	/* api callbacks */
-	ot->invoke = graphkeys_duplicate_invoke;
 	ot->exec = graphkeys_duplicate_exec;
 	ot->poll = graphop_editable_keyframes_poll;
 	
@@ -1159,6 +1178,11 @@ static int graphkeys_sound_bake_exec(bContext *C, wmOperator *op)
 		return OPERATOR_CANCELLED;
 
 	RNA_string_get(op->ptr, "filepath", path);
+
+	if (!BLI_is_file(path)) {
+		BKE_reportf(op->reports, RPT_ERROR, "File not found '%s'", path);
+		return OPERATOR_CANCELLED;
+	}
 
 	scene = ac.scene;    /* current scene */
 
@@ -1882,7 +1906,8 @@ static int graphkeys_framejump_exec(bContext *C, wmOperator *UNUSED(op))
 		AnimData *adt = ANIM_nla_mapping_get(&ac, ale);
 		short mapping_flag = ANIM_get_normalization_flags(&ac);
 		KeyframeEditData current_ked;
-		float unit_scale = ANIM_unit_mapping_get_factor(ac.scene, ale->id, ale->key_data, mapping_flag | ANIM_UNITCONV_ONLYKEYS);
+		float offset;
+		float unit_scale = ANIM_unit_mapping_get_factor(ac.scene, ale->id, ale->key_data, mapping_flag | ANIM_UNITCONV_ONLYKEYS, &offset);
 
 		memset(&current_ked, 0, sizeof(current_ked));
 
@@ -1896,7 +1921,7 @@ static int graphkeys_framejump_exec(bContext *C, wmOperator *UNUSED(op))
 
 		ked.f1 += current_ked.f1;
 		ked.i1 += current_ked.i1;
-		ked.f2 += current_ked.f2 * unit_scale;
+		ked.f2 += (current_ked.f2 + offset) * unit_scale;
 		ked.i2 += current_ked.i2;
 	}
 	
@@ -1989,9 +2014,10 @@ static void snap_graph_keys(bAnimContext *ac, short mode)
 		/* normalise cursor value (for normalised F-Curves display) */
 		if (mode == GRAPHKEYS_SNAP_VALUE) {
 			short mapping_flag = ANIM_get_normalization_flags(ac);
-			float unit_scale = ANIM_unit_mapping_get_factor(ac->scene, ale->id, ale->key_data, mapping_flag);
+			float offset;
+			float unit_scale = ANIM_unit_mapping_get_factor(ac->scene, ale->id, ale->key_data, mapping_flag, &offset);
 			
-			ked.f1 = cursor_value / unit_scale;
+			ked.f1 = (cursor_value / unit_scale) - offset;
 		}
 		
 		/* perform snapping */
@@ -2116,9 +2142,10 @@ static void mirror_graph_keys(bAnimContext *ac, short mode)
 		/* apply unit corrections */
 		if (mode == GRAPHKEYS_MIRROR_VALUE) {
 			short mapping_flag = ANIM_get_normalization_flags(ac);
-			float unit_scale = ANIM_unit_mapping_get_factor(ac->scene, ale->id, ale->key_data, mapping_flag | ANIM_UNITCONV_ONLYKEYS);
+			float offset;
+			float unit_scale = ANIM_unit_mapping_get_factor(ac->scene, ale->id, ale->key_data, mapping_flag | ANIM_UNITCONV_ONLYKEYS, &offset);
 			
-			ked.f1 = cursor_value * unit_scale;
+			ked.f1 = (cursor_value + offset) * unit_scale;
 		}
 		
 		/* perform actual mirroring */

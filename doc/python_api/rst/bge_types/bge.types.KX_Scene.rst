@@ -125,6 +125,12 @@ base class --- :class:`PyObjectPlus`
 
       :type: list
 
+   .. attribute:: pre_draw_setup
+
+      A list of callables to be run before the drawing setup (i.e., before the model view and projection matrices are computed).
+
+      :type: list
+
    .. attribute:: gravity
 
       The scene gravity using the world x, y and z axis.
@@ -137,9 +143,9 @@ base class --- :class:`PyObjectPlus`
 
       :arg object: The (name of the) object to add.
       :type object: :class:`KX_GameObject` or string
-      :arg reference: The (name of the) object which position, orientation, and scale to copy.
+      :arg reference: The (name of the) object which position, orientation, and scale to copy (optional), if the object to add is a light and there is not reference the light's layer will be the same that the active layer in the blender scene.
       :type reference: :class:`KX_GameObject` or string
-      :arg time: The lifetime of the added object, in frames. A time of 0 means the object will last forever.
+      :arg time: The lifetime of the added object, in frames. A time of 0 means the object will last forever (optional).
       :type time: integer
       :return: The newly added object.
       :rtype: :class:`KX_GameObject`

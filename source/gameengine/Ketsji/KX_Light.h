@@ -34,6 +34,8 @@
 
 #include "KX_GameObject.h"
 
+#define MAX_LIGHT_LAYERS ((1 << 20) - 1)
+
 struct GPULamp;
 struct Scene;
 struct Base;
@@ -58,7 +60,7 @@ public:
 	RAS_ILightObject*	GetLightData() { return m_lightobj;}
 	
 	void UpdateScene(class KX_Scene *kxscene);
-	void SetLayer(int layer);
+	virtual void SetLayer(int layer);
 
 	virtual int GetGameObjectType() { return OBJ_LIGHT; }
 

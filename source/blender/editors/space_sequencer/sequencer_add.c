@@ -30,6 +30,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <string.h>
+#include <ctype.h>
 
 #include "MEM_guardedalloc.h"
 
@@ -751,11 +752,74 @@ void SEQUENCER_OT_sound_strip_add(struct wmOperatorType *ot)
 	RNA_def_boolean(ot->srna, "cache", false, "Cache", "Cache the sound in memory");
 }
 
+int sequencer_image_seq_get_minmax_frame(wmOperator *op, int sfra, int *r_minframe, int *r_numdigits)
+{
+	int minframe = INT32_MAX, maxframe = INT32_MIN;
+	int numdigits = 0;
+
+	RNA_BEGIN (op->ptr, itemptr, "files")
+	{
+		char *filename;
+		int frame;
+		/* just get the first filename */
+		filename = RNA_string_get_alloc(&itemptr, "name", NULL, 0);
+
+		if (filename) {
+			if (BLI_path_frame_get(filename, &frame, &numdigits)) {
+				minframe = min_ii(minframe, frame);
+				maxframe = max_ii(maxframe, frame);
+			}
+
+			MEM_freeN(filename);
+		}
+	}
+	RNA_END;
+
+	if (minframe == INT32_MAX) {
+		minframe = sfra;
+		maxframe = minframe + 1;
+	}
+
+	*r_minframe = minframe;
+	*r_numdigits = numdigits;
+
+	return maxframe - minframe + 1;
+}
+
+void sequencer_image_seq_reserve_frames(wmOperator *op, StripElem *se, int len, int minframe, int numdigits)
+{
+	int i;
+	char *filename = NULL;
+	RNA_BEGIN (op->ptr, itemptr, "files")
+	{
+		/* just get the first filename */
+		filename = RNA_string_get_alloc(&itemptr, "name", NULL, 0);
+		break;
+	}
+	RNA_END;
+
+	if (filename) {
+		char ext[PATH_MAX];
+		char filename_stripped[PATH_MAX];
+		/* strip the frame from filename and substitute with # */
+		BLI_path_frame_strip(filename, true, ext);
+
+		for (i = 0; i < len; i++, se++) {
+			BLI_strncpy(filename_stripped, filename, sizeof(filename_stripped));
+			BLI_path_frame(filename_stripped, minframe + i, numdigits);
+			BLI_snprintf(se->name, sizeof(se->name), "%s%s", filename_stripped, ext);
+		}
+
+		MEM_freeN(filename);
+	}
+}
+
+
 /* add image operator */
 static int sequencer_add_image_strip_exec(bContext *C, wmOperator *op)
 {
+	int minframe, numdigits;
 	/* cant use the generic function for this */
-
 	Scene *scene = CTX_data_scene(C); /* only for sound */
 	Editing *ed = BKE_sequencer_editing_get(scene, true);
 	SeqLoadInfo seq_load;
@@ -763,11 +827,17 @@ static int sequencer_add_image_strip_exec(bContext *C, wmOperator *op)
 
 	Strip *strip;
 	StripElem *se;
+	const bool use_placeholders = RNA_boolean_get(op->ptr, "use_placeholders");
 
 	seq_load_operator_info(&seq_load, op);
 
 	/* images are unique in how they handle this - 1 per strip elem */
-	seq_load.len = RNA_property_collection_length(op->ptr, RNA_struct_find_property(op->ptr, "files"));
+	if (use_placeholders) {
+		seq_load.len = sequencer_image_seq_get_minmax_frame(op, seq_load.start_frame, &minframe, &numdigits);
+	}
+	else {
+		seq_load.len = RNA_property_collection_length(op->ptr, RNA_struct_find_property(op->ptr, "files"));
+	}
 
 	if (seq_load.len == 0)
 		return OPERATOR_CANCELLED;
@@ -775,20 +845,24 @@ static int sequencer_add_image_strip_exec(bContext *C, wmOperator *op)
 	if (seq_load.flag & SEQ_LOAD_REPLACE_SEL)
 		ED_sequencer_deselect_all(scene);
 
-
 	/* main adding function */
 	seq = BKE_sequencer_add_image_strip(C, ed->seqbasep, &seq_load);
 	strip = seq->strip;
 	se = strip->stripdata;
 
-	RNA_BEGIN (op->ptr, itemptr, "files")
-	{
-		char *filename = RNA_string_get_alloc(&itemptr, "name", NULL, 0);
-		BLI_strncpy(se->name, filename, sizeof(se->name));
-		MEM_freeN(filename);
-		se++;
+	if (use_placeholders) {
+		sequencer_image_seq_reserve_frames(op, se, seq_load.len, minframe, numdigits);
 	}
-	RNA_END;
+	else {
+		RNA_BEGIN (op->ptr, itemptr, "files")
+		{
+			char *filename = RNA_string_get_alloc(&itemptr, "name", NULL, 0);
+			BLI_strncpy(se->name, filename, sizeof(se->name));
+			MEM_freeN(filename);
+			se++;
+		}
+		RNA_END;
+	}
 
 	if (seq_load.len == 1) {
 		if (seq_load.start_frame < seq_load.end_frame) {
@@ -861,6 +935,8 @@ void SEQUENCER_OT_image_strip_add(struct wmOperatorType *ot)
 	WM_operator_properties_filesel(ot, FILE_TYPE_FOLDER | FILE_TYPE_IMAGE, FILE_SPECIAL, FILE_OPENFILE,
 	                               WM_FILESEL_DIRECTORY | WM_FILESEL_RELPATH | WM_FILESEL_FILES, FILE_DEFAULTDISPLAY);
 	sequencer_generic_props__internal(ot, SEQPROP_STARTFRAME | SEQPROP_ENDFRAME);
+
+	RNA_def_boolean(ot->srna, "use_placeholders", false, "Use Placeholders", "Use placeholders for missing frames of the strip");
 }
 
 

@@ -641,6 +641,9 @@ static int separate_armature_exec(bContext *C, wmOperator *op)
 	
 	ED_armature_to_edit(obedit->data);
 	
+	/* parents tips remain selected when connected children are removed. */
+	ED_armature_deselect_all(obedit);
+
 	BKE_report(op->reports, RPT_INFO, "Separated bones");
 
 	/* note, notifier might evolve */
@@ -660,6 +663,7 @@ void ARMATURE_OT_separate(wmOperatorType *ot)
 	ot->description = "Isolate selected bones into a separate armature";
 	
 	/* callbacks */
+	ot->invoke = WM_operator_confirm;
 	ot->exec = separate_armature_exec;
 	ot->poll = ED_operator_editarmature;
 	

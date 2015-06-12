@@ -160,6 +160,28 @@ static BMOpDefine bmo_recalc_face_normals_def = {
 };
 
 /*
+ * Planar Faces.
+ *
+ * Iteratively flatten faces.
+ */
+static BMOpDefine bmo_planar_faces_def = {
+	"planar_faces",
+	/* slots_in */
+	{{"faces", BMO_OP_SLOT_ELEMENT_BUF, {BM_FACE}},    /* input geometry. */
+	 {"iterations", BMO_OP_SLOT_INT},
+	 {"factor", BMO_OP_SLOT_FLT},           /* planar factor */
+	 {{'\0'}},
+	},
+	/* slots_out */
+	{{"geom.out", BMO_OP_SLOT_ELEMENT_BUF, {BM_VERT | BM_EDGE | BM_FACE}}, /* output slot, computed boundary geometry. */
+	 {{'\0'}},
+	},
+	bmo_planar_faces_exec,
+	(BMO_OPTYPE_FLAG_SELECT_FLUSH |
+	 BMO_OPTYPE_FLAG_SELECT_VALIDATE),
+};
+
+/*
  * Region Extend.
  *
  * used to implement the select more/less tools.
@@ -359,6 +381,7 @@ static BMOpDefine bmo_collapse_def = {
 	"collapse",
 	/* slots_in */
 	{{"edges", BMO_OP_SLOT_ELEMENT_BUF, {BM_EDGE}}, /* input edges */
+	 {"uvs", BMO_OP_SLOT_BOOL}, /* also collapse UVs and such */
 	 {{'\0'}},
 	},
 	{{{'\0'}}},  /* no output */
@@ -486,17 +509,19 @@ static BMOpDefine bmo_create_vert_def = {
  * Join Triangles.
  *
  * Tries to intelligently join triangles according
- * to various settings and stuff.
+ * to angle threshold and delimiters.
  */
 static BMOpDefine bmo_join_triangles_def = {
 	"join_triangles",
 	/* slots_in */
 	{{"faces", BMO_OP_SLOT_ELEMENT_BUF, {BM_FACE}},    /* input geometry. */
+	 {"cmp_seam", BMO_OP_SLOT_BOOL},
 	 {"cmp_sharp", BMO_OP_SLOT_BOOL},
 	 {"cmp_uvs", BMO_OP_SLOT_BOOL},
 	 {"cmp_vcols", BMO_OP_SLOT_BOOL},
 	 {"cmp_materials", BMO_OP_SLOT_BOOL},
-	 {"limit", BMO_OP_SLOT_FLT},
+	 {"angle_face_threshold", BMO_OP_SLOT_FLT},
+	 {"angle_shape_threshold", BMO_OP_SLOT_FLT},
 	 {{'\0'}},
 	},
 	/* slots_out */
@@ -2015,6 +2040,7 @@ const BMOpDefine *bmo_opdefines[] = {
 	&bmo_pointmerge_facedata_def,
 	&bmo_poke_def,
 	&bmo_recalc_face_normals_def,
+	&bmo_planar_faces_def,
 	&bmo_region_extend_def,
 	&bmo_remove_doubles_def,
 	&bmo_reverse_colors_def,

@@ -327,17 +327,17 @@ static void init_editNurb_keyIndex(EditNurb *editnurb, ListBase *origBase)
 	editnurb->keyindex = gh;
 }
 
-static CVKeyIndex *getCVKeyIndex(EditNurb *editnurb, void *cv)
+static CVKeyIndex *getCVKeyIndex(EditNurb *editnurb, const void *cv)
 {
 	return BLI_ghash_lookup(editnurb->keyindex, cv);
 }
 
-static CVKeyIndex *popCVKeyIndex(EditNurb *editnurb, void *cv)
+static CVKeyIndex *popCVKeyIndex(EditNurb *editnurb, const void *cv)
 {
 	return BLI_ghash_popkey(editnurb->keyindex, cv, NULL);
 }
 
-static BezTriple *getKeyIndexOrig_bezt(EditNurb *editnurb, BezTriple *bezt)
+static BezTriple *getKeyIndexOrig_bezt(EditNurb *editnurb, const BezTriple *bezt)
 {
 	CVKeyIndex *index = getCVKeyIndex(editnurb, bezt);
 
@@ -370,7 +370,7 @@ static int getKeyIndexOrig_keyIndex(EditNurb *editnurb, void *cv)
 	return index->key_index;
 }
 
-static void keyIndex_delCV(EditNurb *editnurb, void *cv)
+static void keyIndex_delCV(EditNurb *editnurb, const void *cv)
 {
 	if (!editnurb->keyindex) {
 		return;
@@ -398,7 +398,7 @@ static void keyIndex_delNurb(EditNurb *editnurb, Nurb *nu)
 	}
 
 	if (nu->bezt) {
-		BezTriple *bezt = nu->bezt;
+		const BezTriple *bezt = nu->bezt;
 		a = nu->pntsu;
 
 		while (a--) {
@@ -407,7 +407,7 @@ static void keyIndex_delNurb(EditNurb *editnurb, Nurb *nu)
 		}
 	}
 	else {
-		BPoint *bp = nu->bp;
+		const BPoint *bp = nu->bp;
 		a = nu->pntsu * nu->pntsv;
 
 		while (a--) {
@@ -1188,7 +1188,7 @@ static int *initialize_index_map(Object *obedit, int *r_old_totvert)
 
 			while (a--) {
 				keyIndex = getCVKeyIndex(editnurb, bezt);
-				if (keyIndex) {
+				if (keyIndex && keyIndex->vertex_index + 2 < old_totvert) {
 					if (keyIndex->switched) {
 						old_to_new_map[keyIndex->vertex_index] = vertex_index + 2;
 						old_to_new_map[keyIndex->vertex_index + 1] = vertex_index + 1;
@@ -1538,6 +1538,7 @@ void CURVE_OT_separate(wmOperatorType *ot)
 	ot->description = "Separate selected points from connected unselected points into a new object";
 	
 	/* api callbacks */
+	ot->invoke = WM_operator_confirm;
 	ot->exec = separate_exec;
 	ot->poll = ED_operator_editsurfcurve;
 	

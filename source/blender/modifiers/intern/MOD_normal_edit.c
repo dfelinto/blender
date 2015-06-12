@@ -80,10 +80,13 @@ static void generate_vert_coordinates(
 	}
 
 	if (ob_center) {
+		float inv_obmat[4][4];
+
 		/* Translate our coordinates so that center of ob_center is at (0, 0, 0). */
 		/* Get ob_center (world) coordinates in ob local coordinates.
 		 * No need to take into accound ob_center's space here, see T44027. */
-		mul_v3_m4v3(diff, ob->obmat, ob_center->obmat[3]);
+		invert_m4_m4(inv_obmat, ob->obmat);
+		mul_v3_m4v3(diff, inv_obmat, ob_center->obmat[3]);
 		negate_v3(diff);
 
 		do_diff = true;
@@ -478,6 +481,18 @@ static void updateDepgraph(ModifierData *md, DagForest *forest,
 	}
 }
 
+static void updateDepsgraph(ModifierData *md,
+                            struct Main *UNUSED(bmain),
+                            struct Scene *UNUSED(scene),
+                            Object *UNUSED(ob),
+                            struct DepsNodeHandle *node)
+{
+	NormalEditModifierData *smd = (NormalEditModifierData *) md;
+	if (smd->target) {
+		DEG_add_object_relation(node, smd->target, DEG_OB_COMP_GEOMETRY, "NormalEdit Modifier");
+	}
+}
+
 static DerivedMesh *applyModifier(ModifierData *md, Object *ob, DerivedMesh *dm, ModifierApplyFlag UNUSED(flag))
 {
 	return normalEditModifier_do((NormalEditModifierData *)md, ob, dm);
@@ -505,6 +520,7 @@ ModifierTypeInfo modifierType_NormalEdit = {
 	/* freeData */          NULL,
 	/* isDisabled */        isDisabled,
 	/* updateDepgraph */    updateDepgraph,
+	/* updateDepsgraph */   updateDepsgraph,
 	/* dependsOnTime */     NULL,
 	/* dependsOnNormals */  dependsOnNormals,
 	/* foreachObjectLink */ foreachObjectLink,

@@ -1384,6 +1384,30 @@ void BKE_curve_forward_diff_bezier(float q0, float q1, float q2, float q3, float
 	}
 }
 
+/* forward differencing method for first derivative of cubic bezier curve */
+void BKE_curve_forward_diff_tangent_bezier(float q0, float q1, float q2, float q3, float *p, int it, int stride)
+{
+	float rt0, rt1, rt2, f;
+	int a;
+
+	f = 1.0f / (float)it;
+
+	rt0 = 3.0f * (q1 - q0);
+	rt1 = f * (3.0f * (q3 - q0) + 9.0f * (q1 - q2));
+	rt2 = 6.0f * (q0 + q2) - 12.0f * q1;
+
+	q0 = rt0;
+	q1 = f * (rt1 + rt2);
+	q2 = 2.0f * f * rt1;
+
+	for (a = 0; a <= it; a++) {
+		*p = q0;
+		p = (float *)(((char *)p) + stride);
+		q0 += q1;
+		q1 += q2;
+	}
+}
+
 static void forward_diff_bezier_cotangent(const float p0[3], const float p1[3], const float p2[3], const float p3[3],
                                           float p[3], int it, int stride)
 {
@@ -4344,8 +4368,10 @@ void BKE_curve_transform_ex(Curve *cu, float mat[4][4], const bool do_keys, cons
 		}
 		else {
 			i = nu->pntsu * nu->pntsv;
-			for (bp = nu->bp; i--; bp++)
+			for (bp = nu->bp; i--; bp++) {
 				mul_m4_v3(mat, bp->vec);
+				bp->radius *= unit_scale;
+			}
 		}
 	}
 
@@ -4422,9 +4448,6 @@ void BKE_curve_material_index_remove(Curve *cu, int index)
 		for (nu = cu->nurb.first; nu; nu = nu->next) {
 			if (nu->mat_nr && nu->mat_nr >= index) {
 				nu->mat_nr--;
-				if (curvetype == OB_CURVE) {
-					nu->charidx--;
-				}
 			}
 		}
 	}
@@ -4446,9 +4469,6 @@ void BKE_curve_material_index_clear(Curve *cu)
 
 		for (nu = cu->nurb.first; nu; nu = nu->next) {
 			nu->mat_nr = 0;
-			if (curvetype == OB_CURVE) {
-				nu->charidx = 0;
-			}
 		}
 	}
 }
@@ -4475,9 +4495,6 @@ int BKE_curve_material_index_validate(Curve *cu)
 		for (nu = cu->nurb.first; nu; nu = nu->next) {
 			if (nu->mat_nr > max_idx) {
 				nu->mat_nr = 0;
-				if (curvetype == OB_CURVE) {
-					nu->charidx = 0;
-				}
 				is_valid = false;
 			}
 		}
@@ -4492,6 +4509,54 @@ int BKE_curve_material_index_validate(Curve *cu)
 	}
 }
 
+void BKE_curve_material_remap(Curve *cu, const unsigned int *remap, unsigned int remap_len)
+{
+	const int curvetype = BKE_curve_type_get(cu);
+	const short remap_len_short = (short)remap_len;
+
+#define MAT_NR_REMAP(n) \
+	if (n < remap_len_short) { \
+		BLI_assert(n >= 0 && remap[n] < remap_len_short); \
+		n = remap[n]; \
+	} ((void)0)
+
+	if (curvetype == OB_FONT) {
+		struct CharInfo *strinfo;
+		int charinfo_len, i;
+
+		if (cu->editfont) {
+			EditFont *ef = cu->editfont;
+			strinfo = ef->textbufinfo;
+			charinfo_len = ef->len;
+		}
+		else {
+			strinfo = cu->strinfo;
+			charinfo_len = cu->len_wchar;
+		}
+
+		for (i = 0; i <= charinfo_len; i++) {
+			if (strinfo[i].mat_nr > 0) {
+				strinfo[i].mat_nr -= 1;
+				MAT_NR_REMAP(strinfo[i].mat_nr);
+				strinfo[i].mat_nr += 1;
+			}
+		}
+	}
+	else {
+		Nurb *nu;
+		ListBase *nurbs = BKE_curve_editNurbs_get(cu);
+
+		if (nurbs) {
+			for (nu = nurbs->first; nu; nu = nu->next) {
+				MAT_NR_REMAP(nu->mat_nr);
+			}
+		}
+	}
+
+#undef MAT_NR_REMAP
+
+}
+
 void BKE_curve_rect_from_textbox(const struct Curve *cu, const struct TextBox *tb, struct rctf *r_rect)
 {
 	r_rect->xmin = cu->xof + tb->x;
@@ -4499,4 +4564,28 @@ void BKE_curve_rect_from_textbox(const struct Curve *cu, const struct TextBox *t
 
 	r_rect->xmax = r_rect->xmin + tb->w;
 	r_rect->ymin = r_rect->ymax - tb->h;
+}
+
+/* **** Depsgraph evaluation **** */
+
+void BKE_curve_eval_geometry(EvaluationContext *UNUSED(eval_ctx),
+                             Curve *curve)
+{
+	if (G.debug & G_DEBUG_DEPSGRAPH) {
+		printf("%s on %s\n", __func__, curve->id.name);
+	}
+	if (curve->bb == NULL || (curve->bb->flag & BOUNDBOX_DIRTY)) {
+		BKE_curve_texspace_calc(curve);
+	}
+}
+
+void BKE_curve_eval_path(EvaluationContext *UNUSED(eval_ctx),
+                         Curve *curve)
+{
+	/* TODO(sergey): This will probably need to be a part of
+	 * the modifier stack still.
+	 */
+	if (G.debug & G_DEBUG_DEPSGRAPH) {
+		printf("%s on %s\n", __func__, curve->id.name);
+	}
 }

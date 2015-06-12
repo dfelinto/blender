@@ -876,7 +876,7 @@ float normalize_vn_vn(float *array_tar, const float *array_src, const int size)
 		mul_vn_vn_fl(array_tar, array_src, size, 1.0f / d_sqrt);
 	}
 	else {
-		fill_vn_fl(array_tar, size, 0.0f);
+		copy_vn_fl(array_tar, size, 0.0f);
 		d_sqrt = 0.0f;
 	}
 	return d_sqrt;
@@ -891,6 +891,16 @@ void range_vn_i(int *array_tar, const int size, const int start)
 {
 	int *array_pt = array_tar + (size - 1);
 	int j = start + (size - 1);
+	int i = size;
+	while (i--) {
+		*(array_pt--) = j--;
+	}
+}
+
+void range_vn_u(unsigned int *array_tar, const int size, const unsigned int start)
+{
+	unsigned int *array_pt = array_tar + (size - 1);
+	unsigned int j = start + (unsigned int)(size - 1);
 	int i = size;
 	while (i--) {
 		*(array_pt--) = j--;
@@ -1041,7 +1051,7 @@ void interp_vn_vn(float *array_tar, const float *array_src, const float t, const
 	}
 }
 
-void fill_vn_i(int *array_tar, const int size, const int val)
+void copy_vn_i(int *array_tar, const int size, const int val)
 {
 	int *tar = array_tar + (size - 1);
 	int i = size;
@@ -1050,7 +1060,7 @@ void fill_vn_i(int *array_tar, const int size, const int val)
 	}
 }
 
-void fill_vn_short(short *array_tar, const int size, const short val)
+void copy_vn_short(short *array_tar, const int size, const short val)
 {
 	short *tar = array_tar + (size - 1);
 	int i = size;
@@ -1059,7 +1069,7 @@ void fill_vn_short(short *array_tar, const int size, const short val)
 	}
 }
 
-void fill_vn_ushort(unsigned short *array_tar, const int size, const unsigned short val)
+void copy_vn_ushort(unsigned short *array_tar, const int size, const unsigned short val)
 {
 	unsigned short *tar = array_tar + (size - 1);
 	int i = size;
@@ -1068,7 +1078,7 @@ void fill_vn_ushort(unsigned short *array_tar, const int size, const unsigned sh
 	}
 }
 
-void fill_vn_uchar(unsigned char *array_tar, const int size, const unsigned char val)
+void copy_vn_uchar(unsigned char *array_tar, const int size, const unsigned char val)
 {
 	unsigned char *tar = array_tar + (size - 1);
 	int i = size;
@@ -1077,7 +1087,7 @@ void fill_vn_uchar(unsigned char *array_tar, const int size, const unsigned char
 	}
 }
 
-void fill_vn_fl(float *array_tar, const int size, const float val)
+void copy_vn_fl(float *array_tar, const int size, const float val)
 {
 	float *tar = array_tar + (size - 1);
 	int i = size;
@@ -1085,3 +1095,38 @@ void fill_vn_fl(float *array_tar, const int size, const float val)
 		*(tar--) = val;
 	}
 }
+
+/** \name Double precision versions 'db'.
+ * \{ */
+
+void add_vn_vn_d(double *array_tar, const double *array_src, const int size)
+{
+	double *tar = array_tar + (size - 1);
+	const double *src = array_src + (size - 1);
+	int i = size;
+	while (i--) {
+		*(tar--) += *(src--);
+	}
+}
+
+void add_vn_vnvn_d(double *array_tar, const double *array_src_a, const double *array_src_b, const int size)
+{
+	double *tar = array_tar + (size - 1);
+	const double *src_a = array_src_a + (size - 1);
+	const double *src_b = array_src_b + (size - 1);
+	int i = size;
+	while (i--) {
+		*(tar--) = *(src_a--) + *(src_b--);
+	}
+}
+
+void mul_vn_db(double *array_tar, const int size, const double f)
+{
+	double *array_pt = array_tar + (size - 1);
+	int i = size;
+	while (i--) {
+		*(array_pt--) *= f;
+	}
+}
+
+/** \} */

@@ -356,9 +356,10 @@ static void ui_layer_but_cb(bContext *C, void *arg_but, void *arg_index)
 }
 
 /* create buttons for an item with an RNA array */
-static void ui_item_array(uiLayout *layout, uiBlock *block, const char *name, int icon,
-                          PointerRNA *ptr, PropertyRNA *prop, int len, int x, int y, int w, int UNUSED(h),
-                          bool expand, bool slider, bool toggle, bool icon_only)
+static void ui_item_array(
+        uiLayout *layout, uiBlock *block, const char *name, int icon,
+        PointerRNA *ptr, PropertyRNA *prop, int len, int x, int y, int w, int UNUSED(h),
+        bool expand, bool slider, bool toggle, bool icon_only)
 {
 	uiStyle *style = layout->root->style;
 	uiBut *but;
@@ -545,8 +546,9 @@ static void ui_item_enum_expand_handle(bContext *C, void *arg1, void *arg2)
 		RNA_property_enum_set(&but->rnapoin, but->rnaprop, current_value);
 	}
 }
-static void ui_item_enum_expand(uiLayout *layout, uiBlock *block, PointerRNA *ptr, PropertyRNA *prop,
-                                const char *uiname, int h, bool icon_only)
+static void ui_item_enum_expand(
+        uiLayout *layout, uiBlock *block, PointerRNA *ptr, PropertyRNA *prop,
+        const char *uiname, int h, bool icon_only)
 {
 	/* XXX The way this function currently handles uiname parameter is insane and inconsistent with general UI API:
 	 *     * uiname is the *enum property* label.
@@ -681,14 +683,17 @@ static uiBut *ui_item_with_label(uiLayout *layout, uiBlock *block, const char *n
 	return but;
 }
 
-void UI_context_active_but_prop_get_filebrowser(const bContext *C, PointerRNA *ptr, PropertyRNA **prop)
+void UI_context_active_but_prop_get_filebrowser(
+        const bContext *C,
+        PointerRNA *r_ptr, PropertyRNA **r_prop, bool *r_is_undo)
 {
 	ARegion *ar = CTX_wm_region(C);
 	uiBlock *block;
 	uiBut *but, *prevbut;
 
-	memset(ptr, 0, sizeof(*ptr));
-	*prop = NULL;
+	memset(r_ptr, 0, sizeof(*r_ptr));
+	*r_prop = NULL;
+	*r_is_undo = false;
 
 	if (!ar)
 		return;
@@ -700,8 +705,9 @@ void UI_context_active_but_prop_get_filebrowser(const bContext *C, PointerRNA *p
 			/* find the button before the active one */
 			if ((but->flag & UI_BUT_LAST_ACTIVE) && prevbut && prevbut->rnapoin.data) {
 				if (RNA_property_type(prevbut->rnaprop) == PROP_STRING) {
-					*ptr = prevbut->rnapoin;
-					*prop = prevbut->rnaprop;
+					*r_ptr = prevbut->rnapoin;
+					*r_prop = prevbut->rnaprop;
+					*r_is_undo = (prevbut->flag & UI_BUT_UNDO) != 0;
 					return;
 				}
 			}
@@ -877,8 +883,9 @@ void uiItemEnumO(uiLayout *layout, const char *opname, const char *name, int ico
 
 }
 
-void uiItemsFullEnumO(uiLayout *layout, const char *opname, const char *propname, IDProperty *properties,
-                      int context, int flag)
+void uiItemsFullEnumO(
+        uiLayout *layout, const char *opname, const char *propname, IDProperty *properties,
+        int context, int flag)
 {
 	wmOperatorType *ot = WM_operatortype_find(opname, 0); /* print error next */
 
@@ -1129,8 +1136,9 @@ void uiItemO(uiLayout *layout, const char *name, int icon, const char *opname)
 
 /* RNA property items */
 
-static void ui_item_rna_size(uiLayout *layout, const char *name, int icon, PointerRNA *ptr, PropertyRNA *prop,
-                             int index, bool icon_only, int *r_w, int *r_h)
+static void ui_item_rna_size(
+        uiLayout *layout, const char *name, int icon, PointerRNA *ptr, PropertyRNA *prop,
+        int index, bool icon_only, int *r_w, int *r_h)
 {
 	PropertyType type;
 	PropertySubType subtype;
@@ -1680,8 +1688,9 @@ static void ui_item_menutype_func(bContext *C, uiLayout *layout, void *arg_mt)
 	layout->root->block->flag ^= UI_BLOCK_IS_FLIP;
 }
 
-static uiBut *ui_item_menu(uiLayout *layout, const char *name, int icon, uiMenuCreateFunc func, void *arg, void *argN,
-                           const char *tip, bool force_menu)
+static uiBut *ui_item_menu(
+        uiLayout *layout, const char *name, int icon, uiMenuCreateFunc func, void *arg, void *argN,
+        const char *tip, bool force_menu)
 {
 	uiBlock *block = layout->root->block;
 	uiBut *but;
@@ -2142,7 +2151,11 @@ static void ui_litem_layout_column(uiLayout *litem)
 static RadialDirection ui_get_radialbut_vec(float vec[2], short itemnum)
 {
 	RadialDirection dir;
-	BLI_assert(itemnum < 8);
+
+	if (itemnum >= 8) {
+		itemnum %= 8;
+		printf("Warning: Pie menus with more than 8 items are currently unsupported\n");
+	}
 
 	dir = ui_radial_dir_order[itemnum];
 	ui_but_pie_dir(dir, vec);
@@ -2720,7 +2733,8 @@ uiLayout *uiLayoutBox(uiLayout *layout)
 	return (uiLayout *)ui_layout_box(layout, UI_BTYPE_ROUNDBOX);
 }
 
-/* Check all buttons defined in this layout, and set any button flagged as UI_BUT_LIST_ITEM as active/selected.
+/**
+ * Check all buttons defined in this layout, and set any button flagged as UI_BUT_LIST_ITEM as active/selected.
  * Needed to handle correctly text colors of active (selected) list item.
  */
 void ui_layout_list_set_labels_active(uiLayout *layout)
@@ -2736,8 +2750,9 @@ void ui_layout_list_set_labels_active(uiLayout *layout)
 	}
 }
 
-uiLayout *uiLayoutListBox(uiLayout *layout, uiList *ui_list, PointerRNA *ptr, PropertyRNA *prop, PointerRNA *actptr,
-                          PropertyRNA *actprop)
+uiLayout *uiLayoutListBox(
+        uiLayout *layout, uiList *ui_list, PointerRNA *ptr, PropertyRNA *prop, PointerRNA *actptr,
+        PropertyRNA *actprop)
 {
 	uiLayoutItemBx *box = ui_layout_box(layout, UI_BTYPE_LISTBOX);
 	uiBut *but = box->roundbox;
@@ -3336,9 +3351,10 @@ static void ui_layout_operator_buts__reset_cb(bContext *UNUSED(C), void *op_pt, 
 #endif
 
 /* this function does not initialize the layout, functions can be called on the layout before and after */
-void uiLayoutOperatorButs(const bContext *C, uiLayout *layout, wmOperator *op,
-                          bool (*check_prop)(struct PointerRNA *, struct PropertyRNA *),
-                          const char label_align, const short flag)
+void uiLayoutOperatorButs(
+        const bContext *C, uiLayout *layout, wmOperator *op,
+        bool (*check_prop)(struct PointerRNA *, struct PropertyRNA *),
+        const char label_align, const short flag)
 {
 	if (!op->properties) {
 		IDPropertyTemplate val = {0};

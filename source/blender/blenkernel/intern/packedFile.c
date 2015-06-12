@@ -224,7 +224,7 @@ PackedFile *newPackedFile(ReportList *reports, const char *filename, const char 
 }
 
 /* no libraries for now */
-void packAll(Main *bmain, ReportList *reports)
+void packAll(Main *bmain, ReportList *reports, bool verbose)
 {
 	Image *ima;
 	VFont *vfont;
@@ -237,7 +237,7 @@ void packAll(Main *bmain, ReportList *reports)
 				BKE_image_packfiles(reports, ima, ID_BLEND_PATH(bmain, &ima->id));
 				tot ++;
 			}
-			else if (BKE_image_is_animated(ima)) {
+			else if (BKE_image_is_animated(ima) && verbose) {
 				BKE_reportf(reports, RPT_WARNING, "Image '%s' skipped, movies and image sequences not supported",
 				            ima->id.name + 2);
 			}
@@ -258,10 +258,10 @@ void packAll(Main *bmain, ReportList *reports)
 		}
 	}
 	
-	if (tot == 0)
-		BKE_report(reports, RPT_INFO, "No new files have been packed");
-	else
+	if (tot > 0)
 		BKE_reportf(reports, RPT_INFO, "Packed %d files", tot);
+	else if (verbose)
+		BKE_report(reports, RPT_INFO, "No new files have been packed");
 
 
 }
@@ -478,7 +478,7 @@ char *unpackFile(ReportList *reports, const char *abs_name, const char *local_na
 }
 
 static void unpack_generate_paths(
-        const char *name, ID *id, char *abspath_r, char *relpath_r, size_t abspathlen, size_t relpathlen)
+        const char *name, ID *id, char *r_abspath, char *r_relpath, size_t abspathlen, size_t relpathlen)
 {
 	char tempname[FILE_MAX];
 	char tempdir[FILE_MAXDIR];
@@ -500,19 +500,19 @@ static void unpack_generate_paths(
 
 	switch (GS(id->name)) {
 		case ID_VF:
-			BLI_snprintf(relpath_r, relpathlen, "//fonts/%s", tempname);
+			BLI_snprintf(r_relpath, relpathlen, "//fonts/%s", tempname);
 			break;
 		case ID_SO:
-			BLI_snprintf(relpath_r, relpathlen, "//sounds/%s", tempname);
+			BLI_snprintf(r_relpath, relpathlen, "//sounds/%s", tempname);
 			break;
 		case ID_IM:
-			BLI_snprintf(relpath_r, relpathlen, "//textures/%s", tempname);
+			BLI_snprintf(r_relpath, relpathlen, "//textures/%s", tempname);
 			break;
 	}
 
 	{
-		size_t len = BLI_strncpy_rlen(abspath_r, tempdir, abspathlen);
-		BLI_strncpy(abspath_r + len, tempname, abspathlen - len);
+		size_t len = BLI_strncpy_rlen(r_abspath, tempdir, abspathlen);
+		BLI_strncpy(r_abspath + len, tempname, abspathlen - len);
 	}
 }
 

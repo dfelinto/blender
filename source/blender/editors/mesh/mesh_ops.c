@@ -151,8 +151,9 @@ void ED_operatortypes_mesh(void)
 	WM_operatortype_append(MESH_OT_uv_texture_remove);
 	WM_operatortype_append(MESH_OT_vertex_color_add);
 	WM_operatortype_append(MESH_OT_vertex_color_remove);
-	WM_operatortype_append(MESH_OT_customdata_clear_mask);
-	WM_operatortype_append(MESH_OT_customdata_clear_skin);
+	WM_operatortype_append(MESH_OT_customdata_mask_clear);
+	WM_operatortype_append(MESH_OT_customdata_skin_add);
+	WM_operatortype_append(MESH_OT_customdata_skin_clear);
 	WM_operatortype_append(MESH_OT_customdata_custom_splitnormals_add);
 	WM_operatortype_append(MESH_OT_customdata_custom_splitnormals_clear);
 	WM_operatortype_append(MESH_OT_drop_named_image);
@@ -166,6 +167,7 @@ void ED_operatortypes_mesh(void)
 	WM_operatortype_append(MESH_OT_vert_connect_path);
 	WM_operatortype_append(MESH_OT_vert_connect_concave);
 	WM_operatortype_append(MESH_OT_vert_connect_nonplanar);
+	WM_operatortype_append(MESH_OT_face_make_planar);
 	WM_operatortype_append(MESH_OT_knife_tool);
 	WM_operatortype_append(MESH_OT_knife_project);
 
@@ -409,7 +411,7 @@ void ED_keymap_mesh(wmKeyConfig *keyconf)
 	/* use KM_CLICK because same key is used for tweaks */
 	kmi = WM_keymap_add_item(keymap, "MESH_OT_dupli_extrude_cursor", ACTIONMOUSE, KM_CLICK, KM_CTRL, 0);
 	RNA_boolean_set(kmi->ptr, "rotate_source", true);
-	kmi = WM_keymap_add_item(keymap, "MESH_OT_dupli_extrude_cursor", ACTIONMOUSE, KM_PRESS, KM_SHIFT | KM_CTRL, 0);
+	kmi = WM_keymap_add_item(keymap, "MESH_OT_dupli_extrude_cursor", ACTIONMOUSE, KM_CLICK, KM_SHIFT | KM_CTRL, 0);
 	RNA_boolean_set(kmi->ptr, "rotate_source", false);
 
 	WM_keymap_add_menu(keymap, "VIEW3D_MT_edit_mesh_delete", XKEY, KM_PRESS, 0, 0);

@@ -45,6 +45,16 @@ typedef struct BMwShellWalker {
 	BMEdge *curedge;
 } BMwShellWalker;
 
+typedef struct BMwLoopShellWalker {
+	BMwGenericWalker header;
+	BMLoop *curloop;
+} BMwLoopShellWalker;
+
+typedef struct BMwLoopShellWireWalker {
+	BMwGenericWalker header;
+	BMElem *curelem;
+} BMwLoopShellWireWalker;
+
 typedef struct BMwIslandboundWalker {
 	BMwGenericWalker header;
 	BMLoop *base;
@@ -57,14 +67,14 @@ typedef struct BMwIslandWalker {
 	BMFace *cur;
 } BMwIslandWalker;
 
-typedef struct BMwLoopWalker {
+typedef struct BMwEdgeLoopWalker {
 	BMwGenericWalker header;
 	BMEdge *cur, *start;
 	BMVert *lastv, *startv;
 	BMFace *f_hub;
 	bool is_boundary; /* boundary looping changes behavior */
 	bool is_single;  /* single means the edge verts are only connected to 1 face */
-} BMwLoopWalker;
+} BMwEdgeLoopWalker;
 
 typedef struct BMwFaceLoopWalker {
 	BMwGenericWalker header;

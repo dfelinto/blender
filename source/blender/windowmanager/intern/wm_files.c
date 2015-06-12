@@ -506,13 +506,13 @@ bool WM_file_read(bContext *C, const char *filepath, ReportList *reports)
 		}
 #endif
 
-		BKE_reset_undo();
-		BKE_write_undo(C, "original");  /* save current state */
+		BKE_undo_reset();
+		BKE_undo_write(C, "original");  /* save current state */
 
 		success = true;
 	}
 	else if (retval == BKE_READ_EXOTIC_OK_OTHER)
-		BKE_write_undo(C, "Import file");
+		BKE_undo_write(C, "Import file");
 	else if (retval == BKE_READ_EXOTIC_FAIL_OPEN) {
 		BKE_reportf(reports, RPT_ERROR, "Cannot read file '%s': %s", filepath,
 		            errno ? strerror(errno) : TIP_("unable to open the file"));
@@ -660,8 +660,8 @@ int wm_homefile_read(bContext *C, ReportList *reports, bool from_memory, const c
 //	refresh_interface_font();
 	
 //	undo_editmode_clear();
-	BKE_reset_undo();
-	BKE_write_undo(C, "original");  /* save current state */
+	BKE_undo_reset();
+	BKE_undo_write(C, "original");  /* save current state */
 
 	ED_editors_init(C);
 	DAG_on_visible_update(CTX_data_main(C), true);
@@ -951,7 +951,7 @@ int wm_file_write(bContext *C, const char *filepath, int fileflags, ReportList *
 	/* operator now handles overwrite checks */
 
 	if (G.fileflags & G_AUTOPACK) {
-		packAll(G.main, reports);
+		packAll(G.main, reports, false);
 	}
 
 	/* don't forget not to return without! */
@@ -991,7 +991,7 @@ int wm_file_write(bContext *C, const char *filepath, int fileflags, ReportList *
 		/* run this function after because the file cant be written before the blend is */
 		if (ibuf_thumb) {
 			IMB_thumb_delete(filepath, THB_FAIL); /* without this a failed thumb overrides */
-			ibuf_thumb = IMB_thumb_create(filepath, THB_NORMAL, THB_SOURCE_BLEND, ibuf_thumb);
+			ibuf_thumb = IMB_thumb_create(filepath, THB_LARGE, THB_SOURCE_BLEND, ibuf_thumb);
 			IMB_freeImBuf(ibuf_thumb);
 		}
 
@@ -1137,8 +1137,6 @@ void wm_autosave_timer(const bContext *C, wmWindowManager *wm, wmTimer *UNUSED(w
 		}
 	}
 
-	ED_editors_flush_edits(C, false);
-
 	wm_autosave_location(filepath);
 
 	if (U.uiflag & USER_GLOBALUNDO) {
@@ -1148,6 +1146,8 @@ void wm_autosave_timer(const bContext *C, wmWindowManager *wm, wmTimer *UNUSED(w
 	else {
 		/*  save as regular blend file */
 		int fileflags = G.fileflags & ~(G_FILE_COMPRESS | G_FILE_AUTOPLAY | G_FILE_LOCK | G_FILE_SIGN | G_FILE_HISTORY);
+
+		ED_editors_flush_edits(C, false);
 
 		/* no error reporting to console */
 		BLO_write_file(CTX_data_main(C), filepath, fileflags, NULL, NULL);

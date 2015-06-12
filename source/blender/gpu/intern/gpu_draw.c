@@ -117,7 +117,7 @@ void GPU_render_text(MTFace *tface, int mode,
 		
 		/* color has been set */
 		if (tface->mode & TF_OBCOL)
-			col= NULL;
+			col = NULL;
 		else if (!col)
 			glColor3f(1.0f, 1.0f, 1.0f);
 
@@ -239,8 +239,12 @@ static struct GPUTextureState {
 	int curtileYRep, tileYRep;
 	Image *ima, *curima;
 
-	int domipmap, linearmipmap;
-	int texpaint; /* store this so that new images created while texture painting won't be set to mipmapped */
+	/* also controls min/mag filtering */
+	bool domipmap;
+	/* only use when 'domipmap' is set */
+	bool linearmipmap;
+	/* store this so that new images created while texture painting won't be set to mipmapped */
+	bool texpaint;
 
 	int alphablend;
 	float anisotropic;
@@ -281,49 +285,53 @@ static void gpu_generate_mipmap(GLenum target)
 		glDisable(target);
 }
 
-void GPU_set_mipmap(int mipmap)
+void GPU_set_mipmap(bool mipmap)
 {
-	if (GTS.domipmap != (mipmap != 0)) {
+	if (GTS.domipmap != mipmap) {
 		GPU_free_images();
-		GTS.domipmap = mipmap != 0;
+		GTS.domipmap = mipmap;
 	}
 }
 
-void GPU_set_linear_mipmap(int linear)
+void GPU_set_linear_mipmap(bool linear)
 {
-	if (GTS.linearmipmap != (linear != 0)) {
-		GPU_free_images();
-		GTS.linearmipmap = linear != 0;
+	if (GTS.linearmipmap != linear) {
+		GTS.linearmipmap = linear;
 	}
 }
 
-int GPU_get_mipmap(void)
+bool GPU_get_mipmap(void)
 {
 	return GTS.domipmap && !GTS.texpaint;
 }
 
-int GPU_get_linear_mipmap(void)
+bool GPU_get_linear_mipmap(void)
 {
 	return GTS.linearmipmap;
 }
 
-static GLenum gpu_get_mipmap_filter(int mag)
+static GLenum gpu_get_mipmap_filter(bool mag)
 {
 	/* linearmipmap is off by default *when mipmapping is off,
 	 * use unfiltered display */
 	if (mag) {
-		if (GTS.linearmipmap || GTS.domipmap)
+		if (GTS.domipmap)
 			return GL_LINEAR;
 		else
 			return GL_NEAREST;
 	}
 	else {
-		if (GTS.linearmipmap)
-			return GL_LINEAR_MIPMAP_LINEAR;
-		else if (GTS.domipmap)
-			return GL_LINEAR_MIPMAP_NEAREST;
-		else
+		if (GTS.domipmap) {
+			if (GTS.linearmipmap) {
+				return GL_LINEAR_MIPMAP_LINEAR;
+			}
+			else {
+				return GL_LINEAR_MIPMAP_NEAREST;
+			}
+		}
+		else {
 			return GL_NEAREST;
+		}
 	}
 }
 
@@ -931,7 +939,7 @@ int GPU_set_tpage(MTFace *tface, int mipmap, int alphablend)
  * temporary disabling/enabling mipmapping on all images for quick texture
  * updates with glTexSubImage2D. images that didn't change don't have to be
  * re-uploaded to OpenGL */
-void GPU_paint_set_mipmap(int mipmap)
+void GPU_paint_set_mipmap(bool mipmap)
 {
 	Image *ima;
 	

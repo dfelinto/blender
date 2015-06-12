@@ -94,6 +94,7 @@ void OBJECT_OT_game_property_new(struct wmOperatorType *ot);
 void OBJECT_OT_game_property_remove(struct wmOperatorType *ot);
 void OBJECT_OT_game_property_copy(struct wmOperatorType *ot);
 void OBJECT_OT_game_property_clear(struct wmOperatorType *ot);
+void OBJECT_OT_game_property_move(struct wmOperatorType *ot);
 void OBJECT_OT_logic_bricks_copy(struct wmOperatorType *ot);
 void OBJECT_OT_game_physics_copy(struct wmOperatorType *ot);
 
@@ -244,7 +245,7 @@ void OBJECT_OT_vertex_weight_normalize_active_vertex(struct wmOperatorType *ot);
 void OBJECT_OT_vertex_weight_copy(struct wmOperatorType *ot);
 
 /* object_warp.c */
-void OBJECT_OT_vertex_warp(struct wmOperatorType *ot);
+void TRANSFORM_OT_vertex_warp(struct wmOperatorType *ot);
 
 /* object_shapekey.c */
 void OBJECT_OT_shape_key_add(struct wmOperatorType *ot);
@@ -270,7 +271,7 @@ void OBJECT_OT_lod_add(struct wmOperatorType *ot);
 void OBJECT_OT_lod_remove(struct wmOperatorType *ot);
 
 /* object_random.c */
-void OBJECT_OT_vertex_random(struct wmOperatorType *ot);
+void TRANSFORM_OT_vertex_random(struct wmOperatorType *ot);
 
 /* object_transfer_data.c */
 void OBJECT_OT_data_transfer(struct wmOperatorType *ot);

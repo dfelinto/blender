@@ -42,6 +42,7 @@
 #include "kernel_path_state.h"
 #include "kernel_shadow.h"
 #include "kernel_emission.h"
+#include "kernel_path_common.h"
 #include "kernel_path_surface.h"
 #include "kernel_path_volume.h"
 
@@ -273,8 +274,6 @@ ccl_device void kernel_path_indirect(KernelGlobals *kg, RNG *rng, Ray ray,
 				float bssrdf_u, bssrdf_v;
 				path_state_rng_2D(kg, rng, &state, PRNG_BSDF_U, &bssrdf_u, &bssrdf_v);
 				subsurface_scatter_step(kg, &sd, state.flag, sc, &lcg_state, bssrdf_u, bssrdf_v, false);
-
-				state.flag |= PATH_RAY_BSSRDF_ANCESTOR;
 			}
 		}
 #endif
@@ -307,17 +306,17 @@ ccl_device void kernel_path_ao(KernelGlobals *kg, ShaderData *sd, PathRadiance *
 
 	sample_cos_hemisphere(ao_N, bsdf_u, bsdf_v, &ao_D, &ao_pdf);
 
-	if(dot(sd->Ng, ao_D) > 0.0f && ao_pdf != 0.0f) {
+	if(dot(ccl_fetch(sd, Ng), ao_D) > 0.0f && ao_pdf != 0.0f) {
 		Ray light_ray;
 		float3 ao_shadow;
 
-		light_ray.P = ray_offset(sd->P, sd->Ng);
+		light_ray.P = ray_offset(ccl_fetch(sd, P), ccl_fetch(sd, Ng));
 		light_ray.D = ao_D;
 		light_ray.t = kernel_data.background.ao_distance;
 #ifdef __OBJECT_MOTION__
-		light_ray.time = sd->time;
+		light_ray.time = ccl_fetch(sd, time);
 #endif
-		light_ray.dP = sd->dP;
+		light_ray.dP = ccl_fetch(sd, dP);
 		light_ray.dD = differential3_zero();
 
 		if(!shadow_blocked(kg, state, &light_ray, &ao_shadow))
@@ -343,17 +342,17 @@ ccl_device void kernel_branched_path_ao(KernelGlobals *kg, ShaderData *sd, PathR
 
 		sample_cos_hemisphere(ao_N, bsdf_u, bsdf_v, &ao_D, &ao_pdf);
 
-		if(dot(sd->Ng, ao_D) > 0.0f && ao_pdf != 0.0f) {
+		if(dot(ccl_fetch(sd, Ng), ao_D) > 0.0f && ao_pdf != 0.0f) {
 			Ray light_ray;
 			float3 ao_shadow;
 
-			light_ray.P = ray_offset(sd->P, sd->Ng);
+			light_ray.P = ray_offset(ccl_fetch(sd, P), ccl_fetch(sd, Ng));
 			light_ray.D = ao_D;
 			light_ray.t = kernel_data.background.ao_distance;
 #ifdef __OBJECT_MOTION__
-			light_ray.time = sd->time;
+			light_ray.time = ccl_fetch(sd, time);
 #endif
-			light_ray.dP = sd->dP;
+			light_ray.dP = ccl_fetch(sd, dP);
 			light_ray.dD = differential3_zero();
 
 			if(!shadow_blocked(kg, state, &light_ray, &ao_shadow))
@@ -363,31 +362,6 @@ ccl_device void kernel_branched_path_ao(KernelGlobals *kg, ShaderData *sd, PathR
 }
 
 #ifdef __SUBSURFACE__
-
-#ifdef __VOLUME__
-ccl_device void kernel_path_subsurface_update_volume_stack(KernelGlobals *kg,
-                                                           Ray *ray,
-                                                           VolumeStack *stack)
-{
-	kernel_assert(kernel_data.integrator.use_volumes);
-
-	Ray volume_ray = *ray;
-	Intersection isect;
-	int step = 0;
-	while(step < VOLUME_STACK_SIZE &&
-	      scene_intersect_volume(kg, &volume_ray, &isect))
-	{
-		ShaderData sd;
-		shader_setup_from_ray(kg, &sd, &isect, &volume_ray, 0, 0);
-		kernel_volume_stack_enter_exit(kg, &sd, stack);
-
-		/* Move ray forward. */
-		volume_ray.P = ray_offset(sd.P, -sd.Ng);
-		volume_ray.t -= sd.ray_length;
-		++step;
-	}
-}
-#endif
 
 ccl_device bool kernel_path_subsurface_scatter(KernelGlobals *kg, ShaderData *sd, PathRadiance *L, PathState *state, RNG *rng, Ray *ray, float3 *throughput)
 {
@@ -408,7 +382,7 @@ ccl_device bool kernel_path_subsurface_scatter(KernelGlobals *kg, ShaderData *sd
 #ifdef __VOLUME__
 		Ray volume_ray = *ray;
 		bool need_update_volume_stack = kernel_data.integrator.use_volumes &&
-		                                sd->flag & SD_OBJECT_INTERSECTS_VOLUME;
+		                                ccl_fetch(sd, flag) & SD_OBJECT_INTERSECTS_VOLUME;
 #endif
 
 		/* compute lighting with the BSDF closure */
@@ -417,7 +391,6 @@ ccl_device bool kernel_path_subsurface_scatter(KernelGlobals *kg, ShaderData *sd
 			PathState hit_state = *state;
 			Ray hit_ray = *ray;
 
-			hit_state.flag |= PATH_RAY_BSSRDF_ANCESTOR;
 			hit_state.rng_offset += PRNG_BOUNCE_NUM;
 			
 			kernel_path_surface_connect_light(kg, rng, &bssrdf_sd[hit], tp, state, L);
@@ -433,7 +406,7 @@ ccl_device bool kernel_path_subsurface_scatter(KernelGlobals *kg, ShaderData *sd
 					volume_ray.D = normalize_len(hit_ray.P - volume_ray.P,
 					                             &volume_ray.t);
 
-					kernel_path_subsurface_update_volume_stack(
+					kernel_volume_stack_update_for_subsurface(
 					    kg,
 					    &volume_ray,
 					    hit_state.volume_stack);
@@ -503,7 +476,9 @@ ccl_device float4 kernel_path_integrate(KernelGlobals *kg, RNG *rng, int sample,
 #ifdef __KERNEL_DEBUG__
 		if(state.flag & PATH_RAY_CAMERA) {
 			debug_data.num_bvh_traversal_steps += isect.num_traversal_steps;
+			debug_data.num_bvh_traversed_instances += isect.num_traversed_instances;
 		}
+		debug_data.num_ray_bounces++;
 #endif
 
 #ifdef __LAMP_MIS__
@@ -740,8 +715,8 @@ ccl_device_noinline void kernel_branched_path_surface_indirect_light(KernelGloba
 	RNG *rng, ShaderData *sd, float3 throughput, float num_samples_adjust,
 	PathState *state, PathRadiance *L)
 {
-	for(int i = 0; i< sd->num_closure; i++) {
-		const ShaderClosure *sc = &sd->closure[i];
+	for(int i = 0; i< ccl_fetch(sd, num_closure); i++) {
+		const ShaderClosure *sc = &ccl_fetch(sd, closure)[i];
 
 		if(!CLOSURE_IS_BSDF(sc->type))
 			continue;
@@ -792,8 +767,8 @@ ccl_device void kernel_branched_path_subsurface_scatter(KernelGlobals *kg,
                                                         Ray *ray,
                                                         float3 throughput)
 {
-	for(int i = 0; i< sd->num_closure; i++) {
-		ShaderClosure *sc = &sd->closure[i];
+	for(int i = 0; i< ccl_fetch(sd, num_closure); i++) {
+		ShaderClosure *sc = &ccl_fetch(sd, closure)[i];
 
 		if(!CLOSURE_IS_BSSRDF(sc->type))
 			continue;
@@ -803,8 +778,6 @@ ccl_device void kernel_branched_path_subsurface_scatter(KernelGlobals *kg,
 		int num_samples = kernel_data.integrator.subsurface_samples;
 		float num_samples_inv = 1.0f/num_samples;
 		RNG bssrdf_rng = cmj_hash(*rng, i);
-
-		state->flag |= PATH_RAY_BSSRDF_ANCESTOR;
 
 		/* do subsurface scatter step with copy of shader data, this will
 		 * replace the BSSRDF with a diffuse BSDF closure */
@@ -816,7 +789,7 @@ ccl_device void kernel_branched_path_subsurface_scatter(KernelGlobals *kg,
 #ifdef __VOLUME__
 			Ray volume_ray = *ray;
 			bool need_update_volume_stack = kernel_data.integrator.use_volumes &&
-			                                sd->flag & SD_OBJECT_INTERSECTS_VOLUME;
+			                                ccl_fetch(sd, flag) & SD_OBJECT_INTERSECTS_VOLUME;
 #endif
 
 			/* compute lighting with the BSDF closure */
@@ -832,7 +805,7 @@ ccl_device void kernel_branched_path_subsurface_scatter(KernelGlobals *kg,
 					volume_ray.D = normalize_len(P - volume_ray.P,
 					                             &volume_ray.t);
 
-					kernel_path_subsurface_update_volume_stack(
+					kernel_volume_stack_update_for_subsurface(
 					    kg,
 					    &volume_ray,
 					    hit_state.volume_stack);
@@ -857,8 +830,6 @@ ccl_device void kernel_branched_path_subsurface_scatter(KernelGlobals *kg,
 					&hit_state, L);
 			}
 		}
-
-		state->flag &= ~PATH_RAY_BSSRDF_ANCESTOR;
 	}
 }
 #endif
@@ -908,7 +879,9 @@ ccl_device float4 kernel_branched_path_integrate(KernelGlobals *kg, RNG *rng, in
 #ifdef __KERNEL_DEBUG__
 		if(state.flag & PATH_RAY_CAMERA) {
 			debug_data.num_bvh_traversal_steps += isect.num_traversal_steps;
+			debug_data.num_bvh_traversed_instances += isect.num_traversed_instances;
 		}
+		debug_data.num_ray_bounces++;
 #endif
 
 #ifdef __VOLUME__
@@ -1174,32 +1147,6 @@ ccl_device float4 kernel_branched_path_integrate(KernelGlobals *kg, RNG *rng, in
 }
 
 #endif
-
-ccl_device_inline void kernel_path_trace_setup(KernelGlobals *kg, ccl_global uint *rng_state, int sample, int x, int y, RNG *rng, Ray *ray)
-{
-	float filter_u;
-	float filter_v;
-
-	int num_samples = kernel_data.integrator.aa_samples;
-
-	path_rng_init(kg, rng_state, sample, num_samples, rng, x, y, &filter_u, &filter_v);
-
-	/* sample camera ray */
-
-	float lens_u = 0.0f, lens_v = 0.0f;
-
-	if(kernel_data.cam.aperturesize > 0.0f)
-		path_rng_2D(kg, rng, sample, num_samples, PRNG_LENS_U, &lens_u, &lens_v);
-
-	float time = 0.0f;
-
-#ifdef __CAMERA_MOTION__
-	if(kernel_data.cam.shuttertime != -1.0f)
-		time = path_rng_1D(kg, rng, sample, num_samples, PRNG_TIME);
-#endif
-
-	camera_sample(kg, x, y, filter_u, filter_v, lens_u, lens_v, time, ray);
-}
 
 ccl_device void kernel_path_trace(KernelGlobals *kg,
 	ccl_global float *buffer, ccl_global uint *rng_state,

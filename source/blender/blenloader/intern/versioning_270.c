@@ -776,8 +776,8 @@ void blo_do_versions_270(FileData *fd, Library *UNUSED(lib), Main *main)
 		}
 
 		for (cam = main->camera.first; cam; cam = cam->id.next) {
-			cam->stereo.interocular_distance = 0.065;
-			cam->stereo.convergence_distance = 30.f * 0.065;
+			cam->stereo.interocular_distance = 0.065f;
+			cam->stereo.convergence_distance = 30.0f * 0.065f;
 		}
 
 		for (ima = main->image.first; ima; ima = ima->id.next) {
@@ -796,6 +796,52 @@ void blo_do_versions_270(FileData *fd, Library *UNUSED(lib), Main *main)
 		for (wm = main->wm.first; wm; wm = wm->id.next) {
 			for (win = wm->windows.first; win; win = win->next) {
 				win->stereo3d_format = MEM_callocN(sizeof(Stereo3dFormat), "Stereo Display 3d Format");
+			}
+		}
+	}
+
+	if (!MAIN_VERSION_ATLEAST(main, 274, 6)) {
+		bScreen *screen;
+
+		if (!DNA_struct_elem_find(fd->filesdna, "FileSelectParams", "int", "thumbnail_size")) {
+			for (screen = main->screen.first; screen; screen = screen->id.next) {
+				ScrArea *sa;
+
+				for (sa = screen->areabase.first; sa; sa = sa->next) {
+					SpaceLink *sl;
+
+					for (sl = sa->spacedata.first; sl; sl = sl->next) {
+						if (sl->spacetype == SPACE_FILE) {
+							SpaceFile *sfile = (SpaceFile *)sl;
+
+							if (sfile->params) {
+								sfile->params->thumbnail_size = 128;
+							}
+						}
+					}
+				}
+			}
+		}
+
+		if (!DNA_struct_elem_find(fd->filesdna, "RenderData", "short", "simplify_subsurf_render")) {
+			Scene *scene;
+			for (scene = main->scene.first; scene != NULL; scene = scene->id.next) {
+				scene->r.simplify_subsurf_render = scene->r.simplify_subsurf;
+				scene->r.simplify_particles_render = scene->r.simplify_particles;
+			}
+		}
+
+		if (!DNA_struct_elem_find(fd->filesdna, "DecimateModifierData", "float", "defgrp_factor")) {
+			Object *ob;
+
+			for (ob = main->object.first; ob; ob = ob->id.next) {
+				ModifierData *md;
+				for (md = ob->modifiers.first; md; md = md->next) {
+					if (md->type == eModifierType_Decimate) {
+						DecimateModifierData *dmd = (DecimateModifierData *)md;
+						dmd->defgrp_factor = 1.0f;
+					}
+				}
 			}
 		}
 	}

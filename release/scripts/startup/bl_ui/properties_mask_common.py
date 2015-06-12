@@ -36,7 +36,7 @@ class MASK_UL_layers(UIList):
             row.prop(mask, "hide", text="", emboss=False)
             row.prop(mask, "hide_select", text="", emboss=False)
             row.prop(mask, "hide_render", text="", emboss=False)
-        elif self.layout_type in {'GRID'}:
+        elif self.layout_type == 'GRID':
             layout.alignment = 'CENTER'
             layout.label(text="", icon_value=icon)
 
@@ -190,7 +190,7 @@ class MASK_PT_point:
             col.prop_search(parent, "parent", tracking,
                             "objects", icon='OBJECT_DATA', text="Object:")
 
-            tracks_list = "tracks" if parent.type == 'POINT_TRACK' else 'plane_tracks'
+            tracks_list = "tracks" if parent.type == 'POINT_TRACK' else "plane_tracks"
 
             if parent.parent in tracking.objects:
                 object = tracking.objects[parent.parent]

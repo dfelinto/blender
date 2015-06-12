@@ -43,6 +43,7 @@
 #include "BLI_blenlib.h"
 #include "BLI_math.h"
 #include "BLI_utildefines.h"
+#include "BLI_threads.h"
 
 #include "BKE_colortools.h"
 #include "BKE_curve.h"
@@ -51,6 +52,10 @@
 
 #include "IMB_colormanagement.h"
 #include "IMB_imbuf_types.h"
+
+#ifdef _OPENMP
+#  include <omp.h>
+#endif
 
 /* ********************************* color curve ********************* */
 
@@ -790,7 +795,17 @@ float curvemap_evaluateF(const CurveMap *cuma, float value)
 float curvemapping_evaluateF(const CurveMapping *cumap, int cur, float value)
 {
 	const CurveMap *cuma = cumap->cm + cur;
-	return curvemap_evaluateF(cuma, value);
+	float val = curvemap_evaluateF(cuma, value);
+
+	/* account for clipping */
+	if (cumap->flag & CUMA_DO_CLIP) {
+		if (val < cumap->curr.ymin)
+			val = cumap->curr.ymin;
+		else if (val > cumap->curr.ymax)
+			val = cumap->curr.ymax;
+	}
+
+	return val;
 }
 
 /* vector case */
@@ -1019,18 +1034,28 @@ void BKE_histogram_update_sample_line(Histogram *hist, ImBuf *ibuf, const ColorM
 void scopes_update(Scopes *scopes, ImBuf *ibuf, const ColorManagedViewSettings *view_settings,
                    const ColorManagedDisplaySettings *display_settings)
 {
-	int x, y, c;
+#ifdef _OPENMP
+	const int num_threads = BLI_system_thread_count();
+#endif
+	int a, y;
 	unsigned int nl, na, nr, ng, nb;
 	double divl, diva, divr, divg, divb;
-	const float *rf = NULL;
-	unsigned char *rc = NULL;
-	unsigned int *bin_lum, *bin_r, *bin_g, *bin_b, *bin_a;
-	int savedlines, saveline;
-	float rgba[4], ycc[3], luma;
+	unsigned char *display_buffer;
+	unsigned int bin_lum[256] = {0},
+	             bin_r[256] = {0},
+	             bin_g[256] = {0},
+	             bin_b[256] = {0},
+	             bin_a[256] = {0};
+	unsigned int bin_lum_t[BLENDER_MAX_THREADS][256] = {{0}},
+	             bin_r_t[BLENDER_MAX_THREADS][256] = {{0}},
+	             bin_g_t[BLENDER_MAX_THREADS][256] = {{0}},
+	             bin_b_t[BLENDER_MAX_THREADS][256] = {{0}},
+	             bin_a_t[BLENDER_MAX_THREADS][256] = {{0}};
 	int ycc_mode = -1;
 	const bool is_float = (ibuf->rect_float != NULL);
 	void *cache_handle = NULL;
 	struct ColormanageProcessor *cm_processor = NULL;
+	int rows_per_sample_line;
 
 	if (ibuf->rect == NULL && ibuf->rect_float == NULL) return;
 
@@ -1060,13 +1085,6 @@ void scopes_update(Scopes *scopes, ImBuf *ibuf, const ColorManagedViewSettings *
 			break;
 	}
 
-	/* temp table to count pix value for histogram */
-	bin_r     = MEM_callocN(256 * sizeof(unsigned int), "temp historgram bins");
-	bin_g     = MEM_callocN(256 * sizeof(unsigned int), "temp historgram bins");
-	bin_b     = MEM_callocN(256 * sizeof(unsigned int), "temp historgram bins");
-	bin_a = MEM_callocN(256 * sizeof(unsigned int), "temp historgram bins");
-	bin_lum   = MEM_callocN(256 * sizeof(unsigned int), "temp historgram bins");
-
 	/* convert to number of lines with logarithmic scale */
 	scopes->sample_lines = (scopes->accuracy * 0.01f) * (scopes->accuracy * 0.01f) * ibuf->y;
 	
@@ -1074,10 +1092,10 @@ void scopes_update(Scopes *scopes, ImBuf *ibuf, const ColorManagedViewSettings *
 		scopes->sample_lines = ibuf->y;
 
 	/* scan the image */
-	savedlines = 0;
-	for (c = 0; c < 3; c++) {
-		scopes->minmax[c][0] = 25500.0f;
-		scopes->minmax[c][1] = -25500.0f;
+	rows_per_sample_line = ibuf->y / scopes->sample_lines;
+	for (a = 0; a < 3; a++) {
+		scopes->minmax[a][0] = 25500.0f;
+		scopes->minmax[a][1] = -25500.0f;
 	}
 	
 	scopes->waveform_tot = ibuf->x * scopes->sample_lines;
@@ -1096,24 +1114,37 @@ void scopes_update(Scopes *scopes, ImBuf *ibuf, const ColorManagedViewSettings *
 	scopes->waveform_3 = MEM_callocN(scopes->waveform_tot * 2 * sizeof(float), "waveform point channel 3");
 	scopes->vecscope = MEM_callocN(scopes->waveform_tot * 2 * sizeof(float), "vectorscope point channel");
 	
-	if (is_float)
-		rf = ibuf->rect_float;
-	else {
-		rc = (unsigned char *)IMB_display_buffer_acquire(ibuf, view_settings, display_settings, &cache_handle);
-	}
-	
-	if (ibuf->rect_float)
+	if (ibuf->rect_float) {
 		cm_processor = IMB_colormanagement_display_processor_new(view_settings, display_settings);
+	}
+	else {
+		display_buffer = (unsigned char *)IMB_display_buffer_acquire(ibuf,
+		                                                             view_settings,
+		                                                             display_settings,
+		                                                             &cache_handle);
+	}
 
+	/* Keep number of threads in sync with the merge parts below. */
+#pragma omp parallel for private(y) schedule(static) num_threads(num_threads) if(ibuf->y > 256)
 	for (y = 0; y < ibuf->y; y++) {
-		if (savedlines < scopes->sample_lines && y >= ((savedlines) * ibuf->y) / (scopes->sample_lines + 1)) {
-			saveline = 1;
-		}
+#ifdef _OPENMP
+		const int thread_idx = omp_get_thread_num();
+#else
+		const int thread_idx = 0;
+#endif
+		const float *rf = NULL;
+		const unsigned char *rc = NULL;
+		const bool do_sample_line = (y % rows_per_sample_line) == 0;
+		float min[3] = { FLT_MAX,  FLT_MAX,  FLT_MAX},
+		      max[3] = {-FLT_MAX, -FLT_MAX, -FLT_MAX};
+		int x, c;
+		if (is_float)
+			rf = ibuf->rect_float + ((size_t)y) * ibuf->x * ibuf->channels;
 		else {
-			saveline = 0;
+			rc = display_buffer + ((size_t)y) * ibuf->x * ibuf->channels;
 		}
 		for (x = 0; x < ibuf->x; x++) {
-
+			float rgba[4], ycc[3], luma;
 			if (is_float) {
 				copy_v4_v4(rgba, rf);
 				IMB_colormanagement_processor_apply_v4(cm_processor, rgba);
@@ -1129,28 +1160,29 @@ void scopes_update(Scopes *scopes, ImBuf *ibuf, const ColorManagedViewSettings *
 			/* check for min max */
 			if (ycc_mode == -1) {
 				for (c = 0; c < 3; c++) {
-					if (rgba[c] < scopes->minmax[c][0]) scopes->minmax[c][0] = rgba[c];
-					if (rgba[c] > scopes->minmax[c][1]) scopes->minmax[c][1] = rgba[c];
+					if (rgba[c] < min[c]) min[c] = rgba[c];
+					if (rgba[c] > max[c]) max[c] = rgba[c];
 				}
 			}
 			else {
 				rgb_to_ycc(rgba[0], rgba[1], rgba[2], &ycc[0], &ycc[1], &ycc[2], ycc_mode);
 				for (c = 0; c < 3; c++) {
 					ycc[c] *= INV_255;
-					if (ycc[c] < scopes->minmax[c][0]) scopes->minmax[c][0] = ycc[c];
-					if (ycc[c] > scopes->minmax[c][1]) scopes->minmax[c][1] = ycc[c];
+					if (ycc[c] < min[c]) min[c] = ycc[c];
+					if (ycc[c] > max[c]) max[c] = ycc[c];
 				}
 			}
 			/* increment count for histo*/
-			bin_lum[get_bin_float(luma)] += 1;
-			bin_r[get_bin_float(rgba[0])] += 1;
-			bin_g[get_bin_float(rgba[1])] += 1;
-			bin_b[get_bin_float(rgba[2])] += 1;
-			bin_a[get_bin_float(rgba[3])] += 1;
+			bin_lum_t[thread_idx][get_bin_float(luma)] += 1;
+			bin_r_t[thread_idx][get_bin_float(rgba[0])] += 1;
+			bin_g_t[thread_idx][get_bin_float(rgba[1])] += 1;
+			bin_b_t[thread_idx][get_bin_float(rgba[2])] += 1;
+			bin_a_t[thread_idx][get_bin_float(rgba[3])] += 1;
 
 			/* save sample if needed */
-			if (saveline) {
+			if (do_sample_line) {
 				const float fx = (float)x / (float)ibuf->x;
+				const int savedlines = y / rows_per_sample_line;
 				const int idx = 2 * (ibuf->x * savedlines + x);
 				save_sample_line(scopes, idx, fx, rgba, ycc);
 			}
@@ -1158,29 +1190,57 @@ void scopes_update(Scopes *scopes, ImBuf *ibuf, const ColorManagedViewSettings *
 			rf += ibuf->channels;
 			rc += ibuf->channels;
 		}
-		if (saveline)
-			savedlines += 1;
+#pragma omp critical
+		{
+			for (c = 0; c < 3; c++) {
+				if (min[c] < scopes->minmax[c][0]) scopes->minmax[c][0] = min[c];
+				if (max[c] > scopes->minmax[c][1]) scopes->minmax[c][1] = max[c];
+			}
+		}
+	}
+
+#ifdef _OPENMP
+	if (ibuf->y > 256) {
+		for (a = 0; a < num_threads; a++) {
+			int b;
+			for (b = 0; b < 256; b++) {
+				bin_lum[b] += bin_lum_t[a][b];
+				bin_r[b] += bin_r_t[a][b];
+				bin_g[b] += bin_g_t[a][b];
+				bin_b[b] += bin_b_t[a][b];
+				bin_a[b] += bin_a_t[a][b];
+			}
+		}
+	}
+	else
+#endif
+	{
+		memcpy(bin_lum, bin_lum_t[0], sizeof(bin_lum));
+		memcpy(bin_r, bin_r_t[0], sizeof(bin_r));
+		memcpy(bin_g, bin_g_t[0], sizeof(bin_g));
+		memcpy(bin_b, bin_b_t[0], sizeof(bin_b));
+		memcpy(bin_a, bin_a_t[0], sizeof(bin_a));
 	}
 
 	/* test for nicer distribution even - non standard, leave it out for a while */
 #if 0
-	for (x = 0; x < 256; x++) {
-		bin_lum[x] = sqrt (bin_lum[x]);
-		bin_r[x] = sqrt(bin_r[x]);
-		bin_g[x] = sqrt(bin_g[x]);
-		bin_b[x] = sqrt(bin_b[x]);
-		bin_a[x] = sqrt(bin_a[x]);
+	for (a = 0; a < 256; a++) {
+		bin_lum[a] = sqrt (bin_lum[a]);
+		bin_r[a] = sqrt(bin_r[a]);
+		bin_g[a] = sqrt(bin_g[a]);
+		bin_b[a] = sqrt(bin_b[a]);
+		bin_a[a] = sqrt(bin_a[a]);
 	}
 #endif
 	
 	/* convert hist data to float (proportional to max count) */
 	nl = na = nr = nb = ng = 0;
-	for (x = 0; x < 256; x++) {
-		if (bin_lum[x] > nl) nl = bin_lum[x];
-		if (bin_r[x]   > nr) nr = bin_r[x];
-		if (bin_g[x]   > ng) ng = bin_g[x];
-		if (bin_b[x]   > nb) nb = bin_b[x];
-		if (bin_a[x]   > na) na = bin_a[x];
+	for (a = 0; a < 256; a++) {
+		if (bin_lum[a] > nl) nl = bin_lum[a];
+		if (bin_r[a]   > nr) nr = bin_r[a];
+		if (bin_g[a]   > ng) ng = bin_g[a];
+		if (bin_b[a]   > nb) nb = bin_b[a];
+		if (bin_a[a]   > na) na = bin_a[a];
 	}
 	divl = nl ? 1.0 / (double)nl : 1.0;
 	diva = na ? 1.0 / (double)na : 1.0;
@@ -1188,18 +1248,13 @@ void scopes_update(Scopes *scopes, ImBuf *ibuf, const ColorManagedViewSettings *
 	divg = ng ? 1.0 / (double)ng : 1.0;
 	divb = nb ? 1.0 / (double)nb : 1.0;
 	
-	for (x = 0; x < 256; x++) {
-		scopes->hist.data_luma[x] = bin_lum[x] * divl;
-		scopes->hist.data_r[x] = bin_r[x] * divr;
-		scopes->hist.data_g[x] = bin_g[x] * divg;
-		scopes->hist.data_b[x] = bin_b[x] * divb;
-		scopes->hist.data_a[x] = bin_a[x] * diva;
+	for (a = 0; a < 256; a++) {
+		scopes->hist.data_luma[a] = bin_lum[a] * divl;
+		scopes->hist.data_r[a] = bin_r[a] * divr;
+		scopes->hist.data_g[a] = bin_g[a] * divg;
+		scopes->hist.data_b[a] = bin_b[a] * divb;
+		scopes->hist.data_a[a] = bin_a[a] * diva;
 	}
-	MEM_freeN(bin_lum);
-	MEM_freeN(bin_r);
-	MEM_freeN(bin_g);
-	MEM_freeN(bin_b);
-	MEM_freeN(bin_a);
 
 	if (cm_processor)
 		IMB_colormanagement_processor_free(cm_processor);
@@ -1302,4 +1357,10 @@ void BKE_color_managed_colorspace_settings_copy(ColorManagedColorspaceSettings *
                                                 const ColorManagedColorspaceSettings *settings)
 {
 	BLI_strncpy(colorspace_settings->name, settings->name, sizeof(colorspace_settings->name));
+}
+
+bool BKE_color_managed_colorspace_settings_equals(const ColorManagedColorspaceSettings *settings1,
+                                                  const ColorManagedColorspaceSettings *settings2)
+{
+	return STREQ(settings1->name, settings2->name);
 }

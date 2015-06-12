@@ -113,11 +113,11 @@ class USERPREF_MT_splash(Menu):
         row.label("")
         row = split.row()
         row.label("Interaction:")
-        # XXX, no redraws
-        # text = bpy.path.display_name(context.window_manager.keyconfigs.active.name)
-        # if not text:
-        #     text = "Blender (default)"
-        row.menu("USERPREF_MT_appconfigs", text="Preset")
+
+        text = bpy.path.display_name(context.window_manager.keyconfigs.active.name)
+        if not text:
+            text = "Blender (default)"
+        row.menu("USERPREF_MT_appconfigs", text=text)
 
 
 # only for addons
@@ -200,6 +200,11 @@ class USERPREF_PT_interface(Panel):
         col.label(text="2D Viewports:")
         col.prop(view, "view2d_grid_spacing_min", text="Minimum Grid Spacing")
         col.prop(view, "timecode_style")
+        col.prop(view, "view_frame_type")
+        if (view.view_frame_type == 'SECONDS'):
+            col.prop(view, "view_frame_seconds")
+        elif (view.view_frame_type == 'KEYFRAMES'):
+            col.prop(view, "view_frame_keyframes")
 
         row.separator()
         row.separator()
@@ -1041,7 +1046,8 @@ class USERPREF_PT_input(Panel):
         userpref = context.user_preferences
         return (userpref.active_section == 'INPUT')
 
-    def draw_input_prefs(self, inputs, layout):
+    @staticmethod
+    def draw_input_prefs(inputs, layout):
         import sys
 
         # General settings

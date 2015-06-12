@@ -25,23 +25,28 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include "MEM_guardedalloc.h"
+
 #include "BLI_array_utils.h"
 
 #include "BLI_sys_types.h"
 #include "BLI_utildefines.h"
 #include "BLI_alloca.h"
 
+#include "BLI_strict_flags.h"
+
 
 void _bli_array_reverse(void *arr_v, unsigned int arr_len, size_t arr_stride)
 {
-	const unsigned int arr_half_stride = (arr_len / 2) * arr_stride;
+	const unsigned int arr_stride_uint = (unsigned int)arr_stride;
+	const unsigned int arr_half_stride = (arr_len / 2) * arr_stride_uint;
 	unsigned int i, i_end;
 	char *arr = arr_v;
 	char *buf = BLI_array_alloca(buf, arr_stride);
 
-	for (i = 0, i_end = (arr_len - 1) * arr_stride;
+	for (i = 0, i_end = (arr_len - 1) * arr_stride_uint;
 	     i < arr_half_stride;
-	     i += arr_stride, i_end -= arr_stride)
+	     i += arr_stride_uint, i_end -= arr_stride_uint)
 	{
 		memcpy(buf, &arr[i], arr_stride);
 		memcpy(&arr[i], &arr[i_end], arr_stride);
@@ -66,6 +71,36 @@ void _bli_array_wrap(void *arr_v, unsigned int arr_len, size_t arr_stride, int d
 	}
 	else {
 		BLI_assert(0);
+	}
+}
+
+void _bli_array_permute(
+        void *arr_v, const unsigned int arr_len, const size_t arr_stride,
+        const unsigned int *order, void *arr_temp)
+{
+	const size_t len = arr_len * arr_stride;
+	const unsigned int arr_stride_uint = (unsigned int)arr_stride;
+	void *arr_orig;
+	unsigned int i;
+
+	if (arr_temp == NULL) {
+		arr_orig = MEM_mallocN(len, __func__);
+	}
+	else {
+		arr_orig = arr_temp;
+	}
+
+	memcpy(arr_orig, arr_v, len);
+
+	for (i = 0; i < arr_len; i++) {
+		BLI_assert(order[i] < arr_len);
+		memcpy(POINTER_OFFSET(arr_v,    arr_stride_uint * i),
+		       POINTER_OFFSET(arr_orig, arr_stride_uint * order[i]),
+		       arr_stride);
+	}
+
+	if (arr_temp == NULL) {
+		MEM_freeN(arr_orig);
 	}
 }
 

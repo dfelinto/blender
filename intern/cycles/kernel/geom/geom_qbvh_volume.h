@@ -95,10 +95,6 @@ ccl_device bool BVH_FUNCTION_FULL_NAME(QBVH)(KernelGlobals *kg,
 		do {
 			/* Traverse internal nodes. */
 			while(nodeAddr >= 0 && nodeAddr != ENTRYPOINT_SENTINEL) {
-#if defined(__KERNEL_DEBUG__)
-				isect->num_traversal_steps++;
-#endif
-
 				ssef dist;
 				int traverseChild = qbvh_node_intersect(kg,
 				                                        tnear,
@@ -208,7 +204,7 @@ ccl_device bool BVH_FUNCTION_FULL_NAME(QBVH)(KernelGlobals *kg,
 
 			/* If node is leaf, fetch triangle list. */
 			if(nodeAddr < 0) {
-				float4 leaf = kernel_tex_fetch(__bvh_nodes, (-nodeAddr-1)*BVH_QNODE_SIZE+6);
+				float4 leaf = kernel_tex_fetch(__bvh_leaf_nodes, (-nodeAddr-1)*BVH_QNODE_LEAF_SIZE);
 				int primAddr = __float_as_int(leaf.x);
 
 #if BVH_FEATURE(BVH_INSTANCING)
