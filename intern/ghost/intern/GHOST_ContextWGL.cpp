@@ -577,7 +577,7 @@ int GHOST_ContextWGL::_choose_pixel_format_arb_2(
 			        "Substituting one that uses %d samples.\n",
 			        numOfAASamples, actualSamples);
 
-			m_numOfAASamples = actualSamples; // set context property to actual value
+			numOfAASamples = actualSamples; // set context property to actual value
 		}
 		if (needAlpha) {
 			iQuery[0] = WGL_ALPHA_BITS_ARB;
@@ -588,7 +588,9 @@ int GHOST_ContextWGL::_choose_pixel_format_arb_2(
 			}
 		}
 	}
-	numOfAASamples = samples;
+	else {
+		numOfAASamples = 0;
+	}
 	return iPixelFormat;
 }
 
@@ -626,26 +628,30 @@ int GHOST_ContextWGL::_choose_pixel_format_arb_1(
 			exchPixelFormat = _choose_pixel_format_arb_2(
 				stereoVisual, exchNumOfAASamples, needAlpha, needStencil, sRGB, swapMethodOut);
 			if (exchPixelFormat == 0 || exchNumOfAASamples < numOfAASamples) {
-				// the number of AA samples cannot be me, take the highest
-				if (exchNumOfAASamples > undefNumOfAASamples) {
-					undefNumOfAASamples = exchNumOfAASamples;
-					undefPixelFormat = exchPixelFormat;
+				// the number of AA samples cannot be met, take the highest
+				if (undefPixelFormat != 0 && undefNumOfAASamples >= exchNumOfAASamples) {
+					exchNumOfAASamples = undefNumOfAASamples;
+					exchPixelFormat = undefPixelFormat;
+					swapMethodOut = WGL_SWAP_UNDEFINED_ARB;
 				}
-				if (undefNumOfAASamples > copyNumOfAASamples) {
-					copyNumOfAASamples = undefNumOfAASamples;
-					copyPixelFormat = undefPixelFormat;
+				if (copyPixelFormat != 0 && copyNumOfAASamples >= exchNumOfAASamples) {
+					exchNumOfAASamples = copyNumOfAASamples;
+					exchPixelFormat = copyPixelFormat;
+					swapMethodOut = WGL_SWAP_COPY_ARB;
 				}
-				iPixelFormat = copyPixelFormat;
 			}
-			else
-				iPixelFormat = exchPixelFormat;
+			iPixelFormat = exchPixelFormat;
+			m_numOfAASamples = exchNumOfAASamples;
 		}
-		else
+		else {
 			iPixelFormat = undefPixelFormat;
+			m_numOfAASamples = undefNumOfAASamples;
+		}
 	}
-	else
+	else {
 		iPixelFormat = copyPixelFormat;
-
+		m_numOfAASamples = copyNumOfAASamples;
+	}
 	return iPixelFormat;
 }
 
