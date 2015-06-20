@@ -155,7 +155,7 @@ private:
 
 	int _choose_pixel_format_arb_2(
 	        bool stereoVisual,
-	        int numOfAASamples,
+	        int &numOfAASamples,
 	        bool needAlpha,
 	        bool needStencil,
 	        bool sRGB,

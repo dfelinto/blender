@@ -478,7 +478,7 @@ static void makeAttribList(
 		out.push_back(numOfAASamples);
 
 		out.push_back(WGL_SAMPLE_BUFFERS_ARB);
-		out.push_back(1);
+		out.push_back(GL_TRUE);
 	}
 
 	if (sRGB) {
@@ -492,7 +492,7 @@ static void makeAttribList(
 
 int GHOST_ContextWGL::_choose_pixel_format_arb_2(
         bool stereoVisual,
-        int numOfAASamples,
+        int &numOfAASamples,
         bool needAlpha,
         bool needStencil,
         bool sRGB,
@@ -588,7 +588,7 @@ int GHOST_ContextWGL::_choose_pixel_format_arb_2(
 			}
 		}
 	}
-
+	numOfAASamples = samples;
 	return iPixelFormat;
 }
 
@@ -602,22 +602,49 @@ int GHOST_ContextWGL::_choose_pixel_format_arb_1(
         int &swapMethodOut)
 {
 	int iPixelFormat;
+	int copyPixelFormat = 0;
+	int undefPixelFormat = 0;
+	int exchPixelFormat = 0;
+	int copyNumOfAASamples = 0;
+	int undefNumOfAASamples = 0;
+	int exchNumOfAASamples = 0;
 
 	swapMethodOut = WGL_SWAP_COPY_ARB;
-	iPixelFormat  = _choose_pixel_format_arb_2(
-	        stereoVisual, numOfAASamples, needAlpha, needStencil, sRGB, swapMethodOut);
+	copyNumOfAASamples = numOfAASamples;
+	copyPixelFormat  = _choose_pixel_format_arb_2(
+		stereoVisual, copyNumOfAASamples, needAlpha, needStencil, sRGB, swapMethodOut);
 
-	if (iPixelFormat == 0) {
+	if (copyPixelFormat == 0 || copyNumOfAASamples < numOfAASamples) {
 		swapMethodOut = WGL_SWAP_UNDEFINED_ARB;
-		iPixelFormat  = _choose_pixel_format_arb_2(
-		        stereoVisual, numOfAASamples, needAlpha, needStencil, sRGB, swapMethodOut);
-	}
+		undefNumOfAASamples = numOfAASamples;
+		undefPixelFormat = _choose_pixel_format_arb_2(
+			stereoVisual, undefNumOfAASamples, needAlpha, needStencil, sRGB, swapMethodOut);
 
-	if (iPixelFormat == 0) {
-		swapMethodOut = WGL_SWAP_EXCHANGE_ARB;
-		iPixelFormat  = _choose_pixel_format_arb_2(
-		        stereoVisual, numOfAASamples, needAlpha, needStencil, sRGB, swapMethodOut);
+		if (undefPixelFormat == 0 || undefNumOfAASamples < numOfAASamples) {
+			swapMethodOut = WGL_SWAP_EXCHANGE_ARB;
+			exchNumOfAASamples = numOfAASamples;
+			exchPixelFormat = _choose_pixel_format_arb_2(
+				stereoVisual, exchNumOfAASamples, needAlpha, needStencil, sRGB, swapMethodOut);
+			if (exchPixelFormat == 0 || exchNumOfAASamples < numOfAASamples) {
+				// the number of AA samples cannot be me, take the highest
+				if (exchNumOfAASamples > undefNumOfAASamples) {
+					undefNumOfAASamples = exchNumOfAASamples;
+					undefPixelFormat = exchPixelFormat;
+				}
+				if (undefNumOfAASamples > copyNumOfAASamples) {
+					copyNumOfAASamples = undefNumOfAASamples;
+					copyPixelFormat = undefPixelFormat;
+				}
+				iPixelFormat = copyPixelFormat;
+			}
+			else
+				iPixelFormat = exchPixelFormat;
+		}
+		else
+			iPixelFormat = undefPixelFormat;
 	}
+	else
+		iPixelFormat = copyPixelFormat;
 
 	return iPixelFormat;
 }
