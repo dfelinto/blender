@@ -591,7 +591,8 @@ typedef struct FileSelectParams {
 
 	char filter_search[64];  /* text items' name must match to be shown. */
 
-	int active_file;
+	int active_file;    /* active file used for keyboard navigation */
+	int highlight_file; /* file under cursor */
 	int sel_first;
 	int sel_last;
 	unsigned short thumbnail_size;
@@ -1164,6 +1165,7 @@ typedef enum eSpaceClip_Flag {
 	SC_SHOW_GRAPH_SEL_ONLY      = (1 << 19),
 	SC_SHOW_GRAPH_HIDDEN        = (1 << 20),
 	SC_SHOW_GRAPH_TRACKS_ERROR  = (1 << 21),
+	SC_SHOW_METADATA            = (1 << 22),
 } eSpaceClip_Flag;
 
 /* SpaceClip->mode */

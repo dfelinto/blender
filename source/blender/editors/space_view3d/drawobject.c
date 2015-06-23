@@ -2053,14 +2053,19 @@ static void drawcamera(Scene *scene, View3D *v3d, RegionView3D *rv3d, Base *base
 	float vec[4][3], asp[2], shift[2], scale[3];
 	int i;
 	float drawsize;
-	const bool is_view = (rv3d->persp == RV3D_CAMOB && ob == v3d->camera);
 	MovieClip *clip = BKE_object_movieclip_get(scene, base->object, false);
 
+	const bool is_view = (rv3d->persp == RV3D_CAMOB && ob == v3d->camera);
+	const bool is_multiview = (scene->r.scemode & R_MULTIVIEW) != 0;
 	const bool is_stereo3d = drawcamera_is_stereo3d(scene, v3d, ob);
+	const bool is_stereo3d_view = (scene->r.views_format == SCE_VIEWS_FORMAT_STEREO_3D);
 	const bool is_stereo3d_cameras = (ob == scene->camera) &&
-	                                 (scene->r.scemode & R_MULTIVIEW) &&
-	                                 (scene->r.views_format == SCE_VIEWS_FORMAT_STEREO_3D) &&
+	                                 is_multiview &&
+	                                 is_stereo3d_view &&
 	                                 (v3d->stereo3d_flag & V3D_S3D_DISPCAMERAS);
+	const bool is_selection_camera_stereo = (G.f & G_PICKSEL) &&
+	                                        is_view && is_multiview &&
+	                                        is_stereo3d_view;
 
 	/* draw data for movie clip set as active for scene */
 	if (clip) {
@@ -2087,9 +2092,17 @@ static void drawcamera(Scene *scene, View3D *v3d, RegionView3D *rv3d, Base *base
 
 	cam = ob->data;
 
-	scale[0] = 1.0f / len_v3(ob->obmat[0]);
-	scale[1] = 1.0f / len_v3(ob->obmat[1]);
-	scale[2] = 1.0f / len_v3(ob->obmat[2]);
+	/* BKE_camera_multiview_model_matrix already accounts for scale, don't do it here */
+	if (is_selection_camera_stereo) {
+		scale[0] = 1.0f;
+		scale[1] = 1.0f;
+		scale[2] = 1.0f;
+	}
+	else {
+		scale[0] = 1.0f / len_v3(ob->obmat[0]);
+		scale[1] = 1.0f / len_v3(ob->obmat[1]);
+		scale[2] = 1.0f / len_v3(ob->obmat[2]);
+	}
 
 	BKE_camera_view_frame_ex(scene, cam, cam->drawsize, is_view, scale,
 	                         asp, shift, &drawsize, vec);
@@ -2098,8 +2111,24 @@ static void drawcamera(Scene *scene, View3D *v3d, RegionView3D *rv3d, Base *base
 	glDisable(GL_CULL_FACE);
 
 	/* camera frame */
-	if (!is_stereo3d_cameras)
-		drawcamera_frame(vec, GL_LINE_LOOP);
+	if (!is_stereo3d_cameras) {
+		/* make sure selection uses the same matrix for camera as the one used while viewing */
+		if (is_selection_camera_stereo) {
+			float obmat[4][4];
+			bool is_left = v3d->multiview_eye == STEREO_LEFT_ID;
+
+			glPushMatrix();
+			glLoadMatrixf(rv3d->viewmat);
+			BKE_camera_multiview_model_matrix(&scene->r, ob, is_left ? STEREO_LEFT_NAME : STEREO_RIGHT_NAME, obmat);
+			glMultMatrixf(obmat);
+
+			drawcamera_frame(vec, GL_LINE_LOOP);
+			glPopMatrix();
+		}
+		else {
+			drawcamera_frame(vec, GL_LINE_LOOP);
+		}
+	}
 
 	if (is_view)
 		return;
@@ -5578,22 +5607,22 @@ static void draw_new_particle_system(Scene *scene, View3D *v3d, RegionView3D *rv
 						UI_ThemeColorShadeAlpha(TH_WIRE, 0, -100);
 					glEnable(GL_BLEND);
 					glBegin(GL_LINES);
-					for (i = 1; i < res[0]-1; ++i) {
-						float f = interpf(b[0], a[0], (float)i / (float)(res[0]-1));
+					for (i = 1; i < res[0] - 1; ++i) {
+						float f = interpf(b[0], a[0], (float)i / (float)(res[0] - 1));
 						glVertex3f(f, a[1], a[2]); glVertex3f(f, b[1], a[2]);
 						glVertex3f(f, b[1], a[2]); glVertex3f(f, b[1], b[2]);
 						glVertex3f(f, b[1], b[2]); glVertex3f(f, a[1], b[2]);
 						glVertex3f(f, a[1], b[2]); glVertex3f(f, a[1], a[2]);
 					}
-					for (i = 1; i < res[1]-1; ++i) {
-						float f = interpf(b[1], a[1], (float)i / (float)(res[1]-1));
+					for (i = 1; i < res[1] - 1; ++i) {
+						float f = interpf(b[1], a[1], (float)i / (float)(res[1] - 1));
 						glVertex3f(a[0], f, a[2]); glVertex3f(b[0], f, a[2]);
 						glVertex3f(b[0], f, a[2]); glVertex3f(b[0], f, b[2]);
 						glVertex3f(b[0], f, b[2]); glVertex3f(a[0], f, b[2]);
 						glVertex3f(a[0], f, b[2]); glVertex3f(a[0], f, a[2]);
 					}
-					for (i = 1; i < res[2]-1; ++i) {
-						float f = interpf(b[2], a[2], (float)i / (float)(res[2]-1));
+					for (i = 1; i < res[2] - 1; ++i) {
+						float f = interpf(b[2], a[2], (float)i / (float)(res[2] - 1));
 						glVertex3f(a[0], a[1], f); glVertex3f(b[0], a[1], f);
 						glVertex3f(b[0], a[1], f); glVertex3f(b[0], b[1], f);
 						glVertex3f(b[0], b[1], f); glVertex3f(a[0], b[1], f);

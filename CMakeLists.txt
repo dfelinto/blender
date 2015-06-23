@@ -53,7 +53,9 @@ if(NOT (${CMAKE_VERSION} VERSION_LESS 3.0))
 endif()
 
 if(NOT EXECUTABLE_OUTPUT_PATH)
-	set(FIRST_RUN "TRUE")
+	set(FIRST_RUN TRUE)
+else()
+	set(FIRST_RUN FALSE)
 endif()
 
 # this starts out unset
@@ -70,7 +72,6 @@ set_property(DIRECTORY APPEND PROPERTY COMPILE_DEFINITIONS_DEBUG           DEBUG
 set_property(DIRECTORY APPEND PROPERTY COMPILE_DEFINITIONS_RELEASE         NDEBUG)
 set_property(DIRECTORY APPEND PROPERTY COMPILE_DEFINITIONS_MINSIZEREL      NDEBUG)
 set_property(DIRECTORY APPEND PROPERTY COMPILE_DEFINITIONS_RELWITHDEBINFO  NDEBUG)
-
 
 #-----------------------------------------------------------------------------
 # Set policy
@@ -129,7 +130,7 @@ macro(option_defaults_init)
 		set(${_var} ON)
 		list(APPEND _init_vars "${_var}")
 	endforeach()
-	unset(_INC)
+	unset(_var)
 endmacro()
 
 # remove from namespace
@@ -450,6 +451,7 @@ mark_as_advanced(WITH_CPP11)
 
 # Dependency graph
 option(WITH_LEGACY_DEPSGRAPH "Build Blender with legacy dependency graph" ON)
+mark_as_advanced(WITH_LEGACY_DEPSGRAPH)
 
 # avoid using again
 option_defaults_clear()
@@ -654,17 +656,19 @@ endif()
 # auto enable openimageio for cycles
 if(WITH_CYCLES)
 	set(WITH_OPENIMAGEIO ON)
+
+	# auto enable llvm for cycles_osl
+	if(WITH_CYCLES_OSL)
+		set(WITH_LLVM ON CACHE BOOL "" FORCE)
+	endif()
+else()
+	set(WITH_CYCLES_OSL OFF)
 endif()
 
 # auto enable openimageio linking dependencies
 if(WITH_OPENIMAGEIO)
 	set(WITH_IMAGE_OPENEXR ON)
 	set(WITH_IMAGE_TIFF ON)
-endif()
-
-# auto enable llvm for cycles_osl
-if(WITH_CYCLES_OSL)
-	set(WITH_LLVM ON CACHE BOOL "" FORCE)
 endif()
 
 # don't store paths to libs for portable distribution
@@ -2758,25 +2762,29 @@ include(build_files/cmake/packaging.cmake)
 # Print Final Configuration
 
 if(FIRST_RUN)
-	set(_config_msg "\n* Blender Configuration *")
-	macro(info_cfg_option
-		_setting)
-		set(_msg "   * ${_setting}")
+
+	set(_config_msg "\nBlender Configuration\n=====================")
+
+	function(info_cfg_option
+		_setting
+		)
+
+		set(_msg "  - ${_setting}")
 		string(LENGTH "${_msg}" _len)
 		while("32" GREATER "${_len}")
 			set(_msg "${_msg} ")
 			 math(EXPR _len "${_len} + 1")
 		endwhile()
 
-		set(_config_msg "${_config_msg}\n${_msg}${${_setting}}")
-	endmacro()
+		set(_config_msg "${_config_msg}\n${_msg}${${_setting}}" PARENT_SCOPE)
+	endfunction()
 
-	macro(info_cfg_text
-		_text)
-		set(_config_msg "${_config_msg}\n\n  ${_text}")
+	function(info_cfg_text
+		_text
+		)
 
-
-	endmacro()
+		set(_config_msg "${_config_msg}\n\n  ${_text}" PARENT_SCOPE)
+	endfunction()
 
 	message(STATUS "C Compiler:   \"${CMAKE_C_COMPILER_ID}\"")
 	message(STATUS "C++ Compiler: \"${CMAKE_CXX_COMPILER_ID}\"")

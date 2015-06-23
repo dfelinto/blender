@@ -1612,8 +1612,8 @@ void init_userdef_do_versions(void)
 		U.tw_size = 25;          /* percentage of window size */
 		U.tw_handlesize = 16;    /* percentage of widget radius */
 	}
-	if (U.pad_rot_angle == 0)
-		U.pad_rot_angle = 15;
+	if (U.pad_rot_angle == 0.0f)
+		U.pad_rot_angle = 15.0f;
 	
 	/* graph editor - unselected F-Curve visibility */
 	if (U.fcu_inactive_alpha == 0) {
@@ -2620,7 +2620,13 @@ void init_userdef_do_versions(void)
 		}
 	}
 
-		
+	if (U.versionfile < 275 || (U.versionfile == 275 && U.subversionfile < 1)) {
+		bTheme *btheme;
+		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
+			copy_v4_v4_char(btheme->tclip.metadatatext, btheme->tseq.text_hi);
+		}
+	}
+
 	if (U.pixelsize == 0.0f)
 		U.pixelsize = 1.0f;
 	

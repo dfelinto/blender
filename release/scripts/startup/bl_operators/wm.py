@@ -1788,7 +1788,7 @@ class WM_OT_addon_disable(Operator):
             err_str = traceback.format_exc()
             print(err_str)
 
-        addon_utils.disable(self.module, handle_error=err_cb)
+        addon_utils.disable(self.module, default_set=True, handle_error=err_cb)
 
         if err_str:
             self.report({'ERROR'}, err_str)
@@ -2004,7 +2004,7 @@ class WM_OT_addon_install(Operator):
         # disable any addons we may have enabled previously and removed.
         # this is unlikely but do just in case. bug [#23978]
         for new_addon in addons_new:
-            addon_utils.disable(new_addon)
+            addon_utils.disable(new_addon, default_set=True)
 
         # possible the zip contains multiple addons, we could disallow this
         # but for now just use the first
@@ -2068,7 +2068,7 @@ class WM_OT_addon_remove(Operator):
             return {'CANCELLED'}
 
         # in case its enabled
-        addon_utils.disable(self.module)
+        addon_utils.disable(self.module, default_set=True)
 
         import shutil
         if isdir:
@@ -2108,15 +2108,9 @@ class WM_OT_addon_expand(Operator):
 
         module_name = self.module
 
-        # unlikely to fail, module should have already been imported
-        try:
-            # mod = __import__(module_name)
-            mod = addon_utils.addons_fake_modules.get(module_name)
-        except:
-            import traceback
-            traceback.print_exc()
-            return {'CANCELLED'}
+        mod = addon_utils.addons_fake_modules.get(module_name)
+        if mod is not None:
+            info = addon_utils.module_bl_info(mod)
+            info["show_expanded"] = not info["show_expanded"]
 
-        info = addon_utils.module_bl_info(mod)
-        info["show_expanded"] = not info["show_expanded"]
         return {'FINISHED'}

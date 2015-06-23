@@ -23,8 +23,6 @@
 #
 # ***** END GPL LICENSE BLOCK *****
 
-# XXX allowing blenkernel and RNA includes in blenlib is a hack,
-# but needed in a few places atm (bpath.c for instance)
 set(INC
 	.
 	# ../blenkernel  # dont add this back!
@@ -72,6 +70,7 @@ set(SRC
 	intern/hash_mm2a.c
 	intern/jitter.c
 	intern/lasso.c
+	intern/list_sort_impl.h
 	intern/listbase.c
 	intern/math_base.c
 	intern/math_base_inline.c

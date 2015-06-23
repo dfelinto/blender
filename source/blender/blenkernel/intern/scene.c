@@ -1730,15 +1730,16 @@ void BKE_scene_update_tagged(EvaluationContext *eval_ctx, Main *bmain, Scene *sc
 	 * in the future this should handle updates for all datablocks, not
 	 * only objects and scenes. - brecht */
 #ifdef WITH_LEGACY_DEPSGRAPH
-	if (use_new_eval) {
-		DEG_evaluate_on_refresh(eval_ctx, scene->depsgraph, scene);
-	}
-	else {
+	if (!use_new_eval) {
 		scene_update_tagged_recursive(eval_ctx, bmain, scene, scene);
 	}
-#else
-	DEG_evaluate_on_refresh(eval_ctx, scene->depsgraph, scene);
+	else
 #endif
+	{
+		DEG_evaluate_on_refresh(eval_ctx, scene->depsgraph, scene);
+		/* TODO(sergey): This is to beocme a node in new depsgraph. */
+		BKE_mask_update_scene(bmain, scene);
+	}
 
 	/* update sound system animation (TODO, move to depsgraph) */
 	BKE_sound_update_scene(bmain, scene);
@@ -2439,6 +2440,7 @@ void BKE_scene_multiview_view_prefix_get(Scene *scene, const char *name, char *r
 	/* begin of extension */
 	index_act = BLI_str_rpartition(name, delims, rext, &suf_act);
 	BLI_assert(index_act > 0);
+	UNUSED_VARS_NDEBUG(index_act);
 
 	for (srv = scene->r.views.first; srv; srv = srv->next) {
 		if (BKE_scene_multiview_is_render_view_active(&scene->r, srv)) {

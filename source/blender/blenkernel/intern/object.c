@@ -351,7 +351,7 @@ void BKE_object_free_caches(Object *object)
 		     psys = psys->next)
 		{
 			psys_free_path_cache(psys, psys->edit);
-			update_flag |= PSYS_RECALC;
+			update_flag |= PSYS_RECALC_REDO;
 		}
 	}
 
@@ -363,6 +363,7 @@ void BKE_object_free_caches(Object *object)
 				psmd->dm->needsFree = 1;
 				psmd->dm->release(psmd->dm);
 				psmd->dm = NULL;
+				psmd->flag |= eParticleSystemFlag_file_loaded;
 				update_flag |= OB_RECALC_DATA;
 			}
 		}
@@ -1608,7 +1609,7 @@ void BKE_object_make_local(Object *ob)
 
 	if (ob->id.lib == NULL) return;
 	
-	ob->proxy = ob->proxy_from = NULL;
+	ob->proxy = ob->proxy_from  = ob->proxy_group = NULL;
 	
 	if (ob->id.us == 1) {
 		id_clear_lib_data(bmain, &ob->id);

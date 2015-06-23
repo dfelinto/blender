@@ -154,6 +154,7 @@ static void stats_background(void *UNUSED(arg), RenderStats *rs)
 {
 	uintptr_t mem_in_use, mmap_in_use, peak_memory;
 	float megs_used_memory, mmap_used_memory, megs_peak_memory;
+	char info_time_str[32];
 
 	mem_in_use = MEM_get_memory_in_use();
 	mmap_in_use = MEM_get_mapped_memory_in_use();
@@ -171,8 +172,11 @@ static void stats_background(void *UNUSED(arg), RenderStats *rs)
 	if (rs->curblur)
 		fprintf(stdout, IFACE_("Blur %d "), rs->curblur);
 
+	BLI_timestr(PIL_check_seconds_timer() - rs->starttime, info_time_str, sizeof(info_time_str));
+	fprintf(stdout, IFACE_("| Time:%s | "), info_time_str);
+
 	if (rs->infostr) {
-		fprintf(stdout, "| %s", rs->infostr);
+		fprintf(stdout, "%s", rs->infostr);
 	}
 	else {
 		if (rs->tothalo)
@@ -181,6 +185,9 @@ static void stats_background(void *UNUSED(arg), RenderStats *rs)
 		else
 			fprintf(stdout, IFACE_("Sce: %s Ve:%d Fa:%d La:%d"), rs->scene_name, rs->totvert, rs->totface, rs->totlamp);
 	}
+
+	/* Flush stdout to be sure python callbacks are printing stuff after blender. */
+	fflush(stdout);
 
 	BLI_callback_exec(G.main, NULL, BLI_CB_EVT_RENDER_STATS);
 
@@ -1382,7 +1389,13 @@ static void threaded_tile_processor(Render *re)
 
 	BLI_thread_queue_free(donequeue);
 	BLI_thread_queue_free(workqueue);
-	
+
+	if (re->result->do_exr_tile) {
+		BLI_rw_mutex_lock(&re->resultmutex, THREAD_LOCK_WRITE);
+		render_result_save_empty_result_tiles(re);
+		BLI_rw_mutex_unlock(&re->resultmutex);
+	}
+
 	/* unset threadsafety */
 	g_break = 0;
 	BLI_rw_mutex_lock(&re->partsmutex, THREAD_LOCK_WRITE);
@@ -2192,7 +2205,7 @@ static void free_all_freestyle_renders(void)
 			/* detach the window manager from freestyle bmain (see comments
 			 * in add_freestyle() for more detail)
 			 */
-			re1->freestyle_bmain->wm.first = re1->freestyle_bmain->wm.last = NULL;
+			BLI_listbase_clear(&re1->freestyle_bmain->wm);
 
 			BKE_main_free(re1->freestyle_bmain);
 			re1->freestyle_bmain = NULL;
@@ -2487,6 +2500,8 @@ static void do_render_composite_fields_blur_3d(Render *re)
 				/* in case it was never initialized */
 				R.sdh = re->sdh;
 				R.stats_draw = re->stats_draw;
+				R.i.starttime = re->i.starttime;
+				R.i.cfra = re->i.cfra;
 				
 				if (update_newframe)
 					BKE_scene_update_for_newframe(re->eval_ctx, re->main, re->scene, re->lay);
@@ -3403,7 +3418,10 @@ static int do_write_image_or_movie(Render *re, Main *bmain, Scene *scene, bMovie
 	
 	BLI_timestr(re->i.lastframetime, name, sizeof(name));
 	printf(" Time: %s", name);
-	
+
+	/* Flush stdout to be sure python callbacks are printing stuff after blender. */
+	fflush(stdout);
+
 	BLI_callback_exec(G.main, NULL, BLI_CB_EVT_RENDER_STATS);
 
 	BLI_timestr(re->i.lastframetime - render_time, name, sizeof(name));

@@ -87,7 +87,6 @@ EnumPropertyItem navigation_mode_items[] = {
 #include "DNA_screen_types.h"
 
 #include "BKE_blender.h"
-#include "BKE_DerivedMesh.h"
 #include "BKE_depsgraph.h"
 #include "BKE_global.h"
 #include "BKE_main.h"
@@ -104,8 +103,6 @@ EnumPropertyItem navigation_mode_items[] = {
 #include "UI_interface.h"
 
 #include "CCL_api.h"
-
-#include "BKE_addon.h"
 
 #ifdef WITH_SDL_DYNLOAD
 #  include "sdlew.h"
@@ -3459,8 +3456,8 @@ static void rna_def_userdef_view(BlenderRNA *brna)
 	RNA_def_property_range(prop, 0, 1000);
 	RNA_def_property_ui_text(prop, "Smooth View", "Time to animate the view in milliseconds, zero to disable");
 
-	prop = RNA_def_property(srna, "rotation_angle", PROP_INT, PROP_NONE);
-	RNA_def_property_int_sdna(prop, NULL, "pad_rot_angle");
+	prop = RNA_def_property(srna, "rotation_angle", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_float_sdna(prop, NULL, "pad_rot_angle");
 	RNA_def_property_range(prop, 0, 90);
 	RNA_def_property_ui_text(prop, "Rotation Angle", "Rotation step for numerical pad keys (2 4 6 8)");
 

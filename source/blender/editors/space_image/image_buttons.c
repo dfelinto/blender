@@ -360,7 +360,7 @@ static void ui_imageuser_layer_menu(bContext *UNUSED(C), uiLayout *layout, void 
 
 	for (rl = rr->layers.last; rl; rl = rl->prev, nr--) {
 final:
-		uiDefButS(block, UI_BTYPE_BUT_MENU, B_NOP, IFACE_(rl->name), 0, 0,
+		uiDefButS(block, UI_BTYPE_BUT_MENU, B_NOP, rl->name, 0, 0,
 		          UI_UNIT_X * 5, UI_UNIT_X, &iuser->layer, (float) nr, 0.0, 0, -1, "");
 	}
 
@@ -684,7 +684,8 @@ static void uiblock_layer_pass_buttons(uiLayout *layout, Image *image, RenderRes
 
 		if (RE_layers_have_name(rr)) {
 			display_name = rl ? rl->name : (fake_name ? fake_name : "");
-			but = uiDefMenuBut(block, ui_imageuser_layer_menu, rnd_pt, display_name, 0, 0, wmenu2, UI_UNIT_Y, TIP_("Select Layer"));
+			but = uiDefMenuBut(block, ui_imageuser_layer_menu, rnd_pt, display_name,
+			                   0, 0, wmenu2, UI_UNIT_Y, TIP_("Select Layer"));
 			UI_but_func_set(but, image_multi_cb, rr, iuser);
 			UI_but_type_set_menu_from_pulldown(but);
 		}
@@ -694,7 +695,8 @@ static void uiblock_layer_pass_buttons(uiLayout *layout, Image *image, RenderRes
 		rpass = (rl ? RE_pass_find_by_type(rl, iuser->passtype, ((RenderView *)rr->views.first)->name) : NULL);
 
 		display_name = rpass ? rpass->internal_name : (fake_name ? fake_name : "");
-		but = uiDefMenuBut(block, ui_imageuser_pass_menu, rnd_pt, display_name, 0, 0, wmenu3, UI_UNIT_Y, TIP_("Select Pass"));
+		but = uiDefMenuBut(block, ui_imageuser_pass_menu, rnd_pt, IFACE_(display_name),
+		                   0, 0, wmenu3, UI_UNIT_Y, TIP_("Select Pass"));
 		UI_but_func_set(but, image_multi_cb, rr, iuser);
 		UI_but_type_set_menu_from_pulldown(but);
 
@@ -785,7 +787,7 @@ static void rna_update_cb(bContext *C, void *arg_cb, void *UNUSED(arg))
 	RNA_property_update(C, &cb->ptr, cb->prop);
 }
 
-void uiTemplateImage(uiLayout *layout, bContext *C, PointerRNA *ptr, const char *propname, PointerRNA *userptr, int compact)
+void uiTemplateImage(uiLayout *layout, bContext *C, PointerRNA *ptr, const char *propname, PointerRNA *userptr, int compact, int multiview)
 {
 	PropertyRNA *prop;
 	PointerRNA imaptr;
@@ -938,11 +940,13 @@ void uiTemplateImage(uiLayout *layout, bContext *C, PointerRNA *ptr, const char 
 						BKE_image_release_ibuf(ima, ibuf, NULL);
 					}
 
-					if ((scene->r.scemode & R_MULTIVIEW) != 0) {
-						uiItemR(layout, &imaptr, "use_multiview", 0, NULL, ICON_NONE);
+					if (multiview) {
+						if ((scene->r.scemode & R_MULTIVIEW) != 0) {
+							uiItemR(layout, &imaptr, "use_multiview", 0, NULL, ICON_NONE);
 
-						if (RNA_boolean_get(&imaptr, "use_multiview")) {
-							uiTemplateImageViews(layout, &imaptr);
+							if (RNA_boolean_get(&imaptr, "use_multiview")) {
+								uiTemplateImageViews(layout, &imaptr);
+							}
 						}
 					}
 

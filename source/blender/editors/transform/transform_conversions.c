@@ -629,10 +629,10 @@ static void add_pose_transdata(TransInfo *t, bPoseChannel *pchan, Object *ob, Tr
 	mul_m3_m3m3(td->axismtx, omat, pmat);
 	normalize_m3(td->axismtx);
 
-	if (t->mode == TFM_BONESIZE) {
+	if (ELEM(t->mode, TFM_BONESIZE, TFM_BONE_ENVELOPE_DIST)) {
 		bArmature *arm = t->poseobj->data;
 
-		if (arm->drawtype == ARM_ENVELOPE) {
+		if ((t->mode == TFM_BONE_ENVELOPE_DIST) || (arm->drawtype == ARM_ENVELOPE)) {
 			td->loc = NULL;
 			td->val = &bone->dist;
 			td->ival = bone->dist;
@@ -719,7 +719,7 @@ int count_set_pose_transflags(int *out_mode, short around, Object *ob)
 
 	/* make sure no bone can be transformed when a parent is transformed */
 	/* since pchans are depsgraph sorted, the parents are in beginning of list */
-	if (mode != TFM_BONESIZE) {
+	if (!ELEM(mode, TFM_BONESIZE, TFM_BONE_ENVELOPE_DIST)) {
 		for (pchan = ob->pose->chanbase.first; pchan; pchan = pchan->next) {
 			bone = pchan->bone;
 			if (bone->flag & BONE_TRANSFORM)
@@ -1126,7 +1126,7 @@ static void createTransArmatureVerts(TransInfo *t)
 		oldtot = t->total;
 
 		if (EBONE_VISIBLE(arm, ebo) && !(ebo->flag & BONE_EDITMODE_LOCKED)) {
-			if (t->mode == TFM_BONESIZE) {
+			if (ELEM(t->mode, TFM_BONESIZE, TFM_BONE_ENVELOPE_DIST)) {
 				if (ebo->flag & BONE_SELECTED)
 					t->total++;
 			}
@@ -1204,9 +1204,9 @@ static void createTransArmatureVerts(TransInfo *t)
 				}
 
 			}
-			else if (t->mode == TFM_BONESIZE) {
+			else if (ELEM(t->mode, TFM_BONESIZE, TFM_BONE_ENVELOPE_DIST)) {
 				if (ebo->flag & BONE_SELECTED) {
-					if (arm->drawtype == ARM_ENVELOPE) {
+					if ((t->mode == TFM_BONE_ENVELOPE_DIST) || (arm->drawtype == ARM_ENVELOPE)) {
 						td->loc = NULL;
 						td->val = &ebo->dist;
 						td->ival = ebo->dist;
@@ -2677,24 +2677,23 @@ void flushTransSeq(TransInfo *t)
 
 /* ********************* UV ****************** */
 
-static void UVsToTransData(SpaceImage *sima, TransData *td, TransData2D *td2d, float *uv, int selected)
+static void UVsToTransData(
+        const float aspect[2], TransData *td, TransData2D *td2d,
+        float *uv, const float *center, bool selected)
 {
-	float aspx, aspy;
-
-	ED_space_image_get_uv_aspect(sima, &aspx, &aspy);
-
 	/* uv coords are scaled by aspects. this is needed for rotations and
 	 * proportional editing to be consistent with the stretched uv coords
 	 * that are displayed. this also means that for display and numinput,
 	 * and when the uv coords are flushed, these are converted each time */
-	td2d->loc[0] = uv[0] * aspx;
-	td2d->loc[1] = uv[1] * aspy;
+	td2d->loc[0] = uv[0] * aspect[0];
+	td2d->loc[1] = uv[1] * aspect[1];
 	td2d->loc[2] = 0.0f;
 	td2d->loc2d = uv;
 
 	td->flag = 0;
 	td->loc = td2d->loc;
-	copy_v3_v3(td->center, td->loc);
+	copy_v2_v2(td->center, center ? center : td->loc);
+	td->center[2] = 0.0f;
 	copy_v3_v3(td->iloc, td->loc);
 
 	memset(td->axismtx, 0, sizeof(td->axismtx));
@@ -2721,36 +2720,44 @@ static void createTransUVs(bContext *C, TransInfo *t)
 	ToolSettings *ts = CTX_data_tool_settings(C);
 	TransData *td = NULL;
 	TransData2D *td2d = NULL;
-	MTexPoly *tf;
-	MLoopUV *luv;
 	BMEditMesh *em = BKE_editmesh_from_object(t->obedit);
 	BMFace *efa;
-	BMLoop *l;
 	BMIter iter, liter;
 	UvElementMap *elementmap = NULL;
 	BLI_bitmap *island_enabled = NULL;
+	struct { float co[2]; int co_num; } *island_center = NULL;
 	int count = 0, countsel = 0, count_rejected = 0;
+	float aspect[2];
 	const bool is_prop_edit = (t->flag & T_PROP_EDIT) != 0;
 	const bool is_prop_connected = (t->flag & T_PROP_CONNECTED) != 0;
-
+	const bool is_island_center = (t->around == V3D_LOCAL);
 	const int cd_loop_uv_offset = CustomData_get_offset(&em->bm->ldata, CD_MLOOPUV);
+	const int cd_poly_tex_offset = CustomData_get_offset(&em->bm->pdata, CD_MTEXPOLY);
 
-	if (!ED_space_image_show_uvedit(sima, t->obedit)) return;
+	if (!ED_space_image_show_uvedit(sima, t->obedit))
+		return;
 
 	/* count */
-	if (is_prop_connected) {
+	if (is_prop_connected || is_island_center) {
 		/* create element map with island information */
-		if (ts->uv_flag & UV_SYNC_SELECTION) {
-			elementmap = BM_uv_element_map_create(em->bm, false, true);
+		const bool use_facesel = (ts->uv_flag & UV_SYNC_SELECTION) == 0;
+		elementmap = BM_uv_element_map_create(em->bm, use_facesel, false, true);
+		if (elementmap == NULL) {
+			return;
 		}
-		else {
-			elementmap = BM_uv_element_map_create(em->bm, true, true);
+
+		if (is_prop_connected) {
+			island_enabled = BLI_BITMAP_NEW(elementmap->totalIslands, "TransIslandData(UV Editing)");
 		}
-		island_enabled = BLI_BITMAP_NEW(elementmap->totalIslands, "TransIslandData(UV Editing)");
+
+		if (is_island_center) {
+			island_center = MEM_callocN(sizeof(*island_center) * elementmap->totalIslands, __func__);
+		}
 	}
 
 	BM_ITER_MESH (efa, &iter, em->bm, BM_FACES_OF_MESH) {
-		tf = CustomData_bmesh_get(&em->bm->pdata, efa->head.data, CD_MTEXPOLY);
+		MTexPoly *tf = BM_ELEM_CD_GET_VOID_P(efa, cd_poly_tex_offset);
+		BMLoop *l;
 
 		if (!uvedit_face_visible_test(scene, ima, efa, tf)) {
 			BM_elem_flag_disable(efa, BM_ELEM_TAG);
@@ -2762,11 +2769,22 @@ static void createTransUVs(bContext *C, TransInfo *t)
 			if (uvedit_uv_select_test(scene, l, cd_loop_uv_offset)) {
 				countsel++;
 
-				if (is_prop_connected) {
+				if (is_prop_connected || island_center) {
 					UvElement *element = BM_uv_element_get(elementmap, efa, l);
-					BLI_BITMAP_ENABLE(island_enabled, element->island);
-				}
 
+					if (is_prop_connected) {
+						BLI_BITMAP_ENABLE(island_enabled, element->island);
+					}
+
+					if (is_island_center) {
+						if (element->flag == false) {
+							MLoopUV *luv = BM_ELEM_CD_GET_VOID_P(l, cd_loop_uv_offset);
+							add_v2_v2(island_center[element->island].co, luv->uv);
+							island_center[element->island].co_num++;
+							element->flag = true;
+						}
+					}
+				}
 			}
 
 			if (is_prop_edit) {
@@ -2777,10 +2795,18 @@ static void createTransUVs(bContext *C, TransInfo *t)
 
 	/* note: in prop mode we need at least 1 selected */
 	if (countsel == 0) {
-		if (is_prop_connected) {
-			MEM_freeN(island_enabled);
+		goto finally;
+	}
+
+	ED_space_image_get_uv_aspect(sima, &aspect[0], &aspect[1]);
+
+	if (is_island_center) {
+		int i;
+
+		for (i = 0; i < elementmap->totalIslands; i++) {
+			mul_v2_fl(island_center[i].co, 1.0f / island_center[i].co_num);
+			mul_v2_v2(island_center[i].co, aspect);
 		}
-		return;
 	}
 
 	t->total = (is_prop_edit) ? count : countsel;
@@ -2796,34 +2822,60 @@ static void createTransUVs(bContext *C, TransInfo *t)
 	td2d = t->data2d;
 
 	BM_ITER_MESH (efa, &iter, em->bm, BM_FACES_OF_MESH) {
+		BMLoop *l;
+
 		if (!BM_elem_flag_test(efa, BM_ELEM_TAG))
 			continue;
 
 		BM_ITER_ELEM (l, &liter, efa, BM_LOOPS_OF_FACE) {
-			if (!is_prop_edit && !uvedit_uv_select_test(scene, l, cd_loop_uv_offset))
+			const bool selected = uvedit_uv_select_test(scene, l, cd_loop_uv_offset);
+			MLoopUV *luv;
+			const float *center = NULL;
+
+			if (!is_prop_edit && !selected)
 				continue;
 
-			if (is_prop_connected) {
+			if (is_prop_connected || is_island_center) {
 				UvElement *element = BM_uv_element_get(elementmap, efa, l);
-				if (!BLI_BITMAP_TEST(island_enabled, element->island)) {
-					count_rejected++;
-					continue;
+
+				if (is_prop_connected) {
+					if (!BLI_BITMAP_TEST(island_enabled, element->island)) {
+						count_rejected++;
+						continue;
+					}
+				}
+
+				if (is_island_center) {
+					center = island_center[element->island].co;
 				}
 			}
 			
+			BM_elem_flag_enable(l, BM_ELEM_TAG);
 			luv = BM_ELEM_CD_GET_VOID_P(l, cd_loop_uv_offset);
-			UVsToTransData(sima, td++, td2d++, luv->uv, uvedit_uv_select_test(scene, l, cd_loop_uv_offset));
+			UVsToTransData(aspect, td++, td2d++, luv->uv, center, selected);
 		}
 	}
 
 	if (is_prop_connected) {
 		t->total -= count_rejected;
-		BM_uv_element_map_free(elementmap);
-		MEM_freeN(island_enabled);
 	}
 
 	if (sima->flag & SI_LIVE_UNWRAP)
 		ED_uvedit_live_unwrap_begin(t->scene, t->obedit);
+
+
+finally:
+	if (is_prop_connected || is_island_center) {
+		BM_uv_element_map_free(elementmap);
+
+		if (is_prop_connected) {
+			MEM_freeN(island_enabled);
+		}
+
+		if (island_center) {
+			MEM_freeN(island_center);
+		}
+	}
 }
 
 void flushTransUVs(TransInfo *t)
@@ -3188,7 +3240,7 @@ static void posttrans_gpd_clean(bGPdata *gpd)
 		bGPDframe *gpf, *gpfn;
 		bool is_double = false;
 
-		BLI_listbase_sort_r(&gpl->frames, &is_double, gpf_cmp_frame);
+		BLI_listbase_sort_r(&gpl->frames, gpf_cmp_frame, &is_double);
 
 		if (is_double) {
 			for (gpf = gpl->frames.first; gpf; gpf = gpfn) {
@@ -3215,7 +3267,7 @@ static void posttrans_mask_clean(Mask *mask)
 		MaskLayerShape *masklay_shape, *masklay_shape_next;
 		bool is_double = false;
 
-		BLI_listbase_sort_r(&masklay->splines_shapes, &is_double, masklay_shape_cmp_frame);
+		BLI_listbase_sort_r(&masklay->splines_shapes, masklay_shape_cmp_frame, &is_double);
 
 		if (is_double) {
 			for (masklay_shape = masklay->splines_shapes.first; masklay_shape; masklay_shape = masklay_shape_next) {

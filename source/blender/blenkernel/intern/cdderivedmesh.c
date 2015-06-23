@@ -392,12 +392,7 @@ static void cdDM_drawUVEdges(DerivedMesh *dm)
 static void cdDM_drawEdges(DerivedMesh *dm, bool drawLooseEdges, bool drawAllEdges)
 {
 	CDDerivedMesh *cddm = (CDDerivedMesh *) dm;
-	MEdge *medge = cddm->medge;
-	int i;
-	int prevstart = 0;
-	int prevdraw = 1;
-	bool draw = true;
-	
+	GPUDrawObject *gdo;
 	if (cddm->pbvh && cddm->pbvh_draw &&
 	    BKE_pbvh_type(cddm->pbvh) == PBVH_BMESH)
 	{
@@ -407,58 +402,36 @@ static void cdDM_drawEdges(DerivedMesh *dm, bool drawLooseEdges, bool drawAllEdg
 	}
 	
 	GPU_edge_setup(dm);
-	for (i = 0; i < dm->numEdgeData; i++, medge++) {
-		if ((drawAllEdges || (medge->flag & ME_EDGEDRAW)) &&
-		        (drawLooseEdges || !(medge->flag & ME_LOOSEEDGE)))
-		{
-			draw = true;
+	gdo = dm->drawObject;
+	if (gdo->edges && gdo->points) {
+		if (drawAllEdges && drawLooseEdges) {
+			GPU_buffer_draw_elements(gdo->edges, GL_LINES, 0, gdo->totedge * 2);
+		}
+		else if (drawAllEdges) {
+			GPU_buffer_draw_elements(gdo->edges, GL_LINES, 0, gdo->loose_edge_offset * 2);
 		}
 		else {
-			draw = false;
+			GPU_buffer_draw_elements(gdo->edges, GL_LINES, 0, gdo->tot_edge_drawn * 2);
+			GPU_buffer_draw_elements(gdo->edges, GL_LINES, gdo->loose_edge_offset * 2, dm->drawObject->tot_loose_edge_drawn * 2);
 		}
-		if (prevdraw != draw) {
-			if (prevdraw > 0 && (i - prevstart) > 0) {
-				GPU_buffer_draw_elements(dm->drawObject->edges, GL_LINES, prevstart * 2, (i - prevstart) * 2);
-			}
-			prevstart = i;
-		}
-		prevdraw = draw;
-	}
-	if (prevdraw > 0 && (i - prevstart) > 0) {
-		GPU_buffer_draw_elements(dm->drawObject->edges, GL_LINES, prevstart * 2, (i - prevstart) * 2);
 	}
 	GPU_buffer_unbind();
 }
 
 static void cdDM_drawLooseEdges(DerivedMesh *dm)
 {
-	CDDerivedMesh *cddm = (CDDerivedMesh *) dm;
-	MEdge *medge = cddm->medge;
-	int i;
-	
-	int prevstart = 0;
-	int prevdraw = 1;
-	int draw = 1;
-	
+	int start;
+	int count;
+
 	GPU_edge_setup(dm);
-	for (i = 0; i < dm->numEdgeData; i++, medge++) {
-		if (medge->flag & ME_LOOSEEDGE) {
-			draw = 1;
-		}
-		else {
-			draw = 0;
-		}
-		if (prevdraw != draw) {
-			if (prevdraw > 0 && (i - prevstart) > 0) {
-				GPU_buffer_draw_elements(dm->drawObject->edges, GL_LINES, prevstart * 2, (i - prevstart) * 2);
-			}
-			prevstart = i;
-		}
-		prevdraw = draw;
+
+	start = (dm->drawObject->loose_edge_offset * 2);
+	count = (dm->drawObject->totedge - dm->drawObject->loose_edge_offset) * 2;
+
+	if (count) {
+		GPU_buffer_draw_elements(dm->drawObject->edges, GL_LINES, start, count);
 	}
-	if (prevdraw > 0 && (i - prevstart) > 0) {
-		GPU_buffer_draw_elements(dm->drawObject->edges, GL_LINES, prevstart * 2, (i - prevstart) * 2);
-	}
+
 	GPU_buffer_unbind();
 }
 

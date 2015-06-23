@@ -1637,7 +1637,7 @@ static void ui_popup_block_remove(bContext *C, uiPopupBlockHandle *handle)
 }
 
 /**
- * Called for creatign new popups and refreshing existing ones.
+ * Called for creating new popups and refreshing existing ones.
  */
 uiBlock *ui_popup_block_refresh(
         bContext *C, uiPopupBlockHandle *handle,
@@ -1683,13 +1683,8 @@ uiBlock *ui_popup_block_refresh(
 	ar->regiondata = handle;
 
 	/* set UI_BLOCK_NUMSELECT before UI_block_end() so we get alphanumeric keys assigned */
-	if (but) {
-		if (but->type == UI_BTYPE_PULLDOWN) {
-			block->flag |= UI_BLOCK_NUMSELECT;
-		}
-	}
-	else {
-		block->flag |= UI_BLOCK_POPUP | UI_BLOCK_NUMSELECT;
+	if (but == NULL) {
+		block->flag |= UI_BLOCK_POPUP;
 	}
 
 	block->flag |= UI_BLOCK_LOOP;

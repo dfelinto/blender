@@ -502,7 +502,7 @@ static RenderPass *render_layer_add_pass(RenderResult *rr, RenderLayer *rl, int 
 	if (rl->exrhandle) {
 		int a;
 		for (a = 0; a < channels; a++)
-			IMB_exr_add_channel(rl->exrhandle, rl->name, name_from_passtype(passtype, a), viewname, 0, 0, NULL);
+			IMB_exr_add_channel(rl->exrhandle, rl->name, name_from_passtype(passtype, a), viewname, 0, 0, NULL, false);
 	}
 	else {
 		float *rect;
@@ -531,6 +531,10 @@ static const char *debug_pass_type_name_get(int debug_type)
 	switch (debug_type) {
 		case RENDER_PASS_DEBUG_BVH_TRAVERSAL_STEPS:
 			return "BVH Traversal Steps";
+		case RENDER_PASS_DEBUG_BVH_TRAVERSED_INSTANCES:
+			return "BVH Traversed Instances";
+		case RENDER_PASS_DEBUG_RAY_BOUNCES:
+			return "Ray Bounces";
 	}
 	return "Unknown";
 }
@@ -547,6 +551,7 @@ static RenderPass *render_layer_add_debug_pass(RenderResult *rr,
 	BLI_strncpy(rpass->name,
 	            debug_pass_type_name_get(debug_type),
 	            sizeof(rpass->name));
+	BLI_strncpy(rpass->internal_name, rpass->name, sizeof(rpass->internal_name));
 	return rpass;
 }
 #endif
@@ -702,7 +707,7 @@ RenderResult *render_result_new(Render *re, rcti *partrct, int crop, int savebuf
 #ifdef WITH_CYCLES_DEBUG
 			if (BKE_scene_use_new_shading_nodes(re->scene)) {
 				render_layer_add_debug_pass(rr, rl, 1, SCE_PASS_DEBUG,
-				        RENDER_PASS_DEBUG_BVH_TRAVERSAL_STEPS, view);
+				        re->r.debug_pass_type, view);
 			}
 #endif
 		}
@@ -1033,6 +1038,7 @@ bool RE_WriteRenderResult(ReportList *reports, RenderResult *rr, const char *fil
 	size_t width, height;
 
 	const bool is_mono = view && !multiview;
+	const bool use_half_float = (imf->depth == R_IMF_CHAN_DEPTH_16);
 
 	width = rr->rectx;
 	height = rr->recty;
@@ -1044,12 +1050,17 @@ bool RE_WriteRenderResult(ReportList *reports, RenderResult *rr, const char *fil
 			IMB_exr_add_view(exrhandle, rview->name);
 
 			if (rview->rectf) {
-				for (a = 0; a < 4; a++)
+				for (a = 0; a < 4; a++) {
 					IMB_exr_add_channel(exrhandle, "", RGBAZ[a],
-					                    rview->name, 4, 4 * width, rview->rectf + a);
-				if (rview->rectz)
+					                    rview->name, 4, 4 * width, rview->rectf + a,
+					                    use_half_float);
+				}
+				if (rview->rectz) {
+					/* Z pass is always stored as float. */
 					IMB_exr_add_channel(exrhandle, "", RGBAZ[4],
-					                    rview->name, 1, width, rview->rectz);
+					                    rview->name, 1, width, rview->rectz,
+					                    false);
+				}
 			}
 		}
 	}
@@ -1069,9 +1080,11 @@ bool RE_WriteRenderResult(ReportList *reports, RenderResult *rr, const char *fil
 			IMB_exr_add_view(exrhandle, rview->name);
 
 			if (rview->rectf) {
-				for (a = 0; a < 4; a++)
+				for (a = 0; a < 4; a++) {
 					IMB_exr_add_channel(exrhandle, "Composite", name_from_passtype(SCE_PASS_COMBINED, a),
-					                    chan_view, 4, 4 * width, rview->rectf + a);
+					                    chan_view, 4, 4 * width, rview->rectf + a,
+					                    use_half_float);
+				}
 			}
 		}
 
@@ -1094,14 +1107,15 @@ bool RE_WriteRenderResult(ReportList *reports, RenderResult *rr, const char *fil
 				}
 
 				for (a = 0; a < xstride; a++) {
-
 					if (rpass->passtype) {
 						IMB_exr_add_channel(exrhandle, rl->name, name_from_passtype(rpass->passtype, a), chan_view,
-						                    xstride, xstride * width, rpass->rect + a);
+						                    xstride, xstride * width, rpass->rect + a,
+						                    rpass->passtype == SCE_PASS_Z ? false : use_half_float);
 					}
 					else {
 						IMB_exr_add_channel(exrhandle, rl->name, make_pass_name(rpass, a), chan_view,
-						                    xstride, xstride * width, rpass->rect + a);
+						                    xstride, xstride * width, rpass->rect + a,
+						                    use_half_float);
 					}
 				}
 			}
@@ -1239,7 +1253,7 @@ static void save_render_result_tile(RenderResult *rr, RenderResult *rrpart, cons
 	BLI_unlock_thread(LOCK_IMAGE);
 }
 
-static void save_empty_result_tiles(Render *re)
+void render_result_save_empty_result_tiles(Render *re)
 {
 	RenderPart *pa;
 	RenderResult *rr;
@@ -1282,8 +1296,6 @@ void render_result_exr_file_end(Render *re)
 	RenderResult *rr;
 	RenderLayer *rl;
 
-	save_empty_result_tiles(re);
-	
 	for (rr = re->result; rr; rr = rr->next) {
 		for (rl = rr->layers.first; rl; rl = rl->next) {
 			IMB_exr_close(rl->exrhandle);

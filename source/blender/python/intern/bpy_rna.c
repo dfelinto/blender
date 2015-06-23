@@ -53,10 +53,6 @@
 #include "bpy_intern_string.h"
 
 #ifdef USE_PYRNA_INVALIDATE_WEAKREF
-#  include "MEM_guardedalloc.h"
-#endif
-
-#ifdef USE_PYRNA_INVALIDATE_WEAKREF
 #  include "BLI_ghash.h"
 #endif
 
@@ -5239,7 +5235,7 @@ static PyObject *pyrna_func_call(BPy_FunctionRNA *self, PyObject *args, PyObject
 		good_args_str = BLI_dynstr_get_cstring(good_args);
 
 		PyErr_Format(PyExc_TypeError,
-		             "%.200s.%.200s(): was called with invalid keyword arguments(s) (%s), expected (%s)",
+		             "%.200s.%.200s(): was called with invalid keyword argument(s) (%s), expected (%s)",
 		             RNA_struct_identifier(self_ptr->type), RNA_function_identifier(self_func),
 		             bad_args_str, good_args_str);
 

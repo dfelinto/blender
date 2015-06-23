@@ -85,6 +85,7 @@
 #include "RNA_enum_types.h"
 
 #include "ED_image.h"
+#include "ED_mask.h"
 #include "ED_paint.h"
 #include "ED_render.h"
 #include "ED_screen.h"
@@ -754,8 +755,15 @@ static int image_view_selected_exec(bContext *C, wmOperator *UNUSED(op))
 	height = height * aspy;
 
 	/* get bounds */
-	if (!ED_uvedit_minmax(scene, ima, obedit, min, max))
-		return OPERATOR_CANCELLED;
+	if (ED_space_image_show_uvedit(sima, obedit)) {
+		if (!ED_uvedit_minmax(scene, ima, obedit, min, max))
+			return OPERATOR_CANCELLED;
+	}
+	else if (ED_space_image_check_show_maskedit(scene, sima)) {
+		if (!ED_mask_selected_minmax(C, min, max)) {
+			return OPERATOR_CANCELLED;
+		}
+	}
 
 	/* adjust offset and zoom */
 	sima->xof = (int)(((min[0] + max[0]) * 0.5f - 0.5f) * width);
@@ -775,7 +783,7 @@ static int image_view_selected_exec(bContext *C, wmOperator *UNUSED(op))
 
 static int image_view_selected_poll(bContext *C)
 {
-	return (space_image_main_area_poll(C) && ED_operator_uvedit(C));
+	return (space_image_main_area_poll(C) && (ED_operator_uvedit(C) || ED_operator_mask(C)));
 }
 
 void IMAGE_OT_view_selected(wmOperatorType *ot)
@@ -1008,6 +1016,7 @@ static void image_sequence_get_frames(PointerRNA *ptr, ListBase *frames, char *p
 			}
 			else {
 				/* different file base name found, is ignored */
+				MEM_freeN(filename);
 				MEM_freeN(frame);
 				break;
 			}
@@ -1072,15 +1081,27 @@ static int image_open_exec(bContext *C, wmOperator *op)
 
 	RNA_string_get(op->ptr, "filepath", path);
 
-	if (!IMB_isanim(path) && RNA_struct_property_is_set(op->ptr, "files") &&
-	    RNA_struct_property_is_set(op->ptr, "directory"))
+	if (RNA_struct_property_is_set(op->ptr, "directory") &&
+	    RNA_struct_property_is_set(op->ptr, "files"))
 	{
-		ListBase frames;
+		/* only to pass to imbuf */
+		char path_full[FILE_MAX];
+		BLI_strncpy(path_full, path, sizeof(path_full));
+		BLI_path_abs(path_full, G.main->name);
 
-		BLI_listbase_clear(&frames);
-		image_sequence_get_frames(op->ptr, &frames, path, sizeof(path));
-		frame_seq_len = image_sequence_get_len(&frames, &frame_ofs);
-		BLI_freelistN(&frames);
+		if (!IMB_isanim(path_full)) {
+			bool was_relative = BLI_path_is_rel(path);
+			ListBase frames;
+
+			BLI_listbase_clear(&frames);
+			image_sequence_get_frames(op->ptr, &frames, path, sizeof(path));
+			frame_seq_len = image_sequence_get_len(&frames, &frame_ofs);
+			BLI_freelistN(&frames);
+
+			if (was_relative) {
+				BLI_path_rel(path, G.main->name);
+			}
+		}
 	}
 
 	errno = 0;

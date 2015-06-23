@@ -41,7 +41,7 @@
 #endif
 
 #ifdef WIN32
-#  if defined(_MSC_VER) && _MSC_VER >= 1800 && defined(_M_X64)
+#  if defined(_MSC_VER) && defined(_M_X64)
 #    include <math.h> /* needed for _set_FMA3_enable */
 #  endif
 #  include <windows.h>
@@ -297,6 +297,7 @@ static int print_help(int UNUSED(argc), const char **UNUSED(argv), void *data)
 
 	BLI_argsPrintArgDoc(ba, "--python");
 	BLI_argsPrintArgDoc(ba, "--python-text");
+	BLI_argsPrintArgDoc(ba, "--python-expr");
 	BLI_argsPrintArgDoc(ba, "--python-console");
 	BLI_argsPrintArgDoc(ba, "--addons");
 
@@ -1283,6 +1284,27 @@ static int run_python_text(int argc, const char **argv, void *data)
 #endif /* WITH_PYTHON */
 }
 
+static int run_python_expr(int argc, const char **argv, void *data)
+{
+#ifdef WITH_PYTHON
+	bContext *C = data;
+
+	/* workaround for scripts not getting a bpy.context.scene, causes internal errors elsewhere */
+	if (argc > 1) {
+		BPY_CTX_SETUP(BPY_string_exec_ex(C, argv[1], false));
+		return 1;
+	}
+	else {
+		printf("\nError: you must specify a Python expression after '%s'.\n", argv[0]);
+		return 0;
+	}
+#else
+	UNUSED_VARS(argc, argv, data);
+	printf("This blender was built without python support\n");
+	return 0;
+#endif /* WITH_PYTHON */
+}
+
 static int run_python_console(int UNUSED(argc), const char **argv, void *data)
 {
 #ifdef WITH_PYTHON
@@ -1303,11 +1325,18 @@ static int set_addons(int argc, const char **argv, void *data)
 	/* workaround for scripts not getting a bpy.context.scene, causes internal errors elsewhere */
 	if (argc > 1) {
 #ifdef WITH_PYTHON
-		const int slen = strlen(argv[1]) + 128;
+		const char script_str[] =
+		        "from addon_utils import check, enable\n"
+		        "for m in '%s'.split(','):\n"
+		        "    if check(m)[1] is False:\n"
+		        "        enable(m, persistent=True)";
+		const int slen = strlen(argv[1]) + (sizeof(script_str) - 2);
 		char *str = malloc(slen);
 		bContext *C = data;
-		BLI_snprintf(str, slen, "[__import__('addon_utils').enable(i, default_set=False) for i in '%s'.split(',')]", argv[1]);
-		BPY_CTX_SETUP(BPY_string_exec(C, str));
+		BLI_snprintf(str, slen, script_str, argv[1]);
+
+		BLI_assert(strlen(str) + 1 == slen);
+		BPY_CTX_SETUP(BPY_string_exec_ex(C, str, false));
 		free(str);
 #else
 		UNUSED_VARS(argv, data);
@@ -1376,6 +1405,14 @@ static int load_file(int UNUSED(argc), const char **argv, void *data)
 		}
 		else {
 			/* failed to load file, stop processing arguments */
+			if (G.background) {
+				/* Set is_break if running in the background mode so
+				 * blender will return non-zero exit code which then
+				 * could be used in automated script to control how
+				 * good or bad things are.
+				 */
+				G.is_break = true;
+			}
 			return -1;
 		}
 
@@ -1549,6 +1586,7 @@ static void setupArguments(bContext *C, bArgs *ba, SYS_SystemHandle *syshandle)
 	BLI_argsAdd(ba, 4, "-j", "--frame-jump", "<frames>\n\tSet number of frames to step forward after each rendered frame", set_skip_frame, C);
 	BLI_argsAdd(ba, 4, "-P", "--python", "<filename>\n\tRun the given Python script file", run_python_file, C);
 	BLI_argsAdd(ba, 4, NULL, "--python-text", "<name>\n\tRun the given Python script text block", run_python_text, C);
+	BLI_argsAdd(ba, 4, NULL, "--python-expr", "<expression>\n\tRun the given expression as a Python script", run_python_expr, C);
 	BLI_argsAdd(ba, 4, NULL, "--python-console", "\n\tRun blender with an interactive console", run_python_console, C);
 	BLI_argsAdd(ba, 4, NULL, "--addons", "\n\tComma separated list of addons (no spaces)", set_addons, C);
 
@@ -1607,7 +1645,7 @@ int main(
 
 #ifdef WIN32
 	/* FMA3 support in the 2013 CRT is broken on Vista and Windows 7 RTM (fixed in SP1). Just disable it. */
-#  if defined(_MSC_VER) && _MSC_VER >= 1800 && defined(_M_X64)
+#  if defined(_MSC_VER) && defined(_M_X64)
 	_set_FMA3_enable(0);
 #  endif
 

@@ -35,6 +35,8 @@
 #  pragma warning (disable:4786)
 #endif
 
+#include <stdio.h>
+
 #include "KX_Scene.h"
 #include "KX_PythonInit.h"
 #include "MT_assert.h"
@@ -43,7 +45,6 @@
 #include "KX_FontObject.h"
 #include "RAS_IPolygonMaterial.h"
 #include "ListValue.h"
-#include "KX_PythonCallBack.h"
 #include "SCA_LogicManager.h"
 #include "SCA_TimeEventManager.h"
 //#include "SCA_AlwaysEventManager.h"
@@ -95,12 +96,14 @@
 #include "KX_ObstacleSimulation.h"
 
 #ifdef WITH_BULLET
-#include "KX_SoftBodyDeformer.h"
+#  include "KX_SoftBodyDeformer.h"
+#endif
+
+#ifdef WITH_PYTHON
+#  include "KX_PythonCallBack.h"
 #endif
 
 #include "KX_Light.h"
-
-#include <stdio.h>
 
 #include "BLI_task.h"
 
@@ -1077,6 +1080,16 @@ int KX_Scene::NewRemoveObject(class CValue* gameobj)
 		group->RemoveInstanceObject(newobj);
 	
 	newobj->RemoveMeshes();
+
+	switch (newobj->GetGameObjectType()) {
+		case SCA_IObject::OBJ_CAMERA:
+			m_cameras.remove((KX_Camera *)newobj);
+			break;
+		case SCA_IObject::OBJ_TEXT:
+			m_fonts.remove((KX_FontObject *)newobj);
+			break;
+	}
+
 	ret = 1;
 	if (newobj->GetGameObjectType()==SCA_IObject::OBJ_LIGHT && m_lightlist->RemoveValue(newobj))
 		ret = newobj->Release();
@@ -1092,19 +1105,16 @@ int KX_Scene::NewRemoveObject(class CValue* gameobj)
 		ret = newobj->Release();
 	if (m_animatedlist->RemoveValue(newobj))
 		ret = newobj->Release();
-		
+
+	/* Warning 'newobj' maye be freed now, only compare, don't access */
+
+
 	if (newobj == m_active_camera)
 	{
 		//no AddRef done on m_active_camera so no Release
 		//m_active_camera->Release();
 		m_active_camera = NULL;
 	}
-
-	// in case this is a camera
-	m_cameras.remove((KX_Camera*)newobj);
-
-	// in case this is a font
-	m_fonts.remove((KX_FontObject*)newobj);
 
 	/* currently does nothing, keep in case we need to Unregister something */
 #if 0

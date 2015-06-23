@@ -119,7 +119,9 @@ CCL_NAMESPACE_BEGIN
 #  define __CAMERA_MOTION__
 #  define __OBJECT_MOTION__
 #  define __HAIR__
-//#define __TRANSPARENT_SHADOWS__
+#  ifdef __KERNEL_EXPERIMENTAL__
+#    define __TRANSPARENT_SHADOWS__
+#  endif
 #endif
 
 #ifdef __KERNEL_OPENCL_INTEL_CPU__
@@ -337,6 +339,8 @@ typedef enum PassType {
 	PASS_LIGHT = (1 << 25), /* no real pass, used to force use_light_pass */
 #ifdef __KERNEL_DEBUG__
 	PASS_BVH_TRAVERSAL_STEPS = (1 << 26),
+	PASS_BVH_TRAVERSED_INSTANCES = (1 << 27),
+	PASS_RAY_BOUNCES = (1 << 28),
 #endif
 } PassType;
 
@@ -498,6 +502,7 @@ typedef ccl_addr_space struct Intersection {
 
 #ifdef __KERNEL_DEBUG__
 	int num_traversal_steps;
+	int num_traversed_instances;
 #endif
 } Intersection;
 
@@ -848,7 +853,9 @@ typedef struct KernelFilm {
 
 #ifdef __KERNEL_DEBUG__
 	int pass_bvh_traversal_steps;
-	int pass_pad3, pass_pad4, pass_pad5;
+	int pass_bvh_traversed_instances;
+	int pass_ray_bounces;
+	int pass_pad3;
 #endif
 } KernelFilm;
 
@@ -987,6 +994,8 @@ typedef ccl_addr_space struct DebugData {
 	// Total number of BVH node traversal steps and primitives intersections
 	// for the camera rays.
 	int num_bvh_traversal_steps;
+	int num_bvh_traversed_instances;
+	int num_ray_bounces;
 } DebugData;
 #endif
 

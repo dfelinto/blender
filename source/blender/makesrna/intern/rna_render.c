@@ -77,6 +77,13 @@ EnumPropertyItem render_pass_type_items[] = {
 	{0, NULL, 0, NULL, NULL}
 };
 
+EnumPropertyItem render_pass_debug_type_items[] = {
+	{RENDER_PASS_DEBUG_BVH_TRAVERSAL_STEPS, "BVH_TRAVERSAL_STEPS", 0, "BVH Traversal Steps", ""},
+	{RENDER_PASS_DEBUG_BVH_TRAVERSED_INSTANCES, "BVH_TRAVERSED_INSTANCES", 0, "BVH Traversed Instances", ""},
+	{RENDER_PASS_DEBUG_RAY_BOUNCES, "RAY_BOUNCES", 0, "Ray Steps", ""},
+	{0, NULL, 0, NULL, NULL}
+};
+
 #ifdef RNA_RUNTIME
 
 #include "MEM_guardedalloc.h"
@@ -770,11 +777,6 @@ static void rna_def_render_pass(BlenderRNA *brna)
 {
 	StructRNA *srna;
 	PropertyRNA *prop;
-
-	static EnumPropertyItem render_pass_debug_type_items[] = {
-		{RENDER_PASS_DEBUG_BVH_TRAVERSAL_STEPS, "BVH_TRAVERSAL_STEPS", 0, "BVH Traversal Steps", ""},
-		{0, NULL, 0, NULL, NULL}
-	};
 
 	srna = RNA_def_struct(brna, "RenderPass", NULL);
 	RNA_def_struct_ui_text(srna, "Render Pass", "");

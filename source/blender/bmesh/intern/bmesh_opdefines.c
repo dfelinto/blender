@@ -160,6 +160,28 @@ static BMOpDefine bmo_recalc_face_normals_def = {
 };
 
 /*
+ * Planar Faces.
+ *
+ * Iteratively flatten faces.
+ */
+static BMOpDefine bmo_planar_faces_def = {
+	"planar_faces",
+	/* slots_in */
+	{{"faces", BMO_OP_SLOT_ELEMENT_BUF, {BM_FACE}},    /* input geometry. */
+	 {"iterations", BMO_OP_SLOT_INT},
+	 {"factor", BMO_OP_SLOT_FLT},           /* planar factor */
+	 {{'\0'}},
+	},
+	/* slots_out */
+	{{"geom.out", BMO_OP_SLOT_ELEMENT_BUF, {BM_VERT | BM_EDGE | BM_FACE}}, /* output slot, computed boundary geometry. */
+	 {{'\0'}},
+	},
+	bmo_planar_faces_exec,
+	(BMO_OPTYPE_FLAG_SELECT_FLUSH |
+	 BMO_OPTYPE_FLAG_SELECT_VALIDATE),
+};
+
+/*
  * Region Extend.
  *
  * used to implement the select more/less tools.
@@ -1844,6 +1866,27 @@ static BMOpDefine bmo_inset_region_def = {
 };
 
 /*
+ * Edgeloop Offset.
+ *
+ * Creates edge loops based on simple edge-outset method.
+ */
+static BMOpDefine bmo_offset_edgeloops_def = {
+	"offset_edgeloops",
+	/* slots_in */
+	{{"edges", BMO_OP_SLOT_ELEMENT_BUF, {BM_EDGE}},    /* input faces */
+	 {"use_cap_endpoint", BMO_OP_SLOT_BOOL},
+	 {{'\0'}},
+	},
+	/* slots_out */
+	{{"edges.out", BMO_OP_SLOT_ELEMENT_BUF, {BM_EDGE}}, /* output faces */
+	 {{'\0'}},
+	},
+	bmo_offset_edgeloops_exec,
+	(BMO_OPTYPE_FLAG_NORMALS_CALC |
+	 BMO_OPTYPE_FLAG_SELECT_FLUSH),
+};
+
+/*
  * Wire Frame.
  *
  * Makes a wire-frame copy of faces.
@@ -1999,6 +2042,7 @@ const BMOpDefine *bmo_opdefines[] = {
 	&bmo_duplicate_def,
 	&bmo_holes_fill_def,
 	&bmo_face_attribute_fill_def,
+	&bmo_offset_edgeloops_def,
 	&bmo_edgeloop_fill_def,
 	&bmo_edgenet_fill_def,
 	&bmo_edgenet_prepare_def,
@@ -2018,6 +2062,7 @@ const BMOpDefine *bmo_opdefines[] = {
 	&bmo_pointmerge_facedata_def,
 	&bmo_poke_def,
 	&bmo_recalc_face_normals_def,
+	&bmo_planar_faces_def,
 	&bmo_region_extend_def,
 	&bmo_remove_doubles_def,
 	&bmo_reverse_colors_def,

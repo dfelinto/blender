@@ -901,7 +901,7 @@ void uiTemplateLayers(uiLayout *layout, struct PointerRNA *ptr, const char *prop
                       PointerRNA *used_ptr, const char *used_propname, int active_layer);
 void uiTemplateGameStates(uiLayout *layout, struct PointerRNA *ptr, const char *propname,
                       PointerRNA *used_ptr, const char *used_propname, int active_state);
-void uiTemplateImage(uiLayout *layout, struct bContext *C, struct PointerRNA *ptr, const char *propname, struct PointerRNA *userptr, int compact);
+void uiTemplateImage(uiLayout *layout, struct bContext *C, struct PointerRNA *ptr, const char *propname, struct PointerRNA *userptr, int compact, int multiview);
 void uiTemplateImageSettings(uiLayout *layout, struct PointerRNA *imfptr, int color_management);
 void uiTemplateImageStereo3d(uiLayout *layout, struct PointerRNA *stereo3d_format_ptr);
 void uiTemplateImageViews(uiLayout *layout, struct PointerRNA *imaptr);
@@ -991,7 +991,7 @@ void UI_context_active_but_prop_get(const struct bContext *C, struct PointerRNA 
 void UI_context_active_but_prop_handle(struct bContext *C);
 struct wmOperator *UI_context_active_operator_get(const struct bContext *C);
 void UI_context_update_anim_flag(const struct bContext *C);
-void UI_context_active_but_prop_get_filebrowser(const struct bContext *C, struct PointerRNA *ptr, struct PropertyRNA **prop);
+void UI_context_active_but_prop_get_filebrowser(const struct bContext *C, struct PointerRNA *r_ptr, struct PropertyRNA **r_prop, bool *r_is_undo);
 void UI_context_active_but_prop_get_templateID(struct bContext *C, struct PointerRNA *ptr, struct PropertyRNA **prop);
 
 /* Styled text draw */
