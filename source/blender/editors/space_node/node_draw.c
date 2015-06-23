@@ -123,7 +123,14 @@ void ED_node_tag_update_id(ID *id)
 	bNodeTree *ntree = node_tree_from_ID(id);
 	if (id == NULL || ntree == NULL)
 		return;
-	
+
+	/* TODO(sergey): With the new dependency graph it
+	 * should be just enough to only tag ntree itself,
+	 * all the users of this tree will have update
+	 * flushed from the tree,
+	 */
+	DAG_id_tag_update(&ntree->id, 0);
+
 	if (ntree->type == NTREE_SHADER) {
 		DAG_id_tag_update(id, 0);
 		
@@ -163,14 +170,14 @@ void ED_node_tag_update_nodetree(Main *bmain, bNodeTree *ntree)
 		ntreeTexCheckCyclics(ntree);
 }
 
-static int compare_nodes(bNode *a, bNode *b)
+static bool compare_nodes(const bNode *a, const bNode *b)
 {
 	bNode *parent;
 	/* These tell if either the node or any of the parent nodes is selected.
 	 * A selected parent means an unselected node is also in foreground!
 	 */
-	int a_select = (a->flag & NODE_SELECT), b_select = (b->flag & NODE_SELECT);
-	int a_active = (a->flag & NODE_ACTIVE), b_active = (b->flag & NODE_ACTIVE);
+	bool a_select = (a->flag & NODE_SELECT) != 0, b_select = (b->flag & NODE_SELECT) != 0;
+	bool a_active = (a->flag & NODE_ACTIVE) != 0, b_active = (b->flag & NODE_ACTIVE) != 0;
 	
 	/* if one is an ancestor of the other */
 	/* XXX there might be a better sorting algorithm for stable topological sort, this is O(n^2) worst case */

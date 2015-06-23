@@ -29,6 +29,7 @@
 #include "BLI_ghash.h"
 #include "BLI_heap.h"
 #include "BLI_math.h"
+#include "BLI_memarena.h"
 
 #include "BKE_ccg.h"
 #include "BKE_DerivedMesh.h"
@@ -40,6 +41,27 @@
 #include "pbvh_intern.h"
 
 #include <assert.h>
+
+/* Avoid skinny faces */
+#define USE_EDGEQUEUE_EVEN_SUBDIV
+#ifdef USE_EDGEQUEUE_EVEN_SUBDIV
+#  include "BKE_global.h"
+#endif
+
+/* Support for only operating on front-faces */
+#define USE_EDGEQUEUE_FRONTFACE
+
+/* don't add edges into the queue multiple times */
+#define USE_EDGEQUEUE_TAG
+/**
+ * Ensure we don't have dirty tags for the edge queue, and that they are left cleared.
+ * (slow, even for debug mode, so leave disabled for now).
+ */
+#if defined(USE_EDGEQUEUE_TAG) && 0
+#  if !defined(NDEBUG)
+#    define USE_EDGEQUEUE_TAG_VERIFY
+#  endif
+#endif
 
 // #define USE_VERIFY
 
@@ -107,7 +129,7 @@ static void pbvh_bmesh_node_finalize(PBVH *bvh, int node_index, const int cd_ver
 }
 
 /* Recursively split the node if it exceeds the leaf_limit */
-static void pbvh_bmesh_node_split(PBVH *bvh, GHash *prim_bbc, int node_index)
+static void pbvh_bmesh_node_split(PBVH *bvh, const BBC *bbc_array, int node_index)
 {
 	GSet *empty, *other;
 	GSetIterator gs_iter;
@@ -129,7 +151,7 @@ static void pbvh_bmesh_node_split(PBVH *bvh, GHash *prim_bbc, int node_index)
 	BB_reset(&cb);
 	GSET_ITER (gs_iter, n->bm_faces) {
 		const BMFace *f = BLI_gsetIterator_getKey(&gs_iter);
-		const BBC *bbc = BLI_ghash_lookup(prim_bbc, f);
+		const BBC *bbc = &bbc_array[BM_elem_index_get(f)];
 
 		BB_expand(&cb, bbc->bcentroid);
 	}
@@ -157,7 +179,7 @@ static void pbvh_bmesh_node_split(PBVH *bvh, GHash *prim_bbc, int node_index)
 	/* Partition the parent node's faces between the two children */
 	GSET_ITER (gs_iter, n->bm_faces) {
 		BMFace *f = BLI_gsetIterator_getKey(&gs_iter);
-		const BBC *bbc = BLI_ghash_lookup(prim_bbc, f);
+		const BBC *bbc = &bbc_array[BM_elem_index_get(f)];
 
 		if (bbc->bcentroid[axis] < mid)
 			BLI_gset_insert(c1->bm_faces, f);
@@ -221,8 +243,8 @@ static void pbvh_bmesh_node_split(PBVH *bvh, GHash *prim_bbc, int node_index)
 	
 	/* Recurse */
 	c1 = c2 = NULL;
-	pbvh_bmesh_node_split(bvh, prim_bbc, children);
-	pbvh_bmesh_node_split(bvh, prim_bbc, children + 1);
+	pbvh_bmesh_node_split(bvh, bbc_array, children);
+	pbvh_bmesh_node_split(bvh, bbc_array, children + 1);
 
 	/* Array maybe reallocated, update current node pointer */
 	n = &bvh->nodes[node_index];
@@ -237,7 +259,6 @@ static void pbvh_bmesh_node_split(PBVH *bvh, GHash *prim_bbc, int node_index)
 /* Recursively split the node if it exceeds the leaf_limit */
 static bool pbvh_bmesh_node_limit_ensure(PBVH *bvh, int node_index)
 {
-	GHash *prim_bbc;
 	GSet *bm_faces;
 	int bm_faces_size;
 	GSetIterator gs_iter;
@@ -252,8 +273,7 @@ static bool pbvh_bmesh_node_limit_ensure(PBVH *bvh, int node_index)
 	}
 
 	/* For each BMFace, store the AABB and AABB centroid */
-	prim_bbc = BLI_ghash_ptr_new_ex("prim_bbc", bm_faces_size);
-	bbc_array = MEM_callocN(sizeof(BBC) * bm_faces_size, "BBC");
+	bbc_array = MEM_mallocN(sizeof(BBC) * bm_faces_size, "BBC");
 
 	GSET_ITER_INDEX (gs_iter, bm_faces, i) {
 		BMFace *f = BLI_gsetIterator_getKey(&gs_iter);
@@ -268,12 +288,14 @@ static bool pbvh_bmesh_node_limit_ensure(PBVH *bvh, int node_index)
 		} while ((l_iter = l_iter->next) != l_first);
 		BBC_update_centroid(bbc);
 
-		BLI_ghash_insert(prim_bbc, f, bbc);
+		/* so we can do direct lookups on 'bbc_array' */
+		BM_elem_index_set(f, i);  /* set_dirty! */
 	}
+	/* likely this is already dirty */
+	bvh->bm->elem_index_dirty |= BM_FACE;
 
-	pbvh_bmesh_node_split(bvh, prim_bbc, node_index);
+	pbvh_bmesh_node_split(bvh, bbc_array, node_index);
 
-	BLI_ghash_free(prim_bbc, NULL, NULL);
 	MEM_freeN(bbc_array);
 
 	return true;
@@ -321,14 +343,20 @@ static PBVHNode *pbvh_bmesh_node_lookup(PBVH *bvh, void *key)
 
 static BMVert *pbvh_bmesh_vert_create(
         PBVH *bvh, int node_index,
-        const float co[3],
-        const BMVert *example,
+        const float co[3], const float no[3],
         const int cd_vert_mask_offset)
 {
-	BMVert *v = BM_vert_create(bvh->bm, co, example, BM_CREATE_NOP);
 	PBVHNode *node = &bvh->nodes[node_index];
+	BMVert *v;
 
 	BLI_assert((bvh->totnode == 1 || node_index) && node_index <= bvh->totnode);
+
+	/* avoid initializing customdata because its quite involved */
+	v = BM_vert_create(bvh->bm, co, NULL, BM_CREATE_SKIP_CD);
+	CustomData_bmesh_set_default(&bvh->bm->vdata, &v->head.data);
+
+	/* This value is logged below */
+	copy_v3_v3(v->no, no);
 
 	BLI_gset_insert(node->bm_unique_verts, v);
 	BM_ELEM_CD_SET_INT(v, bvh->cd_vert_node_offset, node_index);
@@ -352,7 +380,7 @@ static BMFace *pbvh_bmesh_face_create(
 	/* ensure we never add existing face */
 	BLI_assert(BM_face_exists(v_tri, 3, NULL) == false);
 
-	f = BM_face_create(bvh->bm, v_tri, e_tri, 3, f_example, BM_CREATE_NOP);
+	f = BM_face_create(bvh->bm, v_tri, e_tri, 3, f_example, BM_CREATE_NO_DOUBLE);
 	f->head.hflag = f_example->head.hflag;
 
 	BLI_gset_insert(node->bm_faces, f);
@@ -369,6 +397,7 @@ static BMFace *pbvh_bmesh_face_create(
 }
 
 /* Return the number of faces in 'node' that use vertex 'v' */
+#if 0
 static int pbvh_bmesh_node_vert_use_count(PBVH *bvh, PBVHNode *node, BMVert *v)
 {
 	BMIter bm_iter;
@@ -376,12 +405,33 @@ static int pbvh_bmesh_node_vert_use_count(PBVH *bvh, PBVHNode *node, BMVert *v)
 	int count = 0;
 
 	BM_ITER_ELEM (f, &bm_iter, v, BM_FACES_OF_VERT) {
-		PBVHNode *f_node;
-
-		f_node = pbvh_bmesh_node_lookup(bvh, f);
-
-		if (f_node == node)
+		PBVHNode *f_node = pbvh_bmesh_node_lookup(bvh, f);
+		if (f_node == node) {
 			count++;
+		}
+	}
+
+	return count;
+}
+#endif
+
+#define pbvh_bmesh_node_vert_use_count_is_equal(bvh, node, v, n) \
+	(pbvh_bmesh_node_vert_use_count_ex(bvh, node, v, (n) + 1) == n)
+
+static int pbvh_bmesh_node_vert_use_count_ex(PBVH *bvh, PBVHNode *node, BMVert *v, const int count_max)
+{
+	BMIter bm_iter;
+	BMFace *f;
+	int count = 0;
+
+	BM_ITER_ELEM (f, &bm_iter, v, BM_FACES_OF_VERT) {
+		PBVHNode *f_node = pbvh_bmesh_node_lookup(bvh, f);
+		if (f_node == node) {
+			count++;
+			if (count == count_max) {
+				break;
+			}
+		}
 	}
 
 	return count;
@@ -484,13 +534,13 @@ static void pbvh_bmesh_face_remove(PBVH *bvh, BMFace *f)
 	l_iter = l_first = BM_FACE_FIRST_LOOP(f);
 	do {
 		v = l_iter->v;
-		if (pbvh_bmesh_node_vert_use_count(bvh, f_node, v) == 1) {
+		if (pbvh_bmesh_node_vert_use_count_is_equal(bvh, f_node, v, 1)) {
 			if (BLI_gset_haskey(f_node->bm_unique_verts, v)) {
 				/* Find a different node that uses 'v' */
 				PBVHNode *new_node;
 
 				new_node = pbvh_bmesh_vert_other_node_find(bvh, v);
-				BLI_assert(new_node || BM_vert_face_count(v) == 1);
+				BLI_assert(new_node || BM_vert_face_count_is_equal(v, 1));
 
 				if (new_node) {
 					pbvh_bmesh_vert_ownership_transfer(bvh, new_node, v);
@@ -548,6 +598,15 @@ typedef struct {
 	const float *center;
 	float radius_squared;
 	float limit_len_squared;
+#ifdef USE_EDGEQUEUE_EVEN_SUBDIV
+	float limit_len;
+#endif
+
+#ifdef USE_EDGEQUEUE_FRONTFACE
+	const float *view_normal;
+	unsigned int use_view_normal : 1;
+#endif
+
 } EdgeQueue;
 
 typedef struct {
@@ -558,6 +617,44 @@ typedef struct {
 	int cd_vert_node_offset;
 	int cd_face_node_offset;
 } EdgeQueueContext;
+
+/* only tag'd edges are in the queue */
+#ifdef USE_EDGEQUEUE_TAG
+#  define EDGE_QUEUE_TEST(e)   (BM_elem_flag_test((CHECK_TYPE_INLINE(e, BMEdge *),    e), BM_ELEM_TAG))
+#  define EDGE_QUEUE_ENABLE(e)  BM_elem_flag_enable((CHECK_TYPE_INLINE(e, BMEdge *),  e), BM_ELEM_TAG)
+#  define EDGE_QUEUE_DISABLE(e) BM_elem_flag_disable((CHECK_TYPE_INLINE(e, BMEdge *), e), BM_ELEM_TAG)
+#endif
+
+#ifdef USE_EDGEQUEUE_TAG_VERIFY
+/* simply check no edges are tagged
+ * (it's a requirement that edges enter and leave a clean tag state) */
+static void pbvh_bmesh_edge_tag_verify(PBVH *bvh)
+{
+	int n;
+
+	for (n = 0; n < bvh->totnode; n++) {
+		PBVHNode *node = &bvh->nodes[n];
+		GSetIterator gs_iter;
+		if (node->bm_faces) {
+			GSET_ITER (gs_iter, node->bm_faces) {
+				BMFace *f = BLI_gsetIterator_getKey(&gs_iter);
+				BMEdge *e_tri[3];
+				BMLoop *l_iter;
+
+				BLI_assert(f->len == 3);
+				l_iter = BM_FACE_FIRST_LOOP(f);
+				e_tri[0] = l_iter->e; l_iter = l_iter->next;
+				e_tri[1] = l_iter->e; l_iter = l_iter->next;
+				e_tri[2] = l_iter->e;
+
+				BLI_assert((EDGE_QUEUE_TEST(e_tri[0]) == false) &&
+				           (EDGE_QUEUE_TEST(e_tri[1]) == false) &&
+				           (EDGE_QUEUE_TEST(e_tri[2]) == false));
+			}
+		}
+	}
+}
+#endif
 
 static bool edge_queue_tri_in_sphere(const EdgeQueue *q, BMFace *f)
 {
@@ -580,8 +677,9 @@ static bool check_mask(EdgeQueueContext *eq_ctx, BMVert *v)
 	return (BM_ELEM_CD_GET_FLOAT(v, eq_ctx->cd_vert_mask_offset) < 1.0f);
 }
 
-static void edge_queue_insert(EdgeQueueContext *eq_ctx, BMEdge *e,
-                              float priority)
+static void edge_queue_insert(
+        EdgeQueueContext *eq_ctx, BMEdge *e,
+        float priority)
 {
 	BMVert **pair;
 
@@ -600,28 +698,120 @@ static void edge_queue_insert(EdgeQueueContext *eq_ctx, BMEdge *e,
 		pair[0] = e->v1;
 		pair[1] = e->v2;
 		BLI_heap_insert(eq_ctx->q->heap, priority, pair);
+#ifdef USE_EDGEQUEUE_TAG
+		BLI_assert(EDGE_QUEUE_TEST(e) == false);
+		EDGE_QUEUE_ENABLE(e);
+#endif
 	}
 }
 
-static void long_edge_queue_edge_add(EdgeQueueContext *eq_ctx,
-                                     BMEdge *e)
+static void long_edge_queue_edge_add(
+        EdgeQueueContext *eq_ctx,
+        BMEdge *e)
 {
-	const float len_sq = BM_edge_calc_length_squared(e);
-	if (len_sq > eq_ctx->q->limit_len_squared)
-		edge_queue_insert(eq_ctx, e, -len_sq);
+#ifdef USE_EDGEQUEUE_TAG
+	if (EDGE_QUEUE_TEST(e) == false)
+#endif
+	{
+		const float len_sq = BM_edge_calc_length_squared(e);
+		if (len_sq > eq_ctx->q->limit_len_squared) {
+			edge_queue_insert(eq_ctx, e, -len_sq);
+		}
+	}
 }
 
-static void short_edge_queue_edge_add(EdgeQueueContext *eq_ctx,
-                                      BMEdge *e)
+#ifdef USE_EDGEQUEUE_EVEN_SUBDIV
+static void long_edge_queue_edge_add_recursive(
+        EdgeQueueContext *eq_ctx,
+        BMLoop *l_edge, BMLoop *l_end,
+        const float len_sq, float limit_len)
 {
-	const float len_sq = BM_edge_calc_length_squared(e);
-	if (len_sq < eq_ctx->q->limit_len_squared)
-		edge_queue_insert(eq_ctx, e, len_sq);
+	BLI_assert(len_sq > SQUARE(limit_len));
+
+#ifdef USE_EDGEQUEUE_FRONTFACE
+	if (eq_ctx->q->use_view_normal) {
+		if (dot_v3v3(l_edge->f->no, eq_ctx->q->view_normal) < 0.0f) {
+			return;
+		}
+	}
+#endif
+
+#ifdef USE_EDGEQUEUE_TAG
+	if (EDGE_QUEUE_TEST(l_edge->e) == false)
+#endif
+	{
+		edge_queue_insert(eq_ctx, l_edge->e, -len_sq);
+	}
+
+	/* temp support previous behavior! */
+	if (UNLIKELY(G.debug_value == 1234)) {
+		return;
+	}
+
+	if ((l_edge->radial_next != l_edge)) {
+		/* how much longer we need to be to consider for subdividing
+		 * (avoids subdividing faces which are only *slightly* skinny) */
+#define EVEN_EDGELEN_THRESHOLD  1.2f
+		/* how much the limit increases per recursion
+		 * (avoids performing subdvisions too far away) */
+#define EVEN_GENERATION_SCALE   1.6f
+
+		const float len_sq_cmp = len_sq * EVEN_EDGELEN_THRESHOLD;
+		float limit_len_sq;
+		BMLoop *l_iter;
+
+		limit_len *= EVEN_GENERATION_SCALE;
+		limit_len_sq = SQUARE(limit_len);
+
+		l_iter = l_edge;
+		do {
+			float len_sq_other;
+			BMLoop *l_adjacent[2] = {l_iter->next, l_iter->prev};
+			int i;
+			for (i = 0; i < ARRAY_SIZE(l_adjacent); i++) {
+				len_sq_other = BM_edge_calc_length_squared(l_adjacent[i]->e);
+				if (len_sq_other > max_ff(len_sq_cmp, limit_len_sq)) {
+//					edge_queue_insert(eq_ctx, l_adjacent[i]->e, -len_sq_other);
+					long_edge_queue_edge_add_recursive(
+					        eq_ctx, l_adjacent[i]->radial_next, l_adjacent[i],
+					        len_sq_other, limit_len);
+				}
+			}
+		} while ((l_iter = l_iter->radial_next) != l_end);
+
+#undef EVEN_EDGELEN_THRESHOLD
+#undef EVEN_GENERATION_SCALE
+	}
+}
+#endif  /* USE_EDGEQUEUE_EVEN_SUBDIV */
+
+static void short_edge_queue_edge_add(
+        EdgeQueueContext *eq_ctx,
+        BMEdge *e)
+{
+#ifdef USE_EDGEQUEUE_TAG
+	if (EDGE_QUEUE_TEST(e) == false)
+#endif
+	{
+		const float len_sq = BM_edge_calc_length_squared(e);
+		if (len_sq < eq_ctx->q->limit_len_squared) {
+			edge_queue_insert(eq_ctx, e, len_sq);
+		}
+	}
 }
 
-static void long_edge_queue_face_add(EdgeQueueContext *eq_ctx,
-                                     BMFace *f)
+static void long_edge_queue_face_add(
+        EdgeQueueContext *eq_ctx,
+        BMFace *f)
 {
+#ifdef USE_EDGEQUEUE_FRONTFACE
+	if (eq_ctx->q->use_view_normal) {
+		if (dot_v3v3(f->no, eq_ctx->q->view_normal) < 0.0f) {
+			return;
+		}
+	}
+#endif
+
 	if (edge_queue_tri_in_sphere(eq_ctx->q, f)) {
 		BMLoop *l_iter;
 		BMLoop *l_first;
@@ -629,14 +819,34 @@ static void long_edge_queue_face_add(EdgeQueueContext *eq_ctx,
 		/* Check each edge of the face */
 		l_iter = l_first = BM_FACE_FIRST_LOOP(f);
 		do {
-			long_edge_queue_edge_add(eq_ctx, l_iter->e);
+			{
+#ifdef USE_EDGEQUEUE_EVEN_SUBDIV
+				const float len_sq = BM_edge_calc_length_squared(l_iter->e);
+				if (len_sq > eq_ctx->q->limit_len_squared) {
+					long_edge_queue_edge_add_recursive(
+					        eq_ctx, l_iter->radial_next, l_iter,
+					        len_sq, eq_ctx->q->limit_len);
+				}
+#else
+				long_edge_queue_edge_add(eq_ctx, l_iter->e);
+#endif
+			}
 		} while ((l_iter = l_iter->next) != l_first);
 	}
 }
 
-static void short_edge_queue_face_add(EdgeQueueContext *eq_ctx,
-                                      BMFace *f)
+static void short_edge_queue_face_add(
+        EdgeQueueContext *eq_ctx,
+        BMFace *f)
 {
+#ifdef USE_EDGEQUEUE_FRONTFACE
+	if (eq_ctx->q->use_view_normal) {
+		if (dot_v3v3(f->no, eq_ctx->q->view_normal) < 0.0f) {
+			return;
+		}
+	}
+#endif
+
 	if (edge_queue_tri_in_sphere(eq_ctx->q, f)) {
 		BMLoop *l_iter;
 		BMLoop *l_first;
@@ -658,9 +868,10 @@ static void short_edge_queue_face_add(EdgeQueueContext *eq_ctx,
  *
  * The highest priority (lowest number) is given to the longest edge.
  */
-static void long_edge_queue_create(EdgeQueueContext *eq_ctx,
-                                   PBVH *bvh, const float center[3],
-                                   float radius)
+static void long_edge_queue_create(
+        EdgeQueueContext *eq_ctx,
+        PBVH *bvh, const float center[3], const float view_normal[3],
+        float radius)
 {
 	int n;
 
@@ -668,6 +879,21 @@ static void long_edge_queue_create(EdgeQueueContext *eq_ctx,
 	eq_ctx->q->center = center;
 	eq_ctx->q->radius_squared = radius * radius;
 	eq_ctx->q->limit_len_squared = bvh->bm_max_edge_len * bvh->bm_max_edge_len;
+#ifdef USE_EDGEQUEUE_EVEN_SUBDIV
+	eq_ctx->q->limit_len = bvh->bm_max_edge_len;
+#endif
+
+#ifdef USE_EDGEQUEUE_FRONTFACE
+	eq_ctx->q->view_normal = view_normal;
+	eq_ctx->q->use_view_normal = (view_normal != NULL);
+#else
+	UNUSED_VARS(view_normal);
+#endif
+
+#ifdef USE_EDGEQUEUE_TAG_VERIFY
+	pbvh_bmesh_edge_tag_verify(bvh);
+#endif
+
 
 	for (n = 0; n < bvh->totnode; n++) {
 		PBVHNode *node = &bvh->nodes[n];
@@ -698,9 +924,10 @@ static void long_edge_queue_create(EdgeQueueContext *eq_ctx,
  *
  * The highest priority (lowest number) is given to the shortest edge.
  */
-static void short_edge_queue_create(EdgeQueueContext *eq_ctx,
-                                    PBVH *bvh, const float center[3],
-                                    float radius)
+static void short_edge_queue_create(
+        EdgeQueueContext *eq_ctx,
+        PBVH *bvh, const float center[3], const float view_normal[3],
+        float radius)
 {
 	int n;
 
@@ -708,6 +935,16 @@ static void short_edge_queue_create(EdgeQueueContext *eq_ctx,
 	eq_ctx->q->center = center;
 	eq_ctx->q->radius_squared = radius * radius;
 	eq_ctx->q->limit_len_squared = bvh->bm_min_edge_len * bvh->bm_min_edge_len;
+#ifdef USE_EDGEQUEUE_EVEN_SUBDIV
+	eq_ctx->q->limit_len = bvh->bm_min_edge_len;
+#endif
+
+#ifdef USE_EDGEQUEUE_FRONTFACE
+	eq_ctx->q->view_normal = view_normal;
+	eq_ctx->q->use_view_normal = (view_normal != NULL);
+#else
+	UNUSED_VARS(view_normal);
+#endif
 
 	for (n = 0; n < bvh->totnode; n++) {
 		PBVHNode *node = &bvh->nodes[n];
@@ -738,21 +975,24 @@ static void bm_edges_from_tri(BMesh *bm, BMVert *v_tri[3], BMEdge *e_tri[3])
 	e_tri[2] = BM_edge_create(bm, v_tri[2], v_tri[0], NULL, BM_CREATE_NO_DOUBLE);
 }
 
-static void pbvh_bmesh_split_edge(EdgeQueueContext *eq_ctx, PBVH *bvh,
-                                  BMEdge *e, BLI_Buffer *edge_loops)
+static void pbvh_bmesh_split_edge(
+        EdgeQueueContext *eq_ctx, PBVH *bvh,
+        BMEdge *e, BLI_Buffer *edge_loops)
 {
 	BMVert *v_new;
-	float mid[3];
+	float co_mid[3], no_mid[3];
 	int i, node_index;
 
 	/* Get all faces adjacent to the edge */
 	pbvh_bmesh_edge_loops(edge_loops, e);
 
 	/* Create a new vertex in current node at the edge's midpoint */
-	mid_v3_v3v3(mid, e->v1->co, e->v2->co);
+	mid_v3_v3v3(co_mid, e->v1->co, e->v2->co);
+	mid_v3_v3v3(no_mid, e->v1->no, e->v2->no);
+	normalize_v3(no_mid);
 
 	node_index = BM_ELEM_CD_GET_INT(e->v1, eq_ctx->cd_vert_node_offset);
-	v_new = pbvh_bmesh_vert_create(bvh, node_index, mid, e->v1, eq_ctx->cd_vert_mask_offset);
+	v_new = pbvh_bmesh_vert_create(bvh, node_index, co_mid, no_mid, eq_ctx->cd_vert_mask_offset);
 
 	/* update paint mask */
 	if (eq_ctx->cd_vert_mask_offset != -1) {
@@ -788,6 +1028,32 @@ static void pbvh_bmesh_split_edge(EdgeQueueContext *eq_ctx, PBVH *bvh,
 		if (ni != node_index && i == 0)
 			pbvh_bmesh_vert_ownership_transfer(bvh, &bvh->nodes[ni], v_new);
 
+		/**
+		 * The 2 new faces created and assigned to ``f_new`` have their
+		 * verts & edges shuffled around.
+		 *
+		 * - faces wind anticlockwise in this example.
+		 * - original edge is ``(v1, v2)``
+		 * - oroginal face is ``(v1, v2, v3)``
+		 *
+		 * <pre>
+		 *         + v3(v_opp)
+		 *        /|\
+		 *       / | \
+		 *      /  |  \
+		 *   e4/   |   \ e3
+		 *    /    |e5  \
+		 *   /     |     \
+		 *  /  e1  |  e2  \
+		 * +-------+-------+
+		 * v1      v4(v_new) v2
+		 *  (first) (second)
+		 * </pre>
+		 *
+		 * - f_new (first):  ``v_tri=(v1, v4, v3), e_tri=(e1, e5, e4)``
+		 * - f_new (second): ``v_tri=(v4, v2, v3), e_tri=(e2, e3, e5)``
+		 */
+
 		/* Create two new faces */
 		v_tri[0] = v1;
 		v_tri[1] = v_new;
@@ -810,13 +1076,11 @@ static void pbvh_bmesh_split_edge(EdgeQueueContext *eq_ctx, PBVH *bvh,
 		BM_face_kill(bvh->bm, f_adj);
 
 		/* Ensure new vertex is in the node */
-		if (!BLI_gset_haskey(bvh->nodes[ni].bm_unique_verts, v_new) &&
-		    !BLI_gset_haskey(bvh->nodes[ni].bm_other_verts, v_new))
-		{
-			BLI_gset_insert(bvh->nodes[ni].bm_other_verts, v_new);
+		if (!BLI_gset_haskey(bvh->nodes[ni].bm_unique_verts, v_new)) {
+			BLI_gset_add(bvh->nodes[ni].bm_other_verts, v_new);
 		}
 
-		if (BM_vert_edge_count(v_opp) >= 9) {
+		if (BM_vert_edge_count_is_over(v_opp, 8)) {
 			BMIter bm_iter;
 			BMEdge *e2;
 
@@ -829,8 +1093,9 @@ static void pbvh_bmesh_split_edge(EdgeQueueContext *eq_ctx, PBVH *bvh,
 	BM_edge_kill(bvh->bm, e);
 }
 
-static bool pbvh_bmesh_subdivide_long_edges(EdgeQueueContext *eq_ctx, PBVH *bvh,
-                                            BLI_Buffer *edge_loops)
+static bool pbvh_bmesh_subdivide_long_edges(
+        EdgeQueueContext *eq_ctx, PBVH *bvh,
+        BLI_Buffer *edge_loops)
 {
 	bool any_subdivided = false;
 
@@ -842,13 +1107,22 @@ static bool pbvh_bmesh_subdivide_long_edges(EdgeQueueContext *eq_ctx, PBVH *bvh,
 		BLI_mempool_free(eq_ctx->pool, pair);
 		pair = NULL;
 
-		if (len_squared_v3v3(v1->co, v2->co) <= eq_ctx->q->limit_len_squared)
-			continue;
-
 		/* Check that the edge still exists */
 		if (!(e = BM_edge_exists(v1, v2))) {
 			continue;
 		}
+#ifdef USE_EDGEQUEUE_TAG
+		EDGE_QUEUE_DISABLE(e);
+#endif
+
+		/* At the moment edges never get shorter (subdiv will make new edges)
+		 * unlike collapse where edges can become longer. */
+#if 0
+		if (len_squared_v3v3(v1->co, v2->co) <= eq_ctx->q->limit_len_squared)
+			continue;
+#else
+		BLI_assert(len_squared_v3v3(v1->co, v2->co) > eq_ctx->q->limit_len_squared);
+#endif
 
 		/* Check that the edge's vertices are still in the PBVH. It's
 		 * possible that an edge collapse has deleted adjacent faces
@@ -864,6 +1138,10 @@ static bool pbvh_bmesh_subdivide_long_edges(EdgeQueueContext *eq_ctx, PBVH *bvh,
 
 		pbvh_bmesh_split_edge(eq_ctx, bvh, e, edge_loops);
 	}
+
+#ifdef USE_EDGEQUEUE_TAG_VERIFY
+	pbvh_bmesh_edge_tag_verify(bvh);
+#endif
 
 	return any_subdivided;
 }
@@ -945,10 +1223,8 @@ static void pbvh_bmesh_collapse_edge(
 			pbvh_bmesh_face_create(bvh, ni, v_tri, e_tri, f);
 
 			/* Ensure that v_conn is in the new face's node */
-			if (!BLI_gset_haskey(n->bm_unique_verts, v_conn) &&
-			    !BLI_gset_haskey(n->bm_other_verts,  v_conn))
-			{
-				BLI_gset_insert(n->bm_other_verts, v_conn);
+			if (!BLI_gset_haskey(n->bm_unique_verts, v_conn)) {
+				BLI_gset_add(n->bm_other_verts, v_conn);
 			}
 		}
 
@@ -970,18 +1246,6 @@ static void pbvh_bmesh_collapse_edge(
 		v_tri[1] = l_iter->v; e_tri[1] = l_iter->e; l_iter = l_iter->next;
 		v_tri[2] = l_iter->v; e_tri[2] = l_iter->e;
 
-		/* Check if any of the face's vertices are now unused, if so
-		 * remove them from the PBVH */
-		for (j = 0; j < 3; j++) {
-			if (v_tri[j] != v_del && BM_vert_face_count(v_tri[j]) == 1) {
-				BLI_gset_insert(deleted_verts, v_tri[j]);
-				pbvh_bmesh_vert_remove(bvh, v_tri[j]);
-			}
-			else {
-				v_tri[j] = NULL;
-			}
-		}
-
 		/* Remove the face */
 		pbvh_bmesh_face_remove(bvh, f_del);
 		BM_face_kill(bvh->bm, f_del);
@@ -993,9 +1257,13 @@ static void pbvh_bmesh_collapse_edge(
 				BM_edge_kill(bvh->bm, e_tri[j]);
 		}
 
-		/* Delete unused vertices */
+		/* Check if any of the face's vertices are now unused, if so
+		 * remove them from the PBVH */
 		for (j = 0; j < 3; j++) {
-			if (v_tri[j]) {
+			if ((v_tri[j] != v_del) && (v_tri[j]->e == NULL)) {
+				BLI_gset_insert(deleted_verts, v_tri[j]);
+				pbvh_bmesh_vert_remove(bvh, v_tri[j]);
+
 				BM_log_vert_removed(bvh->bm_log, v_tri[j], eq_ctx->cd_vert_mask_offset);
 				BM_vert_kill(bvh->bm, v_tri[j]);
 			}
@@ -1007,10 +1275,12 @@ static void pbvh_bmesh_collapse_edge(
 	if (!BLI_gset_haskey(deleted_verts, v_conn)) {
 		BM_log_vert_before_modified(bvh->bm_log, v_conn, eq_ctx->cd_vert_mask_offset);
 		mid_v3_v3v3(v_conn->co, v_conn->co, v_del->co);
+		add_v3_v3(v_conn->no, v_del->no);
+		normalize_v3(v_conn->no);
 	}
 
 	/* Delete v_del */
-	BLI_assert(BM_vert_face_count(v_del) == 0);
+	BLI_assert(!BM_vert_face_check(v_del));
 	BLI_gset_insert(deleted_verts, v_del);
 	BM_log_vert_removed(bvh->bm_log, v_del, eq_ctx->cd_vert_mask_offset);
 	BM_vert_kill(bvh->bm, v_del);
@@ -1042,13 +1312,16 @@ static bool pbvh_bmesh_collapse_short_edges(
 			continue;
 		}
 
-		if (len_squared_v3v3(v1->co, v2->co) >= min_len_squared)
-			continue;
-
 		/* Check that the edge still exists */
 		if (!(e = BM_edge_exists(v1, v2))) {
 			continue;
 		}
+#ifdef USE_EDGEQUEUE_TAG
+		EDGE_QUEUE_DISABLE(e);
+#endif
+
+		if (len_squared_v3v3(v1->co, v2->co) >= min_len_squared)
+			continue;
 
 		/* Check that the edge's vertices are still in the PBVH. It's
 		 * possible that an edge collapse has deleted adjacent faces
@@ -1074,9 +1347,10 @@ static bool pbvh_bmesh_collapse_short_edges(
 
 /************************* Called from pbvh.c *************************/
 
-bool pbvh_bmesh_node_raycast(PBVHNode *node, const float ray_start[3],
-                            const float ray_normal[3], float *dist,
-                            bool use_original)
+bool pbvh_bmesh_node_raycast(
+        PBVHNode *node, const float ray_start[3],
+        const float ray_normal[3], float *dist,
+        bool use_original)
 {
 	bool hit = false;
 
@@ -1189,36 +1463,225 @@ void pbvh_bmesh_normals_update(PBVHNode **nodes, int totnode)
 	}
 }
 
-/***************************** Public API *****************************/
+typedef struct FastNodeBuildInfo {
+	int totface; /* number of faces */
+	int start; /* start of faces in array */
+	struct FastNodeBuildInfo *child1;
+	struct FastNodeBuildInfo *child2;
+} FastNodeBuildInfo;
 
-static void pbvh_bmesh_node_layers_reset(PBVH *bvh)
+/* Recursively split the node if it exceeds the leaf_limit. This function is multithreadabe since each invocation applies
+ * to a sub part of the arrays */
+static void pbvh_bmesh_node_limit_ensure_fast(PBVH *bvh, BMFace **nodeinfo, BBC *bbc_array, FastNodeBuildInfo *node, MemArena *arena)
 {
 	BMFace *f;
-	BMVert *v;
-	BMIter iter;
-	BMesh *bm = bvh->bm;
-	int cd_vert_node_offset = bvh->cd_vert_node_offset;
-	int cd_face_node_offset = bvh->cd_face_node_offset;
+	BB cb;
+	BBC *bbc;
+	float mid;
+	int axis, i;
+	int end;
+	FastNodeBuildInfo *child1, *child2;
+	int num_child1, num_child2;
+	BMFace *tmp;
 
-	/* clear the elements of the node information */
-	BM_ITER_MESH(v, &iter, bm, BM_VERTS_OF_MESH) {
-		BM_ELEM_CD_SET_INT(v, cd_vert_node_offset, DYNTOPO_NODE_NONE);
+	if (node->totface <= bvh->leaf_limit) {
+		return;
 	}
 
-	BM_ITER_MESH(f, &iter, bm, BM_FACES_OF_MESH) {
-		BM_ELEM_CD_SET_INT(f, cd_face_node_offset, DYNTOPO_NODE_NONE);
+	/* Calculate bounding box around primitive centroids */
+	BB_reset(&cb);
+	for (i = 0; i < node->totface; i++) {
+		f = nodeinfo[i + node->start];
+		bbc = &bbc_array[BM_elem_index_get(f)];
+
+		BB_expand(&cb, bbc->bcentroid);
+	}
+
+	/* initialize the children */
+
+	/* Find widest axis and its midpoint */
+	axis = BB_widest_axis(&cb);
+	mid = (cb.bmax[axis] + cb.bmin[axis]) * 0.5f;
+
+	num_child1 = 0, num_child2 = 0;
+
+	/* split vertices along the middle line */
+	end = node->start + node->totface;
+	for (i = node->start; i < end - num_child2; i++) {
+		f = nodeinfo[i];
+		bbc = &bbc_array[BM_elem_index_get(f)];
+
+		if (bbc->bcentroid[axis] > mid) {
+			int i_iter = end - num_child2 - 1;
+			int candidate = -1;
+			/* found a face that should be part of another node, look for a face to substitute with */
+
+			for (;i_iter > i; i_iter--) {
+				BMFace *f_iter = nodeinfo[i_iter];
+				const BBC *bbc_iter = &bbc_array[BM_elem_index_get(f_iter)];
+				if (bbc_iter->bcentroid[axis] <= mid) {
+					candidate = i_iter;
+					break;
+				}
+				else {
+					num_child2++;
+				}
+			}
+
+			if (candidate != -1) {
+				tmp = nodeinfo[i];
+				nodeinfo[i] = nodeinfo[candidate];
+				nodeinfo[candidate] = tmp;
+				/* increase both counts */
+				num_child1++;
+				num_child2++;
+			}
+			else {
+				/* not finding candidate means second half of array part is full of
+				 * second node parts, just increase the number of child nodes for it */
+				num_child2++;
+			}
+		}
+		else {
+			num_child1++;
+		}
+	}
+
+	/* ensure at least one child in each node */
+	if (num_child2 == 0) {
+		num_child2++;
+		num_child1--;
+	}
+	else if (num_child1 == 0) {
+		num_child1++;
+		num_child2--;
+	}
+
+	/* at this point, faces should have been split along the array range sequentially,
+	 * each sequential part belonging to one node only */
+	BLI_assert((num_child1 + num_child2) == node->totface);
+
+	node->child1 = child1 = BLI_memarena_alloc(arena, sizeof(FastNodeBuildInfo));
+	node->child2 = child2 = BLI_memarena_alloc(arena, sizeof(FastNodeBuildInfo));
+
+	child1->totface = num_child1;
+	child1->start = node->start;
+	child2->totface = num_child2;
+	child2->start = node->start + num_child1;
+	child1->child1 = child1->child2 = child2->child1 = child2->child2 = NULL;
+
+	pbvh_bmesh_node_limit_ensure_fast(bvh, nodeinfo, bbc_array, child1, arena);
+	pbvh_bmesh_node_limit_ensure_fast(bvh, nodeinfo, bbc_array, child2, arena);
+
+	return;
+}
+
+static void pbvh_bmesh_create_nodes_fast_recursive(PBVH *bvh, BMFace **nodeinfo, BBC *bbc_array, FastNodeBuildInfo *node, int node_index)
+{
+	PBVHNode *n = bvh->nodes + node_index;
+	/* two cases, node does not have children or does have children */
+	if (node->child1) {
+		int children_offset = bvh->totnode;
+
+		n->children_offset = children_offset;
+		pbvh_grow_nodes(bvh, bvh->totnode + 2);
+		pbvh_bmesh_create_nodes_fast_recursive(bvh, nodeinfo, bbc_array, node->child1, children_offset);
+		pbvh_bmesh_create_nodes_fast_recursive(bvh, nodeinfo, bbc_array, node->child2, children_offset + 1);
+
+		n = &bvh->nodes[node_index];
+
+		/* Update bounding box */
+		BB_reset(&n->vb);
+		BB_expand_with_bb(&n->vb, &bvh->nodes[n->children_offset].vb);
+		BB_expand_with_bb(&n->vb, &bvh->nodes[n->children_offset + 1].vb);
+		n->orig_vb = n->vb;
+	}
+	else {
+		/* node does not have children so it's a leaf node, populate with faces and tag accordingly
+		 * this is an expensive part but it's not so easily threadable due to vertex node indices */
+		const int cd_vert_node_offset = bvh->cd_vert_node_offset;
+		const int cd_face_node_offset = bvh->cd_face_node_offset;
+
+		bool has_visible = false;
+		int i, end;
+		BMFace *f;
+		BMLoop *l_iter;
+		BMLoop *l_first;
+		BMVert *v;
+		BBC *bbc;
+
+		n->flag = PBVH_Leaf;
+		n->bm_faces = BLI_gset_ptr_new_ex("bm_faces", node->totface);
+
+		/* Create vert hash sets */
+		n->bm_unique_verts = BLI_gset_ptr_new("bm_unique_verts");
+		n->bm_other_verts = BLI_gset_ptr_new("bm_other_verts");
+
+		BB_reset(&n->vb);
+
+		end = node->start + node->totface;
+
+		for (i = node->start; i < end; i++) {
+			f = nodeinfo[i];
+			bbc = &bbc_array[BM_elem_index_get(f)];
+
+			/* Update ownership of faces */
+			BLI_gset_insert(n->bm_faces, f);
+			BM_ELEM_CD_SET_INT(f, cd_face_node_offset, node_index);
+
+			/* Update vertices */
+			l_iter = l_first = BM_FACE_FIRST_LOOP(f);
+			do {
+				v = l_iter->v;
+				if (!BLI_gset_haskey(n->bm_unique_verts, v)) {
+					if (BM_ELEM_CD_GET_INT(v, cd_vert_node_offset) != DYNTOPO_NODE_NONE) {
+						BLI_gset_add(n->bm_other_verts, v);
+					}
+					else {
+						BLI_gset_insert(n->bm_unique_verts, v);
+						BM_ELEM_CD_SET_INT(v, cd_vert_node_offset, node_index);
+					}
+				}
+				/* Update node bounding box */
+			} while ((l_iter = l_iter->next) != l_first);
+
+			if (!BM_elem_flag_test(f, BM_ELEM_HIDDEN))
+				has_visible = true;
+
+			BB_expand_with_bb(&n->vb, (BB *)bbc);
+		}
+
+		BLI_assert(n->vb.bmin[0] <= n->vb.bmax[0] &&
+		        n->vb.bmin[1] <= n->vb.bmax[1] &&
+		        n->vb.bmin[2] <= n->vb.bmax[2]);
+
+		n->orig_vb = n->vb;
+
+		/* Build GPU buffers for new node and update vertex normals */
+		BKE_pbvh_node_mark_rebuild_draw(n);
+
+		BKE_pbvh_node_fully_hidden_set(n, !has_visible);
+		n->flag |= PBVH_UpdateNormals;
 	}
 }
 
 
+/***************************** Public API *****************************/
+
 /* Build a PBVH from a BMesh */
-void BKE_pbvh_build_bmesh(PBVH *bvh, BMesh *bm, bool smooth_shading, BMLog *log,
-                          const int cd_vert_node_offset, const int cd_face_node_offset)
+void BKE_pbvh_build_bmesh(
+        PBVH *bvh, BMesh *bm, bool smooth_shading, BMLog *log,
+        const int cd_vert_node_offset, const int cd_face_node_offset)
 {
 	BMIter iter;
 	BMFace *f;
-	PBVHNode *n;
-	int node_index = 0;
+	BMVert *v;
+	int i;
+	/* bounding box array of all faces, no need to recalculate every time */
+	BBC *bbc_array;
+	BMFace **nodeinfo;
+	FastNodeBuildInfo rootnode = {0};
+	MemArena *arena;
 
 	bvh->cd_vert_node_offset = cd_vert_node_offset;
 	bvh->cd_face_node_offset = cd_face_node_offset;
@@ -1235,26 +1698,61 @@ void BKE_pbvh_build_bmesh(PBVH *bvh, BMesh *bm, bool smooth_shading, BMLog *log,
 	if (smooth_shading)
 		bvh->flags |= PBVH_DYNTOPO_SMOOTH_SHADING;
 
-	pbvh_bmesh_node_layers_reset(bvh);
+	/* calculate all bounding boxes once for all faces */
+	bbc_array = MEM_mallocN(sizeof(BBC) * bm->totface, "BBC");
+	nodeinfo = MEM_mallocN(sizeof(*nodeinfo) * bm->totface, "nodeinfo");
+	arena = BLI_memarena_new(BLI_MEMARENA_STD_BUFSIZE, "fast PBVH node storage");
 
-	/* Start with all faces in the root node */
-	n = bvh->nodes = MEM_callocN(sizeof(PBVHNode), "PBVHNode");
-	bvh->totnode = 1;
-	n->flag = PBVH_Leaf;
-	n->bm_faces = BLI_gset_ptr_new_ex("bm_faces", bvh->bm->totface);
-	BM_ITER_MESH (f, &iter, bvh->bm, BM_FACES_OF_MESH) {
-		BLI_gset_insert(n->bm_faces, f);
+	BM_ITER_MESH_INDEX(f, &iter, bm, BM_FACES_OF_MESH, i) {
+		BBC *bbc = &bbc_array[i];
+		BMLoop *l_iter;
+		BMLoop *l_first;
+
+		BB_reset((BB *)bbc);
+		l_iter = l_first = BM_FACE_FIRST_LOOP(f);
+		do {
+			BB_expand((BB *)bbc, l_iter->v->co);
+		} while ((l_iter = l_iter->next) != l_first);
+		BBC_update_centroid(bbc);
+
+		/* so we can do direct lookups on 'bbc_array' */
+		BM_elem_index_set(f, i);  /* set_dirty! */
+		nodeinfo[i] = f;
+		BM_ELEM_CD_SET_INT(f, cd_face_node_offset, DYNTOPO_NODE_NONE);
 	}
 
-	/* Recursively split the node until it is under the limit; if no
-	 * splitting occurs then finalize the existing leaf node */
-	if (!pbvh_bmesh_node_limit_ensure(bvh, node_index))
-		pbvh_bmesh_node_finalize(bvh, 0, cd_vert_node_offset, cd_face_node_offset);
+	BM_ITER_MESH(v, &iter, bm, BM_VERTS_OF_MESH) {
+		BM_ELEM_CD_SET_INT(v, cd_vert_node_offset, DYNTOPO_NODE_NONE);
+	}
+
+	/* likely this is already dirty */
+	bm->elem_index_dirty |= BM_FACE;
+
+	/* setup root node */
+	rootnode.totface = bm->totface;
+
+	/* start recursion, assign faces to nodes accordingly */
+	pbvh_bmesh_node_limit_ensure_fast(bvh, nodeinfo, bbc_array, &rootnode, arena);
+
+	/* we now have all faces assigned to a node, next we need to assign those to the gsets of the nodes */
+
+	/* Start with all faces in the root node */
+	bvh->nodes = MEM_callocN(sizeof(PBVHNode), "PBVHNode");
+	bvh->totnode = 1;
+
+	/* take root node and visit and populate children recursively */
+	pbvh_bmesh_create_nodes_fast_recursive(bvh, nodeinfo, bbc_array, &rootnode, 0);
+
+	BLI_memarena_free(arena);
+	MEM_freeN(bbc_array);
+	MEM_freeN(nodeinfo);
 }
 
 /* Collapse short edges, subdivide long edges */
-bool BKE_pbvh_bmesh_update_topology(PBVH *bvh, PBVHTopologyUpdateMode mode,
-                                   const float center[3], float radius)
+bool BKE_pbvh_bmesh_update_topology(
+        PBVH *bvh, PBVHTopologyUpdateMode mode,
+        const float center[3], const float view_normal[3],
+        float radius)
 {
 	/* 2 is enough for edge faces - manifold edge */
 	BLI_buffer_declare_static(BMLoop *, edge_loops, BLI_BUFFER_NOP, 2);
@@ -1266,12 +1764,16 @@ bool BKE_pbvh_bmesh_update_topology(PBVH *bvh, PBVHTopologyUpdateMode mode,
 	bool modified = false;
 	int n;
 
+	if (view_normal) {
+		BLI_assert(len_squared_v3(view_normal) != 0.0f);
+	}
+
 	if (mode & PBVH_Collapse) {
 		EdgeQueue q;
 		BLI_mempool *queue_pool = BLI_mempool_create(sizeof(BMVert *[2]), 0, 128, BLI_MEMPOOL_NOP);
 		EdgeQueueContext eq_ctx = {&q, queue_pool, bvh->bm, cd_vert_mask_offset, cd_vert_node_offset, cd_face_node_offset};
 
-		short_edge_queue_create(&eq_ctx, bvh, center, radius);
+		short_edge_queue_create(&eq_ctx, bvh, center, view_normal, radius);
 		modified |= !BLI_heap_is_empty(q.heap);
 		pbvh_bmesh_collapse_short_edges(&eq_ctx, bvh,
 		                                &deleted_faces);
@@ -1284,7 +1786,7 @@ bool BKE_pbvh_bmesh_update_topology(PBVH *bvh, PBVHTopologyUpdateMode mode,
 		BLI_mempool *queue_pool = BLI_mempool_create(sizeof(BMVert *[2]), 0, 128, BLI_MEMPOOL_NOP);
 		EdgeQueueContext eq_ctx = {&q, queue_pool, bvh->bm, cd_vert_mask_offset, cd_vert_node_offset, cd_face_node_offset};
 
-		long_edge_queue_create(&eq_ctx, bvh, center, radius);
+		long_edge_queue_create(&eq_ctx, bvh, center, view_normal, radius);
 		modified |= !BLI_heap_is_empty(q.heap);
 		pbvh_bmesh_subdivide_long_edges(&eq_ctx, bvh, &edge_loops);
 		BLI_heap_free(q.heap, NULL);
@@ -1641,7 +2143,7 @@ static void pbvh_bmesh_verify(PBVH *bvh)
 
 			GSET_ITER (gs_iter, n->bm_other_verts) {
 				BMVert *v = BLI_gsetIterator_getKey(&gs_iter);
-				BLI_assert(BM_vert_face_count(v) > 0);
+				BLI_assert(!BM_vert_face_check(v));
 				BLI_assert(BLI_gset_haskey(verts_all, v));
 			}
 		}

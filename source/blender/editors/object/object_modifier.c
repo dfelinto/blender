@@ -152,10 +152,10 @@ ModifierData *ED_object_modifier_add(ReportList *reports, Main *bmain, Scene *sc
 				ob->pd = object_add_collision_fields(0);
 			
 			ob->pd->deflect = 1;
-			DAG_relations_tag_update(bmain);
 		}
-		else if (type == eModifierType_Surface)
-			DAG_relations_tag_update(bmain);
+		else if (type == eModifierType_Surface) {
+			/* pass */
+		}
 		else if (type == eModifierType_Multires) {
 			/* set totlvl from existing MDISPS layer if object already had it */
 			multiresModifier_set_levels_from_disps((MultiresModifierData *)new_md, ob);
@@ -172,6 +172,7 @@ ModifierData *ED_object_modifier_add(ReportList *reports, Main *bmain, Scene *sc
 	}
 
 	DAG_id_tag_update(&ob->id, OB_RECALC_DATA);
+	DAG_relations_tag_update(bmain);
 
 	return new_md;
 }
@@ -247,7 +248,7 @@ static bool object_has_modifier_cb(Object *ob, void *data)
 bool ED_object_multires_update_totlevels_cb(Object *ob, void *totlevel_v)
 {
 	ModifierData *md;
-	int totlevel = *((int *)totlevel_v);
+	int totlevel = *((char *)totlevel_v);
 
 	for (md = ob->modifiers.first; md; md = md->next) {
 		if (md->type == eModifierType_Multires) {
@@ -318,6 +319,8 @@ static bool object_modifier_remove(Main *bmain, Object *ob, ModifierData *md,
 	{
 		ob->mode &= ~OB_MODE_PARTICLE_EDIT;
 	}
+
+	DAG_relations_tag_update(bmain);
 
 	BLI_remlink(&ob->modifiers, md);
 	modifier_free(md);
@@ -459,7 +462,7 @@ int ED_object_modifier_convert(ReportList *UNUSED(reports), Main *bmain, Scene *
 	if (totvert == 0) return 0;
 
 	/* add new mesh */
-	obn = BKE_object_add(bmain, scene, OB_MESH);
+	obn = BKE_object_add(bmain, scene, OB_MESH, NULL);
 	me = obn->data;
 	
 	me->totvert = totvert;
@@ -1704,7 +1707,7 @@ static Object *modifier_skin_armature_create(Main *bmain, Scene *scene, Object *
 	                     NULL,
 	                     me->totvert);
 	
-	arm_ob = BKE_object_add(bmain, scene, OB_ARMATURE);
+	arm_ob = BKE_object_add(bmain, scene, OB_ARMATURE, NULL);
 	BKE_object_transform_copy(arm_ob, skin_ob);
 	arm = arm_ob->data;
 	arm->layer = 1;

@@ -342,12 +342,10 @@ static int make_proxy_exec(bContext *C, wmOperator *op)
 		Base *newbase, *oldbase = BASACT;
 		char name[MAX_ID_NAME + 4];
 
-		/* Add new object for the proxy */
-		newob = BKE_object_add(bmain, scene, OB_EMPTY);
-
 		BLI_snprintf(name, sizeof(name), "%s_proxy", ((ID *)(gob ? gob : ob))->name + 2);
 
-		rename_id(&newob->id, name);
+		/* Add new object for the proxy */
+		newob = BKE_object_add(bmain, scene, OB_EMPTY, name);
 
 		/* set layers OK */
 		newbase = BASACT;    /* BKE_object_add sets active... */
@@ -572,6 +570,9 @@ void ED_object_parent(Object *ob, Object *par, const int type, const char *subst
 		ob->parsubstr[0] = 0;
 		return;
 	}
+
+	/* Other partypes are deprecated, do not use here! */
+	BLI_assert(ELEM(type & PARTYPE, PAROBJECT, PARSKEL, PARVERT1, PARVERT3, PARBONE));
 
 	/* this could use some more checks */
 

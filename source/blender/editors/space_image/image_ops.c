@@ -85,6 +85,7 @@
 #include "RNA_enum_types.h"
 
 #include "ED_image.h"
+#include "ED_mask.h"
 #include "ED_paint.h"
 #include "ED_render.h"
 #include "ED_screen.h"
@@ -378,7 +379,7 @@ void IMAGE_OT_view_pan(wmOperatorType *ot)
 	ot->poll = space_image_main_area_poll;
 
 	/* flags */
-	ot->flag = OPTYPE_BLOCKING | OPTYPE_GRAB_POINTER | OPTYPE_LOCK_BYPASS;
+	ot->flag = OPTYPE_BLOCKING | OPTYPE_GRAB_CURSOR | OPTYPE_LOCK_BYPASS;
 	
 	/* properties */
 	RNA_def_float_vector(ot->srna, "offset", 2, NULL, -FLT_MAX, FLT_MAX,
@@ -594,7 +595,7 @@ void IMAGE_OT_view_zoom(wmOperatorType *ot)
 	ot->poll = space_image_main_area_poll;
 
 	/* flags */
-	ot->flag = OPTYPE_BLOCKING | OPTYPE_GRAB_POINTER | OPTYPE_LOCK_BYPASS;
+	ot->flag = OPTYPE_BLOCKING | OPTYPE_GRAB_CURSOR | OPTYPE_LOCK_BYPASS;
 	
 	/* properties */
 	prop = RNA_def_float(ot->srna, "factor", 0.0f, -FLT_MAX, FLT_MAX, "Factor",
@@ -720,6 +721,9 @@ void IMAGE_OT_view_all(wmOperatorType *ot)
 	ot->exec = image_view_all_exec;
 	ot->poll = space_image_main_area_poll;
 
+	/* flags */
+	ot->flag = OPTYPE_LOCK_BYPASS;
+
 	/* properties */
 	prop = RNA_def_boolean(ot->srna, "fit_view", 0, "Fit View", "Fit frame to the viewport");
 	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
@@ -751,8 +755,15 @@ static int image_view_selected_exec(bContext *C, wmOperator *UNUSED(op))
 	height = height * aspy;
 
 	/* get bounds */
-	if (!ED_uvedit_minmax(scene, ima, obedit, min, max))
-		return OPERATOR_CANCELLED;
+	if (ED_space_image_show_uvedit(sima, obedit)) {
+		if (!ED_uvedit_minmax(scene, ima, obedit, min, max))
+			return OPERATOR_CANCELLED;
+	}
+	else if (ED_space_image_check_show_maskedit(scene, sima)) {
+		if (!ED_mask_selected_minmax(C, min, max)) {
+			return OPERATOR_CANCELLED;
+		}
+	}
 
 	/* adjust offset and zoom */
 	sima->xof = (int)(((min[0] + max[0]) * 0.5f - 0.5f) * width);
@@ -772,7 +783,7 @@ static int image_view_selected_exec(bContext *C, wmOperator *UNUSED(op))
 
 static int image_view_selected_poll(bContext *C)
 {
-	return (space_image_main_area_poll(C) && ED_operator_uvedit(C));
+	return (space_image_main_area_poll(C) && (ED_operator_uvedit(C) || ED_operator_mask(C)));
 }
 
 void IMAGE_OT_view_selected(wmOperatorType *ot)
@@ -1005,6 +1016,7 @@ static void image_sequence_get_frames(PointerRNA *ptr, ListBase *frames, char *p
 			}
 			else {
 				/* different file base name found, is ignored */
+				MEM_freeN(filename);
 				MEM_freeN(frame);
 				break;
 			}
@@ -1069,15 +1081,27 @@ static int image_open_exec(bContext *C, wmOperator *op)
 
 	RNA_string_get(op->ptr, "filepath", path);
 
-	if (!IMB_isanim(path) && RNA_struct_property_is_set(op->ptr, "files") &&
-	    RNA_struct_property_is_set(op->ptr, "directory"))
+	if (RNA_struct_property_is_set(op->ptr, "directory") &&
+	    RNA_struct_property_is_set(op->ptr, "files"))
 	{
-		ListBase frames;
+		/* only to pass to imbuf */
+		char path_full[FILE_MAX];
+		BLI_strncpy(path_full, path, sizeof(path_full));
+		BLI_path_abs(path_full, G.main->name);
 
-		BLI_listbase_clear(&frames);
-		image_sequence_get_frames(op->ptr, &frames, path, sizeof(path));
-		frame_seq_len = image_sequence_get_len(&frames, &frame_ofs);
-		BLI_freelistN(&frames);
+		if (!IMB_isanim(path_full)) {
+			bool was_relative = BLI_path_is_rel(path);
+			ListBase frames;
+
+			BLI_listbase_clear(&frames);
+			image_sequence_get_frames(op->ptr, &frames, path, sizeof(path));
+			frame_seq_len = image_sequence_get_len(&frames, &frame_ofs);
+			BLI_freelistN(&frames);
+
+			if (was_relative) {
+				BLI_path_rel(path, G.main->name);
+			}
+		}
 	}
 
 	errno = 0;
@@ -1346,7 +1370,7 @@ static int image_replace_exec(bContext *C, wmOperator *op)
 	/* XXX unpackImage frees image buffers */
 	ED_preview_kill_jobs(CTX_wm_manager(C), CTX_data_main(C));
 	
-	BKE_icon_changed(BKE_icon_getid(&sima->image->id));
+	BKE_icon_changed(BKE_icon_id_ensure(&sima->image->id));
 	BKE_image_signal(sima->image, &sima->iuser, IMA_SIGNAL_RELOAD);
 	WM_event_add_notifier(C, NC_IMAGE | NA_EDITED, sima->image);
 
@@ -1533,45 +1557,12 @@ static void save_image_options_to_op(SaveImageOptions *simopts, wmOperator *op)
 	RNA_string_set(op->ptr, "filepath", simopts->filepath);
 }
 
-/* returns the pass index for the view_id */
-static int get_multiview_pass_id(RenderResult *rr, ImageUser *iuser, const int view_id)
-{
-	RenderLayer *rl;
-	RenderPass *rpass;
-	int passtype;
-	short rl_index = 0, rp_index;
-
-	if (rr == NULL || iuser == NULL)
-		return 0;
-
-	if (BLI_listbase_count_ex(&rr->views, 2) < 2)
-		return iuser->pass;
-
-	if (RE_HasFakeLayer(rr))
-		rl_index ++; /* fake compo/sequencer layer */
-
-	rl = BLI_findlink(&rr->layers, rl_index);
-	if (!rl) return iuser->pass;
-
-	rpass = BLI_findlink(&rl->passes, iuser->pass);
-	passtype = rpass->passtype;
-
-	rp_index = 0;
-	for (rpass = rl->passes.first; rpass; rpass = rpass->next, rp_index++) {
-		if (rpass->passtype == passtype &&
-		    rpass->view_id == view_id)
-		{
-			return rp_index;
-		}
-	}
-
-	return iuser->pass;
-}
-
 static void save_image_post(wmOperator *op, ImBuf *ibuf, Image *ima, int ok, int save_copy, const char *relbase, int relative, int do_newpath, const char *filepath)
 {
 	if (ok) {
 		if (!save_copy) {
+			ColorManagedColorspaceSettings old_colorspace_settings;
+
 			if (do_newpath) {
 				BLI_strncpy(ibuf->name, filepath, sizeof(ibuf->name));
 				BLI_strncpy(ima->name, filepath, sizeof(ima->name));
@@ -1605,8 +1596,14 @@ static void save_image_post(wmOperator *op, ImBuf *ibuf, Image *ima, int ok, int
 				BLI_path_rel(ima->name, relbase); /* only after saving */
 			}
 
+			BKE_color_managed_colorspace_settings_copy(&old_colorspace_settings,
+			                                           &ima->colorspace_settings);
 			IMB_colormanagment_colorspace_from_ibuf_ftype(&ima->colorspace_settings, ibuf);
-
+			if (!BKE_color_managed_colorspace_settings_equals(&old_colorspace_settings,
+			                                                  &ima->colorspace_settings))
+			{
+				BKE_image_signal(ima, NULL, IMA_SIGNAL_COLORMANAGE);
+			}
 		}
 	}
 	else {
@@ -1707,6 +1704,7 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 					goto cleanup;
 				}
 			}
+			BKE_imbuf_stamp_info(rr, ibuf);
 		}
 
 		/* fancy multiview OpenEXR */
@@ -1728,6 +1726,7 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 			}
 			else {
 				colormanaged_ibuf = IMB_colormanagement_imbuf_for_write(ibuf, save_as_render, true, &imf->view_settings, &imf->display_settings, imf);
+				IMB_metadata_copy(colormanaged_ibuf, ibuf);
 				ok = BKE_imbuf_write_as(colormanaged_ibuf, simopts->filepath, imf, save_copy);
 				save_imbuf_post(ibuf, colormanaged_ibuf);
 			}
@@ -1761,13 +1760,10 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 					iuser.view = i;
 					iuser.flag &= ~IMA_SHOW_STEREO;
 
-					if (rr) {
-						iuser.pass = get_multiview_pass_id(rr, &sima->iuser, i);
+					if (rr)
 						BKE_image_multilayer_index(rr, &iuser);
-					}
-					else {
+					else
 						BKE_image_multiview_index(ima, &iuser);
-					}
 
 					ibuf = BKE_image_acquire_ibuf(sima->image, &iuser, &lock);
 					ibuf->planes = planes;
@@ -1810,9 +1806,7 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 
 					if (rr) {
 						int id = BLI_findstringindex(&rr->views, names[i], offsetof(RenderView, name));
-						iuser.pass = get_multiview_pass_id(rr, &sima->iuser, id);
 						iuser.view = id;
-
 						BKE_image_multilayer_index(rr, &iuser);
 					}
 					else {
@@ -1971,7 +1965,7 @@ static void image_save_as_draw(bContext *UNUSED(C), wmOperator *op)
 	uiLayout *layout = op->layout;
 	ImageFormatData *imf = op->customdata;
 	PointerRNA imf_ptr, ptr;
-	const bool is_multiview = RNA_boolean_get(op->ptr, "use_multiview");
+	const bool is_multiview = RNA_boolean_get(op->ptr, "show_multiview");
 
 	/* image template */
 	RNA_pointer_create(NULL, &RNA_ImageFormatSettings, imf, &imf_ptr);
@@ -1983,7 +1977,7 @@ static void image_save_as_draw(bContext *UNUSED(C), wmOperator *op)
 
 	/* multiview template */
 	if (is_multiview)
-		uiTemplateImageFormatViews(layout, &imf_ptr, NULL);
+		uiTemplateImageFormatViews(layout, &imf_ptr, op->ptr);
 }
 
 static int image_save_as_poll(bContext *C)
@@ -2444,7 +2438,7 @@ static int image_invert_exec(bContext *C, wmOperator *op)
 	const bool b = RNA_boolean_get(op->ptr, "invert_b");
 	const bool a = RNA_boolean_get(op->ptr, "invert_a");
 
-	int i;
+	size_t i;
 
 	if (ibuf == NULL)  /* TODO: this should actually never happen, but does for render-results -> cleanup */
 		return OPERATOR_CANCELLED;
@@ -2455,13 +2449,13 @@ static int image_invert_exec(bContext *C, wmOperator *op)
 		/* not strictly needed, because we only imapaint_dirty_region to invalidate all tiles
 		 * but better do this right in case someone copies this for a tool that uses partial redraw better */
 		ED_imapaint_clear_partial_redraw();
-		ED_imapaint_dirty_region(ima, ibuf, 0, 0, ibuf->x, ibuf->y);
+		ED_imapaint_dirty_region(ima, ibuf, 0, 0, ibuf->x, ibuf->y, false);
 	}
 	/* TODO: make this into an IMB_invert_channels(ibuf,r,g,b,a) method!? */
 	if (ibuf->rect_float) {
 		
 		float *fp = (float *) ibuf->rect_float;
-		for (i = ibuf->x * ibuf->y; i > 0; i--, fp += 4) {
+		for (i = ((size_t)ibuf->x) * ibuf->y; i > 0; i--, fp += 4) {
 			if (r) fp[0] = 1.0f - fp[0];
 			if (g) fp[1] = 1.0f - fp[1];
 			if (b) fp[2] = 1.0f - fp[2];
@@ -2475,7 +2469,7 @@ static int image_invert_exec(bContext *C, wmOperator *op)
 	else if (ibuf->rect) {
 		
 		char *cp = (char *) ibuf->rect;
-		for (i = ibuf->x * ibuf->y; i > 0; i--, cp += 4) {
+		for (i = ((size_t)ibuf->x) * ibuf->y; i > 0; i--, cp += 4) {
 			if (r) cp[0] = 255 - cp[0];
 			if (g) cp[1] = 255 - cp[1];
 			if (b) cp[2] = 255 - cp[2];

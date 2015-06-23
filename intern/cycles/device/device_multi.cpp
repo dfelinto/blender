@@ -25,6 +25,7 @@
 
 #include "util_foreach.h"
 #include "util_list.h"
+#include "util_logging.h"
 #include "util_map.h"
 #include "util_time.h"
 
@@ -88,10 +89,10 @@ public:
 		return error_msg;
 	}
 
-	bool load_kernels(bool experimental)
+	bool load_kernels(const DeviceRequestedFeatures& requested_features)
 	{
 		foreach(SubDevice& sub, devices)
-			if(!sub.device->load_kernels(experimental))
+			if(!sub.device->load_kernels(requested_features))
 				return false;
 
 		return true;
@@ -170,6 +171,8 @@ public:
 
 	void tex_alloc(const char *name, device_memory& mem, InterpolationType interpolation, bool periodic)
 	{
+		VLOG(1) << "Texture allocate: " << name << ", " << mem.memory_size() << " bytes.";
+
 		foreach(SubDevice& sub, devices) {
 			mem.device_pointer = 0;
 			sub.device->tex_alloc(name, mem, interpolation, periodic);
@@ -233,7 +236,7 @@ public:
 		mem.device_pointer = tmp;
 	}
 
-	void draw_pixels(device_memory& rgba, int y, int w, int h, int dy, int width, int height, bool transparent,
+	void draw_pixels(device_memory& rgba, int y, int w, int h, int dx, int dy, int width, int height, bool transparent,
 		const DeviceDrawParams &draw_params)
 	{
 		device_ptr tmp = rgba.device_pointer;
@@ -248,7 +251,7 @@ public:
 			/* adjust math for w/width */
 
 			rgba.device_pointer = sub.ptr_map[tmp];
-			sub.device->draw_pixels(rgba, sy, w, sh, sdy, width, sheight, transparent, draw_params);
+			sub.device->draw_pixels(rgba, sy, w, sh, dx, sdy, width, sheight, transparent, draw_params);
 			i++;
 		}
 

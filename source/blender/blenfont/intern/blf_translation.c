@@ -46,7 +46,9 @@
 
 #include "DNA_userdef_types.h" /* For user settings. */
 
+#ifdef WITH_PYTHON
 #include "BPY_extern.h"
+#endif
 
 #ifdef WITH_INTERNATIONAL
 
@@ -152,15 +154,26 @@ const char *BLF_pgettext(const char *msgctxt, const char *msgid)
 		/* We assume if the returned string is the same (memory level) as the msgid, no translation was found,
 		 * and we can try py scripts' ones!
 		 */
+#ifdef WITH_PYTHON
 		if (ret == msgid) {
 			ret = BPY_app_translations_py_pgettext(msgctxt, msgid);
 		}
+#endif
 	}
 
 	return ret;
 #else
 	(void)msgctxt;
 	return msgid;
+#endif
+}
+
+bool BLF_translate(void)
+{
+#ifdef WITH_INTERNATIONAL
+	return (U.transopts & USER_DOTRANSLATE) != 0;
+#else
+	return false;
 #endif
 }
 
@@ -188,6 +201,21 @@ bool BLF_translate_new_dataname(void)
 	return (U.transopts & USER_DOTRANSLATE) && (U.transopts & USER_TR_NEWDATANAME);
 #else
 	return false;
+#endif
+}
+
+const char *BLF_translate_do(const char *msgctxt, const char *msgid)
+{
+#ifdef WITH_INTERNATIONAL
+	if (BLF_translate()) {
+		return BLF_pgettext(msgctxt, msgid);
+	}
+	else {
+		return msgid;
+	}
+#else
+	(void)msgctxt;
+	return msgid;
 #endif
 }
 

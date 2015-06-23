@@ -33,6 +33,10 @@
 
 
 #include <stdio.h>
+#include <stdlib.h>
+
+#include "BLI_utildefines.h"
+#include "BLI_path_util.h"
 
 #include "IMB_imbuf_types.h"
 #include "IMB_imbuf.h"
@@ -41,14 +45,16 @@
 #include "IMB_colormanagement.h"
 #include "IMB_colormanagement_intern.h"
 
-static ImBuf *prepare_write_imbuf(ImFileType *type, ImBuf *ibuf)
+static ImBuf *prepare_write_imbuf(const ImFileType *type, ImBuf *ibuf)
 {
 	return IMB_prepare_write_ImBuf((type->flag & IM_FTYPE_FLOAT), ibuf);
 }
 
 short IMB_saveiff(struct ImBuf *ibuf, const char *name, int flags)
 {
-	ImFileType *type;
+	const ImFileType *type;
+
+	BLI_assert(!BLI_path_is_rel(name));
 
 	if (ibuf == NULL) return (false);
 	ibuf->flags = flags;

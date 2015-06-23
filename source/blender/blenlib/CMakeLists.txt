@@ -23,8 +23,6 @@
 #
 # ***** END GPL LICENSE BLOCK *****
 
-# XXX allowing blenkernel and RNA includes in blenlib is a hack,
-# but needed in a few places atm (bpath.c for instance)
 set(INC
 	.
 	# ../blenkernel  # dont add this back!
@@ -72,9 +70,11 @@ set(SRC
 	intern/hash_mm2a.c
 	intern/jitter.c
 	intern/lasso.c
+	intern/list_sort_impl.h
 	intern/listbase.c
 	intern/math_base.c
 	intern/math_base_inline.c
+	intern/math_bits_inline.c
 	intern/math_color.c
 	intern/math_color_blend_inline.c
 	intern/math_color_inline.c
@@ -154,6 +154,7 @@ set(SRC
 	BLI_listbase.h
 	BLI_math.h
 	BLI_math_base.h
+	BLI_math_bits.h
 	BLI_math_color.h
 	BLI_math_color_blend.h
 	BLI_math_geom.h
@@ -209,6 +210,7 @@ endif()
 # no need to compile object files for inline headers.
 set_source_files_properties(
 	intern/math_base_inline.c
+	intern/math_bits_inline.c
 	intern/math_color_blend_inline.c
 	intern/math_color_inline.c
 	intern/math_geom_inline.c

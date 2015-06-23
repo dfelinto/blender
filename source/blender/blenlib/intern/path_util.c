@@ -57,6 +57,9 @@
 #  include <shlobj.h>
 #  include "BLI_winstuff.h"
 #  include "MEM_guardedalloc.h"
+#  include "BLI_alloca.h"
+#else
+#  include "unistd.h"
 #endif /* WIN32 */
 
 /* local */
@@ -743,7 +746,7 @@ bool BLI_parent_dir(char *path)
 	BLI_cleanup_dir(NULL, tmp); /* does all the work of normalizing the path for us */
 
 	if (!BLI_testextensie(tmp, parent_dir)) {
-		BLI_strncpy(path, tmp, sizeof(tmp));
+		strcpy(path, tmp);  /* We assume pardir is always shorter... */
 		return true;
 	}
 	else {
@@ -854,6 +857,111 @@ bool BLI_path_frame_range(char *path, int sta, int end, int digits)
 	}
 	return false;
 }
+
+/**
+ * Get the frame from a filename formatted by blender's frame scheme
+ */
+bool BLI_path_frame_get(char *path, int *r_frame, int *r_numdigits)
+{
+	if (path && *path) {
+		char *file = (char *)BLI_last_slash(path);
+		char *c;
+		int len, numdigits;
+
+		numdigits = *r_numdigits = 0;
+
+		if (file == NULL)
+			file = path;
+
+		/* first get the extension part */
+		len = strlen(file);
+
+		c = file + len;
+
+		/* isolate extension */
+		while (--c != file) {
+			if (*c == '.') {
+				c--;
+				break;
+			}
+		}
+
+		/* find start of number */
+		while (c != (file - 1) && isdigit(*c)) {
+			c--;
+			numdigits++;
+		}
+
+		if (numdigits) {
+			char prevchar;
+
+			c++;
+			prevchar = c[numdigits];
+			c[numdigits] = 0;
+
+			/* was the number really an extension? */
+			*r_frame = atoi(c);
+			c[numdigits] = prevchar;
+
+			*r_numdigits = numdigits;
+
+			return true;
+		}
+	}
+
+	return false;
+}
+
+void BLI_path_frame_strip(char *path, bool setsharp, char *ext)
+{
+	if (path && *path) {
+		char *file = (char *)BLI_last_slash(path);
+		char *c, *suffix;
+		int len;
+		int numdigits = 0;
+
+		if (file == NULL)
+			file = path;
+
+		/* first get the extension part */
+		len = strlen(file);
+
+		c = file + len;
+
+		/* isolate extension */
+		while (--c != file) {
+			if (*c == '.') {
+				c--;
+				break;
+			}
+		}
+
+		suffix = c + 1;
+
+		/* find start of number */
+		while (c != (file - 1) && isdigit(*c)) {
+			c--;
+			numdigits++;
+		}
+
+		c++;
+
+		if (numdigits) {
+			/* replace the number with the suffix and terminate the string */
+			while (numdigits--) {
+				if (ext) *ext++ = *suffix;
+
+				if (setsharp) *c++ = '#';
+				else *c++ = *suffix;
+
+				suffix++;
+			}
+			*c = 0;
+			if (ext) *ext = 0;
+		}
+	}
+}
+
 
 /**
  * Check if we have '#' chars, usable for #BLI_path_frame, #BLI_path_frame_range
@@ -1018,6 +1126,114 @@ bool BLI_path_cwd(char *path)
 	return wasrelative;
 }
 
+#ifdef _WIN32
+/**
+ * Tries appending each of the semicolon-separated extensions in the PATHEXT
+ * environment variable (Windows-only) onto *name in turn until such a file is found.
+ * Returns success/failure.
+ */
+bool BLI_path_program_extensions_add_win32(char *name, const size_t maxlen)
+{
+	bool retval = false;
+	int type;
+
+	type = BLI_exists(name);
+	if ((type == 0) || S_ISDIR(type)) {
+		/* typically 3-5, ".EXE", ".BAT"... etc */
+		const int ext_max = 12;
+		const char *ext = getenv("PATHEXT");
+		if (ext) {
+			const int name_len = strlen(name);
+			char *filename = alloca(name_len + ext_max);
+			char *filename_ext;
+			const char *ext_next;
+
+			/* null terminated in the loop */
+			memcpy(filename, name, name_len);
+			filename_ext = filename + name_len;
+
+			do {
+				int ext_len;
+				ext_next = strchr(ext, ';');
+				ext_len = ext_next ? ((ext_next++) - ext) : strlen(ext);
+
+				if (LIKELY(ext_len < ext_max)) {
+					memcpy(filename_ext, ext, ext_len);
+					filename_ext[ext_len] = '\0';
+
+					type = BLI_exists(filename);
+					if (type && (!S_ISDIR(type))) {
+						retval = true;
+						BLI_strncpy(name, filename, maxlen);
+						break;
+					}
+				}
+			} while ((ext = ext_next));
+		}
+	}
+	else {
+		retval = true;
+	}
+
+	return retval;
+}
+#endif  /* WIN32 */
+
+/**
+ * Search for a binary (executable)
+ */
+bool BLI_path_program_search(
+        char *fullname, const size_t maxlen,
+        const char *name)
+{
+	const char *path;
+	bool retval = false;
+
+#ifdef _WIN32
+	const char separator = ';';
+#else
+	const char separator = ':';
+#endif
+
+	path = getenv("PATH");
+	if (path) {
+		char filename[FILE_MAX];
+		const char *temp;
+
+		do {
+			temp = strchr(path, separator);
+			if (temp) {
+				strncpy(filename, path, temp - path);
+				filename[temp - path] = 0;
+				path = temp + 1;
+			}
+			else {
+				strncpy(filename, path, sizeof(filename));
+			}
+
+			BLI_path_append(filename, maxlen, name);
+			if (
+#ifdef _WIN32
+			    BLI_path_program_extensions_add_win32(filename, maxlen)
+#else
+			    BLI_exists(filename)
+#endif
+			    )
+			{
+				BLI_strncpy(fullname, filename, maxlen);
+				retval = true;
+				break;
+			}
+		} while (temp);
+	}
+
+	if (retval == false) {
+		*fullname = '\0';
+	}
+
+	return retval;
+}
+
 /**
  * Copies into *last the part of *dir following the second-last slash.
  */
@@ -1109,33 +1325,18 @@ void BLI_char_switch(char *string, char from, char to)
  */
 void BLI_make_exist(char *dir)
 {
-	int a;
-	char par_path[PATH_MAX + 3];
+	bool valid_path = true;
 
-	BLI_char_switch(dir, ALTSEP, SEP);
+	/* Loop as long as cur path is not a dir, and we can get a parent path. */
+	while ((BLI_access(dir, R_OK) != 0) && (valid_path = BLI_parent_dir(dir)));
 
-	a = strlen(dir);
-
-	for (BLI_join_dirfile(par_path, sizeof(par_path), dir, FILENAME_PARENT);
-	     !(BLI_is_dir(dir) && BLI_exists(par_path));
-	     BLI_join_dirfile(par_path, sizeof(par_path), dir, FILENAME_PARENT))
-	{
-		a--;
-		while (dir[a] != SEP) {
-			a--;
-			if (a <= 0) break;
-		}
-		if (a >= 0) {
-			dir[a + 1] = '\0';
-		}
-		else {
+	/* If we could not find an existing dir, use default root... */
+	if (!valid_path || !dir[0]) {
 #ifdef WIN32
-			get_default_root(dir);
+		get_default_root(dir);
 #else
-			strcpy(dir, "/");
+		strcpy(dir, "/");
 #endif
-			break;
-		}
 	}
 }
 

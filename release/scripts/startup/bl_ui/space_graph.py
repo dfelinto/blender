@@ -48,9 +48,12 @@ class GRAPH_HT_header(Header):
         row.prop(st, "use_auto_normalization", text="Auto")
 
         row = layout.row(align=True)
-        row.prop(toolsettings, "proportional_edit", icon_only=True)
-        if toolsettings.proportional_edit != 'DISABLED':
-            row.prop(toolsettings, "proportional_edit_falloff", icon_only=True)
+
+        row.prop(toolsettings, "use_proportional_fcurve",
+                 text="", icon_only=True)
+        if toolsettings.use_proportional_fcurve:
+            row.prop(toolsettings, "proportional_edit_falloff",
+                     text="", icon_only=True)
 
         layout.prop(st, "auto_snap", text="")
         layout.prop(st, "pivot_point", icon_only=True)
@@ -122,6 +125,7 @@ class GRAPH_MT_view(Menu):
         layout.separator()
         layout.operator("graph.view_all")
         layout.operator("graph.view_selected")
+        layout.operator("graph.view_frame")
 
         layout.separator()
         layout.operator("screen.area_dupli")
@@ -276,6 +280,20 @@ class GRAPH_MT_key_transform(Menu):
         layout.operator("transform.transform", text="Extend").mode = 'TIME_EXTEND'
         layout.operator("transform.rotate", text="Rotate")
         layout.operator("transform.resize", text="Scale")
+
+
+class GRAPH_MT_delete(Menu):
+    bl_label = "Delete"
+
+    def draw(self, context):
+        layout = self.layout
+
+        layout.operator("graph.delete")
+
+        layout.separator()
+
+        layout.operator("graph.clean")
+
 
 if __name__ == "__main__":  # only for live edit.
     bpy.utils.register_module(__name__)

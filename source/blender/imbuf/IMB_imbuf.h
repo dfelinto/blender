@@ -38,21 +38,21 @@
  * \page IMB Imbuf module external interface
  *
  *
- * \section about About the IMB module
+ * \section imb_about About the IMB module
  *
  * External interface of the IMage Buffer module. This module offers
  * import/export of several graphical file formats. It offers the
  * ImBuf type as a common structure to refer to different graphical
  * file formats, and to enable a uniform way of handling them.
  *
- * \section issues Known issues with IMB
+ * \section imb_issues Known issues with IMB
  *
  * - imbuf is written in C.
  * - Endianness issues are dealt with internally.
  * - File I/O must be done externally. The module uses FILE*'s to
  *   direct input/output.
  *
- * \section dependencies Dependencies
+ * \section imb_dependencies Dependencies
  *
  * IMB needs:
  * - \ref DNA module
@@ -279,7 +279,7 @@ int IMB_anim_get_duration(struct anim *anim, IMB_Timecode_Type tc);
  * and frs_sec and frs_sec_base untouched if none available!)
  */
 bool IMB_anim_get_fps(struct anim *anim,
-                      short *frs_sec, float *frs_sec_base);
+                      short *frs_sec, float *frs_sec_base, bool no_av_base);
 
 /**
  *
@@ -467,6 +467,7 @@ void bilinear_interpolation(struct ImBuf *in, struct ImBuf *out, float u, float 
 
 void bicubic_interpolation_color(struct ImBuf *in, unsigned char col[4], float col_float[4], float u, float v);
 void nearest_interpolation_color(struct ImBuf *in, unsigned char col[4], float col_float[4], float u, float v);
+void nearest_interpolation_color_wrap(struct ImBuf *in, unsigned char col[4], float col_float[4], float u, float v);
 void bilinear_interpolation_color(struct ImBuf *in, unsigned char col[4], float col_float[4], float u, float v);
 void bilinear_interpolation_color_wrap(struct ImBuf *in, unsigned char col[4], float col_float[4], float u, float v);
 
@@ -547,8 +548,21 @@ void buf_rectfill_area(unsigned char *rect, float *rectf, int width, int height,
                        const float col[4], struct ColorManagedDisplay *display,
                        int x1, int y1, int x2, int y2);
 
-/* defined in metadata.c */
+/**
+ *
+ * \attention Defined in metadata.c
+ */
+/** read the field from the image info into the field 
+ *  \param img - the ImBuf that contains the image data
+ *  \param key - the key of the field
+ *  \param value - the data in the field, first one found with key is returned, 
+ *                 memory has to be allocated by user.
+ *  \param len - length of value buffer allocated by user.
+ *  \return    - 1 (true) if ImageInfo present and value for the key found, 0 (false) otherwise
+ */
+bool IMB_metadata_get_field(struct ImBuf *img, const char *key, char *value, const size_t len);
 bool IMB_metadata_change_field(struct ImBuf *img, const char *key, const char *field);
+void IMB_metadata_copy(struct ImBuf *dimb, struct ImBuf *simb);
 
 /* exported for image tools in blender, to quickly allocate 32 bits rect */
 bool imb_addrectImBuf(struct ImBuf *ibuf);

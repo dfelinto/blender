@@ -23,15 +23,14 @@ base class --- :class:`PyObjectPlus`
       :arg axis:
       :type axis: integer
 
-   .. note::
-      For each axis:
-      * Lowerlimit == Upperlimit -> axis is locked
-      * Lowerlimit > Upperlimit -> axis is free
-      * Lowerlimit < Upperlimit -> axis it limited in that range
+      .. note::
+         * Lowerlimit == Upperlimit -> axis is locked
+         * Lowerlimit > Upperlimit -> axis is free
+         * Lowerlimit < Upperlimit -> axis it limited in that range
 
-      PHY_LINEHINGE_CONSTRAINT = 2 or PHY_ANGULAR_CONSTRAINT = 3:
+      For PHY_LINEHINGE_CONSTRAINT = 2 or PHY_ANGULAR_CONSTRAINT = 3:
+
       axis = 3 is a constraint limit, with low/high limit value
-
          * 3: X axis angle
 
       :arg value0 (min): Set the minimum limit of the axis
@@ -39,7 +38,8 @@ base class --- :class:`PyObjectPlus`
       :arg value1 (max): Set the maximum limit of the axis
       :type value1: float
 
-      PHY_CONE_TWIST_CONSTRAINT = 3:
+      For PHY_CONE_TWIST_CONSTRAINT = 4:
+
       axis = 3..5 are constraint limits, high limit values
          * 3: X axis angle
          * 4: Y axis angle
@@ -50,7 +50,8 @@ base class --- :class:`PyObjectPlus`
       :arg value1 (max): Set the maximum limit of the axis
       :type value1: float
 
-      PHY_GENERIC_6DOF_CONSTRAINT = 12:
+      For PHY_GENERIC_6DOF_CONSTRAINT = 12:
+
       axis = 0..2 are constraint limits, with low/high limit value
          * 0: X axis position
          * 1: Y axis position
@@ -132,10 +133,10 @@ base class --- :class:`PyObjectPlus`
       Returns the contraint type (read only)
 
       :type: integer
+      - 1 = :class:`~bge.constraints.POINTTOPOINT_CONSTRAINT`
+      - 2 = :class:`~bge.constraints.LINEHINGE_CONSTRAINT`
+      - 3 = :class:`~bge.constraints.ANGULAR_CONSTRAINT`
+      - 4 = :class:`~bge.constraints.CONETWIST_CONSTRAINT`
+      - 11 = :class:`~bge.constraints.VEHICLE_CONSTRAINT`
+      - 12 = :class:`~bge.constraints.GENERIC_6DOF_CONSTRAINT`
 
-         * 1 = POINTTOPOINT_CONSTRAINT
-         * 2 = LINEHINGE_CONSTRAINT
-         * 3 = ANGULAR_CONSTRAINT (aka LINEHINGE_CONSTRAINT)
-         * 4 = CONETWIST_CONSTRAINT
-         * 11 = VEHICLE_CONSTRAINT
-         * 12 = GENERIC_6DOF_CONSTRAINT

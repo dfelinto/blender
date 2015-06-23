@@ -32,7 +32,7 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_array.h"
+#include "BLI_stack.h"
 #include "BLI_string.h"
 #include "BLI_math.h"
 
@@ -224,7 +224,8 @@ static void edgering_preview_calc_edges(RingSelOpData *lcd, DerivedMesh *dm, con
 	BMEdge *eed, *eed_last;
 	BMVert *v[2][2] = {{NULL}}, *v_last;
 	float (*edges)[2][3] = NULL;
-	BLI_array_declare(edges);
+	BLI_Stack *edge_stack;
+
 	int i, tot = 0;
 
 	BMW_init(&walker, bm, BMW_EDGERING,
@@ -232,10 +233,24 @@ static void edgering_preview_calc_edges(RingSelOpData *lcd, DerivedMesh *dm, con
 	         BMW_FLAG_TEST_HIDDEN,
 	         BMW_NIL_LAY);
 
+
+	edge_stack = BLI_stack_new(sizeof(BMEdge *), __func__);
+
+	eed_last = NULL;
+	for (eed = eed_start = BMW_begin(&walker, eed_start); eed; eed = BMW_step(&walker)) {
+		BLI_stack_push(edge_stack, &eed);
+		eed_last = eed;
+	}
+
+	edges = MEM_mallocN(
+	        (sizeof(*edges) * (BLI_stack_count(edge_stack) + (eed_last != eed_start))) * previewlines, __func__);
+
 	v_last   = NULL;
 	eed_last = NULL;
 
-	for (eed = eed_start = BMW_begin(&walker, eed_start); eed; eed = BMW_step(&walker)) {
+	while (!BLI_stack_is_empty(edge_stack)) {
+		BLI_stack_pop(edge_stack, &eed);
+
 		if (eed_last) {
 			if (v_last) {
 				v[1][0] = v[0][0];
@@ -249,8 +264,6 @@ static void edgering_preview_calc_edges(RingSelOpData *lcd, DerivedMesh *dm, con
 
 			edgering_find_order(eed_last, eed, v_last, v);
 			v_last = v[0][0];
-
-			BLI_array_grow_items(edges, previewlines);
 
 			for (i = 1; i <= previewlines; i++) {
 				const float fac = (i / ((float)previewlines + 1));
@@ -279,8 +292,6 @@ static void edgering_preview_calc_edges(RingSelOpData *lcd, DerivedMesh *dm, con
 
 		edgering_find_order(eed_last, eed_start, v_last, v);
 
-		BLI_array_grow_items(edges, previewlines);
-
 		for (i = 1; i <= previewlines; i++) {
 			const float fac = (i / ((float)previewlines + 1));
 			float v_cos[2][2][3];
@@ -296,6 +307,8 @@ static void edgering_preview_calc_edges(RingSelOpData *lcd, DerivedMesh *dm, con
 			tot++;
 		}
 	}
+
+	BLI_stack_free(edge_stack);
 
 	BMW_end(&walker);
 	lcd->edges = edges;
@@ -553,6 +566,7 @@ static int loopcut_init(bContext *C, wmOperator *op, const wmEvent *event)
 
 	/* add a modal handler for this operator - handles loop selection */
 	if (is_interactive) {
+		op->flag |= OP_IS_MODAL_CURSOR_REGION;
 		WM_event_add_modal_handler(C, op);
 	}
 
@@ -638,6 +652,9 @@ static int loopcut_modal(bContext *C, wmOperator *op, const wmEvent *event)
 	RingSelOpData *lcd = op->customdata;
 	bool show_cuts = false;
 	const bool has_numinput = hasNumInput(&lcd->num);
+
+	em_setup_viewcontext(C, &lcd->vc);
+	lcd->ar = lcd->vc.ar;
 
 	view3d_operator_needs_opengl(C);
 
@@ -825,21 +842,21 @@ void MESH_OT_loopcut(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_BLOCKING;
 
 	/* properties */
-	prop = RNA_def_int(ot->srna, "number_cuts", 1, 1, INT_MAX, "Number of Cuts", "", 1, 100);
+	prop = RNA_def_int(ot->srna, "number_cuts", 1, 1, 1000000, "Number of Cuts", "", 1, 100);
 	/* avoid re-using last var because it can cause _very_ high poly meshes and annoy users (or worse crash) */
 	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 
-	prop = RNA_def_float(ot->srna, "smoothness", 0.0f, -FLT_MAX, FLT_MAX,
+	prop = RNA_def_float(ot->srna, "smoothness", 0.0f, -1e3f, 1e3f,
 	                     "Smoothness", "Smoothness factor", -SUBD_SMOOTH_MAX, SUBD_SMOOTH_MAX);
 	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 
 	prop = RNA_def_property(ot->srna, "falloff", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_items(prop, proportional_falloff_curve_only_items);
-	RNA_def_property_enum_default(prop, PROP_ROOT);
+	RNA_def_property_enum_default(prop, PROP_INVSQUARE);
 	RNA_def_property_ui_text(prop, "Falloff", "Falloff type the feather");
 	RNA_def_property_translation_context(prop, BLF_I18NCONTEXT_ID_CURVE); /* Abusing id_curve :/ */
 
-	prop = RNA_def_int(ot->srna, "edge_index", -1, -1, INT_MAX, "Number of Cuts", "", 0, INT_MAX);
+	prop = RNA_def_int(ot->srna, "edge_index", -1, -1, INT_MAX, "Edge Index", "", 0, INT_MAX);
 	RNA_def_property_flag(prop, PROP_HIDDEN);
 
 #ifdef USE_LOOPSLIDE_HACK

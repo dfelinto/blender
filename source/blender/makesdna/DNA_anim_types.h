@@ -459,7 +459,7 @@ typedef struct FCurve {
 	int color_mode;			/* coloring method to use (eFCurve_Coloring) */
 	float color[3];			/* the last-color this curve took */
 
-	float prev_norm_factor, pad;
+	float prev_norm_factor, prev_offset;
 } FCurve;
 
 
@@ -853,6 +853,8 @@ typedef struct AnimData {
 
 		/* nla-tracks */
 	ListBase    nla_tracks;
+		/* active NLA-track (only set/used during tweaking, so no need to worry about dangling pointers) */
+	NlaTrack	*act_track;
 		/* active NLA-strip (only set/used during tweaking, so no need to worry about dangling pointers) */
 	NlaStrip    *actstrip;
 

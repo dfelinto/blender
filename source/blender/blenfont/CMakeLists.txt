@@ -29,7 +29,6 @@ set(INC
 	../gpu
 	../makesdna
 	../makesrna
-	../python
 	../imbuf
 	../../../intern/guardedalloc
 	../../../intern/glew-mx
@@ -47,6 +46,7 @@ set(SRC
 	intern/blf_font.c
 	intern/blf_glyph.c
 	intern/blf_lang.c
+	intern/blf_thumbs.c
 	intern/blf_translation.c
 	intern/blf_util.c
 
@@ -66,7 +66,13 @@ if(WITH_INTERNATIONAL)
 	add_definitions(-DWITH_INTERNATIONAL)
 endif()
 
+if(WITH_PYTHON)
+	add_definitions(-DWITH_PYTHON)
+	list(APPEND INC
+		../python
+	)
+endif()
+
 add_definitions(${GL_DEFINITIONS})
 
 blender_add_lib(bf_blenfont "${SRC}" "${INC}" "${INC_SYS}")
-

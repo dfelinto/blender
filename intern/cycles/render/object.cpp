@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "camera.h"
 #include "device.h"
 #include "light.h"
 #include "mesh.h"
@@ -23,6 +24,7 @@
 #include "scene.h"
 
 #include "util_foreach.h"
+#include "util_logging.h"
 #include "util_map.h"
 #include "util_progress.h"
 #include "util_vector.h"
@@ -191,6 +193,7 @@ void Object::tag_update(Scene *scene)
 		}
 	}
 
+	scene->camera->need_flags_update = true;
 	scene->curve_system_manager->need_update = true;
 	scene->mesh_manager->need_update = true;
 	scene->object_manager->need_update = true;
@@ -377,6 +380,8 @@ void ObjectManager::device_update_transforms(Device *device, DeviceScene *dscene
 
 void ObjectManager::device_update(Device *device, DeviceScene *dscene, Scene *scene, Progress& progress)
 {
+	VLOG(1) << "Total " << scene->objects.size() << " objects.";
+
 	if(!need_update)
 		return;
 	
@@ -405,7 +410,8 @@ void ObjectManager::device_update(Device *device, DeviceScene *dscene, Scene *sc
 void ObjectManager::device_update_flags(Device *device,
                                         DeviceScene *dscene,
                                         Scene *scene,
-                                        Progress& /*progress*/)
+                                        Progress& /*progress*/,
+                                        bool bounds_valid)
 {
 	if(!need_update && !need_flags_update)
 		return;
@@ -420,9 +426,13 @@ void ObjectManager::device_update_flags(Device *device,
 	uint *object_flag = dscene->object_flag.get_data();
 
 	vector<Object *> volume_objects;
+	bool has_volume_objects = false;
 	foreach(Object *object, scene->objects) {
 		if(object->mesh->has_volume) {
-			volume_objects.push_back(object);
+			if(bounds_valid) {
+				volume_objects.push_back(object);
+			}
+			has_volume_objects = true;
 		}
 	}
 
@@ -435,14 +445,22 @@ void ObjectManager::device_update_flags(Device *device,
 			object_flag[object_index] &= ~SD_OBJECT_HAS_VOLUME;
 		}
 
-		foreach(Object *volume_object, volume_objects) {
-			if(object == volume_object) {
-				continue;
+		if(bounds_valid) {
+			foreach(Object *volume_object, volume_objects) {
+				if(object == volume_object) {
+					continue;
+				}
+				if(object->bounds.intersects(volume_object->bounds)) {
+					object_flag[object_index] |= SD_OBJECT_INTERSECTS_VOLUME;
+					break;
+				}
 			}
-			if(object->bounds.intersects(volume_object->bounds)) {
-				object_flag[object_index] |= SD_OBJECT_INTERSECTS_VOLUME;
-				break;
-			}
+		}
+		else if(has_volume_objects) {
+			/* Not really valid, but can't make more reliable in the case
+			 * of bounds not being up to date.
+			 */
+			object_flag[object_index] |= SD_OBJECT_INTERSECTS_VOLUME;
 		}
 		++object_index;
 	}
@@ -476,6 +494,7 @@ void ObjectManager::apply_static_transforms(DeviceScene *dscene, Scene *scene, u
 	bool apply_to_motion = need_motion != Scene::MOTION_PASS;
 #else
 	bool motion_blur = false;
+	bool apply_to_motion = false;
 #endif
 	int i = 0;
 	bool have_instancing = false;

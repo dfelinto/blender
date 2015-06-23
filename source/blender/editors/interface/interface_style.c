@@ -64,7 +64,7 @@
 
 /* style + theme + layout-engine = UI */
 
-/* 
+/**
  * This is a complete set of layout rules, the 'state' of the Layout 
  * Engine. Multiple styles are possible, defined via C or Python. Styles 
  * get a name, and will typically get activated per region type, like 
@@ -323,10 +323,14 @@ void UI_fontstyle_draw_simple_backdrop(
 /* XXX: read a style configure */
 uiStyle *UI_style_get(void)
 {
+#if 0
 	uiStyle *style = NULL;
 	/* offset is two struct uiStyle pointers */
-	/* style = BLI_findstring(&U.uistyles, "Unifont Style", sizeof(style) * 2) */;
+	style = BLI_findstring(&U.uistyles, "Unifont Style", sizeof(style) * 2);
 	return (style != NULL) ? style : U.uistyles.first;
+#else
+	return U.uistyles.first;
+#endif
 }
 
 /* for drawing, scaled with DPI setting */

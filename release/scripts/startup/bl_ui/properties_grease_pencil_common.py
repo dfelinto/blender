@@ -321,7 +321,7 @@ class GPENCIL_UL_layer(UIList):
             row = layout.row(align=True)
             row.prop(gpl, "lock", text="", emboss=False)
             row.prop(gpl, "hide", text="", emboss=False)
-        elif self.layout_type in {'GRID'}:
+        elif self.layout_type == 'GRID':
             layout.alignment = 'CENTER'
             layout.label(text="", icon_value=icon)
 
@@ -414,9 +414,7 @@ class GreasePencilDataPanel:
 
         col = split.column(align=True)
         col.prop(gpl, "show_x_ray")
-
-        # if debug:
-        #     layout.prop(gpl, "show_points")
+        col.prop(gpl, "show_points", text="Points")
 
         layout.separator()
 

@@ -37,7 +37,7 @@
 
 #include "py_capi_utils.h"
 
-#include "../generic/python_utildefines.h"
+#include "python_utildefines.h"
 
 /* only for BLI_strncpy_wchar_from_utf8, should replace with py funcs but too late in release now */
 #include "BLI_string_utf8.h"
@@ -478,6 +478,34 @@ error_cleanup:
 }
 #endif
 
+PyObject *PyC_ExceptionBuffer_Simple(void)
+{
+	PyObject *string_io_buf;
+
+	PyObject *error_type, *error_value, *error_traceback;
+
+	if (!PyErr_Occurred())
+		return NULL;
+
+	PyErr_Fetch(&error_type, &error_value, &error_traceback);
+
+	if (error_value == NULL) {
+		return NULL;
+	}
+
+	string_io_buf = PyObject_Str(error_value);
+	/* Python does this too */
+	if (UNLIKELY(string_io_buf == NULL)) {
+		string_io_buf = PyUnicode_FromFormat(
+		        "<unprintable %s object>", Py_TYPE(error_value)->tp_name);
+	}
+
+	PyErr_Restore(error_type, error_value, error_traceback);
+
+	PyErr_Print();
+	PyErr_Clear();
+	return string_io_buf;
+}
 
 /* string conversion, escape non-unicode chars, coerce must be set to NULL */
 const char *PyC_UnicodeAsByte(PyObject *py_str, PyObject **coerce)

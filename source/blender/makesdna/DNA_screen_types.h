@@ -281,6 +281,8 @@ enum {
 	AREA_FLAG_TEMP_TYPE          = (1 << 6),
 	/* for temporary fullscreens (file browser, image editor render) that are opened above user set fullscreens */
 	AREA_FLAG_STACKED_FULLSCREEN = (1 << 7),
+	/* update action zones (even if the mouse is not intersecting them) */
+	AREA_FLAG_ACTIONZONES_UPDATE = (1 << 8),
 };
 
 #define EDGEWIDTH	1
@@ -372,6 +374,8 @@ enum {
 	RGN_TYPE_TOOL_PROPS = 6,
 	RGN_TYPE_PREVIEW = 7
 };
+/* use for function args */
+#define RGN_TYPE_ANY -1
 
 /* region alignment */
 #define RGN_ALIGN_NONE		0

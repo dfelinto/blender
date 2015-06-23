@@ -51,6 +51,8 @@
 #  include <Python.h>
 
 extern "C" {
+	#  include "BLI_utildefines.h"
+	#  include "python_utildefines.h"
 	#  include "bpy_internal_import.h"  /* from the blender python api, but we want to import text too! */
 	#  include "py_capi_utils.h"
 	#  include "mathutils.h" // 'mathutils' module copied here so the blenderlayer can use.
@@ -136,6 +138,7 @@ extern "C" {
 #include "BKE_global.h"
 #include "BKE_library.h"
 #include "BKE_appdir.h"
+#include "BKE_blender.h"
 #include "BLI_blenlib.h"
 #include "GPU_material.h"
 #include "MEM_guardedalloc.h"
@@ -354,7 +357,7 @@ static PyObject *gPyLoadGlobalDict(PyObject *)
 {
 	char marshal_path[512];
 	char *marshal_buffer = NULL;
-	size_t marshal_length;
+	int marshal_length;
 	FILE *fp = NULL;
 	int result;
 
@@ -365,7 +368,12 @@ static PyObject *gPyLoadGlobalDict(PyObject *)
 	if (fp) {
 		// obtain file size:
 		fseek (fp, 0, SEEK_END);
-		marshal_length = (size_t)ftell(fp);
+		marshal_length = ftell(fp);
+		if (marshal_length == -1) {
+			printf("Warning: could not read position of '%s'\n", marshal_path);
+			fclose(fp);
+			Py_RETURN_NONE;
+		}
 		rewind(fp);
 
 		marshal_buffer = (char*)malloc (sizeof(char)*marshal_length);
@@ -1403,6 +1411,21 @@ static PyObject *gPyClearDebugList(PyObject *)
 	Py_RETURN_NONE;
 }
 
+static PyObject *gPyGetDisplayDimensions(PyObject *)
+{
+	PyObject *result;
+	int width, height;
+
+	gp_Canvas->GetDisplayDimensions(width, height);
+
+	result = PyTuple_New(2);
+	PyTuple_SET_ITEMS(result,
+	        PyLong_FromLong(width),
+	        PyLong_FromLong(height));
+
+	return result;
+}
+
 PyDoc_STRVAR(Rasterizer_module_documentation,
 "This is the Python API for the game engine of Rasterizer"
 );
@@ -1446,6 +1469,8 @@ static struct PyMethodDef rasterizer_methods[] = {
 	{"setWindowSize", (PyCFunction) gPySetWindowSize, METH_VARARGS, ""},
 	{"setFullScreen", (PyCFunction) gPySetFullScreen, METH_O, ""},
 	{"getFullScreen", (PyCFunction) gPyGetFullScreen, METH_NOARGS, ""},
+	{"getDisplayDimensions", (PyCFunction) gPyGetDisplayDimensions, METH_NOARGS,
+	 "Get the actual dimensions, in pixels, of the physical display (e.g., the monitor)."},
 	{"setMipmapping", (PyCFunction) gPySetMipmapping, METH_VARARGS, ""},
 	{"getMipmapping", (PyCFunction) gPyGetMipmapping, METH_NOARGS, ""},
 	{"setVsync", (PyCFunction) gPySetVsync, METH_VARARGS, ""},
@@ -1996,32 +2021,49 @@ PyMODINIT_FUNC initBGE(void)
 	PyObject *mod;
 	PyObject *submodule;
 	PyObject *sys_modules = PyThreadState_GET()->interp->modules;
+	const char *mod_full;
 
 	mod = PyModule_Create(&BGE_module_def);
 
-	PyModule_AddObject(mod, "constraints", (submodule = initConstraintPythonBinding()));
-	PyDict_SetItemString(sys_modules, PyModule_GetName(submodule), submodule);
+	/* skip "bge." */
+#define SUBMOD (mod_full + 4)
+
+	mod_full = "bge.app";
+	PyModule_AddObject(mod, SUBMOD, (submodule = initApplicationPythonBinding()));
+	PyDict_SetItemString(sys_modules, mod_full, submodule);
 	Py_INCREF(submodule);
 
-	PyModule_AddObject(mod, "events", (submodule = initGameKeysPythonBinding()));
-	PyDict_SetItemString(sys_modules, PyModule_GetName(submodule), submodule);
+	mod_full = "bge.constraints";
+	PyModule_AddObject(mod, SUBMOD, (submodule = initConstraintPythonBinding()));
+	PyDict_SetItemString(sys_modules, mod_full, submodule);
 	Py_INCREF(submodule);
 
-	PyModule_AddObject(mod, "logic", (submodule = initGameLogicPythonBinding()));
-	PyDict_SetItemString(sys_modules, PyModule_GetName(submodule), submodule);
+	mod_full = "bge.events";
+	PyModule_AddObject(mod, SUBMOD, (submodule = initGameKeysPythonBinding()));
+	PyDict_SetItemString(sys_modules, mod_full, submodule);
 	Py_INCREF(submodule);
 
-	PyModule_AddObject(mod, "render", (submodule = initRasterizerPythonBinding()));
-	PyDict_SetItemString(sys_modules, PyModule_GetName(submodule), submodule);
+	mod_full = "bge.logic";
+	PyModule_AddObject(mod, SUBMOD, (submodule = initGameLogicPythonBinding()));
+	PyDict_SetItemString(sys_modules, mod_full, submodule);
 	Py_INCREF(submodule);
 
-	PyModule_AddObject(mod, "texture", (submodule = initVideoTexturePythonBinding()));
-	PyDict_SetItemString(sys_modules, PyModule_GetName(submodule), submodule);
+	mod_full = "bge.render";
+	PyModule_AddObject(mod, SUBMOD, (submodule = initRasterizerPythonBinding()));
+	PyDict_SetItemString(sys_modules, mod_full, submodule);
 	Py_INCREF(submodule);
 
-	PyModule_AddObject(mod, "types", (submodule = initGameTypesPythonBinding()));
-	PyDict_SetItemString(sys_modules, PyModule_GetName(submodule), submodule);
+	mod_full = "bge.texture";
+	PyModule_AddObject(mod, SUBMOD, (submodule = initVideoTexturePythonBinding()));
+	PyDict_SetItemString(sys_modules, mod_full, submodule);
 	Py_INCREF(submodule);
+
+	mod_full = "bge.types";
+	PyModule_AddObject(mod, SUBMOD, (submodule = initGameTypesPythonBinding()));
+	PyDict_SetItemString(sys_modules, mod_full, submodule);
+	Py_INCREF(submodule);
+
+#undef SUBMOD
 
 	return mod;
 }
@@ -2513,6 +2555,77 @@ PyMODINIT_FUNC initGameKeysPythonBinding()
 
 	return m;
 }
+
+
+
+/* ------------------------------------------------------------------------- */
+/* Application: application values that remain unchanged during runtime       */
+/* ------------------------------------------------------------------------- */
+
+PyDoc_STRVAR(Application_module_documentation,
+	"This module contains application values that remain unchanged during runtime."
+	);
+
+static struct PyModuleDef Application_module_def = {
+	PyModuleDef_HEAD_INIT,
+	"bge.app",  /* m_name */
+	Application_module_documentation,  /* m_doc */
+	0,  /* m_size */
+	NULL,  /* m_methods */
+	0,  /* m_reload */
+	0,  /* m_traverse */
+	0,  /* m_clear */
+	0,  /* m_free */
+};
+
+PyMODINIT_FUNC initApplicationPythonBinding()
+{
+	PyObject *m;
+	PyObject *d;
+
+	m = PyModule_Create(&Application_module_def);
+	
+	// Add some symbolic constants to the module
+	d = PyModule_GetDict(m);
+
+	PyDict_SetItemString(d, "version", Py_BuildValue("(iii)",
+		BLENDER_VERSION / 100, BLENDER_VERSION % 100, BLENDER_SUBVERSION));
+	PyDict_SetItemString(d, "version_string", PyUnicode_FromFormat("%d.%02d (sub %d)",
+		BLENDER_VERSION / 100, BLENDER_VERSION % 100, BLENDER_SUBVERSION));
+	PyDict_SetItemString(d, "version_char", PyUnicode_FromString(
+		STRINGIFY(BLENDER_VERSION_CHAR)));
+
+	PyDict_SetItemString(d, "has_texture_ffmpeg",
+#ifdef WITH_FFMPEG
+		Py_True
+#else
+		Py_False
+#endif
+	);
+	PyDict_SetItemString(d, "has_joystick",
+#ifdef WITH_SDL
+		Py_True
+#else
+		Py_False
+#endif
+	);
+	PyDict_SetItemString(d, "has_physics",
+#ifdef WITH_BULLET
+		Py_True
+#else
+		Py_False
+#endif
+	);
+
+	// Check for errors
+	if (PyErr_Occurred()) {
+		PyErr_Print();
+		PyErr_Clear();
+	}
+
+	return m;
+}
+
 
 // utility function for loading and saving the globalDict
 int saveGamePythonConfig( char **marshal_buffer)

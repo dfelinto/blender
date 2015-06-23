@@ -831,7 +831,7 @@ static void node_shader_buts_tex_image(uiLayout *layout, bContext *C, PointerRNA
 static void node_shader_buts_tex_image_ex(uiLayout *layout, bContext *C, PointerRNA *ptr)
 {
 	PointerRNA iuserptr = RNA_pointer_get(ptr, "image_user");
-	uiTemplateImage(layout, C, ptr, "image", &iuserptr, 0);
+	uiTemplateImage(layout, C, ptr, "image", &iuserptr, 0, 0);
 }
 
 static void node_shader_buts_tex_environment(uiLayout *layout, bContext *C, PointerRNA *ptr)
@@ -864,14 +864,15 @@ static void node_shader_buts_tex_environment_ex(uiLayout *layout, bContext *C, P
 
 	if (!(ELEM(ima->source, IMA_SRC_GENERATED, IMA_SRC_VIEWER))) {
 		uiLayout *row = uiLayoutRow(layout, true);
+		const bool is_packed = BKE_image_has_packedfile(ima);
 
-		if (ima->packedfile)
+		if (is_packed)
 			uiItemO(row, "", ICON_PACKAGE, "image.unpack");
 		else
 			uiItemO(row, "", ICON_UGLYPACKAGE, "image.pack");
 
 		row = uiLayoutRow(row, true);
-		uiLayoutSetEnabled(row, ima->packedfile == NULL);
+		uiLayoutSetEnabled(row, !is_packed);
 		uiItemR(row, &imaptr, "filepath", 0, "", ICON_NONE);
 		uiItemO(row, "", ICON_FILE_REFRESH, "image.reload");
 	}
@@ -1258,7 +1259,7 @@ static void node_composit_buts_image_ex(uiLayout *layout, bContext *C, PointerRN
 
 	RNA_pointer_create((ID *)ptr->id.data, &RNA_ImageUser, node->storage, &iuserptr);
 	uiLayoutSetContextPointer(layout, "image_user", &iuserptr);
-	uiTemplateImage(layout, C, ptr, "image", &iuserptr, 0);
+	uiTemplateImage(layout, C, ptr, "image", &iuserptr, 0, 1);
 }
 
 static void node_composit_buts_renderlayers(uiLayout *layout, bContext *C, PointerRNA *ptr)
@@ -2786,7 +2787,7 @@ static void node_texture_buts_image_ex(uiLayout *layout, bContext *C, PointerRNA
 	PointerRNA iuserptr;
 
 	RNA_pointer_create((ID *)ptr->id.data, &RNA_ImageUser, node->storage, &iuserptr);
-	uiTemplateImage(layout, C, ptr, "image", &iuserptr, 0);
+	uiTemplateImage(layout, C, ptr, "image", &iuserptr, 0, 0);
 }
 
 static void node_texture_buts_output(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)

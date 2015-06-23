@@ -34,16 +34,25 @@
 #include "DNA_scene_types.h"
 #include "DNA_space_types.h"
 #include "DNA_userdef_types.h"
+#include "DNA_screen_types.h"
+#include "DNA_object_types.h"
+#include "DNA_gpencil_types.h"
+#include "DNA_mask_types.h"
 
 #include "BLI_math.h"
 #include "BLI_timecode.h"
+#include "BLI_utildefines.h"
+#include "BLI_rect.h"
+#include "BLI_dlrbTree.h"
 
 #include "BKE_context.h"
 #include "BKE_global.h"
 #include "BKE_nla.h"
+#include "BKE_mask.h"
 
 #include "ED_anim_api.h"
 #include "ED_keyframes_edit.h"
+#include "ED_keyframes_draw.h"
 
 #include "RNA_access.h"
 
@@ -266,19 +275,26 @@ short ANIM_get_normalization_flags(bAnimContext *ac)
 	return 0;
 }
 
-static float normalzation_factor_get(FCurve *fcu, short flag)
+static float normalization_factor_get(Scene *scene, FCurve *fcu, short flag, float *r_offset)
 {
-	float factor = 1.0f;
+	float factor = 1.0f, offset = 0.0f;
 
 	if (flag & ANIM_UNITCONV_RESTORE) {
+		if (r_offset)
+			*r_offset = fcu->prev_offset;
+
 		return 1.0f / fcu->prev_norm_factor;
 	}
 
 	if (flag & ANIM_UNITCONV_NORMALIZE_FREEZE) {
+		if (r_offset)
+			*r_offset = fcu->prev_offset;
 		return fcu->prev_norm_factor;
 	}
 
 	if (G.moving & G_TRANSFORM_FCURVES) {
+		if (r_offset)
+			*r_offset = fcu->prev_offset;
 		return fcu->prev_norm_factor;
 	}
 
@@ -287,31 +303,64 @@ static float normalzation_factor_get(FCurve *fcu, short flag)
 		BezTriple *bezt;
 		int i;
 		float max_coord = -FLT_MAX;
+		float min_coord = FLT_MAX;
+		float range;
 
 		if (fcu->totvert < 1) {
 			return 1.0f;
 		}
 
-		for (i = 0, bezt = fcu->bezt; i < fcu->totvert; i++, bezt++) {
-			max_coord = max_ff(max_coord, fabsf(bezt->vec[0][1]));
-			max_coord = max_ff(max_coord, fabsf(bezt->vec[1][1]));
-			max_coord = max_ff(max_coord, fabsf(bezt->vec[2][1]));
+		if (PRVRANGEON) {
+			for (i = 0, bezt = fcu->bezt; i < fcu->totvert; i++, bezt++) {
+				if (IN_RANGE_INCL(bezt->vec[1][0], scene->r.psfra, scene->r.pefra)) {
+					max_coord = max_ff(max_coord, bezt->vec[0][1]);
+					max_coord = max_ff(max_coord, bezt->vec[1][1]);
+					max_coord = max_ff(max_coord, bezt->vec[2][1]);
+
+					min_coord = min_ff(min_coord, bezt->vec[0][1]);
+					min_coord = min_ff(min_coord, bezt->vec[1][1]);
+					min_coord = min_ff(min_coord, bezt->vec[2][1]);
+				}
+			}
+		}
+		else {
+			for (i = 0, bezt = fcu->bezt; i < fcu->totvert; i++, bezt++) {
+				max_coord = max_ff(max_coord, bezt->vec[0][1]);
+				max_coord = max_ff(max_coord, bezt->vec[1][1]);
+				max_coord = max_ff(max_coord, bezt->vec[2][1]);
+
+				min_coord = min_ff(min_coord, bezt->vec[0][1]);
+				min_coord = min_ff(min_coord, bezt->vec[1][1]);
+				min_coord = min_ff(min_coord, bezt->vec[2][1]);
+			}
 		}
 
-		if (max_coord > FLT_EPSILON) {
-			factor = 1.0f / max_coord;
+		range = max_coord - min_coord;
+
+		if (range > FLT_EPSILON) {
+			factor = 2.0f / range;
 		}
+		offset = -min_coord - range / 2.0f;
 	}
+
+	if (r_offset) {
+		*r_offset = offset;
+	}
+
 	fcu->prev_norm_factor = factor;
+	fcu->prev_offset = offset;
 	return factor;
 }
 
 /* Get unit conversion factor for given ID + F-Curve */
-float ANIM_unit_mapping_get_factor(Scene *scene, ID *id, FCurve *fcu, short flag)
+float ANIM_unit_mapping_get_factor(Scene *scene, ID *id, FCurve *fcu, short flag, float *r_offset)
 {
 	if (flag & ANIM_UNITCONV_NORMALIZE) {
-		return normalzation_factor_get(fcu, flag);
+		return normalization_factor_get(scene, fcu, flag, r_offset);
 	}
+
+	if (r_offset)
+		*r_offset = 0.0f;
 
 	/* sanity checks */
 	if (id && fcu && fcu->rna_path) {
@@ -340,4 +389,137 @@ float ANIM_unit_mapping_get_factor(Scene *scene, ID *id, FCurve *fcu, short flag
 	return 1.0f;
 }
 
+static bool find_prev_next_keyframes(struct bContext *C, int *nextfra, int *prevfra)
+{
+	Scene *scene = CTX_data_scene(C);
+	Object *ob = CTX_data_active_object(C);
+	bGPdata *gpd = CTX_data_gpencil_data(C);
+	Mask *mask = CTX_data_edit_mask(C);
+	bDopeSheet ads = {NULL};
+	DLRBT_Tree keys;
+	ActKeyColumn *aknext, *akprev;
+	float cfranext, cfraprev;
+	bool donenext = false, doneprev = false;
+	int nextcount = 0, prevcount = 0;
+
+	cfranext = cfraprev = (float)(CFRA);
+
+	/* init binarytree-list for getting keyframes */
+	BLI_dlrbTree_init(&keys);
+
+	/* seed up dummy dopesheet context with flags to perform necessary filtering */
+	if ((scene->flag & SCE_KEYS_NO_SELONLY) == 0) {
+		/* only selected channels are included */
+		ads.filterflag |= ADS_FILTER_ONLYSEL;
+	}
+
+	/* populate tree with keyframe nodes */
+	scene_to_keylist(&ads, scene, &keys, NULL);
+
+	if (ob)
+		ob_to_keylist(&ads, ob, &keys, NULL);
+
+	gpencil_to_keylist(&ads, gpd, &keys);
+
+	if (mask) {
+		MaskLayer *masklay = BKE_mask_layer_active(mask);
+		mask_to_keylist(&ads, masklay, &keys);
+	}
+
+	/* build linked-list for searching */
+	BLI_dlrbTree_linkedlist_sync(&keys);
+
+	/* find matching keyframe in the right direction */
+	do {
+		aknext = (ActKeyColumn *)BLI_dlrbTree_search_next(&keys, compare_ak_cfraPtr, &cfranext);
+
+		if (aknext) {
+			if (CFRA == (int)aknext->cfra) {
+				/* make this the new starting point for the search and ignore */
+				cfranext = aknext->cfra;
+			}
+			else {
+				/* this changes the frame, so set the frame and we're done */
+				if (++nextcount == U.view_frame_keyframes)
+					donenext = true;
+			}
+			cfranext = aknext->cfra;
+		}
+	} while ((aknext != NULL) && (donenext == false));
+
+	do {
+		akprev = (ActKeyColumn *)BLI_dlrbTree_search_prev(&keys, compare_ak_cfraPtr, &cfraprev);
+
+		if (akprev) {
+			if (CFRA == (int)akprev->cfra) {
+				/* make this the new starting point for the search */
+			}
+			else {
+				/* this changes the frame, so set the frame and we're done */
+				if (++prevcount == U.view_frame_keyframes)
+					doneprev = true;
+			}
+			cfraprev = akprev->cfra;
+		}
+	} while ((akprev != NULL) && (doneprev == false));
+
+	/* free temp stuff */
+	BLI_dlrbTree_free(&keys);
+
+	/* any success? */
+	if (doneprev || donenext) {
+		if (doneprev)
+			*prevfra = cfraprev;
+		else
+			*prevfra = CFRA - (cfranext - CFRA);
+
+		if (donenext)
+			*nextfra = cfranext;
+		else
+			*nextfra = CFRA + (CFRA - cfraprev);
+
+		return true;
+	}
+
+	return false;
+}
+
+void ANIM_center_frame(struct bContext *C, int smooth_viewtx)
+{
+	ARegion *ar = CTX_wm_region(C);
+	Scene *scene = CTX_data_scene(C);
+	float w = BLI_rctf_size_x(&ar->v2d.cur);
+	rctf newrct;
+	int nextfra, prevfra;
+
+	switch (U.view_frame_type) {
+		case ZOOM_FRAME_MODE_SECONDS:
+			newrct.xmax = scene->r.cfra + U.view_frame_seconds * FPS + 1;
+			newrct.xmin = scene->r.cfra - U.view_frame_seconds * FPS - 1;
+			newrct.ymax = ar->v2d.cur.ymax;
+			newrct.ymin = ar->v2d.cur.ymin;
+			break;
+
+		/* hardest case of all, look for all keyframes around frame and display those */
+		case ZOOM_FRAME_MODE_KEYFRAMES:
+			if (find_prev_next_keyframes(C, &nextfra, &prevfra)) {
+				newrct.xmax = nextfra;
+				newrct.xmin = prevfra;
+				newrct.ymax = ar->v2d.cur.ymax;
+				newrct.ymin = ar->v2d.cur.ymin;
+				break;
+			}
+			/* else drop through, keep range instead */
+
+		case ZOOM_FRAME_MODE_KEEP_RANGE:
+		default:
+			newrct.xmax = scene->r.cfra + (w / 2);
+			newrct.xmin = scene->r.cfra - (w / 2);
+			newrct.ymax = ar->v2d.cur.ymax;
+			newrct.ymin = ar->v2d.cur.ymin;
+			break;
+	}
+
+	UI_view2d_smooth_view(C, ar, &newrct, smooth_viewtx);
+}
 /* *************************************************** */

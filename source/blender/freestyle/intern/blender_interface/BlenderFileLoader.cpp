@@ -64,12 +64,11 @@ NodeGroup *BlenderFileLoader::Load()
 	_viewplane_bottom = _re->viewplane.ymin;
 	_viewplane_top =    _re->viewplane.ymax;
 
-	if ((_re->r.scemode & R_VIEWPORT_PREVIEW) && (_re->r.mode & R_ORTHO)) {
+	if (_re->clipsta < 0.f) {
 		// Adjust clipping start/end and set up a Z offset when the viewport preview
 		// is used with the orthographic view.  In this case, _re->clipsta is negative,
 		// while Freestyle assumes that imported mesh data are in the camera coordinate
 		// system with the view point located at origin [bug #36009].
-		BLI_assert(_re->clipsta < 0.f);
 		_z_near = -0.001f;
 		_z_offset = _re->clipsta + _z_near;
 		_z_far = -_re->clipend + _z_offset;
@@ -537,8 +536,12 @@ void BlenderFileLoader::insertShapeNode(ObjectInstanceRen *obi, int id)
 		else {
 			RE_vlakren_get_normal(_re, obi, vlr, facenormal);
 #ifndef NDEBUG
+			/* test if normals are inverted in rendering [T39669] */
 			float tnor[3];
-			normal_tri_v3(tnor, v3, v2, v1);  /* normals are inverted in rendering */
+			if (vlr->v4)
+				normal_quad_v3(tnor, v4, v3, v2, v1);
+			else
+				normal_tri_v3(tnor, v3, v2, v1);
 			BLI_assert(dot_v3v3(tnor, facenormal) > 0.0f);
 #endif
 			copy_v3_v3(n1, facenormal);

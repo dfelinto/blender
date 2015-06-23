@@ -43,7 +43,9 @@
 #include "BKE_deform.h"
 
 #include "MEM_guardedalloc.h"
+
 #include "depsgraph_private.h"
+#include "DEG_depsgraph_build.h"
 
 static void initData(ModifierData *md)
 {
@@ -88,13 +90,25 @@ static void updateDepgraph(ModifierData *md, DagForest *forest,
 	}
 }
 
+static void updateDepsgraph(ModifierData *md,
+                            struct Main *UNUSED(bmain),
+                            struct Scene *UNUSED(scene),
+                            Object *UNUSED(ob),
+                            struct DepsNodeHandle *node)
+{
+	MirrorModifierData *mmd = (MirrorModifierData *)md;
+	if (mmd->mirror_ob != NULL) {
+		DEG_add_object_relation(node, mmd->mirror_ob, DEG_OB_COMP_TRANSFORM, "Mirror Modifier");
+	}
+}
+
 static DerivedMesh *doMirrorOnAxis(MirrorModifierData *mmd,
                                    Object *ob,
                                    DerivedMesh *dm,
                                    int axis)
 {
 	const float tolerance_sq = mmd->tolerance * mmd->tolerance;
-	const int do_vtargetmap = !(mmd->flag & MOD_MIR_NO_MERGE);
+	const bool do_vtargetmap = (mmd->flag & MOD_MIR_NO_MERGE) == 0;
 	int tot_vtargetmap = 0;  /* total merge vertices */
 
 	DerivedMesh *result;
@@ -361,6 +375,7 @@ ModifierTypeInfo modifierType_Mirror = {
 	/* freeData */          NULL,
 	/* isDisabled */        NULL,
 	/* updateDepgraph */    updateDepgraph,
+	/* updateDepsgraph */   updateDepsgraph,
 	/* dependsOnTime */     NULL,
 	/* dependsOnNormals */	NULL,
 	/* foreachObjectLink */ foreachObjectLink,

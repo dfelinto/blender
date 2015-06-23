@@ -88,6 +88,7 @@ LANGUAGES = (
     (38, "Uzbek (Oʻzbek)", "uz_UZ"),
     (39, "Uzbek Cyrillic (Ўзбек)", "uz_UZ@cyrillic"),
     (40, "Hindi (मानक हिन्दी)", "hi_IN"),
+    (41, "Vietnamese (tiếng Việt)", "vi_VN"),
 )
 
 # Default context, in py!
@@ -324,6 +325,7 @@ WARN_MSGID_NOT_CAPITALIZED_ALLOWED = {
     "y",
     # Sub-strings.
     "available with",
+    "brown fox",
     "can't save image while rendering",
     "expected a timeline/animation area to be active",
     "expected a view3d region",
@@ -332,6 +334,8 @@ WARN_MSGID_NOT_CAPITALIZED_ALLOWED = {
     "image file not found",
     "image path can't be written to",
     "in memory to enable editing!",
+    "jumps over",
+    "the lazy dog",
     "unable to load movie clip",
     "unable to load text",
     "unable to open the file",
@@ -411,6 +415,15 @@ REL_TRUNK_PO_DIR = os.path.join(REL_TRUNK_DIR, "po")
 
 # The /trunk/mo path (relative to I18N_DIR).
 REL_TRUNK_MO_DIR = os.path.join(REL_TRUNK_DIR, "locale")
+
+
+# The path to the *git* translation repository (relative to SOURCE_DIR).
+REL_GIT_I18N_DIR = os.path.join("release/datafiles/locale")
+
+
+# The /po path of the *git* translation repository (relative to REL_GIT_I18N_DIR).
+REL_GIT_I18N_PO_DIR = os.path.join("po")
+
 
 # The Blender source path to check for i18n macros (relative to SOURCE_DIR).
 REL_POTFILES_SOURCE_DIR = os.path.join("source")
@@ -493,14 +506,6 @@ def _gen_get_set_path(ref, name):
     return _get, _set
 
 
-def _gen_get_set_paths(ref, name):
-    def _get(self):
-        return [_do_get(getattr(self, ref), p) for p in getattr(self, name)]
-    def _set(self, value):
-        setattr(self, name, [_do_set(getattr(self, ref), p) for p in value])
-    return _get, _set
-
-
 class I18nSettings:
     """
     Class allowing persistence of our settings!
@@ -552,6 +557,8 @@ class I18nSettings:
     TRUNK_DIR = property(*(_gen_get_set_path("I18N_DIR", "REL_TRUNK_DIR")))
     TRUNK_PO_DIR = property(*(_gen_get_set_path("I18N_DIR", "REL_TRUNK_PO_DIR")))
     TRUNK_MO_DIR = property(*(_gen_get_set_path("I18N_DIR", "REL_TRUNK_MO_DIR")))
+    GIT_I18N_ROOT = property(*(_gen_get_set_path("SOURCE_DIR", "REL_GIT_I18N_DIR")))
+    GIT_I18N_PO_DIR = property(*(_gen_get_set_path("GIT_I18N_ROOT", "REL_GIT_I18N_PO_DIR")))
     POTFILES_SOURCE_DIR = property(*(_gen_get_set_path("SOURCE_DIR", "REL_POTFILES_SOURCE_DIR")))
     FILE_NAME_POT = property(*(_gen_get_set_path("I18N_DIR", "REL_FILE_NAME_POT")))
     MO_PATH_ROOT = property(*(_gen_get_set_path("I18N_DIR", "REL_MO_PATH_ROOT")))

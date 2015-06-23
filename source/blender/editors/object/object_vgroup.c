@@ -1177,7 +1177,7 @@ static void getVerticalAndHorizontalChange(const float norm[3], float d, const f
 	dists[index] = dot_v3v3(norm, end) + d;
 	/* vertical change */
 	changes[index][0] = dists[index] - distToStart;
-	//printf("vc %f %f\n", distance(end, projB, 3)-distance(start, projA, 3), changes[index][0]);
+	//printf("vc %f %f\n", distance(end, projB, 3) - distance(start, projA, 3), changes[index][0]);
 	/* horizontal change */
 	changes[index][1] = len_v3v3(projA, projB);
 }
@@ -2062,7 +2062,7 @@ void ED_vgroup_mirror(Object *ob,
 			/* object mode / weight paint */
 			MVert *mv, *mv_mirr;
 			int vidx, vidx_mirr;
-			const int use_vert_sel = (me->editflag & ME_EDIT_PAINT_VERT_SEL) != 0;
+			const bool use_vert_sel = (me->editflag & ME_EDIT_PAINT_VERT_SEL) != 0;
 
 			if (me->dvert == NULL) {
 				goto cleanup;

@@ -138,19 +138,9 @@ def handle_args():
     parser.add_argument("-T", "--sphinx-theme",
                         dest="sphinx_theme",
                         type=str,
-                        default='default',
-                        help=
-                        # see SPHINX_THEMES below
-                        "Sphinx theme (default='default')\n"
-                        "Available themes\n"
-                        "----------------\n"
-                        "(Blender Foundation) blender-org\n"    # naiad
-                        "(Sphinx) agogo, basic, epub, haiku, nature, "
-                        "scrolls, sphinxdoc, traditional\n",
-#                        choices=['naiad', 'blender-org'] +      # bf
-#                                ['agogo', 'basic', 'epub',
-#                                 'haiku', 'nature', 'scrolls',
-#                                 'sphinxdoc', 'traditional'],   # sphinx
+                        default="classic",
+                        help="Sphinx theme (default='classic'), "
+                        "see: http://sphinx-doc.org/theming.html",
                         required=False)
 
     parser.add_argument("-N", "--sphinx-named-output",
@@ -244,6 +234,7 @@ else:
     EXCLUDE_MODULES = [
         "aud",
         "bge",
+        "bge.app"
         "bge.constraints",
         "bge.events",
         "bge.logic",
@@ -267,6 +258,7 @@ else:
         "bpy.props",
         "bpy.types",  # supports filtering
         "bpy.utils",
+        "bpy.utils.previews",
         "bpy_extras",
         "gpu",
         "mathutils",
@@ -419,23 +411,7 @@ BLENDER_ZIP_FILENAME = "%s.zip" % REFERENCE_NAME
 
 # -------------------------------SPHINX-----------------------------------------
 
-SPHINX_THEMES = {'bf': ['blender-org'],  # , 'naiad',
-                 'sphinx': ['agogo',
-                            'basic',
-                            'default',
-                            'epub',
-                            'haiku',
-                            'nature',
-                            'scrolls',
-                            'sphinxdoc',
-                            'traditional']}
-
-available_themes = SPHINX_THEMES['bf'] + SPHINX_THEMES['sphinx']
-if ARGS.sphinx_theme not in available_themes:
-    print("Please choose a theme among: %s" % ', '.join(available_themes))
-    sys.exit()
-
-if ARGS.sphinx_theme in SPHINX_THEMES['bf']:
+if ARGS.sphinx_theme == "blender-org":
     SPHINX_THEME_DIR = os.path.join(ARGS.output_dir, ARGS.sphinx_theme)
     SPHINX_THEME_SVN_DIR = os.path.join(SCRIPT_DIR, ARGS.sphinx_theme)
 
@@ -480,9 +456,11 @@ ClassMethodDescriptorType = type(dict.__dict__['fromkeys'])
 MethodDescriptorType = type(dict.get)
 GetSetDescriptorType = type(int.real)
 StaticMethodType = type(staticmethod(lambda: None))
-from types import (MemberDescriptorType,
-                   MethodType,
-                   )
+from types import (
+        MemberDescriptorType,
+        MethodType,
+        FunctionType,
+        )
 
 _BPY_STRUCT_FAKE = "bpy_struct"
 _BPY_PROP_COLLECTION_FAKE = "bpy_prop_collection"
@@ -659,19 +637,26 @@ def pyfunc2sphinx(ident, fw, module_name, type_name, identifier, py_func, is_cla
         func_type = "function"
 
         # ther rest are class methods
-    elif arg_str.startswith("(self, "):
-        arg_str = "(" + arg_str[7:]
+    elif arg_str.startswith("(self, ") or arg_str == "(self)":
+        arg_str = "()" if (arg_str == "(self)") else ("(" + arg_str[7:])
         func_type = "method"
     elif arg_str.startswith("(cls, "):
-        arg_str = "(" + arg_str[6:]
+        arg_str = "()" if (arg_str == "(cls)") else ("(" + arg_str[6:])
         func_type = "classmethod"
     else:
         func_type = "staticmethod"
 
-    fw(ident + ".. %s:: %s%s\n\n" % (func_type, identifier, arg_str))
-    if py_func.__doc__:
-        write_indented_lines(ident + "   ", fw, py_func.__doc__)
+    doc = py_func.__doc__
+    if (not doc) or (not doc.startswith(".. %s:: " % func_type)):
+        fw(ident + ".. %s:: %s%s\n\n" % (func_type, identifier, arg_str))
+        ident_temp = ident + "   "
+    else:
+        ident_temp = ident
+
+    if doc:
+        write_indented_lines(ident_temp, fw, doc)
         fw("\n")
+    del doc, ident_temp
 
     if is_class:
         write_example_ref(ident + "   ", fw, module_name + "." + type_name + "." + identifier)
@@ -887,7 +872,7 @@ def pymodule2sphinx(basepath, module_name, module, title):
     module_dir_value_type.sort(key=lambda triple: str(triple[2]))
 
     for attribute, value, value_type in module_dir_value_type:
-        if value_type == types.FunctionType:
+        if value_type == FunctionType:
             pyfunc2sphinx("", fw, module_name, None, attribute, value, is_class=False)
         elif value_type in {types.BuiltinMethodType, types.BuiltinFunctionType}:  # both the same at the moment but to be future proof
             # note: can't get args from these, so dump the string as is
@@ -942,18 +927,23 @@ def pymodule2sphinx(basepath, module_name, module, title):
                 fw(value.__doc__)
             else:
                 fw(".. class:: %s\n\n" % type_name)
-                write_indented_lines("   ", fw, value.__doc__, False)
+                write_indented_lines("   ", fw, value.__doc__, True)
         else:
             fw(".. class:: %s\n\n" % type_name)
         fw("\n")
 
         write_example_ref("   ", fw, module_name + "." + type_name)
 
-        descr_items = [(key, descr) for key, descr in sorted(value.__dict__.items()) if not key.startswith("__")]
+        descr_items = [(key, descr) for key, descr in sorted(value.__dict__.items()) if not key.startswith("_")]
 
         for key, descr in descr_items:
             if type(descr) == ClassMethodDescriptorType:
                 py_descr2sphinx("   ", fw, descr, module_name, type_name, key)
+
+        # needed for pure python classes
+        for key, descr in descr_items:
+            if type(descr) == FunctionType:
+                pyfunc2sphinx("   ", fw, module_name, type_name, key, descr, is_class=True)
 
         for key, descr in descr_items:
             if type(descr) == MethodDescriptorType:
@@ -1265,6 +1255,7 @@ def pyrna2sphinx(basepath):
             fw("\n\n")
 
         subclass_ids = [s.identifier for s in structs.values() if s.base is struct if not rna_info.rna_id_ignore(s.identifier)]
+        subclass_ids.sort()
         if subclass_ids:
             fw("subclasses --- \n" + ", ".join((":class:`%s`" % s) for s in subclass_ids) + "\n\n")
 
@@ -1572,7 +1563,7 @@ def write_sphinx_conf_py(basepath):
     if ARGS.sphinx_theme != 'default':
         fw("html_theme = '%s'\n" % ARGS.sphinx_theme)
 
-    if ARGS.sphinx_theme in SPHINX_THEMES['bf']:
+    if ARGS.sphinx_theme == "blender-org":
         fw("html_theme_path = ['../']\n")
         # copied with the theme, exclude else we get an error [#28873]
         fw("html_favicon = 'favicon.ico'\n")    # in <theme>/static/
@@ -1633,6 +1624,7 @@ def write_rst_contents(basepath):
 
         # py modules
         "bpy.utils",
+        "bpy.utils.previews",
         "bpy.path",
         "bpy.app",
         "bpy.app.handlers",
@@ -1678,6 +1670,7 @@ def write_rst_contents(basepath):
         fw("   bge.texture.rst\n\n")
         fw("   bge.events.rst\n\n")
         fw("   bge.constraints.rst\n\n")
+        fw("   bge.app.rst\n\n")
 
     # rna generated change log
     fw(title_string("API Info", "=", double=True))
@@ -1834,6 +1827,7 @@ def copy_handwritten_rsts(basepath):
         "bge.texture",
         "bge.events",
         "bge.constraints",
+        "bge.app",
         "bgl",  # "Blender OpenGl wrapper"
         "gpu",  # "GPU Shader Module"
 
@@ -1987,7 +1981,7 @@ def main():
                         copy_function=shutil.copy)
 
         # eventually, copy the theme dir
-        if ARGS.sphinx_theme in SPHINX_THEMES['bf']:
+        if ARGS.sphinx_theme == "blender-org":
             if os.path.exists(SPHINX_THEME_DIR):
                 shutil.rmtree(SPHINX_THEME_DIR, True)
             shutil.copytree(SPHINX_THEME_SVN_DIR,

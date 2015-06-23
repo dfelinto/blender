@@ -72,7 +72,8 @@
  */
 bool BM_vert_dissolve(BMesh *bm, BMVert *v)
 {
-	const int len = BM_vert_edge_count(v);
+	/* logic for 3 or more is identical */
+	const int len = BM_vert_edge_count_ex(v, 3);
 	
 	if (len == 1) {
 		BM_vert_kill(bm, v); /* will kill edges too */
@@ -97,7 +98,7 @@ bool BM_vert_dissolve(BMesh *bm, BMVert *v)
 			return false;
 		}
 	}
-	else if (len == 2 && BM_vert_face_count(v) == 1) {
+	else if (len == 2 && BM_vert_face_count_is_equal(v, 1)) {
 		/* boundary vertex on a face */
 		return (BM_vert_collapse_edge(bm, v->e, v, true, true) != NULL);
 	}
@@ -269,16 +270,17 @@ BMFace *BM_faces_join_pair(BMesh *bm, BMFace *f_a, BMFace *f_b, BMEdge *e, const
  * the split edge to be created (must be differ and not can't be adjacent in the face).
  * \param r_l pointer which will receive the BMLoop for the split edge in the new face
  * \param example Edge used for attributes of splitting edge, if non-NULL
- * \param nodouble Use an existing edge if found
+ * \param no_double: Use an existing edge if found
  *
  * \return Pointer to the newly created face representing one side of the split
  * if the split is successful (and the original original face will be the
  * other side). NULL if the split fails.
  */
-BMFace *BM_face_split(BMesh *bm, BMFace *f,
-                      BMLoop *l_a, BMLoop *l_b,
-                      BMLoop **r_l, BMEdge *example,
-                      const bool no_double)
+BMFace *BM_face_split(
+        BMesh *bm, BMFace *f,
+        BMLoop *l_a, BMLoop *l_b,
+        BMLoop **r_l, BMEdge *example,
+        const bool no_double)
 {
 	const bool has_mdisp = CustomData_has_layer(&bm->ldata, CD_MDISPS);
 	BMFace *f_new, *f_tmp;
@@ -356,10 +358,11 @@ BMFace *BM_face_split(BMesh *bm, BMFace *f,
  * if the split is successful (and the original original face will be the
  * other side). NULL if the split fails.
  */
-BMFace *BM_face_split_n(BMesh *bm, BMFace *f,
-                        BMLoop *l_a, BMLoop *l_b,
-                        float cos[][3], int n,
-                        BMLoop **r_l, BMEdge *example)
+BMFace *BM_face_split_n(
+        BMesh *bm, BMFace *f,
+        BMLoop *l_a, BMLoop *l_b,
+        float cos[][3], int n,
+        BMLoop **r_l, BMEdge *example)
 {
 	BMFace *f_new, *f_tmp;
 	BMLoop *l_dummy;
@@ -990,8 +993,9 @@ bool BM_face_split_edgenet(
  *
  * \returns The New Edge
  */
-BMEdge *BM_vert_collapse_faces(BMesh *bm, BMEdge *e_kill, BMVert *v_kill, float fac,
-                               const bool do_del, const bool join_faces, const bool kill_degenerate_faces)
+BMEdge *BM_vert_collapse_faces(
+        BMesh *bm, BMEdge *e_kill, BMVert *v_kill, float fac,
+        const bool do_del, const bool join_faces, const bool kill_degenerate_faces)
 {
 	BMEdge *e_new = NULL;
 	BMVert *tv = BM_edge_other_vert(e_kill, v_kill);
@@ -1103,8 +1107,9 @@ BMEdge *BM_vert_collapse_faces(BMesh *bm, BMEdge *e_kill, BMVert *v_kill, float 
  *
  * \return The New Edge
  */
-BMEdge *BM_vert_collapse_edge(BMesh *bm, BMEdge *e_kill, BMVert *v_kill,
-                              const bool do_del, const bool kill_degenerate_faces)
+BMEdge *BM_vert_collapse_edge(
+        BMesh *bm, BMEdge *e_kill, BMVert *v_kill,
+        const bool do_del, const bool kill_degenerate_faces)
 {
 	/* nice example implementation but we want loops to have their customdata
 	 * accounted for */
@@ -1353,8 +1358,9 @@ bool BM_face_validate(BMFace *face, FILE *err)
  *
  * \note #BM_edge_rotate_check must have already run.
  */
-void BM_edge_calc_rotate(BMEdge *e, const bool ccw,
-                         BMLoop **r_l1, BMLoop **r_l2)
+void BM_edge_calc_rotate(
+        BMEdge *e, const bool ccw,
+        BMLoop **r_l1, BMLoop **r_l2)
 {
 	BMVert *v1, *v2;
 	BMFace *fa, *fb;
@@ -1516,8 +1522,9 @@ bool BM_edge_rotate_check_degenerate(BMEdge *e, BMLoop *l1, BMLoop *l2)
 	return true;
 }
 
-bool BM_edge_rotate_check_beauty(BMEdge *e,
-                                 BMLoop *l1, BMLoop *l2)
+bool BM_edge_rotate_check_beauty(
+        BMEdge *e,
+        BMLoop *l1, BMLoop *l2)
 {
 	/* Stupid check for now:
 	 * Could compare angles of surrounding edges
@@ -1642,4 +1649,10 @@ BMVert *BM_face_vert_separate(BMesh *bm, BMFace *sf, BMVert *sv)
 BMVert *BM_face_loop_separate(BMesh *bm, BMLoop *sl)
 {
 	return bmesh_urmv_loop(bm, sl);
+}
+
+BMVert *BM_face_loop_separate_multi(
+        BMesh *bm, BMLoop **larr, int larr_len)
+{
+	return bmesh_urmv_loop_multi(bm, larr, larr_len);
 }

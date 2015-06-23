@@ -77,7 +77,7 @@ typedef enum eParentType {
 	PAR_PATH_CONST,
 	PAR_LATTICE,
 	PAR_VERTEX,
-	PAR_VERTEX_TRI
+	PAR_VERTEX_TRI,
 } eParentType;
 
 #ifdef __RNA_TYPES_H__
@@ -131,6 +131,10 @@ float ED_object_new_primitive_matrix(
         struct bContext *C, struct Object *editob,
         const float loc[3], const float rot[3], float primmat[4][4]);
 
+
+/* Avoid allowing too much insane values even by typing (typos can hang/crash Blender otherwise). */
+#define OBJECT_ADD_SIZE_MAXF 1.0e12f
+
 void ED_object_add_unit_props(struct wmOperatorType *ot);
 void ED_object_add_generic_props(struct wmOperatorType *ot, bool do_editmode);
 bool ED_object_add_generic_get_opts(struct bContext *C, struct wmOperator *op, const char view_align_axis,
@@ -138,8 +142,10 @@ bool ED_object_add_generic_get_opts(struct bContext *C, struct wmOperator *op, c
                                     bool *enter_editmode, unsigned int *layer, bool *is_view_aligned);
 
 struct Object *ED_object_add_type(
-        struct bContext *C, int type, const float loc[3], const float rot[3],
-        bool enter_editmode, unsigned int layer) ATTR_RETURNS_NONNULL;
+        struct bContext *C,
+        int type, const char *name, const float loc[3], const float rot[3],
+        bool enter_editmode, unsigned int layer)
+        ATTR_NONNULL(1) ATTR_RETURNS_NONNULL;
 
 void ED_object_single_users(struct Main *bmain, struct Scene *scene, const bool full, const bool copy_groups);
 void ED_object_single_user(struct Main *bmain, struct Scene *scene, struct Object *ob);

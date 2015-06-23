@@ -66,7 +66,7 @@ static int sound_cfra;
 
 bSound *BKE_sound_new_file(struct Main *bmain, const char *filename)
 {
-	bSound *sound = NULL;
+	bSound *sound;
 
 	char str[FILE_MAX];
 	const char *path;
@@ -88,11 +88,6 @@ bSound *BKE_sound_new_file(struct Main *bmain, const char *filename)
 	/* sound->type = SOUND_TYPE_FILE; */ /* XXX unused currently */
 
 	BKE_sound_load(bmain, sound);
-
-	if (!sound->playback_handle) {
-		BKE_libblock_free(bmain, sound);
-		sound = NULL;
-	}
 
 	return sound;
 }
@@ -144,8 +139,8 @@ static void sound_sync_callback(void *data, int mode, float time)
 				BKE_sound_play_scene(scene);
 			else
 				BKE_sound_stop_scene(scene);
-			if (scene->sound_scene_handle)
-				AUD_seek(scene->sound_scene_handle, time);
+			if (scene->playback_handle)
+				AUD_seek(scene->playback_handle, time);
 		}
 		scene = scene->id.next;
 	}
@@ -246,12 +241,6 @@ bSound *BKE_sound_new_buffer(struct Main *bmain, bSound *source)
 
 	sound_load(bmain, sound);
 
-	if (!sound->playback_handle)
-	{
-		BKE_libblock_free(bmain, sound);
-		sound = NULL;
-	}
-
 	return sound;
 }
 
@@ -271,12 +260,6 @@ bSound *BKE_sound_new_limiter(struct Main *bmain, bSound *source, float start, f
 	sound->type = SOUND_TYPE_LIMITER;
 
 	sound_load(bmain, sound);
-
-	if (!sound->playback_handle)
-	{
-		BKE_libblock_free(bmain, sound);
-		sound = NULL;
-	}
 
 	return sound;
 }
@@ -400,15 +383,15 @@ void BKE_sound_create_scene(struct Scene *scene)
 	scene->sound_scene = AUD_createSequencer(FPS, scene->audio.flag & AUDIO_MUTE);
 	AUD_updateSequencerData(scene->sound_scene, scene->audio.speed_of_sound,
 	                        scene->audio.doppler_factor, scene->audio.distance_model);
-	scene->sound_scene_handle = NULL;
+	scene->playback_handle = NULL;
 	scene->sound_scrub_handle = NULL;
 	scene->speaker_handles = NULL;
 }
 
 void BKE_sound_destroy_scene(struct Scene *scene)
 {
-	if (scene->sound_scene_handle)
-		AUD_stop(scene->sound_scene_handle);
+	if (scene->playback_handle)
+		AUD_stop(scene->playback_handle);
 	if (scene->sound_scrub_handle)
 		AUD_stop(scene->sound_scrub_handle);
 	if (scene->sound_scene)
@@ -541,13 +524,13 @@ void BKE_sound_update_sequencer(struct Main *main, bSound *sound)
 
 static void sound_start_play_scene(struct Scene *scene)
 {
-	if (scene->sound_scene_handle)
-		AUD_stop(scene->sound_scene_handle);
+	if (scene->playback_handle)
+		AUD_stop(scene->playback_handle);
 
 	AUD_setSequencerDeviceSpecs(scene->sound_scene);
 
-	if ((scene->sound_scene_handle = AUD_play(scene->sound_scene, 1)))
-		AUD_setLoop(scene->sound_scene_handle, -1);
+	if ((scene->playback_handle = AUD_play(scene->sound_scene, 1)))
+		AUD_setLoop(scene->playback_handle, -1);
 }
 
 void BKE_sound_play_scene(struct Scene *scene)
@@ -557,20 +540,20 @@ void BKE_sound_play_scene(struct Scene *scene)
 
 	AUD_lock();
 
-	status = scene->sound_scene_handle ? AUD_getStatus(scene->sound_scene_handle) : AUD_STATUS_INVALID;
+	status = scene->playback_handle ? AUD_getStatus(scene->playback_handle) : AUD_STATUS_INVALID;
 
 	if (status == AUD_STATUS_INVALID) {
 		sound_start_play_scene(scene);
 
-		if (!scene->sound_scene_handle) {
+		if (!scene->playback_handle) {
 			AUD_unlock();
 			return;
 		}
 	}
 
 	if (status != AUD_STATUS_PLAYING) {
-		AUD_seek(scene->sound_scene_handle, cur_time);
-		AUD_resume(scene->sound_scene_handle);
+		AUD_seek(scene->playback_handle, cur_time);
+		AUD_resume(scene->playback_handle);
 	}
 
 	if (scene->audio.flag & AUDIO_SYNC)
@@ -581,8 +564,8 @@ void BKE_sound_play_scene(struct Scene *scene)
 
 void BKE_sound_stop_scene(struct Scene *scene)
 {
-	if (scene->sound_scene_handle) {
-		AUD_pause(scene->sound_scene_handle);
+	if (scene->playback_handle) {
+		AUD_pause(scene->playback_handle);
 
 		if (scene->audio.flag & AUDIO_SYNC)
 			AUD_stopPlayback();
@@ -600,17 +583,17 @@ void BKE_sound_seek_scene(struct Main *bmain, struct Scene *scene)
 
 	AUD_lock();
 
-	status = scene->sound_scene_handle ? AUD_getStatus(scene->sound_scene_handle) : AUD_STATUS_INVALID;
+	status = scene->playback_handle ? AUD_getStatus(scene->playback_handle) : AUD_STATUS_INVALID;
 
 	if (status == AUD_STATUS_INVALID) {
 		sound_start_play_scene(scene);
 
-		if (!scene->sound_scene_handle) {
+		if (!scene->playback_handle) {
 			AUD_unlock();
 			return;
 		}
 
-		AUD_pause(scene->sound_scene_handle);
+		AUD_pause(scene->playback_handle);
 	}
 
 	animation_playing = 0;
@@ -623,13 +606,13 @@ void BKE_sound_seek_scene(struct Main *bmain, struct Scene *scene)
 
 	if (scene->audio.flag & AUDIO_SCRUB && !animation_playing) {
 		if (scene->audio.flag & AUDIO_SYNC) {
-			AUD_seek(scene->sound_scene_handle, cur_time);
-			AUD_seekSequencer(scene->sound_scene_handle, cur_time);
+			AUD_seek(scene->playback_handle, cur_time);
+			AUD_seekSequencer(scene->playback_handle, cur_time);
 		}
 		else {
-			AUD_seek(scene->sound_scene_handle, cur_time);
+			AUD_seek(scene->playback_handle, cur_time);
 		}
-		AUD_resume(scene->sound_scene_handle);
+		AUD_resume(scene->playback_handle);
 		if (scene->sound_scrub_handle && AUD_getStatus(scene->sound_scrub_handle) != AUD_STATUS_INVALID) {
 			AUD_seek(scene->sound_scrub_handle, 0);
 		}
@@ -637,16 +620,16 @@ void BKE_sound_seek_scene(struct Main *bmain, struct Scene *scene)
 			if (scene->sound_scrub_handle) {
 				AUD_stop(scene->sound_scrub_handle);
 			}
-			scene->sound_scrub_handle = AUD_pauseAfter(scene->sound_scene_handle, one_frame);
+			scene->sound_scrub_handle = AUD_pauseAfter(scene->playback_handle, one_frame);
 		}
 	}
 	else {
 		if (scene->audio.flag & AUDIO_SYNC) {
-			AUD_seekSequencer(scene->sound_scene_handle, cur_time);
+			AUD_seekSequencer(scene->playback_handle, cur_time);
 		}
 		else {
 			if (status == AUD_STATUS_PLAYING) {
-				AUD_seek(scene->sound_scene_handle, cur_time);
+				AUD_seek(scene->playback_handle, cur_time);
 			}
 		}
 	}
@@ -656,11 +639,11 @@ void BKE_sound_seek_scene(struct Main *bmain, struct Scene *scene)
 
 float BKE_sound_sync_scene(struct Scene *scene)
 {
-	if (scene->sound_scene_handle) {
+	if (scene->playback_handle) {
 		if (scene->audio.flag & AUDIO_SYNC)
-			return AUD_getSequencerPosition(scene->sound_scene_handle);
+			return AUD_getSequencerPosition(scene->playback_handle);
 		else
-			return AUD_getPosition(scene->sound_scene_handle);
+			return AUD_getPosition(scene->playback_handle);
 	}
 	return NAN_FLT;
 }

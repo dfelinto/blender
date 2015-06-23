@@ -19,6 +19,15 @@
 
 /* So ImathMath is included before our kernel_cpu_compat. */
 #ifdef WITH_OSL
+#  if defined(_MSC_VER)
+/* Prevent OSL from polluting the context with weird macros from windows.h.
+ * TODO(sergey): Ideally it's only enough to have class/struct declarations in
+ * the header and skip header include here.
+ */
+#    define NOGDI
+#    define NOMINMAX
+#    define WIN32_LEAN_AND_MEAN
+#  endif
 #  include <OSL/oslexec.h>
 #endif
 
@@ -38,6 +47,7 @@
 #include "util_debug.h"
 #include "util_foreach.h"
 #include "util_function.h"
+#include "util_logging.h"
 #include "util_opengl.h"
 #include "util_progress.h"
 #include "util_system.h"
@@ -115,6 +125,7 @@ public:
 
 	void tex_alloc(const char *name, device_memory& mem, InterpolationType interpolation, bool /*periodic*/)
 	{
+		VLOG(1) << "Texture allocate: " << name << ", " << mem.memory_size() << " bytes.";
 		kernel_tex_copy(&kernel_globals, name, mem.data_pointer, mem.data_width, mem.data_height, mem.data_depth, interpolation);
 		mem.device_pointer = mem.data_pointer;
 		mem.device_size = mem.memory_size();

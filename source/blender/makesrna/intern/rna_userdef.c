@@ -87,7 +87,6 @@ EnumPropertyItem navigation_mode_items[] = {
 #include "DNA_screen_types.h"
 
 #include "BKE_blender.h"
-#include "BKE_DerivedMesh.h"
 #include "BKE_depsgraph.h"
 #include "BKE_global.h"
 #include "BKE_main.h"
@@ -104,8 +103,6 @@ EnumPropertyItem navigation_mode_items[] = {
 #include "UI_interface.h"
 
 #include "CCL_api.h"
-
-#include "BKE_addon.h"
 
 #ifdef WITH_SDL_DYNLOAD
 #  include "sdlew.h"
@@ -2386,6 +2383,18 @@ static void rna_def_userdef_theme_space_image(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Current Frame", "");
 	RNA_def_property_update(prop, 0, "rna_userdef_update");
 
+	prop = RNA_def_property(srna, "metadatabg", PROP_FLOAT, PROP_COLOR_GAMMA);
+	RNA_def_property_float_sdna(prop, NULL, "metadatabg");
+	RNA_def_property_array(prop, 3);
+	RNA_def_property_ui_text(prop, "Metadata Background", "");
+	RNA_def_property_update(prop, 0, "rna_userdef_update");
+
+	prop = RNA_def_property(srna, "metadatatext", PROP_FLOAT, PROP_COLOR_GAMMA);
+	RNA_def_property_float_sdna(prop, NULL, "metadatatext");
+	RNA_def_property_array(prop, 3);
+	RNA_def_property_ui_text(prop, "Metadata Text", "");
+	RNA_def_property_update(prop, 0, "rna_userdef_update");
+
 	rna_def_userdef_theme_spaces_curves(srna, false, false, false, true);
 
 	rna_def_userdef_theme_spaces_paint_curves(srna);
@@ -2487,6 +2496,18 @@ static void rna_def_userdef_theme_space_seq(BlenderRNA *brna)
 	RNA_def_property_float_sdna(prop, NULL, "preview_back");
 	RNA_def_property_array(prop, 3);
 	RNA_def_property_ui_text(prop, "Preview Background", "");
+	RNA_def_property_update(prop, 0, "rna_userdef_update");
+
+	prop = RNA_def_property(srna, "metadatabg", PROP_FLOAT, PROP_COLOR_GAMMA);
+	RNA_def_property_float_sdna(prop, NULL, "metadatabg");
+	RNA_def_property_array(prop, 3);
+	RNA_def_property_ui_text(prop, "Metadata Background", "");
+	RNA_def_property_update(prop, 0, "rna_userdef_update");
+
+	prop = RNA_def_property(srna, "metadatatext", PROP_FLOAT, PROP_COLOR_GAMMA);
+	RNA_def_property_float_sdna(prop, NULL, "metadatatext");
+	RNA_def_property_array(prop, 3);
+	RNA_def_property_ui_text(prop, "Metadata Text", "");
 	RNA_def_property_update(prop, 0, "rna_userdef_update");
 }
 
@@ -3239,7 +3260,14 @@ static void rna_def_userdef_view(BlenderRNA *brna)
 		                             "Direct conversion of frame numbers to seconds"},
 		{0, NULL, 0, NULL, NULL}
 	};
-	
+
+	static EnumPropertyItem zoom_frame_modes[] = {
+		{ZOOM_FRAME_MODE_KEEP_RANGE, "KEEP_RANGE", 0, "Keep Range", ""},
+		{ZOOM_FRAME_MODE_SECONDS, "SECONDS", 0, "Seconds", ""},
+	    {ZOOM_FRAME_MODE_KEYFRAMES, "KEYFRAMES", 0, "Keyframes", ""},
+		{0, NULL, 0, NULL, NULL}
+	};
+
 	PropertyRNA *prop;
 	StructRNA *srna;
 	
@@ -3428,8 +3456,8 @@ static void rna_def_userdef_view(BlenderRNA *brna)
 	RNA_def_property_range(prop, 0, 1000);
 	RNA_def_property_ui_text(prop, "Smooth View", "Time to animate the view in milliseconds, zero to disable");
 
-	prop = RNA_def_property(srna, "rotation_angle", PROP_INT, PROP_NONE);
-	RNA_def_property_int_sdna(prop, NULL, "pad_rot_angle");
+	prop = RNA_def_property(srna, "rotation_angle", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_float_sdna(prop, NULL, "pad_rot_angle");
 	RNA_def_property_range(prop, 0, 90);
 	RNA_def_property_ui_text(prop, "Rotation Angle", "Rotation step for numerical pad keys (2 4 6 8)");
 
@@ -3481,6 +3509,22 @@ static void rna_def_userdef_view(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "TimeCode Style",
 	                         "Format of Time Codes displayed when not displaying timing in terms of frames");
 	RNA_def_property_update(prop, 0, "rna_userdef_update");
+
+	prop = RNA_def_property(srna, "view_frame_type", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_items(prop, zoom_frame_modes);
+	RNA_def_property_enum_sdna(prop, NULL, "view_frame_type");
+	RNA_def_property_ui_text(prop, "Zoom To Frame Type", "How zooming to frame focuses around current frame");
+
+	prop = RNA_def_property(srna, "view_frame_keyframes", PROP_INT, PROP_NONE);
+	RNA_def_property_range(prop, 1, 500);
+	RNA_def_property_ui_text(prop, "Zoom Keyframes",
+	                         "Keyframes around cursor that we zoom around");
+
+	prop = RNA_def_property(srna, "view_frame_seconds", PROP_FLOAT, PROP_TIME);
+	RNA_def_property_range(prop, 0.0, 10000.0);
+	RNA_def_property_ui_text(prop, "Zoom Seconds",
+	                         "Seconds around cursor that we zoom around");
+
 }
 
 static void rna_def_userdef_edit(BlenderRNA *brna)
@@ -3601,7 +3645,7 @@ static void rna_def_userdef_edit(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "New Interpolation Type",
 	                         "Interpolation mode used for first keyframe on newly added F-Curves "
 	                         "(subsequent keyframes take interpolation from preceding keyframe)");
-	
+
 	prop = RNA_def_property(srna, "keyframe_new_handle_type", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_items(prop, keyframe_handle_type_items);
 	RNA_def_property_enum_sdna(prop, NULL, "keyhandles_new");
@@ -3648,7 +3692,7 @@ static void rna_def_userdef_edit(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Grease Pencil Eraser Radius", "Radius of eraser 'brush'");
 	
 	
-	prop = RNA_def_property(srna, "grease_pencil_default_color", PROP_FLOAT, PROP_COLOR);
+	prop = RNA_def_property(srna, "grease_pencil_default_color", PROP_FLOAT, PROP_COLOR_GAMMA);
 	RNA_def_property_float_sdna(prop, NULL, "gpencil_new_layer_col");
 	RNA_def_property_array(prop, 4);
 	RNA_def_property_ui_text(prop, "Grease Pencil Default Color", "Color of new Grease Pencil layers");
@@ -4324,15 +4368,11 @@ static void rna_def_userdef_input(BlenderRNA *brna)
 	RNA_def_property_boolean_sdna(prop, NULL, "ndof_flag", NDOF_FLY_HELICOPTER);
 	RNA_def_property_ui_text(prop, "Helicopter Mode", "Device up/down directly controls your Z position");
 
-	prop = RNA_def_property(srna, "double_click_time", PROP_INT, PROP_NONE);
+
+	prop = RNA_def_property(srna, "mouse_double_click_time", PROP_INT, PROP_NONE);
 	RNA_def_property_int_sdna(prop, NULL, "dbl_click_time");
 	RNA_def_property_range(prop, 1, 1000);
 	RNA_def_property_ui_text(prop, "Double Click Timeout", "Time/delay (in ms) for a double click");
-
-	prop = RNA_def_property(srna, "click_timeout", PROP_INT, PROP_NONE);
-	RNA_def_property_int_sdna(prop, NULL, "click_timeout");
-	RNA_def_property_range(prop, 0, 10000);
-	RNA_def_property_ui_text(prop, "Click Timeout", "Time (in ms) to determine if a key is clicked or held");
 
 	prop = RNA_def_property(srna, "use_mouse_emulate_3_button", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "flag", USER_TWOBUTTONMOUSE);

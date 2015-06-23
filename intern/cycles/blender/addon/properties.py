@@ -66,6 +66,7 @@ enum_panorama_types = (
     ('FISHEYE_EQUIDISTANT', "Fisheye Equidistant", "Ideal for fulldomes, ignore the sensor dimensions"),
     ('FISHEYE_EQUISOLID', "Fisheye Equisolid",
                           "Similar to most fisheye modern lens, takes sensor dimensions into consideration"),
+    ('MIRRORBALL', "Mirror Ball", "Uses the mirror ball mapping"),
     )
 
 enum_curve_primitives = (
@@ -393,6 +394,12 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
                 default=0,
                 )
 
+        cls.use_animated_seed = BoolProperty(
+                name="Use Animated Seed",
+                description="Use different seed values (and hence noise patterns) at different frames",
+                default=False,
+                )
+
         cls.sample_clamp_direct = FloatProperty(
                 name="Clamp Direct",
                 description="If non-zero, the maximum value for a direct sample, "
@@ -691,6 +698,12 @@ class CyclesLampSettings(bpy.types.PropertyGroup):
                 name="Multiple Importance Sample",
                 description="Use multiple importance sampling for the lamp, "
                             "reduces noise for area lamps and sharp glossy materials",
+                default=False,
+                )
+        cls.is_portal = BoolProperty(
+                name="Is Portal",
+                description="Use this area lamp to guide sampling of the background, "
+                            "note that this will make the lamp invisible",
                 default=False,
                 )
 

@@ -90,6 +90,7 @@ void BKE_curve_translate(struct Curve *cu, float offset[3], const bool do_keys);
 void BKE_curve_material_index_remove(struct Curve *cu, int index);
 void BKE_curve_material_index_clear(struct Curve *cu);
 int BKE_curve_material_index_validate(struct Curve *cu);
+void BKE_curve_material_remap(struct Curve *cu, const unsigned int *remap, unsigned int remap_len);
 
 ListBase    *BKE_curve_nurbs_get(struct Curve *cu);
 
@@ -119,6 +120,7 @@ void BKE_curve_bevel_make(struct Scene *scene, struct Object *ob,  struct ListBa
                           const bool for_render, const bool use_render_resolution);
 
 void BKE_curve_forward_diff_bezier(float q0, float q1, float q2, float q3, float *p, int it, int stride);
+void BKE_curve_forward_diff_tangent_bezier(float q0, float q1, float q2, float q3, float *p, int it, int stride);
 
 void BKE_curve_rect_from_textbox(const struct Curve *cu, const struct TextBox *tb, struct rctf *r_rect);
 
@@ -181,5 +183,15 @@ void BKE_nurb_handles_calc(struct Nurb *nu);
 void BKE_nurb_handles_autocalc(struct Nurb *nu, int flag);
 void BKE_nurb_bezt_handle_test(struct BezTriple *bezt, const bool use_handle);
 void BKE_nurb_handles_test(struct Nurb *nu, const bool use_handles);
+
+/* **** Depsgraph evaluation **** */
+
+struct EvaluationContext;
+
+void BKE_curve_eval_geometry(struct EvaluationContext *eval_ctx,
+                             struct Curve *curve);
+
+void BKE_curve_eval_path(struct EvaluationContext *eval_ctx,
+                         struct Curve *curve);
 
 #endif  /* __BKE_CURVE_H__ */

@@ -35,7 +35,7 @@ class SCENE_UL_keying_set_paths(UIList):
         if self.layout_type in {'DEFAULT', 'COMPACT'}:
             # Do not make this one editable in uiList for now...
             layout.label(text=kspath.data_path, translate=False, icon_value=icon)
-        elif self.layout_type in {'GRID'}:
+        elif self.layout_type == 'GRID':
             layout.alignment = 'CENTER'
             layout.label(text="", icon_value=icon)
 
@@ -86,19 +86,25 @@ class SCENE_PT_unit(SceneButtonsPanel, Panel):
 
 
 class SceneKeyingSetsPanel:
-    def draw_keyframing_settings(self, context, layout, ks, ksp):
-        self.draw_keyframing_setting(context, layout, ks, ksp, "Needed",
-                                     "use_insertkey_override_needed", "use_insertkey_needed",
-                                     userpref_fallback="use_keyframe_insert_needed")
 
-        self.draw_keyframing_setting(context, layout, ks, ksp, "Visual",
-                                     "use_insertkey_override_visual", "use_insertkey_visual",
-                                     userpref_fallback="use_visual_keying")
+    @staticmethod
+    def draw_keyframing_settings(context, layout, ks, ksp):
+        SceneKeyingSetsPanel._draw_keyframing_setting(
+                context, layout, ks, ksp, "Needed",
+                "use_insertkey_override_needed", "use_insertkey_needed",
+                userpref_fallback="use_keyframe_insert_needed")
 
-        self.draw_keyframing_setting(context, layout, ks, ksp, "XYZ to RGB",
-                                     "use_insertkey_override_xyz_to_rgb", "use_insertkey_xyz_to_rgb")
+        SceneKeyingSetsPanel._draw_keyframing_setting(
+                context, layout, ks, ksp, "Visual",
+                "use_insertkey_override_visual", "use_insertkey_visual",
+                userpref_fallback="use_visual_keying")
 
-    def draw_keyframing_setting(self, context, layout, ks, ksp, label, toggle_prop, prop, userpref_fallback=None):
+        SceneKeyingSetsPanel._draw_keyframing_setting(
+                context, layout, ks, ksp, "XYZ to RGB",
+                "use_insertkey_override_xyz_to_rgb", "use_insertkey_xyz_to_rgb")
+
+    @staticmethod
+    def _draw_keyframing_setting(context, layout, ks, ksp, label, toggle_prop, prop, userpref_fallback=None):
         if ksp:
             item = ksp
 
@@ -392,14 +398,17 @@ class SCENE_PT_simplify(SceneButtonsPanel, Panel):
         split = layout.split()
 
         col = split.column()
+        col.label(text="Viewport:")
         col.prop(rd, "simplify_subdivision", text="Subdivision")
         col.prop(rd, "simplify_child_particles", text="Child Particles")
 
-        col.prop(rd, "use_simplify_triangulate")
-
         col = split.column()
+        col.label(text="Render:")
+        col.prop(rd, "simplify_subdivision_render", text="Subdivision")
+        col.prop(rd, "simplify_child_particles_render", text="Child Particles")
         col.prop(rd, "simplify_shadow_samples", text="Shadow Samples")
         col.prop(rd, "simplify_ao_sss", text="AO and SSS")
+        col.prop(rd, "use_simplify_triangulate")
 
 
 class SCENE_PT_custom_props(SceneButtonsPanel, PropertyPanel, Panel):

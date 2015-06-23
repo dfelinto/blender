@@ -160,11 +160,6 @@ void Scene::device_update(Device *device_, Progress& progress)
 
 	if(progress.get_cancel() || device->have_error()) return;
 
-	progress.set_status("Updating Images");
-	image_manager->device_update(device, &dscene, progress);
-
-	if(progress.get_cancel() || device->have_error()) return;
-
 	progress.set_status("Updating Background");
 	background->device_update(device, &dscene, this);
 
@@ -185,13 +180,18 @@ void Scene::device_update(Device *device_, Progress& progress)
 
 	if(progress.get_cancel() || device->have_error()) return;
 
+	progress.set_status("Updating Meshes");
+	mesh_manager->device_update(device, &dscene, this, progress);
+
+	if(progress.get_cancel() || device->have_error()) return;
+
 	progress.set_status("Updating Objects Flags");
 	object_manager->device_update_flags(device, &dscene, this, progress);
 
 	if(progress.get_cancel() || device->have_error()) return;
 
-	progress.set_status("Updating Meshes");
-	mesh_manager->device_update(device, &dscene, this, progress);
+	progress.set_status("Updating Images");
+	image_manager->device_update(device, &dscene, progress);
 
 	if(progress.get_cancel() || device->have_error()) return;
 

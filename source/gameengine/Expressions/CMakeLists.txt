@@ -79,4 +79,12 @@ set(SRC
 	VoidValue.h
 )
 
+if(WITH_PYTHON)
+	list(APPEND SRC
+		KX_PythonCallBack.cpp
+
+		KX_PythonCallBack.h
+	)
+endif()
+
 blender_add_lib(ge_logic_expressions "${SRC}" "${INC}" "${INC_SYS}")

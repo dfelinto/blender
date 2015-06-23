@@ -77,6 +77,7 @@
 #include "BLI_blenlib.h"
 #include "BLI_math.h"
 
+#include "BKE_action.h"
 #include "BKE_armature.h"
 #include "BKE_colortools.h"
 #include "BKE_constraint.h"
@@ -795,22 +796,14 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *main)
 				nr = me->totface;
 				tface = me->tface;
 				while (nr--) {
-					cp = (char *)&tface->col[0];
-					if (cp[1] > 126) cp[1] = 255; else cp[1] *= 2;
-					if (cp[2] > 126) cp[2] = 255; else cp[2] *= 2;
-					if (cp[3] > 126) cp[3] = 255; else cp[3] *= 2;
-					cp = (char *)&tface->col[1];
-					if (cp[1] > 126) cp[1] = 255; else cp[1] *= 2;
-					if (cp[2] > 126) cp[2] = 255; else cp[2] *= 2;
-					if (cp[3] > 126) cp[3] = 255; else cp[3] *= 2;
-					cp = (char *)&tface->col[2];
-					if (cp[1] > 126) cp[1] = 255; else cp[1] *= 2;
-					if (cp[2] > 126) cp[2] = 255; else cp[2] *= 2;
-					if (cp[3] > 126) cp[3] = 255; else cp[3] *= 2;
-					cp = (char *)&tface->col[3];
-					if (cp[1] > 126) cp[1] = 255; else cp[1] *= 2;
-					if (cp[2] > 126) cp[2] = 255; else cp[2] *= 2;
-					if (cp[3] > 126) cp[3] = 255; else cp[3] *= 2;
+					int j;
+					for (j = 0; j < 4; j++) {
+						int k;
+						cp = ((char *)&tface->col[j]) + 1;
+						for (k = 0; k < 3; k++) {
+							cp[k] = (cp[k] > 126) ? 255 : cp[k] * 2;
+						}
+					}
 
 					tface++;
 				}
@@ -1299,7 +1292,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *main)
 		Object *ob;
 
 		for (vf = main->vfont.first; vf; vf = vf->id.next) {
-			if (STREQ(vf->name + strlen(vf->name)-6, ".Bfont")) {
+			if (STREQ(vf->name + strlen(vf->name) - 6, ".Bfont")) {
 				strcpy(vf->name, FO_BUILTIN_NAME);
 			}
 		}
@@ -1958,7 +1951,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *main)
 			/* btw. armature_rebuild_pose is further only called on leave editmode */
 			if (ob->type == OB_ARMATURE) {
 				if (ob->pose)
-					ob->pose->flag |= POSE_RECALC;
+					BKE_pose_tag_recalc(main, ob->pose);
 
 				/* cannot call stuff now (pointers!), done in setup_app_data */
 				ob->recalc |= OB_RECALC_OB|OB_RECALC_DATA|OB_RECALC_TIME;
@@ -2082,7 +2075,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *main)
 								data->rootbone = -1;
 
 								/* update_pose_etc handles rootbone == -1 */
-								ob->pose->flag |= POSE_RECALC;
+								BKE_pose_tag_recalc(main, ob->pose);
 							}
 						}
 					}
@@ -2487,7 +2480,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *main)
 
 		for (group = main->group.first; group; group = group->id.next)
 			if (group->layer == 0)
-				group->layer = (1<<20)-1;
+				group->layer = (1 << 20) - 1;
 
 		/* now, subversion control! */
 		if (main->subversionfile < 3) {

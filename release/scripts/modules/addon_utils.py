@@ -74,40 +74,43 @@ def modules_refresh(module_cache=addons_fake_modules):
             print("fake_module", mod_path, mod_name)
         import ast
         ModuleType = type(ast)
-        file_mod = open(mod_path, "r", encoding='UTF-8')
-        if speedy:
-            lines = []
-            line_iter = iter(file_mod)
-            l = ""
-            while not l.startswith("bl_info"):
-                try:
-                    l = line_iter.readline()
-                except UnicodeDecodeError as e:
-                    if not error_encoding:
-                        error_encoding = True
-                        print("Error reading file as UTF-8:", mod_path, e)
-                    file_mod.close()
-                    return None
+        try:
+            file_mod = open(mod_path, "r", encoding='UTF-8')
+        except OSError as e:
+            print("Error opening file %r: %s" % (mod_path, e))
+            return None
 
-                if len(l) == 0:
-                    break
-            while l.rstrip():
-                lines.append(l)
-                try:
-                    l = line_iter.readline()
-                except UnicodeDecodeError as e:
-                    if not error_encoding:
-                        error_encoding = True
-                        print("Error reading file as UTF-8:", mod_path, e)
-                    file_mod.close()
-                    return None
+        with file_mod:
+            if speedy:
+                lines = []
+                line_iter = iter(file_mod)
+                l = ""
+                while not l.startswith("bl_info"):
+                    try:
+                        l = line_iter.readline()
+                    except UnicodeDecodeError as e:
+                        if not error_encoding:
+                            error_encoding = True
+                            print("Error reading file as UTF-8:", mod_path, e)
+                        return None
 
-            data = "".join(lines)
+                    if len(l) == 0:
+                        break
+                while l.rstrip():
+                    lines.append(l)
+                    try:
+                        l = line_iter.readline()
+                    except UnicodeDecodeError as e:
+                        if not error_encoding:
+                            error_encoding = True
+                            print("Error reading file as UTF-8:", mod_path, e)
+                        return None
 
-        else:
-            data = file_mod.read()
+                data = "".join(lines)
 
-        file_mod.close()
+            else:
+                data = file_mod.read()
+        del file_mod
 
         try:
             ast_data = ast.parse(data, filename=mod_path)
@@ -216,7 +219,8 @@ def check(module_name):
     loaded_default = module_name in _user_preferences.addons
 
     mod = sys.modules.get(module_name)
-    loaded_state = mod and getattr(mod, "__addon_enabled__", Ellipsis)
+    loaded_state = ((mod is not None) and
+                    getattr(mod, "__addon_enabled__", Ellipsis))
 
     if loaded_state is Ellipsis:
         print("Warning: addon-module %r found module "
@@ -274,6 +278,20 @@ def enable(module_name, default_set=False, persistent=False, handle_error=None):
     mod = sys.modules.get(module_name)
     # chances of the file _not_ existing are low, but it could be removed
     if mod and os.path.exists(mod.__file__):
+
+        if getattr(mod, "__addon_enabled__", False):
+            # This is an unlikely situation,
+            # re-register if the module is enabled.
+            # Note: the UI doesn't allow this to happen,
+            # in most cases the caller should 'check()' first.
+            try:
+                mod.unregister()
+            except:
+                print("Exception in module unregister(): %r" %
+                      getattr(mod, "__file__", module_name))
+                handle_error()
+                return None
+
         mod.__addon_enabled__ = False
         mtime_orig = getattr(mod, "__time__", 0)
         mtime_new = os.path.getmtime(mod.__file__)
@@ -342,7 +360,7 @@ def enable(module_name, default_set=False, persistent=False, handle_error=None):
     return mod
 
 
-def disable(module_name, default_set=True, handle_error=None):
+def disable(module_name, default_set=False, handle_error=None):
     """
     Disables an addon by name.
 
@@ -416,19 +434,21 @@ def reset_all(reload_scripts=False):
                 disable(mod_name)
 
 
-def module_bl_info(mod, info_basis={"name": "",
-                                    "author": "",
-                                    "version": (),
-                                    "blender": (),
-                                    "location": "",
-                                    "description": "",
-                                    "wiki_url": "",
-                                    "support": 'COMMUNITY',
-                                    "category": "",
-                                    "warning": "",
-                                    "show_expanded": False,
-                                    }
-                   ):
+def module_bl_info(mod, info_basis=None):
+    if info_basis is None:
+        info_basis = {
+            "name": "",
+            "author": "",
+            "version": (),
+            "blender": (),
+            "location": "",
+            "description": "",
+            "wiki_url": "",
+            "support": 'COMMUNITY',
+            "category": "",
+            "warning": "",
+            "show_expanded": False,
+            }
 
     addon_info = getattr(mod, "bl_info", {})
 

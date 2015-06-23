@@ -40,7 +40,7 @@ class RENDERLAYER_UL_renderlayers(UIList):
         if self.layout_type in {'DEFAULT', 'COMPACT'}:
             layout.prop(layer, "name", text="", icon_value=icon, emboss=False)
             layout.prop(layer, "use", text="", index=index)
-        elif self.layout_type in {'GRID'}:
+        elif self.layout_type == 'GRID':
             layout.alignment = 'CENTER'
             layout.label("", icon_value=icon)
 
@@ -87,7 +87,7 @@ class RENDERLAYER_PT_layer_options(RenderLayerButtonsPanel, Panel):
         col = split.column()
         col.prop(scene, "layers", text="Scene")
         col.label(text="")
-        col.prop(rl, "light_override", text="Light")
+        col.prop(rl, "light_override", text="Lights")
         col.prop(rl, "material_override", text="Material")
 
         col = split.column()
@@ -126,7 +126,8 @@ class RENDERLAYER_PT_layer_passes(RenderLayerButtonsPanel, Panel):
     bl_options = {'DEFAULT_CLOSED'}
     COMPAT_ENGINES = {'BLENDER_RENDER'}
 
-    def draw_pass_type_buttons(self, box, rl, pass_type):
+    @staticmethod
+    def draw_pass_type_buttons(box, rl, pass_type):
         # property names
         use_pass_type = "use_pass_" + pass_type
         exclude_pass_type = "exclude_" + pass_type

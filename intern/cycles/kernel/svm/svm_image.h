@@ -251,9 +251,9 @@ ccl_device float4 svm_image_texture(KernelGlobals *kg, int id, float x, float y,
 		case 95: r = kernel_tex_image_interp(__tex_image_095, x, y); break;
 		case 96: r = kernel_tex_image_interp(__tex_image_096, x, y); break;
 		case 97: r = kernel_tex_image_interp(__tex_image_097, x, y); break;
-		case 98: r = kernel_tex_image_interp(__tex_image_098, x, y); break;
 
 #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 300)
+		case 98: r = kernel_tex_image_interp(__tex_image_098, x, y); break;
 		case 99: r = kernel_tex_image_interp(__tex_image_099, x, y); break;
 		case 100: r = kernel_tex_image_interp(__tex_image_100, x, y); break;
 		case 101: r = kernel_tex_image_interp(__tex_image_101, x, y); break;
@@ -392,10 +392,10 @@ ccl_device void svm_node_tex_image(KernelGlobals *kg, ShaderData *sd, float *sta
 ccl_device void svm_node_tex_image_box(KernelGlobals *kg, ShaderData *sd, float *stack, uint4 node)
 {
 	/* get object space normal */
-	float3 N = sd->N;
+	float3 N = ccl_fetch(sd, N);
 
-	N = sd->N;
-	if(sd->object != OBJECT_NONE)
+	N = ccl_fetch(sd, N);
+	if(ccl_fetch(sd, object) != OBJECT_NONE)
 		object_inverse_normal_transform(kg, sd, &N);
 
 	/* project from direction vector to barycentric coordinates in triangles */
@@ -433,17 +433,17 @@ ccl_device void svm_node_tex_image_box(KernelGlobals *kg, ShaderData *sd, float 
 		/* in case of blending, test for mixes between two textures */
 		if(N.z < (1.0f - limit)*(N.y + N.x)) {
 			weight.x = N.x/(N.x + N.y);
-			weight.x = clamp((weight.x - 0.5f*(1.0f - blend))/blend, 0.0f, 1.0f);
+			weight.x = saturate((weight.x - 0.5f*(1.0f - blend))/blend);
 			weight.y = 1.0f - weight.x;
 		}
 		else if(N.x < (1.0f - limit)*(N.y + N.z)) {
 			weight.y = N.y/(N.y + N.z);
-			weight.y = clamp((weight.y - 0.5f*(1.0f - blend))/blend, 0.0f, 1.0f);
+			weight.y = saturate((weight.y - 0.5f*(1.0f - blend))/blend);
 			weight.z = 1.0f - weight.y;
 		}
 		else if(N.y < (1.0f - limit)*(N.x + N.z)) {
 			weight.x = N.x/(N.x + N.z);
-			weight.x = clamp((weight.x - 0.5f*(1.0f - blend))/blend, 0.0f, 1.0f);
+			weight.x = saturate((weight.x - 0.5f*(1.0f - blend))/blend);
 			weight.z = 1.0f - weight.x;
 		}
 		else {

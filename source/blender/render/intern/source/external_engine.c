@@ -454,6 +454,7 @@ void RE_bake_engine_set_engine_parameters(Render *re, Main *bmain, Scene *scene)
 	 * but it potentially leaves unfreed memory blocks
 	 * not sure how to fix this yet -- dfelinto */
 	BLI_listbase_clear(&re->r.layers);
+	BLI_listbase_clear(&re->r.views);
 }
 
 bool RE_bake_has_engine(Render *re)
@@ -463,7 +464,8 @@ bool RE_bake_has_engine(Render *re)
 }
 
 bool RE_bake_engine(
-        Render *re, Object *object, const BakePixel pixel_array[],
+        Render *re, Object *object,
+        const int object_id, const BakePixel pixel_array[],
         const size_t num_pixels, const int depth,
         const ScenePassType pass_type, float result[])
 {
@@ -501,7 +503,7 @@ bool RE_bake_engine(
 		type->update(engine, re->main, re->scene);
 
 	if (type->bake)
-		type->bake(engine, re->scene, object, pass_type, pixel_array, num_pixels, depth, result);
+		type->bake(engine, re->scene, object, pass_type, object_id, pixel_array, num_pixels, depth, result);
 
 	engine->tile_x = 0;
 	engine->tile_y = 0;
@@ -705,6 +707,7 @@ int RE_engine_render(Render *re, int do_all)
 
 	if (re->result->do_exr_tile) {
 		BLI_rw_mutex_lock(&re->resultmutex, THREAD_LOCK_WRITE);
+		render_result_save_empty_result_tiles(re);
 		render_result_exr_file_end(re);
 		BLI_rw_mutex_unlock(&re->resultmutex);
 	}

@@ -61,6 +61,9 @@
 #include "BIF_glutil.h"
 #include "BLF_api.h"
 
+#include "IMB_imbuf.h"
+#include "IMB_imbuf_types.h"
+
 #include "UI_interface.h"
 #include "UI_interface_icons.h"
 #include "UI_resources.h"
@@ -146,6 +149,34 @@ void ED_area_do_refresh(bContext *C, ScrArea *sa)
 		sa->type->refresh(C, sa);
 	}
 	sa->do_refresh = false;
+}
+
+/**
+ * Action zones are only updated if the mouse is inside of them, but in some cases (currently only fullscreen icon)
+ * it might be needed to update their properties and redraw if the mouse isn't inside.
+ */
+void ED_area_azones_update(ScrArea *sa, const int mouse_xy[2])
+{
+	AZone *az;
+	bool changed = false;
+
+	for (az = sa->actionzones.first; az; az = az->next) {
+		if (az->type == AZONE_FULLSCREEN) {
+			/* only if mouse is not hovering the azone */
+			if (BLI_rcti_isect_pt_v(&az->rect, mouse_xy) == false) {
+				az->alpha = 0.0f;
+				changed = true;
+
+				/* can break since currently only this is handled here */
+				break;
+			}
+		}
+	}
+
+	if (changed) {
+		sa->flag &= ~AREA_FLAG_ACTIONZONES_UPDATE;
+		ED_area_tag_redraw(sa);
+	}
 }
 
 /**
@@ -366,6 +397,11 @@ static void region_draw_azone_tria(AZone *az)
 	glDisable(GL_BLEND);
 }
 
+static void area_azone_tag_update(ScrArea *sa)
+{
+	sa->flag |= AREA_FLAG_ACTIONZONES_UPDATE;
+}
+
 static void region_draw_azones(ScrArea *sa, ARegion *ar)
 {
 	AZone *az;
@@ -406,6 +442,10 @@ static void region_draw_azones(ScrArea *sa, ARegion *ar)
 			}
 			else if (az->type == AZONE_FULLSCREEN) {
 				area_draw_azone_fullscreen(az->x1, az->y1, az->x2, az->y2, az->alpha);
+
+				if (az->alpha != 0.0f) {
+					area_azone_tag_update(sa);
+				}
 			}
 		}
 	}
@@ -1223,16 +1263,22 @@ static void region_rect_recursive(wmWindow *win, ScrArea *sa, ARegion *ar, rcti 
 	if (ar->flag & (RGN_FLAG_HIDDEN | RGN_FLAG_TOO_SMALL)) {
 		ar->winrct = *remainder;
 		
-		if (alignment == RGN_ALIGN_TOP)
-			ar->winrct.ymin = ar->winrct.ymax;
-		else if (alignment == RGN_ALIGN_BOTTOM)
-			ar->winrct.ymax = ar->winrct.ymin;
-		else if (alignment == RGN_ALIGN_RIGHT)
-			ar->winrct.xmin = ar->winrct.xmax;
-		else if (alignment == RGN_ALIGN_LEFT)
-			ar->winrct.xmax = ar->winrct.xmin;
-		else /* prevent winrct to be valid */
-			ar->winrct.xmax = ar->winrct.xmin;
+		switch (alignment) {
+			case RGN_ALIGN_TOP:
+				ar->winrct.ymin = ar->winrct.ymax;
+				break;
+			case RGN_ALIGN_BOTTOM:
+				ar->winrct.ymax = ar->winrct.ymin;
+				break;
+			case RGN_ALIGN_RIGHT:
+				ar->winrct.xmin = ar->winrct.xmax;
+				break;
+			case RGN_ALIGN_LEFT:
+			default:
+				/* prevent winrct to be valid */
+				ar->winrct.xmax = ar->winrct.xmin;
+				break;
+		}
 	}
 
 	/* restore prev-split exception */
@@ -2025,6 +2071,196 @@ void ED_region_info_draw(ARegion *ar, const char *text, int block, float fill_co
 
 	/* restore scissor as it was before */
 	glScissor(scissor[0], scissor[1], scissor[2], scissor[3]);
+}
+
+#define MAX_METADATA_STR    1024
+
+static const char *meta_data_list[] =
+{
+	"File",
+	"Strip",
+	"Note",
+	"Date",
+	"RenderTime",
+	"Marker",
+	"Time",
+	"Frame",
+	"Camera",
+	"Scene"
+};
+
+BLI_INLINE bool metadata_is_valid(ImBuf *ibuf, char *r_str, short index, int offset)
+{
+	return (IMB_metadata_get_field(ibuf, meta_data_list[index], r_str + offset, MAX_METADATA_STR - offset) && r_str[0]);
+}
+
+static void metadata_draw_imbuf(ImBuf *ibuf, rctf rect, int fontid, const bool is_top)
+{
+	char temp_str[MAX_METADATA_STR];
+	int line_width;
+	int ofs_y = 0;
+	short i;
+	int len;
+	const float height = BLF_height_max(fontid);
+	const float vertical_offset = height + (0.1f * U.widget_unit);
+
+	if (is_top) {
+		for (i = 0; i < 4; i++) {
+			/* first line */
+			if (i == 0) {
+				bool do_newline = false;
+				len = BLI_snprintf_rlen(temp_str, MAX_METADATA_STR, "%s: ", meta_data_list[0]);
+				if (metadata_is_valid(ibuf, temp_str, 0, len)) {
+					BLF_position(fontid, rect.xmin + (0.2f * U.widget_unit),
+					             rect.ymax - vertical_offset, 0.0f);
+					BLF_draw(fontid, temp_str, BLF_DRAW_STR_DUMMY_MAX);
+					do_newline = true;
+				}
+
+				len = BLI_snprintf_rlen(temp_str, MAX_METADATA_STR, "%s: ", meta_data_list[1]);
+				if (metadata_is_valid(ibuf, temp_str, 1, len)) {
+					line_width = BLF_width(fontid, temp_str, BLF_DRAW_STR_DUMMY_MAX);
+					BLF_position(fontid, rect.xmax - line_width - (0.2f * U.widget_unit),
+					             rect.ymax - vertical_offset, 0.0f);
+					BLF_draw(fontid, temp_str, BLF_DRAW_STR_DUMMY_MAX);
+					do_newline = true;
+				}
+
+				if (do_newline)
+					ofs_y += vertical_offset;
+			}
+			else if (i == 1) {
+				len = BLI_snprintf_rlen(temp_str, MAX_METADATA_STR, "%s: ", meta_data_list[i + 1]);
+				if (metadata_is_valid(ibuf, temp_str, i + 1, len)) {
+					BLF_position(fontid, rect.xmin + (0.2f * U.widget_unit),
+					             rect.ymax - vertical_offset - ofs_y, 0.0f);
+					BLF_draw(fontid, temp_str, BLF_DRAW_STR_DUMMY_MAX);
+					ofs_y += vertical_offset;
+				}
+			}
+			else {
+				len = BLI_snprintf_rlen(temp_str, MAX_METADATA_STR, "%s: ", meta_data_list[i + 1]);
+				if (metadata_is_valid(ibuf, temp_str, i + 1, len)) {
+					line_width = BLF_width(fontid, temp_str, BLF_DRAW_STR_DUMMY_MAX);
+					BLF_position(fontid, rect.xmax  - line_width -  (0.2f * U.widget_unit),
+					             rect.ymax - vertical_offset - ofs_y, 0.0f);
+					BLF_draw(fontid, temp_str, BLF_DRAW_STR_DUMMY_MAX);
+					ofs_y += vertical_offset;
+				}
+			}
+		}
+	}
+	else {
+		int ofs_x = 0;
+		for (i = 5; i < 10; i++) {
+			len = BLI_snprintf_rlen(temp_str, MAX_METADATA_STR, "%s: ", meta_data_list[i]);
+			if (metadata_is_valid(ibuf, temp_str, i, len)) {
+				BLF_position(fontid, rect.xmin + (0.2f * U.widget_unit) + ofs_x,
+				             rect.ymin + (0.3f * U.widget_unit), 0.0f);
+				BLF_draw(fontid, temp_str, BLF_DRAW_STR_DUMMY_MAX);
+	
+				ofs_x += BLF_width(fontid, temp_str, BLF_DRAW_STR_DUMMY_MAX) + UI_UNIT_X;
+			}
+		}
+	}
+}
+
+static float metadata_box_height_get(ImBuf *ibuf, int fontid, const bool is_top)
+{
+	char str[MAX_METADATA_STR] = "";
+	short i, count = 0;
+	const float height = BLF_height_max(fontid) + 0.1f * U.widget_unit;
+
+	if (is_top) {
+		if (metadata_is_valid(ibuf, str, 0, 0) || metadata_is_valid(ibuf, str, 1, 0)) {
+			count++;
+		}
+		for (i = 2; i < 5; i++) {
+			if (metadata_is_valid(ibuf, str, i, 0)) {
+				count++;
+			}
+		}
+	}
+	else {
+		for (i = 5; i < 10; i++) {
+			if (metadata_is_valid(ibuf, str, i, 0)) {
+				count = 1;
+			}
+		}
+	}
+
+	if (count) {
+		return (height * count + (0.1f * U.widget_unit));
+	}
+
+	return 0;
+}
+
+#undef MAX_METADATA_STR
+
+void ED_region_image_metadata_draw(int x, int y, ImBuf *ibuf, rctf frame, float zoomx, float zoomy)
+{
+	float box_y;
+	rctf rect;
+	uiStyle *style = UI_style_get_dpi();
+
+	if (!ibuf->metadata)
+		return;
+
+	/* find window pixel coordinates of origin */
+	glPushMatrix();
+
+	/* offset and zoom using ogl */
+	glTranslatef(x, y, 0.0f);
+	glScalef(zoomx, zoomy, 1.0f);
+
+	BLF_size(blf_mono_font, style->widgetlabel.points * 1.5f, U.dpi);
+
+	/* *** upper box*** */
+
+	/* get needed box height */
+	box_y = metadata_box_height_get(ibuf, blf_mono_font, true);
+
+	if (box_y) {
+		UI_ThemeColor(TH_METADATA_BG);
+
+		/* set up rect */
+		BLI_rctf_init(&rect, frame.xmin, frame.xmax, frame.ymax, frame.ymax + box_y);
+		/* draw top box */
+		glRectf(rect.xmin, rect.ymin, rect.xmax, rect.ymax);
+
+		BLF_clipping(blf_mono_font, rect.xmin, rect.ymin, rect.xmax, rect.ymax);
+		BLF_enable(blf_mono_font, BLF_CLIPPING);
+
+		UI_ThemeColor(TH_METADATA_TEXT);
+		metadata_draw_imbuf(ibuf, rect, blf_mono_font, true);
+
+		BLF_disable(blf_mono_font, BLF_CLIPPING);
+	}
+
+
+	/* *** lower box*** */
+
+	box_y = metadata_box_height_get(ibuf, blf_mono_font, false);
+
+	if (box_y) {
+		UI_ThemeColor(TH_METADATA_BG);
+
+		/* set up box rect */
+		BLI_rctf_init(&rect, frame.xmin, frame.xmax, frame.ymin - box_y, frame.ymin);
+		/* draw top box */
+		glRectf(rect.xmin, rect.ymin, rect.xmax, rect.ymax);
+
+		BLF_clipping(blf_mono_font, rect.xmin, rect.ymin, rect.xmax, rect.ymax);
+		BLF_enable(blf_mono_font, BLF_CLIPPING);
+
+		UI_ThemeColor(TH_METADATA_TEXT);
+		metadata_draw_imbuf(ibuf, rect, blf_mono_font, false);
+
+		BLF_disable(blf_mono_font, BLF_CLIPPING);
+	}
+
+	glPopMatrix();
 }
 
 void ED_region_grid_draw(ARegion *ar, float zoomx, float zoomy)

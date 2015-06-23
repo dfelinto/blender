@@ -222,7 +222,7 @@ static ImBuf *movieclip_load_sequence_file(MovieClip *clip, MovieClipUser *user,
 		colorspace = clip->colorspace_settings.name;
 	}
 
-	loadflag = IB_rect | IB_multilayer | IB_alphamode_detect;
+	loadflag = IB_rect | IB_multilayer | IB_alphamode_detect | IB_metadata;
 
 	/* read ibuf */
 	ibuf = IMB_loadiffname(name, loadflag, colorspace);
@@ -1129,15 +1129,15 @@ void BKE_movieclip_get_aspect(MovieClip *clip, float *aspx, float *aspy)
 }
 
 /* get segments of cached frames. useful for debugging cache policies */
-void BKE_movieclip_get_cache_segments(MovieClip *clip, MovieClipUser *user, int *totseg_r, int **points_r)
+void BKE_movieclip_get_cache_segments(MovieClip *clip, MovieClipUser *user, int *r_totseg, int **r_points)
 {
-	*totseg_r = 0;
-	*points_r = NULL;
+	*r_totseg = 0;
+	*r_points = NULL;
 
 	if (clip->cache) {
 		int proxy = rendersize_to_proxy(user, clip->flag);
 
-		IMB_moviecache_get_cache_segments(clip->cache->moviecache, proxy, user->render_flag, totseg_r, points_r);
+		IMB_moviecache_get_cache_segments(clip->cache->moviecache, proxy, user->render_flag, r_totseg, r_points);
 	}
 }
 

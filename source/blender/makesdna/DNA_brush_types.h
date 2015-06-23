@@ -137,16 +137,14 @@ typedef struct Brush {
 	float mask_stencil_dimension[2];
 } Brush;
 
-typedef struct PaletteColor
-{
+typedef struct PaletteColor {
 	struct PaletteColor *next, *prev;
 	/* two values, one to store rgb, other to store values for sculpt/weight */
 	float rgb[3];
 	float value;
 } PaletteColor;
 
-typedef struct Palette
-{
+typedef struct Palette {
 	ID id;
 
 	/* pointer to individual colours */
@@ -156,14 +154,12 @@ typedef struct Palette
 	int pad;
 } Palette;
 
-typedef struct PaintCurvePoint
-{
+typedef struct PaintCurvePoint {
 	BezTriple bez; /* bezier handle */
 	float pressure; /* pressure on that point */
 } PaintCurvePoint;
 
-typedef struct PaintCurve
-{
+typedef struct PaintCurve {
 	ID id;
 	PaintCurvePoint *points; /* points of curve */
 	int tot_points;
@@ -259,6 +255,36 @@ typedef enum BrushSculptTool {
 	SCULPT_TOOL_MASK = 19
 } BrushSculptTool;
 
+/** When #BRUSH_ACCUMULATE is used */
+#define SCULPT_TOOL_HAS_ACCUMULATE(t) ELEM(t, \
+	SCULPT_TOOL_DRAW, \
+	SCULPT_TOOL_CREASE, \
+	SCULPT_TOOL_BLOB, \
+	SCULPT_TOOL_LAYER, \
+	SCULPT_TOOL_INFLATE, \
+	SCULPT_TOOL_CLAY, \
+	SCULPT_TOOL_CLAY_STRIPS, \
+	SCULPT_TOOL_ROTATE, \
+	SCULPT_TOOL_FLATTEN \
+	)
+
+#define SCULPT_TOOL_HAS_NORMAL_WEIGHT(t) ELEM(t, \
+	SCULPT_TOOL_GRAB, \
+	SCULPT_TOOL_SNAKE_HOOK \
+	)
+
+#define SCULPT_TOOL_HAS_DYNTOPO(t) (ELEM(t, \
+	/* These brushes, as currently coded, cannot support dynamic topology */ \
+	SCULPT_TOOL_GRAB, \
+	SCULPT_TOOL_ROTATE, \
+	SCULPT_TOOL_THUMB, \
+	SCULPT_TOOL_LAYER, \
+	\
+	/* These brushes could handle dynamic topology, but user feedback indicates it's better not to */ \
+	SCULPT_TOOL_SMOOTH, \
+	SCULPT_TOOL_MASK \
+	) == 0)
+
 /* ImagePaintSettings.tool */
 typedef enum BrushImagePaintTool {
 	PAINT_TOOL_DRAW = 0,
@@ -299,7 +325,7 @@ typedef enum BlurKernelType {
 	KERNEL_BOX
 } BlurKernelType;
 
-#define MAX_BRUSH_PIXEL_RADIUS 200
+#define MAX_BRUSH_PIXEL_RADIUS 500
 
 #endif
 

@@ -199,6 +199,7 @@ void BLI_init_threads(ListBase *threadbase, void *(*do_thread)(void *), int tot)
 		}
 	}
 	
+	BLI_spin_lock(&_malloc_lock);
 	if (thread_levels == 0) {
 		MEM_set_lock_callback(BLI_lock_malloc_thread, BLI_unlock_malloc_thread);
 
@@ -211,6 +212,7 @@ void BLI_init_threads(ListBase *threadbase, void *(*do_thread)(void *), int tot)
 	}
 
 	thread_levels++;
+	BLI_spin_unlock(&_malloc_lock);
 }
 
 /* amount of available threads */
@@ -329,9 +331,11 @@ void BLI_end_threads(ListBase *threadbase)
 		BLI_freelistN(threadbase);
 	}
 
+	BLI_spin_lock(&_malloc_lock);
 	thread_levels--;
 	if (thread_levels == 0)
 		MEM_set_lock_callback(NULL, NULL);
+	BLI_spin_unlock(&_malloc_lock);
 }
 
 /* System Information */
@@ -339,33 +343,37 @@ void BLI_end_threads(ListBase *threadbase)
 /* how many threads are native on this system? */
 int BLI_system_thread_count(void)
 {
-	int t;
+	static int t = -1;
+
+	if (num_threads_override != 0) {
+		return num_threads_override;
+	}
+	else if (LIKELY(t != -1)) {
+		return t;
+	}
+
+	{
 #ifdef WIN32
-	SYSTEM_INFO info;
-	GetSystemInfo(&info);
-	t = (int) info.dwNumberOfProcessors;
+		SYSTEM_INFO info;
+		GetSystemInfo(&info);
+		t = (int) info.dwNumberOfProcessors;
 #else 
 #   ifdef __APPLE__
-	int mib[2];
-	size_t len;
-	
-	mib[0] = CTL_HW;
-	mib[1] = HW_NCPU;
-	len = sizeof(t);
-	sysctl(mib, 2, &t, &len, NULL, 0);
+		int mib[2];
+		size_t len;
+
+		mib[0] = CTL_HW;
+		mib[1] = HW_NCPU;
+		len = sizeof(t);
+		sysctl(mib, 2, &t, &len, NULL, 0);
 #   else
-	t = (int)sysconf(_SC_NPROCESSORS_ONLN);
+		t = (int)sysconf(_SC_NPROCESSORS_ONLN);
 #   endif
 #endif
+	}
 
-	if (num_threads_override > 0)
-		return num_threads_override;
-	
-	if (t > RE_MAX_THREAD)
-		return RE_MAX_THREAD;
-	if (t < 1)
-		return 1;
-	
+	CLAMP(t, 1, RE_MAX_THREAD);
+
 	return t;
 }
 
@@ -773,6 +781,17 @@ int BLI_thread_queue_size(ThreadQueue *queue)
 	return size;
 }
 
+bool BLI_thread_queue_is_empty(ThreadQueue *queue)
+{
+	bool is_empty;
+
+	pthread_mutex_lock(&queue->mutex);
+	is_empty = BLI_gsqueue_is_empty(queue->queue);
+	pthread_mutex_unlock(&queue->mutex);
+
+	return is_empty;
+}
+
 void BLI_thread_queue_nowait(ThreadQueue *queue)
 {
 	pthread_mutex_lock(&queue->mutex);
@@ -802,10 +821,12 @@ void BLI_begin_threaded_malloc(void)
 	/* Used for debug only */
 	/* BLI_assert(thread_levels >= 0); */
 
+	BLI_spin_lock(&_malloc_lock);
 	if (thread_levels == 0) {
 		MEM_set_lock_callback(BLI_lock_malloc_thread, BLI_unlock_malloc_thread);
 	}
 	thread_levels++;
+	BLI_spin_unlock(&_malloc_lock);
 }
 
 void BLI_end_threaded_malloc(void)
@@ -813,8 +834,10 @@ void BLI_end_threaded_malloc(void)
 	/* Used for debug only */
 	/* BLI_assert(thread_levels >= 0); */
 
+	BLI_spin_lock(&_malloc_lock);
 	thread_levels--;
 	if (thread_levels == 0)
 		MEM_set_lock_callback(NULL, NULL);
+	BLI_spin_unlock(&_malloc_lock);
 }
 

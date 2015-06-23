@@ -103,7 +103,7 @@ static void imb_handle_alpha(ImBuf *ibuf, int flags, char colorspace[IM_MAX_SPAC
 ImBuf *IMB_ibImageFromMemory(unsigned char *mem, size_t size, int flags, char colorspace[IM_MAX_SPACE], const char *descr)
 {
 	ImBuf *ibuf;
-	ImFileType *type;
+	const ImFileType *type;
 	char effective_colorspace[IM_MAX_SPACE] = "";
 
 	if (mem == NULL) {
@@ -133,7 +133,7 @@ ImBuf *IMB_ibImageFromMemory(unsigned char *mem, size_t size, int flags, char co
 static ImBuf *IMB_ibImageFromFile(const char *filepath, int flags, char colorspace[IM_MAX_SPACE], const char *descr)
 {
 	ImBuf *ibuf;
-	ImFileType *type;
+	const ImFileType *type;
 	char effective_colorspace[IM_MAX_SPACE] = "";
 
 	if (colorspace)
@@ -209,6 +209,8 @@ ImBuf *IMB_loadiffname(const char *filepath, int flags, char colorspace[IM_MAX_S
 	int file, a;
 	char filepath_tx[IB_FILENAME_SIZE];
 
+	BLI_assert(!BLI_path_is_rel(filepath));
+
 	imb_cache_filename(filepath_tx, filepath, flags);
 
 	file = BLI_open(filepath_tx, O_BINARY | O_RDONLY, 0);
@@ -237,6 +239,8 @@ ImBuf *IMB_testiffname(const char *filepath, int flags)
 	char filepath_tx[IB_FILENAME_SIZE];
 	char colorspace[IM_MAX_SPACE] = "\0";
 
+	BLI_assert(!BLI_path_is_rel(filepath));
+
 	imb_cache_filename(filepath_tx, filepath, flags);
 
 	file = BLI_open(filepath_tx, O_BINARY | O_RDONLY, 0);
@@ -257,7 +261,7 @@ ImBuf *IMB_testiffname(const char *filepath, int flags)
 
 static void imb_loadtilefile(ImBuf *ibuf, int file, int tx, int ty, unsigned int *rect)
 {
-	ImFileType *type;
+	const ImFileType *type;
 	unsigned char *mem;
 	size_t size;
 

@@ -116,6 +116,8 @@ else:
 
             if config.find('player') != -1:
                 scons_options.append('BF_BUILDDIR=%s_player' % (build_dir))
+            elif config.find('cuda') != -1:
+                scons_options.append('BF_BUILDDIR=%s_cuda' % (build_dir))
             else:
                 scons_options.append('BF_BUILDDIR=%s' % (build_dir))
 
@@ -140,7 +142,7 @@ else:
 
             retcode = subprocess.call(cur_scons_cmd + scons_options)
             if retcode != 0:
-                print('Error building rules wuth config ' + config)
+                print('Error building rules with config ' + config)
                 sys.exit(retcode)
 
         sys.exit(0)

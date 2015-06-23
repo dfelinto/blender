@@ -326,8 +326,8 @@ void MESH_OT_extrude_repeat(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 	
 	/* props */
-	RNA_def_float(ot->srna, "offset", 2.0f, 0.0f, FLT_MAX, "Offset", "", 0.0f, 100.0f);
-	RNA_def_int(ot->srna, "steps", 10, 0, INT_MAX, "Steps", "", 0, 180);
+	RNA_def_float(ot->srna, "offset", 2.0f, 0.0f, 1e12f, "Offset", "", 0.0f, 100.0f);
+	RNA_def_int(ot->srna, "steps", 10, 0, 1000000, "Steps", "", 0, 180);
 }
 
 /* generic extern called extruder */
@@ -511,10 +511,6 @@ static int edbm_dupli_extrude_cursor_invoke(bContext *C, wmOperator *op, const w
 	bool done = false;
 	bool use_proj;
 
-	if (ELEM(event->click_type, KM_CLICK, KM_HOLD)) {
-		return OPERATOR_CANCELLED;
-	}
-
 	em_setup_viewcontext(C, &vc);
 
 	ED_view3d_init_mats_rv3d(vc.obedit, vc.rv3d);
@@ -578,8 +574,7 @@ static int edbm_dupli_extrude_cursor_invoke(bContext *C, wmOperator *op, const w
 			mul_mat3_m4_v3(vc.obedit->imat, nor); /* local space */
 
 			/* correct the normal to be aligned on the view plane */
-			copy_v3_v3(view_vec, vc.rv3d->viewinv[2]);
-			mul_mat3_m4_v3(vc.obedit->imat, view_vec);
+			mul_v3_mat3_m4v3(view_vec, vc.obedit->imat, vc.rv3d->viewinv[2]);
 			cross_v3_v3v3(cross, nor, view_vec);
 			cross_v3_v3v3(nor, view_vec, cross);
 			normalize_v3(nor);
@@ -683,7 +678,7 @@ void MESH_OT_dupli_extrude_cursor(wmOperatorType *ot)
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
-	RNA_def_boolean(ot->srna, "rotate_source", 1, "Rotate Source", "Rotate initial selection giving better shape");
+	RNA_def_boolean(ot->srna, "rotate_source", true, "Rotate Source", "Rotate initial selection giving better shape");
 }
 
 
@@ -756,13 +751,15 @@ void MESH_OT_spin(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
 	/* props */
-	RNA_def_int(ot->srna, "steps", 9, 0, INT_MAX, "Steps", "Steps", 0, INT_MAX);
+	RNA_def_int(ot->srna, "steps", 9, 0, 1000000, "Steps", "Steps", 0, 1000);
 	RNA_def_boolean(ot->srna, "dupli", 0, "Dupli", "Make Duplicates");
-	prop = RNA_def_float(ot->srna, "angle", DEG2RADF(90.0f), -FLT_MAX, FLT_MAX, "Angle", "Angle", DEG2RADF(-360.0f), DEG2RADF(360.0f));
+	prop = RNA_def_float(ot->srna, "angle", DEG2RADF(90.0f), -1e12f, 1e12f, "Angle", "Rotation for each step",
+	                     DEG2RADF(-360.0f), DEG2RADF(360.0f));
 	RNA_def_property_subtype(prop, PROP_ANGLE);
 
-	RNA_def_float_vector(ot->srna, "center", 3, NULL, -FLT_MAX, FLT_MAX, "Center", "Center in global view space", -FLT_MAX, FLT_MAX);
-	RNA_def_float_vector(ot->srna, "axis", 3, NULL, -FLT_MAX, FLT_MAX, "Axis", "Axis in global view space", -1.0f, 1.0f);
+	RNA_def_float_vector(ot->srna, "center", 3, NULL, -1e12f, 1e12f,
+	                     "Center", "Center in global view space", -1e4f, 1e4f);
+	RNA_def_float_vector(ot->srna, "axis", 3, NULL, -1.0f, 1.0f, "Axis", "Axis in global view space", -1.0f, 1.0f);
 
 }
 
@@ -874,11 +871,11 @@ void MESH_OT_screw(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
 	/* props */
-	RNA_def_int(ot->srna, "steps", 9, 1, INT_MAX, "Steps", "Steps", 3, 256);
-	RNA_def_int(ot->srna, "turns", 1, 1, INT_MAX, "Turns", "Turns", 1, 256);
+	RNA_def_int(ot->srna, "steps", 9, 1, 100000, "Steps", "Steps", 3, 256);
+	RNA_def_int(ot->srna, "turns", 1, 1, 100000, "Turns", "Turns", 1, 256);
 
-	RNA_def_float_vector(ot->srna, "center", 3, NULL, -FLT_MAX, FLT_MAX,
-	                     "Center", "Center in global view space", -FLT_MAX, FLT_MAX);
-	RNA_def_float_vector(ot->srna, "axis", 3, NULL, -FLT_MAX, FLT_MAX,
+	RNA_def_float_vector(ot->srna, "center", 3, NULL, -1e12f, 1e12f,
+	                     "Center", "Center in global view space", -1e4f, 1e4f);
+	RNA_def_float_vector(ot->srna, "axis", 3, NULL, -1.0f, 1.0f,
 	                     "Axis", "Axis in global view space", -1.0f, 1.0f);
 }

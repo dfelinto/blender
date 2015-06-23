@@ -125,8 +125,10 @@ void BLI_stack_free(BLI_Stack *stack)
 }
 
 /**
- * Copies the source value onto the stack (note that it copies
- * elem_size bytes from 'src', the pointer itself is not stored)
+ * Push a new item onto the stack.
+ *
+ * \return a pointer #BLI_Stack.elem_size
+ * bytes of uninitialized memory (caller must fill in).
  */
 void *BLI_stack_push_r(BLI_Stack *stack)
 {
@@ -158,6 +160,14 @@ void *BLI_stack_push_r(BLI_Stack *stack)
 	return CHUNK_LAST_ELEM(stack);
 }
 
+/**
+ * Copies the source value onto the stack
+ *
+ * \note This copies #BLI_Stack.elem_size bytes from \a src,
+ * (the pointer itself is not stored).
+ *
+ * \param src: source data to be copied to the stack.
+ */
 void BLI_stack_push(BLI_Stack *stack, const void *src)
 {
 	void *dst = BLI_stack_push_r(stack);
@@ -179,6 +189,15 @@ void BLI_stack_pop(BLI_Stack *stack, void *dst)
 	BLI_stack_discard(stack);
 }
 
+/**
+ * A version of #BLI_stack_pop which which fills in an array.
+ *
+ * \param dst: The destination array,
+ * must be at least (#BLI_Stack.elem_size * \a n) bytes long.
+ * \param n: The number of items to pop.
+ *
+ * \note The first item in the array will be last item added to the stack.
+ */
 void BLI_stack_pop_n(BLI_Stack *stack, void *dst, unsigned int n)
 {
 	BLI_assert(n <= BLI_stack_count(stack));
@@ -189,6 +208,23 @@ void BLI_stack_pop_n(BLI_Stack *stack, void *dst, unsigned int n)
 	}
 }
 
+/**
+ * A version of #BLI_stack_pop_n which which fills in an array (in the reverse order).
+ *
+ * \note The first item in the array will be first item added to the stack.
+ */
+void BLI_stack_pop_n_reverse(BLI_Stack *stack, void *dst, unsigned int n)
+{
+	BLI_assert(n <= BLI_stack_count(stack));
+
+	dst = (void *)((char *)dst + (stack->elem_size * n));
+
+	while (n--) {
+		dst = (void *)((char *)dst - stack->elem_size);
+		BLI_stack_pop(stack, dst);
+	}
+}
+
 void *BLI_stack_peek(BLI_Stack *stack)
 {
 	BLI_assert(BLI_stack_is_empty(stack) == false);
@@ -196,6 +232,9 @@ void *BLI_stack_peek(BLI_Stack *stack)
 	return CHUNK_LAST_ELEM(stack);
 }
 
+/**
+ * Removes the top element from the stack.
+ */
 void BLI_stack_discard(BLI_Stack *stack)
 {
 	BLI_assert(BLI_stack_is_empty(stack) == false);
@@ -213,6 +252,41 @@ void BLI_stack_discard(BLI_Stack *stack)
 		stack->chunk_free = chunk_free;
 
 		stack->chunk_index = stack->chunk_elem_max - 1;
+	}
+}
+
+/**
+ * Discards all elements without freeing.
+ */
+void BLI_stack_clear(BLI_Stack *stack)
+{
+#ifdef USE_TOTELEM
+	if (UNLIKELY(stack->totelem == 0)) {
+		return;
+	}
+	stack->totelem = 0;
+#else
+	if (UNLIKELY(stack->chunk_curr == NULL)) {
+		return;
+	}
+#endif
+
+	stack->chunk_index = stack->chunk_elem_max - 1;
+
+	if (stack->chunk_free) {
+		if (stack->chunk_curr) {
+			/* move all used chunks into tail of free list */
+			struct StackChunk *chunk_free_last = stack->chunk_free;
+			while (chunk_free_last->next) {
+				chunk_free_last = chunk_free_last->next;
+			}
+			chunk_free_last->next = stack->chunk_curr;
+			stack->chunk_curr = NULL;
+		}
+	}
+	else {
+		stack->chunk_free = stack->chunk_curr;
+		stack->chunk_curr = NULL;
 	}
 }
 

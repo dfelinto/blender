@@ -40,6 +40,7 @@ from project_info import (
         # is_py,
         cmake_advanced_info,
         cmake_compiler_defines,
+        cmake_cache_var,
         project_name_get,
         )
 
@@ -70,6 +71,10 @@ def create_nb_project_main():
         else:
             # be tricky, get the project name from git if we can!
             PROJECT_NAME = project_name_get()
+
+
+        make_exe = cmake_cache_var("CMAKE_MAKE_PROGRAM")
+        make_exe_basename = os.path.basename(make_exe)
 
         # --------------- NB spesific
         defines = [("%s=%s" % cdef) if cdef[1] else cdef[0] for cdef in defines]
@@ -131,9 +136,9 @@ def create_nb_project_main():
         f = open(join(PROJECT_DIR_NB, "configurations.xml"), 'w')
 
         f.write('<?xml version="1.0" encoding="UTF-8"?>\n')
-        f.write('<configurationDescriptor version="94">\n')
+        f.write('<configurationDescriptor version="95">\n')
         f.write('  <logicalFolder name="root" displayName="root" projectFiles="true" kind="ROOT">\n')
-        f.write('    <df name="0" root="%s">\n' % SOURCE_DIR)  # base_root_rel
+        f.write('    <df root="%s" name="0">\n' % SOURCE_DIR)  # base_root_rel
 
         # write files!
         files_rel_local = [normpath(relpath(join(CMAKE_DIR, path), SOURCE_DIR)) for path in files_rel]
@@ -185,16 +190,27 @@ def create_nb_project_main():
 
         f.write('      <toolsSet>\n')
         f.write('        <compilerSet>default</compilerSet>\n')
+        f.write('        <dependencyChecking>false</dependencyChecking>\n')
+        f.write('        <rebuildPropChanged>false</rebuildPropChanged>\n')
         f.write('      </toolsSet>\n')
-        f.write('      <dependencyChecking>false</dependencyChecking>\n')
-        f.write('      <rebuildPropChanged>false</rebuildPropChanged>\n')
+        f.write('      <codeAssistance>\n')
+        f.write('      </codeAssistance>\n')
         f.write('      <makefileType>\n')
 
         f.write('        <makeTool>\n')
         f.write('          <buildCommandWorkingDir>.</buildCommandWorkingDir>\n')
-        f.write('          <buildCommand>${MAKE} -f Makefile</buildCommand>\n')
-        f.write('          <cleanCommand>${MAKE} -f Makefile clean</cleanCommand>\n')
+
+        if make_exe_basename == "ninja":
+            build_cmd = "ninja"
+            clean_cmd = "ninja -t clean"
+        else:
+            build_cmd = "${MAKE} -f Makefile"
+            clean_cmd = "${MAKE} -f Makefile clean"
+
+        f.write('          <buildCommand>%s</buildCommand>\n' % build_cmd)
+        f.write('          <cleanCommand>%s</cleanCommand>\n' % clean_cmd)
         f.write('          <executablePath>./bin/blender</executablePath>\n')
+        del build_cmd, clean_cmd
 
         def write_toolinfo():
             f.write('            <incDir>\n')
@@ -221,10 +237,11 @@ def create_nb_project_main():
         f.write('    \n')
 
         for path in files_rel_local:
+            is_c = path.endswith(".c")
             f.write('      <item path="%s"\n' % path)
             f.write('            ex="false"\n')
-            f.write('            tool="1"\n')
-            f.write('            flavor2="0">\n')
+            f.write('            tool="%d"\n' % (0 if is_c else 1))
+            f.write('            flavor2="%d">\n' % (3 if is_c else 0))
             f.write('      </item>\n')
 
         f.write('      <runprofile version="9">\n')

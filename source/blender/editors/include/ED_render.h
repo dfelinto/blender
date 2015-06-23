@@ -60,17 +60,21 @@ struct Scene *ED_render_job_get_current_scene(const struct bContext *C);
  * - PR_BUTS_RENDER: preview is rendered for buttons window
  * - PR_ICON_RENDER: preview is rendered for icons. hopefully fast enough for at least 32x32
  * - PR_NODE_RENDER: preview is rendered for node editor
+ * - PR_ICON_DEFERRED: No render, we just ensure deferred icon data gets generated.
  */
 
-#define PR_BUTS_RENDER  0
-#define PR_ICON_RENDER  1
-#define PR_NODE_RENDER  2
+enum {
+	PR_BUTS_RENDER   = 0,
+	PR_ICON_RENDER   = 1,
+	PR_NODE_RENDER   = 2,
+	PR_ICON_DEFERRED = 3,
+};
 
 void ED_preview_init_dbase(void);
 void ED_preview_free_dbase(void);
 
 void ED_preview_shader_job(const struct bContext *C, void *owner, struct ID *id, struct ID *parent, struct MTex *slot, int sizex, int sizey, int method);
-void ED_preview_icon_render(struct Scene *scene, struct ID *id, unsigned int *rect, int sizex, int sizey);
+void ED_preview_icon_render(struct Main *bmain, struct Scene *scene, struct ID *id, unsigned int *rect, int sizex, int sizey);
 void ED_preview_icon_job(const struct bContext *C, void *owner, struct ID *id, unsigned int *rect, int sizex, int sizey);
 void ED_preview_kill_jobs(struct wmWindowManager *wm, struct Main *bmain);
 

@@ -77,6 +77,13 @@ EnumPropertyItem render_pass_type_items[] = {
 	{0, NULL, 0, NULL, NULL}
 };
 
+EnumPropertyItem render_pass_debug_type_items[] = {
+	{RENDER_PASS_DEBUG_BVH_TRAVERSAL_STEPS, "BVH_TRAVERSAL_STEPS", 0, "BVH Traversal Steps", ""},
+	{RENDER_PASS_DEBUG_BVH_TRAVERSED_INSTANCES, "BVH_TRAVERSED_INSTANCES", 0, "BVH Traversed Instances", ""},
+	{RENDER_PASS_DEBUG_RAY_BOUNCES, "RAY_BOUNCES", 0, "Ray Steps", ""},
+	{0, NULL, 0, NULL, NULL}
+};
+
 #ifdef RNA_RUNTIME
 
 #include "MEM_guardedalloc.h"
@@ -154,8 +161,10 @@ static void engine_render(RenderEngine *engine, struct Scene *scene)
 	RNA_parameter_list_free(&list);
 }
 
-static void engine_bake(RenderEngine *engine, struct Scene *scene, struct Object *object, const int pass_type,
-                        const struct BakePixel *pixel_array, const int num_pixels, const int depth, void *result)
+static void engine_bake(RenderEngine *engine, struct Scene *scene,
+                        struct Object *object, const int pass_type,
+                        const int object_id, const struct BakePixel *pixel_array,
+                        const int num_pixels, const int depth, void *result)
 {
 	extern FunctionRNA rna_RenderEngine_bake_func;
 	PointerRNA ptr;
@@ -169,6 +178,7 @@ static void engine_bake(RenderEngine *engine, struct Scene *scene, struct Object
 	RNA_parameter_set_lookup(&list, "scene", &scene);
 	RNA_parameter_set_lookup(&list, "object", &object);
 	RNA_parameter_set_lookup(&list, "pass_type", &pass_type);
+	RNA_parameter_set_lookup(&list, "object_id", &object_id);
 	RNA_parameter_set_lookup(&list, "pixel_array", &pixel_array);
 	RNA_parameter_set_lookup(&list, "num_pixels", &num_pixels);
 	RNA_parameter_set_lookup(&list, "depth", &depth);
@@ -254,6 +264,7 @@ static StructRNA *rna_RenderEngine_register(Main *bmain, ReportList *reports, vo
 
 	/* setup dummy engine & engine type to store static properties in */
 	dummyengine.type = &dummyet;
+	dummyet.flag |= RE_USE_SHADING_NODES_CUSTOM;
 	RNA_pointer_create(NULL, &RNA_RenderEngine, &dummyengine, &dummyptr);
 
 	/* validate the python class */
@@ -384,14 +395,7 @@ static PointerRNA rna_BakePixel_next_get(PointerRNA *ptr)
 
 static RenderPass *rna_RenderPass_find_by_type(RenderLayer *rl, int passtype, const char *view)
 {
-	RenderPass *rp;
-	for (rp = rl->passes.first; rp; rp = rp->next) {
-		if (rp->passtype == passtype) {
-			if (STREQ(rp->view, view))
-				return rp;
-		}
-	}
-	return NULL;
+	return RE_pass_find_by_type(rl, passtype, view);
 }
 
 #else /* RNA_RUNTIME */
@@ -429,6 +433,8 @@ static void rna_def_render_engine(BlenderRNA *brna)
 	prop = RNA_def_pointer(func, "object", "Object", "", "");
 	RNA_def_property_flag(prop, PROP_REQUIRED);
 	prop = RNA_def_enum(func, "pass_type", render_pass_type_items, 0, "Pass", "Pass to bake");
+	RNA_def_property_flag(prop, PROP_REQUIRED);
+	prop = RNA_def_int(func, "object_id", 0, 0, INT_MAX, "Object Id", "Id of the current object being baked in relation to the others", 0, INT_MAX);
 	RNA_def_property_flag(prop, PROP_REQUIRED);
 	prop = RNA_def_pointer(func, "pixel_array", "BakePixel", "", "");
 	RNA_def_property_flag(prop, PROP_REQUIRED);
@@ -630,6 +636,11 @@ static void rna_def_render_engine(BlenderRNA *brna)
 	RNA_def_property_boolean_sdna(prop, NULL, "type->flag", RE_USE_SHADING_NODES);
 	RNA_def_property_flag(prop, PROP_REGISTER_OPTIONAL);
 
+	prop = RNA_def_property(srna, "bl_use_shading_nodes_custom", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "type->flag", RE_USE_SHADING_NODES_CUSTOM);
+	RNA_def_property_boolean_default(prop, true);
+	RNA_def_property_flag(prop, PROP_REGISTER_OPTIONAL);
+
 	prop = RNA_def_property(srna, "bl_use_exclude_layers", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "type->flag", RE_USE_EXCLUDE_LAYERS);
 	RNA_def_property_flag(prop, PROP_REGISTER_OPTIONAL);
@@ -763,11 +774,6 @@ static void rna_def_render_pass(BlenderRNA *brna)
 	StructRNA *srna;
 	PropertyRNA *prop;
 
-	static EnumPropertyItem render_pass_debug_type_items[] = {
-		{RENDER_PASS_DEBUG_BVH_TRAVERSAL_STEPS, "BVH_TRAVERSAL_STEPS", 0, "BVH Traversal Steps", ""},
-		{0, NULL, 0, NULL, NULL}
-	};
-
 	srna = RNA_def_struct(brna, "RenderPass", NULL);
 	RNA_def_struct_ui_text(srna, "Render Pass", "");
 
@@ -821,6 +827,10 @@ static void rna_def_render_bake_pixel(BlenderRNA *brna)
 
 	prop = RNA_def_property(srna, "primitive_id", PROP_INT, PROP_NONE);
 	RNA_def_property_int_sdna(prop, NULL, "primitive_id");
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+
+	prop = RNA_def_property(srna, "object_id", PROP_INT, PROP_NONE);
+	RNA_def_property_int_sdna(prop, NULL, "object_id");
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 
 	prop = RNA_def_property(srna, "uv", PROP_FLOAT, PROP_NONE);

@@ -319,7 +319,7 @@ typedef struct bNodeTreeType {
 
 struct bNodeTreeType *ntreeTypeFind(const char *idname);
 void ntreeTypeAdd(struct bNodeTreeType *nt);
-void ntreeTypeFreeLink(struct bNodeTreeType *nt);
+void ntreeTypeFreeLink(const struct bNodeTreeType *nt);
 bool ntreeIsRegistered(struct bNodeTree *ntree);
 struct GHashIterator *ntreeTypeGetIterator(void);
 
@@ -507,8 +507,7 @@ const struct ListBase *BKE_node_clipboard_get_links(void);
 int                    BKE_node_clipboard_get_type(void);
 
 /* Node Instance Hash */
-typedef struct bNodeInstanceHash
-{
+typedef struct bNodeInstanceHash {
 	 GHash *ghash;	/* XXX should be made a direct member, GHash allocation needs to support it */
 } bNodeInstanceHash;
 

@@ -272,6 +272,19 @@ void BKE_spacedata_draw_locks(int set)
 	}
 }
 
+static void (*spacedata_id_unref_cb)(struct SpaceLink *sl, const struct ID *id) = NULL;
+
+void BKE_spacedata_callback_id_unref_set(void (*func)(struct SpaceLink *sl, const struct ID *))
+{
+	spacedata_id_unref_cb = func;
+}
+
+void BKE_spacedata_id_unref(struct SpaceLink *sl, const struct ID *id)
+{
+	if (spacedata_id_unref_cb) {
+		spacedata_id_unref_cb(sl, id);
+	}
+}
 
 /* not region itself */
 void BKE_area_region_free(SpaceType *st, ARegion *ar)
@@ -405,6 +418,23 @@ ARegion *BKE_area_find_region_active_win(ScrArea *sa)
 	return NULL;
 }
 
+ARegion *BKE_area_find_region_xy(ScrArea *sa, const int regiontype, int x, int y)
+{
+	ARegion *ar_found = NULL;
+	if (sa) {
+		ARegion *ar;
+		for (ar = sa->regionbase.first; ar; ar = ar->next) {
+			if ((regiontype == RGN_TYPE_ANY) || (ar->regiontype == regiontype)) {
+				if (BLI_rcti_isect_pt(&ar->winrct, x, y)) {
+					ar_found = ar;
+					break;
+				}
+			}
+		}
+	}
+	return ar_found;
+}
+
 /**
  * \note, ideally we can get the area from the context,
  * there are a few places however where this isn't practical.
@@ -486,6 +516,23 @@ unsigned int BKE_screen_view3d_layer_active_ex(const View3D *v3d, const Scene *s
 unsigned int BKE_screen_view3d_layer_active(const struct View3D *v3d, const struct Scene *scene)
 {
 	return BKE_screen_view3d_layer_active_ex(v3d, scene, true);
+}
+
+/**
+ * Accumulate all visible layers on this screen.
+ */
+unsigned int BKE_screen_view3d_layer_all(const bScreen *sc)
+{
+	const ScrArea *sa;
+	unsigned int lay = 0;
+	for (sa = sc->areabase.first; sa; sa = sa->next) {
+		if (sa->spacetype == SPACE_VIEW3D) {
+			View3D *v3d = sa->spacedata.first;
+			lay |= v3d->lay;
+		}
+	}
+
+	return lay;
 }
 
 void BKE_screen_view3d_sync(View3D *v3d, struct Scene *scene)

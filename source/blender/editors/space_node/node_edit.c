@@ -239,9 +239,14 @@ static void compo_startjob(void *cjv, short *stop, short *do_update, float *prog
 	// XXX BIF_store_spare();
 	/* 1 is do_previews */
 
-	for (srv = scene->r.views.first; srv; srv = srv->next) {
-		if (BKE_scene_multiview_is_render_view_active(&scene->r, srv) == false) continue;
-		ntreeCompositExecTree(cj->scene, ntree, &cj->scene->r, false, true, &scene->view_settings, &scene->display_settings, srv->name);
+	if ((cj->scene->r.scemode & R_MULTIVIEW) == 0) {
+		ntreeCompositExecTree(cj->scene, ntree, &cj->scene->r, false, true, &scene->view_settings, &scene->display_settings, "");
+	}
+	else {
+		for (srv = scene->r.views.first; srv; srv = srv->next) {
+			if (BKE_scene_multiview_is_render_view_active(&scene->r, srv) == false) continue;
+			ntreeCompositExecTree(cj->scene, ntree, &cj->scene->r, false, true, &scene->view_settings, &scene->display_settings, srv->name);
+		}
 	}
 
 	ntree->test_break = NULL;
@@ -731,6 +736,34 @@ void ED_node_set_active(Main *bmain, bNodeTree *ntree, bNode *node)
 			// allqueue(REDRAWBUTSSHADING, 1);
 			// allqueue(REDRAWIPO, 0);
 #endif
+		}
+	}
+}
+
+void ED_node_id_unref(SpaceNode *snode, const ID *id)
+{
+	if (GS(id->name) == ID_SCE) {
+		if (snode->id == id) {
+			/* nasty DNA logic for SpaceNode:
+			 * ideally should be handled by editor code, but would be bad level call
+			 */
+			bNodeTreePath *path, *path_next;
+			for (path = snode->treepath.first; path; path = path_next) {
+				path_next = path->next;
+				MEM_freeN(path);
+			}
+			BLI_listbase_clear(&snode->treepath);
+
+			snode->id = NULL;
+			snode->from = NULL;
+			snode->nodetree = NULL;
+			snode->edittree = NULL;
+		}
+	}
+	else if (GS(id->name) == ID_OB) {
+		if (snode->from == id) {
+			snode->flag &= ~SNODE_PIN;
+			snode->from = NULL;
 		}
 	}
 }

@@ -77,6 +77,8 @@
  */
 
 /* Non-generated shaders */
+extern char datatoc_gpu_program_smoke_frag_glsl[];
+extern char datatoc_gpu_program_smoke_color_frag_glsl[];
 extern char datatoc_gpu_shader_vsm_store_vert_glsl[];
 extern char datatoc_gpu_shader_vsm_store_frag_glsl[];
 extern char datatoc_gpu_shader_sep_gaussian_blur_vert_glsl[];
@@ -94,6 +96,8 @@ extern char datatoc_gpu_shader_fx_lib_glsl[];
 typedef struct GPUShaders {
 	GPUShader *vsm_store;
 	GPUShader *sep_gaussian_blur;
+	GPUProgram *smoke;
+	GPUProgram *smoke_colored;
 	/* cache for shader fx. Those can exist in combinations so store them here */
 	GPUShader *fx_shaders[MAX_FX_SHADERS * 2];
 } GPUShaders;
@@ -259,7 +263,13 @@ void gpu_extensions_init(void)
 		GG.dfdyfactors[0] = 1.0;
 		GG.dfdyfactors[1] = -1.0;
 	}
-	else if (GG.device == GPU_DEVICE_INTEL && GG.os == GPU_OS_WIN) {
+	else if (GG.device == GPU_DEVICE_INTEL && GG.os == GPU_OS_WIN  &&
+	        (strstr(version, "4.0.0 - Build 10.18.10.3308") ||
+	         strstr(version, "4.0.0 - Build 9.18.10.3186") ||
+	         strstr(version, "4.0.0 - Build 9.18.10.3165") ||
+	         strstr(version, "3.1.0 - Build 9.17.10.3347") ||
+	         strstr(version, "3.1.0 - Build 9.17.10.4101")))
+	{
 		GG.dfdyfactors[0] = -1.0;
 		GG.dfdyfactors[1] = 1.0;
 	}
@@ -555,7 +565,8 @@ GPUTexture *GPU_texture_create_3D(int w, int h, int depth, int channels, const f
 	GPUTexture *tex;
 	GLenum type, format, internalformat;
 	void *pixels = NULL;
-	const float vfBorderColor[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+	int r_width;
+	bool rescale = false;
 
 	if (!GLEW_VERSION_1_2)
 		return NULL;
@@ -598,37 +609,90 @@ GPUTexture *GPU_texture_create_3D(int w, int h, int depth, int channels, const f
 		internalformat = GL_INTENSITY;
 	}
 
+	/* 3D textures are quite heavy, test if it's possible to create them first */
+	glTexImage3D(GL_PROXY_TEXTURE_3D, 0, internalformat, tex->w, tex->h, tex->depth, 0, format, type, NULL);
+	glGetTexLevelParameteriv(GL_PROXY_TEXTURE_3D, 0, GL_TEXTURE_WIDTH, &r_width);
+
+	while (r_width == 0) {
+		rescale = true;
+		tex->w /= 2;
+		tex->h /= 2;
+		tex->depth /= 2;
+		glTexImage3D(GL_PROXY_TEXTURE_3D, 0, internalformat, tex->w, tex->h, tex->depth, 0, format, type, NULL);
+		glGetTexLevelParameteriv(GL_PROXY_TEXTURE_3D, 0, GL_TEXTURE_WIDTH, &r_width);
+	}
+
+	/* really unlikely to happen but keep this just in case */
+	tex->w = max_ii(tex->w, 1);
+	tex->h = max_ii(tex->h, 1);
+	tex->depth = max_ii(tex->depth, 1);
+
 #if 0
 	if (fpixels)
 		pixels = GPU_texture_convert_pixels(w*h*depth, fpixels);
 #endif
 
-	glTexImage3D(tex->target, 0, internalformat, tex->w, tex->h, tex->depth, 0, format, type, NULL);
-
 	GPU_ASSERT_NO_GL_ERRORS("3D glTexImage3D");
 
-	if (fpixels) {
-		if (!GPU_non_power_of_two_support() && (w != tex->w || h != tex->h || depth != tex->depth)) {
-			/* clear first to avoid unitialized pixels */
-			float *zero= MEM_callocN(sizeof(float)*tex->w*tex->h*tex->depth, "zero");
-			glTexSubImage3D(tex->target, 0, 0, 0, 0, tex->w, tex->h, tex->depth, format, type, zero);
-			MEM_freeN(zero);
+	/* hardcore stuff, 3D texture rescaling - warning, this is gonna hurt your performance a lot, but we need it
+	 * for gooseberry */
+	if (rescale && fpixels) {
+		unsigned int i, j, k;
+		unsigned int xf = w / tex->w, yf = h / tex->h, zf = depth / tex->depth;
+		float *tex3d = MEM_mallocN(channels * sizeof(float)*tex->w*tex->h*tex->depth, "tex3d");
+
+		GPU_print_error_debug("You need to scale a 3D texture, feel the pain!");
+
+		for (k = 0; k < tex->depth; k++) {
+			for (j = 0; j < tex->h; j++) {
+				for (i = 0; i < tex->w; i++) {
+					/* obviously doing nearest filtering here, it's going to be slow in any case, let's not make it worse */
+					float xb = i * xf;
+					float yb = j * yf;
+					float zb = k * zf;
+					unsigned int offset = k * (tex->w * tex->h) + i * tex->h + j;
+					unsigned int offset_orig = (zb) * (w * h) + (xb) * h + (yb);
+
+					if (channels == 4) {
+						tex3d[offset * 4] = fpixels[offset_orig * 4];
+						tex3d[offset * 4 + 1] = fpixels[offset_orig * 4 + 1];
+						tex3d[offset * 4 + 2] = fpixels[offset_orig * 4 + 2];
+						tex3d[offset * 4 + 3] = fpixels[offset_orig * 4 + 3];
+					}
+					else
+						tex3d[offset] = fpixels[offset_orig];
+				}
+			}
 		}
 
-		glTexSubImage3D(tex->target, 0, 0, 0, 0, w, h, depth, format, type, fpixels);
-		GPU_ASSERT_NO_GL_ERRORS("3D glTexSubImage3D");
+		glTexImage3D(tex->target, 0, internalformat, tex->w, tex->h, tex->depth, 0, format, type, tex3d);
+
+		MEM_freeN(tex3d);
+	}
+	else {
+		if (fpixels) {
+			if (!GPU_non_power_of_two_support() && (w != tex->w || h != tex->h || depth != tex->depth)) {
+				/* clear first to avoid unitialized pixels */
+				float *zero= MEM_callocN(sizeof(float)*tex->w*tex->h*tex->depth, "zero");
+				glTexImage3D(tex->target, 0, internalformat, tex->w, tex->h, tex->depth, 0, format, type, NULL);
+				glTexSubImage3D(tex->target, 0, 0, 0, 0, tex->w, tex->h, tex->depth, GL_INTENSITY, GL_FLOAT, zero);
+				glTexSubImage3D(tex->target, 0, 0, 0, 0, w, h, depth, format, type, fpixels);
+				MEM_freeN(zero);
+			}
+			else {
+				glTexImage3D(tex->target, 0, internalformat, tex->w, tex->h, tex->depth, 0, format, type, fpixels);
+			}
+
+			GPU_ASSERT_NO_GL_ERRORS("3D glTexSubImage3D");
+		}
 	}
 
 
-	glTexParameterfv(GL_TEXTURE_3D, GL_TEXTURE_BORDER_COLOR, vfBorderColor);
-	GPU_ASSERT_NO_GL_ERRORS("3D GL_TEXTURE_BORDER_COLOR");
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	GPU_ASSERT_NO_GL_ERRORS("3D GL_LINEAR");
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-	GPU_ASSERT_NO_GL_ERRORS("3D GL_CLAMP_TO_BORDER");
 
 	if (pixels)
 		MEM_freeN(pixels);
@@ -1430,7 +1494,13 @@ struct GPUShader {
 	int uniforms;         /* required uniforms */
 };
 
-static void shader_print_errors(const char *task, char *log, const char **code, int totcode)
+struct GPUProgram {
+	GPUProgramType type;
+	GLuint prog;
+};
+
+
+static void shader_print_errors(const char *task, const char *log, const char **code, int totcode)
 {
 	int i;
 	int line = 1;
@@ -1503,6 +1573,70 @@ static void gpu_shader_standard_defines(char defines[MAX_DEFINE_LENGTH])
 		strcat(defines, "#define BUMP_BICUBIC\n");
 	return;
 }
+
+void GPU_program_bind(GPUProgram *program)
+{
+	glEnable(program->type);
+	glBindProgramARB(program->type, program->prog);
+}
+
+void GPU_program_unbind(GPUProgram *program)
+{
+	glDisable(program->type);
+	glBindProgramARB(program->type, 0);
+}
+
+
+GPUProgram *GPU_program_shader_create(GPUProgramType type, const char *code)
+{
+	GPUProgram *program;
+	GLint error_pos, is_native;
+
+	if (!(GLEW_ARB_fragment_program && type == GPU_PROGRAM_TYPE_FRAGMENT))
+		return NULL;
+
+	program = MEM_callocN(sizeof(GPUProgram), "GPUProgram");
+
+	switch (type) {
+		case GPU_PROGRAM_TYPE_FRAGMENT:
+			program->type = GL_FRAGMENT_PROGRAM_ARB;
+			break;
+	}
+
+	/* create the object and set its code string */
+	glGenProgramsARB(1, &program->prog);
+	glBindProgramARB(program->type, program->prog);
+
+	glProgramStringARB(program->type, GL_PROGRAM_FORMAT_ASCII_ARB, (GLsizei)strlen(code), code);
+
+	glGetIntegerv(GL_PROGRAM_ERROR_POSITION_ARB, &error_pos);
+	glGetProgramivARB(GL_FRAGMENT_PROGRAM_ARB, GL_PROGRAM_UNDER_NATIVE_LIMITS_ARB, &is_native);
+	if ((error_pos == -1) && (is_native == 1)) {
+		return program;
+	}
+	else {
+		/* glGetError is set before that, clear it */
+		while (glGetError() != GL_NO_ERROR)
+			;
+		shader_print_errors("compile", (const char *)glGetString(GL_PROGRAM_ERROR_STRING_ARB), &code, 1);
+		MEM_freeN(program);
+	}
+
+	return NULL;
+}
+
+void GPU_program_free(GPUProgram *program)
+{
+	glDeleteProgramsARB(1, &program->prog);
+	MEM_freeN(program);
+}
+
+void GPU_program_parameter_4f(GPUProgram *program, unsigned int location, float x, float y, float z, float w)
+{
+	glProgramLocalParameter4fARB(program->type, location, x, y, z, w);
+}
+
+
 
 GPUShader *GPU_shader_create(const char *vertexcode, const char *fragcode, const char *geocode, const char *libcode, const char *defines, int input, int output, int number)
 {
@@ -1819,7 +1953,30 @@ GPUShader *GPU_shader_get_builtin_shader(GPUBuiltinShader shader)
 	}
 
 	if (retval == NULL)
-		printf("Unable to create a GPUShader for builtin shader: %d\n", shader);
+		printf("Unable to create a GPUShader for builtin shader: %u\n", shader);
+
+	return retval;
+}
+
+GPUProgram *GPU_shader_get_builtin_program(GPUBuiltinProgram program)
+{
+	GPUProgram *retval = NULL;
+
+	switch (program) {
+		case GPU_PROGRAM_SMOKE:
+			if (!GG.shaders.smoke)
+				GG.shaders.smoke = GPU_program_shader_create(GPU_PROGRAM_TYPE_FRAGMENT, datatoc_gpu_program_smoke_frag_glsl);
+			retval = GG.shaders.smoke;
+			break;
+		case GPU_PROGRAM_SMOKE_COLORED:
+			if (!GG.shaders.smoke_colored)
+				GG.shaders.smoke_colored = GPU_program_shader_create(GPU_PROGRAM_TYPE_FRAGMENT, datatoc_gpu_program_smoke_color_frag_glsl);
+			retval = GG.shaders.smoke_colored;
+			break;
+	}
+
+	if (retval == NULL)
+		printf("Unable to create a GPUProgram for builtin program: %u\n", program);
 
 	return retval;
 }
@@ -1905,22 +2062,60 @@ void GPU_shader_free_builtin_shaders(void)
 	int i;
 
 	if (GG.shaders.vsm_store) {
-		MEM_freeN(GG.shaders.vsm_store);
+		GPU_shader_free(GG.shaders.vsm_store);
 		GG.shaders.vsm_store = NULL;
 	}
 
 	if (GG.shaders.sep_gaussian_blur) {
-		MEM_freeN(GG.shaders.sep_gaussian_blur);
+		GPU_shader_free(GG.shaders.sep_gaussian_blur);
 		GG.shaders.sep_gaussian_blur = NULL;
+	}
+
+	if (GG.shaders.smoke) {
+		GPU_program_free(GG.shaders.smoke);
+		GG.shaders.smoke = NULL;
+	}
+
+	if (GG.shaders.smoke_colored) {
+		GPU_program_free(GG.shaders.smoke_colored);
+		GG.shaders.smoke_colored = NULL;
 	}
 
 	for (i = 0; i < 2 * MAX_FX_SHADERS; i++) {
 		if (GG.shaders.fx_shaders[i]) {
-			MEM_freeN(GG.shaders.fx_shaders[i]);
+			GPU_shader_free(GG.shaders.fx_shaders[i]);
 			GG.shaders.fx_shaders[i] = NULL;
 		}
 	}
 }
+
+bool GPU_mem_stats_supported(void)
+{
+	return (GLEW_NVX_gpu_memory_info || (GLEW_ATI_meminfo)) && (G.debug & G_DEBUG_GPU_MEM);
+}
+
+
+void GPU_mem_stats_get(int *totalmem, int *freemem)
+{
+	if (GLEW_NVX_gpu_memory_info) {
+		/* returned value in Kb */
+		glGetIntegerv(GL_GPU_MEMORY_INFO_TOTAL_AVAILABLE_MEMORY_NVX, totalmem);
+
+		glGetIntegerv(GL_GPU_MEMORY_INFO_CURRENT_AVAILABLE_VIDMEM_NVX, freemem);
+	}
+	else if (GLEW_ATI_meminfo) {
+		int stats[4];
+
+		glGetIntegerv(GL_TEXTURE_FREE_MEMORY_ATI, stats);
+		*freemem = stats[0];
+		*totalmem = 0;
+	}
+	else {
+		*totalmem = 0;
+		*freemem = 0;
+	}
+}
+
 
 #if 0 /* unused */
 

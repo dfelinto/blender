@@ -43,15 +43,19 @@ void BM_face_hide_set(BMFace *f, const bool hide);
 /* Selection code */
 void BM_elem_select_set(BMesh *bm, BMElem *ele, const bool select);
 
-void BM_mesh_elem_hflag_enable_test(BMesh *bm, const char htype, const char hflag,
-                                    const bool respecthide, const bool overwrite, const char hflag_test);
-void BM_mesh_elem_hflag_disable_test(BMesh *bm, const char htype, const char hflag,
-                                     const bool respecthide, const bool overwrite, const char hflag_test);
+void BM_mesh_elem_hflag_enable_test(
+        BMesh *bm, const char htype, const char hflag,
+        const bool respecthide, const bool overwrite, const char hflag_test);
+void BM_mesh_elem_hflag_disable_test(
+        BMesh *bm, const char htype, const char hflag,
+        const bool respecthide, const bool overwrite, const char hflag_test);
 
-void BM_mesh_elem_hflag_enable_all(BMesh *bm, const char htype, const char hflag,
-                                   const bool respecthide);
-void BM_mesh_elem_hflag_disable_all(BMesh *bm, const char htype, const char hflag,
-                                    const bool respecthide);
+void BM_mesh_elem_hflag_enable_all(
+        BMesh *bm, const char htype, const char hflag,
+        const bool respecthide);
+void BM_mesh_elem_hflag_disable_all(
+        BMesh *bm, const char htype, const char hflag,
+        const bool respecthide);
 
 /* individual element select functions, BM_elem_select_set is a shortcut for these
  * that automatically detects which one to use*/
@@ -91,6 +95,8 @@ void    BM_editselection_plane(BMEditSelection *ese,  float r_plane[3]);
 #define BM_select_history_remove(bm, ele)       _bm_select_history_remove(bm,       &(ele)->head)
 #define BM_select_history_store_notest(bm, ele) _bm_select_history_store_notest(bm, &(ele)->head)
 #define BM_select_history_store(bm, ele)        _bm_select_history_store(bm,        &(ele)->head)
+#define BM_select_history_store_head_notest(bm, ele) _bm_select_history_store_head_notest(bm, &(ele)->head)
+#define BM_select_history_store_head(bm, ele)        _bm_select_history_store_head(bm,        &(ele)->head)
 #define BM_select_history_store_after_notest(bm, ese_ref, ele) _bm_select_history_store_after_notest(bm, ese_ref, &(ele)->head)
 #define BM_select_history_store_after(bm, ese, ese_ref)        _bm_select_history_store_after(bm,        ese_ref, &(ele)->head)
 
@@ -98,6 +104,8 @@ bool _bm_select_history_check(BMesh *bm,  const BMHeader *ele);
 bool _bm_select_history_remove(BMesh *bm,       BMHeader *ele);
 void _bm_select_history_store_notest(BMesh *bm, BMHeader *ele);
 void _bm_select_history_store(BMesh *bm,        BMHeader *ele);
+void _bm_select_history_store_head_notest(BMesh *bm, BMHeader *ele);
+void _bm_select_history_store_head(BMesh *bm,        BMHeader *ele);
 void _bm_select_history_store_after(BMesh *bm,  BMEditSelection *ese_ref, BMHeader *ele);
 void _bm_select_history_store_after_notest(BMesh *bm,  BMEditSelection *ese_ref, BMHeader *ele);
 

@@ -54,13 +54,19 @@ typedef enum ThumbSize {
 typedef enum ThumbSource {
 	THB_SOURCE_IMAGE,
 	THB_SOURCE_MOVIE,
-	THB_SOURCE_BLEND
+	THB_SOURCE_BLEND,
+	THB_SOURCE_FONT,
 } ThumbSource;
 
 /* don't generate thumbs for images bigger then this (100mb) */
 #define THUMB_SIZE_MAX (100 * 1024 * 1024)
 
-// IB_metadata
+#define PREVIEW_RENDER_DEFAULT_HEIGHT 128
+
+/* Note this can also be used as versionning system,
+ * to force refreshing all thumbnails if e.g. we change some thumb generating code or so.
+ * Only used by fonts so far. */
+#define THUMB_DEFAULT_HASH  "00000000000000000000000000000000"
 
 /* create thumbnail for file and returns new imbuf for thumbnail */
 ImBuf *IMB_thumb_create(const char *path, ThumbSize size, ThumbSource source, ImBuf *ibuf);
@@ -78,8 +84,12 @@ ImBuf *IMB_thumb_manage(const char *path, ThumbSize size, ThumbSource source);
 void IMB_thumb_makedirs(void);
 
 /* special function for loading a thumbnail embedded into a blend file */
-ImBuf *IMB_loadblend_thumb(const char *path);
-void IMB_overlayblend_thumb(unsigned int *thumb, int width, int height, float aspect);
+ImBuf *IMB_thumb_load_blend(const char *path);
+void   IMB_thumb_overlay_blend(unsigned int *thumb, int width, int height, float aspect);
+
+/* special function for previewing fonts */
+ImBuf *IMB_thumb_load_font(const char *filename, unsigned int x, unsigned int y);
+bool IMB_thumb_load_font_get_hash(char *r_hash);
 
 #ifdef __cplusplus
 }

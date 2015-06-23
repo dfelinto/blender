@@ -40,7 +40,7 @@ typedef struct ImFileType {
 
 	int (*is_a)(unsigned char *buf);
 	int (*is_a_filepath)(const char *name);
-	int (*ftype)(struct ImFileType *type, struct ImBuf *ibuf);
+	int (*ftype)(const struct ImFileType *type, struct ImBuf *ibuf);
 	struct ImBuf *(*load)(unsigned char *mem, size_t size, int flags, char colorspace[IM_MAX_SPACE]);
 	struct ImBuf *(*load_filepath)(const char *name, int flags, char colorspace[IM_MAX_SPACE]);
 	int (*save)(struct ImBuf *ibuf, const char *name, int flags);
@@ -51,8 +51,8 @@ typedef struct ImFileType {
 	int default_save_role;
 } ImFileType;
 
-extern ImFileType IMB_FILE_TYPES[];
-extern ImFileType *IMB_FILE_TYPES_LAST;
+extern const ImFileType IMB_FILE_TYPES[];
+extern const ImFileType *IMB_FILE_TYPES_LAST;
 
 void imb_filetypes_init(void);
 void imb_filetypes_exit(void);
@@ -88,7 +88,7 @@ int imb_savejp2(struct ImBuf *ibuf, const char *name, int flags);
 /* jpeg */
 int imb_is_a_jpeg(unsigned char *mem);
 int imb_savejpeg(struct ImBuf *ibuf, const char *name, int flags);
-struct ImBuf *imb_load_jpeg (unsigned char *buffer, size_t size, int flags, char colorspace[IM_MAX_SPACE]);
+struct ImBuf *imb_load_jpeg(unsigned char *buffer, size_t size, int flags, char colorspace[IM_MAX_SPACE]);
 
 /* bmp */
 int imb_is_a_bmp(unsigned char *buf);

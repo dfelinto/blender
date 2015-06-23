@@ -71,8 +71,13 @@ public:
 	ustring name;
 
 	/* Mesh Data */
-	bool geometry_synced;  /* used to distinguish meshes with no verts
-	                          and meshed for which geometry is not created */
+	enum GeometryFlags {
+		GEOMETRY_NONE      = 0,
+		GEOMETRY_TRIANGLES = (1 << 0),
+		GEOMETRY_CURVES    = (1 << 1),
+	};
+	int geometry_flags;  /* used to distinguish meshes with no verts
+	                        and meshed for which geometry is not created */
 
 	vector<float3> verts;
 	vector<Triangle> triangles;
@@ -162,6 +167,7 @@ public:
 	void device_update_attributes(Device *device, DeviceScene *dscene, Scene *scene, Progress& progress);
 	void device_update_bvh(Device *device, DeviceScene *dscene, Scene *scene, Progress& progress);
 	void device_update_flags(Device *device, DeviceScene *dscene, Scene *scene, Progress& progress);
+	void device_update_displacement_images(Device *device, DeviceScene *dscene, Scene *scene, Progress& progress);
 	void device_free(Device *device, DeviceScene *dscene);
 
 	void tag_update(Scene *scene);

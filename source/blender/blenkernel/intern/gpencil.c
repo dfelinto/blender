@@ -129,11 +129,11 @@ void BKE_gpencil_free(bGPdata *gpd)
 /* add a new gp-frame to the given layer */
 bGPDframe *gpencil_frame_addnew(bGPDlayer *gpl, int cframe)
 {
-	bGPDframe *gpf, *gf;
+	bGPDframe *gpf = NULL, *gf = NULL;
 	short state = 0;
 	
 	/* error checking (neg frame only if they are not allowed in Blender!) */
-	if ((gpl == NULL) || ((U.flag & USER_NONEGFRAMES) && (cframe <= 0)))
+	if (gpl == NULL)
 		return NULL;
 		
 	/* allocate memory for this frame */
@@ -160,8 +160,14 @@ bGPDframe *gpencil_frame_addnew(bGPDlayer *gpl, int cframe)
 	
 	/* check whether frame was added successfully */
 	if (state == -1) {
+		printf("Error: Frame (%d) existed already for this layer. Using existing frame\n", cframe);
+		
+		/* free the newly created one, and use the old one instead */
 		MEM_freeN(gpf);
-		printf("Error: frame (%d) existed already for this layer\n", cframe);
+		
+		/* return existing frame instead... */
+		BLI_assert(gf != NULL);
+		gpf = gf;
 	}
 	else if (state == 0) {
 		/* add to end then! */
@@ -388,8 +394,6 @@ bGPDframe *gpencil_layer_getframe(bGPDlayer *gpl, int cframe, short addnew)
 	
 	/* error checking */
 	if (gpl == NULL) return NULL;
-	/* No reason to forbid negative frames when they are allowed in Blender! */
-	if ((U.flag & USER_NONEGFRAMES) && cframe <= 0) cframe = 1;
 	
 	/* check if there is already an active frame */
 	if (gpl->actframe) {

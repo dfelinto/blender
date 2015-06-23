@@ -165,18 +165,6 @@ void BLI_astar_solution_free(BLI_AStarSolution *as_solution)
 }
 
 /**
- * Callback computing the current cost (distance) to next node, and the estimated overall cost to destination node
- * (A* expects this estimation to always be less or equal than actual shortest path from next node to destination one).
- *
- * \param link the graph link between current node and next one.
- * \param node_idx_curr current node index.
- * \param node_idx_next next node index.
- * \param node_idx_dst destination node index.
- */
-typedef float (*astar_f_cost)(BLI_AStarGraph *as_graph, BLI_AStarSolution *as_solution, BLI_AStarGNLink *link,
-                              const int node_idx_curr, const int node_idx_next, const int node_idx_dst);
-
-/**
  * Init an A* graph. Total number of nodes must be known.
  *
  * Nodes might be e.g. vertices, faces, ...
@@ -229,7 +217,7 @@ bool BLI_astar_graph_solve(
 	r_solution->steps = 0;
 	prev_nodes[node_index_src] = -1;
 	BLI_BITMAP_SET_ALL(done_nodes, false, as_graph->node_num);
-	fill_vn_fl(g_costs, as_graph->node_num, FLT_MAX);
+	copy_vn_fl(g_costs, as_graph->node_num, FLT_MAX);
 	g_costs[node_index_src] = 0.0f;
 	g_steps[node_index_src] = 0;
 

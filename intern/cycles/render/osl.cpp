@@ -75,6 +75,8 @@ void OSLShaderManager::reset(Scene * /*scene*/)
 
 void OSLShaderManager::device_update(Device *device, DeviceScene *dscene, Scene *scene, Progress& progress)
 {
+	VLOG(1) << "Total " << scene->shaders.size() << " shaders.";
+
 	if(!need_update)
 		return;
 
@@ -211,9 +213,9 @@ void OSLShaderManager::shading_system_init()
 
 			"__unused__",
 			"__unused__",
-			"diffuse_ancestor", /* PATH_RAY_DIFFUSE_ANCESTOR */
-			"glossy_ancestor",  /* PATH_RAY_GLOSSY_ANCESTOR */
-			"bssrdf_ancestor",  /* PATH_RAY_BSSRDF_ANCESTOR */
+			"diffuse_ancestor",	/* PATH_RAY_DIFFUSE_ANCESTOR */
+			"__unused__",
+			"__unused__",
 			"__unused__",		/* PATH_RAY_SINGLE_PASS_DONE */
 			"volume_scatter",	/* PATH_RAY_VOLUME_SCATTER */
 		};

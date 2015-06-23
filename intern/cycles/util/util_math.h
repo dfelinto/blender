@@ -175,6 +175,15 @@ ccl_device_inline float clamp(float a, float mn, float mx)
 
 #endif
 
+#ifndef __KERNEL_CUDA__
+
+ccl_device_inline float saturate(float a)
+{
+	return clamp(a, 0.0f, 1.0f);
+}
+
+#endif
+
 ccl_device_inline int float_to_int(float f)
 {
 	return (int)f;
@@ -1463,7 +1472,7 @@ ccl_device_inline float2 map_to_tube(const float3 co)
 	len = sqrtf(co.x * co.x + co.y * co.y);
 	if(len > 0.0f) {
 		u = (1.0f - (atan2f(co.x / len, co.y / len) / M_PI_F)) * 0.5f;
-		v = (co.x + 1.0f) * 0.5f;
+		v = (co.z + 1.0f) * 0.5f;
 	}
 	else {
 		u = v = 0.0f;

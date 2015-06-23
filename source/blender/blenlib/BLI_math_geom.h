@@ -142,7 +142,7 @@ int isect_line_line_v2(const float a1[2], const float a2[2], const float b1[2], 
 int isect_line_line_v2_int(const int a1[2], const int a2[2], const int b1[2], const int b2[2]);
 int isect_line_sphere_v3(const float l1[3], const float l2[3], const float sp[3], const float r, float r_p1[3], float r_p2[3]);
 int isect_line_sphere_v2(const float l1[2], const float l2[2], const float sp[2], const float r, float r_p1[2], float r_p2[2]);
-int isect_seg_seg_v2_point(const float v1[2], const float v2[2], const float v3[2], const float v4[2], float vi[2]);
+int isect_seg_seg_v2_point(const float v0[2], const float v1[2], const float v2[2], const float v3[2], float vi[2]);
 bool isect_seg_seg_v2(const float v1[2], const float v2[2], const float v3[2], const float v4[2]);
 
 int isect_line_line_epsilon_v3(
@@ -259,6 +259,7 @@ void resolve_tri_uv_v3(float r_uv[2], const float st[3], const float st0[3], con
 void resolve_quad_uv_v2(float r_uv[2], const float st[2], const float st0[2], const float st1[2], const float st2[2], const float st3[2]);
 void resolve_quad_uv_v2_deriv(float r_uv[2], float r_deriv[2][2],
                               const float st[2], const float st0[2], const float st1[2], const float st2[2], const float st3[2]);
+float resolve_quad_u_v2(const float st[2], const float st0[2], const float st1[2], const float st2[2], const float st3[2]);
 
 /* use to find the point of a UV on a face */
 void interp_bilinear_quad_v3(float data[4][3], float u, float v, float res[3]);

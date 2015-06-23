@@ -49,6 +49,7 @@ struct Scene;
 struct SceneRenderLayer;
 struct EnvMap;
 struct RenderResult;
+struct StampData;
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 /* this include is what is exposed of render to outside world */
@@ -98,6 +99,8 @@ typedef struct RenderPass {
 
 enum {
 	RENDER_PASS_DEBUG_BVH_TRAVERSAL_STEPS = 0,
+	RENDER_PASS_DEBUG_BVH_TRAVERSED_INSTANCES = 1,
+	RENDER_PASS_DEBUG_RAY_BOUNCES = 2,
 };
 
 /* a renderlayer is a full image, but with all passes and samples */
@@ -137,6 +140,9 @@ typedef struct RenderResult {
 	int rectx, recty;
 	short crop, sample_nr;
 	
+	/* the following rect32, rectf and rectz buffers are for temporary storage only, for RenderResult structs
+	 * created in #RE_AcquireResultImage - which do not have RenderView */
+
 	/* optional, 32 bits version of picture, used for ogl render and image curves */
 	int *rect32;
 	/* if this exists, a copy of one of layers, or result of composited layers */
@@ -171,6 +177,8 @@ typedef struct RenderResult {
 	/* render info text */
 	char *text;
 	char *error;
+
+	struct StampData *stamp_data;
 } RenderResult;
 
 
@@ -261,10 +269,10 @@ void RE_init_threadcount(Render *re);
 /* the main processor, assumes all was set OK! */
 void RE_TileProcessor(struct Render *re);
 
-bool RE_WriteRenderViewsImage(struct ReportList *reports, struct RenderResult *rr, struct Scene *scene, struct Object *camera, const bool stamp, char *name);
+bool RE_WriteRenderViewsImage(struct ReportList *reports, struct RenderResult *rr, struct Scene *scene, const bool stamp, char *name);
 bool RE_WriteRenderViewsMovie(struct ReportList *reports, struct RenderResult *rr, struct Scene *scene, struct RenderData *rd,
                               struct bMovieHandle *mh, const size_t width, const size_t height, void **movie_ctx_arr,
-                              const size_t totvideos);
+                              const size_t totvideos, bool preview);
 
 /* only RE_NewRender() needed, main Blender render calls */
 void RE_BlenderFrame(struct Render *re, struct Main *bmain, struct Scene *scene,
@@ -315,6 +323,8 @@ int RE_seq_render_active(struct Scene *scene, struct RenderData *rd);
 
 bool RE_layers_have_name(struct RenderResult *result);
 
+struct RenderPass *RE_pass_find_by_type(volatile struct RenderLayer *rl, int passtype, const char *viewname);
+
 /* shaded view or baking options */
 #define RE_BAKE_LIGHT				0	/* not listed in rna_scene.c -> can't be enabled! */
 #define RE_BAKE_ALL					1
@@ -348,12 +358,8 @@ bool RE_allow_render_generic_object(struct Object *ob);
 
 bool RE_HasFakeLayer(RenderResult *res);
 bool RE_RenderResult_is_stereo(RenderResult *res);
-
-float *RE_RenderViewGetRectf(struct RenderResult *rr, const int view_id);
-float *RE_RenderViewGetRectz(struct RenderResult *rr, const int view_id);
-int   *RE_RenderViewGetRect32(struct RenderResult *rr, const int view_id);
-void   RE_RenderViewSetRectf(struct RenderResult *res, const int view_id, float *rect);
-void   RE_RenderViewSetRectz(struct RenderResult *res, const int view_id, float *rect);
+struct RenderView *RE_RenderViewGetById(struct RenderResult *res, const int view_id);
+struct RenderView *RE_RenderViewGetByName(struct RenderResult *res, const char *viewname);
 
 #endif /* __RE_PIPELINE_H__ */
 

@@ -200,12 +200,13 @@ void ED_operatortypes_object(void)
 	WM_operatortype_append(OBJECT_OT_vertex_weight_normalize_active_vertex);
 	WM_operatortype_append(OBJECT_OT_vertex_weight_copy);
 
-	WM_operatortype_append(OBJECT_OT_vertex_warp);
+	WM_operatortype_append(TRANSFORM_OT_vertex_warp);
 
 	WM_operatortype_append(OBJECT_OT_game_property_new);
 	WM_operatortype_append(OBJECT_OT_game_property_remove);
 	WM_operatortype_append(OBJECT_OT_game_property_copy);
 	WM_operatortype_append(OBJECT_OT_game_property_clear);
+	WM_operatortype_append(OBJECT_OT_game_property_move);
 	WM_operatortype_append(OBJECT_OT_logic_bricks_copy);
 	WM_operatortype_append(OBJECT_OT_game_physics_copy);
 
@@ -248,7 +249,7 @@ void ED_operatortypes_object(void)
 	WM_operatortype_append(OBJECT_OT_lod_add);
 	WM_operatortype_append(OBJECT_OT_lod_remove);
 
-	WM_operatortype_append(OBJECT_OT_vertex_random);
+	WM_operatortype_append(TRANSFORM_OT_vertex_random);
 
 	WM_operatortype_append(OBJECT_OT_data_transfer);
 	WM_operatortype_append(OBJECT_OT_datalayout_transfer);
@@ -295,7 +296,7 @@ void ED_keymap_object(wmKeyConfig *keyconf)
 	keymap = WM_keymap_find(keyconf, "Object Non-modal", 0, 0);
 	
 	/* Note: this keymap works disregarding mode */
-	kmi = WM_keymap_add_item(keymap, "OBJECT_OT_mode_set", TABKEY, KM_CLICK, 0, 0);
+	kmi = WM_keymap_add_item(keymap, "OBJECT_OT_mode_set", TABKEY, KM_PRESS, 0, 0);
 	RNA_enum_set(kmi->ptr, "mode", OB_MODE_EDIT);
 	RNA_boolean_set(kmi->ptr, "toggle", true);
 

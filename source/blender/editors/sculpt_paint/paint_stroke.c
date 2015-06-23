@@ -68,7 +68,7 @@
 #include <float.h>
 #include <math.h>
 
-// #define DEBUG_TIME
+#define DEBUG_TIME
 
 #ifdef DEBUG_TIME
 #  include "PIL_time_utildefines.h"
@@ -347,7 +347,8 @@ static bool paint_brush_update(bContext *C,
 		if (!stroke->brush_init) {
 			copy_v2_v2(ups->last_rake, mouse_init);
 		}
-		else {
+		/* curve strokes do their own rake calculation */
+		else if (!(brush->flag & BRUSH_CURVE)) {
 			paint_calculate_rake_rotation(ups, brush, mouse_init);
 		}
 	}
@@ -556,7 +557,7 @@ static float paint_stroke_integrate_overlap(Brush *br, float factor)
 	g = 1.0f / m;
 	max = 0;
 	for (i = 0; i < m; i++) {
-		float overlap = paint_stroke_overlapped_curve(br, i * g, spacing);
+		float overlap = fabs(paint_stroke_overlapped_curve(br, i * g, spacing));
 
 		if (overlap > max)
 			max = overlap;
@@ -671,9 +672,8 @@ PaintStroke *paint_stroke_new(bContext *C,
 	get_imapaint_zoom(C, &zoomx, &zoomy);
 	stroke->zoom_2d = max_ff(zoomx, zoomy);
 
-	if (stroke->stroke_mode == BRUSH_STROKE_INVERT)
-	{
-		if (br->flag & (BRUSH_CURVE | BRUSH_LINE)) {
+	if (stroke->stroke_mode == BRUSH_STROKE_INVERT) {
+		if (br->flag & (BRUSH_CURVE)) {
 			RNA_enum_set(op->ptr, "mode", BRUSH_STROKE_NORMAL);
 		}
 	}
@@ -955,6 +955,7 @@ static bool paint_stroke_curve_end(bContext *C, wmOperator *op, PaintStroke *str
 	Brush *br = stroke->brush;
 
 	if (br->flag & BRUSH_CURVE) {
+		UnifiedPaintSettings *ups = &CTX_data_tool_settings(C)->unified_paint_settings;
 		const Scene *scene = CTX_data_scene(C);
 		const float spacing = paint_space_stroke_spacing(scene, stroke, 1.0f, 1.0f);
 		PaintCurve *pc = br->paint_curve;
@@ -975,18 +976,39 @@ static bool paint_stroke_curve_end(bContext *C, wmOperator *op, PaintStroke *str
 		for (i = 0; i < pc->tot_points - 1; i++, pcp++) {
 			int j;
 			float data[(PAINT_CURVE_NUM_SEGMENTS + 1) * 2];
+			float tangents[(PAINT_CURVE_NUM_SEGMENTS + 1) * 2];
 			PaintCurvePoint *pcp_next = pcp + 1;
+			bool do_rake = false;
 
-			for (j = 0; j < 2; j++)
+			for (j = 0; j < 2; j++) {
 				BKE_curve_forward_diff_bezier(
 				        pcp->bez.vec[1][j],
 				        pcp->bez.vec[2][j],
 				        pcp_next->bez.vec[0][j],
 				        pcp_next->bez.vec[1][j],
 				        data + j, PAINT_CURVE_NUM_SEGMENTS, sizeof(float[2]));
+			}
 
+			if ((br->mtex.brush_angle_mode & MTEX_ANGLE_RAKE) ||
+			    (br->mask_mtex.brush_angle_mode & MTEX_ANGLE_RAKE))
+			{
+				do_rake = true;
+				for (j = 0; j < 2; j++) {
+					BKE_curve_forward_diff_tangent_bezier(
+					        pcp->bez.vec[1][j],
+					        pcp->bez.vec[2][j],
+					        pcp_next->bez.vec[0][j],
+					        pcp_next->bez.vec[1][j],
+					        tangents + j, PAINT_CURVE_NUM_SEGMENTS, sizeof(float[2]));
+				}
+			}
 
 			for (j = 0; j < PAINT_CURVE_NUM_SEGMENTS; j++) {
+				if (do_rake) {
+					float rotation = atan2f(tangents[2 * j], tangents[2 * j + 1]);
+					paint_update_brush_rake_rotation(ups, br, rotation);
+				}
+
 				if (!stroke->stroke_started) {
 					stroke->last_pressure = 1.0;
 					copy_v2_v2(stroke->last_mouse_position, data + 2 * j);
@@ -1015,7 +1037,7 @@ static bool paint_stroke_curve_end(bContext *C, wmOperator *op, PaintStroke *str
 	return false;
 }
 
-static void paint_stroke_line_constrain (PaintStroke *stroke, float mouse[2])
+static void paint_stroke_line_constrain(PaintStroke *stroke, float mouse[2])
 {
 	if (stroke->constrain_line) {
 		float line[2];
@@ -1129,7 +1151,7 @@ int paint_stroke_modal(bContext *C, wmOperator *op, const wmEvent *event)
 		return OPERATOR_FINISHED;
 	}
 	else if (br->flag & BRUSH_LINE) {
-		if (event->ctrl)
+		if (event->alt)
 			stroke->constrain_line = true;
 		else 
 			stroke->constrain_line = false;
@@ -1137,8 +1159,7 @@ int paint_stroke_modal(bContext *C, wmOperator *op, const wmEvent *event)
 		copy_v2_fl2(mouse, event->mval[0], event->mval[1]);
 		paint_stroke_line_constrain(stroke, mouse);
 		
-		if (stroke->stroke_started && (first_modal || (ELEM(event->type, MOUSEMOVE, INBETWEEN_MOUSEMOVE))))
-		{
+		if (stroke->stroke_started && (first_modal || (ELEM(event->type, MOUSEMOVE, INBETWEEN_MOUSEMOVE)))) {
 			if ((br->mtex.brush_angle_mode & MTEX_ANGLE_RAKE) || (br->mtex.brush_angle_mode & MTEX_ANGLE_RAKE)) {
 				copy_v2_v2(stroke->ups->last_rake, stroke->last_mouse_position);
 			}

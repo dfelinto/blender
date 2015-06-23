@@ -49,18 +49,27 @@ typedef struct IsectPrecalc {
 	float Sx, Sy, Sz;
 } IsectPrecalc;
 
-/* Workaround for CUDA toolkit 6.5.16. */
-#if defined(__KERNEL_CPU__) || !defined(__KERNEL_CUDA_EXPERIMENTAL__) || __CUDA_ARCH__ < 500
+#if defined(__KERNEL_CUDA__)
 #  if (defined(i386) || defined(_M_IX86))
+#    if __CUDA_ARCH__ > 500
 ccl_device_noinline
-#  else
+#    else  /* __CUDA_ARCH__ > 500 */
 ccl_device_inline
-#  endif
-#else
+#    endif  /* __CUDA_ARCH__ > 500 */
+#  else  /* (defined(i386) || defined(_M_IX86)) */
+#    if defined(__KERNEL_EXPERIMENTAL__) && (__CUDA_ARCH__ >= 500)
 ccl_device_noinline
-#endif
+#    else
+ccl_device_inline
+#    endif
+#  endif  /* (defined(i386) || defined(_M_IX86)) */
+#elif defined(__KERNEL_OPENCL_APPLE__)
+ccl_device_noinline
+#else  /* defined(__KERNEL_OPENCL_APPLE__) */
+ccl_device_inline
+#endif  /* defined(__KERNEL_OPENCL_APPLE__) */
 void triangle_intersect_precalc(float3 dir,
-                                 IsectPrecalc *isect_precalc)
+                                IsectPrecalc *isect_precalc)
 {
 	/* Calculate dimension where the ray direction is maximal. */
 	int kz = util_max_axis(make_float3(fabsf(dir.x),
@@ -77,10 +86,10 @@ void triangle_intersect_precalc(float3 dir,
 	}
 
 	/* Calculate the shear constants. */
-	float inf_dir_z = 1.0f / IDX(dir, kz);
-	isect_precalc->Sx = IDX(dir, kx) * inf_dir_z;
-	isect_precalc->Sy = IDX(dir, ky) * inf_dir_z;
-	isect_precalc->Sz = inf_dir_z;
+	float inv_dir_z = 1.0f / IDX(dir, kz);
+	isect_precalc->Sx = IDX(dir, kx) * inv_dir_z;
+	isect_precalc->Sy = IDX(dir, ky) * inv_dir_z;
+	isect_precalc->Sz = inv_dir_z;
 
 	/* Store the dimensions. */
 	isect_precalc->kx = kx;
@@ -110,14 +119,12 @@ ccl_device_inline bool triangle_intersect(KernelGlobals *kg,
 	const float Sz = isect_precalc->Sz;
 
 	/* Calculate vertices relative to ray origin. */
-	float3 tri[3];
-	tri[0] = float4_to_float3(kernel_tex_fetch(__tri_woop, triAddr*TRI_NODE_SIZE+0));
-	tri[1] = float4_to_float3(kernel_tex_fetch(__tri_woop, triAddr*TRI_NODE_SIZE+1));
-	tri[2] = float4_to_float3(kernel_tex_fetch(__tri_woop, triAddr*TRI_NODE_SIZE+2));
-
-	const float3 A = tri[0] - P;
-	const float3 B = tri[1] - P;
-	const float3 C = tri[2] - P;
+	const float4 tri_a = kernel_tex_fetch(__tri_woop, triAddr*TRI_NODE_SIZE+0),
+	             tri_b = kernel_tex_fetch(__tri_woop, triAddr*TRI_NODE_SIZE+1),
+	             tri_c = kernel_tex_fetch(__tri_woop, triAddr*TRI_NODE_SIZE+2);
+	const float3 A = make_float3(tri_a.x - P.x, tri_a.y - P.y, tri_a.z - P.z);
+	const float3 B = make_float3(tri_b.x - P.x, tri_b.y - P.y, tri_b.z - P.z);
+	const float3 C = make_float3(tri_c.x - P.x, tri_c.y - P.y, tri_c.z - P.z);
 
 	const float A_kx = IDX(A, kx), A_ky = IDX(A, ky), A_kz = IDX(A, kz);
 	const float B_kx = IDX(B, kx), B_ky = IDX(B, ky), B_kz = IDX(B, kz);
@@ -205,14 +212,12 @@ ccl_device_inline void triangle_intersect_subsurface(
 	const float Sz = isect_precalc->Sz;
 
 	/* Calculate vertices relative to ray origin. */
-	float3 tri[3];
-	tri[0] = float4_to_float3(kernel_tex_fetch(__tri_woop, triAddr*TRI_NODE_SIZE+0));
-	tri[1] = float4_to_float3(kernel_tex_fetch(__tri_woop, triAddr*TRI_NODE_SIZE+1));
-	tri[2] = float4_to_float3(kernel_tex_fetch(__tri_woop, triAddr*TRI_NODE_SIZE+2));
-
-	const float3 A = tri[0] - P;
-	const float3 B = tri[1] - P;
-	const float3 C = tri[2] - P;
+	const float4 tri_a = kernel_tex_fetch(__tri_woop, triAddr*TRI_NODE_SIZE+0),
+	             tri_b = kernel_tex_fetch(__tri_woop, triAddr*TRI_NODE_SIZE+1),
+	             tri_c = kernel_tex_fetch(__tri_woop, triAddr*TRI_NODE_SIZE+2);
+	const float3 A = make_float3(tri_a.x - P.x, tri_a.y - P.y, tri_a.z - P.z);
+	const float3 B = make_float3(tri_b.x - P.x, tri_b.y - P.y, tri_b.z - P.z);
+	const float3 C = make_float3(tri_c.x - P.x, tri_c.y - P.y, tri_c.z - P.z);
 
 	const float A_kx = IDX(A, kx), A_ky = IDX(A, ky), A_kz = IDX(A, kz);
 	const float B_kx = IDX(B, kx), B_ky = IDX(B, ky), B_kz = IDX(B, kz);
@@ -310,7 +315,7 @@ ccl_device_inline float3 triangle_refine(KernelGlobals *kg,
 			return P;
 		}
 #ifdef __OBJECT_MOTION__
-		Transform tfm = sd->ob_itfm;
+		Transform tfm = ccl_fetch(sd, ob_itfm);
 #else
 		Transform tfm = object_fetch_transform(kg, isect->object, OBJECT_INVERSE_TRANSFORM);
 #endif
@@ -322,14 +327,12 @@ ccl_device_inline float3 triangle_refine(KernelGlobals *kg,
 
 	P = P + D*t;
 
-	float3 tri[3];
-	tri[0] = float4_to_float3(kernel_tex_fetch(__tri_woop, isect->prim*TRI_NODE_SIZE+0));
-	tri[1] = float4_to_float3(kernel_tex_fetch(__tri_woop, isect->prim*TRI_NODE_SIZE+1));
-	tri[2] = float4_to_float3(kernel_tex_fetch(__tri_woop, isect->prim*TRI_NODE_SIZE+2));
-
-	float3 edge1 = tri[0] - tri[2];
-	float3 edge2 = tri[1] - tri[2];
-	float3 tvec = P - tri[2];
+	const float4 tri_a = kernel_tex_fetch(__tri_woop, isect->prim*TRI_NODE_SIZE+0),
+	             tri_b = kernel_tex_fetch(__tri_woop, isect->prim*TRI_NODE_SIZE+1),
+	             tri_c = kernel_tex_fetch(__tri_woop, isect->prim*TRI_NODE_SIZE+2);
+	float3 edge1 = make_float3(tri_a.x - tri_c.x, tri_a.y - tri_c.y, tri_a.z - tri_c.z);
+	float3 edge2 = make_float3(tri_b.x - tri_c.x, tri_b.y - tri_c.y, tri_b.z - tri_c.z);
+	float3 tvec = make_float3(P.x - tri_c.x, P.y - tri_c.y, P.z - tri_c.z);
 	float3 qvec = cross(tvec, edge1);
 	float3 pvec = cross(D, edge2);
 	float rt = dot(edge2, qvec) / dot(edge1, pvec);
@@ -338,7 +341,7 @@ ccl_device_inline float3 triangle_refine(KernelGlobals *kg,
 
 	if(isect->object != OBJECT_NONE) {
 #ifdef __OBJECT_MOTION__
-		Transform tfm = sd->ob_tfm;
+		Transform tfm = ccl_fetch(sd, ob_tfm);
 #else
 		Transform tfm = object_fetch_transform(kg, isect->object, OBJECT_TRANSFORM);
 #endif
@@ -367,7 +370,7 @@ ccl_device_inline float3 triangle_refine_subsurface(KernelGlobals *kg,
 #ifdef __INTERSECTION_REFINE__
 	if(isect->object != OBJECT_NONE) {
 #ifdef __OBJECT_MOTION__
-		Transform tfm = sd->ob_itfm;
+		Transform tfm = ccl_fetch(sd, ob_itfm);
 #else
 		Transform tfm = object_fetch_transform(kg,
 		                                       isect->object,
@@ -381,14 +384,12 @@ ccl_device_inline float3 triangle_refine_subsurface(KernelGlobals *kg,
 
 	P = P + D*t;
 
-	float3 tri[3];
-	tri[0] = float4_to_float3(kernel_tex_fetch(__tri_woop, isect->prim*TRI_NODE_SIZE+0));
-	tri[1] = float4_to_float3(kernel_tex_fetch(__tri_woop, isect->prim*TRI_NODE_SIZE+1));
-	tri[2] = float4_to_float3(kernel_tex_fetch(__tri_woop, isect->prim*TRI_NODE_SIZE+2));
-
-	float3 edge1 = tri[0] - tri[2];
-	float3 edge2 = tri[1] - tri[2];
-	float3 tvec = P - tri[2];
+	const float4 tri_a = kernel_tex_fetch(__tri_woop, isect->prim*TRI_NODE_SIZE+0),
+	             tri_b = kernel_tex_fetch(__tri_woop, isect->prim*TRI_NODE_SIZE+1),
+	             tri_c = kernel_tex_fetch(__tri_woop, isect->prim*TRI_NODE_SIZE+2);
+	float3 edge1 = make_float3(tri_a.x - tri_c.x, tri_a.y - tri_c.y, tri_a.z - tri_c.z);
+	float3 edge2 = make_float3(tri_b.x - tri_c.x, tri_b.y - tri_c.y, tri_b.z - tri_c.z);
+	float3 tvec = make_float3(P.x - tri_c.x, P.y - tri_c.y, P.z - tri_c.z);
 	float3 qvec = cross(tvec, edge1);
 	float3 pvec = cross(D, edge2);
 	float rt = dot(edge2, qvec) / dot(edge1, pvec);
@@ -397,7 +398,7 @@ ccl_device_inline float3 triangle_refine_subsurface(KernelGlobals *kg,
 
 	if(isect->object != OBJECT_NONE) {
 #ifdef __OBJECT_MOTION__
-		Transform tfm = sd->ob_tfm;
+		Transform tfm = ccl_fetch(sd, ob_tfm);
 #else
 		Transform tfm = object_fetch_transform(kg,
 		                                       isect->object,

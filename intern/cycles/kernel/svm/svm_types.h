@@ -28,6 +28,29 @@ CCL_NAMESPACE_BEGIN
 
 /* Nodes */
 
+/* Known frequencies of used nodes, used for selective nodes compilation
+ * in the kernel. Currently only affects split OpenCL kernel.
+ *
+ * Keep as defines so it's easy to check which nodes are to be compiled
+ * from preprocessor.
+ *
+ * Lower the number of group more often the node is used.
+ */
+#define NODE_GROUP_LEVEL_0    0
+#define NODE_GROUP_LEVEL_1    1
+#define NODE_GROUP_LEVEL_2    2
+#define NODE_GROUP_LEVEL_3    3
+#define NODE_GROUP_LEVEL_MAX  NODE_GROUP_LEVEL_3
+
+#define NODE_FEATURE_VOLUME     (1 << 0)
+#define NODE_FEATURE_HAIR       (1 << 1)
+#define NODE_FEATURE_BUMP       (1 << 2)
+/* TODO(sergey): Consider using something like ((uint)(-1)).
+ * Need to ceck carefully operand types around usage of this
+ * define first.
+ */
+#define NODE_FEATURE_ALL        (NODE_FEATURE_VOLUME|NODE_FEATURE_HAIR|NODE_FEATURE_BUMP)
+
 typedef enum NodeType {
 	NODE_END = 0,
 	NODE_CLOSURE_BSDF,
@@ -256,27 +279,6 @@ typedef enum NodeConvert {
 	NODE_CONVERT_IV
 } NodeConvert;
 
-typedef enum NodeDistanceMetric {
-	NODE_VORONOI_DISTANCE_SQUARED,
-	NODE_VORONOI_ACTUAL_DISTANCE,
-	NODE_VORONOI_MANHATTAN,
-	NODE_VORONOI_CHEBYCHEV,
-	NODE_VORONOI_MINKOVSKY_H,
-	NODE_VORONOI_MINKOVSKY_4,
-	NODE_VORONOI_MINKOVSKY
-} NodeDistanceMetric;
-
-typedef enum NodeNoiseBasis {
-	NODE_NOISE_PERLIN,
-	NODE_NOISE_VORONOI_F1,
-	NODE_NOISE_VORONOI_F2,
-	NODE_NOISE_VORONOI_F3,
-	NODE_NOISE_VORONOI_F4,
-	NODE_NOISE_VORONOI_F2_F1,
-	NODE_NOISE_VORONOI_CRACKLE,
-	NODE_NOISE_CELL_NOISE
-} NodeNoiseBasis;
-
 typedef enum NodeMusgraveType {
 	NODE_MUSGRAVE_MULTIFRACTAL,
 	NODE_MUSGRAVE_FBM,
@@ -426,6 +428,7 @@ typedef enum ClosureType {
 #define CLOSURE_IS_BACKGROUND(type) (type == CLOSURE_BACKGROUND_ID)
 #define CLOSURE_IS_AMBIENT_OCCLUSION(type) (type == CLOSURE_AMBIENT_OCCLUSION_ID)
 #define CLOSURE_IS_PHASE(type) (type == CLOSURE_VOLUME_HENYEY_GREENSTEIN_ID)
+#define CLOSURE_IS_GLASS(type) (type >= CLOSURE_BSDF_MICROFACET_BECKMANN_GLASS_ID && type <= CLOSURE_BSDF_SHARP_GLASS_ID)
 
 #define CLOSURE_WEIGHT_CUTOFF 1e-5f
 

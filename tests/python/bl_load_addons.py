@@ -34,11 +34,29 @@ import imp
 BLACKLIST_DIRS = (
     os.path.join(bpy.utils.resource_path('USER'), "scripts"),
     ) + tuple(addon_utils.paths()[1:])
+BLACKLIST_ADDONS = set()
+
+
+def _init_addon_blacklist():
+
+    # in case we built without cycles
+    if not bpy.app.build_options.cycles:
+        BLACKLIST_ADDONS.add("cycles")
+
+    # in case we built without freestyle
+    if not bpy.app.build_options.freestyle:
+        BLACKLIST_ADDONS.add("render_freestyle_svg")
+
+    # netrender has known problems re-registering
+    BLACKLIST_ADDONS.add("netrender")
 
 
 def addon_modules_sorted():
     modules = addon_utils.modules({})
-    modules[:] = [mod for mod in modules if not mod.__file__.startswith(BLACKLIST_DIRS)]
+    modules[:] = [
+            mod for mod in modules
+            if not (mod.__file__.startswith(BLACKLIST_DIRS))
+            if not (mod.__name__ in BLACKLIST_ADDONS)]
     modules.sort(key=lambda mod: mod.__name__)
     return modules
 
@@ -47,7 +65,7 @@ def disable_addons():
     # first disable all
     addons = bpy.context.user_preferences.addons
     for mod_name in list(addons.keys()):
-        addon_utils.disable(mod_name)
+        addon_utils.disable(mod_name, default_set=True)
     assert(bool(addons) is False)
 
 
@@ -64,7 +82,7 @@ def test_load_addons():
         mod_name = mod.__name__
         print("\tenabling:", mod_name)
         addon_utils.enable(mod_name, default_set=True)
-        if mod_name not in addons:
+        if (mod_name not in addons) and (mod_name not in BLACKLIST_ADDONS):
             addons_fail.append(mod_name)
 
     if addons_fail:
@@ -93,7 +111,7 @@ def reload_addons(do_reload=True, do_reverse=True):
         for mod in modules:
             mod_name = mod.__name__
             print("\tdisabling:", mod_name)
-            addon_utils.disable(mod_name)
+            addon_utils.disable(mod_name, default_set=True)
             assert(not (mod_name in addons))
 
             # now test reloading
@@ -106,6 +124,9 @@ def reload_addons(do_reload=True, do_reverse=True):
 
 
 def main():
+
+    _init_addon_blacklist()
+
     # first load addons, print a list of all addons that fail
     test_load_addons()
 

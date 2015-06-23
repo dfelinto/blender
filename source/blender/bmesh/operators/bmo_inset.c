@@ -660,9 +660,10 @@ void bmo_inset_region_exec(BMesh *bm, BMOperator *op)
 			es->l = es->e_old->l; /* must be a boundary */
 		}
 
-
 		/* run the separate arg */
-		bmesh_edge_separate(bm, es->e_old, es->l, false);
+		if (!BM_edge_is_boundary(es->e_old)) {
+			bmesh_edge_separate(bm, es->e_old, es->l, false);
+		}
 
 		/* calc edge-split info */
 		es->e_new = es->l->e;
@@ -974,7 +975,7 @@ void bmo_inset_region_exec(BMesh *bm, BMOperator *op)
 								v_glue = v_split;
 							}
 							else {
-								BM_vert_splice(bm, v_split, v_glue);
+								BM_vert_splice(bm, v_glue, v_split);
 							}
 						}
 					}

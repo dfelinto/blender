@@ -306,22 +306,23 @@ static void makeraytree_single(Render *re)
 	RayObject *raytree;
 	RayFace *face = NULL;
 	VlakPrimitive *vlakprimitive = NULL;
-	int faces = 0, obs = 0, special = 0;
+	int faces = 0, special = 0;
 
-	for (obi=re->instancetable.first; obi; obi=obi->next)
-	if (is_raytraceable(re, obi)) {
-		ObjectRen *obr = obi->obr;
-		obs++;
-		
-		if (has_special_rayobject(re, obi)) {
-			special++;
-		}
-		else {
-			int v;
-			for (v=0;v<obr->totvlak;v++) {
-				VlakRen *vlr = obr->vlaknodes[v>>8].vlak + (v&255);
-				if (is_raytraceable_vlr(re, vlr))
-					faces++;
+	for (obi = re->instancetable.first; obi; obi = obi->next) {
+		if (is_raytraceable(re, obi)) {
+			ObjectRen *obr = obi->obr;
+
+			if (has_special_rayobject(re, obi)) {
+				special++;
+			}
+			else {
+				int v;
+				for (v = 0;v < obr->totvlak; v++) {
+					VlakRen *vlr = obr->vlaknodes[v >> 8].vlak + (v&255);
+					if (is_raytraceable_vlr(re, vlr)) {
+						faces++;
+					}
+				}
 			}
 		}
 	}
@@ -794,7 +795,7 @@ static void traceray(ShadeInput *origshi, ShadeResult *origshr, short depth, con
 					traceray(origshi, origshr, depth-1, shi.co, shi.view, tracol, shi.obi, shi.vlr, 0);
 				
 				f= shr.alpha; f1= 1.0f-f;
-				nf= d * shi.mat->filter;
+				nf= (shi.mat->mode & MA_RAYTRANSP) ? d * shi.mat->filter : 0.0f;
 				fr= 1.0f+ nf*(shi.r-1.0f);
 				fg= 1.0f+ nf*(shi.g-1.0f);
 				fb= 1.0f+ nf*(shi.b-1.0f);
@@ -1628,9 +1629,9 @@ static void ray_trace_shadow_tra(Isect *is, ShadeInput *origshi, int depth, int 
 
 		shade_ray(is, &shi, &shr);
 		if (shi.mat->material_type == MA_TYPE_SURFACE) {
-			const float d= (traflag & RAY_TRA) ?
-			            shade_by_transmission(is, &shi, &shr) :
-			            1.0f;
+			const float d = (shi.mat->mode & MA_RAYTRANSP) ?
+			                ((traflag & RAY_TRA) ? shade_by_transmission(is, &shi, &shr) : 1.0f) :
+			                0.0f;
 			/* mix colors based on shadfac (rgb + amount of light factor) */
 			addAlphaLight(col, shr.diff, shr.alpha, d*shi.mat->filter);
 		}

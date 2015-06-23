@@ -2000,7 +2000,7 @@ static bool psys_thread_context_init_path(ParticleThreadContext *ctx, ParticleSi
 	if (psys_in_edit_mode(scene, psys)) {
 		ParticleEditSettings *pset = &scene->toolsettings->particle;
 
-		if (psys->renderdata == 0 && (psys->edit == NULL || pset->flag & PE_DRAW_PART) == 0)
+		if ((psys->renderdata == 0 && G.is_rendering == 0) && (psys->edit == NULL || pset->flag & PE_DRAW_PART) == 0)
 			totchild = 0;
 
 		segments = 1 << pset->draw_step;
@@ -2016,7 +2016,7 @@ static bool psys_thread_context_init_path(ParticleThreadContext *ctx, ParticleSi
 		between = 1;
 	}
 
-	if (psys->renderdata)
+	if (psys->renderdata || G.is_rendering)
 		segments = 1 << part->ren_step;
 	else {
 		totchild = (int)((float)totchild * (float)part->disp / 100.0f);
@@ -2288,6 +2288,7 @@ static void psys_thread_create_path(ParticleTask *task, struct ChildParticle *cp
 			if (i >= ctx->totparent) {
 				pa = &psys->particles[cpa->parent];
 				/* this is now threadsafe, virtual parents are calculated before rest of children */
+				BLI_assert(cpa->parent < psys->totchildcache);
 				par = cache[cpa->parent];
 			}
 		}
@@ -2335,6 +2336,7 @@ static void exec_child_path_cache(TaskPool *UNUSED(pool), void *taskdata, int UN
 
 	cpa = psys->child + task->begin;
 	for (i = task->begin; i < task->end; ++i, ++cpa) {
+		BLI_assert(i < psys->totchildcache);
 		psys_thread_create_path(task, cpa, cache[i], i);
 	}
 }
@@ -2468,7 +2470,7 @@ void psys_cache_paths(ParticleSimulationData *sim, float cfra)
 	float prev_tangent[3] = {0.0f, 0.0f, 0.0f}, hairmat[4][4];
 	float rotmat[3][3];
 	int k;
-	int segments = (int)pow(2.0, (double)(psys->renderdata ? part->ren_step : part->draw_step));
+	int segments = (int)pow(2.0, (double)((psys->renderdata || G.is_rendering) ? part->ren_step : part->draw_step));
 	int totpart = psys->totpart;
 	float length, vec[3];
 	float *vg_effector = NULL;

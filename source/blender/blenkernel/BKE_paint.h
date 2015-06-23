@@ -120,6 +120,7 @@ void BKE_paint_brush_set(struct Paint *paint, struct Brush *br);
 struct Palette *BKE_paint_palette(struct Paint *paint);
 void BKE_paint_palette_set(struct Paint *p, struct Palette *palette);
 void BKE_paint_curve_set(struct Brush *br, struct PaintCurve *pc);
+void BKE_paint_curve_clamp_endpoint_add_index(struct PaintCurve *pc, const int add_index);
 
 void BKE_paint_data_warning(struct ReportList *reports, bool uvs, bool mat, bool tex, bool stencil);
 bool BKE_paint_proj_mesh_data_check(struct Scene *scene, struct Object *ob, bool *uvs, bool *mat, bool *tex, bool *stencil);
@@ -143,6 +144,7 @@ float paint_grid_paint_mask(const struct GridPaintMask *gpm, unsigned level,
 
 /* stroke related */
 void paint_calculate_rake_rotation(struct UnifiedPaintSettings *ups, struct Brush *brush, const float mouse_pos[2]);
+void paint_update_brush_rake_rotation(struct UnifiedPaintSettings *ups, struct Brush *brush, float rotation);
 
 void BKE_paint_stroke_get_average(struct Scene *scene, struct Object *ob, float stroke[3]);
 
@@ -155,7 +157,6 @@ typedef struct SculptSession {
 	struct MPoly *mpoly;
 	struct MLoop *mloop;
 	int totvert, totpoly;
-	float (*face_normals)[3];
 	struct KeyBlock *kb;
 	float *vmask;
 	

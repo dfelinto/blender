@@ -1319,18 +1319,63 @@ static BMElem *bm_elem_from_knife_edge(KnifeEdge *kfe)
 	return ele_test;
 }
 
+/* Do edges e1 and e2 go between exactly the same coordinates? */
+static bool coinciding_edges(BMEdge *e1, BMEdge *e2)
+{
+	const float *co11, *co12, *co21, *co22;
+
+	co11 = e1->v1->co;
+	co12 = e1->v2->co;
+	co21 = e2->v1->co;
+	co22 = e2->v2->co;
+	if ((equals_v3v3(co11, co21) && equals_v3v3(co12, co22)) ||
+	    (equals_v3v3(co11, co22) && equals_v3v3(co12, co21)))
+	{
+		return true;
+	}
+	else {
+		return false;
+	}
+}
+
+/* Callback used in point_is_visible to exclude hits on the faces that are the same
+ * as or contain the hitting element (which is in user_data).
+ * Also (see T44492) want to exclude hits on faces that butt up to the hitting element
+ * (e.g., when you double an edge by an edge split).
+ */
 static bool bm_ray_cast_cb_elem_not_in_face_check(BMFace *f, void *user_data)
 {
+	bool ans;
+	BMEdge *e, *e2;
+	BMIter iter;
+
 	switch (((BMElem *)user_data)->head.htype) {
 		case BM_FACE:
-			return (BMFace *)user_data != f;
+			ans = (BMFace *)user_data != f;
+			break;
 		case BM_EDGE:
-			return !BM_edge_in_face((BMEdge *)user_data, f);
+			e = (BMEdge *)user_data;
+			ans = !BM_edge_in_face(e, f);
+			if (ans) {
+				/* Is it a boundary edge, coincident with a split edge? */
+				if (BM_edge_is_boundary(e)) {
+					BM_ITER_ELEM(e2, &iter, f, BM_EDGES_OF_FACE) {
+						if (coinciding_edges(e, e2)) {
+							ans = false;
+							break;
+						}
+					}
+				}
+			}
+			break;
 		case BM_VERT:
-			return !BM_vert_in_face((BMVert *)user_data, f);
+			ans = !BM_vert_in_face((BMVert *)user_data, f);
+			break;
 		default:
-			return true;
+			ans = true;
+			break;
 	}
+	return ans;
 }
 
 
@@ -2783,7 +2828,7 @@ static void knife_make_cuts(KnifeTool_OpData *kcd)
 	for (lst = BLI_smallhash_iternew(ehash, &hiter, (uintptr_t *)&e); lst;
 	     lst = BLI_smallhash_iternext(&hiter, (uintptr_t *)&e))
 	{
-		BLI_listbase_sort_r(lst, e->v1->co, sort_verts_by_dist_cb);
+		BLI_listbase_sort_r(lst, sort_verts_by_dist_cb, e->v1->co);
 
 		for (ref = lst->first; ref; ref = ref->next) {
 			kfv = ref->ref;
@@ -2831,8 +2876,7 @@ static void knife_recalc_projmat(KnifeTool_OpData *kcd)
 	ED_view3d_ob_project_mat_get(kcd->ar->regiondata, kcd->ob, kcd->projmat);
 	invert_m4_m4(kcd->projmat_inv, kcd->projmat);
 
-	copy_v3_v3(kcd->proj_zaxis, kcd->vc.rv3d->viewinv[2]);
-	mul_mat3_m4_v3(kcd->ob->imat, kcd->proj_zaxis);
+	mul_v3_mat3_m4v3(kcd->proj_zaxis, kcd->ob->imat, kcd->vc.rv3d->viewinv[2]);
 	normalize_v3(kcd->proj_zaxis);
 
 	kcd->is_ortho = ED_view3d_clip_range_get(kcd->vc.v3d, kcd->vc.rv3d,
@@ -3006,6 +3050,8 @@ static int knifetool_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 
 	knifetool_init(C, kcd, only_select, cut_through, true);
 
+	op->flag |= OP_IS_MODAL_CURSOR_REGION;
+
 	/* add a modal handler for this operator - handles loop selection */
 	WM_cursor_modal_set(CTX_wm_window(C), BC_KNIFECURSOR);
 	WM_event_add_modal_handler(C, op);
@@ -3097,6 +3143,9 @@ static int knifetool_modal(bContext *C, wmOperator *op, const wmEvent *event)
 		ED_area_headerprint(CTX_wm_area(C), NULL);
 		return OPERATOR_FINISHED;
 	}
+
+	em_setup_viewcontext(C, &kcd->vc);
+	kcd->ar = kcd->vc.ar;
 
 	view3d_operator_needs_opengl(C);
 	ED_view3d_init_mats_rv3d(obedit, kcd->vc.rv3d);  /* needed to initialize clipping */
@@ -3257,6 +3306,13 @@ static int knifetool_modal(bContext *C, wmOperator *op, const wmEvent *event)
 		}
 	}
 
+	if (kcd->mode == MODE_DRAGGING) {
+		op->flag &= ~OP_IS_MODAL_CURSOR_REGION;
+	}
+	else {
+		op->flag |= OP_IS_MODAL_CURSOR_REGION;
+	}
+
 	if (do_refresh) {
 		/* we don't really need to update mval,
 		 * but this happens to be the best way to refresh at the moment */
@@ -3315,9 +3371,7 @@ static void edbm_mesh_knife_face_point(BMFace *f, float r_cent[3])
 		const float *p3 = loops[index[j][2]]->v->co;
 		float area;
 
-		float cross[3];
-		cross_v3_v3v3(cross, p2, p3);
-		area = fabsf(dot_v3v3(p1, cross));
+		area = area_squared_tri_v3(p1, p2, p3);
 		if (area > area_best) {
 			j_best = j;
 			area_best = area;

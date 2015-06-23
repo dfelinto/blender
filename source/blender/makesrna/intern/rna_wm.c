@@ -49,7 +49,6 @@ static EnumPropertyItem event_keymouse_value_items[] = {
 	{KM_PRESS, "PRESS", 0, "Press", ""},
 	{KM_RELEASE, "RELEASE", 0, "Release", ""},
 	{KM_CLICK, "CLICK", 0, "Click", ""},
-	{KM_HOLD, "HOLD", 0, "Hold", ""},
 	{KM_DBL_CLICK, "DOUBLE_CLICK", 0, "Double Click", ""},
 	{0, NULL, 0, NULL, NULL}
 };
@@ -381,7 +380,6 @@ EnumPropertyItem event_value_items[] = {
 	{KM_PRESS, "PRESS", 0, "Press", ""},
 	{KM_RELEASE, "RELEASE", 0, "Release", ""},
 	{KM_CLICK, "CLICK", 0, "Click", ""},
-	{KM_HOLD, "HOLD", 0, "Hold", ""},
 	{KM_DBL_CLICK, "DOUBLE_CLICK", 0, "Double Click", ""},
 	{EVT_GESTURE_N, "NORTH", 0, "North", ""},
 	{EVT_GESTURE_NE, "NORTH_EAST", 0, "North-East", ""},
@@ -416,7 +414,7 @@ static EnumPropertyItem operator_flag_items[] = {
 	{OPTYPE_UNDO, "UNDO", 0, "Undo", "Push an undo event (needed for operator redo)"},
 	{OPTYPE_BLOCKING, "BLOCKING", 0, "Blocking", "Block anything else from using the cursor"},
 	{OPTYPE_MACRO, "MACRO", 0, "Macro", "Use to check if an operator is a macro"},
-	{OPTYPE_GRAB_POINTER, "GRAB_POINTER", 0, "Grab Pointer",
+	{OPTYPE_GRAB_CURSOR, "GRAB_CURSOR", 0, "Grab Pointer",
 	                      "Use so the operator grabs the mouse focus, enables wrapping when continuous grab "
 	                      "is enabled"},
 	{OPTYPE_PRESET, "PRESET", 0, "Preset", "Display a preset button with the operators settings"},
@@ -511,6 +509,11 @@ static int rna_Operator_has_reports_get(PointerRNA *ptr)
 {
 	wmOperator *op = (wmOperator *)ptr->data;
 	return (op->reports && op->reports->list.first);
+}
+
+static PointerRNA rna_Operator_options_get(PointerRNA *ptr)
+{
+	return rna_pointer_inherit_refine(ptr, &RNA_OperatorOptions, ptr->data);
 }
 
 static PointerRNA rna_Operator_properties_get(PointerRNA *ptr)
@@ -792,6 +795,29 @@ static void rna_KeyMapItem_any_set(PointerRNA *ptr, int value)
 	}
 }
 
+static int rna_KeyMapItem_shift_get(PointerRNA *ptr)
+{
+	wmKeyMapItem *kmi = (wmKeyMapItem *)ptr->data;
+	return kmi->shift != 0;
+}
+
+static int rna_KeyMapItem_ctrl_get(PointerRNA *ptr)
+{
+	wmKeyMapItem *kmi = (wmKeyMapItem *)ptr->data;
+	return kmi->ctrl != 0;
+}
+
+static int rna_KeyMapItem_alt_get(PointerRNA *ptr)
+{
+	wmKeyMapItem *kmi = (wmKeyMapItem *)ptr->data;
+	return kmi->alt != 0;
+}
+
+static int rna_KeyMapItem_oskey_get(PointerRNA *ptr)
+{
+	wmKeyMapItem *kmi = (wmKeyMapItem *)ptr->data;
+	return kmi->oskey != 0;
+}
 
 static PointerRNA rna_WindowManager_active_keyconfig_get(PointerRNA *ptr)
 {
@@ -1369,6 +1395,33 @@ static void rna_KeyMapItem_update(Main *UNUSED(bmain), Scene *UNUSED(scene), Poi
 
 #else /* RNA_RUNTIME */
 
+/**
+ * expose ``Operator.options`` as its own type so we can control each flags use (some are read-only).
+ */
+static void rna_def_operator_options_runtime(BlenderRNA *brna)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	srna = RNA_def_struct(brna, "OperatorOptions", NULL);
+	RNA_def_struct_ui_text(srna, "Operator Options", "Runtime options");
+	RNA_def_struct_sdna(srna, "wmOperator");
+
+	prop = RNA_def_property(srna, "is_grab_cursor", PROP_BOOLEAN, PROP_BOOLEAN);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag", OP_IS_MODAL_GRAB_CURSOR);
+	RNA_def_property_ui_text(prop, "Grab Cursor", "True when the cursor is grabbed");
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+
+	prop = RNA_def_property(srna, "is_invoke", PROP_BOOLEAN, PROP_BOOLEAN);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag", OP_IS_INVOKE);
+	RNA_def_property_ui_text(prop, "Invoke", "True when invoked (even if only the execute callbacks available)");
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+
+	prop = RNA_def_property(srna, "use_cursor_region", PROP_BOOLEAN, PROP_BOOLEAN);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag", OP_IS_MODAL_CURSOR_REGION);
+	RNA_def_property_ui_text(prop, "Focus Region", "Enable to use the region under the cursor for modal execution");
+}
+
 static void rna_def_operator(BlenderRNA *brna)
 {
 	StructRNA *srna;
@@ -1402,6 +1455,12 @@ static void rna_def_operator(BlenderRNA *brna)
 	
 	prop = RNA_def_property(srna, "layout", PROP_POINTER, PROP_NONE);
 	RNA_def_property_struct_type(prop, "UILayout");
+
+	prop = RNA_def_property(srna, "options", PROP_POINTER, PROP_NONE);
+	RNA_def_property_flag(prop, PROP_NEVER_NULL);
+	RNA_def_property_struct_type(prop, "OperatorOptions");
+	RNA_def_property_pointer_funcs(prop, "rna_Operator_options_get", NULL, NULL, NULL);
+	RNA_def_property_ui_text(prop, "Options", "Runtime options");
 
 	/* Registration */
 	prop = RNA_def_property(srna, "bl_idname", PROP_STRING, PROP_NONE);
@@ -1441,6 +1500,11 @@ static void rna_def_operator(BlenderRNA *brna)
 	RNA_def_property_enum_items(prop, operator_flag_items);
 	RNA_def_property_flag(prop, PROP_REGISTER_OPTIONAL | PROP_ENUM_FLAG);
 	RNA_def_property_ui_text(prop, "Options",  "Options for this operator type");
+
+	prop = RNA_def_property(srna, "macros", PROP_COLLECTION, PROP_NONE);
+	RNA_def_property_collection_sdna(prop, NULL, "macro", NULL);
+	RNA_def_property_struct_type(prop, "Macro");
+	RNA_def_property_ui_text(prop, "Macros", "");
 
 	RNA_api_operator(srna);
 
@@ -2075,6 +2139,7 @@ static void rna_def_keyconfig(BlenderRNA *brna)
 
 	prop = RNA_def_property(srna, "shift", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "shift", 0);
+	RNA_def_property_boolean_funcs(prop, "rna_KeyMapItem_shift_get", NULL);
 /*	RNA_def_property_enum_sdna(prop, NULL, "shift"); */
 /*	RNA_def_property_enum_items(prop, keymap_modifiers_items); */
 	RNA_def_property_ui_text(prop, "Shift", "Shift key pressed");
@@ -2082,6 +2147,7 @@ static void rna_def_keyconfig(BlenderRNA *brna)
 
 	prop = RNA_def_property(srna, "ctrl", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "ctrl", 0);
+	RNA_def_property_boolean_funcs(prop, "rna_KeyMapItem_ctrl_get", NULL);
 /*	RNA_def_property_enum_sdna(prop, NULL, "ctrl"); */
 /*	RNA_def_property_enum_items(prop, keymap_modifiers_items); */
 	RNA_def_property_ui_text(prop, "Ctrl", "Control key pressed");
@@ -2089,6 +2155,7 @@ static void rna_def_keyconfig(BlenderRNA *brna)
 
 	prop = RNA_def_property(srna, "alt", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "alt", 0);
+	RNA_def_property_boolean_funcs(prop, "rna_KeyMapItem_alt_get", NULL);
 /*	RNA_def_property_enum_sdna(prop, NULL, "alt"); */
 /*	RNA_def_property_enum_items(prop, keymap_modifiers_items); */
 	RNA_def_property_ui_text(prop, "Alt", "Alt key pressed");
@@ -2096,6 +2163,7 @@ static void rna_def_keyconfig(BlenderRNA *brna)
 
 	prop = RNA_def_property(srna, "oskey", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "oskey", 0);
+	RNA_def_property_boolean_funcs(prop, "rna_KeyMapItem_oskey_get", NULL);
 /*	RNA_def_property_enum_sdna(prop, NULL, "oskey"); */
 /*	RNA_def_property_enum_items(prop, keymap_modifiers_items); */
 	RNA_def_property_ui_text(prop, "OS Key", "Operating system key pressed");
@@ -2144,6 +2212,7 @@ static void rna_def_keyconfig(BlenderRNA *brna)
 void RNA_def_wm(BlenderRNA *brna)
 {
 	rna_def_operator(brna);
+	rna_def_operator_options_runtime(brna);
 	rna_def_operator_utils(brna);
 	rna_def_operator_filelist_element(brna);
 	rna_def_macro_operator(brna);

@@ -286,10 +286,9 @@ void blf_font_buffer(FontBLF *font, const char *str)
 	    (unsigned char)(buf_info->col[2] * 255),
 	    (unsigned char)(buf_info->col[3] * 255)};
 
-	unsigned char *cbuf;
 	int chx, chy;
 	int y, x;
-	float a, *fbuf;
+	float a;
 
 	BLF_KERNING_VARS(font, has_kerning, kern_mode);
 
@@ -349,8 +348,12 @@ void blf_font_buffer(FontBLF *font, const char *str)
 						a = *(g->bitmap + x + (yb * g->pitch)) / 255.0f;
 
 						if (a > 0.0f) {
+							const size_t buf_ofs = (
+							        ((size_t)(chx + x) + ((size_t)(pen_y + y) * (size_t)buf_info->w)) *
+							        (size_t)buf_info->ch);
+							float *fbuf = buf_info->fbuf + buf_ofs;
 							float alphatest;
-							fbuf = buf_info->fbuf + buf_info->ch * ((chx + x) + ((pen_y + y) * buf_info->w));
+
 							if (a >= 1.0f) {
 								fbuf[0] = b_col_float[0];
 								fbuf[1] = b_col_float[1];
@@ -375,13 +378,17 @@ void blf_font_buffer(FontBLF *font, const char *str)
 
 			if (buf_info->cbuf) {
 				int yb = yb_start;
-				for (y = 0; y < height_clip; y++) {
-					for (x = 0; x < width_clip; x++) {
+				for (y = ((chy >= 0) ? 0 : -chy); y < height_clip; y++) {
+					for (x = ((chx >= 0) ? 0 : -chx); x < width_clip; x++) {
 						a = *(g->bitmap + x + (yb * g->pitch)) / 255.0f;
 
 						if (a > 0.0f) {
+							const size_t buf_ofs = (
+							        ((size_t)(chx + x) + ((size_t)(pen_y + y) * (size_t)buf_info->w)) *
+							        (size_t)buf_info->ch);
+							unsigned char *cbuf = buf_info->cbuf + buf_ofs;
 							int alphatest;
-							cbuf = buf_info->cbuf + buf_info->ch * ((chx + x) + ((pen_y + y) * buf_info->w));
+
 							if (a >= 1.0f) {
 								cbuf[0] = b_col_char[0];
 								cbuf[1] = b_col_char[1];
@@ -665,6 +672,28 @@ float blf_font_fixed_width(FontBLF *font)
 	}
 
 	return g->advance;
+}
+
+int blf_font_count_missing_chars(FontBLF *font, const char *str, const size_t len, int *r_tot_chars)
+{
+	int missing = 0;
+	size_t i = 0;
+
+	*r_tot_chars = 0;
+	while (i < len) {
+		unsigned int c;
+
+		if ((c = str[i]) < 0x80) {
+			i++;
+		}
+		else if ((c = BLI_str_utf8_as_unicode_step(str, &i)) != BLI_UTF8_ERR) {
+			if (FT_Get_Char_Index((font)->face, c) == 0) {
+				missing++;
+			}
+		}
+		(*r_tot_chars)++;
+	}
+	return missing;
 }
 
 void blf_font_free(FontBLF *font)

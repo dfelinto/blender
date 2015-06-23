@@ -30,7 +30,9 @@
 #include "MEM_guardedalloc.h"
 
 #include "DNA_meshdata_types.h"
+#include "DNA_vec_types.h"
 
+#include "BLI_buffer.h"
 #include "BLI_utildefines.h"
 #include "BLI_bitmap.h"
 #include "BLI_math.h"
@@ -52,14 +54,19 @@
 /* this replaces the non bmesh function (in trunk) which takes MTFace's, if we ever need it back we could
  * but for now this replaces it because its unused. */
 
-UvVertMap *BKE_mesh_uv_vert_map_create(struct MPoly *mpoly, struct MLoop *mloop, struct MLoopUV *mloopuv,
-                                       unsigned int totpoly, unsigned int totvert, int selected, float *limit)
+UvVertMap *BKE_mesh_uv_vert_map_create(
+        struct MPoly *mpoly, struct MLoop *mloop, struct MLoopUV *mloopuv,
+        unsigned int totpoly, unsigned int totvert,
+        const float limit[2], const bool selected, const bool use_winding)
 {
 	UvVertMap *vmap;
 	UvMapVert *buf;
 	MPoly *mp;
 	unsigned int a;
 	int i, totuv, nverts;
+
+	bool *winding;
+	BLI_buffer_declare_static(vec2f, tf_uv_buf, BLI_BUFFER_NOP, 32);
 
 	totuv = 0;
 
@@ -73,11 +80,11 @@ UvVertMap *BKE_mesh_uv_vert_map_create(struct MPoly *mpoly, struct MLoop *mloop,
 		return NULL;
 
 	vmap = (UvVertMap *)MEM_callocN(sizeof(*vmap), "UvVertMap");
-	if (!vmap)
-		return NULL;
-
-	vmap->vert = (UvMapVert **)MEM_callocN(sizeof(*vmap->vert) * totvert, "UvMapVert*");
 	buf = vmap->buf = (UvMapVert *)MEM_callocN(sizeof(*vmap->buf) * (size_t)totuv, "UvMapVert");
+	vmap->vert = (UvMapVert **)MEM_callocN(sizeof(*vmap->vert) * totvert, "UvMapVert*");
+	if (use_winding) {
+		winding = MEM_callocN(sizeof(*winding) * totpoly, "winding");
+	}
 
 	if (!vmap->vert || !vmap->buf) {
 		BKE_mesh_uv_vert_map_free(vmap);
@@ -87,6 +94,12 @@ UvVertMap *BKE_mesh_uv_vert_map_create(struct MPoly *mpoly, struct MLoop *mloop,
 	mp = mpoly;
 	for (a = 0; a < totpoly; a++, mp++) {
 		if (!selected || (!(mp->flag & ME_HIDE) && (mp->flag & ME_FACE_SEL))) {
+			float (*tf_uv)[2];
+
+			if (use_winding) {
+				tf_uv = (float (*)[2])BLI_buffer_resize_data(&tf_uv_buf, vec2f, mp->totloop);
+			}
+
 			nverts = mp->totloop;
 
 			for (i = 0; i < nverts; i++) {
@@ -95,7 +108,16 @@ UvVertMap *BKE_mesh_uv_vert_map_create(struct MPoly *mpoly, struct MLoop *mloop,
 				buf->separate = 0;
 				buf->next = vmap->vert[mloop[mp->loopstart + i].v];
 				vmap->vert[mloop[mp->loopstart + i].v] = buf;
+
+				if (use_winding) {
+					copy_v2_v2(tf_uv[i], mloopuv[mpoly[a].loopstart + i].uv);
+				}
+
 				buf++;
+			}
+
+			if (use_winding) {
+				winding[a] = cross_poly_v2((const float (*)[2])tf_uv, (unsigned int)nverts) > 0;
 			}
 		}
 	}
@@ -123,7 +145,9 @@ UvVertMap *BKE_mesh_uv_vert_map_create(struct MPoly *mpoly, struct MLoop *mloop,
 				sub_v2_v2v2(uvdiff, uv2, uv);
 
 
-				if (fabsf(uv[0] - uv2[0]) < limit[0] && fabsf(uv[1] - uv2[1]) < limit[1]) {
+				if (fabsf(uv[0] - uv2[0]) < limit[0] && fabsf(uv[1] - uv2[1]) < limit[1] &&
+				    (!use_winding || winding[iterv->f] == winding[v->f]))
+				{
 					if (lastv) lastv->next = next;
 					else vlist = next;
 					iterv->next = newvlist;
@@ -140,6 +164,12 @@ UvVertMap *BKE_mesh_uv_vert_map_create(struct MPoly *mpoly, struct MLoop *mloop,
 
 		vmap->vert[a] = newvlist;
 	}
+
+	if (use_winding)  {
+		MEM_freeN(winding);
+	}
+
+	BLI_buffer_free(&tf_uv_buf);
 
 	return vmap;
 }
@@ -159,8 +189,6 @@ void BKE_mesh_uv_vert_map_free(UvVertMap *vmap)
 }
 
 /**
-
-
  * Generates a map where the key is the vertex and the value is a list
  * of polys or loops that use that vertex as a corner. The lists are allocated
  * from one memory pool.
@@ -233,9 +261,10 @@ void BKE_mesh_vert_loop_map_create(MeshElemMap **r_map, int **r_mem,
 	mesh_vert_poly_or_loop_map_create(r_map, r_mem, mpoly, mloop, totvert, totpoly, totloop, true);
 }
 
-/* Generates a map where the key is the vertex and the value is a list
- * of edges that use that vertex as an endpoint. The lists are allocated
- * from one memory pool. */
+/**
+ * Generates a map where the key is the vertex and the value is a list of edges that use that vertex as an endpoint.
+ * The lists are allocated from one memory pool.
+ */
 void BKE_mesh_vert_edge_map_create(MeshElemMap **r_map, int **r_mem,
                                    const MEdge *medge, int totvert, int totedge)
 {
@@ -275,6 +304,10 @@ void BKE_mesh_vert_edge_map_create(MeshElemMap **r_map, int **r_mem,
 	*r_mem = indices;
 }
 
+/**
+ * Generates a map where the key is the edge and the value is a list of polygons that use that edge.
+ * The lists are allocated from one memory pool.
+ */
 void BKE_mesh_edge_poly_map_create(MeshElemMap **r_map, int **r_mem,
                                    const MEdge *UNUSED(medge), const int totedge,
                                    const MPoly *mpoly, const int totpoly,
@@ -382,7 +415,8 @@ void BKE_mesh_origindex_map_create(MeshElemMap **r_map, int **r_mem,
  * Used currently for UVs and 'smooth groups'.
  * \{ */
 
-/** Callback deciding whether the given poly/loop/edge define an island boundary or not.
+/**
+ * Callback deciding whether the given poly/loop/edge define an island boundary or not.
  */
 typedef bool (*MeshRemap_CheckIslandBoundary)(
         const struct MPoly *mpoly, const struct MLoop *mloop, const struct MEdge *medge,
@@ -565,8 +599,7 @@ static void poly_edge_loop_islands_calc(
 }
 
 static bool poly_is_island_boundary_smooth_cb(
-        const MPoly *mp, const MLoop *UNUSED(ml), const MEdge *me,
-        const int nbr_egde_users)
+        const MPoly *mp, const MLoop *UNUSED(ml), const MEdge *me, const int nbr_egde_users)
 {
 	/* Edge is sharp if its poly is sharp, or edge itself is sharp, or edge is not used by exactly two polygons. */
 	return (!(mp->flag & ME_SMOOTH) || (me->flag & ME_SHARP) || (nbr_egde_users != 2));
@@ -663,7 +696,6 @@ void BKE_mesh_loop_islands_add(
 	const size_t curr_num_islands = (size_t)island_store->islands_num;
 	int i = item_num;
 
-	island_store->items_to_islands_num = item_num;
 	while (i--) {
 		island_store->items_to_islands[items_indices[i]] = curr_island_idx;
 	}
@@ -698,17 +730,21 @@ void BKE_mesh_loop_islands_add(
  *       not sure we want that at all!
  */
 static bool mesh_check_island_boundary_uv(
-        const MPoly *UNUSED(mp), const MLoop *UNUSED(ml), const MEdge *me,
-        const int UNUSED(nbr_egde_users))
+        const MPoly *UNUSED(mp), const MLoop *UNUSED(ml), const MEdge *me, const int UNUSED(nbr_egde_users))
 {
 	/* Edge is UV boundary if tagged as seam. */
 	return (me->flag & ME_SEAM) != 0;
 }
 
 /**
- * \note all this could be optimized...
- * Not sure it would be worth the more complex code, though, those loops
- * are supposed to be really quick to do...
+ * Calculate UV islands.
+ *
+ * \note Currently we only consider edges tagges as seams as UV boundaries. This has the advantages of simplicity,
+ *     and being valid/common to all UV maps. However, it means actual UV islands whithout matching UV seams
+ *     will not be handled correctly...
+ *
+ * \note All this could be optimized...
+ *     Not sure it would be worth the more complex code, though, those loops are supposed to be really quick to do...
  */
 bool BKE_mesh_calc_islands_loop_poly_uv(
         MVert *UNUSED(verts), const int UNUSED(totvert),

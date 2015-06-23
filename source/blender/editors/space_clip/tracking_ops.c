@@ -825,12 +825,8 @@ static void apply_mouse_slide(bContext *C, SlideMarkerData *data)
 		     plane_track = plane_track->next)
 		{
 			if ((plane_track->flag & PLANE_TRACK_AUTOKEY) == 0) {
-				int i;
-				for (i = 0; i < plane_track->point_tracksnr; i++) {
-					if (plane_track->point_tracks[i] == data->track) {
-						BKE_tracking_track_plane_from_existing_motion(plane_track, framenr);
-						break;
-					}
+				if (BKE_tracking_plane_track_has_point_track(plane_track, data->track)) {
+					BKE_tracking_track_plane_from_existing_motion(plane_track, framenr);
 				}
 			}
 		}
@@ -1070,7 +1066,7 @@ void CLIP_OT_slide_marker(wmOperatorType *ot)
 	ot->modal = slide_marker_modal;
 
 	/* flags */
-	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_GRAB_POINTER | OPTYPE_BLOCKING;
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_GRAB_CURSOR | OPTYPE_BLOCKING;
 
 	/* properties */
 	RNA_def_float_vector(ot->srna, "offset", 2, NULL, -FLT_MAX, FLT_MAX,
@@ -1430,6 +1426,7 @@ static int track_markers_invoke(bContext *C, wmOperator *op, const wmEvent *UNUS
 	}
 
 	clip = ED_space_clip_get_clip(sc);
+	BLI_assert(clip != NULL);
 	framenr = ED_space_clip_get_clip_frame_number(sc);
 
 	if (WM_jobs_test(CTX_wm_manager(C), sa, WM_JOB_TYPE_ANY)) {
@@ -1508,6 +1505,7 @@ void CLIP_OT_track_markers(wmOperatorType *ot)
 	ot->exec = track_markers_exec;
 	ot->invoke = track_markers_invoke;
 	ot->modal = track_markers_modal;
+	ot->poll = ED_space_clip_tracking_poll;
 
 	/* flags */
 	ot->flag = OPTYPE_UNDO;
@@ -1883,7 +1881,7 @@ void CLIP_OT_clear_track_path(wmOperatorType *ot)
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
-	/* proeprties */
+	/* properties */
 	RNA_def_enum(ot->srna, "action", clear_path_actions, TRACK_CLEAR_REMAINED, "Action", "Clear action to execute");
 	RNA_def_boolean(ot->srna, "clear_active", 0, "Clear Active", "Clear active track only instead of all selected tracks");
 }
@@ -3117,6 +3115,12 @@ static int join_tracks_exec(bContext *C, wmOperator *op)
 			if (tracking->stabilization.rot_track == track)
 				tracking->stabilization.rot_track = act_track;
 
+			/* TODO(sergey): Re-evaluate planes with auto-key. */
+			BKE_tracking_plane_tracks_replace_point_track(tracking,
+			                                              track,
+			                                              act_track);
+
+
 			BKE_tracking_track_free(track);
 			BLI_freelinkN(tracksbase, track);
 		}
@@ -4181,7 +4185,7 @@ void CLIP_OT_slide_plane_marker(wmOperatorType *ot)
 	ot->modal = slide_plane_marker_modal;
 
 	/* flags */
-	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_GRAB_POINTER | OPTYPE_BLOCKING;
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_GRAB_CURSOR | OPTYPE_BLOCKING;
 }
 
 /********************** Insert track keyframe operator *********************/

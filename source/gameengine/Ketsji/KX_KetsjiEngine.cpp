@@ -313,6 +313,7 @@ void KX_KetsjiEngine::RenderDome()
 		// for each scene, call the proceed functions
 		{
 			scene = *sceneit;
+			KX_SetActiveScene(scene);
 			KX_Camera* cam = scene->GetActiveCamera();
 
 			// pass the scene's worldsettings to the rasterizer
@@ -390,8 +391,10 @@ void KX_KetsjiEngine::RenderDome()
 			);
 	}
 	m_dome->Draw();
+
 	// Draw Callback for the last scene
 #ifdef WITH_PYTHON
+	PHY_SetActiveEnvironment(scene->GetPhysicsEnvironment());
 	scene->RunDrawingCallbacks(scene->GetPostDrawCB());
 #endif
 	EndFrame();
@@ -688,13 +691,6 @@ bool KX_KetsjiEngine::NextFrame()
 				// update levels of detail
 				scene->UpdateObjectLods();
 
-				if (!GetRestrictAnimationFPS())
-				{
-					m_logger->StartLog(tc_animations, m_kxsystem->GetTimeInSeconds(), true);
-					SG_SetActiveStage(SG_STAGE_ANIMATION_UPDATE);
-					scene->UpdateAnimations(m_frameTime);
-				}
-
 				m_logger->StartLog(tc_physics, m_kxsystem->GetTimeInSeconds(), true);
 				SG_SetActiveStage(SG_STAGE_PHYSICS2);
 				scene->GetPhysicsEnvironment()->BeginFrame();
@@ -739,26 +735,6 @@ bool KX_KetsjiEngine::NextFrame()
 		frames--;
 	}
 
-	// Handle the animations independently of the logic time step
-	if (GetRestrictAnimationFPS())
-	{
-		double clocktime = m_kxsystem->GetTimeInSeconds();
-		m_logger->StartLog(tc_animations, clocktime, true);
-		SG_SetActiveStage(SG_STAGE_ANIMATION_UPDATE);
-
-		double anim_timestep = 1.0/KX_GetActiveScene()->GetAnimationFPS();
-		if (clocktime - m_previousAnimTime > anim_timestep)
-		{
-			// Sanity/debug print to make sure we're actually going at the fps we want (should be close to anim_timestep)
-			// printf("Anim fps: %f\n", 1.0/(m_clockTime - m_previousAnimTime));
-			m_previousAnimTime = clocktime;
-			for (sceneit = m_scenes.begin();sceneit != m_scenes.end(); ++sceneit)
-			{
-				(*sceneit)->UpdateAnimations(clocktime);
-			}
-		}
-	}
-	
 	// Start logging time spend outside main loop
 	m_logger->StartLog(tc_outside, m_kxsystem->GetTimeInSeconds(), true);
 	
@@ -1047,6 +1023,23 @@ void KX_KetsjiEngine::GetSceneViewport(KX_Scene *scene, KX_Camera* cam, RAS_Rect
 	}
 }
 
+void KX_KetsjiEngine::UpdateAnimations(KX_Scene *scene)
+{
+	// Handle the animations independently of the logic time step
+	if (GetRestrictAnimationFPS()) {
+		double anim_timestep = 1.0 / KX_GetActiveScene()->GetAnimationFPS();
+		if (m_frameTime - m_previousAnimTime > anim_timestep || m_frameTime == m_previousAnimTime) {
+			// Sanity/debug print to make sure we're actually going at the fps we want (should be close to anim_timestep)
+			// printf("Anim fps: %f\n", 1.0/(m_frameTime - m_previousAnimTime));
+			m_previousAnimTime = m_frameTime;
+			for (KX_SceneList::iterator sceneit = m_scenes.begin(); sceneit != m_scenes.end(); ++sceneit)
+				(*sceneit)->UpdateAnimations(m_frameTime);
+		}
+	}
+	else
+		scene->UpdateAnimations(m_frameTime);
+}
+
 void KX_KetsjiEngine::RenderShadowBuffers(KX_Scene *scene)
 {
 	CListValue *lightlist = scene->GetLightList();
@@ -1080,6 +1073,12 @@ void KX_KetsjiEngine::RenderShadowBuffers(KX_Scene *scene)
 			/* update scene */
 			scene->CalculateVisibleMeshes(m_rasterizer, cam, raslight->GetShadowLayer());
 
+			m_logger->StartLog(tc_animations, m_kxsystem->GetTimeInSeconds(), true);
+			SG_SetActiveStage(SG_STAGE_ANIMATION_UPDATE);
+			UpdateAnimations(scene);
+			m_logger->StartLog(tc_rasterizer, m_kxsystem->GetTimeInSeconds(), true);
+			SG_SetActiveStage(SG_STAGE_RENDER);
+
 			/* render */
 			m_rasterizer->ClearDepthBuffer();
 			m_rasterizer->ClearColorBuffer();
@@ -1103,6 +1102,13 @@ void KX_KetsjiEngine::RenderFrame(KX_Scene* scene, KX_Camera* cam)
 	
 	if (!cam)
 		return;
+
+	KX_SetActiveScene(scene);
+
+#ifdef WITH_PYTHON
+	scene->RunDrawingCallbacks(scene->GetPreDrawSetupCB());
+#endif
+
 	GetSceneViewport(scene, cam, area, viewport);
 
 	// store the computed viewport in the scene
@@ -1211,10 +1217,15 @@ void KX_KetsjiEngine::RenderFrame(KX_Scene* scene, KX_Camera* cam)
 
 	scene->CalculateVisibleMeshes(m_rasterizer,cam);
 
+	m_logger->StartLog(tc_animations, m_kxsystem->GetTimeInSeconds(), true);
+	SG_SetActiveStage(SG_STAGE_ANIMATION_UPDATE);
+	UpdateAnimations(scene);
+
 	m_logger->StartLog(tc_rasterizer, m_kxsystem->GetTimeInSeconds(), true);
 	SG_SetActiveStage(SG_STAGE_RENDER);
 
 #ifdef WITH_PYTHON
+	PHY_SetActiveEnvironment(scene->GetPhysicsEnvironment());
 	// Run any pre-drawing python callbacks
 	scene->RunDrawingCallbacks(scene->GetPreDrawCB());
 #endif
@@ -1233,12 +1244,16 @@ void KX_KetsjiEngine::RenderFrame(KX_Scene* scene, KX_Camera* cam)
  */
 void KX_KetsjiEngine::PostRenderScene(KX_Scene* scene)
 {
+	KX_SetActiveScene(scene);
+
 	// We need to first make sure our viewport is correct (enabling multiple viewports can mess this up)
 	m_canvas->SetViewPort(0, 0, m_canvas->GetWidth(), m_canvas->GetHeight());
 	
 	m_rasterizer->FlushDebugShapes();
 	scene->Render2DFilters(m_canvas);
+
 #ifdef WITH_PYTHON
+	PHY_SetActiveEnvironment(scene->GetPhysicsEnvironment());
 	scene->RunDrawingCallbacks(scene->GetPostDrawCB());
 #endif
 }

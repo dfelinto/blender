@@ -148,12 +148,18 @@ PyObject *PyObjectPlus::py_base_repr(PyObject *self)			// This should be the ent
 PyObject *PyObjectPlus::py_base_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
 	PyTypeObject *base_type;
-	PyObjectPlus_Proxy *base = NULL;
 
-	if (!PyArg_ParseTuple(args, "O:Base PyObjectPlus", &base))
+	/* one or more args is needed */
+	if (!PyTuple_GET_SIZE(args)) {
+		PyErr_SetString(PyExc_TypeError,
+		                "Expected at least one argument");
 		return NULL;
+	}
 
-	/* the 'base' PyObject may be subclassed (multiple times even)
+	PyObjectPlus_Proxy *base = (PyObjectPlus_Proxy *)PyTuple_GET_ITEM(args, 0);
+
+	/**
+	 * the 'base' PyObject may be subclassed (multiple times even)
 	 * we need to find the first C++ defined class to check 'type'
 	 * is a subclass of the base arguments type.
 	 *
@@ -162,12 +168,13 @@ PyObject *PyObjectPlus::py_base_new(PyTypeObject *type, PyObject *args, PyObject
 	 * eg.
 	 *
 	 * # CustomOb is called 'type' in this C code
+	 * \code{.py}
 	 * class CustomOb(GameTypes.KX_GameObject):
 	 *     pass
 	 *
 	 * # this calls py_base_new(...), the type of 'CustomOb' is checked to be a subclass of the 'cont.owner' type
 	 * ob = CustomOb(cont.owner)
-	 *
+	 * \endcode
 	 * */
 	base_type= Py_TYPE(base);
 	while (base_type && !BGE_PROXY_CHECK_TYPE(base_type))

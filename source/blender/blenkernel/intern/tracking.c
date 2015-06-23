@@ -730,7 +730,7 @@ MovieTrackingTrack *BKE_tracking_track_get_named(MovieTracking *tracking, MovieT
 	return NULL;
 }
 
-MovieTrackingTrack *BKE_tracking_track_get_indexed(MovieTracking *tracking, int tracknr, ListBase **tracksbase_r)
+MovieTrackingTrack *BKE_tracking_track_get_indexed(MovieTracking *tracking, int tracknr, ListBase **r_tracksbase)
 {
 	MovieTrackingObject *object;
 	int cur = 1;
@@ -743,7 +743,7 @@ MovieTrackingTrack *BKE_tracking_track_get_indexed(MovieTracking *tracking, int 
 		while (track) {
 			if (track->flag & TRACK_HAS_BUNDLE) {
 				if (cur == tracknr) {
-					*tracksbase_r = tracksbase;
+					*r_tracksbase = tracksbase;
 					return track;
 				}
 
@@ -756,7 +756,7 @@ MovieTrackingTrack *BKE_tracking_track_get_indexed(MovieTracking *tracking, int 
 		object = object->next;
 	}
 
-	*tracksbase_r = NULL;
+	*r_tracksbase = NULL;
 
 	return NULL;
 }
@@ -1299,6 +1299,95 @@ void BKE_tracking_plane_tracks_deselect_all(ListBase *plane_tracks_base)
 
 	for (plane_track = plane_tracks_base->first; plane_track; plane_track = plane_track->next) {
 		plane_track->flag &= ~SELECT;
+	}
+}
+
+bool BKE_tracking_plane_track_has_point_track(MovieTrackingPlaneTrack *plane_track,
+                                              MovieTrackingTrack *track)
+{
+	int i;
+	for (i = 0; i < plane_track->point_tracksnr; i++) {
+		if (plane_track->point_tracks[i] == track) {
+			return true;
+		}
+	}
+	return false;
+}
+
+bool BKE_tracking_plane_track_remove_point_track(MovieTrackingPlaneTrack *plane_track,
+                                                 MovieTrackingTrack *track)
+{
+	int i, track_index;
+	MovieTrackingTrack **new_point_tracks;
+
+	if (plane_track->point_tracksnr <= 4) {
+		return false;
+	}
+
+	new_point_tracks = MEM_mallocN(sizeof(*new_point_tracks) * (plane_track->point_tracksnr - 1),
+	                               "new point tracks array");
+
+	for (i = 0, track_index = 0; i < plane_track->point_tracksnr; i++) {
+		if (plane_track->point_tracks[i] != track) {
+			new_point_tracks[track_index++] = plane_track->point_tracks[i];
+		}
+	}
+
+	MEM_freeN(plane_track->point_tracks);
+	plane_track->point_tracks = new_point_tracks;
+	plane_track->point_tracksnr--;
+
+	return true;
+}
+
+void BKE_tracking_plane_tracks_remove_point_track(MovieTracking *tracking,
+                                                  MovieTrackingTrack *track)
+{
+	MovieTrackingPlaneTrack *plane_track, *next_plane_track;
+	ListBase *plane_tracks_base = BKE_tracking_get_active_plane_tracks(tracking);
+	for (plane_track = plane_tracks_base->first;
+	     plane_track;
+	     plane_track = next_plane_track)
+	{
+		next_plane_track = plane_track->next;
+		if (BKE_tracking_plane_track_has_point_track(plane_track, track)) {
+			if (!BKE_tracking_plane_track_remove_point_track(plane_track, track)) {
+				/* Delete planes with less than 3 point tracks in it. */
+				BKE_tracking_plane_track_free(plane_track);
+				BLI_freelinkN(plane_tracks_base, plane_track);
+			}
+		}
+	}
+}
+
+void BKE_tracking_plane_track_replace_point_track(MovieTrackingPlaneTrack *plane_track,
+                                                  MovieTrackingTrack *old_track,
+                                                  MovieTrackingTrack *new_track)
+{
+	int i;
+	for (i = 0; i < plane_track->point_tracksnr; i++) {
+		if (plane_track->point_tracks[i] == old_track) {
+			plane_track->point_tracks[i] = new_track;
+			break;
+		}
+	}
+}
+
+void BKE_tracking_plane_tracks_replace_point_track(MovieTracking *tracking,
+                                                   MovieTrackingTrack *old_track,
+                                                   MovieTrackingTrack *new_track)
+{
+	MovieTrackingPlaneTrack *plane_track;
+	ListBase *plane_tracks_base = BKE_tracking_get_active_plane_tracks(tracking);
+	for (plane_track = plane_tracks_base->first;
+	     plane_track;
+	     plane_track = plane_track->next)
+	{
+		if (BKE_tracking_plane_track_has_point_track(plane_track, old_track)) {
+			BKE_tracking_plane_track_replace_point_track(plane_track,
+			                                             old_track,
+			                                             new_track);
+		}
 	}
 }
 

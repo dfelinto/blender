@@ -80,6 +80,7 @@
 #include "BKE_editmesh.h"
 #include "BKE_tracking.h"
 #include "BKE_mask.h"
+#include "BKE_utildefines.h"
 
 #include "ED_anim_api.h"
 #include "ED_armature.h"
@@ -815,7 +816,7 @@ static void recalcData_objects(TransInfo *t)
 				}
 			}
 			
-			if (!ELEM(t->mode, TFM_BONE_ROLL, TFM_BONE_ENVELOPE, TFM_BONESIZE)) {
+			if (!ELEM(t->mode, TFM_BONE_ROLL, TFM_BONE_ENVELOPE, TFM_BONE_ENVELOPE_DIST, TFM_BONESIZE)) {
 				/* fix roll */
 				for (i = 0; i < t->total; i++, td++) {
 					if (td->extra) {
@@ -1069,6 +1070,8 @@ static int initTransInfo_edit_pet_to_flag(const int proportional)
  * Setup internal data, mouse, vectors
  *
  * \note \a op and \a event can be NULL
+ *
+ * \see #saveTransform does the reverse.
  */
 void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *event)
 {
@@ -1160,6 +1163,19 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
 		t->spacetype = sa->spacetype;
 	}
 
+	/* handle T_ALT_TRANSFORM initialization, we may use for different operators */
+	if (op) {
+		const char *prop_id = NULL;
+		if (t->mode == TFM_SHRINKFATTEN) {
+			prop_id = "use_even_offset";
+		}
+
+		if (prop_id && (prop = RNA_struct_find_property(op->ptr, prop_id)) &&
+		    RNA_property_is_set(op->ptr, prop))
+		{
+			BKE_BIT_TEST_SET(t->flag, RNA_property_boolean_get(op->ptr, prop), T_ALT_TRANSFORM);
+		}
+	}
 
 	if (t->spacetype == SPACE_VIEW3D) {
 		View3D *v3d = sa->spacedata.first;
@@ -1321,7 +1337,10 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
 			if (t->flag & T_MODAL) {
 				if ((t->options & CTX_NO_PET) == 0) {
 					if (t->spacetype == SPACE_IPO) {
-						t->flag |= initTransInfo_edit_pet_to_flag(ts->proportional);
+						t->flag |= initTransInfo_edit_pet_to_flag(ts->proportional_fcurve);
+					}
+					else if (t->spacetype == SPACE_ACTION) {
+						t->flag |= initTransInfo_edit_pet_to_flag(ts->proportional_action);
 					}
 					else if (t->obedit) {
 						t->flag |= initTransInfo_edit_pet_to_flag(ts->proportional);

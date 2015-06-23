@@ -39,9 +39,6 @@
 
 #include "DNA_listBase.h"
 
-#include "BLI_smallhash.h"
-#include "BKE_editmesh.h"
-
 /* ************************** Types ***************************** */
 
 struct TransInfo;
@@ -216,10 +213,10 @@ typedef struct TransDataEdgeSlideVert {
 
 	float edge_len;
 
-	struct BMVert *v_a, *v_b;
+	struct BMVert *v_side[2];
 
 	/* add origvert.co to get the original locations */
-	float dir_a[3], dir_b[3];
+	float dir_side[2][3];
 
 	int loop_nr;
 } TransDataEdgeSlideVert;
@@ -256,19 +253,20 @@ typedef struct EdgeSlideData {
 	bool flipped_vtx;
 
 	int curr_sv_index;
+
+	/** when un-clamped - use this index: #TransDataEdgeSlideVert.dir_side */
+	int curr_side_unclamp;
 } EdgeSlideData;
 
 
 typedef struct TransDataVertSlideVert {
 	/* TransDataGenericSlideVert */
-	BMVert *v;
+	struct BMVert *v;
 	struct LinkNode **cd_loop_groups;
 	float   co_orig_3d[3];
 	/* end generic */
 
-	float   co_orig_2d[2];
 	float (*co_link_orig_3d)[3];
-	float (*co_link_orig_2d)[2];
 	int     co_link_tot;
 	int     co_link_curr;
 } TransDataVertSlideVert;
@@ -287,6 +285,9 @@ typedef struct VertSlideData {
 	bool flipped_vtx;
 
 	int curr_sv_index;
+
+	/* result of ED_view3d_ob_project_mat_get */
+	float proj_mat[4][4];
 } VertSlideData;
 
 typedef struct BoneInitData {

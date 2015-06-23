@@ -392,12 +392,7 @@ static void cdDM_drawUVEdges(DerivedMesh *dm)
 static void cdDM_drawEdges(DerivedMesh *dm, bool drawLooseEdges, bool drawAllEdges)
 {
 	CDDerivedMesh *cddm = (CDDerivedMesh *) dm;
-	MEdge *medge = cddm->medge;
-	int i;
-	int prevstart = 0;
-	int prevdraw = 1;
-	bool draw = true;
-	
+	GPUDrawObject *gdo;
 	if (cddm->pbvh && cddm->pbvh_draw &&
 	    BKE_pbvh_type(cddm->pbvh) == PBVH_BMESH)
 	{
@@ -407,58 +402,36 @@ static void cdDM_drawEdges(DerivedMesh *dm, bool drawLooseEdges, bool drawAllEdg
 	}
 	
 	GPU_edge_setup(dm);
-	for (i = 0; i < dm->numEdgeData; i++, medge++) {
-		if ((drawAllEdges || (medge->flag & ME_EDGEDRAW)) &&
-		        (drawLooseEdges || !(medge->flag & ME_LOOSEEDGE)))
-		{
-			draw = true;
+	gdo = dm->drawObject;
+	if (gdo->edges && gdo->points) {
+		if (drawAllEdges && drawLooseEdges) {
+			GPU_buffer_draw_elements(gdo->edges, GL_LINES, 0, gdo->totedge * 2);
+		}
+		else if (drawAllEdges) {
+			GPU_buffer_draw_elements(gdo->edges, GL_LINES, 0, gdo->loose_edge_offset * 2);
 		}
 		else {
-			draw = false;
+			GPU_buffer_draw_elements(gdo->edges, GL_LINES, 0, gdo->tot_edge_drawn * 2);
+			GPU_buffer_draw_elements(gdo->edges, GL_LINES, gdo->loose_edge_offset * 2, dm->drawObject->tot_loose_edge_drawn * 2);
 		}
-		if (prevdraw != draw) {
-			if (prevdraw > 0 && (i - prevstart) > 0) {
-				GPU_buffer_draw_elements(dm->drawObject->edges, GL_LINES, prevstart * 2, (i - prevstart) * 2);
-			}
-			prevstart = i;
-		}
-		prevdraw = draw;
-	}
-	if (prevdraw > 0 && (i - prevstart) > 0) {
-		GPU_buffer_draw_elements(dm->drawObject->edges, GL_LINES, prevstart * 2, (i - prevstart) * 2);
 	}
 	GPU_buffer_unbind();
 }
 
 static void cdDM_drawLooseEdges(DerivedMesh *dm)
 {
-	CDDerivedMesh *cddm = (CDDerivedMesh *) dm;
-	MEdge *medge = cddm->medge;
-	int i;
-	
-	int prevstart = 0;
-	int prevdraw = 1;
-	int draw = 1;
-	
+	int start;
+	int count;
+
 	GPU_edge_setup(dm);
-	for (i = 0; i < dm->numEdgeData; i++, medge++) {
-		if (medge->flag & ME_LOOSEEDGE) {
-			draw = 1;
-		}
-		else {
-			draw = 0;
-		}
-		if (prevdraw != draw) {
-			if (prevdraw > 0 && (i - prevstart) > 0) {
-				GPU_buffer_draw_elements(dm->drawObject->edges, GL_LINES, prevstart * 2, (i - prevstart) * 2);
-			}
-			prevstart = i;
-		}
-		prevdraw = draw;
+
+	start = (dm->drawObject->loose_edge_offset * 2);
+	count = (dm->drawObject->totedge - dm->drawObject->loose_edge_offset) * 2;
+
+	if (count) {
+		GPU_buffer_draw_elements(dm->drawObject->edges, GL_LINES, start, count);
 	}
-	if (prevdraw > 0 && (i - prevstart) > 0) {
-		GPU_buffer_draw_elements(dm->drawObject->edges, GL_LINES, prevstart * 2, (i - prevstart) * 2);
-	}
+
 	GPU_buffer_unbind();
 }
 
@@ -470,7 +443,7 @@ static void cdDM_drawFacesSolid(DerivedMesh *dm,
 	int a;
 
 	if (cddm->pbvh && cddm->pbvh_draw) {
-		if (dm->numTessFaceData) {
+		if (BKE_pbvh_has_faces(cddm->pbvh)) {
 			float (*face_nors)[3] = CustomData_get_layer(&dm->faceData, CD_NORMAL);
 
 			BKE_pbvh_draw(cddm->pbvh, partial_redraw_planes, face_nors,
@@ -527,7 +500,7 @@ static void cdDM_drawFacesTex_common(DerivedMesh *dm,
 	 *       (the same as it'll display without UV maps in textured view)
 	 */
 	if (cddm->pbvh && cddm->pbvh_draw && BKE_pbvh_type(cddm->pbvh) == PBVH_BMESH) {
-		if (dm->numTessFaceData) {
+		if (BKE_pbvh_has_faces(cddm->pbvh)) {
 			GPU_set_tpage(NULL, false, false);
 			BKE_pbvh_draw(cddm->pbvh, NULL, NULL, NULL, false);
 		}
@@ -793,7 +766,7 @@ static void cdDM_drawMappedFaces(DerivedMesh *dm,
 		else {
 			/* we need to check if the next material changes */
 			int next_actualFace = dm->drawObject->triangle_to_mface[0];
-			int prev_mat_nr = -1;
+			short prev_mat_nr = -1;
 			
 			for (i = 0; i < tottri; i++) {
 				//int actualFace = dm->drawObject->triangle_to_mface[i];
@@ -912,7 +885,7 @@ static void cdDM_drawMappedFacesGLSL(DerivedMesh *dm,
 	 *       works fine for matcap
 	 */
 	if (cddm->pbvh && cddm->pbvh_draw && BKE_pbvh_type(cddm->pbvh) == PBVH_BMESH) {
-		if (dm->numTessFaceData) {
+		if (BKE_pbvh_has_faces(cddm->pbvh)) {
 			setMaterial(1, &gattribs);
 			BKE_pbvh_draw(cddm->pbvh, NULL, NULL, NULL, false);
 		}
@@ -1246,7 +1219,7 @@ static void cdDM_drawMappedFacesMat(DerivedMesh *dm,
 	 *       works fine for matcap
 	 */
 	if (cddm->pbvh && cddm->pbvh_draw && BKE_pbvh_type(cddm->pbvh) == PBVH_BMESH) {
-		if (dm->numTessFaceData) {
+		if (BKE_pbvh_has_faces(cddm->pbvh)) {
 			setMaterial(userData, 1, &gattribs);
 			BKE_pbvh_draw(cddm->pbvh, NULL, NULL, NULL, false);
 		}
@@ -2545,16 +2518,16 @@ DerivedMesh *CDDM_merge_verts(DerivedMesh *dm, const int *vtargetmap, const int 
 		const unsigned int v1 = (vtargetmap[med->v1] != -1) ? vtargetmap[med->v1] : med->v1;
 		const unsigned int v2 = (vtargetmap[med->v2] != -1) ? vtargetmap[med->v2] : med->v2;
 		if (LIKELY(v1 != v2)) {
-			void **eh_p = BLI_edgehash_lookup_p(ehash, v1, v2);
+			void **val_p;
 
-			if (eh_p) {
-				newe[i] = GET_INT_FROM_POINTER(*eh_p);
+			if (BLI_edgehash_ensure_p(ehash, v1, v2, &val_p)) {
+				newe[i] = GET_INT_FROM_POINTER(*val_p);
 			}
 			else {
 				STACK_PUSH(olde, i);
 				STACK_PUSH(medge, *med);
 				newe[i] = c;
-				BLI_edgehash_insert(ehash, v1, v2, SET_INT_IN_POINTER(c));
+				*val_p = SET_INT_IN_POINTER(c);
 				c++;
 			}
 		}

@@ -33,7 +33,7 @@ ShaderInput::ShaderInput(ShaderNode *parent_, const char *name_, ShaderSocketTyp
 	name = name_;
 	type = type_;
 	link = NULL;
-	value = make_float3(0, 0, 0);
+	value = make_float3(0.0f, 0.0f, 0.0f);
 	stack_offset = SVM_STACK_INVALID;
 	default_value = NONE;
 	usage = USE_ALL;
@@ -404,6 +404,36 @@ void ShaderGraph::remove_unneeded_nodes()
 				}
 			}
 		}
+		else if(node->special_type == SHADER_SPECIAL_TYPE_EMISSION) {
+			EmissionNode *em = static_cast<EmissionNode*>(node);
+
+			if(em->outputs[0]->links.size()) {
+				/* Black color or zero strength, remove node */
+				if((!em->inputs[0]->link && em->inputs[0]->value == make_float3(0.0f, 0.0f, 0.0f)) ||
+				   (!em->inputs[1]->link && em->inputs[1]->value.x == 0.0f)) {
+					vector<ShaderInput*> inputs = em->outputs[0]->links;
+
+					relink(em->inputs, inputs, NULL);
+					removed[em->id] = true;
+					any_node_removed = true;
+				}
+			}
+		}
+		else if(node->special_type == SHADER_SPECIAL_TYPE_BUMP) {
+			BumpNode *bump = static_cast<BumpNode*>(node);
+
+			if(bump->outputs[0]->links.size()) {
+				/* Height input not connected */
+				/* ToDo: Strength zero? */
+				if(!bump->inputs[0]->link) {
+					vector<ShaderInput*> inputs = bump->outputs[0]->links;
+
+					relink(bump->inputs, inputs, NULL);
+					removed[bump->id] = true;
+					any_node_removed = true;
+				}
+			}
+		}
 		else if(node->special_type == SHADER_SPECIAL_TYPE_MIX_CLOSURE) {
 			MixClosureNode *mix = static_cast<MixClosureNode*>(node);
 
@@ -545,7 +575,7 @@ void ShaderGraph::clean()
 		else
 			delete node;
 	}
-	
+
 	nodes = newnodes;
 }
 
@@ -833,6 +863,26 @@ void ShaderGraph::transform_multi_closure(ShaderNode *node, ShaderOutput *weight
 	}
 }
 
+int ShaderGraph::get_num_closures()
+{
+	int num_closures = 0;
+	foreach(ShaderNode *node, nodes) {
+		if(node->special_type == SHADER_SPECIAL_TYPE_CLOSURE) {
+			BsdfNode *bsdf_node = static_cast<BsdfNode*>(node);
+			/* TODO(sergey): Make it more generic approach, maybe some utility
+			 * macros like CLOSURE_IS_FOO()?
+			 */
+			if(CLOSURE_IS_BSSRDF(bsdf_node->closure))
+				num_closures = num_closures + 3;
+			else if(CLOSURE_IS_GLASS(bsdf_node->closure))
+				num_closures = num_closures + 2;
+			else
+				num_closures = num_closures + 1;
+		}
+	}
+	return num_closures;
+}
+
 void ShaderGraph::dump_graph(const char *filename)
 {
 	FILE *fd = fopen(filename, "w");
@@ -892,7 +942,7 @@ void ShaderGraph::dump_graph(const char *filename)
 				        input,
 				        output->name, input->name);
 				fprintf(fd,
-				        "\"\%p\":\"OUT_%p\":e -> \"%p\":\"IN_%p\":w [label=\"\"]\n",
+				        "\"%p\":\"OUT_%p\":e -> \"%p\":\"IN_%p\":w [label=\"\"]\n",
 				        output->parent,
 				        output,
 				        input->parent,

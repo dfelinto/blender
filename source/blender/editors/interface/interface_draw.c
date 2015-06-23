@@ -508,8 +508,9 @@ static void draw_scope_end(const rctf *rect, GLint *scissor)
 	UI_draw_roundbox_gl_mode(GL_LINE_LOOP, rect->xmin - 1, rect->ymin, rect->xmax + 1, rect->ymax + 1, 3.0f);
 }
 
-static void histogram_draw_one(float r, float g, float b, float alpha,
-                               float x, float y, float w, float h, const float *data, int res, const bool is_line)
+static void histogram_draw_one(
+        float r, float g, float b, float alpha,
+        float x, float y, float w, float h, const float *data, int res, const bool is_line)
 {
 	int i;
 	
@@ -1260,8 +1261,8 @@ void ui_draw_but_UNITVEC(uiBut *but, uiWidgetColors *wcol, const rcti *rect)
 		size = BLI_rcti_size_x(rect) / 200.f;
 	else
 		size = BLI_rcti_size_y(rect) / 200.f;
-	
-	glScalef(size, size, size);
+
+	glScalef(size, size, MIN2(size, 1.0f));
 
 	if (displist == 0) {
 		GLUquadricObj *qobj;

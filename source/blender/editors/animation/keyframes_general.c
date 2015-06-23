@@ -199,13 +199,17 @@ void clean_fcurve(FCurve *fcu, float thresh)
 	/* now insert first keyframe, as it should be ok */
 	bezt = old_bezts;
 	insert_vert_fcurve(fcu, bezt->vec[1][0], bezt->vec[1][1], 0);
+	if (!(bezt->f2 & SELECT)) {
+		lastb = fcu->bezt;
+		lastb->f1 = lastb->f2 = lastb->f3 = 0;
+	}
 	
 	/* Loop through BezTriples, comparing them. Skip any that do 
 	 * not fit the criteria for "ok" points.
 	 */
 	for (i = 1; i < totCount; i++) {
 		float prev[2], cur[2], next[2];
-		
+
 		/* get BezTriples and their values */
 		if (i < (totCount - 1)) {
 			beztn = (old_bezts + (i + 1));
@@ -217,10 +221,17 @@ void clean_fcurve(FCurve *fcu, float thresh)
 		}
 		lastb = (fcu->bezt + (fcu->totvert - 1));
 		bezt = (old_bezts + i);
-		
+
 		/* get references for quicker access */
 		prev[0] = lastb->vec[1][0]; prev[1] = lastb->vec[1][1];
 		cur[0] = bezt->vec[1][0]; cur[1] = bezt->vec[1][1];
+
+		if (!(bezt->f2 & SELECT)) {
+			insert_vert_fcurve(fcu, cur[0], cur[1], 0);
+			lastb = (fcu->bezt + (fcu->totvert - 1));
+			lastb->f1 = lastb->f2 = lastb->f3 = 0;
+			continue;
+		}
 		
 		/* check if current bezt occurs at same time as last ok */
 		if (IS_EQT(cur[0], prev[0], thresh)) {
@@ -228,7 +239,7 @@ void clean_fcurve(FCurve *fcu, float thresh)
 			 * if there is a considerable distance between the points, and also if the 
 			 * current is further away than the next one is to the previous.
 			 */
-			if (beztn && (IS_EQT(cur[0], next[0], thresh)) && 
+			if (beztn && (IS_EQT(cur[0], next[0], thresh)) &&
 			    (IS_EQT(next[1], prev[1], thresh) == 0))
 			{
 				/* only add if current is further away from previous */
@@ -548,24 +559,15 @@ short copy_animedit_keys(bAnimContext *ac, ListBase *anim_data)
 		 * storing the relevant information here helps avoiding crashes if we undo-repaste */
 		if ((aci->id_type == ID_OB) && (((Object *)aci->id)->type == OB_ARMATURE) && aci->rna_path) {
 			Object *ob = (Object *)aci->id;
-			char *str_start;
-			
-			if ((str_start = strstr(aci->rna_path, "pose.bones["))) {
-				bPoseChannel *pchan;
-				int length = 0;
-				char *str_end;
-				
-				str_start += 12;
-				str_end = strchr(str_start, '\"');
-				length = str_end - str_start;
-				str_start[length] = 0;
-				pchan = BKE_pose_channel_find_name(ob->pose, str_start);
-				str_start[length] = '\"';
-		
-				if (pchan) {
-					aci->is_bone = true;
-				}
+			bPoseChannel *pchan;
+			char *bone_name;
+
+			bone_name = BLI_str_quoted_substrN(aci->rna_path, "pose.bones[");
+			pchan = BKE_pose_channel_find_name(ob->pose, bone_name);
+			if (pchan) {
+				aci->is_bone = true;
 			}
+			if (bone_name) MEM_freeN(bone_name);
 		}
 		
 		BLI_addtail(&animcopybuf, aci);
@@ -624,22 +626,22 @@ static void flip_names(tAnimCopybufItem *aci, char **name)
 			char bname_new[MAX_VGROUP_NAME];
 			char *str_iter, *str_end;
 			int length, prefix_l, postfix_l;
-			
+
 			str_start += 12;
 			prefix_l = str_start - aci->rna_path;
-			
+
 			str_end = strchr(str_start, '\"');
-			
+
 			length = str_end - str_start;
 			postfix_l = strlen(str_end);
-			
+
 			/* more ninja stuff, temporary substitute with NULL terminator */
 			str_start[length] = 0;
 			BKE_deform_flip_side_name(bname_new, str_start, false);
 			str_start[length] = '\"';
-			
+
 			str_iter = *name = MEM_mallocN(sizeof(char) * (prefix_l + postfix_l + length + 1), "flipped_path");
-			
+
 			BLI_strncpy(str_iter, aci->rna_path, prefix_l + 1);
 			str_iter += prefix_l;
 			BLI_strncpy(str_iter, bname_new, length + 1);

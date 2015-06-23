@@ -55,12 +55,10 @@ typedef struct ImageUser {
 	char ok;
 
 	char multiview_eye;			/* multiview current eye - for internal use of drawing routines */
+	int passtype;
 
-	short multi_index, view, layer, pass;	 /* listbase indices, for menu browsing or retrieve buffer */
-
+	short multi_index, view, layer;	 /* listbase indices, for menu browsing or retrieve buffer */
 	short flag;
-	short passtype;
-
 } ImageUser;
 
 typedef struct ImageAnim {
@@ -117,7 +115,7 @@ typedef struct Image {
 	unsigned int bindcode;	/* only for current image... */
 	unsigned int *repbind;	/* for repeat of parts of images */
 	
-	struct PackedFile *packedfile; /* deprecated */
+	struct PackedFile *packedfile DNA_DEPRECATED; /* deprecated */
 	struct ListBase packedfiles;
 	struct PreviewImage *preview;
 

@@ -162,13 +162,18 @@ def get_po_files_from_dir(root_dir, langs=set()):
         yield uid, po_file
 
 
-def enable_addons(addons={}, support={}, disable=False, check_only=False):
+def enable_addons(addons=None, support=None, disable=False, check_only=False):
     """
     Enable (or disable) addons based either on a set of names, or a set of 'support' types.
     Returns the list of all affected addons (as fake modules)!
     If "check_only" is set, no addon will be enabled nor disabled.
     """
     import addon_utils
+
+    if addons is None:
+        addons = {}
+    if support is None:
+        support = {}
 
     userpref = bpy.context.user_preferences
     used_ext = {ext.module for ext in userpref.addons}
@@ -212,13 +217,13 @@ class I18nMessage:
     __slots__ = ("msgctxt_lines", "msgid_lines", "msgstr_lines", "comment_lines", "is_fuzzy", "is_commented",
                  "settings")
 
-    def __init__(self, msgctxt_lines=[], msgid_lines=[], msgstr_lines=[], comment_lines=[],
+    def __init__(self, msgctxt_lines=None, msgid_lines=None, msgstr_lines=None, comment_lines=None,
                  is_commented=False, is_fuzzy=False, settings=settings):
         self.settings = settings
-        self.msgctxt_lines = msgctxt_lines
-        self.msgid_lines = msgid_lines
-        self.msgstr_lines = msgstr_lines
-        self.comment_lines = comment_lines
+        self.msgctxt_lines = msgctxt_lines or []
+        self.msgid_lines = msgid_lines or []
+        self.msgstr_lines = msgstr_lines or []
+        self.comment_lines = comment_lines or []
         self.is_fuzzy = is_fuzzy
         self.is_commented = is_commented
 
@@ -976,13 +981,13 @@ class I18nMessages:
     def write(self, kind, dest):
         self.writers[kind](self, dest)
 
-    def write_messages_to_po(self, fname):
+    def write_messages_to_po(self, fname, compact=False):
         """
         Write messages in fname po file.
         """
         default_context = self.settings.DEFAULT_CONTEXT
 
-        def _write(self, f):
+        def _write(self, f, compact):
             _msgctxt = self.settings.PO_MSGCTXT
             _msgid = self.settings.PO_MSGID
             _msgstr = self.settings.PO_MSGSTR
@@ -991,9 +996,12 @@ class I18nMessages:
             self.escape()
 
             for num, msg in enumerate(self.msgs.values()):
-                f.write("\n".join(msg.comment_lines))
+                if compact and (msg.is_commented or msg.is_fuzzy or not msg.msgstr_lines):
+                    continue
+                if not compact:
+                    f.write("\n".join(msg.comment_lines))
                 # Only mark as fuzzy if msgstr is not empty!
-                if msg.is_fuzzy and msg.msgstr:
+                if msg.is_fuzzy and msg.msgstr_lines:
                     f.write("\n" + self.settings.PO_COMMENT_FUZZY)
                 _p = _comm if msg.is_commented else ""
                 chunks = []
@@ -1030,10 +1038,10 @@ class I18nMessages:
         self.normalize(max_len=0)  # No wrapping for now...
         if isinstance(fname, str):
             with open(fname, 'w', encoding="utf-8") as f:
-                _write(self, f)
+                _write(self, f, compact)
         # Else assume fname is already a file(like) object!
         else:
-            _write(self, fname)
+            _write(self, fname, compact)
 
     def write_messages_to_mo(self, fname):
         """
@@ -1112,6 +1120,7 @@ class I18nMessages:
 
     writers = {
         "PO": write_messages_to_po,
+        "PO_COMPACT": lambda s, fn: s.write_messages_to_po(fn, True),
         "MO": write_messages_to_mo,
     }
 

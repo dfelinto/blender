@@ -569,6 +569,13 @@ const unsigned char *UI_ThemeGetColorPtr(bTheme *btheme, int spacetype, int colo
 					cp = ts->paint_curve_pivot;
 					break;
 
+				case TH_METADATA_BG:
+					cp = ts->metadatabg;
+					break;
+				case TH_METADATA_TEXT:
+					cp = ts->metadatatext;
+					break;
+
 				case TH_UV_OTHERS:
 					cp = ts->uv_others;
 					break;
@@ -817,8 +824,9 @@ static void ui_theme_space_init_handles_color(ThemeSpace *theme_space)
 	rgba_char_args_set(theme_space->act_spline, 0xdb, 0x25, 0x12, 255);
 }
 
-/* initialize default theme
- * Note: when you add new colors, created & saved themes need initialized
+/**
+ * initialize default theme
+ * \note: when you add new colors, created & saved themes need initialized
  * use function below, init_userdef_do_versions()
  */
 void ui_theme_init_default(void)
@@ -1504,8 +1512,9 @@ void UI_GetColorPtrShade3ubv(const unsigned char cp[3], unsigned char col[3], in
 }
 
 /* get a 3 byte color, blended and shaded between two other char color pointers */
-void UI_GetColorPtrBlendShade3ubv(const unsigned char cp1[3], const unsigned char cp2[3], unsigned char col[3],
-                                  float fac, int offset)
+void UI_GetColorPtrBlendShade3ubv(
+        const unsigned char cp1[3], const unsigned char cp2[3], unsigned char col[3],
+        float fac, int offset)
 {
 	int r, g, b;
 
@@ -1603,8 +1612,8 @@ void init_userdef_do_versions(void)
 		U.tw_size = 25;          /* percentage of window size */
 		U.tw_handlesize = 16;    /* percentage of widget radius */
 	}
-	if (U.pad_rot_angle == 0)
-		U.pad_rot_angle = 15;
+	if (U.pad_rot_angle == 0.0f)
+		U.pad_rot_angle = 15.0f;
 	
 	/* graph editor - unselected F-Curve visibility */
 	if (U.fcu_inactive_alpha == 0) {
@@ -2603,9 +2612,19 @@ void init_userdef_do_versions(void)
 		}
 	}
 
-	if (U.versionfile < 274 || (U.versionfile == 274 && U.subversionfile < 3)) {
-		if (U.click_timeout == 0)
-			U.click_timeout = 250;
+	if (U.versionfile < 274 || (U.versionfile == 274 && U.subversionfile < 5)) {
+		bTheme *btheme;
+		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
+			copy_v4_v4_char(btheme->tima.metadatatext, btheme->tima.text_hi);
+			copy_v4_v4_char(btheme->tseq.metadatatext, btheme->tseq.text_hi);
+		}
+	}
+
+	if (U.versionfile < 275 || (U.versionfile == 275 && U.subversionfile < 1)) {
+		bTheme *btheme;
+		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
+			copy_v4_v4_char(btheme->tclip.metadatatext, btheme->tseq.text_hi);
+		}
 	}
 
 	if (U.pixelsize == 0.0f)

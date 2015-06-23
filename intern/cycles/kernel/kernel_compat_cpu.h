@@ -24,6 +24,15 @@
  */
 #if defined(__GNUC__) && defined(NDEBUG)
 #  pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#  pragma GCC diagnostic ignored "-Wuninitialized"
+#endif
+
+/* Selective nodes compilation. */
+#ifndef __NODES_MAX_GROUP__
+#  define __NODES_MAX_GROUP__ NODE_GROUP_LEVEL_MAX
+#endif
+#ifndef __NODES_FEATURES__
+#  define __NODES_FEATURES__ NODE_FEATURE_ALL
 #endif
 
 #include "util_debug.h"
@@ -31,6 +40,8 @@
 #include "util_simd.h"
 #include "util_half.h"
 #include "util_types.h"
+
+#define ccl_addr_space
 
 /* On x86_64, versions of glibc < 2.16 have an issue where expf is
  * much slower than the double version.  This was fixed in glibc 2.16.

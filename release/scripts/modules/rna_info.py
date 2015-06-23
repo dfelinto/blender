@@ -268,7 +268,8 @@ class InfoPropertyRNA:
             self.default_str = "\"%s\"" % self.default
         elif self.type == "enum":
             if self.is_enum_flag:
-                self.default_str = "%r" % self.default  # repr or set()
+                # self.default_str = "%r" % self.default  # repr or set()
+                self.default_str = "{%s}" % repr(list(sorted(self.default)))[1:-1]
             else:
                 self.default_str = "'%s'" % self.default
         elif self.array_length:
@@ -695,7 +696,7 @@ def BuildRNAInfo():
     return InfoStructRNA.global_lookup, InfoFunctionRNA.global_lookup, InfoOperatorRNA.global_lookup, InfoPropertyRNA.global_lookup
 
 
-if __name__ == "__main__":
+def main():
     import rna_info
     struct = rna_info.BuildRNAInfo()[0]
     data = []
@@ -723,3 +724,7 @@ if __name__ == "__main__":
     else:
         text = bpy.data.texts.new(name="api.py")
         text.from_string(data)
+
+
+if __name__ == "__main__":
+    main()

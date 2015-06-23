@@ -30,6 +30,7 @@
  *  \ingroup bli
  */
 
+#include <stdlib.h>
 
 #include "MEM_guardedalloc.h"
 
@@ -38,7 +39,9 @@
 #include "BLI_memarena.h"
 #include "BLI_mempool.h"
 
-int BLI_linklist_length(LinkNode *list)
+#include "BLI_strict_flags.h"
+
+int BLI_linklist_count(LinkNode *list)
 {
 	int len;
 
@@ -188,40 +191,39 @@ void BLI_linklist_prepend_pool(LinkNode **listp, void *ptr, BLI_mempool *mempool
 /**
  * A version of append that takes the allocated link.
  */
-void BLI_linklist_append_nlink(LinkNode **listp, void *ptr, LinkNode *nlink)
+void BLI_linklist_append_nlink(LinkNodePair *list_pair, void *ptr, LinkNode *nlink)
 {
-	LinkNode *node = *listp;
-	
 	nlink->link = ptr;
 	nlink->next = NULL;
 	
-	if (node == NULL) {
-		*listp = nlink;
+	if (list_pair->list) {
+		BLI_assert((list_pair->last_node != NULL) && (list_pair->last_node->next == NULL));
+		list_pair->last_node->next = nlink;
 	}
 	else {
-		while (node->next != NULL) {
-			node = node->next;   
-		}
-		node->next = nlink;
+		BLI_assert(list_pair->last_node == NULL);
+		list_pair->list = nlink;
 	}
+
+	list_pair->last_node = nlink;
 }
 
-void BLI_linklist_append(LinkNode **listp, void *ptr)
+void BLI_linklist_append(LinkNodePair *list_pair, void *ptr)
 {
 	LinkNode *nlink = MEM_mallocN(sizeof(*nlink), __func__);
-	BLI_linklist_append_nlink(listp, ptr, nlink);
+	BLI_linklist_append_nlink(list_pair, ptr, nlink);
 }
 
-void BLI_linklist_append_arena(LinkNode **listp, void *ptr, MemArena *ma)
+void BLI_linklist_append_arena(LinkNodePair *list_pair, void *ptr, MemArena *ma)
 {
 	LinkNode *nlink = BLI_memarena_alloc(ma, sizeof(*nlink));
-	BLI_linklist_append_nlink(listp, ptr, nlink);
+	BLI_linklist_append_nlink(list_pair, ptr, nlink);
 }
 
-void BLI_linklist_append_pool(LinkNode **listp, void *ptr, BLI_mempool *mempool)
+void BLI_linklist_append_pool(LinkNodePair *list_pair, void *ptr, BLI_mempool *mempool)
 {
 	LinkNode *nlink = BLI_mempool_alloc(mempool);
-	BLI_linklist_append_nlink(listp, ptr, nlink);
+	BLI_linklist_append_nlink(list_pair, ptr, nlink);
 }
 
 void *BLI_linklist_pop(struct LinkNode **listp)
@@ -307,4 +309,41 @@ void BLI_linklist_apply(LinkNode *list, LinkNodeApplyFP applyfunc, void *userdat
 {
 	for (; list; list = list->next)
 		applyfunc(list->link, userdata);
+}
+
+/* -------------------------------------------------------------------- */
+/* Sort */
+#define SORT_IMPL_LINKTYPE LinkNode
+#define SORT_IMPL_LINKTYPE_DATA link
+
+/* regular call */
+#define SORT_IMPL_FUNC linklist_sort_fn
+#include "list_sort_impl.h"
+#undef SORT_IMPL_FUNC
+
+/* reentrant call */
+#define SORT_IMPL_USE_THUNK
+#define SORT_IMPL_FUNC linklist_sort_fn_r
+#include "list_sort_impl.h"
+#undef SORT_IMPL_FUNC
+#undef SORT_IMPL_USE_THUNK
+
+#undef SORT_IMPL_LINKTYPE
+#undef SORT_IMPL_LINKTYPE_DATA
+
+
+LinkNode *BLI_linklist_sort(LinkNode *list, int (*cmp)(const void *, const void *))
+{
+	if (list && list->next) {
+		list = linklist_sort_fn(list, cmp);
+	}
+	return list;
+}
+
+LinkNode *BLI_linklist_sort_r(LinkNode *list, int (*cmp)(void *, const void *, const void *), void *thunk)
+{
+	if (list && list->next) {
+		list = linklist_sort_fn_r(list, cmp, thunk);
+	}
+	return list;
 }

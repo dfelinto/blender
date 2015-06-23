@@ -75,7 +75,6 @@ EnumPropertyItem sequence_modifier_type_items[] = {
 #include "BKE_idprop.h"
 
 #include "WM_api.h"
-#include "WM_types.h"
 
 #include "IMB_imbuf.h"
 
@@ -135,9 +134,9 @@ static void rna_SequenceEditor_sequences_all_begin(CollectionPropertyIterator *i
 	rna_iterator_listbase_begin(iter, &ed->seqbase, NULL);
 }
 
-static void rna_SequenceEditor_update_cache(Main *UNUSED(bmain), Scene *scene, PointerRNA *ptr)
+static void rna_SequenceEditor_update_cache(Main *UNUSED(bmain), Scene *scene, PointerRNA *UNUSED(ptr))
 {
-	Editing *ed = (Editing *) ptr->id.data;
+	Editing *ed = scene->ed;
 
 	BKE_sequencer_free_imbuf(scene, &ed->seqbase, false);
 }
@@ -809,7 +808,7 @@ static int colbalance_seq_cmp_cb(Sequence *seq, void *arg_pt)
 	return 1;
 }
 
-static Sequence *sequence_get_by_colorbalance(Editing *ed, StripColorBalance *cb, SequenceModifierData **smd_r)
+static Sequence *sequence_get_by_colorbalance(Editing *ed, StripColorBalance *cb, SequenceModifierData **r_smd)
 {
 	SequenceSearchData data;
 
@@ -820,7 +819,7 @@ static Sequence *sequence_get_by_colorbalance(Editing *ed, StripColorBalance *cb
 	/* irritating we need to search for our sequence! */
 	BKE_sequencer_base_recursive_apply(&ed->seqbase, colbalance_seq_cmp_cb, &data);
 
-	*smd_r = data.smd;
+	*r_smd = data.smd;
 
 	return data.seq;
 }

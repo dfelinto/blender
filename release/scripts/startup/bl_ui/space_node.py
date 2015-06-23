@@ -67,7 +67,7 @@ class NODE_HT_header(Header):
                 if snode_id and not (scene.render.use_shading_nodes == 0 and ob.type == 'LAMP'):
                     layout.prop(snode_id, "use_nodes")
 
-            if snode.shader_type == 'WORLD':
+            if scene.render.use_shading_nodes and snode.shader_type == 'WORLD':
                 row = layout.row()
                 row.enabled = not snode.pin
                 row.template_ID(scene, "world", new="world.new")
@@ -209,8 +209,8 @@ class NODE_MT_select(Menu):
         layout.separator()
 
         layout.operator("node.select_grouped").extend = False
-        layout.operator("node.select_same_type_step").prev = True
-        layout.operator("node.select_same_type_step").prev = False
+        layout.operator("node.select_same_type_step", text="Activate Same Type Previous").prev = True
+        layout.operator("node.select_same_type_step", text="Activate Same Type Next").prev = False
 
         layout.separator()
 
@@ -441,7 +441,7 @@ class NODE_UL_interface_sockets(bpy.types.UIList):
             if socket.is_output:
                 row.template_node_socket(color)
 
-        elif self.layout_type in {'GRID'}:
+        elif self.layout_type == 'GRID':
             layout.alignment = 'CENTER'
             layout.template_node_socket(color)
 

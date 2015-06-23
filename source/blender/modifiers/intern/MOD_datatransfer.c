@@ -147,6 +147,18 @@ static void updateDepgraph(ModifierData *md, DagForest *forest,
 	}
 }
 
+static void updateDepsgraph(ModifierData *md,
+                            struct Main *UNUSED(bmain),
+                            struct Scene *UNUSED(scene),
+                            Object *UNUSED(ob),
+                            struct DepsNodeHandle *node)
+{
+	DataTransferModifierData *dtmd = (DataTransferModifierData *) md;
+	if (dtmd->ob_source != NULL) {
+		DEG_add_object_relation(node, dtmd->ob_source, DEG_OB_COMP_GEOMETRY, "DataTransfer Modifier");
+	}
+}
+
 static bool isDisabled(ModifierData *md, int UNUSED(useRenderParams))
 {
 	DataTransferModifierData *dtmd = (DataTransferModifierData *) md;
@@ -213,6 +225,15 @@ static DerivedMesh *applyModifier(ModifierData *md, Object *ob, DerivedMesh *der
 #undef HIGH_POLY_WARNING
 #undef DT_TYPES_AFFECT_MESH
 
+static void copyData(ModifierData *md, ModifierData *target)
+{
+#if 0
+	DataTransferModifierData *dtmd = (DecimateModifierData *) md;
+	DataTransferModifierData *tdtmd = (DecimateModifierData *) target;
+#endif
+	modifier_copyData_generic(md, target);
+}
+
 ModifierTypeInfo modifierType_DataTransfer = {
 	/* name */              "DataTransfer",
 	/* structName */        "DataTransferModifierData",
@@ -223,7 +244,7 @@ ModifierTypeInfo modifierType_DataTransfer = {
 	                        eModifierTypeFlag_SupportsEditmode |
 	                        eModifierTypeFlag_UsesPreview,
 
-	/* copyData */          NULL,
+	/* copyData */          copyData,
 	/* deformVerts */       NULL,
 	/* deformMatrices */    NULL,
 	/* deformVertsEM */     NULL,
@@ -235,6 +256,7 @@ ModifierTypeInfo modifierType_DataTransfer = {
 	/* freeData */          NULL,
 	/* isDisabled */        isDisabled,
 	/* updateDepgraph */    updateDepgraph,
+	/* updateDepsgraph */   updateDepsgraph,
 	/* dependsOnTime */     NULL,
 	/* dependsOnNormals */  dependsOnNormals,
 	/* foreachObjectLink */ foreachObjectLink,

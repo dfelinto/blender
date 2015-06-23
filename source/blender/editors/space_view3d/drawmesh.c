@@ -579,7 +579,7 @@ static DMDrawOption draw_tface__set_draw(MTFace *tface, const bool UNUSED(has_mc
 {
 	Material *ma = give_current_material(Gtexdraw.ob, matnr + 1);
 
-	if (ma && (ma->game.flag & GEMAT_INVISIBLE)) return 0;
+	if (ma && (ma->game.flag & GEMAT_INVISIBLE)) return DM_DRAW_OPTION_SKIP;
 
 	if (tface || Gtexdraw.is_texpaint)
 		set_draw_settings_cached(0, tface, ma, Gtexdraw);
@@ -588,15 +588,19 @@ static DMDrawOption draw_tface__set_draw(MTFace *tface, const bool UNUSED(has_mc
 	return DM_DRAW_OPTION_NORMAL;
 }
 
-static void update_tface_color_layer(DerivedMesh *dm)
+static void update_tface_color_layer(DerivedMesh *dm, bool use_mcol)
 {
 	MTFace *tface = DM_get_tessface_data_layer(dm, CD_MTFACE);
 	MFace *mface = dm->getTessFaceArray(dm);
 	MCol *finalCol;
 	int i, j;
-	MCol *mcol = dm->getTessFaceDataArray(dm, CD_PREVIEW_MCOL);
-	if (!mcol)
-		mcol = dm->getTessFaceDataArray(dm, CD_MCOL);
+	MCol *mcol = NULL;
+
+	if (use_mcol) {
+		mcol = dm->getTessFaceDataArray(dm, CD_PREVIEW_MCOL);
+		if (!mcol)
+			mcol = dm->getTessFaceDataArray(dm, CD_MCOL);
+	}
 
 	if (CustomData_has_layer(&dm->faceData, CD_TEXTURE_MCOL)) {
 		finalCol = CustomData_get_layer(&dm->faceData, CD_TEXTURE_MCOL);
@@ -771,7 +775,7 @@ static void draw_mesh_text(Scene *scene, Object *ob, int glsl)
 
 	for (a = 0, mp = mface; a < totpoly; a++, mtpoly++, mp++) {
 		short matnr = mp->mat_nr;
-		int mf_smooth = mp->flag & ME_SMOOTH;
+		const bool mf_smooth = (mp->flag & ME_SMOOTH) != 0;
 		Material *mat = (me->mat) ? me->mat[matnr] : NULL;
 		int mode = mat ? mat->game.flag : GEMAT_INVISIBLE;
 
@@ -937,7 +941,7 @@ static void draw_mesh_textured_old(Scene *scene, View3D *v3d, RegionView3D *rv3d
 	else {		
 		drawTFace_userData userData;
 		
-		update_tface_color_layer(dm);
+		update_tface_color_layer(dm, !(ob->mode & OB_MODE_TEXTURE_PAINT));
 		
 		userData.mf = DM_get_tessface_data_layer(dm, CD_MFACE);
 		userData.tf = DM_get_tessface_data_layer(dm, CD_MTFACE);
@@ -1103,7 +1107,7 @@ void draw_mesh_textured(Scene *scene, View3D *v3d, RegionView3D *rv3d,
 		Mesh *me = ob->data;
 		TexMatCallback data = {scene, ob, me, dm};
 		bool (*set_face_cb)(void *, int);
-		int glsl, picking = (G.f & G_PICKSEL);
+		bool glsl, picking = (G.f & G_PICKSEL) != 0;
 		
 		/* face hiding callback depending on mode */
 		if (ob == scene->obedit)

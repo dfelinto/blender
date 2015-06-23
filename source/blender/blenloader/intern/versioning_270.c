@@ -27,7 +27,6 @@
 
 #include "BLI_utildefines.h"
 #include "BLI_compiler_attrs.h"
-#include "BLI_string.h"
 
 /* for MinGW32 definition of NULL, could use BLI_blenlib.h instead too */
 #include <stddef.h>
@@ -49,7 +48,6 @@
 #include "DNA_particle_types.h"
 #include "DNA_linestyle_types.h"
 #include "DNA_actuator_types.h"
-#include "DNA_camera_types.h"
 #include "DNA_view3d_types.h"
 
 #include "DNA_genfile.h"
@@ -60,7 +58,6 @@
 #include "BKE_scene.h"
 #include "BKE_sequencer.h"
 #include "BKE_screen.h"
-#include "BKE_sequencer.h"
 
 #include "BLI_math.h"
 #include "BLI_listbase.h"
@@ -708,30 +705,7 @@ void blo_do_versions_270(FileData *fd, Library *UNUSED(lib), Main *main)
 		} FOREACH_NODETREE_END
 	}
 
-	if (!DNA_struct_elem_find(fd->filesdna, "Sequence", "char", "storage")) {
-		Scene *scene;
-		Sequence *seq;
-
-#define SEQ_USE_PROXY_CUSTOM_DIR (1 << 19)
-#define SEQ_USE_PROXY_CUSTOM_FILE (1 << 21)
-
-		for (scene = main->scene.first; scene; scene = scene->id.next) {
-			SEQ_BEGIN (scene->ed, seq) {
-				if (seq->strip && seq->strip->proxy) {
-					if (seq->flag & SEQ_USE_PROXY_CUSTOM_DIR)
-						seq->strip->proxy->storage = SEQ_STORAGE_PROXY_CUSTOM_DIR;
-					if (seq->flag & SEQ_USE_PROXY_CUSTOM_FILE)
-						seq->strip->proxy->storage = SEQ_STORAGE_PROXY_CUSTOM_FILE;
-				}
-			}
-			SEQ_END
-		}
-#undef SEQ_USE_PROXY_CUSTOM_DIR
-#undef SEQ_USE_PROXY_CUSTOM_FILE
-	}
-
-	if (!MAIN_VERSION_ATLEAST(main, 274, 4))
-	{
+	if (!MAIN_VERSION_ATLEAST(main, 274, 4)) {
 		SceneRenderView *srv;
 		wmWindowManager *wm;
 		bScreen *screen;
@@ -754,6 +728,18 @@ void blo_do_versions_270(FileData *fd, Library *UNUSED(lib), Main *main)
 			SEQ_BEGIN (scene->ed, seq)
 			{
 				seq->stereo3d_format = MEM_callocN(sizeof(Stereo3dFormat), "Stereo Display 3d Format");
+
+#define SEQ_USE_PROXY_CUSTOM_DIR (1 << 19)
+#define SEQ_USE_PROXY_CUSTOM_FILE (1 << 21)
+				if (seq->strip && seq->strip->proxy && !seq->strip->proxy->storage) {
+					if (seq->flag & SEQ_USE_PROXY_CUSTOM_DIR)
+						seq->strip->proxy->storage = SEQ_STORAGE_PROXY_CUSTOM_DIR;
+					if (seq->flag & SEQ_USE_PROXY_CUSTOM_FILE)
+						seq->strip->proxy->storage = SEQ_STORAGE_PROXY_CUSTOM_FILE;
+				}
+#undef SEQ_USE_PROXY_CUSTOM_DIR
+#undef SEQ_USE_PROXY_CUSTOM_FILE
+
 			}
 			SEQ_END
 		}
@@ -787,8 +773,8 @@ void blo_do_versions_270(FileData *fd, Library *UNUSED(lib), Main *main)
 		}
 
 		for (cam = main->camera.first; cam; cam = cam->id.next) {
-			cam->stereo.interocular_distance = 0.065;
-			cam->stereo.convergence_distance = 30.f * 0.065;
+			cam->stereo.interocular_distance = 0.065f;
+			cam->stereo.convergence_distance = 30.0f * 0.065f;
 		}
 
 		for (ima = main->image.first; ima; ima = ima->id.next) {
@@ -807,6 +793,52 @@ void blo_do_versions_270(FileData *fd, Library *UNUSED(lib), Main *main)
 		for (wm = main->wm.first; wm; wm = wm->id.next) {
 			for (win = wm->windows.first; win; win = win->next) {
 				win->stereo3d_format = MEM_callocN(sizeof(Stereo3dFormat), "Stereo Display 3d Format");
+			}
+		}
+	}
+
+	if (!MAIN_VERSION_ATLEAST(main, 274, 6)) {
+		bScreen *screen;
+
+		if (!DNA_struct_elem_find(fd->filesdna, "FileSelectParams", "int", "thumbnail_size")) {
+			for (screen = main->screen.first; screen; screen = screen->id.next) {
+				ScrArea *sa;
+
+				for (sa = screen->areabase.first; sa; sa = sa->next) {
+					SpaceLink *sl;
+
+					for (sl = sa->spacedata.first; sl; sl = sl->next) {
+						if (sl->spacetype == SPACE_FILE) {
+							SpaceFile *sfile = (SpaceFile *)sl;
+
+							if (sfile->params) {
+								sfile->params->thumbnail_size = 128;
+							}
+						}
+					}
+				}
+			}
+		}
+
+		if (!DNA_struct_elem_find(fd->filesdna, "RenderData", "short", "simplify_subsurf_render")) {
+			Scene *scene;
+			for (scene = main->scene.first; scene != NULL; scene = scene->id.next) {
+				scene->r.simplify_subsurf_render = scene->r.simplify_subsurf;
+				scene->r.simplify_particles_render = scene->r.simplify_particles;
+			}
+		}
+
+		if (!DNA_struct_elem_find(fd->filesdna, "DecimateModifierData", "float", "defgrp_factor")) {
+			Object *ob;
+
+			for (ob = main->object.first; ob; ob = ob->id.next) {
+				ModifierData *md;
+				for (md = ob->modifiers.first; md; md = md->next) {
+					if (md->type == eModifierType_Decimate) {
+						DecimateModifierData *dmd = (DecimateModifierData *)md;
+						dmd->defgrp_factor = 1.0f;
+					}
+				}
 			}
 		}
 	}

@@ -504,6 +504,16 @@ void mul_mat3_m4_v3(float mat[4][4], float vec[3])
 	vec[2] = x * mat[0][2] + y * mat[1][2] + mat[2][2] * vec[2];
 }
 
+void mul_v3_mat3_m4v3(float r[3], float mat[4][4], const float vec[3])
+{
+	const float x = vec[0];
+	const float y = vec[1];
+
+	r[0] = x * mat[0][0] + y * mat[1][0] + mat[2][0] * vec[2];
+	r[1] = x * mat[0][1] + y * mat[1][1] + mat[2][1] * vec[2];
+	r[2] = x * mat[0][2] + y * mat[1][2] + mat[2][2] * vec[2];
+}
+
 void mul_project_m4_v3(float mat[4][4], float vec[3])
 {
 	const float w = mul_project_m4_v3_zfac(mat, vec);
@@ -1149,7 +1159,7 @@ bool is_orthogonal_m3(float m[3][3])
 
 	for (i = 0; i < 3; i++) {
 		for (j = 0; j < i; j++) {
-			if (fabsf(dot_v3v3(m[i], m[j])) > 1.5f * FLT_EPSILON)
+			if (fabsf(dot_v3v3(m[i], m[j])) > 1e-5f)
 				return false;
 		}
 	}
@@ -1163,7 +1173,7 @@ bool is_orthogonal_m4(float m[4][4])
 
 	for (i = 0; i < 4; i++) {
 		for (j = 0; j < i; j++) {
-			if (fabsf(dot_v4v4(m[i], m[j])) > 1.5f * FLT_EPSILON)
+			if (fabsf(dot_v4v4(m[i], m[j])) > 1e-5f)
 				return false;
 		}
 
@@ -1178,7 +1188,7 @@ bool is_orthonormal_m3(float m[3][3])
 		int i;
 
 		for (i = 0; i < 3; i++)
-			if (fabsf(dot_v3v3(m[i], m[i]) - 1) > 1.5f * FLT_EPSILON)
+			if (fabsf(dot_v3v3(m[i], m[i]) - 1) > 1e-5f)
 				return false;
 
 		return true;
@@ -1193,7 +1203,7 @@ bool is_orthonormal_m4(float m[4][4])
 		int i;
 
 		for (i = 0; i < 4; i++)
-			if (fabsf(dot_v4v4(m[i], m[i]) - 1) > 1.5f * FLT_EPSILON)
+			if (fabsf(dot_v4v4(m[i], m[i]) - 1) > 1e-5f)
 				return false;
 
 		return true;
@@ -1465,39 +1475,14 @@ float mat4_to_scale(float mat[4][4])
 
 void mat3_to_rot_size(float rot[3][3], float size[3], float mat3[3][3])
 {
-	float mat3_n[3][3]; /* mat3 -> normalized, 3x3 */
-	float imat3_n[3][3]; /* mat3 -> normalized & inverted, 3x3 */
-
-	/* rotation & scale are linked, we need to create the mat's
-	 * for these together since they are related. */
-
-	/* so scale doesn't interfere with rotation [#24291] */
-	/* note: this is a workaround for negative matrix not working for rotation conversion, FIXME */
-	normalize_m3_m3(mat3_n, mat3);
-	if (is_negative_m3(mat3)) {
-		negate_m3(mat3_n);
-	}
-
-	/* rotation */
 	/* keep rot as a 3x3 matrix, the caller can convert into a quat or euler */
-	copy_m3_m3(rot, mat3_n);
-
-	/* scale */
-	/* note: mat4_to_size(ob->size, mat) fails for negative scale */
-	invert_m3_m3(imat3_n, mat3_n);
-
-	/* better not edit mat3 */
-#if 0
-	mul_m3_m3m3(mat3, imat3_n, mat3);
-
-	size[0] = mat3[0][0];
-	size[1] = mat3[1][1];
-	size[2] = mat3[2][2];
-#else
-	size[0] = dot_m3_v3_row_x(imat3_n, mat3[0]);
-	size[1] = dot_m3_v3_row_y(imat3_n, mat3[1]);
-	size[2] = dot_m3_v3_row_z(imat3_n, mat3[2]);
-#endif
+	size[0] = normalize_v3_v3(rot[0], mat3[0]);
+	size[1] = normalize_v3_v3(rot[1], mat3[1]);
+	size[2] = normalize_v3_v3(rot[2], mat3[2]);
+	if (UNLIKELY(is_negative_m3(rot))) {
+		negate_m3(rot);
+		negate_v3(size);
+	}
 }
 
 void mat4_to_loc_rot_size(float loc[3], float rot[3][3], float size[3], float wmat[4][4])
@@ -2251,7 +2236,7 @@ void svd_m4(float U[4][4], float s[4], float V[4][4], float A_[4][4])
 
 void pseudoinverse_m4_m4(float Ainv[4][4], float A_[4][4], float epsilon)
 {
-	/* compute moon-penrose pseudo inverse of matrix, singular values
+	/* compute Moore-Penrose pseudo inverse of matrix, singular values
 	 * below epsilon are ignored for stability (truncated SVD) */
 	float A[4][4], V[4][4], W[4], Wm[4][4], U[4][4];
 	int i;

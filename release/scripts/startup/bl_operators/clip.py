@@ -225,7 +225,8 @@ class CLIP_OT_track_to_empty(Operator):
     bl_label = "Link Empty to Track"
     bl_options = {'UNDO', 'REGISTER'}
 
-    def _link_track(self, context, clip, tracking_object, track):
+    @staticmethod
+    def _link_track(context, clip, tracking_object, track):
         sc = context.space_data
         constraint = None
         ob = None
@@ -331,7 +332,8 @@ class CLIP_OT_delete_proxy(Operator):
 
         return wm.invoke_confirm(self, event)
 
-    def _rmproxy(self, abspath):
+    @staticmethod
+    def _rmproxy(abspath):
         import shutil
 
         if not os.path.exists(abspath):
@@ -552,8 +554,8 @@ class CLIP_OT_setup_tracking_scene(Operator):
         world.light_settings.sample_method = 'ADAPTIVE_QMC'
         world.light_settings.samples = 7
         world.light_settings.threshold = 0.005
-        if hasattr(scene, 'cycles'):
-                world.light_settings.ao_factor = 0.05
+        if hasattr(scene, "cycles"):
+            world.light_settings.ao_factor = 0.05
 
     @staticmethod
     def _findOrCreateCamera(context):
@@ -841,7 +843,7 @@ class CLIP_OT_setup_tracking_scene(Operator):
         self._offsetNodes(tree)
 
         scene.render.alpha_mode = 'TRANSPARENT'
-        if hasattr(scene, 'cycles'):
+        if hasattr(scene, "cycles"):
             scene.cycles.film_transparent = True
 
     @staticmethod
