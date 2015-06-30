@@ -50,6 +50,7 @@
 #include "BLI_blenlib.h"
 #include "BLI_utildefines.h"
 #include "BLI_linklist_stack.h"
+#include "BLI_stackdefines.h"
 
 
 #include "BKE_context.h"
@@ -426,6 +427,48 @@ bool ED_vgroup_array_copy(Object *ob, Object *ob_from)
 
 	return true;
 }
+
+void ED_vgroup_parray_to_weight_array(
+        const MDeformVert **dvert_array, const int dvert_tot,
+        float *dvert_weights, const int def_nr)
+{
+	int i;
+
+	for (i = 0; i < dvert_tot; i++) {
+		const MDeformVert *dv = dvert_array[i];
+		dvert_weights[i] = dv ? defvert_find_weight(dv, def_nr) : 0.0f;
+	}
+}
+
+void ED_vgroup_parray_from_weight_array(
+        MDeformVert **dvert_array, const int dvert_tot,
+        const float *dvert_weights, const int def_nr, const bool remove_zero)
+{
+	int i;
+
+	for (i = 0; i < dvert_tot; i++) {
+		MDeformVert *dv = dvert_array[i];
+		if (dv) {
+			if (dvert_weights[i] > 0.0f) {
+				MDeformWeight *dw = defvert_verify_index(dv, def_nr);
+				BLI_assert(IN_RANGE_INCL(dvert_weights[i], 0.0f, 1.0f));
+				dw->weight = dvert_weights[i];
+			}
+			else {
+				MDeformWeight *dw = defvert_find_index(dv, def_nr);
+				if (dw) {
+					if (remove_zero) {
+						defvert_remove_group(dv, dw);
+					}
+					else {
+						dw->weight = 0.0f;
+					}
+				}
+			}
+		}
+	}
+}
+
 
 /* TODO, cache flip data to speedup calls within a loop. */
 static void mesh_defvert_mirror_update_internal(Object *ob,
@@ -1631,9 +1674,17 @@ static void vgroup_invert_subset(Object *ob,
 	}
 }
 
-static void vgroup_blend_subset(Object *ob, const bool *vgroup_validmap, const int vgroup_tot,
-                                const int subset_count,
-                                const float fac)
+enum {
+	WEIGHT_SMOOTH_ALL = -1,
+	WEIGHT_SMOOTH_DESELECT = false,
+	WEIGHT_SMOOTH_SELECT = true,
+};
+
+static void vgroup_smooth_subset(
+        Object *ob, const bool *vgroup_validmap, const int vgroup_tot,
+        const int subset_count,
+        const float fac, const int repeat,
+        const float fac_expand, const int source)
 {
 	const float ifac = 1.0f - fac;
 	MDeformVert **dvert_array = NULL;
@@ -1642,6 +1693,10 @@ static void vgroup_blend_subset(Object *ob, const bool *vgroup_validmap, const i
 	float *vgroup_subset_weights = BLI_array_alloca(vgroup_subset_weights, subset_count);
 	const bool use_mirror = (ob->type == OB_MESH) ? (((Mesh *)ob->data)->editflag & ME_EDIT_MIRROR_X) != 0 : false;
 
+	const int    expand_sign = signum_i(fac_expand);
+	const float  expand = fabsf(fac_expand);
+	const float iexpand = 1.0f - expand;
+
 	BMEditMesh *em = BKE_editmesh_from_object(ob);
 	BMesh *bm = em ? em->bm : NULL;
 	Mesh  *me = em ? NULL   : ob->data;
@@ -1649,7 +1704,15 @@ static void vgroup_blend_subset(Object *ob, const bool *vgroup_validmap, const i
 	MeshElemMap *emap;
 	int *emap_mem;
 
-	BLI_SMALLSTACK_DECLARE(dv_stack, MDeformVert *);
+	float *weight_accum_prev;
+	float *weight_accum_curr;
+
+	unsigned int subset_index;
+
+	/* vertex indices that will be smoothed, (only to avoid iterating over verts that do nothing) */
+	unsigned int *verts_used;
+	STACK_DECLARE(verts_used);
+
 
 	BKE_object_defgroup_subset_to_index_array(vgroup_validmap, vgroup_tot, vgroup_subset_map);
 	ED_vgroup_parray_alloc(ob->data, &dvert_array, &dvert_tot, false);
@@ -1657,86 +1720,158 @@ static void vgroup_blend_subset(Object *ob, const bool *vgroup_validmap, const i
 
 	if (bm) {
 		BM_mesh_elem_table_ensure(bm, BM_VERT);
+		BM_mesh_elem_index_ensure(bm, BM_VERT);
 
 		emap = NULL;
 		emap_mem = NULL;
 	}
 	else {
-		BKE_mesh_vert_edge_map_create(&emap, &emap_mem,
-		                              me->medge, me->totvert, me->totedge);
+		BKE_mesh_vert_edge_map_create(&emap, &emap_mem, me->medge, me->totvert, me->totedge);
 	}
 
+	weight_accum_prev = MEM_mallocN(sizeof(*weight_accum_prev) * dvert_tot, __func__);
+	weight_accum_curr = MEM_mallocN(sizeof(*weight_accum_curr) * dvert_tot, __func__);
 
-	for (i = 0; i < dvert_tot; i++) {
-		MDeformVert *dv;
-		int dv_stack_tot = 0;
-		int j;
-		/* in case its not selected */
+	verts_used = MEM_mallocN(sizeof(*verts_used) * dvert_tot, __func__);
+	STACK_INIT(verts_used, dvert_tot);
 
-		if (bm) {
+
+	/* initialize used verts */
+	if (bm) {
+		for (i = 0; i < dvert_tot; i++) {
 			BMVert *v = BM_vert_at_index(bm, i);
 			if (BM_elem_flag_test(v, BM_ELEM_SELECT)) {
 				BMIter eiter;
 				BMEdge *e;
 				BM_ITER_ELEM (e, &eiter, v, BM_EDGES_OF_VERT) {
 					BMVert *v_other = BM_edge_other_vert(e, v);
-					const int i_other = BM_elem_index_get(v_other);
-
-					if (BM_elem_flag_test(v_other, BM_ELEM_SELECT) == 0) {
-						dv = dvert_array[i_other];
-						BLI_SMALLSTACK_PUSH(dv_stack, dv);
-						dv_stack_tot++;
+					if ((source == WEIGHT_SMOOTH_ALL) ||
+					    (source == (BM_elem_flag_test(v_other, BM_ELEM_SELECT) != 0)))
+					{
+						STACK_PUSH(verts_used, i);
+						break;
 					}
 				}
 			}
 		}
-		else {
+	}
+	else {
+		for (i = 0; i < dvert_tot; i++) {
 			MVert *v = &me->mvert[i];
 			if (v->flag & SELECT) {
+				int j;
 				for (j = 0; j < emap[i].count; j++) {
 					MEdge *e = &me->medge[emap[i].indices[j]];
 					const int i_other = (e->v1 == i ? e->v2 : e->v1);
 					MVert *v_other = &me->mvert[i_other];
-
-					if ((v_other->flag & SELECT) == 0) {
-						dv = dvert_array[i_other];
-						BLI_SMALLSTACK_PUSH(dv_stack, dv);
-						dv_stack_tot++;
+					if ((source == WEIGHT_SMOOTH_ALL) ||
+					    (source == ((v_other->flag & SELECT) != 0)))
+					{
+						STACK_PUSH(verts_used, i);
+						break;
 					}
 				}
 			}
 		}
+	}
 
-		if (dv_stack_tot) {
-			const float dv_mul = 1.0f / (float)dv_stack_tot;
+	for (subset_index = 0; subset_index < subset_count; subset_index++) {
+		const int def_nr = vgroup_subset_map[subset_index];
+		int iter;
 
-			/* vgroup_subset_weights is zero'd at this point */
-			while ((dv = BLI_SMALLSTACK_POP(dv_stack))) {
-				for (j = 0; j < subset_count; j++) {
-					vgroup_subset_weights[j] += dv_mul * defvert_find_weight(dv, vgroup_subset_map[j]);
-				}
-			}
+		ED_vgroup_parray_to_weight_array((const MDeformVert **)dvert_array, dvert_tot, weight_accum_prev, def_nr);
+		memcpy(weight_accum_curr, weight_accum_prev, sizeof(*weight_accum_curr) * dvert_tot);
 
-			dv = dvert_array[i];
-			for (j = 0; j < subset_count; j++) {
-				MDeformWeight *dw;
-				if (vgroup_subset_weights[j] > 0.0f) {
-					dw = defvert_verify_index(dv, vgroup_subset_map[j]);
+		for (iter = 0; iter < repeat; iter++) {
+			unsigned *vi_step, *vi_end = verts_used + STACK_SIZE(verts_used);
+
+			/* avoid looping over all verts */
+			// for (i = 0; i < dvert_tot; i++)
+			for (vi_step = verts_used; vi_step != vi_end; vi_step++) {
+				const unsigned int i  = *vi_step;
+				float weight_tot = 0.0f;
+				float weight = 0.0f;
+
+#define WEIGHT_ACCUMULATE \
+				{ \
+					float weight_other = weight_accum_prev[i_other]; \
+					float tot_factor = 1.0f; \
+					if (expand_sign == 1) {  /* expand */ \
+						if (weight_other < weight_accum_prev[i]) { \
+							weight_other = (weight_accum_prev[i_other] * iexpand) + (weight_other * expand); \
+							tot_factor = iexpand; \
+						} \
+					} \
+					else if (expand_sign == -1) {  /* contract */ \
+						if (weight_other > weight_accum_prev[i]) { \
+							weight_other = (weight_accum_prev[i_other] * iexpand) + (weight_other * expand); \
+							tot_factor = iexpand; \
+						} \
+					} \
+					weight     += tot_factor * weight_other; \
+					weight_tot += tot_factor; \
+				} ((void)0)
+
+
+				if (bm) {
+					BMVert *v = BM_vert_at_index(bm, i);
+					BMIter eiter;
+					BMEdge *e;
+
+					/* checked already */
+					BLI_assert(BM_elem_flag_test(v, BM_ELEM_SELECT));
+
+					BM_ITER_ELEM (e, &eiter, v, BM_EDGES_OF_VERT) {
+						BMVert *v_other = BM_edge_other_vert(e, v);
+						if ((source == WEIGHT_SMOOTH_ALL) ||
+						    (source == (BM_elem_flag_test(v_other, BM_ELEM_SELECT) != 0)))
+						{
+							const int i_other = BM_elem_index_get(v_other);
+
+							WEIGHT_ACCUMULATE;
+						}
+					}
 				}
 				else {
-					dw = defvert_find_index(dv, vgroup_subset_map[j]);
+					int j;
+
+					/* checked already */
+					BLI_assert(me->mvert[i].flag & SELECT);
+
+					for (j = 0; j < emap[i].count; j++) {
+						MEdge *e = &me->medge[emap[i].indices[j]];
+						const int i_other = (e->v1 == i ? e->v2 : e->v1);
+						MVert *v_other = &me->mvert[i_other];
+
+						if ((source == WEIGHT_SMOOTH_ALL) ||
+							(source == ((v_other->flag & SELECT) != 0)))
+						{
+							WEIGHT_ACCUMULATE;
+						}
+					}
 				}
 
-				if (dw) {
-					dw->weight = (fac * vgroup_subset_weights[j]) + (ifac * dw->weight);
-					CLAMP(dw->weight, 0.0f, 1.0f);
-				}
+#undef WEIGHT_ACCUMULATE
 
-				/* zero for next iteration */
-				vgroup_subset_weights[j] = 0.0f;
+				if (weight_tot != 0.0f) {
+					weight /= weight_tot;
+					weight = (weight_accum_prev[i] * ifac) + (weight * fac);
+
+					/* should be within range, just clamp because of float precision */
+					CLAMP(weight, 0.0f, 1.0f);
+					weight_accum_curr[i] = weight;
+				}
 			}
+
+			SWAP(float *, weight_accum_curr, weight_accum_prev);
 		}
+
+		ED_vgroup_parray_from_weight_array(dvert_array, dvert_tot, weight_accum_prev, def_nr, true);
 	}
+
+	MEM_freeN(weight_accum_curr);
+	MEM_freeN(weight_accum_prev);
+	MEM_freeN(verts_used);
 
 	if (bm) {
 		/* pass */
@@ -2315,16 +2450,43 @@ static int UNUSED_FUNCTION(vertex_group_poll_edit) (bContext *C)
 }
 
 /* editmode _or_ weight paint vertex sel */
-static int vertex_group_vert_select_poll(bContext *C)
+static int vertex_group_vert_select_poll_ex(bContext *C, const short ob_type_flag)
 {
 	Object *ob = ED_object_context(C);
 	ID *data = (ob) ? ob->data : NULL;
 
 	if (!(ob && !ob->id.lib && data && !data->lib))
-		return 0;
+		return false;
 
-	return (BKE_object_is_in_editmode_vgroup(ob) ||
-	        BKE_object_is_in_wpaint_select_vert(ob));
+	if (ob_type_flag && (((1 << ob->type) & ob_type_flag)) == 0) {
+		return false;
+	}
+
+	if (BKE_object_is_in_editmode_vgroup(ob)) {
+		return true;
+	}
+	else if (ob->mode & OB_MODE_WEIGHT_PAINT) {
+		if (BKE_object_is_in_wpaint_select_vert(ob)) {
+			return true;
+		}
+		else {
+			CTX_wm_operator_poll_msg_set(C, "Vertex select needs to be enabled in weight paint mode");
+			return false;
+		}
+	}
+	else {
+		return false;
+	}
+}
+
+static int vertex_group_vert_select_poll(bContext *C)
+{
+	return vertex_group_vert_select_poll_ex(C, 0);
+}
+
+static int vertex_group_mesh_vert_select_poll(bContext *C)
+{
+	return vertex_group_vert_select_poll_ex(C, (1 << OB_MESH));
 }
 
 /* editmode _or_ weight paint vertex sel and active group unlocked */
@@ -2851,17 +3013,19 @@ void OBJECT_OT_vertex_group_invert(wmOperatorType *ot)
 	                "Remove verts from groups that have zero weight after inverting");
 }
 
-
-static int vertex_group_blend_exec(bContext *C, wmOperator *op)
+static int vertex_group_smooth_exec(bContext *C, wmOperator *op)
 {
 	Object *ob = ED_object_context(C);
-	float fac = RNA_float_get(op->ptr, "factor");
+	const float fac = RNA_float_get(op->ptr, "factor");
+	const int repeat = RNA_int_get(op->ptr, "repeat");
 	eVGroupSelect subset_type  = RNA_enum_get(op->ptr, "group_select_mode");
+	const int source = RNA_enum_get(op->ptr, "source");
+	const float fac_expand = RNA_float_get(op->ptr, "expand");
 
 	int subset_count, vgroup_tot;
 
 	const bool *vgroup_validmap = BKE_object_defgroup_subset_from_select_type(ob, subset_type, &vgroup_tot, &subset_count);
-	vgroup_blend_subset(ob, vgroup_validmap, vgroup_tot, subset_count, fac);
+	vgroup_smooth_subset(ob, vgroup_validmap, vgroup_tot, subset_count, fac, repeat, fac_expand, source);
 	MEM_freeN((void *)vgroup_validmap);
 
 	DAG_id_tag_update(&ob->id, OB_RECALC_DATA);
@@ -2871,60 +3035,34 @@ static int vertex_group_blend_exec(bContext *C, wmOperator *op)
 	return OPERATOR_FINISHED;
 }
 
-/* check we have a vertex selection, either in weight paint or editmode */
-static int vertex_group_blend_poll(bContext *C)
+void OBJECT_OT_vertex_group_smooth(wmOperatorType *ot)
 {
-	Object *ob = ED_object_context(C);
-	ID *data = (ob) ? ob->data : NULL;
-
-	if (!(ob && !ob->id.lib && data && !data->lib))
-		return false;
-
-	if (ob->type != OB_MESH) {
-		return false;
-	}
-
-	if (BKE_object_is_in_editmode_vgroup(ob)) {
-		return true;
-	}
-	else if (ob->mode & OB_MODE_WEIGHT_PAINT) {
-		if (ME_EDIT_PAINT_SEL_MODE(((Mesh *)data)) == SCE_SELECT_VERTEX) {
-			return true;
-		}
-		else {
-			CTX_wm_operator_poll_msg_set(C, "Vertex select needs to be enabled in weight paint mode");
-			return false;
-		}
-
-	}
-	else {
-		return false;
-	}
-}
-
-void OBJECT_OT_vertex_group_blend(wmOperatorType *ot)
-{
-	PropertyRNA *prop;
+	static EnumPropertyItem smooth_source_item[] = {
+		{WEIGHT_SMOOTH_ALL, "ALL", 0, "All", ""},
+		{WEIGHT_SMOOTH_SELECT, "SELECT", 0, "Only Selected", ""},
+		{WEIGHT_SMOOTH_DESELECT, "DESELECT", 0, "Only Deselected", ""},
+		{0, NULL, 0, NULL, NULL}
+	};
 
 	/* identifiers */
-	ot->name = "Blend Vertex Group";
-	ot->idname = "OBJECT_OT_vertex_group_blend";
-	ot->description = "Blend selected vertex weights with unselected for the active group";
+	ot->name = "Smooth Vertex Weights";
+	ot->idname = "OBJECT_OT_vertex_group_smooth";
+	ot->description = "Smooth weights for selected vertices";
 
 	/* api callbacks */
-	ot->poll = vertex_group_blend_poll;
-	ot->exec = vertex_group_blend_exec;
+	ot->poll = vertex_group_mesh_vert_select_poll;
+	ot->exec = vertex_group_smooth_exec;
 
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
 	vgroup_operator_subset_select_props(ot, true);
-	prop = RNA_def_property(ot->srna, "factor", PROP_FLOAT, PROP_FACTOR);
-	RNA_def_property_ui_text(prop, "Factor", "");
-	RNA_def_property_range(prop, 0.0f, 1.0f);
-	RNA_def_property_float_default(prop, 1.0f);
-}
+	RNA_def_float(ot->srna, "factor", 0.5f, 0.0f, 1.0, "Factor", "", 0.0f, 1.0f);
+	RNA_def_int(ot->srna, "repeat", 1, 1, 10000, "Iterations", "", 1, 200);
 
+	RNA_def_float(ot->srna, "expand", 0.0f, -1.0f, 1.0, "Expand/Contract", "Expand/contract weights", -1.0f, 1.0f);
+	RNA_def_enum(ot->srna, "source", smooth_source_item, -1, "Source", "Vertices to mix with");
+}
 
 static int vertex_group_clean_exec(bContext *C, wmOperator *op)
 {

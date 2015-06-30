@@ -418,7 +418,7 @@ char *BLI_str_quoted_substrN(const char *__restrict str, const char *__restrict 
  * \param substr_new The text in the string to find and replace
  * \retval Returns the duplicated string
  */
-char *BLI_replacestrN(const char *__restrict str, const char *__restrict substr_old, const char *__restrict substr_new)
+char *BLI_str_replaceN(const char *__restrict str, const char *__restrict substr_old, const char *__restrict substr_new)
 {
 	DynStr *ds = NULL;
 	size_t len_old = strlen(substr_old);
@@ -475,6 +475,23 @@ char *BLI_replacestrN(const char *__restrict str, const char *__restrict substr_
 		return BLI_strdup(str);
 	}
 } 
+
+/**
+ * In-place replace every \a src to \a dst in \a str.
+ *
+ * \param str: The string to operate on.
+ * \param src: The character to replace.
+ * \param dst: The character to replace with.
+ */
+void BLI_str_replace_char(char *str, char src, char dst)
+{
+	while (*str) {
+		if (*str == src) {
+			*str = dst;
+		}
+		str++;
+	}
+}
 
 /**
  * Compare two strings without regard to case.
@@ -701,22 +718,6 @@ int BLI_strcmp_ignore_pad(const char *str1, const char *str2, const char pad)
 	}
 }
 
-void BLI_timestr(double _time, char *str, size_t maxlen)
-{
-	/* format 00:00:00.00 (hr:min:sec) string has to be 12 long */
-	int  hr = ( (int)  _time) / (60 * 60);
-	int min = (((int)  _time) / 60 ) % 60;
-	int sec = ( (int)  _time) % 60;
-	int hun = ( (int) (_time   * 100.0)) % 100;
-
-	if (hr) {
-		BLI_snprintf(str, maxlen, "%.2d:%.2d:%.2d.%.2d", hr, min, sec, hun);
-	}
-	else {
-		BLI_snprintf(str, maxlen, "%.2d:%.2d.%.2d", min, sec, hun);
-	}
-}
-
 /* determine the length of a fixed-size string */
 size_t BLI_strnlen(const char *s, const size_t maxlen)
 {
@@ -854,9 +855,9 @@ bool BLI_str_endswith(const char *__restrict str, const char *end)
  * \param suf Return value, set to next char after the first delimiter found (or NULL if none found).
  * \return The length of the prefix (i.e. *sep - str).
  */
-size_t BLI_str_partition(const char *str, const char delim[], char **sep, char **suf)
+size_t BLI_str_partition(const char *str, const char delim[], const char **sep, const char **suf)
 {
-	return BLI_str_partition_ex(str, delim, sep, suf, false);
+	return BLI_str_partition_ex(str, NULL, delim, sep, suf, false);
 }
 
 /**
@@ -868,30 +869,52 @@ size_t BLI_str_partition(const char *str, const char delim[], char **sep, char *
  * \param suf Return value, set to next char after the first delimiter found (or NULL if none found).
  * \return The length of the prefix (i.e. *sep - str).
  */
-size_t BLI_str_rpartition(const char *str, const char delim[], char **sep, char **suf)
+size_t BLI_str_rpartition(const char *str, const char delim[], const char **sep, const char **suf)
 {
-	return BLI_str_partition_ex(str, delim, sep, suf, true);
+	return BLI_str_partition_ex(str, NULL, delim, sep, suf, true);
 }
 
 /**
  * Find the first char matching one of the chars in \a delim, either from left or right.
  *
  * \param str The string to search within.
+ * \param end If non-NULL, the right delimiter of the string.
  * \param delim The set of delimiters to search for, as unicode values.
  * \param sep Return value, set to the first delimiter found (or NULL if none found).
  * \param suf Return value, set to next char after the first delimiter found (or NULL if none found).
  * \param from_right If %true, search from the right of \a str, else, search from its left.
  * \return The length of the prefix (i.e. *sep - str).
  */
-size_t BLI_str_partition_ex(const char *str, const char delim[], char **sep, char **suf, const bool from_right)
+size_t BLI_str_partition_ex(
+        const char *str, const char *end, const char delim[], const char **sep, const char **suf, const bool from_right)
 {
 	const char *d;
 	char *(*func)(const char *str, int c) = from_right ? strrchr : strchr;
 
+	BLI_assert(end == NULL || end > str);
+
 	*sep = *suf = NULL;
 
 	for (d = delim; *d != '\0'; ++d) {
-		char *tmp = func(str, *d);
+		const char *tmp;
+
+		if (end) {
+			if (from_right) {
+				for (tmp = end - 1; (tmp >= str) && (*tmp != *d); tmp--);
+				if (tmp	< str) {
+					tmp = NULL;
+				}
+			}
+			else {
+				tmp = func(str, *d);
+				if (tmp	>= end) {
+					tmp = NULL;
+				}
+			}
+		}
+		else {
+			tmp = func(str, *d);
+		}
 
 		if (tmp && (from_right ? (*sep < tmp) : (!*sep || *sep > tmp))) {
 			*sep = tmp;
@@ -903,7 +926,7 @@ size_t BLI_str_partition_ex(const char *str, const char delim[], char **sep, cha
 		return (size_t)(*sep - str);
 	}
 
-	return strlen(str);
+	return end ? (size_t)(end - str) : strlen(str);
 }
 
 /**

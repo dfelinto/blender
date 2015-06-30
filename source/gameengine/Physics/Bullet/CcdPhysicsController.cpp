@@ -697,6 +697,35 @@ CcdPhysicsController::~CcdPhysicsController()
 	}
 }
 
+void CcdPhysicsController::SimulationTick(float timestep)
+{
+	btRigidBody *body = GetRigidBody();
+	if (!body && body->isStaticObject())
+		return;
+
+	// Clamp linear velocity
+	if (m_cci.m_clamp_vel_max > 0.0f || m_cci.m_clamp_vel_min > 0.0f) {
+		const btVector3 &linvel = body->getLinearVelocity();
+		btScalar len = linvel.length();
+
+		if (m_cci.m_clamp_vel_max > 0.0f && len > m_cci.m_clamp_vel_max)
+			body->setLinearVelocity(linvel * (m_cci.m_clamp_vel_max / len));
+		else if (m_cci.m_clamp_vel_min > 0.0f && !btFuzzyZero(len) && len < m_cci.m_clamp_vel_min)
+			body->setLinearVelocity(linvel * (m_cci.m_clamp_vel_min / len));
+	}
+
+	// Clamp angular velocity
+	if (m_cci.m_clamp_angvel_max > 0.0f || m_cci.m_clamp_angvel_min > 0.0f) {
+		const btVector3 &angvel = body->getAngularVelocity();
+		btScalar len = angvel.length();
+
+		if (m_cci.m_clamp_angvel_max > 0.0f && len > m_cci.m_clamp_angvel_max)
+			body->setAngularVelocity(angvel * (m_cci.m_clamp_angvel_max / len));
+		else if (m_cci.m_clamp_angvel_min > 0.0f && !btFuzzyZero(len) && len < m_cci.m_clamp_angvel_min)
+			body->setAngularVelocity(angvel * (m_cci.m_clamp_angvel_min / len));
+	}
+}
+
 
 /**
  * SynchronizeMotionStates ynchronizes dynas, kinematic and deformable entities (and do 'late binding')
@@ -732,19 +761,6 @@ bool		CcdPhysicsController::SynchronizeMotionStates(float time)
 
 	if (body && !body->isStaticObject())
 	{
-		
-		if ((m_cci.m_clamp_vel_max>0.0) || (m_cci.m_clamp_vel_min>0.0))
-		{
-			const btVector3& linvel = body->getLinearVelocity();
-			float len= linvel.length();
-			
-			if ((m_cci.m_clamp_vel_max>0.0) && (len > m_cci.m_clamp_vel_max))
-					body->setLinearVelocity(linvel * (m_cci.m_clamp_vel_max / len));
-			
-			else if ((m_cci.m_clamp_vel_min>0.0) && btFuzzyZero(len)==0 && (len < m_cci.m_clamp_vel_min))
-				body->setLinearVelocity(linvel * (m_cci.m_clamp_vel_min / len));
-		}
-		
 		const btTransform& xform = body->getCenterOfMassTransform();
 		const btMatrix3x3& worldOri = xform.getBasis();
 		const btVector3& worldPos = xform.getOrigin();

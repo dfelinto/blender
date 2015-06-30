@@ -105,6 +105,7 @@ static void len_v3_ensure(float v[3], const float length);
 static void postInputRotation(TransInfo *t, float values[3]);
 
 static void ElementRotation(TransInfo *t, TransData *td, float mat[3][3], short around);
+static void initSnapSpatial(TransInfo *t, float r_snap[3]);
 
 
 /* Transform Callbacks */
@@ -239,6 +240,38 @@ void setTransformViewMatrices(TransInfo *t)
 	calculateCenter2D(t);
 }
 
+void setTransformViewAspect(TransInfo *t, float r_aspect[3])
+{
+	copy_v3_fl(r_aspect, 1.0f);
+
+	if (t->spacetype == SPACE_IMAGE) {
+		SpaceImage *sima = t->sa->spacedata.first;
+
+		if (t->options & CTX_MASK) {
+			ED_space_image_get_aspect(sima, &r_aspect[0], &r_aspect[1]);
+		}
+		else if (t->options & CTX_PAINT_CURVE) {
+			/* pass */
+		}
+		else {
+			ED_space_image_get_uv_aspect(sima, &r_aspect[0], &r_aspect[1]);
+		}
+	}
+	else if (t->spacetype == SPACE_CLIP) {
+		SpaceClip *sclip = t->sa->spacedata.first;
+
+		if (t->options & CTX_MOVIECLIP) {
+			ED_space_clip_get_aspect_dimension_aware(sclip, &r_aspect[0], &r_aspect[1]);
+		}
+		else {
+			ED_space_clip_get_aspect(sclip, &r_aspect[0], &r_aspect[1]);
+		}
+	}
+	else if (t->spacetype == SPACE_IPO) {
+		/* depemds on context of usage */
+	}
+}
+
 static void convertViewVec2D(View2D *v2d, float r_vec[3], int dx, int dy)
 {
 	float divx, divy;
@@ -292,25 +325,19 @@ void convertViewVec(TransInfo *t, float r_vec[3], int dx, int dy)
 		}
 	}
 	else if (t->spacetype == SPACE_IMAGE) {
-		float aspx, aspy;
-
 		if (t->options & CTX_MASK) {
 			convertViewVec2D_mask(t->view, r_vec, dx, dy);
-			ED_space_image_get_aspect(t->sa->spacedata.first, &aspx, &aspy);
 		}
 		else if (t->options & CTX_PAINT_CURVE) {
 			r_vec[0] = dx;
 			r_vec[1] = dy;
-
-			aspx = aspy = 1.0;
 		}
 		else {
 			convertViewVec2D(t->view, r_vec, dx, dy);
-			ED_space_image_get_uv_aspect(t->sa->spacedata.first, &aspx, &aspy);
 		}
 
-		r_vec[0] *= aspx;
-		r_vec[1] *= aspy;
+		r_vec[0] *= t->aspect[0];
+		r_vec[1] *= t->aspect[1];
 	}
 	else if (ELEM(t->spacetype, SPACE_IPO, SPACE_NLA)) {
 		convertViewVec2D(t->view, r_vec, dx, dy);
@@ -319,8 +346,6 @@ void convertViewVec(TransInfo *t, float r_vec[3], int dx, int dy)
 		convertViewVec2D(&t->ar->v2d, r_vec, dx, dy);
 	}
 	else if (t->spacetype == SPACE_CLIP) {
-		float aspx, aspy;
-
 		if (t->options & CTX_MASK) {
 			convertViewVec2D_mask(t->view, r_vec, dx, dy);
 		}
@@ -328,21 +353,8 @@ void convertViewVec(TransInfo *t, float r_vec[3], int dx, int dy)
 			convertViewVec2D(t->view, r_vec, dx, dy);
 		}
 
-		if (t->options & CTX_MOVIECLIP) {
-			ED_space_clip_get_aspect_dimension_aware(t->sa->spacedata.first, &aspx, &aspy);
-		}
-		else if (t->options & CTX_MASK) {
-			/* TODO - NOT WORKING, this isnt so bad since its only display aspect */
-			ED_space_clip_get_aspect(t->sa->spacedata.first, &aspx, &aspy);
-		}
-		else {
-			/* should never happen, quiet warnings */
-			BLI_assert(0);
-			aspx = aspy = 1.0f;
-		}
-
-		r_vec[0] *= aspx;
-		r_vec[1] *= aspy;
+		r_vec[0] *= t->aspect[0];
+		r_vec[1] *= t->aspect[1];
 	}
 	else {
 		printf("%s: called in an invalid context\n", __func__);
@@ -364,15 +376,10 @@ void projectIntViewEx(TransInfo *t, const float vec[3], int adr[2], const eV3DPr
 		SpaceImage *sima = t->sa->spacedata.first;
 
 		if (t->options & CTX_MASK) {
-			float aspx, aspy;
 			float v[2];
 
-			ED_space_image_get_aspect(sima, &aspx, &aspy);
-
-			copy_v2_v2(v, vec);
-
-			v[0] = v[0] / aspx;
-			v[1] = v[1] / aspy;
+			v[0] = vec[0] / t->aspect[0];
+			v[1] = vec[1] / t->aspect[1];
 
 			BKE_mask_coord_to_image(sima->image, &sima->iuser, v, v);
 
@@ -386,11 +393,10 @@ void projectIntViewEx(TransInfo *t, const float vec[3], int adr[2], const eV3DPr
 			adr[1] = vec[1];
 		}
 		else {
-			float aspx, aspy, v[2];
+			float v[2];
 
-			ED_space_image_get_uv_aspect(t->sa->spacedata.first, &aspx, &aspy);
-			v[0] = vec[0] / aspx;
-			v[1] = vec[1] / aspy;
+			v[0] = vec[0] / t->aspect[0];
+			v[1] = vec[1] / t->aspect[1];
 
 			UI_view2d_view_to_region(t->view, v[0], v[1], &adr[0], &adr[1]);
 		}
@@ -435,15 +441,10 @@ void projectIntViewEx(TransInfo *t, const float vec[3], int adr[2], const eV3DPr
 			MovieClip *clip = ED_space_clip_get_clip(sc);
 
 			if (clip) {
-				float aspx, aspy;
 				float v[2];
 
-				ED_space_clip_get_aspect(sc, &aspx, &aspy);
-
-				copy_v2_v2(v, vec);
-
-				v[0] = v[0] / aspx;
-				v[1] = v[1] / aspy;
+				v[0] = vec[0] / t->aspect[0];
+				v[1] = vec[1] / t->aspect[1];
 
 				BKE_mask_coord_to_movieclip(sc->clip, &sc->user, v, v);
 
@@ -458,13 +459,10 @@ void projectIntViewEx(TransInfo *t, const float vec[3], int adr[2], const eV3DPr
 			}
 		}
 		else if (t->options & CTX_MOVIECLIP) {
-			float v[2], aspx, aspy;
+			float v[2];
 
-			copy_v2_v2(v, vec);
-			ED_space_clip_get_aspect_dimension_aware(t->sa->spacedata.first, &aspx, &aspy);
-
-			v[0] /= aspx;
-			v[1] /= aspy;
+			v[0] = vec[0] / t->aspect[0];
+			v[1] = vec[1] / t->aspect[1];
 
 			UI_view2d_view_to_region(t->view, v[0], v[1], &adr[0], &adr[1]);
 		}
@@ -520,7 +518,6 @@ void applyAspectRatio(TransInfo *t, float vec[2])
 {
 	if ((t->spacetype == SPACE_IMAGE) && (t->mode == TFM_TRANSLATION) && !(t->options & CTX_PAINT_CURVE)) {
 		SpaceImage *sima = t->sa->spacedata.first;
-		float aspx, aspy;
 
 		if ((sima->flag & SI_COORDFLOATS) == 0) {
 			int width, height;
@@ -530,28 +527,13 @@ void applyAspectRatio(TransInfo *t, float vec[2])
 			vec[1] *= height;
 		}
 
-		ED_space_image_get_uv_aspect(sima, &aspx, &aspy);
-		vec[0] /= aspx;
-		vec[1] /= aspy;
+		vec[0] /= t->aspect[0];
+		vec[1] /= t->aspect[1];
 	}
 	else if ((t->spacetype == SPACE_CLIP) && (t->mode == TFM_TRANSLATION)) {
 		if (t->options & (CTX_MOVIECLIP | CTX_MASK)) {
-			SpaceClip *sc = t->sa->spacedata.first;
-			float aspx, aspy;
-
-
-			if (t->options & CTX_MOVIECLIP) {
-				ED_space_clip_get_aspect_dimension_aware(sc, &aspx, &aspy);
-
-				vec[0] /= aspx;
-				vec[1] /= aspy;
-			}
-			else if (t->options & CTX_MASK) {
-				ED_space_clip_get_aspect(sc, &aspx, &aspy);
-
-				vec[0] /= aspx;
-				vec[1] /= aspy;
-			}
+			vec[0] /= t->aspect[0];
+			vec[1] /= t->aspect[1];
 		}
 	}
 }
@@ -560,7 +542,6 @@ void removeAspectRatio(TransInfo *t, float vec[2])
 {
 	if ((t->spacetype == SPACE_IMAGE) && (t->mode == TFM_TRANSLATION)) {
 		SpaceImage *sima = t->sa->spacedata.first;
-		float aspx, aspy;
 
 		if ((sima->flag & SI_COORDFLOATS) == 0) {
 			int width, height;
@@ -570,24 +551,13 @@ void removeAspectRatio(TransInfo *t, float vec[2])
 			vec[1] /= height;
 		}
 
-		ED_space_image_get_uv_aspect(sima, &aspx, &aspy);
-		vec[0] *= aspx;
-		vec[1] *= aspy;
+		vec[0] *= t->aspect[0];
+		vec[1] *= t->aspect[1];
 	}
 	else if ((t->spacetype == SPACE_CLIP) && (t->mode == TFM_TRANSLATION)) {
 		if (t->options & (CTX_MOVIECLIP | CTX_MASK)) {
-			SpaceClip *sc = t->sa->spacedata.first;
-			float aspx = 1.0f, aspy = 1.0f;
-
-			if (t->options & CTX_MOVIECLIP) {
-				ED_space_clip_get_aspect_dimension_aware(sc, &aspx, &aspy);
-			}
-			else if (t->options & CTX_MASK) {
-				ED_space_clip_get_aspect(sc, &aspx, &aspy);
-			}
-
-			vec[0] *= aspx;
-			vec[1] *= aspy;
+			vec[0] *= t->aspect[0];
+			vec[1] *= t->aspect[1];
 		}
 	}
 }
@@ -1579,7 +1549,7 @@ bool calculateTransformCenter(bContext *C, int centerMode, float cent3d[3], floa
 
 		if (cent3d) {
 			// Copy center from constraint center. Transform center can be local
-			copy_v3_v3(cent3d, t->con.center);
+			copy_v3_v3(cent3d, t->center_global);
 		}
 	}
 
@@ -2161,6 +2131,8 @@ bool initTransform(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
 
 	initSnapping(t, op); // Initialize snapping data AFTER mode flags
 
+	initSnapSpatial(t, t->snap_spatial);
+
 	/* EVIL! posemode code can switch translation to rotate when 1 bone is selected. will be removed (ton) */
 	/* EVIL2: we gave as argument also texture space context bit... was cleared */
 	/* EVIL3: extend mode for animation editors also switches modes... but is best way to avoid duplicate code */
@@ -2299,7 +2271,6 @@ bool initTransform(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
 		postTrans(C, t);
 		return 0;
 	}
-
 
 	/* overwrite initial values if operator supplied a non-null vector */
 	if ((prop = RNA_struct_find_property(op->ptr, "value")) && RNA_property_is_set(op->ptr, prop)) {
@@ -2856,6 +2827,7 @@ static void initBend(TransInfo *t)
 
 	//copy_v3_v3(t->center, ED_view3d_cursor3d_get(t->scene, t->view));
 	calculateCenterCursor(t, t->center);
+	calculateCenterGlobal(t);
 
 	t->val = 0.0f;
 
@@ -4111,6 +4083,38 @@ static void applyTrackball(TransInfo *t, const int UNUSED(mval[2]))
 /* -------------------------------------------------------------------- */
 /* Transform (Translation) */
 
+static void initSnapSpatial(TransInfo *t, float r_snap[3])
+{
+	if (t->spacetype == SPACE_VIEW3D) {
+		RegionView3D *rv3d = t->ar->regiondata;
+
+		if (rv3d) {
+			r_snap[0] = 0.0f;
+			r_snap[1] = rv3d->gridview * 1.0f;
+			r_snap[2] = r_snap[1] * 0.1f;
+		}
+	}
+	else if (ELEM(t->spacetype, SPACE_IMAGE, SPACE_CLIP)) {
+		r_snap[0] = 0.0f;
+		r_snap[1] = 0.125f;
+		r_snap[2] = 0.0625f;
+	}
+	else if (t->spacetype == SPACE_NODE) {
+		r_snap[0] = 0.0f;
+		r_snap[1] = ED_node_grid_size();
+		r_snap[2] = ED_node_grid_size();
+	}
+	else if (t->spacetype == SPACE_IPO) {
+		r_snap[0] = 0.0f;
+		r_snap[1] = 1.0;
+		r_snap[2] = 0.1f;
+	}
+	else {
+		r_snap[0] = 0.0f;
+		r_snap[1] = r_snap[2] = 1.0f;
+	}
+}
+
 /** \name Transform Translation
  * \{ */
 
@@ -4133,34 +4137,7 @@ static void initTranslation(TransInfo *t)
 	t->num.flag = 0;
 	t->num.idx_max = t->idx_max;
 
-	if (t->spacetype == SPACE_VIEW3D) {
-		RegionView3D *rv3d = t->ar->regiondata;
-
-		if (rv3d) {
-			t->snap[0] = 0.0f;
-			t->snap[1] = rv3d->gridview * 1.0f;
-			t->snap[2] = t->snap[1] * 0.1f;
-		}
-	}
-	else if (ELEM(t->spacetype, SPACE_IMAGE, SPACE_CLIP)) {
-		t->snap[0] = 0.0f;
-		t->snap[1] = 0.125f;
-		t->snap[2] = 0.0625f;
-	}
-	else if (t->spacetype == SPACE_NODE) {
-		t->snap[0] = 0.0f;
-		t->snap[1] = ED_node_grid_size() * NODE_GRID_STEPS;
-		t->snap[2] = ED_node_grid_size();
-	}
-	else if (t->spacetype == SPACE_IPO) {
-		t->snap[0] = 0.0f;
-		t->snap[1] = 1.0;
-		t->snap[2] = 0.1f;
-	}
-	else {
-		t->snap[0] = 0.0f;
-		t->snap[1] = t->snap[2] = 1.0f;
-	}
+	copy_v3_v3(t->snap, t->snap_spatial);
 
 	copy_v3_fl(t->num.val_inc, t->snap[1]);
 	t->num.unit_sys = t->scene->unit.system;
@@ -5324,12 +5301,22 @@ static void slide_origdata_create_data_vert(
 	loop_weights = BLI_array_alloca(loop_weights, l_num);
 	for (j = 0; j < l_num; j++) {
 		BMLoop *l = BM_iter_step(&liter);
+		BMLoop *l_prev, *l_next;
 		void **val_p;
 		if (!BLI_ghash_ensure_p(sod->origfaces, l->f, &val_p)) {
 			BMFace *f_copy = BM_face_copy(sod->bm_origfaces, bm, l->f, true, true);
 			*val_p = f_copy;
 		}
-		loop_weights[j] = BM_loop_calc_face_angle(l);
+
+		if ((l_prev = BM_loop_find_prev_nodouble(l, l->next, FLT_EPSILON)) &&
+		    (l_next = BM_loop_find_next_nodouble(l, l_prev,  FLT_EPSILON)))
+		{
+			loop_weights[j] = angle_v3v3v3(l_prev->v->co, l->v->co, l_next->v->co);
+		}
+		else {
+			loop_weights[j] = 0.0f;
+		}
+
 	}
 
 	/* store cd_loop_groups */
@@ -5397,6 +5384,13 @@ static void slide_origdata_interp_data_vert(
 	int j, l_num;
 	float *loop_weights;
 	const bool do_loop_weight = (len_squared_v3v3(sv->v->co, sv->co_orig_3d) > FLT_EPSILON);
+	const float *v_proj_axis = sv->v->no;
+	/* original (l->prev, l, l->next) projections for each loop ('l' remains unchanged) */
+	float v_proj[3][3];
+
+	if (do_loop_weight) {
+		project_plane_v3_v3v3(v_proj[1], sv->co_orig_3d, v_proj_axis);
+	}
 
 	// BM_ITER_ELEM (l, &liter, sv->v, BM_LOOPS_OF_VERT) {
 	BM_iter_init(&liter, bm, BM_LOOPS_OF_VERT, sv->v);
@@ -5417,7 +5411,7 @@ static void slide_origdata_interp_data_vert(
 
 		/* weight the loop */
 		if (do_loop_weight) {
-			const float eps = 0.00001f;
+			const float eps = 1.0e-8f;
 			const BMLoop *l_prev = l->prev;
 			const BMLoop *l_next = l->next;
 			const float *co_prev = slide_origdata_orig_vert_co(sod, l_prev->v);
@@ -5425,24 +5419,32 @@ static void slide_origdata_interp_data_vert(
 			bool co_prev_ok;
 			bool co_next_ok;
 
+
 			/* In the unlikely case that we're next to a zero length edge - walk around the to the next.
 			 * Since we only need to check if the vertex is in this corner,
 			 * its not important _which_ loop - as long as its not overlapping 'sv->co_orig_3d', see: T45096. */
-			while (UNLIKELY(((co_prev_ok = (len_squared_v3v3(sv->co_orig_3d, co_prev) > eps)) == false) &&
+			project_plane_v3_v3v3(v_proj[0], co_prev, v_proj_axis);
+			while (UNLIKELY(((co_prev_ok = (len_squared_v3v3(v_proj[1], v_proj[0]) > eps)) == false) &&
 			                ((l_prev = l_prev->prev) != l->next)))
 			{
 				co_prev = slide_origdata_orig_vert_co(sod, l_prev->v);
+				project_plane_v3_v3v3(v_proj[0], co_prev, v_proj_axis);
 			}
-			while (UNLIKELY(((co_next_ok = (len_squared_v3v3(sv->co_orig_3d, co_next) > eps)) == false) &&
+			project_plane_v3_v3v3(v_proj[2], co_next, v_proj_axis);
+			while (UNLIKELY(((co_next_ok = (len_squared_v3v3(v_proj[1], v_proj[2]) > eps)) == false) &&
 			                ((l_next = l_next->next) != l->prev)))
 			{
 				co_next = slide_origdata_orig_vert_co(sod, l_next->v);
+				project_plane_v3_v3v3(v_proj[2], co_next, v_proj_axis);
 			}
 
-			if (co_prev_ok && co_next_ok && (area_squared_tri_v3(co_prev, sv->co_orig_3d, co_next) > eps)) {
-				const float dist = dist_signed_squared_to_corner_v3v3v3(
-				        sv->v->co, co_prev, sv->co_orig_3d, co_next, f_copy->no);
+			if (co_prev_ok && co_next_ok) {
+				const float dist = dist_signed_squared_to_corner_v3v3v3(sv->v->co, UNPACK3(v_proj), v_proj_axis);
+
 				loop_weights[j] = (dist >= 0.0f) ? 1.0f : ((dist <= -eps) ? 0.0f : (1.0f + (dist / eps)));
+				if (UNLIKELY(!isfinite(loop_weights[j]))) {
+					loop_weights[j] = 0.0f;
+				}
 			}
 			else {
 				loop_weights[j] = 0.0f;

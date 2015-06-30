@@ -4271,6 +4271,8 @@ static int edbm_delete_edgeloop_exec(bContext *C, wmOperator *op)
 
 	BM_mesh_elem_hflag_enable_test(em->bm, BM_FACE, BM_ELEM_SELECT, true, false, BM_ELEM_TAG);
 
+	EDBM_selectmode_flush_ex(em, SCE_SELECT_VERTEX);
+
 	EDBM_update_generic(em, true, true);
 
 	return OPERATOR_FINISHED;

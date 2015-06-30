@@ -395,7 +395,6 @@ option(WITH_BOOST					"Enable features depending on boost" ON)
 
 # Unit testsing
 option(WITH_GTESTS "Enable GTest unit testing" OFF)
-option(WITH_TESTS_PERFORMANCE "Enable performance tests" OFF)
 
 
 # Documentation
@@ -1116,12 +1115,12 @@ if(UNIX AND NOT APPLE)
 		execute_process(
 		        COMMAND ${CMAKE_C_COMPILER} -fuse-ld=gold -Wl,--version
 		        ERROR_QUIET OUTPUT_VARIABLE LD_VERSION)
-		if ("${LD_VERSION}" MATCHES "GNU gold")
+		if("${LD_VERSION}" MATCHES "GNU gold")
 			set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fuse-ld=gold")
 			set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fuse-ld=gold")
-		else ()
-			message(INFO "GNU gold linker isn't available, using the default system linker.")
-		endif ()
+		else()
+			message(STATUS "GNU gold linker isn't available, using the default system linker.")
+		endif()
 		unset(LD_VERSION)
 
 	# CLang is the same as GCC for now.

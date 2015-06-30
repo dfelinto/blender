@@ -892,6 +892,15 @@ void DepsgraphRelationBuilder::build_driver(ID *id, FCurve *fcu)
 		}
 		DRIVER_TARGETS_LOOPER_END
 	}
+
+	/* It's quite tricky to detect if the driver actually depends on time or not,
+	 * so for now we'll be quite conservative here about optimization and consider
+	 * all python drivers to be depending on time.
+	 */
+	if (driver->type == DRIVER_TYPE_PYTHON) {
+		TimeSourceKey time_src_key;
+		add_relation(time_src_key, driver_key, DEPSREL_TYPE_TIME, "[TimeSrc -> Driver]");
+	}
 }
 
 void DepsgraphRelationBuilder::build_world(World *world)
@@ -1182,7 +1191,7 @@ void DepsgraphRelationBuilder::build_ik_pose(Object *ob,
 	/* Pole Target */
 	// XXX: this should get handled as part of the constraint code
 	if (data->poletar != NULL) {
-		if ((data->tar->type == OB_ARMATURE) && (data->subtarget[0])) {
+		if ((data->poletar->type == OB_ARMATURE) && (data->polesubtarget[0])) {
 			// XXX: same armature issues - ready vs done?
 			ComponentKey target_key(&data->poletar->id, DEPSNODE_TYPE_BONE, data->subtarget);
 			add_relation(target_key, solver_key, DEPSREL_TYPE_TRANSFORM, con->name);
@@ -1681,6 +1690,10 @@ void DepsgraphRelationBuilder::build_obdata_geom(Main *bmain, Scene *scene, Obje
 		ComponentKey parameters_key(obdata, DEPSNODE_TYPE_PARAMETERS);
 		add_relation(animation_key, parameters_key,
 		             DEPSREL_TYPE_COMPONENT_ORDER, "Geom Parameters");
+		/* Evaluation usually depends on animation.
+		 * TODO(sergey): Need to re-hook it after granular update is implemented..
+		 */
+		add_relation(animation_key, obdata_geom_eval_key, DEPSREL_TYPE_GEOMETRY_EVAL, "Animation");
 	}
 }
 
