@@ -38,6 +38,7 @@
  * - pixel_array: list of primitive ids and barycentric coordinates to bake(Python object, see bake_pixel)
  * - num_pixels: size of pixel_array, number of pixels to bake (int)
  * - depth: depth of pixels to return (int, assuming always 4 now)
+ * - matrix: transformation matrix relative to the object (for dupli objects), for regular objects use an identity matrix or NULL
  * - result: array to be populated by the engine (float array, PyLong_AsVoidPtr)
  *
  * \note Normals are expected to be in World Space and in the +X, +Y, +Z orientation.
