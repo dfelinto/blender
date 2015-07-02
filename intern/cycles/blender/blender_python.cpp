@@ -211,7 +211,7 @@ static PyObject *bake_func(PyObject * /*self*/, PyObject *args)
 
 	python_thread_state_save(&session->python_thread_state);
 
-	session->bake(b_object, pass_type, object_id, b_bake_pixel, (size_t)num_pixels, depth, *((BL::Array<float, 16>*)b_matrix), (float *)b_result);
+	session->bake(b_object, pass_type, object_id, b_bake_pixel, (size_t)num_pixels, depth, b_matrix ? (BL::Array<float, 16>*)b_matrix : NULL, (float *)b_result);
 
 	python_thread_state_restore(&session->python_thread_state);
 

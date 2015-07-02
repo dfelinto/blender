@@ -467,7 +467,7 @@ bool RE_bake_engine(
         Render *re, Object *object,
         const int object_id, const BakePixel pixel_array[],
         const size_t num_pixels, const int depth,
-        const ScenePassType pass_type, const float matrix[4][4], float result[])
+        const ScenePassType pass_type, const float *matrix, float result[])
 {
 	RenderEngineType *type = RE_engines_find(re->r.engine);
 	RenderEngine *engine;

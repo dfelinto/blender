@@ -184,7 +184,7 @@ bool BakeManager::bake(Device *device, DeviceScene *dscene, Scene *scene, Progre
 		task.shader_input = d_input.device_pointer;
 		task.shader_output = d_output.device_pointer;
 		task.shader_eval_type = shader_type;
-		task.tfm = *tfm;
+		task.tfm = tfm;
 		task.shader_x = 0;
 		task.offset = shader_offset;
 		task.shader_w = d_output.size();

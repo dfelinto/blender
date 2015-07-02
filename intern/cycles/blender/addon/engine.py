@@ -63,7 +63,7 @@ def bake(engine, obj, pass_type, object_id, pixel_array, num_pixels, depth, matr
     import _cycles
     session = getattr(engine, "session", None)
     if session is not None:
-        _cycles.bake(engine.session, obj.as_pointer(), pass_type, object_id, pixel_array.as_pointer(), num_pixels, depth, matrix.as_pointer(), result.as_pointer())
+        _cycles.bake(engine.session, obj.as_pointer(), pass_type, object_id, pixel_array.as_pointer(), num_pixels, depth, matrix.as_pointer() if matrix else None, result.as_pointer())
 
 
 def reset(engine, data, scene):

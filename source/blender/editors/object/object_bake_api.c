@@ -603,6 +603,7 @@ static void bake_highpoly_setup(
 	/* initialize highpoly_data */
 	highpoly->ob = ob;
 	highpoly->name = name;
+	highpoly->is_dupli_object = is_dupli;
 
 	if (!is_dupli) {
 		highpoly->ob->restrictflag &= ~OB_RESTRICT_RENDER;
@@ -927,7 +928,9 @@ static int bake(
 		/* the baking itself */
 		for (i = 0; i < tot_highpoly; i++) {
 			ok = RE_bake_engine(re, highpoly[i].ob, i, pixel_array_high,
-			                    num_pixels, depth, pass_type, highpoly[i].mat, result);
+			                    num_pixels, depth, pass_type,
+			                    highpoly[i].is_dupli_object ? (float *)highpoly[i].mat : NULL,
+			                    result);
 			if (!ok) {
 				BKE_reportf(reports, RPT_ERROR, "Error baking from object \"%s\"", highpoly[i].name + 2);
 				goto cage_cleanup;
@@ -953,9 +956,7 @@ cage_cleanup:
 		ob_low->restrictflag &= ~OB_RESTRICT_RENDER;
 
 		if (RE_bake_has_engine(re)) {
-			float matrix[4][4];
-			unit_m4(matrix);
-			ok = RE_bake_engine(re, ob_low, 0, pixel_array_low, num_pixels, depth, pass_type, matrix, result);
+			ok = RE_bake_engine(re, ob_low, 0, pixel_array_low, num_pixels, depth, pass_type, NULL, result);
 		}
 		else {
 			BKE_report(reports, RPT_ERROR, "Current render engine does not support baking");

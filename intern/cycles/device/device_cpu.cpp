@@ -365,7 +365,7 @@ public:
 		for(int sample = 0; sample < task.num_samples; sample++) {
 			for(int x = task.shader_x; x < task.shader_x + task.shader_w; x++)
 				shader_kernel(&kg, (uint4*)task.shader_input, (float4*)task.shader_output,
-					task.shader_eval_type, &task.tfm, x, task.offset, sample);
+					task.shader_eval_type, task.tfm, x, task.offset, sample);
 
 			if(task.get_cancel() || task_pool.canceled())
 				break;

@@ -183,7 +183,9 @@ static void engine_bake(RenderEngine *engine, struct Scene *scene,
 	RNA_parameter_set_lookup(&list, "pixel_array", &pixel_array);
 	RNA_parameter_set_lookup(&list, "num_pixels", &num_pixels);
 	RNA_parameter_set_lookup(&list, "depth", &depth);
-	RNA_parameter_set_lookup(&list, "matrix", &matrix);
+	if (matrix) {
+		RNA_parameter_set_lookup(&list, "matrix", &matrix);
+	}
 	RNA_parameter_set_lookup(&list, "result", &result);
 	engine->type->ext.call(NULL, &ptr, func, &list);
 

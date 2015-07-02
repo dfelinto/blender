@@ -49,7 +49,7 @@ public:
 	device_ptr shader_input;
 	device_ptr shader_output;
 	int shader_eval_type;
-	Transform tfm;
+	Transform *tfm;
 	int shader_x, shader_w;
 
 	DeviceTask(Type type = PATH_TRACE);

@@ -68,6 +68,7 @@ typedef struct BakeHighPolyData {
 	const char *name; /* for error messages */
 	int mesh_lookup_id;
 	bool is_flip_object;
+	bool is_dupli_object;
 	float obmat[4][4];
 	float imat[4][4];
 	float mat[4][4];
@@ -78,7 +79,7 @@ bool RE_bake_has_engine(struct Render *re);
 
 bool RE_bake_engine(
         struct Render *re, struct Object *object, const int object_id, const BakePixel pixel_array[],
-        const size_t num_pixels, const int depth, const ScenePassType pass_type, const float matrix[4][4], float result[]);
+        const size_t num_pixels, const int depth, const ScenePassType pass_type, const float *matrix, float result[]);
 
 /* bake.c */
 int RE_pass_depth(const ScenePassType pass_type);
