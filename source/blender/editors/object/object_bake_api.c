@@ -878,7 +878,7 @@ static int bake(
 						bake_highpoly_setup(bmain, scene, &highpoly[i], meshes_lookup_arr, dob->ob, obmat, ob_iter->id.name, true, reports);
 
 						/* calculate the baking matrix (from the original object to the dupli) */
-						mul_m4_m4m4(highpoly[i].imat, imat, dob->mat);
+						mul_m4_m4m4(highpoly[i].mat, imat, dob->mat);
 
 						i++;
 					}
