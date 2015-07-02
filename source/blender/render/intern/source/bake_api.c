@@ -329,7 +329,7 @@ static bool cast_ray_highpoly(
 	}
 
 	if (hit_mesh != -1) {
-		calc_barycentric_from_point(triangles[hit_mesh], hits[hit_mesh].index, hits[hit_mesh].co, &primitive_id, uv);
+		calc_barycentric_from_point(triangles[highpoly[hit_mesh].mesh_lookup_id], hits[hit_mesh].index, hits[hit_mesh].co, &primitive_id, uv);
 		pixel_array[pixel_id].primitive_id = primitive_id;
 		pixel_array[pixel_id].object_id = hit_mesh;
 		copy_v2_v2(pixel_array[pixel_id].uv, uv);
