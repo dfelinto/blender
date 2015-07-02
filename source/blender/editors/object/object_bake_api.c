@@ -868,14 +868,11 @@ static int bake(
 				DupliObject *dob;
 				float imat[4][4];
 				invert_m4_m4(imat, ob_iter->obmat);
+
 				for (dob = dupli_list_arr[j]->first; dob; dob = dob->next) {
 					if (dob->ob->type == OB_MESH) {
-						float obmat[4][4];
-
-						/* calculate the corresponding global matrix */
-						mul_m4_m4m4(obmat, ob_iter->obmat, dob->mat);
-
-						bake_highpoly_setup(bmain, scene, &highpoly[i], meshes_lookup_arr, dob->ob, obmat, ob_iter->id.name, true, reports);
+						/* note: dob->mat is already in world space, no need to multiply by the parent */
+						bake_highpoly_setup(bmain, scene, &highpoly[i], meshes_lookup_arr, dob->ob, dob->mat, ob_iter->id.name, true, reports);
 
 						/* calculate the baking matrix (from the original object to the dupli) */
 						mul_m4_m4m4(highpoly[i].mat, imat, dob->mat);
