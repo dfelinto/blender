@@ -425,9 +425,30 @@ BoundBox Camera::viewplane_bounds_get()
 	BoundBox bounds = BoundBox::empty;
 
 	if(type == CAMERA_PANORAMA) {
-		bounds.grow(make_float3(cameratoworld.w.x,
-		                        cameratoworld.w.y,
-		                        cameratoworld.w.z));
+		if(use_spherical_stereo == false){
+			bounds.grow(make_float3(cameratoworld.w.x,
+			                        cameratoworld.w.y,
+			                        cameratoworld.w.z));
+		}
+		else {
+			float half_eye_distance = interocular_distance * 0.5f;
+
+			bounds.grow(make_float3(cameratoworld.w.x + half_eye_distance,
+			                        cameratoworld.w.y,
+			                        cameratoworld.w.z));
+
+			bounds.grow(make_float3(cameratoworld.w.x,
+			                        cameratoworld.w.y + half_eye_distance,
+			                        cameratoworld.w.z));
+
+			bounds.grow(make_float3(cameratoworld.w.x - half_eye_distance,
+			                        cameratoworld.w.y,
+			                        cameratoworld.w.z));
+
+			bounds.grow(make_float3(cameratoworld.w.x,
+			                        cameratoworld.w.y - half_eye_distance,
+			                        cameratoworld.w.z));
+		}
 	}
 	else {
 		bounds.grow(transform_raster_to_world(0.0f, 0.0f));
