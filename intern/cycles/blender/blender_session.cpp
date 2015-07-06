@@ -551,9 +551,6 @@ void BlenderSession::bake(BL::Object b_object, const string& pass_type, const in
 	int tri_offset = 0;
 	Transform tfm;
 
-	if (matrix)
-		tfm = get_transform(*matrix);
-
 	/* Set baking flag in advance, so kernel loading can check if we need
 	 * any baking capabilities.
 	 */
@@ -599,11 +596,22 @@ void BlenderSession::bake(BL::Object b_object, const string& pass_type, const in
 	session->reset(buffer_params, session_params.samples);
 	session->update_scene();
 
+	/* for duplicated objects, we get the object id by the object name and its transformation matrix */
+	if(matrix)
+		tfm = get_transform(*matrix);
+
 	/* find object index. todo: is arbitrary - copied from mesh_displace.cpp */
 	for(size_t i = 0; i < scene->objects.size(); i++) {
-		if(strcmp(scene->objects[i]->name.c_str(), b_object.name().c_str()) == 0) {
+		Object *b_ob = scene->objects[i];
+
+		if(strcmp(b_ob->name.c_str(), b_object.name().c_str()) == 0) {
+
+			/* duplicated object of the same type but not the right copy of it */
+			if(matrix && tfm != b_ob->tfm)
+				continue;
+
 			object_index = i;
-			tri_offset = scene->objects[i]->mesh->tri_offset;
+			tri_offset = b_ob->mesh->tri_offset;
 			break;
 		}
 	}
