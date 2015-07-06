@@ -4422,7 +4422,7 @@ static void applyShrinkFatten(TransInfo *t, const int UNUSED(mval[2]))
 	if (t->keymap) {
 		wmKeyMapItem *kmi = WM_modalkeymap_find_propvalue(t->keymap, TFM_MODAL_RESIZE);
 		if (kmi) {
-			ofs += WM_keymap_item_to_string(kmi, str + ofs, MAX_INFO_LEN - ofs);
+			ofs += WM_keymap_item_to_string(kmi, false, MAX_INFO_LEN - ofs, str + ofs);
 		}
 	}
 	BLI_snprintf(str + ofs, MAX_INFO_LEN - ofs, IFACE_(" or Alt) Even Thickness %s"),
@@ -6918,13 +6918,13 @@ static void calcVertSlideMouseActiveEdges(struct TransInfo *t, const int mval[2]
 	TransDataVertSlideVert *sv;
 	int i;
 
+	/* note: we could save a matrix-multiply for each vertex
+	 * by finding the closest edge in local-space.
+	 * However this skews the outcome with non-uniform-scale. */
+
 	/* first get the direction of the original mouse position */
 	sub_v2_v2v2(dir, imval_fl, mval_fl);
 	ED_view3d_win_to_delta(t->ar, dir, dir, t->zfac);
-
-	invert_m4_m4(t->obedit->imat, t->obedit->obmat);
-	mul_mat3_m4_v3(t->obedit->imat, dir);
-
 	normalize_v3(dir);
 
 	for (i = 0, sv = sld->sv; i < sld->totsv; i++, sv++) {
@@ -6938,6 +6938,7 @@ static void calcVertSlideMouseActiveEdges(struct TransInfo *t, const int mval[2]
 				float dir_dot;
 
 				sub_v3_v3v3(tdir, sv->co_orig_3d, sv->co_link_orig_3d[j]);
+				mul_mat3_m4_v3(t->obedit->obmat, tdir);
 				project_plane_v3_v3v3(tdir, tdir, t->viewinv[2]);
 
 				normalize_v3(tdir);
@@ -7272,12 +7273,16 @@ static void drawVertSlide(TransInfo *t)
 			if ((t->mval[0] != t->imval[0]) ||
 			    (t->mval[1] != t->imval[1]))
 			{
-				float zfac = ED_view3d_calc_zfac(t->ar->regiondata, curr_sv->co_orig_3d, NULL);
+				float zfac;
 				float mval_ofs[2];
+				float co_orig_3d[3];
 				float co_dest_3d[3];
 
 				mval_ofs[0] = t->mval[0] - t->imval[0];
 				mval_ofs[1] = t->mval[1] - t->imval[1];
+
+				mul_v3_m4v3(co_orig_3d, t->obedit->obmat, curr_sv->co_orig_3d);
+				zfac = ED_view3d_calc_zfac(t->ar->regiondata, co_orig_3d, NULL);
 
 				ED_view3d_win_to_delta(t->ar, mval_ofs, co_dest_3d, zfac);
 
@@ -7742,7 +7747,7 @@ static void headerSeqSlide(TransInfo *t, const float val[2], char str[MAX_INFO_L
 	if (t->keymap) {
 		wmKeyMapItem *kmi = WM_modalkeymap_find_propvalue(t->keymap, TFM_MODAL_TRANSLATE);
 		if (kmi) {
-			ofs += WM_keymap_item_to_string(kmi, str + ofs, MAX_INFO_LEN - ofs);
+			ofs += WM_keymap_item_to_string(kmi, false, MAX_INFO_LEN - ofs, str + ofs);
 		}
 	}
 	ofs += BLI_snprintf(str + ofs, MAX_INFO_LEN - ofs, IFACE_(" or Alt) Expand to fit %s"),
