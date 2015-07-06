@@ -71,7 +71,6 @@ typedef struct BakeHighPolyData {
 	bool is_dupli_object;
 	float obmat[4][4];
 	float imat[4][4];
-	float mat[4][4];
 } BakeHighPolyData;
 
 /* external_engine.c */
