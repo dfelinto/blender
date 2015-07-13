@@ -687,7 +687,7 @@ static PyObject *DeckLink_getRight(DeckLink *self, PyObject *value, void *closur
 
 
 // set source object
-int DeckLink_setRight(DeckLink *self, PyObject *value, void *closure)
+static int DeckLink_setRight(DeckLink *self, PyObject *value, void *closure)
 {
 	// check new value
 	if (value == NULL || !pyImageTypes.in(Py_TYPE(value)))
