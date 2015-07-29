@@ -57,25 +57,25 @@ static int mathutils_array_parse_fast(float *array,
                                       const char *error_prefix)
 {
 	PyObject *item;
+	PyObject **value_fast_items = PySequence_Fast_ITEMS(value_fast);
 
 	int i;
 
 	i = size;
 	do {
 		i--;
-		if (((array[i] = PyFloat_AsDouble((item = PySequence_Fast_GET_ITEM(value_fast, i)))) == -1.0f) &&
+		if (((array[i] = PyFloat_AsDouble((item = value_fast_items[i]))) == -1.0f) &&
 		    PyErr_Occurred())
 		{
 			PyErr_Format(PyExc_TypeError,
 			             "%.200s: sequence index %d expected a number, "
 			             "found '%.200s' type, ",
 			             error_prefix, i, Py_TYPE(item)->tp_name);
-			Py_DECREF(value_fast);
-			return -1;
+			size = -1;
+			break;
 		}
 	} while (i);
 
-	Py_XDECREF(value_fast);
 	return size;
 }
 
@@ -182,6 +182,7 @@ int mathutils_array_parse(float *array, int array_min, int array_max, PyObject *
 		}
 
 		size = mathutils_array_parse_fast(array, size, value_fast, error_prefix);
+		Py_DECREF(value_fast);
 	}
 
 	if (size != -1) {
@@ -239,6 +240,7 @@ int mathutils_array_parse_alloc(float **array, int array_min, PyObject *value, c
 		size = PySequence_Fast_GET_SIZE(value_fast);
 
 		if (size < array_min) {
+			Py_DECREF(value_fast);
 			PyErr_Format(PyExc_ValueError,
 			             "%.200s: sequence size is %d, expected > %d",
 			             error_prefix, size, array_min);
@@ -248,6 +250,7 @@ int mathutils_array_parse_alloc(float **array, int array_min, PyObject *value, c
 		*array = PyMem_Malloc(size * sizeof(float));
 
 		ret = mathutils_array_parse_fast(*array, size, value_fast, error_prefix);
+		Py_DECREF(value_fast);
 
 		if (ret == -1) {
 			PyMem_Free(*array);
@@ -260,7 +263,7 @@ int mathutils_array_parse_alloc(float **array, int array_min, PyObject *value, c
 /* parse an array of vectors */
 int mathutils_array_parse_alloc_v(float **array, int array_dim, PyObject *value, const char *error_prefix)
 {
-	PyObject *value_fast = NULL;
+	PyObject *value_fast;
 	const int array_dim_flag = array_dim;
 	int i, size;
 
@@ -273,6 +276,7 @@ int mathutils_array_parse_alloc_v(float **array, int array_dim, PyObject *value,
 	size = PySequence_Fast_GET_SIZE(value_fast);
 
 	if (size != 0) {
+		PyObject **value_fast_items = PySequence_Fast_ITEMS(value_fast);
 		float *fp;
 
 		array_dim &= ~MU_ARRAY_FLAGS;
@@ -280,7 +284,7 @@ int mathutils_array_parse_alloc_v(float **array, int array_dim, PyObject *value,
 		fp = *array = PyMem_Malloc(size * array_dim * sizeof(float));
 
 		for (i = 0; i < size; i++, fp += array_dim) {
-			PyObject *item = PySequence_Fast_GET_ITEM(value, i);
+			PyObject *item = value_fast_items[i];
 
 			if (mathutils_array_parse(fp, array_dim, array_dim_flag, item, error_prefix) == -1) {
 				PyMem_Free(*array);
@@ -596,6 +600,7 @@ static struct PyModuleDef M_Mathutils_module_def = {
 #include "mathutils_geometry.h"
 #include "mathutils_interpolate.h"
 #ifndef MATH_STANDALONE
+#  include "mathutils_bvhtree.h"
 #  include "mathutils_kdtree.h"
 #  include "mathutils_noise.h"
 #endif
@@ -646,6 +651,11 @@ PyMODINIT_FUNC PyInit_mathutils(void)
 #ifndef MATH_STANDALONE
 	/* Noise submodule */
 	PyModule_AddObject(mod, "noise", (submodule = PyInit_mathutils_noise()));
+	PyDict_SetItemString(sys_modules, PyModule_GetName(submodule), submodule);
+	Py_INCREF(submodule);
+
+	/* BVHTree submodule */
+	PyModule_AddObject(mod, "bvhtree", (submodule = PyInit_mathutils_bvhtree()));
 	PyDict_SetItemString(sys_modules, PyModule_GetName(submodule), submodule);
 	Py_INCREF(submodule);
 

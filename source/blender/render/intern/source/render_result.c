@@ -905,14 +905,12 @@ RenderResult *render_result_new_from_exr(void *exrhandle, const char *colorspace
 	IMB_exr_multilayer_convert(exrhandle, rr, ml_addview_cb, ml_addlayer_cb, ml_addpass_cb);
 
 	for (rl = rr->layers.first; rl; rl = rl->next) {
-		int c=0;
 		rl->rectx = rectx;
 		rl->recty = recty;
 
 		BLI_listbase_sort(&rl->passes, order_render_passes);
 
 		for (rpass = rl->passes.first; rpass; rpass = rpass->next) {
-			printf("%d: %s\n", c++, rpass->name);
 			rpass->rectx = rectx;
 			rpass->recty = recty;
 

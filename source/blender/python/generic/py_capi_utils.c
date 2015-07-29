@@ -48,21 +48,17 @@
 #endif
 
 /* array utility function */
-int PyC_AsArray(void *array, PyObject *value, const Py_ssize_t length,
-                const PyTypeObject *type, const bool is_double, const char *error_prefix)
+int PyC_AsArray_FAST(
+        void *array, PyObject *value_fast, const Py_ssize_t length,
+        const PyTypeObject *type, const bool is_double, const char *error_prefix)
 {
-	PyObject *value_fast;
-	Py_ssize_t value_len;
+	const Py_ssize_t value_len = PySequence_Fast_GET_SIZE(value_fast);
+	PyObject **value_fast_items = PySequence_Fast_ITEMS(value_fast);
 	Py_ssize_t i;
 
-	if (!(value_fast = PySequence_Fast(value, error_prefix))) {
-		return -1;
-	}
-
-	value_len = PySequence_Fast_GET_SIZE(value_fast);
+	BLI_assert(PyList_Check(value_fast) || PyTuple_Check(value_fast));
 
 	if (value_len != length) {
-		Py_DECREF(value);
 		PyErr_Format(PyExc_TypeError,
 		             "%.200s: invalid sequence length. expected %d, got %d",
 		             error_prefix, length, value_len);
@@ -74,13 +70,13 @@ int PyC_AsArray(void *array, PyObject *value, const Py_ssize_t length,
 		if (is_double) {
 			double *array_double = array;
 			for (i = 0; i < length; i++) {
-				array_double[i] = PyFloat_AsDouble(PySequence_Fast_GET_ITEM(value_fast, i));
+				array_double[i] = PyFloat_AsDouble(value_fast_items[i]);
 			}
 		}
 		else {
 			float *array_float = array;
 			for (i = 0; i < length; i++) {
-				array_float[i] = PyFloat_AsDouble(PySequence_Fast_GET_ITEM(value_fast, i));
+				array_float[i] = PyFloat_AsDouble(value_fast_items[i]);
 			}
 		}
 	}
@@ -88,24 +84,21 @@ int PyC_AsArray(void *array, PyObject *value, const Py_ssize_t length,
 		/* could use is_double for 'long int' but no use now */
 		int *array_int = array;
 		for (i = 0; i < length; i++) {
-			array_int[i] = PyLong_AsLong(PySequence_Fast_GET_ITEM(value_fast, i));
+			array_int[i] = PyLong_AsLong(value_fast_items[i]);
 		}
 	}
 	else if (type == &PyBool_Type) {
 		int *array_bool = array;
 		for (i = 0; i < length; i++) {
-			array_bool[i] = (PyLong_AsLong(PySequence_Fast_GET_ITEM(value_fast, i)) != 0);
+			array_bool[i] = (PyLong_AsLong(value_fast_items[i]) != 0);
 		}
 	}
 	else {
-		Py_DECREF(value_fast);
 		PyErr_Format(PyExc_TypeError,
 		             "%s: internal error %s is invalid",
 		             error_prefix, type->tp_name);
 		return -1;
 	}
-
-	Py_DECREF(value_fast);
 
 	if (PyErr_Occurred()) {
 		PyErr_Format(PyExc_TypeError,
@@ -115,6 +108,22 @@ int PyC_AsArray(void *array, PyObject *value, const Py_ssize_t length,
 	}
 
 	return 0;
+}
+
+int PyC_AsArray(
+        void *array, PyObject *value, const Py_ssize_t length,
+        const PyTypeObject *type, const bool is_double, const char *error_prefix)
+{
+	PyObject *value_fast;
+	int ret;
+
+	if (!(value_fast = PySequence_Fast(value, error_prefix))) {
+		return -1;
+	}
+
+	ret = PyC_AsArray_FAST(array, value_fast, length, type, is_double, error_prefix);
+	Py_DECREF(value_fast);
+	return ret;
 }
 
 /* array utility function */
