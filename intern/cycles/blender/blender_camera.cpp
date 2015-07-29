@@ -538,7 +538,7 @@ void BlenderSync::sync_camera_motion(BL::RenderSettings b_render,
 		BlenderCamera bcam;
 		float aspectratio, sensor_size;
 		blender_camera_init(&bcam, b_render);
-		blender_camera_from_object(&bcam, b_engine, b_ob);
+		blender_camera_from_object(&bcam, b_engine, b_render, b_ob);
 		blender_camera_viewplane(&bcam,
 		                         width, height,
 		                         NULL,
