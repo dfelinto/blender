@@ -215,6 +215,7 @@ void BlenderSync::sync_background_light(bool use_portal)
 				light->map_resolution  = get_int(cworld, "sample_map_resolution");
 				light->shader = scene->default_background;
 				light->use_mis = sample_as_light;
+				light->max_bounces = get_int(cworld, "max_bounces");
 
 				int samples = get_int(cworld, "samples");
 				if(get_boolean(cscene, "use_square_samples"))
@@ -234,8 +235,56 @@ void BlenderSync::sync_background_light(bool use_portal)
 
 /* Object */
 
-Object *BlenderSync::sync_object(BL::Object b_parent, int persistent_id[OBJECT_PERSISTENT_ID_SIZE], BL::DupliObject b_dupli_ob,
-                                 Transform& tfm, uint layer_flag, float motion_time, bool hide_tris, bool *use_portal)
+/* TODO(sergey): Not really optimal, consider approaches based on k-DOP in order
+ * to reduce number of objects which are wrongly considered visible.
+ */
+static bool object_boundbox_clip(Scene *scene,
+                                 BL::Object b_ob,
+                                 Transform& tfm,
+                                 float margin)
+{
+	Camera *cam = scene->camera;
+	Transform& worldtondc = cam->worldtondc;
+	BL::Array<float, 24> boundbox = b_ob.bound_box();
+	float3 bb_min = make_float3(FLT_MAX, FLT_MAX, FLT_MAX),
+	       bb_max = make_float3(-FLT_MAX, -FLT_MAX, -FLT_MAX);
+	bool all_behind = true;
+	for(int i = 0; i < 8; ++i) {
+		float3 p = make_float3(boundbox[3 * i + 0],
+		                       boundbox[3 * i + 1],
+		                       boundbox[3 * i + 2]);
+		p = transform_point(&tfm, p);
+		p = transform_point(&worldtondc, p);
+		if(p.z >= -margin) {
+			all_behind = false;
+		}
+		p /= p.z;
+		bb_min = min(bb_min, p);
+		bb_max = max(bb_max, p);
+	}
+	if(!all_behind) {
+		if(bb_min.x >= 1.0f + margin ||
+		   bb_min.y >= 1.0f + margin ||
+		   bb_max.x <= -margin ||
+		   bb_max.y <= -margin)
+		{
+			return true;
+		}
+		return false;
+	}
+	return true;
+}
+
+Object *BlenderSync::sync_object(BL::Object b_parent,
+                                 int persistent_id[OBJECT_PERSISTENT_ID_SIZE],
+                                 BL::DupliObject b_dupli_ob,
+                                 Transform& tfm,
+                                 uint layer_flag,
+                                 float motion_time,
+                                 bool hide_tris,
+                                 bool use_camera_cull,
+                                 float camera_cull_margin,
+                                 bool *use_portal)
 {
 	BL::Object b_ob = (b_dupli_ob ? b_dupli_ob.object() : b_parent);
 	bool motion = motion_time != 0.0f;
@@ -253,6 +302,11 @@ Object *BlenderSync::sync_object(BL::Object b_parent, int persistent_id[OBJECT_P
 	if(!object_is_mesh(b_ob))
 		return NULL;
 
+	/* Perform camera space culling. */
+	if(use_camera_cull && object_boundbox_clip(scene, b_ob, tfm, camera_cull_margin)) {
+		return NULL;
+	}
+
 	/* key to lookup object */
 	ObjectKey key(b_parent, persistent_id, b_ob);
 	Object *object;
@@ -261,7 +315,9 @@ Object *BlenderSync::sync_object(BL::Object b_parent, int persistent_id[OBJECT_P
 	if(motion) {
 		object = object_map.find(key);
 
-		if(object && (scene->need_motion() == Scene::MOTION_PASS || object_use_motion(b_ob))) {
+		if(object && (scene->need_motion() == Scene::MOTION_PASS ||
+		              object_use_motion(b_parent, b_ob)))
+		{
 			/* object transformation */
 			if(tfm != object->tfm) {
 				VLOG(1) << "Object " << b_ob.name() << " motion detected.";
@@ -342,8 +398,8 @@ Object *BlenderSync::sync_object(BL::Object b_parent, int persistent_id[OBJECT_P
 
 			mesh->use_motion_blur = false;
 
-			if(object_use_motion(b_ob)) {
-				if(object_use_deform_motion(b_ob)) {
+			if(object_use_motion(b_parent, b_ob)) {
+				if(object_use_deform_motion(b_parent, b_ob)) {
 					mesh->motion_steps = object_motion_steps(b_ob);
 					mesh->use_motion_blur = true;
 				}
@@ -478,6 +534,18 @@ void BlenderSync::sync_objects(BL::SpaceView3D b_v3d, float motion_time)
 		mesh_motion_synced.clear();
 	}
 
+	bool allow_camera_cull = false;
+	float camera_cull_margin = 0.0f;
+	if(b_scene.render().use_simplify()) {
+		PointerRNA cscene = RNA_pointer_get(&b_scene.ptr, "cycles");
+		allow_camera_cull = scene->camera->type != CAMERA_PANORAMA &&
+		                    !b_scene.render().use_multiview() &&
+		                    get_boolean(cscene, "use_camera_cull");
+		if(allow_camera_cull) {
+			camera_cull_margin = get_float(cscene, "camera_cull_margin");
+		}
+	}
+
 	/* object loop */
 	BL::Scene::object_bases_iterator b_base;
 	BL::Scene b_sce = b_scene;
@@ -500,6 +568,12 @@ void BlenderSync::sync_objects(BL::SpaceView3D b_v3d, float motion_time)
 			if(!hide) {
 				progress.set_sync_status("Synchronizing object", b_ob.name());
 
+				PointerRNA cobject = RNA_pointer_get(&b_ob.ptr, "cycles");
+				bool use_camera_cull = allow_camera_cull && get_boolean(cobject, "use_camera_cull");
+				if(use_camera_cull) {
+					/* Need to have proper projection matrix. */
+					scene->camera->update();
+				}
 				if(b_ob.is_duplicator() && !object_render_hide_duplis(b_ob)) {
 					/* dupli objects */
 					b_ob.dupli_list_create(b_scene, dupli_settings);
@@ -519,7 +593,16 @@ void BlenderSync::sync_objects(BL::SpaceView3D b_v3d, float motion_time)
 							BL::Array<int, OBJECT_PERSISTENT_ID_SIZE> persistent_id = b_dup->persistent_id();
 
 							/* sync object and mesh or light data */
-							Object *object = sync_object(b_ob, persistent_id.data, *b_dup, tfm, ob_layer, motion_time, hide_tris, &use_portal);
+							Object *object = sync_object(b_ob,
+							                             persistent_id.data,
+							                             *b_dup,
+							                             tfm,
+							                             ob_layer,
+							                             motion_time,
+							                             hide_tris,
+							                             use_camera_cull,
+							                             camera_cull_margin,
+							                             &use_portal);
 
 							/* sync possible particle data, note particle_id
 							 * starts counting at 1, first is dummy particle */
@@ -539,7 +622,16 @@ void BlenderSync::sync_objects(BL::SpaceView3D b_v3d, float motion_time)
 				if(!object_render_hide(b_ob, true, true, hide_tris)) {
 					/* object itself */
 					Transform tfm = get_transform(b_ob.matrix_world());
-					sync_object(b_ob, NULL, PointerRNA_NULL, tfm, ob_layer, motion_time, hide_tris, &use_portal);
+					sync_object(b_ob,
+					            NULL,
+					            PointerRNA_NULL,
+					            tfm,
+					            ob_layer,
+					            motion_time,
+					            hide_tris,
+					            use_camera_cull,
+					            camera_cull_margin,
+					            &use_portal);
 				}
 			}
 
@@ -567,7 +659,11 @@ void BlenderSync::sync_objects(BL::SpaceView3D b_v3d, float motion_time)
 		mesh_motion_synced.clear();
 }
 
-void BlenderSync::sync_motion(BL::SpaceView3D b_v3d, BL::Object b_override, void **python_thread_state)
+void BlenderSync::sync_motion(BL::RenderSettings b_render,
+                              BL::SpaceView3D b_v3d,
+                              BL::Object b_override,
+                              int width, int height,
+                              void **python_thread_state)
 {
 	if(scene->need_motion() == Scene::MOTION_NONE)
 		return;
@@ -587,6 +683,9 @@ void BlenderSync::sync_motion(BL::SpaceView3D b_v3d, BL::Object b_override, void
 
 	/* note iteration over motion_times set happens in sorted order */
 	foreach(float relative_time, motion_times) {
+		VLOG(1) << "Synchronizing motion for the relative time "
+		        << relative_time << ".";
+
 		/* fixed shutter time to get previous and next frame for motion pass */
 		float shuttertime;
 
@@ -606,8 +705,12 @@ void BlenderSync::sync_motion(BL::SpaceView3D b_v3d, BL::Object b_override, void
 		python_thread_state_save(python_thread_state);
 
 		/* sync camera, only supports two times at the moment */
-		if(relative_time == -1.0f || relative_time == 1.0f)
-			sync_camera_motion(b_cam, relative_time);
+		if(relative_time == -1.0f || relative_time == 1.0f) {
+			sync_camera_motion(b_render,
+			                   b_cam,
+			                   width, height,
+			                   relative_time);
+		}
 
 		/* sync object */
 		sync_objects(b_v3d, relative_time);

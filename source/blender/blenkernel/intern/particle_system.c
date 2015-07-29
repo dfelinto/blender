@@ -555,13 +555,28 @@ void initialize_particle(ParticleSimulationData *sim, ParticleData *pa)
 	/* usage other than straight after distribute has to handle this index by itself - jahka*/
 	//pa->num_dmcache = DMCACHE_NOTFOUND; /* assume we don't have a derived mesh face */
 }
+
 static void initialize_all_particles(ParticleSimulationData *sim)
 {
 	ParticleSystem *psys = sim->psys;
+	ParticleSettings *part = psys->part;
+	/* Grid distributionsets UNEXIST flag, need to take care of
+	 * it here because later this flag is being reset.
+	 *
+	 * We can't do it for any distribution, because it'll then
+	 * conflict with texture influence, which does not free
+	 * unexisting particles and only sets flag.
+	 *
+	 * It's not so bad, because only grid distribution sets
+	 * UNEXIST flag.
+	 */
+	const bool emit_from_volume_grid = (part->distr == PART_DISTR_GRID) &&
+	                                   (!ELEM(part->from, PART_FROM_VERT, PART_FROM_CHILD));
 	PARTICLE_P;
-
 	LOOP_PARTICLES {
-		initialize_particle(sim, pa);
+		if (!(emit_from_volume_grid && (pa->flag & PARS_UNEXIST) != 0)) {
+			initialize_particle(sim, pa);
+		}
 	}
 }
 
@@ -609,8 +624,9 @@ static void free_unexisting_particles(ParticleSimulationData *sim)
 		if (psys->particles->boid) {
 			BoidParticle *newboids = MEM_callocN(psys->totpart * sizeof(BoidParticle), "boid particles");
 
-			LOOP_PARTICLES
+			LOOP_PARTICLES {
 				pa->boid = newboids++;
+			}
 
 		}
 	}

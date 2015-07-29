@@ -416,7 +416,10 @@ public:
 		cuda_pop_context();
 	}
 
-	void tex_alloc(const char *name, device_memory& mem, InterpolationType interpolation, bool periodic)
+	void tex_alloc(const char *name,
+	               device_memory& mem,
+	               InterpolationType interpolation,
+	               ExtensionType extension)
 	{
 		/* todo: support 3D textures, only CPU for now */
 		VLOG(1) << "Texture allocate: " << name << ", " << mem.memory_size() << " bytes.";
@@ -510,13 +513,19 @@ public:
 				cuda_assert(cuTexRefSetFlags(texref, CU_TRSF_READ_AS_INTEGER));
 			}
 
-			if(periodic) {
-				cuda_assert(cuTexRefSetAddressMode(texref, 0, CU_TR_ADDRESS_MODE_WRAP));
-				cuda_assert(cuTexRefSetAddressMode(texref, 1, CU_TR_ADDRESS_MODE_WRAP));
-			}
-			else {
-				cuda_assert(cuTexRefSetAddressMode(texref, 0, CU_TR_ADDRESS_MODE_CLAMP));
-				cuda_assert(cuTexRefSetAddressMode(texref, 1, CU_TR_ADDRESS_MODE_CLAMP));
+			switch(extension) {
+				case EXTENSION_REPEAT:
+					cuda_assert(cuTexRefSetAddressMode(texref, 0, CU_TR_ADDRESS_MODE_WRAP));
+					cuda_assert(cuTexRefSetAddressMode(texref, 1, CU_TR_ADDRESS_MODE_WRAP));
+					break;
+				case EXTENSION_EXTEND:
+					cuda_assert(cuTexRefSetAddressMode(texref, 0, CU_TR_ADDRESS_MODE_CLAMP));
+					cuda_assert(cuTexRefSetAddressMode(texref, 1, CU_TR_ADDRESS_MODE_CLAMP));
+					break;
+				case EXTENSION_CLIP:
+					cuda_assert(cuTexRefSetAddressMode(texref, 0, CU_TR_ADDRESS_MODE_BORDER));
+					cuda_assert(cuTexRefSetAddressMode(texref, 1, CU_TR_ADDRESS_MODE_BORDER));
+					break;
 			}
 			cuda_assert(cuTexRefSetFormat(texref, format, mem.data_elements));
 
@@ -1122,13 +1131,19 @@ void device_cuda_info(vector<DeviceInfo>& devices)
 	}
 	
 	vector<DeviceInfo> display_devices;
-	
+
 	for(int num = 0; num < count; num++) {
 		char name[256];
 		int attr;
-		
+
 		if(cuDeviceGetName(name, 256, num) != CUDA_SUCCESS)
 			continue;
+
+		int major, minor;
+		cuDeviceComputeCapability(&major, &minor, num);
+		if(major < 2) {
+			continue;
+		}
 
 		DeviceInfo info;
 
@@ -1137,8 +1152,6 @@ void device_cuda_info(vector<DeviceInfo>& devices)
 		info.id = string_printf("CUDA_%d", num);
 		info.num = num;
 
-		int major, minor;
-		cuDeviceComputeCapability(&major, &minor, num);
 		info.advanced_shading = (major >= 2);
 		info.extended_images = (major >= 3);
 		info.pack_images = false;

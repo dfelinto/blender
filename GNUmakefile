@@ -81,18 +81,20 @@ endif
 
 # -----------------------------------------------------------------------------
 # Get the number of cores for threaded build
-NPROCS:=1
-ifeq ($(OS), Linux)
-	NPROCS:=$(shell nproc)
-endif
-ifeq ($(OS), Darwin)
-	NPROCS:=$(shell sysctl -a | grep "hw.ncpu" | cut -d" " -f3)
-endif
-ifeq ($(OS), FreeBSD)
-	NPROCS:=$(shell sysctl -a | grep "hw.ncpu" | cut -d" " -f2 )
-endif
-ifeq ($(OS), NetBSD)
-	NPROCS:=$(shell sysctl -a | grep "hw.ncpu" | cut -d" " -f2 )
+ifndef NPROCS
+	NPROCS:=1
+	ifeq ($(OS), Linux)
+		NPROCS:=$(shell nproc)
+	endif
+	ifeq ($(OS), Darwin)
+		NPROCS:=$(shell sysctl -a | grep "hw.ncpu" | cut -d" " -f3)
+	endif
+	ifeq ($(OS), FreeBSD)
+		NPROCS:=$(shell sysctl -a | grep "hw.ncpu" | cut -d" " -f2 )
+	endif
+	ifeq ($(OS), NetBSD)
+		NPROCS:=$(shell sysctl -a | grep "hw.ncpu" | cut -d" " -f2 )
+	endif
 endif
 
 
@@ -122,12 +124,12 @@ all: FORCE
 	@echo
 	@echo Configuring Blender ...
 
-	# if test ! -f $(BUILD_DIR)/CMakeCache.txt ; then \
-	# 	$(CMAKE_CONFIG); \
-	# fi
+#	# if test ! -f $(BUILD_DIR)/CMakeCache.txt ; then \
+#	# 	$(CMAKE_CONFIG); \
+#	# fi
 	
-	# do this always incase of failed initial build, could be smarter here...
-	$(CMAKE_CONFIG)
+#	# do this always incase of failed initial build, could be smarter here...
+	@$(CMAKE_CONFIG)
 
 	@echo
 	@echo Building Blender ...
@@ -210,6 +212,7 @@ help: FORCE
 	@echo "  * BUILD_CMAKE_ARGS    - arguments passed to CMake."
 	@echo "  * BUILD_DIR           - override default build path."
 	@echo "  * PYTHON              - use this for the Python command (used for checking tools)."
+	@echo "  * NPROCS              - number of processes to use building (auto-detect when omitted)."
 	@echo ""
 	@echo "Documentation Targets (not associated with building blender)"
 	@echo "  * doc_py   - generate sphinx python api docs"

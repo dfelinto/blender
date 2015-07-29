@@ -28,7 +28,7 @@
  * todo: clean this up ... */
 
 extern "C" {
-void BLI_timestr(double _time, char *str, size_t maxlen);
+size_t BLI_timecode_string_from_time_simple(char *str, size_t maxlen, double time_seconds);
 void BKE_image_user_frame_calc(void *iuser, int cfra, int fieldnr);
 void BKE_image_user_file_path(void *iuser, void *ima, char *path);
 unsigned char *BKE_image_get_pixels_for_frame(void *image, int frame);
@@ -354,11 +354,20 @@ static inline void mesh_texture_space(BL::Mesh b_mesh, float3& loc, float3& size
 }
 
 /* object used for motion blur */
-static inline bool object_use_motion(BL::Object b_ob)
+static inline bool object_use_motion(BL::Object b_parent, BL::Object b_ob)
 {
 	PointerRNA cobject = RNA_pointer_get(&b_ob.ptr, "cycles");
 	bool use_motion = get_boolean(cobject, "use_motion_blur");
-	
+	/* If motion blur is enabled for the object we also check
+	 * whether it's enabled for the parent object as well.
+	 *
+	 * This way we can control motion blur from the dupligroup
+	 * duplicator much easier.
+	 */
+	if(use_motion && b_parent.ptr.data != b_ob.ptr.data) {
+		PointerRNA parent_cobject = RNA_pointer_get(&b_parent.ptr, "cycles");
+		use_motion &= get_boolean(parent_cobject, "use_motion_blur");
+	}
 	return use_motion;
 }
 
@@ -375,11 +384,20 @@ static inline uint object_motion_steps(BL::Object b_ob)
 }
 
 /* object uses deformation motion blur */
-static inline bool object_use_deform_motion(BL::Object b_ob)
+static inline bool object_use_deform_motion(BL::Object b_parent, BL::Object b_ob)
 {
 	PointerRNA cobject = RNA_pointer_get(&b_ob.ptr, "cycles");
 	bool use_deform_motion = get_boolean(cobject, "use_deform_motion");
-	
+	/* If motion blur is enabled for the object we also check
+	 * whether it's enabled for the parent object as well.
+	 *
+	 * This way we can control motion blur from the dupligroup
+	 * duplicator much easier.
+	 */
+	if(use_deform_motion && b_parent.ptr.data != b_ob.ptr.data) {
+		PointerRNA parent_cobject = RNA_pointer_get(&b_parent.ptr, "cycles");
+		use_deform_motion &= get_boolean(parent_cobject, "use_deform_motion");
+	}
 	return use_deform_motion;
 }
 

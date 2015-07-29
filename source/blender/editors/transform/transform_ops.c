@@ -141,6 +141,7 @@ EnumPropertyItem transform_mode_types[] =
 	{TFM_MIRROR, "MIRROR", 0, "Mirror", ""},
 	{TFM_BONESIZE, "BONE_SIZE", 0, "Bonesize", ""},
 	{TFM_BONE_ENVELOPE, "BONE_ENVELOPE", 0, "Bone_Envelope", ""},
+	{TFM_BONE_ENVELOPE_DIST, "BONE_ENVELOPE_DIST", 0, "Bone_Envelope_Distance", ""},
 	{TFM_CURVE_SHRINKFATTEN, "CURVE_SHRINKFATTEN", 0, "Curve_Shrinkfatten", ""},
 	{TFM_MASK_SHRINKFATTEN, "MASK_SHRINKFATTEN", 0, "Mask_Shrinkfatten", ""},
 	{TFM_GPENCIL_SHRINKFATTEN, "GPENCIL_SHRINKFATTEN", 0, "GPencil_Shrinkfatten", ""},
@@ -837,6 +838,8 @@ static void TRANSFORM_OT_mirror(struct wmOperatorType *ot)
 
 static void TRANSFORM_OT_edge_slide(struct wmOperatorType *ot)
 {
+	PropertyRNA *prop;
+
 	/* identifiers */
 	ot->name   = "Edge Slide";
 	ot->description = "Slide an edge loop along a mesh"; 
@@ -851,6 +854,9 @@ static void TRANSFORM_OT_edge_slide(struct wmOperatorType *ot)
 	ot->poll   = ED_operator_editmesh_region_view3d;
 
 	RNA_def_float_factor(ot->srna, "value", 0, -10.0f, 10.0f, "Factor", "", -1.0f, 1.0f);
+
+	prop = RNA_def_boolean(ot->srna, "single_side", false, "Single Side", "");
+	RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 
 	Transform_Properties(ot, P_MIRROR | P_SNAP | P_CORRECT_UV);
 }

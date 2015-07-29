@@ -159,10 +159,21 @@ static int image_poll(bContext *C)
 static int space_image_buffer_exists_poll(bContext *C)
 {
 	SpaceImage *sima = CTX_wm_space_image(C);
-	if (sima && sima->spacetype == SPACE_IMAGE)
-		if (ED_space_image_has_buffer(sima))
-			return 1;
-	return 0;
+	if (sima && ED_space_image_has_buffer(sima)) {
+		return true;
+	}
+	return false;
+}
+
+static int image_not_packed_poll(bContext *C)
+{
+	SpaceImage *sima = CTX_wm_space_image(C);
+
+	/* Do not run 'replace' on packed images, it does not give user expected results at all. */
+	if (sima && sima->image && BLI_listbase_is_empty(&sima->image->packedfiles)) {
+		return true;
+	}
+	return false;
 }
 
 static int space_image_file_exists_poll(bContext *C)
@@ -194,26 +205,29 @@ static int space_image_file_exists_poll(bContext *C)
 
 		return ret;
 	}
-	return 0;
+	return false;
 }
 
+#if 0  /* UNUSED */
 static int space_image_poll(bContext *C)
 {
 	SpaceImage *sima = CTX_wm_space_image(C);
-	if (sima && sima->spacetype == SPACE_IMAGE && sima->image)
-		return 1;
-	return 0;
+	if (sima && sima->image) {
+		return true;
+	}
+	return false;
 }
+#endif
 
 int space_image_main_area_poll(bContext *C)
 {
 	SpaceImage *sima = CTX_wm_space_image(C);
-	// XXX ARegion *ar = CTX_wm_region(C);
+	/* XXX ARegion *ar = CTX_wm_region(C); */
 
-	if (sima)
-		return 1;  // XXX (ar && ar->type->regionid == RGN_TYPE_WINDOW);
-	
-	return 0;
+	if (sima) {
+		return true;  /* XXX (ar && ar->type->regionid == RGN_TYPE_WINDOW); */
+	}
+	return false;
 }
 
 /* For IMAGE_OT_curves_point_set to avoid sampling when in uv smooth mode or editmode */
@@ -1016,6 +1030,7 @@ static void image_sequence_get_frames(PointerRNA *ptr, ListBase *frames, char *p
 			}
 			else {
 				/* different file base name found, is ignored */
+				MEM_freeN(filename);
 				MEM_freeN(frame);
 				break;
 			}
@@ -1080,15 +1095,27 @@ static int image_open_exec(bContext *C, wmOperator *op)
 
 	RNA_string_get(op->ptr, "filepath", path);
 
-	if (!IMB_isanim(path) && RNA_struct_property_is_set(op->ptr, "files") &&
-	    RNA_struct_property_is_set(op->ptr, "directory"))
+	if (RNA_struct_property_is_set(op->ptr, "directory") &&
+	    RNA_struct_property_is_set(op->ptr, "files"))
 	{
-		ListBase frames;
+		/* only to pass to imbuf */
+		char path_full[FILE_MAX];
+		BLI_strncpy(path_full, path, sizeof(path_full));
+		BLI_path_abs(path_full, G.main->name);
 
-		BLI_listbase_clear(&frames);
-		image_sequence_get_frames(op->ptr, &frames, path, sizeof(path));
-		frame_seq_len = image_sequence_get_len(&frames, &frame_ofs);
-		BLI_freelistN(&frames);
+		if (!IMB_isanim(path_full)) {
+			bool was_relative = BLI_path_is_rel(path);
+			ListBase frames;
+
+			BLI_listbase_clear(&frames);
+			image_sequence_get_frames(op->ptr, &frames, path, sizeof(path));
+			frame_seq_len = image_sequence_get_len(&frames, &frame_ofs);
+			BLI_freelistN(&frames);
+
+			if (was_relative) {
+				BLI_path_rel(path, G.main->name);
+			}
+		}
 	}
 
 	errno = 0;
@@ -1392,7 +1419,7 @@ void IMAGE_OT_replace(wmOperatorType *ot)
 	/* api callbacks */
 	ot->exec = image_replace_exec;
 	ot->invoke = image_replace_invoke;
-	ot->poll = space_image_poll;
+	ot->poll = image_not_packed_poll;
 
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -1456,12 +1483,11 @@ static int save_image_options_init(SaveImageOptions *simopts, SpaceImage *sima, 
 		else {
 			if (ima->source == IMA_SRC_GENERATED) {
 				simopts->im_format.imtype = R_IMF_IMTYPE_PNG;
+				simopts->im_format.compress = ibuf->foptions.quality;
 			}
 			else {
 				BKE_imbuf_to_image_format(&simopts->im_format, ibuf);
-				simopts->im_format.quality = ibuf->ftype & 0xff;
 			}
-			simopts->im_format.quality = ibuf->ftype & 0xff;
 		}
 
 		simopts->im_format.planes = ibuf->planes;
@@ -1606,6 +1632,7 @@ static void save_imbuf_post(ImBuf *ibuf, ImBuf *colormanaged_ibuf)
 		 * original one, so file type of image is being properly updated.
 		 */
 		ibuf->ftype = colormanaged_ibuf->ftype;
+		ibuf->foptions = colormanaged_ibuf->foptions;
 		ibuf->planes = colormanaged_ibuf->planes;
 
 		IMB_freeImBuf(colormanaged_ibuf);

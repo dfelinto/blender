@@ -27,7 +27,6 @@
 
 #include "BLI_utildefines.h"
 #include "BLI_compiler_attrs.h"
-#include "BLI_string.h"
 
 /* for MinGW32 definition of NULL, could use BLI_blenlib.h instead too */
 #include <stddef.h>
@@ -49,7 +48,6 @@
 #include "DNA_particle_types.h"
 #include "DNA_linestyle_types.h"
 #include "DNA_actuator_types.h"
-#include "DNA_camera_types.h"
 #include "DNA_view3d_types.h"
 
 #include "DNA_genfile.h"
@@ -60,7 +58,6 @@
 #include "BKE_scene.h"
 #include "BKE_sequencer.h"
 #include "BKE_screen.h"
-#include "BKE_sequencer.h"
 
 #include "BLI_math.h"
 #include "BLI_listbase.h"
@@ -844,5 +841,14 @@ void blo_do_versions_270(FileData *fd, Library *UNUSED(lib), Main *main)
 				}
 			}
 		}
+	}
+
+	if (!MAIN_VERSION_ATLEAST(main, 275, 3)) {
+		Brush *br;
+#define BRUSH_TORUS (1 << 1)
+		for (br = main->brush.first; br; br = br->id.next) {
+			br->flag &= ~BRUSH_TORUS;
+		}
+#undef BRUSH_TORUS
 	}
 }

@@ -117,6 +117,10 @@
 #include "BKE_sound.h"
 #include "COM_compositor.h"
 
+#ifdef WITH_OPENSUBDIV
+#  include "opensubdiv_capi.h"
+#endif
+
 static void wm_init_reports(bContext *C)
 {
 	ReportList *reports = CTX_wm_reports(C);
@@ -171,9 +175,13 @@ void WM_init(bContext *C, int argc, const char **argv)
 	/* get the default database, plus a wm */
 	wm_homefile_read(C, NULL, G.factory_startup, NULL);
 	
+
 	BLF_lang_set(NULL);
 
 	if (!G.background) {
+		/* sets 3D mouse deadzone */
+		WM_ndof_deadzone_set(U.ndof_deadzone);
+
 		GPU_init();
 
 		GPU_set_mipmap(!(U.gameflags & USER_DISABLE_MIPMAP));
@@ -221,9 +229,7 @@ void WM_init(bContext *C, int argc, const char **argv)
 	ED_render_clear_mtex_copybuf();
 
 	// glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-		
-	ED_preview_init_dbase();
-	
+
 	wm_read_history();
 
 	/* allow a path of "", this is what happens when making a new file */
@@ -422,7 +428,7 @@ void WM_exit_ext(bContext *C, const bool do_python)
 				/* save the undo state as quit.blend */
 				char filename[FILE_MAX];
 				bool has_edited;
-				int fileflags = G.fileflags & ~(G_FILE_COMPRESS | G_FILE_AUTOPLAY | G_FILE_LOCK | G_FILE_SIGN | G_FILE_HISTORY);
+				int fileflags = G.fileflags & ~(G_FILE_COMPRESS | G_FILE_AUTOPLAY | G_FILE_HISTORY);
 
 				BLI_make_file_string("/", filename, BKE_tempdir_base(), BLENDER_QUIT_FILE);
 
@@ -521,6 +527,10 @@ void WM_exit_ext(bContext *C, const bool do_python)
 	(void)do_python;
 #endif
 
+#ifdef WITH_OPENSUBDIV
+	openSubdiv_cleanup();
+#endif
+
 	if (!G.background) {
 		GPU_global_buffer_pool_free();
 		GPU_free_unused_buffers();
@@ -550,7 +560,7 @@ void WM_exit_ext(bContext *C, const bool do_python)
 
 	if (MEM_get_memory_blocks_in_use() != 0) {
 		size_t mem_in_use = MEM_get_memory_in_use() + MEM_get_memory_in_use();
-		printf("Error: Not freed memory blocks: %d, total unfreed memory %f MB\n",
+		printf("Error: Not freed memory blocks: %u, total unfreed memory %f MB\n",
 		       MEM_get_memory_blocks_in_use(),
 		       (double)mem_in_use / 1024 / 1024);
 		MEM_printmemlist();

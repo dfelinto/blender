@@ -242,6 +242,11 @@ def setup_staticlibs(lenv):
             if lenv['WITH_BF_STATIC3DMOUSE']:
                 statlibs += Split(lenv['BF_3DMOUSE_LIB_STATIC'])
 
+    if lenv['WITH_BF_OPENSUBDIV']:
+        libincs += Split(lenv['BF_OPENSUBDIV_LIBPATH'])
+        if lenv['WITH_BF_STATICOPENSUBDIV']:
+            statlibs += Split(lenv['BF_OPENSUBDIV_LIB_STATIC'])
+
     # setting this last so any overriding of manually libs could be handled
     if lenv['OURPLATFORM'] not in ('win32-vc', 'win32-mingw', 'win64-vc', 'linuxcross', 'win64-mingw'):
         # We must remove any previous items defining this path, for same reason stated above!
@@ -343,6 +348,13 @@ def setup_syslibs(lenv):
 
     if not lenv['WITH_BF_STATICPNG']:
         syslibs += Split(lenv['BF_PNG_LIB'])
+
+    if lenv['WITH_BF_OPENSUBDIV']:
+        if not lenv['WITH_BF_STATICOPENSUBDIV']:
+            if lenv['BF_DEBUG'] and lenv['OURPLATFORM'] in ('win32-vc', 'win64-vc', 'win32-mingw', 'win64-mingw'):
+                syslibs += [osdlib+'_d' for osdlib in Split(lenv['BF_OPENSUBDIV_LIB'])]
+            else:
+                syslibs += Split(lenv['BF_OPENSUBDIV_LIB'])
 
     # Hack to pass OSD libraries to linker before extern_{clew,cuew}
     for syslib in create_blender_liblist(lenv, 'system'):
@@ -764,7 +776,7 @@ def AppIt(target=None, source=None, env=None):
             commands.getoutput(cmd)
             cmd = 'cp -R %s/kernel/*.h %s/kernel/*.cl %s/kernel/*.cu %s/kernel/' % (croot, croot, croot, cinstalldir)
             commands.getoutput(cmd)
-            cmd = 'cp -R %s/kernel/svm %s/kernel/closure %s/kernel/geom %s/util/util_color.h %s/util/util_half.h %s/util/util_math.h %s/util/util_math_fast.h %s/util/util_transform.h %s/util/util_types.h %s/kernel/' % (croot, croot, croot, croot, croot, croot, croot, croot, croot, cinstalldir)
+            cmd = 'cp -R %s/kernel/svm %s/kernel/closure %s/kernel/geom %s/kernel/split %s/kernel/kernels %s/util/util_color.h %s/util/util_half.h %s/util/util_math.h %s/util/util_math_fast.h %s/util/util_transform.h %s/util/util_types.h %s/util/util_atomic.h %s/kernel/' % (croot, croot, croot, croot, croot, croot, croot, croot, croot, croot, croot, croot, cinstalldir)
             commands.getoutput(cmd)
             cmd = 'cp -R %s/../intern/cycles/kernel/*.cubin %s/lib/' % (builddir, cinstalldir)
             commands.getoutput(cmd)

@@ -145,7 +145,7 @@ static int vertex_parent_set_exec(bContext *C, wmOperator *op)
 
 		/* derivedMesh might be needed for solving parenting,
 		 * so re-create it here */
-		makeDerivedMesh(scene, obedit, em, CD_MASK_BAREMESH | CD_MASK_ORIGINDEX, 0);
+		makeDerivedMesh(scene, obedit, em, CD_MASK_BAREMESH | CD_MASK_ORIGINDEX, false);
 
 		BM_ITER_MESH (eve, &iter, em->bm, BM_VERTS_OF_MESH) {
 			if (BM_elem_flag_test(eve, BM_ELEM_SELECT)) {
@@ -169,7 +169,7 @@ static int vertex_parent_set_exec(bContext *C, wmOperator *op)
 				bezt = nu->bezt;
 				a = nu->pntsu;
 				while (a--) {
-					if (BEZSELECTED_HIDDENHANDLES(cu, bezt)) {
+					if (BEZT_ISSEL_ANY_HIDDENHANDLES(cu, bezt)) {
 						if (v1 == 0) v1 = nr;
 						else if (v2 == 0) v2 = nr;
 						else if (v3 == 0) v3 = nr;
@@ -570,6 +570,9 @@ void ED_object_parent(Object *ob, Object *par, const int type, const char *subst
 		ob->parsubstr[0] = 0;
 		return;
 	}
+
+	/* Other partypes are deprecated, do not use here! */
+	BLI_assert(ELEM(type & PARTYPE, PAROBJECT, PARSKEL, PARVERT1, PARVERT3, PARBONE));
 
 	/* this could use some more checks */
 

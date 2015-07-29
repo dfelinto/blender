@@ -30,7 +30,6 @@
 #include "BLI_path_util.h"
 
 #include "DNA_color_types.h"
-#include "DNA_userdef_types.h"
 
 #include "intern/openexr/openexr_multi.h"
 
@@ -51,7 +50,8 @@ public:
 class OutputOpenExrMultiLayerMultiViewOperation : public OutputOpenExrMultiLayerOperation {
 private:
 public:
-	OutputOpenExrMultiLayerMultiViewOperation(const RenderData *rd, const bNodeTree *tree, const char *path, char exr_codec, const char *viewName);
+	OutputOpenExrMultiLayerMultiViewOperation(const RenderData *rd, const bNodeTree *tree, const char *path,
+	                                          char exr_codec, bool exr_half_float, const char *viewName);
 
 	void *get_handle(const char *filename);
 	void deinitExecution();

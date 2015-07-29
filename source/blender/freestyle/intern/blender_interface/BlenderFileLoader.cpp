@@ -536,8 +536,12 @@ void BlenderFileLoader::insertShapeNode(ObjectInstanceRen *obi, int id)
 		else {
 			RE_vlakren_get_normal(_re, obi, vlr, facenormal);
 #ifndef NDEBUG
+			/* test if normals are inverted in rendering [T39669] */
 			float tnor[3];
-			normal_tri_v3(tnor, v3, v2, v1);  /* normals are inverted in rendering */
+			if (vlr->v4)
+				normal_quad_v3(tnor, v4, v3, v2, v1);
+			else
+				normal_tri_v3(tnor, v3, v2, v1);
 			BLI_assert(dot_v3v3(tnor, facenormal) > 0.0f);
 #endif
 			copy_v3_v3(n1, facenormal);
@@ -659,13 +663,13 @@ void BlenderFileLoader::insertShapeNode(ObjectInstanceRen *obi, int id)
 
 	// We might have several times the same vertex. We want a clean 
 	// shape with no real-vertex. Here, we are making a cleaning pass.
-	real *cleanVertices = NULL;
+	float *cleanVertices = NULL;
 	unsigned int cvSize;
 	unsigned int *cleanVIndices = NULL;
 
 	GeomCleaner::CleanIndexedVertexArray(vertices, vSize, VIndices, viSize, &cleanVertices, &cvSize, &cleanVIndices);
 
-	real *cleanNormals = NULL;
+	float *cleanNormals = NULL;
 	unsigned int cnSize;
 	unsigned int *cleanNIndices = NULL;
 
@@ -772,12 +776,12 @@ void BlenderFileLoader::insertShapeNode(ObjectInstanceRen *obi, int id)
 		for (v = detriList.begin(); v != detriList.end(); v++) {
 			detri_t detri = (*v);
 			if (detri.n == 0) {
-				cleanVertices[detri.viP]   = cleanVertices[detri.viA];
+				cleanVertices[detri.viP]     = cleanVertices[detri.viA];
 				cleanVertices[detri.viP + 1] = cleanVertices[detri.viA + 1];
 				cleanVertices[detri.viP + 2] = cleanVertices[detri.viA + 2];
 			}
 			else if (detri.v.norm() > 0.0) {
-				cleanVertices[detri.viP]   += 1.0e-5 * detri.v.x();
+				cleanVertices[detri.viP]     += 1.0e-5 * detri.v.x();
 				cleanVertices[detri.viP + 1] += 1.0e-5 * detri.v.y();
 				cleanVertices[detri.viP + 2] += 1.0e-5 * detri.v.z();
 			}

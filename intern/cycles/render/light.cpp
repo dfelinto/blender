@@ -138,6 +138,17 @@ void Light::tag_update(Scene *scene)
 	scene->light_manager->need_update = true;
 }
 
+bool Light::has_contribution(Scene *scene)
+{
+	if(is_portal) {
+		return false;
+	}
+	if(type == LIGHT_BACKGROUND) {
+		return true;
+	}
+	return scene->shaders[shader]->has_surface_emission;
+}
+
 /* Light Manager */
 
 LightManager::LightManager()
@@ -162,7 +173,7 @@ void LightManager::device_update_distribution(Device *device, DeviceScene *dscen
 	bool background_mis = false;
 
 	foreach(Light *light, scene->lights) {
-		if(!light->is_portal)
+		if(light->has_contribution(scene))
 			num_lights++;
 	}
 
@@ -301,7 +312,7 @@ void LightManager::device_update_distribution(Device *device, DeviceScene *dscen
 
 	int light_index = 0;
 	foreach(Light *light, scene->lights) {
-		if(light->is_portal)
+		if(!light->has_contribution(scene))
 			continue;
 
 		distribution[offset].x = totarea;
@@ -421,16 +432,16 @@ static void background_cdf(int start,
 	for(int i = start; i < end; i++) {
 		float sin_theta = sinf(M_PI_F * (i + 0.5f) / res);
 		float3 env_color = (*pixels)[i * res];
-		float ave_luminamce = average(env_color);
+		float ave_luminance = average(env_color);
 
-		cond_cdf[i * cdf_count].x = ave_luminamce * sin_theta;
+		cond_cdf[i * cdf_count].x = ave_luminance * sin_theta;
 		cond_cdf[i * cdf_count].y = 0.0f;
 
 		for(int j = 1; j < res; j++) {
 			env_color = (*pixels)[i * res + j];
-			ave_luminamce = average(env_color);
+			ave_luminance = average(env_color);
 
-			cond_cdf[i * cdf_count + j].x = ave_luminamce * sin_theta;
+			cond_cdf[i * cdf_count + j].x = ave_luminance * sin_theta;
 			cond_cdf[i * cdf_count + j].y = cond_cdf[i * cdf_count + j - 1].y + cond_cdf[i * cdf_count + j - 1].x / res;
 		}
 
@@ -559,8 +570,9 @@ void LightManager::device_update_points(Device *device, DeviceScene *dscene, Sce
 	int light_index = 0;
 
 	foreach(Light *light, scene->lights) {
-		if(light->is_portal)
+		if(!light->has_contribution(scene)) {
 			continue;
+		}
 
 		float3 co = light->co;
 		int shader_id = scene->shader_manager->get_shader_id(light->shader);
@@ -720,7 +732,8 @@ void LightManager::device_update_points(Device *device, DeviceScene *dscene, Sce
 		light_index++;
 	}
 
-	assert(light_index == scene->lights.size());
+	VLOG(1) << "Number of lights without contribution: "
+	        << scene->lights.size() - light_index;
 
 	device->tex_alloc("__light_data", dscene->light_data);
 }

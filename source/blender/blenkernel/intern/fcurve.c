@@ -335,6 +335,7 @@ FCurve *rna_get_fcurve_context_ui(bContext *C, PointerRNA *ptr, PropertyRNA *pro
 	/* there must be some RNA-pointer + property combon */
 	if (prop && tptr.id.data && RNA_property_animateable(&tptr, prop)) {
 		AnimData *adt = BKE_animdata_from_id(tptr.id.data);
+		AnimData *adt_initial = adt;
 		int step = C ? 2 : 1;  /* Always 1 in case we have no context (can't check in 'ancestors' of given RNA ptr). */
 		char *path = NULL;
 		
@@ -391,11 +392,15 @@ FCurve *rna_get_fcurve_context_ui(bContext *C, PointerRNA *ptr, PropertyRNA *pro
 			}
 			
 			/* if we still haven't found anything, check whether it's a "special" property */
-			if ((fcu == NULL) && (adt && adt->nla_tracks.first)) {
+			/* NOTE: Need to go back to the original AnimData (vs one further up the chain,
+			 *       that we'd get after the loop above failed), or else this check will not 
+			 *       work for Materials
+			 */
+			if ((fcu == NULL) && (adt_initial && adt_initial->nla_tracks.first)) {
 				NlaTrack *nlt;
 				const char *propname = RNA_property_identifier(prop);
 				
-				for (nlt = adt->nla_tracks.first; nlt; nlt = nlt->next) {
+				for (nlt = adt_initial->nla_tracks.first; nlt; nlt = nlt->next) {
 					NlaStrip *strip;
 					
 					if (fcu)
@@ -534,7 +539,7 @@ static short get_fcurve_end_keyframes(FCurve *fcu, BezTriple **first, BezTriple 
 		/* find first selected */
 		bezt = fcu->bezt;
 		for (i = 0; i < fcu->totvert; bezt++, i++) {
-			if (BEZSELECTED(bezt)) {
+			if (BEZT_ISSEL_ANY(bezt)) {
 				*first = bezt;
 				found = true;
 				break;
@@ -544,7 +549,7 @@ static short get_fcurve_end_keyframes(FCurve *fcu, BezTriple **first, BezTriple 
 		/* find last selected */
 		bezt = ARRAY_LAST_ITEM(fcu->bezt, BezTriple, fcu->totvert);
 		for (i = 0; i < fcu->totvert; bezt--, i++) {
-			if (BEZSELECTED(bezt)) {
+			if (BEZT_ISSEL_ANY(bezt)) {
 				*last = bezt;
 				found = true;
 				break;
@@ -598,7 +603,7 @@ bool calc_fcurve_bounds(FCurve *fcu, float *xmin, float *xmax, float *ymin, floa
 				BezTriple *bezt, *prevbezt = NULL;
 				
 				for (bezt = fcu->bezt, i = 0; i < fcu->totvert; prevbezt = bezt, bezt++, i++) {
-					if ((do_sel_only == false) || BEZSELECTED(bezt)) {	
+					if ((do_sel_only == false) || BEZT_ISSEL_ANY(bezt)) {
 						/* keyframe itself */
 						yminv = min_ff(yminv, bezt->vec[1][1]);
 						ymaxv = max_ff(ymaxv, bezt->vec[1][1]);
@@ -986,15 +991,12 @@ void sort_time_fcurve(FCurve *fcu)
 					/* if either one of both of the points exceeds crosses over the keyframe time... */
 					if ( (bezt->vec[0][0] > bezt->vec[1][0]) && (bezt->vec[2][0] < bezt->vec[1][0]) ) {
 						/* swap handles if they have switched sides for some reason */
-						SWAP(float, bezt->vec[0][0], bezt->vec[2][0]);
-						SWAP(float, bezt->vec[0][1], bezt->vec[2][1]);
+						swap_v2_v2(bezt->vec[0], bezt->vec[2]);
 					}
 					else {
 						/* clamp handles */
-						if (bezt->vec[0][0] > bezt->vec[1][0]) 
-							bezt->vec[0][0] = bezt->vec[1][0];
-						if (bezt->vec[2][0] < bezt->vec[1][0]) 
-							bezt->vec[2][0] = bezt->vec[1][0];
+						CLAMP_MAX(bezt->vec[0][0], bezt->vec[1][0]);
+						CLAMP_MIN(bezt->vec[2][0], bezt->vec[1][0]);
 					}
 				}
 			}

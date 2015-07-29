@@ -229,7 +229,7 @@ static short get_active_fcurve_keyframe_edit(FCurve *fcu, BezTriple **bezt, BezT
 	 *	  wants to edit numerically, there is likely to only be 1 vert selected
 	 */
 	for (i = 0, b = fcu->bezt; i < fcu->totvert; i++, b++) {
-		if (BEZSELECTED(b)) {
+		if (BEZT_ISSEL_ANY(b)) {
 			/* found 
 			 *	- 'previous' is either the one before, of the keyframe itself (which is still fine)
 			 *		XXX: we can just make this null instead if needed
@@ -696,13 +696,13 @@ static void graph_panel_drivers(const bContext *C, Panel *pa)
 	col = uiLayoutColumn(pa->layout, false);
 	block = uiLayoutGetBlock(col);
 	but = uiDefIconTextBut(block, UI_BTYPE_BUT, B_IPO_DEPCHANGE, ICON_FILE_REFRESH, IFACE_("Update Dependencies"),
-	               0, 0, 10 * UI_UNIT_X, 22,
+	               0, 0, 10 * UI_UNIT_X, UI_UNIT_Y,
 	               NULL, 0.0, 0.0, 0, 0,
 	               TIP_("Force updates of dependencies"));
 	UI_but_func_set(but, driver_update_flags_cb, fcu, NULL);
 
 	but = uiDefIconTextBut(block, UI_BTYPE_BUT, B_IPO_DEPCHANGE, ICON_ZOOMOUT, IFACE_("Remove Driver"),
-	               0, 0, 10 * UI_UNIT_X, 18,
+	               0, 0, 10 * UI_UNIT_X, UI_UNIT_Y,
 	               NULL, 0.0, 0.0, 0, 0,
 	               TIP_("Remove this driver"));
 	UI_but_funcN_set(but, driver_remove_cb, MEM_dupallocN(ale), NULL);

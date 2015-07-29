@@ -157,7 +157,10 @@ void file_draw_buttons(const bContext *C, ARegion *ar)
 
 	/* Text input fields for directory and file. */
 	if (available_w > 0) {
+		const struct direntry *file = sfile->files ? filelist_file(sfile->files, params->active_file) : NULL;
 		int overwrite_alert = file_draw_check_exists(sfile);
+		const bool is_active_dir = file && file->path && BLI_is_dir(file->path);
+
 		/* callbacks for operator check functions */
 		UI_block_func_set(block, file_draw_check_cb, NULL, NULL);
 
@@ -178,7 +181,8 @@ void file_draw_buttons(const bContext *C, ARegion *ar)
 		if ((params->flag & FILE_DIRSEL_ONLY) == 0) {
 			but = uiDefBut(block, UI_BTYPE_TEXT, -1, "",
 			               min_x, line2_y, line2_w - chan_offs, btn_h,
-			               params->file, 0.0, (float)FILE_MAXFILE, 0, 0,
+			               is_active_dir ? (char *)"" : params->file,
+			               0.0, (float)FILE_MAXFILE, 0, 0,
 			               TIP_(overwrite_alert ? N_("File name, overwrite existing") : N_("File name")));
 			UI_but_func_complete_set(but, autocomplete_file, NULL);
 			UI_but_flag_enable(but, UI_BUT_NO_UTF8);
@@ -216,8 +220,12 @@ void file_draw_buttons(const bContext *C, ARegion *ar)
 	
 	/* Execute / cancel buttons. */
 	if (loadbutton) {
-		/* params->title is already translated! */
-		uiDefButO(block, UI_BTYPE_BUT, "FILE_OT_execute", WM_OP_EXEC_REGION_WIN, params->title,
+		const struct direntry *file = filelist_file(sfile->files, params->active_file);
+		const char *str_exec = (file && file->path && BLI_is_dir(file->path)) ?
+		                        /* params->title is already translated! */
+		                        IFACE_("Open Directory") : params->title;
+
+		uiDefButO(block, UI_BTYPE_BUT, "FILE_OT_execute", WM_OP_EXEC_REGION_WIN, str_exec,
 		          max_x - loadbutton, line1_y, loadbutton, btn_h, "");
 		uiDefButO(block, UI_BTYPE_BUT, "FILE_OT_cancel", WM_OP_EXEC_REGION_WIN, IFACE_("Cancel"),
 		          max_x - loadbutton, line2_y, loadbutton, btn_h, "");
@@ -274,7 +282,7 @@ static int get_file_icon(struct direntry *file)
 		return ICON_FILE_BLANK;
 }
 
-static void file_draw_icon(uiBlock *block, char *path, int sx, int sy, int icon, int width, int height, bool drag)
+static void file_draw_icon(uiBlock *block, const char *path, int sx, int sy, int icon, int width, int height, bool drag)
 {
 	uiBut *but;
 	int x, y;
@@ -420,6 +428,7 @@ static void renamebutton_cb(bContext *C, void *UNUSED(arg1), char *oldname)
 
 	BLI_make_file_string(G.main->name, orgname, sfile->params->dir, oldname);
 	BLI_strncpy(filename, sfile->params->renameedit, sizeof(filename));
+	BLI_filename_make_safe(filename);
 	BLI_make_file_string(G.main->name, newname, sfile->params->dir, filename);
 
 	if (!STREQ(orgname, newname)) {
@@ -547,10 +556,8 @@ void file_draw_list(const bContext *C, ARegion *ar)
 				int colorid = (file->selflag & FILE_SEL_SELECTED) ? TH_HILITE : TH_BACK;
 				int shade = (params->highlight_file == i) || (file->selflag & FILE_SEL_HIGHLIGHTED) ? 35 : 0;
 
-				/* readonly files (".." and ".") must not be drawn as selected - set color back to normal */
-				if (FILENAME_IS_CURRPAR(file->relname)) {
-					colorid = TH_BACK;
-				}
+				BLI_assert(i > 0 || FILENAME_IS_CURRPAR(file->relname));
+
 				draw_tile(sx, sy - 1, layout->tile_w + 4, sfile->layout->tile_h + layout->tile_border_y, colorid, shade);
 			}
 		}

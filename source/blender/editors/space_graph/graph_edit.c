@@ -36,7 +36,7 @@
 #include <float.h>
 
 #ifdef WITH_AUDASPACE
-#  include "AUD_C-API.h"
+#  include AUD_SPECIAL_H
 #endif
 
 #include "MEM_guardedalloc.h"

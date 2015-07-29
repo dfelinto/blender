@@ -859,7 +859,7 @@ static void cloth_collision_solve_extra(Object *ob, ClothModifierData *clmd, Lis
 	Implicit_Data *id = cloth->implicit;
 	ClothVertex *verts = cloth->verts;
 	int numverts = cloth->numverts;
-	const float spf = (float)clmd->sim_parms->stepsPerFrame / clmd->sim_parms->timescale;;
+	const float spf = (float)clmd->sim_parms->stepsPerFrame / clmd->sim_parms->timescale;
 	
 	bool do_extra_solve;
 	int i;
@@ -1000,7 +1000,7 @@ int BPH_cloth_solve(Object *ob, float frame, ClothModifierData *clmd, ListBase *
 	if (clmd->sim_parms->flags & CLOTH_SIMSETTINGS_FLAG_GOAL) { /* do goal stuff */
 		for (i = 0; i < numverts; i++) {
 			// update velocities with constrained velocities from pinned verts
-			if (verts [i].flags & CLOTH_VERT_FLAG_PINNED) {
+			if (verts[i].flags & CLOTH_VERT_FLAG_PINNED) {
 				float v[3];
 				sub_v3_v3v3(v, verts[i].xconst, verts[i].xold);
 				// mul_v3_fl(v, clmd->sim_parms->stepsPerFrame);

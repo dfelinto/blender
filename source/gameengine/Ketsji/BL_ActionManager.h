@@ -51,6 +51,9 @@ private:
 	class KX_GameObject* m_obj;
 	BL_ActionMap 		 m_layers;
 
+	// The last update time to avoid double animation update.
+	float m_prevUpdate;
+
 	/**
 	 * Check if an action exists
 	 */
@@ -105,6 +108,11 @@ public:
 	 * Stop playing the action on the given layer
 	 */
 	void StopAction(short layer);
+
+	/**
+	 * Remove playing tagged actions.
+	 */
+	void RemoveTaggedActions();
 
 	/**
 	 * Check if an action has finished playing

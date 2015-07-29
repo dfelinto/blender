@@ -59,7 +59,6 @@ incs = [
     '#/intern/guardedalloc',
     env['BF_GLEW_INC'],
     '#/intern/glew-mx',
-    '#/intern/audaspace/intern',
     '#/intern/cycles/blender',
     '#/intern/smoke/extern',
     '../../blenfont',
@@ -110,6 +109,10 @@ if env['WITH_BF_HDR']:
 if env['WITH_BF_FRAMESERVER']:
     defs.append('WITH_FRAMESERVER')
 
+if env['WITH_BF_AUDASPACE']:
+    defs += env['BF_AUDASPACE_DEF']
+    incs += ' ' + env['BF_AUDASPACE_C_INC']
+
 if env['WITH_BF_FFMPEG']:
     defs.append('WITH_FFMPEG')
     incs += ' ' + env['BF_FFMPEG_INC'] + ' #/intern/ffmpeg'
@@ -153,6 +156,10 @@ if env['WITH_BF_CYCLES']:
 if env['WITH_BF_FREESTYLE']:
     defs.append('WITH_FREESTYLE')
     incs += ' ../../freestyle'
+
+if env['WITH_BF_OPENSUBDIV']:
+    defs.append('WITH_OPENSUBDIV')
+    incs += ' #intern/opensubdiv'
 
 if env['OURPLATFORM'] == 'linux':
     cflags='-pthread'

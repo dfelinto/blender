@@ -77,6 +77,8 @@ void sequencer_operatortypes(void)
 	WM_operatortype_append(SEQUENCER_OT_swap_data);
 	WM_operatortype_append(SEQUENCER_OT_rendersize);
 
+	WM_operatortype_append(SEQUENCER_OT_export_subtitles);
+
 	WM_operatortype_append(SEQUENCER_OT_copy);
 	WM_operatortype_append(SEQUENCER_OT_paste);
 
@@ -121,6 +123,7 @@ void sequencer_operatortypes(void)
 	WM_operatortype_append(SEQUENCER_OT_strip_modifier_add);
 	WM_operatortype_append(SEQUENCER_OT_strip_modifier_remove);
 	WM_operatortype_append(SEQUENCER_OT_strip_modifier_move);
+	WM_operatortype_append(SEQUENCER_OT_strip_modifier_copy);
 
 	/* sequencer_view.h */
 	WM_operatortype_append(SEQUENCER_OT_sample);

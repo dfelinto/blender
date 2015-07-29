@@ -32,7 +32,6 @@
  * Also some operator reports utility functions.
  */
 
-
 #include <stdlib.h>
 #include <string.h>
 
@@ -63,14 +62,11 @@
 
 #include "ED_fileselect.h"
 #include "ED_info.h"
-#include "ED_outliner.h"
 #include "ED_screen.h"
 #include "ED_view3d.h"
 #include "ED_util.h"
 
 #include "RNA_access.h"
-
-#include "BIF_gl.h"
 
 #include "GPU_debug.h"
 
@@ -578,7 +574,7 @@ void WM_event_print(const wmEvent *event)
 		if (ISNDOF(event->type)) {
 			const wmNDOFMotionData *ndof = event->customdata;
 			if (event->type == NDOF_MOTION) {
-				printf("   ndof: rot: (%.4f %.4f %.4f), tx: (%.4f %.4f %.4f), dt: %.4f, progress: %d\n",
+				printf("   ndof: rot: (%.4f %.4f %.4f), tx: (%.4f %.4f %.4f), dt: %.4f, progress: %u\n",
 				       UNPACK3(ndof->rvec), UNPACK3(ndof->tvec), ndof->dt, ndof->progress);
 			}
 			else {
@@ -621,6 +617,11 @@ void WM_report_banner_show(const bContext *C)
 bool WM_event_is_absolute(const wmEvent *event)
 {
 	return (event->tablet_data != NULL);
+}
+
+void WM_ndof_deadzone_set(float deadzone)
+{
+	GHOST_setNDOFDeadZone(deadzone);
 }
 
 static void wm_add_reports(const bContext *C, ReportList *reports)

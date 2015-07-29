@@ -32,7 +32,7 @@
 #ifndef __KX_PYTHONINIT_H__
 #define __KX_PYTHONINIT_H__
 
-#include "KX_Python.h"
+#include "EXP_Python.h"
 #include "STR_String.h"
 #include "MT_Vector3.h"
 
@@ -48,6 +48,7 @@ extern bool gUseVisibilityTemp;
 
 #ifdef WITH_PYTHON
 PyMODINIT_FUNC initBGE(void);
+PyMODINIT_FUNC initApplicationPythonBinding(void);
 PyMODINIT_FUNC initGameLogicPythonBinding(void);
 PyMODINIT_FUNC initGameKeysPythonBinding(void);
 PyMODINIT_FUNC initRasterizerPythonBinding(void);

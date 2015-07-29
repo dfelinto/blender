@@ -49,6 +49,7 @@
 #include "BLI_listbase.h"
 #include "BLI_string.h"
 #include "BLI_path_util.h"
+#include "BLI_timecode.h"
 #include "BLI_fileops.h"
 #include "BLI_threads.h"
 #include "BLI_rand.h"
@@ -121,17 +122,6 @@
  *
  */
 
-/* Freestyle needs the whole frame to be merged into memory prior to
- * doing stroke rendering. This conflicts a bit with multiview save
- * buffers behavior which does a merge of exr files after all the
- * views are rendered.
- *
- * For until a proper solution is implemented we'll just merge single
- * view image prior to freestyle stroke rendering, which is how this
- * worked prior to multiview. Multiview+freestyle+save buffers are
- * considered unsupported for the time being.
- */
-#define FREESTYLR_SAVEBUFFERS_WORKAROUND
 
 /* ********* globals ******** */
 
@@ -165,6 +155,7 @@ static void stats_background(void *UNUSED(arg), RenderStats *rs)
 {
 	uintptr_t mem_in_use, mmap_in_use, peak_memory;
 	float megs_used_memory, mmap_used_memory, megs_peak_memory;
+	char info_time_str[32];
 
 	mem_in_use = MEM_get_memory_in_use();
 	mmap_in_use = MEM_get_mapped_memory_in_use();
@@ -182,8 +173,11 @@ static void stats_background(void *UNUSED(arg), RenderStats *rs)
 	if (rs->curblur)
 		fprintf(stdout, IFACE_("Blur %d "), rs->curblur);
 
+	BLI_timecode_string_from_time_simple(info_time_str, sizeof(info_time_str), PIL_check_seconds_timer() - rs->starttime);
+	fprintf(stdout, IFACE_("| Time:%s | "), info_time_str);
+
 	if (rs->infostr) {
-		fprintf(stdout, "| %s", rs->infostr);
+		fprintf(stdout, "%s", rs->infostr);
 	}
 	else {
 		if (rs->tothalo)
@@ -192,6 +186,9 @@ static void stats_background(void *UNUSED(arg), RenderStats *rs)
 		else
 			fprintf(stdout, IFACE_("Sce: %s Ve:%d Fa:%d La:%d"), rs->scene_name, rs->totvert, rs->totface, rs->totlamp);
 	}
+
+	/* Flush stdout to be sure python callbacks are printing stuff after blender. */
+	fflush(stdout);
 
 	BLI_callback_exec(G.main, NULL, BLI_CB_EVT_RENDER_STATS);
 
@@ -341,8 +338,6 @@ void RE_AcquireResultImageViews(Render *re, RenderResult *rr)
 
 			rv = rr->views.first;
 
-			rr->have_combined = (rv->rectf != NULL);
-
 			/* active layer */
 			rl = render_get_active_layer(re, re->result);
 
@@ -360,6 +355,7 @@ void RE_AcquireResultImageViews(Render *re, RenderResult *rr)
 				}
 			}
 
+			rr->have_combined = (rv->rectf != NULL);
 			rr->layers = re->result->layers;
 			rr->xof = re->disprect.xmin;
 			rr->yof = re->disprect.ymin;
@@ -1393,7 +1389,13 @@ static void threaded_tile_processor(Render *re)
 
 	BLI_thread_queue_free(donequeue);
 	BLI_thread_queue_free(workqueue);
-	
+
+	if (re->result->do_exr_tile) {
+		BLI_rw_mutex_lock(&re->resultmutex, THREAD_LOCK_WRITE);
+		render_result_save_empty_result_tiles(re);
+		BLI_rw_mutex_unlock(&re->resultmutex);
+	}
+
 	/* unset threadsafety */
 	g_break = 0;
 	BLI_rw_mutex_lock(&re->partsmutex, THREAD_LOCK_WRITE);
@@ -1437,9 +1439,6 @@ void RE_TileProcessor(Render *re)
 
 static void do_render_3d(Render *re)
 {
-#ifdef FREESTYLR_SAVEBUFFERS_WORKAROUND
-	const bool do_early_result_merge = (re->r.scemode & R_MULTIVIEW) == 0;
-#endif
 	RenderView *rv;
 	int cfra_backup;
 
@@ -1487,13 +1486,7 @@ static void do_render_3d(Render *re)
 			re->draw_lock(re->dlh, 0);
 	
 		threaded_tile_processor(re);
-
-#ifdef FREESTYLR_SAVEBUFFERS_WORKAROUND
-		if (do_early_result_merge) {
-			main_render_result_end(re);
-		}
-#endif
-
+	
 #ifdef WITH_FREESTYLE
 		/* Freestyle */
 		if (re->r.mode & R_EDGE_FRS)
@@ -1510,13 +1503,7 @@ static void do_render_3d(Render *re)
 		RE_Database_Free(re);
 	}
 
-#ifdef FREESTYLR_SAVEBUFFERS_WORKAROUND
-	if (!do_early_result_merge) {
-		main_render_result_end(re);
-	}
-#else
 	main_render_result_end(re);
-#endif
 
 	re->scene->r.cfra = cfra_backup;
 	re->scene->r.subframe = 0.f;
@@ -2218,7 +2205,7 @@ static void free_all_freestyle_renders(void)
 			/* detach the window manager from freestyle bmain (see comments
 			 * in add_freestyle() for more detail)
 			 */
-			re1->freestyle_bmain->wm.first = re1->freestyle_bmain->wm.last = NULL;
+			BLI_listbase_clear(&re1->freestyle_bmain->wm);
 
 			BKE_main_free(re1->freestyle_bmain);
 			re1->freestyle_bmain = NULL;
@@ -2513,6 +2500,8 @@ static void do_render_composite_fields_blur_3d(Render *re)
 				/* in case it was never initialized */
 				R.sdh = re->sdh;
 				R.stats_draw = re->stats_draw;
+				R.i.starttime = re->i.starttime;
+				R.i.cfra = re->i.cfra;
 				
 				if (update_newframe)
 					BKE_scene_update_for_newframe(re->eval_ctx, re->main, re->scene, re->lay);
@@ -2627,6 +2616,7 @@ static void do_render_seq(Render *re)
 
 		if (out) {
 			ibuf_arr[view_id] = IMB_dupImBuf(out);
+			IMB_metadata_copy(ibuf_arr[view_id], out);
 			IMB_freeImBuf(out);
 			BKE_sequencer_imbuf_from_sequencer_space(re->scene, ibuf_arr[view_id]);
 		}
@@ -2648,6 +2638,12 @@ static void do_render_seq(Render *re)
 		if (ibuf_arr[view_id]) {
 			/* copy ibuf into combined pixel rect */
 			render_result_rect_from_ibuf(rr, &re->r, ibuf_arr[view_id], view_id);
+
+			if (ibuf_arr[view_id]->metadata && (re->r.stamp & R_STAMP_STRIPMETA)) {
+				/* ensure render stamp info first */
+				BKE_render_result_stamp_info(NULL, NULL, rr, true);
+				BKE_stamp_info_from_imbuf(rr, ibuf_arr[view_id]);
+			}
 
 			if (recurs_depth == 0) { /* with nested scenes, only free on toplevel... */
 				Editing *ed = re->scene->ed;
@@ -2688,6 +2684,7 @@ static void do_render_seq(Render *re)
 static void do_render_all_options(Render *re)
 {
 	Object *camera;
+	bool render_seq = false;
 
 	re->current_scene_update(re->suh, re->scene);
 
@@ -2703,8 +2700,10 @@ static void do_render_all_options(Render *re)
 	}
 	else if (RE_seq_render_active(re->scene, &re->r)) {
 		/* note: do_render_seq() frees rect32 when sequencer returns float images */
-		if (!re->test_break(re->tbh))
+		if (!re->test_break(re->tbh)) {
 			do_render_seq(re);
+			render_seq = true;
+		}
 		
 		re->stats_draw(re->sdh, &re->i);
 		re->display_update(re->duh, re->result, NULL);
@@ -2724,7 +2723,9 @@ static void do_render_all_options(Render *re)
 	
 	/* save render result stamp if needed */
 	camera = RE_GetCamera(re);
-	BKE_render_result_stamp_info(re->scene, camera, re->result);
+	/* sequence rendering should have taken care of that already */
+	if (!(render_seq && (re->r.stamp & R_STAMP_STRIPMETA)))
+		BKE_render_result_stamp_info(re->scene, camera, re->result, false);
 
 	/* stamp image info here */
 	if ((re->r.stamp & R_STAMP_ALL) && (re->r.stamp & R_STAMP_DRAW)) {
@@ -2955,13 +2956,6 @@ bool RE_is_rendering_allowed(Scene *scene, Object *camera_override, ReportList *
 			BKE_report(reports, RPT_ERROR, "Fields not supported in Freestyle");
 			return false;
 		}
-
-#  ifdef FREESTYLR_SAVEBUFFERS_WORKAROUND
-		if ((scene->r.scemode & R_MULTIVIEW) != 0 && (scene->r.scemode & R_EXR_TILE_FILE) != 0) {
-			BKE_report(reports, RPT_ERROR, "Multi-View combined with Save Buffers not supported in Freestyle");
-			return false;
-		}
-#  endif
 	}
 #endif
 
@@ -3434,12 +3428,15 @@ static int do_write_image_or_movie(Render *re, Main *bmain, Scene *scene, bMovie
 	render_time = re->i.lastframetime;
 	re->i.lastframetime = PIL_check_seconds_timer() - re->i.starttime;
 	
-	BLI_timestr(re->i.lastframetime, name, sizeof(name));
+	BLI_timecode_string_from_time_simple(name, sizeof(name), re->i.lastframetime);
 	printf(" Time: %s", name);
-	
+
+	/* Flush stdout to be sure python callbacks are printing stuff after blender. */
+	fflush(stdout);
+
 	BLI_callback_exec(G.main, NULL, BLI_CB_EVT_RENDER_STATS);
 
-	BLI_timestr(re->i.lastframetime - render_time, name, sizeof(name));
+	BLI_timecode_string_from_time_simple(name, sizeof(name), re->i.lastframetime - render_time);
 	printf(" (Saving: %s)\n", name);
 	
 	fputc('\n', stdout);

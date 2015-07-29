@@ -134,6 +134,8 @@ void SEQUENCER_OT_paste(struct wmOperatorType *ot);
 void SEQUENCER_OT_rebuild_proxy(struct wmOperatorType *ot);
 void SEQUENCER_OT_enable_proxies(struct wmOperatorType *ot);
 
+void SEQUENCER_OT_export_subtitles(struct wmOperatorType *ot);
+
 /* preview specific operators */
 void SEQUENCER_OT_view_all_preview(struct wmOperatorType *ot);
 
@@ -197,6 +199,7 @@ void SEQUENCER_OT_properties(struct wmOperatorType *ot);
 void SEQUENCER_OT_strip_modifier_add(struct wmOperatorType *ot);
 void SEQUENCER_OT_strip_modifier_remove(struct wmOperatorType *ot);
 void SEQUENCER_OT_strip_modifier_move(struct wmOperatorType *ot);
+void SEQUENCER_OT_strip_modifier_copy(struct wmOperatorType *ot);
 
 /* sequencer_view.c */
 void SEQUENCER_OT_sample(struct wmOperatorType *ot);

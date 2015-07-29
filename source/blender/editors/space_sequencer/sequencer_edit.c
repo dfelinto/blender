@@ -35,9 +35,11 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_blenlib.h"
-#include "BLI_math.h"
-#include "BLI_utildefines.h"
+#include "BLI_fileops.h"
 #include "BLI_ghash.h"
+#include "BLI_math.h"
+#include "BLI_timecode.h"
+#include "BLI_utildefines.h"
 
 #include "BLF_translation.h"
 
@@ -91,6 +93,7 @@ EnumPropertyItem sequencer_prop_effect_types[] = {
 	{SEQ_TYPE_MULTICAM, "MULTICAM", 0, "Multicam Selector", ""},
 	{SEQ_TYPE_ADJUSTMENT, "ADJUSTMENT", 0, "Adjustment Layer", ""},
 	{SEQ_TYPE_GAUSSIAN_BLUR, "GAUSSIAN_BLUR", 0, "Gaussian Blur", ""},
+	{SEQ_TYPE_TEXT, "TEXT", 0, "Text", ""},
 	{0, NULL, 0, NULL, NULL}
 };
 
@@ -900,6 +903,7 @@ static bool sequence_offset_after_frame(Scene *scene, const int delta, const int
 	Sequence *seq;
 	Editing *ed = BKE_sequencer_editing_get(scene, false);
 	bool done = false;
+	TimeMarker *marker;
 
 	/* all strips >= cfra are shifted */
 	
@@ -910,6 +914,14 @@ static bool sequence_offset_after_frame(Scene *scene, const int delta, const int
 			BKE_sequence_translate(scene, seq, delta);
 			BKE_sequence_calc(scene, seq);
 			done = true;
+		}
+	}
+
+	if (!scene->toolsettings->lock_markers) {
+		for (marker = scene->markers.first; marker; marker = marker->next) {
+			if (marker->frame >= cfra) {
+				marker->frame += delta;
+			}
 		}
 	}
 
@@ -984,11 +996,11 @@ static void UNUSED_FUNCTION(seq_remap_paths) (Scene *scene)
 		return;
 	
 	BLI_strncpy(from, last_seq->strip->dir, sizeof(from));
-// XXX	if (0 == sbutton(from, 0, sizeof(from)-1, "From: "))
+// XXX	if (0 == sbutton(from, 0, sizeof(from) - 1, "From: "))
 //		return;
 	
 	BLI_strncpy(to, from, sizeof(to));
-// XXX	if (0 == sbutton(to, 0, sizeof(to)-1, "To: "))
+// XXX	if (0 == sbutton(to, 0, sizeof(to) - 1, "To: "))
 //		return;
 	
 	if (STREQ(to, from))
@@ -1035,7 +1047,7 @@ static int sequencer_gap_remove_exec(bContext *C, wmOperator *op)
 			break;
 		}
 	}
-	
+
 	for ( ; cfra < efra; cfra++) {
 		/* first == 0 means there's still no strip to remove a gap for */
 		if (first == false) {
@@ -1915,6 +1927,14 @@ void SEQUENCER_OT_reload(struct wmOperatorType *ot)
 }
 
 /* reload operator */
+static int sequencer_refresh_all_poll(bContext *C)
+{
+	if (G.is_rendering) {
+		return 0;
+	}
+	return sequencer_edit_poll(C);
+}
+
 static int sequencer_refresh_all_exec(bContext *C, wmOperator *UNUSED(op))
 {
 	Scene *scene = CTX_data_scene(C);
@@ -1936,7 +1956,7 @@ void SEQUENCER_OT_refresh_all(struct wmOperatorType *ot)
 	
 	/* api callbacks */
 	ot->exec = sequencer_refresh_all_exec;
-	ot->poll = sequencer_edit_poll;
+	ot->poll = sequencer_refresh_all_poll;
 }
 
 static int sequencer_reassign_inputs_exec(bContext *C, wmOperator *op)
@@ -3814,4 +3834,113 @@ void SEQUENCER_OT_change_path(struct wmOperatorType *ot)
 	                               WM_FILESEL_DIRECTORY | WM_FILESEL_RELPATH | WM_FILESEL_FILEPATH | WM_FILESEL_FILES,
 	                               FILE_DEFAULTDISPLAY);
 	RNA_def_boolean(ot->srna, "use_placeholders", false, "Use Placeholders", "Use placeholders for missing frames of the strip");
+}
+
+static int sequencer_export_subtitles_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
+{
+	if (!RNA_struct_property_is_set(op->ptr, "filepath")) {
+		char filepath[FILE_MAX];
+
+		if (G.main->name[0] == 0)
+			BLI_strncpy(filepath, "untitled", sizeof(filepath));
+		else
+			BLI_strncpy(filepath, G.main->name, sizeof(filepath));
+
+		BLI_replace_extension(filepath, sizeof(filepath), ".srt");
+		RNA_string_set(op->ptr, "filepath", filepath);
+	}
+
+	WM_event_add_fileselect(C, op);
+
+	return OPERATOR_RUNNING_MODAL;
+}
+
+static int sequencer_export_subtitles_exec(bContext *C, wmOperator *op)
+{
+	Scene *scene = CTX_data_scene(C);
+	Sequence *seq = BKE_sequencer_active_get(scene);
+	Editing *ed = BKE_sequencer_editing_get(scene, false);
+	int iter = 0;
+	FILE *file;
+	char filepath[FILE_MAX];
+
+	if (!RNA_struct_property_is_set(op->ptr, "filepath")) {
+		BKE_report(op->reports, RPT_ERROR, "No filename given");
+		return OPERATOR_CANCELLED;
+	}
+
+	RNA_string_get(op->ptr, "filepath", filepath);
+	BLI_ensure_extension(filepath, sizeof(filepath), ".srt");
+
+	/* Avoid File write exceptions */
+	if (!BLI_exists(filepath)) {
+		BLI_make_existing_file(filepath);
+		if (!BLI_file_touch(filepath)) {
+			BKE_report(op->reports, RPT_ERROR, "Can't create subtitle file");
+			return OPERATOR_CANCELLED;
+		}
+	}
+	else if (!BLI_file_is_writable(filepath)) {
+		BKE_report(op->reports, RPT_ERROR, "Can't overwrite export file");
+		return OPERATOR_CANCELLED;
+	}
+
+	/* time to open and write! */
+	file = BLI_fopen(filepath, "w");
+
+	SEQ_BEGIN(ed, seq)
+	{
+		if (seq->type == SEQ_TYPE_TEXT) {
+			TextVars *data = seq->effectdata;
+			char timecode_str[32];
+			double sec;
+			int frac;
+			int len;
+			fprintf(file, "%d\n", iter++);
+			sec = FRA2TIME(seq->startdisp);
+			frac = 1000 * (sec - floor(sec));
+			sec = floor(sec);
+			BLI_timecode_string_from_time(timecode_str, sizeof(timecode_str), 1, sec, FPS, USER_TIMECODE_SMPTE_FULL);
+			len = strlen(timecode_str);
+			timecode_str[len - 3] = 0;
+			fprintf(file, "%s,%d", timecode_str, frac);
+			sec = FRA2TIME(seq->enddisp);
+			BLI_timecode_string_from_time(timecode_str, sizeof(timecode_str), 1, sec, FPS, USER_TIMECODE_SMPTE_FULL);
+			len = strlen(timecode_str);
+			timecode_str[len - 3] = 0;
+			fprintf(file, " --> %s,%d\n", timecode_str, frac);
+			fprintf(file, "%s\n\n", data->text);
+		}
+	}
+	SEQ_END
+
+	fclose(file);
+
+	return OPERATOR_FINISHED;
+}
+
+static int sequencer_strip_is_text_poll(bContext *C)
+{
+	Editing *ed;
+	Sequence *seq;
+	return (((ed = BKE_sequencer_editing_get(CTX_data_scene(C), false)) != NULL) && ((seq = ed->act_seq) != NULL) && (seq->type == SEQ_TYPE_TEXT));
+}
+
+void SEQUENCER_OT_export_subtitles(struct wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Export Subtitles";
+	ot->idname = "SEQUENCER_OT_export_subtitles";
+	ot->description = "Export .srt file containing text strips";
+
+	/* api callbacks */
+	ot->exec = sequencer_export_subtitles_exec;
+	ot->invoke = sequencer_export_subtitles_invoke;
+	ot->poll = sequencer_strip_is_text_poll;
+
+	/* flags */
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+	WM_operator_properties_filesel(ot,  FILE_TYPE_FOLDER, FILE_BLENDER, FILE_SAVE,
+	                               WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY);
 }

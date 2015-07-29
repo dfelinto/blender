@@ -35,7 +35,6 @@
 #include "BKE_key.h"
 #include "BKE_movieclip.h"
 #include "BKE_node.h"
-#include "BKE_screen.h"
 
 #include "DNA_action_types.h"
 #include "DNA_key_types.h"
@@ -57,8 +56,6 @@
 
 #include "RE_engine.h"
 #include "RE_pipeline.h"
-
-#include "ED_fileselect.h"
 
 #include "RNA_enum_types.h"
 
@@ -225,7 +222,6 @@ static EnumPropertyItem buttons_texture_context_items[] = {
 #ifdef RNA_RUNTIME
 
 #include "DNA_anim_types.h"
-#include "DNA_mask_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
 #include "DNA_userdef_types.h"
@@ -917,6 +913,8 @@ static EnumPropertyItem *rna_SpaceImageEditor_pivot_itemf(bContext *UNUSED(C), P
 		{V3D_CENTER, "CENTER", ICON_ROTATE, "Bounding Box Center", ""},
 		{V3D_CENTROID, "MEDIAN", ICON_ROTATECENTER, "Median Point", ""},
 		{V3D_CURSOR, "CURSOR", ICON_CURSOR, "2D Cursor", ""},
+		{V3D_LOCAL, "INDIVIDUAL_ORIGINS", ICON_ROTATECOLLECTION,
+		            "Individual Origins", "Pivot around each object's own origin"},
 		{0, NULL, 0, NULL, NULL}
 	};
 
@@ -2302,7 +2300,7 @@ static void rna_def_space_view3d(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "render_border_min_x", PROP_FLOAT, PROP_NONE);
 	RNA_def_property_float_sdna(prop, NULL, "render_border.xmin");
 	RNA_def_property_range(prop, 0.0f, 1.0f);
-	RNA_def_property_ui_text(prop, "Border Minimum X", "Minimum X value to for the render border");
+	RNA_def_property_ui_text(prop, "Border Minimum X", "Minimum X value for the render border");
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
 
 	prop = RNA_def_property(srna, "render_border_min_y", PROP_FLOAT, PROP_NONE);
@@ -2357,7 +2355,7 @@ static void rna_def_space_view3d(BlenderRNA *brna)
 	RNA_def_property_float_funcs(prop, "rna_View3D_CursorLocation_get", "rna_View3D_CursorLocation_set", NULL);
 	RNA_def_property_ui_text(prop, "3D Cursor Location",
 	                         "3D cursor location for this view (dependent on local view setting)");
-	RNA_def_property_ui_range(prop, -10000.0, 10000.0, 10, 4);
+	RNA_def_property_ui_range(prop, -10000.0, 10000.0, 1, RNA_TRANSLATION_PREC_DEFAULT);
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
 	
 	prop = RNA_def_property(srna, "lens", PROP_FLOAT, PROP_UNIT_CAMERA);
@@ -3212,14 +3210,15 @@ static void rna_def_space_text(BlenderRNA *brna)
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_TEXT, NULL);
 
 	prop = RNA_def_property(srna, "top", PROP_INT, PROP_NONE);
-	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 	RNA_def_property_int_sdna(prop, NULL, "top");
+	RNA_def_property_range(prop, 0, INT_MAX);
 	RNA_def_property_ui_text(prop, "Top Line", "Top line visible");
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_TEXT, NULL);
 
 	prop = RNA_def_property(srna, "visible_lines", PROP_INT, PROP_NONE);
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 	RNA_def_property_int_sdna(prop, NULL, "viewlines");
-	RNA_def_property_ui_text(prop, "Top Line", "Amount of lines that can be visible in current editor");
+	RNA_def_property_ui_text(prop, "Visible Lines", "Amount of lines that can be visible in current editor");
 
 	/* functionality options */
 	prop = RNA_def_property(srna, "use_overwrite", PROP_BOOLEAN, PROP_NONE);
@@ -4408,6 +4407,11 @@ static void rna_def_space_clip(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "show_disabled", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_ui_text(prop, "Show Disabled", "Show disabled tracks from the footage");
 	RNA_def_property_boolean_negative_sdna(prop, NULL, "flag", SC_HIDE_DISABLED);
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_CLIP, NULL);
+
+	prop = RNA_def_property(srna, "show_metadata", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag", 	SC_SHOW_METADATA);
+	RNA_def_property_ui_text(prop, "Show Metadata", "Show metadata of clip");
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_CLIP, NULL);
 
 	/* scopes */

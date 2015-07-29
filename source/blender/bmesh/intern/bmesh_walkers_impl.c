@@ -86,6 +86,30 @@ static bool bmw_mask_check_face(BMWalker *walker, BMFace *f)
 /** \} */
 
 
+/** \name BMesh Queries (modified to check walker flags)
+ * \{ */
+
+/**
+ * Check for a wire edge, taking ignoring hidden.
+ */
+static bool bmw_edge_is_wire(const BMWalker *walker, const BMEdge *e)
+{
+	if (walker->flag & BMW_FLAG_TEST_HIDDEN) {
+		/* check if this is a wire edge, ignoring hidden faces */
+		if (BM_edge_is_wire(e)) {
+			return true;
+		}
+		else {
+			return BM_edge_is_all_face_flag_test(e, BM_ELEM_HIDDEN, false);
+		}
+	}
+	else {
+		return BM_edge_is_wire(e);
+	}
+}
+/** \} */
+
+
 /** \name Shell Walker
  * \{
  *
@@ -239,6 +263,10 @@ static void bmw_LoopShellWalker_visitLoop(BMWalker *walker, BMLoop *l)
 		return;
 	}
 
+	if (!bmw_mask_check_face(walker, l->f)) {
+		return;
+	}
+
 	shellWalk = BMW_state_add(walker);
 	shellWalk->curloop = l;
 	BLI_gset_insert(walker->visit_set, l);
@@ -364,9 +392,13 @@ static void bmw_LoopShellWalker_visitEdgeWire(BMWalker *walker, BMEdge *e)
 {
 	BMwLoopShellWireWalker *shellWalk = NULL;
 
-	BLI_assert(BM_edge_is_wire(e));
+	BLI_assert(bmw_edge_is_wire(walker, e));
 
 	if (BLI_gset_haskey(walker->visit_set_alt, e)) {
+		return;
+	}
+
+	if (!bmw_mask_check_edge(walker, e)) {
 		return;
 	}
 
@@ -385,9 +417,13 @@ static void bmw_LoopShellWireWalker_visitVert(BMWalker *walker, BMVert *v, const
 		return;
 	}
 
+	if (!bmw_mask_check_vert(walker, v)) {
+		return;
+	}
+
 	e = v->e;
 	do {
-		if (BM_edge_is_wire(e) && (e != e_from)) {
+		if (bmw_edge_is_wire(walker, e) && (e != e_from)) {
 			BMVert *v_other;
 			BMIter iter;
 			BMLoop *l;
@@ -397,6 +433,7 @@ static void bmw_LoopShellWireWalker_visitVert(BMWalker *walker, BMVert *v, const
 			/* check if we step onto a non-wire vertex */
 			v_other = BM_edge_other_vert(e, v);
 			BM_ITER_ELEM (l, &iter, v_other, BM_LOOPS_OF_VERT) {
+
 				bmw_LoopShellWalker_visitLoop(walker, l);
 			}
 		}
@@ -426,15 +463,15 @@ static void bmw_LoopShellWireWalker_begin(BMWalker *walker, void *data)
 		case BM_VERT:
 		{
 			BMVert *v = (BMVert *)h;
-			bmw_LoopShellWireWalker_visitVert(walker, v, NULL);
+			if (v->e) {
+				bmw_LoopShellWireWalker_visitVert(walker, v, NULL);
+			}
 			break;
 		}
 		case BM_EDGE:
 		{
 			BMEdge *e = (BMEdge *)h;
-			if (BM_edge_is_wire(e)) {
-				bmw_LoopShellWalker_visitEdgeWire(walker, e);
-			}
+			bmw_LoopShellWalker_visitEdgeWire(walker, e);
 			break;
 		}
 		case BM_FACE:
@@ -1439,17 +1476,16 @@ static void *bmw_UVEdgeWalker_yield(BMWalker *walker)
 static void *bmw_UVEdgeWalker_step(BMWalker *walker)
 {
 	const int type = walker->bm->ldata.layers[walker->layer].type;
+	const int offset = walker->bm->ldata.layers[walker->layer].offset;
+
 	BMwUVEdgeWalker *lwalk, owalk;
-	BMLoop *l, *l2, *l3, *nl, *cl;
-	BMIter liter;
-	void *d1, *d2;
-	int i, j, rlen;
+	BMLoop *l;
+	int i;
 
 	BMW_state_remove_r(walker, &owalk);
 	lwalk = &owalk;
 
 	l = lwalk->l;
-	nl = l->next;
 
 	if (!bmw_mask_check_edge(walker, l->e)) {
 		return l;
@@ -1458,37 +1494,40 @@ static void *bmw_UVEdgeWalker_step(BMWalker *walker)
 	/* go over loops around l->v and nl->v and see which ones share l and nl's
 	 * mloopuv's coordinates. in addition, push on l->next if necessary */
 	for (i = 0; i < 2; i++) {
-		cl = i ? nl : l;
-		BM_ITER_ELEM (l2, &liter, cl->v, BM_LOOPS_OF_VERT) {
-			d1 = CustomData_bmesh_get_layer_n(&walker->bm->ldata,
-			                                  cl->head.data, walker->layer);
-			
-			rlen = BM_edge_face_count(l2->e);
-			for (j = 0; j < rlen; j++) {
-				if (BLI_gset_haskey(walker->visit_set, l2)) {
+		BMIter liter;
+		BMLoop *l_pivot, *l_radial;
+
+		l_pivot = i ? l->next : l;
+		BM_ITER_ELEM (l_radial, &liter, l_pivot->v, BM_LOOPS_OF_VERT) {
+			BMLoop *l_radial_first = l_radial;
+			void *data_pivot = BM_ELEM_CD_GET_VOID_P(l_pivot, offset);
+
+			do {
+				BMLoop *l_other;
+				void *data_other;
+
+				if (BLI_gset_haskey(walker->visit_set, l_radial)) {
 					continue;
 				}
 
-				if (!bmw_mask_check_edge(walker, l2->e)) {
-					if (l2->v != cl->v) {
+				if (l_radial->v != l_pivot->v) {
+					if (!bmw_mask_check_edge(walker, l_radial->e)) {
 						continue;
 					}
 				}
 
-				l3 = l2->v != cl->v ? l2->next : l2;
-				d2 = CustomData_bmesh_get_layer_n(&walker->bm->ldata,
-				                                  l3->head.data, walker->layer);
+				l_other = (l_radial->v != l_pivot->v) ? l_radial->next : l_radial;
+				data_other = BM_ELEM_CD_GET_VOID_P(l_other, offset);
 
-				if (!CustomData_data_equals(type, d1, d2))
+				if (!CustomData_data_equals(type, data_pivot, data_other))
 					continue;
-				
+
 				lwalk = BMW_state_add(walker);
-				BLI_gset_insert(walker->visit_set, l2);
+				BLI_gset_insert(walker->visit_set, l_radial);
 
-				lwalk->l = l2;
+				lwalk->l = l_radial;
 
-				l2 = l2->radial_next;
-			}
+			} while ((l_radial = l_radial->radial_next) != l_radial_first);
 		}
 	}
 

@@ -61,7 +61,7 @@ extern "C" {
 
 	#  include "marshal.h" /* python header for loading/saving dicts */
 }
-#include "AUD_PyInit.h"
+#include "../../../../intern/audaspace/intern/AUD_PyInit.h"
 
 #endif  /* WITH_PYTHON */
 
@@ -112,8 +112,8 @@ extern "C" {
 #include "RAS_2DFilterManager.h"
 #include "MT_Vector3.h"
 #include "MT_Point3.h"
-#include "ListValue.h"
-#include "InputParser.h"
+#include "EXP_ListValue.h"
+#include "EXP_InputParser.h"
 #include "KX_Scene.h"
 
 #include "NG_NetworkScene.h" //Needed for sendMessage()
@@ -123,7 +123,7 @@ extern "C" {
 
 #include "KX_PyMath.h"
 
-#include "PyObjectPlus.h"
+#include "EXP_PyObjectPlus.h"
 
 #include "KX_PythonInitTypes.h" 
 
@@ -138,6 +138,7 @@ extern "C" {
 #include "BKE_global.h"
 #include "BKE_library.h"
 #include "BKE_appdir.h"
+#include "BKE_blender.h"
 #include "BLI_blenlib.h"
 #include "GPU_material.h"
 #include "MEM_guardedalloc.h"
@@ -185,17 +186,17 @@ class KX_KetsjiEngine* KX_GetActiveEngine()
 }
 
 /* why is this in python? */
-void	KX_RasterizerDrawDebugLine(const MT_Vector3& from,const MT_Vector3& to,const MT_Vector3& color)
+void KX_RasterizerDrawDebugLine(const MT_Vector3& from,const MT_Vector3& to,const MT_Vector3& color)
 {
 	if (gp_Rasterizer)
-		gp_Rasterizer->DrawDebugLine(from,to,color);
+		gp_Rasterizer->DrawDebugLine(gp_KetsjiScene, from, to, color);
 }
 
 void KX_RasterizerDrawDebugCircle(const MT_Vector3& center, const MT_Scalar radius, const MT_Vector3& color,
                                   const MT_Vector3& normal, int nsector)
 {
 	if (gp_Rasterizer)
-		gp_Rasterizer->DrawDebugCircle(center, radius, color, normal, nsector);
+		gp_Rasterizer->DrawDebugCircle(gp_KetsjiScene, center, radius, color, normal, nsector);
 }
 
 #ifdef WITH_PYTHON
@@ -220,7 +221,7 @@ static void KX_MACRO_addTypesToDict_fn(PyObject *dict, const char *name, long va
 
 
 // temporarily python stuff, will be put in another place later !
-#include "KX_Python.h"
+#include "EXP_Python.h"
 #include "SCA_PythonController.h"
 // List of methods defined in the module
 
@@ -1137,10 +1138,6 @@ static PyObject *gPySetGLSLMaterialSetting(PyObject *,
 	else
 		gs->glslflag |= flag;
 
-	/* temporarily store the glsl settings in the scene for the GLSL materials */
-	GameData *gm= &(gp_KetsjiScene->GetBlenderScene()->gm);
-	gm->flag = gs->glslflag;
-
 	/* display lists and GLSL materials need to be remade */
 	if (sceneflag != gs->glslflag) {
 		GPU_materials_free();
@@ -1148,11 +1145,14 @@ static PyObject *gPySetGLSLMaterialSetting(PyObject *,
 			KX_SceneList *scenes = gp_KetsjiEngine->CurrentScenes();
 			KX_SceneList::iterator it;
 
-			for (it=scenes->begin(); it!=scenes->end(); it++)
+			for (it=scenes->begin(); it!=scenes->end(); it++) {
+				// temporarily store the glsl settings in the scene for the GLSL materials
+				(*it)->GetBlenderScene()->gm.flag = gs->glslflag;
 				if ((*it)->GetBucketManager()) {
 					(*it)->GetBucketManager()->ReleaseDisplayLists();
 					(*it)->GetBucketManager()->ReleaseMaterials();
 				}
+			}
 		}
 	}
 
@@ -1265,7 +1265,7 @@ static PyObject *gPyDrawLine(PyObject *, PyObject *args)
 	if (!PyVecTo(ob_color, color))
 		return NULL;
 
-	gp_Rasterizer->DrawDebugLine(from,to,color);
+	gp_Rasterizer->DrawDebugLine(gp_KetsjiScene, from, to, color);
 	
 	Py_RETURN_NONE;
 }
@@ -2020,32 +2020,49 @@ PyMODINIT_FUNC initBGE(void)
 	PyObject *mod;
 	PyObject *submodule;
 	PyObject *sys_modules = PyThreadState_GET()->interp->modules;
+	const char *mod_full;
 
 	mod = PyModule_Create(&BGE_module_def);
 
-	PyModule_AddObject(mod, "constraints", (submodule = initConstraintPythonBinding()));
-	PyDict_SetItemString(sys_modules, PyModule_GetName(submodule), submodule);
+	/* skip "bge." */
+#define SUBMOD (mod_full + 4)
+
+	mod_full = "bge.app";
+	PyModule_AddObject(mod, SUBMOD, (submodule = initApplicationPythonBinding()));
+	PyDict_SetItemString(sys_modules, mod_full, submodule);
 	Py_INCREF(submodule);
 
-	PyModule_AddObject(mod, "events", (submodule = initGameKeysPythonBinding()));
-	PyDict_SetItemString(sys_modules, PyModule_GetName(submodule), submodule);
+	mod_full = "bge.constraints";
+	PyModule_AddObject(mod, SUBMOD, (submodule = initConstraintPythonBinding()));
+	PyDict_SetItemString(sys_modules, mod_full, submodule);
 	Py_INCREF(submodule);
 
-	PyModule_AddObject(mod, "logic", (submodule = initGameLogicPythonBinding()));
-	PyDict_SetItemString(sys_modules, PyModule_GetName(submodule), submodule);
+	mod_full = "bge.events";
+	PyModule_AddObject(mod, SUBMOD, (submodule = initGameKeysPythonBinding()));
+	PyDict_SetItemString(sys_modules, mod_full, submodule);
 	Py_INCREF(submodule);
 
-	PyModule_AddObject(mod, "render", (submodule = initRasterizerPythonBinding()));
-	PyDict_SetItemString(sys_modules, PyModule_GetName(submodule), submodule);
+	mod_full = "bge.logic";
+	PyModule_AddObject(mod, SUBMOD, (submodule = initGameLogicPythonBinding()));
+	PyDict_SetItemString(sys_modules, mod_full, submodule);
 	Py_INCREF(submodule);
 
-	PyModule_AddObject(mod, "texture", (submodule = initVideoTexturePythonBinding()));
-	PyDict_SetItemString(sys_modules, PyModule_GetName(submodule), submodule);
+	mod_full = "bge.render";
+	PyModule_AddObject(mod, SUBMOD, (submodule = initRasterizerPythonBinding()));
+	PyDict_SetItemString(sys_modules, mod_full, submodule);
 	Py_INCREF(submodule);
 
-	PyModule_AddObject(mod, "types", (submodule = initGameTypesPythonBinding()));
-	PyDict_SetItemString(sys_modules, PyModule_GetName(submodule), submodule);
+	mod_full = "bge.texture";
+	PyModule_AddObject(mod, SUBMOD, (submodule = initVideoTexturePythonBinding()));
+	PyDict_SetItemString(sys_modules, mod_full, submodule);
 	Py_INCREF(submodule);
+
+	mod_full = "bge.types";
+	PyModule_AddObject(mod, SUBMOD, (submodule = initGameTypesPythonBinding()));
+	PyDict_SetItemString(sys_modules, mod_full, submodule);
+	Py_INCREF(submodule);
+
+#undef SUBMOD
 
 	return mod;
 }
@@ -2537,6 +2554,77 @@ PyMODINIT_FUNC initGameKeysPythonBinding()
 
 	return m;
 }
+
+
+
+/* ------------------------------------------------------------------------- */
+/* Application: application values that remain unchanged during runtime       */
+/* ------------------------------------------------------------------------- */
+
+PyDoc_STRVAR(Application_module_documentation,
+	"This module contains application values that remain unchanged during runtime."
+	);
+
+static struct PyModuleDef Application_module_def = {
+	PyModuleDef_HEAD_INIT,
+	"bge.app",  /* m_name */
+	Application_module_documentation,  /* m_doc */
+	0,  /* m_size */
+	NULL,  /* m_methods */
+	0,  /* m_reload */
+	0,  /* m_traverse */
+	0,  /* m_clear */
+	0,  /* m_free */
+};
+
+PyMODINIT_FUNC initApplicationPythonBinding()
+{
+	PyObject *m;
+	PyObject *d;
+
+	m = PyModule_Create(&Application_module_def);
+	
+	// Add some symbolic constants to the module
+	d = PyModule_GetDict(m);
+
+	PyDict_SetItemString(d, "version", Py_BuildValue("(iii)",
+		BLENDER_VERSION / 100, BLENDER_VERSION % 100, BLENDER_SUBVERSION));
+	PyDict_SetItemString(d, "version_string", PyUnicode_FromFormat("%d.%02d (sub %d)",
+		BLENDER_VERSION / 100, BLENDER_VERSION % 100, BLENDER_SUBVERSION));
+	PyDict_SetItemString(d, "version_char", PyUnicode_FromString(
+		STRINGIFY(BLENDER_VERSION_CHAR)));
+
+	PyDict_SetItemString(d, "has_texture_ffmpeg",
+#ifdef WITH_FFMPEG
+		Py_True
+#else
+		Py_False
+#endif
+	);
+	PyDict_SetItemString(d, "has_joystick",
+#ifdef WITH_SDL
+		Py_True
+#else
+		Py_False
+#endif
+	);
+	PyDict_SetItemString(d, "has_physics",
+#ifdef WITH_BULLET
+		Py_True
+#else
+		Py_False
+#endif
+	);
+
+	// Check for errors
+	if (PyErr_Occurred()) {
+		PyErr_Print();
+		PyErr_Clear();
+	}
+
+	return m;
+}
+
 
 // utility function for loading and saving the globalDict
 int saveGamePythonConfig( char **marshal_buffer)

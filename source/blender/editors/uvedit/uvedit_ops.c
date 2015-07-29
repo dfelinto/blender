@@ -1135,7 +1135,9 @@ static void uv_select_linked(Scene *scene, Image *ima, BMEditMesh *em, const flo
 	const int cd_poly_tex_offset = CustomData_get_offset(&em->bm->pdata, CD_MTEXPOLY);
 
 	BM_mesh_elem_table_ensure(em->bm, BM_FACE); /* we can use this too */
-	vmap = BM_uv_vert_map_create(em->bm, limit, !select_faces, false);
+
+	/* use winding so we don't consider overlapping islands as connected, see T44320 */
+	vmap = BM_uv_vert_map_create(em->bm, limit, !select_faces, true);
 
 	if (vmap == NULL)
 		return;
@@ -3330,7 +3332,7 @@ static bool uv_snap_uvs_offset(Scene *scene, Image *ima, Object *obedit, const f
 	BMFace *efa;
 	BMLoop *l;
 	BMIter iter, liter;
-	MTexPoly *tface;
+	MTexPoly *mtexpoly;
 	MLoopUV *luv;
 	bool changed = false;
 
@@ -3338,8 +3340,8 @@ static bool uv_snap_uvs_offset(Scene *scene, Image *ima, Object *obedit, const f
 	const int cd_poly_tex_offset = CustomData_get_offset(&em->bm->pdata, CD_MTEXPOLY);
 
 	BM_ITER_MESH (efa, &iter, em->bm, BM_FACES_OF_MESH) {
-		tface = BM_ELEM_CD_GET_VOID_P(efa, cd_poly_tex_offset);
-		if (!uvedit_face_visible_test(scene, ima, efa, tface))
+		mtexpoly = BM_ELEM_CD_GET_VOID_P(efa, cd_poly_tex_offset);
+		if (!uvedit_face_visible_test(scene, ima, efa, mtexpoly))
 			continue;
 
 		BM_ITER_ELEM (l, &liter, efa, BM_LOOPS_OF_FACE) {

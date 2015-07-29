@@ -520,7 +520,11 @@ static int ed_markers_poll_selected_no_locked_markers(bContext *C)
 static int ed_markers_poll_markers_exist(bContext *C)
 {
 	ListBase *markers = ED_context_get_markers(C);
+	ToolSettings *ts = CTX_data_tool_settings(C);
 	
+	if (ts->lock_markers)
+		return 0;
+
 	/* first things first: markers can only exist in timeline views */
 	if (ED_operator_animview_active(C) == 0)
 		return 0;

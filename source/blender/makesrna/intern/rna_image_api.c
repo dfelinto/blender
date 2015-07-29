@@ -35,7 +35,6 @@
 #include <time.h>
 
 #include "DNA_packedFile_types.h"
-#include "DNA_userdef_types.h"
 
 #include "BLI_utildefines.h"
 #include "BLI_path_util.h"
@@ -56,7 +55,6 @@
 #include "IMB_imbuf.h"
 #include "IMB_colormanagement.h"
 
-#include "BIF_gl.h"
 #include "GPU_draw.h"
 #include "GPU_debug.h"
 

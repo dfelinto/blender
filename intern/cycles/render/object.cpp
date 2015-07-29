@@ -494,6 +494,7 @@ void ObjectManager::apply_static_transforms(DeviceScene *dscene, Scene *scene, u
 	bool apply_to_motion = need_motion != Scene::MOTION_PASS;
 #else
 	bool motion_blur = false;
+	bool apply_to_motion = false;
 #endif
 	int i = 0;
 	bool have_instancing = false;
@@ -511,7 +512,9 @@ void ObjectManager::apply_static_transforms(DeviceScene *dscene, Scene *scene, u
 
 	/* apply transforms for objects with single user meshes */
 	foreach(Object *object, scene->objects) {
-		if(mesh_users[object->mesh] == 1) {
+		if(mesh_users[object->mesh] == 1 &&
+		   object->mesh->displacement_method == Mesh::DISPLACE_BUMP)
+		{
 			if(!(motion_blur && object->use_motion)) {
 				if(!object->mesh->transform_applied) {
 					object->apply_transform(apply_to_motion);

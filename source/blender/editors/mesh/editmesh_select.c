@@ -203,8 +203,9 @@ bool EDBM_backbuf_border_init(ViewContext *vc, short xmin, short ymin, short xma
 	}
 	
 	buf = ED_view3d_backbuf_read(vc, xmin, ymin, xmax, ymax);
-	if (buf == NULL) return false;
-	if (bm_vertoffs == 0) return false;
+	if ((buf == NULL) || (bm_vertoffs == 0)) {
+		return false;
+	}
 
 	dr = buf->rect;
 	
@@ -278,8 +279,9 @@ bool EDBM_backbuf_border_mask_init(ViewContext *vc, const int mcords[][2], short
 	}
 
 	buf = ED_view3d_backbuf_read(vc, xmin, ymin, xmax, ymax);
-	if (buf == NULL) return false;
-	if (bm_vertoffs == 0) return false;
+	if ((buf == NULL) || (bm_vertoffs == 0)) {
+		return false;
+	}
 
 	dr = buf->rect;
 
@@ -329,8 +331,9 @@ bool EDBM_backbuf_circle_init(ViewContext *vc, short xs, short ys, short rads)
 	xmin = xs - rads; xmax = xs + rads;
 	ymin = ys - rads; ymax = ys + rads;
 	buf = ED_view3d_backbuf_read(vc, xmin, ymin, xmax, ymax);
-	if (bm_vertoffs == 0) return false;
-	if (buf == NULL) return false;
+	if ((buf == NULL) || (bm_vertoffs == 0)) {
+		return false;
+	}
 
 	dr = buf->rect;
 	
@@ -566,7 +569,7 @@ static void find_nearest_edge__doClosest(
 	dist_test = dist_test_bias = len_manhattan_v2v2(data->mval_fl, screen_co);
 
 	if (data->use_select_bias && BM_elem_flag_test(eed, BM_ELEM_SELECT)) {
-		dist_test += FIND_NEAR_SELECT_BIAS;
+		dist_test_bias += FIND_NEAR_SELECT_BIAS;
 	}
 
 	if (data->vc.rv3d->rflag & RV3D_CLIPPING) {
@@ -700,7 +703,7 @@ BMEdge *EDBM_edge_find_nearest_ex(
 BMEdge *EDBM_edge_find_nearest(
         ViewContext *vc, float *r_dist)
 {
-	return EDBM_edge_find_nearest_ex(vc, r_dist, false, false, false, NULL);
+	return EDBM_edge_find_nearest_ex(vc, r_dist, NULL, false, false, NULL);
 }
 
 /* find the distance to the face we already have */
@@ -1173,7 +1176,7 @@ static EnumPropertyItem *select_similar_type_itemf(bContext *C, PointerRNA *UNUS
 		return item;
 	}
 
-	return NULL;
+	return prop_similar_types;
 }
 
 void MESH_OT_select_similar(wmOperatorType *ot)
@@ -1199,7 +1202,7 @@ void MESH_OT_select_similar(wmOperatorType *ot)
 
 	RNA_def_enum(ot->srna, "compare", prop_similar_compare_types, SIM_CMP_EQ, "Compare", "");
 
-	RNA_def_float(ot->srna, "threshold", 0.0, 0.0, 1.0, "Threshold", "", 0.0, 1.0);
+	RNA_def_float(ot->srna, "threshold", 0.0f, 0.0f, 1.0f, "Threshold", "", 0.0f, 1.0f);
 }
 
 
@@ -1564,7 +1567,7 @@ static bool mouse_mesh_loop(bContext *C, const int mval[2], bool extend, bool de
 	/* no afterqueue (yet), so we check it now, otherwise the bm_xxxofs indices are bad */
 	ED_view3d_backbuf_validate(&vc);
 
-	eed = EDBM_edge_find_nearest(&vc, &dist);
+	eed = EDBM_edge_find_nearest_ex(&vc, &dist, NULL, true, true, NULL);
 	if (eed == NULL) {
 		return false;
 	}
@@ -2821,7 +2824,7 @@ void MESH_OT_select_linked_pick(wmOperatorType *ot)
 	                  "Delimit selected region");
 
 	/* use for redo */
-	prop = RNA_def_int(ot->srna, "index", -1, 0, INT_MAX, "", "", 0, INT_MAX);
+	prop = RNA_def_int(ot->srna, "index", -1, -1, INT_MAX, "", "", 0, INT_MAX);
 	RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 }
 
@@ -3591,8 +3594,8 @@ void MESH_OT_select_random(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 	
 	/* props */
-	RNA_def_float_percentage(ot->srna, "percent", 50.f, 0.0f, 100.0f,
-	                         "Percent", "Percentage of elements to select randomly", 0.f, 100.0f);
+	RNA_def_float_percentage(ot->srna, "percent", 50.0f, 0.0f, 100.0f,
+	                         "Percent", "Percentage of elements to select randomly", 0.0f, 100.0f);
 	WM_operator_properties_select_action_simple(ot, SEL_SELECT);
 }
 
@@ -3745,7 +3748,7 @@ void MESH_OT_select_axis(wmOperatorType *ot)
 	/* properties */
 	RNA_def_enum(ot->srna, "mode", axis_mode_items, 0, "Axis Mode", "Axis side to use when selecting");
 	RNA_def_enum(ot->srna, "axis", axis_items_xyz, 0, "Axis", "Select the axis to compare each vertex on");
-	RNA_def_float(ot->srna, "threshold", 0.0001f, 0.000001f, 50.0f,  "Threshold", "", 0.00001, 10.0);
+	RNA_def_float(ot->srna, "threshold", 0.0001f, 0.000001f, 50.0f,  "Threshold", "", 0.00001f, 10.0f);
 }
 
 

@@ -195,10 +195,10 @@ void BKE_object_handle_data_update(EvaluationContext *eval_ctx,
 			}
 #endif
 			if (em) {
-				makeDerivedMesh(scene, ob, em,  data_mask, 0); /* was CD_MASK_BAREMESH */
+				makeDerivedMesh(scene, ob, em,  data_mask, false); /* was CD_MASK_BAREMESH */
 			}
 			else {
-				makeDerivedMesh(scene, ob, NULL, data_mask, 0);
+				makeDerivedMesh(scene, ob, NULL, data_mask, false);
 			}
 			break;
 		}
@@ -295,7 +295,8 @@ void BKE_object_handle_data_update(EvaluationContext *eval_ctx,
 			/* this is to make sure we get render level duplis in groups:
 			 * the derivedmesh must be created before init_render_mesh,
 			 * since object_duplilist does dupliparticles before that */
-			dm = mesh_create_derived_render(scene, ob, CD_MASK_BAREMESH | CD_MASK_MTFACE | CD_MASK_MCOL);
+			CustomDataMask data_mask = CD_MASK_BAREMESH | CD_MASK_MFACE | CD_MASK_MTFACE | CD_MASK_MCOL;
+			dm = mesh_create_derived_render(scene, ob, data_mask);
 			dm->release(dm);
 
 			for (psys = ob->particlesystem.first; psys; psys = psys->next)

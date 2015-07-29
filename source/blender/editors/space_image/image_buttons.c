@@ -787,7 +787,7 @@ static void rna_update_cb(bContext *C, void *arg_cb, void *UNUSED(arg))
 	RNA_property_update(C, &cb->ptr, cb->prop);
 }
 
-void uiTemplateImage(uiLayout *layout, bContext *C, PointerRNA *ptr, const char *propname, PointerRNA *userptr, int compact)
+void uiTemplateImage(uiLayout *layout, bContext *C, PointerRNA *ptr, const char *propname, PointerRNA *userptr, int compact, int multiview)
 {
 	PropertyRNA *prop;
 	PointerRNA imaptr;
@@ -932,7 +932,7 @@ void uiTemplateImage(uiLayout *layout, bContext *C, PointerRNA *ptr, const char 
 					bool has_alpha = true;
 
 					if (ibuf) {
-						int imtype = BKE_image_ftype_to_imtype(ibuf->ftype);
+						int imtype = BKE_image_ftype_to_imtype(ibuf->ftype, &ibuf->foptions);
 						char valid_channels = BKE_imtype_valid_channels(imtype, false);
 
 						has_alpha = (valid_channels & IMA_CHAN_FLAG_ALPHA) != 0;
@@ -940,11 +940,13 @@ void uiTemplateImage(uiLayout *layout, bContext *C, PointerRNA *ptr, const char 
 						BKE_image_release_ibuf(ima, ibuf, NULL);
 					}
 
-					if ((scene->r.scemode & R_MULTIVIEW) != 0) {
-						uiItemR(layout, &imaptr, "use_multiview", 0, NULL, ICON_NONE);
+					if (multiview) {
+						if ((scene->r.scemode & R_MULTIVIEW) != 0) {
+							uiItemR(layout, &imaptr, "use_multiview", 0, NULL, ICON_NONE);
 
-						if (RNA_boolean_get(&imaptr, "use_multiview")) {
-							uiTemplateImageViews(layout, &imaptr);
+							if (RNA_boolean_get(&imaptr, "use_multiview")) {
+								uiTemplateImageViews(layout, &imaptr);
+							}
 						}
 					}
 

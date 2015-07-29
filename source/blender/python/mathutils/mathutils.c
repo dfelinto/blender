@@ -110,7 +110,7 @@ Py_hash_t mathutils_array_hash(const float *array, size_t array_len)
 	return x;
 }
 
-/* helper functionm returns length of the 'value', -1 on error */
+/* helper function returns length of the 'value', -1 on error */
 int mathutils_array_parse(float *array, int array_min, int array_max, PyObject *value, const char *error_prefix)
 {
 	const int flag = array_max;
@@ -348,6 +348,15 @@ int mathutils_any_to_rotmat(float rmat[3][3], PyObject *value, const char *error
 /* Utility functions */
 
 /* LomontRRDCompare4, Ever Faster Float Comparisons by Randy Dillon */
+/* XXX We may want to use 'safer' BLI's compare_ff_relative ultimately?
+ *     LomontRRDCompare4() is an optimized version of Dawson's AlmostEqual2sComplement() (see [1] and [2]).
+ *     Dawson himself now claims this is not a 'safe' thing to do (pushing ULP method beyond its limits),
+ *     an recommands using work from [3] instead, which is done in BLI func...
+ *
+ *     [1] http://www.randydillon.org/Papers/2007/everfast.htm
+ *     [2] http://www.cygnus-software.com/papers/comparingfloats/comparingfloats.htm
+ *     [3] https://randomascii.wordpress.com/2012/02/25/comparing-floating-point-numbers-2012-edition/ instead
+ */
 #define SIGNMASK(i) (-(int)(((unsigned int)(i)) >> 31))
 
 int EXPP_FloatsAreEqual(float af, float bf, int maxDiff)
@@ -403,7 +412,7 @@ int mathutils_deepcopy_args_check(PyObject *args)
 /* Mathutils Callbacks */
 
 /* for mathutils internal use only, eventually should re-alloc but to start with we only have a few users */
-#define MATHUTILS_TOT_CB 16
+#define MATHUTILS_TOT_CB 17
 static Mathutils_Callback *mathutils_callbacks[MATHUTILS_TOT_CB] = {NULL};
 
 unsigned char Mathutils_RegisterCallback(Mathutils_Callback *cb)
@@ -535,7 +544,7 @@ PyObject *BaseMathObject_freeze(BaseMathObject *self)
 
 	self->flag |= BASE_MATH_FLAG_IS_FROZEN;
 
-	return Py_INCREF_RET((PyObject *)self);;
+	return Py_INCREF_RET((PyObject *)self);
 }
 
 int BaseMathObject_traverse(BaseMathObject *self, visitproc visit, void *arg)

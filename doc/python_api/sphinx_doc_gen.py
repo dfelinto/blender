@@ -234,6 +234,7 @@ else:
     EXCLUDE_MODULES = [
         "aud",
         "bge",
+        "bge.app"
         "bge.constraints",
         "bge.events",
         "bge.logic",
@@ -630,7 +631,7 @@ def pyfunc2sphinx(ident, fw, module_name, type_name, identifier, py_func, is_cla
     if type(py_func) == MethodType:
         return
 
-    arg_str = inspect.formatargspec(*inspect.getargspec(py_func))
+    arg_str = inspect.formatargspec(*inspect.getfullargspec(py_func))
 
     if not is_class:
         func_type = "function"
@@ -1669,6 +1670,7 @@ def write_rst_contents(basepath):
         fw("   bge.texture.rst\n\n")
         fw("   bge.events.rst\n\n")
         fw("   bge.constraints.rst\n\n")
+        fw("   bge.app.rst\n\n")
 
     # rna generated change log
     fw(title_string("API Info", "=", double=True))
@@ -1825,6 +1827,7 @@ def copy_handwritten_rsts(basepath):
         "bge.texture",
         "bge.events",
         "bge.constraints",
+        "bge.app",
         "bgl",  # "Blender OpenGl wrapper"
         "gpu",  # "GPU Shader Module"
 

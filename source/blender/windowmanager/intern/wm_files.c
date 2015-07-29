@@ -745,7 +745,8 @@ void wm_read_history(void)
 	/* read list of recent opened files from recent-files.txt to memory */
 	for (l = lines, num = 0; l && (num < U.recent_files); l = l->next) {
 		line = l->link;
-		if (line[0] && BLI_exists(line)) {
+		/* don't check if files exist, causes slow startup for remote/external drives */
+		if (line[0]) {
 			recent = (RecentFile *)MEM_mallocN(sizeof(RecentFile), "RecentFile");
 			BLI_addtail(&(G.recent_files), recent);
 			recent->filepath = BLI_strdup(line);
@@ -1035,7 +1036,7 @@ int wm_homefile_write_exec(bContext *C, wmOperator *op)
 	ED_editors_flush_edits(C, false);
 
 	/*  force save as regular blend file */
-	fileflags = G.fileflags & ~(G_FILE_COMPRESS | G_FILE_AUTOPLAY | G_FILE_LOCK | G_FILE_SIGN | G_FILE_HISTORY);
+	fileflags = G.fileflags & ~(G_FILE_COMPRESS | G_FILE_AUTOPLAY | G_FILE_HISTORY);
 
 	if (BLO_write_file(CTX_data_main(C), filepath, fileflags | G_FILE_USERPREFS, op->reports, NULL) == 0) {
 		printf("fail\n");
@@ -1145,7 +1146,7 @@ void wm_autosave_timer(const bContext *C, wmWindowManager *wm, wmTimer *UNUSED(w
 	}
 	else {
 		/*  save as regular blend file */
-		int fileflags = G.fileflags & ~(G_FILE_COMPRESS | G_FILE_AUTOPLAY | G_FILE_LOCK | G_FILE_SIGN | G_FILE_HISTORY);
+		int fileflags = G.fileflags & ~(G_FILE_COMPRESS | G_FILE_AUTOPLAY | G_FILE_HISTORY);
 
 		ED_editors_flush_edits(C, false);
 

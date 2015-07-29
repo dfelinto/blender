@@ -77,7 +77,7 @@ typedef enum eParentType {
 	PAR_PATH_CONST,
 	PAR_LATTICE,
 	PAR_VERTEX,
-	PAR_VERTEX_TRI
+	PAR_VERTEX_TRI,
 } eParentType;
 
 #ifdef __RNA_TYPES_H__
@@ -130,6 +130,10 @@ void ED_object_base_init_transform(struct bContext *C, struct Base *base, const 
 float ED_object_new_primitive_matrix(
         struct bContext *C, struct Object *editob,
         const float loc[3], const float rot[3], float primmat[4][4]);
+
+
+/* Avoid allowing too much insane values even by typing (typos can hang/crash Blender otherwise). */
+#define OBJECT_ADD_SIZE_MAXF 1.0e12f
 
 void ED_object_add_unit_props(struct wmOperatorType *ot);
 void ED_object_add_generic_props(struct wmOperatorType *ot, bool do_editmode);

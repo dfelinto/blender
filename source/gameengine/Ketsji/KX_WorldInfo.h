@@ -34,7 +34,7 @@
 
 #include "MT_Scalar.h"
 #include "KX_KetsjiEngine.h"
-#include "PyObjectPlus.h"
+#include "EXP_PyObjectPlus.h"
 
 #ifdef WITH_CXX_GUARDEDALLOC
 #include "MEM_guardedalloc.h"
@@ -88,7 +88,7 @@ public:
 	void setMistIntensity(float intensity);
 	void setMistColor(float r, float g, float b);
 	void setBackColor(float r, float g, float b);
-	const float *getBackColor() const;
+	const float *getBackColorConverted() const;
 	void setAmbientColor(float r, float g, float b);
 	void UpdateBackGround();
 	void UpdateWorldSettings();

@@ -62,9 +62,8 @@ void paintface_flush_flags(Object *ob)
 	Mesh *me = BKE_mesh_from_object(ob);
 	DerivedMesh *dm = ob->derivedFinal;
 	MPoly *polys, *mp_orig;
-	MFace *faces;
 	const int *index_array = NULL;
-	int totface, totpoly;
+	int totpoly;
 	int i;
 	
 	if (me == NULL)
@@ -79,26 +78,7 @@ void paintface_flush_flags(Object *ob)
 	if (dm == NULL)
 		return;
 
-	/*
-	 * Try to push updated mesh poly flags to three other data sets:
-	 *  - Mesh polys => Mesh tess faces
-	 *  - Mesh polys => Final derived polys
-	 *  - Final derived polys => Final derived tessfaces
-	 */
-
-	if ((index_array = CustomData_get_layer(&me->fdata, CD_ORIGINDEX))) {
-		faces = me->mface;
-		totface = me->totface;
-		
-		/* loop over tessfaces */
-		for (i = 0; i < totface; i++) {
-			if (index_array[i] != ORIGINDEX_NONE) {
-				/* Copy flags onto the original tessface from its original poly */
-				mp_orig = me->mpoly + index_array[i];
-				faces[i].flag = mp_orig->flag;
-			}
-		}
-	}
+	/* Mesh polys => Final derived polys */
 
 	if ((index_array = CustomData_get_layer(&dm->polyData, CD_ORIGINDEX))) {
 		polys = dm->getPolyArray(dm);
@@ -110,21 +90,6 @@ void paintface_flush_flags(Object *ob)
 				/* Copy flags onto the final derived poly from the original mesh poly */
 				mp_orig = me->mpoly + index_array[i];
 				polys[i].flag = mp_orig->flag;
-			}
-		}
-	}
-
-	if ((index_array = CustomData_get_layer(&dm->faceData, CD_ORIGINDEX))) {
-		polys = dm->getPolyArray(dm);
-		faces = dm->getTessFaceArray(dm);
-		totface = dm->getNumTessFaces(dm);
-
-		/* loop over tessfaces */
-		for (i = 0; i < totface; i++) {
-			if (index_array[i] != ORIGINDEX_NONE) {
-				/* Copy flags onto the final tessface from its final poly */
-				mp_orig = polys + index_array[i];
-				faces[i].flag = mp_orig->flag;
 			}
 		}
 	}
@@ -426,13 +391,15 @@ int do_paintface_box_select(ViewContext *vc, rcti *rect, bool select, bool exten
 	unsigned int *rt;
 	char *selar;
 	int a, index;
-	int sx = BLI_rcti_size_x(rect) + 1;
-	int sy = BLI_rcti_size_y(rect) + 1;
+	const int size[2] = {
+	    BLI_rcti_size_x(rect) + 1,
+	    BLI_rcti_size_y(rect) + 1};
 	
 	me = BKE_mesh_from_object(ob);
 
-	if (me == NULL || me->totpoly == 0 || sx * sy <= 0)
+	if ((me == NULL) || (me->totpoly == 0) || (size[0] * size[1] <= 0)) {
 		return OPERATOR_CANCELLED;
+	}
 
 	selar = MEM_callocN(me->totpoly + 1, "selar");
 
@@ -448,16 +415,21 @@ int do_paintface_box_select(ViewContext *vc, rcti *rect, bool select, bool exten
 
 	ED_view3d_backbuf_validate(vc);
 
-	ibuf = IMB_allocImBuf(sx, sy, 32, IB_rect);
+	ibuf = IMB_allocImBuf(size[0], size[1], 32, IB_rect);
 	rt = ibuf->rect;
-	view3d_opengl_read_pixels(vc->ar, rect->xmin, rect->ymin, sx, sy, GL_RGBA, GL_UNSIGNED_BYTE,  ibuf->rect);
-	if (ENDIAN_ORDER == B_ENDIAN) IMB_convert_rgba_to_abgr(ibuf);
+	view3d_opengl_read_pixels(vc->ar, rect->xmin, rect->ymin, size[0], size[1], GL_RGBA, GL_UNSIGNED_BYTE,  ibuf->rect);
+	if (ENDIAN_ORDER == B_ENDIAN) {
+		IMB_convert_rgba_to_abgr(ibuf);
+	}
+	WM_framebuffer_to_index_array(ibuf->rect, size[0] * size[1]);
 
-	a = sx * sy;
+	a = size[0] * size[1];
 	while (a--) {
 		if (*rt) {
-			index = WM_framebuffer_to_index(*rt);
-			if (index <= me->totpoly) selar[index] = 1;
+			index = *rt;
+			if (index <= me->totpoly) {
+				selar[index] = 1;
+			}
 		}
 		rt++;
 	}
@@ -625,7 +597,7 @@ void paintvert_select_ungrouped(Object *ob, bool extend, bool flush_flags)
 
 /* ********************* MESH VERTEX MIRR TOPO LOOKUP *************** */
 /* note, this is not the best place for the function to be but moved
- * here to for the purpose of syncing with bmesh */
+ * here for the purpose of syncing with bmesh */
 
 typedef unsigned int MirrTopoHash_t;
 

@@ -724,6 +724,7 @@ void RNA_api_ui_layout(StructRNA *srna)
 	RNA_def_function_ui_description(func, "Enum. Large widget showing Icon previews");
 	api_ui_item_rna_common(func);
 	RNA_def_boolean(func, "show_labels", false, "", "Show enum label in preview buttons");
+	RNA_def_float(func, "scale", 5.0f, 1.0f, 100.0f, "Scale", "Scale the icon size (by the button size)", 1.0f, 100.0f);
 
 	func = RNA_def_function(srna, "template_histogram", "uiTemplateHistogram");
 	RNA_def_function_ui_description(func, "Item. A histogramm widget to analyze imaga data");
@@ -773,6 +774,7 @@ void RNA_api_ui_layout(StructRNA *srna)
 	parm = RNA_def_pointer(func, "image_user", "ImageUser", "", "");
 	RNA_def_property_flag(parm, PROP_REQUIRED | PROP_RNAPTR | PROP_NEVER_NULL);
 	RNA_def_boolean(func, "compact", false, "", "Use more compact layout");
+	RNA_def_boolean(func, "multiview", false, "", "Expose Multi-View options");
 
 	func = RNA_def_function(srna, "template_image_settings", "uiTemplateImageSettings");
 	RNA_def_function_ui_description(func, "User interface for setting image format options");

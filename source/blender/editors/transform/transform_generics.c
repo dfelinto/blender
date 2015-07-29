@@ -304,7 +304,7 @@ static bool fcu_test_selected(FCurve *fcu)
 		return 0;
 
 	for (i = 0; i < fcu->totvert; i++, bezt++) {
-		if (BEZSELECTED(bezt)) return 1;
+		if (BEZT_ISSEL_ANY(bezt)) return 1;
 	}
 
 	return 0;
@@ -708,7 +708,7 @@ static void recalcData_spaceclip(TransInfo *t)
 static void recalcData_objects(TransInfo *t)
 {
 	Base *base = t->scene->basact;
-	
+
 	if (t->obedit) {
 		if (ELEM(t->obedit->type, OB_CURVE, OB_SURF)) {
 			Curve *cu = t->obedit->data;
@@ -758,7 +758,14 @@ static void recalcData_objects(TransInfo *t)
 			}
 			if ((t->options & CTX_NO_MIRROR) == 0 && (t->flag & T_MIRROR))
 				editbmesh_apply_to_mirror(t);
-				
+
+			if (t->mode == TFM_EDGE_SLIDE) {
+				projectEdgeSlideData(t, false);
+			}
+			else if (t->mode == TFM_VERT_SLIDE) {
+				projectVertSlideData(t, false);
+			}
+
 			DAG_id_tag_update(t->obedit->data, 0);  /* sets recalc flags */
 			
 			EDBM_mesh_normals_update(em);
@@ -816,7 +823,7 @@ static void recalcData_objects(TransInfo *t)
 				}
 			}
 			
-			if (!ELEM(t->mode, TFM_BONE_ROLL, TFM_BONE_ENVELOPE, TFM_BONESIZE)) {
+			if (!ELEM(t->mode, TFM_BONE_ROLL, TFM_BONE_ENVELOPE, TFM_BONE_ENVELOPE_DIST, TFM_BONESIZE)) {
 				/* fix roll */
 				for (i = 0; i < t->total; i++, td++) {
 					if (td->extra) {
@@ -1128,6 +1135,7 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
 
 	zero_v3(t->vec);
 	zero_v3(t->center);
+	zero_v3(t->center_global);
 
 	unit_m3(t->mat);
 	
@@ -1401,6 +1409,7 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
 #endif
 
 	setTransformViewMatrices(t);
+	setTransformViewAspect(t, t->aspect);
 	initNumInput(&t->num);
 }
 
@@ -1567,6 +1576,19 @@ void calculateCenter2D(TransInfo *t)
 	}
 }
 
+void calculateCenterGlobal(TransInfo *t)
+{
+	/* setting constraint center */
+	/* note, init functions may over-ride t->center */
+	if (t->flag & (T_EDIT | T_POSE)) {
+		Object *ob = t->obedit ? t->obedit : t->poseobj;
+		mul_v3_m4v3(t->center_global, ob->obmat, t->center);
+	}
+	else {
+		copy_v3_v3(t->center_global, t->center);
+	}
+}
+
 void calculateCenterCursor(TransInfo *t, float r_center[3])
 {
 	const float *cursor;
@@ -1595,30 +1617,17 @@ void calculateCenterCursor(TransInfo *t, float r_center[3])
 
 void calculateCenterCursor2D(TransInfo *t, float r_center[2])
 {
-	float aspx = 1.0, aspy = 1.0;
 	const float *cursor = NULL;
 	
 	if (t->spacetype == SPACE_IMAGE) {
 		SpaceImage *sima = (SpaceImage *)t->sa->spacedata.first;
-		if (t->options & CTX_MASK) {
-			ED_space_image_get_aspect(sima, &aspx, &aspy);
-		}
-		else {
-			ED_space_image_get_uv_aspect(sima, &aspx, &aspy);
-		}
 		cursor = sima->cursor;
 	}
 	else if (t->spacetype == SPACE_CLIP) {
 		SpaceClip *space_clip = (SpaceClip *) t->sa->spacedata.first;
-		if (t->options & CTX_MOVIECLIP) {
-			ED_space_clip_get_aspect_dimension_aware(space_clip, &aspx, &aspy);
-		}
-		else {
-			ED_space_clip_get_aspect(space_clip, &aspx, &aspy);
-		}
 		cursor = space_clip->cursor;
 	}
-	
+
 	if (cursor) {
 		if (t->options & CTX_MASK) {
 			float co[2];
@@ -1635,8 +1644,8 @@ void calculateCenterCursor2D(TransInfo *t, float r_center[2])
 				BLI_assert(!"Shall not happen");
 			}
 
-			r_center[0] = co[0] * aspx;
-			r_center[1] = co[1] * aspy;
+			r_center[0] = co[0] * t->aspect[0];
+			r_center[1] = co[1] * t->aspect[1];
 		}
 		else if (t->options & CTX_PAINT_CURVE) {
 			if (t->spacetype == SPACE_IMAGE) {
@@ -1645,8 +1654,8 @@ void calculateCenterCursor2D(TransInfo *t, float r_center[2])
 			}
 		}
 		else {
-			r_center[0] = cursor[0] * aspx;
-			r_center[1] = cursor[1] * aspy;
+			r_center[0] = cursor[0] * t->aspect[0];
+			r_center[1] = cursor[1] * t->aspect[1];
 		}
 	}
 }
@@ -1781,14 +1790,8 @@ void calculateCenter(TransInfo *t)
 	}
 
 	calculateCenter2D(t);
+	calculateCenterGlobal(t);
 
-	/* setting constraint center */
-	copy_v3_v3(t->con.center, t->center);
-	if (t->flag & (T_EDIT | T_POSE)) {
-		Object *ob = t->obedit ? t->obedit : t->poseobj;
-		mul_m4_v3(ob->obmat, t->con.center);
-	}
-	
 	/* for panning from cameraview */
 	if (t->flag & T_OBJECT) {
 		if (t->spacetype == SPACE_VIEW3D && t->ar && t->ar->regiontype == RGN_TYPE_WINDOW) {
@@ -1809,7 +1812,7 @@ void calculateCenter(TransInfo *t)
 				/* rotate only needs correct 2d center, grab needs ED_view3d_calc_zfac() value */
 				if (t->mode == TFM_TRANSLATION) {
 					copy_v3_v3(t->center, axis);
-					copy_v3_v3(t->con.center, t->center);
+					copy_v3_v3(t->center_global, t->center);
 				}
 			}
 		}
@@ -1960,3 +1963,110 @@ void calculatePropRatio(TransInfo *t)
 		}
 	}
 }
+
+/**
+ * Rotate an element, low level code, ignore protected channels.
+ * (use for objects or pose-bones)
+ * Similar to #ElementRotation.
+ */
+void transform_data_ext_rotate(TransData *td, float mat[3][3], bool use_drot)
+{
+	float totmat[3][3];
+	float smat[3][3];
+	float fmat[3][3];
+	float obmat[3][3];
+
+	float dmat[3][3];  /* delta rotation */
+	float dmat_inv[3][3];
+
+	mul_m3_m3m3(totmat, mat, td->mtx);
+	mul_m3_m3m3(smat, td->smtx, mat);
+
+	/* logic from BKE_object_rot_to_mat3 */
+	if (use_drot) {
+		if (td->ext->rotOrder > 0) {
+			eulO_to_mat3(dmat, td->ext->drot, td->ext->rotOrder);
+		}
+		else if (td->ext->rotOrder == ROT_MODE_AXISANGLE) {
+#if 0
+			axis_angle_to_mat3(dmat, td->ext->drotAxis, td->ext->drotAngle);
+#else
+			unit_m3(dmat);
+#endif
+		}
+		else {
+			float tquat[4];
+			normalize_qt_qt(tquat, td->ext->dquat);
+			quat_to_mat3(dmat, tquat);
+		}
+
+		invert_m3_m3(dmat_inv, dmat);
+	}
+
+
+	if (td->ext->rotOrder == ROT_MODE_QUAT) {
+		float quat[4];
+
+		/* calculate the total rotatation */
+		quat_to_mat3(obmat, td->ext->iquat);
+		if (use_drot) {
+			mul_m3_m3m3(obmat, dmat, obmat);
+		}
+
+		/* mat = transform, obmat = object rotation */
+		mul_m3_m3m3(fmat, smat, obmat);
+
+		if (use_drot) {
+			mul_m3_m3m3(fmat, dmat_inv, fmat);
+		}
+
+		mat3_to_quat(quat, fmat);
+
+		/* apply */
+		copy_qt_qt(td->ext->quat, quat);
+	}
+	else if (td->ext->rotOrder == ROT_MODE_AXISANGLE) {
+		float axis[3], angle;
+
+		/* calculate the total rotatation */
+		axis_angle_to_mat3(obmat, td->ext->irotAxis, td->ext->irotAngle);
+		if (use_drot) {
+			mul_m3_m3m3(obmat, dmat, obmat);
+		}
+
+		/* mat = transform, obmat = object rotation */
+		mul_m3_m3m3(fmat, smat, obmat);
+
+		if (use_drot) {
+			mul_m3_m3m3(fmat, dmat_inv, fmat);
+		}
+
+		mat3_to_axis_angle(axis, &angle, fmat);
+
+		/* apply */
+		copy_v3_v3(td->ext->rotAxis, axis);
+		*td->ext->rotAngle = angle;
+	}
+	else {
+		float eul[3];
+
+		/* calculate the total rotatation */
+		eulO_to_mat3(obmat, td->ext->irot, td->ext->rotOrder);
+		if (use_drot) {
+			mul_m3_m3m3(obmat, dmat, obmat);
+		}
+
+		/* mat = transform, obmat = object rotation */
+		mul_m3_m3m3(fmat, smat, obmat);
+
+		if (use_drot) {
+			mul_m3_m3m3(fmat, dmat_inv, fmat);
+		}
+
+		mat3_to_compatible_eulO(eul, td->ext->rot, td->ext->rotOrder, fmat);
+
+		/* apply */
+		copy_v3_v3(td->ext->rot, eul);
+	}
+}
+

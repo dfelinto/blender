@@ -41,7 +41,7 @@
 #endif
 
 #ifdef WIN32
-#  if defined(_MSC_VER) && _MSC_VER >= 1800 && defined(_M_X64)
+#  if defined(_MSC_VER) && defined(_M_X64)
 #    include <math.h> /* needed for _set_FMA3_enable */
 #  endif
 #  include <windows.h>
@@ -325,6 +325,7 @@ static int print_help(int UNUSED(argc), const char **UNUSED(argv), void *data)
 	BLI_argsPrintArgDoc(ba, "--debug-depsgraph");
 	BLI_argsPrintArgDoc(ba, "--debug-depsgraph-no-threads");
 
+	BLI_argsPrintArgDoc(ba, "--debug-gpumem");
 	BLI_argsPrintArgDoc(ba, "--debug-wm");
 	BLI_argsPrintArgDoc(ba, "--debug-all");
 
@@ -336,7 +337,6 @@ static int print_help(int UNUSED(argc), const char **UNUSED(argv), void *data)
 	printf("Misc Options:\n");
 	BLI_argsPrintArgDoc(ba, "--factory-startup");
 	printf("\n");
-	BLI_argsPrintArgDoc(ba, "--env-system-config");
 	BLI_argsPrintArgDoc(ba, "--env-system-datafiles");
 	BLI_argsPrintArgDoc(ba, "--env-system-scripts");
 	BLI_argsPrintArgDoc(ba, "--env-system-python");
@@ -366,21 +366,22 @@ static int print_help(int UNUSED(argc), const char **UNUSED(argv), void *data)
 	BLI_argsPrintArgDoc(ba, "--enable-new-depsgraph");
 
 	printf("Argument Parsing:\n");
-	printf("\targuments must be separated by white space. eg\n");
-	printf("\t\t\"blender -ba test.blend\"\n");
+	printf("\tArguments must be separated by white space, eg:\n");
+	printf("\t# blender -ba test.blend\n");
 	printf("\t...will ignore the 'a'\n");
-	printf("\t\t\"blender -b test.blend -f8\"\n");
-	printf("\t...will ignore 8 because there is no space between the -f and the frame value\n\n");
+	printf("\t# blender -b test.blend -f8\n");
+	printf("\t...will ignore '8' because there is no space between the '-f' and the frame value\n\n");
 
 	printf("Argument Order:\n");
-	printf("\targuments are executed in the order they are given. eg\n");
-	printf("\t\t\"blender --background test.blend --render-frame 1 --render-output /tmp\"\n");
-	printf("\t...will not render to /tmp because '--render-frame 1' renders before the output path is set\n");
-	printf("\t\t\"blender --background --render-output /tmp test.blend --render-frame 1\"\n");
-	printf("\t...will not render to /tmp because loading the blend file overwrites the render output that was set\n");
-	printf("\t\t\"blender --background test.blend --render-output /tmp --render-frame 1\" works as expected.\n\n");
+	printf("\tArguments are executed in the order they are given. eg:\n");
+	printf("\t# blender --background test.blend --render-frame 1 --render-output '/tmp'\n");
+	printf("\t...will not render to '/tmp' because '--render-frame 1' renders before the output path is set\n");
+	printf("\t# blender --background --render-output /tmp test.blend --render-frame 1\n");
+	printf("\t...will not render to '/tmp' because loading the blend file overwrites the render output that was set\n");
+	printf("\t# blender --background test.blend --render-output /tmp --render-frame 1\n");
+	printf("\t...works as expected.\n\n");
 
-	printf("\nEnvironment Variables:\n");
+	printf("Environment Variables:\n");
 	printf("  $BLENDER_USER_CONFIG      Directory for user configuration files.\n");
 	printf("  $BLENDER_USER_SCRIPTS     Directory for user scripts.\n");
 	printf("  $BLENDER_SYSTEM_SCRIPTS   Directory for system wide scripts.\n");
@@ -444,7 +445,7 @@ static int debug_mode(int UNUSED(argc), const char **UNUSED(argv), void *data)
 	G.debug |= G_DEBUG;  /* std output printf's */
 	printf(BLEND_VERSION_STRING_FMT);
 	MEM_set_memory_debug();
-#ifdef DEBUG
+#ifndef NDEBUG
 	BLI_mempool_set_memory_debug();
 #endif
 
@@ -823,7 +824,7 @@ static int no_glsl(int UNUSED(argc), const char **UNUSED(argv), void *UNUSED(dat
 
 static int no_audio(int UNUSED(argc), const char **UNUSED(argv), void *UNUSED(data))
 {
-	BKE_sound_force_device(0);
+	BKE_sound_force_device("Null");
 	return 0;
 }
 
@@ -834,7 +835,7 @@ static int set_audio(int argc, const char **argv, void *UNUSED(data))
 		exit(1);
 	}
 
-	BKE_sound_force_device(BKE_sound_define_from_str(argv[1]));
+	BKE_sound_force_device(argv[1]);
 	return 1;
 }
 
@@ -1325,11 +1326,18 @@ static int set_addons(int argc, const char **argv, void *data)
 	/* workaround for scripts not getting a bpy.context.scene, causes internal errors elsewhere */
 	if (argc > 1) {
 #ifdef WITH_PYTHON
-		const int slen = strlen(argv[1]) + 128;
+		const char script_str[] =
+		        "from addon_utils import check, enable\n"
+		        "for m in '%s'.split(','):\n"
+		        "    if check(m)[1] is False:\n"
+		        "        enable(m, persistent=True)";
+		const int slen = strlen(argv[1]) + (sizeof(script_str) - 2);
 		char *str = malloc(slen);
 		bContext *C = data;
-		BLI_snprintf(str, slen, "[__import__('addon_utils').enable(i, default_set=False) for i in '%s'.split(',')]", argv[1]);
-		BPY_CTX_SETUP(BPY_string_exec(C, str));
+		BLI_snprintf(str, slen, script_str, argv[1]);
+
+		BLI_assert(strlen(str) + 1 == slen);
+		BPY_CTX_SETUP(BPY_string_exec_ex(C, str, false));
 		free(str);
 #else
 		UNUSED_VARS(argv, data);
@@ -1398,6 +1406,14 @@ static int load_file(int UNUSED(argc), const char **argv, void *data)
 		}
 		else {
 			/* failed to load file, stop processing arguments */
+			if (G.background) {
+				/* Set is_break if running in the background mode so
+				 * blender will return non-zero exit code which then
+				 * could be used in automated script to control how
+				 * good or bad things are.
+				 */
+				G.is_break = true;
+			}
 			return -1;
 		}
 
@@ -1432,15 +1448,17 @@ static void setupArguments(bContext *C, bArgs *ba, SYS_SystemHandle *syshandle)
 {
 	static char output_doc[] = "<path>"
 		"\n\tSet the render path and file name."
-		"\n\tUse // at the start of the path to"
-		"\n\t\trender relative to the blend file."
-		"\n\tThe # characters are replaced by the frame number, and used to define zero padding."
-		"\n\t\tani_##_test.png becomes ani_01_test.png"
-		"\n\t\ttest-######.png becomes test-000001.png"
-		"\n\t\tWhen the filename does not contain #, The suffix #### is added to the filename"
-		"\n\tThe frame number will be added at the end of the filename."
-		"\n\t\teg: blender -b foobar.blend -o //render_ -F PNG -x 1 -a"
-		"\n\t\t//render_ becomes //render_####, writing frames as //render_0001.png//";
+		"\n\tUse '//' at the start of the path to render relative to the blend file."
+		"\n"
+		"\n\tThe '#' characters are replaced by the frame number, and used to define zero padding."
+		"\n\t* 'ani_##_test.png' becomes 'ani_01_test.png'"
+		"\n\t* 'test-######.png' becomes 'test-000001.png'"
+		"\n"
+		"\n\tWhen the filename does not contain '#', The suffix '####' is added to the filename."
+		"\n"
+		"\n\tThe frame number will be added at the end of the filename, eg:"
+		"\n\t# blender -b foobar.blend -o //render_ -F PNG -x 1 -a"
+		"\n\t'//render_' becomes '//render_####', writing frames as '//render_0001.png'";
 
 	static char format_doc[] = "<format>"
 		"\n\tSet the render format, Valid options are..."
@@ -1467,12 +1485,12 @@ static void setupArguments(bContext *C, bArgs *ba, SYS_SystemHandle *syshandle)
 	static char debug_doc[] = "\n\tTurn debugging on\n"
 		"\n\t* Prints every operator call and their arguments"
 		"\n\t* Disables mouse grab (to interact with a debugger in some cases)"
-		"\n\t* Keeps python sys.stdin rather than setting it to None";
+		"\n\t* Keeps Python's 'sys.stdin' rather than setting it to None";
 
 	//BLI_argsAdd(ba, pass, short_arg, long_arg, doc, cb, C);
 
 	/* end argument processing after -- */
-	BLI_argsAdd(ba, -1, "--", NULL, "\n\tEnds option processing, following arguments passed unchanged. Access via python's sys.argv", end_arguments, NULL);
+	BLI_argsAdd(ba, -1, "--", NULL, "\n\tEnds option processing, following arguments passed unchanged. Access via Python's 'sys.argv'", end_arguments, NULL);
 
 	/* first pass: background mode, disable python and commands that exit after usage */
 	BLI_argsAdd(ba, 1, "-h", "--help", "\n\tPrint this help text and exit", print_help, ba);
@@ -1490,8 +1508,8 @@ static void setupArguments(bContext *C, bArgs *ba, SYS_SystemHandle *syshandle)
 #  define   PY_DISABLE_AUTO ", (compiled as non-standard default)"
 #endif
 
-	BLI_argsAdd(ba, 1, "-y", "--enable-autoexec", "\n\tEnable automatic python script execution" PY_ENABLE_AUTO, enable_python, NULL);
-	BLI_argsAdd(ba, 1, "-Y", "--disable-autoexec", "\n\tDisable automatic python script execution (pydrivers & startup scripts)" PY_DISABLE_AUTO, disable_python, NULL);
+	BLI_argsAdd(ba, 1, "-y", "--enable-autoexec", "\n\tEnable automatic Python script execution" PY_ENABLE_AUTO, enable_python, NULL);
+	BLI_argsAdd(ba, 1, "-Y", "--disable-autoexec", "\n\tDisable automatic Python script execution (pydrivers & startup scripts)" PY_DISABLE_AUTO, disable_python, NULL);
 
 	BLI_argsAdd(ba, 1, NULL, "--disable-crash-handler", "\n\tDisable the crash handler", disable_crash_handler, NULL);
 	BLI_argsAdd(ba, 1, NULL, "--disable-abort-handler", "\n\tDisable the abort handler", disable_abort_handler, NULL);
@@ -1513,7 +1531,7 @@ static void setupArguments(bContext *C, bArgs *ba, SYS_SystemHandle *syshandle)
 	BLI_argsAdd(ba, 1, NULL, "--debug-freestyle", "\n\tEnable debug/profiling messages from Freestyle rendering", debug_mode_generic, (void *)G_DEBUG_FREESTYLE);
 #endif
 
-	BLI_argsAdd(ba, 1, NULL, "--debug-python", "\n\tEnable debug messages for python", debug_mode_generic, (void *)G_DEBUG_PYTHON);
+	BLI_argsAdd(ba, 1, NULL, "--debug-python", "\n\tEnable debug messages for Python", debug_mode_generic, (void *)G_DEBUG_PYTHON);
 	BLI_argsAdd(ba, 1, NULL, "--debug-events", "\n\tEnable debug messages for the event system", debug_mode_generic, (void *)G_DEBUG_EVENTS);
 	BLI_argsAdd(ba, 1, NULL, "--debug-handlers", "\n\tEnable debug messages for event handling", debug_mode_generic, (void *)G_DEBUG_HANDLERS);
 	BLI_argsAdd(ba, 1, NULL, "--debug-wm",     "\n\tEnable debug messages for the window manager", debug_mode_generic, (void *)G_DEBUG_WM);
@@ -1531,6 +1549,7 @@ static void setupArguments(bContext *C, bArgs *ba, SYS_SystemHandle *syshandle)
 
 	BLI_argsAdd(ba, 1, NULL, "--debug-value", "<value>\n\tSet debug value of <value> on startup\n", set_debug_value, NULL);
 	BLI_argsAdd(ba, 1, NULL, "--debug-jobs",  "\n\tEnable time profiling for background jobs.", debug_mode_generic, (void *)G_DEBUG_JOBS);
+	BLI_argsAdd(ba, 1, NULL, "--debug-gpu",  "\n\tEnable gpu debug context and information for OpenGL 4.3+.", debug_mode_generic, (void *)G_DEBUG_GPU);
 	BLI_argsAdd(ba, 1, NULL, "--debug-depsgraph", "\n\tEnable debug messages from dependency graph", debug_mode_generic, (void *)G_DEBUG_DEPSGRAPH);
 	BLI_argsAdd(ba, 1, NULL, "--debug-depsgraph-no-threads", "\n\tSwitch dependency graph to a single threaded evlauation", debug_mode_generic, (void *)G_DEBUG_DEPSGRAPH_NO_THREADS);
 	BLI_argsAdd(ba, 1, NULL, "--debug-gpumem", "\n\tEnable GPU memory stats in status bar", debug_mode_generic, (void *)G_DEBUG_GPU_MEM);
@@ -1539,7 +1558,7 @@ static void setupArguments(bContext *C, bArgs *ba, SYS_SystemHandle *syshandle)
 
 	BLI_argsAdd(ba, 1, NULL, "--verbose", "<verbose>\n\tSet logging verbosity level.", set_verbosity, NULL);
 
-	BLI_argsAdd(ba, 1, NULL, "--factory-startup", "\n\tSkip reading the "STRINGIFY (BLENDER_STARTUP_FILE)" in the users home directory", set_factory_startup, NULL);
+	BLI_argsAdd(ba, 1, NULL, "--factory-startup", "\n\tSkip reading the " STRINGIFY(BLENDER_STARTUP_FILE) " in the users home directory", set_factory_startup, NULL);
 
 	/* TODO, add user env vars? */
 	BLI_argsAdd(ba, 1, NULL, "--env-system-datafiles",  "\n\tSet the "STRINGIFY_ARG (BLENDER_SYSTEM_DATAFILES)" environment variable", set_env, NULL);
@@ -1630,7 +1649,7 @@ int main(
 
 #ifdef WIN32
 	/* FMA3 support in the 2013 CRT is broken on Vista and Windows 7 RTM (fixed in SP1). Just disable it. */
-#  if defined(_MSC_VER) && _MSC_VER >= 1800 && defined(_M_X64)
+#  if defined(_MSC_VER) && defined(_M_X64)
 	_set_FMA3_enable(0);
 #  endif
 

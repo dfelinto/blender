@@ -35,7 +35,8 @@
 void   *IMB_exr_get_handle          (void) {return NULL;}
 void   *IMB_exr_get_handle_name     (const char * /*name*/) { return NULL;}
 void    IMB_exr_add_channel         (void * /*handle*/, const char * /*layname*/, const char * /*passname*/, const char * /*view*/,
-                                     int /*xstride*/, int /*ystride*/, float * /*rect*/) { }
+                                     int /*xstride*/, int /*ystride*/, float * /*rect*/,
+                                     bool /*use_half_float*/) { }
 
 int     IMB_exr_begin_read          (void * /*handle*/, const char * /*filename*/, int * /*width*/, int * /*height*/) { return 0;}
 int     IMB_exr_begin_write         (void * /*handle*/, const char * /*filename*/, int /*width*/, int /*height*/, int /*compress*/, const struct StampData * /*stamp*/) { return 0;}
@@ -78,6 +79,5 @@ bool    IMB_exr_multiview_save(
 void    IMB_exr_close               (void * /*handle*/) { }
 
 void    IMB_exr_add_view(void * /*handle*/, const char * /*name*/) { }
-int     IMB_exr_split_token(const char * /*str*/, const char * /*end*/, const char ** /*token*/) { return 1; }
 bool    IMB_exr_has_multilayer(void * /*handle*/) { return false; }
 bool    IMB_exr_has_singlelayer_multiview(void * /*handle*/) { return false; }

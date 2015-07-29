@@ -42,8 +42,6 @@
 
 //#include "DNA_anim_types.h"
 #include "DNA_image_types.h"
-#include "DNA_scene_types.h"
-#include "DNA_sequence_types.h"
 #include "DNA_mask_types.h"
 #include "DNA_sound_types.h"
 
@@ -476,6 +474,7 @@ void RNA_api_sequences(BlenderRNA *brna, PropertyRNA *cprop)
 		{SEQ_TYPE_MULTICAM, "MULTICAM", 0, "Multicam Selector", ""},
 		{SEQ_TYPE_ADJUSTMENT, "ADJUSTMENT", 0, "Adjustment Layer", ""},
 		{SEQ_TYPE_GAUSSIAN_BLUR, "GAUSSIAN_BLUR", 0, "Gaussian Blur", ""},
+		{SEQ_TYPE_TEXT, "TEXT", 0, "Text", ""},
 		{0, NULL, 0, NULL, NULL}
 	};
 

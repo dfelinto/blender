@@ -26,6 +26,8 @@ BF_CXX = '/usr'
 WITH_BF_STATICCXX = False
 BF_CXX_LIB_STATIC = '${BF_CXX}/lib/libstdc++.a'
 
+WITH_BF_AUDASPACE = True
+
 WITH_BF_JACK = False
 BF_JACK = '/usr'
 BF_JACK_INC = '${BF_JACK}/include/jack'
@@ -206,7 +208,7 @@ WITH_BF_CYCLES = WITH_BF_OIIO and WITH_BF_BOOST
 
 WITH_BF_CYCLES_CUDA_BINARIES = False
 BF_CYCLES_CUDA_NVCC = '/usr/local/cuda/bin/nvcc'
-BF_CYCLES_CUDA_BINARIES_ARCH = ['sm_20', 'sm_21', 'sm_30', 'sm_35', 'sm_50']
+BF_CYCLES_CUDA_BINARIES_ARCH = ['sm_20', 'sm_21', 'sm_30', 'sm_35', 'sm_50', 'sm_52']
 
 WITH_BF_OPENMP = True
 
@@ -225,6 +227,14 @@ BF_3DMOUSE_LIB_STATIC = '${BF_3DMOUSE_LIBPATH}/libspnav.a'
 
 #Freestyle
 WITH_BF_FREESTYLE = True
+
+WITH_BF_OPENSUBDIV = False
+WITH_BF_STATICOPENSUBDIV = False
+BF_OPENSUBDIV = '/usr'
+BF_OPENSUBDIV_INC = '${BF_OPENSUBDIV}/include'
+BF_OPENSUBDIV_LIB = 'osdCPU osdGPU'
+BF_OPENSUBDIV_LIB_STATIC = '${BF_OPENSUBDIV_LIBPATH}/libosdGPU.a ${BF_OPENSUBDIV_LIBPATH}/libosdCPU.a'
+BF_OPENSUBDIV_LIBPATH = '${BF_OPENSUBDIV}/lib'
 
 ##
 CC = 'gcc'

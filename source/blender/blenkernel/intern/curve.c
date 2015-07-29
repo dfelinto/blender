@@ -737,6 +737,41 @@ void BKE_nurb_bezierPoints_add(Nurb *nu, int number)
 }
 
 
+int BKE_nurb_index_from_uv(
+        Nurb *nu,
+        int u, int v)
+{
+	const int totu = nu->pntsu;
+	const int totv = nu->pntsv;
+
+	if (nu->flagu & CU_NURB_CYCLIC) {
+		u = mod_i(u, totu);
+	}
+	else if (u < 0 || u >= totu) {
+		return -1;
+	}
+
+	if (nu->flagv & CU_NURB_CYCLIC) {
+		v = mod_i(v, totv);
+	}
+	else if (v < 0 || v >= totv) {
+		return -1;
+	}
+
+	return (v * totu) + u;
+}
+
+void BKE_nurb_index_to_uv(
+        Nurb *nu, int index,
+        int *r_u, int *r_v)
+{
+	const int totu = nu->pntsu;
+	const int totv = nu->pntsv;
+	BLI_assert(index >= 0 && index < (nu->pntsu * nu->pntsv));
+	*r_u = (index % totu);
+	*r_v = (index / totu) % totv;
+}
+
 BezTriple *BKE_nurb_bezt_get_next(Nurb *nu, BezTriple *bezt)
 {
 	BezTriple *bezt_next;
@@ -871,6 +906,29 @@ void BKE_nurb_bezt_calc_plane(struct Nurb *nu, struct BezTriple *bezt, float r_p
 	}
 
 	normalize_v3(r_plane);
+}
+
+void BKE_nurb_bpoint_calc_normal(struct Nurb *nu, struct BPoint *bp, float r_normal[3])
+{
+	BPoint *bp_prev = BKE_nurb_bpoint_get_prev(nu, bp);
+	BPoint *bp_next = BKE_nurb_bpoint_get_next(nu, bp);
+
+	zero_v3(r_normal);
+
+	if (bp_prev) {
+		float dir_prev[3];
+		sub_v3_v3v3(dir_prev, bp_prev->vec, bp->vec);
+		normalize_v3(dir_prev);
+		add_v3_v3(r_normal, dir_prev);
+	}
+	if (bp_next) {
+		float dir_next[3];
+		sub_v3_v3v3(dir_next, bp->vec, bp_next->vec);
+		normalize_v3(dir_next);
+		add_v3_v3(r_normal, dir_next);
+	}
+
+	normalize_v3(r_normal);
 }
 
 /* ~~~~~~~~~~~~~~~~~~~~Non Uniform Rational B Spline calculations ~~~~~~~~~~~ */
@@ -2546,7 +2604,8 @@ void BKE_curve_bevelList_free(ListBase *bev)
 		}
 		MEM_freeN(bl);
 	}
-	bev->first = bev->last = NULL;
+
+	BLI_listbase_clear(bev);
 }
 
 void BKE_curve_bevelList_make(Object *ob, ListBase *nurbs, bool for_render)
@@ -4180,7 +4239,7 @@ ListBase *BKE_curve_nurbs_get(Curve *cu)
 	return &cu->nurb;
 }
 
-void BKE_curve_nurb_active_set(Curve *cu, Nurb *nu)
+void BKE_curve_nurb_active_set(Curve *cu, const Nurb *nu)
 {
 	if (nu == NULL) {
 		cu->actnu = CU_ACT_NONE;
@@ -4207,21 +4266,26 @@ void *BKE_curve_vert_active_get(Curve *cu)
 	return vert;
 }
 
+int BKE_curve_nurb_vert_index_get(const Nurb *nu, const void *vert)
+{
+	if (nu->type == CU_BEZIER) {
+		BLI_assert(ARRAY_HAS_ITEM((BezTriple *)vert, nu->bezt, nu->pntsu));
+		return (BezTriple *)vert - nu->bezt;
+	}
+	else {
+		BLI_assert(ARRAY_HAS_ITEM((BPoint *)vert, nu->bp, nu->pntsu * nu->pntsv));
+		return (BPoint *)vert - nu->bp;
+	}
+}
+
 /* Set active nurb and active vert for curve */
-void BKE_curve_nurb_vert_active_set(Curve *cu, Nurb *nu, void *vert)
+void BKE_curve_nurb_vert_active_set(Curve *cu, const Nurb *nu, const void *vert)
 {
 	if (nu) {
 		BKE_curve_nurb_active_set(cu, nu);
 
 		if (vert) {
-			if (nu->type == CU_BEZIER) {
-				BLI_assert(ARRAY_HAS_ITEM((BezTriple *)vert, nu->bezt, nu->pntsu));
-				cu->actvert = (BezTriple *)vert - nu->bezt;
-			}
-			else {
-				BLI_assert(ARRAY_HAS_ITEM((BPoint *)vert, nu->bp, nu->pntsu * nu->pntsv));
-				cu->actvert = (BPoint *)vert - nu->bp;
-			}
+			cu->actvert = BKE_curve_nurb_vert_index_get(nu, vert);
 		}
 		else {
 			cu->actvert = CU_ACT_NONE;
@@ -4273,12 +4337,14 @@ void BKE_curve_nurb_vert_active_validate(Curve *cu)
 
 	if (BKE_curve_nurb_vert_active_get(cu, &nu, &vert)) {
 		if (nu->type == CU_BEZIER) {
-			if ((((BezTriple *)vert)->f1 & SELECT) == 0) {
+			BezTriple *bezt = vert;
+			if (BEZT_ISSEL_ANY(bezt) == 0) {
 				cu->actvert = CU_ACT_NONE;
 			}
 		}
 		else {
-			if ((((BPoint *)vert)->f1 & SELECT) == 0) {
+			BPoint *bp = vert;
+			if ((bp->f1 & SELECT) == 0) {
 				cu->actvert = CU_ACT_NONE;
 			}
 		}

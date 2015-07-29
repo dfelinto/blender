@@ -33,7 +33,9 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_blenlib.h"
+#include "BLI_listbase.h"
+#include "BLI_rect.h"
+#include "BLI_timecode.h"
 #include "BLI_math.h"
 #include "BLI_threads.h"
 #include "BLI_utildefines.h"
@@ -374,7 +376,7 @@ static void make_renderinfo_string(const RenderStats *rs,
 	spos += sprintf(spos, IFACE_("Frame:%d "), (scene->r.cfra));
 
 	/* previous and elapsed time */
-	BLI_timestr(rs->lastframetime, info_time_str, sizeof(info_time_str));
+	BLI_timecode_string_from_time_simple(info_time_str, sizeof(info_time_str), rs->lastframetime);
 
 	if (rs->infostr && rs->infostr[0]) {
 		if (rs->lastframetime != 0.0)
@@ -382,7 +384,7 @@ static void make_renderinfo_string(const RenderStats *rs,
 		else
 			spos += sprintf(spos, "| ");
 
-		BLI_timestr(PIL_check_seconds_timer() - rs->starttime, info_time_str, sizeof(info_time_str));
+		BLI_timecode_string_from_time_simple(info_time_str, sizeof(info_time_str), PIL_check_seconds_timer() - rs->starttime);
 	}
 	else
 		spos += sprintf(spos, "| ");
@@ -790,13 +792,13 @@ static void clean_viewport_memory(Main *bmain, Scene *scene, int renderlay)
 		if ((base->lay & renderlay) == 0) {
 			continue;
 		}
-
 		if (RE_allow_render_generic_object(base->object)) {
 			base->object->id.flag &= ~LIB_DOIT;
 		}
 	}
 
-	for (object = bmain->object.first; object; object = object->id.next) {
+	for (SETLOOPER(scene, sce_iter, base)) {
+		object = base->object;
 		if ((object->id.flag & LIB_DOIT) == 0) {
 			continue;
 		}

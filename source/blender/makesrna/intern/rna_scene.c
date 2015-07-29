@@ -42,10 +42,8 @@
 
 #include "BLF_translation.h"
 
-#include "BKE_freestyle.h"
 #include "BKE_editmesh.h"
 #include "BKE_paint.h"
-#include "BKE_scene.h"
 
 #include "GPU_extensions.h"
 
@@ -60,9 +58,7 @@
 
 #ifdef WITH_QUICKTIME
 #  include "quicktime_export.h"
-#  ifdef WITH_AUDASPACE
-#    include "AUD_Space.h"
-#  endif
+#  include AUD_TYPES_H
 #endif
 
 #ifdef WITH_FFMPEG
@@ -160,7 +156,7 @@ EnumPropertyItem mesh_select_mode_items[] = {
 };
 
 EnumPropertyItem snap_element_items[] = {
-	{SCE_SNAP_MODE_INCREMENT, "INCREMENT", ICON_SNAP_INCREMENT, "Increment", "Snap to increments of grid"},
+	{SCE_SNAP_MODE_INCREMENT, "INCREMENT", ICON_ALIGN, "Increment", "Snap to increments of grid"},
 	{SCE_SNAP_MODE_VERTEX, "VERTEX", ICON_SNAP_VERTEX, "Vertex", "Snap to vertices"},
 	{SCE_SNAP_MODE_EDGE, "EDGE", ICON_SNAP_EDGE, "Edge", "Snap to edges"},
 	{SCE_SNAP_MODE_FACE, "FACE", ICON_SNAP_FACE, "Face", "Snap to faces"},
@@ -407,8 +403,6 @@ EnumPropertyItem stereo3d_interlace_type_items[] = {
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_threads.h"
-
 #include "BKE_brush.h"
 #include "BKE_context.h"
 #include "BKE_global.h"
@@ -418,7 +412,6 @@ EnumPropertyItem stereo3d_interlace_type_items[] = {
 #include "BKE_pointcache.h"
 #include "BKE_scene.h"
 #include "BKE_depsgraph.h"
-#include "BKE_image.h"
 #include "BKE_mesh.h"
 #include "BKE_sound.h"
 #include "BKE_screen.h"
@@ -426,16 +419,12 @@ EnumPropertyItem stereo3d_interlace_type_items[] = {
 #include "BKE_animsys.h"
 #include "BKE_freestyle.h"
 
-#include "WM_api.h"
-
 #include "ED_info.h"
 #include "ED_node.h"
 #include "ED_view3d.h"
 #include "ED_mesh.h"
 #include "ED_keyframing.h"
 #include "ED_image.h"
-
-#include "RE_engine.h"
 
 #ifdef WITH_FREESTYLE
 #include "FRS_freestyle.h"
@@ -489,6 +478,8 @@ static Base *rna_Scene_object_link(Scene *scene, bContext *C, ReportList *report
 	if (scene == scene_act)
 		ob->lay = base->lay;
 
+	/* TODO(sergey): Only update relations for the current scene. */
+	DAG_relations_tag_update(CTX_data_main(C));
 	DAG_id_tag_update(&ob->id, OB_RECALC_OB | OB_RECALC_DATA | OB_RECALC_TIME);
 
 	/* slows down importers too much, run scene.update() */
@@ -1928,7 +1919,7 @@ char *rna_GPUDOF_path(PointerRNA *ptr)
 		}
 	}
 
-	return BLI_strdup("");;
+	return BLI_strdup("");
 }
 
 static void rna_GPUFXSettings_fx_update(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *ptr)
@@ -2222,6 +2213,13 @@ static void rna_def_tool_settings(BlenderRNA  *brna)
 	RNA_def_property_boolean_sdna(prop, NULL, "snap_flag", SCE_SNAP_ROTATE);
 	RNA_def_property_ui_text(prop, "Snap Align Rotation", "Align rotation with the snapping target");
 	RNA_def_property_ui_icon(prop, ICON_SNAP_NORMAL, 0);
+	RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL); /* header redraw */
+
+	prop = RNA_def_property(srna, "use_snap_grid_absolute", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "snap_flag", SCE_SNAP_ABS_GRID);
+	RNA_def_property_ui_text(prop, "Absolute Grid Snap",
+	                         "Absolute grid alignment while translating (based on the pivot center)");
+	RNA_def_property_ui_icon(prop, ICON_SNAP_INCREMENT, 0);
 	RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL); /* header redraw */
 
 	prop = RNA_def_property(srna, "snap_element", PROP_ENUM, PROP_NONE);
@@ -5382,7 +5380,7 @@ static void rna_def_scene_render_data(BlenderRNA *brna)
 	RNA_def_property_float_sdna(prop, NULL, "border.xmin");
 	RNA_def_property_range(prop, 0.0f, 1.0f);
 	RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
-	RNA_def_property_ui_text(prop, "Border Minimum X", "Minimum X value to for the render border");
+	RNA_def_property_ui_text(prop, "Border Minimum X", "Minimum X value for the render border");
 	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
 
 	prop = RNA_def_property(srna, "border_min_y", PROP_FLOAT, PROP_NONE);
@@ -5688,9 +5686,14 @@ static void rna_def_scene_render_data(BlenderRNA *brna)
 
 	prop = RNA_def_property(srna, "use_stamp", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "stamp", R_STAMP_DRAW);
-	RNA_def_property_ui_text(prop, "Render Stamp", "Render the stamp info text in the rendered image");
+	RNA_def_property_ui_text(prop, "Stamp Output", "Render the stamp info text in the rendered image");
 	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
-	
+
+	prop = RNA_def_property(srna, "use_stamp_strip_meta", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "stamp", R_STAMP_STRIPMETA);
+	RNA_def_property_ui_text(prop, "Strip Metadata", "Use metadata from the strips in the sequencer");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
 	prop = RNA_def_property(srna, "stamp_font_size", PROP_INT, PROP_NONE);
 	RNA_def_property_int_sdna(prop, NULL, "stamp_font_id");
 	RNA_def_property_range(prop, 8, 64);
@@ -5878,6 +5881,7 @@ static void rna_def_scene_render_data(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "debug_pass_type", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_items(prop, render_pass_debug_type_items);
 	RNA_def_property_ui_text(prop, "Debug Pass Type", "Type of the debug pass to use");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
 #endif
 
 	/* Nestled Data  */

@@ -99,13 +99,8 @@
 #endif //WITH_FFMPEG
 
 #ifdef WITH_REDCODE
-#ifdef _WIN32 /* on windows we use the ones in extern instead */
-#include "libredcode/format.h"
-#include "libredcode/codec.h"
-#else
-#include "libredcode/format.h"
-#include "libredcode/codec.h"
-#endif
+#  include "libredcode/format.h"
+#  include "libredcode/codec.h"
 #endif
 
 #include "IMB_colormanagement.h"
@@ -270,6 +265,8 @@ void IMB_close_anim_proxies(struct anim *anim)
 struct anim *IMB_open_anim(const char *name, int ib_flags, int streamindex, char colorspace[IM_MAX_SPACE])
 {
 	struct anim *anim;
+
+	BLI_assert(!BLI_path_is_rel(name));
 
 	anim = (struct anim *)MEM_callocN(sizeof(struct anim), "anim struct");
 	if (anim != NULL) {
