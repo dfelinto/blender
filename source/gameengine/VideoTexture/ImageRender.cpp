@@ -312,6 +312,10 @@ void ImageRender::Render()
 
 	m_scene->RenderFonts();
 
+	m_canvas->SetViewPort(0, 0, m_canvas->GetWidth(), m_canvas->GetHeight());
+	m_scene->Render2DFilters(m_canvas);
+	m_scene->RunDrawingCallbacks(m_scene->GetPostDrawCB());
+
 	// restore the canvas area now that the render is completed
 	m_canvas->GetWindowArea() = area;
 }
