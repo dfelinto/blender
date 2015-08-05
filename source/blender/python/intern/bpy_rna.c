@@ -2637,6 +2637,7 @@ static int prop_subscript_ass_array_slice(PointerRNA *ptr, PropertyRNA *prop,
                                           int start, int stop, int length, PyObject *value_orig)
 {
 	PyObject *value;
+	PyObject **value_items;
 	int count;
 	void *values_alloc = NULL;
 	int ret = 0;
@@ -2658,6 +2659,7 @@ static int prop_subscript_ass_array_slice(PointerRNA *ptr, PropertyRNA *prop,
 		return -1;
 	}
 
+	value_items = PySequence_Fast_ITEMS(value);
 	switch (RNA_property_type(prop)) {
 		case PROP_FLOAT:
 		{
@@ -2673,7 +2675,7 @@ static int prop_subscript_ass_array_slice(PointerRNA *ptr, PropertyRNA *prop,
 				RNA_property_float_get_array(ptr, prop, values);
 
 			for (count = start; count < stop; count++) {
-				fval = PyFloat_AsDouble(PySequence_Fast_GET_ITEM(value, count - start));
+				fval = PyFloat_AsDouble(value_items[count - start]);
 				CLAMP(fval, min, max);
 				values[count] = fval;
 			}
@@ -2693,7 +2695,7 @@ static int prop_subscript_ass_array_slice(PointerRNA *ptr, PropertyRNA *prop,
 				RNA_property_boolean_get_array(ptr, prop, values);
 
 			for (count = start; count < stop; count++)
-				values[count] = PyLong_AsLong(PySequence_Fast_GET_ITEM(value, count - start));
+				values[count] = PyLong_AsLong(value_items[count - start]);
 
 			if (PyErr_Occurred()) ret = -1;
 			else                  RNA_property_boolean_set_array(ptr, prop, values);
@@ -2714,7 +2716,7 @@ static int prop_subscript_ass_array_slice(PointerRNA *ptr, PropertyRNA *prop,
 				RNA_property_int_get_array(ptr, prop, values);
 
 			for (count = start; count < stop; count++) {
-				ival = PyLong_AsLong(PySequence_Fast_GET_ITEM(value, count - start));
+				ival = PyLong_AsLong(value_items[count - start]);
 				CLAMP(ival, min, max);
 				values[count] = ival;
 			}
@@ -3355,7 +3357,7 @@ static PyObject *pyrna_prop_path_from_id(BPy_PropertyRNA *self)
 PyDoc_STRVAR(pyrna_prop_as_bytes_doc,
 ".. method:: as_bytes()\n"
 "\n"
-"   Returns this string property as a byte rather then a python string.\n"
+"   Returns this string property as a byte rather than a python string.\n"
 "\n"
 "   :return: The string as bytes.\n"
 "   :rtype: bytes\n"
@@ -7446,8 +7448,14 @@ static void bpy_class_free(void *pyob_ptr)
 	PyGILState_Release(gilstate);
 }
 
+/**
+ * \note This isn't essential to run on startup, since subtypes will lazy initialize.
+ * But keep running in debug mode so we get immediate notification of bad class hierarchy
+ * or any errors in "bpy_types.py" at load time, so errors don't go unnoticed.
+ */
 void pyrna_alloc_types(void)
 {
+#ifdef DEBUG
 	PyGILState_STATE gilstate;
 
 	PointerRNA ptr;
@@ -7475,6 +7483,7 @@ void pyrna_alloc_types(void)
 	RNA_PROP_END;
 
 	PyGILState_Release(gilstate);
+#endif  /* DEBUG */
 }
 
 

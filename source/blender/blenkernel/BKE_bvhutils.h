@@ -34,7 +34,7 @@
 #include "BLI_bitmap.h"
 #include "BLI_kdopbvh.h"
 
-/*
+/**
  * This header encapsulates necessary code to buld a BVH
  */
 
@@ -42,7 +42,7 @@ struct DerivedMesh;
 struct MVert;
 struct MFace;
 
-/*
+/**
  * struct that kepts basic information about a BVHTree build from a mesh
  */
 typedef struct BVHTreeFromMesh {
@@ -53,12 +53,16 @@ typedef struct BVHTreeFromMesh {
 	BVHTree_RayCastCallback raycast_callback;
 
 	/* Vertex array, so that callbacks have instante access to data */
-	struct MVert *vert;
-	struct MEdge *edge;     /* only used for BVHTreeFromMeshEdges */
-	struct MFace *face;
+	const struct MVert *vert;
+	const struct MEdge *edge;     /* only used for BVHTreeFromMeshEdges */
+	const struct MFace *face;
+	const struct MLoop *loop;
+	const struct MLoopTri *looptri;
 	bool vert_allocated;
 	bool edge_allocated;
 	bool face_allocated;
+	bool loop_allocated;
+	bool looptri_allocated;
 
 	/* radius for raycast */
 	float sphere_radius;
@@ -69,7 +73,7 @@ typedef struct BVHTreeFromMesh {
 
 } BVHTreeFromMesh;
 
-/*
+/**
  * Builds a bvh tree where nodes are the relevant elements of the given mesh.
  * Configures BVHTreeFromMesh.
  *
@@ -79,31 +83,56 @@ typedef struct BVHTreeFromMesh {
  * 
  * free_bvhtree_from_mesh should be called when the tree is no longer needed.
  */
-BVHTree *bvhtree_from_mesh_verts(struct BVHTreeFromMesh *data, struct DerivedMesh *mesh, float epsilon, int tree_type, int axis);
-BVHTree *bvhtree_from_mesh_verts_ex(struct BVHTreeFromMesh *data, struct MVert *vert, const int numVerts,
-                                    const bool vert_allocated, BLI_bitmap *mask, int numVerts_active,
-                                    float epsilon, int tree_type, int axis);
+BVHTree *bvhtree_from_mesh_verts(
+        struct BVHTreeFromMesh *data, struct DerivedMesh *mesh, float epsilon, int tree_type, int axis);
+BVHTree *bvhtree_from_mesh_verts_ex(
+        struct BVHTreeFromMesh *data, struct MVert *vert, const int numVerts,
+        const bool vert_allocated, BLI_bitmap *mask, int numVerts_active,
+        float epsilon, int tree_type, int axis);
 
-BVHTree *bvhtree_from_mesh_edges(struct BVHTreeFromMesh *data, struct DerivedMesh *mesh, float epsilon, int tree_type, int axis);
+BVHTree *bvhtree_from_mesh_edges(
+        struct BVHTreeFromMesh *data, struct DerivedMesh *mesh,
+        float epsilon, int tree_type, int axis);
 
-BVHTree *bvhtree_from_mesh_faces(struct BVHTreeFromMesh *data, struct DerivedMesh *mesh, float epsilon, int tree_type, int axis);
-BVHTree *bvhtree_from_mesh_faces_ex(struct BVHTreeFromMesh *data, struct MVert *vert, const bool vert_allocated,
-                                    struct MFace *face, const int numFaces, const bool face_allocated,
-                                    BLI_bitmap *mask, int numFaces_active,
-                                    float epsilon, int tree_type, int axis);
+BVHTree *bvhtree_from_mesh_faces(
+        struct BVHTreeFromMesh *data, struct DerivedMesh *mesh, float epsilon,
+        int tree_type, int axis);
+BVHTree *bvhtree_from_mesh_faces_ex(
+        struct BVHTreeFromMesh *data,
+        struct MVert *vert, const bool vert_allocated,
+        struct MFace *face, const int numFaces, const bool face_allocated,
+        BLI_bitmap *mask, int numFaces_active,
+        float epsilon, int tree_type, int axis);
 
-/*
+BVHTree *bvhtree_from_mesh_looptri(
+        struct BVHTreeFromMesh *data, struct DerivedMesh *mesh, float epsilon, int tree_type, int axis);
+BVHTree *bvhtree_from_mesh_looptri_ex(
+        struct BVHTreeFromMesh *data,
+        const struct MVert *vert, const bool vert_allocated,
+        const struct MLoop *mloop, const bool loop_allocated,
+        const struct MLoopTri *looptri, const int looptri_num, const bool looptri_allocated,
+        BLI_bitmap *mask, int looptri_num_active,
+        float epsilon, int tree_type, int axis);
+
+/**
  * Frees data allocated by a call to bvhtree_from_mesh_*.
  */
 void free_bvhtree_from_mesh(struct BVHTreeFromMesh *data);
 
-/*
+/**
  * Math functions used by callbacks
  */
-float bvhtree_ray_tri_intersection(const BVHTreeRay *ray, const float m_dist, const float v0[3], const float v1[3], const float v2[3]);
-float nearest_point_in_tri_surface_squared(const float v0[3], const float v1[3], const float v2[3], const float p[3], int *v, int *e, float nearest[3]);
+float bvhtree_ray_tri_intersection(
+        const BVHTreeRay *ray, const float m_dist,
+        const float v0[3], const float v1[3], const float v2[3]);
+float bvhtree_sphereray_tri_intersection(
+        const BVHTreeRay *ray, float radius, const float m_dist,
+        const float v0[3], const float v1[3], const float v2[3]);
+float nearest_point_in_tri_surface_squared(
+        const float v0[3], const float v1[3], const float v2[3],
+        const float p[3], int *v, int *e, float nearest[3]);
 
-/*
+/**
  * BVHCache
  */
 
@@ -113,17 +142,18 @@ enum {
 	BVHTREE_FROM_EDGES           = 1,
 	BVHTREE_FROM_FACES           = 2,
 	BVHTREE_FROM_FACES_EDITMESH  = 3,
+	BVHTREE_FROM_LOOPTRI         = 4,
 };
 
 typedef struct LinkNode *BVHCache;
 
 
-/*
+/**
  * Queries a bvhcache for the cache bvhtree of the request type
  */
 BVHTree *bvhcache_find(BVHCache *cache, int type);
 
-/*
+/**
  * Inserts a BVHTree of the given type under the cache
  * After that the caller no longer needs to worry when to free the BVHTree
  * as that will be done when the cache is freed.
@@ -132,7 +162,7 @@ BVHTree *bvhcache_find(BVHCache *cache, int type);
  */
 void bvhcache_insert(BVHCache *cache, BVHTree *tree, int type);
 
-/*
+/**
  * inits and frees a bvhcache
  */
 void bvhcache_init(BVHCache *cache);

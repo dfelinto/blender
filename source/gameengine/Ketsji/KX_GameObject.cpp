@@ -69,11 +69,11 @@
 #include "BL_ActionManager.h"
 #include "BL_Action.h"
 
-#include "PyObjectPlus.h" /* python stuff */
+#include "EXP_PyObjectPlus.h" /* python stuff */
 #include "BLI_utildefines.h"
 
 #ifdef WITH_PYTHON
-#  include "KX_PythonCallBack.h"
+#  include "EXP_PythonCallBack.h"
 #  include "python_utildefines.h"
 #endif
 
@@ -492,6 +492,11 @@ void KX_GameObject::UpdateActionIPOs()
 float KX_GameObject::GetActionFrame(short layer)
 {
 	return GetActionManager()->GetActionFrame(layer);
+}
+
+const char *KX_GameObject::GetActionName(short layer)
+{
+	return GetActionManager()->GetActionName(layer);
 }
 
 void KX_GameObject::SetActionFrame(short layer, float frame)
@@ -1583,6 +1588,14 @@ void KX_GameObject::RunCollisionCallbacks(KX_GameObject *collider, const MT_Vect
 	if (!m_collisionCallbacks || PyList_GET_SIZE(m_collisionCallbacks) == 0)
 		return;
 
+	/** Current logic controller is set by each python logic bricks before run,
+	 * but if no python logic brick ran the logic manager can be wrong 
+	 * (if the user use muti scenes) and it will cause problems with function
+	 * ConvertPythonToGameObject which use the current logic manager for object's name.
+	 * Note: the scene is already set in logic frame loop.
+	 */
+	SCA_ILogicBrick::m_sCurrentLogicManager = GetScene()->GetLogicManager();
+
 	PyObject *args[] = {collider->GetProxy(), PyObjectFrom(point), PyObjectFrom(normal)};
 	RunPythonCallBackList(m_collisionCallbacks, args, 1, ARRAY_SIZE(args));
 
@@ -1949,6 +1962,7 @@ PyMethodDef KX_GameObject::Methods[] = {
 	KX_PYMETHODTABLE_KEYWORDS(KX_GameObject, playAction),
 	KX_PYMETHODTABLE(KX_GameObject, stopAction),
 	KX_PYMETHODTABLE(KX_GameObject, getActionFrame),
+	KX_PYMETHODTABLE(KX_GameObject, getActionName),
 	KX_PYMETHODTABLE(KX_GameObject, setActionFrame),
 	KX_PYMETHODTABLE(KX_GameObject, isPlayingAction),
 	
@@ -3913,7 +3927,7 @@ KX_PYMETHODDEF_DOC(KX_GameObject, stopAction,
 	"stopAction(layer=0)\n"
 	"Stop playing the action on the given layer\n")
 {
-	short layer=0;
+	short layer = 0;
 
 	if (!PyArg_ParseTuple(args, "|h:stopAction", &layer))
 		return NULL;
@@ -3929,7 +3943,7 @@ KX_PYMETHODDEF_DOC(KX_GameObject, getActionFrame,
 	"getActionFrame(layer=0)\n"
 	"Gets the current frame of the action playing in the supplied layer\n")
 {
-	short layer=0;
+	short layer = 0;
 
 	if (!PyArg_ParseTuple(args, "|h:getActionFrame", &layer))
 		return NULL;
@@ -3939,11 +3953,25 @@ KX_PYMETHODDEF_DOC(KX_GameObject, getActionFrame,
 	return PyFloat_FromDouble(GetActionFrame(layer));
 }
 
+KX_PYMETHODDEF_DOC(KX_GameObject, getActionName,
+	"getActionName(layer=0)\n"
+	"Gets the name of the current action playing in the supplied layer\n")
+{
+	short layer = 0;
+
+	if (!PyArg_ParseTuple(args, "|h:getActionName", &layer))
+		return NULL;
+
+	layer_check(layer, "getActionName");
+
+	return PyUnicode_FromString(GetActionName(layer));
+}
+
 KX_PYMETHODDEF_DOC(KX_GameObject, setActionFrame,
 	"setActionFrame(frame, layer=0)\n"
 	"Set the current frame of the action playing in the supplied layer\n")
 {
-	short layer=0;
+	short layer = 0;
 	float frame;
 
 	if (!PyArg_ParseTuple(args, "f|h:setActionFrame", &frame, &layer))
@@ -3960,7 +3988,7 @@ KX_PYMETHODDEF_DOC(KX_GameObject, isPlayingAction,
 	"isPlayingAction(layer=0)\n"
 	"Checks to see if there is an action playing in the given layer\n")
 {
-	short layer=0;
+	short layer = 0;
 
 	if (!PyArg_ParseTuple(args, "|h:isPlayingAction", &layer))
 		return NULL;

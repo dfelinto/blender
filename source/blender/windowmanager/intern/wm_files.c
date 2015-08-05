@@ -398,6 +398,8 @@ void WM_file_autoexec_init(const char *filepath)
 
 bool WM_file_read(bContext *C, const char *filepath, ReportList *reports)
 {
+	/* assume automated tasks with background, don't write recent file list */
+	const bool do_history = (G.background == false) && (CTX_wm_manager(C)->op_undo_depth == 0);
 	bool success = false;
 	int retval;
 
@@ -419,9 +421,6 @@ bool WM_file_read(bContext *C, const char *filepath, ReportList *reports)
 	if (retval == BKE_READ_EXOTIC_OK_BLEND) {
 		int G_f = G.f;
 		ListBase wmbase;
-
-		/* assume automated tasks with background, don't write recent file list */
-		const bool do_history = (G.background == false) && (CTX_wm_manager(C)->op_undo_depth == 0);
 
 		/* put aside screens to match with persistent windows later */
 		/* also exit screens and editors */
@@ -526,6 +525,19 @@ bool WM_file_read(bContext *C, const char *filepath, ReportList *reports)
 	else {
 		BKE_reportf(reports, RPT_ERROR, "Unknown error loading '%s'", filepath);
 		BLI_assert(!"invalid 'retval'");
+	}
+
+
+	if (success == false) {
+		/* remove from recent files list */
+		if (do_history) {
+			RecentFile *recent = BLI_findstring_ptr(&G.recent_files, filepath, offsetof(RecentFile, filepath));
+			if (recent) {
+				MEM_freeN(recent->filepath);
+				BLI_freelinkN(&G.recent_files, recent);
+				write_history();
+			}
+		}
 	}
 
 	WM_cursor_wait(0);
@@ -745,7 +757,8 @@ void wm_read_history(void)
 	/* read list of recent opened files from recent-files.txt to memory */
 	for (l = lines, num = 0; l && (num < U.recent_files); l = l->next) {
 		line = l->link;
-		if (line[0] && BLI_exists(line)) {
+		/* don't check if files exist, causes slow startup for remote/external drives */
+		if (line[0]) {
 			recent = (RecentFile *)MEM_mallocN(sizeof(RecentFile), "RecentFile");
 			BLI_addtail(&(G.recent_files), recent);
 			recent->filepath = BLI_strdup(line);
@@ -1035,7 +1048,7 @@ int wm_homefile_write_exec(bContext *C, wmOperator *op)
 	ED_editors_flush_edits(C, false);
 
 	/*  force save as regular blend file */
-	fileflags = G.fileflags & ~(G_FILE_COMPRESS | G_FILE_AUTOPLAY | G_FILE_LOCK | G_FILE_SIGN | G_FILE_HISTORY);
+	fileflags = G.fileflags & ~(G_FILE_COMPRESS | G_FILE_AUTOPLAY | G_FILE_HISTORY);
 
 	if (BLO_write_file(CTX_data_main(C), filepath, fileflags | G_FILE_USERPREFS, op->reports, NULL) == 0) {
 		printf("fail\n");
@@ -1145,7 +1158,7 @@ void wm_autosave_timer(const bContext *C, wmWindowManager *wm, wmTimer *UNUSED(w
 	}
 	else {
 		/*  save as regular blend file */
-		int fileflags = G.fileflags & ~(G_FILE_COMPRESS | G_FILE_AUTOPLAY | G_FILE_LOCK | G_FILE_SIGN | G_FILE_HISTORY);
+		int fileflags = G.fileflags & ~(G_FILE_COMPRESS | G_FILE_AUTOPLAY | G_FILE_HISTORY);
 
 		ED_editors_flush_edits(C, false);
 

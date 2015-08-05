@@ -235,6 +235,10 @@ typedef struct SlideOrigData {
 	/* array size of 'layer_math_map_num'
 	 * maps TransDataVertSlideVert.cd_group index to absolute CustomData layer index */
 	int *layer_math_map;
+
+	/* array of slide vert data especially for mirror verts */
+	TransDataGenericSlideVert *sv_mirror;
+	int totsv_mirror;
 } SlideOrigData;
 
 typedef struct EdgeSlideData {
@@ -710,6 +714,8 @@ bool calculateCenterActive(TransInfo *t, bool select_only, float r_center[3]);
 void calculatePropRatio(TransInfo *t);
 
 void getViewVector(TransInfo *t, float coord[3], float vec[3]);
+
+void transform_data_ext_rotate(TransData *td, float mat[3][3], bool use_drot);
 
 /*********************** Transform Orientations ******************************/
 

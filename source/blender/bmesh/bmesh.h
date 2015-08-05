@@ -28,8 +28,7 @@
  *
  * \addtogroup bmesh BMesh
  *
- * \brief BMesh is a non-manifold boundary representation designed to replace the current, limited EditMesh structure,
- * solving many of the design limitations and maintenance issues of EditMesh.
+ * \brief BMesh is a non-manifold boundary representation designed to support advanced editing operations.
  *
  *
  * \section bm_structure The Structure
@@ -78,11 +77,11 @@
  *
  * \subsection bm_edges_and_verts Edges and Vertices
  *
- * Edges and Vertices in BMesh are much like their counterparts in EditMesh,
- * except for some members private to the BMesh api.
+ * Edges and Vertices in BMesh are primitive structures.
  *
- * \note There can be more than one edge between two vertices in bmesh,
- * though the rest of blender (e.g. DerivedMesh, CDDM, CCGSubSurf, etc) does not support this.
+ * \note There can be more than one edge between two vertices in BMesh,
+ * though the rest of Blender (e.g. DerivedMesh, CDDM, CCGSubSurf, etc) does not support this.
+ * So it should only occur temporarily during editing operations.
  *
  *
  * \subsection bm_queries Queries
@@ -107,7 +106,8 @@
  * \subsection bm_iter_api Iterator API
  *
  * Most topological queries in BMesh go through an iterator API (see Queries above).
- * These are defined in bmesh_iterators.h.  If you can, please use the #BM_ITER macro in bmesh_iterators.h
+ * These are defined in bmesh_iterators.h.
+ * If you can, please use the #BM_ITER_MESH, #BM_ITER_ELEM macros in bmesh_iterators.h
  *
  *
  * \subsection bm_walker_api Walker API
@@ -161,7 +161,7 @@
  * - integer - #BMO_OP_SLOT_INT
  * - boolean - #BMO_OP_SLOT_BOOL
  * - float   - #BMO_OP_SLOT_FLT
- * - pointer - #BMO_OP_SLOT_PNT
+ * - pointer - #BMO_OP_SLOT_PTR
  * - matrix  - #BMO_OP_SLOT_MAT
  * - vector  - #BMO_OP_SLOT_VEC
  * - buffer  - #BMO_OP_SLOT_ELEMENT_BUF - a list of verts/edges/faces.

@@ -985,12 +985,17 @@ typedef struct SpaceNode {
 	int treetype DNA_DEPRECATED; /* treetype: as same nodetree->type */
 	int pad3;
 	
-	short texfrom;      /* texfrom object, world or brush */
-	short shaderfrom;   /* shader from object or world */
-	short recalc;       /* currently on 0/1, for auto compo */
-	short pad4;
-	ListBase linkdrag;  /* temporary data for modal linking operator */
-	
+	short texfrom;       /* texfrom object, world or brush */
+	short shaderfrom;    /* shader from object or world */
+	short recalc;        /* currently on 0/1, for auto compo */
+
+	char insert_ofs_dir; /* direction for offsetting nodes on insertion */
+	char pad4;
+
+	ListBase linkdrag;   /* temporary data for modal linking operator */
+	/* XXX hack for translate_attach op-macros to pass data from transform op to insert_offset op */
+	struct NodeInsertOfsData *iofsd; /* temporary data for node insert offset (in UI called Auto-offset) */
+
 	struct bGPdata *gpd;        /* grease-pencil data */
 } SpaceNode;
 
@@ -1006,8 +1011,9 @@ typedef enum eSpaceNode_Flag {
 	SNODE_AUTO_RENDER    = (1 << 5),
 	SNODE_SHOW_HIGHLIGHT = (1 << 6),
 //	SNODE_USE_HIDDEN_PREVIEW = (1 << 10), DNA_DEPRECATED December2013 
-	SNODE_NEW_SHADERS = (1 << 11),
+	SNODE_NEW_SHADERS    = (1 << 11),
 	SNODE_PIN            = (1 << 12),
+	SNODE_SKIP_INSOFFSET = (1 << 13), /* automatically offset following nodes in a chain on insertion */
 } eSpaceNode_Flag;
 
 /* snode->texfrom */
@@ -1024,6 +1030,12 @@ typedef enum eSpaceNode_ShaderFrom {
 	SNODE_SHADER_WORLD = 1,
 	SNODE_SHADER_LINESTYLE = 2,
 } eSpaceNode_ShaderFrom;
+
+/* snode->insert_ofs_dir */
+enum {
+	SNODE_INSERTOFS_DIR_RIGHT = 0,
+	SNODE_INSERTOFS_DIR_LEFT  = 1,
+};
 
 /* Game Logic Editor ===================================== */
 
@@ -1204,10 +1216,13 @@ typedef enum eSpace_Type {
 	SPACE_INFO     = 7,
 	SPACE_SEQ      = 8,
 	SPACE_TEXT     = 9,
+#ifdef DNA_DEPRECATED
 	SPACE_IMASEL   = 10, /* deprecated */
 	SPACE_SOUND    = 11, /* Deprecated */
+#endif
 	SPACE_ACTION   = 12,
 	SPACE_NLA      = 13,
+	/* TODO: fully deprecate */
 	SPACE_SCRIPT   = 14, /* Deprecated */
 	SPACE_TIME     = 15,
 	SPACE_NODE     = 16,
@@ -1222,10 +1237,6 @@ typedef enum eSpace_Type {
 /* use for function args */
 #define SPACE_TYPE_ANY -1
 
-// TODO: SPACE_SCRIPT
-#if (DNA_DEPRECATED_GCC_POISON == 1)
-#pragma GCC poison SPACE_IMASEL SPACE_SOUND
-#endif
 
 #define IMG_SIZE_FALLBACK 256
 

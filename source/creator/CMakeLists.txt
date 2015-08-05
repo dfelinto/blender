@@ -165,20 +165,27 @@ if(WITH_BUILDINFO)
 	#       except when used as an include path.
 
 	# include the output directory, where the buildinfo.h file is generated
-	include_directories(${CMAKE_BINARY_DIR}/source/creator)
+	include_directories(${CMAKE_CURRENT_BINARY_DIR})
+
+
+	# XXX, "_buildinfo.h" is used twice here,
+	# because we rely on that file being detected as missing
+	# every build so that the real header "buildinfo.h" is updated.
+	#
+	# Keep this until we find a better way to resolve!
 
 	# a custom target that is always built
 	add_custom_target(buildinfo ALL
-		DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/buildinfo.h)
+		DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/_buildinfo.h)
 
-	# creates svnheader.h using cmake script
-	add_custom_command(OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/buildinfo.h
+	# creates buildinfo.h using cmake script
+	add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/_buildinfo.h
 		COMMAND ${CMAKE_COMMAND}
 		-DSOURCE_DIR=${CMAKE_SOURCE_DIR}
 		-P ${CMAKE_SOURCE_DIR}/build_files/cmake/buildinfo.cmake)
 
 	# buildinfo.h is a generated file
-	set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/buildinfo.h
+	set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/buildinfo.h
 		PROPERTIES GENERATED TRUE
 		HEADER_FILE_ONLY TRUE)
 
@@ -784,6 +791,16 @@ elseif(WIN32)
 	if(WITH_SDL)
 		install(
 			FILES ${LIBDIR}/sdl/lib/SDL2.dll
+			DESTINATION "."
+		)
+	endif()
+	
+	if(WITH_SYSTEM_AUDASPACE)
+		install(
+			FILES
+				${LIBDIR}/audaspace/lib/audaspace.dll
+				${LIBDIR}/audaspace/lib/audaspace-c.dll
+				${LIBDIR}/audaspace/lib/audaspace-py.dll
 			DESTINATION "."
 		)
 	endif()

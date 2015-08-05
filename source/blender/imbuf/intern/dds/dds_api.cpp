@@ -73,7 +73,7 @@ int imb_save_dds(struct ImBuf *ibuf, const char *name, int /*flags*/)
 	return(1);
 }
 
-int imb_is_a_dds(unsigned char *mem) // note: use at most first 32 bytes
+int imb_is_a_dds(const unsigned char *mem) // note: use at most first 32 bytes
 {
 	/* heuristic check to see if mem contains a DDS file */
 	/* header.fourcc == FOURCC_DDS */
@@ -83,10 +83,10 @@ int imb_is_a_dds(unsigned char *mem) // note: use at most first 32 bytes
 	return(1);
 }
 
-struct ImBuf *imb_load_dds(unsigned char *mem, size_t size, int flags, char colorspace[IM_MAX_SPACE])
+struct ImBuf *imb_load_dds(const unsigned char *mem, size_t size, int flags, char colorspace[IM_MAX_SPACE])
 {
 	struct ImBuf *ibuf = NULL;
-	DirectDrawSurface dds(mem, size); /* reads header */
+	DirectDrawSurface dds((unsigned char *)mem, size); /* reads header */
 	unsigned char bits_per_pixel;
 	unsigned int *rect;
 	Image img;
@@ -142,7 +142,7 @@ struct ImBuf *imb_load_dds(unsigned char *mem, size_t size, int flags, char colo
 	ibuf = IMB_allocImBuf(dds.width(), dds.height(), bits_per_pixel, 0); 
 	if (ibuf == 0) return(0); /* memory allocation failed */
 
-	ibuf->ftype = DDS;
+	ibuf->ftype = IMB_FTYPE_DDS;
 	ibuf->dds_data.fourcc = dds.fourCC();
 	ibuf->dds_data.nummipmaps = dds.mipmapCount();
 

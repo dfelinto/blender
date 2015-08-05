@@ -30,6 +30,7 @@
 
 #include "util_foreach.h"
 #include "util_function.h"
+#include "util_logging.h"
 #include "util_math.h"
 #include "util_opengl.h"
 #include "util_task.h"
@@ -637,6 +638,9 @@ DeviceRequestedFeatures Session::get_requested_device_features()
 		requested_features.use_camera_motion |= mesh->use_motion_blur;
 	}
 
+	BakeManager *bake_manager = scene->bake_manager;
+	requested_features.use_baking = bake_manager->get_baking();
+
 	return requested_features;
 }
 
@@ -647,7 +651,9 @@ void Session::load_kernels()
 	if(!kernels_loaded) {
 		progress.set_status("Loading render kernels (may take a few minutes the first time)");
 
-		if(!device->load_kernels(get_requested_device_features())) {
+		DeviceRequestedFeatures requested_features = get_requested_device_features();
+		VLOG(2) << "Requested features:\n" << requested_features;
+		if(!device->load_kernels(requested_features)) {
 			string message = device->error_message();
 			if(message.empty())
 				message = "Failed loading render kernel, see console for errors";

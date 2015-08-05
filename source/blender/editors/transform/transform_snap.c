@@ -343,31 +343,13 @@ void applyProject(TransInfo *t)
 						/* handle alignment as well */
 						const float *original_normal;
 						float mat[3][3];
-						float totmat[3][3], smat[3][3];
-						float eul[3], fmat[3][3];
-						float obmat[3][3];
 
 						/* In pose mode, we want to align normals with Y axis of bones... */
 						original_normal = td->axismtx[2];
 
 						rotation_between_vecs_to_mat3(mat, original_normal, no);
 
-						mul_m3_m3m3(totmat, mat, td->mtx);
-						mul_m3_m3m3(smat, td->smtx, totmat);
-
-						/* calculate the total rotatation in eulers */
-						add_v3_v3v3(eul, td->ext->irot, td->ext->drot); /* we have to correct for delta rot */
-						eulO_to_mat3(obmat, eul, td->ext->rotOrder);
-						/* mat = transform, obmat = object rotation */
-						mul_m3_m3m3(fmat, smat, obmat);
-
-						mat3_to_compatible_eulO(eul, td->ext->rot, td->ext->rotOrder, fmat);
-
-						/* correct back for delta rot */
-						sub_v3_v3v3(eul, eul, td->ext->drot);
-
-						/* and apply */
-						copy_v3_v3(td->ext->rot, eul);
+						transform_data_ext_rotate(td, mat, true);
 
 						/* TODO support constraints for rotation too? see ElementRotation */
 					}
@@ -1551,7 +1533,7 @@ static bool snapDerivedMesh(short snap_mode, ARegion *ar, Object *ob, DerivedMes
 			len_diff = 0.0f;  /* In case BVHTree would fail for some reason... */
 
 			treeData.em_evil = em;
-			bvhtree_from_mesh_faces(&treeData, dm, 0.0f, 2, 6);
+			bvhtree_from_mesh_looptri(&treeData, dm, 0.0f, 2, 6);
 			if (treeData.tree != NULL) {
 				nearest.index = -1;
 				nearest.dist_sq = FLT_MAX;
@@ -1593,7 +1575,7 @@ static bool snapDerivedMesh(short snap_mode, ARegion *ar, Object *ob, DerivedMes
 				}
 
 				treeData.em_evil = em;
-				bvhtree_from_mesh_faces(&treeData, dm, 0.0f, 4, 6);
+				bvhtree_from_mesh_looptri(&treeData, dm, 0.0f, 4, 6);
 
 				hit.index = -1;
 				hit.dist = *r_depth;
@@ -2080,9 +2062,11 @@ static bool peelDerivedMesh(Object *ob, DerivedMesh *dm, float obmat[4][4],
 {
 	bool retval = false;
 	int totvert = dm->getNumVerts(dm);
-	int totface = dm->getNumTessFaces(dm);
 	
 	if (totvert > 0) {
+		const MLoopTri *looptri = dm->getLoopTriArray(dm);
+		const MLoop *mloop = dm->getLoopArray(dm);
+		int looptri_num = dm->getNumLoopTri(dm);
 		float imat[4][4];
 		float timat[3][3]; /* transpose inverse matrix for normals */
 		float ray_start_local[3], ray_normal_local[3];
@@ -2098,23 +2082,27 @@ static bool peelDerivedMesh(Object *ob, DerivedMesh *dm, float obmat[4][4],
 		/* If number of vert is more than an arbitrary limit, 
 		 * test against boundbox first
 		 * */
-		if (totface > 16) {
+		if (looptri_num > 16) {
 			struct BoundBox *bb = BKE_object_boundbox_get(ob);
 			test = BKE_boundbox_ray_hit_check(bb, ray_start_local, ray_normal_local, NULL);
 		}
 		
 		if (test == 1) {
+			const MLoopTri *lt;
 			MVert *verts = dm->getVertArray(dm);
-			MFace *faces = dm->getTessFaceArray(dm);
+			float (*polynors)[3] = dm->getPolyDataArray(dm, CD_NORMAL);
 			int i;
 			
-			for (i = 0; i < totface; i++) {
-				MFace *f = faces + i;
+			for (i = 0, lt = looptri; i < looptri_num; i++, lt++) {
+				const unsigned int vtri[3] = {mloop[lt->tri[0]].v, mloop[lt->tri[1]].v, mloop[lt->tri[2]].v};
 				float lambda;
 				int result;
 				
 				
-				result = isect_ray_tri_threshold_v3(ray_start_local, ray_normal_local, verts[f->v1].co, verts[f->v2].co, verts[f->v3].co, &lambda, NULL, 0.001);
+				result = isect_ray_tri_threshold_v3(
+				        ray_start_local, ray_normal_local,
+				        verts[vtri[0]].co, verts[vtri[1]].co, verts[vtri[2]].co,
+				        &lambda, NULL, 0.001);
 				
 				if (result) {
 					float location[3], normal[3];
@@ -2126,11 +2114,13 @@ static bool peelDerivedMesh(Object *ob, DerivedMesh *dm, float obmat[4][4],
 					add_v3_v3(intersect, ray_start_local);
 					
 					copy_v3_v3(location, intersect);
-					
-					if (f->v4)
-						normal_quad_v3(normal, verts[f->v1].co, verts[f->v2].co, verts[f->v3].co, verts[f->v4].co);
-					else
-						normal_tri_v3(normal, verts[f->v1].co, verts[f->v2].co, verts[f->v3].co);
+
+					if (polynors) {
+						copy_v3_v3(normal, polynors[lt->poly]);
+					}
+					else {
+						normal_tri_v3(normal, verts[vtri[0]].co, verts[vtri[1]].co, verts[vtri[2]].co);
+					}
 
 					mul_m4_v3(obmat, location);
 					
@@ -2140,36 +2130,6 @@ static bool peelDerivedMesh(Object *ob, DerivedMesh *dm, float obmat[4][4],
 					normalize_v3(normal);
 
 					addDepthPeel(depth_peels, new_depth, location, normal, ob);
-				}
-		
-				if (f->v4 && result == 0) {
-					result = isect_ray_tri_threshold_v3(ray_start_local, ray_normal_local, verts[f->v3].co, verts[f->v4].co, verts[f->v1].co, &lambda, NULL, 0.001);
-					
-					if (result) {
-						float location[3], normal[3];
-						float intersect[3];
-						float new_depth;
-						
-						copy_v3_v3(intersect, ray_normal_local);
-						mul_v3_fl(intersect, lambda);
-						add_v3_v3(intersect, ray_start_local);
-						
-						copy_v3_v3(location, intersect);
-						
-						if (f->v4)
-							normal_quad_v3(normal, verts[f->v1].co, verts[f->v2].co, verts[f->v3].co, verts[f->v4].co);
-						else
-							normal_tri_v3(normal, verts[f->v1].co, verts[f->v2].co, verts[f->v3].co);
-
-						mul_m4_v3(obmat, location);
-						
-						new_depth = len_v3v3(location, ray_start);
-						
-						mul_m3_v3(timat, normal);
-						normalize_v3(normal);
-	
-						addDepthPeel(depth_peels, new_depth, location, normal, ob);
-					}
 				}
 			}
 		}

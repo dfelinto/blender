@@ -445,7 +445,7 @@ static int debug_mode(int UNUSED(argc), const char **UNUSED(argv), void *data)
 	G.debug |= G_DEBUG;  /* std output printf's */
 	printf(BLEND_VERSION_STRING_FMT);
 	MEM_set_memory_debug();
-#ifdef DEBUG
+#ifndef NDEBUG
 	BLI_mempool_set_memory_debug();
 #endif
 
@@ -824,7 +824,7 @@ static int no_glsl(int UNUSED(argc), const char **UNUSED(argv), void *UNUSED(dat
 
 static int no_audio(int UNUSED(argc), const char **UNUSED(argv), void *UNUSED(data))
 {
-	BKE_sound_force_device(0);
+	BKE_sound_force_device("Null");
 	return 0;
 }
 
@@ -835,7 +835,7 @@ static int set_audio(int argc, const char **argv, void *UNUSED(data))
 		exit(1);
 	}
 
-	BKE_sound_force_device(BKE_sound_define_from_str(argv[1]));
+	BKE_sound_force_device(argv[1]);
 	return 1;
 }
 

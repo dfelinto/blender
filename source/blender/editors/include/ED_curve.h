@@ -48,11 +48,6 @@ void    ED_operatormacros_curve(void);
 void    ED_keymap_curve(struct wmKeyConfig *keyconf);
 
 /* editcurve.c */
-void ED_curve_deselect_all(struct EditNurb *editnurb);
-void ED_curve_select_all(struct EditNurb *editnurb);
-void ED_curve_select_swap(struct EditNurb *editnurb, bool hide_handles);
-
-
 void    undo_push_curve(struct bContext *C, const char *name);
 ListBase *object_editcurve_get(struct Object *ob);
 
@@ -64,9 +59,19 @@ bool    mouse_nurb(struct bContext *C, const int mval[2], bool extend, bool dese
 
 struct Nurb *add_nurbs_primitive(struct bContext *C, struct Object *obedit, float mat[4][4], int type, int newob);
 
-int     isNurbsel(struct Nurb *nu);
+bool    ED_curve_nurb_select_check(struct Curve *cu, struct Nurb *nu);
+int     ED_curve_nurb_select_count(struct Curve *cu, struct Nurb *nu);
+void    ED_curve_nurb_select_all(struct Nurb *nu);
+void    ED_curve_nurb_deselect_all(struct Nurb *nu);
 
 int     join_curve_exec(struct bContext *C, struct wmOperator *op);
+
+/* editcurve_select.c */
+bool ED_curve_select_check(struct Curve *cu, struct EditNurb *editnurb);
+void ED_curve_deselect_all(struct EditNurb *editnurb);
+void ED_curve_select_all(struct EditNurb *editnurb);
+void ED_curve_select_swap(struct EditNurb *editnurb, bool hide_handles);
+bool ED_curve_select_nth(struct Curve *cu, int nth, int skip, int offset);
 
 /* editfont.h */
 void    undo_push_font(struct bContext *C, const char *name);
@@ -75,8 +80,6 @@ void    load_editText(struct Object *obedit);
 void    free_editText(struct Object *obedit);
 
 void    ED_text_to_object(struct bContext *C, struct Text *text, const bool split_lines);
-
-bool ED_curve_select_nth(struct Curve *cu, int nth, int skip, int offset);
 
 void ED_curve_beztcpy(struct EditNurb *editnurb, struct BezTriple *dst, struct BezTriple *src, int count);
 void ED_curve_bpcpy(struct EditNurb *editnurb, struct BPoint *dst, struct BPoint *src, int count);

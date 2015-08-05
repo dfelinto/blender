@@ -15,7 +15,7 @@
 #include "BL_Shader.h"
 #include "BL_BlenderShader.h"
 
-#include "PyObjectPlus.h"
+#include "EXP_PyObjectPlus.h"
 
 #include "MT_Vector3.h"
 #include "MT_Vector4.h"
@@ -84,7 +84,7 @@ public:
 
 	Material* GetBlenderMaterial() const;
 	Image* GetBlenderImage() const;
-	MTFace* GetMTFace() const;
+	MTexPoly *GetMTexPoly() const;
 	unsigned int* GetMCol() const;
 	BL_Texture * getTex (unsigned int idx) { 
 		return (idx < MAXTEX) ? mTextures + idx : NULL; 

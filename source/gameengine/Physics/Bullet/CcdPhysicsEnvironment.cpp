@@ -410,6 +410,10 @@ m_ccdMode(0),
 m_solverType(-1),
 m_profileTimings(0),
 m_enableSatCollisionDetection(false),
+m_deactivationTime(2.0f),
+m_linearDeactivationThreshold(0.8f),
+m_angularDeactivationThreshold(1.0f),
+m_contactBreakingThreshold(0.02f),
 m_solver(NULL),
 m_ownPairCache(NULL),
 m_filterCallback(NULL),
@@ -472,8 +476,10 @@ void	CcdPhysicsEnvironment::AddCcdPhysicsController(CcdPhysicsController* ctrl)
 
 	//this m_userPointer is just used for triggers, see CallbackTriggers
 	obj->setUserPointer(ctrl);
-	if (body)
-		body->setGravity( m_gravity );
+	if (body) {
+		body->setGravity(m_gravity);
+		body->setSleepingThresholds(m_linearDeactivationThreshold, m_angularDeactivationThreshold);
+	}
 
 	if (body)
 	{
@@ -699,6 +705,10 @@ bool	CcdPhysicsEnvironment::ProceedDeltaTime(double curTime,float timeStep,float
 	std::set<CcdPhysicsController*>::iterator it;
 	int i;
 
+	// Update Bullet global variables.
+	gDeactivationTime = m_deactivationTime;
+	gContactBreakingThreshold = m_contactBreakingThreshold;
+
 	for (it=m_controllers.begin(); it!=m_controllers.end(); it++)
 	{
 		(*it)->SynchronizeMotionStates(timeStep);
@@ -918,21 +928,32 @@ void		CcdPhysicsEnvironment::SetNumIterations(int numIter)
 }
 void		CcdPhysicsEnvironment::SetDeactivationTime(float dTime)
 {
-	gDeactivationTime = dTime;
+	m_deactivationTime = dTime;
 }
 void		CcdPhysicsEnvironment::SetDeactivationLinearTreshold(float linTresh)
 {
-	gLinearSleepingTreshold = linTresh;
+	m_linearDeactivationThreshold = linTresh;
+
+	// Update from all controllers.
+	for (std::set<CcdPhysicsController*>::iterator it = m_controllers.begin(); it != m_controllers.end(); it++) {
+		if ((*it)->GetRigidBody())
+			(*it)->GetRigidBody()->setSleepingThresholds(m_linearDeactivationThreshold, m_angularDeactivationThreshold);
+	}
 }
 void		CcdPhysicsEnvironment::SetDeactivationAngularTreshold(float angTresh)
 {
-	gAngularSleepingTreshold = angTresh;
+	m_angularDeactivationThreshold = angTresh;
+
+	// Update from all controllers.
+	for (std::set<CcdPhysicsController*>::iterator it = m_controllers.begin(); it != m_controllers.end(); it++) {
+		if ((*it)->GetRigidBody())
+			(*it)->GetRigidBody()->setSleepingThresholds(m_linearDeactivationThreshold, m_angularDeactivationThreshold);
+	}
 }
 
 void		CcdPhysicsEnvironment::SetContactBreakingTreshold(float contactBreakingTreshold)
 {
-	gContactBreakingThreshold = contactBreakingTreshold;
-
+	m_contactBreakingThreshold = contactBreakingTreshold;
 }
 
 
@@ -1082,7 +1103,10 @@ int			CcdPhysicsEnvironment::CreateUniversalD6Constraint(
 
 void		CcdPhysicsEnvironment::RemoveConstraint(int	constraintId)
 {
-	
+	// For soft body constraints
+	if (constraintId == 0)
+		return;
+
 	int i;
 	int numConstraints = m_dynamicsWorld->getNumConstraints();
 	for (i=0;i<numConstraints;i++)
@@ -2026,6 +2050,9 @@ CcdPhysicsEnvironment::~CcdPhysicsEnvironment()
 float	CcdPhysicsEnvironment::GetConstraintParam(int constraintId,int param)
 {
 	btTypedConstraint* typedConstraint = GetConstraintById(constraintId);
+	if (!typedConstraint)
+		return 0.0f;
+
 	switch (typedConstraint->getUserConstraintType())
 	{
 	case PHY_GENERIC_6DOF_CONSTRAINT:
@@ -2065,6 +2092,9 @@ float	CcdPhysicsEnvironment::GetConstraintParam(int constraintId,int param)
 void	CcdPhysicsEnvironment::SetConstraintParam(int constraintId,int param,float value0,float value1)
 {
 	btTypedConstraint* typedConstraint = GetConstraintById(constraintId);
+	if (!typedConstraint)
+		return;
+
 	switch (typedConstraint->getUserConstraintType())
 	{
 	case PHY_GENERIC_6DOF_CONSTRAINT:
@@ -2174,6 +2204,9 @@ void	CcdPhysicsEnvironment::SetConstraintParam(int constraintId,int param,float 
 
 btTypedConstraint*	CcdPhysicsEnvironment::GetConstraintById(int constraintId)
 {
+	// For soft body constraints
+	if (constraintId == 0)
+		return NULL;
 
 	int numConstraints = m_dynamicsWorld->getNumConstraints();
 	int i;
@@ -2954,6 +2987,10 @@ PHY_IPhysicsController* CcdPhysicsEnvironment::CreateConeController(float conera
 	
 float		CcdPhysicsEnvironment::getAppliedImpulse(int	constraintid)
 {
+	// For soft body constraints
+	if (constraintid == 0)
+		return 0.0f;
+
 	int i;
 	int numConstraints = m_dynamicsWorld->getNumConstraints();
 	for (i=0;i<numConstraints;i++)

@@ -58,9 +58,7 @@
 
 #ifdef WITH_QUICKTIME
 #  include "quicktime_export.h"
-#  ifdef WITH_AUDASPACE
-#    include "AUD_Space.h"
-#  endif
+#  include AUD_TYPES_H
 #endif
 
 #ifdef WITH_FFMPEG
@@ -480,6 +478,8 @@ static Base *rna_Scene_object_link(Scene *scene, bContext *C, ReportList *report
 	if (scene == scene_act)
 		ob->lay = base->lay;
 
+	/* TODO(sergey): Only update relations for the current scene. */
+	DAG_relations_tag_update(CTX_data_main(C));
 	DAG_id_tag_update(&ob->id, OB_RECALC_OB | OB_RECALC_DATA | OB_RECALC_TIME);
 
 	/* slows down importers too much, run scene.update() */
@@ -5380,7 +5380,7 @@ static void rna_def_scene_render_data(BlenderRNA *brna)
 	RNA_def_property_float_sdna(prop, NULL, "border.xmin");
 	RNA_def_property_range(prop, 0.0f, 1.0f);
 	RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
-	RNA_def_property_ui_text(prop, "Border Minimum X", "Minimum X value to for the render border");
+	RNA_def_property_ui_text(prop, "Border Minimum X", "Minimum X value for the render border");
 	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
 
 	prop = RNA_def_property(srna, "border_min_y", PROP_FLOAT, PROP_NONE);
@@ -5691,7 +5691,7 @@ static void rna_def_scene_render_data(BlenderRNA *brna)
 
 	prop = RNA_def_property(srna, "use_stamp_strip_meta", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "stamp", R_STAMP_STRIPMETA);
-	RNA_def_property_ui_text(prop, "Strip Metadata", "Render the metadata of the strip for sequencer");
+	RNA_def_property_ui_text(prop, "Strip Metadata", "Use metadata from the strips in the sequencer");
 	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
 
 	prop = RNA_def_property(srna, "stamp_font_size", PROP_INT, PROP_NONE);
@@ -5881,6 +5881,7 @@ static void rna_def_scene_render_data(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "debug_pass_type", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_items(prop, render_pass_debug_type_items);
 	RNA_def_property_ui_text(prop, "Debug Pass Type", "Type of the debug pass to use");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
 #endif
 
 	/* Nestled Data  */

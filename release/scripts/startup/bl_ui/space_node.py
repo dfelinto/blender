@@ -18,6 +18,7 @@
 
 # <pep8 compliant>
 import bpy
+import nodeitems_utils
 from bpy.types import Header, Menu, Panel
 from bpy.app.translations import pgettext_iface as iface_
 from bl_ui.properties_grease_pencil_common import (
@@ -114,6 +115,9 @@ class NODE_HT_header(Header):
 
         layout.separator()
 
+        # Auto-offset nodes (called "insert_offset" in code)
+        layout.prop(snode, "use_insert_offset", text="")
+
         # Snap
         row = layout.row(align=True)
         row.prop(toolsettings, "use_snap", text="")
@@ -154,7 +158,8 @@ class NODE_MT_add(bpy.types.Menu):
         props = layout.operator("node.add_search", text="Search ...")
         props.use_transform = True
 
-        # actual node submenus are added by draw functions from node categories
+        # actual node submenus are defined by draw functions from node categories
+        nodeitems_utils.draw_node_categories_menu(self, context)
 
 
 class NODE_MT_view(Menu):

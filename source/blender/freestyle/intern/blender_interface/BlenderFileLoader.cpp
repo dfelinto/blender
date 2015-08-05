@@ -663,13 +663,13 @@ void BlenderFileLoader::insertShapeNode(ObjectInstanceRen *obi, int id)
 
 	// We might have several times the same vertex. We want a clean 
 	// shape with no real-vertex. Here, we are making a cleaning pass.
-	real *cleanVertices = NULL;
+	float *cleanVertices = NULL;
 	unsigned int cvSize;
 	unsigned int *cleanVIndices = NULL;
 
 	GeomCleaner::CleanIndexedVertexArray(vertices, vSize, VIndices, viSize, &cleanVertices, &cvSize, &cleanVIndices);
 
-	real *cleanNormals = NULL;
+	float *cleanNormals = NULL;
 	unsigned int cnSize;
 	unsigned int *cleanNIndices = NULL;
 
@@ -776,12 +776,12 @@ void BlenderFileLoader::insertShapeNode(ObjectInstanceRen *obi, int id)
 		for (v = detriList.begin(); v != detriList.end(); v++) {
 			detri_t detri = (*v);
 			if (detri.n == 0) {
-				cleanVertices[detri.viP]   = cleanVertices[detri.viA];
+				cleanVertices[detri.viP]     = cleanVertices[detri.viA];
 				cleanVertices[detri.viP + 1] = cleanVertices[detri.viA + 1];
 				cleanVertices[detri.viP + 2] = cleanVertices[detri.viA + 2];
 			}
 			else if (detri.v.norm() > 0.0) {
-				cleanVertices[detri.viP]   += 1.0e-5 * detri.v.x();
+				cleanVertices[detri.viP]     += 1.0e-5 * detri.v.x();
 				cleanVertices[detri.viP + 1] += 1.0e-5 * detri.v.y();
 				cleanVertices[detri.viP + 2] += 1.0e-5 * detri.v.z();
 			}

@@ -373,6 +373,7 @@ void            ntreeFreeCache(struct bNodeTree *ntree);
 
 int             ntreeNodeExists(struct bNodeTree *ntree, struct bNode *testnode);
 int             ntreeOutputExists(struct bNode *node, struct bNodeSocket *testsock);
+void            ntreeNodeFlagSet(const bNodeTree *ntree, const int flag, const bool enable);
 struct bNodeTree *ntreeLocalize(struct bNodeTree *ntree);
 void            ntreeLocalSync(struct bNodeTree *localtree, struct bNodeTree *ntree);
 void            ntreeLocalMerge(struct bNodeTree *localtree, struct bNodeTree *ntree);
@@ -475,6 +476,15 @@ void            nodeDetachNode(struct bNode *node);
 
 struct bNode   *nodeFindNodebyName(struct bNodeTree *ntree, const char *name);
 int             nodeFindNode(struct bNodeTree *ntree, struct bNodeSocket *sock, struct bNode **nodep, int *sockindex);
+struct bNode   *nodeFindRootParent(bNode *node);
+
+bool            nodeIsChildOf(const bNode *parent, const bNode *child);
+
+void nodeChainIter(
+        const bNodeTree *ntree, const bNode *node_start,
+        bool (*callback)(bNode *, bNode *, void *, const bool), void *userdata,
+        const bool reversed);
+void nodeParentsIter(bNode *node, bool (*callback)(bNode *, void *), void *userdata);
 
 struct bNodeLink *nodeFindLink(struct bNodeTree *ntree, struct bNodeSocket *from, struct bNodeSocket *to);
 int             nodeCountSocketLinks(struct bNodeTree *ntree, struct bNodeSocket *sock);
@@ -782,6 +792,7 @@ struct ShadeResult;
 #define SH_NODE_COMBXYZ					189
 #define SH_NODE_OUTPUT_LINESTYLE		190
 #define SH_NODE_UVALONGSTROKE			191
+#define SH_NODE_TEX_POINTDENSITY		192
 
 /* custom defines options for Material node */
 #define SH_NODE_MAT_DIFF   1
@@ -848,6 +859,7 @@ void            ntreeGPUMaterialNodes(struct bNodeTree *ntree, struct GPUMateria
 #define RRES_OUT_SUBSURFACE_DIRECT		28
 #define RRES_OUT_SUBSURFACE_INDIRECT	29
 #define RRES_OUT_SUBSURFACE_COLOR		30
+#define RRES_OUT_DEBUG				31
 
 /* note: types are needed to restore callbacks, don't change values */
 #define CMP_NODE_VIEWER		201

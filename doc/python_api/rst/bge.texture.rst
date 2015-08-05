@@ -75,14 +75,7 @@ Video classes
       Video status. (readonly)
       
       :type: int
-      :value: one of...
-      
-         * :data:`SOURCE_ERROR`
-         * :data:`SOURCE_EMPTY`
-         * :data:`SOURCE_READY`
-         * :data:`SOURCE_PLAYING`
-         * :data:`SOURCE_STOPPED`
-      
+      :value: see `FFmpeg Video and Image Status`_.
 
    .. attribute:: range
 
@@ -184,14 +177,8 @@ Video classes
 
       Refresh video - get its status.
       
-      :return: The video's status, one of...
-      
-         * :data:`SOURCE_ERROR`
-         * :data:`SOURCE_EMPTY`
-         * :data:`SOURCE_READY`
-         * :data:`SOURCE_PLAYING`
-         * :data:`SOURCE_STOPPED`
-      
+      :value: see `FFmpeg Video and Image Status`_.
+
       :rtype: int
 
 *************
@@ -210,13 +197,7 @@ Image classes
       Image status. (readonly)
       
       :type: int
-      :value: one of...
-      
-         * :data:`SOURCE_ERROR`
-         * :data:`SOURCE_EMPTY`
-         * :data:`SOURCE_READY`
-         * :data:`SOURCE_PLAYING`
-         * :data:`SOURCE_STOPPED`
+      :value: see `FFmpeg Video and Image Status`_.
 
    .. attribute:: valid
 
@@ -267,14 +248,8 @@ Image classes
 
       Refresh image, i.e. load it.
       
-      :return: the video's status, one of...
-      
-         * :data:`SOURCE_ERROR`
-         * :data:`SOURCE_EMPTY`
-         * :data:`SOURCE_READY`
-         * :data:`SOURCE_PLAYING`
-         * :data:`SOURCE_STOPPED`
-      
+      :value: see `FFmpeg Video and Image Status`_.
+
       :rtype: int
 
    .. method:: reload(newname=None)
@@ -350,36 +325,7 @@ Image classes
       :type positionX: int
       :arg positionY: Upper boundary of the region to be drawn on.
       :type positionY: int
-      :arg mode: Drawing mode, one of... (optional)
-      
-         * :data:`IMB_BLEND_MIX`
-         * :data:`IMB_BLEND_ADD`
-         * :data:`IMB_BLEND_SUB`
-         * :data:`IMB_BLEND_MUL`
-         * :data:`IMB_BLEND_LIGHTEN`
-         * :data:`IMB_BLEND_DARKEN`
-         * :data:`IMB_BLEND_ERASE_ALPHA`
-         * :data:`IMB_BLEND_ADD_ALPHA`
-         * :data:`IMB_BLEND_OVERLAY`
-         * :data:`IMB_BLEND_HARDLIGHT`
-         * :data:`IMB_BLEND_COLORBURN`
-         * :data:`IMB_BLEND_LINEARBURN`
-         * :data:`IMB_BLEND_COLORDODGE`
-         * :data:`IMB_BLEND_SCREEN`
-         * :data:`IMB_BLEND_SOFTLIGHT`
-         * :data:`IMB_BLEND_PINLIGHT`
-         * :data:`IMB_BLEND_VIVIDLIGHT`
-         * :data:`IMB_BLEND_LINEARLIGHT`
-         * :data:`IMB_BLEND_DIFFERENCE`
-         * :data:`IMB_BLEND_EXCLUSION`
-         * :data:`IMB_BLEND_HUE`
-         * :data:`IMB_BLEND_SATURATION`
-         * :data:`IMB_BLEND_LUMINOSITY`
-         * :data:`IMB_BLEND_COLOR`
-         * :data:`IMB_BLEND_COPY`
-         * :data:`IMB_BLEND_COPY_RGB`
-         * :data:`IMB_BLEND_COPY_ALPHA`
-      
+      :arg mode: Drawing mode, see `Image Blending Modes`_.
       :type mode: int
       
 
@@ -1100,140 +1046,77 @@ Functions
 Constants
 *********
 
-FFmpeg video and image statuses
-+++++++++++++++++++++++++++++++
+FFmpeg Video and Image Status
++++++++++++++++++++++++++++++
 
 
 .. data:: SOURCE_ERROR
 
-   :type: int
-
 .. data:: SOURCE_EMPTY
-
-   :type: int
 
 .. data:: SOURCE_READY
 
-   :type: int
-
 .. data:: SOURCE_PLAYING
-
-   :type: int
 
 .. data:: SOURCE_STOPPED
 
-   :type: int
 
-
-Image blending modes
+Image Blending Modes
 ++++++++++++++++++++
 
 See Wikipedia's `Blend Modes <https://en.wikipedia.org/wiki/Blend_modes>`_ for reference.
 
 .. data:: IMB_BLEND_MIX
 
-   :type: int
-
 .. data:: IMB_BLEND_ADD
-
-   :type: int
 
 .. data:: IMB_BLEND_SUB
 
-   :type: int
-
 .. data:: IMB_BLEND_MUL
-
-   :type: int
 
 .. data:: IMB_BLEND_LIGHTEN
 
-   :type: int
-
 .. data:: IMB_BLEND_DARKEN
-
-   :type: int
 
 .. data:: IMB_BLEND_ERASE_ALPHA
 
-   :type: int
-
 .. data:: IMB_BLEND_ADD_ALPHA
-
-   :type: int
 
 .. data:: IMB_BLEND_OVERLAY
 
-   :type: int
-
 .. data:: IMB_BLEND_HARDLIGHT
-
-   :type: int
 
 .. data:: IMB_BLEND_COLORBURN
 
-   :type: int
-
 .. data:: IMB_BLEND_LINEARBURN
-
-   :type: int
 
 .. data:: IMB_BLEND_COLORDODGE
 
-   :type: int
-
 .. data:: IMB_BLEND_SCREEN
-
-   :type: int
 
 .. data:: IMB_BLEND_SOFTLIGHT
 
-   :type: int
-
 .. data:: IMB_BLEND_PINLIGHT
-
-   :type: int
 
 .. data:: IMB_BLEND_VIVIDLIGHT
 
-   :type: int
-
 .. data:: IMB_BLEND_LINEARLIGHT
-
-   :type: int
 
 .. data:: IMB_BLEND_DIFFERENCE
 
-   :type: int
-
 .. data:: IMB_BLEND_EXCLUSION
-
-   :type: int
 
 .. data:: IMB_BLEND_HUE
 
-   :type: int
-
 .. data:: IMB_BLEND_SATURATION
-
-   :type: int
 
 .. data:: IMB_BLEND_LUMINOSITY
 
-   :type: int
-
 .. data:: IMB_BLEND_COLOR
-
-   :type: int
 
 .. data:: IMB_BLEND_COPY
 
-   :type: int
-
 .. data:: IMB_BLEND_COPY_RGB
-
-   :type: int
 
 .. data:: IMB_BLEND_COPY_ALPHA
 
-   :type: int

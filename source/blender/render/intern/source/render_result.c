@@ -528,7 +528,7 @@ static RenderPass *render_layer_add_pass(RenderResult *rr, RenderLayer *rl, int 
 }
 
 #ifdef WITH_CYCLES_DEBUG
-static const char *debug_pass_type_name_get(int debug_type)
+const char *RE_debug_pass_name_get(int debug_type)
 {
 	switch (debug_type) {
 		case RENDER_PASS_DEBUG_BVH_TRAVERSAL_STEPS:
@@ -541,20 +541,32 @@ static const char *debug_pass_type_name_get(int debug_type)
 	return "Unknown";
 }
 
+int RE_debug_pass_num_channels_get(int UNUSED(debug_type))
+{
+	/* Only single case currently, might be handy for further debug passes. */
+	return 1;
+}
+
 static RenderPass *render_layer_add_debug_pass(RenderResult *rr,
                                                RenderLayer *rl,
-                                               int channels,
                                                int pass_type,
                                                int debug_type,
                                                const char *view)
 {
+	const char *name = RE_debug_pass_name_get(debug_type);
+	int channels = RE_debug_pass_num_channels_get(debug_type);
 	RenderPass *rpass = render_layer_add_pass(rr, rl, channels, pass_type, view);
 	rpass->debug_type = debug_type;
 	BLI_strncpy(rpass->name,
-	            debug_pass_type_name_get(debug_type),
+	            name,
 	            sizeof(rpass->name));
 	BLI_strncpy(rpass->internal_name, rpass->name, sizeof(rpass->internal_name));
 	return rpass;
+}
+
+int RE_debug_pass_type_get(Render *re)
+{
+	return re->r.debug_pass_type;
 }
 #endif
 
@@ -708,7 +720,7 @@ RenderResult *render_result_new(Render *re, rcti *partrct, int crop, int savebuf
 
 #ifdef WITH_CYCLES_DEBUG
 			if (BKE_scene_use_new_shading_nodes(re->scene)) {
-				render_layer_add_debug_pass(rr, rl, 1, SCE_PASS_DEBUG,
+				render_layer_add_debug_pass(rr, rl, SCE_PASS_DEBUG,
 				        re->r.debug_pass_type, view);
 			}
 #endif
@@ -893,14 +905,12 @@ RenderResult *render_result_new_from_exr(void *exrhandle, const char *colorspace
 	IMB_exr_multilayer_convert(exrhandle, rr, ml_addview_cb, ml_addlayer_cb, ml_addpass_cb);
 
 	for (rl = rr->layers.first; rl; rl = rl->next) {
-		int c=0;
 		rl->rectx = rectx;
 		rl->recty = recty;
 
 		BLI_listbase_sort(&rl->passes, order_render_passes);
 
 		for (rpass = rl->passes.first; rpass; rpass = rpass->next) {
-			printf("%d: %s\n", c++, rpass->name);
 			rpass->rectx = rectx;
 			rpass->recty = recty;
 
@@ -1323,9 +1333,9 @@ void render_result_exr_file_merge(RenderResult *rr, RenderResult *rrpart, const 
 /* path to temporary exr file */
 void render_result_exr_file_path(Scene *scene, const char *layname, int sample, char *filepath)
 {
-	char name[FILE_MAXFILE + MAX_ID_NAME + MAX_ID_NAME + 100], fi[FILE_MAXFILE];
+	char name[FILE_MAXFILE + MAX_ID_NAME + MAX_ID_NAME + 100];
+	const char *fi = BLI_path_basename(G.main->name);
 	
-	BLI_split_file_part(G.main->name, fi, sizeof(fi));
 	if (sample == 0) {
 		BLI_snprintf(name, sizeof(name), "%s_%s_%s.exr", fi, scene->id.name + 2, layname);
 	}

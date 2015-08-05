@@ -61,6 +61,19 @@ static EnumPropertyItem compute_device_type_items[] = {
 };
 #endif
 
+#ifdef WITH_OPENSUBDIV
+static EnumPropertyItem opensubdiv_compute_type_items[] = {
+	{USER_OPENSUBDIV_COMPUTE_NONE, "NONE", 0, "None", ""},
+	{USER_OPENSUBDIV_COMPUTE_CPU, "CPU", 0, "CPU", ""},
+	{USER_OPENSUBDIV_COMPUTE_OPENMP, "OPENMP", 0, "OpenMP", ""},
+	{USER_OPENSUBDIV_COMPUTE_OPENCL, "OPENCL", 0, "OpenCL", ""},
+	{USER_OPENSUBDIV_COMPUTE_CUDA, "CUDA", 0, "CUDA", ""},
+	{USER_OPENSUBDIV_COMPUTE_GLSL_TRANSFORM_FEEDBACK, "GLSL_TRANSFORM_FEEDBACL", 0, "GLSL Transform Feedback", ""},
+	{USER_OPENSUBDIV_COMPUTE_GLSL_COMPUTE, "GLSL_COMPUTE", 0, "GLSL Compute", ""},
+	{ 0, NULL, 0, NULL, NULL}
+};
+#endif
+
 static EnumPropertyItem audio_device_items[] = {
 	{0, "NONE", 0, "None", "Null device - there will be no audio output"},
 #ifdef WITH_SDL
@@ -91,6 +104,8 @@ EnumPropertyItem navigation_mode_items[] = {
 #include "BKE_global.h"
 #include "BKE_main.h"
 #include "BKE_idprop.h"
+#include "BKE_pbvh.h"
+#include "BKE_paint.h"
 
 #include "GPU_draw.h"
 #include "GPU_select.h"
@@ -104,9 +119,14 @@ EnumPropertyItem navigation_mode_items[] = {
 
 #include "CCL_api.h"
 
+#ifdef WITH_OPENSUBDIV
+#  include "opensubdiv_capi.h"
+#endif
+
 #ifdef WITH_SDL_DYNLOAD
 #  include "sdlew.h"
 #endif
+
 
 static void rna_userdef_update(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *UNUSED(ptr))
 {
@@ -141,13 +161,23 @@ static void rna_userdef_language_update(Main *UNUSED(bmain), Scene *UNUSED(scene
 	UI_reinit_font();
 }
 
+static void update_cb(PBVHNode *node, void *UNUSED(rebuild))
+{
+	BKE_pbvh_node_mark_rebuild_draw(node);
+}
+
 static void rna_userdef_vbo_update(Main *bmain, Scene *UNUSED(scene), PointerRNA *UNUSED(ptr))
 {
 	Object *ob;
 	
 	for (ob = bmain->object.first; ob; ob = ob->id.next) {
 		GPU_drawobject_free(ob->derivedFinal);
+
+		if (ob->sculpt && ob->sculpt->pbvh) {
+			BKE_pbvh_search_callback(ob->sculpt->pbvh, NULL, NULL, update_cb, NULL);
+		}
 	}
+	GPU_buffer_multires_free(false);
 }
 
 static void rna_userdef_show_manipulator_update(Main *bmain, Scene *scene, PointerRNA *ptr)
@@ -526,6 +556,54 @@ static EnumPropertyItem *rna_userdef_compute_device_itemf(bContext *UNUSED(C), P
 }
 #endif
 
+#ifdef WITH_OPENSUBDIV
+static EnumPropertyItem *rna_userdef_opensubdiv_compute_type_itemf(bContext *UNUSED(C), PointerRNA *UNUSED(ptr),
+                                                                   PropertyRNA *UNUSED(prop), bool *r_free)
+{
+	EnumPropertyItem *item = NULL;
+	int totitem = 0;
+	int evaluators = openSubdiv_getAvailableEvaluators();
+
+	RNA_enum_items_add_value(&item, &totitem, opensubdiv_compute_type_items, USER_OPENSUBDIV_COMPUTE_NONE);
+
+#define APPEND_COMPUTE(compute) \
+	if (evaluators & OPENSUBDIV_EVALUATOR_## compute) { \
+		RNA_enum_items_add_value(&item, &totitem, opensubdiv_compute_type_items, USER_OPENSUBDIV_COMPUTE_ ## compute); \
+	} ((void)0)
+
+	APPEND_COMPUTE(CPU);
+	APPEND_COMPUTE(OPENMP);
+	APPEND_COMPUTE(OPENCL);
+	APPEND_COMPUTE(CUDA);
+	APPEND_COMPUTE(GLSL_TRANSFORM_FEEDBACK);
+	APPEND_COMPUTE(GLSL_COMPUTE);
+
+#undef APPEND_COMPUTE
+
+	RNA_enum_item_end(&item, &totitem);
+	*r_free = true;
+
+	return item;
+}
+
+static void rna_userdef_opensubdiv_update(Main *bmain, Scene *UNUSED(scene), PointerRNA *UNUSED(ptr))
+{
+	Object *object;
+
+	for (object = bmain->object.first;
+	     object;
+	     object = object->id.next)
+	{
+		if (object->derivedFinal != NULL &&
+		    object->derivedFinal->type == DM_TYPE_CCGDM)
+		{
+			DAG_id_tag_update(&object->id, OB_RECALC_OB);
+		}
+	}
+}
+
+#endif
+
 static EnumPropertyItem *rna_userdef_audio_device_itemf(bContext *UNUSED(C), PointerRNA *UNUSED(ptr),
                                                         PropertyRNA *UNUSED(prop), bool *r_free)
 {
@@ -533,6 +611,16 @@ static EnumPropertyItem *rna_userdef_audio_device_itemf(bContext *UNUSED(C), Poi
 	int totitem = 0;
 	EnumPropertyItem *item = NULL;
 
+#ifdef WITH_SYSTEM_AUDASPACE
+	int i;
+
+	char **names = BKE_sound_get_device_names();
+
+	for (i = 0; names[i]; i++) {
+		EnumPropertyItem new_item = {i, names[i], 0, names[i], names[i]};
+		RNA_enum_item_add(&item, &totitem, &new_item);
+	}
+#else
 	/* NONE */
 	RNA_enum_item_add(&item, &totitem, &audio_device_items[index++]);
 
@@ -555,6 +643,7 @@ static EnumPropertyItem *rna_userdef_audio_device_itemf(bContext *UNUSED(C), Poi
 		RNA_enum_item_add(&item, &totitem, &audio_device_items[index]);
 	}
 	index++;
+#endif
 #endif
 
 	RNA_enum_item_end(&item, &totitem);
@@ -3759,6 +3848,12 @@ static void rna_def_userdef_edit(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "use_duplicate_particle", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "dupflag", USER_DUP_PSYS);
 	RNA_def_property_ui_text(prop, "Duplicate Particle", "Causes particle systems to be duplicated with the object");
+
+	/* currently only used for insert offset (aka auto-offset), maybe also be useful for later stuff though */
+	prop = RNA_def_property(srna, "node_margin", PROP_INT, PROP_NONE);
+	RNA_def_property_int_sdna(prop, NULL, "node_margin");
+	RNA_def_property_ui_text(prop, "Auto-offset Margin", "Minimum distance between nodes for Auto-offsetting nodes");
+	RNA_def_property_update(prop, 0, "rna_userdef_update");
 }
 
 static void rna_def_userdef_system(BlenderRNA *brna)
@@ -4191,6 +4286,16 @@ static void rna_def_userdef_system(BlenderRNA *brna)
 	RNA_def_property_enum_items(prop, compute_device_items);
 	RNA_def_property_enum_funcs(prop, "rna_userdef_compute_device_get", NULL, "rna_userdef_compute_device_itemf");
 	RNA_def_property_ui_text(prop, "Compute Device", "Device to use for computation");
+#endif
+
+#ifdef WITH_OPENSUBDIV
+	prop = RNA_def_property(srna, "opensubdiv_compute_type", PROP_ENUM, PROP_NONE);
+	RNA_def_property_flag(prop, PROP_ENUM_NO_CONTEXT);
+	RNA_def_property_enum_sdna(prop, NULL, "opensubdiv_compute_type");
+	RNA_def_property_enum_items(prop, opensubdiv_compute_type_items);
+	RNA_def_property_enum_funcs(prop, NULL, NULL, "rna_userdef_opensubdiv_compute_type_itemf");
+	RNA_def_property_ui_text(prop, "OpenSubdiv Compute Type", "Type of computer backend used with OpenSubdiv");
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_PROPERTIES, "rna_userdef_opensubdiv_update");
 #endif
 }
 

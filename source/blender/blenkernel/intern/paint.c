@@ -470,12 +470,11 @@ void BKE_paint_stroke_get_average(Scene *scene, Object *ob, float stroke[3])
 
 /* returns non-zero if any of the face's vertices
  * are hidden, zero otherwise */
-bool paint_is_face_hidden(const MFace *f, const MVert *mvert)
+bool paint_is_face_hidden(const MLoopTri *lt, const MVert *mvert, const MLoop *mloop)
 {
-	return ((mvert[f->v1].flag & ME_HIDE) ||
-	        (mvert[f->v2].flag & ME_HIDE) ||
-	        (mvert[f->v3].flag & ME_HIDE) ||
-	        (f->v4 && (mvert[f->v4].flag & ME_HIDE)));
+	return ((mvert[mloop[lt->tri[0]].v].flag & ME_HIDE) ||
+	        (mvert[mloop[lt->tri[1]].v].flag & ME_HIDE) ||
+	        (mvert[mloop[lt->tri[2]].v].flag & ME_HIDE));
 }
 
 /* returns non-zero if any of the corners of the grid
@@ -764,18 +763,11 @@ void BKE_sculpt_update_mesh_elements(Scene *scene, Sculpt *sd, Object *ob,
 		}
 	}
 
-	/* BMESH ONLY --- at some point we should move sculpt code to use polygons only - but for now it needs tessfaces */
-	if (ss->bm) {
-		BKE_mesh_tessface_clear(me);
-	}
-	else {
-		BKE_mesh_tessface_ensure(me);
-	}
+	/* tessfaces aren't used and will become invalid */
+	BKE_mesh_tessface_clear(me);
 
-	if (!mmd) ss->kb = BKE_keyblock_from_object(ob);
-	else ss->kb = NULL;
+	ss->kb = (mmd == NULL) ? BKE_keyblock_from_object(ob) : NULL;
 
-	/* needs to be called after we ensure tessface */
 	dm = mesh_get_derived_final(scene, ob, CD_MASK_BAREMESH);
 
 	if (mmd) {

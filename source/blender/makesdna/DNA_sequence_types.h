@@ -274,14 +274,24 @@ typedef struct GaussianBlurVars {
 typedef struct TextVars {
 	char text[512];
 	int text_size;
-	int xpos, ypos;
-	int flags;
+	float loc[2];
+	short flag;
+	char align;
+	char pad;
 } TextVars;
 
+/* TextVars.flag */
 enum {
-	TEXT_SEQ_SHADOW =      (1 << 0),
-	TEXT_SEQ_AUTO_CENTER = (1 << 1),
+	SEQ_TEXT_SHADOW =       (1 << 0),
 };
+
+/* TextVars.align */
+enum {
+	SEQ_TEXT_ALIGN_LEFT = 0,
+	SEQ_TEXT_ALIGN_CENTER = 1,
+	SEQ_TEXT_ALIGN_RIGHT = 2,
+};
+
 /* ***************** Sequence modifiers ****************** */
 
 typedef struct SequenceModifierData {
@@ -368,7 +378,9 @@ enum {
 	SEQ_OVERLAP                 = (1 << 3),
 	SEQ_FILTERY                 = (1 << 4),
 	SEQ_MUTE                    = (1 << 5),
+#ifdef DNA_DEPRECATED
 	SEQ_MAKE_PREMUL             = (1 << 6), /* deprecated, used for compatibility code only */
+#endif
 	SEQ_REVERSE_FRAMES          = (1 << 7),
 	SEQ_IPO_FRAME_LOCKED        = (1 << 8),
 	SEQ_EFFECT_NOT_LOADED       = (1 << 9),
@@ -405,10 +417,6 @@ enum {
 	SEQ_STORAGE_PROXY_CUSTOM_FILE   = (1 << 1), /* store proxy in custom directory */
 	SEQ_STORAGE_PROXY_CUSTOM_DIR    = (1 << 2), /* store proxy in custom file */
 };
-
-#if (DNA_DEPRECATED_GCC_POISON == 1)
-#pragma GCC poison SEQ_MAKE_PREMUL
-#endif
 
 /* convenience define for all selection flags */
 #define SEQ_ALLSEL  (SELECT + SEQ_LEFTSEL + SEQ_RIGHTSEL)

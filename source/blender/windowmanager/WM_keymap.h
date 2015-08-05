@@ -82,6 +82,8 @@ int			WM_keymap_item_compare(struct wmKeyMapItem *k1, struct wmKeyMapItem *k2);
 
 /* Modal Keymap */
 
+int WM_modalkeymap_items_to_string(
+        struct wmKeyMap *km, const int propvalue, const bool compact, const int len, char *r_str);
 int WM_modalkeymap_operator_items_to_string(
         struct wmOperatorType *ot, const int propvalue, const bool compact, const int len, char *r_str);
 char *WM_modalkeymap_operator_items_to_string_buf(
@@ -107,7 +109,7 @@ int			WM_keymap_map_type_get(struct wmKeyMapItem *kmi);
 const char *WM_key_event_string(const short type, const bool compact);
 int WM_keymap_item_raw_to_string(
         const short shift, const short ctrl, const short alt, const short oskey, const short keymodifier,
-        const short type, const bool compact, const int len, char *r_str);
+        const short val, const short type, const bool compact, const int len, char *r_str);
 int         WM_key_event_operator_id(
         const struct bContext *C, const char *opname, int opcontext,
         struct IDProperty *properties, const bool is_hotkey,

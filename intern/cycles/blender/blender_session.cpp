@@ -122,7 +122,12 @@ void BlenderSession::create_session()
 		if(session_pause == false) {
 			/* full data sync */
 			sync->sync_view(b_v3d, b_rv3d, width, height);
-			sync->sync_data(b_v3d, b_engine.camera_override(), &python_thread_state);
+			sync->sync_data(b_render,
+			                b_v3d,
+			                b_engine.camera_override(),
+			                width, height,
+			                &python_thread_state,
+			                b_rlay_name.c_str());
 		}
 	}
 	else {
@@ -442,10 +447,6 @@ void BlenderSession::render()
 		/* add passes */
 		vector<Pass> passes;
 		Pass::add(PASS_COMBINED, passes);
-#ifdef WITH_CYCLES_DEBUG
-		Pass::add(PASS_BVH_TRAVERSAL_STEPS, passes);
-		/* Pass::add(PASS_RAY_BOUNCES, passes); */
-#endif
 
 		if(session_params.device.advanced_shading) {
 
@@ -477,7 +478,12 @@ void BlenderSession::render()
 
 			/* update scene */
 			sync->sync_camera(b_render, b_engine.camera_override(), width, height);
-			sync->sync_data(b_v3d, b_engine.camera_override(), &python_thread_state, b_rlay_name.c_str());
+			sync->sync_data(b_render,
+			                b_v3d,
+			                b_engine.camera_override(),
+			                width, height,
+			                &python_thread_state,
+			                b_rlay_name.c_str());
 
 			/* update number of samples per layer */
 			int samples = sync->get_layer_samples();
@@ -545,6 +551,11 @@ void BlenderSession::bake(BL::Object b_object, const string& pass_type, const in
 	int tri_offset = 0;
 	Transform tfm;
 
+	/* Set baking flag in advance, so kernel loading can check if we need
+	 * any baking capabilities.
+	 */
+	scene->bake_manager->set_baking(true);
+
 	/* ensure kernels are loaded before we do any scene updates */
 	session->load_kernels();
 
@@ -567,14 +578,18 @@ void BlenderSession::bake(BL::Object b_object, const string& pass_type, const in
 
 	/* update scene */
 	sync->sync_camera(b_render, b_engine.camera_override(), width, height);
-	sync->sync_data(b_v3d, b_engine.camera_override(), &python_thread_state);
+	sync->sync_data(b_render,
+	                b_v3d,
+	                b_engine.camera_override(),
+	                width, height,
+	                &python_thread_state,
+	                b_rlay_name.c_str());
 
 	/* get buffer parameters */
 	SessionParams session_params = BlenderSync::get_session_params(b_engine, b_userpref, b_scene, background);
 	BufferParams buffer_params = BlenderSync::get_buffer_params(b_render, b_v3d, b_rv3d, scene->camera, width, height);
 
 	scene->bake_manager->set_shader_limit((size_t)b_engine.tile_x(), (size_t)b_engine.tile_y());
-	scene->bake_manager->set_baking(true);
 
 	/* set number of samples */
 	session->tile_manager.set_samples(session_params.samples);
@@ -721,7 +736,12 @@ void BlenderSession::synchronize()
 	}
 
 	/* data and camera synchronize */
-	sync->sync_data(b_v3d, b_engine.camera_override(), &python_thread_state);
+	sync->sync_data(b_render,
+	                b_v3d,
+	                b_engine.camera_override(),
+	                width, height,
+	                &python_thread_state,
+	                b_rlay_name.c_str());
 
 	if(b_rv3d)
 		sync->sync_view(b_v3d, b_rv3d, width, height);
@@ -1025,6 +1045,18 @@ void BlenderSession::builtin_image_info(const string &builtin_name, void *builti
 
 		is_float = true;
 	}
+	else {
+		/* TODO(sergey): Check we're indeed in shader node tree. */
+		PointerRNA ptr;
+		RNA_pointer_create(NULL, &RNA_Node, builtin_data, &ptr);
+		BL::Node b_node(ptr);
+		if(b_node.is_a(&RNA_ShaderNodeTexPointDensity)) {
+			BL::ShaderNodeTexPointDensity b_point_density_node(b_node);
+			channels = 4;
+			width = height = depth = b_point_density_node.resolution();
+			is_float = true;
+		}
+	}
 }
 
 bool BlenderSession::builtin_image_pixels(const string &builtin_name, void *builtin_data, unsigned char *pixels)
@@ -1166,6 +1198,17 @@ bool BlenderSession::builtin_image_float_pixels(const string &builtin_name, void
 		}
 
 		fprintf(stderr, "Cycles error: unexpected smoke volume resolution, skipping\n");
+	}
+	else {
+		/* TODO(sergey): Check we're indeed in shader node tree. */
+		PointerRNA ptr;
+		RNA_pointer_create(NULL, &RNA_Node, builtin_data, &ptr);
+		BL::Node b_node(ptr);
+		if(b_node.is_a(&RNA_ShaderNodeTexPointDensity)) {
+			BL::ShaderNodeTexPointDensity b_point_density_node(b_node);
+			int length;
+			b_point_density_node.calc_point_density(b_scene, &length, &pixels);
+		}
 	}
 
 	return false;
