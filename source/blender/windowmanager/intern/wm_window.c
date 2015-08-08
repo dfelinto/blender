@@ -76,8 +76,6 @@
 #include "GPU_init_exit.h"
 #include "GPU_glew.h"
 
-#include "UI_interface.h"
-
 /* for assert */
 #ifndef NDEBUG
 #  include "BLI_threads.h"
@@ -400,6 +398,10 @@ static void wm_window_add_ghostwindow(wmWindowManager *wm, const char *title, wm
 	if (win->stereo3d_format->display_mode == S3D_DISPLAY_PAGEFLIP)
 		glSettings.flags |= GHOST_glStereoVisual;
 
+	if (G.debug & G_DEBUG_GPU) {
+		glSettings.flags |= GHOST_glDebugContext;
+	}
+
 	if (!(U.uiflag2 & USER_OPENGL_NO_WARN_SUPPORT))
 		glSettings.flags |= GHOST_glWarnSupport;
 
@@ -512,6 +514,11 @@ void wm_window_add_ghostwindows(wmWindowManager *wm)
 			if (wm_init_state.override_flag & WIN_OVERRIDE_WINSTATE) {
 				win->windowstate = wm_init_state.windowstate;
 				wm_init_state.override_flag &= ~WIN_OVERRIDE_WINSTATE;
+			}
+
+			/* without this, cursor restore may fail, T45456 */
+			if (win->cursor == 0) {
+				win->cursor = CURSOR_STD;
 			}
 
 			wm_window_add_ghostwindow(wm, "Blender", win);

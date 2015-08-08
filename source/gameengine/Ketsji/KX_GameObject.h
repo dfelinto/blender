@@ -40,7 +40,7 @@
 
 #include <stddef.h>
 
-#include "ListValue.h"
+#include "EXP_ListValue.h"
 #include "SCA_IObject.h"
 #include "SG_Node.h"
 #include "MT_Transform.h"
@@ -275,6 +275,11 @@ public:
 	 * Gets the current frame of an action
 	 */
 	float GetActionFrame(short layer);
+
+	/**
+	 * Gets the name of the current action
+	 */
+	const char *GetActionName(short layer);
 
 	/**
 	 * Sets the current frame of an action
@@ -1037,6 +1042,7 @@ public:
 	KX_PYMETHOD_DOC(KX_GameObject, playAction);
 	KX_PYMETHOD_DOC(KX_GameObject, stopAction);
 	KX_PYMETHOD_DOC(KX_GameObject, getActionFrame);
+	KX_PYMETHOD_DOC(KX_GameObject, getActionName);
 	KX_PYMETHOD_DOC(KX_GameObject, setActionFrame);
 	KX_PYMETHOD_DOC(KX_GameObject, isPlayingAction);
 	

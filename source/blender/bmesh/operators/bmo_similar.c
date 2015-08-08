@@ -102,7 +102,6 @@ void bmo_similar_faces_exec(BMesh *bm, BMOperator *op)
 	float angle = 0.0f;
 	SimSel_FaceExt *f_ext = NULL;
 	int *indices = NULL;
-	float t_no[3];	/* temporary normal */
 	const int type = BMO_slot_int_get(op->slots_in, "type");
 	const float thresh = BMO_slot_float_get(op->slots_in, "thresh");
 	const float thresh_radians = thresh * (float)M_PI;
@@ -158,12 +157,8 @@ void bmo_similar_faces_exec(BMesh *bm, BMOperator *op)
 					/* compute the center of the polygon */
 					BM_face_calc_center_mean(f_ext[i].f, f_ext[i].c);
 
-					/* normalize the polygon normal */
-					copy_v3_v3(t_no, f_ext[i].f->no);
-					normalize_v3(t_no);
-
 					/* compute the plane distance */
-					f_ext[i].d = dot_v3v3(t_no, f_ext[i].c);
+					f_ext[i].d = dot_v3v3(f_ext[i].f->no, f_ext[i].c);
 					break;
 
 				case SIMFACE_AREA:
@@ -212,16 +207,23 @@ void bmo_similar_faces_exec(BMesh *bm, BMOperator *op)
 						break;
 
 					case SIMFACE_COPLANAR:
+					{
+						float sign = 1.0f;
 						angle = angle_normalized_v3v3(fs->no, fm->no); /* angle -> 0 */
+						/* allow for normal pointing in either direction (just check the plane) */
+						if (angle > (float)M_PI * 0.5f) {
+							angle = (float)M_PI - angle;
+							sign = -1.0f;
+						}
 						if (angle <= thresh_radians) { /* and dot product difference -> 0 */
-							delta_fl = f_ext[i].d - f_ext[indices[idx]].d;
+							delta_fl = f_ext[i].d - (f_ext[indices[idx]].d * sign);
 							if (bm_sel_similar_cmp_fl(delta_fl, thresh, compare)) {
 								BMO_elem_flag_enable(bm, fm, FACE_MARK);
 								cont = false;
 							}
 						}
 						break;
-
+					}
 					case SIMFACE_AREA:
 						delta_fl = f_ext[i].area - f_ext[indices[idx]].area;
 						if (bm_sel_similar_cmp_fl(delta_fl, thresh, compare)) {

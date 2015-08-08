@@ -2635,12 +2635,22 @@ void init_userdef_do_versions(void)
 		U.ndof_deadzone = 0.1;
 	}
 
+	if (!USER_VERSION_ATLEAST(275, 4)) {
+		U.node_margin = 80;
+	}
+
 	if (U.pixelsize == 0.0f)
 		U.pixelsize = 1.0f;
 	
 	if (U.image_draw_method == 0)
 		U.image_draw_method = IMAGE_DRAW_METHOD_2DTEXTURE;
 	
+	// keep the following until the new audaspace is default to be built with
+#ifdef WITH_SYSTEM_AUDASPACE
+	// we default to the first audio device
+	U.audiodevice = 0;
+#endif
+
 	/* funny name, but it is GE stuff, moves userdef stuff to engine */
 // XXX	space_set_commmandline_options();
 	/* this timer uses U */

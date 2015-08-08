@@ -406,6 +406,37 @@ void BKE_mesh_origindex_map_create(MeshElemMap **r_map, int **r_mem,
 	*r_mem = indices;
 }
 
+/**
+ * A version of #BKE_mesh_origindex_map_create that takes a looptri array.
+ * Making a poly -> looptri map.
+ */
+void BKE_mesh_origindex_map_create_looptri(
+        MeshElemMap **r_map, int **r_mem,
+        const MPoly *mpoly, const int mpoly_num,
+        const MLoopTri *looptri, const int looptri_num)
+{
+	MeshElemMap *map = MEM_callocN(sizeof(MeshElemMap) * (size_t)mpoly_num, "poly-tessface map");
+	int *indices = MEM_mallocN(sizeof(int) * (size_t)looptri_num, "poly-tessface map mem");
+	int *index_step;
+	int i;
+
+	/* create offsets */
+	index_step = indices;
+	for (i = 0; i < mpoly_num; i++) {
+		map[i].indices = index_step;
+		index_step += ME_POLY_TRI_TOT(&mpoly[i]);
+	}
+
+	/* assign poly-tessface users */
+	for (i = 0; i < looptri_num; i++) {
+		MeshElemMap *map_ele = &map[looptri[i].poly];
+		map_ele->indices[map_ele->count++] = i;
+	}
+
+	*r_map = map;
+	*r_mem = indices;
+}
+
 /** \} */
 
 
@@ -766,8 +797,8 @@ bool BKE_mesh_calc_islands_loop_poly_uv(
 
 	/* Those are used to detect 'inner cuts', i.e. edges that are borders, and yet have two or more polys of
 	 * a same group using them (typical case: seam used to unwrap properly a cylinder). */
-	BLI_bitmap *edge_borders;
-	int num_edge_borders;
+	BLI_bitmap *edge_borders = NULL;
+	int num_edge_borders = 0;
 	char *edge_border_count = NULL;
 	int *edge_innercut_indices = NULL;
 	int num_einnercuts = 0;
@@ -786,6 +817,12 @@ bool BKE_mesh_calc_islands_loop_poly_uv(
 
 	if (!num_poly_groups) {
 		/* Should never happen... */
+		MEM_freeN(edge_poly_map);
+		MEM_freeN(edge_poly_mem);
+
+		if (edge_borders) {
+			MEM_freeN(edge_borders);
+		}
 		return false;
 	}
 
@@ -830,9 +867,17 @@ bool BKE_mesh_calc_islands_loop_poly_uv(
 		                          num_einnercuts, edge_innercut_indices);
 	}
 
+	MEM_freeN(edge_poly_map);
+	MEM_freeN(edge_poly_mem);
+
 	MEM_freeN(poly_indices);
 	MEM_freeN(loop_indices);
 	MEM_freeN(poly_groups);
+
+	if (edge_borders) {
+		MEM_freeN(edge_borders);
+	}
+
 	if (num_edge_borders) {
 		MEM_freeN(edge_border_count);
 		MEM_freeN(edge_innercut_indices);

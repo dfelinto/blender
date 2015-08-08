@@ -153,8 +153,6 @@ const char* gpuErrorString(GLenum err)
 }
 
 
-#ifdef WITH_GPU_DEBUG
-
 /* Debug callbacks need the same calling convention as OpenGL functions.
  */
 #if defined(_WIN32) && !defined(_WIN32_WCE) && !defined(__SCITECH_SNAP__)
@@ -165,11 +163,18 @@ const char* gpuErrorString(GLenum err)
 #endif
 
 
-static void APIENTRY gpu_debug_proc(GLenum UNUSED(source), GLenum UNUSED(type), GLuint UNUSED(id),
+static void APIENTRY gpu_debug_proc(GLenum source, GLenum type, GLuint UNUSED(id),
                                GLenum UNUSED(severity), GLsizei UNUSED(length),
                                const GLchar *message, GLvoid *UNUSED(userParm))
 {
-	fprintf(stderr, "GL: %s\n", message);
+	if (source == GL_DEBUG_SOURCE_API && type == GL_DEBUG_TYPE_ERROR) {
+		fprintf(stderr, "GL: %s\n", message);
+		fflush(stderr);
+	}
+	else if (G.debug_value == 20) {
+		fprintf(stderr, "GL: %s\n", message);
+		fflush(stderr);
+	}
 }
 
 
@@ -194,7 +199,7 @@ void gpu_debug_init(void)
 		glEnable(GL_DEBUG_OUTPUT);
 		glDebugMessageCallback(gpu_debug_proc, mxGetCurrentContext());
 		glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, NULL, GL_TRUE);
-		GPU_STRING_MARKER(sizeof(success), success);
+		GPU_string_marker(sizeof(success), success);
 		return;
 	}
 #endif
@@ -203,7 +208,7 @@ void gpu_debug_init(void)
 #ifndef GLEW_ES_ONLY
 			glDebugMessageCallback(gpu_debug_proc, mxGetCurrentContext());
 			glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, NULL, GL_TRUE);
-			GPU_STRING_MARKER(sizeof(success), success);
+			GPU_string_marker(sizeof(success), success);
 #endif
 		return;
 	}
@@ -212,7 +217,7 @@ void gpu_debug_init(void)
 	if (GLEW_ARB_debug_output) {
 		glDebugMessageCallbackARB(gpu_debug_proc, mxGetCurrentContext());
 		glDebugMessageControlARB(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, NULL, GL_TRUE);
-		GPU_STRING_MARKER(sizeof(success), success);
+		GPU_string_marker(sizeof(success), success);
 
 		return;
 	}
@@ -220,7 +225,7 @@ void gpu_debug_init(void)
 	if (GLEW_AMD_debug_output) {
 		glDebugMessageCallbackAMD(gpu_debug_proc_amd, mxGetCurrentContext());
 		glDebugMessageEnableAMD(GL_DONT_CARE, GL_DONT_CARE, 0, NULL, GL_TRUE);
-		GPU_STRING_MARKER(sizeof(success), success);
+		GPU_string_marker(sizeof(success), success);
 
 		return;
 	}
@@ -268,7 +273,7 @@ void gpu_debug_exit(void)
 	return;
 }
 
-void gpu_string_marker(size_t length, const char *buf)
+void GPU_string_marker(size_t length, const char *buf)
 {
 #ifndef WITH_GLEW_ES
 #ifndef GLEW_ES_ONLY
@@ -310,8 +315,6 @@ void gpu_string_marker(size_t length, const char *buf)
 	return;
 }
 
-#endif /* WITH_GPU_DEBUG */
-
 void GPU_print_error_debug(const char *str)
 {
 	if (G.debug & G_DEBUG)
@@ -319,7 +322,7 @@ void GPU_print_error_debug(const char *str)
 }
 
 
-void gpu_assert_no_gl_errors(const char* file, int line, const char* str)
+void GPU_assert_no_gl_errors(const char* file, int line, const char* str)
 {
 	if (G.debug) {
 		GLboolean gl_ok = gpu_report_gl_errors(file, line, str);

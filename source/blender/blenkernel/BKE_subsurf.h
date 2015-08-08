@@ -57,7 +57,8 @@ typedef enum {
 	SUBSURF_IS_FINAL_CALC = 2,
 	SUBSURF_FOR_EDIT_MODE = 4,
 	SUBSURF_IN_EDIT_MODE = 8,
-	SUBSURF_ALLOC_PAINT_MASK = 16
+	SUBSURF_ALLOC_PAINT_MASK = 16,
+	SUBSURF_USE_GPU_BACKEND = 32,
 } SubsurfFlags;
 
 struct DerivedMesh *subsurf_make_derived_from_derived(
@@ -84,6 +85,9 @@ void subsurf_copy_grid_paint_mask(struct DerivedMesh *dm,
                                   const struct MPoly *mpoly, float *paint_mask,
                                   const struct GridPaintMask *grid_paint_mask);
 
+bool subsurf_has_edges(struct DerivedMesh *dm);
+bool subsurf_has_faces(struct DerivedMesh *dm);
+
 typedef enum MultiresModifiedFlags {
 	/* indicates the grids have been sculpted on, so MDisps
 	 * have to be updated */
@@ -99,7 +103,7 @@ typedef struct CCGDerivedMesh {
 
 	struct CCGSubSurf *ss;
 	int freeSS;
-	int drawInteriorEdges, useSubsurfUv;
+	int drawInteriorEdges, useSubsurfUv, useGpuBackend;
 
 	struct {int startVert; struct CCGVert *vert; } *vertMap;
 	struct {int startVert; int startEdge; struct CCGEdge *edge; } *edgeMap;

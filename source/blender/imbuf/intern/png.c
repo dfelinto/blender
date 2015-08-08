@@ -53,7 +53,7 @@
 #include "IMB_colormanagement_intern.h"
 
 typedef struct PNGReadStruct {
-	unsigned char *data;
+	const unsigned char *data;
 	unsigned int size;
 	unsigned int seek;
 } PNGReadStruct;
@@ -67,11 +67,18 @@ BLI_INLINE unsigned short UPSAMPLE_8_TO_16(const unsigned char _val)
 	return (_val << 8) + _val;
 }
 
-int imb_is_a_png(unsigned char *mem)
+int imb_is_a_png(const unsigned char *mem)
 {
 	int ret_val = 0;
 
-	if (mem) ret_val = !png_sig_cmp(mem, 0, 8);
+	if (mem) {
+#if (PNG_LIBPNG_VER_MAJOR == 1) && (PNG_LIBPNG_VER_MINOR == 2)
+		/* Older version of libpng doesn't use const pointer to memory. */
+		ret_val = !png_sig_cmp((png_bytep)mem, 0, 8);
+#else
+		ret_val = !png_sig_cmp(mem, 0, 8);
+#endif
+	}
 	return(ret_val);
 }
 
@@ -133,7 +140,7 @@ int imb_savepng(struct ImBuf *ibuf, const char *name, int flags)
 	int i, bytesperpixel, color_type = PNG_COLOR_TYPE_GRAY;
 	FILE *fp = NULL;
 
-	bool is_16bit  = (ibuf->ftype & PNG_16BIT) != 0;
+	bool is_16bit  = (ibuf->foptions.flag & PNG_16BIT) != 0;
 	bool has_float = (ibuf->rect_float != NULL);
 	int channels_in_float = ibuf->channels ? ibuf->channels : 4;
 
@@ -142,7 +149,7 @@ int imb_savepng(struct ImBuf *ibuf, const char *name, int flags)
 
 	/* use the jpeg quality setting for compression */
 	int compression;
-	compression = (int)(((float)(ibuf->ftype & 0xff) / 11.1111f));
+	compression = (int)(((float)(ibuf->foptions.quality) / 11.1111f));
 	compression = compression < 0 ? 0 : (compression > 9 ? 9 : compression);
 
 	if (ibuf->float_colorspace) {
@@ -504,7 +511,7 @@ static void imb_png_error(png_structp UNUSED(png_ptr), png_const_charp message)
 	fprintf(stderr, "libpng error: %s\n", message);
 }
 
-ImBuf *imb_loadpng(unsigned char *mem, size_t size, int flags, char colorspace[IM_MAX_SPACE])
+ImBuf *imb_loadpng(const unsigned char *mem, size_t size, int flags, char colorspace[IM_MAX_SPACE])
 {
 	struct ImBuf *ibuf = NULL;
 	png_structp png_ptr;
@@ -584,6 +591,10 @@ ImBuf *imb_loadpng(unsigned char *mem, size_t size, int flags, char colorspace[I
 			if (bit_depth < 8) {
 				png_set_expand(png_ptr);
 				bit_depth = 8;
+				if (png_get_valid(png_ptr, info_ptr, PNG_INFO_tRNS)) {
+					/* PNG_COLOR_TYPE_GRAY may also have alpha 'values', like with palette. */
+					bytesperpixel = 2;
+				}
 			}
 			break;
 		default:
@@ -595,9 +606,9 @@ ImBuf *imb_loadpng(unsigned char *mem, size_t size, int flags, char colorspace[I
 	ibuf = IMB_allocImBuf(width, height, 8 * bytesperpixel, 0);
 
 	if (ibuf) {
-		ibuf->ftype = PNG;
+		ibuf->ftype = IMB_FTYPE_PNG;
 		if (bit_depth == 16)
-			ibuf->ftype |= PNG_16BIT;
+			ibuf->foptions.flag |= PNG_16BIT;
 
 		if (png_get_valid(png_ptr, info_ptr, PNG_INFO_pHYs)) {
 			int unit_type;

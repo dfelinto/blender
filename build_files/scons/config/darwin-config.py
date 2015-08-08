@@ -52,6 +52,8 @@ BF_CXX = '/usr'
 WITH_BF_STATICCXX = False
 BF_CXX_LIB_STATIC = '${BF_CXX}/lib/libstdc++.a'
 
+WITH_BF_AUDASPACE = True
+
 # we use simply jack framework
 WITH_BF_JACK = True
 BF_JACK = '/Library/Frameworks/Jackmp.framework'
@@ -212,6 +214,12 @@ WITH_BF_FREESTYLE = True
 
 #OpenMP ( will be checked for compiler support and turned off eventually )
 WITH_BF_OPENMP = True
+
+WITH_BF_OPENSUBDIV = False
+BF_OPENSUBDIV = LIBDIR + '/opensubdiv'
+BF_OPENSUBDIV_INC = '${BF_OPENSUBDIV}/include'
+BF_OPENSUBDIV_LIB = 'osdCPU osdGPU'
+BF_OPENSUBDIV_LIBPATH = '${BF_OPENSUBDIV}/lib'
 
 #Ray trace optimization
 WITH_BF_RAYOPTIMIZATION = True

@@ -287,6 +287,17 @@ void ED_fileselect_reset_params(SpaceFile *sfile)
 	sfile->params->active_file = -1;
 }
 
+/**
+ * Sets FileSelectParams->file (name of selected file)
+ */
+void fileselect_file_set(SpaceFile *sfile, const int index)
+{
+	const struct direntry *file = filelist_file(sfile->files, index);
+	if (file && file->relname[0] && file->path && !BLI_is_dir(file->path)) {
+		BLI_strncpy(sfile->params->file, file->relname, FILE_MAXFILE);
+	}
+}
+
 int ED_fileselect_layout_numfiles(FileLayout *layout, ARegion *ar)
 {
 	int numfiles;
@@ -577,13 +588,14 @@ void ED_file_change_dir(bContext *C, const bool checkdir)
 		/* Clear search string, it is very rare to want to keep that filter while changing dir,
 		 * and usually very annoying to keep it actually! */
 		sfile->params->filter_search[0] = '\0';
+		sfile->params->active_file = -1;
 
 		if (checkdir && !BLI_is_dir(sfile->params->dir)) {
 			BLI_strncpy(sfile->params->dir, filelist_dir(sfile->files), sizeof(sfile->params->dir));
 			/* could return but just refresh the current dir */
 		}
 		filelist_setdir(sfile->files, sfile->params->dir);
-		
+
 		if (folderlist_clear_next(sfile))
 			folderlist_free(sfile->folders_next);
 

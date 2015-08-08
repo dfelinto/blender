@@ -514,6 +514,10 @@ if env['WITH_BF_STATICCXX']:
     else:
         print '\tcould not remove stdc++ library from LLIBS, WITH_BF_STATICCXX may not work for your platform'
 
+# audaspace is needed for the game engine
+if not env['WITH_BF_AUDASPACE']:
+    env['WITH_BF_GAMEENGINE'] = False
+
 # check target for blenderplayer. Set WITH_BF_PLAYER if found on cmdline
 if 'blenderplayer' in B.targets:
     env['WITH_BF_PLAYER'] = True
@@ -540,12 +544,24 @@ else:
     env['CPPFLAGS'].append('-D__LITTLE_ENDIAN__')
 
 # TODO, make optional (as with CMake)
-env['CPPFLAGS'].append('-DWITH_AUDASPACE')
 env['CPPFLAGS'].append('-DWITH_AVI')
 env['CPPFLAGS'].append('-DWITH_OPENNL')
 
 if env['OURPLATFORM'] not in ('win32-vc', 'win64-vc'):
     env['CPPFLAGS'].append('-DHAVE_STDBOOL_H')
+
+# Audaspace
+
+if env['WITH_BF_AUDASPACE']:
+    env['BF_AUDASPACE_C_INC'] = '#intern/audaspace/intern'
+    env['BF_AUDASPACE_PY_INC'] = '#intern/audaspace/intern'
+    env['BF_AUDASPACE_DEF'] = ['WITH_AUDASPACE']
+    env['BF_AUDASPACE_DEF'].append('AUD_DEVICE_H="<AUD_C-API.h>"')
+    env['BF_AUDASPACE_DEF'].append('AUD_SPECIAL_H="<AUD_C-API.h>"')
+    env['BF_AUDASPACE_DEF'].append('AUD_SOUND_H="<AUD_C-API.h>"')
+    env['BF_AUDASPACE_DEF'].append('AUD_HANDLE_H="<AUD_C-API.h>"')
+    env['BF_AUDASPACE_DEF'].append('AUD_SEQUENCE_H="<AUD_C-API.h>"')
+    env['BF_AUDASPACE_DEF'].append('AUD_TYPES_H="<AUD_Space.h>"')
 
 # OpenGL
 
@@ -766,6 +782,8 @@ if B.targets != ['cudakernels']:
     data_to_c_simple("release/datafiles/preview_cycles.blend")
 
     # --- glsl ---
+    data_to_c_simple("source/blender/gpu/shaders/gpu_shader_geometry.glsl")
+
     data_to_c_simple("source/blender/gpu/shaders/gpu_program_smoke_frag.glsl")
     data_to_c_simple("source/blender/gpu/shaders/gpu_program_smoke_color_frag.glsl")
 
@@ -789,6 +807,7 @@ if B.targets != ['cudakernels']:
     data_to_c_simple("source/blender/gpu/shaders/gpu_shader_fx_depth_resolve.glsl")
     data_to_c_simple("source/blender/gpu/shaders/gpu_shader_fx_vert.glsl")
     data_to_c_simple("intern/opencolorio/gpu_shader_display_transform.glsl")
+    data_to_c_simple("intern/opensubdiv/gpu_shader_opensubd_display.glsl")
 
     # --- blender ---
     data_to_c_simple("release/datafiles/bfont.pfb")

@@ -179,12 +179,12 @@ static int CheckTexfaceDM(void *mcol, int index)
 }
 */
 
-static DMDrawOption CheckTexDM(MTFace *tface, const bool has_mcol, int matnr)
+static DMDrawOption CheckTexDM(MTexPoly *mtexpoly, const bool has_mcol, int matnr)
 {
 
 	// index is the original face index, retrieve the polygon
 	if (matnr == current_blmat_nr &&
-		(tface == NULL || tface->tpage == current_image)) {
+		(mtexpoly == NULL || mtexpoly->tpage == current_image)) {
 		// must handle color.
 		if (current_wireframe)
 			return DM_DRAW_OPTION_NO_MCOL;
@@ -236,7 +236,7 @@ void RAS_StorageIM::IndexPrimitivesInternal(RAS_MeshSlot& ms, bool multi)
 			Material* blmat = current_polymat->GetBlenderMaterial();
 			Scene* blscene = current_polymat->GetBlenderScene();
 			if (!wireframe && blscene && blmat)
-				GPU_material_vertex_attributes(GPU_material_from_blender(blscene, blmat), &current_gpu_attribs);
+				GPU_material_vertex_attributes(GPU_material_from_blender(blscene, blmat, false), &current_gpu_attribs);
 			else
 				memset(&current_gpu_attribs, 0, sizeof(current_gpu_attribs));
 			// DM draw can mess up blending mode, restore at the end

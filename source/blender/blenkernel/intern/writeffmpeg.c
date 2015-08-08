@@ -45,7 +45,8 @@
 #include "BLI_blenlib.h"
 
 #ifdef WITH_AUDASPACE
-#  include "AUD_C-API.h"
+#  include AUD_DEVICE_H
+#  include AUD_SPECIAL_H
 #endif
 
 #include "BLI_utildefines.h"
@@ -133,7 +134,7 @@ static int write_audio_frame(FFMpegContext *context)
 	pkt.size = 0;
 	pkt.data = NULL;
 
-	AUD_readDevice(context->audio_mixdown_device, context->audio_input_buffer, context->audio_input_samples);
+	AUD_Device_read(context->audio_mixdown_device, context->audio_input_buffer, context->audio_input_samples);
 	context->audio_time += (double) context->audio_input_samples / (double) c->sample_rate;
 
 #ifdef FFMPEG_HAVE_ENCODE_AUDIO2
@@ -1210,7 +1211,7 @@ static void end_ffmpeg_impl(FFMpegContext *context, int is_autosplit)
 #ifdef WITH_AUDASPACE
 	if (is_autosplit == false) {
 		if (context->audio_mixdown_device) {
-			AUD_closeReadDevice(context->audio_mixdown_device);
+			AUD_Device_free(context->audio_mixdown_device);
 			context->audio_mixdown_device = 0;
 		}
 	}

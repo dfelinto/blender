@@ -167,11 +167,11 @@ void duplicate_fcurve_keys(FCurve *fcu)
 			fcu->bezt = newbezt;
 			
 			/* Unselect the current key */
-			BEZ_DESEL(&fcu->bezt[i]);
+			BEZT_DESEL_ALL(&fcu->bezt[i]);
 			i++;
 			
 			/* Select the copied key */
-			BEZ_SEL(&fcu->bezt[i]);
+			BEZT_SEL_ALL(&fcu->bezt[i]);
 		}
 	}
 }
@@ -179,17 +179,22 @@ void duplicate_fcurve_keys(FCurve *fcu)
 /* **************************************************** */
 /* Various Tools */
 
-/* Basic F-Curve 'cleanup' function that removes 'double points' and unnecessary keyframes on linear-segments only */
-void clean_fcurve(FCurve *fcu, float thresh)
+/* Basic F-Curve 'cleanup' function that removes 'double points' and unnecessary keyframes on linear-segments only
+ * optionally clears up curve if one keyframe with default value remains */
+void clean_fcurve(struct bAnimContext *ac, bAnimListElem *ale, float thresh, bool cleardefault)
 {
+	FCurve *fcu = (FCurve *)ale->key_data;
 	BezTriple *old_bezts, *bezt, *beztn;
 	BezTriple *lastb;
 	int totCount, i;
 	
 	/* check if any points  */
-	if ((fcu == NULL) || (fcu->bezt == NULL) || (fcu->totvert <= 1))
+	if ((fcu == NULL) || (fcu->bezt == NULL) || (fcu->totvert == 0) ||
+	    (!cleardefault && fcu->totvert == 1))
+	{
 		return;
-	
+	}
+
 	/* make a copy of the old BezTriples, and clear F-Curve */
 	old_bezts = fcu->bezt;
 	totCount = fcu->totvert;
@@ -284,6 +289,34 @@ void clean_fcurve(FCurve *fcu, float thresh)
 	/* now free the memory used by the old BezTriples */
 	if (old_bezts)
 		MEM_freeN(old_bezts);
+
+	/* final step, if there is just one key in fcurve, check if it's
+	 * the default value and if is, remove fcurve completely. */
+	if (cleardefault && fcu->totvert == 1) {
+		float default_value = 0.0f;
+		PointerRNA id_ptr, ptr;
+		PropertyRNA *prop;
+		RNA_id_pointer_create(ale->id, &id_ptr);
+
+		/* get property to read from, and get value as appropriate */
+		if (RNA_path_resolve_property(&id_ptr, fcu->rna_path, &ptr, &prop)) {
+			if (RNA_property_type(prop) == PROP_FLOAT)
+				default_value = RNA_property_float_get_default_index(&ptr, prop, fcu->array_index);
+		}
+
+		if (fcu->bezt->vec[1][1] == default_value) {
+			clear_fcurve_keys(fcu);
+
+			/* check if curve is really unused and if it is, return signal for deletion */
+			if ((list_has_suitable_fmodifier(&fcu->modifiers, 0, FMI_TYPE_GENERATE_CURVE) == 0) &&
+			    (fcu->driver == NULL))
+			{
+				AnimData *adt = ale->adt;
+				ANIM_fcurve_delete_from_animdata(ac, adt, fcu);
+				ale->key_data = NULL;
+			}
+		}
+	}
 }
 
 /* ---------------- */
@@ -308,7 +341,7 @@ void smooth_fcurve(FCurve *fcu)
 	/* first loop through - count how many verts are selected */
 	bezt = fcu->bezt;
 	for (i = 0; i < fcu->totvert; i++, bezt++) {
-		if (BEZSELECTED(bezt))
+		if (BEZT_ISSEL_ANY(bezt))
 			totSel++;
 	}
 	
@@ -322,7 +355,7 @@ void smooth_fcurve(FCurve *fcu)
 		/* populate tarray with data of selected points */
 		bezt = fcu->bezt;
 		for (i = 0, x = 0; (i < fcu->totvert) && (x < totSel); i++, bezt++) {
-			if (BEZSELECTED(bezt)) {
+			if (BEZT_ISSEL_ANY(bezt)) {
 				/* tsb simply needs pointer to vec, and index */
 				tsb->h1 = &bezt->vec[0][1];
 				tsb->h2 = &bezt->vec[1][1];
@@ -411,7 +444,7 @@ void sample_fcurve(FCurve *fcu)
 	/* find selected keyframes... once pair has been found, add keyframes  */
 	for (i = 0, bezt = fcu->bezt; i < fcu->totvert; i++, bezt++) {
 		/* check if selected, and which end this is */
-		if (BEZSELECTED(bezt)) {
+		if (BEZT_ISSEL_ANY(bezt)) {
 			if (start) {
 				/* set end */
 				end = bezt;
@@ -576,7 +609,7 @@ short copy_animedit_keys(bAnimContext *ac, ListBase *anim_data)
 		/* TODO: currently, we resize array every time we add a new vert -
 		 * this works ok as long as it is assumed only a few keys are copied */
 		for (i = 0, bezt = fcu->bezt; i < fcu->totvert; i++, bezt++) {
-			if (BEZSELECTED(bezt)) {
+			if (BEZT_ISSEL_ANY(bezt)) {
 				/* add to buffer */
 				newbuf = MEM_callocN(sizeof(BezTriple) * (aci->totvert + 1), "copybuf beztriple");
 				
@@ -589,7 +622,7 @@ short copy_animedit_keys(bAnimContext *ac, ListBase *anim_data)
 				*nbezt = *bezt;
 				
 				/* ensure copy buffer is selected so pasted keys are selected */
-				BEZ_SEL(nbezt);
+				BEZT_SEL_ALL(nbezt);
 				
 				/* free old array and set the new */
 				if (aci->bezt) MEM_freeN(aci->bezt);
@@ -776,7 +809,7 @@ static void paste_animedit_keys_fcurve(FCurve *fcu, tAnimCopybufItem *aci, float
 
 	/* First de-select existing FCurve's keyframes */
 	for (i = 0, bezt = fcu->bezt; i < fcu->totvert; i++, bezt++) {
-		BEZ_DESEL(bezt);
+		BEZT_DESEL_ALL(bezt);
 	}
 
 	/* mix mode with existing data */
@@ -836,7 +869,7 @@ static void paste_animedit_keys_fcurve(FCurve *fcu, tAnimCopybufItem *aci, float
 		 */
 		
 		insert_bezt_fcurve(fcu, bezt, INSERTKEY_OVERWRITE_FULL);
-
+		
 		/* un-apply offset from src beztriple after copying */
 		bezt->vec[0][0] -= offset;
 		bezt->vec[1][0] -= offset;
@@ -938,6 +971,7 @@ short paste_animedit_keys(bAnimContext *ac, ListBase *anim_data,
 				 *	- if names do matter, only check if id-type is ok for now (group check is not that important)
 				 *	- most importantly, rna-paths should match (array indices are unimportant for now)
 				 */
+				AnimData *adt = ANIM_nla_mapping_get(ac, ale);
 				FCurve *fcu = (FCurve *)ale->data;  /* destination F-Curve */
 				tAnimCopybufItem *aci = NULL;
 				
@@ -961,9 +995,17 @@ short paste_animedit_keys(bAnimContext *ac, ListBase *anim_data,
 				/* copy the relevant data from the matching buffer curve */
 				if (aci) {
 					totmatch++;
-					paste_animedit_keys_fcurve(fcu, aci, offset, merge_mode, flip);
+					
+					if (adt) {
+						ANIM_nla_mapping_apply_fcurve(adt, ale->key_data, 0, 1);
+						paste_animedit_keys_fcurve(fcu, aci, offset, merge_mode, flip);
+						ANIM_nla_mapping_apply_fcurve(adt, ale->key_data, 1, 1);
+					}
+					else {
+						paste_animedit_keys_fcurve(fcu, aci, offset, merge_mode, flip);
+					}
 				}
-
+				
 				ale->update |= ANIM_UPDATE_DEFAULT;
 			}
 			

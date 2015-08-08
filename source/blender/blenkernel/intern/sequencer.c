@@ -88,7 +88,7 @@
 #include "BKE_sound.h"
 
 #ifdef WITH_AUDASPACE
-#  include "AUD_C-API.h"
+#  include AUD_SPECIAL_H
 #endif
 
 static ImBuf *seq_render_strip_stack(const SeqRenderData *context, ListBase *seqbasep, float cfra, int chanshown);
@@ -1115,6 +1115,7 @@ static const char *give_seqname_by_type(int type)
 		case SEQ_TYPE_ADJUSTMENT:    return "Adjustment";
 		case SEQ_TYPE_SPEED:         return "Speed";
 		case SEQ_TYPE_GAUSSIAN_BLUR: return "Gaussian Blur";
+		case SEQ_TYPE_TEXT:          return "Text";
 		default:
 			return NULL;
 	}
@@ -1751,7 +1752,8 @@ static void seq_proxy_build_frame(const SeqRenderData *context, Sequence *seq, i
 	/* depth = 32 is intentionally left in, otherwise ALPHA channels
 	 * won't work... */
 	quality = seq->strip->proxy->quality;
-	ibuf->ftype = JPG | quality;
+	ibuf->ftype = IMB_FTYPE_JPG;
+	ibuf->foptions.quality = quality;
 
 	/* unsupported feature only confuses other s/w */
 	if (ibuf->planes == 32)
@@ -2859,12 +2861,12 @@ static ImBuf *seq_render_movie_strip(const SeqRenderData *context, Sequence *seq
 				                                seq->strip->proxy ? seq->strip->proxy->tc : IMB_TC_RECORD_RUN,
 				                                proxy_size);
 
-			/* fetching for requested proxy size failed, try fetching the original instead */
-			if (!ibuf_arr[i] && proxy_size != IMB_PROXY_NONE) {
-				ibuf_arr[i] = IMB_anim_absolute(sanim->anim, nr + seq->anim_startofs,
-				                                seq->strip->proxy ? seq->strip->proxy->tc : IMB_TC_RECORD_RUN,
-				                                IMB_PROXY_NONE);
-			}
+				/* fetching for requested proxy size failed, try fetching the original instead */
+				if (!ibuf_arr[i] && proxy_size != IMB_PROXY_NONE) {
+					ibuf_arr[i] = IMB_anim_absolute(sanim->anim, nr + seq->anim_startofs,
+					                                seq->strip->proxy ? seq->strip->proxy->tc : IMB_TC_RECORD_RUN,
+					                                IMB_PROXY_NONE);
+				}
 				if (ibuf_arr[i]) {
 					/* we don't need both (speed reasons)! */
 					if (ibuf_arr[i]->rect_float && ibuf_arr[i]->rect)
@@ -5284,7 +5286,10 @@ static void seq_new_fix_links_recursive(Sequence *seq)
 
 Sequence *BKE_sequence_dupli_recursive(Scene *scene, Scene *scene_to, Sequence *seq, int dupe_flag)
 {
-	Sequence *seqn = seq_dupli(scene, scene_to, seq, dupe_flag);
+	Sequence *seqn;
+
+	seq->tmp = NULL;
+	seqn = seq_dupli(scene, scene_to, seq, dupe_flag);
 	if (seq->type == SEQ_TYPE_META) {
 		Sequence *s;
 		for (s = seq->seqbase.first; s; s = s->next) {

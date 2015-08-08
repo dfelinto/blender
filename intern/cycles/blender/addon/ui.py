@@ -687,8 +687,8 @@ class CyclesObject_PT_motion_blur(CyclesButtonsPanel, Panel):
         sub.prop(cob, "motion_steps", text="Steps")
 
 
-class CyclesObject_PT_ray_visibility(CyclesButtonsPanel, Panel):
-    bl_label = "Ray Visibility"
+class CyclesObject_PT_cycles_settings(CyclesButtonsPanel, Panel):
+    bl_label = "Cycles Settings"
     bl_context = "object"
     bl_options = {'DEFAULT_CLOSED'}
 
@@ -702,9 +702,13 @@ class CyclesObject_PT_ray_visibility(CyclesButtonsPanel, Panel):
     def draw(self, context):
         layout = self.layout
 
+        scene = context.scene
+        cscene = scene.cycles
         ob = context.object
+        cob = ob.cycles
         visibility = ob.cycles_visibility
 
+        layout.label(text="Ray Visibility:")
         flow = layout.column_flow()
 
         flow.prop(visibility, "camera")
@@ -715,6 +719,12 @@ class CyclesObject_PT_ray_visibility(CyclesButtonsPanel, Panel):
 
         if ob.type != 'LAMP':
             flow.prop(visibility, "shadow")
+
+        col = layout.column()
+        col.label(text="Performance:")
+        row = col.row()
+        row.active = scene.render.use_simplify and cscene.use_camera_cull
+        row.prop(cob, "use_camera_cull")
 
 
 class CYCLES_OT_use_shading_nodes(Operator):
@@ -1040,6 +1050,7 @@ class CyclesWorld_PT_settings(CyclesButtonsPanel, Panel):
         sub.prop(cworld, "sample_map_resolution")
         if use_branched_path(context):
             sub.prop(cworld, "samples")
+        sub.prop(cworld, "max_bounces")
 
         col = split.column()
         col.label(text="Volume:")
@@ -1225,7 +1236,8 @@ class CyclesTexture_PT_mapping(CyclesButtonsPanel, Panel):
     @classmethod
     def poll(cls, context):
         node = context.texture_node
-        return node and CyclesButtonsPanel.poll(context)
+        # TODO(sergey): perform a faster/nicer check?
+        return node and hasattr(node, 'texture_mapping') and CyclesButtonsPanel.poll(context)
 
     def draw(self, context):
         layout = self.layout
@@ -1449,7 +1461,9 @@ class CyclesScene_PT_simplify(CyclesButtonsPanel, Panel):
     def draw(self, context):
         layout = self.layout
 
-        rd = context.scene.render
+        scene = context.scene
+        rd = scene.render
+        cscene = scene.cycles
 
         layout.active = rd.use_simplify
         split = layout.split()
@@ -1463,6 +1477,12 @@ class CyclesScene_PT_simplify(CyclesButtonsPanel, Panel):
         col.label(text="Render:")
         col.prop(rd, "simplify_subdivision_render", text="Subdivision")
         col.prop(rd, "simplify_child_particles_render", text="Child Particles")
+
+        col = layout.column()
+        col.prop(cscene, "use_camera_cull")
+        subsub = col.column()
+        subsub.active = cscene.use_camera_cull
+        subsub.prop(cscene, "camera_cull_margin")
 
 
 def draw_device(self, context):

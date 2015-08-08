@@ -224,7 +224,13 @@ static void drawseqwave(const bContext *C, SpaceSeq *sseq, Scene *scene, Sequenc
 		BLI_spin_unlock(sound->spinlock);
 		
 		waveform = seq->sound->waveform;
-		
+
+		if (waveform->length == 0) {
+			/* BKE_sound_read_waveform() set an empty SoundWaveform data in case it cannot generate a valid one...
+			 * See T45726. */
+			return;
+		}
+
 		startsample = floor((seq->startofs + seq->anim_startofs) / FPS * SOUND_WAVE_SAMPLES_PER_SECOND);
 		endsample = ceil((seq->startofs + seq->anim_startofs + seq->enddisp - seq->startdisp) / FPS * SOUND_WAVE_SAMPLES_PER_SECOND);
 		samplestep = (endsample - startsample) * stepsize / (x2 - x1);
@@ -498,6 +504,11 @@ static void draw_seq_text(View2D *v2d, Sequence *seq, float x1, float x2, float 
 	else if (seq->type == SEQ_TYPE_IMAGE) {
 		str_len = BLI_snprintf(str, sizeof(str), "%s: %s%s | %d",
 		                       name, seq->strip->dir, seq->strip->stripdata->name, seq->len);
+	}
+	else if (seq->type == SEQ_TYPE_TEXT) {
+		TextVars *textdata = seq->effectdata;
+		str_len = BLI_snprintf(str, sizeof(str), "%s | %d",
+		                       textdata->text, seq->startdisp);
 	}
 	else if (seq->type & SEQ_TYPE_EFFECT) {
 		str_len = BLI_snprintf(str, sizeof(str), "%s | %d",

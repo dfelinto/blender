@@ -66,7 +66,7 @@
 #include "BKE_sound.h"
 
 #ifdef WITH_AUDASPACE
-#  include "AUD_C-API.h"
+#  include AUD_SEQUENCE_H
 #endif
 
 /* own include */
@@ -1009,6 +1009,9 @@ static int sequencer_add_effect_strip_exec(bContext *C, wmOperator *op)
 	}
 	else if (seq->type == SEQ_TYPE_ADJUSTMENT) {
 		seq->blend_mode = SEQ_TYPE_CROSS;
+	}
+	else if (seq->type == SEQ_TYPE_TEXT) {
+		seq->blend_mode = SEQ_TYPE_ALPHAOVER;
 	}
 
 	/* an unset channel is a special case where we automatically go above

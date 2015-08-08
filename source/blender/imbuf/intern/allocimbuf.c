@@ -409,7 +409,8 @@ ImBuf *IMB_allocImBuf(unsigned int x, unsigned int y, uchar planes, unsigned int
 		ibuf->x = x;
 		ibuf->y = y;
 		ibuf->planes = planes;
-		ibuf->ftype = PNG | 15; /* the 15 means, set compression to low ratio but not time consuming */
+		ibuf->ftype = IMB_FTYPE_PNG;
+		ibuf->foptions.quality = 15; /* the 15 means, set compression to low ratio but not time consuming */
 		ibuf->channels = 4;  /* float option, is set to other values when buffers get assigned */
 		ibuf->ppm[0] = ibuf->ppm[1] = IMB_DPI_DEFAULT / 0.0254f; /* IMB_DPI_DEFAULT -> pixels-per-meter */
 
@@ -491,7 +492,7 @@ ImBuf *IMB_dupImBuf(ImBuf *ibuf1)
 	tbuf.encodedbuffer = ibuf2->encodedbuffer;
 	tbuf.zbuf          = NULL;
 	tbuf.zbuf_float    = NULL;
-	for (a = 0; a < IB_MIPMAP_LEVELS; a++)
+	for (a = 0; a < IMB_MIPMAP_LEVELS; a++)
 		tbuf.mipmap[a] = NULL;
 	tbuf.dds_data.data = NULL;
 	

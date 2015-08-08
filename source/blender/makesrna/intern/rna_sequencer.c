@@ -546,6 +546,8 @@ static StructRNA *rna_Sequence_refine(struct PointerRNA *ptr)
 			return &RNA_SpeedControlSequence;
 		case SEQ_TYPE_GAUSSIAN_BLUR:
 			return &RNA_GaussianBlurSequence;
+		case SEQ_TYPE_TEXT:
+			return &RNA_TextSequence;
 		default:
 			return &RNA_Sequence;
 	}
@@ -1407,6 +1409,7 @@ static void rna_def_sequence(BlenderRNA *brna)
 		{SEQ_TYPE_MULTICAM, "MULTICAM", 0, "Multicam Selector", ""},
 		{SEQ_TYPE_ADJUSTMENT, "ADJUSTMENT", 0, "Adjustment Layer", ""},
 		{SEQ_TYPE_GAUSSIAN_BLUR, "GAUSSIAN_BLUR", 0, "Gaussian Blur", ""},
+		{SEQ_TYPE_TEXT, "TEXT", 0, "Text", ""},
 		{0, NULL, 0, NULL, NULL}
 	};
 	
@@ -2302,6 +2305,48 @@ static void rna_def_gaussian_blur(StructRNA *srna)
 	RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_Sequence_update");
 }
 
+static void rna_def_text(StructRNA *srna)
+{
+	static EnumPropertyItem text_align_items[] = {
+		{SEQ_TEXT_ALIGN_LEFT, "LEFT", 0, "Left", ""},
+		{SEQ_TEXT_ALIGN_CENTER, "CENTER", 0, "Center", ""},
+		{SEQ_TEXT_ALIGN_RIGHT, "RIGHT", 0, "Right", ""},
+		{0, NULL, 0, NULL, NULL}
+	};
+
+	PropertyRNA *prop;
+
+	RNA_def_struct_sdna_from(srna, "TextVars", "effectdata");
+
+	prop = RNA_def_property(srna, "font_size", PROP_INT, PROP_UNSIGNED);
+	RNA_def_property_int_sdna(prop, NULL, "text_size");
+	RNA_def_property_ui_text(prop, "Size", "Size of the text");
+	RNA_def_property_ui_range(prop, 0.0f, 1000, 1, -1);
+	RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_Sequence_update");
+
+	prop = RNA_def_property(srna, "location", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_float_sdna(prop, NULL, "loc");
+	RNA_def_property_ui_text(prop, "Location", "Location of the text");
+	RNA_def_property_range(prop, -FLT_MAX, FLT_MAX);
+	RNA_def_property_ui_range(prop, 0.0, 1.0, 1, -1);
+	RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_Sequence_update");
+
+	prop = RNA_def_property(srna, "align", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_sdna(prop, NULL, "align");
+	RNA_def_property_enum_items(prop, text_align_items);
+	RNA_def_property_ui_text(prop, "Align", "");
+	RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_Sequence_update");
+
+	prop = RNA_def_property(srna, "text", PROP_STRING, PROP_NONE);
+	RNA_def_property_ui_text(prop, "Text", "Text that will be displayed");
+	RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_Sequence_update");
+
+	prop = RNA_def_property(srna, "use_shadow", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "flag", SEQ_TEXT_SHADOW);
+	RNA_def_property_ui_text(prop, "Shadow", "Draw text with shadow");
+	RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_Sequence_update");
+}
+
 static EffectInfo def_effects[] = {
 	{"AddSequence", "Add Sequence", "Add Sequence", NULL, 2},
 	{"AdjustmentSequence", "Adjustment Layer Sequence",
@@ -2326,6 +2371,8 @@ static EffectInfo def_effects[] = {
 	 rna_def_wipe, 1},
 	{"GaussianBlurSequence", "Gaussian Blur Sequence", "Sequence strip creating a gaussian blur",
 	 rna_def_gaussian_blur, 1},
+	{"TextSequence", "Text Sequence", "Sequence strip creating text",
+	 rna_def_text, 0},
 	{"", "", "", NULL, 0}
 };
 

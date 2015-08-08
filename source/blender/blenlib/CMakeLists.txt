@@ -30,6 +30,7 @@ set(INC
 	../../../intern/guardedalloc
 	../../../intern/atomic
 	../../../extern/wcwidth
+	../../../extern/Eigen3
 )
 
 set(INC_SYS
@@ -83,6 +84,8 @@ set(SRC
 	intern/math_interp.c
 	intern/math_matrix.c
 	intern/math_rotation.c
+	intern/math_solvers.c
+	intern/math_statistics.c
 	intern/math_vector.c
 	intern/math_vector_inline.c
 	intern/noise.c
@@ -162,6 +165,8 @@ set(SRC
 	BLI_math_interp.h
 	BLI_math_matrix.h
 	BLI_math_rotation.h
+	BLI_math_solvers.h
+	BLI_math_statistics.h
 	BLI_math_vector.h
 	BLI_memarena.h
 	BLI_mempool.h

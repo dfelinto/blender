@@ -42,9 +42,9 @@
 #include "MT_Matrix4x4.h"
 #include "MT_Point2.h"
 
-#include "ListValue.h"
+#include "EXP_ListValue.h"
 
-#include "KX_Python.h"
+#include "EXP_Python.h"
 #include "KX_PyMath.h"
 
 bool PyOrientationTo(PyObject *pyval, MT_Matrix3x3 &rot, const char *error_prefix)
@@ -193,6 +193,21 @@ PyObject *PyObjectFrom(const MT_Tuple2 &vec)
 	PyObject *list = PyList_New(2);
 	PyList_SET_ITEM(list, 0, PyFloat_FromDouble(vec[0]));
 	PyList_SET_ITEM(list, 1, PyFloat_FromDouble(vec[1]));
+	return list;
+#endif
+}
+
+PyObject *PyColorFromVector(const MT_Vector3 &vec)
+{
+#ifdef USE_MATHUTILS
+	float fvec[3];
+	vec.getValue(fvec);
+	return Color_CreatePyObject(fvec, NULL);
+#else
+	PyObject *list = PyList_New(3);
+	PyList_SET_ITEM(list, 0, PyFloat_FromDouble(vec[0]));
+	PyList_SET_ITEM(list, 1, PyFloat_FromDouble(vec[1]));
+	PyList_SET_ITEM(list, 2, PyFloat_FromDouble(vec[2]));
 	return list;
 #endif
 }

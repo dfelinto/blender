@@ -799,6 +799,8 @@ enum {
 
 /* for analog input, like trackpad */
 	TFM_MODAL_PROPSIZE       = 26,
+/* node editor insert offset (aka auto-offset) direction toggle */
+	TFM_MODAL_INSERTOFS_TOGGLE_DIR         = 27,
 };
 
 /* called in transform_ops.c, on each regeneration of keymaps */
@@ -831,6 +833,7 @@ wmKeyMap *transform_modal_keymap(wmKeyConfig *keyconf)
 		{TFM_MODAL_EDGESLIDE_UP, "EDGESLIDE_EDGE_NEXT", 0, "Select next Edge Slide Edge", ""},
 		{TFM_MODAL_EDGESLIDE_DOWN, "EDGESLIDE_PREV_NEXT", 0, "Select previous Edge Slide Edge", ""},
 		{TFM_MODAL_PROPSIZE, "PROPORTIONAL_SIZE", 0, "Adjust Proportional Influence", ""},
+		{TFM_MODAL_INSERTOFS_TOGGLE_DIR, "INSERTOFS_TOGGLE_DIR", 0, "Toggle Direction for Node Auto-offset", ""},
 		{0, NULL, 0, NULL, NULL}
 	};
 	
@@ -879,7 +882,10 @@ wmKeyMap *transform_modal_keymap(wmKeyConfig *keyconf)
 	WM_modalkeymap_add_item(keymap, PAGEDOWNKEY, KM_PRESS, KM_SHIFT, 0, TFM_MODAL_AUTOIK_LEN_DEC);
 	WM_modalkeymap_add_item(keymap, WHEELDOWNMOUSE, KM_PRESS, KM_SHIFT, 0, TFM_MODAL_AUTOIK_LEN_INC);
 	WM_modalkeymap_add_item(keymap, WHEELUPMOUSE, KM_PRESS, KM_SHIFT, 0, TFM_MODAL_AUTOIK_LEN_DEC);
-	
+
+	/* node editor only */
+	WM_modalkeymap_add_item(keymap, TKEY, KM_PRESS, 0, 0, TFM_MODAL_INSERTOFS_TOGGLE_DIR);
+
 	return keymap;
 }
 
@@ -1001,9 +1007,9 @@ int transformEvent(TransInfo *t, const wmEvent *event)
 			case TFM_MODAL_TRANSLATE:
 				/* only switch when... */
 				if (ELEM(t->mode, TFM_ROTATION, TFM_RESIZE, TFM_TRACKBALL, TFM_EDGE_SLIDE, TFM_VERT_SLIDE)) {
+					restoreTransObjects(t);
 					resetTransModal(t);
 					resetTransRestrictions(t);
-					restoreTransObjects(t);
 					initTranslation(t);
 					initSnapping(t, NULL); // need to reinit after mode change
 					t->redraw |= TREDRAW_HARD;
@@ -1018,9 +1024,9 @@ int transformEvent(TransInfo *t, const wmEvent *event)
 				else {
 					if (t->obedit && t->obedit->type == OB_MESH) {
 						if ((t->mode == TFM_TRANSLATION) && (t->spacetype == SPACE_VIEW3D)) {
+							restoreTransObjects(t);
 							resetTransModal(t);
 							resetTransRestrictions(t);
-							restoreTransObjects(t);
 
 							/* first try edge slide */
 							initEdgeSlide(t);
@@ -1032,8 +1038,8 @@ int transformEvent(TransInfo *t, const wmEvent *event)
 							/* vert slide can fail on unconnected vertices (rare but possible) */
 							if (t->state == TRANS_CANCEL) {
 								t->state = TRANS_STARTING;
-								resetTransRestrictions(t);
 								restoreTransObjects(t);
+								resetTransRestrictions(t);
 								initTranslation(t);
 							}
 							initSnapping(t, NULL); // need to reinit after mode change
@@ -1083,9 +1089,9 @@ int transformEvent(TransInfo *t, const wmEvent *event)
 						stopConstraint(t);
 					}
 
+					restoreTransObjects(t);
 					resetTransModal(t);
 					resetTransRestrictions(t);
-					restoreTransObjects(t);
 					initResize(t);
 					initSnapping(t, NULL); // need to reinit after mode change
 					t->redraw |= TREDRAW_HARD;
@@ -1240,6 +1246,25 @@ int transformEvent(TransInfo *t, const wmEvent *event)
 					handled = true;
 				}
 				break;
+			case TFM_MODAL_INSERTOFS_TOGGLE_DIR:
+				if (t->spacetype == SPACE_NODE) {
+					SpaceNode *snode = (SpaceNode *)t->sa->spacedata.first;
+
+					BLI_assert(t->sa->spacetype == t->spacetype);
+
+					if (snode->insert_ofs_dir == SNODE_INSERTOFS_DIR_RIGHT) {
+						snode->insert_ofs_dir = SNODE_INSERTOFS_DIR_LEFT;
+					}
+					else if (snode->insert_ofs_dir == SNODE_INSERTOFS_DIR_LEFT) {
+						snode->insert_ofs_dir = SNODE_INSERTOFS_DIR_RIGHT;
+					}
+					else {
+						BLI_assert(0);
+					}
+
+					t->redraw |= TREDRAW_SOFT;
+				}
+				break;
 			/* Those two are only handled in transform's own handler, see T44634! */
 			case TFM_MODAL_EDGESLIDE_UP:
 			case TFM_MODAL_EDGESLIDE_DOWN:
@@ -1313,9 +1338,9 @@ int transformEvent(TransInfo *t, const wmEvent *event)
 			case GKEY:
 				/* only switch when... */
 				if (ELEM(t->mode, TFM_ROTATION, TFM_RESIZE, TFM_TRACKBALL)) {
+					restoreTransObjects(t);
 					resetTransModal(t);
 					resetTransRestrictions(t);
-					restoreTransObjects(t);
 					initTranslation(t);
 					initSnapping(t, NULL); // need to reinit after mode change
 					t->redraw |= TREDRAW_HARD;
@@ -1325,9 +1350,9 @@ int transformEvent(TransInfo *t, const wmEvent *event)
 			case SKEY:
 				/* only switch when... */
 				if (ELEM(t->mode, TFM_ROTATION, TFM_TRANSLATION, TFM_TRACKBALL)) {
+					restoreTransObjects(t);
 					resetTransModal(t);
 					resetTransRestrictions(t);
-					restoreTransObjects(t);
 					initResize(t);
 					initSnapping(t, NULL); // need to reinit after mode change
 					t->redraw |= TREDRAW_HARD;
@@ -4246,6 +4271,23 @@ static void headerTranslation(TransInfo *t, const float vec[3], char str[MAX_INF
 	if (t->flag & T_PROP_EDIT_ALL) {
 		ofs += BLI_snprintf(str + ofs, MAX_INFO_LEN - ofs, IFACE_(" Proportional size: %.2f"), t->prop_size);
 	}
+
+	if (t->spacetype == SPACE_NODE) {
+		SpaceNode *snode = (SpaceNode *)t->sa->spacedata.first;
+
+		if ((snode->flag & SNODE_SKIP_INSOFFSET) == 0) {
+			const char *str_old = BLI_strdup(str);
+			const char *str_dir = (snode->insert_ofs_dir == SNODE_INSERTOFS_DIR_RIGHT) ? "right" : "left";
+			char str_km[MAX_INFO_LEN];
+
+			WM_modalkeymap_items_to_string(t->keymap, TFM_MODAL_INSERTOFS_TOGGLE_DIR, true, sizeof(str_km), str_km);
+
+			ofs += BLI_snprintf(str, MAX_INFO_LEN, "Auto-offset set to %s - press %s to toggle direction  |  %s",
+			                    str_dir, str_km, str_old);
+
+			MEM_freeN((void *)str_old);
+		}
+	}
 }
 
 static void applyTranslationValue(TransInfo *t, const float vec[3])
@@ -4422,7 +4464,7 @@ static void applyShrinkFatten(TransInfo *t, const int UNUSED(mval[2]))
 	if (t->keymap) {
 		wmKeyMapItem *kmi = WM_modalkeymap_find_propvalue(t->keymap, TFM_MODAL_RESIZE);
 		if (kmi) {
-			ofs += WM_keymap_item_to_string(kmi, str + ofs, MAX_INFO_LEN - ofs);
+			ofs += WM_keymap_item_to_string(kmi, false, MAX_INFO_LEN - ofs, str + ofs);
 		}
 	}
 	BLI_snprintf(str + ofs, MAX_INFO_LEN - ofs, IFACE_(" or Alt) Even Thickness %s"),
@@ -5336,12 +5378,13 @@ static void slide_origdata_create_data_vert(
 
 static void slide_origdata_create_data(
         TransInfo *t, SlideOrigData *sod,
-        TransDataGenericSlideVert *sv, unsigned int v_stride, unsigned int v_num)
+        TransDataGenericSlideVert *sv_array, unsigned int v_stride, unsigned int v_num)
 {
 	if (sod->use_origfaces) {
 		BMEditMesh *em = BKE_editmesh_from_object(t->obedit);
 		BMesh *bm = em->bm;
 		unsigned int i;
+		TransDataGenericSlideVert *sv;
 
 		int layer_index_dst;
 		int j;
@@ -5361,8 +5404,37 @@ static void slide_origdata_create_data(
 
 		sod->origverts = BLI_ghash_ptr_new_ex(__func__, v_num);
 
-		for (i = 0; i < v_num; i++, sv = POINTER_OFFSET(sv, v_stride)) {
+		for (i = 0, sv = sv_array; i < v_num; i++, sv = POINTER_OFFSET(sv, v_stride)) {
 			slide_origdata_create_data_vert(bm, sod, sv);
+		}
+
+		if (t->flag & T_MIRROR) {
+			TransData *td = t->data;
+			TransDataGenericSlideVert *sv_mirror;
+
+			sod->sv_mirror = MEM_callocN(sizeof(*sv_mirror) * t->total, __func__);
+			sod->totsv_mirror = t->total;
+
+			sv_mirror = sod->sv_mirror;
+
+			for (i = 0; i < t->total; i++, td++) {
+				BMVert *eve = td->extra;
+				if (eve) {
+					sv_mirror->v = eve;
+					copy_v3_v3(sv_mirror->co_orig_3d, eve->co);
+
+					slide_origdata_create_data_vert(bm, sod, sv_mirror);
+					sv_mirror++;
+				}
+				else {
+					sod->totsv_mirror--;
+				}
+			}
+
+			if (sod->totsv_mirror == 0) {
+				MEM_freeN(sod->sv_mirror);
+				sod->sv_mirror = NULL;
+			}
 		}
 	}
 }
@@ -5480,6 +5552,15 @@ static void slide_origdata_interp_data(
 				slide_origdata_interp_data_vert(sod, bm, is_final, sv);
 			}
 		}
+
+		if (sod->sv_mirror) {
+			sv = sod->sv_mirror;
+			for (i = 0; i < v_num; i++, sv++) {
+				if (sv->cd_loop_groups) {
+					slide_origdata_interp_data_vert(sod, bm, is_final, sv);
+				}
+			}
+		}
 	}
 }
 
@@ -5508,6 +5589,8 @@ static void slide_origdata_free_date(
 		}
 
 		MEM_SAFE_FREE(sod->layer_math_map);
+
+		MEM_SAFE_FREE(sod->sv_mirror);
 	}
 }
 
@@ -6272,7 +6355,7 @@ static bool createEdgeSlideVerts_double_side(TransInfo *t)
 }
 
 /**
- * A simple version of #createEdgeSlideVerts
+ * A simple version of #createEdgeSlideVerts_double_side
  * Which assumes the longest unselected.
  */
 static bool createEdgeSlideVerts_single_side(TransInfo *t)
@@ -6495,8 +6578,6 @@ void freeEdgeSlideVerts(TransInfo *t)
 	MEM_freeN(sld);
 	
 	t->customData = NULL;
-	
-	recalcData(t);
 }
 
 static void initEdgeSlide_ex(TransInfo *t, bool use_double_side)
@@ -6785,8 +6866,6 @@ static void doEdgeSlide(TransInfo *t, float perc)
 			}
 		}
 	}
-	
-	projectEdgeSlideData(t, 0);
 }
 
 static void applyEdgeSlide(TransInfo *t, const int UNUSED(mval[2]))
@@ -6918,13 +6997,13 @@ static void calcVertSlideMouseActiveEdges(struct TransInfo *t, const int mval[2]
 	TransDataVertSlideVert *sv;
 	int i;
 
+	/* note: we could save a matrix-multiply for each vertex
+	 * by finding the closest edge in local-space.
+	 * However this skews the outcome with non-uniform-scale. */
+
 	/* first get the direction of the original mouse position */
 	sub_v2_v2v2(dir, imval_fl, mval_fl);
 	ED_view3d_win_to_delta(t->ar, dir, dir, t->zfac);
-
-	invert_m4_m4(t->obedit->imat, t->obedit->obmat);
-	mul_mat3_m4_v3(t->obedit->imat, dir);
-
 	normalize_v3(dir);
 
 	for (i = 0, sv = sld->sv; i < sld->totsv; i++, sv++) {
@@ -6938,6 +7017,7 @@ static void calcVertSlideMouseActiveEdges(struct TransInfo *t, const int mval[2]
 				float dir_dot;
 
 				sub_v3_v3v3(tdir, sv->co_orig_3d, sv->co_link_orig_3d[j]);
+				mul_mat3_m4_v3(t->obedit->obmat, tdir);
 				project_plane_v3_v3v3(tdir, tdir, t->viewinv[2]);
 
 				normalize_v3(tdir);
@@ -7103,8 +7183,6 @@ void freeVertSlideVerts(TransInfo *t)
 	MEM_freeN(sld);
 
 	t->customData = NULL;
-
-	recalcData(t);
 }
 
 static void initVertSlide(TransInfo *t)
@@ -7272,12 +7350,16 @@ static void drawVertSlide(TransInfo *t)
 			if ((t->mval[0] != t->imval[0]) ||
 			    (t->mval[1] != t->imval[1]))
 			{
-				float zfac = ED_view3d_calc_zfac(t->ar->regiondata, curr_sv->co_orig_3d, NULL);
+				float zfac;
 				float mval_ofs[2];
+				float co_orig_3d[3];
 				float co_dest_3d[3];
 
 				mval_ofs[0] = t->mval[0] - t->imval[0];
 				mval_ofs[1] = t->mval[1] - t->imval[1];
+
+				mul_v3_m4v3(co_orig_3d, t->obedit->obmat, curr_sv->co_orig_3d);
+				zfac = ED_view3d_calc_zfac(t->ar->regiondata, co_orig_3d, NULL);
 
 				ED_view3d_win_to_delta(t->ar, mval_ofs, co_dest_3d, zfac);
 
@@ -7345,8 +7427,6 @@ static void doVertSlide(TransInfo *t, float perc)
 			}
 		}
 	}
-
-	projectVertSlideData(t, false);
 }
 
 static void applyVertSlide(TransInfo *t, const int UNUSED(mval[2]))
@@ -7742,7 +7822,7 @@ static void headerSeqSlide(TransInfo *t, const float val[2], char str[MAX_INFO_L
 	if (t->keymap) {
 		wmKeyMapItem *kmi = WM_modalkeymap_find_propvalue(t->keymap, TFM_MODAL_TRANSLATE);
 		if (kmi) {
-			ofs += WM_keymap_item_to_string(kmi, str + ofs, MAX_INFO_LEN - ofs);
+			ofs += WM_keymap_item_to_string(kmi, false, MAX_INFO_LEN - ofs, str + ofs);
 		}
 	}
 	ofs += BLI_snprintf(str + ofs, MAX_INFO_LEN - ofs, IFACE_(" or Alt) Expand to fit %s"),
