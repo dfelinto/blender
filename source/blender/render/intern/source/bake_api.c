@@ -65,6 +65,8 @@
  * For a complete implementation example look at the Cycles Bake commit.
  */
 
+#include <limits.h>
+
 #include "MEM_guardedalloc.h"
 
 #include "BLI_math.h"
@@ -366,6 +368,9 @@ static void mesh_calc_tri_tessface(
 	bool calculate_normal;
 	const int tottri = poly_to_tri_count(me->totpoly, me->totloop);
 	MLoopTri *looptri;
+	/* calculate normal for each polygon only once */
+	unsigned int mpoly_prev = UINT_MAX;
+	float no[3];
 
 	mvert = CustomData_get_layer(&me->vdata, CD_MVERT);
 	looptri = MEM_mallocN(sizeof(*looptri) * tottri, __func__);
@@ -391,9 +396,9 @@ static void mesh_calc_tri_tessface(
 		MLoopTri *lt = &looptri[i];
 		MPoly *mp = &me->mpoly[lt->poly];
 
-		triangles[i].mverts[0] = &mvert[lt->tri[0]];
-		triangles[i].mverts[1] = &mvert[lt->tri[1]];
-		triangles[i].mverts[2] = &mvert[lt->tri[2]];
+		triangles[i].mverts[0] = &mvert[me->mloop[lt->tri[0]].v];
+		triangles[i].mverts[1] = &mvert[me->mloop[lt->tri[1]].v];
+		triangles[i].mverts[2] = &mvert[me->mloop[lt->tri[2]].v];
 		triangles[i].is_smooth = (mp->flag & ME_SMOOTH) != 0;
 
 		if (tangent) {
@@ -402,10 +407,12 @@ static void mesh_calc_tri_tessface(
 			triangles[i].tspace[2] = &tspace[lt->tri[2]];
 
 			if (calculate_normal) {
-				normal_tri_v3(triangles[i].normal,
-				              triangles[i].mverts[0]->co,
-				              triangles[i].mverts[1]->co,
-				              triangles[i].mverts[2]->co);
+				if (lt->poly != mpoly_prev) {
+					const MPoly *mp = &me->mpoly[lt->poly];
+					BKE_mesh_calc_poly_normal(mp, &me->mloop[mp->loopstart], me->mvert, no);
+					mpoly_prev = lt->poly;
+				}
+				copy_v3_v3(triangles[i].normal, no);
 			}
 			else {
 				copy_v3_v3(triangles[i].normal, &precomputed_normals[lt->poly]);
@@ -470,6 +477,7 @@ bool RE_bake_pixels_populate_from_objects(
 		mesh_calc_tri_tessface(tris_high[i], highpoly_meshes[i]->me, false, NULL);
 
 		dm_highpoly[i] = CDDM_from_mesh(highpoly_meshes[i]->me);
+		DM_ensure_tessface(dm_highpoly[i]);
 
 		if (dm_highpoly[i]->getNumTessFaces(dm_highpoly[i]) != 0) {
 			/* Create a bvh-tree for each highpoly object */
