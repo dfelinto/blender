@@ -537,8 +537,18 @@ bool	CcdPhysicsEnvironment::RemoveCcdPhysicsController(CcdPhysicsController* ctr
 			con->getRigidBodyA().activate();
 			con->getRigidBodyB().activate();
 			m_dynamicsWorld->removeConstraint(con);
+
+			// The other physics controller in the constraint, can't be NULL.
+			CcdPhysicsController *otherCtrl = (body == &con->getRigidBodyA()) ? 
+			(CcdPhysicsController *)con->getRigidBodyB().getUserPointer() : 
+			(CcdPhysicsController *)con->getRigidBodyA().getUserPointer();
+
+			otherCtrl->removeCcdConstraintRef(con);
 			ctrl->removeCcdConstraintRef(con);
-			//delete con; //might be kept by python KX_ConstraintWrapper
+			/** Since we remove the constraint in the onwer and the target, we can delete it,
+			 * KX_ConstraintWrapper keep the constraint id not the pointer, so no problems.
+			 */
+			delete con;
 		}
 		m_dynamicsWorld->removeRigidBody(ctrl->GetRigidBody());
 
@@ -3122,9 +3132,7 @@ void CcdPhysicsEnvironment::ConvertObject(KX_GameObject *gameobj, RAS_MeshObject
 	{
 		KX_BlenderSceneConverter *converter = (KX_BlenderSceneConverter*)KX_GetActiveEngine()->GetSceneConverter();
 		parent = converter->FindGameObject(blenderparent);
-		isbulletdyna = false;
 		isbulletsoftbody = false;
-		shapeprops->m_mass = 0.f;
 	}
 
 	if (!isbulletdyna)
@@ -3580,6 +3588,9 @@ void CcdPhysicsEnvironment::ConvertObject(KX_GameObject *gameobj, RAS_MeshObject
 			}
 		}
 	}
+
+	if (parent)
+		physicscontroller->SuspendDynamics(false);
 
 	CcdPhysicsController* parentCtrl = parent ? (CcdPhysicsController*)parent->GetPhysicsController() : 0;
 	physicscontroller->SetParentCtrl(parentCtrl);

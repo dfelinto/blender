@@ -1533,7 +1533,7 @@ static const char *gpu_shader_version(bool use_opensubdiv)
 {
 #ifdef WITH_OPENSUBDIV
 	if (use_opensubdiv) {
-		return "#version 150";
+		return "#version 130\n";
 	}
 #else
 	UNUSED_VARS(use_opensubdiv);
@@ -1678,7 +1678,7 @@ void GPU_program_parameter_4f(GPUProgram *program, unsigned int location, float 
 
 GPUShader *GPU_shader_create(const char *vertexcode, const char *fragcode, const char *geocode, const char *libcode, const char *defines, int input, int output, int number)
 {
-#ifdef WITH_OPENSUBDIF
+#ifdef WITH_OPENSUBDIV
 	/* TODO(sergey): used to add #version 150 to the geometry shader.
 	 * Could safely be renamed to "use_geometry_code" since it's evry much
 	 * liely any of geometry code will want to use GLSL 1.5.
@@ -1850,7 +1850,7 @@ GPUShader *GPU_shader_create(const char *vertexcode, const char *fragcode, const
 
 #ifdef WITH_OPENSUBDIV
 	/* TODO(sergey): Find a better place for this. */
-	{
+	if (use_opensubdiv && GLEW_VERSION_4_1) {
 		glProgramUniform1i(shader->object,
 		                   glGetUniformLocation(shader->object, "FVarDataBuffer"),
 		                   31);  /* GL_TEXTURE31 */
@@ -1932,7 +1932,7 @@ int GPU_shader_get_uniform(GPUShader *shader, const char *name)
 
 void GPU_shader_uniform_vector(GPUShader *UNUSED(shader), int location, int length, int arraysize, const float *value)
 {
-	if (location == -1)
+	if (location == -1 || value == NULL)
 		return;
 
 	GPU_ASSERT_NO_GL_ERRORS("Pre Uniform Vector");

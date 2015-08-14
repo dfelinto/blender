@@ -2494,7 +2494,7 @@ static void curve_smooth_value(ListBase *editnurb,
 
 	for (nu = editnurb->first; nu; nu = nu->next) {
 		if (nu->bezt) {
-#define BEZT_VALUE(bezt) (*((float *)((char *)bezt + bezt_offsetof)))
+#define BEZT_VALUE(bezt) (*((float *)((char *)(bezt) + bezt_offsetof)))
 
 			for (last_sel = 0; last_sel < nu->pntsu; last_sel++) {
 				/* loop over selection segments of a curve, smooth each */
@@ -2563,7 +2563,7 @@ static void curve_smooth_value(ListBase *editnurb,
 #undef BEZT_VALUE
 		}
 		else if (nu->bp) {
-#define BP_VALUE(bp) (*((float *)((char *)bp + bp_offset)))
+#define BP_VALUE(bp) (*((float *)((char *)(bp) + bp_offset)))
 
 			/* Same as above, keep these the same! */
 			for (last_sel = 0; last_sel < nu->pntsu; last_sel++) {
@@ -3591,15 +3591,17 @@ static void switchdirection_knots(float *base, int tot)
 		fp1++; 
 		fp2--;
 	}
+
 	/* and make in increasing order again */
-	a = tot;
+	a = tot - 1;
 	fp1 = base;
-	fp2 = tempf = MEM_mallocN(sizeof(float) * a, "switchdirect");
+	fp2 = tempf = MEM_mallocN(sizeof(float) * tot, "switchdirect");
 	while (a--) {
 		fp2[0] = fabsf(fp1[1] - fp1[0]);
 		fp1++;
 		fp2++;
 	}
+	fp2[0] = 0.0f;
 
 	a = tot - 1;
 	fp1 = base;

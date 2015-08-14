@@ -262,12 +262,10 @@
 #define GLfloat_def(num)    float GLfloat_var(num)
 
 /* typedef char *GLstring; */
-#if 0
 #define GLstring_str     "s"
 #define GLstring_var(number) bgl_var##number
 #define GLstring_ref(number) &bgl_var##number
 #define GLstring_def(number) char *GLstring_var(number)
-#endif
 
 /* typedef float GLclampf; */
 #if 0
@@ -435,9 +433,7 @@
 
 
 /* -------------------------------------------------------------------- */
-
-/** \name Forward Declarations
- * \{ */
+/* Forward Declarations */
 
 static PyObject *Buffer_new(PyTypeObject *type, PyObject *args, PyObject *kwds);
 static PyObject *Method_ShaderSource(PyObject *self, PyObject *args);
@@ -451,8 +447,6 @@ static int Buffer_ass_item(Buffer *self, int i, PyObject *v);
 static int Buffer_ass_slice(Buffer *self, int begin, int end, PyObject *seq);
 static PyObject *Buffer_subscript(Buffer *self, PyObject *item);
 static int Buffer_ass_subscript(Buffer *self, PyObject *item, PyObject *value);
-
-/** \} */
 
 
 /* -------------------------------------------------------------------- */
@@ -756,7 +750,7 @@ static PyObject *Buffer_new(PyTypeObject *UNUSED(type), PyObject *args, PyObject
 	return (PyObject *)buffer;
 }
 
-/*@ Buffer sequence methods */
+/* Buffer sequence methods */
 
 static int Buffer_len(Buffer *self)
 {
@@ -1460,7 +1454,7 @@ BGL_Wrap(UnmapBuffer,               GLboolean, (GLenum))
 
 /* GL_VERSION_2_0 */
 BGL_Wrap(AttachShader,              void,      (GLuint, GLuint))
-BGL_Wrap(BindAttribLocation,        void,      (GLuint, GLuint, GLcharP))
+BGL_Wrap(BindAttribLocation,        void,      (GLuint, GLuint, GLstring))
 BGL_Wrap(BlendEquationSeparate,     void,      (GLenum, GLenum))
 BGL_Wrap(CompileShader,             void,      (GLuint))
 BGL_Wrap(CreateProgram,             GLuint,    (void))
@@ -1474,13 +1468,13 @@ BGL_Wrap(EnableVertexAttribArray,   void,      (GLuint))
 BGL_Wrap(GetActiveAttrib,           void,      (GLuint, GLuint, GLsizei, GLsizeiP, GLintP, GLenumP, GLcharP))
 BGL_Wrap(GetActiveUniform,          void,      (GLuint, GLuint, GLsizei, GLsizeiP, GLintP, GLenumP, GLcharP))
 BGL_Wrap(GetAttachedShaders,        void,      (GLuint, GLsizei, GLsizeiP, GLuintP))
-BGL_Wrap(GetAttribLocation,         GLint,     (GLuint, GLcharP))
+BGL_Wrap(GetAttribLocation,         GLint,     (GLuint, GLstring))
 BGL_Wrap(GetProgramInfoLog,         void,      (GLuint, GLsizei, GLsizeiP, GLcharP))
 BGL_Wrap(GetProgramiv,              void,      (GLuint, GLenum, GLintP))
 BGL_Wrap(GetShaderInfoLog,          void,      (GLuint, GLsizei, GLsizeiP, GLcharP))
 BGL_Wrap(GetShaderSource,           void,      (GLuint, GLsizei, GLsizeiP, GLcharP))
 BGL_Wrap(GetShaderiv,               void,      (GLuint, GLenum, GLintP))
-BGL_Wrap(GetUniformLocation,        GLint,     (GLuint, GLcharP))
+BGL_Wrap(GetUniformLocation,        GLint,     (GLuint, GLstring))
 BGL_Wrap(GetUniformfv,              void,      (GLuint, GLint, GLfloatP))
 BGL_Wrap(GetUniformiv,              void,      (GLuint, GLint, GLintP))
 BGL_Wrap(GetVertexAttribPointerv,   void,      (GLuint, GLenum, GLvoidP))
@@ -1577,7 +1571,7 @@ BGL_Wrap(GetActiveUniformBlockiv,   void,      (GLuint, GLuint, GLenum, GLintP))
 BGL_Wrap(GetActiveUniformName,      void,      (GLuint, GLuint, GLsizei, GLsizeiP, GLcharP))
 BGL_Wrap(GetActiveUniformsiv,       void,      (GLuint, GLsizei, GLuintP, GLenum, GLintP))
 BGL_Wrap(GetIntegeri_v,             void,      (GLenum, GLuint, GLintP))
-BGL_Wrap(GetUniformBlockIndex,      GLuint,    (GLuint, GLcharP))
+BGL_Wrap(GetUniformBlockIndex,      GLuint,    (GLuint, GLstring))
 BGL_Wrap(GetUniformIndices,         void,      (GLuint, GLsizei, GLcharP, GLuintP))
 BGL_Wrap(UniformBlockBinding,       void,      (GLuint, GLuint, GLuint))
 

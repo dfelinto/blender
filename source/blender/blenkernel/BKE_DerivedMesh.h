@@ -228,7 +228,7 @@ struct DerivedMesh {
 	int (*getNumPolys)(DerivedMesh *dm);
 
 	/** Copy a single vert/edge/tessellated face from the derived mesh into
-	 * *{vert/edge/face}_r. note that the current implementation
+	 * ``*r_{vert/edge/face}``. note that the current implementation
 	 * of this function can be quite slow, iterating over all
 	 * elements (editmesh)
 	 */
@@ -613,8 +613,10 @@ void DM_ensure_tessface(DerivedMesh *dm);
 
 void DM_ensure_looptri_data(DerivedMesh *dm);
 void DM_ensure_looptri(DerivedMesh *dm);
+void DM_verttri_from_looptri(MVertTri *verttri, const MLoop *mloop, const MLoopTri *looptri, int looptri_num);
 
 void DM_update_tessface_data(DerivedMesh *dm);
+void DM_generate_tangent_tessface_data(DerivedMesh *dm, bool generate);
 
 void DM_update_materials(DerivedMesh *dm, struct Object *ob);
 struct MLoopUV *DM_paint_uvlayer_active_get(DerivedMesh *dm, int mat_nr);

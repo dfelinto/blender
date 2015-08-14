@@ -853,10 +853,7 @@ CCGError ccgSubSurf_syncFace(CCGSubSurf *ss, CCGFaceHDL fHDL, int numVerts, CCGV
 static void ccgSubSurf__sync(CCGSubSurf *ss)
 {
 #ifdef WITH_OPENSUBDIV
-	/* TODO(sergey): This is because OSD evaluator does not support
-	 * bilinear subdivision scheme at this moment.
-	 */
-	if (ss->meshIFC.simpleSubdiv == false || ss->skip_grids == true) {
+	if (ss->skip_grids) {
 		ccgSubSurf__sync_opensubdiv(ss);
 	}
 	else
@@ -1194,39 +1191,15 @@ CCGError ccgSubSurf_stitchFaces(CCGSubSurf *ss, int lvl, CCGFace **effectedF, in
 
 int ccgSubSurf_getNumVerts(const CCGSubSurf *ss)
 {
-#ifdef WITH_OPENSUBDIV
-	if (ss->skip_grids) {
-		return ccgSubSurf__getNumOsdBaseVerts(ss);
-	}
-	else
-#endif
-	{
-		return ss->vMap->numEntries;
-	}
+	return ss->vMap->numEntries;
 }
 int ccgSubSurf_getNumEdges(const CCGSubSurf *ss)
 {
-#ifdef WITH_OPENSUBDIV
-	if (ss->skip_grids) {
-		return ccgSubSurf__getNumOsdBaseEdges(ss);
-	}
-	else
-#endif
-	{
-		return ss->eMap->numEntries;
-	}
+	return ss->eMap->numEntries;
 }
 int ccgSubSurf_getNumFaces(const CCGSubSurf *ss)
 {
-#ifdef WITH_OPENSUBDIV
-	if (ss->skip_grids) {
-		return ccgSubSurf__getNumOsdBaseFaces(ss);
-	}
-	else
-#endif
-	{
-		return ss->fMap->numEntries;
-	}
+	return ss->fMap->numEntries;
 }
 
 CCGVert *ccgSubSurf_getVert(CCGSubSurf *ss, CCGVertHDL v)
@@ -1542,6 +1515,12 @@ int ccgSubSurf_getNumFinalVerts(const CCGSubSurf *ss)
 	                     ss->fMap->numEntries +
 	                     ss->numGrids * ((gridSize - 2) + ((gridSize - 2) * (gridSize - 2))));
 
+#ifdef WITH_OPENSUBDIV
+	if (ss->skip_grids) {
+		return 0;
+	}
+#endif
+
 	return numFinalVerts;
 }
 int ccgSubSurf_getNumFinalEdges(const CCGSubSurf *ss)
@@ -1550,13 +1529,22 @@ int ccgSubSurf_getNumFinalEdges(const CCGSubSurf *ss)
 	int gridSize = ccg_gridsize(ss->subdivLevels);
 	int numFinalEdges = (ss->eMap->numEntries * (edgeSize - 1) +
 	                     ss->numGrids * ((gridSize - 1) + 2 * ((gridSize - 2) * (gridSize - 1))));
-
+#ifdef WITH_OPENSUBDIV
+	if (ss->skip_grids) {
+		return 0;
+	}
+#endif
 	return numFinalEdges;
 }
 int ccgSubSurf_getNumFinalFaces(const CCGSubSurf *ss)
 {
 	int gridSize = ccg_gridsize(ss->subdivLevels);
 	int numFinalFaces = ss->numGrids * ((gridSize - 1) * (gridSize - 1));
+#ifdef WITH_OPENSUBDIV
+	if (ss->skip_grids) {
+		return 0;
+	}
+#endif
 	return numFinalFaces;
 }
 

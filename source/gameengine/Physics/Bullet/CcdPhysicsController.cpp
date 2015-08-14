@@ -820,6 +820,9 @@ void		CcdPhysicsController::PostProcessReplica(class PHY_IMotionState* motionsta
 	m_registerCount = 0;
 	m_collisionShape = NULL;
 
+	// Clear all old constraints.
+	m_ccdConstraintRefs.clear();
+
 	// always create a new shape to avoid scaling bug
 	if (m_shapeInfo)
 	{
@@ -1080,7 +1083,7 @@ void CcdPhysicsController::RefreshCollisions()
 void	CcdPhysicsController::SuspendDynamics(bool ghost)
 {
 	btRigidBody *body = GetRigidBody();
-	if (body && !m_suspended && !GetConstructionInfo().m_bSensor)
+	if (body && !m_suspended && !GetConstructionInfo().m_bSensor && GetPhysicsEnvironment()->IsActiveCcdPhysicsController(this))
 	{
 		btBroadphaseProxy* handle = body->getBroadphaseHandle();
 
@@ -1102,7 +1105,7 @@ void	CcdPhysicsController::SuspendDynamics(bool ghost)
 void	CcdPhysicsController::RestoreDynamics()
 {
 	btRigidBody *body = GetRigidBody();
-	if (body && m_suspended)
+	if (body && m_suspended && GetPhysicsEnvironment()->IsActiveCcdPhysicsController(this))
 	{
 		// before make sure any position change that was done in this logic frame are accounted for
 		SetTransform();

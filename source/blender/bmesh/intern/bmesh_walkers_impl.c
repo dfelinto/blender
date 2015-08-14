@@ -471,7 +471,19 @@ static void bmw_LoopShellWireWalker_begin(BMWalker *walker, void *data)
 		case BM_EDGE:
 		{
 			BMEdge *e = (BMEdge *)h;
-			bmw_LoopShellWalker_visitEdgeWire(walker, e);
+			if (bmw_mask_check_edge(walker, e)) {
+				bmw_LoopShellWireWalker_visitVert(walker, e->v1, NULL);
+				bmw_LoopShellWireWalker_visitVert(walker, e->v2, NULL);
+			}
+			else {
+				BMLoop *l_iter, *l_first;
+
+				l_iter = l_first = e->l;
+				do {
+					bmw_LoopShellWalker_visitLoop(walker, l_iter);
+					bmw_LoopShellWalker_visitLoop(walker, l_iter->next);
+				} while ((l_iter = l_iter->radial_next) != l_first);
+			}
 			break;
 		}
 		case BM_FACE:
@@ -1232,7 +1244,7 @@ static void *bmw_FaceLoopWalker_step(BMWalker *walker)
  *
  * Starts at a tool-flagged edge and walks over the edge ring
  * Conditions for starting and stepping the edge ring have been
- * tuned in an attempt to match the edge rings built by EditMesh
+ * tuned to match behavior users expect (dating back to v2.4x).
  */
 static void bmw_EdgeringWalker_begin(BMWalker *walker, void *data)
 {
@@ -1660,7 +1672,7 @@ static BMWalker bmw_ConnectedVertexWalker_Type = {
 BMWalker *bm_walker_types[] = {
 	&bmw_VertShellWalker_Type,          /* BMW_VERT_SHELL */
 	&bmw_LoopShellWalker_Type,          /* BMW_LOOP_SHELL */
-    &bmw_LoopShellWireWalker_Type,      /* BMW_LOOP_SHELL_WIRE */
+	&bmw_LoopShellWireWalker_Type,      /* BMW_LOOP_SHELL_WIRE */
 	&bmw_FaceShellWalker_Type,          /* BMW_FACE_SHELL */
 	&bmw_EdgeLoopWalker_Type,           /* BMW_EDGELOOP */
 	&bmw_FaceLoopWalker_Type,           /* BMW_FACELOOP */

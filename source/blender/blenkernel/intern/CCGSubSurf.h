@@ -234,6 +234,10 @@ void ccgSubSurf_evaluatorFVarUV(CCGSubSurf *ss,
                                 float grid_u, float grid_v,
                                 float uv[2]);
 
+void ccgSubSurf_free_osd_mesh(CCGSubSurf *ss);
+
+void ccgSubSurf_getMinMax(CCGSubSurf *ss, float r_min[3], float r_max[3]);
+
 #endif
 
 #endif  /* __CCGSUBSURF_H__ */

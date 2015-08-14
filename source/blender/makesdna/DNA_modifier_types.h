@@ -134,6 +134,7 @@ typedef struct SubsurfModifierData {
 	ModifierData modifier;
 
 	short subdivType, levels, renderLevels, flags;
+	short use_opensubdiv, pad[3];
 
 	void *emCache, *mCache;
 } SubsurfModifierData;
@@ -391,6 +392,7 @@ enum {
 	MOD_DISP_DIR_Z       = 2,
 	MOD_DISP_DIR_NOR     = 3,
 	MOD_DISP_DIR_RGB_XYZ = 4,
+	MOD_DISP_DIR_CLNOR   = 5,
 };
 
 /* DisplaceModifierData->texmapping */
@@ -612,10 +614,10 @@ typedef struct CollisionModifierData {
 	struct MVert *current_x;    /* position at the actual inter-frame step */
 	struct MVert *current_v;    /* (xnew - x) at the actual inter-frame step */
 
-	struct MFace *mfaces;       /* object face data */
+	struct MVertTri *tri;
 
-	unsigned int numverts;
-	unsigned int numfaces;
+	unsigned int mvert_num;
+	unsigned int tri_num;
 	float time_x, time_xnew;    /* cfra time of modifier */
 	struct BVHTree *bvhtree;    /* bounding volume hierarchy for this cloth object */
 } CollisionModifierData;
