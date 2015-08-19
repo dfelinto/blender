@@ -109,7 +109,7 @@
 #include "BLI_threads.h"
 #include "BLI_mempool.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_action.h"
 #include "BKE_armature.h"
@@ -313,6 +313,56 @@ void blo_do_versions_oldnewmap_insert(OldNewMap *onm, void *oldaddr, void *newad
 	oldnewmap_insert(onm, oldaddr, newaddr, nr);
 }
 
+/**
+ * Do a full search (no state).
+ *
+ * \param lasthit: Use as a reference position to avoid a full search
+ * from either end of the array, giving more efficient lookups.
+ *
+ * \note This would seem an ideal case for hash or btree lookups.
+ * However the data is written in-order, using the \a lasthit will normally avoid calling this function.
+ * Creating a btree/hash structure adds overhead for the common-case to optimize the corner-case
+ * (since most entries will never be retrieved).
+ * So just keep full lookups as a fall-back.
+ */
+static int oldnewmap_lookup_entry_full(const OldNewMap *onm, const void *addr, int lasthit)
+{
+	const int nentries = onm->nentries;
+	const OldNew *entries = onm->entries;
+	int i;
+
+	/* search relative to lasthit where possible */
+	if (lasthit >= 0 && lasthit < nentries) {
+
+		/* search forwards */
+		i = lasthit;
+		while (++i != nentries) {
+			if (entries[i].old == addr) {
+				return i;
+			}
+		}
+
+		/* search backwards */
+		i = lasthit + 1;
+		while (i--) {
+			if (entries[i].old == addr) {
+				return i;
+			}
+		}
+	}
+	else {
+		/* search backwards (full) */
+		i = nentries;
+		while (i--) {
+			if (entries[i].old == addr) {
+				return i;
+			}
+		}
+	}
+
+	return -1;
+}
+
 static void *oldnewmap_lookup_and_inc(OldNewMap *onm, void *addr, bool increase_users) 
 {
 	int i;
@@ -329,16 +379,14 @@ static void *oldnewmap_lookup_and_inc(OldNewMap *onm, void *addr, bool increase_
 		}
 	}
 	
-	for (i = 0; i < onm->nentries; i++) {
+	i = oldnewmap_lookup_entry_full(onm, addr, onm->lasthit);
+	if (i != -1) {
 		OldNew *entry = &onm->entries[i];
-		
-		if (entry->old == addr) {
-			onm->lasthit = i;
-			
-			if (increase_users)
-				entry->nr++;
-			return entry->newp;
-		}
+		BLI_assert(entry->old == addr);
+		onm->lasthit = i;
+		if (increase_users)
+			entry->nr++;
+		return entry->newp;
 	}
 	
 	return NULL;
@@ -368,16 +416,13 @@ static void *oldnewmap_liblookup(OldNewMap *onm, void *addr, void *lib)
 	}
 	else {
 		/* note, this can be a bottle neck when loading some files */
-		unsigned int nentries = (unsigned int)onm->nentries;
-		unsigned int i;
-		OldNew *entry;
-
-		for (i = 0, entry = onm->entries; i < nentries; i++, entry++) {
-			if (entry->old == addr) {
-				ID *id = entry->newp;
-				if (id && (!lib || id->lib)) {
-					return id;
-				}
+		const int i = oldnewmap_lookup_entry_full(onm, addr, -1);
+		if (i != -1) {
+			OldNew *entry = &onm->entries[i];
+			ID *id = entry->newp;
+			BLI_assert(entry->old == addr);
+			if (id && (!lib || id->lib)) {
+				return id;
 			}
 		}
 	}
@@ -1189,47 +1234,60 @@ bool BLO_has_bfile_extension(const char *str)
 	return BLI_testextensie_array(str, ext_test);
 }
 
-bool BLO_is_a_library(const char *path, char *dir, char *group)
+bool BLO_library_path_explode(const char *path, char *r_dir, char **r_group, char **r_name)
 {
-	/* return ok when a blenderfile, in dir is the filename,
-	 * in group the type of libdata
-	 */
-	int len;
-	char *fd;
-	
-	/* if path leads to a directory we can be sure we're not in a library */
-	if (BLI_is_dir(path)) return 0;
+	/* We might get some data names with slashes, so we have to go up in path until we find blend file itself,
+	 * then we now next path item is group, and everything else is data name. */
+	char *slash = NULL, *prev_slash = NULL, c = '\0';
 
-	strcpy(dir, path);
-	len = strlen(dir);
-	if (len < 7) return 0;
-	if ((dir[len - 1] != '/') && (dir[len - 1] != '\\')) return 0;
-	
-	group[0] = '\0';
-	dir[len - 1] = '\0';
-
-	/* Find the last slash */
-	fd = (char *)BLI_last_slash(dir);
-
-	if (fd == NULL) return 0;
-	*fd = 0;
-	if (BLO_has_bfile_extension(fd+1)) {
-		/* the last part of the dir is a .blend file, no group follows */
-		*fd = '/'; /* put back the removed slash separating the dir and the .blend file name */
+	r_dir[0] = '\0';
+	if (r_group) {
+		*r_group = NULL;
 	}
-	else {
-		const char * const gp = fd + 1; // in case we have a .blend file, gp points to the group
-		
-		/* Find the last slash */
-		fd = (char *)BLI_last_slash(dir);
-		if (!fd || !BLO_has_bfile_extension(fd+1)) return 0;
-		
-		/* now we know that we are in a blend file and it is safe to 
-		 * assume that gp actually points to a group */
-		if (!STREQ("Screen", gp))
-			BLI_strncpy(group, gp, BLO_GROUP_MAX);
+	if (r_name) {
+		*r_name = NULL;
 	}
-	return 1;
+
+	/* if path leads to an existing directory, we can be sure we're not (in) a library */
+	if (BLI_is_dir(path)) {
+		return false;
+	}
+
+	strcpy(r_dir, path);
+
+	while ((slash = (char *)BLI_last_slash(r_dir))) {
+		char tc = *slash;
+		*slash = '\0';
+		if (BLO_has_bfile_extension(r_dir)) {
+			break;
+		}
+
+		if (prev_slash) {
+			*prev_slash = c;
+		}
+		prev_slash = slash;
+		c = tc;
+	}
+
+	if (!slash) {
+		return false;
+	}
+
+	if (slash[1] != '\0') {
+		BLI_assert(strlen(slash + 1) < BLO_GROUP_MAX);
+		if (r_group) {
+			*r_group = slash + 1;
+		}
+	}
+
+	if (prev_slash && (prev_slash[1] != '\0')) {
+		BLI_assert(strlen(prev_slash + 1) < MAX_ID_NAME - 2);
+		if (r_name) {
+			*r_name = prev_slash + 1;
+		}
+	}
+
+	return true;
 }
 
 /* ************** OLD POINTERS ******************* */

@@ -49,7 +49,7 @@
 #include "WM_api.h"
 #include "WM_types.h"
 
-#include "BLF_translation.h"
+#include "BLT_lang.h"
 #include "GPU_buffers.h"
 
 #ifdef WITH_CYCLES
@@ -157,7 +157,7 @@ static void rna_userdef_virtual_pixel_update(Main *UNUSED(bmain), Scene *UNUSED(
 static void rna_userdef_language_update(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *UNUSED(ptr))
 {
 	BLF_cache_clear();
-	BLF_lang_set(NULL);
+	BLT_lang_set(NULL);
 	UI_reinit_font();
 }
 
@@ -659,7 +659,7 @@ static EnumPropertyItem *rna_userdef_audio_device_itemf(bContext *UNUSED(C), Poi
 static EnumPropertyItem *rna_lang_enum_properties_itemf(bContext *UNUSED(C), PointerRNA *UNUSED(ptr),
                                                         PropertyRNA *UNUSED(prop), bool *UNUSED(r_free))
 {
-	return BLF_RNA_lang_enum_properties();
+	return BLT_lang_RNA_enum_properties();
 }
 #endif
 
@@ -3551,7 +3551,7 @@ static void rna_def_userdef_view(BlenderRNA *brna)
 
 	prop = RNA_def_property(srna, "smooth_view", PROP_INT, PROP_NONE);
 	RNA_def_property_int_sdna(prop, NULL, "smooth_viewtx");
-	RNA_def_property_range(prop, 0, 1000);
+	RNA_def_property_range(prop, 0, 10000);
 	RNA_def_property_ui_text(prop, "Smooth View", "Time to animate the view in milliseconds, zero to disable");
 
 	prop = RNA_def_property(srna, "rotation_angle", PROP_FLOAT, PROP_NONE);

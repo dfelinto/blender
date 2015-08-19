@@ -41,7 +41,7 @@
 #include "BLI_utildefines.h"
 #include "BLI_ghash.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "DNA_customdata_types.h"
 #include "DNA_mesh_types.h"
@@ -4897,7 +4897,7 @@ static int sculpt_dynamic_topology_toggle_invoke(bContext *C, wmOperator *op, co
 			if (!ELEM(i, CD_MVERT, CD_MEDGE, CD_MFACE, CD_MLOOP, CD_MPOLY, CD_PAINT_MASK, CD_ORIGINDEX) &&
 			    (CustomData_has_layer(&me->vdata, i) ||
 			     CustomData_has_layer(&me->edata, i) ||
-			     CustomData_has_layer(&me->fdata, i)))
+			     CustomData_has_layer(&me->ldata, i)))
 			{
 				vdata = true;
 				break;

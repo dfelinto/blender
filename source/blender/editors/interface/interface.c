@@ -59,7 +59,7 @@
 #include "BIF_gl.h"
 
 #include "BLF_api.h"
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "UI_interface.h"
 
@@ -215,6 +215,23 @@ void ui_region_to_window(const ARegion *ar, int *x, int *y)
 	*x += ar->winrct.xmin;
 	*y += ar->winrct.ymin;
 }
+
+/**
+ * Popups will add a margin to #ARegion.winrct for shadow,
+ * for interactivity (point-inside tests for eg), we want the winrct without the margin added.
+ */
+void ui_region_winrct_get_no_margin(const struct ARegion *ar, struct rcti *r_rect)
+{
+	uiBlock *block = ar->uiblocks.first;
+	if (block && block->flag & UI_BLOCK_LOOP) {
+		BLI_rcti_rctf_copy_floor(r_rect, &block->rect);
+		BLI_rcti_translate(r_rect, ar->winrct.xmin, ar->winrct.ymin);
+	}
+	else {
+		*r_rect = ar->winrct;
+	}
+}
+
 /* ******************* block calc ************************* */
 
 void ui_block_translate(uiBlock *block, int x, int y)
@@ -1313,16 +1330,8 @@ static void ui_but_to_pixelrect(rcti *rect, const ARegion *ar, uiBlock *block, u
 	rctf rectf;
 
 	ui_block_to_window_rctf(ar, block, &rectf, (but) ? &but->rect : &block->rect);
-
-	rectf.xmin -= ar->winrct.xmin;
-	rectf.ymin -= ar->winrct.ymin;
-	rectf.xmax -= ar->winrct.xmin;
-	rectf.ymax -= ar->winrct.ymin;
-
-	rect->xmin = floorf(rectf.xmin);
-	rect->ymin = floorf(rectf.ymin);
-	rect->xmax = floorf(rectf.xmax);
-	rect->ymax = floorf(rectf.ymax);
+	BLI_rcti_rctf_copy_floor(rect, &rectf);
+	BLI_rcti_translate(rect, -ar->winrct.xmin, -ar->winrct.ymin);
 }
 
 /* uses local copy of style, to scale things down, and allow widgets to change stuff */
@@ -4568,7 +4577,7 @@ void UI_but_string_info_get(bContext *C, uiBut *but, ...)
 			}
 		}
 		else if (type == BUT_GET_RNA_LABEL_CONTEXT) {
-			const char *_tmp = BLF_I18NCONTEXT_DEFAULT;
+			const char *_tmp = BLT_I18NCONTEXT_DEFAULT;
 			if (but->rnaprop)
 				_tmp = RNA_property_translation_context(but->rnaprop);
 			else if (but->optype)
@@ -4578,8 +4587,8 @@ void UI_but_string_info_get(bContext *C, uiBut *but, ...)
 				if (mt)
 					_tmp = RNA_struct_translation_context(mt->ext.srna);
 			}
-			if (BLF_is_default_context(_tmp)) {
-				_tmp = BLF_I18NCONTEXT_DEFAULT_BPYRNA;
+			if (BLT_is_default_context(_tmp)) {
+				_tmp = BLT_I18NCONTEXT_DEFAULT_BPYRNA;
 			}
 			tmp = BLI_strdup(_tmp);
 		}

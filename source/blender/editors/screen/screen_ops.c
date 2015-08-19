@@ -37,7 +37,7 @@
 #include "BLI_dlrbTree.h"
 #include "BLI_utildefines.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "DNA_armature_types.h"
 #include "DNA_lattice_types.h"
@@ -3986,7 +3986,9 @@ static int scene_delete_exec(bContext *C, wmOperator *UNUSED(op))
 {
 	Scene *scene = CTX_data_scene(C);
 
-	ED_screen_delete_scene(C, scene);
+	if (ED_screen_delete_scene(C, scene) == false) {
+		return OPERATOR_CANCELLED;
+	}
 
 	if (G.debug & G_DEBUG)
 		printf("scene delete %p\n", scene);

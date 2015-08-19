@@ -67,7 +67,7 @@
 #include "BLI_linklist.h"
 #include "BLI_kdtree.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_pbvh.h"
 #include "BKE_main.h"
@@ -2082,24 +2082,29 @@ void BKE_object_matrix_local_get(struct Object *ob, float mat[4][4])
 /* extern */
 int enable_cu_speed = 1;
 
-static void ob_parcurve(Scene *scene, Object *ob, Object *par, float mat[4][4])
+/**
+ * \param scene: Used when curve cache needs to be calculated, or for dupli-frame time.
+ * \return success if \a mat is set.
+ */
+static bool ob_parcurve(Scene *scene, Object *ob, Object *par, float mat[4][4])
 {
-	Curve *cu;
+	Curve *cu = par->data;
 	float vec[4], dir[3], quat[4], radius, ctime;
-	
-	unit_m4(mat);
-	
-	cu = par->data;
-	if (par->curve_cache == NULL) /* only happens on reload file, but violates depsgraph still... fix! */
+
+	/* only happens on reload file, but violates depsgraph still... fix! */
+	if (par->curve_cache == NULL) {
+		if (scene == NULL) {
+			return false;
+		}
 		BKE_displist_make_curveTypes(scene, par, 0);
-	if (par->curve_cache->path == NULL) return;
-	
-	/* catch exceptions: feature for nla stride editing */
-	if (ob->ipoflag & OB_DISABLE_PATH) {
-		ctime = 0.0f;
 	}
+
+	if (par->curve_cache->path == NULL) {
+		return false;
+	}
+
 	/* catch exceptions: curve paths used as a duplicator */
-	else if (enable_cu_speed) {
+	if (enable_cu_speed) {
 		/* ctime is now a proper var setting of Curve which gets set by Animato like any other var that's animated,
 		 * but this will only work if it actually is animated... 
 		 *
@@ -2116,6 +2121,11 @@ static void ob_parcurve(Scene *scene, Object *ob, Object *par, float mat[4][4])
 		CLAMP(ctime, 0.0f, 1.0f);
 	}
 	else {
+		/* For dupli-frames only */
+		if (scene == NULL) {
+			return false;
+		}
+
 		ctime = BKE_scene_frame_get(scene);
 		if (cu->pathlen) {
 			ctime /= cu->pathlen;
@@ -2124,6 +2134,8 @@ static void ob_parcurve(Scene *scene, Object *ob, Object *par, float mat[4][4])
 		CLAMP(ctime, 0.0f, 1.0f);
 	}
 	
+	unit_m4(mat);
+
 	/* vec: 4 items! */
 	if (where_on_path(par, ctime, vec, dir, (cu->flag & CU_FOLLOW) ? quat : NULL, &radius, NULL)) {
 
@@ -2157,6 +2169,8 @@ static void ob_parcurve(Scene *scene, Object *ob, Object *par, float mat[4][4])
 		copy_v3_v3(mat[3], vec);
 		
 	}
+
+	return true;
 }
 
 static void ob_parbone(Object *ob, Object *par, float mat[4][4])
@@ -2373,8 +2387,9 @@ void BKE_object_get_parent_matrix(Scene *scene, Object *ob, Object *par, float p
 		case PAROBJECT:
 			ok = 0;
 			if (par->type == OB_CURVE) {
-				if (scene && ((Curve *)par->data)->flag & CU_PATH) {
-					ob_parcurve(scene, ob, par, tmat);
+				if ((((Curve *)par->data)->flag & CU_PATH) &&
+				    (ob_parcurve(scene, ob, par, tmat)))
+				{
 					ok = 1;
 				}
 			}
