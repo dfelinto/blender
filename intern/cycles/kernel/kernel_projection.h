@@ -235,10 +235,10 @@ ccl_device float3 panorama_stereo_position(KernelGlobals *kg, float3 dir, float3
 
 	switch(kernel_data.cam.stereo_eye) {
 		case STEREO_LEFT:
-			return pos + (side * kernel_data.cam.interocular_distance * 0.5f);
+			return pos - (side * kernel_data.cam.interocular_distance * 0.5f);
 			break;
 		case STEREO_RIGHT:
-			return pos - (side * kernel_data.cam.interocular_distance * 0.5f);
+			return pos + (side * kernel_data.cam.interocular_distance * 0.5f);
 			break;
 	}
 	return pos;
