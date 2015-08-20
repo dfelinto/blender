@@ -776,6 +776,7 @@ ccl_device_inline float4 kernel_path_integrate(KernelGlobals *kg,
 			path_radiance_accum_background(&L, throughput, L_background, state.bounce);
 #endif
 
+			kernel_write_data_passes(kg, buffer, &L, NULL, sample, &state, throughput);
 			break;
 		}
 
@@ -900,7 +901,7 @@ ccl_device_inline float4 kernel_path_integrate(KernelGlobals *kg,
 
 	float3 L_sum = path_radiance_clamp_and_sum(kg, &L);
 
-	kernel_write_light_passes(kg, buffer, &L, sample);
+	kernel_write_light_passes(kg, buffer, &L, sample, L_sum);
 
 #ifdef __KERNEL_DEBUG__
 	kernel_write_debug_passes(kg, buffer, &state, &debug_data, sample);

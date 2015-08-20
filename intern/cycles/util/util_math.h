@@ -169,6 +169,11 @@ ccl_device_inline float clamp(float a, float mn, float mx)
 	return min(max(a, mn), mx);
 }
 
+ccl_device_inline double clamp(double a, double mn, double mx)
+{
+	return min(max(a, mn), mx);
+}
+
 #endif
 
 #ifndef __KERNEL_CUDA__
@@ -179,6 +184,11 @@ ccl_device_inline float saturate(float a)
 }
 
 #endif
+
+ccl_device_inline float3 saturate(float3 a)
+{
+	return make_float3(saturate(a.x), saturate(a.y), saturate(a.z));
+}
 
 ccl_device_inline int float_to_int(float f)
 {
@@ -458,6 +468,11 @@ ccl_device_inline float3 operator-(const float3 a, const float3 b)
 ccl_device_inline float3 operator+=(float3& a, const float3 b)
 {
 	return a = a + b;
+}
+
+ccl_device_inline float3 operator-=(float3& a, const float3 b)
+{
+	return a = a - b;
 }
 
 ccl_device_inline float3 operator*=(float3& a, const float3 b)
@@ -1540,6 +1555,106 @@ ccl_device_inline int util_max_axis(float3 vec)
 			return 2;
 	}
 }
+
+/* Performs Singular Value Decomposition on A, fills V and S2 (containing the squares of the singular values) and returns the estimated rank */
+ccl_device int svd(float *A, float *V, float *S2, int n)
+{
+	int  i, j, k, EstColRank = n, RotCount = n, SweepCount = 0;
+	int slimit = 6;
+	float eps = 1e-7;
+	float e2 = 10.f * n * eps * eps;
+	float tol = 0.1f * eps;
+	float vt, p, x0, y0, q, r, c0, s0, d1, d2;
+
+	for(int r = 0; r < n; r++)
+		for(int c = 0; c < n; c++)
+			V[r*n+c] = (c == r)? 1.0f: 0.0f;
+
+	while (RotCount != 0 && SweepCount++ <= slimit) {
+		RotCount = EstColRank * (EstColRank - 1) / 2;
+
+		for (j = 0; j < EstColRank-1; ++j) {
+			for (k = j+1; k < EstColRank; ++k) {
+				p = q = r = 0.0;
+
+				for (i = 0; i < n; ++i) {
+					x0 = A[i * n + j];
+					y0 = A[i * n + k];
+					p += x0 * y0;
+					q += x0 * x0;
+					r += y0 * y0;
+				}
+
+				S2[j] = q;
+				S2[k] = r;
+
+				if (q >= r) {
+					if (q <= e2 * S2[0] || fabsf(p) <= tol * q)
+						RotCount--;
+					else {
+						p /= q;
+						r = 1.f - r/q;
+						vt = sqrtf(4.0f * p * p + r * r);
+						c0 = sqrtf(0.5f * (1.f + r / vt));
+						s0 = p / (vt*c0);
+
+						// Rotation
+						for (i = 0; i < n; ++i) {
+							d1 = A[i * n + j];
+							d2 = A[i * n + k];
+							A[i * n + j] = d1*c0+d2*s0;
+							A[i * n + k] = -d1*s0+d2*c0;
+						}
+						for (i = 0; i < n; ++i) {
+							d1 = V[i * n + j];
+							d2 = V[i * n + k];
+							V[i * n + j] = d1 * c0 + d2 * s0;
+							V[i * n + k] = -d1 * s0 + d2 * c0;
+						}
+					}
+				} else {
+					p /= r;
+					q = q / r - 1.f;
+					vt = sqrtf(4.f * p * p + q * q);
+					s0 = sqrtf(0.5f * (1.f - q / vt));
+					if (p < 0.f)
+						s0 = -s0;
+					c0 = p / (vt * s0);
+
+					// Rotation
+					for (i = 0; i < n; ++i) {
+						d1 = A[i * n + j];
+						d2 = A[i * n + k];
+						A[i * n + j] = d1 * c0 + d2 * s0;
+						A[i * n + k] = -d1 * s0 + d2 * c0;
+					}
+					for (i = 0; i < n; ++i) {
+						d1 = V[i * n + j];
+						d2 = V[i * n + k];
+						V[i * n + j] = d1 * c0 + d2 * s0;
+						V[i * n + k] = -d1 * s0 + d2 * c0;
+					}
+				}
+			}
+		}
+		while (EstColRank >= 3 && S2[EstColRank-1] <= S2[0] * tol + tol * tol)
+			EstColRank--;
+	}
+	return EstColRank;
+}
+
+ccl_device void cholesky(float *A, int n, float *L)
+{
+	for (int i = 0; i < n; ++i) {
+		for (int j = 0; j <= i; ++j) {
+			float s = 0.0f;
+			for (int k = 0; k < j; ++k)
+				s += L[i * n + k] * L[j * n + k];
+			L[i * n + j] = (i == j) ? sqrtf(A[i * n + i] - s) : (1.0f / L[j * n + j] * (A[j * n + i] - s));
+		}
+	}
+}
+
 
 CCL_NAMESPACE_END
 

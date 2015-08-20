@@ -525,6 +525,17 @@ SessionParams BlenderSync::get_session_params(BL::RenderEngine& b_engine,
 	/* Background */
 	params.background = background;
 
+	params.filter_params = (background && get_boolean(cscene, "use_filtering"))? 1: 0;
+	params.filter_params |= (params.filter_params && get_boolean(cscene, "filter_diffuse_direct"))? 2: 0;
+	params.filter_params |= (params.filter_params && get_boolean(cscene, "filter_diffuse_indirect"))? 4: 0;
+	params.filter_params |= (params.filter_params && get_boolean(cscene, "filter_glossy_direct"))? 8: 0;
+	params.filter_params |= (params.filter_params && get_boolean(cscene, "filter_glossy_indirect"))? 16: 0;
+	params.filter_params |= (params.filter_params && get_boolean(cscene, "filter_transmission_direct"))? 32: 0;
+	params.filter_params |= (params.filter_params && get_boolean(cscene, "filter_transmission_indirect"))? 64: 0;
+	params.filter_half_window = get_int(cscene, "filter_half_window");
+	params.filter_bandwidth_factor = powf(2.0f, get_float(cscene, "filter_bandwidth_factor"));
+	params.prepass_samples = params.progressive? 0: get_int(cscene, "prepass_samples");
+
 	/* samples */
 	int samples = get_int(cscene, "samples");
 	int aa_samples = get_int(cscene, "aa_samples");

@@ -556,7 +556,7 @@ ccl_device float4 kernel_branched_path_integrate(KernelGlobals *kg, RNG *rng, in
 
 	float3 L_sum = path_radiance_clamp_and_sum(kg, &L);
 
-	kernel_write_light_passes(kg, buffer, &L, sample);
+	kernel_write_light_passes(kg, buffer, &L, sample, L_sum);
 
 #ifdef __KERNEL_DEBUG__
 	kernel_write_debug_passes(kg, buffer, &state, &debug_data, sample);
@@ -599,4 +599,3 @@ ccl_device void kernel_branched_path_trace(KernelGlobals *kg,
 #endif  /* __BRANCHED_PATH__ */
 
 CCL_NAMESPACE_END
-

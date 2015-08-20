@@ -72,7 +72,8 @@ public:
 	int num_samples;
 
 	TileManager(bool progressive, int num_samples, int2 tile_size, int start_resolution,
-	            bool preserve_tile_device, bool background, TileOrder tile_order, int num_devices = 1);
+	            bool preserve_tile_device, bool background, TileOrder tile_order,
+	            int prepass_samples = 0, int num_devices = 1);
 	~TileManager();
 
 	void reset(BufferParams& params, int num_samples);
@@ -87,6 +88,7 @@ protected:
 	void set_tiles();
 
 	bool progressive;
+	int prepass_samples;
 	int2 tile_size;
 	TileOrder tile_order;
 	int start_resolution;
