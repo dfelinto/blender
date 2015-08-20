@@ -39,6 +39,7 @@ set(SRC_HEADERS
 	kernel_differential.h
 	kernel_emission.h
 	kernel_film.h
+	kernel_filter.h
 	kernel_globals.h
 	kernel_jitter.h
 	kernel_light.h

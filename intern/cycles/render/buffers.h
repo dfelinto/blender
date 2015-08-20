@@ -24,6 +24,7 @@
 #include "kernel_types.h"
 
 #include "util_half.h"
+#include "util_progress.h"
 #include "util_string.h"
 #include "util_thread.h"
 #include "util_types.h"
@@ -31,6 +32,8 @@
 CCL_NAMESPACE_BEGIN
 
 class Device;
+class RenderTile;
+class SampleMap;
 struct DeviceDrawParams;
 struct float4;
 
@@ -51,6 +54,7 @@ public:
 
 	/* passes */
 	vector<Pass> passes;
+	int lwr_passes;
 
 	/* functions */
 	BufferParams();
@@ -58,7 +62,7 @@ public:
 	void get_offset_stride(int& offset, int& stride);
 	bool modified(const BufferParams& params);
 	void add_pass(PassType type);
-	int get_passes_size();
+	int get_passes_size(bool get_lwr = false);
 };
 
 /* Render Buffers */
@@ -79,10 +83,17 @@ public:
 	void reset(Device *device, BufferParams& params);
 
 	bool copy_from_device();
-	bool get_pass_rect(PassType type, float exposure, int sample, int components, float *pixels);
+	bool copy_to_device();
+	bool get_pass_rect(PassType type, float exposure, int sample, int components, float *pixels, int x, int y, int w, int h);
+	bool filter_lwr(int sample, int half_window, float bandwidth_factor,
+	                Progress *progress,
+	                function<void(RenderTile&)> write_render_tile_cb);
 
 protected:
 	void device_free();
+	void filter_buffer(int sample, int half_window, float bandwidth_factor, int mode,
+	                Progress *progress,
+	                function<void(RenderTile&)> write_render_tile_cb);
 
 	Device *device;
 };
@@ -138,6 +149,7 @@ public:
 	int resolution;
 	int offset;
 	int stride;
+	int index;
 
 	device_ptr buffer;
 	device_ptr rng_state;

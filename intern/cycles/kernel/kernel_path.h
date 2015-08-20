@@ -806,7 +806,7 @@ ccl_device_inline float4 kernel_path_integrate(KernelGlobals *kg,
 #endif
 
 		/* holdout mask objects do not write data passes */
-		kernel_write_data_passes(kg, buffer, &L, &sd, sample, &state, throughput);
+		kernel_write_data_passes(kg, buffer, &L, &sd, sample, &state, throughput, false);
 
 		/* blurring of bsdf after bounces, for rays that have a small likelihood
 		 * of following this particular path (diffuse, rough glossy) */
@@ -900,7 +900,9 @@ ccl_device_inline float4 kernel_path_integrate(KernelGlobals *kg,
 
 	float3 L_sum = path_radiance_clamp_and_sum(kg, &L);
 
-	kernel_write_light_passes(kg, buffer, &L, sample);
+	/* Ensure that the LWR data is written no matter how the path was terminated */
+	kernel_write_data_passes(kg, buffer, &L, NULL, sample, &state, throughput, true);
+	kernel_write_light_passes(kg, buffer, &L, sample, L_sum);
 
 #ifdef __KERNEL_DEBUG__
 	kernel_write_debug_passes(kg, buffer, &state, &debug_data, sample);

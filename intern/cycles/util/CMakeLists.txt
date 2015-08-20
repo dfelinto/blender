@@ -2,6 +2,9 @@
 set(INC
 	.
 	../../glew-mx
+	../device
+	../kernel
+	../render
 )
 
 set(INC_SYS
