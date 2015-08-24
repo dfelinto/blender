@@ -123,7 +123,7 @@ typedef enum eWalkGravityState {
 } eWalkGravityState;
 
 typedef enum eWalkMouseMode {
-	WALK_MOUSE_LOOKAROUND     = 0,
+	WALK_MOUSE_LOOKAROUND = 0,
 	WALK_MOUSE_MOVEHORIZONTAL,
 	WALK_MOUSE_MOVEVERTICAL,
 	WALK_MOUSE_NULL,
@@ -1212,11 +1212,11 @@ static int walkApply(bContext *C, wmOperator *op, WalkInfo *walk)
 				case WALK_MOUSE_LOOKAROUND:
 				default:
 				{
-					if (moffset[0])
-						walk_mouse_rotate_horizontal(ar, rv3d, walk->mouse_speed, moffset, mat, upvec);
-
 					if (moffset[1])
 						walk_mouse_rotate_vertical(ar, rv3d, walk->mouse_speed, moffset, mat, upvec);
+
+					if (moffset[0])
+						walk_mouse_rotate_horizontal(ar, rv3d, walk->mouse_speed, moffset, mat, upvec);
 
 					break;
 				}
