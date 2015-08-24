@@ -1082,9 +1082,9 @@ static void walk_updown(const float speed, float r_dvec[3])
 	add_v3_v3(r_dvec, dvec_tmp);
 }
 
-static void walk_mouse_move(WalkInfo *walk, float mat[3][3], const eWalkDirectionFlag direction, float r_dvec[3])
+static void walk_mouse_move(WalkInfo *walk, float mat[3][3], const eWalkDirectionFlag direction, const float time_redraw, float r_dvec[3])
 {
-	const float speed = 0.1f;
+	const float speed = walk->speed * time_redraw;
 	switch (direction) {
 		case WALK_BIT_UP:
 			walk_updown(-speed, r_dvec);
@@ -1189,23 +1189,23 @@ static int walkApply(bContext *C, wmOperator *op, WalkInfo *walk)
 						walk_mouse_rotate_horizontal(ar, rv3d, walk->mouse_speed, moffset, mat, upvec);
 
 					if (moffset[1] > 0)
-						walk_mouse_move(walk, mat, WALK_BIT_FORWARD, dvec);
+						walk_mouse_move(walk, mat, WALK_BIT_FORWARD, time_redraw, dvec);
 					else if (moffset[1] < 0)
-						walk_mouse_move(walk, mat, WALK_BIT_BACKWARD, dvec);
+						walk_mouse_move(walk, mat, WALK_BIT_BACKWARD, time_redraw, dvec);
 
 					break;
 				}
 				case WALK_MOUSE_MOVEVERTICAL:
 				{
 					if (moffset[0] > 0)
-						walk_mouse_move(walk, mat, WALK_BIT_RIGHT, dvec);
+						walk_mouse_move(walk, mat, WALK_BIT_RIGHT, time_redraw, dvec);
 					else if (moffset[0] < 0)
-						walk_mouse_move(walk, mat, WALK_BIT_LEFT, dvec);
+						walk_mouse_move(walk, mat, WALK_BIT_LEFT, time_redraw, dvec);
 
 					if (moffset[1] > 0)
-						walk_mouse_move(walk, mat, WALK_BIT_UP, dvec);
+						walk_mouse_move(walk, mat, WALK_BIT_UP, time_redraw, dvec);
 					else if (moffset[1] < 0)
-						walk_mouse_move(walk, mat, WALK_BIT_DOWN, dvec);
+						walk_mouse_move(walk, mat, WALK_BIT_DOWN, time_redraw, dvec);
 
 					break;
 				}
