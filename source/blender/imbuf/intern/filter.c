@@ -472,7 +472,7 @@ void IMB_remakemipmap(ImBuf *ibuf, int use_filter)
 	
 	ibuf->miptot = 1;
 	
-	while (curmap < IB_MIPMAP_LEVELS) {
+	while (curmap < IMB_MIPMAP_LEVELS) {
 		
 		if (ibuf->mipmap[curmap]) {
 			
@@ -512,7 +512,7 @@ void IMB_makemipmap(ImBuf *ibuf, int use_filter)
 	
 	ibuf->miptot = 1;
 
-	while (curmap < IB_MIPMAP_LEVELS) {
+	while (curmap < IMB_MIPMAP_LEVELS) {
 		if (use_filter) {
 			ImBuf *nbuf = IMB_allocImBuf(hbuf->x, hbuf->y, 32, IB_rect);
 			IMB_filterN(nbuf, hbuf);
@@ -526,7 +526,7 @@ void IMB_makemipmap(ImBuf *ibuf, int use_filter)
 		hbuf = ibuf->mipmap[curmap];
 		hbuf->miplevel = curmap + 1;
 
-		if (hbuf->x <= 2 && hbuf->y <= 2)
+		if (hbuf->x < 2 && hbuf->y < 2)
 			break;
 
 		curmap++;

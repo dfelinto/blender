@@ -22,6 +22,8 @@ subject to the following restrictions:
 #define __CCDPHYSICSENVIRONMENT_H__
 
 #include "PHY_IPhysicsEnvironment.h"
+#include "KX_KetsjiEngine.h"
+
 #include <vector>
 #include <set>
 #include <map>
@@ -50,8 +52,10 @@ class btBroadphaseInterface;
 struct btDbvtBroadphase;
 class btOverlappingPairCache;
 class btIDebugDraw;
+class btDynamicsWorld;
 class PHY_IVehicle;
 class CcdOverlapFilterCallBack;
+class CcdShapeConstructionInfo;
 
 /** CcdPhysicsEnvironment is an experimental mainloop for physics simulation using optional continuous collision detection.
  * Physics Environment takes care of stepping the simulation and is a container for physics entities.
@@ -62,6 +66,9 @@ class CcdPhysicsEnvironment : public PHY_IPhysicsEnvironment
 {
 	friend class CcdOverlapFilterCallBack;
 	btVector3 m_gravity;
+
+	// Removes the constraint and his references from the owner and the target.
+	void RemoveConstraint(btTypedConstraint *con);
 
 protected:
 	btIDebugDraw*	m_debugDrawer;
@@ -83,6 +90,11 @@ protected:
 	int	m_solverType;
 	int	m_profileTimings;
 	bool m_enableSatCollisionDetection;
+
+	float m_deactivationTime;
+	float m_linearDeactivationThreshold;
+	float m_angularDeactivationThreshold;
+	float m_contactBreakingThreshold;
 
 	void	ProcessFhSprings(double curTime,float timeStep);
 
@@ -126,13 +138,20 @@ protected:
 		/// Perform an integration step of duration 'timeStep'.
 		virtual	bool		ProceedDeltaTime(double curTime,float timeStep,float interval);
 
+		/**
+		 * Called by Bullet for every physical simulation (sub)tick.
+		 * Our constructor registers this callback to Bullet, which stores a pointer to 'this' in
+		 * the btDynamicsWorld::getWorldUserInfo() pointer.
+		 */
+		static void StaticSimulationSubtickCallback(btDynamicsWorld *world, btScalar timeStep);
+		void SimulationSubtickCallback(btScalar timeStep);
+
 		virtual void		DebugDrawWorld();
 //		virtual bool		proceedDeltaTimeOneStep(float timeStep);
 
 		virtual	void		SetFixedTimeStep(bool useFixedTimeStep,float fixedTimeStep)
 		{
-			//based on DEFAULT_PHYSICS_TIC_RATE of 60 hertz
-			SetNumTimeSubSteps((int)(fixedTimeStep / 60.f));
+			SetNumTimeSubSteps((int)(fixedTimeStep / KX_KetsjiEngine::GetTicRate()));
 		}
 		//returns 0.f if no fixed timestep is used
 
@@ -169,7 +188,7 @@ protected:
 		
 		virtual float	GetConstraintParam(int constraintId,int param);
 
-		virtual void		RemoveConstraint(int	constraintid);
+		virtual void RemoveConstraintById(int constraintid);
 
 		virtual float		getAppliedImpulse(int	constraintid);
 
@@ -220,15 +239,21 @@ protected:
 
 		void	UpdateCcdPhysicsController(CcdPhysicsController* ctrl, btScalar newMass, int newCollisionFlags, short int newCollisionGroup, short int newCollisionMask);
 
-		void	DisableCcdPhysicsController(CcdPhysicsController* ctrl);
-
-		void	EnableCcdPhysicsController(CcdPhysicsController* ctrl);
-
 		void	RefreshCcdPhysicsController(CcdPhysicsController* ctrl);
+
+		bool	IsActiveCcdPhysicsController(CcdPhysicsController *ctrl);
 
 		void	AddCcdGraphicController(CcdGraphicController* ctrl);
 
 		void	RemoveCcdGraphicController(CcdGraphicController* ctrl);
+
+		/** 
+		 * Update all physics controllers shape which use the same shape construction info.
+		 * Call RecreateControllerShape on controllers which use the same shape
+		 * construction info that argument shapeInfo.
+		 * You need to call this function when the shape construction info changed.
+		 */
+		void	UpdateCcdPhysicsControllerShape(CcdShapeConstructionInfo *shapeInfo);
 
 		btBroadphaseInterface*	GetBroadphase();
 		btDbvtBroadphase*	GetCullingTree() { return m_cullingTree; }
@@ -274,12 +299,15 @@ protected:
 							bool isCompoundChild,
 							bool hasCompoundChildren);
 
+		/* Set the rigid body joints constraints values for converted objects and replicated group instances. */
+		virtual void SetupObjectConstraints(KX_GameObject *obj_src, KX_GameObject *obj_dest,
+		                                    bRigidBodyJointConstraint *dat);
+
 	protected:
 		
 		
 
 		std::set<CcdPhysicsController*> m_controllers;
-		std::set<CcdPhysicsController*> m_triggerControllers;
 
 		PHY_ResponseCallback	m_triggerCallbacks[PHY_NUM_RESPONSE];
 		void*			m_triggerCallbacksUserPtrs[PHY_NUM_RESPONSE];

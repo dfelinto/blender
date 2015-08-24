@@ -31,6 +31,8 @@
 #include "BLI_math_color.h"
 #include "BLI_utildefines.h"
 
+#include "math.h"
+
 #ifndef __MATH_COLOR_INLINE_C__
 #define __MATH_COLOR_INLINE_C__
 
@@ -198,60 +200,46 @@ MINLINE void cpack_cpy_3ub(unsigned char r_col[3], const unsigned int pack)
 	r_col[2] = ((pack) >> 16) & 0xFF;
 }
 
-/* TODO:
- *
- * regarding #rgb_to_bw vs #rgb_to_grayscale,
- * it seems nobody knows why we have both functions which convert color to grays
- * but with different influences, this is quite stupid, and should be resolved
- * by someone who knows this stuff: see this thread
- * http://lists.blender.org/pipermail/bf-committers/2012-June/037180.html
- *
- * Only conclusion is that rgb_to_grayscale is used more for compositing.
- */
-MINLINE float rgb_to_bw(const float rgb[3])
-{
-	return 0.35f * rgb[0] + 0.45f * rgb[1] + 0.2f * rgb[2];
-}
 
-/* non-linear luma from ITU-R BT.601-2
- * see: http://www.poynton.com/notes/colour_and_gamma/ColorFAQ.html#RTFToC11
- * note: the values used for are not exact matches to those documented above,
- * but they are from the same */
+/** \name RGB/Grayscale Functions
+ *
+ * \warning
+ * These are only an approximation,
+ * in almost _all_ cases, #IMB_colormanagement_get_luminance should be used instead.
+ * however for screen-only colors which don't depend on the currently loaded profile - this is preferred.
+ * Checking theme colors for contrast, etc. Basically anything outside the render pipeline.
+ *
+ * \{ */
+
+/**
+ * ITU-R BT.709 primaries
+ * http://en.wikipedia.org/wiki/Relative_luminance
+ *
+ * Real values are:
+ * ``Y = 0.2126390059(R) + 0.7151686788(G) + 0.0721923154(B)``
+ * according to: "Derivation of Basic Television Color Equations", RP 177-1993
+ *
+ * As this sums slightly above 1.0, the document recommends to use:
+ * ``0.2126(R) + 0.7152(G) + 0.0722(B)``, as used here.
+ *
+ * The high precision values are used to calculate the rounded byte weights so they add up to 255:
+ * ``54(R) + 182(G) + 19(B)``
+ */
 MINLINE float rgb_to_grayscale(const float rgb[3])
 {
-	return 0.3f * rgb[0] + 0.58f * rgb[1] + 0.12f * rgb[2];
+	return  (0.2126f * rgb[0]) + (0.7152f * rgb[1]) + (0.0722f * rgb[2]);
 }
 
 MINLINE unsigned char rgb_to_grayscale_byte(const unsigned char rgb[3])
 {
-	return (unsigned char)(((76  * (unsigned short)rgb[0]) +
-	                        (148 * (unsigned short)rgb[1]) +
-	                        (31  * (unsigned short)rgb[2])) / 255);
+	return (unsigned char)(((54  * (unsigned short)rgb[0]) +
+	                        (182 * (unsigned short)rgb[1]) +
+	                        (19  * (unsigned short)rgb[2])) / 255);
 }
 
-/* luma from defined by 'YCC_JFIF', see #rgb_to_ycc */
-MINLINE float rgb_to_luma(const float rgb[3])
-{
-	return 0.299f * rgb[0] + 0.587f * rgb[1] + 0.114f * rgb[2];
-}
+/** \} */
 
-MINLINE unsigned char rgb_to_luma_byte(const unsigned char rgb[3])
-{
-	return (unsigned char)(((76  * (unsigned short)rgb[0]) +
-	                        (150 * (unsigned short)rgb[1]) +
-	                        (29  * (unsigned short)rgb[2])) / 255);
-}
 
-/* gamma-corrected RGB --> CIE XYZ
- * for this function we only get the Y component
- * see: http://software.intel.com/sites/products/documentation/hpc/ipp/ippi/ippi_ch6/ch6_color_models.html
- *
- * also known as:
- * luminance rec. 709 */
-MINLINE float rgb_to_luma_y(const float rgb[3])
-{
-	return 0.212671f * rgb[0] + 0.71516f * rgb[1] + 0.072169f * rgb[2];
-}
 
 MINLINE int compare_rgb_uchar(const unsigned char col_a[3], const unsigned char col_b[3], const int limit)
 {
@@ -267,6 +255,24 @@ MINLINE int compare_rgb_uchar(const unsigned char col_a[3], const unsigned char 
 	}
 
 	return 0;
+}
+
+MINLINE float dither_random_value(float s, float t)
+{
+	static float vec[2] = {12.9898f, 78.233f};
+	float value;
+
+	value = sinf(s * vec[0] + t * vec[1]) * 43758.5453f;
+	return value - floorf(value);
+}
+
+MINLINE void float_to_byte_dither_v3(unsigned char b[3], const float f[3], float dither, float s, float t)
+{
+	float dither_value = dither_random_value(s, t) * 0.005f * dither;
+
+	b[0] = FTOCHAR(dither_value + f[0]);
+	b[1] = FTOCHAR(dither_value + f[1]);
+	b[2] = FTOCHAR(dither_value + f[2]);
 }
 
 /**************** Alpha Transformations *****************/

@@ -52,6 +52,7 @@ CompositorOperation::CompositorOperation() : NodeOperation()
 	this->m_active = false;
 
 	this->m_sceneName[0] = '\0';
+	this->m_viewName = NULL;
 }
 
 void CompositorOperation::initExecution()
@@ -81,14 +82,16 @@ void CompositorOperation::deinitExecution()
 		RenderResult *rr = RE_AcquireResultWrite(re);
 
 		if (rr) {
-			if (rr->rectf != NULL) {
-				MEM_freeN(rr->rectf);
+			RenderView *rv = RE_RenderViewGetByName(rr, this->m_viewName);
+
+			if (rv->rectf != NULL) {
+				MEM_freeN(rv->rectf);
 			}
-			rr->rectf = this->m_outputBuffer;
-			if (rr->rectz != NULL) {
-				MEM_freeN(rr->rectz);
+			rv->rectf = this->m_outputBuffer;
+			if (rv->rectz != NULL) {
+				MEM_freeN(rv->rectz);
 			}
-			rr->rectz = this->m_depthBuffer;
+			rv->rectz = this->m_depthBuffer;
 		}
 		else {
 			if (this->m_outputBuffer) {
@@ -125,7 +128,7 @@ void CompositorOperation::deinitExecution()
 }
 
 
-void CompositorOperation::executeRegion(rcti *rect, unsigned int tileNumber)
+void CompositorOperation::executeRegion(rcti *rect, unsigned int /*tileNumber*/)
 {
 	float color[8]; // 7 is enough
 	float *buffer = this->m_outputBuffer;
@@ -138,7 +141,7 @@ void CompositorOperation::executeRegion(rcti *rect, unsigned int tileNumber)
 	int y2 = rect->ymax;
 	int offset = (y1 * this->getWidth() + x1);
 	int add = (this->getWidth() - (x2 - x1));
-	int offset4 = offset * COM_NUMBER_OF_CHANNELS;
+	int offset4 = offset * COM_NUM_CHANNELS_COLOR;
 	int x;
 	int y;
 	bool breaked = false;
@@ -196,14 +199,14 @@ void CompositorOperation::executeRegion(rcti *rect, unsigned int tileNumber)
 
 			this->m_depthInput->readSampled(color, input_x, input_y, COM_PS_NEAREST);
 			zbuffer[offset] = color[0];
-			offset4 += COM_NUMBER_OF_CHANNELS;
+			offset4 += COM_NUM_CHANNELS_COLOR;
 			offset++;
 			if (isBreaked()) {
 				breaked = true;
 			}
 		}
 		offset += add;
-		offset4 += add * COM_NUMBER_OF_CHANNELS;
+		offset4 += add * COM_NUM_CHANNELS_COLOR;
 	}
 }
 

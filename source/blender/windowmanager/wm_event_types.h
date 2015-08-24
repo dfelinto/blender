@@ -87,6 +87,13 @@ enum {
 	 * paint and drawing tools however will want to handle these. */
 	INBETWEEN_MOUSEMOVE = 0x0011,
 
+/* IME event, GHOST_kEventImeCompositionStart in ghost */
+	WM_IME_COMPOSITE_START = 0x0014,
+/* IME event, GHOST_kEventImeComposition in ghost */
+	WM_IME_COMPOSITE_EVENT      = 0x0015,
+/* IME event, GHOST_kEventImeCompositionEnd in ghost */
+	WM_IME_COMPOSITE_END   = 0x0016,
+
 	/* *** Start of keyboard codes. *** */
 
 	/* standard keyboard.
@@ -297,6 +304,7 @@ enum {
 	TIMERAUTOSAVE         = 0x0115,  /* timer event, autosave */
 	TIMERREPORT           = 0x0116,  /* timer event, reports */
 	TIMERREGION           = 0x0117,  /* timer event, region slide in/out */
+	TIMERNOTIFIER         = 0x0118,  /* timer event, notifier sender */
 	TIMERF                = 0x011F,  /* last timer */
 
 	/* Tweak, gestures: 0x500x, 0x501x */
@@ -363,6 +371,18 @@ enum {
 	 (event_type >= LEFTCTRLKEY && event_type <= LEFTSHIFTKEY) == false &&    \
 	 (event_type >= UNKNOWNKEY  && event_type <= GRLESSKEY) == false)
 
+/* internal helpers*/
+#define _VA_IS_EVENT_MOD2(v, a) (CHECK_TYPE_INLINE(v, wmEvent *), \
+       ((v)->a))
+#define _VA_IS_EVENT_MOD3(v, a, b) \
+       (_VA_IS_EVENT_MOD2(v, a) || ((v)->b))
+#define _VA_IS_EVENT_MOD4(v, a, b, c) \
+       (_VA_IS_EVENT_MOD3(v, a, b) || ((v)->c))
+#define _VA_IS_EVENT_MOD5(v, a, b, c, d) \
+       (_VA_IS_EVENT_MOD4(v, a, b, c) || ((v)->d))
+
+/* reusable IS_EVENT_MOD(event, shift, ctrl, alt, oskey), macro */
+#define IS_EVENT_MOD(...) VA_NARGS_CALL_OVERLOAD(_VA_IS_EVENT_MOD, __VA_ARGS__)
 
 /* ********** wmEvent.val ********** */
 
@@ -391,11 +411,10 @@ enum {
 
 /* File select */
 enum {
-	EVT_FILESELECT_OPEN             = 1,
-	EVT_FILESELECT_FULL_OPEN        = 2,
-	EVT_FILESELECT_EXEC             = 3,
-	EVT_FILESELECT_CANCEL           = 4,
-	EVT_FILESELECT_EXTERNAL_CANCEL  = 5,
+	EVT_FILESELECT_FULL_OPEN        = 1,
+	EVT_FILESELECT_EXEC             = 2,
+	EVT_FILESELECT_CANCEL           = 3,
+	EVT_FILESELECT_EXTERNAL_CANCEL  = 4,
 };
 
 /* Gesture */

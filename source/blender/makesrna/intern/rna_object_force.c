@@ -190,7 +190,7 @@ static void rna_Cache_idname_change(Main *UNUSED(bmain), Scene *UNUSED(scene), P
 		for (pid = pidlist.first; pid; pid = pid->next) {
 			if (pid->cache == cache)
 				pid2 = pid;
-			else if (cache->name[0] != '\0' && strcmp(cache->name, pid->cache->name) == 0) {
+			else if (cache->name[0] != '\0' && STREQ(cache->name, pid->cache->name)) {
 				/*TODO: report "name exists" to user */
 				BLI_strncpy(cache->name, cache->prev_name, sizeof(cache->name));
 				new_name = 0;
@@ -243,7 +243,7 @@ static void rna_Cache_active_point_cache_index_range(PointerRNA *ptr, int *min, 
 
 	for (pid = pidlist.first; pid; pid = pid->next) {
 		if (pid->cache == cache) {
-			*max = max_ii(0, BLI_countlist(pid->ptcaches) - 1);
+			*max = max_ii(0, BLI_listbase_count(pid->ptcaches) - 1);
 			break;
 		}
 	}
@@ -845,7 +845,7 @@ static void rna_def_pointcache(BlenderRNA *brna)
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 	RNA_def_property_ui_text(prop, "Cache is outdated", "");
 
-	prop = RNA_def_property(srna, "frames_skipped", PROP_BOOLEAN, PROP_NONE);
+	prop = RNA_def_property(srna, "is_frame_skip", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "flag", PTCACHE_FRAMES_SKIPPED);
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 

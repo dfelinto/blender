@@ -12,7 +12,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #ifndef __UTIL_SIMD_TYPES_H__
@@ -58,8 +58,12 @@ __forceinline operator          int      ( ) const { return std::numeric_limits<
 /* Intrinsics Functions */
 
 #if defined(__BMI__) && defined(__GNUC__)
-#define _tzcnt_u32 __tzcnt_u32
-#define _tzcnt_u64 __tzcnt_u64
+#  ifndef _tzcnt_u32
+#    define _tzcnt_u32 __tzcnt_u32
+#  endif
+#  ifndef _tzcnt_u64
+#    define _tzcnt_u64 __tzcnt_u64
+#  endif
 #endif
 
 #if defined(__LZCNT__)
@@ -133,7 +137,7 @@ __forceinline int clz(const int x)
 #if defined(__KERNEL_AVX2__)
   return _lzcnt_u32(x);
 #else
-  if (UNLIKELY(x == 0)) return 32;
+  if(UNLIKELY(x == 0)) return 32;
   return 31 - __bsr(x);    
 #endif
 }
@@ -286,7 +290,7 @@ __forceinline int clz(const int x)
 #if defined(__KERNEL_AVX2__)
   return _lzcnt_u32(x);
 #else
-  if (UNLIKELY(x == 0)) return 32;
+  if(UNLIKELY(x == 0)) return 32;
   return 31 - __bsr(x);    
 #endif
 }
@@ -358,7 +362,7 @@ __forceinline __m128i _mm_mullo_epi32( __m128i value, __m128i input ) {
   char* _r = (char*)(&rvalue + 1);
   char* _v = (char*)(& value + 1);
   char* _i = (char*)(& input + 1);
-  for ( ssize_t i = -16 ; i != 0 ; i += 4 ) *((int32*)(_r + i)) = *((int32*)(_v + i))*  *((int32*)(_i + i));
+  for( ssize_t i = -16 ; i != 0 ; i += 4 ) *((int32*)(_r + i)) = *((int32*)(_v + i))*  *((int32*)(_i + i));
   return rvalue;
 }
 

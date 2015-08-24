@@ -80,6 +80,8 @@ void    BKE_lattice_modifiers_calc(struct Scene *scene, struct Object *ob);
 struct MDeformVert *BKE_lattice_deform_verts_get(struct Object *lattice);
 struct BPoint *BKE_lattice_active_point_get(struct Lattice *lt);
 
+struct BoundBox *BKE_lattice_boundbox_get(struct Object *ob);
+void BKE_lattice_minmax_dl(struct Object *ob, struct Lattice *lt, float min[3], float max[3]);
 void BKE_lattice_minmax(struct Lattice *lt, float min[3], float max[3]);
 void BKE_lattice_center_median(struct Lattice *lt, float cent[3]);
 void BKE_lattice_center_bounds(struct Lattice *lt, float cent[3]);
@@ -92,5 +94,12 @@ int  BKE_lattice_index_flip(struct Lattice *lt, const int index,
                             const bool flip_u, const bool flip_v, const bool flip_w);
 void BKE_lattice_bitmap_from_flag(struct Lattice *lt, unsigned int *bitmap, const short flag,
                                   const bool clear, const bool respecthide);
+
+/* **** Depsgraph evaluation **** */
+
+struct EvaluationContext;
+
+void BKE_lattice_eval_geometry(struct EvaluationContext *eval_ctx,
+                               struct Lattice *latt);
 
 #endif  /* __BKE_LATTICE_H__ */

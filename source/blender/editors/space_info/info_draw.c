@@ -33,7 +33,6 @@
 #include <sys/stat.h>
 #include <limits.h>
 
-#include "BLF_api.h"
 
 #include "BLI_utildefines.h"
 
@@ -45,15 +44,13 @@
 
 #include "BIF_gl.h"
 
-#include "ED_datafiles.h"
-#include "ED_types.h"
 
 #include "UI_resources.h"
 #include "UI_interface.h"
 #include "UI_view2d.h"
 
 #include "info_intern.h"
-#include "../space_info/textview.h"
+#include "textview.h"
 
 /* complicates things a bit, so leaving in old simple code */
 #define USE_INFO_NEWLINE

@@ -35,7 +35,6 @@
 
 #include "DNA_space_types.h"
 
-#include "BLI_utildefines.h"
 
 #include "ED_anim_api.h"
 #include "ED_markers.h"
@@ -44,7 +43,6 @@
 #include "action_intern.h"
 
 #include "RNA_access.h"
-#include "RNA_define.h"
 
 #include "WM_api.h"
 #include "WM_types.h"
@@ -79,12 +77,22 @@ void action_operatortypes(void)
 	WM_operatortype_append(ACTION_OT_keyframe_insert);
 	WM_operatortype_append(ACTION_OT_copy);
 	WM_operatortype_append(ACTION_OT_paste);
+	
 	WM_operatortype_append(ACTION_OT_new);
+	WM_operatortype_append(ACTION_OT_unlink);
+	
+	WM_operatortype_append(ACTION_OT_push_down);
+	WM_operatortype_append(ACTION_OT_stash);
+	WM_operatortype_append(ACTION_OT_stash_and_create);
+	
+	WM_operatortype_append(ACTION_OT_layer_next);
+	WM_operatortype_append(ACTION_OT_layer_prev);
 	
 	WM_operatortype_append(ACTION_OT_previewrange_set);
 	WM_operatortype_append(ACTION_OT_view_all);
 	WM_operatortype_append(ACTION_OT_view_selected);
-	
+	WM_operatortype_append(ACTION_OT_view_frame);
+
 	WM_operatortype_append(ACTION_OT_markers_make_local);
 }
 
@@ -99,6 +107,7 @@ void ED_operatormacros_action(void)
 	WM_operatortype_macro_define(ot, "ACTION_OT_duplicate");
 	otmacro = WM_operatortype_macro_define(ot, "TRANSFORM_OT_transform");
 	RNA_enum_set(otmacro->ptr, "mode", TFM_TIME_DUPLICATE);
+	RNA_enum_set(otmacro->ptr, "proportional", PROP_EDIT_OFF);
 }
 
 /* ************************** registration - keymaps **********************************/
@@ -195,11 +204,10 @@ static void action_keymap_keyframes(wmKeyConfig *keyconf, wmKeyMap *keymap)
 	WM_keymap_add_item(keymap, "ACTION_OT_keyframe_type", RKEY, KM_PRESS, 0, 0); 
 	
 	/* destructive */
-	WM_keymap_add_item(keymap, "ACTION_OT_clean", OKEY, KM_PRESS, 0, 0);
 	WM_keymap_add_item(keymap, "ACTION_OT_sample", OKEY, KM_PRESS, KM_SHIFT, 0);
 	
-	WM_keymap_add_item(keymap, "ACTION_OT_delete", XKEY, KM_PRESS, 0, 0);
-	WM_keymap_add_item(keymap, "ACTION_OT_delete", DELKEY, KM_PRESS, 0, 0);
+	WM_keymap_add_menu(keymap, "DOPESHEET_MT_delete", XKEY, KM_PRESS, 0, 0);
+	WM_keymap_add_menu(keymap, "DOPESHEET_MT_delete", DELKEY, KM_PRESS, 0, 0);
 	
 	WM_keymap_add_item(keymap, "ACTION_OT_duplicate_move", DKEY, KM_PRESS, KM_SHIFT, 0);
 	WM_keymap_add_item(keymap, "ACTION_OT_keyframe_insert", IKEY, KM_PRESS, 0, 0);
@@ -207,9 +215,13 @@ static void action_keymap_keyframes(wmKeyConfig *keyconf, wmKeyMap *keymap)
 	/* copy/paste */
 	WM_keymap_add_item(keymap, "ACTION_OT_copy", CKEY, KM_PRESS, KM_CTRL, 0);
 	WM_keymap_add_item(keymap, "ACTION_OT_paste", VKEY, KM_PRESS, KM_CTRL, 0);
+	kmi = WM_keymap_add_item(keymap, "ACTION_OT_paste", VKEY, KM_PRESS, KM_CTRL | KM_SHIFT, 0);
+	RNA_boolean_set(kmi->ptr, "flipped", true);
 #ifdef __APPLE__
 	WM_keymap_add_item(keymap, "ACTION_OT_copy", CKEY, KM_PRESS, KM_OSKEY, 0);
 	WM_keymap_add_item(keymap, "ACTION_OT_paste", VKEY, KM_PRESS, KM_OSKEY, 0);
+	kmi = WM_keymap_add_item(keymap, "ACTION_OT_paste", VKEY, KM_PRESS, KM_OSKEY | KM_SHIFT, 0);
+	RNA_boolean_set(kmi->ptr, "flipped", true);
 #endif
 
 	/* auto-set range */
@@ -217,6 +229,8 @@ static void action_keymap_keyframes(wmKeyConfig *keyconf, wmKeyMap *keymap)
 	WM_keymap_add_item(keymap, "ACTION_OT_view_all", HOMEKEY, KM_PRESS, 0, 0);
 	WM_keymap_add_item(keymap, "ACTION_OT_view_all", NDOF_BUTTON_FIT, KM_PRESS, 0, 0);
 	WM_keymap_add_item(keymap, "ACTION_OT_view_selected", PADPERIOD, KM_PRESS, 0, 0);
+	WM_keymap_add_item(keymap, "ACTION_OT_view_frame", PAD0, KM_PRESS, 0, 0);
+
 	
 	/* animation module */
 	/* channels list
@@ -230,6 +244,9 @@ static void action_keymap_keyframes(wmKeyConfig *keyconf, wmKeyMap *keymap)
 	/* transform system */
 	transform_keymap_for_space(keyconf, keymap, SPACE_ACTION);
 	
+	kmi = WM_keymap_add_item(keymap, "WM_OT_context_toggle", OKEY, KM_PRESS, 0, 0);
+	RNA_string_set(kmi->ptr, "data_path", "tool_settings.use_proportional_action");
+
 	/* special markers hotkeys for anim editors: see note in definition of this function */
 	ED_marker_keymap_animedit_conflictfree(keymap);
 }

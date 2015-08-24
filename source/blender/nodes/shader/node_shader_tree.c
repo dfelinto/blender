@@ -41,16 +41,13 @@
 #include "DNA_linestyle_types.h"
 
 #include "BLI_listbase.h"
-#include "BLI_math.h"
 #include "BLI_threads.h"
 #include "BLI_utildefines.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_context.h"
-#include "BKE_global.h"
 #include "BKE_linestyle.h"
-#include "BKE_main.h"
 #include "BKE_node.h"
 #include "BKE_scene.h"
 
@@ -72,7 +69,8 @@ static int shader_tree_poll(const bContext *C, bNodeTreeType *UNUSED(treetype))
 	return (scene->r.engine[0] == '\0' ||
 	        STREQ(scene->r.engine, RE_engine_id_BLENDER_RENDER) ||
 	        STREQ(scene->r.engine, RE_engine_id_BLENDER_GAME) ||
-	        STREQ(scene->r.engine, RE_engine_id_CYCLES));
+	        STREQ(scene->r.engine, RE_engine_id_CYCLES) ||
+	        !BKE_scene_use_shading_nodes_custom(scene));
 }
 
 static void shader_get_from_context(const bContext *C, bNodeTreeType *UNUSED(treetype), bNodeTree **r_ntree, ID **r_id, ID **r_from)

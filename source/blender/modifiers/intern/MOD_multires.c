@@ -44,10 +44,7 @@
 #include "BKE_mesh.h"
 #include "BKE_multires.h"
 #include "BKE_modifier.h"
-#include "BKE_paint.h"
 #include "BKE_subsurf.h"
-
-#include "MOD_util.h"
 
 static void initData(ModifierData *md)
 {
@@ -165,6 +162,7 @@ ModifierTypeInfo modifierType_Multires = {
 	/* freeData */          NULL,
 	/* isDisabled */        NULL,
 	/* updateDepgraph */    NULL,
+	/* updateDepsgraph */   NULL,
 	/* dependsOnTime */     NULL,
 	/* dependsOnNormals */	NULL,
 	/* foreachObjectLink */ NULL,

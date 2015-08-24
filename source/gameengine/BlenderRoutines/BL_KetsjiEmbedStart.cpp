@@ -63,7 +63,7 @@
 #include "BL_System.h"
 
 #include "GPU_extensions.h"
-#include "Value.h"
+#include "EXP_Value.h"
 
 
 extern "C" {
@@ -79,6 +79,7 @@ extern "C" {
 	#include "BKE_ipo.h"
 	#include "BKE_main.h"
 	#include "BKE_context.h"
+	#include "BKE_sound.h"
 
 	/* avoid c++ conflict with 'new' */
 	#define new _new
@@ -101,9 +102,7 @@ typedef void * wmUIHandlerRemoveFunc;
 }
 
 #ifdef WITH_AUDASPACE
-#  include "AUD_C-API.h"
-#  include "AUD_I3DDevice.h"
-#  include "AUD_IDevice.h"
+#  include AUD_DEVICE_H
 #endif
 
 static BlendFileData *load_game_data(char *filename)
@@ -280,8 +279,8 @@ extern "C" void StartKetsjiShell(struct bContext *C, struct ARegion *ar, rcti *c
 		bool nodepwarnings = (SYS_GetCommandLineInt(syshandle, "ignore_deprecation_warnings", 0) != 0);
 #endif
 		// bool novertexarrays = (SYS_GetCommandLineInt(syshandle, "novertexarrays", 0) != 0);
-		bool mouse_state = startscene->gm.flag & GAME_SHOW_MOUSE;
-		bool restrictAnimFPS = startscene->gm.flag & GAME_RESTRICT_ANIM_UPDATES;
+		bool mouse_state = (startscene->gm.flag & GAME_SHOW_MOUSE) != 0;
+		bool restrictAnimFPS = (startscene->gm.flag & GAME_RESTRICT_ANIM_UPDATES) != 0;
 
 		short drawtype = v3d->drawtype;
 		
@@ -446,7 +445,7 @@ extern "C" void StartKetsjiShell(struct bContext *C, struct ARegion *ar, rcti *c
 				rasterizer->SetEyeSeparation(scene->gm.eyeseparation);
 			}
 
-			rasterizer->SetBackColor(scene->gm.framing.col[0], scene->gm.framing.col[1], scene->gm.framing.col[2], 0.0f);
+			rasterizer->SetBackColor(scene->gm.framing.col);
 		}
 		
 		if (exitrequested != KX_EXIT_REQUEST_QUIT_GAME)
@@ -457,21 +456,13 @@ extern "C" void StartKetsjiShell(struct bContext *C, struct ARegion *ar, rcti *c
 				ketsjiengine->SetCameraOverrideUseOrtho((rv3d->persp == RV3D_ORTHO));
 				ketsjiengine->SetCameraOverrideProjectionMatrix(MT_CmMatrix4x4(rv3d->winmat));
 				ketsjiengine->SetCameraOverrideViewMatrix(MT_CmMatrix4x4(rv3d->viewmat));
-				if (rv3d->persp == RV3D_ORTHO)
-				{
-					ketsjiengine->SetCameraOverrideClipping(v3d->near, v3d->far);
-				}
-				else
-				{
-					ketsjiengine->SetCameraOverrideClipping(v3d->near, v3d->far);
-				}
+				ketsjiengine->SetCameraOverrideClipping(v3d->near, v3d->far);
 				ketsjiengine->SetCameraOverrideLens(v3d->lens);
 			}
 			
 			// create a scene converter, create and convert the startingscene
 			KX_ISceneConverter* sceneconverter = new KX_BlenderSceneConverter(blenderdata, ketsjiengine);
 			ketsjiengine->SetSceneConverter(sceneconverter);
-			sceneconverter->addInitFromFrame=false;
 			if (always_use_expand_framing)
 				sceneconverter->SetAlwaysUseExpandFraming(true);
 
@@ -510,13 +501,10 @@ extern "C" void StartKetsjiShell(struct bContext *C, struct ARegion *ar, rcti *c
 				ketsjiengine->InitDome(scene->gm.dome.res, scene->gm.dome.mode, scene->gm.dome.angle, scene->gm.dome.resbuf, scene->gm.dome.tilt, scene->gm.dome.warptext);
 
 			// initialize 3D Audio Settings
-			AUD_I3DDevice* dev = AUD_get3DDevice();
-			if (dev)
-			{
-				dev->setSpeedOfSound(scene->audio.speed_of_sound);
-				dev->setDopplerFactor(scene->audio.doppler_factor);
-				dev->setDistanceModel(AUD_DistanceModel(scene->audio.distance_model));
-			}
+			AUD_Device* device = BKE_sound_get_device();
+			AUD_Device_setSpeedOfSound(device, scene->audio.speed_of_sound);
+			AUD_Device_setDopplerFactor(device, scene->audio.doppler_factor);
+			AUD_Device_setDistanceModel(device, AUD_DistanceModel(scene->audio.distance_model));
 
 			// from see blender.c:
 			// FIXME: this version patching should really be part of the file-reading code,
@@ -556,6 +544,10 @@ extern "C" void StartKetsjiShell(struct bContext *C, struct ARegion *ar, rcti *c
 				if (python_main) {
 					char *python_code = KX_GetPythonCode(blenderdata, python_main);
 					if (python_code) {
+						// Set python environement variable.
+						KX_SetActiveScene(startscene);
+						PHY_SetActiveEnvironment(startscene->GetPhysicsEnvironment());
+
 						ketsjinextframestate.ketsjiengine = ketsjiengine;
 						ketsjinextframestate.C = C;
 						ketsjinextframestate.win = win;
@@ -596,22 +588,11 @@ extern "C" void StartKetsjiShell(struct bContext *C, struct ARegion *ar, rcti *c
 				// inside the GameLogic dictionary when the python interpreter is finalized.
 				// which allows the scene to safely delete them :)
 				// see: (space.c)->start_game
-				
-				//PyDict_Clear(PyModule_GetDict(gameLogic));
-				
-				// Keep original items, means python plugins will autocomplete members
-				PyObject *gameLogic_keys_new = PyDict_Keys(PyModule_GetDict(gameLogic));
-				const Py_ssize_t numitems= PyList_GET_SIZE(gameLogic_keys_new);
-				Py_ssize_t listIndex;
-				for (listIndex=0; listIndex < numitems; listIndex++) {
-					PyObject *item = PyList_GET_ITEM(gameLogic_keys_new, listIndex);
-					if (!PySequence_Contains(gameLogic_keys, item)) {
-						PyDict_DelItem(	PyModule_GetDict(gameLogic), item);
-					}
-				}
-				Py_DECREF(gameLogic_keys_new);
-				gameLogic_keys_new = NULL;
+
+				PyDict_Clear(PyModule_GetDict(gameLogic));
+				PyDict_SetItemString(PyModule_GetDict(gameLogic), "globalDict", pyGlobalDict);
 #endif
+
 				ketsjiengine->StopEngine();
 #ifdef WITH_PYTHON
 				exitGamePythonScripting();
@@ -683,7 +664,7 @@ extern "C" void StartKetsjiShell(struct bContext *C, struct ARegion *ar, rcti *c
 		}
 
 		// stop all remaining playing sounds
-		AUD_getDevice()->stopAll();
+		AUD_Device_stopAll(BKE_sound_get_device());
 	
 	} while (exitrequested == KX_EXIT_REQUEST_RESTART_GAME || exitrequested == KX_EXIT_REQUEST_START_OTHER_GAME);
 	

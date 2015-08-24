@@ -27,14 +27,11 @@
  * General operations for brushes.
  */
 
-struct ID;
 struct Brush;
 struct ImBuf;
 struct ImagePool;
 struct Main;
-struct rctf;
 struct Scene;
-struct wmOperator;
 // enum CurveMappingPreset;
 
 
@@ -62,12 +59,12 @@ int BKE_brush_clone_image_delete(struct Brush *brush);
 /* jitter */
 void BKE_brush_jitter_pos(const struct Scene *scene, struct Brush *brush,
                           const float pos[2], float jitterpos[2]);
-void BKE_brush_randomize_texture_coordinates(struct UnifiedPaintSettings *ups, bool mask);
+void BKE_brush_randomize_texture_coords(struct UnifiedPaintSettings *ups, bool mask);
 
 /* brush curve */
 void BKE_brush_curve_preset(struct Brush *b, int preset);
-float BKE_brush_curve_strength_clamp(struct Brush *br, float p, const float len);
-float BKE_brush_curve_strength(struct Brush *br, float p, const float len); /* used for sculpt */
+float BKE_brush_curve_strength_clamped(struct Brush *br, float p, const float len);
+float BKE_brush_curve_strength(struct Brush *br, float p, const float len);
 
 /* sampling */
 float BKE_brush_sample_tex_3D(const Scene *scene, struct Brush *br, const float point[3],
@@ -83,34 +80,36 @@ struct ImBuf *BKE_brush_gen_radial_control_imbuf(struct Brush *br, bool secondar
 
 /* unified strength size and color */
 
-float *BKE_brush_color_get(const struct Scene *scene, struct Brush *brush);
-float *BKE_brush_secondary_color_get(const struct Scene *scene, struct Brush *brush);
+const float *BKE_brush_color_get(const struct Scene *scene, const struct Brush *brush);
+const float *BKE_brush_secondary_color_get(const struct Scene *scene, const struct Brush *brush);
 void BKE_brush_color_set(struct Scene *scene, struct Brush *brush, const float color[3]);
 
-int  BKE_brush_size_get(const struct Scene *scene, struct Brush *brush);
+int  BKE_brush_size_get(const struct Scene *scene, const struct Brush *brush);
 void BKE_brush_size_set(struct Scene *scene, struct Brush *brush, int value);
 
-float BKE_brush_unprojected_radius_get(const struct Scene *scene, struct Brush *brush);
+float BKE_brush_unprojected_radius_get(const struct Scene *scene, const struct Brush *brush);
 void  BKE_brush_unprojected_radius_set(struct Scene *scene, struct Brush *brush, float value);
 
-float BKE_brush_alpha_get(const struct Scene *scene, struct Brush *brush);
+float BKE_brush_alpha_get(const struct Scene *scene, const struct Brush *brush);
 void BKE_brush_alpha_set(Scene *scene, struct Brush *brush, float alpha);
-float BKE_brush_weight_get(const Scene *scene, struct Brush *brush);
+float BKE_brush_weight_get(const Scene *scene, const struct Brush *brush);
 void BKE_brush_weight_set(const Scene *scene, struct Brush *brush, float value);
 
-int  BKE_brush_use_locked_size(const struct Scene *scene, struct Brush *brush);
-int  BKE_brush_use_alpha_pressure(const struct Scene *scene, struct Brush *brush);
-int  BKE_brush_use_size_pressure(const struct Scene *scene, struct Brush *brush);
+int  BKE_brush_use_locked_size(const struct Scene *scene, const struct Brush *brush);
+int  BKE_brush_use_alpha_pressure(const struct Scene *scene, const struct Brush *brush);
+int  BKE_brush_use_size_pressure(const struct Scene *scene, const struct Brush *brush);
 
 /* scale unprojected radius to reflect a change in the brush's 2D size */
-void BKE_brush_scale_unprojected_radius(float *unprojected_radius,
-                                        int new_brush_size,
-                                        int old_brush_size);
+void BKE_brush_scale_unprojected_radius(
+        float *unprojected_radius,
+        int new_brush_size,
+        int old_brush_size);
 
 /* scale brush size to reflect a change in the brush's unprojected radius */
-void BKE_brush_scale_size(int *BKE_brush_size_get,
-                          float new_unprojected_radius,
-                          float old_unprojected_radius);
+void BKE_brush_scale_size(
+        int *r_brush_size,
+        float new_unprojected_radius,
+        float old_unprojected_radius);
 
 /* debugging only */
 void BKE_brush_debug_print_state(struct Brush *br);

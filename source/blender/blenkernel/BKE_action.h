@@ -46,8 +46,6 @@ struct bItasc;
 struct bPoseChannel;
 struct Main;
 struct Object;
-struct Scene;
-struct ID;
 
 /* Kernel prototypes */
 #ifdef __cplusplus
@@ -142,6 +140,10 @@ void                 BKE_pose_channels_free_ex(struct bPose *pose, bool do_id_us
 void                 BKE_pose_channels_hash_make(struct bPose *pose);
 void                 BKE_pose_channels_hash_free(struct bPose *pose);
 
+void BKE_pose_channels_remove(
+        struct Object *ob,
+        bool (*filter_fn)(const char *bone_name, void *user_data), void *user_data);
+
 void                 BKE_pose_free(struct bPose *pose);
 void                 BKE_pose_free_ex(struct bPose *pose, bool do_id_user);
 void                 BKE_pose_copy_data(struct bPose **dst, struct bPose *src, const bool copy_constraints);
@@ -160,6 +162,9 @@ void extract_pose_from_pose(struct bPose *pose, const struct bPose *src);
 
 /* sets constraint flags */
 void BKE_pose_update_constraint_flags(struct bPose *pose);
+
+/* tag constraint flags for update */
+void BKE_pose_tag_update_constraint_flags(struct bPose *pose);
 
 /* return the name of structure pointed by pose->ikparam */
 const char *BKE_pose_ikparam_get_name(struct bPose *pose);
@@ -196,6 +201,9 @@ void what_does_obaction(struct Object *ob, struct Object *workob, struct bPose *
 bool BKE_pose_copy_result(struct bPose *to, struct bPose *from);
 /* clear all transforms */
 void BKE_pose_rest(struct bPose *pose);
+
+/* Tag pose for recalc. Also tag all related data to be recalc. */
+void BKE_pose_tag_recalc(struct Main *bmain, struct bPose *pose);
 
 #ifdef __cplusplus
 };

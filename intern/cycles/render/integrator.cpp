@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #include "device.h"
@@ -39,7 +39,6 @@ Integrator::Integrator()
 	transparent_max_bounce = max_bounce;
 	transparent_shadows = false;
 
-	volume_homogeneous_sampling = 0;
 	volume_max_steps = 1024;
 	volume_step_size = 0.1f;
 
@@ -60,6 +59,10 @@ Integrator::Integrator()
 	mesh_light_samples = 1;
 	subsurface_samples = 1;
 	volume_samples = 1;
+
+	sample_all_lights_direct = true;
+	sample_all_lights_indirect = true;
+
 	method = PATH;
 
 	sampling_pattern = SAMPLING_PATTERN_SOBOL;
@@ -189,7 +192,6 @@ bool Integrator::modified(const Integrator& integrator)
 		transparent_min_bounce == integrator.transparent_min_bounce &&
 		transparent_max_bounce == integrator.transparent_max_bounce &&
 		transparent_shadows == integrator.transparent_shadows &&
-		volume_homogeneous_sampling == integrator.volume_homogeneous_sampling &&
 		volume_max_steps == integrator.volume_max_steps &&
 		volume_step_size == integrator.volume_step_size &&
 		caustics_reflective == integrator.caustics_reflective &&
@@ -214,7 +216,7 @@ bool Integrator::modified(const Integrator& integrator)
 		sample_all_lights_indirect == integrator.sample_all_lights_indirect);
 }
 
-void Integrator::tag_update(Scene *scene)
+void Integrator::tag_update(Scene * /*scene*/)
 {
 	need_update = true;
 }

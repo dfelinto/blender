@@ -47,7 +47,6 @@
 
 #include "RNA_define.h"
 #include "RNA_access.h"
-#include "RNA_enum_types.h"
 
 #include "BKE_depsgraph.h"
 #include "BKE_context.h"
@@ -405,7 +404,8 @@ void MBALL_OT_select_random_metaelems(struct wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 	
 	/* properties */
-	RNA_def_float_percentage(ot->srna, "percent", 50.f, 0.0f, 100.0f, "Percent", "Percentage of elements to select randomly", 0.f, 100.0f);
+	RNA_def_float_percentage(ot->srna, "percent", 50.f, 0.0f, 100.0f,
+	                         "Percent", "Percentage of elements to select randomly", 0.0f, 100.0f);
 	WM_operator_properties_select_action_simple(ot, SEL_SELECT);
 }
 
@@ -533,7 +533,7 @@ void MBALL_OT_hide_metaelems(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 	
 	/* props */
-	RNA_def_boolean(ot->srna, "unselected", 0, "Unselected", "Hide unselected rather than selected");
+	RNA_def_boolean(ot->srna, "unselected", false, "Unselected", "Hide unselected rather than selected");
 }
 
 /***************************** Unhide operator *****************************/
@@ -584,7 +584,7 @@ bool mouse_mball(bContext *C, const int mval[2], bool extend, bool deselect, boo
 	MetaBall *mb = (MetaBall *)obedit->data;
 	MetaElem *ml, *ml_act = NULL;
 	int a, hits;
-	unsigned int buffer[4 * MAXPICKBUF];
+	unsigned int buffer[MAXPICKBUF];
 	rcti rect;
 
 	view3d_set_viewcontext(C, &vc);

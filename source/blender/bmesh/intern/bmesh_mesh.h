@@ -28,6 +28,7 @@
  */
 
 struct BMAllocTemplate;
+struct MLoopNorSpaceArray;
 
 void   BM_mesh_elem_toolflags_ensure(BMesh *bm);
 void   BM_mesh_elem_toolflags_clear(BMesh *bm);
@@ -39,15 +40,18 @@ void   BM_mesh_clear(BMesh *bm);
 
 void BM_mesh_normals_update(BMesh *bm);
 void BM_verts_calc_normal_vcos(BMesh *bm, const float (*fnos)[3], const float (*vcos)[3], float (*vnos)[3]);
-void BM_loops_calc_normal_vcos(BMesh *bm, const float (*vcos)[3], const float (*vnos)[3], const float (*pnos)[3],
-                               const float split_angle, float (*r_lnos)[3]);
+void BM_loops_calc_normal_vcos(
+        BMesh *bm, const float (*vcos)[3], const float (*vnos)[3], const float (*pnos)[3],
+        const bool use_split_normals, const float split_angle, float (*r_lnos)[3],
+        struct MLoopNorSpaceArray *r_lnors_spacearr, short (*clnors_data)[2], const int cd_loop_clnors_offset);
 
 void bmesh_edit_begin(BMesh *bm, const BMOpTypeFlag type_flag);
 void bmesh_edit_end(BMesh *bm, const BMOpTypeFlag type_flag);
 
 void BM_mesh_elem_index_ensure(BMesh *bm, const char hflag);
-void BM_mesh_elem_index_validate(BMesh *bm, const char *location, const char *func,
-                                 const char *msg_a, const char *msg_b);
+void BM_mesh_elem_index_validate(
+        BMesh *bm, const char *location, const char *func,
+        const char *msg_a, const char *msg_b);
 
 #ifndef NDEBUG
 bool BM_mesh_elem_table_check(BMesh *bm);
@@ -64,6 +68,10 @@ BMFace *BM_face_at_index(BMesh *bm, const int index);
 BMVert *BM_vert_at_index_find(BMesh *bm, const int index);
 BMEdge *BM_edge_at_index_find(BMesh *bm, const int index);
 BMFace *BM_face_at_index_find(BMesh *bm, const int index);
+
+BMVert *BM_vert_at_index_find_or_table(BMesh *bm, const int index);
+BMEdge *BM_edge_at_index_find_or_table(BMesh *bm, const int index);
+BMFace *BM_face_at_index_find_or_table(BMesh *bm, const int index);
 
 // XXX
 

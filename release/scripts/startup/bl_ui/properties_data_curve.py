@@ -24,7 +24,7 @@ from rna_prop_ui import PropertyPanel
 from bpy.types import Curve, SurfaceCurve, TextCurve
 
 
-class CurveButtonsPanel():
+class CurveButtonsPanel:
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
     bl_context = "data"
@@ -286,7 +286,7 @@ class DATA_PT_active_spline(CurveButtonsPanelActive, Panel):
                 sub.prop(act_spline, "order_v", text="V")
                 sub.prop(act_spline, "resolution_v", text="V")
 
-            if not is_surf:
+            if act_spline.type == 'BEZIER':
                 col = layout.column()
                 col.label(text="Interpolation:")
 
@@ -321,7 +321,7 @@ class DATA_PT_font(CurveButtonsPanelText, Panel):
         row.label(text="Bold & Italic")
         row.template_ID(text, "font_bold_italic", open="font.open", unlink="font.unlink")
 
-        #layout.prop(text, "font")
+        # layout.prop(text, "font")
 
         split = layout.split()
 

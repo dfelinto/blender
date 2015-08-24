@@ -41,6 +41,10 @@
 
 #include "BLI_path_util.h"
 
+#ifdef WITH_SDL
+#  define SDL_CHECK(x) ((x) != (void *)0)
+#endif
+
 SCA_Joystick::SCA_Joystick(short int index)
 	:
 	m_joyindex(index),
@@ -82,6 +86,9 @@ SCA_Joystick *SCA_Joystick::GetInstance( short int joyindex )
 #ifndef WITH_SDL
 	return NULL;
 #else  /* WITH_SDL */
+	if (!SDL_CHECK(SDL_InitSubSystem)) {
+		return NULL;
+	}
 	if (joyindex < 0 || joyindex >= JOYINDEX_MAX) {
 		JOYSTICK_ECHO("Error-invalid joystick index: " << joyindex);
 		return NULL;
@@ -104,7 +111,11 @@ SCA_Joystick *SCA_Joystick::GetInstance( short int joyindex )
 		char *videodriver = getenv("SDL_VIDEODRIVER");
 		BLI_setenv("SDL_VIDEODRIVER", "dummy");
 
+#if SDL_VERSION_ATLEAST(2, 0, 0)
+		int success = (SDL_InitSubSystem(SDL_INIT_JOYSTICK) != -1 );
+#else
 		int success = (SDL_InitSubSystem(SDL_INIT_JOYSTICK | SDL_INIT_VIDEO) != -1 );
+#endif
 
 		BLI_setenv("SDL_VIDEODRIVER", videodriver);
 #  endif
@@ -116,7 +127,7 @@ SCA_Joystick *SCA_Joystick::GetInstance( short int joyindex )
 		
 		m_joynum = SDL_NumJoysticks();
 		
-		for (i=0; i<JOYINDEX_MAX; i++) {
+		for (i = 0; i < m_joynum; i++) {
 			m_instance[i] = new SCA_Joystick(i);
 			m_instance[i]->CreateJoystickDevice();
 		}
@@ -135,8 +146,10 @@ void SCA_Joystick::ReleaseInstance()
 	if (--m_refCount == 0)
 	{
 #ifdef WITH_SDL
-		int i;
-		for (i=0; i<JOYINDEX_MAX; i++) {
+		if (!SDL_CHECK(SDL_QuitSubSystem)) {
+			return;
+		}
+		for (int i = 0; i < m_joynum; i++) {
 			if (m_instance[i]) {
 				m_instance[i]->DestroyJoystickDevice();
 				delete m_instance[i];
@@ -147,11 +160,11 @@ void SCA_Joystick::ReleaseInstance()
 		/* The video subsystem is required for joystick input to work. However,
 		 * when GHOST is running under SDL, video is freed elsewhere.
 		 * Do this once only. */
-#  ifdef WITH_GHOST_SDL
+#if SDL_VERSION_ATLEAST(2, 0, 0)
 		SDL_QuitSubSystem(SDL_INIT_JOYSTICK);
-#  else
+#else
 		SDL_QuitSubSystem(SDL_INIT_JOYSTICK | SDL_INIT_VIDEO);
-#  endif
+#endif
 #endif /* WITH_SDL */
 	}
 }
@@ -191,6 +204,9 @@ bool SCA_Joystick::aAxisIsPositive(int axis_single)
 bool SCA_Joystick::aAnyButtonPressIsPositive(void)
 {
 #ifdef WITH_SDL
+	if (!SDL_CHECK(SDL_JoystickGetButton)) {
+		return false;
+	}
 	/* this is needed for the "all events" option
 	 * so we know if there are no buttons pressed */
 	for (int i=0; i<m_buttonmax; i++)
@@ -206,7 +222,7 @@ bool SCA_Joystick::aButtonPressIsPositive(int button)
 	return false;
 #else
 	bool result;
-	SDL_JoystickGetButton(m_private->m_joystick, button)? result = true:result = false;
+	result = SDL_CHECK(SDL_JoystickGetButton) && SDL_JoystickGetButton(m_private->m_joystick, button);
 	return result;
 #endif
 }
@@ -218,7 +234,7 @@ bool SCA_Joystick::aButtonReleaseIsPositive(int button)
 	return false;
 #else
 	bool result;
-	SDL_JoystickGetButton(m_private->m_joystick, button)? result = false : result = true;
+	result = !(SDL_CHECK(SDL_JoystickGetButton) && SDL_JoystickGetButton(m_private->m_joystick, button));
 	return result;
 #endif
 }
@@ -253,7 +269,7 @@ bool SCA_Joystick::CreateJoystickDevice(void)
 	m_axismax = m_buttonmax = m_hatmax = 0;
 	return false;
 #else /* WITH_SDL */
-	if (m_isinit == false) {
+	if (m_isinit == false && SDL_CHECK(SDL_JoystickOpen)) {
 		if (m_joyindex>=m_joynum) {
 			/* don't print a message, because this is done anyway */
 			//JOYSTICK_ECHO("Joystick-Error: " << SDL_NumJoysticks() << " avaiable joystick(s)");
@@ -293,9 +309,9 @@ void SCA_Joystick::DestroyJoystickDevice(void)
 #ifdef WITH_SDL
 	if (m_isinit) {
 #if SDL_VERSION_ATLEAST(2, 0, 0)
-		if (SDL_JoystickGetAttached(m_private->m_joystick))
+		if (SDL_CHECK(SDL_JoystickGetAttached) && SDL_JoystickGetAttached(m_private->m_joystick))
 #else
-		if (SDL_JoystickOpened(m_joyindex))
+		if (SDL_CHECK(SDL_JoystickOpened) && SDL_JoystickOpened(m_joyindex))
 #endif
 		{
 			JOYSTICK_ECHO("Closing-joystick " << m_joyindex);
@@ -309,13 +325,16 @@ void SCA_Joystick::DestroyJoystickDevice(void)
 int SCA_Joystick::Connected(void)
 {
 #ifdef WITH_SDL
-	if (m_isinit
+	if (m_isinit &&
 #if SDL_VERSION_ATLEAST(2, 0, 0)
-		&& SDL_JoystickGetAttached(m_private->m_joystick))
+	    SDL_CHECK(SDL_JoystickGetAttached) && SDL_JoystickGetAttached(m_private->m_joystick)
 #else
-	    && SDL_JoystickOpened(m_joyindex))
+	    SDL_CHECK(SDL_JoystickOpened) && SDL_JoystickOpened(m_joyindex)
 #endif
+		)
+	{
 		return 1;
+	}
 #endif
 	return 0;
 }
@@ -353,9 +372,9 @@ const char *SCA_Joystick::GetName()
 {
 #ifdef WITH_SDL
 #if SDL_VERSION_ATLEAST(2, 0, 0)
-	return SDL_JoystickName(m_private->m_joystick);
+	return (SDL_CHECK(SDL_JoystickName)) ? SDL_JoystickName(m_private->m_joystick) : "";
 #else
-	return SDL_JoystickName(m_joyindex);
+	return (SDL_CHECK(SDL_JoystickName)) ? SDL_JoystickName(m_joyindex) : "";
 #endif
 #else /* WITH_SDL */
 	return "";

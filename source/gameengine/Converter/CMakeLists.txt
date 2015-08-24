@@ -56,7 +56,7 @@ set(INC
 set(INC_SYS
 	../../../intern/moto/include
 	../../../extern/recastnavigation/Detour/Include
-	../../../extern/Eigen3
+	${EIGEN3_INCLUDE_DIRS}
 	${PTHREADS_INCLUDE_DIRS}
 	${BOOST_INCLUDE_DIR}
 )
@@ -74,7 +74,6 @@ set(SRC
 	BL_ShapeActionActuator.cpp
 	BL_ShapeDeformer.cpp
 	BL_SkinDeformer.cpp
-	BlenderWorldInfo.cpp
 	KX_BlenderScalarInterpolator.cpp
 	KX_BlenderSceneConverter.cpp
 	KX_ConvertActuators.cpp
@@ -96,7 +95,6 @@ set(SRC
 	BL_ShapeActionActuator.h
 	BL_ShapeDeformer.h
 	BL_SkinDeformer.h
-	BlenderWorldInfo.h
 	KX_BlenderScalarInterpolator.h
 	KX_BlenderSceneConverter.h
 	KX_ConvertActuators.h
@@ -115,10 +113,11 @@ if(WITH_BULLET)
 endif()
 
 if(WITH_AUDASPACE)
-	list(APPEND INC
-		../../../intern/audaspace/intern
+	add_definitions(${AUDASPACE_DEFINITIONS})
+
+	list(APPEND INC_SYS
+		${AUDASPACE_C_INCLUDE_DIRS}
 	)
-	add_definitions(-DWITH_AUDASPACE)
 endif()
 
 blender_add_lib(ge_converter "${SRC}" "${INC}" "${INC_SYS}")

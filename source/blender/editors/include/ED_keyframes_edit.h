@@ -41,12 +41,6 @@ struct Scene;
 /* ************************************************ */
 /* Common Macros and Defines */
 
-/* --------- BezTriple Selection ------------- */
-
-#define BEZ_SEL(bezt)    { (bezt)->f1 |=  SELECT; (bezt)->f2 |=  SELECT; (bezt)->f3 |=  SELECT; } (void)0
-#define BEZ_DESEL(bezt)  { (bezt)->f1 &= ~SELECT; (bezt)->f2 &= ~SELECT; (bezt)->f3 &= ~SELECT; } (void)0
-#define BEZ_INVSEL(bezt) { (bezt)->f1 ^=  SELECT; (bezt)->f2 ^=  SELECT; (bezt)->f3 ^=  SELECT; } (void)0
-
 /* --------- Tool Flags ------------ */
 
 /* bezt validation */
@@ -58,6 +52,7 @@ typedef enum eEditKeyframes_Validate {
 	BEZT_OK_VALUERANGE,
 	BEZT_OK_REGION,
 	BEZT_OK_REGION_LASSO,
+	BEZT_OK_REGION_CIRCLE,
 } eEditKeyframes_Validate;
 
 /* ------------ */
@@ -105,6 +100,14 @@ struct KeyframeEdit_LassoData {
 	const rctf *rectf_view;
 	const int (*mcords)[2];
 	int mcords_tot;
+};
+
+/* use with BEZT_OK_REGION_CIRCLE */
+struct KeyframeEdit_CircleData {
+	const rctf *rectf_scaled;
+	const rctf *rectf_view;
+	float mval[2];
+	float radius_squared;
 };
 
 
@@ -252,7 +255,7 @@ bool delete_fcurve_keys(struct FCurve *fcu);
 void clear_fcurve_keys(struct FCurve *fcu);
 void duplicate_fcurve_keys(struct FCurve *fcu);
 
-void clean_fcurve(struct FCurve *fcu, float thresh);
+void clean_fcurve(struct bAnimContext *ac, struct bAnimListElem *ale, float thresh, bool cleardefault);
 void smooth_fcurve(struct FCurve *fcu);
 void sample_fcurve(struct FCurve *fcu);
 
@@ -261,7 +264,7 @@ void sample_fcurve(struct FCurve *fcu);
 void free_anim_copybuf(void);
 short copy_animedit_keys(struct bAnimContext *ac, ListBase *anim_data);
 short paste_animedit_keys(struct bAnimContext *ac, ListBase *anim_data,
-                          const eKeyPasteOffset offset_mode, const eKeyMergeMode merge_mode);
+                          const eKeyPasteOffset offset_mode, const eKeyMergeMode merge_mode, bool flip);
 
 /* ************************************************ */
 

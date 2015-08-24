@@ -34,7 +34,7 @@
 #include "BLI_utildefines.h"
 #include "BLI_math.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_font.h"
 
@@ -45,9 +45,6 @@
 #include "rna_internal.h"
 
 #include "WM_types.h"
-
-#include "BKE_curve.h"
-#include "ED_curve.h"
 
 #ifndef RNA_RUNTIME
 static EnumPropertyItem beztriple_handle_type_items[] = {
@@ -123,8 +120,6 @@ static const EnumPropertyItem curve2d_fill_mode_items[] = {
 #endif
 
 #ifdef RNA_RUNTIME
-
-#include "BLI_math.h"
 
 #include "DNA_object_types.h"
 
@@ -1300,16 +1295,13 @@ static void rna_def_curve_splines(BlenderRNA *brna, PropertyRNA *cprop)
 	RNA_def_property_clear_flag(parm, PROP_THICK_WRAP);
 
 	func = RNA_def_function(srna, "clear", "rna_Curve_spline_clear");
-	RNA_def_function_ui_description(func, "Remove all spline from a curve");
+	RNA_def_function_ui_description(func, "Remove all splines from a curve");
 
 	prop = RNA_def_property(srna, "active", PROP_POINTER, PROP_NONE);
-	RNA_def_property_struct_type(prop, "Object");
+	RNA_def_property_struct_type(prop, "Spline");
 	RNA_def_property_pointer_funcs(prop, "rna_Curve_active_spline_get", "rna_Curve_active_spline_set", NULL, NULL);
 	RNA_def_property_flag(prop, PROP_EDITABLE);
 	RNA_def_property_ui_text(prop, "Active Spline", "Active curve spline");
-	/* Could call: ED_base_object_activate(C, scene->basact);
-	 * but would be a bad level call and it seems the notifier is enough */
-	RNA_def_property_update(prop, NC_SCENE | ND_OB_ACTIVE, NULL);
 }
 
 

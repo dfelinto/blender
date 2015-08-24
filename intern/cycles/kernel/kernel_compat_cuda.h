@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #ifndef __KERNEL_COMPAT_CUDA_H__
@@ -21,6 +21,14 @@
 #define __KERNEL_CUDA__
 #define CCL_NAMESPACE_BEGIN
 #define CCL_NAMESPACE_END
+
+/* Selective nodes compilation. */
+#ifndef __NODES_MAX_GROUP__
+#  define __NODES_MAX_GROUP__ NODE_GROUP_LEVEL_MAX
+#endif
+#ifndef __NODES_FEATURES__
+#  define __NODES_FEATURES__ NODE_FEATURE_ALL
+#endif
 
 #include <cuda.h>
 #include <float.h>
@@ -33,6 +41,7 @@
 #define ccl_global
 #define ccl_constant
 #define ccl_may_alias
+#define ccl_addr_space
 
 /* No assert supported for CUDA */
 

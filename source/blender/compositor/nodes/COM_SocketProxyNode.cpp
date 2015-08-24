@@ -46,7 +46,7 @@ SocketProxyNode::SocketProxyNode(bNode *editorNode, bNodeSocket *editorInput, bN
 	this->addOutputSocket(dt, editorOutput);
 }
 
-void SocketProxyNode::convertToOperations(NodeConverter &converter, const CompositorContext &context) const
+void SocketProxyNode::convertToOperations(NodeConverter &converter, const CompositorContext &/*context*/) const
 {
 	NodeOperationOutput *proxy_output = converter.addInputProxy(getInputSocket(0), m_use_conversion);
 	converter.mapOutputSocket(getOutputSocket(), proxy_output);
@@ -68,13 +68,14 @@ SocketBufferNode::SocketBufferNode(bNode *editorNode, bNodeSocket *editorInput, 
 	this->addOutputSocket(dt, editorOutput);
 }
 
-void SocketBufferNode::convertToOperations(NodeConverter &converter, const CompositorContext &context) const
+void SocketBufferNode::convertToOperations(NodeConverter &converter, const CompositorContext &/*context*/) const
 {
 	NodeOutput *output = this->getOutputSocket(0);
 	NodeInput *input = this->getInputSocket(0);
 	
-	WriteBufferOperation *writeOperation = new WriteBufferOperation();
-	ReadBufferOperation *readOperation = new ReadBufferOperation();
+	DataType datatype = output->getDataType();
+	WriteBufferOperation *writeOperation = new WriteBufferOperation(datatype);
+	ReadBufferOperation *readOperation = new ReadBufferOperation(datatype);
 	readOperation->setMemoryProxy(writeOperation->getMemoryProxy());
 	converter.addOperation(writeOperation);
 	converter.addOperation(readOperation);

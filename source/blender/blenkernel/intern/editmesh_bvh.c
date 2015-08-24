@@ -239,6 +239,32 @@ struct RayCastUserData {
 	float uv[2];
 };
 
+
+static BMFace *bmbvh_ray_cast_handle_hit(
+        BMBVHTree *bmtree, struct RayCastUserData *bmcb_data, const BVHTreeRayHit *hit,
+        float *r_dist, float r_hitout[3], float r_cagehit[3])
+{
+	if (r_hitout) {
+		if (bmtree->flag & BMBVH_RETURN_ORIG) {
+			BMLoop **ltri = bmtree->looptris[hit->index];
+			interp_v3_v3v3v3_uv(r_hitout, ltri[0]->v->co, ltri[1]->v->co, ltri[2]->v->co, bmcb_data->uv);
+		}
+		else {
+			copy_v3_v3(r_hitout, hit->co);
+		}
+
+		if (r_cagehit) {
+			copy_v3_v3(r_cagehit, hit->co);
+		}
+	}
+
+	if (r_dist) {
+		*r_dist = hit->dist;
+	}
+
+	return bmtree->looptris[hit->index][0]->f;
+}
+
 static void bmbvh_ray_cast_cb(void *userdata, int index, const BVHTreeRay *ray, BVHTreeRayHit *hit)
 {
 	struct RayCastUserData *bmcb_data = userdata;
@@ -252,8 +278,13 @@ static void bmbvh_ray_cast_cb(void *userdata, int index, const BVHTreeRay *ray, 
 	isect = (ray->radius > 0.0f ?
 	         isect_ray_tri_epsilon_v3(ray->origin, ray->direction,
 	                                  tri_cos[0], tri_cos[1], tri_cos[2], &dist, uv, ray->radius) :
+#ifdef USE_KDOPBVH_WATERTIGHT
+	         isect_ray_tri_watertight_v3(ray->origin, ray->isect_precalc,
+	                                     tri_cos[0], tri_cos[1], tri_cos[2], &dist, uv));
+#else
 	         isect_ray_tri_v3(ray->origin, ray->direction,
 	                          tri_cos[0], tri_cos[1], tri_cos[2], &dist, uv));
+#endif
 
 	if (isect && dist < hit->dist) {
 		hit->dist = dist;
@@ -284,123 +315,63 @@ BMFace *BKE_bmbvh_ray_cast(BMBVHTree *bmtree, const float co[3], const float dir
 	bmcb_data.cos_cage = (const float (*)[3])bmtree->cos_cage;
 	
 	BLI_bvhtree_ray_cast(bmtree->tree, co, dir, radius, &hit, bmbvh_ray_cast_cb, &bmcb_data);
+
 	if (hit.index != -1 && hit.dist != dist) {
-		if (r_hitout) {
-			if (bmtree->flag & BMBVH_RETURN_ORIG) {
-				BMLoop **ltri = bmtree->looptris[hit.index];
-				interp_v3_v3v3v3_uv(r_hitout, ltri[0]->v->co, ltri[1]->v->co, ltri[2]->v->co, bmcb_data.uv);
-			}
-			else {
-				copy_v3_v3(r_hitout, hit.co);
-			}
-
-			if (r_cagehit) {
-				copy_v3_v3(r_cagehit, hit.co);
-			}
-		}
-
-		if (r_dist) {
-			*r_dist = hit.dist;
-		}
-
-		return bmtree->looptris[hit.index][0]->f;
+		return bmbvh_ray_cast_handle_hit(bmtree, &bmcb_data, &hit, r_dist, r_hitout, r_cagehit);
 	}
 
 	return NULL;
 }
 
-
 /* -------------------------------------------------------------------- */
-/* BKE_bmbvh_find_face_segment */
+/* bmbvh_ray_cast_cb_filter */
 
-struct SegmentUserData {
-	/* from the bmtree */
-	const BMLoop *(*looptris)[3];
-	const float (*cos_cage)[3];
+/* Same as BKE_bmbvh_ray_cast but takes a callback to filter out faces.
+ */
 
-	/* from the hit */
-	float uv[2];
-	const float *co_a, *co_b;
+struct RayCastUserData_Filter {
+	struct RayCastUserData bmcb_data;
+
+	BMBVHTree_FaceFilter filter_cb;
+	void                *filter_userdata;
 };
 
-static void bmbvh_find_face_segment_cb(void *userdata, int index, const BVHTreeRay *ray, BVHTreeRayHit *hit)
+static void bmbvh_ray_cast_cb_filter(void *userdata, int index, const BVHTreeRay *ray, BVHTreeRayHit *hit)
 {
-	struct SegmentUserData *bmcb_data = userdata;
+	struct RayCastUserData_Filter *bmcb_data_filter = userdata;
+	struct RayCastUserData *bmcb_data = &bmcb_data_filter->bmcb_data;
 	const BMLoop **ltri = bmcb_data->looptris[index];
-	float dist, uv[2];
-	const float *tri_cos[3];
-
-	bmbvh_tri_from_face(tri_cos, ltri, bmcb_data->cos_cage);
-
-	if (equals_v3v3(bmcb_data->co_a, tri_cos[0]) ||
-	    equals_v3v3(bmcb_data->co_a, tri_cos[1]) ||
-	    equals_v3v3(bmcb_data->co_a, tri_cos[2]) ||
-
-	    equals_v3v3(bmcb_data->co_b, tri_cos[0]) ||
-	    equals_v3v3(bmcb_data->co_b, tri_cos[1]) ||
-	    equals_v3v3(bmcb_data->co_b, tri_cos[2]))
-	{
-		return;
-	}
-
-	if (isect_ray_tri_v3(ray->origin, ray->direction, tri_cos[0], tri_cos[1], tri_cos[2], &dist, uv) &&
-	    (dist < hit->dist))
-	{
-		hit->dist = dist;
-		hit->index = index;
-
-		copy_v3_v3(hit->no, ltri[0]->f->no);
-
-		madd_v3_v3v3fl(hit->co, ray->origin, ray->direction, dist);
-
-		copy_v2_v2(bmcb_data->uv, uv);
+	if (bmcb_data_filter->filter_cb(ltri[0]->f, bmcb_data_filter->filter_userdata)) {
+		bmbvh_ray_cast_cb(bmcb_data, index, ray, hit);
 	}
 }
 
-BMFace *BKE_bmbvh_find_face_segment(BMBVHTree *bmtree, const float co_a[3], const float co_b[3],
-                                    float *r_fac, float r_hitout[3], float r_cagehit[3])
+BMFace *BKE_bmbvh_ray_cast_filter(
+        BMBVHTree *bmtree, const float co[3], const float dir[3], const float radius,
+        float *r_dist, float r_hitout[3], float r_cagehit[3],
+        BMBVHTree_FaceFilter filter_cb, void *filter_userdata)
 {
 	BVHTreeRayHit hit;
-	struct SegmentUserData bmcb_data;
-	const float dist = len_v3v3(co_a, co_b);
-	float dir[3];
+	struct RayCastUserData_Filter bmcb_data_filter;
+	struct RayCastUserData *bmcb_data = &bmcb_data_filter.bmcb_data;
+
+	const float dist = r_dist ? *r_dist : FLT_MAX;
+
+	bmcb_data_filter.filter_cb = filter_cb;
+	bmcb_data_filter.filter_userdata = filter_userdata;
 
 	if (bmtree->cos_cage) BLI_assert(!(bmtree->bm->elem_index_dirty & BM_VERT));
-
-	sub_v3_v3v3(dir, co_b, co_a);
 
 	hit.dist = dist;
 	hit.index = -1;
 
 	/* ok to leave 'uv' uninitialized */
-	bmcb_data.looptris = (const BMLoop *(*)[3])bmtree->looptris;
-	bmcb_data.cos_cage = (const float (*)[3])bmtree->cos_cage;
-	bmcb_data.co_a = co_a;
-	bmcb_data.co_b = co_b;
+	bmcb_data->looptris = (const BMLoop *(*)[3])bmtree->looptris;
+	bmcb_data->cos_cage = (const float (*)[3])bmtree->cos_cage;
 
-	BLI_bvhtree_ray_cast(bmtree->tree, co_a, dir, 0.0f, &hit, bmbvh_find_face_segment_cb, &bmcb_data);
+	BLI_bvhtree_ray_cast(bmtree->tree, co, dir, radius, &hit, bmbvh_ray_cast_cb_filter, &bmcb_data_filter);
 	if (hit.index != -1 && hit.dist != dist) {
-		/* duplicate of BKE_bmbvh_ray_cast() */
-		if (r_hitout) {
-			if (bmtree->flag & BMBVH_RETURN_ORIG) {
-				BMLoop **ltri = bmtree->looptris[hit.index];
-				interp_v3_v3v3v3_uv(r_hitout, ltri[0]->v->co, ltri[1]->v->co, ltri[2]->v->co, bmcb_data.uv);
-			}
-			else {
-				copy_v3_v3(r_hitout, hit.co);
-			}
-
-			if (r_cagehit) {
-				copy_v3_v3(r_cagehit, hit.co);
-			}
-		}
-		/* end duplicate */
-
-		if (r_fac) {
-			*r_fac = hit.dist / dist;
-		}
-
-		return bmtree->looptris[hit.index][0]->f;
+		return bmbvh_ray_cast_handle_hit(bmtree, bmcb_data, &hit, r_dist, r_hitout, r_cagehit);
 	}
 
 	return NULL;
@@ -466,4 +437,60 @@ BMVert *BKE_bmbvh_find_vert_closest(BMBVHTree *bmtree, const float co[3], const 
 	}
 
 	return NULL;
+}
+
+/* -------------------------------------------------------------------- */
+/* BKE_bmbvh_overlap */
+
+struct BMBVHTree_OverlapData {
+	const BMBVHTree *tree_pair[2];
+	float epsilon;
+};
+
+static bool bmbvh_overlap_cb(void *userdata, int index_a, int index_b, int UNUSED(thread))
+{
+	struct BMBVHTree_OverlapData *data = userdata;
+	const BMBVHTree *bmtree_a = data->tree_pair[0];
+	const BMBVHTree *bmtree_b = data->tree_pair[1];
+
+	BMLoop **tri_a = bmtree_a->looptris[index_a];
+	BMLoop **tri_b = bmtree_b->looptris[index_b];
+	const float *tri_a_co[3] = {tri_a[0]->v->co, tri_a[1]->v->co, tri_a[2]->v->co};
+	const float *tri_b_co[3] = {tri_b[0]->v->co, tri_b[1]->v->co, tri_b[2]->v->co};
+	float ix_pair[2][3];
+	int verts_shared = 0;
+
+	if (bmtree_a->looptris == bmtree_b->looptris) {
+		if (UNLIKELY(tri_a[0]->f == tri_b[0]->f)) {
+			return false;
+		}
+
+		verts_shared = (
+		        ELEM(tri_a_co[0], UNPACK3(tri_b_co)) +
+		        ELEM(tri_a_co[1], UNPACK3(tri_b_co)) +
+		        ELEM(tri_a_co[2], UNPACK3(tri_b_co)));
+
+		/* if 2 points are shared, bail out */
+		if (verts_shared >= 2) {
+			return false;
+		}
+	}
+
+	return (isect_tri_tri_epsilon_v3(UNPACK3(tri_a_co), UNPACK3(tri_b_co), ix_pair[0], ix_pair[1], data->epsilon) &&
+	        /* if we share a vertex, check the intersection isn't a 'point' */
+	        ((verts_shared == 0) || (len_squared_v3v3(ix_pair[0], ix_pair[1]) > data->epsilon)));
+}
+
+/**
+ * Overlap indices reference the looptri's
+ */
+BVHTreeOverlap *BKE_bmbvh_overlap(const BMBVHTree *bmtree_a, const BMBVHTree *bmtree_b, unsigned int *r_overlap_tot)
+{
+	struct BMBVHTree_OverlapData data;
+
+	data.tree_pair[0] = bmtree_a;
+	data.tree_pair[1] = bmtree_b;
+	data.epsilon = max_ff(BLI_bvhtree_getepsilon(bmtree_a->tree), BLI_bvhtree_getepsilon(bmtree_b->tree));
+
+	return BLI_bvhtree_overlap(bmtree_a->tree, bmtree_b->tree, r_overlap_tot, bmbvh_overlap_cb, &data);
 }

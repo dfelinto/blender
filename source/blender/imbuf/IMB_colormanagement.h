@@ -47,10 +47,6 @@ struct ColormanageProcessor;
 struct EnumPropertyItem;
 struct ImBuf;
 struct Main;
-struct rcti;
-struct PartialBufferUpdateContext;
-struct wmWindow;
-struct Scene;
 struct ImageFormatData;
 
 struct ColorSpace;
@@ -70,6 +66,9 @@ void IMB_colormanagement_assign_rect_colorspace(struct ImBuf *ibuf, const char *
 
 const char *IMB_colormanagement_get_float_colorspace(struct ImBuf *ibuf);
 const char *IMB_colormanagement_get_rect_colorspace(struct ImBuf *ibuf);
+
+float IMB_colormanagement_get_luminance(const float rgb[3]);
+unsigned char IMB_colormanagement_get_luminance_byte(const unsigned char[3]);
 
 /* ** Color space transformation functions ** */
 void IMB_colormanagement_transform(float *buffer, int width, int height, int channels,

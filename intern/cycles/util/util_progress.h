@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #ifndef __UTIL_PROGRESS_H__
@@ -38,15 +38,18 @@ public:
 		sample = 0;
 		start_time = time_dt();
 		total_time = 0.0f;
+		render_time = 0.0f;
 		tile_time = 0.0f;
 		status = "Initializing";
 		substatus = "";
 		sync_status = "";
 		sync_substatus = "";
-		update_cb = NULL;
+		update_cb = function_null;
 		cancel = false;
 		cancel_message = "";
-		cancel_cb = NULL;
+		error = false;
+		error_message = "";
+		cancel_cb = function_null;
 	}
 
 	Progress(Progress& progress)
@@ -59,7 +62,7 @@ public:
 		thread_scoped_lock lock(progress.progress_mutex);
 
 		progress.get_status(status, substatus);
-		progress.get_tile(tile, total_time, tile_time);
+		progress.get_tile(tile, total_time, render_time, tile_time);
 
 		sample = progress.get_sample();
 
@@ -71,7 +74,9 @@ public:
 		tile = 0;
 		sample = 0;
 		start_time = time_dt();
+		render_start_time = time_dt();
 		total_time = 0.0f;
+		render_time = 0.0f;
 		tile_time = 0.0f;
 		status = "Initializing";
 		substatus = "";
@@ -79,6 +84,8 @@ public:
 		sync_substatus = "";
 		cancel = false;
 		cancel_message = "";
+		error = false;
+		error_message = "";
 	}
 
 	/* cancel */
@@ -103,9 +110,31 @@ public:
 		return cancel_message;
 	}
 
-	void set_cancel_callback(boost::function<void(void)> function)
+	void set_cancel_callback(function<void(void)> function)
 	{
 		cancel_cb = function;
+	}
+
+	/* error */
+	void set_error(const string& error_message_)
+	{
+		thread_scoped_lock lock(progress_mutex);
+		error_message = error_message_;
+		error = true;
+		/* If error happens we also stop rendering. */
+		cancel_message = error_message_;
+		cancel = true;
+	}
+
+	bool get_error()
+	{
+		return error;
+	}
+
+	string get_error_message()
+	{
+		thread_scoped_lock lock(progress_mutex);
+		return error_message;
 	}
 
 	/* tile and timing information */
@@ -117,22 +146,37 @@ public:
 		start_time = start_time_;
 	}
 
+	void set_render_start_time(double render_start_time_)
+	{
+		thread_scoped_lock lock(progress_mutex);
+
+		render_start_time = render_start_time_;
+	}
+
 	void set_tile(int tile_, double tile_time_)
 	{
 		thread_scoped_lock lock(progress_mutex);
 
 		tile = tile_;
 		total_time = time_dt() - start_time;
+		render_time = time_dt() - render_start_time;
 		tile_time = tile_time_;
 	}
 
-	void get_tile(int& tile_, double& total_time_, double& tile_time_)
+	void get_tile(int& tile_, double& total_time_, double& render_time_, double& tile_time_)
 	{
 		thread_scoped_lock lock(progress_mutex);
 
 		tile_ = tile;
 		total_time_ = (total_time > 0.0)? total_time: 0.0;
+		render_time_ = (render_time > 0.0)? render_time: 0.0;
 		tile_time_ = tile_time;
+	}
+
+	void get_time(double& total_time_, double& render_time_)
+	{
+		total_time_ = (total_time > 0.0)? total_time: 0.0;
+		render_time_ = (render_time > 0.0)? render_time: 0.0;
 	}
 
 	void reset_sample()
@@ -169,6 +213,7 @@ public:
 			status = status_;
 			substatus = substatus_;
 			total_time = time_dt() - start_time;
+			render_time = time_dt() - render_start_time;
 		}
 
 		set_update();
@@ -180,6 +225,7 @@ public:
 			thread_scoped_lock lock(progress_mutex);
 			substatus = substatus_;
 			total_time = time_dt() - start_time;
+			render_time = time_dt() - render_start_time;
 		}
 
 		set_update();
@@ -192,6 +238,7 @@ public:
 			sync_status = status_;
 			sync_substatus = substatus_;
 			total_time = time_dt() - start_time;
+			render_time = time_dt() - render_start_time;
 		}
 
 		set_update();
@@ -204,6 +251,7 @@ public:
 			thread_scoped_lock lock(progress_mutex);
 			sync_substatus = substatus_;
 			total_time = time_dt() - start_time;
+			render_time = time_dt() - render_start_time;
 		}
 
 		set_update();
@@ -233,7 +281,7 @@ public:
 		}
 	}
 
-	void set_update_callback(boost::function<void(void)> function)
+	void set_update_callback(function<void(void)> function)
 	{
 		update_cb = function;
 	}
@@ -241,14 +289,14 @@ public:
 protected:
 	thread_mutex progress_mutex;
 	thread_mutex update_mutex;
-	boost::function<void(void)> update_cb;
-	boost::function<void(void)> cancel_cb;
+	function<void(void)> update_cb;
+	function<void(void)> cancel_cb;
 
 	int tile;    /* counter for rendered tiles */
 	int sample;  /* counter of rendered samples, global for all tiles */
 
-	double start_time;
-	double total_time;
+	double start_time, render_start_time;
+	double total_time, render_time;
 	double tile_time;
 
 	string status;
@@ -259,6 +307,9 @@ protected:
 
 	volatile bool cancel;
 	string cancel_message;
+
+	volatile bool error;
+	string error_message;
 };
 
 CCL_NAMESPACE_END

@@ -7,6 +7,8 @@
 #  OPENIMAGEIO_ROOT_DIR, The base directory to search for OpenImageIO.
 #                        This can also be an environment variable.
 #  OPENIMAGEIO_FOUND, If false, do not try to use OpenImageIO.
+#  OPENIMAGEIO_PUGIXML_FOUND, Indicates whether OIIO has biltin PuguXML parser.
+#  OPENIMAGEIO_IDIFF, full path to idiff application if found.
 #
 # also defined, but not for general use are
 #  OPENIMAGEIO_LIBRARY, where to find the OpenImageIO library.
@@ -54,6 +56,15 @@ FIND_LIBRARY(OPENIMAGEIO_LIBRARY
     lib64 lib
   )
 
+FIND_FILE(OPENIMAGEIO_IDIFF
+  NAMES
+    idiff
+  HINTS
+    ${OPENIMAGEIO_ROOT_DIR}
+  PATH_SUFFIXES
+    bin
+)
+
 # handle the QUIETLY and REQUIRED arguments and set OPENIMAGEIO_FOUND to TRUE if 
 # all listed variables are TRUE
 INCLUDE(FindPackageHandleStandardArgs)
@@ -63,9 +74,17 @@ FIND_PACKAGE_HANDLE_STANDARD_ARGS(OpenImageIO DEFAULT_MSG
 IF(OPENIMAGEIO_FOUND)
   SET(OPENIMAGEIO_LIBRARIES ${OPENIMAGEIO_LIBRARY})
   SET(OPENIMAGEIO_INCLUDE_DIRS ${OPENIMAGEIO_INCLUDE_DIR})
-ENDIF(OPENIMAGEIO_FOUND)
+  IF(EXISTS ${OPENIMAGEIO_INCLUDE_DIR}/OpenImageIO/pugixml.hpp)
+    SET(OPENIMAGEIO_PUGIXML_FOUND TRUE)
+  ENDIF()
+ELSE()
+  SET(OPENIMAGEIO_PUGIXML_FOUND FALSE)
+ENDIF()
 
 MARK_AS_ADVANCED(
   OPENIMAGEIO_INCLUDE_DIR
   OPENIMAGEIO_LIBRARY
+  OPENIMAGEIO_IDIFF
 )
+
+UNSET(_openimageio_SEARCH_DIRS)

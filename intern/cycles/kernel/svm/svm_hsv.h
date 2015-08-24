@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #ifndef __SVM_HSV_H__
@@ -46,12 +46,12 @@ ccl_device void svm_node_hsv(KernelGlobals *kg, ShaderData *sd, float *stack, ui
 	color.y = fac*color.y + (1.0f - fac)*in_color.y;
 	color.z = fac*color.z + (1.0f - fac)*in_color.z;
 
-	/* Clamp color to prevent negative values cauzed by oversaturation. */
+	/* Clamp color to prevent negative values caused by oversaturation. */
 	color.x = max(color.x, 0.0f);
 	color.y = max(color.y, 0.0f);
 	color.z = max(color.z, 0.0f);
 
-	if (stack_valid(out_color_offset))
+	if(stack_valid(out_color_offset))
 		stack_store_float3(stack, out_color_offset, color);
 }
 

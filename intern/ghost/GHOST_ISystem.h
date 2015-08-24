@@ -241,8 +241,8 @@ public:
 	 * \param   height          The height the window.
 	 * \param   state           The state of the window when opened.
 	 * \param   type            The type of drawing context installed in this window.
-	 * \param   stereoVisual    Create a stereo visual for quad buffered stereo.
-	 * \param   numOfAASamples  Number of samples used for AA (zero if no AA)
+	 * \param glSettings: Misc OpenGL settings.
+	 * \param exclusive: Use to show the window ontop and ignore others (used fullscreen).
 	 * \param   parentWindow    Parent (embedder) window
 	 * \return  The new window (or 0 if creation failed).
 	 */
@@ -250,9 +250,8 @@ public:
 	        const STR_String& title,
 	        GHOST_TInt32 left, GHOST_TInt32 top, GHOST_TUns32 width, GHOST_TUns32 height,
 	        GHOST_TWindowState state, GHOST_TDrawingContextType type,
-	        const bool stereoVisual = false,
+	        GHOST_GLSettings glSettings,
 	        const bool exclusive = false,
-	        const GHOST_TUns16 numOfAASamples = 0,
 	        const GHOST_TEmbedderWindowID parentWindow = 0) = 0;
 
 	/**
@@ -380,6 +379,12 @@ public:
 	virtual GHOST_TSuccess getButtonState(GHOST_TButtonMask mask, bool& isDown) const = 0;
 
 	/**
+	 * Sets 3D mouse deadzone
+	 * \param deadzone: Deadzone of the 3D mouse (both for rotation and pan) relative to full range
+	 */
+	virtual void setNDOFDeadZone(float deadzone) = 0;
+
+	/**
 	 * Toggles console
 	 * \param action
 	 * - 0: Hides
@@ -397,7 +402,7 @@ public:
 
 	/**
 	 * Returns the selection buffer
-	 * \return Returns "unsinged char" from X11 XA_CUT_BUFFER0 buffer
+	 * \return "unsigned char" from X11 XA_CUT_BUFFER0 buffer
 	 *
 	 */
 	virtual GHOST_TUns8 *getClipboard(bool selection) const = 0;

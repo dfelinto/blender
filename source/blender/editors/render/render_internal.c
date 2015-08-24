@@ -33,14 +33,16 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_blenlib.h"
+#include "BLI_listbase.h"
+#include "BLI_rect.h"
+#include "BLI_timecode.h"
 #include "BLI_math.h"
 #include "BLI_threads.h"
 #include "BLI_utildefines.h"
 
 #include "PIL_time.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
@@ -48,6 +50,7 @@
 #include "DNA_userdef_types.h"
 
 #include "BKE_blender.h"
+#include "BKE_camera.h"
 #include "BKE_context.h"
 #include "BKE_colortools.h"
 #include "BKE_depsgraph.h"
@@ -75,10 +78,8 @@
 #include "RE_engine.h"
 
 #include "IMB_colormanagement.h"
-#include "IMB_imbuf.h"
 #include "IMB_imbuf_types.h"
 
-#include "GPU_extensions.h"
 
 #include "BIF_gl.h"
 #include "BIF_glutil.h"
@@ -86,7 +87,6 @@
 #include "RNA_access.h"
 #include "RNA_define.h"
 
-#include "wm_window.h"
 
 #include "render_intern.h"
 
@@ -119,7 +119,7 @@ typedef struct RenderJob {
 } RenderJob;
 
 /* called inside thread! */
-static void image_buffer_rect_update(RenderJob *rj, RenderResult *rr, ImBuf *ibuf, ImageUser *iuser, volatile rcti *renrect)
+static void image_buffer_rect_update(RenderJob *rj, RenderResult *rr, ImBuf *ibuf, ImageUser *iuser, volatile rcti *renrect, const char *viewname)
 {
 	Scene *scene = rj->scene;
 	const float *rectf = NULL;
@@ -190,12 +190,16 @@ static void image_buffer_rect_update(RenderJob *rj, RenderResult *rr, ImBuf *ibu
 	 *                                              - sergey -
 	 */
 	/* TODO(sergey): Need to check has_combined here? */
-	if (iuser->pass == 0) {
+	if (iuser->passtype == SCE_PASS_COMBINED) {
+		RenderView *rv;
+		size_t view_id = BKE_scene_multiview_view_id_get(&scene->r, viewname);
+		rv = RE_RenderViewGetById(rr, view_id);
+
 		/* find current float rect for display, first case is after composite... still weak */
-		if (rr->rectf)
-			rectf = rr->rectf;
+		if (rv->rectf)
+			rectf = rv->rectf;
 		else {
-			if (rr->rect32) {
+			if (rv->rect32) {
 				/* special case, currently only happens with sequencer rendering,
 				 * which updates the whole frame, so we can only mark display buffer
 				 * as invalid here (sergey)
@@ -204,8 +208,8 @@ static void image_buffer_rect_update(RenderJob *rj, RenderResult *rr, ImBuf *ibu
 				return;
 			}
 			else {
-				if (rr->renlay == NULL || rr->renlay->rectf == NULL) return;
-				rectf = rr->renlay->rectf;
+				if (rr->renlay == NULL) return;
+				rectf = RE_RenderLayerGetPass(rr->renlay, SCE_PASS_COMBINED, viewname);
 			}
 		}
 		if (rectf == NULL) return;
@@ -343,7 +347,11 @@ static void render_freejob(void *rjv)
 }
 
 /* str is IMA_MAX_RENDER_TEXT in size */
-static void make_renderinfo_string(RenderStats *rs, Scene *scene, bool v3d_override, char *str)
+static void make_renderinfo_string(const RenderStats *rs,
+                                   const Scene *scene,
+                                   const bool v3d_override,
+                                   const char *error,
+                                   char *str)
 {
 	char info_time_str[32]; // used to be extern to header_info.c
 	uintptr_t mem_in_use, mmap_in_use, peak_memory;
@@ -368,7 +376,7 @@ static void make_renderinfo_string(RenderStats *rs, Scene *scene, bool v3d_overr
 	spos += sprintf(spos, IFACE_("Frame:%d "), (scene->r.cfra));
 
 	/* previous and elapsed time */
-	BLI_timestr(rs->lastframetime, info_time_str, sizeof(info_time_str));
+	BLI_timecode_string_from_time_simple(info_time_str, sizeof(info_time_str), rs->lastframetime);
 
 	if (rs->infostr && rs->infostr[0]) {
 		if (rs->lastframetime != 0.0)
@@ -376,7 +384,7 @@ static void make_renderinfo_string(RenderStats *rs, Scene *scene, bool v3d_overr
 		else
 			spos += sprintf(spos, "| ");
 
-		BLI_timestr(PIL_check_seconds_timer() - rs->starttime, info_time_str, sizeof(info_time_str));
+		BLI_timecode_string_from_time_simple(info_time_str, sizeof(info_time_str), PIL_check_seconds_timer() - rs->starttime);
 	}
 	else
 		spos += sprintf(spos, "| ");
@@ -416,8 +424,12 @@ static void make_renderinfo_string(RenderStats *rs, Scene *scene, bool v3d_overr
 		spos += sprintf(spos, IFACE_("| Full Sample %d "), rs->curfsa);
 	
 	/* extra info */
-	if (rs->infostr && rs->infostr[0])
+	if (rs->infostr && rs->infostr[0]) {
 		spos += sprintf(spos, "| %s ", rs->infostr);
+	}
+	else if (error && error[0]) {
+		spos += sprintf(spos, "| %s ", error);
+	}
 
 	/* very weak... but 512 characters is quite safe */
 	if (spos >= str + IMA_MAX_RENDER_TEXT)
@@ -438,7 +450,8 @@ static void image_renderinfo_cb(void *rjv, RenderStats *rs)
 		if (rr->text == NULL)
 			rr->text = MEM_callocN(IMA_MAX_RENDER_TEXT, "rendertext");
 
-		make_renderinfo_string(rs, rj->scene, rj->v3d_override, rr->text);
+		make_renderinfo_string(rs, rj->scene, rj->v3d_override,
+		                       rr->error, rr->text);
 	}
 
 	RE_ReleaseResult(rj->re);
@@ -512,7 +525,6 @@ static void render_image_update_pass_and_layer(RenderJob *rj, RenderResult *rr, 
 			}
 		}
 
-		iuser->pass = sima->iuser.pass;
 		iuser->layer = sima->iuser.layer;
 
 		RE_ReleaseResult(rj->re);
@@ -525,6 +537,7 @@ static void image_rect_update(void *rjv, RenderResult *rr, volatile rcti *renrec
 	Image *ima = rj->image;
 	ImBuf *ibuf;
 	void *lock;
+	const char *viewname = RE_GetActiveRenderView(rj->re);
 
 	/* only update if we are displaying the slot being rendered */
 	if (ima->render_slot != ima->last_render_slot) {
@@ -557,7 +570,7 @@ static void image_rect_update(void *rjv, RenderResult *rr, volatile rcti *renrec
 		    ibuf->channels == 1 ||
 		    U.image_draw_method != IMAGE_DRAW_METHOD_GLSL)
 		{
-			image_buffer_rect_update(rj, rr, ibuf, &rj->iuser, renrect);
+			image_buffer_rect_update(rj, rr, ibuf, &rj->iuser, renrect, viewname);
 		}
 		
 		/* make jobs timer to send notifier */
@@ -779,13 +792,13 @@ static void clean_viewport_memory(Main *bmain, Scene *scene, int renderlay)
 		if ((base->lay & renderlay) == 0) {
 			continue;
 		}
-
 		if (RE_allow_render_generic_object(base->object)) {
 			base->object->id.flag &= ~LIB_DOIT;
 		}
 	}
 
-	for (object = bmain->object.first; object; object = object->id.next) {
+	for (SETLOOPER(scene, sce_iter, base)) {
+		object = base->object;
 		if ((object->id.flag & LIB_DOIT) == 0) {
 			continue;
 		}
@@ -885,6 +898,7 @@ static int screen_render_invoke(bContext *C, wmOperator *op, const wmEvent *even
 	rj->write_still = is_write_still && !is_animation;
 	rj->iuser.scene = scene;
 	rj->iuser.ok = 1;
+	rj->iuser.passtype = SCE_PASS_COMBINED;
 	rj->reports = op->reports;
 	rj->orig_layer = 0;
 	rj->last_layer = 0;
@@ -1121,7 +1135,7 @@ static void render_view3d_renderinfo_cb(void *rjp, RenderStats *rs)
 		*rp->stop = 1;
 	}
 	else {
-		make_renderinfo_string(rs, rp->scene, false, rp->engine->text);
+		make_renderinfo_string(rs, rp->scene, false, NULL, rp->engine->text);
 	
 		/* make jobs timer to send notifier */
 		*(rp->do_update) = true;
@@ -1140,8 +1154,8 @@ BLI_INLINE void rcti_scale_coords(rcti *scaled_rect, const rcti *rect,
 static void render_update_resolution(Render *re, const RenderPreview *rp,
                                      bool use_border, const rcti *clip_rect)
 {
-	int winx = rp->ar->winx / rp->resolution_divider,
-	    winy = rp->ar->winy / rp->resolution_divider;
+	int winx = rp->ar->winx / rp->resolution_divider;
+	int winy = rp->ar->winy / rp->resolution_divider;
 	if (use_border) {
 		rcti scaled_cliprct;
 		rcti_scale_coords(&scaled_cliprct, clip_rect,
@@ -1221,10 +1235,10 @@ static void render_view3d_startjob(void *customdata, short *stop, short *do_upda
 	if ((update_flag & (PR_UPDATE_RENDERSIZE | PR_UPDATE_DATABASE)) || rstats->convertdone == 0) {
 		RenderData rdata;
 
-		/* no osa, blur, seq, layers, etc for preview render */
+		/* no osa, blur, seq, layers, savebuffer etc for preview render */
 		rdata = rp->scene->r;
 		rdata.mode &= ~(R_OSA | R_MBLUR | R_BORDER | R_PANORAMA);
-		rdata.scemode &= ~(R_DOSEQ | R_DOCOMP | R_FREE_IMAGE);
+		rdata.scemode &= ~(R_DOSEQ | R_DOCOMP | R_FREE_IMAGE | R_EXR_TILE_FILE | R_FULL_SAMPLE);
 		rdata.scemode |= R_VIEWPORT_PREVIEW;
 
 		/* we do use layers, but only active */
@@ -1439,7 +1453,7 @@ static void render_view3d_do(RenderEngine *engine, const bContext *C)
 	rp->bmain = CTX_data_main(C);
 	rp->resolution_divider = divider;
 	rp->start_resolution_divider = divider;
-	rp->has_freestyle = scene->r.mode & R_EDGE_FRS;
+	rp->has_freestyle = (scene->r.mode & R_EDGE_FRS) != 0;
 	copy_m4_m4(rp->viewmat, rp->rv3d->viewmat);
 	
 	/* clear info text */
@@ -1455,7 +1469,7 @@ static void render_view3d_do(RenderEngine *engine, const bContext *C)
 	engine->flag &= ~RE_ENGINE_DO_UPDATE;
 }
 
-/* callback for render engine , on changes */
+/* callback for render engine, on changes */
 void render_view3d_update(RenderEngine *engine, const bContext *C)
 {	
 	/* this shouldn't be needed and causes too many database rebuilds, but we
@@ -1481,7 +1495,8 @@ void render_view3d_draw(RenderEngine *engine, const bContext *C)
 		if (re == NULL) return;
 	}
 	
-	RE_AcquireResultImage(re, &rres);
+	/* Viewport render preview doesn't support multiview, view hardcoded to 0 */
+	RE_AcquireResultImage(re, &rres, 0);
 	
 	if (rres.rectf) {
 		RegionView3D *rv3d = CTX_wm_region_view3d(C);
@@ -1551,10 +1566,10 @@ void render_view3d_draw(RenderEngine *engine, const bContext *C)
 	RE_ReleaseResultImage(re);
 }
 
-void ED_viewport_render_kill_jobs(const bContext *C, bool free_database)
+void ED_viewport_render_kill_jobs(wmWindowManager *wm,
+                                  Main *bmain,
+                                  bool free_database)
 {
-	wmWindowManager *wm = CTX_wm_manager(C);
-	Main *bmain = CTX_data_main(C);
 	bScreen *sc;
 	ScrArea *sa;
 	ARegion *ar;
@@ -1611,7 +1626,17 @@ Scene *ED_render_job_get_scene(const bContext *C)
 	RenderJob *rj = (RenderJob *)WM_jobs_customdata_from_type(wm, WM_JOB_TYPE_RENDER);
 	
 	if (rj)
-		return rj->current_scene;
+		return rj->scene;
 	
+	return NULL;
+}
+
+Scene *ED_render_job_get_current_scene(const bContext *C)
+{
+	wmWindowManager *wm = CTX_wm_manager(C);
+	RenderJob *rj = (RenderJob *)WM_jobs_customdata_from_type(wm, WM_JOB_TYPE_RENDER);
+	if (rj) {
+		return rj->current_scene;
+	}
 	return NULL;
 }

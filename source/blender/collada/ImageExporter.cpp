@@ -67,14 +67,14 @@ void ImagesExporter::export_UV_Image(Image *image, bool use_copies)
 			return;
 		}
 
-		bool  is_dirty     = imbuf->userflags & IB_BITMAPDIRTY;
+		bool  is_dirty     = (imbuf->userflags & IB_BITMAPDIRTY) != 0;
 
 		ImageFormatData imageFormat;
 		BKE_imbuf_to_image_format(&imageFormat, imbuf);
 
 		short image_source = image->source;
 		bool  is_generated = image_source == IMA_SRC_GENERATED;
-		bool  is_packed    = image->packedfile != NULL;
+		bool  is_packed    = BKE_image_has_packedfile(image);
 
 		char export_path[FILE_MAX];
 		char source_path[FILE_MAX];
@@ -89,7 +89,7 @@ void ImagesExporter::export_UV_Image(Image *image, bool use_copies)
 			// make absolute destination path
 
 			BLI_strncpy(export_file, name.c_str(), sizeof(export_file));
-			BKE_add_image_extension(export_file, &imageFormat);
+			BKE_image_path_ensure_ext_from_imformat(export_file, &imageFormat);
 
 			BLI_join_dirfile(export_path, sizeof(export_path), export_dir, export_file);
 

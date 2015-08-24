@@ -49,8 +49,6 @@
 #include "WM_api.h"
 #include "WM_types.h"
 
-
-
 #include "ED_armature.h"
 #include "ED_keyframing.h"
 
@@ -261,7 +259,7 @@ LinkData *poseAnim_mapping_getNextFCurve(ListBase *fcuLinks, LinkData *prev, con
 		FCurve *fcu = (FCurve *)ld->data;
 		
 		/* check if paths match */
-		if (strcmp(path, fcu->rna_path) == 0)
+		if (STREQ(path, fcu->rna_path))
 			return ld;
 	}
 	

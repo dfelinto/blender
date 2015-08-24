@@ -46,6 +46,8 @@
 #include "BKE_cdderivedmesh.h"
 
 #include "depsgraph_private.h"
+#include "DEG_depsgraph_build.h"
+
 #include "MOD_modifiertypes.h"
 #include "MEM_guardedalloc.h"
 
@@ -138,15 +140,15 @@ static DerivedMesh *applyModifier(ModifierData *md, Object *ob,
 	DerivedMesh *dm = derivedData;
 	DerivedMesh *result;
 	ScrewModifierData *ltmd = (ScrewModifierData *) md;
-	const int useRenderParams = flag & MOD_APPLY_RENDER;
+	const bool use_render_params = (flag & MOD_APPLY_RENDER) != 0;
 	
 	int *origindex;
 	int mpoly_index = 0;
 	unsigned int step;
 	unsigned int i, j;
 	unsigned int i1, i2;
-	unsigned int step_tot = useRenderParams ? ltmd->render_steps : ltmd->steps;
-	const bool do_flip = ltmd->flag & MOD_SCREW_NORMAL_FLIP ? 1 : 0;
+	unsigned int step_tot = use_render_params ? ltmd->render_steps : ltmd->steps;
+	const bool do_flip = (ltmd->flag & MOD_SCREW_NORMAL_FLIP) != 0;
 
 	const int quad_ord[4] = {
 	    do_flip ? 3 : 0,
@@ -156,9 +158,9 @@ static DerivedMesh *applyModifier(ModifierData *md, Object *ob,
 	};
 	const int quad_ord_ofs[4] = {
 	    do_flip ? 2 : 0,
-	    do_flip ? 1 : 1,
+	    1,
 	    do_flip ? 0 : 2,
-	    do_flip ? 3 : 3,
+	    3,
 	};
 
 	unsigned int maxVerts = 0, maxEdges = 0, maxPolys = 0;
@@ -1058,6 +1060,7 @@ static DerivedMesh *applyModifier(ModifierData *md, Object *ob,
 
 
 static void updateDepgraph(ModifierData *md, DagForest *forest,
+                           struct Main *UNUSED(bmain),
                            struct Scene *UNUSED(scene),
                            Object *UNUSED(ob),
                            DagNode *obNode)
@@ -1070,6 +1073,18 @@ static void updateDepgraph(ModifierData *md, DagForest *forest,
 		dag_add_relation(forest, curNode, obNode,
 		                 DAG_RL_DATA_DATA | DAG_RL_OB_DATA,
 		                 "Screw Modifier");
+	}
+}
+
+static void updateDepsgraph(ModifierData *md,
+                            struct Main *UNUSED(bmain),
+                            struct Scene *UNUSED(scene),
+                            Object *UNUSED(ob),
+                            struct DepsNodeHandle *node)
+{
+	ScrewModifierData *ltmd = (ScrewModifierData *)md;
+	if (ltmd->ob_axis != NULL) {
+		DEG_add_object_relation(node, ltmd->ob_axis, DEG_OB_COMP_TRANSFORM, "Screw Modifier");
 	}
 }
 
@@ -1106,6 +1121,7 @@ ModifierTypeInfo modifierType_Screw = {
 	/* freeData */          NULL,
 	/* isDisabled */        NULL,
 	/* updateDepgraph */    updateDepgraph,
+	/* updateDepsgraph */   updateDepsgraph,
 	/* dependsOnTime */     NULL,
 	/* dependsOnNormals */	NULL,
 	/* foreachObjectLink */ foreachObjectLink,

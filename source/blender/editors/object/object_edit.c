@@ -42,6 +42,8 @@
 #include "BLI_utildefines.h"
 #include "BLI_ghash.h"
 
+#include "BLT_translation.h"
+
 #include "DNA_armature_types.h"
 #include "DNA_curve_types.h"
 #include "DNA_group_types.h"
@@ -63,7 +65,9 @@
 #include "BKE_curve.h"
 #include "BKE_effect.h"
 #include "BKE_depsgraph.h"
+#include "BKE_global.h"
 #include "BKE_image.h"
+#include "BKE_lattice.h"
 #include "BKE_library.h"
 #include "BKE_main.h"
 #include "BKE_material.h"
@@ -315,7 +319,7 @@ void OBJECT_OT_hide_render_set(wmOperatorType *ot)
  * Load EditMode data back into the object,
  * optionally freeing the editmode data.
  */
-static bool ED_object_editmode_load_ex(Object *obedit, const bool freedata)
+static bool ED_object_editmode_load_ex(Main *bmain, Object *obedit, const bool freedata)
 {
 	if (obedit == NULL) {
 		return false;
@@ -345,6 +349,11 @@ static bool ED_object_editmode_load_ex(Object *obedit, const bool freedata)
 		ED_armature_from_edit(obedit->data);
 		if (freedata)
 			ED_armature_edit_free(obedit->data);
+		/* TODO(sergey): Pose channels might have been changed, so need
+		 * to inform dependency graph about this. But is it really the
+		 * best place to do this?
+		 */
+		DAG_relations_tag_update(bmain);
 	}
 	else if (ELEM(obedit->type, OB_CURVE, OB_SURF)) {
 		load_editNurb(obedit);
@@ -373,7 +382,8 @@ static bool ED_object_editmode_load_ex(Object *obedit, const bool freedata)
 
 bool ED_object_editmode_load(Object *obedit)
 {
-	return ED_object_editmode_load_ex(obedit, false);
+	/* TODO(sergey): use proper main here? */
+	return ED_object_editmode_load_ex(G.main, obedit, false);
 }
 
 void ED_object_editmode_exit(bContext *C, int flag)
@@ -386,7 +396,7 @@ void ED_object_editmode_exit(bContext *C, int flag)
 
 	if (flag & EM_WAITCURSOR) waitcursor(1);
 
-	if (ED_object_editmode_load_ex(obedit, freedata) == false) {
+	if (ED_object_editmode_load_ex(CTX_data_main(C), obedit, freedata) == false) {
 		/* in rare cases (background mode) its possible active object
 		 * is flagged for editmode, without 'obedit' being set [#35489] */
 		if (UNLIKELY(scene->basact && (scene->basact->object->mode & OB_MODE_EDIT))) {
@@ -568,8 +578,8 @@ static int editmode_toggle_exec(bContext *C, wmOperator *op)
 	ToolSettings *toolsettings =  CTX_data_tool_settings(C);
 
 	if (!is_mode_set) {
-		Scene *scene = CTX_data_scene(C);
-		if (!ED_object_mode_compat_set(C, scene->basact->object, mode_flag, op->reports)) {
+		Object *ob = CTX_data_active_object(C);
+		if (!ED_object_mode_compat_set(C, ob, mode_flag, op->reports)) {
 			return OPERATOR_CANCELLED;
 		}
 	}
@@ -895,6 +905,8 @@ static void copy_attr(Main *bmain, Scene *scene, View3D *v3d, short event)
 					base->object->rdamping = ob->rdamping;
 					base->object->min_vel = ob->min_vel;
 					base->object->max_vel = ob->max_vel;
+					base->object->min_angvel = ob->min_angvel;
+					base->object->max_angvel = ob->max_angvel;
 					if (ob->gameflag & OB_BOUNDS) {
 						base->object->collision_boundtype = ob->collision_boundtype;
 					}
@@ -1347,7 +1359,7 @@ static int shade_smooth_exec(bContext *C, wmOperator *op)
 	ID *data;
 	Curve *cu;
 	Nurb *nu;
-	int clear = (strcmp(op->idname, "OBJECT_OT_shade_flat") == 0);
+	int clear = (STREQ(op->idname, "OBJECT_OT_shade_flat"));
 	bool done = false, linked_data = false;
 
 	CTX_DATA_BEGIN(C, Object *, ob, selected_editable_objects)
@@ -1701,7 +1713,7 @@ static int game_property_new_exec(bContext *C, wmOperator *op)
 		BLI_strncpy(prop->name, name, sizeof(prop->name));
 	}
 
-	BKE_bproperty_unique(NULL, prop, 0); // make_unique_prop_names(prop->name);
+	BLI_uniquename(&ob->prop, prop, DATA_("Property"), '.', offsetof(bProperty, name), sizeof(prop->name));
 
 	WM_event_add_notifier(C, NC_LOGIC, NULL);
 	return OPERATOR_FINISHED;
@@ -1765,6 +1777,77 @@ void OBJECT_OT_game_property_remove(wmOperatorType *ot)
 
 	RNA_def_int(ot->srna, "index", 0, 0, INT_MAX, "Index", "Property index to remove ", 0, INT_MAX);
 }
+
+#define GAME_PROPERTY_MOVE_UP    1
+#define GAME_PROPERTY_MOVE_DOWN -1
+
+static int game_property_move(bContext *C, wmOperator *op)
+{
+	Object *ob = CTX_data_active_object(C);
+	bProperty *prop;
+	bProperty *otherprop = NULL;
+	const int index = RNA_int_get(op->ptr, "index");
+	const int dir = RNA_enum_get(op->ptr, "direction");
+
+	if (ob == NULL)
+		return OPERATOR_CANCELLED;
+
+	prop = BLI_findlink(&ob->prop, index);
+	/* invalid index */
+	if (prop == NULL)
+		return OPERATOR_CANCELLED;
+
+	if (dir == GAME_PROPERTY_MOVE_UP) {
+		otherprop = prop->prev;
+	}
+	else if (dir == GAME_PROPERTY_MOVE_DOWN) {
+		otherprop = prop->next;
+	}
+	else {
+		BLI_assert(0);
+	}
+
+	if (prop && otherprop) {
+		BLI_listbase_swaplinks(&ob->prop, prop, otherprop);
+
+		WM_event_add_notifier(C, NC_LOGIC, NULL);
+		return OPERATOR_FINISHED;
+	}
+	else {
+		return OPERATOR_CANCELLED;
+	}
+}
+
+void OBJECT_OT_game_property_move(wmOperatorType *ot)
+{
+	static EnumPropertyItem direction_property_move[] = {
+		{GAME_PROPERTY_MOVE_UP,   "UP",   0, "Up",   ""},
+		{GAME_PROPERTY_MOVE_DOWN, "DOWN", 0, "Down", ""},
+		{0, NULL, 0, NULL, NULL}
+	};
+	PropertyRNA *prop;
+
+	/* identifiers */
+	ot->name = "Move Game Property";
+	ot->description = "Move game property";
+	ot->idname = "OBJECT_OT_game_property_move";
+
+	/* api callbacks */
+	ot->exec = game_property_move;
+	ot->poll = ED_operator_object_active_editable;
+
+	/* flags */
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+	/* properties */
+	prop = RNA_def_int(ot->srna, "index", 0, 0, INT_MAX, "Index", "Property index to move", 0, INT_MAX);
+	RNA_def_property_flag(prop, PROP_HIDDEN);
+	RNA_def_enum(ot->srna, "direction", direction_property_move, 0, "Direction",
+	             "Direction for moving the property");
+}
+
+#undef GAME_PROPERTY_MOVE_UP
+#undef GAME_PROPERTY_MOVE_DOWN
 
 #define COPY_PROPERTIES_REPLACE 1
 #define COPY_PROPERTIES_MERGE   2
@@ -1963,6 +2046,8 @@ static int game_physics_copy_exec(bContext *C, wmOperator *UNUSED(op))
 			ob_iter->rdamping = ob->rdamping;
 			ob_iter->min_vel = ob->min_vel;
 			ob_iter->max_vel = ob->max_vel;
+			ob_iter->min_angvel = ob->min_angvel;
+			ob_iter->max_angvel = ob->max_angvel;
 			ob_iter->obstacleRad = ob->obstacleRad;
 			ob_iter->mass = ob->mass;
 			copy_v3_v3(ob_iter->anisotropicFriction, ob->anisotropicFriction);
@@ -1996,4 +2081,68 @@ void OBJECT_OT_game_physics_copy(struct wmOperatorType *ot)
 	
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
+
+/* generic utility function */
+
+bool ED_object_editmode_calc_active_center(Object *obedit, const bool select_only, float r_center[3])
+{
+	switch (obedit->type) {
+		case OB_MESH:
+		{
+			BMEditMesh *em = BKE_editmesh_from_object(obedit);
+			BMEditSelection ese;
+
+			if (BM_select_history_active_get(em->bm, &ese)) {
+				BM_editselection_center(&ese, r_center);
+				return true;
+			}
+			break;
+		}
+		case OB_ARMATURE:
+		{
+			bArmature *arm = obedit->data;
+			EditBone *ebo = arm->act_edbone;
+
+			if (ebo && (!select_only || (ebo->flag & (BONE_SELECTED | BONE_ROOTSEL)))) {
+				copy_v3_v3(r_center, ebo->head);
+				return true;
+			}
+
+			break;
+		}
+		case OB_CURVE:
+		case OB_SURF:
+		{
+			Curve *cu = obedit->data;
+
+			if (ED_curve_active_center(cu, r_center)) {
+				return true;
+			}
+			break;
+		}
+		case OB_MBALL:
+		{
+			MetaBall *mb = obedit->data;
+			MetaElem *ml_act = mb->lastelem;
+
+			if (ml_act && (!select_only || (ml_act->flag & SELECT))) {
+				copy_v3_v3(r_center, &ml_act->x);
+				return true;
+			}
+			break;
+		}
+		case OB_LATTICE:
+		{
+			BPoint *actbp = BKE_lattice_active_point_get(obedit->data);
+
+			if (actbp) {
+				copy_v3_v3(r_center, actbp->vec);
+				return true;
+			}
+			break;
+		}
+	}
+
+	return false;
 }

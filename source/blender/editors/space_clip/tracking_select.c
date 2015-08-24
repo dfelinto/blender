@@ -36,7 +36,6 @@
 
 #include "BLI_utildefines.h"
 #include "BLI_math.h"
-#include "BLI_listbase.h"
 #include "BLI_rect.h"
 #include "BLI_lasso.h"
 
@@ -49,15 +48,8 @@
 #include "ED_screen.h"
 #include "ED_clip.h"
 
-#include "IMB_imbuf_types.h"
-#include "IMB_imbuf.h"
-
-#include "UI_interface.h"
-
 #include "RNA_access.h"
 #include "RNA_define.h"
-
-#include "PIL_time.h"
 
 #include "UI_view2d.h"
 
@@ -70,7 +62,6 @@ static float dist_to_crns(float co[2], float pos[2], float crns[4][2]);
 static int mouse_on_side(float co[2], float x1, float y1, float x2, float y2, float epsx, float epsy)
 {
 	if (x1 > x2)
-
 		SWAP(float, x1, x2);
 
 	if (y1 > y2)
@@ -1006,6 +997,6 @@ void CLIP_OT_select_grouped(wmOperatorType *ot)
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
-	/* proeprties */
+	/* properties */
 	RNA_def_enum(ot->srna, "group", select_group_items, TRACK_CLEAR_REMAINED, "Action", "Clear action to execute");
 }

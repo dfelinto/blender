@@ -61,6 +61,9 @@
 #  define USE_KDTREE
 #endif
 
+/* disable in production, it can fail on near zero area ngons */
+// #define USE_STRICT_ASSERT
+
 // #define DEBUG_TIME
 #ifdef DEBUG_TIME
 #  include "PIL_time_utildefines.h"
@@ -165,7 +168,7 @@ static bool       pf_ear_tip_check(PolyFill *pf, PolyIndex *pi_ear_tip);
 static void       pf_ear_tip_cut(PolyFill *pf, PolyIndex *pi_ear_tip);
 
 
-BLI_INLINE eSign signum_i(float a)
+BLI_INLINE eSign signum_enum(float a)
 {
 	if (UNLIKELY(a == 0.0f))
 		return  0;
@@ -179,7 +182,7 @@ BLI_INLINE eSign signum_i(float a)
  * alternative version of #area_tri_signed_v2
  * needed because of float precision issues
  *
- * \note removes / 2 since its not needed since we only need ths sign.
+ * \note removes / 2 since its not needed since we only need the sign.
  */
 BLI_INLINE float area_tri_signed_v2_alt_2x(const float v1[2], const float v2[2], const float v3[2])
 {
@@ -191,7 +194,7 @@ BLI_INLINE float area_tri_signed_v2_alt_2x(const float v1[2], const float v2[2],
 
 static eSign span_tri_v2_sign(const float v1[2], const float v2[2], const float v3[2])
 {
-	return signum_i(area_tri_signed_v2_alt_2x(v3, v2, v1));
+	return signum_enum(area_tri_signed_v2_alt_2x(v3, v2, v1));
 }
 
 
@@ -797,6 +800,7 @@ static void polyfill_prepare(
 	}
 	else {
 		/* chech we're passing in correcty args */
+#ifdef USE_STRICT_ASSERT
 #ifndef NDEBUG
 		if (coords_sign == 1) {
 			BLI_assert(cross_poly_v2(coords, coords_tot) >= 0.0f);
@@ -804,6 +808,7 @@ static void polyfill_prepare(
 		else {
 			BLI_assert(cross_poly_v2(coords, coords_tot) <= 0.0f);
 		}
+#endif
 #endif
 	}
 

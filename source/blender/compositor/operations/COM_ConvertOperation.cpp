@@ -22,6 +22,9 @@
 
 #include "COM_ConvertOperation.h"
 
+extern "C" {
+#include "IMB_colormanagement.h"
+}
 
 ConvertBaseOperation::ConvertBaseOperation()
 {
@@ -49,9 +52,9 @@ ConvertValueToColorOperation::ConvertValueToColorOperation() : ConvertBaseOperat
 
 void ConvertValueToColorOperation::executePixelSampled(float output[4], float x, float y, PixelSampler sampler)
 {
-	float inputValue[4];
-	this->m_inputOperation->readSampled(inputValue, x, y, sampler);
-	output[0] = output[1] = output[2] = inputValue[0];
+	float value;
+	this->m_inputOperation->readSampled(&value, x, y, sampler);
+	output[0] = output[1] = output[2] = value;
 	output[3] = 1.0f;
 }
 
@@ -84,7 +87,7 @@ void ConvertColorToBWOperation::executePixelSampled(float output[4], float x, fl
 {
 	float inputColor[4];
 	this->m_inputOperation->readSampled(inputColor, x, y, sampler);
-	output[0] = rgb_to_bw(inputColor);
+	output[0] = IMB_colormanagement_get_luminance(inputColor);
 }
 
 
@@ -98,8 +101,9 @@ ConvertColorToVectorOperation::ConvertColorToVectorOperation() : ConvertBaseOper
 
 void ConvertColorToVectorOperation::executePixelSampled(float output[4], float x, float y, PixelSampler sampler)
 {
-	this->m_inputOperation->readSampled(output, x, y, sampler);
-}
+	float color[4];
+	this->m_inputOperation->readSampled(color, x, y, sampler);
+	copy_v3_v3(output, color);}
 
 
 /* ******** Value to Vector ******** */
@@ -112,12 +116,9 @@ ConvertValueToVectorOperation::ConvertValueToVectorOperation() : ConvertBaseOper
 
 void ConvertValueToVectorOperation::executePixelSampled(float output[4], float x, float y, PixelSampler sampler)
 {
-	float input[4];
-	this->m_inputOperation->readSampled(input, x, y, sampler);
-	output[0] = input[0];
-	output[1] = input[0];
-	output[2] = input[0];
-	output[3] = 0.0f;
+	float value;
+	this->m_inputOperation->readSampled(&value, x, y, sampler);
+	output[0] = output[1] = output[2] = value;
 }
 
 

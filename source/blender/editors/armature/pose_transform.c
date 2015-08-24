@@ -320,7 +320,7 @@ static bPoseChannel *pose_bone_do_paste(Object *ob, bPoseChannel *chan, const bo
 	if (selOnly)
 		paste_ok = ((pchan) && (pchan->bone->flag & BONE_SELECTED));
 	else
-		paste_ok = ((pchan != NULL));
+		paste_ok = (pchan != NULL);
 	
 	/* continue? */
 	if (paste_ok) {
@@ -811,7 +811,7 @@ void POSE_OT_transforms_clear(wmOperatorType *ot)
 static int pose_clear_user_transforms_exec(bContext *C, wmOperator *op)
 {
 	Scene *scene = CTX_data_scene(C);
-	Object *ob = CTX_data_active_object(C);
+	Object *ob = BKE_object_pose_armature_get(CTX_data_active_object(C));
 	float cframe = (float)CFRA;
 	const bool only_select = RNA_boolean_get(op->ptr, "only_selected");
 	

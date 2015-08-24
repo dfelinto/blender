@@ -23,7 +23,10 @@
 #include "COM_TextureOperation.h"
 
 #include "BLI_listbase.h"
+#include "BLI_threads.h"
 #include "BKE_image.h"
+
+static ThreadMutex mutex_lock = BLI_MUTEX_INITIALIZER;
 
 TextureBaseOperation::TextureBaseOperation() : SingleThreadedOperation()
 {
@@ -77,12 +80,9 @@ void TextureBaseOperation::determineResolution(unsigned int resolution[2], unsig
 
 void TextureAlphaOperation::executePixelSampled(float output[4], float x, float y, PixelSampler sampler)
 {
-	TextureBaseOperation::executePixelSampled(output, x, y, sampler);
-	output[0] = output[3];
-	output[1] = 0.0f;
-	output[2] = 0.0f;
-	output[3] = 0.0f;
-}
+	float color[4];
+	TextureBaseOperation::executePixelSampled(color, x, y, sampler);
+	output[0] = color[3];}
 
 void TextureBaseOperation::executePixelSampled(float output[4], float x, float y, PixelSampler sampler)
 {
@@ -103,7 +103,12 @@ void TextureBaseOperation::executePixelSampled(float output[4], float x, float y
 	vec[1] = textureSize[1] * (v + textureOffset[1]);
 	vec[2] = textureSize[2] * textureOffset[2];
 
-	retval = multitex_ext(this->m_texture, vec, NULL, NULL, 0, &texres, m_pool, m_sceneColorManage);
+	/* TODO(sergey): Need to pass thread ID to the multitex code,
+	 * then we can avoid having mutex here.
+	 */
+	BLI_mutex_lock(&mutex_lock);
+	retval = multitex_ext(this->m_texture, vec, NULL, NULL, 0, &texres, m_pool, m_sceneColorManage, false);
+	BLI_mutex_unlock(&mutex_lock);
 
 	if (texres.talpha)
 		output[3] = texres.ta;
@@ -120,22 +125,27 @@ void TextureBaseOperation::executePixelSampled(float output[4], float x, float y
 	}
 }
 
-MemoryBuffer *TextureBaseOperation::createMemoryBuffer(rcti *rect2)
+MemoryBuffer *TextureBaseOperation::createMemoryBuffer(rcti * /*rect2*/)
 {
 	int height = getHeight();
 	int width = getWidth();
+	DataType datatype = this->getOutputSocket()->getDataType();
+	int add = 4;
+	if (datatype == COM_DT_VALUE) {
+		add = 1;
+	}
 
 	rcti rect;
 	rect.xmin = 0;
 	rect.ymin = 0;
 	rect.xmax = width;
 	rect.ymax = height;
-	MemoryBuffer *result = new MemoryBuffer(NULL, &rect);
+	MemoryBuffer *result = new MemoryBuffer(datatype, &rect);
 
 	float *data = result->getBuffer();
 
 	for (int y = 0; y < height; y++) {
-		for (int x = 0; x < width; x++, data += 4) {
+		for (int x = 0; x < width; x++, data += add) {
 			this->executePixelSampled(data, x, y, COM_PS_NEAREST);
 		}
 	}

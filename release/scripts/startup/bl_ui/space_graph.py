@@ -29,6 +29,7 @@ class GRAPH_HT_header(Header):
         from bl_ui.space_dopesheet import dopesheet_filter
 
         layout = self.layout
+        toolsettings = context.tool_settings
 
         st = context.space_data
 
@@ -46,12 +47,21 @@ class GRAPH_HT_header(Header):
         row.active = st.use_normalization
         row.prop(st, "use_auto_normalization", text="Auto")
 
+        row = layout.row(align=True)
+
+        row.prop(toolsettings, "use_proportional_fcurve",
+                 text="", icon_only=True)
+        if toolsettings.use_proportional_fcurve:
+            row.prop(toolsettings, "proportional_edit_falloff",
+                     text="", icon_only=True)
+
         layout.prop(st, "auto_snap", text="")
         layout.prop(st, "pivot_point", icon_only=True)
 
         row = layout.row(align=True)
         row.operator("graph.copy", text="", icon='COPYDOWN')
         row.operator("graph.paste", text="", icon='PASTEDOWN')
+        row.operator("graph.paste", text="", icon='PASTEFLIPDOWN').flipped = True
 
         row = layout.row(align=True)
         if st.has_ghost_curves:
@@ -115,6 +125,7 @@ class GRAPH_MT_view(Menu):
         layout.separator()
         layout.operator("graph.view_all")
         layout.operator("graph.view_selected")
+        layout.operator("graph.view_frame")
 
         layout.separator()
         layout.operator("screen.area_dupli")
@@ -133,9 +144,15 @@ class GRAPH_MT_select(Menu):
         layout.operator("graph.select_all_toggle", text="Invert Selection").invert = True
 
         layout.separator()
-        layout.operator("graph.select_border")
-        layout.operator("graph.select_border", text="Border Axis Range").axis_range = True
-        layout.operator("graph.select_border", text="Border (Include Handles)").include_handles = True
+        props = layout.operator("graph.select_border")
+        props.axis_range = False
+        props.include_handles = False
+        props = layout.operator("graph.select_border", text="Border Axis Range")
+        props.axis_range = True
+        props.include_handles = False
+        props = layout.operator("graph.select_border", text="Border (Include Handles)")
+        props.axis_range = False
+        props.include_handles = True
 
         layout.separator()
         layout.operator("graph.select_column", text="Columns on Selected Keys").mode = 'KEYS'
@@ -145,8 +162,12 @@ class GRAPH_MT_select(Menu):
         layout.operator("graph.select_column", text="Between Selected Markers").mode = 'MARKERS_BETWEEN'
 
         layout.separator()
-        layout.operator("graph.select_leftright", text="Before Current Frame").mode = 'LEFT'
-        layout.operator("graph.select_leftright", text="After Current Frame").mode = 'RIGHT'
+        props = layout.operator("graph.select_leftright", text="Before Current Frame")
+        props.extend = False
+        props.mode = 'LEFT'
+        props = layout.operator("graph.select_leftright", text="After Current Frame")
+        props.extend = False
+        props.mode = 'RIGHT'
 
         layout.separator()
         layout.operator("graph.select_more")
@@ -189,8 +210,12 @@ class GRAPH_MT_channel(Menu):
 
         layout.separator()
         layout.operator("anim.channels_editable_toggle")
-        layout.operator("anim.channels_visibility_set")
         layout.operator_menu_enum("graph.extrapolation_type", "type", text="Extrapolation Mode")
+
+        layout.separator()
+        layout.operator("graph.hide", text="Hide Selected Curves").unselected = False
+        layout.operator("graph.hide", text="Hide Unselected Curves").unselected = True
+        layout.operator("graph.reveal")
 
         layout.separator()
         layout.operator("anim.channels_expand")
@@ -233,6 +258,7 @@ class GRAPH_MT_key(Menu):
 
         layout.separator()
         layout.operator("graph.clean")
+        layout.operator("graph.clean", text="Clean Channels").channels = True
         layout.operator("graph.smooth")
         layout.operator("graph.sample")
         layout.operator("graph.bake")
@@ -255,6 +281,21 @@ class GRAPH_MT_key_transform(Menu):
         layout.operator("transform.transform", text="Extend").mode = 'TIME_EXTEND'
         layout.operator("transform.rotate", text="Rotate")
         layout.operator("transform.resize", text="Scale")
+
+
+class GRAPH_MT_delete(Menu):
+    bl_label = "Delete"
+
+    def draw(self, context):
+        layout = self.layout
+
+        layout.operator("graph.delete")
+
+        layout.separator()
+
+        layout.operator("graph.clean")
+        layout.operator("graph.clean", text="Clean Channels").channels = True
+
 
 if __name__ == "__main__":  # only for live edit.
     bpy.utils.register_module(__name__)

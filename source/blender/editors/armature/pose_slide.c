@@ -43,6 +43,7 @@
 #include "BKE_context.h"
 #include "BKE_object.h"
 #include "BKE_report.h"
+#include "BKE_unit.h"
 
 #include "RNA_access.h"
 #include "RNA_define.h"
@@ -53,6 +54,7 @@
 #include "ED_armature.h"
 #include "ED_keyframes_draw.h"
 #include "ED_markers.h"
+#include "ED_numinput.h"
 #include "ED_screen.h"
 
 #include "armature_intern.h"
@@ -98,6 +100,8 @@ typedef struct tPoseSlideOp {
 	int flag;           /* unused for now, but can later get used for storing runtime settings.... */
 	
 	float percentage;   /* 0-1 value for determining the influence of whatever is relevant */
+	
+	NumInput num;       /* numeric input */
 } tPoseSlideOp;
 
 /* Pose Sliding Modes */
@@ -154,6 +158,12 @@ static int pose_slide_init(bContext *C, wmOperator *op, short mode)
 	 */
 	BLI_dlrbTree_init(&pso->keys);
 	
+	/* initialise numeric input */
+	initNumInput(&pso->num);
+	pso->num.idx_max = 0; /* one axis */
+	pso->num.val_flag[0] |= NUM_NO_NEGATIVE;
+	pso->num.unit_type[0] = B_UNIT_NONE; /* percentages don't have any units... */
+	
 	/* return status is whether we've got all the data we were requested to get */
 	return 1;
 }
@@ -201,6 +211,12 @@ static void pose_slide_apply_val(tPoseSlideOp *pso, FCurve *fcu, float *val)
 	/* next/end */
 	eVal = evaluate_fcurve(fcu, (float)pso->nextFrame);
 	
+	/* if both values are equal, don't do anything */
+	if (IS_EQF(sVal, eVal)) {
+		(*val) = sVal;
+		return;
+	}
+	
 	/* calculate the relative weights of the endpoints */
 	if (pso->mode == POSESLIDE_BREAKDOWN) {
 		/* get weights from the percentage control */
@@ -234,7 +250,7 @@ static void pose_slide_apply_val(tPoseSlideOp *pso, FCurve *fcu, float *val)
 			 *	- perform this weighting a number of times given by the percentage...
 			 */
 			int iters = (int)ceil(10.0f * pso->percentage); /* TODO: maybe a sensitivity ctrl on top of this is needed */
-
+			
 			while (iters-- > 0) {
 				(*val) = (-((sVal * w2) + (eVal * w1)) + ((*val) * 6.0f) ) / 5.0f;
 			}
@@ -247,7 +263,7 @@ static void pose_slide_apply_val(tPoseSlideOp *pso, FCurve *fcu, float *val)
 			 *	- perform this weighting a number of times given by the percentage...
 			 */
 			int iters = (int)ceil(10.0f * pso->percentage); /* TODO: maybe a sensitivity ctrl on top of this is needed */
-
+			
 			while (iters-- > 0) {
 				(*val) = ( ((sVal * w2) + (eVal * w1)) + ((*val) * 5.0f) ) / 6.0f;
 			}
@@ -320,6 +336,7 @@ static void pose_slide_apply_props(tPoseSlideOp *pso, tPChanFCurveLink *pfl)
 			
 			if (prop) {
 				switch (RNA_property_type(prop)) {
+					/* continuous values that can be smoothly interpolated... */
 					case PROP_FLOAT:
 					{
 						float tval = RNA_property_float_get(&ptr, prop);
@@ -327,8 +344,6 @@ static void pose_slide_apply_props(tPoseSlideOp *pso, tPChanFCurveLink *pfl)
 						RNA_property_float_set(&ptr, prop, tval);
 						break;
 					}
-					case PROP_BOOLEAN:
-					case PROP_ENUM:
 					case PROP_INT:
 					{
 						float tval = (float)RNA_property_int_get(&ptr, prop);
@@ -336,6 +351,23 @@ static void pose_slide_apply_props(tPoseSlideOp *pso, tPChanFCurveLink *pfl)
 						RNA_property_int_set(&ptr, prop, (int)tval);
 						break;
 					}
+					
+					/* values which can only take discrete values */
+					case PROP_BOOLEAN:
+					{
+						float tval = (float)RNA_property_boolean_get(&ptr, prop);
+						pose_slide_apply_val(pso, fcu, &tval);
+						RNA_property_boolean_set(&ptr, prop, (int)tval); // XXX: do we need threshold clamping here?
+						break;
+					}
+					case PROP_ENUM:
+					{
+						/* don't handle this case - these don't usually represent interchangeable
+						 * set of values which should be interpolated between
+						 */
+						break;
+					}
+					
 					default:
 						/* cannot handle */
 						//printf("Cannot Pose Slide non-numerical property\n");
@@ -404,11 +436,11 @@ static void pose_slide_apply_quat(tPoseSlideOp *pso, tPChanFCurveLink *pfl)
 		}
 		else if (pso->mode == POSESLIDE_PUSH) {
 			float quat_diff[4], quat_orig[4];
-
+			
 			/* calculate the delta transform from the previous to the current */
 			/* TODO: investigate ways to favour one transform more? */
 			sub_qt_qtqt(quat_diff, pchan->quat, quat_prev);
-
+			
 			/* make a copy of the original rotation */
 			copy_qt_qt(quat_orig, pchan->quat);
 			
@@ -418,7 +450,7 @@ static void pose_slide_apply_quat(tPoseSlideOp *pso, tPChanFCurveLink *pfl)
 		else {
 			float quat_interp[4], quat_orig[4];
 			int iters = (int)ceil(10.0f * pso->percentage); /* TODO: maybe a sensitivity ctrl on top of this is needed */
-
+			
 			/* perform this blending several times until a satisfactory result is reached */
 			while (iters-- > 0) {
 				/* calculate the interpolation between the endpoints */
@@ -512,7 +544,7 @@ static void pose_slide_reset(tPoseSlideOp *pso)
 /* draw percentage indicator in header */
 static void pose_slide_draw_status(tPoseSlideOp *pso)
 {
-	char status_str[32];
+	char status_str[256];
 	char mode_str[32];
 	
 	switch (pso->mode) {
@@ -532,7 +564,18 @@ static void pose_slide_draw_status(tPoseSlideOp *pso)
 			break;
 	}
 	
-	BLI_snprintf(status_str, sizeof(status_str), "%s: %d %%", mode_str, (int)(pso->percentage * 100.0f));
+	if (hasNumInput(&pso->num)) {
+		Scene *scene = pso->scene;
+		char str_offs[NUM_STR_REP_LEN];
+		
+		outputNumInput(&pso->num, str_offs, &scene->unit);
+		
+		BLI_snprintf(status_str, sizeof(status_str), "%s: %s", mode_str, str_offs);
+	}
+	else {
+		BLI_snprintf(status_str, sizeof(status_str), "%s: %d %%", mode_str, (int)(pso->percentage * 100.0f));
+	}
+	
 	ED_area_headerprint(pso->sa, status_str);
 }
 
@@ -617,6 +660,7 @@ static int pose_slide_modal(bContext *C, wmOperator *op, const wmEvent *event)
 {
 	tPoseSlideOp *pso = op->customdata;
 	wmWindow *win = CTX_wm_window(C);
+	const bool has_numinput = hasNumInput(&pso->num);
 	
 	switch (event->type) {
 		case LEFTMOUSE: /* confirm */
@@ -656,25 +700,54 @@ static int pose_slide_modal(bContext *C, wmOperator *op, const wmEvent *event)
 			
 		case MOUSEMOVE: /* calculate new position */
 		{
-			/* calculate percentage based on position of mouse (we only use x-axis for now.
-			 * since this is more convenient for users to do), and store new percentage value
-			 */
-			pso->percentage = (event->x - pso->ar->winrct.xmin) / ((float)pso->ar->winx);
-			RNA_float_set(op->ptr, "percentage", pso->percentage);
-			
-			/* update percentage indicator in header */
-			pose_slide_draw_status(pso);
-			
-			/* reset transforms (to avoid accumulation errors) */
-			pose_slide_reset(pso);
-			
-			/* apply... */
-			pose_slide_apply(C, pso);
+			/* only handle mousemove if not doing numinput */
+			if (has_numinput == false) {
+				/* calculate percentage based on position of mouse (we only use x-axis for now.
+				 * since this is more convenient for users to do), and store new percentage value
+				 */
+				pso->percentage = (event->x - pso->ar->winrct.xmin) / ((float)pso->ar->winx);
+				RNA_float_set(op->ptr, "percentage", pso->percentage);
+				
+				/* update percentage indicator in header */
+				pose_slide_draw_status(pso);
+				
+				/* reset transforms (to avoid accumulation errors) */
+				pose_slide_reset(pso);
+				
+				/* apply... */
+				pose_slide_apply(C, pso);
+			}
 			break;
 		}
-		default: /* unhandled event (maybe it was some view manip? */
-			/* allow to pass through */
-			return OPERATOR_RUNNING_MODAL | OPERATOR_PASS_THROUGH;
+		default:
+			if ((event->val == KM_PRESS) && handleNumInput(C, &pso->num, event)) {
+				float value;
+				
+				/* Grab percentage from numeric input, and store this new value for redo  
+				 * NOTE: users see ints, while internally we use a 0-1 float
+				 */
+				value = pso->percentage * 100.0f;
+				applyNumInput(&pso->num, &value);
+				
+				pso->percentage = value / 100.0f;
+				CLAMP(pso->percentage, 0.0f, 1.0f);
+				RNA_float_set(op->ptr, "percentage", pso->percentage);
+				
+				/* update percentage indicator in header */
+				pose_slide_draw_status(pso);
+				
+				/* reset transforms (to avoid accumulation errors) */
+				pose_slide_reset(pso);
+				
+				/* apply... */
+				pose_slide_apply(C, pso);
+				break;
+			}
+			else {
+				/* unhandled event - maybe it was some view manip? */
+				/* allow to pass through */
+				return OPERATOR_RUNNING_MODAL | OPERATOR_PASS_THROUGH;
+			}
 	}
 	
 	/* still running... */
@@ -898,6 +971,8 @@ typedef enum ePosePropagate_Termination {
 	/* stop when we run out of keyframes */
 	POSE_PROPAGATE_BEFORE_END,
 	
+	/* only do on keyframes that are selected */
+	POSE_PROPAGATE_SELECTED_KEYS,
 	/* only do on the frames where markers are selected */
 	POSE_PROPAGATE_SELECTED_MARKERS
 } ePosePropagate_Termination;
@@ -1098,13 +1173,20 @@ static void pose_propagate_fcurve(wmOperator *op, Object *ob, FCurve *fcu,
 	 *	  since it may be as of yet unkeyed
 	 *  - if starting before the starting frame, don't touch the key, as it may have had some valid
 	 *	  values
+	 *  - if only doing selected keyframes, start from the first one
 	 */
-	match = binarysearch_bezt_index(fcu->bezt, startFrame, fcu->totvert, &keyExists);
-	
-	if (fcu->bezt[match].vec[1][0] < startFrame)
-		i = match + 1;
-	else
-		i = match;
+	if (mode != POSE_PROPAGATE_SELECTED_KEYS) {
+		match = binarysearch_bezt_index(fcu->bezt, startFrame, fcu->totvert, &keyExists);
+		
+		if (fcu->bezt[match].vec[1][0] < startFrame)
+			i = match + 1;
+		else
+			i = match;
+	}
+	else {
+		/* selected - start from first keyframe */
+		i = 0;
+	}
 	
 	for (bezt = &fcu->bezt[i]; i < fcu->totvert; i++, bezt++) {
 		/* additional termination conditions based on the operator 'mode' property go here... */
@@ -1135,6 +1217,11 @@ static void pose_propagate_fcurve(wmOperator *op, Object *ob, FCurve *fcu,
 			
 			/* skip this keyframe if no marker */
 			if (ce == NULL)
+				continue;
+		}
+		else if (mode == POSE_PROPAGATE_SELECTED_KEYS) {
+			/* only allow if this keyframe is already selected - skip otherwise */
+			if (BEZT_ISSEL_ANY(bezt) == 0)
 				continue;
 		}
 		
@@ -1219,12 +1306,20 @@ static int pose_propagate_exec(bContext *C, wmOperator *op)
 void POSE_OT_propagate(wmOperatorType *ot)
 {
 	static EnumPropertyItem terminate_items[] = {
-		{POSE_PROPAGATE_SMART_HOLDS, "WHILE_HELD", 0, "While Held", "Propagate pose to all keyframes after current frame that don't change (Default behavior)"},
-		{POSE_PROPAGATE_NEXT_KEY, "NEXT_KEY", 0, "To Next Keyframe", "Propagate pose to first keyframe following the current frame only"},
-		{POSE_PROPAGATE_LAST_KEY, "LAST_KEY", 0, "To Last Keyframe", "Propagate pose to the last keyframe only (i.e. making action cyclic)"},
-		{POSE_PROPAGATE_BEFORE_FRAME, "BEFORE_FRAME", 0, "Before Frame", "Propagate pose to all keyframes between current frame and 'Frame' property"},
-		{POSE_PROPAGATE_BEFORE_END, "BEFORE_END", 0, "Before Last Keyframe", "Propagate pose to all keyframes from current frame until no more are found"},
-		{POSE_PROPAGATE_SELECTED_MARKERS, "SELECTED_MARKERS", 0, "On Selected Markers", "Propagate pose to all keyframes occurring on frames with Scene Markers after the current frame"},
+		{POSE_PROPAGATE_SMART_HOLDS, "WHILE_HELD", 0, "While Held",
+	     "Propagate pose to all keyframes after current frame that don't change (Default behavior)"},
+		{POSE_PROPAGATE_NEXT_KEY, "NEXT_KEY", 0, "To Next Keyframe",
+	     "Propagate pose to first keyframe following the current frame only"},
+		{POSE_PROPAGATE_LAST_KEY, "LAST_KEY", 0, "To Last Keyframe",
+	     "Propagate pose to the last keyframe only (i.e. making action cyclic)"},
+		{POSE_PROPAGATE_BEFORE_FRAME, "BEFORE_FRAME", 0, "Before Frame",
+	     "Propagate pose to all keyframes between current frame and 'Frame' property"},
+		{POSE_PROPAGATE_BEFORE_END, "BEFORE_END", 0, "Before Last Keyframe",
+	     "Propagate pose to all keyframes from current frame until no more are found"},
+		{POSE_PROPAGATE_SELECTED_KEYS, "SELECTED_KEYS", 0, "On Selected Keyframes",
+	     "Propagate pose to all selected keyframes"},
+		{POSE_PROPAGATE_SELECTED_MARKERS, "SELECTED_MARKERS", 0, "On Selected Markers",
+	     "Propagate pose to all keyframes occurring on frames with Scene Markers after the current frame"},
 		{0, NULL, 0, NULL, NULL}};
 		
 	/* identifiers */

@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #ifndef __BLENDER_UTIL_H__
@@ -28,7 +28,7 @@
  * todo: clean this up ... */
 
 extern "C" {
-void BLI_timestr(double _time, char *str, size_t maxlen);
+size_t BLI_timecode_string_from_time_simple(char *str, size_t maxlen, double time_seconds);
 void BKE_image_user_frame_calc(void *iuser, int cfra, int fieldnr);
 void BKE_image_user_file_path(void *iuser, void *ima, char *path);
 unsigned char *BKE_image_get_pixels_for_frame(void *image, int frame);
@@ -43,11 +43,11 @@ void python_thread_state_restore(void **python_thread_state);
 static inline BL::Mesh object_to_mesh(BL::BlendData data, BL::Object object, BL::Scene scene, bool apply_modifiers, bool render, bool calc_undeformed)
 {
 	BL::Mesh me = data.meshes.new_from_object(scene, object, apply_modifiers, (render)? 2: 1, false, calc_undeformed);
-	if ((bool)me) {
-		if (me.use_auto_smooth()) {
-			me.calc_normals_split(me.auto_smooth_angle());
+	if((bool)me) {
+		if(me.use_auto_smooth()) {
+			me.calc_normals_split();
 		}
-		me.calc_tessface();
+		me.calc_tessface(true);
 	}
 	return me;
 }
@@ -310,7 +310,7 @@ static inline string get_string(PointerRNA& ptr, const char *name)
 	char cstrbuf[1024];
 	char *cstr = RNA_string_get_alloc(&ptr, name, cstrbuf, sizeof(cstrbuf));
 	string str(cstr);
-	if (cstr != cstrbuf)
+	if(cstr != cstrbuf)
 		MEM_freeN(cstr);
 	
 	return str;
@@ -354,11 +354,20 @@ static inline void mesh_texture_space(BL::Mesh b_mesh, float3& loc, float3& size
 }
 
 /* object used for motion blur */
-static inline bool object_use_motion(BL::Object b_ob)
+static inline bool object_use_motion(BL::Object b_parent, BL::Object b_ob)
 {
 	PointerRNA cobject = RNA_pointer_get(&b_ob.ptr, "cycles");
 	bool use_motion = get_boolean(cobject, "use_motion_blur");
-	
+	/* If motion blur is enabled for the object we also check
+	 * whether it's enabled for the parent object as well.
+	 *
+	 * This way we can control motion blur from the dupligroup
+	 * duplicator much easier.
+	 */
+	if(use_motion && b_parent.ptr.data != b_ob.ptr.data) {
+		PointerRNA parent_cobject = RNA_pointer_get(&b_parent.ptr, "cycles");
+		use_motion &= get_boolean(parent_cobject, "use_motion_blur");
+	}
 	return use_motion;
 }
 
@@ -375,11 +384,20 @@ static inline uint object_motion_steps(BL::Object b_ob)
 }
 
 /* object uses deformation motion blur */
-static inline bool object_use_deform_motion(BL::Object b_ob)
+static inline bool object_use_deform_motion(BL::Object b_parent, BL::Object b_ob)
 {
 	PointerRNA cobject = RNA_pointer_get(&b_ob.ptr, "cycles");
 	bool use_deform_motion = get_boolean(cobject, "use_deform_motion");
-	
+	/* If motion blur is enabled for the object we also check
+	 * whether it's enabled for the parent object as well.
+	 *
+	 * This way we can control motion blur from the dupligroup
+	 * duplicator much easier.
+	 */
+	if(use_deform_motion && b_parent.ptr.data != b_ob.ptr.data) {
+		PointerRNA parent_cobject = RNA_pointer_get(&b_parent.ptr, "cycles");
+		use_deform_motion &= get_boolean(parent_cobject, "use_deform_motion");
+	}
 	return use_deform_motion;
 }
 
@@ -388,7 +406,7 @@ static inline BL::SmokeDomainSettings object_smoke_domain_find(BL::Object b_ob)
 	BL::Object::modifiers_iterator b_mod;
 
 	for(b_ob.modifiers.begin(b_mod); b_mod != b_ob.modifiers.end(); ++b_mod) {
-		if (b_mod->is_a(&RNA_SmokeModifier)) {
+		if(b_mod->is_a(&RNA_SmokeModifier)) {
 			BL::SmokeModifier b_smd(*b_mod);
 
 			if(b_smd.smoke_type() == BL::SmokeModifier::smoke_type_DOMAIN)

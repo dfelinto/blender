@@ -113,10 +113,22 @@ def write_sysinfo(op):
     ffmpeg = bpy.app.ffmpeg
     if ffmpeg.supported:
         for lib in ("avcodec", "avdevice", "avformat", "avutil", "swscale"):
-            output.write("%r:%r%r\n" % (lib, " " * (10 - len(lib)),
+            output.write("%s:%s%r\n" % (lib, " " * (10 - len(lib)),
                          getattr(ffmpeg, lib + "_version_string")))
     else:
         output.write("Blender was built without FFmpeg support\n")
+
+    if bpy.app.build_options.sdl:
+        output.write("\nSDL\n")
+        output.write(lilies)
+        output.write("Version: %s\n" % bpy.app.sdl.version_string)
+        output.write("Loading method: ")
+        if bpy.app.build_options.sdl_dynload:
+            output.write("dynamically loaded by Blender (WITH_SDL_DYNLOAD=ON)\n")
+        else:
+            output.write("linked (WITH_SDL_DYNLOAD=OFF)\n")
+        if not bpy.app.sdl.available:
+            output.write("WARNING: Blender could not load SDL library\n")
 
     output.write("\nOther Libraries:\n")
     output.write(lilies)
@@ -148,12 +160,15 @@ def write_sysinfo(op):
     else:
         output.write("Blender was built without Cycles support\n")
 
+    if not bpy.app.build_options.sdl:
+        output.write("SDL: Blender was built without SDL support\n")
+
     if bpy.app.background:
         output.write("\nOpenGL: missing, background mode\n")
     else:
         output.write("\nOpenGL\n")
         output.write(lilies)
-        version = bgl.glGetString(bgl.GL_RENDERER);
+        version = bgl.glGetString(bgl.GL_RENDERER)
         output.write("renderer:\t%r\n" % version)
         output.write("vendor:\t\t%r\n" % (bgl.glGetString(bgl.GL_VENDOR)))
         output.write("version:\t%r\n" % (bgl.glGetString(bgl.GL_VERSION)))
@@ -186,6 +201,12 @@ def write_sysinfo(op):
             output.write("Maximum Fragment Image Units:\t%d\n" % limit[0])
             bgl.glGetIntegerv(bgl.GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, limit)
             output.write("Maximum Pipeline Image Units:\t%d\n" % limit[0])
+
+    if bpy.app.build_options.cycles:
+        import cycles
+        output.write("\nCycles\n")
+        output.write(lilies)
+        output.write(cycles.engine.system_info())
 
     output.current_line_index = 0
 

@@ -22,6 +22,9 @@
 
 #include "COM_ViewerNode.h"
 #include "BKE_global.h"
+#include "BKE_image.h"
+#include "BLI_listbase.h"
+#include "BKE_scene.h"
 
 #include "COM_ViewerOperation.h"
 #include "COM_ExecutionSystem.h"
@@ -35,7 +38,7 @@ void ViewerNode::convertToOperations(NodeConverter &converter, const CompositorC
 {
 	bNode *editorNode = this->getbNode();
 	bool do_output = (editorNode->flag & NODE_DO_OUTPUT_RECALC || context.isRendering()) && (editorNode->flag & NODE_DO_OUTPUT);
-	bool ignore_alpha = editorNode->custom2 & CMP_NODE_OUTPUT_IGNORE_ALPHA;
+	bool ignore_alpha = (editorNode->custom2 & CMP_NODE_OUTPUT_IGNORE_ALPHA) != 0;
 
 	NodeInput *imageSocket = this->getInputSocket(0);
 	NodeInput *alphaSocket = this->getInputSocket(1);
@@ -51,6 +54,8 @@ void ViewerNode::convertToOperations(NodeConverter &converter, const CompositorC
 	viewerOperation->setCenterY(editorNode->custom4);
 	/* alpha socket gives either 1 or a custom alpha value if "use alpha" is enabled */
 	viewerOperation->setUseAlphaInput(ignore_alpha || alphaSocket->isLinked());
+	viewerOperation->setRenderData(context.getRenderData());
+	viewerOperation->setViewName(context.getViewName());
 
 	viewerOperation->setViewSettings(context.getViewSettings());
 	viewerOperation->setDisplaySettings(context.getDisplaySettings());

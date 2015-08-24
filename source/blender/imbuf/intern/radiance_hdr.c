@@ -38,7 +38,7 @@
  */
 
 #ifdef WIN32
-#  include <io.h>
+#  include "BLI_utildefines.h"
 #endif
 
 #include "MEM_guardedalloc.h"
@@ -72,10 +72,13 @@ typedef float fCOLOR[3];
 #define COPY_RGBE(c1, c2) (c2[RED] = c1[RED], c2[GRN] = c1[GRN], c2[BLU] = c1[BLU], c2[EXP] = c1[EXP])
 
 /* read routines */
-static unsigned char *oldreadcolrs(RGBE *scan, unsigned char *mem, int xmax)
+static const unsigned char *oldreadcolrs(RGBE *scan, const unsigned char *mem, int xmax, const unsigned char *mem_eof)
 {
 	int i, rshift = 0, len = xmax;
 	while (len > 0) {
+		if (mem_eof - mem < 4) {
+			return NULL;
+		}
 		scan[0][RED] = *mem++;
 		scan[0][GRN] = *mem++;
 		scan[0][BLU] = *mem++;
@@ -97,34 +100,62 @@ static unsigned char *oldreadcolrs(RGBE *scan, unsigned char *mem, int xmax)
 	return mem;
 }
 
-static unsigned char *freadcolrs(RGBE *scan, unsigned char *mem, int xmax)
+static const unsigned char *freadcolrs(RGBE *scan, const unsigned char *mem, int xmax, const unsigned char *mem_eof)
 {
 	int i, j, code, val;
 
-	if ((xmax < MINELEN) | (xmax > MAXELEN)) return oldreadcolrs(scan, mem, xmax);
+	if (mem_eof - mem < 4) {
+		return NULL;
+	}
+
+	if ((xmax < MINELEN) | (xmax > MAXELEN)) {
+		return oldreadcolrs(scan, mem, xmax, mem_eof);
+	}
 
 	i = *mem++;
-	if (i != 2) return oldreadcolrs(scan, mem - 1, xmax);
+	if (i != 2) {
+		return oldreadcolrs(scan, mem - 1, xmax, mem_eof);
+	}
 
 	scan[0][GRN] = *mem++;
 	scan[0][BLU] = *mem++;
 
 	i = *mem++;
-	if (((scan[0][BLU] << 8) | i) != xmax) return NULL;
 
-	for (i = 0; i < 4; i++)
+	if (scan[0][GRN] != 2 || scan[0][BLU] & 128) {
+		scan[0][RED] = 2;
+		scan[0][EXP] = i;
+		return oldreadcolrs(scan + 1, mem, xmax - 1, mem_eof);
+	}
+
+	if (((scan[0][BLU] << 8) | i) != xmax) {
+		return NULL;
+	}
+
+	for (i = 0; i < 4; i++) {
+		if (mem_eof - mem < 2) {
+			return NULL;
+		}
 		for (j = 0; j < xmax; ) {
 			code = *mem++;
 			if (code > 128) {
 				code &= 127;
 				val = *mem++;
-				while (code--)
+				while (code--) {
 					scan[j++][i] = (unsigned char)val;
+				}
 			}
-			else
-				while (code--)
+			else {
+				if (mem_eof - mem < code) {
+					return NULL;
+				}
+				while (code--) {
 					scan[j++][i] = *mem++;
+				}
+			}
 		}
+	}
+
 	return mem;
 }
 
@@ -163,7 +194,7 @@ static void FLOAT2RGBE(fCOLOR fcol, RGBE rgbe)
 
 /* ImBuf read */
 
-int imb_is_a_hdr(unsigned char *buf)
+int imb_is_a_hdr(const unsigned char *buf)
 {
 	/* For recognition, Blender only loads first 32 bytes, so use #?RADIANCE id instead */
 	/* update: actually, the 'RADIANCE' part is just an optional program name, the magic word is really only the '#?' part */
@@ -173,7 +204,7 @@ int imb_is_a_hdr(unsigned char *buf)
 	return 0;
 }
 
-struct ImBuf *imb_loadhdr(unsigned char *mem, size_t size, int flags, char colorspace[IM_MAX_SPACE])
+struct ImBuf *imb_loadhdr(const unsigned char *mem, size_t size, int flags, char colorspace[IM_MAX_SPACE])
 {
 	struct ImBuf *ibuf;
 	RGBE *sline;
@@ -182,7 +213,7 @@ struct ImBuf *imb_loadhdr(unsigned char *mem, size_t size, int flags, char color
 	int found = 0;
 	int width = 0, height = 0;
 	int x, y;
-	unsigned char *ptr;
+	const unsigned char *ptr, *mem_eof = mem + size;
 	char oriY[80], oriX[80];
 
 	if (imb_is_a_hdr((void *)mem)) {
@@ -210,7 +241,7 @@ struct ImBuf *imb_loadhdr(unsigned char *mem, size_t size, int flags, char color
 			else ibuf = IMB_allocImBuf(width, height, 32, (flags & IB_rect) | IB_rectfloat);
 
 			if (ibuf == NULL) return NULL;
-			ibuf->ftype = RADHDR;
+			ibuf->ftype = IMB_FTYPE_RADHDR;
 
 			if (flags & IB_alphamode_detect)
 				ibuf->flags |= IB_alphamode_premul;
@@ -218,15 +249,14 @@ struct ImBuf *imb_loadhdr(unsigned char *mem, size_t size, int flags, char color
 			if (flags & IB_test) return ibuf;
 
 			/* read in and decode the actual data */
-			sline = (RGBE *)MEM_mallocN(sizeof(RGBE) * width, "radhdr_read_tmpscan");
+			sline = (RGBE *)MEM_mallocN(sizeof(*sline) * width, __func__);
 			rect_float = ibuf->rect_float;
 			
 			for (y = 0; y < height; y++) {
-				ptr = freadcolrs(sline, ptr, width);
+				ptr = freadcolrs(sline, ptr, width, mem_eof);
 				if (ptr == NULL) {
-					printf("HDR decode error\n");
-					MEM_freeN(sline);
-					return ibuf;
+					printf("WARNING! HDR decode error, image may be just truncated, or completely wrong...\n");
+					break;
 				}
 				for (x = 0; x < width; x++) {
 					/* convert to ldr */

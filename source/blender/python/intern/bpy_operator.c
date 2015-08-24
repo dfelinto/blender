@@ -36,6 +36,7 @@
 #include "RNA_types.h"
 
 #include "BLI_utildefines.h"
+#include "BLI_listbase.h"
 #include "BLI_string.h"
 
 #include "BPY_extern.h"
@@ -44,6 +45,8 @@
 #include "bpy_rna.h" /* for setting arg props only - pyrna_py_to_prop() */
 #include "bpy_util.h"
 #include "../generic/bpy_internal_import.h"
+#include "../generic/py_capi_utils.h"
+#include "../generic/python_utildefines.h"
 
 #include "RNA_access.h"
 #include "RNA_enum_types.h"
@@ -99,7 +102,7 @@ static PyObject *pyop_poll(PyObject *UNUSED(self), PyObject *args)
 			char *enum_str = BPy_enum_as_string(operator_context_items);
 			PyErr_Format(PyExc_TypeError,
 			             "Calling operator \"bpy.ops.%s.poll\" error, "
-			             "expected a string enum in (%.200s)",
+			             "expected a string enum in (%s)",
 			             opname, enum_str);
 			MEM_freeN(enum_str);
 			return NULL;
@@ -127,9 +130,8 @@ static PyObject *pyop_poll(PyObject *UNUSED(self), PyObject *args)
 	/* restore with original context dict, probably NULL but need this for nested operator calls */
 	Py_XDECREF(context_dict);
 	CTX_py_dict_set(C, (void *)context_dict_back);
-	
-	Py_INCREF(ret);
-	return ret;
+
+	return Py_INCREF_RET(ret);
 }
 
 static PyObject *pyop_call(PyObject *UNUSED(self), PyObject *args)
@@ -186,7 +188,7 @@ static PyObject *pyop_call(PyObject *UNUSED(self), PyObject *args)
 			char *enum_str = BPy_enum_as_string(operator_context_items);
 			PyErr_Format(PyExc_TypeError,
 			             "Calling operator \"bpy.ops.%s\" error, "
-			             "expected a string enum in (%.200s)",
+			             "expected a string enum in (%s)",
 			             opname, enum_str);
 			MEM_freeN(enum_str);
 			return NULL;
@@ -251,12 +253,10 @@ static PyObject *pyop_call(PyObject *UNUSED(self), PyObject *args)
 			error_val = BPy_reports_to_error(reports, PyExc_RuntimeError, false);
 
 			/* operator output is nice to have in the terminal/console too */
-			if (reports->list.first) {
-				char *report_str = BKE_reports_string(reports, 0); /* all reports */
-	
-				if (report_str) {
-					PySys_WriteStdout("%s\n", report_str);
-					MEM_freeN(report_str);
+			if (!BLI_listbase_is_empty(&reports->list)) {
+				Report *report;
+				for (report = reports->list.first; report; report = report->next) {
+					PySys_WriteStdout("%s: %s\n", report->typestr, report->message);
 				}
 			}
 	
@@ -312,8 +312,8 @@ static PyObject *pyop_as_string(PyObject *UNUSED(self), PyObject *args)
 
 	const char *opname;
 	PyObject *kw = NULL; /* optional args */
-	int all_args = 1;
-	int macro_args = 1;
+	bool all_args = true;
+	bool macro_args = true;
 	int error_val = 0;
 
 	char *buf = NULL;
@@ -326,8 +326,14 @@ static PyObject *pyop_as_string(PyObject *UNUSED(self), PyObject *args)
 		return NULL;
 	}
 	
-	if (!PyArg_ParseTuple(args, "s|O!ii:_bpy.ops.as_string", &opname, &PyDict_Type, &kw, &all_args, &macro_args))
+	if (!PyArg_ParseTuple(
+	        args, "s|O!O&O&:_bpy.ops.as_string",
+	        &opname, &PyDict_Type, &kw,
+	        PyC_ParseBool, &all_args,
+	        PyC_ParseBool, &macro_args))
+	{
 		return NULL;
+	}
 
 	ot = WM_operatortype_find(opname, true);
 

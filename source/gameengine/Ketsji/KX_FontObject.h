@@ -54,6 +54,7 @@ public:
 	 */
 	virtual	CValue* GetReplica();
 	virtual void ProcessReplica();
+	virtual int GetGameObjectType() { return OBJ_TEXT; }
 
 protected:
 	std::vector<STR_String>		m_text;

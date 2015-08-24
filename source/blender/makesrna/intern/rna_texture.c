@@ -119,6 +119,7 @@ static EnumPropertyItem blend_type_items[] = {
 #include "BKE_main.h"
 
 #include "ED_node.h"
+#include "ED_render.h"
 
 static StructRNA *rna_Texture_refine(struct PointerRNA *ptr)
 {
@@ -180,7 +181,7 @@ static void rna_Texture_update(Main *bmain, Scene *UNUSED(scene), PointerRNA *pt
 static void rna_Texture_mapping_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 {
 	TexMapping *texmap = ptr->data;
-	init_tex_mapping(texmap);
+	BKE_texture_mapping_init(texmap);
 	rna_Texture_update(bmain, scene, ptr);
 }
 
@@ -221,7 +222,7 @@ static void rna_Texture_type_set(PointerRNA *ptr, int value)
 {
 	Tex *tex = (Tex *)ptr->data;
 	
-	tex_set_type(tex, value);
+	BKE_texture_type_set(tex, value);
 }
 
 void rna_TextureSlot_update(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *ptr)
@@ -439,13 +440,13 @@ static void rna_ImageTexture_mipmap_set(PointerRNA *ptr, int value)
 	else tex->imaflag &= ~TEX_MIPMAP;
 }
 
-static void rna_Envmap_source_update(Main *bmain, Scene *scene, PointerRNA *ptr)
+static void rna_Envmap_update_generic(Main *bmain, Scene *scene, PointerRNA *ptr)
 {
 	Tex *tex = ptr->id.data;
-	
-	if (tex->env)
-		BKE_free_envmapdata(tex->env);
-	
+	if (tex->env) {
+		ED_preview_kill_jobs(bmain->wm.first, bmain);
+		BKE_texture_envmap_free_data(tex->env);
+	}
 	rna_Texture_update(bmain, scene, ptr);
 }
 
@@ -803,7 +804,7 @@ static void rna_def_environment_map(BlenderRNA *brna)
 	RNA_def_property_enum_sdna(prop, NULL, "stype");
 	RNA_def_property_enum_items(prop, prop_source_items);
 	RNA_def_property_ui_text(prop, "Source", "");
-	RNA_def_property_update(prop, 0, "rna_Envmap_source_update");
+	RNA_def_property_update(prop, 0, "rna_Envmap_update_generic");
 
 	prop = RNA_def_property(srna, "viewpoint_object", PROP_POINTER, PROP_NONE);
 	RNA_def_property_pointer_sdna(prop, NULL, "object");
@@ -1391,7 +1392,7 @@ static void rna_def_texture_environment_map(BlenderRNA *brna)
 	RNA_def_property_struct_type(prop, "Image");
 	RNA_def_property_flag(prop, PROP_EDITABLE);
 	RNA_def_property_ui_text(prop, "Image", "Source image file to read the environment map from");
-	RNA_def_property_update(prop, 0, "rna_Texture_update");
+	RNA_def_property_update(prop, 0, "rna_Envmap_update_generic");
 	
 	prop = RNA_def_property(srna, "image_user", PROP_POINTER, PROP_NEVER_NULL);
 	RNA_def_property_pointer_sdna(prop, NULL, "iuser");
@@ -1848,6 +1849,7 @@ static void rna_def_texture_voxeldata(BlenderRNA *brna)
 		{TEX_VD_IMAGE_SEQUENCE, "IMAGE_SEQUENCE", 0, "Image Sequence",
 		                        "Generate voxels from a sequence of image slices"},
 		{TEX_VD_SMOKE, "SMOKE", 0, "Smoke", "Render voxels from a Blender smoke simulation"},
+		{TEX_VD_HAIR, "HAIR", 0, "Hair", "Render voxels from a Blender hair simulation"},
 		{0, NULL, 0, NULL, NULL}
 	};
 	
@@ -1866,6 +1868,14 @@ static void rna_def_texture_voxeldata(BlenderRNA *brna)
 		{0, NULL, 0, NULL, NULL}
 	};
 
+	static EnumPropertyItem hair_type_items[] = {
+		{TEX_VD_HAIRDENSITY, "HAIRDENSITY", 0, "Density", "Use hair density as texture data"},
+		{TEX_VD_HAIRRESTDENSITY, "HAIRRESTDENSITY", 0, "Rest Density", "Use hair rest density as texture data"},
+		{TEX_VD_HAIRVELOCITY, "HAIRVELOCITY", 0, "Velocity", "Use hair velocity as texture data"},
+		{TEX_VD_HAIRENERGY, "HAIRENERGY", 0, "Energy", "Use potential hair energy as texture data"},
+		{0, NULL, 0, NULL, NULL}
+	};
+
 	srna = RNA_def_struct(brna, "VoxelData", NULL);
 	RNA_def_struct_sdna(srna, "VoxelData");
 	RNA_def_struct_ui_text(srna, "VoxelData", "Voxel data settings");
@@ -1880,6 +1890,12 @@ static void rna_def_texture_voxeldata(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "smoke_data_type", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "smoked_type");
 	RNA_def_property_enum_items(prop, smoked_type_items);
+	RNA_def_property_ui_text(prop, "Source", "Simulation value to be used as a texture");
+	RNA_def_property_update(prop, 0, "rna_Texture_voxeldata_update");
+	
+	prop = RNA_def_property(srna, "hair_data_type", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_sdna(prop, NULL, "hair_type");
+	RNA_def_property_enum_items(prop, hair_type_items);
 	RNA_def_property_ui_text(prop, "Source", "Simulation value to be used as a texture");
 	RNA_def_property_update(prop, 0, "rna_Texture_voxeldata_update");
 	

@@ -45,8 +45,8 @@ struct ARegion;
 typedef struct wmEventHandler {
 	struct wmEventHandler *next, *prev;
 
-	int type;                           /* WM_HANDLER_DEFAULT, ... */
-	int flag;                           /* WM_HANDLER_BLOCKING, ... */
+	char type;                          /* WM_HANDLER_DEFAULT, ... */
+	char flag;                          /* WM_HANDLER_BLOCKING, ... */
 
 	/* keymap handler */
 	wmKeyMap *keymap;                   /* pointer to builtin/custom keymaps */
@@ -56,6 +56,7 @@ typedef struct wmEventHandler {
 	wmOperator *op;                     /* for derived/modal handlers */
 	struct ScrArea *op_area;            /* for derived/modal handlers */
 	struct ARegion *op_region;          /* for derived/modal handlers */
+	short           op_region_type;     /* for derived/modal handlers */
 
 	/* ui handler */
 	wmUIHandlerFunc ui_handle;          /* callback receiving events */
@@ -64,9 +65,6 @@ typedef struct wmEventHandler {
 	struct ScrArea *ui_area;            /* for derived/modal handlers */
 	struct ARegion *ui_region;          /* for derived/modal handlers */
 	struct ARegion *ui_menu;            /* for derived/modal handlers */
-
-	/* fileselect handler re-uses modal operator data */
-	struct bScreen *filescreen;         /* screen it started in, to validate exec */
 
 	/* drop box handler */
 	ListBase *dropboxes;
@@ -77,13 +75,6 @@ typedef struct wmEventHandler {
 enum {
 	WM_HANDLER_DEFAULT,
 	WM_HANDLER_FILESELECT
-};
-
-/* handler flag */
-enum {
-	WM_HANDLER_BLOCKING             = (1 << 0),  /* after this handler all others are ignored */
-	WM_HANDLER_DO_FREE              = (1 << 1),  /* handler tagged to be freed in wm_handlers_do() */
-	WM_HANDLER_ACCEPT_DBL_CLICK     = (1 << 2),  /* handler accepts double key press events */
 };
 
 /* wm_event_system.c */

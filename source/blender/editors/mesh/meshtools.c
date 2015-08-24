@@ -329,7 +329,7 @@ int join_mesh_exec(bContext *C, wmOperator *op)
 							if (odg) {
 								/*	Search for a match in the new object, and set new index */
 								for (dg = ob->defbase.first, index = 0; dg; dg = dg->next, index++) {
-									if (!strcmp(dg->name, odg->name)) {
+									if (STREQ(dg->name, odg->name)) {
 										dvert[i].dw[j].def_nr = index;
 										break;
 									}
@@ -627,7 +627,7 @@ int join_mesh_shapes_exec(bContext *C, wmOperator *op)
 
 		/* first key added, so it was the basis. initialize it with the existing mesh */
 		kb = BKE_keyblock_add(key, NULL);
-		BKE_key_convert_from_mesh(me, kb);
+		BKE_keyblock_convert_from_mesh(me, kb);
 	}
 	
 	/* now ready to add new keys from selected meshes */
@@ -895,7 +895,7 @@ int ED_mesh_mirror_get_vert(Object *ob, int index)
 		index_mirr = eve_mirr ? BM_elem_index_get(eve_mirr) : -1;
 	}
 	else {
-		 index_mirr = mesh_get_x_mirror_vert(ob, index, use_topology);
+		index_mirr = mesh_get_x_mirror_vert(ob, index, use_topology);
 	}
 
 	return index_mirr;
@@ -1082,11 +1082,11 @@ bool ED_mesh_pick_face(bContext *C, Object *ob, const int mval[2], unsigned int 
 		 * on an edge in the backbuf, we can still select a face */
 
 		float dummy_dist;
-		*index = view3d_sample_backbuf_rect(&vc, mval, size, 1, me->totpoly + 1, &dummy_dist, 0, NULL, NULL);
+		*index = ED_view3d_backbuf_sample_rect(&vc, mval, size, 1, me->totpoly + 1, &dummy_dist);
 	}
 	else {
 		/* sample only on the exact position */
-		*index = view3d_sample_backbuf(&vc, mval[0], mval[1]);
+		*index = ED_view3d_backbuf_sample(&vc, mval[0], mval[1]);
 	}
 
 	if ((*index) == 0 || (*index) > (unsigned int)me->totpoly)
@@ -1248,11 +1248,11 @@ bool ED_mesh_pick_vert(bContext *C, Object *ob, const int mval[2], unsigned int 
 			 * on an face in the backbuf, we can still select a vert */
 
 			float dummy_dist;
-			*index = view3d_sample_backbuf_rect(&vc, mval, size, 1, me->totvert + 1, &dummy_dist, 0, NULL, NULL);
+			*index = ED_view3d_backbuf_sample_rect(&vc, mval, size, 1, me->totvert + 1, &dummy_dist);
 		}
 		else {
 			/* sample only on the exact position */
-			*index = view3d_sample_backbuf(&vc, mval[0], mval[1]);
+			*index = ED_view3d_backbuf_sample(&vc, mval[0], mval[1]);
 		}
 
 		if ((*index) == 0 || (*index) > (unsigned int)me->totvert)

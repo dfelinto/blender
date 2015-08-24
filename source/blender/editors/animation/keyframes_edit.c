@@ -41,9 +41,7 @@
 
 #include "DNA_anim_types.h"
 #include "DNA_object_types.h"
-#include "DNA_node_types.h"
 #include "DNA_scene_types.h"
-#include "DNA_space_types.h"
 
 #include "BKE_fcurve.h"
 
@@ -457,7 +455,7 @@ static short ok_bezier_selected(KeyframeEditData *UNUSED(ked), BezTriple *bezt)
 	/* this macro checks all beztriple handles for selection... 
 	 * only one of the verts has to be selected for this to be ok...
 	 */
-	if (BEZSELECTED(bezt))
+	if (BEZT_ISSEL_ANY(bezt))
 		return KEYFRAME_OK_ALL;
 	else
 		return 0;
@@ -548,6 +546,44 @@ static short ok_bezier_region_lasso(KeyframeEditData *ked, BezTriple *bezt)
 		return 0;
 }
 
+/**
+ * only called from #ok_bezier_region_circle
+ */
+static bool bezier_region_circle_test(
+        const struct KeyframeEdit_CircleData *data_circle,
+        const float xy[2])
+{
+	if (BLI_rctf_isect_pt_v(data_circle->rectf_scaled, xy)) {
+		float xy_view[2];
+
+		BLI_rctf_transform_pt_v(data_circle->rectf_view, data_circle->rectf_scaled, xy_view, xy);
+
+		xy_view[0] = xy_view[0] - data_circle->mval[0];
+		xy_view[1] = xy_view[1] - data_circle->mval[1];
+		return len_squared_v2(xy_view) < data_circle->radius_squared;
+	}
+	
+	return false;
+}
+
+
+static short ok_bezier_region_circle(KeyframeEditData *ked, BezTriple *bezt)
+{
+	/* rect is stored in data property (it's of type rectf, but may not be set) */
+	if (ked->data) {
+		short ok = 0;
+
+#define KEY_CHECK_OK(_index) bezier_region_circle_test(ked->data, bezt->vec[_index])
+		KEYFRAME_OK_CHECKS(KEY_CHECK_OK);
+#undef KEY_CHECK_OK
+
+		/* return ok flags */
+		return ok;
+	}
+	else
+		return 0;
+}
+
 
 KeyframeEditFunc ANIM_editkeyframes_ok(short mode)
 {
@@ -567,6 +603,8 @@ KeyframeEditFunc ANIM_editkeyframes_ok(short mode)
 			return ok_bezier_region;
 		case BEZT_OK_REGION_LASSO: /* only if the point falls within KeyframeEdit_LassoData defined data */
 			return ok_bezier_region_lasso;
+		case BEZT_OK_REGION_CIRCLE: /* only if the point falls within KeyframeEdit_LassoData defined data */
+			return ok_bezier_region_circle;
 		default: /* nothing was ok */
 			return NULL;
 	}
@@ -747,7 +785,8 @@ static short mirror_bezier_cframe(KeyframeEditData *ked, BezTriple *bezt)
 static short mirror_bezier_yaxis(KeyframeEditData *UNUSED(ked), BezTriple *bezt)
 {
 	if (bezt->f2 & SELECT) {
-		mirror_bezier_yaxis_ex(bezt, 0.0f);
+		/* Yes, names are inverted, we are mirroring accross y axis, hence along x axis... */
+		mirror_bezier_xaxis_ex(bezt, 0.0f);
 	}
 	
 	return 0;
@@ -756,7 +795,8 @@ static short mirror_bezier_yaxis(KeyframeEditData *UNUSED(ked), BezTriple *bezt)
 static short mirror_bezier_xaxis(KeyframeEditData *UNUSED(ked), BezTriple *bezt)
 {
 	if (bezt->f2 & SELECT) {
-		mirror_bezier_xaxis_ex(bezt, 0.0f);
+		/* Yes, names are inverted, we are mirroring accross x axis, hence along y axis... */
+		mirror_bezier_yaxis_ex(bezt, 0.0f);
 	}
 	
 	return 0;
@@ -776,7 +816,7 @@ static short mirror_bezier_value(KeyframeEditData *ked, BezTriple *bezt)
 {
 	/* value to mirror over is stored in the custom data -> first float value slot */
 	if (bezt->f2 & SELECT) {
-		mirror_bezier_xaxis_ex(bezt, ked->f1);
+		mirror_bezier_yaxis_ex(bezt, ked->f1);
 	}
 	
 	return 0;
@@ -1141,7 +1181,7 @@ static short select_bezier_add(KeyframeEditData *ked, BezTriple *bezt)
 			bezt->f3 |= SELECT;
 	}
 	else {
-		BEZ_SEL(bezt);
+		BEZT_SEL_ALL(bezt);
 	}
 	
 	return 0;
@@ -1159,7 +1199,7 @@ static short select_bezier_subtract(KeyframeEditData *ked, BezTriple *bezt)
 			bezt->f3 &= ~SELECT;
 	}
 	else {
-		BEZ_DESEL(bezt);
+		BEZT_DESEL_ALL(bezt);
 	}
 	
 	return 0;
@@ -1212,7 +1252,7 @@ static short selmap_build_bezier_more(KeyframeEditData *ked, BezTriple *bezt)
 	int i = ked->curIndex;
 	
 	/* if current is selected, just make sure it stays this way */
-	if (BEZSELECTED(bezt)) {
+	if (BEZT_ISSEL_ANY(bezt)) {
 		map[i] = 1;
 		return 0;
 	}
@@ -1221,7 +1261,7 @@ static short selmap_build_bezier_more(KeyframeEditData *ked, BezTriple *bezt)
 	if (i > 0) {
 		BezTriple *prev = bezt - 1;
 		
-		if (BEZSELECTED(prev)) {
+		if (BEZT_ISSEL_ANY(prev)) {
 			map[i] = 1;
 			return 0;
 		}
@@ -1231,7 +1271,7 @@ static short selmap_build_bezier_more(KeyframeEditData *ked, BezTriple *bezt)
 	if (i < (fcu->totvert - 1)) {
 		BezTriple *next = bezt + 1;
 		
-		if (BEZSELECTED(next)) {
+		if (BEZT_ISSEL_ANY(next)) {
 			map[i] = 1;
 			return 0;
 		}
@@ -1249,12 +1289,12 @@ static short selmap_build_bezier_less(KeyframeEditData *ked, BezTriple *bezt)
 	/* if current is selected, check the left/right keyframes
 	 * since it might need to be deselected (but otherwise no)
 	 */
-	if (BEZSELECTED(bezt)) {
+	if (BEZT_ISSEL_ANY(bezt)) {
 		/* if previous is not selected, we're on the tip of an iceberg */
 		if (i > 0) {
 			BezTriple *prev = bezt - 1;
 			
-			if (BEZSELECTED(prev) == 0)
+			if (BEZT_ISSEL_ANY(prev) == 0)
 				return 0;
 		}
 		else if (i == 0) {
@@ -1266,7 +1306,7 @@ static short selmap_build_bezier_less(KeyframeEditData *ked, BezTriple *bezt)
 		if (i < (fcu->totvert - 1)) {
 			BezTriple *next = bezt + 1;
 			
-			if (BEZSELECTED(next) == 0)
+			if (BEZT_ISSEL_ANY(next) == 0)
 				return 0;
 		}
 		else if (i == (fcu->totvert - 1)) {
@@ -1304,10 +1344,10 @@ short bezt_selmap_flush(KeyframeEditData *ked, BezTriple *bezt)
 	
 	/* select or deselect based on whether the map allows it or not */
 	if (on) {
-		BEZ_SEL(bezt);
+		BEZT_SEL_ALL(bezt);
 	}
 	else {
-		BEZ_DESEL(bezt);
+		BEZT_DESEL_ALL(bezt);
 	}
 	
 	return 0;

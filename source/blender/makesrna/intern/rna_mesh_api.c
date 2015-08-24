@@ -61,39 +61,11 @@ static const char *rna_Mesh_unit_test_compare(struct Mesh *mesh, struct Mesh *me
 	return ret;
 }
 
-static void rna_Mesh_calc_normals_split(Mesh *mesh, float min_angle)
+static void rna_Mesh_create_normals_split(Mesh *mesh)
 {
-	float (*r_loopnors)[3];
-	float (*polynors)[3];
-	bool free_polynors = false;
-
-	if (CustomData_has_layer(&mesh->ldata, CD_NORMAL)) {
-		r_loopnors = CustomData_get_layer(&mesh->ldata, CD_NORMAL);
-		memset(r_loopnors, 0, sizeof(float[3]) * mesh->totloop);
-	}
-	else {
-		r_loopnors = CustomData_add_layer(&mesh->ldata, CD_NORMAL, CD_CALLOC, NULL, mesh->totloop);
+	if (!CustomData_has_layer(&mesh->ldata, CD_NORMAL)) {
+		CustomData_add_layer(&mesh->ldata, CD_NORMAL, CD_CALLOC, NULL, mesh->totloop);
 		CustomData_set_layer_flag(&mesh->ldata, CD_NORMAL, CD_FLAG_TEMPORARY);
-	}
-
-	if (CustomData_has_layer(&mesh->pdata, CD_NORMAL)) {
-		/* This assume that layer is always up to date, not sure this is the case (esp. in Edit mode?)... */
-		polynors = CustomData_get_layer(&mesh->pdata, CD_NORMAL);
-		free_polynors = false;
-	}
-	else {
-		polynors = MEM_mallocN(sizeof(float[3]) * mesh->totpoly, __func__);
-		BKE_mesh_calc_normals_poly(mesh->mvert, mesh->totvert, mesh->mloop, mesh->mpoly, mesh->totloop, mesh->totpoly,
-		                           polynors, false);
-		free_polynors = true;
-	}
-
-	BKE_mesh_normals_loop_split(mesh->mvert, mesh->totvert, mesh->medge, mesh->totedge,
-	                            mesh->mloop, r_loopnors, mesh->totloop, mesh->mpoly, polynors, mesh->totpoly,
-	                            min_angle);
-
-	if (free_polynors) {
-		MEM_freeN(polynors);
 	}
 }
 
@@ -117,7 +89,7 @@ static void rna_Mesh_calc_tangents(Mesh *mesh, ReportList *reports, const char *
 
 	/* Compute loop normals if needed. */
 	if (!CustomData_has_layer(&mesh->ldata, CD_NORMAL)) {
-		rna_Mesh_calc_normals_split(mesh, (float)M_PI);
+		BKE_mesh_calc_normals_split(mesh);
 	}
 
 	BKE_mesh_loop_tangents(mesh, uvmap, r_looptangents, reports);
@@ -126,6 +98,11 @@ static void rna_Mesh_calc_tangents(Mesh *mesh, ReportList *reports, const char *
 static void rna_Mesh_free_tangents(Mesh *mesh)
 {
 	CustomData_free_layers(&mesh->ldata, CD_MLOOPTANGENT, mesh->totloop);
+}
+
+static void rna_Mesh_calc_tessface(Mesh *mesh, int free_mpoly)
+{
+	ED_mesh_calc_tessface(mesh, free_mpoly != 0);
 }
 
 static void rna_Mesh_calc_smooth_groups(Mesh *mesh, int use_bitflags, int *r_poly_group_len,
@@ -137,6 +114,82 @@ static void rna_Mesh_calc_smooth_groups(Mesh *mesh, int use_bitflags, int *r_pol
 	                    mesh->mpoly, mesh->totpoly,
 	                    mesh->mloop, mesh->totloop,
 	                    r_group_total, use_bitflags);
+}
+
+static void rna_Mesh_normals_split_custom_do(Mesh *mesh, float (*custom_loopnors)[3], const bool use_vertices)
+{
+	float (*polynors)[3];
+	short (*clnors)[2];
+	const int numloops = mesh->totloop;
+	bool free_polynors = false;
+
+	clnors = CustomData_get_layer(&mesh->ldata, CD_CUSTOMLOOPNORMAL);
+	if (clnors) {
+		memset(clnors, 0, sizeof(*clnors) * numloops);
+	}
+	else {
+		clnors = CustomData_add_layer(&mesh->ldata, CD_CUSTOMLOOPNORMAL, CD_DEFAULT, NULL, numloops);
+	}
+
+	if (CustomData_has_layer(&mesh->pdata, CD_NORMAL)) {
+		polynors = CustomData_get_layer(&mesh->pdata, CD_NORMAL);
+	}
+	else {
+		polynors = MEM_mallocN(sizeof(float[3]) * mesh->totpoly, __func__);
+		BKE_mesh_calc_normals_poly(mesh->mvert, mesh->totvert, mesh->mloop, mesh->mpoly, mesh->totloop, mesh->totpoly,
+		                           polynors, false);
+		free_polynors = true;
+	}
+
+	if (use_vertices) {
+		BKE_mesh_normals_loop_custom_from_vertices_set(
+		        mesh->mvert, custom_loopnors, mesh->totvert, mesh->medge, mesh->totedge, mesh->mloop, mesh->totloop,
+		        mesh->mpoly, (const float (*)[3])polynors, mesh->totpoly, clnors);
+	}
+	else {
+		BKE_mesh_normals_loop_custom_set(
+		        mesh->mvert, mesh->totvert, mesh->medge, mesh->totedge, mesh->mloop, custom_loopnors, mesh->totloop,
+		        mesh->mpoly, (const float (*)[3])polynors, mesh->totpoly, clnors);
+	}
+
+	if (free_polynors) {
+		MEM_freeN(polynors);
+	}
+}
+
+static void rna_Mesh_normals_split_custom_set(Mesh *mesh, ReportList *reports, int normals_len, float *normals)
+{
+	float (*loopnors)[3] = (float (*)[3])normals;
+	const int numloops = mesh->totloop;
+
+	if (normals_len != numloops * 3) {
+		BKE_reportf(reports, RPT_ERROR,
+		            "Number of custom normals is not number of loops (%f / %d)",
+		            (float)normals_len / 3.0f, numloops);
+		return;
+	}
+
+	rna_Mesh_normals_split_custom_do(mesh, loopnors, false);
+
+	DAG_id_tag_update(&mesh->id, 0);
+}
+
+static void rna_Mesh_normals_split_custom_set_from_vertices(
+        Mesh *mesh, ReportList *reports, int normals_len, float *normals)
+{
+	float (*vertnors)[3] = (float (*)[3])normals;
+	const int numverts = mesh->totvert;
+
+	if (normals_len != numverts * 3) {
+		BKE_reportf(reports, RPT_ERROR,
+		            "Number of custom normals is not number of vertices (%f / %d)",
+		            (float)normals_len / 3.0f, numverts);
+		return;
+	}
+
+	rna_Mesh_normals_split_custom_do(mesh, vertnors, true);
+
+	DAG_id_tag_update(&mesh->id, 0);
 }
 
 static void rna_Mesh_transform(Mesh *mesh, float *mat, int shape_keys)
@@ -152,6 +205,7 @@ void RNA_api_mesh(StructRNA *srna)
 {
 	FunctionRNA *func;
 	PropertyRNA *parm;
+	const int normals_array_dim[] = {1, 3};
 
 	func = RNA_def_function(srna, "transform", "rna_Mesh_transform");
 	RNA_def_function_ui_description(func, "Transform mesh vertices by a matrix");
@@ -162,12 +216,11 @@ void RNA_api_mesh(StructRNA *srna)
 	func = RNA_def_function(srna, "calc_normals", "BKE_mesh_calc_normals");
 	RNA_def_function_ui_description(func, "Calculate vertex normals");
 
-	func = RNA_def_function(srna, "calc_normals_split", "rna_Mesh_calc_normals_split");
+	func = RNA_def_function(srna, "create_normals_split", "rna_Mesh_create_normals_split");
+	RNA_def_function_ui_description(func, "Empty split vertex normals");
+
+	func = RNA_def_function(srna, "calc_normals_split", "BKE_mesh_calc_normals_split");
 	RNA_def_function_ui_description(func, "Calculate split vertex normals, which preserve sharp edges");
-	parm = RNA_def_float(func, "split_angle", M_PI, 0.0f, M_PI, "",
-	                     "Angle between polys' normals above which an edge is always sharp (180° to disable)",
-	                     0.0f, M_PI);
-	RNA_def_property_subtype(parm, (PropertySubType)PROP_UNIT_ROTATION);
 
 	func = RNA_def_function(srna, "free_normals_split", "rna_Mesh_free_normals_split");
 	RNA_def_function_ui_description(func, "Free split vertex normals");
@@ -184,8 +237,12 @@ void RNA_api_mesh(StructRNA *srna)
 	func = RNA_def_function(srna, "free_tangents", "rna_Mesh_free_tangents");
 	RNA_def_function_ui_description(func, "Free tangents");
 
-	func = RNA_def_function(srna, "calc_tessface", "ED_mesh_calc_tessface");
+	func = RNA_def_function(srna, "calc_tessface", "rna_Mesh_calc_tessface");
 	RNA_def_function_ui_description(func, "Calculate face tessellation (supports editmode too)");
+	RNA_def_boolean(func, "free_mpoly", 0, "Free MPoly", "Free data used by polygons and loops. "
+	                "WARNING: This destructive operation removes regular faces, "
+	                "only used on temporary mesh data-blocks to reduce memory footprint of render "
+	                "engines and export scripts");
 
 	func = RNA_def_function(srna, "calc_smooth_groups", "rna_Mesh_calc_smooth_groups");
 	RNA_def_function_ui_description(func, "Calculate smooth groups from sharp edges");
@@ -196,6 +253,26 @@ void RNA_api_mesh(StructRNA *srna)
 	parm = RNA_def_int(func, "groups", 0, 0, INT_MAX, "groups", "Total number of groups", 0, INT_MAX);
 	RNA_def_property_flag(parm, PROP_OUTPUT);
 
+	func = RNA_def_function(srna, "normals_split_custom_set", "rna_Mesh_normals_split_custom_set");
+	RNA_def_function_ui_description(func,
+	                                "Define custom split normals of this mesh "
+	                                "(use zero-vectors to keep auto ones)");
+	RNA_def_function_flag(func, FUNC_USE_REPORTS);
+	/* TODO, see how array size of 0 works, this shouldnt be used */
+	parm = RNA_def_float_array(func, "normals", 1, NULL, -1.0f, 1.0f, "", "Normals", 0.0f, 0.0f);
+	RNA_def_property_multi_array(parm, 2, normals_array_dim);
+	RNA_def_property_flag(parm, PROP_DYNAMIC | PROP_REQUIRED);
+
+	func = RNA_def_function(srna, "normals_split_custom_set_from_vertices",
+	                        "rna_Mesh_normals_split_custom_set_from_vertices");
+	RNA_def_function_ui_description(func,
+	                                "Define custom split normals of this mesh, from vertices' normals "
+	                                "(use zero-vectors to keep auto ones)");
+	RNA_def_function_flag(func, FUNC_USE_REPORTS);
+	/* TODO, see how array size of 0 works, this shouldnt be used */
+	parm = RNA_def_float_array(func, "normals", 1, NULL, -1.0f, 1.0f, "", "Normals", 0.0f, 0.0f);
+	RNA_def_property_multi_array(parm, 2, normals_array_dim);
+	RNA_def_property_flag(parm, PROP_DYNAMIC | PROP_REQUIRED);
 
 	func = RNA_def_function(srna, "update", "ED_mesh_update");
 	RNA_def_boolean(func, "calc_edges", 0, "Calculate Edges", "Force recalculation of edges");
@@ -211,7 +288,9 @@ void RNA_api_mesh(StructRNA *srna)
 	func = RNA_def_function(srna, "validate", "BKE_mesh_validate");
 	RNA_def_function_ui_description(func, "Validate geometry, return True when the mesh has had "
 	                                "invalid geometry corrected/removed");
-	RNA_def_boolean(func, "verbose", 0, "Verbose", "Output information about the errors found");
+	RNA_def_boolean(func, "verbose", false, "Verbose", "Output information about the errors found");
+	RNA_def_boolean(func, "clean_customdata", true, "Clean Custom Data",
+	                "Remove temp/cached custom-data layers, like e.g. normals...");
 	parm = RNA_def_boolean(func, "result", 0, "Result", "");
 	RNA_def_function_return(func, parm);
 

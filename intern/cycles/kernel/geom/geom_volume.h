@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 /* Volume Primitive
@@ -60,7 +60,7 @@ ccl_device float volume_attribute_float(KernelGlobals *kg, const ShaderData *sd,
 #endif
 
 	if(dx) *dx = 0.0f;
-	if(dx) *dy = 0.0f;
+	if(dy) *dy = 0.0f;
 
 	/* todo: support float textures to lower memory usage for single floats */
 	return average(float4_to_float3(r));

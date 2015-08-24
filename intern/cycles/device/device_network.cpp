@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #include "device.h"
@@ -19,6 +19,7 @@
 #include "device_network.h"
 
 #include "util_foreach.h"
+#include "util_logging.h"
 
 #if defined(WITH_NETWORK)
 
@@ -162,8 +163,13 @@ public:
 		snd.write_buffer(host, size);
 	}
 
-	void tex_alloc(const char *name, device_memory& mem, InterpolationType interpolation, bool periodic)
+	void tex_alloc(const char *name,
+	               device_memory& mem,
+	               InterpolationType interpolation,
+	               ExtensionType extension)
 	{
+		VLOG(1) << "Texture allocate: " << name << ", " << mem.memory_size() << " bytes.";
+
 		thread_scoped_lock lock(rpc_lock);
 
 		mem.device_pointer = ++mem_counter;
@@ -175,7 +181,7 @@ public:
 		snd.add(name_string);
 		snd.add(mem);
 		snd.add(interpolation);
-		snd.add(periodic);
+		snd.add(extension);
 		snd.write();
 		snd.write_buffer((void*)mem.data_pointer, mem.memory_size());
 	}
@@ -194,7 +200,7 @@ public:
 		}
 	}
 
-	bool load_kernels(bool experimental)
+	bool load_kernels(const DeviceRequestedFeatures& requested_features)
 	{
 		if(error_func.have_error())
 			return false;
@@ -202,7 +208,10 @@ public:
 		thread_scoped_lock lock(rpc_lock);
 
 		RPCSend snd(socket, &error_func, "load_kernels");
-		snd.add(experimental);
+		snd.add(requested_features.experimental);
+		snd.add(requested_features.max_closure);
+		snd.add(requested_features.max_nodes_group);
+		snd.add(requested_features.nodes_features);
 		snd.write();
 
 		bool result;
@@ -269,7 +278,7 @@ public:
 				lock.unlock();
 
 				TileList::iterator it = tile_list_find(the_tiles, tile);
-				if (it != the_tiles.end()) {
+				if(it != the_tiles.end()) {
 					tile.buffers = it->buffers;
 					the_tiles.erase(it);
 				}
@@ -565,13 +574,13 @@ protected:
 			network_device_memory mem;
 			string name;
 			InterpolationType interpolation;
-			bool periodic;
+			ExtensionType extension_type;
 			device_ptr client_pointer;
 
 			rcv.read(name);
 			rcv.read(mem);
 			rcv.read(interpolation);
-			rcv.read(periodic);
+			rcv.read(extension_type);
 			lock.unlock();
 
 			client_pointer = mem.device_pointer;
@@ -587,7 +596,7 @@ protected:
 
 			rcv.read_buffer((uint8_t*)mem.data_pointer, data_size);
 
-			device->tex_alloc(name.c_str(), mem, interpolation, periodic);
+			device->tex_alloc(name.c_str(), mem, interpolation, extension_type);
 
 			pointer_mapping_insert(client_pointer, mem.device_pointer);
 		}
@@ -605,11 +614,14 @@ protected:
 			device->tex_free(mem);
 		}
 		else if(rcv.name == "load_kernels") {
-			bool experimental;
-			rcv.read(experimental);
+			DeviceRequestedFeatures requested_features;
+			rcv.read(requested_features.experimental);
+			rcv.read(requested_features.max_closure);
+			rcv.read(requested_features.max_nodes_group);
+			rcv.read(requested_features.nodes_features);
 
 			bool result;
-			result = device->load_kernels(experimental);
+			result = device->load_kernels(requested_features);
 			RPCSend snd(socket, &error_func, "load_kernels");
 			snd.add(result);
 			snd.write();

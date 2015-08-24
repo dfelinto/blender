@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #include <stdio.h>
@@ -23,12 +23,6 @@
 #include "util_md5.h"
 #include "util_path.h"
 #include "util_types.h"
-
-#include <boost/version.hpp>
-
-#if (BOOST_VERSION < 104400)
-#  define BOOST_FILESYSTEM_VERSION 2
-#endif
 
 #include <boost/filesystem.hpp> 
 #include <boost/algorithm/string.hpp>

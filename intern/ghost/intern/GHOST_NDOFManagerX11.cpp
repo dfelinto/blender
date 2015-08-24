@@ -33,8 +33,6 @@ GHOST_NDOFManagerX11::GHOST_NDOFManagerX11(GHOST_System& sys)
     : GHOST_NDOFManager(sys),
       m_available(false)
 {
-	setDeadZone(0.1f); /* how to calibrate on Linux? throw away slight motion! */
-
 	if (spnav_open() != -1) {
 		m_available = true;
 
@@ -42,8 +40,8 @@ GHOST_NDOFManagerX11::GHOST_NDOFManagerX11(GHOST_System& sys)
 
 #define MAX_LINE_LENGTH 100
 
-		/* look for USB devices with Logitech's vendor ID */
-		FILE *command_output = popen("lsusb -d 046d:", "r");
+		/* look for USB devices with Logitech or 3Dconnexion's vendor ID */
+		FILE *command_output = popen("lsusb | grep '046d:\\|256f:'", "r");
 		if (command_output) {
 			char line[MAX_LINE_LENGTH] = {0};
 			while (fgets(line, MAX_LINE_LENGTH, command_output)) {
@@ -58,7 +56,7 @@ GHOST_NDOFManagerX11::GHOST_NDOFManagerX11(GHOST_System& sys)
 	}
 	else {
 #ifdef DEBUG
-		/* annoying for official builds, just adds noise and most prople don't own these */
+		/* annoying for official builds, just adds noise and most people don't own these */
 		puts("ndof: spacenavd not found");
 		/* This isn't a hard error, just means the user doesn't have a 3D mouse. */
 #endif
@@ -81,11 +79,11 @@ bool GHOST_NDOFManagerX11::available()
  * this causes any proceeding event to have a very high 'dt' (time delta),
  * many seconds for eg, causing the view to jump.
  *
- * this workaround expect's continuous events, if we miss a motion event,
+ * this workaround expects continuous events, if we miss a motion event,
  * immediately send a dummy event with no motion to ensure the finished state is reached.
  */
 #define USE_FINISH_GLITCH_WORKAROUND
-
+/* TODO: make this available on all platforms */
 
 #ifdef USE_FINISH_GLITCH_WORKAROUND
 static bool motion_test_prev = false;

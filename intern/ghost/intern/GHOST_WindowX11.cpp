@@ -29,6 +29,10 @@
  *  \ingroup GHOST
  */
 
+/* For standard X11 cursors */
+#include <X11/cursorfont.h>
+#include <X11/Xatom.h>
+#include <X11/Xutil.h>
 
 #include "GHOST_WindowX11.h"
 #include "GHOST_SystemX11.h"
@@ -45,17 +49,15 @@
 #  include "GHOST_ContextGLX.h"
 #endif
 
-
-/* For standard X11 cursors */
-#include <X11/cursorfont.h>
-#include <X11/Xatom.h>
-
 #if defined(__sun__) || defined(__sun) || defined(__sparc) || defined(__sparc__) || defined(_AIX)
 #  include <strings.h>
 #endif
 
 #include <cstring>
 #include <cstdio>
+
+/* gethostname */
+#include <unistd.h>
 
 #include <algorithm>
 #include <string>
@@ -72,6 +74,9 @@ typedef struct {
 
 #define MWM_HINTS_DECORATIONS         (1L << 1)
 
+#ifndef HOST_NAME_MAX
+#  define HOST_NAME_MAX 64
+#endif
 
 // #define GHOST_X11_GRAB
 
@@ -153,11 +158,77 @@ static long BLENDER_ICON_48x48x32[] = {
 	4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303,
 };
 
+static XVisualInfo *x11_visualinfo_from_glx(
+        Display *display,
+        bool stereoVisual, GHOST_TUns16 *r_numOfAASamples)
+{
+	XVisualInfo *visualInfo = NULL;
+	GHOST_TUns16 numOfAASamples = *r_numOfAASamples;
+	GHOST_TUns16 actualSamples;
 
+	/* Set up the minimum attributes that we require and see if
+	 * X can find us a visual matching those requirements. */
+	int glx_major, glx_minor; /* GLX version: major.minor */
+
+	if (!glXQueryVersion(display, &glx_major, &glx_minor)) {
+		fprintf(stderr,
+		        "%s:%d: X11 glXQueryVersion() failed, "
+		        "verify working openGL system!\n",
+		        __FILE__, __LINE__);
+
+		return NULL;
+	}
+
+	/* GLX >= 1.4 required for multi-sample */
+	if ((glx_major > 1) || (glx_major == 1 && glx_minor >= 4)) {
+		actualSamples = numOfAASamples;
+	}
+	else {
+		numOfAASamples = 0;
+		actualSamples = 0;
+	}
+
+	/* Find the display with highest samples, starting at level requested */
+	for (;;) {
+		int glx_attribs[64];
+
+		GHOST_X11_GL_GetAttributes(glx_attribs, 64, actualSamples, stereoVisual, false);
+
+		visualInfo = glXChooseVisual(display, DefaultScreen(display), glx_attribs);
+
+		/* Any sample level or even zero, which means oversampling disabled, is good
+		 * but we need a valid visual to continue */
+		if (visualInfo != NULL) {
+			if (actualSamples < numOfAASamples) {
+				fprintf(stderr,
+				        "Warning! Unable to find a multisample pixel format that supports exactly %d samples. "
+				        "Substituting one that uses %d samples.\n",
+				        numOfAASamples, actualSamples);
+			}
+			break;
+		}
+
+		if (actualSamples == 0) {
+			/* All options exhausted, cannot continue */
+			fprintf(stderr,
+			        "%s:%d: X11 glXChooseVisual() failed, "
+			        "verify working openGL system!\n",
+			        __FILE__, __LINE__);
+
+			return NULL;
+		}
+		else {
+			--actualSamples;
+		}
+	}
+
+	*r_numOfAASamples = actualSamples;
+
+	return visualInfo;
+}
 
 GHOST_WindowX11::
-GHOST_WindowX11(
-        GHOST_SystemX11 *system,
+GHOST_WindowX11(GHOST_SystemX11 *system,
         Display *display,
         const STR_String &title,
         GHOST_TInt32 left,
@@ -169,18 +240,39 @@ GHOST_WindowX11(
         GHOST_TDrawingContextType type,
         const bool stereoVisual,
         const bool exclusive,
-        const GHOST_TUns16 numOfAASamples)
+        const GHOST_TUns16 numOfAASamples, const bool is_debug)
     : GHOST_Window(width, height, state, stereoVisual, exclusive, numOfAASamples),
       m_display(display),
+      m_visualInfo(NULL),
       m_normal_state(GHOST_kWindowStateNormal),
       m_system(system),
-      m_valid_setup(false),
       m_invalid_window(false),
       m_empty_cursor(None),
       m_custom_cursor(None),
-      m_visible_cursor(None)
+      m_visible_cursor(None),
+#ifdef WITH_XDND
+      m_dropTarget(NULL),
+#endif
+#if defined(WITH_X11_XINPUT) && defined(X_HAVE_UTF8_STRING)
+      m_xic(NULL),
+#endif
+      m_valid_setup(false),
+      m_is_debug_context(is_debug)
 {
-	int natom;
+	if (type == GHOST_kDrawingContextTypeOpenGL) {
+		m_visualInfo = x11_visualinfo_from_glx(m_display, stereoVisual, &m_wantNumOfAASamples);
+	}
+	else {
+		XVisualInfo tmp = {0};
+		int n;
+		m_visualInfo = XGetVisualInfo(m_display, 0, &tmp, &n);
+	}
+
+	/* caller needs to check 'getValid()' */
+	if (m_visualInfo == NULL) {
+		fprintf(stderr, "initial window could not find the GLX extension\n");
+		return;
+	}
 
 	unsigned int xattributes_valuemask = 0;
 
@@ -206,24 +298,28 @@ GHOST_WindowX11(
 		xattributes.override_redirect = True;
 	}
 
+	xattributes_valuemask |= CWColormap;
+	xattributes.colormap = XCreateColormap(
+	        m_display,
+	        RootWindow(m_display, m_visualInfo->screen),
+	        m_visualInfo->visual,
+	        AllocNone
+	        );
+
 	/* create the window! */
 	if (parentWindow == 0) {
-		m_window =  XCreateWindow(m_display,
-		                          RootWindow(m_display, DefaultScreen(m_display)),
-		                          left,
-		                          top,
-		                          width,
-		                          height,
-		                          0, /* no border. */
-		                          CopyFromParent,
-		                          InputOutput,
-		                          CopyFromParent,
-		                          xattributes_valuemask,
-		                          &xattributes
-		                          );
+		m_window =  XCreateWindow(
+		        m_display,
+		        RootWindow(m_display, m_visualInfo->screen),
+		        left, top, width, height,
+		        0, /* no border. */
+		        m_visualInfo->depth,
+		        InputOutput,
+		        m_visualInfo->visual,
+		        xattributes_valuemask,
+		        &xattributes);
 	}
 	else {
-
 		Window root_return;
 		int x_return, y_return;
 		unsigned int w_return, h_return, border_w_return, depth_return;
@@ -237,19 +333,16 @@ GHOST_WindowX11(
 		height = h_return;
 
 
-		m_window = XCreateWindow(m_display,
-		                         parentWindow, /* reparent against embedder */
-		                         left,
-		                         top,
-		                         width,
-		                         height,
-		                         0, /* no border. */
-		                         CopyFromParent,
-		                         InputOutput,
-		                         CopyFromParent,
-		                         xattributes_valuemask,
-		                         &xattributes
-		                         );
+		m_window = XCreateWindow(
+		        m_display,
+		        parentWindow, /* reparent against embedder */
+		        left, top, width, height,
+		        0, /* no border. */
+		        m_visualInfo->depth,
+		        InputOutput,
+		        m_visualInfo->visual,
+		        xattributes_valuemask,
+		        &xattributes);
 
 		XSelectInput(m_display, parentWindow, SubstructureNotifyMask);
 		
@@ -301,36 +394,43 @@ GHOST_WindowX11(
 		m_post_state = GHOST_kWindowStateNormal;
 	}
 
+
 	/* Create some hints for the window manager on how
 	 * we want this window treated. */
+	{
+		XSizeHints *xsizehints = XAllocSizeHints();
+		xsizehints->flags = PPosition | PSize | PMinSize | PMaxSize;
+		xsizehints->x = left;
+		xsizehints->y = top;
+		xsizehints->width = width;
+		xsizehints->height = height;
+		xsizehints->min_width = 320;     /* size hints, could be made apart of the ghost api */
+		xsizehints->min_height = 240;    /* limits are also arbitrary, but should not allow 1x1 window */
+		xsizehints->max_width = 65535;
+		xsizehints->max_height = 65535;
+		XSetWMNormalHints(m_display, m_window, xsizehints);
+		XFree(xsizehints);
+	}
 
-	XSizeHints *xsizehints = XAllocSizeHints();
-	xsizehints->flags = PPosition | PSize | PMinSize | PMaxSize;
-	xsizehints->x = left;
-	xsizehints->y = top;
-	xsizehints->width = width;
-	xsizehints->height = height;
-	xsizehints->min_width = 320;     /* size hints, could be made apart of the ghost api */
-	xsizehints->min_height = 240;    /* limits are also arbitrary, but should not allow 1x1 window */
-	xsizehints->max_width = 65535;
-	xsizehints->max_height = 65535;
-	XSetWMNormalHints(m_display, m_window, xsizehints);
-	XFree(xsizehints);
 
-	XClassHint *xclasshint = XAllocClassHint();
-	const int len = title.Length() + 1;
-	char *wmclass = (char *)malloc(sizeof(char) * len);
-	strncpy(wmclass, (const char *)title, sizeof(char) * len);
-	xclasshint->res_name = wmclass;
-	xclasshint->res_class = wmclass;
-	XSetClassHint(m_display, m_window, xclasshint);
-	free(wmclass);
-	XFree(xclasshint);
+	/* XClassHint, title */
+	{
+		XClassHint *xclasshint = XAllocClassHint();
+		const int len = title.Length() + 1;
+		char *wmclass = (char *)malloc(sizeof(char) * len);
+		memcpy(wmclass, title.ReadPtr(), len * sizeof(char));
+		xclasshint->res_name = wmclass;
+		xclasshint->res_class = wmclass;
+		XSetClassHint(m_display, m_window, xclasshint);
+		free(wmclass);
+		XFree(xclasshint);
+	}
+
 
 	/* The basic for a good ICCCM "work" */
 	if (m_system->m_atom.WM_PROTOCOLS) {
 		Atom atoms[2];
-		natom = 0;
+		int natom = 0;
 
 		if (m_system->m_atom.WM_DELETE_WINDOW) {
 			atoms[natom] = m_system->m_atom.WM_DELETE_WINDOW;
@@ -348,31 +448,55 @@ GHOST_WindowX11(
 		}
 	}
 
-#if defined(WITH_X11_XINPUT) && defined(X_HAVE_UTF8_STRING)
-	m_xic = NULL;
-#endif
-
 	/* Set the window hints */
-	XWMHints *xwmhints = XAllocWMHints();
-	xwmhints->initial_state = NormalState;
-	xwmhints->input = True;
-	xwmhints->flags = InputHint | StateHint;
-	XSetWMHints(display, m_window, xwmhints);
-	XFree(xwmhints);
-	/* done setting the hints */
+	{
+		XWMHints *xwmhints = XAllocWMHints();
+		xwmhints->initial_state = NormalState;
+		xwmhints->input = True;
+		xwmhints->flags = InputHint | StateHint;
+		XSetWMHints(display, m_window, xwmhints);
+		XFree(xwmhints);
+	}
+
 
 	/* set the icon */
-	Atom _NET_WM_ICON     = XInternAtom(m_display, "_NET_WM_ICON", False);
-	XChangeProperty(m_display, m_window, _NET_WM_ICON, XA_CARDINAL,
-	                32, PropModeReplace, (unsigned char *)BLENDER_ICON_48x48x32,
-	                BLENDER_ICON_48x48x32[0] * BLENDER_ICON_48x48x32[1] + 2);
-	/* done setting the icon */
+	{
+		Atom _NET_WM_ICON     = XInternAtom(m_display, "_NET_WM_ICON", False);
+		XChangeProperty(m_display, m_window, _NET_WM_ICON, XA_CARDINAL,
+		                32, PropModeReplace, (unsigned char *)BLENDER_ICON_48x48x32,
+		                BLENDER_ICON_48x48x32[0] * BLENDER_ICON_48x48x32[1] + 2);
+	}
+
+	/* set the process ID (_NET_WM_PID) */
+	{
+		Atom _NET_WM_PID = XInternAtom(m_display, "_NET_WM_PID", False);
+		pid_t pid = getpid();
+		XChangeProperty(m_display, m_window, _NET_WM_PID, XA_CARDINAL,
+		                32, PropModeReplace, (unsigned char *)&pid, 1);
+	}
+
+
+	/* set the hostname (WM_CLIENT_MACHINE) */
+	{
+		char  hostname[HOST_NAME_MAX];
+		char *text_array[1];
+		XTextProperty text_prop;
+
+		gethostname(hostname, sizeof(hostname));
+		hostname[sizeof(hostname) - 1] = '\0';
+		text_array[0] = hostname;
+
+		XStringListToTextProperty(text_array, 1, &text_prop);
+		XSetWMClientMachine(m_display, m_window, &text_prop);
+		XFree(text_prop.value);
+	}
 
 #ifdef WITH_X11_XINPUT
 	initXInputDevices();
 
 	m_tabletData.Active = GHOST_kTabletModeNone;
 #endif
+
 
 	/* now set up the rendering context. */
 	if (setDrawingContextType(type) == GHOST_kSuccess) {
@@ -394,7 +518,7 @@ GHOST_WindowX11(
 }
 
 #if defined(WITH_X11_XINPUT) && defined(X_HAVE_UTF8_STRING)
-static void destroyICCallback(XIC xic, XPointer ptr, XPointer data)
+static void destroyICCallback(XIC /*xic*/, XPointer ptr, XPointer /*data*/)
 {
 	GHOST_PRINT("XIM input context destroyed\n");
 
@@ -442,11 +566,18 @@ void GHOST_WindowX11::initXInputDevices()
 	if (version && (version != (XExtensionVersion *)NoSuchExtension)) {
 		if (version->present) {
 			GHOST_SystemX11::GHOST_TabletX11 &xtablet = m_system->GetXTablet();
-			XEventClass xevents[10], ev;
+			XEventClass xevents[8], ev;
 			int dcount = 0;
+
+			/* With modern XInput (xlib 1.6.2 at least and/or evdev 2.9.0) and some 'no-name' tablets
+			 * like 'UC-LOGIC Tablet WP5540U', we also need to 'select' ButtonPress for motion event,
+			 * otherwise we do not get any tablet motion event once pen is pressed... See T43367.
+			 */
 
 			if (xtablet.StylusDevice) {
 				DeviceMotionNotify(xtablet.StylusDevice, xtablet.MotionEvent, ev);
+				if (ev) xevents[dcount++] = ev;
+				DeviceButtonPress(xtablet.StylusDevice, xtablet.PressEvent, ev);
 				if (ev) xevents[dcount++] = ev;
 				ProximityIn(xtablet.StylusDevice, xtablet.ProxInEvent, ev);
 				if (ev) xevents[dcount++] = ev;
@@ -454,11 +585,13 @@ void GHOST_WindowX11::initXInputDevices()
 				if (ev) xevents[dcount++] = ev;
 			}
 			if (xtablet.EraserDevice) {
-				DeviceMotionNotify(xtablet.EraserDevice, xtablet.MotionEvent, ev);
+				DeviceMotionNotify(xtablet.EraserDevice, xtablet.MotionEventEraser, ev);
 				if (ev) xevents[dcount++] = ev;
-				ProximityIn(xtablet.EraserDevice, xtablet.ProxInEvent, ev);
+				DeviceButtonPress(xtablet.EraserDevice, xtablet.PressEventEraser, ev);
 				if (ev) xevents[dcount++] = ev;
-				ProximityOut(xtablet.EraserDevice, xtablet.ProxOutEvent, ev);
+				ProximityIn(xtablet.EraserDevice, xtablet.ProxInEventEraser, ev);
+				if (ev) xevents[dcount++] = ev;
+				ProximityOut(xtablet.EraserDevice, xtablet.ProxOutEventEraser, ev);
 				if (ev) xevents[dcount++] = ev;
 			}
 
@@ -602,7 +735,7 @@ screenToClient(
 	Window temp;
 
 	XTranslateCoordinates(m_display,
-	                      RootWindow(m_display, DefaultScreen(m_display)),
+	                      RootWindow(m_display, m_visualInfo->screen),
 	                      m_window,
 	                      inX, inY,
 	                      &ax, &ay,
@@ -625,7 +758,7 @@ clientToScreen(
 	XTranslateCoordinates(
 	    m_display,
 	    m_window,
-	    RootWindow(m_display, DefaultScreen(m_display)),
+	    RootWindow(m_display, m_visualInfo->screen),
 	    inX, inY,
 	    &ax, &ay,
 	    &temp);
@@ -648,7 +781,7 @@ void GHOST_WindowX11::icccmSetState(int state)
 	xev.xclient.format = 32;
 	xev.xclient.message_type = m_system->m_atom.WM_CHANGE_STATE;
 	xev.xclient.data.l[0] = state;
-	XSendEvent(m_display, RootWindow(m_display, DefaultScreen(m_display)),
+	XSendEvent(m_display, RootWindow(m_display, m_visualInfo->screen),
 	           False, SubstructureNotifyMask | SubstructureRedirectMask, &xev);
 }
 
@@ -694,7 +827,7 @@ void GHOST_WindowX11::netwmMaximized(bool set)
 	xev.xclient.data.l[2] = m_system->m_atom._NET_WM_STATE_MAXIMIZED_VERT;
 	xev.xclient.data.l[3] = 0;
 	xev.xclient.data.l[4] = 0;
-	XSendEvent(m_display, RootWindow(m_display, DefaultScreen(m_display)),
+	XSendEvent(m_display, RootWindow(m_display, m_visualInfo->screen),
 	           False, SubstructureRedirectMask | SubstructureNotifyMask, &xev);
 }
 
@@ -750,7 +883,7 @@ void GHOST_WindowX11::netwmFullScreen(bool set)
 	xev.xclient.data.l[2] = 0;
 	xev.xclient.data.l[3] = 0;
 	xev.xclient.data.l[4] = 0;
-	XSendEvent(m_display, RootWindow(m_display, DefaultScreen(m_display)),
+	XSendEvent(m_display, RootWindow(m_display, m_visualInfo->screen),
 	           False, SubstructureRedirectMask | SubstructureNotifyMask, &xev);
 }
 
@@ -969,7 +1102,7 @@ setOrder(
 			xev.xclient.data.l[3] = 0;
 			xev.xclient.data.l[4] = 0;
 
-			root = RootWindow(m_display, DefaultScreen(m_display)),
+			root = RootWindow(m_display, m_visualInfo->screen),
 			eventmask = SubstructureRedirectMask | SubstructureNotifyMask;
 
 			XSendEvent(m_display, root, False, eventmask, &xev);
@@ -1040,15 +1173,6 @@ validate()
 GHOST_WindowX11::
 ~GHOST_WindowX11()
 {
-	static Atom Primary_atom, Clipboard_atom;
-	Window p_owner, c_owner;
-	/*Change the owner of the Atoms to None if we are the owner*/
-	Primary_atom = XInternAtom(m_display, "PRIMARY", False);
-	Clipboard_atom = XInternAtom(m_display, "CLIPBOARD", False);
-	
-	p_owner = XGetSelectionOwner(m_display, Primary_atom);
-	c_owner = XGetSelectionOwner(m_display, Clipboard_atom);
-	
 	std::map<unsigned int, Cursor>::iterator it = m_standard_cursors.begin();
 	for (; it != m_standard_cursors.end(); ++it) {
 		XFreeCursor(m_display, it->second);
@@ -1061,13 +1185,29 @@ GHOST_WindowX11::
 		XFreeCursor(m_display, m_custom_cursor);
 	}
 
-	if (p_owner == m_window) {
-		XSetSelectionOwner(m_display, Primary_atom, None, CurrentTime);
-	}
-	if (c_owner == m_window) {
-		XSetSelectionOwner(m_display, Clipboard_atom, None, CurrentTime);
+	if (m_valid_setup) {
+		static Atom Primary_atom, Clipboard_atom;
+		Window p_owner, c_owner;
+		/*Change the owner of the Atoms to None if we are the owner*/
+		Primary_atom = XInternAtom(m_display, "PRIMARY", False);
+		Clipboard_atom = XInternAtom(m_display, "CLIPBOARD", False);
+
+
+		p_owner = XGetSelectionOwner(m_display, Primary_atom);
+		c_owner = XGetSelectionOwner(m_display, Clipboard_atom);
+
+		if (p_owner == m_window) {
+			XSetSelectionOwner(m_display, Primary_atom, None, CurrentTime);
+		}
+		if (c_owner == m_window) {
+			XSetSelectionOwner(m_display, Clipboard_atom, None, CurrentTime);
+		}
 	}
 	
+	if (m_visualInfo) {
+		XFree(m_visualInfo);
+	}
+
 #if defined(WITH_X11_XINPUT) && defined(X_HAVE_UTF8_STRING)
 	if (m_xic) {
 		XDestroyIC(m_xic);
@@ -1080,7 +1220,9 @@ GHOST_WindowX11::
 
 	releaseNativeHandles();
 
-	XDestroyWindow(m_display, m_window);
+	if (m_valid_setup) {
+		XDestroyWindow(m_display, m_window);
+	}
 }
 
 
@@ -1095,9 +1237,10 @@ GHOST_Context *GHOST_WindowX11::newDrawingContext(GHOST_TDrawingContextType type
 		        m_wantNumOfAASamples,
 		        m_window,
 		        m_display,
-		        GLX_CONTEXT_OPENGL_CORE_PROFILE_BIT,
+		        m_visualInfo,
+		        GLX_CONTEXT_CORE_PROFILE_BIT_ARB,
 		        3, 2,
-		        GHOST_OPENGL_GLX_CONTEXT_FLAGS,
+		        GHOST_OPENGL_GLX_CONTEXT_FLAGS | (m_is_debug_context ? GLX_CONTEXT_DEBUG_BIT_ARB : 0),
 		        GHOST_OPENGL_GLX_RESET_NOTIFICATION_STRATEGY);
 #elif defined(WITH_GL_PROFILE_ES20)
 		GHOST_Context *context = new GHOST_ContextGLX(
@@ -1105,9 +1248,10 @@ GHOST_Context *GHOST_WindowX11::newDrawingContext(GHOST_TDrawingContextType type
 		        m_wantNumOfAASamples,
 		        m_window,
 		        m_display,
+		        m_visualInfo,
 		        GLX_CONTEXT_ES2_PROFILE_BIT_EXT,
 		        2, 0,
-		        GHOST_OPENGL_GLX_CONTEXT_FLAGS,
+		        GHOST_OPENGL_GLX_CONTEXT_FLAGS | (m_is_debug_context ? GLX_CONTEXT_DEBUG_BIT_ARB : 0),
 		        GHOST_OPENGL_GLX_RESET_NOTIFICATION_STRATEGY);
 #elif defined(WITH_GL_PROFILE_COMPAT)
 		GHOST_Context *context = new GHOST_ContextGLX(
@@ -1115,9 +1259,10 @@ GHOST_Context *GHOST_WindowX11::newDrawingContext(GHOST_TDrawingContextType type
 		        m_wantNumOfAASamples,
 		        m_window,
 		        m_display,
+		        m_visualInfo,
 		        0, // profile bit
 		        0, 0,
-		        GHOST_OPENGL_GLX_CONTEXT_FLAGS,
+		        GHOST_OPENGL_GLX_CONTEXT_FLAGS | (m_is_debug_context ? GLX_CONTEXT_DEBUG_BIT_ARB : 0),
 		        GHOST_OPENGL_GLX_RESET_NOTIFICATION_STRATEGY);
 #else
 #  error
@@ -1231,13 +1376,13 @@ getEmptyCursor(
         ) {
 	if (!m_empty_cursor) {
 		Pixmap blank;
-		XColor dummy;
+		XColor dummy = {0};
 		char data[1] = {0};
 			
 		/* make a blank cursor */
 		blank = XCreateBitmapFromData(
 		    m_display,
-		    RootWindow(m_display, DefaultScreen(m_display)),
+		    RootWindow(m_display, m_visualInfo->screen),
 		    data, 1, 1
 		    );
 
@@ -1353,10 +1498,10 @@ setWindowCustomCursorShape(
 		int sizey,
 		int hotX,
 		int hotY,
-		int fg_color,
-		int bg_color)
+		int /*fg_color*/,
+		int /*bg_color*/)
 {
-	Colormap colormap = DefaultColormap(m_display, DefaultScreen(m_display));
+	Colormap colormap = DefaultColormap(m_display, m_visualInfo->screen);
 	Pixmap bitmap_pix, mask_pix;
 	XColor fg, bg;
 	

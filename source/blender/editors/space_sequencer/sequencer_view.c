@@ -94,7 +94,7 @@ static void sample_apply(bContext *C, wmOperator *op, const wmEvent *event)
 	Scene *scene = CTX_data_scene(C);
 	SpaceSeq *sseq = (SpaceSeq *) CTX_wm_space_data(C);
 	ARegion *ar = CTX_wm_region(C);
-	ImBuf *ibuf = sequencer_ibuf_get(bmain, scene, sseq, CFRA, 0);
+	ImBuf *ibuf = sequencer_ibuf_get(bmain, scene, sseq, CFRA, 0, NULL);
 	ImageSampleInfo *info = op->customdata;
 	float fx, fy;
 	
@@ -201,8 +201,11 @@ static int sample_modal(bContext *C, wmOperator *op, const wmEvent *event)
 	switch (event->type) {
 		case LEFTMOUSE:
 		case RIGHTMOUSE: /* XXX hardcoded */
-			sample_exit(C, op);
-			return OPERATOR_CANCELLED;
+			if (event->val == KM_RELEASE) {
+				sample_exit(C, op);
+				return OPERATOR_CANCELLED;
+			}
+			break;
 		case MOUSEMOVE:
 			sample_apply(C, op, event);
 			break;

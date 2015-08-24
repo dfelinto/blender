@@ -136,7 +136,9 @@ static void foreachTexLink(ModifierData *md, Object *ob, TexWalkFunc walk, void 
 	walk(userData, ob, md, "texture");
 }
 
-static void updateDepgraph(ModifierData *md, DagForest *forest, struct Scene *UNUSED(scene),
+static void updateDepgraph(ModifierData *md, DagForest *forest,
+                           struct Main *UNUSED(bmain),
+                           struct Scene *UNUSED(scene),
                            Object *UNUSED(ob), DagNode *obNode)
 {
 	WarpModifierData *wmd = (WarpModifierData *) md;
@@ -155,6 +157,22 @@ static void updateDepgraph(ModifierData *md, DagForest *forest, struct Scene *UN
 	}
 }
 
+static void updateDepsgraph(ModifierData *md,
+                            struct Main *UNUSED(bmain),
+                            struct Scene *UNUSED(scene),
+                            Object *UNUSED(ob),
+                            struct DepsNodeHandle *node)
+{
+	WarpModifierData *wmd = (WarpModifierData *) md;
+	if (wmd->object_from != NULL && wmd->object_to != NULL) {
+		DEG_add_object_relation(node, wmd->object_from, DEG_OB_COMP_TRANSFORM, "Warp Modifier from");
+		DEG_add_object_relation(node, wmd->object_to, DEG_OB_COMP_TRANSFORM, "Warp Modifier to");
+	}
+	if ((wmd->texmapping == MOD_DISP_MAP_OBJECT) && wmd->map_object != NULL) {
+		DEG_add_object_relation(node, wmd->map_object, DEG_OB_COMP_TRANSFORM, "Warp Modifier map");
+	}
+}
+
 static void warpModifier_do(WarpModifierData *wmd, Object *ob,
                             DerivedMesh *dm, float (*vertexCos)[3], int numVerts)
 {
@@ -167,6 +185,7 @@ static void warpModifier_do(WarpModifierData *wmd, Object *ob,
 
 	float tmat[4][4];
 
+	const float falloff_radius_sq = SQUARE(wmd->falloff_radius);
 	float strength = wmd->strength;
 	float fac = 1.0f, weight;
 	int i;
@@ -179,6 +198,9 @@ static void warpModifier_do(WarpModifierData *wmd, Object *ob,
 		return;
 
 	modifier_get_vgroup(ob, dm, wmd->defgrp_name, &dvert, &defgrp_index);
+	if (dvert == NULL) {
+		defgrp_index = -1;
+	}
 
 	if (wmd->curfalloff == NULL) /* should never happen, but bad lib linking could cause it */
 		wmd->curfalloff = curvemapping_add(1, 0.0f, 0.0f, 1.0f, 1.0f);
@@ -222,17 +244,15 @@ static void warpModifier_do(WarpModifierData *wmd, Object *ob,
 		float *co = vertexCos[i];
 
 		if (wmd->falloff_type == eWarp_Falloff_None ||
-		    ((fac = len_v3v3(co, mat_from[3])) < wmd->falloff_radius &&
-		     (fac = (wmd->falloff_radius - fac) / wmd->falloff_radius)))
+		    ((fac = len_squared_v3v3(co, mat_from[3])) < falloff_radius_sq &&
+		     (fac = (wmd->falloff_radius - sqrtf(fac)) / wmd->falloff_radius)))
 		{
 			/* skip if no vert group found */
-			if (dvert && defgrp_index != -1) {
+			if (defgrp_index != -1) {
 				dv = &dvert[i];
-
-				if (dv) {
-					weight = defvert_find_weight(dv, defgrp_index) * strength;
-					if (weight <= 0.0f) /* Should never occure... */
-						continue;
+				weight = defvert_find_weight(dv, defgrp_index) * strength;
+				if (weight <= 0.0f) {
+					continue;
 				}
 			}
 
@@ -263,6 +283,9 @@ static void warpModifier_do(WarpModifierData *wmd, Object *ob,
 				case eWarp_Falloff_Sphere:
 					fac = sqrtf(2 * fac - fac * fac);
 					break;
+				case eWarp_Falloff_InvSquare:
+					fac = fac * (2.0f - fac);
+					break;
 			}
 
 			fac *= weight;
@@ -274,27 +297,29 @@ static void warpModifier_do(WarpModifierData *wmd, Object *ob,
 				fac *= texres.tin;
 			}
 
-			/* into the 'from' objects space */
-			mul_m4_v3(mat_from_inv, co);
+			if (fac != 0.0f) {
+				/* into the 'from' objects space */
+				mul_m4_v3(mat_from_inv, co);
 
-			if (fac >= 1.0f) {
-				mul_m4_v3(mat_final, co);
-			}
-			else if (fac > 0.0f) {
-				if (wmd->flag & MOD_WARP_VOLUME_PRESERVE) {
-					/* interpolate the matrix for nicer locations */
-					blend_m4_m4m4(tmat, mat_unit, mat_final, fac);
-					mul_m4_v3(tmat, co);
+				if (fac == 1.0f) {
+					mul_m4_v3(mat_final, co);
 				}
 				else {
-					float tvec[3];
-					mul_v3_m4v3(tvec, mat_final, co);
-					interp_v3_v3v3(co, co, tvec, fac);
+					if (wmd->flag & MOD_WARP_VOLUME_PRESERVE) {
+						/* interpolate the matrix for nicer locations */
+						blend_m4_m4m4(tmat, mat_unit, mat_final, fac);
+						mul_m4_v3(tmat, co);
+					}
+					else {
+						float tvec[3];
+						mul_v3_m4v3(tvec, mat_final, co);
+						interp_v3_v3v3(co, co, tvec, fac);
+					}
 				}
-			}
 
-			/* out of the 'from' objects space */
-			mul_m4_v3(mat_from, co);
+				/* out of the 'from' objects space */
+				mul_m4_v3(mat_from, co);
+			}
 		}
 	}
 
@@ -363,6 +388,7 @@ ModifierTypeInfo modifierType_Warp = {
 	/* freeData */          freeData,
 	/* isDisabled */        isDisabled,
 	/* updateDepgraph */    updateDepgraph,
+	/* updateDepsgraph */   updateDepsgraph,
 	/* dependsOnTime */     dependsOnTime,
 	/* dependsOnNormals */  NULL,
 	/* foreachObjectLink */ foreachObjectLink,

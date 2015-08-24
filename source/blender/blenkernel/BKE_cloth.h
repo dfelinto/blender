@@ -36,12 +36,11 @@
 #include "BLI_math_inline.h"
 
 struct Object;
-struct ListBase;
 struct Scene;
 struct MFace;
 struct DerivedMesh;
 struct ClothModifierData;
-struct CollisionTree;
+struct CollisionModifierData;
 
 #define DO_INLINE MALWAYS_INLINE
 
@@ -53,8 +52,26 @@ struct CollisionTree;
 #define ALMOST_ZERO		FLT_EPSILON
 
 /* Bits to or into the ClothVertex.flags. */
-#define CLOTH_VERT_FLAG_PINNED 1
-#define CLOTH_VERT_FLAG_NOSELFCOLL 2 /* vertex NOT used for self collisions */
+typedef enum eClothVertexFlag {
+	CLOTH_VERT_FLAG_PINNED      = 1,
+	CLOTH_VERT_FLAG_NOSELFCOLL  = 2, /* vertex NOT used for self collisions */
+} eClothVertexFlag;
+
+typedef struct ClothHairData {
+	float loc[3];
+	float rot[3][3];
+	float rest_target[3]; /* rest target direction for each segment */
+	float radius;
+	float bending_stiffness;
+} ClothHairData;
+
+typedef struct ClothSolverResult {
+	int status;
+	
+	int max_iterations, min_iterations;
+	float avg_iterations;
+	float max_error, min_error, avg_error;
+} ClothSolverResult;
 
 /**
  * This structure describes a cloth object against which the
@@ -69,17 +86,16 @@ struct CollisionTree;
 typedef struct Cloth {
 	struct ClothVertex	*verts;			/* The vertices that represent this cloth. */
 	struct	LinkNode	*springs;		/* The springs connecting the mesh. */
-	unsigned int		numverts;		/* The number of verts == m * n. */
 	unsigned int		numsprings;		/* The count of springs. */
-	unsigned int		numfaces;
+	unsigned int		mvert_num;		/* The number of verts == m * n. */
+	unsigned int		tri_num;
 	unsigned char 		old_solver_type;	/* unused, only 1 solver here */
 	unsigned char 		pad2;
 	short 			pad3;
 	struct BVHTree		*bvhtree;			/* collision tree for this cloth object */
 	struct BVHTree 		*bvhselftree;			/* collision tree for this cloth object */
-	struct MFace 		*mfaces;
+	struct MVertTri		*tri;
 	struct Implicit_Data	*implicit; 		/* our implicit solver connects to this pointer */
-	struct Implicit_Data	*implicitEM; 		/* our implicit solver connects to this pointer */
 	struct EdgeSet	 	*edgeset; 		/* used for selfcollisions */
 	int last_frame, pad4;
 } Cloth;
@@ -116,8 +132,8 @@ ClothVertex;
 typedef struct ClothSpring {
 	int	ij;		/* Pij from the paper, one end of the spring.	*/
 	int	kl;		/* Pkl from the paper, one end of the spring.	*/
+	int mn;
 	float	restlen;	/* The original length of the spring.	*/
-	int	matrix_index; 	/* needed for implicit solver (fast lookup) */
 	int	type;		/* types defined in BKE_cloth.h ("springType") */
 	int	flags; 		/* defined in BKE_cloth.h, e.g. deactivated due to tearing */
 	float dfdx[3][3];
@@ -125,6 +141,9 @@ typedef struct ClothSpring {
 	float f[3];
 	float 	stiffness;	/* stiffness factor from the vertex groups */
 	float editrestlen;
+	
+	/* angular bending spring target and derivatives */
+	float target[3];
 }
 ClothSpring;
 
@@ -150,7 +169,7 @@ typedef enum {
 	CLOTH_SIMSETTINGS_FLAG_TEARING = ( 1 << 4 ),// true if tearing is enabled
 	CLOTH_SIMSETTINGS_FLAG_SCALING = ( 1 << 8 ), /* is advanced scaling active? */
 	CLOTH_SIMSETTINGS_FLAG_CCACHE_EDIT = (1 << 12),	/* edit cache in editmode */
-    CLOTH_SIMSETTINGS_FLAG_NO_SPRING_COMPRESS = (1 << 13), /* don't allow spring compression */
+	CLOTH_SIMSETTINGS_FLAG_NO_SPRING_COMPRESS = (1 << 13), /* don't allow spring compression */
 	CLOTH_SIMSETTINGS_FLAG_SEW = (1 << 14), /* pull ends of loose edges together */
 } CLOTH_SIMSETTINGS_FLAGS;
 
@@ -166,7 +185,8 @@ typedef enum {
 	CLOTH_SPRING_TYPE_SHEAR       = (1 << 2),
 	CLOTH_SPRING_TYPE_BENDING     = (1 << 3),
 	CLOTH_SPRING_TYPE_GOAL        = (1 << 4),
-	CLOTH_SPRING_TYPE_SEWING      = (1 << 5)
+	CLOTH_SPRING_TYPE_SEWING      = (1 << 5),
+	CLOTH_SPRING_TYPE_BENDING_ANG = (1 << 6),
 } CLOTH_SPRING_TYPES;
 
 /* SPRING FLAGS */
@@ -180,21 +200,25 @@ typedef enum {
 // collision.c
 ////////////////////////////////////////////////
 
+struct CollPair;
+
+typedef struct ColliderContacts {
+	struct Object *ob;
+	struct CollisionModifierData *collmd;
+	
+	struct CollPair *collisions;
+	int totcollisions;
+} ColliderContacts;
+
 // needed for implicit.c
 int cloth_bvh_objcollision (struct Object *ob, struct ClothModifierData *clmd, float step, float dt );
+int cloth_points_objcollision(struct Object *ob, struct ClothModifierData *clmd, float step, float dt);
+
+void cloth_find_point_contacts(struct Object *ob, struct ClothModifierData *clmd, float step, float dt,
+                               ColliderContacts **r_collider_contacts, int *r_totcolliders);
+void cloth_free_contacts(ColliderContacts *collider_contacts, int totcolliders);
 
 ////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////
-// implicit.c
-////////////////////////////////////////////////
-
-// needed for cloth.c
-int implicit_init (struct Object *ob, struct ClothModifierData *clmd );
-int implicit_free (struct ClothModifierData *clmd );
-int implicit_solver (struct Object *ob, float frame, struct ClothModifierData *clmd, struct ListBase *effectors );
-void implicit_set_positions (struct ClothModifierData *clmd );
 
 /////////////////////////////////////////////////
 // cloth.c
@@ -209,8 +233,8 @@ void clothModifier_do (struct ClothModifierData *clmd, struct Scene *scene, stru
 int cloth_uses_vgroup(struct ClothModifierData *clmd);
 
 // needed for collision.c
-void bvhtree_update_from_cloth (struct ClothModifierData *clmd, int moving );
-void bvhselftree_update_from_cloth (struct ClothModifierData *clmd, int moving );
+void bvhtree_update_from_cloth(struct ClothModifierData *clmd, bool moving);
+void bvhselftree_update_from_cloth(struct ClothModifierData *clmd, bool moving);
 
 // needed for button_object.c
 void cloth_clear_cache (struct Object *ob, struct ClothModifierData *clmd, float framenr );
@@ -218,27 +242,9 @@ void cloth_clear_cache (struct Object *ob, struct ClothModifierData *clmd, float
 // needed for cloth.c
 int cloth_add_spring (struct ClothModifierData *clmd, unsigned int indexA, unsigned int indexB, float restlength, int spring_type);
 
+void cloth_parallel_transport_hair_frame(float mat[3][3], const float dir_old[3], const float dir_new[3]);
+
 ////////////////////////////////////////////////
-
-
-/* This enum provides the IDs for our solvers. */
-// only one available in the moment
-typedef enum {
-	CM_IMPLICIT = 0,
-} CM_SOLVER_ID;
-
-
-/* This structure defines how to call the solver.
- */
-typedef struct {
-	const char		*name;
-	CM_SOLVER_ID	id;
-	int	( *init ) (struct Object *ob, struct ClothModifierData *clmd );
-	int	( *solver ) (struct Object *ob, float framenr, struct ClothModifierData *clmd, struct ListBase *effectors );
-	int	( *free ) (struct ClothModifierData *clmd );
-}
-CM_SOLVER_DEF;
-
 
 #endif
 

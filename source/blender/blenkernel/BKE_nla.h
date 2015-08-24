@@ -76,6 +76,8 @@ void BKE_nlameta_flush_transforms(struct NlaStrip *mstrip);
 struct NlaTrack *BKE_nlatrack_find_active(ListBase *tracks);
 void BKE_nlatrack_set_active(ListBase *tracks, struct NlaTrack *nlt);
 
+struct NlaTrack *BKE_nlatrack_find_tweaked(struct AnimData *adt);
+
 void BKE_nlatrack_solo_toggle(struct AnimData *adt, struct NlaTrack *nlt);
 
 bool BKE_nlatrack_has_space(struct NlaTrack *nlt, float start, float end);
@@ -102,6 +104,11 @@ bool BKE_nlatracks_have_animated_strips(ListBase *tracks);
 void BKE_nlastrip_validate_fcurves(struct NlaStrip *strip);
 
 void BKE_nla_validate_state(struct AnimData *adt);
+
+/* ............ */
+
+bool BKE_nla_action_is_stashed(struct AnimData *adt, struct bAction *act);
+bool BKE_nla_action_stash(struct AnimData *adt);
 
 /* ............ */
 

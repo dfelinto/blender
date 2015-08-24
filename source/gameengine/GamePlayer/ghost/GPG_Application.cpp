@@ -100,9 +100,7 @@ extern "C"
 #include "GHOST_Rect.h"
 
 #ifdef WITH_AUDASPACE
-#  include "AUD_C-API.h"
-#  include "AUD_I3DDevice.h"
-#  include "AUD_IDevice.h"
+#  include AUD_DEVICE_H
 #endif
 
 static void frameTimerProc(GHOST_ITimerTask* task, GHOST_TUns64 time);
@@ -114,6 +112,7 @@ GPG_Application::GPG_Application(GHOST_ISystem* system)
 	: m_startSceneName(""), 
 	  m_startScene(0),
 	  m_maggie(0),
+	  m_kxStartScene(NULL),
 	  m_exitRequested(0),
 	  m_system(system), 
 	  m_mainWindow(0), 
@@ -250,9 +249,15 @@ bool GPG_Application::startScreenSaverPreview(
 		int windowWidth = rc.right - rc.left;
 		int windowHeight = rc.bottom - rc.top;
 		STR_String title = "";
-							
+		GHOST_GLSettings glSettings = {0};
+
+		if (stereoVisual) {
+			glSettings.flags |= GHOST_glStereoVisual;
+		}
+		glSettings.numOfAASamples = samples;
+
 		m_mainWindow = fSystem->createWindow(title, 0, 0, windowWidth, windowHeight, GHOST_kWindowStateMinimized,
-			GHOST_kDrawingContextTypeOpenGL, stereoVisual, samples);
+		                                     GHOST_kDrawingContextTypeOpenGL, glSettings);
 		if (!m_mainWindow) {
 			printf("error: could not create main window\n");
 			exit(-1);
@@ -323,11 +328,16 @@ bool GPG_Application::startWindow(
         const int stereoMode,
         const GHOST_TUns16 samples)
 {
+	GHOST_GLSettings glSettings = {0};
 	bool success;
 	// Create the main window
 	//STR_String title ("Blender Player - GHOST");
+	if (stereoVisual)
+		glSettings.flags |= GHOST_glStereoVisual;
+	glSettings.numOfAASamples = samples;
+
 	m_mainWindow = fSystem->createWindow(title, windowLeft, windowTop, windowWidth, windowHeight, GHOST_kWindowStateNormal,
-	                                     GHOST_kDrawingContextTypeOpenGL, stereoVisual, false, samples);
+	                                     GHOST_kDrawingContextTypeOpenGL, glSettings);
 	if (!m_mainWindow) {
 		printf("error: could not create main window\n");
 		exit(-1);
@@ -354,10 +364,16 @@ bool GPG_Application::startEmbeddedWindow(
         const GHOST_TUns16 samples)
 {
 	GHOST_TWindowState state = GHOST_kWindowStateNormal;
+	GHOST_GLSettings glSettings = {0};
+
+	if (stereoVisual)
+		glSettings.flags |= GHOST_glStereoVisual;
+	glSettings.numOfAASamples = samples;
+
 	if (parentWindow != 0)
 		state = GHOST_kWindowStateEmbedded;
 	m_mainWindow = fSystem->createWindow(title, 0, 0, 0, 0, state,
-	                                     GHOST_kDrawingContextTypeOpenGL, stereoVisual, false, samples, parentWindow);
+	                                     GHOST_kDrawingContextTypeOpenGL, glSettings, parentWindow);
 
 	if (!m_mainWindow) {
 		printf("error: could not create main window\n");
@@ -567,7 +583,7 @@ bool GPG_Application::initEngine(GHOST_IWindow* window, const int stereoMode)
 		bool frameRate = (SYS_GetCommandLineInt(syshandle, "show_framerate", 0) != 0);
 		bool useLists = (SYS_GetCommandLineInt(syshandle, "displaylists", gm->flag & GAME_DISPLAY_LISTS) != 0) && GPU_display_list_support();
 		bool nodepwarnings = (SYS_GetCommandLineInt(syshandle, "ignore_deprecation_warnings", 1) != 0);
-		bool restrictAnimFPS = gm->flag & GAME_RESTRICT_ANIM_UPDATES;
+		bool restrictAnimFPS = (gm->flag & GAME_RESTRICT_ANIM_UPDATES) != 0;
 
 		if (GLEW_ARB_multitexture && GLEW_VERSION_1_1)
 			m_blendermat = (SYS_GetCommandLineInt(syshandle, "blender_material", 1) != 0);
@@ -619,7 +635,7 @@ bool GPG_Application::initEngine(GHOST_IWindow* window, const int stereoMode)
 		if (!m_networkdevice)
 			goto initFailed;
 			
-		sound_init(m_maggie);
+		BKE_sound_init(m_maggie);
 
 		// create a ketsjisystem (only needed for timing and stuff)
 		m_kxsystem = new GPG_System (m_system);
@@ -655,7 +671,7 @@ bool GPG_Application::initEngine(GHOST_IWindow* window, const int stereoMode)
 
 	return m_engineInitialized;
 initFailed:
-	sound_exit();
+	BKE_sound_exit();
 	delete m_kxsystem;
 	delete m_networkdevice;
 	delete m_mouse;
@@ -699,7 +715,7 @@ bool GPG_Application::startEngine(void)
 	m_sceneconverter = new KX_BlenderSceneConverter(m_maggie, m_ketsjiengine);
 	if (m_sceneconverter)
 	{
-		STR_String startscenename = m_startSceneName.Ptr();
+		STR_String m_kxStartScenename = m_startSceneName.Ptr();
 		m_ketsjiengine->SetSceneConverter(m_sceneconverter);
 
 		//	if (always_use_expand_framing)
@@ -711,17 +727,17 @@ bool GPG_Application::startEngine(void)
 		if (m_startScene->gm.flag & GAME_NO_MATERIAL_CACHING)
 			m_sceneconverter->SetCacheMaterials(false);
 
-		KX_Scene* startscene = new KX_Scene(m_keyboard,
+		m_kxStartScene = new KX_Scene(m_keyboard,
 			m_mouse,
 			m_networkdevice,
-			startscenename,
+			m_kxStartScenename,
 			m_startScene,
 			m_canvas);
 		
 #ifdef WITH_PYTHON
 			// some python things
 			PyObject *gameLogic, *gameLogic_keys;
-			setupGamePython(m_ketsjiengine, startscene, m_maggie, NULL, &gameLogic, &gameLogic_keys, m_argc, m_argv);
+			setupGamePython(m_ketsjiengine, m_kxStartScene, m_maggie, NULL, &gameLogic, &gameLogic_keys, m_argc, m_argv);
 #endif // WITH_PYTHON
 
 		//initialize Dome Settings
@@ -729,13 +745,10 @@ bool GPG_Application::startEngine(void)
 			m_ketsjiengine->InitDome(m_startScene->gm.dome.res, m_startScene->gm.dome.mode, m_startScene->gm.dome.angle, m_startScene->gm.dome.resbuf, m_startScene->gm.dome.tilt, m_startScene->gm.dome.warptext);
 
 		// initialize 3D Audio Settings
-		AUD_I3DDevice* dev = AUD_get3DDevice();
-		if (dev)
-		{
-			dev->setSpeedOfSound(m_startScene->audio.speed_of_sound);
-			dev->setDopplerFactor(m_startScene->audio.doppler_factor);
-			dev->setDistanceModel(AUD_DistanceModel(m_startScene->audio.distance_model));
-		}
+		AUD_Device* device = BKE_sound_get_device();
+		AUD_Device_setSpeedOfSound(device, m_startScene->audio.speed_of_sound);
+		AUD_Device_setDopplerFactor(device, m_startScene->audio.doppler_factor);
+		AUD_Device_setDistanceModel(device, AUD_DistanceModel(m_startScene->audio.distance_model));
 
 #ifdef WITH_PYTHON
 		// Set the GameLogic.globalDict from marshal'd data, so we can
@@ -743,10 +756,10 @@ bool GPG_Application::startEngine(void)
 		loadGamePythonConfig(m_pyGlobalDictString, m_pyGlobalDictString_Length);
 #endif
 		m_sceneconverter->ConvertScene(
-			startscene,
+			m_kxStartScene,
 			m_rasterizer,
 			m_canvas);
-		m_ketsjiengine->AddScene(startscene);
+		m_ketsjiengine->AddScene(m_kxStartScene);
 		
 		// Create a timer that is used to kick the engine
 		if (!m_frameTimer) {
@@ -759,7 +772,7 @@ bool GPG_Application::startEngine(void)
 		// Set the animation playback rate for ipo's and actions
 		// the framerate below should patch with FPS macro defined in blendef.h
 		// Could be in StartEngine set the framerate, we need the scene to do this
-		Scene *scene= startscene->GetBlenderScene(); // needed for macro
+		Scene *scene= m_kxStartScene->GetBlenderScene(); // needed for macro
 		m_ketsjiengine->SetAnimFrameRate(FPS);
 	}
 	
@@ -830,7 +843,7 @@ void GPG_Application::exitEngine()
 	if (!m_engineInitialized)
 		return;
 
-	sound_exit();
+	BKE_sound_exit();
 	if (m_ketsjiengine)
 	{
 		stopEngine();

@@ -25,19 +25,24 @@
  */
 
 
+#include <stdlib.h>
 #include <string.h>
 
 #include "zlib.h"
 
-#include "MEM_guardedalloc.h"
-
 #include "BLI_utildefines.h"
 #include "BLI_endian_switch.h"
 #include "BLI_fileops.h"
+#include "BLI_linklist.h"
 
 #include "BLO_blend_defs.h"
+#include "BLO_readfile.h"
 
 #include "BKE_global.h"
+#include "BKE_idcode.h"
+#include "BKE_icons.h"
+
+#include "DNA_ID.h"  /* For preview images... */
 
 #include "IMB_imbuf_types.h"
 #include "IMB_imbuf.h"
@@ -57,7 +62,7 @@ static ImBuf *loadblend_thumb(gzFile gzfile)
 	/* read the blend file header */
 	if (gzread(gzfile, buf, 12) != 12)
 		return NULL;
-	if (strncmp(buf, "BLENDER", 7))
+	if (!STREQLEN(buf, "BLENDER", 7))
 		return NULL;
 
 	if (buf[7] == '-')
@@ -123,29 +128,83 @@ static ImBuf *loadblend_thumb(gzFile gzfile)
 	return NULL;
 }
 
-ImBuf *IMB_loadblend_thumb(const char *path)
+ImBuf *IMB_thumb_load_blend(const char *blen_path, const char *blen_group, const char *blen_id)
 {
-	gzFile gzfile;
-	/* not necessarily a gzip */
-	gzfile = BLI_gzopen(path, "rb");
+	if (blen_group && blen_id) {
+		LinkNode *ln, *names, *lp, *previews = NULL;
+		struct BlendHandle *libfiledata = BLO_blendhandle_from_file(blen_path, NULL);
+		ImBuf *ima = NULL;
+		int idcode = BKE_idcode_from_name(blen_group);
+		int i, nprevs, nnames;
 
-	if (NULL == gzfile) {
-		return NULL;
+		if (libfiledata == NULL) {
+			return NULL;
+		}
+
+		/* Note: we should handle all previews for a same group at once, would avoid reopening .blend file
+		 *       for each and every ID. However, this adds some complexity, so keep it for later. */
+		names = BLO_blendhandle_get_datablock_names(libfiledata, idcode, &nnames);
+		previews = BLO_blendhandle_get_previews(libfiledata, idcode, &nprevs);
+
+		BLO_blendhandle_close(libfiledata);
+
+		if (!previews || (nnames != nprevs)) {
+			if (previews != 0) {
+				/* No previews at all is not a bug! */
+				printf("%s: error, found %d items, %d previews\n", __func__, nnames, nprevs);
+			}
+			BLI_linklist_free(previews, BKE_previewimg_freefunc);
+			BLI_linklist_free(names, free);
+			return ima;
+		}
+
+		for (i = 0, ln = names, lp = previews; i < nnames; i++, ln = ln->next, lp = lp->next) {
+			const char *blockname = ln->link;
+			PreviewImage *img = lp->link;
+
+			if (STREQ(blockname, blen_id)) {
+				if (img) {
+					unsigned int w = img->w[ICON_SIZE_PREVIEW];
+					unsigned int h = img->h[ICON_SIZE_PREVIEW];
+					unsigned int *rect = img->rect[ICON_SIZE_PREVIEW];
+
+					if (w > 0 && h > 0 && rect) {
+						/* first allocate imbuf for copying preview into it */
+						ima = IMB_allocImBuf(w, h, 32, IB_rect);
+						memcpy(ima->rect, rect, w * h * sizeof(unsigned int));
+					}
+				}
+				break;
+			}
+		}
+
+		BLI_linklist_free(previews, BKE_previewimg_freefunc);
+		BLI_linklist_free(names, free);
+		return ima;
 	}
 	else {
-		ImBuf *img = loadblend_thumb(gzfile);
+		gzFile gzfile;
+		/* not necessarily a gzip */
+		gzfile = BLI_gzopen(blen_path, "rb");
 
-		/* read ok! */
-		gzclose(gzfile);
+		if (NULL == gzfile) {
+			return NULL;
+		}
+		else {
+			ImBuf *img = loadblend_thumb(gzfile);
 
-		return img;
+			/* read ok! */
+			gzclose(gzfile);
+
+			return img;
+		}
 	}
 }
 
 /* add a fake passepartout overlay to a byte buffer, use for blend file thumbnails */
 #define MARGIN 2
 
-void IMB_overlayblend_thumb(unsigned int *thumb, int width, int height, float aspect)
+void IMB_thumb_overlay_blend(unsigned int *thumb, int width, int height, float aspect)
 {
 	unsigned char *px = (unsigned char *)thumb;
 	int margin_l = MARGIN;

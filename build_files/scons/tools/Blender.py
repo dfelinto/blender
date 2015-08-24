@@ -143,7 +143,7 @@ def setup_staticlibs(lenv):
     libincs += Split(lenv['BF_FREETYPE_LIBPATH'])
     if lenv['WITH_BF_PYTHON']:
         libincs += Split(lenv['BF_PYTHON_LIBPATH'])
-    if lenv['WITH_BF_SDL']:
+    if lenv['WITH_BF_SDL'] and not lenv['WITH_BF_SDL_DYNLOAD']:
         libincs += Split(lenv['BF_SDL_LIBPATH'])
     if lenv['WITH_BF_JACK'] and not lenv['WITH_BF_JACK_DYNLOAD']:
         libincs += Split(lenv['BF_JACK_LIBPATH'])
@@ -216,15 +216,15 @@ def setup_staticlibs(lenv):
         if lenv['WITH_BF_STATICOCIO']:
             statlibs += Split(lenv['BF_OCIO_LIB_STATIC'])
 
-    if lenv['WITH_BF_BOOST']:
-        libincs += Split(lenv['BF_BOOST_LIBPATH'])
-        if lenv['WITH_BF_STATICBOOST']:
-            statlibs += Split(lenv['BF_BOOST_LIB_STATIC'])
-
     if lenv['WITH_BF_CYCLES_OSL']:
         libincs += Split(lenv['BF_OSL_LIBPATH'])
         if lenv['WITH_BF_STATICOSL']:
             statlibs += Split(lenv['BF_OSL_LIB_STATIC'])
+
+    if lenv['WITH_BF_BOOST']:
+        libincs += Split(lenv['BF_BOOST_LIBPATH'])
+        if lenv['WITH_BF_STATICBOOST']:
+            statlibs += Split(lenv['BF_BOOST_LIB_STATIC'])
 
     if lenv['WITH_BF_LLVM']:
         libincs += Split(lenv['BF_LLVM_LIBPATH'])
@@ -241,6 +241,11 @@ def setup_staticlibs(lenv):
             libincs += Split(lenv['BF_3DMOUSE_LIBPATH'])
             if lenv['WITH_BF_STATIC3DMOUSE']:
                 statlibs += Split(lenv['BF_3DMOUSE_LIB_STATIC'])
+
+    if lenv['WITH_BF_OPENSUBDIV']:
+        libincs += Split(lenv['BF_OPENSUBDIV_LIBPATH'])
+        if lenv['WITH_BF_STATICOPENSUBDIV']:
+            statlibs += Split(lenv['BF_OPENSUBDIV_LIB_STATIC'])
 
     # setting this last so any overriding of manually libs could be handled
     if lenv['OURPLATFORM'] not in ('win32-vc', 'win32-mingw', 'win64-vc', 'linuxcross', 'win64-mingw'):
@@ -303,7 +308,7 @@ def setup_syslibs(lenv):
     if lenv['WITH_BF_ELTOPO']:
         syslibs += Split(lenv['BF_LAPACK_LIB'])
     '''
-    if lenv['WITH_BF_SDL']:
+    if lenv['WITH_BF_SDL'] and not lenv['WITH_BF_SDL_DYNLOAD']:
         syslibs += Split(lenv['BF_SDL_LIB'])
     if not lenv['WITH_BF_STATICOPENGL']:
         syslibs += Split(lenv['BF_OPENGL_LIB'])
@@ -325,15 +330,15 @@ def setup_syslibs(lenv):
         if lenv['WITH_BF_3DMOUSE']:
             if not lenv['WITH_BF_STATIC3DMOUSE']:
                 syslibs += Split(lenv['BF_3DMOUSE_LIB'])
-                
-    if lenv['WITH_BF_BOOST'] and not lenv['WITH_BF_STATICBOOST']:
-        syslibs += Split(lenv['BF_BOOST_LIB'])
-        
-        if lenv['WITH_BF_INTERNATIONAL']:
-            syslibs += Split(lenv['BF_BOOST_LIB_INTERNATIONAL'])
 
     if lenv['WITH_BF_CYCLES_OSL'] and not lenv['WITH_BF_STATICOSL']:
         syslibs += Split(lenv['BF_OSL_LIB'])
+
+    if lenv['WITH_BF_BOOST'] and not lenv['WITH_BF_STATICBOOST']:
+        syslibs += Split(lenv['BF_BOOST_LIB'])
+
+        if lenv['WITH_BF_INTERNATIONAL']:
+            syslibs += Split(lenv['BF_BOOST_LIB_INTERNATIONAL'])
 
     if lenv['WITH_BF_LLVM'] and not lenv['WITH_BF_STATICLLVM']:
         syslibs += Split(lenv['BF_LLVM_LIB'])
@@ -343,6 +348,13 @@ def setup_syslibs(lenv):
 
     if not lenv['WITH_BF_STATICPNG']:
         syslibs += Split(lenv['BF_PNG_LIB'])
+
+    if lenv['WITH_BF_OPENSUBDIV']:
+        if not lenv['WITH_BF_STATICOPENSUBDIV']:
+            if lenv['BF_DEBUG'] and lenv['OURPLATFORM'] in ('win32-vc', 'win64-vc', 'win32-mingw', 'win64-mingw'):
+                syslibs += [osdlib+'_d' for osdlib in Split(lenv['BF_OPENSUBDIV_LIB'])]
+            else:
+                syslibs += Split(lenv['BF_OPENSUBDIV_LIB'])
 
     # Hack to pass OSD libraries to linker before extern_{clew,cuew}
     for syslib in create_blender_liblist(lenv, 'system'):
@@ -372,7 +384,7 @@ def propose_priorities():
 def creator(env):
     sources = ['creator.c']# + Blender.buildinfo(env, "dynamic") + Blender.resources
 
-    incs = ['#/intern/guardedalloc', '#/source/blender/blenlib', '#/source/blender/blenkernel', '#/source/blender/editors/include', '#/source/blender/blenloader', '#/source/blender/imbuf', '#/source/blender/renderconverter', '#/source/blender/render/extern/include', '#/source/blender/windowmanager', '#/source/blender/makesdna', '#/source/blender/makesrna', '#/source/gameengine/BlenderRoutines', '#/extern/glew/include', '#/source/blender/gpu', env['BF_OPENGL_INC']]
+    incs = ['#/intern/guardedalloc', '#/source/blender/blenlib', '#/source/blender/blenkernel', '#/source/blender/depsgraph', '#/source/blender/editors/include', '#/source/blender/blenloader', '#/source/blender/imbuf', '#/source/blender/renderconverter', '#/source/blender/render/extern/include', '#/source/blender/windowmanager', '#/source/blender/makesdna', '#/source/blender/makesrna', '#/source/gameengine/BlenderRoutines', '#/extern/glew/include', '#/source/blender/gpu', env['BF_OPENGL_INC']]
 
     defs = []
 
@@ -381,11 +393,18 @@ def creator(env):
         defs.append('WITH_BINRELOC')
 
     if env['WITH_BF_SDL']:
+        if env['WITH_BF_SDL_DYNLOAD']:
+            defs.append('WITH_SDL_DYNLOAD')
+            incs.append('#/extern/sdlew/include')
         defs.append('WITH_SDL')
 
     if env['WITH_BF_LIBMV']:
         incs.append('#/extern/libmv')
         defs.append('WITH_LIBMV')
+
+    if env['WITH_BF_CYCLES'] and env['WITH_BF_CYCLES_LOGGING']:
+        incs.append('#/intern/cycles/blender')
+        defs.append('WITH_CYCLES_LOGGING')
 
     if env['WITH_BF_FFMPEG']:
         defs.append('WITH_FFMPEG')
@@ -434,7 +453,7 @@ def buildinfo(lenv, build_type):
             no_upstream = False
 
             try :
-                build_hash = btools.get_command_output(['git', 'rev-parse', '--short', '@{u}']).strip()
+                build_hash = btools.get_command_output(['git', 'rev-parse', '--short', '@{u}'], stderr=subprocess.STDOUT).strip()
             except subprocess.CalledProcessError:
                 # assume branch has no upstream configured
                 build_hash = btools.get_command_output(['git', 'rev-parse', '--short', 'HEAD']).strip()
@@ -623,7 +642,7 @@ def WinPyBundle(target=None, source=None, env=None):
         py_tar+= '/release/python' + env['BF_PYTHON_VERSION'].replace('.','') + '.tar.gz'
 
     py_target = env.subst(env['BF_INSTALLDIR']).lstrip("#")
-    py_target = os.path.join(py_target, VERSION, 'python', 'lib')
+    py_target = os.path.join(py_target, VERSION, 'python')
     def printexception(func,path,ex):
         if os.path.exists(path): #do not report if path does not exist. eg on a fresh build.
             print str(func) + ' failed on ' + str(path)
@@ -647,7 +666,7 @@ def WinPyBundle(target=None, source=None, env=None):
     # Extract Numpy
     if env['WITH_BF_PYTHON_INSTALL_NUMPY']:
         py_tar = env.subst(env['LCGDIR']).lstrip("#")
-        py_tar += '/release/python' + env['BF_PYTHON_VERSION'].replace('.','') + '_numpy_1.8.tar.gz'
+        py_tar += '/release/python' + env['BF_PYTHON_VERSION'].replace('.','') + '_numpy_1.9.tar.gz'
 
         py_target = env.subst(env['BF_INSTALLDIR']).lstrip("#")
         py_target = os.path.join(py_target, VERSION, 'python', 'lib', 'site-packages')
@@ -663,6 +682,8 @@ def WinPyBundle(target=None, source=None, env=None):
     py_dir += '/release/site-packages'
     # grr, we have to do one by one because the dir exists
     for f in os.listdir(py_dir):
+        if f == '.svn':
+            continue
         fn_src = os.path.join(py_dir, f)
         fn_dst = os.path.join(py_target, f)
 
@@ -755,7 +776,7 @@ def AppIt(target=None, source=None, env=None):
             commands.getoutput(cmd)
             cmd = 'cp -R %s/kernel/*.h %s/kernel/*.cl %s/kernel/*.cu %s/kernel/' % (croot, croot, croot, cinstalldir)
             commands.getoutput(cmd)
-            cmd = 'cp -R %s/kernel/svm %s/kernel/closure %s/kernel/geom %s/util/util_color.h %s/util/util_half.h %s/util/util_math.h %s/util/util_transform.h %s/util/util_types.h %s/kernel/' % (croot, croot, croot, croot, croot, croot, croot, croot, cinstalldir)
+            cmd = 'cp -R %s/kernel/svm %s/kernel/closure %s/kernel/geom %s/kernel/split %s/kernel/kernels %s/util/util_color.h %s/util/util_half.h %s/util/util_math.h %s/util/util_math_fast.h %s/util/util_transform.h %s/util/util_types.h %s/util/util_atomic.h %s/kernel/' % (croot, croot, croot, croot, croot, croot, croot, croot, croot, croot, croot, croot, cinstalldir)
             commands.getoutput(cmd)
             cmd = 'cp -R %s/../intern/cycles/kernel/*.cubin %s/lib/' % (builddir, cinstalldir)
             commands.getoutput(cmd)
@@ -809,9 +830,7 @@ def AppIt(target=None, source=None, env=None):
             instname = env['LCGDIR'][1:] # made libiomp5 part of blender libs
             cmd = 'ditto --arch %s %s/openmp/lib/libiomp5.dylib %s/%s.app/Contents/Resources/lib/'%(osxarch, instname, installdir, binary) # copy libiomp5
             commands.getoutput(cmd)
-            cmd = 'install_name_tool -id @loader_path/../Resources/lib/libiomp5.dylib %s/%s.app/Contents/Resources/lib/libiomp5.dylib'%(installdir, binary) # change id of libiomp5
-            commands.getoutput(cmd)
-            cmd = 'install_name_tool -change @loader_path/libiomp5.dylib  @loader_path/../Resources/lib/libiomp5.dylib %s/%s.app/Contents/MacOS/%s'%(installdir, binary, binary) # change ref to libiomp5 ( blender )
+            cmd = 'cp %s/openmp/LICENSE.txt %s/LICENSE-libiomp5.txt'%(instname, installdir) # copy libiomp5 license
             commands.getoutput(cmd)
 
 # extract copy system python, be sure to update other build systems
@@ -836,6 +855,7 @@ def UnixPyBundle(target=None, source=None, env=None):
 
     py_src =    env.subst( env['BF_PYTHON_LIBPATH'] + '/python'+env['BF_PYTHON_VERSION'] )
     py_target =    env.subst( dir + '/python/' + target_lib + '/python'+env['BF_PYTHON_VERSION'] )
+    py_target_bin = env.subst(dir + '/python/bin')
     
     # This is a bit weak, but dont install if its been installed before, makes rebuilds quite slow.
     if os.path.exists(py_target):
@@ -854,6 +874,11 @@ def UnixPyBundle(target=None, source=None, env=None):
         os.makedirs(os.path.dirname(py_target)) # the final part is copied
     except:
         pass
+
+    # install the executable
+    run("rm -rf '%s'" % py_target_bin)
+    os.makedirs(py_target_bin)
+    run("cp '%s' '%s'" % (env.subst(env['BF_PYTHON_BINARY']), py_target_bin))
 
     run("cp -R '%s' '%s'" % (py_src, os.path.dirname(py_target)))
     run("rm -rf '%s/distutils'" % py_target)

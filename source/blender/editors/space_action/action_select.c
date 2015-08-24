@@ -632,7 +632,7 @@ void ACTION_OT_select_linked(wmOperatorType *ot)
 	ot->poll = ED_operator_action_active;
 	
 	/* flags */
-	ot->flag = OPTYPE_REGISTER /*|OPTYPE_UNDO*/;
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
 /* ******************** Select More/Less Operators *********************** */
@@ -709,7 +709,7 @@ void ACTION_OT_select_more(wmOperatorType *ot)
 	ot->poll = ED_operator_action_active;
 	
 	/* flags */
-	ot->flag = OPTYPE_REGISTER /*|OPTYPE_UNDO*/;
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
 /* ----------------- */
@@ -743,7 +743,7 @@ void ACTION_OT_select_less(wmOperatorType *ot)
 	ot->poll = ED_operator_action_active;
 	
 	/* flags */
-	ot->flag = OPTYPE_REGISTER /*|OPTYPE_UNDO*/;
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
 /* ******************** Select Left/Right Operator ************************* */
@@ -1221,11 +1221,11 @@ static void mouse_action_keys(bAnimContext *ac, const int mval[2], short select_
 					agrp->flag |= AGRP_SELECTED;
 					ANIM_set_active_channel(ac, ac->data, ac->datatype, filter, agrp, ANIMTYPE_GROUP);
 				}
-				else if (ale->type == ANIMTYPE_FCURVE) {
+				else if (ELEM(ale->type, ANIMTYPE_FCURVE, ANIMTYPE_NLACURVE)) {
 					FCurve *fcu = ale->data;
 					
 					fcu->flag |= FCURVE_SELECTED;
-					ANIM_set_active_channel(ac, ac->data, ac->datatype, filter, fcu, ANIMTYPE_FCURVE);
+					ANIM_set_active_channel(ac, ac->data, ac->datatype, filter, fcu, ale->type);
 				}
 			}
 		}

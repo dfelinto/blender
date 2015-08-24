@@ -34,15 +34,15 @@ MixNode::MixNode(bNode *editorNode) : Node(editorNode)
 	/* pass */
 }
 
-void MixNode::convertToOperations(NodeConverter &converter, const CompositorContext &context) const
+void MixNode::convertToOperations(NodeConverter &converter, const CompositorContext &/*context*/) const
 {
 	NodeInput *valueSocket = this->getInputSocket(0);
 	NodeInput *color1Socket = this->getInputSocket(1);
 	NodeInput *color2Socket = this->getInputSocket(2);
 	NodeOutput *outputSocket = this->getOutputSocket(0);
 	bNode *editorNode = this->getbNode();
-	bool useAlphaPremultiply = this->getbNode()->custom2 & 1;
-	bool useClamp = this->getbNode()->custom2 & 2;
+	bool useAlphaPremultiply = (this->getbNode()->custom2 & 1) != 0;
+	bool useClamp = (this->getbNode()->custom2 & 2) != 0;
 	
 	MixBaseOperation *convertProg;
 	switch (editorNode->custom1) {

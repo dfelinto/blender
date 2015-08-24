@@ -210,7 +210,7 @@ static int undo_stack_step(bContext *C, UndoStack *stack, int step, const char *
 			/* pass */
 		}
 		else {
-			if (!name || strcmp(stack->current->name, name) == 0) {
+			if (!name || STREQ(stack->current->name, name)) {
 				if (G.debug & G_DEBUG_WM) {
 					printf("%s: undo '%s'\n", __func__, stack->current->name);
 				}
@@ -225,7 +225,7 @@ static int undo_stack_step(bContext *C, UndoStack *stack, int step, const char *
 			/* pass */
 		}
 		else {
-			if (!name || strcmp(stack->current->name, name) == 0) {
+			if (!name || STREQ(stack->current->name, name)) {
 				undo = (stack->current && stack->current->next) ? stack->current->next : stack->elems.first;
 				undo_restore(C, stack, undo);
 				stack->current = undo;
@@ -331,32 +331,33 @@ void ED_undo_paint_step_num(bContext *C, int type, int step)
 		undo_step_num(C, &MeshUndoStack, step);
 }
 
-static char *undo_stack_get_name(UndoStack *stack, int nr, int *active)
+static char *undo_stack_get_name(UndoStack *stack, int nr, bool *r_active)
 {
 	UndoElem *uel;
 
-	if (active) *active = 0;
+	if (r_active) *r_active = false;
 
 	uel = BLI_findlink(&stack->elems, nr);
 	if (uel) {
-		if (active && uel == stack->current)
-			*active = 1;
+		if (r_active && (uel == stack->current)) {
+			*r_active = true;
+		}
 		return uel->name;
 	}
 
 	return NULL;
 }
 
-const char *ED_undo_paint_get_name(bContext *C, int type, int nr, int *active)
+const char *ED_undo_paint_get_name(bContext *C, int type, int nr, bool *r_active)
 {
 
 	if (type == UNDO_PAINT_IMAGE) {
 		undo_stack_cleanup(&ImageUndoStack, C);
-		return undo_stack_get_name(&ImageUndoStack, nr, active);
+		return undo_stack_get_name(&ImageUndoStack, nr, r_active);
 	}
 	else if (type == UNDO_PAINT_MESH) {
 		undo_stack_cleanup(&MeshUndoStack, C);
-		return undo_stack_get_name(&MeshUndoStack, nr, active);
+		return undo_stack_get_name(&MeshUndoStack, nr, r_active);
 	}
 	return NULL;
 }
@@ -379,7 +380,7 @@ bool ED_undo_paint_empty(int type)
 	return false;
 }
 
-int ED_undo_paint_valid(int type, const char *name)
+bool ED_undo_paint_is_valid(int type, const char *name)
 {
 	UndoStack *stack;
 	
@@ -394,7 +395,7 @@ int ED_undo_paint_valid(int type, const char *name)
 		/* pass */
 	}
 	else {
-		if (name && strcmp(stack->current->name, name) == 0)
+		if (name && STREQ(stack->current->name, name))
 			return 1;
 		else
 			return stack->elems.first != stack->elems.last;

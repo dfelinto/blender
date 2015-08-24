@@ -42,6 +42,7 @@ incs = [
     '../blenkernel',
     '../blenlib',
     '../blenloader',
+    '../blentranslation',
     '../compositor',
     '../editors/include',
     '../gpu',
@@ -55,7 +56,8 @@ incs = [
     ]
 incs = ' '.join(incs)
 
-defs = env['BF_GL_DEFINITIONS']
+defs = []
+defs += env['BF_GL_DEFINITIONS']
 
 if env['WITH_BF_PYTHON']:
     defs.append('WITH_PYTHON')
@@ -65,10 +67,17 @@ if env['WITH_BF_COLLADA']:
 
 if env['OURPLATFORM'] in ('win32-vc', 'win32-mingw', 'linuxcross', 'win64-vc', 'win64-mingw'):
     incs += ' ' + env['BF_PTHREADS_INC']
-    incs += ' ../../intern/utfconv'
 
 if env['BF_BUILDINFO']:
     defs.append('WITH_BUILDINFO')
+
+if env['OURPLATFORM'] in ('win32-vc', 'win32-mingw', 'win64-vc', 'win64-mingw'):
+    if env['WITH_BF_IME']:
+        defs.append('WITH_INPUT_IME')
+
+if env['WITH_BF_AUDASPACE']:
+    defs += env['BF_AUDASPACE_DEF']
+    incs += ' ' + env['BF_AUDASPACE_C_INC']
 
 if env['WITH_BF_INTERNATIONAL']:
     defs.append('WITH_INTERNATIONAL')
@@ -81,5 +90,9 @@ if env['WITH_BF_PYTHON_SECURITY']:
 
 if env['OURPLATFORM'] in ('linux', 'openbsd3', 'sunos5', 'freebsd7', 'freebsd8', 'freebsd9', 'aix4', 'aix5'):
     defs.append("WITH_X11")
+
+if env['WITH_BF_OPENSUBDIV']:
+    defs.append("WITH_OPENSUBDIV")
+    incs += ' #intern/opensubdiv'
 
 env.BlenderLib ( 'bf_windowmanager', sources, Split(incs), defines=defs, libtype=['core'], priority=[5] )

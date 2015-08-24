@@ -34,6 +34,7 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_math.h"
+#include "BLI_rand.h"
 #include "BLI_threads.h"
 #include "BLI_utildefines.h"
 
@@ -53,8 +54,6 @@
 #include "IMB_imbuf_types.h"
 #include "IMB_imbuf.h"
 #include "IMB_colormanagement.h"
-
-#include "RE_bake.h"
 
 /* local include */
 #include "rayintersection.h"
@@ -77,6 +76,8 @@ extern struct Render R;
 
 
 typedef struct BakeShade {
+	int thread;
+
 	ShadeSample ssamp;
 	ObjectInstanceRen *obi;
 	VlakRen *vlr;
@@ -374,8 +375,8 @@ static void bake_displacement(void *handle, ShadeInput *UNUSED(shi), float dist,
 			bs->vcol->b = col[2];
 		}
 		else {
-			const char *imcol = (char *)(bs->rect + bs->rectx * y + x);
-			copy_v4_v4_char((char *)imcol, (char *)col);
+			char *imcol = (char *)(bs->rect + bs->rectx * y + x);
+			copy_v4_v4_char(imcol, (char *)col);
 		}
 	}
 	if (bs->rect_mask) {
@@ -739,6 +740,9 @@ static void bake_single_vertex(BakeShade *bs, VertRen *vert, float u, float v)
 	MLoopCol *basevcol;
 	MLoop *mloop;
 
+	/* per vertex fixed seed */
+	BLI_thread_srandom(bs->thread, vert->index);
+
 	origindex = RE_vertren_get_origindex(bs->obi->obr, vert, 0);
 	if (!origindex || *origindex == ORIGINDEX_NONE)
 		return;
@@ -813,6 +817,9 @@ static void shade_tface(BakeShade *bs)
 	Image *ima = tface->tpage;
 	float vec[4][2];
 	int a, i1, i2, i3;
+
+	/* per face fixed seed */
+	BLI_thread_srandom(bs->thread, vlr->index);
 	
 	/* check valid zspan */
 	if (ima != bs->ima) {
@@ -986,8 +993,12 @@ int RE_bake_shade_all_selected(Render *re, int type, Object *actob, short *do_up
 	int a, vdone = false, result = BAKE_RESULT_OK;
 	bool use_mask = false;
 	bool use_displacement_buffer = false;
-	bool do_manage = BKE_scene_check_color_management_enabled(re->scene);
-	
+	bool do_manage = false;
+
+	if (ELEM(type, RE_BAKE_ALL, RE_BAKE_TEXTURE)) {
+		do_manage = BKE_scene_check_color_management_enabled(re->scene);
+	}
+
 	re->scene_color_manage = BKE_scene_check_color_management_enabled(re->scene);
 	
 	/* initialize render global */
@@ -1035,6 +1046,8 @@ int RE_bake_shade_all_selected(Render *re, int type, Object *actob, short *do_up
 
 	/* get the threads running */
 	for (a = 0; a < re->r.threads; a++) {
+		handles[a].thread = a;
+
 		/* set defaults in handles */
 		handles[a].ssamp.shi[0].lay = re->lay;
 

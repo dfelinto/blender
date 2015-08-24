@@ -67,6 +67,7 @@ m_frame_rect(rect)
 	// area boundaries needed for mouse coordinates in Letterbox framing mode
 	m_area_left = ar->winrct.xmin;
 	m_area_top = ar->winrct.ymax;
+	m_frame = 1;
 
 	glGetIntegerv(GL_VIEWPORT, (GLint *)m_viewport);
 }
@@ -94,6 +95,11 @@ void KX_BlenderCanvas::SetSwapInterval(int interval)
 bool KX_BlenderCanvas::GetSwapInterval(int &intervalOut)
 {
 	return wm_window_get_swap_interval(m_win, &intervalOut);
+}
+
+void KX_BlenderCanvas::GetDisplayDimensions(int &width, int &height)
+{
+	wm_get_screensize(&width, &height);
 }
 
 void KX_BlenderCanvas::ResizeWindow(int width, int height)
@@ -350,7 +356,9 @@ void KX_BlenderCanvas::MakeScreenShot(const char *filename)
 		char path[FILE_MAX];
 		BLI_strncpy(path, filename, sizeof(path));
 		BLI_path_abs(path, G.main->name);
-		BKE_add_image_extension_from_type(path, im_format.imtype);
+		BLI_path_frame(path, m_frame, 0);
+		m_frame++;
+		BKE_image_path_ensure_ext_from_imtype(path, im_format.imtype);
 
 		/* create and save imbuf */
 		ImBuf *ibuf = IMB_allocImBuf(dumpsx, dumpsy, 24, 0);

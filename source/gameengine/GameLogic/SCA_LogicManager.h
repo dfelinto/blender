@@ -24,7 +24,7 @@
  *
  * ***** END GPL LICENSE BLOCK *****
  */
-/** \file SCA_IController.h
+/** \file SCA_LogicManager.h
  *  \ingroup gamelogic
  *  \brief Regulates the top-level logic behavior for one scene.
  */
@@ -43,10 +43,10 @@
 
 #include "CTR_Map.h"
 #include "STR_HashedString.h"
-#include "Value.h"
+#include "EXP_Value.h"
 #include "SG_QList.h"
 
-#include "KX_HashedPtr.h"
+#include "EXP_HashedPtr.h"
 
 using namespace std;
 typedef std::list<class SCA_IController*> controllerlist;

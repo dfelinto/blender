@@ -158,10 +158,16 @@ PyObject *BPy_BMIter_CreatePyObject(BMesh *bm);
 
 PyObject *BPy_BMElem_CreatePyObject(BMesh *bm, BMHeader *ele); /* just checks type and creates v/e/f/l */
 
-void *BPy_BMElem_PySeq_As_Array(BMesh **r_bm, PyObject *seq, Py_ssize_t min, Py_ssize_t max, Py_ssize_t *r_size,
-                                const char htype,
-                                const bool do_unique_check, const bool do_bm_check,
-                                const char *error_prefix);
+void *BPy_BMElem_PySeq_As_Array_FAST(
+        BMesh **r_bm, PyObject *seq_fast, Py_ssize_t min, Py_ssize_t max, Py_ssize_t *r_size,
+        const char htype,
+        const bool do_unique_check, const bool do_bm_check,
+        const char *error_prefix);
+void *BPy_BMElem_PySeq_As_Array(
+        BMesh **r_bm, PyObject *seq, Py_ssize_t min, Py_ssize_t max, Py_ssize_t *r_size,
+        const char htype,
+        const bool do_unique_check, const bool do_bm_check,
+        const char *error_prefix);
 
 PyObject *BPy_BMElem_Array_As_Tuple(BMesh *bm, BMHeader **elem, Py_ssize_t elem_len);
 PyObject *BPy_BMVert_Array_As_Tuple(BMesh *bm, BMVert **elem, Py_ssize_t elem_len);
@@ -198,16 +204,17 @@ int  bpy_bm_generic_valid_check_source(BMesh *bm_source, const char *error_prefi
 
 #define BPY_BM_IS_VALID(obj) (LIKELY((obj)->bm != NULL))
 
-#define BM_ITER_BPY_BM_SEQ(ele, iter, bpy_bmelemseq)                          \
-	for (ele = BM_iter_new(iter,                                              \
-	                       (bpy_bmelemseq)->bm,                               \
-	                       (bpy_bmelemseq)->itype,                            \
-	                       (bpy_bmelemseq)->py_ele ?                          \
-	                           ((BPy_BMElem *)(bpy_bmelemseq)->py_ele)->ele : \
-	                           NULL                                           \
-	                       );                                                 \
-	     ele;                                                                 \
-	     ele = BM_iter_step(iter))
+#define BM_ITER_BPY_BM_SEQ(ele, iter, bpy_bmelemseq)                \
+	for (BM_CHECK_TYPE_ELEM_ASSIGN(ele) = BM_iter_new(              \
+	             iter,                                              \
+	             (bpy_bmelemseq)->bm,                               \
+	             (bpy_bmelemseq)->itype,                            \
+	             (bpy_bmelemseq)->py_ele ?                          \
+	                 ((BPy_BMElem *)(bpy_bmelemseq)->py_ele)->ele : \
+	                 NULL                                           \
+	             );                                                 \
+	     ele;                                                       \
+	     BM_CHECK_TYPE_ELEM_ASSIGN(ele) = BM_iter_step(iter))
 
 
 #ifdef __PY_CAPI_UTILS_H__

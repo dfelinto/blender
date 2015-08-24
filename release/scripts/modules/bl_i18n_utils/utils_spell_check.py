@@ -24,7 +24,7 @@ import pickle
 import re
 
 
-class SpellChecker():
+class SpellChecker:
     """
     A basic spell checker.
     """
@@ -91,6 +91,7 @@ class SpellChecker():
         "customdata",
         "dataset", "datasets",
         "de",
+        "deadzone",
         "deconstruct",
         "defocus",
         "denoise",
@@ -125,6 +126,7 @@ class SpellChecker():
         "multisampling",
         "multitexture",
         "multiuser",
+        "multiview",
         "namespace",
         "keyconfig",
         "online",
@@ -186,6 +188,7 @@ class SpellChecker():
         "unhide",
         "unindent",
         "unkeyed",
+        "unmute",
         "unpremultiply",
         "unprojected",
         "unreacted",
@@ -217,10 +220,10 @@ class SpellChecker():
         "passepartout",
         "perspectively",
         "pixelate",
+        "pointiness",
         "polycount",
         "polygonization", "polygonalization",  # yuck!
         "selectability",
-        "slurph",
         "stitchable",
         "symmetrize",
         "trackability",
@@ -260,12 +263,14 @@ class SpellChecker():
         "loc", "rot", "pos",
         "lorem",
         "luma",
+        "mbs",  # mouse button 'select'.
         "mem",
         "multicam",
         "num",
         "ok",
         "orco",
         "ortho",
+        "pano",
         "persp",
         "pref", "prefs",
         "prev",
@@ -281,6 +286,7 @@ class SpellChecker():
         "struct", "structs",
         "sys",
         "tex",
+        "tmr",  # timer
         "tri", "tris",
         "uv", "uvs", "uvw", "uw", "uvmap",
         "ve",
@@ -454,6 +460,7 @@ class SpellChecker():
         "vcol", "vcols",
         "vgroup", "vgroups",
         "vinterlace",
+        "vse",
         "wasd", "wasdqe",  # keys...
         "wetmap", "wetmaps",
         "wpaint",
@@ -509,6 +516,7 @@ class SpellChecker():
         "fov",
         "fft",
         "futura",
+        "fx",
         "gfx",
         "gl",
         "glsl",
@@ -539,6 +547,7 @@ class SpellChecker():
         "sdl",
         "sl",
         "smpte",
+        "ssao",
         "svn",
         "ui",
         "unix",
@@ -572,6 +581,8 @@ class SpellChecker():
         "btx",
         "cineon",
         "dpx",
+        "dwaa",
+        "dwab",
         "dxf",
         "eps",
         "exr",

@@ -62,7 +62,7 @@
 
 #include "armature_intern.h"
 
-/* utility macros fro storing a temp int in the bone (selection flag) */
+/* utility macros for storing a temp int in the bone (selection flag) */
 #define PBONE_PREV_FLAG_GET(pchan) ((void)0, (GET_INT_FROM_POINTER((pchan)->temp)))
 #define PBONE_PREV_FLAG_SET(pchan, val) ((pchan)->temp = SET_INT_IN_POINTER(val))
 
@@ -458,7 +458,7 @@ static int pose_select_constraint_target_exec(bContext *C, wmOperator *UNUSED(op
 	{
 		if (pchan->bone->flag & BONE_SELECTED) {
 			for (con = pchan->constraints.first; con; con = con->next) {
-				bConstraintTypeInfo *cti = BKE_constraint_typeinfo_get(con);
+				const bConstraintTypeInfo *cti = BKE_constraint_typeinfo_get(con);
 				ListBase targets = {NULL, NULL};
 				bConstraintTarget *ct;
 				
@@ -518,71 +518,67 @@ static int pose_select_hierarchy_exec(bContext *C, wmOperator *op)
 {
 	Object *ob = BKE_object_pose_armature_get(CTX_data_active_object(C));
 	bArmature *arm = ob->data;
-	Bone *curbone, *pabone, *chbone;
+	bPoseChannel *pchan_act;
 	int direction = RNA_enum_get(op->ptr, "direction");
 	const bool add_to_sel = RNA_boolean_get(op->ptr, "extend");
-	bool found = false;
+	bool changed = false;
 	
-	CTX_DATA_BEGIN (C, bPoseChannel *, pchan, visible_pose_bones)
-	{
-		curbone = pchan->bone;
-		
-		if ((curbone->flag & BONE_UNSELECTABLE) == 0) {
-			if (curbone == arm->act_bone) {
-				if (direction == BONE_SELECT_PARENT) {
-					if (pchan->parent == NULL) continue;
-					else pabone = pchan->parent->bone;
-					
-					if (PBONE_SELECTABLE(arm, pabone)) {
-						if (!add_to_sel) curbone->flag &= ~BONE_SELECTED;
-						pabone->flag |= BONE_SELECTED;
-						arm->act_bone = pabone;
-						
-						found = 1;
-						break;
-					}
+	pchan_act = BKE_pose_channel_active(ob);
+	if (pchan_act == NULL) {
+		return OPERATOR_CANCELLED;
+	}
+
+	if (direction == BONE_SELECT_PARENT) {
+		if (pchan_act->parent) {
+			Bone *bone_parent;
+			bone_parent = pchan_act->parent->bone;
+
+			if (PBONE_SELECTABLE(arm, bone_parent)) {
+				if (!add_to_sel) {
+					pchan_act->bone->flag &= ~BONE_SELECTED;
 				}
-				else { /* direction == BONE_SELECT_CHILD */
-					/* the child member is only assigned to connected bones, see [#30340] */
-#if 0
-					if (pchan->child == NULL) continue;
-					else chbone = pchan->child->bone;
-#else
-					/* instead. find _any_ visible child bone, using the first one is a little arbitrary  - campbell */
-					chbone = pchan->child ? pchan->child->bone : NULL;
-					if (chbone == NULL) {
-						bPoseChannel *pchan_child;
+				bone_parent->flag |= BONE_SELECTED;
+				arm->act_bone = bone_parent;
 
-						for (pchan_child = ob->pose->chanbase.first; pchan_child; pchan_child = pchan_child->next) {
-							/* possible we have multiple children, some invisible */
-							if (PBONE_SELECTABLE(arm, pchan_child->bone)) {
-								if (pchan_child->parent == pchan) {
-									chbone = pchan_child->bone;
-									break;
-								}
-							}
+				changed = true;
+			}
+		}
+	}
+	else { /* direction == BONE_SELECT_CHILD */
+		bPoseChannel *pchan_iter;
+		Bone *bone_child = NULL;
+		int pass;
+
+		/* first pass, only connected bones (the logical direct child) */
+		for (pass = 0; pass < 2 && (bone_child == NULL); pass++) {
+			for (pchan_iter = ob->pose->chanbase.first; pchan_iter; pchan_iter = pchan_iter->next) {
+				/* possible we have multiple children, some invisible */
+				if (PBONE_SELECTABLE(arm, pchan_iter->bone)) {
+					if (pchan_iter->parent == pchan_act) {
+						if ((pass == 1) || (pchan_iter->bone->flag & BONE_CONNECTED)) {
+							bone_child = pchan_iter->bone;
+							break;
 						}
-					}
-
-					if (chbone == NULL) continue;
-#endif
-					
-					if (PBONE_SELECTABLE(arm, chbone)) {
-						if (!add_to_sel) curbone->flag &= ~BONE_SELECTED;
-						chbone->flag |= BONE_SELECTED;
-						arm->act_bone = chbone;
-						
-						found = 1;
-						break;
 					}
 				}
 			}
 		}
-	}
-	CTX_DATA_END;
 
-	if (found == 0)
+		if (bone_child) {
+			arm->act_bone = bone_child;
+
+			if (!add_to_sel) {
+				pchan_act->bone->flag &= ~BONE_SELECTED;
+			}
+			bone_child->flag |= BONE_SELECTED;
+
+			changed = true;
+		}
+	}
+
+	if (changed == false) {
 		return OPERATOR_CANCELLED;
+	}
 	
 	/* updates */
 	WM_event_add_notifier(C, NC_OBJECT | ND_BONE_SELECT, ob);
@@ -642,7 +638,7 @@ static bool pose_select_same_group(bContext *C, Object *ob, bool extend)
 		return 0;
 		
 	/* count the number of groups */
-	numGroups = BLI_countlist(&pose->agroups);
+	numGroups = BLI_listbase_count(&pose->agroups);
 	if (numGroups == 0)
 		return 0;
 		
@@ -825,7 +821,7 @@ static int pose_select_grouped_exec(bContext *C, wmOperator *op)
 			break;
 		
 		default:
-			printf("pose_select_grouped() - Unknown selection type %d\n", type);
+			printf("pose_select_grouped() - Unknown selection type %u\n", type);
 			break;
 	}
 	

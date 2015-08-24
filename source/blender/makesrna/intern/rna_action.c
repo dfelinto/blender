@@ -119,6 +119,17 @@ static FCurve *rna_Action_fcurve_new(bAction *act, ReportList *reports, const ch
 	return verify_fcurve(act, group, NULL, data_path, index, 1);
 }
 
+static FCurve *rna_Action_fcurve_find(bAction *act, ReportList *reports, const char *data_path, int index)
+{
+	if (data_path[0] == '\0') {
+		BKE_report(reports, RPT_ERROR, "F-Curve data path empty, invalid argument");
+		return NULL;
+	}
+
+	/* Returns NULL if not found. */
+	return list_find_fcurve(&act->curves, data_path, index);
+}
+
 static void rna_Action_fcurve_remove(bAction *act, ReportList *reports, PointerRNA *fcu_ptr)
 {
 	FCurve *fcu = fcu_ptr->data;
@@ -197,7 +208,7 @@ static void rna_Action_active_pose_marker_index_range(PointerRNA *ptr, int *min,
 	bAction *act = (bAction *)ptr->data;
 
 	*min = 0;
-	*max = max_ii(0, BLI_countlist(&act->markers) - 1);
+	*max = max_ii(0, BLI_listbase_count(&act->markers) - 1);
 }
 
 
@@ -329,6 +340,21 @@ static void rna_def_dopesheet(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "filter_fcurve_name", PROP_STRING, PROP_NONE);
 	RNA_def_property_string_sdna(prop, NULL, "searchstr");
 	RNA_def_property_ui_text(prop, "F-Curve Name Filter", "F-Curve live filtering string");
+	RNA_def_property_flag(prop, PROP_TEXTEDIT_UPDATE);
+	RNA_def_property_update(prop, NC_ANIMATION | ND_ANIMCHAN | NA_EDITED, NULL);
+	
+	/* NLA Name Search Settings (Shared with FCurve setting, but with different labels) */
+	prop = RNA_def_property(srna, "use_filter_text", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "filterflag", ADS_FILTER_BY_FCU_NAME);
+	RNA_def_property_ui_text(prop, "Only Matching Channels",
+	                         "Only include channels with names containing search text");
+	RNA_def_property_ui_icon(prop, ICON_VIEWZOOM, 0);
+	RNA_def_property_update(prop, NC_ANIMATION | ND_ANIMCHAN | NA_EDITED, NULL);
+	
+	prop = RNA_def_property(srna, "filter_text", PROP_STRING, PROP_NONE);
+	RNA_def_property_string_sdna(prop, NULL, "searchstr");
+	RNA_def_property_ui_text(prop, "Name Filter", "Live filtering string");
+	RNA_def_property_flag(prop, PROP_TEXTEDIT_UPDATE);
 	RNA_def_property_update(prop, NC_ANIMATION | ND_ANIMCHAN | NA_EDITED, NULL);
 	
 	/* NLA Specific Settings */
@@ -462,6 +488,12 @@ static void rna_def_dopesheet(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Display Speaker", "Include visualization of speaker related animation data");
 	RNA_def_property_ui_icon(prop, ICON_SPEAKER, 0);
 	RNA_def_property_update(prop, NC_ANIMATION | ND_ANIMCHAN | NA_EDITED, NULL);
+	
+	prop = RNA_def_property(srna, "show_gpencil", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_negative_sdna(prop, NULL, "filterflag", ADS_FILTER_NOGPENCIL);
+	RNA_def_property_ui_text(prop, "Display Grease Pencil", "Include visualization of Grease Pencil related animation data and frames");
+	RNA_def_property_ui_icon(prop, ICON_GREASEPENCIL, 0);
+	RNA_def_property_update(prop, NC_ANIMATION | ND_ANIMCHAN | NA_EDITED, NULL);
 }
 
 static void rna_def_action_group(BlenderRNA *brna)
@@ -527,7 +559,7 @@ static void rna_def_action_groups(BlenderRNA *brna, PropertyRNA *cprop)
 	RNA_def_struct_ui_text(srna, "Action Groups", "Collection of action groups");
 
 	func = RNA_def_function(srna, "new", "rna_Action_groups_new");
-	RNA_def_function_ui_description(func, "Add a keyframe to the curve");
+	RNA_def_function_ui_description(func, "Create a new action group and add it to the action");
 	parm = RNA_def_string(func, "name", "Group", 0, "", "New name for the action group");
 	RNA_def_property_flag(parm, PROP_REQUIRED);
 
@@ -555,8 +587,9 @@ static void rna_def_action_fcurves(BlenderRNA *brna, PropertyRNA *cprop)
 	RNA_def_struct_sdna(srna, "bAction");
 	RNA_def_struct_ui_text(srna, "Action F-Curves", "Collection of action F-Curves");
 
+	/* Action.fcurves.new(...) */
 	func = RNA_def_function(srna, "new", "rna_Action_fcurve_new");
-	RNA_def_function_ui_description(func, "Add a keyframe to the F-Curve");
+	RNA_def_function_ui_description(func, "Add an F-Curve to the action");
 	RNA_def_function_flag(func, FUNC_USE_REPORTS);
 	parm = RNA_def_string(func, "data_path", NULL, 0, "Data Path", "F-Curve data path to use");
 	RNA_def_property_flag(parm, PROP_REQUIRED);
@@ -566,7 +599,19 @@ static void rna_def_action_fcurves(BlenderRNA *brna, PropertyRNA *cprop)
 	parm = RNA_def_pointer(func, "fcurve", "FCurve", "", "Newly created F-Curve");
 	RNA_def_function_return(func, parm);
 
+	/* Action.fcurves.find(...) */
+	func = RNA_def_function(srna, "find", "rna_Action_fcurve_find");
+	RNA_def_function_ui_description(func, "Find an F-Curve. Note that this function performs a linear scan "
+	                                "of all F-Curves in the action.");
+	RNA_def_function_flag(func, FUNC_USE_REPORTS);
+	parm = RNA_def_string(func, "data_path", NULL, 0, "Data Path", "F-Curve data path");
+	RNA_def_property_flag(parm, PROP_REQUIRED);
+	RNA_def_int(func, "index", 0, 0, INT_MAX, "Index", "Array index", 0, INT_MAX);
 
+	parm = RNA_def_pointer(func, "fcurve", "FCurve", "", "The found F-Curve, or None if it doesn't exist");
+	RNA_def_function_return(func, parm);
+
+	/* Action.fcurves.remove(...) */
 	func = RNA_def_function(srna, "remove", "rna_Action_fcurve_remove");
 	RNA_def_function_ui_description(func, "Remove action group");
 	RNA_def_function_flag(func, FUNC_USE_REPORTS);
@@ -605,13 +650,14 @@ static void rna_def_action_pose_markers(BlenderRNA *brna, PropertyRNA *cprop)
 	
 	prop = RNA_def_property(srna, "active", PROP_POINTER, PROP_NONE);
 	RNA_def_property_struct_type(prop, "TimelineMarker");
-	RNA_def_property_flag(prop, PROP_EDITABLE);
+	RNA_def_property_flag(prop, PROP_EDITABLE | PROP_LIB_EXCEPTION);
 	RNA_def_property_pointer_funcs(prop, "rna_Action_active_pose_marker_get",
 	                               "rna_Action_active_pose_marker_set", NULL, NULL);
 	RNA_def_property_ui_text(prop, "Active Pose Marker", "Active pose marker for this action");
 	
 	prop = RNA_def_property(srna, "active_index", PROP_INT, PROP_UNSIGNED);
 	RNA_def_property_int_sdna(prop, NULL, "active_marker");
+	RNA_def_property_flag(prop, PROP_LIB_EXCEPTION);
 	RNA_def_property_int_funcs(prop, "rna_Action_active_pose_marker_index_get",
 	                           "rna_Action_active_pose_marker_index_set", "rna_Action_active_pose_marker_index_range");
 	RNA_def_property_ui_text(prop, "Active Pose Marker Index", "Index of active pose marker");
@@ -643,6 +689,7 @@ static void rna_def_action(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "pose_markers", PROP_COLLECTION, PROP_NONE);
 	RNA_def_property_collection_sdna(prop, NULL, "markers", NULL);
 	RNA_def_property_struct_type(prop, "TimelineMarker");
+	RNA_def_property_flag(prop, PROP_LIB_EXCEPTION); /* T45689 - so that the list isn't greyed out; adding/removing is still banned though */
 	RNA_def_property_ui_text(prop, "Pose Markers", "Markers specific to this action, for labeling poses");
 	rna_def_action_pose_markers(brna, prop);
 	

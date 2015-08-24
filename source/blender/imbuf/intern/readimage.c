@@ -103,7 +103,7 @@ static void imb_handle_alpha(ImBuf *ibuf, int flags, char colorspace[IM_MAX_SPAC
 ImBuf *IMB_ibImageFromMemory(unsigned char *mem, size_t size, int flags, char colorspace[IM_MAX_SPACE], const char *descr)
 {
 	ImBuf *ibuf;
-	ImFileType *type;
+	const ImFileType *type;
 	char effective_colorspace[IM_MAX_SPACE] = "";
 
 	if (mem == NULL) {
@@ -133,7 +133,7 @@ ImBuf *IMB_ibImageFromMemory(unsigned char *mem, size_t size, int flags, char co
 static ImBuf *IMB_ibImageFromFile(const char *filepath, int flags, char colorspace[IM_MAX_SPACE], const char *descr)
 {
 	ImBuf *ibuf;
-	ImFileType *type;
+	const ImFileType *type;
 	char effective_colorspace[IM_MAX_SPACE] = "";
 
 	if (colorspace)
@@ -192,22 +192,24 @@ static void imb_cache_filename(char *filename, const char *name, int flags)
 {
 	/* read .tx instead if it exists and is not older */
 	if (flags & IB_tilecache) {
-		BLI_strncpy(filename, name, IB_FILENAME_SIZE);
-		if (!BLI_replace_extension(filename, IB_FILENAME_SIZE, ".tx"))
+		BLI_strncpy(filename, name, IMB_FILENAME_SIZE);
+		if (!BLI_replace_extension(filename, IMB_FILENAME_SIZE, ".tx"))
 			return;
 
 		if (BLI_file_older(name, filename))
 			return;
 	}
 
-	BLI_strncpy(filename, name, IB_FILENAME_SIZE);
+	BLI_strncpy(filename, name, IMB_FILENAME_SIZE);
 }
 
 ImBuf *IMB_loadiffname(const char *filepath, int flags, char colorspace[IM_MAX_SPACE])
 {
 	ImBuf *ibuf;
 	int file, a;
-	char filepath_tx[IB_FILENAME_SIZE];
+	char filepath_tx[IMB_FILENAME_SIZE];
+
+	BLI_assert(!BLI_path_is_rel(filepath));
 
 	imb_cache_filename(filepath_tx, filepath, flags);
 
@@ -234,8 +236,10 @@ ImBuf *IMB_testiffname(const char *filepath, int flags)
 {
 	ImBuf *ibuf;
 	int file;
-	char filepath_tx[IB_FILENAME_SIZE];
+	char filepath_tx[IMB_FILENAME_SIZE];
 	char colorspace[IM_MAX_SPACE] = "\0";
+
+	BLI_assert(!BLI_path_is_rel(filepath));
 
 	imb_cache_filename(filepath_tx, filepath, flags);
 
@@ -257,7 +261,7 @@ ImBuf *IMB_testiffname(const char *filepath, int flags)
 
 static void imb_loadtilefile(ImBuf *ibuf, int file, int tx, int ty, unsigned int *rect)
 {
-	ImFileType *type;
+	const ImFileType *type;
 	unsigned char *mem;
 	size_t size;
 

@@ -30,7 +30,7 @@
 
 // implementation
 
-#include "PyObjectPlus.h"
+#include "EXP_PyObjectPlus.h"
 #include <structmember.h>
 
 #include "KX_GameObject.h"
@@ -41,6 +41,7 @@
 #include "DNA_meshdata_types.h"
 #include "DNA_image_types.h"
 #include "IMB_imbuf_types.h"
+#include "BKE_image.h"
 
 #include "MEM_guardedalloc.h"
 
@@ -56,6 +57,9 @@
 #include <memory.h>
 #include "glew-mx.h"
 
+extern "C" {
+	#include "IMB_imbuf.h"
+}
 
 // macro for exception handling and logging
 #define CATCH_EXCP catch (Exception & exp) \
@@ -75,9 +79,21 @@ void loadTexture(unsigned int texId, unsigned int *texture, short *size,
 	glBindTexture(GL_TEXTURE_2D, texId);
 	if (mipmap)
 	{
+		int i;
+		ImBuf *ibuf;
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		gluBuild2DMipmaps(GL_TEXTURE_2D, GL_RGBA, size[0], size[1], GL_RGBA, GL_UNSIGNED_BYTE, texture);
+
+		ibuf = IMB_allocFromBuffer(texture, NULL, size[0], size[1]);
+
+		IMB_makemipmap(ibuf, true);
+
+		for (i = 0; i < ibuf->miptot; i++) {
+			ImBuf *mip = IMB_getmipmap(ibuf, i);
+
+			glTexImage2D(GL_TEXTURE_2D, i,  GL_RGBA,  mip->x, mip->y, 0, GL_RGBA, GL_UNSIGNED_BYTE, mip->rect);
+		}
+		IMB_freeImBuf(ibuf);
 	} 
 	else
 	{
@@ -158,11 +174,11 @@ static PyObject *Texture_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 	// initialize object structure
 	self->m_actTex = 0;
 	self->m_orgSaved = false;
+	self->m_imgBuf = NULL;
 	self->m_imgTexture = NULL;
 	self->m_matTexture = NULL;
 	self->m_mipmap = false;
-	self->m_scaledImg = NULL;
-	self->m_scaledImgSize = 0;
+	self->m_scaledImBuf = NULL;
 	self->m_source = NULL;
 	self->m_lastClock = 0.0;
 	// return allocated object
@@ -184,7 +200,7 @@ static void Texture_dealloc(Texture *self)
 	PyObject *ret = Texture_close(self);
 	Py_DECREF(ret);
 	// release scaled image buffer
-	delete [] self->m_scaledImg;
+	IMB_freeImBuf(self->m_scaledImBuf);
 	// release object
 	Py_TYPE((PyObject *)self)->tp_free((PyObject *)self);
 }
@@ -282,7 +298,11 @@ PyObject *Texture_close(Texture * self)
 		if (self->m_useMatTexture)
 			self->m_matTexture->swapTexture(self->m_orgTex);
 		else
+		{
 			self->m_imgTexture->bindcode = self->m_orgTex;
+			BKE_image_release_ibuf(self->m_imgTexture, self->m_imgBuf, NULL);
+			self->m_imgBuf = NULL;
+		}
 		// drop actual texture
 		if (self->m_actTex != 0)
 		{
@@ -331,6 +351,12 @@ static PyObject *Texture_refresh(Texture *self, PyObject *args)
 						self->m_orgTex = self->m_matTexture->swapTexture(self->m_actTex);
 					else
 					{
+						// Swapping will work only if the GPU has already loaded the image.
+						// If not, it will delete and overwrite our texture on next render.
+						// To avoid that, we acquire the image buffer now.
+						// WARNING: GPU has a ImageUser to pass, we don't. Using NULL
+						// works on image file, not necessarily on other type of image.
+						self->m_imgBuf = BKE_image_acquire_ibuf(self->m_imgTexture, NULL, NULL);
 						self->m_orgTex = self->m_imgTexture->bindcode;
 						self->m_imgTexture->bindcode = self->m_actTex;
 					}
@@ -358,20 +384,12 @@ static PyObject *Texture_refresh(Texture *self, PyObject *args)
 					// scale texture if needed
 					if (size[0] != orgSize[0] || size[1] != orgSize[1])
 					{
-						// if scaled image buffer is smaller than needed
-						if (self->m_scaledImgSize < (unsigned int)(size[0] * size[1]))
-						{
-							// new size
-							self->m_scaledImgSize = size[0] * size[1];
-							// allocate scaling image
-							delete [] self->m_scaledImg;
-							self->m_scaledImg = new unsigned int[self->m_scaledImgSize];
-						}
-						// scale texture
-						gluScaleImage(GL_RGBA, orgSize[0], orgSize[1], GL_UNSIGNED_BYTE, texture,
-							size[0], size[1], GL_UNSIGNED_BYTE, self->m_scaledImg);
+						IMB_freeImBuf(self->m_scaledImBuf);
+						self->m_scaledImBuf = IMB_allocFromBuffer(texture, NULL, orgSize[0], orgSize[1]);
+						IMB_scaleImBuf(self->m_scaledImBuf, size[0], size[1]);
+
 						// use scaled image instead original
-						texture = self->m_scaledImg;
+						texture = self->m_scaledImBuf->rect;
 					}
 					// load texture for rendering
 					loadTexture(self->m_actTex, texture, size, self->m_mipmap);

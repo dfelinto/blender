@@ -48,17 +48,23 @@ char *BLI_strdupcat(const char *__restrict str1, const char *__restrict str2) AT
 
 char *BLI_strncpy(char *__restrict dst, const char *__restrict src, const size_t maxncpy) ATTR_NONNULL();
 
+char *BLI_strncpy_ensure_pad(char *__restrict dst, const char *__restrict src, const char pad, size_t maxncpy) ATTR_NONNULL();
+
 size_t BLI_strncpy_rlen(char *__restrict dst, const char *__restrict src, const size_t maxncpy) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
 
 size_t BLI_strcpy_rlen(char *__restrict dst, const char *__restrict src) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
 
 char *BLI_str_quoted_substrN(const char *__restrict str, const char *__restrict prefix) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL() ATTR_MALLOC;
 
-char *BLI_replacestrN(const char *__restrict str, const char *__restrict substr_old, const char *__restrict substr_new) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL() ATTR_MALLOC;
+char *BLI_str_replaceN(const char *__restrict str, const char *__restrict substr_old, const char *__restrict substr_new) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL() ATTR_MALLOC;
+
+void BLI_str_replace_char(char *string, char src, char dst) ATTR_NONNULL();
 
 size_t BLI_snprintf(char *__restrict dst, size_t maxncpy, const char *__restrict format, ...) ATTR_NONNULL(1, 3) ATTR_PRINTF_FORMAT(3, 4);
+size_t BLI_snprintf_rlen(char *__restrict dst, size_t maxncpy, const char *__restrict format, ...) ATTR_NONNULL(1, 3) ATTR_PRINTF_FORMAT(3, 4);
 
 size_t BLI_vsnprintf(char *__restrict dst, size_t maxncpy, const char *__restrict format, va_list arg) ATTR_PRINTF_FORMAT(3, 0);
+size_t BLI_vsnprintf_rlen(char *__restrict buffer, size_t maxncpy, const char *__restrict format, va_list arg) ATTR_PRINTF_FORMAT(3, 0);
 
 char *BLI_sprintfN(const char *__restrict format, ...) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL(1) ATTR_MALLOC ATTR_PRINTF_FORMAT(1, 2);
 
@@ -71,19 +77,25 @@ char *BLI_strcasestr(const char *s, const char *find) ATTR_WARN_UNUSED_RESULT AT
 int BLI_strcasecmp(const char *s1, const char *s2) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
 int BLI_strncasecmp(const char *s1, const char *s2, size_t len) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
 int BLI_natstrcmp(const char *s1, const char *s2) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
-size_t BLI_strnlen(const char *str, const size_t maxlen) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
-void BLI_timestr(double _time, char *str, size_t maxlen) ATTR_NONNULL();
+int BLI_strcmp_ignore_pad(const char *str1, const char *str2, const char pad) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
 
-void BLI_ascii_strtolower(char *str, const size_t len) ATTR_NONNULL();
-void BLI_ascii_strtoupper(char *str, const size_t len) ATTR_NONNULL();
+size_t BLI_strnlen(const char *str, const size_t maxlen) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
+
+void BLI_str_tolower_ascii(char *str, const size_t len) ATTR_NONNULL();
+void BLI_str_toupper_ascii(char *str, const size_t len) ATTR_NONNULL();
 int BLI_str_rstrip_float_zero(char *str, const char pad) ATTR_NONNULL();
 
 int BLI_str_index_in_array_n(const char *__restrict str, const char **__restrict str_array, const int str_array_len) ATTR_NONNULL();
 int BLI_str_index_in_array(const char *__restrict str, const char **__restrict str_array) ATTR_NONNULL();
 
-size_t BLI_str_partition(const char *str, const char delim[], char **sep, char **suf) ATTR_NONNULL();
-size_t BLI_str_rpartition(const char *str, const char delim[], char **sep, char **suf) ATTR_NONNULL();
-size_t BLI_str_partition_ex(const char *str, const char delim[], char **sep, char **suf, const bool from_right) ATTR_NONNULL();
+bool BLI_str_endswith(const char *__restrict str, const char *__restrict end) ATTR_NONNULL();
+bool BLI_strn_endswith(const char *__restrict str, const char *__restrict end, size_t length) ATTR_NONNULL();
+
+size_t BLI_str_partition(const char *str, const char delim[], const char **sep, const char **suf) ATTR_NONNULL();
+size_t BLI_str_rpartition(const char *str, const char delim[], const char **sep, const char **suf) ATTR_NONNULL();
+size_t BLI_str_partition_ex(
+        const char *str, const char *end, const char delim[], const char **sep, const char **suf, const bool from_right)
+        ATTR_NONNULL(1, 3, 4, 5);
 
 #ifdef __cplusplus
 }

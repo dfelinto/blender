@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #include "background.h"
@@ -26,6 +26,7 @@
 
 #include "util_foreach.h"
 #include "util_progress.h"
+#include "util_logging.h"
 
 CCL_NAMESPACE_BEGIN
 
@@ -82,6 +83,8 @@ static void shade_background_pixels(Device *device, DeviceScene *dscene, int res
 	device->mem_free(d_input);
 	device->mem_free(d_output);
 
+	d_input.clear();
+
 	float4 *d_output_data = reinterpret_cast<float4*>(d_output.data_pointer);
 
 	pixels.resize(width*height);
@@ -126,11 +129,24 @@ Light::Light()
 	shader = 0;
 	samples = 1;
 	max_bounces = 1024;
+
+	is_portal = false;
 }
 
 void Light::tag_update(Scene *scene)
 {
 	scene->light_manager->need_update = true;
+}
+
+bool Light::has_contribution(Scene *scene)
+{
+	if(is_portal) {
+		return false;
+	}
+	if(type == LIGHT_BACKGROUND) {
+		return true;
+	}
+	return scene->shaders[shader]->has_surface_emission;
 }
 
 /* Light Manager */
@@ -150,9 +166,16 @@ void LightManager::device_update_distribution(Device *device, DeviceScene *dscen
 	progress.set_status("Updating Lights", "Computing distribution");
 
 	/* count */
-	size_t num_lights = scene->lights.size();
+	size_t num_lights = 0;
 	size_t num_background_lights = 0;
 	size_t num_triangles = 0;
+
+	bool background_mis = false;
+
+	foreach(Light *light, scene->lights) {
+		if(light->has_contribution(scene))
+			num_lights++;
+	}
 
 	foreach(Object *object, scene->objects) {
 		Mesh *mesh = object->mesh;
@@ -284,22 +307,29 @@ void LightManager::device_update_distribution(Device *device, DeviceScene *dscen
 	float trianglearea = totarea;
 
 	/* point lights */
-	float lightarea = (totarea > 0.0f)? totarea/scene->lights.size(): 1.0f;
+	float lightarea = (totarea > 0.0f) ? totarea / num_lights : 1.0f;
 	bool use_lamp_mis = false;
 
-	for(int i = 0; i < scene->lights.size(); i++, offset++) {
-		Light *light = scene->lights[i];
+	int light_index = 0;
+	foreach(Light *light, scene->lights) {
+		if(!light->has_contribution(scene))
+			continue;
 
 		distribution[offset].x = totarea;
-		distribution[offset].y = __int_as_float(~(int)i);
+		distribution[offset].y = __int_as_float(~light_index);
 		distribution[offset].z = 1.0f;
 		distribution[offset].w = light->size;
 		totarea += lightarea;
 
 		if(light->size > 0.0f && light->use_mis)
 			use_lamp_mis = true;
-		if(light->type == LIGHT_BACKGROUND)
+		if(light->type == LIGHT_BACKGROUND) {
 			num_background_lights++;
+			background_mis = light->use_mis;
+		}
+
+		light_index++;
+		offset++;
 	}
 
 	/* normalize cumulative distribution functions */
@@ -361,6 +391,18 @@ void LightManager::device_update_distribution(Device *device, DeviceScene *dscen
 
 		/* CDF */
 		device->tex_alloc("__light_distribution", dscene->light_distribution);
+
+		/* Portals */
+		if(num_background_lights > 0 && light_index != scene->lights.size()) {
+			kintegrator->portal_offset = light_index;
+			kintegrator->num_portals = scene->lights.size() - light_index;
+			kintegrator->portal_pdf = background_mis? 0.5f: 1.0f;
+		}
+		else {
+			kintegrator->num_portals = 0;
+			kintegrator->portal_offset = 0;
+			kintegrator->portal_pdf = 0.0f;
+		}
 	}
 	else {
 		dscene->light_distribution.clear();
@@ -371,7 +413,50 @@ void LightManager::device_update_distribution(Device *device, DeviceScene *dscen
 		kintegrator->pdf_lights = 0.0f;
 		kintegrator->inv_pdf_lights = 0.0f;
 		kintegrator->use_lamp_mis = false;
+		kintegrator->num_portals = 0;
+		kintegrator->portal_offset = 0;
+		kintegrator->portal_pdf = 0.0f;
+
 		kfilm->pass_shadow_scale = 1.0f;
+	}
+}
+
+static void background_cdf(int start,
+                           int end,
+                           int res,
+                           int cdf_count,
+                           const vector<float3> *pixels,
+                           float2 *cond_cdf)
+{
+	/* Conditional CDFs (rows, U direction). */
+	for(int i = start; i < end; i++) {
+		float sin_theta = sinf(M_PI_F * (i + 0.5f) / res);
+		float3 env_color = (*pixels)[i * res];
+		float ave_luminance = average(env_color);
+
+		cond_cdf[i * cdf_count].x = ave_luminance * sin_theta;
+		cond_cdf[i * cdf_count].y = 0.0f;
+
+		for(int j = 1; j < res; j++) {
+			env_color = (*pixels)[i * res + j];
+			ave_luminance = average(env_color);
+
+			cond_cdf[i * cdf_count + j].x = ave_luminance * sin_theta;
+			cond_cdf[i * cdf_count + j].y = cond_cdf[i * cdf_count + j - 1].y + cond_cdf[i * cdf_count + j - 1].x / res;
+		}
+
+		float cdf_total = cond_cdf[i * cdf_count + res - 1].y + cond_cdf[i * cdf_count + res - 1].x / res;
+		float cdf_total_inv = 1.0f / cdf_total;
+
+		/* stuff the total into the brightness value for the last entry, because
+		 * we are going to normalize the CDFs to 0.0 to 1.0 afterwards */
+		cond_cdf[i * cdf_count + res].x = cdf_total;
+
+		if(cdf_total > 0.0f)
+			for(int j = 1; j < res; j++)
+				cond_cdf[i * cdf_count + j].y *= cdf_total_inv;
+
+		cond_cdf[i * cdf_count + res].y = 1.0f;
 	}
 }
 
@@ -415,34 +500,30 @@ void LightManager::device_update_background(Device *device, DeviceScene *dscene,
 	float2 *marg_cdf = dscene->light_background_marginal_cdf.resize(cdf_count);
 	float2 *cond_cdf = dscene->light_background_conditional_cdf.resize(cdf_count * cdf_count);
 
-	/* conditional CDFs (rows, U direction) */
-	for(int i = 0; i < res; i++) {
-		float sin_theta = sinf(M_PI_F * (i + 0.5f) / res);
-		float3 env_color = pixels[i * res];
-		float ave_luminamce = average(env_color);
-
-		cond_cdf[i * cdf_count].x = ave_luminamce * sin_theta;
-		cond_cdf[i * cdf_count].y = 0.0f;
-
-		for(int j = 1; j < res; j++) {
-			env_color = pixels[i * res + j];
-			ave_luminamce = average(env_color);
-
-			cond_cdf[i * cdf_count + j].x = ave_luminamce * sin_theta;
-			cond_cdf[i * cdf_count + j].y = cond_cdf[i * cdf_count + j - 1].y + cond_cdf[i * cdf_count + j - 1].x / res;
+	double time_start = time_dt();
+	if(res < 512) {
+		/* Small enough resolution, faster to do single-threaded. */
+		background_cdf(0, res, res, cdf_count, &pixels, cond_cdf);
+	}
+	else {
+		/* Threaded evaluation for large resolution. */
+		const int num_blocks = TaskScheduler::num_threads();
+		const int chunk_size = res / num_blocks;
+		int start_row = 0;
+		TaskPool pool;
+		for(int i = 0; i < num_blocks; ++i) {
+			const int current_chunk_size =
+			    (i != num_blocks - 1) ? chunk_size
+			                          : (res - i * chunk_size);
+			pool.push(function_bind(&background_cdf,
+			                        start_row, start_row + current_chunk_size,
+			                        res,
+			                        cdf_count,
+			                        &pixels,
+			                        cond_cdf));
+			start_row += current_chunk_size;
 		}
-
-		float cdf_total = cond_cdf[i * cdf_count + res - 1].y + cond_cdf[i * cdf_count + res - 1].x / res;
-
-		/* stuff the total into the brightness value for the last entry, because
-		 * we are going to normalize the CDFs to 0.0 to 1.0 afterwards */
-		cond_cdf[i * cdf_count + res].x = cdf_total;
-
-		if(cdf_total > 0.0f)
-			for(int j = 1; j < res; j++)
-				cond_cdf[i * cdf_count + j].y /= cdf_total;
-
-		cond_cdf[i * cdf_count + res].y = 1.0f;
+		pool.wait_work();
 	}
 
 	/* marginal CDFs (column, V direction, sum of rows) */
@@ -463,6 +544,8 @@ void LightManager::device_update_background(Device *device, DeviceScene *dscene,
 
 	marg_cdf[res].y = 1.0f;
 
+	VLOG(2) << "Background MIS build time " << time_dt() - time_start << "\n";
+
 	/* update device */
 	device->tex_alloc("__light_background_marginal_cdf", dscene->light_background_marginal_cdf);
 	device->tex_alloc("__light_background_conditional_cdf", dscene->light_background_conditional_cdf);
@@ -473,10 +556,8 @@ void LightManager::device_update_points(Device *device, DeviceScene *dscene, Sce
 	if(scene->lights.size() == 0)
 		return;
 
-	float4 *light_data = dscene->light_data.resize(scene->lights.size()*LIGHT_SIZE);
-
-	if(!device->info.advanced_shading) {
-		/* remove unsupported light */
+	/* remove background light? */
+	if(!(device->info.advanced_shading)) {
 		foreach(Light *light, scene->lights) {
 			if(light->type == LIGHT_BACKGROUND) {
 				scene->lights.erase(std::remove(scene->lights.begin(), scene->lights.end(), light), scene->lights.end());
@@ -485,10 +566,16 @@ void LightManager::device_update_points(Device *device, DeviceScene *dscene, Sce
 		}
 	}
 
-	for(size_t i = 0; i < scene->lights.size(); i++) {
-		Light *light = scene->lights[i];
+	float4 *light_data = dscene->light_data.resize(scene->lights.size()*LIGHT_SIZE);
+	int light_index = 0;
+
+	foreach(Light *light, scene->lights) {
+		if(!light->has_contribution(scene)) {
+			continue;
+		}
+
 		float3 co = light->co;
-		int shader_id = scene->shader_manager->get_shader_id(scene->lights[i]->shader);
+		int shader_id = scene->shader_manager->get_shader_id(light->shader);
 		float samples = __int_as_float(light->samples);
 		float max_bounces = __int_as_float(light->max_bounces);
 
@@ -521,11 +608,11 @@ void LightManager::device_update_points(Device *device, DeviceScene *dscene, Sce
 			if(light->use_mis && radius > 0.0f)
 				shader_id |= SHADER_USE_MIS;
 
-			light_data[i*LIGHT_SIZE + 0] = make_float4(__int_as_float(light->type), co.x, co.y, co.z);
-			light_data[i*LIGHT_SIZE + 1] = make_float4(__int_as_float(shader_id), radius, invarea, 0.0f);
-			light_data[i*LIGHT_SIZE + 2] = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
-			light_data[i*LIGHT_SIZE + 3] = make_float4(samples, 0.0f, 0.0f, 0.0f);
-			light_data[i*LIGHT_SIZE + 4] = make_float4(max_bounces, 0.0f, 0.0f, 0.0f);
+			light_data[light_index*LIGHT_SIZE + 0] = make_float4(__int_as_float(light->type), co.x, co.y, co.z);
+			light_data[light_index*LIGHT_SIZE + 1] = make_float4(__int_as_float(shader_id), radius, invarea, 0.0f);
+			light_data[light_index*LIGHT_SIZE + 2] = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+			light_data[light_index*LIGHT_SIZE + 3] = make_float4(samples, 0.0f, 0.0f, 0.0f);
+			light_data[light_index*LIGHT_SIZE + 4] = make_float4(max_bounces, 0.0f, 0.0f, 0.0f);
 		}
 		else if(light->type == LIGHT_DISTANT) {
 			shader_id &= ~SHADER_AREA_LIGHT;
@@ -542,11 +629,11 @@ void LightManager::device_update_points(Device *device, DeviceScene *dscene, Sce
 			if(light->use_mis && area > 0.0f)
 				shader_id |= SHADER_USE_MIS;
 
-			light_data[i*LIGHT_SIZE + 0] = make_float4(__int_as_float(light->type), dir.x, dir.y, dir.z);
-			light_data[i*LIGHT_SIZE + 1] = make_float4(__int_as_float(shader_id), radius, cosangle, invarea);
-			light_data[i*LIGHT_SIZE + 2] = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
-			light_data[i*LIGHT_SIZE + 3] = make_float4(samples, 0.0f, 0.0f, 0.0f);
-			light_data[i*LIGHT_SIZE + 4] = make_float4(max_bounces, 0.0f, 0.0f, 0.0f);
+			light_data[light_index*LIGHT_SIZE + 0] = make_float4(__int_as_float(light->type), dir.x, dir.y, dir.z);
+			light_data[light_index*LIGHT_SIZE + 1] = make_float4(__int_as_float(shader_id), radius, cosangle, invarea);
+			light_data[light_index*LIGHT_SIZE + 2] = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+			light_data[light_index*LIGHT_SIZE + 3] = make_float4(samples, 0.0f, 0.0f, 0.0f);
+			light_data[light_index*LIGHT_SIZE + 4] = make_float4(max_bounces, 0.0f, 0.0f, 0.0f);
 		}
 		else if(light->type == LIGHT_BACKGROUND) {
 			uint visibility = scene->background->visibility;
@@ -571,11 +658,11 @@ void LightManager::device_update_points(Device *device, DeviceScene *dscene, Sce
 				use_light_visibility = true;
 			}
 
-			light_data[i*LIGHT_SIZE + 0] = make_float4(__int_as_float(light->type), 0.0f, 0.0f, 0.0f);
-			light_data[i*LIGHT_SIZE + 1] = make_float4(__int_as_float(shader_id), 0.0f, 0.0f, 0.0f);
-			light_data[i*LIGHT_SIZE + 2] = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
-			light_data[i*LIGHT_SIZE + 3] = make_float4(samples, 0.0f, 0.0f, 0.0f);
-			light_data[i*LIGHT_SIZE + 4] = make_float4(max_bounces, 0.0f, 0.0f, 0.0f);
+			light_data[light_index*LIGHT_SIZE + 0] = make_float4(__int_as_float(light->type), 0.0f, 0.0f, 0.0f);
+			light_data[light_index*LIGHT_SIZE + 1] = make_float4(__int_as_float(shader_id), 0.0f, 0.0f, 0.0f);
+			light_data[light_index*LIGHT_SIZE + 2] = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+			light_data[light_index*LIGHT_SIZE + 3] = make_float4(samples, 0.0f, 0.0f, 0.0f);
+			light_data[light_index*LIGHT_SIZE + 4] = make_float4(max_bounces, 0.0f, 0.0f, 0.0f);
 		}
 		else if(light->type == LIGHT_AREA) {
 			float3 axisu = light->axisu*(light->sizeu*light->size);
@@ -589,11 +676,11 @@ void LightManager::device_update_points(Device *device, DeviceScene *dscene, Sce
 			if(light->use_mis && area > 0.0f)
 				shader_id |= SHADER_USE_MIS;
 
-			light_data[i*LIGHT_SIZE + 0] = make_float4(__int_as_float(light->type), co.x, co.y, co.z);
-			light_data[i*LIGHT_SIZE + 1] = make_float4(__int_as_float(shader_id), axisu.x, axisu.y, axisu.z);
-			light_data[i*LIGHT_SIZE + 2] = make_float4(invarea, axisv.x, axisv.y, axisv.z);
-			light_data[i*LIGHT_SIZE + 3] = make_float4(samples, dir.x, dir.y, dir.z);
-			light_data[i*LIGHT_SIZE + 4] = make_float4(max_bounces, 0.0f, 0.0f, 0.0f);
+			light_data[light_index*LIGHT_SIZE + 0] = make_float4(__int_as_float(light->type), co.x, co.y, co.z);
+			light_data[light_index*LIGHT_SIZE + 1] = make_float4(__int_as_float(shader_id), axisu.x, axisu.y, axisu.z);
+			light_data[light_index*LIGHT_SIZE + 2] = make_float4(invarea, axisv.x, axisv.y, axisv.z);
+			light_data[light_index*LIGHT_SIZE + 3] = make_float4(samples, dir.x, dir.y, dir.z);
+			light_data[light_index*LIGHT_SIZE + 4] = make_float4(max_bounces, 0.0f, 0.0f, 0.0f);
 		}
 		else if(light->type == LIGHT_SPOT) {
 			shader_id &= ~SHADER_AREA_LIGHT;
@@ -609,19 +696,52 @@ void LightManager::device_update_points(Device *device, DeviceScene *dscene, Sce
 			if(light->use_mis && radius > 0.0f)
 				shader_id |= SHADER_USE_MIS;
 
-			light_data[i*LIGHT_SIZE + 0] = make_float4(__int_as_float(light->type), co.x, co.y, co.z);
-			light_data[i*LIGHT_SIZE + 1] = make_float4(__int_as_float(shader_id), radius, invarea, spot_angle);
-			light_data[i*LIGHT_SIZE + 2] = make_float4(spot_smooth, dir.x, dir.y, dir.z);
-			light_data[i*LIGHT_SIZE + 3] = make_float4(samples, 0.0f, 0.0f, 0.0f);
-			light_data[i*LIGHT_SIZE + 4] = make_float4(max_bounces, 0.0f, 0.0f, 0.0f);
+			light_data[light_index*LIGHT_SIZE + 0] = make_float4(__int_as_float(light->type), co.x, co.y, co.z);
+			light_data[light_index*LIGHT_SIZE + 1] = make_float4(__int_as_float(shader_id), radius, invarea, spot_angle);
+			light_data[light_index*LIGHT_SIZE + 2] = make_float4(spot_smooth, dir.x, dir.y, dir.z);
+			light_data[light_index*LIGHT_SIZE + 3] = make_float4(samples, 0.0f, 0.0f, 0.0f);
+			light_data[light_index*LIGHT_SIZE + 4] = make_float4(max_bounces, 0.0f, 0.0f, 0.0f);
 		}
+
+		light_index++;
 	}
-	
+
+	/* TODO(sergey): Consider moving portals update to their own function
+	 * keeping this one more manageable.
+	 */
+	foreach(Light *light, scene->lights) {
+		if(!light->is_portal)
+			continue;
+		assert(light->type == LIGHT_AREA);
+
+		float3 co = light->co;
+		float3 axisu = light->axisu*(light->sizeu*light->size);
+		float3 axisv = light->axisv*(light->sizev*light->size);
+		float area = len(axisu)*len(axisv);
+		float invarea = (area > 0.0f) ? 1.0f / area : 1.0f;
+		float3 dir = light->dir;
+
+		dir = safe_normalize(dir);
+
+		light_data[light_index*LIGHT_SIZE + 0] = make_float4(__int_as_float(light->type), co.x, co.y, co.z);
+		light_data[light_index*LIGHT_SIZE + 1] = make_float4(area, axisu.x, axisu.y, axisu.z);
+		light_data[light_index*LIGHT_SIZE + 2] = make_float4(invarea, axisv.x, axisv.y, axisv.z);
+		light_data[light_index*LIGHT_SIZE + 3] = make_float4(-1, dir.x, dir.y, dir.z);
+		light_data[light_index*LIGHT_SIZE + 4] = make_float4(-1, 0.0f, 0.0f, 0.0f);
+
+		light_index++;
+	}
+
+	VLOG(1) << "Number of lights without contribution: "
+	        << scene->lights.size() - light_index;
+
 	device->tex_alloc("__light_data", dscene->light_data);
 }
 
 void LightManager::device_update(Device *device, DeviceScene *dscene, Scene *scene, Progress& progress)
 {
+	VLOG(1) << "Total " << scene->lights.size() << " lights.";
+
 	if(!need_update)
 		return;
 
@@ -659,7 +779,7 @@ void LightManager::device_free(Device *device, DeviceScene *dscene)
 	dscene->light_background_conditional_cdf.clear();
 }
 
-void LightManager::tag_update(Scene *scene)
+void LightManager::tag_update(Scene * /*scene*/)
 {
 	need_update = true;
 }

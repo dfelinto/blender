@@ -43,7 +43,7 @@ class RENDER_MT_framerate_presets(Menu):
     draw = Menu.draw_preset
 
 
-class RenderButtonsPanel():
+class RenderButtonsPanel:
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
     bl_context = "render"
@@ -274,7 +274,7 @@ class RENDER_PT_performance(RenderButtonsPanel, Panel):
         col.prop(rd, "tile_y", text="Y")
 
         col.separator()
-        col.prop(rd, 'preview_start_resolution')
+        col.prop(rd, "preview_start_resolution")
 
         col = split.column()
         col.label(text="Memory:")
@@ -334,28 +334,25 @@ class RENDER_PT_post_processing(RenderButtonsPanel, Panel):
 
 
 class RENDER_PT_stamp(RenderButtonsPanel, Panel):
-    bl_label = "Stamp"
+    bl_label = "Metadata"
     bl_options = {'DEFAULT_CLOSED'}
     COMPAT_ENGINES = {'BLENDER_RENDER'}
-
-    def draw_header(self, context):
-        rd = context.scene.render
-
-        self.layout.prop(rd, "use_stamp", text="")
 
     def draw(self, context):
         layout = self.layout
 
         rd = context.scene.render
 
-        layout.active = rd.use_stamp
+        layout.prop(rd, "use_stamp")
+        col = layout.column()
+        col.active = rd.use_stamp
+        col.prop(rd, "stamp_font_size", text="Font Size")
 
-        layout.prop(rd, "stamp_font_size", text="Font Size")
-
-        row = layout.row()
+        row = col.row()
         row.column().prop(rd, "stamp_foreground", slider=True)
         row.column().prop(rd, "stamp_background", slider=True)
 
+        layout.label("Enabled Metadata")
         split = layout.split()
 
         col = split.column()
@@ -377,6 +374,9 @@ class RENDER_PT_stamp(RenderButtonsPanel, Panel):
         sub = row.row()
         sub.active = rd.use_stamp_note
         sub.prop(rd, "stamp_note_text", text="")
+        if rd.use_sequencer:
+            layout.label("Sequencer")
+            layout.prop(rd, "use_stamp_strip_meta")
 
 
 class RENDER_PT_output(RenderButtonsPanel, Panel):
@@ -404,6 +404,8 @@ class RENDER_PT_output(RenderButtonsPanel, Panel):
         col.prop(rd, "use_render_cache")
 
         layout.template_image_settings(image_settings, color_management=False)
+        if rd.use_multiview:
+            layout.template_image_views(image_settings)
 
         if file_format == 'QUICKTIME':
             quicktime = rd.quicktime

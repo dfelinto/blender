@@ -131,6 +131,7 @@ static void foreachTexLink(ModifierData *md, Object *ob,
 }
 
 static void updateDepgraph(ModifierData *md, DagForest *forest,
+                           struct Main *UNUSED(bmain),
                            Scene *UNUSED(scene),
                            Object *UNUSED(ob),
                            DagNode *obNode)
@@ -149,6 +150,21 @@ static void updateDepgraph(ModifierData *md, DagForest *forest,
 
 		dag_add_relation(forest, curNode, obNode, DAG_RL_OB_DATA,
 		                 "Wave Modifer");
+	}
+}
+
+static void updateDepsgraph(ModifierData *md,
+                            struct Main *UNUSED(bmain),
+                            struct Scene *UNUSED(scene),
+                            Object *UNUSED(ob),
+                            struct DepsNodeHandle *node)
+{
+	WaveModifierData *wmd = (WaveModifierData *)md;
+	if (wmd->objectcenter != NULL) {
+		DEG_add_object_relation(node, wmd->objectcenter, DEG_OB_COMP_TRANSFORM, "Wave Modifier");
+	}
+	if (wmd->map_object != NULL) {
+		DEG_add_object_relation(node, wmd->map_object, DEG_OB_COMP_TRANSFORM, "Wave Modifier");
 	}
 }
 
@@ -380,6 +396,7 @@ ModifierTypeInfo modifierType_Wave = {
 	/* freeData */          freeData,
 	/* isDisabled */        NULL,
 	/* updateDepgraph */    updateDepgraph,
+	/* updateDepsgraph */   updateDepsgraph,
 	/* dependsOnTime */     dependsOnTime,
 	/* dependsOnNormals */	NULL,
 	/* foreachObjectLink */ foreachObjectLink,

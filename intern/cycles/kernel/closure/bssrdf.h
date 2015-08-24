@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #ifndef __KERNEL_BSSRDF_H__
@@ -30,8 +30,8 @@ ccl_device int bssrdf_setup(ShaderClosure *sc, ClosureType type)
 		return flag;
 	}
 	else {
-		sc->data1 = clamp(sc->data1, 0.0f, 1.0f); /* texture blur */
-		sc->T.x = clamp(sc->T.x, 0.0f, 1.0f); /* sharpness */
+		sc->data1 = saturate(sc->data1); /* texture blur */
+		sc->T.x = saturate(sc->T.x); /* sharpness */
 		sc->type = type;
 
 		return SD_BSDF|SD_BSDF_HAS_EVAL|SD_BSSRDF;
@@ -157,7 +157,7 @@ ccl_device float bssrdf_cubic_quintic_root_find(float xi)
 	float x = 0.25f;
 	int i;
 
-	for (i = 0; i < max_iteration_count; i++) {
+	for(i = 0; i < max_iteration_count; i++) {
 		float x2 = x*x;
 		float x3 = x2*x;
 		float nx = (1.0f - x);
@@ -168,7 +168,7 @@ ccl_device float bssrdf_cubic_quintic_root_find(float xi)
 		if(fabsf(f) < tolerance || f_ == 0.0f)
 			break;
 
-		x = clamp(x - f/f_, 0.0f, 1.0f);
+		x = saturate(x - f/f_);
 	}
 
 	return x;

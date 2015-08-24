@@ -64,10 +64,12 @@ static EnumPropertyItem property_flag_items[] = {
 	{PROP_ANIMATABLE, "ANIMATABLE", 0, "Animatable", ""},
 	{PROP_LIB_EXCEPTION, "LIBRARY_EDITABLE", 0, "Library Editable", ""},
 	{PROP_PROPORTIONAL, "PROPORTIONAL", 0, "Adjust values proportionally to eachother", ""},
+	{PROP_TEXTEDIT_UPDATE, "TEXTEDIT_UPDATE", 0, "Update on every keystroke in textedit 'mode'", ""},
 	{0, NULL, 0, NULL, NULL}};
 
 #define BPY_PROPDEF_OPTIONS_DOC \
-"   :arg options: Enumerator in ['HIDDEN', 'SKIP_SAVE', 'ANIMATABLE', 'LIBRARY_EDITABLE', 'PROPORTIONAL'].\n" \
+"   :arg options: Enumerator in ['HIDDEN', 'SKIP_SAVE', 'ANIMATABLE', 'LIBRARY_EDITABLE', 'PROPORTIONAL'," \
+                                "'TEXTEDIT_UPDATE'].\n" \
 "   :type options: set\n" \
 
 static EnumPropertyItem property_flag_enum_items[] = {
@@ -1317,6 +1319,7 @@ static EnumPropertyItem *enum_items_from_py(PyObject *seq_fast, PyObject *def, i
 	EnumPropertyItem *items;
 	PyObject *item;
 	const Py_ssize_t seq_len = PySequence_Fast_GET_SIZE(seq_fast);
+	PyObject **seq_fast_items = PySequence_Fast_ITEMS(seq_fast);
 	Py_ssize_t totbuf = 0;
 	int i;
 	short def_used = 0;
@@ -1364,7 +1367,7 @@ static EnumPropertyItem *enum_items_from_py(PyObject *seq_fast, PyObject *def, i
 		Py_ssize_t name_str_size;
 		Py_ssize_t desc_str_size;
 
-		item = PySequence_Fast_GET_ITEM(seq_fast, i);
+		item = seq_fast_items[i];
 
 		if ((PyTuple_CheckExact(item)) &&
 		    (item_size = PyTuple_GET_SIZE(item)) &&
@@ -1374,7 +1377,8 @@ static EnumPropertyItem *enum_items_from_py(PyObject *seq_fast, PyObject *def, i
 		    (tmp.description = _PyUnicode_AsStringAndSize(PyTuple_GET_ITEM(item, 2), &desc_str_size)) &&
 		    /* TODO, number isn't ensured to be unique from the script author */
 		    (item_size != 4 || py_long_as_int(PyTuple_GET_ITEM(item, 3), &tmp.value) != -1) &&
-		    (item_size != 5 || ((tmp_icon = _PyUnicode_AsString(PyTuple_GET_ITEM(item, 3))) &&
+		    (item_size != 5 || ((py_long_as_int(PyTuple_GET_ITEM(item, 3), &tmp.icon) != -1 ||
+		                         (tmp_icon = _PyUnicode_AsString(PyTuple_GET_ITEM(item, 3)))) &&
 		                        py_long_as_int(PyTuple_GET_ITEM(item, 4), &tmp.value) != -1)))
 		{
 			if (is_enum_flag) {
@@ -1478,15 +1482,26 @@ static EnumPropertyItem *bpy_prop_enum_itemf_cb(struct bContext *C, PointerRNA *
 	EnumPropertyItem *eitems = NULL;
 	int err = 0;
 
-	bpy_context_set(C, &gilstate);
+	if (C) {
+		bpy_context_set(C, &gilstate);
+	}
+	else {
+		gilstate = PyGILState_Ensure();
+	}
 
 	args = PyTuple_New(2);
 	self = pyrna_struct_as_instance(ptr);
 	PyTuple_SET_ITEM(args, 0, self);
 
 	/* now get the context */
-	PyTuple_SET_ITEM(args, 1, (PyObject *)bpy_context_module);
-	Py_INCREF(bpy_context_module);
+	if (C) {
+		PyTuple_SET_ITEM(args, 1, (PyObject *)bpy_context_module);
+		Py_INCREF(bpy_context_module);
+	}
+	else {
+		PyTuple_SET_ITEM(args, 1, Py_None);
+		Py_INCREF(Py_None);
+	}
 
 	items = PyObject_CallObject(py_func, args);
 
@@ -1527,8 +1542,13 @@ static EnumPropertyItem *bpy_prop_enum_itemf_cb(struct bContext *C, PointerRNA *
 		eitems = DummyRNA_NULL_items;
 	}
 
+	if (C) {
+		bpy_context_clear(C, &gilstate);
+	}
+	else {
+		PyGILState_Release(gilstate);
+	}
 
-	bpy_context_clear(C, &gilstate);
 	return eitems;
 }
 
@@ -1931,7 +1951,7 @@ static PyObject *BPy_BoolProperty(PyObject *self, PyObject *args, PyObject *kw)
 		                               "options", "subtype", "update", "get", "set", NULL};
 		const char *id = NULL, *name = NULL, *description = "";
 		int id_len;
-		int def = 0;
+		bool def = false;
 		PropertyRNA *prop;
 		PyObject *pyopts = NULL;
 		int opts = 0;
@@ -1942,9 +1962,9 @@ static PyObject *BPy_BoolProperty(PyObject *self, PyObject *args, PyObject *kw)
 		PyObject *set_cb = NULL;
 
 		if (!PyArg_ParseTupleAndKeywords(args, kw,
-		                                 "s#|ssiO!sOOO:BoolProperty",
+		                                 "s#|ssO&O!sOOO:BoolProperty",
 		                                 (char **)kwlist, &id, &id_len,
-		                                 &name, &description, &def,
+		                                 &name, &description, PyC_ParseBool, &def,
 		                                 &PySet_Type, &pyopts, &pysubtype,
 		                                 &update_cb, &get_cb, &set_cb))
 		{
@@ -2598,7 +2618,7 @@ PyDoc_STRVAR(BPy_EnumProperty_doc,
 ".. function:: EnumProperty(items, "
                            "name=\"\", "
                            "description=\"\", "
-                           "default=\"\", "
+                           "default=None, "
                            "options={'ANIMATABLE'}, "
                            "update=None, "
                            "get=None, "
@@ -2610,12 +2630,12 @@ PyDoc_STRVAR(BPy_EnumProperty_doc,
 "      [(identifier, name, description, icon, number), ...] where the identifier is used\n"
 "      for python access and other values are used for the interface.\n"
 "      The three first elements of the tuples are mandatory.\n"
-"      The forth one is either the (unique!) number id of the item or, if followed by a fith element \n"
-"      (which must be the numid), an icon string identifier.\n"
+"      The forth one is either the (unique!) number id of the item or, if followed by a fith element\n"
+"      (which must be the numid), an icon string identifier or integer icon value (e.g. returned by icon()...).\n"
 "      Note the item is optional.\n"
 "      For dynamic values a callback can be passed which returns a list in\n"
 "      the same format as the static list.\n"
-"      This function must take 2 arguments (self, context)\n"
+"      This function must take 2 arguments (self, context), **context may be None**.\n"
 "      WARNING: There is a known bug with using a callback,\n"
 "      Python must keep a reference to the strings returned or Blender will crash.\n"
 "   :type items: sequence of string tuples or a function\n"
@@ -2623,6 +2643,8 @@ BPY_PROPDEF_NAME_DOC
 BPY_PROPDEF_DESC_DOC
 "   :arg default: The default value for this enum, a string from the identifiers used in *items*.\n"
 "      If the *ENUM_FLAG* option is used this must be a set of such string identifiers instead.\n"
+"      WARNING: It shall not be specified (or specified to its default *None* value) for dynamic enums\n"
+"      (i.e. if a callback function is given as *items* parameter).\n"
 "   :type default: string or set\n"
 BPY_PROPDEF_OPTIONS_ENUM_DOC
 BPY_PROPDEF_UPDATE_DOC
@@ -2672,6 +2694,12 @@ static PyObject *BPy_EnumProperty(PyObject *self, PyObject *args, PyObject *kw)
 		}
 		if (bpy_prop_callback_check(set_cb, "set", 2) == -1) {
 			return NULL;
+		}
+
+		if (def == Py_None) {
+			/* This allows to get same behavior when explicitly passing None as default value,
+			 * and not defining a default value at all! */
+			def = NULL;
 		}
 
 		/* items can be a list or a callable */
@@ -2955,9 +2983,10 @@ static struct PyMethodDef props_methods[] = {
 static struct PyModuleDef props_module = {
 	PyModuleDef_HEAD_INIT,
 	"bpy.props",
-	"This module defines properties to extend blenders internal data, the result of these functions"
-	" is used to assign properties to classes registered with blender and can't be used directly.\n"
-	".. warning:: All parameters to these functions must be passed as keywords.",
+	"This module defines properties to extend Blender's internal data. The result of these functions"
+	" is used to assign properties to classes registered with Blender and can't be used directly.\n"
+	"\n"
+	".. warning:: All parameters to these functions must be passed as keywords.\n",
 	-1, /* multiple "initialization" just copies the module dict. */
 	props_methods,
 	NULL, NULL, NULL, NULL

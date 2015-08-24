@@ -140,14 +140,12 @@ GHOST_WindowHandle GHOST_CreateWindow(GHOST_SystemHandle systemhandle,
                                       GHOST_TUns32 height,
                                       GHOST_TWindowState state,
                                       GHOST_TDrawingContextType type,
-                                      const int stereoVisual,
-                                      const GHOST_TUns16 numOfAASamples)
+                                      GHOST_GLSettings glSettings)
 {
 	GHOST_ISystem *system = (GHOST_ISystem *) systemhandle;
 
 	return (GHOST_WindowHandle) system->createWindow(title, left, top, width, height,
-	                                                 state, type, stereoVisual != 0, false,
-	                                                 numOfAASamples);
+	                                                 state, type, glSettings, false);
 }
 
 GHOST_TUserDataPtr GHOST_GetWindowUserData(GHOST_WindowHandle windowhandle)
@@ -412,6 +410,13 @@ GHOST_TSuccess GHOST_GetButtonState(GHOST_SystemHandle systemhandle,
 	*isDown = (int) isdown;
 
 	return result;
+}
+
+
+void GHOST_setNDOFDeadZone(float deadzone)
+{
+	GHOST_ISystem *system = GHOST_ISystem::getSystem();
+	system->setNDOFDeadZone(deadzone);
 }
 
 
@@ -915,3 +920,21 @@ float GHOST_GetNativePixelSize(GHOST_WindowHandle windowhandle)
 	return 1.0f;
 }
 
+#ifdef WITH_INPUT_IME
+
+void GHOST_BeginIME(GHOST_WindowHandle windowhandle,
+                    GHOST_TInt32 x, GHOST_TInt32 y,
+                    GHOST_TInt32 w, GHOST_TInt32 h,
+                    int complete)
+{
+	GHOST_IWindow *window = (GHOST_IWindow *) windowhandle;
+	window->beginIME(x, y, w, h, complete);
+}
+
+void GHOST_EndIME(GHOST_WindowHandle windowhandle)
+{
+	GHOST_IWindow *window = (GHOST_IWindow *) windowhandle;
+	window->endIME();
+}
+
+#endif  /* WITH_INPUT_IME */

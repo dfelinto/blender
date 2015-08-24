@@ -11,11 +11,13 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #ifndef __UTIL_STATS_H__
 #define __UTIL_STATS_H__
+
+#include "util_atomic.h"
 
 CCL_NAMESPACE_BEGIN
 
@@ -24,14 +26,13 @@ public:
 	Stats() : mem_used(0), mem_peak(0) {}
 
 	void mem_alloc(size_t size) {
-		mem_used += size;
-		if(mem_used > mem_peak)
-			mem_peak = mem_used;
+		atomic_add_z(&mem_used, size);
+		atomic_update_max_z(&mem_peak, mem_used);
 	}
 
 	void mem_free(size_t size) {
 		assert(mem_used >= size);
-		mem_used -= size;
+		atomic_sub_z(&mem_used, size);
 	}
 
 	size_t mem_used;

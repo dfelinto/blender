@@ -34,7 +34,7 @@ WITH_BF_PYTHON_INSTALL_NUMPY = True
 WITH_BF_OPENAL = True
 BF_OPENAL = LIBDIR + '/openal'
 BF_OPENAL_INC = '${BF_OPENAL}/include '
-BF_OPENAL_LIB = 'wrap_oal'
+BF_OPENAL_LIB = 'OpenAL32'
 BF_OPENAL_LIBPATH = '${BF_OPENAL}/lib'
 
 WITH_BF_SNDFILE = True
@@ -55,6 +55,8 @@ BF_SDL_INC = '${BF_SDL}/include'
 BF_SDL_LIB = 'SDL2.lib'
 BF_SDL_LIBPATH = '${BF_SDL}/lib'
 
+WITH_BF_AUDASPACE = True
+
 WITH_BF_JACK = False
 
 BF_PTHREADS = LIBDIR + '/pthreads'
@@ -66,7 +68,7 @@ WITH_BF_OPENEXR = True
 WITH_BF_STATICOPENEXR = False
 BF_OPENEXR = LIBDIR + '/openexr'
 BF_OPENEXR_INC = '${BF_OPENEXR}/include ${BF_OPENEXR}/include/OpenEXR '
-BF_OPENEXR_LIB = ' Iex-2_1 Half IlmImf-2_1 Imath-2_1 IlmThread-2_1 '
+BF_OPENEXR_LIB = ' Iex-2_2 Half IlmImf-2_2 Imath-2_2 IlmThread-2_2 '
 BF_OPENEXR_LIBPATH = '${BF_OPENEXR}/lib'
 BF_OPENEXR_LIB_STATIC = '${BF_OPENEXR}/lib/libHalf.a ${BF_OPENEXR}/lib/libIlmImf.a ${BF_OPENEXR}/lib/libIex.a ${BF_OPENEXR}/lib/libImath.a ${BF_OPENEXR}/lib/libIlmThread.a'
 
@@ -154,6 +156,8 @@ BF_OPENCOLLADA_INC = '${BF_OPENCOLLADA}/include/opencollada'
 BF_OPENCOLLADA_LIB = 'OpenCOLLADAStreamWriter OpenCOLLADASaxFrameworkLoader OpenCOLLADAFramework OpenCOLLADABaseUtils GeneratedSaxParser MathMLSolver xml pcre buffer ftoa'
 BF_OPENCOLLADA_LIBPATH = '${BF_OPENCOLLADA}/lib/opencollada'
 
+WITH_BF_IME = True
+
 WITH_BF_3DMOUSE = True
 
 WITH_BF_OPENMP = True
@@ -200,7 +204,7 @@ BF_BOOST_LIBPATH = '${BF_BOOST}/lib'
 #CUDA
 WITH_BF_CYCLES_CUDA_BINARIES = False
 #BF_CYCLES_CUDA_NVCC = "" # Path to the nvidia compiler
-BF_CYCLES_CUDA_BINARIES_ARCH = ['sm_20', 'sm_21', 'sm_30', 'sm_35', 'sm_50']
+BF_CYCLES_CUDA_BINARIES_ARCH = ['sm_20', 'sm_21', 'sm_30', 'sm_35', 'sm_50', 'sm_52']
 
 #Ray trace optimization
 WITH_BF_RAYOPTIMIZATION = True
@@ -209,6 +213,12 @@ BF_RAYOPTIMIZATION_SSE_FLAGS = ['']
 
 #Freestyle
 WITH_BF_FREESTYLE = True
+
+WITH_BF_OPENSUBDIV = True
+BF_OPENSUBDIV = LIBDIR + '/opensubdiv'
+BF_OPENSUBDIV_INC = '${BF_OPENSUBDIV}/include'
+BF_OPENSUBDIV_LIB = 'osdCPU osdGPU'
+BF_OPENSUBDIV_LIBPATH = '${BF_OPENSUBDIV}/lib'
 
 WITH_BF_STATICOPENGL = False
 BF_OPENGL_INC = '${BF_OPENGL}/include'
@@ -242,7 +252,10 @@ C_WARN = []
 CC_WARN = []
 CXX_WARN = []
 
-LLIBS = ['ws2_32', 'vfw32', 'winmm', 'kernel32', 'user32', 'gdi32', 'comdlg32', 'advapi32', 'shfolder', 'shell32', 'ole32', 'oleaut32', 'uuid', 'psapi']
+LLIBS = ['ws2_32', 'vfw32', 'winmm', 'kernel32', 'user32', 'gdi32', 'comdlg32', 'advapi32', 'shfolder', 'shell32', 'ole32', 'oleaut32', 'uuid', 'psapi', 'Dbghelp']
+
+if WITH_BF_IME:
+    LLIBS.append('imm32')
 
 PLATFORM_LINKFLAGS = ['/SUBSYSTEM:CONSOLE','/MACHINE:X64','/STACK:2097152','/OPT:NOREF','/INCREMENTAL:NO', '/NODEFAULTLIB:msvcrt.lib', '/NODEFAULTLIB:msvcmrt.lib', '/NODEFAULTLIB:msvcurt.lib', '/NODEFAULTLIB:msvcrtd.lib']
 

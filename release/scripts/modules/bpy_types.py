@@ -715,7 +715,7 @@ class Menu(StructRNA, _GenericUI, metaclass=RNAMeta):
     __slots__ = ()
 
     def path_menu(self, searchpaths, operator,
-                  props_default={}, filter_ext=None):
+                  props_default=None, filter_ext=None):
 
         layout = self.layout
         # hard coded to set the operators 'filepath' to the filename.
@@ -745,8 +745,9 @@ class Menu(StructRNA, _GenericUI, metaclass=RNAMeta):
                                     text=bpy.path.display_name(f),
                                     translate=False)
 
-            for attr, value in props_default.items():
-                setattr(props, attr, value)
+            if props_default is not None:
+                for attr, value in props_default.items():
+                    setattr(props, attr, value)
 
             props.filepath = filepath
             if operator == "script.execute_preset":
@@ -754,14 +755,21 @@ class Menu(StructRNA, _GenericUI, metaclass=RNAMeta):
 
     def draw_preset(self, context):
         """
-        Define these on the subclass
-        - preset_operator
-        - preset_subdir
+        Define these on the subclass:
+        - preset_operator (string)
+        - preset_subdir (string)
+
+        Optionally:
+        - preset_extensions (set of strings)
+        - preset_operator_defaults (dict of keyword args)
         """
         import bpy
+        ext_valid = getattr(self, "preset_extensions", {".py", ".xml"})
+        props_default = getattr(self, "preset_operator_defaults", None)
         self.path_menu(bpy.utils.preset_paths(self.preset_subdir),
                        self.preset_operator,
-                       filter_ext=lambda ext: ext.lower() in {".py", ".xml"})
+                       props_default=props_default,
+                       filter_ext=lambda ext: ext.lower() in ext_valid)
 
     @classmethod
     def draw_collapsible(cls, context, layout):
@@ -771,24 +779,6 @@ class Menu(StructRNA, _GenericUI, metaclass=RNAMeta):
             cls.draw_menus(layout, context)
         else:
             layout.menu(cls.__name__, icon='COLLAPSEMENU')
-
-
-class Region(StructRNA):
-    __slots__ = ()
-
-    def callback_add(self, cb, args, draw_mode):
-        """
-        Append a draw function to this region,
-        deprecated, instead use bpy.types.SpaceView3D.draw_handler_add
-        """
-        for area in self.id_data.areas:
-            for region in area.regions:
-                if region == self:
-                    spacetype = type(area.spaces[0])
-                    return spacetype.draw_handler_add(cb, args, self.type,
-                                                      draw_mode)
-
-        return None
 
 
 class NodeTree(bpy_types.ID, metaclass=RNAMetaPropGroup):

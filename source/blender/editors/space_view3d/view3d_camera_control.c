@@ -51,14 +51,12 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_math.h"
-#include "BLI_blenlib.h"
 #include "BLI_utildefines.h"
 
 #include "BKE_object.h"
 
 #include "BKE_depsgraph.h" /* for object updating */
 
-#include "ED_keyframing.h"
 #include "ED_screen.h"
 
 #include "view3d_intern.h"  /* own include */
@@ -135,7 +133,7 @@ Object *ED_view3d_cameracontrol_object_get(View3DCameraControl *vctrl)
 
 
 /**
- * Creates a #View3DControl handle and sets up
+ * Creates a #View3DCameraControl handle and sets up
  * the view for first-person style navigation.
  */
 struct View3DCameraControl *ED_view3d_cameracontrol_acquire(
@@ -265,6 +263,8 @@ void ED_view3d_cameracontrol_update(
 		mul_m4_m4m4(view_mat, view_mat, size_mat);
 
 		BKE_object_apply_mat4(v3d->camera, view_mat, true, true);
+
+		DAG_id_tag_update(&v3d->camera->id, OB_RECALC_OB);
 
 		copy_v3_v3(v3d->camera->size, size_back);
 

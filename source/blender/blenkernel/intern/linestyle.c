@@ -53,8 +53,6 @@
 #include "BKE_colortools.h"
 #include "BKE_animsys.h"
 
-#include "RNA_access.h"
-
 static const char *modifier_name[LS_MODIFIER_NUM] = {
 	NULL,
 	"Along Stroke",
@@ -75,6 +73,11 @@ static const char *modifier_name[LS_MODIFIER_NUM] = {
 	"Blueprint",
 	"2D Offset",
 	"2D Transform",
+	"Tangent",
+	"Noise",
+	"Crease Angle",
+	"Simplification",
+	"3D Curvature",
 };
 
 static void default_linestyle_settings(FreestyleLineStyle *linestyle)
@@ -109,14 +112,11 @@ static void default_linestyle_settings(FreestyleLineStyle *linestyle)
 	linestyle->caps = LS_CAPS_BUTT;
 }
 
-FreestyleLineStyle *BKE_linestyle_new(const char *name, struct Main *main)
+FreestyleLineStyle *BKE_linestyle_new(struct Main *bmain, const char *name)
 {
 	FreestyleLineStyle *linestyle;
 
-	if (!main)
-		main = G.main;
-
-	linestyle = (FreestyleLineStyle *)BKE_libblock_alloc(main, ID_LS, name);
+	linestyle = (FreestyleLineStyle *)BKE_libblock_alloc(bmain, ID_LS, name);
 
 	default_linestyle_settings(linestyle);
 
@@ -140,7 +140,7 @@ void BKE_linestyle_free(FreestyleLineStyle *linestyle)
 		MEM_freeN(linestyle->nodetree);
 	}
 
-	BKE_free_animdata(&linestyle->id);
+	BKE_animdata_free(&linestyle->id);
 	while ((m = (LineStyleModifier *)linestyle->color_modifiers.first))
 		BKE_linestyle_color_modifier_remove(linestyle, m);
 	while ((m = (LineStyleModifier *)linestyle->alpha_modifiers.first))
@@ -151,13 +151,13 @@ void BKE_linestyle_free(FreestyleLineStyle *linestyle)
 		BKE_linestyle_geometry_modifier_remove(linestyle, m);
 }
 
-FreestyleLineStyle *BKE_linestyle_copy(FreestyleLineStyle *linestyle)
+FreestyleLineStyle *BKE_linestyle_copy(struct Main *bmain, FreestyleLineStyle *linestyle)
 {
 	FreestyleLineStyle *new_linestyle;
 	LineStyleModifier *m;
 	int a;
 
-	new_linestyle = BKE_linestyle_new(linestyle->id.name + 2, NULL);
+	new_linestyle = BKE_linestyle_new(bmain, linestyle->id.name + 2);
 	BKE_linestyle_free(new_linestyle);
 
 	for (a = 0; a < MAX_MTEX; a++) {
@@ -201,8 +201,11 @@ FreestyleLineStyle *BKE_linestyle_copy(FreestyleLineStyle *linestyle)
 	new_linestyle->dash3 = linestyle->dash3;
 	new_linestyle->gap3 = linestyle->gap3;
 	new_linestyle->panel = linestyle->panel;
+	new_linestyle->sort_key = linestyle->sort_key;
+	new_linestyle->integration_type = linestyle->integration_type;
 	new_linestyle->texstep = linestyle->texstep;
 	new_linestyle->pr_texture = linestyle->pr_texture;
+	new_linestyle->use_nodes = linestyle->use_nodes;
 	for (m = (LineStyleModifier *)linestyle->color_modifiers.first; m; m = m->next)
 		BKE_linestyle_color_modifier_copy(new_linestyle, m);
 	for (m = (LineStyleModifier *)linestyle->alpha_modifiers.first; m; m = m->next)
@@ -211,6 +214,10 @@ FreestyleLineStyle *BKE_linestyle_copy(FreestyleLineStyle *linestyle)
 		BKE_linestyle_thickness_modifier_copy(new_linestyle, m);
 	for (m = (LineStyleModifier *)linestyle->geometry_modifiers.first; m; m = m->next)
 		BKE_linestyle_geometry_modifier_copy(new_linestyle, m);
+
+	if (linestyle->id.lib) {
+		BKE_id_lib_local_paths(G.main, linestyle->id.lib, &new_linestyle->id);
+	}
 
 	return new_linestyle;
 }
@@ -266,6 +273,18 @@ static LineStyleModifier *alloc_color_modifier(const char *name, int type)
 		case LS_MODIFIER_MATERIAL:
 			size = sizeof(LineStyleColorModifier_Material);
 			break;
+		case LS_MODIFIER_TANGENT:
+			size = sizeof(LineStyleColorModifier_Tangent);
+			break;
+		case LS_MODIFIER_NOISE:
+			size = sizeof(LineStyleColorModifier_Noise);
+			break;
+		case LS_MODIFIER_CREASE_ANGLE:
+			size = sizeof(LineStyleColorModifier_CreaseAngle);
+			break;
+		case LS_MODIFIER_CURVATURE_3D:
+			size = sizeof(LineStyleColorModifier_Curvature_3D);
+			break;
 		default:
 			return NULL; /* unknown modifier type */
 	}
@@ -278,6 +297,9 @@ LineStyleModifier *BKE_linestyle_color_modifier_add(FreestyleLineStyle *linestyl
 	LineStyleModifier *m;
 
 	m = alloc_color_modifier(name, type);
+	if (UNLIKELY(m == NULL)) {
+		return NULL;
+	}
 	m->blend = MA_RAMP_BLEND;
 
 	switch (type) {
@@ -299,6 +321,25 @@ LineStyleModifier *BKE_linestyle_color_modifier_add(FreestyleLineStyle *linestyl
 			((LineStyleColorModifier_Material *)m)->color_ramp = add_colorband(1);
 			((LineStyleColorModifier_Material *)m)->mat_attr = LS_MODIFIER_MATERIAL_LINE;
 			break;
+		case LS_MODIFIER_TANGENT:
+			((LineStyleColorModifier_Tangent *)m)->color_ramp = add_colorband(1);
+			break;
+		case LS_MODIFIER_NOISE:
+			((LineStyleColorModifier_Noise *)m)->color_ramp = add_colorband(1);
+			((LineStyleColorModifier_Noise *)m)->amplitude = 10.0f;
+			((LineStyleColorModifier_Noise *)m)->period = 10.0f;
+			((LineStyleColorModifier_Noise *)m)->seed = 512;
+			break;
+		case LS_MODIFIER_CREASE_ANGLE:
+			((LineStyleColorModifier_CreaseAngle *)m)->color_ramp = add_colorband(1);
+			((LineStyleColorModifier_CreaseAngle *)m)->min_angle = 0.0f;
+			((LineStyleColorModifier_CreaseAngle *)m)->max_angle = DEG2RADF(180.0f);
+			break;
+		case LS_MODIFIER_CURVATURE_3D:
+			((LineStyleColorModifier_Curvature_3D *)m)->color_ramp = add_colorband(1);
+			((LineStyleColorModifier_Curvature_3D *)m)->min_curvature = 0.0f;
+			((LineStyleColorModifier_Curvature_3D *)m)->max_curvature = 0.5f;
+			break;
 		default:
 			return NULL; /* unknown modifier type */
 	}
@@ -312,6 +353,9 @@ LineStyleModifier *BKE_linestyle_color_modifier_copy(FreestyleLineStyle *linesty
 	LineStyleModifier *new_m;
 
 	new_m = alloc_color_modifier(m->name, m->type);
+	if (UNLIKELY(new_m == NULL)) {
+		return NULL;
+	}
 	new_m->influence = m->influence;
 	new_m->flags = m->flags;
 	new_m->blend = m->blend;
@@ -354,6 +398,41 @@ LineStyleModifier *BKE_linestyle_color_modifier_copy(FreestyleLineStyle *linesty
 			q->mat_attr = p->mat_attr;
 			break;
 		}
+		case LS_MODIFIER_TANGENT:
+		{
+			LineStyleColorModifier_Tangent *p = (LineStyleColorModifier_Tangent *)m;
+			LineStyleColorModifier_Tangent *q = (LineStyleColorModifier_Tangent *)new_m;
+			q->color_ramp = MEM_dupallocN(p->color_ramp);
+			break;
+		}
+		case LS_MODIFIER_NOISE:
+		{
+			LineStyleColorModifier_Noise *p = (LineStyleColorModifier_Noise *)m;
+			LineStyleColorModifier_Noise *q = (LineStyleColorModifier_Noise *)new_m;
+			q->color_ramp = MEM_dupallocN(p->color_ramp);
+			q->amplitude = p->amplitude;
+			q->period = p->period;
+			q->seed = p->seed;
+			break;
+		}
+		case LS_MODIFIER_CREASE_ANGLE:
+		{
+			LineStyleColorModifier_CreaseAngle *p = (LineStyleColorModifier_CreaseAngle *)m;
+			LineStyleColorModifier_CreaseAngle *q = (LineStyleColorModifier_CreaseAngle *)new_m;
+			q->color_ramp = MEM_dupallocN(p->color_ramp);
+			q->min_angle = p->min_angle;
+			q->max_angle = p->max_angle;
+			break;
+		}
+		case LS_MODIFIER_CURVATURE_3D:
+		{
+			LineStyleColorModifier_Curvature_3D *p = (LineStyleColorModifier_Curvature_3D *)m;
+			LineStyleColorModifier_Curvature_3D *q = (LineStyleColorModifier_Curvature_3D *)new_m;
+			q->color_ramp = MEM_dupallocN(p->color_ramp);
+			q->min_curvature = p->min_curvature;
+			q->max_curvature = p->max_curvature;
+			break;
+		}
 		default:
 			return NULL; /* unknown modifier type */
 	}
@@ -379,6 +458,18 @@ int BKE_linestyle_color_modifier_remove(FreestyleLineStyle *linestyle, LineStyle
 		case LS_MODIFIER_MATERIAL:
 			MEM_freeN(((LineStyleColorModifier_Material *)m)->color_ramp);
 			break;
+		case LS_MODIFIER_TANGENT:
+			MEM_freeN(((LineStyleColorModifier_Tangent *)m)->color_ramp);
+			break;
+		case LS_MODIFIER_NOISE:
+			MEM_freeN(((LineStyleColorModifier_Noise *)m)->color_ramp);
+			break;
+		case LS_MODIFIER_CREASE_ANGLE:
+			MEM_freeN(((LineStyleColorModifier_CreaseAngle *)m)->color_ramp);
+			break;
+		case LS_MODIFIER_CURVATURE_3D:
+			MEM_freeN(((LineStyleColorModifier_Curvature_3D *)m)->color_ramp);
+			break;
 	}
 	BLI_freelinkN(&linestyle->color_modifiers, m);
 	return 0;
@@ -400,6 +491,18 @@ static LineStyleModifier *alloc_alpha_modifier(const char *name, int type)
 			break;
 		case LS_MODIFIER_MATERIAL:
 			size = sizeof(LineStyleAlphaModifier_Material);
+			break;
+		case LS_MODIFIER_TANGENT:
+			size = sizeof(LineStyleAlphaModifier_Tangent);
+			break;
+		case LS_MODIFIER_NOISE:
+			size = sizeof(LineStyleAlphaModifier_Noise);
+			break;
+		case LS_MODIFIER_CREASE_ANGLE:
+			size = sizeof(LineStyleAlphaModifier_CreaseAngle);
+			break;
+		case LS_MODIFIER_CURVATURE_3D:
+			size = sizeof(LineStyleAlphaModifier_Curvature_3D);
 			break;
 		default:
 			return NULL; /* unknown modifier type */
@@ -443,6 +546,37 @@ LineStyleModifier *BKE_linestyle_alpha_modifier_add(FreestyleLineStyle *linestyl
 			LineStyleAlphaModifier_Material *p = (LineStyleAlphaModifier_Material *)m;
 			p->curve = curvemapping_add(1, 0.0f, 0.0f, 1.0f, 1.0f);
 			p->mat_attr = LS_MODIFIER_MATERIAL_LINE_A;
+			break;
+		}
+		case LS_MODIFIER_TANGENT:
+		{
+			LineStyleAlphaModifier_Tangent *p = (LineStyleAlphaModifier_Tangent *)m;
+			p->curve = curvemapping_add(1, 0.0f, 0.0f, 1.0f, 1.0f);
+			break;
+		}
+		case LS_MODIFIER_NOISE:
+		{
+			LineStyleAlphaModifier_Noise *p = (LineStyleAlphaModifier_Noise *)m;
+			p->curve = curvemapping_add(1, 0.0f, 0.0f, 1.0f, 1.0f);
+			((LineStyleAlphaModifier_Noise *)m)->amplitude = 10.0f;
+			((LineStyleAlphaModifier_Noise *)m)->period = 10.0f;
+			((LineStyleAlphaModifier_Noise *)m)->seed = 512;
+			break;
+		}
+		case LS_MODIFIER_CREASE_ANGLE:
+		{
+			LineStyleAlphaModifier_CreaseAngle *p = (LineStyleAlphaModifier_CreaseAngle *)m;
+			p->curve = curvemapping_add(1, 0.0f, 0.0f, 1.0f, 1.0f);
+			((LineStyleAlphaModifier_CreaseAngle *)m)->min_angle = 0.0f;
+			((LineStyleAlphaModifier_CreaseAngle *)m)->max_angle = DEG2RADF(180.0f);
+			break;
+		}
+		case LS_MODIFIER_CURVATURE_3D:
+		{
+			LineStyleAlphaModifier_Curvature_3D *p = (LineStyleAlphaModifier_Curvature_3D *)m;
+			p->curve = curvemapping_add(1, 0.0f, 0.0f, 1.0f, 1.0f);
+			((LineStyleAlphaModifier_Curvature_3D *)m)->min_curvature = 0.0f;
+			((LineStyleAlphaModifier_Curvature_3D *)m)->max_curvature = 0.5f;
 			break;
 		}
 		default:
@@ -503,6 +637,45 @@ LineStyleModifier *BKE_linestyle_alpha_modifier_copy(FreestyleLineStyle *linesty
 			q->mat_attr = p->mat_attr;
 			break;
 		}
+		case LS_MODIFIER_TANGENT:
+		{
+			LineStyleAlphaModifier_Tangent *p = (LineStyleAlphaModifier_Tangent *)m;
+			LineStyleAlphaModifier_Tangent *q = (LineStyleAlphaModifier_Tangent *)new_m;
+			q->curve = curvemapping_copy(p->curve);
+			q->flags = p->flags;
+			break;
+		}
+		case LS_MODIFIER_NOISE:
+		{
+			LineStyleAlphaModifier_Noise *p = (LineStyleAlphaModifier_Noise *)m;
+			LineStyleAlphaModifier_Noise *q = (LineStyleAlphaModifier_Noise *)new_m;
+			q->curve = curvemapping_copy(p->curve);
+			q->flags = p->flags;
+			q->amplitude = p->amplitude;
+			q->period = p->period;
+			q->seed = p->seed;
+			break;
+		}
+		case LS_MODIFIER_CREASE_ANGLE:
+		{
+			LineStyleAlphaModifier_CreaseAngle *p = (LineStyleAlphaModifier_CreaseAngle *)m;
+			LineStyleAlphaModifier_CreaseAngle *q = (LineStyleAlphaModifier_CreaseAngle *)new_m;
+			q->curve = curvemapping_copy(p->curve);
+			q->flags = p->flags;
+			q->min_angle = p->min_angle;
+			q->max_angle = p->max_angle;
+			break;
+		}
+		case LS_MODIFIER_CURVATURE_3D:
+		{
+			LineStyleAlphaModifier_Curvature_3D *p = (LineStyleAlphaModifier_Curvature_3D *)m;
+			LineStyleAlphaModifier_Curvature_3D *q = (LineStyleAlphaModifier_Curvature_3D *)new_m;
+			q->curve = curvemapping_copy(p->curve);
+			q->flags = p->flags;
+			q->min_curvature = p->min_curvature;
+			q->max_curvature = p->max_curvature;
+			break;
+		}
 		default:
 			return NULL; /* unknown modifier type */
 	}
@@ -528,6 +701,18 @@ int BKE_linestyle_alpha_modifier_remove(FreestyleLineStyle *linestyle, LineStyle
 		case LS_MODIFIER_MATERIAL:
 			curvemapping_free(((LineStyleAlphaModifier_Material *)m)->curve);
 			break;
+		case LS_MODIFIER_TANGENT:
+			curvemapping_free(((LineStyleAlphaModifier_Tangent *)m)->curve);
+			break;
+		case LS_MODIFIER_NOISE:
+			curvemapping_free(((LineStyleAlphaModifier_Noise *)m)->curve);
+			break;
+		case LS_MODIFIER_CREASE_ANGLE:
+			curvemapping_free(((LineStyleAlphaModifier_CreaseAngle *)m)->curve);
+			break;
+		case LS_MODIFIER_CURVATURE_3D:
+			curvemapping_free(((LineStyleAlphaModifier_Curvature_3D *)m)->curve);
+			break;
 	}
 	BLI_freelinkN(&linestyle->alpha_modifiers, m);
 	return 0;
@@ -552,6 +737,18 @@ static LineStyleModifier *alloc_thickness_modifier(const char *name, int type)
 			break;
 		case LS_MODIFIER_CALLIGRAPHY:
 			size = sizeof(LineStyleThicknessModifier_Calligraphy);
+			break;
+		case LS_MODIFIER_TANGENT:
+			size = sizeof(LineStyleThicknessModifier_Tangent);
+			break;
+		case LS_MODIFIER_NOISE:
+			size = sizeof(LineStyleThicknessModifier_Noise);
+			break;
+		case LS_MODIFIER_CREASE_ANGLE:
+			size = sizeof(LineStyleThicknessModifier_CreaseAngle);
+			break;
+		case LS_MODIFIER_CURVATURE_3D:
+			size = sizeof(LineStyleThicknessModifier_Curvature_3D);
 			break;
 		default:
 			return NULL; /* unknown modifier type */
@@ -612,6 +809,43 @@ LineStyleModifier *BKE_linestyle_thickness_modifier_add(FreestyleLineStyle *line
 			p->min_thickness = 1.0f;
 			p->max_thickness = 10.0f;
 			p->orientation = DEG2RADF(60.0f);
+			break;
+		}
+		case LS_MODIFIER_TANGENT:
+		{
+			LineStyleThicknessModifier_Tangent *p = (LineStyleThicknessModifier_Tangent *)m;
+			p->curve = curvemapping_add(1, 0.0f, 0.0f, 1.0f, 1.0f);
+			p->min_thickness = 1.0f;
+			p->max_thickness = 10.0f;
+			break;
+		}
+		case LS_MODIFIER_NOISE:
+		{
+			LineStyleThicknessModifier_Noise *p = (LineStyleThicknessModifier_Noise *)m;
+			p->period = 10.0f;
+			p->amplitude = 10.0f;
+			p->seed = 512;
+			p->flags = LS_THICKNESS_ASYMMETRIC;
+			break;
+		}
+		case LS_MODIFIER_CREASE_ANGLE:
+		{
+			LineStyleThicknessModifier_CreaseAngle *p = (LineStyleThicknessModifier_CreaseAngle *)m;
+			p->curve = curvemapping_add(1, 0.0f, 0.0f, 1.0f, 1.0f);
+			p->min_angle = 0.0f;
+			p->max_angle = DEG2RADF(180.0f);
+			p->min_thickness = 1.0f;
+			p->max_thickness = 10.0f;
+			break;
+		}
+		case LS_MODIFIER_CURVATURE_3D:
+		{
+			LineStyleThicknessModifier_Curvature_3D *p = (LineStyleThicknessModifier_Curvature_3D *)m;
+			p->curve = curvemapping_add(1, 0.0f, 0.0f, 1.0f, 1.0f);
+			p->min_curvature = 0.0f;
+			p->max_curvature = 0.5f;
+			p->min_thickness = 1.0f;
+			p->max_thickness = 10.0f;
 			break;
 		}
 		default:
@@ -691,6 +925,50 @@ LineStyleModifier *BKE_linestyle_thickness_modifier_copy(FreestyleLineStyle *lin
 			q->orientation = p->orientation;
 			break;
 		}
+		case LS_MODIFIER_TANGENT:
+		{
+			LineStyleThicknessModifier_Tangent *p = (LineStyleThicknessModifier_Tangent *)m;
+			LineStyleThicknessModifier_Tangent *q = (LineStyleThicknessModifier_Tangent *)new_m;
+			q->curve = curvemapping_copy(p->curve);
+			q->flags = p->flags;
+			q->min_thickness = p->min_thickness;
+			q->max_thickness = p->max_thickness;
+			break;
+		}
+		case LS_MODIFIER_NOISE:
+		{
+			LineStyleThicknessModifier_Noise *p = (LineStyleThicknessModifier_Noise *)m;
+			LineStyleThicknessModifier_Noise *q = (LineStyleThicknessModifier_Noise *)new_m;
+			q->amplitude = p->amplitude;
+			q->period = p->period;
+			q->seed = p->seed;
+			q->flags = p->flags;
+			break;
+		}
+		case LS_MODIFIER_CURVATURE_3D:
+		{
+			LineStyleThicknessModifier_Curvature_3D *p = (LineStyleThicknessModifier_Curvature_3D *)m;
+			LineStyleThicknessModifier_Curvature_3D *q = (LineStyleThicknessModifier_Curvature_3D *)new_m;
+			q->curve = curvemapping_copy(p->curve);
+			q->flags = p->flags;
+			q->min_curvature = p->min_curvature;
+			q->max_curvature = p->max_curvature;
+			q->min_thickness = p->min_thickness;
+			q->max_thickness = p->max_thickness;
+			break;
+		}
+		case LS_MODIFIER_CREASE_ANGLE:
+		{
+			LineStyleThicknessModifier_CreaseAngle *p = (LineStyleThicknessModifier_CreaseAngle *)m;
+			LineStyleThicknessModifier_CreaseAngle *q = (LineStyleThicknessModifier_CreaseAngle *)new_m;
+			q->curve = curvemapping_copy(p->curve);
+			q->flags = p->flags;
+			q->min_angle = p->min_angle;
+			q->max_angle = p->max_angle;
+			q->min_thickness = p->min_thickness;
+			q->max_thickness = p->max_thickness;
+			break;
+		}
 		default:
 			return NULL; /* unknown modifier type */
 	}
@@ -717,6 +995,15 @@ int BKE_linestyle_thickness_modifier_remove(FreestyleLineStyle *linestyle, LineS
 			curvemapping_free(((LineStyleThicknessModifier_Material *)m)->curve);
 			break;
 		case LS_MODIFIER_CALLIGRAPHY:
+			break;
+		case LS_MODIFIER_TANGENT:
+			curvemapping_free(((LineStyleThicknessModifier_Tangent *)m)->curve);
+			break;
+		case LS_MODIFIER_NOISE:
+			break;
+		case LS_MODIFIER_CREASE_ANGLE:
+			break;
+		case LS_MODIFIER_CURVATURE_3D:
 			break;
 	}
 	BLI_freelinkN(&linestyle->thickness_modifiers, m);
@@ -766,6 +1053,9 @@ static LineStyleModifier *alloc_geometry_modifier(const char *name, int type)
 			break;
 		case LS_MODIFIER_2D_TRANSFORM:
 			size = sizeof(LineStyleGeometryModifier_2DTransform);
+			break;
+		case LS_MODIFIER_SIMPLIFICATION:
+			size = sizeof(LineStyleGeometryModifier_Simplification);
 			break;
 		default:
 			return NULL; /* unknown modifier type */
@@ -882,6 +1172,12 @@ LineStyleModifier *BKE_linestyle_geometry_modifier_add(FreestyleLineStyle *lines
 			p->pivot_u = 0.5f;
 			p->pivot_x = 0.0f;
 			p->pivot_y = 0.0f;
+			break;
+		}
+		case LS_MODIFIER_SIMPLIFICATION:
+		{
+			LineStyleGeometryModifier_Simplification *p = (LineStyleGeometryModifier_Simplification *)m;
+			p->tolerance = 0.1f;
 			break;
 		}
 		default:
@@ -1018,6 +1314,13 @@ LineStyleModifier *BKE_linestyle_geometry_modifier_copy(FreestyleLineStyle *line
 			q->pivot_y = p->pivot_y;
 			break;
 		}
+		case LS_MODIFIER_SIMPLIFICATION:
+		{
+			LineStyleGeometryModifier_Simplification *p = (LineStyleGeometryModifier_Simplification *)m;
+			LineStyleGeometryModifier_Simplification *q = (LineStyleGeometryModifier_Simplification *)new_m;
+			q->tolerance = p->tolerance;
+			break;
+		}
 		default:
 			return NULL; /* unknown modifier type */
 	}
@@ -1115,6 +1418,22 @@ char *BKE_linestyle_path_to_color_ramp(FreestyleLineStyle *linestyle, ColorBand 
 				break;
 			case LS_MODIFIER_MATERIAL:
 				if (color_ramp == ((LineStyleColorModifier_Material *)m)->color_ramp)
+					found = true;
+				break;
+			case LS_MODIFIER_TANGENT:
+				if (color_ramp == ((LineStyleColorModifier_Tangent *)m)->color_ramp)
+					found = true;
+				break;
+			case LS_MODIFIER_NOISE:
+				if (color_ramp == ((LineStyleColorModifier_Noise *)m)->color_ramp)
+					found = true;
+				break;
+			case LS_MODIFIER_CREASE_ANGLE:
+				if (color_ramp == ((LineStyleColorModifier_CreaseAngle *)m)->color_ramp)
+					found = true;
+				break;
+			case LS_MODIFIER_CURVATURE_3D:
+				if (color_ramp == ((LineStyleColorModifier_Curvature_3D *)m)->color_ramp)
 					found = true;
 				break;
 		}

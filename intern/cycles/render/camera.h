@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #ifndef __CAMERA_H__
@@ -53,6 +53,10 @@ public:
 	PanoramaType panorama_type;
 	float fisheye_fov;
 	float fisheye_lens;
+	float latitude_min;
+	float latitude_max;
+	float longitude_min;
+	float longitude_max;
 
 	/* anamorphic lens bokeh */
 	float aperture_ratio;
@@ -72,13 +76,16 @@ public:
 
 	/* border */
 	BoundBox2D border;
+	BoundBox2D viewport_camera_border;
 
 	/* transformation */
 	Transform matrix;
 
 	/* motion */
 	MotionTransform motion;
-	bool use_motion;
+	bool use_motion, use_perspective_motion;
+	float fov_pre, fov_post;
+	PerspectiveMotionTransform perspective_motion;
 
 	/* computed camera parameters */
 	Transform screentoworld;
@@ -100,6 +107,7 @@ public:
 	/* update */
 	bool need_update;
 	bool need_device_update;
+	bool need_flags_update;
 	int previous_need_motion;
 
 	/* functions */
@@ -111,13 +119,18 @@ public:
 	void update();
 
 	void device_update(Device *device, DeviceScene *dscene, Scene *scene);
+	void device_update_volume(Device *device, DeviceScene *dscene, Scene *scene);
 	void device_free(Device *device, DeviceScene *dscene);
 
 	bool modified(const Camera& cam);
 	bool motion_modified(const Camera& cam);
 	void tag_update();
 
+	/* Public utility functions. */
 	BoundBox viewplane_bounds_get();
+
+private:
+	/* Private utility functions. */
 	float3 transform_raster_to_world(float raster_x, float raster_y);
 };
 

@@ -342,13 +342,14 @@ PyDoc_STRVAR(SVertex_normals_doc,
 static PyObject *SVertex_normals_get(BPy_SVertex *self, void *UNUSED(closure))
 {
 	PyObject *py_normals; 
-	set< Vec3r > normals;
-	
-	py_normals = PyList_New(0);
-	normals = self->sv->normals();
-	for (set< Vec3r >::iterator set_iterator = normals.begin(); set_iterator != normals.end(); set_iterator++) {
-		Vec3r v(*set_iterator);
-		PyList_Append(py_normals, Vector_from_Vec3r(v));
+	set< Vec3r > normals = self->sv->normals();
+	set< Vec3r >::iterator it;
+	py_normals = PyList_New(normals.size());
+	unsigned int i = 0;
+
+	for (it = normals.begin(); it != normals.end(); it++) {
+		Vec3r v(*it);
+		PyList_SET_ITEM(py_normals, i++, Vector_from_Vec3r(v));
 	}
 	return py_normals;
 }
@@ -386,7 +387,7 @@ PyDoc_STRVAR(SVertex_curvatures_doc,
 "directions, i.e. the directions of the normal plane where the\n"
 "curvature takes its maximum and minimum values, respectively; and Kr,\n"
 "er and dKr are the radial curvature, radial direction, and the\n"
-"derivative of the radial curvature at this SVertex, repectively.\n"
+"derivative of the radial curvature at this SVertex, respectively.\n"
 "\n"
 ":type: tuple");
 
@@ -399,13 +400,14 @@ static PyObject *SVertex_curvatures_get(BPy_SVertex *self, void *UNUSED(closure)
 	Vec3r e2(info->e2.x(), info->e2.y(), info->e2.z());
 	Vec3r er(info->er.x(), info->er.y(), info->er.z());
 	PyObject *retval = PyTuple_New(7);
-	PyTuple_SET_ITEM(retval, 0, PyFloat_FromDouble(info->K1));
-	PyTuple_SET_ITEM(retval, 2, Vector_from_Vec3r(e1));
-	PyTuple_SET_ITEM(retval, 1, PyFloat_FromDouble(info->K2));
-	PyTuple_SET_ITEM(retval, 3, Vector_from_Vec3r(e2));
-	PyTuple_SET_ITEM(retval, 4, PyFloat_FromDouble(info->Kr));
-	PyTuple_SET_ITEM(retval, 5, Vector_from_Vec3r(er));
-	PyTuple_SET_ITEM(retval, 6, PyFloat_FromDouble(info->dKr));
+	PyTuple_SET_ITEMS(retval,
+	        PyFloat_FromDouble(info->K1),
+	        PyFloat_FromDouble(info->K2),
+	        Vector_from_Vec3r(e1),
+	        Vector_from_Vec3r(e2),
+	        PyFloat_FromDouble(info->Kr),
+	        Vector_from_Vec3r(er),
+	        PyFloat_FromDouble(info->dKr));
 	return retval;
 }
 

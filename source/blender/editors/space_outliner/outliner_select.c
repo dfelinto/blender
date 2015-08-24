@@ -290,6 +290,10 @@ static eOLDrawState tree_element_active_material(
 		}
 	}
 	if (set != OL_SETSEL_NONE) {
+		/* Tagging object for update seems a bit stupid here, but looks like we have to do it
+		 * for render views to update. See T42973.
+		 * Note that RNA material update does it too, see e.g. rna_MaterialSlot_update(). */
+		DAG_id_tag_update((ID *)ob, OB_RECALC_OB);
 		WM_event_add_notifier(C, NC_MATERIAL | ND_SHADING_LINKS, NULL);
 	}
 	return OL_DRAWSEL_NONE;
@@ -550,10 +554,12 @@ static eOLDrawState tree_element_active_bone(
 			Object *ob = OBACT;
 			if (ob) {
 				if (set != OL_SETSEL_EXTEND) {
-					bPoseChannel *pchannel;
 					/* single select forces all other bones to get unselected */
-					for (pchannel = ob->pose->chanbase.first; pchannel; pchannel = pchannel->next)
-						pchannel->bone->flag &= ~(BONE_TIPSEL | BONE_SELECTED | BONE_ROOTSEL);
+					Bone *bone;
+					for (bone = arm->bonebase.first; bone != NULL; bone = bone->next) {
+						bone->flag &= ~(BONE_TIPSEL | BONE_SELECTED | BONE_ROOTSEL);
+						do_outliner_bone_select_recursive(arm, bone, false);
+					}
 				}
 			}
 			
@@ -614,7 +620,7 @@ static eOLDrawState tree_element_active_ebone(
 	if (set != OL_SETSEL_NONE) {
 		if (set == OL_SETSEL_NORMAL) {
 			if (!(ebone->flag & BONE_HIDDEN_A)) {
-				ED_armature_deselect_all(scene->obedit, 0); // deselect
+				ED_armature_deselect_all(scene->obedit);
 				tree_element_active_ebone__sel(C, scene, arm, ebone, true);
 				status = OL_DRAWSEL_NORMAL;
 			}
@@ -771,7 +777,7 @@ static eOLDrawState tree_element_active_sequence_dup(
 			continue;
 		}
 
-//		if (!strcmp(p->strip->stripdata->name, seq->strip->stripdata->name))
+//		if (STREQ(p->strip->stripdata->name, seq->strip->stripdata->name))
 // XXX			select_single_seq(p, 0);
 		p = p->next;
 	}
@@ -869,6 +875,9 @@ eOLDrawState tree_element_type_active(
 			return tree_element_active_sequence_dup(scene, te, tselem, set);
 		case TSE_KEYMAP_ITEM:
 			return tree_element_active_keymap_item(C, te, tselem, set);
+		case TSE_GP_LAYER:
+			//return tree_element_active_gplayer(C, scene, te, tselem, set);
+			break;
 			
 	}
 	return OL_DRAWSEL_NONE;
@@ -911,7 +920,7 @@ static bool do_outliner_item_activate(bContext *C, Scene *scene, ARegion *ar, Sp
 			if (tselem->type != TSE_SEQUENCE && tselem->type != TSE_SEQ_STRIP && tselem->type != TSE_SEQUENCE_DUP)
 				tree_element_set_active_object(C, scene, soops, te,
 				                               (extend && tselem->type == 0) ? OL_SETSEL_EXTEND : OL_SETSEL_NORMAL,
-				                               recursive && tselem->type == 0 );
+				                               recursive && tselem->type == 0);
 			
 			if (tselem->type == 0) { // the lib blocks
 				/* editmode? */

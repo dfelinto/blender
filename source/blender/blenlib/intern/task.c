@@ -33,6 +33,8 @@
 #include "BLI_task.h"
 #include "BLI_threads.h"
 
+#include "atomic_ops.h"
+
 /* Types */
 
 typedef struct Task {
@@ -49,6 +51,8 @@ struct TaskPool {
 
 	volatile size_t num;
 	volatile size_t done;
+	size_t num_threads;
+	size_t currently_running_tasks;
 	ThreadMutex num_mutex;
 	ThreadCondition num_cond;
 
@@ -84,6 +88,7 @@ static void task_pool_num_decrease(TaskPool *pool, size_t done)
 	BLI_assert(pool->num >= done);
 
 	pool->num -= done;
+	atomic_sub_z(&pool->currently_running_tasks, done);
 	pool->done += done;
 
 	if (pool->num == 0)
@@ -104,19 +109,37 @@ static void task_pool_num_increase(TaskPool *pool)
 
 static bool task_scheduler_thread_wait_pop(TaskScheduler *scheduler, Task **task)
 {
+	bool found_task = false;
 	BLI_mutex_lock(&scheduler->queue_mutex);
 
 	while (!scheduler->queue.first && !scheduler->do_exit)
 		BLI_condition_wait(&scheduler->queue_cond, &scheduler->queue_mutex);
 
-	if (!scheduler->queue.first) {
-		BLI_mutex_unlock(&scheduler->queue_mutex);
-		BLI_assert(scheduler->do_exit);
-		return false;
-	}
-	
-	*task = scheduler->queue.first;
-	BLI_remlink(&scheduler->queue, *task);
+	do {
+		Task *current_task;
+		if (!scheduler->queue.first) {
+			BLI_mutex_unlock(&scheduler->queue_mutex);
+			BLI_assert(scheduler->do_exit);
+			return false;
+		}
+		for (current_task = scheduler->queue.first;
+		     current_task != NULL;
+		     current_task = current_task->next)
+		{
+			TaskPool *pool = current_task->pool;
+			if (pool->num_threads == 0 ||
+			    pool->currently_running_tasks < pool->num_threads)
+			{
+				*task = current_task;
+				found_task = true;
+				atomic_add_z(&pool->currently_running_tasks, 1);
+				BLI_remlink(&scheduler->queue, *task);
+				break;
+			}
+		}
+		if (!found_task)
+			BLI_condition_wait(&scheduler->queue_cond, &scheduler->queue_mutex);
+	} while (!found_task);
 
 	BLI_mutex_unlock(&scheduler->queue_mutex);
 
@@ -288,6 +311,8 @@ TaskPool *BLI_task_pool_create(TaskScheduler *scheduler, void *userdata)
 
 	pool->scheduler = scheduler;
 	pool->num = 0;
+	pool->num_threads = 0;
+	pool->currently_running_tasks = 0;
 	pool->do_cancel = false;
 
 	BLI_mutex_init(&pool->num_mutex);
@@ -351,12 +376,16 @@ void BLI_task_pool_work_and_wait(TaskPool *pool)
 		/* find task from this pool. if we get a task from another pool,
 		 * we can get into deadlock */
 
-		for (task = scheduler->queue.first; task; task = task->next) {
-			if (task->pool == pool) {
-				work_task = task;
-				found_task = true;
-				BLI_remlink(&scheduler->queue, task);
-				break;
+		if (pool->num_threads == 0 ||
+		    pool->currently_running_tasks < pool->num_threads)
+		{
+			for (task = scheduler->queue.first; task; task = task->next) {
+				if (task->pool == pool) {
+					work_task = task;
+					found_task = true;
+					BLI_remlink(&scheduler->queue, task);
+					break;
+				}
 			}
 		}
 
@@ -365,6 +394,7 @@ void BLI_task_pool_work_and_wait(TaskPool *pool)
 		/* if found task, do it, otherwise wait until other tasks are done */
 		if (found_task) {
 			/* run task */
+			atomic_add_z(&pool->currently_running_tasks, 1);
 			work_task->run(pool, work_task->taskdata, 0);
 
 			/* delete task */
@@ -385,6 +415,22 @@ void BLI_task_pool_work_and_wait(TaskPool *pool)
 	}
 
 	BLI_mutex_unlock(&pool->num_mutex);
+}
+
+int BLI_pool_get_num_threads(TaskPool *pool)
+{
+	if (pool->num_threads != 0) {
+		return pool->num_threads;
+	}
+	else {
+		return BLI_task_scheduler_num_threads(pool->scheduler);
+	}
+}
+
+void BLI_pool_set_num_threads(TaskPool *pool, int num_threads)
+{
+	/* NOTE: Don't try to modify threads while tasks are running! */
+	pool->num_threads = num_threads;
 }
 
 void BLI_task_pool_cancel(TaskPool *pool)
@@ -462,16 +508,14 @@ BLI_INLINE bool parallel_range_next_iter_get(
         int * __restrict iter, int * __restrict count)
 {
 	bool result = false;
+	BLI_spin_lock(&state->lock);
 	if (state->iter < state->stop) {
-		BLI_spin_lock(&state->lock);
-		if (state->iter < state->stop) {
-			*count = min_ii(state->chunk_size, state->stop - state->iter);
-			*iter = state->iter;
-			state->iter += *count;
-			result = true;
-		}
-		BLI_spin_unlock(&state->lock);
+		*count = min_ii(state->chunk_size, state->stop - state->iter);
+		*iter = state->iter;
+		state->iter += *count;
+		result = true;
 	}
+	BLI_spin_unlock(&state->lock);
 	return result;
 }
 

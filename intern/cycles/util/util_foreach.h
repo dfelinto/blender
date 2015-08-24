@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #ifndef __UTIL_FOREACH_H__
@@ -19,8 +19,12 @@
 
 /* Use Boost to get nice foreach() loops for STL data structures. */
 
-#include <boost/foreach.hpp>
-#define foreach BOOST_FOREACH
+#if (__cplusplus > 199711L) || (defined(_MSC_VER) && _MSC_VER >= 1800)
+#  define foreach(x, y) for(x : y)
+#else
+#  include <boost/foreach.hpp>
+#  define foreach BOOST_FOREACH
+#endif
 
 #endif /* __UTIL_FOREACH_H__ */
 

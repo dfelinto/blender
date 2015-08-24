@@ -35,10 +35,13 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_blenlib.h"
+#include "BLI_fileops.h"
+#include "BLI_ghash.h"
 #include "BLI_math.h"
+#include "BLI_timecode.h"
 #include "BLI_utildefines.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "DNA_scene_types.h"
 
@@ -49,7 +52,6 @@
 #include "BKE_report.h"
 #include "BKE_sound.h"
 
-#include "IMB_imbuf.h"
 
 #include "WM_api.h"
 #include "WM_types.h"
@@ -59,11 +61,15 @@
 
 /* for menu/popup icons etc etc*/
 
+#include "ED_numinput.h"
 #include "ED_screen.h"
 #include "ED_transform.h"
 #include "ED_sequencer.h"
+#include "ED_space_api.h"
 
 #include "UI_view2d.h"
+#include "UI_interface.h"
+
 
 /* own include */
 #include "sequencer_intern.h"
@@ -87,6 +93,7 @@ EnumPropertyItem sequencer_prop_effect_types[] = {
 	{SEQ_TYPE_MULTICAM, "MULTICAM", 0, "Multicam Selector", ""},
 	{SEQ_TYPE_ADJUSTMENT, "ADJUSTMENT", 0, "Adjustment Layer", ""},
 	{SEQ_TYPE_GAUSSIAN_BLUR, "GAUSSIAN_BLUR", 0, "Gaussian Blur", ""},
+	{SEQ_TYPE_TEXT, "TEXT", 0, "Text", ""},
 	{0, NULL, 0, NULL, NULL}
 };
 
@@ -145,11 +152,12 @@ static void proxy_startjob(void *pjv, short *stop, short *do_update, float *prog
 		struct SeqIndexBuildContext *context = link->data;
 
 		BKE_sequencer_proxy_rebuild(context, stop, do_update, progress);
-	}
-
-	if (*stop) {
-		pj->stop = 1;
-		fprintf(stderr,  "Canceling proxy rebuild on users request...\n");
+		
+		if (*stop) {
+			pj->stop = 1;
+			fprintf(stderr,  "Canceling proxy rebuild on users request...\n");
+			break;
+		}
 	}
 }
 
@@ -175,9 +183,12 @@ static void seq_proxy_build_job(const bContext *C)
 	Scene *scene = CTX_data_scene(C);
 	Editing *ed = BKE_sequencer_editing_get(scene, false);
 	ScrArea *sa = CTX_wm_area(C);
-	struct SeqIndexBuildContext *context;
-	LinkData *link;
 	Sequence *seq;
+	GSet *file_list;
+	
+	if (ed == NULL) {
+		return;
+	}
 
 	wm_job = WM_jobs_get(CTX_wm_manager(C), CTX_wm_window(C), sa, "Building Proxies",
 	                     WM_JOB_PROGRESS, WM_JOB_TYPE_SEQ_BUILD_PROXY);
@@ -195,16 +206,17 @@ static void seq_proxy_build_job(const bContext *C)
 		WM_jobs_callbacks(wm_job, proxy_startjob, NULL, NULL, proxy_endjob);
 	}
 
+	file_list = BLI_gset_new(BLI_ghashutil_strhash_p, BLI_ghashutil_strcmp, "file list");
 	SEQP_BEGIN (ed, seq)
 	{
 		if ((seq->flag & SELECT)) {
-			context = BKE_sequencer_proxy_rebuild_context(pj->main, pj->scene, seq);
-			link = BLI_genericNodeN(context);
-			BLI_addtail(&pj->queue, link);
+			BKE_sequencer_proxy_rebuild_context(pj->main, pj->scene, seq, file_list, &pj->queue);
 		}
 	}
 	SEQ_END
 
+	BLI_gset_free(file_list, MEM_freeN);
+	
 	if (!WM_jobs_is_running(wm_job)) {
 		G.is_break = false;
 		WM_jobs_start(CTX_wm_manager(C), wm_job);
@@ -385,7 +397,7 @@ Sequence *find_nearest_seq(Scene *scene, View2D *v2d, int *hand, const int mval[
 					displen = (float)abs(seq->startdisp - seq->enddisp);
 					
 					if (displen / pixelx > 16) { /* don't even try to grab the handles of small strips */
-						/* Set the max value to handle to 1/3 of the total len when its less then 28.
+						/* Set the max value to handle to 1/3 of the total len when its less than 28.
 						 * This is important because otherwise selecting handles happens even when you click in the middle */
 						
 						if ((displen / 3) < 30 * pixelx) {
@@ -493,6 +505,13 @@ bool ED_space_sequencer_check_show_imbuf(SpaceSeq *sseq)
 	return (ELEM(sseq->view, SEQ_VIEW_PREVIEW, SEQ_VIEW_SEQUENCE_PREVIEW) &&
 	        ELEM(sseq->mainb, SEQ_DRAW_SEQUENCE, SEQ_DRAW_IMG_IMBUF));
 }
+
+bool ED_space_sequencer_check_show_strip(SpaceSeq *sseq)
+{
+	return (ELEM(sseq->view, SEQ_VIEW_SEQUENCE, SEQ_VIEW_SEQUENCE_PREVIEW) &&
+	        ELEM(sseq->mainb, SEQ_DRAW_SEQUENCE, SEQ_DRAW_IMG_IMBUF));
+}
+
 
 int seq_effect_find_selected(Scene *scene, Sequence *activeseq, int type, Sequence **selseq1, Sequence **selseq2, Sequence **selseq3, const char **error_str)
 {
@@ -884,6 +903,7 @@ static bool sequence_offset_after_frame(Scene *scene, const int delta, const int
 	Sequence *seq;
 	Editing *ed = BKE_sequencer_editing_get(scene, false);
 	bool done = false;
+	TimeMarker *marker;
 
 	/* all strips >= cfra are shifted */
 	
@@ -894,6 +914,14 @@ static bool sequence_offset_after_frame(Scene *scene, const int delta, const int
 			BKE_sequence_translate(scene, seq, delta);
 			BKE_sequence_calc(scene, seq);
 			done = true;
+		}
+	}
+
+	if (!scene->toolsettings->lock_markers) {
+		for (marker = scene->markers.first; marker; marker = marker->next) {
+			if (marker->frame >= cfra) {
+				marker->frame += delta;
+			}
 		}
 	}
 
@@ -968,20 +996,20 @@ static void UNUSED_FUNCTION(seq_remap_paths) (Scene *scene)
 		return;
 	
 	BLI_strncpy(from, last_seq->strip->dir, sizeof(from));
-// XXX	if (0 == sbutton(from, 0, sizeof(from)-1, "From: "))
+// XXX	if (0 == sbutton(from, 0, sizeof(from) - 1, "From: "))
 //		return;
 	
 	BLI_strncpy(to, from, sizeof(to));
-// XXX	if (0 == sbutton(to, 0, sizeof(to)-1, "To: "))
+// XXX	if (0 == sbutton(to, 0, sizeof(to) - 1, "To: "))
 //		return;
 	
-	if (strcmp(to, from) == 0)
+	if (STREQ(to, from))
 		return;
 	
 	SEQP_BEGIN (ed, seq)
 	{
 		if (seq->flag & SELECT) {
-			if (strncmp(seq->strip->dir, from, strlen(from)) == 0) {
+			if (STREQLEN(seq->strip->dir, from, strlen(from))) {
 				printf("found %s\n", seq->strip->dir);
 				
 				/* strip off the beginning */
@@ -1019,7 +1047,7 @@ static int sequencer_gap_remove_exec(bContext *C, wmOperator *op)
 			break;
 		}
 	}
-	
+
 	for ( ; cfra < efra; cfra++) {
 		/* first == 0 means there's still no strip to remove a gap for */
 		if (first == false) {
@@ -1129,11 +1157,20 @@ int sequencer_strip_has_path_poll(bContext *C)
 	return (((ed = BKE_sequencer_editing_get(CTX_data_scene(C), false)) != NULL) && ((seq = ed->act_seq) != NULL) && (SEQ_HAS_PATH(seq)));
 }
 
-int sequencer_view_poll(bContext *C)
+int sequencer_view_preview_poll(bContext *C)
 {
 	SpaceSeq *sseq = CTX_wm_space_seq(C);
 	Editing *ed = BKE_sequencer_editing_get(CTX_data_scene(C), false);
 	if (ed && sseq && (sseq->mainb == SEQ_DRAW_IMG_IMBUF))
+		return 1;
+
+	return 0;
+}
+
+int sequencer_view_strips_poll(bContext *C)
+{
+	SpaceSeq *sseq = CTX_wm_space_seq(C);
+	if (sseq && ED_space_sequencer_check_show_strip(sseq))
 		return 1;
 
 	return 0;
@@ -1231,7 +1268,6 @@ void SEQUENCER_OT_snap(struct wmOperatorType *ot)
 	RNA_def_int(ot->srna, "frame", 0, INT_MIN, INT_MAX, "Frame", "Frame where selected strips will be snapped", INT_MIN, INT_MAX);
 }
 
-
 typedef struct SlipData {
 	int init_mouse[2];
 	float init_mouseloc[2];
@@ -1241,6 +1277,8 @@ typedef struct SlipData {
 	int num_seq;
 	bool slow;
 	int slow_offset; /* offset at the point where offset was turned on */
+	void *draw_handle;
+	NumInput num_input;
 } SlipData;
 
 static void transseq_backup(TransSeq *ts, Sequence *seq)
@@ -1274,15 +1312,30 @@ static void transseq_restore(TransSeq *ts, Sequence *seq)
 	seq->len = ts->len;
 }
 
-static int slip_add_sequences_rec(ListBase *seqbasep, Sequence **seq_array, bool *trim, int offset, bool first_level)
+static void draw_slip_extensions(const bContext *C, ARegion *ar, void *data)
+{
+	Scene *scene = CTX_data_scene(C);
+	SlipData *td = data;
+	int i;
+
+	for (i = 0; i < td->num_seq; i++) {
+		Sequence *seq = td->seq_array[i];
+
+		if ((seq->type != SEQ_TYPE_META) && td->trim[i]) {
+			draw_sequence_extensions(scene, ar, seq);
+		}
+	}
+}
+
+static int slip_add_sequences_rec(ListBase *seqbasep, Sequence **seq_array, bool *trim, int offset, bool do_trim)
 {
 	Sequence *seq;
 	int num_items = 0;
 
 	for (seq = seqbasep->first; seq; seq = seq->next) {
-		if (!first_level || (!(seq->type & SEQ_TYPE_EFFECT) && (seq->flag & SELECT))) {
+		if (!do_trim || (!(seq->type & SEQ_TYPE_EFFECT) && (seq->flag & SELECT))) {
 			seq_array[offset + num_items] = seq;
-			trim[offset + num_items] = first_level;
+			trim[offset + num_items] = do_trim;
 			num_items++;
 
 			if (seq->type == SEQ_TYPE_META) {
@@ -1322,6 +1375,7 @@ static int sequencer_slip_invoke(bContext *C, wmOperator *op, const wmEvent *eve
 	SlipData *data;
 	Scene *scene = CTX_data_scene(C);
 	Editing *ed = BKE_sequencer_editing_get(scene, false);
+	ARegion *ar = CTX_wm_region(C);
 	float mouseloc[2];
 	int num_seq, i;
 	View2D *v2d = UI_view2d_fromcontext(C);
@@ -1338,11 +1392,20 @@ static int sequencer_slip_invoke(bContext *C, wmOperator *op, const wmEvent *eve
 	data->trim = MEM_mallocN(num_seq * sizeof(bool), "trimdata_trim");
 	data->num_seq = num_seq;
 
+	initNumInput(&data->num_input);
+	data->num_input.idx_max = 0;
+	data->num_input.val_flag[0] |= NUM_NO_FRACTION;
+	data->num_input.unit_sys = USER_UNIT_NONE;
+	data->num_input.unit_type[0] = 0;
+
+
 	slip_add_sequences_rec(ed->seqbasep, data->seq_array, data->trim, 0, true);
 
 	for (i = 0; i < num_seq; i++) {
 		transseq_backup(data->ts + i, data->seq_array[i]);
 	}
+
+	data->draw_handle = ED_region_draw_cb_activate(ar->type, draw_slip_extensions, data, REGION_DRAW_POST_VIEW);
 
 	UI_view2d_region_to_view(v2d, event->mval[0], event->mval[1], &mouseloc[0], &mouseloc[1]);
 
@@ -1352,6 +1415,9 @@ static int sequencer_slip_invoke(bContext *C, wmOperator *op, const wmEvent *eve
 	data->slow = false;
 
 	WM_event_add_modal_handler(C, op);
+
+	/* notify so we draw extensions immediately */
+	WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
 
 	return OPERATOR_RUNNING_MODAL;
 }
@@ -1449,8 +1515,35 @@ static int sequencer_slip_exec(bContext *C, wmOperator *op)
 	MEM_freeN(data->ts);
 	MEM_freeN(data);
 
-	if (success) return OPERATOR_FINISHED;
-	else return OPERATOR_CANCELLED;
+	if (success) {
+		WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
+		return OPERATOR_FINISHED;
+	}
+	else {
+		return OPERATOR_CANCELLED;
+	}
+}
+
+
+static void sequencer_slip_update_header(Scene *scene, ScrArea *sa, SlipData *data, int offset)
+{
+#define HEADER_LENGTH 40
+	char msg[HEADER_LENGTH];
+
+	if (sa) {
+		if (hasNumInput(&data->num_input)) {
+			char num_str[NUM_STR_REP_LEN];
+			outputNumInput(&data->num_input, num_str, &scene->unit);
+			BLI_snprintf(msg, HEADER_LENGTH, "Trim offset: %s", num_str);
+		}
+		else {
+			BLI_snprintf(msg, HEADER_LENGTH, "Trim offset: %d", offset);
+		}
+	}
+
+	ED_area_headerprint(sa, msg);
+
+#undef HEADER_LENGTH
 }
 
 static int sequencer_slip_modal(bContext *C, wmOperator *op, const wmEvent *event)
@@ -1458,47 +1551,65 @@ static int sequencer_slip_modal(bContext *C, wmOperator *op, const wmEvent *even
 	Scene *scene = CTX_data_scene(C);
 	SlipData *data = (SlipData *)op->customdata;
 	ScrArea *sa = CTX_wm_area(C);
+	ARegion *ar = CTX_wm_region(C);
+	const bool has_numInput = hasNumInput(&data->num_input);
+	bool handled = true;
+
+	/* Modal numinput active, try to handle numeric inputs first... */
+	if (event->val == KM_PRESS && has_numInput && handleNumInput(C, &data->num_input, event)) {
+		float offset;
+		applyNumInput(&data->num_input, &offset);
+
+		sequencer_slip_update_header(scene, sa, data, (int)offset);
+
+		RNA_int_set(op->ptr, "offset", offset);
+
+		if (sequencer_slip_recursively(scene, data, offset)) {
+			WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
+		}
+
+		return OPERATOR_RUNNING_MODAL;
+	}
 
 	switch (event->type) {
 		case MOUSEMOVE:
 		{
-			float mouseloc[2];
-			int offset;
-			int mouse_x;
-			View2D *v2d = UI_view2d_fromcontext(C);
+			if (!has_numInput) {
+				float mouseloc[2];
+				int offset;
+				int mouse_x;
+				View2D *v2d = UI_view2d_fromcontext(C);
 
-			if (data->slow) {
-				mouse_x = event->mval[0] - data->slow_offset;
-				mouse_x *= 0.1f;
-				mouse_x += data->slow_offset;
-			}
-			else {
-				mouse_x = event->mval[0];
-			}
+				if (data->slow) {
+					mouse_x = event->mval[0] - data->slow_offset;
+					mouse_x *= 0.1f;
+					mouse_x += data->slow_offset;
+				}
+				else {
+					mouse_x = event->mval[0];
+				}
 
 
-			/* choose the side based on which side of the playhead the mouse is on */
-			UI_view2d_region_to_view(v2d, mouse_x, 0, &mouseloc[0], &mouseloc[1]);
-			offset = mouseloc[0] - data->init_mouseloc[0];
+				/* choose the side based on which side of the playhead the mouse is on */
+				UI_view2d_region_to_view(v2d, mouse_x, 0, &mouseloc[0], &mouseloc[1]);
+				offset = mouseloc[0] - data->init_mouseloc[0];
 
-			RNA_int_set(op->ptr, "offset", offset);
+				sequencer_slip_update_header(scene, sa, data, offset);
 
-			if (sa) {
-#define HEADER_LENGTH 40
-				char msg[HEADER_LENGTH];
-				BLI_snprintf(msg, HEADER_LENGTH, "Trim offset: %d", offset);
-#undef HEADER_LENGTH
-				ED_area_headerprint(sa, msg);
-			}
+				RNA_int_set(op->ptr, "offset", offset);
 
-			if (sequencer_slip_recursively(scene, data, offset)) {
-				WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
+				if (sequencer_slip_recursively(scene, data, offset)) {
+					WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
+				}
 			}
 			break;
 		}
 
 		case LEFTMOUSE:
+		case RETKEY:
+		case SPACEKEY:
 		{
+			ED_region_draw_cb_exit(ar->type, data->draw_handle);
 			MEM_freeN(data->seq_array);
 			MEM_freeN(data->trim);
 			MEM_freeN(data->ts);
@@ -1527,6 +1638,8 @@ static int sequencer_slip_modal(bContext *C, wmOperator *op, const wmEvent *even
 				BKE_sequence_calc(scene, seq);
 			}
 
+			ED_region_draw_cb_exit(ar->type, data->draw_handle);
+
 			MEM_freeN(data->seq_array);
 			MEM_freeN(data->ts);
 			MEM_freeN(data->trim);
@@ -1546,17 +1659,34 @@ static int sequencer_slip_modal(bContext *C, wmOperator *op, const wmEvent *even
 
 		case RIGHTSHIFTKEY:
 		case LEFTSHIFTKEY:
-			if (event->val == KM_PRESS) {
-				data->slow = true;
-				data->slow_offset = event->mval[0];
-			}
-			else if (event->val == KM_RELEASE) {
-				data->slow = false;
+			if (!has_numInput) {
+				if (event->val == KM_PRESS) {
+					data->slow = true;
+					data->slow_offset = event->mval[0];
+				}
+				else if (event->val == KM_RELEASE) {
+					data->slow = false;
+				}
 			}
 			break;
 
 		default:
+			handled = false;
 			break;
+	}
+
+	/* Modal numinput inactive, try to handle numeric inputs last... */
+	if (!handled && event->val == KM_PRESS && handleNumInput(C, &data->num_input, event)) {
+		float offset;
+		applyNumInput(&data->num_input, &offset);
+
+		sequencer_slip_update_header(scene, sa, data, (int)offset);
+
+		RNA_int_set(op->ptr, "offset", offset);
+
+		if (sequencer_slip_recursively(scene, data, offset)) {
+			WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
+		}
 	}
 
 	return OPERATOR_RUNNING_MODAL;
@@ -1581,7 +1711,6 @@ void SEQUENCER_OT_slip(struct wmOperatorType *ot)
 	RNA_def_int(ot->srna, "offset", 0, INT32_MIN, INT32_MAX, "Offset", "Offset to the data of the strip",
 	            INT32_MIN, INT32_MAX);
 }
-
 
 /* mute operator */
 static int sequencer_mute_exec(bContext *C, wmOperator *op)
@@ -1621,7 +1750,7 @@ void SEQUENCER_OT_mute(struct wmOperatorType *ot)
 	/* identifiers */
 	ot->name = "Mute Strips";
 	ot->idname = "SEQUENCER_OT_mute";
-	ot->description = "Mute selected strips";
+	ot->description = "Mute (un)selected strips";
 	
 	/* api callbacks */
 	ot->exec = sequencer_mute_exec;
@@ -1672,7 +1801,7 @@ void SEQUENCER_OT_unmute(struct wmOperatorType *ot)
 	/* identifiers */
 	ot->name = "Un-Mute Strips";
 	ot->idname = "SEQUENCER_OT_unmute";
-	ot->description = "Un-Mute unselected rather than selected strips";
+	ot->description = "Unmute (un)selected strips";
 	
 	/* api callbacks */
 	ot->exec = sequencer_unmute_exec;
@@ -1681,7 +1810,7 @@ void SEQUENCER_OT_unmute(struct wmOperatorType *ot)
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 	
-	RNA_def_boolean(ot->srna, "unselected", 0, "Unselected", "UnMute unselected rather than selected strips");
+	RNA_def_boolean(ot->srna, "unselected", 0, "Unselected", "Unmute unselected rather than selected strips");
 }
 
 
@@ -1798,6 +1927,14 @@ void SEQUENCER_OT_reload(struct wmOperatorType *ot)
 }
 
 /* reload operator */
+static int sequencer_refresh_all_poll(bContext *C)
+{
+	if (G.is_rendering) {
+		return 0;
+	}
+	return sequencer_edit_poll(C);
+}
+
 static int sequencer_refresh_all_exec(bContext *C, wmOperator *UNUSED(op))
 {
 	Scene *scene = CTX_data_scene(C);
@@ -1819,7 +1956,7 @@ void SEQUENCER_OT_refresh_all(struct wmOperatorType *ot)
 	
 	/* api callbacks */
 	ot->exec = sequencer_refresh_all_exec;
-	ot->poll = sequencer_edit_poll;
+	ot->poll = sequencer_refresh_all_poll;
 }
 
 static int sequencer_reassign_inputs_exec(bContext *C, wmOperator *op)
@@ -2805,74 +2942,13 @@ void SEQUENCER_OT_view_selected(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER;
 }
 
-
-static int find_next_prev_edit(Scene *scene, int cfra,
-                               const short side,
-                               const bool do_skip_mute, const bool do_center)
-{
-	Editing *ed = BKE_sequencer_editing_get(scene, false);
-	Sequence *seq;
-	
-	int dist, best_dist, best_frame = cfra;
-	int seq_frames[2], seq_frames_tot;
-
-	best_dist = MAXFRAME * 2;
-
-	if (ed == NULL) return cfra;
-	
-	for (seq = ed->seqbasep->first; seq; seq = seq->next) {
-		int i;
-
-		if (do_skip_mute && (seq->flag & SEQ_MUTE)) {
-			continue;
-		}
-
-		if (do_center) {
-			seq_frames[0] = (seq->startdisp + seq->enddisp) / 2;
-			seq_frames_tot = 1;
-		}
-		else {
-			seq_frames[0] = seq->startdisp;
-			seq_frames[1] = seq->enddisp;
-
-			seq_frames_tot = 2;
-		}
-
-		for (i = 0; i < seq_frames_tot; i++) {
-			const int seq_frame = seq_frames[i];
-
-			dist = MAXFRAME * 2;
-
-			switch (side) {
-				case SEQ_SIDE_LEFT:
-					if (seq_frame < cfra) {
-						dist = cfra - seq_frame;
-					}
-					break;
-				case SEQ_SIDE_RIGHT:
-					if (seq_frame > cfra) {
-						dist = seq_frame - cfra;
-					}
-					break;
-			}
-
-			if (dist < best_dist) {
-				best_frame = seq_frame;
-				best_dist = dist;
-			}
-		}
-	}
-
-	return best_frame;
-}
-
 static bool strip_jump_internal(Scene *scene,
                                 const short side,
                                 const bool do_skip_mute, const bool do_center)
 {
 	bool changed = false;
 	int cfra = CFRA;
-	int nfra = find_next_prev_edit(scene, cfra, side, do_skip_mute, do_center);
+	int nfra = BKE_sequencer_find_next_prev_edit(scene, cfra, side, do_skip_mute, do_center, false);
 	
 	if (nfra != cfra) {
 		CFRA = nfra;
@@ -3105,7 +3181,7 @@ static void seq_copy_del_sound(Scene *scene, Sequence *seq)
 		}
 	}
 	else if (seq->scene_sound) {
-		sound_remove_scene_sound(scene, seq->scene_sound);
+		BKE_sound_remove_scene_sound(scene, seq->scene_sound);
 		seq->scene_sound = NULL;
 	}
 }
@@ -3262,10 +3338,10 @@ static int sequencer_swap_data_exec(bContext *C, wmOperator *op)
 	}
 
 	if (seq_act->scene_sound)
-		sound_remove_scene_sound(scene, seq_act->scene_sound);
+		BKE_sound_remove_scene_sound(scene, seq_act->scene_sound);
 
 	if (seq_other->scene_sound)
-		sound_remove_scene_sound(scene, seq_other->scene_sound);
+		BKE_sound_remove_scene_sound(scene, seq_other->scene_sound);
 
 	seq_act->scene_sound = NULL;
 	seq_other->scene_sound = NULL;
@@ -3273,8 +3349,8 @@ static int sequencer_swap_data_exec(bContext *C, wmOperator *op)
 	BKE_sequence_calc(scene, seq_act);
 	BKE_sequence_calc(scene, seq_other);
 
-	if (seq_act->sound) sound_add_scene_sound_defaults(scene, seq_act);
-	if (seq_other->sound) sound_add_scene_sound_defaults(scene, seq_other);
+	if (seq_act->sound) BKE_sound_add_scene_sound_defaults(scene, seq_act);
+	if (seq_other->sound) BKE_sound_add_scene_sound_defaults(scene, seq_other);
 
 	WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
 
@@ -3345,7 +3421,7 @@ void SEQUENCER_OT_view_ghost_border(wmOperatorType *ot)
 	ot->invoke = WM_border_select_invoke;
 	ot->exec = view_ghost_border_exec;
 	ot->modal = WM_border_select_modal;
-	ot->poll = sequencer_view_poll;
+	ot->poll = sequencer_view_preview_poll;
 	ot->cancel = WM_border_select_cancel;
 
 	/* flags */
@@ -3356,10 +3432,51 @@ void SEQUENCER_OT_view_ghost_border(wmOperatorType *ot)
 }
 
 /* rebuild_proxy operator */
-static int sequencer_rebuild_proxy_exec(bContext *C, wmOperator *UNUSED(op))
+
+static int sequencer_rebuild_proxy_invoke(bContext *C, wmOperator *UNUSED(op),
+                                          const wmEvent *UNUSED(event))
 {
 	seq_proxy_build_job(C);
 
+	return OPERATOR_FINISHED;
+}
+
+static int sequencer_rebuild_proxy_exec(bContext *C, wmOperator *UNUSED(op))
+{
+	Main *bmain = CTX_data_main(C);
+	Scene *scene = CTX_data_scene(C);
+	Editing *ed = BKE_sequencer_editing_get(scene, false);
+	Sequence *seq;
+	GSet *file_list;
+	
+	if (ed == NULL) {
+		return OPERATOR_CANCELLED;
+	}
+
+	file_list = BLI_gset_new(BLI_ghashutil_strhash_p, BLI_ghashutil_strcmp, "file list");
+	
+	SEQP_BEGIN(ed, seq)
+	{
+		if ((seq->flag & SELECT)) {
+			ListBase queue = {NULL, NULL};
+			LinkData *link;
+			short stop = 0, do_update;
+			float progress;
+
+			BKE_sequencer_proxy_rebuild_context(bmain, scene, seq, file_list, &queue);
+
+			for (link = queue.first; link; link = link->next) {
+				struct SeqIndexBuildContext *context = link->data;
+				BKE_sequencer_proxy_rebuild(context, &stop, &do_update, &progress);
+				BKE_sequencer_proxy_rebuild_finish(context, 0);
+			}
+			BKE_sequencer_free_imbuf(scene, &ed->seqbase, false);
+		}
+	}
+	SEQ_END
+
+	BLI_gset_free(file_list, MEM_freeN);
+	
 	return OPERATOR_FINISHED;
 }
 
@@ -3371,11 +3488,96 @@ void SEQUENCER_OT_rebuild_proxy(wmOperatorType *ot)
 	ot->description = "Rebuild all selected proxies and timecode indices using the job system";
 	
 	/* api callbacks */
+	ot->invoke = sequencer_rebuild_proxy_invoke;
 	ot->exec = sequencer_rebuild_proxy_exec;
-	ot->poll = ED_operator_sequencer_active;
 	
 	/* flags */
 	ot->flag = OPTYPE_REGISTER;
+}
+
+static int sequencer_enable_proxies_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
+{
+	return WM_operator_props_dialog_popup(C, op, 10 * UI_UNIT_X, 5 * UI_UNIT_Y);
+}
+
+static int sequencer_enable_proxies_exec(bContext *C, wmOperator *op)
+{
+	Scene *scene = CTX_data_scene(C);
+	Editing *ed = BKE_sequencer_editing_get(scene, false);
+	Sequence *seq;
+	bool proxy_25 = RNA_boolean_get(op->ptr, "proxy_25");
+	bool proxy_50 = RNA_boolean_get(op->ptr, "proxy_50");
+	bool proxy_75 = RNA_boolean_get(op->ptr, "proxy_75");
+	bool proxy_100 = RNA_boolean_get(op->ptr, "proxy_100");
+	bool override = RNA_boolean_get(op->ptr, "override");
+	bool turnon = true;
+
+	if (ed == NULL || !(proxy_25 || proxy_50 || proxy_75 || proxy_100)) {
+		turnon = false;
+	}
+
+	SEQP_BEGIN(ed, seq)
+	{
+		if ((seq->flag & SELECT)) {
+			if (ELEM(seq->type, SEQ_TYPE_MOVIE, SEQ_TYPE_IMAGE, SEQ_TYPE_META, SEQ_TYPE_SCENE, SEQ_TYPE_MULTICAM)) {
+				BKE_sequencer_proxy_set(seq, turnon);
+				if (seq->strip->proxy == NULL) {
+					continue;
+				}
+
+				if (proxy_25)
+					seq->strip->proxy->build_size_flags |= SEQ_PROXY_IMAGE_SIZE_25;
+				else 
+					seq->strip->proxy->build_size_flags &= ~SEQ_PROXY_IMAGE_SIZE_25;
+				
+				if (proxy_50)
+					seq->strip->proxy->build_size_flags |= SEQ_PROXY_IMAGE_SIZE_50;
+				else 
+					seq->strip->proxy->build_size_flags &= ~SEQ_PROXY_IMAGE_SIZE_50;
+				
+				if (proxy_75)
+					seq->strip->proxy->build_size_flags |= SEQ_PROXY_IMAGE_SIZE_75;
+				else 
+					seq->strip->proxy->build_size_flags &= ~SEQ_PROXY_IMAGE_SIZE_75;
+				
+				if (proxy_100)
+					seq->strip->proxy->build_size_flags |= SEQ_PROXY_IMAGE_SIZE_100;
+				else 
+					seq->strip->proxy->build_size_flags &= ~SEQ_PROXY_IMAGE_SIZE_100;
+				
+				if (!override)
+					seq->strip->proxy->build_flags |= SEQ_PROXY_SKIP_EXISTING;
+				else 
+					seq->strip->proxy->build_flags &= ~SEQ_PROXY_SKIP_EXISTING;
+			}
+		}
+	}
+	SEQ_END
+
+	WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
+	
+	return OPERATOR_FINISHED;
+}
+
+void SEQUENCER_OT_enable_proxies(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Set Selected Strip Proxies";
+	ot->idname = "SEQUENCER_OT_enable_proxies";
+	ot->description = "Enable selected proxies on all selected Movie strips";
+	
+	/* api callbacks */
+	ot->invoke = sequencer_enable_proxies_invoke;
+	ot->exec = sequencer_enable_proxies_exec;
+	
+	/* flags */
+	ot->flag = OPTYPE_REGISTER;
+	
+	RNA_def_boolean(ot->srna, "proxy_25", false, "25%", "");
+	RNA_def_boolean(ot->srna, "proxy_50", false, "50%", "");
+	RNA_def_boolean(ot->srna, "proxy_75", false, "75%", "");
+	RNA_def_boolean(ot->srna, "proxy_100", false, "100%", "");
+	RNA_def_boolean(ot->srna, "override", false, "Override", "");
 }
 
 /* change ops */
@@ -3512,12 +3714,21 @@ static int sequencer_change_path_exec(bContext *C, wmOperator *op)
 	Editing *ed = BKE_sequencer_editing_get(scene, false);
 	Sequence *seq = BKE_sequencer_active_get(scene);
 	const bool is_relative_path = RNA_boolean_get(op->ptr, "relative_path");
+	const bool use_placeholders = RNA_boolean_get(op->ptr, "use_placeholders");
+	int minframe, numdigits;
 
 	if (seq->type == SEQ_TYPE_IMAGE) {
 		char directory[FILE_MAX];
-		const int len = RNA_property_collection_length(op->ptr, RNA_struct_find_property(op->ptr, "files"));
+		int len;
 		StripElem *se;
 
+		/* need to find min/max frame for placeholders */
+		if (use_placeholders) {
+			len = sequencer_image_seq_get_minmax_frame(op, seq->sfra, &minframe, &numdigits);
+		}
+		else {
+			len = RNA_property_collection_length(op->ptr, RNA_struct_find_property(op->ptr, "files"));
+		}
 		if (len == 0)
 			return OPERATOR_CANCELLED;
 
@@ -3535,14 +3746,19 @@ static int sequencer_change_path_exec(bContext *C, wmOperator *op)
 		}
 		seq->strip->stripdata = se = MEM_callocN(len * sizeof(StripElem), "stripelem");
 
-		RNA_BEGIN (op->ptr, itemptr, "files")
-		{
-			char *filename = RNA_string_get_alloc(&itemptr, "name", NULL, 0);
-			BLI_strncpy(se->name, filename, sizeof(se->name));
-			MEM_freeN(filename);
-			se++;
+		if (use_placeholders) {
+			sequencer_image_seq_reserve_frames(op, se, len, minframe, numdigits);
 		}
-		RNA_END;
+		else {
+			RNA_BEGIN (op->ptr, itemptr, "files")
+			{
+				char *filename = RNA_string_get_alloc(&itemptr, "name", NULL, 0);
+				BLI_strncpy(se->name, filename, sizeof(se->name));
+				MEM_freeN(filename);
+				se++;
+			}
+			RNA_END;
+		}
 
 		/* reset these else we wont see all the images */
 		seq->anim_startofs = seq->anim_endofs = 0;
@@ -3614,8 +3830,117 @@ void SEQUENCER_OT_change_path(struct wmOperatorType *ot)
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
-	WM_operator_properties_filesel(ot, FOLDERFILE | IMAGEFILE | MOVIEFILE, FILE_SPECIAL, FILE_OPENFILE,
+	WM_operator_properties_filesel(ot, FILE_TYPE_FOLDER | FILE_TYPE_IMAGE | FILE_TYPE_MOVIE, FILE_SPECIAL, FILE_OPENFILE,
 	                               WM_FILESEL_DIRECTORY | WM_FILESEL_RELPATH | WM_FILESEL_FILEPATH | WM_FILESEL_FILES,
-	                               FILE_DEFAULTDISPLAY);
+	                               FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);
+	RNA_def_boolean(ot->srna, "use_placeholders", false, "Use Placeholders", "Use placeholders for missing frames of the strip");
 }
 
+static int sequencer_export_subtitles_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
+{
+	if (!RNA_struct_property_is_set(op->ptr, "filepath")) {
+		char filepath[FILE_MAX];
+
+		if (G.main->name[0] == 0)
+			BLI_strncpy(filepath, "untitled", sizeof(filepath));
+		else
+			BLI_strncpy(filepath, G.main->name, sizeof(filepath));
+
+		BLI_replace_extension(filepath, sizeof(filepath), ".srt");
+		RNA_string_set(op->ptr, "filepath", filepath);
+	}
+
+	WM_event_add_fileselect(C, op);
+
+	return OPERATOR_RUNNING_MODAL;
+}
+
+static int sequencer_export_subtitles_exec(bContext *C, wmOperator *op)
+{
+	Scene *scene = CTX_data_scene(C);
+	Sequence *seq = BKE_sequencer_active_get(scene);
+	Editing *ed = BKE_sequencer_editing_get(scene, false);
+	int iter = 0;
+	FILE *file;
+	char filepath[FILE_MAX];
+
+	if (!RNA_struct_property_is_set(op->ptr, "filepath")) {
+		BKE_report(op->reports, RPT_ERROR, "No filename given");
+		return OPERATOR_CANCELLED;
+	}
+
+	RNA_string_get(op->ptr, "filepath", filepath);
+	BLI_ensure_extension(filepath, sizeof(filepath), ".srt");
+
+	/* Avoid File write exceptions */
+	if (!BLI_exists(filepath)) {
+		BLI_make_existing_file(filepath);
+		if (!BLI_file_touch(filepath)) {
+			BKE_report(op->reports, RPT_ERROR, "Can't create subtitle file");
+			return OPERATOR_CANCELLED;
+		}
+	}
+	else if (!BLI_file_is_writable(filepath)) {
+		BKE_report(op->reports, RPT_ERROR, "Can't overwrite export file");
+		return OPERATOR_CANCELLED;
+	}
+
+	/* time to open and write! */
+	file = BLI_fopen(filepath, "w");
+
+	SEQ_BEGIN(ed, seq)
+	{
+		if (seq->type == SEQ_TYPE_TEXT) {
+			TextVars *data = seq->effectdata;
+			char timecode_str[32];
+			double sec;
+			int frac;
+			int len;
+			fprintf(file, "%d\n", iter++);
+			sec = FRA2TIME(seq->startdisp);
+			frac = 1000 * (sec - floor(sec));
+			sec = floor(sec);
+			BLI_timecode_string_from_time(timecode_str, sizeof(timecode_str), 1, sec, FPS, USER_TIMECODE_SMPTE_FULL);
+			len = strlen(timecode_str);
+			timecode_str[len - 3] = 0;
+			fprintf(file, "%s,%d", timecode_str, frac);
+			sec = FRA2TIME(seq->enddisp);
+			BLI_timecode_string_from_time(timecode_str, sizeof(timecode_str), 1, sec, FPS, USER_TIMECODE_SMPTE_FULL);
+			len = strlen(timecode_str);
+			timecode_str[len - 3] = 0;
+			fprintf(file, " --> %s,%d\n", timecode_str, frac);
+			fprintf(file, "%s\n\n", data->text);
+		}
+	}
+	SEQ_END
+
+	fclose(file);
+
+	return OPERATOR_FINISHED;
+}
+
+static int sequencer_strip_is_text_poll(bContext *C)
+{
+	Editing *ed;
+	Sequence *seq;
+	return (((ed = BKE_sequencer_editing_get(CTX_data_scene(C), false)) != NULL) && ((seq = ed->act_seq) != NULL) && (seq->type == SEQ_TYPE_TEXT));
+}
+
+void SEQUENCER_OT_export_subtitles(struct wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Export Subtitles";
+	ot->idname = "SEQUENCER_OT_export_subtitles";
+	ot->description = "Export .srt file containing text strips";
+
+	/* api callbacks */
+	ot->exec = sequencer_export_subtitles_exec;
+	ot->invoke = sequencer_export_subtitles_invoke;
+	ot->poll = sequencer_strip_is_text_poll;
+
+	/* flags */
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+	WM_operator_properties_filesel(ot,  FILE_TYPE_FOLDER, FILE_BLENDER, FILE_SAVE,
+	                               WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);
+}

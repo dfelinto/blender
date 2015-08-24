@@ -31,10 +31,12 @@
  *  \ingroup bke
  */
 
-struct MPoly;
+struct MVert;
 struct MEdge;
+struct MPoly;
 struct MLoop;
 struct MLoopUV;
+struct MLoopTri;
 
 /* map from uv vertex to face (for select linked, stitch, uv suburf) */
 
@@ -101,11 +103,16 @@ typedef struct MeshElemMap {
 /* mapping */
 UvVertMap *BKE_mesh_uv_vert_map_create(
         struct MPoly *mpoly, struct MLoop *mloop, struct MLoopUV *mloopuv,
-        unsigned int totpoly, unsigned int totvert, int selected, float *limit);
+        unsigned int totpoly, unsigned int totvert,
+        const float limit[2], const bool selected, const bool use_winding);
 UvMapVert *BKE_mesh_uv_vert_map_get_vert(UvVertMap *vmap, unsigned int v);
 void       BKE_mesh_uv_vert_map_free(UvVertMap *vmap);
 
 void BKE_mesh_vert_poly_map_create(
+        MeshElemMap **r_map, int **r_mem,
+        const struct MPoly *mface, const struct MLoop *mloop,
+        int totvert, int totface, int totloop);
+void BKE_mesh_vert_loop_map_create(
         MeshElemMap **r_map, int **r_mem,
         const struct MPoly *mface, const struct MLoop *mloop,
         int totvert, int totface, int totloop);
@@ -121,8 +128,65 @@ void BKE_mesh_origindex_map_create(
         MeshElemMap **r_map, int **r_mem,
         const int totorig,
         const int *final_origindex, const int totfinal);
+void BKE_mesh_origindex_map_create_looptri(
+        MeshElemMap **r_map, int **r_mem,
+        const struct MPoly *mpoly, const int mpoly_num,
+        const struct MLoopTri *looptri, const int looptri_num);
 
-/* smoothgroups */
+/* islands */
+
+/* Loop islands data helpers. */
+enum {
+	MISLAND_TYPE_NONE = 0,
+	MISLAND_TYPE_VERT = 1,
+	MISLAND_TYPE_EDGE = 2,
+	MISLAND_TYPE_POLY = 3,
+	MISLAND_TYPE_LOOP = 4,
+};
+
+typedef struct MeshIslandStore {
+	short item_type;      /* MISLAND_TYPE_... */
+	short island_type;    /* MISLAND_TYPE_... */
+	short innercut_type;  /* MISLAND_TYPE_... */
+
+	int  items_to_islands_num;
+	int *items_to_islands;  /* map the item to the island index */
+
+	int                  islands_num;
+	size_t               islands_num_alloc;
+	struct MeshElemMap **islands;    /* Array of pointers, one item per island. */
+	struct MeshElemMap **innercuts;  /* Array of pointers, one item per island. */
+
+	struct MemArena *mem;  /* Memory arena, internal use only. */
+} MeshIslandStore;
+
+void BKE_mesh_loop_islands_init(
+        MeshIslandStore *island_store,
+        const short item_type, const int item_num, const short island_type, const short innercut_type);
+void BKE_mesh_loop_islands_clear(MeshIslandStore *island_store);
+void BKE_mesh_loop_islands_free(MeshIslandStore *island_store);
+void BKE_mesh_loop_islands_add(
+        MeshIslandStore *islands, const int item_num, int *item_indices,
+        const int num_island_items, int *island_item_indices,
+        const int num_innercut_items, int *innercut_item_indices);
+
+typedef bool (*MeshRemapIslandsCalc)(
+        struct MVert *verts, const int totvert,
+        struct MEdge *edges, const int totedge,
+        struct MPoly *polys, const int totpoly,
+        struct MLoop *loops, const int totloop,
+        struct MeshIslandStore *r_island_store);
+
+/* Above vert/UV mapping stuff does not do what we need here, but does things we do not need here.
+ * So better keep them separated for now, I think.
+ */
+bool BKE_mesh_calc_islands_loop_poly_uv(
+        struct MVert *verts, const int totvert,
+        struct MEdge *edges, const int totedge,
+        struct MPoly *polys, const int totpoly,
+        struct MLoop *loops, const int totloop,
+        MeshIslandStore *r_island_store);
+
 int *BKE_mesh_calc_smoothgroups(
         const struct MEdge *medge, const int totedge,
         const struct MPoly *mpoly, const int totpoly,
@@ -137,6 +201,16 @@ int *BKE_mesh_calc_smoothgroups(
      (_mf->v2 == _v) ? 1 :                                                  \
      (_mf->v3 == _v) ? 2 :                                                  \
      (_mf->v4 && _mf->v4 == _v) ? 3 : -1)                                   \
+    )
+
+/* use on looptri vertex values */
+#define BKE_MESH_TESSTRI_VINDEX_ORDER(_tri, _v)  (                          \
+    (CHECK_TYPE_ANY(_tri, unsigned int *, int *, int[3],                    \
+                          const unsigned int *, const int *, const int[3]), \
+     CHECK_TYPE_ANY(_v, unsigned int, const unsigned int, int, const int)), \
+    (((_tri)[0] == _v) ? 0 :                                                \
+     ((_tri)[1] == _v) ? 1 :                                                \
+     ((_tri)[2] == _v) ? 2 : -1)                                            \
     )
 
 #endif  /* __BKE_MESH_MAPPING_H__ */

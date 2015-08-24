@@ -36,10 +36,6 @@
 #include "DNA_curve_types.h"
 #include "DNA_scene_types.h"
 
-#include "BLI_math.h"
-#include "BLI_blenlib.h"
-
-
 #include "RNA_access.h"
 
 #include "WM_api.h"
@@ -58,7 +54,6 @@ void ED_operatortypes_curve(void)
 {
 	WM_operatortype_append(FONT_OT_text_insert);
 	WM_operatortype_append(FONT_OT_line_break);
-	WM_operatortype_append(FONT_OT_insert_lorem);
 
 	WM_operatortype_append(FONT_OT_case_toggle);
 	WM_operatortype_append(FONT_OT_case_set);
@@ -133,6 +128,8 @@ void ED_operatortypes_curve(void)
 	WM_operatortype_append(CURVE_OT_select_less);
 	WM_operatortype_append(CURVE_OT_select_random);
 	WM_operatortype_append(CURVE_OT_select_nth);
+	WM_operatortype_append(CURVE_OT_select_similar);
+	WM_operatortype_append(CURVE_OT_shortest_path_pick);
 
 	WM_operatortype_append(CURVE_OT_switch_direction);
 	WM_operatortype_append(CURVE_OT_subdivide);
@@ -246,11 +243,14 @@ void ED_keymap_curve(wmKeyConfig *keyconf)
 	WM_keymap_add_item(keymap, "CURVE_OT_select_more", PADPLUSKEY, KM_PRESS, KM_CTRL, 0);
 	WM_keymap_add_item(keymap, "CURVE_OT_select_less", PADMINUS, KM_PRESS, KM_CTRL, 0);
 	WM_keymap_add_item(keymap, "CURVE_OT_select_linked", LKEY, KM_PRESS, KM_CTRL, 0);
+	WM_keymap_add_item(keymap, "CURVE_OT_select_similar", GKEY, KM_PRESS, KM_SHIFT, 0);
 
 	kmi = WM_keymap_add_item(keymap, "CURVE_OT_select_linked_pick", LKEY, KM_PRESS, 0, 0);
 	RNA_boolean_set(kmi->ptr, "deselect", false);
 	kmi = WM_keymap_add_item(keymap, "CURVE_OT_select_linked_pick", LKEY, KM_PRESS, KM_SHIFT, 0);
 	RNA_boolean_set(kmi->ptr, "deselect", true);
+
+	WM_keymap_add_item(keymap, "CURVE_OT_shortest_path_pick", SELECTMOUSE, KM_CLICK, KM_CTRL, 0);
 
 	WM_keymap_add_item(keymap, "CURVE_OT_separate", PKEY, KM_PRESS, 0, 0);
 	WM_keymap_add_item(keymap, "CURVE_OT_split", YKEY, KM_PRESS, 0, 0);

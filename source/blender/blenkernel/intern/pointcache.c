@@ -50,14 +50,14 @@
 #include "BLI_threads.h"
 #include "BLI_math.h"
 #include "BLI_utildefines.h"
-#include "BLI_system.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "PIL_time.h"
 
 #include "WM_api.h"
 
+#include "BKE_appdir.h"
 #include "BKE_anim.h"
 #include "BKE_blender.h"
 #include "BKE_cloth.h"
@@ -84,8 +84,12 @@
 #endif
 
 #ifdef WITH_LZO
-#include "minilzo.h"
-#define LZO_HEAP_ALLOC(var,size) \
+#  ifdef WITH_SYSTEM_LZO
+#    include <lzo/lzo1x.h>
+#  else
+#    include "minilzo.h"
+#  endif
+#  define LZO_HEAP_ALLOC(var,size) \
 	lzo_align_t __LZO_MMODEL var [ ((size) + (sizeof(lzo_align_t) - 1)) / sizeof(lzo_align_t) ]
 #endif
 
@@ -539,7 +543,7 @@ static void ptcache_cloth_interpolate(int index, void *cloth_v, void **data, flo
 static int  ptcache_cloth_totpoint(void *cloth_v, int UNUSED(cfra))
 {
 	ClothModifierData *clmd= cloth_v;
-	return clmd->clothObject ? clmd->clothObject->numverts : 0;
+	return clmd->clothObject ? clmd->clothObject->mvert_num : 0;
 }
 
 static void ptcache_cloth_error(void *cloth_v, const char *message)
@@ -772,7 +776,7 @@ static int ptcache_smoke_read(PTCacheFile *pf, void *smoke_v)
 
 	/* version header */
 	ptcache_file_read(pf, version, 4, sizeof(char));
-	if (strncmp(version, SMOKE_CACHE_VERSION, 4))
+	if (!STREQLEN(version, SMOKE_CACHE_VERSION, 4))
 	{
 		/* reset file pointer */
 		fseek(pf->fp, -4, SEEK_CUR);
@@ -954,7 +958,7 @@ static int ptcache_dynamicpaint_read(PTCacheFile *pf, void *dp_v)
 	
 	/* version header */
 	ptcache_file_read(pf, version, 1, sizeof(char) * 4);
-	if (strncmp(version, DPAINT_CACHE_VERSION, 4)) {
+	if (!STREQLEN(version, DPAINT_CACHE_VERSION, 4)) {
 		printf("Dynamic Paint: Invalid cache version: '%c%c%c%c'!\n", UNPACK4(version));
 		return 0;
 	}
@@ -1469,7 +1473,7 @@ static int ptcache_path(PTCacheID *pid, char *filename)
 	
 	/* use the temp path. this is weak but better then not using point cache at all */
 	/* temporary directory is assumed to exist and ALWAYS has a trailing slash */
-	BLI_snprintf(filename, MAX_PTCACHE_PATH, "%s"PTCACHE_PATH, BLI_temp_dir_session());
+	BLI_snprintf(filename, MAX_PTCACHE_PATH, "%s"PTCACHE_PATH, BKE_tempdir_session());
 	
 	return BLI_add_slash(filename); /* new strlen() */
 }
@@ -1716,7 +1720,7 @@ static int ptcache_file_header_begin_read(PTCacheFile *pf)
 	if (fread(bphysics, sizeof(char), 8, pf->fp) != 8)
 		error = 1;
 	
-	if (!error && strncmp(bphysics, "BPHYSICS", 8))
+	if (!error && !STREQLEN(bphysics, "BPHYSICS", 8))
 		error = 1;
 
 	if (!error && !fread(&typeflag, sizeof(unsigned int), 1, pf->fp))
@@ -2447,7 +2451,7 @@ static int ptcache_write_needed(PTCacheID *pid, int cfra, int *overwrite)
 	PointCache *cache = pid->cache;
 	int ofra = 0, efra = cache->endframe;
 
-	/* allways start from scratch on the first frame */
+	/* always start from scratch on the first frame */
 	if (cfra && cfra == cache->startframe) {
 		BKE_ptcache_id_clear(pid, PTCACHE_CLEAR_ALL, cfra);
 		cache->flag &= ~PTCACHE_REDO_NEEDED;
@@ -2571,17 +2575,24 @@ void BKE_ptcache_id_clear(PTCacheID *pid, int mode, unsigned int cfra)
 		if (pid->cache->flag & PTCACHE_DISK_CACHE) {
 			ptcache_path(pid, path);
 			
-			len = ptcache_filename(pid, filename, cfra, 0, 0); /* no path */
-			
 			dir = opendir(path);
 			if (dir==NULL)
 				return;
-
+			
+			len = ptcache_filename(pid, filename, cfra, 0, 0); /* no path */
+			/* append underscore terminator to ensure we don't match similar names
+			 * from objects whose names start with the same prefix
+			 */
+			if (len < sizeof(filename) - 2) {
+				BLI_strncpy(filename + len, "_", sizeof(filename) - 2 - len);
+				len += 1;
+			}
+			
 			BLI_snprintf(ext, sizeof(ext), "_%02u"PTCACHE_EXT, pid->stack_index);
 			
 			while ((de = readdir(dir)) != NULL) {
 				if (strstr(de->d_name, ext)) { /* do we have the right extension?*/
-					if (strncmp(filename, de->d_name, len ) == 0) { /* do we have the right prefix */
+					if (STREQLEN(filename, de->d_name, len)) { /* do we have the right prefix */
 						if (mode == PTCACHE_CLEAR_ALL) {
 							pid->cache->last_exact = MIN2(pid->cache->startframe, 0);
 							BLI_join_dirfile(path_full, sizeof(path_full), path, de->d_name);
@@ -2787,7 +2798,7 @@ void BKE_ptcache_id_time(PTCacheID *pid, Scene *scene, float cfra, int *startfra
 			
 			while ((de = readdir(dir)) != NULL) {
 				if (strstr(de->d_name, ext)) { /* do we have the right extension?*/
-					if (strncmp(filename, de->d_name, len ) == 0) { /* do we have the right prefix */
+					if (STREQLEN(filename, de->d_name, len)) { /* do we have the right prefix */
 						/* read the number of the file */
 						unsigned int frame, len2 = (int)strlen(de->d_name);
 						char num[7];
@@ -2968,7 +2979,7 @@ void BKE_ptcache_remove(void)
 			return;
 		
 		while ((de = readdir(dir)) != NULL) {
-			if ( strcmp(de->d_name, ".")==0 || strcmp(de->d_name, "..")==0) {
+			if (FILENAME_IS_CURRPAR(de->d_name)) {
 				/* do nothing */
 			}
 			else if (strstr(de->d_name, PTCACHE_EXT)) { /* do we have the right extension?*/
@@ -3082,7 +3093,7 @@ static PointCache *ptcache_copy(PointCache *cache, bool copy_data)
 }
 
 /* returns first point cache */
-PointCache *BKE_ptcache_copy_list(ListBase *ptcaches_new, ListBase *ptcaches_old, bool copy_data)
+PointCache *BKE_ptcache_copy_list(ListBase *ptcaches_new, const ListBase *ptcaches_old, bool copy_data)
 {
 	PointCache *cache = ptcaches_old->first;
 
@@ -3343,7 +3354,7 @@ void BKE_ptcache_bake(PTCacheBaker *baker)
 			}
 		}
 
-	BLI_end_threads(&threads);
+		BLI_end_threads(&threads);
 	}
 	/* clear baking flag */
 	if (pid) {
@@ -3525,7 +3536,7 @@ void BKE_ptcache_disk_cache_rename(PTCacheID *pid, const char *name_src, const c
 
 	while ((de = readdir(dir)) != NULL) {
 		if (strstr(de->d_name, ext)) { /* do we have the right extension?*/
-			if (strncmp(old_filename, de->d_name, len ) == 0) { /* do we have the right prefix */
+			if (STREQLEN(old_filename, de->d_name, len)) { /* do we have the right prefix */
 				/* read the number of the file */
 				int frame, len2 = (int)strlen(de->d_name);
 				char num[7];
@@ -3580,7 +3591,7 @@ void BKE_ptcache_load_external(PTCacheID *pid)
 	
 	while ((de = readdir(dir)) != NULL) {
 		if (strstr(de->d_name, ext)) { /* do we have the right extension?*/
-			if (strncmp(filename, de->d_name, len ) == 0) { /* do we have the right prefix */
+			if (STREQLEN(filename, de->d_name, len)) { /* do we have the right prefix */
 				/* read the number of the file */
 				int frame, len2 = (int)strlen(de->d_name);
 				char num[7];

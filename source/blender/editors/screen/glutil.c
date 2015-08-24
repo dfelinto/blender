@@ -45,7 +45,6 @@
 #include "BIF_gl.h"
 #include "BIF_glutil.h"
 
-#include "GPU_extensions.h"
 
 #include "IMB_colormanagement.h"
 #include "IMB_imbuf_types.h"
@@ -580,25 +579,25 @@ void glaDrawPixelsTexScaled(float x, float y, int img_w, int img_h, int format, 
 				continue;
 			
 			if (type == GL_FLOAT) {
-				glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, subpart_w, subpart_h, format, GL_FLOAT, &f_rect[subpart_y * offset_y * img_w * components + subpart_x * offset_x * components]);
+				glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, subpart_w, subpart_h, format, GL_FLOAT, &f_rect[((size_t)subpart_y) * offset_y * img_w * components + subpart_x * offset_x * components]);
 				
 				/* add an extra border of pixels so linear looks ok at edges of full image. */
 				if (subpart_w < tex_w)
-					glTexSubImage2D(GL_TEXTURE_2D, 0, subpart_w, 0, 1, subpart_h, format, GL_FLOAT, &f_rect[subpart_y * offset_y * img_w * components + (subpart_x * offset_x + subpart_w - 1) * components]);
+					glTexSubImage2D(GL_TEXTURE_2D, 0, subpart_w, 0, 1, subpart_h, format, GL_FLOAT, &f_rect[((size_t)subpart_y) * offset_y * img_w * components + (subpart_x * offset_x + subpart_w - 1) * components]);
 				if (subpart_h < tex_h)
-					glTexSubImage2D(GL_TEXTURE_2D, 0, 0, subpart_h, subpart_w, 1, format, GL_FLOAT, &f_rect[(subpart_y * offset_y + subpart_h - 1) * img_w * components + subpart_x * offset_x * components]);
+					glTexSubImage2D(GL_TEXTURE_2D, 0, 0, subpart_h, subpart_w, 1, format, GL_FLOAT, &f_rect[(((size_t)subpart_y) * offset_y + subpart_h - 1) * img_w * components + subpart_x * offset_x * components]);
 				if (subpart_w < tex_w && subpart_h < tex_h)
-					glTexSubImage2D(GL_TEXTURE_2D, 0, subpart_w, subpart_h, 1, 1, format, GL_FLOAT, &f_rect[(subpart_y * offset_y + subpart_h - 1) * img_w * components + (subpart_x * offset_x + subpart_w - 1) * components]);
+					glTexSubImage2D(GL_TEXTURE_2D, 0, subpart_w, subpart_h, 1, 1, format, GL_FLOAT, &f_rect[(((size_t)subpart_y) * offset_y + subpart_h - 1) * img_w * components + (subpart_x * offset_x + subpart_w - 1) * components]);
 			}
 			else {
-				glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, subpart_w, subpart_h, format, GL_UNSIGNED_BYTE, &uc_rect[subpart_y * offset_y * img_w * components + subpart_x * offset_x * components]);
+				glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, subpart_w, subpart_h, format, GL_UNSIGNED_BYTE, &uc_rect[((size_t)subpart_y) * offset_y * img_w * components + subpart_x * offset_x * components]);
 				
 				if (subpart_w < tex_w)
-					glTexSubImage2D(GL_TEXTURE_2D, 0, subpart_w, 0, 1, subpart_h, format, GL_UNSIGNED_BYTE, &uc_rect[subpart_y * offset_y * img_w * components + (subpart_x * offset_x + subpart_w - 1) * components]);
+					glTexSubImage2D(GL_TEXTURE_2D, 0, subpart_w, 0, 1, subpart_h, format, GL_UNSIGNED_BYTE, &uc_rect[((size_t)subpart_y) * offset_y * img_w * components + (subpart_x * offset_x + subpart_w - 1) * components]);
 				if (subpart_h < tex_h)
-					glTexSubImage2D(GL_TEXTURE_2D, 0, 0, subpart_h, subpart_w, 1, format, GL_UNSIGNED_BYTE, &uc_rect[(subpart_y * offset_y + subpart_h - 1) * img_w * components + subpart_x * offset_x * components]);
+					glTexSubImage2D(GL_TEXTURE_2D, 0, 0, subpart_h, subpart_w, 1, format, GL_UNSIGNED_BYTE, &uc_rect[(((size_t)subpart_y) * offset_y + subpart_h - 1) * img_w * components + subpart_x * offset_x * components]);
 				if (subpart_w < tex_w && subpart_h < tex_h)
-					glTexSubImage2D(GL_TEXTURE_2D, 0, subpart_w, subpart_h, 1, 1, format, GL_UNSIGNED_BYTE, &uc_rect[(subpart_y * offset_y + subpart_h - 1) * img_w * components + (subpart_x * offset_x + subpart_w - 1) * components]);
+					glTexSubImage2D(GL_TEXTURE_2D, 0, subpart_w, subpart_h, 1, 1, format, GL_UNSIGNED_BYTE, &uc_rect[(((size_t)subpart_y) * offset_y + subpart_h - 1) * img_w * components + (subpart_x * offset_x + subpart_w - 1) * components]);
 			}
 
 			glEnable(GL_TEXTURE_2D);
@@ -840,16 +839,16 @@ void gla2DDrawTranslatePt(gla2DDrawInfo *di, float wo_x, float wo_y, int *r_sc_x
 }
 
 /**
- * Translate the \a world point from world coordiantes into screen space.
+ * Translate the \a world point from world coordinates into screen space.
  */
-void gla2DDrawTranslatePtv(gla2DDrawInfo *di, float world[2], int screen_r[2])
+void gla2DDrawTranslatePtv(gla2DDrawInfo *di, float world[2], int r_screen[2])
 {
 	screen_r[0] = (world[0] - di->world_rect.xmin) * di->wo_to_sc[0];
 	screen_r[1] = (world[1] - di->world_rect.ymin) * di->wo_to_sc[1];
 }
 
 /**
- * Restores the previous OpenGL state and free's the auxilary gla data.
+ * Restores the previous OpenGL state and frees the auxiliary gla data.
  */
 void glaEnd2DDraw(gla2DDrawInfo *di)
 {
@@ -992,7 +991,7 @@ void bgl_get_mats(bglMats *mats)
 /**
  * \note \a viewdist is only for ortho at the moment.
  */
-void bglPolygonOffset(float viewdist, float dist) 
+void bglPolygonOffset(float viewdist, float dist)
 {
 	static float winmat[16], offset = 0.0;
 	
@@ -1008,8 +1007,25 @@ void bglPolygonOffset(float viewdist, float dist)
 		
 		/* dist is from camera to center point */
 		
-		if (winmat[15] > 0.5f) offs = 0.00001f * dist * viewdist;  // ortho tweaking
-		else offs = 0.0005f * dist;  // should be clipping value or so...
+		if (winmat[15] > 0.5f) {
+#if 1
+			offs = 0.00001f * dist * viewdist;  // ortho tweaking
+#else
+			static float depth_fac = 0.0f;
+			if (depth_fac == 0.0f) {
+				int depthbits;
+				glGetIntegerv(GL_DEPTH_BITS, &depthbits);
+				depth_fac = 1.0f / (float)((1 << depthbits) - 1);
+			}
+			offs = (-1.0 / winmat[10]) * dist * depth_fac;
+
+			UNUSED_VARS(viewdist);
+#endif
+		}
+		else {
+			/* should be clipping value or so... */
+			offs = 0.0005f * dist;
+		}
 		
 		winmat[14] -= offs;
 		offset += offs;
@@ -1137,9 +1153,9 @@ void glaDrawImBuf_glsl_ctx(const bContext *C, ImBuf *ibuf, float x, float y, int
 
 void cpack(unsigned int x)
 {
-	glColor3ub( ( (x)        & 0xFF),
-	            (((x) >>  8) & 0xFF),
-	            (((x) >> 16) & 0xFF) );
+	glColor3ub(( (x)        & 0xFF),
+	           (((x) >>  8) & 0xFF),
+	           (((x) >> 16) & 0xFF));
 }
 
 void glaDrawBorderCorners(const rcti *border, float zoomx, float zoomy)

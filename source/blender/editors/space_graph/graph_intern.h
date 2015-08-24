@@ -32,11 +32,8 @@
 #define __GRAPH_INTERN_H__
 
 struct bContext;
-struct wmWindowManager;
 struct bAnimContext;
 struct bAnimListElem;
-struct FCurve;
-struct FModifier;
 struct SpaceIpo;
 struct ScrArea;
 struct ARegion;
@@ -62,6 +59,7 @@ void graph_draw_ghost_curves(struct bAnimContext *ac, struct SpaceIpo *sipo, str
 void GRAPH_OT_select_all_toggle(struct wmOperatorType *ot);
 void GRAPH_OT_select_border(struct wmOperatorType *ot);
 void GRAPH_OT_select_lasso(struct wmOperatorType *ot);
+void GRAPH_OT_select_circle(struct wmOperatorType *ot);
 void GRAPH_OT_select_column(struct wmOperatorType *ot);
 void GRAPH_OT_select_linked(struct wmOperatorType *ot);
 void GRAPH_OT_select_more(struct wmOperatorType *ot);
@@ -93,6 +91,7 @@ void get_graph_keyframe_extents(struct bAnimContext *ac, float *xmin, float *xma
 void GRAPH_OT_previewrange_set(struct wmOperatorType *ot);
 void GRAPH_OT_view_all(struct wmOperatorType *ot);
 void GRAPH_OT_view_selected(struct wmOperatorType *ot);
+void GRAPH_OT_view_frame(struct wmOperatorType *ot);
 
 void GRAPH_OT_click_insert(struct wmOperatorType *ot);
 void GRAPH_OT_keyframe_insert(struct wmOperatorType *ot);

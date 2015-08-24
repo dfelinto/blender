@@ -182,7 +182,7 @@ int imb_is_a_photoshop(const char *filename)
 	return BLI_testextensie_array(filename, photoshop_extension);
 }
 
-int imb_save_photoshop(struct ImBuf *ibuf, const char *name, int flags)
+int imb_save_photoshop(struct ImBuf *ibuf, const char * /*name*/, int flags)
 {
 	if (flags & IB_mem) {
 		std::cerr << __func__ << ": Photoshop PSD-save: Create PSD in memory"
@@ -268,7 +268,7 @@ struct ImBuf *imb_load_photoshop(const char *filename, int flags, char colorspac
 		return NULL;
 
 	/* ImBuf always needs 4 channels */
-	ibuf->ftype = PSD;
+	ibuf->ftype = IMB_FTYPE_PSD;
 	ibuf->channels = 4;
 	ibuf->planes = (3 + (is_alpha ? 1 : 0)) * 4 << basesize;
 

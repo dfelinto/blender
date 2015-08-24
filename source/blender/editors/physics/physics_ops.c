@@ -29,10 +29,6 @@
 
 #include <stdlib.h>
 
-#include "DNA_scene_types.h"
-
-#include "BLI_utildefines.h"
-
 #include "RNA_access.h"
 
 #include "WM_api.h"
@@ -68,6 +64,8 @@ static void operatortypes_particle(void)
 
 	WM_operatortype_append(PARTICLE_OT_brush_edit);
 
+	WM_operatortype_append(PARTICLE_OT_shape_cut);
+
 	WM_operatortype_append(PARTICLE_OT_particle_edit_toggle);
 	WM_operatortype_append(PARTICLE_OT_edited_clear);
 
@@ -82,6 +80,7 @@ static void operatortypes_particle(void)
 	WM_operatortype_append(PARTICLE_OT_target_move_down);
 	WM_operatortype_append(PARTICLE_OT_connect_hair);
 	WM_operatortype_append(PARTICLE_OT_disconnect_hair);
+	WM_operatortype_append(PARTICLE_OT_copy_particle_systems);
 
 	WM_operatortype_append(PARTICLE_OT_dupliob_copy);
 	WM_operatortype_append(PARTICLE_OT_dupliob_remove);

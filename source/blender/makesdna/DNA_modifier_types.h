@@ -82,6 +82,9 @@ typedef enum ModifierType {
 	eModifierType_MeshCache         = 46,
 	eModifierType_LaplacianDeform   = 47,
 	eModifierType_Wireframe         = 48,
+	eModifierType_DataTransfer      = 49,
+	eModifierType_NormalEdit        = 50,
+	eModifierType_CorrectiveSmooth  = 51,
 	NUM_MODIFIER_TYPES
 } ModifierType;
 
@@ -131,6 +134,7 @@ typedef struct SubsurfModifierData {
 	ModifierData modifier;
 
 	short subdivType, levels, renderLevels, flags;
+	short use_opensubdiv, pad[3];
 
 	void *emCache, *mCache;
 } SubsurfModifierData;
@@ -335,6 +339,7 @@ enum {
 /*	MOD_BEVEL_EVEN          = (1 << 11), */
 /*	MOD_BEVEL_DIST          = (1 << 12), */  /* same as above */
 	MOD_BEVEL_OVERLAP_OK    = (1 << 13),
+	MOD_BEVEL_EVEN_WIDTHS   = (1 << 14),
 };
 
 /* BevelModifierData->val_flags (not used as flags any more) */
@@ -387,6 +392,7 @@ enum {
 	MOD_DISP_DIR_Z       = 2,
 	MOD_DISP_DIR_NOR     = 3,
 	MOD_DISP_DIR_RGB_XYZ = 4,
+	MOD_DISP_DIR_CLNOR   = 5,
 };
 
 /* DisplaceModifierData->texmapping */
@@ -428,10 +434,11 @@ typedef struct DecimateModifierData {
 	float angle;    /* (mode == MOD_DECIM_MODE_DISSOLVE) */
 
 	char defgrp_name[64];  /* MAX_VGROUP_NAME */
+	float defgrp_factor;
 	short flag, mode;
 
 	/* runtime only */
-	int face_count, pad2;
+	int face_count;
 } DecimateModifierData;
 
 enum {
@@ -534,15 +541,38 @@ typedef struct ArmatureModifierData {
 	char defgrp_name[64];     /* MAX_VGROUP_NAME */
 } ArmatureModifierData;
 
+enum {
+	MOD_HOOK_UNIFORM_SPACE = (1 << 0),
+};
+
+/* same as WarpModifierFalloff */
+typedef enum {
+	eHook_Falloff_None   = 0,
+	eHook_Falloff_Curve  = 1,
+	eHook_Falloff_Sharp  = 2, /* PROP_SHARP */
+	eHook_Falloff_Smooth = 3, /* PROP_SMOOTH */
+	eHook_Falloff_Root   = 4, /* PROP_ROOT */
+	eHook_Falloff_Linear = 5, /* PROP_LIN */
+	eHook_Falloff_Const  = 6, /* PROP_CONST */
+	eHook_Falloff_Sphere = 7, /* PROP_SPHERE */
+	eHook_Falloff_InvSquare = 8, /* PROP_INVSQUARE */
+	/* PROP_RANDOM not used */
+} HookModifierFalloff;
+
 typedef struct HookModifierData {
 	ModifierData modifier;
 
 	struct Object *object;
 	char subtarget[64];     /* optional name of bone target, MAX_ID_NAME-2 */
 
+	char flag;
+	char falloff_type;      /* use enums from WarpModifier (exact same functionality) */
+	char pad[6];
 	float parentinv[4][4];  /* matrix making current transform unmodified */
 	float cent[3];          /* visualization of hook */
 	float falloff;          /* if not zero, falloff is distance where influence zero */
+
+	struct CurveMapping *curfalloff;
 
 	int *indexar;           /* if NULL, it's using vertexgroup */
 	int totindex;
@@ -563,6 +593,15 @@ typedef struct ClothModifierData {
 	struct ClothCollSettings *coll_parms; /* definition is in DNA_cloth_types.h */
 	struct PointCache *point_cache;       /* definition is in DNA_object_force.h */
 	struct ListBase ptcaches;
+	/* XXX nasty hack, remove once hair can be separated from cloth modifier data */
+	struct ClothHairData *hairdata;
+	/* grid geometry values of hair continuum */
+	float hair_grid_min[3];
+	float hair_grid_max[3];
+	int hair_grid_res[3];
+	float hair_grid_cellsize;
+	
+	struct ClothSolverResult *solver_result;
 } ClothModifierData;
 
 typedef struct CollisionModifierData {
@@ -575,10 +614,10 @@ typedef struct CollisionModifierData {
 	struct MVert *current_x;    /* position at the actual inter-frame step */
 	struct MVert *current_v;    /* (xnew - x) at the actual inter-frame step */
 
-	struct MFace *mfaces;       /* object face data */
+	struct MVertTri *tri;
 
-	unsigned int numverts;
-	unsigned int numfaces;
+	unsigned int mvert_num;
+	unsigned int tri_num;
 	float time_x, time_xnew;    /* cfra time of modifier */
 	struct BVHTree *bvhtree;    /* bounding volume hierarchy for this cloth object */
 } CollisionModifierData;
@@ -838,14 +877,12 @@ enum {
 	MOD_SOLIDIFY_EVEN           = (1 << 1),
 	MOD_SOLIDIFY_NORMAL_CALC    = (1 << 2),
 	MOD_SOLIDIFY_VGROUP_INV     = (1 << 3),
+#ifdef DNA_DEPRECATED
 	MOD_SOLIDIFY_RIM_MATERIAL   = (1 << 4),  /* deprecated, used in do_versions */
+#endif
 	MOD_SOLIDIFY_FLIP           = (1 << 5),
 	MOD_SOLIDIFY_NOSHELL        = (1 << 6),
 };
-
-#if (DNA_DEPRECATED_GCC_POISON == 1)
-#pragma GCC poison MOD_SOLIDIFY_RIM_MATERIAL
-#endif
 
 typedef struct ScrewModifierData {
 	ModifierData modifier;
@@ -968,6 +1005,7 @@ typedef enum {
 	eWarp_Falloff_Linear = 5, /* PROP_LIN */
 	eWarp_Falloff_Const  = 6, /* PROP_CONST */
 	eWarp_Falloff_Sphere = 7, /* PROP_SPHERE */
+	eWarp_Falloff_InvSquare = 8, /* PROP_INVSQUARE */
 	/* PROP_RANDOM not used */
 } WarpModifierFalloff;
 
@@ -1214,12 +1252,10 @@ typedef struct TriangulateModifierData {
 	int pad;
 } TriangulateModifierData;
 
+#ifdef DNA_DEPRECATED
 enum {
 	MOD_TRIANGULATE_BEAUTY = (1 << 0), /* deprecated */
 };
-
-#if (DNA_DEPRECATED_GCC_POISON == 1)
-#pragma GCC poison MOD_TRIANGULATE_BEAUTY
 #endif
 
 /* Triangulate methods - NGons */
@@ -1251,6 +1287,48 @@ enum {
 	MOD_LAPLACIANSMOOTH_Z               = (1 << 3),
 	MOD_LAPLACIANSMOOTH_PRESERVE_VOLUME = (1 << 4),
 	MOD_LAPLACIANSMOOTH_NORMALIZED      = (1 << 5),
+};
+
+
+typedef struct CorrectiveSmoothModifierData {
+	ModifierData modifier;
+
+	/* positions set during 'bind' operator
+	 * use for MOD_CORRECTIVESMOOTH_RESTSOURCE_BIND */
+	float (*bind_coords)[3];
+
+	/* note: -1 is used to bind */
+	unsigned int bind_coords_num;
+
+	float lambda;
+	short repeat, flag;
+	char smooth_type, rest_source;
+	char pad[2];
+
+	char defgrp_name[64];  /* MAX_VGROUP_NAME */
+
+	/* runtime-only cache (delta's between),
+	 * delta's between the original positions and the smoothed positions */
+	float (*delta_cache)[3];
+	unsigned int delta_cache_num;
+	char pad2[4];
+} CorrectiveSmoothModifierData;
+
+enum {
+	MOD_CORRECTIVESMOOTH_SMOOTH_SIMPLE         = 0,
+	MOD_CORRECTIVESMOOTH_SMOOTH_LENGTH_WEIGHT    = 1,
+};
+
+enum {
+	MOD_CORRECTIVESMOOTH_RESTSOURCE_ORCO       = 0,
+	MOD_CORRECTIVESMOOTH_RESTSOURCE_BIND       = 1,
+};
+
+/* Corrective Smooth modifier flags */
+enum {
+	MOD_CORRECTIVESMOOTH_INVERT_VGROUP         = (1 << 0),
+	MOD_CORRECTIVESMOOTH_ONLY_SMOOTH           = (1 << 1),
+	MOD_CORRECTIVESMOOTH_PIN_BOUNDARY          = (1 << 2),
 };
 
 typedef struct UVWarpModifierData {
@@ -1367,5 +1445,79 @@ enum {
 };
 
 
+typedef struct DataTransferModifierData {
+	ModifierData modifier;
+
+	struct Object *ob_source;
+
+	int data_types;  /* See DT_TYPE_ enum in ED_object.h */
+
+	/* See MREMAP_MODE_ enum in BKE_mesh_mapping.h */
+	int vmap_mode;
+	int emap_mode;
+	int lmap_mode;
+	int pmap_mode;
+
+	float map_max_distance;
+	float map_ray_radius;
+	float islands_precision;
+
+	int pad_i1;
+
+	int layers_select_src[4];  /* DT_MULTILAYER_INDEX_MAX; See DT_FROMLAYERS_ enum in ED_object.h */
+	int layers_select_dst[4];  /* DT_MULTILAYER_INDEX_MAX; See DT_TOLAYERS_ enum in ED_object.h */
+
+	int mix_mode;  /* See CDT_MIX_ enum in BKE_customdata.h */
+	float mix_factor;
+	char defgrp_name[64];  /* MAX_VGROUP_NAME */
+
+	int flags;
+} DataTransferModifierData;
+
+/* DataTransferModifierData.flags */
+enum {
+	MOD_DATATRANSFER_OBSRC_TRANSFORM  = 1 << 0,
+	MOD_DATATRANSFER_MAP_MAXDIST      = 1 << 1,
+	MOD_DATATRANSFER_INVERT_VGROUP    = 1 << 2,
+
+	/* Only for UI really. */
+	MOD_DATATRANSFER_USE_VERT         = 1 << 28,
+	MOD_DATATRANSFER_USE_EDGE         = 1 << 29,
+	MOD_DATATRANSFER_USE_LOOP         = 1 << 30,
+	MOD_DATATRANSFER_USE_POLY         = 1 << 31,
+};
+
+/* Set Split Normals modifier */
+typedef struct NormalEditModifierData {
+	ModifierData modifier;
+	char defgrp_name[64];  /* MAX_VGROUP_NAME */
+	struct Object *target;  /* Source of normals, or center of ellipsoid. */
+	short mode;
+	short flag;
+	short mix_mode;
+	char pad[2];
+	float mix_factor;
+	float offset[3];
+} NormalEditModifierData;
+
+/* NormalEditModifierData.mode */
+enum {
+	MOD_NORMALEDIT_MODE_RADIAL        = 0,
+	MOD_NORMALEDIT_MODE_DIRECTIONAL   = 1,
+};
+
+/* NormalEditModifierData.flags */
+enum {
+	MOD_NORMALEDIT_INVERT_VGROUP            = (1 << 0),
+	MOD_NORMALEDIT_USE_DIRECTION_PARALLEL   = (1 << 1),
+};
+
+/* NormalEditModifierData.mix_mode */
+enum {
+	MOD_NORMALEDIT_MIX_COPY = 0,
+	MOD_NORMALEDIT_MIX_ADD  = 1,
+	MOD_NORMALEDIT_MIX_SUB  = 2,
+	MOD_NORMALEDIT_MIX_MUL  = 3,
+};
 
 #endif  /* __DNA_MODIFIER_TYPES_H__ */

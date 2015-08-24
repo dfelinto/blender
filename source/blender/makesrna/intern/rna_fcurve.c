@@ -574,7 +574,7 @@ static void rna_FModifier_blending_range(PointerRNA *ptr, float *min, float *max
 static void rna_FModifier_verify_data_update(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *ptr)
 {
 	FModifier *fcm = (FModifier *)ptr->data;
-	FModifierTypeInfo *fmi = fmodifier_get_typeinfo(fcm);
+	const FModifierTypeInfo *fmi = fmodifier_get_typeinfo(fcm);
 
 	/* call the verify callback on the modifier if applicable */
 	if (fmi && fmi->verify_data)
@@ -1948,6 +1948,10 @@ static void rna_def_fcurve(BlenderRNA *brna)
 	parm = RNA_def_pointer(func, "data", "AnyType", "Data",
 	                       "Data containing the property controlled by given FCurve");
 	RNA_def_property_flag(parm, PROP_REQUIRED | PROP_RNAPTR | PROP_NEVER_NULL);
+
+
+	/* Functions */
+	RNA_api_fcurves(srna);
 }
 
 /* *********************** */

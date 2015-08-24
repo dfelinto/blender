@@ -32,6 +32,8 @@
 #ifndef __DNA_CLOTH_TYPES_H__
 #define __DNA_CLOTH_TYPES_H__
 
+#include "DNA_defs.h"
+
 /**
  * This struct contains all the global data required to run a simulation.
  * At the time of this writing, this structure contains data appropriate
@@ -69,14 +71,23 @@ typedef struct ClothSimSettings {
 	float	goalspring;
 	float	goalfrict;
 	float	velocity_smooth; /* smoothing of velocities for hair */
+	float	density_target;		/* minimum density for hair */
+	float	density_strength;	/* influence of hair density */
 	float	collider_friction; /* friction with colliders */
 	float	vel_damping; /* damp the velocity to speed up getting to the resting position */
 	float	shrink_min;  /* min amount to shrink cloth by 0.0f (no shrink) - 1.0f (shrink to nothing) */
 	float	shrink_max;  /* max amount to shrink cloth by 0.0f (no shrink) - 1.0f (shrink to nothing) */
+	
+	/* XXX various hair stuff
+	 * should really be separate, this struct is a horrible mess already
+	 */
+	float	bending_damping;	/* damping of bending springs */
+	float	voxel_cell_size;    /* size of voxel grid cells for continuum dynamics */
+	int		pad;
 
 	int 	stepsPerFrame;	/* Number of time steps per frame.		*/
 	int	flags;		/* flags, see CSIMSETT_FLAGS enum above.	*/
-	int	preroll;	/* How many frames of simulation to do before we start.	*/
+	int	preroll  DNA_DEPRECATED;	/* How many frames of simulation to do before we start.	*/
 	int	maxspringlen; 	/* in percent!; if tearing enabled, a spring will get cut */
 	short	solver_type; 	/* which solver should be used?		txold	*/
 	short	vgroup_bend;	/* vertex group for scaling bending stiffness */
@@ -86,7 +97,6 @@ typedef struct ClothSimSettings {
 	short	shapekey_rest;  /* vertex group for scaling structural stiffness */
 	short	presets; /* used for presets on GUI */
 	short 	reset;
-	char    pad[4];
 
 	struct EffectorWeights *effector_weights;
 } ClothSimSettings;
@@ -97,15 +107,16 @@ typedef struct ClothCollSettings {
 	float	epsilon;		/* min distance for collisions.		*/
 	float	self_friction;		/* Fiction/damping with self contact. */
 	float	friction;		/* Friction/damping applied on contact with other object.*/
+	float	damping;	/* Collision restitution on contact with other object.*/
 	float 	selfepsilon; 		/* for selfcollision */
 	float repel_force, distance_repel;
 	int	flags;			/* collision flags defined in BKE_cloth.h */
 	short	self_loop_count;	/* How many iterations for the selfcollision loop	*/
 	short	loop_count;		/* How many iterations for the collision loop.		*/
+	int pad;
 	struct Group *group;	/* Only use colliders from this group of objects */
 	short	vgroup_selfcol; /* vgroup to paint which vertices are used for self collisions */
-	short pad;
-	int pad2;
+	short pad2[3];
 } ClothCollSettings;
 
 

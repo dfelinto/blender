@@ -24,7 +24,6 @@
  *  \ingroup edtransform
  */
 
-
 #include <string.h>
 #include <stddef.h>
 #include <ctype.h>
@@ -53,13 +52,9 @@
 #include "BKE_main.h"
 #include "BKE_screen.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "ED_armature.h"
-
-#include "RNA_define.h"
-
-#include "UI_interface.h"
 
 #include "transform.h"
 
@@ -90,7 +85,7 @@ static bool uniqueOrientationNameCheck(void *arg, const char *name)
 
 static void uniqueOrientationName(ListBase *lb, char *name)
 {
-	BLI_uniquename_cb(uniqueOrientationNameCheck, lb, CTX_DATA_(BLF_I18NCONTEXT_ID_SCENE, "Space"), '.', name,
+	BLI_uniquename_cb(uniqueOrientationNameCheck, lb, CTX_DATA_(BLT_I18NCONTEXT_ID_SCENE, "Space"), '.', name,
 	                  sizeof(((TransformOrientation *)NULL)->name));
 }
 
@@ -392,7 +387,7 @@ void BIF_selectTransformOrientationValue(bContext *C, int orientation)
 int BIF_countTransformOrientation(const bContext *C)
 {
 	ListBase *transform_spaces = &CTX_data_scene(C)->transform_spaces;
-	return BLI_countlist(transform_spaces);
+	return BLI_listbase_count(transform_spaces);
 }
 
 bool applyTransformOrientation(const bContext *C, float mat[3][3], char *r_name)
@@ -723,14 +718,15 @@ int getTransformOrientation(const bContext *C, float normal[3], float plane[3], 
 					/* should never fail */
 					if (LIKELY(v_pair[0] && v_pair[1])) {
 						bool v_pair_swap = false;
-						/* Logic explained:
+						/**
+						 * Logic explained:
 						 *
 						 * - Edges and vert-pairs treated the same way.
-						 * - Point the Z axis along the edge vector (towards the active vertex).
-						 * - Point the Y axis outwards (the same direction as the normals).
+						 * - Point the Y axis along the edge vector (towards the active vertex).
+						 * - Point the Z axis outwards (the same direction as the normals).
 						 *
-						 * Note that this is at odds a little with face select (and 3 vertices)
-						 * which point the Z axis along the normal, however in both cases Z is the dominant axis.
+						 * \note Z points outwards - along the normal.
+						 * take care making changes here, see: T38592, T43708
 						 */
 
 						/* be deterministic where possible and ensure v_pair[0] is active */
@@ -738,7 +734,7 @@ int getTransformOrientation(const bContext *C, float normal[3], float plane[3], 
 							v_pair_swap = true;
 						}
 						else if (eed && BM_edge_is_boundary(eed)) {
-							/* pradictable direction for boundary edges */
+							/* predictable direction for boundary edges */
 							if (eed->l->v != v_pair[0]) {
 								v_pair_swap = true;
 							}
@@ -748,8 +744,8 @@ int getTransformOrientation(const bContext *C, float normal[3], float plane[3], 
 							SWAP(BMVert *, v_pair[0], v_pair[1]);
 						}
 
-						add_v3_v3v3(plane, v_pair[0]->no, v_pair[1]->no);
-						sub_v3_v3v3(normal, v_pair[0]->co, v_pair[1]->co);
+						add_v3_v3v3(normal, v_pair[0]->no, v_pair[1]->no);
+						sub_v3_v3v3(plane, v_pair[0]->co, v_pair[1]->co);
 						/* flip the plane normal so we point outwards */
 						negate_v3(plane);
 					}
@@ -960,8 +956,16 @@ int getTransformOrientation(const bContext *C, float normal[3], float plane[3], 
 
 		/* Vectors from edges don't need the special transpose inverse multiplication */
 		if (result == ORIENTATION_EDGE) {
+			float tvec[3];
+
 			mul_mat3_m4_v3(ob->obmat, normal);
 			mul_mat3_m4_v3(ob->obmat, plane);
+
+			/* align normal to edge direction (so normal is perpendicular to the plane).
+			 * 'ORIENTATION_EDGE' will do the other way around.
+			 * This has to be done **after** applying obmat, see T45775! */
+			project_v3_v3v3(tvec, normal, plane);
+			sub_v3_v3(normal, tvec);
 		}
 		else {
 			mul_m3_v3(mat, normal);

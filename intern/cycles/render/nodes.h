@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #ifndef __NODES_H__
@@ -55,13 +55,28 @@ public:
 
 /* Nodes */
 
+/* Any node which uses image manager's slot should be a subclass of this one. */
+class ImageSlotNode : public ShaderNode {
+public:
+	ImageSlotNode(const char *name_) : ShaderNode(name_) {
+		special_type = SHADER_SPECIAL_TYPE_IMAGE_SLOT;
+	}
+	int slot;
+};
+
 class TextureNode : public ShaderNode {
 public:
 	TextureNode(const char *name_) : ShaderNode(name_) {}
 	TextureMapping tex_mapping;
 };
 
-class ImageTextureNode : public TextureNode {
+class ImageSlotTextureNode : public ImageSlotNode {
+public:
+	ImageSlotTextureNode(const char *name_) : ImageSlotNode(name_) {}
+	TextureMapping tex_mapping;
+};
+
+class ImageTextureNode : public ImageSlotTextureNode {
 public:
 	SHADER_NODE_NO_CLONE_CLASS(ImageTextureNode)
 	~ImageTextureNode();
@@ -69,7 +84,6 @@ public:
 	void attributes(Shader *shader, AttributeRequestSet *attributes);
 
 	ImageManager *image_manager;
-	int slot;
 	int is_float;
 	bool is_linear;
 	bool use_alpha;
@@ -78,6 +92,7 @@ public:
 	ustring color_space;
 	ustring projection;
 	InterpolationType interpolation;
+	ExtensionType extension;
 	float projection_blend;
 	bool animated;
 
@@ -85,15 +100,15 @@ public:
 	static ShaderEnum projection_enum;
 };
 
-class EnvironmentTextureNode : public TextureNode {
+class EnvironmentTextureNode : public ImageSlotTextureNode {
 public:
 	SHADER_NODE_NO_CLONE_CLASS(EnvironmentTextureNode)
 	~EnvironmentTextureNode();
 	ShaderNode *clone() const;
 	void attributes(Shader *shader, AttributeRequestSet *attributes);
+	virtual int get_group() { return NODE_GROUP_LEVEL_2; }
 
 	ImageManager *image_manager;
-	int slot;
 	int is_float;
 	bool is_linear;
 	bool use_alpha;
@@ -110,6 +125,8 @@ public:
 class SkyTextureNode : public TextureNode {
 public:
 	SHADER_NODE_CLASS(SkyTextureNode)
+
+	virtual int get_group() { return NODE_GROUP_LEVEL_2; }
 
 	float3 sun_direction;
 	float turbidity;
@@ -128,6 +145,8 @@ class GradientTextureNode : public TextureNode {
 public:
 	SHADER_NODE_CLASS(GradientTextureNode)
 
+	virtual int get_group() { return NODE_GROUP_LEVEL_2; }
+
 	ustring type;
 	static ShaderEnum type_enum;
 };
@@ -141,6 +160,8 @@ class VoronoiTextureNode : public TextureNode {
 public:
 	SHADER_NODE_CLASS(VoronoiTextureNode)
 
+	virtual int get_group() { return NODE_GROUP_LEVEL_2; }
+
 	ustring coloring;
 
 	static ShaderEnum coloring_enum;
@@ -149,6 +170,8 @@ public:
 class MusgraveTextureNode : public TextureNode {
 public:
 	SHADER_NODE_CLASS(MusgraveTextureNode)
+
+	virtual int get_group() { return NODE_GROUP_LEVEL_2; }
 
 	ustring type;
 
@@ -159,6 +182,8 @@ class WaveTextureNode : public TextureNode {
 public:
 	SHADER_NODE_CLASS(WaveTextureNode)
 
+	virtual int get_group() { return NODE_GROUP_LEVEL_2; }
+
 	ustring type;
 	static ShaderEnum type_enum;
 };
@@ -167,12 +192,16 @@ class MagicTextureNode : public TextureNode {
 public:
 	SHADER_NODE_CLASS(MagicTextureNode)
 
+	virtual int get_group() { return NODE_GROUP_LEVEL_2; }
+
 	int depth;
 };
 
 class CheckerTextureNode : public TextureNode {
 public:
 	SHADER_NODE_CLASS(CheckerTextureNode)
+
+	virtual int get_group() { return NODE_GROUP_LEVEL_2; }
 };
 
 class BrickTextureNode : public TextureNode {
@@ -181,11 +210,37 @@ public:
 	
 	float offset, squash;
 	int offset_frequency, squash_frequency;
+
+	virtual int get_group() { return NODE_GROUP_LEVEL_2; }
+};
+
+class PointDensityTextureNode : public ShaderNode {
+public:
+	SHADER_NODE_NO_CLONE_CLASS(PointDensityTextureNode)
+
+	~PointDensityTextureNode();
+	ShaderNode *clone() const;
+	void attributes(Shader *shader, AttributeRequestSet *attributes);
+
+	bool has_spatial_varying() { return true; }
+	bool has_object_dependency() { return true; }
+
+	ImageManager *image_manager;
+	int slot;
+	string filename;
+	ustring space;
+	void *builtin_data;
+	InterpolationType interpolation;
+
+	Transform tfm;
+
+	static ShaderEnum space_enum;
 };
 
 class MappingNode : public ShaderNode {
 public:
 	SHADER_NODE_CLASS(MappingNode)
+	virtual int get_group() { return NODE_GROUP_LEVEL_2; }
 
 	TextureMapping tex_mapping;
 };
@@ -308,6 +363,7 @@ public:
 class HoldoutNode : public ShaderNode {
 public:
 	SHADER_NODE_CLASS(HoldoutNode)
+	virtual int get_group() { return NODE_GROUP_LEVEL_1; }
 };
 
 class AmbientOcclusionNode : public ShaderNode {
@@ -315,6 +371,7 @@ public:
 	SHADER_NODE_CLASS(AmbientOcclusionNode)
 
 	bool has_spatial_varying() { return true; }
+	virtual int get_group() { return NODE_GROUP_LEVEL_1; }
 };
 
 class VolumeNode : public ShaderNode {
@@ -322,6 +379,7 @@ public:
 	SHADER_NODE_CLASS(VolumeNode)
 
 	void compile(SVMCompiler& compiler, ShaderInput *param1, ShaderInput *param2);
+	virtual int get_group() { return NODE_GROUP_LEVEL_1; }
 
 	ClosureType closure;
 };
@@ -357,8 +415,11 @@ public:
 	SHADER_NODE_CLASS(TextureCoordinateNode)
 	void attributes(Shader *shader, AttributeRequestSet *attributes);
 	bool has_spatial_varying() { return true; }
-	
+	bool has_object_dependency() { return use_transform; }
+
 	bool from_dupli;
+	bool use_transform;
+	Transform ob_tfm;
 };
 
 class UVMapNode : public ShaderNode {
@@ -366,6 +427,7 @@ public:
 	SHADER_NODE_CLASS(UVMapNode)
 	void attributes(Shader *shader, AttributeRequestSet *attributes);
 	bool has_spatial_varying() { return true; }
+	virtual int get_group() { return NODE_GROUP_LEVEL_1; }
 
 	ustring attribute;
 	bool from_dupli;
@@ -374,6 +436,7 @@ public:
 class LightPathNode : public ShaderNode {
 public:
 	SHADER_NODE_CLASS(LightPathNode)
+	virtual int get_group() { return NODE_GROUP_LEVEL_1; }
 };
 
 class LightFalloffNode : public ShaderNode {
@@ -385,12 +448,14 @@ public:
 class ObjectInfoNode : public ShaderNode {
 public:
 	SHADER_NODE_CLASS(ObjectInfoNode)
+	virtual int get_group() { return NODE_GROUP_LEVEL_1; }
 };
 
 class ParticleInfoNode : public ShaderNode {
 public:
 	SHADER_NODE_CLASS(ParticleInfoNode)
 	void attributes(Shader *shader, AttributeRequestSet *attributes);
+	virtual int get_group() { return NODE_GROUP_LEVEL_1; }
 };
 
 class HairInfoNode : public ShaderNode {
@@ -399,6 +464,10 @@ public:
 
 	void attributes(Shader *shader, AttributeRequestSet *attributes);
 	bool has_spatial_varying() { return true; }
+	virtual int get_group() { return NODE_GROUP_LEVEL_1; }
+	virtual int get_feature() {
+		return ShaderNode::get_feature() | NODE_FEATURE_HAIR;
+	}
 };
 
 class ValueNode : public ShaderNode {
@@ -433,11 +502,15 @@ public:
 class InvertNode : public ShaderNode {
 public:
 	SHADER_NODE_CLASS(InvertNode)
+
+	virtual int get_group() { return NODE_GROUP_LEVEL_3; }
 };
 
 class MixNode : public ShaderNode {
 public:
 	SHADER_NODE_CLASS(MixNode)
+
+	virtual int get_group() { return NODE_GROUP_LEVEL_3; }
 
 	bool use_clamp;
 
@@ -448,41 +521,55 @@ public:
 class CombineRGBNode : public ShaderNode {
 public:
 	SHADER_NODE_CLASS(CombineRGBNode)
+
+	virtual int get_group() { return NODE_GROUP_LEVEL_3; }
 };
 
 class CombineHSVNode : public ShaderNode {
 public:
 	SHADER_NODE_CLASS(CombineHSVNode)
+
+	virtual int get_group() { return NODE_GROUP_LEVEL_3; }
 };
 
 class CombineXYZNode : public ShaderNode {
 public:
 	SHADER_NODE_CLASS(CombineXYZNode)
+
+	virtual int get_group() { return NODE_GROUP_LEVEL_3; }
 };
 
 class GammaNode : public ShaderNode {
 public:
 	SHADER_NODE_CLASS(GammaNode)
+	virtual int get_group() { return NODE_GROUP_LEVEL_1; }
 };
 
 class BrightContrastNode : public ShaderNode {
 public:
 	SHADER_NODE_CLASS(BrightContrastNode)
+	virtual int get_group() { return NODE_GROUP_LEVEL_1; }
 };
 
 class SeparateRGBNode : public ShaderNode {
 public:
 	SHADER_NODE_CLASS(SeparateRGBNode)
+
+	virtual int get_group() { return NODE_GROUP_LEVEL_3; }
 };
 
 class SeparateHSVNode : public ShaderNode {
 public:
 	SHADER_NODE_CLASS(SeparateHSVNode)
+
+	virtual int get_group() { return NODE_GROUP_LEVEL_3; }
 };
 
 class SeparateXYZNode : public ShaderNode {
 public:
 	SHADER_NODE_CLASS(SeparateXYZNode)
+
+	virtual int get_group() { return NODE_GROUP_LEVEL_3; }
 };
 
 class HSVNode : public ShaderNode {
@@ -509,18 +596,21 @@ class FresnelNode : public ShaderNode {
 public:
 	SHADER_NODE_CLASS(FresnelNode)
 	bool has_spatial_varying() { return true; }
+	virtual int get_group() { return NODE_GROUP_LEVEL_1; }
 };
 
 class LayerWeightNode : public ShaderNode {
 public:
 	SHADER_NODE_CLASS(LayerWeightNode)
 	bool has_spatial_varying() { return true; }
+	virtual int get_group() { return NODE_GROUP_LEVEL_1; }
 };
 
 class WireframeNode : public ShaderNode {
 public:
 	SHADER_NODE_CLASS(WireframeNode)
 	bool has_spatial_varying() { return true; }
+	virtual int get_group() { return NODE_GROUP_LEVEL_3; }
 	
 	bool use_pixel_size;
 };
@@ -528,18 +618,21 @@ public:
 class WavelengthNode : public ShaderNode {
 public:
 	SHADER_NODE_CLASS(WavelengthNode)
+
+	virtual int get_group() { return NODE_GROUP_LEVEL_3; }
 };
 
 class BlackbodyNode : public ShaderNode {
 public:
 	SHADER_NODE_CLASS(BlackbodyNode)
-	
-	bool has_converter_blackbody() { return true; }
+
+	virtual int get_group() { return NODE_GROUP_LEVEL_3; }
 };
 
 class MathNode : public ShaderNode {
 public:
 	SHADER_NODE_CLASS(MathNode)
+	virtual int get_group() { return NODE_GROUP_LEVEL_1; }
 
 	bool use_clamp;
 
@@ -550,6 +643,7 @@ public:
 class NormalNode : public ShaderNode {
 public:
 	SHADER_NODE_CLASS(NormalNode)
+	virtual int get_group() { return NODE_GROUP_LEVEL_2; }
 
 	float3 direction;
 };
@@ -557,6 +651,7 @@ public:
 class VectorMathNode : public ShaderNode {
 public:
 	SHADER_NODE_CLASS(VectorMathNode)
+	virtual int get_group() { return NODE_GROUP_LEVEL_1; }
 
 	ustring type;
 	static ShaderEnum type_enum;
@@ -565,6 +660,8 @@ public:
 class VectorTransformNode : public ShaderNode {
 public:
 	SHADER_NODE_CLASS(VectorTransformNode)
+
+	virtual int get_group() { return NODE_GROUP_LEVEL_3; }
 
 	ustring type;
 	ustring convert_from;
@@ -578,6 +675,9 @@ class BumpNode : public ShaderNode {
 public:
 	SHADER_NODE_CLASS(BumpNode)
 	bool has_spatial_varying() { return true; }
+	virtual int get_feature() {
+		return NODE_FEATURE_BUMP;
+	}
 
 	bool invert;
 };
@@ -585,12 +685,18 @@ public:
 class RGBCurvesNode : public ShaderNode {
 public:
 	SHADER_NODE_CLASS(RGBCurvesNode)
+
+	virtual int get_group() { return NODE_GROUP_LEVEL_3; }
+
 	float4 curves[RAMP_TABLE_SIZE];
 };
 
 class VectorCurvesNode : public ShaderNode {
 public:
 	SHADER_NODE_CLASS(VectorCurvesNode)
+
+	virtual int get_group() { return NODE_GROUP_LEVEL_3; }
+
 	float4 curves[RAMP_TABLE_SIZE];
 };
 
@@ -599,6 +705,7 @@ public:
 	SHADER_NODE_CLASS(RGBRampNode)
 	float4 ramp[RAMP_TABLE_SIZE];
 	bool interpolate;
+	virtual int get_group() { return NODE_GROUP_LEVEL_1; }
 };
 
 class SetNormalNode : public ShaderNode {
@@ -627,6 +734,7 @@ public:
 	SHADER_NODE_CLASS(NormalMapNode)
 	void attributes(Shader *shader, AttributeRequestSet *attributes);
 	bool has_spatial_varying() { return true; }
+	virtual int get_group() { return NODE_GROUP_LEVEL_3; }
 
 	ustring space;
 	static ShaderEnum space_enum;
@@ -639,6 +747,7 @@ public:
 	SHADER_NODE_CLASS(TangentNode)
 	void attributes(Shader *shader, AttributeRequestSet *attributes);
 	bool has_spatial_varying() { return true; }
+	virtual int get_group() { return NODE_GROUP_LEVEL_3; }
 
 	ustring direction_type;
 	static ShaderEnum direction_type_enum;

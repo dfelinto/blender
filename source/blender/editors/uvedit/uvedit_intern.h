@@ -34,18 +34,13 @@
 
 struct MTexPoly;
 struct Image;
-struct MTFace;
 struct Object;
 struct Scene;
 struct SpaceImage;
-struct UvElementMap;
 struct wmOperatorType;
 struct BMEditMesh;
-struct BMesh;
 struct BMFace;
 struct BMLoop;
-struct BMEdge;
-struct BMVert;
 
 /* visibility and selection */
 bool uvedit_face_visible_nolocal(struct Scene *scene, struct BMFace *efa);
@@ -72,7 +67,6 @@ void uv_find_nearest_edge(struct Scene *scene, struct Image *ima, struct BMEditM
 /* utility tool functions */
 
 void uvedit_live_unwrap_update(struct SpaceImage *sima, struct Scene *scene, struct Object *obedit);
-void uvedit_get_aspect(struct Scene *scene, struct Object *ob, struct BMesh *em, float *aspx, float *aspy);
 
 /* operators */
 

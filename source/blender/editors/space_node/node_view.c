@@ -292,7 +292,7 @@ void NODE_OT_backimage_move(wmOperatorType *ot)
 	ot->cancel = snode_bg_viewmove_cancel;
 
 	/* flags */
-	ot->flag = OPTYPE_BLOCKING | OPTYPE_GRAB_POINTER;
+	ot->flag = OPTYPE_BLOCKING | OPTYPE_GRAB_CURSOR;
 }
 
 static int backimage_zoom_exec(bContext *C, wmOperator *op)
@@ -609,8 +609,11 @@ static int sample_modal(bContext *C, wmOperator *op, const wmEvent *event)
 	switch (event->type) {
 		case LEFTMOUSE:
 		case RIGHTMOUSE: // XXX hardcoded
-			sample_exit(C, op);
-			return OPERATOR_CANCELLED;
+			if (event->val == KM_RELEASE) {
+				sample_exit(C, op);
+				return OPERATOR_CANCELLED;
+			}
+			break;
 		case MOUSEMOVE:
 			sample_apply(C, op, event);
 			break;

@@ -33,6 +33,7 @@
 #include "DNA_meshdata_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
+#include "DNA_image_types.h"
 
 #include "MEM_guardedalloc.h"
 
@@ -155,7 +156,9 @@ static SpaceLink *image_new(const bContext *UNUSED(C))
 	simage->iuser.ok = true;
 	simage->iuser.fie_ima = 2;
 	simage->iuser.frames = 100;
-	
+	simage->iuser.flag = IMA_SHOW_STEREO;
+	simage->iuser.passtype = SCE_PASS_COMBINED;
+
 	scopes_new(&simage->scopes);
 	simage->sample_line_hist.height = 100;
 
@@ -355,7 +358,7 @@ static void image_keymap(struct wmKeyConfig *keyconf)
 static int image_drop_poll(bContext *UNUSED(C), wmDrag *drag, const wmEvent *UNUSED(event))
 {
 	if (drag->type == WM_DRAG_PATH)
-		if (ELEM(drag->icon, 0, ICON_FILE_IMAGE, ICON_FILE_BLANK)) /* rule might not work? */
+		if (ELEM(drag->icon, 0, ICON_FILE_IMAGE, ICON_FILE_MOVIE, ICON_FILE_BLANK)) /* rule might not work? */
 			return 1;
 	return 0;
 }
@@ -680,7 +683,7 @@ static void image_main_area_draw(const bContext *C, ARegion *ar)
 	View2D *v2d = &ar->v2d;
 	//View2DScrollers *scrollers;
 	float col[3];
-	
+
 	/* XXX not supported yet, disabling for now */
 	scene->r.scemode &= ~R_COMP_CROP;
 	
@@ -692,7 +695,7 @@ static void image_main_area_draw(const bContext *C, ARegion *ar)
 	/* put scene context variable in iuser */
 	if (sima->image && sima->image->type == IMA_TYPE_R_RESULT) {
 		/* for render result, try to use the currently rendering scene */
-		Scene *render_scene = ED_render_job_get_scene(C);
+		Scene *render_scene = ED_render_job_get_current_scene(C);
 		if (render_scene)
 			sima->iuser.scene = render_scene;
 		else
@@ -791,17 +794,27 @@ static void image_main_area_draw(const bContext *C, ARegion *ar)
 #endif
 }
 
-static void image_main_area_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa), ARegion *ar, wmNotifier *wmn)
+static void image_main_area_listener(bScreen *UNUSED(sc), ScrArea *sa, ARegion *ar, wmNotifier *wmn)
 {
 	/* context changes */
 	switch (wmn->category) {
 		case NC_GPENCIL:
-			if (wmn->action == NA_EDITED)
+			if (ELEM(wmn->action, NA_EDITED, NA_SELECTED))
+				ED_region_tag_redraw(ar);
+			else if (wmn->data & ND_GPENCIL_EDITMODE)
 				ED_region_tag_redraw(ar);
 			break;
 		case NC_IMAGE:
 			if (wmn->action == NA_PAINTING)
 				ED_region_tag_redraw(ar);
+			break;
+		case NC_MATERIAL:
+			if (wmn->data == ND_SHADING_LINKS) {
+				SpaceImage *sima = sa->spacedata.first;
+
+				if (sima->iuser.scene && (sima->iuser.scene->toolsettings->uv_flag & UV_SHOW_SAME_IMAGE))
+					ED_region_tag_redraw(ar);
+			}
 			break;
 	}
 }
@@ -822,7 +835,7 @@ static void image_buttons_area_init(wmWindowManager *wm, ARegion *ar)
 
 static void image_buttons_area_draw(const bContext *C, ARegion *ar)
 {
-	ED_region_panels(C, ar, 1, NULL, -1);
+	ED_region_panels(C, ar, NULL, -1, true);
 }
 
 static void image_buttons_area_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa), ARegion *ar, wmNotifier *wmn)
@@ -850,6 +863,10 @@ static void image_buttons_area_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa)
 			break;
 		case NC_NODE:
 			ED_region_tag_redraw(ar);
+			break;
+		case NC_GPENCIL:
+			if (ELEM(wmn->action, NA_EDITED, NA_SELECTED))
+				ED_region_tag_redraw(ar);
 			break;
 	}
 }
@@ -884,14 +901,14 @@ static void image_tools_area_draw(const bContext *C, ARegion *ar)
 				BKE_histogram_update_sample_line(&sima->sample_line_hist, ibuf, &scene->view_settings, &scene->display_settings);
 			}
 			if (sima->image->flag & IMA_VIEW_AS_RENDER)
-				scopes_update(&sima->scopes, ibuf, &scene->view_settings, &scene->display_settings);
+				ED_space_image_scopes_update(C, sima, ibuf, true);
 			else
-				scopes_update(&sima->scopes, ibuf, NULL, &scene->display_settings);
+				ED_space_image_scopes_update(C, sima, ibuf, false);
 		}
 	}
 	ED_space_image_release_buffer(sima, ibuf, lock);
 	
-	ED_region_panels(C, ar, 1, NULL, -1);
+	ED_region_panels(C, ar, NULL, -1, true);
 }
 
 static void image_tools_area_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa), ARegion *ar, wmNotifier *wmn)
@@ -899,7 +916,7 @@ static void image_tools_area_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa), 
 	/* context changes */
 	switch (wmn->category) {
 		case NC_GPENCIL:
-			if (wmn->data == ND_DATA)
+			if (wmn->data == ND_DATA || ELEM(wmn->action, NA_EDITED, NA_SELECTED))
 				ED_region_tag_redraw(ar);
 			break;
 		case NC_BRUSH:

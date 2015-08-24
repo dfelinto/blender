@@ -42,6 +42,17 @@ CCL_NAMESPACE_BEGIN
 #define BVH_HAIR				4
 #define BVH_HAIR_MINIMUM_WIDTH	8
 
+#define BVH_NAME_JOIN(x,y) x ## _ ## y
+#define BVH_NAME_EVAL(x,y) BVH_NAME_JOIN(x,y)
+#define BVH_FUNCTION_FULL_NAME(prefix) BVH_NAME_EVAL(prefix, BVH_FUNCTION_NAME)
+
+#define BVH_FEATURE(f) (((BVH_FUNCTION_FEATURES) & (f)) != 0)
+
+/* Common QBVH functions. */
+#ifdef __QBVH__
+#include "geom_qbvh.h"
+#endif
+
 /* Regular BVH traversal */
 
 #define BVH_FUNCTION_NAME bvh_intersect
@@ -104,7 +115,39 @@ CCL_NAMESPACE_BEGIN
 #include "geom_bvh_subsurface.h"
 #endif
 
-/* Record all BVH intersection for shadows */
+/* Volume BVH traversal */
+
+#if defined(__VOLUME__)
+#define BVH_FUNCTION_NAME bvh_intersect_volume
+#define BVH_FUNCTION_FEATURES 0
+#include "geom_bvh_volume.h"
+#endif
+
+#if defined(__VOLUME__) && defined(__INSTANCING__)
+#define BVH_FUNCTION_NAME bvh_intersect_volume_instancing
+#define BVH_FUNCTION_FEATURES BVH_INSTANCING
+#include "geom_bvh_volume.h"
+#endif
+
+#if defined(__VOLUME__) && defined(__HAIR__)
+#define BVH_FUNCTION_NAME bvh_intersect_volume_hair
+#define BVH_FUNCTION_FEATURES BVH_INSTANCING|BVH_HAIR|BVH_HAIR_MINIMUM_WIDTH
+#include "geom_bvh_volume.h"
+#endif
+
+#if defined(__VOLUME__) && defined(__OBJECT_MOTION__)
+#define BVH_FUNCTION_NAME bvh_intersect_volume_motion
+#define BVH_FUNCTION_FEATURES BVH_INSTANCING|BVH_MOTION
+#include "geom_bvh_volume.h"
+#endif
+
+#if defined(__VOLUME__) && defined(__HAIR__) && defined(__OBJECT_MOTION__)
+#define BVH_FUNCTION_NAME bvh_intersect_volume_hair_motion
+#define BVH_FUNCTION_FEATURES BVH_INSTANCING|BVH_HAIR|BVH_HAIR_MINIMUM_WIDTH|BVH_MOTION
+#include "geom_bvh_volume.h"
+#endif
+
+/* Record all intersections - Shadow BVH traversal */
 
 #if defined(__SHADOW_RECORD_ALL__)
 #define BVH_FUNCTION_NAME bvh_intersect_shadow_all
@@ -136,37 +179,42 @@ CCL_NAMESPACE_BEGIN
 #include "geom_bvh_shadow.h"
 #endif
 
-/* Camera inside Volume BVH intersection */
+/* Record all intersections - Volume BVH traversal  */
 
-#if defined(__VOLUME__)
-#define BVH_FUNCTION_NAME bvh_intersect_volume
+#if defined(__VOLUME_RECORD_ALL__)
+#define BVH_FUNCTION_NAME bvh_intersect_volume_all
 #define BVH_FUNCTION_FEATURES 0
-#include "geom_bvh_volume.h"
+#include "geom_bvh_volume_all.h"
 #endif
 
-#if defined(__VOLUME__) && defined(__INSTANCING__)
-#define BVH_FUNCTION_NAME bvh_intersect_volume_instancing
+#if defined(__VOLUME_RECORD_ALL__) && defined(__INSTANCING__)
+#define BVH_FUNCTION_NAME bvh_intersect_volume_all_instancing
 #define BVH_FUNCTION_FEATURES BVH_INSTANCING
-#include "geom_bvh_volume.h"
+#include "geom_bvh_volume_all.h"
 #endif
 
-#if defined(__VOLUME__) && defined(__HAIR__)
-#define BVH_FUNCTION_NAME bvh_intersect_volume_hair
+#if defined(__VOLUME_RECORD_ALL__) && defined(__HAIR__)
+#define BVH_FUNCTION_NAME bvh_intersect_volume_all_hair
 #define BVH_FUNCTION_FEATURES BVH_INSTANCING|BVH_HAIR|BVH_HAIR_MINIMUM_WIDTH
-#include "geom_bvh_volume.h"
+#include "geom_bvh_volume_all.h"
 #endif
 
-#if defined(__VOLUME__) && defined(__OBJECT_MOTION__)
-#define BVH_FUNCTION_NAME bvh_intersect_volume_motion
+#if defined(__VOLUME_RECORD_ALL__) && defined(__OBJECT_MOTION__)
+#define BVH_FUNCTION_NAME bvh_intersect_volume_all_motion
 #define BVH_FUNCTION_FEATURES BVH_INSTANCING|BVH_MOTION
-#include "geom_bvh_volume.h"
+#include "geom_bvh_volume_all.h"
 #endif
 
-#if defined(__VOLUME__) && defined(__HAIR__) && defined(__OBJECT_MOTION__)
-#define BVH_FUNCTION_NAME bvh_intersect_volume_hair_motion
+#if defined(__VOLUME_RECORD_ALL__) && defined(__HAIR__) && defined(__OBJECT_MOTION__)
+#define BVH_FUNCTION_NAME bvh_intersect_volume_all_hair_motion
 #define BVH_FUNCTION_FEATURES BVH_INSTANCING|BVH_HAIR|BVH_HAIR_MINIMUM_WIDTH|BVH_MOTION
-#include "geom_bvh_volume.h"
+#include "geom_bvh_volume_all.h"
 #endif
+
+#undef BVH_FEATURE
+#undef BVH_NAME_JOIN
+#undef BVH_NAME_EVAL
+#undef BVH_FUNCTION_FULL_NAME
 
 ccl_device_intersect bool scene_intersect(KernelGlobals *kg, const Ray *ray, const uint visibility, Intersection *isect,
 					 uint *lcg_state, float difl, float extmax)
@@ -314,6 +362,37 @@ ccl_device_intersect bool scene_intersect_volume(KernelGlobals *kg,
 }
 #endif
 
+#ifdef __VOLUME_RECORD_ALL__
+ccl_device_intersect uint scene_intersect_volume_all(KernelGlobals *kg,
+                                                     const Ray *ray,
+                                                     Intersection *isect,
+                                                     const uint max_hits)
+{
+#ifdef __OBJECT_MOTION__
+	if(kernel_data.bvh.have_motion) {
+#ifdef __HAIR__
+		if(kernel_data.bvh.have_curves)
+			return bvh_intersect_volume_all_hair_motion(kg, ray, isect, max_hits);
+#endif /* __HAIR__ */
+
+		return bvh_intersect_volume_all_motion(kg, ray, isect, max_hits);
+	}
+#endif /* __OBJECT_MOTION__ */
+
+#ifdef __HAIR__
+	if(kernel_data.bvh.have_curves)
+		return bvh_intersect_volume_all_hair(kg, ray, isect, max_hits);
+#endif /* __HAIR__ */
+
+#ifdef __INSTANCING__
+	if(kernel_data.bvh.have_instancing)
+		return bvh_intersect_volume_all_instancing(kg, ray, isect, max_hits);
+#endif /* __INSTANCING__ */
+
+	return bvh_intersect_volume_all(kg, ray, isect, max_hits);
+}
+#endif
+
 
 /* Ray offset to avoid self intersection.
  *
@@ -367,6 +446,22 @@ ccl_device_inline float3 ray_offset(float3 P, float3 Ng)
 	return P + epsilon_f*Ng;
 #endif
 }
+
+#if defined(__SHADOW_RECORD_ALL__) || defined (__VOLUME_RECORD_ALL__)
+/* ToDo: Move to another file? */
+ccl_device int intersections_compare(const void *a, const void *b)
+{
+	const Intersection *isect_a = (const Intersection*)a;
+	const Intersection *isect_b = (const Intersection*)b;
+
+	if(isect_a->t < isect_b->t)
+		return -1;
+	else if(isect_a->t > isect_b->t)
+		return 1;
+	else
+		return 0;
+}
+#endif
 
 CCL_NAMESPACE_END
 

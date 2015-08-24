@@ -20,12 +20,13 @@
 import bpy
 from bpy.types import Panel
 
-from bl_ui.properties_physics_common import (basic_force_field_settings_ui,
-                                             basic_force_field_falloff_ui,
-                                             )
+from bl_ui.properties_physics_common import (
+        basic_force_field_settings_ui,
+        basic_force_field_falloff_ui,
+        )
 
 
-class PhysicButtonsPanel():
+class PhysicButtonsPanel:
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
     bl_context = "physics"

@@ -30,7 +30,7 @@
 
 // implementation
 
-#include "PyObjectPlus.h"
+#include "EXP_PyObjectPlus.h"
 #include <structmember.h>
 #include <float.h>
 #include <math.h>
@@ -75,8 +75,8 @@ ImageRender::ImageRender (KX_Scene *scene, KX_Camera * camera) :
     m_mirrorHalfWidth(0.f),
     m_mirrorHalfHeight(0.f)
 {
-	// initialize background color
-	setBackground(0, 0, 255, 255);
+	// initialize background color to scene background color as default
+	setBackgroundFromScene(m_scene);
 	// retrieve rendering objects
 	m_engine = KX_GetActiveEngine();
 	m_rasterizer = m_engine->GetRasterizer();
@@ -90,14 +90,33 @@ ImageRender::~ImageRender (void)
 		m_camera->Release();
 }
 
+// get background color
+float ImageRender::getBackground (int idx)
+{
+	return (idx < 0 || idx > 3) ? 0.0f : m_background[idx] * 255.0f;
+}
 
 // set background color
-void ImageRender::setBackground (int red, int green, int blue, int alpha)
+void ImageRender::setBackground (float red, float green, float blue, float alpha)
 {
-	m_background[0] = (red < 0) ? 0.f : (red > 255) ? 1.f : float(red)/255.f;
-	m_background[1] = (green < 0) ? 0.f : (green > 255) ? 1.f : float(green)/255.f;
-	m_background[2] = (blue < 0) ? 0.f : (blue > 255) ? 1.f : float(blue)/255.f;
-	m_background[3] = (alpha < 0) ? 0.f : (alpha > 255) ? 1.f : float(alpha)/255.f;
+	m_background[0] = (red < 0.0f) ? 0.0f : (red > 255.0f) ? 1.0f : red / 255.0f;
+	m_background[1] = (green < 0.0f) ? 0.0f : (green > 255.0f) ? 1.0f : green / 255.0f;
+	m_background[2] = (blue < 0.0f) ? 0.0f : (blue > 255.0f) ? 1.0f : blue / 255.0f;
+	m_background[3] = (alpha < 0.0f) ? 0.0f : (alpha > 255.0f) ? 1.0f : alpha / 255.0f;
+}
+
+// set background color from scene
+void ImageRender::setBackgroundFromScene (KX_Scene *scene)
+{
+	if (scene) {
+		const float *background_color = scene->GetWorldInfo()->getBackColorConverted();
+		copy_v3_v3(m_background, background_color);
+		m_background[3] = 1.0f;
+	}
+	else {
+		const float blue_color[] = {0.0f, 0.0f, 1.0f, 1.0f};
+		copy_v4_v4(m_background, blue_color);
+	}
 }
 
 
@@ -200,7 +219,7 @@ void ImageRender::Render()
 	m_canvas->ClearColor(m_background[0], m_background[1], m_background[2], m_background[3]);
 	m_canvas->ClearBuffer(RAS_ICanvas::COLOR_BUFFER|RAS_ICanvas::DEPTH_BUFFER);
 	m_rasterizer->BeginFrame(m_engine->GetClockTime());
-	m_engine->SetWorldSettings(m_scene->GetWorldInfo());
+	m_scene->GetWorldInfo()->UpdateWorldSettings();
 	m_rasterizer->SetAuxilaryClientInfo(m_scene);
 	m_rasterizer->DisplayFog();
 	// matrix calculation, don't apply any of the stereo mode
@@ -221,6 +240,8 @@ void ImageRender::Render()
 		float lens = m_camera->GetLens();
 		float sensor_x = m_camera->GetSensorWidth();
 		float sensor_y = m_camera->GetSensorHeight();
+		float shift_x = m_camera->GetShiftHorizontal();
+		float shift_y = m_camera->GetShiftVertical();
 		bool orthographic = !m_camera->GetCameraData()->m_perspective;
 		float nearfrust = m_camera->GetCameraNear();
 		float farfrust = m_camera->GetCameraFar();
@@ -241,6 +262,8 @@ void ImageRender::Render()
 			            m_camera->GetScale(),
 			            aspect_ratio,
 						m_camera->GetSensorFit(),
+			            shift_x,
+			            shift_y,
 			            frustrum
 			            );
 
@@ -255,6 +278,8 @@ void ImageRender::Render()
 			            sensor_x,
 			            sensor_y,
 			            RAS_SENSORFIT_AUTO,
+			            shift_x,
+			            shift_y,
 			            aspect_ratio,
 			            frustrum);
 			
@@ -272,9 +297,16 @@ void ImageRender::Render()
 	// restore the stereo mode now that the matrix is computed
 	m_rasterizer->SetStereoMode(stereomode);
 
+    if (stereomode == RAS_IRasterizer::RAS_STEREO_QUADBUFFERED) {
+        // In QUAD buffer stereo mode, the GE render pass ends with the right eye on the right buffer
+        // but we need to draw on the left buffer to capture the render
+        // TODO: implement an explicit function in rasterizer to restore the left buffer.
+        m_rasterizer->SetEye(RAS_IRasterizer::RAS_STEREO_LEFTEYE);
+    }
+
 	m_scene->CalculateVisibleMeshes(m_rasterizer,m_camera);
 
-	m_scene->UpdateAnimations(m_engine->GetFrameTime());
+	m_engine->UpdateAnimations(m_scene);
 
 	m_scene->RenderBuckets(camtrans, m_rasterizer);
 
@@ -344,7 +376,7 @@ static int ImageRender_init(PyObject *pySelf, PyObject *args, PyObject *kwds)
 // get background color
 static PyObject *getBackground (PyImage *self, void *closure)
 {
-	return Py_BuildValue("[BBBB]",
+	return Py_BuildValue("[ffff]",
 	                     getImageRender(self)->getBackground(0),
 	                     getImageRender(self)->getBackground(1),
 	                     getImageRender(self)->getBackground(2),
@@ -356,20 +388,20 @@ static int setBackground(PyImage *self, PyObject *value, void *closure)
 {
 	// check validity of parameter
 	if (value == NULL || !PySequence_Check(value) || PySequence_Size(value) != 4
-		|| !PyLong_Check(PySequence_Fast_GET_ITEM(value, 0))
-		|| !PyLong_Check(PySequence_Fast_GET_ITEM(value, 1))
-		|| !PyLong_Check(PySequence_Fast_GET_ITEM(value, 2))
-		|| !PyLong_Check(PySequence_Fast_GET_ITEM(value, 3)))
-	{
-		PyErr_SetString(PyExc_TypeError, "The value must be a sequence of 4 integer between 0 and 255");
+		|| (!PyFloat_Check(PySequence_Fast_GET_ITEM(value, 0)) && !PyLong_Check(PySequence_Fast_GET_ITEM(value, 0)))
+		|| (!PyFloat_Check(PySequence_Fast_GET_ITEM(value, 1)) && !PyLong_Check(PySequence_Fast_GET_ITEM(value, 1)))
+		|| (!PyFloat_Check(PySequence_Fast_GET_ITEM(value, 2)) && !PyLong_Check(PySequence_Fast_GET_ITEM(value, 2)))
+		|| (!PyFloat_Check(PySequence_Fast_GET_ITEM(value, 3)) && !PyLong_Check(PySequence_Fast_GET_ITEM(value, 3)))) {
+
+		PyErr_SetString(PyExc_TypeError, "The value must be a sequence of 4 floats or ints between 0.0 and 255.0");
 		return -1;
 	}
 	// set background color
 	getImageRender(self)->setBackground(
-	        (unsigned char)(PyLong_AsLong(PySequence_Fast_GET_ITEM(value, 0))),
-	        (unsigned char)(PyLong_AsLong(PySequence_Fast_GET_ITEM(value, 1))),
-	        (unsigned char)(PyLong_AsLong(PySequence_Fast_GET_ITEM(value, 2))),
-	        (unsigned char)(PyLong_AsLong(PySequence_Fast_GET_ITEM(value, 3))));
+	        PyFloat_AsDouble(PySequence_Fast_GET_ITEM(value, 0)),
+	        PyFloat_AsDouble(PySequence_Fast_GET_ITEM(value, 1)),
+	        PyFloat_AsDouble(PySequence_Fast_GET_ITEM(value, 2)),
+	        PyFloat_AsDouble(PySequence_Fast_GET_ITEM(value, 3)));
 	// success
 	return 0;
 }
@@ -729,7 +761,8 @@ ImageRender::ImageRender (KX_Scene *scene, KX_GameObject *observer, KX_GameObjec
 	m_mirrorX = m_mirrorY.cross(m_mirrorZ);
 	m_render = true;
 
-	setBackground(0, 0, 255, 255);
+	// set mirror background color to scene background color as default
+	setBackgroundFromScene(m_scene);
 }
 
 

@@ -35,6 +35,7 @@
 #include "BLI_blenlib.h"
 #include "BLI_utildefines.h"
 #include "BLI_fileops_types.h"
+#include "BLI_math.h"
 
 #ifdef WIN32
 #  include "BLI_winstuff.h"
@@ -47,8 +48,9 @@
 #include "BKE_global.h"
 #include "BKE_main.h"
 
-#include "BLF_api.h"
-#include "BLF_translation.h"
+#include "BLO_readfile.h"
+
+#include "BLT_translation.h"
 
 #include "IMB_imbuf_types.h"
 
@@ -65,12 +67,19 @@
 #include "UI_resources.h"
 #include "UI_view2d.h"
 
+#include "WM_api.h"
 #include "WM_types.h"
 
-#include "fsmenu.h"
 #include "filelist.h"
 
 #include "file_intern.h"    // own include
+
+/* Dummy helper - we need dynamic tooltips here. */
+static char *file_draw_tooltip_func(bContext *UNUSED(C), void *argN, const char *UNUSED(tip))
+{
+	char *dyn_tooltip = argN;
+	return BLI_strdup(dyn_tooltip);
+}
 
 /* Note: This function uses pixelspace (0, 0, winx, winy), not view2d. 
  * The controls are laid out as follows:
@@ -113,6 +122,7 @@ void file_draw_buttons(const bContext *C, ARegion *ar)
 	SpaceFile *sfile  = CTX_wm_space_file(C);
 	FileSelectParams *params = ED_fileselect_get_params(sfile);
 	ARegion *artmp;
+	const bool is_browse_only = (sfile->op == NULL);
 	
 	/* Initialize UI block. */
 	BLI_snprintf(uiblockstr, sizeof(uiblockstr), "win %p", (void *)ar);
@@ -120,21 +130,29 @@ void file_draw_buttons(const bContext *C, ARegion *ar)
 
 	/* exception to make space for collapsed region icon */
 	for (artmp = CTX_wm_area(C)->regionbase.first; artmp; artmp = artmp->next) {
-		if (artmp->regiontype == RGN_TYPE_CHANNELS && artmp->flag & RGN_FLAG_HIDDEN) {
+		if (artmp->regiontype == RGN_TYPE_TOOLS && artmp->flag & RGN_FLAG_HIDDEN) {
 			chan_offs = 16;
 			min_x += chan_offs;
 			available_w -= chan_offs;
 		}
 	}
-	
-	/* Is there enough space for the execute / cancel buttons? */
-	loadbutton = UI_fontstyle_string_width(params->title) + btn_margin;
-	CLAMP_MIN(loadbutton, btn_minw);
 
-	if (available_w <= loadbutton + separator + input_minw || params->title[0] == 0) {
+	/* Is there enough space for the execute / cancel buttons? */
+
+
+	if (is_browse_only) {
 		loadbutton = 0;
 	}
 	else {
+		const uiFontStyle *fstyle = UI_FSTYLE_WIDGET;
+		loadbutton = UI_fontstyle_string_width(fstyle, params->title) + btn_margin;
+		CLAMP_MIN(loadbutton, btn_minw);
+		if (available_w <= loadbutton + separator + input_minw) {
+			loadbutton = 0;
+		}
+	}
+
+	if (loadbutton) {
 		line1_w -= (loadbutton + separator);
 		line2_w  = line1_w;
 	}
@@ -147,10 +165,13 @@ void file_draw_buttons(const bContext *C, ARegion *ar)
 	else {
 		line2_w -= (fnumbuttons + separator);
 	}
-	
+
 	/* Text input fields for directory and file. */
 	if (available_w > 0) {
+		const struct FileDirEntry *file = sfile->files ? filelist_file(sfile->files, params->active_file) : NULL;
 		int overwrite_alert = file_draw_check_exists(sfile);
+		const bool is_active_dir = file && (file->typeflag & FILE_TYPE_FOLDER);
+
 		/* callbacks for operator check functions */
 		UI_block_func_set(block, file_draw_check_cb, NULL, NULL);
 
@@ -171,7 +192,8 @@ void file_draw_buttons(const bContext *C, ARegion *ar)
 		if ((params->flag & FILE_DIRSEL_ONLY) == 0) {
 			but = uiDefBut(block, UI_BTYPE_TEXT, -1, "",
 			               min_x, line2_y, line2_w - chan_offs, btn_h,
-			               params->file, 0.0, (float)FILE_MAXFILE, 0, 0,
+			               is_active_dir ? (char *)"" : params->file,
+			               0.0, (float)FILE_MAXFILE, 0, 0,
 			               TIP_(overwrite_alert ? N_("File name, overwrite existing") : N_("File name")));
 			UI_but_func_complete_set(but, autocomplete_file, NULL);
 			UI_but_flag_enable(but, UI_BUT_NO_UTF8);
@@ -209,8 +231,12 @@ void file_draw_buttons(const bContext *C, ARegion *ar)
 	
 	/* Execute / cancel buttons. */
 	if (loadbutton) {
-		/* params->title is already translated! */
-		uiDefButO(block, UI_BTYPE_BUT, "FILE_OT_execute", WM_OP_EXEC_REGION_WIN, params->title,
+		const struct FileDirEntry *file = sfile->files ? filelist_file(sfile->files, params->active_file) : NULL;
+		const char *str_exec = (file && (file->typeflag & FILE_TYPE_FOLDER)) ?
+		                        /* params->title is already translated! */
+		                        IFACE_("Open Directory") : params->title;
+
+		uiDefButO(block, UI_BTYPE_BUT, "FILE_OT_execute", WM_OP_EXEC_REGION_WIN, str_exec,
 		          max_x - loadbutton, line1_y, loadbutton, btn_h, "");
 		uiDefButO(block, UI_BTYPE_BUT, "FILE_OT_cancel", WM_OP_EXEC_REGION_WIN, IFACE_("Cancel"),
 		          max_x - loadbutton, line2_y, loadbutton, btn_h, "");
@@ -229,45 +255,7 @@ static void draw_tile(int sx, int sy, int width, int height, int colorid, int sh
 }
 
 
-static int get_file_icon(struct direntry *file)
-{
-	if (file->type & S_IFDIR) {
-		if (strcmp(file->relname, "..") == 0) {
-			return ICON_FILE_PARENT;
-		}
-		if (file->flags & APPLICATIONBUNDLE) {
-			return ICON_UGLYPACKAGE;
-		}
-		if (file->flags & BLENDERFILE) {
-			return ICON_FILE_BLEND;
-		}
-		return ICON_FILE_FOLDER;
-	}
-	else if (file->flags & BLENDERFILE)
-		return ICON_FILE_BLEND;
-	else if (file->flags & BLENDERFILE_BACKUP)
-		return ICON_FILE_BACKUP;
-	else if (file->flags & IMAGEFILE)
-		return ICON_FILE_IMAGE;
-	else if (file->flags & MOVIEFILE)
-		return ICON_FILE_MOVIE;
-	else if (file->flags & PYSCRIPTFILE)
-		return ICON_FILE_SCRIPT;
-	else if (file->flags & SOUNDFILE)
-		return ICON_FILE_SOUND;
-	else if (file->flags & FTFONTFILE)
-		return ICON_FILE_FONT;
-	else if (file->flags & BTXFILE)
-		return ICON_FILE_BLANK;
-	else if (file->flags & COLLADAFILE)
-		return ICON_FILE_BLANK;
-	else if (file->flags & TEXTFILE)
-		return ICON_FILE_TEXT;
-	else
-		return ICON_FILE_BLANK;
-}
-
-static void file_draw_icon(uiBlock *block, char *path, int sx, int sy, int icon, int width, int height, bool drag)
+static void file_draw_icon(uiBlock *block, const char *path, int sx, int sy, int icon, int width, int height, bool drag)
 {
 	uiBut *but;
 	int x, y;
@@ -278,31 +266,41 @@ static void file_draw_icon(uiBlock *block, char *path, int sx, int sy, int icon,
 	
 	/*if (icon == ICON_FILE_BLANK) alpha = 0.375f;*/
 
-	but = uiDefIconBut(block, UI_BTYPE_LABEL, 0, icon, x, y, width, height, NULL, 0.0f, 0.0f, 0.0f, 0.0f, "");
+	but = uiDefIconBut(block, UI_BTYPE_LABEL, 0, icon, x, y, width, height, NULL, 0.0f, 0.0f, 0.0f, 0.0f, NULL);
+	UI_but_func_tooltip_set(but, file_draw_tooltip_func, BLI_strdup(path));
 
-	if (drag)
-		UI_but_drag_set_path(but, path);
+	if (drag) {
+		/* path is no more static, cannot give it directly to but... */
+		UI_but_drag_set_path(but, BLI_strdup(path), true);
+	}
 }
 
 
 static void file_draw_string(int sx, int sy, const char *string, float width, int height, short align)
 {
-	uiStyle *style = UI_style_get();
-	uiFontStyle fs = style->widgetlabel;
+	uiStyle *style;
+	uiFontStyle fs;
 	rcti rect;
 	char fname[FILE_MAXFILE];
+
+	if (string[0] == '\0') {
+		return;
+	}
+
+	style = UI_style_get();
+	fs = style->widgetlabel;
 
 	fs.align = align;
 
 	BLI_strncpy(fname, string, FILE_MAXFILE);
-	file_shorten_string(fname, width + 1.0f, 0);
+	UI_text_clip_middle_ex(&fs, fname, width, UI_DPI_ICON_SIZE, sizeof(fname), '\0');
 
 	/* no text clipping needed, UI_fontstyle_draw does it but is a bit too strict (for buttons it works) */
 	rect.xmin = sx;
-	rect.xmax = (int)(sx + ceil(width + 4.0f));
+	rect.xmax = (int)(sx + ceil(width + 5.0f / UI_DPI_FAC));
 	rect.ymin = sy - height;
 	rect.ymax = sy;
-	
+
 	UI_fontstyle_draw(&fs, &rect, fname);
 }
 
@@ -315,72 +313,92 @@ void file_calc_previews(const bContext *C, ARegion *ar)
 	UI_view2d_totRect_set(v2d, sfile->layout->width, sfile->layout->height);
 }
 
-static void file_draw_preview(uiBlock *block, struct direntry *file, int sx, int sy, ImBuf *imb, FileLayout *layout, bool dropshadow, bool drag)
+static void file_draw_preview(
+        uiBlock *block, const char *path, int sx, int sy, const float icon_aspect,
+        ImBuf *imb, const int icon, FileLayout *layout, const bool is_icon, const int typeflags, const bool drag)
 {
-	if (imb) {
-		uiBut *but;
-		float fx, fy;
-		float dx, dy;
-		int xco, yco;
-		float scaledx, scaledy;
-		float scale;
-		int ex, ey;
-		
-		if ((imb->x * UI_DPI_FAC > layout->prv_w) ||
-		    (imb->y * UI_DPI_FAC > layout->prv_h))
-		{
-			if (imb->x > imb->y) {
-				scaledx = (float)layout->prv_w;
-				scaledy =  ( (float)imb->y / (float)imb->x) * layout->prv_w;
-				scale = scaledx / imb->x;
-			}
-			else {
-				scaledy = (float)layout->prv_h;
-				scaledx =  ( (float)imb->x / (float)imb->y) * layout->prv_h;
-				scale = scaledy / imb->y;
-			}
+	uiBut *but;
+	float fx, fy;
+	float dx, dy;
+	int xco, yco;
+	float ui_imbx, ui_imby;
+	float scaledx, scaledy;
+	float scale;
+	int ex, ey;
+	bool use_dropshadow = !is_icon && (typeflags & FILE_TYPE_IMAGE);
+
+	BLI_assert(imb != NULL);
+
+	ui_imbx = imb->x * UI_DPI_FAC;
+	ui_imby = imb->y * UI_DPI_FAC;
+	/* Unlike thumbnails, icons are not scaled up. */
+	if (((ui_imbx > layout->prv_w) || (ui_imby > layout->prv_h)) ||
+	    (!is_icon && ((ui_imbx < layout->prv_w) || (ui_imby < layout->prv_h))))
+	{
+		if (imb->x > imb->y) {
+			scaledx = (float)layout->prv_w;
+			scaledy = ((float)imb->y / (float)imb->x) * layout->prv_w;
+			scale = scaledx / imb->x;
 		}
 		else {
-			scaledx = (float)imb->x * UI_DPI_FAC;
-			scaledy = (float)imb->y * UI_DPI_FAC;
-			scale = UI_DPI_FAC;
+			scaledy = (float)layout->prv_h;
+			scaledx = ((float)imb->x / (float)imb->y) * layout->prv_h;
+			scale = scaledy / imb->y;
 		}
-
-		ex = (int)scaledx;
-		ey = (int)scaledy;
-		fx = ((float)layout->prv_w - (float)ex) / 2.0f;
-		fy = ((float)layout->prv_h - (float)ey) / 2.0f;
-		dx = (fx + 0.5f + layout->prv_border_x);
-		dy = (fy + 0.5f - layout->prv_border_y);
-		xco = sx + (int)dx;
-		yco = sy - layout->prv_h + (int)dy;
-		
-		glBlendFunc(GL_SRC_ALPHA,  GL_ONE_MINUS_SRC_ALPHA);
-		
-		/* shadow */
-		if (dropshadow)
-			UI_draw_box_shadow(220, (float)xco, (float)yco, (float)(xco + ex), (float)(yco + ey));
-
-		glEnable(GL_BLEND);
-		
-		/* the image */
-		glColor4f(1.0, 1.0, 1.0, 1.0);
-		glaDrawPixelsTexScaled((float)xco, (float)yco, imb->x, imb->y, GL_RGBA, GL_UNSIGNED_BYTE, GL_NEAREST, imb->rect, scale, scale);
-		
-		/* border */
-		if (dropshadow) {
-			glColor4f(0.0f, 0.0f, 0.0f, 0.4f);
-			fdrawbox((float)xco, (float)yco, (float)(xco + ex), (float)(yco + ey));
-		}
-		
-		/* dragregion */
-		if (drag) {
-			but = uiDefBut(block, UI_BTYPE_LABEL, 0, "", xco, yco, ex, ey, NULL, 0.0, 0.0, 0, 0, "");
-			UI_but_drag_set_image(but, file->path, get_file_icon(file), imb, scale);
-		}
-		
-		glDisable(GL_BLEND);
 	}
+	else {
+		scaledx = ui_imbx;
+		scaledy = ui_imby;
+		scale = UI_DPI_FAC;
+	}
+
+	ex = (int)scaledx;
+	ey = (int)scaledy;
+	fx = ((float)layout->prv_w - (float)ex) / 2.0f;
+	fy = ((float)layout->prv_h - (float)ey) / 2.0f;
+	dx = (fx + 0.5f + layout->prv_border_x);
+	dy = (fy + 0.5f - layout->prv_border_y);
+	xco = sx + (int)dx;
+	yco = sy - layout->prv_h + (int)dy;
+
+	glBlendFunc(GL_SRC_ALPHA,  GL_ONE_MINUS_SRC_ALPHA);
+
+	/* shadow */
+	if (use_dropshadow) {
+		UI_draw_box_shadow(220, (float)xco, (float)yco, (float)(xco + ex), (float)(yco + ey));
+	}
+
+	glEnable(GL_BLEND);
+
+	/* the image */
+	if (!is_icon && typeflags & FILE_TYPE_FTFONT) {
+		UI_ThemeColor(TH_TEXT);
+	}
+	else {
+		glColor4f(1.0, 1.0, 1.0, 1.0);
+	}
+	glaDrawPixelsTexScaled((float)xco, (float)yco, imb->x, imb->y, GL_RGBA, GL_UNSIGNED_BYTE, GL_NEAREST, imb->rect, scale, scale);
+
+	if (icon) {
+		UI_icon_draw_aspect((float)xco, (float)yco, icon, icon_aspect, 1.0f);
+	}
+
+	/* border */
+	if (use_dropshadow) {
+		glColor4f(0.0f, 0.0f, 0.0f, 0.4f);
+		fdrawbox((float)xco, (float)yco, (float)(xco + ex), (float)(yco + ey));
+	}
+
+	but = uiDefBut(block, UI_BTYPE_LABEL, 0, "", xco, yco, ex, ey, NULL, 0.0, 0.0, 0, 0, NULL);
+	UI_but_func_tooltip_set(but, file_draw_tooltip_func, BLI_strdup(path));
+
+	/* dragregion */
+	if (drag) {
+		/* path is no more static, cannot give it directly to but... */
+		UI_but_drag_set_image(but, BLI_strdup(path), icon, imb, scale, true);
+	}
+
+	glDisable(GL_BLEND);
 }
 
 static void renamebutton_cb(bContext *C, void *UNUSED(arg1), char *oldname)
@@ -390,17 +408,19 @@ static void renamebutton_cb(bContext *C, void *UNUSED(arg1), char *oldname)
 	char filename[FILE_MAX + 12];
 	wmWindowManager *wm = CTX_wm_manager(C);
 	SpaceFile *sfile = (SpaceFile *)CTX_wm_space_data(C);
+	ScrArea *sa = CTX_wm_area(C);
 	ARegion *ar = CTX_wm_region(C);
 
 	BLI_make_file_string(G.main->name, orgname, sfile->params->dir, oldname);
 	BLI_strncpy(filename, sfile->params->renameedit, sizeof(filename));
+	BLI_filename_make_safe(filename);
 	BLI_make_file_string(G.main->name, newname, sfile->params->dir, filename);
 
-	if (strcmp(orgname, newname) != 0) {
+	if (!STREQ(orgname, newname)) {
 		if (!BLI_exists(newname)) {
 			BLI_rename(orgname, newname);
 			/* to make sure we show what is on disk */
-			ED_fileselect_clear(wm, sfile);
+			ED_fileselect_clear(wm, sa, sfile);
 		}
 
 		ED_region_tag_redraw(ar);
@@ -465,7 +485,8 @@ void file_draw_list(const bContext *C, ARegion *ar)
 	FileLayout *layout = ED_fileselect_get_layout(sfile, ar);
 	View2D *v2d = &ar->v2d;
 	struct FileList *files = sfile->files;
-	struct direntry *file;
+	struct FileDirEntry *file;
+	const char *root = filelist_dir(files);
 	ImBuf *imb;
 	uiBlock *block = UI_block_begin(C, ar, __func__, UI_EMBOSS);
 	int numfiles;
@@ -478,8 +499,11 @@ void file_draw_list(const bContext *C, ARegion *ar)
 	short align;
 	bool do_drag;
 	int column_space = 0.6f * UI_UNIT_X;
+	const bool small_size = SMALL_SIZE_CHECK(params->thumbnail_size);
+	const bool update_stat_strings = small_size != SMALL_SIZE_CHECK(layout->curr_size);
+	const float thumb_icon_aspect = sqrtf(64.0f / (float)(params->thumbnail_size));
 
-	numfiles = filelist_numfiles(files);
+	numfiles = filelist_files_ensure(files);
 	
 	if (params->display != FILE_IMGDISPLAY) {
 
@@ -501,51 +525,91 @@ void file_draw_list(const bContext *C, ARegion *ar)
 		numfiles_layout += layout->columns;
 	}
 
+	filelist_file_cache_slidingwindow_set(files, numfiles_layout);
+
 	textwidth = (FILE_IMGDISPLAY == params->display) ? layout->tile_w : (int)layout->column_widths[COLUMN_NAME];
 	textheight = (int)(layout->textheight * 3.0 / 2.0 + 0.5);
 
 	align = (FILE_IMGDISPLAY == params->display) ? UI_STYLE_TEXT_CENTER : UI_STYLE_TEXT_LEFT;
 
+	if (numfiles > 0) {
+		const bool success = filelist_file_cache_block(files, min_ii(offset + (numfiles_layout / 2), numfiles - 1));
+		BLI_assert(success);
+		UNUSED_VARS_NDEBUG(success);
+
+		filelist_cache_previews_update(files);
+
+		/* Handle preview timer here, since it's filelist_file_cache_block() and filelist_cache_previews_update()
+		 * which controlls previews task. */
+		{
+			const bool previews_running = filelist_cache_previews_running(files);
+//			printf("%s: preview task: %d\n", __func__, previews_running);
+			if (previews_running && !sfile->previews_timer) {
+				sfile->previews_timer = WM_event_add_timer_notifier(CTX_wm_manager(C), CTX_wm_window(C),
+				                                                    NC_SPACE | ND_SPACE_FILE_PREVIEW, 0.01);
+			}
+			if (!previews_running && sfile->previews_timer) {
+				/* Preview is not running, no need to keep generating update events! */
+//				printf("%s: Inactive preview task, sleeping!\n", __func__);
+				WM_event_remove_timer_notifier(CTX_wm_manager(C), CTX_wm_window(C), sfile->previews_timer);
+				sfile->previews_timer = NULL;
+			}
+		}
+	}
+
 	for (i = offset; (i < numfiles) && (i < offset + numfiles_layout); i++) {
+		unsigned int file_selflag;
+		char path[FILE_MAX_LIBEXTRA];
 		ED_fileselect_layout_tilepos(layout, i, &sx, &sy);
 		sx += (int)(v2d->tot.xmin + 0.1f * UI_UNIT_X);
 		sy = (int)(v2d->tot.ymax - sy);
 
 		file = filelist_file(files, i);
-		
+		file_selflag = filelist_entry_select_get(sfile->files, file, CHECK_ALL);
+
+		BLI_join_dirfile(path, sizeof(path), root, file->relpath);
+
 		UI_ThemeColor4(TH_TEXT);
 
 
-		if (!(file->selflag & EDITING_FILE)) {
-			if ((params->active_file == i) || (file->selflag & HILITED_FILE) || (file->selflag & SELECTED_FILE)) {
-				int colorid = (file->selflag & SELECTED_FILE) ? TH_HILITE : TH_BACK;
-				int shade = (params->active_file == i) || (file->selflag & HILITED_FILE) ? 20 : 0;
+		if (!(file_selflag & FILE_SEL_EDITING)) {
+			if ((params->highlight_file == i) || (file_selflag & FILE_SEL_HIGHLIGHTED) ||
+			    (file_selflag & FILE_SEL_SELECTED))
+			{
+				int colorid = (file_selflag & FILE_SEL_SELECTED) ? TH_HILITE : TH_BACK;
+				int shade = (params->highlight_file == i) || (file_selflag & FILE_SEL_HIGHLIGHTED) ? 35 : 0;
+
+				BLI_assert(i > 0 || FILENAME_IS_CURRPAR(file->relpath));
+
 				draw_tile(sx, sy - 1, layout->tile_w + 4, sfile->layout->tile_h + layout->tile_border_y, colorid, shade);
 			}
 		}
 		UI_draw_roundbox_corner_set(UI_CNR_NONE);
 
 		/* don't drag parent or refresh items */
-		do_drag = !(STREQ(file->relname, "..") || STREQ(file->relname, "."));
+		do_drag = !(FILENAME_IS_CURRPAR(file->relpath));
 
 		if (FILE_IMGDISPLAY == params->display) {
+			const int icon = filelist_geticon(files, i, false);
 			is_icon = 0;
 			imb = filelist_getimage(files, i);
 			if (!imb) {
-				imb = filelist_geticon(files, i);
+				imb = filelist_geticon_image(files, i);
 				is_icon = 1;
 			}
-			
-			file_draw_preview(block, file, sx, sy, imb, layout, !is_icon && (file->flags & IMAGEFILE), do_drag);
+
+			file_draw_preview(block, path, sx, sy, thumb_icon_aspect,
+			                  imb, icon, layout, is_icon, file->typeflag, do_drag);
 		}
 		else {
-			file_draw_icon(block, file->path, sx, sy - (UI_UNIT_Y / 6), get_file_icon(file), ICON_DEFAULT_WIDTH_SCALE, ICON_DEFAULT_HEIGHT_SCALE, do_drag);
+			file_draw_icon(block, path, sx, sy - (UI_UNIT_Y / 6), filelist_geticon(files, i, true),
+			               ICON_DEFAULT_WIDTH_SCALE, ICON_DEFAULT_HEIGHT_SCALE, do_drag);
 			sx += ICON_DEFAULT_WIDTH_SCALE + 0.2f * UI_UNIT_X;
 		}
 
 		UI_ThemeColor4(TH_TEXT);
 
-		if (file->selflag & EDITING_FILE) {
+		if (file_selflag & FILE_SEL_EDITING) {
 			uiBut *but;
 			short width;
 
@@ -553,9 +617,7 @@ void file_draw_list(const bContext *C, ARegion *ar)
 				width = layout->tile_w - (ICON_DEFAULT_WIDTH_SCALE + 0.2f * UI_UNIT_X);
 			}
 			else if (params->display == FILE_LONGDISPLAY) {
-				width = layout->column_widths[COLUMN_NAME]  + layout->column_widths[COLUMN_MODE1] +
-				        layout->column_widths[COLUMN_MODE2] + layout->column_widths[COLUMN_MODE3] +
-				        (column_space * 3.5f);
+				width = layout->column_widths[COLUMN_NAME] + (column_space * 3.5f);
 			}
 			else {
 				BLI_assert(params->display == FILE_IMGDISPLAY);
@@ -563,59 +625,68 @@ void file_draw_list(const bContext *C, ARegion *ar)
 			}
 
 			but = uiDefBut(block, UI_BTYPE_TEXT, 1, "", sx, sy - layout->tile_h - 0.15f * UI_UNIT_X,
-			               width, textheight, sfile->params->renameedit, 1.0f, (float)sizeof(sfile->params->renameedit), 0, 0, "");
+			               width, textheight, sfile->params->renameedit, 1.0f,
+			               (float)sizeof(sfile->params->renameedit), 0, 0, "");
 			UI_but_func_rename_set(but, renamebutton_cb, file);
 			UI_but_flag_enable(but, UI_BUT_NO_UTF8); /* allow non utf8 names */
 			UI_but_flag_disable(but, UI_BUT_UNDO);
 			if (false == UI_but_active_only(C, ar, block, but)) {
-				file->selflag &= ~EDITING_FILE;
+				file_selflag = filelist_entry_select_set(
+				                   sfile->files, file, FILE_SEL_REMOVE, FILE_SEL_EDITING, CHECK_ALL);
 			}
 		}
 
-		if (!(file->selflag & EDITING_FILE)) {
+		if (!(file_selflag& FILE_SEL_EDITING)) {
 			int tpos = (FILE_IMGDISPLAY == params->display) ? sy - layout->tile_h + layout->textheight : sy;
-			file_draw_string(sx + 1, tpos, file->relname, (float)textwidth, textheight, align);
+			file_draw_string(sx + 1, tpos, file->name, (float)textwidth, textheight, align);
 		}
 
+		sx += (int)layout->column_widths[COLUMN_NAME] + column_space;
 		if (params->display == FILE_SHORTDISPLAY) {
-			sx += (int)layout->column_widths[COLUMN_NAME] + column_space;
-			if (!(file->type & S_IFDIR)) {
-				file_draw_string(sx, sy, file->size, layout->column_widths[COLUMN_SIZE], layout->tile_h, align);
-				sx += (int)layout->column_widths[COLUMN_SIZE] + column_space;
+			if ((file->typeflag & (FILE_TYPE_BLENDER | FILE_TYPE_BLENDER_BACKUP)) ||
+			    !(file->typeflag & (FILE_TYPE_DIR | FILE_TYPE_BLENDERLIB)))
+			{
+				if ((file->entry->size_str[0] == '\0') || update_stat_strings) {
+					BLI_filelist_entry_size_to_string(NULL, file->entry->size, small_size, file->entry->size_str);
+				}
+				file_draw_string(
+				            sx, sy, file->entry->size_str, layout->column_widths[COLUMN_SIZE], layout->tile_h, align);
 			}
+			sx += (int)layout->column_widths[COLUMN_SIZE] + column_space;
 		}
 		else if (params->display == FILE_LONGDISPLAY) {
-			sx += (int)layout->column_widths[COLUMN_NAME] + column_space;
-
-#ifndef WIN32
-			/* rwx rwx rwx */
-			file_draw_string(sx, sy, file->mode1, layout->column_widths[COLUMN_MODE1], layout->tile_h, align); 
-			sx += layout->column_widths[COLUMN_MODE1] + column_space;
-
-			file_draw_string(sx, sy, file->mode2, layout->column_widths[COLUMN_MODE2], layout->tile_h, align);
-			sx += layout->column_widths[COLUMN_MODE2] + column_space;
-
-			file_draw_string(sx, sy, file->mode3, layout->column_widths[COLUMN_MODE3], layout->tile_h, align);
-			sx += layout->column_widths[COLUMN_MODE3] + column_space;
-
-			file_draw_string(sx, sy, file->owner, layout->column_widths[COLUMN_OWNER], layout->tile_h, align);
-			sx += layout->column_widths[COLUMN_OWNER] + column_space;
-#endif
-
-			file_draw_string(sx, sy, file->date, layout->column_widths[COLUMN_DATE], layout->tile_h, align);
-			sx += (int)layout->column_widths[COLUMN_DATE] + column_space;
-
-			file_draw_string(sx, sy, file->time, layout->column_widths[COLUMN_TIME], layout->tile_h, align);
-			sx += (int)layout->column_widths[COLUMN_TIME] + column_space;
-
-			if (!(file->type & S_IFDIR)) {
-				file_draw_string(sx, sy, file->size, layout->column_widths[COLUMN_SIZE], layout->tile_h, align);
-				sx += (int)layout->column_widths[COLUMN_SIZE] + column_space;
+			if (!(file->typeflag & FILE_TYPE_BLENDERLIB) && !FILENAME_IS_CURRPAR(file->relpath)) {
+				if ((file->entry->date_str[0] == '\0') || update_stat_strings) {
+					BLI_filelist_entry_datetime_to_string(
+					            NULL, file->entry->time, small_size, file->entry->time_str, file->entry->date_str);
+				}
+				file_draw_string(
+				            sx, sy, file->entry->date_str, layout->column_widths[COLUMN_DATE], layout->tile_h, align);
+				sx += (int)layout->column_widths[COLUMN_DATE] + column_space;
+				file_draw_string(
+				            sx, sy, file->entry->time_str, layout->column_widths[COLUMN_TIME], layout->tile_h, align);
+				sx += (int)layout->column_widths[COLUMN_TIME] + column_space;
 			}
+			else {
+				sx += (int)layout->column_widths[COLUMN_DATE] + column_space;
+				sx += (int)layout->column_widths[COLUMN_TIME] + column_space;
+			}
+
+			if ((file->typeflag & (FILE_TYPE_BLENDER | FILE_TYPE_BLENDER_BACKUP)) ||
+			    !(file->typeflag & (FILE_TYPE_DIR | FILE_TYPE_BLENDERLIB)))
+			{
+				if ((file->entry->size_str[0] == '\0') || update_stat_strings) {
+					BLI_filelist_entry_size_to_string(NULL, file->entry->size, small_size, file->entry->size_str);
+				}
+				file_draw_string(
+				            sx, sy, file->entry->size_str, layout->column_widths[COLUMN_SIZE], layout->tile_h, align);
+			}
+			sx += (int)layout->column_widths[COLUMN_SIZE] + column_space;
 		}
 	}
 
 	UI_block_end(C, block);
 	UI_block_draw(C, block);
 
+	layout->curr_size = params->thumbnail_size;
 }

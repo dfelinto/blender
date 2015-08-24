@@ -26,12 +26,13 @@
  *  \ingroup edscr
  */
 
-
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "DNA_object_types.h"
 #include "DNA_armature_types.h"
+#include "DNA_gpencil_types.h"
 #include "DNA_sequence_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
@@ -45,16 +46,31 @@
 #include "BKE_object.h"
 #include "BKE_action.h"
 #include "BKE_armature.h"
+#include "BKE_gpencil.h"
+#include "BKE_screen.h"
 #include "BKE_sequencer.h"
 
 #include "RNA_access.h"
 
 #include "ED_armature.h"
+#include "ED_gpencil.h"
 
 #include "WM_api.h"
 #include "UI_interface.h"
 
 #include "screen_intern.h"
+
+static unsigned int context_layers(bScreen *sc, Scene *scene, ScrArea *sa_ctx)
+{
+	/* needed for 'USE_ALLSELECT' define, otherwise we end up editing off-screen layers. */
+	if (sc && sa_ctx && (sa_ctx->spacetype == SPACE_BUTS)) {
+		const unsigned int lay = BKE_screen_view3d_layer_all(sc);
+		if (lay) {
+			return lay;
+		}
+	}
+	return scene->lay;
+}
 
 const char *screen_context_dir[] = {
 	"scene", "visible_objects", "visible_bases", "selectable_objects", "selectable_bases",
@@ -66,15 +82,18 @@ const char *screen_context_dir[] = {
 	"sculpt_object", "vertex_paint_object", "weight_paint_object",
 	"image_paint_object", "particle_edit_object",
 	"sequences", "selected_sequences", "selected_editable_sequences", /* sequencer */
+	"gpencil_data", "gpencil_data_owner", /* grease pencil data */
+	"visible_gpencil_layers", "editable_gpencil_layers", "editable_gpencil_strokes",
+	"active_gpencil_layer", "active_gpencil_frame",
 	"active_operator",
 	NULL};
 
 int ed_screen_context(const bContext *C, const char *member, bContextDataResult *result)
 {
 	bScreen *sc = CTX_wm_screen(C);
+	ScrArea *sa = CTX_wm_area(C);
 	Scene *scene = sc->scene;
 	Base *base;
-	unsigned int lay = scene->lay;
 
 #if 0  /* Using the context breaks adding objects in the UI. Need to find out why - campbell */
 	Object *obact = CTX_data_active_object(C);
@@ -95,10 +114,11 @@ int ed_screen_context(const bContext *C, const char *member, bContextDataResult 
 		return 1;
 	}
 	else if (CTX_data_equals(member, "visible_objects") || CTX_data_equals(member, "visible_bases")) {
+		const unsigned int lay = context_layers(sc, scene, sa);
 		int visible_objects = CTX_data_equals(member, "visible_objects");
 
 		for (base = scene->base.first; base; base = base->next) {
-			if (((base->object->restrictflag & OB_RESTRICT_VIEW) == 0) && (base->lay & scene->lay)) {
+			if (((base->object->restrictflag & OB_RESTRICT_VIEW) == 0) && (base->lay & lay)) {
 				if (visible_objects)
 					CTX_data_id_list_add(result, &base->object->id);
 				else
@@ -109,6 +129,7 @@ int ed_screen_context(const bContext *C, const char *member, bContextDataResult 
 		return 1;
 	}
 	else if (CTX_data_equals(member, "selectable_objects") || CTX_data_equals(member, "selectable_bases")) {
+		const unsigned int lay = context_layers(sc, scene, sa);
 		int selectable_objects = CTX_data_equals(member, "selectable_objects");
 
 		for (base = scene->base.first; base; base = base->next) {
@@ -125,10 +146,11 @@ int ed_screen_context(const bContext *C, const char *member, bContextDataResult 
 		return 1;
 	}
 	else if (CTX_data_equals(member, "selected_objects") || CTX_data_equals(member, "selected_bases")) {
+		const unsigned int lay = context_layers(sc, scene, sa);
 		int selected_objects = CTX_data_equals(member, "selected_objects");
 
 		for (base = scene->base.first; base; base = base->next) {
-			if ((base->flag & SELECT) && (base->lay & scene->lay)) {
+			if ((base->flag & SELECT) && (base->lay & lay)) {
 				if (selected_objects)
 					CTX_data_id_list_add(result, &base->object->id);
 				else
@@ -139,10 +161,11 @@ int ed_screen_context(const bContext *C, const char *member, bContextDataResult 
 		return 1;
 	}
 	else if (CTX_data_equals(member, "selected_editable_objects") || CTX_data_equals(member, "selected_editable_bases")) {
+		const unsigned int lay = context_layers(sc, scene, sa);
 		int selected_editable_objects = CTX_data_equals(member, "selected_editable_objects");
 
 		for (base = scene->base.first; base; base = base->next) {
-			if ((base->flag & SELECT) && (base->lay & scene->lay)) {
+			if ((base->flag & SELECT) && (base->lay & lay)) {
 				if ((base->object->restrictflag & OB_RESTRICT_VIEW) == 0) {
 					if (0 == BKE_object_is_libdata(base->object)) {
 						if (selected_editable_objects)
@@ -392,6 +415,114 @@ int ed_screen_context(const bContext *C, const char *member, bContextDataResult 
 			return 1;
 		}
 	}
+	else if (CTX_data_equals(member, "gpencil_data")) {
+		/* FIXME: for some reason, CTX_data_active_object(C) returns NULL when called from these situations
+		 * (as outlined above - see Campbell's #ifdefs). That causes the get_active function to fail when 
+		 * called from context. For that reason, we end up using an alternative where we pass everything in!
+		 */
+		bGPdata *gpd = ED_gpencil_data_get_active_direct((ID *)sc, scene, sa, obact);
+		
+		if (gpd) {
+			CTX_data_id_pointer_set(result, &gpd->id);
+			return 1;
+		}
+	}
+	else if (CTX_data_equals(member, "gpencil_data_owner")) {
+		/* pointer to which data/datablock owns the reference to the Grease Pencil data being used (as gpencil_data)
+		 * XXX: see comment for gpencil_data case... 
+		 */
+		bGPdata **gpd_ptr = NULL;
+		PointerRNA ptr;
+		
+		/* get pointer to Grease Pencil Data */
+		gpd_ptr = ED_gpencil_data_get_pointers_direct((ID *)sc, scene, sa, obact, &ptr);
+		
+		if (gpd_ptr) {
+			CTX_data_pointer_set(result, ptr.id.data, ptr.type, ptr.data);
+			return 1;
+		}
+	}
+	else if (CTX_data_equals(member, "active_gpencil_layer")) {
+		/* XXX: see comment for gpencil_data case... */
+		bGPdata *gpd = ED_gpencil_data_get_active_direct((ID *)sc, scene, sa, obact);
+		
+		if (gpd) {
+			bGPDlayer *gpl = gpencil_layer_getactive(gpd);
+			
+			if (gpl) {
+				CTX_data_pointer_set(result, &gpd->id, &RNA_GPencilLayer, gpl);
+				return 1;
+			}
+		}
+	}
+	else if (CTX_data_equals(member, "active_gpencil_frame")) {
+		/* XXX: see comment for gpencil_data case... */
+		bGPdata *gpd = ED_gpencil_data_get_active_direct((ID *)sc, scene, sa, obact);
+		
+		if (gpd) {
+			bGPDlayer *gpl = gpencil_layer_getactive(gpd);
+			
+			if (gpl) {
+				CTX_data_pointer_set(result, &gpd->id, &RNA_GPencilLayer, gpl->actframe);
+				return 1;
+			}
+		}
+	}
+	else if (CTX_data_equals(member, "visible_gpencil_layers")) {
+		/* XXX: see comment for gpencil_data case... */
+		bGPdata *gpd = ED_gpencil_data_get_active_direct((ID *)sc, scene, sa, obact);
+		
+		if (gpd) {
+			bGPDlayer *gpl;
+			
+			for (gpl = gpd->layers.first; gpl; gpl = gpl->next) {
+				if ((gpl->flag & GP_LAYER_HIDE) == 0) {
+					CTX_data_list_add(result, &gpd->id, &RNA_GPencilLayer, gpl);
+				}
+			}
+			CTX_data_type_set(result, CTX_DATA_TYPE_COLLECTION);
+			return 1;
+		}
+	}
+	else if (CTX_data_equals(member, "editable_gpencil_layers")) {
+		/* XXX: see comment for gpencil_data case... */
+		bGPdata *gpd = ED_gpencil_data_get_active_direct((ID *)sc, scene, sa, obact);
+		
+		if (gpd) {
+			bGPDlayer *gpl;
+			
+			for (gpl = gpd->layers.first; gpl; gpl = gpl->next) {
+				if ((gpl->flag & (GP_LAYER_HIDE | GP_LAYER_LOCKED)) == 0) {
+					CTX_data_list_add(result, &gpd->id, &RNA_GPencilLayer, gpl);
+				}
+			}
+			CTX_data_type_set(result, CTX_DATA_TYPE_COLLECTION);
+			return 1;
+		}
+	}
+	else if (CTX_data_equals(member, "editable_gpencil_strokes")) {
+		/* XXX: see comment for gpencil_data case... */
+		bGPdata *gpd = ED_gpencil_data_get_active_direct((ID *)sc, scene, sa, obact);
+		
+		if (gpd) {
+			bGPDlayer *gpl;
+			
+			for (gpl = gpd->layers.first; gpl; gpl = gpl->next) {
+				if ((gpl->flag & (GP_LAYER_HIDE | GP_LAYER_LOCKED)) == 0 && (gpl->actframe)) {
+					bGPDframe *gpf = gpl->actframe;
+					bGPDstroke *gps;
+					
+					for (gps = gpf->strokes.first; gps; gps = gps->next) {
+						if (ED_gpencil_stroke_can_use_direct(sa, gps)) {
+							CTX_data_list_add(result, &gpd->id, &RNA_GPencilStroke, gps);
+						}
+					}
+				}
+			}
+			CTX_data_type_set(result, CTX_DATA_TYPE_COLLECTION);
+			return 1;
+		}
+	}
 	else if (CTX_data_equals(member, "active_operator")) {
 		wmOperator *op = NULL;
 
@@ -400,7 +531,7 @@ int ed_screen_context(const bContext *C, const char *member, bContextDataResult 
 			op = sfile->op;
 		}
 		else if ((op = UI_context_active_operator_get(C))) {
-			/* do nothign */
+			/* do nothing */
 		}
 		else {
 			/* note, this checks poll, could be a problem, but this also

@@ -34,7 +34,6 @@
 #include "BLI_utildefines.h"
 
 #include "DNA_color_types.h"      /* CurveMapping. */
-#include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
 #include "DNA_modifier_types.h"
 #include "DNA_object_types.h"
@@ -43,11 +42,9 @@
 #include "BKE_cdderivedmesh.h"
 #include "BKE_colortools.h"       /* CurveMapping. */
 #include "BKE_deform.h"
-#include "BKE_mesh.h"
 #include "BKE_modifier.h"
 #include "BKE_texture.h"          /* Texture masking. */
 
-#include "depsgraph_private.h"
 #include "MEM_guardedalloc.h"
 #include "MOD_util.h"
 #include "MOD_weightvg_util.h"
@@ -235,8 +232,6 @@ void weightvg_do_mask(int num, const int *indices, float *org_w, const float *ne
 }
 
 
-
-
 /* Applies weights to given vgroup (defgroup), and optionally add/remove vertices from the group.
  * If dws is not NULL, it must be an array of MDeformWeight pointers of same length as weights (and
  * defgrp_idx can then have any value).
@@ -252,7 +247,7 @@ void weightvg_update_vg(MDeformVert *dvert, int defgrp_idx, MDeformWeight **dws,
 	for (i = 0; i < num; i++) {
 		float w = weights[i];
 		MDeformVert *dv = &dvert[indices ? indices[i] : i];
-		MDeformWeight *dw = dws ? dws[i] : defvert_find_index(dv, defgrp_idx);
+		MDeformWeight *dw = dws ? dws[i] : ((defgrp_idx >= 0) ? defvert_find_index(dv, defgrp_idx) : NULL);
 
 		/* Never allow weights out of [0.0, 1.0] range. */
 		CLAMP(w, 0.0f, 1.0f);

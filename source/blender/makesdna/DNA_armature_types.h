@@ -153,16 +153,15 @@ typedef enum eArmature_DeformFlag {
 	ARM_DEF_VGROUP			= (1<<0),
 	ARM_DEF_ENVELOPE		= (1<<1),
 	ARM_DEF_QUATERNION		= (1<<2),
+#ifdef DNA_DEPRECATED
 	ARM_DEF_B_BONE_REST		= (1<<3),	/* deprecated */
+#endif
 	ARM_DEF_INVERT_VGROUP	= (1<<4)
 } eArmature_DeformFlag;
 
-#if (DNA_DEPRECATED_GCC_POISON == 1)
-#pragma GCC poison ARM_DEF_B_BONE_REST
-#endif
-
 /* armature->pathflag */
 // XXX deprecated... old animation system (armature only viz)
+#ifdef DNA_DEPRECATED
 typedef enum eArmature_PathFlag {
 	ARM_PATH_FNUMS		= (1<<0),
 	ARM_PATH_KFRAS		= (1<<1),
@@ -170,9 +169,6 @@ typedef enum eArmature_PathFlag {
 	ARM_PATH_ACFRA		= (1<<3),
 	ARM_PATH_KFNOS		= (1<<4)
 } eArmature_PathFlag;
-
-#if (DNA_DEPRECATED_GCC_POISON == 1)
-#pragma GCC poison ARM_PATH_FNUMS ARM_PATH_KFRAS ARM_PATH_HEADS ARM_PATH_ACFRA ARM_PATH_KFNOS
 #endif
 
 /* armature->ghosttype */
@@ -188,7 +184,7 @@ typedef enum eBone_Flag {
 	BONE_SELECTED               = (1 << 0),
 	BONE_ROOTSEL                = (1 << 1),
 	BONE_TIPSEL                 = (1 << 2),
-	BONE_TRANSFORM              = (1 << 3),   /* Used instead of BONE_SELECTED during transform */
+	BONE_TRANSFORM              = (1 << 3),   /* Used instead of BONE_SELECTED during transform (clear before use) */
 	BONE_CONNECTED              = (1 << 4),   /* when bone has a parent, connect head of bone to parent's tail*/
 	/* 32 used to be quatrot, was always set in files, do not reuse unless you clear it always */
 	BONE_HIDDEN_P               = (1 << 6),   /* hidden Bones when drawing PoseChannels */

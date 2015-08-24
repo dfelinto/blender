@@ -40,6 +40,7 @@
 #include "BL_ArmatureConstraint.h"
 #include "BL_ArmatureObject.h"
 #include "BL_ArmatureChannel.h"
+#include "KX_WorldInfo.h"
 #include "KX_ArmatureSensor.h"
 #include "KX_BlenderMaterial.h"
 #include "KX_CameraActuator.h"
@@ -163,21 +164,34 @@ static void PyType_Ready_ADD(PyObject *dict, PyTypeObject *tp, PyAttributeDef *a
 #define PyType_Ready_Attr(d, n, i)   PyType_Ready_ADD(d, &n::Type, n::Attributes, NULL, i)
 #define PyType_Ready_AttrPtr(d, n, i)   PyType_Ready_ADD(d, &n::Type, n::Attributes, n::AttributesPtr, i)
 
-void initPyTypes(void)
+
+
+PyDoc_STRVAR(GameTypes_module_documentation,
+"This module provides access to the game engine data types."
+);
+static struct PyModuleDef GameTypes_module_def = {
+	PyModuleDef_HEAD_INIT,
+	"GameTypes",  /* m_name */
+	GameTypes_module_documentation,  /* m_doc */
+	0,  /* m_size */
+	NULL,  /* m_methods */
+	NULL,  /* m_reload */
+	NULL,  /* m_traverse */
+	NULL,  /* m_clear */
+	NULL,  /* m_free */
+};
+
+
+PyMODINIT_FUNC initGameTypesPythonBinding(void)
 {
+	PyObject *m;
+	PyObject *dict;
 
-/*
- * initPyObjectPlusType(BL_ActionActuator::Parents);
- * .....
- */
+	m = PyModule_Create(&GameTypes_module_def);
+	PyDict_SetItemString(PySys_GetObject("modules"), GameTypes_module_def.m_name, m);
 
-	/* For now just do PyType_Ready */
-	PyObject *mod = PyModule_New("GameTypes");
-	PyObject *dict = PyModule_GetDict(mod);
-	PyDict_SetItemString(PySys_GetObject("modules"), "GameTypes", mod);
-	Py_DECREF(mod);
-	
-	
+	dict = PyModule_GetDict(m);
+
 	for (int init_getset= 1; init_getset > -1; init_getset--) { /* run twice, once to init the getsets another to run PyType_Ready */
 		PyType_Ready_Attr(dict, BL_ActionActuator, init_getset);
 		PyType_Ready_Attr(dict, BL_Shader, init_getset);
@@ -218,6 +232,7 @@ void initPyTypes(void)
 		PyType_Ready_Attr(dict, KX_SCA_EndObjectActuator, init_getset);
 		PyType_Ready_Attr(dict, KX_SCA_ReplaceMeshActuator, init_getset);
 		PyType_Ready_Attr(dict, KX_Scene, init_getset);
+		PyType_Ready_Attr(dict, KX_WorldInfo, init_getset);
 		PyType_Ready_Attr(dict, KX_NavMeshObject, init_getset);
 		PyType_Ready_Attr(dict, KX_SceneActuator, init_getset);
 		PyType_Ready_Attr(dict, KX_SoundActuator, init_getset);
@@ -266,7 +281,11 @@ void initPyTypes(void)
 	/* Init mathutils callbacks */
 	KX_GameObject_Mathutils_Callback_Init();
 	KX_ObjectActuator_Mathutils_Callback_Init();
+	KX_WorldInfo_Mathutils_Callback_Init();
+	KX_BlenderMaterial_Mathutils_Callback_Init();
 #endif
+
+	return m;
 }
 
 #endif // WITH_PYTHON

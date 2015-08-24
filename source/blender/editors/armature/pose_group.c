@@ -130,6 +130,7 @@ static int pose_groups_menu_invoke(bContext *C, wmOperator *op, const wmEvent *U
 {
 	Object *ob = ED_pose_object_from_context(C);
 	bPose *pose;
+	PropertyRNA *prop = RNA_struct_find_property(op->ptr, "type");
 	
 	uiPopupMenu *pup;
 	uiLayout *layout;
@@ -140,6 +141,17 @@ static int pose_groups_menu_invoke(bContext *C, wmOperator *op, const wmEvent *U
 	if (ELEM(NULL, ob, ob->pose)) 
 		return OPERATOR_CANCELLED;
 	pose = ob->pose;
+
+	/* If group index is set, try to use it! */
+	if (RNA_property_is_set(op->ptr, prop)) {
+		const int num_groups = BLI_listbase_count(&pose->agroups);
+		const int group = RNA_property_int_get(op->ptr, prop);
+
+		/* just use the active group index, and call the exec callback for the calling operator */
+		if (group > 0 && group <= num_groups) {
+			return op->type->exec(C, op);
+		}
+	}
 	
 	/* if there's no active group (or active is invalid), create a new menu to find it */
 	if (pose->active_group <= 0) {
@@ -365,8 +377,8 @@ typedef struct tSortActionGroup {
 /* compare bone groups by name */
 static int compare_agroup(const void *sgrp_a_ptr, const void *sgrp_b_ptr)
 {
-	tSortActionGroup *sgrp_a = (tSortActionGroup *)sgrp_a_ptr;
-	tSortActionGroup *sgrp_b = (tSortActionGroup *)sgrp_b_ptr;
+	const tSortActionGroup *sgrp_a = sgrp_a_ptr;
+	const tSortActionGroup *sgrp_b = sgrp_b_ptr;
 
 	return strcmp(sgrp_a->agrp->name, sgrp_b->agrp->name);
 }
@@ -387,7 +399,7 @@ static int group_sort_exec(bContext *C, wmOperator *UNUSED(op))
 		return OPERATOR_CANCELLED;
 
 	/* create temporary array with bone groups and indices */
-	agrp_count = BLI_countlist(&pose->agroups);
+	agrp_count = BLI_listbase_count(&pose->agroups);
 	agrp_array = MEM_mallocN(sizeof(tSortActionGroup) * agrp_count, "sort bone groups");
 	for (agrp = pose->agroups.first, i = 0; agrp; agrp = agrp->next, i++) {
 		BLI_assert(i < agrp_count);

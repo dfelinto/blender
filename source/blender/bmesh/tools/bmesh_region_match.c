@@ -190,14 +190,16 @@ static bool ghashutil_bmelem_indexcmp(const void *a, const void *b)
 	return (a != b);
 }
 
-static GHash *ghash_bmelem_new_ex(const char *info,
-                                  const unsigned int nentries_reserve)
+static GHash *ghash_bmelem_new_ex(
+        const char *info,
+        const unsigned int nentries_reserve)
 {
 	return BLI_ghash_new_ex(ghashutil_bmelem_indexhash, ghashutil_bmelem_indexcmp, info, nentries_reserve);
 }
 
-static GSet *gset_bmelem_new_ex(const char *info,
-                             const unsigned int nentries_reserve)
+static GSet *gset_bmelem_new_ex(
+        const char *info,
+        const unsigned int nentries_reserve)
 {
 	return BLI_gset_new_ex(ghashutil_bmelem_indexhash, ghashutil_bmelem_indexcmp, info, nentries_reserve);
 }
@@ -419,8 +421,8 @@ static void bm_uuidwalk_rehash(
 	UUID_Int *uuid_store;
 	unsigned int i;
 
-	unsigned int rehash_store_len_new = (unsigned int)MAX2(BLI_ghash_size(uuidwalk->verts_uuid),
-	                                                       BLI_ghash_size(uuidwalk->faces_uuid));
+	unsigned int rehash_store_len_new = MAX2(BLI_ghash_size(uuidwalk->verts_uuid),
+	                                         BLI_ghash_size(uuidwalk->faces_uuid));
 
 	bm_uuidwalk_rehash_reserve(uuidwalk, rehash_store_len_new);
 	uuid_store = uuidwalk->cache.rehash_store;
@@ -509,7 +511,7 @@ static void bm_uuidwalk_pass_add(
 
 	UUIDFaceStep *fstep;
 
-	BLI_assert(faces_pass_len == (unsigned int)BLI_linklist_length(faces_pass));
+	BLI_assert(faces_pass_len == (unsigned int)BLI_linklist_count(faces_pass));
 
 	/* rehash faces now all their verts have been added */
 	bm_uuidwalk_rehash_facelinks(uuidwalk, faces_pass, faces_pass_len, true);
@@ -534,12 +536,13 @@ static void bm_uuidwalk_pass_add(
 		l_iter = l_first = BM_FACE_FIRST_LOOP(f);
 		do {
 			/* fill verts_new */
+			void **val_p;
 			if (!BLI_ghash_haskey(uuidwalk->verts_uuid, l_iter->v) &&
-			    !BLI_ghash_haskey(verts_uuid_pass,      l_iter->v) &&
+			    !BLI_ghash_ensure_p(verts_uuid_pass,    l_iter->v, &val_p) &&
 			    (bm_vert_is_uuid_connect(uuidwalk, l_iter->v) == true))
 			{
 				const UUID_Int uuid = bm_uuidwalk_calc_vert_uuid(uuidwalk, l_iter->v);
-				BLI_ghash_insert(verts_uuid_pass, l_iter->v, (void *)uuid);
+				*val_p = (void *)uuid;
 			}
 
 			/* fill faces_step_next */
@@ -614,15 +617,16 @@ static unsigned int bm_uuidwalk_init_from_edge(
 	/* turning an array into LinkNode's seems odd,
 	 * but this is just for initialization,
 	 * elsewhere using LinkNode's makes more sense */
-	for (i = 0; i < f_arr_len; i++) {
+	for (i = 0; i < f_arr_len; ) {
 		LinkNode *faces_pass = NULL;
+		const unsigned int i_init = i;
 		const int f_len = f_arr[i]->len;
 
 		do {
 			BLI_linklist_prepend_pool(&faces_pass, f_arr[i++], uuidwalk->link_pool);
 		} while (i < f_arr_len && (f_len == f_arr[i]->len));
 
-		bm_uuidwalk_pass_add(uuidwalk, faces_pass, i);
+		bm_uuidwalk_pass_add(uuidwalk, faces_pass, i - i_init);
 		BLI_linklist_free_pool(faces_pass, NULL, uuidwalk->link_pool);
 		fstep_num += 1;
 	}
@@ -656,7 +660,7 @@ static bool bm_uuidwalk_facestep_begin(
 	bool ok = false;
 
 	BLI_assert(BLI_ghash_size(uuidwalk->cache.faces_from_uuid) == 0);
-	BLI_assert(BLI_countlist(&fstep->items) == 0);
+	BLI_assert(BLI_listbase_is_empty(&fstep->items));
 
 	f_link_prev_p = &fstep->faces;
 	for (f_link = fstep->faces; f_link; f_link = f_link_next) {
@@ -667,13 +671,15 @@ static bool bm_uuidwalk_facestep_begin(
 		if (!BLI_ghash_haskey(uuidwalk->faces_uuid, f)) {
 			const UUID_Int uuid = bm_uuidwalk_calc_face_uuid(uuidwalk, f);
 			UUIDFaceStepItem *fstep_item;
+			void **val_p;
 
 			ok = true;
 
-			fstep_item = BLI_ghash_lookup(uuidwalk->cache.faces_from_uuid, (void *)uuid);
-			if (UNLIKELY(fstep_item == NULL)) {
-				fstep_item = BLI_mempool_alloc(uuidwalk->step_pool_items);
-				BLI_ghash_insert(uuidwalk->cache.faces_from_uuid, (void *)uuid, fstep_item);
+			if (BLI_ghash_ensure_p(uuidwalk->cache.faces_from_uuid, (void *)uuid, &val_p)) {
+				fstep_item = *val_p;
+			}
+			else {
+				fstep_item = *val_p = BLI_mempool_alloc(uuidwalk->step_pool_items);
 
 				/* add to start, so its handled on the next round of passes */
 				BLI_addhead(&fstep->items, fstep_item);
@@ -695,7 +701,7 @@ static bool bm_uuidwalk_facestep_begin(
 
 	BLI_ghash_clear(uuidwalk->cache.faces_from_uuid, NULL, NULL);
 
-	BLI_sortlist(&fstep->items, facestep_sort);
+	BLI_listbase_sort(&fstep->items, facestep_sort);
 
 	return ok;
 }
@@ -781,7 +787,7 @@ static BMFace **bm_mesh_region_match_pair(
 		UUIDFaceStep *fstep_src = w_src->faces_step.first;
 		UUIDFaceStep *fstep_dst = w_dst->faces_step.first;
 
-		BLI_assert(BLI_countlist(&w_src->faces_step) == BLI_countlist(&w_dst->faces_step));
+		BLI_assert(BLI_listbase_count(&w_src->faces_step) == BLI_listbase_count(&w_dst->faces_step));
 
 		while (fstep_src) {
 
@@ -858,7 +864,7 @@ static BMFace **bm_mesh_region_match_pair(
 			break;
 		}
 
-		found = ((unsigned int)BLI_ghash_size(w_dst->faces_uuid) == faces_src_region_len);
+		found = (BLI_ghash_size(w_dst->faces_uuid) == faces_src_region_len);
 		if (found) {
 			break;
 		}
@@ -871,7 +877,7 @@ static BMFace **bm_mesh_region_match_pair(
 
 	if (found) {
 		GHashIterator gh_iter;
-		const unsigned int faces_result_len = (unsigned int)BLI_ghash_size(w_dst->faces_uuid);
+		const unsigned int faces_result_len = BLI_ghash_size(w_dst->faces_uuid);
 		unsigned int i;
 
 		faces_result = MEM_mallocN(sizeof(*faces_result) * (faces_result_len + 1), __func__);
@@ -1111,9 +1117,10 @@ static BMEdge *bm_face_region_pivot_edge_find(
 			if (bm_edge_is_region_boundary(e)) {
 				unsigned int j;
 				for (j = 0; j < 2; j++) {
-					if (!BLI_ghash_haskey(gh, (&e->v1)[j])) {
+					void **val_p;
+					if (!BLI_ghash_ensure_p(gh, (&e->v1)[j], &val_p)) {
 						SUID_Int v_id = bm_face_region_vert_boundary_id((&e->v1)[j]);
-						BLI_ghash_insert(gh, (&e->v1)[j], (void *)v_id);
+						*val_p = (void *)v_id;
 						BLI_LINKSTACK_PUSH(vert_queue_prev, (&e->v1)[j]);
 						vert_queue_used += 1;
 					}
@@ -1137,10 +1144,11 @@ static BMEdge *bm_face_region_pivot_edge_find(
 				if (BM_elem_flag_test(e, BM_ELEM_TAG)) {
 					BMVert *v_other = BM_edge_other_vert(e, v);
 					if (BM_elem_flag_test(v_other, BM_ELEM_TAG)) {
-						if (!BLI_ghash_haskey(gh, v_other)) {
+						void **val_p;
+						if (!BLI_ghash_ensure_p(gh, v_other, &val_p)) {
 							/* add as negative, so we know not to read from them this pass */
 							const SUID_Int v_id_other = -bm_face_region_vert_pass_id(gh, v_other);
-							BLI_ghash_insert(gh, v_other, (void *)v_id_other);
+							*val_p = (void *)v_id_other;
 							BLI_LINKSTACK_PUSH(vert_queue_next, v_other);
 							vert_queue_used += 1;
 						}
@@ -1451,7 +1459,7 @@ int BM_mesh_region_match(
 		BMFace **faces_result;
 		unsigned int faces_result_len_out;
 
-		if (BM_elem_flag_test(e_dst, BM_ELEM_TAG)) {
+		if (BM_elem_flag_test(e_dst, BM_ELEM_TAG) || BM_edge_is_wire(e_dst)) {
 			continue;
 		}
 

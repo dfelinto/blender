@@ -133,7 +133,7 @@ void EffectsExporter::writeTextures(COLLADASW::EffectProfile &ep,
 	if (!ima) return;
 
 	// color
-	if (t->mapto & (MAP_COL | MAP_COLSPEC)) {
+	if (t->mapto & MAP_COL) {
 		ep.setDiffuse(createTexture(ima, uvname, sampler), false, "diffuse");
 	}
 	// ambient
@@ -141,7 +141,7 @@ void EffectsExporter::writeTextures(COLLADASW::EffectProfile &ep,
 		ep.setAmbient(createTexture(ima, uvname, sampler), false, "ambient");
 	}
 	// specular
-	if (t->mapto & MAP_SPEC) {
+	if (t->mapto & (MAP_SPEC | MAP_COLSPEC)) {
 		ep.setSpecular(createTexture(ima, uvname, sampler), false, "specular");
 	}
 	// emission
@@ -263,7 +263,7 @@ void EffectsExporter::operator()(Material *ma, Object *ob)
 	COLLADASW::Sampler samplers[MAX_MTEX];
 	//COLLADASW::Surface surfaces[MAX_MTEX];
 	//void *samp_surf[MAX_MTEX][2];
-	void *samp_surf[MAX_MTEX][1];
+	void *samp_surf[MAX_MTEX];
 	
 	// image to index to samp_surf map
 	// samp_surf[index] stores 2 pointers, sampler and surface
@@ -302,7 +302,7 @@ void EffectsExporter::operator()(Material *ma, Object *ob)
 			//surfaces[a] = surface;
 			
 			// store pointers so they can be used later when we create <texture>s
-			samp_surf[b][0] = &samplers[a];
+			samp_surf[b] = &samplers[a];
 			//samp_surf[b][1] = &surfaces[a];
 			
 			im_samp_map[key] = b;
@@ -349,7 +349,7 @@ void EffectsExporter::operator()(Material *ma, Object *ob)
 														   key + COLLADASW::Sampler::SURFACE_SID_SUFFIX);
 								sampler.setImageId(key);
 								samplers[a] = sampler;
-								samp_surf[b][0] = &samplers[a];
+								samp_surf[b] = &samplers[a];
 								im_samp_map[key] = b;
 								b++;
 								a++;
@@ -380,19 +380,19 @@ void EffectsExporter::operator()(Material *ma, Object *ob)
 		key = translate_id(key);
 		int i = im_samp_map[key];
 		std::string uvname = strlen(t->uvname) ? t->uvname : active_uv;
-		COLLADASW::Sampler *sampler = (COLLADASW::Sampler *)samp_surf[i][0];
+		COLLADASW::Sampler *sampler = (COLLADASW::Sampler *)samp_surf[i];
 		writeTextures(ep, key, sampler, t, ima, uvname);
 	}
 
 	std::set<Image *>::iterator uv_t_iter;
 	int idx;
 	for (idx = 0, uv_t_iter = uv_textures.begin(); uv_t_iter != uv_textures.end(); uv_t_iter++, idx++ ) {
-		if(active_uv_layer>-1 && idx==active_uv_layer) {
+		if (active_uv_layer>-1 && idx==active_uv_layer) {
 			Image *ima = *uv_t_iter;
 			std::string key(id_name(ima));
 			key = translate_id(key);
 			int i = im_samp_map[key];
-			COLLADASW::Sampler *sampler = (COLLADASW::Sampler *)samp_surf[i][0];
+			COLLADASW::Sampler *sampler = (COLLADASW::Sampler *)samp_surf[i];
 			ep.setDiffuse(createTexture(ima, active_uv, sampler), false, "diffuse");
 		}
 	}

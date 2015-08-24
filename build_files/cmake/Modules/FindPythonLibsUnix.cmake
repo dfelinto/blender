@@ -14,6 +14,7 @@
 #  PYTHON_INCLUDE_CONFIG_DIRS
 #  PYTHON_LIBRARIES
 #  PYTHON_LIBPATH, Used for installation
+#  PYTHON_SITE_PACKAGES, Used for installation (as a Python module)
 #  PYTHON_LINKFLAGS
 #  PYTHON_ROOT_DIR, The base directory to search for Python.
 #                   This can also be an environment variable.
@@ -65,6 +66,14 @@ IF(DEFINED PYTHON_LIBPATH)
   SET(_IS_LIB_PATH_DEF ON)
 ENDIF()
 
+STRING(REPLACE "." "" _PYTHON_VERSION_NO_DOTS ${PYTHON_VERSION})
+
+SET(_python_SEARCH_DIRS
+  ${PYTHON_ROOT_DIR}
+  "$ENV{HOME}/py${_PYTHON_VERSION_NO_DOTS}"
+  "/opt/py${_PYTHON_VERSION_NO_DOTS}"
+  "/opt/lib/python-${PYTHON_VERSION}"
+)
 
 # only search for the dirs if we havn't already
 IF((NOT _IS_INC_DEF) OR (NOT _IS_INC_CONF_DEF) OR (NOT _IS_LIB_DEF) OR (NOT _IS_LIB_PATH_DEF))
@@ -74,14 +83,7 @@ IF((NOT _IS_INC_DEF) OR (NOT _IS_INC_CONF_DEF) OR (NOT _IS_LIB_DEF) OR (NOT _IS_
     "dm;dmu;du;d" # debug
   )
 
-  STRING(REPLACE "." "" _PYTHON_VERSION_NO_DOTS ${PYTHON_VERSION})
 
-  SET(_python_SEARCH_DIRS
-    ${PYTHON_ROOT_DIR}
-    "$ENV{HOME}/py${_PYTHON_VERSION_NO_DOTS}"
-    "/opt/py${_PYTHON_VERSION_NO_DOTS}"
-    "/opt/lib/python-${PYTHON_VERSION}"
-  )
 
   FOREACH(_CURRENT_ABI_FLAGS ${_python_ABI_FLAGS})
     #IF(CMAKE_BUILD_TYPE STREQUAL Debug)
@@ -146,6 +148,7 @@ IF((NOT _IS_INC_DEF) OR (NOT _IS_INC_CONF_DEF) OR (NOT _IS_LIB_DEF) OR (NOT _IS_
     ENDIF()
 
     IF(PYTHON_LIBRARY AND PYTHON_LIBPATH AND PYTHON_INCLUDE_DIR AND PYTHON_INCLUDE_CONFIG_DIR)
+      SET(_PYTHON_ABI_FLAGS "${_CURRENT_ABI_FLAGS}")
       break()
     ELSE()
       # ensure we dont find values from 2 different ABI versions
@@ -168,7 +171,6 @@ IF((NOT _IS_INC_DEF) OR (NOT _IS_INC_CONF_DEF) OR (NOT _IS_LIB_DEF) OR (NOT _IS_
   UNSET(_CURRENT_PATH)
 
   UNSET(_python_ABI_FLAGS)
-  UNSET(_python_SEARCH_DIRS)
 ENDIF()
 
 UNSET(_IS_INC_DEF)
@@ -187,17 +189,41 @@ IF(PYTHONLIBSUNIX_FOUND)
   SET(PYTHON_INCLUDE_DIRS ${PYTHON_INCLUDE_DIR} ${PYTHON_INCLUDE_CONFIG_DIR})
   SET(PYTHON_LIBRARIES ${PYTHON_LIBRARY})
 
+  FIND_FILE(PYTHON_SITE_PACKAGES
+    NAMES
+      # debian specific
+      dist-packages
+      site-packages
+    HINTS
+      ${PYTHON_LIBPATH}/python${PYTHON_VERSION}
+  )
+
   # we need this for installation
   # XXX No more valid with debian-like py3.4 packages...
 #  GET_FILENAME_COMPONENT(PYTHON_LIBPATH ${PYTHON_LIBRARY} PATH)
 
-  # not used
-  # SET(PYTHON_BINARY ${PYTHON_EXECUTABLE} CACHE STRING "")
+  # not required for build, just used when bundling Python.
+  FIND_PROGRAM(
+    PYTHON_EXECUTABLE
+    NAMES
+      "python${PYTHON_VERSION}${_PYTHON_ABI_FLAGS}"
+      "python${PYTHON_VERSION}"
+      "python"
+    HINTS
+      ${_python_SEARCH_DIRS}
+    PATH_SUFFIXES bin
+  )
 ENDIF()
+
+UNSET(_PYTHON_VERSION_NO_DOTS)
+UNSET(_PYTHON_ABI_FLAGS)
+UNSET(_python_SEARCH_DIRS)
 
 MARK_AS_ADVANCED(
   PYTHON_INCLUDE_DIR
   PYTHON_INCLUDE_CONFIG_DIR
   PYTHON_LIBRARY
   PYTHON_LIBPATH
+  PYTHON_SITE_PACKAGES
+  PYTHON_EXECUTABLE
 )

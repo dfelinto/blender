@@ -57,12 +57,15 @@ class INFO_HT_header(Header):
         row = layout.row(align=True)
 
         if bpy.app.autoexec_fail is True and bpy.app.autoexec_fail_quiet is False:
-            row.label("Auto-run disabled: %s" % bpy.app.autoexec_fail_message, icon='ERROR')
+            row.label("Auto-run disabled", icon='ERROR')
             if bpy.data.is_saved:
                 props = row.operator("wm.revert_mainfile", icon='SCREEN_BACK', text="Reload Trusted")
                 props.use_scripts = True
 
             row.operator("script.autoexec_warn_clear", text="Ignore")
+
+            # include last so text doesn't push buttons out of the header
+            row.label(bpy.app.autoexec_fail_message)
             return
 
         row.operator("wm.splash", text="", icon='BLENDER', emboss=False)
@@ -129,6 +132,7 @@ class INFO_MT_file(Menu):
         layout.operator_context = 'INVOKE_AREA'
         layout.operator("wm.link", text="Link", icon='LINK_BLEND')
         layout.operator("wm.append", text="Append", icon='APPEND_BLEND')
+        layout.menu("INFO_MT_file_previews")
 
         layout.separator()
 
@@ -190,6 +194,21 @@ class INFO_MT_file_external_data(Menu):
         layout.operator("file.make_paths_absolute")
         layout.operator("file.report_missing_files")
         layout.operator("file.find_missing_files")
+
+
+class INFO_MT_file_previews(Menu):
+    bl_label = "Data Previews"
+
+    def draw(self, context):
+        layout = self.layout
+
+        layout.operator("wm.previews_ensure")
+        layout.operator("wm.previews_batch_generate")
+
+        layout.separator()
+
+        layout.operator("wm.previews_clear")
+        layout.operator("wm.previews_batch_clear")
 
 
 class INFO_MT_game(Menu):
@@ -262,12 +281,16 @@ class INFO_MT_window(Menu):
 
         layout.separator()
 
-        layout.operator("screen.screenshot").full = True
-        layout.operator("screen.screencast").full = True
+        layout.operator("screen.screenshot")
+        layout.operator("screen.screencast")
 
         if sys.platform[:3] == "win":
             layout.separator()
             layout.operator("wm.console_toggle", icon='CONSOLE')
+
+        if context.scene.render.use_multiview:
+            layout.separator()
+            layout.operator("wm.set_stereo_3d", icon='CAMERA_STEREO')
 
 
 class INFO_MT_help(Menu):
@@ -276,7 +299,7 @@ class INFO_MT_help(Menu):
     def draw(self, context):
         layout = self.layout
 
-        layout.operator("wm.url_open", text="Manual", icon='HELP').url = "http://wiki.blender.org/index.php/Doc:2.6/Manual"
+        layout.operator("wm.url_open", text="Manual", icon='HELP').url = "http://www.blender.org/manual"
         layout.operator("wm.url_open", text="Release Log", icon='URL').url = "http://wiki.blender.org/index.php/Dev:Ref/Release_Notes/%d.%d" % bpy.app.version[:2]
         layout.separator()
 

@@ -32,9 +32,9 @@
 #ifndef __RENDER_INTERN_H__
 #define __RENDER_INTERN_H__
 
+struct bContext;
+struct RenderEngine;
 struct wmOperatorType;
-struct RenderResult;
-struct Scene;
 struct ScrArea;
 
 /* render_shading.c */
@@ -44,6 +44,7 @@ void OBJECT_OT_material_slot_assign(struct wmOperatorType *ot);
 void OBJECT_OT_material_slot_select(struct wmOperatorType *ot);
 void OBJECT_OT_material_slot_deselect(struct wmOperatorType *ot);
 void OBJECT_OT_material_slot_copy(struct wmOperatorType *ot);
+void OBJECT_OT_material_slot_move(struct wmOperatorType *ot);
 
 void MATERIAL_OT_new(struct wmOperatorType *ot);
 void TEXTURE_OT_new(struct wmOperatorType *ot);
@@ -54,6 +55,9 @@ void MATERIAL_OT_paste(struct wmOperatorType *ot);
 
 void SCENE_OT_render_layer_add(struct wmOperatorType *ot);
 void SCENE_OT_render_layer_remove(struct wmOperatorType *ot);
+
+void SCENE_OT_render_view_add(struct wmOperatorType *ot);
+void SCENE_OT_render_view_remove(struct wmOperatorType *ot);
 
 #ifdef WITH_FREESTYLE
 void SCENE_OT_freestyle_module_add(struct wmOperatorType *ot);

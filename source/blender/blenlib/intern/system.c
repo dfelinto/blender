@@ -22,8 +22,20 @@
  *  \ingroup bli
  */
 
+#include <stdio.h>
+#include <stdlib.h>
 
 #include "BLI_system.h"
+
+#include "MEM_guardedalloc.h"
+
+/* for backtrace */
+#if defined(__linux__) || defined(__APPLE__)
+#  include <execinfo.h>
+#elif defined(WIN32)
+#  include <windows.h>
+#  include <DbgHelp.h>
+#endif
 
 int BLI_cpu_support_sse2(void)
 {
@@ -57,3 +69,71 @@ int BLI_cpu_support_sse2(void)
 #endif
 }
 
+/**
+ * Write a backtrace into a file for systems which support it.
+ */
+void BLI_system_backtrace(FILE *fp)
+{
+	/* ------------- */
+	/* Linux / Apple */
+#if defined(__linux__) || defined(__APPLE__)
+
+#define SIZE 100
+	void *buffer[SIZE];
+	int nptrs;
+	char **strings;
+	int i;
+
+	/* include a backtrace for good measure */
+	nptrs = backtrace(buffer, SIZE);
+	strings = backtrace_symbols(buffer, nptrs);
+	for (i = 0; i < nptrs; i++) {
+		fputs(strings[i], fp);
+		fputc('\n', fp);
+	}
+
+	free(strings);
+#undef SIZE
+
+	/* -------- */
+	/* Windows  */
+#elif defined(_MSC_VER)
+
+#ifndef NDEBUG
+#define MAXSYMBOL 256
+#define SIZE 100
+	unsigned short i;
+	void *stack[SIZE];
+	unsigned short nframes;
+	SYMBOL_INFO *symbolinfo;
+	HANDLE process;
+
+	process = GetCurrentProcess();
+
+	SymInitialize(process, NULL, TRUE);
+
+	nframes = CaptureStackBackTrace(0, SIZE, stack, NULL);
+	symbolinfo = MEM_callocN(sizeof(SYMBOL_INFO) + MAXSYMBOL * sizeof(char), "crash Symbol table");
+	symbolinfo->MaxNameLen = MAXSYMBOL - 1;
+	symbolinfo->SizeOfStruct = sizeof(SYMBOL_INFO);
+
+	for (i = 0; i < nframes; i++) {
+		SymFromAddr(process, (DWORD64)(stack[i]), 0, symbolinfo);
+
+		fprintf(fp, "%u: %s - 0x%0X\n", nframes - i - 1, symbolinfo->Name, symbolinfo->Address);
+	}
+
+	MEM_freeN(symbolinfo);
+#undef MAXSYMBOL
+#undef SIZE
+#else
+	fprintf(fp, "Crash backtrace not supported on release builds\n");
+#endif /* NDEBUG */
+#else /* _MSC_VER */
+	/* ------------------ */
+	/* non msvc/osx/linux */
+	(void)fp;
+#endif
+
+}
+/* end BLI_system_backtrace */

@@ -48,7 +48,6 @@ struct ID;
 struct Main;
 struct Object;
 struct Scene;
-struct ListBase;
 
 /* Dependency graph evaluation context
  *
@@ -57,6 +56,7 @@ struct ListBase;
  */
 typedef struct EvaluationContext {
 	int mode;               /* evaluation mode */
+	float ctime;            /* evaluation time */
 } EvaluationContext;
 
 typedef enum eEvaluationMode {
@@ -72,6 +72,10 @@ enum {
 	 * who're using curve deform, where_on_path and so.
 	 */
 	DAG_EVAL_NEED_CURVE_PATH = 1,
+	/* Scene evaluation would need to have object's data on CPU,
+	 * meaning no GPU shortcuts is allowed.
+	 */
+	DAG_EVAL_NEED_CPU        = 2,
 };
 
 /* Global initialization/deinitialization */
@@ -92,6 +96,7 @@ void DAG_exit(void);
  */
 
 void DAG_scene_relations_update(struct Main *bmain, struct Scene *sce);
+void DAG_scene_relations_validate(struct Main *bmain, struct Scene *sce);
 void DAG_relations_tag_update(struct Main *bmain);
 void DAG_scene_relations_rebuild(struct Main *bmain, struct Scene *scene);
 void DAG_scene_free(struct Scene *sce);

@@ -57,6 +57,8 @@ class OUTLINER_HT_header(Header):
             else:
                 row = layout.row()
                 row.label(text="No Keying Set active")
+        elif space.display_mode == 'ORPHAN_DATA':
+            layout.operator("outliner.orphans_purge")
 
 
 class OUTLINER_MT_editor_menus(Menu):
@@ -86,6 +88,7 @@ class OUTLINER_MT_view(Menu):
         space = context.space_data
 
         if space.display_mode not in {'DATABLOCKS', 'USER_PREFERENCES', 'KEYMAPS'}:
+            layout.prop(space, "use_sort_alpha")
             layout.prop(space, "show_restrict_columns")
             layout.separator()
             layout.operator("outliner.show_active")

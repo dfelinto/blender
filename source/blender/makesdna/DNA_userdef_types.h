@@ -168,7 +168,7 @@ typedef struct ThemeUI {
 
 	uiPanelColors panel; /* depricated, but we keep it for do_versions (2.66.1) */
 
-	char emboss[4];
+	char widget_emboss[4];
 
 	/* fac: 0 - 1 for blend factor, width in pixels */
 	float menu_shadow_fac;
@@ -251,6 +251,7 @@ typedef struct ThemeSpace {
 	char bone_solid[4], bone_pose[4], bone_pose_active[4];
 	char strip[4], strip_select[4];
 	char cframe[4];
+	char time_keyframe[4], time_gp_keyframe[4];
 	char freestyle_edge_mark[4], freestyle_face_mark[4];
 	
 	char nurb_uline[4], nurb_vline[4];
@@ -287,15 +288,19 @@ typedef struct ThemeSpace {
 
 	char handle_vertex[4];
 	char handle_vertex_select[4];
-	char pad2[4];
 	
 	char handle_vertex_size;
+
+	char clipping_border_3d[4];
 	
 	char marker_outline[4], marker[4], act_marker[4], sel_marker[4], dis_marker[4], lock_marker[4];
 	char bundle_solid[4];
 	char path_before[4], path_after[4];
 	char camera_path[4];
-	char hpad[3];
+	char hpad[2];
+	
+	char gp_vertex_size;
+	char gp_vertex[4], gp_vertex_select[4];
 	
 	char preview_back[4];
 	char preview_stitch_face[4];
@@ -333,6 +338,9 @@ typedef struct ThemeSpace {
 
 	char paint_curve_pivot[4];
 	char paint_curve_handle[4];
+
+	char metadatabg[4];
+	char metadatatext[4];
 } ThemeSpace;
 
 
@@ -457,7 +465,8 @@ typedef struct UserDef {
 
 	int scrollback; /* console scrollback limit */
 	int dpi;		/* range 48-128? */
-	short encoding;
+	char node_margin; /* node insert offset (aka auto-offset) margin, but might be useful for later stuff as well */
+	char pad2;
 	short transopts;
 	short menuthreshold1, menuthreshold2;
 	
@@ -482,8 +491,9 @@ typedef struct UserDef {
 	short dragthreshold;
 	int memcachelimit;
 	int prefetchframes;
+	float pad_rot_angle; /* control the rotation step of the view when PAD2, PAD4, PAD6&PAD8 is use */
 	short frameserverport;
-	short pad_rot_angle;	/* control the rotation step of the view when PAD2, PAD4, PAD6&PAD8 is use */
+	short pad4;
 	short obcenter_dia;
 	short rvisize;			/* rotating view icon size */
 	short rvibright;		/* rotating view icon brightness */
@@ -495,7 +505,10 @@ typedef struct UserDef {
 	char  ipo_new;			/* interpolation mode for newly added F-Curves */
 	char  keyhandles_new;	/* handle types for newly added keyframes */
 	char  gpu_select_method;
-	char  pad1;
+	char  view_frame_type;
+
+	int view_frame_keyframes; /* number of keyframes to zoom around current frame */
+	float view_frame_seconds; /* seconds to zoom around current frame */
 
 	short scrcastfps;		/* frame rate for screencast to be played back */
 	short scrcastwait;		/* milliseconds between screencast snapshots */
@@ -506,6 +519,7 @@ typedef struct UserDef {
 
 	float ndof_sensitivity;	/* overall sensitivity of 3D mouse */
 	float ndof_orbit_sensitivity;
+	float ndof_deadzone; /* deadzone of 3D mouse */
 	int ndof_flag;			/* flags for 3D mouse */
 
 	short ogl_multisamples;	/* amount of samples for OpenGL FSA, if zero no FSA */
@@ -548,6 +562,9 @@ typedef struct UserDef {
 	short pie_menu_threshold;     /* pie menu distance from center before a direction is set */
 
 	struct WalkNavigation walk_navigation;
+
+	short opensubdiv_compute_type;
+	char pad5[6];
 } UserDef;
 
 extern UserDef U; /* from blenkernel blender.c */
@@ -662,9 +679,10 @@ typedef enum eUserpref_UI_Flag {
 
 /* uiflag2 */
 typedef enum eUserpref_UI_Flag2 {
-	USER_KEEP_SESSION		= (1 << 0),
-	USER_REGION_OVERLAP		= (1 << 1),
-	USER_TRACKPAD_NATURAL	= (1 << 2)
+	USER_KEEP_SESSION			= (1 << 0),
+	USER_REGION_OVERLAP			= (1 << 1),
+	USER_TRACKPAD_NATURAL		= (1 << 2),
+	USER_OPENGL_NO_WARN_SUPPORT	= (1 << 3)
 } eUserpref_UI_Flag2;
 	
 /* Auto-Keying mode */
@@ -676,6 +694,13 @@ typedef enum eAutokey_Mode {
 	AUTOKEY_MODE_NORMAL    = 3,
 	AUTOKEY_MODE_EDITKEYS  = 5
 } eAutokey_Mode;
+
+/* Zoom to frame mode */
+typedef enum eZoomFrame_Mode {
+	ZOOM_FRAME_MODE_KEEP_RANGE = 0,
+	ZOOM_FRAME_MODE_SECONDS = 1,
+	ZOOM_FRAME_MODE_KEYFRAMES = 2
+} eZoomFrame_Mode;
 
 /* Auto-Keying flag
  * U.autokey_flag (not strictly used when autokeying only - is also used when keyframing these days)
@@ -861,6 +886,16 @@ typedef enum eUserpref_VirtualPixel {
 	VIRTUAL_PIXEL_NATIVE = 0,
 	VIRTUAL_PIXEL_DOUBLE = 1,
 } eUserpref_VirtualPixel;
+
+typedef enum eOpensubdiv_Computee_Type {
+	USER_OPENSUBDIV_COMPUTE_NONE = 0,
+	USER_OPENSUBDIV_COMPUTE_CPU = 1,
+	USER_OPENSUBDIV_COMPUTE_OPENMP = 2,
+	USER_OPENSUBDIV_COMPUTE_OPENCL = 3,
+	USER_OPENSUBDIV_COMPUTE_CUDA = 4,
+	USER_OPENSUBDIV_COMPUTE_GLSL_TRANSFORM_FEEDBACK = 5,
+	USER_OPENSUBDIV_COMPUTE_GLSL_COMPUTE = 6,
+} eOpensubdiv_Computee_Type;
 
 #ifdef __cplusplus
 }

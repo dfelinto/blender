@@ -56,7 +56,7 @@
 #include "BLI_kdtree.h"
 #include "BLI_utildefines.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_action.h"
 #include "BKE_animsys.h"
@@ -145,7 +145,7 @@ static int vertex_parent_set_exec(bContext *C, wmOperator *op)
 
 		/* derivedMesh might be needed for solving parenting,
 		 * so re-create it here */
-		makeDerivedMesh(scene, obedit, em, CD_MASK_BAREMESH | CD_MASK_ORIGINDEX, 0);
+		makeDerivedMesh(scene, obedit, em, CD_MASK_BAREMESH | CD_MASK_ORIGINDEX, false);
 
 		BM_ITER_MESH (eve, &iter, em->bm, BM_VERTS_OF_MESH) {
 			if (BM_elem_flag_test(eve, BM_ELEM_SELECT)) {
@@ -169,7 +169,7 @@ static int vertex_parent_set_exec(bContext *C, wmOperator *op)
 				bezt = nu->bezt;
 				a = nu->pntsu;
 				while (a--) {
-					if (BEZSELECTED_HIDDENHANDLES(cu, bezt)) {
+					if (BEZT_ISSEL_ANY_HIDDENHANDLES(cu, bezt)) {
 						if (v1 == 0) v1 = nr;
 						else if (v2 == 0) v2 = nr;
 						else if (v3 == 0) v3 = nr;
@@ -342,12 +342,10 @@ static int make_proxy_exec(bContext *C, wmOperator *op)
 		Base *newbase, *oldbase = BASACT;
 		char name[MAX_ID_NAME + 4];
 
-		/* Add new object for the proxy */
-		newob = BKE_object_add(bmain, scene, OB_EMPTY);
-
 		BLI_snprintf(name, sizeof(name), "%s_proxy", ((ID *)(gob ? gob : ob))->name + 2);
 
-		rename_id(&newob->id, name);
+		/* Add new object for the proxy */
+		newob = BKE_object_add(bmain, scene, OB_EMPTY, name);
 
 		/* set layers OK */
 		newbase = BASACT;    /* BKE_object_add sets active... */
@@ -572,6 +570,9 @@ void ED_object_parent(Object *ob, Object *par, const int type, const char *subst
 		ob->parsubstr[0] = 0;
 		return;
 	}
+
+	/* Other partypes are deprecated, do not use here! */
+	BLI_assert(ELEM(type & PARTYPE, PAROBJECT, PARSKEL, PARVERT1, PARVERT3, PARBONE));
 
 	/* this could use some more checks */
 
@@ -803,6 +804,7 @@ static void parent_set_vert_find(KDTree *tree, Object *child, int vert_par[3], b
 
 		tot = BLI_kdtree_find_nearest_n(tree, co_find, nearest, 3);
 		BLI_assert(tot == 3);
+		UNUSED_VARS(tot);
 
 		vert_par[0] = nearest[0].index;
 		vert_par[1] = nearest[1].index;
@@ -972,7 +974,7 @@ void OBJECT_OT_parent_set(wmOperatorType *ot)
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
-	RNA_def_enum(ot->srna, "type", prop_make_parent_types, 0, "Type", "");
+	ot->prop = RNA_def_enum(ot->srna, "type", prop_make_parent_types, 0, "Type", "");
 	RNA_def_boolean(ot->srna, "xmirror", false, "X Mirror",
 	                "Apply weights symmetrically along X axis, for Envelope/Automatic vertex groups creation");
 	RNA_def_boolean(ot->srna, "keep_transform", false, "Keep Transform",
@@ -1315,7 +1317,7 @@ static unsigned int move_to_layer_init(bContext *C, wmOperator *op)
 		CTX_DATA_END;
 
 		for (a = 0; a < 20; a++)
-			values[a] = (lay & (1 << a));
+			values[a] = (lay & (1 << a)) != 0;
 
 		RNA_boolean_set_array(op->ptr, "layers", values);
 	}
@@ -1573,13 +1575,13 @@ static int make_links_data_exec(bContext *C, wmOperator *op)
 						DAG_id_tag_update(&ob_dst->id, 0);
 						break;
 					case MAKE_LINKS_ANIMDATA:
-						BKE_copy_animdata_id((ID *)ob_dst, (ID *)ob_src, false);
+						BKE_animdata_copy_id((ID *)ob_dst, (ID *)ob_src, false);
 						if (ob_dst->data && ob_src->data) {
 							if (obdata_id->lib) {
 								is_lib = true;
 								break;
 							}
-							BKE_copy_animdata_id((ID *)ob_dst->data, (ID *)ob_src->data, false);
+							BKE_animdata_copy_id((ID *)ob_dst->data, (ID *)ob_src->data, false);
 						}
 						DAG_id_tag_update(&ob_dst->id, OB_RECALC_OB | OB_RECALC_DATA | OB_RECALC_TIME);
 						break;
@@ -1870,7 +1872,7 @@ static void single_obdata_users(Main *bmain, Scene *scene, const int flag)
 					case OB_MESH:
 						ob->data = me = BKE_mesh_copy(ob->data);
 						if (me->key)
-							BKE_copy_animdata_id_action((ID *)me->key);
+							BKE_animdata_copy_id_action((ID *)me->key);
 						break;
 					case OB_MBALL:
 						ob->data = BKE_mball_copy(ob->data);
@@ -1882,12 +1884,12 @@ static void single_obdata_users(Main *bmain, Scene *scene, const int flag)
 						ID_NEW(cu->bevobj);
 						ID_NEW(cu->taperobj);
 						if (cu->key)
-							BKE_copy_animdata_id_action((ID *)cu->key);
+							BKE_animdata_copy_id_action((ID *)cu->key);
 						break;
 					case OB_LATTICE:
 						ob->data = lat = BKE_lattice_copy(ob->data);
 						if (lat->key)
-							BKE_copy_animdata_id_action((ID *)lat->key);
+							BKE_animdata_copy_id_action((ID *)lat->key);
 						break;
 					case OB_ARMATURE:
 						DAG_id_tag_update(&ob->id, OB_RECALC_DATA);
@@ -1908,7 +1910,7 @@ static void single_obdata_users(Main *bmain, Scene *scene, const int flag)
 				 * AnimData structure, which is not what we want.
 				 *                                             (sergey)
 				 */
-				BKE_copy_animdata_id_action((ID *)ob->data);
+				BKE_animdata_copy_id_action((ID *)ob->data);
 
 				id->us--;
 				id->newid = ob->data;
@@ -1932,7 +1934,7 @@ static void single_object_action_users(Scene *scene, const int flag)
 		ob = base->object;
 		if (ob->id.lib == NULL && (flag == 0 || (base->flag & SELECT)) ) {
 			DAG_id_tag_update(&ob->id, OB_RECALC_DATA);
-			BKE_copy_animdata_id_action(&ob->id);
+			BKE_animdata_copy_id_action(&ob->id);
 		}
 	}
 }
@@ -1955,7 +1957,7 @@ static void single_mat_users(Scene *scene, const int flag, const bool do_texture
 
 					if (ma->id.us > 1) {
 						man = BKE_material_copy(ma);
-						BKE_copy_animdata_id_action(&man->id);
+						BKE_animdata_copy_id_action(&man->id);
 
 						man->id.us = 0;
 						assign_material(ob, man, a, BKE_MAT_ASSIGN_USERPREF);
@@ -1966,7 +1968,7 @@ static void single_mat_users(Scene *scene, const int flag, const bool do_texture
 									if (tex->id.us > 1) {
 										tex->id.us--;
 										tex = BKE_texture_copy(tex);
-										BKE_copy_animdata_id_action(&tex->id);
+										BKE_animdata_copy_id_action(&tex->id);
 										man->mtex[b]->tex = tex;
 									}
 								}
@@ -1993,7 +1995,7 @@ static void do_single_tex_user(Tex **from)
 	}
 	else if (tex->id.us > 1) {
 		texn = BKE_texture_copy(tex);
-		BKE_copy_animdata_id_action(&texn->id);
+		BKE_animdata_copy_id_action(&texn->id);
 		tex->id.newid = (ID *)texn;
 		tex->id.us--;
 		*from = texn;
@@ -2343,10 +2345,8 @@ void OBJECT_OT_make_local(wmOperatorType *ot)
 }
 
 enum {
-	/* Be careful with those values, they are used as bitflags in some cases, in others as bool...
-	 * See single_object_users, single_obdata_users, single_object_action_users, etc.< */
-	MAKE_SINGLE_USER_ALL      = 0,
-	MAKE_SINGLE_USER_SELECTED = SELECT,
+	MAKE_SINGLE_USER_ALL      = 1,
+	MAKE_SINGLE_USER_SELECTED = 2,
 };
 
 static int make_single_user_exec(bContext *C, wmOperator *op)
@@ -2354,7 +2354,7 @@ static int make_single_user_exec(bContext *C, wmOperator *op)
 	Main *bmain = CTX_data_main(C);
 	Scene *scene = CTX_data_scene(C);
 	View3D *v3d = CTX_wm_view3d(C); /* ok if this is NULL */
-	const int flag = RNA_enum_get(op->ptr, "type");
+	const int flag = (RNA_enum_get(op->ptr, "type") == MAKE_SINGLE_USER_SELECTED) ? SELECT : 0;
 	const bool copy_groups = false;
 	bool update_deps = false;
 
@@ -2420,7 +2420,7 @@ void OBJECT_OT_make_single_user(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
 	/* properties */
-	ot->prop = RNA_def_enum(ot->srna, "type", type_items, SELECT, "Type", "");
+	ot->prop = RNA_def_enum(ot->srna, "type", type_items, MAKE_SINGLE_USER_SELECTED, "Type", "");
 
 	RNA_def_boolean(ot->srna, "object", 0, "Object", "Make single user objects");
 	RNA_def_boolean(ot->srna, "obdata", 0, "Object Data", "Make single user object data");

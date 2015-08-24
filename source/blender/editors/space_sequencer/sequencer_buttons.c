@@ -34,7 +34,7 @@
 #include "BLI_blenlib.h"
 #include "BLI_utildefines.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_context.h"
 #include "BKE_screen.h"
@@ -46,12 +46,12 @@
 #include "WM_api.h"
 #include "WM_types.h"
 
-#include "UI_interface.h"
 
 #include "sequencer_intern.h"
 
 /* **************************** buttons ********************************* */
 
+#if 0
 static int sequencer_grease_pencil_panel_poll(const bContext *C, PanelType *UNUSED(pt))
 {
 	SpaceSeq *sseq = CTX_wm_space_seq(C);
@@ -59,19 +59,22 @@ static int sequencer_grease_pencil_panel_poll(const bContext *C, PanelType *UNUS
 	/* don't show the gpencil if we are not showing the image */
 	return ED_space_sequencer_check_show_imbuf(sseq);
 }
+#endif
 
-void sequencer_buttons_register(ARegionType *art)
+void sequencer_buttons_register(ARegionType *UNUSED(art))
 {
+#if 0
 	PanelType *pt;
 	
 	pt = MEM_callocN(sizeof(PanelType), "spacetype sequencer panel gpencil");
 	strcpy(pt->idname, "SEQUENCER_PT_gpencil");
 	strcpy(pt->label, N_("Grease Pencil"));
-	strcpy(pt->translation_context, BLF_I18NCONTEXT_DEFAULT_BPYRNA);
+	strcpy(pt->translation_context, BLT_I18NCONTEXT_DEFAULT_BPYRNA);
 	pt->draw_header = ED_gpencil_panel_standard_header;
 	pt->draw = ED_gpencil_panel_standard;
 	pt->poll = sequencer_grease_pencil_panel_poll;
 	BLI_addtail(&art->paneltypes, pt);
+#endif
 }
 
 /* **************** operator to open/close properties view ************* */

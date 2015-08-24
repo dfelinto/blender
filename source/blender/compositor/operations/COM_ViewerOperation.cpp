@@ -23,6 +23,7 @@
 #include "COM_ViewerOperation.h"
 #include "BLI_listbase.h"
 #include "BKE_image.h"
+#include "BKE_scene.h"
 #include "WM_api.h"
 #include "WM_types.h"
 #include "PIL_time.h"
@@ -57,6 +58,8 @@ ViewerOperation::ViewerOperation() : NodeOperation()
 	this->m_imageInput = NULL;
 	this->m_alphaInput = NULL;
 	this->m_depthInput = NULL;
+	this->m_rd = NULL;
+	this->m_viewName = NULL;
 }
 
 void ViewerOperation::initExecution()
@@ -80,7 +83,7 @@ void ViewerOperation::deinitExecution()
 	this->m_outputBuffer = NULL;
 }
 
-void ViewerOperation::executeRegion(rcti *rect, unsigned int tileNumber)
+void ViewerOperation::executeRegion(rcti *rect, unsigned int /*tileNumber*/)
 {
 	float *buffer = this->m_outputBuffer;
 	float *depthbuffer = this->m_depthBuffer;
@@ -123,11 +126,25 @@ void ViewerOperation::executeRegion(rcti *rect, unsigned int tileNumber)
 void ViewerOperation::initImage()
 {
 	Image *ima = this->m_image;
+	ImageUser iuser = *this->m_imageUser;
 	void *lock;
-	ImBuf *ibuf = BKE_image_acquire_ibuf(ima, this->m_imageUser, &lock);
+	ImBuf *ibuf;
 
-	if (!ibuf) return;
+	/* make sure the image has the correct number of views */
+	if (ima && BKE_scene_multiview_is_render_view_first(this->m_rd, this->m_viewName)) {
+		BKE_image_verify_viewer_views(this->m_rd, ima, this->m_imageUser);
+	}
+
 	BLI_lock_thread(LOCK_DRAW_IMAGE);
+
+	/* local changes to the original ImageUser */
+	iuser.multi_index = BKE_scene_multiview_view_id_get(this->m_rd, this->m_viewName);
+	ibuf = BKE_image_acquire_ibuf(ima, &iuser, &lock);
+
+	if (!ibuf) {
+		BLI_unlock_thread(LOCK_DRAW_IMAGE);
+		return;
+	}
 	if (ibuf->x != (int)getWidth() || ibuf->y != (int)getHeight()) {
 
 		imb_freerectImBuf(ibuf);
@@ -146,7 +163,6 @@ void ViewerOperation::initImage()
 	if (m_doDepthBuffer) {
 		addzbuffloatImBuf(ibuf);
 	}
-	BLI_unlock_thread(LOCK_DRAW_IMAGE);
 
 	/* now we combine the input with ibuf */
 	this->m_outputBuffer = ibuf->rect_float;
@@ -159,6 +175,8 @@ void ViewerOperation::initImage()
 	}
 
 	BKE_image_release_ibuf(this->m_image, this->m_ibuf, lock);
+
+	BLI_unlock_thread(LOCK_DRAW_IMAGE);
 }
 
 void ViewerOperation::updateImage(rcti *rect)

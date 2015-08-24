@@ -33,6 +33,7 @@
 #include <float.h>
 
 #include "BLI_blenlib.h"
+#include "BLI_math.h"
 #include "BLI_utildefines.h"
 
 #include "DNA_anim_types.h"
@@ -42,6 +43,7 @@
 #include "DNA_userdef_types.h"
 
 #include "BKE_context.h"
+#include "BKE_curve.h"
 #include "BKE_fcurve.h"
 
 
@@ -227,7 +229,7 @@ static void draw_fcurve_vertices_handles(FCurve *fcu, SpaceIpo *sipo, View2D *v2
 		 * Also, need to take into account whether the keyframe was selected
 		 * if a Graph Editor option to only show handles of selected keys is on.
 		 */
-		if (!sel_handle_only || BEZSELECTED(bezt)) {
+		if (!sel_handle_only || BEZT_ISSEL_ANY(bezt)) {
 			if ((!prevbezt && (bezt->ipo == BEZT_IPO_BEZ)) || (prevbezt && (prevbezt->ipo == BEZT_IPO_BEZ))) {
 				if ((bezt->f1 & SELECT) == sel) /* && v2d->cur.xmin < bezt->vec[0][0] < v2d->cur.xmax)*/
 					draw_fcurve_handle_control(bezt->vec[0][0], bezt->vec[0][1], xscale, yscale, hsize);
@@ -343,7 +345,7 @@ static void draw_fcurve_handles(SpaceIpo *sipo, FCurve *fcu)
 			 * check that keyframe is selected
 			 */
 			if (sipo->flag & SIPO_SELVHANDLESONLY) {
-				if (BEZSELECTED(bezt) == 0)
+				if (BEZT_ISSEL_ANY(bezt) == 0)
 					continue;
 			}
 			
@@ -475,10 +477,11 @@ static void draw_fcurve_samples(SpaceIpo *sipo, ARegion *ar, FCurve *fcu)
 /* helper func - just draw the F-Curve by sampling the visible region (for drawing curves with modifiers) */
 static void draw_fcurve_curve(bAnimContext *ac, ID *id, FCurve *fcu, View2D *v2d, View2DGrid *grid)
 {
+	SpaceIpo *sipo = (SpaceIpo *)ac->sl;
 	ChannelDriver *driver;
 	float samplefreq;
 	float stime, etime;
-	float unitFac;
+	float unitFac, offset;
 	float dx, dy;
 	short mapping_flag = ANIM_get_normalization_flags(ac);
 	int i, n;
@@ -495,14 +498,14 @@ static void draw_fcurve_curve(bAnimContext *ac, ID *id, FCurve *fcu, View2D *v2d
 	fcu->driver = NULL;
 	
 	/* compute unit correction factor */
-	unitFac = ANIM_unit_mapping_get_factor(ac->scene, id, fcu, mapping_flag);
+	unitFac = ANIM_unit_mapping_get_factor(ac->scene, id, fcu, mapping_flag, &offset);
 	
 	/* Note about sampling frequency:
 	 *  Ideally, this is chosen such that we have 1-2 pixels = 1 segment
 	 *	which means that our curves can be as smooth as possible. However,
 	 *  this does mean that curves may not be fully accurate (i.e. if they have
 	 *  sudden spikes which happen at the sampling point, we may have problems).
-	 *  Also, this may introduce lower performance on less densely detailed curves,'
+	 *  Also, this may introduce lower performance on less densely detailed curves,
 	 *	though it is impossible to predict this from the modifiers!
 	 *
 	 *	If the automatically determined sampling frequency is likely to cause an infinite
@@ -512,7 +515,25 @@ static void draw_fcurve_curve(bAnimContext *ac, ID *id, FCurve *fcu, View2D *v2d
 	/* grid->dx represents the number of 'frames' between gridlines, but we divide by U.v2d_min_gridsize to get pixels-steps */
 	/* TODO: perhaps we should have 1.0 frames as upper limit so that curves don't get too distorted? */
 	samplefreq = dx / (U.v2d_min_gridsize * U.pixelsize);
-	if (samplefreq < 0.00001f) samplefreq = 0.00001f;
+	
+	if (sipo->flag & SIPO_BEAUTYDRAW_OFF) {
+		/* Low Precision = coarse lower-bound clamping
+		 * 
+		 * Although the "Beauty Draw" flag was originally for AA'd
+		 * line drawing, the sampling rate here has a much greater
+		 * impact on performance (e.g. for T40372)!
+		 *
+		 * This one still amounts to 10 sample-frames for each 1-frame interval
+		 * which should be quite a decent approximation in many situations.
+		 */
+		if (samplefreq < 0.1f)
+			samplefreq = 0.1f;
+	}
+	else {
+		/* "Higher Precision" but slower - especially on larger windows (e.g. T40372) */
+		if (samplefreq < 0.00001f)
+			samplefreq = 0.00001f;
+	}
 	
 	
 	/* the start/end times are simply the horizontal extents of the 'cur' rect */
@@ -525,12 +546,13 @@ static void draw_fcurve_curve(bAnimContext *ac, ID *id, FCurve *fcu, View2D *v2d
 	 *	  the displayed values appear correctly in the viewport
 	 */
 	glBegin(GL_LINE_STRIP);
-
-	for (i = 0, n = (etime - stime) / samplefreq + 0.5f; i < n; ++i) {
+	
+	n = (etime - stime) / samplefreq + 0.5f;
+	for (i = 0; i <= n; i++) {
 		float ctime = stime + i * samplefreq;
-		glVertex2f(ctime, evaluate_fcurve(fcu, ctime) * unitFac);
+		glVertex2f(ctime, (evaluate_fcurve(fcu, ctime) + offset) * unitFac);
 	}
-
+	
 	glEnd();
 	
 	/* restore driver */
@@ -544,13 +566,14 @@ static void draw_fcurve_curve_samples(bAnimContext *ac, ID *id, FCurve *fcu, Vie
 	FPoint *fpt = prevfpt + 1;
 	float fac, v[2];
 	int b = fcu->totvert - 1;
-	float unit_scale;
+	float unit_scale, offset;
 	short mapping_flag = ANIM_get_normalization_flags(ac);
 
 	/* apply unit mapping */
 	glPushMatrix();
-	unit_scale = ANIM_unit_mapping_get_factor(ac->scene, id, fcu, mapping_flag);
+	unit_scale = ANIM_unit_mapping_get_factor(ac->scene, id, fcu, mapping_flag, &offset);
 	glScalef(1.0f, unit_scale, 1.0f);
+	glTranslatef(0.0f, offset, 0.0f);
 
 	glBegin(GL_LINE_STRIP);
 	
@@ -616,8 +639,24 @@ static void draw_fcurve_curve_samples(bAnimContext *ac, ID *id, FCurve *fcu, Vie
 	glPopMatrix();
 }
 
-#if 0
-/* helper func - draw one repeat of an F-Curve */
+/* helper func - check if the F-Curve only contains easily drawable segments 
+ * (i.e. no easing equation interpolations) 
+ */
+static bool fcurve_can_use_simple_bezt_drawing(FCurve *fcu)
+{
+	BezTriple *bezt;
+	int i;
+	
+	for (i = 0, bezt = fcu->bezt; i < fcu->totvert; i++, bezt++) {
+		if (ELEM(bezt->ipo, BEZT_IPO_CONST, BEZT_IPO_LIN, BEZT_IPO_BEZ) == false) {
+			return false;
+		}
+	}
+	
+	return true;
+}
+
+/* helper func - draw one repeat of an F-Curve (using Bezier curve approximations) */
 static void draw_fcurve_curve_bezts(bAnimContext *ac, ID *id, FCurve *fcu, View2D *v2d)
 {
 	BezTriple *prevbezt = fcu->bezt;
@@ -627,13 +666,14 @@ static void draw_fcurve_curve_bezts(bAnimContext *ac, ID *id, FCurve *fcu, View2
 	float fac = 0.0f;
 	int b = fcu->totvert - 1;
 	int resol;
-	float unit_scale;
+	float unit_scale, offset;
 	short mapping_flag = ANIM_get_normalization_flags(ac);
-
+	
 	/* apply unit mapping */
 	glPushMatrix();
-	unit_scale = ANIM_unit_mapping_get_factor(ac->scene, id, fcu, mapping_flag);
+	unit_scale = ANIM_unit_mapping_get_factor(ac->scene, id, fcu, mapping_flag, &offset);
 	glScalef(1.0f, unit_scale, 1.0f);
+	glTranslatef(0.0f, offset, 0.0f);
 
 	glBegin(GL_LINE_STRIP);
 	
@@ -689,17 +729,19 @@ static void draw_fcurve_curve_bezts(bAnimContext *ac, ID *id, FCurve *fcu, View2
 			v1[1] = prevbezt->vec[1][1];
 			glVertex2fv(v1);
 		}
-		else {
+		else if (prevbezt->ipo == BEZT_IPO_BEZ) {
 			/* Bezier-Interpolation: draw curve as series of segments between keyframes 
 			 *	- resol determines number of points to sample in between keyframes
 			 */
 			
 			/* resol depends on distance between points (not just horizontal) OR is a fixed high res */
 			/* TODO: view scale should factor into this someday too... */
-			if (fcu->driver) 
+			if (fcu->driver) {
 				resol = 32;
-			else 
+			}
+			else {
 				resol = (int)(5.0f * len_v2v2(bezt->vec[1], prevbezt->vec[1]));
+			}
 			
 			if (resol < 2) {
 				/* only draw one */
@@ -773,7 +815,6 @@ static void draw_fcurve_curve_bezts(bAnimContext *ac, ID *id, FCurve *fcu, View2
 	glEnd();
 	glPopMatrix();
 }
-#endif
 
 /* Debugging -------------------------------- */
 
@@ -787,7 +828,8 @@ static void graph_draw_driver_debug(bAnimContext *ac, ID *id, FCurve *fcu)
 	ChannelDriver *driver = fcu->driver;
 	View2D *v2d = &ac->ar->v2d;
 	short mapping_flag = ANIM_get_normalization_flags(ac);
-	float unitfac = ANIM_unit_mapping_get_factor(ac->scene, id, fcu, mapping_flag);
+	float offset;
+	float unitfac = ANIM_unit_mapping_get_factor(ac->scene, id, fcu, mapping_flag, &offset);
 	
 	/* for now, only show when debugging driver... */
 	//if ((driver->flag & DRIVER_FLAG_SHOWDEBUG) == 0)
@@ -809,11 +851,13 @@ static void graph_draw_driver_debug(bAnimContext *ac, ID *id, FCurve *fcu)
 		 * NOTE: we need to scale the y-values to be valid for the units
 		 */
 		glBegin(GL_LINES);
+		{
 			t = v2d->cur.xmin;
-			glVertex2f(t, t * unitfac);
+			glVertex2f(t, (t + offset) * unitfac);
 			
 			t = v2d->cur.xmax;
-			glVertex2f(t, t * unitfac); 
+			glVertex2f(t, (t + offset) * unitfac);
+		}
 		glEnd();
 		
 		/* cleanup line drawing */
@@ -836,6 +880,7 @@ static void graph_draw_driver_debug(bAnimContext *ac, ID *id, FCurve *fcu)
 			setlinestyle(5);
 			
 			glBegin(GL_LINES);
+			{
 				/* x-axis lookup */
 				co[0] = x;
 				
@@ -855,6 +900,7 @@ static void graph_draw_driver_debug(bAnimContext *ac, ID *id, FCurve *fcu)
 				
 				co[0] = x;
 				glVertex2fv(co);
+			}
 			glEnd();
 			
 			setlinestyle(0);
@@ -865,7 +911,7 @@ static void graph_draw_driver_debug(bAnimContext *ac, ID *id, FCurve *fcu)
 			glPointSize(7.0);
 			
 			glBegin(GL_POINTS);
-				glVertex2f(x, y);
+			glVertex2f(x, y);
 			glEnd();
 			
 			/* inner frame */
@@ -873,7 +919,7 @@ static void graph_draw_driver_debug(bAnimContext *ac, ID *id, FCurve *fcu)
 			glPointSize(3.0);
 			
 			glBegin(GL_POINTS);
-				glVertex2f(x, y);
+			glVertex2f(x, y);
 			glEnd();
 			
 			glPointSize(1.0f);
@@ -989,11 +1035,15 @@ void graph_draw_curves(bAnimContext *ac, SpaceIpo *sipo, ARegion *ar, View2DGrid
 			}
 			else if (((fcu->bezt) || (fcu->fpt)) && (fcu->totvert)) {
 				/* just draw curve based on defined data (i.e. no modifiers) */
-				if (fcu->bezt)
-					//draw_fcurve_curve_bezts(ac, ale->id, fcu, &ar->v2d);
-					draw_fcurve_curve(ac, ale->id, fcu, &ar->v2d, grid);  // XXX: better to do an optimised integration here instead, but for now, this works
-				else if (fcu->fpt)
+				if (fcu->bezt) {
+					if (fcurve_can_use_simple_bezt_drawing(fcu))
+						draw_fcurve_curve_bezts(ac, ale->id, fcu, &ar->v2d);
+					else
+						draw_fcurve_curve(ac, ale->id, fcu, &ar->v2d, grid);
+				}
+				else if (fcu->fpt) {
 					draw_fcurve_curve_samples(ac, ale->id, fcu, &ar->v2d);
+				}
 			}
 			
 			/* restore settings */
@@ -1020,10 +1070,12 @@ void graph_draw_curves(bAnimContext *ac, SpaceIpo *sipo, ARegion *ar, View2DGrid
 			}
 			else if (((fcu->bezt) || (fcu->fpt)) && (fcu->totvert)) {
 				short mapping_flag = ANIM_get_normalization_flags(ac);
-				float unit_scale = ANIM_unit_mapping_get_factor(ac->scene, ale->id, fcu, mapping_flag);
+				float offset;
+				float unit_scale = ANIM_unit_mapping_get_factor(ac->scene, ale->id, fcu, mapping_flag, &offset);
 
 				glPushMatrix();
 				glScalef(1.0f, unit_scale, 1.0f);
+				glTranslatef(0.0f, offset, 0.0f);
 
 				if (fcu->bezt) {
 					bool do_handles = draw_fcurve_handles_check(sipo, fcu);
@@ -1090,6 +1142,8 @@ void graph_draw_channel_names(bContext *C, bAnimContext *ac, ARegion *ar)
 	
 	/* loop through channels, and set up drawing depending on their type  */
 	{   /* first pass: just the standard GL-drawing for backdrop + text */
+		size_t channel_index = 0;
+		
 		y = (float)ACHANNEL_FIRST;
 		
 		for (ale = anim_data.first, i = 0; ale; ale = ale->next, i++) {
@@ -1101,11 +1155,12 @@ void graph_draw_channel_names(bContext *C, bAnimContext *ac, ARegion *ar)
 			    IN_RANGE(ymaxc, v2d->cur.ymin, v2d->cur.ymax) )
 			{
 				/* draw all channels using standard channel-drawing API */
-				ANIM_channel_draw(ac, ale, yminc, ymaxc);
+				ANIM_channel_draw(ac, ale, yminc, ymaxc, channel_index);
 			}
 			
 			/* adjust y-position for next one */
 			y -= ACHANNEL_STEP;
+			channel_index++;
 		}
 	}
 	{   /* second pass: widgets */

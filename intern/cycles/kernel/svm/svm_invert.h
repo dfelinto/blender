@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 CCL_NAMESPACE_BEGIN
@@ -30,7 +30,7 @@ ccl_device void svm_node_invert(ShaderData *sd, float *stack, uint in_fac, uint 
 	color.y = invert(color.y, factor);
 	color.z = invert(color.z, factor);
 
-	if (stack_valid(out_color))
+	if(stack_valid(out_color))
 		stack_store_float3(stack, out_color, color);
 }
 

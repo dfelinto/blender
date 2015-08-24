@@ -51,10 +51,8 @@
 
 #include "BIF_gl.h"
 
-#include "ED_armature.h"
 #include "ED_keyframes_draw.h"
 
-#include "BLF_api.h"
 
 #include "UI_resources.h"
 

@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #include "stdosl.h"
@@ -37,7 +37,7 @@ shader node_voronoi_texture(
 	float da[4];
 	point pa[4];
 
-	voronoi(p * Scale, "Distance Squared", 1.0, da, pa);
+	voronoi(p * Scale, 1.0, da, pa);
 
 	/* Colored output */
 	if (Coloring == "Intensity") {

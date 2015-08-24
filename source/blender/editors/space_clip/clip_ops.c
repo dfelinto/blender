@@ -52,7 +52,7 @@
 #include "BLI_task.h"
 #include "BLI_string.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_context.h"
 #include "BKE_global.h"
@@ -274,7 +274,7 @@ static int open_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event)
 		return open_exec(C, op);
 
 	if (!RNA_struct_property_is_set(op->ptr, "relative_path"))
-		RNA_boolean_set(op->ptr, "relative_path", U.flag & USER_RELPATHS);
+		RNA_boolean_set(op->ptr, "relative_path", (U.flag & USER_RELPATHS) != 0);
 
 	open_init(C, op);
 
@@ -299,8 +299,8 @@ void CLIP_OT_open(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
 	/* properties */
-	WM_operator_properties_filesel(ot, FOLDERFILE | IMAGEFILE | MOVIEFILE, FILE_SPECIAL, FILE_OPENFILE,
-	                               WM_FILESEL_RELPATH | WM_FILESEL_FILES | WM_FILESEL_DIRECTORY, FILE_DEFAULTDISPLAY);
+	WM_operator_properties_filesel(ot, FILE_TYPE_FOLDER | FILE_TYPE_IMAGE | FILE_TYPE_MOVIE, FILE_SPECIAL, FILE_OPENFILE,
+	                               WM_FILESEL_RELPATH | WM_FILESEL_FILES | WM_FILESEL_DIRECTORY, FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);
 }
 
 /******************* reload clip operator *********************/
@@ -658,7 +658,7 @@ void CLIP_OT_view_zoom(wmOperatorType *ot)
 	ot->poll = ED_space_clip_view_clip_poll;
 
 	/* flags */
-	ot->flag = OPTYPE_BLOCKING | OPTYPE_GRAB_POINTER;
+	ot->flag = OPTYPE_BLOCKING | OPTYPE_GRAB_CURSOR;
 
 	/* properties */
 	prop = RNA_def_float(ot->srna, "factor", 0.0f, -FLT_MAX, FLT_MAX, "Factor",
@@ -912,7 +912,7 @@ static void change_frame_apply(bContext *C, wmOperator *op)
 	SUBFRA = 0.0f;
 
 	/* do updates */
-	sound_seek_scene(CTX_data_main(C), scene);
+	BKE_sound_seek_scene(CTX_data_main(C), scene);
 	WM_event_add_notifier(C, NC_SCENE | ND_FRAME, scene);
 }
 
@@ -1307,7 +1307,14 @@ static void proxy_endjob(void *pjv)
 	if (pj->index_context)
 		IMB_anim_index_rebuild_finish(pj->index_context, pj->stop);
 
-	BKE_movieclip_reload(pj->clip);
+	if (pj->clip->source == MCLIP_SRC_MOVIE) {
+		/* Timecode might have changed, so do a full reload to deal with this. */
+		BKE_movieclip_reload(pj->clip);
+	}
+	else {
+		/* For image sequences we'll preserve original cache. */
+		BKE_movieclip_clear_proxy_cache(pj->clip);
+	}
 
 	WM_main_add_notifier(NC_MOVIECLIP | ND_DISPLAY, pj->clip);
 }
@@ -1335,7 +1342,8 @@ static int clip_rebuild_proxy_exec(bContext *C, wmOperator *UNUSED(op))
 
 	if (clip->anim) {
 		pj->index_context = IMB_anim_index_rebuild_context(clip->anim, clip->proxy.build_tc_flag,
-		                                                   clip->proxy.build_size_flag, clip->proxy.quality);
+		                                                   clip->proxy.build_size_flag, clip->proxy.quality,
+		                                                   true, NULL);
 	}
 
 	WM_jobs_customdata_set(wm_job, pj, proxy_freejob);

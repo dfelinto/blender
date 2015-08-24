@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 CCL_NAMESPACE_BEGIN
@@ -28,7 +28,7 @@ ccl_device_noinline float svm_wave(NodeWaveType type, float3 p, float detail, fl
 		n = len(p) * 20.0f;
 	
 	if(distortion != 0.0f)
-		n += distortion * noise_turbulence(p*dscale, NODE_NOISE_PERLIN, detail, 0);
+		n += distortion * noise_turbulence(p*dscale, detail, 0);
 
 	return 0.5f + 0.5f * sinf(n);
 }

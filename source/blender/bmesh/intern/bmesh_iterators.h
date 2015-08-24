@@ -84,30 +84,40 @@ typedef enum BMIterType {
 extern const char bm_iter_itype_htype_map[BM_ITYPE_MAX];
 
 #define BM_ITER_MESH(ele, iter, bm, itype) \
-	for (ele = BM_iter_new(iter, bm, itype, NULL); ele; ele = BM_iter_step(iter))
+	for (BM_CHECK_TYPE_ELEM_ASSIGN(ele) = BM_iter_new(iter, bm, itype, NULL); \
+	     ele; \
+	     BM_CHECK_TYPE_ELEM_ASSIGN(ele) = BM_iter_step(iter))
 
 #define BM_ITER_MESH_INDEX(ele, iter, bm, itype, indexvar) \
-	for (ele = BM_iter_new(iter, bm, itype, NULL), indexvar = 0; ele; ele = BM_iter_step(iter), (indexvar)++)
+	for (BM_CHECK_TYPE_ELEM_ASSIGN(ele) = BM_iter_new(iter, bm, itype, NULL), indexvar = 0; \
+	     ele; \
+	     BM_CHECK_TYPE_ELEM_ASSIGN(ele) = BM_iter_step(iter), (indexvar)++)
 
 /* a version of BM_ITER_MESH which keeps the next item in storage
  * so we can delete the current item, see bug [#36923] */
 #ifdef DEBUG
 #  define BM_ITER_MESH_MUTABLE(ele, ele_next, iter, bm, itype) \
-	for (ele = BM_iter_new(iter, bm, itype, NULL); \
-	ele ? ((void)((iter)->count = BM_iter_mesh_count(itype, bm)), \
-	       (void)(ele_next = BM_iter_step(iter)), 1) : 0; \
-	ele = ele_next)
+	for (BM_CHECK_TYPE_ELEM_ASSIGN(ele) = BM_iter_new(iter, bm, itype, NULL); \
+	     ele ? ((void)((iter)->count = BM_iter_mesh_count(itype, bm)), \
+	            (void)(ele_next = BM_iter_step(iter)), 1) : 0; \
+	     BM_CHECK_TYPE_ELEM_ASSIGN(ele) = ele_next)
 #else
 #  define BM_ITER_MESH_MUTABLE(ele, ele_next, iter, bm, itype) \
-	for (ele = BM_iter_new(iter, bm, itype, NULL); ele ? ((ele_next = BM_iter_step(iter)), 1) : 0; ele = ele_next)
+	for (BM_CHECK_TYPE_ELEM_ASSIGN(ele) = BM_iter_new(iter, bm, itype, NULL); \
+	     ele ? ((BM_CHECK_TYPE_ELEM_ASSIGN(ele_next) = BM_iter_step(iter)), 1) : 0; \
+	     ele = ele_next)
 #endif
 
 
 #define BM_ITER_ELEM(ele, iter, data, itype) \
-	for (ele = BM_iter_new(iter, NULL, itype, data); ele; ele = BM_iter_step(iter))
+	for (BM_CHECK_TYPE_ELEM_ASSIGN(ele) = BM_iter_new(iter, NULL, itype, data); \
+	     ele; \
+	     BM_CHECK_TYPE_ELEM_ASSIGN(ele) = BM_iter_step(iter))
 
 #define BM_ITER_ELEM_INDEX(ele, iter, data, itype, indexvar) \
-	for (ele = BM_iter_new(iter, NULL, itype, data), indexvar = 0; ele; ele = BM_iter_step(iter), (indexvar)++)
+	for (BM_CHECK_TYPE_ELEM_ASSIGN(ele) = BM_iter_new(iter, NULL, itype, data), indexvar = 0; \
+	     ele; \
+	     BM_CHECK_TYPE_ELEM_ASSIGN(ele) = BM_iter_step(iter), (indexvar)++)
 
 /* iterator type structs */
 struct BMIter__elem_of_mesh {
@@ -187,14 +197,17 @@ typedef struct BMIter {
 
 void   *BM_iter_at_index(BMesh *bm, const char itype, void *data, int index) ATTR_WARN_UNUSED_RESULT;
 int     BM_iter_as_array(BMesh *bm, const char itype, void *data, void **array, const int len);
-void   *BM_iter_as_arrayN(BMesh *bm, const char itype, void *data, int *r_len,
-                          void **stack_array, int stack_array_size) ATTR_WARN_UNUSED_RESULT;
-int     BMO_iter_as_array(BMOpSlot slot_args[BMO_OP_MAX_SLOTS], const char *slot_name, const char restrictmask,
-                          void **array, const int len);
-void    *BMO_iter_as_arrayN(BMOpSlot slot_args[BMO_OP_MAX_SLOTS], const char *slot_name, const char restrictmask,
-                            int *r_len,
-                            /* optional args to avoid an alloc (normally stack array) */
-                            void **stack_array, int stack_array_size);
+void   *BM_iter_as_arrayN(
+        BMesh *bm, const char itype, void *data, int *r_len,
+        void **stack_array, int stack_array_size) ATTR_WARN_UNUSED_RESULT;
+int     BMO_iter_as_array(
+        BMOpSlot slot_args[BMO_OP_MAX_SLOTS], const char *slot_name, const char restrictmask,
+        void **array, const int len);
+void    *BMO_iter_as_arrayN(
+        BMOpSlot slot_args[BMO_OP_MAX_SLOTS], const char *slot_name, const char restrictmask,
+        int *r_len,
+        /* optional args to avoid an alloc (normally stack array) */
+        void **stack_array, int stack_array_size);
 int     BM_iter_elem_count_flag(const char itype, void *data, const char hflag, const bool value);
 int     BMO_iter_elem_count_flag(BMesh *bm, const char itype, void *data, const short oflag, const bool value);
 int     BM_iter_mesh_count(const char itype, BMesh *bm);

@@ -69,6 +69,7 @@ GPC_Canvas::GPC_Canvas(
 	m_displayarea.m_y1 = 0;
 	m_displayarea.m_x2 = width;
 	m_displayarea.m_y2 = height;
+	m_frame = 1;
 
 	glGetIntegerv(GL_VIEWPORT, (GLint*)m_viewport);
 }
@@ -180,7 +181,9 @@ MakeScreenShot(
 	char path[FILE_MAX];
 	BLI_strncpy(path, filename, sizeof(path));
 	BLI_path_abs(path, G.main->name);
-	BKE_add_image_extension_from_type(path, im_format.imtype);
+	BLI_path_frame(path, m_frame, 0);
+	m_frame++;
+	BKE_image_path_ensure_ext_from_imtype(path, im_format.imtype);
 
 	// create and save imbuf 
 	ImBuf *ibuf = IMB_allocImBuf(GetWidth(), GetHeight(), 24, 0);

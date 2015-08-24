@@ -29,8 +29,6 @@
  *  \ingroup spnode
  */
 
-#include <errno.h>
-
 #include "MEM_guardedalloc.h"
 
 #include "DNA_node_types.h"
@@ -38,7 +36,7 @@
 #include "BLI_listbase.h"
 #include "BLI_math.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_context.h"
 #include "BKE_image.h"
@@ -227,7 +225,7 @@ static int add_reroute_exec(bContext *C, wmOperator *op)
 		float insert_point[2];
 		
 		/* always first */
-		ED_preview_kill_jobs(C);
+		ED_preview_kill_jobs(CTX_wm_manager(C), CTX_data_main(C));
 		
 		node_deselect_all(snode);
 		
@@ -304,33 +302,12 @@ static int node_add_file_exec(bContext *C, wmOperator *op)
 {
 	SpaceNode *snode = CTX_wm_space_node(C);
 	bNode *node;
-	Image *ima = NULL;
+	Image *ima;
 	int type = 0;
 
-	/* check input variables */
-	if (RNA_struct_property_is_set(op->ptr, "filepath")) {
-		char path[FILE_MAX];
-		RNA_string_get(op->ptr, "filepath", path);
-
-		errno = 0;
-
-		ima = BKE_image_load_exists(path);
-
-		if (!ima) {
-			BKE_reportf(op->reports, RPT_ERROR, "Cannot read image '%s': %s",
-			            path, errno ? strerror(errno) : TIP_("unsupported format"));
-			return OPERATOR_CANCELLED;
-		}
-	}
-	else if (RNA_struct_property_is_set(op->ptr, "name")) {
-		char name[MAX_ID_NAME - 2];
-		RNA_string_get(op->ptr, "name", name);
-		ima = (Image *)BKE_libblock_find_name(ID_IM, name);
-
-		if (!ima) {
-			BKE_reportf(op->reports, RPT_ERROR, "Image '%s' not found", name);
-			return OPERATOR_CANCELLED;
-		}
+	ima = (Image *)WM_operator_drop_load_path(C, op, ID_IM);
+	if (!ima) {
+		return OPERATOR_CANCELLED;
 	}
 
 	switch (snode->nodetree->type) {
@@ -347,7 +324,7 @@ static int node_add_file_exec(bContext *C, wmOperator *op)
 			return OPERATOR_CANCELLED;
 	}
 	
-	ED_preview_kill_jobs(C);
+	ED_preview_kill_jobs(CTX_wm_manager(C), CTX_data_main(C));
 	
 	node = node_add_node(C, NULL, type, snode->cursor[0], snode->cursor[1]);
 	
@@ -357,9 +334,14 @@ static int node_add_file_exec(bContext *C, wmOperator *op)
 	}
 	
 	node->id = (ID *)ima;
-	
-	BKE_image_signal(ima, NULL, IMA_SIGNAL_RELOAD);
-	WM_event_add_notifier(C, NC_IMAGE | NA_EDITED, ima);
+
+	/* When adding new image file via drag-drop we need to load imbuf in order
+	 * to get proper image source.
+	 */
+	if (RNA_struct_property_is_set(op->ptr, "filepath")) {
+		BKE_image_signal(ima, NULL, IMA_SIGNAL_RELOAD);
+		WM_event_add_notifier(C, NC_IMAGE | NA_EDITED, ima);
+	}
 
 	snode_notify(C, snode);
 	snode_dag_update(C, snode);
@@ -397,8 +379,8 @@ void NODE_OT_add_file(wmOperatorType *ot)
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
-	WM_operator_properties_filesel(ot, FOLDERFILE | IMAGEFILE, FILE_SPECIAL, FILE_OPENFILE,
-	                               WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY);  //XXX TODO, relative_path
+	WM_operator_properties_filesel(ot, FILE_TYPE_FOLDER | FILE_TYPE_IMAGE | FILE_TYPE_MOVIE, FILE_SPECIAL, FILE_OPENFILE,
+	                               WM_FILESEL_FILEPATH | WM_FILESEL_RELPATH, FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);
 	RNA_def_string(ot->srna, "name", "Image", MAX_ID_NAME - 2, "Name", "Datablock name to assign");
 }
 
@@ -426,7 +408,7 @@ static int node_add_mask_exec(bContext *C, wmOperator *op)
 		return OPERATOR_CANCELLED;
 	}
 
-	ED_preview_kill_jobs(C);
+	ED_preview_kill_jobs(CTX_wm_manager(C), CTX_data_main(C));
 
 	node = node_add_node(C, NULL, CMP_NODE_MASK, snode->cursor[0], snode->cursor[1]);
 
@@ -471,8 +453,8 @@ static int new_node_tree_exec(bContext *C, wmOperator *op)
 	PointerRNA ptr, idptr;
 	PropertyRNA *prop;
 	const char *idname;
-	char _treename[MAX_ID_NAME - 2];
-	char *treename = _treename;
+	char treename_buf[MAX_ID_NAME - 2];
+	const char *treename;
 	
 	if (RNA_struct_property_is_set(op->ptr, "type")) {
 		prop = RNA_struct_find_property(op->ptr, "type");
@@ -484,10 +466,11 @@ static int new_node_tree_exec(bContext *C, wmOperator *op)
 		return OPERATOR_CANCELLED;
 	
 	if (RNA_struct_property_is_set(op->ptr, "name")) {
-		RNA_string_get(op->ptr, "name", treename);
+		RNA_string_get(op->ptr, "name", treename_buf);
+		treename = treename_buf;
 	}
 	else {
-		treename = (char *)DATA_("NodeTree");
+		treename = DATA_("NodeTree");
 	}
 	
 	if (!ntreeTypeFind(idname)) {

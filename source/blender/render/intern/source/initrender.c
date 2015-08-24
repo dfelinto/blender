@@ -36,8 +36,6 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "PIL_time.h"
-
 #include "BLI_math.h"
 #include "BLI_blenlib.h"
 #include "BLI_jitter.h"
@@ -48,11 +46,7 @@
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
-
 #include "BKE_camera.h"
-
-#include "IMB_imbuf_types.h"
-#include "IMB_imbuf.h"
 
 #ifdef WITH_QUICKTIME
 #include "quicktime_export.h"
@@ -61,10 +55,6 @@
 /* this module */
 #include "renderpipeline.h"
 #include "render_types.h"
-
-#include "rendercore.h"
-#include "pixelshading.h"
-#include "zbuf.h"
 
 /* Own includes */
 #include "initrender.h"
@@ -167,7 +157,7 @@ float RE_filter_value(int type, float x)
 		{
 			const float two_gaussfac2 = 2.0f * gaussfac * gaussfac;
 			x *= 3.0f * gaussfac;
-			return 1.0f / sqrtf(M_PI * two_gaussfac2) * expf(-x*x / two_gaussfac2);
+			return 1.0f / sqrtf((float)M_PI * two_gaussfac2) * expf(-x*x / two_gaussfac2);
 		}
 			
 		case R_FILTER_MITCH:
@@ -436,10 +426,10 @@ void make_sample_tables(Render *re)
 
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
-
 struct Object *RE_GetCamera(Render *re)
 {
-	return re->camera_override ? re->camera_override : re->scene->camera;
+	Object *camera = re->camera_override ? re->camera_override : re->scene->camera;
+	return BKE_camera_multiview_render(re->scene, camera, re->viewname);
 }
 
 static void re_camera_params_get(Render *re, CameraParams *params, Object *cam_ob)
@@ -480,6 +470,16 @@ void RE_SetEnvmapCamera(Render *re, Object *cam_ob, float viewscale, float clips
 	re_camera_params_get(re, &params, cam_ob);
 }
 
+void RE_SetOverrideCamera(Render *re, Object *camera)
+{
+	re->camera_override = camera;
+}
+
+static void re_camera_params_stereo3d(Render *re, CameraParams *params, Object *cam_ob)
+{
+	BKE_camera_multiview_params(&re->r, params, cam_ob, re->viewname);
+}
+
 /* call this after InitState() */
 /* per render, there's one persistent viewplane. Parts will set their own viewplanes */
 void RE_SetCamera(Render *re, Object *cam_ob)
@@ -489,6 +489,7 @@ void RE_SetCamera(Render *re, Object *cam_ob)
 	/* setup parameters */
 	BKE_camera_params_init(&params);
 	BKE_camera_params_from_object(&params, cam_ob);
+	re_camera_params_stereo3d(re, &params, cam_ob);
 
 	params.use_fields = (re->r.mode & R_FIELDS);
 	params.field_second = (re->flag & R_SEC_FIELD);
@@ -513,6 +514,11 @@ void RE_GetCameraWindow(struct Render *re, struct Object *camera, int frame, flo
 	re->r.cfra = frame;
 	RE_SetCamera(re, camera);
 	copy_m4_m4(mat, re->winmat);
+}
+
+void RE_GetCameraModelMatrix(Render *re, struct Object *camera, float r_mat[4][4])
+{
+	BKE_camera_multiview_model_matrix(&re->r, camera, re->viewname, r_mat);
 }
 
 /* ~~~~~~~~~~~~~~~~ part (tile) calculus ~~~~~~~~~~~~~~~~~~~~~~ */

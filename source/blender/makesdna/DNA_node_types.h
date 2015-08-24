@@ -40,7 +40,6 @@
 
 struct ID;
 struct ListBase;
-struct SpaceNode;
 struct bNodeLink;
 struct bNodeType;
 struct bNodeTreeExec;
@@ -192,6 +191,8 @@ typedef struct bNode {
 	float width, height;	/* node custom width and height */
 	float miniwidth;		/* node width if hidden */
 	float offsetx, offsety;	/* additional offset from loc */
+	float anim_init_locx;	/* initial locx for insert offset animation */
+	float anim_ofsx;		/* offset that will be added to locx for insert offset animation */
 	
 	int update;				/* update flags */
 	
@@ -264,12 +265,12 @@ typedef struct bNode {
  */
 #define NODE_UPDATE			0xFFFF	/* generic update flag (includes all others) */
 #define NODE_UPDATE_ID		1		/* associated id data block has changed */
+#define NODE_UPDATE_OPERATOR		2		/* node update triggered from update operator */
 
 /* Unique hash key for identifying node instances
  * Defined as a struct because DNA does not support other typedefs.
  */
-typedef struct bNodeInstanceKey
-{
+typedef struct bNodeInstanceKey {
 	unsigned int value;
 } bNodeInstanceKey;
 
@@ -383,10 +384,12 @@ typedef struct bNodeTree {
 	
 	/* callbacks */
 	void (*progress)(void *, float progress);
-	void (*stats_draw)(void *, char *str);
+	void (*stats_draw)(void *, const char *str);
 	int (*test_break)(void *);
 	void (*update_draw)(void *);
 	void *tbh, *prh, *sdh, *udh;
+
+	void *duplilock;
 	
 } bNodeTree;
 
@@ -726,6 +729,8 @@ typedef struct NodeTexImage {
 	int projection;
 	float projection_blend;
 	int interpolation;
+	int extension;
+	int pad;
 } NodeTexImage;
 
 typedef struct NodeTexChecker {
@@ -789,6 +794,18 @@ typedef struct NodeShaderVectTransform {
 	int pad;
 } NodeShaderVectTransform;
 
+typedef struct NodeShaderTexPointDensity {
+	NodeTexBase base;
+	short point_source, pad;
+	int particle_system;
+	float radius;
+	int resolution;
+	short space;
+	short interpolation;
+	short color_source;
+	short pad2;
+} NodeShaderTexPointDensity;
+
 /* TEX_output */
 typedef struct TexNodeOutput {
 	char name[64];
@@ -825,6 +842,10 @@ typedef struct NodeTranslateData {
 typedef struct NodePlaneTrackDeformData {
 	char tracking_object[64];
 	char plane_track_name[64];
+	char flag;
+	char motion_blur_samples;
+	char pad[2];
+	float motion_blur_shutter;
 } NodePlaneTrackDeformData;
 
 typedef struct NodeShaderScript {
@@ -959,9 +980,15 @@ typedef struct NodeSunBeams {
 #define SHD_PROJ_EQUIRECTANGULAR	0
 #define SHD_PROJ_MIRROR_BALL		1
 
+#define SHD_IMAGE_EXTENSION_REPEAT	0
+#define SHD_IMAGE_EXTENSION_EXTEND	1
+#define SHD_IMAGE_EXTENSION_CLIP	2
+
 /* image texture */
 #define SHD_PROJ_FLAT				0
 #define SHD_PROJ_BOX				1
+#define SHD_PROJ_SPHERE				2
+#define SHD_PROJ_TUBE				3
 
 /* image texture interpolation */
 #define SHD_INTERP_LINEAR		0
@@ -1017,14 +1044,12 @@ enum {
 
 /* subsurface */
 enum {
+#ifdef DNA_DEPRECATED
 	SHD_SUBSURFACE_COMPATIBLE		= 0, // Deprecated
+#endif
 	SHD_SUBSURFACE_CUBIC			= 1,
 	SHD_SUBSURFACE_GAUSSIAN			= 2,
 };
-
-#if (DNA_DEPRECATED_GCC_POISON == 1)
-#pragma GCC poison SHD_SUBSURFACE_COMPATIBLE
-#endif
 
 /* blur node */
 #define CMP_NODE_BLUR_ASPECT_NONE		0
@@ -1077,5 +1102,30 @@ enum {
 
 /* viewer and cmposite output */
 #define CMP_NODE_OUTPUT_IGNORE_ALPHA		1
+
+/* Plane track deform node */
+enum {
+	CMP_NODEFLAG_PLANETRACKDEFORM_MOTION_BLUR = 1,
+};
+
+#define CMP_NODE_PLANETRACKDEFORM_MBLUR_SAMPLES_MAX 64
+
+/* Point Density shader node */
+
+enum {
+	SHD_POINTDENSITY_SOURCE_PSYS = 0,
+	SHD_POINTDENSITY_SOURCE_OBJECT = 1,
+};
+
+enum {
+	SHD_POINTDENSITY_SPACE_OBJECT = 0,
+	SHD_POINTDENSITY_SPACE_WORLD  = 1,
+};
+
+enum {
+	SHD_POINTDENSITY_COLOR_PARTAGE   = 1,
+	SHD_POINTDENSITY_COLOR_PARTSPEED = 2,
+	SHD_POINTDENSITY_COLOR_PARTVEL   = 3,
+};
 
 #endif

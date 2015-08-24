@@ -42,6 +42,7 @@
 #include "bmesh_py_types_meshdata.h"
 
 #include "../mathutils/mathutils.h"
+#include "../generic/python_utildefines.h"
 
 #include "BKE_customdata.h"
 
@@ -114,6 +115,9 @@ PyDoc_STRVAR(bpy_bmlayeraccess_collection__color_doc,
 );
 PyDoc_STRVAR(bpy_bmlayeraccess_collection__skin_doc,
 "Accessor for skin layer.\n\ntype: :class:`BMLayerCollection`"
+);
+PyDoc_STRVAR(bpy_bmlayeraccess_collection__paint_mask_doc,
+"Accessor for paint mask layer.\n\ntype: :class:`BMLayerCollection`"
 );
 #ifdef WITH_FREESTYLE
 PyDoc_STRVAR(bpy_bmlayeraccess_collection__freestyle_edge_doc,
@@ -195,6 +199,7 @@ static PyGetSetDef bpy_bmlayeraccess_vert_getseters[] = {
 	{(char *)"shape",        (getter)bpy_bmlayeraccess_collection_get, (setter)NULL, (char *)bpy_bmlayeraccess_collection__shape_doc, (void *)CD_SHAPEKEY},
 	{(char *)"bevel_weight", (getter)bpy_bmlayeraccess_collection_get, (setter)NULL, (char *)bpy_bmlayeraccess_collection__bevel_weight_doc, (void *)CD_BWEIGHT},
 	{(char *)"skin",         (getter)bpy_bmlayeraccess_collection_get, (setter)NULL, (char *)bpy_bmlayeraccess_collection__skin_doc, (void *)CD_MVERT_SKIN},
+	{(char *)"paint_mask",   (getter)bpy_bmlayeraccess_collection_get, (setter)NULL, (char *)bpy_bmlayeraccess_collection__paint_mask_doc, (void *)CD_PAINT_MASK},
 
 	{NULL, NULL, NULL, NULL, NULL} /* Sentinel */
 };
@@ -483,8 +488,9 @@ static PyObject *bpy_bmlayercollection_items(BPy_BMLayerCollection *self)
 
 	for (i = 0; tot-- > 0; index++) {
 		item = PyTuple_New(2);
-		PyTuple_SET_ITEM(item, 0, PyUnicode_FromString(data->layers[index].name));
-		PyTuple_SET_ITEM(item, 1, BPy_BMLayerItem_CreatePyObject(self->bm, self->htype, self->type, index));
+		PyTuple_SET_ITEMS(item,
+		        PyUnicode_FromString(data->layers[index].name),
+		        BPy_BMLayerItem_CreatePyObject(self->bm, self->htype, self->type, index));
 		PyList_SET_ITEM(ret, i++, item);
 	}
 
@@ -559,7 +565,7 @@ static PyObject *bpy_bmlayercollection_get(BPy_BMLayerCollection *self, PyObject
 		}
 	}
 
-	return Py_INCREF(def), def;
+	return Py_INCREF_RET(def);
 }
 
 static struct PyMethodDef bpy_bmlayeritem_methods[] = {
@@ -785,12 +791,12 @@ PyDoc_STRVAR(bpy_bmlayeritem_type_doc,
 );
 
 
-PyTypeObject BPy_BMLayerAccessVert_Type     = {{{0}}}; /* bm.verts.layers */
-PyTypeObject BPy_BMLayerAccessEdge_Type     = {{{0}}}; /* bm.edges.layers */
-PyTypeObject BPy_BMLayerAccessFace_Type     = {{{0}}}; /* bm.faces.layers */
-PyTypeObject BPy_BMLayerAccessLoop_Type     = {{{0}}}; /* bm.loops.layers */
-PyTypeObject BPy_BMLayerCollection_Type     = {{{0}}}; /* bm.loops.layers.uv */
-PyTypeObject BPy_BMLayerItem_Type           = {{{0}}}; /* bm.loops.layers.uv["UVMap"] */
+PyTypeObject BPy_BMLayerAccessVert_Type; /* bm.verts.layers */
+PyTypeObject BPy_BMLayerAccessEdge_Type; /* bm.edges.layers */
+PyTypeObject BPy_BMLayerAccessFace_Type; /* bm.faces.layers */
+PyTypeObject BPy_BMLayerAccessLoop_Type; /* bm.loops.layers */
+PyTypeObject BPy_BMLayerCollection_Type; /* bm.loops.layers.uv */
+PyTypeObject BPy_BMLayerItem_Type;       /* bm.loops.layers.uv["UVMap"] */
 
 
 PyObject *BPy_BMLayerAccess_CreatePyObject(BMesh *bm, const char htype)
@@ -982,6 +988,7 @@ PyObject *BPy_BMLayerItem_GetItem(BPy_BMElem *py_ele, BPy_BMLayerItem *py_layer)
 			break;
 		}
 		case CD_PROP_FLT:
+		case CD_PAINT_MASK:
 		{
 			ret = PyFloat_FromDouble(*(float *)value);
 			break;
@@ -1014,7 +1021,7 @@ PyObject *BPy_BMLayerItem_GetItem(BPy_BMElem *py_ele, BPy_BMLayerItem *py_layer)
 		}
 		case CD_SHAPEKEY:
 		{
-			ret = Vector_CreatePyObject((float *)value, 3, Py_WRAP, NULL);
+			ret = Vector_CreatePyObject_wrap((float *)value, 3, NULL);
 			break;
 		}
 		case CD_BWEIGHT:
@@ -1059,6 +1066,7 @@ int BPy_BMLayerItem_SetItem(BPy_BMElem *py_ele, BPy_BMLayerItem *py_layer, PyObj
 			break;
 		}
 		case CD_PROP_FLT:
+		case CD_PAINT_MASK:
 		{
 			float tmp_val = PyFloat_AsDouble(py_value);
 			if (UNLIKELY(tmp_val == -1 && PyErr_Occurred())) {

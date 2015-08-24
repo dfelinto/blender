@@ -40,11 +40,12 @@
 #include "BLI_utildefines.h"
 #include "BLI_math_vector.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "DNA_gpencil_types.h"
 #include "DNA_userdef_types.h"
 
+#include "BKE_animsys.h"
 #include "BKE_global.h"
 #include "BKE_gpencil.h"
 #include "BKE_library.h"
@@ -115,6 +116,12 @@ void BKE_gpencil_free(bGPdata *gpd)
 {
 	/* free layers */
 	free_gpencil_layers(&gpd->layers);
+	
+	/* free animation data */
+	if (gpd->adt) {
+		BKE_animdata_free(&gpd->id);
+		gpd->adt = NULL;
+	}
 }
 
 /* -------- Container Creation ---------- */
@@ -122,11 +129,11 @@ void BKE_gpencil_free(bGPdata *gpd)
 /* add a new gp-frame to the given layer */
 bGPDframe *gpencil_frame_addnew(bGPDlayer *gpl, int cframe)
 {
-	bGPDframe *gpf, *gf;
+	bGPDframe *gpf = NULL, *gf = NULL;
 	short state = 0;
 	
 	/* error checking (neg frame only if they are not allowed in Blender!) */
-	if ((gpl == NULL) || ((U.flag & USER_NONEGFRAMES) && (cframe <= 0)))
+	if (gpl == NULL)
 		return NULL;
 		
 	/* allocate memory for this frame */
@@ -153,8 +160,14 @@ bGPDframe *gpencil_frame_addnew(bGPDlayer *gpl, int cframe)
 	
 	/* check whether frame was added successfully */
 	if (state == -1) {
+		printf("Error: Frame (%d) existed already for this layer. Using existing frame\n", cframe);
+		
+		/* free the newly created one, and use the old one instead */
 		MEM_freeN(gpf);
-		printf("Error: frame (%d) existed already for this layer\n", cframe);
+		
+		/* return existing frame instead... */
+		BLI_assert(gf != NULL);
+		gpf = gf;
 	}
 	else if (state == 0) {
 		/* add to end then! */
@@ -276,7 +289,7 @@ bGPDlayer *gpencil_layer_duplicate(bGPDlayer *src)
 }
 
 /* make a copy of a given gpencil datablock */
-bGPdata *gpencil_data_duplicate(bGPdata *src)
+bGPdata *gpencil_data_duplicate(bGPdata *src, bool internal_copy)
 {
 	bGPDlayer *gpl, *gpld;
 	bGPdata *dst;
@@ -286,7 +299,14 @@ bGPdata *gpencil_data_duplicate(bGPdata *src)
 		return NULL;
 	
 	/* make a copy of the base-data */
-	dst = MEM_dupallocN(src);
+	if (internal_copy) {
+		/* make a straight copy for undo buffers used during stroke drawing */
+		dst = MEM_dupallocN(src);
+	}
+	else {
+		/* make a copy when others use this */
+		dst = BKE_libblock_copy(&src->id);
+	}
 	
 	/* copy layers */
 	BLI_listbase_clear(&dst->layers);
@@ -298,6 +318,31 @@ bGPdata *gpencil_data_duplicate(bGPdata *src)
 	
 	/* return new */
 	return dst;
+}
+
+/* -------- GP-Stroke API --------- */
+
+/* ensure selection status of stroke is in sync with its points */
+void gpencil_stroke_sync_selection(bGPDstroke *gps)
+{
+	bGPDspoint *pt;
+	int i;
+	
+	/* error checking */
+	if (gps == NULL)
+		return;
+	
+	/* we'll stop when we find the first selected point,
+	 * so initially, we must deselect
+	 */
+	gps->flag &= ~GP_STROKE_SELECT;
+	
+	for (i = 0, pt = gps->points; i < gps->totpoints; i++, pt++) {
+		if (pt->flag & GP_SPOINT_SELECT) {
+			gps->flag |= GP_STROKE_SELECT;
+			break;
+		}
+	}
 }
 
 /* -------- GP-Frame API ---------- */
@@ -349,8 +394,6 @@ bGPDframe *gpencil_layer_getframe(bGPDlayer *gpl, int cframe, short addnew)
 	
 	/* error checking */
 	if (gpl == NULL) return NULL;
-	/* No reason to forbid negative frames when they are allowed in Blender! */
-	if ((U.flag & USER_NONEGFRAMES) && cframe <= 0) cframe = 1;
 	
 	/* check if there is already an active frame */
 	if (gpl->actframe) {
@@ -359,7 +402,7 @@ bGPDframe *gpencil_layer_getframe(bGPDlayer *gpl, int cframe, short addnew)
 		/* do not allow any changes to layer's active frame if layer is locked from changes
 		 * or if the layer has been set to stay on the current frame
 		 */
-		if (gpl->flag & (GP_LAYER_LOCKED | GP_LAYER_FRAMELOCK))
+		if (gpl->flag & GP_LAYER_FRAMELOCK)
 			return gpf;
 		/* do not allow any changes to actframe if frame has painting tag attached to it */
 		if (gpf->flag & GP_FRAME_PAINT) 
@@ -468,16 +511,23 @@ bGPDframe *gpencil_layer_getframe(bGPDlayer *gpl, int cframe, short addnew)
 bool gpencil_layer_delframe(bGPDlayer *gpl, bGPDframe *gpf)
 {
 	bool changed = false;
-
+	
 	/* error checking */
 	if (ELEM(NULL, gpl, gpf))
 		return false;
-		
+	
+	/* if this frame was active, make the previous frame active instead 
+	 * since it's tricky to set active frame otherwise
+	 */
+	if (gpl->actframe == gpf)
+		gpl->actframe = gpf->prev;
+	else
+		gpl->actframe = NULL;
+	
 	/* free the frame and its data */
 	changed = free_gpencil_strokes(gpf);
 	BLI_freelinkN(&gpl->frames, gpf);
-	gpl->actframe = NULL;
-
+	
 	return changed;
 }
 

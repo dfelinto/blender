@@ -113,22 +113,22 @@ size_t BLI_timecode_string_from_time(
 			if (power <= 0) {
 				/* include "frames" in display */
 				if (hours) {
-					rlen = BLI_snprintf(str, maxncpy, "%s%02d:%02d:%02d+%02d", neg, hours, minutes, seconds, frames);
+					rlen = BLI_snprintf_rlen(str, maxncpy, "%s%02d:%02d:%02d+%02d", neg, hours, minutes, seconds, frames);
 				}
 				else if (minutes) {
-					rlen = BLI_snprintf(str, maxncpy, "%s%02d:%02d+%02d", neg, minutes, seconds, frames);
+					rlen = BLI_snprintf_rlen(str, maxncpy, "%s%02d:%02d+%02d", neg, minutes, seconds, frames);
 				}
 				else {
-					rlen = BLI_snprintf(str, maxncpy, "%s%d+%02d", neg, seconds, frames);
+					rlen = BLI_snprintf_rlen(str, maxncpy, "%s%d+%02d", neg, seconds, frames);
 				}
 			}
 			else {
 				/* don't include 'frames' in display */
 				if (hours) {
-					rlen = BLI_snprintf(str, maxncpy, "%s%02d:%02d:%02d", neg, hours, minutes, seconds);
+					rlen = BLI_snprintf_rlen(str, maxncpy, "%s%02d:%02d:%02d", neg, hours, minutes, seconds);
 				}
 				else {
-					rlen = BLI_snprintf(str, maxncpy, "%s%02d:%02d", neg, minutes, seconds);
+					rlen = BLI_snprintf_rlen(str, maxncpy, "%s%02d:%02d", neg, minutes, seconds);
 				}
 			}
 			break;
@@ -137,10 +137,10 @@ size_t BLI_timecode_string_from_time(
 		{
 			/* reduced SMPTE format that always shows minutes, seconds, frames. Hours only shown as needed. */
 			if (hours) {
-				rlen = BLI_snprintf(str, maxncpy, "%s%02d:%02d:%02d:%02d", neg, hours, minutes, seconds, frames);
+				rlen = BLI_snprintf_rlen(str, maxncpy, "%s%02d:%02d:%02d:%02d", neg, hours, minutes, seconds, frames);
 			}
 			else {
-				rlen = BLI_snprintf(str, maxncpy, "%s%02d:%02d:%02d", neg, minutes, seconds, frames);
+				rlen = BLI_snprintf_rlen(str, maxncpy, "%s%02d:%02d:%02d", neg, minutes, seconds, frames);
 			}
 			break;
 		}
@@ -156,10 +156,10 @@ size_t BLI_timecode_string_from_time(
 			const int s_pad = ms_dp + 3;
 
 			if (hours) {
-				rlen = BLI_snprintf(str, maxncpy, "%s%02d:%02d:%0*.*f", neg, hours, minutes, s_pad, ms_dp, time);
+				rlen = BLI_snprintf_rlen(str, maxncpy, "%s%02d:%02d:%0*.*f", neg, hours, minutes, s_pad, ms_dp, time);
 			}
 			else {
-				rlen = BLI_snprintf(str, maxncpy, "%s%02d:%0*.*f", neg, minutes, s_pad,  ms_dp, time);
+				rlen = BLI_snprintf_rlen(str, maxncpy, "%s%02d:%0*.*f", neg, minutes, s_pad,  ms_dp, time);
 			}
 			break;
 		}
@@ -168,10 +168,10 @@ size_t BLI_timecode_string_from_time(
 			/* only show the original seconds display */
 			/* round to whole numbers if power is >= 1 (i.e. scale is coarse) */
 			if (power <= 0) {
-				rlen = BLI_snprintf(str, maxncpy, "%.*f", 1 - power, time_seconds);
+				rlen = BLI_snprintf_rlen(str, maxncpy, "%.*f", 1 - power, time_seconds);
 			}
 			else {
-				rlen = BLI_snprintf(str, maxncpy, "%d", iroundf(time_seconds));
+				rlen = BLI_snprintf_rlen(str, maxncpy, "%d", iroundf(time_seconds));
 			}
 			break;
 		}
@@ -179,7 +179,7 @@ size_t BLI_timecode_string_from_time(
 		default:
 		{
 			/* full SMPTE format */
-			rlen = BLI_snprintf(str, maxncpy, "%s%02d:%02d:%02d:%02d", neg, hours, minutes, seconds, frames);
+			rlen = BLI_snprintf_rlen(str, maxncpy, "%s%02d:%02d:%02d:%02d", neg, hours, minutes, seconds, frames);
 			break;
 		}
 	}
@@ -187,6 +187,34 @@ size_t BLI_timecode_string_from_time(
 	return rlen;
 }
 
+/**
+ * Generate time string and store in \a str
+ *
+ * \param str: destination string
+ * \param maxncpy: maximum number of characters to copy ``sizeof(str)``
+ * \param time_seconds: time total time in seconds
+ * \return length of \a str
+ */
+size_t BLI_timecode_string_from_time_simple(
+        char *str, const size_t maxncpy, const double time_seconds)
+{
+	size_t rlen;
+
+	/* format 00:00:00.00 (hr:min:sec) string has to be 12 long */
+	const int  hr = ( (int)  time_seconds) / (60 * 60);
+	const int min = (((int)  time_seconds) / 60 ) % 60;
+	const int sec = ( (int)  time_seconds) % 60;
+	const int hun = ( (int) (time_seconds   * 100.0)) % 100;
+
+	if (hr) {
+		rlen = BLI_snprintf(str, maxncpy, "%.2d:%.2d:%.2d.%.2d", hr, min, sec, hun);
+	}
+	else {
+		rlen = BLI_snprintf(str, maxncpy, "%.2d:%.2d.%.2d", min, sec, hun);
+	}
+
+	return rlen;
+}
 
 /**
  * Generate time string and store in \a str
@@ -196,22 +224,21 @@ size_t BLI_timecode_string_from_time(
  * \param power  special setting for #View2D grid drawing,
  *        used to specify how detailed we need to be
  * \param time_seconds  time total time in seconds
- * \param seconds  time in seconds.
  * \return length of \a str
  *
  * \note in some cases this is used to print non-seconds values.
  */
-size_t BLI_timecode_string_from_time_simple(
+size_t BLI_timecode_string_from_time_seconds(
         char *str, const size_t maxncpy, const int power, const float time_seconds)
 {
 	size_t rlen;
 
 	/* round to whole numbers if power is >= 1 (i.e. scale is coarse) */
 	if (power <= 0) {
-		rlen = BLI_snprintf(str, maxncpy, "%.*f", 1 - power, time_seconds);
+		rlen = BLI_snprintf_rlen(str, maxncpy, "%.*f", 1 - power, time_seconds);
 	}
 	else {
-		rlen = BLI_snprintf(str, maxncpy, "%d", iroundf(time_seconds));
+		rlen = BLI_snprintf_rlen(str, maxncpy, "%d", iroundf(time_seconds));
 	}
 
 	return rlen;

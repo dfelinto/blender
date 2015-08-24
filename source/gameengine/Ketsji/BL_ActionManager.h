@@ -20,7 +20,7 @@
  * ***** END GPL LICENSE BLOCK *****
  */
 
-/** \file BL_ActionManager.cpp
+/** \file BL_ActionManager.h
  *  \ingroup ketsji
  */
 
@@ -50,6 +50,9 @@ private:
 
 	class KX_GameObject* m_obj;
 	BL_ActionMap 		 m_layers;
+
+	// The last update time to avoid double animation update.
+	float m_prevUpdate;
 
 	/**
 	 * Check if an action exists
@@ -82,6 +85,11 @@ public:
 	float GetActionFrame(short layer);
 
 	/**
+	 * Gets the name of the current action
+	 */        
+	const char *GetActionName(short layer);
+
+	/**
 	 * Sets the current frame of an action
 	 */
 	void SetActionFrame(short layer, float frame);
@@ -105,6 +113,11 @@ public:
 	 * Stop playing the action on the given layer
 	 */
 	void StopAction(short layer);
+
+	/**
+	 * Remove playing tagged actions.
+	 */
+	void RemoveTaggedActions();
 
 	/**
 	 * Check if an action has finished playing

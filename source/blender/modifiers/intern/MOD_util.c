@@ -32,7 +32,6 @@
 
 #include <string.h>
 
-#include "DNA_curve_types.h"
 #include "DNA_image_types.h"
 #include "DNA_meshdata_types.h"
 #include "DNA_modifier_types.h"
@@ -48,8 +47,6 @@
 #include "BKE_image.h"
 #include "BKE_lattice.h"
 #include "BKE_mesh.h"
-#include "BKE_displist.h"
-#include "BKE_scene.h"
 
 #include "BKE_modifier.h"
 
@@ -58,13 +55,11 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "RE_shader_ext.h"
-
 #ifdef OPENNL_THREADING_HACK
 #include "BLI_threads.h"
 #endif
 
-void modifier_init_texture(Scene *scene, Tex *tex)
+void modifier_init_texture(const Scene *scene, Tex *tex)
 {
 	if (!tex)
 		return;
@@ -164,8 +159,8 @@ DerivedMesh *get_cddm(Object *ob, struct BMEditMesh *em, DerivedMesh *dm, float 
 	if (dm) {
 		if (dm->type != DM_TYPE_CDDM) {
 			dm = CDDM_copy(dm);
-			CDDM_apply_vert_coords(dm, vertexCos);
 		}
+		CDDM_apply_vert_coords(dm, vertexCos);
 
 		if (use_normals) {
 			DM_ensure_normals(dm);
@@ -309,5 +304,8 @@ void modifier_type_init(ModifierTypeInfo *types[])
 	INIT_TYPE(MeshCache);
 	INIT_TYPE(LaplacianDeform);
 	INIT_TYPE(Wireframe);
+	INIT_TYPE(DataTransfer);
+	INIT_TYPE(NormalEdit);
+	INIT_TYPE(CorrectiveSmooth);
 #undef INIT_TYPE
 }

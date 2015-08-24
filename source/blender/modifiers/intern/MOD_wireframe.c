@@ -23,20 +23,14 @@
  *  \ingroup modifiers
  */
 
-#include "MEM_guardedalloc.h"
-
 #include "DNA_object_types.h"
-#include "DNA_meshdata_types.h"
 
-#include "BLI_math.h"
 #include "BLI_utildefines.h"
-#include "BLI_string.h"
 
 #include "BKE_cdderivedmesh.h"
 #include "BKE_deform.h"
 
 #include "MOD_modifiertypes.h"
-#include "MOD_util.h"
 
 #include "bmesh.h"
 #include "tools/bmesh_wireframe.h"
@@ -80,7 +74,7 @@ static bool dependsOnNormals(ModifierData *UNUSED(md))
 	return true;
 }
 
-static DerivedMesh *WireframeModifier_do( WireframeModifierData *wmd, Object *ob, DerivedMesh *dm)
+static DerivedMesh *WireframeModifier_do(WireframeModifierData *wmd, Object *ob, DerivedMesh *dm)
 {
 	DerivedMesh *result;
 	BMesh *bm;
@@ -139,6 +133,7 @@ ModifierTypeInfo modifierType_Wireframe = {
 	/* freeData */          NULL,
 	/* isDisabled */        isDisabled,
 	/* updateDepgraph */    NULL,
+	/* updateDepsgraph */   NULL,
 	/* dependsOnTime */     NULL,
 	/* dependsOnNormals */  dependsOnNormals,
 	/* foreachObjectLink */ NULL,

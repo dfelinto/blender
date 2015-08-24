@@ -19,14 +19,16 @@
 # <pep8 compliant>
 
 if "bpy" in locals():
-    from imp import reload as _reload
+    from importlib import reload
     for val in _modules_loaded.values():
-        _reload(val)
+        reload(val)
+    del reload
 _modules = [
     "add_mesh_torus",
     "anim",
     "clip",
     "console",
+    "file",
     "image",
     "mask",
     "mesh",
@@ -53,7 +55,7 @@ if bpy.app.build_options.freestyle:
     _modules.append("freestyle")
 __import__(name=__name__, fromlist=_modules)
 _namespace = globals()
-_modules_loaded = {name: _namespace[name] for name in _modules if name != 'bpy'}
+_modules_loaded = {name: _namespace[name] for name in _modules if name != "bpy"}
 del _namespace
 
 

@@ -56,6 +56,11 @@
 		_hsv[1] *= tex->saturation;                                           \
 		hsv_to_rgb(_hsv[0], _hsv[1], _hsv[2],                                 \
 		           &texres->tr, &texres->tg, &texres->tb);                    \
+		if ((tex->saturation > 1.0f) && !(tex->flag & TEX_NO_CLAMP)) {        \
+			if (texres->tr < 0.0f) texres->tr= 0.0f;                          \
+			if (texres->tg < 0.0f) texres->tg= 0.0f;                          \
+			if (texres->tb < 0.0f) texres->tb= 0.0f;                          \
+		}                                                                     \
 	}                                                                         \
 
 struct HaloRen;
@@ -81,8 +86,8 @@ void render_realtime_texture(struct ShadeInput *shi, struct Image *ima);
 
 /* imagetexture.h */
 
-int imagewraposa(struct Tex *tex, struct Image *ima, struct ImBuf *ibuf, const float texvec[3], const float dxt[2], const float dyt[2], struct TexResult *texres, struct ImagePool *pool);
-int imagewrap(struct Tex *tex, struct Image *ima, struct ImBuf *ibuf, const float texvec[3], struct TexResult *texres, struct ImagePool *pool);
+int imagewraposa(struct Tex *tex, struct Image *ima, struct ImBuf *ibuf, const float texvec[3], const float dxt[2], const float dyt[2], struct TexResult *texres, struct ImagePool *pool, const bool skip_load_image);
+int imagewrap(struct Tex *tex, struct Image *ima, struct ImBuf *ibuf, const float texvec[3], struct TexResult *texres, struct ImagePool *pool, const bool skip_load_image);
 void image_sample(struct Image *ima, float fx, float fy, float dx, float dy, float result[4], struct ImagePool *pool);
 
 #endif /* __TEXTURE_H__ */

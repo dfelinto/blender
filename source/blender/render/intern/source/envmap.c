@@ -37,7 +37,7 @@
 #include "BLI_threads.h"
 #include "BLI_utildefines.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "IMB_imbuf_types.h"
 #include "IMB_imbuf.h"        /* for rectcpy */
@@ -55,14 +55,10 @@
 
 /* this module */
 #include "render_types.h"
-#include "renderpipeline.h"
 #include "envmap.h"
-#include "rendercore.h" 
 #include "renderdatabase.h" 
 #include "texture.h"
 #include "zbuf.h"
-#include "initrender.h"
-
 
 /* ------------------------------------------------------------------------- */
 
@@ -74,7 +70,7 @@ static void envmap_split_ima(EnvMap *env, ImBuf *ibuf)
 	BLI_lock_thread(LOCK_IMAGE);
 	if (env->cube[1] == NULL) {
 
-		BKE_free_envmapdata(env);
+		BKE_texture_envmap_free_data(env);
 	
 		dx = ibuf->y;
 		dx /= 2;
@@ -145,6 +141,7 @@ static Render *envmap_render_copy(Render *re, EnvMap *env)
 	envre->r = re->r;
 	envre->r.mode &= ~(R_BORDER | R_PANORAMA | R_ORTHO | R_MBLUR);
 	BLI_listbase_clear(&envre->r.layers);
+	BLI_listbase_clear(&envre->r.views);
 	envre->r.filtertype = 0;
 	envre->r.tilex = envre->r.xsch / 2;
 	envre->r.tiley = envre->r.ysch / 2;
@@ -499,9 +496,12 @@ static void render_envmap(Render *re, EnvMap *env)
 			RenderLayer *rl = envre->result->layers.first;
 			int y;
 			float *alpha;
-			
+			float *rect;
+
+			/* envmap is rendered independently of multiview  */
+			rect = RE_RenderLayerGetPass(rl, SCE_PASS_COMBINED, "");
 			ibuf = IMB_allocImBuf(envre->rectx, envre->recty, 24, IB_rect | IB_rectfloat);
-			memcpy(ibuf->rect_float, rl->rectf, ibuf->channels * ibuf->x * ibuf->y * sizeof(float));
+			memcpy(ibuf->rect_float, rect, ibuf->channels * ibuf->x * ibuf->y * sizeof(float));
 			
 			/* envmap renders without alpha */
 			alpha = ibuf->rect_float + 3;
@@ -515,7 +515,7 @@ static void render_envmap(Render *re, EnvMap *env)
 
 	}
 	
-	if (re->test_break(re->tbh)) BKE_free_envmapdata(env);
+	if (re->test_break(re->tbh)) BKE_texture_envmap_free_data(env);
 	else {
 		if (envre->r.mode & R_OSA) env->ok = ENV_OSA;
 		else env->ok = ENV_NORMAL;
@@ -576,13 +576,13 @@ void make_envmaps(Render *re)
 								if (env->ok) {
 									/* free when OSA, and old one isn't OSA */
 									if ((re->r.mode & R_OSA) && env->ok == ENV_NORMAL)
-										BKE_free_envmapdata(env);
+										BKE_texture_envmap_free_data(env);
 									/* free when size larger */
 									else if (env->lastsize < re->r.size)
-										BKE_free_envmapdata(env);
+										BKE_texture_envmap_free_data(env);
 									/* free when env is in recalcmode */
 									else if (env->recalc)
-										BKE_free_envmapdata(env);
+										BKE_texture_envmap_free_data(env);
 								}
 								
 								if (env->ok == 0 && depth == 0) env->recalc = 1;
@@ -698,7 +698,7 @@ static void set_dxtdyt(float r_dxt[3], float r_dyt[3], const float dxt[3], const
 
 /* ------------------------------------------------------------------------- */
 
-int envmaptex(Tex *tex, const float texvec[3], float dxt[3], float dyt[3], int osatex, TexResult *texres, struct ImagePool *pool)
+int envmaptex(Tex *tex, const float texvec[3], float dxt[3], float dyt[3], int osatex, TexResult *texres, struct ImagePool *pool, const bool skip_load_image)
 {
 	extern Render R;                /* only in this call */
 	/* texvec should be the already reflected normal */
@@ -754,7 +754,7 @@ int envmaptex(Tex *tex, const float texvec[3], float dxt[3], float dyt[3], int o
 			mul_mat3_m4_v3(R.viewinv, dyt);
 		}
 		set_dxtdyt(dxts, dyts, dxt, dyt, face);
-		imagewraposa(tex, NULL, ibuf, sco, dxts, dyts, texres, pool);
+		imagewraposa(tex, NULL, ibuf, sco, dxts, dyts, texres, pool, skip_load_image);
 		
 		/* edges? */
 		
@@ -771,7 +771,7 @@ int envmaptex(Tex *tex, const float texvec[3], float dxt[3], float dyt[3], int o
 			if (face != face1) {
 				ibuf = env->cube[face1];
 				set_dxtdyt(dxts, dyts, dxt, dyt, face1);
-				imagewraposa(tex, NULL, ibuf, sco, dxts, dyts, &texr1, pool);
+				imagewraposa(tex, NULL, ibuf, sco, dxts, dyts, &texr1, pool, skip_load_image);
 			}
 			else texr1.tr = texr1.tg = texr1.tb = texr1.ta = 0.0;
 			
@@ -784,7 +784,7 @@ int envmaptex(Tex *tex, const float texvec[3], float dxt[3], float dyt[3], int o
 			if (face != face1) {
 				ibuf = env->cube[face1];
 				set_dxtdyt(dxts, dyts, dxt, dyt, face1);
-				imagewraposa(tex, NULL, ibuf, sco, dxts, dyts, &texr2, pool);
+				imagewraposa(tex, NULL, ibuf, sco, dxts, dyts, &texr2, pool, skip_load_image);
 			}
 			else texr2.tr = texr2.tg = texr2.tb = texr2.ta = 0.0;
 			
@@ -800,7 +800,7 @@ int envmaptex(Tex *tex, const float texvec[3], float dxt[3], float dyt[3], int o
 		}
 	}
 	else {
-		imagewrap(tex, NULL, ibuf, sco, texres, pool);
+		imagewrap(tex, NULL, ibuf, sco, texres, pool, skip_load_image);
 	}
 	
 	return 1;

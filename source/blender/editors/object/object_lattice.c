@@ -100,7 +100,7 @@ void make_editLatt(Object *obedit)
 
 	actkey = BKE_keyblock_from_object(obedit);
 	if (actkey)
-		BKE_key_convert_to_lattice(actkey, lt);
+		BKE_keyblock_convert_to_lattice(actkey, lt);
 
 	lt->editlatt = MEM_callocN(sizeof(EditLatt), "editlatt");
 	lt->editlatt->latt = MEM_dupallocN(lt);
@@ -713,7 +713,7 @@ static int lattice_flip_exec(bContext *C, wmOperator *op)
 			break;
 			
 		default:
-			printf("lattice_flip(): Unknown flipping axis (%d)\n", axis);
+			printf("lattice_flip(): Unknown flipping axis (%u)\n", axis);
 			return OPERATOR_CANCELLED;
 	}
 	

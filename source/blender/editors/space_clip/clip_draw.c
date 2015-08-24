@@ -43,6 +43,7 @@
 #include "BLI_math.h"
 #include "BLI_string.h"
 #include "BLI_math_base.h"
+#include "BLI_rect.h"
 
 #include "BKE_context.h"
 #include "BKE_image.h"
@@ -63,7 +64,6 @@
 #include "UI_resources.h"
 #include "UI_view2d.h"
 
-#include "RNA_access.h"
 
 #include "BLF_api.h"
 
@@ -252,11 +252,11 @@ static void draw_movieclip_notes(SpaceClip *sc, ARegion *ar)
 	MovieClip *clip = ED_space_clip_get_clip(sc);
 	MovieTracking *tracking = &clip->tracking;
 	char str[256] = {0};
-	bool block = false;
+	bool full_redraw = false;
 
 	if (tracking->stats) {
 		BLI_strncpy(str, tracking->stats->message, sizeof(str));
-		block = true;
+		full_redraw = true;
 	}
 	else {
 		if (sc->flag & SC_LOCK_SELECTION)
@@ -265,7 +265,7 @@ static void draw_movieclip_notes(SpaceClip *sc, ARegion *ar)
 
 	if (str[0]) {
 		float fill_color[4] = {0.0f, 0.0f, 0.0f, 0.6f};
-		ED_region_info_draw(ar, str, block, fill_color);
+		ED_region_info_draw(ar, str, fill_color, full_redraw);
 	}
 }
 
@@ -286,6 +286,7 @@ static void draw_movieclip_buffer(const bContext *C, SpaceClip *sc, ARegion *ar,
 	MovieClip *clip = ED_space_clip_get_clip(sc);
 	int filter = GL_LINEAR;
 	int x, y;
+	rctf frame;
 
 	/* find window pixel coordinates of origin */
 	UI_view2d_view_to_region(&ar->v2d, 0.0f, 0.0f, &x, &y);
@@ -309,9 +310,13 @@ static void draw_movieclip_buffer(const bContext *C, SpaceClip *sc, ARegion *ar,
 	glPixelZoom(zoomx * width / ibuf->x, zoomy * height / ibuf->y);
 
 	glaDrawImBuf_glsl_ctx(C, ibuf, x, y, filter);
-
 	/* reset zoom */
 	glPixelZoom(1.0f, 1.0f);
+
+	BLI_rctf_init(&frame, 0.0f, ibuf->x, 0.0f, ibuf->y);
+
+	if (sc->flag & SC_SHOW_METADATA)
+		ED_region_image_metadata_draw(x, y, ibuf, frame, zoomx * width / ibuf->x, zoomy * height / ibuf->y);
 
 	if (ibuf->planes == 32)
 		glDisable(GL_BLEND);
@@ -1123,8 +1128,10 @@ static void draw_plane_marker_ex(SpaceClip *sc, Scene *scene, MovieTrackingPlane
                                  bool draw_outline, int width, int height)
 {
 	bool tiny = (sc->flag & SC_SHOW_TINY_MARKER) != 0;
-	bool is_selected_track = plane_track->flag & SELECT;
-	bool draw_plane_quad = plane_track->image == NULL || plane_track->image_opacity == 0.0f;
+	bool is_selected_track = (plane_track->flag & SELECT) != 0;
+	const bool has_image = plane_track->image != NULL &&
+	                       BKE_image_has_ibuf(plane_track->image, NULL);
+	const bool draw_plane_quad = !has_image || plane_track->image_opacity == 0.0f;
 	float px[2];
 
 	if (draw_outline) {
@@ -1693,29 +1700,29 @@ void clip_draw_main(const bContext *C, SpaceClip *sc, ARegion *ar)
 	}
 
 	if (sc->flag & SC_SHOW_STABLE) {
+		float translation[2];
+		float aspect = clip->tracking.camera.pixel_aspect;
 		float smat[4][4], ismat[4][4];
 
-		ibuf = ED_space_clip_get_stable_buffer(sc, sc->loc, &sc->scale, &sc->angle);
-
-		if (ibuf) {
-			float translation[2];
-			float aspect = clip->tracking.camera.pixel_aspect;
-
-			if (width != ibuf->x)
-				mul_v2_v2fl(translation, sc->loc, (float)width / ibuf->x);
-			else
-				copy_v2_v2(translation, sc->loc);
-
-			BKE_tracking_stabilization_data_to_mat4(width, height, aspect,
-			                                        translation, sc->scale, sc->angle, sc->stabmat);
-
-			unit_m4(smat);
-			smat[0][0] = 1.0f / width;
-			smat[1][1] = 1.0f / height;
-			invert_m4_m4(ismat, smat);
-
-			mul_m4_series(sc->unistabmat, smat, sc->stabmat, ismat);
+		if ((sc->flag & SC_MUTE_FOOTAGE) == 0) {
+			ibuf = ED_space_clip_get_stable_buffer(sc, sc->loc,
+			                                       &sc->scale, &sc->angle);
 		}
+
+		if (ibuf != NULL && width != ibuf->x)
+			mul_v2_v2fl(translation, sc->loc, (float)width / ibuf->x);
+		else
+			copy_v2_v2(translation, sc->loc);
+
+		BKE_tracking_stabilization_data_to_mat4(width, height, aspect, translation,
+		                                        sc->scale, sc->angle, sc->stabmat);
+
+		unit_m4(smat);
+		smat[0][0] = 1.0f / width;
+		smat[1][1] = 1.0f / height;
+		invert_m4_m4(ismat, smat);
+
+		mul_m4_series(sc->unistabmat, smat, sc->stabmat, ismat);
 	}
 	else if ((sc->flag & SC_MUTE_FOOTAGE) == 0) {
 		ibuf = ED_space_clip_get_buffer(sc);

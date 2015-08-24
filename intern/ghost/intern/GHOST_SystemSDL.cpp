@@ -67,9 +67,8 @@ GHOST_SystemSDL::createWindow(const STR_String& title,
                               GHOST_TUns32 height,
                               GHOST_TWindowState state,
                               GHOST_TDrawingContextType type,
-                              const bool stereoVisual,
+                              GHOST_GLSettings glSettings,
                               const bool exclusive,
-                              const GHOST_TUns16 numOfAASamples,
                               const GHOST_TEmbedderWindowID parentWindow
                               )
 {
@@ -78,8 +77,8 @@ GHOST_SystemSDL::createWindow(const STR_String& title,
 	window = new GHOST_WindowSDL(this, title,
 	                             left, top, width, height,
 	                             state, parentWindow, type,
-	                             stereoVisual, exclusive,
-	                             numOfAASamples);
+	                             ((glSettings.flags & GHOST_glStereoVisual) != 0), exclusive,
+	                             glSettings.numOfAASamples);
 
 	if (window) {
 		if (GHOST_kWindowStateFullScreen == state) {
@@ -321,8 +320,9 @@ GHOST_SystemSDL::processEvent(SDL_Event *sdl_event)
 					g_event = new GHOST_Event(getMilliSeconds(), GHOST_kEventWindowClose, window);
 					break;
 			}
-		}
+
 			break;
+		}
 		case SDL_QUIT:
 			g_event = new GHOST_Event(getMilliSeconds(), GHOST_kEventQuit, NULL);
 			break;
@@ -418,8 +418,8 @@ GHOST_SystemSDL::processEvent(SDL_Event *sdl_event)
 			GHOST_WindowSDL *window = findGhostWindow(SDL_GetWindowFromID_fallback(sdl_sub_evt.windowID));
 			assert(window != NULL);
 			g_event = new GHOST_EventWheel(getMilliSeconds(), window, sdl_sub_evt.y);
-		}
 			break;
+		}
 		case SDL_KEYDOWN:
 		case SDL_KEYUP:
 		{
@@ -489,8 +489,8 @@ GHOST_SystemSDL::processEvent(SDL_Event *sdl_event)
 			}
 
 			g_event = new GHOST_EventKey(getMilliSeconds(), type, window, gkey, sym, NULL);
-		}
 			break;
+		}
 	}
 
 	if (g_event) {

@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #include "bake.h"
@@ -53,6 +53,11 @@ void BakeData::set(int i, int prim, float uv[2], float dudx, float dudy, float d
 	m_dudy[i] = dudy;
 	m_dvdx[i] = dvdx;
 	m_dvdy[i] = dvdy;
+}
+
+void BakeData::set_null(int i)
+{
+	m_primitive[i] = -1;
 }
 
 int BakeData::object()
@@ -221,7 +226,10 @@ bool BakeManager::bake(Device *device, DeviceScene *dscene, Scene *scene, Progre
 	return true;
 }
 
-void BakeManager::device_update(Device *device, DeviceScene *dscene, Scene *scene, Progress& progress)
+void BakeManager::device_update(Device * /*device*/,
+                                DeviceScene * /*dscene*/,
+                                Scene * /*scene*/,
+                                Progress& progress)
 {
 	if(!need_update)
 		return;
@@ -231,7 +239,7 @@ void BakeManager::device_update(Device *device, DeviceScene *dscene, Scene *scen
 	need_update = false;
 }
 
-void BakeManager::device_free(Device *device, DeviceScene *dscene)
+void BakeManager::device_free(Device * /*device*/, DeviceScene * /*dscene*/)
 {
 }
 

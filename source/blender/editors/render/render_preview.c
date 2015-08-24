@@ -60,6 +60,7 @@
 #include "DNA_brush_types.h"
 #include "DNA_screen_types.h"
 
+#include "BKE_appdir.h"
 #include "BKE_brush.h"
 #include "BKE_context.h"
 #include "BKE_colortools.h"
@@ -78,14 +79,11 @@
 
 #include "IMB_imbuf.h"
 #include "IMB_imbuf_types.h"
-#include "IMB_colormanagement.h"
-
-#include "GPU_extensions.h"
+#include "IMB_thumbs.h"
 
 #include "BIF_gl.h"
 #include "BIF_glutil.h"
 
-#include "PIL_time.h"
 
 #include "RE_pipeline.h"
 #include "RE_engine.h"
@@ -96,9 +94,10 @@
 #include "ED_datafiles.h"
 #include "ED_render.h"
 
-#include "UI_interface.h"
-
-#include "render_intern.h"
+#ifndef NDEBUG
+/* Used for database init assert(). */
+#  include "BLI_threads.h"
+#endif
 
 ImBuf *get_brush_icon(Brush *brush)
 {
@@ -121,7 +120,7 @@ ImBuf *get_brush_icon(Brush *brush)
 
 				// otherwise lets try to find it in other directories
 				if (!(brush->icon_imbuf)) {
-					folder = BLI_get_folder(BLENDER_DATAFILES, "brushicons");
+					folder = BKE_appdir_folder_id(BLENDER_DATAFILES, "brushicons");
 
 					BLI_make_file_string(G.main->name, path, folder, brush->icon_filepath);
 
@@ -132,7 +131,7 @@ ImBuf *get_brush_icon(Brush *brush)
 				}
 
 				if (brush->icon_imbuf)
-					BKE_icon_changed(BKE_icon_getid(&brush->id));
+					BKE_icon_changed(BKE_icon_id_ensure(&brush->id));
 			}
 		}
 	}
@@ -165,6 +164,7 @@ typedef struct ShaderPreview {
 	unsigned int *pr_rect;
 	int pr_method;
 
+	Main *bmain;
 	Main *pr_main;
 } ShaderPreview;
 
@@ -175,6 +175,7 @@ typedef struct IconPreviewSize {
 } IconPreviewSize;
 
 typedef struct IconPreview {
+	Main *bmain;
 	Scene *scene;
 	void *owner;
 	ID *id;
@@ -206,11 +207,16 @@ static Main *load_main_from_memory(const void *blend, int blend_size)
 }
 #endif
 
-void ED_preview_init_dbase(void)
+void ED_preview_ensure_dbase(void)
 {
 #ifndef WITH_HEADLESS
-	G_pr_main = load_main_from_memory(datatoc_preview_blend, datatoc_preview_blend_size);
-	G_pr_main_cycles = load_main_from_memory(datatoc_preview_cycles_blend, datatoc_preview_cycles_blend_size);
+	static bool base_initialized = false;
+	BLI_assert(BLI_thread_is_main());
+	if (!base_initialized) {
+		G_pr_main = load_main_from_memory(datatoc_preview_blend, datatoc_preview_blend_size);
+		G_pr_main_cycles = load_main_from_memory(datatoc_preview_cycles_blend, datatoc_preview_cycles_blend_size);
+		base_initialized = true;
+	}
 #endif
 }
 
@@ -265,12 +271,14 @@ static Scene *preview_get_scene(Main *pr_main)
 
 /* call this with a pointer to initialize preview scene */
 /* call this with NULL to restore assigned ID pointers in preview scene */
-static Scene *preview_prepare_scene(Scene *scene, ID *id, int id_type, ShaderPreview *sp)
+static Scene *preview_prepare_scene(Main *bmain, Scene *scene, ID *id, int id_type, ShaderPreview *sp)
 {
 	Scene *sce;
 	Base *base;
 	Main *pr_main = sp->pr_main;
-	
+
+	memcpy(pr_main->name, bmain->name, sizeof(pr_main->name));
+
 	sce = preview_get_scene(pr_main);
 	if (sce) {
 		
@@ -363,7 +371,7 @@ static Scene *preview_prepare_scene(Scene *scene, ID *id, int id_type, ShaderPre
 					for (base = sce->base.first; base; base = base->next) {
 						if (base->object->type == OB_LAMP) {
 							/* if doesn't match 'Lamp.002' --> main key light */
-							if (strcmp(base->object->id.name + 2, "Lamp.002") != 0) {
+							if (!STREQ(base->object->id.name + 2, "Lamp.002")) {
 								if (mat->material_type == MA_TYPE_VOLUME)
 									base->object->restrictflag |= OB_RESTRICT_RENDER;
 								else
@@ -427,7 +435,7 @@ static Scene *preview_prepare_scene(Scene *scene, ID *id, int id_type, ShaderPre
 			Tex *tex = NULL, *origtex = (Tex *)id;
 			
 			if (origtex) {
-				tex = localize_texture(origtex);
+				tex = BKE_texture_localize(origtex);
 				sp->texcopy = tex;
 				BLI_addtail(&pr_main->tex, tex);
 			}
@@ -529,6 +537,7 @@ static Scene *preview_prepare_scene(Scene *scene, ID *id, int id_type, ShaderPre
 static bool ed_preview_draw_rect(ScrArea *sa, int split, int first, rcti *rect, rcti *newrect)
 {
 	Render *re;
+	RenderView *rv;
 	RenderResult rres;
 	char name[32];
 	int offx = 0;
@@ -552,9 +561,22 @@ static bool ed_preview_draw_rect(ScrArea *sa, int split, int first, rcti *rect, 
 
 	/* test if something rendered ok */
 	re = RE_GetRender(name);
-	RE_AcquireResultImage(re, &rres);
 
-	if (rres.rectf) {
+	if (re == NULL)
+		return false;
+
+	RE_AcquireResultImageViews(re, &rres);
+
+	if (!BLI_listbase_is_empty(&rres.views)) {
+		/* material preview only needs monoscopy (view 0) */
+		rv = RE_RenderViewGetById(&rres, 0);
+	}
+	else {
+		/* possible the job clears the views but we're still drawing T45496 */
+		rv = NULL;
+	}
+
+	if (rv && rv->rectf) {
 		
 		if (ABS(rres.rectx - newx) < 2 && ABS(rres.recty - newy) < 2) {
 
@@ -565,8 +587,11 @@ static bool ed_preview_draw_rect(ScrArea *sa, int split, int first, rcti *rect, 
 				unsigned char *rect_byte = MEM_mallocN(rres.rectx * rres.recty * sizeof(int), "ed_preview_draw_rect");
 				float fx = rect->xmin + offx;
 				float fy = rect->ymin;
-				
-				RE_AcquiredResultGet32(re, &rres, (unsigned int *)rect_byte);
+
+				/* material preview only needs monoscopy (view 0) */
+				if (re)
+					RE_AcquiredResultGet32(re, &rres, (unsigned int *)rect_byte, 0);
+
 				glaDrawPixelsSafe(fx, fy, rres.rectx, rres.recty, rres.rectx, GL_RGBA, GL_UNSIGNED_BYTE, rect_byte);
 				
 				MEM_freeN(rect_byte);
@@ -576,7 +601,7 @@ static bool ed_preview_draw_rect(ScrArea *sa, int split, int first, rcti *rect, 
 		}
 	}
 
-	RE_ReleaseResultImage(re);
+	RE_ReleaseResultImageViews(re, &rres);
 
 	return ok;
 }
@@ -705,7 +730,7 @@ static void shader_preview_render(ShaderPreview *sp, ID *id, int split, int firs
 	}
 	
 	/* get the stuff from the builtin preview dbase */
-	sce = preview_prepare_scene(sp->scene, id, idtype, sp);
+	sce = preview_prepare_scene(sp->bmain, sp->scene, id, idtype, sp);
 	if (sce == NULL) return;
 	
 	if (!split || first) sprintf(name, "Preview %p", sp->owner);
@@ -760,7 +785,7 @@ static void shader_preview_render(ShaderPreview *sp, ID *id, int split, int firs
 	}
 
 	/* unassign the pointers, reset vars */
-	preview_prepare_scene(sp->scene, NULL, GS(id->name), sp);
+	preview_prepare_scene(sp->bmain, sp->scene, NULL, GS(id->name), sp);
 	
 	/* XXX bad exception, end-exec is not being called in render, because it uses local main */
 //	if (idtype == ID_TE) {
@@ -928,65 +953,87 @@ static void set_alpha(char *cp, int sizex, int sizey, char alpha)
 static void icon_preview_startjob(void *customdata, short *stop, short *do_update)
 {
 	ShaderPreview *sp = customdata;
-	ID *id = sp->id;
-	short idtype = GS(id->name);
-	
-	if (idtype == ID_IM) {
-		Image *ima = (Image *)id;
-		ImBuf *ibuf = NULL;
-		ImageUser iuser = {NULL};
 
-		/* ima->ok is zero when Image cannot load */
-		if (ima == NULL || ima->ok == 0)
-			return;
+	if (sp->pr_method == PR_ICON_DEFERRED) {
+		PreviewImage *prv = sp->owner;
+		ImBuf *thumb;
+		char *deferred_data = PRV_DEFERRED_DATA(prv);
+		int source =  deferred_data[0];
+		char *path = &deferred_data[1];
 
-		/* setup dummy image user */
-		iuser.ok = iuser.framenr = 1;
-		iuser.scene = sp->scene;
-		
-		/* elubie: this needs to be changed: here image is always loaded if not
-		 * already there. Very expensive for large images. Need to find a way to 
-		 * only get existing ibuf */
-		ibuf = BKE_image_acquire_ibuf(ima, &iuser, NULL);
-		if (ibuf == NULL || ibuf->rect == NULL) {
-			BKE_image_release_ibuf(ima, ibuf, NULL);
-			return;
+//		printf("generating deferred %d×%d preview for %s\n", sp->sizex, sp->sizey, path);
+
+		thumb = IMB_thumb_manage(path, THB_LARGE, source);
+
+		if (thumb) {
+			/* PreviewImage assumes premultiplied alhpa... */
+			IMB_premultiply_alpha(thumb);
+
+			icon_copy_rect(thumb, sp->sizex, sp->sizey, sp->pr_rect);
+			IMB_freeImBuf(thumb);
 		}
-		
-		icon_copy_rect(ibuf, sp->sizex, sp->sizey, sp->pr_rect);
-
-		*do_update = true;
-
-		BKE_image_release_ibuf(ima, ibuf, NULL);
-	}
-	else if (idtype == ID_BR) {
-		Brush *br = (Brush *)id;
-
-		br->icon_imbuf = get_brush_icon(br);
-
-		memset(sp->pr_rect, 0x88, sp->sizex * sp->sizey * sizeof(unsigned int));
-
-		if (!(br->icon_imbuf) || !(br->icon_imbuf->rect))
-			return;
-
-		icon_copy_rect(br->icon_imbuf, sp->sizex, sp->sizey, sp->pr_rect);
-
-		*do_update = true;
 	}
 	else {
-		/* re-use shader job */
-		shader_preview_startjob(customdata, stop, do_update);
+		ID *id = sp->id;
+		short idtype = GS(id->name);
 
-		/* world is rendered with alpha=0, so it wasn't displayed 
-		 * this could be render option for sky to, for later */
-		if (idtype == ID_WO) {
-			set_alpha((char *)sp->pr_rect, sp->sizex, sp->sizey, 255);
+		if (idtype == ID_IM) {
+			Image *ima = (Image *)id;
+			ImBuf *ibuf = NULL;
+			ImageUser iuser = {NULL};
+
+			/* ima->ok is zero when Image cannot load */
+			if (ima == NULL || ima->ok == 0)
+				return;
+
+			/* setup dummy image user */
+			iuser.ok = iuser.framenr = 1;
+			iuser.scene = sp->scene;
+
+			/* elubie: this needs to be changed: here image is always loaded if not
+			 * already there. Very expensive for large images. Need to find a way to
+			 * only get existing ibuf */
+			ibuf = BKE_image_acquire_ibuf(ima, &iuser, NULL);
+			if (ibuf == NULL || ibuf->rect == NULL) {
+				BKE_image_release_ibuf(ima, ibuf, NULL);
+				return;
+			}
+
+			icon_copy_rect(ibuf, sp->sizex, sp->sizey, sp->pr_rect);
+
+			*do_update = true;
+
+			BKE_image_release_ibuf(ima, ibuf, NULL);
 		}
-		else if (idtype == ID_MA) {
-			Material *ma = (Material *)id;
+		else if (idtype == ID_BR) {
+			Brush *br = (Brush *)id;
 
-			if (ma->material_type == MA_TYPE_HALO)
+			br->icon_imbuf = get_brush_icon(br);
+
+			memset(sp->pr_rect, 0x88, sp->sizex * sp->sizey * sizeof(unsigned int));
+
+			if (!(br->icon_imbuf) || !(br->icon_imbuf->rect))
+				return;
+
+			icon_copy_rect(br->icon_imbuf, sp->sizex, sp->sizey, sp->pr_rect);
+
+			*do_update = true;
+		}
+		else {
+			/* re-use shader job */
+			shader_preview_startjob(customdata, stop, do_update);
+
+			/* world is rendered with alpha=0, so it wasn't displayed
+			 * this could be render option for sky to, for later */
+			if (idtype == ID_WO) {
 				set_alpha((char *)sp->pr_rect, sp->sizex, sp->sizey, 255);
+			}
+			else if (idtype == ID_MA) {
+				Material *ma = (Material *)id;
+
+				if (ma->material_type == MA_TYPE_HALO)
+					set_alpha((char *)sp->pr_rect, sp->sizex, sp->sizey, 255);
+			}
 		}
 	}
 }
@@ -998,7 +1045,7 @@ static void common_preview_startjob(void *customdata, short *stop, short *do_upd
 {
 	ShaderPreview *sp = customdata;
 
-	if (sp->pr_method == PR_ICON_RENDER)
+	if (ELEM(sp->pr_method, PR_ICON_RENDER, PR_ICON_DEFERRED))
 		icon_preview_startjob(customdata, stop, do_update);
 	else
 		shader_preview_startjob(customdata, stop, do_update);
@@ -1034,29 +1081,35 @@ static void icon_preview_startjob_all_sizes(void *customdata, short *stop, short
 	const bool use_new_shading = BKE_scene_use_new_shading_nodes(ip->scene);
 
 	while (cur_size) {
+		PreviewImage *prv = ip->owner;
 		ShaderPreview *sp = MEM_callocN(sizeof(ShaderPreview), "Icon ShaderPreview");
+		const bool is_render = !prv->use_deferred;
 
 		/* construct shader preview from image size and previewcustomdata */
 		sp->scene = ip->scene;
 		sp->owner = ip->owner;
 		sp->sizex = cur_size->sizex;
 		sp->sizey = cur_size->sizey;
-		sp->pr_method = PR_ICON_RENDER;
+		sp->pr_method = is_render ? PR_ICON_RENDER : PR_ICON_DEFERRED;
 		sp->pr_rect = cur_size->rect;
 		sp->id = ip->id;
+		sp->bmain = ip->bmain;
 
-		if (use_new_shading) {
-			/* texture icon rendering is hardcoded to use BI,
-			 * so don't even think of using cycle's bmain for
-			 * texture icons
-			 */
-			if (GS(ip->id->name) != ID_TE)
-				sp->pr_main = G_pr_main_cycles;
-			else
+		if (is_render) {
+			BLI_assert(ip->id);
+			if (use_new_shading) {
+				/* texture icon rendering is hardcoded to use BI,
+				 * so don't even think of using cycle's bmain for
+				 * texture icons
+				 */
+				if (GS(ip->id->name) != ID_TE)
+					sp->pr_main = G_pr_main_cycles;
+				else
+					sp->pr_main = G_pr_main;
+			}
+			else {
 				sp->pr_main = G_pr_main;
-		}
-		else {
-			sp->pr_main = G_pr_main;
+			}
 		}
 
 		common_preview_startjob(sp, stop, do_update, progress);
@@ -1101,11 +1154,35 @@ static void icon_preview_free(void *customdata)
 	MEM_freeN(ip);
 }
 
+void ED_preview_icon_render(Main *bmain, Scene *scene, ID *id, unsigned int *rect, int sizex, int sizey)
+{
+	IconPreview ip = {NULL};
+	short stop = false, update = false;
+	float progress = 0.0f;
+
+	ED_preview_ensure_dbase();
+
+	ip.bmain = bmain;
+	ip.scene = scene;
+	ip.owner = id;
+	ip.id = id;
+
+	icon_preview_add_size(&ip, rect, sizex, sizey);
+
+	icon_preview_startjob_all_sizes(&ip, &stop, &update, &progress);
+
+	icon_preview_endjob(&ip);
+
+	BLI_freelistN(&ip.sizes);
+}
+
 void ED_preview_icon_job(const bContext *C, void *owner, ID *id, unsigned int *rect, int sizex, int sizey)
 {
 	wmJob *wm_job;
 	IconPreview *ip, *old_ip;
-	
+
+	ED_preview_ensure_dbase();
+
 	/* suspended start means it starts after 1 timer step, see WM_jobs_timer below */
 	wm_job = WM_jobs_get(CTX_wm_manager(C), CTX_wm_window(C), owner, "Icon Preview",
 	                     WM_JOB_EXCL_RENDER | WM_JOB_SUSPEND, WM_JOB_TYPE_RENDER_PREVIEW);
@@ -1118,8 +1195,9 @@ void ED_preview_icon_job(const bContext *C, void *owner, ID *id, unsigned int *r
 		BLI_movelisttolist(&ip->sizes, &old_ip->sizes);
 
 	/* customdata for preview thread */
+	ip->bmain = CTX_data_main(C);
 	ip->scene = CTX_data_scene(C);
-	ip->owner = id;
+	ip->owner = owner;
 	ip->id = id;
 
 	icon_preview_add_size(ip, rect, sizex, sizey);
@@ -1146,6 +1224,8 @@ void ED_preview_shader_job(const bContext *C, void *owner, ID *id, ID *parent, M
 		return;
 	}
 
+	ED_preview_ensure_dbase();
+
 	wm_job = WM_jobs_get(CTX_wm_manager(C), CTX_wm_window(C), owner, "Shader Preview",
 	                    WM_JOB_EXCL_RENDER, WM_JOB_TYPE_RENDER_PREVIEW);
 	sp = MEM_callocN(sizeof(ShaderPreview), "shader preview");
@@ -1159,6 +1239,7 @@ void ED_preview_shader_job(const bContext *C, void *owner, ID *id, ID *parent, M
 	sp->id = id;
 	sp->parent = parent;
 	sp->slot = slot;
+	sp->bmain = CTX_data_main(C);
 
 	/* hardcoded preview .blend for cycles/internal, this should be solved
 	 * once with custom preview .blend path for external engines */
@@ -1180,12 +1261,11 @@ void ED_preview_shader_job(const bContext *C, void *owner, ID *id, ID *parent, M
 	WM_jobs_start(CTX_wm_manager(C), wm_job);
 }
 
-void ED_preview_kill_jobs(const struct bContext *C)
+void ED_preview_kill_jobs(wmWindowManager *wm, Main *bmain)
 {
-	wmWindowManager *wm = CTX_wm_manager(C);
 	if (wm)
 		WM_jobs_kill(wm, NULL, common_preview_startjob);
-	
-	ED_viewport_render_kill_jobs(C, false);
+
+	ED_viewport_render_kill_jobs(wm, bmain, false);
 }
 

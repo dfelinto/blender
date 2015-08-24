@@ -43,6 +43,7 @@
 #include "BKE_action.h"
 #include "BKE_armature.h"
 #include "BKE_deform.h"
+#include "BKE_object_deform.h"
 #include "BKE_report.h"
 #include "BKE_subsurf.h"
 #include "BKE_modifier.h"
@@ -52,7 +53,10 @@
 
 
 #include "armature_intern.h"
-#include "meshlaplacian.h"
+
+#ifdef WITH_OPENNL
+#  include "meshlaplacian.h"
+#endif
 
 #if 0
 #include "reeb.h"
@@ -117,7 +121,7 @@ static int vgroup_add_unique_bone_cb(Object *ob, Bone *bone, void *UNUSED(ptr))
 	 */
 	if (!(bone->flag & BONE_NO_DEFORM)) {
 		if (!defgroup_find_name(ob, bone->name)) {
-			ED_vgroup_add_name(ob, bone->name);
+			BKE_object_defgroup_add_name(ob, bone->name);
 			return 1;
 		}
 	}
@@ -162,9 +166,15 @@ static int dgroup_skinnable_cb(Object *ob, Bone *bone, void *datap)
 			else
 				segments = 1;
 			
-			if (!wpmode || ((arm->layer & bone->layer) && (bone->flag & BONE_SELECTED)))
-				if (!(defgroup = defgroup_find_name(ob, bone->name)))
-					defgroup = ED_vgroup_add_name(ob, bone->name);
+			if (!wpmode || ((arm->layer & bone->layer) && (bone->flag & BONE_SELECTED))) {
+				if (!(defgroup = defgroup_find_name(ob, bone->name))) {
+					defgroup = BKE_object_defgroup_add_name(ob, bone->name);
+				}
+				else if (defgroup->flag & DG_LOCK_WEIGHT) {
+					/* In case vgroup already exists and is locked, do not modify it here. See T43814. */
+					defgroup = NULL;
+				}
+			}
 			
 			if (data->list != NULL) {
 				hgroup = (bDeformGroup ***) &data->list;
@@ -276,7 +286,7 @@ static void add_verts_to_dgroups(ReportList *reports, Scene *scene, Object *ob, 
 	if (numbones == 0)
 		return;
 	
-	if (ED_vgroup_data_create(ob->data) == false)
+	if (BKE_object_defgroup_data_create(ob->data) == NULL)
 		return;
 
 	/* create an array of pointer to bones that are skinnable
@@ -428,7 +438,7 @@ void create_vgroups_from_armature(ReportList *reports, Scene *scene, Object *ob,
 	bArmature *arm = par->data;
 
 	if (mode == ARM_GROUPS_NAME) {
-		const int defbase_tot = BLI_countlist(&ob->defbase);
+		const int defbase_tot = BLI_listbase_count(&ob->defbase);
 		int defbase_add;
 		/* Traverse the bone list, trying to create empty vertex 
 		 * groups corresponding to the bone.

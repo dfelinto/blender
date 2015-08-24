@@ -21,7 +21,7 @@ import bpy
 from bpy.types import Panel, UIList
 
 
-class RenderLayerButtonsPanel():
+class RenderLayerButtonsPanel:
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
     bl_context = "render_layer"
@@ -40,7 +40,7 @@ class RENDERLAYER_UL_renderlayers(UIList):
         if self.layout_type in {'DEFAULT', 'COMPACT'}:
             layout.prop(layer, "name", text="", icon_value=icon, emboss=False)
             layout.prop(layer, "use", text="", index=index)
-        elif self.layout_type in {'GRID'}:
+        elif self.layout_type == 'GRID':
             layout.alignment = 'CENTER'
             layout.label("", icon_value=icon)
 
@@ -48,13 +48,17 @@ class RENDERLAYER_UL_renderlayers(UIList):
 class RENDERLAYER_PT_layers(RenderLayerButtonsPanel, Panel):
     bl_label = "Layer List"
     bl_options = {'HIDE_HEADER'}
-    COMPAT_ENGINES = {'BLENDER_RENDER'}
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_GAME'}
 
     def draw(self, context):
         layout = self.layout
 
         scene = context.scene
         rd = scene.render
+
+        if rd.engine == 'BLENDER_GAME':
+            layout.label("Not available in the Game Engine")
+            return
 
         row = layout.row()
         col = row.column()
@@ -83,7 +87,7 @@ class RENDERLAYER_PT_layer_options(RenderLayerButtonsPanel, Panel):
         col = split.column()
         col.prop(scene, "layers", text="Scene")
         col.label(text="")
-        col.prop(rl, "light_override", text="Light")
+        col.prop(rl, "light_override", text="Lights")
         col.prop(rl, "material_override", text="Material")
 
         col = split.column()
@@ -122,7 +126,8 @@ class RENDERLAYER_PT_layer_passes(RenderLayerButtonsPanel, Panel):
     bl_options = {'DEFAULT_CLOSED'}
     COMPAT_ENGINES = {'BLENDER_RENDER'}
 
-    def draw_pass_type_buttons(self, box, rl, pass_type):
+    @staticmethod
+    def draw_pass_type_buttons(box, rl, pass_type):
         # property names
         use_pass_type = "use_pass_" + pass_type
         exclude_pass_type = "exclude_" + pass_type
@@ -161,6 +166,65 @@ class RENDERLAYER_PT_layer_passes(RenderLayerButtonsPanel, Panel):
         self.draw_pass_type_buttons(col, rl, "indirect")
         self.draw_pass_type_buttons(col, rl, "reflection")
         self.draw_pass_type_buttons(col, rl, "refraction")
+
+
+class RENDERLAYER_UL_renderviews(UIList):
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
+        # assert(isinstance(item, bpy.types.SceneRenderView)
+        view = item
+        if self.layout_type in {'DEFAULT', 'COMPACT'}:
+            if view.name in {'left', 'right'}:
+                layout.label(view.name, icon_value=icon + (not view.use))
+            else:
+                layout.prop(view, "name", text="", index=index, icon_value=icon, emboss=False)
+            layout.prop(view, "use", text="", index=index)
+
+        elif self.layout_type == 'GRID':
+            layout.alignment = 'CENTER'
+            layout.label("", icon_value=icon + (not view.use))
+
+
+class RENDERLAYER_PT_views(RenderLayerButtonsPanel, Panel):
+    bl_label = "Views"
+    COMPAT_ENGINES = {'BLENDER_RENDER'}
+    bl_options = {'DEFAULT_CLOSED'}
+
+    def draw_header(self, context):
+        rd = context.scene.render
+        self.layout.prop(rd, "use_multiview", text="")
+
+    def draw(self, context):
+        layout = self.layout
+
+        scene = context.scene
+        rd = scene.render
+        rv = rd.views.active
+
+        layout.active = rd.use_multiview
+        basic_stereo = rd.views_format == 'STEREO_3D'
+
+        row = layout.row()
+        row.prop(rd, "views_format", expand=True)
+
+        if basic_stereo:
+            row = layout.row()
+            row.template_list("RENDERLAYER_UL_renderviews", "name", rd, "stereo_views", rd.views, "active_index", rows=2)
+
+            row = layout.row()
+            row.label(text="File Suffix:")
+            row.prop(rv, "file_suffix", text="")
+
+        else:
+            row = layout.row()
+            row.template_list("RENDERLAYER_UL_renderviews", "name", rd, "views", rd.views, "active_index", rows=2)
+
+            col = row.column(align=True)
+            col.operator("scene.render_view_add", icon='ZOOMIN', text="")
+            col.operator("scene.render_view_remove", icon='ZOOMOUT', text="")
+
+            row = layout.row()
+            row.label(text="Camera Suffix:")
+            row.prop(rv, "camera_suffix", text="")
 
 
 if __name__ == "__main__":  # only for live edit.

@@ -106,13 +106,13 @@ static int bm_vert_sortval_cb(const void *v_a_v, const void *v_b_v)
 
 	if      (val_a > val_b) return  1;
 	else if (val_a < val_b) return -1;
-	                        return  0;
+	else                    return  0;
 }
 
 
 static void bm_face_bisect_verts(BMesh *bm, BMFace *f, const float plane[4], const short oflag_center)
 {
-	/* unlikely more then 2 verts are needed */
+	/* unlikely more than 2 verts are needed */
 	const unsigned int f_len_orig = (unsigned int)f->len;
 	BMVert **vert_split_arr = BLI_array_alloca(vert_split_arr, f_len_orig);
 	STACK_DECLARE(vert_split_arr);

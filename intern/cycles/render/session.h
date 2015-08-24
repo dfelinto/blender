@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #ifndef __SESSION_H__
@@ -32,6 +32,7 @@ CCL_NAMESPACE_BEGIN
 class BufferParams;
 class Device;
 class DeviceScene;
+class DeviceRequestedFeatures;
 class DisplayBuffer;
 class Progress;
 class RenderBuffers;
@@ -59,6 +60,7 @@ public:
 	double cancel_timeout;
 	double reset_timeout;
 	double text_timeout;
+	double progressive_update_timeout;
 
 	ShadingSystem shadingsystem;
 
@@ -80,6 +82,7 @@ public:
 		cancel_timeout = 0.1;
 		reset_timeout = 0.1;
 		text_timeout = 1.0;
+		progressive_update_timeout = 1.0;
 
 		shadingsystem = SHADINGSYSTEM_SVM;
 		tile_order = TILE_CENTER;
@@ -101,6 +104,7 @@ public:
 		&& cancel_timeout == params.cancel_timeout
 		&& reset_timeout == params.reset_timeout
 		&& text_timeout == params.text_timeout
+		&& progressive_update_timeout == params.progressive_update_timeout
 		&& tile_order == params.tile_order
 		&& shadingsystem == params.shadingsystem); }
 
@@ -122,8 +126,8 @@ public:
 	TileManager tile_manager;
 	Stats stats;
 
-	boost::function<void(RenderTile&)> write_render_tile_cb;
-	boost::function<void(RenderTile&)> update_render_tile_cb;
+	function<void(RenderTile&)> write_render_tile_cb;
+	function<void(RenderTile&)> update_render_tile_cb;
 
 	Session(const SessionParams& params);
 	~Session();
@@ -201,6 +205,16 @@ protected:
 	bool update_progressive_refine(bool cancel);
 
 	vector<RenderBuffers *> tile_buffers;
+
+	DeviceRequestedFeatures get_requested_device_features();
+
+	/* ** Split kernel routines ** */
+
+	/* Maximumnumber of closure during session lifetime. */
+	int max_closure_global;
+
+	/* Get maximum number of closures to be used in kernel. */
+	int get_max_closure_count();
 };
 
 CCL_NAMESPACE_END

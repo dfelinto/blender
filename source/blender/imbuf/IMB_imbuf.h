@@ -38,21 +38,21 @@
  * \page IMB Imbuf module external interface
  *
  *
- * \section about About the IMB module
+ * \section imb_about About the IMB module
  *
  * External interface of the IMage Buffer module. This module offers
  * import/export of several graphical file formats. It offers the
  * ImBuf type as a common structure to refer to different graphical
  * file formats, and to enable a uniform way of handling them.
  *
- * \section issues Known issues with IMB
+ * \section imb_issues Known issues with IMB
  *
  * - imbuf is written in C.
  * - Endianness issues are dealt with internally.
  * - File I/O must be done externally. The module uses FILE*'s to
  *   direct input/output.
  *
- * \section dependencies Dependencies
+ * \section imb_dependencies Dependencies
  *
  * IMB needs:
  * - \ref DNA module
@@ -85,6 +85,14 @@ struct ImBuf;
 struct anim;
 
 struct ColorManagedDisplay;
+
+struct GSet;
+/**
+ *
+ * \attention defined in DNA_scene_types.h
+ */
+struct ImageFormatData;
+struct Stereo3dFormat;
 
 /**
  *
@@ -123,6 +131,13 @@ void IMB_freeImBuf(struct ImBuf *ibuf);
  */
 struct ImBuf *IMB_allocImBuf(unsigned int x, unsigned int y,
                              unsigned char d, unsigned int flags);
+
+/**
+ * Create a copy of a pixel buffer and wrap it to a new ImBuf
+ * \attention Defined in allocimbuf.c
+ */
+struct ImBuf *IMB_allocFromBuffer(const unsigned int *rect, const float *rectf,
+                                  unsigned int w, unsigned int h);
 
 /**
  *
@@ -212,7 +227,7 @@ typedef enum IMB_Timecode_Type {
 	                        * and is a sane default) */
 
 	IMB_TC_FREE_RUN   = 2, /* use global timestamp written by recording
-                            * device (prosumer camcorders e.g. can do that) */
+	                        * device (prosumer camcorders e.g. can do that) */
 	IMB_TC_INTERPOLATED_REC_DATE_FREE_RUN = 4, /* interpolate a global timestamp using the
 	                                            * record date and time written by recording
 	                                            * device (*every* consumer camcorder can do
@@ -232,15 +247,19 @@ typedef enum IMB_Proxy_Size {
 
 /* defaults to BL_proxy within the directory of the animation */
 void IMB_anim_set_index_dir(struct anim *anim, const char *dir);
+void IMB_anim_get_fname(struct anim *anim, char *file, int size);
 
 int IMB_anim_index_get_frame_index(struct anim *anim, IMB_Timecode_Type tc,
                                    int position);
+
+IMB_Proxy_Size IMB_anim_proxy_get_existing(struct anim *anim);
 
 struct IndexBuildContext;
 
 /* prepare context for proxies/imecodes builder */
 struct IndexBuildContext *IMB_anim_index_rebuild_context(struct anim *anim, IMB_Timecode_Type tcs_in_use,
-                                                         IMB_Proxy_Size proxy_sizes_in_use, int quality);
+                                                         IMB_Proxy_Size proxy_sizes_in_use, int quality,
+                                                         const bool overwite, struct GSet *file_list);
 
 /* will rebuild all used indices and proxies at once */
 void IMB_anim_index_rebuild(struct IndexBuildContext *context,
@@ -260,16 +279,16 @@ int IMB_anim_get_duration(struct anim *anim, IMB_Timecode_Type tc);
  * and frs_sec and frs_sec_base untouched if none available!)
  */
 bool IMB_anim_get_fps(struct anim *anim,
-                      short *frs_sec, float *frs_sec_base);
+                      short *frs_sec, float *frs_sec_base, bool no_av_base);
 
 /**
  *
  * \attention Defined in anim_movie.c
  */
 struct anim *IMB_open_anim(const char *name, int ib_flags, int streamindex, char colorspace[IM_MAX_SPACE]);
+void IMB_suffix_anim(struct anim *anim, const char *suffix);
 void IMB_close_anim(struct anim *anim);
 void IMB_close_anim_proxies(struct anim *anim);
-
 
 /**
  *
@@ -365,6 +384,7 @@ void IMB_scaleImBuf_threaded(struct ImBuf *ibuf, unsigned int newx, unsigned int
  * \attention Defined in writeimage.c
  */
 short IMB_saveiff(struct ImBuf *ibuf, const char *filepath, int flags);
+struct ImBuf *IMB_prepare_write_ImBuf(const bool isfloat, struct ImBuf *ibuf);
 
 /**
  *
@@ -384,6 +404,12 @@ bool IMB_isanim(const char *name);
  * \attention Defined in util.c
  */
 int imb_get_anim_type(const char *name);
+
+/**
+ *
+ * \attention Defined in util.c
+ */
+bool IMB_isfloat(struct ImBuf *ibuf);
 
 /**
  *
@@ -441,6 +467,7 @@ void bilinear_interpolation(struct ImBuf *in, struct ImBuf *out, float u, float 
 
 void bicubic_interpolation_color(struct ImBuf *in, unsigned char col[4], float col_float[4], float u, float v);
 void nearest_interpolation_color(struct ImBuf *in, unsigned char col[4], float col_float[4], float u, float v);
+void nearest_interpolation_color_wrap(struct ImBuf *in, unsigned char col[4], float col_float[4], float u, float v);
 void bilinear_interpolation_color(struct ImBuf *in, unsigned char col[4], float col_float[4], float u, float v);
 void bilinear_interpolation_color_wrap(struct ImBuf *in, unsigned char col[4], float col_float[4], float u, float v);
 
@@ -521,8 +548,21 @@ void buf_rectfill_area(unsigned char *rect, float *rectf, int width, int height,
                        const float col[4], struct ColorManagedDisplay *display,
                        int x1, int y1, int x2, int y2);
 
-/* defined in metadata.c */
+/**
+ *
+ * \attention Defined in metadata.c
+ */
+/** read the field from the image info into the field 
+ *  \param img - the ImBuf that contains the image data
+ *  \param key - the key of the field
+ *  \param value - the data in the field, first one found with key is returned, 
+ *                 memory has to be allocated by user.
+ *  \param len - length of value buffer allocated by user.
+ *  \return    - 1 (true) if ImageInfo present and value for the key found, 0 (false) otherwise
+ */
+bool IMB_metadata_get_field(struct ImBuf *img, const char *key, char *value, const size_t len);
 bool IMB_metadata_change_field(struct ImBuf *img, const char *key, const char *field);
+void IMB_metadata_copy(struct ImBuf *dimb, struct ImBuf *simb);
 
 /* exported for image tools in blender, to quickly allocate 32 bits rect */
 bool imb_addrectImBuf(struct ImBuf *ibuf);
@@ -545,5 +585,27 @@ void IMB_processor_apply_threaded(int buffer_lines, int handle_size, void *init_
 void IMB_ffmpeg_init(void);
 const char *IMB_ffmpeg_last_error(void);
 
-#endif
+/**
+ *
+ * \attention defined in stereoimbuf.c
+ */
+void IMB_stereo3d_write_dimensions(
+        const char mode, const bool is_squeezed, const size_t width, const size_t height,
+        size_t *r_width, size_t *r_height);
+void IMB_stereo3d_read_dimensions(
+        const char mode, const bool is_squeezed, const size_t width, const size_t height,
+        size_t *r_width, size_t *r_height);
+int *IMB_stereo3d_from_rect(
+        struct ImageFormatData *im_format, const size_t x, const size_t y, const size_t channels,
+        int *rect_left, int *rect_right);
+float *IMB_stereo3d_from_rectf(
+        struct ImageFormatData *im_format, const size_t x, const size_t y, const size_t channels,
+        float *rectf_left, float *rectf_right);
+struct ImBuf *IMB_stereo3d_ImBuf(
+        struct ImageFormatData *im_format,
+        struct ImBuf *ibuf_left, struct ImBuf *ibuf_right);
+void IMB_ImBufFromStereo3d(
+        struct Stereo3dFormat *s3d, struct ImBuf *ibuf_stereo,
+        struct ImBuf **r_ibuf_left, struct ImBuf **r_ibuf_right);
 
+#endif

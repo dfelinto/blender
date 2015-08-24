@@ -52,6 +52,8 @@ BF_CXX = '/usr'
 WITH_BF_STATICCXX = False
 BF_CXX_LIB_STATIC = '${BF_CXX}/lib/libstdc++.a'
 
+WITH_BF_AUDASPACE = True
+
 # we use simply jack framework
 WITH_BF_JACK = True
 BF_JACK = '/Library/Frameworks/Jackmp.framework'
@@ -68,7 +70,7 @@ BF_SNDFILE_LIBPATH = '${BF_SNDFILE}/lib ${BF_FFMPEG}/lib' #ogg libs are stored i
 WITH_BF_SDL = True
 BF_SDL = LIBDIR + '/sdl' #$(shell sdl-config --prefix)
 BF_SDL_INC = '${BF_SDL}/include' #$(shell $(BF_SDL)/bin/sdl-config --cflags)
-BF_SDL_LIB = 'SDL' #BF_SDL #$(shell $(BF_SDL)/bin/sdl-config --libs) -lSDL_mixer
+BF_SDL_LIB = 'SDL2' #BF_SDL #$(shell $(BF_SDL)/bin/sdl-config --libs) -lSDL_mixer
 BF_SDL_LIBPATH = '${BF_SDL}/lib'
 
 WITH_BF_OPENEXR = True
@@ -205,13 +207,19 @@ BF_BOOST_LIBPATH = '${BF_BOOST}/lib'
 
 WITH_BF_CYCLES_CUDA_BINARIES = False
 BF_CYCLES_CUDA_NVCC = '/usr/local/cuda/bin/nvcc'
-BF_CYCLES_CUDA_BINARIES_ARCH = ['sm_20', 'sm_21', 'sm_30', 'sm_35', 'sm_50']
+BF_CYCLES_CUDA_BINARIES_ARCH = ['sm_20', 'sm_21', 'sm_30', 'sm_35', 'sm_50', 'sm_52']
 
 #Freestyle
 WITH_BF_FREESTYLE = True
 
 #OpenMP ( will be checked for compiler support and turned off eventually )
 WITH_BF_OPENMP = True
+
+WITH_BF_OPENSUBDIV = False
+BF_OPENSUBDIV = LIBDIR + '/opensubdiv'
+BF_OPENSUBDIV_INC = '${BF_OPENSUBDIV}/include'
+BF_OPENSUBDIV_LIB = 'osdCPU osdGPU'
+BF_OPENSUBDIV_LIBPATH = '${BF_OPENSUBDIV}/lib'
 
 #Ray trace optimization
 WITH_BF_RAYOPTIMIZATION = True

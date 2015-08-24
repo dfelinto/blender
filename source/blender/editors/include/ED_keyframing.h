@@ -46,10 +46,8 @@ struct FCurve;
 struct BezTriple;
 
 struct bPoseChannel;
-struct bConstraint;
 
 struct bContext;
-struct wmOperatorType;
 struct ReportList;
 
 struct PointerRNA;
@@ -293,7 +291,7 @@ bool ANIM_paste_driver(struct ReportList *reports, struct ID *id, const char rna
 		(U.autokey_flag & AUTOKEY_FLAG_##flag))
 
 /* auto-keyframing feature - checks for whether anything should be done for the current frame */
-int autokeyframe_cfra_can_key(struct Scene *scene, struct ID *id);
+bool autokeyframe_cfra_can_key(struct Scene *scene, struct ID *id);
 
 /* ************ Keyframe Checking ******************** */
 

@@ -90,6 +90,7 @@ getNumDisplaySettings(
 	numSettings = 1;
 #endif
 
+	(void) display;
 	return GHOST_kSuccess;
 }
 
@@ -115,6 +116,8 @@ getDisplaySetting(
 
 	if (dpy == NULL)
 		return GHOST_kFailure;
+
+	(void) display;
 
 #ifdef WITH_X11_XF86VMODE
 	int majorVersion, minorVersion;
@@ -171,7 +174,7 @@ getCurrentDisplaySetting(
 GHOST_TSuccess
 GHOST_DisplayManagerX11::
 setCurrentDisplaySetting(
-		GHOST_TUns8 display,
+		GHOST_TUns8 /*display*/,
 		const GHOST_DisplaySetting& setting)
 {
 #ifdef WITH_X11_XF86VMODE

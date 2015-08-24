@@ -162,6 +162,19 @@ const char *FallbackImpl::configGetDisplayColorSpaceName(OCIO_ConstConfigRcPtr *
 	return "sRGB";
 }
 
+void FallbackImpl::configGetDefaultLumaCoefs(OCIO_ConstConfigRcPtr * /*config*/, float *rgb)
+{
+ /* Here we simply use the older Blender assumed primaries of
+ * ITU-BT.709 / sRGB, or 0.2126729 0.7151522 0.0721750. Brute
+ * force stupid, but only plausible option given no color management
+ * system in place.
+ */
+
+	rgb[0] = 0.2126f;
+	rgb[1] = 0.7152f;
+	rgb[2] = 0.0722f;
+}
+
 int FallbackImpl::configGetNumLooks(OCIO_ConstConfigRcPtr * /*config*/)
 {
 	return 0;
@@ -177,7 +190,7 @@ OCIO_ConstLookRcPtr *FallbackImpl::configGetLook(OCIO_ConstConfigRcPtr * /*confi
 	return NULL;
 }
 
-const char *FallbackImpl::lookGetProcessSpace(OCIO_ConstLookRcPtr *look)
+const char *FallbackImpl::lookGetProcessSpace(OCIO_ConstLookRcPtr * /*look*/)
 {
 	return NULL;
 }

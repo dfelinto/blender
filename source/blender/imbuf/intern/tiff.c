@@ -53,9 +53,7 @@
 #include "IMB_imbuf_types.h"
 #include "IMB_imbuf.h"
 
-#include "IMB_allocimbuf.h"
 #include "IMB_filetype.h"
-#include "IMB_filter.h"
 
 #include "IMB_colormanagement.h"
 #include "IMB_colormanagement_intern.h"
@@ -81,9 +79,9 @@ static void    imb_tiff_DummyUnmapProc(thandle_t fd, tdata_t base, toff_t size);
 
 /* Structure for in-memory TIFF file. */
 typedef struct ImbTIFFMemFile {
-	unsigned char *mem; /* Location of first byte of TIFF file. */
-	toff_t offset;      /* Current offset within the file.      */
-	tsize_t size;       /* Size of the TIFF file.               */
+	const unsigned char *mem;   /* Location of first byte of TIFF file. */
+	toff_t offset;              /* Current offset within the file.      */
+	tsize_t size;               /* Size of the TIFF file.               */
 } ImbTIFFMemFile;
 #define IMB_TIFF_GET_MEMFILE(x) ((ImbTIFFMemFile *)(x))
 
@@ -276,7 +274,7 @@ static toff_t imb_tiff_SizeProc(thandle_t handle)
 	return (toff_t)(mfile->size);
 }
 
-static TIFF *imb_tiff_client_open(ImbTIFFMemFile *memFile, unsigned char *mem, size_t size)
+static TIFF *imb_tiff_client_open(ImbTIFFMemFile *memFile, const unsigned char *mem, size_t size)
 {
 	/* open the TIFF client layer interface to the in-memory file */
 	memFile->mem = mem;
@@ -306,13 +304,13 @@ static TIFF *imb_tiff_client_open(ImbTIFFMemFile *memFile, unsigned char *mem, s
  * hence my manual comparison. - Jonathan Merritt (lancelet) 4th Sept 2005.
  */
 #define IMB_TIFF_NCB 4      /* number of comparison bytes used */
-int imb_is_a_tiff(unsigned char *mem)
+int imb_is_a_tiff(const unsigned char *mem)
 {
 	char big_endian[IMB_TIFF_NCB] = { 0x4d, 0x4d, 0x00, 0x2a };
 	char lil_endian[IMB_TIFF_NCB] = { 0x49, 0x49, 0x2a, 0x00 };
 
-	return ( (memcmp(big_endian, mem, IMB_TIFF_NCB) == 0) ||
-	         (memcmp(lil_endian, mem, IMB_TIFF_NCB) == 0) );
+	return ((memcmp(big_endian, mem, IMB_TIFF_NCB) == 0) ||
+	        (memcmp(lil_endian, mem, IMB_TIFF_NCB) == 0));
 }
 
 static void scanline_contig_16bit(float *rectf, const unsigned short *sbuf, int scanline_w, int spp)
@@ -456,7 +454,7 @@ static int imb_read_tiff_pixels(ImBuf *ibuf, TIFF *image)
 				
 				if (bitspersample == 32) {
 					if (chan == 3 && spp == 3) /* fill alpha if only RGB TIFF */
-						fill_vn_fl(fbuf, ibuf->x, 1.0f);
+						copy_vn_fl(fbuf, ibuf->x, 1.0f);
 					else if (chan >= spp) /* for grayscale, duplicate first channel into G and B */
 						success |= TIFFReadScanline(image, fbuf, row, 0);
 					else
@@ -466,7 +464,7 @@ static int imb_read_tiff_pixels(ImBuf *ibuf, TIFF *image)
 				}
 				else if (bitspersample == 16) {
 					if (chan == 3 && spp == 3) /* fill alpha if only RGB TIFF */
-						fill_vn_ushort(sbuf, ibuf->x, 65535);
+						copy_vn_ushort(sbuf, ibuf->x, 65535);
 					else if (chan >= spp) /* for grayscale, duplicate first channel into G and B */
 						success |= TIFFReadScanline(image, fbuf, row, 0);
 					else
@@ -522,7 +520,7 @@ void imb_inittiff(void)
  *
  * \return: A newly allocated ImBuf structure if successful, otherwise NULL.
  */
-ImBuf *imb_loadtiff(unsigned char *mem, size_t size, int flags, char colorspace[IM_MAX_SPACE])
+ImBuf *imb_loadtiff(const unsigned char *mem, size_t size, int flags, char colorspace[IM_MAX_SPACE])
 {
 	TIFF *image = NULL;
 	ImBuf *ibuf = NULL, *hbuf;
@@ -561,7 +559,7 @@ ImBuf *imb_loadtiff(unsigned char *mem, size_t size, int flags, char colorspace[
 	
 	ibuf = IMB_allocImBuf(width, height, ib_depth, 0);
 	if (ibuf) {
-		ibuf->ftype = TIF;
+		ibuf->ftype = IMB_FTYPE_TIF;
 	}
 	else {
 		fprintf(stderr, 
@@ -596,7 +594,7 @@ ImBuf *imb_loadtiff(unsigned char *mem, size_t size, int flags, char colorspace[
 		format = NULL;
 		TIFFGetField(image, TIFFTAG_PIXAR_TEXTUREFORMAT, &format);
 
-		if (format && strcmp(format, "Plain Texture") == 0 && TIFFIsTiled(image)) {
+		if (format && STREQ(format, "Plain Texture") && TIFFIsTiled(image)) {
 			int numlevel = TIFFNumberOfDirectories(image);
 
 			/* create empty mipmap levels in advance */
@@ -645,7 +643,7 @@ ImBuf *imb_loadtiff(unsigned char *mem, size_t size, int flags, char colorspace[
 	return ibuf;
 }
 
-void imb_loadtiletiff(ImBuf *ibuf, unsigned char *mem, size_t size, int tx, int ty, unsigned int *rect)
+void imb_loadtiletiff(ImBuf *ibuf, const unsigned char *mem, size_t size, int tx, int ty, unsigned int *rect)
 {
 	TIFF *image = NULL;
 	uint32 width, height;
@@ -722,7 +720,7 @@ int imb_savetiff(ImBuf *ibuf, const char *name, int flags)
 		return (0);
 	}
 
-	if ((ibuf->ftype & TIF_16BIT) && ibuf->rect_float)
+	if ((ibuf->foptions.flag & TIF_16BIT) && ibuf->rect_float)
 		bitspersample = 16;
 	else
 		bitspersample = 8;

@@ -28,8 +28,6 @@
  *  \ingroup spnode
  */
 
-
-
 #include "DNA_lamp_types.h"
 #include "DNA_material_types.h"
 #include "DNA_node_types.h"
@@ -152,7 +150,7 @@ void ED_node_tree_pop(SpaceNode *snode)
 
 int ED_node_tree_depth(SpaceNode *snode)
 {
-	return BLI_countlist(&snode->treepath);
+	return BLI_listbase_count(&snode->treepath);
 }
 
 bNodeTree *ED_node_tree_get(SpaceNode *snode, int level)
@@ -205,12 +203,10 @@ void ED_node_tree_path_get_fixedbuf(SpaceNode *snode, char *value, int max_lengt
 	value[0] = '\0';
 	for (path = snode->treepath.first, i = 0; path; path = path->next, ++i) {
 		if (i == 0) {
-			BLI_strncpy(value, path->node_name, max_length);
-			size = strlen(path->node_name);
+			size = BLI_strncpy_rlen(value, path->node_name, max_length);
 		}
 		else {
-			BLI_snprintf(value, max_length, "/%s", path->node_name);
-			size = strlen(path->node_name) + 1;
+			size = BLI_snprintf_rlen(value, max_length, "/%s", path->node_name);
 		}
 		max_length -= size;
 		if (max_length <= 0)
@@ -515,6 +511,11 @@ static void node_area_listener(bScreen *sc, ScrArea *sa, wmNotifier *wmn)
 				ED_area_tag_refresh(sa);
 			}
 			break;
+		case NC_GPENCIL:
+			if (ELEM(wmn->action, NA_EDITED, NA_SELECTED)) {
+				ED_area_tag_redraw(sa);
+			}
+			break;
 	}
 }
 
@@ -597,7 +598,7 @@ static void node_buttons_area_init(wmWindowManager *wm, ARegion *ar)
 
 static void node_buttons_area_draw(const bContext *C, ARegion *ar)
 {
-	ED_region_panels(C, ar, 1, NULL, -1);
+	ED_region_panels(C, ar, NULL, -1, true);
 }
 
 /* add handlers, stuff you only do once or on area/region changes */
@@ -613,7 +614,7 @@ static void node_toolbar_area_init(wmWindowManager *wm, ARegion *ar)
 
 static void node_toolbar_area_draw(const bContext *C, ARegion *ar)
 {
-	ED_region_panels(C, ar, 1, NULL, -1);
+	ED_region_panels(C, ar, NULL, -1, true);
 }
 
 static void node_cursor(wmWindow *win, ScrArea *sa, ARegion *ar)
@@ -665,12 +666,12 @@ static void node_main_area_draw(const bContext *C, ARegion *ar)
 static int node_ima_drop_poll(bContext *UNUSED(C), wmDrag *drag, const wmEvent *UNUSED(event))
 {
 	if (drag->type == WM_DRAG_ID) {
-		ID *id = (ID *)drag->poin;
+		ID *id = drag->poin;
 		if (GS(id->name) == ID_IM)
 			return 1;
 	}
 	else if (drag->type == WM_DRAG_PATH) {
-		if (ELEM(drag->icon, 0, ICON_FILE_IMAGE))   /* rule might not work? */
+		if (ELEM(drag->icon, 0, ICON_FILE_IMAGE, ICON_FILE_MOVIE))   /* rule might not work? */
 			return 1;
 	}
 	return 0;
@@ -679,7 +680,7 @@ static int node_ima_drop_poll(bContext *UNUSED(C), wmDrag *drag, const wmEvent *
 static int node_mask_drop_poll(bContext *UNUSED(C), wmDrag *drag, const wmEvent *UNUSED(event))
 {
 	if (drag->type == WM_DRAG_ID) {
-		ID *id = (ID *)drag->poin;
+		ID *id = drag->poin;
 		if (GS(id->name) == ID_MSK)
 			return 1;
 	}
@@ -688,20 +689,22 @@ static int node_mask_drop_poll(bContext *UNUSED(C), wmDrag *drag, const wmEvent 
 
 static void node_id_drop_copy(wmDrag *drag, wmDropBox *drop)
 {
-	ID *id = (ID *)drag->poin;
+	ID *id = drag->poin;
 
 	RNA_string_set(drop->ptr, "name", id->name + 2);
 }
 
 static void node_id_path_drop_copy(wmDrag *drag, wmDropBox *drop)
 {
-	ID *id = (ID *)drag->poin;
+	ID *id = drag->poin;
 
 	if (id) {
 		RNA_string_set(drop->ptr, "name", id->name + 2);
+		RNA_struct_property_unset(drop->ptr, "filepath");
 	}
-	if (drag->path[0]) {
+	else if (drag->path[0]) {
 		RNA_string_set(drop->ptr, "filepath", drag->path);
+		RNA_struct_property_unset(drop->ptr, "name");
 	}
 }
 
@@ -767,6 +770,8 @@ static void node_region_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa), ARegi
 			break;
 		case NC_GPENCIL:
 			if (wmn->action == NA_EDITED)
+				ED_region_tag_redraw(ar);
+			else if (wmn->data & ND_GPENCIL_EDITMODE)
 				ED_region_tag_redraw(ar);
 			break;
 	}

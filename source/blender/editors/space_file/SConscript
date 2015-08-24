@@ -29,6 +29,7 @@ Import ('env')
 
 sources = env.Glob('*.c')
 incs = [
+    '#/intern/atomic',
     '#/intern/guardedalloc',
     env['BF_GLEW_INC'],
     '#/intern/glew-mx',
@@ -37,6 +38,7 @@ incs = [
     '../../blenkernel',
     '../../blenlib',
     '../../blenloader',
+    '../../blentranslation',
     '../../gpu',
     '../../imbuf',
     '../../makesdna',
@@ -46,7 +48,8 @@ incs = [
     ]
 incs = ' '.join(incs)
 
-defs = env['BF_GL_DEFINITIONS']
+defs = []
+defs += env['BF_GL_DEFINITIONS']
 
 if env['WITH_BF_OPENJPEG']:
     defs.append('WITH_OPENJPEG')

@@ -33,6 +33,7 @@
 
 struct ARegion;
 struct FileSelectParams;
+struct ScrArea;
 struct SpaceFile;
 struct bContext;
 struct wmWindowManager;
@@ -40,17 +41,13 @@ struct wmWindowManager;
 #define FILE_LAYOUT_HOR 1
 #define FILE_LAYOUT_VER 2
 
-#define MAX_FILE_COLUMN 8
+#define MAX_FILE_COLUMN 4
 
 typedef enum FileListColumns {
 	COLUMN_NAME = 0,
 	COLUMN_DATE,
 	COLUMN_TIME,
 	COLUMN_SIZE,
-	COLUMN_MODE1,
-	COLUMN_MODE2,
-	COLUMN_MODE3,
-	COLUMN_OWNER
 } FileListColumns;
 
 typedef struct FileLayout {
@@ -71,6 +68,9 @@ typedef struct FileLayout {
 	int dirty;
 	int textheight;
 	float column_widths[MAX_FILE_COLUMN];
+
+	/* When we change display size, we may have to update static strings like size of files... */
+	short curr_size;
 } FileLayout;
 
 typedef struct FileSelection {
@@ -100,13 +100,48 @@ void ED_fileselect_layout_tilepos(FileLayout *layout, int tile, int *x, int *y);
 
 void ED_operatormacros_file(void);
 
-void ED_fileselect_clear(struct wmWindowManager *wm, struct SpaceFile *sfile);
+void ED_fileselect_clear(struct wmWindowManager *wm, struct ScrArea *sa, struct SpaceFile *sfile);
 
-void ED_fileselect_exit(struct wmWindowManager *wm, struct SpaceFile *sfile);
+void ED_fileselect_exit(struct wmWindowManager *wm, struct ScrArea *sa, struct SpaceFile *sfile);
 
 int ED_file_extension_icon(const char *relname);
 
 void ED_file_read_bookmarks(void);
+
+void ED_file_change_dir(struct bContext *C, const bool checkdir);
+
+/* File menu stuff */
+
+typedef enum FSMenuCategory {
+	FS_CATEGORY_SYSTEM,
+	FS_CATEGORY_SYSTEM_BOOKMARKS,
+	FS_CATEGORY_BOOKMARKS,
+	FS_CATEGORY_RECENT
+} FSMenuCategory;
+
+typedef enum FSMenuInsert {
+	FS_INSERT_SORTED = (1 << 0),
+	FS_INSERT_SAVE   = (1 << 1),
+	FS_INSERT_FIRST  = (1 << 2),  /* moves the item to the front of the list when its not already there */
+	FS_INSERT_LAST   = (1 << 3),  /* just append to preseve delivered order */
+} FSMenuInsert;
+
+struct FSMenu;
+struct FSMenuEntry;
+
+struct FSMenu *ED_fsmenu_get(void);
+struct FSMenuEntry *ED_fsmenu_get_category(struct FSMenu *fsmenu, FSMenuCategory category);
+void ED_fsmenu_set_category(struct FSMenu *fsmenu, FSMenuCategory category, struct FSMenuEntry *fsm_head);
+
+int ED_fsmenu_get_nentries(struct FSMenu *fsmenu, FSMenuCategory category);
+
+struct FSMenuEntry *ED_fsmenu_get_entry(struct FSMenu *fsmenu, FSMenuCategory category, int index);
+
+char *ED_fsmenu_entry_get_path(struct FSMenuEntry *fsentry);
+void ED_fsmenu_entry_set_path(struct FSMenuEntry *fsentry, const char *path);
+
+char *ED_fsmenu_entry_get_name(struct FSMenuEntry *fsentry);
+void ED_fsmenu_entry_set_name(struct FSMenuEntry *fsentry, const char *name);
 
 #endif /* __ED_FILESELECT_H__ */
 

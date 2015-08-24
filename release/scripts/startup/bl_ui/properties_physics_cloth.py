@@ -20,8 +20,10 @@
 import bpy
 from bpy.types import Menu, Panel
 
-from bl_ui.properties_physics_common import (point_cache_ui,
-                                             effector_weights_ui)
+from bl_ui.properties_physics_common import (
+        point_cache_ui,
+        effector_weights_ui,
+        )
 
 
 def cloth_panel_enabled(md):
@@ -35,7 +37,7 @@ class CLOTH_MT_presets(Menu):
     draw = Menu.draw_preset
 
 
-class PhysicButtonsPanel():
+class PhysicButtonsPanel:
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
     bl_context = "physics"
@@ -89,9 +91,6 @@ class PHYSICS_PT_cloth(PhysicButtonsPanel, Panel):
         sub.active = cloth.use_pin_cloth
         sub.prop_search(cloth, "vertex_group_mass", ob, "vertex_groups", text="")
         sub.prop(cloth, "pin_stiffness", text="Stiffness")
-
-        col.label(text="Pre roll:")
-        col.prop(cloth, "pre_roll", text="Frames")
 
         # Disabled for now
         """

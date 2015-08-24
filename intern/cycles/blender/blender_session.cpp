@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #include <stdlib.h>
@@ -32,6 +32,7 @@
 #include "util_color.h"
 #include "util_foreach.h"
 #include "util_function.h"
+#include "util_logging.h"
 #include "util_progress.h"
 #include "util_time.h"
 
@@ -40,6 +41,8 @@
 #include "blender_util.h"
 
 CCL_NAMESPACE_BEGIN
+
+bool BlenderSession::headless = false;
 
 BlenderSession::BlenderSession(BL::RenderEngine b_engine_, BL::UserPreferences b_userpref_,
 	BL::BlendData b_data_, BL::Scene b_scene_)
@@ -86,12 +89,14 @@ void BlenderSession::create()
 
 void BlenderSession::create_session()
 {
-	SceneParams scene_params = BlenderSync::get_scene_params(b_scene, background);
 	SessionParams session_params = BlenderSync::get_session_params(b_engine, b_userpref, b_scene, background);
+	bool is_cpu = session_params.device.type == DEVICE_CPU;
+	SceneParams scene_params = BlenderSync::get_scene_params(b_scene, background, is_cpu);
 	bool session_pause = BlenderSync::get_session_pause(b_scene, background);
 
 	/* reset status/progress */
 	last_status = "";
+	last_error = "";
 	last_progress = -1.0f;
 	start_resize_time = 0.0;
 
@@ -111,13 +116,18 @@ void BlenderSession::create_session()
 	session->set_pause(session_pause);
 
 	/* create sync */
-	sync = new BlenderSync(b_engine, b_data, b_scene, scene, !background, session->progress, session_params.device.type == DEVICE_CPU);
+	sync = new BlenderSync(b_engine, b_data, b_scene, scene, !background, session->progress, is_cpu);
 
 	if(b_v3d) {
 		if(session_pause == false) {
 			/* full data sync */
 			sync->sync_view(b_v3d, b_rv3d, width, height);
-			sync->sync_data(b_v3d, b_engine.camera_override(), &python_thread_state);
+			sync->sync_data(b_render,
+			                b_v3d,
+			                b_engine.camera_override(),
+			                width, height,
+			                &python_thread_state,
+			                b_rlay_name.c_str());
 		}
 	}
 	else {
@@ -129,7 +139,7 @@ void BlenderSession::create_session()
 	}
 
 	/* set buffer parameters */
-	BufferParams buffer_params = BlenderSync::get_buffer_params(b_render, b_scene, b_v3d, b_rv3d, scene->camera, width, height);
+	BufferParams buffer_params = BlenderSync::get_buffer_params(b_render, b_v3d, b_rv3d, scene->camera, width, height);
 	session->reset(buffer_params, session_params.samples);
 
 	b_engine.use_highlight_tiles(session_params.progressive_refine == false);
@@ -141,8 +151,9 @@ void BlenderSession::reset_session(BL::BlendData b_data_, BL::Scene b_scene_)
 	b_render = b_engine.render();
 	b_scene = b_scene_;
 
-	SceneParams scene_params = BlenderSync::get_scene_params(b_scene, background);
 	SessionParams session_params = BlenderSync::get_session_params(b_engine, b_userpref, b_scene, background);
+	const bool is_cpu = session_params.device.type == DEVICE_CPU;
+	SceneParams scene_params = BlenderSync::get_scene_params(b_scene, background, is_cpu);
 
 	width = render_resolution_x(b_render);
 	height = render_resolution_y(b_render);
@@ -173,7 +184,7 @@ void BlenderSession::reset_session(BL::BlendData b_data_, BL::Scene b_scene_)
 	session->stats.mem_peak = session->stats.mem_used;
 
 	/* sync object should be re-created */
-	sync = new BlenderSync(b_engine, b_data, b_scene, scene, !background, session->progress, session_params.device.type == DEVICE_CPU);
+	sync = new BlenderSync(b_engine, b_data, b_scene, scene, !background, session->progress, is_cpu);
 
 	/* for final render we will do full data sync per render layer, only
 	 * do some basic syncing here, no objects or materials for speed */
@@ -181,7 +192,7 @@ void BlenderSession::reset_session(BL::BlendData b_data_, BL::Scene b_scene_)
 	sync->sync_integrator();
 	sync->sync_camera(b_render, b_engine.camera_override(), width, height);
 
-	BufferParams buffer_params = BlenderSync::get_buffer_params(b_render, b_scene, PointerRNA_NULL, PointerRNA_NULL, scene->camera, width, height);
+	BufferParams buffer_params = BlenderSync::get_buffer_params(b_render, PointerRNA_NULL, PointerRNA_NULL, scene->camera, width, height);
 	session->reset(buffer_params, session_params.samples);
 
 	b_engine.use_highlight_tiles(session_params.progressive_refine == false);
@@ -266,6 +277,10 @@ static PassType get_pass_type(BL::RenderPass b_pass)
 		{
 			if(b_pass.debug_type() == BL::RenderPass::debug_type_BVH_TRAVERSAL_STEPS)
 				return PASS_BVH_TRAVERSAL_STEPS;
+			if(b_pass.debug_type() == BL::RenderPass::debug_type_BVH_TRAVERSED_INSTANCES)
+				return PASS_BVH_TRAVERSED_INSTANCES;
+			if(b_pass.debug_type() == BL::RenderPass::debug_type_RAY_BOUNCES)
+				return PASS_RAY_BOUNCES;
 			break;
 		}
 #endif
@@ -326,9 +341,9 @@ static ShaderEvalType get_shader_type(const string& pass_type)
 		return SHADER_EVAL_BAKE;
 }
 
-static BL::RenderResult begin_render_result(BL::RenderEngine b_engine, int x, int y, int w, int h, const char *layername)
+static BL::RenderResult begin_render_result(BL::RenderEngine b_engine, int x, int y, int w, int h, const char *layername, const char *viewname)
 {
-	return b_engine.begin_result(x, y, w, h, layername);
+	return b_engine.begin_result(x, y, w, h, layername, viewname);
 }
 
 static void end_render_result(BL::RenderEngine b_engine, BL::RenderResult b_rr, bool cancel, bool do_merge_results)
@@ -345,10 +360,10 @@ void BlenderSession::do_write_update_render_tile(RenderTile& rtile, bool do_upda
 	int h = params.height;
 
 	/* get render result */
-	BL::RenderResult b_rr = begin_render_result(b_engine, x, y, w, h, b_rlay_name.c_str());
+	BL::RenderResult b_rr = begin_render_result(b_engine, x, y, w, h, b_rlay_name.c_str(), b_rview_name.c_str());
 
 	/* can happen if the intersected rectangle gives 0 width or height */
-	if (b_rr.ptr.data == NULL) {
+	if(b_rr.ptr.data == NULL) {
 		return;
 	}
 
@@ -361,10 +376,10 @@ void BlenderSession::do_write_update_render_tile(RenderTile& rtile, bool do_upda
 
 	BL::RenderLayer b_rlay = *b_single_rlay;
 
-	if (do_update_only) {
+	if(do_update_only) {
 		/* update only needed */
 
-		if (rtile.sample != 0) {
+		if(rtile.sample != 0) {
 			/* sample would be zero at initial tile update, which is only needed
 			 * to tag tile form blender side as IN PROGRESS for proper highlight
 			 * no buffers should be sent to blender yet
@@ -392,7 +407,7 @@ void BlenderSession::update_render_tile(RenderTile& rtile)
 	 * be updated in blender side
 	 * would need to be investigated a bit further, but for now shall be fine
 	 */
-	if (!b_engine.is_preview())
+	if(!b_engine.is_preview())
 		do_write_update_render_tile(rtile, true);
 	else
 		do_write_update_render_tile(rtile, false);
@@ -406,17 +421,18 @@ void BlenderSession::render()
 
 	/* get buffer parameters */
 	SessionParams session_params = BlenderSync::get_session_params(b_engine, b_userpref, b_scene, background);
-	BufferParams buffer_params = BlenderSync::get_buffer_params(b_render, b_scene, b_v3d, b_rv3d, scene->camera, width, height);
+	BufferParams buffer_params = BlenderSync::get_buffer_params(b_render, b_v3d, b_rv3d, scene->camera, width, height);
 
 	/* render each layer */
 	BL::RenderSettings r = b_scene.render();
-	BL::RenderSettings::layers_iterator b_iter;
+	BL::RenderSettings::layers_iterator b_layer_iter;
+	BL::RenderResult::views_iterator b_view_iter;
 	
-	for(r.layers.begin(b_iter); b_iter != r.layers.end(); ++b_iter) {
-		b_rlay_name = b_iter->name();
+	for(r.layers.begin(b_layer_iter); b_layer_iter != r.layers.end(); ++b_layer_iter) {
+		b_rlay_name = b_layer_iter->name();
 
-		/* temporary render result to find needed passes */
-		BL::RenderResult b_rr = begin_render_result(b_engine, 0, 0, 1, 1, b_rlay_name.c_str());
+		/* temporary render result to find needed passes and views */
+		BL::RenderResult b_rr = begin_render_result(b_engine, 0, 0, 1, 1, b_rlay_name.c_str(), NULL);
 		BL::RenderResult::layers_iterator b_single_rlay;
 		b_rr.layers.begin(b_single_rlay);
 
@@ -431,9 +447,6 @@ void BlenderSession::render()
 		/* add passes */
 		vector<Pass> passes;
 		Pass::add(PASS_COMBINED, passes);
-#ifdef WITH_CYCLES_DEBUG
-		Pass::add(PASS_BVH_TRAVERSAL_STEPS, passes);
-#endif
 
 		if(session_params.device.advanced_shading) {
 
@@ -451,39 +464,59 @@ void BlenderSession::render()
 			}
 		}
 
-		/* free result without merging */
-		end_render_result(b_engine, b_rr, true, false);
-
 		buffer_params.passes = passes;
-		scene->film->pass_alpha_threshold = b_iter->pass_alpha_threshold();
+		scene->film->pass_alpha_threshold = b_layer_iter->pass_alpha_threshold();
 		scene->film->tag_passes_update(scene, passes);
 		scene->film->tag_update(scene);
 		scene->integrator->tag_update(scene);
 
-		/* update scene */
-		sync->sync_camera(b_render, b_engine.camera_override(), width, height);
-		sync->sync_data(b_v3d, b_engine.camera_override(), &python_thread_state, b_rlay_name.c_str());
+		for(b_rr.views.begin(b_view_iter); b_view_iter != b_rr.views.end(); ++b_view_iter) {
+			b_rview_name = b_view_iter->name();
 
-		/* update number of samples per layer */
-		int samples = sync->get_layer_samples();
-		bool bound_samples = sync->get_layer_bound_samples();
+			/* set the current view */
+			b_engine.active_view_set(b_rview_name.c_str());
 
-		if(samples != 0 && (!bound_samples || (samples < session_params.samples)))
-			session->reset(buffer_params, samples);
-		else
-			session->reset(buffer_params, session_params.samples);
+			/* update scene */
+			sync->sync_camera(b_render, b_engine.camera_override(), width, height);
+			sync->sync_data(b_render,
+			                b_v3d,
+			                b_engine.camera_override(),
+			                width, height,
+			                &python_thread_state,
+			                b_rlay_name.c_str());
 
-		/* render */
-		session->start();
-		session->wait();
+			/* update number of samples per layer */
+			int samples = sync->get_layer_samples();
+			bool bound_samples = sync->get_layer_bound_samples();
+
+			if(samples != 0 && (!bound_samples || (samples < session_params.samples)))
+				session->reset(buffer_params, samples);
+			else
+				session->reset(buffer_params, session_params.samples);
+
+			/* render */
+			session->start();
+			session->wait();
+
+			if(session->progress.get_cancel())
+				break;
+		}
+
+		/* free result without merging */
+		end_render_result(b_engine, b_rr, true, false);
 
 		if(session->progress.get_cancel())
 			break;
 	}
 
+	double total_time, render_time;
+	session->progress.get_time(total_time, render_time);
+	VLOG(1) << "Total render time: " << total_time;
+	VLOG(1) << "Render time (without synchronization): " << render_time;
+
 	/* clear callback */
-	session->write_render_tile_cb = NULL;
-	session->update_render_tile_cb = NULL;
+	session->write_render_tile_cb = function_null;
+	session->update_render_tile_cb = function_null;
 
 	/* free all memory used (host and device), so we wouldn't leave render
 	 * engine with extra memory allocated
@@ -495,22 +528,31 @@ void BlenderSession::render()
 	sync = NULL;
 }
 
-static void populate_bake_data(BakeData *data, BL::BakePixel pixel_array, const int num_pixels)
+static void populate_bake_data(BakeData *data, const int object_id, BL::BakePixel pixel_array, const int num_pixels)
 {
 	BL::BakePixel bp = pixel_array;
 
 	int i;
 	for(i=0; i < num_pixels; i++) {
-		data->set(i, bp.primitive_id(), bp.uv(), bp.du_dx(), bp.du_dy(), bp.dv_dx(), bp.dv_dy());
+		if(bp.object_id() == object_id) {
+			data->set(i, bp.primitive_id(), bp.uv(), bp.du_dx(), bp.du_dy(), bp.dv_dx(), bp.dv_dy());
+		} else {
+			data->set_null(i);
+		}
 		bp = bp.next();
 	}
 }
 
-void BlenderSession::bake(BL::Object b_object, const string& pass_type, BL::BakePixel pixel_array, const size_t num_pixels, const int depth, float result[])
+void BlenderSession::bake(BL::Object b_object, const string& pass_type, const int object_id, BL::BakePixel pixel_array, const size_t num_pixels, const int /*depth*/, float result[])
 {
 	ShaderEvalType shader_type = get_shader_type(pass_type);
 	size_t object_index = OBJECT_NONE;
 	int tri_offset = 0;
+
+	/* Set baking flag in advance, so kernel loading can check if we need
+	 * any baking capabilities.
+	 */
+	scene->bake_manager->set_baking(true);
 
 	/* ensure kernels are loaded before we do any scene updates */
 	session->load_kernels();
@@ -534,14 +576,18 @@ void BlenderSession::bake(BL::Object b_object, const string& pass_type, BL::Bake
 
 	/* update scene */
 	sync->sync_camera(b_render, b_engine.camera_override(), width, height);
-	sync->sync_data(b_v3d, b_engine.camera_override(), &python_thread_state);
+	sync->sync_data(b_render,
+	                b_v3d,
+	                b_engine.camera_override(),
+	                width, height,
+	                &python_thread_state,
+	                b_rlay_name.c_str());
 
 	/* get buffer parameters */
 	SessionParams session_params = BlenderSync::get_session_params(b_engine, b_userpref, b_scene, background);
-	BufferParams buffer_params = BlenderSync::get_buffer_params(b_render, b_scene, b_v3d, b_rv3d, scene->camera, width, height);
+	BufferParams buffer_params = BlenderSync::get_buffer_params(b_render, b_v3d, b_rv3d, scene->camera, width, height);
 
 	scene->bake_manager->set_shader_limit((size_t)b_engine.tile_x(), (size_t)b_engine.tile_y());
-	scene->bake_manager->set_baking(true);
 
 	/* set number of samples */
 	session->tile_manager.set_samples(session_params.samples);
@@ -562,7 +608,7 @@ void BlenderSession::bake(BL::Object b_object, const string& pass_type, BL::Bake
 
 	BakeData *bake_data = scene->bake_manager->init(object, tri_offset, num_pixels);
 
-	populate_bake_data(bake_data, pixel_array, num_pixels);
+	populate_bake_data(bake_data, object_id, pixel_array, num_pixels);
 
 	/* set number of samples */
 	session->tile_manager.set_samples(session_params.samples);
@@ -596,7 +642,7 @@ void BlenderSession::do_write_update_render_result(BL::RenderResult b_rr, BL::Re
 
 	vector<float> pixels(params.width*params.height*4);
 
-	if (!do_update_only) {
+	if(!do_update_only) {
 		/* copy each pass */
 		BL::RenderLayer::passes_iterator b_iter;
 
@@ -614,10 +660,12 @@ void BlenderSession::do_write_update_render_result(BL::RenderResult b_rr, BL::Re
 			b_pass.rect(&pixels[0]);
 		}
 	}
-
-	/* copy combined pass */
-	if(buffers->get_pass_rect(PASS_COMBINED, exposure, rtile.sample, 4, &pixels[0]))
-		b_rlay.rect(&pixels[0]);
+	else {
+		/* copy combined pass */
+		BL::RenderPass b_combined_pass(b_rlay.passes.find_by_type(BL::RenderPass::type_COMBINED, b_rview_name.c_str()));
+		if(buffers->get_pass_rect(PASS_COMBINED, exposure, rtile.sample, 4, &pixels[0]))
+			b_combined_pass.rect(&pixels[0]);
+	}
 
 	/* tag result as updated */
 	b_engine.update_result(b_rr);
@@ -640,8 +688,9 @@ void BlenderSession::synchronize()
 		return;
 
 	/* on session/scene parameter changes, we recreate session entirely */
-	SceneParams scene_params = BlenderSync::get_scene_params(b_scene, background);
 	SessionParams session_params = BlenderSync::get_session_params(b_engine, b_userpref, b_scene, background);
+	const bool is_cpu = session_params.device.type == DEVICE_CPU;
+	SceneParams scene_params = BlenderSync::get_scene_params(b_scene, background, is_cpu);
 	bool session_pause = BlenderSync::get_session_pause(b_scene, background);
 
 	if(session->params.modified(session_params) ||
@@ -674,7 +723,12 @@ void BlenderSession::synchronize()
 	}
 
 	/* data and camera synchronize */
-	sync->sync_data(b_v3d, b_engine.camera_override(), &python_thread_state);
+	sync->sync_data(b_render,
+	                b_v3d,
+	                b_engine.camera_override(),
+	                width, height,
+	                &python_thread_state,
+	                b_rlay_name.c_str());
 
 	if(b_rv3d)
 		sync->sync_view(b_v3d, b_rv3d, width, height);
@@ -686,7 +740,7 @@ void BlenderSession::synchronize()
 
 	/* reset if needed */
 	if(scene->need_reset()) {
-		BufferParams buffer_params = BlenderSync::get_buffer_params(b_render, b_scene, b_v3d, b_rv3d, scene->camera, width, height);
+		BufferParams buffer_params = BlenderSync::get_buffer_params(b_render, b_v3d, b_rv3d, scene->camera, width, height);
 		session->reset(buffer_params, session_params.samples);
 
 		/* reset time */
@@ -741,7 +795,7 @@ bool BlenderSession::draw(int w, int h)
 		/* reset if requested */
 		if(reset) {
 			SessionParams session_params = BlenderSync::get_session_params(b_engine, b_userpref, b_scene, background);
-			BufferParams buffer_params = BlenderSync::get_buffer_params(b_render, b_scene, b_v3d, b_rv3d, scene->camera, width, height);
+			BufferParams buffer_params = BlenderSync::get_buffer_params(b_render, b_v3d, b_rv3d, scene->camera, width, height);
 			bool session_pause = BlenderSync::get_session_pause(b_scene, background);
 
 			if(session_pause == false) {
@@ -758,7 +812,7 @@ bool BlenderSession::draw(int w, int h)
 	update_status_progress();
 
 	/* draw */
-	BufferParams buffer_params = BlenderSync::get_buffer_params(b_render, b_scene, b_v3d, b_rv3d, scene->camera, width, height);
+	BufferParams buffer_params = BlenderSync::get_buffer_params(b_render, b_v3d, b_rv3d, scene->camera, width, height);
 	DeviceDrawParams draw_params;
 
 	if(session->params.display_buffer_linear) {
@@ -774,19 +828,23 @@ void BlenderSession::get_status(string& status, string& substatus)
 	session->progress.get_status(status, substatus);
 }
 
-void BlenderSession::get_progress(float& progress, double& total_time)
+void BlenderSession::get_progress(float& progress, double& total_time, double& render_time)
 {
 	double tile_time;
 	int tile, sample, samples_per_tile;
 	int tile_total = session->tile_manager.state.num_tiles;
+	int samples = session->tile_manager.state.sample + 1;
+	int total_samples = session->tile_manager.num_samples;
 
-	session->progress.get_tile(tile, total_time, tile_time);
+	session->progress.get_tile(tile, total_time, render_time, tile_time);
 
 	sample = session->progress.get_sample();
 	samples_per_tile = session->tile_manager.num_samples;
 
-	if(samples_per_tile && tile_total)
+	if(background && samples_per_tile && tile_total)
 		progress = ((float)sample / (float)(tile_total * samples_per_tile));
+	else if(!background && samples > 0 && total_samples != USHRT_MAX)
+		progress = ((float)samples) / total_samples;
 	else
 		progress = 0.0;
 }
@@ -816,39 +874,35 @@ void BlenderSession::update_status_progress()
 	string timestatus, status, substatus;
 	string scene = "";
 	float progress;
-	double total_time, remaining_time = 0;
+	double total_time, remaining_time = 0, render_time;
 	char time_str[128];
 	float mem_used = (float)session->stats.mem_used / 1024.0f / 1024.0f;
 	float mem_peak = (float)session->stats.mem_peak / 1024.0f / 1024.0f;
-	int samples = session->tile_manager.state.sample + 1;
-	int total_samples = session->tile_manager.num_samples;
 
 	get_status(status, substatus);
-	get_progress(progress, total_time);
+	get_progress(progress, total_time, render_time);
 
-	
+	if(progress > 0)
+		remaining_time = (1.0 - (double)progress) * (render_time / (double)progress);
 
 	if(background) {
-		if(progress>0)
-			remaining_time = (1.0 - (double)progress) * (total_time / (double)progress);
-
 		scene += " | " + b_scene.name();
 		if(b_rlay_name != "")
 			scene += ", "  + b_rlay_name;
+
+		if(b_rview_name != "")
+			scene += ", " + b_rview_name;
 	}
 	else {
-		BLI_timestr(total_time, time_str, sizeof(time_str));
+		BLI_timecode_string_from_time_simple(time_str, sizeof(time_str), total_time);
 		timestatus = "Time:" + string(time_str) + " | ";
-
-		if(samples > 0 && total_samples != USHRT_MAX)
-			remaining_time = (total_samples - samples) * (total_time / samples);
 	}
-	
-	if(remaining_time>0) {
-		BLI_timestr(remaining_time, time_str, sizeof(time_str));
+
+	if(remaining_time > 0) {
+		BLI_timecode_string_from_time_simple(time_str, sizeof(time_str), remaining_time);
 		timestatus += "Remaining:" + string(time_str) + " | ";
 	}
-	
+
 	timestatus += string_printf("Mem:%.2fM, Peak:%.2fM", (double)mem_used, (double)mem_peak);
 
 	if(status.size() > 0)
@@ -864,6 +918,21 @@ void BlenderSession::update_status_progress()
 	if(progress != last_progress) {
 		b_engine.update_progress(progress);
 		last_progress = progress;
+	}
+
+	if(session->progress.get_error()) {
+		string error = session->progress.get_error_message();
+		if(error != last_error) {
+			/* TODO(sergey): Currently C++ RNA API doesn't let us to
+			 * use mnemonic name for the variable. Would be nice to
+			 * have this figured out.
+			 *
+			 * For until then, 1 << 5 means RPT_ERROR.
+			 */
+			b_engine.report(1 << 5, error.c_str());
+			b_engine.error_set(error.c_str());
+			last_error = error;
+		}
 	}
 }
 
@@ -963,6 +1032,18 @@ void BlenderSession::builtin_image_info(const string &builtin_name, void *builti
 
 		is_float = true;
 	}
+	else {
+		/* TODO(sergey): Check we're indeed in shader node tree. */
+		PointerRNA ptr;
+		RNA_pointer_create(NULL, &RNA_Node, builtin_data, &ptr);
+		BL::Node b_node(ptr);
+		if(b_node.is_a(&RNA_ShaderNodeTexPointDensity)) {
+			BL::ShaderNodeTexPointDensity b_point_density_node(b_node);
+			channels = 4;
+			width = height = depth = b_point_density_node.resolution();
+			is_float = true;
+		}
+	}
 }
 
 bool BlenderSession::builtin_image_pixels(const string &builtin_name, void *builtin_data, unsigned char *pixels)
@@ -982,18 +1063,19 @@ bool BlenderSession::builtin_image_pixels(const string &builtin_name, void *buil
 
 	unsigned char *image_pixels;
 	image_pixels = image_get_pixels_for_frame(b_image, frame);
+	size_t num_pixels = ((size_t)width) * height;
 
 	if(image_pixels) {
-		memcpy(pixels, image_pixels, width * height * channels * sizeof(unsigned char));
+		memcpy(pixels, image_pixels, num_pixels * channels * sizeof(unsigned char));
 		MEM_freeN(image_pixels);
 	}
 	else {
 		if(channels == 1) {
-			memset(pixels, 0, width * height * sizeof(unsigned char));
+			memset(pixels, 0, num_pixels * sizeof(unsigned char));
 		}
 		else {
 			unsigned char *cp = pixels;
-			for(int i = 0; i < width * height; i++, cp += channels) {
+			for(size_t i = 0; i < num_pixels; i++, cp += channels) {
 				cp[0] = 255;
 				cp[1] = 0;
 				cp[2] = 255;
@@ -1005,7 +1087,7 @@ bool BlenderSession::builtin_image_pixels(const string &builtin_name, void *buil
 
 	/* premultiply, byte images are always straight for blender */
 	unsigned char *cp = pixels;
-	for(int i = 0; i < width * height; i++, cp += channels) {
+	for(size_t i = 0; i < num_pixels; i++, cp += channels) {
 		cp[0] = (cp[0] * cp[3]) >> 8;
 		cp[1] = (cp[1] * cp[3]) >> 8;
 		cp[2] = (cp[2] * cp[3]) >> 8;
@@ -1034,18 +1116,19 @@ bool BlenderSession::builtin_image_float_pixels(const string &builtin_name, void
 
 		float *image_pixels;
 		image_pixels = image_get_float_pixels_for_frame(b_image, frame);
+		size_t num_pixels = ((size_t)width) * height;
 
 		if(image_pixels) {
-			memcpy(pixels, image_pixels, width * height * channels * sizeof(float));
+			memcpy(pixels, image_pixels, num_pixels * channels * sizeof(float));
 			MEM_freeN(image_pixels);
 		}
 		else {
 			if(channels == 1) {
-				memset(pixels, 0, width * height * sizeof(float));
+				memset(pixels, 0, num_pixels * sizeof(float));
 			}
 			else {
 				float *fp = pixels;
-				for(int i = 0; i < width * height; i++, fp += channels) {
+				for(int i = 0; i < num_pixels; i++, fp += channels) {
 					fp[0] = 1.0f;
 					fp[1] = 0.0f;
 					fp[2] = 1.0f;
@@ -1071,11 +1154,12 @@ bool BlenderSession::builtin_image_float_pixels(const string &builtin_name, void
 		int width = resolution.x * amplify;
 		int height = resolution.y * amplify;
 		int depth = resolution.z * amplify;
+		size_t num_pixels = ((size_t)width) * height * depth;
 
 		if(builtin_name == Attribute::standard_name(ATTR_STD_VOLUME_DENSITY)) {
 			SmokeDomainSettings_density_grid_get_length(&b_domain.ptr, &length);
 
-			if(length == width*height*depth) {
+			if(length == num_pixels) {
 				SmokeDomainSettings_density_grid_get(&b_domain.ptr, pixels);
 				return true;
 			}
@@ -1085,7 +1169,7 @@ bool BlenderSession::builtin_image_float_pixels(const string &builtin_name, void
 			 * as 1500..3000 K with the first part faded to zero density */
 			SmokeDomainSettings_flame_grid_get_length(&b_domain.ptr, &length);
 
-			if(length == width*height*depth) {
+			if(length == num_pixels) {
 				SmokeDomainSettings_flame_grid_get(&b_domain.ptr, pixels);
 				return true;
 			}
@@ -1094,13 +1178,24 @@ bool BlenderSession::builtin_image_float_pixels(const string &builtin_name, void
 			/* the RGB is "premultiplied" by density for better interpolation results */
 			SmokeDomainSettings_color_grid_get_length(&b_domain.ptr, &length);
 
-			if(length == width*height*depth*4) {
+			if(length == num_pixels*4) {
 				SmokeDomainSettings_color_grid_get(&b_domain.ptr, pixels);
 				return true;
 			}
 		}
 
 		fprintf(stderr, "Cycles error: unexpected smoke volume resolution, skipping\n");
+	}
+	else {
+		/* TODO(sergey): Check we're indeed in shader node tree. */
+		PointerRNA ptr;
+		RNA_pointer_create(NULL, &RNA_Node, builtin_data, &ptr);
+		BL::Node b_node(ptr);
+		if(b_node.is_a(&RNA_ShaderNodeTexPointDensity)) {
+			BL::ShaderNodeTexPointDensity b_point_density_node(b_node);
+			int length;
+			b_point_density_node.calc_point_density(b_scene, &length, &pixels);
+		}
 	}
 
 	return false;

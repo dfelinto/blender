@@ -33,14 +33,12 @@
 #define __UI_INTERFACE_ICONS_H__
 
 struct bContext;
-struct Image;
-struct ImBuf;
-struct World;
-struct Tex;
-struct Lamp;
-struct Material;
+struct ID;
+struct Scene;
 struct PreviewImage;
 struct PointerRNA;
+
+enum eIconSizes;
 
 typedef struct IconFile {
 	struct IconFile *next, *prev;
@@ -54,7 +52,7 @@ typedef struct IconFile {
 #define ICON_DEFAULT_HEIGHT_SCALE ((int)(UI_UNIT_Y * 0.8f))
 #define ICON_DEFAULT_WIDTH_SCALE  ((int)(UI_UNIT_X * 0.8f))
 
-#define PREVIEW_DEFAULT_HEIGHT 96
+#define PREVIEW_DEFAULT_HEIGHT 128
 
 /*
  * Resizable Icons for Blender
@@ -63,10 +61,14 @@ void UI_icons_init(int first_dyn_id);
 int UI_icon_get_width(int icon_id);
 int UI_icon_get_height(int icon_id);
 
+void UI_id_icon_render(
+        const struct bContext *C, struct Scene *scene, struct ID *id, const bool big, const bool use_job);
+int UI_preview_render_size(enum eIconSizes size);
+
 void UI_icon_draw(float x, float y, int icon_id);
 void UI_icon_draw_preview(float x, float y, int icon_id);
 void UI_icon_draw_preview_aspect(float x, float y, int icon_id, float aspect);
-void UI_icon_draw_preview_aspect_size(float x, float y, int icon_id, float aspect, int size);
+void UI_icon_draw_preview_aspect_size(float x, float y, int icon_id, float aspect, float alpha, int size);
 
 void UI_icon_draw_aspect(float x, float y, int icon_id, float aspect, float alpha);
 void UI_icon_draw_aspect_color(float x, float y, int icon_id, float aspect, const float rgb[3]);
@@ -80,5 +82,6 @@ int UI_iconfile_get_index(const char *filename);
 struct PreviewImage *UI_icon_to_preview(int icon_id);
 
 int UI_rnaptr_icon_get(struct bContext *C, struct PointerRNA *ptr, int rnaicon, const bool big);
+int UI_idcode_icon_get(const int idcode);
 
 #endif /*  __UI_INTERFACE_ICONS_H__ */

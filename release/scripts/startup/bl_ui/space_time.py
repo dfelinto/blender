@@ -30,6 +30,7 @@ class TIME_HT_header(Header):
         scene = context.scene
         toolsettings = context.tool_settings
         screen = context.screen
+        userprefs = context.user_preferences
 
         row = layout.row(align=True)
         row.template_header()
@@ -82,7 +83,7 @@ class TIME_HT_header(Header):
         if toolsettings.use_keyframe_insert_auto:
             row.prop(toolsettings, "use_keyframe_insert_keyingset", text="", toggle=True)
 
-            if screen.is_animation_playing:
+            if screen.is_animation_playing and not userprefs.edit.use_keyframe_insert_available:
                 subsub = row.row(align=True)
                 subsub.prop(toolsettings, "use_record_with_nla", toggle=True)
 
@@ -207,6 +208,8 @@ class TIME_MT_playback(Menu):
         layout.prop(screen, "use_play_clip_editors")
 
         layout.separator()
+        layout.prop(screen, "use_follow")
+        layout.separator()
 
         layout.prop(scene, "use_frame_drop", text="Frame Dropping")
         layout.prop(scene, "use_audio_sync", text="AV-sync", icon='SPEAKER')
@@ -250,6 +253,10 @@ def marker_menu_generic(layout):
 
     layout.operator("screen.marker_jump", text="Jump to Next Marker").next = True
     layout.operator("screen.marker_jump", text="Jump to Previous Marker").next = False
+
+    layout.separator()
+    ts = bpy.context.tool_settings
+    layout.prop(ts, "lock_markers")
 
 
 if __name__ == "__main__":  # only for live edit.

@@ -20,7 +20,7 @@
 import bpy
 import os
 from bpy.types import Operator
-
+from bpy.props import FloatProperty
 from mathutils import Vector, Matrix
 
 
@@ -124,6 +124,100 @@ def CLIP_default_settings_from_track(clip, track, framenr):
     settings.default_weight = track.weight
 
 
+class CLIP_OT_filter_tracks(bpy.types.Operator):
+    """Filter tracks which has weirdly looking spikes in motion curves"""
+    bl_label = "Filter Tracks"
+    bl_idname = "clip.filter_tracks"
+    bl_options = {'UNDO', 'REGISTER'}
+
+    track_threshold = FloatProperty(
+            name="Track Threshold",
+            description="Filter Threshold to select problematic tracks",
+            default=5.0,
+            )
+
+    @staticmethod
+    def _filter_values(context, threshold):
+
+        def get_marker_coordinates_in_pixels(clip_size, track, frame_number):
+            marker = track.markers.find_frame(frame_number)
+            return Vector((marker.co[0] * clip_size[0], marker.co[1] * clip_size[1]))
+
+        def marker_velocity(clip_size, track, frame):
+            marker_a = get_marker_coordinates_in_pixels(clip_size, track, frame)
+            marker_b = get_marker_coordinates_in_pixels(clip_size, track, frame - 1)
+            return marker_a - marker_b
+
+        scene = context.scene
+        frame_start = scene.frame_start
+        frame_end = scene.frame_end
+        clip = context.space_data.clip
+        clip_size = clip.size[:]
+
+        bpy.ops.clip.clean_tracks(frames=10, action='DELETE_TRACK')
+
+        tracks_to_clean = set()
+
+        for frame in range(frame_start, frame_end + 1):
+
+            # Find tracks with markers in both this frame and the previous one.
+            relevant_tracks = [
+                    track for track in clip.tracking.tracks
+                    if (track.markers.find_frame(frame) and
+                        track.markers.find_frame(frame - 1))]
+
+            if not relevant_tracks:
+                continue
+
+            # Get average velocity and deselect track.
+            average_velocity = Vector((0.0, 0.0))
+            for track in relevant_tracks:
+                track.select = False
+                average_velocity += marker_velocity(clip_size, track, frame)
+            if len(relevant_tracks) >= 1:
+                average_velocity = average_velocity / len(relevant_tracks)
+
+            # Then find all markers that behave differently than the average.
+            for track in relevant_tracks:
+                track_velocity = marker_velocity(clip_size, track, frame)
+                distance = (average_velocity - track_velocity).length
+
+                if distance > threshold:
+                    tracks_to_clean.add(track)
+
+        for track in tracks_to_clean:
+            track.select = True
+        return len(tracks_to_clean)
+
+    @classmethod
+    def poll(cls, context):
+        space = context.space_data
+        return (space.type == 'CLIP_EDITOR') and space.clip
+
+    def execute(self, context):
+        num_tracks = self._filter_values(context, self.track_threshold)
+        self.report({'INFO'}, "Identified %d problematic tracks" % num_tracks)
+        return {'FINISHED'}
+
+
+class CLIP_OT_set_active_clip(bpy.types.Operator):
+    bl_label = "Set Active Clip"
+    bl_idname = "clip.set_active_clip"
+
+    @classmethod
+    def poll(cls, context):
+        space = context.space_data
+        return space.type == 'CLIP_EDITOR'
+
+    def execute(self, context):
+        clip = context.space_data.clip
+        scene = context.scene
+        scene.active_clip = clip
+        scene.render.resolution_x = clip.size[0]
+        scene.render.resolution_y = clip.size[1]
+        return {'FINISHED'}
+
+
 class CLIP_OT_track_to_empty(Operator):
     """Create an Empty object which will be copying movement of active track"""
 
@@ -131,7 +225,8 @@ class CLIP_OT_track_to_empty(Operator):
     bl_label = "Link Empty to Track"
     bl_options = {'UNDO', 'REGISTER'}
 
-    def _link_track(self, context, clip, tracking_object, track):
+    @staticmethod
+    def _link_track(context, clip, tracking_object, track):
         sc = context.space_data
         constraint = None
         ob = None
@@ -237,7 +332,8 @@ class CLIP_OT_delete_proxy(Operator):
 
         return wm.invoke_confirm(self, event)
 
-    def _rmproxy(self, abspath):
+    @staticmethod
+    def _rmproxy(abspath):
         import shutil
 
         if not os.path.exists(abspath):
@@ -458,8 +554,8 @@ class CLIP_OT_setup_tracking_scene(Operator):
         world.light_settings.sample_method = 'ADAPTIVE_QMC'
         world.light_settings.samples = 7
         world.light_settings.threshold = 0.005
-        if hasattr(scene, 'cycles'):
-                world.light_settings.ao_factor = 0.05
+        if hasattr(scene, "cycles"):
+            world.light_settings.ao_factor = 0.05
 
     @staticmethod
     def _findOrCreateCamera(context):
@@ -747,7 +843,7 @@ class CLIP_OT_setup_tracking_scene(Operator):
         self._offsetNodes(tree)
 
         scene.render.alpha_mode = 'TRANSPARENT'
-        if hasattr(scene, 'cycles'):
+        if hasattr(scene, "cycles"):
             scene.cycles.film_transparent = True
 
     @staticmethod
@@ -918,5 +1014,60 @@ class CLIP_OT_track_settings_as_default(Operator):
         framenr = context.scene.frame_current - clip.frame_start + 1
 
         CLIP_default_settings_from_track(clip, track, framenr)
+
+        return {'FINISHED'}
+
+
+class CLIP_OT_track_settings_to_track(bpy.types.Operator):
+    """Copy tracking settings from active track to selected tracks"""
+
+    bl_label = "Copy Track Settings"
+    bl_idname = "clip.track_settings_to_track"
+    bl_options = {'UNDO', 'REGISTER'}
+
+    _attrs_track = (
+        "correlation_min",
+        "frames_limit",
+        "pattern_match",
+        "margin",
+        "motion_model",
+        "use_brute",
+        "use_normalization",
+        "use_mask",
+        "use_red_channel",
+        "use_green_channel",
+        "use_blue_channel",
+        "weight"
+        )
+
+    _attrs_marker = (
+        "pattern_corners",
+        "search_min",
+        "search_max",
+        )
+
+    @classmethod
+    def poll(cls, context):
+        space = context.space_data
+        if space.type != 'CLIP_EDITOR':
+            return False
+        clip = space.clip
+        return clip and clip.tracking.tracks.active
+
+    def execute(self, context):
+        space = context.space_data
+        clip = space.clip
+        track = clip.tracking.tracks.active
+
+        framenr = context.scene.frame_current - clip.frame_start + 1
+        marker = track.markers.find_frame(framenr, False)
+
+        for t in clip.tracking.tracks:
+            if t.select and t != track:
+                marker_selected = t.markers.find_frame(framenr, False)
+                for attr in self._attrs_track:
+                    setattr(t, attr, getattr(track, attr))
+                for attr in self._attrs_marker:
+                    setattr(marker_selected, attr, getattr(marker, attr))
 
         return {'FINISHED'}

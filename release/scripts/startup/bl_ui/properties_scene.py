@@ -22,9 +22,9 @@ from bpy.types import Panel, UIList
 from rna_prop_ui import PropertyPanel
 
 from bl_ui.properties_physics_common import (
-    point_cache_ui,
-    effector_weights_ui,
-    )
+        point_cache_ui,
+        effector_weights_ui,
+        )
 
 
 class SCENE_UL_keying_set_paths(UIList):
@@ -35,12 +35,12 @@ class SCENE_UL_keying_set_paths(UIList):
         if self.layout_type in {'DEFAULT', 'COMPACT'}:
             # Do not make this one editable in uiList for now...
             layout.label(text=kspath.data_path, translate=False, icon_value=icon)
-        elif self.layout_type in {'GRID'}:
+        elif self.layout_type == 'GRID':
             layout.alignment = 'CENTER'
             layout.label(text="", icon_value=icon)
 
 
-class SceneButtonsPanel():
+class SceneButtonsPanel:
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
     bl_context = "scene"
@@ -62,7 +62,8 @@ class SCENE_PT_scene(SceneButtonsPanel, Panel):
 
         layout.prop(scene, "camera")
         layout.prop(scene, "background_set", text="Background")
-        layout.prop(scene, "active_clip", text="Active Clip")
+        if context.scene.render.engine != 'BLENDER_GAME':
+            layout.prop(scene, "active_clip", text="Active Clip")
 
 
 class SCENE_PT_unit(SceneButtonsPanel, Panel):
@@ -84,7 +85,59 @@ class SCENE_PT_unit(SceneButtonsPanel, Panel):
             row.prop(unit, "use_separate")
 
 
-class SCENE_PT_keying_sets(SceneButtonsPanel, Panel):
+class SceneKeyingSetsPanel:
+
+    @staticmethod
+    def draw_keyframing_settings(context, layout, ks, ksp):
+        SceneKeyingSetsPanel._draw_keyframing_setting(
+                context, layout, ks, ksp, "Needed",
+                "use_insertkey_override_needed", "use_insertkey_needed",
+                userpref_fallback="use_keyframe_insert_needed")
+
+        SceneKeyingSetsPanel._draw_keyframing_setting(
+                context, layout, ks, ksp, "Visual",
+                "use_insertkey_override_visual", "use_insertkey_visual",
+                userpref_fallback="use_visual_keying")
+
+        SceneKeyingSetsPanel._draw_keyframing_setting(
+                context, layout, ks, ksp, "XYZ to RGB",
+                "use_insertkey_override_xyz_to_rgb", "use_insertkey_xyz_to_rgb")
+
+    @staticmethod
+    def _draw_keyframing_setting(context, layout, ks, ksp, label, toggle_prop, prop, userpref_fallback=None):
+        if ksp:
+            item = ksp
+
+            if getattr(ks, toggle_prop):
+                owner = ks
+                propname = prop
+            else:
+                owner = context.user_preferences.edit
+                if userpref_fallback:
+                    propname = userpref_fallback
+                else:
+                    propname = prop
+        else:
+            item = ks
+
+            owner = context.user_preferences.edit
+            if userpref_fallback:
+                propname = userpref_fallback
+            else:
+                propname = prop
+
+        row = layout.row(align=True)
+        row.prop(item, toggle_prop, text="", icon='STYLUS_PRESSURE', toggle=True)  # XXX: needs dedicated icon
+
+        subrow = row.row()
+        subrow.active = getattr(item, toggle_prop)
+        if subrow.active:
+            subrow.prop(item, prop, text=label)
+        else:
+            subrow.prop(owner, propname, text=label)
+
+
+class SCENE_PT_keying_sets(SceneButtonsPanel, SceneKeyingSetsPanel, Panel):
     bl_label = "Keying Sets"
     COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_GAME'}
 
@@ -114,10 +167,10 @@ class SCENE_PT_keying_sets(SceneButtonsPanel, Panel):
 
             col = row.column()
             col.label(text="Keyframing Settings:")
-            col.prop(ks, "bl_options")
+            self.draw_keyframing_settings(context, col, ks, None)
 
 
-class SCENE_PT_keying_set_paths(SceneButtonsPanel, Panel):
+class SCENE_PT_keying_set_paths(SceneButtonsPanel, SceneKeyingSetsPanel, Panel):
     bl_label = "Active Keying Set"
     COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_GAME'}
 
@@ -170,7 +223,7 @@ class SCENE_PT_keying_set_paths(SceneButtonsPanel, Panel):
 
             col = row.column()
             col.label(text="Keyframing Settings:")
-            col.prop(ksp, "bl_options")
+            self.draw_keyframing_settings(context, col, ks, ksp)
 
 
 class SCENE_PT_color_management(SceneButtonsPanel, Panel):
@@ -216,10 +269,11 @@ class SCENE_PT_audio(SceneButtonsPanel, Panel):
         split = layout.split()
 
         col = split.column()
-        col.label("Listener:")
+        col.label("Distance Model:")
         col.prop(scene, "audio_distance_model", text="")
-        col.prop(scene, "audio_doppler_speed", text="Speed")
-        col.prop(scene, "audio_doppler_factor", text="Doppler")
+        sub = col.column(align=True)
+        sub.prop(scene, "audio_doppler_speed", text="Speed")
+        sub.prop(scene, "audio_doppler_factor", text="Doppler")
 
         col = split.column()
         col.label("Format:")
@@ -344,14 +398,17 @@ class SCENE_PT_simplify(SceneButtonsPanel, Panel):
         split = layout.split()
 
         col = split.column()
+        col.label(text="Viewport:")
         col.prop(rd, "simplify_subdivision", text="Subdivision")
         col.prop(rd, "simplify_child_particles", text="Child Particles")
 
-        col.prop(rd, "use_simplify_triangulate")
-
         col = split.column()
+        col.label(text="Render:")
+        col.prop(rd, "simplify_subdivision_render", text="Subdivision")
+        col.prop(rd, "simplify_child_particles_render", text="Child Particles")
         col.prop(rd, "simplify_shadow_samples", text="Shadow Samples")
         col.prop(rd, "simplify_ao_sss", text="AO and SSS")
+        col.prop(rd, "use_simplify_triangulate")
 
 
 class SCENE_PT_custom_props(SceneButtonsPanel, PropertyPanel, Panel):

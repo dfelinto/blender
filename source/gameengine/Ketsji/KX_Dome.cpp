@@ -2044,7 +2044,9 @@ void KX_Dome::RenderDomeFrame(KX_Scene* scene, KX_Camera* cam, int i)
 	cam->NodeUpdateGS(0.f);
 
 	scene->CalculateVisibleMeshes(m_rasterizer,cam);
-	scene->UpdateAnimations(m_engine->GetFrameTime());
+
+	m_engine->UpdateAnimations(scene);
+
 	scene->RenderBuckets(camtrans, m_rasterizer);
 }
 

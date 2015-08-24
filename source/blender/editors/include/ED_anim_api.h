@@ -49,7 +49,6 @@ struct Object;
 struct bDopeSheet;
 
 struct bAction;
-struct bActionGroup;
 struct FCurve;
 struct FModifier;
 
@@ -115,13 +114,17 @@ typedef struct bAnimListElem {
 	int     flag;           /* copy of elem's flags for quick access */
 	int     index;          /* for un-named data, the index of the data in its collection */
 	
-	short   update;         /* (eAnim_Update_Flags)  tag the element for updating */
+	char    update;         /* (eAnim_Update_Flags)  tag the element for updating */
+	char    tag;            /* tag the included data. Temporary always */
+
 	short   datatype;       /* (eAnim_KeyType) type of motion data to expect */
 	void   *key_data;       /* motion data - mostly F-Curves, but can be other types too */
 	
 	
 	struct ID *id;          /* ID block that channel is attached to */
 	struct AnimData *adt;   /* source of the animation data attached to ID block (for convenience) */
+	
+	void   *owner;          /* for per-element F-Curves (e.g. NLA Control Curves), the element that this represents (e.g. NlaStrip) */
 } bAnimListElem;
 
 
@@ -141,6 +144,9 @@ typedef enum eAnim_ChannelType {
 	ANIMTYPE_GROUP,
 	ANIMTYPE_FCURVE,
 	
+	ANIMTYPE_NLACONTROLS,
+	ANIMTYPE_NLACURVE,
+	
 	ANIMTYPE_FILLACTD,
 	ANIMTYPE_FILLDRIVERS,
 	
@@ -159,6 +165,7 @@ typedef enum eAnim_ChannelType {
 	ANIMTYPE_DSLAT,
 	ANIMTYPE_DSLINESTYLE,
 	ANIMTYPE_DSSPK,
+	ANIMTYPE_DSGPENCIL,
 	
 	ANIMTYPE_SHAPEKEY,
 	
@@ -405,7 +412,8 @@ typedef enum eAnimChannel_Settings {
 	ACHANNEL_SETTING_EXPAND   = 3,
 	ACHANNEL_SETTING_VISIBLE  = 4,  /* only for Graph Editor */
 	ACHANNEL_SETTING_SOLO     = 5,  /* only for NLA Tracks */
-	ACHANNEL_SETTING_PINNED   = 6   /* only for NLA Actions */
+	ACHANNEL_SETTING_PINNED   = 6,  /* only for NLA Actions */
+	ACHANNEL_SETTING_MOD_OFF  = 7
 } eAnimChannel_Settings;
 
 
@@ -449,15 +457,15 @@ typedef struct bAnimChannelType {
 /* ------------------------ Drawing API -------------------------- */
 
 /* Get typeinfo for the given channel */
-bAnimChannelType *ANIM_channel_get_typeinfo(bAnimListElem *ale);
+const bAnimChannelType *ANIM_channel_get_typeinfo(bAnimListElem *ale);
 
 /* Print debugging info about a given channel */
 void ANIM_channel_debug_print_info(bAnimListElem *ale, short indent_level);
 
 /* Draw the given channel */
-void ANIM_channel_draw(bAnimContext *ac, bAnimListElem *ale, float yminc, float ymaxc);
+void ANIM_channel_draw(bAnimContext *ac, bAnimListElem *ale, float yminc, float ymaxc, size_t channel_index);
 /* Draw the widgets for the given channel */
-void ANIM_channel_draw_widgets(struct bContext *C, bAnimContext *ac, bAnimListElem *ale, struct uiBlock *block, float yminc, float ymaxc, size_t channel_index);
+void ANIM_channel_draw_widgets(const struct bContext *C, bAnimContext *ac, bAnimListElem *ale, struct uiBlock *block, float yminc, float ymaxc, size_t channel_index);
 
 
 /* ------------------------ Editing API -------------------------- */
@@ -610,7 +618,7 @@ typedef enum eAnimUnitConv_Flags {
 short ANIM_get_normalization_flags(bAnimContext *ac);
 
 /* Get unit conversion factor for given ID + F-Curve */
-float ANIM_unit_mapping_get_factor(struct Scene *scene, struct ID *id, struct FCurve *fcu, short flag);
+float ANIM_unit_mapping_get_factor(struct Scene *scene, struct ID *id, struct FCurve *fcu, short flag, float *r_offset);
 
 /* ------------- Utility macros ----------------------- */
 
@@ -652,6 +660,7 @@ void ANIM_list_elem_update(struct Scene *scene, bAnimListElem *ale);
 /* data -> channels syncing */
 void ANIM_sync_animchannels_to_data(const struct bContext *C);
 
+void ANIM_center_frame(struct bContext *C, int smooth_viewtx);
 /* ************************************************* */
 /* OPERATORS */
 	
@@ -667,6 +676,14 @@ void ED_keymap_anim(struct wmKeyConfig *keyconf);
 void ED_operatormacros_graph(void);
 /* space_action */
 void ED_operatormacros_action(void);
+
+/* ************************************************ */
+/* Animation Editor Exports */
+/* XXX: Should we be doing these here, or at all? */
+
+/* Action Editor - Action Management */
+struct AnimData *ED_actedit_animdata_from_context(struct bContext *C);
+void ED_animedit_unlink_action(struct bContext *C, struct ID *id, struct AnimData *adt, struct bAction *act, struct ReportList *reports);
 
 /* ************************************************ */
 

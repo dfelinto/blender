@@ -75,9 +75,10 @@ GHOST_ContextCGL::GHOST_ContextCGL(
 GHOST_ContextCGL::~GHOST_ContextCGL()
 {
 	if (m_openGLContext != nil) {
-		if (m_openGLContext == [NSOpenGLContext currentContext])
+		if (m_openGLContext == [NSOpenGLContext currentContext]) {
 			[NSOpenGLContext clearCurrentContext];
 			[m_openGLView clearGLContext];
+		}
 
 		if (m_openGLContext != s_sharedOpenGLContext || s_sharedCount == 1) {
 			assert(s_sharedCount > 0);
@@ -192,11 +193,7 @@ static void makeAttribList(
 	 * Maybe a command line flag is better... */
 	if (getenv("BLENDER_SOFTWAREGL")) {
 		attribs.push_back(NSOpenGLPFARendererID);
-#if defined(__ppc__) || defined(__ppc64__)
-		attribs.push_back(kCGLRendererAppleSWID);
-#else
 		attribs.push_back(kCGLRendererGenericFloatID);
-#endif
 	}
 	else {
 		attribs.push_back(NSOpenGLPFAAccelerated);
@@ -206,6 +203,9 @@ static void makeAttribList(
 	//attribs.push_back(NSOpenGLPFAAllowOfflineRenderers);
 
 	attribs.push_back(NSOpenGLPFADepthSize);
+	attribs.push_back((NSOpenGLPixelFormatAttribute) 32);
+
+	attribs.push_back(NSOpenGLPFAAccumSize);
 	attribs.push_back((NSOpenGLPixelFormatAttribute) 32);
 
 	if (stereoVisual)
@@ -295,14 +295,16 @@ GHOST_TSuccess GHOST_ContextCGL::initializeDrawingContext()
 
 	[m_openGLView setPixelFormat:pixelFormat];
 
-	m_openGLContext = [[NSOpenGLContext alloc] initWithFormat:pixelFormat shareContext:s_sharedOpenGLContext];
+	m_openGLContext = [[NSOpenGLContext alloc] initWithFormat:pixelFormat shareContext:s_sharedOpenGLContext]; // +1 refCount to pixelFormat
 
 	if (m_openGLContext == nil)
 		goto error;
 
 	if (s_sharedCount == 0)
 		s_sharedOpenGLContext = m_openGLContext;
-
+	
+	[pixelFormat release]; // -1 refCount to pixelFormat
+	
 	s_sharedCount++;
 
 #ifdef GHOST_MULTITHREADED_OPENGL
@@ -335,6 +337,7 @@ GHOST_TSuccess GHOST_ContextCGL::initializeDrawingContext()
 error:
 
 	[m_openGLView setOpenGLContext:prev_openGLContext];
+	[pixelFormat release];
 
 	[pool drain];
 

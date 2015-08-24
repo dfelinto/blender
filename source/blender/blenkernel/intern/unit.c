@@ -48,7 +48,7 @@
 #define SEP_CHR		'#'
 #define SEP_STR		"#"
 
-#define EPS 0.00001
+#define EPS 0.001
 
 #define UN_SC_KM	1000.0f
 #define UN_SC_HM	100.0f
@@ -370,12 +370,7 @@ static size_t unit_as_string(char *str, int len_max, double value, int prec, bUn
 	value_conv = value / unit->scalar;
 
 	/* Convert to a string */
-	{
-		len = BLI_snprintf(str, len_max, "%.*f", prec, value_conv);
-
-		if (len >= len_max)
-			len = len_max;
-	}
+	len = BLI_snprintf_rlen(str, len_max, "%.*f", prec, value_conv);
 
 	/* Add unit prefix and strip zeros */
 
@@ -650,7 +645,7 @@ bool bUnit_ReplaceString(char *str, int len_max, const char *str_prev, double sc
 	}
 
 	/* make lowercase */
-	BLI_ascii_strtolower(str, len_max);
+	BLI_str_tolower_ascii(str, len_max);
 
 	/* Try to find a default unit from current or previous string. */
 	default_unit = unit_detect_from_str(usys, str, str_prev);

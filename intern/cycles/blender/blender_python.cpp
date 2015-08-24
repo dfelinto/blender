@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #include <Python.h>
@@ -22,9 +22,11 @@
 #include "blender_session.h"
 
 #include "util_foreach.h"
+#include "util_logging.h"
 #include "util_md5.h"
 #include "util_opengl.h"
 #include "util_path.h"
+#include "util_types.h"
 
 #ifdef WITH_OSL
 #include "osl.h"
@@ -70,11 +72,12 @@ static const char *PyC_UnicodeAsByte(PyObject *py_str, PyObject **coerce)
 	return "";
 }
 
-static PyObject *init_func(PyObject *self, PyObject *args)
+static PyObject *init_func(PyObject * /*self*/, PyObject *args)
 {
 	PyObject *path, *user_path;
+	int headless;
 
-	if(!PyArg_ParseTuple(args, "OO", &path, &user_path)) {
+	if(!PyArg_ParseTuple(args, "OOi", &path, &user_path, &headless)) {
 		return NULL;
 	}
 
@@ -84,16 +87,21 @@ static PyObject *init_func(PyObject *self, PyObject *args)
 	Py_XDECREF(path_coerce);
 	Py_XDECREF(user_path_coerce);
 
+	BlenderSession::headless = headless;
+
 	Py_RETURN_NONE;
 }
 
-static PyObject *create_func(PyObject *self, PyObject *args)
+static PyObject *create_func(PyObject * /*self*/, PyObject *args)
 {
 	PyObject *pyengine, *pyuserpref, *pydata, *pyscene, *pyregion, *pyv3d, *pyrv3d;
 	int preview_osl;
 
-	if(!PyArg_ParseTuple(args, "OOOOOOOi", &pyengine, &pyuserpref, &pydata, &pyscene, &pyregion, &pyv3d, &pyrv3d, &preview_osl))
+	if(!PyArg_ParseTuple(args, "OOOOOOOi", &pyengine, &pyuserpref, &pydata, &pyscene,
+	                     &pyregion, &pyv3d, &pyrv3d, &preview_osl))
+	{
 		return NULL;
+	}
 
 	/* RNA */
 	PointerRNA engineptr;
@@ -105,7 +113,7 @@ static PyObject *create_func(PyObject *self, PyObject *args)
 	BL::UserPreferences userpref(userprefptr);
 
 	PointerRNA dataptr;
-	RNA_id_pointer_create((ID*)PyLong_AsVoidPtr(pydata), &dataptr);
+	RNA_main_pointer_create((Main*)PyLong_AsVoidPtr(pydata), &dataptr);
 	BL::BlendData data(dataptr);
 
 	PointerRNA sceneptr;
@@ -113,15 +121,15 @@ static PyObject *create_func(PyObject *self, PyObject *args)
 	BL::Scene scene(sceneptr);
 
 	PointerRNA regionptr;
-	RNA_id_pointer_create((ID*)pylong_as_voidptr_typesafe(pyregion), &regionptr);
+	RNA_pointer_create(NULL, &RNA_Region, pylong_as_voidptr_typesafe(pyregion), &regionptr);
 	BL::Region region(regionptr);
 
 	PointerRNA v3dptr;
-	RNA_id_pointer_create((ID*)pylong_as_voidptr_typesafe(pyv3d), &v3dptr);
+	RNA_pointer_create(NULL, &RNA_SpaceView3D, pylong_as_voidptr_typesafe(pyv3d), &v3dptr);
 	BL::SpaceView3D v3d(v3dptr);
 
 	PointerRNA rv3dptr;
-	RNA_id_pointer_create((ID*)pylong_as_voidptr_typesafe(pyrv3d), &rv3dptr);
+	RNA_pointer_create(NULL, &RNA_RegionView3D, pylong_as_voidptr_typesafe(pyrv3d), &rv3dptr);
 	BL::RegionView3D rv3d(rv3dptr);
 
 	/* create session */
@@ -156,14 +164,14 @@ static PyObject *create_func(PyObject *self, PyObject *args)
 	return PyLong_FromVoidPtr(session);
 }
 
-static PyObject *free_func(PyObject *self, PyObject *value)
+static PyObject *free_func(PyObject * /*self*/, PyObject *value)
 {
 	delete (BlenderSession*)PyLong_AsVoidPtr(value);
 
 	Py_RETURN_NONE;
 }
 
-static PyObject *render_func(PyObject *self, PyObject *value)
+static PyObject *render_func(PyObject * /*self*/, PyObject *value)
 {
 	BlenderSession *session = (BlenderSession*)PyLong_AsVoidPtr(value);
 
@@ -177,14 +185,14 @@ static PyObject *render_func(PyObject *self, PyObject *value)
 }
 
 /* pixel_array and result passed as pointers */
-static PyObject *bake_func(PyObject *self, PyObject *args)
+static PyObject *bake_func(PyObject * /*self*/, PyObject *args)
 {
 	PyObject *pysession, *pyobject;
 	PyObject *pypixel_array, *pyresult;
 	const char *pass_type;
-	int num_pixels, depth;
+	int num_pixels, depth, object_id;
 
-	if(!PyArg_ParseTuple(args, "OOsOiiO", &pysession, &pyobject, &pass_type, &pypixel_array,  &num_pixels, &depth, &pyresult))
+	if(!PyArg_ParseTuple(args, "OOsiOiiO", &pysession, &pyobject, &pass_type, &object_id, &pypixel_array, &num_pixels, &depth, &pyresult))
 		return NULL;
 
 	BlenderSession *session = (BlenderSession*)PyLong_AsVoidPtr(pysession);
@@ -196,19 +204,19 @@ static PyObject *bake_func(PyObject *self, PyObject *args)
 	void *b_result = PyLong_AsVoidPtr(pyresult);
 
 	PointerRNA bakepixelptr;
-	RNA_id_pointer_create((ID*)PyLong_AsVoidPtr(pypixel_array), &bakepixelptr);
+	RNA_pointer_create(NULL, &RNA_BakePixel, PyLong_AsVoidPtr(pypixel_array), &bakepixelptr);
 	BL::BakePixel b_bake_pixel(bakepixelptr);
 
 	python_thread_state_save(&session->python_thread_state);
 
-	session->bake(b_object, pass_type, b_bake_pixel, (size_t)num_pixels, depth, (float *)b_result);
+	session->bake(b_object, pass_type, object_id, b_bake_pixel, (size_t)num_pixels, depth, (float *)b_result);
 
 	python_thread_state_restore(&session->python_thread_state);
 
 	Py_RETURN_NONE;
 }
 
-static PyObject *draw_func(PyObject *self, PyObject *args)
+static PyObject *draw_func(PyObject * /*self*/, PyObject *args)
 {
 	PyObject *pysession, *pyv3d, *pyrv3d;
 
@@ -228,7 +236,7 @@ static PyObject *draw_func(PyObject *self, PyObject *args)
 	Py_RETURN_NONE;
 }
 
-static PyObject *reset_func(PyObject *self, PyObject *args)
+static PyObject *reset_func(PyObject * /*self*/, PyObject *args)
 {
 	PyObject *pysession, *pydata, *pyscene;
 
@@ -238,7 +246,7 @@ static PyObject *reset_func(PyObject *self, PyObject *args)
 	BlenderSession *session = (BlenderSession*)PyLong_AsVoidPtr(pysession);
 
 	PointerRNA dataptr;
-	RNA_id_pointer_create((ID*)PyLong_AsVoidPtr(pydata), &dataptr);
+	RNA_main_pointer_create((Main*)PyLong_AsVoidPtr(pydata), &dataptr);
 	BL::BlendData b_data(dataptr);
 
 	PointerRNA sceneptr;
@@ -254,7 +262,7 @@ static PyObject *reset_func(PyObject *self, PyObject *args)
 	Py_RETURN_NONE;
 }
 
-static PyObject *sync_func(PyObject *self, PyObject *value)
+static PyObject *sync_func(PyObject * /*self*/, PyObject *value)
 {
 	BlenderSession *session = (BlenderSession*)PyLong_AsVoidPtr(value);
 
@@ -267,7 +275,7 @@ static PyObject *sync_func(PyObject *self, PyObject *value)
 	Py_RETURN_NONE;
 }
 
-static PyObject *available_devices_func(PyObject *self, PyObject *args)
+static PyObject *available_devices_func(PyObject * /*self*/, PyObject * /*args*/)
 {
 	vector<DeviceInfo>& devices = Device::available_devices();
 	PyObject *ret = PyTuple_New(devices.size());
@@ -282,7 +290,7 @@ static PyObject *available_devices_func(PyObject *self, PyObject *args)
 
 #ifdef WITH_OSL
 
-static PyObject *osl_update_node_func(PyObject *self, PyObject *args)
+static PyObject *osl_update_node_func(PyObject * /*self*/, PyObject *args)
 {
 	PyObject *pynodegroup, *pynode;
 	const char *filepath = NULL;
@@ -384,7 +392,7 @@ static PyObject *osl_update_node_func(PyObject *self, PyObject *args)
 
 		/* find socket socket */
 		BL::NodeSocket b_sock(PointerRNA_NULL);
-		if (param->isoutput) {
+		if(param->isoutput) {
 			b_sock = b_node.outputs[param->name.string()];
 			/* remove if type no longer matches */
 			if(b_sock && b_sock.bl_idname() != socket_type) {
@@ -438,7 +446,7 @@ static PyObject *osl_update_node_func(PyObject *self, PyObject *args)
 
 		removed = false;
 
-		for (b_node.inputs.begin(b_input); b_input != b_node.inputs.end(); ++b_input) {
+		for(b_node.inputs.begin(b_input); b_input != b_node.inputs.end(); ++b_input) {
 			if(used_sockets.find(b_input->ptr.data) == used_sockets.end()) {
 				b_node.inputs.remove(*b_input);
 				removed = true;
@@ -446,7 +454,7 @@ static PyObject *osl_update_node_func(PyObject *self, PyObject *args)
 			}
 		}
 
-		for (b_node.outputs.begin(b_output); b_output != b_node.outputs.end(); ++b_output) {
+		for(b_node.outputs.begin(b_output); b_output != b_node.outputs.end(); ++b_output) {
 			if(used_sockets.find(b_output->ptr.data) == used_sockets.end()) {
 				b_node.outputs.remove(*b_output);
 				removed = true;
@@ -458,7 +466,7 @@ static PyObject *osl_update_node_func(PyObject *self, PyObject *args)
 	Py_RETURN_TRUE;
 }
 
-static PyObject *osl_compile_func(PyObject *self, PyObject *args)
+static PyObject *osl_compile_func(PyObject * /*self*/, PyObject *args)
 {
 	const char *inputfile = NULL, *outputfile = NULL;
 
@@ -470,6 +478,25 @@ static PyObject *osl_compile_func(PyObject *self, PyObject *args)
 		Py_RETURN_FALSE;
 
 	Py_RETURN_TRUE;
+}
+#endif
+
+static PyObject *system_info_func(PyObject * /*self*/, PyObject * /*value*/)
+{
+	string system_info = Device::device_capabilities();
+	return PyUnicode_FromString(system_info.c_str());
+}
+
+#ifdef WITH_OPENCL
+static PyObject *opencl_disable_func(PyObject * /*self*/, PyObject * /*value*/)
+{
+	VLOG(2) << "Disabling OpenCL platform.";
+#ifdef WIN32
+	putenv("CYCLES_OPENCL_TEST=NONE");
+#else
+	setenv("CYCLES_OPENCL_TEST", "NONE", 1);
+#endif
+	Py_RETURN_NONE;
 }
 #endif
 
@@ -487,6 +514,10 @@ static PyMethodDef methods[] = {
 	{"osl_compile", osl_compile_func, METH_VARARGS, ""},
 #endif
 	{"available_devices", available_devices_func, METH_NOARGS, ""},
+	{"system_info", system_info_func, METH_NOARGS, ""},
+#ifdef WITH_OPENCL
+	{"opencl_disable", opencl_disable_func, METH_NOARGS, ""},
+#endif
 	{NULL, NULL, 0, NULL},
 };
 

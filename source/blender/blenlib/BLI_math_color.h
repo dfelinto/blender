@@ -80,18 +80,8 @@ void rgb_to_xyz(float r, float g, float b, float *x, float *y, float *z);
 unsigned int rgb_to_cpack(float r, float g, float b);
 unsigned int hsv_to_cpack(float h, float s, float v);
 
-MINLINE float rgb_to_bw(const float rgb[3]);
-MINLINE float rgb_to_grayscale(const float rgb[3]);
-MINLINE unsigned char rgb_to_grayscale_byte(const unsigned char rgb[3]);
-MINLINE float rgb_to_luma(const float rgb[3]);
-MINLINE unsigned char rgb_to_luma_byte(const unsigned char rgb[3]);
-MINLINE float rgb_to_luma_y(const float rgb[3]);
-
 /**************** Profile Transformations *****************/
 
-void gamma_correct(float *c, float gamma);
-float rec709_to_linearrgb(float c);
-float linearrgb_to_rec709(float c);
 float srgb_to_linearrgb(float c);
 float linearrgb_to_srgb(float c);
 
@@ -139,7 +129,14 @@ void rgba_float_to_uchar(unsigned char r_col[4], const float col_f[4]);
 
 void xyz_to_lab(float x, float y, float z, float *l, float *a, float *b);
 
+MINLINE float rgb_to_grayscale(const float rgb[3]);
+MINLINE unsigned char rgb_to_grayscale_byte(const unsigned char rgb[3]);
+
 MINLINE int compare_rgb_uchar(const unsigned char a[3], const unsigned char b[3], const int limit);
+
+MINLINE float dither_random_value(float s, float t);
+MINLINE void float_to_byte_dither_v3(unsigned char b[3], const float f[3], float dither, float s, float t);
+
 
 #define rgba_char_args_set_fl(col, r, g, b, a) \
 	rgba_char_args_set(col, (r) * 255, (g) * 255, (b) * 255, (a) * 255)

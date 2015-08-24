@@ -30,13 +30,12 @@
  */
 
 
-#include "zlib.h"
-
 #include <limits.h>
 
 #ifndef WIN32
 #  include <unistd.h> // for read close
 #else
+#  include <zlib.h>  /* odd include order-issue */
 #  include <io.h> // for open close read
 #  include "winsock2.h"
 #  include "BLI_winstuff.h"
@@ -78,6 +77,7 @@
 #include "BLI_blenlib.h"
 #include "BLI_math.h"
 
+#include "BKE_action.h"
 #include "BKE_armature.h"
 #include "BKE_colortools.h"
 #include "BKE_constraint.h"
@@ -94,14 +94,9 @@
 #include "BKE_scene.h"
 #include "BKE_sequencer.h"
 
-#include "IMB_imbuf.h"  // for proxy / timecode versioning stuff
-
 #include "NOD_socket.h"
 
 #include "BLO_readfile.h"
-#include "BLO_undofile.h"
-
-#include "RE_engine.h"
 
 #include "readfile.h"
 
@@ -521,6 +516,40 @@ static void do_version_free_effects_245(ListBase *lb)
 	}
 }
 
+static void do_version_constraints_245(ListBase *lb)
+{
+	bConstraint *con;
+	bConstraintTarget *ct;
+
+	for (con = lb->first; con; con = con->next) {
+		if (con->type == CONSTRAINT_TYPE_PYTHON) {
+			bPythonConstraint *data = (bPythonConstraint *)con->data;
+			if (data->tar) {
+				/* version patching needs to be done */
+				ct = MEM_callocN(sizeof(bConstraintTarget), "PyConTarget");
+
+				ct->tar = data->tar;
+				BLI_strncpy(ct->subtarget, data->subtarget, sizeof(ct->subtarget));
+				ct->space = con->tarspace;
+
+				BLI_addtail(&data->targets, ct);
+				data->tarnum++;
+
+				/* clear old targets to avoid problems */
+				data->tar = NULL;
+				data->subtarget[0] = '\0';
+			}
+		}
+		else if (con->type == CONSTRAINT_TYPE_LOCLIKE) {
+			bLocateLikeConstraint *data = (bLocateLikeConstraint *)con->data;
+
+			/* new headtail functionality makes Bone-Tip function obsolete */
+			if (data->flag & LOCLIKE_TIP)
+				con->headtail = 1.0f;
+		}
+	}
+}
+
 PartEff *blo_do_version_give_parteff_245(Object *ob)
 {
 	PartEff *paf;
@@ -619,7 +648,6 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *main)
 		while (ob) {
 			if (ob->transflag & 1) {
 				ob->transflag -= 1;
-				//ob->ipoflag |= OB_OFFS_OB;
 			}
 			ob = ob->id.next;
 		}
@@ -656,7 +684,6 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *main)
 		}
 		ob = main->object.first;
 		while (ob) {
-			//ob->ipoflag |= OB_OFFS_PARENT;
 			if (ob->dt == 0)
 				ob->dt = OB_SOLID;
 			ob = ob->id.next;
@@ -767,22 +794,14 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *main)
 				nr = me->totface;
 				tface = me->tface;
 				while (nr--) {
-					cp = (char *)&tface->col[0];
-					if (cp[1] > 126) cp[1] = 255; else cp[1] *= 2;
-					if (cp[2] > 126) cp[2] = 255; else cp[2] *= 2;
-					if (cp[3] > 126) cp[3] = 255; else cp[3] *= 2;
-					cp = (char *)&tface->col[1];
-					if (cp[1] > 126) cp[1] = 255; else cp[1] *= 2;
-					if (cp[2] > 126) cp[2] = 255; else cp[2] *= 2;
-					if (cp[3] > 126) cp[3] = 255; else cp[3] *= 2;
-					cp = (char *)&tface->col[2];
-					if (cp[1] > 126) cp[1] = 255; else cp[1] *= 2;
-					if (cp[2] > 126) cp[2] = 255; else cp[2] *= 2;
-					if (cp[3] > 126) cp[3] = 255; else cp[3] *= 2;
-					cp = (char *)&tface->col[3];
-					if (cp[1] > 126) cp[1] = 255; else cp[1] *= 2;
-					if (cp[2] > 126) cp[2] = 255; else cp[2] *= 2;
-					if (cp[3] > 126) cp[3] = 255; else cp[3] *= 2;
+					int j;
+					for (j = 0; j < 4; j++) {
+						int k;
+						cp = ((char *)&tface->col[j]) + 1;
+						for (k = 0; k < 3; k++) {
+							cp[k] = (cp[k] > 126) ? 255 : cp[k] * 2;
+						}
+					}
 
 					tface++;
 				}
@@ -1271,7 +1290,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *main)
 		Object *ob;
 
 		for (vf = main->vfont.first; vf; vf = vf->id.next) {
-			if (strcmp(vf->name + strlen(vf->name)-6, ".Bfont") == 0) {
+			if (STREQ(vf->name + strlen(vf->name) - 6, ".Bfont")) {
 				strcpy(vf->name, FO_BUILTIN_NAME);
 			}
 		}
@@ -1930,7 +1949,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *main)
 			/* btw. armature_rebuild_pose is further only called on leave editmode */
 			if (ob->type == OB_ARMATURE) {
 				if (ob->pose)
-					ob->pose->flag |= POSE_RECALC;
+					BKE_pose_tag_recalc(main, ob->pose);
 
 				/* cannot call stuff now (pointers!), done in setup_app_data */
 				ob->recalc |= OB_RECALC_OB|OB_RECALC_DATA|OB_RECALC_TIME;
@@ -2054,7 +2073,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *main)
 								data->rootbone = -1;
 
 								/* update_pose_etc handles rootbone == -1 */
-								ob->pose->flag |= POSE_RECALC;
+								BKE_pose_tag_recalc(main, ob->pose);
 							}
 						}
 					}
@@ -2155,8 +2174,8 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *main)
 				cam->flag |= CAM_SHOWPASSEPARTOUT;
 
 			/* make sure old cameras have title safe on */
-			if (!(cam->flag & CAM_SHOWTITLESAFE))
-				cam->flag |= CAM_SHOWTITLESAFE;
+			if (!(cam->flag & CAM_SHOW_SAFE_MARGINS))
+				cam->flag |= CAM_SHOW_SAFE_MARGINS;
 
 			/* set an appropriate camera passepartout alpha */
 			if (!(cam->passepartalpha))
@@ -2286,7 +2305,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *main)
 		if (main->versionfile == 241) {
 			Image *ima;
 			for (ima = main->image.first; ima; ima = ima->id.next)
-				if (strcmp(ima->name, "Compositor") == 0) {
+				if (STREQ(ima->name, "Compositor")) {
 					strcpy(ima->id.name + 2, "Viewer Node");
 					strcpy(ima->name, "Viewer Node");
 				}
@@ -2380,8 +2399,9 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *main)
 								data->flag |= MINMAX_STICKY;
 							else
 								data->flag &= ~MINMAX_STICKY;
-						}
+
 							break;
+						}
 						case CONSTRAINT_TYPE_ROTLIKE:
 						{
 							bRotateLikeConstraint *data = curcon->data;
@@ -2389,8 +2409,9 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *main)
 							/* version patch from buttons_object.c */
 							if (data->flag == 0)
 								data->flag = ROTLIKE_X|ROTLIKE_Y|ROTLIKE_Z;
-						}
+
 							break;
+						}
 					}
 				}
 			}
@@ -2459,7 +2480,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *main)
 
 		for (group = main->group.first; group; group = group->id.next)
 			if (group->layer == 0)
-				group->layer = (1<<20)-1;
+				group->layer = (1 << 20) - 1;
 
 		/* now, subversion control! */
 		if (main->subversionfile < 3) {
@@ -2474,11 +2495,11 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *main)
 				ima->gen_x = 256; ima->gen_y = 256;
 				ima->gen_type = 1;
 
-				if (0 == strncmp(ima->id.name + 2, "Viewer Node", sizeof(ima->id.name) - 2)) {
+				if (STREQLEN(ima->id.name + 2, "Viewer Node", sizeof(ima->id.name) - 2)) {
 					ima->source = IMA_SRC_VIEWER;
 					ima->type = IMA_TYPE_COMPOSITE;
 				}
-				if (0 == strncmp(ima->id.name + 2, "Render Result", sizeof(ima->id.name) - 2)) {
+				if (STREQLEN(ima->id.name + 2, "Render Result", sizeof(ima->id.name) - 2)) {
 					ima->source = IMA_SRC_VIEWER;
 					ima->type = IMA_TYPE_R_RESULT;
 				}
@@ -2957,69 +2978,14 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *main)
 	if ((main->versionfile < 245) || (main->versionfile == 245 && main->subversionfile < 7)) {
 		Object *ob;
 		bPoseChannel *pchan;
-		bConstraint *con;
-		bConstraintTarget *ct;
 
 		for (ob = main->object.first; ob; ob = ob->id.next) {
 			if (ob->pose) {
 				for (pchan = ob->pose->chanbase.first; pchan; pchan = pchan->next) {
-					for (con = pchan->constraints.first; con; con = con->next) {
-						if (con->type == CONSTRAINT_TYPE_PYTHON) {
-							bPythonConstraint *data = (bPythonConstraint *)con->data;
-							if (data->tar) {
-								/* version patching needs to be done */
-								ct = MEM_callocN(sizeof(bConstraintTarget), "PyConTarget");
-
-								ct->tar = data->tar;
-								BLI_strncpy(ct->subtarget, data->subtarget, sizeof(ct->subtarget));
-								ct->space = con->tarspace;
-
-								BLI_addtail(&data->targets, ct);
-								data->tarnum++;
-
-								/* clear old targets to avoid problems */
-								data->tar = NULL;
-								data->subtarget[0] = '\0';
-							}
-						}
-						else if (con->type == CONSTRAINT_TYPE_LOCLIKE) {
-							bLocateLikeConstraint *data = (bLocateLikeConstraint *)con->data;
-
-							/* new headtail functionality makes Bone-Tip function obsolete */
-							if (data->flag & LOCLIKE_TIP)
-								con->headtail = 1.0f;
-						}
-					}
+					do_version_constraints_245(&pchan->constraints);
 				}
 			}
-
-			for (con = ob->constraints.first; con; con = con->next) {
-				if (con->type == CONSTRAINT_TYPE_PYTHON) {
-					bPythonConstraint *data = (bPythonConstraint *)con->data;
-					if (data->tar) {
-						/* version patching needs to be done */
-						ct = MEM_callocN(sizeof(bConstraintTarget), "PyConTarget");
-
-						ct->tar = data->tar;
-						BLI_strncpy(ct->subtarget, data->subtarget, sizeof(ct->subtarget));
-						ct->space = con->tarspace;
-
-						BLI_addtail(&data->targets, ct);
-						data->tarnum++;
-
-						/* clear old targets to avoid problems */
-						data->tar = NULL;
-						data->subtarget[0] = '\0';
-					}
-				}
-				else if (con->type == CONSTRAINT_TYPE_LOCLIKE) {
-					bLocateLikeConstraint *data = (bLocateLikeConstraint *)con->data;
-
-					/* new headtail functionality makes Bone-Tip function obsolete */
-					if (data->flag & LOCLIKE_TIP)
-						con->headtail = 1.0f;
-				}
-			}
+			do_version_constraints_245(&ob->constraints);
 
 			if (ob->soft && ob->soft->keys) {
 				SoftBody *sb = ob->soft;
@@ -3085,7 +3051,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *main)
 				BLI_addtail(&ob->particlesystem, psys);
 
 				md = modifier_new(eModifierType_ParticleSystem);
-				BLI_snprintf(md->name, sizeof(md->name), "ParticleSystem %i", BLI_countlist(&ob->particlesystem));
+				BLI_snprintf(md->name, sizeof(md->name), "ParticleSystem %i", BLI_listbase_count(&ob->particlesystem));
 				psmd = (ParticleSystemModifierData*) md;
 				psmd->psys = psys;
 				BLI_addtail(&ob->modifiers, md);

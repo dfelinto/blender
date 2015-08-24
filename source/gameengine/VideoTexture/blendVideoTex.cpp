@@ -28,7 +28,7 @@
  *  \ingroup bgevideotex
  */
 
-#include "PyObjectPlus.h"
+#include "EXP_PyObjectPlus.h"
 
 #include "KX_PythonInit.h"
 
@@ -49,6 +49,12 @@
 #include "Texture.h"
 
 #include "Exception.h"
+
+// access to IMB_BLEND_* constants
+extern "C"
+{
+#include "IMB_imbuf.h"
+};
 
 
 // get material id
@@ -157,10 +163,14 @@ static void registerAllTypes(void)
 	pyFilterTypes.add(&FilterBGR24Type, "FilterBGR24");
 }
 
+PyDoc_STRVAR(VideoTexture_module_documentation,
+"Module that allows to play video files on textures in GameBlender."
+);
+
 static struct PyModuleDef VideoTexture_module_def = {
-	{}, /* m_base */
+	PyModuleDef_HEAD_INIT,
 	"VideoTexture",  /* m_name */
-	"Module that allows to play video files on textures in GameBlender.",  /* m_doc */
+	VideoTexture_module_documentation,  /* m_doc */
 	0,  /* m_size */
 	moduleMethods,  /* m_methods */
 	0,  /* m_reload */
@@ -169,7 +179,7 @@ static struct PyModuleDef VideoTexture_module_def = {
 	0,  /* m_free */
 };
 
-PyObject *initVideoTexture(void)
+PyMODINIT_FUNC initVideoTexturePythonBinding(void)
 {
 	PyObject *m;
 	
@@ -187,20 +197,9 @@ PyObject *initVideoTexture(void)
 	if (PyType_Ready(&TextureType) < 0) 
 		return NULL;
 
-	/* Use existing module where possible
-	 * be careful not to init any runtime vars after this */
-	m = PyImport_ImportModule( "VideoTexture" );
-	if (m) {
-		Py_DECREF(m);
-		return m;
-	}
-	else {
-		PyErr_Clear();
-	
-		m = PyModule_Create(&VideoTexture_module_def);
-		PyDict_SetItemString(PySys_GetObject("modules"), VideoTexture_module_def.m_name, m);
-	}
-	
+	m = PyModule_Create(&VideoTexture_module_def);
+	PyDict_SetItemString(PySys_GetObject("modules"), VideoTexture_module_def.m_name, m);
+
 	if (m == NULL) 
 		return NULL;
 
@@ -215,7 +214,36 @@ PyObject *initVideoTexture(void)
 	PyModule_AddIntConstant(m, "SOURCE_READY", SourceReady);
 	PyModule_AddIntConstant(m, "SOURCE_PLAYING", SourcePlaying);
 	PyModule_AddIntConstant(m, "SOURCE_STOPPED", SourceStopped);
-	
+
+	PyModule_AddIntConstant(m, "IMB_BLEND_MIX", IMB_BLEND_MIX);
+	PyModule_AddIntConstant(m, "IMB_BLEND_ADD", IMB_BLEND_ADD);
+	PyModule_AddIntConstant(m, "IMB_BLEND_SUB", IMB_BLEND_SUB);
+	PyModule_AddIntConstant(m, "IMB_BLEND_MUL", IMB_BLEND_MUL);
+	PyModule_AddIntConstant(m, "IMB_BLEND_LIGHTEN", IMB_BLEND_LIGHTEN);
+	PyModule_AddIntConstant(m, "IMB_BLEND_DARKEN", IMB_BLEND_DARKEN);
+	PyModule_AddIntConstant(m, "IMB_BLEND_ERASE_ALPHA", IMB_BLEND_ERASE_ALPHA);
+	PyModule_AddIntConstant(m, "IMB_BLEND_ADD_ALPHA", IMB_BLEND_ADD_ALPHA);
+	PyModule_AddIntConstant(m, "IMB_BLEND_OVERLAY", IMB_BLEND_OVERLAY);
+	PyModule_AddIntConstant(m, "IMB_BLEND_HARDLIGHT", IMB_BLEND_HARDLIGHT);
+	PyModule_AddIntConstant(m, "IMB_BLEND_COLORBURN", IMB_BLEND_COLORBURN);
+	PyModule_AddIntConstant(m, "IMB_BLEND_LINEARBURN", IMB_BLEND_LINEARBURN);
+	PyModule_AddIntConstant(m, "IMB_BLEND_COLORDODGE", IMB_BLEND_COLORDODGE);
+	PyModule_AddIntConstant(m, "IMB_BLEND_SCREEN", IMB_BLEND_SCREEN);
+	PyModule_AddIntConstant(m, "IMB_BLEND_SOFTLIGHT", IMB_BLEND_SOFTLIGHT);
+	PyModule_AddIntConstant(m, "IMB_BLEND_PINLIGHT", IMB_BLEND_PINLIGHT);
+	PyModule_AddIntConstant(m, "IMB_BLEND_VIVIDLIGHT", IMB_BLEND_VIVIDLIGHT);
+	PyModule_AddIntConstant(m, "IMB_BLEND_LINEARLIGHT", IMB_BLEND_LINEARLIGHT);
+	PyModule_AddIntConstant(m, "IMB_BLEND_DIFFERENCE", IMB_BLEND_DIFFERENCE);
+	PyModule_AddIntConstant(m, "IMB_BLEND_EXCLUSION", IMB_BLEND_EXCLUSION);
+	PyModule_AddIntConstant(m, "IMB_BLEND_HUE", IMB_BLEND_HUE);
+	PyModule_AddIntConstant(m, "IMB_BLEND_SATURATION", IMB_BLEND_SATURATION);
+	PyModule_AddIntConstant(m, "IMB_BLEND_LUMINOSITY", IMB_BLEND_LUMINOSITY);
+	PyModule_AddIntConstant(m, "IMB_BLEND_COLOR", IMB_BLEND_COLOR);
+
+	PyModule_AddIntConstant(m, "IMB_BLEND_COPY", IMB_BLEND_COPY);
+	PyModule_AddIntConstant(m, "IMB_BLEND_COPY_RGB", IMB_BLEND_COPY_RGB);
+	PyModule_AddIntConstant(m, "IMB_BLEND_COPY_ALPHA", IMB_BLEND_COPY_ALPHA);
+
 	// init last error description
 	Exception::m_lastError = "";
 	

@@ -35,17 +35,14 @@
 /* ******************* Registration Function ********************** */
 
 struct ARegion;
-struct EnumPropertyItem;
 struct ListBase;
 struct Object;
 struct View3D;
 struct bContext;
-struct uiLayout;
 struct wmEvent;
 struct wmKeyConfig;
 struct wmKeyMap;
 struct wmOperatorType;
-struct wmWindowManager;
 
 void transform_keymap_for_space(struct wmKeyConfig *keyconf, struct wmKeyMap *keymap, int spaceid);
 void transform_operatortypes(void);
@@ -73,6 +70,7 @@ enum TfmMode {
 	TFM_BONE_ENVELOPE,
 	TFM_CURVE_SHRINKFATTEN,
 	TFM_MASK_SHRINKFATTEN,
+	TFM_GPENCIL_SHRINKFATTEN,
 	TFM_BONE_ROLL,
 	TFM_TIME_TRANSLATE,
 	TFM_TIME_SLIDE,
@@ -85,7 +83,8 @@ enum TfmMode {
 	TFM_ALIGN,
 	TFM_EDGE_SLIDE,
 	TFM_VERT_SLIDE,
-	TFM_SEQ_SLIDE
+	TFM_SEQ_SLIDE,
+	TFM_BONE_ENVELOPE_DIST,
 };
 
 /* TRANSFORM CONTEXTS */
@@ -99,6 +98,7 @@ enum TfmMode {
 #define CTX_MOVIECLIP       (1 << 6)
 #define CTX_MASK            (1 << 7)
 #define CTX_PAINT_CURVE     (1 << 8)
+#define CTX_GPENCIL_STROKES (1 << 9)
 
 /* Standalone call to get the transformation center corresponding to the current situation
  * returns 1 if successful, 0 otherwise (usually means there's no selection)
@@ -107,7 +107,6 @@ enum TfmMode {
 bool calculateTransformCenter(struct bContext *C, int centerMode, float cent3d[3], float cent2d[2]);
 
 struct TransInfo;
-struct ScrArea;
 struct Base;
 struct Scene;
 struct Object;
@@ -146,6 +145,7 @@ int BIF_countTransformOrientation(const struct bContext *C);
 #define P_CORRECT_UV    (1 << 8)
 #define P_NO_DEFAULTS   (1 << 10)
 #define P_NO_TEXSPACE   (1 << 11)
+#define P_GPENCIL_EDIT  (1 << 12)
 
 void Transform_Properties(struct wmOperatorType *ot, int flags);
 

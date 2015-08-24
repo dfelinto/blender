@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #ifndef __KERNEL_H__
@@ -32,7 +32,14 @@ void *kernel_osl_memory(KernelGlobals *kg);
 bool kernel_osl_use(KernelGlobals *kg);
 
 void kernel_const_copy(KernelGlobals *kg, const char *name, void *host, size_t size);
-void kernel_tex_copy(KernelGlobals *kg, const char *name, device_ptr mem, size_t width, size_t height, size_t depth, InterpolationType interpolation=INTERPOLATION_LINEAR);
+void kernel_tex_copy(KernelGlobals *kg,
+                     const char *name,
+                     device_ptr mem,
+                     size_t width,
+                     size_t height,
+                     size_t depth,
+                     InterpolationType interpolation=INTERPOLATION_LINEAR,
+                     ExtensionType extension = EXTENSION_REPEAT);
 
 void kernel_cpu_path_trace(KernelGlobals *kg, float *buffer, unsigned int *rng_state,
 	int sample, int x, int y, int offset, int stride);

@@ -41,7 +41,7 @@
 #include "BLI_string.h"
 #include "BLI_listbase.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_report.h"
 
@@ -51,6 +51,9 @@
 
 #include "UI_interface.h"
 #include "UI_resources.h"
+
+#include "WM_api.h"
+#include "WM_types.h"
 
 #include "interface_intern.h"
 
@@ -83,13 +86,21 @@ uiBut *uiDefAutoButR(uiBlock *block, PointerRNA *ptr, PropertyRNA *prop, int ind
 			int arraylen = RNA_property_array_length(ptr, prop);
 
 			if (arraylen && index == -1) {
-				if (ELEM(RNA_property_subtype(prop), PROP_COLOR, PROP_COLOR_GAMMA))
+				if (ELEM(RNA_property_subtype(prop), PROP_COLOR, PROP_COLOR_GAMMA)) {
 					but = uiDefButR_prop(block, UI_BTYPE_COLOR, 0, name, x1, y1, x2, y2, ptr, prop, -1, 0, 0, -1, -1, NULL);
+				}
+				else {
+					return NULL;
+				}
 			}
 			else if (RNA_property_subtype(prop) == PROP_PERCENTAGE || RNA_property_subtype(prop) == PROP_FACTOR)
 				but = uiDefButR_prop(block, UI_BTYPE_NUM_SLIDER, 0, name, x1, y1, x2, y2, ptr, prop, index, 0, 0, -1, -1, NULL);
 			else
 				but = uiDefButR_prop(block, UI_BTYPE_NUM, 0, name, x1, y1, x2, y2, ptr, prop, index, 0, 0, -1, -1, NULL);
+
+			if (RNA_property_flag(prop) & PROP_TEXTEDIT_UPDATE) {
+				UI_but_flag_enable(but, UI_BUT_TEXTEDIT_UPDATE);
+			}
 			break;
 		}
 		case PROP_ENUM:
@@ -107,6 +118,10 @@ uiBut *uiDefAutoButR(uiBlock *block, PointerRNA *ptr, PropertyRNA *prop, int ind
 				but = uiDefIconTextButR_prop(block, UI_BTYPE_TEXT, 0, icon, name, x1, y1, x2, y2, ptr, prop, index, 0, 0, -1, -1, NULL);
 			else
 				but = uiDefButR_prop(block, UI_BTYPE_TEXT, 0, name, x1, y1, x2, y2, ptr, prop, index, 0, 0, -1, -1, NULL);
+
+			if (RNA_property_flag(prop) & PROP_TEXTEDIT_UPDATE) {
+				UI_but_flag_enable(but, UI_BUT_TEXTEDIT_UPDATE);
+			}
 			break;
 		case PROP_POINTER:
 		{
@@ -142,9 +157,10 @@ uiBut *uiDefAutoButR(uiBlock *block, PointerRNA *ptr, PropertyRNA *prop, int ind
  * \a check_prop callback filters functions to avoid drawing certain properties,
  * in cases where PROP_HIDDEN flag can't be used for a property.
  */
-int uiDefAutoButsRNA(uiLayout *layout, PointerRNA *ptr,
-                     bool (*check_prop)(PointerRNA *, PropertyRNA *),
-                     const char label_align)
+int uiDefAutoButsRNA(
+        uiLayout *layout, PointerRNA *ptr,
+        bool (*check_prop)(PointerRNA *, PropertyRNA *),
+        const char label_align)
 {
 	uiLayout *split, *col;
 	int flag;
@@ -297,6 +313,34 @@ int UI_calc_float_precision(int prec, double value)
 	return prec;
 }
 
+bool UI_but_online_manual_id(const uiBut *but, char *r_str, size_t maxlength)
+{
+	if (but->rnapoin.id.data && but->rnapoin.data && but->rnaprop) {
+		BLI_snprintf(r_str, maxlength, "%s.%s", RNA_struct_identifier(but->rnapoin.type),
+		             RNA_property_identifier(but->rnaprop));
+		return true;
+	}
+	else if (but->optype) {
+		WM_operator_py_idname(r_str, but->optype->idname);
+		return true;
+	}
+
+	*r_str = '\0';
+	return false;
+}
+
+bool UI_but_online_manual_id_from_active(const struct bContext *C, char *r_str, size_t maxlength)
+{
+	uiBut *but = UI_context_active_but_get(C);
+
+	if (but) {
+		return UI_but_online_manual_id(but, r_str, maxlength);
+	}
+
+	*r_str = '\0';
+	return false;
+}
+
 
 /* -------------------------------------------------------------------- */
 /* Modal Button Store API */
@@ -387,6 +431,27 @@ void UI_butstore_unregister(uiButStore *bs_handle, uiBut **but_p)
 	}
 
 	BLI_assert(0);
+}
+
+/**
+ * Update the pointer for a registered button.
+ */
+bool UI_butstore_register_update(uiBlock *block, uiBut *but_dst, const uiBut *but_src)
+{
+	uiButStore *bs_handle;
+	bool found = false;
+
+	for (bs_handle = block->butstore.first; bs_handle; bs_handle = bs_handle->next) {
+		uiButStoreElem *bs_elem;
+		for (bs_elem = bs_handle->items.first; bs_elem; bs_elem = bs_elem->next) {
+			if (*bs_elem->but_p == but_src) {
+				*bs_elem->but_p = but_dst;
+				found = true;
+			}
+		}
+	}
+
+	return found;
 }
 
 /**

@@ -108,7 +108,7 @@ PyDoc_STRVAR(bpy_bm_update_edit_mesh_doc,
 "   :type mesh: :class:`bpy.types.Mesh`\n"
 "   :arg tessface: Option to recalculate n-gon tessellation.\n"
 "   :type tessface: boolean\n"
-"   :arg destructive: Use when grometry has been added or removed.\n"
+"   :arg destructive: Use when geometry has been added or removed.\n"
 "   :type destructive: boolean\n"
 );
 static PyObject *bpy_bm_update_edit_mesh(PyObject *UNUSED(self), PyObject *args, PyObject *kw)
@@ -116,11 +116,14 @@ static PyObject *bpy_bm_update_edit_mesh(PyObject *UNUSED(self), PyObject *args,
 	static const char *kwlist[] = {"mesh", "tessface", "destructive", NULL};
 	PyObject *py_me;
 	Mesh *me;
-	int do_tessface = true;
-	int is_destructive = true;
+	bool do_tessface = true;
+	bool is_destructive = true;
 
-	if (!PyArg_ParseTupleAndKeywords(args, kw, "O|ii:update_edit_mesh", (char **)kwlist,
-	                                 &py_me, &do_tessface, &is_destructive))
+	if (!PyArg_ParseTupleAndKeywords(
+	        args, kw, "O|O&O&:update_edit_mesh", (char **)kwlist,
+	        &py_me,
+	        PyC_ParseBool, &do_tessface,
+	        PyC_ParseBool, &is_destructive))
 	{
 		return NULL;
 	}

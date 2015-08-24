@@ -107,8 +107,9 @@ def print_arguments(args, bc):
 def validate_arguments(args, bc):
     opts_list = [
             'WITH_BF_FREESTYLE', 'WITH_BF_PYTHON', 'WITH_BF_PYTHON_SAFETY', 'WITH_BF_PYTHON_SECURITY', 'BF_PYTHON', 'BF_PYTHON_VERSION', 'BF_PYTHON_INC', 'BF_PYTHON_BINARY', 'BF_PYTHON_LIB', 'BF_PYTHON_LIBPATH', 'BF_PYTHON_LIBPATH_ARCH', 'WITH_BF_STATICPYTHON', 'WITH_OSX_STATICPYTHON', 'BF_PYTHON_LIB_STATIC', 'BF_PYTHON_DLL', 'BF_PYTHON_ABI_FLAGS',
+            'WITH_BF_AUDASPACE', 'BF_AUDASPACE_C_INC', 'BF_AUDASPACE_PY_INC', 'BF_AUDASPACE_DEF',
             'WITH_BF_OPENAL', 'BF_OPENAL', 'BF_OPENAL_INC', 'BF_OPENAL_LIB', 'BF_OPENAL_LIBPATH', 'WITH_BF_STATICOPENAL', 'BF_OPENAL_LIB_STATIC',
-            'WITH_BF_SDL', 'BF_SDL', 'BF_SDL_INC', 'BF_SDL_LIB', 'BF_SDL_LIBPATH',
+            'WITH_BF_SDL', 'BF_SDL', 'BF_SDL_INC', 'BF_SDL_LIB', 'BF_SDL_LIBPATH', 'WITH_BF_SDL_DYNLOAD',
             'WITH_BF_JACK', 'BF_JACK', 'BF_JACK_INC', 'BF_JACK_LIB', 'BF_JACK_LIBPATH', 'WITH_BF_JACK_DYNLOAD',
             'WITH_BF_SNDFILE', 'BF_SNDFILE', 'BF_SNDFILE_INC', 'BF_SNDFILE_LIB', 'BF_SNDFILE_LIBPATH', 'WITH_BF_STATICSNDFILE', 'BF_SNDFILE_LIB_STATIC',
             'BF_PTHREADS', 'BF_PTHREADS_INC', 'BF_PTHREADS_LIB', 'BF_PTHREADS_LIBPATH',
@@ -174,6 +175,7 @@ def validate_arguments(args, bc):
             'WITH_BF_CXX_GUARDEDALLOC',
             'WITH_BF_JEMALLOC', 'WITH_BF_STATICJEMALLOC', 'BF_JEMALLOC', 'BF_JEMALLOC_INC', 'BF_JEMALLOC_LIBPATH', 'BF_JEMALLOC_LIB', 'BF_JEMALLOC_LIB_STATIC',
             'BUILDBOT_BRANCH',
+            'WITH_BF_IME',
             'WITH_BF_3DMOUSE', 'WITH_BF_STATIC3DMOUSE', 'BF_3DMOUSE', 'BF_3DMOUSE_INC', 'BF_3DMOUSE_LIB', 'BF_3DMOUSE_LIBPATH', 'BF_3DMOUSE_LIB_STATIC',
             'WITH_BF_CYCLES', 'WITH_BF_CYCLES_CUDA_BINARIES', 'BF_CYCLES_CUDA_NVCC', 'BF_CYCLES_CUDA_NVCC', 'WITH_BF_CYCLES_CUDA_THREADED_COMPILE', 'BF_CYCLES_CUDA_ENV',
             'WITH_BF_OIIO', 'WITH_BF_STATICOIIO', 'BF_OIIO', 'BF_OIIO_INC', 'BF_OIIO_LIB', 'BF_OIIO_LIB_STATIC', 'BF_OIIO_LIBPATH',
@@ -181,7 +183,8 @@ def validate_arguments(args, bc):
             'WITH_BF_BOOST', 'WITH_BF_STATICBOOST', 'BF_BOOST', 'BF_BOOST_INC', 'BF_BOOST_LIB', 'BF_BOOST_LIB_INTERNATIONAL', 'BF_BOOST_LIB_STATIC', 'BF_BOOST_LIBPATH',
             'WITH_BF_LIBMV', 'WITH_BF_LIBMV_SCHUR_SPECIALIZATIONS',
             'WITH_BF_CYCLES_OSL', 'WITH_BF_STATICOSL', 'BF_OSL', 'BF_OSL_INC', 'BF_OSL_LIB', 'BF_OSL_LIBPATH', 'BF_OSL_LIB_STATIC', 'BF_OSL_COMPILER',
-            'WITH_BF_LLVM', 'WITH_BF_STATICLLVM', 'BF_LLVM', 'BF_LLVM_LIB', 'BF_LLVM_LIBPATH', 'BF_LLVM_LIB_STATIC', 'BF_PROGRAM_LINKFLAGS'
+            'WITH_BF_LLVM', 'WITH_BF_STATICLLVM', 'BF_LLVM', 'BF_LLVM_LIB', 'BF_LLVM_LIBPATH', 'BF_LLVM_LIB_STATIC', 'BF_PROGRAM_LINKFLAGS',
+            'WITH_BF_OPENSUBDIV', 'WITH_BF_STATICOPENSUBDIV', 'BF_OPENSUBDIV', 'BF_OPENSUBDIV_INC', 'BF_OPENSUBDIV_LIB', 'BF_OPENSUBDIV_LIBPATH', 'BF_OPENSUBDIV_LIB_STATIC'
             ]
 
     # Have options here that scons expects to be lists
@@ -197,7 +200,8 @@ def validate_arguments(args, bc):
             'C_WARN', 'CC_WARN', 'CXX_WARN',
             'LLIBS', 'PLATFORM_LINKFLAGS', 'MACOSX_ARCHITECTURE', 'MACOSX_SDK', 'XCODE_CUR_VER', 'C_COMPILER_ID',
             'BF_CYCLES_CUDA_BINARIES_ARCH', 'BF_PROGRAM_LINKFLAGS', 'MACOSX_DEPLOYMENT_TARGET',
-            'WITH_BF_CYCLES_DEBUG'
+            'WITH_BF_CYCLES_DEBUG', 'WITH_BF_CYCLES_LOGGING',
+            'WITH_BF_CPP11', 'WITH_BF_LEGACY_DEPSGRAPH',
     ]
 
 
@@ -295,11 +299,17 @@ def read_opts(env, cfg, args):
         ('BF_OPENAL_LIBPATH', 'Path to OpenAL library', ''),
         (BoolVariable('WITH_BF_STATICOPENAL', 'Staticly link to openal', False)),
 
+        (BoolVariable('WITH_BF_AUDASPACE', 'Build with audaspace if true', True)),
+        ('BF_AUDASPACE_C_INC', 'audaspace-c include path', ''),
+        ('BF_AUDASPACE_PY_INC', 'audaspace-py include path', ''),
+        ('BF_AUDASPACE_DEF', 'audaspace defines', ''),
+
         (BoolVariable('WITH_BF_SDL', 'Use SDL if true', False)),
         ('BF_SDL', 'SDL base path', ''),
         ('BF_SDL_INC', 'SDL include path', ''),
         ('BF_SDL_LIB', 'SDL library', ''),
         ('BF_SDL_LIBPATH', 'SDL library path', ''),
+        (BoolVariable('WITH_BF_SDL_DYNLOAD', 'Enable runtime dynamic SDL libraries loading (works only on Linux)', False)),
 
         (BoolVariable('WITH_BF_JACK', 'Enable jack support if true', True)),
         ('BF_JACK', 'jack base path', ''),
@@ -506,6 +516,8 @@ def read_opts(env, cfg, args):
         (BoolVariable('WITH_BF_PLAYER', 'Build blenderplayer if true', False)),
         (BoolVariable('WITH_BF_NOBLENDER', 'Do not build blender if true', False)),
 
+        (BoolVariable('WITH_BF_IME', 'Enable Input Method Editor (IME) for complex Asian character input', False)),
+
         (BoolVariable('WITH_BF_3DMOUSE', 'Build blender with support of 3D mouses', False)),
         (BoolVariable('WITH_BF_STATIC3DMOUSE', 'Staticly link to 3d mouse library', False)),
         ('BF_3DMOUSE', '3d mouse library base path', ''),
@@ -604,6 +616,7 @@ def read_opts(env, cfg, args):
         ('BF_CYCLES_CUDA_ENV', 'preset environement nvcc will execute in', ''),
         ('BF_CYCLES_CUDA_BINARIES_ARCH', 'CUDA architectures to compile binaries for', []),
         (BoolVariable('WITH_BF_CYCLES_DEBUG', 'Build Cycles engine with extra debugging capabilities', False)),
+        (BoolVariable('WITH_BF_CYCLES_LOGGING', 'Build Cycles engine with logging support', True)),
 
         (BoolVariable('WITH_BF_OIIO', 'Build with OpenImageIO', False)),
         (BoolVariable('WITH_BF_STATICOIIO', 'Statically link to OpenImageIO', False)),
@@ -648,7 +661,19 @@ def read_opts(env, cfg, args):
         ('BF_LLVM_LIBPATH', 'LLVM library path', ''),
         ('BF_LLVM_LIB_STATIC', 'LLVM static library', ''),
 
-        ('BF_PROGRAM_LINKFLAGS', 'Link flags applied only to final binaries (blender and blenderplayer, not makesrna/makesdna)', '')
+        ('BF_PROGRAM_LINKFLAGS', 'Link flags applied only to final binaries (blender and blenderplayer, not makesrna/makesdna)', ''),
+
+        (BoolVariable('WITH_BF_OPENSUBDIV', 'Build with OpenSubdiv library', False)),
+        (BoolVariable('WITH_BF_STATICOPENSUBDIV', 'Staticly link to OpenColorIO', False)),
+        ('BF_OPENSUBDIV', 'OpenSubdiv root path', ''),
+        ('BF_OPENSUBDIV_INC', 'OpenSubdiv include path', ''),
+        ('BF_OPENSUBDIV_LIB', 'OpenSubdiv library', ''),
+        ('BF_OPENSUBDIV_LIBPATH', 'OpenSubdiv library path', ''),
+        ('BF_OPENSUBDIV_LIB_STATIC', 'OpenSubdiv static library', ''),
+
+        (BoolVariable('WITH_BF_CPP11', '"Build with C++11 standard enabled, for development use only!', False)),
+
+        (BoolVariable('WITH_BF_LEGACY_DEPSGRAPH', 'Build Blender with legacy dependency graph', True)),
     ) # end of opts.AddOptions()
 
     return localopts

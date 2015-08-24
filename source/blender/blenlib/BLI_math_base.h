@@ -42,37 +42,43 @@
 #endif
 
 #ifndef M_PI
-#define M_PI        3.14159265358979323846
+#define M_PI        3.14159265358979323846  /* pi */
 #endif
 #ifndef M_PI_2
-#define M_PI_2      1.57079632679489661923
+#define M_PI_2      1.57079632679489661923  /* pi/2 */
+#endif
+#ifndef M_PI_4
+#define M_PI_4      0.78539816339744830962  /* pi/4 */
 #endif
 #ifndef M_SQRT2
-#define M_SQRT2     1.41421356237309504880
+#define M_SQRT2     1.41421356237309504880  /* sqrt(2) */
 #endif
 #ifndef M_SQRT1_2
-#define M_SQRT1_2   0.70710678118654752440
+#define M_SQRT1_2   0.70710678118654752440  /* 1/sqrt(2) */
 #endif
 #ifndef M_SQRT3
-#define M_SQRT3   1.7320508075688772
+#define M_SQRT3     1.73205080756887729352  /* sqrt(3) */
+#endif
+#ifndef M_SQRT1_3
+#define M_SQRT1_3   0.57735026918962576450  /* 1/sqrt(3) */
 #endif
 #ifndef M_1_PI
-#define M_1_PI      0.318309886183790671538
+#define M_1_PI      0.318309886183790671538  /* 1/pi */
 #endif
 #ifndef M_E
-#define M_E             2.7182818284590452354
+#define M_E         2.7182818284590452354  /* e */
 #endif
 #ifndef M_LOG2E
-#define M_LOG2E         1.4426950408889634074
+#define M_LOG2E     1.4426950408889634074  /* log_2 e */
 #endif
 #ifndef M_LOG10E
-#define M_LOG10E        0.43429448190325182765
+#define M_LOG10E    0.43429448190325182765  /* log_10 e */
 #endif
 #ifndef M_LN2
-#define M_LN2           0.69314718055994530942
+#define M_LN2       0.69314718055994530942  /* log_e 2 */
 #endif
 #ifndef M_LN10
-#define M_LN10          2.30258509299404568402
+#define M_LN10      2.30258509299404568402  /* log_e 10 */
 #endif
 
 #if defined(__GNUC__)
@@ -84,7 +90,7 @@ static const int NAN_INT = 0x7FC00000;
 #endif
 
 /* do not redefine functions from C99, POSIX.1-2001 or MSVC12 (partial C99) */
-#if !(defined(_ISOC99_SOURCE) || (defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 200112L) || (defined(_MSC_VER) && _MSC_VER >= 1800))
+#if !(defined(_ISOC99_SOURCE) || (defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 200112L) || defined(_MSC_VER))
 
 #ifndef sqrtf
 #define sqrtf(a) ((float)sqrt(a))
@@ -190,7 +196,12 @@ MINLINE int max_iii(int a, int b, int c);
 MINLINE int min_iiii(int a, int b, int c, int d);
 MINLINE int max_iiii(int a, int b, int c, int d);
 
+MINLINE int compare_ff(float a, float b, const float max_diff);
+MINLINE int compare_ff_relative(float a, float b, const float max_diff, const int max_ulps);
+
 MINLINE float signf(float f);
+MINLINE int signum_i_ex(float a, float eps);
+MINLINE int signum_i(float a);
 
 MINLINE float power_of_2(float f);
 
@@ -206,9 +217,7 @@ MINLINE int iroundf(float a);
 MINLINE int divide_round_i(int a, int b);
 MINLINE int mod_i(int i, int n);
 
-MINLINE unsigned int highest_order_bit_i(unsigned int n);
-MINLINE unsigned short highest_order_bit_s(unsigned short n);
-
+int pow_i(int base, int exp);
 double double_round(double x, int ndigits);
 
 #ifdef BLI_MATH_GCC_WARN_PRAGMA

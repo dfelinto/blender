@@ -31,7 +31,6 @@
 #include "BLI_sys_types.h"
 #include "BLI_utildefines.h"
 #include "BLI_fileops.h"
-#include "BLI_math.h"
 #ifdef __BIG_ENDIAN__
 #  include "BLI_endian_switch.h"
 #endif
@@ -58,7 +57,7 @@ static bool meshcache_read_pc2_head(FILE *fp, const int verts_tot,
 		return false;
 	}
 
-	if (strcmp(pc2_head->header, "POINTCACHE2") != 0) {
+	if (!STREQ(pc2_head->header, "POINTCACHE2")) {
 		*err_str = "Invalid header";
 		return false;
 	}

@@ -35,6 +35,8 @@
 #  pragma warning (disable:4786)
 #endif
 
+#include <stdio.h>
+
 #include "KX_Scene.h"
 #include "KX_PythonInit.h"
 #include "MT_assert.h"
@@ -42,7 +44,7 @@
 #include "KX_BlenderMaterial.h"
 #include "KX_FontObject.h"
 #include "RAS_IPolygonMaterial.h"
-#include "ListValue.h"
+#include "EXP_ListValue.h"
 #include "SCA_LogicManager.h"
 #include "SCA_TimeEventManager.h"
 //#include "SCA_AlwaysEventManager.h"
@@ -66,7 +68,7 @@
 #include "RAS_ICanvas.h"
 #include "RAS_BucketManager.h"
 
-#include "FloatValue.h"
+#include "EXP_FloatValue.h"
 #include "SCA_IController.h"
 #include "SCA_IActuator.h"
 #include "SG_Node.h"
@@ -94,12 +96,14 @@
 #include "KX_ObstacleSimulation.h"
 
 #ifdef WITH_BULLET
-#include "KX_SoftBodyDeformer.h"
+#  include "KX_SoftBodyDeformer.h"
+#endif
+
+#ifdef WITH_PYTHON
+#  include "EXP_PythonCallBack.h"
 #endif
 
 #include "KX_Light.h"
-
-#include <stdio.h>
 
 #include "BLI_task.h"
 
@@ -156,7 +160,9 @@ KX_Scene::KX_Scene(class SCA_IInputDevice* keyboarddevice,
 	m_networkDeviceInterface(ndi),
 	m_active_camera(NULL),
 	m_ueberExecutionPriority(0),
-	m_blenderScene(scene)
+	m_blenderScene(scene),
+	m_isActivedHysteresis(false),
+	m_lodHysteresisValue(0)
 {
 	m_suspendedtime = 0.0;
 	m_suspendeddelta = 0.0;
@@ -218,7 +224,7 @@ KX_Scene::KX_Scene(class SCA_IInputDevice* keyboarddevice,
 
 	m_bucketmanager=new RAS_BucketManager();
 	
-	bool showObstacleSimulation = scene->gm.flag & GAME_SHOW_OBSTACLE_SIMULATION;
+	bool showObstacleSimulation = (scene->gm.flag & GAME_SHOW_OBSTACLE_SIMULATION) != 0;
 	switch (scene->gm.obstacleSimulation)
 	{
 	case OBSTSIMULATION_TOI_rays:
@@ -235,6 +241,7 @@ KX_Scene::KX_Scene(class SCA_IInputDevice* keyboarddevice,
 	m_attr_dict = NULL;
 	m_draw_call_pre = NULL;
 	m_draw_call_post = NULL;
+	m_draw_setup_call_pre = NULL;
 #endif
 }
 
@@ -532,6 +539,8 @@ KX_GameObject* KX_Scene::AddNodeReplicaObject(class SG_IObject* node, class CVal
 	m_objectlist->Add(newobj->AddRef());
 	if (newobj->GetGameObjectType()==SCA_IObject::OBJ_LIGHT)
 		m_lightlist->Add(newobj->AddRef());
+	else if (newobj->GetGameObjectType()==SCA_IObject::OBJ_TEXT)
+		AddFont((KX_FontObject*)newobj);
 	newobj->AddMeshUser();
 
 	// logic cannot be replicated, until the whole hierarchy is replicated.
@@ -575,6 +584,10 @@ KX_GameObject* KX_Scene::AddNodeReplicaObject(class SG_IObject* node, class CVal
 		newctrl->SetNewClientInfo(newobj->getClientInfo());
 		newobj->SetPhysicsController(newctrl, newobj->IsDynamic());
 		newctrl->PostProcessReplica(motionstate, parentctrl);
+
+		// Child objects must be static
+		if (parent)
+			newctrl->SuspendDynamics();
 	}
 
 	return newobj;
@@ -803,13 +816,6 @@ void KX_Scene::DupliGroupRecurse(CValue* obj, int level)
 		// we can now add the graphic controller to the physic engine
 		replica->ActivateGraphicController(true);
 
-		// set references for dupli-group
-		// groupobj holds a list of all objects, that belongs to this group
-		groupobj->AddInstanceObjects(replica);
-
-		// every object gets the reference to its dupli-group object
-		replica->SetDupliGroupObject(groupobj);
-
 		// done with replica
 		replica->Release();
 	}
@@ -829,12 +835,6 @@ void KX_Scene::DupliGroupRecurse(CValue* obj, int level)
 		(*git)->Relink(&m_map_gameobject_to_replica);
 		// add the object in the layer of the parent
 		(*git)->SetLayer(groupobj->GetLayer());
-		// If the object was a light, we need to update it's RAS_LightObject as well
-		if ((*git)->GetGameObjectType()==SCA_IObject::OBJ_LIGHT)
-		{
-			KX_LightObject* lightobj = static_cast<KX_LightObject*>(*git);
-			lightobj->SetLayer(groupobj->GetLayer());
-		}
 	}
 
 	// replicate crosslinks etc. between logic bricks
@@ -846,9 +846,24 @@ void KX_Scene::DupliGroupRecurse(CValue* obj, int level)
 	// now look if object in the hierarchy have dupli group and recurse
 	for (git = m_logicHierarchicalGameObjects.begin();!(git==m_logicHierarchicalGameObjects.end());++git)
 	{
+		/* Replicate all constraints. */
+		if ((*git)->GetPhysicsController()) {
+			(*git)->GetPhysicsController()->ReplicateConstraints((*git), m_logicHierarchicalGameObjects);
+			(*git)->ClearConstraints();
+		}
+
 		if ((*git) != groupobj && (*git)->IsDupliGroup())
 			// can't instantiate group immediately as it destroys m_logicHierarchicalGameObjects
 			duplilist.push_back((*git));
+
+		if ((*git)->GetBlenderGroupObject() == blgroupobj) {
+			// set references for dupli-group
+			// groupobj holds a list of all objects, that belongs to this group
+			groupobj->AddInstanceObjects((*git));
+
+			// every object gets the reference to its dupli-group object
+			(*git)->SetDupliGroupObject(groupobj);
+		}
 	}
 
 	for (git = duplilist.begin(); !(git == duplilist.end()); ++git)
@@ -859,7 +874,7 @@ void KX_Scene::DupliGroupRecurse(CValue* obj, int level)
 
 
 SCA_IObject* KX_Scene::AddReplicaObject(class CValue* originalobject,
-										class CValue* parentobject,
+										class CValue* referenceobject,
 										int lifespan)
 {
 
@@ -867,19 +882,18 @@ SCA_IObject* KX_Scene::AddReplicaObject(class CValue* originalobject,
 	m_map_gameobject_to_replica.clear();
 	m_groupGameObjects.clear();
 
-	// todo: place a timebomb in the object, for temporarily objects :)
-	// lifespan of zero means 'this object lives forever'
 	KX_GameObject* originalobj = (KX_GameObject*) originalobject;
-	KX_GameObject* parentobj = (KX_GameObject*) parentobject;
+	KX_GameObject* referenceobj = (KX_GameObject*) referenceobject;
 
 	m_ueberExecutionPriority++;
 
 	// lets create a replica
 	KX_GameObject* replica = (KX_GameObject*) AddNodeReplicaObject(NULL,originalobj);
 
+	// add a timebomb to this object
+	// lifespan of zero means 'this object lives forever'
 	if (lifespan > 0)
 	{
-		// add a timebomb to this object
 		// for now, convert between so called frames and realtime
 		m_tempObjectList->Add(replica->AddRef());
 		// this convert the life from frames to sort-of seconds, hard coded 0.02 that assumes we have 50 frames per second
@@ -905,19 +919,20 @@ SCA_IObject* KX_Scene::AddReplicaObject(class CValue* originalobject,
 			replica->GetSGNode()->AddChild(childreplicanode);
 	}
 
-	// At this stage all the objects in the hierarchy have been duplicated,
-	// we can update the scenegraph, we need it for the duplication of logic
-	MT_Point3 newpos = ((KX_GameObject*) parentobject)->NodeGetWorldPosition();
-	replica->NodeSetLocalPosition(newpos);
+	if (referenceobj) {
+		// At this stage all the objects in the hierarchy have been duplicated,
+		// we can update the scenegraph, we need it for the duplication of logic
+		MT_Point3 newpos = referenceobj->NodeGetWorldPosition();
+		replica->NodeSetLocalPosition(newpos);
 
-	MT_Matrix3x3 newori = ((KX_GameObject*) parentobject)->NodeGetWorldOrientation();
-	replica->NodeSetLocalOrientation(newori);
-	
-	// get the rootnode's scale
-	MT_Vector3 newscale = parentobj->GetSGNode()->GetRootSGParent()->GetLocalScale();
+		MT_Matrix3x3 newori = referenceobj->NodeGetWorldOrientation();
+		replica->NodeSetLocalOrientation(newori);
 
-	// set the replica's relative scale with the rootnode's scale
-	replica->NodeSetRelativeScale(newscale);
+		// get the rootnode's scale
+		MT_Vector3 newscale = referenceobj->GetSGNode()->GetRootSGParent()->GetLocalScale();
+		// set the replica's relative scale with the rootnode's scale
+		replica->NodeSetRelativeScale(newscale);
+	}
 
 	replica->GetSGNode()->UpdateWorldData(0);
 	replica->GetSGNode()->SetBBox(originalobj->GetSGNode()->BBox());
@@ -937,13 +952,13 @@ SCA_IObject* KX_Scene::AddReplicaObject(class CValue* originalobject,
 	{
 		// this will also relink the actuators in the hierarchy
 		(*git)->Relink(&m_map_gameobject_to_replica);
-		// add the object in the layer of the parent
-		(*git)->SetLayer(parentobj->GetLayer());
-		// If the object was a light, we need to update it's RAS_LightObject as well
-		if ((*git)->GetGameObjectType()==SCA_IObject::OBJ_LIGHT)
-		{
-			KX_LightObject* lightobj = static_cast<KX_LightObject*>(*git);
-			lightobj->SetLayer(parentobj->GetLayer());
+		if (referenceobj) {
+			// add the object in the layer of the reference object
+			(*git)->SetLayer(referenceobj->GetLayer());
+		}
+		else {
+			// We don't know what layer set, so we set all visible layers in the blender scene.
+			(*git)->SetLayer(m_blenderScene->lay);
 		}
 	}
 
@@ -1078,6 +1093,16 @@ int KX_Scene::NewRemoveObject(class CValue* gameobj)
 		group->RemoveInstanceObject(newobj);
 	
 	newobj->RemoveMeshes();
+
+	switch (newobj->GetGameObjectType()) {
+		case SCA_IObject::OBJ_CAMERA:
+			m_cameras.remove((KX_Camera *)newobj);
+			break;
+		case SCA_IObject::OBJ_TEXT:
+			m_fonts.remove((KX_FontObject *)newobj);
+			break;
+	}
+
 	ret = 1;
 	if (newobj->GetGameObjectType()==SCA_IObject::OBJ_LIGHT && m_lightlist->RemoveValue(newobj))
 		ret = newobj->Release();
@@ -1093,19 +1118,16 @@ int KX_Scene::NewRemoveObject(class CValue* gameobj)
 		ret = newobj->Release();
 	if (m_animatedlist->RemoveValue(newobj))
 		ret = newobj->Release();
-		
+
+	/* Warning 'newobj' maye be freed now, only compare, don't access */
+
+
 	if (newobj == m_active_camera)
 	{
 		//no AddRef done on m_active_camera so no Release
 		//m_active_camera->Release();
 		m_active_camera = NULL;
 	}
-
-	// in case this is a camera
-	m_cameras.remove((KX_Camera*)newobj);
-
-	// in case this is a font
-	m_fonts.remove((KX_FontObject*)newobj);
 
 	/* currently does nothing, keep in case we need to Unregister something */
 #if 0
@@ -1502,6 +1524,15 @@ void KX_Scene::CalculateVisibleMeshes(RAS_IRasterizer* rasty,KX_Camera* cam, int
 	bool dbvt_culling = false;
 	if (m_dbvt_culling) 
 	{
+		/* Reset KX_GameObject m_bCulled to true before doing culling
+		 * since DBVT culling will only set it to false.
+		 * This is similar to what RAS_BucketManager does for RAS_MeshSlot culling.
+		 */
+		for (int i = 0; i < m_objectlist->GetCount(); i++) {
+			KX_GameObject *gameobj = static_cast<KX_GameObject*>(m_objectlist->GetValue(i));
+			gameobj->SetCulled(true);
+		}
+
 		// test culling through Bullet
 		MT_Vector4 planes[6];
 		// get the clip planes
@@ -1531,9 +1562,6 @@ void KX_Scene::CalculateVisibleMeshes(RAS_IRasterizer* rasty,KX_Camera* cam, int
 			MarkVisible(rasty, static_cast<KX_GameObject*>(m_objectlist->GetValue(i)), cam, layer);
 		}
 	}
-
-	// Now that we know visible meshes, update LoDs
-	UpdateObjectLods();
 }
 
 // logic stuff
@@ -1642,20 +1670,6 @@ static void update_anim_thread_func(TaskPool *pool, void *taskdata, int UNUSED(t
 
 void KX_Scene::UpdateAnimations(double curtime)
 {
-	KX_KetsjiEngine *engine = KX_GetActiveEngine();
-
-	if (engine->GetRestrictAnimationFPS())
-	{
-		// Handle the animations independently of the logic time step
-		double anim_timestep = 1.0 / GetAnimationFPS();
-		if (curtime - m_previousAnimTime < anim_timestep)
-			return;
-
-		// Sanity/debug print to make sure we're actually going at the fps we want (should be close to anim_timestep)
-		// printf("Anim fps: %f\n", 1.0/(m_clockTime - m_previousAnimTime));
-		m_previousAnimTime = curtime;
-	}
-
 	TaskPool *pool = BLI_task_pool_create(KX_GetActiveEngine()->GetTaskScheduler(), &curtime);
 
 	for (int i=0; i<m_animatedlist->GetCount(); ++i) {
@@ -1755,6 +1769,10 @@ void KX_Scene::RenderFonts()
 void KX_Scene::UpdateObjectLods(void)
 {
 	KX_GameObject* gameobj;
+
+	if (!this->m_active_camera)
+		return;
+
 	MT_Vector3 cam_pos = this->m_active_camera->NodeGetWorldPosition();
 
 	for (int i = 0; i < this->GetObjectList()->GetCount(); i++) {
@@ -1763,6 +1781,26 @@ void KX_Scene::UpdateObjectLods(void)
 			gameobj->UpdateLod(cam_pos);
 		}
 	}
+}
+
+void KX_Scene::SetLodHysteresis(bool active)
+{
+	m_isActivedHysteresis = active;
+}
+
+bool KX_Scene::IsActivedLodHysteresis(void)
+{
+	return m_isActivedHysteresis;
+}
+
+void KX_Scene::SetLodHysteresisValue(int hysteresisvalue)
+{
+	m_lodHysteresisValue = hysteresisvalue;
+}
+
+int KX_Scene::GetLodHysteresisValue(void)
+{
+	return m_lodHysteresisValue;
 }
 
 void KX_Scene::UpdateObjectActivity(void) 
@@ -1881,15 +1919,6 @@ static void MergeScene_LogicBrick(SCA_ILogicBrick* brick, KX_Scene *from, KX_Sce
 	brick->Replace_IScene(to);
 	brick->Replace_NetworkScene(to->GetNetworkScene());
 
-	/* near sensors have physics controllers */
-	KX_TouchSensor *touch_sensor = dynamic_cast<class KX_TouchSensor *>(brick);
-	if (touch_sensor) {
-		KX_TouchEventManager *tmgr = (KX_TouchEventManager*)from->GetLogicManager()->FindEventManager(SCA_EventManager::TOUCH_EVENTMGR);
-		touch_sensor->UnregisterSumo(tmgr);
-		touch_sensor->GetPhysicsController()->SetPhysicsEnvironment(to->GetPhysicsEnvironment());
-		touch_sensor->RegisterSumo(tmgr);
-	}
-
 	// If we end up replacing a KX_TouchEventManager, we need to make sure
 	// physics controllers are properly in place. In other words, do this
 	// after merging physics controllers!
@@ -1948,17 +1977,6 @@ static void MergeScene_GameObject(KX_GameObject* gameobj, KX_Scene *to, KX_Scene
 		{
 			SCA_IController *cont= *itc;
 			MergeScene_LogicBrick(cont, from, to);
-
-			vector<SCA_ISensor*> linkedsensors = cont->GetLinkedSensors();
-			vector<SCA_IActuator*> linkedactuators = cont->GetLinkedActuators();
-
-			for (vector<SCA_IActuator*>::iterator ita = linkedactuators.begin();!(ita==linkedactuators.end());++ita) {
-				MergeScene_LogicBrick(*ita, from, to);
-			}
-
-			for (vector<SCA_ISensor*>::iterator its = linkedsensors.begin();!(its==linkedsensors.end());++its) {
-				MergeScene_LogicBrick(*its, from, to);
-			}
 		}
 	}
 
@@ -1993,12 +2011,20 @@ static void MergeScene_GameObject(KX_GameObject* gameobj, KX_Scene *to, KX_Scene
 	if (gameobj->GetGameObjectType() == SCA_IObject::OBJ_CAMERA)
 		to->AddCamera((KX_Camera*)gameobj);
 
+	// All armatures should be in the animated object list to be umpdated.
+	if (gameobj->GetGameObjectType() == SCA_IObject::OBJ_ARMATURE)
+		to->AddAnimatedObject(gameobj);
+
 	/* Add the object to the scene's logic manager */
 	to->GetLogicManager()->RegisterGameObjectName(gameobj->GetName(), gameobj);
 	to->GetLogicManager()->RegisterGameObj(gameobj->GetBlenderObject(), gameobj);
 
-	for (int i=0; i<gameobj->GetMeshCount(); ++i)
-		to->GetLogicManager()->RegisterGameMeshName(gameobj->GetMesh(i)->GetName(), gameobj->GetBlenderObject());
+	for (int i = 0; i < gameobj->GetMeshCount(); ++i) {
+		RAS_MeshObject *meshobj = gameobj->GetMesh(i);
+		// Register the mesh object by name and blender object.
+		to->GetLogicManager()->RegisterGameMeshName(meshobj->GetName(), gameobj->GetBlenderObject());
+		to->GetLogicManager()->RegisterMeshName(meshobj->GetName(), meshobj);
+	}
 }
 
 bool KX_Scene::MergeScene(KX_Scene *other)
@@ -2042,6 +2068,28 @@ bool KX_Scene::MergeScene(KX_Scene *other)
 		MergeScene_GameObject(gameobj, this, other);
 	}
 
+	if (env) {
+		env->MergeEnvironment(env_other);
+		CListValue *otherObjects = other->GetObjectList();
+
+		// List of all physics objects to merge (needed by ReplicateConstraints).
+		std::vector<KX_GameObject *> physicsObjects;
+		for (unsigned int i = 0; i < otherObjects->GetCount(); ++i) {
+			KX_GameObject *gameobj = (KX_GameObject *)otherObjects->GetValue(i);
+			if (gameobj->GetPhysicsController()) {
+				physicsObjects.push_back(gameobj);
+			}
+		}
+
+		for (unsigned int i = 0; i < physicsObjects.size(); ++i) {
+			KX_GameObject *gameobj = physicsObjects[i];
+			// Replicate all constraints in the right physics environment.
+			gameobj->GetPhysicsController()->ReplicateConstraints(gameobj, physicsObjects);
+			gameobj->ClearConstraints();
+		}
+	}
+
+
 	GetTempObjectList()->MergeList(other->GetTempObjectList());
 	other->GetTempObjectList()->ReleaseAndRemoveAll();
 
@@ -2056,9 +2104,6 @@ bool KX_Scene::MergeScene(KX_Scene *other)
 
 	GetLightList()->MergeList(other->GetLightList());
 	other->GetLightList()->ReleaseAndRemoveAll();
-
-	if (env)
-		env->MergeEnvironment(env_other);
 
 	/* move materials across, assume they both use the same scene-converters
 	 * Do this after lights are merged so materials can use the lights in shaders
@@ -2112,30 +2157,10 @@ void KX_Scene::Render2DFilters(RAS_ICanvas* canvas)
 
 void KX_Scene::RunDrawingCallbacks(PyObject *cb_list)
 {
-	Py_ssize_t len;
+	if (!cb_list || PyList_GET_SIZE(cb_list) == 0)
+		return;
 
-	if (cb_list && (len=PyList_GET_SIZE(cb_list)))
-	{
-		PyObject *args = PyTuple_New(0); // save python creating each call
-		PyObject *func;
-		PyObject *ret;
-
-		// Iterate the list and run the callbacks
-		for (Py_ssize_t pos=0; pos < len; pos++)
-		{
-			func= PyList_GET_ITEM(cb_list, pos);
-			ret= PyObject_Call(func, args, NULL);
-			if (ret==NULL) {
-				PyErr_Print();
-				PyErr_Clear();
-			}
-			else {
-				Py_DECREF(ret);
-			}
-		}
-
-		Py_DECREF(args);
-	}
+	RunPythonCallBackList(cb_list, NULL, 0, 0);
 }
 
 //----------------------------------------------------------------------------
@@ -2321,6 +2346,19 @@ PyObject *KX_Scene::pyattr_get_lights(void *self_v, const KX_PYATTRIBUTE_DEF *at
 	return self->GetLightList()->GetProxy();
 }
 
+PyObject *KX_Scene::pyattr_get_world(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef)
+{
+	KX_Scene* self = static_cast<KX_Scene*>(self_v);
+	KX_WorldInfo *world = self->GetWorldInfo();
+
+	if (world->GetName() != "") {
+		return world->GetProxy();
+	}
+	else {
+		Py_RETURN_NONE;
+	}
+}
+
 PyObject *KX_Scene::pyattr_get_cameras(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef)
 {
 	/* With refcounts in this case...
@@ -2385,6 +2423,17 @@ PyObject *KX_Scene::pyattr_get_drawing_callback_post(void *self_v, const KX_PYAT
 	return self->m_draw_call_post;
 }
 
+PyObject *KX_Scene::pyattr_get_drawing_setup_callback_pre(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef)
+{
+	KX_Scene* self = static_cast<KX_Scene*>(self_v);
+
+	if (self->m_draw_setup_call_pre == NULL)
+		self->m_draw_setup_call_pre = PyList_New(0);
+
+	Py_INCREF(self->m_draw_setup_call_pre);
+	return self->m_draw_setup_call_pre;
+}
+
 int KX_Scene::pyattr_set_drawing_callback_pre(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef, PyObject *value)
 {
 	KX_Scene* self = static_cast<KX_Scene*>(self_v);
@@ -2419,6 +2468,22 @@ int KX_Scene::pyattr_set_drawing_callback_post(void *self_v, const KX_PYATTRIBUT
 	return PY_SET_ATTR_SUCCESS;
 }
 
+int KX_Scene::pyattr_set_drawing_setup_callback_pre(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef, PyObject *value)
+{
+	KX_Scene* self = static_cast<KX_Scene*>(self_v);
+
+	if (!PyList_CheckExact(value)) {
+		PyErr_SetString(PyExc_ValueError, "Expected a list");
+		return PY_SET_ATTR_FAIL;
+	}
+
+	Py_XDECREF(self->m_draw_setup_call_pre);
+	Py_INCREF(value);
+
+	self->m_draw_setup_call_pre = value;
+	return PY_SET_ATTR_SUCCESS;
+}
+
 PyObject *KX_Scene::pyattr_get_gravity(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef)
 {
 	KX_Scene* self = static_cast<KX_Scene*>(self_v);
@@ -2444,9 +2509,11 @@ PyAttributeDef KX_Scene::Attributes[] = {
 	KX_PYATTRIBUTE_RO_FUNCTION("objectsInactive",	KX_Scene, pyattr_get_objects_inactive),
 	KX_PYATTRIBUTE_RO_FUNCTION("lights",			KX_Scene, pyattr_get_lights),
 	KX_PYATTRIBUTE_RO_FUNCTION("cameras",			KX_Scene, pyattr_get_cameras),
+	KX_PYATTRIBUTE_RO_FUNCTION("world",				KX_Scene, pyattr_get_world),
 	KX_PYATTRIBUTE_RW_FUNCTION("active_camera",		KX_Scene, pyattr_get_active_camera, pyattr_set_active_camera),
 	KX_PYATTRIBUTE_RW_FUNCTION("pre_draw",			KX_Scene, pyattr_get_drawing_callback_pre, pyattr_set_drawing_callback_pre),
 	KX_PYATTRIBUTE_RW_FUNCTION("post_draw",			KX_Scene, pyattr_get_drawing_callback_post, pyattr_set_drawing_callback_post),
+	KX_PYATTRIBUTE_RW_FUNCTION("pre_draw_setup",	KX_Scene, pyattr_get_drawing_setup_callback_pre, pyattr_set_drawing_setup_callback_pre),
 	KX_PYATTRIBUTE_RW_FUNCTION("gravity",			KX_Scene, pyattr_get_gravity, pyattr_set_gravity),
 	KX_PYATTRIBUTE_BOOL_RO("suspended",				KX_Scene, m_suspend),
 	KX_PYATTRIBUTE_BOOL_RO("activity_culling",		KX_Scene, m_activity_culling),
@@ -2459,23 +2526,23 @@ KX_PYMETHODDEF_DOC(KX_Scene, addObject,
 "addObject(object, other, time=0)\n"
 "Returns the added object.\n")
 {
-	PyObject *pyob, *pyother;
-	KX_GameObject *ob, *other;
+	PyObject *pyob, *pyreference = Py_None;
+	KX_GameObject *ob, *reference;
 
 	int time = 0;
 
-	if (!PyArg_ParseTuple(args, "OO|i:addObject", &pyob, &pyother, &time))
+	if (!PyArg_ParseTuple(args, "O|Oi:addObject", &pyob, &pyreference, &time))
 		return NULL;
 
-	if (	!ConvertPythonToGameObject(pyob, &ob, false, "scene.addObject(object, other, time): KX_Scene (first argument)") ||
-			!ConvertPythonToGameObject(pyother, &other, false, "scene.addObject(object, other, time): KX_Scene (second argument)") )
+	if (!ConvertPythonToGameObject(pyob, &ob, false, "scene.addObject(object, reference, time): KX_Scene (first argument)") ||
+		!ConvertPythonToGameObject(pyreference, &reference, true, "scene.addObject(object, reference, time): KX_Scene (second argument)"))
 		return NULL;
 
 	if (!m_inactivelist->SearchValue(ob)) {
-		PyErr_Format(PyExc_ValueError, "scene.addObject(object, other, time): KX_Scene (first argument): object must be in an inactive layer");
+		PyErr_Format(PyExc_ValueError, "scene.addObject(object, reference, time): KX_Scene (first argument): object must be in an inactive layer");
 		return NULL;
 	}
-	SCA_IObject* replica = AddReplicaObject((SCA_IObject*)ob, other, time);
+	SCA_IObject *replica = AddReplicaObject((SCA_IObject*)ob, reference, time);
 	
 	// release here because AddReplicaObject AddRef's
 	// the object is added to the scene so we don't want python to own a reference

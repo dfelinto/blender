@@ -35,10 +35,7 @@ struct bContext;
 struct bAnimContext;
 struct SpaceAction;
 struct ARegion;
-struct wmWindowManager;
 struct wmOperatorType;
-struct ActKeysInc;
-struct bAnimListElem;
 
 /* internal exports only */
 
@@ -80,6 +77,7 @@ enum eActKeys_ColumnSelect_Mode {
 void ACTION_OT_previewrange_set(struct wmOperatorType *ot);
 void ACTION_OT_view_all(struct wmOperatorType *ot);
 void ACTION_OT_view_selected(struct wmOperatorType *ot);
+void ACTION_OT_view_frame(struct wmOperatorType *ot);
 
 void ACTION_OT_copy(struct wmOperatorType *ot);
 void ACTION_OT_paste(struct wmOperatorType *ot);
@@ -101,6 +99,14 @@ void ACTION_OT_snap(struct wmOperatorType *ot);
 void ACTION_OT_mirror(struct wmOperatorType *ot);
 
 void ACTION_OT_new(struct wmOperatorType *ot);
+void ACTION_OT_unlink(struct wmOperatorType *ot);
+
+void ACTION_OT_push_down(struct wmOperatorType *ot);
+void ACTION_OT_stash(struct wmOperatorType *ot);
+void ACTION_OT_stash_and_create(struct wmOperatorType *ot);
+
+void ACTION_OT_layer_next(struct wmOperatorType *ot);
+void ACTION_OT_layer_prev(struct wmOperatorType *ot);
 
 void ACTION_OT_markers_make_local(struct wmOperatorType *ot);
 

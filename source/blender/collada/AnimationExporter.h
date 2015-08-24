@@ -51,7 +51,6 @@ extern "C"
 #include "BKE_object.h"
 #include "BKE_constraint.h"
 #include "BIK_api.h"
-#include "BKE_global.h"
 #include "ED_object.h"
 }
 
@@ -104,7 +103,7 @@ protected:
 	const ExportSettings *export_settings;
 
 	void dae_animation(Object *ob, FCurve *fcu, char *transformName, bool is_param, Material *ma = NULL);
-    
+
 	void export_object_constraint_animation(Object *ob);
 
 	void export_morph_animation(Object *ob);
@@ -155,7 +154,7 @@ protected:
 	std::string create_xyz_source(float *v, int tot, const std::string& anim_id);
 
 	std::string create_4x4_source(std::vector<float> &frames, Object * ob_arm, Bone *bone, const std::string& anim_id);
-    
+
 	std::string create_interpolation_source(FCurve *fcu, const std::string& anim_id, const char *axis_name, bool *has_tangents);
 
 	std::string fake_interpolation_source(int tot, const std::string& anim_id, const char *axis_name);

@@ -244,8 +244,6 @@ static void SimpleDeformModifier_do(SimpleDeformModifierData *smd, struct Object
 }
 
 
-
-
 /* SimpleDeform */
 static void initData(ModifierData *md)
 {
@@ -289,6 +287,7 @@ static void foreachObjectLink(ModifierData *md, Object *ob,
 }
 
 static void updateDepgraph(ModifierData *md, DagForest *forest,
+                           struct Main *UNUSED(bmain),
                            struct Scene *UNUSED(scene),
                            Object *UNUSED(ob),
                            DagNode *obNode)
@@ -297,6 +296,18 @@ static void updateDepgraph(ModifierData *md, DagForest *forest,
 
 	if (smd->origin)
 		dag_add_relation(forest, dag_get_node(forest, smd->origin), obNode, DAG_RL_OB_DATA, "SimpleDeform Modifier");
+}
+
+static void updateDepsgraph(ModifierData *md,
+                            struct Main *UNUSED(bmain),
+                            struct Scene *UNUSED(scene),
+                            Object *UNUSED(ob),
+                            struct DepsNodeHandle *node)
+{
+	SimpleDeformModifierData *smd  = (SimpleDeformModifierData *)md;
+	if (smd->origin != NULL) {
+		DEG_add_object_relation(node, smd->origin, DEG_OB_COMP_TRANSFORM, "SimpleDeform Modifier");
+	}
 }
 
 static void deformVerts(ModifierData *md, Object *ob,
@@ -363,6 +374,7 @@ ModifierTypeInfo modifierType_SimpleDeform = {
 	/* freeData */          NULL,
 	/* isDisabled */        NULL,
 	/* updateDepgraph */    updateDepgraph,
+	/* updateDepsgraph */   updateDepsgraph,
 	/* dependsOnTime */     NULL,
 	/* dependsOnNormals */	NULL,
 	/* foreachObjectLink */ foreachObjectLink,

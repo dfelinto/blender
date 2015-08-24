@@ -45,7 +45,9 @@
 
 #include "BLI_linklist_stack.h"
 #include "BLI_stackdefines.h"
-#include "BLI_array.h"
+#ifndef NDEBUG
+#  include "BLI_array_utils.h"
+#endif
 
 #include "BLI_kdopbvh.h"
 
@@ -541,7 +543,7 @@ static void bm_isect_tri_tri(
 					if (((1 << i_b_e0) | (1 << i_b_e1)) & b_mask)
 						continue;
 					fac = line_point_factor_v3(fv_a[i_a]->co, fv_b[i_b_e0]->co, fv_b[i_b_e1]->co);
-					if ((fac > 0.0f - s->epsilon.eps) && (fac < 1.0 + s->epsilon.eps)) {
+					if ((fac > 0.0f - s->epsilon.eps) && (fac < 1.0f + s->epsilon.eps)) {
 						float ix[3];
 						interp_v3_v3v3(ix, fv_b[i_b_e0]->co, fv_b[i_b_e1]->co, fac);
 						if (len_squared_v3v3(ix, fv_a[i_a]->co) <= s->epsilon.eps2x_sq) {
@@ -579,7 +581,7 @@ static void bm_isect_tri_tri(
 					if (((1 << i_a_e0) | (1 << i_a_e1)) & a_mask)
 						continue;
 					fac = line_point_factor_v3(fv_b[i_b]->co, fv_a[i_a_e0]->co, fv_a[i_a_e1]->co);
-					if ((fac > 0.0 - s->epsilon.eps) && (fac < 1.0 + s->epsilon.eps)) {
+					if ((fac > 0.0f - s->epsilon.eps) && (fac < 1.0f + s->epsilon.eps)) {
 						float ix[3];
 						interp_v3_v3v3(ix, fv_a[i_a_e0]->co, fv_a[i_a_e1]->co, fac);
 						if (len_squared_v3v3(ix, fv_b[i_b]->co) <= s->epsilon.eps2x_sq) {
@@ -802,7 +804,7 @@ bool BM_mesh_intersect(
 	s.edgetri_cache = BLI_ghash_new(BLI_ghashutil_inthash_v4_p, BLI_ghashutil_inthash_v4_cmp, __func__);
 
 	s.edge_verts = BLI_ghash_ptr_new(__func__);
-	s.face_edges = BLI_ghash_ptr_new(__func__);
+	s.face_edges = BLI_ghash_int_new(__func__);
 	s.wire_edges = BLI_gset_ptr_new(__func__);
 	s.vert_dissolve = NULL;
 
@@ -857,7 +859,7 @@ bool BM_mesh_intersect(
 					{UNPACK3(looptris[i][2]->v->co)},
 				};
 
-				BLI_bvhtree_insert(tree_a, i, (float *)t_cos, 3);
+				BLI_bvhtree_insert(tree_a, i, (const float *)t_cos, 3);
 			}
 		}
 		BLI_bvhtree_balance(tree_a);
@@ -874,7 +876,7 @@ bool BM_mesh_intersect(
 					{UNPACK3(looptris[i][2]->v->co)},
 				};
 
-				BLI_bvhtree_insert(tree_b, i, (float *)t_cos, 3);
+				BLI_bvhtree_insert(tree_b, i, (const float *)t_cos, 3);
 			}
 		}
 		BLI_bvhtree_balance(tree_b);
@@ -883,7 +885,7 @@ bool BM_mesh_intersect(
 		tree_b = tree_a;
 	}
 
-	overlap = BLI_bvhtree_overlap(tree_b, tree_a, &tree_overlap_tot);
+	overlap = BLI_bvhtree_overlap(tree_b, tree_a, &tree_overlap_tot, NULL, NULL);
 
 	if (overlap) {
 		unsigned int i;
@@ -1004,7 +1006,7 @@ bool BM_mesh_intersect(
 					    !BM_vert_splice_check_double(v_prev, vi) &&
 					    !BM_vert_pair_share_face_check(v_prev, vi))
 					{
-						BM_vert_splice(bm, v_prev, vi);
+						BM_vert_splice(bm, vi, v_prev);
 					}
 					else {
 						copy_v3_v3(v_prev->co, vi->co);
@@ -1038,8 +1040,8 @@ bool BM_mesh_intersect(
 			}
 		}
 
-		splice_ls = MEM_mallocN((unsigned int)BLI_gset_size(s.wire_edges) * sizeof(*splice_ls), __func__);
-		STACK_INIT(splice_ls, (unsigned int)BLI_gset_size(s.wire_edges));
+		splice_ls = MEM_mallocN(BLI_gset_size(s.wire_edges) * sizeof(*splice_ls), __func__);
+		STACK_INIT(splice_ls, BLI_gset_size(s.wire_edges));
 
 		for (node = s.vert_dissolve; node; node = node->next) {
 			BMEdge *e_pair[2];
@@ -1226,7 +1228,7 @@ bool BM_mesh_intersect(
 						if (!BM_edge_exists(UNPACK2(splice_ls[i])) &&
 						    !BM_vert_splice_check_double(UNPACK2(splice_ls[i])))
 						{
-							BM_vert_splice(bm, UNPACK2(splice_ls[i]));
+							BM_vert_splice(bm, splice_ls[i][1], splice_ls[i][0]);
 						}
 					}
 				}
@@ -1265,10 +1267,8 @@ bool BM_mesh_intersect(
 			face_edges_split(bm, f, e_ls_base);
 		}
 	}
-#else
-	(void)totface_orig;
 #endif  /* USE_NET */
-
+	(void)totface_orig;
 
 #ifdef USE_SEPARATE
 	if (use_separate) {

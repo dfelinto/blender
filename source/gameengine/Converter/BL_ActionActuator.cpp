@@ -49,8 +49,8 @@
 #include "MT_Matrix4x4.h"
 
 #include "BKE_action.h"
-#include "FloatValue.h"
-#include "PyObjectPlus.h"
+#include "EXP_FloatValue.h"
+#include "EXP_PyObjectPlus.h"
 #include "KX_PyMath.h"
 
 extern "C" {
@@ -90,7 +90,7 @@ BL_ActionActuator::BL_ActionActuator(SCA_IObject *gameobj,
 	m_stridelength(stride),
 	m_layer_weight(layer_weight),
 	m_playtype(playtype),
-    m_blendmode(blend_mode),
+	m_blendmode(blend_mode),
 	m_priority(priority),
 	m_layer(layer),
 	m_ipo_flags(ipo_flags),
@@ -256,12 +256,14 @@ bool BL_ActionActuator::Update(double curtime, bool frame)
 	if ((m_flag & ACT_FLAG_PLAY_END) && (m_flag & ACT_FLAG_ACTIVE) && obj->IsActionDone(m_layer))
 	{
 		m_flag &= ~ACT_FLAG_ACTIVE;
-		m_flag &= ~ACT_FLAG_ATTEMPT_PLAY;
 
-		if (m_playtype == ACT_ACTION_PINGPONG)
+		if (m_playtype == ACT_ACTION_PINGPONG) {
 			m_flag ^= ACT_FLAG_REVERSE;
-		else
+		}
+		else {
+			m_flag &= ~ACT_FLAG_ATTEMPT_PLAY;
 			return false;
+		}
 	}
 	
 	// If a different action is playing, we've been overruled and are no longer active
@@ -320,8 +322,9 @@ bool BL_ActionActuator::Update(double curtime, bool frame)
 	
 			case ACT_ACTION_FLIPPER:
 				// Convert into a play action and play back to the beginning
+				float temp = end;
 				end = start;
-				start = obj->GetActionFrame(m_layer);
+				start = curr_action ? obj->GetActionFrame(m_layer) : temp;
 				obj->PlayAction(m_action->id.name+2, start, end, m_layer, m_priority, 0, BL_Action::ACT_MODE_PLAY, m_layer_weight, m_ipo_flags, 1.f, blendmode);
 
 				m_flag |= ACT_FLAG_PLAY_END;

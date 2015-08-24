@@ -33,7 +33,7 @@
 
 #include "BLI_math.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_global.h"
 #include "BKE_context.h"
@@ -264,7 +264,7 @@ static int mesh_bisect_exec(bContext *C, wmOperator *op)
 
 	invert_m4_m4(imat, obedit->obmat);
 	mul_m4_v3(imat, plane_co);
-	mul_mat3_m4_v3(imat, plane_no);
+	mul_transposed_mat3_m4_v3(obedit->obmat, plane_no);
 
 	EDBM_op_init(em, &bmop, op,
 	             "bisect_plane geom=%hvef plane_co=%v plane_no=%v dist=%f clear_inner=%b clear_outer=%b",
@@ -335,11 +335,11 @@ void MESH_OT_bisect(struct wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
 
-	prop = RNA_def_float_vector(ot->srna, "plane_co", 3, NULL, -FLT_MAX, FLT_MAX,
-	                            "Plane Point", "A point on the plane", -FLT_MAX, FLT_MAX);
+	prop = RNA_def_float_vector(ot->srna, "plane_co", 3, NULL, -1e12f, 1e12f,
+	                            "Plane Point", "A point on the plane", -1e4f, 1e4f);
 	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
-	prop = RNA_def_float_vector(ot->srna, "plane_no", 3, NULL, -FLT_MAX, FLT_MAX,
-	                            "Plane Normal", "The direction the plane points", -FLT_MAX, FLT_MAX);
+	prop = RNA_def_float_vector(ot->srna, "plane_no", 3, NULL, -1.0f, 1.0f,
+	                            "Plane Normal", "The direction the plane points", -1.0f, 1.0f);
 	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 
 	RNA_def_boolean(ot->srna, "use_fill", false, "Fill", "Fill in the cut");

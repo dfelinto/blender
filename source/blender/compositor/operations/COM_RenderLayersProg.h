@@ -41,7 +41,7 @@ extern "C" {
  * @todo: rename to operation.
  */
 class RenderLayersBaseProg : public NodeOperation {
-private:
+protected:
 	/**
 	 * Reference to the scene object.
 	 */
@@ -51,7 +51,12 @@ private:
 	 * layerId of the layer where this operation needs to get its data from
 	 */
 	short m_layerId;
-	
+
+	/**
+	 * viewName of the view to use (unless another view is specified by the node
+	 */
+	const char *m_viewName;
+
 	/**
 	 * cached instance to the float buffer inside the layer
 	 */
@@ -69,7 +74,6 @@ private:
 	 */
 	const RenderData *m_rd;
 
-protected:
 	/**
 	 * Constructor
 	 */
@@ -97,6 +101,8 @@ public:
 	void setRenderData(const RenderData *rd) { this->m_rd = rd; }
 	void setLayerId(short layerId) { this->m_layerId = layerId; }
 	short getLayerId() { return this->m_layerId; }
+	void setViewName(const char *viewName) { this->m_viewName = viewName; }
+	const char *getViewName() { return this->m_viewName; }
 	void initExecution();
 	void deinitExecution();
 	void executePixelSampled(float output[4], float x, float y, PixelSampler sampler);
@@ -105,6 +111,7 @@ public:
 class RenderLayersAOOperation : public RenderLayersBaseProg {
 public:
 	RenderLayersAOOperation();
+	void executePixelSampled(float output[4], float x, float y, PixelSampler sampler);
 };
 
 class RenderLayersAlphaProg : public RenderLayersBaseProg {
@@ -204,5 +211,13 @@ class RenderLayersUVOperation : public RenderLayersBaseProg {
 public:
 	RenderLayersUVOperation();
 };
+
+#ifdef WITH_CYCLES_DEBUG
+class RenderLayersCyclesDebugOperation : public RenderLayersBaseProg {
+public:
+	RenderLayersCyclesDebugOperation(int pass,
+	                                 int debug_pass_type);
+};
+#endif
 
 #endif

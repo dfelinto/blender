@@ -34,15 +34,14 @@
 #include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
 
-#include "BLI_listbase.h"
 #include "BLI_string.h"
 #include "BLI_string_utf8.h"
 #include "BLI_utildefines.h"
 
 #include "BKE_context.h"
-#include "BKE_animsys.h"
 #include "BKE_fcurve.h"
 #include "BKE_global.h"
+#include "BKE_nla.h"
 
 #include "ED_keyframing.h"
 
@@ -55,27 +54,41 @@
 
 #include "interface_intern.h"
 
-static FCurve *ui_but_get_fcurve(uiBut *but, bAction **action, bool *r_driven)
+static FCurve *ui_but_get_fcurve(uiBut *but, AnimData **adt, bAction **action, bool *r_driven, bool *r_special)
 {
 	/* for entire array buttons we check the first component, it's not perfect
 	 * but works well enough in typical cases */
 	int rnaindex = (but->rnaindex == -1) ? 0 : but->rnaindex;
 
-	return rna_get_fcurve_context_ui(but->block->evil_C, &but->rnapoin, but->rnaprop, rnaindex, action, r_driven);
+	return rna_get_fcurve_context_ui(but->block->evil_C, &but->rnapoin, but->rnaprop, rnaindex, adt, action, r_driven, r_special);
 }
 
 void ui_but_anim_flag(uiBut *but, float cfra)
 {
+	AnimData *adt;
+	bAction *act;
 	FCurve *fcu;
 	bool driven;
-
+	bool special;
+	
 	but->flag &= ~(UI_BUT_ANIMATED | UI_BUT_ANIMATED_KEY | UI_BUT_DRIVEN);
-
-	fcu = ui_but_get_fcurve(but, NULL, &driven);
-
+	
+	/* NOTE: "special" is reserved for special F-Curves stored on the animation data
+	 *        itself (which are used to animate properties of the animation data).
+	 *        We count those as "animated" too for now
+	 */
+	fcu = ui_but_get_fcurve(but, &adt, &act, &driven, &special);
+	
 	if (fcu) {
 		if (!driven) {
 			but->flag |= UI_BUT_ANIMATED;
+			
+			/* T41525 - When the active action is a NLA strip being edited, 
+			 * we need to correct the frame number to "look inside" the
+			 * remapped action
+			 */
+			if (adt)
+				cfra = BKE_nla_tweakedit_remap(adt, cfra, NLATIME_CONVERT_UNMAP);
 			
 			if (fcurve_frame_has_keyframe(fcu, cfra, 0))
 				but->flag |= UI_BUT_ANIMATED_KEY;
@@ -90,10 +103,10 @@ bool ui_but_anim_expression_get(uiBut *but, char *str, size_t maxlen)
 {
 	FCurve *fcu;
 	ChannelDriver *driver;
-	bool driven;
-
-	fcu = ui_but_get_fcurve(but, NULL, &driven);
-
+	bool driven, special;
+	
+	fcu = ui_but_get_fcurve(but, NULL, NULL, &driven, &special);
+	
 	if (fcu && driven) {
 		driver = fcu->driver;
 
@@ -110,9 +123,9 @@ bool ui_but_anim_expression_set(uiBut *but, const char *str)
 {
 	FCurve *fcu;
 	ChannelDriver *driver;
-	bool driven;
+	bool driven, special;
 
-	fcu = ui_but_get_fcurve(but, NULL, &driven);
+	fcu = ui_but_get_fcurve(but, NULL, NULL, &driven, &special);
 
 	if (fcu && driven) {
 		driver = fcu->driver;
@@ -207,10 +220,28 @@ void ui_but_anim_autokey(bContext *C, uiBut *but, Scene *scene, float cfra)
 	bAction *action;
 	FCurve *fcu;
 	bool driven;
+	bool special;
 
-	fcu = ui_but_get_fcurve(but, &action, &driven);
-
-	if (fcu && !driven) {
+	fcu = ui_but_get_fcurve(but, NULL, &action, &driven, &special);
+	
+	if (fcu == NULL)
+		return;
+	
+	if (special) {
+		/* NLA Strip property */
+		if (IS_AUTOKEY_ON(scene)) {
+			ReportList *reports = CTX_wm_reports(C);
+			PointerRNA ptr = {{NULL}};
+			PropertyRNA *prop = NULL;
+			int index;
+			
+			UI_context_active_but_prop_get(C, &ptr, &prop, &index);
+			
+			insert_keyframe_direct(reports, ptr, prop, fcu, cfra, 0);
+			WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
+		}
+	}
+	else if (!driven) {
 		id = but->rnapoin.id.data;
 
 		/* TODO: this should probably respect the keyingset only option for anim */
@@ -219,7 +250,14 @@ void ui_but_anim_autokey(bContext *C, uiBut *but, Scene *scene, float cfra)
 			short flag = ANIM_get_keyframing_flags(scene, 1);
 
 			fcu->flag &= ~FCURVE_SELECTED;
-			insert_keyframe(reports, id, action, ((fcu->grp) ? (fcu->grp->name) : (NULL)), fcu->rna_path, fcu->array_index, cfra, flag);
+
+			/* Note: We use but->rnaindex instead of fcu->array_index,
+			 *       because a button may control all items of an array at once.
+			 *       E.g., color wheels (see T42567). */
+			BLI_assert((fcu->array_index == but->rnaindex) || (but->rnaindex == -1));
+			insert_keyframe(reports, id, action, ((fcu->grp) ? (fcu->grp->name) : (NULL)),
+			                fcu->rna_path, but->rnaindex, cfra, flag);
+
 			WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
 		}
 	}

@@ -138,6 +138,10 @@ libmv_Reconstruction *libmv_solveModal(
   return NULL;
 }
 
+int libmv_reconstructionIsValid(libmv_Reconstruction * /*libmv_reconstruction*/) {
+  return 0;
+}
+
 int libmv_reprojectionPointForTrack(
     const libmv_Reconstruction * /*libmv_reconstruction*/,
     int /*track*/,
@@ -175,20 +179,20 @@ void libmv_reconstructionDestroy(
 
 /* ************ Feature detector ************ */
 
-libmv_Features *libmv_detectFeaturesByte(const unsigned char */*image_buffer*/,
+libmv_Features *libmv_detectFeaturesByte(const unsigned char * /*image_buffer*/,
                                          int /*width*/,
                                          int /*height*/,
                                          int /*channels*/,
-                                         libmv_DetectOptions */*options*/) {
+                                         libmv_DetectOptions * /*options*/) {
   return NULL;
 }
 
 struct libmv_Features *libmv_detectFeaturesFloat(
-    const float */*image_buffer*/,
+    const float * /*image_buffer*/,
     int /*width*/,
     int /*height*/,
     int /*channels*/,
-    libmv_DetectOptions */*options*/) {
+    libmv_DetectOptions * /*options*/) {
   return NULL;
 }
 
@@ -243,7 +247,7 @@ void libmv_cameraIntrinsicsSetThreads(
 }
 
 void libmv_cameraIntrinsicsExtractOptions(
-    const libmv_CameraIntrinsics */*libmv_intrinsics*/,
+    const libmv_CameraIntrinsics * /*libmv_intrinsics*/,
     libmv_CameraIntrinsicsOptions *camera_intrinsics_options) {
   memset(camera_intrinsics_options, 0, sizeof(libmv_CameraIntrinsicsOptions));
   camera_intrinsics_options->focal_length = 1.0;
@@ -351,7 +355,7 @@ void libmv_autoTrackSetOptions(libmv_AutoTrack* /*libmv_autotrack*/,
 
 int libmv_autoTrackMarker(libmv_AutoTrack* /*libmv_autotrack*/,
                           const libmv_TrackRegionOptions* /*libmv_options*/,
-                          libmv_Marker */*libmv_tracker_marker*/,
+                          libmv_Marker * /*libmv_tracker_marker*/,
                           libmv_TrackRegionResult* /*libmv_result*/)
 {
   return 0;
@@ -386,7 +390,7 @@ void libmv_FrameAccessorDestroy(libmv_FrameAccessor* /*frame_accessor*/)
 }
 
 int64_t libmv_frameAccessorgetTransformKey(
-    const libmv_FrameTransform */*transform*/)
+    const libmv_FrameTransform * /*transform*/)
 {
   return 0;
 }

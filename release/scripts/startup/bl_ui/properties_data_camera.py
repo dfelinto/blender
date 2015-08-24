@@ -22,7 +22,7 @@ from bpy.types import Panel, Menu
 from rna_prop_ui import PropertyPanel
 
 
-class CameraButtonsPanel():
+class CameraButtonsPanel:
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
     bl_context = "data"
@@ -36,6 +36,14 @@ class CameraButtonsPanel():
 class CAMERA_MT_presets(Menu):
     bl_label = "Camera Presets"
     preset_subdir = "camera"
+    preset_operator = "script.execute_preset"
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_GAME'}
+    draw = Menu.draw_preset
+
+
+class SAFE_AREAS_MT_presets(Menu):
+    bl_label = "Camera Presets"
+    preset_subdir = "safe_areas"
     preset_operator = "script.execute_preset"
     COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_GAME'}
     draw = Menu.draw_preset
@@ -98,6 +106,14 @@ class DATA_PT_lens(CameraButtonsPanel, Panel):
                     row = layout.row()
                     row.prop(ccam, "fisheye_lens", text="Lens")
                     row.prop(ccam, "fisheye_fov")
+                elif ccam.panorama_type == 'EQUIRECTANGULAR':
+                    row = layout.row()
+                    sub = row.column(align=True)
+                    sub.prop(ccam, "latitude_min")
+                    sub.prop(ccam, "latitude_max")
+                    sub = row.column(align=True)
+                    sub.prop(ccam, "longitude_min")
+                    sub.prop(ccam, "longitude_max")
             elif engine == 'BLENDER_RENDER':
                 row = col.row()
                 if cam.lens_unit == 'MILLIMETERS':
@@ -117,6 +133,34 @@ class DATA_PT_lens(CameraButtonsPanel, Panel):
         col.label(text="Clipping:")
         col.prop(cam, "clip_start", text="Start")
         col.prop(cam, "clip_end", text="End")
+
+
+class DATA_PT_camera_stereoscopy(CameraButtonsPanel, Panel):
+    bl_label = "Stereoscopy"
+    COMPAT_ENGINES = {'BLENDER_RENDER'}
+
+    @classmethod
+    def poll(cls, context):
+        render = context.scene.render
+        return (super().poll(context) and render.use_multiview and
+                render.views_format == 'STEREO_3D')
+
+    def draw(self, context):
+        layout = self.layout
+        # render = context.scene.render
+        st = context.camera.stereo
+
+        col = layout.column()
+        col.row().prop(st, "convergence_mode", expand=True)
+
+        sub = col.column()
+        sub.active = st.convergence_mode != 'PARALLEL'
+        sub.prop(st, "convergence_distance")
+
+        col.prop(st, "interocular_distance")
+
+        col.label(text="Pivot:")
+        col.row().prop(st, "pivot", expand=True)
 
 
 class DATA_PT_camera(CameraButtonsPanel, Panel):
@@ -161,16 +205,26 @@ class DATA_PT_camera_dof(CameraButtonsPanel, Panel):
         layout = self.layout
 
         cam = context.camera
-
-        layout.label(text="Focus:")
+        dof_options = cam.gpu_dof
 
         split = layout.split()
-        split.prop(cam, "dof_object", text="")
 
         col = split.column()
+        col.label(text="Focus:")
+        col.prop(cam, "dof_object", text="")
+        sub = col.column()
+        sub.active = (cam.dof_object is None)
+        sub.prop(cam, "dof_distance", text="Distance")
 
-        col.active = cam.dof_object is None
-        col.prop(cam, "dof_distance", text="Distance")
+        hq_support = dof_options.is_hq_supported
+        col = split.column(align=True)
+        col.label("Viewport:")
+        sub = col.column()
+        sub.active = hq_support
+        sub.prop(dof_options, "use_high_quality")
+        col.prop(dof_options, "fstop")
+        if dof_options.use_high_quality and hq_support:
+            col.prop(dof_options, "blades")
 
 
 class DATA_PT_camera_display(CameraButtonsPanel, Panel):
@@ -187,7 +241,7 @@ class DATA_PT_camera_display(CameraButtonsPanel, Panel):
         col = split.column()
         col.prop(cam, "show_limits", text="Limits")
         col.prop(cam, "show_mist", text="Mist")
-        col.prop(cam, "show_title_safe", text="Safe Areas")
+
         col.prop(cam, "show_sensor", text="Sensor")
         col.prop(cam, "show_name", text="Name")
 
@@ -202,10 +256,56 @@ class DATA_PT_camera_display(CameraButtonsPanel, Panel):
         sub.prop(cam, "passepartout_alpha", text="Alpha", slider=True)
 
 
+class DATA_PT_camera_safe_areas(CameraButtonsPanel, Panel):
+    bl_label = "Safe Areas"
+    bl_options = {'DEFAULT_CLOSED'}
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_GAME'}
+
+    def draw_header(self, context):
+        cam = context.camera
+
+        self.layout.prop(cam, "show_safe_areas", text="")
+
+    def draw(self, context):
+        layout = self.layout
+        safe_data = context.scene.safe_areas
+        camera = context.camera
+
+        draw_display_safe_settings(layout, safe_data, camera)
+
+
 class DATA_PT_custom_props_camera(CameraButtonsPanel, PropertyPanel, Panel):
     COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_GAME'}
     _context_path = "object.data"
     _property_type = bpy.types.Camera
+
+
+def draw_display_safe_settings(layout, safe_data, settings):
+    show_safe_areas = settings.show_safe_areas
+    show_safe_center = settings.show_safe_center
+
+    split = layout.split()
+
+    col = split.column()
+    row = col.row(align=True)
+    row.menu("SAFE_AREAS_MT_presets", text=bpy.types.SAFE_AREAS_MT_presets.bl_label)
+    row.operator("safe_areas.preset_add", text="", icon='ZOOMIN')
+    row.operator("safe_areas.preset_add", text="", icon='ZOOMOUT').remove_active = True
+
+    col = split.column()
+    col.prop(settings, "show_safe_center", text="Center-Cut Safe Areas")
+
+    split = layout.split()
+    col = split.column()
+    col.active = show_safe_areas
+    col.prop(safe_data, "title", slider=True)
+    col.prop(safe_data, "action", slider=True)
+
+    col = split.column()
+    col.active = show_safe_areas and show_safe_center
+    col.prop(safe_data, "title_center", slider=True)
+    col.prop(safe_data, "action_center", slider=True)
+
 
 if __name__ == "__main__":  # only for live edit.
     bpy.utils.register_module(__name__)

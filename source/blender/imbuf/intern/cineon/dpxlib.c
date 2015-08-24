@@ -67,7 +67,7 @@ static void fillDpxMainHeader(LogImageFile *dpx, DpxMainHeader *header, const ch
 	/* --- File header --- */
 	header->fileHeader.magic_num = swap_uint(DPX_FILE_MAGIC, dpx->isMSB);
 	header->fileHeader.offset = swap_uint(dpx->element[0].dataOffset, dpx->isMSB);
-	strcpy(header->fileHeader.version, "v2.0");
+	strcpy(header->fileHeader.version, "V2.0");
 	header->fileHeader.file_size = swap_uint(dpx->element[0].dataOffset + dpx->height * getRowLength(dpx->width, dpx->element[0]), dpx->isMSB);
 	header->fileHeader.ditto_key = 0;
 	header->fileHeader.gen_hdr_size = swap_uint(sizeof(DpxFileHeader) + sizeof(DpxImageHeader) + sizeof(DpxOrientationHeader), dpx->isMSB);
@@ -134,7 +134,7 @@ LogImageFile *dpxOpen(const unsigned char *byteStuff, int fromMemory, size_t buf
 {
 	DpxMainHeader header;
 	LogImageFile *dpx = (LogImageFile *)MEM_mallocN(sizeof(LogImageFile), __func__);
-	char *filename = (char *)byteStuff;
+	const char *filename = (const char *)byteStuff;
 	int i;
 
 	if (dpx == NULL) {
@@ -183,8 +183,10 @@ LogImageFile *dpxOpen(const unsigned char *byteStuff, int fromMemory, size_t buf
 		if (verbose) printf("DPX: File is LSB.\n");
 	}
 	else {
-		if (verbose) printf("DPX: Bad magic number %lu in \"%s\".\n",
-		                    (uintptr_t)header.fileHeader.magic_num, byteStuff);
+		if (verbose)  {
+			printf("DPX: Bad magic number %lu in \"%s\".\n",
+			       (uintptr_t)header.fileHeader.magic_num, byteStuff);
+		}
 		logImageClose(dpx);
 		return NULL;
 	}
@@ -364,7 +366,7 @@ LogImageFile *dpxOpen(const unsigned char *byteStuff, int fromMemory, size_t buf
 			printf("  Transfer characteristics: %d\n", dpx->element[i].transfer);
 			printf("  Packing: %d\n", dpx->element[i].packing);
 			printf("  Descriptor: %d\n", dpx->element[i].descriptor);
-			printf("  Data offset: %u\n", dpx->element[i].dataOffset);
+			printf("  Data offset: %d\n", dpx->element[i].dataOffset);
 			printf("  Reference low data: %u\n", dpx->element[i].refLowData);
 			printf("  Reference low quantity: %f\n", dpx->element[i].refLowQuantity);
 			printf("  Reference high data: %u\n", dpx->element[i].refHighData);

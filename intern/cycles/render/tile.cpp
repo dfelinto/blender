@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #include "tile.h"
@@ -28,6 +28,7 @@ TileManager::TileManager(bool progressive_, int num_samples_, int2 tile_size_, i
 	tile_size = tile_size_;
 	tile_order = tile_order_;
 	start_resolution = start_resolution_;
+	num_samples = num_samples_;
 	num_devices = num_devices_;
 	preserve_tile_device = preserve_tile_device_;
 	background = background_;
@@ -234,7 +235,7 @@ bool TileManager::next_tile(Tile& tile, int device)
 {
 	list<Tile>::iterator tile_it;
 	
-	if (background)
+	if(background)
 		tile_it = next_background_tile(device, tile_order);
 	else
 		tile_it = next_viewport_tile(device);

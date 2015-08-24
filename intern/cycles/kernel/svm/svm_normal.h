@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 CCL_NAMESPACE_BEGIN
@@ -28,10 +28,10 @@ ccl_device void svm_node_normal(KernelGlobals *kg, ShaderData *sd, float *stack,
 	direction.z = __int_as_float(node1.z);
 	direction = normalize(direction);
 
-	if (stack_valid(out_normal_offset))
+	if(stack_valid(out_normal_offset))
 		stack_store_float3(stack, out_normal_offset, direction);
 
-	if (stack_valid(out_dot_offset))
+	if(stack_valid(out_dot_offset))
 		stack_store_float(stack, out_dot_offset, dot(direction, normalize(normal)));
 }
 

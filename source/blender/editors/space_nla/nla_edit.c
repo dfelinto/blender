@@ -43,7 +43,7 @@
 #include "BLI_math.h"
 #include "BLI_utildefines.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_action.h"
 #include "BKE_fcurve.h"
@@ -111,6 +111,8 @@ static int nlaedit_enable_tweakmode_exec(bContext *C, wmOperator *op)
 	ListBase anim_data = {NULL, NULL};
 	bAnimListElem *ale;
 	int filter;
+	
+	const bool do_solo = RNA_boolean_get(op->ptr, "isolate_action");
 	bool ok = false;
 	
 	/* get editor data */
@@ -133,6 +135,15 @@ static int nlaedit_enable_tweakmode_exec(bContext *C, wmOperator *op)
 		
 		/* try entering tweakmode if valid */
 		ok |= BKE_nla_tweakmode_enter(adt);
+		
+		/* mark the active track as being "solo"? */
+		if (do_solo && adt->actstrip) {
+			NlaTrack *nlt = BKE_nlatrack_find_tweaked(adt);
+			
+			if (nlt && !(nlt->flag & NLATRACK_SOLO)) {
+				BKE_nlatrack_solo_toggle(adt, nlt);
+			}
+		}
 	}
 	
 	/* free temp data */
@@ -159,6 +170,8 @@ static int nlaedit_enable_tweakmode_exec(bContext *C, wmOperator *op)
  
 void NLA_OT_tweakmode_enter(wmOperatorType *ot)
 {
+	PropertyRNA *prop;
+	
 	/* identifiers */
 	ot->name = "Enter Tweak Mode";
 	ot->idname = "NLA_OT_tweakmode_enter";
@@ -170,16 +183,22 @@ void NLA_OT_tweakmode_enter(wmOperatorType *ot)
 	
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+	
+	/* properties */
+	prop = RNA_def_boolean(ot->srna, "isolate_action", 0, "Isolate Action",
+	                       "Enable 'solo' on the NLA Track containing the active strip, "
+	                       "to edit it without seeing the effects of the NLA stack");
+	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
 
 /* ------------- */
 
 /* NLA Editor internal API function for exiting tweakmode */
-bool nlaedit_disable_tweakmode(bAnimContext *ac)
+bool nlaedit_disable_tweakmode(bAnimContext *ac, bool do_solo)
 {
 	ListBase anim_data = {NULL, NULL};
 	bAnimListElem *ale;
-	int filter;
+	int filter;	
 	
 	/* get a list of the AnimData blocks being shown in the NLA */
 	filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_ANIMDATA);
@@ -195,7 +214,14 @@ bool nlaedit_disable_tweakmode(bAnimContext *ac)
 	for (ale = anim_data.first; ale; ale = ale->next) {
 		AnimData *adt = ale->data;
 		
-		/* to be sure, just exit tweakmode... */
+		/* clear solo flags */
+		if ((do_solo) & (adt->flag & ADT_NLA_SOLO_TRACK) &&
+		    (adt->flag & ADT_NLA_EDIT_ON)) 
+		{
+			BKE_nlatrack_solo_toggle(adt, NULL);
+		}
+		
+		/* to be sure that we're doing everything right, just exit tweakmode... */
 		BKE_nla_tweakmode_exit(adt);
 	}
 	
@@ -218,9 +244,11 @@ bool nlaedit_disable_tweakmode(bAnimContext *ac)
 }
 
 /* exit tweakmode operator callback */
-static int nlaedit_disable_tweakmode_exec(bContext *C, wmOperator *UNUSED(op))
+static int nlaedit_disable_tweakmode_exec(bContext *C, wmOperator *op)
 {
 	bAnimContext ac;
+	
+	const bool do_solo = RNA_boolean_get(op->ptr, "isolate_action");
 	bool ok = false;
 	
 	/* get editor data */
@@ -228,7 +256,7 @@ static int nlaedit_disable_tweakmode_exec(bContext *C, wmOperator *UNUSED(op))
 		return OPERATOR_CANCELLED;
 		
 	/* perform operation */
-	ok = nlaedit_disable_tweakmode(&ac);
+	ok = nlaedit_disable_tweakmode(&ac, do_solo);
 	
 	/* success? */
 	if (ok)
@@ -239,6 +267,8 @@ static int nlaedit_disable_tweakmode_exec(bContext *C, wmOperator *UNUSED(op))
  
 void NLA_OT_tweakmode_exit(wmOperatorType *ot)
 {
+	PropertyRNA *prop;
+	
 	/* identifiers */
 	ot->name = "Exit Tweak Mode";
 	ot->idname = "NLA_OT_tweakmode_exit";
@@ -250,6 +280,12 @@ void NLA_OT_tweakmode_exit(wmOperatorType *ot)
 	
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+	
+	/* properties */
+	prop = RNA_def_boolean(ot->srna, "isolate_action", 0, "Isolate Action",
+	                       "Disable 'solo' on any of the NLA Tracks after exiting tweak mode "
+	                       "to get things back to normal");
+	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
 
 /* *********************************************** */
@@ -382,7 +418,7 @@ static bool nla_channels_get_selected_extents(bAnimContext *ac, float *min, floa
 	y = (float)NLACHANNEL_FIRST;
 	
 	for (ale = anim_data.first; ale; ale = ale->next) {
-		bAnimChannelType *acf = ANIM_channel_get_typeinfo(ale);
+		const bAnimChannelType *acf = ANIM_channel_get_typeinfo(ale);
 		
 		/* must be selected... */
 		if (acf && acf->has_setting(ac, ale, ACHANNEL_SETTING_SELECT) && 
@@ -1372,11 +1408,15 @@ static int nlaedit_toggle_mute_exec(bContext *C, wmOperator *UNUSED(op))
 				/* just flip the mute flag for now */
 				// TODO: have a pre-pass to check if mute all or unmute all?
 				strip->flag ^= NLASTRIP_FLAG_MUTED;
+				
+				/* tag AnimData to get recalculated */
+				ale->update |= ANIM_UPDATE_DEPS;
 			}
 		}
 	}
 	
-	/* free temp data */
+	/* cleanup */
+	ANIM_animdata_update(&ac, &anim_data);
 	ANIM_animdata_freelist(&anim_data);
 	
 	/* set notifier that things have changed */
@@ -1436,7 +1476,9 @@ static int nlaedit_swap_exec(bContext *C, wmOperator *op)
 		if (BLI_listbase_is_empty(&nlt->strips) == false) {
 			NlaStrip *mstrip = (NlaStrip *)nlt->strips.first;
 			
-			if ((mstrip->flag & NLASTRIP_FLAG_TEMP_META) && (BLI_countlist(&mstrip->strips) == 2)) {
+			if ((mstrip->flag & NLASTRIP_FLAG_TEMP_META) &&
+			    (BLI_listbase_count_ex(&mstrip->strips, 3) == 2))
+			{
 				/* remove this temp meta, so that we can see the strips inside */
 				BKE_nlastrips_clear_metas(&nlt->strips, 0, 1);
 			}
@@ -2128,9 +2170,13 @@ static int nlaedit_snap_exec(bContext *C, wmOperator *op)
 		
 		/* remove the meta-strips now that we're done */
 		BKE_nlastrips_clear_metas(&nlt->strips, 0, 1);
+		
+		/* tag for recalculating the animation */
+		ale->update |= ANIM_UPDATE_DEPS;
 	}
 	
-	/* free temp data */
+	/* cleanup */
+	ANIM_animdata_update(&ac, &anim_data);
 	ANIM_animdata_freelist(&anim_data);
 	
 	/* refresh auto strip properties */
@@ -2179,7 +2225,7 @@ static int nla_fmodifier_add_invoke(bContext *C, wmOperator *UNUSED(op), const w
 	
 	/* start from 1 to skip the 'Invalid' modifier type */
 	for (i = 1; i < FMODIFIER_NUM_TYPES; i++) {
-		FModifierTypeInfo *fmi = get_fmodifier_typeinfo(i);
+		const FModifierTypeInfo *fmi = get_fmodifier_typeinfo(i);
 		
 		/* check if modifier is valid for this context */
 		if (fmi == NULL)
@@ -2244,6 +2290,7 @@ static int nla_fmodifier_add_exec(bContext *C, wmOperator *op)
 			
 			if (fcm) {
 				set_active_fmodifier(&strip->modifiers, fcm);
+				ale->update |= ANIM_UPDATE_DEPS;
 			}
 			else {
 				BKE_reportf(op->reports, RPT_ERROR,
@@ -2254,6 +2301,7 @@ static int nla_fmodifier_add_exec(bContext *C, wmOperator *op)
 	}
 	
 	/* free temp data */
+	ANIM_animdata_update(&ac, &anim_data);
 	ANIM_animdata_freelist(&anim_data);
 	
 	/* set notifier that things have changed */
@@ -2319,6 +2367,9 @@ static int nla_fmodifier_copy_exec(bContext *C, wmOperator *op)
 		}
 	}
 	
+	/* free temp data */
+	ANIM_animdata_freelist(&anim_data);
+	
 	/* successful or not? */
 	if (ok == 0) {
 		BKE_report(op->reports, RPT_ERROR, "No F-Modifiers available to be copied");
@@ -2373,10 +2424,12 @@ static int nla_fmodifier_paste_exec(bContext *C, wmOperator *op)
 		for (strip = nlt->strips.first; strip; strip = strip->next) {
 			// TODO: do we want to replace existing modifiers? add user pref for that!
 			ok += ANIM_fmodifiers_paste_from_buf(&strip->modifiers, 0);
+			ale->update |= ANIM_UPDATE_DEPS;
 		}
 	}
 	
 	/* clean up */
+	ANIM_animdata_update(&ac, &anim_data);
 	ANIM_animdata_freelist(&anim_data);
 	
 	/* successful or not? */

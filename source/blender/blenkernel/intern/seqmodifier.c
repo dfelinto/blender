@@ -39,7 +39,7 @@
 #include "BLI_utildefines.h"
 #include "BLI_math.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "DNA_sequence_types.h"
 
@@ -77,9 +77,9 @@ typedef struct ModifierThread {
 } ModifierThread;
 
 
-static ImBuf *modifier_mask_get(SequenceModifierData *smd, const SeqRenderData *context, int cfra, bool make_float)
+static ImBuf *modifier_mask_get(SequenceModifierData *smd, const SeqRenderData *context, int cfra, int fra_offset, bool make_float)
 {
-	return BKE_sequencer_render_mask_input(context, smd->mask_input_type, smd->mask_sequence, smd->mask_id, cfra, make_float);
+	return BKE_sequencer_render_mask_input(context, smd->mask_input_type, smd->mask_sequence, smd->mask_id, cfra, fra_offset, make_float);
 }
 
 static void modifier_init_handle(void *handle_v, int start_line, int tot_line, void *init_data_v)
@@ -164,7 +164,7 @@ static void colorBalance_apply(SequenceModifierData *smd, ImBuf *ibuf, ImBuf *ma
 }
 
 static SequenceModifierTypeInfo seqModifier_ColorBalance = {
-	CTX_N_(BLF_I18NCONTEXT_ID_SEQUENCE, "Color Balance"),  /* name */
+	CTX_N_(BLT_I18NCONTEXT_ID_SEQUENCE, "Color Balance"),  /* name */
 	"ColorBalanceModifierData",                            /* struct_name */
 	sizeof(ColorBalanceModifierData),                      /* struct_size */
 	colorBalance_init_data,                                /* init_data */
@@ -273,7 +273,7 @@ static void curves_apply(struct SequenceModifierData *smd, ImBuf *ibuf, ImBuf *m
 }
 
 static SequenceModifierTypeInfo seqModifier_Curves = {
-	CTX_N_(BLF_I18NCONTEXT_ID_SEQUENCE, "Curves"),   /* name */
+	CTX_N_(BLT_I18NCONTEXT_ID_SEQUENCE, "Curves"),   /* name */
 	"CurvesModifierData",                            /* struct_name */
 	sizeof(CurvesModifierData),                      /* struct_size */
 	curves_init_data,                                /* init_data */
@@ -381,7 +381,7 @@ static void hue_correct_apply(struct SequenceModifierData *smd, ImBuf *ibuf, ImB
 }
 
 static SequenceModifierTypeInfo seqModifier_HueCorrect = {
-	CTX_N_(BLF_I18NCONTEXT_ID_SEQUENCE, "Hue Correct"),    /* name */
+	CTX_N_(BLT_I18NCONTEXT_ID_SEQUENCE, "Hue Correct"),    /* name */
 	"HueCorrectModifierData",                              /* struct_name */
 	sizeof(HueCorrectModifierData),                        /* struct_size */
 	hue_correct_init_data,                                 /* init_data */
@@ -478,7 +478,7 @@ static void brightcontrast_apply(struct SequenceModifierData *smd, ImBuf *ibuf, 
 }
 
 static SequenceModifierTypeInfo seqModifier_BrightContrast = {
-	CTX_N_(BLF_I18NCONTEXT_ID_SEQUENCE, "Bright/Contrast"),   /* name */
+	CTX_N_(BLT_I18NCONTEXT_ID_SEQUENCE, "Bright/Contrast"),   /* name */
 	"BrightContrastModifierData",                             /* struct_name */
 	sizeof(BrightContrastModifierData),                       /* struct_size */
 	NULL,                                                     /* init_data */
@@ -531,19 +531,15 @@ static void maskmodifier_apply_threaded(int width, int height, unsigned char *re
 	}
 }
 
-static void maskmodifier_apply(struct SequenceModifierData *smd, ImBuf *ibuf, ImBuf *mask)
+static void maskmodifier_apply(struct SequenceModifierData *UNUSED(smd), ImBuf *ibuf, ImBuf *mask)
 {
-	BrightContrastModifierData *bcmd = (BrightContrastModifierData *) smd;
-	BrightContrastThreadData data;
+	// SequencerMaskModifierData *bcmd = (SequencerMaskModifierData *)smd;
 
-	data.bright = bcmd->bright;
-	data.contrast = bcmd->contrast;
-
-	modifier_apply_threaded(ibuf, mask, maskmodifier_apply_threaded, &data);
+	modifier_apply_threaded(ibuf, mask, maskmodifier_apply_threaded, NULL);
 }
 
 static SequenceModifierTypeInfo seqModifier_Mask = {
-	CTX_N_(BLF_I18NCONTEXT_ID_SEQUENCE, "Mask"), /* name */
+	CTX_N_(BLT_I18NCONTEXT_ID_SEQUENCE, "Mask"), /* name */
 	"SequencerMaskModifierData",                 /* struct_name */
 	sizeof(SequencerMaskModifierData),           /* struct_size */
 	NULL,                                        /* init_data */
@@ -567,7 +563,7 @@ static void sequence_modifier_type_info_init(void)
 #undef INIT_TYPE
 }
 
-SequenceModifierTypeInfo *BKE_sequence_modifier_type_info_get(int type)
+const SequenceModifierTypeInfo *BKE_sequence_modifier_type_info_get(int type)
 {
 	if (!modifierTypesInit) {
 		sequence_modifier_type_info_init();
@@ -580,7 +576,7 @@ SequenceModifierTypeInfo *BKE_sequence_modifier_type_info_get(int type)
 SequenceModifierData *BKE_sequence_modifier_new(Sequence *seq, const char *name, int type)
 {
 	SequenceModifierData *smd;
-	SequenceModifierTypeInfo *smti = BKE_sequence_modifier_type_info_get(type);
+	const SequenceModifierTypeInfo *smti = BKE_sequence_modifier_type_info_get(type);
 
 	smd = MEM_callocN(smti->struct_size, "sequence modifier");
 
@@ -627,7 +623,7 @@ void BKE_sequence_modifier_clear(Sequence *seq)
 
 void BKE_sequence_modifier_free(SequenceModifierData *smd)
 {
-	SequenceModifierTypeInfo *smti = BKE_sequence_modifier_type_info_get(smd->type);
+	const SequenceModifierTypeInfo *smti = BKE_sequence_modifier_type_info_get(smd->type);
 
 	if (smti && smti->free_data) {
 		smti->free_data(smd);
@@ -638,9 +634,9 @@ void BKE_sequence_modifier_free(SequenceModifierData *smd)
 
 void BKE_sequence_modifier_unique_name(Sequence *seq, SequenceModifierData *smd)
 {
-	SequenceModifierTypeInfo *smti = BKE_sequence_modifier_type_info_get(smd->type);
+	const SequenceModifierTypeInfo *smti = BKE_sequence_modifier_type_info_get(smd->type);
 
-	BLI_uniquename(&seq->modifiers, smd, CTX_DATA_(BLF_I18NCONTEXT_ID_SEQUENCE, smti->name), '.',
+	BLI_uniquename(&seq->modifiers, smd, CTX_DATA_(BLT_I18NCONTEXT_ID_SEQUENCE, smti->name), '.',
 	               offsetof(SequenceModifierData, name), sizeof(smd->name));
 }
 
@@ -660,7 +656,7 @@ ImBuf *BKE_sequence_modifier_apply_stack(const SeqRenderData *context, Sequence 
 	}
 
 	for (smd = seq->modifiers.first; smd; smd = smd->next) {
-		SequenceModifierTypeInfo *smti = BKE_sequence_modifier_type_info_get(smd->type);
+		const SequenceModifierTypeInfo *smti = BKE_sequence_modifier_type_info_get(smd->type);
 
 		/* could happen if modifier is being removed or not exists in current version of blender */
 		if (!smti)
@@ -671,7 +667,7 @@ ImBuf *BKE_sequence_modifier_apply_stack(const SeqRenderData *context, Sequence 
 			continue;
 
 		if (smti->apply) {
-			ImBuf *mask = modifier_mask_get(smd, context, cfra, ibuf->rect_float != NULL);
+			ImBuf *mask = modifier_mask_get(smd, context, cfra, seq->start, ibuf->rect_float != NULL);
 
 			if (processed_ibuf == ibuf)
 				processed_ibuf = IMB_dupImBuf(ibuf);
@@ -696,7 +692,7 @@ void BKE_sequence_modifier_list_copy(Sequence *seqn, Sequence *seq)
 
 	for (smd = seq->modifiers.first; smd; smd = smd->next) {
 		SequenceModifierData *smdn;
-		SequenceModifierTypeInfo *smti = BKE_sequence_modifier_type_info_get(smd->type);
+		const SequenceModifierTypeInfo *smti = BKE_sequence_modifier_type_info_get(smd->type);
 
 		smdn = MEM_dupallocN(smd);
 

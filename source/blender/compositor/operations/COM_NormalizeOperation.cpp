@@ -60,7 +60,7 @@ void NormalizeOperation::deinitExecution()
 	NodeOperation::deinitMutex();
 }
 
-bool NormalizeOperation::determineDependingAreaOfInterest(rcti *input, ReadBufferOperation *readOperation, rcti *output)
+bool NormalizeOperation::determineDependingAreaOfInterest(rcti * /*input*/, ReadBufferOperation *readOperation, rcti *output)
 {
 	rcti imageInput;
 	if (this->m_cachedInstance) return false;
@@ -104,7 +104,7 @@ void *NormalizeOperation::initializeTileData(rcti *rect)
 			if ((value < minv) && (value >= -BLENDER_ZMAX)) {
 				minv = value;
 			}
-			bc += 4;
+			bc ++;
 		}
 
 		minmult->x = minv;
@@ -118,7 +118,7 @@ void *NormalizeOperation::initializeTileData(rcti *rect)
 	return this->m_cachedInstance;
 }
 
-void NormalizeOperation::deinitializeTileData(rcti *rect, void *data)
+void NormalizeOperation::deinitializeTileData(rcti * /*rect*/, void * /*data*/)
 {
 	/* pass */
 }

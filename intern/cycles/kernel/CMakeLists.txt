@@ -1,3 +1,4 @@
+remove_extra_strict_flags()
 
 set(INC
 	.
@@ -11,9 +12,20 @@ set(INC_SYS
 )
 
 set(SRC
-	kernel.cpp
-	kernel.cl
-	kernel.cu
+	kernels/cpu/kernel.cpp
+	kernels/opencl/kernel.cl
+	kernels/opencl/kernel_data_init.cl
+	kernels/opencl/kernel_queue_enqueue.cl
+	kernels/opencl/kernel_scene_intersect.cl
+	kernels/opencl/kernel_lamp_emission.cl
+	kernels/opencl/kernel_background_buffer_update.cl
+	kernels/opencl/kernel_shader_eval.cl
+	kernels/opencl/kernel_holdout_emission_blurring_pathtermination_ao.cl
+	kernels/opencl/kernel_direct_lighting.cl
+	kernels/opencl/kernel_shadow_blocked.cl
+	kernels/opencl/kernel_next_iteration_setup.cl
+	kernels/opencl/kernel_sum_all_radiance.cl
+	kernels/cuda/kernel.cu
 )
 
 set(SRC_HEADERS
@@ -35,17 +47,22 @@ set(SRC_HEADERS
 	kernel_montecarlo.h
 	kernel_passes.h
 	kernel_path.h
+	kernel_path_branched.h
+	kernel_path_common.h
 	kernel_path_state.h
 	kernel_path_surface.h
 	kernel_path_volume.h
 	kernel_projection.h
+	kernel_queues.h
 	kernel_random.h
 	kernel_shader.h
+	kernel_shaderdata_vars.h
 	kernel_shadow.h
 	kernel_subsurface.h
 	kernel_textures.h
 	kernel_types.h
 	kernel_volume.h
+	kernel_work_stealing.h
 )
 
 set(SRC_CLOSURE_HEADERS
@@ -67,6 +84,7 @@ set(SRC_CLOSURE_HEADERS
 	closure/emissive.h
 	closure/volume.h
 )
+
 set(SRC_SVM_HEADERS
 	svm/svm.h
 	svm/svm_attribute.h
@@ -107,6 +125,7 @@ set(SRC_SVM_HEADERS
 	svm/svm_value.h
 	svm/svm_vector_transform.h
 	svm/svm_voronoi.h
+	svm/svm_voxel.h
 	svm/svm_wave.h
 )
 
@@ -118,22 +137,47 @@ set(SRC_GEOM_HEADERS
 	geom/geom_bvh_subsurface.h
 	geom/geom_bvh_traversal.h
 	geom/geom_bvh_volume.h
+	geom/geom_bvh_volume_all.h
 	geom/geom_curve.h
 	geom/geom_motion_curve.h
 	geom/geom_motion_triangle.h
 	geom/geom_object.h
 	geom/geom_primitive.h
+	geom/geom_qbvh.h
+	geom/geom_qbvh_shadow.h
+	geom/geom_qbvh_subsurface.h
+	geom/geom_qbvh_traversal.h
+	geom/geom_qbvh_volume.h
+	geom/geom_qbvh_volume_all.h
 	geom/geom_triangle.h
+	geom/geom_triangle_intersect.h
 	geom/geom_volume.h
 )
 
 set(SRC_UTIL_HEADERS
+	../util/util_atomic.h
 	../util/util_color.h
 	../util/util_half.h
 	../util/util_math.h
+	../util/util_math_fast.h
 	../util/util_transform.h
 	../util/util_types.h
 )
+
+set(SRC_SPLIT_HEADERS
+	split/kernel_background_buffer_update.h
+	split/kernel_data_init.h
+	split/kernel_direct_lighting.h
+	split/kernel_holdout_emission_blurring_pathtermination_ao.h
+	split/kernel_lamp_emission.h
+	split/kernel_next_iteration_setup.h
+	split/kernel_scene_intersect.h
+	split/kernel_shader_eval.h
+	split/kernel_shadow_blocked.h
+	split/kernel_split_common.h
+	split/kernel_sum_all_radiance.h
+)
+
 # CUDA module
 
 if(WITH_CYCLES_CUDA_BINARIES)
@@ -145,7 +189,7 @@ if(WITH_CYCLES_CUDA_BINARIES)
 	endif()
 
 	# CUDA version
-	execute_process (COMMAND ${CUDA_NVCC_EXECUTABLE} "--version" OUTPUT_VARIABLE NVCC_OUT)
+	execute_process(COMMAND ${CUDA_NVCC_EXECUTABLE} "--version" OUTPUT_VARIABLE NVCC_OUT)
 	string(REGEX REPLACE ".*release ([0-9]+)\\.([0-9]+).*" "\\1" CUDA_VERSION_MAJOR ${NVCC_OUT})
 	string(REGEX REPLACE ".*release ([0-9]+)\\.([0-9]+).*" "\\2" CUDA_VERSION_MINOR ${NVCC_OUT})
 	set(CUDA_VERSION "${CUDA_VERSION_MAJOR}${CUDA_VERSION_MINOR}")
@@ -159,12 +203,12 @@ if(WITH_CYCLES_CUDA_BINARIES)
 	endif()
 
 	# build for each arch
-	set(cuda_sources kernel.cu ${SRC_HEADERS} ${SRC_SVM_HEADERS} ${SRC_GEOM_HEADERS} ${SRC_CLOSURE_HEADERS} ${SRC_UTIL_HEADERS})
+	set(cuda_sources kernels/cuda/kernel.cu ${SRC_HEADERS} ${SRC_SVM_HEADERS} ${SRC_GEOM_HEADERS} ${SRC_CLOSURE_HEADERS} ${SRC_UTIL_HEADERS})
 	set(cuda_cubins)
 
 	macro(CYCLES_CUDA_KERNEL_ADD arch experimental)
 		if(${experimental})
-			set(cuda_extra_flags "-D__KERNEL_CUDA_EXPERIMENTAL__")
+			set(cuda_extra_flags "-D__KERNEL_EXPERIMENTAL__")
 			set(cuda_cubin kernel_experimental_${arch}.cubin)
 		else()
 			set(cuda_extra_flags "")
@@ -185,7 +229,7 @@ if(WITH_CYCLES_CUDA_BINARIES)
 			COMMAND ${CUDA_NVCC_EXECUTABLE}
 					-arch=${arch}
 					-m${CUDA_BITS}
-					--cubin ${CMAKE_CURRENT_SOURCE_DIR}/kernel.cu
+					--cubin ${CMAKE_CURRENT_SOURCE_DIR}/kernels/cuda/kernel.cu
 					-o ${CMAKE_CURRENT_BINARY_DIR}/${cuda_cubin}
 					--ptxas-options="-v"
 					${cuda_arch_flags}
@@ -233,20 +277,29 @@ include_directories(SYSTEM ${INC_SYS})
 
 if(CXX_HAS_SSE)
 	list(APPEND SRC
-		kernel_sse2.cpp
-		kernel_sse3.cpp
-		kernel_sse41.cpp
-		kernel_avx.cpp
-		kernel_avx2.cpp
+		kernels/cpu/kernel_sse2.cpp
+		kernels/cpu/kernel_sse3.cpp
+		kernels/cpu/kernel_sse41.cpp
 	)
 
-	set_source_files_properties(kernel_sse2.cpp PROPERTIES COMPILE_FLAGS "${CYCLES_SSE2_KERNEL_FLAGS}")
-	set_source_files_properties(kernel_sse3.cpp PROPERTIES COMPILE_FLAGS "${CYCLES_SSE3_KERNEL_FLAGS}")
-	set_source_files_properties(kernel_sse41.cpp PROPERTIES COMPILE_FLAGS "${CYCLES_SSE41_KERNEL_FLAGS}")
-	set_source_files_properties(kernel_avx.cpp PROPERTIES COMPILE_FLAGS "${CYCLES_AVX_KERNEL_FLAGS}")
-	set_source_files_properties(kernel_avx2.cpp PROPERTIES COMPILE_FLAGS "${CYCLES_AVX2_KERNEL_FLAGS}")
+	set_source_files_properties(kernels/cpu/kernel_sse2.cpp PROPERTIES COMPILE_FLAGS "${CYCLES_SSE2_KERNEL_FLAGS}")
+	set_source_files_properties(kernels/cpu/kernel_sse3.cpp PROPERTIES COMPILE_FLAGS "${CYCLES_SSE3_KERNEL_FLAGS}")
+	set_source_files_properties(kernels/cpu/kernel_sse41.cpp PROPERTIES COMPILE_FLAGS "${CYCLES_SSE41_KERNEL_FLAGS}")
 endif()
 
+if(CXX_HAS_AVX)
+	list(APPEND SRC
+		kernels/cpu/kernel_avx.cpp
+	)
+	set_source_files_properties(kernels/cpu/kernel_avx.cpp PROPERTIES COMPILE_FLAGS "${CYCLES_AVX_KERNEL_FLAGS}")
+endif()
+
+if(CXX_HAS_AVX2)
+	list(APPEND SRC
+		kernels/cpu/kernel_avx2.cpp
+	)
+	set_source_files_properties(kernels/cpu/kernel_avx2.cpp PROPERTIES COMPILE_FLAGS "${CYCLES_AVX2_KERNEL_FLAGS}")
+endif()
 
 add_library(cycles_kernel ${SRC} ${SRC_HEADERS} ${SRC_CLOSURE_HEADERS} ${SRC_SVM_HEADERS} ${SRC_GEOM_HEADERS})
 
@@ -264,11 +317,23 @@ endif()
 #add_custom_target(cycles_kernel_preprocess ALL DEPENDS ${KERNEL_PREPROCESSED})
 #delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "${KERNEL_PREPROCESSED}" ${CYCLES_INSTALL_PATH}/kernel)
 
-delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "kernel.cl" ${CYCLES_INSTALL_PATH}/kernel)
-delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "kernel.cu" ${CYCLES_INSTALL_PATH}/kernel)
+delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "kernels/opencl/kernel.cl" ${CYCLES_INSTALL_PATH}/kernel/kernels/opencl)
+delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "kernels/opencl/kernel_data_init.cl" ${CYCLES_INSTALL_PATH}/kernel/kernels/opencl)
+delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "kernels/opencl/kernel_queue_enqueue.cl" ${CYCLES_INSTALL_PATH}/kernel/kernels/opencl)
+delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "kernels/opencl/kernel_scene_intersect.cl" ${CYCLES_INSTALL_PATH}/kernel/kernels/opencl)
+delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "kernels/opencl/kernel_lamp_emission.cl" ${CYCLES_INSTALL_PATH}/kernel/kernels/opencl)
+delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "kernels/opencl/kernel_background_buffer_update.cl" ${CYCLES_INSTALL_PATH}/kernel/kernels/opencl)
+delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "kernels/opencl/kernel_shader_eval.cl" ${CYCLES_INSTALL_PATH}/kernel/kernels/opencl)
+delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "kernels/opencl/kernel_holdout_emission_blurring_pathtermination_ao.cl" ${CYCLES_INSTALL_PATH}/kernel/kernels/opencl)
+delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "kernels/opencl/kernel_direct_lighting.cl" ${CYCLES_INSTALL_PATH}/kernel/kernels/opencl)
+delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "kernels/opencl/kernel_shadow_blocked.cl" ${CYCLES_INSTALL_PATH}/kernel/kernels/opencl)
+delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "kernels/opencl/kernel_next_iteration_setup.cl" ${CYCLES_INSTALL_PATH}/kernel/kernels/opencl)
+delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "kernels/opencl/kernel_sum_all_radiance.cl" ${CYCLES_INSTALL_PATH}/kernel/kernels/opencl)
+delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "kernels/cuda/kernel.cu" ${CYCLES_INSTALL_PATH}/kernel/kernels/cuda)
 delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "${SRC_HEADERS}" ${CYCLES_INSTALL_PATH}/kernel)
 delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "${SRC_CLOSURE_HEADERS}" ${CYCLES_INSTALL_PATH}/kernel/closure)
 delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "${SRC_SVM_HEADERS}" ${CYCLES_INSTALL_PATH}/kernel/svm)
 delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "${SRC_GEOM_HEADERS}" ${CYCLES_INSTALL_PATH}/kernel/geom)
 delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "${SRC_UTIL_HEADERS}" ${CYCLES_INSTALL_PATH}/kernel)
+delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "${SRC_SPLIT_HEADERS}" ${CYCLES_INSTALL_PATH}/kernel/split)
 

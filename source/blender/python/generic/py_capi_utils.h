@@ -32,16 +32,22 @@ void			PyC_ObSpit(const char *name, PyObject *var);
 void			PyC_LineSpit(void);
 void			PyC_StackSpit(void);
 PyObject *		PyC_ExceptionBuffer(void);
+PyObject *		PyC_ExceptionBuffer_Simple(void);
 PyObject *		PyC_Object_GetAttrStringArgs(PyObject *o, Py_ssize_t n, ...);
 PyObject *		PyC_FrozenSetFromStrings(const char **strings);
 PyObject *		PyC_Err_Format_Prefix(PyObject *exception_type_prefix, const char *format, ...);
 void			PyC_FileAndNum(const char **filename, int *lineno);
 void			PyC_FileAndNum_Safe(const char **filename, int *lineno); /* checks python is running */
-int				PyC_AsArray(void *array, PyObject *value, const Py_ssize_t length,
-                            const PyTypeObject *type, const bool is_double, const char *error_prefix);
+int             PyC_AsArray_FAST(
+        void *array, PyObject *value_fast, const Py_ssize_t length,
+        const PyTypeObject *type, const bool is_double, const char *error_prefix);
+int             PyC_AsArray(
+        void *array, PyObject *value, const Py_ssize_t length,
+        const PyTypeObject *type, const bool is_double, const char *error_prefix);
 PyObject *      PyC_FromArray(const void *array, int length, const PyTypeObject *type,
                               const bool is_double, const char *error_prefix);
 void            PyC_Tuple_Fill(PyObject *tuple, PyObject *value);
+void            PyC_List_Fill(PyObject *list, PyObject *value);
 
 /* follow http://www.python.org/dev/peps/pep-0383/ */
 PyObject *      PyC_UnicodeFromByte(const char *str);
@@ -74,5 +80,7 @@ int       PyC_FlagSet_ToBitfield(PyC_FlagSet *items, PyObject *value, int *r_val
 PyObject *PyC_FlagSet_FromBitfield(PyC_FlagSet *items, int flag);
 
 int PyC_RunString_AsNumber(const char *expr, double *value, const char *filename);
+
+int PyC_ParseBool(PyObject *o, void *p);
 
 #endif  /* __PY_CAPI_UTILS_H__ */

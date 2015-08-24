@@ -32,6 +32,8 @@
 #include "BLI_math.h"
 #include "BLI_utildefines.h"
 
+#include "../generic/python_utildefines.h"
+
 #ifndef MATH_STANDALONE
 #  include "BLI_dynstr.h"
 #endif
@@ -64,7 +66,7 @@ static PyObject *Color_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 			                "more than a single arg given");
 			return NULL;
 	}
-	return Color_CreatePyObject(col, Py_NEW, type);
+	return Color_CreatePyObject(col, type);
 }
 
 /* -----------------------------METHODS---------------------------- */
@@ -107,7 +109,7 @@ static PyObject *Color_copy(ColorObject *self)
 	if (BaseMath_ReadCallback(self) == -1)
 		return NULL;
 
-	return Color_CreatePyObject(self->col, Py_NEW, Py_TYPE(self));
+	return Color_CreatePyObject(self->col, Py_TYPE(self));
 }
 static PyObject *Color_deepcopy(ColorObject *self, PyObject *args)
 {
@@ -187,7 +189,18 @@ static PyObject *Color_richcmpr(PyObject *a, PyObject *b, int op)
 			return NULL;
 	}
 
-	return Py_INCREF(res), res;
+	return Py_INCREF_RET(res);
+}
+
+static Py_hash_t Color_hash(ColorObject *self)
+{
+	if (BaseMath_ReadCallback(self) == -1)
+		return -1;
+
+	if (BaseMathObject_Prepare_ForHash(self) == -1)
+		return -1;
+
+	return mathutils_array_hash(self->col, COLOR_SIZE);
 }
 
 /* ---------------------SEQUENCE PROTOCOLS------------------------ */
@@ -220,8 +233,12 @@ static PyObject *Color_item(ColorObject *self, int i)
 /* sequence accessor (set) */
 static int Color_ass_item(ColorObject *self, int i, PyObject *value)
 {
-	float f = PyFloat_AsDouble(value);
+	float f;
 
+	if (BaseMath_Prepare_ForWrite(self) == -1)
+		return -1;
+
+	f = PyFloat_AsDouble(value);
 	if (f == -1 && PyErr_Occurred()) {  /* parsed item not a number */
 		PyErr_SetString(PyExc_TypeError,
 		                "color[item] = x: "
@@ -273,7 +290,7 @@ static int Color_ass_slice(ColorObject *self, int begin, int end, PyObject *seq)
 	int i, size;
 	float col[COLOR_SIZE];
 
-	if (BaseMath_ReadCallback(self) == -1)
+	if (BaseMath_ReadCallback_ForWrite(self) == -1)
 		return -1;
 
 	CLAMP(begin, 0, COLOR_SIZE);
@@ -411,7 +428,7 @@ static PyObject *Color_add(PyObject *v1, PyObject *v2)
 
 	add_vn_vnvn(col, color1->col, color2->col, COLOR_SIZE);
 
-	return Color_CreatePyObject(col, Py_NEW, Py_TYPE(v1));
+	return Color_CreatePyObject(col, Py_TYPE(v1));
 }
 
 /* addition in-place: obj += obj */
@@ -429,7 +446,7 @@ static PyObject *Color_iadd(PyObject *v1, PyObject *v2)
 	color1 = (ColorObject *)v1;
 	color2 = (ColorObject *)v2;
 
-	if (BaseMath_ReadCallback(color1) == -1 || BaseMath_ReadCallback(color2) == -1)
+	if (BaseMath_ReadCallback_ForWrite(color1) == -1 || BaseMath_ReadCallback(color2) == -1)
 		return NULL;
 
 	add_vn_vn(color1->col, color2->col, COLOR_SIZE);
@@ -460,7 +477,7 @@ static PyObject *Color_sub(PyObject *v1, PyObject *v2)
 
 	sub_vn_vnvn(col, color1->col, color2->col, COLOR_SIZE);
 
-	return Color_CreatePyObject(col, Py_NEW, Py_TYPE(v1));
+	return Color_CreatePyObject(col, Py_TYPE(v1));
 }
 
 /* subtraction in-place: obj -= obj */
@@ -478,7 +495,7 @@ static PyObject *Color_isub(PyObject *v1, PyObject *v2)
 	color1 = (ColorObject *)v1;
 	color2 = (ColorObject *)v2;
 
-	if (BaseMath_ReadCallback(color1) == -1 || BaseMath_ReadCallback(color2) == -1)
+	if (BaseMath_ReadCallback_ForWrite(color1) == -1 || BaseMath_ReadCallback(color2) == -1)
 		return NULL;
 
 	sub_vn_vn(color1->col, color2->col, COLOR_SIZE);
@@ -492,7 +509,7 @@ static PyObject *color_mul_float(ColorObject *color, const float scalar)
 {
 	float tcol[COLOR_SIZE];
 	mul_vn_vn_fl(tcol, color->col, COLOR_SIZE, scalar);
-	return Color_CreatePyObject(tcol, Py_NEW, Py_TYPE(color));
+	return Color_CreatePyObject(tcol, Py_TYPE(color));
 }
 
 
@@ -577,7 +594,7 @@ static PyObject *Color_imul(PyObject *v1, PyObject *v2)
 	ColorObject *color = (ColorObject *)v1;
 	float scalar;
 
-	if (BaseMath_ReadCallback(color) == -1)
+	if (BaseMath_ReadCallback_ForWrite(color) == -1)
 		return NULL;
 
 	/* only support color *= float */
@@ -603,7 +620,7 @@ static PyObject *Color_idiv(PyObject *v1, PyObject *v2)
 	ColorObject *color = (ColorObject *)v1;
 	float scalar;
 
-	if (BaseMath_ReadCallback(color) == -1)
+	if (BaseMath_ReadCallback_ForWrite(color) == -1)
 		return NULL;
 
 	/* only support color /= float */
@@ -639,7 +656,7 @@ static PyObject *Color_neg(ColorObject *self)
 		return NULL;
 
 	negate_vn_vn(tcol, self->col, COLOR_SIZE);
-	return Color_CreatePyObject(tcol, Py_NEW, Py_TYPE(self));
+	return Color_CreatePyObject(tcol, Py_TYPE(self));
 }
 
 
@@ -726,7 +743,7 @@ static int Color_channel_hsv_set(ColorObject *self, PyObject *value, void *type)
 		return -1;
 	}
 
-	if (BaseMath_ReadCallback(self) == -1)
+	if (BaseMath_ReadCallback_ForWrite(self) == -1)
 		return -1;
 
 	rgb_to_hsv_v(self->col, hsv);
@@ -753,9 +770,10 @@ static PyObject *Color_hsv_get(ColorObject *self, void *UNUSED(closure))
 	rgb_to_hsv(self->col[0], self->col[1], self->col[2], &(hsv[0]), &(hsv[1]), &(hsv[2]));
 
 	ret = PyTuple_New(3);
-	PyTuple_SET_ITEM(ret, 0, PyFloat_FromDouble(hsv[0]));
-	PyTuple_SET_ITEM(ret, 1, PyFloat_FromDouble(hsv[1]));
-	PyTuple_SET_ITEM(ret, 2, PyFloat_FromDouble(hsv[2]));
+	PyTuple_SET_ITEMS(ret,
+	        PyFloat_FromDouble(hsv[0]),
+	        PyFloat_FromDouble(hsv[1]),
+	        PyFloat_FromDouble(hsv[2]));
 	return ret;
 }
 
@@ -764,6 +782,9 @@ static int Color_hsv_set(ColorObject *self, PyObject *value, void *UNUSED(closur
 	float hsv[3];
 
 	if (mathutils_array_parse(hsv, 3, 3, value, "mathutils.Color.hsv = value") == -1)
+		return -1;
+
+	if (BaseMath_Prepare_ForWrite(self) == -1)
 		return -1;
 
 	CLAMP(hsv[0], 0.0f, 1.0f);
@@ -793,6 +814,7 @@ static PyGetSetDef Color_getseters[] = {
 	{(char *)"hsv", (getter)Color_hsv_get, (setter)Color_hsv_set, (char *)Color_hsv_doc, (void *)0},
 
 	{(char *)"is_wrapped", (getter)BaseMathObject_is_wrapped_get, (setter)NULL, BaseMathObject_is_wrapped_doc, NULL},
+	{(char *)"is_frozen",  (getter)BaseMathObject_is_frozen_get,  (setter)NULL, BaseMathObject_is_frozen_doc, NULL},
 	{(char *)"owner", (getter)BaseMathObject_owner_get, (setter)NULL, BaseMathObject_owner_doc, NULL},
 	{NULL, NULL, NULL, NULL, NULL}  /* Sentinel */
 };
@@ -803,12 +825,20 @@ static struct PyMethodDef Color_methods[] = {
 	{"copy", (PyCFunction) Color_copy, METH_NOARGS, Color_copy_doc},
 	{"__copy__", (PyCFunction) Color_copy, METH_NOARGS, Color_copy_doc},
 	{"__deepcopy__", (PyCFunction) Color_deepcopy, METH_VARARGS, Color_copy_doc},
+
+	/* base-math methods */
+	{"freeze", (PyCFunction)BaseMathObject_freeze, METH_NOARGS, BaseMathObject_freeze_doc},
 	{NULL, NULL, 0, NULL}
 };
 
 /* ------------------PY_OBECT DEFINITION-------------------------- */
 PyDoc_STRVAR(color_doc,
-"This object gives access to Colors in Blender."
+".. class:: Color(rgb)\n"
+"\n"
+"   This object gives access to Colors in Blender.\n"
+"\n"
+"   :param rgb: (r, g, b) color values\n"
+"   :type rgb: 3d vector\n"
 );
 PyTypeObject color_Type = {
 	PyVarObject_HEAD_INIT(NULL, 0)
@@ -824,7 +854,7 @@ PyTypeObject color_Type = {
 	&Color_NumMethods,              /* tp_as_number */
 	&Color_SeqMethods,              /* tp_as_sequence */
 	&Color_AsMapping,               /* tp_as_mapping */
-	NULL,                           /* tp_hash */
+	(hashfunc)Color_hash,           /* tp_hash */
 	NULL,                           /* tp_call */
 #ifndef MATH_STANDALONE
 	(reprfunc) Color_str,           /* tp_str */
@@ -862,40 +892,60 @@ PyTypeObject color_Type = {
 	NULL,                           /* tp_weaklist */
 	NULL                            /* tp_del */
 };
-/* ------------------------Color_CreatePyObject (internal)------------- */
-/* creates a new color object */
-/* pass Py_WRAP - if vector is a WRAPPER for data allocated by BLENDER
- *  (i.e. it was allocated elsewhere by MEM_mallocN())
- *   pass Py_NEW - if vector is not a WRAPPER and managed by PYTHON
- *  (i.e. it must be created here with PyMEM_malloc())*/
-PyObject *Color_CreatePyObject(float col[3], int type, PyTypeObject *base_type)
+
+PyObject *Color_CreatePyObject(
+        const float col[3],
+        PyTypeObject *base_type)
+{
+	ColorObject *self;
+	float *col_alloc;
+
+	col_alloc = PyMem_Malloc(COLOR_SIZE * sizeof(float));
+	if (UNLIKELY(col_alloc == NULL)) {
+		PyErr_SetString(PyExc_MemoryError,
+		                "Color(): "
+		                "problem allocating data");
+		return NULL;
+	}
+
+	self = BASE_MATH_NEW(ColorObject, color_Type, base_type);
+	if (self) {
+		self->col = col_alloc;
+
+		/* init callbacks as NULL */
+		self->cb_user = NULL;
+		self->cb_type = self->cb_subtype = 0;
+
+		/* NEW */
+		if (col)
+			copy_v3_v3(self->col, col);
+		else
+			zero_v3(self->col);
+
+		self->flag = BASE_MATH_FLAG_DEFAULT;
+	}
+	else {
+		PyMem_Free(col_alloc);
+	}
+
+	return (PyObject *)self;
+}
+
+PyObject *Color_CreatePyObject_wrap(
+        float col[3],
+        PyTypeObject *base_type)
 {
 	ColorObject *self;
 
-	self = base_type ?  (ColorObject *)base_type->tp_alloc(base_type, 0) :
-	                    (ColorObject *)PyObject_GC_New(ColorObject, &color_Type);
-
+	self = BASE_MATH_NEW(ColorObject, color_Type, base_type);
 	if (self) {
 		/* init callbacks as NULL */
 		self->cb_user = NULL;
 		self->cb_type = self->cb_subtype = 0;
 
-		if (type == Py_WRAP) {
-			self->col = col;
-			self->wrapped = Py_WRAP;
-		}
-		else if (type == Py_NEW) {
-			self->col = PyMem_Malloc(COLOR_SIZE * sizeof(float));
-			if (col)
-				copy_v3_v3(self->col, col);
-			else
-				zero_v3(self->col);
-
-			self->wrapped = Py_NEW;
-		}
-		else {
-			Py_FatalError("Color(): invalid type!");
-		}
+		/* WRAP */
+		self->col = col;
+		self->flag = BASE_MATH_FLAG_DEFAULT | BASE_MATH_FLAG_IS_WRAP;
 	}
 
 	return (PyObject *)self;
@@ -904,7 +954,7 @@ PyObject *Color_CreatePyObject(float col[3], int type, PyTypeObject *base_type)
 PyObject *Color_CreatePyObject_cb(PyObject *cb_user,
                                   unsigned char cb_type, unsigned char cb_subtype)
 {
-	ColorObject *self = (ColorObject *)Color_CreatePyObject(NULL, Py_NEW, NULL);
+	ColorObject *self = (ColorObject *)Color_CreatePyObject(NULL, NULL);
 	if (self) {
 		Py_INCREF(cb_user);
 		self->cb_user         = cb_user;

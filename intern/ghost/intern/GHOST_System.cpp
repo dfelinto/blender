@@ -169,7 +169,7 @@ GHOST_TSuccess GHOST_System::beginFullScreen(const GHOST_DisplaySetting& setting
 }
 
 
-GHOST_TSuccess GHOST_System::updateFullScreen(const GHOST_DisplaySetting& setting, GHOST_IWindow **window)
+GHOST_TSuccess GHOST_System::updateFullScreen(const GHOST_DisplaySetting& setting, GHOST_IWindow ** /*window*/)
 {
 	GHOST_TSuccess success = GHOST_kFailure;
 	GHOST_ASSERT(m_windowManager, "GHOST_System::updateFullScreen(): invalid window manager");
@@ -295,6 +295,15 @@ GHOST_TSuccess GHOST_System::getButtonState(GHOST_TButtonMask mask, bool& isDown
 	return success;
 }
 
+void GHOST_System::setNDOFDeadZone(float deadzone)
+{
+#ifdef WITH_INPUT_NDOF
+	this->m_ndofManager->setDeadZone(deadzone);
+#else
+	(void)deadzone;
+#endif
+}
+
 GHOST_TSuccess GHOST_System::init()
 {
 	m_timerManager = new GHOST_TimerManager();
@@ -350,6 +359,12 @@ GHOST_TSuccess GHOST_System::exit()
 GHOST_TSuccess GHOST_System::createFullScreenWindow(GHOST_Window **window, const GHOST_DisplaySetting &settings,
                                                     const bool stereoVisual, const GHOST_TUns16 numOfAASamples)
 {
+	GHOST_GLSettings glSettings = {0};
+
+	if (stereoVisual)
+		glSettings.flags |= GHOST_glStereoVisual;
+	glSettings.numOfAASamples = numOfAASamples;
+
 	/* note: don't use getCurrentDisplaySetting() because on X11 we may
 	 * be zoomed in and the desktop may be bigger then the viewport. */
 	GHOST_ASSERT(m_displayManager, "GHOST_System::createFullScreenWindow(): invalid display manager");
@@ -359,14 +374,13 @@ GHOST_TSuccess GHOST_System::createFullScreenWindow(GHOST_Window **window, const
 	    0, 0, settings.xPixels, settings.yPixels,
 	    GHOST_kWindowStateNormal,
 	    GHOST_kDrawingContextTypeOpenGL,
-	    stereoVisual,
-	    true,  /* exclusive */
-	    numOfAASamples);
+	    glSettings,
+	    true  /* exclusive */);
 	return (*window == NULL) ? GHOST_kFailure : GHOST_kSuccess;
 }
 
 
-int GHOST_System::confirmQuit(GHOST_IWindow *window) const
+int GHOST_System::confirmQuit(GHOST_IWindow * /*window*/) const
 {
 	return 1;
 }

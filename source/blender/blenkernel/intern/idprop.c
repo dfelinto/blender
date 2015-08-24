@@ -42,10 +42,18 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "BLI_strict_flags.h"
+
 /* IDPropertyTemplate is a union in DNA_ID.h */
 
+/**
+ * if the new is 'IDP_ARRAY_REALLOC_LIMIT' items less,
+ * than #IDProperty.totallen, reallocate anyway.
+ */
+#define IDP_ARRAY_REALLOC_LIMIT 200
+
 /*local size table.*/
-static char idp_size_table[] = {
+static size_t idp_size_table[] = {
 	1, /*strings*/
 	sizeof(int),
 	sizeof(float),
@@ -158,9 +166,8 @@ void IDP_ResizeIDPArray(IDProperty *prop, int newlen)
 	BLI_assert(prop->type == IDP_IDPARRAY);
 
 	/* first check if the array buffer size has room */
-	/* if newlen is 200 items less then totallen, reallocate anyway */
 	if (newlen <= prop->totallen) {
-		if (newlen < prop->len && prop->totallen - newlen < 200) {
+		if (newlen < prop->len && prop->totallen - newlen < IDP_ARRAY_REALLOC_LIMIT) {
 			int i;
 
 			for (i = newlen; i < prop->len; i++)
@@ -194,7 +201,7 @@ void IDP_ResizeIDPArray(IDProperty *prop, int newlen)
 	 */
 	newsize = newlen;
 	newsize = (newsize >> 3) + (newsize < 9 ? 3 : 6) + newsize;
-	prop->data.pointer = MEM_recallocN(prop->data.pointer, sizeof(IDProperty) * newsize);
+	prop->data.pointer = MEM_recallocN(prop->data.pointer, sizeof(IDProperty) * (size_t)newsize);
 	prop->len = newlen;
 	prop->totallen = newsize;
 }
@@ -235,8 +242,7 @@ void IDP_ResizeArray(IDProperty *prop, int newlen)
 	const bool is_grow = newlen >= prop->len;
 
 	/* first check if the array buffer size has room */
-	/* if newlen is 200 chars less then totallen, reallocate anyway */
-	if (newlen <= prop->totallen && prop->totallen - newlen < 200) {
+	if (newlen <= prop->totallen && prop->totallen - newlen < IDP_ARRAY_REALLOC_LIMIT) {
 		idp_resize_group_array(prop, newlen, prop->data.pointer);
 		prop->len = newlen;
 		return;
@@ -256,7 +262,8 @@ void IDP_ResizeArray(IDProperty *prop, int newlen)
 	if (is_grow == false)
 		idp_resize_group_array(prop, newlen, prop->data.pointer);
 
-	prop->data.pointer = MEM_recallocN(prop->data.pointer, idp_size_table[(int)prop->subtype] * newsize);
+	prop->data.pointer = MEM_recallocN(
+	        prop->data.pointer, idp_size_table[(int)prop->subtype] * (size_t)newsize);
 
 	if (is_grow == true)
 		idp_resize_group_array(prop, newlen, prop->data.pointer);
@@ -321,8 +328,8 @@ static IDProperty *IDP_CopyArray(const IDProperty *prop)
  *
  * \param st  The string to assign.
  * \param name  The property name.
- * \param maxlen  The size of the new string (including the \0 terminator)
- * \return
+ * \param maxlen  The size of the new string (including the \0 terminator).
+ * \return The new string property.
  */
 IDProperty *IDP_NewString(const char *st, const char *name, int maxlen)
 {
@@ -336,14 +343,14 @@ IDProperty *IDP_NewString(const char *st, const char *name, int maxlen)
 	}
 	else {
 		/* include null terminator '\0' */
-		int stlen = strlen(st) + 1;
+		int stlen = (int)strlen(st) + 1;
 
 		if (maxlen > 0 && maxlen < stlen)
 			stlen = maxlen;
 
-		prop->data.pointer = MEM_mallocN(stlen, "id property string 2");
+		prop->data.pointer = MEM_mallocN((size_t)stlen, "id property string 2");
 		prop->len = prop->totallen = stlen;
-		BLI_strncpy(prop->data.pointer, st, stlen);
+		BLI_strncpy(prop->data.pointer, st, (size_t)stlen);
 	}
 
 	prop->type = IDP_STRING;
@@ -374,18 +381,18 @@ void IDP_AssignString(IDProperty *prop, const char *st, int maxlen)
 	int stlen;
 
 	BLI_assert(prop->type == IDP_STRING);
-	stlen = strlen(st);
+	stlen = (int)strlen(st);
 	if (maxlen > 0 && maxlen < stlen)
 		stlen = maxlen;
 
 	if (prop->subtype == IDP_STRING_SUB_BYTE) {
 		IDP_ResizeArray(prop, stlen);
-		memcpy(prop->data.pointer, st, stlen);
+		memcpy(prop->data.pointer, st, (size_t)stlen);
 	}
 	else {
 		stlen++;
 		IDP_ResizeArray(prop, stlen);
-		BLI_strncpy(prop->data.pointer, st, stlen);
+		BLI_strncpy(prop->data.pointer, st, (size_t)stlen);
 	}
 }
 
@@ -395,7 +402,7 @@ void IDP_ConcatStringC(IDProperty *prop, const char *st)
 
 	BLI_assert(prop->type == IDP_STRING);
 
-	newlen = prop->len + strlen(st);
+	newlen = prop->len + (int)strlen(st);
 	/* we have to remember that prop->len includes the null byte for strings.
 	 * so there's no need to add +1 to the resize function.*/
 	IDP_ResizeArray(prop, newlen);
@@ -630,8 +637,8 @@ void IDP_MergeGroup(IDProperty *dest, const IDProperty *src, const bool do_overw
  *
  * The sanity check just means the property is not added to the group if another property
  * exists with the same name; the client code using ID properties then needs to detect this
- * (the function that adds new properties to groups, IDP_AddToGroup,returns 0 if a property can't
- * be added to the group, and 1 if it can) and free the property.
+ * (the function that adds new properties to groups, IDP_AddToGroup, returns false if a property can't
+ * be added to the group, and true if it can) and free the property.
  *
  * Currently the code to free ID properties is designed to leave the actual struct
  * you pass it un-freed, this is needed for how the system works.  This means
@@ -646,10 +653,10 @@ bool IDP_AddToGroup(IDProperty *group, IDProperty *prop)
 	if (IDP_GetPropertyFromGroup(group, prop->name) == NULL) {
 		group->len++;
 		BLI_addtail(&group->data.group, prop);
-		return 1;
+		return true;
 	}
 
-	return 0;
+	return false;
 }
 
 /**
@@ -663,10 +670,10 @@ bool IDP_InsertToGroup(IDProperty *group, IDProperty *previous, IDProperty *pnew
 	if (IDP_GetPropertyFromGroup(group, pnew->name) == NULL) {
 		group->len++;
 		BLI_insertlinkafter(&group->data.group, previous, pnew);
-		return 1;
+		return true;
 	}
 
-	return 0;
+	return false;
 }
 
 /**
@@ -768,11 +775,11 @@ IDProperty *IDP_GetProperties(ID *id, const bool create_if_needed)
 bool IDP_EqualsProperties_ex(IDProperty *prop1, IDProperty *prop2, const bool is_strict)
 {
 	if (prop1 == NULL && prop2 == NULL)
-		return 1;
+		return true;
 	else if (prop1 == NULL || prop2 == NULL)
-		return is_strict ? 0 : 1;
+		return is_strict ? false : true;
 	else if (prop1->type != prop2->type)
-		return 0;
+		return false;
 
 	switch (prop1->type) {
 		case IDP_INT:
@@ -795,27 +802,32 @@ bool IDP_EqualsProperties_ex(IDProperty *prop1, IDProperty *prop2, const bool is
 		case IDP_DOUBLE:
 			return (IDP_Double(prop1) == IDP_Double(prop2));
 		case IDP_STRING:
-			return ((prop1->len == prop2->len) && strncmp(IDP_String(prop1), IDP_String(prop2), prop1->len) == 0);
+		{
+			return (((prop1->len == prop2->len) &&
+			         STREQLEN(IDP_String(prop1), IDP_String(prop2), (size_t)prop1->len)));
+		}
 		case IDP_ARRAY:
 			if (prop1->len == prop2->len && prop1->subtype == prop2->subtype) {
-				return memcmp(IDP_Array(prop1), IDP_Array(prop2), idp_size_table[(int)prop1->subtype] * prop1->len);
+				return (memcmp(IDP_Array(prop1),
+				               IDP_Array(prop2),
+				               idp_size_table[(int)prop1->subtype] * (size_t)prop1->len) == 0);
 			}
-			return 0;
+			return false;
 		case IDP_GROUP:
 		{
 			IDProperty *link1, *link2;
 
 			if (is_strict && prop1->len != prop2->len)
-				return 0;
+				return false;
 
 			for (link1 = prop1->data.group.first; link1; link1 = link1->next) {
 				link2 = IDP_GetPropertyFromGroup(prop2, link1->name);
 
 				if (!IDP_EqualsProperties_ex(link1, link2, is_strict))
-					return 0;
+					return false;
 			}
 
-			return 1;
+			return true;
 		}
 		case IDP_IDPARRAY:
 		{
@@ -824,12 +836,12 @@ bool IDP_EqualsProperties_ex(IDProperty *prop1, IDProperty *prop2, const bool is
 			int i;
 
 			if (prop1->len != prop2->len)
-				return 0;
+				return false;
 
 			for (i = 0; i < prop1->len; i++)
 				if (!IDP_EqualsProperties(&array1[i], &array2[i]))
-					return 0;
-			return 1;
+					return false;
+			return true;
 		}
 		default:
 			/* should never get here */
@@ -837,7 +849,7 @@ bool IDP_EqualsProperties_ex(IDProperty *prop1, IDProperty *prop2, const bool is
 			break;
 	}
 
-	return 1;
+	return true;
 }
 
 bool IDP_EqualsProperties(IDProperty *prop1, IDProperty *prop2)
@@ -870,7 +882,7 @@ bool IDP_EqualsProperties(IDProperty *prop1, IDProperty *prop2)
  * IDP_AddToGroup or MEM_freeN the property, doing anything else might result in
  * a memory leak.
  */
-IDProperty *IDP_New(const int type, const IDPropertyTemplate *val, const char *name)
+IDProperty *IDP_New(const char type, const IDPropertyTemplate *val, const char *name)
 {
 	IDProperty *prop = NULL;
 
@@ -897,8 +909,10 @@ IDProperty *IDP_New(const int type, const IDPropertyTemplate *val, const char *n
 			{
 				prop = MEM_callocN(sizeof(IDProperty), "IDProperty array");
 				prop->subtype = val->array.type;
-				if (val->array.len)
-					prop->data.pointer = MEM_callocN(idp_size_table[val->array.type] * val->array.len, "id property array");
+				if (val->array.len) {
+					prop->data.pointer = MEM_callocN(
+					        idp_size_table[val->array.type] * (size_t)val->array.len, "id property array");
+				}
 				prop->len = prop->totallen = val->array.len;
 				break;
 			}
@@ -918,9 +932,9 @@ IDProperty *IDP_New(const int type, const IDPropertyTemplate *val, const char *n
 					prop->len = 0;
 				}
 				else {
-					prop->data.pointer = MEM_mallocN(val->string.len, "id property string 2");
+					prop->data.pointer = MEM_mallocN((size_t)val->string.len, "id property string 2");
 					prop->len = prop->totallen = val->string.len;
-					memcpy(prop->data.pointer, st, val->string.len);
+					memcpy(prop->data.pointer, st, (size_t)val->string.len);
 				}
 				prop->subtype = IDP_STRING_SUB_BYTE;
 			}
@@ -932,10 +946,10 @@ IDProperty *IDP_New(const int type, const IDPropertyTemplate *val, const char *n
 					prop->len = 1; /*NULL string, has len of 1 to account for null byte.*/
 				}
 				else {
-					int stlen = strlen(st) + 1;
-					prop->data.pointer = MEM_mallocN(stlen, "id property string 3");
+					int stlen = (int)strlen(st) + 1;
+					prop->data.pointer = MEM_mallocN((size_t)stlen, "id property string 3");
 					prop->len = prop->totallen = stlen;
-					memcpy(prop->data.pointer, st, stlen);
+					memcpy(prop->data.pointer, st, (size_t)stlen);
 				}
 				prop->subtype = IDP_STRING_SUB_UTF8;
 			}

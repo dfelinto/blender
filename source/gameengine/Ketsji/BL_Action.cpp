@@ -49,6 +49,7 @@ extern "C" {
 // Needed for material IPOs
 #include "BKE_material.h"
 #include "DNA_material_types.h"
+#include "DNA_scene_types.h"
 }
 
 #include "MEM_guardedalloc.h"
@@ -161,6 +162,14 @@ bool BL_Action::Play(const char* name,
 	m_sg_contr_list.push_back(sg_contr);
 	m_obj->GetSGNode()->AddSGController(sg_contr);
 	sg_contr->SetObject(m_obj->GetSGNode());
+
+	// World
+	sg_contr = BL_CreateWorldIPO(m_action, kxscene->GetBlenderScene()->world, kxscene->GetSceneConverter());
+	if (sg_contr) {
+		m_sg_contr_list.push_back(sg_contr);
+		m_obj->GetSGNode()->AddSGController(sg_contr);
+		sg_contr->SetObject(m_obj->GetSGNode());
+	}
 
 	// Try obcolor
 	sg_contr = BL_CreateObColorIPO(m_action, m_obj, kxscene->GetSceneConverter());
@@ -290,6 +299,18 @@ bAction *BL_Action::GetAction()
 float BL_Action::GetFrame()
 {
 	return m_localtime;
+}
+
+const char *BL_Action::GetName()
+{
+	if (m_action != NULL) {
+		return m_action->id.name + 2;
+	}
+	else {
+		return "";
+	}
+
+	            
 }
 
 void BL_Action::SetFrame(float frame)

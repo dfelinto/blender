@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #ifndef __DEVICE_INTERN_H__
@@ -34,6 +34,10 @@ void device_opencl_info(vector<DeviceInfo>& devices);
 void device_cuda_info(vector<DeviceInfo>& devices);
 void device_network_info(vector<DeviceInfo>& devices);
 void device_multi_info(vector<DeviceInfo>& devices);
+
+string device_cpu_capabilities(void);
+string device_opencl_capabilities(void);
+string device_cuda_capabilities(void);
 
 CCL_NAMESPACE_END
 

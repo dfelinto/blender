@@ -27,8 +27,6 @@
  *  \ingroup bke
  */
 
-struct bContext;
-struct wmOperator;
 struct Scene;
 
 /* Actual surface point	*/
@@ -47,12 +45,10 @@ typedef struct PaintPoint {
 
 	/* Wet paint is handled at effect layer only
 	 * and mixed to surface when drying */
-	float e_color[3];
-	float e_alpha;
+	float e_color[4];
 	float wetness;
 	short state;
-	float color[3];
-	float alpha;
+	float color[4];
 } PaintPoint;
 
 /* heigh field waves	*/
@@ -70,8 +66,8 @@ void dynamicPaint_Modifier_copy(struct DynamicPaintModifierData *pmd, struct Dyn
 
 bool dynamicPaint_createType(struct DynamicPaintModifierData *pmd, int type, struct Scene *scene);
 struct DynamicPaintSurface *dynamicPaint_createNewSurface(struct DynamicPaintCanvasSettings *canvas, struct Scene *scene);
-void dynamicPaint_clearSurface(struct Scene *scene, struct DynamicPaintSurface *surface);
-bool dynamicPaint_resetSurface(struct Scene *scene, struct DynamicPaintSurface *surface);
+void dynamicPaint_clearSurface(const struct Scene *scene, struct DynamicPaintSurface *surface);
+bool dynamicPaint_resetSurface(const struct Scene *scene, struct DynamicPaintSurface *surface);
 void dynamicPaint_freeSurface(struct DynamicPaintSurface *surface);
 void dynamicPaint_freeCanvas(struct DynamicPaintModifierData *pmd);
 void dynamicPaint_freeBrush(struct DynamicPaintModifierData *pmd);

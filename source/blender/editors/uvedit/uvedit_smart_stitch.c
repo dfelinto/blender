@@ -574,11 +574,11 @@ static void stitch_island_calculate_vert_rotation(UvElement *element, StitchStat
 			edgecos = dot_v2v2(normal, state->normals + index_tmp1 * 2);
 			edgesin = cross_v2v2(normal, state->normals + index_tmp1 * 2);
 			if (edgesin > 0.0f) {
-			    rotation += acosf(max_ff(-1.0f, min_ff(1.0f, edgecos)));
+				rotation += acosf(max_ff(-1.0f, min_ff(1.0f, edgecos)));
 				rot_elem++;
 			}
 			else {
-			    rotation_neg += acosf(max_ff(-1.0f, min_ff(1.0f, edgecos)));
+				rotation_neg += acosf(max_ff(-1.0f, min_ff(1.0f, edgecos)));
 				rot_elem_neg++;
 			}
 		}
@@ -1354,16 +1354,15 @@ static int stitch_process_data(StitchState *state, Scene *scene, int final)
 /* Stitch hash initialization functions */
 static unsigned int uv_edge_hash(const void *key)
 {
-	UvEdge *edge = (UvEdge *)key;
-	return
-	        BLI_ghashutil_uinthash(edge->uv2) +
-	        BLI_ghashutil_uinthash(edge->uv1);
+	const UvEdge *edge = key;
+	return (BLI_ghashutil_uinthash(edge->uv2) +
+	        BLI_ghashutil_uinthash(edge->uv1));
 }
 
 static bool uv_edge_compare(const void *a, const void *b)
 {
-	UvEdge *edge1 = (UvEdge *)a;
-	UvEdge *edge2 = (UvEdge *)b;
+	const UvEdge *edge1 = a;
+	const UvEdge *edge2 = b;
 
 	if ((edge1->uv1 == edge2->uv1) && (edge1->uv2 == edge2->uv2)) {
 		return 0;
@@ -1602,7 +1601,7 @@ static int stitch_init(bContext *C, wmOperator *op)
 	BMFace *efa;
 	BMLoop *l;
 	BMIter iter, liter;
-	GHashIterator *ghi;
+	GHashIterator gh_iter;
 	UvEdge *all_edges;
 	StitchState *state;
 	Scene *scene = CTX_data_scene(C);
@@ -1650,17 +1649,17 @@ static int stitch_init(bContext *C, wmOperator *op)
 
 	/* in uv synch selection, all uv's are visible */
 	if (ts->uv_flag & UV_SYNC_SELECTION) {
-		state->element_map = BM_uv_element_map_create(state->em->bm, false, true);
+		state->element_map = BM_uv_element_map_create(state->em->bm, false, true, true);
 	}
 	else {
-		state->element_map = BM_uv_element_map_create(state->em->bm, true, true);
+		state->element_map = BM_uv_element_map_create(state->em->bm, true, true, true);
 	}
 	if (!state->element_map) {
 		state_delete(state);
 		return 0;
 	}
 
-	uvedit_get_aspect(scene, obedit, em->bm, &aspx, &aspy);
+	ED_uvedit_get_aspect(scene, obedit, em->bm, &aspx, &aspy);
 	state->aspect = aspx / aspy;
 
 	/* Entirely possible if redoing last operator that static island is bigger than total number of islands.
@@ -1749,14 +1748,11 @@ static int stitch_init(bContext *C, wmOperator *op)
 		}
 	}
 
-
-	ghi = BLI_ghashIterator_new(edge_hash);
 	total_edges = BLI_ghash_size(edge_hash);
 	state->edges = edges = MEM_mallocN(sizeof(*edges) * total_edges, "stitch_edges");
 
 	/* I assume any system will be able to at least allocate an iterator :p */
 	if (!edges) {
-		BLI_ghashIterator_free(ghi);
 		state_delete(state);
 		return 0;
 	}
@@ -1764,12 +1760,12 @@ static int stitch_init(bContext *C, wmOperator *op)
 	state->total_separate_edges = total_edges;
 
 	/* fill the edges with data */
-	for (i = 0, BLI_ghashIterator_init(ghi, edge_hash); !BLI_ghashIterator_done(ghi); BLI_ghashIterator_step(ghi)) {
-		edges[i++] = *((UvEdge *)BLI_ghashIterator_getKey(ghi));
+	i = 0;
+	GHASH_ITER (gh_iter, edge_hash) {
+		edges[i++] = *((UvEdge *)BLI_ghashIterator_getKey(&gh_iter));
 	}
 
 	/* cleanup temporary stuff */
-	BLI_ghashIterator_free(ghi);
 	MEM_freeN(all_edges);
 
 	BLI_ghash_free(edge_hash, NULL, NULL);

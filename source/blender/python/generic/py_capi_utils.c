@@ -37,6 +37,8 @@
 
 #include "py_capi_utils.h"
 
+#include "python_utildefines.h"
+
 /* only for BLI_strncpy_wchar_from_utf8, should replace with py funcs but too late in release now */
 #include "BLI_string_utf8.h"
 
@@ -46,21 +48,17 @@
 #endif
 
 /* array utility function */
-int PyC_AsArray(void *array, PyObject *value, const Py_ssize_t length,
-                const PyTypeObject *type, const bool is_double, const char *error_prefix)
+int PyC_AsArray_FAST(
+        void *array, PyObject *value_fast, const Py_ssize_t length,
+        const PyTypeObject *type, const bool is_double, const char *error_prefix)
 {
-	PyObject *value_fast;
-	Py_ssize_t value_len;
+	const Py_ssize_t value_len = PySequence_Fast_GET_SIZE(value_fast);
+	PyObject **value_fast_items = PySequence_Fast_ITEMS(value_fast);
 	Py_ssize_t i;
 
-	if (!(value_fast = PySequence_Fast(value, error_prefix))) {
-		return -1;
-	}
-
-	value_len = PySequence_Fast_GET_SIZE(value_fast);
+	BLI_assert(PyList_Check(value_fast) || PyTuple_Check(value_fast));
 
 	if (value_len != length) {
-		Py_DECREF(value);
 		PyErr_Format(PyExc_TypeError,
 		             "%.200s: invalid sequence length. expected %d, got %d",
 		             error_prefix, length, value_len);
@@ -72,13 +70,13 @@ int PyC_AsArray(void *array, PyObject *value, const Py_ssize_t length,
 		if (is_double) {
 			double *array_double = array;
 			for (i = 0; i < length; i++) {
-				array_double[i] = PyFloat_AsDouble(PySequence_Fast_GET_ITEM(value_fast, i));
+				array_double[i] = PyFloat_AsDouble(value_fast_items[i]);
 			}
 		}
 		else {
 			float *array_float = array;
 			for (i = 0; i < length; i++) {
-				array_float[i] = PyFloat_AsDouble(PySequence_Fast_GET_ITEM(value_fast, i));
+				array_float[i] = PyFloat_AsDouble(value_fast_items[i]);
 			}
 		}
 	}
@@ -86,24 +84,21 @@ int PyC_AsArray(void *array, PyObject *value, const Py_ssize_t length,
 		/* could use is_double for 'long int' but no use now */
 		int *array_int = array;
 		for (i = 0; i < length; i++) {
-			array_int[i] = PyLong_AsLong(PySequence_Fast_GET_ITEM(value_fast, i));
+			array_int[i] = PyLong_AsLong(value_fast_items[i]);
 		}
 	}
 	else if (type == &PyBool_Type) {
 		int *array_bool = array;
 		for (i = 0; i < length; i++) {
-			array_bool[i] = (PyLong_AsLong(PySequence_Fast_GET_ITEM(value_fast, i)) != 0);
+			array_bool[i] = (PyLong_AsLong(value_fast_items[i]) != 0);
 		}
 	}
 	else {
-		Py_DECREF(value_fast);
 		PyErr_Format(PyExc_TypeError,
 		             "%s: internal error %s is invalid",
 		             error_prefix, type->tp_name);
 		return -1;
 	}
-
-	Py_DECREF(value_fast);
 
 	if (PyErr_Occurred()) {
 		PyErr_Format(PyExc_TypeError,
@@ -113,6 +108,22 @@ int PyC_AsArray(void *array, PyObject *value, const Py_ssize_t length,
 	}
 
 	return 0;
+}
+
+int PyC_AsArray(
+        void *array, PyObject *value, const Py_ssize_t length,
+        const PyTypeObject *type, const bool is_double, const char *error_prefix)
+{
+	PyObject *value_fast;
+	int ret;
+
+	if (!(value_fast = PySequence_Fast(value, error_prefix))) {
+		return -1;
+	}
+
+	ret = PyC_AsArray_FAST(array, value_fast, length, type, is_double, error_prefix);
+	Py_DECREF(value_fast);
+	return ret;
 }
 
 /* array utility function */
@@ -174,6 +185,17 @@ void PyC_Tuple_Fill(PyObject *tuple, PyObject *value)
 
 	for (i = 0; i < tot; i++) {
 		PyTuple_SET_ITEM(tuple, i, value);
+		Py_INCREF(value);
+	}
+}
+
+void PyC_List_Fill(PyObject *list, PyObject *value)
+{
+	unsigned int tot = PyList_GET_SIZE(list);
+	unsigned int i;
+
+	for (i = 0; i < tot; i++) {
+		PyList_SET_ITEM(list, i, value);
 		Py_INCREF(value);
 	}
 }
@@ -465,6 +487,34 @@ error_cleanup:
 }
 #endif
 
+PyObject *PyC_ExceptionBuffer_Simple(void)
+{
+	PyObject *string_io_buf;
+
+	PyObject *error_type, *error_value, *error_traceback;
+
+	if (!PyErr_Occurred())
+		return NULL;
+
+	PyErr_Fetch(&error_type, &error_value, &error_traceback);
+
+	if (error_value == NULL) {
+		return NULL;
+	}
+
+	string_io_buf = PyObject_Str(error_value);
+	/* Python does this too */
+	if (UNLIKELY(string_io_buf == NULL)) {
+		string_io_buf = PyUnicode_FromFormat(
+		        "<unprintable %s object>", Py_TYPE(error_value)->tp_name);
+	}
+
+	PyErr_Restore(error_type, error_value, error_traceback);
+
+	PyErr_Print();
+	PyErr_Clear();
+	return string_io_buf;
+}
 
 /* string conversion, escape non-unicode chars, coerce must be set to NULL */
 const char *PyC_UnicodeAsByte(PyObject *py_str, PyObject **coerce)
@@ -568,7 +618,7 @@ void PyC_MainModule_Restore(PyObject *main_mod)
 	Py_XDECREF(main_mod);
 }
 
-/* must be called before Py_Initialize, expects output of BLI_get_folder(BLENDER_PYTHON, NULL) */
+/* must be called before Py_Initialize, expects output of BKE_appdir_folder_id(BLENDER_PYTHON, NULL) */
 void PyC_SetHomePath(const char *py_path_bundle)
 {
 	if (py_path_bundle == NULL) {
@@ -664,8 +714,7 @@ void PyC_RunQuicky(const char *filepath, int n, ...)
 				PyErr_Print();
 				PyErr_Clear();
 
-				PyList_SET_ITEM(values, i, Py_None); /* hold user */
-				Py_INCREF(Py_None);
+				PyList_SET_ITEM(values, i, Py_INCREF_RET(Py_None)); /* hold user */
 
 				sizes[i] = 0;
 			}
@@ -974,4 +1023,22 @@ int PyC_RunString_AsNumber(const char *expr, double *value, const char *filename
 	PyC_MainModule_Restore(main_mod);
 
 	return error_ret;
+}
+
+/**
+ * Use with PyArg_ParseTuple's "O&" formatting.
+ */
+int PyC_ParseBool(PyObject *o, void *p)
+{
+	bool *bool_p = p;
+	long value;
+	if (((value = PyLong_AsLong(o)) == -1) || !ELEM(value, 0, 1)) {
+		PyErr_Format(PyExc_ValueError,
+		             "expected a bool or int (0/1), got %s",
+		             Py_TYPE(o)->tp_name);
+		return 0;
+	}
+
+	*bool_p = value ? true : false;
+	return 1;
 }

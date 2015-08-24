@@ -21,7 +21,7 @@ import bpy
 from bpy.types import Panel
 
 
-class ConstraintButtonsPanel():
+class ConstraintButtonsPanel:
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
     bl_context = "constraint"
@@ -38,7 +38,8 @@ class ConstraintButtonsPanel():
             if con.type not in {'RIGID_BODY_JOINT', 'NULL'}:
                 box.prop(con, "influence")
 
-    def space_template(self, layout, con, target=True, owner=True):
+    @staticmethod
+    def space_template(layout, con, target=True, owner=True):
         if target or owner:
 
             split = layout.split(percentage=0.2)
@@ -55,7 +56,8 @@ class ConstraintButtonsPanel():
             if owner:
                 row.prop(con, "owner_space", text="")
 
-    def target_template(self, layout, con, subtargets=True):
+    @staticmethod
+    def target_template(layout, con, subtargets=True):
         layout.prop(con, "target")  # XXX limiting settings for only 'curves' or some type of object
 
         if con.target and subtargets:
@@ -69,7 +71,8 @@ class ConstraintButtonsPanel():
             elif con.target.type in {'MESH', 'LATTICE'}:
                 layout.prop_search(con, "subtarget", con.target, "vertex_groups", text="Vertex Group")
 
-    def ik_template(self, layout, con):
+    @staticmethod
+    def ik_template(layout, con):
         # only used for iTaSC
         layout.prop(con, "pole_target")
 
@@ -768,8 +771,26 @@ class ConstraintButtonsPanel():
         col = layout.column()
         col.label(text="Chain Scaling:")
         col.prop(con, "use_y_stretch")
-        col.prop(con, "xz_scale_mode")
         col.prop(con, "use_curve_radius")
+
+        layout.prop(con, "xz_scale_mode")
+
+        if con.xz_scale_mode == 'VOLUME_PRESERVE':
+            layout.prop(con, "bulge", text="Volume Variation")
+            split = layout.split()
+            col = split.column(align=True)
+            col.prop(con, "use_bulge_min", text="Volume Min")
+            sub = col.column()
+            sub.active = con.use_bulge_min
+            sub.prop(con, "bulge_min", text="")
+            col = split.column(align=True)
+            col.prop(con, "use_bulge_max", text="Volume Max")
+            sub = col.column()
+            sub.active = con.use_bulge_max
+            sub.prop(con, "bulge_max", text="")
+            col = layout.column()
+            col.active = con.use_bulge_min or con.use_bulge_max
+            col.prop(con, "bulge_smooth", text="Smooth")
 
     def PIVOT(self, context, layout, con):
         self.target_template(layout, con)
@@ -876,7 +897,7 @@ class OBJECT_PT_constraints(ConstraintButtonsPanel, Panel):
 
         obj = context.object
 
-        if obj.type == 'ARMATURE' and obj.mode in {'POSE'}:
+        if obj.type == 'ARMATURE' and obj.mode == 'POSE':
             box = layout.box()
             box.alert = True  # XXX: this should apply to the box background
             box.label(icon='INFO', text="Constraints for active bone do not live here")

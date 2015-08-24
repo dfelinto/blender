@@ -23,11 +23,12 @@
 /** \file blender/blenlib/intern/edgehash.c
  *  \ingroup bli
  *
- * A general (pointer -> pointer) hash table ADT
+ * An (edge -> pointer) chaining hash table.
+ * Using unordered int-pairs as keys.
  *
- * \note Based on 'BLI_ghash.c', make sure these stay in sync.
+ * \note Based on 'BLI_ghash.c', which is a more generalized hash-table
+ * make sure these stay in sync.
  */
-
 
 #include <stdlib.h>
 #include <string.h>
@@ -146,7 +147,7 @@ BLI_INLINE void edgehash_buckets_reserve(EdgeHash *eh, const unsigned int nentri
 
 /**
  * Internal lookup function.
- * Takes a hash argument to avoid calling #ghash_keyhash multiple times.
+ * Takes a hash argument to avoid calling #edgehash_keyhash multiple times.
  */
 BLI_INLINE EdgeEntry *edgehash_lookup_entry_ex(EdgeHash *eh, unsigned int v0, unsigned int v1,
                                                const unsigned int hash)
@@ -239,6 +240,30 @@ BLI_INLINE void edgehash_insert_ex_keyonly(EdgeHash *eh, unsigned int v0, unsign
 	e->next = eh->buckets[hash];
 	e->v0 = v0;
 	e->v1 = v1;
+	eh->buckets[hash] = e;
+
+	if (UNLIKELY(edgehash_test_expand_buckets(++eh->nentries, eh->nbuckets))) {
+		edgehash_resize_buckets(eh, _ehash_hashsizes[++eh->cursize]);
+	}
+}
+
+/**
+ * Insert function that doesn't set the value (use for EdgeSet)
+ */
+BLI_INLINE void edgehash_insert_ex_keyonly_entry(
+        EdgeHash *eh, unsigned int v0, unsigned int v1,
+        unsigned int hash,
+        EdgeEntry *e)
+{
+	BLI_assert((eh->flag & EDGEHASH_FLAG_ALLOW_DUPES) || (BLI_edgehash_haskey(eh, v0, v1) == 0));
+
+	/* this helps to track down errors with bad edge data */
+	BLI_assert(v0 < v1);
+	BLI_assert(v0 != v1);
+
+	e->next = eh->buckets[hash];
+	e->v0 = v0;
+	e->v1 = v1;
 	/* intentionally leave value unset */
 	eh->buckets[hash] = e;
 
@@ -253,6 +278,35 @@ BLI_INLINE void edgehash_insert(EdgeHash *eh, unsigned int v0, unsigned int v1, 
 	EDGE_ORD(v0, v1); /* ensure v0 is smaller */
 	hash = edgehash_keyhash(eh, v0, v1);
 	edgehash_insert_ex(eh, v0, v1, val, hash);
+}
+
+/**
+ * Remove the entry and return it, caller must free from eh->epool.
+ */
+static EdgeEntry *edgehash_remove_ex(EdgeHash *eh, unsigned int v0, unsigned int v1, EdgeHashFreeFP valfreefp,
+                                     unsigned int hash)
+{
+	EdgeEntry *e;
+	EdgeEntry *e_prev = NULL;
+
+	BLI_assert(v0 < v1);
+
+	for (e = eh->buckets[hash]; e; e = e->next) {
+		if (UNLIKELY(v0 == e->v0 && v1 == e->v1)) {
+			EdgeEntry *e_next = e->next;
+
+			if (valfreefp) valfreefp(e->val);
+
+			if (e_prev) e_prev->next = e_next;
+			else   eh->buckets[hash] = e_next;
+
+			eh->nentries--;
+			return e;
+		}
+		e_prev = e;
+	}
+
+	return NULL;
 }
 
 /**
@@ -343,6 +397,40 @@ void **BLI_edgehash_lookup_p(EdgeHash *eh, unsigned int v0, unsigned int v1)
 }
 
 /**
+ * Ensure \a (v0, v1) is exists in \a eh.
+ *
+ * This handles the common situation where the caller needs ensure a key is added to \a eh,
+ * constructing a new value in the case the key isn't found.
+ * Otherwise use the existing value.
+ *
+ * Such situations typically incur multiple lookups, however this function
+ * avoids them by ensuring the key is added,
+ * returning a pointer to the value so it can be used or initialized by the caller.
+ *
+ * \returns true when the value didn't need to be added.
+ * (when false, the caller _must_ initialize the value).
+ */
+bool BLI_edgehash_ensure_p(EdgeHash *eh, unsigned int v0, unsigned int v1, void ***r_val)
+{
+	unsigned int hash;
+	EdgeEntry *e;
+	bool haskey;
+
+	EDGE_ORD(v0, v1); /* ensure v0 is smaller */
+	hash = edgehash_keyhash(eh, v0, v1);
+	e = edgehash_lookup_entry_ex(eh, v0, v1, hash);
+	haskey = (e != NULL);
+
+	if (!haskey) {
+		e = BLI_mempool_alloc(eh->epool);
+		edgehash_insert_ex_keyonly_entry(eh, v0, v1, hash, e);
+	}
+
+	*r_val = &e->val;
+	return haskey;
+}
+
+/**
  * Return value for given edge (\a v0, \a v1), or NULL if
  * if key does not exist in hash. (If need exists
  * to differentiate between key-value being NULL and
@@ -363,6 +451,57 @@ void *BLI_edgehash_lookup_default(EdgeHash *eh, unsigned int v0, unsigned int v1
 	EdgeEntry *e = edgehash_lookup_entry(eh, v0, v1);
 	IS_EDGEHASH_ASSERT(eh);
 	return e ? e->val : val_default;
+}
+
+/**
+ * Remove \a key (v0, v1) from \a eh, or return false if the key wasn't found.
+ *
+ * \param v0, v1: The key to remove.
+ * \param valfreefp  Optional callback to free the value.
+ * \return true if \a key was removed from \a eh.
+ */
+bool BLI_edgehash_remove(EdgeHash *eh, unsigned int v0, unsigned int v1, EdgeHashFreeFP valfreefp)
+{
+	unsigned int hash;
+	EdgeEntry *e;
+
+	EDGE_ORD(v0, v1); /* ensure v0 is smaller */
+	hash = edgehash_keyhash(eh, v0, v1);
+	e = edgehash_remove_ex(eh, v0, v1, valfreefp, hash);
+	if (e) {
+		BLI_mempool_free(eh->epool, e);
+		return true;
+	}
+	else {
+		return false;
+	}
+}
+
+/* same as above but return the value,
+ * no free value argument since it will be returned */
+/**
+ * Remove \a key (v0, v1) from \a eh, returning the value or NULL if the key wasn't found.
+ *
+ * \param v0, v1: The key to remove.
+ * \return the value of \a key int \a eh or NULL.
+ */
+void *BLI_edgehash_popkey(EdgeHash *eh, unsigned int v0, unsigned int v1)
+{
+	unsigned int hash;
+	EdgeEntry *e;
+
+	EDGE_ORD(v0, v1); /* ensure v0 is smaller */
+	hash = edgehash_keyhash(eh, v0, v1);
+	e = edgehash_remove_ex(eh, v0, v1, NULL, hash);
+	IS_EDGEHASH_ASSERT(eh);
+	if (e) {
+		void *val = e->val;
+		BLI_mempool_free(eh->epool, e);
+		return val;
+	}
+	else {
+		return NULL;
+	}
 }
 
 /**
@@ -404,6 +543,14 @@ void BLI_edgehash_clear_ex(EdgeHash *eh, EdgeHashFreeFP valfreefp,
 	BLI_mempool_clear_ex(eh->epool, nentries_reserve ? (int)nentries_reserve : -1);
 }
 
+/**
+ * Wraps #BLI_edgehash_clear_ex with zero entries reserved.
+ */
+void BLI_edgehash_clear(EdgeHash *eh, EdgeHashFreeFP valfreefp)
+{
+	BLI_edgehash_clear_ex(eh, valfreefp, 0);
+}
+
 void BLI_edgehash_free(EdgeHash *eh, EdgeHashFreeFP valfreefp)
 {
 	BLI_assert((int)eh->nentries == BLI_mempool_count(eh->epool));
@@ -440,7 +587,7 @@ void BLI_edgehash_flag_clear(EdgeHash *eh, unsigned int flag)
 /**
  * Create a new EdgeHashIterator. The hash table must not be mutated
  * while the iterator is in use, and the iterator will step exactly
- * BLI_edgehash_size(gh) times before becoming done.
+ * BLI_edgehash_size(eh) times before becoming done.
  */
 EdgeHashIterator *BLI_edgehashIterator_new(EdgeHash *eh)
 {

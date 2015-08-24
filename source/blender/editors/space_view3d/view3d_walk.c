@@ -26,8 +26,6 @@
 
 /* defines VIEW3D_OT_navigate - walk modal operator */
 
-//#define NDOF_WALK_DEBUG
-//#define NDOF_WALK_DRAW_TOOMUCH  /* is this needed for ndof? - commented so redraw doesnt thrash - campbell */
 #include "DNA_scene_types.h"
 #include "DNA_object_types.h"
 
@@ -40,11 +38,10 @@
 #include "BKE_context.h"
 #include "BKE_report.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "RNA_access.h"
 #include "RNA_define.h"
-#include "RNA_enum_types.h"
 #include "RNA_types.h"
 
 #include "BIF_gl.h"
@@ -58,9 +55,15 @@
 
 #include "PIL_time.h" /* smoothview */
 
+#include "UI_interface.h"
 #include "UI_resources.h"
 
 #include "view3d_intern.h"  /* own include */
+
+//#define NDOF_WALK_DEBUG
+//#define NDOF_WALK_DRAW_TOOMUCH  /* is this needed for ndof? - commented so redraw doesnt thrash - campbell */
+
+#define USE_TABLET_SUPPORT
 
 /* prototypes */
 static float getVelocityZeroTime(const float gravity, const float velocity);
@@ -231,8 +234,7 @@ void walk_modal_keymap(wmKeyConfig *keyconf)
 }
 
 
-typedef struct WalkTeleport
-{
+typedef struct WalkTeleport {
 	eWalkTeleportState state;
 	float duration; /* from user preferences */
 	float origin[3];
@@ -293,6 +295,14 @@ typedef struct WalkInfo {
 	/* mouse reverse */
 	bool is_reversed;
 
+#ifdef USE_TABLET_SUPPORT
+	/* check if we had a cursor event before */
+	bool is_cursor_first;
+
+	/* tablet devices (we can't relocate the cursor) */
+	bool is_cursor_absolute;
+#endif
+
 	/* gravity system */
 	eWalkGravityState gravity_state;
 	float gravity;
@@ -351,27 +361,42 @@ static void drawWalkPixel(const struct bContext *UNUSED(C), ARegion *ar, void *a
 	glEnd();
 }
 
-static void walk_update_header(bContext *C, WalkInfo *walk)
+static void walk_update_header(bContext *C, wmOperator *op, WalkInfo *walk)
 {
-	bool gravity = walk->navigation_mode == WALK_MODE_GRAVITY ||
-	(walk->teleport.state == WALK_TELEPORT_STATE_ON &&
-	 walk->teleport.navigation_mode == WALK_MODE_GRAVITY);
+	const bool gravity = (walk->navigation_mode == WALK_MODE_GRAVITY) ||
+	                     ((walk->teleport.state == WALK_TELEPORT_STATE_ON) &&
+	                      (walk->teleport.navigation_mode == WALK_MODE_GRAVITY));
+	char header[UI_MAX_DRAW_STR];
+	char buf[UI_MAX_DRAW_STR];
 
-#define HEADER_LENGTH 256
-	char header[HEADER_LENGTH];
+	char *p = buf;
+	int available_len = sizeof(buf);
 
-	BLI_snprintf(header, HEADER_LENGTH, IFACE_("LMB/Return: confirm, Esc/RMB: cancel, "
-                                               "Tab: gravity (%s), "
-	                                           "WASD: move around, "
-	                                           "Shift: fast, Alt: slow, "
-	                                           "QE: up and down, MMB/Space: teleport, V: jump, "
-	                                           "Pad +/Wheel Up: increase speed, Pad -/Wheel Down: decrease speed"),
-	             WM_bool_as_string(gravity));
+#define WM_MODALKEY(_id) \
+	WM_modalkeymap_operator_items_to_string_buf(op->type, (_id), true, UI_MAX_SHORTCUT_STR, &available_len, &p)
+
+	BLI_snprintf(header, sizeof(header), IFACE_("%s: confirm, %s: cancel, "
+	                                            "%s: gravity (%s), "
+	                                            "%s|%s|%s|%s: move around, "
+	                                            "%s: fast, %s: slow, "
+	                                            "%s|%s: up and down, "
+	                                            "%s: teleport, %s: jump, "
+	                                            "%s: increase speed, %s: decrease speed"),
+	             WM_MODALKEY(WALK_MODAL_CONFIRM), WM_MODALKEY(WALK_MODAL_CANCEL),
+	             WM_MODALKEY(WALK_MODAL_TOGGLE), WM_bool_as_string(gravity),
+	             WM_MODALKEY(WALK_MODAL_DIR_FORWARD), WM_MODALKEY(WALK_MODAL_DIR_LEFT),
+	             WM_MODALKEY(WALK_MODAL_DIR_BACKWARD), WM_MODALKEY(WALK_MODAL_DIR_RIGHT),
+	             WM_MODALKEY(WALK_MODAL_FAST_ENABLE), WM_MODALKEY(WALK_MODAL_SLOW_ENABLE),
+	             WM_MODALKEY(WALK_MODAL_DIR_UP), WM_MODALKEY(WALK_MODAL_DIR_DOWN),
+	             WM_MODALKEY(WALK_MODAL_TELEPORT), WM_MODALKEY(WALK_MODAL_JUMP),
+	             WM_MODALKEY(WALK_MODAL_ACCELERATE), WM_MODALKEY(WALK_MODAL_DECELERATE));
+
+#undef WM_MODALKEY
+
 	ED_area_headerprint(CTX_wm_area(C), header);
-#undef HEADER_LENGTH
 }
 
-static void walk_navigation_mode_set(bContext *C, WalkInfo *walk, eWalkMethod mode)
+static void walk_navigation_mode_set(bContext *C, wmOperator *op, WalkInfo *walk, eWalkMethod mode)
 {
 	if (mode == WALK_MODE_FREE) {
 		walk->navigation_mode = WALK_MODE_FREE;
@@ -383,7 +408,7 @@ static void walk_navigation_mode_set(bContext *C, WalkInfo *walk, eWalkMethod mo
 	}
 
 	if (walk->use_mouse) {
-		walk_update_header(C, walk);
+		walk_update_header(C, op, walk);
 	}
 }
 
@@ -521,9 +546,9 @@ static bool initWalkInfo(bContext *C, WalkInfo *walk, wmOperator *op, const wmEv
 	walk->mouse_speed = U.walk_navigation.mouse_speed;
 
 	if ((U.walk_navigation.flag & USER_WALK_GRAVITY))
-		walk_navigation_mode_set(C, walk, WALK_MODE_GRAVITY);
+		walk_navigation_mode_set(C, op, walk, WALK_MODE_GRAVITY);
 	else
-		walk_navigation_mode_set(C, walk, WALK_MODE_FREE);
+		walk_navigation_mode_set(C, op, walk, WALK_MODE_FREE);
 
 	walk->view_height = U.walk_navigation.view_height;
 	walk->jump_height = U.walk_navigation.jump_height;
@@ -540,6 +565,12 @@ static bool initWalkInfo(bContext *C, WalkInfo *walk, wmOperator *op, const wmEv
 	}
 
 	walk->is_reversed = ((U.walk_navigation.flag & USER_WALK_MOUSE_REVERSE) != 0);
+
+#ifdef USE_TABLET_SUPPORT
+	walk->is_cursor_first = true;
+
+	walk->is_cursor_absolute = false;
+#endif
 
 	walk->active_directions = 0;
 
@@ -615,7 +646,11 @@ static int walkEnd(bContext *C, WalkInfo *walk)
 
 	WM_event_remove_timer(CTX_wm_manager(C), win, walk->timer);
 
-	if (walk->use_mouse) {
+#ifdef USE_TABLET_SUPPORT
+	if ((walk->is_cursor_absolute == false) &&
+	    (walk->use_mouse))
+#endif
+	{
 		ED_region_draw_cb_exit(walk->ar->type, walk->draw_handle_pixel);
 
 		/* restore the cursor */
@@ -644,7 +679,7 @@ static bool wm_event_is_last_mousemove(const wmEvent *event)
 	return true;
 }
 
-static void walkEvent(bContext *C, wmOperator *UNUSED(op), WalkInfo *walk, const wmEvent *event)
+static void walkEvent(bContext *C, wmOperator *op, WalkInfo *walk, const wmEvent *event)
 {
 	if (event->type == TIMER && event->customdata == walk->timer) {
 		walk->redraw = true;
@@ -779,7 +814,7 @@ static void walkEvent(bContext *C, wmOperator *UNUSED(op), WalkInfo *walk, const
 					teleport->duration = U.walk_navigation.teleport_time;
 
 					teleport->navigation_mode = walk->navigation_mode;
-					walk_navigation_mode_set(C, walk, WALK_MODE_FREE);
+					walk_navigation_mode_set(C, op, walk, WALK_MODE_FREE);
 
 					copy_v3_v3(teleport->origin, walk->rv3d->viewinv[3]);
 
@@ -802,16 +837,44 @@ static void walkEvent(bContext *C, wmOperator *UNUSED(op), WalkInfo *walk, const
 
 			case WALK_MODAL_TOGGLE:
 				if (walk->navigation_mode == WALK_MODE_GRAVITY) {
-					walk_navigation_mode_set(C, walk, WALK_MODE_FREE);
+					walk_navigation_mode_set(C, op, walk, WALK_MODE_FREE);
 				}
 				else { /* WALK_MODE_FREE */
-					walk_navigation_mode_set(C, walk, WALK_MODE_GRAVITY);
+					walk_navigation_mode_set(C, op, walk, WALK_MODE_GRAVITY);
 				}
 				break;
 		}
 	}
 	else if (ELEM(event->type, MOUSEMOVE, INBETWEEN_MOUSEMOVE, MOUSEPAN)) {
 		int xy[2], prevxy[2];
+
+#ifdef USE_TABLET_SUPPORT
+		if (walk->is_cursor_first) {
+			/* wait until we get the 'warp' event */
+			if ((walk->center_mval[0] == event->mval[0]) &&
+			    (walk->center_mval[1] == event->mval[1]))
+			{
+				walk->is_cursor_first = false;
+			}
+			else {
+				/* note, its possible the system isn't giving us the warp event
+				 * ideally we shouldn't have to worry about this, see: T45361 */
+				wmWindow *win = CTX_wm_window(C);
+				WM_cursor_warp(win,
+				               walk->ar->winrct.xmin + walk->center_mval[0],
+				               walk->ar->winrct.ymin + walk->center_mval[1]);
+			}
+			return;
+		}
+
+		if ((walk->is_cursor_absolute == false) && WM_event_is_absolute(event)) {
+			walk->is_cursor_absolute = true;
+			copy_v2_v2_int(walk->prev_mval, event->mval);
+			copy_v2_v2_int(walk->center_mval, event->mval);
+			/* without this we can't turn 180d */
+			CLAMP_MIN(walk->mouse_speed, 4.0f);
+		}
+#endif  /* USE_TABLET_SUPPORT */
 
 		xy[0] = event->x;
 		xy[1] = event->y;
@@ -832,6 +895,13 @@ static void walkEvent(bContext *C, wmOperator *UNUSED(op), WalkInfo *walk, const
 		    (walk->center_mval[1] != event->mval[1]))
 		{
 			walk->redraw = true;
+
+#ifdef USE_TABLET_SUPPORT
+			if (walk->is_cursor_absolute) {
+				/* pass */
+			}
+			else
+#endif
 
 			if (wm_event_is_last_mousemove(event) && walk->use_mouse) {
 				wmWindow *win = CTX_wm_window(C);
@@ -1039,7 +1109,7 @@ static void walk_mouse_move(WalkInfo *walk, float mat[3][3], const eWalkDirectio
 	}
 }
 
-static int walkApply(bContext *C, WalkInfo *walk)
+static int walkApply(bContext *C, wmOperator *op, WalkInfo *walk)
 {
 	/* walk mode - Ctrl+Shift+F
 	 * a walk loop where the user can move move the view as if they are in a walk game
@@ -1314,7 +1384,7 @@ static int walkApply(bContext *C, WalkInfo *walk)
 				if (t >= 1.0f) {
 					t = 1.0f;
 					walk->teleport.state = WALK_TELEPORT_STATE_OFF;
-					walk_navigation_mode_set(C, walk, walk->teleport.navigation_mode);
+					walk_navigation_mode_set(C, op, walk, walk->teleport.navigation_mode);
 				}
 
 				mul_v3_v3fl(new_loc, walk->teleport.direction, t);
@@ -1435,7 +1505,7 @@ static int walk_modal(bContext *C, wmOperator *op, const wmEvent *event)
 		}
 	}
 	else if (event->type == TIMER && event->customdata == walk->timer) {
-		walkApply(C, walk);
+		walkApply(C, op, walk);
 	}
 
 	do_draw |= walk->redraw;

@@ -39,7 +39,7 @@
 #include "SCA_EventManager.h"
 #include "SCA_RandomEventManager.h"
 #include "SCA_LogicManager.h"
-#include "ConstExpr.h"
+#include "EXP_ConstExpr.h"
 #include <iostream>
 
 /* ------------------------------------------------------------------------- */
@@ -107,7 +107,7 @@ bool SCA_RandomSensor::Evaluate()
 
 	bool evaluateResult = false;
 
-	if (++m_interval > m_pulse_frequency) {
+	if (++m_interval > m_skipped_ticks) {
 		bool drawResult = false;
 		m_interval = 0;
 		if (m_iteration > 31) {

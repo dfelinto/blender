@@ -73,7 +73,7 @@ typedef enum TaskPriority {
 } TaskPriority;
 
 typedef struct TaskPool TaskPool;
-typedef void (*TaskRunFunction)(TaskPool *pool, void *taskdata, int threadid);
+typedef void (*TaskRunFunction)(TaskPool *__restrict pool, void *taskdata, int threadid);
 
 TaskPool *BLI_task_pool_create(TaskScheduler *scheduler, void *userdata);
 void BLI_task_pool_free(TaskPool *pool);
@@ -87,6 +87,12 @@ void BLI_task_pool_work_and_wait(TaskPool *pool);
 void BLI_task_pool_cancel(TaskPool *pool);
 /* stop all worker threads */
 void BLI_task_pool_stop(TaskPool *pool);
+
+/* get number of threads allowed to be used by this pool */
+int BLI_pool_get_num_threads(TaskPool *pool);
+
+/* set number of threads allowed to be used by this pool */
+void BLI_pool_set_num_threads(TaskPool *pool, int num_threads);
 
 /* for worker threads, test if canceled */
 bool BLI_task_pool_canceled(TaskPool *pool);

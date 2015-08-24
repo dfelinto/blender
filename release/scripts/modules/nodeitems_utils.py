@@ -20,7 +20,7 @@
 import bpy
 
 
-class NodeCategory():
+class NodeCategory:
     @classmethod
     def poll(cls, context):
         return True
@@ -37,13 +37,17 @@ class NodeCategory():
         else:
             def items_gen(context):
                 for item in items:
-                    if item.poll is None or item.poll(context):
+                    if item.poll is None or context is None or item.poll(context):
                         yield item
             self.items = items_gen
 
 
-class NodeItem():
-    def __init__(self, nodetype, label=None, settings={}, poll=None):
+class NodeItem:
+    def __init__(self, nodetype, label=None, settings=None, poll=None):
+
+        if settings is None:
+            settings = {}
+
         self.nodetype = nodetype
         self._label = label
         self.settings = settings
@@ -73,14 +77,13 @@ class NodeItem():
             ops.value = setting[1]
 
 
-class NodeItemCustom():
+class NodeItemCustom:
     def __init__(self, poll=None, draw=None):
         self.poll = poll
         self.draw = draw
 
 
 _node_categories = {}
-
 
 def register_node_categories(identifier, cat_list):
     if identifier in _node_categories:
@@ -127,8 +130,6 @@ def register_node_categories(identifier, cat_list):
             if cat.poll(context):
                 layout.menu("NODE_MT_category_%s" % cat.identifier)
 
-    bpy.types.NODE_MT_add.append(draw_add_menu)
-
     # stores: (categories list, menu draw function, submenu types, panel types)
     _node_categories[identifier] = (cat_list, draw_add_menu, menu_types, panel_types)
 
@@ -136,7 +137,7 @@ def register_node_categories(identifier, cat_list):
 def node_categories_iter(context):
     for cat_type in _node_categories.values():
         for cat in cat_type[0]:
-            if cat.poll and cat.poll(context):
+            if cat.poll and ((context is None) or cat.poll(context)):
                 yield cat
 
 
@@ -147,7 +148,6 @@ def node_items_iter(context):
 
 
 def unregister_node_cat_types(cats):
-    bpy.types.NODE_MT_add.remove(cats[1])
     for mt in cats[2]:
         bpy.utils.unregister_class(mt)
     for pt in cats[3]:
@@ -166,3 +166,7 @@ def unregister_node_categories(identifier=None):
         for cat_types in _node_categories.values():
             unregister_node_cat_types(cat_types)
         _node_categories.clear()
+
+def draw_node_categories_menu(self, context):
+    for cats in _node_categories.values():
+        cats[1](self, context)

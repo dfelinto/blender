@@ -23,6 +23,7 @@ set(INC
 	../../blenfont
 	../../blenkernel
 	../../blenlib
+	../../blentranslation
 	../../gpu
 	../../imbuf
 	../../makesdna
@@ -69,6 +70,12 @@ endif()
 
 if(WITH_PYTHON)
 	add_definitions(-DWITH_PYTHON)
+endif()
+
+if(WIN32)
+	if(WITH_INPUT_IME)
+		add_definitions(-DWITH_INPUT_IME)
+	endif()
 endif()
 
 add_definitions(${GL_DEFINITIONS})

@@ -32,6 +32,7 @@ extern "C" {
 #include "BLI_path_util.h"
 #include "BLI_string.h"
 #include "DNA_node_types.h"
+#include "BKE_appdir.h"
 #include "BKE_node.h"
 }
 
@@ -212,7 +213,7 @@ int DebugInfo::graphviz_legend_color(const char *name, const char *color, char *
 	return len;
 }
 
-int DebugInfo::graphviz_legend_line(const char *name, const char *color, const char *style, char *str, int maxlen)
+int DebugInfo::graphviz_legend_line(const char * /*name*/, const char * /*color*/, const char * /*style*/, char *str, int maxlen)
 {
 	/* XXX TODO */
 	int len = 0;
@@ -220,7 +221,7 @@ int DebugInfo::graphviz_legend_line(const char *name, const char *color, const c
 	return len;
 }
 
-int DebugInfo::graphviz_legend_group(const char *name, const char *color, const char *style, char *str, int maxlen)
+int DebugInfo::graphviz_legend_group(const char *name, const char *color, const char * /*style*/, char *str, int maxlen)
 {
 	int len = 0;
 	len += snprintf(str + len, maxlen > len ? maxlen - len : 0, "<TR><TD>%s</TD><TD CELLPADDING=\"4\"><TABLE BORDER=\"1\" CELLBORDER=\"0\" CELLSPACING=\"0\" CELLPADDING=\"0\"><TR><TD BGCOLOR=\"%s\"></TD></TR></TABLE></TD></TR>\r\n", name, color);
@@ -355,7 +356,7 @@ bool DebugInfo::graphviz_system(const ExecutionSystem *system, char *str, int ma
 			std::string color;
 			switch (from->getDataType()) {
 				case COM_DT_VALUE:
-					color = "grey";
+					color = "gray";
 					break;
 				case COM_DT_VECTOR:
 					color = "blue";
@@ -398,7 +399,7 @@ void DebugInfo::graphviz(const ExecutionSystem *system)
 		char filename[FILE_MAX];
 		
 		BLI_snprintf(basename, sizeof(basename), "compositor_%d.dot", m_file_index);
-		BLI_join_dirfile(filename, sizeof(filename), BLI_temp_dir_session(), basename);
+		BLI_join_dirfile(filename, sizeof(filename), BKE_tempdir_session(), basename);
 		++m_file_index;
 		
 		FILE *fp = BLI_fopen(filename, "wb");

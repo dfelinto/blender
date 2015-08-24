@@ -49,13 +49,13 @@ MemoryBuffer *GlareBaseOperation::createMemoryBuffer(rcti *rect2)
 	rect.ymin = 0;
 	rect.xmax = getWidth();
 	rect.ymax = getHeight();
-	MemoryBuffer *result = new MemoryBuffer(NULL, &rect);
+	MemoryBuffer *result = new MemoryBuffer(COM_DT_COLOR, &rect);
 	float *data = result->getBuffer();
 	this->generateGlare(data, tile, this->m_settings);
 	return result;
 }
 
-bool GlareBaseOperation::determineDependingAreaOfInterest(rcti *input, ReadBufferOperation *readOperation, rcti *output)
+bool GlareBaseOperation::determineDependingAreaOfInterest(rcti * /*input*/, ReadBufferOperation *readOperation, rcti *output)
 {
 	if (isCached()) {
 		return false;

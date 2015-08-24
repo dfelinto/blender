@@ -57,7 +57,7 @@
 #include "BLI_rand.h"
 #include "BLI_utildefines.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "RNA_access.h"
 
@@ -80,6 +80,7 @@
 #include "BKE_editmesh.h"
 #include "BKE_tracking.h"
 #include "BKE_mask.h"
+#include "BKE_utildefines.h"
 
 #include "ED_anim_api.h"
 #include "ED_armature.h"
@@ -87,6 +88,7 @@
 #include "ED_keyframing.h"
 #include "ED_markers.h"
 #include "ED_mesh.h"
+#include "ED_object.h"
 #include "ED_particle.h"
 #include "ED_screen_types.h"
 #include "ED_space_api.h"
@@ -109,21 +111,7 @@
 void getViewVector(TransInfo *t, float coord[3], float vec[3])
 {
 	if (t->persp != RV3D_ORTHO) {
-		float p1[4], p2[4];
-		
-		copy_v3_v3(p1, coord);
-		p1[3] = 1.0f;
-		copy_v3_v3(p2, p1);
-		p2[3] = 1.0f;
-		mul_m4_v4(t->viewmat, p2);
-		
-		p2[0] = 2.0f * p2[0];
-		p2[1] = 2.0f * p2[1];
-		p2[2] = 2.0f * p2[2];
-		
-		mul_m4_v4(t->viewinv, p2);
-		
-		sub_v3_v3v3(vec, p1, p2);
+		sub_v3_v3v3(vec, coord, t->viewinv[3]);
 	}
 	else {
 		copy_v3_v3(vec, t->viewinv[2]);
@@ -316,7 +304,7 @@ static bool fcu_test_selected(FCurve *fcu)
 		return 0;
 
 	for (i = 0; i < fcu->totvert; i++, bezt++) {
-		if (BEZSELECTED(bezt)) return 1;
+		if (BEZT_ISSEL_ANY(bezt)) return 1;
 	}
 
 	return 0;
@@ -720,7 +708,7 @@ static void recalcData_spaceclip(TransInfo *t)
 static void recalcData_objects(TransInfo *t)
 {
 	Base *base = t->scene->basact;
-	
+
 	if (t->obedit) {
 		if (ELEM(t->obedit->type, OB_CURVE, OB_SURF)) {
 			Curve *cu = t->obedit->data;
@@ -770,7 +758,14 @@ static void recalcData_objects(TransInfo *t)
 			}
 			if ((t->options & CTX_NO_MIRROR) == 0 && (t->flag & T_MIRROR))
 				editbmesh_apply_to_mirror(t);
-				
+
+			if (t->mode == TFM_EDGE_SLIDE) {
+				projectEdgeSlideData(t, false);
+			}
+			else if (t->mode == TFM_VERT_SLIDE) {
+				projectVertSlideData(t, false);
+			}
+
 			DAG_id_tag_update(t->obedit->data, 0);  /* sets recalc flags */
 			
 			EDBM_mesh_normals_update(em);
@@ -821,10 +816,14 @@ static void recalcData_objects(TransInfo *t)
 					ebo->rad_head *= ebo->length / ebo->oldlength;
 					ebo->rad_tail *= ebo->length / ebo->oldlength;
 					ebo->oldlength = ebo->length;
+
+					if (ebo_parent) {
+						ebo_parent->rad_tail = ebo->rad_head;
+					}
 				}
 			}
 			
-			if (!ELEM(t->mode, TFM_BONE_ROLL, TFM_BONE_ENVELOPE, TFM_BONESIZE)) {
+			if (!ELEM(t->mode, TFM_BONE_ROLL, TFM_BONE_ENVELOPE, TFM_BONE_ENVELOPE_DIST, TFM_BONESIZE)) {
 				/* fix roll */
 				for (i = 0; i < t->total; i++, td++) {
 					if (td->extra) {
@@ -975,6 +974,9 @@ void recalcData(TransInfo *t)
 	else if (t->options & CTX_PAINT_CURVE) {
 		flushTransPaintCurve(t);
 	}
+	else if (t->options & CTX_GPENCIL_STROKES) {
+		/* pass? */
+	}
 	else if (t->spacetype == SPACE_IMAGE) {
 		recalcData_image(t);
 	}
@@ -1075,6 +1077,8 @@ static int initTransInfo_edit_pet_to_flag(const int proportional)
  * Setup internal data, mouse, vectors
  *
  * \note \a op and \a event can be NULL
+ *
+ * \see #saveTransform does the reverse.
  */
 void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *event)
 {
@@ -1131,6 +1135,7 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
 
 	zero_v3(t->vec);
 	zero_v3(t->center);
+	zero_v3(t->center_global);
 
 	unit_m3(t->mat);
 	
@@ -1166,6 +1171,19 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
 		t->spacetype = sa->spacetype;
 	}
 
+	/* handle T_ALT_TRANSFORM initialization, we may use for different operators */
+	if (op) {
+		const char *prop_id = NULL;
+		if (t->mode == TFM_SHRINKFATTEN) {
+			prop_id = "use_even_offset";
+		}
+
+		if (prop_id && (prop = RNA_struct_find_property(op->ptr, prop_id)) &&
+		    RNA_property_is_set(op->ptr, prop))
+		{
+			BKE_BIT_TEST_SET(t->flag, RNA_property_boolean_get(op->ptr, prop), T_ALT_TRANSFORM);
+		}
+	}
 
 	if (t->spacetype == SPACE_VIEW3D) {
 		View3D *v3d = sa->spacedata.first;
@@ -1205,7 +1223,11 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
 		/* exceptional case */
 		if (t->around == V3D_LOCAL) {
 			if (ELEM(t->mode, TFM_ROTATION, TFM_RESIZE, TFM_TRACKBALL)) {
-				t->options |= CTX_NO_PET;
+				const bool use_island = transdata_check_local_islands(t, t->around);
+
+				if (obedit && !use_island) {
+					t->options |= CTX_NO_PET;
+				}
 			}
 		}
 
@@ -1227,7 +1249,7 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
 				}
 			}
 			else {
-				RNA_property_boolean_set(op->ptr, prop, t->settings->uvcalc_flag & UVCALC_TRANSFORM_CORRECT);
+				RNA_property_boolean_set(op->ptr, prop, (t->settings->uvcalc_flag & UVCALC_TRANSFORM_CORRECT) != 0);
 			}
 		}
 
@@ -1322,7 +1344,16 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
 			/* use settings from scene only if modal */
 			if (t->flag & T_MODAL) {
 				if ((t->options & CTX_NO_PET) == 0) {
-					if (t->obedit) {
+					if (t->spacetype == SPACE_IPO) {
+						t->flag |= initTransInfo_edit_pet_to_flag(ts->proportional_fcurve);
+					}
+					else if (t->spacetype == SPACE_ACTION) {
+						t->flag |= initTransInfo_edit_pet_to_flag(ts->proportional_action);
+					}
+					else if (t->obedit) {
+						t->flag |= initTransInfo_edit_pet_to_flag(ts->proportional);
+					}
+					else if (t->options & CTX_GPENCIL_STROKES) {
 						t->flag |= initTransInfo_edit_pet_to_flag(ts->proportional);
 					}
 					else if (t->options & CTX_MASK) {
@@ -1378,6 +1409,7 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
 #endif
 
 	setTransformViewMatrices(t);
+	setTransformViewAspect(t, t->aspect);
 	initNumInput(&t->num);
 }
 
@@ -1544,6 +1576,19 @@ void calculateCenter2D(TransInfo *t)
 	}
 }
 
+void calculateCenterGlobal(TransInfo *t)
+{
+	/* setting constraint center */
+	/* note, init functions may over-ride t->center */
+	if (t->flag & (T_EDIT | T_POSE)) {
+		Object *ob = t->obedit ? t->obedit : t->poseobj;
+		mul_v3_m4v3(t->center_global, ob->obmat, t->center);
+	}
+	else {
+		copy_v3_v3(t->center_global, t->center);
+	}
+}
+
 void calculateCenterCursor(TransInfo *t, float r_center[3])
 {
 	const float *cursor;
@@ -1572,30 +1617,17 @@ void calculateCenterCursor(TransInfo *t, float r_center[3])
 
 void calculateCenterCursor2D(TransInfo *t, float r_center[2])
 {
-	float aspx = 1.0, aspy = 1.0;
 	const float *cursor = NULL;
 	
 	if (t->spacetype == SPACE_IMAGE) {
 		SpaceImage *sima = (SpaceImage *)t->sa->spacedata.first;
-		if (t->options & CTX_MASK) {
-			ED_space_image_get_aspect(sima, &aspx, &aspy);
-		}
-		else {
-			ED_space_image_get_uv_aspect(sima, &aspx, &aspy);
-		}
 		cursor = sima->cursor;
 	}
 	else if (t->spacetype == SPACE_CLIP) {
 		SpaceClip *space_clip = (SpaceClip *) t->sa->spacedata.first;
-		if (t->options & CTX_MOVIECLIP) {
-			ED_space_clip_get_aspect_dimension_aware(space_clip, &aspx, &aspy);
-		}
-		else {
-			ED_space_clip_get_aspect(space_clip, &aspx, &aspy);
-		}
 		cursor = space_clip->cursor;
 	}
-	
+
 	if (cursor) {
 		if (t->options & CTX_MASK) {
 			float co[2];
@@ -1612,8 +1644,8 @@ void calculateCenterCursor2D(TransInfo *t, float r_center[2])
 				BLI_assert(!"Shall not happen");
 			}
 
-			r_center[0] = co[0] * aspx;
-			r_center[1] = co[1] * aspy;
+			r_center[0] = co[0] * t->aspect[0];
+			r_center[1] = co[1] * t->aspect[1];
 		}
 		else if (t->options & CTX_PAINT_CURVE) {
 			if (t->spacetype == SPACE_IMAGE) {
@@ -1622,8 +1654,8 @@ void calculateCenterCursor2D(TransInfo *t, float r_center[2])
 			}
 		}
 		else {
-			r_center[0] = cursor[0] * aspx;
-			r_center[1] = cursor[1] * aspy;
+			r_center[0] = cursor[0] * t->aspect[0];
+			r_center[1] = cursor[1] * t->aspect[1];
 		}
 	}
 }
@@ -1686,63 +1718,8 @@ bool calculateCenterActive(TransInfo *t, bool select_only, float r_center[3])
 	bool ok = false;
 
 	if (t->obedit) {
-		switch (t->obedit->type) {
-			case OB_MESH:
-			{
-				BMEditSelection ese;
-				BMEditMesh *em = BKE_editmesh_from_object(t->obedit);
-
-				if (BM_select_history_active_get(em->bm, &ese)) {
-					BM_editselection_center(&ese, r_center);
-					ok = true;
-				}
-				break;
-			}
-			case OB_ARMATURE:
-			{
-				bArmature *arm = t->obedit->data;
-				EditBone *ebo = arm->act_edbone;
-
-				if (ebo && (!select_only || (ebo->flag & (BONE_SELECTED | BONE_ROOTSEL)))) {
-					copy_v3_v3(r_center, ebo->head);
-					ok = true;
-				}
-
-				break;
-			}
-			case OB_CURVE:
-			case OB_SURF:
-			{
-				float center[3];
-				Curve *cu = (Curve *)t->obedit->data;
-
-				if (ED_curve_active_center(cu, center)) {
-					copy_v3_v3(r_center, center);
-					ok = true;
-				}
-				break;
-			}
-			case OB_MBALL:
-			{
-				MetaBall *mb = (MetaBall *)t->obedit->data;
-				MetaElem *ml_act = mb->lastelem;
-
-				if (ml_act && (!select_only || (ml_act->flag & SELECT))) {
-					copy_v3_v3(r_center, &ml_act->x);
-					ok = true;
-				}
-				break;
-			}
-			case OB_LATTICE:
-			{
-				BPoint *actbp = BKE_lattice_active_point_get(t->obedit->data);
-
-				if (actbp) {
-					copy_v3_v3(r_center, actbp->vec);
-					ok = true;
-				}
-				break;
-			}
+		if (ED_object_editmode_calc_active_center(t->obedit, select_only, r_center)) {
+			ok = true;
 		}
 	}
 	else if (t->flag & T_POSE) {
@@ -1813,14 +1790,8 @@ void calculateCenter(TransInfo *t)
 	}
 
 	calculateCenter2D(t);
+	calculateCenterGlobal(t);
 
-	/* setting constraint center */
-	copy_v3_v3(t->con.center, t->center);
-	if (t->flag & (T_EDIT | T_POSE)) {
-		Object *ob = t->obedit ? t->obedit : t->poseobj;
-		mul_m4_v3(ob->obmat, t->con.center);
-	}
-	
 	/* for panning from cameraview */
 	if (t->flag & T_OBJECT) {
 		if (t->spacetype == SPACE_VIEW3D && t->ar && t->ar->regiontype == RGN_TYPE_WINDOW) {
@@ -1841,7 +1812,7 @@ void calculateCenter(TransInfo *t)
 				/* rotate only needs correct 2d center, grab needs ED_view3d_calc_zfac() value */
 				if (t->mode == TFM_TRANSLATION) {
 					copy_v3_v3(t->center, axis);
-					copy_v3_v3(t->con.center, t->center);
+					copy_v3_v3(t->center_global, t->center);
 				}
 			}
 		}
@@ -1878,9 +1849,12 @@ void calculatePropRatio(TransInfo *t)
 	TransData *td = t->data;
 	int i;
 	float dist;
-	short connected = t->flag & T_PROP_CONNECTED;
+	const bool connected = (t->flag & T_PROP_CONNECTED) != 0;
+
+	t->proptext[0] = '\0';
 
 	if (t->flag & T_PROP_EDIT) {
+		const char *pet_id = NULL;
 		for (i = 0; i < t->total; i++, td++) {
 			if (td->flag & TD_SELECTED) {
 				td->factor = 1.0f;
@@ -1941,6 +1915,9 @@ void calculatePropRatio(TransInfo *t)
 					case PROP_RANDOM:
 						td->factor = BLI_frand() * dist;
 						break;
+					case PROP_INVSQUARE:
+						td->factor = dist * (2.0f - dist);
+						break;
 					default:
 						td->factor = 1;
 						break;
@@ -1949,35 +1926,147 @@ void calculatePropRatio(TransInfo *t)
 		}
 		switch (t->prop_mode) {
 			case PROP_SHARP:
-				strcpy(t->proptext, IFACE_("(Sharp)"));
+				pet_id = N_("(Sharp)");
 				break;
 			case PROP_SMOOTH:
-				strcpy(t->proptext, IFACE_("(Smooth)"));
+				pet_id = N_("(Smooth)");
 				break;
 			case PROP_ROOT:
-				strcpy(t->proptext, IFACE_("(Root)"));
+				pet_id = N_("(Root)");
 				break;
 			case PROP_LIN:
-				strcpy(t->proptext, IFACE_("(Linear)"));
+				pet_id = N_("(Linear)");
 				break;
 			case PROP_CONST:
-				strcpy(t->proptext, IFACE_("(Constant)"));
+				pet_id = N_("(Constant)");
 				break;
 			case PROP_SPHERE:
-				strcpy(t->proptext, IFACE_("(Sphere)"));
+				pet_id = N_("(Sphere)");
 				break;
 			case PROP_RANDOM:
-				strcpy(t->proptext, IFACE_("(Random)"));
+				pet_id = N_("(Random)");
+				break;
+			case PROP_INVSQUARE:
+				pet_id = N_("(InvSquare)");
 				break;
 			default:
-				t->proptext[0] = '\0';
 				break;
+		}
+
+		if (pet_id) {
+			BLI_strncpy(t->proptext, IFACE_(pet_id), sizeof(t->proptext));
 		}
 	}
 	else {
 		for (i = 0; i < t->total; i++, td++) {
 			td->factor = 1.0;
 		}
-		t->proptext[0] = '\0';
 	}
 }
+
+/**
+ * Rotate an element, low level code, ignore protected channels.
+ * (use for objects or pose-bones)
+ * Similar to #ElementRotation.
+ */
+void transform_data_ext_rotate(TransData *td, float mat[3][3], bool use_drot)
+{
+	float totmat[3][3];
+	float smat[3][3];
+	float fmat[3][3];
+	float obmat[3][3];
+
+	float dmat[3][3];  /* delta rotation */
+	float dmat_inv[3][3];
+
+	mul_m3_m3m3(totmat, mat, td->mtx);
+	mul_m3_m3m3(smat, td->smtx, mat);
+
+	/* logic from BKE_object_rot_to_mat3 */
+	if (use_drot) {
+		if (td->ext->rotOrder > 0) {
+			eulO_to_mat3(dmat, td->ext->drot, td->ext->rotOrder);
+		}
+		else if (td->ext->rotOrder == ROT_MODE_AXISANGLE) {
+#if 0
+			axis_angle_to_mat3(dmat, td->ext->drotAxis, td->ext->drotAngle);
+#else
+			unit_m3(dmat);
+#endif
+		}
+		else {
+			float tquat[4];
+			normalize_qt_qt(tquat, td->ext->dquat);
+			quat_to_mat3(dmat, tquat);
+		}
+
+		invert_m3_m3(dmat_inv, dmat);
+	}
+
+
+	if (td->ext->rotOrder == ROT_MODE_QUAT) {
+		float quat[4];
+
+		/* calculate the total rotatation */
+		quat_to_mat3(obmat, td->ext->iquat);
+		if (use_drot) {
+			mul_m3_m3m3(obmat, dmat, obmat);
+		}
+
+		/* mat = transform, obmat = object rotation */
+		mul_m3_m3m3(fmat, smat, obmat);
+
+		if (use_drot) {
+			mul_m3_m3m3(fmat, dmat_inv, fmat);
+		}
+
+		mat3_to_quat(quat, fmat);
+
+		/* apply */
+		copy_qt_qt(td->ext->quat, quat);
+	}
+	else if (td->ext->rotOrder == ROT_MODE_AXISANGLE) {
+		float axis[3], angle;
+
+		/* calculate the total rotatation */
+		axis_angle_to_mat3(obmat, td->ext->irotAxis, td->ext->irotAngle);
+		if (use_drot) {
+			mul_m3_m3m3(obmat, dmat, obmat);
+		}
+
+		/* mat = transform, obmat = object rotation */
+		mul_m3_m3m3(fmat, smat, obmat);
+
+		if (use_drot) {
+			mul_m3_m3m3(fmat, dmat_inv, fmat);
+		}
+
+		mat3_to_axis_angle(axis, &angle, fmat);
+
+		/* apply */
+		copy_v3_v3(td->ext->rotAxis, axis);
+		*td->ext->rotAngle = angle;
+	}
+	else {
+		float eul[3];
+
+		/* calculate the total rotatation */
+		eulO_to_mat3(obmat, td->ext->irot, td->ext->rotOrder);
+		if (use_drot) {
+			mul_m3_m3m3(obmat, dmat, obmat);
+		}
+
+		/* mat = transform, obmat = object rotation */
+		mul_m3_m3m3(fmat, smat, obmat);
+
+		if (use_drot) {
+			mul_m3_m3m3(fmat, dmat_inv, fmat);
+		}
+
+		mat3_to_compatible_eulO(eul, td->ext->rot, td->ext->rotOrder, fmat);
+
+		/* apply */
+		copy_v3_v3(td->ext->rot, eul);
+	}
+}
+

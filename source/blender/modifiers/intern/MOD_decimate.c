@@ -35,17 +35,12 @@
 #include "DNA_object_types.h"
 
 #include "BLI_math.h"
-#include "BLI_string.h"
 #include "BLI_utildefines.h"
-
-#include "BLF_translation.h"
 
 #include "MEM_guardedalloc.h"
 
-#include "BKE_mesh.h"
 #include "BKE_modifier.h"
 #include "BKE_deform.h"
-#include "BKE_particle.h"
 #include "BKE_cdderivedmesh.h"
 
 #include "bmesh.h"
@@ -66,6 +61,7 @@ static void initData(ModifierData *md)
 
 	dmd->percent = 1.0;
 	dmd->angle   = DEG2RADF(5.0f);
+	dmd->defgrp_factor = 1.0;
 }
 
 static void copyData(ModifierData *md, ModifierData *target)
@@ -83,7 +79,9 @@ static CustomDataMask requiredDataMask(Object *UNUSED(ob), ModifierData *md)
 	CustomDataMask dataMask = 0;
 
 	/* ask for vertexgroups if we need them */
-	if (dmd->defgrp_name[0]) dataMask |= CD_MASK_MDEFORMVERT;
+	if (dmd->defgrp_name[0] && (dmd->defgrp_factor > 0.0f)) {
+		dataMask |= CD_MASK_MDEFORMVERT;
+	}
 
 	return dataMask;
 }
@@ -135,7 +133,7 @@ static DerivedMesh *applyModifier(ModifierData *md, Object *ob,
 	}
 
 	if (dmd->mode == MOD_DECIM_MODE_COLLAPSE) {
-		if (dmd->defgrp_name[0]) {
+		if (dmd->defgrp_name[0] && (dmd->defgrp_factor > 0.0f)) {
 			MDeformVert *dvert;
 			int defgrp_index;
 
@@ -149,14 +147,12 @@ static DerivedMesh *applyModifier(ModifierData *md, Object *ob,
 
 				if (dmd->flag & MOD_DECIM_FLAG_INVERT_VGROUP) {
 					for (i = 0; i < vert_tot; i++) {
-						const float f = 1.0f - defvert_find_weight(&dvert[i], defgrp_index);
-						vweights[i] = f > BM_MESH_DECIM_WEIGHT_EPS ? (1.0f / f) : BM_MESH_DECIM_WEIGHT_MAX;
+						vweights[i] = 1.0f - defvert_find_weight(&dvert[i], defgrp_index);
 					}
 				}
 				else {
 					for (i = 0; i < vert_tot; i++) {
-						const float f = defvert_find_weight(&dvert[i], defgrp_index);
-						vweights[i] = f > BM_MESH_DECIM_WEIGHT_EPS ? (1.0f / f) : BM_MESH_DECIM_WEIGHT_MAX;
+						vweights[i] = defvert_find_weight(&dvert[i], defgrp_index);
 					}
 				}
 			}
@@ -168,8 +164,8 @@ static DerivedMesh *applyModifier(ModifierData *md, Object *ob,
 	switch (dmd->mode) {
 		case MOD_DECIM_MODE_COLLAPSE:
 		{
-			const int do_triangulate = (dmd->flag & MOD_DECIM_FLAG_TRIANGULATE) != 0;
-			BM_mesh_decimate_collapse(bm, dmd->percent, vweights, do_triangulate);
+			const bool do_triangulate = (dmd->flag & MOD_DECIM_FLAG_TRIANGULATE) != 0;
+			BM_mesh_decimate_collapse(bm, dmd->percent, vweights, dmd->defgrp_factor, do_triangulate);
 			break;
 		}
 		case MOD_DECIM_MODE_UNSUBDIV:
@@ -179,7 +175,7 @@ static DerivedMesh *applyModifier(ModifierData *md, Object *ob,
 		}
 		case MOD_DECIM_MODE_DISSOLVE:
 		{
-			const int do_dissolve_boundaries = (dmd->flag & MOD_DECIM_FLAG_ALL_BOUNDARY_VERTS) != 0;
+			const bool do_dissolve_boundaries = (dmd->flag & MOD_DECIM_FLAG_ALL_BOUNDARY_VERTS) != 0;
 			BM_mesh_decimate_dissolve(bm, dmd->angle, do_dissolve_boundaries, (BMO_Delimit)dmd->delimit);
 			break;
 		}
@@ -229,6 +225,7 @@ ModifierTypeInfo modifierType_Decimate = {
 	/* freeData */          NULL,
 	/* isDisabled */        NULL,
 	/* updateDepgraph */    NULL,
+	/* updateDepsgraph */   NULL,
 	/* dependsOnTime */     NULL,
 	/* dependsOnNormals */	NULL,
 	/* foreachObjectLink */ NULL,

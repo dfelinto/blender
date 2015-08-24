@@ -35,7 +35,7 @@
 #include "BLI_blenlib.h"
 #include "BLI_dlrbTree.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "DNA_anim_types.h"
 #include "DNA_armature_types.h"
@@ -175,6 +175,15 @@ static int has_poselib_pose_data_poll(bContext *C)
 {
 	Object *ob = get_poselib_object(C);
 	return (ob && ob->poselib);
+}
+
+/* Poll callback for operators that require existing PoseLib data (with poses)
+ * as they need to do some editing work on those poses (i.e. not on lib-linked actions)
+ */
+static int has_poselib_pose_data_for_editing_poll(bContext *C)
+{
+	Object *ob = get_poselib_object(C);
+	return (ob && ob->poselib && !ob->poselib->id.lib);
 }
 
 /* ----------------------------------- */
@@ -357,13 +366,32 @@ void POSELIB_OT_action_sanitize(wmOperatorType *ot)
 	
 	/* callbacks */
 	ot->exec = poselib_sanitize_exec;
-	ot->poll = has_poselib_pose_data_poll;
+	ot->poll = has_poselib_pose_data_for_editing_poll;
 	
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
 /* ------------------------------------------ */
+
+/* Poll callback for adding poses to a PoseLib */
+static int poselib_add_poll(bContext *C)
+{
+	/* There are 2 cases we need to be careful with:
+	 *  1) When this operator is invoked from a hotkey, there may be no PoseLib yet
+	 *  2) If a PoseLib already exists, we can't edit the action if it is a lib-linked
+	 *     actions, as data will be lost when saving the file
+	 */
+	if (ED_operator_posemode(C)) {
+		Object *ob = get_poselib_object(C);
+		if (ob) {
+			if ((ob->poselib == NULL) || (ob->poselib->id.lib == 0)) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
 
 static void poselib_add_menu_invoke__replacemenu(bContext *C, uiLayout *layout, void *UNUSED(arg))
 {
@@ -472,7 +500,7 @@ static int poselib_add_exec(bContext *C, wmOperator *op)
 	ANIM_apply_keyingset(C, NULL, act, ks, MODIFYKEY_MODE_INSERT, (float)frame);
 	
 	/* store new 'active' pose number */
-	act->active_marker = BLI_countlist(&act->markers);
+	act->active_marker = BLI_listbase_count(&act->markers);
 	
 	/* done */
 	return OPERATOR_FINISHED;
@@ -488,7 +516,7 @@ void POSELIB_OT_pose_add(wmOperatorType *ot)
 	/* api callbacks */
 	ot->invoke = poselib_add_menu_invoke;
 	ot->exec = poselib_add_exec;
-	ot->poll = ED_operator_posemode;
+	ot->poll = poselib_add_poll;
 	
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -604,7 +632,7 @@ void POSELIB_OT_pose_remove(wmOperatorType *ot)
 	/* api callbacks */
 	ot->invoke = WM_menu_invoke;
 	ot->exec = poselib_remove_exec;
-	ot->poll = has_poselib_pose_data_poll;
+	ot->poll = has_poselib_pose_data_for_editing_poll;
 	
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -692,7 +720,7 @@ void POSELIB_OT_pose_rename(wmOperatorType *ot)
 	/* api callbacks */
 	ot->invoke = poselib_rename_invoke;
 	ot->exec = poselib_rename_exec;
-	ot->poll = has_poselib_pose_data_poll;
+	ot->poll = has_poselib_pose_data_for_editing_poll;
 	
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -916,7 +944,7 @@ static void poselib_keytag_pose(bContext *C, Scene *scene, tPoseLib_PreviewData 
 	
 	KeyingSet *ks = ANIM_get_keyingset_for_autokeying(scene, ANIM_KS_WHOLE_CHARACTER_ID);
 	ListBase dsources = {NULL, NULL};
-	short autokey = autokeyframe_cfra_can_key(scene, &pld->ob->id);
+	bool autokey = autokeyframe_cfra_can_key(scene, &pld->ob->id);
 	
 	/* start tagging/keying */
 	for (agrp = act->groups.first; agrp; agrp = agrp->next) {
@@ -1050,7 +1078,7 @@ static void poselib_preview_get_next(tPoseLib_PreviewData *pld, int step)
 		LinkData *ld, *ldn, *ldc;
 		
 		/* free and rebuild if needed (i.e. if search-str changed) */
-		if (strcmp(pld->searchstr, pld->searchold)) {
+		if (!STREQ(pld->searchstr, pld->searchold)) {
 			/* free list of temporary search matches */
 			BLI_freelistN(&pld->searchp);
 			
@@ -1196,7 +1224,7 @@ static int poselib_preview_handle_event(bContext *UNUSED(C), wmOperator *op, con
 	
 	/* only accept 'press' event, and ignore 'release', so that we don't get double actions */
 	if (ELEM(event->val, KM_PRESS, KM_NOTHING) == 0) {
-		//printf("PoseLib: skipping event with type '%s' and val %d\n", WM_key_event_string(event->type), event->val);
+		//printf("PoseLib: skipping event with type '%s' and val %d\n", WM_key_event_string(event->type, false), event->val);
 		return ret; 
 	}
 	
@@ -1348,7 +1376,7 @@ static int poselib_preview_handle_event(bContext *UNUSED(C), wmOperator *op, con
 			else {
 				/* change to last pose */
 				pld->marker = pld->act->markers.last;
-				pld->act->active_marker = BLI_countlist(&pld->act->markers);
+				pld->act->active_marker = BLI_listbase_count(&pld->act->markers);
 				
 				pld->redraw = PL_PREVIEW_REDRAWALL;
 			}

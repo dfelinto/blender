@@ -35,9 +35,7 @@
 
 #include "BLI_utildefines.h"
 #include "BLI_string.h"
-#include "BLI_ghash.h"
 
-#include "BPY_extern.h"
 #include "bpy_utils_units.h"
 
 #include "../generic/py_capi_utils.h"
@@ -157,18 +155,18 @@ static bool bpyunits_validate(const char *usys_str, const char *ucat_str, int *r
 }
 
 PyDoc_STRVAR(bpyunits_to_value_doc,
-".. method:: to_value(unit_system, unit_category, str_input, [str_ref_unit=None])\n"
+".. method:: to_value(unit_system, unit_category, str_input, str_ref_unit=None)\n"
 "\n"
 "   Convert a given input string into a float value.\n"
 "\n"
 "   :arg unit_system: The unit system, from :attr:`bpy.utils.units.systems`.\n"
 "   :type unit_system: string\n"
-"   :arg unit_category: The category of data we are converting (length, area, rotation, etc.), "
+"   :arg unit_category: The category of data we are converting (length, area, rotation, etc.),\n"
 "      from :attr:`bpy.utils.units.categories`.\n"
 "   :type unit_category: string\n"
 "   :arg str_input: The string to convert to a float value.\n"
 "   :type str_input: string\n"
-"   :arg str_ref_unit: A reference string from which to extract a default unit, if none is found in :arg:`str_input`.\n"
+"   :arg str_ref_unit: A reference string from which to extract a default unit, if none is found in ``str_input``.\n"
 "   :type str_ref_unit: string or None\n"
 "   :return: The converted/interpreted value.\n"
 "   :rtype: float\n"
@@ -223,13 +221,13 @@ static PyObject *bpyunits_to_value(PyObject *UNUSED(self), PyObject *args, PyObj
 }
 
 PyDoc_STRVAR(bpyunits_to_string_doc,
-".. method:: to_string(unit_system, unit_category, value, [precision=3, [split_unit=False, [compatible_unit=False]]])\n"
+".. method:: to_string(unit_system, unit_category, value, precision=3, split_unit=False, compatible_unit=False)\n"
 "\n"
 "   Convert a given input float value into a string with units.\n"
 "\n"
 "   :arg unit_system: The unit system, from :attr:`bpy.utils.units.systems`.\n"
 "   :type unit_system: string\n"
-"   :arg unit_category: The category of data we are converting (length, area, rotation, etc.), "
+"   :arg unit_category: The category of data we are converting (length, area, rotation, etc.),\n"
 "      from :attr:`bpy.utils.units.categories`.\n"
 "   :type unit_category: string\n"
 "   :arg value: The value to convert to a string.\n"
@@ -251,12 +249,17 @@ static PyObject *bpyunits_to_string(PyObject *UNUSED(self), PyObject *args, PyOb
 
 	char *usys_str = NULL, *ucat_str = NULL;
 	double value = 0.0;
-	int precision = 3, split_unit = false, compatible_unit = false;
+	int precision = 3;
+	bool split_unit = false, compatible_unit = false;
 
 	int usys, ucat;
 
-	if (!PyArg_ParseTupleAndKeywords(args, kw, "ssd|ipp:bpy.utils.units.to_string", (char **)kwlist,
-	                                 &usys_str, &ucat_str, &value, &precision, &split_unit, &compatible_unit))
+	if (!PyArg_ParseTupleAndKeywords(
+	        args, kw,
+	        "ssd|iO&O&:bpy.utils.units.to_string", (char **)kwlist,
+	        &usys_str, &ucat_str, &value, &precision,
+	        PyC_ParseBool, &split_unit,
+	        PyC_ParseBool, &compatible_unit))
 	{
 		return NULL;
 	}

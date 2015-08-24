@@ -41,7 +41,7 @@
 #include "BKE_context.h"
 #include "BKE_screen.h"
 #include "BKE_scene.h"
-#include "BKE_treehash.h"
+#include "BKE_outliner_treehash.h"
 
 #include "ED_space_api.h"
 #include "ED_screen.h"
@@ -98,10 +98,10 @@ static int outliner_parent_drop_poll(bContext *C, wmDrag *drag, const wmEvent *e
 	UI_view2d_region_to_view(&ar->v2d, event->mval[0], event->mval[1], &fmval[0], &fmval[1]);
 
 	if (drag->type == WM_DRAG_ID) {
-		ID *id = (ID *)drag->poin;
+		ID *id = drag->poin;
 		if (GS(id->name) == ID_OB) {
 			/* Ensure item under cursor is valid drop target */
-			TreeElement *te = outliner_dropzone_find(soops, fmval, 1);
+			TreeElement *te = outliner_dropzone_find(soops, fmval, true);
 
 			if (te && te->idcode == ID_OB && TREESTORE(te)->type == 0) {
 				Scene *scene;
@@ -129,7 +129,7 @@ static int outliner_parent_drop_poll(bContext *C, wmDrag *drag, const wmEvent *e
 
 static void outliner_parent_drop_copy(wmDrag *drag, wmDropBox *drop)
 {
-	ID *id = (ID *)drag->poin;
+	ID *id = drag->poin;
 
 	RNA_string_set(drop->ptr, "child", id->name + 2);
 }
@@ -148,10 +148,10 @@ static int outliner_parent_clear_poll(bContext *C, wmDrag *drag, const wmEvent *
 	}
 
 	if (drag->type == WM_DRAG_ID) {
-		ID *id = (ID *)drag->poin;
+		ID *id = drag->poin;
 		if (GS(id->name) == ID_OB) {
 			if (((Object *)id)->parent) {
-				if ((te = outliner_dropzone_find(soops, fmval, 1))) {
+				if ((te = outliner_dropzone_find(soops, fmval, true))) {
 					TreeStoreElem *tselem = TREESTORE(te);
 
 					switch (te->idcode) {
@@ -171,7 +171,7 @@ static int outliner_parent_clear_poll(bContext *C, wmDrag *drag, const wmEvent *
 
 static void outliner_parent_clear_copy(wmDrag *drag, wmDropBox *drop)
 {
-	ID *id = (ID *)drag->poin;
+	ID *id = drag->poin;
 	RNA_string_set(drop->ptr, "dragged_obj", id->name + 2);
 
 	/* Set to simple parent clear type. Avoid menus for drag and drop if possible.
@@ -188,10 +188,10 @@ static int outliner_scene_drop_poll(bContext *C, wmDrag *drag, const wmEvent *ev
 	UI_view2d_region_to_view(&ar->v2d, event->mval[0], event->mval[1], &fmval[0], &fmval[1]);
 
 	if (drag->type == WM_DRAG_ID) {
-		ID *id = (ID *)drag->poin;
+		ID *id = drag->poin;
 		if (GS(id->name) == ID_OB) {
 			/* Ensure item under cursor is valid drop target */
-			TreeElement *te = outliner_dropzone_find(soops, fmval, 0);
+			TreeElement *te = outliner_dropzone_find(soops, fmval, false);
 			return (te && te->idcode == ID_SCE && TREESTORE(te)->type == 0);
 		}
 	}
@@ -200,7 +200,7 @@ static int outliner_scene_drop_poll(bContext *C, wmDrag *drag, const wmEvent *ev
 
 static void outliner_scene_drop_copy(wmDrag *drag, wmDropBox *drop)
 {
-	ID *id = (ID *)drag->poin;
+	ID *id = drag->poin;
 
 	RNA_string_set(drop->ptr, "object", id->name + 2);
 }
@@ -213,10 +213,10 @@ static int outliner_material_drop_poll(bContext *C, wmDrag *drag, const wmEvent 
 	UI_view2d_region_to_view(&ar->v2d, event->mval[0], event->mval[1], &fmval[0], &fmval[1]);
 
 	if (drag->type == WM_DRAG_ID) {
-		ID *id = (ID *)drag->poin;
+		ID *id = drag->poin;
 		if (GS(id->name) == ID_MA) {
 			/* Ensure item under cursor is valid drop target */
-			TreeElement *te = outliner_dropzone_find(soops, fmval, 1);
+			TreeElement *te = outliner_dropzone_find(soops, fmval, true);
 			return (te && te->idcode == ID_OB && TREESTORE(te)->type == 0);
 		}
 	}
@@ -225,9 +225,33 @@ static int outliner_material_drop_poll(bContext *C, wmDrag *drag, const wmEvent 
 
 static void outliner_material_drop_copy(wmDrag *drag, wmDropBox *drop)
 {
-	ID *id = (ID *)drag->poin;
+	ID *id = drag->poin;
 
 	RNA_string_set(drop->ptr, "material", id->name + 2);
+}
+
+static int outliner_group_link_poll(bContext *C, wmDrag *drag, const wmEvent *event)
+{
+	ARegion *ar = CTX_wm_region(C);
+	SpaceOops *soops = CTX_wm_space_outliner(C);
+	float fmval[2];
+	UI_view2d_region_to_view(&ar->v2d, event->mval[0], event->mval[1], &fmval[0], &fmval[1]);
+
+	if (drag->type == WM_DRAG_ID) {
+		ID *id = drag->poin;
+		if (GS(id->name) == ID_OB) {
+			/* Ensure item under cursor is valid drop target */
+			TreeElement *te = outliner_dropzone_find(soops, fmval, true);
+			return (te && te->idcode == ID_GR && TREESTORE(te)->type == 0);
+		}
+	}
+	return 0;
+}
+
+static void outliner_group_link_copy(wmDrag *drag, wmDropBox *drop)
+{
+	ID *id = drag->poin;
+	RNA_string_set(drop->ptr, "object", id->name + 2);
 }
 
 /* region dropbox definition */
@@ -239,6 +263,7 @@ static void outliner_dropboxes(void)
 	WM_dropbox_add(lb, "OUTLINER_OT_parent_clear", outliner_parent_clear_poll, outliner_parent_clear_copy);
 	WM_dropbox_add(lb, "OUTLINER_OT_scene_drop", outliner_scene_drop_poll, outliner_scene_drop_copy);
 	WM_dropbox_add(lb, "OUTLINER_OT_material_drop", outliner_material_drop_poll, outliner_material_drop_copy);
+	WM_dropbox_add(lb, "OUTLINER_OT_group_link", outliner_group_link_poll, outliner_group_link_copy);
 }
 
 static void outliner_main_area_draw(const bContext *C, ARegion *ar)
@@ -362,6 +387,10 @@ static void outliner_main_area_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa)
 					break;
 			}
 			break;
+		case NC_GPENCIL:
+			if (ELEM(wmn->action, NA_EDITED, NA_SELECTED))
+				ED_region_tag_redraw(ar);
+			break;
 	}
 	
 }
@@ -435,7 +464,7 @@ static void outliner_free(SpaceLink *sl)
 		BLI_mempool_destroy(soutliner->treestore);
 	}
 	if (soutliner->treehash) {
-		BKE_treehash_free(soutliner->treehash);
+		BKE_outliner_treehash_free(soutliner->treehash);
 	}
 }
 

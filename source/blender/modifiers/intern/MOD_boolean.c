@@ -39,8 +39,6 @@
 
 #include "BLI_utildefines.h"
 
-#include "BLF_translation.h"
-
 #include "BKE_cdderivedmesh.h"
 #include "BKE_modifier.h"
 
@@ -48,8 +46,6 @@
 
 #include "MOD_boolean_util.h"
 #include "MOD_util.h"
-
-#include "PIL_time.h"
 
 static void copyData(ModifierData *md, ModifierData *target)
 {
@@ -78,6 +74,7 @@ static void foreachObjectLink(
 }
 
 static void updateDepgraph(ModifierData *md, DagForest *forest,
+                           struct Main *UNUSED(bmain),
                            struct Scene *UNUSED(scene),
                            Object *UNUSED(ob),
                            DagNode *obNode)
@@ -90,6 +87,21 @@ static void updateDepgraph(ModifierData *md, DagForest *forest,
 		dag_add_relation(forest, curNode, obNode,
 		                 DAG_RL_DATA_DATA | DAG_RL_OB_DATA, "Boolean Modifier");
 	}
+}
+
+static void updateDepsgraph(ModifierData *md,
+                            struct Main *UNUSED(bmain),
+                            struct Scene *UNUSED(scene),
+                            Object *ob,
+                            struct DepsNodeHandle *node)
+{
+	BooleanModifierData *bmd = (BooleanModifierData *)md;
+	if (bmd->object != NULL) {
+		DEG_add_object_relation(node, bmd->object, DEG_OB_COMP_TRANSFORM, "Boolean Modifier");
+		DEG_add_object_relation(node, bmd->object, DEG_OB_COMP_GEOMETRY, "Boolean Modifier");
+	}
+	/* We need own transformation as well. */
+	DEG_add_object_relation(node, ob, DEG_OB_COMP_TRANSFORM, "Boolean Modifier");
 }
 
 #ifdef WITH_MOD_BOOLEAN
@@ -196,6 +208,7 @@ ModifierTypeInfo modifierType_Boolean = {
 	/* freeData */          NULL,
 	/* isDisabled */        isDisabled,
 	/* updateDepgraph */    updateDepgraph,
+	/* updateDepsgraph */   updateDepsgraph,
 	/* dependsOnTime */     NULL,
 	/* dependsOnNormals */  NULL,
 	/* foreachObjectLink */ foreachObjectLink,

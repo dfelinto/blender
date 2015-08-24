@@ -2,7 +2,6 @@ set(PROJECT_DESCRIPTION  "Blender is a very fast and versatile 3D modeller/rende
 set(PROJECT_COPYRIGHT    "Copyright (C) 2001-2012 Blender Foundation")
 set(PROJECT_CONTACT      "foundation@blender.org")
 set(PROJECT_VENDOR       "Blender Foundation")
-set(ORG_WEBSITE          "www.blender.org")
 
 set(MAJOR_VERSION ${BLENDER_VERSION_MAJOR})
 set(MINOR_VERSION ${BLENDER_VERSION_MINOR})
@@ -25,13 +24,15 @@ if(EXISTS ${CMAKE_SOURCE_DIR}/.git/)
 	include(FindGit)
 	if(GIT_FOUND)
 		message(STATUS "-- Found Git: ${GIT_EXECUTABLE}")
-		execute_process(COMMAND git rev-parse --short @{u}
+		execute_process(COMMAND git rev-parse --short HEAD
 		                WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
 		                OUTPUT_VARIABLE MY_WC_HASH
-		                OUTPUT_STRIP_TRAILING_WHITESPACE)
+		                OUTPUT_STRIP_TRAILING_WHITESPACE
+		                ERROR_QUIET)
 	endif()
 endif()
 set(BUILD_REV ${MY_WC_HASH})
+unset(MY_WC_HASH)
 
 
 # Force Package Name
@@ -41,7 +42,7 @@ set(CPACK_PACKAGE_FILE_NAME ${PROJECT_NAME}-${MAJOR_VERSION}.${MINOR_VERSION}.${
 if(CMAKE_SYSTEM_NAME MATCHES "Linux")
 	# RPM packages
 	include(build_files/cmake/RpmBuild.cmake)
-	if(RPMBUILD_FOUND AND NOT WIN32)
+	if(RPMBUILD_FOUND)
 		set(CPACK_GENERATOR "RPM")
 		set(CPACK_RPM_PACKAGE_RELEASE "git${CPACK_DATE}.${BUILD_REV}")
 		set(CPACK_SET_DESTDIR "true")
@@ -71,6 +72,12 @@ if(WIN32)
 	set(CPACK_RESOURCE_FILE_LICENSE ${CMAKE_SOURCE_DIR}/release/text/GPL-license.txt)
 	set(CPACK_WIX_PRODUCT_ICON ${CMAKE_SOURCE_DIR}/source/icons/winblender.ico)
 	set(CPACK_WIX_UPGRADE_GUID "B767E4FD-7DE7-4094-B051-3AE62E13A17A")
+
+	set(CPACK_WIX_UI_BANNER ${LIBDIR}/package/installer_wix/WIX_UI_BANNER.bmp)
+	set(CPACK_WIX_UI_DIALOG ${LIBDIR}/package/installer_wix/WIX_UI_DIALOG.bmp)
+
+	#force lzma instead of deflate
+	set(CPACK_WIX_LIGHT_EXTRA_FLAGS -dcl:high)
 endif()
 
 set(CPACK_PACKAGE_EXECUTABLES "blender" "blender")
@@ -88,6 +95,8 @@ macro(add_package_archive packagename extension)
 		OUTPUT ${package_output}
 		COMMAND ${build_archive} ${packagename} ${extension} bin release
 		WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+	unset(build_archive)
+	unset(package_output)
 endmacro()
 
 if(APPLE)
@@ -102,4 +111,10 @@ elseif(UNIX)
 		"${PROJECT_NAME}-${BLENDER_VERSION}-${BUILD_REV}-${PACKAGE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}"
 		"tar.bz2")
 endif()
+
+unset(MAJOR_VERSION)
+unset(MINOR_VERSION)
+unset(PATCH_VERSION)
+
+unset(BUILD_REV)
 

@@ -38,7 +38,7 @@
 #include "BLI_path_util.h"
 #include "BLI_string.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_action.h"
 #include "BKE_armature.h"
@@ -219,7 +219,7 @@ void AnimationImporter::add_fcurves_to_object(Object *ob, std::vector<FCurve *>&
 					BLI_strncpy(grp->name, bone_name, sizeof(grp->name));
 					
 					BLI_addtail(&act->groups, grp);
-					BLI_uniquename(&act->groups, grp, CTX_DATA_(BLF_I18NCONTEXT_ID_ACTION, "Group"), '.',
+					BLI_uniquename(&act->groups, grp, CTX_DATA_(BLT_I18NCONTEXT_ID_ACTION, "Group"), '.',
 					               offsetof(bActionGroup, name), 64);
 				}
 				
@@ -649,7 +649,7 @@ void AnimationImporter:: Assign_float_animations(const COLLADAFW::UniqueId& list
 			for (iter = animcurves.begin(); iter != animcurves.end(); iter++) {
 				FCurve *fcu = *iter;
 				/* All anim_types whose values are to be converted from Degree to Radians can be ORed here */
-				if (strcmp("spot_size", anim_type)==0) {
+				if (STREQ("spot_size", anim_type)) {
 					/* NOTE: Do NOT convert if imported file was made by blender <= 2.69.10
 					 * Reason: old blender versions stored spot_size in radians (was a bug)
 					 */
@@ -1994,7 +1994,7 @@ void AnimationImporter::add_bone_fcurve(Object *ob, COLLADAFW::Node *node, FCurv
 		BLI_strncpy(grp->name, bone_name, sizeof(grp->name));
 
 		BLI_addtail(&act->groups, grp);
-		BLI_uniquename(&act->groups, grp, CTX_DATA_(BLF_I18NCONTEXT_ID_ACTION, "Group"), '.',
+		BLI_uniquename(&act->groups, grp, CTX_DATA_(BLT_I18NCONTEXT_ID_ACTION, "Group"), '.',
 		               offsetof(bActionGroup, name), 64);
 	}
 

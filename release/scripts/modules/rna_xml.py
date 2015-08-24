@@ -32,7 +32,7 @@ def build_property_typemap(skip_classes, skip_typemap):
         if issubclass(cls, skip_classes):
             continue
 
-        ## to support skip-save we cant get all props
+        # # to support skip-save we cant get all props
         # properties = cls.bl_rna.properties.keys()
         properties = []
         for prop_id, prop in cls.bl_rna.properties.items():
@@ -331,7 +331,7 @@ def xml2rna(root_xml,
                                     rna2xml_node(child_xml_real, subsubvalue)
 
                     else:
-#                        print(elems)
+                        # print(elems)
 
                         if len(elems) == 1:
                             # sub node named by its type

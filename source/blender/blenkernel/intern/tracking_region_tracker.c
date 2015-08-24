@@ -35,11 +35,8 @@
 #include "MEM_guardedalloc.h"
 
 #include "DNA_movieclip_types.h"
-#include "DNA_object_types.h"   /* SELECT */
 
 #include "BLI_utildefines.h"
-#include "BLI_math.h"
-#include "BLI_ghash.h"
 #include "BLI_threads.h"
 
 #include "BKE_tracking.h"
@@ -116,7 +113,7 @@ static float *track_get_search_floatbuf(ImBuf *ibuf, MovieTrackingTrack *track, 
 	return gray_pixels;
 }
 
-/* Get image boffer for a given frame
+/* Get image buffer for a given frame
  *
  * Frame is in clip space.
  */

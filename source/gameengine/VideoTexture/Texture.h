@@ -31,7 +31,7 @@
 #ifndef __TEXTURE_H__
 #define __TEXTURE_H__
 
-#include "PyObjectPlus.h"
+#include "EXP_PyObjectPlus.h"
 #include <structmember.h>
 
 #include "DNA_image_types.h"
@@ -42,6 +42,8 @@
 #include "BlendType.h"
 #include "Exception.h"
 
+
+struct ImBuf;
 
 // type Texture declaration
 struct Texture
@@ -58,6 +60,8 @@ struct Texture
 	// original texture saved
 	bool m_orgSaved;
 
+	// kernel image buffer, to make sure the image is loaded before we swap the bindcode
+	struct ImBuf *m_imgBuf;
 	// texture image for game materials
 	Image * m_imgTexture;
 	// texture for blender materials
@@ -67,9 +71,7 @@ struct Texture
 	bool m_mipmap;
 
 	// scaled image buffer
-	unsigned int * m_scaledImg;
-	// scaled image buffer size
-	unsigned int m_scaledImgSize;
+	ImBuf * m_scaledImBuf;
 	// last refresh
 	double m_lastClock;
 

@@ -25,9 +25,9 @@
 
 set(INC
 	.
-	../blenfont
 	../blenkernel
 	../blenlib
+	../blentranslation
 	../makesdna
 	../../../intern/guardedalloc
 	../../../extern/rangetree
@@ -43,6 +43,7 @@ set(SRC
 	operators/bmo_bisect_plane.c
 	operators/bmo_bridge.c
 	operators/bmo_connect.c
+	operators/bmo_connect_concave.c
 	operators/bmo_connect_nonplanar.c
 	operators/bmo_connect_pair.c
 	operators/bmo_create.c
@@ -60,6 +61,8 @@ set(SRC
 	operators/bmo_mesh_conv.c
 	operators/bmo_mirror.c
 	operators/bmo_normals.c
+	operators/bmo_offset_edgeloops.c
+	operators/bmo_planar_faces.c
 	operators/bmo_poke.c
 	operators/bmo_primitive.c
 	operators/bmo_removedoubles.c

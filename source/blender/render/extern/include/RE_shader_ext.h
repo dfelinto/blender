@@ -86,12 +86,12 @@ struct ShadeInputCopy {
 
 typedef struct ShadeInputUV {
 	float dxuv[3], dyuv[3], uv[3];
-	char *name;
+	const char *name;
 } ShadeInputUV;
 
 typedef struct ShadeInputCol {
 	float col[4];
-	char *name;
+	const char *name;
 } ShadeInputCol;
 
 /* localized renderloop data */
@@ -178,7 +178,7 @@ typedef struct ShadeInput {
 	int layflag, passflag, combinedflag;
 	struct Group *light_override;
 	struct Material *mat_override;
-	
+
 #ifdef RE_RAYCOUNTER
 	RayCounter raycounter;
 #endif
@@ -198,14 +198,15 @@ struct ImagePool;
 struct Object;
 
 /* this one uses nodes */
-int	multitex_ext(struct Tex *tex, float texvec[3], float dxt[3], float dyt[3], int osatex, struct TexResult *texres, struct ImagePool *pool, bool scene_color_manage);
+int	multitex_ext(struct Tex *tex, float texvec[3], float dxt[3], float dyt[3], int osatex, struct TexResult *texres, struct ImagePool *pool, bool scene_color_manage, const bool skip_load_image);
 /* nodes disabled */
-int multitex_ext_safe(struct Tex *tex, float texvec[3], struct TexResult *texres, struct ImagePool *pool, bool scene_color_manage);
+int multitex_ext_safe(struct Tex *tex, float texvec[3], struct TexResult *texres, struct ImagePool *pool, bool scene_color_manage, const bool skip_load_image);
 /* only for internal node usage */
 int multitex_nodes(struct Tex *tex, float texvec[3], float dxt[3], float dyt[3], int osatex, struct TexResult *texres,
                    const short thread, short which_output, struct ShadeInput *shi, struct MTex *mtex,
                    struct ImagePool *pool);
 float RE_lamp_get_data(struct ShadeInput *shi, struct Object *lamp_obj, float col[4], float lv[3], float *dist, float shadow[4]);
+void RE_instance_get_particle_info(struct ObjectInstanceRen *obi, float *index, float *age, float *lifetime, float co[3], float *size, float vel[3], float angvel[3]);
 
 /* shaded view and bake */
 struct Render;

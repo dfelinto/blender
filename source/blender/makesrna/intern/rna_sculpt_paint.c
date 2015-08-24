@@ -289,9 +289,10 @@ static char *rna_ParticleBrush_path(PointerRNA *UNUSED(ptr))
 
 static void rna_Paint_brush_update(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *ptr)
 {
-	Brush *br = (Brush *)ptr->data;
+	Paint *paint = ptr->data;
+	Brush *br = paint->brush;
 	BKE_paint_invalidate_overlay_all();
-	WM_main_add_notifier(NC_BRUSH | NA_EDITED, br);
+	WM_main_add_notifier(NC_BRUSH | NA_SELECTED, br);
 }
 
 static void rna_ImaPaint_viewport_update(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *UNUSED(ptr))
@@ -303,22 +304,27 @@ static void rna_ImaPaint_viewport_update(Main *UNUSED(bmain), Scene *UNUSED(scen
 static void rna_ImaPaint_mode_update(Main *UNUSED(bmain), Scene *scene, PointerRNA *UNUSED(ptr))
 {
 	Object *ob = OBACT;
-	
-	/* of course we need to invalidate here */
-	BKE_texpaint_slots_refresh_object(scene, ob);
 
-	/* we assume that changing the current mode will invalidate the uv layers so we need to refresh display */
-	GPU_drawobject_free(ob->derivedFinal);
-	BKE_paint_proj_mesh_data_check(scene, ob, NULL, NULL, NULL, NULL);
-	WM_main_add_notifier(NC_OBJECT | ND_DRAW, NULL);
+	if (ob && ob->type == OB_MESH) {
+		/* of course we need to invalidate here */
+		BKE_texpaint_slots_refresh_object(scene, ob);
+
+		/* we assume that changing the current mode will invalidate the uv layers so we need to refresh display */
+		GPU_drawobject_free(ob->derivedFinal);
+		BKE_paint_proj_mesh_data_check(scene, ob, NULL, NULL, NULL, NULL);
+		WM_main_add_notifier(NC_OBJECT | ND_DRAW, NULL);
+	}
 }
 
 static void rna_ImaPaint_stencil_update(Main *UNUSED(bmain), Scene *scene, PointerRNA *UNUSED(ptr))
 {
-	Object *ob = OBACT;	
-	GPU_drawobject_free(ob->derivedFinal);
-	BKE_paint_proj_mesh_data_check(scene, ob, NULL, NULL, NULL, NULL);
-	WM_main_add_notifier(NC_OBJECT | ND_DRAW, NULL);
+	Object *ob = OBACT;
+
+	if (ob && ob->type == OB_MESH) {
+		GPU_drawobject_free(ob->derivedFinal);
+		BKE_paint_proj_mesh_data_check(scene, ob, NULL, NULL, NULL, NULL);
+		WM_main_add_notifier(NC_OBJECT | ND_DRAW, NULL);
+	}
 }
 
 static void rna_ImaPaint_canvas_update(Main *bmain, Scene *scene, PointerRNA *UNUSED(ptr))
@@ -342,9 +348,11 @@ static void rna_ImaPaint_canvas_update(Main *bmain, Scene *scene, PointerRNA *UN
 		}
 	}
 	
-	GPU_drawobject_free(ob->derivedFinal);
-	BKE_paint_proj_mesh_data_check(scene, ob, NULL, NULL, NULL, NULL);
-	WM_main_add_notifier(NC_OBJECT | ND_DRAW, NULL);
+	if (ob && ob->type == OB_MESH) {
+		GPU_drawobject_free(ob->derivedFinal);
+		BKE_paint_proj_mesh_data_check(scene, ob, NULL, NULL, NULL, NULL);
+		WM_main_add_notifier(NC_OBJECT | ND_DRAW, NULL);
+	}
 }
 
 static int rna_ImaPaint_detect_data(ImagePaintSettings *imapaint)
@@ -352,49 +360,6 @@ static int rna_ImaPaint_detect_data(ImagePaintSettings *imapaint)
 	return imapaint->missing_data == 0;
 }
 #else
-
-static void rna_def_palettecolor(BlenderRNA *brna)
-{
-	StructRNA *srna;
-	PropertyRNA *prop;
-
-	srna = RNA_def_struct(brna, "PaletteColor", NULL);
-	RNA_def_struct_ui_text(srna, "Palette Color", "");
-
-	prop = RNA_def_property(srna, "color", PROP_FLOAT, PROP_COLOR_GAMMA);
-	RNA_def_property_range(prop, 0.0, 1.0);
-	RNA_def_property_float_sdna(prop, NULL, "rgb");
-	RNA_def_property_ui_text(prop, "Color", "");
-	RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
-
-	prop = RNA_def_property(srna, "strength", PROP_FLOAT, PROP_NONE);
-	RNA_def_property_range(prop, 0.0, 1.0);
-	RNA_def_property_float_sdna(prop, NULL, "value");
-	RNA_def_property_ui_text(prop, "Value", "");
-	RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
-
-	prop = RNA_def_property(srna, "weight", PROP_FLOAT, PROP_NONE);
-	RNA_def_property_range(prop, 0.0, 1.0);
-	RNA_def_property_float_sdna(prop, NULL, "value");
-	RNA_def_property_ui_text(prop, "Weight", "");
-	RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
-}
-
-
-static void rna_def_palette(BlenderRNA *brna)
-{
-	StructRNA *srna;
-	PropertyRNA *prop;
-
-	srna = RNA_def_struct(brna, "Palette", "ID");
-	RNA_def_struct_ui_text(srna, "Palette", "");
-	RNA_def_struct_ui_icon(srna, ICON_COLOR);
-
-	prop = RNA_def_property(srna, "colors", PROP_COLLECTION, PROP_NONE);
-	RNA_def_property_struct_type(prop, "PaletteColor");
-	RNA_def_property_ui_text(prop, "Palette Color", "Colors that are part of this palette");
-	RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
-}
 
 static void rna_def_paint_curve(BlenderRNA *brna)
 {
@@ -467,6 +432,39 @@ static void rna_def_paint(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Symmetry Feathering",
 	                         "Reduce the strength of the brush where it overlaps symmetrical daubs");
 	RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
+
+	prop = RNA_def_property(srna, "cavity_curve", PROP_POINTER, PROP_NONE);
+	RNA_def_property_flag(prop, PROP_NEVER_NULL);
+	RNA_def_property_ui_text(prop, "Curve", "Editable cavity curve");
+	RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
+
+	prop = RNA_def_property(srna, "use_cavity", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "flags", PAINT_USE_CAVITY_MASK);
+	RNA_def_property_ui_text(prop, "Cavity Mask", "Mask painting according to mesh geometry cavity");
+	RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
+
+	prop = RNA_def_property(srna, "tile_offset", PROP_FLOAT, PROP_XYZ);
+	RNA_def_property_float_sdna(prop, NULL, "tile_offset");
+	RNA_def_property_array(prop, 3);
+	RNA_def_property_range(prop, 0.01, FLT_MAX);
+	RNA_def_property_ui_range(prop, 0.01, 100, 1 * 100, 2);
+	RNA_def_property_ui_text(prop, "Tiling offset for the X Axis",
+	                         "Stride at which tiled strokes are copied");
+
+	prop = RNA_def_property(srna, "tile_x", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "symmetry_flags", PAINT_TILE_X);
+	RNA_def_property_ui_text(prop, "Tile X", "Tile along X axis");
+	RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
+
+	prop = RNA_def_property(srna, "tile_y", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "symmetry_flags", PAINT_TILE_Y);
+	RNA_def_property_ui_text(prop, "Tile Y", "Tile along Y axis");
+	RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
+
+	prop = RNA_def_property(srna, "tile_z", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "symmetry_flags", PAINT_TILE_Z);
+	RNA_def_property_ui_text(prop, "Tile Z", "Tile along Z axis");
+	RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
 }
 
 static void rna_def_sculpt(BlenderRNA  *brna)
@@ -486,6 +484,8 @@ static void rna_def_sculpt(BlenderRNA  *brna)
 		 "Relative Detail", "Mesh detail is relative to the brush size and detail size"},
 		{SCULPT_DYNTOPO_DETAIL_CONSTANT, "CONSTANT", 0,
 		 "Constant Detail", "Mesh detail is constant in object space according to detail size"},
+	    {SCULPT_DYNTOPO_DETAIL_BRUSH, "BRUSH", 0,
+		 "Brush Detail", "Mesh detail is relative to brush radius"},
 		{0, NULL, 0, NULL, NULL}
 	};
 
@@ -541,6 +541,11 @@ static void rna_def_sculpt(BlenderRNA  *brna)
 	prop = RNA_def_property(srna, "detail_size", PROP_FLOAT, PROP_PIXEL);
 	RNA_def_property_ui_range(prop, 0.5, 40.0, 10, 2);
 	RNA_def_property_ui_text(prop, "Detail Size", "Maximum edge length for dynamic topology sculpting (in pixels)");
+	RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
+
+	prop = RNA_def_property(srna, "detail_percent", PROP_FLOAT, PROP_PERCENTAGE);
+	RNA_def_property_ui_range(prop, 0.5, 100.0, 10, 2);
+	RNA_def_property_ui_text(prop, "Detail Percentage", "Maximum edge length for dynamic topology sculpting (in brush percenage)");
 	RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
 
 	prop = RNA_def_property(srna, "constant_detail", PROP_FLOAT, PROP_PERCENTAGE);
@@ -673,7 +678,7 @@ static void rna_def_image_paint(BlenderRNA *brna)
 	RNA_def_property_boolean_sdna(prop, NULL, "flag", IMAGEPAINT_PROJECT_LAYER_STENCIL);
 	RNA_def_property_ui_text(prop, "Stencil Layer", "Set the mask layer from the UV map buttons");
 	RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, "rna_ImaPaint_viewport_update");
-	
+
 	prop = RNA_def_property(srna, "invert_stencil", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "flag", IMAGEPAINT_PROJECT_LAYER_STENCIL_INV);
 	RNA_def_property_ui_text(prop, "Invert", "Invert the stencil layer");
@@ -701,12 +706,17 @@ static void rna_def_image_paint(BlenderRNA *brna)
 	RNA_def_property_float_sdna(prop, NULL, "stencil_col");
 	RNA_def_property_ui_text(prop, "Stencil Color", "Stencil color in the viewport");
 	RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, "rna_ImaPaint_viewport_update");
+
+	prop = RNA_def_property(srna, "dither", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_range(prop, 0.0, 2.0);
+	RNA_def_property_ui_text(prop, "Dither", "Amount of dithering when painting on byte images");
+	RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
 	
 	prop = RNA_def_property(srna, "use_clone_layer", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "flag", IMAGEPAINT_PROJECT_LAYER_CLONE);
 	RNA_def_property_ui_text(prop, "Clone Map",
 	                         "Use another UV map as clone source, otherwise use the 3D cursor as the source");
-	RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
+	RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, "rna_ImaPaint_viewport_update");
 	
 	/* integers */
 	
@@ -880,6 +890,11 @@ static void rna_def_particle_edit(BlenderRNA *brna)
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 	RNA_def_property_ui_text(prop, "Object", "The edited object");
 
+	prop = RNA_def_property(srna, "shape_object", PROP_POINTER, PROP_NONE);
+	RNA_def_property_flag(prop, PROP_EDITABLE);
+	RNA_def_property_ui_text(prop, "Shape Object", "Outer shape to use for tools");
+	RNA_def_property_pointer_funcs(prop, NULL, NULL, NULL, "rna_Mesh_object_poll");
+	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_ParticleEdit_redo");
 
 	/* brush */
 
@@ -890,7 +905,7 @@ static void rna_def_particle_edit(BlenderRNA *brna)
 
 	prop = RNA_def_property(srna, "size", PROP_INT, PROP_PIXEL);
 	RNA_def_property_range(prop, 1, SHRT_MAX);
-	RNA_def_property_ui_range(prop, 1, 100, 10, 3);
+	RNA_def_property_ui_range(prop, 1, MAX_BRUSH_PIXEL_RADIUS, 10, 3);
 	RNA_def_property_ui_text(prop, "Radius", "Radius of the brush in pixels");
 
 	prop = RNA_def_property(srna, "strength", PROP_FLOAT, PROP_FACTOR);
@@ -934,8 +949,6 @@ void RNA_def_sculpt_paint(BlenderRNA *brna)
 {
 	/* *** Non-Animated *** */
 	RNA_define_animate_sdna(false);
-	rna_def_palettecolor(brna);
-	rna_def_palette(brna);
 	rna_def_paint_curve(brna);
 	rna_def_paint(brna);
 	rna_def_sculpt(brna);

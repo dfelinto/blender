@@ -19,18 +19,20 @@
 # <pep8-80 compliant>
 
 if "bpy" in locals():
-    import imp
+    from importlib import reload
     if "anim_utils" in locals():
-        imp.reload(anim_utils)
+        reload(anim_utils)
+    del reload
 
 
 import bpy
 from bpy.types import Operator
-from bpy.props import (IntProperty,
-                       BoolProperty,
-                       EnumProperty,
-                       StringProperty,
-                       )
+from bpy.props import (
+        IntProperty,
+        BoolProperty,
+        EnumProperty,
+        StringProperty,
+        )
 
 
 class ANIM_OT_keying_set_export(Operator):
@@ -83,7 +85,9 @@ class ANIM_OT_keying_set_export(Operator):
             f.write("ks.is_path_absolute = False\n")
         f.write("\n")
 
-        f.write("ks.bl_options = %r\n" % ks.bl_options)
+        f.write("ks.use_insertkey_needed = %s\n" % ks.use_insertkey_needed)
+        f.write("ks.use_insertkey_visual = %s\n" % ks.use_insertkey_visual)
+        f.write("ks.use_insertkey_xyz_to_rgb = %s\n" % ks.use_insertkey_xyz_to_rgb)
         f.write("\n")
 
         # --------------------------------------------------------
@@ -206,6 +210,12 @@ class BakeAction(Operator):
             description="Bake animation onto the object then clear parents (objects only)",
             default=False,
             )
+    use_current_action = BoolProperty(
+            name="Overwrite Current Action",
+            description="Bake animation into current action, instead of creating a new one "
+                        "(useful for baking only part of bones in an armature)",
+            default=False,
+            )
     bake_types = EnumProperty(
             name="Bake Data",
             description="Which data's transformations to bake",
@@ -220,6 +230,12 @@ class BakeAction(Operator):
 
         from bpy_extras import anim_utils
 
+        action = None
+        if self.use_current_action:
+            obj = context.object
+            if obj.animation_data:
+                action = obj.animation_data.action
+
         action = anim_utils.bake_action(self.frame_start,
                                         self.frame_end,
                                         frame_step=self.step,
@@ -230,6 +246,7 @@ class BakeAction(Operator):
                                         do_constraint_clear=self.clear_constraints,
                                         do_parents_clear=self.clear_parents,
                                         do_clean=True,
+                                        action=action,
                                         )
 
         if action is None:

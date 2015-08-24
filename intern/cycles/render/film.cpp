@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #include "camera.h"
@@ -151,6 +151,14 @@ void Pass::add(PassType type, vector<Pass>& passes)
 			pass.components = 1;
 			pass.exposure = false;
 			break;
+		case PASS_BVH_TRAVERSED_INSTANCES:
+			pass.components = 1;
+			pass.exposure = false;
+			break;
+		case PASS_RAY_BOUNCES:
+			pass.components = 1;
+			pass.exposure = false;
+			break;
 #endif
 	}
 
@@ -187,7 +195,7 @@ bool Pass::contains(const vector<Pass>& passes, PassType type)
 
 /* Pixel Filter */
 
-static float filter_func_box(float v, float width)
+static float filter_func_box(float /*v*/, float /*width*/)
 {
 	return 1.0f;
 }
@@ -399,6 +407,12 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
 			case PASS_BVH_TRAVERSAL_STEPS:
 				kfilm->pass_bvh_traversal_steps = kfilm->pass_stride;
 				break;
+			case PASS_BVH_TRAVERSED_INSTANCES:
+				kfilm->pass_bvh_traversed_instances = kfilm->pass_stride;
+				break;
+			case PASS_RAY_BOUNCES:
+				kfilm->pass_ray_bounces = kfilm->pass_stride;
+				break;
 #endif
 
 			case PASS_NONE:
@@ -424,7 +438,9 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
 	need_update = false;
 }
 
-void Film::device_free(Device *device, DeviceScene *dscene, Scene *scene)
+void Film::device_free(Device * /*device*/,
+                       DeviceScene * /*dscene*/,
+                       Scene *scene)
 {
 	if(filter_table_offset != TABLE_OFFSET_INVALID) {
 		scene->lookup_tables->remove_table(filter_table_offset);
@@ -459,7 +475,7 @@ void Film::tag_passes_update(Scene *scene, const vector<Pass>& passes_)
 	passes = passes_;
 }
 
-void Film::tag_update(Scene *scene)
+void Film::tag_update(Scene * /*scene*/)
 {
 	need_update = true;
 }

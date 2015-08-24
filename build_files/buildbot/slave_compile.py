@@ -47,17 +47,20 @@ if 'cmake' in builder:
         cmake_options.append('-DCMAKE_OSX_ARCHITECTURES:STRING=ppc')
 
     if 'win64' in builder:
-
-        cmake_options.append(['-G','"Visual Studio 12 2013 Win64"'])
+        cmake_options.append(['-G', '"Visual Studio 12 2013 Win64"'])
     elif 'win32' in builder:
-        cmake_options.append(['-G','"Visual Studio 12 2013"'])
+        cmake_options.append(['-G', '"Visual Studio 12 2013"'])
 
-
+    cmake_options.append("-C../blender.git/build_files/cmake/config/blender_full.cmake")
+    cmake_options.append("-DWITH_CYCLES_CUDA_BINARIES=1")
     # configure and make
     retcode = subprocess.call(['cmake', blender_dir] + cmake_options)
     if retcode != 0:
         sys.exit(retcode)
-    if 'win' in builder:
+
+    if 'win32' in builder:
+        retcode = subprocess.call(['msbuild', 'INSTALL.vcxproj', '/Property:PlatformToolset=v120_xp', '/p:Configuration=Release'])
+    elif 'win64' in builder:
         retcode = subprocess.call(['msbuild', 'INSTALL.vcxproj', '/p:Configuration=Release'])
     else:
         retcode = subprocess.call(['make', '-s', '-j4', 'install'])
@@ -116,6 +119,8 @@ else:
 
             if config.find('player') != -1:
                 scons_options.append('BF_BUILDDIR=%s_player' % (build_dir))
+            elif config.find('cuda') != -1:
+                scons_options.append('BF_BUILDDIR=%s_cuda' % (build_dir))
             else:
                 scons_options.append('BF_BUILDDIR=%s' % (build_dir))
 
@@ -140,7 +145,7 @@ else:
 
             retcode = subprocess.call(cur_scons_cmd + scons_options)
             if retcode != 0:
-                print('Error building rules wuth config ' + config)
+                print('Error building rules with config ' + config)
                 sys.exit(retcode)
 
         sys.exit(0)

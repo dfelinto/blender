@@ -32,8 +32,11 @@
 #include "DNA_scene_types.h"
 #include "DNA_object_types.h"
 #include "DNA_mesh_types.h"
-#include "DNA_meshdata_types.h"
 #include "DNA_windowmanager_types.h"
+
+#ifdef WITH_FREESTYLE
+#  include "DNA_meshdata_types.h"
+#endif
 
 #include "BLI_math.h"
 #include "BLI_linklist.h"
@@ -91,7 +94,7 @@ static bool mouse_mesh_shortest_path_vert(ViewContext *vc)
 	float dist = ED_view3d_select_dist_px();
 	const bool use_length = true;
 
-	v_dst = EDBM_vert_find_nearest(vc, &dist, false, false);
+	v_dst = EDBM_vert_find_nearest(vc, &dist);
 	if (v_dst) {
 		struct UserData user_data = {bm, vc->obedit->data, vc->scene};
 		LinkNode *path = NULL;

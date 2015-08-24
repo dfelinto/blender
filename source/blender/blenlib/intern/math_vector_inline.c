@@ -617,6 +617,48 @@ MINLINE void negate_v2_int(int r[2])
 	r[1] = -r[1];
 }
 
+MINLINE void abs_v2(float r[2])
+{
+	r[0] = fabsf(r[0]);
+	r[1] = fabsf(r[1]);
+}
+
+MINLINE void abs_v2_v2(float r[2], const float a[2])
+{
+	r[0] = fabsf(a[0]);
+	r[1] = fabsf(a[1]);
+}
+
+MINLINE void abs_v3(float r[3])
+{
+	r[0] = fabsf(r[0]);
+	r[1] = fabsf(r[1]);
+	r[2] = fabsf(r[2]);
+}
+
+MINLINE void abs_v3_v3(float r[3], const float a[3])
+{
+	r[0] = fabsf(a[0]);
+	r[1] = fabsf(a[1]);
+	r[2] = fabsf(a[2]);
+}
+
+MINLINE void abs_v4(float r[4])
+{
+	r[0] = fabsf(r[0]);
+	r[1] = fabsf(r[1]);
+	r[2] = fabsf(r[2]);
+	r[3] = fabsf(r[3]);
+}
+
+MINLINE void abs_v4_v4(float r[4], const float a[4])
+{
+	r[0] = fabsf(a[0]);
+	r[1] = fabsf(a[1]);
+	r[2] = fabsf(a[2]);
+	r[3] = fabsf(a[3]);
+}
+
 MINLINE float dot_v2v2(const float a[2], const float b[2])
 {
 	return a[0] * b[0] + a[1] * b[1];
@@ -627,9 +669,26 @@ MINLINE float dot_v3v3(const float a[3], const float b[3])
 	return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 }
 
+MINLINE float dot_v3v3v3(const float p[3], const float a[3], const float b[3])
+{
+	float vec1[3], vec2[3];
+
+	sub_v3_v3v3(vec1, a, p);
+	sub_v3_v3v3(vec2, b, p);
+	if (is_zero_v3(vec1) || is_zero_v3(vec2)) {
+		return 0.0f;
+	}
+	return dot_v3v3(vec1, vec2);
+}
+
 MINLINE float dot_v4v4(const float a[4], const float b[4])
 {
 	return a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3];
+}
+
+MINLINE double dot_v3db_v3fl(const double a[3], const float b[3])
+{
+	return a[0] * (double)b[0] + a[1] * (double)b[1] + a[2] * (double)b[2];
 }
 
 MINLINE float cross_v2v2(const float a[2], const float b[2])
@@ -913,22 +972,46 @@ MINLINE bool equals_v4v4(const float v1[4], const float v2[4])
 
 MINLINE bool compare_v2v2(const float v1[2], const float v2[2], const float limit)
 {
-	if (fabsf(v1[0] - v2[0]) <= limit)
-		if (fabsf(v1[1] - v2[1]) <= limit)
-			return true;
-
-	return false;
+	return (compare_ff(v1[0], v2[0], limit) &&
+	        compare_ff(v1[1], v2[1], limit));
 }
 
 MINLINE bool compare_v3v3(const float v1[3], const float v2[3], const float limit)
 {
-	if (fabsf(v1[0] - v2[0]) <= limit)
-		if (fabsf(v1[1] - v2[1]) <= limit)
-			if (fabsf(v1[2] - v2[2]) <= limit)
-				return true;
-
-	return false;
+	return (compare_ff(v1[0], v2[0], limit) &&
+	        compare_ff(v1[1], v2[1], limit) &&
+	        compare_ff(v1[2], v2[2], limit));
 }
+
+MINLINE bool compare_v4v4(const float v1[4], const float v2[4], const float limit)
+{
+	return (compare_ff(v1[0], v2[0], limit) &&
+	        compare_ff(v1[1], v2[1], limit) &&
+	        compare_ff(v1[2], v2[2], limit) &&
+	        compare_ff(v1[3], v2[3], limit));
+}
+
+MINLINE bool compare_v2v2_relative(const float v1[2], const float v2[2], const float limit, const int max_ulps)
+{
+	return (compare_ff_relative(v1[0], v2[0], limit, max_ulps) &&
+	        compare_ff_relative(v1[1], v2[1], limit, max_ulps));
+}
+
+MINLINE bool compare_v3v3_relative(const float v1[3], const float v2[3], const float limit, const int max_ulps)
+{
+	return (compare_ff_relative(v1[0], v2[0], limit, max_ulps) &&
+	        compare_ff_relative(v1[1], v2[1], limit, max_ulps) &&
+	        compare_ff_relative(v1[2], v2[2], limit, max_ulps));
+}
+
+MINLINE bool compare_v4v4_relative(const float v1[4], const float v2[4], const float limit, const int max_ulps)
+{
+	return (compare_ff_relative(v1[0], v2[0], limit, max_ulps) &&
+	        compare_ff_relative(v1[1], v2[1], limit, max_ulps) &&
+	        compare_ff_relative(v1[2], v2[2], limit, max_ulps) &&
+	        compare_ff_relative(v1[3], v2[3], limit, max_ulps));
+}
+
 
 MINLINE bool compare_len_v3v3(const float v1[3], const float v2[3], const float limit)
 {
@@ -950,17 +1033,6 @@ MINLINE bool compare_len_squared_v3v3(const float v1[3], const float v2[3], cons
 	z = v1[2] - v2[2];
 
 	return ((x * x + y * y + z * z) <= limit_sq);
-}
-
-MINLINE bool compare_v4v4(const float v1[4], const float v2[4], const float limit)
-{
-	if (fabsf(v1[0] - v2[0]) <= limit)
-		if (fabsf(v1[1] - v2[1]) <= limit)
-			if (fabsf(v1[2] - v2[2]) <= limit)
-				if (fabsf(v1[3] - v2[3]) <= limit)
-					return true;
-
-	return false;
 }
 
 /**

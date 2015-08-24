@@ -51,6 +51,7 @@
 #include "BKE_global.h"
 #include "BKE_main.h"
 #include "BKE_report.h"
+#include "BKE_library.h"
 #include "BKE_packedFile.h"
 #include "BKE_scene.h"
 #include "BKE_sound.h"
@@ -66,13 +67,12 @@
 #include "WM_types.h"
 
 #ifdef WITH_AUDASPACE
-#  include "AUD_C-API.h"
+#  include AUD_SPECIAL_H
 #endif
 
 #include "ED_sound.h"
 #include "ED_util.h"
 
-#include "sound_intern.h"
 
 /******************** open sound operator ********************/
 
@@ -101,13 +101,14 @@ static int sound_open_exec(bContext *C, wmOperator *op)
 	Main *bmain = CTX_data_main(C);
 
 	RNA_string_get(op->ptr, "filepath", path);
-	sound = sound_new_file(bmain, path);
+	sound = BKE_sound_new_file(bmain, path);
 
 	if (!op->customdata)
 		sound_open_init(C, op);
 
-	if (sound == NULL || sound->playback_handle == NULL) {
+	if (sound->playback_handle == NULL) {
 		if (op->customdata) MEM_freeN(op->customdata);
+		BKE_libblock_free(bmain, sound);
 		BKE_report(op->reports, RPT_ERROR, "Unsupported audio format");
 		return OPERATOR_CANCELLED;
 	}
@@ -115,7 +116,7 @@ static int sound_open_exec(bContext *C, wmOperator *op)
 	info = AUD_getInfo(sound->playback_handle);
 
 	if (info.specs.channels == AUD_CHANNELS_INVALID) {
-		sound_delete(bmain, sound);
+		BKE_sound_delete(bmain, sound);
 		if (op->customdata) MEM_freeN(op->customdata);
 		BKE_report(op->reports, RPT_ERROR, "Unsupported audio format");
 		return OPERATOR_CANCELLED;
@@ -123,11 +124,11 @@ static int sound_open_exec(bContext *C, wmOperator *op)
 
 	if (RNA_boolean_get(op->ptr, "mono")) {
 		sound->flags |= SOUND_FLAGS_MONO;
-		sound_load(bmain, sound);
+		BKE_sound_load(bmain, sound);
 	}
 
 	if (RNA_boolean_get(op->ptr, "cache")) {
-		sound_cache(sound);
+		BKE_sound_cache(sound);
 	}
 
 	/* hook into UI */
@@ -143,7 +144,7 @@ static int sound_open_exec(bContext *C, wmOperator *op)
 		RNA_property_update(C, &pprop->ptr, pprop->prop);
 	}
 
-	if (op->customdata) MEM_freeN(op->customdata);
+	MEM_freeN(op->customdata);
 	return OPERATOR_FINISHED;
 }
 
@@ -184,8 +185,8 @@ static void SOUND_OT_open(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
 	/* properties */
-	WM_operator_properties_filesel(ot, FOLDERFILE | SOUNDFILE | MOVIEFILE, FILE_SPECIAL, FILE_OPENFILE,
-	                               WM_FILESEL_FILEPATH | WM_FILESEL_RELPATH, FILE_DEFAULTDISPLAY);
+	WM_operator_properties_filesel(ot, FILE_TYPE_FOLDER | FILE_TYPE_SOUND | FILE_TYPE_MOVIE, FILE_SPECIAL, FILE_OPENFILE,
+	                               WM_FILESEL_FILEPATH | WM_FILESEL_RELPATH, FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);
 	RNA_def_boolean(ot->srna, "cache", false, "Cache", "Cache the sound in memory");
 	RNA_def_boolean(ot->srna, "mono", false, "Mono", "Mixdown the sound to mono");
 }
@@ -206,8 +207,8 @@ static void SOUND_OT_open_mono(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
 	/* properties */
-	WM_operator_properties_filesel(ot, FOLDERFILE | SOUNDFILE | MOVIEFILE, FILE_SPECIAL, FILE_OPENFILE,
-	                               WM_FILESEL_FILEPATH | WM_FILESEL_RELPATH, FILE_DEFAULTDISPLAY);
+	WM_operator_properties_filesel(ot, FILE_TYPE_FOLDER | FILE_TYPE_SOUND | FILE_TYPE_MOVIE, FILE_SPECIAL, FILE_OPENFILE,
+	                               WM_FILESEL_FILEPATH | WM_FILESEL_RELPATH, FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);
 	RNA_def_boolean(ot->srna, "cache", false, "Cache", "Cache the sound in memory");
 	RNA_def_boolean(ot->srna, "mono", true, "Mono", "Mixdown the sound to mono");
 }
@@ -243,7 +244,7 @@ static int sound_update_animation_flags_exec(bContext *C, wmOperator *UNUSED(op)
 	}
 	SEQ_END
 
-	    fcu = id_data_find_fcurve(&scene->id, scene, &RNA_Scene, "audio_volume", 0, &driven);
+	fcu = id_data_find_fcurve(&scene->id, scene, &RNA_Scene, "audio_volume", 0, &driven);
 	if (fcu || driven)
 		scene->audio.flag |= AUDIO_VOLUME_ANIMATED;
 	else
@@ -400,7 +401,7 @@ static bool sound_mixdown_check(bContext *UNUSED(C), wmOperator *op)
 		if (item->value == container) {
 			const char **ext = snd_ext_sound;
 			while (*ext != NULL) {
-				if (!strcmp(*ext + 1, item->name)) {
+				if (STREQ(*ext + 1, item->name)) {
 					extension = *ext;
 					break;
 				}
@@ -450,9 +451,9 @@ static int sound_mixdown_invoke(bContext *C, wmOperator *op, const wmEvent *even
 static bool sound_mixdown_draw_check_prop(PointerRNA *UNUSED(ptr), PropertyRNA *prop)
 {
 	const char *prop_id = RNA_property_identifier(prop);
-	return !(strcmp(prop_id, "filepath") == 0 ||
-	         strcmp(prop_id, "directory") == 0 ||
-	         strcmp(prop_id, "filename") == 0);
+	return !(STREQ(prop_id, "filepath") ||
+	         STREQ(prop_id, "directory") ||
+	         STREQ(prop_id, "filename"));
 }
 
 static void sound_mixdown_draw(bContext *C, wmOperator *op)
@@ -651,8 +652,8 @@ static void SOUND_OT_mixdown(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER;
 
 	/* properties */
-	WM_operator_properties_filesel(ot, FOLDERFILE | SOUNDFILE, FILE_SPECIAL, FILE_SAVE,
-	                               WM_FILESEL_FILEPATH | WM_FILESEL_RELPATH, FILE_DEFAULTDISPLAY);
+	WM_operator_properties_filesel(ot, FILE_TYPE_FOLDER | FILE_TYPE_SOUND, FILE_SPECIAL, FILE_SAVE,
+	                               WM_FILESEL_FILEPATH | WM_FILESEL_RELPATH, FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);
 #ifdef WITH_AUDASPACE
 	RNA_def_int(ot->srna, "accuracy", 1024, 1, 16777216, "Accuracy", "Sample accuracy, important for animation data (the lower the value, the more accurate)", 1, 16777216);
 	RNA_def_enum(ot->srna, "container", container_items, AUD_CONTAINER_FLAC, "Container", "File format");
@@ -691,7 +692,7 @@ static int sound_pack_exec(bContext *C, wmOperator *op)
 		return OPERATOR_CANCELLED;
 
 	sound->packedfile = newPackedFile(op->reports, sound->name, ID_BLEND_PATH(bmain, &sound->id));
-	sound_load(bmain, sound);
+	BKE_sound_load(bmain, sound);
 
 	return OPERATOR_FINISHED;
 }

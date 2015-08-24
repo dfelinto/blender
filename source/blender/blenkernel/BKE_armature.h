@@ -36,13 +36,10 @@
 struct Bone;
 struct Main;
 struct bArmature;
-struct bPose;
 struct bPoseChannel;
 struct bConstraint;
 struct Scene;
 struct Object;
-struct MDeformVert;
-struct Mesh;
 struct PoseTree;
 struct ListBase;
 
@@ -86,6 +83,8 @@ struct BoundBox *BKE_armature_boundbox_get(struct Object *ob);
 int bone_autoside_name(char name[64], int strip_number, short axis, float head, float tail);
 
 struct Bone *BKE_armature_find_bone_name(struct bArmature *arm, const char *name);
+
+bool         BKE_armature_bone_flag_test_recursive(const struct Bone *bone, int flag);
 
 float distfactor_to_bone(const float vec[3], const float b1[3], const float b2[3], float r1, float r2, float rdist);
 
@@ -142,6 +141,57 @@ void b_bone_spline_setup(struct bPoseChannel *pchan, int rest, Mat4 result_array
 
 #define PBONE_SELECTABLE(arm, bone) \
 	(PBONE_VISIBLE(arm, bone) && !((bone)->flag & BONE_UNSELECTABLE))
+
+/* Evaluation helpers */
+struct bKinematicConstraint;
+struct bPose;
+struct bSplineIKConstraint;
+struct EvaluationContext;
+
+struct bPoseChannel *BKE_armature_ik_solver_find_root(
+        struct bPoseChannel *pchan,
+        struct bKinematicConstraint *data);
+struct bPoseChannel *BKE_armature_splineik_solver_find_root(
+        struct bPoseChannel *pchan,
+        struct bSplineIKConstraint *data);
+
+void BKE_pose_splineik_init_tree(struct Scene *scene, struct Object *ob, float ctime);
+void BKE_splineik_execute_tree(struct Scene *scene, struct Object *ob, struct bPoseChannel *pchan_root, float ctime);
+
+void BKE_pose_eval_init(struct EvaluationContext *eval_ctx,
+                        struct Scene *scene,
+                        struct Object *ob,
+                        struct bPose *pose);
+
+void BKE_pose_eval_bone(struct EvaluationContext *eval_ctx,
+                        struct Scene *scene,
+                        struct Object *ob,
+                        struct bPoseChannel *pchan);
+
+void BKE_pose_constraints_evaluate(struct EvaluationContext *eval_ctx,
+                                   struct Object *ob,
+                                   struct bPoseChannel *pchan);
+
+void BKE_pose_bone_done(struct EvaluationContext *eval_ctx,
+                        struct bPoseChannel *pchan);
+
+void BKE_pose_iktree_evaluate(struct EvaluationContext *eval_ctx,
+                              struct Scene *scene,
+                              struct Object *ob,
+                              struct bPoseChannel *rootchan);
+
+void BKE_pose_splineik_evaluate(struct EvaluationContext *eval_ctx,
+                                struct Scene *scene,
+                                struct Object *ob,
+                                struct bPoseChannel *rootchan);
+
+void BKE_pose_eval_flush(struct EvaluationContext *eval_ctx,
+                         struct Scene *scene,
+                         struct Object *ob,
+                         struct bPose *pose);
+
+void BKE_pose_eval_proxy_copy(struct EvaluationContext *eval_ctx,
+                              struct Object *ob);
 
 #ifdef __cplusplus
 }

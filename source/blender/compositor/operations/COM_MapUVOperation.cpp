@@ -41,7 +41,7 @@ void MapUVOperation::initExecution()
 	this->m_inputUVProgram = this->getInputSocketReader(1);
 }
 
-void MapUVOperation::executePixelSampled(float output[4], float x, float y, PixelSampler sampler)
+void MapUVOperation::executePixelSampled(float output[4], float x, float y, PixelSampler /*sampler*/)
 {
 	float xy[2] = { x, y };
 	float uv[2], deriv[2][2], alpha;
@@ -83,11 +83,11 @@ bool MapUVOperation::read_uv(float x, float y, float &r_u, float &r_v, float &r_
 		return false;
 	}
 	else {
-		float col[4];
-		m_inputUVProgram->readSampled(col, x, y, COM_PS_BILINEAR);
-		r_u = col[0] * m_inputColorProgram->getWidth();
-		r_v = col[1] * m_inputColorProgram->getHeight();
-		r_alpha = col[2];
+		float vector[3];
+		m_inputUVProgram->readSampled(vector, x, y, COM_PS_BILINEAR);
+		r_u = vector[0] * m_inputColorProgram->getWidth();
+		r_v = vector[1] * m_inputColorProgram->getHeight();
+		r_alpha = vector[2];
 		return true;
 	}
 }

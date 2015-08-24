@@ -44,7 +44,7 @@
 #include "BLI_path_util.h"
 #include "BLI_string.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_context.h"
 #include "BKE_depsgraph.h"
@@ -69,26 +69,9 @@
 
 /* Panels */
 
-static int clip_grease_pencil_panel_poll(const bContext *C, PanelType *UNUSED(pt))
+void ED_clip_buttons_register(ARegionType *UNUSED(art))
 {
-	SpaceClip *sc = CTX_wm_space_clip(C);
 
-	return sc->view == SC_VIEW_CLIP;
-}
-
-void ED_clip_buttons_register(ARegionType *art)
-{
-	PanelType *pt;
-
-	pt = MEM_callocN(sizeof(PanelType), "spacetype clip panel gpencil");
-	strcpy(pt->idname, "CLIP_PT_gpencil");
-	strcpy(pt->label, N_("Grease Pencil"));
-	strcpy(pt->translation_context, BLF_I18NCONTEXT_DEFAULT_BPYRNA);
-	pt->draw_header = ED_gpencil_panel_standard_header;
-	pt->draw = ED_gpencil_panel_standard;
-	pt->flag |= PNL_DEFAULT_CLOSED;
-	pt->poll = clip_grease_pencil_panel_poll;
-	BLI_addtail(&art->paneltypes, pt);
 }
 
 /********************* MovieClip Template ************************/
@@ -557,7 +540,7 @@ void uiTemplateMovieclipInformation(uiLayout *layout, PointerRNA *ptr, const cha
 	uiItemL(col, str, ICON_NONE);
 
 	/* Display current frame number. */
-	framenr = BKE_movieclip_remap_scene_to_clip_frame(clip, user->framenr) ;
+	framenr = BKE_movieclip_remap_scene_to_clip_frame(clip, user->framenr);
 	if (framenr <= clip->len)
 		BLI_snprintf(str, sizeof(str), IFACE_("Frame: %d / %d"), framenr, clip->len);
 	else

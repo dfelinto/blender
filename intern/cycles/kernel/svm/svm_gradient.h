@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 CCL_NAMESPACE_BEGIN
@@ -66,7 +66,7 @@ ccl_device void svm_node_tex_gradient(ShaderData *sd, float *stack, uint4 node)
 	float3 co = stack_load_float3(stack, co_offset);
 
 	float f = svm_gradient(co, (NodeGradientType)type);
-	f = clamp(f, 0.0f, 1.0f);
+	f = saturate(f);
 
 	if(stack_valid(fac_offset))
 		stack_store_float(stack, fac_offset, f);

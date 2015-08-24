@@ -119,14 +119,14 @@ public:
 	 * Returns the current cursor shape.
 	 * \return	The current cursor shape.
 	 */
-	inline virtual GHOST_TStandardCursor getCursorShape() const;
+	inline GHOST_TStandardCursor getCursorShape() const;
 
 	/**
 	 * Set the shape of the cursor.
-	 * \param	cursor	The new cursor shape type id.
+	 * \param	cursorShape: The new cursor shape type id.
 	 * \return	Indication of success.
 	 */
-	virtual GHOST_TSuccess setCursorShape(GHOST_TStandardCursor cursorShape);
+	GHOST_TSuccess setCursorShape(GHOST_TStandardCursor cursorShape);
 
 	/**
 	 * Set the shape of the cursor to a custom cursor.
@@ -136,53 +136,53 @@ public:
 	 * \param	hotY	The Y coordinate of the cursor hotspot.
 	 * \return	Indication of success.
 	 */
-	virtual GHOST_TSuccess setCustomCursorShape(GHOST_TUns8 bitmap[16][2], 
-	                                            GHOST_TUns8 mask[16][2],
-	                                            int hotX,
-	                                            int hotY);
-												
-	virtual GHOST_TSuccess setCustomCursorShape(GHOST_TUns8 *bitmap, 
-	                                            GHOST_TUns8 *mask,
-	                                            int sizex, int sizey,
-	                                            int hotX,  int hotY,
-	                                            int fg_color, int bg_color);
-	
+	GHOST_TSuccess setCustomCursorShape(GHOST_TUns8 bitmap[16][2],
+	                                    GHOST_TUns8 mask[16][2],
+	                                    int hotX,
+	                                    int hotY);
+
+	GHOST_TSuccess setCustomCursorShape(GHOST_TUns8 *bitmap,
+	                                    GHOST_TUns8 *mask,
+	                                    int sizex, int sizey,
+	                                    int hotX,  int hotY,
+	                                    int fg_color, int bg_color);
+
 	/**
 	 * Returns the visibility state of the cursor.
 	 * \return	The visibility state of the cursor.
 	 */
-	inline virtual bool getCursorVisibility() const;
-	inline virtual GHOST_TGrabCursorMode getCursorGrabMode() const;
-	inline virtual bool getCursorGrabModeIsWarp() const;
-	inline virtual void getCursorGrabInitPos(GHOST_TInt32 &x, GHOST_TInt32 &y) const;
-	inline virtual void getCursorGrabAccum(GHOST_TInt32 &x, GHOST_TInt32 &y) const;
-	inline virtual void setCursorGrabAccum(GHOST_TInt32 x, GHOST_TInt32 y);
+	inline bool getCursorVisibility() const;
+	inline GHOST_TGrabCursorMode getCursorGrabMode() const;
+	inline bool getCursorGrabModeIsWarp() const;
+	inline void getCursorGrabInitPos(GHOST_TInt32 &x, GHOST_TInt32 &y) const;
+	inline void getCursorGrabAccum(GHOST_TInt32 &x, GHOST_TInt32 &y) const;
+	inline void setCursorGrabAccum(GHOST_TInt32 x, GHOST_TInt32 y);
 
 	/**
 	 * Shows or hides the cursor.
 	 * \param	visible The new visibility state of the cursor.
 	 * \return	Indication of success.
 	 */
-	virtual GHOST_TSuccess setCursorVisibility(bool visible);
+	GHOST_TSuccess setCursorVisibility(bool visible);
 
 	/**
 	 * Sets the cursor grab.
 	 * \param	mode The new grab state of the cursor.
 	 * \return	Indication of success.
 	 */
-	virtual GHOST_TSuccess setCursorGrab(GHOST_TGrabCursorMode mode, GHOST_Rect *bounds, GHOST_TInt32 mouse_ungrab_xy[2]);
+	GHOST_TSuccess setCursorGrab(GHOST_TGrabCursorMode mode, GHOST_Rect *bounds, GHOST_TInt32 mouse_ungrab_xy[2]);
 
 	/**
 	 * Gets the cursor grab region, if unset the window is used.
 	 * reset when grab is disabled.
 	 */
-	virtual GHOST_TSuccess getCursorGrabBounds(GHOST_Rect& bounds);
+	GHOST_TSuccess getCursorGrabBounds(GHOST_Rect& bounds);
 
 	/**
 	 * Sets the progress bar value displayed in the window/application icon
 	 * \param progress The progress % (0.0 to 1.0)
 	 */
-	virtual GHOST_TSuccess setProgressBar(float progress) {
+	virtual GHOST_TSuccess setProgressBar(float /*progress*/) {
 		return GHOST_kFailure;
 	}
 	
@@ -198,30 +198,30 @@ public:
 	 * \param interval The swap interval to use.
 	 * \return A boolean success indicator.
 	 */
-	virtual GHOST_TSuccess setSwapInterval(int interval);
+	GHOST_TSuccess setSwapInterval(int interval);
 
 	/**
 	 * Gets the current swap interval for swapBuffers.
 	 * \return An integer.
 	 */
-	virtual GHOST_TSuccess getSwapInterval(int& intervalOut);
+	GHOST_TSuccess getSwapInterval(int& intervalOut);
 
 	/**
 	 * Gets the current swap interval for swapBuffers.
 	 * \return Number of AA Samples (0 if there is no multisample buffer)
 	 */
-	virtual GHOST_TUns16 getNumOfAASamples();
+	GHOST_TUns16 getNumOfAASamples();
 
 	/**
 	 * Tells if the ongoing drag'n'drop object can be accepted upon mouse drop
 	 */
-	virtual void setAcceptDragOperation(bool canAccept);
+	void setAcceptDragOperation(bool canAccept);
 	
 	/**
 	 * Returns acceptance of the dropped object
 	 * Usually called by the "object dropped" event handling function
 	 */
-	virtual bool canAcceptDragOperation() const;
+	bool canAcceptDragOperation() const;
 	
 	/**
 	 * Sets the window "modified" status, indicating unsaved changes
@@ -240,7 +240,7 @@ public:
 	 * Returns the type of drawing context used in this window.
 	 * \return The current type of drawing context.
 	 */
-	inline virtual GHOST_TDrawingContextType getDrawingContextType();
+	inline GHOST_TDrawingContextType getDrawingContextType();
 
 	/**
 	 * Tries to install a rendering context in this window.
@@ -249,7 +249,7 @@ public:
 	 * \param type	The type of rendering context installed.
 	 * \return Indication as to whether installation has succeeded.
 	 */
-	virtual GHOST_TSuccess setDrawingContextType(GHOST_TDrawingContextType type);
+	GHOST_TSuccess setDrawingContextType(GHOST_TDrawingContextType type);
 
 	/**
 	 * Swaps front and back buffers of a window.
@@ -268,32 +268,48 @@ public:
 	 * whenever the window is changed.
 	 * \return Indication of success.
 	 */
-	virtual GHOST_TSuccess updateDrawingContext();
+	GHOST_TSuccess updateDrawingContext();
 
 	/**
 	 * Returns the window user data.
 	 * \return The window user data.
 	 */
-	inline virtual GHOST_TUserDataPtr getUserData() const
+	inline GHOST_TUserDataPtr getUserData() const
 	{
 		return m_userData;
 	}
 	
 	/**
 	 * Changes the window user data.
-	 * \param data The window user data.
+	 * \param userData: The window user data.
 	 */
-	virtual void setUserData(const GHOST_TUserDataPtr userData)
+	void setUserData(const GHOST_TUserDataPtr userData)
 	{
 		m_userData = userData;
 	}
 	
-	virtual float getNativePixelSize(void)
+	float getNativePixelSize(void)
 	{
 		if (m_nativePixelSize > 0.0f)
 			return m_nativePixelSize;
 		return 1.0f;
 	}
+
+#ifdef WITH_INPUT_IME
+	virtual void beginIME(GHOST_TInt32 x,
+	                      GHOST_TInt32 y,
+	                      GHOST_TInt32 w,
+	                      GHOST_TInt32 h,
+	                      int completed)
+	{
+		/* do nothing temporarily if not in windows */
+	}
+
+	virtual void endIME()
+	{
+		/* do nothing temporarily if not in windows */
+	}
+#endif /* WITH_INPUT_IME */
 
 protected:
 	/**
@@ -313,7 +329,7 @@ protected:
 	 * Sets the cursor grab on the window using
 	 * native window system calls.
 	 */
-	virtual GHOST_TSuccess setWindowCursorGrab(GHOST_TGrabCursorMode mode) {
+	virtual GHOST_TSuccess setWindowCursorGrab(GHOST_TGrabCursorMode /*mode*/) {
 		return GHOST_kSuccess;
 	}
 	

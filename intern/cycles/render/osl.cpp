@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #include "device.h"
@@ -30,6 +30,7 @@
 #include "osl_shader.h"
 
 #include "util_foreach.h"
+#include "util_logging.h"
 #include "util_md5.h"
 #include "util_path.h"
 #include "util_progress.h"
@@ -66,7 +67,7 @@ OSLShaderManager::~OSLShaderManager()
 	texture_system_free();
 }
 
-void OSLShaderManager::reset(Scene *scene)
+void OSLShaderManager::reset(Scene * /*scene*/)
 {
 	shading_system_free();
 	shading_system_init();
@@ -74,6 +75,8 @@ void OSLShaderManager::reset(Scene *scene)
 
 void OSLShaderManager::device_update(Device *device, DeviceScene *dscene, Scene *scene, Progress& progress)
 {
+	VLOG(1) << "Total " << scene->shaders.size() << " shaders.";
+
 	if(!need_update)
 		return;
 
@@ -188,11 +191,13 @@ void OSLShaderManager::shading_system_init()
 	if(ss_shared_users == 0) {
 		services_shared = new OSLRenderServices();
 
-		ss_shared = OSL::ShadingSystem::create(services_shared, ts_shared, &errhandler);
+		ss_shared = new OSL::ShadingSystem(services_shared, ts_shared, &errhandler);
 		ss_shared->attribute("lockgeom", 1);
 		ss_shared->attribute("commonspace", "world");
 		ss_shared->attribute("searchpath:shader", path_get("shader"));
 		//ss_shared->attribute("greedyjit", 1);
+
+		VLOG(1) << "Using shader search path: " << path_get("shader");
 
 		/* our own ray types */
 		static const char *raytypes[] = {
@@ -208,9 +213,9 @@ void OSLShaderManager::shading_system_init()
 
 			"__unused__",
 			"__unused__",
-			"diffuse_ancestor", /* PATH_RAY_DIFFUSE_ANCESTOR */
-			"glossy_ancestor",  /* PATH_RAY_GLOSSY_ANCESTOR */
-			"bssrdf_ancestor",  /* PATH_RAY_BSSRDF_ANCESTOR */
+			"diffuse_ancestor",	/* PATH_RAY_DIFFUSE_ANCESTOR */
+			"__unused__",
+			"__unused__",
 			"__unused__",		/* PATH_RAY_SINGLE_PASS_DONE */
 			"volume_scatter",	/* PATH_RAY_VOLUME_SCATTER */
 		};
@@ -235,7 +240,7 @@ void OSLShaderManager::shading_system_free()
 	ss_shared_users--;
 
 	if(ss_shared_users == 0) {
-		OSL::ShadingSystem::destroy(ss_shared);
+		delete ss_shared;
 		ss_shared = NULL;
 
 		delete services_shared;
@@ -248,7 +253,11 @@ void OSLShaderManager::shading_system_free()
 
 bool OSLShaderManager::osl_compile(const string& inputfile, const string& outputfile)
 {
+#if OSL_LIBRARY_VERSION_CODE < 10602
 	vector<string_view> options;
+#else
+	vector<string> options;
+#endif
 	string stdosl_path;
 	string shader_path = path_get("shader");
 
@@ -257,13 +266,13 @@ bool OSLShaderManager::osl_compile(const string& inputfile, const string& output
 	options.push_back(outputfile);
 
 	/* specify standard include path */
-	options.push_back("-I");
-	options.push_back(shader_path);
+	string include_path_arg = string("-I") + shader_path;
+	options.push_back(include_path_arg);
 
 	stdosl_path = path_get("shader/stdosl.h");
 
 	/* compile */
-	OSL::OSLCompiler *compiler = OSL::OSLCompiler::create();
+	OSL::OSLCompiler *compiler = new OSL::OSLCompiler();
 	bool ok = compiler->compile(string_view(inputfile), options, string_view(stdosl_path));
 	delete compiler;
 
@@ -407,7 +416,7 @@ string OSLCompiler::compatible_name(ShaderNode *node, ShaderInput *input)
 	
 	/* if output exists with the same name, add "In" suffix */
 	foreach(ShaderOutput *output, node->outputs) {
-		if (strcmp(input->name, output->name)==0) {
+		if(strcmp(input->name, output->name)==0) {
 			sname += "In";
 			break;
 		}
@@ -427,7 +436,7 @@ string OSLCompiler::compatible_name(ShaderNode *node, ShaderOutput *output)
 	
 	/* if input exists with the same name, add "Out" suffix */
 	foreach(ShaderInput *input, node->inputs) {
-		if (strcmp(input->name, output->name)==0) {
+		if(strcmp(input->name, output->name)==0) {
 			sname += "Out";
 			break;
 		}
@@ -559,6 +568,10 @@ void OSLCompiler::add(ShaderNode *node, const char *name, bool isfilepath)
 	else if(current_type == SHADER_TYPE_VOLUME) {
 		if(node->has_spatial_varying())
 			current_shader->has_heterogeneous_volume = true;
+	}
+
+	if(node->has_object_dependency()) {
+		current_shader->has_object_dependency = true;
 	}
 }
 
@@ -801,6 +814,7 @@ void OSLCompiler::compile(OSLGlobals *og, Shader *shader)
 		shader->has_volume = false;
 		shader->has_displacement = false;
 		shader->has_heterogeneous_volume = false;
+		shader->has_object_dependency = false;
 
 		/* generate surface shader */
 		if(shader->used && graph && output->input("Surface")->link) {
@@ -848,75 +862,75 @@ void OSLCompiler::compile(OSLGlobals *og, Shader *shader)
 
 #else
 
-void OSLCompiler::add(ShaderNode *node, const char *name, bool isfilepath)
+void OSLCompiler::add(ShaderNode * /*node*/, const char * /*name*/, bool /*isfilepath*/)
 {
 }
 
-void OSLCompiler::parameter(const char *name, float f)
+void OSLCompiler::parameter(const char * /*name*/, float /*f*/)
 {
 }
 
-void OSLCompiler::parameter_color(const char *name, float3 f)
+void OSLCompiler::parameter_color(const char * /*name*/, float3 /*f*/)
 {
 }
 
-void OSLCompiler::parameter_vector(const char *name, float3 f)
+void OSLCompiler::parameter_vector(const char * /*name*/, float3 /*f*/)
 {
 }
 
-void OSLCompiler::parameter_point(const char *name, float3 f)
+void OSLCompiler::parameter_point(const char * /*name*/, float3 /*f*/)
 {
 }
 
-void OSLCompiler::parameter_normal(const char *name, float3 f)
+void OSLCompiler::parameter_normal(const char * /*name*/, float3 /*f*/)
 {
 }
 
-void OSLCompiler::parameter(const char *name, int f)
+void OSLCompiler::parameter(const char * /*name*/, int /*f*/)
 {
 }
 
-void OSLCompiler::parameter(const char *name, const char *s)
+void OSLCompiler::parameter(const char * /*name*/, const char * /*s*/)
 {
 }
 
-void OSLCompiler::parameter(const char *name, ustring s)
+void OSLCompiler::parameter(const char * /*name*/, ustring /*s*/)
 {
 }
 
-void OSLCompiler::parameter(const char *name, const Transform& tfm)
+void OSLCompiler::parameter(const char * /*name*/, const Transform& /*tfm*/)
 {
 }
 
-void OSLCompiler::parameter_array(const char *name, const float f[], int arraylen)
+void OSLCompiler::parameter_array(const char * /*name*/, const float /*f*/[], int /*arraylen*/)
 {
 }
 
-void OSLCompiler::parameter_color_array(const char *name, const float f[][3], int arraylen)
+void OSLCompiler::parameter_color_array(const char * /*name*/, const float /*f*/[][3], int /*arraylen*/)
 {
 }
 
-void OSLCompiler::parameter_vector_array(const char *name, const float f[][3], int arraylen)
+void OSLCompiler::parameter_vector_array(const char * /*name*/, const float /*f*/[][3], int /*arraylen*/)
 {
 }
 
-void OSLCompiler::parameter_normal_array(const char *name, const float f[][3], int arraylen)
+void OSLCompiler::parameter_normal_array(const char * /*name*/, const float /*f*/[][3], int /*arraylen*/)
 {
 }
 
-void OSLCompiler::parameter_point_array(const char *name, const float f[][3], int arraylen)
+void OSLCompiler::parameter_point_array(const char * /*name*/, const float /*f*/[][3], int /*arraylen*/)
 {
 }
 
-void OSLCompiler::parameter_array(const char *name, const int f[], int arraylen)
+void OSLCompiler::parameter_array(const char * /*name*/, const int /*f*/[], int /*arraylen*/)
 {
 }
 
-void OSLCompiler::parameter_array(const char *name, const char * const s[], int arraylen)
+void OSLCompiler::parameter_array(const char * /*name*/, const char * const /*s*/[], int /*arraylen*/)
 {
 }
 
-void OSLCompiler::parameter_array(const char *name, const Transform tfm[], int arraylen)
+void OSLCompiler::parameter_array(const char * /*name*/, const Transform /*tfm*/[], int /*arraylen*/)
 {
 }
 

@@ -47,12 +47,14 @@
 
 #include "BKE_animsys.h"
 #include "BKE_depsgraph.h"
+#include "BKE_editmesh.h"
 #include "BKE_global.h"
 #include "BKE_image.h"
 #include "BKE_scene.h"
 #include "BKE_writeavi.h"
 
 #include "ED_transform.h"
+#include "ED_uvedit.h"
 
 #ifdef WITH_PYTHON
 #  include "BPY_extern.h"
@@ -90,6 +92,20 @@ static void rna_Scene_frame_set(Scene *scene, int frame, float subframe)
 	}
 }
 
+static void rna_Scene_uvedit_aspect(Scene *scene, Object *ob, float *aspect)
+{
+	if ((ob->type == OB_MESH) && (ob->mode == OB_MODE_EDIT)) {
+		BMEditMesh *em;
+		em = BKE_editmesh_from_object(ob);
+		if (EDBM_mtexpoly_check(em)) {
+			ED_uvedit_get_aspect(scene, ob, em->bm, aspect, aspect + 1);
+			return;
+		}
+	}
+
+	aspect[0] = aspect[1] = 1.0f;
+}
+
 static void rna_Scene_update_tagged(Scene *scene)
 {
 #ifdef WITH_PYTHON
@@ -103,13 +119,22 @@ static void rna_Scene_update_tagged(Scene *scene)
 #endif
 }
 
-static void rna_SceneRender_get_frame_path(RenderData *rd, int frame, char *name)
+static void rna_SceneRender_get_frame_path(RenderData *rd, int frame, int preview, const char *view, char *name)
 {
-	if (BKE_imtype_is_movie(rd->im_format.imtype))
-		BKE_movie_filepath_get(name, rd);
-	else
-		BKE_makepicstring(name, rd->pic, G.main->name, (frame == INT_MIN) ? rd->cfra : frame,
-		                  &rd->im_format, (rd->scemode & R_EXTENSION) != 0, true);
+	const char *suffix = BKE_scene_multiview_view_suffix_get(rd, view);
+
+	/* avoid NULL pointer */
+	if (!suffix)
+		suffix = "";
+
+	if (BKE_imtype_is_movie(rd->im_format.imtype)) {
+		BKE_movie_filepath_get(name, rd, preview != 0, suffix);
+	}
+	else {
+		BKE_image_path_from_imformat(
+		        name, rd->pic, G.main->name, (frame == INT_MIN) ? rd->cfra : frame,
+		        &rd->im_format, (rd->scemode & R_EXTENSION) != 0, true, suffix);
+	}
 }
 
 static void rna_Scene_ray_cast(Scene *scene, float ray_start[3], float ray_end[3],
@@ -191,6 +216,15 @@ void RNA_api_scene(StructRNA *srna)
 	RNA_def_function_ui_description(func,
 	                                "Update data tagged to be updated from previous access to data or operators");
 
+	func = RNA_def_function(srna, "uvedit_aspect", "rna_Scene_uvedit_aspect");
+	RNA_def_function_ui_description(func, "Get uv aspect for current object");
+	parm = RNA_def_pointer(func, "object", "Object", "", "Object");
+	RNA_def_property_flag(parm, PROP_REQUIRED | PROP_NEVER_NULL);
+
+	parm = RNA_def_float_vector(func, "result", 2, NULL, 0.0f, FLT_MAX, "", "aspect", 0.0f, FLT_MAX);
+	RNA_def_property_flag(parm, PROP_THICK_WRAP);
+	RNA_def_function_output(func, parm);
+	
 	/* Ray Cast */
 	func = RNA_def_function(srna, "ray_cast", "rna_Scene_ray_cast");
 	RNA_def_function_ui_description(func, "Cast a ray onto in object space");
@@ -259,6 +293,10 @@ void RNA_api_scene_render(StructRNA *srna)
 	RNA_def_function_ui_description(func, "Return the absolute path to the filename to be written for a given frame");
 	RNA_def_int(func, "frame", INT_MIN, INT_MIN, INT_MAX, "",
 	            "Frame number to use, if unset the current frame will be used", MINAFRAME, MAXFRAME);
+	parm = RNA_def_boolean(func, "preview", 0, "Preview", "Use preview range");
+	parm = RNA_def_string_file_path(func, "view", NULL, FILE_MAX, "View",
+	                                "The name of the view to use to replace the \"%\" chars");
+
 	parm = RNA_def_string_file_path(func, "filepath", NULL, FILE_MAX, "File Path",
 	                                "The resulting filepath from the scenes render settings");
 	RNA_def_property_flag(parm, PROP_THICK_WRAP); /* needed for string return value */

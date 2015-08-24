@@ -645,6 +645,8 @@ GHOST_WindowCocoa::GHOST_WindowCocoa(
 		m_lionStyleFullScreen = true;
 	}
 	
+	[NSApp activateIgnoringOtherApps:YES]; // raise application to front, important for new blender instance animation play case
+	
 	[pool drain];
 }
 
@@ -1193,18 +1195,18 @@ GHOST_Context *GHOST_WindowCocoa::newDrawingContext(GHOST_TDrawingContextType ty
 
 #if defined(WITH_GL_PROFILE_CORE)
 		GHOST_Context *context = new GHOST_ContextCGL(
-			m_initStereoVisual,
-			m_initNumOfAASamples,
+			m_wantStereoVisual,
+			m_wantNumOfAASamples,
 			m_window,
 			m_openGLView,
-			CGL_CONTEXT_OPENGL_CORE_PROFILE_BIT,
+			GL_CONTEXT_CORE_PROFILE_BIT,
 			3, 2,
 			GHOST_OPENGL_CGL_CONTEXT_FLAGS,
 			GHOST_OPENGL_CGL_RESET_NOTIFICATION_STRATEGY);
 #elif defined(WITH_GL_PROFILE_ES20)
 		GHOST_Context *context = new GHOST_ContextCGL(
-			m_initStereoVisual,
-			m_initNumOfAASamples,
+			m_wantStereoVisual,
+			m_wantNumOfAASamples,
 			m_window,
 			m_openGLView,
 			CGL_CONTEXT_ES2_PROFILE_BIT_EXT,
@@ -1326,6 +1328,7 @@ GHOST_TSuccess GHOST_WindowCocoa::setProgressBar(float progress)
 	return GHOST_kSuccess;
 }
 
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1080
 static void postNotification()
 {
 	NSUserNotification *notification = [[NSUserNotification alloc] init];
@@ -1335,7 +1338,8 @@ static void postNotification()
 	[[NSUserNotificationCenter defaultUserNotificationCenter] deliverNotification:notification];
 	[notification release];
 }
-	
+#endif
+
 GHOST_TSuccess GHOST_WindowCocoa::endProgressBar()
 {
 	if (!m_progressBarVisible) return GHOST_kFailure;
@@ -1353,11 +1357,12 @@ GHOST_TSuccess GHOST_WindowCocoa::endProgressBar()
 	// With OSX 10.8 and later, we can use notifications to inform the user when the progress reached 100%
 	// Atm. just fire this when the progressbar ends, the behavior is controlled in the NotificationCenter
 	// If Blender is not frontmost window, a message pops up with sound, in any case an entry in notifications
-	
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1080
 	if ([NSUserNotificationCenter respondsToSelector:@selector(defaultUserNotificationCenter)]) {
 		postNotification();
 	}
-	
+#endif
+
 	[dockIcon release];
 	
 	[pool drain];

@@ -27,7 +27,6 @@
  *  \ingroup render
  */
 
-
 #include <stdio.h>
 #include <math.h>
 #include <string.h>
@@ -46,28 +45,21 @@
 #include "BLI_rand.h"
 #include "BLI_utildefines.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_node.h"
 
-
-#include "PIL_time.h"
-
 #include "render_result.h"
 #include "render_types.h"
-#include "renderpipeline.h"
 #include "rendercore.h"
 #include "renderdatabase.h"
-#include "pixelblending.h"
 #include "pixelshading.h"
 #include "shading.h"
-#include "texture.h"
 #include "volumetric.h"
 
 #include "rayintersection.h"
 #include "rayobject.h"
 #include "raycounter.h"
-
 
 #define RAY_TRA		1
 #define RAY_INSIDE	2
@@ -314,22 +306,23 @@ static void makeraytree_single(Render *re)
 	RayObject *raytree;
 	RayFace *face = NULL;
 	VlakPrimitive *vlakprimitive = NULL;
-	int faces = 0, obs = 0, special = 0;
+	int faces = 0, special = 0;
 
-	for (obi=re->instancetable.first; obi; obi=obi->next)
-	if (is_raytraceable(re, obi)) {
-		ObjectRen *obr = obi->obr;
-		obs++;
-		
-		if (has_special_rayobject(re, obi)) {
-			special++;
-		}
-		else {
-			int v;
-			for (v=0;v<obr->totvlak;v++) {
-				VlakRen *vlr = obr->vlaknodes[v>>8].vlak + (v&255);
-				if (is_raytraceable_vlr(re, vlr))
-					faces++;
+	for (obi = re->instancetable.first; obi; obi = obi->next) {
+		if (is_raytraceable(re, obi)) {
+			ObjectRen *obr = obi->obr;
+
+			if (has_special_rayobject(re, obi)) {
+				special++;
+			}
+			else {
+				int v;
+				for (v = 0;v < obr->totvlak; v++) {
+					VlakRen *vlr = obr->vlaknodes[v >> 8].vlak + (v&255);
+					if (is_raytraceable_vlr(re, vlr)) {
+						faces++;
+					}
+				}
 			}
 		}
 	}
@@ -802,7 +795,7 @@ static void traceray(ShadeInput *origshi, ShadeResult *origshr, short depth, con
 					traceray(origshi, origshr, depth-1, shi.co, shi.view, tracol, shi.obi, shi.vlr, 0);
 				
 				f= shr.alpha; f1= 1.0f-f;
-				nf= d * shi.mat->filter;
+				nf= (shi.mat->mode & MA_RAYTRANSP) ? d * shi.mat->filter : 0.0f;
 				fr= 1.0f+ nf*(shi.r-1.0f);
 				fg= 1.0f+ nf*(shi.g-1.0f);
 				fb= 1.0f+ nf*(shi.b-1.0f);
@@ -1281,7 +1274,7 @@ static float get_avg_speed(ShadeInput *shi)
 	post_x = (shi->winspeed[2] == PASS_VECTOR_MAX)?0.0f:shi->winspeed[2];
 	post_y = (shi->winspeed[3] == PASS_VECTOR_MAX)?0.0f:shi->winspeed[3];
 	
-	speedavg = (sqrtf(pre_x * pre_x + pre_y * pre_y) + sqrtf(post_x * post_x + post_y * post_y)) / 2.0;
+	speedavg = (sqrtf(pre_x * pre_x + pre_y * pre_y) + sqrtf(post_x * post_x + post_y * post_y)) / 2.0f;
 	
 	return speedavg;
 }
@@ -1562,7 +1555,7 @@ void ray_trace(ShadeInput *shi, ShadeResult *shr)
 			}
 			
 			if (shi->combinedflag & SCE_PASS_REFLECT) {
-				/* values in shr->spec can be greater then 1.0.
+				/* values in shr->spec can be greater than 1.0.
 				 * In this case the mircol uses a zero blending factor, so ignoring it is ok.
 				 * Fixes bug #18837 - when the spec is higher then 1.0,
 				 * diff can become a negative color - Campbell  */
@@ -1636,9 +1629,9 @@ static void ray_trace_shadow_tra(Isect *is, ShadeInput *origshi, int depth, int 
 
 		shade_ray(is, &shi, &shr);
 		if (shi.mat->material_type == MA_TYPE_SURFACE) {
-			const float d= (traflag & RAY_TRA) ?
-			            shade_by_transmission(is, &shi, &shr) :
-			            1.0f;
+			const float d = (shi.mat->mode & MA_RAYTRANSP) ?
+			                ((traflag & RAY_TRA) ? shade_by_transmission(is, &shi, &shr) : 1.0f) :
+			                0.0f;
 			/* mix colors based on shadfac (rgb + amount of light factor) */
 			addAlphaLight(col, shr.diff, shr.alpha, d*shi.mat->filter);
 		}

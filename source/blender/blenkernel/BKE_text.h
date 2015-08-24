@@ -40,18 +40,17 @@ extern "C" {
 struct Main;
 struct Text;
 struct TextLine;
-struct SpaceText;
 
 void			BKE_text_free		(struct Text *text);
 void 			txt_set_undostate	(int u);
 int 			txt_get_undostate	(void);
 struct Text    *BKE_text_add	(struct Main *bmain, const char *name);
 int				txt_extended_ascii_as_utf8(char **str);
-int				BKE_text_reload		(struct Text *text);
+bool            BKE_text_reload(struct Text *text);
 struct Text    *BKE_text_load_ex(struct Main *bmain, const char *file, const char *relpath,
                                  const bool is_internal);
 struct Text    *BKE_text_load	(struct Main *bmain, const char *file, const char *relpath);
-struct Text    *BKE_text_copy		(struct Text *ta);
+struct Text    *BKE_text_copy		(struct Main *bmain, struct Text *ta);
 void			BKE_text_unlink		(struct Main *bmain, struct Text *text);
 void			BKE_text_clear      (struct Text *text);
 void			BKE_text_write      (struct Text *text, const char *str);

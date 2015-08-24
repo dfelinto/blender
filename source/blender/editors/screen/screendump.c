@@ -65,7 +65,6 @@
 
 #include "PIL_time.h"
 
-#include "ED_screen_types.h"
 
 #include "screen_intern.h"
 
@@ -287,8 +286,8 @@ void SCREEN_OT_screenshot(wmOperatorType *ot)
 	
 	ot->flag = 0;
 	
-	WM_operator_properties_filesel(ot, FOLDERFILE | IMAGEFILE, FILE_SPECIAL, FILE_SAVE,
-	                               WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY);
+	WM_operator_properties_filesel(ot, FILE_TYPE_FOLDER | FILE_TYPE_IMAGE, FILE_SPECIAL, FILE_SAVE,
+	                               WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);
 	RNA_def_boolean(ot->srna, "full", 1, "Full Screen",
 	                "Capture the whole window (otherwise only capture the active area)");
 }
@@ -304,6 +303,9 @@ typedef struct ScreenshotJob {
 	const short *stop;
 	const short *do_update;
 	ReportList reports;
+
+	bMovieHandle *movie_handle;
+	void *movie_ctx;
 } ScreenshotJob;
 
 
@@ -313,7 +315,13 @@ static void screenshot_freejob(void *sjv)
 	
 	if (sj->dumprect)
 		MEM_freeN(sj->dumprect);
-	
+
+	if (sj->movie_handle) {
+		bMovieHandle *mh = sj->movie_handle;
+		mh->end_movie(sj->movie_ctx);
+		mh->context_free(sj->movie_ctx);
+	}
+
 	MEM_freeN(sj);
 }
 
@@ -338,20 +346,22 @@ static void screenshot_startjob(void *sjv, short *stop, short *do_update, float 
 {
 	ScreenshotJob *sj = sjv;
 	RenderData rd = sj->scene->r;
-	bMovieHandle *mh = BKE_movie_handle_get(sj->scene->r.im_format.imtype);
-	
+	bMovieHandle *mh = NULL;
+
 	/* we need this as local variables for renderdata */
 	rd.frs_sec = U.scrcastfps;
 	rd.frs_sec_base = 1.0f;
 	
 	if (BKE_imtype_is_movie(rd.im_format.imtype)) {
-		if (!mh->start_movie(sj->scene, &rd, sj->dumpsx, sj->dumpsy, &sj->reports)) {
+		mh = BKE_movie_handle_get(sj->scene->r.im_format.imtype);
+		sj->movie_ctx = mh->context_create();
+		sj->movie_handle = mh;
+
+		if (!mh->start_movie(sj->movie_ctx, sj->scene, &rd, sj->dumpsx, sj->dumpsy, &sj->reports, false, "")) {
 			printf("screencast job stopped\n");
 			return;
 		}
 	}
-	else
-		mh = NULL;
 	
 	sj->stop = stop;
 	sj->do_update = do_update;
@@ -363,8 +373,8 @@ static void screenshot_startjob(void *sjv, short *stop, short *do_update, float 
 		if (sj->dumprect) {
 			
 			if (mh) {
-				if (mh->append_movie(&rd, rd.sfra, rd.cfra, (int *)sj->dumprect,
-				                     sj->dumpsx, sj->dumpsy, &sj->reports))
+				if (mh->append_movie(sj->movie_ctx, &rd, rd.sfra, rd.cfra, (int *)sj->dumprect,
+				                     sj->dumpsx, sj->dumpsy, "", &sj->reports))
 				{
 					BKE_reportf(&sj->reports, RPT_INFO, "Appended frame: %d", rd.cfra);
 					printf("Appended frame %d\n", rd.cfra);
@@ -378,8 +388,9 @@ static void screenshot_startjob(void *sjv, short *stop, short *do_update, float 
 				char name[FILE_MAX];
 				int ok;
 				
-				BKE_makepicstring(name, rd.pic, sj->bmain->name, rd.cfra,
-				                  &rd.im_format, (rd.scemode & R_EXTENSION) != 0, true);
+				BKE_image_path_from_imformat(
+				        name, rd.pic, sj->bmain->name, rd.cfra,
+				        &rd.im_format, (rd.scemode & R_EXTENSION) != 0, true, NULL);
 				
 				ibuf->rect = sj->dumprect;
 				ok = BKE_imbuf_write(ibuf, name, &rd.im_format);
@@ -410,8 +421,11 @@ static void screenshot_startjob(void *sjv, short *stop, short *do_update, float 
 			PIL_sleep_ms(U.scrcastwait);
 	}
 	
-	if (mh)
-		mh->end_movie();
+	if (mh) {
+		mh->end_movie(sj->movie_ctx);
+		mh->context_free(sj->movie_ctx);
+		sj->movie_handle = NULL;
+	}
 
 	BKE_report(&sj->reports, RPT_INFO, "Screencast job stopped");
 }

@@ -29,7 +29,8 @@ Import ('env')
 
 sources = env.Glob('*.c')
 
-defs = env['BF_GL_DEFINITIONS']
+defs = []
+defs += env['BF_GL_DEFINITIONS']
 
 incs = [
     '#/intern/guardedalloc',
@@ -41,6 +42,7 @@ incs = [
     '../../blenfont',
     '../../blenkernel',
     '../../blenlib',
+    '../../blentranslation',
     '../../bmesh',
     '../../gpu',
     '../../imbuf',
@@ -48,6 +50,7 @@ incs = [
     '../../makesrna',
     '../../render/extern/include',
     '../../windowmanager',
+    '../../depsgraph',
     ]
 
 if env['WITH_BF_PYTHON']:

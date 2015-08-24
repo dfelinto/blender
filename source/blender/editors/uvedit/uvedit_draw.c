@@ -43,7 +43,6 @@
 
 #include "BLI_math.h"
 #include "BLI_utildefines.h"
-#include "BLI_alloca.h"
 #include "BLI_buffer.h"
 #include "BLI_bitmap.h"
 
@@ -506,6 +505,8 @@ static void draw_uvs_texpaint(SpaceImage *sima, Scene *scene, Object *ob)
 		mloopuv_base = mloopuv;
 
 		for (a = me->totpoly; a > 0; a--, mpoly++) {
+			if ((scene->toolsettings->uv_flag & UV_SHOW_SAME_IMAGE) && mpoly->mat_nr != ob->actcol - 1)
+				continue;
 			glBegin(GL_LINE_LOOP);
 
 			mloopuv = mloopuv_base + mpoly->loopstart;
@@ -597,7 +598,9 @@ static void draw_uvs(SpaceImage *sima, Scene *scene, Object *obedit)
 		/* first try existing derivedmesh */
 		if (!draw_uvs_dm_shadow(em->derivedFinal)) {
 			/* create one if it does not exist */
-			cagedm = editbmesh_get_derived_cage_and_final(scene, obedit, me->edit_btmesh, &finaldm, CD_MASK_BAREMESH | CD_MASK_MTFACE);
+			cagedm = editbmesh_get_derived_cage_and_final(
+			        scene, obedit, me->edit_btmesh, CD_MASK_BAREMESH | CD_MASK_MTFACE,
+			        &finaldm);
 
 			/* when sync selection is enabled, all faces are drawn (except for hidden)
 			 * so if cage is the same as the final, theres no point in drawing this */

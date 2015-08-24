@@ -38,12 +38,10 @@
 
 struct OldNewMap;
 struct MemFile;
-struct bheadsort;
 struct ReportList;
 struct Object;
 struct PartEff;
 struct View3D;
-struct bNodeTree;
 struct Key;
 
 typedef struct FileData {
@@ -88,10 +86,14 @@ typedef struct FileData {
 	struct OldNewMap *libmap;
 	struct OldNewMap *imamap;
 	struct OldNewMap *movieclipmap;
+	struct OldNewMap *soundmap;
 	struct OldNewMap *packedmap;
 	
 	struct BHeadSort *bheadmap;
 	int tot_bheadmap;
+
+	/* see: USE_GHASH_BHEAD */
+	struct GHash *bhead_idname_hash;
 	
 	ListBase *mainlist;
 	
@@ -133,6 +135,8 @@ void blo_make_image_pointer_map(FileData *fd, Main *oldmain);
 void blo_end_image_pointer_map(FileData *fd, Main *oldmain);
 void blo_make_movieclip_pointer_map(FileData *fd, Main *oldmain);
 void blo_end_movieclip_pointer_map(FileData *fd, Main *oldmain);
+void blo_make_sound_pointer_map(FileData *fd, Main *oldmain);
+void blo_end_sound_pointer_map(FileData *fd, Main *oldmain);
 void blo_make_packed_pointer_map(FileData *fd, Main *oldmain);
 void blo_end_packed_pointer_map(FileData *fd, Main *oldmain);
 void blo_add_library_pointer_map(ListBase *mainlist, FileData *fd);
@@ -143,7 +147,7 @@ BHead *blo_firstbhead(FileData *fd);
 BHead *blo_nextbhead(FileData *fd, BHead *thisblock);
 BHead *blo_prevbhead(FileData *fd, BHead *thisblock);
 
-char *bhead_id_name(FileData *fd, BHead *bhead);
+const char *bhead_id_name(const FileData *fd, const BHead *bhead);
 
 /* do versions stuff */
 

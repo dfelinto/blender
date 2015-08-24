@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #include "util_debug.h"
@@ -237,7 +237,7 @@ bool TaskScheduler::thread_wait_pop(Entry& entry)
 	return true;
 }
 
-void TaskScheduler::thread_run(int thread_id)
+void TaskScheduler::thread_run(int /*thread_id*/)
 {
 	Entry entry;
 

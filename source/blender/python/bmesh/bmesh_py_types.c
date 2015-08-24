@@ -44,6 +44,7 @@
 #include "../mathutils/mathutils.h"
 
 #include "../generic/py_capi_utils.h"
+#include "../generic/python_utildefines.h"
 
 #include "bmesh_py_types.h" /* own include */
 #include "bmesh_py_types_select.h"
@@ -77,6 +78,8 @@ PyC_FlagSet bpy_bm_htype_all_flags[] = {
 	{BM_LOOP, "LOOP"},
 	{0, NULL}
 };
+
+#define BPY_BM_HFLAG_ALL_STR "('SELECT', 'HIDE', 'SEAM', 'SMOOTH', 'TAG')"
 
 PyC_FlagSet bpy_bm_hflag_all_flags[] = {
 	{BM_ELEM_SELECT,  "SELECT"},
@@ -342,7 +345,7 @@ PyDoc_STRVAR(bpy_bmvert_co_doc,
 static PyObject *bpy_bmvert_co_get(BPy_BMVert *self)
 {
 	BPY_BM_CHECK_OBJ(self);
-	return Vector_CreatePyObject(self->v->co, 3, Py_WRAP, NULL);
+	return Vector_CreatePyObject_wrap(self->v->co, 3, NULL);
 }
 
 static int bpy_bmvert_co_set(BPy_BMVert *self, PyObject *value)
@@ -364,7 +367,7 @@ PyDoc_STRVAR(bpy_bmvert_normal_doc,
 static PyObject *bpy_bmvert_normal_get(BPy_BMVert *self)
 {
 	BPY_BM_CHECK_OBJ(self);
-	return Vector_CreatePyObject(self->v->no, 3, Py_WRAP, NULL);
+	return Vector_CreatePyObject_wrap(self->v->no, 3, NULL);
 }
 
 static int bpy_bmvert_normal_set(BPy_BMVert *self, PyObject *value)
@@ -468,7 +471,7 @@ PyDoc_STRVAR(bpy_bmface_normal_doc,
 static PyObject *bpy_bmface_normal_get(BPy_BMFace *self)
 {
 	BPY_BM_CHECK_OBJ(self);
-	return Vector_CreatePyObject(self->f->no, 3, Py_WRAP, NULL);
+	return Vector_CreatePyObject_wrap(self->f->no, 3, NULL);
 }
 
 static int bpy_bmface_normal_set(BPy_BMFace *self, PyObject *value)
@@ -940,16 +943,22 @@ static PyObject *bpy_bmesh_from_object(BPy_BMesh *self, PyObject *args)
 	Object *ob;
 	struct Scene *scene;
 	BMesh *bm;
-	int use_deform = true;
-	int use_render = false;
-	int use_cage   = false;
-	int use_fnorm  = true;
+	bool use_deform = true;
+	bool use_render = false;
+	bool use_cage   = false;
+	bool use_fnorm  = true;
 	DerivedMesh *dm;
 	const int mask = CD_MASK_BMESH;
 
 	BPY_BM_CHECK_OBJ(self);
 
-	if (!PyArg_ParseTuple(args, "OO|iiii:from_object", &py_object, &py_scene, &use_render, &use_cage, &use_fnorm) ||
+	if (!PyArg_ParseTuple(
+	        args, "OO|O&O&O&O&:from_object",
+	        &py_object, &py_scene,
+	        PyC_ParseBool, &use_deform,
+	        PyC_ParseBool, &use_render,
+	        PyC_ParseBool, &use_cage,
+	        PyC_ParseBool, &use_fnorm) ||
 	    !(ob    = PyC_RNA_AsPointer(py_object, "Object")) ||
 	    !(scene = PyC_RNA_AsPointer(py_scene,  "Scene")))
 	{
@@ -1041,14 +1050,18 @@ static PyObject *bpy_bmesh_from_mesh(BPy_BMesh *self, PyObject *args, PyObject *
 	BMesh *bm;
 	PyObject *py_mesh;
 	Mesh *me;
-	int use_fnorm  = true;
-	int use_shape_key = false;
+	bool use_fnorm  = true;
+	bool use_shape_key = false;
 	int shape_key_index = 0;
 
 	BPY_BM_CHECK_OBJ(self);
 
-	if (!PyArg_ParseTupleAndKeywords(args, kw, "O|iii:from_mesh", (char **)kwlist,
-	                                 &py_mesh, &use_fnorm, &use_shape_key, &shape_key_index) ||
+	if (!PyArg_ParseTupleAndKeywords(
+	        args, kw, "O|O&O&i:from_mesh", (char **)kwlist,
+	        &py_mesh,
+	        PyC_ParseBool, &use_fnorm,
+	        PyC_ParseBool, &use_shape_key,
+	        &shape_key_index) ||
 	    !(me = PyC_RNA_AsPointer(py_mesh, "Mesh")))
 	{
 		return NULL;
@@ -1127,7 +1140,7 @@ PyDoc_STRVAR(bpy_bmesh_transform_doc,
 "\n"
 "   :arg matrix: transform matrix.\n"
 "   :type matrix: 4x4 :class:`mathutils.Matrix`\n"
-"   :arg filter: set of values in ('SELECT', 'HIDE', 'SEAM', 'SMOOTH', 'TAG').\n"
+"   :arg filter: set of values in " BPY_BM_HFLAG_ALL_STR ".\n"
 "   :type filter: set\n"
 );
 static PyObject *bpy_bmesh_transform(BPy_BMElem *self, PyObject *args, PyObject *kw)
@@ -1421,17 +1434,44 @@ static PyObject *bpy_bmvert_copy_from_face_interp(BPy_BMVert *self, PyObject *ar
 
 
 PyDoc_STRVAR(bpy_bmvert_calc_edge_angle_doc,
-".. method:: calc_vert_angle()\n"
+".. method:: calc_edge_angle(fallback=None)\n"
 "\n"
 "   Return the angle between this vert's two connected edges.\n"
 "\n"
+"   :arg fallback: return this when the vert doesn't have 2 edges\n"
+"      (instead of raising a :exc:`ValueError`).\n"
+"   :type fallback: any\n"
 "   :return: Angle between edges in radians.\n"
 "   :rtype: float\n"
 );
-static PyObject *bpy_bmvert_calc_edge_angle(BPy_BMVert *self)
+static PyObject *bpy_bmvert_calc_edge_angle(BPy_BMVert *self, PyObject *args)
 {
+	const float angle_invalid = -1.0f;
+	float angle;
+	PyObject *fallback = NULL;
+
 	BPY_BM_CHECK_OBJ(self);
-	return PyFloat_FromDouble(BM_vert_calc_edge_angle(self->v));
+
+	if (!PyArg_ParseTuple(args, "|O:calc_edge_angle", &fallback))
+		return NULL;
+
+	angle = BM_vert_calc_edge_angle_ex(self->v, angle_invalid);
+
+	if (angle == angle_invalid) {
+		/* avoid exception */
+		if (fallback) {
+			Py_INCREF(fallback);
+			return fallback;
+		}
+		else {
+			PyErr_SetString(PyExc_ValueError,
+			                "BMVert.calc_edge_angle(): "
+			                "vert doesn't use 2 edges");
+			return NULL;
+		}
+	}
+
+	return PyFloat_FromDouble(angle);
 }
 
 PyDoc_STRVAR(bpy_bmvert_calc_shell_factor_doc,
@@ -1481,27 +1521,81 @@ static PyObject *bpy_bmedge_calc_length(BPy_BMEdge *self)
 }
 
 PyDoc_STRVAR(bpy_bmedge_calc_face_angle_doc,
-".. method:: calc_face_angle()\n"
+".. method:: calc_face_angle(fallback=None)\n"
 "\n"
+"   :arg fallback: return this when the edge doesn't have 2 faces\n"
+"      (instead of raising a :exc:`ValueError`).\n"
+"   :type fallback: any\n"
 "   :return: The angle between 2 connected faces in radians.\n"
 "   :rtype: float\n"
 );
-static PyObject *bpy_bmedge_calc_face_angle(BPy_BMEdge *self)
+static PyObject *bpy_bmedge_calc_face_angle(BPy_BMEdge *self, PyObject *args)
 {
+	const float angle_invalid = -1.0f;
+	float angle;
+	PyObject *fallback = NULL;
+
 	BPY_BM_CHECK_OBJ(self);
-	return PyFloat_FromDouble(BM_edge_calc_face_angle(self->e));
+
+	if (!PyArg_ParseTuple(args, "|O:calc_face_angle", &fallback))
+		return NULL;
+
+	angle = BM_edge_calc_face_angle_ex(self->e, angle_invalid);
+
+	if (angle == angle_invalid) {
+		/* avoid exception */
+		if (fallback) {
+			Py_INCREF(fallback);
+			return fallback;
+		}
+		else {
+			PyErr_SetString(PyExc_ValueError,
+			                "BMEdge.calc_face_angle(): "
+			                "edge doesn't use 2 faces");
+			return NULL;
+		}
+	}
+
+	return PyFloat_FromDouble(angle);
 }
 
 PyDoc_STRVAR(bpy_bmedge_calc_face_angle_signed_doc,
-".. method:: calc_face_angle_signed()\n"
+".. method:: calc_face_angle_signed(fallback=None)\n"
 "\n"
+"   :arg fallback: return this when the edge doesn't have 2 faces\n"
+"      (instead of raising a :exc:`ValueError`).\n"
+"   :type fallback: any\n"
 "   :return: The angle between 2 connected faces in radians (negative for concave join).\n"
 "   :rtype: float\n"
 );
-static PyObject *bpy_bmedge_calc_face_angle_signed(BPy_BMEdge *self)
+static PyObject *bpy_bmedge_calc_face_angle_signed(BPy_BMEdge *self, PyObject *args)
 {
+	const float angle_invalid = -FLT_MAX;
+	float angle;
+	PyObject *fallback = NULL;
+
 	BPY_BM_CHECK_OBJ(self);
-	return PyFloat_FromDouble(BM_edge_calc_face_angle_signed(self->e));
+
+	if (!PyArg_ParseTuple(args, "|O:calc_face_angle_signed", &fallback))
+		return NULL;
+
+	angle = BM_edge_calc_face_angle_signed_ex(self->e, angle_invalid);
+
+	if (angle == angle_invalid) {
+		/* avoid exception */
+		if (fallback) {
+			Py_INCREF(fallback);
+			return fallback;
+		}
+		else {
+			PyErr_SetString(PyExc_ValueError,
+			                "BMEdge.calc_face_angle_signed(): "
+			                "edge doesn't use 2 faces");
+			return NULL;
+		}
+	}
+
+	return PyFloat_FromDouble(angle);
 }
 
 PyDoc_STRVAR(bpy_bmedge_calc_tangent_doc,
@@ -1530,7 +1624,7 @@ static PyObject *bpy_bmedge_calc_tangent(BPy_BMEdge *self, PyObject *args)
 		BPY_BM_CHECK_OBJ(py_loop);
 		/* no need to check if they are from the same mesh or even connected */
 		BM_edge_calc_face_tangent(self->e, py_loop->l, vec);
-		return Vector_CreatePyObject(vec, 3, Py_NEW, NULL);
+		return Vector_CreatePyObject(vec, 3, NULL);
 	}
 }
 
@@ -1602,12 +1696,14 @@ PyDoc_STRVAR(bpy_bmface_copy_from_face_interp_doc,
 static PyObject *bpy_bmface_copy_from_face_interp(BPy_BMFace *self, PyObject *args)
 {
 	BPy_BMFace *py_face = NULL;
-	int do_vertex   = true;
+	bool do_vertex   = true;
 
 	BPY_BM_CHECK_OBJ(self);
 
-	if (!PyArg_ParseTuple(args, "O!|i:BMFace.copy_from_face_interp",
-	                      &BPy_BMFace_Type, &py_face, &do_vertex))
+	if (!PyArg_ParseTuple(
+	        args, "O!|O&:BMFace.copy_from_face_interp",
+	        &BPy_BMFace_Type, &py_face,
+	        PyC_ParseBool, &do_vertex))
 	{
 		return NULL;
 	}
@@ -1640,16 +1736,17 @@ static PyObject *bpy_bmface_copy(BPy_BMFace *self, PyObject *args, PyObject *kw)
 	static const char *kwlist[] = {"verts", "edges", NULL};
 
 	BMesh *bm = self->bm;
-	int do_verts = true;
-	int do_edges = true;
+	bool do_verts = true;
+	bool do_edges = true;
 
 	BMFace *f_cpy;
 	BPY_BM_CHECK_OBJ(self);
 
-	if (!PyArg_ParseTupleAndKeywords(args, kw,
-	                                 "|ii:BMFace.copy",
-	                                 (char **)kwlist,
-	                                 &do_verts, &do_edges))
+	if (!PyArg_ParseTupleAndKeywords(
+	        args, kw,
+	        "|O&O&:BMFace.copy", (char **)kwlist,
+	        PyC_ParseBool, &do_verts,
+	        PyC_ParseBool, &do_edges))
 	{
 		return NULL;
 	}
@@ -1711,7 +1808,7 @@ static PyObject *bpy_bmface_calc_center_mean(BPy_BMFace *self)
 
 	BPY_BM_CHECK_OBJ(self);
 	BM_face_calc_center_mean(self->f, cent);
-	return Vector_CreatePyObject(cent, 3, Py_NEW, NULL);
+	return Vector_CreatePyObject(cent, 3, NULL);
 }
 
 PyDoc_STRVAR(bpy_bmface_calc_center_mean_weighted_doc,
@@ -1728,7 +1825,7 @@ static PyObject *bpy_bmface_calc_center_mean_weighted(BPy_BMFace *self)
 
 	BPY_BM_CHECK_OBJ(self);
 	BM_face_calc_center_mean_weighted(self->f, cent);
-	return Vector_CreatePyObject(cent, 3, Py_NEW, NULL);
+	return Vector_CreatePyObject(cent, 3, NULL);
 }
 
 PyDoc_STRVAR(bpy_bmface_calc_center_bounds_doc,
@@ -1745,7 +1842,7 @@ static PyObject *bpy_bmface_calc_center_bounds(BPy_BMFace *self)
 
 	BPY_BM_CHECK_OBJ(self);
 	BM_face_calc_center_bounds(self->f, cent);
-	return Vector_CreatePyObject(cent, 3, Py_NEW, NULL);
+	return Vector_CreatePyObject(cent, 3, NULL);
 }
 
 
@@ -1797,14 +1894,16 @@ PyDoc_STRVAR(bpy_bmloop_copy_from_face_interp_doc,
 static PyObject *bpy_bmloop_copy_from_face_interp(BPy_BMLoop *self, PyObject *args)
 {
 	BPy_BMFace *py_face = NULL;
-	int do_vertex   = true;
-	int do_multires = true;
+	bool do_vertex   = true;
+	bool do_multires = true;
 
 	BPY_BM_CHECK_OBJ(self);
 
-	if (!PyArg_ParseTuple(args, "O!|ii:BMLoop.copy_from_face_interp",
-	                      &BPy_BMFace_Type, &py_face,
-	                      &do_vertex, &do_multires))
+	if (!PyArg_ParseTuple(
+	        args, "O!|O&O&:BMLoop.copy_from_face_interp",
+	        &BPy_BMFace_Type, &py_face,
+	        PyC_ParseBool, &do_vertex,
+	        PyC_ParseBool, &do_multires))
 	{
 		return NULL;
 	}
@@ -1849,7 +1948,7 @@ static PyObject *bpy_bmloop_calc_normal(BPy_BMLoop *self)
 	float vec[3];
 	BPY_BM_CHECK_OBJ(self);
 	BM_loop_calc_face_normal(self->l, vec);
-	return Vector_CreatePyObject(vec, 3, Py_NEW, NULL);
+	return Vector_CreatePyObject(vec, 3, NULL);
 }
 
 PyDoc_STRVAR(bpy_bmloop_calc_tangent_doc,
@@ -1866,7 +1965,7 @@ static PyObject *bpy_bmloop_calc_tangent(BPy_BMLoop *self)
 	float vec[3];
 	BPY_BM_CHECK_OBJ(self);
 	BM_loop_calc_face_tangent(self->l, vec);
-	return Vector_CreatePyObject(vec, 3, Py_NEW, NULL);
+	return Vector_CreatePyObject(vec, 3, NULL);
 }
 
 /* Vert Seq
@@ -2377,7 +2476,7 @@ static PyObject *bpy_bmelemseq_sort(BPy_BMElemSeq *self, PyObject *args, PyObjec
 {
 	static const char *kwlist[] = {"key", "reverse", NULL};
 	PyObject *keyfunc = NULL; /* optional */
-	int do_reverse = false; /* optional */
+	bool do_reverse = false; /* optional */
 
 	const char htype = bm_iter_itype_htype_map[self->itype];
 	int n_elem;
@@ -2399,10 +2498,11 @@ static PyObject *bpy_bmelemseq_sort(BPy_BMElemSeq *self, PyObject *args, PyObjec
 	BPY_BM_CHECK_OBJ(self);
 
 	if (args != NULL) {
-		if (!PyArg_ParseTupleAndKeywords(args, kw,
-		                                 "|Oi:BMElemSeq.sort",
-		                                 (char **)kwlist,
-		                                 &keyfunc, &do_reverse))
+		if (!PyArg_ParseTupleAndKeywords(
+		        args, kw,
+		        "|OO&:BMElemSeq.sort", (char **)kwlist,
+		        &keyfunc,
+		        PyC_ParseBool, &do_reverse))
 		{
 			return NULL;
 		}
@@ -2553,7 +2653,7 @@ static struct PyMethodDef bpy_bmvert_methods[] = {
 	{"copy_from_face_interp", (PyCFunction)bpy_bmvert_copy_from_face_interp, METH_VARARGS, bpy_bmvert_copy_from_face_interp_doc},
 	{"copy_from_vert_interp", (PyCFunction)bpy_bmvert_copy_from_vert_interp, METH_VARARGS, bpy_bmvert_copy_from_vert_interp_doc},
 
-	{"calc_vert_angle",   (PyCFunction)bpy_bmvert_calc_edge_angle,   METH_NOARGS, bpy_bmvert_calc_edge_angle_doc},
+	{"calc_edge_angle",   (PyCFunction)bpy_bmvert_calc_edge_angle,   METH_VARARGS, bpy_bmvert_calc_edge_angle_doc},
 	{"calc_shell_factor", (PyCFunction)bpy_bmvert_calc_shell_factor, METH_NOARGS, bpy_bmvert_calc_shell_factor_doc},
 
 	{"normal_update",  (PyCFunction)bpy_bmvert_normal_update,  METH_NOARGS,  bpy_bmvert_normal_update_doc},
@@ -2569,8 +2669,8 @@ static struct PyMethodDef bpy_bmedge_methods[] = {
 	{"other_vert", (PyCFunction)bpy_bmedge_other_vert, METH_O, bpy_bmedge_other_vert_doc},
 
 	{"calc_length",     (PyCFunction)bpy_bmedge_calc_length,     METH_NOARGS,  bpy_bmedge_calc_length_doc},
-	{"calc_face_angle", (PyCFunction)bpy_bmedge_calc_face_angle, METH_NOARGS,  bpy_bmedge_calc_face_angle_doc},
-	{"calc_face_angle_signed", (PyCFunction)bpy_bmedge_calc_face_angle_signed, METH_NOARGS,  bpy_bmedge_calc_face_angle_signed_doc},
+	{"calc_face_angle", (PyCFunction)bpy_bmedge_calc_face_angle, METH_VARARGS,  bpy_bmedge_calc_face_angle_doc},
+	{"calc_face_angle_signed", (PyCFunction)bpy_bmedge_calc_face_angle_signed, METH_VARARGS,  bpy_bmedge_calc_face_angle_signed_doc},
 	{"calc_tangent",    (PyCFunction)bpy_bmedge_calc_tangent,    METH_VARARGS, bpy_bmedge_calc_tangent_doc},
 
 	{"normal_update",  (PyCFunction)bpy_bmedge_normal_update,  METH_NOARGS,  bpy_bmedge_normal_update_doc},
@@ -2796,7 +2896,6 @@ static PyObject *bpy_bmelemseq_subscript_slice(BPy_BMElemSeq *self, Py_ssize_t s
 	bool ok;
 
 	PyObject *list;
-	PyObject *item;
 	BMHeader *ele;
 
 	BPY_BM_CHECK_OBJ(self);
@@ -2821,9 +2920,7 @@ static PyObject *bpy_bmelemseq_subscript_slice(BPy_BMElemSeq *self, Py_ssize_t s
 
 	/* add items until stop */
 	while ((ele = BM_iter_step(&iter))) {
-		item = BPy_BMElem_CreatePyObject(self->bm, ele);
-		PyList_Append(list, item);
-		Py_DECREF(item);
+		PyList_APPEND(list, BPy_BMElem_CreatePyObject(self->bm, ele));
 
 		count++;
 		if (count == stop) {
@@ -3172,17 +3269,17 @@ static PyObject *bpy_bmloop_repr(BPy_BMLoop *self)
 /* Types
  * ===== */
 
-PyTypeObject BPy_BMesh_Type     = {{{0}}};
-PyTypeObject BPy_BMVert_Type    = {{{0}}};
-PyTypeObject BPy_BMEdge_Type    = {{{0}}};
-PyTypeObject BPy_BMFace_Type    = {{{0}}};
-PyTypeObject BPy_BMLoop_Type    = {{{0}}};
-PyTypeObject BPy_BMElemSeq_Type = {{{0}}};
-PyTypeObject BPy_BMVertSeq_Type = {{{0}}};
-PyTypeObject BPy_BMEdgeSeq_Type = {{{0}}};
-PyTypeObject BPy_BMFaceSeq_Type = {{{0}}};
-PyTypeObject BPy_BMLoopSeq_Type = {{{0}}};
-PyTypeObject BPy_BMIter_Type    = {{{0}}};
+PyTypeObject BPy_BMesh_Type;
+PyTypeObject BPy_BMVert_Type;
+PyTypeObject BPy_BMEdge_Type;
+PyTypeObject BPy_BMFace_Type;
+PyTypeObject BPy_BMLoop_Type;
+PyTypeObject BPy_BMElemSeq_Type;
+PyTypeObject BPy_BMVertSeq_Type;
+PyTypeObject BPy_BMEdgeSeq_Type;
+PyTypeObject BPy_BMFaceSeq_Type;
+PyTypeObject BPy_BMLoopSeq_Type;
+PyTypeObject BPy_BMIter_Type;
 
 
 
@@ -3678,104 +3775,120 @@ void bpy_bm_generic_invalidate(BPy_BMGeneric *self)
  *
  * The 'bm_r' value is assigned when empty, and used when set.
  */
-void *BPy_BMElem_PySeq_As_Array(BMesh **r_bm, PyObject *seq, Py_ssize_t min, Py_ssize_t max, Py_ssize_t *r_size,
-                                const char htype,
-                                const bool do_unique_check, const bool do_bm_check,
-                                const char *error_prefix)
+void *BPy_BMElem_PySeq_As_Array_FAST(
+        BMesh **r_bm, PyObject *seq_fast, Py_ssize_t min, Py_ssize_t max, Py_ssize_t *r_size,
+        const char htype,
+        const bool do_unique_check, const bool do_bm_check,
+        const char *error_prefix)
 {
 	BMesh *bm = (r_bm && *r_bm) ? *r_bm : NULL;
-	PyObject *seq_fast;
+	PyObject **seq_fast_items = PySequence_Fast_ITEMS(seq_fast);
+	const Py_ssize_t seq_len = PySequence_Fast_GET_SIZE(seq_fast);
+	Py_ssize_t i;
+
+	BPy_BMElem *item;
+	BMElem **alloc;
+
 	*r_size = 0;
+
+	if (seq_len < min || seq_len > max) {
+		PyErr_Format(PyExc_TypeError,
+		             "%s: sequence incorrect size, expected [%d - %d], given %d",
+		             error_prefix, min, max, seq_len);
+		return NULL;
+	}
+
+	/* from now on, use goto */
+	alloc = PyMem_MALLOC(seq_len * sizeof(BPy_BMElem **));
+
+	for (i = 0; i < seq_len; i++) {
+		item = (BPy_BMElem *)seq_fast_items[i];
+
+		if (!BPy_BMElem_CheckHType(Py_TYPE(item), htype)) {
+			PyErr_Format(PyExc_TypeError,
+			             "%s: expected %.200s, not '%.200s'",
+			             error_prefix, BPy_BMElem_StringFromHType(htype), Py_TYPE(item)->tp_name);
+			goto err_cleanup;
+		}
+		else if (!BPY_BM_IS_VALID(item)) {
+			PyErr_Format(PyExc_TypeError,
+			             "%s: %d %s has been removed",
+			             error_prefix, i, Py_TYPE(item)->tp_name);
+			goto err_cleanup;
+		}
+		/* trick so we can ensure all items have the same mesh,
+		 * and allows us to pass the 'bm' as NULL. */
+		else if (do_bm_check && (bm && bm != item->bm)) {
+			PyErr_Format(PyExc_ValueError,
+			             "%s: %d %s is from another mesh",
+			             error_prefix, i, BPy_BMElem_StringFromHType(htype));
+			goto err_cleanup;
+		}
+
+		if (bm == NULL) {
+			bm = item->bm;
+		}
+
+		alloc[i] = item->ele;
+
+		if (do_unique_check) {
+			BM_elem_flag_enable(item->ele, BM_ELEM_INTERNAL_TAG);
+		}
+	}
+
+	if (do_unique_check) {
+		/* check for double verts! */
+		bool ok = true;
+		for (i = 0; i < seq_len; i++) {
+			if (UNLIKELY(BM_elem_flag_test(alloc[i], BM_ELEM_INTERNAL_TAG) == false)) {
+				ok = false;
+			}
+
+			/* ensure we don't leave this enabled */
+			BM_elem_flag_disable(alloc[i], BM_ELEM_INTERNAL_TAG);
+		}
+
+		if (ok == false) {
+			PyErr_Format(PyExc_ValueError,
+			             "%s: found the same %.200s used multiple times",
+			             error_prefix, BPy_BMElem_StringFromHType(htype));
+			goto err_cleanup;
+		}
+	}
+
+	*r_size = seq_len;
+	if (r_bm) *r_bm = bm;
+	return alloc;
+
+err_cleanup:
+	PyMem_FREE(alloc);
+	return NULL;
+
+}
+
+void *BPy_BMElem_PySeq_As_Array(
+        BMesh **r_bm, PyObject *seq, Py_ssize_t min, Py_ssize_t max, Py_ssize_t *r_size,
+        const char htype,
+        const bool do_unique_check, const bool do_bm_check,
+        const char *error_prefix)
+{
+	PyObject *seq_fast;
+	PyObject *ret;
 
 	if (!(seq_fast = PySequence_Fast(seq, error_prefix))) {
 		return NULL;
 	}
-	else {
-		Py_ssize_t seq_len;
-		Py_ssize_t i;
 
-		BPy_BMElem *item;
-		BMElem **alloc;
+	ret = BPy_BMElem_PySeq_As_Array_FAST(
+	        r_bm, seq_fast, min, max, r_size,
+	        htype,
+	        do_unique_check, do_bm_check,
+	        error_prefix);
 
-		seq_len = PySequence_Fast_GET_SIZE(seq_fast);
-
-		if (seq_len < min || seq_len > max) {
-			PyErr_Format(PyExc_TypeError,
-			             "%s: sequence incorrect size, expected [%d - %d], given %d",
-			             error_prefix, min, max, seq_len);
-			return NULL;
-		}
-
-
-		/* from now on, use goto */
-		alloc = PyMem_MALLOC(seq_len * sizeof(BPy_BMElem **));
-
-		for (i = 0; i < seq_len; i++) {
-			item = (BPy_BMElem *)PySequence_Fast_GET_ITEM(seq_fast, i);
-
-			if (!BPy_BMElem_CheckHType(Py_TYPE(item), htype)) {
-				PyErr_Format(PyExc_TypeError,
-				             "%s: expected %.200s, not '%.200s'",
-				             error_prefix, BPy_BMElem_StringFromHType(htype), Py_TYPE(item)->tp_name);
-				goto err_cleanup;
-			}
-			else if (!BPY_BM_IS_VALID(item)) {
-				PyErr_Format(PyExc_TypeError,
-				             "%s: %d %s has been removed",
-				             error_prefix, i, Py_TYPE(item)->tp_name);
-				goto err_cleanup;
-			}
-			/* trick so we can ensure all items have the same mesh,
-			 * and allows us to pass the 'bm' as NULL. */
-			else if (do_bm_check && (bm && bm != item->bm)) {
-				PyErr_Format(PyExc_ValueError,
-				             "%s: %d %s is from another mesh",
-				             error_prefix, i, BPy_BMElem_StringFromHType(htype));
-				goto err_cleanup;
-			}
-
-			if (bm == NULL) {
-				bm = item->bm;
-			}
-
-			alloc[i] = item->ele;
-
-			if (do_unique_check) {
-				BM_elem_flag_enable(item->ele, BM_ELEM_INTERNAL_TAG);
-			}
-		}
-
-		if (do_unique_check) {
-			/* check for double verts! */
-			bool ok = true;
-			for (i = 0; i < seq_len; i++) {
-				if (UNLIKELY(BM_elem_flag_test(alloc[i], BM_ELEM_INTERNAL_TAG) == false)) {
-					ok = false;
-				}
-
-				/* ensure we don't leave this enabled */
-				BM_elem_flag_disable(alloc[i], BM_ELEM_INTERNAL_TAG);
-			}
-
-			if (ok == false) {
-				PyErr_Format(PyExc_ValueError,
-				             "%s: found the same %.200s used multiple times",
-				             error_prefix, BPy_BMElem_StringFromHType(htype));
-				goto err_cleanup;
-			}
-		}
-
-		Py_DECREF(seq_fast);
-		*r_size = seq_len;
-		if (r_bm) *r_bm = bm;
-		return alloc;
-
-err_cleanup:
-		Py_DECREF(seq_fast);
-		PyMem_FREE(alloc);
-		return NULL;
-	}
+	Py_DECREF(seq_fast);
+	return ret;
 }
+
 
 PyObject *BPy_BMElem_Array_As_Tuple(BMesh *bm, BMHeader **elem, Py_ssize_t elem_len)
 {

@@ -323,15 +323,23 @@ void unlink_actuators(ListBase *lb)
 
 void free_actuator(bActuator *act)
 {
-	bSoundActuator *sa;
-
 	if (act->data) {
 		switch (act->type) {
-		case ACT_SOUND:
-			sa = (bSoundActuator *) act->data;
-			if (sa->sound)
-				id_us_min((ID *) sa->sound);
-			break;
+			case ACT_ACTION:
+			case ACT_SHAPEACTION:
+			{
+				bActionActuator *aa = (bActionActuator *)act->data;
+				if (aa->act)
+					id_us_min((ID *)aa->act);
+				break;
+			}
+			case ACT_SOUND:
+			{
+				bSoundActuator *sa = (bSoundActuator *) act->data;
+				if (sa->sound)
+					id_us_min((ID *)sa->sound);
+				break;
+			}
 		}
 
 		MEM_freeN(act->data);
@@ -351,7 +359,6 @@ void free_actuators(ListBase *lb)
 bActuator *copy_actuator(bActuator *act)
 {
 	bActuator *actn;
-	bSoundActuator *sa;
 	
 	act->mynew=actn= MEM_dupallocN(act);
 	actn->flag |= ACT_NEW;
@@ -360,11 +367,21 @@ bActuator *copy_actuator(bActuator *act)
 	}
 	
 	switch (act->type) {
-		case ACT_SOUND:
-			sa= (bSoundActuator *)act->data;
-			if (sa->sound)
-				id_us_plus((ID *) sa->sound);
+		case ACT_ACTION:
+		case ACT_SHAPEACTION:
+		{
+			bActionActuator *aa = (bActionActuator *)act->data;
+			if (aa->act)
+				id_us_plus((ID *)aa->act);
 			break;
+		}
+		case ACT_SOUND:
+		{
+			bSoundActuator *sa = (bSoundActuator *)act->data;
+			if (sa->sound)
+				id_us_plus((ID *)sa->sound);
+			break;
+		}
 	}
 	return actn;
 }
@@ -479,7 +496,7 @@ void init_actuator(bActuator *act)
 		sta->turnspeed = 120.f;
 		sta->dist = 1.f;
 		sta->velocity= 3.f;
-		sta->flag = ACT_STEERING_AUTOMATICFACING;
+		sta->flag = ACT_STEERING_AUTOMATICFACING | ACT_STEERING_LOCKZVEL;
 		sta->facingaxis = 1;
 		break;
 	case ACT_MOUSE:

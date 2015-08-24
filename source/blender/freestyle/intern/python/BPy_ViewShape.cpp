@@ -207,19 +207,19 @@ PyDoc_STRVAR(ViewShape_vertices_doc,
 
 static PyObject *ViewShape_vertices_get(BPy_ViewShape *self, void *UNUSED(closure))
 {
-	PyObject *py_vertices = PyList_New(0);
-
 	vector<ViewVertex *> vertices = self->vs->vertices();
 	vector<ViewVertex *>::iterator it;
+	PyObject *py_vertices = PyList_New(vertices.size());
+	unsigned int i = 0;
+
 	for (it = vertices.begin(); it != vertices.end(); it++) {
-		PyList_Append( py_vertices, Any_BPy_ViewVertex_from_ViewVertex(*(*it)));
+		PyList_SET_ITEM(py_vertices, i++, Any_BPy_ViewVertex_from_ViewVertex(*(*it)));
 	}
 	return py_vertices;
 }
 
 static int ViewShape_vertices_set(BPy_ViewShape *self, PyObject *value, void *UNUSED(closure))
 {
-	PyObject *list = 0;
 	PyObject *item;
 	vector< ViewVertex *> v;
 	
@@ -227,8 +227,10 @@ static int ViewShape_vertices_set(BPy_ViewShape *self, PyObject *value, void *UN
 		PyErr_SetString(PyExc_TypeError, "value must be a list of ViewVertex objects");
 		return -1;
 	}
-	for (int i = 0; i < PyList_Size(list); i++) {
-		item = PyList_GetItem(list, i);
+
+	v.reserve(PyList_GET_SIZE(value));
+	for (unsigned int i = 0; i < PyList_GET_SIZE(value); i++) {
+		item = PyList_GET_ITEM(value, i);
 		if (BPy_ViewVertex_Check(item)) {
 			v.push_back(((BPy_ViewVertex *)item)->vv);
 		}
@@ -248,20 +250,19 @@ PyDoc_STRVAR(ViewShape_edges_doc,
 
 static PyObject *ViewShape_edges_get(BPy_ViewShape *self, void *UNUSED(closure))
 {
-	PyObject *py_edges = PyList_New(0);
-
 	vector<ViewEdge *> edges = self->vs->edges();
 	vector<ViewEdge *>::iterator it;
+	PyObject *py_edges = PyList_New(edges.size());
+	unsigned int i = 0;
 
 	for (it = edges.begin(); it != edges.end(); it++) {
-		PyList_Append(py_edges, BPy_ViewEdge_from_ViewEdge(*(*it)));
+		PyList_SET_ITEM(py_edges, i++, BPy_ViewEdge_from_ViewEdge(*(*it)));
 	}
 	return py_edges;
 }
 
 static int ViewShape_edges_set(BPy_ViewShape *self, PyObject *value, void *UNUSED(closure))
 {
-	PyObject *list = 0;
 	PyObject *item;
 	vector<ViewEdge *> v;
 
@@ -269,8 +270,10 @@ static int ViewShape_edges_set(BPy_ViewShape *self, PyObject *value, void *UNUSE
 		PyErr_SetString(PyExc_TypeError, "value must be a list of ViewEdge objects");
 		return -1;
 	}
-	for (int i = 0; i < PyList_Size(list); i++) {
-		item = PyList_GetItem(list, i);
+
+	v.reserve(PyList_GET_SIZE(value));
+	for (int i = 0; i < PyList_GET_SIZE(value); i++) {
+		item = PyList_GET_ITEM(value, i);
 		if (BPy_ViewEdge_Check(item)) {
 			v.push_back(((BPy_ViewEdge *)item)->ve);
 		}
@@ -290,7 +293,7 @@ PyDoc_STRVAR(ViewShape_name_doc,
 
 static PyObject *ViewShape_name_get(BPy_ViewShape *self, void *UNUSED(closure))
 {
-	return PyUnicode_FromString(self->vs->getName().c_str());
+	return PyUnicode_FromString(self->vs->getName());
 }
 
 PyDoc_STRVAR(ViewShape_id_doc,

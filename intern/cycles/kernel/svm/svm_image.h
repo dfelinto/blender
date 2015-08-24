@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 CCL_NAMESPACE_BEGIN
@@ -65,7 +65,7 @@ ccl_device float4 svm_image_texture(KernelGlobals *kg, int id, float x, float y,
 
 	float4 r;
 	int ix, iy, nix, niy;
-	if (interpolation == INTERPOLATION_CLOSEST) {
+	if(interpolation == INTERPOLATION_CLOSEST) {
 		svm_image_texture_frac(x*width, &ix);
 		svm_image_texture_frac(y*height, &iy);
 
@@ -251,9 +251,9 @@ ccl_device float4 svm_image_texture(KernelGlobals *kg, int id, float x, float y,
 		case 95: r = kernel_tex_image_interp(__tex_image_095, x, y); break;
 		case 96: r = kernel_tex_image_interp(__tex_image_096, x, y); break;
 		case 97: r = kernel_tex_image_interp(__tex_image_097, x, y); break;
-		case 98: r = kernel_tex_image_interp(__tex_image_098, x, y); break;
 
 #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 300)
+		case 98: r = kernel_tex_image_interp(__tex_image_098, x, y); break;
 		case 99: r = kernel_tex_image_interp(__tex_image_099, x, y); break;
 		case 100: r = kernel_tex_image_interp(__tex_image_100, x, y); break;
 		case 101: r = kernel_tex_image_interp(__tex_image_101, x, y); break;
@@ -354,6 +354,12 @@ ccl_device float4 svm_image_texture(KernelGlobals *kg, int id, float x, float y,
 
 #endif
 
+/* Remap coordnate from 0..1 box to -1..-1 */
+ccl_device_inline float3 texco_remap_square(float3 co)
+{
+	return (co - make_float3(0.5f, 0.5f, 0.5f)) * 2.0f;
+}
+
 ccl_device void svm_node_tex_image(KernelGlobals *kg, ShaderData *sd, float *stack, uint4 node)
 {
 	uint id = node.y;
@@ -362,8 +368,20 @@ ccl_device void svm_node_tex_image(KernelGlobals *kg, ShaderData *sd, float *sta
 	decode_node_uchar4(node.z, &co_offset, &out_offset, &alpha_offset, &srgb);
 
 	float3 co = stack_load_float3(stack, co_offset);
+	float2 tex_co;
 	uint use_alpha = stack_valid(alpha_offset);
-	float4 f = svm_image_texture(kg, id, co.x, co.y, srgb, use_alpha);
+	if(node.w == NODE_IMAGE_PROJ_SPHERE) {
+		co = texco_remap_square(co);
+		tex_co = map_to_sphere(co);
+	}
+	else if(node.w == NODE_IMAGE_PROJ_TUBE) {
+		co = texco_remap_square(co);
+		tex_co = map_to_tube(co);
+	}
+	else {
+		tex_co = make_float2(co.x, co.y);
+	}
+	float4 f = svm_image_texture(kg, id, tex_co.x, tex_co.y, srgb, use_alpha);
 
 	if(stack_valid(out_offset))
 		stack_store_float3(stack, out_offset, make_float3(f.x, f.y, f.z));
@@ -374,10 +392,10 @@ ccl_device void svm_node_tex_image(KernelGlobals *kg, ShaderData *sd, float *sta
 ccl_device void svm_node_tex_image_box(KernelGlobals *kg, ShaderData *sd, float *stack, uint4 node)
 {
 	/* get object space normal */
-	float3 N = sd->N;
+	float3 N = ccl_fetch(sd, N);
 
-	N = sd->N;
-	if(sd->object != OBJECT_NONE)
+	N = ccl_fetch(sd, N);
+	if(ccl_fetch(sd, object) != OBJECT_NONE)
 		object_inverse_normal_transform(kg, sd, &N);
 
 	/* project from direction vector to barycentric coordinates in triangles */
@@ -415,17 +433,17 @@ ccl_device void svm_node_tex_image_box(KernelGlobals *kg, ShaderData *sd, float 
 		/* in case of blending, test for mixes between two textures */
 		if(N.z < (1.0f - limit)*(N.y + N.x)) {
 			weight.x = N.x/(N.x + N.y);
-			weight.x = clamp((weight.x - 0.5f*(1.0f - blend))/blend, 0.0f, 1.0f);
+			weight.x = saturate((weight.x - 0.5f*(1.0f - blend))/blend);
 			weight.y = 1.0f - weight.x;
 		}
 		else if(N.x < (1.0f - limit)*(N.y + N.z)) {
 			weight.y = N.y/(N.y + N.z);
-			weight.y = clamp((weight.y - 0.5f*(1.0f - blend))/blend, 0.0f, 1.0f);
+			weight.y = saturate((weight.y - 0.5f*(1.0f - blend))/blend);
 			weight.z = 1.0f - weight.y;
 		}
 		else if(N.y < (1.0f - limit)*(N.x + N.z)) {
 			weight.x = N.x/(N.x + N.z);
-			weight.x = clamp((weight.x - 0.5f*(1.0f - blend))/blend, 0.0f, 1.0f);
+			weight.x = saturate((weight.x - 0.5f*(1.0f - blend))/blend);
 			weight.z = 1.0f - weight.x;
 		}
 		else {
@@ -462,7 +480,6 @@ ccl_device void svm_node_tex_image_box(KernelGlobals *kg, ShaderData *sd, float 
 	if(stack_valid(alpha_offset))
 		stack_store_float(stack, alpha_offset, f.w);
 }
-
 
 ccl_device void svm_node_tex_environment(KernelGlobals *kg, ShaderData *sd, float *stack, uint4 node)
 {

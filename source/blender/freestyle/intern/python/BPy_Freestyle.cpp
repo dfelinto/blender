@@ -60,6 +60,7 @@ extern "C" {
 
 #include "FRS_freestyle.h"
 #include "RNA_access.h"
+#include "BKE_appdir.h"
 #include "DNA_scene_types.h"
 #include "bpy_rna.h" /* pyrna_struct_CreatePyObject() */
 
@@ -71,7 +72,7 @@ static char Freestyle_getCurrentScene___doc__[] =
 "   :return: The current scene.\n"
 "   :rtype: :class:`bpy.types.Scene`\n";
 
-static PyObject *Freestyle_getCurrentScene(PyObject *self)
+static PyObject *Freestyle_getCurrentScene(PyObject * /*self*/)
 {
 	if (!freestyle_scene) {
 		PyErr_SetString(PyExc_TypeError, "current scene not available");
@@ -86,24 +87,24 @@ static PyObject *Freestyle_getCurrentScene(PyObject *self)
 
 static int ramp_blend_type(const char *type)
 {
-	if (!strcmp(type, "MIX"))           return MA_RAMP_BLEND;
-	if (!strcmp(type, "ADD"))           return MA_RAMP_ADD;
-	if (!strcmp(type, "MULTIPLY"))      return MA_RAMP_MULT;
-	if (!strcmp(type, "SUBTRACT"))      return MA_RAMP_SUB;
-	if (!strcmp(type, "SCREEN"))        return MA_RAMP_SCREEN;
-	if (!strcmp(type, "DIVIDE"))        return MA_RAMP_DIV;
-	if (!strcmp(type, "DIFFERENCE"))    return MA_RAMP_DIFF;
-	if (!strcmp(type, "DARKEN"))        return MA_RAMP_DARK;
-	if (!strcmp(type, "LIGHTEN"))       return MA_RAMP_LIGHT;
-	if (!strcmp(type, "OVERLAY"))       return MA_RAMP_OVERLAY;
-	if (!strcmp(type, "DODGE"))         return MA_RAMP_DODGE;
-	if (!strcmp(type, "BURN"))          return MA_RAMP_BURN;
-	if (!strcmp(type, "HUE"))           return MA_RAMP_HUE;
-	if (!strcmp(type, "SATURATION"))    return MA_RAMP_SAT;
-	if (!strcmp(type, "VALUE"))         return MA_RAMP_VAL;
-	if (!strcmp(type, "COLOR"))         return MA_RAMP_COLOR;
-	if (!strcmp(type, "SOFT_LIGHT"))    return MA_RAMP_SOFT;
-	if (!strcmp(type, "LINEAR_LIGHT"))  return MA_RAMP_LINEAR;
+	if (STREQ(type, "MIX"))           return MA_RAMP_BLEND;
+	if (STREQ(type, "ADD"))           return MA_RAMP_ADD;
+	if (STREQ(type, "MULTIPLY"))      return MA_RAMP_MULT;
+	if (STREQ(type, "SUBTRACT"))      return MA_RAMP_SUB;
+	if (STREQ(type, "SCREEN"))        return MA_RAMP_SCREEN;
+	if (STREQ(type, "DIVIDE"))        return MA_RAMP_DIV;
+	if (STREQ(type, "DIFFERENCE"))    return MA_RAMP_DIFF;
+	if (STREQ(type, "DARKEN"))        return MA_RAMP_DARK;
+	if (STREQ(type, "LIGHTEN"))       return MA_RAMP_LIGHT;
+	if (STREQ(type, "OVERLAY"))       return MA_RAMP_OVERLAY;
+	if (STREQ(type, "DODGE"))         return MA_RAMP_DODGE;
+	if (STREQ(type, "BURN"))          return MA_RAMP_BURN;
+	if (STREQ(type, "HUE"))           return MA_RAMP_HUE;
+	if (STREQ(type, "SATURATION"))    return MA_RAMP_SAT;
+	if (STREQ(type, "VALUE"))         return MA_RAMP_VAL;
+	if (STREQ(type, "COLOR"))         return MA_RAMP_COLOR;
+	if (STREQ(type, "SOFT_LIGHT"))    return MA_RAMP_SOFT;
+	if (STREQ(type, "LINEAR_LIGHT"))  return MA_RAMP_LINEAR;
 	return -1;
 }
 
@@ -125,7 +126,7 @@ static char Freestyle_blendRamp___doc__[] =
 "   :return: Blended color in RGB format.\n"
 "   :rtype: :class:`mathutils.Vector`\n";
 
-static PyObject *Freestyle_blendRamp(PyObject *self, PyObject *args)
+static PyObject *Freestyle_blendRamp(PyObject * /*self*/, PyObject *args)
 {
 	PyObject *obj1, *obj2;
 	char *s;
@@ -152,7 +153,7 @@ static PyObject *Freestyle_blendRamp(PyObject *self, PyObject *args)
 		return NULL;
 	}
 	ramp_blend(type, a, fac, b);
-	return Vector_CreatePyObject(a, 3, Py_NEW, NULL);
+	return Vector_CreatePyObject(a, 3, NULL);
 }
 
 #include "BKE_texture.h" /* do_colorband() */
@@ -169,7 +170,7 @@ static char Freestyle_evaluateColorRamp___doc__[] =
 "   :return: color in RGBA format.\n"
 "   :rtype: :class:`mathutils.Vector`\n";
 
-static PyObject *Freestyle_evaluateColorRamp(PyObject *self, PyObject *args)
+static PyObject *Freestyle_evaluateColorRamp(PyObject * /*self*/, PyObject *args)
 {
 	BPy_StructRNA *py_srna;
 	ColorBand *coba;
@@ -186,7 +187,7 @@ static PyObject *Freestyle_evaluateColorRamp(PyObject *self, PyObject *args)
 		PyErr_SetString(PyExc_ValueError, "failed to evaluate the color ramp");
 		return NULL;
 	}
-	return Vector_CreatePyObject(out, 4, Py_NEW, NULL);
+	return Vector_CreatePyObject(out, 4, NULL);
 }
 
 #include "DNA_color_types.h"
@@ -206,7 +207,7 @@ static char Freestyle_evaluateCurveMappingF___doc__[] =
 "   :return: Mapped output value.\n"
 "   :rtype: float\n";
 
-static PyObject *Freestyle_evaluateCurveMappingF(PyObject *self, PyObject *args)
+static PyObject *Freestyle_evaluateCurveMappingF(PyObject * /*self*/, PyObject *args)
 {
 	BPy_StructRNA *py_srna;
 	CurveMapping *cumap;
@@ -492,7 +493,7 @@ PyObject *Freestyle_Init(void)
 	PyDict_SetItemString(PySys_GetObject("modules"), module_definition.m_name, module);
 
 	// update 'sys.path' for Freestyle Python API modules
-	const char * const path = BLI_get_folder(BLENDER_SYSTEM_SCRIPTS, "freestyle");
+	const char * const path = BKE_appdir_folder_id(BLENDER_SYSTEM_SCRIPTS, "freestyle");
 	if (path) {
 		char modpath[FILE_MAX];
 		BLI_join_dirfile(modpath, sizeof(modpath), path, "modules");

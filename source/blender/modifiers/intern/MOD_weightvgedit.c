@@ -34,7 +34,6 @@
 #include "BLI_rand.h"
 
 #include "DNA_color_types.h"      /* CurveMapping. */
-#include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
 #include "DNA_modifier_types.h"
 #include "DNA_object_types.h"
@@ -47,8 +46,9 @@
 #include "BKE_texture.h"          /* Texture masking. */
 
 #include "depsgraph_private.h"
+#include "DEG_depsgraph_build.h"
+
 #include "MEM_guardedalloc.h"
-#include "MOD_util.h"
 #include "MOD_weightvg_util.h"
 
 /**************************************
@@ -144,7 +144,9 @@ static void foreachTexLink(ModifierData *md, Object *ob, TexWalkFunc walk, void 
 	walk(userData, ob, md, "mask_texture");
 }
 
-static void updateDepgraph(ModifierData *md, DagForest *forest, struct Scene *UNUSED(scene),
+static void updateDepgraph(ModifierData *md, DagForest *forest,
+                           struct Main *UNUSED(bmain),
+                           struct Scene *UNUSED(scene),
                            Object *UNUSED(ob), DagNode *obNode)
 {
 	WeightVGEditModifierData *wmd = (WeightVGEditModifierData *) md;
@@ -160,6 +162,21 @@ static void updateDepgraph(ModifierData *md, DagForest *forest, struct Scene *UN
 	if (wmd->mask_tex_mapping == MOD_DISP_MAP_GLOBAL)
 		dag_add_relation(forest, obNode, obNode, DAG_RL_DATA_DATA | DAG_RL_OB_DATA,
 		                 "WeightVGEdit Modifier");
+}
+
+static void updateDepsgraph(ModifierData *md,
+                            struct Main *UNUSED(bmain),
+                            struct Scene *UNUSED(scene),
+                            Object *ob,
+                            struct DepsNodeHandle *node)
+{
+	WeightVGEditModifierData *wmd = (WeightVGEditModifierData *)md;
+	if (wmd->mask_tex_map_obj != NULL && wmd->mask_tex_mapping == MOD_DISP_MAP_OBJECT) {
+		DEG_add_object_relation(node, wmd->mask_tex_map_obj, DEG_OB_COMP_TRANSFORM, "WeightVGEdit Modifier");
+	}
+	if (wmd->mask_tex_mapping == MOD_DISP_MAP_GLOBAL) {
+		DEG_add_object_relation(node, ob, DEG_OB_COMP_TRANSFORM, "WeightVGEdit Modifier");
+	}
 }
 
 static bool isDisabled(ModifierData *md, int UNUSED(useRenderParams))
@@ -292,6 +309,7 @@ ModifierTypeInfo modifierType_WeightVGEdit = {
 	/* freeData */          freeData,
 	/* isDisabled */        isDisabled,
 	/* updateDepgraph */    updateDepgraph,
+	/* updateDepsgraph */   updateDepsgraph,
 	/* dependsOnTime */     dependsOnTime,
 	/* dependsOnNormals */  NULL,
 	/* foreachObjectLink */ foreachObjectLink,

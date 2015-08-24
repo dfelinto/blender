@@ -200,8 +200,9 @@ char BM_mesh_cd_flag_from_bmesh(BMesh *bm)
 }
 
 /* Static function for alloc (duplicate in modifiers_bmesh.c) */
-static BMFace *bm_face_create_from_mpoly(MPoly *mp, MLoop *ml,
-                                         BMesh *bm, BMVert **vtable, BMEdge **etable)
+static BMFace *bm_face_create_from_mpoly(
+        MPoly *mp, MLoop *ml,
+        BMesh *bm, BMVert **vtable, BMEdge **etable)
 {
 	BMVert **verts = BLI_array_alloca(verts, mp->totloop);
 	BMEdge **edges = BLI_array_alloca(edges, mp->totloop);
@@ -221,8 +222,9 @@ static BMFace *bm_face_create_from_mpoly(MPoly *mp, MLoop *ml,
  *
  * \warning This function doesn't calculate face normals.
  */
-void BM_mesh_bm_from_me(BMesh *bm, Mesh *me,
-                        const bool calc_face_normal, const bool set_key, int act_key_nr)
+void BM_mesh_bm_from_me(
+        BMesh *bm, Mesh *me,
+        const bool calc_face_normal, const bool set_key, int act_key_nr)
 {
 	MVert *mvert;
 	MEdge *medge;
@@ -788,7 +790,7 @@ void BM_mesh_bm_to_me(BMesh *bm, Mesh *me, bool do_tessface)
 
 	{
 		BMEditSelection *selected;
-		me->totselect = BLI_countlist(&(bm->selected));
+		me->totselect = BLI_listbase_count(&(bm->selected));
 
 		if (me->mselect) MEM_freeN(me->mselect);
 
@@ -850,15 +852,7 @@ void BM_mesh_bm_to_me(BMesh *bm, Mesh *me, bool do_tessface)
 		                                        * bmesh and the mesh are out of sync */
 		    (oldverts != NULL))                /* not used here, but 'oldverts' is used later for applying 'ofs' */
 		{
-			bool act_is_basis = false;
-
-			/* find if this key is a basis for any others */
-			for (currkey = me->key->block.first; currkey; currkey = currkey->next) {
-				if (bm->shapenr - 1 == currkey->relative) {
-					act_is_basis = true;
-					break;
-				}
-			}
+			const bool act_is_basis = BKE_keyblock_is_basis(me->key, bm->shapenr - 1);
 
 			/* active key is a base */
 			if (act_is_basis && (cd_shape_keyindex_offset != -1)) {

@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #ifndef __MESH_H__
@@ -71,15 +71,20 @@ public:
 	ustring name;
 
 	/* Mesh Data */
-	bool geometry_synced;  /* used to distinguish meshes with no verts
-	                          and meshed for which geometry is not created */
+	enum GeometryFlags {
+		GEOMETRY_NONE      = 0,
+		GEOMETRY_TRIANGLES = (1 << 0),
+		GEOMETRY_CURVES    = (1 << 1),
+	};
+	int geometry_flags;  /* used to distinguish meshes with no verts
+	                        and meshed for which geometry is not created */
 
 	vector<float3> verts;
 	vector<Triangle> triangles;
 	vector<uint> shader;
 	vector<bool> smooth;
 
-	bool has_volume;  /* Set in the device_update(). */
+	bool has_volume;  /* Set in the device_update_flags(). */
 
 	vector<float4> curve_keys; /* co + radius */
 	vector<Curve> curves;
@@ -145,6 +150,7 @@ public:
 	BVH *bvh;
 
 	bool need_update;
+	bool need_flags_update;
 
 	MeshManager();
 	~MeshManager();
@@ -160,6 +166,8 @@ public:
 	void device_update_mesh(Device *device, DeviceScene *dscene, Scene *scene, Progress& progress);
 	void device_update_attributes(Device *device, DeviceScene *dscene, Scene *scene, Progress& progress);
 	void device_update_bvh(Device *device, DeviceScene *dscene, Scene *scene, Progress& progress);
+	void device_update_flags(Device *device, DeviceScene *dscene, Scene *scene, Progress& progress);
+	void device_update_displacement_images(Device *device, DeviceScene *dscene, Scene *scene, Progress& progress);
 	void device_free(Device *device, DeviceScene *dscene);
 
 	void tag_update(Scene *scene);

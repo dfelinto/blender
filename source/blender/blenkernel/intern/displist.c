@@ -37,7 +37,6 @@
 #include "MEM_guardedalloc.h"
 
 #include "DNA_curve_types.h"
-#include "DNA_meshdata_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_object_types.h"
 #include "DNA_vfont_types.h"
@@ -54,6 +53,7 @@
 #include "BKE_cdderivedmesh.h"
 #include "BKE_object.h"
 #include "BKE_mball.h"
+#include "BKE_mball_tessellate.h"
 #include "BKE_curve.h"
 #include "BKE_key.h"
 #include "BKE_anim.h"
@@ -352,7 +352,8 @@ static void curve_to_displist(Curve *cu, ListBase *nubase, ListBase *dispbase,
 
 				data = dl->verts;
 
-				if (nu->flagu & CU_NURB_CYCLIC) {
+				/* check that (len != 2) so we don't immediately loop back on ourselves */
+				if (nu->flagu & CU_NURB_CYCLIC && (dl->nr != 2)) {
 					dl->type = DL_POLY;
 					a = nu->pntsu;
 				}
@@ -422,8 +423,12 @@ static void curve_to_displist(Curve *cu, ListBase *nubase, ListBase *dispbase,
 				dl->charidx = nu->charidx;
 
 				data = dl->verts;
-				if (nu->flagu & CU_NURB_CYCLIC) dl->type = DL_POLY;
-				else dl->type = DL_SEGM;
+				if ((nu->flagu & CU_NURB_CYCLIC) && (dl->nr != 2)) {
+					dl->type = DL_POLY;
+				}
+				else {
+					dl->type = DL_SEGM;
+				}
 
 				a = len;
 				bp = nu->bp;
@@ -512,7 +517,7 @@ void BKE_displist_fill(ListBase *dispbase, ListBase *to, const float normal_proj
 			dl = dl->next;
 		}
 
-		/* XXX (obedit && obedit->actcol) ? (obedit->actcol-1) : 0)) { */
+		/* XXX (obedit && obedit->actcol) ? (obedit->actcol - 1) : 0)) { */
 		if (totvert && (tot = BLI_scanfill_calc_ex(&sf_ctx,
 		                                           scanfill_flag,
 		                                           normal_proj)))
@@ -759,7 +764,7 @@ static ModifierData *curve_get_tessellate_point(Scene *scene, Object *ob,
 
 	pretessellatePoint = NULL;
 	for (; md; md = md->next) {
-		ModifierTypeInfo *mti = modifierType_getInfo(md->type);
+		const ModifierTypeInfo *mti = modifierType_getInfo(md->type);
 
 		if (!modifier_isEnabled(scene, md, required_mode))
 			continue;
@@ -814,7 +819,7 @@ static void curve_calc_modifiers_pre(Scene *scene, Object *ob, ListBase *nurb,
 		required_mode |= eModifierMode_Editmode;
 
 	if (cu->editnurb == NULL) {
-		keyVerts = BKE_key_evaluate_object(scene, ob, &numVerts);
+		keyVerts = BKE_key_evaluate_object(ob, &numVerts);
 
 		if (keyVerts) {
 			/* split coords from key data, the latter also includes
@@ -828,7 +833,7 @@ static void curve_calc_modifiers_pre(Scene *scene, Object *ob, ListBase *nurb,
 
 	if (pretessellatePoint) {
 		for (; md; md = md->next) {
-			ModifierTypeInfo *mti = modifierType_getInfo(md->type);
+			const ModifierTypeInfo *mti = modifierType_getInfo(md->type);
 
 			md->scene = scene;
 
@@ -929,7 +934,7 @@ static void curve_calc_modifiers_post(Scene *scene, Object *ob, ListBase *nurb,
 	}
 
 	for (; md; md = md->next) {
-		ModifierTypeInfo *mti = modifierType_getInfo(md->type);
+		const ModifierTypeInfo *mti = modifierType_getInfo(md->type);
 		ModifierApplyFlag appf = app_flag;
 
 		md->scene = scene;
@@ -1160,7 +1165,7 @@ static void curve_calc_orcodm(Scene *scene, Object *ob, DerivedMesh *dm_final,
 	orcodm = create_orco_dm(scene, ob);
 
 	for (; md; md = md->next) {
-		ModifierTypeInfo *mti = modifierType_getInfo(md->type);
+		const ModifierTypeInfo *mti = modifierType_getInfo(md->type);
 
 		md->scene = scene;
 
@@ -1430,9 +1435,8 @@ static void calc_bevfac_mapping(Curve *cu, BevList *bl, Nurb *nu,
 		return;
 	}
 
-	if (ELEM(cu->bevfac1_mapping,
-	         CU_BEVFAC_MAP_SEGMENT,
-	         CU_BEVFAC_MAP_SPLINE))
+	if (ELEM(cu->bevfac1_mapping, CU_BEVFAC_MAP_SEGMENT, CU_BEVFAC_MAP_SPLINE) ||
+	    ELEM(cu->bevfac2_mapping, CU_BEVFAC_MAP_SEGMENT, CU_BEVFAC_MAP_SPLINE))
 	{
 		for (i = 0; i < SEGMENTSU(nu); i++) {
 			total_length += bl->seglen[i];
@@ -1622,8 +1626,12 @@ static void do_makeDispListCurveTypes(Scene *scene, Object *ob, ListBase *dispba
 							dl->type = DL_SURF;
 
 							dl->flag = dlb->flag & (DL_FRONT_CURVE | DL_BACK_CURVE);
-							if (dlb->type == DL_POLY) dl->flag |= DL_CYCL_U;
-							if (bl->poly >= 0) dl->flag |= DL_CYCL_V;
+							if (dlb->type == DL_POLY) {
+								dl->flag |= DL_CYCL_U;
+							}
+							if ((bl->poly >= 0) && (steps != 2)) {
+								dl->flag |= DL_CYCL_V;
+							}
 
 							dl->parts = steps;
 							dl->nr = dlb->nr;

@@ -45,6 +45,7 @@
 #include "BLI_utildefines.h"
 #include "BLI_math.h"
 
+#include "BKE_appdir.h"
 #include "BKE_DerivedMesh.h"
 #include "BKE_global.h"
 #include "BKE_main.h"
@@ -60,9 +61,16 @@
 /* global for themes */
 typedef void (*VectorDrawFunc)(int x, int y, int w, int h, float alpha);
 
-static bTheme *theme_active = NULL;
-static int theme_spacetype = SPACE_VIEW3D;
-static int theme_regionid = RGN_TYPE_WINDOW;
+/* be sure to keep 'bThemeState' in sync */
+static struct bThemeState g_theme_state = {
+    NULL,
+    SPACE_VIEW3D,
+    RGN_TYPE_WINDOW,
+};
+
+#define theme_active g_theme_state.theme
+#define theme_spacetype g_theme_state.spacetype
+#define theme_regionid g_theme_state.regionid
 
 void ui_resources_init(void)
 {
@@ -371,6 +379,10 @@ const unsigned char *UI_ThemeGetColorPtr(bTheme *btheme, int spacetype, int colo
 					cp = ts->keyborder_select; break;
 				case TH_CFRAME:
 					cp = ts->cframe; break;
+				case TH_TIME_KEYFRAME:
+					cp = ts->time_keyframe; break;
+				case TH_TIME_GP_KEYFRAME:
+					cp = ts->time_gp_keyframe; break;
 				case TH_NURB_ULINE:
 					cp = ts->nurb_uline; break;
 				case TH_NURB_VLINE:
@@ -505,6 +517,17 @@ const unsigned char *UI_ThemeGetColorPtr(bTheme *btheme, int spacetype, int colo
 				case TH_HANDLE_VERTEX_SIZE:
 					cp = &ts->handle_vertex_size;
 					break;
+					
+				case TH_GP_VERTEX:
+					cp = ts->gp_vertex;
+					break;
+				case TH_GP_VERTEX_SELECT:
+					cp = ts->gp_vertex_select;
+					break;
+				case TH_GP_VERTEX_SIZE:
+					cp = &ts->gp_vertex_size;
+					break;
+					
 				case TH_DOPESHEET_CHANNELOB:
 					cp = ts->ds_channel;
 					break;
@@ -544,6 +567,13 @@ const unsigned char *UI_ThemeGetColorPtr(bTheme *btheme, int spacetype, int colo
 					break;
 				case TH_PAINT_CURVE_PIVOT:
 					cp = ts->paint_curve_pivot;
+					break;
+
+				case TH_METADATA_BG:
+					cp = ts->metadatabg;
+					break;
+				case TH_METADATA_TEXT:
+					cp = ts->metadatatext;
 					break;
 
 				case TH_UV_OTHERS:
@@ -619,8 +649,8 @@ const unsigned char *UI_ThemeGetColorPtr(bTheme *btheme, int spacetype, int colo
 					cp = ts->nla_sound_sel;
 					break;
 					
-				case TH_EMBOSS:
-					cp = btheme->tui.emboss; break;
+				case TH_WIDGET_EMBOSS:
+					cp = btheme->tui.widget_emboss; break;
 
 				case TH_AXIS_X:
 					cp = btheme->tui.xaxis; break;
@@ -659,11 +689,14 @@ const unsigned char *UI_ThemeGetColorPtr(bTheme *btheme, int spacetype, int colo
 				case TH_INFO_DEBUG_TEXT:
 					cp = ts->info_debug_text;
 					break;
+				case TH_V3D_CLIPPING_BORDER:
+					cp = ts->clipping_border_3d;
+					break;
 			}
 		}
 	}
 	
-	return (unsigned char *)cp;
+	return (const unsigned char *)cp;
 }
 
 /* use this call to init new bone color sets in Theme */
@@ -791,8 +824,9 @@ static void ui_theme_space_init_handles_color(ThemeSpace *theme_space)
 	rgba_char_args_set(theme_space->act_spline, 0xdb, 0x25, 0x12, 255);
 }
 
-/* initialize default theme
- * Note: when you add new colors, created & saved themes need initialized
+/**
+ * initialize default theme
+ * \note: when you add new colors, created & saved themes need initialized
  * use function below, init_userdef_do_versions()
  */
 void ui_theme_init_default(void)
@@ -820,7 +854,7 @@ void ui_theme_init_default(void)
 	
 	rgba_char_args_set(btheme->tui.wcol_tooltip.text, 255, 255, 255, 255);
 	
-	rgba_char_args_set_fl(btheme->tui.emboss, 1.0f, 1.0f, 1.0f, 0.02f);
+	rgba_char_args_set_fl(btheme->tui.widget_emboss, 1.0f, 1.0f, 1.0f, 0.02f);
 
 	rgba_char_args_set(btheme->tui.xaxis, 220,   0,   0, 255);
 	rgba_char_args_set(btheme->tui.yaxis,   0, 220,   0, 255);
@@ -892,6 +926,9 @@ void ui_theme_init_default(void)
 	rgba_char_args_set(btheme->tv3d.freestyle_face_mark, 0x7f, 0xff, 0x7f, 51);
 	rgba_char_args_set_fl(btheme->tv3d.paint_curve_handle, 0.5f, 1.0f, 0.5f, 0.5f);
 	rgba_char_args_set_fl(btheme->tv3d.paint_curve_pivot, 1.0f, 0.5f, 0.5f, 0.5f);
+	rgba_char_args_set(btheme->tv3d.gp_vertex, 0, 0, 0, 255);
+	rgba_char_args_set(btheme->tv3d.gp_vertex_select, 255, 133, 0, 255);
+	btheme->tv3d.gp_vertex_size = 3;
 
 	btheme->tv3d.facedot_size = 4;
 
@@ -925,6 +962,7 @@ void ui_theme_init_default(void)
 	rgba_char_args_set(btheme->tv3d.gradients.high_gradient, 58, 58, 58, 255);
 	btheme->tv3d.gradients.show_grad = false;
 
+	rgba_char_args_set(btheme->tv3d.clipping_border_3d, 50, 50, 50, 255);
 	/* space buttons */
 	/* to have something initialized */
 	btheme->tbuts = btheme->tv3d;
@@ -1068,7 +1106,7 @@ void ui_theme_init_default(void)
 	rgba_char_args_set(btheme->text.syntaxd,    50, 0, 140, 255);   /* Decorator/Preprocessor Dir.  Blue-purple */
 	rgba_char_args_set(btheme->text.syntaxr,    140, 60, 0, 255);   /* Reserved  Orange*/
 	rgba_char_args_set(btheme->text.syntaxb,    128, 0, 80, 255);   /* Builtin  Red-purple */
-	rgba_char_args_set(btheme->text.syntaxs,    76, 76, 76, 255);   /* Grey (mix between fg/bg) */
+	rgba_char_args_set(btheme->text.syntaxs,    76, 76, 76, 255);   /* Gray (mix between fg/bg) */
 	
 	/* space oops */
 	btheme->toops = btheme->tv3d;
@@ -1110,6 +1148,9 @@ void ui_theme_init_default(void)
 	rgba_char_args_set_fl(btheme->ttime.back,   0.45, 0.45, 0.45, 1.0);
 	rgba_char_args_set_fl(btheme->ttime.grid,   0.36, 0.36, 0.36, 1.0);
 	rgba_char_args_set(btheme->ttime.shade1,  173, 173, 173, 255);      /* sliders */
+	
+	rgba_char_args_set(btheme->ttime.time_keyframe, 0xDD, 0xD7, 0x00, 1.0);
+	rgba_char_args_set(btheme->ttime.time_gp_keyframe, 0xB5, 0xE6, 0x1D, 1.0);
 	
 	/* space node, re-uses syntax and console color storage */
 	btheme->tnode = btheme->tv3d;
@@ -1191,6 +1232,18 @@ void UI_SetTheme(int spacetype, int regionid)
 bTheme *UI_GetTheme(void)
 {
 	return U.themes.first;
+}
+
+/**
+ * for the rare case we need to temp swap in a different theme (offscreen render)
+ */
+void UI_Theme_Store(struct bThemeState *theme_state)
+{
+	*theme_state = g_theme_state;
+}
+void UI_Theme_Restore(struct bThemeState *theme_state)
+{
+	g_theme_state = *theme_state;
 }
 
 /* for space windows only */
@@ -1459,8 +1512,9 @@ void UI_GetColorPtrShade3ubv(const unsigned char cp[3], unsigned char col[3], in
 }
 
 /* get a 3 byte color, blended and shaded between two other char color pointers */
-void UI_GetColorPtrBlendShade3ubv(const unsigned char cp1[3], const unsigned char cp2[3], unsigned char col[3],
-                                  float fac, int offset)
+void UI_GetColorPtrBlendShade3ubv(
+        const unsigned char cp1[3], const unsigned char cp2[3], unsigned char col[3],
+        float fac, int offset)
 {
 	int r, g, b;
 
@@ -1483,8 +1537,16 @@ void UI_ThemeClearColor(int colorid)
 	float col[3];
 	
 	UI_GetThemeColor3fv(colorid, col);
-	glClearColor(col[0], col[1], col[2], 0.0);
+	glClearColor(col[0], col[1], col[2], 0.0f);
 }
+
+void UI_ThemeClearColorAlpha(int colorid, float alpha)
+{
+	float col[3];
+	UI_GetThemeColor3fv(colorid, col);
+	glClearColor(col[0], col[1], col[2], alpha);
+}
+
 
 int UI_ThemeMenuShadowWidth(void)
 {
@@ -1522,6 +1584,8 @@ void init_userdef_do_versions(void)
 {
 	Main *bmain = G.main;
 	
+#define USER_VERSION_ATLEAST(ver, subver) MAIN_VERSION_ATLEAST(bmain, ver, subver)
+
 	/* the UserDef struct is not corrected with do_versions() .... ugh! */
 	if (U.wheellinescroll == 0) U.wheellinescroll = 3;
 	if (U.menuthreshold1 == 0) {
@@ -1533,8 +1597,8 @@ void init_userdef_do_versions(void)
 		U.tb_rightmouse = 5;
 	}
 	if (U.mixbufsize == 0) U.mixbufsize = 2048;
-	if (strcmp(U.tempdir, "/") == 0) {
-		BLI_system_temporary_dir(U.tempdir);
+	if (STREQ(U.tempdir, "/")) {
+		BKE_tempdir_system_init(U.tempdir);
 	}
 	if (U.autokey_mode == 0) {
 		/* 'add/replace' but not on */
@@ -1550,8 +1614,8 @@ void init_userdef_do_versions(void)
 		U.tw_size = 25;          /* percentage of window size */
 		U.tw_handlesize = 16;    /* percentage of widget radius */
 	}
-	if (U.pad_rot_angle == 0)
-		U.pad_rot_angle = 15;
+	if (U.pad_rot_angle == 0.0f)
+		U.pad_rot_angle = 15.0f;
 	
 	/* graph editor - unselected F-Curve visibility */
 	if (U.fcu_inactive_alpha == 0) {
@@ -1562,17 +1626,17 @@ void init_userdef_do_versions(void)
 	/* run in case this was on and is now off in the user prefs [#28096] */
 	vDM_ColorBand_store((U.flag & USER_CUSTOM_RANGE) ? (&U.coba_weight) : NULL, UI_GetTheme()->tv3d.vertex_unreferenced);
 
-	if (bmain->versionfile <= 191) {
+	if (!USER_VERSION_ATLEAST(192, 0)) {
 		strcpy(U.sounddir, "/");
 	}
 	
 	/* patch to set Dupli Armature */
-	if (bmain->versionfile < 220) {
+	if (!USER_VERSION_ATLEAST(220, 0)) {
 		U.dupflag |= USER_DUP_ARM;
 	}
 	
 	/* added seam, normal color, undo */
-	if (bmain->versionfile <= 234) {
+	if (!USER_VERSION_ATLEAST(235, 0)) {
 		bTheme *btheme;
 		
 		U.uiflag |= USER_GLOBALUNDO;
@@ -1595,12 +1659,12 @@ void init_userdef_do_versions(void)
 			}
 		}
 	}
-	if (bmain->versionfile <= 235) {
+	if (!USER_VERSION_ATLEAST(236, 0)) {
 		/* illegal combo... */
 		if (U.flag & USER_LMOUSESELECT) 
 			U.flag &= ~USER_TWOBUTTONMOUSE;
 	}
-	if (bmain->versionfile <= 236) {
+	if (!USER_VERSION_ATLEAST(237, 0)) {
 		bTheme *btheme;
 		/* new space type */
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
@@ -1621,7 +1685,7 @@ void init_userdef_do_versions(void)
 			}
 		}
 	}
-	if (bmain->versionfile <= 237) {
+	if (!USER_VERSION_ATLEAST(238, 0)) {
 		bTheme *btheme;
 		/* bone colors */
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
@@ -1632,7 +1696,7 @@ void init_userdef_do_versions(void)
 			}
 		}
 	}
-	if (bmain->versionfile <= 238) {
+	if (!USER_VERSION_ATLEAST(239, 0)) {
 		bTheme *btheme;
 		/* bone colors */
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
@@ -1643,7 +1707,7 @@ void init_userdef_do_versions(void)
 			}
 		}
 	}
-	if (bmain->versionfile <= 239) {
+	if (!USER_VERSION_ATLEAST(240, 0)) {
 		bTheme *btheme;
 		
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
@@ -1657,7 +1721,7 @@ void init_userdef_do_versions(void)
 		}
 		if (U.obcenter_dia == 0) U.obcenter_dia = 6;
 	}
-	if (bmain->versionfile <= 241) {
+	if (!USER_VERSION_ATLEAST(242, 0)) {
 		bTheme *btheme;
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
 			/* Node editor theme, check for alpha==0 is safe, then color was never set */
@@ -1697,7 +1761,7 @@ void init_userdef_do_versions(void)
 		}
 		
 	}
-	if (bmain->versionfile <= 242) {
+	if (!USER_VERSION_ATLEAST(243, 0)) {
 		bTheme *btheme;
 		
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
@@ -1715,11 +1779,11 @@ void init_userdef_do_versions(void)
 			}
 		}
 	}
-	if (bmain->versionfile <= 243) {
+	if (!USER_VERSION_ATLEAST(244, 0)) {
 		/* set default number of recently-used files (if not set) */
 		if (U.recent_files == 0) U.recent_files = 10;
 	}
-	if (bmain->versionfile < 245 || (bmain->versionfile == 245 && bmain->subversionfile < 3)) {
+	if (!USER_VERSION_ATLEAST(245, 3)) {
 		bTheme *btheme;
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
 			rgba_char_args_set(btheme->tv3d.editmesh_active, 255, 255, 255, 128);
@@ -1727,7 +1791,7 @@ void init_userdef_do_versions(void)
 		if (U.coba_weight.tot == 0)
 			init_colorband(&U.coba_weight, true);
 	}
-	if ((bmain->versionfile < 245) || (bmain->versionfile == 245 && bmain->subversionfile < 11)) {
+	if (!USER_VERSION_ATLEAST(245, 3)) {
 		bTheme *btheme;
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
 			/* these should all use the same color */
@@ -1740,7 +1804,7 @@ void init_userdef_do_versions(void)
 			rgba_char_args_set(btheme->ttime.cframe, 0x60, 0xc0, 0x40, 255);
 		}
 	}
-	if ((bmain->versionfile < 245) || (bmain->versionfile == 245 && bmain->subversionfile < 13)) {
+	if (!USER_VERSION_ATLEAST(245, 3)) {
 		bTheme *btheme;
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
 			/* action channel groups (recolor anyway) */
@@ -1752,10 +1816,10 @@ void init_userdef_do_versions(void)
 				ui_theme_init_boneColorSets(btheme);
 		}
 	}
-	if ((bmain->versionfile < 245) || (bmain->versionfile == 245 && bmain->subversionfile < 16)) {
+	if (!USER_VERSION_ATLEAST(245, 3)) {
 		U.flag |= USER_ADD_VIEWALIGNED | USER_ADD_EDITMODE;
 	}
-	if ((bmain->versionfile < 247) || (bmain->versionfile == 247 && bmain->subversionfile <= 2)) {
+	if (!USER_VERSION_ATLEAST(245, 3)) {
 		bTheme *btheme;
 		
 		/* adjust themes */
@@ -1777,7 +1841,7 @@ void init_userdef_do_versions(void)
 			rgba_char_args_set(btheme->tseq.vertex_select, col[0], col[1], col[2], 255);
 		}
 	}
-	if (bmain->versionfile < 250) {
+	if (!USER_VERSION_ATLEAST(250, 0)) {
 		bTheme *btheme;
 		
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
@@ -1818,7 +1882,7 @@ void init_userdef_do_versions(void)
 		U.ipo_new = BEZT_IPO_BEZ;
 	}
 	
-	if (bmain->versionfile < 250 || (bmain->versionfile == 250 && bmain->subversionfile < 1)) {
+	if (!USER_VERSION_ATLEAST(250, 1)) {
 		bTheme *btheme;
 
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
@@ -1841,7 +1905,7 @@ void init_userdef_do_versions(void)
 		}
 	}
 
-	if (bmain->versionfile < 250 || (bmain->versionfile == 250 && bmain->subversionfile < 3)) {
+	if (!USER_VERSION_ATLEAST(250, 3)) {
 		/* new audio system */
 		if (U.audiochannels == 0)
 			U.audiochannels = 2;
@@ -1859,59 +1923,60 @@ void init_userdef_do_versions(void)
 			U.audiorate = 44100;
 	}
 
-	if (bmain->versionfile < 250 || (bmain->versionfile == 250 && bmain->subversionfile < 5))
+	if (!USER_VERSION_ATLEAST(250, 3)) {
 		U.gameflags |= USER_DISABLE_VBO;
+	}
 	
-	if (bmain->versionfile < 250 || (bmain->versionfile == 250 && bmain->subversionfile < 8)) {
+	if (!USER_VERSION_ATLEAST(250, 8)) {
 		wmKeyMap *km;
 		
 		for (km = U.user_keymaps.first; km; km = km->next) {
-			if (strcmp(km->idname, "Armature_Sketch") == 0)
+			if (STREQ(km->idname, "Armature_Sketch"))
 				strcpy(km->idname, "Armature Sketch");
-			else if (strcmp(km->idname, "View3D") == 0)
+			else if (STREQ(km->idname, "View3D"))
 				strcpy(km->idname, "3D View");
-			else if (strcmp(km->idname, "View3D Generic") == 0)
+			else if (STREQ(km->idname, "View3D Generic"))
 				strcpy(km->idname, "3D View Generic");
-			else if (strcmp(km->idname, "EditMesh") == 0)
+			else if (STREQ(km->idname, "EditMesh"))
 				strcpy(km->idname, "Mesh");
-			else if (strcmp(km->idname, "TimeLine") == 0)
+			else if (STREQ(km->idname, "TimeLine"))
 				strcpy(km->idname, "Timeline");
-			else if (strcmp(km->idname, "UVEdit") == 0)
+			else if (STREQ(km->idname, "UVEdit"))
 				strcpy(km->idname, "UV Editor");
-			else if (strcmp(km->idname, "Animation_Channels") == 0)
+			else if (STREQ(km->idname, "Animation_Channels"))
 				strcpy(km->idname, "Animation Channels");
-			else if (strcmp(km->idname, "GraphEdit Keys") == 0)
+			else if (STREQ(km->idname, "GraphEdit Keys"))
 				strcpy(km->idname, "Graph Editor");
-			else if (strcmp(km->idname, "GraphEdit Generic") == 0)
+			else if (STREQ(km->idname, "GraphEdit Generic"))
 				strcpy(km->idname, "Graph Editor Generic");
-			else if (strcmp(km->idname, "Action_Keys") == 0)
+			else if (STREQ(km->idname, "Action_Keys"))
 				strcpy(km->idname, "Dopesheet");
-			else if (strcmp(km->idname, "NLA Data") == 0)
+			else if (STREQ(km->idname, "NLA Data"))
 				strcpy(km->idname, "NLA Editor");
-			else if (strcmp(km->idname, "Node Generic") == 0)
+			else if (STREQ(km->idname, "Node Generic"))
 				strcpy(km->idname, "Node Editor");
-			else if (strcmp(km->idname, "Logic Generic") == 0)
+			else if (STREQ(km->idname, "Logic Generic"))
 				strcpy(km->idname, "Logic Editor");
-			else if (strcmp(km->idname, "File") == 0)
+			else if (STREQ(km->idname, "File"))
 				strcpy(km->idname, "File Browser");
-			else if (strcmp(km->idname, "FileMain") == 0)
+			else if (STREQ(km->idname, "FileMain"))
 				strcpy(km->idname, "File Browser Main");
-			else if (strcmp(km->idname, "FileButtons") == 0)
+			else if (STREQ(km->idname, "FileButtons"))
 				strcpy(km->idname, "File Browser Buttons");
-			else if (strcmp(km->idname, "Buttons Generic") == 0)
+			else if (STREQ(km->idname, "Buttons Generic"))
 				strcpy(km->idname, "Property Editor");
 		}
 	}
-	if (bmain->versionfile < 250 || (bmain->versionfile == 250 && bmain->subversionfile < 16)) {
+	if (!USER_VERSION_ATLEAST(250, 16)) {
 		if (U.wmdrawmethod == USER_DRAW_TRIPLE)
 			U.wmdrawmethod = USER_DRAW_AUTOMATIC;
 	}
 	
-	if (bmain->versionfile < 252 || (bmain->versionfile == 252 && bmain->subversionfile < 3)) {
+	if (!USER_VERSION_ATLEAST(252, 3)) {
 		if (U.flag & USER_LMOUSESELECT) 
 			U.flag &= ~USER_TWOBUTTONMOUSE;
 	}
-	if (bmain->versionfile < 252 || (bmain->versionfile == 252 && bmain->subversionfile < 4)) {
+	if (!USER_VERSION_ATLEAST(252, 4)) {
 		bTheme *btheme;
 		
 		/* default new handle type is auto handles */
@@ -1926,7 +1991,7 @@ void init_userdef_do_versions(void)
 			rgba_char_args_set_fl(btheme->tv3d.edge_crease, 0.8, 0, 0.6, 1.0);
 		}
 	}
-	if (bmain->versionfile <= 252) {
+	if (!USER_VERSION_ATLEAST(253, 0)) {
 		bTheme *btheme;
 
 		/* init new curve colors */
@@ -1935,7 +2000,7 @@ void init_userdef_do_versions(void)
 				rgba_char_args_set(btheme->tv3d.lastsel_point, 0xff, 0xff, 0xff, 255);
 		}
 	}
-	if (bmain->versionfile < 252 || (bmain->versionfile == 252 && bmain->subversionfile < 5)) {
+	if (!USER_VERSION_ATLEAST(252, 5)) {
 		bTheme *btheme;
 		
 		/* interface_widgets.c */
@@ -1958,7 +2023,7 @@ void init_userdef_do_versions(void)
 		}
 	}
 
-	if (bmain->versionfile < 255 || (bmain->versionfile == 255 && bmain->subversionfile < 2)) {
+	if (!USER_VERSION_ATLEAST(255, 2)) {
 		bTheme *btheme;
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
 			rgba_char_args_set(btheme->tv3d.extra_edge_len, 32, 0, 0, 255);
@@ -1967,27 +2032,27 @@ void init_userdef_do_versions(void)
 		}
 	}
 	
-	if (bmain->versionfile < 256 || (bmain->versionfile == 256 && bmain->subversionfile < 4)) {
+	if (!USER_VERSION_ATLEAST(256, 4)) {
 		bTheme *btheme;
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
 			if ((btheme->tv3d.outline_width) == 0) btheme->tv3d.outline_width = 1;
 		}
 	}
 
-	if (bmain->versionfile < 257) {
+	if (!USER_VERSION_ATLEAST(257, 0)) {
 		/* clear "AUTOKEY_FLAG_ONLYKEYINGSET" flag from userprefs,
 		 * so that it doesn't linger around from old configs like a ghost */
 		U.autokey_flag &= ~AUTOKEY_FLAG_ONLYKEYINGSET;
 	}
 
-	if (bmain->versionfile < 258 || (bmain->versionfile == 258 && bmain->subversionfile < 2)) {
+	if (!USER_VERSION_ATLEAST(258, 2)) {
 		bTheme *btheme;
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
 			btheme->tnode.noodle_curving = 5;
 		}
 	}
 
-	if (bmain->versionfile < 259 || (bmain->versionfile == 259 && bmain->subversionfile < 1)) {
+	if (!USER_VERSION_ATLEAST(259, 1)) {
 		bTheme *btheme;
 		
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
@@ -1995,7 +2060,7 @@ void init_userdef_do_versions(void)
 		}
 	}
 
-	if (bmain->versionfile < 260 || (bmain->versionfile == 260 && bmain->subversionfile < 3)) {
+	if (!USER_VERSION_ATLEAST(260, 3)) {
 		bTheme *btheme;
 		
 		/* if new keyframes handle default is stuff "auto", make it "auto-clamped" instead 
@@ -2044,7 +2109,7 @@ void init_userdef_do_versions(void)
 		}
 	}
 	
-	if (bmain->versionfile < 260 || (bmain->versionfile == 260 && bmain->subversionfile < 5)) {
+	if (!USER_VERSION_ATLEAST(260, 5)) {
 		bTheme *btheme;
 		
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
@@ -2053,7 +2118,7 @@ void init_userdef_do_versions(void)
 		}
 	}
 	
-	if (bmain->versionfile < 261 || (bmain->versionfile == 261 && bmain->subversionfile < 4)) {
+	if (!USER_VERSION_ATLEAST(261, 4)) {
 		bTheme *btheme;
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
 			rgba_char_args_set_fl(btheme->tima.preview_stitch_face, 0.071, 0.259, 0.694, 0.150);
@@ -2070,7 +2135,7 @@ void init_userdef_do_versions(void)
 		U.use_16bit_textures = true;
 	}
 
-	if (bmain->versionfile < 262 || (bmain->versionfile == 262 && bmain->subversionfile < 2)) {
+	if (!USER_VERSION_ATLEAST(262, 2)) {
 		bTheme *btheme;
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
 			if (btheme->tui.wcol_menu_item.item[3] == 255)
@@ -2078,7 +2143,7 @@ void init_userdef_do_versions(void)
 		}
 	}
 
-	if (bmain->versionfile < 262 || (bmain->versionfile == 262 && bmain->subversionfile < 3)) {
+	if (!USER_VERSION_ATLEAST(262, 3)) {
 		bTheme *btheme;
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
 			if (btheme->tui.wcol_tooltip.inner[3] == 0) {
@@ -2090,7 +2155,7 @@ void init_userdef_do_versions(void)
 		}
 	}
 
-	if (bmain->versionfile < 262 || (bmain->versionfile == 262 && bmain->subversionfile < 4)) {
+	if (!USER_VERSION_ATLEAST(262, 4)) {
 		bTheme *btheme;
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
 			if (btheme->tseq.movieclip[3] == 0) {
@@ -2099,7 +2164,7 @@ void init_userdef_do_versions(void)
 		}
 	}
 
-	if (bmain->versionfile < 263 || (bmain->versionfile == 263 && bmain->subversionfile < 2)) {
+	if (!USER_VERSION_ATLEAST(263, 2)) {
 		bTheme *btheme;
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
 			if (btheme->tclip.strip[0] == 0) {
@@ -2110,13 +2175,13 @@ void init_userdef_do_versions(void)
 		}
 	}
 
-	if (bmain->versionfile < 263 || (bmain->versionfile == 263 && bmain->subversionfile < 6)) {
+	if (!USER_VERSION_ATLEAST(263, 6)) {
 		bTheme *btheme;
 		for (btheme = U.themes.first; btheme; btheme = btheme->next)
 			rgba_char_args_set(btheme->tv3d.skin_root, 180, 77, 77, 255);
 	}
 	
-	if (bmain->versionfile < 263 || (bmain->versionfile == 263 && bmain->subversionfile < 7)) {
+	if (!USER_VERSION_ATLEAST(263, 7)) {
 		bTheme *btheme;
 		
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
@@ -2139,7 +2204,7 @@ void init_userdef_do_versions(void)
 		}
 	}
 
-	if (bmain->versionfile < 263 || (bmain->versionfile == 263 && bmain->subversionfile < 11)) {
+	if (!USER_VERSION_ATLEAST(263, 11)) {
 		bTheme *btheme;
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
 			if (btheme->tseq.mask[3] == 0) {
@@ -2148,14 +2213,14 @@ void init_userdef_do_versions(void)
 		}
 	}
 
-	if (bmain->versionfile < 263 || (bmain->versionfile == 263 && bmain->subversionfile < 15)) {
+	if (!USER_VERSION_ATLEAST(263, 15)) {
 		bTheme *btheme;
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
 			rgba_char_args_set(btheme->tv3d.bone_pose_active, 140, 255, 255, 80);
 		}
 	}
 
-	if (bmain->versionfile < 263 || (bmain->versionfile == 263 && bmain->subversionfile < 16)) {
+	if (!USER_VERSION_ATLEAST(263, 16)) {
 		bTheme *btheme;
 
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
@@ -2167,7 +2232,7 @@ void init_userdef_do_versions(void)
 		}
 	}
 
-	if (bmain->versionfile < 263 || (bmain->versionfile == 263 && bmain->subversionfile < 22)) {
+	if (!USER_VERSION_ATLEAST(263, 22)) {
 		bTheme *btheme;
 
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
@@ -2179,7 +2244,7 @@ void init_userdef_do_versions(void)
 		}
 	}
 	
-	if (bmain->versionfile < 264 || (bmain->versionfile == 264 && bmain->subversionfile < 9)) {
+	if (!USER_VERSION_ATLEAST(264, 9)) {
 		bTheme *btheme;
 		
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
@@ -2189,7 +2254,7 @@ void init_userdef_do_versions(void)
 		}
 	}
 
-	if (U.versionfile < 267) {
+	if (!USER_VERSION_ATLEAST(267, 0)) {
 		/* Freestyle color settings */
 		bTheme *btheme;
 
@@ -2248,7 +2313,7 @@ void init_userdef_do_versions(void)
 			U.tweak_threshold = 10;
 	}
 
-	if (bmain->versionfile < 265 || (bmain->versionfile == 265 && bmain->subversionfile < 1)) {
+	if (!USER_VERSION_ATLEAST(265, 1)) {
 		bTheme *btheme;
 		
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
@@ -2264,7 +2329,7 @@ void init_userdef_do_versions(void)
 	}
 	
 	/* panel header/backdrop supported locally per editor now */
-	if (bmain->versionfile < 265 || (bmain->versionfile == 265 && bmain->subversionfile < 2)) {
+	if (!USER_VERSION_ATLEAST(265, 2)) {
 		bTheme *btheme;
 		
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
@@ -2281,7 +2346,10 @@ void init_userdef_do_versions(void)
 	}
 
 	/* NOTE!! from now on use U.versionfile and U.subversionfile */
-	if (U.versionfile < 266) {
+#undef USER_VERSION_ATLEAST
+#define USER_VERSION_ATLEAST(ver, subver) MAIN_VERSION_ATLEAST((&(U)), ver, subver)
+
+	if (!USER_VERSION_ATLEAST(266, 0)) {
 		bTheme *btheme;
 		
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
@@ -2293,23 +2361,23 @@ void init_userdef_do_versions(void)
 		}
 	}
 
-	if (U.versionfile < 265 || (U.versionfile == 265 && U.subversionfile < 4)) {
+	if (!USER_VERSION_ATLEAST(265, 4)) {
 		bTheme *btheme;
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
 			rgba_char_args_set(btheme->text.syntaxd,    50, 0, 140, 255);   /* Decorator/Preprocessor Dir.  Blue-purple */
 			rgba_char_args_set(btheme->text.syntaxr,    140, 60, 0, 255);   /* Reserved  Orange */
-			rgba_char_args_set(btheme->text.syntaxs,    76, 76, 76, 255);   /* Grey (mix between fg/bg) */
+			rgba_char_args_set(btheme->text.syntaxs,    76, 76, 76, 255);   /* Gray (mix between fg/bg) */
 		}
 	}
 
-	if (U.versionfile < 265 || (U.versionfile == 265 && U.subversionfile < 6)) {
+	if (!USER_VERSION_ATLEAST(265, 6)) {
 		bTheme *btheme;
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
 			copy_v4_v4_char(btheme->tv3d.gradients.high_gradient, btheme->tv3d.back);
 		}
 	}
 
-	if (U.versionfile < 265 || (U.versionfile == 265 && U.subversionfile < 9)) {
+	if (!USER_VERSION_ATLEAST(265, 9)) {
 		bTheme *btheme;
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
 			rgba_char_args_test_set(btheme->tnode.syntaxs, 151, 116, 116, 255);  /* matte nodes */
@@ -2317,23 +2385,21 @@ void init_userdef_do_versions(void)
 		}
 	}
 
-	if (U.versionfile < 265 || (U.versionfile == 265 && U.subversionfile < 11)) {
+	if (!USER_VERSION_ATLEAST(265, 11)) {
 		bTheme *btheme;
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
 			rgba_char_args_test_set(btheme->tconsole.console_select, 255, 255, 255, 48);
 		}
 	}
 
-	if (U.versionfile < 266 || (U.versionfile == 266 && U.subversionfile < 2)) {
+	if (!USER_VERSION_ATLEAST(266, 2)) {
 		bTheme *btheme;
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
 			rgba_char_args_test_set(btheme->tnode.console_output, 223, 202, 53, 255);  /* interface nodes */
 		}
 	}
 
-	/* NOTE!! from now on use U.versionfile and U.subversionfile */
-
-	if (U.versionfile < 268 || (U.versionfile == 268 && U.subversionfile < 3)) {
+	if (!USER_VERSION_ATLEAST(268, 3)) {
 		bTheme *btheme;
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
 			rgba_char_args_test_set(btheme->tima.uv_others, 96, 96, 96, 255);
@@ -2341,7 +2407,7 @@ void init_userdef_do_versions(void)
 		}
 	}
 
-	if (U.versionfile < 269 || (U.versionfile == 269 && U.subversionfile < 5)) {
+	if (!USER_VERSION_ATLEAST(269, 5)) {
 		bTheme *btheme;
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
 			rgba_char_args_set(btheme->tima.wire_edit, 192, 192, 192, 255);
@@ -2349,7 +2415,7 @@ void init_userdef_do_versions(void)
 		}
 	}
 
-	if (U.versionfile < 269 || (U.versionfile == 269 && U.subversionfile < 6)) {
+	if (!USER_VERSION_ATLEAST(269, 6)) {
 		bTheme *btheme;
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
 			char r, g, b;
@@ -2370,7 +2436,7 @@ void init_userdef_do_versions(void)
 		}
 	}
 
-	if (U.versionfile < 269 || (U.versionfile == 269 && U.subversionfile < 8)) {
+	if (!USER_VERSION_ATLEAST(269, 8)) {
 		bTheme *btheme;
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
 			rgba_char_args_test_set(btheme->tinfo.info_selected, 96, 128, 255, 255);
@@ -2386,7 +2452,7 @@ void init_userdef_do_versions(void)
 		}
 	}
 	
-	if (U.versionfile < 269 || (U.versionfile == 269 && U.subversionfile < 9)) {
+	if (!USER_VERSION_ATLEAST(269, 9)) {
 		bTheme *btheme;
 		
 		U.tw_size = U.tw_size * 5.0f;
@@ -2426,7 +2492,7 @@ void init_userdef_do_versions(void)
 		}
 	}
 
-	if (U.versionfile < 269 || (U.versionfile == 269 && U.subversionfile < 10)) {
+	if (!USER_VERSION_ATLEAST(269, 10)) {
 		bTheme *btheme;
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
 			ThemeSpace *ts;
@@ -2440,14 +2506,14 @@ void init_userdef_do_versions(void)
 		}
 	}
 
-	if (U.versionfile < 271) {
+	if (!USER_VERSION_ATLEAST(271, 0)) {
 		bTheme *btheme;
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
 			rgba_char_args_set(btheme->tui.wcol_tooltip.text, 255, 255, 255, 255);
 		}
 	}
 
-	if (U.versionfile < 272 || (U.versionfile == 272 && U.subversionfile < 2)) {
+	if (!USER_VERSION_ATLEAST(272, 2)) {
 		bTheme *btheme;
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
 			rgba_char_args_set_fl(btheme->tv3d.paint_curve_handle, 0.5f, 1.0f, 0.5f, 0.5f);
@@ -2458,7 +2524,7 @@ void init_userdef_do_versions(void)
 		}
 	}
 
-	if (U.versionfile < 271 || (U.versionfile == 271 && U.subversionfile < 5)) {
+	if (!USER_VERSION_ATLEAST(271, 5)) {
 		bTheme *btheme;
 
 		struct uiWidgetColors wcol_pie_menu = {
@@ -2488,7 +2554,7 @@ void init_userdef_do_versions(void)
 		}
 	}
 
-	if (U.versionfile < 271 || (U.versionfile == 271 && U.subversionfile < 6)) {
+	if (!USER_VERSION_ATLEAST(271, 6)) {
 		bTheme *btheme;
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
 			/* check for (alpha == 0) is safe, then color was never set */
@@ -2498,11 +2564,79 @@ void init_userdef_do_versions(void)
 		}
 	}
 
-	if (U.versionfile < 272 || (U.versionfile == 272 && U.subversionfile < 2)) {
+	if (!USER_VERSION_ATLEAST(272, 3)) {
 		bTheme *btheme;
 		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
-			rgba_char_args_set_fl(btheme->tui.emboss, 1.0f, 1.0f, 1.0f, 0.02f);
+			rgba_char_args_set_fl(btheme->tui.widget_emboss, 1.0f, 1.0f, 1.0f, 0.02f);
 		}
+	}
+	
+	if (!USER_VERSION_ATLEAST(273, 1)) {
+		bTheme *btheme;
+		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
+			/* Grease Pencil vertex settings */
+			rgba_char_args_set(btheme->tv3d.gp_vertex, 0, 0, 0, 255);
+			rgba_char_args_set(btheme->tv3d.gp_vertex_select, 255, 133, 0, 255);
+			btheme->tv3d.gp_vertex_size = 3;
+			
+			rgba_char_args_set(btheme->tseq.gp_vertex, 0, 0, 0, 255);
+			rgba_char_args_set(btheme->tseq.gp_vertex_select, 255, 133, 0, 255);
+			btheme->tseq.gp_vertex_size = 3;
+			
+			rgba_char_args_set(btheme->tima.gp_vertex, 0, 0, 0, 255);
+			rgba_char_args_set(btheme->tima.gp_vertex_select, 255, 133, 0, 255);
+			btheme->tima.gp_vertex_size = 3;
+			
+			rgba_char_args_set(btheme->tnode.gp_vertex, 0, 0, 0, 255);
+			rgba_char_args_set(btheme->tnode.gp_vertex_select, 255, 133, 0, 255);
+			btheme->tnode.gp_vertex_size = 3;
+			
+			/* Timeline Keyframe Indicators */
+			rgba_char_args_set(btheme->ttime.time_keyframe, 0xDD, 0xD7, 0x00, 1.0);
+			rgba_char_args_set(btheme->ttime.time_gp_keyframe, 0xB5, 0xE6, 0x1D, 1.0);
+		}
+	}
+
+	if (!USER_VERSION_ATLEAST(273, 5)) {
+		bTheme *btheme;
+		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
+			unsigned char *cp = (unsigned char *)btheme->tv3d.clipping_border_3d;
+			int c;
+			copy_v4_v4_char((char *)cp, btheme->tv3d.back);
+			c = cp[0] - 8;
+			CLAMP(c, 0, 255);
+			cp[0] = c;
+			c = cp[1] - 8;
+			CLAMP(c, 0, 255);
+			cp[1] = c;
+			c = cp[2] - 8;
+			CLAMP(c, 0, 255);
+			cp[2] = c;
+			cp[3] = 255;
+		}
+	}
+
+	if (!USER_VERSION_ATLEAST(274, 5)) {
+		bTheme *btheme;
+		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
+			copy_v4_v4_char(btheme->tima.metadatatext, btheme->tima.text_hi);
+			copy_v4_v4_char(btheme->tseq.metadatatext, btheme->tseq.text_hi);
+		}
+	}
+
+	if (!USER_VERSION_ATLEAST(275, 1)) {
+		bTheme *btheme;
+		for (btheme = U.themes.first; btheme; btheme = btheme->next) {
+			copy_v4_v4_char(btheme->tclip.metadatatext, btheme->tseq.text_hi);
+		}
+	}
+
+	if (!USER_VERSION_ATLEAST(275, 2)) {
+		U.ndof_deadzone = 0.1;
+	}
+
+	if (!USER_VERSION_ATLEAST(275, 4)) {
+		U.node_margin = 80;
 	}
 
 	if (U.pixelsize == 0.0f)
@@ -2511,6 +2645,12 @@ void init_userdef_do_versions(void)
 	if (U.image_draw_method == 0)
 		U.image_draw_method = IMAGE_DRAW_METHOD_2DTEXTURE;
 	
+	// keep the following until the new audaspace is default to be built with
+#ifdef WITH_SYSTEM_AUDASPACE
+	// we default to the first audio device
+	U.audiodevice = 0;
+#endif
+
 	/* funny name, but it is GE stuff, moves userdef stuff to engine */
 // XXX	space_set_commmandline_options();
 	/* this timer uses U */

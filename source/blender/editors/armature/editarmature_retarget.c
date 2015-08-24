@@ -707,7 +707,7 @@ static void RIG_reconnectControlBones(RigGraph *rg)
 		/* DO SOME MAGIC HERE */
 		for (pchan = rg->ob->pose->chanbase.first; pchan; pchan = pchan->next) {
 			for (con = pchan->constraints.first; con; con = con->next) {
-				bConstraintTypeInfo *cti = BKE_constraint_typeinfo_get(con);
+				const bConstraintTypeInfo *cti = BKE_constraint_typeinfo_get(con);
 				ListBase targets = {NULL, NULL};
 				bConstraintTarget *ct;
 				
@@ -718,7 +718,7 @@ static void RIG_reconnectControlBones(RigGraph *rg)
 					cti->get_constraint_targets(con, &targets);
 					
 					for (target_index = 0, ct = targets.first; ct; target_index++, ct = ct->next) {
-						if ((ct->tar == rg->ob) && strcmp(ct->subtarget, ctrl->bone->name) == 0) {
+						if ((ct->tar == rg->ob) && STREQ(ct->subtarget, ctrl->bone->name)) {
 							/* SET bone link to bone corresponding to pchan */
 							EditBone *link = BLI_ghash_lookup(rg->bones_map, pchan->name);
 							
@@ -832,7 +832,7 @@ static void RIG_reconnectControlBones(RigGraph *rg)
 				/* DO SOME MAGIC HERE */
 				for (pchan = rg->ob->pose->chanbase.first; pchan; pchan = pchan->next) {
 					for (con = pchan->constraints.first; con; con = con->next) {
-						bConstraintTypeInfo *cti = BKE_constraint_typeinfo_get(con);
+						const bConstraintTypeInfo *cti = BKE_constraint_typeinfo_get(con);
 						ListBase targets = {NULL, NULL};
 						bConstraintTarget *ct;
 						
@@ -841,7 +841,7 @@ static void RIG_reconnectControlBones(RigGraph *rg)
 							cti->get_constraint_targets(con, &targets);
 							
 							for (ct = targets.first; ct; ct = ct->next) {
-								if ((ct->tar == rg->ob) && strcmp(ct->subtarget, ctrl->bone->name) == 0) {
+								if ((ct->tar == rg->ob) && STREQ(ct->subtarget, ctrl->bone->name)) {
 									/* SET bone link to ctrl corresponding to pchan */
 									RigControl *link = BLI_ghash_lookup(rg->controls_map, pchan->name);
 
@@ -1160,7 +1160,7 @@ static void RIG_arcFromBoneChain(RigGraph *rg, ListBase *list, EditBone *root_bo
 				
 				last_bone = bone;
 				
-				if (strcmp(bone->name, "head") == 0) {
+				if (STREQ(bone->name, "head")) {
 					contain_head = 1;
 				}
 			}
@@ -1205,7 +1205,7 @@ static void RIG_arcFromBoneChain(RigGraph *rg, ListBase *list, EditBone *root_bo
 static void RIG_findHead(RigGraph *rg)
 {
 	if (rg->head == NULL) {
-		if (BLI_countlist(&rg->arcs) == 1) {
+		if (BLI_listbase_is_single(&rg->arcs)) {
 			RigArc *arc = rg->arcs.first;
 			
 			rg->head = (RigNode *)arc->head;
@@ -1958,7 +1958,7 @@ static void retargetArctoArcAggresive(bContext *C, RigGraph *rigg, RigArc *iarc,
 #endif
 	float *vec0, *vec1;
 	int *best_positions;
-	int nb_edges = BLI_countlist(&iarc->edges);
+	int nb_edges = BLI_listbase_count(&iarc->edges);
 	int nb_joints = nb_edges - 1;
 	RetargetMethod method = METHOD_MEMOIZE;
 	int i;
@@ -2152,7 +2152,7 @@ void exec_retargetArctoArc(TaskPool *UNUSED(pool), void *taskdata, int UNUSED(th
 	RigNode *inode_start = p->inode_start;
 	ReebArc *earc = iarc->link_mesh;
 	
-	if (BLI_countlist(&iarc->edges) == 1) {
+	if (BLI_listbase_is_single(&iarc->edges)) {
 		RigEdge *edge = iarc->edges.first;
 
 		if (testFlipArc(iarc, inode_start)) {
@@ -2454,7 +2454,7 @@ const char *RIG_nameBone(RigGraph *rg, int arc_index, int bone_index)
 		return "None";
 	}
 	
-	if (bone_index == BLI_countlist(&arc->edges)) {
+	if (bone_index == BLI_listbase_count(&arc->edges)) {
 		return "Last joint";
 	}
 
@@ -2476,10 +2476,10 @@ int RIG_nbJoints(RigGraph *rg)
 	RigArc *arc;
 	int total = 0;
 	
-	total += BLI_countlist(&rg->nodes);
+	total += BLI_listbase_count(&rg->nodes);
 	
 	for (arc = rg->arcs.first; arc; arc = arc->next) {
-		total += BLI_countlist(&arc->edges) - 1; /* -1 because end nodes are already counted */
+		total += BLI_listbase_count(&arc->edges) - 1; /* -1 because end nodes are already counted */
 	}
 	
 	return total;

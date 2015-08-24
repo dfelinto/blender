@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #ifndef __DEVICE_MEMORY_H__
@@ -212,11 +212,14 @@ public:
 	{
 		data_size = width * ((height == 0)? 1: height) * ((depth == 0)? 1: depth);
 		data.resize(data_size);
-		data_pointer = (device_ptr)&data[0];
 		data_width = width;
 		data_height = height;
 		data_depth = depth;
-
+		if(data_size == 0) {
+			data_pointer = 0;
+			return NULL;
+		}
+		data_pointer = (device_ptr)&data[0];
 		return &data[0];
 	}
 

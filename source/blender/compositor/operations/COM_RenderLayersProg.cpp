@@ -23,6 +23,7 @@
 #include "COM_RenderLayersProg.h"
 
 #include "BLI_listbase.h"
+#include "BKE_scene.h"
 #include "DNA_scene_types.h"
 
 extern "C" {
@@ -57,11 +58,10 @@ void RenderLayersBaseProg::initExecution()
 		if (srl) {
 
 			RenderLayer *rl = RE_GetRenderLayer(rr, srl->name);
-			if (rl && rl->rectf) {
-				this->m_inputBuffer = RE_RenderLayerGetPass(rl, this->m_renderpass);
-
+			if (rl) {
+				this->m_inputBuffer = RE_RenderLayerGetPass(rl, this->m_renderpass, this->m_viewName);
 				if (this->m_inputBuffer == NULL && this->m_renderpass == SCE_PASS_COMBINED) {
-					this->m_inputBuffer = rl->rectf;
+					this->m_inputBuffer = RE_RenderLayerGetPass(rl, SCE_PASS_COMBINED, this->m_viewName);
 				}
 			}
 		}
@@ -111,15 +111,6 @@ void RenderLayersBaseProg::doInterpolation(float output[4], float x, float y, Pi
 			BLI_bicubic_interpolation_fl(this->m_inputBuffer, output, width, height, this->m_elementsize, x, y);
 			break;
 	}
-
-	if (this->m_elementsize == 1) {
-		output[1] = 0.0f;
-		output[2] = 0.0f;
-		output[3] = 0.0f;
-	}
-	else if (this->m_elementsize == 3) {
-		output[3] = 1.0f;
-	}
 }
 
 void RenderLayersBaseProg::executePixelSampled(float output[4], float x, float y, PixelSampler sampler)
@@ -144,8 +135,39 @@ void RenderLayersBaseProg::executePixelSampled(float output[4], float x, float y
 	int iy = y - dy;
 #endif
 
+#ifndef NDEBUG
+	{
+		const DataType data_type = this->getOutputSocket()->getDataType();
+		int actual_element_size = this->m_elementsize;
+		int expected_element_size;
+		if (data_type == COM_DT_VALUE) {
+			expected_element_size = 1;
+		}
+		else if (data_type == COM_DT_VECTOR) {
+			expected_element_size = 3;
+		}
+		else if (data_type == COM_DT_COLOR) {
+			expected_element_size = 4;
+		}
+		else {
+			BLI_assert(!"Something horribly wrong just happened");
+		}
+		BLI_assert(expected_element_size == actual_element_size);
+	}
+#endif
+
 	if (this->m_inputBuffer == NULL) {
-		zero_v4(output);
+		int elemsize = this->m_elementsize;
+		if (elemsize == 1) {
+			output[0] = 0.0f;
+		}
+		else if (elemsize == 3) {
+			zero_v3(output);
+		}
+		else {
+			BLI_assert(elemsize == 4);
+			zero_v4(output);
+		}
 	}
 	else {
 		doInterpolation(output, x, y, sampler);
@@ -157,7 +179,7 @@ void RenderLayersBaseProg::deinitExecution()
 	this->m_inputBuffer = NULL;
 }
 
-void RenderLayersBaseProg::determineResolution(unsigned int resolution[2], unsigned int preferredResolution[2])
+void RenderLayersBaseProg::determineResolution(unsigned int resolution[2], unsigned int /*preferredResolution*/[2])
 {
 	Scene *sce = this->getScene();
 	Render *re = (sce) ? RE_GetRender(sce->id.name) : NULL;
@@ -173,7 +195,7 @@ void RenderLayersBaseProg::determineResolution(unsigned int resolution[2], unsig
 		SceneRenderLayer *srl   = (SceneRenderLayer *)BLI_findlink(&sce->r.layers, getLayerId());
 		if (srl) {
 			RenderLayer *rl = RE_GetRenderLayer(rr, srl->name);
-			if (rl && rl->rectf) {
+			if (rl) {
 				resolution[0] = rl->rectx;
 				resolution[1] = rl->recty;
 			}
@@ -192,6 +214,19 @@ RenderLayersAOOperation::RenderLayersAOOperation() : RenderLayersBaseProg(SCE_PA
 	this->addOutputSocket(COM_DT_COLOR);
 }
 
+
+void RenderLayersAOOperation::executePixelSampled(float output[4], float x, float y, PixelSampler sampler)
+{
+	float *inputBuffer = this->getInputBuffer();
+	if (inputBuffer == NULL) {
+		zero_v3(output);
+	}
+	else {
+		doInterpolation(output, x, y, sampler);
+	}
+	output[3] = 1.0f;
+}
+
 /* ******** Render Layers Alpha Operation ******** */
 
 RenderLayersAlphaProg::RenderLayersAlphaProg() : RenderLayersBaseProg(SCE_PASS_COMBINED, 4)
@@ -204,15 +239,12 @@ void RenderLayersAlphaProg::executePixelSampled(float output[4], float x, float 
 	float *inputBuffer = this->getInputBuffer();
 
 	if (inputBuffer == NULL) {
-		zero_v4(output);
+		output[0] = 0.0f;
 	}
 	else {
 		float temp[4];
 		doInterpolation(temp, x, y, sampler);
 		output[0] = temp[3];
-		output[1] = 0.0f;
-		output[2] = 0.0f;
-		output[3] = 0.0f;
 	}
 }
 
@@ -227,7 +259,7 @@ RenderLayersColorOperation::RenderLayersColorOperation() : RenderLayersBaseProg(
 
 RenderLayersCyclesOperation::RenderLayersCyclesOperation(int pass) : RenderLayersBaseProg(pass, 3)
 {
-	this->addOutputSocket(COM_DT_COLOR);
+	this->addOutputSocket(COM_DT_VECTOR);
 }
 
 /* ******** Render Layers Depth Operation ******** */
@@ -237,7 +269,7 @@ RenderLayersDepthProg::RenderLayersDepthProg() : RenderLayersBaseProg(SCE_PASS_Z
 	this->addOutputSocket(COM_DT_VALUE);
 }
 
-void RenderLayersDepthProg::executePixelSampled(float output[4], float x, float y, PixelSampler sampler)
+void RenderLayersDepthProg::executePixelSampled(float output[4], float x, float y, PixelSampler /*sampler*/)
 {
 	int ix = x;
 	int iy = y;
@@ -245,16 +277,10 @@ void RenderLayersDepthProg::executePixelSampled(float output[4], float x, float 
 
 	if (inputBuffer == NULL || ix < 0 || iy < 0 || ix >= (int)this->getWidth() || iy >= (int)this->getHeight() ) {
 		output[0] = 0.0f;
-		output[1] = 0.0f;
-		output[2] = 0.0f;
-		output[3] = 0.0f;
 	}
 	else {
 		unsigned int offset = (iy * this->getWidth() + ix);
 		output[0] = inputBuffer[offset];
-		output[1] = 0.0f;
-		output[2] = 0.0f;
-		output[3] = 0.0f;
 	}
 }
 
@@ -262,21 +288,21 @@ void RenderLayersDepthProg::executePixelSampled(float output[4], float x, float 
 
 RenderLayersDiffuseOperation::RenderLayersDiffuseOperation() : RenderLayersBaseProg(SCE_PASS_DIFFUSE, 3)
 {
-	this->addOutputSocket(COM_DT_COLOR);
+	this->addOutputSocket(COM_DT_VECTOR);
 }
 
 /* ******** Render Layers Emit Operation ******** */
 
 RenderLayersEmitOperation::RenderLayersEmitOperation() : RenderLayersBaseProg(SCE_PASS_EMIT, 3)
 {
-	this->addOutputSocket(COM_DT_COLOR);
+	this->addOutputSocket(COM_DT_VECTOR);
 }
 
 /* ******** Render Layers Environment Operation ******** */
 
 RenderLayersEnvironmentOperation::RenderLayersEnvironmentOperation() : RenderLayersBaseProg(SCE_PASS_ENVIRONMENT, 3)
 {
-	this->addOutputSocket(COM_DT_COLOR);
+	this->addOutputSocket(COM_DT_VECTOR);
 }
 
 /* ******** Render Layers Image Operation ******** */
@@ -290,7 +316,7 @@ RenderLayersColorProg::RenderLayersColorProg() : RenderLayersBaseProg(SCE_PASS_C
 
 RenderLayersIndirectOperation::RenderLayersIndirectOperation() : RenderLayersBaseProg(SCE_PASS_INDIRECT, 3)
 {
-	this->addOutputSocket(COM_DT_COLOR);
+	this->addOutputSocket(COM_DT_VECTOR);
 }
 
 /* ******** Render Layers Material Index Operation ******** */
@@ -325,28 +351,28 @@ RenderLayersObjectIndexOperation::RenderLayersObjectIndexOperation() : RenderLay
 
 RenderLayersReflectionOperation::RenderLayersReflectionOperation() : RenderLayersBaseProg(SCE_PASS_REFLECT, 3)
 {
-	this->addOutputSocket(COM_DT_COLOR);
+	this->addOutputSocket(COM_DT_VECTOR);
 }
 
 /* ******** Render Layers Refraction Operation ******** */
 
 RenderLayersRefractionOperation::RenderLayersRefractionOperation() : RenderLayersBaseProg(SCE_PASS_REFRACT, 3)
 {
-	this->addOutputSocket(COM_DT_COLOR);
+	this->addOutputSocket(COM_DT_VECTOR);
 }
 
 /* ******** Render Layers Shadow Operation ******** */
 
 RenderLayersShadowOperation::RenderLayersShadowOperation() : RenderLayersBaseProg(SCE_PASS_SHADOW, 3)
 {
-	this->addOutputSocket(COM_DT_COLOR);
+	this->addOutputSocket(COM_DT_VECTOR);
 }
 
 /* ******** Render Layers Specular Operation ******** */
 
 RenderLayersSpecularOperation::RenderLayersSpecularOperation() : RenderLayersBaseProg(SCE_PASS_SPEC, 3)
 {
-	this->addOutputSocket(COM_DT_COLOR);
+	this->addOutputSocket(COM_DT_VECTOR);
 }
 
 /* ******** Render Layers Speed Operation ******** */
@@ -362,3 +388,29 @@ RenderLayersUVOperation::RenderLayersUVOperation() : RenderLayersBaseProg(SCE_PA
 {
 	this->addOutputSocket(COM_DT_VECTOR);
 }
+
+/* ******** Debug Render Layers Cycles Operation ******** */
+
+#ifdef WITH_CYCLES_DEBUG
+
+RenderLayersCyclesDebugOperation::RenderLayersCyclesDebugOperation(
+        int pass,
+        int debug_pass_type)
+	: RenderLayersBaseProg(pass, RE_debug_pass_num_channels_get(debug_pass_type))
+{
+	switch (m_elementsize) {
+		case 1:
+			this->addOutputSocket(COM_DT_VALUE);
+			break;
+		case 3:
+			this->addOutputSocket(COM_DT_VECTOR);
+			break;
+		case 4:
+			this->addOutputSocket(COM_DT_COLOR);
+			break;
+		default:
+			BLI_assert(!"Unkown debug pass type element size.");
+	}
+}
+
+#endif

@@ -75,13 +75,19 @@ private:
 	 * @brief operation is active for calculating final compo result
 	 */
 	bool m_active;
+
+	/**
+	 * @brief View name, used for multiview
+	 */
+	const char *m_viewName;
 public:
 	CompositorOperation();
 	const bool isActiveCompositorOutput() const { return this->m_active; }
 	void executeRegion(rcti *rect, unsigned int tileNumber);
 	void setSceneName(const char *sceneName) { BLI_strncpy(this->m_sceneName, sceneName, sizeof(this->m_sceneName)); }
+	void setViewName(const char *viewName) { this->m_viewName = viewName; }
 	void setRenderData(const RenderData *rd) { this->m_rd = rd; }
-	bool isOutputOperation(bool rendering) const { return this->isActiveCompositorOutput(); }
+	bool isOutputOperation(bool /*rendering*/) const { return this->isActiveCompositorOutput(); }
 	void initExecution();
 	void deinitExecution();
 	const CompositorPriority getRenderPriority() const { return COM_PRIORITY_MEDIUM; }

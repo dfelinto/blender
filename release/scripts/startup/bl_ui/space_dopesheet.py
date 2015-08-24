@@ -51,6 +51,11 @@ def dopesheet_filter(layout, context, genericFiltersOnly=False):
         row.prop(dopesheet, "show_only_matching_fcurves", text="")
         if dopesheet.show_only_matching_fcurves:
             row.prop(dopesheet, "filter_fcurve_name", text="")
+    else:
+        row = layout.row(align=True)
+        row.prop(dopesheet, "use_filter_text", text="")
+        if dopesheet.use_filter_text:
+            row.prop(dopesheet, "filter_text", text="")
 
     if not genericFiltersOnly:
         row = layout.row(align=True)
@@ -91,6 +96,8 @@ def dopesheet_filter(layout, context, genericFiltersOnly=False):
                 row.prop(dopesheet, "show_speakers", text="")
             if bpy.data.linestyles:
                 row.prop(dopesheet, "show_linestyles", text="")
+            if bpy.data.grease_pencil:
+                row.prop(dopesheet, "show_gpencil", text="")
 
 
 #######################################
@@ -103,6 +110,7 @@ class DOPESHEET_HT_header(Header):
         layout = self.layout
 
         st = context.space_data
+        toolsettings = context.tool_settings
 
         row = layout.row(align=True)
         row.template_header()
@@ -110,6 +118,18 @@ class DOPESHEET_HT_header(Header):
         DOPESHEET_MT_editor_menus.draw_collapsible(context, layout)
 
         layout.prop(st, "mode", text="")
+
+        if st.mode in {'ACTION', 'SHAPEKEY'}:
+            row = layout.row(align=True)
+            row.operator("action.layer_prev", text="", icon='TRIA_DOWN')
+            row.operator("action.layer_next", text="", icon='TRIA_UP')
+
+            layout.template_ID(st, "action", new="action.new", unlink="action.unlink")
+
+            row = layout.row(align=True)
+            row.operator("action.push_down", text="Push Down", icon='NLA_PUSHDOWN')
+            row.operator("action.stash", text="Stash", icon='FREEZE')
+
         layout.prop(st.dopesheet, "show_summary", text="Summary")
 
         if st.mode == 'DOPESHEET':
@@ -119,8 +139,12 @@ class DOPESHEET_HT_header(Header):
             # filters which will work here and are useful (especially for character animation)
             dopesheet_filter(layout, context, genericFiltersOnly=True)
 
-        if st.mode in {'ACTION', 'SHAPEKEY'}:
-            layout.template_ID(st, "action", new="action.new")
+        row = layout.row(align=True)
+        row.prop(toolsettings, "use_proportional_action",
+                 text="", icon_only=True)
+        if toolsettings.use_proportional_action:
+            row.prop(toolsettings, "proportional_edit_falloff",
+                     text="", icon_only=True)
 
         # Grease Pencil mode doesn't need snapping, as it's frame-aligned only
         if st.mode != 'GPENCIL':
@@ -129,6 +153,7 @@ class DOPESHEET_HT_header(Header):
         row = layout.row(align=True)
         row.operator("action.copy", text="", icon='COPYDOWN')
         row.operator("action.paste", text="", icon='PASTEDOWN')
+        row.operator("action.paste", text="", icon='PASTEFLIPDOWN').flipped = True
 
 
 class DOPESHEET_MT_editor_menus(Menu):
@@ -183,6 +208,7 @@ class DOPESHEET_MT_view(Menu):
         layout.separator()
         layout.operator("action.view_all")
         layout.operator("action.view_selected")
+        layout.operator("action.view_frame")
 
         layout.separator()
         layout.operator("screen.area_dupli")
@@ -212,8 +238,12 @@ class DOPESHEET_MT_select(Menu):
         layout.operator("action.select_column", text="Between Selected Markers").mode = 'MARKERS_BETWEEN'
 
         layout.separator()
-        layout.operator("action.select_leftright", text="Before Current Frame").mode = 'LEFT'
-        layout.operator("action.select_leftright", text="After Current Frame").mode = 'RIGHT'
+        props = layout.operator("action.select_leftright", text="Before Current Frame")
+        props.extend = False
+        props.mode = 'LEFT'
+        props = layout.operator("action.select_leftright", text="After Current Frame")
+        props.extend = False
+        props.mode = 'RIGHT'
 
         # FIXME: grease pencil mode isn't supported for these yet, so skip for that mode only
         if context.space_data.mode != 'GPENCIL':
@@ -309,6 +339,7 @@ class DOPESHEET_MT_key(Menu):
 
         layout.separator()
         layout.operator("action.clean")
+        layout.operator("action.clean", text="Clean Channels").channels = True
         layout.operator("action.sample")
 
         layout.separator()
@@ -365,17 +396,34 @@ class DOPESHEET_MT_gpencil_frame(Menu):
         layout = self.layout
 
         layout.menu("DOPESHEET_MT_key_transform", text="Transform")
-
-        #layout.operator_menu_enum("action.snap", "type", text="Snap")
-        #layout.operator_menu_enum("action.mirror", "type", text="Mirror")
+        layout.operator_menu_enum("action.snap", "type", text="Snap")
+        layout.operator_menu_enum("action.mirror", "type", text="Mirror")
 
         layout.separator()
         layout.operator("action.duplicate")
         layout.operator("action.delete")
 
+        layout.separator()
+        layout.operator("action.keyframe_type")
+
         #layout.separator()
         #layout.operator("action.copy")
         #layout.operator("action.paste")
+
+
+class DOPESHEET_MT_delete(Menu):
+    bl_label = "Delete"
+
+    def draw(self, context):
+        layout = self.layout
+
+        layout.operator("action.delete")
+
+        layout.separator()
+
+        layout.operator("action.clean")
+        layout.operator("action.clean", text="Clean Channels").channels = True
+
 
 if __name__ == "__main__":  # only for live edit.
     bpy.utils.register_module(__name__)

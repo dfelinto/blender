@@ -36,7 +36,7 @@
 #include "SCA_KeyboardSensor.h"
 #include "SCA_KeyboardManager.h"
 #include "SCA_LogicManager.h"
-#include "StringValue.h"
+#include "EXP_StringValue.h"
 #include "SCA_IInputDevice.h"
 
 extern "C" {
@@ -511,6 +511,7 @@ PyObject *SCA_KeyboardSensor::pyattr_get_events(void *self_v, const KX_PYATTRIBU
 			PyList_SET_ITEM(keypair,0,PyLong_FromLong(i));
 			PyList_SET_ITEM(keypair,1,PyLong_FromLong(inevent.m_status));
 			PyList_Append(resultlist,keypair);
+			Py_DECREF(keypair);
 		}
 	}
 	return resultlist;

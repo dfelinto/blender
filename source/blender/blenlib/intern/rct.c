@@ -123,6 +123,38 @@ bool BLI_rctf_isect_pt_v(const rctf *rect, const float xy[2])
 }
 
 /**
+ * \returns shortest distance from \a rect to x/y (0 if inside)
+*/
+
+int BLI_rcti_length_x(const rcti *rect, const int x)
+{
+	if (x < rect->xmin) return rect->xmin - x;
+	if (x > rect->xmax) return x - rect->xmax;
+	return 0;
+}
+
+int BLI_rcti_length_y(const rcti *rect, const int y)
+{
+	if (y < rect->ymin) return rect->ymin - y;
+	if (y > rect->ymax) return y - rect->ymax;
+	return 0;
+}
+
+float BLI_rctf_length_x(const rctf *rect, const float x)
+{
+	if (x < rect->xmin) return rect->xmin - x;
+	if (x > rect->xmax) return x - rect->xmax;
+	return 0.0f;
+}
+
+float BLI_rctf_length_y(const rctf *rect, const float y)
+{
+	if (y < rect->ymin) return rect->ymin - y;
+	if (y > rect->ymax) return y - rect->ymax;
+	return 0.0f;
+}
+
+/**
  * is \a rct_b inside \a rct_a
  */
 bool BLI_rctf_inside_rctf(rctf *rct_a, const rctf *rct_b)
@@ -552,6 +584,14 @@ void BLI_rcti_rctf_copy(rcti *dst, const rctf *src)
 	dst->ymax = dst->ymin + floorf(BLI_rctf_size_y(src) + 0.5f);
 }
 
+void BLI_rcti_rctf_copy_floor(rcti *dst, const rctf *src)
+{
+	dst->xmin = floorf(src->xmin);
+	dst->xmax = floorf(src->xmax);
+	dst->ymin = floorf(src->ymin);
+	dst->ymax = floorf(src->ymax);
+}
+
 void BLI_rctf_rcti_copy(rctf *dst, const rcti *src)
 {
 	dst->xmin = src->xmin;
@@ -571,3 +611,46 @@ void print_rcti(const char *str, const rcti *rect)
 	printf("%s: xmin %d, xmax %d, ymin %d, ymax %d (%dx%d)\n", str,
 	       rect->xmin, rect->xmax, rect->ymin, rect->ymax, BLI_rcti_size_x(rect), BLI_rcti_size_y(rect));
 }
+
+
+/* -------------------------------------------------------------------- */
+/* Comprehensive math (float only) */
+
+/** \name Rect math functions
+ * \{ */
+
+#define ROTATE_SINCOS(r_vec, mat2, vec) { \
+	(r_vec)[0] = (mat2)[1] * (vec)[0] + (+(mat2)[0]) * (vec)[1]; \
+	(r_vec)[1] = (mat2)[0] * (vec)[0] + (-(mat2)[1]) * (vec)[1]; \
+} ((void)0)
+
+/**
+ * Expand the rectangle to fit a rotated \a src.
+ */
+void BLI_rctf_rotate_expand(rctf *dst, const rctf *src, const float angle)
+{
+	const float mat2[2] = {sinf(angle), cosf(angle)};
+	const float cent[2] = {BLI_rctf_cent_x(src), BLI_rctf_cent_y(src)};
+	float corner[2], corner_rot[2], corder_max[2];
+
+	/* x is same for both corners */
+	corner[0] = src->xmax - cent[0];
+	corner[1] = src->ymax - cent[1];
+	ROTATE_SINCOS(corner_rot, mat2, corner);
+	corder_max[0] = fabsf(corner_rot[0]);
+	corder_max[1] = fabsf(corner_rot[1]);
+
+	corner[1] *= -1;
+	ROTATE_SINCOS(corner_rot, mat2, corner);
+	corder_max[0] = MAX2(corder_max[0], fabsf(corner_rot[0]));
+	corder_max[1] = MAX2(corder_max[1], fabsf(corner_rot[1]));
+
+	dst->xmin = cent[0] - corder_max[0];
+	dst->xmax = cent[0] + corder_max[0];
+	dst->ymin = cent[1] - corder_max[1];
+	dst->ymax = cent[1] + corder_max[1];
+}
+
+#undef ROTATE_SINCOS
+
+/** \} */

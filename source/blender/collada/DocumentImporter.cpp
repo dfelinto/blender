@@ -104,7 +104,7 @@ DocumentImporter::DocumentImporter(bContext *C, const ImportSettings *import_set
 	import_settings(import_settings),
 	mImportStage(General),
 	mContext(C),
-	armature_importer(&unit_converter, &mesh_importer, CTX_data_scene(C)),
+	armature_importer(&unit_converter, &mesh_importer, CTX_data_scene(C), import_settings),
 	mesh_importer(&unit_converter, &armature_importer, CTX_data_scene(C)),
 	anim_importer(&unit_converter, &armature_importer, CTX_data_scene(C))
 {
@@ -156,9 +156,6 @@ bool DocumentImporter::import()
 	
 	
 	delete ehandler;
-
-	//XXX No longer needed (geometries are now created as bmesh)
-	//mesh_importer.bmeshConversion();
 
 	return true;
 }
@@ -774,9 +771,9 @@ MTex *DocumentImporter::create_texture(COLLADAFW::EffectCommon *ef, COLLADAFW::T
 		return NULL;
 	}
 	
-	ma->mtex[i] = add_mtex();
+	ma->mtex[i] = BKE_texture_mtex_add();
 	ma->mtex[i]->texco = TEXCO_UV;
-	ma->mtex[i]->tex = add_texture(G.main, "Texture");
+	ma->mtex[i]->tex = BKE_texture_add(G.main, "Texture");
 	ma->mtex[i]->tex->type = TEX_IMAGE;
 	ma->mtex[i]->tex->ima = uid_image_map[ima_uid];
 	

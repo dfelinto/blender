@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #include "device.h"
@@ -19,6 +19,7 @@
 #include "scene.h"
 
 #include "util_foreach.h"
+#include "util_logging.h"
 #include "util_map.h"
 #include "util_progress.h"
 #include "util_vector.h"
@@ -92,6 +93,9 @@ void ParticleSystemManager::device_update_particles(Device *device, DeviceScene 
 
 void ParticleSystemManager::device_update(Device *device, DeviceScene *dscene, Scene *scene, Progress& progress)
 {
+	VLOG(1) << "Total " << scene->particle_systems.size()
+	        << " particle systems.";
+
 	if(!need_update)
 		return;
 	
@@ -111,7 +115,7 @@ void ParticleSystemManager::device_free(Device *device, DeviceScene *dscene)
 	dscene->particles.clear();
 }
 
-void ParticleSystemManager::tag_update(Scene *scene)
+void ParticleSystemManager::tag_update(Scene * /*scene*/)
 {
 	need_update = true;
 }

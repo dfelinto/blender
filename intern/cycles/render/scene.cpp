@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #include <stdlib.h>
@@ -35,6 +35,11 @@
 
 #include "util_foreach.h"
 #include "util_progress.h"
+
+#ifdef WITH_CYCLES_DEBUG
+#  include "util_guarded_allocator.h"
+#  include "util_logging.h"
+#endif
 
 CCL_NAMESPACE_BEGIN
 
@@ -153,81 +158,98 @@ void Scene::device_update(Device *device_, Progress& progress)
 	progress.set_status("Updating Shaders");
 	shader_manager->device_update(device, &dscene, this, progress);
 
-	if(progress.get_cancel()) return;
-
-	progress.set_status("Updating Images");
-	image_manager->device_update(device, &dscene, progress);
-
-	if(progress.get_cancel()) return;
+	if(progress.get_cancel() || device->have_error()) return;
 
 	progress.set_status("Updating Background");
 	background->device_update(device, &dscene, this);
 
-	if(progress.get_cancel()) return;
+	if(progress.get_cancel() || device->have_error()) return;
+
+	progress.set_status("Updating Camera");
+	camera->device_update(device, &dscene, this);
+
+	if(progress.get_cancel() || device->have_error()) return;
 
 	progress.set_status("Updating Objects");
 	object_manager->device_update(device, &dscene, this, progress);
 
-	if(progress.get_cancel()) return;
+	if(progress.get_cancel() || device->have_error()) return;
+
+	progress.set_status("Updating Meshes Flags");
+	mesh_manager->device_update_flags(device, &dscene, this, progress);
+
+	if(progress.get_cancel() || device->have_error()) return;
 
 	progress.set_status("Updating Meshes");
 	mesh_manager->device_update(device, &dscene, this, progress);
 
-	if(progress.get_cancel()) return;
+	if(progress.get_cancel() || device->have_error()) return;
 
 	progress.set_status("Updating Objects Flags");
 	object_manager->device_update_flags(device, &dscene, this, progress);
 
-	if(progress.get_cancel()) return;
+	if(progress.get_cancel() || device->have_error()) return;
+
+	progress.set_status("Updating Images");
+	image_manager->device_update(device, &dscene, progress);
+
+	if(progress.get_cancel() || device->have_error()) return;
+
+	progress.set_status("Updating Camera Volume");
+	camera->device_update_volume(device, &dscene, this);
+
+	if(progress.get_cancel() || device->have_error()) return;
 
 	progress.set_status("Updating Hair Systems");
 	curve_system_manager->device_update(device, &dscene, this, progress);
 
-	if(progress.get_cancel()) return;
+	if(progress.get_cancel() || device->have_error()) return;
 
 	progress.set_status("Updating Lookup Tables");
 	lookup_tables->device_update(device, &dscene);
 
-	if(progress.get_cancel()) return;
-
-	/* TODO(sergey): Make sure camera is not needed above. */
-	progress.set_status("Updating Camera");
-	camera->device_update(device, &dscene, this);
-
-	if(progress.get_cancel()) return;
+	if(progress.get_cancel() || device->have_error()) return;
 
 	progress.set_status("Updating Lights");
 	light_manager->device_update(device, &dscene, this, progress);
 
-	if(progress.get_cancel()) return;
+	if(progress.get_cancel() || device->have_error()) return;
 
 	progress.set_status("Updating Particle Systems");
 	particle_system_manager->device_update(device, &dscene, this, progress);
 
-	if(progress.get_cancel()) return;
+	if(progress.get_cancel() || device->have_error()) return;
 
 	progress.set_status("Updating Film");
 	film->device_update(device, &dscene, this);
 
-	if(progress.get_cancel()) return;
+	if(progress.get_cancel() || device->have_error()) return;
 
 	progress.set_status("Updating Integrator");
 	integrator->device_update(device, &dscene, this);
 
-	if(progress.get_cancel()) return;
+	if(progress.get_cancel() || device->have_error()) return;
 
 	progress.set_status("Updating Lookup Tables");
 	lookup_tables->device_update(device, &dscene);
 
-	if(progress.get_cancel()) return;
+	if(progress.get_cancel() || device->have_error()) return;
 
 	progress.set_status("Updating Baking");
 	bake_manager->device_update(device, &dscene, this, progress);
 
-	if(progress.get_cancel()) return;
+	if(progress.get_cancel() || device->have_error()) return;
 
-	progress.set_status("Updating Device", "Writing constant memory");
-	device->const_copy_to("__data", &dscene.data, sizeof(dscene.data));
+	if(device->have_error() == false) {
+		progress.set_status("Updating Device", "Writing constant memory");
+		device->const_copy_to("__data", &dscene.data, sizeof(dscene.data));
+	}
+
+#ifdef WITH_CYCLES_DEBUG
+	VLOG(1) << "System memory statistics after full device sync:\n"
+	        << "  Usage: " << util_guarded_get_mem_used() << "\n"
+	        << "  Peak: " << util_guarded_get_mem_peak();
+#endif
 }
 
 Scene::MotionType Scene::need_motion(bool advanced_shading)

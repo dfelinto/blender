@@ -53,6 +53,7 @@
 #include "BKE_anim.h"
 #include "BKE_cdderivedmesh.h"
 #include "BKE_curve.h"
+#include "BKE_depsgraph.h"
 #include "BKE_displist.h"
 #include "BKE_global.h"
 #include "BKE_key.h"
@@ -60,6 +61,7 @@
 #include "BKE_library.h"
 #include "BKE_main.h"
 #include "BKE_modifier.h"
+#include "BKE_object.h"
 
 #include "BKE_deform.h"
 
@@ -284,6 +286,10 @@ Lattice *BKE_lattice_copy(Lattice *lt)
 
 	ltn->editlatt = NULL;
 
+	if (lt->id.lib) {
+		BKE_id_lib_local_paths(G.main, lt->id.lib, &ltn->id);
+	}
+
 	return ltn;
 }
 
@@ -303,7 +309,7 @@ void BKE_lattice_free(Lattice *lt)
 	
 	/* free animation data */
 	if (lt->adt) {
-		BKE_free_animdata(&lt->id);
+		BKE_animdata_free(&lt->id);
 		lt->adt = NULL;
 	}
 }
@@ -575,7 +581,7 @@ static bool where_on_path_deform(Object *ob, float ctime, float vec[4], float di
 	
 	/* test for cyclic */
 	bl = ob->curve_cache->bev.first;
-	if (!bl->nr) return 0;
+	if (!bl->nr) return false;
 	if (bl->poly > -1) cycl = 1;
 
 	if (cycl == 0) {
@@ -608,9 +614,9 @@ static bool where_on_path_deform(Object *ob, float ctime, float vec[4], float di
 				/* weight - not used but could be added */
 			}
 		}
-		return 1;
+		return true;
 	}
-	return 0;
+	return false;
 }
 
 /* for each point, rotate & translate to curve */
@@ -634,9 +640,7 @@ static bool calc_curve_deform(Scene *scene, Object *par, float co[3],
 #endif
 
 	if (par->curve_cache->path == NULL) {
-		return 0;  /* happens on append, cyclic dependencies
-		            * and empty curves
-		            */
+		return false;  /* happens on append, cyclic dependencies and empty curves */
 	}
 
 	/* options */
@@ -718,13 +722,14 @@ static bool calc_curve_deform(Scene *scene, Object *par, float co[3],
 		if (r_quat)
 			copy_qt_qt(r_quat, quat);
 
-		return 1;
+		return true;
 	}
-	return 0;
+	return false;
 }
 
-void curve_deform_verts(Scene *scene, Object *cuOb, Object *target, DerivedMesh *dm, float (*vertexCos)[3],
-                        int numVerts, const char *vgroup, short defaxis)
+void curve_deform_verts(
+        Scene *scene, Object *cuOb, Object *target, DerivedMesh *dm, float (*vertexCos)[3],
+        int numVerts, const char *vgroup, short defaxis)
 {
 	Curve *cu;
 	int a;
@@ -939,10 +944,10 @@ bool object_deform_mball(Object *ob, ListBase *dispbase)
 			                     (float(*)[3])dl->verts, dl->nr, NULL, 1.0f);
 		}
 
-		return 1;
+		return true;
 	}
 	else {
-		return 0;
+		return false;
 	}
 }
 
@@ -1066,7 +1071,7 @@ void BKE_lattice_modifiers_calc(Scene *scene, Object *ob)
 	}
 
 	for (; md; md = md->next) {
-		ModifierTypeInfo *mti = modifierType_getInfo(md->type);
+		const ModifierTypeInfo *mti = modifierType_getInfo(md->type);
 
 		md->scene = scene;
 		
@@ -1132,6 +1137,48 @@ void BKE_lattice_center_median(Lattice *lt, float cent[3])
 		add_v3_v3(cent, lt->def[i].vec);
 
 	mul_v3_fl(cent, 1.0f / (float)numVerts);
+}
+
+static void boundbox_lattice(Object *ob)
+{
+	BoundBox *bb;
+	Lattice *lt;
+	float min[3], max[3];
+
+	if (ob->bb == NULL)
+		ob->bb = MEM_mallocN(sizeof(BoundBox), "Lattice boundbox");
+
+	bb = ob->bb;
+	lt = ob->data;
+
+	INIT_MINMAX(min, max);
+	BKE_lattice_minmax_dl(ob, lt, min, max);
+	BKE_boundbox_init_from_minmax(bb, min, max);
+}
+
+BoundBox *BKE_lattice_boundbox_get(Object *ob)
+{
+	boundbox_lattice(ob);
+
+	return ob->bb;
+}
+
+void BKE_lattice_minmax_dl(Object *ob, Lattice *lt, float min[3], float max[3])
+{
+	DispList *dl = ob->curve_cache ? BKE_displist_find(&ob->curve_cache->disp, DL_VERTS) : NULL;
+
+	if (!dl) {
+		BKE_lattice_minmax(lt, min, max);
+	}
+	else {
+		int i, numVerts;
+		
+		if (lt->editlatt) lt = lt->editlatt->latt;
+		numVerts = lt->pntsu * lt->pntsv * lt->pntsw;
+
+		for (i = 0; i < numVerts; i++)
+			minmax_v3v3_v3(min, max, &dl->verts[i * 3]);
+	}
 }
 
 void BKE_lattice_minmax(Lattice *lt, float min[3], float max[3])
@@ -1201,5 +1248,12 @@ void BKE_lattice_translate(Lattice *lt, float offset[3], bool do_keys)
 			}
 		}
 	}
+}
+
+/* **** Depsgraph evaluation **** */
+
+void BKE_lattice_eval_geometry(EvaluationContext *UNUSED(eval_ctx),
+                               Lattice *UNUSED(latt))
+{
 }
 

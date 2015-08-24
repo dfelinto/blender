@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #include "device.h"
@@ -19,6 +19,7 @@
 #include "tables.h"
 
 #include "util_debug.h"
+#include "util_logging.h"
 
 CCL_NAMESPACE_BEGIN
 
@@ -36,6 +37,8 @@ LookupTables::~LookupTables()
 
 void LookupTables::device_update(Device *device, DeviceScene *dscene)
 {
+	VLOG(1) << "Total " << lookup_tables.size() << " lookup tables.";
+
 	if(!need_update)
 		return;
 

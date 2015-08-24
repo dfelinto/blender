@@ -49,12 +49,10 @@
 #include "WM_types.h"
 
 #include "wm.h"
-#include "wm_event_system.h"
 #include "wm_subwindow.h"
 #include "wm_draw.h"
 
 
-#include "BIF_gl.h"
 #include "BIF_glutil.h"
 
 

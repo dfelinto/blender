@@ -43,6 +43,7 @@
 #include "BKE_constraint.h"
 #include "BKE_context.h"
 #include "BKE_idprop.h"
+#include "BKE_deform.h"
 
 #include "RNA_access.h"
 #include "RNA_define.h"
@@ -89,7 +90,7 @@ EditBone *ED_armature_edit_bone_add_primitive(Object *obedit_arm, float length, 
 	bArmature *arm = obedit_arm->data;
 	EditBone *bone;
 
-	ED_armature_deselect_all(obedit_arm, 0);
+	ED_armature_deselect_all(obedit_arm);
 	
 	/* Create a bone */
 	bone = ED_armature_edit_bone_add(arm, "Bone");
@@ -144,7 +145,7 @@ static int armature_click_extrude_exec(bContext *C, wmOperator *UNUSED(op))
 		to_root = 1;
 	}
 	
-	ED_armature_deselect_all(obedit, 0);
+	ED_armature_deselect_all(obedit);
 	
 	/* we re-use code for mirror editing... */
 	flipbone = NULL;
@@ -270,7 +271,7 @@ static EditBone *get_named_editbone(ListBase *edbo, const char *name)
 
 	if (name) {
 		for (eBone = edbo->first; eBone; eBone = eBone->next) {
-			if (!strcmp(name, eBone->name))
+			if (STREQ(name, eBone->name))
 				return eBone;
 		}
 	}
@@ -282,12 +283,8 @@ static EditBone *get_named_editbone(ListBase *edbo, const char *name)
  * */
 void preEditBoneDuplicate(ListBase *editbones)
 {
-	EditBone *eBone;
-	
 	/* clear temp */
-	for (eBone = editbones->first; eBone; eBone = eBone->next) {
-		eBone->temp = NULL;
-	}
+	ED_armature_ebone_listbase_temp_clear(editbones);
 }
 
 /*
@@ -311,7 +308,7 @@ void updateDuplicateSubtargetObjects(EditBone *dupBone, ListBase *editbones, Obj
 				/* does this constraint have a subtarget in
 				 * this armature?
 				 */
-				bConstraintTypeInfo *cti = BKE_constraint_typeinfo_get(curcon);
+				const bConstraintTypeInfo *cti = BKE_constraint_typeinfo_get(curcon);
 				ListBase targets = {NULL, NULL};
 				bConstraintTarget *ct;
 				
@@ -327,8 +324,8 @@ void updateDuplicateSubtargetObjects(EditBone *dupBone, ListBase *editbones, Obj
 								 * so, update the constraint to point at the 
 								 * duplicate of the old subtarget.
 								 */
-								if (oldtarget->temp) {
-									newtarget = (EditBone *) oldtarget->temp;
+								if (oldtarget->temp.ebone) {
+									newtarget = oldtarget->temp.ebone;
 									BLI_strncpy(ct->subtarget, newtarget->name, sizeof(ct->subtarget));
 								}
 							}
@@ -357,8 +354,8 @@ EditBone *duplicateEditBoneObjects(EditBone *curBone, const char *name, ListBase
 	/*	Copy data from old bone to new bone */
 	memcpy(eBone, curBone, sizeof(EditBone));
 	
-	curBone->temp = eBone;
-	eBone->temp = curBone;
+	curBone->temp.ebone = eBone;
+	eBone->temp.ebone = curBone;
 	
 	if (name != NULL) {
 		BLI_strncpy(eBone->name, name, sizeof(eBone->name));
@@ -398,13 +395,11 @@ EditBone *duplicateEditBone(EditBone *curBone, const char *name, ListBase *editb
 	return duplicateEditBoneObjects(curBone, name, editbones, ob, ob);
 }
 
-/* previously adduplicate_armature */
 static int armature_duplicate_selected_exec(bContext *C, wmOperator *UNUSED(op))
 {
 	bArmature *arm;
-	EditBone    *eBone = NULL;
-	EditBone    *curBone;
-	EditBone    *firstDup = NULL; /*	The beginning of the duplicated bones in the edbo list */
+	EditBone *ebone_iter;
+	EditBone *ebone_first_dupe = NULL;  /* The beginning of the duplicated bones in the edbo list */
 
 	Object *obedit = CTX_data_edit_object(C);
 	arm = obedit->data;
@@ -419,77 +414,80 @@ static int armature_duplicate_selected_exec(bContext *C, wmOperator *UNUSED(op))
 
 	/* Select mirrored bones */
 	if (arm->flag & ARM_MIRROR_EDIT) {
-		for (curBone = arm->edbo->first; curBone; curBone = curBone->next) {
-			if (EBONE_VISIBLE(arm, curBone)) {
-				if (curBone->flag & BONE_SELECTED) {
-					eBone = ED_armature_bone_get_mirrored(arm->edbo, curBone);
-					if (eBone)
-						eBone->flag |= BONE_SELECTED;
+		for (ebone_iter = arm->edbo->first; ebone_iter; ebone_iter = ebone_iter->next) {
+			if (EBONE_VISIBLE(arm, ebone_iter) &&
+			    (ebone_iter->flag & BONE_SELECTED))
+			{
+				EditBone *ebone;
+
+				ebone = ED_armature_bone_get_mirrored(arm->edbo, ebone_iter);
+				if (ebone) {
+					ebone->flag |= BONE_SELECTED;
 				}
 			}
 		}
 	}
 
 	
-	/*	Find the selected bones and duplicate them as needed */
-	for (curBone = arm->edbo->first; curBone && curBone != firstDup; curBone = curBone->next) {
-		if (EBONE_VISIBLE(arm, curBone)) {
-			if (curBone->flag & BONE_SELECTED) {
-				
-				eBone = duplicateEditBone(curBone, curBone->name, arm->edbo, obedit);
-				
-				if (!firstDup)
-					firstDup = eBone;
+	/* Find the selected bones and duplicate them as needed */
+	for (ebone_iter = arm->edbo->first; ebone_iter && ebone_iter != ebone_first_dupe; ebone_iter = ebone_iter->next) {
+		if (EBONE_VISIBLE(arm, ebone_iter) &&
+		    (ebone_iter->flag & BONE_SELECTED))
+		{
+			EditBone *ebone;
 
+			ebone = duplicateEditBone(ebone_iter, ebone_iter->name, arm->edbo, obedit);
+
+			if (!ebone_first_dupe) {
+				ebone_first_dupe = ebone;
 			}
 		}
 	}
 
-	/*	Run though the list and fix the pointers */
-	for (curBone = arm->edbo->first; curBone && curBone != firstDup; curBone = curBone->next) {
-		if (EBONE_VISIBLE(arm, curBone)) {
-			if (curBone->flag & BONE_SELECTED) {
-				eBone = (EditBone *) curBone->temp;
-				
-				if (!curBone->parent) {
-					/* If this bone has no parent,
-					 * Set the duplicate->parent to NULL
-					 */
-					eBone->parent = NULL;
-				}
-				else if (curBone->parent->temp) {
-					/* If this bone has a parent that was duplicated,
-					 * Set the duplicate->parent to the curBone->parent->temp
-					 */
-					eBone->parent = (EditBone *)curBone->parent->temp;
-				}
-				else {
-					/* If this bone has a parent that IS not selected,
-					 * Set the duplicate->parent to the curBone->parent
-					 */
-					eBone->parent = (EditBone *) curBone->parent;
-					eBone->flag &= ~BONE_CONNECTED;
-				}
-				
-				/* Lets try to fix any constraint subtargets that might
-				 * have been duplicated 
+	/* Run though the list and fix the pointers */
+	for (ebone_iter = arm->edbo->first; ebone_iter && ebone_iter != ebone_first_dupe; ebone_iter = ebone_iter->next) {
+		if (EBONE_VISIBLE(arm, ebone_iter) &&
+		    (ebone_iter->flag & BONE_SELECTED))
+		{
+			EditBone *ebone = ebone_iter->temp.ebone;
+
+			if (!ebone_iter->parent) {
+				/* If this bone has no parent,
+				 * Set the duplicate->parent to NULL
 				 */
-				updateDuplicateSubtarget(eBone, arm->edbo, obedit);
+				ebone->parent = NULL;
 			}
+			else if (ebone_iter->parent->temp.ebone) {
+				/* If this bone has a parent that was duplicated,
+				 * Set the duplicate->parent to the curBone->parent->temp
+				 */
+				ebone->parent = ebone_iter->parent->temp.ebone;
+			}
+			else {
+				/* If this bone has a parent that IS not selected,
+				 * Set the duplicate->parent to the curBone->parent
+				 */
+				ebone->parent = (EditBone *) ebone_iter->parent;
+				ebone->flag &= ~BONE_CONNECTED;
+			}
+
+			/* Lets try to fix any constraint subtargets that might
+			 * have been duplicated
+			 */
+			updateDuplicateSubtarget(ebone, arm->edbo, obedit);
 		}
 	}
 	
 	/* correct the active bone */
-	if (arm->act_edbone) {
-		eBone = arm->act_edbone;
-		if (eBone->temp)
-			arm->act_edbone = eBone->temp;
+	if (arm->act_edbone && arm->act_edbone->temp.ebone) {
+		arm->act_edbone = arm->act_edbone->temp.ebone;
 	}
 
-	/*	Deselect the old bones and select the new ones */
-	for (curBone = arm->edbo->first; curBone && curBone != firstDup; curBone = curBone->next) {
-		if (EBONE_VISIBLE(arm, curBone))
-			curBone->flag &= ~(BONE_SELECTED | BONE_TIPSEL | BONE_ROOTSEL);
+	/* Deselect the old bones and select the new ones */
+	for (ebone_iter = arm->edbo->first; ebone_iter && ebone_iter != ebone_first_dupe; ebone_iter = ebone_iter->next) {
+		if (EBONE_VISIBLE(arm, ebone_iter)) {
+			ebone_iter->flag &= ~(BONE_SELECTED | BONE_TIPSEL | BONE_ROOTSEL);
+		}
 	}
 
 	ED_armature_validate_active(arm);
@@ -513,6 +511,214 @@ void ARMATURE_OT_duplicate(wmOperatorType *ot)
 	
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
+
+/**
+ * near duplicate of #armature_duplicate_selected_exec,
+ * except for parenting part (keep in sync)
+ */
+static int armature_symmetrize_exec(bContext *C, wmOperator *op)
+{
+	bArmature *arm;
+	EditBone *ebone_iter;
+	EditBone *ebone_first_dupe = NULL;  /* The beginning of the duplicated mirrored bones in the edbo list */
+
+	Object *obedit = CTX_data_edit_object(C);
+	const int direction = RNA_enum_get(op->ptr, "direction");
+	const int axis = 0;
+
+	arm = obedit->data;
+
+	/* cancel if nothing selected */
+	if (CTX_DATA_COUNT(C, selected_bones) == 0)
+		return OPERATOR_CANCELLED;
+
+	ED_armature_sync_selection(arm->edbo); // XXX why is this needed?
+
+	preEditBoneDuplicate(arm->edbo);
+
+	/* Select mirrored bones */
+	for (ebone_iter = arm->edbo->first; ebone_iter; ebone_iter = ebone_iter->next) {
+		if (EBONE_VISIBLE(arm, ebone_iter) &&
+		    (ebone_iter->flag & BONE_SELECTED))
+		{
+			char name_flip[MAX_VGROUP_NAME];
+
+			BKE_deform_flip_side_name(name_flip, ebone_iter->name, false);
+
+			if (STREQ(name_flip, ebone_iter->name)) {
+				/* if the name matches, we don't have the potential to be mirrored, just skip */
+				ebone_iter->flag &= ~(BONE_SELECTED | BONE_TIPSEL | BONE_ROOTSEL);
+			}
+			else {
+				EditBone *ebone = ED_armature_bone_find_name(arm->edbo, name_flip);
+
+				if (ebone) {
+					if ((ebone->flag & BONE_SELECTED) == 0) {
+						/* simple case, we're selected, the other bone isn't! */
+						ebone_iter->temp.ebone = ebone;
+					}
+					else {
+						/* complicated - choose which direction to copy */
+						float axis_delta;
+
+						axis_delta = ebone->head[axis] - ebone_iter->head[axis];
+						if (axis_delta == 0.0f) {
+							axis_delta = ebone->tail[axis] - ebone_iter->tail[axis];
+						}
+
+						if (axis_delta == 0.0f) {
+							/* both mirrored bones exist and point to eachother and overlap exactly.
+							 *
+							 * in this case theres no well defined solution, so de-select both and skip.
+							 */
+							ebone->flag      &= ~(BONE_SELECTED | BONE_TIPSEL | BONE_ROOTSEL);
+							ebone_iter->flag &= ~(BONE_SELECTED | BONE_TIPSEL | BONE_ROOTSEL);
+						}
+						else {
+							EditBone *ebone_src, *ebone_dst;
+							if (((axis_delta < 0.0f) ? -1 : 1) == direction) {
+								ebone_src = ebone;
+								ebone_dst = ebone_iter;
+							}
+							else {
+								ebone_src = ebone_iter;
+								ebone_dst = ebone;
+							}
+
+							ebone_src->temp.ebone = ebone_dst;
+							ebone_dst->flag &= ~(BONE_SELECTED | BONE_TIPSEL | BONE_ROOTSEL);
+						}
+					}
+				}
+			}
+		}
+	}
+
+	/*	Find the selected bones and duplicate them as needed, with mirrored name */
+	for (ebone_iter = arm->edbo->first; ebone_iter && ebone_iter != ebone_first_dupe; ebone_iter = ebone_iter->next) {
+		if (EBONE_VISIBLE(arm, ebone_iter) &&
+		    (ebone_iter->flag & BONE_SELECTED) &&
+		    /* will be set if the mirror bone already exists (no need to make a new one) */
+		    (ebone_iter->temp.ebone == NULL))
+		{
+			char name_flip[MAX_VGROUP_NAME];
+
+			BKE_deform_flip_side_name(name_flip, ebone_iter->name, false);
+
+			/* bones must have a side-suffix */
+			if (!STREQ(name_flip, ebone_iter->name)) {
+				EditBone *ebone;
+
+				ebone = duplicateEditBone(ebone_iter, name_flip, arm->edbo, obedit);
+
+				if (!ebone_first_dupe) {
+					ebone_first_dupe = ebone;
+				}
+			}
+		}
+	}
+
+	/*	Run though the list and fix the pointers */
+	for (ebone_iter = arm->edbo->first; ebone_iter && ebone_iter != ebone_first_dupe; ebone_iter = ebone_iter->next) {
+		if (ebone_iter->temp.ebone) {
+			/* copy all flags except for ... */
+			const int flag_copy = ((int)~0) & ~(BONE_SELECTED | BONE_ROOTSEL | BONE_TIPSEL);
+
+			EditBone *ebone = ebone_iter->temp.ebone;
+
+			/* copy flags incase bone is pre-existing data */
+			ebone->flag = (ebone->flag & ~flag_copy) | (ebone_iter->flag & flag_copy);
+
+			if (ebone_iter->parent == NULL) {
+				/* If this bone has no parent,
+				 * Set the duplicate->parent to NULL
+				 */
+				ebone->parent = NULL;
+				ebone->flag &= ~BONE_CONNECTED;
+			}
+			else {
+				/* the parent may have been duplicated, if not lookup the mirror parent */
+				EditBone *ebone_parent =
+				        (ebone_iter->parent->temp.ebone ?
+				         ebone_iter->parent->temp.ebone : ED_armature_bone_get_mirrored(arm->edbo, ebone_iter->parent));
+
+				if (ebone_parent == NULL) {
+					/* If the mirror lookup failed, (but the current bone has a parent)
+					 * then we can assume the parent has no L/R but is a center bone.
+					 * So just use the same parent for both.
+					 */
+					ebone_parent = ebone_iter->parent;
+					ebone->flag &= ~BONE_CONNECTED;
+				}
+
+				ebone->parent = ebone_parent;
+			}
+
+			/* Lets try to fix any constraint subtargets that might
+			 * have been duplicated
+			 */
+			updateDuplicateSubtarget(ebone, arm->edbo, obedit);
+		}
+	}
+
+	transform_armature_mirror_update(obedit);
+
+	/* Selected bones now have their 'temp' pointer set,
+	 * so we don't need this anymore */
+
+	/* Deselect the old bones and select the new ones */
+	for (ebone_iter = arm->edbo->first; ebone_iter && ebone_iter != ebone_first_dupe; ebone_iter = ebone_iter->next) {
+		if (EBONE_VISIBLE(arm, ebone_iter)) {
+			ebone_iter->flag &= ~(BONE_SELECTED | BONE_TIPSEL | BONE_ROOTSEL);
+		}
+	}
+
+	/* New bones will be selected, but some of the bones may already exist */
+	for (ebone_iter = arm->edbo->first; ebone_iter && ebone_iter != ebone_first_dupe; ebone_iter = ebone_iter->next) {
+		EditBone *ebone = ebone_iter->temp.ebone;
+		if (ebone && EBONE_SELECTABLE(arm, ebone)) {
+			ED_armature_ebone_select_set(ebone, true);
+		}
+	}
+
+	/* correct the active bone */
+	if (arm->act_edbone && arm->act_edbone->temp.ebone) {
+		arm->act_edbone = arm->act_edbone->temp.ebone;
+	}
+
+	ED_armature_validate_active(arm);
+
+	WM_event_add_notifier(C, NC_OBJECT | ND_BONE_SELECT, obedit);
+
+	return OPERATOR_FINISHED;
+}
+
+/* following conventions from #MESH_OT_symmetrize */
+void ARMATURE_OT_symmetrize(wmOperatorType *ot)
+{
+	/* subset of 'symmetrize_direction_items' */
+	static EnumPropertyItem arm_symmetrize_direction_items[] = {
+		{-1, "NEGATIVE_X", 0, "-X to +X", ""},
+		{+1, "POSITIVE_X", 0, "+X to -X", ""},
+		{0, NULL, 0, NULL, NULL}
+	};
+
+	/* identifiers */
+	ot->name = "Symmetrize";
+	ot->idname = "ARMATURE_OT_symmetrize";
+	ot->description = "Enforce symmetry, make copies of the selection or use existing";
+
+	/* api callbacks */
+	ot->exec = armature_symmetrize_exec;
+	ot->poll = ED_operator_editarmature;
+
+	/* flags */
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+	ot->prop = RNA_def_enum(
+	        ot->srna, "direction", arm_symmetrize_direction_items, -1,
+	        "Direction", "Which sides to copy from and to (when both are selected)");
 }
 
 /* ------------------------------------------ */
@@ -704,7 +910,7 @@ static int armature_bone_primitive_add_exec(bContext *C, wmOperator *op)
 	mul_m3_m3m3(totmat, obmat, viewmat);
 	invert_m3_m3(imat, totmat);
 	
-	ED_armature_deselect_all(obedit, 0);
+	ED_armature_deselect_all(obedit);
 	
 	/*	Create a bone	*/
 	bone = ED_armature_edit_bone_add(obedit->data, name);
@@ -830,7 +1036,7 @@ void ARMATURE_OT_subdivide(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 	
 	/* Properties */
-	prop = RNA_def_int(ot->srna, "number_cuts", 1, 1, INT_MAX, "Number of Cuts", "", 1, 10);
+	prop = RNA_def_int(ot->srna, "number_cuts", 1, 1, 1000, "Number of Cuts", "", 1, 10);
 	/* avoid re-using last var because it can cause _very_ high poly meshes and annoy users (or worse crash) */
 	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }

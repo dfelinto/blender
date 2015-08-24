@@ -47,13 +47,14 @@
 #include "BLI_utildefines.h"
 #include "BLI_ghash.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_action.h"
 #include "BKE_anim.h"
 #include "BKE_animsys.h"
 #include "BKE_constraint.h"
 #include "BKE_deform.h"
+#include "BKE_depsgraph.h"
 #include "BKE_fcurve.h"
 #include "BKE_global.h"
 #include "BKE_idprop.h"
@@ -215,6 +216,10 @@ bAction *BKE_action_copy(bAction *src)
 		}
 	}
 	
+	if (src->id.lib) {
+		BKE_id_lib_local_paths(G.main, src->id.lib, &dst->id);
+	}
+
 	return dst;
 }
 
@@ -450,9 +455,9 @@ bPoseChannel *BKE_pose_channel_find_name(const bPose *pose, const char *name)
 		return NULL;
 	
 	if (pose->chanhash)
-		return BLI_ghash_lookup(pose->chanhash, (void *)name);
+		return BLI_ghash_lookup(pose->chanhash, (const void *)name);
 	
-	return BLI_findstring(&((bPose *)pose)->chanbase, name, offsetof(bPoseChannel, name));
+	return BLI_findstring(&((const bPose *)pose)->chanbase, name, offsetof(bPoseChannel, name));
 }
 
 /**
@@ -712,6 +717,57 @@ void BKE_pose_channels_hash_free(bPose *pose)
 }
 
 /**
+ * Selectively remove pose channels.
+ */
+void BKE_pose_channels_remove(
+        Object *ob,
+        bool (*filter_fn)(const char *bone_name, void *user_data), void *user_data)
+{
+	/*  First erase any associated pose channel */
+	if (ob->pose) {
+		bPoseChannel *pchan, *pchan_next;
+		bConstraint *con;
+
+		for (pchan = ob->pose->chanbase.first; pchan; pchan = pchan_next) {
+			pchan_next = pchan->next;
+
+			if (filter_fn(pchan->name, user_data)) {
+				BKE_pose_channel_free(pchan);
+				if (ob->pose->chanhash) {
+					BLI_ghash_remove(ob->pose->chanhash, pchan->name, NULL, NULL);
+				}
+				BLI_freelinkN(&ob->pose->chanbase, pchan);
+			}
+			else {
+				for (con = pchan->constraints.first; con; con = con->next) {
+					const bConstraintTypeInfo *cti = BKE_constraint_typeinfo_get(con);
+					ListBase targets = {NULL, NULL};
+					bConstraintTarget *ct;
+
+					if (cti && cti->get_constraint_targets) {
+						cti->get_constraint_targets(con, &targets);
+
+						for (ct = targets.first; ct; ct = ct->next) {
+							if (ct->tar == ob) {
+								if (ct->subtarget[0]) {
+									if (filter_fn(ct->subtarget, user_data)) {
+										con->flag |= CONSTRAINT_DISABLE;
+										ct->subtarget[0] = 0;
+									}
+								}
+							}
+						}
+
+						if (cti->flush_constraint_targets)
+							cti->flush_constraint_targets(con, &targets, 0);
+					}
+				}
+			}
+		}
+	}
+}
+
+/**
  * Deallocates a pose channel.
  * Does not free the pose channel itself.
  */
@@ -729,7 +785,7 @@ void BKE_pose_channel_free_ex(bPoseChannel *pchan, bool do_id_user)
 		pchan->mpath = NULL;
 	}
 
-	BKE_constraints_free(&pchan->constraints);
+	BKE_constraints_free_ex(&pchan->constraints, do_id_user);
 	
 	if (pchan->prop) {
 		IDP_FreeProperty(pchan->prop);
@@ -925,6 +981,12 @@ void BKE_pose_update_constraint_flags(bPose *pose)
 				pchan->constflag |= PCHAN_HAS_CONST;
 		}
 	}
+	pose->flag &= ~POSE_CONSTRAINTS_NEED_UPDATE_FLAGS;
+}
+
+void BKE_pose_tag_update_constraint_flags(bPose *pose)
+{
+	pose->flag |= POSE_CONSTRAINTS_NEED_UPDATE_FLAGS;
 }
 
 /* Clears all BONE_UNKEYED flags for every pose channel in every pose 
@@ -966,7 +1028,7 @@ bActionGroup *BKE_pose_add_group(bPose *pose, const char *name)
 	BLI_addtail(&pose->agroups, grp);
 	BLI_uniquename(&pose->agroups, grp, name, '.', offsetof(bActionGroup, name), sizeof(grp->name));
 	
-	pose->active_group = BLI_countlist(&pose->agroups);
+	pose->active_group = BLI_listbase_count(&pose->agroups);
 	
 	return grp;
 }
@@ -998,8 +1060,12 @@ void BKE_pose_remove_group(bPose *pose, bActionGroup *grp, const int index)
 	/* now, remove it from the pose */
 	BLI_freelinkN(&pose->agroups, grp);
 	if (pose->active_group >= idx) {
+		const bool has_groups = !BLI_listbase_is_empty(&pose->agroups);
 		pose->active_group--;
-		if (pose->active_group < 0 || BLI_listbase_is_empty(&pose->agroups)) {
+		if (pose->active_group == 0 && has_groups) {
+			pose->active_group = 1;
+		}
+		else if (pose->active_group < 0 || !has_groups) {
 			pose->active_group = 0;
 		}
 	}
@@ -1028,12 +1094,12 @@ bool action_has_motion(const bAction *act)
 	if (act) {
 		for (fcu = act->curves.first; fcu; fcu = fcu->next) {
 			if (fcu->totvert)
-				return 1;
+				return true;
 		}
 	}
 	
 	/* nothing found */
-	return 0;
+	return false;
 }
 
 /* Calculate the extents of given action */
@@ -1301,6 +1367,16 @@ bool BKE_pose_copy_result(bPose *to, bPose *from)
 		}
 	}
 	return true;
+}
+
+/* Tag pose for recalc. Also tag all related data to be recalc. */
+void BKE_pose_tag_recalc(Main *bmain, bPose *pose)
+{
+	pose->flag |= POSE_RECALC;
+	/* Depsgraph components depends on actual pose state,
+	 * if pose was changed depsgraph is to be updated as well.
+	 */
+	DAG_relations_tag_update(bmain);
 }
 
 /* For the calculation of the effects of an Action at the given frame on an object 

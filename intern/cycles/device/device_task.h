@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #ifndef __DEVICE_TASK_H__
@@ -57,14 +57,15 @@ public:
 
 	void update_progress(RenderTile *rtile);
 
-	boost::function<bool(Device *device, RenderTile&)> acquire_tile;
-	boost::function<void(void)> update_progress_sample;
-	boost::function<void(RenderTile&)> update_tile_sample;
-	boost::function<void(RenderTile&)> release_tile;
-	boost::function<bool(void)> get_cancel;
+	function<bool(Device *device, RenderTile&)> acquire_tile;
+	function<void(void)> update_progress_sample;
+	function<void(RenderTile&)> update_tile_sample;
+	function<void(RenderTile&)> release_tile;
+	function<bool(void)> get_cancel;
 
 	bool need_finish_queue;
 	bool integrator_branched;
+	int2 requested_tile_size;
 protected:
 	double last_update_time;
 };

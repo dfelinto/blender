@@ -92,6 +92,8 @@ void node_operatortypes(void)
 	
 	WM_operatortype_append(NODE_OT_link_viewer);
 	
+	WM_operatortype_append(NODE_OT_insert_offset);
+	
 	WM_operatortype_append(NODE_OT_read_renderlayers);
 	WM_operatortype_append(NODE_OT_read_fullsamplelayers);
 	WM_operatortype_append(NODE_OT_render_changed);
@@ -123,6 +125,8 @@ void node_operatortypes(void)
 	WM_operatortype_append(NODE_OT_viewer_border);
 	WM_operatortype_append(NODE_OT_clear_viewer_border);
 
+	WM_operatortype_append(NODE_OT_switch_view_update);
+
 	WM_operatortype_append(NODE_OT_tree_socket_add);
 	WM_operatortype_append(NODE_OT_tree_socket_remove);
 	WM_operatortype_append(NODE_OT_tree_socket_move);
@@ -145,6 +149,17 @@ void ED_operatormacros_node(void)
 	mot = WM_operatortype_macro_define(ot, "TRANSFORM_OT_translate");
 	RNA_boolean_set(mot->ptr, "release_confirm", true);
 	WM_operatortype_macro_define(ot, "NODE_OT_attach");
+	WM_operatortype_macro_define(ot, "NODE_OT_insert_offset");
+	
+	/* NODE_OT_translate_attach with remove_on_canel set to true */
+	ot = WM_operatortype_append_macro("NODE_OT_translate_attach_remove_on_cancel", "Move and Attach",
+	                                  "Move nodes and attach to frame",
+	                                  OPTYPE_UNDO | OPTYPE_REGISTER);
+	mot = WM_operatortype_macro_define(ot, "TRANSFORM_OT_translate");
+	RNA_boolean_set(mot->ptr, "release_confirm", true);
+	RNA_boolean_set(mot->ptr, "remove_on_cancel", true);
+	WM_operatortype_macro_define(ot, "NODE_OT_attach");
+	WM_operatortype_macro_define(ot, "NODE_OT_insert_offset");
 
 	/* Note: Currently not in a default keymap or menu due to messy keymaps
 	 * and tricky invoke functionality.
@@ -176,6 +191,7 @@ void ED_operatormacros_node(void)
 	                                  OPTYPE_UNDO | OPTYPE_REGISTER);
 	WM_operatortype_macro_define(ot, "NODE_OT_links_detach");
 	WM_operatortype_macro_define(ot, "TRANSFORM_OT_translate");
+	WM_operatortype_macro_define(ot, "NODE_OT_insert_offset");
 
 	ot = WM_operatortype_append_macro("NODE_OT_move_detach_links_release", "Detach", "Move a node to detach links",
 	                                  OPTYPE_UNDO | OPTYPE_REGISTER);
@@ -314,7 +330,7 @@ void node_keymap(struct wmKeyConfig *keyconf)
 	WM_keymap_add_item(keymap, "NODE_OT_group_separate", PKEY, KM_PRESS, 0, 0);
 	kmi = WM_keymap_add_item(keymap, "NODE_OT_group_edit", TABKEY, KM_PRESS, 0, 0);
 	RNA_boolean_set(kmi->ptr, "exit", false);
-	kmi = WM_keymap_add_item(keymap, "NODE_OT_group_edit", TABKEY, KM_PRESS, KM_SHIFT, 0);
+	kmi = WM_keymap_add_item(keymap, "NODE_OT_group_edit", TABKEY, KM_PRESS, KM_CTRL, 0);
 	RNA_boolean_set(kmi->ptr, "exit", true);
 
 	WM_keymap_add_item(keymap, "NODE_OT_read_renderlayers", RKEY, KM_PRESS, KM_CTRL, 0);

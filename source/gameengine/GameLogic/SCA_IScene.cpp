@@ -31,7 +31,7 @@
 
 
 #include "SCA_IScene.h"
-#include "Value.h"
+#include "EXP_Value.h"
 
 SCA_DebugProp::SCA_DebugProp(): m_obj(NULL)
 {
@@ -114,7 +114,7 @@ void SCA_IScene::RemoveDebugProperty(class CValue *gameobj,
 								  const STR_String &name)
 {
 	vector<SCA_DebugProp*>::iterator it = m_debugList.begin();
-	while(it != m_debugList.end()) {
+	while (it != m_debugList.end()) {
 		STR_String debugname = (*it)->m_name;
 		CValue *debugobj = (*it)->m_obj;
 

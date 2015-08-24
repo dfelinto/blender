@@ -32,7 +32,6 @@
  *  \ingroup modifiers
  */
 
-
 #include <string.h>
 
 #include "DNA_scene_types.h"
@@ -46,8 +45,8 @@
 #include "BKE_modifier.h"
 
 #include "depsgraph_private.h"
+#include "DEG_depsgraph_build.h"
 
-#include "MOD_util.h"
 
 static void initData(ModifierData *md)
 {
@@ -94,6 +93,7 @@ static void foreachObjectLink(
 }
 
 static void updateDepgraph(ModifierData *md, DagForest *forest,
+                           struct Main *UNUSED(bmain),
                            Scene *UNUSED(scene),
                            Object *UNUSED(ob),
                            DagNode *obNode)
@@ -106,6 +106,25 @@ static void updateDepgraph(ModifierData *md, DagForest *forest,
 
 		dag_add_relation(forest, curNode, obNode,
 		                 DAG_RL_DATA_DATA | DAG_RL_OB_DATA, "Curve Modifier");
+	}
+}
+
+static void updateDepsgraph(ModifierData *md,
+                            struct Main *UNUSED(bmain),
+                            struct Scene *scene,
+                            Object *UNUSED(ob),
+                            struct DepsNodeHandle *node)
+{
+	CurveModifierData *cmd = (CurveModifierData *)md;
+	if (cmd->object != NULL) {
+		/* TODO(sergey): Need to do the same eval_flags trick for path
+		 * as happening in legacy depsgraph callback.
+		 */
+		/* TODO(sergey): Currently path is evaluated as a part of modifier stack,
+		 * might be changed in the future.
+		 */
+		DEG_add_object_relation(node, cmd->object, DEG_OB_COMP_GEOMETRY, "Curve Modifier");
+		DEG_add_special_eval_flag(scene->depsgraph, &cmd->object->id, DAG_EVAL_NEED_CURVE_PATH);
 	}
 }
 
@@ -157,6 +176,7 @@ ModifierTypeInfo modifierType_Curve = {
 	/* freeData */          NULL,
 	/* isDisabled */        isDisabled,
 	/* updateDepgraph */    updateDepgraph,
+	/* updateDepsgraph */   updateDepsgraph,
 	/* dependsOnTime */     NULL,
 	/* dependsOnNormals */  NULL,
 	/* foreachObjectLink */ foreachObjectLink,

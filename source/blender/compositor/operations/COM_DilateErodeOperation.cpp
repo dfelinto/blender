@@ -56,7 +56,7 @@ void DilateErodeThresholdOperation::initExecution()
 	}
 }
 
-void *DilateErodeThresholdOperation::initializeTileData(rcti *rect)
+void *DilateErodeThresholdOperation::initializeTileData(rcti * /*rect*/)
 {
 	void *buffer = this->m_inputProgram->initializeTileData(NULL);
 	return buffer;
@@ -82,18 +82,18 @@ void DilateErodeThresholdOperation::executePixel(float output[4], int x, int y, 
 	const int bufferWidth = BLI_rcti_size_x(rect);
 	int offset;
 
-	this->m_inputProgram->read(inputValue, x, y, NULL);
+	inputBuffer->read(inputValue, x, y);
 	if (inputValue[0] > sw) {
 		for (int yi = miny; yi < maxy; yi++) {
 			const float dy = yi - y;
-			offset = ((yi - rect->ymin) * bufferWidth + (minx - rect->xmin)) * 4;
+			offset = ((yi - rect->ymin) * bufferWidth + (minx - rect->xmin));
 			for (int xi = minx; xi < maxx; xi++) {
 				if (buffer[offset] < sw) {
 					const float dx = xi - x;
 					const float dis = dx * dx + dy * dy;
 					mindist = min(mindist, dis);
 				}
-				offset += 4;
+				offset ++;
 			}
 		}
 		pixelvalue = -sqrtf(mindist);
@@ -101,15 +101,14 @@ void DilateErodeThresholdOperation::executePixel(float output[4], int x, int y, 
 	else {
 		for (int yi = miny; yi < maxy; yi++) {
 			const float dy = yi - y;
-			offset = ((yi - rect->ymin) * bufferWidth + (minx - rect->xmin)) * 4;
+			offset = ((yi - rect->ymin) * bufferWidth + (minx - rect->xmin));
 			for (int xi = minx; xi < maxx; xi++) {
 				if (buffer[offset] > sw) {
 					const float dx = xi - x;
 					const float dis = dx * dx + dy * dy;
 					mindist = min(mindist, dis);
 				}
-				offset += 4;
-
+				offset ++;
 			}
 		}
 		pixelvalue = sqrtf(mindist);
@@ -181,7 +180,7 @@ void DilateDistanceOperation::initExecution()
 	}
 }
 
-void *DilateDistanceOperation::initializeTileData(rcti *rect)
+void *DilateDistanceOperation::initializeTileData(rcti * /*rect*/)
 {
 	void *buffer = this->m_inputProgram->initializeTileData(NULL);
 	return buffer;
@@ -206,14 +205,14 @@ void DilateDistanceOperation::executePixel(float output[4], int x, int y, void *
 
 	for (int yi = miny; yi < maxy; yi++) {
 		const float dy = yi - y;
-		offset = ((yi - rect->ymin) * bufferWidth + (minx - rect->xmin)) * 4;
+		offset = ((yi - rect->ymin) * bufferWidth + (minx - rect->xmin));
 		for (int xi = minx; xi < maxx; xi++) {
 			const float dx = xi - x;
 			const float dis = dx * dx + dy * dy;
 			if (dis <= mindist) {
 				value = max(buffer[offset], value);
 			}
-			offset += 4;
+			offset ++;
 		}
 	}
 	output[0] = value;
@@ -239,7 +238,7 @@ bool DilateDistanceOperation::determineDependingAreaOfInterest(rcti *input, Read
 void DilateDistanceOperation::executeOpenCL(OpenCLDevice *device,
                                             MemoryBuffer *outputMemoryBuffer, cl_mem clOutputBuffer,
                                             MemoryBuffer **inputMemoryBuffers, list<cl_mem> *clMemToCleanUp,
-                                            list<cl_kernel> *clKernelsToCleanUp)
+                                            list<cl_kernel> * /*clKernelsToCleanUp*/)
 {
 	cl_kernel dilateKernel = device->COM_clCreateKernel("dilateKernel", NULL);
 
@@ -280,14 +279,14 @@ void ErodeDistanceOperation::executePixel(float output[4], int x, int y, void *d
 
 	for (int yi = miny; yi < maxy; yi++) {
 		const float dy = yi - y;
-		offset = ((yi - rect->ymin) * bufferWidth + (minx - rect->xmin)) * 4;
+		offset = ((yi - rect->ymin) * bufferWidth + (minx - rect->xmin));
 		for (int xi = minx; xi < maxx; xi++) {
 			const float dx = xi - x;
 			const float dis = dx * dx + dy * dy;
 			if (dis <= mindist) {
 				value = min(buffer[offset], value);
 			}
-			offset += 4;
+			offset ++;
 		}
 	}
 	output[0] = value;
@@ -296,7 +295,7 @@ void ErodeDistanceOperation::executePixel(float output[4], int x, int y, void *d
 void ErodeDistanceOperation::executeOpenCL(OpenCLDevice *device,
                                            MemoryBuffer *outputMemoryBuffer, cl_mem clOutputBuffer,
                                            MemoryBuffer **inputMemoryBuffers, list<cl_mem> *clMemToCleanUp,
-                                           list<cl_kernel> *clKernelsToCleanUp)
+                                           list<cl_kernel> * /*clKernelsToCleanUp*/)
 {
 	cl_kernel erodeKernel = device->COM_clCreateKernel("erodeKernel", NULL);
 
@@ -383,7 +382,7 @@ void *DilateStepOperation::initializeTileData(rcti *rect)
 			buf[x] = -FLT_MAX;
 		}
 		for (x = xmin; x < xmax; ++x) {
-			buf[x - rect->xmin + window - 1] = buffer[4 * (y * width + x)];
+			buf[x - rect->xmin + window - 1] = buffer[(y * width + x)];
 		}
 
 		for (i = 0; i < (bwidth + 3 * half_window) / window; i++) {
@@ -447,7 +446,7 @@ void DilateStepOperation::deinitExecution()
 	this->m_inputProgram = NULL;
 }
 
-void DilateStepOperation::deinitializeTileData(rcti *rect, void *data)
+void DilateStepOperation::deinitializeTileData(rcti * /*rect*/, void *data)
 {
 	tile_info *tile = (tile_info *)data;
 	MEM_freeN(tile->buffer);
@@ -510,7 +509,7 @@ void *ErodeStepOperation::initializeTileData(rcti *rect)
 			buf[x] = FLT_MAX;
 		}
 		for (x = xmin; x < xmax; ++x) {
-			buf[x - rect->xmin + window - 1] = buffer[4 * (y * width + x)];
+			buf[x - rect->xmin + window - 1] = buffer[(y * width + x)];
 		}
 
 		for (i = 0; i < (bwidth + 3 * half_window) / window; i++) {

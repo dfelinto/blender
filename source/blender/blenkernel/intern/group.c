@@ -49,6 +49,7 @@
 #include "BKE_depsgraph.h"
 #include "BKE_global.h"
 #include "BKE_group.h"
+#include "BKE_icons.h"
 #include "BKE_library.h"
 #include "BKE_main.h"
 #include "BKE_object.h"
@@ -64,7 +65,9 @@ void BKE_group_free(Group *group)
 {
 	/* don't free group itself */
 	GroupObject *go;
-	
+
+	BKE_previewimg_free(&group->preview);
+
 	while ((go = BLI_pophead(&group->gobject))) {
 		free_group_object(go);
 	}
@@ -139,6 +142,9 @@ Group *BKE_group_add(Main *bmain, const char *name)
 	
 	group = BKE_libblock_alloc(bmain, ID_GR, name);
 	group->layer = (1 << 20) - 1;
+
+	group->preview = NULL;
+
 	return group;
 }
 
@@ -148,6 +154,12 @@ Group *BKE_group_copy(Group *group)
 
 	groupn = BKE_libblock_copy(&group->id);
 	BLI_duplicatelist(&groupn->gobject, &group->gobject);
+
+	/* Do not copy group's preview (same behavior as for objects). */
+
+	if (group->id.lib) {
+		BKE_id_lib_local_paths(G.main, group->id.lib, &groupn->id);
+	}
 
 	return groupn;
 }
@@ -213,6 +225,43 @@ static int group_object_unlink_internal(Group *group, Object *ob)
 		go = gon;
 	}
 	return removed;
+}
+
+static bool group_object_cyclic_check_internal(Object *object, Group *group)
+{
+	if (object->dup_group) {
+		Group *dup_group = object->dup_group;
+		if ((dup_group->id.flag & LIB_DOIT) == 0) {
+			/* Cycle already exists in groups, let's prevent further crappyness */
+			return true;
+		}
+		/* flag the object to identify cyclic dependencies in further dupli groups */
+		dup_group->id.flag &= ~LIB_DOIT;
+
+		if (dup_group == group)
+			return true;
+		else {
+			GroupObject *gob;
+			for (gob = dup_group->gobject.first; gob; gob = gob->next) {
+				if (group_object_cyclic_check_internal(gob->ob, group)) {
+					return true;
+				}
+			}
+		}
+
+		/* un-flag the object, it's allowed to have the same group multiple times in parallel */
+		dup_group->id.flag |= LIB_DOIT;
+	}
+
+	return false;
+}
+
+bool BKE_group_object_cyclic_check(Main *bmain, Object *object, Group *group)
+{
+	/* first flag all groups */
+	BKE_main_id_tag_listbase(&bmain->group, true);
+
+	return group_object_cyclic_check_internal(object, group);
 }
 
 bool BKE_group_object_unlink(Group *group, Object *object, Scene *scene, Base *base)

@@ -36,7 +36,9 @@ class Object;
 class Progress;
 
 #define BVH_NODE_SIZE	4
-#define BVH_QNODE_SIZE	8
+#define BVH_NODE_LEAF_SIZE	1
+#define BVH_QNODE_SIZE	7
+#define BVH_QNODE_LEAF_SIZE	1
 #define BVH_ALIGN		4096
 #define TRI_NODE_SIZE	3
 
@@ -47,7 +49,9 @@ class Progress;
 struct PackedBVH {
 	/* BVH nodes storage, one node is 4x int4, and contains two bounding boxes,
 	 * and child, triangle or object indexes depending on the node type */
-	array<int4> nodes; 
+	array<int4> nodes;
+	/* BVH leaf nodes storage. */
+	array<int4> leaf_nodes;
 	/* object index to BVH node index mapping for instances */
 	array<int> object_node; 
 	/* precomputed triangle intersection data, one triangle is 4x float4 */
@@ -61,9 +65,6 @@ struct PackedBVH {
 	array<int> prim_index;
 	/* mapping from BVH primitive index, to the object id of that primitive. */
 	array<int> prim_object;
-	/* quick array to lookup if a node is a leaf, not used for traversal, only
-	 * for instance BVH merging  */
-	array<int> is_leaf;
 
 	/* index of the root node. */
 	int root_index;
@@ -106,13 +107,12 @@ protected:
 	/* triangles and strands*/
 	void pack_primitives();
 	void pack_triangle(int idx, float4 woop[3]);
-	void pack_curve_segment(int idx, float4 woop[3]);
 
 	/* merge instance BVH's */
-	void pack_instances(size_t nodes_size);
+	void pack_instances(size_t nodes_size, size_t leaf_nodes_size);
 
 	/* for subclasses to implement */
-	virtual void pack_nodes(const array<int>& prims, const BVHNode *root) = 0;
+	virtual void pack_nodes(const BVHNode *root) = 0;
 	virtual void refit_nodes() = 0;
 };
 
@@ -127,7 +127,7 @@ protected:
 	RegularBVH(const BVHParams& params, const vector<Object*>& objects);
 
 	/* pack */
-	void pack_nodes(const array<int>& prims, const BVHNode *root);
+	void pack_nodes(const BVHNode *root);
 	void pack_leaf(const BVHStackEntry& e, const LeafNode *leaf);
 	void pack_inner(const BVHStackEntry& e, const BVHStackEntry& e0, const BVHStackEntry& e1);
 	void pack_node(int idx, const BoundBox& b0, const BoundBox& b1, int c0, int c1, uint visibility0, uint visibility1);
@@ -148,12 +148,13 @@ protected:
 	QBVH(const BVHParams& params, const vector<Object*>& objects);
 
 	/* pack */
-	void pack_nodes(const array<int>& prims, const BVHNode *root);
+	void pack_nodes(const BVHNode *root);
 	void pack_leaf(const BVHStackEntry& e, const LeafNode *leaf);
 	void pack_inner(const BVHStackEntry& e, const BVHStackEntry *en, int num);
 
 	/* refit */
 	void refit_nodes();
+	void refit_node(int idx, bool leaf, BoundBox& bbox, uint& visibility);
 };
 
 CCL_NAMESPACE_END

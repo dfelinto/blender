@@ -32,17 +32,18 @@
 #ifndef __WM_WINDOW_H__
 #define __WM_WINDOW_H__
 
-struct bScreen;
 struct wmOperator;
 
 /* *************** internal api ************** */
 void		wm_ghost_init			(bContext *C);
 void		wm_ghost_exit(void);
 
-void wm_get_screensize(int *width_r, int *height_r);
-void wm_get_desktopsize(int *width_r, int *height_r);
+void wm_get_screensize(int *r_width, int *r_height);
+void wm_get_desktopsize(int *r_width, int *r_height);
 
 wmWindow	*wm_window_new			(bContext *C);
+wmWindow	*wm_window_copy			(bContext *C, wmWindow *win_src);
+wmWindow	*wm_window_copy_test	(bContext *C, wmWindow *win_src);
 void		wm_window_free			(bContext *C, wmWindowManager *wm, wmWindow *win);
 void		wm_window_close			(bContext *C, wmWindowManager *wm, wmWindow *win);
 
@@ -56,7 +57,7 @@ void		wm_window_make_drawable(wmWindowManager *wm, wmWindow *win);
 void		wm_window_raise			(wmWindow *win);
 void		wm_window_lower			(wmWindow *win);
 void		wm_window_set_size		(wmWindow *win, int width, int height);
-void		wm_window_get_position	(wmWindow *win, int *posx_r, int *posy_r);
+void		wm_window_get_position	(wmWindow *win, int *r_pos_x, int *r_pos_y);
 void		wm_window_swap_buffers	(wmWindow *win);
 void		wm_window_set_swap_interval(wmWindow *win, int interval);
 bool		wm_window_get_swap_interval(wmWindow *win, int *intervalOut);
@@ -65,9 +66,12 @@ float		wm_window_pixelsize(wmWindow *win);
 
 void		wm_get_cursor_position	(wmWindow *win, int *x, int *y);
 
-wmWindow	*wm_window_copy			(bContext *C, wmWindow *winorig);
-
 void		wm_window_testbreak		(void);
+
+#ifdef WITH_INPUT_IME
+void		wm_window_IME_begin	(wmWindow *win, int x, int y, int w, int h, bool complete);
+void		wm_window_IME_end	(wmWindow *win);
+#endif
 
 /* *************** window operators ************** */
 int			wm_window_duplicate_exec(bContext *C, struct wmOperator *op);

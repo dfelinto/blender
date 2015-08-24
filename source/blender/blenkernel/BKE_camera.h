@@ -46,6 +46,7 @@ struct RenderData;
 struct Scene;
 struct rctf;
 struct View3D;
+struct GPUFXSettings;
 
 /* Camera Datablock */
 
@@ -103,22 +104,45 @@ typedef struct CameraParams {
 	float winmat[4][4];
 } CameraParams;
 
+/* values for CameraParams.zoom, need to be taken into account for some operations */
+#define CAMERA_PARAM_ZOOM_INIT_CAMOB 1.0f
+#define CAMERA_PARAM_ZOOM_INIT_PERSP 2.0f
+
 void BKE_camera_params_init(CameraParams *params);
-void BKE_camera_params_from_object(CameraParams *params, struct Object *camera);
-void BKE_camera_params_from_view3d(CameraParams *params, struct View3D *v3d, struct RegionView3D *rv3d);
+void BKE_camera_params_from_object(CameraParams *params, const struct Object *camera);
+void BKE_camera_params_from_view3d(CameraParams *params, const struct View3D *v3d, const struct RegionView3D *rv3d);
 
 void BKE_camera_params_compute_viewplane(CameraParams *params, int winx, int winy, float aspx, float aspy);
 void BKE_camera_params_compute_matrix(CameraParams *params);
 
 /* Camera View Frame */
 
-void BKE_camera_view_frame_ex(struct Scene *scene, struct Camera *camera, float drawsize, const bool do_clip, const float scale[3],
-                              float r_asp[2], float r_shift[2], float *r_drawsize, float r_vec[4][3]);
+void BKE_camera_view_frame_ex(
+        const struct Scene *scene, const struct Camera *camera,
+        const float drawsize, const bool do_clip, const float scale[3],
+        float r_asp[2], float r_shift[2], float *r_drawsize, float r_vec[4][3]);
+void BKE_camera_view_frame(
+        const struct Scene *scene, const struct Camera *camera,
+        float r_vec[4][3]);
 
-void BKE_camera_view_frame(struct Scene *scene, struct Camera *camera, float r_vec[4][3]);
+bool BKE_camera_view_frame_fit_to_scene(
+        struct Scene *scene, struct View3D *v3d, struct Object *camera_ob,
+        float r_co[3], float *r_scale);
+bool BKE_camera_view_frame_fit_to_coords(
+        const struct Scene *scene,
+        const float (*cos)[3], int num_cos,
+        const struct Object *camera_ob,
+        float r_co[3], float *r_scale);
 
-bool BKE_camera_view_frame_fit_to_scene(struct Scene *scene, struct View3D *v3d, struct Object *camera_ob,
-                                        float r_co[3]);
+void BKE_camera_to_gpu_dof(struct Object *camera, struct GPUFXSettings *r_fx_settings);
+
+/* Camera multi-view API */
+
+struct Object *BKE_camera_multiview_render(struct Scene *scene, struct Object *camera, const char *viewname);
+void           BKE_camera_multiview_view_matrix(struct RenderData *rd, struct Object *camera, const bool is_left, float r_viewmat[4][4]);
+void           BKE_camera_multiview_model_matrix(struct RenderData *rd, struct Object *camera, const char *viewname, float r_modelmat[4][4]);
+float          BKE_camera_multiview_shift_x(struct RenderData *rd, struct Object *camera, const char *viewname);
+void           BKE_camera_multiview_params(struct RenderData *rd, struct CameraParams *params, struct Object *camera, const char *viewname);
 
 #ifdef __cplusplus
 }

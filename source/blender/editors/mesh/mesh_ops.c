@@ -151,8 +151,11 @@ void ED_operatortypes_mesh(void)
 	WM_operatortype_append(MESH_OT_uv_texture_remove);
 	WM_operatortype_append(MESH_OT_vertex_color_add);
 	WM_operatortype_append(MESH_OT_vertex_color_remove);
-	WM_operatortype_append(MESH_OT_customdata_clear_mask);
-	WM_operatortype_append(MESH_OT_customdata_clear_skin);
+	WM_operatortype_append(MESH_OT_customdata_mask_clear);
+	WM_operatortype_append(MESH_OT_customdata_skin_add);
+	WM_operatortype_append(MESH_OT_customdata_skin_clear);
+	WM_operatortype_append(MESH_OT_customdata_custom_splitnormals_add);
+	WM_operatortype_append(MESH_OT_customdata_custom_splitnormals_clear);
 	WM_operatortype_append(MESH_OT_drop_named_image);
 
 	WM_operatortype_append(MESH_OT_edgering_select);
@@ -161,7 +164,10 @@ void ED_operatortypes_mesh(void)
 	WM_operatortype_append(MESH_OT_solidify);
 	WM_operatortype_append(MESH_OT_select_nth);
 	WM_operatortype_append(MESH_OT_vert_connect);
+	WM_operatortype_append(MESH_OT_vert_connect_path);
+	WM_operatortype_append(MESH_OT_vert_connect_concave);
 	WM_operatortype_append(MESH_OT_vert_connect_nonplanar);
+	WM_operatortype_append(MESH_OT_face_make_planar);
 	WM_operatortype_append(MESH_OT_knife_tool);
 	WM_operatortype_append(MESH_OT_knife_project);
 
@@ -171,6 +177,7 @@ void ED_operatortypes_mesh(void)
 
 	WM_operatortype_append(MESH_OT_bridge_edge_loops);
 	WM_operatortype_append(MESH_OT_inset);
+	WM_operatortype_append(MESH_OT_offset_edge_loops);
 	WM_operatortype_append(MESH_OT_intersect);
 	WM_operatortype_append(MESH_OT_face_split_by_edges);
 	WM_operatortype_append(MESH_OT_poke);
@@ -218,6 +225,13 @@ void ED_operatormacros_mesh(void)
 	WM_operatortype_macro_define(ot, "MESH_OT_loopcut");
 	otmacro = WM_operatortype_macro_define(ot, "TRANSFORM_OT_edge_slide");
 	RNA_boolean_set(otmacro->ptr, "release_confirm", false);
+
+	ot = WM_operatortype_append_macro("MESH_OT_offset_edge_loops_slide", "Offset Edge Slide", "Offset edge loop slide",
+	                                  OPTYPE_UNDO | OPTYPE_REGISTER);
+	WM_operatortype_macro_define(ot, "MESH_OT_offset_edge_loops");
+	otmacro = WM_operatortype_macro_define(ot, "TRANSFORM_OT_edge_slide");
+	RNA_boolean_set(otmacro->ptr, "release_confirm", false);
+	RNA_boolean_set(otmacro->ptr, "single_side", true);
 
 	ot = WM_operatortype_append_macro("MESH_OT_duplicate_move", "Add Duplicate", "Duplicate mesh and move",
 	                                  OPTYPE_UNDO | OPTYPE_REGISTER);
@@ -296,7 +310,8 @@ void ED_keymap_mesh(wmKeyConfig *keyconf)
 	keymap = WM_keymap_find(keyconf, "Mesh", 0, 0);
 	keymap->poll = ED_operator_editmesh;
 	
-	WM_keymap_add_item(keymap, "MESH_OT_loopcut_slide", RKEY, KM_PRESS, KM_CTRL, 0);	
+	WM_keymap_add_item(keymap, "MESH_OT_loopcut_slide", RKEY, KM_PRESS, KM_CTRL, 0);
+	WM_keymap_add_item(keymap, "MESH_OT_offset_edge_loops_slide", RKEY, KM_PRESS, KM_CTRL | KM_SHIFT, 0);
 	WM_keymap_add_item(keymap, "MESH_OT_inset", IKEY, KM_PRESS, 0, 0);
 	WM_keymap_add_item(keymap, "MESH_OT_poke", PKEY, KM_PRESS, KM_ALT, 0);
 	kmi = WM_keymap_add_item(keymap, "MESH_OT_bevel", BKEY, KM_PRESS, KM_CTRL, 0);
@@ -398,7 +413,7 @@ void ED_keymap_mesh(wmKeyConfig *keyconf)
 	
 	WM_keymap_add_item(keymap, "MESH_OT_separate", PKEY, KM_PRESS, 0, 0);
 	WM_keymap_add_item(keymap, "MESH_OT_split", YKEY, KM_PRESS, 0, 0);
-	WM_keymap_add_item(keymap, "MESH_OT_vert_connect", JKEY, KM_PRESS, 0, 0);
+	WM_keymap_add_item(keymap, "MESH_OT_vert_connect_path", JKEY, KM_PRESS, 0, 0);
 
 	/* Vertex Slide */
 	WM_keymap_add_item(keymap, "TRANSFORM_OT_vert_slide", VKEY, KM_PRESS, KM_SHIFT, 0);

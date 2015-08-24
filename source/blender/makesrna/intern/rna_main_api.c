@@ -35,6 +35,7 @@
 
 #include "DNA_ID.h"
 #include "DNA_modifier_types.h"
+#include "DNA_space_types.h"
 
 #include "BLI_utildefines.h"
 #include "BLI_path_util.h"
@@ -58,9 +59,11 @@
 #include "BKE_library.h"
 #include "BKE_object.h"
 #include "BKE_material.h"
+#include "BKE_icons.h"
 #include "BKE_image.h"
 #include "BKE_texture.h"
 #include "BKE_scene.h"
+#include "BKE_sound.h"
 #include "BKE_text.h"
 #include "BKE_action.h"
 #include "BKE_group.h"
@@ -69,6 +72,7 @@
 #include "BKE_mball.h"
 #include "BKE_world.h"
 #include "BKE_particle.h"
+#include "BKE_paint.h"
 #include "BKE_font.h"
 #include "BKE_node.h"
 #include "BKE_depsgraph.h"
@@ -86,6 +90,7 @@
 #include "DNA_mesh_types.h"
 #include "DNA_object_types.h"
 #include "DNA_speaker_types.h"
+#include "DNA_sound_types.h"
 #include "DNA_text_types.h"
 #include "DNA_texture_types.h"
 #include "DNA_group_types.h"
@@ -102,7 +107,7 @@
 
 #include "ED_screen.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #ifdef WITH_PYTHON
 #  include "BPY_extern.h"
@@ -340,10 +345,10 @@ static void rna_Main_lamps_remove(Main *bmain, ReportList *reports, PointerRNA *
 	}
 }
 
-static Image *rna_Main_images_new(Main *bmain, const char *name, int width, int height, int alpha, int float_buffer)
+static Image *rna_Main_images_new(Main *bmain, const char *name, int width, int height, int alpha, int float_buffer, int stereo3d)
 {
 	float color[4] = {0.0, 0.0, 0.0, 1.0};
-	Image *image = BKE_image_add_generated(bmain, width, height, name, alpha ? 32 : 24, float_buffer, 0, color);
+	Image *image = BKE_image_add_generated(bmain, width, height, name, alpha ? 32 : 24, float_buffer, 0, color, stereo3d);
 	id_us_min(&image->id);
 	return image;
 }
@@ -460,8 +465,8 @@ static void rna_Main_fonts_remove(Main *bmain, ReportList *reports, PointerRNA *
 
 static Tex *rna_Main_textures_new(Main *bmain, const char *name, int type)
 {
-	Tex *tex = add_texture(bmain, name);
-	tex_set_type(tex, type);
+	Tex *tex = BKE_texture_add(bmain, name);
+	BKE_texture_type_set(tex, type);
 	id_us_min(&tex->id);
 	return tex;
 }
@@ -544,6 +549,25 @@ static void rna_Main_speakers_remove(Main *bmain, ReportList *reports, PointerRN
 	else {
 		BKE_reportf(reports, RPT_ERROR, "Speaker '%s' must have zero users to be removed, found %d",
 		            speaker->id.name + 2, ID_REAL_USERS(speaker));
+	}
+}
+
+static bSound *rna_Main_sounds_load(Main *bmain, const char *name)
+{
+	bSound *sound = BKE_sound_new_file(bmain, name);
+	id_us_min(&sound->id);
+	return sound;
+}
+static void rna_Main_sounds_remove(Main *bmain, ReportList *reports, PointerRNA *sound_ptr)
+{
+	Speaker *sound = sound_ptr->data;
+	if (ID_REAL_USERS(sound) <= 0) {
+		BKE_libblock_free(bmain, sound);
+		RNA_POINTER_INVALIDATE(sound_ptr);
+	}
+	else {
+		BKE_reportf(reports, RPT_ERROR, "Sound '%s' must have zero users to be removed, found %d",
+		            sound->id.name + 2, ID_REAL_USERS(sound));
 	}
 }
 
@@ -631,6 +655,25 @@ static void rna_Main_particles_remove(Main *bmain, ReportList *reports, PointerR
 	}
 }
 
+static Palette *rna_Main_palettes_new(Main *bmain, const char *name)
+{
+	Palette *palette = BKE_palette_add(bmain, name);
+	id_us_min(&palette->id);
+	return (Palette *)palette;
+}
+static void rna_Main_palettes_remove(Main *bmain, ReportList *reports, PointerRNA *palette_ptr)
+{
+	Palette *palette = palette_ptr->data;
+	if (ID_REAL_USERS(palette) <= 0) {
+		BKE_libblock_free(bmain, palette);
+		RNA_POINTER_INVALIDATE(palette_ptr);
+	}
+	else {
+		BKE_reportf(reports, RPT_ERROR, "Palette settings '%s' must have zero users to be removed, found %d",
+		            palette->id.name + 2, ID_REAL_USERS(palette));
+	}
+}
+
 static MovieClip *rna_Main_movieclip_load(Main *bmain, ReportList *reports, const char *filepath)
 {
 	MovieClip *clip;
@@ -685,7 +728,7 @@ static void rna_Main_grease_pencil_remove(Main *bmain, ReportList *reports, Poin
 
 static FreestyleLineStyle *rna_Main_linestyles_new(Main *bmain, const char *name)
 {
-	FreestyleLineStyle *linestyle = BKE_linestyle_new(name, bmain);
+	FreestyleLineStyle *linestyle = BKE_linestyle_new(bmain, name);
 	id_us_min(&linestyle->id);
 	return linestyle;
 }
@@ -729,46 +772,49 @@ static void rna_Main_sounds_tag(Main *bmain, int value) { BKE_main_id_tag_listba
 static void rna_Main_armatures_tag(Main *bmain, int value) { BKE_main_id_tag_listbase(&bmain->armature, value); }
 static void rna_Main_actions_tag(Main *bmain, int value) { BKE_main_id_tag_listbase(&bmain->action, value); }
 static void rna_Main_particles_tag(Main *bmain, int value) { BKE_main_id_tag_listbase(&bmain->particle, value); }
+static void rna_Main_palettes_tag(Main *bmain, int value) { BKE_main_id_tag_listbase(&bmain->palettes, value); }
 static void rna_Main_gpencil_tag(Main *bmain, int value) { BKE_main_id_tag_listbase(&bmain->gpencil, value); }
 static void rna_Main_movieclips_tag(Main *bmain, int value) { BKE_main_id_tag_listbase(&bmain->movieclip, value); }
 static void rna_Main_masks_tag(Main *bmain, int value) { BKE_main_id_tag_listbase(&bmain->mask, value); }
 static void rna_Main_linestyle_tag(Main *bmain, int value) { BKE_main_id_tag_listbase(&bmain->linestyle, value); }
 
-static int rna_Main_cameras_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_CA); }
-static int rna_Main_scenes_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_SCE); }
-static int rna_Main_objects_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_OB); }
-static int rna_Main_materials_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_MA); }
-static int rna_Main_node_groups_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_NT); }
-static int rna_Main_meshes_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_ME); }
-static int rna_Main_lamps_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_LA); }
-static int rna_Main_libraries_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_LI); }
-static int rna_Main_screens_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_SCR); }
-static int rna_Main_window_managers_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_WM); }
-static int rna_Main_images_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_IM); }
-static int rna_Main_lattices_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_LT); }
-static int rna_Main_curves_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_CU); }
-static int rna_Main_metaballs_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_MB); }
-static int rna_Main_fonts_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_VF); }
-static int rna_Main_textures_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_TE); }
-static int rna_Main_brushes_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_BR); }
-static int rna_Main_worlds_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_WO); }
-static int rna_Main_groups_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_GR); }
-static int rna_Main_texts_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_TXT); }
-static int rna_Main_speakers_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_SPK); }
-static int rna_Main_sounds_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_SO); }
-static int rna_Main_armatures_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_AR); }
-static int rna_Main_actions_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_AC); }
-static int rna_Main_particles_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_PA); }
-static int rna_Main_gpencil_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_GD); }
-static int rna_Main_linestyle_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_LS); }
+static int rna_Main_cameras_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_CA) != 0; }
+static int rna_Main_scenes_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_SCE) != 0; }
+static int rna_Main_objects_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_OB) != 0; }
+static int rna_Main_materials_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_MA) != 0; }
+static int rna_Main_node_groups_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_NT) != 0; }
+static int rna_Main_meshes_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_ME) != 0; }
+static int rna_Main_lamps_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_LA) != 0; }
+static int rna_Main_libraries_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_LI) != 0; }
+static int rna_Main_screens_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_SCR) != 0; }
+static int rna_Main_window_managers_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_WM) != 0; }
+static int rna_Main_images_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_IM) != 0; }
+static int rna_Main_lattices_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_LT) != 0; }
+static int rna_Main_curves_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_CU) != 0; }
+static int rna_Main_metaballs_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_MB) != 0; }
+static int rna_Main_fonts_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_VF) != 0; }
+static int rna_Main_textures_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_TE) != 0; }
+static int rna_Main_brushes_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_BR) != 0; }
+static int rna_Main_worlds_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_WO) != 0; }
+static int rna_Main_groups_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_GR) != 0; }
+static int rna_Main_texts_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_TXT) != 0; }
+static int rna_Main_speakers_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_SPK) != 0; }
+static int rna_Main_sounds_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_SO) != 0; }
+static int rna_Main_armatures_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_AR) != 0; }
+static int rna_Main_actions_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_AC) != 0; }
+static int rna_Main_particles_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_PA) != 0; }
+static int rna_Main_palettes_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_PAL) != 0; }
+static int rna_Main_gpencil_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_GD) != 0; }
+static int rna_Main_linestyle_is_updated_get(PointerRNA *ptr) { return DAG_id_type_tagged(ptr->data, ID_LS) != 0; }
 
 #else
 
-void RNA_api_main(StructRNA *srna)
+void RNA_api_main(StructRNA *UNUSED(srna))
 {
 #if 0
 	FunctionRNA *func;
 	PropertyRNA *parm;
+
 	/* maybe we want to add functions in 'bpy.data' still?
 	 * for now they are all in collections bpy.data.images.new(...) */
 	func = RNA_def_function(srna, "add_image", "rna_Main_add_image");
@@ -777,8 +823,6 @@ void RNA_api_main(StructRNA *srna)
 	RNA_def_property_flag(parm, PROP_REQUIRED);
 	parm = RNA_def_pointer(func, "image", "Image", "", "New image");
 	RNA_def_function_return(func, parm);
-#else
-	(void)srna;
 #endif
 }
 
@@ -1152,6 +1196,7 @@ void RNA_def_main_images(BlenderRNA *brna, PropertyRNA *cprop)
 	RNA_def_property_flag(parm, PROP_REQUIRED);
 	RNA_def_boolean(func, "alpha", 0, "Alpha", "Use alpha channel");
 	RNA_def_boolean(func, "float_buffer", 0, "Float Buffer", "Create an image with floating point color");
+	RNA_def_boolean(func, "stereo3d", 0, "Stereo 3D", "Create left and right views");
 	/* return type */
 	parm = RNA_def_pointer(func, "image", "Image", "", "New image datablock");
 	RNA_def_function_return(func, parm);
@@ -1562,7 +1607,21 @@ void RNA_def_main_sounds(BlenderRNA *brna, PropertyRNA *cprop)
 	RNA_def_struct_sdna(srna, "Main");
 	RNA_def_struct_ui_text(srna, "Main Sounds", "Collection of sounds");
 
-	/* TODO, 'load' */
+	/* load func */
+	func = RNA_def_function(srna, "load", "rna_Main_sounds_load");
+	RNA_def_function_ui_description(func, "Add a new sound to the main database from a file");
+	parm = RNA_def_string_file_path(func, "filepath", "Path", FILE_MAX, "", "path for the datablock");
+	RNA_def_property_flag(parm, PROP_REQUIRED);
+	/* return type */
+	parm = RNA_def_pointer(func, "sound", "Sound", "", "New text datablock");
+	RNA_def_function_return(func, parm);
+
+	func = RNA_def_function(srna, "remove", "rna_Main_sounds_remove");
+	RNA_def_function_flag(func, FUNC_USE_REPORTS);
+	RNA_def_function_ui_description(func, "Remove a sound from the current blendfile");
+	parm = RNA_def_pointer(func, "sound", "Sound", "", "Sound to remove");
+	RNA_def_property_flag(parm, PROP_REQUIRED | PROP_NEVER_NULL | PROP_RNAPTR);
+	RNA_def_property_clear_flag(parm, PROP_THICK_WRAP);
 
 	func = RNA_def_function(srna, "tag", "rna_Main_sounds_tag");
 	parm = RNA_def_boolean(func, "value", 0, "Value", "");
@@ -1678,7 +1737,41 @@ void RNA_def_main_particles(BlenderRNA *brna, PropertyRNA *cprop)
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 	RNA_def_property_boolean_funcs(prop, "rna_Main_particles_is_updated_get", NULL);
 }
+void RNA_def_main_palettes(BlenderRNA *brna, PropertyRNA *cprop)
+{
+	StructRNA *srna;
+	FunctionRNA *func;
+	PropertyRNA *parm;
+	PropertyRNA *prop;
 
+	RNA_def_property_srna(cprop, "BlendDataPalettes");
+	srna = RNA_def_struct(brna, "BlendDataPalettes", NULL);
+	RNA_def_struct_sdna(srna, "Main");
+	RNA_def_struct_ui_text(srna, "Main Palettes", "Collection of palettes");
+
+	func = RNA_def_function(srna, "new", "rna_Main_palettes_new");
+	RNA_def_function_ui_description(func, "Add a new palette to the main database");
+	parm = RNA_def_string(func, "name", "Palette", 0, "", "New name for the datablock");
+	RNA_def_property_flag(parm, PROP_REQUIRED);
+	/* return type */
+	parm = RNA_def_pointer(func, "palette", "Palette", "", "New palette datablock");
+	RNA_def_function_return(func, parm);
+
+	func = RNA_def_function(srna, "remove", "rna_Main_palettes_remove");
+	RNA_def_function_flag(func, FUNC_USE_REPORTS);
+	RNA_def_function_ui_description(func, "Remove a palette from the current blendfile");
+	parm = RNA_def_pointer(func, "palette", "Palette", "", "Palette to remove");
+	RNA_def_property_flag(parm, PROP_REQUIRED | PROP_NEVER_NULL | PROP_RNAPTR);
+	RNA_def_property_clear_flag(parm, PROP_THICK_WRAP);
+
+	func = RNA_def_function(srna, "tag", "rna_Main_palettes_tag");
+	parm = RNA_def_boolean(func, "value", 0, "Value", "");
+	RNA_def_property_flag(parm, PROP_REQUIRED);
+
+	prop = RNA_def_property(srna, "is_updated", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+	RNA_def_property_boolean_funcs(prop, "rna_Main_palettes_is_updated_get", NULL);
+}
 void RNA_def_main_gpencil(BlenderRNA *brna, PropertyRNA *cprop)
 {
 	StructRNA *srna;

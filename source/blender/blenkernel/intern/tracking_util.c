@@ -45,7 +45,7 @@
 #include "BLI_path_util.h"
 #include "BLI_string.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_movieclip.h"
 #include "BKE_tracking.h"
@@ -172,8 +172,7 @@ void tracks_map_merge(TracksMap *map, MovieTracking *tracking)
 			MovieTrackingTrack *new_track = BKE_tracking_track_duplicate(track);
 
 			/* Update old-new track mapping */
-			BLI_ghash_remove(map->hash, track, NULL, NULL);
-			BLI_ghash_insert(map->hash, track, new_track);
+			BLI_ghash_reinsert(map->hash, track, new_track, NULL, NULL);
 
 			BLI_addtail(&tracks, new_track);
 		}
@@ -197,7 +196,7 @@ void tracks_map_merge(TracksMap *map, MovieTracking *tracking)
 		track->next = track->prev = NULL;
 		BLI_addtail(&new_tracks, track);
 
-		BLI_uniquename(&new_tracks, track, CTX_DATA_(BLF_I18NCONTEXT_ID_MOVIECLIP, "Track"), '.',
+		BLI_uniquename(&new_tracks, track, CTX_DATA_(BLT_I18NCONTEXT_ID_MOVIECLIP, "Track"), '.',
 		               offsetof(MovieTrackingTrack, name), sizeof(track->name));
 
 		track = next;
@@ -424,6 +423,7 @@ void tracking_cameraIntrinscisOptionsFromTracking(MovieTracking *tracking,
 			break;
 		default:
 			BLI_assert(!"Unknown distortion model");
+			break;
 	}
 
 	camera_intrinsics_options->image_width = calibration_width;
@@ -455,6 +455,7 @@ void tracking_trackingCameraFromIntrinscisOptions(MovieTracking *tracking,
 			break;
 		default:
 			BLI_assert(!"Unknown distortion model");
+			break;
 	}
 }
 

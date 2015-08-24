@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #ifndef __UTIL_MATH_H__
@@ -71,6 +71,13 @@ CCL_NAMESPACE_BEGIN
 #define M_SQRT2_F	((float)1.41421356237309504880) 					/* sqrt(2) */
 #endif
 
+#ifndef M_LN2_F
+#define M_LN2_F      ((float)0.6931471805599453)        /* ln(2) */
+#endif
+
+#ifndef M_LN10_F
+#define M_LN10_F     ((float)2.3025850929940457)        /* ln(10) */
+#endif
 
 /* Scalar */
 
@@ -124,6 +131,24 @@ ccl_device_inline double min(double a, double b)
 	return (a < b)? a: b;
 }
 
+/* These 2 guys are templated for usage with registers data.
+ *
+ * NOTE: Since this is CPU-only functions it is ok to use references here.
+ * But for other devices we'll need to be careful about this.
+ */
+
+template<typename T>
+ccl_device_inline T min4(const T& a, const T& b, const T& c, const T& d)
+{
+	return min(min(a,b),min(c,d));
+}
+
+template<typename T>
+ccl_device_inline T max4(const T& a, const T& b, const T& c, const T& d)
+{
+	return max(max(a,b),max(c,d));
+}
+
 #endif
 
 ccl_device_inline float min4(float a, float b, float c, float d)
@@ -146,6 +171,15 @@ ccl_device_inline int clamp(int a, int mn, int mx)
 ccl_device_inline float clamp(float a, float mn, float mx)
 {
 	return min(max(a, mn), mx);
+}
+
+#endif
+
+#ifndef __KERNEL_CUDA__
+
+ccl_device_inline float saturate(float a)
+{
+	return clamp(a, 0.0f, 1.0f);
 }
 
 #endif
@@ -1413,10 +1447,9 @@ ccl_device bool ray_triangle_intersect_uv(
 	return true;
 }
 
-ccl_device bool ray_quad_intersect(
-	float3 ray_P, float3 ray_D, float ray_t,
-	float3 quad_P, float3 quad_u, float3 quad_v,
-	float3 *isect_P, float *isect_t)
+ccl_device bool ray_quad_intersect(float3 ray_P, float3 ray_D, float ray_t,
+                                   float3 quad_P, float3 quad_u, float3 quad_v,
+                                   float3 *isect_P, float *isect_t)
 {
 	float3 v0 = quad_P - quad_u*0.5f - quad_v*0.5f;
 	float3 v1 = quad_P + quad_u*0.5f - quad_v*0.5f;
@@ -1432,23 +1465,52 @@ ccl_device bool ray_quad_intersect(
 }
 
 /* projections */
-ccl_device bool map_to_sphere(float *r_u, float *r_v,
-                              const float x, const float y, const float z)
+ccl_device_inline float2 map_to_tube(const float3 co)
 {
-	float len = sqrtf(x * x + y * y + z * z);
+	float len, u, v;
+	len = sqrtf(co.x * co.x + co.y * co.y);
 	if(len > 0.0f) {
-		if(UNLIKELY(x == 0.0f && y == 0.0f)) {
-			*r_u = 0.0f;  /* othwise domain error */
-		}
-		else {
-			*r_u = (1.0f - atan2f(x, y) / M_PI_F) / 2.0f;
-		}
-		*r_v = 1.0f - safe_acosf(z / len) / M_PI_F;
-		return true;
+		u = (1.0f - (atan2f(co.x / len, co.y / len) / M_PI_F)) * 0.5f;
+		v = (co.z + 1.0f) * 0.5f;
 	}
 	else {
-		*r_v = *r_u = 0.0f; /* to avoid un-initialized variables */
-		return false;
+		u = v = 0.0f;
+	}
+	return make_float2(u, v);
+}
+
+ccl_device_inline float2 map_to_sphere(const float3 co)
+{
+	float l = len(co);
+	float u, v;
+	if(l > 0.0f) {
+		if(UNLIKELY(co.x == 0.0f && co.y == 0.0f)) {
+			u = 0.0f;  /* othwise domain error */
+		}
+		else {
+			u = (1.0f - atan2f(co.x, co.y) / M_PI_F) / 2.0f;
+		}
+		v = 1.0f - safe_acosf(co.z / l) / M_PI_F;
+	}
+	else {
+		u = v = 0.0f;
+	}
+	return make_float2(u, v);
+}
+
+ccl_device_inline int util_max_axis(float3 vec)
+{
+	if(vec.x > vec.y) {
+		if(vec.x > vec.z)
+			return 0;
+		else
+			return 2;
+	}
+	else {
+		if(vec.y > vec.z)
+			return 1;
+		else
+			return 2;
 	}
 }
 

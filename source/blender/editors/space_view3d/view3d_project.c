@@ -497,7 +497,7 @@ void ED_view3d_win_to_3d(const ARegion *ar, const float depth_pt[3], const float
 		float dy = (2.0f * mval[1] / (float)ar->winy) - 1.0f;
 		if (rv3d->persp == RV3D_CAMOB) {
 			/* ortho camera needs offset applied */
-			const float zoomfac = BKE_screen_view3d_zoom_to_fac((float)rv3d->camzoom) * 4.0f;
+			const float zoomfac = BKE_screen_view3d_zoom_to_fac(rv3d->camzoom) * 4.0f;
 			dx += rv3d->camdx * zoomfac;
 			dy += rv3d->camdy * zoomfac;
 		}
@@ -602,6 +602,14 @@ void ED_view3d_ob_project_mat_get(const RegionView3D *rv3d, Object *ob, float pm
 	float vmat[4][4];
 
 	mul_m4_m4m4(vmat, (float (*)[4])rv3d->viewmat, ob->obmat);
+	mul_m4_m4m4(pmat, (float (*)[4])rv3d->winmat, vmat);
+}
+
+void ED_view3d_ob_project_mat_get_from_obmat(const RegionView3D *rv3d, float obmat[4][4], float pmat[4][4])
+{
+	float vmat[4][4];
+
+	mul_m4_m4m4(vmat, (float (*)[4])rv3d->viewmat, obmat);
 	mul_m4_m4m4(pmat, (float (*)[4])rv3d->winmat, vmat);
 }
 

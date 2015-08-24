@@ -47,9 +47,7 @@
 #include "WM_api.h"
 #include "WM_types.h"
 
-#include "UI_view2d.h"
 
-#include "userpref_intern.h"	// own include
 
 /* ******************** default callbacks for userpref space ***************** */
 
@@ -115,7 +113,7 @@ static void userpref_main_area_init(wmWindowManager *wm, ARegion *ar)
 
 static void userpref_main_area_draw(const bContext *C, ARegion *ar)
 {
-	ED_region_panels(C, ar, 1, NULL, -1);
+	ED_region_panels(C, ar, NULL, -1, true);
 }
 
 static void userpref_operatortypes(void)

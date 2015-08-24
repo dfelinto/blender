@@ -45,7 +45,7 @@ BokehBlurOperation::BokehBlurOperation() : NodeOperation()
 	this->m_inputBoundingBoxReader = NULL;
 }
 
-void *BokehBlurOperation::initializeTileData(rcti *rect)
+void *BokehBlurOperation::initializeTileData(rcti * /*rect*/)
 {
 	lockMutex();
 	if (!this->m_sizeavailable) {
@@ -110,11 +110,11 @@ void BokehBlurOperation::executePixel(float output[4], int x, int y, void *data)
 
 
 		int step = getStep();
-		int offsetadd = getOffsetAdd();
+		int offsetadd = getOffsetAdd() * COM_NUM_CHANNELS_COLOR;
 
 		float m = this->m_bokehDimension / pixelSize;
 		for (int ny = miny; ny < maxy; ny += step) {
-			int bufferindex = ((minx - bufferstartx) * 4) + ((ny - bufferstarty) * 4 * bufferwidth);
+			int bufferindex = ((minx - bufferstartx) * COM_NUM_CHANNELS_COLOR) + ((ny - bufferstarty) * COM_NUM_CHANNELS_COLOR * bufferwidth);
 			for (int nx = minx; nx < maxx; nx += step) {
 				float u = this->m_bokehMidX - (nx - x) * m;
 				float v = this->m_bokehMidY - (ny - y) * m;
@@ -194,7 +194,7 @@ bool BokehBlurOperation::determineDependingAreaOfInterest(rcti *input, ReadBuffe
 void BokehBlurOperation::executeOpenCL(OpenCLDevice *device,
                                        MemoryBuffer *outputMemoryBuffer, cl_mem clOutputBuffer, 
                                        MemoryBuffer **inputMemoryBuffers, list<cl_mem> *clMemToCleanUp, 
-                                       list<cl_kernel> *clKernelsToCleanUp) 
+                                       list<cl_kernel> * /*clKernelsToCleanUp*/)
 {
 	cl_kernel kernel = device->COM_clCreateKernel("bokehBlurKernel", NULL);
 	if (!this->m_sizeavailable) {

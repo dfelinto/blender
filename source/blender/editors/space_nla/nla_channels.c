@@ -182,6 +182,7 @@ static int mouse_nla_channels(bContext *C, bAnimContext *ac, float x, int channe
 		case ANIMTYPE_DSLAT:
 		case ANIMTYPE_DSLINESTYLE:
 		case ANIMTYPE_DSSPK:
+		case ANIMTYPE_DSGPENCIL:
 		{
 			/* sanity checking... */
 			if (ale->adt) {
@@ -290,10 +291,12 @@ static int mouse_nla_channels(bContext *C, bAnimContext *ac, float x, int channe
 				 *   the case of users trying to use this to change actions
 				 * - in tweakmode, clicking here gets us out of tweakmode, as changing selection
 				 *   while in tweakmode is really evil!
+				 * - we disable "solo" flags too, to make it easier to work with stashed actions
+				 *   with less trouble
 				 */
 				if (nlaedit_is_tweakmode_on(ac)) {
 					/* exit tweakmode immediately */
-					nlaedit_disable_tweakmode(ac);
+					nlaedit_disable_tweakmode(ac, true);
 					
 					/* changes to NLA-Action occurred */
 					notifierFlags |= ND_NLA_ACTCHANGE;
@@ -503,6 +506,52 @@ void NLA_OT_action_pushdown(wmOperatorType *ot)
 	RNA_def_property_flag(ot->prop, PROP_SKIP_SAVE);
 }
 
+/* ******************** Action Unlink ******************************** */
+
+static int nla_action_unlink_poll(bContext *C)
+{
+	if (ED_operator_nla_active(C)) {
+		return nla_panel_context(C, NULL, NULL, NULL);
+	}
+	
+	/* something failed... */
+	return false;
+}
+
+static int nla_action_unlink_exec(bContext *C, wmOperator *op)
+{
+	PointerRNA adt_ptr;
+	AnimData *adt;
+	
+	/* check context and also validity of pointer */
+	if (!nla_panel_context(C, &adt_ptr, NULL, NULL))
+		return OPERATOR_CANCELLED;
+	
+	/* get animdata */
+	adt = adt_ptr.data;
+	if (adt == NULL)
+		return OPERATOR_CANCELLED;
+	
+	/* do unlinking */
+	if (adt && adt->action) {
+		ED_animedit_unlink_action(C, adt_ptr.id.data, adt, adt->action, op->reports);
+	}
+	
+	return OPERATOR_FINISHED;
+}
+
+void NLA_OT_action_unlink(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Unlink Action";
+	ot->idname = "NLA_OT_action_unlink";
+	ot->description = "Unlink this action from the active action slot (and/or exit Tweak Mode)";
+	
+	/* callbacks */
+	ot->exec = nla_action_unlink_exec;
+	ot->poll = nla_action_unlink_poll;
+}
+
 /* ******************** Add Tracks Operator ***************************** */
 /* Add NLA Tracks to the same AnimData block as a selected track, or above the selected tracks */
 
@@ -649,7 +698,7 @@ static int nlaedit_delete_tracks_exec(bContext *C, wmOperator *UNUSED(op))
 		return OPERATOR_CANCELLED;
 		
 	/* get a list of the AnimData blocks being shown in the NLA */
-	filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_LIST_VISIBLE | ANIMFILTER_SEL);
+	filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_LIST_VISIBLE | ANIMFILTER_SEL | ANIMFILTER_NODUPLIS);
 	ANIM_animdata_filter(&ac, &anim_data, filter, ac.data, ac.datatype);
 	
 	/* delete tracks */
@@ -724,7 +773,7 @@ static int nlaedit_objects_add_exec(bContext *C, wmOperator *UNUSED(op))
 	CTX_DATA_BEGIN (C, Object *, ob, selected_objects)
 	{
 		/* ensure that object has AnimData... that's all */
-		BKE_id_add_animdata(&ob->id);
+		BKE_animdata_add_id(&ob->id);
 	}
 	CTX_DATA_END;
 	

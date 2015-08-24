@@ -44,6 +44,8 @@
 #include "BKE_text.h"
 #include "BKE_screen.h"
 
+#include "ED_text.h"
+
 #include "BIF_gl.h"
 
 #include "UI_interface.h"
@@ -380,7 +382,9 @@ static int text_draw_wrapped(SpaceText *st, const char *str, int x, int y, int w
 	int a, fstart, fpos;                     /* utf8 chars */
 	int mi, ma, mstart, mend;                /* mem */
 	char fmt_prev = 0xff;
-	
+	/* don't draw lines below this */
+	const int clip_min_y = -(int)(st->lheight_dpi - 1);
+
 	flatten_string(st, &fs, str);
 	str = fs.buf;
 	max = w / st->cwidth;
@@ -423,7 +427,8 @@ static int text_draw_wrapped(SpaceText *st, const char *str, int x, int y, int w
 			mend = txt_utf8_forward_columns(str + mend, max, &padding) - str;
 			end = (wrap += max - padding);
 
-			if (y <= 0) break;
+			if (y <= clip_min_y)
+				break;
 		}
 		else if (str[mi] == ' ' || str[mi] == '-') {
 			wrap = i + 1; mend = mi + 1;
@@ -431,7 +436,7 @@ static int text_draw_wrapped(SpaceText *st, const char *str, int x, int y, int w
 	}
 
 	/* Draw the remaining text */
-	for (a = fstart, ma = mstart; str[ma] && y > 0; a++, ma += BLI_str_utf8_size_safe(str + ma)) {
+	for (a = fstart, ma = mstart; str[ma] && y > clip_min_y; a++, ma += BLI_str_utf8_size_safe(str + ma)) {
 		if (use_syntax) {
 			if (fmt_prev != format[a]) format_draw_color(fmt_prev = format[a]);
 		}
@@ -518,7 +523,7 @@ static void text_drawcache_init(SpaceText *st)
 	DrawCache *drawcache = MEM_callocN(sizeof(DrawCache), "text draw cache");
 
 	drawcache->winx = -1;
-	drawcache->nlines = BLI_countlist(&st->text->lines);
+	drawcache->nlines = BLI_listbase_count(&st->text->lines);
 	drawcache->text_id[0] = '\0';
 
 	st->drawcache = drawcache;
@@ -544,7 +549,7 @@ static void text_update_drawcache(SpaceText *st, ARegion *ar)
 	full_update |= drawcache->tabnumber != st->tabnumber;     /* word-wrapping option was toggled */
 	full_update |= drawcache->lheight != st->lheight_dpi;         /* word-wrapping option was toggled */
 	full_update |= drawcache->cwidth != st->cwidth;           /* word-wrapping option was toggled */
-	full_update |= strncmp(drawcache->text_id, txt->id.name, MAX_ID_NAME); /* text datablock was changed */
+	full_update |= !STREQLEN(drawcache->text_id, txt->id.name, MAX_ID_NAME); /* text datablock was changed */
 
 	if (st->wordwrap) {
 		/* update line heights */
@@ -559,7 +564,7 @@ static void text_update_drawcache(SpaceText *st, ARegion *ar)
 			int lineno = 0, size, lines_count;
 			int *fp = drawcache->line_height, *new_tail, *old_tail;
 
-			nlines = BLI_countlist(&txt->lines);
+			nlines = BLI_listbase_count(&txt->lines);
 			size = sizeof(int) * nlines;
 
 			if (fp) fp = MEM_reallocN(fp, size);
@@ -604,7 +609,7 @@ static void text_update_drawcache(SpaceText *st, ARegion *ar)
 		}
 
 		if (full_update || drawcache->update_flag) {
-			nlines = BLI_countlist(&txt->lines);
+			nlines = BLI_listbase_count(&txt->lines);
 
 			if (st->showlinenrs)
 				st->linenrs_tot = (int)floor(log10((float)nlines)) + 1;
@@ -1322,6 +1327,8 @@ void draw_text_main(SpaceText *st, ARegion *ar)
 	int i, x, y, winx, linecount = 0, lineno = 0;
 	int wraplinecount = 0, wrap_skip = 0;
 	int margin_column_x;
+	/* don't draw lines below this */
+	const int clip_min_y = -(int)(st->lheight_dpi - 1);
 
 	/* if no text, nothing to do */
 	if (!text)
@@ -1329,7 +1336,7 @@ void draw_text_main(SpaceText *st, ARegion *ar)
 
 	/* dpi controlled line height and font size */
 	st->lheight_dpi = (U.widget_unit * st->lheight) / 20;
-	st->viewlines = (st->lheight_dpi) ? (int)ar->winy / (st->lheight_dpi + TXT_LINE_SPACING) : 0;
+	st->viewlines = (st->lheight_dpi) ? (int)(ar->winy - clip_min_y) / (st->lheight_dpi + TXT_LINE_SPACING) : 0;
 	
 	text_update_drawcache(st, ar);
 
@@ -1393,7 +1400,7 @@ void draw_text_main(SpaceText *st, ARegion *ar)
 	/* draw the text */
 	UI_ThemeColor(TH_TEXT);
 
-	for (i = 0; y > 0 && i < st->viewlines && tmp; i++, tmp = tmp->next) {
+	for (i = 0; y > clip_min_y && i < st->viewlines && tmp; i++, tmp = tmp->next) {
 		if (st->showsyntax && !tmp->format)
 			tft->format_line(st, tmp, false);
 
@@ -1440,7 +1447,6 @@ void draw_text_main(SpaceText *st, ARegion *ar)
 
 	/* draw other stuff */
 	draw_brackets(st, ar);
-	glTranslatef(GLA_PIXEL_OFS, GLA_PIXEL_OFS, 0.0f); /* XXX scroll requires exact pixel space */
 	draw_textscroll(st, &scroll, &back);
 	draw_documentation(st, ar);
 	draw_suggestion_list(st, ar);
@@ -1541,4 +1547,38 @@ void text_update_cursor_moved(bContext *C)
 	SpaceText *st = CTX_wm_space_text(C);
 
 	text_scroll_to_cursor__area(st, sa, true);
+}
+
+/**
+ * Takes a cursor (row, character) and returns x,y pixel coords.
+ */
+bool ED_text_region_location_from_cursor(SpaceText *st, ARegion *ar, const int cursor_co[2], int r_pixel_co[2])
+{
+	TextLine *line = NULL;
+
+	if (!st->text) {
+		goto error;
+	}
+
+	line = BLI_findlink(&st->text->lines, cursor_co[0]);
+	if (!line || (cursor_co[1] < 0) || (cursor_co[1] > line->len)) {
+		goto error;
+	}
+	else {
+		int offl, offc;
+		int linenr_offset = st->showlinenrs ? TXT_OFFSET + TEXTXLOC : TXT_OFFSET;
+		/* handle tabs as well! */
+		int char_pos = text_get_char_pos(st, line->line, cursor_co[1]);
+
+		wrap_offset(st, ar, line, cursor_co[1], &offl, &offc);
+		r_pixel_co[0] = (char_pos + offc - st->left) * st->cwidth + linenr_offset;
+		r_pixel_co[1] = (cursor_co[0] + offl - st->top) * (st->lheight_dpi + TXT_LINE_SPACING);
+		r_pixel_co[1] = (ar->winy - (r_pixel_co[1] + TXT_OFFSET)) - st->lheight_dpi;
+	}
+	return true;
+
+
+error:
+	r_pixel_co[0] = r_pixel_co[1] = -1;
+	return false;
 }

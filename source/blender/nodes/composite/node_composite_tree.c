@@ -36,11 +36,8 @@
 #include "DNA_scene_types.h"
 #include "DNA_node_types.h"
 
-#include "BLI_listbase.h"
+#include "BLT_translation.h"
 
-#include "BLF_translation.h"
-
-#include "BKE_colortools.h"
 #include "BKE_context.h"
 #include "BKE_global.h"
 #include "BKE_main.h"
@@ -49,8 +46,6 @@
 
 #include "node_common.h"
 #include "node_util.h"
-
-#include "PIL_time.h"
 
 #include "RNA_access.h"
 
@@ -231,16 +226,16 @@ void *COM_linker_hack = NULL;
 
 void ntreeCompositExecTree(Scene *scene, bNodeTree *ntree, RenderData *rd, int rendering, int do_preview,
                            const ColorManagedViewSettings *view_settings,
-                           const ColorManagedDisplaySettings *display_settings)
+                           const ColorManagedDisplaySettings *display_settings,
+                           const char *view_name)
 {
 #ifdef WITH_COMPOSITOR
-	COM_execute(rd, scene, ntree, rendering, view_settings, display_settings);
+	COM_execute(rd, scene, ntree, rendering, view_settings, display_settings, view_name);
 #else
-	(void)scene, (void)ntree, (void)rd, (void)rendering, (void)do_preview;
-	(void)view_settings, (void)display_settings;
+	UNUSED_VARS(scene, ntree, rd, rendering, view_settings, display_settings, view_name);
 #endif
 
-	(void)do_preview;
+	UNUSED_VARS(do_preview);
 }
 
 /* *********************************************** */

@@ -381,14 +381,14 @@ static void pose_copy_menu(Scene *scene)
 	 * but for constraints (just add local constraints)
 	 */
 	if (pose_has_protected_selected(ob, 0)) {
-		i = BLI_countlist(&(pchanact->constraints)); /* if there are 24 or less, allow for the user to select constraints */
+		i = BLI_listbase_count(&(pchanact->constraints)); /* if there are 24 or less, allow for the user to select constraints */
 		if (i < 25)
 			nr = pupmenu("Copy Pose Attributes %t|Local Location %x1|Local Rotation %x2|Local Size %x3|%l|Visual Location %x9|Visual Rotation %x10|Visual Size %x11|%l|Constraints (All) %x4|Constraints... %x5");
 		else
 			nr = pupmenu("Copy Pose Attributes %t|Local Location %x1|Local Rotation %x2|Local Size %x3|%l|Visual Location %x9|Visual Rotation %x10|Visual Size %x11|%l|Constraints (All) %x4");
 	}
 	else {
-		i = BLI_countlist(&(pchanact->constraints)); /* if there are 24 or less, allow for the user to select constraints */
+		i = BLI_listbase_count(&(pchanact->constraints)); /* if there are 24 or less, allow for the user to select constraints */
 		if (i < 25)
 			nr = pupmenu("Copy Pose Attributes %t|Local Location %x1|Local Rotation %x2|Local Size %x3|%l|Visual Location %x9|Visual Rotation %x10|Visual Size %x11|%l|Constraints (All) %x4|Constraints... %x5|%l|Transform Locks %x6|IK Limits %x7|Bone Shape %x8");
 		else
@@ -436,7 +436,7 @@ static void pose_copy_menu(Scene *scene)
 						pchan->constflag |= pchanact->constflag;
 						
 						if (ob->pose)
-							ob->pose->flag |= POSE_RECALC;
+							BKE_pose_tag_recalc(bmain, ob->pose);
 					}
 					break;
 					case 6: /* Transform Locks */
@@ -550,7 +550,7 @@ static void pose_copy_menu(Scene *scene)
 		BKE_pose_update_constraint_flags(ob->pose); /* we could work out the flags but its simpler to do this */
 		
 		if (ob->pose)
-			ob->pose->flag |= POSE_RECALC;
+			BKE_pose_tag_recalc(bmain, ob->pose);
 	}
 	
 	DAG_id_tag_update(&ob->id, OB_RECALC_DATA); // and all its relations
@@ -853,7 +853,7 @@ void ARMATURE_OT_armature_layers(wmOperatorType *ot)
 /* Present a popup to get the layers that should be used */
 static int pose_bone_layers_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
-	int layers[32] = {0}; /* hardcoded for now - we can only have 32 armature layers, so this should be fine... */
+	int layers[32]; /* hardcoded for now - we can only have 32 armature layers, so this should be fine... */
 	
 	/* get layers that are active already */
 	CTX_DATA_BEGIN (C, bPoseChannel *, pchan, selected_pose_bones)
@@ -862,8 +862,7 @@ static int pose_bone_layers_invoke(bContext *C, wmOperator *op, const wmEvent *e
 		
 		/* loop over the bits for this pchan's layers, adding layers where they're needed */
 		for (bit = 0; bit < 32; bit++) {
-			if (pchan->bone->layer & (1 << bit))
-				layers[bit] = 1;
+			layers[bit] = (pchan->bone->layer & (1u << bit)) != 0;
 		}
 	}
 	CTX_DATA_END;
@@ -937,8 +936,9 @@ static int armature_bone_layers_invoke(bContext *C, wmOperator *op, const wmEven
 		
 		/* loop over the bits for this pchan's layers, adding layers where they're needed */
 		for (bit = 0; bit < 32; bit++) {
-			if (ebone->layer & (1 << bit))
+			if (ebone->layer & (1u << bit)) {
 				layers[bit] = 1;
+			}
 		}
 	}
 	CTX_DATA_END;

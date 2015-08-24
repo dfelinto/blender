@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #include "background.h"
@@ -72,21 +72,28 @@ void Background::device_update(Device *device, DeviceScene *dscene, Scene *scene
 	else
 		kbackground->volume_shader = SHADER_NONE;
 
-	if(!(visibility & PATH_RAY_DIFFUSE))
-		kbackground->surface_shader |= SHADER_EXCLUDE_DIFFUSE;
-	if(!(visibility & PATH_RAY_GLOSSY))
-		kbackground->surface_shader |= SHADER_EXCLUDE_GLOSSY;
-	if(!(visibility & PATH_RAY_TRANSMIT))
-		kbackground->surface_shader |= SHADER_EXCLUDE_TRANSMIT;
-	if(!(visibility & PATH_RAY_VOLUME_SCATTER))
-		kbackground->surface_shader |= SHADER_EXCLUDE_SCATTER;
-	if(!(visibility & PATH_RAY_CAMERA))
-		kbackground->surface_shader |= SHADER_EXCLUDE_CAMERA;
+	/* No background node, make world shader invisible to all rays, to skip evaluation in kernel. */
+	if(scene->shaders[shader]->graph->nodes.size() <= 1) {
+		kbackground->surface_shader |= SHADER_EXCLUDE_ANY;
+	}
+	/* Background present, check visibilities */
+	else {
+		if(!(visibility & PATH_RAY_DIFFUSE))
+			kbackground->surface_shader |= SHADER_EXCLUDE_DIFFUSE;
+		if(!(visibility & PATH_RAY_GLOSSY))
+			kbackground->surface_shader |= SHADER_EXCLUDE_GLOSSY;
+		if(!(visibility & PATH_RAY_TRANSMIT))
+			kbackground->surface_shader |= SHADER_EXCLUDE_TRANSMIT;
+		if(!(visibility & PATH_RAY_VOLUME_SCATTER))
+			kbackground->surface_shader |= SHADER_EXCLUDE_SCATTER;
+		if(!(visibility & PATH_RAY_CAMERA))
+			kbackground->surface_shader |= SHADER_EXCLUDE_CAMERA;
+	}
 
 	need_update = false;
 }
 
-void Background::device_free(Device *device, DeviceScene *dscene)
+void Background::device_free(Device * /*device*/, DeviceScene * /*dscene*/)
 {
 }
 

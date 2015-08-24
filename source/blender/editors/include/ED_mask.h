@@ -31,10 +31,10 @@
 #ifndef __ED_MASK_H__
 #define __ED_MASK_H__
 
+struct bContext;
 struct wmKeyConfig;
 struct MaskLayer;
 struct MaskLayerShape;
-struct wmEvent;
 
 /* mask_edit.c */
 void ED_mask_get_size(struct ScrArea *sa, int *width, int *height);
@@ -49,6 +49,7 @@ void ED_mask_point_pos__reverse(struct ScrArea *sa, struct ARegion *ar,
                                 float x, float y, float *xr, float *yr);
 
 void ED_mask_cursor_location_get(struct ScrArea *sa, float cursor[2]);
+bool ED_mask_selected_minmax(const struct bContext *C, float min[2], float max[2]);
 
 void ED_operatortypes_mask(void);
 void ED_keymap_mask(struct wmKeyConfig *keyconf);

@@ -43,15 +43,15 @@
 #include "BLI_utildefines.h"
 
 #include "BKE_cdderivedmesh.h"
+#include "BKE_effect.h"
+#include "BKE_global.h"
 #include "BKE_lattice.h"
 #include "BKE_modifier.h"
 #include "BKE_particle.h"
 #include "BKE_pointcache.h"
 
-#include "MOD_util.h"
-
 #include "depsgraph_private.h"
-
+#include "DEG_depsgraph_build.h"
 
 static void initData(ModifierData *md)
 {
@@ -111,6 +111,7 @@ static bool isDisabled(ModifierData *md, int useRenderParams)
 
 
 static void updateDepgraph(ModifierData *md, DagForest *forest,
+                           struct Main *UNUSED(bmain),
                            struct Scene *UNUSED(scene),
                            Object *UNUSED(ob),
                            DagNode *obNode)
@@ -123,6 +124,18 @@ static void updateDepgraph(ModifierData *md, DagForest *forest,
 		dag_add_relation(forest, curNode, obNode,
 		                 DAG_RL_DATA_DATA | DAG_RL_OB_DATA,
 		                 "Particle Instance Modifier");
+	}
+}
+
+static void updateDepsgraph(ModifierData *md,
+                            struct Main *UNUSED(bmain),
+                            struct Scene *UNUSED(scene),
+                            Object *UNUSED(ob),
+                            struct DepsNodeHandle *node)
+{
+	ParticleInstanceModifierData *pimd = (ParticleInstanceModifierData *) md;
+	if (pimd->ob != NULL) {
+		DEG_add_object_relation(node, pimd->ob, DEG_OB_COMP_TRANSFORM, "Particle Instance Modifier");
 	}
 }
 
@@ -185,7 +198,7 @@ static DerivedMesh *applyModifier(ModifierData *md, Object *ob,
 	int maxvert, maxpoly, maxloop, totpart = 0, first_particle = 0;
 	int k, p, p_skip;
 	short track = ob->trackflag % 3, trackneg, axis = pimd->axis;
-	float max_co = 0.0, min_co = 0.0, temp_co[3], cross[3];
+	float max_co = 0.0, min_co = 0.0, temp_co[3];
 	float *size = NULL;
 
 	trackneg = ((ob->trackflag > 2) ? 1 : 0);
@@ -278,6 +291,9 @@ static DerivedMesh *applyModifier(ModifierData *md, Object *ob,
 	orig_mloop = dm->getLoopArray(dm);
 
 	for (p = 0, p_skip = 0; p < totpart; p++) {
+		float prev_dir[3];
+		float frame[4]; /* frame orientation quaternion */
+		
 		/* skip particle? */
 		if (particle_skip(pimd, psys, p))
 			continue;
@@ -323,19 +339,55 @@ static DerivedMesh *applyModifier(ModifierData *md, Object *ob,
 
 				normalize_v3(state.vel);
 
-				/* TODO: incremental rotations somehow */
+				/* Incrementally Rotating Frame (Bishop Frame) */
+				if (k == 0) {
+					float hairmat[4][4];
+					float mat[3][3];
+					
+					if (first_particle + p < psys->totpart)
+						pa = psys->particles + first_particle + p;
+					else {
+						ChildParticle *cpa = psys->child + (p - psys->totpart);
+						pa = psys->particles + cpa->parent;
+					}
+					psys_mat_hair_to_global(sim.ob, sim.psmd->dm, sim.psys->part->from, pa, hairmat);
+					copy_m3_m4(mat, hairmat);
+					/* to quaternion */
+					mat3_to_quat(frame, mat);
+					
+					/* note: direction is same as normal vector currently,
+					 * but best to keep this separate so the frame can be
+					 * rotated later if necessary
+					 */
+					copy_v3_v3(prev_dir, state.vel);
+				}
+				else {
+					float rot[4];
+					
+					/* incrementally rotate along bend direction */
+					rotation_between_vecs_to_quat(rot, prev_dir, state.vel);
+					mul_qt_qtqt(frame, rot, frame);
+					
+					copy_v3_v3(prev_dir, state.vel);
+				}
+				
+				copy_qt_qt(state.rot, frame);
+#if 0
+				/* Absolute Frame (Frenet Frame) */
 				if (state.vel[axis] < -0.9999f || state.vel[axis] > 0.9999f) {
 					unit_qt(state.rot);
 				}
 				else {
+					float cross[3];
 					float temp[3] = {0.0f, 0.0f, 0.0f};
 					temp[axis] = 1.0f;
-
+					
 					cross_v3_v3v3(cross, temp, state.vel);
-
+					
 					/* state.vel[axis] is the only component surviving from a dot product with the axis */
 					axis_angle_to_quat(state.rot, cross, saacos(state.vel[axis]));
 				}
+#endif
 			}
 			else {
 				state.time = -1.0;
@@ -408,6 +460,7 @@ ModifierTypeInfo modifierType_ParticleInstance = {
 	/* freeData */          NULL,
 	/* isDisabled */        isDisabled,
 	/* updateDepgraph */    updateDepgraph,
+	/* updateDepsgraph */   updateDepsgraph,
 	/* dependsOnTime */     NULL,
 	/* dependsOnNormals */  NULL,
 	/* foreachObjectLink */ foreachObjectLink,

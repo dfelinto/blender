@@ -81,7 +81,7 @@ void bpy_import_init(PyObject *builtins)
 
 	/* move reload here
 	 * XXX, use import hooks */
-	mod = PyImport_ImportModuleLevel("imp", NULL, NULL, NULL, 0);
+	mod = PyImport_ImportModuleLevel("importlib", NULL, NULL, NULL, 0);
 	if (mod) {
 		PyObject *mod_dict = PyModule_GetDict(mod);
 
@@ -93,7 +93,7 @@ void bpy_import_init(PyObject *builtins)
 		Py_DECREF(mod);
 	}
 	else {
-		BLI_assert(!"unable to load 'imp' module.");
+		BLI_assert(!"unable to load 'importlib' module.");
 	}
 }
 
@@ -265,7 +265,7 @@ PyObject *bpy_text_reimport(PyObject *module, int *found)
 	}
 
 	/* make into a module */
-	return PyImport_ExecCodeModule((char *)name, text->compiled);
+	return PyImport_ExecCodeModule(name, text->compiled);
 }
 
 

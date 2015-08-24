@@ -60,7 +60,7 @@ extern "C"{
 
 
 // XXX Clean these up <<<
-#include "Value.h"
+#include "EXP_Value.h"
 #include "KX_Scene.h"
 #include "KX_RayCast.h"
 #include "KX_GameObject.h"
@@ -99,9 +99,9 @@ RAS_OpenGLRasterizer::RAS_OpenGLRasterizer(RAS_ICanvas* canvas, int storage)
 	m_motionblur(0),
 	m_motionblurvalue(-1.0),
 	m_usingoverrideshader(false),
-    m_clientobject(NULL),
-    m_auxilaryClientInfo(NULL),
-    m_drawingmode(KX_TEXTURED),
+	m_clientobject(NULL),
+	m_auxilaryClientInfo(NULL),
+	m_drawingmode(KX_TEXTURED),
 	m_texco_num(0),
 	m_attrib_num(0),
 	//m_last_alphablend(GPU_BLEND_SOLID),
@@ -194,112 +194,51 @@ bool RAS_OpenGLRasterizer::Init()
 }
 
 
-void RAS_OpenGLRasterizer::SetAmbientColor(float red, float green, float blue)
+void RAS_OpenGLRasterizer::SetAmbientColor(float color[3])
 {
-	m_ambr = red;
-	m_ambg = green;
-	m_ambb = blue;
+	m_ambr = color[0];
+	m_ambg = color[1];
+	m_ambb = color[2];
 }
-
 
 void RAS_OpenGLRasterizer::SetAmbient(float factor)
 {
-	float ambient[] = { m_ambr*factor, m_ambg*factor, m_ambb*factor, 1.0f };
+	float ambient[] = {m_ambr * factor, m_ambg * factor, m_ambb * factor, 1.0f};
 	glLightModelfv(GL_LIGHT_MODEL_AMBIENT, ambient);
 }
 
-
-void RAS_OpenGLRasterizer::SetBackColor(float red,
-										float green,
-										float blue,
-										float alpha)
+void RAS_OpenGLRasterizer::SetBackColor(float color[3])
 {
-	m_redback = red;
-	m_greenback = green;
-	m_blueback = blue;
-	m_alphaback = alpha;
+	m_redback = color[0];
+	m_greenback = color[1];
+	m_blueback = color[2];
+	m_alphaback = 1.0f;
 }
 
-
-
-void RAS_OpenGLRasterizer::SetFogColor(float r,
-									   float g,
-									   float b)
+void RAS_OpenGLRasterizer::SetFog(short type, float start, float dist, float intensity, float color[3])
 {
-	m_fogr = r;
-	m_fogg = g;
-	m_fogb = b;
-	m_fogenabled = true;
+	float params[4] = {color[0], color[1], color[2], 1.0f};
+	glFogi(GL_FOG_MODE, GL_LINEAR);
+	glFogf(GL_FOG_DENSITY, intensity / 10.0f);
+	glFogf(GL_FOG_START, start);
+	glFogf(GL_FOG_END, start + dist);
+	glFogfv(GL_FOG_COLOR, params);
 }
 
-
-
-void RAS_OpenGLRasterizer::SetFogStart(float start)
+void RAS_OpenGLRasterizer::EnableFog(bool enable)
 {
-	m_fogstart = start;
-	m_fogenabled = true;
+	m_fogenabled = enable;
 }
-
-
-
-void RAS_OpenGLRasterizer::SetFogEnd(float fogend)
-{
-	m_fogdist = fogend;
-	m_fogenabled = true;
-}
-
-
-
-void RAS_OpenGLRasterizer::SetFog(float start,
-								  float dist,
-								  float r,
-								  float g,
-								  float b)
-{
-	m_fogstart = start;
-	m_fogdist = dist;
-	m_fogr = r;
-	m_fogg = g;
-	m_fogb = b;
-	m_fogenabled = true;
-}
-
-
-
-void RAS_OpenGLRasterizer::DisableFog()
-{
-	m_fogenabled = false;
-}
-
-bool RAS_OpenGLRasterizer::IsFogEnabled()
-{
-	return m_fogenabled;
-}
-
 
 void RAS_OpenGLRasterizer::DisplayFog()
 {
-	if ((m_drawingmode >= KX_SOLID) && m_fogenabled)
-	{
-		float params[5];
-		glFogi(GL_FOG_MODE, GL_LINEAR);
-		glFogf(GL_FOG_DENSITY, 0.1f);
-		glFogf(GL_FOG_START, m_fogstart);
-		glFogf(GL_FOG_END, m_fogstart + m_fogdist);
-		params[0] = m_fogr;
-		params[1] = m_fogg;
-		params[2] = m_fogb;
-		params[3] = 0.0;
-		glFogfv(GL_FOG_COLOR, params); 
+	if ((m_drawingmode >= KX_SOLID) && m_fogenabled) {
 		glEnable(GL_FOG);
-	} 
-	else
-	{
+	}
+	else {
 		glDisable(GL_FOG);
 	}
 }
-
-
 
 bool RAS_OpenGLRasterizer::SetMaterial(const RAS_IPolyMaterial& mat)
 {
@@ -417,9 +356,10 @@ void RAS_OpenGLRasterizer::ClearCachingInfo(void)
 	m_materialCachingInfo = 0;
 }
 
-void RAS_OpenGLRasterizer::FlushDebugShapes()
+void RAS_OpenGLRasterizer::FlushDebugShapes(SCA_IScene *scene)
 {
-	if (m_debugShapes.empty())
+	std::vector<OglDebugShape> &debugShapes = m_debugShapes[scene];
+	if (debugShapes.empty())
 		return;
 
 	// DrawDebugLines
@@ -433,28 +373,26 @@ void RAS_OpenGLRasterizer::FlushDebugShapes()
 
 	//draw lines
 	glBegin(GL_LINES);
-	for (unsigned int i=0;i<m_debugShapes.size();i++)
-	{
-		if (m_debugShapes[i].m_type != OglDebugShape::LINE)
+	for (unsigned int i = 0; i < debugShapes.size(); i++) {
+		if (debugShapes[i].m_type != OglDebugShape::LINE)
 			continue;
-		glColor4f(m_debugShapes[i].m_color[0],m_debugShapes[i].m_color[1],m_debugShapes[i].m_color[2],1.f);
-		const MT_Scalar* fromPtr = &m_debugShapes[i].m_pos.x();
-		const MT_Scalar* toPtr= &m_debugShapes[i].m_param.x();
+		glColor4f(debugShapes[i].m_color[0], debugShapes[i].m_color[1], debugShapes[i].m_color[2], 1.0f);
+		const MT_Scalar *fromPtr = &debugShapes[i].m_pos.x();
+		const MT_Scalar *toPtr= &debugShapes[i].m_param.x();
 		glVertex3dv(fromPtr);
 		glVertex3dv(toPtr);
 	}
 	glEnd();
 
 	//draw circles
-	for (unsigned int i=0;i<m_debugShapes.size();i++)
-	{
-		if (m_debugShapes[i].m_type != OglDebugShape::CIRCLE)
+	for (unsigned int i = 0; i < debugShapes.size(); i++) {
+		if (debugShapes[i].m_type != OglDebugShape::CIRCLE)
 			continue;
 		glBegin(GL_LINE_LOOP);
-		glColor4f(m_debugShapes[i].m_color[0],m_debugShapes[i].m_color[1],m_debugShapes[i].m_color[2],1.f);
+		glColor4f(debugShapes[i].m_color[0], debugShapes[i].m_color[1], debugShapes[i].m_color[2], 1.0f);
 
 		static const MT_Vector3 worldUp(0.0, 0.0, 1.0);
-		MT_Vector3 norm = m_debugShapes[i].m_param;
+		MT_Vector3 norm = debugShapes[i].m_param;
 		MT_Matrix3x3 tr;
 		if (norm.fuzzyZero() || norm == worldUp)
 		{
@@ -469,14 +407,14 @@ void RAS_OpenGLRasterizer::FlushDebugShapes()
 				yaxis.x(), yaxis.y(), yaxis.z(),
 				norm.x(), norm.y(), norm.z());
 		}
-		MT_Scalar rad = m_debugShapes[i].m_param2.x();
-		int n = (int) m_debugShapes[i].m_param2.y();
+		MT_Scalar rad = debugShapes[i].m_param2.x();
+		int n = (int)debugShapes[i].m_param2.y();
 		for (int j = 0; j<n; j++)
 		{
 			MT_Scalar theta = j*M_PI*2/n;
 			MT_Vector3 pos(cos(theta) * rad, sin(theta) * rad, 0.0);
 			pos = pos*tr;
-			pos += m_debugShapes[i].m_pos;
+			pos += debugShapes[i].m_pos;
 			const MT_Scalar* posPtr = &pos.x();
 			glVertex3dv(posPtr);
 		}
@@ -486,13 +424,11 @@ void RAS_OpenGLRasterizer::FlushDebugShapes()
 	if (light) glEnable(GL_LIGHTING);
 	if (tex) glEnable(GL_TEXTURE_2D);
 
-	m_debugShapes.clear();
+	debugShapes.clear();
 }
 
 void RAS_OpenGLRasterizer::EndFrame()
 {
-	FlushDebugShapes();
-
 	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 
 	glDisable(GL_MULTISAMPLE_ARB);
@@ -731,7 +667,9 @@ void RAS_OpenGLRasterizer::IndexPrimitives_3DText(RAS_MeshSlot& ms,
 			// triangle and quad text drawing
 			for (i=0; i<it.totindex; i+=numvert)
 			{
-				float v[4][3];
+				float  v[4][3];
+				const float  *v_ptr[4] = {NULL};
+				const float *uv_ptr[4] = {NULL};
 				int glattrib, unit;
 
 				for (j=0; j<numvert; j++) {
@@ -740,6 +678,9 @@ void RAS_OpenGLRasterizer::IndexPrimitives_3DText(RAS_MeshSlot& ms,
 					v[j][0] = vertex->getXYZ()[0];
 					v[j][1] = vertex->getXYZ()[1];
 					v[j][2] = vertex->getXYZ()[2];
+					v_ptr[j] = v[j];
+
+					uv_ptr[j] = vertex->getUV(0);
 				}
 
 				// find the right opengl attribute
@@ -749,7 +690,9 @@ void RAS_OpenGLRasterizer::IndexPrimitives_3DText(RAS_MeshSlot& ms,
 						if (m_attrib[unit] == RAS_TEXCO_UV)
 							glattrib = unit;
 
-				GPU_render_text(polymat->GetMTFace(), polymat->GetDrawingMode(), mytext, mytext.Length(), polymat->GetMCol(), v[0], v[1], v[2], v[3], glattrib);
+				GPU_render_text(
+				        polymat->GetMTexPoly(), polymat->GetDrawingMode(), mytext, mytext.Length(), polymat->GetMCol(),
+				        v_ptr, uv_ptr, glattrib);
 
 				ClearCachingInfo();
 			}
@@ -1135,12 +1078,17 @@ void RAS_OpenGLRasterizer::SetMipmapping(MipmapOption val)
 
 RAS_IRasterizer::MipmapOption RAS_OpenGLRasterizer::GetMipmapping()
 {
-	if (GPU_get_linear_mipmap())
-		return RAS_IRasterizer::RAS_MIPMAP_LINEAR;
-	else if (GPU_get_mipmap())
-		return RAS_IRasterizer::RAS_MIPMAP_NEAREST;
-	else
+	if (GPU_get_mipmap()) {
+		if (GPU_get_linear_mipmap()) {
+			return RAS_IRasterizer::RAS_MIPMAP_LINEAR;
+		}
+		else {
+			return RAS_IRasterizer::RAS_MIPMAP_NEAREST;
+		}
+	}
+	else {
 		return RAS_IRasterizer::RAS_MIPMAP_NONE;
+	}
 }
 
 void RAS_OpenGLRasterizer::SetUsingOverrideShader(bool val)
@@ -1269,28 +1217,32 @@ void RAS_OpenGLRasterizer::RemoveLight(RAS_ILightObject* lightobject)
 
 bool RAS_OpenGLRasterizer::RayHit(struct KX_ClientObjectInfo *client, KX_RayCast *result, void * const data)
 {
-	double* const oglmatrix = (double* const) data;
+	if (result->m_hitMesh) {
+		double* const oglmatrix = (double* const) data;
 
-	RAS_Polygon* poly = result->m_hitMesh->GetPolygon(result->m_hitPolygon);
-	if (!poly->IsVisible())
+		RAS_Polygon* poly = result->m_hitMesh->GetPolygon(result->m_hitPolygon);
+		if (!poly->IsVisible())
+			return false;
+
+		MT_Vector3 resultnormal(result->m_hitNormal);
+		MT_Vector3 left(oglmatrix[0],oglmatrix[1],oglmatrix[2]);
+		MT_Vector3 dir = -(left.cross(resultnormal)).safe_normalized();
+		left = (dir.cross(resultnormal)).safe_normalized();
+		// for the up vector, we take the 'resultnormal' returned by the physics
+
+		double maat[16] = {left[0],         left[1],         left[2],         0,
+			               dir[0],          dir[1],          dir[2],          0,
+				           resultnormal[0], resultnormal[1], resultnormal[2], 0,
+					       0,               0,               0,               1};
+
+		glTranslated(oglmatrix[12],oglmatrix[13],oglmatrix[14]);
+		//glMultMatrixd(oglmatrix);
+		glMultMatrixd(maat);
+		return true;
+	}
+	else {
 		return false;
-
-	MT_Point3 resultpoint(result->m_hitPoint);
-	MT_Vector3 resultnormal(result->m_hitNormal);
-	MT_Vector3 left(oglmatrix[0],oglmatrix[1],oglmatrix[2]);
-	MT_Vector3 dir = -(left.cross(resultnormal)).safe_normalized();
-	left = (dir.cross(resultnormal)).safe_normalized();
-	// for the up vector, we take the 'resultnormal' returned by the physics
-
-	double maat[16] = {left[0],         left[1],         left[2],         0,
-	                   dir[0],          dir[1],          dir[2],          0,
-	                   resultnormal[0], resultnormal[1], resultnormal[2], 0,
-	                   0,               0,               0,               1};
-
-	glTranslated(resultpoint[0],resultpoint[1],resultpoint[2]);
-	//glMultMatrixd(oglmatrix);
-	glMultMatrixd(maat);
-	return true;
+	}
 }
 
 void RAS_OpenGLRasterizer::applyTransform(double* oglmatrix,int objectdrawmode )

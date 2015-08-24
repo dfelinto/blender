@@ -45,7 +45,7 @@ void AntiAliasOperation::initExecution()
 	NodeOperation::initMutex();
 }
 
-void AntiAliasOperation::executePixel(float output[4], int x, int y, void *data)
+void AntiAliasOperation::executePixel(float output[4], int x, int y, void * /*data*/)
 {
 	if (y < 0 || (unsigned int)y >= this->m_height || x < 0 || (unsigned int)x >= this->m_width) {
 		output[0] = 0.0f;
@@ -66,7 +66,7 @@ void AntiAliasOperation::deinitExecution()
 	NodeOperation::deinitMutex();
 }
 
-bool AntiAliasOperation::determineDependingAreaOfInterest(rcti *input, ReadBufferOperation *readOperation, rcti *output)
+bool AntiAliasOperation::determineDependingAreaOfInterest(rcti * /*input*/, ReadBufferOperation *readOperation, rcti *output)
 {
 	rcti imageInput;
 	if (this->m_buffer) {
@@ -95,7 +95,7 @@ void *AntiAliasOperation::initializeTileData(rcti *rect)
 		float *input = tile->getBuffer();
 		char *valuebuffer = (char *)MEM_mallocN(sizeof(char) * size, __func__);
 		for (int i = 0; i < size; i++) {
-			float in = input[i * COM_NUMBER_OF_CHANNELS];
+			float in = input[i];
 			valuebuffer[i] = FTOCHAR(in);
 		}
 		antialias_tagbuf(tile->getWidth(), tile->getHeight(), valuebuffer);

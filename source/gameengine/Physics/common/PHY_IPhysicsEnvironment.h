@@ -55,6 +55,7 @@ class KX_Scene;
 struct PHY_ShapeProps;
 struct PHY_MaterialProps;
 class PHY_IMotionState;
+struct bRigidBodyJointConstraint;
 
 /**
  * pass back information from rayTest
@@ -167,7 +168,7 @@ class PHY_IPhysicsEnvironment
 			float axis1X=0,float axis1Y=0,float axis1Z=0,
 			float axis2X=0,float axis2Y=0,float axis2Z=0,int flag=0
 		)=0;
-		virtual void		RemoveConstraint(int	constraintid)=0;
+		virtual void RemoveConstraintById(int constraintid) = 0;
 		virtual float		GetAppliedImpulse(int	constraintid) { return 0.0f; }
 
 
@@ -213,6 +214,9 @@ class PHY_IPhysicsEnvironment
 							bool isCompoundChild,
 							bool hasCompoundChildren) = 0;
 
+		/* Set the rigid body joints constraints values for converted objects and replicated group instances. */
+		virtual void SetupObjectConstraints(KX_GameObject *obj_src, KX_GameObject *obj_dest,
+		                                    bRigidBodyJointConstraint *dat) {}
 
 #ifdef WITH_CXX_GUARDEDALLOC
 	MEM_CXX_CLASS_ALLOC_FUNCS("GE:PHY_IPhysicsEnvironment")

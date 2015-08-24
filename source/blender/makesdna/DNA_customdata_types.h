@@ -63,9 +63,10 @@ typedef struct CustomDataExternal {
  * layers, each with a data type (e.g. MTFace, MDeformVert, etc.). */
 typedef struct CustomData {
 	CustomDataLayer *layers;      /* CustomDataLayers, ordered by type */
-	int typemap[41];              /* runtime only! - maps types to indices of first layer of that type,
+	int typemap[42];              /* runtime only! - maps types to indices of first layer of that type,
 	                               * MUST be >= CD_NUMTYPES, but we cant use a define here.
 	                               * Correct size is ensured in CustomData_update_typemap assert() */
+	int pad_i1;
 	int totlayer, maxlayer;       /* number of layers, size of layers array */
 	int totsize;                  /* in editmode, total size of all data layers */
 	struct BLI_mempool *pool;     /* (BMesh Only): Memory pool for allocation of blocks */
@@ -73,9 +74,11 @@ typedef struct CustomData {
 } CustomData;
 
 /* CustomData.type */
-enum {
+typedef enum CustomDataType {
 	CD_MVERT            = 0,
+#ifdef DNA_DEPRECATED
 	CD_MSTICKY          = 1,  /* DEPRECATED */
+#endif
 	CD_MDEFORMVERT      = 2,
 	CD_MEDGE            = 3,
 	CD_MFACE            = 4,
@@ -95,8 +98,8 @@ enum {
 	CD_TANGENT          = 18,
 	CD_MDISPS           = 19,
 	CD_PREVIEW_MCOL     = 20,  /* for displaying weightpaint colors */
-	CD_ID_MCOL          = 21,
-	CD_TEXTURE_MCOL     = 22,
+/*	CD_ID_MCOL          = 21, */
+	CD_TEXTURE_MLOOPCOL = 22,
 	CD_CLOTH_ORCO       = 23,
 	CD_RECAST           = 24,
 
@@ -119,13 +122,14 @@ enum {
 	CD_FREESTYLE_FACE   = 38,
 	CD_MLOOPTANGENT     = 39,
 	CD_TESSLOOPNORMAL   = 40,
+	CD_CUSTOMLOOPNORMAL = 41,
 
-	CD_NUMTYPES         = 41
-};
+	CD_NUMTYPES         = 42
+} CustomDataType;
 
 /* Bits for CustomDataMask */
 #define CD_MASK_MVERT		(1 << CD_MVERT)
-#define CD_MASK_MSTICKY		(1 << CD_MSTICKY)  /* DEPRECATED */
+// #define CD_MASK_MSTICKY		(1 << CD_MSTICKY)  /* DEPRECATED */
 #define CD_MASK_MDEFORMVERT	(1 << CD_MDEFORMVERT)
 #define CD_MASK_MEDGE		(1 << CD_MEDGE)
 #define CD_MASK_MFACE		(1 << CD_MFACE)
@@ -167,6 +171,7 @@ enum {
 #define CD_MASK_FREESTYLE_FACE	(1LL << CD_FREESTYLE_FACE)
 #define CD_MASK_MLOOPTANGENT    (1LL << CD_MLOOPTANGENT)
 #define CD_MASK_TESSLOOPNORMAL  (1LL << CD_TESSLOOPNORMAL)
+#define CD_MASK_CUSTOMLOOPNORMAL (1LL << CD_CUSTOMLOOPNORMAL)
 
 /* CustomData.flag */
 enum {
@@ -187,6 +192,8 @@ enum {
 #define MAX_MCOL    8
 
 #define DYNTOPO_NODE_NONE -1
+
+#define CD_TEMP_CHUNK_SIZE 128
 
 #ifdef __cplusplus
 }

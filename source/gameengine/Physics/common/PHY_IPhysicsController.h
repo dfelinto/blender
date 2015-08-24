@@ -32,6 +32,7 @@
 #ifndef __PHY_IPHYSICSCONTROLLER_H__
 #define __PHY_IPHYSICSCONTROLLER_H__
 
+#include <vector>
 #include "PHY_IController.h"
 
 class PHY_IMotionState;
@@ -89,6 +90,13 @@ class PHY_IPhysicsController : public PHY_IController
 		virtual void		SetLinearVelocity(const MT_Vector3& lin_vel,bool local)=0;
 		virtual void		ResolveCombinedVelocities(float linvelX,float linvelY,float linvelZ,float angVelX,float angVelY,float angVelZ) = 0;
 
+		virtual float		GetLinearDamping() const=0;
+		virtual float		GetAngularDamping() const=0;
+		virtual void		SetLinearDamping(float damping)=0;
+		virtual void		SetAngularDamping(float damping)=0;
+		virtual void		SetDamping(float linear, float angular)=0;
+
+		virtual void		RefreshCollisions() = 0;
 		virtual void		SuspendDynamics(bool ghost=false)=0;
 		virtual void		RestoreDynamics()=0;
 
@@ -117,6 +125,11 @@ class PHY_IPhysicsController : public PHY_IController
 		virtual float GetLinVelocityMax() const=0;
 		virtual void  SetLinVelocityMax(float val) = 0;
 		
+		virtual void SetAngularVelocityMin(float val) = 0;
+		virtual float GetAngularVelocityMin() const = 0;
+		virtual void SetAngularVelocityMax(float val) = 0;
+		virtual float GetAngularVelocityMax() const = 0;
+
 		MT_Vector3	GetWorldPosition(MT_Vector3& localpos);
 
 		// Shape control
@@ -126,9 +139,12 @@ class PHY_IPhysicsController : public PHY_IController
 
 		virtual bool IsDynamic() = 0;
 		virtual bool IsCompound() = 0;
+		virtual bool IsSuspended() const = 0;
 
 		virtual bool ReinstancePhysicsShape(KX_GameObject *from_gameobj, RAS_MeshObject* from_meshobj) = 0;
 
+		/* Method to replicate rigid body joint contraints for group instances. */
+		virtual void ReplicateConstraints(KX_GameObject *gameobj, std::vector<KX_GameObject*> constobj) = 0;
 
 #ifdef WITH_CXX_GUARDEDALLOC
 	MEM_CXX_CLASS_ALLOC_FUNCS("GE:PHY_IPhysicsController")

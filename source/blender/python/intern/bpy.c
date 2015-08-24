@@ -31,10 +31,9 @@
 #include <Python.h>
 
 #include "BLI_utildefines.h"
-#include "BLI_path_util.h"
 #include "BLI_string.h"
 
-#include "BKE_main.h"
+#include "BKE_appdir.h"
 #include "BKE_global.h" /* XXX, G.main only */
 #include "BKE_blender.h"
 #include "BKE_bpath.h"
@@ -49,18 +48,14 @@
 #include "bpy_props.h"
 #include "bpy_library.h"
 #include "bpy_operator.h"
+#include "bpy_utils_previews.h"
 #include "bpy_utils_units.h"
 
 #include "../generic/py_capi_utils.h"
-
-#include "MEM_guardedalloc.h"
+#include "../generic/python_utildefines.h"
 
 /* external util modules */
 #include "../generic/idprop_py_api.h"
-#include "../generic/bgl.h"
-#include "../generic/blf_py_api.h"
-#include "../generic/blf_py_api.h"
-#include "../mathutils/mathutils.h"
 
 #ifdef WITH_FREESTYLE
 #  include "BPy_Freestyle.h"
@@ -82,11 +77,11 @@ static PyObject *bpy_script_paths(PyObject *UNUSED(self))
 	PyObject *item;
 	const char *path;
 
-	path = BLI_get_folder(BLENDER_SYSTEM_SCRIPTS, NULL);
+	path = BKE_appdir_folder_id(BLENDER_SYSTEM_SCRIPTS, NULL);
 	item = PyC_UnicodeFromByte(path ? path : "");
 	BLI_assert(item != NULL);
 	PyTuple_SET_ITEM(ret, 0, item);
-	path = BLI_get_folder(BLENDER_USER_SCRIPTS, NULL);
+	path = BKE_appdir_folder_id(BLENDER_USER_SCRIPTS, NULL);
 	item = PyC_UnicodeFromByte(path ? path : "");
 	BLI_assert(item != NULL);
 	PyTuple_SET_ITEM(ret, 1, item);
@@ -96,10 +91,7 @@ static PyObject *bpy_script_paths(PyObject *UNUSED(self))
 
 static bool bpy_blend_paths_visit_cb(void *userdata, char *UNUSED(path_dst), const char *path_src)
 {
-	PyObject *list = (PyObject *)userdata;
-	PyObject *item = PyC_UnicodeFromByte(path_src);
-	PyList_Append(list, item);
-	Py_DECREF(item);
+	PyList_APPEND((PyObject *)userdata, PyC_UnicodeFromByte(path_src));
 	return false; /* never edits the path */
 }
 
@@ -122,13 +114,16 @@ static PyObject *bpy_blend_paths(PyObject *UNUSED(self), PyObject *args, PyObjec
 	int flag = 0;
 	PyObject *list;
 
-	int absolute = false;
-	int packed   = false;
-	int local    = false;
+	bool absolute = false;
+	bool packed   = false;
+	bool local    = false;
 	static const char *kwlist[] = {"absolute", "packed", "local", NULL};
 
-	if (!PyArg_ParseTupleAndKeywords(args, kw, "|iii:blend_paths",
-	                                 (char **)kwlist, &absolute, &packed, &local))
+	if (!PyArg_ParseTupleAndKeywords(
+	        args, kw, "|O&O&O&:blend_paths", (char **)kwlist,
+	        PyC_ParseBool, &absolute,
+	        PyC_ParseBool, &packed,
+	        PyC_ParseBool, &local))
 	{
 		return NULL;
 	}
@@ -168,11 +163,11 @@ static PyObject *bpy_user_resource(PyObject *UNUSED(self), PyObject *args, PyObj
 		return NULL;
 	}
 	
-	/* same logic as BLI_get_folder_create(), but best leave it up to the script author to create */
-	path = BLI_get_folder(folder_id, subdir);
+	/* same logic as BKE_appdir_folder_id_create(), but best leave it up to the script author to create */
+	path = BKE_appdir_folder_id(folder_id, subdir);
 
 	if (!path)
-		path = BLI_get_user_folder_notest(folder_id, subdir);
+		path = BKE_appdir_folder_id_user_notest(folder_id, subdir);
 
 	return PyC_UnicodeFromByte(path ? path : "");
 }
@@ -211,7 +206,7 @@ static PyObject *bpy_resource_path(PyObject *UNUSED(self), PyObject *args, PyObj
 		return NULL;
 	}
 
-	path = BLI_get_folder_version(folder_id, (major * 100) + minor, false);
+	path = BKE_appdir_folder_id_version(folder_id, (major * 100) + minor, false);
 
 	return PyC_UnicodeFromByte(path ? path : "");
 }
@@ -296,7 +291,7 @@ void BPy_init_modules(void)
 	PyObject *mod;
 
 	/* Needs to be first since this dir is needed for future modules */
-	const char * const modpath = BLI_get_folder(BLENDER_SYSTEM_SCRIPTS, "modules");
+	const char * const modpath = BKE_appdir_folder_id(BLENDER_SYSTEM_SCRIPTS, "modules");
 	if (modpath) {
 		// printf("bpy: found module path '%s'.\n", modpath);
 		PyObject *sys_path = PySys_GetObject("path"); /* borrow */
@@ -339,6 +334,7 @@ void BPy_init_modules(void)
 	PyModule_AddObject(mod, "ops", BPY_operator_module());
 	PyModule_AddObject(mod, "app", BPY_app_struct());
 	PyModule_AddObject(mod, "_utils_units", BPY_utils_units());
+	PyModule_AddObject(mod, "_utils_previews", BPY_utils_previews_module());
 
 	/* bpy context */
 	RNA_pointer_create(NULL, &RNA_Context, (void *)BPy_GetContext(), &ctx_ptr);

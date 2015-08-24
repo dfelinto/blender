@@ -45,7 +45,7 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BLI_blenlib.h"
 #include "BLI_utildefines.h"
@@ -78,7 +78,7 @@
 static void validate_fmodifier_cb(bContext *UNUSED(C), void *fcm_v, void *UNUSED(arg))
 {
 	FModifier *fcm = (FModifier *)fcm_v;
-	FModifierTypeInfo *fmi = fmodifier_get_typeinfo(fcm);
+	const FModifierTypeInfo *fmi = fmodifier_get_typeinfo(fcm);
 	
 	/* call the verify callback on the modifier if applicable */
 	if (fmi && fmi->verify_data)
@@ -130,6 +130,7 @@ static void draw_modifier__generator(uiLayout *layout, ID *id, FModifier *fcm, s
 	switch (data->mode) {
 		case FCM_GENERATOR_POLYNOMIAL: /* polynomial expression */
 		{
+			const uiFontStyle *fstyle = UI_FSTYLE_WIDGET;
 			float *cp = NULL;
 			char xval[32];
 			unsigned int i;
@@ -147,11 +148,12 @@ static void draw_modifier__generator(uiLayout *layout, ID *id, FModifier *fcm, s
 			/* calculate maximum width of label for "x^n" labels */
 			if (data->arraysize > 2) {
 				BLI_snprintf(xval, sizeof(xval), "x^%u", data->arraysize);
-				maxXWidth = UI_fontstyle_string_width(xval) + 0.5 * UI_UNIT_X; /* XXX: UI_fontstyle_string_width is not accurate */
+				/* XXX: UI_fontstyle_string_width is not accurate */
+				maxXWidth = UI_fontstyle_string_width(fstyle, xval) + 0.5 * UI_UNIT_X;
 			}
 			else {
 				/* basic size (just "x") */
-				maxXWidth = UI_fontstyle_string_width("x") + 0.5 * UI_UNIT_X;
+				maxXWidth = UI_fontstyle_string_width(fstyle, "x") + 0.5 * UI_UNIT_X;
 			}
 			
 			/* draw controls for each coefficient and a + sign at end of row */
@@ -553,7 +555,7 @@ static void draw_modifier__stepped(uiLayout *layout, ID *id, FModifier *fcm, sho
 
 void ANIM_uiTemplate_fmodifier_draw(uiLayout *layout, ID *id, ListBase *modifiers, FModifier *fcm)
 {
-	FModifierTypeInfo *fmi = fmodifier_get_typeinfo(fcm);
+	const FModifierTypeInfo *fmi = fmodifier_get_typeinfo(fcm);
 	uiLayout *box, *row, *sub, *col;
 	uiBlock *block;
 	uiBut *but;

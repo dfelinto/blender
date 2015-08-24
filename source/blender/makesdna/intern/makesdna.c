@@ -73,6 +73,7 @@ static const char *includefiles[] = {
 	"DNA_key_types.h",
 	"DNA_text_types.h",
 	"DNA_packedFile_types.h",
+	"DNA_gpu_types.h",
 	"DNA_camera_types.h",
 	"DNA_image_types.h",
 	"DNA_texture_types.h",
@@ -538,6 +539,11 @@ static void *read_file_data(char *filename, int *r_len)
 	*r_len = ftell(fp);
 	fseek(fp, 0L, SEEK_SET);
 
+	if (*r_len == -1) {
+		fclose(fp);
+		return NULL;
+	}
+
 	data = MEM_mallocN(*r_len, "read_file_data");
 	if (!data) {
 		*r_len = -1;
@@ -909,7 +915,7 @@ static void dna_write(FILE *file, const void *pntr, const int size)
 	int i;
 	const char *data;
 
-	data = (char *) pntr;
+	data = (const char *)pntr;
 	
 	for (i = 0; i < size; i++) {
 		fprintf(file, "%d, ", data[i]);

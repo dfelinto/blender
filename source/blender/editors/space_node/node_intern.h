@@ -42,12 +42,9 @@ struct ARegionType;
 struct View2D;
 struct bContext;
 struct wmWindow;
-struct wmWindowManager;
-struct wmEvent;
 struct bNode;
 struct bNodeSocket;
 struct bNodeLink;
-struct Main;
 struct wmKeyConfig;
 
 /* temp data to pass on to modal */
@@ -87,6 +84,7 @@ void drawnodespace(const bContext *C, ARegion *ar);
 void node_set_cursor(struct wmWindow *win, struct SpaceNode *snode, float cursor[2]);
 	/* DPI scaled coords */
 void node_to_view(struct bNode *node, float x, float y, float *rx, float *ry);
+void node_to_updated_rect(struct bNode *node, rctf *r_rect);
 void node_from_view(struct bNode *node, float x, float y, float *rx, float *ry);
 
 /* node_buttons.c */
@@ -169,6 +167,8 @@ void NODE_OT_detach(struct wmOperatorType *ot);
 
 void NODE_OT_link_viewer(struct wmOperatorType *ot);
 
+void NODE_OT_insert_offset(wmOperatorType *ot);
+
 /* node_edit.c */
 void snode_notify(struct bContext *C, struct SpaceNode *snode);
 void snode_dag_update(struct bContext *C, struct SpaceNode *snode);
@@ -203,6 +203,8 @@ void NODE_OT_output_file_add_socket(struct wmOperatorType *ot);
 void NODE_OT_output_file_remove_active_socket(struct wmOperatorType *ot);
 void NODE_OT_output_file_move_active_socket(struct wmOperatorType *ot);
 
+void NODE_OT_switch_view_update (struct wmOperatorType *ot);
+
 /* Note: clipboard_cut is a simple macro of copy + delete */
 void NODE_OT_clipboard_copy(struct wmOperatorType *ot);
 void NODE_OT_clipboard_paste(struct wmOperatorType *ot);
@@ -226,7 +228,8 @@ extern const char *node_context_dir[];
 #define NODE_DYS        (U.widget_unit / 2)
 #define NODE_DY         U.widget_unit
 #define NODE_SOCKDY     (0.08f * U.widget_unit)
-#define NODE_WIDTH(node)	(node->width * UI_DPI_FAC)
+#define NODE_WIDTH(node)  (node->width * UI_DPI_FAC)
+#define NODE_HEIGHT(node) (node->height * UI_DPI_FAC)
 #define NODE_MARGIN_X   (0.75f * U.widget_unit)
 #define NODE_SOCKSIZE   (0.25f * U.widget_unit)
 #define NODE_LINK_RESOL 12

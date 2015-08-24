@@ -241,7 +241,6 @@ typedef struct PTCacheEdit {
 
 	/* particles stuff */
 	struct ParticleSystem *psys;
-	struct ParticleData *particles;
 	struct KDTree *emitter_field;
 	float *emitter_cosnos; /* localspace face centers and normals (average of its verts), from the derived mesh */
 	int *mirror_cache;
@@ -304,7 +303,7 @@ struct PointCache *BKE_ptcache_add(struct ListBase *ptcaches);
 void BKE_ptcache_free_mem(struct ListBase *mem_cache);
 void BKE_ptcache_free(struct PointCache *cache);
 void BKE_ptcache_free_list(struct ListBase *ptcaches);
-struct PointCache *BKE_ptcache_copy_list(struct ListBase *ptcaches_new, struct ListBase *ptcaches_old, bool copy_data);
+struct PointCache *BKE_ptcache_copy_list(struct ListBase *ptcaches_new, const struct ListBase *ptcaches_old, bool copy_data);
 
 /********************** Baking *********************/
 

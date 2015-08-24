@@ -38,10 +38,9 @@
 #include "BLI_math.h"
 
 #include "BKE_global.h"
+#include "BKE_idprop.h"
 
 #include "MEM_guardedalloc.h"
-
-#include "imbuf.h"
 
 #include "IMB_imbuf_types.h"
 #include "IMB_imbuf.h"
@@ -54,7 +53,7 @@
 #include "IMB_colormanagement_intern.h"
 
 typedef struct PNGReadStruct {
-	unsigned char *data;
+	const unsigned char *data;
 	unsigned int size;
 	unsigned int seek;
 } PNGReadStruct;
@@ -68,11 +67,18 @@ BLI_INLINE unsigned short UPSAMPLE_8_TO_16(const unsigned char _val)
 	return (_val << 8) + _val;
 }
 
-int imb_is_a_png(unsigned char *mem)
+int imb_is_a_png(const unsigned char *mem)
 {
 	int ret_val = 0;
 
-	if (mem) ret_val = !png_sig_cmp(mem, 0, 8);
+	if (mem) {
+#if (PNG_LIBPNG_VER_MAJOR == 1) && (PNG_LIBPNG_VER_MINOR == 2)
+		/* Older version of libpng doesn't use const pointer to memory. */
+		ret_val = !png_sig_cmp((png_bytep)mem, 0, 8);
+#else
+		ret_val = !png_sig_cmp(mem, 0, 8);
+#endif
+	}
 	return(ret_val);
 }
 
@@ -134,15 +140,16 @@ int imb_savepng(struct ImBuf *ibuf, const char *name, int flags)
 	int i, bytesperpixel, color_type = PNG_COLOR_TYPE_GRAY;
 	FILE *fp = NULL;
 
-	bool is_16bit  = (ibuf->ftype & PNG_16BIT) != 0;
+	bool is_16bit  = (ibuf->foptions.flag & PNG_16BIT) != 0;
 	bool has_float = (ibuf->rect_float != NULL);
 	int channels_in_float = ibuf->channels ? ibuf->channels : 4;
 
 	float (*chanel_colormanage_cb)(float);
+	size_t num_bytes;
 
 	/* use the jpeg quality setting for compression */
 	int compression;
-	compression = (int)(((float)(ibuf->ftype & 0xff) / 11.1111f));
+	compression = (int)(((float)(ibuf->foptions.quality) / 11.1111f));
 	compression = compression < 0 ? 0 : (compression > 9 ? 9 : compression);
 
 	if (ibuf->float_colorspace) {
@@ -185,11 +192,11 @@ int imb_savepng(struct ImBuf *ibuf, const char *name, int flags)
 	}
 
 	/* copy image data */
-
+	num_bytes = ((size_t)ibuf->x) * ibuf->y * bytesperpixel;
 	if (is_16bit)
-		pixels16 = MEM_mallocN(ibuf->x * ibuf->y * bytesperpixel * sizeof(unsigned short), "png 16bit pixels");
+		pixels16 = MEM_mallocN(num_bytes * sizeof(unsigned short), "png 16bit pixels");
 	else
-		pixels = MEM_mallocN(ibuf->x * ibuf->y * bytesperpixel * sizeof(unsigned char), "png 8bit pixels");
+		pixels = MEM_mallocN(num_bytes * sizeof(unsigned char), "png 8bit pixels");
 
 	if (pixels == NULL && pixels16 == NULL) {
 		png_destroy_write_struct(&png_ptr, &info_ptr);
@@ -313,7 +320,7 @@ int imb_savepng(struct ImBuf *ibuf, const char *name, int flags)
 							rgb[0] = chanel_colormanage_cb(from_straight[0]);
 							rgb[1] = chanel_colormanage_cb(from_straight[1]);
 							rgb[2] = chanel_colormanage_cb(from_straight[2]);
-							to16[0] = ftoshort(rgb_to_bw(rgb));
+							to16[0] = ftoshort(IMB_colormanagement_get_luminance(rgb));
 							to16++; from_float += 4;
 						}
 					}
@@ -322,7 +329,7 @@ int imb_savepng(struct ImBuf *ibuf, const char *name, int flags)
 							rgb[0] = chanel_colormanage_cb(from_float[0]);
 							rgb[1] = chanel_colormanage_cb(from_float[1]);
 							rgb[2] = chanel_colormanage_cb(from_float[2]);
-							to16[0] = ftoshort(rgb_to_bw(rgb));
+							to16[0] = ftoshort(IMB_colormanagement_get_luminance(rgb));
 							to16++; from_float += 3;
 						}
 					}
@@ -399,24 +406,25 @@ int imb_savepng(struct ImBuf *ibuf, const char *name, int flags)
 	/* image text info */
 	if (ibuf->metadata) {
 		png_text *metadata;
-		ImMetaData *iptr;
+		IDProperty *prop;
+
 		int num_text = 0;
-		iptr = ibuf->metadata;
-		while (iptr) {
-			num_text++;
-			iptr = iptr->next;
+
+		for (prop = ibuf->metadata->data.group.first; prop; prop = prop->next) {
+			if (prop->type == IDP_STRING) {
+				num_text++;
+			}
 		}
 		
 		metadata = MEM_callocN(num_text * sizeof(png_text), "png_metadata");
-		iptr = ibuf->metadata;
 		num_text = 0;
-		while (iptr) {
-			
-			metadata[num_text].compression = PNG_TEXT_COMPRESSION_NONE;
-			metadata[num_text].key = iptr->key;
-			metadata[num_text].text = iptr->value;
-			num_text++;
-			iptr = iptr->next;
+		for (prop = ibuf->metadata->data.group.first; prop; prop = prop->next) {
+			if (prop->type == IDP_STRING) {
+				metadata[num_text].compression = PNG_TEXT_COMPRESSION_NONE;
+				metadata[num_text].key = prop->name;
+				metadata[num_text].text = IDP_String(prop);
+				num_text++;
+			}
 		}
 		
 		png_set_text(png_ptr, info_ptr, metadata, num_text);
@@ -454,13 +462,13 @@ int imb_savepng(struct ImBuf *ibuf, const char *name, int flags)
 	if (is_16bit) {
 		for (i = 0; i < ibuf->y; i++) {
 			row_pointers[ibuf->y - 1 - i] = (png_bytep)
-			                                ((unsigned short *)pixels16 + (i * ibuf->x) * bytesperpixel);
+			                                ((unsigned short *)pixels16 + (((size_t)i) * ibuf->x) * bytesperpixel);
 		}
 	}
 	else {
 		for (i = 0; i < ibuf->y; i++) {
 			row_pointers[ibuf->y - 1 - i] = (png_bytep)
-			                                ((unsigned char *)pixels + (i * ibuf->x) * bytesperpixel * sizeof(unsigned char));
+			                                ((unsigned char *)pixels + (((size_t)i) * ibuf->x) * bytesperpixel * sizeof(unsigned char));
 		}
 	}
 
@@ -492,7 +500,7 @@ static void imb_png_warning(png_structp UNUSED(png_ptr), png_const_charp message
 	 * and with new libpng it became too much picky, giving a warning on
 	 * the splash screen even.
 	 */
-	if ((G.debug & G_DEBUG) == 0 && !strncmp(message, "iCCP", 4)) {
+	if ((G.debug & G_DEBUG) == 0 && STREQLEN(message, "iCCP", 4)) {
 		return;
 	}
 	fprintf(stderr, "libpng warning: %s\n", message);
@@ -503,7 +511,7 @@ static void imb_png_error(png_structp UNUSED(png_ptr), png_const_charp message)
 	fprintf(stderr, "libpng error: %s\n", message);
 }
 
-ImBuf *imb_loadpng(unsigned char *mem, size_t size, int flags, char colorspace[IM_MAX_SPACE])
+ImBuf *imb_loadpng(const unsigned char *mem, size_t size, int flags, char colorspace[IM_MAX_SPACE])
 {
 	struct ImBuf *ibuf = NULL;
 	png_structp png_ptr;
@@ -583,6 +591,10 @@ ImBuf *imb_loadpng(unsigned char *mem, size_t size, int flags, char colorspace[I
 			if (bit_depth < 8) {
 				png_set_expand(png_ptr);
 				bit_depth = 8;
+				if (png_get_valid(png_ptr, info_ptr, PNG_INFO_tRNS)) {
+					/* PNG_COLOR_TYPE_GRAY may also have alpha 'values', like with palette. */
+					bytesperpixel = 2;
+				}
 			}
 			break;
 		default:
@@ -594,9 +606,9 @@ ImBuf *imb_loadpng(unsigned char *mem, size_t size, int flags, char colorspace[I
 	ibuf = IMB_allocImBuf(width, height, 8 * bytesperpixel, 0);
 
 	if (ibuf) {
-		ibuf->ftype = PNG;
+		ibuf->ftype = IMB_FTYPE_PNG;
 		if (bit_depth == 16)
-			ibuf->ftype |= PNG_16BIT;
+			ibuf->foptions.flag |= PNG_16BIT;
 
 		if (png_get_valid(png_ptr, info_ptr, PNG_INFO_pHYs)) {
 			int unit_type;
@@ -682,7 +694,7 @@ ImBuf *imb_loadpng(unsigned char *mem, size_t size, int flags, char colorspace[I
 		else {
 			imb_addrectImBuf(ibuf);
 
-			pixels = MEM_mallocN(ibuf->x * ibuf->y * bytesperpixel * sizeof(unsigned char), "pixels");
+			pixels = MEM_mallocN(((size_t)ibuf->x) * ibuf->y * bytesperpixel * sizeof(unsigned char), "pixels");
 			if (pixels == NULL) {
 				printf("Cannot allocate pixels array\n");
 				longjmp(png_jmpbuf(png_ptr), 1);
@@ -698,7 +710,7 @@ ImBuf *imb_loadpng(unsigned char *mem, size_t size, int flags, char colorspace[I
 			/* set the individual row-pointers to point at the correct offsets */
 			for (i = 0; i < ibuf->y; i++) {
 				row_pointers[ibuf->y - 1 - i] = (png_bytep)
-				                                ((unsigned char *)pixels + (i * ibuf->x) * bytesperpixel * sizeof(unsigned char));
+				                                ((unsigned char *)pixels + (((size_t)i) * ibuf->x) * bytesperpixel * sizeof(unsigned char));
 			}
 
 			png_read_image(png_ptr, row_pointers);

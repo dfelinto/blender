@@ -19,7 +19,7 @@
 #  Filename : anisotropic_diffusion.py
 #  Author   : Fredo Durand
 #  Date     : 12/08/2004
-#  Purpose  : Smoothes lines using an anisotropic diffusion scheme
+#  Purpose  : Smooth lines using an anisotropic diffusion scheme
 
 from freestyle.chainingiterators import ChainPredicateIterator
 from freestyle.predicates import (
@@ -34,7 +34,6 @@ from freestyle.shaders import (
     ConstantThicknessShader,
     IncreasingColorShader,
     SamplingShader,
-    StrokeTextureShader,
     pyDiffusion2Shader,
     )
 from freestyle.types import Operators, Stroke
@@ -50,7 +49,6 @@ bpred = TrueBP1D()
 Operators.bidirectional_chain(ChainPredicateIterator(upred, bpred), NotUP1D(upred))
 shaders_list = [
     ConstantThicknessShader(4),
-    StrokeTextureShader("smoothAlpha.bmp", Stroke.OPAQUE_MEDIUM, False),
     SamplingShader(2),
     pyDiffusion2Shader(offset, nbIter),
     IncreasingColorShader(1, 0, 0, 1, 0, 1, 0, 1),

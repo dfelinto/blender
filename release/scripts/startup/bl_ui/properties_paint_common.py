@@ -20,7 +20,7 @@
 from bpy.types import Menu
 
 
-class UnifiedPaintPanel():
+class UnifiedPaintPanel:
     # subclass must set
     # bl_space_type = 'IMAGE_EDITOR'
     # bl_region_type = 'UI'
@@ -133,7 +133,7 @@ def brush_texpaint_common(panel, context, layout, brush, settings, projpaint=Fal
             else:
                 row = col.row(align=True)
                 panel.prop_unified_color(row, context, brush, "color", text="")
-                if brush.image_tool == 'FILL':
+                if brush.image_tool == 'FILL' and not projpaint:
                     col.prop(brush, "fill_threshold")
                 else:
                     panel.prop_unified_color(row, context, brush, "secondary_color", text="")
@@ -216,7 +216,9 @@ def brush_texpaint_common(panel, context, layout, brush, settings, projpaint=Fal
         col = layout.column(align=True)
         col.prop(brush, "use_accumulate")
 
-    col.prop(brush, "use_alpha")
+    if projpaint:
+        col.prop(brush, "use_alpha")
+
     col.prop(brush, "use_gradient")
 
     col.separator()
@@ -243,24 +245,23 @@ def brush_texture_settings(layout, brush, sculpt):
         layout.operator("brush.stencil_reset_transform")
 
     # angle and texture_angle_source
-    if brush.brush_capabilities.has_texture_angle:
+    if tex_slot.has_texture_angle:
         col = layout.column()
         col.label(text="Angle:")
-        row = col.row(align=True)
-        if brush.brush_capabilities.has_texture_angle_source:
-            if brush.brush_capabilities.has_random_texture_angle:
+        col.prop(tex_slot, "angle", text="")
+        if tex_slot.has_texture_angle_source:
+            col.prop(tex_slot, "use_rake", text="Rake")
+
+            if brush.brush_capabilities.has_random_texture_angle and tex_slot.has_random_texture_angle:
                 if sculpt:
                     if brush.sculpt_capabilities.has_random_texture_angle:
-                        row.prop(brush, "texture_angle_source_random", text="")
-                    else:
-                        row.prop(brush, "texture_angle_source_no_random", text="")
-
+                        col.prop(tex_slot, "use_random", text="Random")
+                        if tex_slot.use_random:
+                            col.prop(tex_slot, "random_angle", text="")
                 else:
-                    row.prop(brush, "texture_angle_source_random", text="")
-            else:
-                row.prop(brush, "texture_angle_source_no_random", text="")
-
-        row.prop(tex_slot, "angle", text="")
+                    col.prop(tex_slot, "use_random", text="Random")
+                    if tex_slot.use_random:
+                        col.prop(tex_slot, "random_angle", text="")
 
     # scale and offset
     split = layout.split()
@@ -290,9 +291,18 @@ def brush_mask_texture_settings(layout, brush):
 
     col = layout.column()
     col.prop(brush, "use_pressure_masking", text="")
-    col.label(text="Angle:")
-    col.active = brush.brush_capabilities.has_texture_angle
-    col.prop(mask_tex_slot, "angle", text="")
+    # angle and texture_angle_source
+    if mask_tex_slot.has_texture_angle:
+        col = layout.column()
+        col.label(text="Angle:")
+        col.prop(mask_tex_slot, "angle", text="")
+        if mask_tex_slot.has_texture_angle_source:
+            col.prop(mask_tex_slot, "use_rake", text="Rake")
+
+            if brush.brush_capabilities.has_random_texture_angle and mask_tex_slot.has_random_texture_angle:
+                col.prop(mask_tex_slot, "use_random", text="Random")
+                if mask_tex_slot.use_random:
+                    col.prop(mask_tex_slot, "random_angle", text="")
 
     # scale and offset
     split = layout.split()

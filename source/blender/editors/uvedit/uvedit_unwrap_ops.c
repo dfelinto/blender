@@ -190,7 +190,7 @@ static bool uvedit_have_selection(Scene *scene, BMEditMesh *em, bool implicit)
 	return false;
 }
 
-void uvedit_get_aspect(Scene *scene, Object *ob, BMesh *bm, float *aspx, float *aspy)
+void ED_uvedit_get_aspect(Scene *scene, Object *ob, BMesh *bm, float *aspx, float *aspy)
 {
 	bool sloppy = true;
 	bool selected = false;
@@ -264,7 +264,7 @@ static ParamHandle *construct_param_handle(Scene *scene, Object *ob, BMesh *bm,
 	if (correct_aspect) {
 		float aspx, aspy;
 
-		uvedit_get_aspect(scene, ob, bm, &aspx, &aspy);
+		ED_uvedit_get_aspect(scene, ob, bm, &aspx, &aspy);
 
 		if (aspx != aspy)
 			param_aspect_ratio(handle, aspx, aspy);
@@ -376,7 +376,7 @@ static ParamHandle *construct_param_handle_subsurfed(Scene *scene, Object *ob, B
 	if (correct_aspect) {
 		float aspx, aspy;
 
-		uvedit_get_aspect(scene, ob, em->bm, &aspx, &aspy);
+		ED_uvedit_get_aspect(scene, ob, em->bm, &aspx, &aspy);
 
 		if (aspx != aspy)
 			param_aspect_ratio(handle, aspx, aspy);
@@ -681,7 +681,7 @@ void UV_OT_minimize_stretch(wmOperatorType *ot)
 	/* identifiers */
 	ot->name = "Minimize Stretch";
 	ot->idname = "UV_OT_minimize_stretch";
-	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_GRAB_POINTER | OPTYPE_BLOCKING;
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_GRAB_CURSOR | OPTYPE_BLOCKING;
 	ot->description = "Reduce UV stretching by relaxing angles";
 	
 	/* api callbacks */
@@ -1010,7 +1010,7 @@ static void correct_uv_aspect(Scene *scene, Object *ob, BMEditMesh *em)
 	
 	const int cd_loop_uv_offset = CustomData_get_offset(&em->bm->ldata, CD_MLOOPUV);
 
-	uvedit_get_aspect(scene, ob, em->bm, &aspx, &aspy);
+	ED_uvedit_get_aspect(scene, ob, em->bm, &aspx, &aspy);
 	
 	if (aspx == aspy)
 		return;
@@ -1130,7 +1130,7 @@ void ED_unwrap_lscm(Scene *scene, Object *obedit, const short sel)
 	ParamHandle *handle;
 
 	const bool fill_holes = (scene->toolsettings->uvcalc_flag & UVCALC_FILLHOLES) != 0;
-	const bool correct_aspect = (scene->toolsettings->uvcalc_flag & UVCALC_NO_ASPECT_CORRECT) != 0;
+	const bool correct_aspect = (scene->toolsettings->uvcalc_flag & UVCALC_NO_ASPECT_CORRECT) == 0;
 	bool use_subsurf;
 
 	modifier_unwrap_state(obedit, scene, &use_subsurf);

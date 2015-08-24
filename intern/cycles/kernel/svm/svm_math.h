@@ -11,48 +11,10 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 CCL_NAMESPACE_BEGIN
-
-ccl_device float average_fac(float3 v)
-{
-	return (fabsf(v.x) + fabsf(v.y) + fabsf(v.z))/3.0f;
-}
-
-ccl_device void svm_vector_math(float *Fac, float3 *Vector, NodeVectorMath type, float3 Vector1, float3 Vector2)
-{
-	if(type == NODE_VECTOR_MATH_ADD) {
-		*Vector = Vector1 + Vector2;
-		*Fac = average_fac(*Vector);
-	}
-	else if(type == NODE_VECTOR_MATH_SUBTRACT) {
-		*Vector = Vector1 - Vector2;
-		*Fac = average_fac(*Vector);
-	}
-	else if(type == NODE_VECTOR_MATH_AVERAGE) {
-		*Fac = len(Vector1 + Vector2);
-		*Vector = normalize(Vector1 + Vector2);
-	}
-	else if(type == NODE_VECTOR_MATH_DOT_PRODUCT) {
-		*Fac = dot(Vector1, Vector2);
-		*Vector = make_float3(0.0f, 0.0f, 0.0f);
-	}
-	else if(type == NODE_VECTOR_MATH_CROSS_PRODUCT) {
-		float3 c = cross(Vector1, Vector2);
-		*Fac = len(c);
-		*Vector = normalize(c);
-	}
-	else if(type == NODE_VECTOR_MATH_NORMALIZE) {
-		*Fac = len(Vector1);
-		*Vector = normalize(Vector1);
-	}
-	else {
-		*Fac = 0.0f;
-		*Vector = make_float3(0.0f, 0.0f, 0.0f);
-	}
-}
 
 /* Nodes */
 

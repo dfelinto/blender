@@ -46,6 +46,7 @@ set(SRC_DNA_INC
 	${CMAKE_CURRENT_SOURCE_DIR}/makesdna/DNA_freestyle_types.h
 	${CMAKE_CURRENT_SOURCE_DIR}/makesdna/DNA_genfile.h
 	${CMAKE_CURRENT_SOURCE_DIR}/makesdna/DNA_gpencil_types.h
+	${CMAKE_CURRENT_SOURCE_DIR}/makesdna/DNA_gpu_types.h
 	${CMAKE_CURRENT_SOURCE_DIR}/makesdna/DNA_group_types.h
 	${CMAKE_CURRENT_SOURCE_DIR}/makesdna/DNA_image_types.h
 	${CMAKE_CURRENT_SOURCE_DIR}/makesdna/DNA_ipo_types.h
@@ -100,8 +101,11 @@ add_subdirectory(blenlib)
 add_subdirectory(bmesh)
 add_subdirectory(render)
 add_subdirectory(blenfont)
+add_subdirectory(blentranslation)
 add_subdirectory(blenloader)
+add_subdirectory(depsgraph)
 add_subdirectory(ikplugin)
+add_subdirectory(physics)
 add_subdirectory(gpu)
 add_subdirectory(imbuf)
 add_subdirectory(nodes)

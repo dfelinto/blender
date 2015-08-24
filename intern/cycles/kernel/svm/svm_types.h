@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #ifndef __SVM_TYPES_H__
@@ -27,6 +27,29 @@ CCL_NAMESPACE_BEGIN
 #define SVM_STACK_INVALID 255 
 
 /* Nodes */
+
+/* Known frequencies of used nodes, used for selective nodes compilation
+ * in the kernel. Currently only affects split OpenCL kernel.
+ *
+ * Keep as defines so it's easy to check which nodes are to be compiled
+ * from preprocessor.
+ *
+ * Lower the number of group more often the node is used.
+ */
+#define NODE_GROUP_LEVEL_0    0
+#define NODE_GROUP_LEVEL_1    1
+#define NODE_GROUP_LEVEL_2    2
+#define NODE_GROUP_LEVEL_3    3
+#define NODE_GROUP_LEVEL_MAX  NODE_GROUP_LEVEL_3
+
+#define NODE_FEATURE_VOLUME     (1 << 0)
+#define NODE_FEATURE_HAIR       (1 << 1)
+#define NODE_FEATURE_BUMP       (1 << 2)
+/* TODO(sergey): Consider using something like ((uint)(-1)).
+ * Need to check carefully operand types around usage of this
+ * define first.
+ */
+#define NODE_FEATURE_ALL        (NODE_FEATURE_VOLUME|NODE_FEATURE_HAIR|NODE_FEATURE_BUMP)
 
 typedef enum NodeType {
 	NODE_END = 0,
@@ -102,7 +125,8 @@ typedef enum NodeType {
 	NODE_TANGENT,
 	NODE_NORMAL_MAP,
 	NODE_HAIR_INFO,
-	NODE_UVMAP
+	NODE_UVMAP,
+	NODE_TEX_VOXEL,
 } NodeType;
 
 typedef enum NodeAttributeType {
@@ -256,27 +280,6 @@ typedef enum NodeConvert {
 	NODE_CONVERT_IV
 } NodeConvert;
 
-typedef enum NodeDistanceMetric {
-	NODE_VORONOI_DISTANCE_SQUARED,
-	NODE_VORONOI_ACTUAL_DISTANCE,
-	NODE_VORONOI_MANHATTAN,
-	NODE_VORONOI_CHEBYCHEV,
-	NODE_VORONOI_MINKOVSKY_H,
-	NODE_VORONOI_MINKOVSKY_4,
-	NODE_VORONOI_MINKOVSKY
-} NodeDistanceMetric;
-
-typedef enum NodeNoiseBasis {
-	NODE_NOISE_PERLIN,
-	NODE_NOISE_VORONOI_F1,
-	NODE_NOISE_VORONOI_F2,
-	NODE_NOISE_VORONOI_F3,
-	NODE_NOISE_VORONOI_F4,
-	NODE_NOISE_VORONOI_F2_F1,
-	NODE_NOISE_VORONOI_CRACKLE,
-	NODE_NOISE_CELL_NOISE
-} NodeNoiseBasis;
-
 typedef enum NodeMusgraveType {
 	NODE_MUSGRAVE_MULTIFRACTAL,
 	NODE_MUSGRAVE_FBM,
@@ -333,6 +336,24 @@ typedef enum NodeNormalMapSpace {
 	NODE_NORMAL_MAP_BLENDER_OBJECT,
 	NODE_NORMAL_MAP_BLENDER_WORLD,
 } NodeNormalMapSpace;
+
+typedef enum NodeImageProjection {
+	NODE_IMAGE_PROJ_FLAT   = 0,
+	NODE_IMAGE_PROJ_BOX    = 1,
+	NODE_IMAGE_PROJ_SPHERE = 2,
+	NODE_IMAGE_PROJ_TUBE   = 3,
+} NodeImageProjection;
+
+typedef enum NodeBumpOffset {
+	NODE_BUMP_OFFSET_CENTER,
+	NODE_BUMP_OFFSET_DX,
+	NODE_BUMP_OFFSET_DY,
+} NodeBumpOffset;
+
+typedef enum NodeTexVoxelSpace {
+	NODE_TEX_VOXEL_SPACE_OBJECT = 0,
+	NODE_TEX_VOXEL_SPACE_WORLD  = 1,
+} NodeTexVoxelSpace;
 
 typedef enum ShaderType {
 	SHADER_TYPE_SURFACE,
@@ -413,6 +434,7 @@ typedef enum ClosureType {
 #define CLOSURE_IS_BACKGROUND(type) (type == CLOSURE_BACKGROUND_ID)
 #define CLOSURE_IS_AMBIENT_OCCLUSION(type) (type == CLOSURE_AMBIENT_OCCLUSION_ID)
 #define CLOSURE_IS_PHASE(type) (type == CLOSURE_VOLUME_HENYEY_GREENSTEIN_ID)
+#define CLOSURE_IS_GLASS(type) (type >= CLOSURE_BSDF_MICROFACET_BECKMANN_GLASS_ID && type <= CLOSURE_BSDF_SHARP_GLASS_ID)
 
 #define CLOSURE_WEIGHT_CUTOFF 1e-5f
 

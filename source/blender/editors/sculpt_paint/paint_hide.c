@@ -98,7 +98,7 @@ static void partialvis_update_mesh(Object *ob,
 	Mesh *me = ob->data;
 	MVert *mvert;
 	const float *paint_mask;
-	int *vert_indices;
+	const int *vert_indices;
 	int totvert, i;
 	bool any_changed = false, any_visible = false;
 			
@@ -150,7 +150,7 @@ static void partialvis_update_grids(Object *ob,
 	/* get PBVH data */
 	BKE_pbvh_node_get_grids(pbvh, node,
 	                        &grid_indices, &totgrid, NULL, NULL,
-	                        &grids, NULL);
+	                        &grids);
 	grid_hidden = BKE_pbvh_grid_hidden(pbvh);
 	BKE_pbvh_get_grid_key(pbvh, &key);
 	

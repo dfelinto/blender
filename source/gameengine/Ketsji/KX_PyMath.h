@@ -41,8 +41,8 @@
 #include "MT_Matrix3x3.h"
 #include "MT_Matrix4x4.h"
 
-#include "KX_Python.h"
-#include "PyObjectPlus.h"
+#include "EXP_Python.h"
+#include "EXP_PyObjectPlus.h"
 
 #ifdef WITH_PYTHON
 #ifdef USE_MATHUTILS
@@ -272,5 +272,10 @@ PyObject *PyObjectFrom(const MT_Quaternion &qrot);
 PyObject *PyObjectFrom(const MT_Tuple4 &pos);
 
 #endif
+
+/**
+ * Converts an MT_Vector3 to a python color object.
+ */
+PyObject *PyColorFromVector(const MT_Vector3 &vec);
 
 #endif  /* WITH_PYTHON */

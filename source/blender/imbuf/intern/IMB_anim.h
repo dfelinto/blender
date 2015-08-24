@@ -79,11 +79,7 @@
 #endif
 
 #ifdef WITH_REDCODE
-#  ifdef _WIN32 /* on windows we use the one in extern instead */
-#    include "libredcode/format.h"
-#  else
-#    include "libredcode/format.h"
-#  endif
+#  include "libredcode/format.h"
 #endif
 
 #include "IMB_imbuf_types.h"
@@ -194,6 +190,7 @@ struct anim {
 	struct anim_index *curr_idx[IMB_TC_MAX_SLOT];
 
 	char colorspace[64];
+	char suffix[64]; /* MAX_NAME - multiview */
 };
 
 #endif

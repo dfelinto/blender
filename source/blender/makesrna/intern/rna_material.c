@@ -181,7 +181,7 @@ static void rna_Material_active_paint_texture_index_update(Main *bmain, Scene *s
 	bScreen *sc;
 	Material *ma = ptr->id.data;
 
-	if (ma->use_nodes && ma->nodetree && BKE_scene_use_new_shading_nodes(scene)) {
+	if (ma->use_nodes && ma->nodetree) {
 		struct bNode *node;
 		int index = 0;
 		for (node = ma->nodetree->nodes.first; node; node = node->next) {
@@ -377,7 +377,7 @@ static EnumPropertyItem *rna_Material_texture_coordinates_itemf(bContext *UNUSED
 
 MTex *rna_mtex_texture_slots_add(ID *self_id, struct bContext *C, ReportList *reports)
 {
-	MTex *mtex = add_mtex_id(self_id, -1);
+	MTex *mtex = BKE_texture_mtex_add_id(self_id, -1);
 	if (mtex == NULL) {
 		BKE_reportf(reports, RPT_ERROR, "Maximum number of textures added %d", MAX_MTEX);
 		return NULL;
@@ -398,7 +398,7 @@ MTex *rna_mtex_texture_slots_create(ID *self_id, struct bContext *C, ReportList 
 		return NULL;
 	}
 
-	mtex = add_mtex_id(self_id, index);
+	mtex = BKE_texture_mtex_add_id(self_id, index);
 
 	/* for redraw only */
 	WM_event_add_notifier(C, NC_TEXTURE, CTX_data_scene(C));
@@ -834,9 +834,11 @@ static void rna_def_material_gamesettings(BlenderRNA *brna)
 		{GEMAT_ADD, "ADD", 0, "Add", "Render face transparent and add color of face"},
 		{GEMAT_CLIP, "CLIP", 0, "Alpha Clip", "Use the image alpha values clipped with no blending (binary alpha)"},
 		{GEMAT_ALPHA, "ALPHA", 0, "Alpha Blend",
-		              "Render polygon transparent, depending on alpha channel of the texture"},
+		 "Render polygon transparent, depending on alpha channel of the texture"},
 		{GEMAT_ALPHA_SORT, "ALPHA_SORT", 0, "Alpha Sort",
-		                   "Sort faces for correct alpha drawing (slow, use Alpha Clip instead when possible)"},
+		 "Sort faces for correct alpha drawing (slow, use Alpha Clip instead when possible)"},
+		{GEMAT_ALPHA_TO_COVERAGE, "ALPHA_ANTIALIASING", 0, "Alpha Anti-Aliasing",
+		 "Use textures alpha as anti-aliasing mask, requires multi-sample OpenGL display"},
 		{0, NULL, 0, NULL, NULL}
 	};
 

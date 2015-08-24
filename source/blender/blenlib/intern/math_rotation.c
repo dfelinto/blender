@@ -1016,6 +1016,41 @@ void angle_to_mat2(float mat[2][2], const float angle)
 	mat[1][1] =  angle_cos;
 }
 
+/****************************** Exponential Map ******************************/
+
+void quat_normalized_to_expmap(float expmap[3], const float q[4])
+{
+	float angle;
+	BLI_ASSERT_UNIT_QUAT(q);
+
+	/* Obtain axis/angle representation. */
+	quat_to_axis_angle(expmap, &angle, q);
+
+	/* Convert to exponential map. */
+	mul_v3_fl(expmap, angle);
+}
+
+void quat_to_expmap(float expmap[3], const float q[4])
+{
+	float q_no[4];
+	normalize_qt_qt(q_no, q);
+	quat_normalized_to_expmap(expmap, q_no);
+}
+
+void expmap_to_quat(float r[4], const float expmap[3])
+{
+	float axis[3];
+	float angle;
+
+	/* Obtain axis/angle representation. */
+	if (LIKELY((angle = normalize_v3_v3(axis, expmap)) != 0.0f)) {
+		axis_angle_normalized_to_quat(r, axis, angle_wrap_rad(angle));
+	}
+	else {
+		unit_qt(r);
+	}
+}
+
 /******************************** XYZ Eulers *********************************/
 
 /* XYZ order */
@@ -1288,12 +1323,21 @@ static const RotOrderInfo rotOrders[] = {
  * NOTE: since we start at 1 for the values, but arrays index from 0,
  *		 there is -1 factor involved in this process...
  */
-#define GET_ROTATIONORDER_INFO(order) (assert(order >= 0 && order <= 6), (order < 1) ? &rotOrders[0] : &rotOrders[(order) - 1])
+static const RotOrderInfo *get_rotation_order_info(const short order)
+{
+	assert(order >= 0 && order <= 6);
+	if (order < 1)
+		return &rotOrders[0];
+	else if (order < 6)
+		return &rotOrders[order - 1];
+	else
+		return &rotOrders[5];
+}
 
 /* Construct quaternion from Euler angles (in radians). */
 void eulO_to_quat(float q[4], const float e[3], const short order)
 {
-	const RotOrderInfo *R = GET_ROTATIONORDER_INFO(order);
+	const RotOrderInfo *R = get_rotation_order_info(order);
 	short i = R->axis[0], j = R->axis[1], k = R->axis[2];
 	double ti, tj, th, ci, cj, ch, si, sj, sh, cc, cs, sc, ss;
 	double a[3];
@@ -1338,7 +1382,7 @@ void quat_to_eulO(float e[3], short const order, const float q[4])
 /* Construct 3x3 matrix from Euler angles (in radians). */
 void eulO_to_mat3(float M[3][3], const float e[3], const short order)
 {
-	const RotOrderInfo *R = GET_ROTATIONORDER_INFO(order);
+	const RotOrderInfo *R = get_rotation_order_info(order);
 	short i = R->axis[0], j = R->axis[1], k = R->axis[2];
 	double ti, tj, th, ci, cj, ch, si, sj, sh, cc, cs, sc, ss;
 
@@ -1379,7 +1423,7 @@ void eulO_to_mat3(float M[3][3], const float e[3], const short order)
 /* returns two euler calculation methods, so we can pick the best */
 static void mat3_to_eulo2(float M[3][3], float eul1[3], float eul2[3], const short order)
 {
-	const RotOrderInfo *R = GET_ROTATIONORDER_INFO(order);
+	const RotOrderInfo *R = get_rotation_order_info(order);
 	short i = R->axis[0], j = R->axis[1], k = R->axis[2];
 	float mat[3][3];
 	float cy;
@@ -1515,7 +1559,7 @@ void rotate_eulO(float beul[3], const short order, char axis, float ang)
 /* the matrix is written to as 3 axis vectors */
 void eulO_to_gimbal_axis(float gmat[3][3], const float eul[3], const short order)
 {
-	const RotOrderInfo *R = GET_ROTATIONORDER_INFO(order);
+	const RotOrderInfo *R = get_rotation_order_info(order);
 
 	float mat[3][3];
 	float teul[3];
@@ -1572,7 +1616,7 @@ void eulO_to_gimbal_axis(float gmat[3][3], const float eul[3], const short order
 
 void mat4_to_dquat(DualQuat *dq, float basemat[4][4], float mat[4][4])
 {
-	float *t, *q, dscale[3], scale[3], basequat[4];
+	float *t, *q, dscale[3], scale[3], basequat[4], mat3[3][3];
 	float baseRS[4][4], baseinv[4][4], baseR[4][4], baseRinv[4][4];
 	float R[4][4], S[4][4];
 
@@ -1585,7 +1629,9 @@ void mat4_to_dquat(DualQuat *dq, float basemat[4][4], float mat[4][4])
 	dscale[1] = scale[1] - 1.0f;
 	dscale[2] = scale[2] - 1.0f;
 
-	if ((determinant_m4(mat) < 0.0f) || len_v3(dscale) > 1e-4f) {
+	copy_m3_m4(mat3, mat);
+
+	if (!is_orthonormal_m3(mat3) || (determinant_m4(mat) < 0.0f) || len_v3(dscale) > 1e-4f) {
 		/* extract R and S  */
 		float tmp[4][4];
 
@@ -1867,7 +1913,7 @@ float angle_wrap_deg(float angle)
 /* returns an angle compatible with angle_compat */
 float angle_compat_rad(float angle, float angle_compat)
 {
-	return angle + (floorf(((angle_compat - angle) / (float)M_PI) + 0.5f)) * (float)M_PI;
+	return angle_compat + angle_wrap_rad(angle - angle_compat);
 }
 
 /* axis conversion */

@@ -45,7 +45,11 @@ extern "C" WGLEWContext *wglewContext;
 #endif
 
 #ifndef GHOST_OPENGL_WGL_CONTEXT_FLAGS
-#define GHOST_OPENGL_WGL_CONTEXT_FLAGS 0
+#  ifdef WITH_GPU_DEBUG
+#    define GHOST_OPENGL_WGL_CONTEXT_FLAGS WGL_CONTEXT_DEBUG_BIT_ARB
+#  else
+#    define GHOST_OPENGL_WGL_CONTEXT_FLAGS 0
+#  endif
 #endif
 
 #ifndef GHOST_OPENGL_WGL_RESET_NOTIFICATION_STRATEGY
@@ -73,46 +77,48 @@ public:
 	/**
 	 * Destructor.
 	 */
-	virtual ~GHOST_ContextWGL();
+	~GHOST_ContextWGL();
 
 	/**
 	 * Swaps front and back buffers of a window.
 	 * \return  A boolean success indicator.
 	 */
-	virtual GHOST_TSuccess swapBuffers();
+	GHOST_TSuccess swapBuffers();
 
 	/**
 	 * Activates the drawing context of this window.
 	 * \return  A boolean success indicator.
 	 */
-	virtual GHOST_TSuccess activateDrawingContext();
+	GHOST_TSuccess activateDrawingContext();
 
 	/**
 	 * Call immediately after new to initialize.  If this fails then immediately delete the object.
 	 * \return Indication as to whether initialization has succeeded.
 	 */
-	virtual GHOST_TSuccess initializeDrawingContext();
+	GHOST_TSuccess initializeDrawingContext();
 
 	/**
 	 * Removes references to native handles from this context and then returns
 	 * \return GHOST_kSuccess if it is OK for the parent to release the handles and
 	 * GHOST_kFailure if releasing the handles will interfere with sharing
 	 */
-	virtual GHOST_TSuccess releaseNativeHandles();
+	GHOST_TSuccess releaseNativeHandles();
 
 	/**
 	 * Sets the swap interval for swapBuffers.
 	 * \param interval The swap interval to use.
 	 * \return A boolean success indicator.
 	 */
-	virtual GHOST_TSuccess setSwapInterval(int interval);
+	GHOST_TSuccess setSwapInterval(int interval);
 
 	/**
 	 * Gets the current swap interval for swapBuffers.
 	 * \param intervalOut Variable to store the swap interval if it can be read.
 	 * \return Whether the swap interval can be read.
 	 */
-	virtual GHOST_TSuccess getSwapInterval(int &intervalOut);
+	GHOST_TSuccess getSwapInterval(int &intervalOut);
+
+	static void unSetWarningOld(){s_warn_old = true;}
 
 protected:
 	inline void activateWGLEW() const {
@@ -142,11 +148,10 @@ private:
 	        bool needAlpha,
 	        bool needStencil,
 	        bool sRGB,
-	        int &swapMethodOut);
+	        int *swapMethodOut);
 
-	int _choose_pixel_format_arb_2(
-	        bool stereoVisual,
-	        int numOfAASamples,
+	int _choose_pixel_format_arb_2(bool stereoVisual,
+	        int *numOfAASamples,
 	        bool needAlpha,
 	        bool needStencil,
 	        bool sRGB,
@@ -154,8 +159,8 @@ private:
 
 	void initContextWGLEW(PIXELFORMATDESCRIPTOR &preferredPFD);
 
-	HDC  m_hDC;
 	HWND m_hWnd;
+	HDC  m_hDC;
 
 	const int m_contextProfileMask;
 	const int m_contextMajorVersion;
@@ -179,6 +184,7 @@ private:
 	static int   s_sharedCount;
 
 	static bool s_singleContextMode;
+	static bool s_warn_old;
 };
 
 #endif  // __GHOST_CONTEXTWGL_H__

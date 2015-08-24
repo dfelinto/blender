@@ -92,7 +92,7 @@ float *BlurBaseOperation::make_gausstab(float rad, int size)
 }
 
 #ifdef __SSE2__
-__m128 *BlurBaseOperation::convert_gausstab_sse(const float *gausstab, float rad, int size)
+__m128 *BlurBaseOperation::convert_gausstab_sse(const float *gausstab, int size)
 {
 	int n = 2 * size + 1;
 	__m128 *gausstab_sse = (__m128 *) MEM_mallocN_aligned(sizeof(__m128) * n, 16, "gausstab sse");
@@ -132,6 +132,9 @@ float *BlurBaseOperation::make_dist_fac_inverse(float rad, int size, int falloff
 				break;
 			case PROP_SHARP:
 				val = val * val;
+				break;
+			case PROP_INVSQUARE:
+				val = val * (2.0f - val);
 				break;
 			case PROP_LIN:
 				/* fall-through */

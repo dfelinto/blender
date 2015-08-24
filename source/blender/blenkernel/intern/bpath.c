@@ -80,6 +80,10 @@
 
 #include "BKE_bpath.h"  /* own include */
 
+#ifndef _MSC_VER
+#  include "BLI_strict_flags.h"
+#endif
+
 static bool checkMissingFiles_visit_cb(void *userdata, char *UNUSED(path_dst), const char *path_src)
 {
 	ReportList *reports = (ReportList *)userdata;
@@ -204,18 +208,19 @@ void BKE_bpath_absolute_convert(Main *bmain, const char *basedir, ReportList *re
  * \returns found: 1/0.
  */
 #define MAX_RECUR 16
-static int findFileRecursive(char *filename_new,
-                             const char *dirname,
-                             const char *filename,
-                             int *filesize,
-                             int *recur_depth)
+static bool missing_files_find__recursive(
+        char *filename_new,
+        const char *dirname,
+        const char *filename,
+        off_t *r_filesize,
+        int *r_recur_depth)
 {
 	/* file searching stuff */
 	DIR *dir;
 	struct dirent *de;
 	BLI_stat_t status;
 	char path[FILE_MAX];
-	int size;
+	off_t size;
 	bool found = false;
 
 	dir = opendir(dirname);
@@ -223,35 +228,35 @@ static int findFileRecursive(char *filename_new,
 	if (dir == NULL)
 		return found;
 
-	if (*filesize == -1)
-		*filesize = 0;  /* dir opened fine */
+	if (*r_filesize == -1)
+		*r_filesize = 0;  /* dir opened fine */
 
 	while ((de = readdir(dir)) != NULL) {
 
-		if (STREQ(".", de->d_name) || STREQ("..", de->d_name))
+		if (FILENAME_IS_CURRPAR(de->d_name))
 			continue;
 
 		BLI_join_dirfile(path, sizeof(path), dirname, de->d_name);
 
-		if (BLI_stat(path, &status) != 0)
+		if (BLI_stat(path, &status) == -1)
 			continue;  /* cant stat, don't bother with this file, could print debug info here */
 
 		if (S_ISREG(status.st_mode)) { /* is file */
 			if (STREQLEN(filename, de->d_name, FILE_MAX)) { /* name matches */
 				/* open the file to read its size */
 				size = status.st_size;
-				if ((size > 0) && (size > *filesize)) { /* find the biggest file */
-					*filesize = size;
+				if ((size > 0) && (size > *r_filesize)) { /* find the biggest file */
+					*r_filesize = size;
 					BLI_strncpy(filename_new, path, FILE_MAX);
 					found = true;
 				}
 			}
 		}
 		else if (S_ISDIR(status.st_mode)) { /* is subdir */
-			if (*recur_depth <= MAX_RECUR) {
-				(*recur_depth)++;
-				found |= findFileRecursive(filename_new, path, filename, filesize, recur_depth);
-				(*recur_depth)--;
+			if (*r_recur_depth <= MAX_RECUR) {
+				(*r_recur_depth)++;
+				found |= missing_files_find__recursive(filename_new, path, filename, r_filesize, r_recur_depth);
+				(*r_recur_depth)--;
 			}
 		}
 	}
@@ -266,14 +271,14 @@ typedef struct BPathFind_Data {
 	bool find_all;
 } BPathFind_Data;
 
-static bool findMissingFiles_visit_cb(void *userdata, char *path_dst, const char *path_src)
+static bool missing_files_find__visit_cb(void *userdata, char *path_dst, const char *path_src)
 {
 	BPathFind_Data *data = (BPathFind_Data *)userdata;
 	char filename_new[FILE_MAX];
 
-	int filesize = -1;
+	off_t filesize = -1;
 	int recur_depth = 0;
-	int found;
+	bool found;
 
 	if (data->find_all == false) {
 		if (BLI_exists(path_src)) {
@@ -283,9 +288,10 @@ static bool findMissingFiles_visit_cb(void *userdata, char *path_dst, const char
 
 	filename_new[0] = '\0';
 
-	found = findFileRecursive(filename_new,
-	                          data->searchdir, BLI_path_basename((char *)path_src),
-	                          &filesize, &recur_depth);
+	found = missing_files_find__recursive(
+	        filename_new,
+	        data->searchdir, BLI_path_basename(path_src),
+	        &filesize, &recur_depth);
 
 	if (filesize == -1) { /* could not open dir */
 		BKE_reportf(data->reports, RPT_WARNING,
@@ -296,7 +302,7 @@ static bool findMissingFiles_visit_cb(void *userdata, char *path_dst, const char
 	else if (found == false) {
 		BKE_reportf(data->reports, RPT_WARNING,
 		            "Could not find '%s' in '%s'",
-		            BLI_path_basename((char *)path_src), data->searchdir);
+		            BLI_path_basename(path_src), data->searchdir);
 		return false;
 	}
 	else {
@@ -316,13 +322,14 @@ void BKE_bpath_missing_files_find(Main *bmain, const char *searchpath, ReportLis
                                   const bool find_all)
 {
 	struct BPathFind_Data data = {NULL};
+	const int flag = BKE_BPATH_TRAVERSE_ABS | BKE_BPATH_TRAVERSE_RELOAD_EDITED;
 
 	data.basedir = bmain->name;
 	data.reports = reports;
 	data.searchdir = searchpath;
 	data.find_all = find_all;
 
-	BKE_bpath_traverse_main(bmain, findMissingFiles_visit_cb, BKE_BPATH_TRAVERSE_ABS, (void *)&data);
+	BKE_bpath_traverse_main(bmain, missing_files_find__visit_cb, flag, (void *)&data);
 }
 
 /* Run a visitor on a string, replacing the contents of the string as needed. */
@@ -364,6 +371,9 @@ static bool rewrite_path_fixed_dirfile(char path_dir[FILE_MAXDIR],
 
 	BLI_join_dirfile(path_src, sizeof(path_src), path_dir, path_file);
 
+	/* so functions can check old value */
+	BLI_strncpy(path_dst, path_src, FILE_MAX);
+
 	if (absbase) {
 		BLI_path_abs(path_src, absbase);
 	}
@@ -393,7 +403,7 @@ static bool rewrite_path_alloc(char **path, BPathVisitor visit_cb, const char *a
 	}
 
 	if (visit_cb(userdata, path_dst, path_src)) {
-		MEM_freeN((*path));
+		MEM_freeN(*path);
 		(*path) = BLI_strdup(path_dst);
 		return true;
 	}
@@ -423,12 +433,17 @@ void BKE_bpath_traverse_id(Main *bmain, ID *id, BPathVisitor visit_cb, const int
 		{
 			Image *ima;
 			ima = (Image *)id;
-			if (ima->packedfile == NULL || (flag & BKE_BPATH_TRAVERSE_SKIP_PACKED) == 0) {
+			if (BKE_image_has_packedfile(ima) == false || (flag & BKE_BPATH_TRAVERSE_SKIP_PACKED) == 0) {
 				if (ELEM(ima->source, IMA_SRC_FILE, IMA_SRC_MOVIE, IMA_SRC_SEQUENCE)) {
 					if (rewrite_path_fixed(ima->name, visit_cb, absbase, bpath_user_data)) {
-						if (!ima->packedfile) {
-							BKE_image_signal(ima, NULL, IMA_SIGNAL_RELOAD);
-							BKE_image_walk_all_users(bmain, ima, bpath_traverse_image_user_cb);
+						if (flag & BKE_BPATH_TRAVERSE_RELOAD_EDITED) {
+							if (!BKE_image_has_packedfile(ima) &&
+							    /* image may have been painted onto (and not saved, T44543) */
+							    !BKE_image_is_dirty(ima))
+							{
+								BKE_image_signal(ima, NULL, IMA_SIGNAL_RELOAD);
+								BKE_image_walk_all_users(bmain, ima, bpath_traverse_image_user_cb);
+							}
 						}
 					}
 				}
@@ -589,12 +604,12 @@ void BKE_bpath_traverse_id(Main *bmain, ID *id, BPathVisitor visit_cb, const int
 						}
 						else if ((seq->type == SEQ_TYPE_IMAGE) && se) {
 							/* might want an option not to loop over all strips */
-							int len = MEM_allocN_len(se) / sizeof(*se);
-							int i;
+							unsigned int len = (unsigned int)MEM_allocN_len(se) / (unsigned int)sizeof(*se);
+							unsigned int i;
 
 							if (flag & BKE_BPATH_TRAVERSE_SKIP_MULTIFILE) {
 								/* only operate on one path */
-								len = MIN2(1, len);
+								len = MIN2(1u, len);
 							}
 
 							for (i = 0; i < len; i++, se++) {

@@ -144,9 +144,9 @@ static SpaceLink *sequencer_new(const bContext *C)
 	ar->alignment = RGN_ALIGN_TOP;
 	ar->flag |= RGN_FLAG_HIDDEN;
 	/* for now, aspect ratio should be maintained, and zoom is clamped within sane default limits */
-	ar->v2d.keepzoom = V2D_KEEPASPECT | V2D_KEEPZOOM;
-	ar->v2d.minzoom = 0.00001f;
-	ar->v2d.maxzoom = 100000.0f;
+	ar->v2d.keepzoom = V2D_KEEPASPECT | V2D_KEEPZOOM | V2D_LIMITZOOM;
+	ar->v2d.minzoom = 0.001f;
+	ar->v2d.maxzoom = 1000.0f;
 	ar->v2d.tot.xmin = -960.0f; /* 1920 width centered */
 	ar->v2d.tot.ymin = -540.0f; /* 1080 height centered */
 	ar->v2d.tot.xmax = 960.0f;
@@ -328,7 +328,7 @@ static SpaceLink *sequencer_duplicate(SpaceLink *sl)
 	SpaceSeq *sseqn = MEM_dupallocN(sl);
 	
 	/* clear or remove stuff from old */
-// XXX	sseq->gpd = gpencil_data_duplicate(sseq->gpd);
+// XXX	sseq->gpd = gpencil_data_duplicate(sseq->gpd, false);
 
 	memset(&sseqn->scopes, 0, sizeof(sseqn->scopes));
 
@@ -351,6 +351,10 @@ static void sequencer_listener(bScreen *UNUSED(sc), ScrArea *sa, wmNotifier *wmn
 		case NC_SPACE:
 			if (wmn->data == ND_SPACE_SEQUENCER)
 				sequencer_scopes_tag_refresh(sa);
+			break;
+		case NC_GPENCIL:
+			if (wmn->data & ND_GPENCIL_EDITMODE)
+				ED_area_tag_redraw(sa);
 			break;
 	}
 }
@@ -500,6 +504,13 @@ static void sequencer_main_area_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa
 					break;
 			}
 			break;
+		case NC_ANIMATION:
+			switch (wmn->data) {
+				case ND_KEYFRAME:
+					ED_region_tag_redraw(ar);
+					break;
+			}
+			break;
 		case NC_SPACE:
 			if (wmn->data == ND_SPACE_SEQUENCER)
 				ED_region_tag_redraw(ar);
@@ -553,13 +564,16 @@ static void sequencer_preview_area_draw(const bContext *C, ARegion *ar)
 	SpaceSeq *sseq = sa->spacedata.first;
 	Scene *scene = CTX_data_scene(C);
 	wmWindowManager *wm = CTX_wm_manager(C);
-	int show_split = scene->ed && scene->ed->over_flag & SEQ_EDIT_OVERLAY_SHOW && sseq->mainb == SEQ_DRAW_IMG_IMBUF;
+	const bool show_split = (
+	        scene->ed &&
+	        (scene->ed->over_flag & SEQ_EDIT_OVERLAY_SHOW) &&
+	        (sseq->mainb == SEQ_DRAW_IMG_IMBUF));
 
 	/* XXX temp fix for wrong setting in sseq->mainb */
 	if (sseq->mainb == SEQ_DRAW_SEQUENCE) sseq->mainb = SEQ_DRAW_IMG_IMBUF;
 
 	if (!show_split || sseq->overlay_type != SEQ_DRAW_OVERLAY_REFERENCE)
-		draw_image_seq(C, scene, ar, sseq, scene->r.cfra, 0, false);
+		draw_image_seq(C, scene, ar, sseq, scene->r.cfra, 0, false, false);
 
 	if (show_split && sseq->overlay_type != SEQ_DRAW_OVERLAY_CURRENT) {
 		int over_cfra;
@@ -570,10 +584,10 @@ static void sequencer_preview_area_draw(const bContext *C, ARegion *ar)
 			over_cfra = scene->r.cfra + scene->ed->over_ofs;
 
 		if (over_cfra != scene->r.cfra || sseq->overlay_type != SEQ_DRAW_OVERLAY_RECT)
-			draw_image_seq(C, scene, ar, sseq, scene->r.cfra, over_cfra - scene->r.cfra, true);
+			draw_image_seq(C, scene, ar, sseq, scene->r.cfra, over_cfra - scene->r.cfra, true, false);
 	}
 
-	if ((U.uiflag & USER_SHOW_FPS) && ED_screen_animation_playing(wm)) {
+	if ((U.uiflag & USER_SHOW_FPS) && ED_screen_animation_no_scrub(wm)) {
 		rcti rect;
 		ED_region_visible_rect(ar, &rect);
 		ED_scene_draw_fps(scene, &rect);
@@ -585,7 +599,7 @@ static void sequencer_preview_area_listener(bScreen *UNUSED(sc), ScrArea *UNUSED
 	/* context changes */
 	switch (wmn->category) {
 		case NC_GPENCIL:
-			if (wmn->action == NA_EDITED) {
+			if (ELEM(wmn->action, NA_EDITED, NA_SELECTED)) {
 				ED_region_tag_redraw(ar);
 			}
 			break;
@@ -595,6 +609,16 @@ static void sequencer_preview_area_listener(bScreen *UNUSED(sc), ScrArea *UNUSED
 				case ND_MARKERS:
 				case ND_SEQUENCER:
 				case ND_RENDER_OPTIONS:
+				case ND_DRAW_RENDER_VIEWPORT:
+					ED_region_tag_redraw(ar);
+					break;
+			}
+			break;
+		case NC_ANIMATION:
+			switch (wmn->data) {
+				case ND_KEYFRAME:
+					/* Otherwise, often prevents seing immediately effects of keyframe editing... */
+					BKE_sequencer_cache_cleanup();
 					ED_region_tag_redraw(ar);
 					break;
 			}
@@ -633,7 +657,7 @@ static void sequencer_buttons_area_init(wmWindowManager *wm, ARegion *ar)
 
 static void sequencer_buttons_area_draw(const bContext *C, ARegion *ar)
 {
-	ED_region_panels(C, ar, 1, NULL, -1);
+	ED_region_panels(C, ar, NULL, -1, true);
 }
 
 static void sequencer_buttons_area_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa), ARegion *ar, wmNotifier *wmn)
@@ -641,7 +665,7 @@ static void sequencer_buttons_area_listener(bScreen *UNUSED(sc), ScrArea *UNUSED
 	/* context changes */
 	switch (wmn->category) {
 		case NC_GPENCIL:
-			if (wmn->data == ND_DATA) {
+			if (ELEM(wmn->action, NA_EDITED, NA_SELECTED)) {
 				ED_region_tag_redraw(ar);
 			}
 			break;

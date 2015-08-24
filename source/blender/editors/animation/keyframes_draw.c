@@ -39,7 +39,6 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_blenlib.h"
 #include "BLI_dlrbTree.h"
 #include "BLI_utildefines.h"
 
@@ -106,7 +105,7 @@ static DLRBT_Node *nalloc_ak_bezt(void *data)
 	
 	/* store settings based on state of BezTriple */
 	ak->cfra = bezt->vec[1][0];
-	ak->sel = BEZSELECTED(bezt) ? SELECT : 0;
+	ak->sel = BEZT_ISSEL_ANY(bezt) ? SELECT : 0;
 	ak->key_type = BEZKEYTYPE(bezt);
 	
 	/* set 'modified', since this is used to identify long keyframes */
@@ -122,7 +121,7 @@ static void nupdate_ak_bezt(void *node, void *data)
 	BezTriple *bezt = (BezTriple *)data;
 	
 	/* set selection status and 'touched' status */
-	if (BEZSELECTED(bezt)) ak->sel = SELECT;
+	if (BEZT_ISSEL_ANY(bezt)) ak->sel = SELECT;
 	ak->modified += 1;
 	
 	/* for keyframe type, 'proper' keyframes have priority over breakdowns (and other types for now) */
@@ -155,6 +154,7 @@ static DLRBT_Node *nalloc_ak_gpframe(void *data)
 	/* store settings based on state of BezTriple */
 	ak->cfra = gpf->framenum;
 	ak->sel = (gpf->flag & GP_FRAME_SELECT) ? SELECT : 0;
+	ak->key_type = gpf->key_type;
 	
 	/* set 'modified', since this is used to identify long keyframes */
 	ak->modified = 1;
@@ -171,6 +171,10 @@ static void nupdate_ak_gpframe(void *node, void *data)
 	/* set selection status and 'touched' status */
 	if (gpf->flag & GP_FRAME_SELECT) ak->sel = SELECT;
 	ak->modified += 1;
+	
+	/* for keyframe type, 'proper' keyframes have priority over breakdowns (and other types for now) */
+	if (gpf->key_type == BEZT_KEYTYPE_KEYFRAME)
+		ak->key_type = BEZT_KEYTYPE_KEYFRAME;
 }
 
 /* ......... */
@@ -275,7 +279,7 @@ static ActKeyBlock *bezts_to_new_actkeyblock(BezTriple *prev, BezTriple *beztn)
 	ab->end = beztn->vec[1][0];
 	ab->val = beztn->vec[1][1];
 	
-	ab->sel = (BEZSELECTED(prev) || BEZSELECTED(beztn)) ? SELECT : 0;
+	ab->sel = (BEZT_ISSEL_ANY(prev) || BEZT_ISSEL_ANY(beztn)) ? SELECT : 0;
 	ab->modified = 1;
 	
 	return ab;
@@ -336,7 +340,7 @@ static void add_bezt_to_keyblocks_list(DLRBT_Tree *blocks, BezTriple *first_bezt
 			 */
 			if (IS_EQT(ab->start, prev->vec[1][0], BEZT_BINARYSEARCH_THRESH)) {
 				/* set selection status and 'touched' status */
-				if (BEZSELECTED(beztn)) ab->sel = SELECT;
+				if (BEZT_ISSEL_ANY(beztn)) ab->sel = SELECT;
 				ab->modified++;
 				
 				/* done... no need to insert */
@@ -524,7 +528,7 @@ void draw_keyframe_shape(float x, float y, float xscale, float hsize, short sel,
 		}
 		
 		/* NOTE: we don't use the straight alpha from the theme, or else effects such as 
-		 * greying out protected/muted channels doesn't work correctly! 
+		 * graying out protected/muted channels doesn't work correctly!
 		 */
 		inner_col[3] *= alpha;
 		glColor4fv(inner_col);
@@ -732,6 +736,21 @@ void draw_action_channel(View2D *v2d, AnimData *adt, bAction *act, float ypos)
 	BLI_dlrbTree_free(&blocks);
 }
 
+void draw_gpencil_channel(View2D *v2d, bDopeSheet *ads, bGPdata *gpd, float ypos)
+{
+	DLRBT_Tree keys;
+	
+	BLI_dlrbTree_init(&keys);
+	
+	gpencil_to_keylist(ads, gpd, &keys);
+	
+	BLI_dlrbTree_linkedlist_sync(&keys);
+	
+	draw_keylist(v2d, &keys, NULL, ypos, 0);
+	
+	BLI_dlrbTree_free(&keys);
+}
+
 void draw_gpl_channel(View2D *v2d, bDopeSheet *ads, bGPDlayer *gpl, float ypos)
 {
 	DLRBT_Tree keys;
@@ -923,6 +942,20 @@ void action_to_keylist(AnimData *adt, bAction *act, DLRBT_Tree *keys, DLRBT_Tree
 	}
 }
 
+
+void gpencil_to_keylist(bDopeSheet *ads, bGPdata *gpd, DLRBT_Tree *keys)
+{
+	bGPDlayer *gpl;
+	
+	if (gpd && keys) {
+		/* for now, just aggregate out all the frames, but only for visible layers */
+		for (gpl = gpd->layers.first; gpl; gpl = gpl->next) {
+			if ((gpl->flag & GP_LAYER_HIDE) == 0) {
+				gpl_to_keylist(ads, gpl, keys);
+			}
+		}
+	}
+}
 
 void gpl_to_keylist(bDopeSheet *UNUSED(ads), bGPDlayer *gpl, DLRBT_Tree *keys)
 {

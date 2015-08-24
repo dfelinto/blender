@@ -41,7 +41,7 @@
 #include "BLI_math.h"
 #include "BLI_blenlib.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_context.h"
 #include "BKE_depsgraph.h"
@@ -66,7 +66,10 @@
 #include "RNA_access.h"
 
 #include "node_intern.h"  /* own include */
-#include "COM_compositor.h"
+
+#ifdef WITH_COMPOSITOR
+#  include "COM_compositor.h"
+#endif
 
 /* XXX interface.h */
 extern void ui_draw_dropshadow(const rctf *rct, float radius, float aspect, float alpha, int select);
@@ -120,7 +123,14 @@ void ED_node_tag_update_id(ID *id)
 	bNodeTree *ntree = node_tree_from_ID(id);
 	if (id == NULL || ntree == NULL)
 		return;
-	
+
+	/* TODO(sergey): With the new dependency graph it
+	 * should be just enough to only tag ntree itself,
+	 * all the users of this tree will have update
+	 * flushed from the tree,
+	 */
+	DAG_id_tag_update(&ntree->id, 0);
+
 	if (ntree->type == NTREE_SHADER) {
 		DAG_id_tag_update(id, 0);
 		
@@ -160,14 +170,14 @@ void ED_node_tag_update_nodetree(Main *bmain, bNodeTree *ntree)
 		ntreeTexCheckCyclics(ntree);
 }
 
-static int compare_nodes(bNode *a, bNode *b)
+static bool compare_nodes(const bNode *a, const bNode *b)
 {
 	bNode *parent;
 	/* These tell if either the node or any of the parent nodes is selected.
 	 * A selected parent means an unselected node is also in foreground!
 	 */
-	int a_select = (a->flag & NODE_SELECT), b_select = (b->flag & NODE_SELECT);
-	int a_active = (a->flag & NODE_ACTIVE), b_active = (b->flag & NODE_ACTIVE);
+	bool a_select = (a->flag & NODE_SELECT) != 0, b_select = (b->flag & NODE_SELECT) != 0;
+	bool a_active = (a->flag & NODE_ACTIVE) != 0, b_active = (b->flag & NODE_ACTIVE) != 0;
 	
 	/* if one is an ancestor of the other */
 	/* XXX there might be a better sorting algorithm for stable topological sort, this is O(n^2) worst case */
@@ -214,7 +224,7 @@ void ED_node_sort(bNodeTree *ntree)
 {
 	/* merge sort is the algorithm of choice here */
 	bNode *first_a, *first_b, *node_a, *node_b, *tmp;
-	int totnodes = BLI_countlist(&ntree->nodes);
+	int totnodes = BLI_listbase_count(&ntree->nodes);
 	int k, a, b;
 	
 	k = 1;
@@ -296,6 +306,12 @@ void node_to_view(struct bNode *node, float x, float y, float *rx, float *ry)
 	nodeToView(node, x, y, rx, ry);
 	*rx *= UI_DPI_FAC;
 	*ry *= UI_DPI_FAC;
+}
+
+void node_to_updated_rect(struct bNode *node, rctf *r_rect)
+{
+	node_to_view(node, node->offsetx, node->offsety, &r_rect->xmin, &r_rect->ymax);
+	node_to_view(node, node->offsetx + node->width, node->offsety - node->height, &r_rect->xmax, &r_rect->ymin);
 }
 
 void node_from_view(struct bNode *node, float x, float y, float *rx, float *ry)
@@ -1130,6 +1146,9 @@ void node_update_nodetree(const bContext *C, bNodeTree *ntree)
 {
 	bNode *node;
 	
+	/* make sure socket "used" tags are correct, for displaying value buttons */
+	ntreeTagUsedSockets(ntree);
+	
 	/* update nodes front to back, so children sizes get updated before parents */
 	for (node = ntree->nodes.last; node; node = node->prev) {
 		node_update(C, ntree, node);
@@ -1297,6 +1316,11 @@ void drawnodespace(const bContext *C, ARegion *ar)
 		LinkData *linkdata;
 		
 		path = snode->treepath.last;
+		
+		/* update tree path name (drawn in the bottom left) */
+		if (snode->id && UNLIKELY(!STREQ(path->node_name, snode->id->name + 2))) {
+			BLI_strncpy(path->node_name, snode->id->name + 2, sizeof(path->node_name));
+		}
 		
 		/* current View2D center, will be set temporarily for parent node trees */
 		UI_view2d_center_get(v2d, &center[0], &center[1]);

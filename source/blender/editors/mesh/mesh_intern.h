@@ -34,14 +34,9 @@
 #ifndef __MESH_INTERN_H__
 #define __MESH_INTERN_H__
 
-struct BMEdge;
 struct BMEditMesh;
-struct BMFace;
-struct BMHeader;
 struct BMOperator;
-struct BMesh;
 struct EnumPropertyItem;
-struct ViewContext;
 struct bContext;
 struct wmKeyConfig;
 struct wmKeyMap;
@@ -175,9 +170,13 @@ void MESH_OT_normals_make_consistent(struct wmOperatorType *ot);
 void MESH_OT_vertices_smooth(struct wmOperatorType *ot);
 void MESH_OT_vertices_smooth_laplacian(struct wmOperatorType *ot);
 void MESH_OT_vert_connect(struct wmOperatorType *ot);
+void MESH_OT_vert_connect_path(struct wmOperatorType *ot);
+void MESH_OT_vert_connect_concave(struct wmOperatorType *ot);
 void MESH_OT_vert_connect_nonplanar(struct wmOperatorType *ot);
+void MESH_OT_face_make_planar(struct wmOperatorType *ot);
 void MESH_OT_edge_split(struct wmOperatorType *ot);
 void MESH_OT_bridge_edge_loops(struct wmOperatorType *ot);
+void MESH_OT_offset_edge_loops(struct wmOperatorType *ot);
 void MESH_OT_wireframe(struct wmOperatorType *ot);
 void MESH_OT_convex_hull(struct wmOperatorType *ot);
 void MESH_OT_symmetrize(struct wmOperatorType *ot);
@@ -235,8 +234,11 @@ void MESH_OT_uv_texture_remove(struct wmOperatorType *ot);
 void MESH_OT_vertex_color_add(struct wmOperatorType *ot);
 void MESH_OT_vertex_color_remove(struct wmOperatorType *ot);
 /* no create_mask yet */
-void MESH_OT_customdata_clear_mask(struct wmOperatorType *ot);
-void MESH_OT_customdata_clear_skin(struct wmOperatorType *ot);
+void MESH_OT_customdata_mask_clear(struct wmOperatorType *ot);
+void MESH_OT_customdata_skin_add(struct wmOperatorType *ot);
+void MESH_OT_customdata_skin_clear(struct wmOperatorType *ot);
+void MESH_OT_customdata_custom_splitnormals_add(struct wmOperatorType *ot);
+void MESH_OT_customdata_custom_splitnormals_clear(struct wmOperatorType *ot);
 void MESH_OT_drop_named_image(struct wmOperatorType *ot);
 
 

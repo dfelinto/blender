@@ -41,7 +41,7 @@
 #include "BLI_listbase.h"
 #include "BLI_math.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "DNA_mask_types.h"
 #include "DNA_node_types.h"
@@ -49,7 +49,9 @@
 #include "DNA_space_types.h"
 #include "DNA_sequence_types.h"
 
+#include "BKE_animsys.h"
 #include "BKE_curve.h"
+#include "BKE_global.h"
 #include "BKE_library.h"
 #include "BKE_main.h"
 #include "BKE_mask.h"
@@ -58,8 +60,6 @@
 #include "BKE_tracking.h"
 #include "BKE_movieclip.h"
 #include "BKE_image.h"
-
-#include "NOD_composite.h"
 
 static struct {
 	ListBase splines;
@@ -180,6 +180,16 @@ void BKE_mask_layer_unique_name(Mask *mask, MaskLayer *masklay)
 {
 	BLI_uniquename(&mask->masklayers, masklay, DATA_("MaskLayer"), '.', offsetof(MaskLayer, name),
 	               sizeof(masklay->name));
+}
+
+void BKE_mask_layer_rename(Mask *mask, MaskLayer *masklay, char *oldname, char *newname)
+{
+	BLI_strncpy(masklay->name, newname, sizeof(masklay->name));
+
+	BKE_mask_layer_unique_name(mask, masklay);
+
+	/* now fix animation paths */
+	BKE_animdata_fix_paths_rename_all(&mask->id, "layers", oldname, masklay->name);
 }
 
 MaskLayer *BKE_mask_layer_copy(MaskLayer *masklay)
@@ -857,6 +867,10 @@ Mask *BKE_mask_copy(Mask *mask)
 		mask_new->id.us++;
 	}
 
+	if (mask->id.lib) {
+		BKE_id_lib_local_paths(G.main, mask->id.lib, &mask_new->id);
+	}
+
 	return mask_new;
 }
 
@@ -1187,11 +1201,12 @@ void BKE_mask_point_parent_matrix_get(MaskSplinePoint *point, float ctime, float
 					MovieTrackingPlaneTrack *plane_track = BKE_tracking_plane_track_get_named(tracking, ob, parent->sub_parent);
 
 					if (plane_track) {
-						MovieTrackingPlaneMarker *plane_marker = BKE_tracking_plane_marker_get(plane_track, clip_framenr);
+						float corners[4][2];
 						float aspx, aspy;
 						float frame_size[2], H[3][3], mask_from_clip_matrix[3][3], mask_to_clip_matrix[3][3];
 
-						BKE_tracking_homography_between_two_quads(parent->parent_corners_orig, plane_marker->corners, H);
+						BKE_tracking_plane_marker_get_subframe_corners(plane_track, ctime, corners);
+						BKE_tracking_homography_between_two_quads(parent->parent_corners_orig, corners, H);
 
 						unit_m3(mask_from_clip_matrix);
 
@@ -1457,7 +1472,7 @@ void BKE_mask_layer_evaluate(MaskLayer *masklay, const float ctime, const bool d
 		{
 			if (found == 1) {
 #if 0
-				printf("%s: exact %d %d (%d)\n", __func__, (int)ctime, BLI_countlist(&masklay->splines_shapes),
+				printf("%s: exact %d %d (%d)\n", __func__, (int)ctime, BLI_listbase_count(&masklay->splines_shapes),
 				       masklay_shape_a->frame);
 #endif
 
@@ -1466,7 +1481,7 @@ void BKE_mask_layer_evaluate(MaskLayer *masklay, const float ctime, const bool d
 			else if (found == 2) {
 				float w = masklay_shape_b->frame - masklay_shape_a->frame;
 #if 0
-				printf("%s: tween %d %d (%d %d)\n", __func__, (int)ctime, BLI_countlist(&masklay->splines_shapes),
+				printf("%s: tween %d %d (%d %d)\n", __func__, (int)ctime, BLI_listbase_count(&masklay->splines_shapes),
 				       masklay_shape_a->frame, masklay_shape_b->frame);
 #endif
 				BKE_mask_layer_shape_to_mask_interp(masklay, masklay_shape_a, masklay_shape_b,
@@ -1833,7 +1848,7 @@ static int mask_layer_shape_sort_cb(const void *masklay_shape_a_ptr, const void 
 
 void BKE_mask_layer_shape_sort(MaskLayer *masklay)
 {
-	BLI_sortlist(&masklay->splines_shapes, mask_layer_shape_sort_cb);
+	BLI_listbase_sort(&masklay->splines_shapes, mask_layer_shape_sort_cb);
 }
 
 bool BKE_mask_layer_shape_spline_from_index(MaskLayer *masklay, int index,

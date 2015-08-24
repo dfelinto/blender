@@ -78,6 +78,35 @@ base class --- :class:`SCA_IObject`
 
          The object must have a physics controller for the mass to be applied, otherwise the mass value will be returned as 0.0.
 
+   .. attribute:: isSuspendDynamics
+
+      The object's dynamic state (read-only).
+
+      :type: boolean
+
+      .. seealso:: :py:meth:`suspendDynamics` and :py:meth:`restoreDynamics` allow you to change the state.
+
+   .. attribute:: linearDamping
+
+      The object's linear damping, also known as translational damping. Can be set simultaneously with angular damping using the :py:meth:`setDamping` method.
+
+      :type: float between 0 and 1 inclusive.
+
+      .. note::
+
+         The object must have a physics controller for the linear damping to be applied, otherwise the value will be returned as 0.0.
+
+   .. attribute:: angularDamping
+
+      The object's angular damping, also known as rotationation damping. Can be set simultaneously with linear damping using the :py:meth:`setDamping` method.
+
+      :type: float between 0 and 1 inclusive.
+
+      .. note::
+
+         The object must have a physics controller for the angular damping to be applied, otherwise the value will be returned as 0.0.
+
+
    .. attribute:: linVelocityMin
 
       Enforces the object keeps moving at a minimum velocity.
@@ -108,13 +137,36 @@ base class --- :class:`SCA_IObject`
 
       .. note::
 
-         A value of 0.0 disables this option (rather then setting it stationary).
+         A value of 0.0 disables this option (rather than setting it stationary).
+
+   .. attribute:: angularVelocityMin
+
+      Enforces the object keeps rotating at a minimum velocity. A value of 0.0 disables this.
+
+      :type: non-negative float
+
+      .. note::
+
+         Applies to dynamic and rigid body objects only.
+         While objects are stationary the minimum velocity will not be applied.
+
+
+   .. attribute:: angularVelocityMax
+
+      Clamp the maximum angular velocity to prevent objects rotating beyond a set speed.
+      A value of 0.0 disables clamping; it does not stop rotation.
+
+      :type: non-negative float
+
+      .. note::
+
+         Applies to dynamic and rigid body objects only.
 
    .. attribute:: localInertia
 
       the object's inertia vector in local coordinates. Read only.
 
-      :type: list [ix, iy, iz]
+      :type: Vector((ix, iy, iz))
 
    .. attribute:: parent
 
@@ -124,21 +176,70 @@ base class --- :class:`SCA_IObject`
 
    .. attribute:: groupMembers
 
-      Returns the list of group members if the object is a group object, otherwise None is returned.
+      Returns the list of group members if the object is a group object (dupli group instance), otherwise None is returned.
 
       :type: :class:`CListValue` of :class:`KX_GameObject` or None
 
    .. attribute:: groupObject
 
-      Returns the group object that the object belongs to or None if the object is not part of a group.
+      Returns the group object (dupli group instance) that the object belongs to or None if the object is not part of a group.
 
       :type: :class:`KX_GameObject` or None
 
+   .. attribute:: collisionGroup
+
+      The object's collision group.
+
+      :type: bitfield
+
+   .. attribute:: collisionMask
+
+      The object's collision mask.
+
+      :type: bitfield
+
    .. attribute:: collisionCallbacks
 
-      A list of callables to be run when a collision occurs.
+      A list of functions to be called when a collision occurs.
 
-      :type: list
+      :type: list of functions and/or methods
+
+      Callbacks should either accept one argument `(object)`, or three
+      arguments `(object, point, normal)`. For simplicity, per
+      colliding object only the first collision point is reported.
+
+      .. code-block:: python
+
+        # Function form
+        def callback_three(object, point, normal):
+            print('Hit by %r at %s with normal %s' % (object.name, point, normal))
+
+        def callback_one(object):
+            print('Hit by %r' % object.name)
+
+        def register_callback(controller):
+            controller.owner.collisionCallbacks.append(callback_three)
+            controller.owner.collisionCallbacks.append(callback_one)
+
+
+        # Method form
+        class YourGameEntity(bge.types.KX_GameObject):
+            def __init__(self, old_owner):
+                self.collisionCallbacks.append(self.on_collision_three)
+                self.collisionCallbacks.append(self.on_collision_one)
+
+            def on_collision_three(self, object, point, normal):
+                print('Hit by %r at %s with normal %s' % (object.name, point, normal))
+
+            def on_collision_one(self, object):
+                print('Hit by %r' % object.name)
+
+      .. note::
+        For backward compatibility, a callback with variable number of
+        arguments (using `*args`) will be passed only the `object`
+        argument. Only when there is more than one fixed argument (not
+        counting `self` for methods) will the three-argument form be
+        used.
 
    .. attribute:: scene
 
@@ -374,6 +475,12 @@ base class --- :class:`SCA_IObject`
       If true, the object's and children's debug properties will be displayed on screen.
 
       :type: boolean
+      
+   .. attribute:: currentLodLevel
+
+      The index of the level of detail (LOD) currently used by this object (read-only).
+
+      :type: int
 
    .. method:: endObject()
 
@@ -496,7 +603,7 @@ base class --- :class:`SCA_IObject`
          * True: you get the "local" velocity ie: relative to object orientation.
       :type local: boolean
       :return: the object's linear velocity.
-      :rtype: list [vx, vy, vz]
+      :rtype: Vector((vx, vy, vz))
 
    .. method:: setLinearVelocity(velocity, local=False)
 
@@ -523,7 +630,7 @@ base class --- :class:`SCA_IObject`
          * True: you get the "local" velocity ie: relative to object orientation.
       :type local: boolean
       :return: the object's angular velocity.
-      :rtype: list [vx, vy, vz]
+      :rtype: Vector((vx, vy, vz))
 
    .. method:: setAngularVelocity(velocity, local=False)
 
@@ -547,7 +654,7 @@ base class --- :class:`SCA_IObject`
       :arg point: optional point to return the velocity for, in local coordinates.
       :type point: 3D Vector
       :return: the velocity at the specified point.
-      :rtype: list [vx, vy, vz]
+      :rtype: Vector((vx, vy, vz))
 
    .. method:: getReactionForce()
 
@@ -557,7 +664,7 @@ base class --- :class:`SCA_IObject`
       This also includes impulses, eg from collisions.
 
       :return: the reaction force of this object.
-      :rtype: list [fx, fy, fz]
+      :rtype: Vector((fx, fy, fz))
 
       .. note::
 
@@ -580,13 +687,28 @@ base class --- :class:`SCA_IObject`
          * True: you get the "local" impulse ie: relative to local coordinates with object orientation.
       :type local: boolean
 
-   .. method:: suspendDynamics()
+   .. method:: setDamping(linear_damping, angular_damping)
+
+      Sets both the :py:attr:`linearDamping` and :py:attr:`angularDamping` simultaneously. This is more efficient than setting both properties individually.
+
+      :arg linear_damping: Linear ("translational") damping factor.
+      :type linear_damping: float ∈ [0, 1]
+      :arg angular_damping: Angular ("rotational") damping factor.
+      :type angular_damping: float ∈ [0, 1]
+
+   .. method:: suspendDynamics([ghost])
 
       Suspends physics for this object.
 
+      :arg ghost: When set to `True`, collisions with the object will be ignored, similar to the "ghost" checkbox in
+          Blender. When `False` (the default), the object becomes static but still collide with other objects.
+      :type ghost: bool
+
+      .. seealso:: :py:attr:`isSuspendDynamics` allows you to inspect whether the object is in a suspended state.
+
    .. method:: restoreDynamics()
 
-      Resumes physics for this object.
+      Resumes physics for this object. Also reinstates collisions; the object will no longer be a ghost.
 
       .. note::
 
@@ -849,6 +971,16 @@ base class --- :class:`SCA_IObject`
 
       :return: The current frame of the action
       :rtype: float
+
+   .. method:: getActionName(layer=0)
+
+      Gets the name of the current action playing in the supplied layer.
+
+      :arg layer: The layer that you want to get the action name from.
+      :type layer: integer
+
+      :return: The name of the current action
+      :rtype: string
 
    .. method:: setActionFrame(frame, layer=0)
 

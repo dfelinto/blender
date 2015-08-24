@@ -11,15 +11,60 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #include "stdosl.h"
 #include "node_color.h"
 
-color image_texture_lookup(string filename, string color_space, float u, float v, output float Alpha, int use_alpha, int is_float, string interpolation)
+point texco_remap_square(point co)
 {
-	color rgb = (color)texture(filename, u, 1.0 - v, "wrap", "periodic", "interp", interpolation, "alpha", Alpha);
+	return (co - point(0.5, 0.5, 0.5)) * 2.0;
+}
+
+point map_to_tube(vector dir)
+{
+	float u, v;
+	v = (dir[2] + 1.0) * 0.5;
+	float len = sqrt(dir[0] * dir[0] + dir[1] * dir[1]);
+	if (len > 0.0) {
+		u = (1.0 - (atan2(dir[0] / len, dir[1] / len) / M_PI)) * 0.5;
+	}
+	else {
+		v = u = 0.0; /* To avoid un-initialized variables. */
+	}
+	return point(u, v, 0.0);
+}
+
+point map_to_sphere(vector dir)
+{
+	float len = length(dir);
+	float v, u;
+	if (len > 0.0) {
+		if (dir[0] == 0.0 && dir[1] == 0.0) {
+			u = 0.0;  /* Othwise domain error. */
+		}
+		else {
+			u = (1.0 - atan2(dir[0], dir[1]) / M_PI) / 2.0;
+		}
+		v = 1.0 - acos(dir[2] / len) / M_PI;
+	}
+	else {
+		v = u = 0.0;  /* To avoid un-initialized variables. */
+	}
+	return point(u, v, 0.0);
+}
+
+color image_texture_lookup(string filename,
+                           string color_space,
+                           float u, float v,
+                           output float Alpha,
+                           int use_alpha,
+                           int is_float,
+                           string interpolation,
+                           string wrap)
+{
+	color rgb = (color)texture(filename, u, 1.0 - v, "wrap", wrap, "interp", interpolation, "alpha", Alpha);
 
 	if (use_alpha) {
 		rgb = color_unpremultiply(rgb, Alpha);
@@ -43,6 +88,7 @@ shader node_image_texture(
 	string color_space = "sRGB",
 	string projection = "Flat",
 	string interpolation = "smartcubic",
+	string wrap = "periodic",
 	float projection_blend = 0.0,
 	int is_float = 1,
 	int use_alpha = 1,
@@ -55,7 +101,14 @@ shader node_image_texture(
 		p = transform(mapping, p);
 	
 	if (projection == "Flat") {
-		Color = image_texture_lookup(filename, color_space, p[0], p[1], Alpha, use_alpha, is_float, interpolation);
+		Color = image_texture_lookup(filename,
+		                             color_space,
+		                             p[0], p[1],
+		                             Alpha,
+		                             use_alpha,
+		                             is_float,
+		                             interpolation,
+		                             wrap);
 	}
 	else if (projection == "Box") {
 		/* object space normal */
@@ -124,17 +177,59 @@ shader node_image_texture(
 		float tmp_alpha;
 
 		if (weight[0] > 0.0) {
-			Color += weight[0] * image_texture_lookup(filename, color_space, p[1], p[2], tmp_alpha, use_alpha, is_float, interpolation);
+			Color += weight[0] * image_texture_lookup(filename,
+			                                          color_space,
+			                                          p[1], p[2],
+			                                          tmp_alpha,
+			                                          use_alpha,
+			                                          is_float,
+			                                          interpolation,
+			                                          wrap);
 			Alpha += weight[0] * tmp_alpha;
 		}
 		if (weight[1] > 0.0) {
-			Color += weight[1] * image_texture_lookup(filename, color_space, p[0], p[2], tmp_alpha, use_alpha, is_float, interpolation);
+			Color += weight[1] * image_texture_lookup(filename,
+			                                          color_space,
+			                                          p[0], p[2],
+			                                          tmp_alpha,
+			                                          use_alpha,
+			                                          is_float,
+			                                          interpolation,
+			                                          wrap);
 			Alpha += weight[1] * tmp_alpha;
 		}
 		if (weight[2] > 0.0) {
-			Color += weight[2] * image_texture_lookup(filename, color_space, p[1], p[0], tmp_alpha, use_alpha, is_float, interpolation);
+			Color += weight[2] * image_texture_lookup(filename,
+			                                          color_space,
+			                                          p[1], p[0],
+			                                          tmp_alpha,
+			                                          use_alpha,
+			                                          is_float,
+			                                          interpolation,
+			                                          wrap);
 			Alpha += weight[2] * tmp_alpha;
 		}
 	}
+	else if (projection == "Sphere") {
+		point projected = map_to_sphere(texco_remap_square(p));
+		Color = image_texture_lookup(filename,
+		                             color_space,
+		                             projected[0], projected[1],
+		                             Alpha,
+		                             use_alpha,
+		                             is_float,
+		                             interpolation,
+		                             wrap);
+	}
+	else if (projection == "Tube") {
+		point projected = map_to_tube(texco_remap_square(p));
+		Color = image_texture_lookup(filename,
+		                             color_space,
+		                             projected[0], projected[1],
+		                             Alpha,
+		                             use_alpha,
+		                             is_float,
+		                             interpolation,
+		                             wrap);
+	}
 }
-

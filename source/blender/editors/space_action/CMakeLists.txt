@@ -22,6 +22,7 @@ set(INC
 	../include
 	../../blenkernel
 	../../blenlib
+	../../blentranslation
 	../../gpu
 	../../makesdna
 	../../makesrna
@@ -35,6 +36,7 @@ set(INC_SYS
 )
 
 set(SRC
+	action_data.c
 	action_draw.c
 	action_edit.c
 	action_ops.c

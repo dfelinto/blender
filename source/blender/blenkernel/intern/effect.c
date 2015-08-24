@@ -30,6 +30,7 @@
  */
 
 #include <stddef.h>
+#include <stdarg.h>
 
 #include <math.h>
 #include <stdlib.h>
@@ -51,6 +52,7 @@
 #include "BLI_noise.h"
 #include "BLI_rand.h"
 #include "BLI_utildefines.h"
+#include "BLI_ghash.h"
 
 #include "PIL_time.h"
 
@@ -61,6 +63,7 @@
 #include "BKE_DerivedMesh.h"
 #include "BKE_cdderivedmesh.h"
 #include "BKE_effect.h"
+#include "BKE_global.h"
 #include "BKE_modifier.h"
 #include "BKE_object.h"
 #include "BKE_particle.h"
@@ -228,7 +231,7 @@ ListBase *pdInitEffectors(Scene *scene, Object *ob_src, ParticleSystem *psys_src
 		for (base = scene->base.first; base; base= base->next) {
 			if ( (base->lay & layer) ) {
 				if ( base->object->pd && base->object->pd->forcefield )
-				add_object_to_effectors(&effectors, scene, weights, base->object, ob_src);
+					add_object_to_effectors(&effectors, scene, weights, base->object, ob_src);
 
 				if ( base->object->particlesystem.first ) {
 					ParticleSystem *psys= base->object->particlesystem.first;
@@ -388,6 +391,7 @@ static void eff_tri_ray_hit(void *UNUSED(userData), int UNUSED(index), const BVH
 // get visibility of a wind ray
 static float eff_calc_visibility(ListBase *colliders, EffectorCache *eff, EffectorData *efd, EffectedPoint *point)
 {
+	const int raycast_flag = BVH_RAYCAST_DEFAULT & ~(BVH_RAYCAST_WATERTIGHT);
 	ListBase *colls = colliders;
 	ColliderCache *col;
 	float norm[3], len = 0.0;
@@ -419,7 +423,10 @@ static float eff_calc_visibility(ListBase *colliders, EffectorCache *eff, Effect
 			hit.dist = len + FLT_EPSILON;
 
 			/* check if the way is blocked */
-			if (BLI_bvhtree_ray_cast(collmd->bvhtree, point->loc, norm, 0.0f, &hit, eff_tri_ray_hit, NULL)>=0) {
+			if (BLI_bvhtree_ray_cast_ex(
+			        collmd->bvhtree, point->loc, norm, 0.0f, &hit,
+			        eff_tri_ray_hit, NULL, raycast_flag) != -1)
+			{
 				absorption= col->ob->pd->absorption;
 
 				/* visibility is only between 0 and 1, calculated from 1-absorption */
@@ -503,7 +510,7 @@ float effector_falloff(EffectorCache *eff, EffectorData *efd, EffectedPoint *UNU
 			if (falloff == 0.0f)
 				break;
 
-			madd_v3_v3v3fl(temp, efd->vec_to_point, efd->nor, -fac);
+			madd_v3_v3v3fl(temp, efd->vec_to_point2, efd->nor, -fac);
 			r_fac= len_v3(temp);
 			falloff*= falloff_func_rad(eff->pd, r_fac);
 			break;
@@ -539,15 +546,14 @@ int closest_point_on_surface(SurfaceModifierData *surmd, const float co[3], floa
 		}
 
 		if (surface_vel) {
-			MFace *mface = CDDM_get_tessface(surmd->dm, nearest.index);
+			const MLoop *mloop = surmd->bvhtree->loop;
+			const MLoopTri *lt = &surmd->bvhtree->looptri[nearest.index];
 			
-			copy_v3_v3(surface_vel, surmd->v[mface->v1].co);
-			add_v3_v3(surface_vel, surmd->v[mface->v2].co);
-			add_v3_v3(surface_vel, surmd->v[mface->v3].co);
-			if (mface->v4)
-				add_v3_v3(surface_vel, surmd->v[mface->v4].co);
+			copy_v3_v3(surface_vel, surmd->v[mloop[lt->tri[0]].v].co);
+			add_v3_v3(surface_vel, surmd->v[mloop[lt->tri[1]].v].co);
+			add_v3_v3(surface_vel, surmd->v[mloop[lt->tri[2]].v].co);
 
-			mul_v3_fl(surface_vel, mface->v4 ? 0.25f : (1.0f / 3.0f));
+			mul_v3_fl(surface_vel, (1.0f / 3.0f));
 		}
 		return 1;
 	}
@@ -754,7 +760,7 @@ static void do_texture_effector(EffectorCache *eff, EffectorData *efd, EffectedP
 
 	scene_color_manage = BKE_scene_check_color_management_enabled(eff->scene);
 
-	hasrgb = multitex_ext(eff->pd->tex, tex_co, NULL, NULL, 0, result, NULL, scene_color_manage);
+	hasrgb = multitex_ext(eff->pd->tex, tex_co, NULL, NULL, 0, result, NULL, scene_color_manage, false);
 
 	if (hasrgb && mode==PFIELD_TEX_RGB) {
 		force[0] = (0.5f - result->tr) * strength;
@@ -765,15 +771,15 @@ static void do_texture_effector(EffectorCache *eff, EffectorData *efd, EffectedP
 		strength/=nabla;
 
 		tex_co[0] += nabla;
-		multitex_ext(eff->pd->tex, tex_co, NULL, NULL, 0, result+1, NULL, scene_color_manage);
+		multitex_ext(eff->pd->tex, tex_co, NULL, NULL, 0, result+1, NULL, scene_color_manage, false);
 
 		tex_co[0] -= nabla;
 		tex_co[1] += nabla;
-		multitex_ext(eff->pd->tex, tex_co, NULL, NULL, 0, result+2, NULL, scene_color_manage);
+		multitex_ext(eff->pd->tex, tex_co, NULL, NULL, 0, result+2, NULL, scene_color_manage, false);
 
 		tex_co[1] -= nabla;
 		tex_co[2] += nabla;
-		multitex_ext(eff->pd->tex, tex_co, NULL, NULL, 0, result+3, NULL, scene_color_manage);
+		multitex_ext(eff->pd->tex, tex_co, NULL, NULL, 0, result+3, NULL, scene_color_manage, false);
 
 		if (mode == PFIELD_TEX_GRAD || !hasrgb) { /* if we don't have rgb fall back to grad */
 			/* generate intensity if texture only has rgb value */
@@ -1021,6 +1027,163 @@ void pdDoEffectors(ListBase *effectors, ListBase *colliders, EffectorWeights *we
 				/* special case for harmonic effector */
 				add_v3_v3v3(impulse, impulse, efd.vel);
 			}
+		}
+	}
+}
+
+/* ======== Simulation Debugging ======== */
+
+SimDebugData *_sim_debug_data = NULL;
+
+unsigned int BKE_sim_debug_data_hash(int i)
+{
+	return BLI_ghashutil_uinthash((unsigned int)i);
+}
+
+unsigned int BKE_sim_debug_data_hash_combine(unsigned int kx, unsigned int ky)
+{
+#define rot(x,k) (((x)<<(k)) | ((x)>>(32-(k))))
+
+	unsigned int a, b, c;
+
+	a = b = c = 0xdeadbeef + (2 << 2) + 13;
+	a += kx;
+	b += ky;
+
+	c ^= b; c -= rot(b,14);
+	a ^= c; a -= rot(c,11);
+	b ^= a; b -= rot(a,25);
+	c ^= b; c -= rot(b,16);
+	a ^= c; a -= rot(c,4);
+	b ^= a; b -= rot(a,14);
+	c ^= b; c -= rot(b,24);
+
+	return c;
+
+#undef rot
+}
+
+static unsigned int debug_element_hash(const void *key)
+{
+	const SimDebugElement *elem = key;
+	return elem->hash;
+}
+
+static bool debug_element_compare(const void *a, const void *b)
+{
+	const SimDebugElement *elem1 = a;
+	const SimDebugElement *elem2 = b;
+
+	if (elem1->hash == elem2->hash) {
+		return 0;
+	}
+	return 1;
+}
+
+static void debug_element_free(void *val)
+{
+	SimDebugElement *elem = val;
+	MEM_freeN(elem);
+}
+
+void BKE_sim_debug_data_set_enabled(bool enable)
+{
+	if (enable) {
+		if (!_sim_debug_data) {
+			_sim_debug_data = MEM_callocN(sizeof(SimDebugData), "sim debug data");
+			_sim_debug_data->gh = BLI_ghash_new(debug_element_hash, debug_element_compare, "sim debug element hash");
+		}
+	}
+	else {
+		BKE_sim_debug_data_free();
+	}
+}
+
+bool BKE_sim_debug_data_get_enabled(void)
+{
+	return _sim_debug_data != NULL;
+}
+
+void BKE_sim_debug_data_free(void)
+{
+	if (_sim_debug_data) {
+		if (_sim_debug_data->gh)
+			BLI_ghash_free(_sim_debug_data->gh, NULL, debug_element_free);
+		MEM_freeN(_sim_debug_data);
+	}
+}
+
+static void debug_data_insert(SimDebugData *debug_data, SimDebugElement *elem)
+{
+	SimDebugElement *old_elem = BLI_ghash_lookup(debug_data->gh, elem);
+	if (old_elem) {
+		*old_elem = *elem;
+		MEM_freeN(elem);
+	}
+	else
+		BLI_ghash_insert(debug_data->gh, elem, elem);
+}
+
+void BKE_sim_debug_data_add_element(int type, const float v1[3], const float v2[3], float r, float g, float b, const char *category, unsigned int hash)
+{
+	unsigned int category_hash = BLI_ghashutil_strhash_p(category);
+	SimDebugElement *elem;
+	
+	if (!_sim_debug_data) {
+		if (G.debug & G_DEBUG_SIMDATA)
+			BKE_sim_debug_data_set_enabled(true);
+		else
+			return;
+	}
+	
+	elem = MEM_callocN(sizeof(SimDebugElement), "sim debug data element");
+	elem->type = type;
+	elem->category_hash = category_hash;
+	elem->hash = hash;
+	elem->color[0] = r;
+	elem->color[1] = g;
+	elem->color[2] = b;
+	copy_v3_v3(elem->v1, v1);
+	copy_v3_v3(elem->v2, v2);
+	
+	debug_data_insert(_sim_debug_data, elem);
+}
+
+void BKE_sim_debug_data_remove_element(unsigned int hash)
+{
+	SimDebugElement dummy;
+	if (!_sim_debug_data)
+		return;
+	
+	dummy.hash = hash;
+	BLI_ghash_remove(_sim_debug_data->gh, &dummy, NULL, debug_element_free);
+}
+
+void BKE_sim_debug_data_clear(void)
+{
+	if (!_sim_debug_data)
+		return;
+	
+	if (_sim_debug_data->gh)
+		BLI_ghash_clear(_sim_debug_data->gh, NULL, debug_element_free);
+}
+
+void BKE_sim_debug_data_clear_category(const char *category)
+{
+	int category_hash = (int)BLI_ghashutil_strhash_p(category);
+	
+	if (!_sim_debug_data)
+		return;
+	
+	if (_sim_debug_data->gh) {
+		GHashIterator iter;
+		BLI_ghashIterator_init(&iter, _sim_debug_data->gh);
+		while (!BLI_ghashIterator_done(&iter)) {
+			const SimDebugElement *elem = BLI_ghashIterator_getValue(&iter);
+			BLI_ghashIterator_step(&iter); /* removing invalidates the current iterator, so step before removing */
+			
+			if (elem->category_hash == category_hash)
+				BLI_ghash_remove(_sim_debug_data->gh, elem, NULL, debug_element_free);
 		}
 	}
 }

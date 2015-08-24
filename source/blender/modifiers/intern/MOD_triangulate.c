@@ -31,7 +31,6 @@
 
 #include "BKE_cdderivedmesh.h"
 #include "BKE_modifier.h"
-#include "BKE_editmesh.h"
 
 #include "bmesh.h"
 #include "bmesh_tools.h"
@@ -120,6 +119,7 @@ ModifierTypeInfo modifierType_Triangulate = {
 	/* freeData */          NULL,
 	/* isDisabled */        NULL,
 	/* updateDepgraph */    NULL,
+	/* updateDepsgraph */   NULL,
 	/* dependsOnTime */     NULL,
 	/* dependsOnNormals */	NULL,
 	/* foreachObjectLink */ NULL,

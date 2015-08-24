@@ -47,15 +47,15 @@
 
 /* local include */
 #include "occlusion.h"
-#include "renderpipeline.h"
 #include "render_types.h"
-#include "pixelblending.h"
 #include "rendercore.h"
 #include "shadbuf.h"
 #include "sss.h"
 #include "texture.h"
 
 #include "shading.h" /* own include */
+
+#include "IMB_colormanagement.h"
 
 /* could enable at some point but for now there are far too many conversions */
 #ifdef __GNUC__
@@ -950,7 +950,7 @@ static void ramp_diffuse_result(float *diff, ShadeInput *shi)
 
 	if (ma->ramp_col) {
 		if (ma->rampin_col==MA_RAMP_IN_RESULT) {
-			float fac = rgb_to_grayscale(diff);
+			float fac = IMB_colormanagement_get_luminance(diff);
 			do_colorband(ma->ramp_col, fac, col);
 			
 			/* blending method */
@@ -962,7 +962,7 @@ static void ramp_diffuse_result(float *diff, ShadeInput *shi)
 }
 
 /* r,g,b denote energy, ramp is used with different values to make new material color */
-static void add_to_diffuse(float *diff, ShadeInput *shi, float is, float r, float g, float b)
+static void add_to_diffuse(float diff[3], const ShadeInput *shi, const float is, const float rgb[3])
 {
 	Material *ma= shi->mat;
 
@@ -971,9 +971,9 @@ static void add_to_diffuse(float *diff, ShadeInput *shi, float is, float r, floa
 		/* MA_RAMP_IN_RESULT is exceptional */
 		if (ma->rampin_col==MA_RAMP_IN_RESULT) {
 			/* normal add */
-			diff[0] += r * shi->r;
-			diff[1] += g * shi->g;
-			diff[2] += b * shi->b;
+			diff[0] += rgb[0] * shi->r;
+			diff[1] += rgb[1] * shi->g;
+			diff[2] += rgb[2] * shi->b;
 		}
 		else {
 			float colt[3], col[4];
@@ -982,40 +982,37 @@ static void add_to_diffuse(float *diff, ShadeInput *shi, float is, float r, floa
 			/* input */
 			switch (ma->rampin_col) {
 			case MA_RAMP_IN_ENERGY:
-				/* should use 'rgb_to_grayscale' but we only have a vector version */
-				fac= 0.3f*r + 0.58f*g + 0.12f*b;
+				fac = IMB_colormanagement_get_luminance(rgb);
 				break;
 			case MA_RAMP_IN_SHADER:
-				fac= is;
+				fac = is;
 				break;
 			case MA_RAMP_IN_NOR:
-				fac= shi->view[0]*shi->vn[0] + shi->view[1]*shi->vn[1] + shi->view[2]*shi->vn[2];
+				fac = dot_v3v3(shi->view, shi->vn);
 				break;
 			default:
-				fac= 0.0f;
+				fac = 0.0f;
 				break;
 			}
 	
 			do_colorband(ma->ramp_col, fac, col);
 			
 			/* blending method */
-			fac= col[3]*ma->rampfac_col;
-			colt[0]= shi->r;
-			colt[1]= shi->g;
-			colt[2]= shi->b;
+			fac = col[3] * ma->rampfac_col;
+			copy_v3_v3(colt, &shi->r);
 
 			ramp_blend(ma->rampblend_col, colt, fac, col);
 
 			/* output to */
-			diff[0] += r * colt[0];
-			diff[1] += g * colt[1];
-			diff[2] += b * colt[2];
+			diff[0] += rgb[0] * colt[0];
+			diff[1] += rgb[1] * colt[1];
+			diff[2] += rgb[2] * colt[2];
 		}
 	}
 	else {
-		diff[0] += r * shi->r;
-		diff[1] += g * shi->g;
-		diff[2] += b * shi->b;
+		diff[0] += rgb[0] * shi->r;
+		diff[1] += rgb[1] * shi->g;
+		diff[2] += rgb[2] * shi->b;
 	}
 }
 
@@ -1025,7 +1022,7 @@ static void ramp_spec_result(float spec_col[3], ShadeInput *shi)
 
 	if (ma->ramp_spec && (ma->rampin_spec==MA_RAMP_IN_RESULT)) {
 		float col[4];
-		float fac = rgb_to_grayscale(spec_col);
+		float fac = IMB_colormanagement_get_luminance(spec_col);
 
 		do_colorband(ma->ramp_spec, fac, col);
 		
@@ -1478,26 +1475,51 @@ static void shade_one_light(LampRen *lar, ShadeInput *shi, ShadeResult *shr, int
 					i*= shadfac[3];
 					shr->shad[3] = shadfac[3]; /* store this for possible check in troublesome cases */
 				}
+				else {
+					shr->shad[3] = 1.0f;  /* No shadow at all! */
+				}
 			}
 		}
 		
 		/* in case 'no diffuse' we still do most calculus, spec can be in shadow.*/
 		if (!(lar->mode & LA_NO_DIFF)) {
 			if (i>0.0f) {
-				if (ma->mode & MA_SHADOW_TRA)
-					add_to_diffuse(shr->shad, shi, is, i*shadfac[0]*lacol[0], i*shadfac[1]*lacol[1], i*shadfac[2]*lacol[2]);
-				else
-					add_to_diffuse(shr->shad, shi, is, i*lacol[0], i*lacol[1], i*lacol[2]);
+				if (ma->mode & MA_SHADOW_TRA) {
+					const float tcol[3] = {
+					    i * shadfac[0] * lacol[0],
+					    i * shadfac[1] * lacol[1],
+					    i * shadfac[2] * lacol[2],
+					};
+					add_to_diffuse(shr->shad, shi, is, tcol);
+				}
+				else {
+					const float tcol[3] = {
+					    i * lacol[0],
+					    i * lacol[1],
+					    i * lacol[2],
+					};
+					add_to_diffuse(shr->shad, shi, is, tcol);
+				}
 			}
 			/* add light for colored shadow */
 			if (i_noshad>i && !(lashdw[0]==0 && lashdw[1]==0 && lashdw[2]==0)) {
-				add_to_diffuse(shr->shad, shi, is, lashdw[0]*(i_noshad-i)*lacol[0], lashdw[1]*(i_noshad-i)*lacol[1], lashdw[2]*(i_noshad-i)*lacol[2]);
+				const float tcol[3] = {
+				    lashdw[0] * (i_noshad - i) * lacol[0],
+				    lashdw[1] * (i_noshad - i) * lacol[1],
+				    lashdw[2] * (i_noshad - i) * lacol[2],
+				};
+				add_to_diffuse(shr->shad, shi, is, tcol);
 			}
 			if (i_noshad>0.0f) {
 				if (passflag & (SCE_PASS_DIFFUSE|SCE_PASS_SHADOW) ||
 				    ((passflag & SCE_PASS_COMBINED) && !(shi->combinedflag & SCE_PASS_SHADOW)))
 				{
-					add_to_diffuse(shr->diff, shi, is, i_noshad*lacol[0], i_noshad*lacol[1], i_noshad*lacol[2]);
+					const float tcol[3] = {
+					    i_noshad * lacol[0],
+					    i_noshad * lacol[1],
+					    i_noshad * lacol[2]
+					};
+					add_to_diffuse(shr->diff, shi, is, tcol);
 				}
 				else {
 					copy_v3_v3(shr->diff, shr->shad);
@@ -1621,10 +1643,10 @@ static void shade_lamp_loop_only_shadow(ShadeInput *shi, ShadeResult *shr)
 
 				if (shi->mat->shadowonly_flag == MA_SO_OLD) {
 					/* Old "Shadows Only" */
-					accum+= (1.0f-visifac) + (visifac)*rgb_to_grayscale(shadfac)*shadfac[3];
+					accum+= (1.0f-visifac) + (visifac)*IMB_colormanagement_get_luminance(shadfac)*shadfac[3];
 				}
 				else {
-					shaded += rgb_to_grayscale(shadfac)*shadfac[3] * visifac * lar->energy;
+					shaded += IMB_colormanagement_get_luminance(shadfac)*shadfac[3] * visifac * lar->energy;
 
 					if (shi->mat->shadowonly_flag == MA_SO_SHADOW) {
 						lightness += visifac * lar->energy;
@@ -1673,26 +1695,26 @@ static void shade_lamp_loop_only_shadow(ShadeInput *shi, ShadeResult *shr)
 			
 			if (R.wrld.aomix==WO_AOADD) {
 				if (shi->mat->shadowonly_flag == MA_SO_OLD) {
-					f= f*(1.0f - rgb_to_grayscale(shi->ao));
+					f= f*(1.0f - IMB_colormanagement_get_luminance(shi->ao));
 					shr->alpha= (shr->alpha + f)*f;
 				}
 				else {
-					shr->alpha -= f*rgb_to_grayscale(shi->ao);
+					shr->alpha -= f*IMB_colormanagement_get_luminance(shi->ao);
 					if (shr->alpha<0.0f) shr->alpha=0.0f;
 				}
 			}
 			else /* AO Multiply */
-				shr->alpha= (1.0f - f)*shr->alpha + f*(1.0f - (1.0f - shr->alpha)*rgb_to_grayscale(shi->ao));
+				shr->alpha= (1.0f - f)*shr->alpha + f*(1.0f - (1.0f - shr->alpha)*IMB_colormanagement_get_luminance(shi->ao));
 		}
 
 		if (R.wrld.mode & WO_ENV_LIGHT) {
 			if (shi->mat->shadowonly_flag == MA_SO_OLD) {
-				f= R.wrld.ao_env_energy*shi->amb*(1.0f - rgb_to_grayscale(shi->env));
+				f= R.wrld.ao_env_energy*shi->amb*(1.0f - IMB_colormanagement_get_luminance(shi->env));
 				shr->alpha= (shr->alpha + f)*f;
 			}
 			else {
 				f= R.wrld.ao_env_energy*shi->amb;
-				shr->alpha -= f*rgb_to_grayscale(shi->env);
+				shr->alpha -= f*IMB_colormanagement_get_luminance(shi->env);
 				if (shr->alpha<0.0f) shr->alpha=0.0f;
 			}
 		}
@@ -2066,7 +2088,7 @@ float RE_lamp_get_data(ShadeInput *shi, Object *lamp_obj, float col[4], float lv
 		if (R.r.scemode & R_BUTS_PREVIEW) {
 			for (go = R.lights.first; go; go = go->next) {
 				/* "Lamp.002" is main key light of material preview */
-				if (strcmp(go->ob->id.name + 2, "Lamp.002") == 0)
+				if (STREQ(go->ob->id.name + 2, "Lamp.002"))
 					return lamp_get_data_internal(shi, go, col, lv, dist, shadow);
 			}
 			return 0.0f;

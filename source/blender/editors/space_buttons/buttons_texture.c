@@ -37,7 +37,7 @@
 #include "BLI_string.h"
 #include "BLI_utildefines.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "DNA_brush_types.h"
 #include "DNA_ID.h"
@@ -61,7 +61,9 @@
 #include "BKE_paint.h"
 #include "BKE_particle.h"
 #include "BKE_scene.h"
-#include "BKE_freestyle.h"
+#ifdef WITH_FREESTYLE
+#  include "BKE_freestyle.h"
+#endif
 
 #include "RNA_access.h"
 
@@ -256,7 +258,7 @@ static void buttons_texture_user_property_add(ListBase *users, ID *id,
 	user->category = category;
 	user->icon = icon;
 	user->name = name;
-	user->index = BLI_countlist(users);
+	user->index = BLI_listbase_count(users);
 
 	BLI_addtail(users, user);
 }
@@ -273,7 +275,7 @@ static void buttons_texture_user_node_add(ListBase *users, ID *id,
 	user->category = category;
 	user->icon = icon;
 	user->name = name;
-	user->index = BLI_countlist(users);
+	user->index = BLI_listbase_count(users);
 
 	BLI_addtail(users, user);
 }
@@ -468,7 +470,7 @@ void buttons_texture_context_compute(const bContext *C, SpaceButs *sbuts)
 	}
 	else {
 		/* set one user as active based on active index */
-		if (ct->index >= BLI_countlist(&ct->users))
+		if (ct->index == BLI_listbase_count_ex(&ct->users, ct->index + 1))
 			ct->index = 0;
 
 		ct->user = BLI_findlink(&ct->users, ct->index);
@@ -557,7 +559,7 @@ static void template_texture_user_menu(bContext *C, uiLayout *layout, void *UNUS
 		char name[UI_MAX_NAME_STR];
 
 		/* add label per category */
-		if (!last_category || strcmp(last_category, user->category) != 0) {
+		if (!last_category || !STREQ(last_category, user->category)) {
 			uiItemL(layout, user->category, ICON_NONE);
 			but = block->buttons.last;
 			but->drawflag = UI_BUT_TEXT_LEFT;

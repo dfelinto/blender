@@ -126,24 +126,33 @@ bool KX_MouseActuator::Update()
 				float movement[2];
 				MT_Vector3 rotation;
 				float setposition[2] = {0.0};
+				float center_x = 0.5, center_y = 0.5;
 
 				getMousePosition(position);
 
 				movement[0] = position[0];
 				movement[1] = position[1];
 
+				//preventing undesired drifting when resolution is odd
+				if ((m_canvas->GetWidth() % 2) != 0) {
+					center_x = ((m_canvas->GetWidth() - 1.0) / 2.0) / (m_canvas->GetWidth());
+				}
+				if ((m_canvas->GetHeight() % 2) != 0) {
+					center_y = ((m_canvas->GetHeight() - 1.0) / 2.0) / (m_canvas->GetHeight());
+				}
+
 				//preventing initial skipping.
 				if ((m_oldposition[0] <= -0.9) && (m_oldposition[1] <= -0.9)) {
 
 					if (m_reset_x) {
-						m_oldposition[0] = 0.5;
+						m_oldposition[0] = center_x;
 					}
 					else {
 						m_oldposition[0] = position[0];
 					}
 
 					if (m_reset_y) {
-						m_oldposition[1] = 0.5;
+						m_oldposition[1] = center_y;
 					}
 					else {
 						m_oldposition[1] = position[1];
@@ -156,8 +165,8 @@ bool KX_MouseActuator::Update()
 				if (m_use_axis_x) {
 
 					if (m_reset_x) {
-						setposition[0] = 0.5;
-						movement[0] -= 0.5;
+						setposition[0] = center_x;
+						movement[0] -= center_x;
 					}
 					else {
 						setposition[0] = position[0];
@@ -166,12 +175,10 @@ bool KX_MouseActuator::Update()
 
 					movement[0] *= -1.0;
 
-					/* Don't apply the rotation when width resolution is odd (+ little movement) to
-					  avoid undesired drifting or when we are under a certain threshold for mouse
+					/* Don't apply the rotation when we are under a certain threshold for mouse
 					  movement */
 
-					if (!((m_canvas->GetWidth() % 2 != 0) && MT_abs(movement[0]) < 0.01) &&
-					    ((movement[0] > (m_threshold[0] / 10.0)) ||
+					if (((movement[0] > (m_threshold[0] / 10.0)) ||
 					    ((movement[0] * (-1.0)) > (m_threshold[0] / 10.0)))) {
 
 						movement[0] *= m_sensitivity[0];
@@ -209,15 +216,15 @@ bool KX_MouseActuator::Update()
 					}
 				}
 				else {
-					setposition[0] = 0.5;
+					setposition[0] = center_x;
 				}
 
 				//Calculating Y axis.
 				if (m_use_axis_y) {
 
 					if (m_reset_y) {
-						setposition[1] = 0.5;
-						movement[1] -= 0.5;
+						setposition[1] = center_y;
+						movement[1] -= center_y;
 					}
 					else {
 						setposition[1] = position[1];
@@ -226,12 +233,10 @@ bool KX_MouseActuator::Update()
 
 					movement[1] *= -1.0;
 
-					/* Don't apply the rotation when height resolution is odd (+ little movement) to
-					  avoid undesired drifting or when we are under a certain threshold for mouse
+					/* Don't apply the rotation when we are under a certain threshold for mouse
 					  movement */
 
-					if (!((m_canvas->GetHeight() % 2 != 0) && MT_abs(movement[1]) < 0.01) &&
-					    ((movement[1] > (m_threshold[1] / 10.0)) ||
+					if (((movement[1] > (m_threshold[1] / 10.0)) ||
 					    ((movement[1] * (-1.0)) > (m_threshold[1] / 10.0)))) {
 
 						movement[1] *= m_sensitivity[1];
@@ -270,10 +275,13 @@ bool KX_MouseActuator::Update()
 					}
 				}
 				else {
-					setposition[1] = 0.5;
+					setposition[1] = center_y;
 				}
 
-				setMousePosition(setposition[0], setposition[1]);
+				// only trigger mouse event when it is necessary
+				if (m_oldposition[0] != position[0] || m_oldposition[1] != position[1]) {
+					setMousePosition(setposition[0], setposition[1]);
+				}
 
 				m_oldposition[0] = position[0];
 				m_oldposition[1] = position[1];
@@ -311,7 +319,7 @@ void KX_MouseActuator::ProcessReplica()
 
 void KX_MouseActuator::getMousePosition(float* pos)
 {
-	MT_assert(!m_mouse);
+	MT_assert(m_mouse);
 	const SCA_InputEvent & xevent = m_mouse->GetEventValue(SCA_IInputDevice::KX_MOUSEX);
 	const SCA_InputEvent & yevent = m_mouse->GetEventValue(SCA_IInputDevice::KX_MOUSEY);
 
@@ -329,7 +337,7 @@ void KX_MouseActuator::setMousePosition(float fx, float fy)
 	m_canvas->SetMousePosition(x, y);
 }
 
-#ifndef DISABLE_PYTHON
+#ifdef WITH_PYTHON
 
 /* ------------------------------------------------------------------------- */
 /* Python functions                                                          */
@@ -399,8 +407,8 @@ int KX_MouseActuator::pyattr_set_limit_x(void *self_v, const KX_PYATTRIBUTE_DEF 
 	if (PyList_Size(value) != 2)
 		return PY_SET_ATTR_FAIL;
 
-	item1 = PyList_GetItem(value, 0);
-	item2 = PyList_GetItem(value, 1);
+	item1 = PyList_GET_ITEM(value, 0);
+	item2 = PyList_GET_ITEM(value, 1);
 
 	if (!(PyFloat_Check(item1)) || !(PyFloat_Check(item2))) {
 		return PY_SET_ATTR_FAIL;
@@ -430,8 +438,8 @@ int KX_MouseActuator::pyattr_set_limit_y(void *self_v, const KX_PYATTRIBUTE_DEF 
 	if (PyList_Size(value) != 2)
 		return PY_SET_ATTR_FAIL;
 
-	item1 = PyList_GetItem(value, 0);
-	item2 = PyList_GetItem(value, 1);
+	item1 = PyList_GET_ITEM(value, 0);
+	item2 = PyList_GET_ITEM(value, 1);
 
 	if (!(PyFloat_Check(item1)) || !(PyFloat_Check(item2))) {
 		return PY_SET_ATTR_FAIL;
@@ -461,8 +469,8 @@ int KX_MouseActuator::pyattr_set_angle(void *self_v, const KX_PYATTRIBUTE_DEF *a
 	if (PyList_Size(value) != 2)
 		return PY_SET_ATTR_FAIL;
 
-	item1 = PyList_GetItem(value, 0);
-	item2 = PyList_GetItem(value, 1);
+	item1 = PyList_GET_ITEM(value, 0);
+	item2 = PyList_GET_ITEM(value, 1);
 
 	if (!(PyFloat_Check(item1)) || !(PyFloat_Check(item2))) {
 		return PY_SET_ATTR_FAIL;
@@ -528,4 +536,4 @@ PyObject* KX_MouseActuator::PyReset()
 	Py_RETURN_NONE;
 }
 
-#endif
+#endif  /* WITH_PYTHON */

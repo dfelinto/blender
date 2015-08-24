@@ -27,9 +27,10 @@ getopt \
 -o s:i:t:h \
 --long source:,install:,tmp:,info:,threads:,help,no-sudo,with-all,with-opencollada,\
 ver-ocio:,ver-oiio:,ver-llvm:,ver-osl:,\
-force-all,force-python,force-numpy,force-boost,force-ocio,force-oiio,force-llvm,force-osl,force-opencollada,\
-force-ffmpeg,\
-skip-python,skip-numpy,skip-boost,skip-ocio,skip-openexr,skip-oiio,skip-llvm,skip-osl,skip-ffmpeg,skip-opencollada,\
+force-all,force-python,force-numpy,force-boost,force-ocio,force-oiio,force-llvm,force-osl,force-osd,\
+force-ffmpeg,force-opencollada,\
+skip-python,skip-numpy,skip-boost,skip-ocio,skip-openexr,skip-oiio,skip-llvm,skip-osl,skip-osd,\
+skip-ffmpeg,skip-opencollada,\
 required-numpy: \
 -- "$@" \
 )
@@ -138,6 +139,9 @@ ARGUMENTS_INFO="\"COMMAND LINE ARGUMENTS:
     --force-osl
         Force the rebuild of OpenShadingLanguage.
 
+    --force-osd
+        Force the rebuild of OpenSubdiv.
+
     --force-opencollada
         Force the rebuild of OpenCOLLADA.
 
@@ -174,6 +178,9 @@ ARGUMENTS_INFO="\"COMMAND LINE ARGUMENTS:
     --skip-osl
         Unconditionally skip OpenShadingLanguage installation/building.
 
+    --skip-osd
+        Unconditionally skip OpenSubdiv installation/building.
+
     --skip-opencollada
         Unconditionally skip OpenCOLLADA installation/building.
 
@@ -209,14 +216,14 @@ OCIO_VERSION_MIN="1.0"
 OCIO_FORCE_REBUILD=false
 OCIO_SKIP=false
 
-OPENEXR_VERSION="2.1.0"
+OPENEXR_VERSION="2.2.0"
 OPENEXR_VERSION_MIN="2.0.1"
-ILMBASE_VERSION="2.1.0"
+ILMBASE_VERSION="2.2.0"
 OPENEXR_FORCE_REBUILD=false
 OPENEXR_SKIP=false
 _with_built_openexr=false
 
-OIIO_VERSION="1.4.11"
+OIIO_VERSION="1.4.16"
 OIIO_VERSION_MIN="1.4.0"
 OIIO_FORCE_REBUILD=false
 OIIO_SKIP=false
@@ -228,10 +235,16 @@ LLVM_FORCE_REBUILD=false
 LLVM_SKIP=false
 
 # OSL needs to be compiled for now!
-OSL_VERSION="1.5.0"
+OSL_VERSION="1.5.11"
 OSL_VERSION_MIN=$OSL_VERSION
 OSL_FORCE_REBUILD=false
 OSL_SKIP=false
+
+# OpenSubdiv needs to be compiled for now
+OSD_VERSION="3.0.2"
+OSD_VERSION_MIN=$OSD_VERSION
+OSD_FORCE_REBUILD=false
+OSD_SKIP=false
 
 # Version??
 OPENCOLLADA_VERSION="1.3"
@@ -375,6 +388,11 @@ while true; do
       OSL_VERSION_MIN=$OSL_VERSION
       shift; shift; continue
     ;;
+  --ver-osd)
+      OSD_VERSION="$2"
+      OSD_VERSION_MIN=$OSD_VERSION
+      shift; shift; continue
+    ;;
     --force-all)
       PYTHON_FORCE_REBUILD=true
       NUMPY_FORCE_REBUILD=true
@@ -384,6 +402,7 @@ while true; do
       OIIO_FORCE_REBUILD=true
       LLVM_FORCE_REBUILD=true
       OSL_FORCE_REBUILD=true
+      OSD_FORCE_REBUILD=true
       OPENCOLLADA_FORCE_REBUILD=true
       FFMPEG_FORCE_REBUILD=true
       shift; continue
@@ -417,6 +436,9 @@ while true; do
     --force-osl)
       OSL_FORCE_REBUILD=true; shift; continue
     ;;
+    --force-osd)
+      OSD_FORCE_REBUILD=true; shift; continue
+    ;;
     --force-opencollada)
       OPENCOLLADA_FORCE_REBUILD=true; shift; continue
     ;;
@@ -447,6 +469,9 @@ while true; do
     --skip-osl)
       OSL_SKIP=true; shift; continue
     ;;
+    --skip-osd)
+      OSD_SKIP=true; shift; continue
+    ;;    
     --skip-opencollada)
       OPENCOLLADA_SKIP=true; shift; continue
     ;;
@@ -485,24 +510,40 @@ BOOST_SOURCE=( "http://sourceforge.net/projects/boost/files/boost/$BOOST_VERSION
 
 OCIO_SOURCE=( "https://github.com/imageworks/OpenColorIO/tarball/v$OCIO_VERSION" )
 
-#OPENEXR_SOURCE=( "http://download.savannah.nongnu.org/releases/openexr/openexr-$OPENEXR_VERSION.tar.gz" )
-OPENEXR_SOURCE=( "https://github.com/mont29/openexr.git" )
-OPENEXR_REPO_UID="2787aa1cf652d244ed45ae124eb1553f6cff11ee"
+OPENEXR_USE_REPO=false
+OPENEXR_SOURCE=( "http://download.savannah.nongnu.org/releases/openexr/openexr-$OPENEXR_VERSION.tar.gz" )
+OPENEXR_SOURCE_REPO=( "https://github.com/mont29/openexr.git" )
+OPENEXR_SOURCE_REPO_UID="2787aa1cf652d244ed45ae124eb1553f6cff11ee"
 ILMBASE_SOURCE=( "http://download.savannah.nongnu.org/releases/openexr/ilmbase-$ILMBASE_VERSION.tar.gz" )
 
-#OIIO_SOURCE=( "https://github.com/OpenImageIO/oiio/archive/Release-$OIIO_VERSION.tar.gz" )
-OIIO_SOURCE=( "https://github.com/OpenImageIO/oiio.git" )
-OIIO_REPO_UID="c9e67275a0b248ead96152f6d2221cc0c0f278a4"
+OIIO_USE_REPO=false
+OIIO_SOURCE=( "https://github.com/OpenImageIO/oiio/archive/Release-$OIIO_VERSION.tar.gz" )
+OIIO_SOURCE_REPO=( "https://github.com/OpenImageIO/oiio.git" )
+OIIO_SOURCE_REPO_UID="c9e67275a0b248ead96152f6d2221cc0c0f278a4"
 
 LLVM_SOURCE=( "http://llvm.org/releases/$LLVM_VERSION/llvm-$LLVM_VERSION.src.tar.gz" )
 LLVM_CLANG_SOURCE=( "http://llvm.org/releases/$LLVM_VERSION/clang-$LLVM_VERSION.src.tar.gz" "http://llvm.org/releases/$LLVM_VERSION/cfe-$LLVM_VERSION.src.tar.gz" )
-#OSL_SOURCE=( "https://github.com/imageworks/OpenShadingLanguage/archive/Release-$OSL_VERSION.tar.gz" )
-#OSL_SOURCE=( "https://github.com/imageworks/OpenShadingLanguage.git" )
-OSL_SOURCE=( "https://github.com/mont29/OpenShadingLanguage.git" )
-OSL_REPO_UID="85179714e1bc69cd25ecb6bb711c1a156685d395"
+OSL_USE_REPO=true
+#~ OSL_SOURCE=( "https://github.com/imageworks/OpenShadingLanguage/archive/Release-$OSL_VERSION.tar.gz" )
+OSL_SOURCE=( "https://github.com/Nazg-Gul/OpenShadingLanguage/archive/Release-1.5.11.tar.gz" )
+#~ OSL_SOURCE_REPO=( "https://github.com/imageworks/OpenShadingLanguage.git" )
+#~ OSL_SOURCE_REPO=( "https://github.com/mont29/OpenShadingLanguage.git" )
+#~ OSL_SOURCE_REPO_UID="85179714e1bc69cd25ecb6bb711c1a156685d395"
+#~ OSL_SOURCE_REPO_BRANCH="master"
+OSL_SOURCE_REPO=( "https://github.com/Nazg-Gul/OpenShadingLanguage.git" )
+OSL_SOURCE_REPO_UID="22ee5ea298fd215430dfbd160b5aefd507f06db0"
+OSL_SOURCE_REPO_BRANCH="blender-fixes"
+
+OSD_USE_REPO=true
+# Script foo to make the version string compliant with the archive name: 
+# ${Varname//SearchForThisChar/ReplaceWithThisChar}
+OSD_SOURCE=( "https://github.com/PixarAnimationStudios/OpenSubdiv/archive/v${OSD_VERSION//./_}.tar.gz" )
+OSD_SOURCE_REPO=( "https://github.com/PixarAnimationStudios/OpenSubdiv.git" )
+OSD_SOURCE_REPO_UID="404659fffa659da075d1c9416e4fc939139a84ee"
+OSD_SOURCE_REPO_BRANCH="dev"
 
 OPENCOLLADA_SOURCE=( "https://github.com/KhronosGroup/OpenCOLLADA.git" )
-OPENCOLLADA_REPO_UID="18da7f4109a8eafaa290a33f5550501cc4c8bae8"
+OPENCOLLADA_REPO_UID="3335ac164e68b2512a40914b14c74db260e6ff7d"
 FFMPEG_SOURCE=( "http://ffmpeg.org/releases/ffmpeg-$FFMPEG_VERSION.tar.bz2" )
 
 
@@ -975,7 +1016,7 @@ clean_ILMBASE() {
 
 compile_ILMBASE() {
   # To be changed each time we make edits that would modify the compiled result!
-  ilmbase_magic=9
+  ilmbase_magic=10
   _init_ilmbase
 
   # Clean install if needed!
@@ -999,8 +1040,7 @@ compile_ILMBASE() {
       download ILMBASE_SOURCE[@] $_src.tar.gz
 
       INFO "Unpacking ILMBase-$ILMBASE_VERSION"
-      tar -C $SRC --transform "s,(.*/?)ilmbase-[^/]*(.*),\1ILMBase-$ILMBASE_VERSION\2,x" \
-          -xf $_src.tar.gz
+      tar -C $SRC --transform "s,(.*/?)ilmbase-[^/]*(.*),\1ILMBase-$ILMBASE_VERSION\2,x" -xf $_src.tar.gz
 
     fi
 
@@ -1016,6 +1056,7 @@ compile_ILMBASE() {
     cmake_d="$cmake_d -D CMAKE_PREFIX_PATH=$_inst"
     cmake_d="$cmake_d -D CMAKE_INSTALL_PREFIX=$_inst"
     cmake_d="$cmake_d -D BUILD_SHARED_LIBS=ON"
+    cmake_d="$cmake_d -D NAMESPACE_VERSIONING=OFF"  # VERY IMPORTANT!!!
 
     if file /bin/cp | grep -q '32-bit'; then
       cflags="-fPIC -m32 -march=i686"
@@ -1088,24 +1129,28 @@ compile_OPENEXR() {
       INFO "Downloading OpenEXR-$OPENEXR_VERSION"
       mkdir -p $SRC
 
-#      download OPENEXR_SOURCE[@] $_src.tar.gz
-
-#      INFO "Unpacking OpenEXR-$OPENEXR_VERSION"
-#      tar -C $SRC --transform "s,(.*/?)openexr[^/]*(.*),\1OpenEXR-$OPENEXR_VERSION\2,x" \
-#          -xf $_src.tar.gz
-
-      git clone ${OPENEXR_SOURCE[0]} $_src
+      if [ $OPENEXR_USE_REPO == true ]; then
+        git clone ${OPENEXR_SOURCE_REPO[0]} $_src
+      else
+        download OPENEXR_SOURCE[@] $_src.tar.gz
+        INFO "Unpacking OpenEXR-$OPENEXR_VERSION"
+        tar -C $SRC --transform "s,(.*/?)openexr[^/]*(.*),\1OpenEXR-$OPENEXR_VERSION\2,x" -xf $_src.tar.gz
+      fi
 
     fi
 
     cd $_src
 
-    # XXX For now, always update from latest repo...
-    git pull origin master
-
-    # Stick to same rev as windows' libs...
-    git checkout $OPENEXR_REPO_UID
-    git reset --hard
+    if [ $OPENEXR_USE_REPO == true ]; then
+      # XXX For now, always update from latest repo...
+      git pull origin master
+      # Stick to same rev as windows' libs...
+      git checkout $OPENEXR_SOURCE_REPO_UID
+      git reset --hard
+      oiio_src_path="../OpenEXR"
+    else
+      oiio_src_path=".."
+    fi
 
     # Always refresh the whole build!
     if [ -d build ]; then
@@ -1119,6 +1164,7 @@ compile_OPENEXR() {
     cmake_d="$cmake_d -D CMAKE_INSTALL_PREFIX=$_inst"
     cmake_d="$cmake_d -D ILMBASE_PACKAGE_PREFIX=$_ilmbase_inst"
     cmake_d="$cmake_d -D BUILD_SHARED_LIBS=ON"
+    cmake_d="$cmake_d -D NAMESPACE_VERSIONING=OFF"  # VERY IMPORTANT!!!
 
     if file /bin/cp | grep -q '32-bit'; then
       cflags="-fPIC -m32 -march=i686"
@@ -1126,7 +1172,7 @@ compile_OPENEXR() {
       cflags="-fPIC"
     fi
 
-    cmake $cmake_d -D CMAKE_CXX_FLAGS="$cflags" -D CMAKE_EXE_LINKER_FLAGS="-lgcc_s -lgcc" ../OpenEXR
+    cmake $cmake_d -D CMAKE_CXX_FLAGS="$cflags" -D CMAKE_EXE_LINKER_FLAGS="-lgcc_s -lgcc" $oiio_src_path
 
     make -j$THREADS && make install
 
@@ -1190,24 +1236,25 @@ compile_OIIO() {
 
     if [ ! -d $_src ]; then
       mkdir -p $SRC
-      #download OIIO_SOURCE[@] "$_src.tar.gz"
-#
-      #INFO "Unpacking OpenImageIO-$OIIO_VERSION"
-      #tar -C $SRC --transform "s,(.*/?)oiio-Release-[^/]*(.*),\1OpenImageIO-$OIIO_VERSION\2,x" \
-          #-xf $_src.tar.gz
 
-      git clone ${OIIO_SOURCE[0]} $_src
-
+      if [ $OIIO_USE_REPO == true ]; then
+        git clone ${OIIO_SOURCE_REPO[0]} $_src
+      else
+        download OIIO_SOURCE[@] "$_src.tar.gz"
+        INFO "Unpacking OpenImageIO-$OIIO_VERSION"
+        tar -C $SRC --transform "s,(.*/?)oiio-Release-[^/]*(.*),\1OpenImageIO-$OIIO_VERSION\2,x" -xf $_src.tar.gz
+      fi
     fi
 
     cd $_src
 
-    # XXX For now, always update from latest repo...
-    git pull origin master
-
-    # Stick to same rev as windows' libs...
-    git checkout $OIIO_REPO_UID
-    git reset --hard
+    if [ $OIIO_USE_REPO == true ]; then
+      # XXX For now, always update from latest repo...
+      git pull origin master
+      # Stick to same rev as windows' libs...
+      git checkout $OIIO_SOURCE_REPO_UID
+      git reset --hard
+    fi
 
     # Always refresh the whole build!
     if [ -d build ]; then
@@ -1229,6 +1276,7 @@ compile_OIIO() {
     if [ $_with_built_openexr == true ]; then
       cmake_d="$cmake_d -D ILMBASE_HOME=$INST/openexr"
       cmake_d="$cmake_d -D OPENEXR_HOME=$INST/openexr"
+      INFO "ILMBASE_HOME=$INST/openexr"
     fi
 
     # Optional tests and cmd tools
@@ -1359,7 +1407,7 @@ EOF
     cmake_d="$cmake_d -D CMAKE_INSTALL_PREFIX=$_inst"
     cmake_d="$cmake_d -D LLVM_ENABLE_FFI=ON"
     cmake_d="$cmake_d -D LLVM_TARGETS_TO_BUILD=X86"
-    cmake_d="$cmake_d -D -DLLVM_ENABLE_TERMINFO=OFF"
+    cmake_d="$cmake_d -D LLVM_ENABLE_TERMINFO=OFF"
 
     if [ -d $_FFI_INCLUDE_DIR ]; then
       cmake_d="$cmake_d -D FFI_INCLUDE_DIR=$_FFI_INCLUDE_DIR"
@@ -1405,14 +1453,15 @@ clean_OSL() {
 
 compile_OSL() {
   # To be changed each time we make edits that would modify the compiled result!
-  osl_magic=15
+  osl_magic=17
   _init_osl
 
   # Clean install if needed!
   magic_compile_check osl-$OSL_VERSION $osl_magic
-  if [ $? -eq 1 -o $OSL_FORCE_REBUILD == true ]; then
-    clean_OSL
-  fi
+  #~ if [ $? -eq 1 -o $OSL_FORCE_REBUILD == true ]; then
+    #~ rm -Rf $_src  # XXX Radical, but not easy to change remote repo fully automatically
+    #~ clean_OSL
+  #~ fi
 
   if [ ! -d $_inst ]; then
     INFO "Building OpenShadingLanguage-$OSL_VERSION"
@@ -1422,26 +1471,26 @@ compile_OSL() {
     if [ ! -d $_src ]; then
       mkdir -p $SRC
 
-      #download OSL_SOURCE[@] "$_src.tar.gz"
-
-      #INFO "Unpacking OpenShadingLanguage-$OSL_VERSION"
-      #tar -C $SRC --transform "s,(.*/?)OpenShadingLanguage-[^/]*(.*),\1OpenShadingLanguage-$OSL_VERSION\2,x" \
-          #-xf $_src.tar.gz
-
-      git clone ${OSL_SOURCE[0]} $_src
-
+      if [ $OSL_USE_REPO == true ]; then
+        git clone ${OSL_SOURCE_REPO[0]} $_src
+      else
+        download OSL_SOURCE[@] "$_src.tar.gz"
+        INFO "Unpacking OpenShadingLanguage-$OSL_VERSION"
+        tar -C $SRC --transform "s,(.*/?)OpenShadingLanguage-[^/]*(.*),\1OpenShadingLanguage-$OSL_VERSION\2,x" \
+            -xf $_src.tar.gz
+      fi
     fi
 
     cd $_src
 
-    git remote set-url origin $OSL_SOURCE
-
-    # XXX For now, always update from latest repo...
-    git pull -X theirs origin master
-
-    # Stick to same rev as windows' libs...
-    git checkout $OSL_REPO_UID
-    git reset --hard
+    if [ $OSL_USE_REPO == true ]; then
+      git remote set-url origin ${OSL_SOURCE_REPO[0]}
+      # XXX For now, always update from latest repo...
+      git pull --no-edit -X theirs origin $OSL_SOURCE_REPO_BRANCH
+      # Stick to same rev as windows' libs...
+      git checkout $OSL_SOURCE_REPO_UID
+      git reset --hard
+    fi
 
     # Always refresh the whole build!
     if [ -d build ]; then
@@ -1456,11 +1505,14 @@ compile_OSL() {
     cmake_d="$cmake_d -D STOP_ON_WARNING=OFF"
     cmake_d="$cmake_d -D BUILDSTATIC=OFF"
 
-    cmake_d="$cmake_d -D ILMBASE_VERSION=$ILMBASE_VERSION"
+    #~ cmake_d="$cmake_d -D ILMBASE_VERSION=$ILMBASE_VERSION"
 
     if [ $_with_built_openexr == true ]; then
       INFO "ILMBASE_HOME=$INST/openexr"
       cmake_d="$cmake_d -D ILMBASE_HOME=$INST/openexr"
+      # XXX Temp workaround... sigh, ILMBase really messed the things up by defining their custom names ON by default :(
+      cmake_d="$cmake_d -D ILMBASE_CUSTOM=ON"
+      cmake_d="$cmake_d -D ILMBASE_CUSTOM_LIBRARIES='Half;Iex;Imath;IlmThread'"
     fi
 
     if [ -d $INST/boost ]; then
@@ -1474,7 +1526,7 @@ compile_OSL() {
     if [ ! -z $LLVM_VERSION_FOUND ]; then
       cmake_d="$cmake_d -D LLVM_VERSION=$LLVM_VERSION_FOUND"
       if [ -d $INST/llvm ]; then
-        cmake_d="$cmake_d -D LLVM_DIRECTORY=$INST/llvm"
+        cmake_d="$cmake_d -D LLVM_ROOT_DIR=$INST/llvm"
         cmake_d="$cmake_d -D LLVM_STATIC=ON"
       fi
     fi
@@ -1503,6 +1555,99 @@ compile_OSL() {
   run_ldconfig "osl"
 }
 
+#### Build OSD ####
+_init_osd() {
+  _src=$SRC/OpenSubdiv-$OSD_VERSION
+  _git=true
+  _inst=$INST/osd-$OSD_VERSION
+  _inst_shortcut=$INST/osd
+}
+
+clean_OSD() {
+  _init_osd
+  _clean
+}
+
+compile_OSD() {
+  # To be changed each time we make edits that would modify the compiled result!
+  osd_magic=0
+  _init_osd
+
+  # Clean install if needed!
+  magic_compile_check osd-$OSD_VERSION $osd_magic
+  if [ $? -eq 1 -o $OSD_FORCE_REBUILD == true ]; then
+    clean_OSD
+  fi
+
+  if [ ! -d $_inst ]; then
+    INFO "Building OpenSubdiv-$OSD_VERSION"
+
+    prepare_opt
+
+    if [ ! -d $_src ]; then
+      mkdir -p $SRC
+
+      if [ $OSD_USE_REPO == true ]; then
+        git clone ${OSD_SOURCE_REPO[0]} $_src
+      else
+        download OSD_SOURCE[@] "$_src.tar.gz"
+        INFO "Unpacking OpenSubdiv-$OSD_VERSION"
+        tar -C $SRC --transform "s,(.*/?)OpenSubdiv-[^/]*(.*),\1OpenSubdiv-$OSD_VERSION\2,x" \
+            -xf $_src.tar.gz
+      fi
+    fi
+
+    cd $_src
+
+    if [ $OSD_USE_REPO == true ]; then
+      git remote set-url origin ${OSD_SOURCE_REPO[0]}
+      # XXX For now, always update from latest repo...
+      git pull --no-edit -X theirs origin $OSD_SOURCE_REPO_BRANCH
+      # Stick to same rev as windows' libs...
+      git checkout $OSD_SOURCE_REPO_UID
+      git reset --hard
+    fi
+
+    # Always refresh the whole build!
+    if [ -d build ]; then
+      rm -rf build
+    fi    
+    mkdir build
+    cd build
+
+    cmake_d="-D CMAKE_BUILD_TYPE=Release"
+    cmake_d="$cmake_d -D CMAKE_INSTALL_PREFIX=$_inst"
+    # ptex is only needed when nicholas bishop is ready
+    cmake_d="$cmake_d -D NO_PTEX=1"
+    cmake_d="$cmake_d -D NO_CLEW=1"
+    # maya plugin, docs, tutorials, regression tests and examples are not needed
+    cmake_d="$cmake_d -D NO_MAYA=1 -D NO_DOC=1 -D NO_TUTORIALS=1 -D NO_REGRESSION=1 -DNO_EXAMPLES=1"
+
+    cmake $cmake_d ..
+
+    make -j$THREADS && make install
+    make clean
+
+    if [ -d $_inst ]; then
+      _create_inst_shortcut
+    else
+      ERROR "OpenSubdiv-$OSD_VERSION failed to compile, exiting"
+      exit 1
+    fi
+
+    magic_compile_set osd-$OSD_VERSION $osd_magic
+
+    cd $CWD
+    INFO "Done compiling OpenSubdiv-$OSD_VERSION!"
+  else
+    INFO "Own OpenSubdiv-$OSD_VERSION is up to date, nothing to do!"
+    INFO "If you want to force rebuild of this lib, use the --force-osd option."
+  fi
+
+  run_ldconfig "osd"
+}
+
+
 #### Build OpenCOLLADA ####
 _init_opencollada() {
   _src=$SRC/OpenCOLLADA-$OPENCOLLADA_VERSION
@@ -1518,7 +1663,7 @@ clean_OpenCOLLADA() {
 
 compile_OpenCOLLADA() {
   # To be changed each time we make edits that would modify the compiled results!
-  opencollada_magic=8
+  opencollada_magic=9
   _init_opencollada
 
   # Clean install if needed!
@@ -1794,8 +1939,9 @@ install_DEB() {
   THEORA_DEV="libtheora-dev"
 
   _packages="gawk cmake cmake-curses-gui scons build-essential libjpeg-dev libpng-dev \
-             libfreetype6-dev libx11-dev libxi-dev wget libsqlite3-dev libbz2-dev \
-             libncurses5-dev libssl-dev liblzma-dev libreadline-dev $OPENJPEG_DEV \
+             libfreetype6-dev libx11-dev \
+             libxcursor-dev libxi-dev wget libsqlite3-dev libxrandr-dev libxinerama-dev \
+             libbz2-dev libncurses5-dev libssl-dev liblzma-dev libreadline-dev $OPENJPEG_DEV \
              libopenal-dev libglew-dev libglewmx-dev yasm $THEORA_DEV $VORBIS_DEV $OGG_DEV \
              libsdl1.2-dev libfftw3-dev patch bzip2 libxml2-dev libtinyxml-dev"
 
@@ -1973,7 +2119,7 @@ install_DEB() {
       if [ $? -eq 0 ]; then
         install_packages_DEB libboost-locale$boost_version-dev libboost-filesystem$boost_version-dev \
                              libboost-regex$boost_version-dev libboost-system$boost_version-dev \
-                             libboost-thread$boost_version-dev
+                             libboost-thread$boost_version-dev libboost-wave$boost_version-dev
         clean_Boost
       else
         compile_Boost
@@ -2067,6 +2213,20 @@ install_DEB() {
       compile_OSL
     else
       WARNING "No LLVM available, cannot build OSL!"
+    fi
+  fi
+
+  PRINT ""
+  if $OSD_SKIP; then
+    WARNING "Skipping OpenSubdiv installation, as requested..."
+  else
+    if $have_llvm; then
+      install_packages_DEB flex bison libtbb-dev
+      # No package currently!
+      PRINT ""
+      compile_OSD
+    else
+      WARNING "No LLVM available, cannot build OSD!"
     fi
   fi
 
@@ -2268,9 +2428,9 @@ install_RPM() {
   OGG_DEV="libogg-devel"
   THEORA_DEV="libtheora-devel"
 
-  _packages="gcc gcc-c++ make scons libtiff-devel freetype-devel libjpeg-devel\
-             libpng-devel libX11-devel libXi-devel wget ncurses-devel \
-             readline-devel $OPENJPEG_DEV openal-soft-devel \
+  _packages="gcc gcc-c++ git make cmake scons libtiff-devel libjpeg-devel\
+             libpng-devel libX11-devel libXi-devel libXcursor-devel libXrandr-devel libXinerama-devel \
+             wget ncurses-devel readline-devel $OPENJPEG_DEV openal-soft-devel \
              glew-devel yasm $THEORA_DEV $VORBIS_DEV $OGG_DEV patch \
              libxml2-devel yaml-cpp-devel tinyxml-devel"
 
@@ -2282,7 +2442,7 @@ install_RPM() {
   if [ $RPM = "FEDORA" -o $RPM = "RHEL" ]; then
     OPENEXR_DEV="openexr-devel"
 
-    _packages="$_packages libsqlite3x-devel fftw-devel SDL-devel"
+    _packages="$_packages freetype-devel libsqlite3x-devel fftw-devel SDL-devel"
 
     if $WITH_ALL; then
       _packages="$_packages jack-audio-connection-kit-devel"
@@ -2320,7 +2480,7 @@ install_RPM() {
   elif [ $RPM = "SUSE" ]; then
     OPENEXR_DEV="libopenexr-devel"
 
-    _packages="$_packages cmake sqlite3-devel fftw3-devel libSDL-devel"
+    _packages="$_packages cmake freetype2-devel sqlite3-devel fftw3-devel libSDL-devel"
 
     PRINT ""
     install_packages_RPM $_packages
@@ -2497,7 +2657,7 @@ install_RPM() {
   else
     if $have_llvm; then
       # No package currently!
-      install_packages_RPM flex bison git
+      install_packages_RPM flex bison
       if [ $RPM = "FEDORA" -o $RPM = "RHEL" ]; then
         install_packages_RPM tbb-devel
       fi
@@ -2508,12 +2668,29 @@ install_RPM() {
     fi
   fi
 
+  PRINT ""
+  if $OSD_SKIP; then
+    WARNING "Skipping OpenSubdiv installation, as requested..."
+  else
+    if $have_llvm; then
+      # No package currently!
+      install_packages_RPM flex bison
+      if [ $RPM = "FEDORA" -o $RPM = "RHEL" ]; then
+        install_packages_RPM tbb-devel
+      fi
+      PRINT ""
+      compile_OSD
+    else
+      WARNING "No LLVM available, cannot build OSD!"
+    fi
+  fi
+
   if $WITH_OPENCOLLADA; then
     PRINT ""
     if $OPENCOLLADA_SKIP; then
       WARNING "Skipping OpenCOLLADA installation, as requested..."
     else
-      install_packages_RPM pcre-devel git
+      install_packages_RPM pcre-devel
       # Find path to libxml shared lib...
       _XML2_LIB=`rpm -ql libxml2-devel | grep -e ".*/libxml2.so"`
       # No package...
@@ -2621,7 +2798,8 @@ install_ARCH() {
   OGG_DEV="libogg"
   THEORA_DEV="libtheora"
 
-  _packages="base-devel scons cmake libxi glew libpng libtiff wget openal \
+  _packages="base-devel git scons cmake \
+             libxi libxcursor libxrandr libxinerama glew libpng libtiff wget openal \
              $OPENJPEG_DEV $VORBIS_DEV $OGG_DEV $THEORA_DEV yasm sdl fftw \
              libxml2 yaml-cpp tinyxml"
 
@@ -2808,12 +2986,26 @@ install_ARCH() {
         clean_OSL
       else
         #XXX Note: will fail to build with LLVM 3.2! 
-        install_packages_ARCH git intel-tbb
+        install_packages_ARCH intel-tbb
         PRINT ""
         compile_OSL
       fi
     else
       WARNING "No LLVM available, cannot build OSL!"
+    fi
+  fi
+
+  PRINT ""
+  if $OSD_SKIP; then
+    WARNING "Skipping OpenSubdiv installation, as requested..."
+  else
+    if $have_llvm; then
+      # No package currently? Just build for now!
+      install_packages_ARCH intel-tbb
+      PRINT ""
+      compile_OSD
+    else
+      WARNING "No LLVM available, cannot build OSD!"
     fi
   fi
 
@@ -2827,7 +3019,7 @@ install_ARCH() {
         install_packages_ARCH opencollada
         clean_OpenCOLLADA
       else
-        install_packages_ARCH pcre git
+        install_packages_ARCH pcre
         PRINT ""
         compile_OpenCOLLADA
       fi
@@ -2978,7 +3170,7 @@ print_info() {
       _buildargs="$_buildargs $_1"
     fi
     if [ -d $INST/llvm ]; then
-      _1="-D LLVM_DIRECTORY=$INST/llvm"
+      _1="-D LLVM_ROOT_DIR=$INST/llvm"
       _2="-D LLVM_STATIC=ON"
       PRINT "  $_1"
       PRINT "  $_2"
@@ -2987,6 +3179,14 @@ print_info() {
   else
     _1="-D WITH_CYCLES_OSL=OFF"
     _2="-D WITH_LLVM=OFF"
+    PRINT "  $_1"
+    PRINT "  $_2"
+    _buildargs="$_buildargs $_1 $_2"
+  fi
+
+  if [ -d $INST/osd ]; then
+    _1="-D WITH_OPENSUBDIV=ON"
+    _2="-D OPENSUBDIV_ROOT_DIR=$INST/osd"
     PRINT "  $_1"
     PRINT "  $_2"
     _buildargs="$_buildargs $_1 $_2"
@@ -3034,10 +3234,10 @@ print_info() {
     PRINT "BF_OPENEXR = '$INST/openexr'"
 
     _ilm_libs_ext=""
-    version_ge $OPENEXR_VERSION "2.1.0"
-    if [ $? -eq 0 ]; then
-      _ilm_libs_ext=`echo $OPENEXR_VERSION | sed -r 's/([0-9]+)\.([0-9]+).*/-\1_\2/'`
-    fi
+    #~ version_ge $OPENEXR_VERSION "2.1.0"
+    #~ if [ $? -eq 0 ]; then
+      #~ _ilm_libs_ext=`echo $OPENEXR_VERSION | sed -r 's/([0-9]+)\.([0-9]+).*/-\1_\2/'`
+    #~ fi
     PRINT "BF_OPENEXR_LIB = 'Half IlmImf$_ilm_libs_ext Iex$_ilm_libs_ext Imath$_ilm_libs_ext '"
     # BF_OPENEXR_LIB does not work, things like '-lIlmImf-2_1' do not suit ld.
     # For now, hack around!!!
@@ -3056,6 +3256,13 @@ print_info() {
 
   if [ -d $INST/osl ]; then
     PRINT "BF_OSL = '$INST/osl'"
+  fi
+
+  if [ "$OSD_SKIP" = false ]; then
+    PRINT "WITH_BF_OPENSUBDIV = True"
+    if [ -d $INST/osd ]; then
+      PRINT "BF_OPENSUBDIV = '$INST/osd'"
+    fi
   fi
 
   if [ "$BOOST_SKIP" = false ]; then
@@ -3104,7 +3311,27 @@ elif [ -f /etc/redhat-release -o /etc/SuSE-release ]; then
   DISTRO="RPM"
   install_RPM
 else
-  ERROR "Failed to detect distribution type"
+  ERROR "Failed to detect distribution type."
+  PRINT ""
+  PRINT "Your distribution is not supported by this script, you'll have to install dependencies and"
+  PRINT "dev packages yourself (list non-exhaustive, but should cover most needs):"
+  PRINT "    * Basics of dev environment (cmake or scons, gcc, svn , git, ...)."
+  PRINT "    * Python$PYTHON_VERSION_MIN, numpy."
+  PRINT "    * libboost$BOOST_VERSION_MIN (locale, filesystem, regex, system, thread, wave)."
+  PRINT "    * libjpeg, libpng, libtiff, libopenjpeg, libopenal."
+  PRINT "    * ffmpeg (with libvorbis, libogg, libtheora, libx264, libmp3lame, libxvidcore, libvpx, ...)."
+  PRINT "    * libx11, libxcursor, libxi, libxrandr, libxinerama (and other libx... as needed)."
+  PRINT "    * libsqlite3, libbz2, libssl, libfftw3, libxml2, libtinyxml, yasm, libyaml-cpp."
+  PRINT "    * libsdl1.2, libglew, libglewmx."
+  PRINT "    * libopencolorio$OCIO_VERSION_MIN, libopenexr$OPENEXR_VERSION_MIN, libopenimageio$OIIO_VERSION_MIN."
+  PRINT "    * llvm-$LLVM_VERSION (with clang)."
+  PRINT ""
+  PRINT "Most of up-listed packages are available in recent distributions. The following are likely not,"
+  PRINT "you'll have to build them (they are all optional, though):"
+  PRINT "    * OpenShadingLanguage (from https://github.com/Nazg-Gul/OpenShadingLanguage.git, branch blender-fixes, commit 22ee5ea298fd215430dfbd160b5aefd507f06db0)."
+  PRINT "    * OpenSubDiv (from https://github.com/PixarAnimationStudios/OpenSubdiv.git, branch dev, commit 404659fffa659da075d1c9416e4fc939139a84ee)."
+  PRINT "    * OpenCollada (from https://github.com/KhronosGroup/OpenCOLLADA.git, branch master, commit 3335ac164e68b2512a40914b14c74db260e6ff7d)."
+  PRINT ""
   exit 1
 fi
 

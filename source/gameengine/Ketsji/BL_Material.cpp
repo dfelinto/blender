@@ -47,10 +47,10 @@ BL_Material::BL_Material()
 
 void BL_Material::Initialize()
 {
-	rgb[0] = 0;
-	rgb[1] = 0;
-	rgb[2] = 0;
-	rgb[3] = 0;
+	rgb[0] = 0xFFFFFFFFL;
+	rgb[1] = 0xFFFFFFFFL;
+	rgb[2] = 0xFFFFFFFFL;
+	rgb[3] = 0xFFFFFFFFL;
 	IdMode = 0;
 	ras_mode = 0;
 	glslmat = 0;
@@ -69,7 +69,7 @@ void BL_Material::Initialize()
 	alpha = 1.f;
 	emit = 0.f;
 	material = 0;
-	memset(&tface, 0, sizeof(tface));
+	memset(&mtexpoly, 0, sizeof(mtexpoly));
 	materialindex = 0;
 	amb=0.5f;
 	num_enabled = 0;

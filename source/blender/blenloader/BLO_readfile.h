@@ -37,13 +37,11 @@ extern "C" {
 #endif
 
 struct bScreen;
-struct direntry;
 struct LinkNode;
 struct Main;
 struct MemFile;
 struct ReportList;
 struct Scene;
-struct SpaceFile;
 struct UserDef;
 struct bContext;
 struct BHead;
@@ -61,9 +59,7 @@ typedef struct BlendFileData {
 	struct Main *main;
 	struct UserDef *user;
 
-	int winpos;
 	int fileflags;
-	int displaymode;
 	int globalf;
 	char filename[1024];    /* 1024 = FILE_MAX */
 	
@@ -123,8 +119,8 @@ BLO_blendfiledata_free(BlendFileData *bfd);
 /**
  * Open a blendhandle from a file path.
  *
- * \param file The file path to open.
- * \param reports Report errors in opening the file (can be NULL).
+ * \param filepath: The file path to open.
+ * \param reports: Report errors in opening the file (can be NULL).
  * \return A handle on success, or NULL on failure.
  */
 BlendHandle *BLO_blendhandle_from_file(
@@ -199,10 +195,13 @@ BLO_blendhandle_close(BlendHandle *bh);
 bool BLO_has_bfile_extension(const char *str);
 
 /**
- * return ok when a blenderfile, in dir is the filename,
- * in group the type of libdata
+ * \param path the full path to explode.
+ * \param r_dir the string that'll contain path up to blend file itself ('library' path).
+ * \param r_group the string that'll contain 'group' part of the path, if any. May be NULL.
+ * \param r_name the string that'll contain data's name part of the path, if any. May be NULL.
+ * \return true if path contains a blend file.
  */
-bool BLO_is_a_library(const char *path, char *dir, char *group);
+bool BLO_library_path_explode(const char *path, char *r_dir, char **r_group, char **r_name);
 
 
 /**

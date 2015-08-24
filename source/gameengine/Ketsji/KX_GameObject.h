@@ -40,7 +40,7 @@
 
 #include <stddef.h>
 
-#include "ListValue.h"
+#include "EXP_ListValue.h"
 #include "SCA_IObject.h"
 #include "SG_Node.h"
 #include "MT_Transform.h"
@@ -49,6 +49,7 @@
 #include "CTR_HashedPtr.h"
 #include "KX_Scene.h"
 #include "KX_KetsjiEngine.h" /* for m_anim_framerate */
+#include "DNA_constraint_types.h" /* for constraint replication */
 #include "DNA_object_types.h"
 #include "SCA_LogicManager.h" /* for ConvertPythonToGameObject to search object names */
 
@@ -88,18 +89,19 @@ protected:
 	int									m_layer;
 	std::vector<RAS_MeshObject*>		m_meshes;
 	std::vector<RAS_MeshObject*>		m_lodmeshes;
+	int                                 m_currentLodLevel;
+	short								m_previousLodLevel;
 	SG_QList							m_meshSlots;	// head of mesh slots of this 
 	struct Object*						m_pBlenderObject;
 	struct Object*						m_pBlenderGroupObject;
 	
-	bool								m_bSuspendDynamics;
 	bool								m_bUseObjectColor;
 	bool								m_bIsNegativeScaling;
 	MT_Vector4							m_objectColor;
 
 	// Bit fields for user control over physics collisions
-	short								m_userCollisionGroup;
-	short								m_userCollisionMask;
+	unsigned short						m_userCollisionGroup;
+	unsigned short						m_userCollisionMask;
 
 	// visible = user setting
 	// culled = while rendering, depending on camera
@@ -116,6 +118,7 @@ protected:
 	SG_Node*							m_pSGNode;
 
 	MT_CmMatrix4x4						m_OpenGL_4x4Matrix;
+	std::vector<bRigidBodyJointConstraint*>	m_constraints;
 
 	KX_ObstacleSimulation*				m_pObstacleSimulation;
 
@@ -192,6 +195,14 @@ public:
 		void
 	UpdateBlenderObjectMatrix(Object* blendobj=NULL);
 
+	/**
+	 * Used for constraint replication for group instances.
+	 * The list of constraints is filled during data conversion.
+	 */
+	void AddConstraint(bRigidBodyJointConstraint *cons);
+	std::vector<bRigidBodyJointConstraint*> GetConstraints();
+	void ClearConstraints();
+
 	/** 
 	 * Get a pointer to the game object that is the parent of 
 	 * this object. Or NULL if there is no parent. The returned
@@ -266,6 +277,11 @@ public:
 	float GetActionFrame(short layer);
 
 	/**
+	 * Gets the name of the current action
+	 */
+	const char *GetActionName(short layer);
+
+	/**
 	 * Sets the current frame of an action
 	 */
 	void SetActionFrame(short layer, float frame);
@@ -289,6 +305,11 @@ public:
 	 * Stop playing the action on the given layer
 	 */
 	void StopAction(short layer);
+
+	/**
+	 * Remove playing tagged actions.
+	 */
+	void RemoveTaggedActions();
 
 	/**
 	 * Check if an action has finished playing
@@ -506,8 +527,17 @@ public:
 	 */
 	void ActivateGraphicController(bool recurse);
 
-	void SetUserCollisionGroup(short filter);
-	void SetUserCollisionMask(short mask);
+	/** Set the object's collison group
+	 * \param filter The group bitfield
+	 */
+	void SetUserCollisionGroup(unsigned short filter);
+
+	/** Set the object's collison mask
+	 * \param filter The mask bitfield
+	 */
+	void SetUserCollisionMask(unsigned short mask);
+	unsigned short GetUserCollisionGroup();
+	unsigned short GetUserCollisionMask();
 	/**
 	 * Extra broadphase check for user controllable collisions
 	 */
@@ -607,6 +637,8 @@ public:
 		return m_bDyna; 
 	}
 
+	bool IsDynamicsSuspended() const;
+
 	/**
 	 * Should we record animation for this object?
 	 */
@@ -683,6 +715,12 @@ public:
 		const MT_Vector3& ang_vel,
 		bool local
 	);
+
+	virtual float	getLinearDamping() const;
+	virtual float	getAngularDamping() const;
+	virtual void	setLinearDamping(float damping);
+	virtual void	setAngularDamping(float damping);
+	virtual void	setDamping(float linear, float angular);
 
 	/**
 	 * Update the physics object transform based upon the current SG_Node
@@ -852,10 +890,10 @@ public:
 	/**
 	 * Was this object culled?
 	 */
-	bool
+	inline bool
 	GetCulled(
 		void
-	);
+	) { return m_bCulled; }
 
 	/**
 	 * Set culled flag of this object
@@ -886,7 +924,7 @@ public:
 	 * Change the layer of the object (when it is added in another layer
 	 * than the original layer)
 	 */
-		void
+	virtual void
 	SetLayer(
 		int l
 	);
@@ -913,7 +951,7 @@ public:
 
 	void RegisterCollisionCallbacks();
 	void UnregisterCollisionCallbacks();
-	void RunCollisionCallbacks(KX_GameObject *collider);
+	void RunCollisionCallbacks(KX_GameObject *collider, const MT_Vector3 &point, const MT_Vector3 &normal);
 	/**
 	 * Stop making progress
 	 */
@@ -965,6 +1003,7 @@ public:
 	KX_PYMETHOD_VARARGS(KX_GameObject,GetAngularVelocity);
 	KX_PYMETHOD_VARARGS(KX_GameObject,SetAngularVelocity);
 	KX_PYMETHOD_VARARGS(KX_GameObject,GetVelocity);
+	KX_PYMETHOD_VARARGS(KX_GameObject,SetDamping);
 
 	KX_PYMETHOD_NOARGS(KX_GameObject,GetReactionForce);
 
@@ -976,7 +1015,7 @@ public:
 	KX_PYMETHOD_O(KX_GameObject,SetState);
 	KX_PYMETHOD_VARARGS(KX_GameObject,AlignAxisToVect);
 	KX_PYMETHOD_O(KX_GameObject,GetAxisVect);
-	KX_PYMETHOD_NOARGS(KX_GameObject,SuspendDynamics);
+	KX_PYMETHOD_VARARGS(KX_GameObject,SuspendDynamics);
 	KX_PYMETHOD_NOARGS(KX_GameObject,RestoreDynamics);
 	KX_PYMETHOD_NOARGS(KX_GameObject,EnableRigidBody);
 	KX_PYMETHOD_NOARGS(KX_GameObject,DisableRigidBody);
@@ -1003,6 +1042,7 @@ public:
 	KX_PYMETHOD_DOC(KX_GameObject, playAction);
 	KX_PYMETHOD_DOC(KX_GameObject, stopAction);
 	KX_PYMETHOD_DOC(KX_GameObject, getActionFrame);
+	KX_PYMETHOD_DOC(KX_GameObject, getActionName);
 	KX_PYMETHOD_DOC(KX_GameObject, setActionFrame);
 	KX_PYMETHOD_DOC(KX_GameObject, isPlayingAction);
 	
@@ -1020,10 +1060,15 @@ public:
 	static PyObject*	pyattr_get_life(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef);
 	static PyObject*	pyattr_get_mass(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef);
 	static int			pyattr_set_mass(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef, PyObject *value);
+	static PyObject*	pyattr_get_is_suspend_dynamics(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef);
 	static PyObject*	pyattr_get_lin_vel_min(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef);
 	static int			pyattr_set_lin_vel_min(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef, PyObject *value);
 	static PyObject*	pyattr_get_lin_vel_max(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef);
 	static int			pyattr_set_lin_vel_max(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef, PyObject *value);
+	static PyObject*	pyattr_get_ang_vel_min(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef);
+	static int			pyattr_set_ang_vel_min(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef, PyObject *value);
+	static PyObject*	pyattr_get_ang_vel_max(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef);
+	static int			pyattr_set_ang_vel_max(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef, PyObject *value);
 	static PyObject*	pyattr_get_visible(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef);
 	static int			pyattr_set_visible(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef, PyObject *value);
 	static PyObject*	pyattr_get_record_animation(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef);
@@ -1066,10 +1111,18 @@ public:
 	static int			pyattr_set_obcolor(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef, PyObject *value);
 	static PyObject*	pyattr_get_collisionCallbacks(void *selv_v, const KX_PYATTRIBUTE_DEF *attrdef);
 	static int			pyattr_set_collisionCallbacks(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef, PyObject *value);
+	static PyObject*	pyattr_get_collisionGroup(void *selv_v, const KX_PYATTRIBUTE_DEF *attrdef);
+	static int			pyattr_set_collisionGroup(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef, PyObject *value);
+	static PyObject*	pyattr_get_collisionMask(void *selv_v, const KX_PYATTRIBUTE_DEF *attrdef);
+	static int			pyattr_set_collisionMask(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef, PyObject *value);
 	static PyObject*	pyattr_get_debug(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef);
 	static int			pyattr_set_debug(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef, PyObject *value);
 	static PyObject*	pyattr_get_debugRecursive(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef);
 	static int			pyattr_set_debugRecursive(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef, PyObject *value);
+	static PyObject*	pyattr_get_linearDamping(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef);
+	static int			pyattr_set_linearDamping(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef, PyObject *value);
+	static PyObject*	pyattr_get_angularDamping(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef);
+	static int			pyattr_set_angularDamping(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef, PyObject *value);
 
 	/* Experimental! */
 	static PyObject*	pyattr_get_sensors(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef);

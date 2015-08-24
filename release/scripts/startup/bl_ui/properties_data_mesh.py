@@ -29,8 +29,8 @@ class MESH_MT_vertex_group_specials(Menu):
     def draw(self, context):
         layout = self.layout
 
-        layout.operator("object.vertex_group_sort", icon='SORTALPHA').sort_type = "NAME"
-        layout.operator("object.vertex_group_sort", icon='ARMATURE_DATA', text="Sort by Bone Hierarchy").sort_type = "BONE_HIERARCHY"
+        layout.operator("object.vertex_group_sort", icon='SORTALPHA', text="Sort by Name").sort_type = 'NAME'
+        layout.operator("object.vertex_group_sort", icon='ARMATURE_DATA', text="Sort by Bone Hierarchy").sort_type = 'BONE_HIERARCHY'
         layout.operator("object.vertex_group_copy", icon='COPY_ID')
         layout.operator("object.vertex_group_copy_to_linked", icon='LINK_AREA')
         layout.operator("object.vertex_group_copy_to_selected", icon='LINK_AREA')
@@ -70,7 +70,7 @@ class MESH_UL_vgroups(UIList):
             layout.prop(vgroup, "name", text="", emboss=False, icon_value=icon)
             icon = 'LOCKED' if vgroup.lock_weight else 'UNLOCKED'
             layout.prop(vgroup, "lock_weight", text="", icon=icon, emboss=False)
-        elif self.layout_type in {'GRID'}:
+        elif self.layout_type == 'GRID':
             layout.alignment = 'CENTER'
             layout.label(text="", icon_value=icon)
 
@@ -94,7 +94,7 @@ class MESH_UL_shape_keys(UIList):
             else:
                 row.label(text="")
             row.prop(key_block, "mute", text="", emboss=False)
-        elif self.layout_type in {'GRID'}:
+        elif self.layout_type == 'GRID':
             layout.alignment = 'CENTER'
             layout.label(text="", icon_value=icon)
 
@@ -106,12 +106,12 @@ class MESH_UL_uvmaps_vcols(UIList):
             layout.prop(item, "name", text="", emboss=False, icon_value=icon)
             icon = 'RESTRICT_RENDER_OFF' if item.active_render else 'RESTRICT_RENDER_ON'
             layout.prop(item, "active_render", text="", icon=icon, emboss=False)
-        elif self.layout_type in {'GRID'}:
+        elif self.layout_type == 'GRID':
             layout.alignment = 'CENTER'
             layout.label(text="", icon_value=icon)
 
 
-class MeshButtonsPanel():
+class MeshButtonsPanel:
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
     bl_context = "data"
@@ -154,7 +154,7 @@ class DATA_PT_normals(MeshButtonsPanel, Panel):
         col = split.column()
         col.prop(mesh, "use_auto_smooth")
         sub = col.column()
-        sub.active = mesh.use_auto_smooth
+        sub.active = mesh.use_auto_smooth and not mesh.has_custom_normals
         sub.prop(mesh, "auto_smooth_angle", text="Angle")
 
         split.prop(mesh, "show_double_sided")
@@ -317,7 +317,6 @@ class DATA_PT_shape_keys(MeshButtonsPanel, Panel):
                 row = layout.column()
                 row.active = enable_edit_value
                 row.prop(key, "eval_time")
-                row.prop(key, "slurph")
 
 
 class DATA_PT_uv_texture(MeshButtonsPanel, Panel):
@@ -370,8 +369,13 @@ class DATA_PT_customdata(MeshButtonsPanel, Panel):
         me = context.mesh
         col = layout.column()
 
-        col.operator("mesh.customdata_clear_mask", icon='X')
-        col.operator("mesh.customdata_clear_skin", icon='X')
+        col.operator("mesh.customdata_mask_clear", icon='X')
+        col.operator("mesh.customdata_skin_clear", icon='X')
+
+        if me.has_custom_normals:
+            col.operator("mesh.customdata_custom_splitnormals_clear", icon='X')
+        else:
+            col.operator("mesh.customdata_custom_splitnormals_add", icon='ZOOMIN')
 
         col = layout.column()
 

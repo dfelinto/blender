@@ -24,14 +24,18 @@
 #include "BLI_math.h"
 #include "BLI_utildefines.h"
 
-
+extern "C" {
+#include "IMB_colormanagement.h"
+}
 
 CalculateStandardDeviationOperation::CalculateStandardDeviationOperation() : CalculateMeanOperation()
 {
 	/* pass */
 }
 
-void CalculateStandardDeviationOperation::executePixel(float output[4], int x, int y, void *data)
+void CalculateStandardDeviationOperation::executePixel(float output[4],
+                                                       int /*x*/, int /*y*/,
+                                                       void * /*data*/)
 {
 	output[0] = this->m_standardDeviation;
 }
@@ -55,7 +59,7 @@ void *CalculateStandardDeviationOperation::initializeTileData(rcti *rect)
 				switch (this->m_setting) {
 					case 1:  /* rgb combined */
 					{
-						float value = rgb_to_bw(&buffer[offset]);
+						float value = IMB_colormanagement_get_luminance(&buffer[offset]);
 						sum += (value - mean) * (value - mean);
 						break;
 					}

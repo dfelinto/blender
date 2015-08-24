@@ -34,7 +34,7 @@ void CompositorNode::convertToOperations(NodeConverter &converter, const Composi
 	bNode *editorNode = this->getbNode();
 	bool is_active = (editorNode->flag & NODE_DO_OUTPUT_RECALC) ||
 	                 context.isRendering();
-	bool ignore_alpha = editorNode->custom2 & CMP_NODE_OUTPUT_IGNORE_ALPHA;
+	bool ignore_alpha = (editorNode->custom2 & CMP_NODE_OUTPUT_IGNORE_ALPHA) != 0;
 
 	NodeInput *imageSocket = this->getInputSocket(0);
 	NodeInput *alphaSocket = this->getInputSocket(1);
@@ -43,6 +43,7 @@ void CompositorNode::convertToOperations(NodeConverter &converter, const Composi
 	CompositorOperation *compositorOperation = new CompositorOperation();
 	compositorOperation->setSceneName(context.getScene()->id.name);
 	compositorOperation->setRenderData(context.getRenderData());
+	compositorOperation->setViewName(context.getViewName());
 	compositorOperation->setbNodeTree(context.getbNodeTree());
 	/* alpha socket gives either 1 or a custom alpha value if "use alpha" is enabled */
 	compositorOperation->setUseAlphaInput(ignore_alpha || alphaSocket->isLinked());

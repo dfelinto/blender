@@ -45,8 +45,6 @@
 
 #include "WM_api.h"
 #include "WM_types.h"
-#include "wm_window.h"
-#include "wm_event_system.h"
 #include "wm_event_types.h"
 #include "wm.h"
 
@@ -159,8 +157,8 @@ static void wm_job_main_thread_yield(wmJob *wm_job, bool ending)
 	BLI_ticket_mutex_lock(wm_job->main_thread_mutex);
 }
 
-/* finds:
- * if type or owner, compare for it, otherwise any matching job
+/**
+ * Finds if type or owner, compare for it, otherwise any matching job.
  */
 static wmJob *wm_job_find(wmWindowManager *wm, void *owner, const int job_type)
 {
@@ -187,9 +185,12 @@ static wmJob *wm_job_find(wmWindowManager *wm, void *owner, const int job_type)
 
 /* ******************* public API ***************** */
 
-/* returns current or adds new job, but doesnt run it */
-/* every owner only gets a single job, adding a new one will stop running job and 
- * when stopped it starts the new one */
+/**
+ * \return current job or adds new job, but doesnt run it.
+ *
+ * \note every owner only gets a single job,
+ * adding a new one will stop running job and when stopped it starts the new one.
+ */
 wmJob *WM_jobs_get(wmWindowManager *wm, wmWindow *win, void *owner, const char *name, int flag, int job_type)
 {
 	wmJob *wm_job = wm_job_find(wm, owner, job_type);
@@ -377,8 +378,10 @@ static void wm_jobs_test_suspend_stop(wmWindowManager *wm, wmJob *test)
 	// if (suspend) printf("job suspended: %s\n", test->name);
 }
 
-/* if job running, the same owner gave it a new job */
-/* if different owner starts existing startjob, it suspends itself */
+/**
+ * if job running, the same owner gave it a new job.
+ * if different owner starts existing startjob, it suspends itself
+ */
 void WM_jobs_start(wmWindowManager *wm, wmJob *wm_job)
 {
 	if (wm_job->running) {
@@ -630,17 +633,22 @@ void wm_jobs_timer(const bContext *C, wmWindowManager *wm, wmTimer *wt)
 		}
 	}
 	
-	/* on file load 'winactive' can be NULL, possibly it should not happen but for now do a NULL check - campbell */
-	if (wm->winactive) {
-		/* if there are running jobs, set the global progress indicator */
-		if (jobs_progress > 0) {
-			float progress = total_progress / (float)jobs_progress;
-			WM_progress_set(wm->winactive, progress);
-		}
-		else {
-			WM_progress_clear(wm->winactive);
-		}
+	
+	/* if there are running jobs, set the global progress indicator */
+	if (jobs_progress > 0) {
+		wmWindow *win;
+		float progress = total_progress / (float)jobs_progress;
+
+		for (win = wm->windows.first; win; win = win->next)
+			WM_progress_set(win, progress);
 	}
+	else {
+		wmWindow *win;
+
+		for (win = wm->windows.first; win; win = win->next)
+			WM_progress_clear(win);
+	}
+	
 }
 
 bool WM_jobs_has_running(wmWindowManager *wm)

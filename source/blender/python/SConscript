@@ -35,8 +35,8 @@ incs = [
     '#/intern/memutil',
     env['BF_GLEW_INC'],
     '#/intern/glew-mx',
-    '#/intern/audaspace/intern',
     '#/intern/cycles/blender',
+    '../blentranslation',
     '../blenfont',
     '../blenkernel',
     '../blenlib',
@@ -63,7 +63,8 @@ sources = env.Glob('bmesh/*.c')
 env.BlenderLib( libname = 'bf_python_bmesh', sources = Split(sources), includes = Split(incs), defines = defs, libtype = ['core','player'], priority = [362,165])
 
 # generic
-defs = env['BF_GL_DEFINITIONS']
+defs = []
+defs += env['BF_GL_DEFINITIONS']
 
 if is_debug:
     defs.append('_DEBUG')
@@ -80,7 +81,8 @@ env.BlenderLib( libname = 'bf_python_mathutils', sources = Split(sources), inclu
 
 
 # bpy
-defs = env['BF_GL_DEFINITIONS']
+defs = []
+defs += env['BF_GL_DEFINITIONS']
 
 if is_debug:
     defs.append('_DEBUG')
@@ -159,6 +161,11 @@ if env['WITH_BF_OPENAL']:
 
 if env['WITH_BF_SDL']:
     defs.append('WITH_SDL')
+    incs += ' ' + env['BF_SDL_INC']
+
+    if env['WITH_BF_SDL_DYNLOAD']:
+        defs.append('WITH_SDL_DYNLOAD')
+        incs += ' #extern/sdlew/include'
 
 if env['WITH_BF_JACK']:
     defs.append('WITH_JACK')

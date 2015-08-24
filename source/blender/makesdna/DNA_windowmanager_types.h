@@ -33,6 +33,7 @@
 
 #include "DNA_listBase.h"
 #include "DNA_vec_types.h"
+#include "DNA_userdef_types.h"
 
 #include "DNA_ID.h"
 
@@ -49,16 +50,14 @@ struct wmKeyConfig;
 
 /* forwards */
 struct bContext;
-struct wmLocal;
 struct bScreen;
-struct uiBlock;
 struct wmSubWindow;
 struct wmTimer;
-struct StructRNA;
 struct PointerRNA;
 struct ReportList;
 struct Report;
 struct uiLayout;
+struct Stereo3dFormat;
 
 #define OP_MAX_TYPENAME 64
 #define KMAP_MAX_NAME   64
@@ -165,6 +164,13 @@ enum {
 	WM_INIT_KEYMAP = (1<<1),
 };
 
+/* IME is win32 only! */
+#ifndef WIN32
+#  ifdef __GNUC__
+#    define ime_data ime_data __attribute__ ((deprecated))
+#  endif
+#endif
+
 /* the savable part, rest of data is local in ghostwinlay */
 typedef struct wmWindow {
 	struct wmWindow *next, *prev;
@@ -197,8 +203,12 @@ typedef struct wmWindow {
 
 	struct wmGesture *tweak;      /* internal for wm_operators.c */
 
+	/* Input Method Editor data - complex character input (esp. for asian character input)
+	 * Currently WIN32, runtime-only data */
+	struct wmIMEData *ime_data;
+
 	int drawmethod, drawfail;     /* internal for wm_draw.c only */
-	void *drawdata;               /* internal for wm_draw.c only */
+	ListBase drawdata;            /* internal for wm_draw.c only */
 
 	ListBase queue;               /* all events (ghost level events were handled) */
 	ListBase handlers;            /* window+screen handlers, handled last */
@@ -206,7 +216,13 @@ typedef struct wmWindow {
 
 	ListBase subwindows;          /* opengl stuff for sub windows, see notes in wm_subwindow.c */
 	ListBase gesture;             /* gesture stuff */
+
+	struct Stereo3dFormat *stereo3d_format; /* properties for stereoscopic displays */
 } wmWindow;
+
+#ifdef ime_data
+#  undef ime_data
+#endif
 
 /* These two Lines with # tell makesdna this struct can be excluded. */
 /* should be something like DNA_EXCLUDE 
@@ -374,10 +390,16 @@ enum {
 
 /* wmOperator flag */
 enum {
-	OP_GRAB_POINTER    = (1 << 0),
 	/* low level flag so exec() operators can tell if they were invoked, use with care.
 	 * typically this shouldn't make any difference, but it rare cases its needed (see smooth-view) */
-	OP_IS_INVOKE       = (1 << 1),
+	OP_IS_INVOKE = (1 << 0),
+
+	/* When the cursor is grabbed */
+	OP_IS_MODAL_GRAB_CURSOR    = (1 << 1),
+
+	/* allow modal operators to have the region under the cursor for their context
+	 * (the regiontype is maintained to prevent errors) */
+	OP_IS_MODAL_CURSOR_REGION = (1 << 2),
 };
 
 #endif /* __DNA_WINDOWMANAGER_TYPES_H__ */

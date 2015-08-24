@@ -81,7 +81,7 @@ PyObject *Vector_from_Vec2f(Vec2f& vec)
 	float vec_data[2]; // because vec->_coord is protected
 	vec_data[0] = vec.x();
 	vec_data[1] = vec.y();
-	return Vector_CreatePyObject(vec_data, 2, Py_NEW, NULL);
+	return Vector_CreatePyObject(vec_data, 2, NULL);
 }
 
 PyObject *Vector_from_Vec3f(Vec3f& vec)
@@ -90,7 +90,7 @@ PyObject *Vector_from_Vec3f(Vec3f& vec)
 	vec_data[0] = vec.x();
 	vec_data[1] = vec.y();
 	vec_data[2] = vec.z(); 
-	return Vector_CreatePyObject(vec_data, 3, Py_NEW, NULL);
+	return Vector_CreatePyObject(vec_data, 3, NULL);
 }
 
 PyObject *Vector_from_Vec3r(Vec3r& vec)
@@ -99,7 +99,7 @@ PyObject *Vector_from_Vec3r(Vec3r& vec)
 	vec_data[0] = vec.x();
 	vec_data[1] = vec.y();
 	vec_data[2] = vec.z();
-	return Vector_CreatePyObject(vec_data, 3, Py_NEW, NULL);
+	return Vector_CreatePyObject(vec_data, 3, NULL);
 }
 
 PyObject *BPy_Id_from_Id(Id& id)
@@ -401,8 +401,9 @@ PyObject *BPy_CurvePoint_from_CurvePoint(CurvePoint& cp)
 PyObject *BPy_directedViewEdge_from_directedViewEdge(ViewVertex::directedViewEdge& dve)
 {
 	PyObject *py_dve = PyTuple_New(2);
-	PyTuple_SET_ITEM(py_dve, 0, BPy_ViewEdge_from_ViewEdge(*(dve.first)));
-	PyTuple_SET_ITEM(py_dve, 1, PyBool_from_bool(dve.second));
+	PyTuple_SET_ITEMS(py_dve,
+	        BPy_ViewEdge_from_ViewEdge(*(dve.first)),
+	        PyBool_from_bool(dve.second));
 	return py_dve;
 }
 

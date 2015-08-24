@@ -41,7 +41,6 @@
 #include "DNA_scene_types.h"
 #include "DNA_texture_types.h"
 
-#include "BLI_listbase.h"
 #include "BLI_math.h"
 #include "BLI_utildefines.h"
 
@@ -127,6 +126,10 @@ Lamp *BKE_lamp_copy(Lamp *la)
 	if (la->preview)
 		lan->preview = BKE_previewimg_copy(la->preview);
 	
+	if (la->id.lib) {
+		BKE_id_lib_local_paths(G.main, la->id.lib, &lan->id);
+	}
+
 	return lan;
 }
 
@@ -218,7 +221,7 @@ void BKE_lamp_free(Lamp *la)
 		if (mtex) MEM_freeN(mtex);
 	}
 	
-	BKE_free_animdata((ID *)la);
+	BKE_animdata_free((ID *)la);
 
 	curvemapping_free(la->curfalloff);
 
@@ -229,7 +232,7 @@ void BKE_lamp_free(Lamp *la)
 	}
 	
 	BKE_previewimg_free(&la->preview);
-	BKE_icon_delete(&la->id);
+	BKE_icon_id_delete(&la->id);
 	la->id.icon_id = 0;
 }
 

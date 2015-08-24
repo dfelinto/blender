@@ -45,7 +45,7 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BLI_math.h"
 #include "BLI_blenlib.h"
@@ -60,6 +60,7 @@
 #include "BKE_editmesh.h"
 #include "BKE_deform.h"
 #include "BKE_object.h"
+#include "BKE_object_deform.h"
 
 #include "WM_api.h"
 #include "WM_types.h"
@@ -67,8 +68,6 @@
 #include "RNA_access.h"
 
 #include "ED_armature.h"
-#include "ED_gpencil.h"
-#include "ED_object.h"
 #include "ED_mesh.h"
 #include "ED_screen.h"
 
@@ -200,7 +199,7 @@ static void v3d_editvertex_buts(uiLayout *layout, View3D *v3d, Object *ob, float
 	bool has_skinradius = false;
 	PointerRNA data_ptr;
 
-	fill_vn_fl(median, NBR_TRANSFORM_PROPERTIES, 0.0f);
+	copy_vn_fl(median, NBR_TRANSFORM_PROPERTIES, 0.0f);
 	tot = totedgedata = totcurvedata = totlattdata = totcurvebweight = 0;
 
 	/* make sure we got storage */
@@ -844,9 +843,9 @@ static void view3d_panel_vgroup(const bContext *C, Panel *pa)
 
 		col = uiLayoutColumn(bcol, true);
 
-		vgroup_validmap = ED_vgroup_subset_from_select_type(ob, subset_type, &vgroup_tot, &subset_count);
+		vgroup_validmap = BKE_object_defgroup_subset_from_select_type(ob, subset_type, &vgroup_tot, &subset_count);
 		for (i = 0, dg = ob->defbase.first; dg; i++, dg = dg->next) {
-			bool locked = dg->flag & DG_LOCK_WEIGHT;
+			bool locked = (dg->flag & DG_LOCK_WEIGHT) != 0;
 			if (vgroup_validmap[i]) {
 				MDeformWeight *dw = defvert_find_index(dv, i);
 				if (dw) {
@@ -993,9 +992,8 @@ static void v3d_transform_butsR(uiLayout *layout, PointerRNA *ptr)
 
 	if (ptr->type == &RNA_Object) {
 		Object *ob = ptr->data;
-		/* dimensions and material support just happen to be the same checks
-		 * later we may want to add dimensions for lattice, armature etc too */
-		if (OB_TYPE_SUPPORT_MATERIAL(ob->type)) {
+		/* dimensions and editmode just happen to be the same checks */
+		if (OB_TYPE_SUPPORT_EDITMODE(ob->type)) {
 			uiItemR(layout, ptr, "dimensions", 0, NULL, ICON_NONE);
 		}
 	}
@@ -1180,23 +1178,15 @@ void view3d_buttons_register(ARegionType *art)
 	pt = MEM_callocN(sizeof(PanelType), "spacetype view3d panel object");
 	strcpy(pt->idname, "VIEW3D_PT_transform");
 	strcpy(pt->label, N_("Transform"));  /* XXX C panels not  available through RNA (bpy.types)! */
-	strcpy(pt->translation_context, BLF_I18NCONTEXT_DEFAULT_BPYRNA);
+	strcpy(pt->translation_context, BLT_I18NCONTEXT_DEFAULT_BPYRNA);
 	pt->draw = view3d_panel_transform;
 	pt->poll = view3d_panel_transform_poll;
-	BLI_addtail(&art->paneltypes, pt);
-
-	pt = MEM_callocN(sizeof(PanelType), "spacetype view3d panel gpencil");
-	strcpy(pt->idname, "VIEW3D_PT_gpencil");
-	strcpy(pt->label, N_("Grease Pencil"));  /* XXX C panels are not available through RNA (bpy.types)! */
-	strcpy(pt->translation_context, BLF_I18NCONTEXT_DEFAULT_BPYRNA);
-	pt->draw_header = ED_gpencil_panel_standard_header;
-	pt->draw = ED_gpencil_panel_standard;
 	BLI_addtail(&art->paneltypes, pt);
 
 	pt = MEM_callocN(sizeof(PanelType), "spacetype view3d panel vgroup");
 	strcpy(pt->idname, "VIEW3D_PT_vgroup");
 	strcpy(pt->label, N_("Vertex Weights"));  /* XXX C panels are not available through RNA (bpy.types)! */
-	strcpy(pt->translation_context, BLF_I18NCONTEXT_DEFAULT_BPYRNA);
+	strcpy(pt->translation_context, BLT_I18NCONTEXT_DEFAULT_BPYRNA);
 	pt->draw = view3d_panel_vgroup;
 	pt->poll = view3d_panel_vgroup_poll;
 	BLI_addtail(&art->paneltypes, pt);

@@ -33,11 +33,11 @@
 #include "GPU_extensions.h"
 #include "GPU_glew.h"
  
-#include "BLI_utildefines.h"
-
 #include "MEM_guardedalloc.h"
 
 #include "DNA_userdef_types.h"
+
+#include "BLI_utildefines.h"
 
 /* Ad hoc number of queries to allocate to skip doing many glGenQueries */
 #define ALLOC_QUERIES 200
@@ -59,6 +59,7 @@ typedef struct GPUQueryState {
 	bool use_gpu_select;
 	/* cache on initialization */
 	unsigned int *buffer;
+	/* buffer size (stores number of integers, for actual size multiply by sizeof integer)*/
 	unsigned int bufsize;
 	/* mode of operation */
 	char mode;
@@ -82,7 +83,7 @@ void GPU_select_begin(unsigned int *buffer, unsigned int bufsize, rctf *input, c
 	g_query_state.oldhits = oldhits;
 
 	if (!g_query_state.use_gpu_select) {
-		glSelectBuffer( bufsize, (GLuint *)buffer);
+		glSelectBuffer(bufsize, (GLuint *)buffer);
 		glRenderMode(GL_SELECT);
 		glInitNames();
 		glPushName(-1);
@@ -92,8 +93,8 @@ void GPU_select_begin(unsigned int *buffer, unsigned int bufsize, rctf *input, c
 
 		g_query_state.num_of_queries = ALLOC_QUERIES;
 
-		g_query_state.queries = MEM_mallocN(g_query_state.num_of_queries * sizeof(*g_query_state.queries) , "gpu selection queries");
-		g_query_state.id = MEM_mallocN(g_query_state.num_of_queries * sizeof(*g_query_state.id) , "gpu selection ids");
+		g_query_state.queries = MEM_mallocN(g_query_state.num_of_queries * sizeof(*g_query_state.queries), "gpu selection queries");
+		g_query_state.id = MEM_mallocN(g_query_state.num_of_queries * sizeof(*g_query_state.id), "gpu selection ids");
 		glGenQueriesARB(g_query_state.num_of_queries, g_query_state.queries);
 
 		glPushAttrib(GL_DEPTH_BUFFER_BIT | GL_VIEWPORT_BIT);
@@ -135,7 +136,7 @@ void GPU_select_begin(unsigned int *buffer, unsigned int bufsize, rctf *input, c
 bool GPU_select_load_id(unsigned int id)
 {
 	/* if no selection mode active, ignore */
-	if(!g_query_state.select_is_active)
+	if (!g_query_state.select_is_active)
 		return true;
 
 	if (!g_query_state.use_gpu_select) {
@@ -158,7 +159,7 @@ bool GPU_select_load_id(unsigned int id)
 		g_query_state.active_query++;
 		g_query_state.query_issued = true;
 
-		if (g_query_state.mode == GPU_SELECT_NEAREST_SECOND_PASS) {
+		if (g_query_state.mode == GPU_SELECT_NEAREST_SECOND_PASS && g_query_state.index < g_query_state.oldhits) {
 			if (g_query_state.buffer[g_query_state.index * 4 + 3] == id) {
 				g_query_state.index++;
 				return true;
@@ -191,7 +192,9 @@ unsigned int GPU_select_end(void)
 			glGetQueryObjectuivARB(g_query_state.queries[i], GL_QUERY_RESULT_ARB, &result);
 			if (result > 0) {
 				if (g_query_state.mode != GPU_SELECT_NEAREST_SECOND_PASS) {
-					if(hits < g_query_state.bufsize) {
+					int maxhits = g_query_state.bufsize / 4;
+
+					if (hits < maxhits) {
 						g_query_state.buffer[hits * 4] = 1;
 						g_query_state.buffer[hits * 4 + 1] = 0xFFFF;
 						g_query_state.buffer[hits * 4 + 2] = 0xFFFF;

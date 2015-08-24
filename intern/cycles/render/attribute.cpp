@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #include "image.h"
@@ -52,7 +52,7 @@ void Attribute::set(ustring name_, TypeDesc type_, AttributeElement element_)
 
 void Attribute::reserve(int numverts, int numtris, int numsteps, int numcurves, int numkeys, bool resize)
 {
-	if (resize) {
+	if(resize) {
 		buffer.resize(buffer_size(numverts, numtris, numsteps, numcurves, numkeys), 0);
 	}
 	else {
@@ -230,6 +230,8 @@ const char *Attribute::standard_name(AttributeStandard std)
 			return "heat";
 		case ATTR_STD_VOLUME_VELOCITY:
 			return "velocity";
+		case ATTR_STD_POINTINESS:
+			return "pointiness";
 		case ATTR_STD_NOT_FOUND:
 		case ATTR_STD_NONE:
 		case ATTR_STD_NUM:
@@ -375,6 +377,9 @@ Attribute *AttributeSet::add(AttributeStandard std, ustring name)
 			case ATTR_STD_VOLUME_VELOCITY:
 				attr = add(name, TypeDesc::TypeVector, ATTR_ELEMENT_VOXEL);
 				break;
+			case ATTR_STD_POINTINESS:
+				attr = add(name, TypeDesc::TypeFloat, ATTR_ELEMENT_VERTEX);
+				break;
 			default:
 				assert(0);
 				break;
@@ -394,6 +399,9 @@ Attribute *AttributeSet::add(AttributeStandard std, ustring name)
 				break;
 			case ATTR_STD_GENERATED_TRANSFORM:
 				attr = add(name, TypeDesc::TypeMatrix, ATTR_ELEMENT_MESH);
+				break;
+			case ATTR_STD_POINTINESS:
+				attr = add(name, TypeDesc::TypeFloat, ATTR_ELEMENT_VERTEX);
 				break;
 			default:
 				assert(0);

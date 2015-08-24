@@ -45,6 +45,8 @@
 
 #include "bmesh_py_types_meshdata.h"
 
+#include "../generic/python_utildefines.h"
+
 
 /* Mesh BMTexPoly
  * ************** */
@@ -97,7 +99,7 @@ static PyGetSetDef bpy_bmtexpoly_getseters[] = {
 	{NULL, NULL, NULL, NULL, NULL} /* Sentinel */
 };
 
-static PyTypeObject BPy_BMTexPoly_Type = {{{0}}}; /* bm.loops.layers.uv.active */
+static PyTypeObject BPy_BMTexPoly_Type; /* bm.loops.layers.uv.active */
 
 static void bm_init_types_bmtexpoly(void)
 {
@@ -150,7 +152,7 @@ PyDoc_STRVAR(bpy_bmloopuv_uv_doc,
 );
 static PyObject *bpy_bmloopuv_uv_get(BPy_BMLoopUV *self, void *UNUSED(closure))
 {
-	return Vector_CreatePyObject(self->data->uv, 2, Py_WRAP, NULL);
+	return Vector_CreatePyObject_wrap(self->data->uv, 2, NULL);
 }
 
 static int bpy_bmloopuv_uv_set(BPy_BMLoopUV *self, PyObject *value, void *UNUSED(closure))
@@ -210,7 +212,7 @@ static PyGetSetDef bpy_bmloopuv_getseters[] = {
 	{NULL, NULL, NULL, NULL, NULL} /* Sentinel */
 };
 
-PyTypeObject BPy_BMLoopUV_Type = {{{0}}}; /* bm.loops.layers.uv.active */
+PyTypeObject BPy_BMLoopUV_Type; /* bm.loops.layers.uv.active */
 
 static void bm_init_types_bmloopuv(void)
 {
@@ -263,7 +265,7 @@ PyDoc_STRVAR(bpy_bmvertskin_radius_doc,
 );
 static PyObject *bpy_bmvertskin_radius_get(BPy_BMVertSkin *self, void *UNUSED(closure))
 {
-	return Vector_CreatePyObject(self->data->radius, 2, Py_WRAP, NULL);
+	return Vector_CreatePyObject_wrap(self->data->radius, 2, NULL);
 }
 
 static int bpy_bmvertskin_radius_set(BPy_BMVertSkin *self, PyObject *value, void *UNUSED(closure))
@@ -319,7 +321,7 @@ static PyGetSetDef bpy_bmvertskin_getseters[] = {
 	{NULL, NULL, NULL, NULL, NULL} /* Sentinel */
 };
 
-static PyTypeObject BPy_BMVertSkin_Type = {{{0}}}; /* bm.loops.layers.uv.active */
+static PyTypeObject BPy_BMVertSkin_Type; /* bm.loops.layers.uv.active */
 
 static void bm_init_types_bmvertskin(void)
 {
@@ -369,7 +371,7 @@ PyObject *BPy_BMVertSkin_CreatePyObject(struct MVertSkin *mvertskin)
 
 static void mloopcol_to_float(const MLoopCol *mloopcol, float r_col[3])
 {
-	rgb_uchar_to_float(r_col, (unsigned char *)&mloopcol->r);
+	rgb_uchar_to_float(r_col, (const unsigned char *)&mloopcol->r);
 }
 
 static void mloopcol_from_float(MLoopCol *mloopcol, const float col[3])
@@ -684,10 +686,9 @@ static PyObject *bpy_bmdeformvert_items(BPy_BMDeformVert *self)
 	ret = PyList_New(self->data->totweight);
 	for (i = 0; i < self->data->totweight; i++, dw++) {
 		item = PyTuple_New(2);
-
-		PyTuple_SET_ITEM(item, 0, PyLong_FromLong(dw->def_nr));
-		PyTuple_SET_ITEM(item, 1, PyFloat_FromDouble(dw->weight));
-
+		PyTuple_SET_ITEMS(item,
+		        PyLong_FromLong(dw->def_nr),
+		        PyFloat_FromDouble(dw->weight));
 		PyList_SET_ITEM(ret, i, item);
 	}
 
@@ -721,7 +722,7 @@ static PyObject *bpy_bmdeformvert_get(BPy_BMDeformVert *self, PyObject *args)
 			return PyFloat_FromDouble(dw->weight);
 		}
 		else {
-			return Py_INCREF(def), def;
+			return Py_INCREF_RET(def);
 		}
 	}
 }
@@ -749,7 +750,7 @@ static struct PyMethodDef bpy_bmdeformvert_methods[] = {
 	{NULL, NULL, 0, NULL}
 };
 
-PyTypeObject BPy_BMDeformVert_Type = {{{0}}}; /* bm.loops.layers.uv.active */
+PyTypeObject BPy_BMDeformVert_Type; /* bm.loops.layers.uv.active */
 
 static void bm_init_types_bmdvert(void)
 {

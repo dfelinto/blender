@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #ifndef __BSDF_OREN_NAYAR_H__
@@ -37,7 +37,7 @@ ccl_device int bsdf_oren_nayar_setup(ShaderClosure *sc)
 
 	sc->type = CLOSURE_BSDF_OREN_NAYAR_ID;
 
-	sigma = clamp(sigma, 0.0f, 1.0f);
+	sigma = saturate(sigma);
 
 	float div = 1.0f / (M_PI_F + ((3.0f * M_PI_F - 4.0f) / 6.0f) * sigma);
 
@@ -45,10 +45,6 @@ ccl_device int bsdf_oren_nayar_setup(ShaderClosure *sc)
 	sc->data1 = sigma * div;
 
 	return SD_BSDF|SD_BSDF_HAS_EVAL;
-}
-
-ccl_device void bsdf_oren_nayar_blur(ShaderClosure *sc, float roughness)
-{
 }
 
 ccl_device float3 bsdf_oren_nayar_eval_reflect(const ShaderClosure *sc, const float3 I, const float3 omega_in, float *pdf)

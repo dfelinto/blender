@@ -45,8 +45,6 @@
 #include "BLI_blenlib.h"
 #include "BLI_threads.h"
 #include "BLI_utildefines.h"
-#include "BLI_math.h"
-#include "BLI_math_geom.h"
 
 #include "BKE_blender.h"
 #include "BKE_screen.h"
@@ -71,7 +69,6 @@
 
 #include "IMB_imbuf_types.h"
 #include "IMB_imbuf.h"
-#include "IMB_colormanagement.h"
 
 #include "GPU_draw.h" /* GPU_free_image */
 
@@ -218,7 +215,7 @@ static DerivedMesh *multiresbake_create_loresdm(Scene *scene, Object *ob, int *l
 		tmp_mmd.simple = true;
 	}
 
-	DM_set_only_copy(cddm, CD_MASK_BAREMESH | CD_MASK_MTFACE);
+	DM_set_only_copy(cddm, CD_MASK_BAREMESH | CD_MASK_MFACE | CD_MASK_MTFACE);
 
 	tmp_mmd.lvl = *lvl;
 	tmp_mmd.sculptlvl = *lvl;
@@ -438,7 +435,7 @@ static void multiresbake_startjob(void *bkv, short *stop, short *do_update, floa
 	MultiresBakeJob *bkj = bkv;
 	int baked_objects = 0, tot_obj;
 
-	tot_obj = BLI_countlist(&bkj->data);
+	tot_obj = BLI_listbase_count(&bkj->data);
 
 	if (bkj->bake_clear) {  /* clear images */
 		for (data = bkj->data.first; data; data = data->next) {

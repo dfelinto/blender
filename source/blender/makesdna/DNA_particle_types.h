@@ -44,6 +44,7 @@ typedef struct HairKey {
 	float weight;	/* softbody weight */
 	short editflag;	/* saved particled edit mode flags */
 	short pad;
+	float world_co[3];
 } HairKey;
 
 typedef struct ParticleKey {	/* when changed update size of struct to copy_particleKey()!! */
@@ -207,6 +208,8 @@ typedef struct ParticleSettings {
 	/* length */
 	float randlength;
 	/* children */
+	int child_flag;
+	int pad3;
 	int child_nbr, ren_child_nbr;
 	float parents, childsize, childrandsize;
 	float childrad, childflat;
@@ -215,6 +218,8 @@ typedef struct ParticleSettings {
 	/* kink */
 	float kink_amp, kink_freq, kink_shape, kink_flat;
 	float kink_amp_clump;
+	int kink_extra_steps, pad4;
+	float kink_axis_random, kink_amp_random;
 	/* rough */
 	float rough1, rough1_size;
 	float rough2, rough2_size, rough2_thres;
@@ -232,6 +237,12 @@ typedef struct ParticleSettings {
 	int trail_count;
 	/* keyed particles */
 	int keyed_loops;
+	struct CurveMapping *clumpcurve;
+	struct CurveMapping *roughcurve;
+	float clump_noise_size;
+
+	/* hair dynamics */
+	float bending_random;
 
 	struct MTex *mtex[18];		/* MAX_MTEX */
 
@@ -246,7 +257,7 @@ typedef struct ParticleSettings {
 
 	/* modified dm support */
 	short use_modifier_stack;
-	short pad[3];
+	short pad5[3];
 
 } ParticleSettings;
 
@@ -312,6 +323,29 @@ typedef struct ParticleSystem {
 	float dt_frac;							/* current time step, as a fraction of a frame */
 	float _pad;								/* spare capacity */
 } ParticleSystem;
+
+typedef enum eParticleDrawFlag {
+	PART_DRAW_VEL           = (1 << 0),
+	PART_DRAW_GLOBAL_OB	    = (1 << 1),
+	PART_DRAW_SIZE          = (1 << 2),
+	PART_DRAW_EMITTER       = (1 << 3), /* render emitter also */
+	PART_DRAW_HEALTH        = (1 << 4),
+	PART_ABS_PATH_TIME      = (1 << 5),
+	PART_DRAW_COUNT_GR      = (1 << 6),
+	PART_DRAW_BB_LOCK       = (1 << 7), /* used with billboards */
+	PART_DRAW_ROTATE_OB     = (1 << 7), /* used with dupliobjects/groups */
+	PART_DRAW_PARENT        = (1 << 8),
+	PART_DRAW_NUM           = (1 << 9),
+	PART_DRAW_RAND_GR       = (1 << 10),
+	PART_DRAW_REN_ADAPT     = (1 << 11),
+	PART_DRAW_VEL_LENGTH    = (1 << 12),
+	PART_DRAW_MAT_COL       = (1 << 13), /* deprecated, but used in do_versions */
+	PART_DRAW_WHOLE_GR      = (1 << 14),
+	PART_DRAW_REN_STRAND    = (1 << 15),
+	PART_DRAW_NO_SCALE_OB   = (1 << 16), /* used with dupliobjects/groups */
+	PART_DRAW_GUIDE_HAIRS   = (1 << 17),
+	PART_DRAW_HAIR_GRID     = (1 << 18),
+} eParticleDrawFlag;
 
 /* part->type */
 /* hair is allways baked static in object/geometry space */
@@ -385,31 +419,21 @@ typedef struct ParticleSystem {
 #define PART_PHYS_FLUID		4
 
 /* part->kink */
-#define PART_KINK_NO		0
-#define PART_KINK_CURL		1
-#define PART_KINK_RADIAL	2
-#define PART_KINK_WAVE		3
-#define PART_KINK_BRAID		4
+typedef enum eParticleKink {
+	PART_KINK_NO		= 0,
+	PART_KINK_CURL		= 1,
+	PART_KINK_RADIAL	= 2,
+	PART_KINK_WAVE		= 3,
+	PART_KINK_BRAID		= 4,
+	PART_KINK_SPIRAL	= 5,
+} eParticleKink;
 
-/* part->draw */
-#define PART_DRAW_VEL		1
-#define PART_DRAW_GLOBAL_OB	2
-#define PART_DRAW_SIZE		4
-#define PART_DRAW_EMITTER	8	/* render emitter also */
-#define PART_DRAW_HEALTH	16
-#define PART_ABS_PATH_TIME  32
-#define PART_DRAW_COUNT_GR	64
-#define PART_DRAW_BB_LOCK	128	/* used with billboards */
-#define PART_DRAW_ROTATE_OB 128 /* used with dupliobjects/groups */
-#define PART_DRAW_PARENT	256
-#define PART_DRAW_NUM		512
-#define PART_DRAW_RAND_GR	1024
-#define PART_DRAW_REN_ADAPT	2048
-#define PART_DRAW_VEL_LENGTH	(1<<12)
-#define PART_DRAW_MAT_COL		(1<<13) /* deprecated, but used in do_versions */
-#define PART_DRAW_WHOLE_GR		(1<<14)
-#define PART_DRAW_REN_STRAND	(1<<15)
-#define PART_DRAW_NO_SCALE_OB 	(1<<16) /* used with dupliobjects/groups */
+/* part->child_flag */
+typedef enum eParticleChildFlag {
+	PART_CHILD_USE_CLUMP_NOISE  = (1<<0),
+	PART_CHILD_USE_CLUMP_CURVE  = (1<<1),
+	PART_CHILD_USE_ROUGH_CURVE  = (1<<2),
+} eParticleChildFlag;
 
 /* part->draw_col */
 #define PART_DRAW_COL_NONE		0
@@ -561,24 +585,27 @@ typedef struct ParticleSystem {
 #define PTARGET_MODE_ENEMY		2
 
 /* mapto */
-/* init */
-#define PAMAP_INIT		(PAMAP_TIME | PAMAP_LIFE | PAMAP_DENS | PAMAP_SIZE)
-#define PAMAP_TIME		(1<<0)	/* emission time */
-#define PAMAP_LIFE		(1<<1)	/* life time */
-#define PAMAP_DENS		(1<<2)	/* density */
-#define PAMAP_SIZE		(1<<3)	/* physical size */
-/* reset */
-#define PAMAP_IVEL		(1<<5)	/* initial velocity */
-/* physics */
-#define PAMAP_PHYSICS	(PAMAP_FIELD | PAMAP_GRAVITY | PAMAP_DAMP)
-#define PAMAP_FIELD		(1<<6)	/* force fields */
-#define PAMAP_GRAVITY	(1<<10)
-#define PAMAP_DAMP		(1<<11)
-/* children */
-#define PAMAP_CHILD		(PAMAP_CLUMP | PAMAP_KINK | PAMAP_ROUGH | PAMAP_LENGTH)
-#define PAMAP_CLUMP		(1<<7)
-#define PAMAP_KINK		(1<<8)
-#define PAMAP_ROUGH		(1<<9)
-#define PAMAP_LENGTH	(1<<4)
+typedef enum eParticleTextureInfluence {
+	/* init */
+	PAMAP_TIME		= (1<<0),	/* emission time */
+	PAMAP_LIFE		= (1<<1),	/* life time */
+	PAMAP_DENS		= (1<<2),	/* density */
+	PAMAP_SIZE		= (1<<3),	/* physical size */
+	PAMAP_INIT		= (PAMAP_TIME | PAMAP_LIFE | PAMAP_DENS | PAMAP_SIZE),
+	/* reset */
+	PAMAP_IVEL		= (1<<5),	/* initial velocity */
+	/* physics */
+	PAMAP_FIELD		= (1<<6),	/* force fields */
+	PAMAP_GRAVITY	= (1<<10),
+	PAMAP_DAMP		= (1<<11),
+	PAMAP_PHYSICS	= (PAMAP_FIELD | PAMAP_GRAVITY | PAMAP_DAMP),
+	/* children */
+	PAMAP_CLUMP		= (1<<7),
+	PAMAP_KINK_FREQ	= (1<<8),
+	PAMAP_KINK_AMP	= (1<<12),
+	PAMAP_ROUGH		= (1<<9),
+	PAMAP_LENGTH	= (1<<4),
+	PAMAP_CHILD		= (PAMAP_CLUMP | PAMAP_KINK_FREQ | PAMAP_KINK_AMP | PAMAP_ROUGH | PAMAP_LENGTH),
+} eParticleTextureInfluence;
 
 #endif

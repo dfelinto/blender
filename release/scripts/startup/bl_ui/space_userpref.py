@@ -113,11 +113,19 @@ class USERPREF_MT_splash(Menu):
         row.label("")
         row = split.row()
         row.label("Interaction:")
-        # XXX, no redraws
-        # text = bpy.path.display_name(context.window_manager.keyconfigs.active.name)
-        # if not text:
-        #     text = "Blender (default)"
-        row.menu("USERPREF_MT_appconfigs", text="Preset")
+
+        text = bpy.path.display_name(context.window_manager.keyconfigs.active.name)
+        if not text:
+            text = "Blender (default)"
+        row.menu("USERPREF_MT_appconfigs", text=text)
+
+
+# only for addons
+class USERPREF_MT_splash_footer(Menu):
+    bl_label = ""
+
+    def draw(self, context):
+        pass
 
 
 class USERPREF_PT_interface(Panel):
@@ -162,6 +170,12 @@ class USERPREF_PT_interface(Panel):
         sub.prop(view, "mini_axis_brightness", text="Brightness")
 
         col.separator()
+
+        if sys.platform[:3] == "win":
+            col.label("Warnings")
+            col.prop(view, "use_quit_dialog")
+            col.prop(view, "use_gl_warn_support")
+
         row.separator()
         row.separator()
 
@@ -186,6 +200,11 @@ class USERPREF_PT_interface(Panel):
         col.label(text="2D Viewports:")
         col.prop(view, "view2d_grid_spacing_min", text="Minimum Grid Spacing")
         col.prop(view, "timecode_style")
+        col.prop(view, "view_frame_type")
+        if (view.view_frame_type == 'SECONDS'):
+            col.prop(view, "view_frame_seconds")
+        elif (view.view_frame_type == 'KEYFRAMES'):
+            col.prop(view, "view_frame_keyframes")
 
         row.separator()
         row.separator()
@@ -229,9 +248,6 @@ class USERPREF_PT_interface(Panel):
         col.separator()
 
         col.prop(view, "show_splash")
-
-        if sys.platform[:3] == "win":
-            col.prop(view, "use_quit_dialog")
 
 
 class USERPREF_PT_edit(Panel):
@@ -297,6 +313,8 @@ class USERPREF_PT_edit(Panel):
         col.separator()
         col.separator()
         col.separator()
+        col.label(text="Node Editor:")
+        col.prop(edit, "node_margin")
         col.label(text="Animation Editors:")
         col.prop(edit, "fcurve_unselected_alpha", text="F-Curve Visibility")
 
@@ -395,9 +413,9 @@ class USERPREF_PT_system(Panel):
         col.separator()
 
         col.label(text="Sound:")
-        col.row().prop(system, "audio_device", expand=True)
+        col.row().prop(system, "audio_device", expand=False)
         sub = col.column()
-        sub.active = system.audio_device != 'NONE'
+        sub.active = system.audio_device != 'NONE' and system.audio_device != 'Null'
         #sub.prop(system, "use_preview_images")
         sub.prop(system, "audio_channels", text="Channels")
         sub.prop(system, "audio_mixing_buffer", text="Mixing Buffer")
@@ -418,6 +436,10 @@ class USERPREF_PT_system(Panel):
             sub = col.row()
             sub.active = system.compute_device_type != 'CPU'
             sub.prop(system, "compute_device", text="")
+
+        if hasattr(system, "opensubdiv_compute_type"):
+            col.label(text="OpenSubdiv compute:")
+            col.row().prop(system, "opensubdiv_compute_type", text="")
 
         # 2. Column
         column = split.column()
@@ -776,7 +798,7 @@ class USERPREF_PT_theme(Panel):
             padding = subsplit.split(percentage=0.15)
             colsub = padding.column()
             colsub = padding.column()
-            colsub.row().prop(ui, "emboss")
+            colsub.row().prop(ui, "widget_emboss")
 
             col.separator()
             col.separator()
@@ -972,6 +994,7 @@ class USERPREF_MT_ndof_settings(Menu):
 
         layout.prop(input_prefs, "ndof_sensitivity")
         layout.prop(input_prefs, "ndof_orbit_sensitivity")
+        layout.prop(input_prefs, "ndof_deadzone")
 
         if is_view3d:
             layout.separator()
@@ -1030,7 +1053,8 @@ class USERPREF_PT_input(Panel):
         userpref = context.user_preferences
         return (userpref.active_section == 'INPUT')
 
-    def draw_input_prefs(self, inputs, layout):
+    @staticmethod
+    def draw_input_prefs(inputs, layout):
         import sys
 
         # General settings
@@ -1113,10 +1137,12 @@ class USERPREF_PT_input(Panel):
             sub.prop(walk, "jump_height")
 
         col.separator()
-        sub = col.column()
-        sub.label(text="NDOF Device:")
+        col.label(text="NDOF Device:")
+        sub = col.column(align=True)
         sub.prop(inputs, "ndof_sensitivity", text="NDOF Sensitivity")
         sub.prop(inputs, "ndof_orbit_sensitivity", text="NDOF Orbit Sensitivity")
+        sub.prop(inputs, "ndof_deadzone", text="NDOF Deadzone")
+        sub = col.column(align=True)
         sub.row().prop(inputs, "ndof_view_navigate_method", expand=True)
         sub.row().prop(inputs, "ndof_view_rotate_method", expand=True)
 
@@ -1160,7 +1186,7 @@ class USERPREF_MT_addons_dev_guides(Menu):
 
 class USERPREF_PT_addons(Panel):
     bl_space_type = 'USER_PREFERENCES'
-    bl_label = "Addons"
+    bl_label = "Add-ons"
     bl_region_type = 'WINDOW'
     bl_options = {'HIDE_HEADER'}
 

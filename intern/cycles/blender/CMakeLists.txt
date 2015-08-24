@@ -17,7 +17,7 @@ set(INC
 
 set(INC_SYS
 	${PYTHON_INCLUDE_DIRS}
-	${GLEW_INCLUDE_PATH}
+	${GLEW_INCLUDE_DIR}
 )
 
 set(SRC
@@ -31,10 +31,12 @@ set(SRC
 	blender_session.cpp
 	blender_shader.cpp
 	blender_sync.cpp
+	blender_texture.cpp
 
 	CCL_api.h
 	blender_sync.h
 	blender_session.h
+	blender_texture.h
 	blender_util.h
 )
 

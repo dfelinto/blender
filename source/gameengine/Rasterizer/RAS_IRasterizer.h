@@ -54,6 +54,7 @@ class RAS_ICanvas;
 class RAS_IPolyMaterial;
 class RAS_MeshSlot;
 class RAS_ILightObject;
+class SCA_IScene;
 
 typedef vector<unsigned short> KX_IndexArray;
 typedef vector<RAS_TexVert> KX_VertexArray;
@@ -297,15 +298,11 @@ public:
 	/**
 	 * Fog
 	 */
-	virtual void SetFog(float start, float dist, float r, float g, float b) = 0;
-	virtual void SetFogColor(float r, float g,float b) = 0;
-	virtual void SetFogStart(float start) = 0;
-	virtual void SetFogEnd(float end) = 0;
+	virtual void SetFog(short type, float start, float dist, float intensity, float color[3]) = 0;
 	virtual void DisplayFog() = 0;
-	virtual void DisableFog() = 0;
-	virtual bool IsFogEnabled() = 0;
+	virtual void EnableFog(bool enable) = 0;
 
-	virtual void SetBackColor(float red, float green, float blue, float alpha) = 0;
+	virtual void SetBackColor(float color[3]) = 0;
 	
 	/**
 	 * \param drawingmode = KX_BOUNDINGBOX, KX_WIREFRAME, KX_SOLID, KX_SHADED or KX_TEXTURED.
@@ -380,7 +377,7 @@ public:
 	 */ 
 	virtual void SetEmissive(float eX, float eY, float eZ, float e) = 0;
 	
-	virtual void SetAmbientColor(float red, float green, float blue) = 0;
+	virtual void SetAmbientColor(float color[3]) = 0;
 	virtual void SetAmbient(float factor) = 0;
 
 	/**
@@ -388,10 +385,10 @@ public:
 	 */
 	virtual void	SetPolygonOffset(float mult, float add) = 0;
 	
-	virtual void DrawDebugLine(const MT_Vector3 &from, const MT_Vector3 &to, const MT_Vector3& color) = 0;
-	virtual void DrawDebugCircle(const MT_Vector3 &center, const MT_Scalar radius, const MT_Vector3 &color,
-	                             const MT_Vector3 &normal, int nsector) = 0;
-	virtual void FlushDebugShapes() = 0;
+	virtual void DrawDebugLine(SCA_IScene *scene, const MT_Vector3 &from, const MT_Vector3 &to, const MT_Vector3& color) = 0;
+	virtual void DrawDebugCircle(SCA_IScene *scene, const MT_Vector3 &center, const MT_Scalar radius,
+								 const MT_Vector3 &color, const MT_Vector3 &normal, int nsector) = 0;
+	virtual void FlushDebugShapes(SCA_IScene *scene) = 0;
 	
 	virtual void SetTexCoordNum(int num) = 0;
 	virtual void SetAttribNum(int num) = 0;

@@ -43,7 +43,7 @@
 #include "BLI_listbase.h"
 #include "BLI_string.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_fcurve.h"
 #include "BKE_tracking.h"
@@ -356,7 +356,7 @@ MovieReconstructContext *BKE_tracking_reconstruction_context_new(MovieClip *clip
 	MovieReconstructContext *context = MEM_callocN(sizeof(MovieReconstructContext), "MovieReconstructContext data");
 	ListBase *tracksbase = BKE_tracking_object_get_tracks(tracking, object);
 	float aspy = 1.0f / tracking->camera.pixel_aspect;
-	int num_tracks = BLI_countlist(tracksbase);
+	int num_tracks = BLI_listbase_count(tracksbase);
 	int sfra = INT_MAX, efra = INT_MIN;
 	MovieTrackingTrack *track;
 
@@ -368,8 +368,8 @@ MovieReconstructContext *BKE_tracking_reconstruction_context_new(MovieClip *clip
 		(tracking->settings.reconstruction_flag & TRACKING_USE_KEYFRAME_SELECTION) != 0;
 
 	tracking_cameraIntrinscisOptionsFromTracking(tracking,
-                                                 width, height,
-                                                 &context->camera_intrinsics_options);
+	                                             width, height,
+	                                             &context->camera_intrinsics_options);
 
 	context->tracks_map = tracks_map_new(context->object_name, context->is_camera, num_tracks, 0);
 
@@ -391,7 +391,7 @@ MovieReconstructContext *BKE_tracking_reconstruction_context_new(MovieClip *clip
 			last_marker--;
 		}
 
-		if (first < track->markersnr - 1)
+		if (first <= track->markersnr - 1)
 			sfra = min_ii(sfra, first_marker->framenr);
 
 		if (last >= 0)
@@ -508,6 +508,11 @@ bool BKE_tracking_reconstruction_finish(MovieReconstructContext *context, MovieT
 {
 	MovieTrackingReconstruction *reconstruction;
 	MovieTrackingObject *object;
+
+	if (!libmv_reconstructionIsValid(context->reconstruction)) {
+		printf("Failed solve the motion: most likely there are no good keyframes\n");
+		return false;
+	}
 
 	tracks_map_merge(context->tracks_map, tracking);
 	BKE_tracking_dopesheet_tag_update(tracking);

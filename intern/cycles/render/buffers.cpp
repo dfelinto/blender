@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #include <stdlib.h>
@@ -187,11 +187,17 @@ bool RenderBuffers::get_pass_rect(PassType type, float exposure, int sample, int
 			else if(type == PASS_MIST) {
 				for(int i = 0; i < size; i++, in += pass_stride, pixels++) {
 					float f = *in;
-					pixels[0] = clamp(f*scale_exposure, 0.0f, 1.0f);
+					pixels[0] = saturate(f*scale_exposure);
 				}
 			}
 #ifdef WITH_CYCLES_DEBUG
 			else if(type == PASS_BVH_TRAVERSAL_STEPS) {
+				for(int i = 0; i < size; i++, in += pass_stride, pixels++) {
+					float f = *in;
+					pixels[0] = f;
+				}
+			}
+			else if(type == PASS_RAY_BOUNCES) {
 				for(int i = 0; i < size; i++, in += pass_stride, pixels++) {
 					float f = *in;
 					pixels[0] = f;
@@ -298,7 +304,7 @@ bool RenderBuffers::get_pass_rect(PassType type, float exposure, int sample, int
 					pixels[2] = f.z*scale_exposure;
 
 					/* clamp since alpha might be > 1.0 due to russian roulette */
-					pixels[3] = clamp(f.w*scale, 0.0f, 1.0f);
+					pixels[3] = saturate(f.w*scale);
 				}
 			}
 		}
@@ -369,13 +375,9 @@ void DisplayBuffer::draw_set(int width, int height)
 void DisplayBuffer::draw(Device *device, const DeviceDrawParams& draw_params)
 {
 	if(draw_width != 0 && draw_height != 0) {
-		glPushMatrix();
-		glTranslatef(params.full_x, params.full_y, 0.0f);
 		device_memory& rgba = rgba_data();
 
-		device->draw_pixels(rgba, 0, draw_width, draw_height, 0, params.width, params.height, transparent, draw_params);
-
-		glPopMatrix();
+		device->draw_pixels(rgba, 0, draw_width, draw_height, params.full_x, params.full_y, params.width, params.height, transparent, draw_params);
 	}
 }
 

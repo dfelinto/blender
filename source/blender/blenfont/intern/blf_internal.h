@@ -62,6 +62,9 @@ void blf_font_width_and_height(struct FontBLF *font, const char *str, size_t len
 float blf_font_width(struct FontBLF *font, const char *str, size_t len);
 float blf_font_height(struct FontBLF *font, const char *str, size_t len);
 float blf_font_fixed_width(struct FontBLF *font);
+
+int blf_font_count_missing_chars(struct FontBLF *font, const char *str, const size_t len, int *r_tot_chars);
+
 void blf_font_free(struct FontBLF *font);
 
 struct GlyphCacheBLF *blf_glyph_cache_find(struct FontBLF *font, unsigned int size, unsigned int dpi);
@@ -74,5 +77,12 @@ struct GlyphBLF *blf_glyph_add(struct FontBLF *font, unsigned int index, unsigne
 
 void blf_glyph_free(struct GlyphBLF *g);
 void blf_glyph_render(struct FontBLF *font, struct GlyphBLF *g, float x, float y);
+
+#ifdef WIN32
+/* blf_font_win32_compat.c */
+#  ifdef FT_FREETYPE_H
+extern FT_Error FT_New_Face__win32_compat(FT_Library library, const char *pathname, FT_Long face_index, FT_Face *aface);
+#  endif
+#endif
 
 #endif /* __BLF_INTERNAL_H__ */

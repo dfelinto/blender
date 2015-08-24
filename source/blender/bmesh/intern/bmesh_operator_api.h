@@ -273,9 +273,10 @@ BMOpSlot *BMO_slot_get(BMOpSlot slot_args[BMO_OP_MAX_SLOTS], const char *identif
 	               (op_dst)->slots_dst, slot_name_dst,                        \
 	               (op_dst)->arena)
 
-void _bmo_slot_copy(BMOpSlot slot_args_src[BMO_OP_MAX_SLOTS], const char *slot_name_src,
-                    BMOpSlot slot_args_dst[BMO_OP_MAX_SLOTS], const char *slot_name_dst,
-                    struct MemArena *arena_dst);
+void _bmo_slot_copy(
+        BMOpSlot slot_args_src[BMO_OP_MAX_SLOTS], const char *slot_name_src,
+        BMOpSlot slot_args_dst[BMO_OP_MAX_SLOTS], const char *slot_name_dst,
+        struct MemArena *arena_dst);
 
 /* del "context" slot values, used for operator too */
 enum {
@@ -301,6 +302,8 @@ typedef enum {
 	BMO_DELIM_NORMAL = 1 << 0,
 	BMO_DELIM_MATERIAL = 1 << 1,
 	BMO_DELIM_SEAM = 1 << 2,
+	BMO_DELIM_SHARP = 1 << 3,
+	BMO_DELIM_UV = 1 << 4,
 } BMO_Delimit;
 
 void BMO_op_flag_enable(BMesh *bm, BMOperator *op, const int op_flag);
@@ -335,11 +338,12 @@ void BMO_slot_mat3_get(BMOpSlot slot_args[BMO_OP_MAX_SLOTS], const char *slot_na
 
 void BMO_mesh_flag_disable_all(BMesh *bm, BMOperator *op, const char htype, const short oflag);
 
-void BMO_mesh_selected_remap(BMesh *bm,
-                             BMOpSlot *slot_vert_map,
-                             BMOpSlot *slot_edge_map,
-                             BMOpSlot *slot_face_map,
-                             const bool check_select);
+void BMO_mesh_selected_remap(
+        BMesh *bm,
+        BMOpSlot *slot_vert_map,
+        BMOpSlot *slot_edge_map,
+        BMOpSlot *slot_face_map,
+        const bool check_select);
 
 /* copies the values from another slot to the end of the output slot */
 #define BMO_slot_buffer_append(op_src, slots_src, slot_name_src,              \
@@ -347,53 +351,62 @@ void BMO_mesh_selected_remap(BMesh *bm,
 	_bmo_slot_buffer_append((op_src)->slots_src, slot_name_src,               \
 	                        (op_dst)->slots_dst, slot_name_dst,               \
 	                        (op_dst)->arena)
-void _bmo_slot_buffer_append(BMOpSlot slot_args_dst[BMO_OP_MAX_SLOTS], const char *slot_name_dst,
-                             BMOpSlot slot_args_src[BMO_OP_MAX_SLOTS], const char *slot_name_src,
-                             struct MemArena *arena_dst);
+void _bmo_slot_buffer_append(
+        BMOpSlot slot_args_dst[BMO_OP_MAX_SLOTS], const char *slot_name_dst,
+        BMOpSlot slot_args_src[BMO_OP_MAX_SLOTS], const char *slot_name_src,
+        struct MemArena *arena_dst);
 
 /* puts every element of type 'type' (which is a bitmask) with tool
  * flag 'flag', into a slot. */
-void BMO_slot_buffer_from_enabled_flag(BMesh *bm, BMOperator *op,
-                                       BMOpSlot slot_args[BMO_OP_MAX_SLOTS], const char *slot_name,
-                                       const char htype, const short oflag);
+void BMO_slot_buffer_from_enabled_flag(
+        BMesh *bm, BMOperator *op,
+        BMOpSlot slot_args[BMO_OP_MAX_SLOTS], const char *slot_name,
+        const char htype, const short oflag);
 
 /* puts every element of type 'type' (which is a bitmask) without tool
  * flag 'flag', into a slot. */
-void BMO_slot_buffer_from_disabled_flag(BMesh *bm, BMOperator *op,
-                                        BMOpSlot slot_args[BMO_OP_MAX_SLOTS], const char *slot_name,
-                                        const char htype, const short oflag);
+void BMO_slot_buffer_from_disabled_flag(
+        BMesh *bm, BMOperator *op,
+        BMOpSlot slot_args[BMO_OP_MAX_SLOTS], const char *slot_name,
+        const char htype, const short oflag);
 
 /* tool-flags all elements inside an element slot array with flag flag. */
-void BMO_slot_buffer_flag_enable(BMesh *bm,
-                                 BMOpSlot slot_args[BMO_OP_MAX_SLOTS], const char *slot_name,
-                                 const char htype, const short oflag);
+void BMO_slot_buffer_flag_enable(
+        BMesh *bm,
+        BMOpSlot slot_args[BMO_OP_MAX_SLOTS], const char *slot_name,
+        const char htype, const short oflag);
 /* clears tool-flag flag from all elements inside a slot array. */
-void BMO_slot_buffer_flag_disable(BMesh *bm,
-                                  BMOpSlot slot_args[BMO_OP_MAX_SLOTS], const char *slot_name,
-                                  const char htype, const short oflag);
+void BMO_slot_buffer_flag_disable(
+        BMesh *bm,
+        BMOpSlot slot_args[BMO_OP_MAX_SLOTS], const char *slot_name,
+        const char htype, const short oflag);
 
 /* tool-flags all elements inside an element slot array with flag flag. */
-void BMO_slot_buffer_hflag_enable(BMesh *bm,
-                                  BMOpSlot slot_args[BMO_OP_MAX_SLOTS], const char *slot_name,
-                                  const char htype, const char hflag, const bool do_flush);
+void BMO_slot_buffer_hflag_enable(
+        BMesh *bm,
+        BMOpSlot slot_args[BMO_OP_MAX_SLOTS], const char *slot_name,
+        const char htype, const char hflag, const bool do_flush);
 /* clears tool-flag flag from all elements inside a slot array. */
-void BMO_slot_buffer_hflag_disable(BMesh *bm,
-                                   BMOpSlot slot_args[BMO_OP_MAX_SLOTS], const char *slot_name,
-                                   const char htype, const char hflag, const bool do_flush);
+void BMO_slot_buffer_hflag_disable(
+        BMesh *bm,
+        BMOpSlot slot_args[BMO_OP_MAX_SLOTS], const char *slot_name,
+        const char htype, const char hflag, const bool do_flush);
 
 /* puts every element of type 'type' (which is a bitmask) with header
  * flag 'flag', into a slot.  note: ignores hidden elements
  * (e.g. elements with header flag BM_ELEM_HIDDEN set).*/
-void BMO_slot_buffer_from_enabled_hflag(BMesh *bm, BMOperator *op,
-                                        BMOpSlot slot_args[BMO_OP_MAX_SLOTS], const char *slot_name,
-                                        const char htype, const char hflag);
+void BMO_slot_buffer_from_enabled_hflag(
+        BMesh *bm, BMOperator *op,
+        BMOpSlot slot_args[BMO_OP_MAX_SLOTS], const char *slot_name,
+        const char htype, const char hflag);
 
 /* puts every element of type 'type' (which is a bitmask) without
  * header flag 'flag', into a slot.  note: ignores hidden elements
  * (e.g. elements with header flag BM_ELEM_HIDDEN set).*/
-void BMO_slot_buffer_from_disabled_hflag(BMesh *bm, BMOperator *op,
-                                         BMOpSlot slot_args[BMO_OP_MAX_SLOTS], const char *slot_name,
-                                         const char htype, const char hflag);
+void BMO_slot_buffer_from_disabled_hflag(
+        BMesh *bm, BMOperator *op,
+        BMOpSlot slot_args[BMO_OP_MAX_SLOTS], const char *slot_name,
+        const char htype, const char hflag);
 
 void  BMO_slot_buffer_from_array(BMOperator *op, BMOpSlot *slot, BMHeader **ele_buffer, int ele_buffer_len);
 
@@ -405,19 +418,23 @@ void *BMO_slot_buffer_get_single(BMOpSlot *slot);
 int BMO_slot_buffer_count(BMOpSlot slot_args[BMO_OP_MAX_SLOTS], const char *slot_name);
 int BMO_slot_map_count(BMOpSlot slot_args[BMO_OP_MAX_SLOTS], const char *slot_name);
 
-void BMO_slot_map_insert(BMOperator *op, BMOpSlot *slot,
-                         const void *element, const void *data);
+void BMO_slot_map_insert(
+        BMOperator *op, BMOpSlot *slot,
+        const void *element, const void *data);
 
 /* flags all elements in a mapping.  note that the mapping must only have
  * bmesh elements in it.*/
-void BMO_slot_map_to_flag(BMesh *bm, BMOpSlot slot_args[BMO_OP_MAX_SLOTS],
-                          const char *slot_name, const char hflag, const short oflag);
+void BMO_slot_map_to_flag(
+        BMesh *bm, BMOpSlot slot_args[BMO_OP_MAX_SLOTS],
+        const char *slot_name, const char hflag, const short oflag);
 
-void *BMO_slot_buffer_alloc(BMOperator *op, BMOpSlot slot_args[BMO_OP_MAX_SLOTS],
-                            const char *slot_name, const int len);
+void *BMO_slot_buffer_alloc(
+        BMOperator *op, BMOpSlot slot_args[BMO_OP_MAX_SLOTS],
+        const char *slot_name, const int len);
 
-void BMO_slot_buffer_from_all(BMesh *bm, BMOperator *op, BMOpSlot slot_args[BMO_OP_MAX_SLOTS],
-                              const char *slot_name, const char htype);
+void BMO_slot_buffer_from_all(
+        BMesh *bm, BMOperator *op, BMOpSlot slot_args[BMO_OP_MAX_SLOTS],
+        const char *slot_name, const char htype);
 
 /**
  * This part of the API is used to iterate over element buffer or
@@ -466,9 +483,10 @@ typedef struct BMOIter {
 
 void *BMO_slot_buffer_get_first(BMOpSlot slot_args[BMO_OP_MAX_SLOTS], const char *slot_name);
 
-void *BMO_iter_new(BMOIter *iter,
-                   BMOpSlot slot_args[BMO_OP_MAX_SLOTS],  const char *slot_name,
-                   const char restrictmask);
+void *BMO_iter_new(
+        BMOIter *iter,
+        BMOpSlot slot_args[BMO_OP_MAX_SLOTS],  const char *slot_name,
+        const char restrictmask);
 void *BMO_iter_step(BMOIter *iter);
 
 void **BMO_iter_map_value_p(BMOIter *iter);
@@ -479,10 +497,14 @@ int   BMO_iter_map_value_int(BMOIter *iter);
 bool  BMO_iter_map_value_bool(BMOIter *iter);
 
 #define BMO_ITER(ele, iter, slot_args, slot_name, restrict_flag)   \
-	for (ele = BMO_iter_new(iter, slot_args, slot_name, restrict_flag); ele; ele = BMO_iter_step(iter))
+	for (BM_CHECK_TYPE_ELEM_ASSIGN(ele) = BMO_iter_new(iter, slot_args, slot_name, restrict_flag); \
+	     ele; \
+	     BM_CHECK_TYPE_ELEM_ASSIGN(ele) = BMO_iter_step(iter))
 
-/******************* Inlined Functions********************/
-typedef void (*opexec)(BMesh *bm, BMOperator *op);
+#define BMO_ITER_INDEX(ele, iter, slot_args, slot_name, restrict_flag, i_)   \
+	for (BM_CHECK_TYPE_ELEM_ASSIGN(ele) = BMO_iter_new(iter, slot_args, slot_name, restrict_flag), i_ = 0; \
+	     ele; \
+	     BM_CHECK_TYPE_ELEM_ASSIGN(ele) = BMO_iter_step(iter), i_++)
 
 extern const int BMO_OPSLOT_TYPEINFO[BMO_OP_SLOT_TOTAL_TYPES];
 

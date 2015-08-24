@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #ifndef __BSDF_ASHIKHMIN_SHIRLEY_H__
@@ -37,7 +37,7 @@ ccl_device int bsdf_ashikhmin_shirley_setup(ShaderClosure *sc)
 	sc->data1 = sc->data0;
 
 	sc->type = CLOSURE_BSDF_ASHIKHMIN_SHIRLEY_ID;
-	return SD_BSDF|SD_BSDF_HAS_EVAL|SD_BSDF_GLOSSY;
+	return SD_BSDF|SD_BSDF_HAS_EVAL;
 }
 
 ccl_device int bsdf_ashikhmin_shirley_aniso_setup(ShaderClosure *sc)
@@ -46,7 +46,7 @@ ccl_device int bsdf_ashikhmin_shirley_aniso_setup(ShaderClosure *sc)
 	sc->data1 = clamp(sc->data1, 1e-4f, 1.0f);
 
 	sc->type = CLOSURE_BSDF_ASHIKHMIN_SHIRLEY_ANISO_ID;
-	return SD_BSDF|SD_BSDF_HAS_EVAL|SD_BSDF_GLOSSY;
+	return SD_BSDF|SD_BSDF_HAS_EVAL;
 }
 
 ccl_device void bsdf_ashikhmin_shirley_blur(ShaderClosure *sc, float roughness)
@@ -68,6 +68,9 @@ ccl_device float3 bsdf_ashikhmin_shirley_eval_reflect(const ShaderClosure *sc, c
 	float NdotO = dot(N, omega_in);    /* and consequently we use for O omaga_in ;)  */
 
 	float out = 0.0f;
+
+	if(fmaxf(sc->data0, sc->data1) <= 1e-4f)
+		return make_float3(0.0f, 0.0f, 0.0f);
 
 	if(NdotI > 0.0f && NdotO > 0.0f) {
 		NdotI = fmaxf(NdotI, 1e-6f);
@@ -190,8 +193,15 @@ ccl_device int bsdf_ashikhmin_shirley_sample(const ShaderClosure *sc, float3 Ng,
 		/* reflect I on H to get omega_in */
 		*omega_in = -I + (2.0f * HdotI) * H;
 
-		/* leave the rest to eval_reflect */
-		*eval = bsdf_ashikhmin_shirley_eval_reflect(sc, I, *omega_in, pdf);
+		if(fmaxf(sc->data0, sc->data1) <= 1e-4f) {
+			/* Some high number for MIS. */
+			*pdf = 1e6f;
+			*eval = make_float3(1e6f, 1e6f, 1e6f);
+		}
+		else {
+			/* leave the rest to eval_reflect */
+			*eval = bsdf_ashikhmin_shirley_eval_reflect(sc, I, *omega_in, pdf);
+		}
 
 #ifdef __RAY_DIFFERENTIALS__
 		/* just do the reflection thing for now */

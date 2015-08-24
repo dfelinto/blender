@@ -34,28 +34,32 @@ incs = [
     '.',
     'intern',
     '#/intern/guardedalloc',
-    '#/intern/locale',
     env['BF_GLEW_INC'],
     '#/intern/glew-mx',
     '../blenkernel',
     '../blenlib',
+    '../blentranslation',
     '../editors/include',
     '../gpu',
     '../imbuf',
     '../makesdna',
     '../makesrna',
-    '../python',
     ]
 
 incs.extend(Split(env['BF_FREETYPE_INC']))
 
-defs = env['BF_GL_DEFINITIONS']
+defs = []
+defs += env['BF_GL_DEFINITIONS']
 
 if sys.platform == 'win32' or env['OURPLATFORM'] == 'linuxcross':
     defs.append('_WIN32')
 
 if env['WITH_BF_INTERNATIONAL']:
     defs.append('WITH_INTERNATIONAL')
+
+if env['WITH_BF_PYTHON']:
+    defs.append('WITH_PYTHON')
+    incs.append('../python')
 
 if env['OURPLATFORM'] in ('win32-vc', 'win32-mingw', 'linuxcross', 'win64-vc', 'win64-mingw'):
     incs.append(env['BF_PTHREADS_INC'])

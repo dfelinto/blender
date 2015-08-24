@@ -46,6 +46,8 @@
 #include "DNA_material_types.h"
 #include "DNA_movieclip_types.h"
 #include "DNA_node_types.h"
+#include "DNA_object_types.h"
+#include "DNA_particle_types.h"
 #include "DNA_sequence_types.h"
 
 #include "MEM_guardedalloc.h"
@@ -345,6 +347,13 @@ static void rna_ColorRamp_update(Main *bmain, Scene *UNUSED(scene), PointerRNA *
 				WM_main_add_notifier(NC_LINESTYLE, linestyle);
 				break;
 			}
+			case ID_PA:
+			{
+				ParticleSettings *part = ptr->id.data;
+				
+				DAG_id_tag_update(&part->id, OB_RECALC_DATA | PSYS_RECALC_REDO);
+				WM_main_add_notifier(NC_OBJECT | ND_PARTICLE | NA_EDITED, part);
+			}
 			default:
 				break;
 		}
@@ -438,6 +447,7 @@ static void rna_ColorManagedDisplaySettings_display_device_update(Main *UNUSED(b
 
 		IMB_colormanagement_validate_settings(&scene->display_settings, &scene->view_settings);
 
+		DAG_id_tag_update(id, 0);
 		WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, NULL);
 	}
 }
@@ -610,9 +620,11 @@ static void rna_ColorManagedColorspaceSettings_reload_update(Main *UNUSED(bmain)
 			}
 
 			if (seq_found) {
-				if (seq->anim) {
-					IMB_free_anim(seq->anim);
-					seq->anim = NULL;
+				BKE_sequence_free_anim(seq);
+
+				if (seq->strip->proxy && seq->strip->proxy->anim) {
+					IMB_free_anim(seq->strip->proxy->anim);
+					seq->strip->proxy->anim = NULL;
 				}
 
 				BKE_sequence_invalidate_cache(scene, seq);
@@ -621,10 +633,7 @@ static void rna_ColorManagedColorspaceSettings_reload_update(Main *UNUSED(bmain)
 			else {
 				SEQ_BEGIN(scene->ed, seq);
 				{
-					if (seq->anim) {
-						IMB_free_anim(seq->anim);
-						seq->anim = NULL;
-					}
+					BKE_sequence_free_anim(seq);
 				}
 				SEQ_END;
 
@@ -664,7 +673,7 @@ static void rna_ColorManagement_update(Main *UNUSED(bmain), Scene *UNUSED(scene)
 static float rna_CurveMap_evaluateF(struct CurveMap *cuma, ReportList *reports, float value)
 {
 	if (!cuma->table) {
-		BKE_reportf(reports, RPT_ERROR, "CurveMap table not initialized, call initialize() on CurveMapping owner of the CurveMap");
+		BKE_report(reports, RPT_ERROR, "CurveMap table not initialized, call initialize() on CurveMapping owner of the CurveMap");
 		return 0.0f;
 	}
 	return curvemap_evaluateF(cuma, value);

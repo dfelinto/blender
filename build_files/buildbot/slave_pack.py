@@ -116,24 +116,36 @@ if builder.find('scons') != -1:
         retcode = subprocess.call([python_bin, 'scons/scons.py'] + scons_options)
         sys.exit(retcode)
 else:
-#cmake
+    # CMake
     if 'win' in builder:
         files = [f for f in os.listdir('.') if os.path.isfile(f) and f.endswith('.zip')]
         for f in files:
             os.remove(f)
-        retcode = subprocess.call(['cpack', '-G','ZIP'])
+        retcode = subprocess.call(['cpack', '-G', 'ZIP'])
         result_file = [f for f in os.listdir('.') if os.path.isfile(f) and f.endswith('.zip')][0]
-        os.rename(result_file, "{}.zip".format(builder))
+
+        # TODO(sergey): Such magic usually happens in SCon's packaging bu we don't have it
+        # in the CMake yet. For until then we do some magic here.
+        tokens = result_file.split('-')
+        blender_version = tokens[1].split('.')
+        blender_full_version = '.'.join(blender_version[0:2])
+        git_hash = tokens[2].split('.')[1]
+        platform = builder.split('_')[0]
+        builderified_name = 'blender-{}-{}-{}'.format(blender_full_version, git_hash, platform)
+        if branch != '':
+            builderified_name = branch + "-" + builderified_name
+
+        os.rename(result_file, "{}.zip".format(builderified_name))
         # create zip file
         try:
             upload_zip = "buildbot_upload.zip"
             if os.path.exists(upload_zip):
                 os.remove(upload_zip)
             z = zipfile.ZipFile(upload_zip, "w", compression=zipfile.ZIP_STORED)
-            z.write("{}.zip".format(builder))
+            z.write("{}.zip".format(builderified_name))
             z.close()
             sys.exit(retcode)
-        except Exception, ex:
+        except Exception as ex:
             sys.stderr.write('Create buildbot_upload.zip failed' + str(ex) + '\n')
             sys.exit(1)
 
@@ -149,7 +161,7 @@ if os.path.exists(release_dir):
 # create release package
 try:
     subprocess.call(['make', 'package_archive'])
-except Exception, ex:
+except Exception as ex:
     sys.stderr.write('Make package release failed' + str(ex) + '\n')
     sys.exit(1)
 
@@ -180,6 +192,6 @@ try:
     z = zipfile.ZipFile(upload_zip, "w", compression=zipfile.ZIP_STORED)
     z.write(filepath, arcname=file)
     z.close()
-except Exception, ex:
+except Exception as ex:
     sys.stderr.write('Create buildbot_upload.zip failed' + str(ex) + '\n')
     sys.exit(1)

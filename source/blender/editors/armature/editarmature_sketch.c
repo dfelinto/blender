@@ -31,8 +31,6 @@
 #include "BLI_blenlib.h"
 #include "BLI_math.h"
 
-#include "BLF_translation.h"
-
 #include "BKE_context.h"
 #include "BKE_sketch.h"
 
@@ -335,11 +333,11 @@ static void sk_autoname(bContext *C, ReebArc *arc)
 			if (side[0] == '\0') {
 				valid = 1;
 			}
-			else if (strcmp(side, "R") == 0 || strcmp(side, "L") == 0) {
+			else if (STREQ(side, "R") || STREQ(side, "L")) {
 				valid = 1;
 				caps = 1;
 			}
-			else if (strcmp(side, "r") == 0 || strcmp(side, "l") == 0) {
+			else if (STREQ(side, "r") || STREQ(side, "l")) {
 				valid = 1;
 				caps = 0;
 			}
@@ -1575,7 +1573,7 @@ static int sk_getIntersections(bContext *C, ListBase *list, SK_Sketch *sketch, S
 		added = MAX2(s_added, added);
 	}
 
-	BLI_sortlist(list, cmpIntersections);
+	BLI_listbase_sort(list, cmpIntersections);
 
 	return added;
 }
@@ -1953,7 +1951,7 @@ static void sk_applyGesture(bContext *C, SK_Sketch *sketch)
 /********************************************/
 
 
-static int sk_selectStroke(bContext *C, SK_Sketch *sketch, const int mval[2], int extend)
+static bool sk_selectStroke(bContext *C, SK_Sketch *sketch, const int mval[2], const bool extend)
 {
 	ViewContext vc;
 	rcti rect;
@@ -2241,15 +2239,19 @@ static int sketch_delete(bContext *C, wmOperator *UNUSED(op), const wmEvent *UNU
 	return OPERATOR_FINISHED;
 }
 
-void BIF_sk_selectStroke(bContext *C, const int mval[2], short extend)
+bool BIF_sk_selectStroke(bContext *C, const int mval[2], const bool extend)
 {
 	ToolSettings *ts = CTX_data_tool_settings(C);
 	SK_Sketch *sketch = contextSketch(C, 0);
 
 	if (sketch != NULL && ts->bone_sketching & BONE_SKETCHING) {
-		if (sk_selectStroke(C, sketch, mval, extend))
+		if (sk_selectStroke(C, sketch, mval, extend)) {
 			ED_area_tag_redraw(CTX_wm_area(C));
+			return true;
+		}
 	}
+
+	return false;
 }
 
 void BIF_convertSketch(bContext *C)

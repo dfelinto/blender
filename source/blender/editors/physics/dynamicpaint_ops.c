@@ -30,7 +30,7 @@
 #include "BLI_string.h"
 #include "BLI_utildefines.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "DNA_dynamicpaint_types.h"
 #include "DNA_modifier_types.h"
@@ -40,6 +40,7 @@
 #include "BKE_blender.h"
 #include "BKE_context.h"
 #include "BKE_deform.h"
+#include "BKE_object_deform.h"
 #include "BKE_depsgraph.h"
 #include "BKE_dynamicpaint.h"
 #include "BKE_global.h"
@@ -235,11 +236,11 @@ static int output_toggle_exec(bContext *C, wmOperator *op)
 		/* Vertex Weight Layer */
 		else if (surface->type == MOD_DPAINT_SURFACE_T_WEIGHT) {
 			if (!exists) {
-				ED_vgroup_add_name(ob, name);
+				BKE_object_defgroup_add_name(ob, name);
 			}
 			else {
 				bDeformGroup *defgroup = defgroup_find_name(ob, name);
-				if (defgroup) ED_vgroup_delete(ob, defgroup);
+				if (defgroup) BKE_object_defgroup_remove(ob, defgroup);
 			}
 		}
 	}
@@ -395,13 +396,8 @@ static int dynamicPaint_initBake(struct bContext *C, struct wmOperator *op)
 	/* Bake was successful:
 	 *  Report for ended bake and how long it took */
 	if (status) {
-		/* Format time string */
-		char time_str[30];
-		double time = PIL_check_seconds_timer() - timer;
-		BLI_timestr(time, time_str, sizeof(time_str));
-
 		/* Show bake info */
-		BKE_reportf(op->reports, RPT_INFO, "Bake complete! (%s)", time_str);
+		BKE_reportf(op->reports, RPT_INFO, "Bake complete! (%.2f)", PIL_check_seconds_timer() - timer);
 	}
 	else {
 		if (strlen(canvas->error)) { /* If an error occurred */

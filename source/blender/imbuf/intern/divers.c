@@ -37,7 +37,6 @@
 #include "imbuf.h"
 #include "IMB_imbuf_types.h"
 #include "IMB_imbuf.h"
-#include "IMB_allocimbuf.h"
 #include "IMB_filter.h"
 
 #include "IMB_colormanagement.h"
@@ -123,16 +122,6 @@ static void clear_dither_context(DitherContext *di)
 	MEM_freeN(di);
 }
 
-MINLINE float dither_random_value(float s, float t)
-{
-	static float vec[2] = {12.9898f, 78.233f};
-	float st[2];
-	float value;
-	copy_v2_fl2(st, s, t);
-
-	value = sinf(dot_v2v2(st, vec)) * 43758.5453f;
-	return value - floorf(value);
-}
 
 /************************* Generic Buffer Conversion *************************/
 
@@ -180,8 +169,8 @@ void IMB_buffer_byte_from_float(uchar *rect_to, const float *rect_from,
 	float tmp[4];
 	int x, y;
 	DitherContext *di = NULL;
-	float inv_width = 1.0f / width,
-	      inv_height = 1.0f / height;
+	float inv_width = 1.0f / width;
+	float inv_height = 1.0f / height;
 
 	/* we need valid profiles */
 	BLI_assert(profile_to != IB_PROFILE_NONE);
@@ -195,16 +184,16 @@ void IMB_buffer_byte_from_float(uchar *rect_to, const float *rect_from,
 
 		if (channels_from == 1) {
 			/* single channel input */
-			const float *from = rect_from + stride_from * y;
-			uchar *to = rect_to + stride_to * y * 4;
+			const float *from = rect_from + ((size_t)stride_from) * y;
+			uchar *to = rect_to + ((size_t)stride_to) * y * 4;
 
 			for (x = 0; x < width; x++, from++, to += 4)
 				to[0] = to[1] = to[2] = to[3] = FTOCHAR(from[0]);
 		}
 		else if (channels_from == 3) {
 			/* RGB input */
-			const float *from = rect_from + stride_from * y * 3;
-			uchar *to = rect_to + stride_to * y * 4;
+			const float *from = rect_from + ((size_t)stride_from) * y * 3;
+			uchar *to = rect_to + ((size_t)stride_to) * y * 4;
 
 			if (profile_to == profile_from) {
 				/* no color space conversion */
@@ -232,8 +221,8 @@ void IMB_buffer_byte_from_float(uchar *rect_to, const float *rect_from,
 		}
 		else if (channels_from == 4) {
 			/* RGBA input */
-			const float *from = rect_from + stride_from * y * 4;
-			uchar *to = rect_to + stride_to * y * 4;
+			const float *from = rect_from + ((size_t)stride_from) * y * 4;
+			uchar *to = rect_to + ((size_t)stride_to) * y * 4;
 
 			if (profile_to == profile_from) {
 				float straight[4];
@@ -345,8 +334,8 @@ void IMB_buffer_byte_from_float_mask(uchar *rect_to, const float *rect_from,
 
 		if (channels_from == 1) {
 			/* single channel input */
-			const float *from = rect_from + stride_from * y;
-			uchar *to = rect_to + stride_to * y * 4;
+			const float *from = rect_from + ((size_t)stride_from) * y;
+			uchar *to = rect_to + ((size_t)stride_to) * y * 4;
 
 			for (x = 0; x < width; x++, from++, to += 4)
 				if (*mask++ == FILTER_MASK_USED)
@@ -354,8 +343,8 @@ void IMB_buffer_byte_from_float_mask(uchar *rect_to, const float *rect_from,
 		}
 		else if (channels_from == 3) {
 			/* RGB input */
-			const float *from = rect_from + stride_from * y * 3;
-			uchar *to = rect_to + stride_to * y * 4;
+			const float *from = rect_from + ((size_t)stride_from) * y * 3;
+			uchar *to = rect_to + ((size_t)stride_to) * y * 4;
 
 			for (x = 0; x < width; x++, from += 3, to += 4) {
 				if (*mask++ == FILTER_MASK_USED) {
@@ -366,8 +355,8 @@ void IMB_buffer_byte_from_float_mask(uchar *rect_to, const float *rect_from,
 		}
 		else if (channels_from == 4) {
 			/* RGBA input */
-			const float *from = rect_from + stride_from * y * 4;
-			uchar *to = rect_to + stride_to * y * 4;
+			const float *from = rect_from + ((size_t)stride_from) * y * 4;
+			uchar *to = rect_to + ((size_t)stride_to) * y * 4;
 
 			float straight[4];
 
@@ -419,7 +408,7 @@ void IMB_buffer_float_from_byte(float *rect_to, const uchar *rect_from,
 	/* RGBA input */
 	for (y = 0; y < height; y++) {
 		const uchar *from = rect_from + stride_from * y * 4;
-		float *to = rect_to + stride_to * y * 4;
+		float *to = rect_to + ((size_t)stride_to) * y * 4;
 
 		if (profile_to == profile_from) {
 			/* no color space conversion */
@@ -471,8 +460,8 @@ void IMB_buffer_float_from_float(float *rect_to, const float *rect_from,
 	if (channels_from == 1) {
 		/* single channel input */
 		for (y = 0; y < height; y++) {
-			const float *from = rect_from + stride_from * y;
-			float *to = rect_to + stride_to * y * 4;
+			const float *from = rect_from + ((size_t)stride_from) * y;
+			float *to = rect_to + ((size_t)stride_to) * y * 4;
 
 			for (x = 0; x < width; x++, from++, to += 4)
 				to[0] = to[1] = to[2] = to[3] = from[0];
@@ -481,8 +470,8 @@ void IMB_buffer_float_from_float(float *rect_to, const float *rect_from,
 	else if (channels_from == 3) {
 		/* RGB input */
 		for (y = 0; y < height; y++) {
-			const float *from = rect_from + stride_from * y * 3;
-			float *to = rect_to + stride_to * y * 4;
+			const float *from = rect_from + ((size_t)stride_from) * y * 3;
+			float *to = rect_to + ((size_t)stride_to) * y * 4;
 
 			if (profile_to == profile_from) {
 				/* no color space conversion */
@@ -510,12 +499,12 @@ void IMB_buffer_float_from_float(float *rect_to, const float *rect_from,
 	else if (channels_from == 4) {
 		/* RGBA input */
 		for (y = 0; y < height; y++) {
-			const float *from = rect_from + stride_from * y * 4;
-			float *to = rect_to + stride_to * y * 4;
+			const float *from = rect_from + ((size_t)stride_from) * y * 4;
+			float *to = rect_to + ((size_t)stride_to) * y * 4;
 
 			if (profile_to == profile_from) {
 				/* same profile, copy */
-				memcpy(to, from, sizeof(float) * 4 * width);
+				memcpy(to, from, sizeof(float) * ((size_t)4) * width);
 			}
 			else if (profile_to == IB_PROFILE_LINEAR_RGB) {
 				/* convert to sRGB to linear */
@@ -552,8 +541,8 @@ void IMB_buffer_float_from_float_mask(float *rect_to, const float *rect_from, in
 	if (channels_from == 1) {
 		/* single channel input */
 		for (y = 0; y < height; y++) {
-			const float *from = rect_from + stride_from * y;
-			float *to = rect_to + stride_to * y * 4;
+			const float *from = rect_from + ((size_t)stride_from) * y;
+			float *to = rect_to + ((size_t)stride_to) * y * 4;
 
 			for (x = 0; x < width; x++, from++, to += 4)
 				if (*mask++ == FILTER_MASK_USED)
@@ -563,8 +552,8 @@ void IMB_buffer_float_from_float_mask(float *rect_to, const float *rect_from, in
 	else if (channels_from == 3) {
 		/* RGB input */
 		for (y = 0; y < height; y++) {
-			const float *from = rect_from + stride_from * y * 3;
-			float *to = rect_to + stride_to * y * 4;
+			const float *from = rect_from + ((size_t)stride_from) * y * 3;
+			float *to = rect_to + ((size_t)stride_to) * y * 4;
 
 			for (x = 0; x < width; x++, from += 3, to += 4) {
 				if (*mask++ == FILTER_MASK_USED) {
@@ -577,8 +566,8 @@ void IMB_buffer_float_from_float_mask(float *rect_to, const float *rect_from, in
 	else if (channels_from == 4) {
 		/* RGBA input */
 		for (y = 0; y < height; y++) {
-			const float *from = rect_from + stride_from * y * 4;
-			float *to = rect_to + stride_to * y * 4;
+			const float *from = rect_from + ((size_t)stride_from) * y * 4;
+			float *to = rect_to + ((size_t)stride_to) * y * 4;
 
 			for (x = 0; x < width; x++, from += 4, to += 4)
 				if (*mask++ == FILTER_MASK_USED)
@@ -601,8 +590,8 @@ void IMB_buffer_byte_from_byte(uchar *rect_to, const uchar *rect_from,
 
 	/* always RGBA input */
 	for (y = 0; y < height; y++) {
-		const uchar *from = rect_from + stride_from * y * 4;
-		uchar *to = rect_to + stride_to * y * 4;
+		const uchar *from = rect_from + ((size_t)stride_from) * y * 4;
+		uchar *to = rect_to + ((size_t)stride_to) * y * 4;
 
 		if (profile_to == profile_from) {
 			/* same profile, copy */
@@ -701,8 +690,8 @@ void IMB_partial_rect_from_float(ImBuf *ibuf, float *buffer, int x, int y, int w
 		imb_addrectImBuf(ibuf);
 
 	/* do conversion */
-	rect_float = ibuf->rect_float + (x + y * ibuf->x) * ibuf->channels;
-	rect_byte = (uchar *)ibuf->rect + (x + y * ibuf->x) * 4;
+	rect_float = ibuf->rect_float + (x + ((size_t)y) * ibuf->x) * ibuf->channels;
+	rect_byte = (uchar *)ibuf->rect + (x + ((size_t)y) * ibuf->x) * 4;
 
 	if (is_data) {
 		/* exception for non-color data, just copy float */
@@ -745,9 +734,9 @@ void IMB_float_from_rect(ImBuf *ibuf)
 	 */
 	rect_float = ibuf->rect_float;
 	if (rect_float == NULL) {
-		int size;
+		size_t size;
 
-		size = ibuf->x * ibuf->y;
+		size = ((size_t)ibuf->x) * ibuf->y;
 		size = size * 4 * sizeof(float);
 		ibuf->channels = 4;
 
@@ -782,22 +771,22 @@ void IMB_color_to_bw(ImBuf *ibuf)
 {
 	float *rct_fl = ibuf->rect_float;
 	uchar *rct = (uchar *)ibuf->rect;
-	int i;
+	size_t i;
 
 	if (rct_fl) {
-		for (i = ibuf->x * ibuf->y; i > 0; i--, rct_fl += 4)
-			rct_fl[0] = rct_fl[1] = rct_fl[2] = rgb_to_grayscale(rct_fl);
+		for (i = ((size_t)ibuf->x) * ibuf->y; i > 0; i--, rct_fl += 4)
+			rct_fl[0] = rct_fl[1] = rct_fl[2] = IMB_colormanagement_get_luminance(rct_fl);
 	}
 
 	if (rct) {
-		for (i = ibuf->x * ibuf->y; i > 0; i--, rct += 4)
-			rct[0] = rct[1] = rct[2] = rgb_to_grayscale_byte(rct);
+		for (i = ((size_t)ibuf->x * ibuf->y); i > 0; i--, rct += 4)
+			rct[0] = rct[1] = rct[2] = IMB_colormanagement_get_luminance_byte(rct);
 	}
 }
 
 void IMB_buffer_float_clamp(float *buf, int width, int height)
 {
-	int i, total = width * height * 4;
+	size_t i, total = ((size_t)width) * height * 4;
 	for (i = 0; i < total; i++) {
 		buf[i] = min_ff(1.0, buf[i]);
 	}
@@ -805,7 +794,7 @@ void IMB_buffer_float_clamp(float *buf, int width, int height)
 
 void IMB_buffer_float_unpremultiply(float *buf, int width, int height)
 {
-	int total = width * height;
+	size_t total = ((size_t)width) * height;
 	float *fp = buf;
 	while (total--) {
 		premul_to_straight_v4(fp);
@@ -815,7 +804,7 @@ void IMB_buffer_float_unpremultiply(float *buf, int width, int height)
 
 void IMB_buffer_float_premultiply(float *buf, int width, int height)
 {
-	int total = width * height;
+	size_t total = ((size_t)width) * height;
 	float *fp = buf;
 	while (total--) {
 		straight_to_premul_v4(fp);
@@ -827,14 +816,14 @@ void IMB_buffer_float_premultiply(float *buf, int width, int height)
 
 void IMB_saturation(ImBuf *ibuf, float sat)
 {
-	int i;
+	size_t i;
 	unsigned char *rct = (unsigned char *)ibuf->rect;
 	float *rct_fl = ibuf->rect_float;
 	float hsv[3];
 
 	if (rct) {
 		float rgb[3];
-		for (i = ibuf->x * ibuf->y; i > 0; i--, rct += 4) {
+		for (i = ((size_t)ibuf->x) * ibuf->y; i > 0; i--, rct += 4) {
 			rgb_uchar_to_float(rgb, rct);
 			rgb_to_hsv_v(rgb, hsv);
 			hsv_to_rgb(hsv[0], hsv[1] * sat, hsv[2], rgb, rgb + 1, rgb + 2);
@@ -843,7 +832,7 @@ void IMB_saturation(ImBuf *ibuf, float sat)
 	}
 
 	if (rct_fl) {
-		for (i = ibuf->x * ibuf->y; i > 0; i--, rct_fl += 4) {
+		for (i = ((size_t)ibuf->x) * ibuf->y; i > 0; i--, rct_fl += 4) {
 			rgb_to_hsv_v(rct_fl, hsv);
 			hsv_to_rgb(hsv[0], hsv[1] * sat, hsv[2], rct_fl, rct_fl + 1, rct_fl + 2);
 		}

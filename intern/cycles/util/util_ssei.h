@@ -12,7 +12,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #ifndef __UTIL_SSEI_H__
@@ -190,8 +190,8 @@ __forceinline const ssei select( const int mask, const ssei& t, const ssei& f ) 
 // Movement/Shifting/Shuffling Functions
 ////////////////////////////////////////////////////////////////////////////////
 
-__forceinline ssei unpacklo( const ssei& a, const ssei& b ) { return _mm_castps_si128(_mm_unpacklo_ps(_mm_castsi128_ps(a.m128), _mm_castsi128_ps(b.m128))); }
-__forceinline ssei unpackhi( const ssei& a, const ssei& b ) { return _mm_castps_si128(_mm_unpackhi_ps(_mm_castsi128_ps(a.m128), _mm_castsi128_ps(b.m128))); }
+__forceinline ssei unpacklo( const ssei& a, const ssei& b ) { return _mm_unpacklo_epi32(a, b); }
+__forceinline ssei unpackhi( const ssei& a, const ssei& b ) { return _mm_unpackhi_epi32(a, b); }
 
 template<size_t i0, size_t i1, size_t i2, size_t i3> __forceinline const ssei shuffle( const ssei& a ) {
 	return _mm_shuffle_epi32(a, _MM_SHUFFLE(i3, i2, i1, i0));
@@ -200,12 +200,6 @@ template<size_t i0, size_t i1, size_t i2, size_t i3> __forceinline const ssei sh
 template<size_t i0, size_t i1, size_t i2, size_t i3> __forceinline const ssei shuffle( const ssei& a, const ssei& b ) {
 	return _mm_castps_si128(_mm_shuffle_ps(_mm_castsi128_ps(a), _mm_castsi128_ps(b), _MM_SHUFFLE(i3, i2, i1, i0)));
 }
-
-#if defined(__KERNEL_SSE3__)
-template<> __forceinline const ssei shuffle<0, 0, 2, 2>( const ssei& a ) { return _mm_castps_si128(_mm_moveldup_ps(_mm_castsi128_ps(a))); }
-template<> __forceinline const ssei shuffle<1, 1, 3, 3>( const ssei& a ) { return _mm_castps_si128(_mm_movehdup_ps(_mm_castsi128_ps(a))); }
-template<> __forceinline const ssei shuffle<0, 1, 0, 1>( const ssei& a ) { return _mm_castpd_si128(_mm_movedup_pd (_mm_castsi128_pd(a))); }
-#endif
 
 template<size_t i0> __forceinline const ssei shuffle( const ssei& b ) {
 	return shuffle<i0,i0,i0,i0>(b);
@@ -284,6 +278,16 @@ __forceinline void store4i_nt(void* ptr, const ssei& v) {
 #else
 	_mm_store_si128((__m128i*)ptr,v);
 #endif
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/// Debug Functions
+////////////////////////////////////////////////////////////////////////////////
+
+ccl_device_inline void print_ssei(const char *label, const ssei &a)
+{
+	printf("%s: %df %df %df %d\n",
+	       label, a[0], a[1], a[2], a[3]);
 }
 
 #endif

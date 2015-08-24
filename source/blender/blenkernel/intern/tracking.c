@@ -51,7 +51,7 @@
 #include "BLI_string.h"
 #include "BLI_threads.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_fcurve.h"
 #include "BKE_tracking.h"
@@ -468,7 +468,7 @@ MovieTrackingTrack *BKE_tracking_track_duplicate(MovieTrackingTrack *track)
  */
 void BKE_tracking_track_unique_name(ListBase *tracksbase, MovieTrackingTrack *track)
 {
-	BLI_uniquename(tracksbase, track, CTX_DATA_(BLF_I18NCONTEXT_ID_MOVIECLIP, "Track"), '.',
+	BLI_uniquename(tracksbase, track, CTX_DATA_(BLT_I18NCONTEXT_ID_MOVIECLIP, "Track"), '.',
 	               offsetof(MovieTrackingTrack, name), sizeof(track->name));
 }
 
@@ -547,7 +547,7 @@ bool BKE_tracking_track_has_enabled_marker_at_frame(MovieTrackingTrack *track, i
  * - If action is TRACK_CLEAR_UPTO path from the beginning up to
  *   ref_frame-1 will be clear.
  *
- * - If action is TRACK_CLEAR_ALL only mareker at frame ref_frame will remain.
+ * - If action is TRACK_CLEAR_ALL only marker at frame ref_frame will remain.
  *
  * NOTE: frame number should be in clip space, not scene space
  */
@@ -721,7 +721,7 @@ MovieTrackingTrack *BKE_tracking_track_get_named(MovieTracking *tracking, MovieT
 	MovieTrackingTrack *track = tracksbase->first;
 
 	while (track) {
-		if (!strcmp(track->name, name))
+		if (STREQ(track->name, name))
 			return track;
 
 		track = track->next;
@@ -730,7 +730,7 @@ MovieTrackingTrack *BKE_tracking_track_get_named(MovieTracking *tracking, MovieT
 	return NULL;
 }
 
-MovieTrackingTrack *BKE_tracking_track_get_indexed(MovieTracking *tracking, int tracknr, ListBase **tracksbase_r)
+MovieTrackingTrack *BKE_tracking_track_get_indexed(MovieTracking *tracking, int tracknr, ListBase **r_tracksbase)
 {
 	MovieTrackingObject *object;
 	int cur = 1;
@@ -743,7 +743,7 @@ MovieTrackingTrack *BKE_tracking_track_get_indexed(MovieTracking *tracking, int 
 		while (track) {
 			if (track->flag & TRACK_HAS_BUNDLE) {
 				if (cur == tracknr) {
-					*tracksbase_r = tracksbase;
+					*r_tracksbase = tracksbase;
 					return track;
 				}
 
@@ -756,7 +756,7 @@ MovieTrackingTrack *BKE_tracking_track_get_indexed(MovieTracking *tracking, int 
 		object = object->next;
 	}
 
-	*tracksbase_r = NULL;
+	*r_tracksbase = NULL;
 
 	return NULL;
 }
@@ -1238,7 +1238,7 @@ MovieTrackingPlaneTrack *BKE_tracking_plane_track_add(MovieTracking *tracking, L
 
 void BKE_tracking_plane_track_unique_name(ListBase *plane_tracks_base, MovieTrackingPlaneTrack *plane_track)
 {
-	BLI_uniquename(plane_tracks_base, plane_track, CTX_DATA_(BLF_I18NCONTEXT_ID_MOVIECLIP, "Plane Track"), '.',
+	BLI_uniquename(plane_tracks_base, plane_track, CTX_DATA_(BLT_I18NCONTEXT_ID_MOVIECLIP, "Plane Track"), '.',
 	               offsetof(MovieTrackingPlaneTrack, name), sizeof(plane_track->name));
 }
 
@@ -1267,7 +1267,7 @@ MovieTrackingPlaneTrack *BKE_tracking_plane_track_get_named(MovieTracking *track
 	     plane_track;
 	     plane_track = plane_track->next)
 	{
-		if (!strcmp(plane_track->name, name)) {
+		if (STREQ(plane_track->name, name)) {
 			return plane_track;
 		}
 	}
@@ -1299,6 +1299,95 @@ void BKE_tracking_plane_tracks_deselect_all(ListBase *plane_tracks_base)
 
 	for (plane_track = plane_tracks_base->first; plane_track; plane_track = plane_track->next) {
 		plane_track->flag &= ~SELECT;
+	}
+}
+
+bool BKE_tracking_plane_track_has_point_track(MovieTrackingPlaneTrack *plane_track,
+                                              MovieTrackingTrack *track)
+{
+	int i;
+	for (i = 0; i < plane_track->point_tracksnr; i++) {
+		if (plane_track->point_tracks[i] == track) {
+			return true;
+		}
+	}
+	return false;
+}
+
+bool BKE_tracking_plane_track_remove_point_track(MovieTrackingPlaneTrack *plane_track,
+                                                 MovieTrackingTrack *track)
+{
+	int i, track_index;
+	MovieTrackingTrack **new_point_tracks;
+
+	if (plane_track->point_tracksnr <= 4) {
+		return false;
+	}
+
+	new_point_tracks = MEM_mallocN(sizeof(*new_point_tracks) * (plane_track->point_tracksnr - 1),
+	                               "new point tracks array");
+
+	for (i = 0, track_index = 0; i < plane_track->point_tracksnr; i++) {
+		if (plane_track->point_tracks[i] != track) {
+			new_point_tracks[track_index++] = plane_track->point_tracks[i];
+		}
+	}
+
+	MEM_freeN(plane_track->point_tracks);
+	plane_track->point_tracks = new_point_tracks;
+	plane_track->point_tracksnr--;
+
+	return true;
+}
+
+void BKE_tracking_plane_tracks_remove_point_track(MovieTracking *tracking,
+                                                  MovieTrackingTrack *track)
+{
+	MovieTrackingPlaneTrack *plane_track, *next_plane_track;
+	ListBase *plane_tracks_base = BKE_tracking_get_active_plane_tracks(tracking);
+	for (plane_track = plane_tracks_base->first;
+	     plane_track;
+	     plane_track = next_plane_track)
+	{
+		next_plane_track = plane_track->next;
+		if (BKE_tracking_plane_track_has_point_track(plane_track, track)) {
+			if (!BKE_tracking_plane_track_remove_point_track(plane_track, track)) {
+				/* Delete planes with less than 3 point tracks in it. */
+				BKE_tracking_plane_track_free(plane_track);
+				BLI_freelinkN(plane_tracks_base, plane_track);
+			}
+		}
+	}
+}
+
+void BKE_tracking_plane_track_replace_point_track(MovieTrackingPlaneTrack *plane_track,
+                                                  MovieTrackingTrack *old_track,
+                                                  MovieTrackingTrack *new_track)
+{
+	int i;
+	for (i = 0; i < plane_track->point_tracksnr; i++) {
+		if (plane_track->point_tracks[i] == old_track) {
+			plane_track->point_tracks[i] = new_track;
+			break;
+		}
+	}
+}
+
+void BKE_tracking_plane_tracks_replace_point_track(MovieTracking *tracking,
+                                                   MovieTrackingTrack *old_track,
+                                                   MovieTrackingTrack *new_track)
+{
+	MovieTrackingPlaneTrack *plane_track;
+	ListBase *plane_tracks_base = BKE_tracking_get_active_plane_tracks(tracking);
+	for (plane_track = plane_tracks_base->first;
+	     plane_track;
+	     plane_track = plane_track->next)
+	{
+		if (BKE_tracking_plane_track_has_point_track(plane_track, old_track)) {
+			BKE_tracking_plane_track_replace_point_track(plane_track,
+			                                             old_track,
+			                                             new_track);
+		}
 	}
 }
 
@@ -1456,6 +1545,35 @@ MovieTrackingPlaneMarker *BKE_tracking_plane_marker_ensure(MovieTrackingPlaneTra
 	return plane_marker;
 }
 
+void BKE_tracking_plane_marker_get_subframe_corners(MovieTrackingPlaneTrack *plane_track,
+                                                    float framenr,
+                                                    float corners[4][2])
+{
+	MovieTrackingPlaneMarker *marker = BKE_tracking_plane_marker_get(plane_track, (int)framenr);
+	MovieTrackingPlaneMarker *marker_last = plane_track->markers + (plane_track->markersnr - 1);
+	int i;
+	if (marker != marker_last) {
+		MovieTrackingPlaneMarker *marker_next = marker + 1;
+		if (marker_next->framenr == marker->framenr + 1) {
+			float fac = (framenr - (int) framenr) / (marker_next->framenr - marker->framenr);
+			for (i = 0; i < 4; ++i) {
+				interp_v2_v2v2(corners[i], marker->corners[i],
+				               marker_next->corners[i], fac);
+			}
+		}
+		else {
+			for (i = 0; i < 4; ++i) {
+				copy_v2_v2(corners[i], marker->corners[i]);
+			}
+		}
+	}
+	else {
+		for (i = 0; i < 4; ++i) {
+			copy_v2_v2(corners[i], marker->corners[i]);
+		}
+	}
+}
+
 /*********************** Object *************************/
 
 MovieTrackingObject *BKE_tracking_object_add(MovieTracking *tracking, const char *name)
@@ -1475,7 +1593,7 @@ MovieTrackingObject *BKE_tracking_object_add(MovieTracking *tracking, const char
 	BLI_addtail(&tracking->objects, object);
 
 	tracking->tot_object++;
-	tracking->objectnr = BLI_countlist(&tracking->objects) - 1;
+	tracking->objectnr = BLI_listbase_count(&tracking->objects) - 1;
 
 	object->scale = 1.0f;
 	object->keyframe1 = 1;
@@ -1534,7 +1652,7 @@ MovieTrackingObject *BKE_tracking_object_get_named(MovieTracking *tracking, cons
 	MovieTrackingObject *object = tracking->objects.first;
 
 	while (object) {
-		if (!strcmp(object->name, name))
+		if (STREQ(object->name, name))
 			return object;
 
 		object = object->next;
@@ -1704,7 +1822,7 @@ MovieReconstructedCamera *BKE_tracking_camera_get_reconstructed(MovieTracking *t
 }
 
 void BKE_tracking_camera_get_reconstructed_interpolate(MovieTracking *tracking, MovieTrackingObject *object,
-                                                       int framenr, float mat[4][4])
+                                                       float framenr, float mat[4][4])
 {
 	MovieTrackingReconstruction *reconstruction;
 	MovieReconstructedCamera *cameras;
@@ -1712,17 +1830,15 @@ void BKE_tracking_camera_get_reconstructed_interpolate(MovieTracking *tracking, 
 
 	reconstruction = BKE_tracking_object_get_reconstruction(tracking, object);
 	cameras = reconstruction->cameras;
-	a = reconstructed_camera_index_get(reconstruction, framenr, true);
+	a = reconstructed_camera_index_get(reconstruction, (int)framenr, true);
 
 	if (a == -1) {
 		unit_m4(mat);
-
 		return;
 	}
 
-	if (cameras[a].framenr != framenr && a > 0 && a < reconstruction->camnr - 1) {
+	if (cameras[a].framenr != framenr && a < reconstruction->camnr - 1) {
 		float t = ((float)framenr - cameras[a].framenr) / (cameras[a + 1].framenr - cameras[a].framenr);
-
 		blend_m4_m4m4(mat, cameras[a].mat, cameras[a + 1].mat, t);
 	}
 	else {
@@ -2410,30 +2526,30 @@ static void tracking_dopesheet_channels_sort(MovieTracking *tracking, int sort_m
 
 	if (inverse) {
 		if (sort_method == TRACKING_DOPE_SORT_NAME) {
-			BLI_sortlist(&dopesheet->channels, channels_alpha_inverse_sort);
+			BLI_listbase_sort(&dopesheet->channels, channels_alpha_inverse_sort);
 		}
 		else if (sort_method == TRACKING_DOPE_SORT_LONGEST) {
-			BLI_sortlist(&dopesheet->channels, channels_longest_segment_inverse_sort);
+			BLI_listbase_sort(&dopesheet->channels, channels_longest_segment_inverse_sort);
 		}
 		else if (sort_method == TRACKING_DOPE_SORT_TOTAL) {
-			BLI_sortlist(&dopesheet->channels, channels_total_track_inverse_sort);
+			BLI_listbase_sort(&dopesheet->channels, channels_total_track_inverse_sort);
 		}
 		else if (sort_method == TRACKING_DOPE_SORT_AVERAGE_ERROR) {
-			BLI_sortlist(&dopesheet->channels, channels_average_error_inverse_sort);
+			BLI_listbase_sort(&dopesheet->channels, channels_average_error_inverse_sort);
 		}
 	}
 	else {
 		if (sort_method == TRACKING_DOPE_SORT_NAME) {
-			BLI_sortlist(&dopesheet->channels, channels_alpha_sort);
+			BLI_listbase_sort(&dopesheet->channels, channels_alpha_sort);
 		}
 		else if (sort_method == TRACKING_DOPE_SORT_LONGEST) {
-			BLI_sortlist(&dopesheet->channels, channels_longest_segment_sort);
+			BLI_listbase_sort(&dopesheet->channels, channels_longest_segment_sort);
 		}
 		else if (sort_method == TRACKING_DOPE_SORT_TOTAL) {
-			BLI_sortlist(&dopesheet->channels, channels_total_track_sort);
+			BLI_listbase_sort(&dopesheet->channels, channels_total_track_sort);
 		}
 		else if (sort_method == TRACKING_DOPE_SORT_AVERAGE_ERROR) {
-			BLI_sortlist(&dopesheet->channels, channels_average_error_sort);
+			BLI_listbase_sort(&dopesheet->channels, channels_average_error_sort);
 		}
 	}
 }

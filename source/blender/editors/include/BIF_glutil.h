@@ -90,13 +90,13 @@ void glutil_draw_lined_arc(float start, float angle, float radius, int nsegments
 void glutil_draw_filled_arc(float start, float angle, float radius, int nsegments);
 
 /**
- * Routines an integer value as obtained by glGetIntegerv.
+ * Returns an integer value as obtained by glGetIntegerv.
  * The param must cause only one value to be gotten from GL.
  */
 int glaGetOneInteger(int param);
 
 /**
- * Routines a float value as obtained by glGetIntegerv.
+ * Returns a float value as obtained by glGetFloatv.
  * The param must cause only one value to be gotten from GL.
  */
 float glaGetOneFloat(int param);
@@ -164,8 +164,8 @@ void glaDrawPixelsTexScaled(float x, float y, int img_w, int img_h, int format, 
 
 /** Define a 2D area (viewport, scissor, matrices) for OpenGL rendering.
  *
- * glwDefine2DArea and glaBegin2DDraw set up an OpenGL state appropriate
- * for drawing using both vertice (Vertex, etc) and raster (RasterPos, Rect)
+ * glaDefine2DArea and glaBegin2DDraw set up an OpenGL state appropriate
+ * for drawing using both vertex (Vertex, etc) and raster (RasterPos, Rect)
  * commands. All coordinates should be at integer positions. There is little
  * to no reason to use glVertex2f etc. functions during 2D rendering, and
  * thus no reason to +-0.5 the coordinates or perform other silly
@@ -181,8 +181,8 @@ typedef struct gla2DDrawInfo gla2DDrawInfo;
 #if 0
 
 gla2DDrawInfo  *glaBegin2DDraw(struct rcti *screen_rect, struct rctf *world_rect);
-void gla2DDrawTranslatePt(gla2DDrawInfo *di, float wo_x, float wo_y, int *sc_x_r, int *sc_y_r);
-void gla2DDrawTranslatePtv(gla2DDrawInfo *di, float world[2], int screen_r[2]);
+void gla2DDrawTranslatePt(gla2DDrawInfo *di, float wo_x, float wo_y, int *r_sc_x, int *r_sc_y);
+void gla2DDrawTranslatePtv(gla2DDrawInfo *di, float world[2], int r_screen[2]);
 
 void glaEnd2DDraw(gla2DDrawInfo *di);
 

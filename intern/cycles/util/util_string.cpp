@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #include <stdarg.h>
@@ -103,6 +103,23 @@ string string_strip(const string& s)
 	result.erase(result.find_last_not_of(' ') + 1);
 	return result;
 
+}
+
+void string_replace(string& haystack, const string& needle, const string& other)
+{
+	size_t i;
+
+	while((i = haystack.find(needle)) != string::npos)
+		haystack.replace(i, needle.length(), other);
+}
+
+string string_remove_trademark(const string &s)
+{
+	string result = s;
+	string_replace(result, "(TM)", "");
+	string_replace(result, "(R)", "");
+
+	return string_strip(result);
 }
 
 CCL_NAMESPACE_END

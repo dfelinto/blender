@@ -39,13 +39,11 @@
 /* called by meshtools */
 struct DerivedMesh;
 struct ImagePool;
-struct LinkNode;
 struct MTex;
 struct Scene;
-struct View3D;
 
 /* particle.c, effect.c, editmesh_modes.c and brush.c, returns 1 if rgb, 0 otherwise */
-int	externtex(struct MTex *mtex, const float vec[3], float *tin, float *tr, float *tg, float *tb, float *ta, const int thread, struct ImagePool *pool);
+int	externtex(struct MTex *mtex, const float vec[3], float *tin, float *tr, float *tg, float *tb, float *ta, const int thread, struct ImagePool *pool, const bool skip_load_image);
 
 /* particle.c */
 void texture_rgb_blend(float in[3], const float tex[3], const float out[3], float fact, float facg, int blendtype);
@@ -58,8 +56,14 @@ void antialias_tagbuf(int xsize, int ysize, char *rectmove);
 /* dynamicpaint.c */
 struct Material *RE_init_sample_material(struct Material *orig_mat, struct Scene *scene);
 void RE_free_sample_material(struct Material *mat);
-void RE_sample_material_color(struct Material *mat, float color[3], float *alpha, const float volume_co[3], const float surface_co[3],
-                              int face_index, short hit_quad, struct DerivedMesh *orcoDm, struct Object *ob);
+void RE_sample_material_color(
+        struct Material *mat, float color[3], float *alpha, const float volume_co[3], const float surface_co[3],
+        int tri_index, struct DerivedMesh *orcoDm, struct Object *ob);
+/* pointdensity.c */
+
+struct PointDensity;
+
+void RE_sample_point_density(struct Scene *scene, struct PointDensity *pd, int resolution, float *values);
 
 void RE_init_texture_rng(void);
 void RE_exit_texture_rng(void);

@@ -127,7 +127,7 @@ static int add_default_keyingset_exec(bContext *C, wmOperator *UNUSED(op))
 	/* call the API func, and set the active keyingset index */
 	BKE_keyingset_add(&scene->keyingsets, NULL, NULL, flag, keyingflag);
 	
-	scene->active_keyingset = BLI_countlist(&scene->keyingsets);
+	scene->active_keyingset = BLI_listbase_count(&scene->keyingsets);
 	
 	/* send notifiers */
 	WM_event_add_notifier(C, NC_SCENE | ND_KEYINGSET, NULL);
@@ -216,7 +216,7 @@ static int add_empty_ks_path_exec(bContext *C, wmOperator *op)
 	/* don't use the API method for this, since that checks on values... */
 	ksp = MEM_callocN(sizeof(KS_Path), "KeyingSetPath Empty");
 	BLI_addtail(&ks->paths, ksp);
-	ks->active_path = BLI_countlist(&ks->paths);
+	ks->active_path = BLI_listbase_count(&ks->paths);
 	
 	ksp->groupmode = KSP_GROUP_KSNAME; // XXX?
 	ksp->idtype = ID_OB;
@@ -316,7 +316,7 @@ static int add_keyingset_button_exec(bContext *C, wmOperator *op)
 		/* call the API func, and set the active keyingset index */
 		ks = BKE_keyingset_add(&scene->keyingsets, "ButtonKeyingSet", "Button Keying Set", flag, keyingflag);
 		
-		scene->active_keyingset = BLI_countlist(&scene->keyingsets);
+		scene->active_keyingset = BLI_listbase_count(&scene->keyingsets);
 	}
 	else if (scene->active_keyingset < 0) {
 		BKE_report(op->reports, RPT_ERROR, "Cannot add property to built in keying set");
@@ -347,7 +347,7 @@ static int add_keyingset_button_exec(bContext *C, wmOperator *op)
 				
 			/* add path to this setting */
 			BKE_keyingset_add_path(ks, ptr.id.data, NULL, path, index, pflag, KSP_GROUP_KSNAME);
-			ks->active_path = BLI_countlist(&ks->paths);
+			ks->active_path = BLI_listbase_count(&ks->paths);
 			success = 1;
 			
 			/* free the temp path created */
@@ -556,7 +556,7 @@ KeyingSet *ANIM_builtin_keyingset_get_named(KeyingSet *prevKS, const char name[]
 	
 	/* loop over KeyingSets checking names */
 	for (ks = first; ks; ks = ks->next) {
-		if (strcmp(name, ks->idname) == 0)
+		if (STREQ(name, ks->idname))
 			return ks;
 	}
 
@@ -603,7 +603,7 @@ void ANIM_keyingset_info_unregister(Main *bmain, KeyingSetInfo *ksi)
 		ksn = ks->next;
 
 		/* remove if matching typeinfo name */
-		if (strcmp(ks->typeinfo, ksi->idname) == 0) {
+		if (STREQ(ks->typeinfo, ksi->idname)) {
 			Scene *scene;
 			BKE_keyingset_free(ks);
 			BLI_remlink(&builtin_keyingsets, ks);
@@ -914,6 +914,37 @@ short ANIM_validate_keyingset(bContext *C, ListBase *dsources, KeyingSet *ks)
 	return 0;
 } 
 
+/* Determine which keying flags apply based on the override flags */
+static short keyingset_apply_keying_flags(const short base_flags, const short overrides, const short own_flags)
+{
+	short result = 0;
+	
+	/* The logic for whether a keying flag applies is as follows:
+	 *  - If the flag in question is set in "overrides", that means that the
+	 *    status of that flag in "own_flags" is used
+	 *  - If however the flag isn't set, then its value in "base_flags" is used
+	 *    instead (i.e. no override)
+	 */
+#define APPLY_KEYINGFLAG_OVERRIDE(kflag) \
+	if (overrides & kflag) {             \
+		result |= (own_flags & kflag);   \
+	}                                    \
+	else {                               \
+		result |= (base_flags & kflag);  \
+	}
+	
+	/* Apply the flags one by one... 
+	 * (See rna_def_common_keying_flags() for the supported flags)
+	 */
+	APPLY_KEYINGFLAG_OVERRIDE(INSERTKEY_NEEDED)
+	APPLY_KEYINGFLAG_OVERRIDE(INSERTKEY_MATRIX)
+	APPLY_KEYINGFLAG_OVERRIDE(INSERTKEY_XYZ2RGB)
+	
+#undef APPLY_KEYINGFLAG_OVERRIDE
+
+	return result;
+}
+
 /* Given a KeyingSet and context info (if required), modify keyframes for the channels specified
  * by the KeyingSet. This takes into account many of the different combinations of using KeyingSets.
  * Returns the number of channels that keyframes were added to
@@ -923,7 +954,8 @@ int ANIM_apply_keyingset(bContext *C, ListBase *dsources, bAction *act, KeyingSe
 	Scene *scene = CTX_data_scene(C);
 	ReportList *reports = CTX_wm_reports(C);
 	KS_Path *ksp;
-	int kflag = 0, success = 0;
+	const short base_kflags = ANIM_get_keyframing_flags(scene, 1);
+	short kflag = 0, success = 0;
 	const char *groupname = NULL;
 	
 	/* sanity checks */
@@ -932,11 +964,8 @@ int ANIM_apply_keyingset(bContext *C, ListBase *dsources, bAction *act, KeyingSe
 	
 	/* get flags to use */
 	if (mode == MODIFYKEY_MODE_INSERT) {
-		/* use KeyingSet's flags as base */
-		kflag = ks->keyingflag;
-		
-		/* supplement with info from the context */
-		kflag |= ANIM_get_keyframing_flags(scene, 1);
+		/* use context settings as base */
+		kflag = keyingset_apply_keying_flags(base_kflags, ks->keyingoverride, ks->keyingflag);
 	}
 	else if (mode == MODIFYKEY_MODE_DELETE)
 		kflag = 0;
@@ -962,8 +991,8 @@ int ANIM_apply_keyingset(bContext *C, ListBase *dsources, bAction *act, KeyingSe
 			continue;
 		}
 		
-		/* since keying settings can be defined on the paths too, extend the path before using it */
-		kflag2 = (kflag | ksp->keyingflag);
+		/* since keying settings can be defined on the paths too, apply the settings for this path first */
+		kflag2 = keyingset_apply_keying_flags(kflag, ksp->keyingoverride, ksp->keyingflag);
 		
 		/* get pointer to name of group to add channels to */
 		if (ksp->groupmode == KSP_GROUP_NONE)

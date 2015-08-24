@@ -138,7 +138,8 @@ from freestyle.predicates import (
 
 from freestyle.utils import (
     bound,
-    bounding_box,
+    BoundingBox,
+    pairwise,
     phase_to_direction,
     )
 
@@ -189,7 +190,7 @@ class pyConstantThicknessShader(StrokeShader):
 
 class pyFXSVaryingThicknessWithDensityShader(StrokeShader):
     """
-    Assings thickness to a stroke based on the density of the diffuse map.
+    Assigns thickness to a stroke based on the density of the diffuse map.
     """
     def __init__(self, wsize, threshold_min, threshold_max, thicknessMin, thicknessMax):
         StrokeShader.__init__(self)
@@ -600,7 +601,7 @@ class pyTimeColorShader(StrokeShader):
 
 class pySamplingShader(StrokeShader):
     """
-    Resamples the stroke, which gives the stroke the ammount of
+    Resamples the stroke, which gives the stroke the amount of
     vertices specified.
     """
     def __init__(self, sampling):
@@ -776,7 +777,7 @@ class pyTVertexRemoverShader(StrokeShader):
 
 class pyHLRShader(StrokeShader):
     """
-    Controlls visibility based upon the quantative invisibility (QI)
+    Controls visibility based upon the quantitative invisibility (QI)
     based on hidden line removal (HLR).
     """
     def shade(self, stroke):
@@ -865,7 +866,7 @@ class pyBluePrintCirclesShader(StrokeShader):
 
     def shade(self, stroke):
         # get minimum and maximum coordinates
-        p_min, p_max = bounding_box(stroke)
+        p_min, p_max = BoundingBox.from_sequence(svert.point for svert in stroke).corners
 
         stroke.resample(32 * self.__turns)
         sv_nb = len(stroke) // self.__turns
@@ -874,7 +875,7 @@ class pyBluePrintCirclesShader(StrokeShader):
         R = self.__random_radius
         C = self.__random_center
 
-        # The directions (and phases) are calculated using a seperate
+        # The directions (and phases) are calculated using a separate
         # function decorated with an lru-cache. This guarantees that
         # the directions (involving sin and cos) are calculated as few
         # times as possible.
@@ -917,7 +918,7 @@ class pyBluePrintEllipsesShader(StrokeShader):
         self.__random_radius = random_radius
 
     def shade(self, stroke):
-        p_min, p_max = bounding_box(stroke)
+        p_min, p_max = BoundingBox.from_sequence(svert.point for svert in stroke).corners
 
         stroke.resample(32 * self.__turns)
         sv_nb = len(stroke) // self.__turns
@@ -942,7 +943,7 @@ class pyBluePrintEllipsesShader(StrokeShader):
                 c = prev_center + (center - prev_center) * phase
                 svert.point = (c.x + r.x * direction.x, c.y + r.y * direction.y)
 
-        # remove exessive vertices
+        # remove excess vertices
         if not it.is_end:
             it.increment()
             for sv in tuple(it):
@@ -964,7 +965,7 @@ class pyBluePrintSquaresShader(StrokeShader):
             return
 
         # get minimum and maximum coordinates
-        p_min, p_max = bounding_box(stroke)
+        p_min, p_max = BoundingBox.from_sequence(svert.point for svert in stroke).corners
 
         stroke.resample(32 * self.__turns)
         num_segments = len(stroke) // self.__turns
@@ -1004,7 +1005,7 @@ class pyBluePrintSquaresShader(StrokeShader):
             points = tuple(p + rand for (p, rand) in zip(points, randomization_mat))
 
 
-        # substract even from uneven; result is length four tuple of vectors
+        # subtract even from uneven; result is length four tuple of vectors
         it = iter(points)
         old_vecs = tuple(next(it) - current for current in it)
 
@@ -1028,7 +1029,7 @@ class pyBluePrintSquaresShader(StrokeShader):
                     # special case; remove these vertices
                     verticesToRemove.append(svert)
 
-        # remove exessive vertices (if any)
+        # remove excess vertices (if any)
         if not it.is_end:
             it.increment()
             verticesToRemove += [svert for svert in it]
@@ -1066,7 +1067,7 @@ class pyBluePrintDirectedSquaresShader(StrokeShader):
 
         sqrt_coeff = sqrt(trace * trace - 4 * det)
         lambda1, lambda2 = (trace + sqrt_coeff) / 2, (trace - sqrt_coeff) / 2
-        # make sure those numers aren't to small, if they are, rooting them will yield complex numbers
+        # make sure those numbers aren't to small, if they are, rooting them will yield complex numbers
         lambda1, lambda2 = max(1e-12, lambda1), max(1e-12, lambda2)
         theta = atan(2 * p_var_xy / (p_var.x - p_var.y)) / 2
 
@@ -1119,7 +1120,7 @@ class pyBluePrintDirectedSquaresShader(StrokeShader):
                     # special case; remove these vertices
                     verticesToRemove.append(svert)
 
-        # remove exessive vertices
+        # remove excess vertices
         if not it.is_end:
             it.increment()
             verticesToRemove += [svert for svert in it]
@@ -1131,6 +1132,13 @@ class pyBluePrintDirectedSquaresShader(StrokeShader):
 # -- various (used in the parameter editor) -- #
 
 
+def iter_stroke_vertices(stroke, epsilon=1e-6):
+    yield stroke[0]
+    for prev, svert in pairwise(stroke):
+        if (prev.point - svert.point).length > epsilon:
+            yield svert
+
+
 class RoundCapShader(StrokeShader):
     def round_cap_thickness(self, x):
         x = max(0.0, min(x, 1.0))
@@ -1138,7 +1146,8 @@ class RoundCapShader(StrokeShader):
 
     def shade(self, stroke):
         # save the location and attribute of stroke vertices
-        buffer = tuple((Vector(sv.point), StrokeAttribute(sv.attribute)) for sv in stroke)
+        buffer = tuple((Vector(sv.point), StrokeAttribute(sv.attribute))
+                       for sv in iter_stroke_vertices(stroke))
         nverts = len(buffer)
         if nverts < 2:
             return
@@ -1186,7 +1195,8 @@ class RoundCapShader(StrokeShader):
 class SquareCapShader(StrokeShader):
     def shade(self, stroke):
         # save the location and attribute of stroke vertices
-        buffer = tuple((Vector(sv.point), StrokeAttribute(sv.attribute)) for sv in stroke)
+        buffer = tuple((Vector(sv.point), StrokeAttribute(sv.attribute))
+                       for sv in iter_stroke_vertices(stroke))
         nverts = len(buffer)
         if nverts < 2:
             return

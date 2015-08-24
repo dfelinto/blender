@@ -39,19 +39,24 @@
 
 #include "BLI_blenlib.h"
 #include "BLI_utildefines.h"
+#include "BLI_mempool.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_animsys.h"
 #include "BKE_context.h"
 #include "BKE_depsgraph.h"
+#include "BKE_global.h"
 #include "BKE_library.h"
 #include "BKE_main.h"
+#include "BKE_outliner_treehash.h"
 #include "BKE_report.h"
 #include "BKE_scene.h"
 #include "BKE_material.h"
+#include "BKE_group.h"
 
 #include "ED_object.h"
+#include "ED_outliner.h"
 #include "ED_screen.h"
 #include "ED_keyframing.h"
 
@@ -73,22 +78,6 @@
 
 /* This is not used anywhere at the moment */
 #if 0
-/* return 1 when levels were opened */
-static int outliner_open_back(SpaceOops *soops, TreeElement *te)
-{
-	TreeStoreElem *tselem;
-	int retval = 0;
-	
-	for (te = te->parent; te; te = te->parent) {
-		tselem = TREESTORE(te);
-		if (tselem->flag & TSE_CLOSED) {
-			tselem->flag &= ~TSE_CLOSED;
-			retval = 1;
-		}
-	}
-	return retval;
-}
-
 static void outliner_open_reveal(SpaceOops *soops, ListBase *lb, TreeElement *teFind, int *found)
 {
 	TreeElement *te;
@@ -113,7 +102,9 @@ static void outliner_open_reveal(SpaceOops *soops, ListBase *lb, TreeElement *te
 }
 #endif
 
-static TreeElement *outliner_dropzone_element(const SpaceOops *soops, TreeElement *te, const float fmval[2], const int children)
+static TreeElement *outliner_dropzone_element(
+        const SpaceOops *soops, TreeElement *te,
+        const float fmval[2], const bool children)
 {
 	if ((fmval[1] > te->ys) && (fmval[1] < (te->ys + UI_UNIT_Y))) {
 		/* name and first icon */
@@ -132,7 +123,7 @@ static TreeElement *outliner_dropzone_element(const SpaceOops *soops, TreeElemen
 }
 
 /* Used for drag and drop parenting */
-TreeElement *outliner_dropzone_find(const SpaceOops *soops, const float fmval[2], const int children)
+TreeElement *outliner_dropzone_find(const SpaceOops *soops, const float fmval[2], const bool children)
 {
 	TreeElement *te;
 
@@ -601,6 +592,50 @@ void OUTLINER_OT_selected_toggle(wmOperatorType *ot)
 
 /* Show Active --------------------------------------------------- */
 
+static void outliner_set_coordinates_element_recursive(SpaceOops *soops, TreeElement *te, int startx, int *starty)
+{
+	TreeStoreElem *tselem = TREESTORE(te);
+
+	/* store coord and continue, we need coordinates for elements outside view too */
+	te->xs = (float)startx;
+	te->ys = (float)(*starty);
+	*starty -= UI_UNIT_Y;
+
+	if (TSELEM_OPEN(tselem, soops)) {
+		TreeElement *ten;
+		for (ten = te->subtree.first; ten; ten = ten->next) {
+			outliner_set_coordinates_element_recursive(soops, ten, startx + UI_UNIT_X, starty);
+		}
+	}
+}
+
+/* to retrieve coordinates with redrawing the entire tree */
+static void outliner_set_coordinates(ARegion *ar, SpaceOops *soops)
+{
+	TreeElement *te;
+	int starty = (int)(ar->v2d.tot.ymax) - UI_UNIT_Y;
+
+	for (te = soops->tree.first; te; te = te->next) {
+		outliner_set_coordinates_element_recursive(soops, te, 0, &starty);
+	}
+}
+
+/* return 1 when levels were opened */
+static int outliner_open_back(TreeElement *te)
+{
+	TreeStoreElem *tselem;
+	int retval = 0;
+
+	for (te = te->parent; te; te = te->parent) {
+		tselem = TREESTORE(te);
+		if (tselem->flag & TSE_CLOSED) {
+			tselem->flag &= ~TSE_CLOSED;
+			retval = 1;
+		}
+	}
+	return retval;
+}
+
 static int outliner_show_active_exec(bContext *C, wmOperator *UNUSED(op))
 {
 	SpaceOops *so = CTX_wm_space_outliner(C);
@@ -617,6 +652,11 @@ static int outliner_show_active_exec(bContext *C, wmOperator *UNUSED(op))
 	
 	te = outliner_find_id(so, &so->tree, (ID *)OBACT);
 	if (te) {
+		/* open up tree to active object */
+		if (outliner_open_back(te)) {
+			outliner_set_coordinates(ar, so);
+		}
+
 		/* make te->ys center of view */
 		ytop = te->ys + BLI_rcti_size_y(&v2d->mask) / 2;
 		if (ytop > 0) ytop = 0;
@@ -642,7 +682,7 @@ void OUTLINER_OT_show_active(wmOperatorType *ot)
 	/* identifiers */
 	ot->name = "Show Active";
 	ot->idname = "OUTLINER_OT_show_active";
-	ot->description = "Adjust the view so that the active Object is shown centered";
+	ot->description = "Open up the tree and adjust the view so that the active Object is shown centered";
 	
 	/* callbacks */
 	ot->exec = outliner_show_active_exec;
@@ -689,37 +729,6 @@ void OUTLINER_OT_scroll_page(wmOperatorType *ot)
 // TODO: probably obsolete now with filtering?
 
 #if 0
-
-/* recursive helper for function below */
-static void outliner_set_coordinates_element(SpaceOops *soops, TreeElement *te, int startx, int *starty)
-{
-	TreeStoreElem *tselem = TREESTORE(te);
-	
-	/* store coord and continue, we need coordinates for elements outside view too */
-	te->xs = (float)startx;
-	te->ys = (float)(*starty);
-	*starty -= UI_UNIT_Y;
-	
-	if (TSELEM_OPEN(tselem, soops)) {
-		TreeElement *ten;
-		for (ten = te->subtree.first; ten; ten = ten->next) {
-			outliner_set_coordinates_element(soops, ten, startx + UI_UNIT_X, starty);
-		}
-	}
-	
-}
-
-/* to retrieve coordinates with redrawing the entire tree */
-static void outliner_set_coordinates(ARegion *ar, SpaceOops *soops)
-{
-	TreeElement *te;
-	int starty = (int)(ar->v2d.tot.ymax) - UI_UNIT_Y;
-	int startx = 0;
-	
-	for (te = soops->tree.first; te; te = te->next) {
-		outliner_set_coordinates_element(soops, te, startx, &starty);
-	}
-}
 
 /* find next element that has this name */
 static TreeElement *outliner_find_name(SpaceOops *soops, ListBase *lb, char *name, int flags,
@@ -780,7 +789,7 @@ static void outliner_find_panel(Scene *UNUSED(scene), ARegion *ar, SpaceOops *so
 	else {
 		/* pop up panel - no previous, or user didn't want search after previous */
 		name[0] = '\0';
-// XXX		if (sbutton(name, 0, sizeof(name)-1, "Find: ") && name[0]) {
+// XXX		if (sbutton(name, 0, sizeof(name) - 1, "Find: ") && name[0]) {
 //			te = outliner_find_name(soops, &soops->tree, name, flags, NULL, &prevFound);
 //		}
 //		else return; /* XXX RETURN! XXX */
@@ -1305,7 +1314,7 @@ static KeyingSet *verify_active_keyingset(Scene *scene, short add)
 	// XXX the default settings have yet to evolve
 	if ((add) && (ks == NULL)) {
 		ks = BKE_keyingset_add(&scene->keyingsets, NULL, NULL, KEYINGSET_ABSOLUTE, 0);
-		scene->active_keyingset = BLI_countlist(&scene->keyingsets);
+		scene->active_keyingset = BLI_listbase_count(&scene->keyingsets);
 	}
 	
 	return ks;
@@ -1347,7 +1356,7 @@ static void do_outliner_keyingset_editop(SpaceOops *soops, KeyingSet *ks, ListBa
 						/* TODO: what do we do with group name?
 						 * for now, we don't supply one, and just let this use the KeyingSet name */
 						BKE_keyingset_add_path(ks, id, NULL, path, array_index, flag, groupmode);
-						ks->active_path = BLI_countlist(&ks->paths);
+						ks->active_path = BLI_listbase_count(&ks->paths);
 						break;
 					}
 					case KEYINGSET_EDITMODE_REMOVE:
@@ -1453,6 +1462,62 @@ void OUTLINER_OT_keyingset_remove_selected(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
+
+/* ************************************************************** */
+/* ORPHANED DATABLOCKS */
+
+static int ed_operator_outliner_id_orphans_active(bContext *C)
+{
+	ScrArea *sa = CTX_wm_area(C);
+	if ((sa) && (sa->spacetype == SPACE_OUTLINER)) {
+		SpaceOops *so = CTX_wm_space_outliner(C);
+		return (so->outlinevis == SO_ID_ORPHANS);
+	}
+	return 0;
+}
+
+/* Purge Orphans Operator --------------------------------------- */
+
+static int outliner_orphans_purge_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(evt))
+{
+	/* present a prompt to informing users that this change is irreversible */
+	return WM_operator_confirm_message(C, op,
+	                                   "Purging unused datablocks cannot be undone. "
+	                                   "Click here to proceed...");
+}
+
+static int outliner_orphans_purge_exec(bContext *C, wmOperator *UNUSED(op))
+{
+	/* Firstly, ensure that the file has been saved,
+	 * so that the latest changes since the last save
+	 * are retained...
+	 */
+	WM_operator_name_call(C, "WM_OT_save_mainfile", WM_OP_EXEC_DEFAULT, NULL);
+	
+	/* Now, reload the file to get rid of the orphans... */
+	WM_operator_name_call(C, "WM_OT_revert_mainfile", WM_OP_EXEC_DEFAULT, NULL);
+	return OPERATOR_FINISHED;
+}
+
+void OUTLINER_OT_orphans_purge(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->idname = "OUTLINER_OT_orphans_purge";
+	ot->name = "Purge All";
+	ot->description = "Clear all orphaned datablocks without any users from the file (cannot be undone)";
+	
+	/* callbacks */
+	ot->invoke = outliner_orphans_purge_invoke;
+	ot->exec = outliner_orphans_purge_exec;
+	ot->poll = ed_operator_outliner_id_orphans_active;
+	
+	/* flags */
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
+
+/* ************************************************************** */
+/* DRAG AND DROP OPERATORS */
+
 /* ******************** Parent Drop Operator *********************** */
 
 static int parent_drop_exec(bContext *C, wmOperator *op)
@@ -1500,7 +1565,7 @@ static int parent_drop_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 	UI_view2d_region_to_view(&ar->v2d, event->mval[0], event->mval[1], &fmval[0], &fmval[1]);
 
 	/* Find object hovered over */
-	te = outliner_dropzone_find(soops, fmval, 1);
+	te = outliner_dropzone_find(soops, fmval, true);
 
 	if (te) {
 		RNA_string_set(op->ptr, "parent", te->name);
@@ -1715,7 +1780,7 @@ static int scene_drop_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 	UI_view2d_region_to_view(&ar->v2d, event->mval[0], event->mval[1], &fmval[0], &fmval[1]);
 
 	/* Find object hovered over */
-	te = outliner_dropzone_find(soops, fmval, 0);
+	te = outliner_dropzone_find(soops, fmval, false);
 
 	if (te) {
 		Base *base;
@@ -1785,7 +1850,7 @@ static int material_drop_invoke(bContext *C, wmOperator *op, const wmEvent *even
 	UI_view2d_region_to_view(&ar->v2d, event->mval[0], event->mval[1], &fmval[0], &fmval[1]);
 
 	/* Find object hovered over */
-	te = outliner_dropzone_find(soops, fmval, 1);
+	te = outliner_dropzone_find(soops, fmval, true);
 
 	if (te) {
 		RNA_string_set(op->ptr, "object", te->name);
@@ -1829,3 +1894,98 @@ void OUTLINER_OT_material_drop(wmOperatorType *ot)
 	RNA_def_string(ot->srna, "material", "Material", MAX_ID_NAME, "Material", "Target Material");
 }
 
+static int group_link_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+{
+	Main *bmain = CTX_data_main(C);
+	Group *group = NULL;
+	Object *ob = NULL;
+	Scene *scene = CTX_data_scene(C);
+	SpaceOops *soops = CTX_wm_space_outliner(C);
+	ARegion *ar = CTX_wm_region(C);
+	TreeElement *te = NULL;
+	char ob_name[MAX_ID_NAME - 2];
+	float fmval[2];
+
+	UI_view2d_region_to_view(&ar->v2d, event->mval[0], event->mval[1], &fmval[0], &fmval[1]);
+
+	/* Find object hovered over */
+	te = outliner_dropzone_find(soops, fmval, true);
+
+	if (te) {
+		group = (Group *)BKE_libblock_find_name(ID_GR, te->name);
+
+		RNA_string_get(op->ptr, "object", ob_name);
+		ob = (Object *)BKE_libblock_find_name(ID_OB, ob_name);
+
+		if (ELEM(NULL, group, ob)) {
+			return OPERATOR_CANCELLED;
+		}
+		if (BKE_group_object_exists(group, ob)) {
+			return OPERATOR_FINISHED;
+		}
+
+		if (BKE_group_object_cyclic_check(bmain, ob, group)) {
+			BKE_report(op->reports, RPT_ERROR, "Could not add the group because of dependency cycle detected");
+			return OPERATOR_CANCELLED;
+		}
+
+		BKE_group_object_add(group, ob, scene, NULL);
+		WM_event_add_notifier(C, NC_OBJECT | ND_DRAW, ob);
+
+		return OPERATOR_FINISHED;
+	}
+
+	return OPERATOR_CANCELLED;
+}
+
+void OUTLINER_OT_group_link(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Link Object to Group";
+	ot->description = "Link Object to Group in Outliner";
+	ot->idname = "OUTLINER_OT_group_link";
+
+	/* api callbacks */
+	ot->invoke = group_link_invoke;
+
+	ot->poll = ED_operator_outliner_active;
+
+	/* flags */
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_INTERNAL;
+
+	/* properties */
+	RNA_def_string(ot->srna, "object", "Object", MAX_ID_NAME, "Object", "Target Object");
+}
+
+/******** Utils to clear any ref to freed ID... **********/
+
+void ED_outliner_id_unref(SpaceOops *so, const ID *id)
+{
+	/* Some early out checks. */
+	if (!TREESTORE_ID_TYPE(id)) {
+		return;  /* ID type is not used by outilner... */
+	}
+
+	if (so->search_tse.id == id) {
+		so->search_tse.id = NULL;
+	}
+
+	if (so->treestore) {
+		TreeStoreElem *tselem;
+		BLI_mempool_iter iter;
+		bool changed = false;
+
+		BLI_mempool_iternew(so->treestore, &iter);
+		while ((tselem = BLI_mempool_iterstep(&iter))) {
+			if (tselem->id == id) {
+				tselem->id = NULL;
+				changed = true;
+			}
+		}
+		if (so->treehash && changed) {
+			/* rebuild hash table, because it depends on ids too */
+			/* postpone a full rebuild because this can be called many times on-free */
+			so->storeflag |= SO_TREESTORE_REBUILD;
+		}
+	}
+}

@@ -24,18 +24,18 @@
  *  \ingroup edinterface
  */
 
+#include <stdlib.h>
 #include <string.h>
 
 #include "MEM_guardedalloc.h"
 
 #include "DNA_node_types.h"
 #include "DNA_screen_types.h"
-#include "DNA_space_types.h"
 
 #include "BLI_listbase.h"
 #include "BLI_string.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_context.h"
 #include "BKE_global.h"
@@ -54,7 +54,6 @@
 
 #include "ED_util.h"
 
-#include "node_intern.h"
 
 /************************* Node Socket Manipulation **************************/
 
@@ -216,8 +215,22 @@ static void node_socket_add_replace(const bContext *C, bNodeTree *ntree, bNode *
 	}
 	else if (!node_from) {
 		node_from = nodeAddStaticNode(C, ntree, type);
-		node_from->locx = node_to->locx - (node_from->typeinfo->width + 50);
-		node_from->locy = node_to->locy;
+		if (node_prev != NULL) {
+			/* If we're replacing existing node, use it's location. */
+			node_from->locx = node_prev->locx;
+			node_from->locy = node_prev->locy;
+			node_from->offsetx = node_prev->offsetx;
+			node_from->offsety = node_prev->offsety;
+		}
+		else {
+			/* Avoid exact intersection of nodes.
+			 * TODO(sergey): Still not ideal, but better than nothing.
+			 */
+			int index = BLI_findindex(&node_to->inputs, sock_to);
+			BLI_assert(index != -1);
+			node_from->locx = node_to->locx - (node_from->typeinfo->width + 50);
+			node_from->locy = node_to->locy - (node_from->typeinfo->height * index);
+		}
 		
 		node_link_item_apply(node_from, item);
 	}
@@ -300,7 +313,7 @@ static void ui_node_link_items(NodeLinkArg *arg, int in_out, NodeLinkItem **r_it
 		
 		for (ngroup = arg->bmain->nodetree.first; ngroup; ngroup = ngroup->id.next) {
 			ListBase *lb = ((in_out == SOCK_IN) ? &ngroup->inputs : &ngroup->outputs);
-			totitems += BLI_countlist(lb);
+			totitems += BLI_listbase_count(lb);
 		}
 		
 		if (totitems > 0) {

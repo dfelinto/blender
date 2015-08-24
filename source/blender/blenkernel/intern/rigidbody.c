@@ -54,6 +54,7 @@
 #include "DNA_scene_types.h"
 
 #include "BKE_cdderivedmesh.h"
+#include "BKE_depsgraph.h"
 #include "BKE_effect.h"
 #include "BKE_global.h"
 #include "BKE_library.h"
@@ -61,8 +62,7 @@
 #include "BKE_object.h"
 #include "BKE_pointcache.h"
 #include "BKE_rigidbody.h"
-
-#include "RNA_access.h"
+#include "BKE_scene.h"
 
 #ifdef WITH_BULLET
 
@@ -274,57 +274,55 @@ static rbCollisionShape *rigidbody_get_shape_trimesh_from_mesh(Object *ob)
 	if (ob->type == OB_MESH) {
 		DerivedMesh *dm = NULL;
 		MVert *mvert;
-		MFace *mface;
+		const MLoopTri *looptri;
 		int totvert;
-		int totface;
-		int tottris = 0;
-		int triangle_index = 0;
-
+		int tottri;
+		const MLoop *mloop;
+		
 		dm = rigidbody_get_mesh(ob);
 
 		/* ensure mesh validity, then grab data */
 		if (dm == NULL)
 			return NULL;
 
-		DM_ensure_tessface(dm);
+		DM_ensure_looptri(dm);
 
 		mvert   = dm->getVertArray(dm);
 		totvert = dm->getNumVerts(dm);
-		mface   = dm->getTessFaceArray(dm);
-		totface = dm->getNumTessFaces(dm);
+		looptri = dm->getLoopTriArray(dm);
+		tottri = dm->getNumLoopTri(dm);
+		mloop = dm->getLoopArray(dm);
 
 		/* sanity checking - potential case when no data will be present */
-		if ((totvert == 0) || (totface == 0)) {
+		if ((totvert == 0) || (tottri == 0)) {
 			printf("WARNING: no geometry data converted for Mesh Collision Shape (ob = %s)\n", ob->id.name + 2);
 		}
 		else {
 			rbMeshData *mdata;
 			int i;
-			
-			/* count triangles */
-			for (i = 0; i < totface; i++) {
-				(mface[i].v4) ? (tottris += 2) : (tottris += 1);
-			}
 
 			/* init mesh data for collision shape */
-			mdata = RB_trimesh_data_new(tottris, totvert);
+			mdata = RB_trimesh_data_new(tottri, totvert);
 			
 			RB_trimesh_add_vertices(mdata, (float *)mvert, totvert, sizeof(MVert));
 
 			/* loop over all faces, adding them as triangles to the collision shape
 			 * (so for some faces, more than triangle will get added)
 			 */
-			for (i = 0; (i < totface) && (mface) && (mvert); i++, mface++) {
-				/* add first triangle - verts 1,2,3 */
-				RB_trimesh_add_triangle_indices(mdata, triangle_index, mface->v1, mface->v2, mface->v3);
-				triangle_index++;
+			if (mvert && looptri) {
+				for (i = 0; i < tottri; i++) {
+					/* add first triangle - verts 1,2,3 */
+					const MLoopTri *lt = &looptri[i];
+					int vtri[3];
 
-				/* add second triangle if needed - verts 1,3,4 */
-				if (mface->v4) {
-					RB_trimesh_add_triangle_indices(mdata, triangle_index, mface->v1, mface->v3, mface->v4);
-					triangle_index++;
+					vtri[0] = mloop[lt->tri[0]].v;
+					vtri[1] = mloop[lt->tri[1]].v;
+					vtri[2] = mloop[lt->tri[2]].v;
+
+					RB_trimesh_add_triangle_indices(mdata, i, UNPACK3(vtri));
 				}
 			}
+			
 			RB_trimesh_finish(mdata);
 
 			/* construct collision shape
@@ -440,17 +438,16 @@ static void rigidbody_validate_sim_shape(Object *ob, bool rebuild)
 			new_shape = rigidbody_get_shape_trimesh_from_mesh(ob);
 			break;
 	}
+	/* use box shape if we can't fall back to old shape */
+	if (new_shape == NULL && rbo->physics_shape == NULL) {
+		new_shape = RB_shape_new_box(size[0], size[1], size[2]);
+	}
 	/* assign new collision shape if creation was successful */
 	if (new_shape) {
 		if (rbo->physics_shape)
 			RB_shape_delete(rbo->physics_shape);
 		rbo->physics_shape = new_shape;
 		RB_shape_set_margin(rbo->physics_shape, RBO_GET_MARGIN(rbo));
-	}
-	/* use box shape if we can't fall back to old shape */
-	else if (rbo->physics_shape == NULL) {
-		rbo->shape = RB_SHAPE_BOX;
-		rigidbody_validate_sim_shape(ob, true);
 	}
 }
 
@@ -513,22 +510,24 @@ void BKE_rigidbody_calc_volume(Object *ob, float *r_vol)
 			if (ob->type == OB_MESH) {
 				DerivedMesh *dm = rigidbody_get_mesh(ob);
 				MVert *mvert;
-				MFace *mface;
-				int totvert, totface;
+				const MLoopTri *lt = NULL;
+				int totvert, tottri = 0;
+				const MLoop *mloop = NULL;
 				
 				/* ensure mesh validity, then grab data */
 				if (dm == NULL)
 					return;
 			
-				DM_ensure_tessface(dm);
+				DM_ensure_looptri(dm);
 			
 				mvert   = dm->getVertArray(dm);
 				totvert = dm->getNumVerts(dm);
-				mface   = dm->getTessFaceArray(dm);
-				totface = dm->getNumTessFaces(dm);
+				lt = dm->getLoopTriArray(dm);
+				tottri = dm->getNumLoopTri(dm);
+				mloop = dm->getLoopArray(dm);
 				
-				if (totvert > 0 && totface > 0) {
-					BKE_mesh_calc_volume(mvert, totvert, mface, totface, &volume, NULL);
+				if (totvert > 0 && tottri > 0) {
+					BKE_mesh_calc_volume(mvert, totvert, lt, tottri, mloop, &volume, NULL);
 				}
 				
 				/* cleanup temp data */
@@ -555,14 +554,14 @@ void BKE_rigidbody_calc_volume(Object *ob, float *r_vol)
 	if (r_vol) *r_vol = volume;
 }
 
-void BKE_rigidbody_calc_center_of_mass(Object *ob, float r_com[3])
+void BKE_rigidbody_calc_center_of_mass(Object *ob, float r_center[3])
 {
 	RigidBodyOb *rbo = ob->rigidbody_object;
 
 	float size[3]  = {1.0f, 1.0f, 1.0f};
 	float height = 1.0f;
 
-	zero_v3(r_com);
+	zero_v3(r_center);
 
 	/* if automatically determining dimensions, use the Object's boundbox
 	 *	- assume that all quadrics are standing upright on local z-axis
@@ -587,7 +586,7 @@ void BKE_rigidbody_calc_center_of_mass(Object *ob, float r_com[3])
 			/* cone is geometrically centered on the median,
 			 * center of mass is 1/4 up from the base
 			 */
-			r_com[2] = -0.25f * height;
+			r_center[2] = -0.25f * height;
 			break;
 
 		case RB_SHAPE_CONVEXH:
@@ -596,22 +595,24 @@ void BKE_rigidbody_calc_center_of_mass(Object *ob, float r_com[3])
 			if (ob->type == OB_MESH) {
 				DerivedMesh *dm = rigidbody_get_mesh(ob);
 				MVert *mvert;
-				MFace *mface;
-				int totvert, totface;
+				const MLoopTri *looptri;
+				int totvert, tottri;
+				const MLoop *mloop;
 				
 				/* ensure mesh validity, then grab data */
 				if (dm == NULL)
 					return;
 			
-				DM_ensure_tessface(dm);
+				DM_ensure_looptri(dm);
 			
 				mvert   = dm->getVertArray(dm);
 				totvert = dm->getNumVerts(dm);
-				mface   = dm->getTessFaceArray(dm);
-				totface = dm->getNumTessFaces(dm);
+				looptri = dm->getLoopTriArray(dm);
+				tottri = dm->getNumLoopTri(dm);
+				mloop = dm->getLoopArray(dm);
 				
-				if (totvert > 0 && totface > 0) {
-					BKE_mesh_calc_volume(mvert, totvert, mface, totface, NULL, r_com);
+				if (totvert > 0 && tottri > 0) {
+					BKE_mesh_calc_volume(mvert, totvert, looptri, tottri, mloop, NULL, r_center);
 				}
 				
 				/* cleanup temp data */
@@ -1158,7 +1159,7 @@ static void rigidbody_update_ob_array(RigidBodyWorld *rbw)
 	GroupObject *go;
 	int i, n;
 
-	n = BLI_countlist(&rbw->group->gobject);
+	n = BLI_listbase_count(&rbw->group->gobject);
 
 	if (rbw->numbodies != n) {
 		rbw->numbodies = n;
@@ -1499,7 +1500,7 @@ void BKE_rigidbody_rebuild_world(Scene *scene, float ctime)
 	cache = rbw->pointcache;
 
 	/* flag cache as outdated if we don't have a world or number of objects in the simulation has changed */
-	if (rbw->physics_world == NULL || rbw->numbodies != BLI_countlist(&rbw->group->gobject)) {
+	if (rbw->physics_world == NULL || rbw->numbodies != BLI_listbase_count(&rbw->group->gobject)) {
 		cache->flag |= PTCACHE_OUTDATED;
 	}
 
@@ -1592,7 +1593,7 @@ struct RigidBodyCon *BKE_rigidbody_copy_constraint(Object *ob) { return NULL; }
 void BKE_rigidbody_relink_constraint(RigidBodyCon *rbc) {}
 void BKE_rigidbody_validate_sim_world(Scene *scene, RigidBodyWorld *rbw, bool rebuild) {}
 void BKE_rigidbody_calc_volume(Object *ob, float *r_vol) { if (r_vol) *r_vol = 0.0f; }
-void BKE_rigidbody_calc_center_of_mass(Object *ob, float r_com[3]) { zero_v3(r_com); }
+void BKE_rigidbody_calc_center_of_mass(Object *ob, float r_center[3]) { zero_v3(r_center); }
 struct RigidBodyWorld *BKE_rigidbody_create_world(Scene *scene) { return NULL; }
 struct RigidBodyWorld *BKE_rigidbody_world_copy(RigidBodyWorld *rbw) { return NULL; }
 void BKE_rigidbody_world_groups_relink(struct RigidBodyWorld *rbw) {}
@@ -1613,3 +1614,51 @@ void BKE_rigidbody_do_simulation(Scene *scene, float ctime) {}
 #endif
 
 #endif  /* WITH_BULLET */
+
+/* -------------------- */
+/* Depsgraph evaluation */
+
+void BKE_rigidbody_rebuild_sim(EvaluationContext *UNUSED(eval_ctx),
+                               Scene *scene)
+{
+	float ctime = BKE_scene_frame_get(scene);
+
+	if (G.debug & G_DEBUG_DEPSGRAPH) {
+		printf("%s at %f\n", __func__, ctime);
+	}
+
+	/* rebuild sim data (i.e. after resetting to start of timeline) */
+	if (BKE_scene_check_rigidbody_active(scene)) {
+		BKE_rigidbody_rebuild_world(scene, ctime);
+	}
+}
+
+void BKE_rigidbody_eval_simulation(EvaluationContext *UNUSED(eval_ctx),
+                                   Scene *scene)
+{
+	float ctime = BKE_scene_frame_get(scene);
+
+	if (G.debug & G_DEBUG_DEPSGRAPH) {
+		printf("%s at %f\n", __func__, ctime);
+	}
+
+	/* evaluate rigidbody sim */
+	if (BKE_scene_check_rigidbody_active(scene)) {
+		BKE_rigidbody_do_simulation(scene, ctime);
+	}
+}
+
+void BKE_rigidbody_object_sync_transforms(EvaluationContext *UNUSED(eval_ctx),
+                                          Scene *scene,
+                                          Object *ob)
+{
+	RigidBodyWorld *rbw = scene->rigidbody_world;
+	float ctime = BKE_scene_frame_get(scene);
+
+	if (G.debug & G_DEBUG_DEPSGRAPH) {
+		printf("%s on %s\n", __func__, ob->id.name);
+	}
+
+	/* read values pushed into RBO from sim/cache... */
+	BKE_rigidbody_sync_transforms(rbw, ob, ctime);
+}

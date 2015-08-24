@@ -53,6 +53,9 @@
 #include "bpy_util.h"
 #include "bpy_library.h"
 
+#include "../generic/py_capi_utils.h"
+#include "../generic/python_utildefines.h"
+
 /* nifty feature. swap out strings for RNA data */
 #define USE_RNA_DATABLOCKS
 
@@ -187,10 +190,17 @@ static PyObject *bpy_lib_load(PyObject *UNUSED(self), PyObject *args, PyObject *
 	static const char *kwlist[] = {"filepath", "link", "relative", NULL};
 	BPy_Library *ret;
 	const char *filename = NULL;
-	int is_rel = 0, is_link = 0;
+	bool is_rel = false, is_link = false;
 
-	if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|ii:load", (char **)kwlist, &filename, &is_link, &is_rel))
+	if (!PyArg_ParseTupleAndKeywords(
+	        args, kwds,
+	        "s|O&O&:load", (char **)kwlist,
+	        &filename,
+	        PyC_ParseBool, &is_link,
+	        PyC_ParseBool, &is_rel))
+	{
 		return NULL;
+	}
 
 	ret = PyObject_New(BPy_Library, &bpy_lib_Type);
 
@@ -274,10 +284,9 @@ static PyObject *bpy_lib_enter(BPy_Library *self, PyObject *UNUSED(args))
 
 	/* return pair */
 	ret = PyTuple_New(2);
-
-	PyTuple_SET_ITEM(ret, 0, (PyObject *)self_from);
-
-	PyTuple_SET_ITEM(ret, 1, (PyObject *)self);
+	PyTuple_SET_ITEMS(ret,
+	        (PyObject *)self_from,
+	        (PyObject *)self);
 	Py_INCREF(self);
 
 	BKE_reports_clear(&reports);
@@ -362,8 +371,7 @@ static PyObject *bpy_lib_exit(BPy_Library *self, PyObject *UNUSED(args))
 								/* just warn for now */
 								/* err = -1; */
 #ifdef USE_RNA_DATABLOCKS
-								item = Py_None;
-								Py_INCREF(item);
+								item = Py_INCREF_RET(Py_None);
 #endif
 							}
 
@@ -375,8 +383,7 @@ static PyObject *bpy_lib_exit(BPy_Library *self, PyObject *UNUSED(args))
 							PyErr_Clear();
 
 #ifdef USE_RNA_DATABLOCKS
-							item = Py_None;
-							Py_INCREF(item);
+							item = Py_INCREF_RET(Py_None);
 #endif
 						}
 

@@ -20,14 +20,16 @@
 import bpy
 from bpy.types import Menu, Panel, UIList
 
-from bpy.types import (Brush,
-                       Lamp,
-                       Material,
-                       Object,
-                       ParticleSettings,
-                       FreestyleLineStyle,
-                       Texture,
-                       World)
+from bpy.types import (
+        Brush,
+        FreestyleLineStyle,
+        Lamp,
+        Material,
+        Object,
+        ParticleSettings,
+        Texture,
+        World,
+        )
 
 from rna_prop_ui import PropertyPanel
 
@@ -70,7 +72,7 @@ class TEXTURE_UL_texslots(UIList):
                 layout.label(text="", icon_value=icon)
             if tex and isinstance(item, bpy.types.MaterialTextureSlot):
                 layout.prop(ma, "use_textures", text="", index=index)
-        elif self.layout_type in {'GRID'}:
+        elif self.layout_type == 'GRID':
             layout.alignment = 'CENTER'
             layout.label(text="", icon_value=icon)
 
@@ -114,7 +116,7 @@ def id_tex_datablock(bid):
     return bid
 
 
-class TextureButtonsPanel():
+class TextureButtonsPanel:
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
     bl_context = "texture"
@@ -133,8 +135,8 @@ class TEXTURE_PT_context_texture(TextureButtonsPanel, Panel):
     @classmethod
     def poll(cls, context):
         engine = context.scene.render.engine
-        #if not (hasattr(context, "texture_slot") or hasattr(context, "texture_node")):
-            #return False
+        # if not (hasattr(context, "texture_slot") or hasattr(context, "texture_node")):
+        #     return False
         return ((context.material or
                  context.world or
                  context.lamp or
@@ -172,14 +174,13 @@ class TEXTURE_PT_context_texture(TextureButtonsPanel, Panel):
             if user or pin_id:
                 layout.separator()
 
-                split = layout.split(percentage=0.65)
-                col = split.column()
+                row = layout.row()
 
                 if pin_id:
-                    col.template_ID(space, "pin_id")
+                    row.template_ID(space, "pin_id")
                 else:
                     propname = context.texture_user_property.identifier
-                    col.template_ID(user, propname, new="texture.new")
+                    row.template_ID(user, propname, new="texture.new")
 
                 if tex:
                     split = layout.split(percentage=0.2)
@@ -675,8 +676,7 @@ class TEXTURE_PT_musgrave(TextureTypePanel, Panel):
         col = split.column()
         if musgrave_type in {'HETERO_TERRAIN', 'RIDGED_MULTIFRACTAL', 'HYBRID_MULTIFRACTAL'}:
             col.prop(tex, "offset")
-        if musgrave_type in {'MULTIFRACTAL', 'RIDGED_MULTIFRACTAL', 'HYBRID_MULTIFRACTAL'}:
-            col.prop(tex, "noise_intensity", text="Intensity")
+        col.prop(tex, "noise_intensity", text="Intensity")
         if musgrave_type in {'RIDGED_MULTIFRACTAL', 'HYBRID_MULTIFRACTAL'}:
             col.prop(tex, "gain")
 
@@ -771,6 +771,9 @@ class TEXTURE_PT_voxeldata(TextureButtonsPanel, Panel):
         elif vd.file_format == 'SMOKE':
             layout.prop(vd, "domain_object")
             layout.prop(vd, "smoke_data_type")
+        elif vd.file_format == 'HAIR':
+            layout.prop(vd, "domain_object")
+            layout.prop(vd, "hair_data_type")
         elif vd.file_format == 'IMAGE_SEQUENCE':
             layout.template_ID(tex, "image", open="image.open")
             layout.template_image(tex, "image", tex.image_user, compact=True)
@@ -1161,7 +1164,8 @@ class TEXTURE_PT_influence(TextureSlotPanel, Panel):
             factor_but(col, "use_map_clump", "clump_factor", "Clump")
 
             col = split.column()
-            factor_but(col, "use_map_kink", "kink_factor", "Kink")
+            factor_but(col, "use_map_kink_amp", "kink_amp_factor", "Kink Amplitude")
+            factor_but(col, "use_map_kink_freq", "kink_freq_factor", "Kink Frequency")
             factor_but(col, "use_map_rough", "rough_factor", "Rough")
 
         elif isinstance(idblock, FreestyleLineStyle):

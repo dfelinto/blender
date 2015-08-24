@@ -27,8 +27,6 @@
 
 #include "../node_shader_util.h"
 
-#include "IMB_colormanagement.h"
-
 /* **************** OUTPUT ******************** */
 
 static bNodeSocketTemplate sh_node_tex_environment_in[] = {
@@ -44,8 +42,8 @@ static bNodeSocketTemplate sh_node_tex_environment_out[] = {
 static void node_shader_init_tex_environment(bNodeTree *UNUSED(ntree), bNode *node)
 {
 	NodeTexEnvironment *tex = MEM_callocN(sizeof(NodeTexEnvironment), "NodeTexEnvironment");
-	default_tex_mapping(&tex->base.tex_mapping, TEXMAP_TYPE_POINT);
-	default_color_mapping(&tex->base.color_mapping);
+	BKE_texture_mapping_default(&tex->base.tex_mapping, TEXMAP_TYPE_POINT);
+	BKE_texture_colormapping_default(&tex->base.color_mapping);
 	tex->color_space = SHD_COLORSPACE_COLOR;
 	tex->projection = SHD_PROJ_EQUIRECTANGULAR;
 	tex->iuser.frames = 1;
@@ -67,13 +65,22 @@ static int node_shader_gpu_tex_environment(GPUMaterial *mat, bNode *node, bNodeE
 	if (!ima)
 		return GPU_stack_link(mat, "node_tex_environment_empty", in, out);
 
-	if (!in[0].link)
-		in[0].link = GPU_builtin(GPU_VIEW_POSITION);
-
+	if (!in[0].link) {
+		GPUMatType type = GPU_Material_get_type(mat);
+		
+		if (type == GPU_MATERIAL_TYPE_MESH)
+			in[0].link = GPU_builtin(GPU_VIEW_POSITION);
+		else
+			GPU_link(mat, "background_transform_to_world", GPU_builtin(GPU_VIEW_POSITION), &in[0].link);
+	}
+	
 	node_shader_gpu_tex_mapping(mat, node, in, out);
 
-	ret = GPU_stack_link(mat, "node_tex_environment", in, out, GPU_image(ima, iuser, isdata));
-
+	if (tex->projection == SHD_PROJ_EQUIRECTANGULAR)
+		ret = GPU_stack_link(mat, "node_tex_environment_equirectangular", in, out, GPU_image(ima, iuser, isdata));
+	else
+		ret = GPU_stack_link(mat, "node_tex_environment_mirror_ball", in, out, GPU_image(ima, iuser, isdata));
+		
 	if (ret) {
 		ImBuf *ibuf = BKE_image_acquire_ibuf(ima, iuser, NULL);
 		if (ibuf && (ibuf->colormanage_flag & IMB_COLORMANAGE_IS_DATA) == 0 &&

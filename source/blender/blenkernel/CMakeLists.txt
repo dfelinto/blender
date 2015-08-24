@@ -28,6 +28,8 @@ set(INC
 	../blenfont
 	../blenlib
 	../blenloader
+	../blentranslation
+	../depsgraph
 	../gpu
 	../ikplugin
 	../imbuf
@@ -36,7 +38,9 @@ set(INC
 	../bmesh
 	../modifiers
 	../nodes
+	../physics
 	../render/extern/include
+	../../../intern/ghost
 	../../../intern/guardedalloc
 	../../../intern/glew-mx
 	../../../intern/iksolver/extern
@@ -44,8 +48,8 @@ set(INC
 	../../../intern/mikktspace
 	../../../intern/raskter
 	../../../intern/smoke/extern
-	../../../extern/libmv
 	../../../intern/atomic
+	../../../extern/libmv
 
 	# XXX - BAD LEVEL CALL WM_api.h
 	../windowmanager
@@ -58,12 +62,18 @@ set(INC_SYS
 
 set(SRC
 	intern/CCGSubSurf.c
+	intern/CCGSubSurf_legacy.c
+	intern/CCGSubSurf_opensubdiv.c
+	intern/CCGSubSurf_opensubdiv_converter.c
+	intern/CCGSubSurf_util.c
 	intern/DerivedMesh.c
 	intern/action.c
 	intern/addon.c
 	intern/anim.c
 	intern/anim_sys.c
+	intern/appdir.c
 	intern/armature.c
+	intern/armature_update.c
 	intern/autoexec.c
 	intern/blender.c
 	intern/bmfont.c
@@ -83,6 +93,7 @@ set(SRC
 	intern/curve.c
 	intern/customdata.c
 	intern/customdata_file.c
+	intern/data_transfer.c
 	intern/deform.c
 	intern/depsgraph.c
 	intern/displist.c
@@ -103,7 +114,6 @@ set(SRC
 	intern/idprop.c
 	intern/image.c
 	intern/image_gen.c
-	intern/implicit.c
 	intern/ipo.c
 	intern/key.c
 	intern/lamp.c
@@ -116,9 +126,11 @@ set(SRC
 	intern/mask_rasterize.c
 	intern/material.c
 	intern/mball.c
+	intern/mball_tessellate.c
 	intern/mesh.c
 	intern/mesh_evaluate.c
 	intern/mesh_mapping.c
+	intern/mesh_remap.c
 	intern/mesh_validate.c
 	intern/modifier.c
 	intern/modifiers_bmesh.c
@@ -129,10 +141,14 @@ set(SRC
 	intern/object.c
 	intern/object_deform.c
 	intern/object_dupli.c
+	intern/object_update.c
 	intern/ocean.c
+	intern/outliner_treehash.c
 	intern/packedFile.c
 	intern/paint.c
 	intern/particle.c
+	intern/particle_child.c
+	intern/particle_distribute.c
 	intern/particle_system.c
 	intern/pbvh.c
 	intern/pbvh_bmesh.c
@@ -165,7 +181,6 @@ set(SRC
 	intern/tracking_solver.c
 	intern/tracking_stabilize.c
 	intern/tracking_util.c
-	intern/treehash.c
 	intern/unit.c
 	intern/world.c
 	intern/writeavi.c
@@ -176,6 +191,7 @@ set(SRC
 	BKE_addon.h
 	BKE_anim.h
 	BKE_animsys.h
+	BKE_appdir.h
 	BKE_armature.h
 	BKE_autoexec.h
 	BKE_blender.h
@@ -198,10 +214,13 @@ set(SRC
 	BKE_curve.h
 	BKE_customdata.h
 	BKE_customdata_file.h
+	BKE_data_transfer.h
 	BKE_deform.h
 	BKE_depsgraph.h
 	BKE_displist.h
 	BKE_dynamicpaint.h
+	BKE_editmesh.h
+	BKE_editmesh_bvh.h
 	BKE_effect.h
 	BKE_fcurve.h
 	BKE_fluidsim.h
@@ -225,8 +244,10 @@ set(SRC
 	BKE_mask.h
 	BKE_material.h
 	BKE_mball.h
+	BKE_mball_tessellate.h
 	BKE_mesh.h
 	BKE_mesh_mapping.h
+	BKE_mesh_remap.h
 	BKE_modifier.h
 	BKE_movieclip.h
 	BKE_multires.h
@@ -235,6 +256,7 @@ set(SRC
 	BKE_object.h
 	BKE_object_deform.h
 	BKE_ocean.h
+	BKE_outliner_treehash.h
 	BKE_packedFile.h
 	BKE_paint.h
 	BKE_particle.h
@@ -255,12 +277,9 @@ set(SRC
 	BKE_speaker.h
 	BKE_subsurf.h
 	BKE_suggestions.h
-	BKE_editmesh.h
-	BKE_editmesh_bvh.h
 	BKE_text.h
 	BKE_texture.h
 	BKE_tracking.h
-	BKE_treehash.h
 	BKE_unit.h
 	BKE_utildefines.h
 	BKE_world.h
@@ -271,16 +290,33 @@ set(SRC
 	nla_private.h
 	tracking_private.h
 	intern/CCGSubSurf.h
+	intern/CCGSubSurf_inline.h
+	intern/CCGSubSurf_intern.h
 	intern/pbvh_intern.h
+	intern/data_transfer_intern.h
 )
+
+if(WITH_BINRELOC)
+	list(APPEND INC_SYS
+		${BINRELOC_INCLUDE_DIRS}
+	)
+	add_definitions(-DWITH_BINRELOC)
+endif()
 
 add_definitions(${GL_DEFINITIONS})
 
-if(WITH_AUDASPACE)
+if(WIN32)
 	list(APPEND INC
-		../../../intern/audaspace/intern
+		../../../intern/utfconv
 	)
-	add_definitions(-DWITH_AUDASPACE)
+endif()
+
+if(WITH_AUDASPACE)
+	add_definitions(${AUDASPACE_DEFINITIONS})
+
+	list(APPEND INC_SYS
+		${AUDASPACE_C_INCLUDE_DIRS}
+	)
 endif()
 
 if(WITH_BULLET)
@@ -399,9 +435,16 @@ if(WITH_JACK)
 endif()
 
 if(WITH_LZO)
-	list(APPEND INC_SYS
-		../../../extern/lzo/minilzo
-	)
+	if(WITH_SYSTEM_LZO)
+		list(APPEND INC_SYS
+			${LZO_INCLUDE_DIR}
+		)
+		add_definitions(-DWITH_SYSTEM_LZO)
+	else()
+		list(APPEND INC_SYS
+			../../../extern/lzo/minilzo
+		)
+	endif()
 	add_definitions(-DWITH_LZO)
 endif()
 
@@ -428,6 +471,20 @@ if(WITH_LIBMV)
 	add_definitions(-DWITH_LIBMV)
 endif()
 
+if(WITH_LIBMV_WERROR)
+	if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_C_COMPILER_ID MATCHES "Clang")
+		set_source_files_properties(intern/tracking.c
+		                            intern/tracking_auto.c
+		                            intern/tracking_detect.c
+		                            intern/tracking_plane_tracker.c
+		                            intern/tracking_region_tracker.c
+		                            intern/tracking_solver.c
+		                            intern/tracking_stabilize.c
+		                            intern/tracking_util.c
+		                            PROPERTIES COMPILE_FLAGS -Werror)
+	endif()
+endif()
+
 if(WITH_FFTW3)
 	list(APPEND INC_SYS
 		${FFTW3_INCLUDE_DIRS}
@@ -443,9 +500,31 @@ if(WITH_FREESTYLE)
 	add_definitions(-DWITH_FREESTYLE)
 endif()
 
+if(WITH_OPENSUBDIV)
+	add_definitions(-DWITH_OPENSUBDIV)
+	list(APPEND INC_SYS
+		../../../intern/opensubdiv
+		${OPENSUBDIV_INCLUDE_DIRS}
+	)
+	if(WITH_SUBSURF_WERROR)
+		if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_C_COMPILER_ID MATCHES "Clang")
+			set_source_files_properties(intern/CCGSubSurf.c
+			                            intern/CCGSubSurf_legacy.c
+			                            intern/CCGSubSurf_opensubdiv.c
+			                            intern/CCGSubSurf_opensubdiv_converter.c
+			                            intern/CCGSubSurf_util.c
+			                            PROPERTIES COMPILE_FLAGS -Werror)
+		endif()
+	endif()
+endif()
+
 ## Warnings as errors, this is too strict!
 #if(MSVC)
 #	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /WX")
 #endif()
+
+if(WITH_LEGACY_DEPSGRAPH)
+	add_definitions(-DWITH_LEGACY_DEPSGRAPH)
+endif()
 
 blender_add_lib(bf_blenkernel "${SRC}" "${INC}" "${INC_SYS}")

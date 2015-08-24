@@ -29,8 +29,6 @@
  *  \ingroup edutil
  */
 
-
-
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
@@ -42,11 +40,12 @@
 
 #include "BLI_utildefines.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_blender.h"
 #include "BKE_context.h"
 #include "BKE_global.h"
+#include "BKE_main.h"
 #include "BKE_screen.h"
 
 #include "ED_armature.h"
@@ -109,7 +108,7 @@ void ED_undo_push(bContext *C, const char *str)
 		/* do nothing for now */
 	}
 	else {
-		BKE_write_undo(C, str);
+		BKE_undo_write(C, str);
 	}
 
 	if (wm->file_saved) {
@@ -124,6 +123,7 @@ static int ed_undo_step(bContext *C, int step, const char *undoname)
 {
 	wmWindowManager *wm = CTX_wm_manager(C);
 	wmWindow *win = CTX_wm_window(C);
+	Main *bmain = CTX_data_main(C);
 	Scene *scene = CTX_data_scene(C);
 	Object *obedit = CTX_data_edit_object(C);
 	Object *obact = CTX_data_active_object(C);
@@ -146,7 +146,7 @@ static int ed_undo_step(bContext *C, int step, const char *undoname)
 		if ((obact && (obact->mode & OB_MODE_TEXTURE_PAINT)) || (sima->mode == SI_MODE_PAINT)) {
 			if (!ED_undo_paint_step(C, UNDO_PAINT_IMAGE, step, undoname) && undoname) {
 				if (U.uiflag & USER_GLOBALUNDO) {
-					ED_viewport_render_kill_jobs(C, true);
+					ED_viewport_render_kill_jobs(wm, bmain, true);
 					BKE_undo_name(C, undoname);
 				}
 			}
@@ -199,7 +199,7 @@ static int ed_undo_step(bContext *C, int step, const char *undoname)
 			/* for example, texface stores image pointers */
 			undo_editmode_clear();
 			
-			ED_viewport_render_kill_jobs(C, true);
+			ED_viewport_render_kill_jobs(wm, bmain, true);
 
 			if (undoname)
 				BKE_undo_name(C, undoname);
@@ -244,7 +244,7 @@ void ED_undo_pop_op(bContext *C, wmOperator *op)
 }
 
 /* name optionally, function used to check for operator redo panel */
-int ED_undo_valid(const bContext *C, const char *undoname)
+bool ED_undo_is_valid(const bContext *C, const char *undoname)
 {
 	Object *obedit = CTX_data_edit_object(C);
 	Object *obact = CTX_data_active_object(C);
@@ -263,7 +263,7 @@ int ED_undo_valid(const bContext *C, const char *undoname)
 	}
 	else if (obedit) {
 		if (OB_TYPE_SUPPORT_EDITMODE(obedit->type)) {
-			return undo_editmode_valid(undoname);
+			return undo_editmode_is_valid(undoname);
 		}
 	}
 	else {
@@ -271,19 +271,19 @@ int ED_undo_valid(const bContext *C, const char *undoname)
 		/* if below tests fail, global undo gets executed */
 		
 		if (obact && obact->mode & OB_MODE_TEXTURE_PAINT) {
-			if (ED_undo_paint_valid(UNDO_PAINT_IMAGE, undoname))
+			if (ED_undo_paint_is_valid(UNDO_PAINT_IMAGE, undoname))
 				return 1;
 		}
 		else if (obact && obact->mode & OB_MODE_SCULPT) {
-			if (ED_undo_paint_valid(UNDO_PAINT_MESH, undoname))
+			if (ED_undo_paint_is_valid(UNDO_PAINT_MESH, undoname))
 				return 1;
 		}
 		else if (obact && obact->mode & OB_MODE_PARTICLE_EDIT) {
-			return PE_undo_valid(CTX_data_scene(C));
+			return PE_undo_is_valid(CTX_data_scene(C));
 		}
 		
 		if (U.uiflag & USER_GLOBALUNDO) {
-			return BKE_undo_valid(undoname);
+			return BKE_undo_is_valid(undoname);
 		}
 	}
 	return 0;
@@ -379,7 +379,7 @@ int ED_undo_operator_repeat(bContext *C, struct wmOperator *op)
 		{
 			int retval;
 
-			ED_viewport_render_kill_jobs(C, true);
+			ED_viewport_render_kill_jobs(wm, CTX_data_main(C), true);
 
 			if (G.debug & G_DEBUG)
 				printf("redo_cb: operator redo %s\n", op->type->name);
@@ -487,7 +487,8 @@ static int get_undo_system(bContext *C)
 static EnumPropertyItem *rna_undo_itemf(bContext *C, int undosys, int *totitem)
 {
 	EnumPropertyItem item_tmp = {0}, *item = NULL;
-	int active, i = 0;
+	int i = 0;
+	bool active;
 	
 	while (true) {
 		const char *name = NULL;
@@ -580,10 +581,10 @@ static int undo_history_exec(bContext *C, wmOperator *op)
 			WM_event_add_notifier(C, NC_GEOM | ND_DATA, NULL);
 		}
 		else if (undosys == UNDOSYSTEM_IMAPAINT) {
-			ED_undo_paint_step_num(C, UNDO_PAINT_IMAGE, item );
+			ED_undo_paint_step_num(C, UNDO_PAINT_IMAGE, item);
 		}
 		else {
-			ED_viewport_render_kill_jobs(C, true);
+			ED_viewport_render_kill_jobs(CTX_wm_manager(C), CTX_data_main(C), true);
 			BKE_undo_number(C, item);
 			WM_event_add_notifier(C, NC_SCENE | ND_LAYER_CONTENT, CTX_data_scene(C));
 		}

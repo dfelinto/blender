@@ -20,11 +20,13 @@
 
 import bpy
 from bpy.types import Operator
-from bpy.props import (StringProperty,
-                       BoolProperty,
-                       EnumProperty,
-                       IntProperty,
-                       FloatProperty)
+from bpy.props import (
+        StringProperty,
+        BoolProperty,
+        EnumProperty,
+        IntProperty,
+        FloatProperty,
+        )
 
 
 class SelectPattern(Operator):
@@ -250,7 +252,7 @@ class SubdivisionSet(Operator):
                     if not relative:
                         if level > mod.total_levels:
                             sub = level - mod.total_levels
-                            for i in range (0, sub):
+                            for i in range(sub):
                                 bpy.ops.object.multires_subdivide(modifier="Multires")
 
                         if obj.mode == 'SCULPT':
@@ -577,7 +579,8 @@ class MakeDupliFace(Operator):
     bl_label = "Make Dupli-Face"
     bl_options = {'REGISTER', 'UNDO'}
 
-    def _main(self, context):
+    @staticmethod
+    def _main(context):
         from mathutils import Vector
 
         SCALE_FAC = 0.01
@@ -640,6 +643,9 @@ class MakeDupliFace(Operator):
             ob_inst.parent = ob_new
             ob_new.use_dupli_faces_scale = True
             ob_new.dupli_faces_scale = 1.0 / SCALE_FAC
+
+            ob_inst.select = True
+            ob_new.select = True
 
     def execute(self, context):
         self._main(context)
@@ -922,7 +928,7 @@ class LodGenerate(Operator):
             lod.location.y = ob.location.y + 3.0 * i
 
             if i == 1:
-                modifier = lod.modifiers.new("lod_decimate", "DECIMATE")
+                modifier = lod.modifiers.new("lod_decimate", 'DECIMATE')
             else:
                 modifier = lod.modifiers[-1]
 

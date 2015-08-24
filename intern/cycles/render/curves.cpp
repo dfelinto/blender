@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #include "device.h"
@@ -103,7 +103,10 @@ CurveSystemManager::~CurveSystemManager()
 {
 }
 
-void CurveSystemManager::device_update(Device *device, DeviceScene *dscene, Scene *scene, Progress& progress)
+void CurveSystemManager::device_update(Device *device,
+                                       DeviceScene *dscene,
+                                       Scene * /*scene*/,
+                                       Progress& progress)
 {
 	if(!need_update)
 		return;
@@ -144,7 +147,8 @@ void CurveSystemManager::device_update(Device *device, DeviceScene *dscene, Scen
 	need_update = false;
 }
 
-void CurveSystemManager::device_free(Device *device, DeviceScene *dscene)
+void CurveSystemManager::device_free(Device * /*device*/,
+                                     DeviceScene * /*dscene*/)
 {
 
 }
@@ -174,7 +178,7 @@ bool CurveSystemManager::modified_mesh(const CurveSystemManager& CurveSystemMana
 		use_curves == CurveSystemManager.use_curves);
 }
 
-void CurveSystemManager::tag_update(Scene *scene)
+void CurveSystemManager::tag_update(Scene * /*scene*/)
 {
 	need_update = true;
 }

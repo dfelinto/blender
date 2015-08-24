@@ -23,6 +23,7 @@ set(INC
 	../../blenfont
 	../../blenkernel
 	../../blenlib
+	../../blentranslation
 	../../bmesh
 	../../gpu
 	../../imbuf
@@ -30,6 +31,7 @@ set(INC
 	../../makesrna
 	../../render/extern/include
 	../../windowmanager
+	../../depsgraph
 	../../../../intern/guardedalloc
 	../../../../intern/glew-mx
 	../../../../intern/smoke/extern
@@ -44,6 +46,7 @@ set(SRC
 	drawarmature.c
 	drawmesh.c
 	drawobject.c
+	drawsimdebug.c
 	drawvolume.c
 	space_view3d.c
 	view3d_buttons.c

@@ -150,7 +150,7 @@ void SceneExporter::writeNodes(Object *ob, Scene *sce)
 		if (!instance_controller_created) {
 			COLLADASW::InstanceGeometry instGeom(mSW);
 			instGeom.setUrl(COLLADASW::URI(COLLADABU::Utils::EMPTY_STRING, get_geometry_id(ob, this->export_settings->use_object_instantiation)));
-
+			instGeom.setName(translate_id(id_name(ob)));
 			InstanceWriter::add_material_bindings(instGeom.getBindMaterial(), ob, this->export_settings->active_uv_only);
 
 			instGeom.add();
@@ -210,7 +210,7 @@ void SceneExporter::writeNodes(Object *ob, Scene *sce)
 			//not ideal: add the target object name as another parameter. 
 			//No real mapping in the .dae
 			//Need support for multiple target objects also.
-			bConstraintTypeInfo *cti = BKE_constraint_typeinfo_get(con);
+			const bConstraintTypeInfo *cti = BKE_constraint_typeinfo_get(con);
 			ListBase targets = {NULL, NULL};
 			if (cti && cti->get_constraint_targets) {
 			

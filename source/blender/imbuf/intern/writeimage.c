@@ -33,6 +33,10 @@
 
 
 #include <stdio.h>
+#include <stdlib.h>
+
+#include "BLI_utildefines.h"
+#include "BLI_path_util.h"
 
 #include "IMB_imbuf_types.h"
 #include "IMB_imbuf.h"
@@ -41,28 +45,16 @@
 #include "IMB_colormanagement.h"
 #include "IMB_colormanagement_intern.h"
 
-#include "imbuf.h"
-
-static ImBuf *prepare_write_imbuf(ImFileType *type, ImBuf *ibuf)
+static ImBuf *prepare_write_imbuf(const ImFileType *type, ImBuf *ibuf)
 {
-	ImBuf *write_ibuf = ibuf;
-
-	if (type->flag & IM_FTYPE_FLOAT) {
-		/* pass */
-	}
-	else {
-		if (ibuf->rect == NULL && ibuf->rect_float) {
-			ibuf->rect_colorspace = colormanage_colorspace_get_roled(COLOR_ROLE_DEFAULT_BYTE);
-			IMB_rect_from_float(ibuf);
-		}
-	}
-
-	return write_ibuf;
+	return IMB_prepare_write_ImBuf((type->flag & IM_FTYPE_FLOAT), ibuf);
 }
 
 short IMB_saveiff(struct ImBuf *ibuf, const char *name, int flags)
 {
-	ImFileType *type;
+	const ImFileType *type;
+
+	BLI_assert(!BLI_path_is_rel(name));
 
 	if (ibuf == NULL) return (false);
 	ibuf->flags = flags;
@@ -88,3 +80,19 @@ short IMB_saveiff(struct ImBuf *ibuf, const char *name, int flags)
 	return false;
 }
 
+ImBuf *IMB_prepare_write_ImBuf(const bool isfloat, ImBuf *ibuf)
+{
+	ImBuf *write_ibuf = ibuf;
+
+	if (isfloat) {
+		/* pass */
+	}
+	else {
+		if (ibuf->rect == NULL && ibuf->rect_float) {
+			ibuf->rect_colorspace = colormanage_colorspace_get_roled(COLOR_ROLE_DEFAULT_BYTE);
+			IMB_rect_from_float(ibuf);
+		}
+	}
+
+	return write_ibuf;
+}

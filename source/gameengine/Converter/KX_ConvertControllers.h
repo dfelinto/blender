@@ -32,7 +32,7 @@
 #ifndef __KX_CONVERTCONTROLLERS_H__
 #define __KX_CONVERTCONTROLLERS_H__
 
-#include "KX_Python.h"
+#include "EXP_Python.h"
 
 void BL_ConvertControllers(
 	struct Object* blenderobject,
@@ -41,7 +41,7 @@ void BL_ConvertControllers(
 	int activeLayerBitInfo,
 	bool isInActiveLayer, 
 	class KX_BlenderSceneConverter* converter,
-    bool libloading
+	bool libloading
 );
 
 #endif  /* __KX_CONVERTCONTROLLERS_H__ */

@@ -85,7 +85,11 @@ void SCA_Joystick::OnNothing(SDL_Event* sdl_event)
 void SCA_Joystick::HandleEvents(void)
 {
 	SDL_Event		sdl_event;
-	
+
+	if (SDL_PollEvent == (void*)0) {
+		return;
+	}
+
 	int i;
 	for (i=0; i<m_joynum; i++) { /* could use JOYINDEX_MAX but no reason to */
 		if (SCA_Joystick::m_instance[i])
@@ -118,6 +122,12 @@ void SCA_Joystick::HandleEvents(void)
 #if 0	/* Not used yet */
 			case SDL_JOYBALLMOTION:
 				SCA_Joystick::m_instance[sdl_event.jball.which]->OnBallMotion(&sdl_event);
+				break;
+#endif
+#if SDL_VERSION_ATLEAST(2, 0, 0)
+			case SDL_JOYDEVICEADDED:
+			case SDL_JOYDEVICEREMOVED:
+				/* pass */
 				break;
 #endif
 			default:

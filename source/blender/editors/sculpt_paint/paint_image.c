@@ -45,13 +45,11 @@
 #include "BLI_utildefines.h"
 #include "BLI_threads.h"
 
-#include "PIL_time.h"
 
 #include "IMB_imbuf.h"
 #include "IMB_imbuf_types.h"
 
 #include "DNA_brush_types.h"
-#include "DNA_mesh_types.h"
 #include "DNA_node_types.h"
 #include "DNA_object_types.h"
 
@@ -62,15 +60,9 @@
 #include "BKE_image.h"
 #include "BKE_main.h"
 #include "BKE_material.h"
-#include "BKE_mesh.h"
 #include "BKE_node.h"
 #include "BKE_paint.h"
-#include "BKE_report.h"
-#include "BKE_scene.h"
 #include "BKE_texture.h"
-#include "BKE_colortools.h"
-
-#include "BKE_editmesh.h"
 
 #include "UI_view2d.h"
 
@@ -85,7 +77,6 @@
 
 #include "RNA_access.h"
 #include "RNA_define.h"
-#include "RNA_enum_types.h"
 
 #include "GPU_draw.h"
 #include "GPU_buffers.h"
@@ -101,7 +92,7 @@ typedef struct UndoImageTile {
 	struct UndoImageTile *next, *prev;
 
 	char idname[MAX_ID_NAME];  /* name instead of pointer*/
-	char ibufname[IB_FILENAME_SIZE];
+	char ibufname[IMB_FILENAME_SIZE];
 
 	union {
 		float        *fp;
@@ -167,9 +158,10 @@ static void undo_copy_tile(UndoImageTile *tile, ImBuf *tmpibuf, ImBuf *ibuf, Cop
 		}
 	}
 	else {
-		if (mode == RESTORE_COPY)
+		if (mode == RESTORE_COPY) {
 			IMB_rectcpy(tmpibuf, ibuf, 0, 0, tile->x * IMAPAINT_TILE_SIZE,
-		                tile->y * IMAPAINT_TILE_SIZE, IMAPAINT_TILE_SIZE, IMAPAINT_TILE_SIZE);
+			            tile->y * IMAPAINT_TILE_SIZE, IMAPAINT_TILE_SIZE, IMAPAINT_TILE_SIZE);
+		}
 		/* swap to the tmpbuf for easy copying */
 		if (ibuf->rect_float) {
 			SWAP(float *, tmpibuf->rect_float, tile->rect.fp);
@@ -201,7 +193,7 @@ void *image_undo_find_tile(Image *ima, ImBuf *ibuf, int x_tile, int y_tile, unsi
 	for (tile = lb->first; tile; tile = tile->next) {
 		if (tile->x == x_tile && tile->y == y_tile && ima->gen_type == tile->gen_type && ima->source == tile->source) {
 			if (tile->use_float == use_float) {
-				if (strcmp(tile->idname, ima->id.name) == 0 && strcmp(tile->ibufname, ibuf->name) == 0) {
+				if (STREQ(tile->idname, ima->id.name) && STREQ(tile->ibufname, ibuf->name)) {
 					if (mask) {
 						/* allocate mask if requested */
 						if (!tile->mask) {
@@ -223,7 +215,7 @@ void *image_undo_find_tile(Image *ima, ImBuf *ibuf, int x_tile, int y_tile, unsi
 	return NULL;
 }
 
-void *image_undo_push_tile(Image *ima, ImBuf *ibuf, ImBuf **tmpibuf, int x_tile, int y_tile, unsigned short **mask, bool **valid, bool proj)
+void *image_undo_push_tile(Image *ima, ImBuf *ibuf, ImBuf **tmpibuf, int x_tile, int y_tile, unsigned short **mask, bool **valid, bool proj, bool find_prev)
 {
 	ListBase *lb = undo_paint_push_get_list(UNDO_PAINT_IMAGE);
 	UndoImageTile *tile;
@@ -234,7 +226,7 @@ void *image_undo_push_tile(Image *ima, ImBuf *ibuf, ImBuf **tmpibuf, int x_tile,
 	/* check if tile is already pushed */
 
 	/* in projective painting we keep accounting of tiles, so if we need one pushed, just push! */
-	if (!proj) {
+	if (find_prev) {
 		data = image_undo_find_tile(ima, ibuf, x_tile, y_tile, mask, true);
 		if (data)
 			return data;
@@ -336,7 +328,7 @@ void ED_image_undo_restore(bContext *C, ListBase *lb)
 		short use_float;
 
 		/* find image based on name, pointer becomes invalid with global undo */
-		if (ima && strcmp(tile->idname, ima->id.name) == 0) {
+		if (ima && STREQ(tile->idname, ima->id.name)) {
 			/* ima is valid */
 		}
 		else {
@@ -345,7 +337,7 @@ void ED_image_undo_restore(bContext *C, ListBase *lb)
 
 		ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL);
 
-		if (ima && ibuf && strcmp(tile->ibufname, ibuf->name) != 0) {
+		if (ima && ibuf && !STREQ(tile->ibufname, ibuf->name)) {
 			/* current ImBuf filename was changed, probably current frame
 			 * was changed when painting on image sequence, rather than storing
 			 * full image user (which isn't so obvious, btw) try to find ImBuf with
@@ -453,7 +445,7 @@ void imapaint_region_tiles(ImBuf *ibuf, int x, int y, int w, int h, int *tx, int
 	*ty = (y >> IMAPAINT_TILE_BITS);
 }
 
-void ED_imapaint_dirty_region(Image *ima, ImBuf *ibuf, int x, int y, int w, int h)
+void ED_imapaint_dirty_region(Image *ima, ImBuf *ibuf, int x, int y, int w, int h, bool find_old)
 {
 	ImBuf *tmpibuf = NULL;
 	int tilex, tiley, tilew, tileh, tx, ty;
@@ -482,7 +474,7 @@ void ED_imapaint_dirty_region(Image *ima, ImBuf *ibuf, int x, int y, int w, int 
 
 	for (ty = tiley; ty <= tileh; ty++)
 		for (tx = tilex; tx <= tilew; tx++)
-			image_undo_push_tile(ima, ibuf, &tmpibuf, tx, ty, NULL, NULL, false);
+			image_undo_push_tile(ima, ibuf, &tmpibuf, tx, ty, NULL, NULL, false, find_old);
 
 	ibuf->userflags |= IB_BITMAPDIRTY;
 	
@@ -507,7 +499,7 @@ void imapaint_image_update(SpaceImage *sima, Image *image, ImBuf *ibuf, short te
 		int w = imapaintpartial.x2 - imapaintpartial.x1;
 		int h = imapaintpartial.y2 - imapaintpartial.y1;
 		/* Testing with partial update in uv editor too */
-		GPU_paint_update_image(image, imapaintpartial.x1, imapaintpartial.y1, w, h); //!texpaint);
+		GPU_paint_update_image(image, (sima ? &sima->iuser : NULL), imapaintpartial.x1, imapaintpartial.y1, w, h); //!texpaint);
 	}
 }
 
@@ -671,22 +663,24 @@ void paint_brush_color_get(struct Scene *scene, struct Brush *br, bool color_cor
 		copy_v3_v3(color, BKE_brush_secondary_color_get(scene, br));
 	else {
 		if (br->flag & BRUSH_USE_GRADIENT) {
+			float color_gr[4];
 			switch (br->gradient_stroke_mode) {
 				case BRUSH_GRADIENT_PRESSURE:
-					do_colorband(br->gradient, pressure, color);
+					do_colorband(br->gradient, pressure, color_gr);
 					break;
 				case BRUSH_GRADIENT_SPACING_REPEAT:
 				{
 					float coord = fmod(distance / br->gradient_spacing, 1.0);
-					do_colorband(br->gradient, coord, color);
+					do_colorband(br->gradient, coord, color_gr);
 					break;
 				}
 				case BRUSH_GRADIENT_SPACING_CLAMP:
 				{
-					do_colorband(br->gradient, distance / br->gradient_spacing, color);
+					do_colorband(br->gradient, distance / br->gradient_spacing, color_gr);
 					break;
 				}
 			}
+			copy_v3_v3(color, color_gr);
 		}
 		else
 			copy_v3_v3(color, BKE_brush_color_get(scene, br));
@@ -1065,7 +1059,7 @@ void ED_space_image_paint_update(wmWindowManager *wm, ToolSettings *settings)
 					enabled = true;
 
 	if (enabled) {
-		BKE_paint_init(&imapaint->paint, PAINT_CURSOR_TEXTURE_PAINT);
+		BKE_paint_init(&settings->unified_paint_settings, &imapaint->paint, PAINT_CURSOR_TEXTURE_PAINT);
 
 		paint_cursor_start_explicit(&imapaint->paint, wm, image_paint_poll);
 	}
@@ -1399,7 +1393,7 @@ static int texture_paint_toggle_exec(bContext *C, wmOperator *op)
 			if (ma && ma->texpaintslot)
 				ima = ma->texpaintslot[ma->paint_active_slot].ima;
 		}
-		else if (imapaint->mode == IMAGEPAINT_MODE_MATERIAL) {
+		else if (imapaint->mode == IMAGEPAINT_MODE_IMAGE) {
 			ima = imapaint->canvas;
 		}	
 		
@@ -1422,7 +1416,7 @@ static int texture_paint_toggle_exec(bContext *C, wmOperator *op)
 		
 		ob->mode |= mode_flag;
 
-		BKE_paint_init(&scene->toolsettings->imapaint.paint, PAINT_CURSOR_TEXTURE_PAINT);
+		BKE_paint_init(&scene->toolsettings->unified_paint_settings, &imapaint->paint, PAINT_CURSOR_TEXTURE_PAINT);
 
 		if (U.glreslimit != 0)
 			GPU_free_images();

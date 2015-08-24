@@ -72,6 +72,13 @@ extern EnumPropertyItem normal_space_items[];
 extern EnumPropertyItem normal_swizzle_items[];
 extern EnumPropertyItem bake_save_mode_items[];
 
+extern EnumPropertyItem views_format_items[];
+extern EnumPropertyItem views_format_multilayer_items[];
+extern EnumPropertyItem views_format_multiview_items[];
+extern EnumPropertyItem stereo3d_display_items[];
+extern EnumPropertyItem stereo3d_anaglyph_type_items[];
+extern EnumPropertyItem stereo3d_interlace_type_items[];
+
 extern EnumPropertyItem exr_codec_items[];
 extern EnumPropertyItem color_sets_items[];
 
@@ -125,6 +132,7 @@ extern EnumPropertyItem object_axis_unsigned_items[];
 extern EnumPropertyItem controller_type_items[];
 
 extern EnumPropertyItem render_pass_type_items[];
+extern EnumPropertyItem render_pass_debug_type_items[];
 
 extern EnumPropertyItem keymap_propvalue_items[];
 
@@ -145,6 +153,8 @@ extern EnumPropertyItem gameproperty_type_items[];
 extern EnumPropertyItem viewport_shade_items[];
 
 extern EnumPropertyItem navigation_mode_items[];
+
+extern EnumPropertyItem file_sort_items[];
 
 int rna_node_tree_type_to_enum(struct bNodeTreeType *typeinfo);
 int rna_node_tree_idname_to_enum(const char *idname);
@@ -183,6 +193,14 @@ extern EnumPropertyItem linestyle_thickness_modifier_type_items[];
 extern EnumPropertyItem linestyle_geometry_modifier_type_items[];
 
 extern EnumPropertyItem window_cursor_items[];
+
+extern EnumPropertyItem DT_method_vertex_items[];
+extern EnumPropertyItem DT_method_edge_items[];
+extern EnumPropertyItem DT_method_loop_items[];
+extern EnumPropertyItem DT_method_poly_items[];
+extern EnumPropertyItem DT_mix_mode_items[];
+extern EnumPropertyItem DT_layers_select_src_items[];
+extern EnumPropertyItem DT_layers_select_dst_items[];
 
 struct bContext;
 struct PointerRNA;

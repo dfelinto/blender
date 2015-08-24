@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 CCL_NAMESPACE_BEGIN
@@ -19,11 +19,13 @@ CCL_NAMESPACE_BEGIN
 ccl_device_inline void debug_data_init(DebugData *debug_data)
 {
 	debug_data->num_bvh_traversal_steps = 0;
+	debug_data->num_bvh_traversed_instances = 0;
+	debug_data->num_ray_bounces = 0;
 }
 
 ccl_device_inline void kernel_write_debug_passes(KernelGlobals *kg,
                                                  ccl_global float *buffer,
-                                                 PathState *state,
+                                                 ccl_addr_space PathState *state,
                                                  DebugData *debug_data,
                                                  int sample)
 {
@@ -32,6 +34,16 @@ ccl_device_inline void kernel_write_debug_passes(KernelGlobals *kg,
 		kernel_write_pass_float(buffer + kernel_data.film.pass_bvh_traversal_steps,
 		                        sample,
 		                        debug_data->num_bvh_traversal_steps);
+	}
+	if(flag & PASS_BVH_TRAVERSED_INSTANCES) {
+		kernel_write_pass_float(buffer + kernel_data.film.pass_bvh_traversed_instances,
+		                        sample,
+		                        debug_data->num_bvh_traversed_instances);
+	}
+	if(flag & PASS_RAY_BOUNCES) {
+		kernel_write_pass_float(buffer + kernel_data.film.pass_ray_bounces,
+		                        sample,
+		                        debug_data->num_ray_bounces);
 	}
 }
 

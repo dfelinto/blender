@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 CCL_NAMESPACE_BEGIN
@@ -33,7 +33,7 @@ ccl_device void svm_node_vector_transform(KernelGlobals *kg, ShaderData *sd, flo
 	NodeVectorTransformConvertSpace to = (NodeVectorTransformConvertSpace)ito;
 	
 	Transform tfm;
-	bool is_object = (sd->object != OBJECT_NONE);
+	bool is_object = (ccl_fetch(sd, object) != OBJECT_NONE);
 	bool is_direction = (type == NODE_VECTOR_TRANSFORM_TYPE_VECTOR || type == NODE_VECTOR_TRANSFORM_TYPE_NORMAL);
 	
 	/* From world */
@@ -45,7 +45,7 @@ ccl_device void svm_node_vector_transform(KernelGlobals *kg, ShaderData *sd, flo
 			else
 				in = transform_point(&tfm, in);
 		}
-		else if (to == NODE_VECTOR_TRANSFORM_CONVERT_SPACE_OBJECT && is_object) {
+		else if(to == NODE_VECTOR_TRANSFORM_CONVERT_SPACE_OBJECT && is_object) {
 			if(is_direction)
 				object_inverse_dir_transform(kg, sd, &in);
 			else
@@ -54,7 +54,7 @@ ccl_device void svm_node_vector_transform(KernelGlobals *kg, ShaderData *sd, flo
 	}
 	
 	/* From camera */
-	else if (from == NODE_VECTOR_TRANSFORM_CONVERT_SPACE_CAMERA) {
+	else if(from == NODE_VECTOR_TRANSFORM_CONVERT_SPACE_CAMERA) {
 		if(to == NODE_VECTOR_TRANSFORM_CONVERT_SPACE_WORLD || to == NODE_VECTOR_TRANSFORM_CONVERT_SPACE_OBJECT) {
 			tfm = kernel_data.cam.cameratoworld;
 			if(is_direction)

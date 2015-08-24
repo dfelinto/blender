@@ -67,6 +67,10 @@ Speaker *BKE_speaker_copy(Speaker *spk)
 	if (spkn->sound)
 		spkn->sound->id.us++;
 
+	if (spk->id.lib) {
+		BKE_id_lib_local_paths(G.main, spk->id.lib, &spkn->id);
+	}
+
 	return spkn;
 }
 
@@ -126,5 +130,5 @@ void BKE_speaker_free(Speaker *spk)
 	if (spk->sound)
 		spk->sound->id.us--;
 
-	BKE_free_animdata((ID *)spk);
+	BKE_animdata_free((ID *)spk);
 }

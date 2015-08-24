@@ -56,6 +56,10 @@ if(WIN32 AND NOT UNIX)
 
 	add_executable(blenderplayer ${EXETYPE} bad_level_call_stubs/stubs.c ../icons/winblender.rc)
 
+	install(TARGETS blenderplayer
+			COMPONENT Blenderplayer
+			DESTINATION ".")
+
 elseif(APPLE)
 	add_executable(blenderplayer ${EXETYPE} bad_level_call_stubs/stubs.c)
 	# setup Info.plist
@@ -102,6 +106,8 @@ endif()
 		bf_intern_ghostndof3dconnexion
 		bf_rna
 		bf_blenkernel
+		bf_depsgraph
+		bf_physics
 		bf_intern_rigidbody
 		bf_blenloader
 		ge_blen_routines
@@ -144,6 +150,7 @@ endif()
 		bf_dna
 		ge_videotex
 		bf_blenfont
+		bf_blentranslation
 		bf_intern_audaspace
 		blenkernel_blc
 		bf_bmesh
@@ -163,6 +170,8 @@ endif()
 		extern_wcwidth
 		extern_libmv
 		extern_glog
+		extern_sdlew
+		extern_eigen3
 	)
 
 	if(WITH_MOD_CLOTH_ELTOPO)
@@ -201,6 +210,10 @@ endif()
 
 	if(WITH_INTERNATIONAL)
 		list(APPEND BLENDER_SORTED_LIBS bf_intern_locale)
+	endif()
+
+	if(WITH_OPENSUBDIV)
+		list(APPEND BLENDER_SORTED_LIBS bf_intern_opensubdiv)
 	endif()
 
 	foreach(SORTLIB ${BLENDER_SORTED_LIBS})

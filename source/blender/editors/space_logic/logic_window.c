@@ -48,6 +48,7 @@
 
 #include "BLI_blenlib.h"
 #include "BLI_utildefines.h"
+#include "BLI_path_util.h"
 
 #include "BKE_action.h"
 #include "BKE_context.h"
@@ -56,7 +57,7 @@
 
 #include "ED_util.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "UI_interface.h"
 #include "UI_view2d.h"
@@ -94,91 +95,6 @@
 /* proto */
 static ID **get_selected_and_linked_obs(bContext *C, short *count, short scavisflag);
 
-static int vergname(const void *v1, const void *v2)
-{
-	char **x1, **x2;
-	
-	x1 = (char **)v1;
-	x2 = (char **)v2;
-	
-	return BLI_natstrcmp(*x1, *x2);
-}
-
-void make_unique_prop_names(bContext *C, char *str)
-{
-	Object *ob;
-	bProperty *prop;
-	bSensor *sens;
-	bController *cont;
-	bActuator *act;
-	ID **idar;
-	short a, obcount, propcount=0, nr;
-	const char **names;
-	
-	/* this function is called by a Button, and gives the current
-	 * stringpointer as an argument, this is the one that can change
-	 */
-	
-	idar= get_selected_and_linked_obs(C, &obcount, BUTS_SENS_SEL|BUTS_SENS_ACT|BUTS_ACT_SEL|BUTS_ACT_ACT|BUTS_CONT_SEL|BUTS_CONT_ACT);
-	
-	/* for each object, make properties and sca names unique */
-	
-	/* count total names */
-	for (a=0; a<obcount; a++) {
-		ob= (Object *)idar[a];
-		propcount+= BLI_countlist(&ob->prop);
-		propcount+= BLI_countlist(&ob->sensors);
-		propcount+= BLI_countlist(&ob->controllers);
-		propcount+= BLI_countlist(&ob->actuators);
-	}
-	if (propcount==0) {
-		if (idar) MEM_freeN(idar);
-		return;
-	}
-	
-	/* make names array for sorting */
-	names= MEM_callocN(propcount*sizeof(void *), "names");
-	
-	/* count total names */
-	nr= 0;
-	for (a=0; a<obcount; a++) {
-		ob= (Object *)idar[a];
-		prop= ob->prop.first;
-		while (prop) {
-			names[nr++] = prop->name;
-			prop= prop->next;
-		}
-		sens= ob->sensors.first;
-		while (sens) {
-			names[nr++] = sens->name;
-			sens= sens->next;
-		}
-		cont= ob->controllers.first;
-		while (cont) {
-			names[nr++] = cont->name;
-			cont= cont->next;
-		}
-		act= ob->actuators.first;
-		while (act) {
-			names[nr++] = act->name;
-			act= act->next;
-		}
-	}
-	
-	qsort(names, propcount, sizeof(void *), vergname);
-	
-	/* now we check for double names, and change them */
-	
-	for (nr=0; nr<propcount; nr++) {
-		if (names[nr]!=str && strcmp( names[nr], str )==0 ) {
-			BLI_newname(str, +1);
-		}
-	}
-	
-	MEM_freeN(idar);
-	MEM_freeN(names);
-}
-
 static void do_logic_buts(bContext *C, void *UNUSED(arg), int event)
 {
 	Main *bmain= CTX_data_main(C);
@@ -210,7 +126,7 @@ static void do_logic_buts(bContext *C, void *UNUSED(arg), int event)
 				ob->scaflag &= ~OB_ADDSENS;
 				sens= new_sensor(SENS_ALWAYS);
 				BLI_addtail(&(ob->sensors), sens);
-				make_unique_prop_names(C, sens->name);
+				BLI_uniquename(&ob->sensors, sens, DATA_("Sensor"), '.', offsetof(bSensor, name), sizeof(sens->name));
 				ob->scaflag |= OB_SHOWSENS;
 			}
 		}
@@ -252,7 +168,7 @@ static void do_logic_buts(bContext *C, void *UNUSED(arg), int event)
 			if (ob->scaflag & OB_ADDCONT) {
 				ob->scaflag &= ~OB_ADDCONT;
 				cont= new_controller(CONT_LOGIC_AND);
-				make_unique_prop_names(C, cont->name);
+				BLI_uniquename(&ob->controllers, cont, DATA_("Controller"), '.', offsetof(bController, name), sizeof(cont->name));
 				ob->scaflag |= OB_SHOWCONT;
 				BLI_addtail(&(ob->controllers), cont);
 				/* set the controller state mask from the current object state.
@@ -328,7 +244,7 @@ static void do_logic_buts(bContext *C, void *UNUSED(arg), int event)
 			if (ob->scaflag & OB_ADDACT) {
 				ob->scaflag &= ~OB_ADDACT;
 				act= new_actuator(ACT_OBJECT);
-				make_unique_prop_names(C, act->name);
+				BLI_uniquename(&ob->actuators, act, DATA_("Actuator"), '.', offsetof(bActuator, name), sizeof(act->name));
 				BLI_addtail(&(ob->actuators), act);
 				ob->scaflag |= OB_SHOWACT;
 			}
@@ -987,7 +903,7 @@ static void draw_sensor_internal_header(uiLayout *layout, PointerRNA *ptr)
 	sub = uiLayoutRow(row, false);
 	uiLayoutSetActive(sub, (RNA_boolean_get(ptr, "use_pulse_true_level") ||
 	                        RNA_boolean_get(ptr, "use_pulse_false_level")));
-	uiItemR(sub, ptr, "frequency", 0, IFACE_("Freq"), ICON_NONE);
+	uiItemR(sub, ptr, "tick_skip", 0, IFACE_("Skip"), ICON_NONE);
 	
 	row = uiLayoutRow(split, true);
 	uiItemR(row, ptr, "use_level", UI_ITEM_R_TOGGLE, NULL, ICON_NONE);
@@ -1117,7 +1033,7 @@ static void draw_sensor_keyboard(uiLayout *layout, PointerRNA *ptr)
 	uiLayout *row, *col;
 
 	row = uiLayoutRow(layout, false);
-	uiItemL(row, CTX_IFACE_(BLF_I18NCONTEXT_ID_WINDOWMANAGER, "Key:"), ICON_NONE);
+	uiItemL(row, CTX_IFACE_(BLT_I18NCONTEXT_ID_WINDOWMANAGER, "Key:"), ICON_NONE);
 	col = uiLayoutColumn(row, false);
 	uiLayoutSetActive(col, RNA_boolean_get(ptr, "use_all_keys") == false);
 	uiItemR(col, ptr, "key", UI_ITEM_R_EVENT, "", ICON_NONE);
@@ -2189,11 +2105,14 @@ static void draw_actuator_steering(uiLayout *layout, PointerRNA *ptr)
 	}
 
 	row = uiLayoutRow(layout, false);
-	uiItemR(row, ptr, "self_terminated", 0, NULL, ICON_NONE);
+	col = uiLayoutColumn(row, false);
+	uiItemR(col, ptr, "self_terminated", 0, NULL, ICON_NONE);
 	if (RNA_enum_get(ptr, "mode")==ACT_STEERING_PATHFOLLOWING) {
-		uiItemR(row, ptr, "update_period", 0, NULL, ICON_NONE);
-		row = uiLayoutRow(layout, false);
+		col = uiLayoutColumn(row, false);
+		uiItemR(col, ptr, "update_period", 0, NULL, ICON_NONE);
 	}
+	row = uiLayoutRow(layout, false);
+	uiItemR(row, ptr, "lock_z_velocity", 1, NULL, ICON_NONE);
 	row = uiLayoutRow(layout, false);
 	uiItemR(row, ptr, "show_visualization", 0, NULL, ICON_NONE);
 	if (RNA_enum_get(ptr, "mode") != ACT_STEERING_PATHFOLLOWING) {

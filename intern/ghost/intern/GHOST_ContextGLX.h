@@ -46,13 +46,13 @@ extern "C" GLXEWContext *glxewContext;
 
 
 #ifndef GHOST_OPENGL_GLX_CONTEXT_FLAGS
+/* leave as convenience define for the future */
 #define GHOST_OPENGL_GLX_CONTEXT_FLAGS 0
 #endif
 
 #ifndef GHOST_OPENGL_GLX_RESET_NOTIFICATION_STRATEGY
 #define GHOST_OPENGL_GLX_RESET_NOTIFICATION_STRATEGY 0
 #endif
-
 
 class GHOST_ContextGLX : public GHOST_Context
 {
@@ -65,6 +65,7 @@ public:
 	        GHOST_TUns16 numOfAASamples,
 	        Window window,
 	        Display *display,
+	        XVisualInfo *visualInfo,
 	        int contextProfileMask,
 	        int contextMajorVersion,
 	        int contextMinorVersion,
@@ -74,46 +75,46 @@ public:
 	/**
 	 * Destructor.
 	 */
-	virtual ~GHOST_ContextGLX();
+	~GHOST_ContextGLX();
 
 	/**
 	 * Swaps front and back buffers of a window.
 	 * \return  A boolean success indicator.
 	 */
-	virtual GHOST_TSuccess swapBuffers();
+	GHOST_TSuccess swapBuffers();
 
 	/**
 	 * Activates the drawing context of this window.
 	 * \return  A boolean success indicator.
 	 */
-	virtual GHOST_TSuccess activateDrawingContext();
+	GHOST_TSuccess activateDrawingContext();
 
 	/**
 	 * Call immediately after new to initialize.  If this fails then immediately delete the object.
 	 * \return Indication as to whether initialization has succeeded.
 	 */
-	virtual GHOST_TSuccess initializeDrawingContext();
+	GHOST_TSuccess initializeDrawingContext();
 
 	/**
 	 * Removes references to native handles from this context and then returns
 	 * \return GHOST_kSuccess if it is OK for the parent to release the handles and
 	 * GHOST_kFailure if releasing the handles will interfere with sharing
 	 */
-	virtual GHOST_TSuccess releaseNativeHandles();
+	GHOST_TSuccess releaseNativeHandles();
 
 	/**
 	 * Sets the swap interval for swapBuffers.
 	 * \param interval The swap interval to use.
 	 * \return A boolean success indicator.
 	 */
-	virtual GHOST_TSuccess setSwapInterval(int interval);
+	GHOST_TSuccess setSwapInterval(int interval);
 
 	/**
 	 * Gets the current swap interval for swapBuffers.
 	 * \param intervalOut Variable to store the swap interval if it can be read.
 	 * \return Whether the swap interval can be read.
 	 */
-	virtual GHOST_TSuccess getSwapInterval(int &intervalOut);
+	GHOST_TSuccess getSwapInterval(int &intervalOut);
 
 protected:
 	inline void activateGLXEW() const {
@@ -126,6 +127,7 @@ private:
 	void initContextGLXEW();
 
 	Display *m_display;
+	XVisualInfo *m_visualInfo;
 	Window   m_window;
 
 	const int m_contextProfileMask;
@@ -133,8 +135,6 @@ private:
 	const int m_contextMinorVersion;
 	const int m_contextFlags;
 	const int m_contextResetNotificationStrategy;
-
-	XVisualInfo *m_visualInfo;
 
 	GLXContext m_context;
 
@@ -146,5 +146,11 @@ private:
 	static GLXContext s_sharedContext;
 	static int        s_sharedCount;
 };
+
+/* used to get GLX info */
+int GHOST_X11_GL_GetAttributes(
+        int *attribs, int attribs_max,
+        int samples, bool is_stereo_visual,
+        bool for_fb_config);
 
 #endif // __GHOST_CONTEXTGLX_H__

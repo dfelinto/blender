@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 CCL_NAMESPACE_BEGIN
@@ -27,7 +27,7 @@ ccl_device float4 film_map(KernelGlobals *kg, float4 irradiance, float scale)
 	result.z = color_scene_linear_to_srgb(result.z*exposure);
 
 	/* clamp since alpha might be > 1.0 due to russian roulette */
-	result.w = clamp(result.w, 0.0f, 1.0f);
+	result.w = saturate(result.w);
 
 	return result;
 }
@@ -37,10 +37,10 @@ ccl_device uchar4 film_float_to_byte(float4 color)
 	uchar4 result;
 
 	/* simple float to byte conversion */
-	result.x = (uchar)clamp(color.x*255.0f, 0.0f, 255.0f);
-	result.y = (uchar)clamp(color.y*255.0f, 0.0f, 255.0f);
-	result.z = (uchar)clamp(color.z*255.0f, 0.0f, 255.0f);
-	result.w = (uchar)clamp(color.w*255.0f, 0.0f, 255.0f);
+	result.x = (uchar)(saturate(color.x)*255.0f);
+	result.y = (uchar)(saturate(color.y)*255.0f);
+	result.z = (uchar)(saturate(color.z)*255.0f);
+	result.w = (uchar)(saturate(color.w)*255.0f);
 
 	return result;
 }

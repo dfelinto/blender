@@ -29,6 +29,7 @@ set(INC
 	../blenkernel
 	../blenlib
 	../blenloader
+	../blentranslation
 	../compositor
 	../editors/include
 	../gpu
@@ -64,6 +65,7 @@ set(SRC
 	intern/wm_operators.c
 	intern/wm_subwindow.c
 	intern/wm_window.c
+	intern/wm_stereo.c
 
 	WM_api.h
 	WM_keymap.h
@@ -77,6 +79,14 @@ set(SRC
 	wm_subwindow.h
 	wm_window.h
 )
+
+if(WITH_AUDASPACE)
+	add_definitions(${AUDASPACE_DEFINITIONS})
+
+	list(APPEND INC_SYS
+		${AUDASPACE_C_INCLUDE_DIRS}
+	)
+endif()
 
 add_definitions(${GL_DEFINITIONS})
 
@@ -130,10 +140,17 @@ if(WITH_BUILDINFO)
 	add_definitions(-DWITH_BUILDINFO)
 endif()
 
-if(WIN322)
+if(WITH_OPENSUBDIV)
+	add_definitions(-DWITH_OPENSUBDIV)
 	list(APPEND INC
-		../../../intern/utfconv
+		../../../intern/opensubdiv
 	)
+endif()
+
+if(WIN32)
+	if(WITH_INPUT_IME)
+		add_definitions(-DWITH_INPUT_IME)
+	endif()
 endif()
 
 if(WITH_COMPOSITOR)

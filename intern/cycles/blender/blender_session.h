@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #ifndef __BLENDER_SESSION_H__
@@ -52,7 +52,7 @@ public:
 	/* offline render */
 	void render();
 
-	void bake(BL::Object b_object, const string& pass_type, BL::BakePixel pixel_array, const size_t num_pixels, const int depth, float pixels[]);
+	void bake(BL::Object b_object, const string& pass_type, const int object_id, BL::BakePixel pixel_array, const size_t num_pixels, const int depth, float pixels[]);
 
 	void write_render_result(BL::RenderResult b_rr, BL::RenderLayer b_rlay, RenderTile& rtile);
 	void write_render_tile(RenderTile& rtile);
@@ -70,12 +70,13 @@ public:
 	void tag_redraw();
 	void tag_update();
 	void get_status(string& status, string& substatus);
-	void get_progress(float& progress, double& total_time);
+	void get_progress(float& progress, double& total_time, double& render_time);
 	void test_cancel();
 	void update_status_progress();
 	void update_bake_progress();
 
 	bool background;
+	static bool headless;
 	Session *session;
 	Scene *scene;
 	BlenderSync *sync;
@@ -89,8 +90,10 @@ public:
 	BL::SpaceView3D b_v3d;
 	BL::RegionView3D b_rv3d;
 	string b_rlay_name;
+	string b_rview_name;
 
 	string last_status;
+	string last_error;
 	float last_progress;
 
 	int width, height;

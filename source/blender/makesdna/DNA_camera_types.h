@@ -33,7 +33,7 @@
 #define __DNA_CAMERA_TYPES_H__
 
 #include "DNA_defs.h"
-
+#include "DNA_gpu_types.h"
 #include "DNA_ID.h"
 
 #ifdef __cplusplus
@@ -43,6 +43,16 @@ extern "C" {
 struct Object;
 struct AnimData;
 struct Ipo;
+
+/* ------------------------------------------- */
+/* Stereo Settings */
+typedef struct CameraStereoSettings {
+	float interocular_distance;
+	float convergence_distance;
+	short convergence_mode;
+	short pivot;
+	short pad, pad2;
+} CameraStereoSettings;
 
 typedef struct Camera {
 	ID id;
@@ -56,7 +66,7 @@ typedef struct Camera {
 	float lens, ortho_scale, drawsize;
 	float sensor_x, sensor_y;
 	float shiftx, shifty;
-	
+
 	/* yafray: dof params */
 	/* qdn: yafray var 'YF_dofdist' now enabled for defocus composite node as well.
 	 * The name was not changed so that no other files need to be modified */
@@ -65,9 +75,13 @@ typedef struct Camera {
 	struct Ipo *ipo  DNA_DEPRECATED; /* old animation system, deprecated for 2.5 */
 	
 	struct Object *dof_ob;
+	struct GPUDOFSettings gpu_dof;
 
 	char sensor_fit;
 	char pad[7];
+
+	 /* Stereo settings */
+	 struct CameraStereoSettings stereo;
 } Camera;
 
 /* **************** CAMERA ********************* */
@@ -96,17 +110,16 @@ enum {
 	CAM_SHOWLIMITS          = (1 << 0),
 	CAM_SHOWMIST            = (1 << 1),
 	CAM_SHOWPASSEPARTOUT    = (1 << 2),
-	CAM_SHOWTITLESAFE       = (1 << 3),
+	CAM_SHOW_SAFE_MARGINS       = (1 << 3),
 	CAM_SHOWNAME            = (1 << 4),
 	CAM_ANGLETOGGLE         = (1 << 5),
 	CAM_DS_EXPAND           = (1 << 6),
+#ifdef DNA_DEPRECATED
 	CAM_PANORAMA            = (1 << 7), /* deprecated */
-	CAM_SHOWSENSOR          = (1 << 8),
-};
-
-#if (DNA_DEPRECATED_GCC_POISON == 1)
-#pragma GCC poison CAM_PANORAMA
 #endif
+	CAM_SHOWSENSOR          = (1 << 8),
+	CAM_SHOW_SAFE_CENTER    = (1 << 9),
+};
 
 /* yafray: dof sampling switch */
 /* #define CAM_YF_NO_QMC	512 */ /* deprecated */
@@ -120,6 +133,20 @@ enum {
 
 #define DEFAULT_SENSOR_WIDTH	32.0f
 #define DEFAULT_SENSOR_HEIGHT	18.0f
+
+/* stereo->convergence_mode */
+enum {
+	CAM_S3D_OFFAXIS    = 0,
+	CAM_S3D_PARALLEL   = 1,
+	CAM_S3D_TOE        = 2,
+};
+
+/* stereo->pivot */
+enum {
+	CAM_S3D_PIVOT_LEFT      = 0,
+	CAM_S3D_PIVOT_RIGHT     = 1,
+	CAM_S3D_PIVOT_CENTER    = 2,
+};
 
 #ifdef __cplusplus
 }

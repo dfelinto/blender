@@ -61,7 +61,7 @@
 #include "BKE_modifier.h"
 #include "BKE_particle.h"
 #include "BKE_report.h"
-
+#include "BKE_bvhutils.h"
 #include "BKE_pointcache.h"
 
 #include "BIF_gl.h"
@@ -83,9 +83,11 @@
 
 #include "physics_intern.h"
 
-static void PE_create_particle_edit(Scene *scene, Object *ob, PointCache *cache, ParticleSystem *psys);
-static void PTCacheUndo_clear(PTCacheEdit *edit);
-static void recalc_emitter_field(Object *ob, ParticleSystem *psys);
+void PE_create_particle_edit(Scene *scene, Object *ob, PointCache *cache, ParticleSystem *psys);
+void PTCacheUndo_clear(PTCacheEdit *edit);
+void recalc_lengths(PTCacheEdit *edit);
+void recalc_emitter_field(Object *ob, ParticleSystem *psys);
+void update_world_cos(Object *ob, PTCacheEdit *edit);
 
 #define KEY_K					PTCacheEditKey *key; int k
 #define POINT_P					PTCacheEditPoint *point; int p
@@ -355,6 +357,7 @@ typedef struct PEData {
 	Object *ob;
 	DerivedMesh *dm;
 	PTCacheEdit *edit;
+	BVHTreeFromMesh shape_bvh;
 
 	const int *mval;
 	rcti *rect;
@@ -397,18 +400,37 @@ static void PE_set_view3d_data(bContext *C, PEData *data)
 	/* note, the object argument means the modelview matrix does not account for the objects matrix, use viewmat rather than (obmat * viewmat) */
 	view3d_get_transformation(data->vc.ar, data->vc.rv3d, NULL, &data->mats);
 
-	if ((data->vc.v3d->drawtype>OB_WIRE) && (data->vc.v3d->flag & V3D_ZBUF_SELECT)) {
+	if (V3D_IS_ZBUF(data->vc.v3d)) {
 		if (data->vc.v3d->flag & V3D_INVALID_BACKBUF) {
 			/* needed or else the draw matrix can be incorrect */
 			view3d_operator_needs_opengl(C);
 
-			view3d_validate_backbuf(&data->vc);
+			ED_view3d_backbuf_validate(&data->vc);
 			/* we may need to force an update here by setting the rv3d as dirty
 			 * for now it seems ok, but take care!:
 			 * rv3d->depths->dirty = 1; */
 			ED_view3d_depth_update(data->vc.ar);
 		}
 	}
+}
+
+static bool PE_create_shape_tree(PEData *data, Object *shapeob)
+{
+	DerivedMesh *dm = shapeob->derivedFinal;
+	
+	memset(&data->shape_bvh, 0, sizeof(data->shape_bvh));
+	
+	if (!dm) {
+		return false;
+	}
+	
+	DM_ensure_looptri(dm);
+	return (bvhtree_from_mesh_looptri(&data->shape_bvh, dm, 0.0f, 4, 8) != NULL);
+}
+
+static void PE_free_shape_tree(PEData *data)
+{
+	free_bvhtree_from_mesh(&data->shape_bvh);
 }
 
 /*************************** selection utilities *******************************/
@@ -421,8 +443,8 @@ static bool key_test_depth(PEData *data, const float co[3], const int screen_co[
 	float depth;
 
 	/* nothing to do */
-	if ((v3d->drawtype<=OB_WIRE) || (v3d->flag & V3D_ZBUF_SELECT)==0)
-		return 1;
+	if (!V3D_IS_ZBUF(v3d))
+		return true;
 
 	/* used to calculate here but all callers have  the screen_co already, so pass as arg */
 #if 0
@@ -1055,7 +1077,7 @@ static void pe_iterate_lengths(Scene *scene, PTCacheEdit *edit)
 	}
 }
 /* set current distances to be kept between neighbouting keys */
-static void recalc_lengths(PTCacheEdit *edit)
+void recalc_lengths(PTCacheEdit *edit)
 {
 	POINT_P; KEY_K;
 
@@ -1071,7 +1093,7 @@ static void recalc_lengths(PTCacheEdit *edit)
 }
 
 /* calculate a tree for finding nearest emitter's vertice */
-static void recalc_emitter_field(Object *ob, ParticleSystem *psys)
+void recalc_emitter_field(Object *ob, ParticleSystem *psys)
 {
 	DerivedMesh *dm=psys_get_modifier(ob, psys)->dm;
 	PTCacheEdit *edit= psys->edit;
@@ -1159,7 +1181,7 @@ static void PE_update_selection(Scene *scene, Object *ob, int useflag)
 		point->flag &= ~PEP_EDIT_RECALC;
 }
 
-static void update_world_cos(Object *ob, PTCacheEdit *edit)
+void update_world_cos(Object *ob, PTCacheEdit *edit)
 {
 	ParticleSystem *psys = edit->psys;
 	ParticleSystemModifierData *psmd= psys_get_modifier(ob, psys);
@@ -1663,10 +1685,10 @@ void PARTICLE_OT_select_random(wmOperatorType *ot)
 
 	/* properties */
 	RNA_def_float_percentage (ot->srna, "percent", 50.0f, 0.0f, 100.0f, "Percent",
-                           "Percentage (mean) of elements in randomly selected set",
-                           0.0f, 100.0f);
+	                          "Percentage (mean) of elements in randomly selected set",
+	                          0.0f, 100.0f);
 	ot->prop = RNA_def_enum (ot->srna, "type", select_random_type_items, RAN_HAIR,
-                           "Type", "Select either hair or points");
+	                         "Type", "Select either hair or points");
 }
 
 /************************ select linked operator ************************/
@@ -3229,7 +3251,7 @@ static void brush_puff(PEData *data, int point_index)
 
 static void BKE_brush_weight_get(PEData *data, float UNUSED(mat[4][4]), float UNUSED(imat[4][4]), int point_index, int key_index, PTCacheEditKey *UNUSED(key))
 {
-	/* roots have full weight allways */
+	/* roots have full weight always */
 	if (key_index) {
 		PTCacheEdit *edit = data->edit;
 		ParticleSystem *psys = edit->psys;
@@ -3463,7 +3485,7 @@ static int brush_add(PEData *data, short number)
 	if (psmd->dm->deformedOnly || psys->part->use_modifier_stack)
 		dm = psmd->dm;
 	else {
-		dm = mesh_get_derived_deform(scene, ob, CD_MASK_BAREMESH);
+		dm = mesh_get_derived_deform(scene, ob, CD_MASK_BAREMESH | CD_MASK_MFACE);
 		release_dm = true;
 	}
 
@@ -4032,6 +4054,184 @@ void PARTICLE_OT_brush_edit(wmOperatorType *ot)
 	RNA_def_collection_runtime(ot->srna, "stroke", &RNA_OperatorStrokeElement, "Stroke", "");
 }
 
+/*********************** cut shape ***************************/
+
+static int shape_cut_poll(bContext *C)
+{
+	if (PE_hair_poll(C)) {
+		Scene *scene = CTX_data_scene(C);
+		ParticleEditSettings *pset = PE_settings(scene);
+		
+		if (pset->shape_object && (pset->shape_object->type == OB_MESH)) {
+			return true;
+		}
+	}
+	
+	return false;
+}
+
+typedef struct PointInsideBVH {
+	BVHTreeFromMesh bvhdata;
+	int num_hits;
+} PointInsideBVH;
+
+static void point_inside_bvh_cb(void *userdata, int index, const BVHTreeRay *ray, BVHTreeRayHit *hit)
+{
+	PointInsideBVH *data = userdata;
+	
+	data->bvhdata.raycast_callback(&data->bvhdata, index, ray, hit);
+	
+	if (hit->index != -1)
+		++data->num_hits;
+}
+
+/* true if the point is inside the shape mesh */
+static bool shape_cut_test_point(PEData *data, ParticleCacheKey *key)
+{
+	BVHTreeFromMesh *shape_bvh = &data->shape_bvh;
+	const float dir[3] = {1.0f, 0.0f, 0.0f};
+	PointInsideBVH userdata;
+	
+	userdata.bvhdata = data->shape_bvh;
+	userdata.num_hits = 0;
+	
+	BLI_bvhtree_ray_cast_all(shape_bvh->tree, key->co, dir, 0.0f, point_inside_bvh_cb, &userdata);
+	
+	/* for any point inside a watertight mesh the number of hits is uneven */
+	return (userdata.num_hits % 2) == 1;
+}
+
+static void shape_cut(PEData *data, int pa_index)
+{
+	PTCacheEdit *edit = data->edit;
+	Object *ob = data->ob;
+	ParticleEditSettings *pset = PE_settings(data->scene);
+	ParticleCacheKey *key;
+	
+	bool cut;
+	float cut_time = 1.0;
+	int k, totkeys = 1 << pset->draw_step;
+	
+	/* don't cut hidden */
+	if (edit->points[pa_index].flag & PEP_HIDE)
+		return;
+	
+	cut = false;
+	
+	/* check if root is inside the cut shape */
+	key = edit->pathcache[pa_index];
+	if (!shape_cut_test_point(data, key)) {
+		cut_time = -1.0f;
+		cut = true;
+	}
+	else {
+		for (k = 0; k < totkeys; k++, key++) {
+			BVHTreeRayHit hit;
+			float dir[3];
+			float len;
+			
+			sub_v3_v3v3(dir, (key+1)->co, key->co);
+			len = normalize_v3(dir);
+			
+			memset(&hit, 0, sizeof(hit));
+			hit.index = -1;
+			hit.dist = len;
+			BLI_bvhtree_ray_cast(data->shape_bvh.tree, key->co, dir, 0.0f, &hit, data->shape_bvh.raycast_callback, &data->shape_bvh);
+			if (hit.index >= 0) {
+				if (hit.dist < len) {
+					cut_time = (hit.dist / len + (float)k) / (float)totkeys;
+					cut = true;
+					break;
+				}
+			}
+		}
+	}
+
+	if (cut) {
+		if (cut_time < 0.0f) {
+			edit->points[pa_index].flag |= PEP_TAG;
+		}
+		else {
+			rekey_particle_to_time(data->scene, ob, pa_index, cut_time);
+			edit->points[pa_index].flag |= PEP_EDIT_RECALC;
+		}
+	}
+}
+
+static int shape_cut_exec(bContext *C, wmOperator *UNUSED(op))
+{
+	Scene *scene = CTX_data_scene(C);
+	Object *ob = CTX_data_active_object(C);
+	ParticleEditSettings *pset = PE_settings(scene);
+	PTCacheEdit *edit = PE_get_current(scene, ob);
+	Object *shapeob = pset->shape_object;
+	int selected = count_selected_keys(scene, edit);
+	int lock_root = pset->flag & PE_LOCK_FIRST;
+	
+	if (!PE_start_edit(edit))
+		return OPERATOR_CANCELLED;
+	
+	/* disable locking temporatily for disconnected hair */
+	if (edit->psys && edit->psys->flag & PSYS_GLOBAL_HAIR)
+		pset->flag &= ~PE_LOCK_FIRST;
+	
+	if (edit->psys && edit->pathcache) {
+		PEData data;
+		int removed;
+		
+		PE_set_data(C, &data);
+		if (!PE_create_shape_tree(&data, shapeob)) {
+			/* shapeob may not have faces... */
+			return OPERATOR_CANCELLED;
+		}
+		
+		if (selected)
+			foreach_selected_point(&data, shape_cut);
+		else
+			foreach_point(&data, shape_cut);
+		
+		removed = remove_tagged_particles(ob, edit->psys, pe_x_mirror(ob));
+		recalc_lengths(edit);
+		
+		if (removed) {
+			update_world_cos(ob, edit);
+			psys_free_path_cache(NULL, edit);
+			DAG_id_tag_update(&ob->id, OB_RECALC_DATA);
+		}
+		else
+			PE_update_object(scene, ob, 1);
+		
+		if (edit->psys) {
+			WM_event_add_notifier(C, NC_OBJECT|ND_PARTICLE|NA_EDITED, ob);
+		}
+		else {
+			DAG_id_tag_update(&ob->id, OB_RECALC_DATA);
+			WM_event_add_notifier(C, NC_OBJECT|ND_MODIFIER, ob);
+		}
+		
+		PE_free_shape_tree(&data);
+	}
+	
+	pset->flag |= lock_root;
+	
+	return OPERATOR_FINISHED;
+}
+
+void PARTICLE_OT_shape_cut(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Shape Cut";
+	ot->idname = "PARTICLE_OT_shape_cut";
+	ot->description = "Cut hair to conform to the set shape object";
+	
+	/* api callbacks */
+	ot->exec = shape_cut_exec;
+	ot->poll = shape_cut_poll;
+
+	/* flags */
+	ot->flag = OPTYPE_REGISTER|OPTYPE_UNDO;
+}
+
 /*********************** undo ***************************/
 
 static void free_PTCacheUndo(PTCacheUndo *undo)
@@ -4249,7 +4449,7 @@ void PE_undo_step(Scene *scene, int step)
 	DAG_id_tag_update(&OBACT->id, OB_RECALC_DATA);
 }
 
-int PE_undo_valid(Scene *scene)
+bool PE_undo_is_valid(Scene *scene)
 {
 	PTCacheEdit *edit= PE_get_current(scene, OBACT);
 	
@@ -4259,7 +4459,7 @@ int PE_undo_valid(Scene *scene)
 	return 0;
 }
 
-static void PTCacheUndo_clear(PTCacheEdit *edit)
+void PTCacheUndo_clear(PTCacheEdit *edit)
 {
 	PTCacheUndo *undo;
 
@@ -4300,18 +4500,19 @@ void PE_undo_number(Scene *scene, int nr)
 
 /* get name of undo item, return null if no item with this index */
 /* if active pointer, set it to 1 if true */
-const char *PE_undo_get_name(Scene *scene, int nr, int *active)
+const char *PE_undo_get_name(Scene *scene, int nr, bool *r_active)
 {
 	PTCacheEdit *edit= PE_get_current(scene, OBACT);
 	PTCacheUndo *undo;
 	
-	if (active) *active= 0;
+	if (r_active) *r_active = false;
 	
 	if (edit) {
 		undo= BLI_findlink(&edit->undo, nr);
 		if (undo) {
-			if (active && undo==edit->curundo)
-				*active= 1;
+			if (r_active && (undo == edit->curundo)) {
+				*r_active = true;
+			}
 			return undo->name;
 		}
 	}
@@ -4360,7 +4561,7 @@ int PE_minmax(Scene *scene, float min[3], float max[3])
 /************************ particle edit toggle operator ************************/
 
 /* initialize needed data for bake edit */
-static void PE_create_particle_edit(Scene *scene, Object *ob, PointCache *cache, ParticleSystem *psys)
+void PE_create_particle_edit(Scene *scene, Object *ob, PointCache *cache, ParticleSystem *psys)
 {
 	PTCacheEdit *edit;
 	ParticleSystemModifierData *psmd = (psys) ? psys_get_modifier(ob, psys) : NULL;

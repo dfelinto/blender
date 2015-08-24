@@ -275,57 +275,6 @@ static void text_update_edited(bContext *C, Object *obedit, int mode)
 	WM_event_add_notifier(C, NC_GEOM | ND_DATA, obedit->data);
 }
 
-/********************** insert lorem operator *********************/
-
-static int insert_lorem_exec(bContext *C, wmOperator *UNUSED(op))
-{
-	Object *obedit = CTX_data_edit_object(C);
-	const char *p, *p2;
-	int i;
-	static const char *lastlorem = NULL;
-	
-	if (lastlorem)
-		p = lastlorem;
-	else
-		p = ED_lorem;
-	
-	i = rand() / (RAND_MAX / 6) + 4;
-		
-	for (p2 = p; *p2 && i; p2++) {
-		insert_into_textbuf(obedit, *p2);
-
-		if (*p2 == '.')
-			i--;
-	}
-
-	lastlorem = p2 + 1;
-	if (strlen(lastlorem) < 5)
-		lastlorem = ED_lorem;
-	
-	insert_into_textbuf(obedit, '\n');
-	insert_into_textbuf(obedit, '\n');
-
-	DAG_id_tag_update(obedit->data, 0);
-	WM_event_add_notifier(C, NC_GEOM | ND_DATA, obedit->data);
-
-	return OPERATOR_FINISHED;
-}
-
-void FONT_OT_insert_lorem(wmOperatorType *ot)
-{
-	/* identifiers */
-	ot->name = "Insert Lorem";
-	ot->description = "Insert placeholder text";
-	ot->idname = "FONT_OT_insert_lorem";
-	
-	/* api callbacks */
-	ot->exec = insert_lorem_exec;
-	ot->poll = ED_operator_editfont;
-	
-	/* flags */
-	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
-}
-
 /* -------------------------------------------------------------------- */
 /* Generic Paste Functions */
 
@@ -500,8 +449,8 @@ void FONT_OT_text_paste_from_file(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
 	/* properties */
-	WM_operator_properties_filesel(ot, FOLDERFILE | TEXTFILE, FILE_SPECIAL, FILE_OPENFILE,
-	                               WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY);
+	WM_operator_properties_filesel(ot, FILE_TYPE_FOLDER | FILE_TYPE_TEXT, FILE_SPECIAL, FILE_OPENFILE,
+	                               WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);
 }
 
 
@@ -558,8 +507,8 @@ void FONT_OT_text_paste_from_clipboard(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
 	/* properties */
-	WM_operator_properties_filesel(ot, FOLDERFILE | TEXTFILE, FILE_SPECIAL, FILE_OPENFILE,
-	                               WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY);
+	WM_operator_properties_filesel(ot, FILE_TYPE_FOLDER | FILE_TYPE_TEXT, FILE_SPECIAL, FILE_OPENFILE,
+	                               WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);
 }
 
 /******************* text to object operator ********************/
@@ -577,7 +526,7 @@ static void txt_add_object(bContext *C, TextLine *firstline, int totline, const 
 	int a;
 	float rot[3] = {0.f, 0.f, 0.f};
 	
-	obedit = BKE_object_add(bmain, scene, OB_FONT);
+	obedit = BKE_object_add(bmain, scene, OB_FONT, NULL);
 	base = scene->basact;
 
 	/* seems to assume view align ? TODO - look into this, could be an operator option */
@@ -668,7 +617,7 @@ void ED_text_to_object(bContext *C, Text *text, const bool split_lines)
 		offset[1] = 0.0f;
 		offset[2] = 0.0f;
 
-		txt_add_object(C, text->lines.first, BLI_countlist(&text->lines), offset);
+		txt_add_object(C, text->lines.first, BLI_listbase_count(&text->lines), offset);
 	}
 }
 
@@ -1417,7 +1366,7 @@ static int insert_text_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 				accentcode = 0;
 			}
 			else if (event->utf8_buf[0]) {
-				BLI_strncpy_wchar_from_utf8(inserted_text, event->utf8_buf, 2);
+				inserted_text[0] = BLI_str_utf8_as_unicode(event->utf8_buf);
 				ascii = inserted_text[0];
 				insert_into_textbuf(obedit, ascii);
 				accentcode = 0;
@@ -1835,8 +1784,8 @@ void FONT_OT_open(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 	
 	/* properties */
-	WM_operator_properties_filesel(ot, FOLDERFILE | FTFONTFILE, FILE_SPECIAL, FILE_OPENFILE,
-	                               WM_FILESEL_FILEPATH | WM_FILESEL_RELPATH, FILE_DEFAULTDISPLAY);
+	WM_operator_properties_filesel(ot, FILE_TYPE_FOLDER | FILE_TYPE_FTFONT, FILE_SPECIAL, FILE_OPENFILE,
+	                               WM_FILESEL_FILEPATH | WM_FILESEL_RELPATH, FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);
 }
 
 /******************* delete operator *********************/
@@ -1884,8 +1833,8 @@ static void undoFont_to_editFont(void *strv, void *ecu, void *UNUSED(obdata))
 	EditFont *ef = cu->editfont;
 	const char *str = strv;
 
-	ef->pos = *((short *)str);
-	ef->len = *((short *)(str + 2));
+	ef->pos = *((const short *)str);
+	ef->len = *((const short *)(str + 2));
 
 	memcpy(ef->textbuf, str + 4, (ef->len + 1) * sizeof(wchar_t));
 	memcpy(ef->textbufinfo, str + 4 + (ef->len + 1) * sizeof(wchar_t), ef->len * sizeof(CharInfo));

@@ -11,11 +11,12 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #include "util_system.h"
 #include "util_types.h"
+#include "util_string.h"
 
 #ifdef _WIN32
 #if(!defined(FREE_WINDOWS))
@@ -75,14 +76,6 @@ static void __cpuid(int data[4], int selector)
 }
 #endif
 
-static void replace_string(string& haystack, const string& needle, const string& other)
-{
-	size_t i;
-
-	while((i = haystack.find(needle)) != string::npos)
-		haystack.replace(i, needle.length(), other);
-}
-
 string system_cpu_brand_string()
 {
 	char buf[48];
@@ -98,10 +91,7 @@ string system_cpu_brand_string()
 		string brand = buf;
 
 		/* make it a bit more presentable */
-		replace_string(brand, "(TM)", "");
-		replace_string(brand, "(R)", "");
-
-		brand = string_strip(brand);
+		brand = string_remove_trademark(brand);
 
 		return brand;
 	}
@@ -127,6 +117,7 @@ struct CPUCapabilities {
 	bool sse42;
 	bool sse4a;
 	bool avx;
+	bool f16c;
 	bool avx2;
 	bool xop;
 	bool fma3;
@@ -135,23 +126,41 @@ struct CPUCapabilities {
 	bool bmi2;
 };
 
+static void system_cpu_capabilities_override(CPUCapabilities *caps)
+{
+	/* Only capabilities which affects on cycles kernel. */
+	if(getenv("CYCLES_CPU_NO_AVX2")) {
+		caps->avx2 = false;
+	}
+	if(getenv("CYCLES_CPU_NO_AVX")) {
+		caps->avx = false;
+	}
+	if(getenv("CYCLES_CPU_NO_SSE41")) {
+		caps->sse41 = false;
+	}
+	if(getenv("CYCLES_CPU_NO_SSE3")) {
+		caps->sse3 = false;
+	}
+	if(getenv("CYCLES_CPU_NO_SSE2")) {
+		caps->sse2 = false;
+	}
+	if(getenv("CYCLES_CPU_NO_SSE")) {
+		caps->sse = false;
+	}
+}
+
 static CPUCapabilities& system_cpu_capabilities()
 {
 	static CPUCapabilities caps;
 	static bool caps_init = false;
 
 	if(!caps_init) {
-		int result[4], num; //, num_ex;
+		int result[4], num;
 
 		memset(&caps, 0, sizeof(caps));
 
 		__cpuid(result, 0);
 		num = result[0];
-
-#if 0
-		__cpuid(result, 0x80000000);
-		num_ex = result[0];
-#endif
 
 		if(num >= 1) {
 			__cpuid(result, 0x00000001);
@@ -184,21 +193,15 @@ static CPUCapabilities& system_cpu_capabilities()
 				caps.avx = (xcr_feature_mask & 0x6) == 0x6;
 			}
 
+			caps.f16c = (result[2] & ((int)1 << 29)) != 0;
+
 			__cpuid(result, 0x00000007);
 			caps.bmi1 = (result[1] & ((int)1 << 3)) != 0;
 			caps.bmi2 = (result[1] & ((int)1 << 8)) != 0;
 			caps.avx2 = (result[1] & ((int)1 << 5)) != 0;
 		}
 
-#if 0
-		if(num_ex >= 0x80000001) {
-			__cpuid(result, 0x80000001);
-			caps.x64 = (result[3] & ((int)1 << 29)) != 0;
-			caps.sse4a = (result[2] & ((int)1 <<  6)) != 0;
-			caps.fma4 = (result[2] & ((int)1 << 16)) != 0;
-			caps.xop = (result[2] & ((int)1 << 11)) != 0;
-		}
-#endif
+		system_cpu_capabilities_override(&caps);
 
 		caps_init = true;
 	}
@@ -232,7 +235,7 @@ bool system_cpu_support_avx()
 bool system_cpu_support_avx2()
 {
 	CPUCapabilities& caps = system_cpu_capabilities();
-	return caps.sse && caps.sse2 && caps.sse3 && caps.ssse3 && caps.sse41 && caps.avx && caps.avx2 && caps.fma3 && caps.bmi1 && caps.bmi2;
+	return caps.sse && caps.sse2 && caps.sse3 && caps.ssse3 && caps.sse41 && caps.avx && caps.f16c && caps.avx2 && caps.fma3 && caps.bmi1 && caps.bmi2;
 }
 #else
 

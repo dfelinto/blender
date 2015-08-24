@@ -54,12 +54,13 @@ struct ImageFormatData;
 struct RenderData;
 struct ReportList;
 struct Scene;
-struct wmOperatorType;
 
-int start_qt(struct Scene *scene, struct RenderData *rd, int rectx, int recty, struct ReportList *reports);	//for movie handle (BKE writeavi.c now)
-int append_qt(struct RenderData *rd, int start_frame, int frame, int *pixels, int rectx, int recty, struct ReportList *reports);
-void end_qt(void);
-void filepath_qt(char *string, struct RenderData *rd);
+int start_qt(void *context_v, struct Scene *scene, struct RenderData *rd, int rectx, int recty, struct ReportList *reports, bool preview, const char *suffix);	//for movie handle (BKE writeavi.c now)
+int append_qt(void *context_v, struct RenderData *rd, int start_frame, int frame, int *pixels, int rectx, int recty, const char *suffix, struct ReportList *reports);
+void end_qt(void *context_v);
+void filepath_qt(char *string, struct RenderData *rd, bool preview, const char *suffix);
+void *context_create_qt(void);
+void context_free_qt(void *context_v);
 
 /*RNA helper functions */
 void quicktime_verify_image_type(struct RenderData *rd, struct ImageFormatData *imf); //used by RNA for defaults values init, if needed
@@ -76,7 +77,7 @@ int quicktime_rnatmpvalue_from_audiocodectype(int codecType);
 int quicktime_audiocodecType_from_rnatmpvalue(int rnatmpvalue);
 
 void free_qtcomponentdata(void);
-void makeqtstring(struct RenderData *rd, char *string);		//for playanim.c
+void makeqtstring(struct RenderData *rd, char *string, bool preview);		//for playanim.c
 
 
 

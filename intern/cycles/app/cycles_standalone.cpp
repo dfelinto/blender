@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #include <stdio.h>
@@ -21,10 +21,12 @@
 #include "device.h"
 #include "scene.h"
 #include "session.h"
+#include "integrator.h"
 
 #include "util_args.h"
 #include "util_foreach.h"
 #include "util_function.h"
+#include "util_logging.h"
 #include "util_path.h"
 #include "util_progress.h"
 #include "util_string.h"
@@ -70,12 +72,12 @@ static void session_print(const string& str)
 static void session_print_status()
 {
 	int sample, tile;
-	double total_time, sample_time;
+	double total_time, sample_time, render_time;
 	string status, substatus;
 
 	/* get status */
 	sample = options.session->progress.get_sample();
-	options.session->progress.get_tile(tile, total_time, sample_time);
+	options.session->progress.get_tile(tile, total_time, sample_time, render_time);
 	options.session->progress.get_status(status, substatus);
 
 	if(substatus != "")
@@ -123,7 +125,7 @@ static void scene_init()
 	xml_read_file(options.scene, options.filepath.c_str());
 
 	/* Camera width/height override? */
-	if (!(options.width == 0 || options.height == 0)) {
+	if(!(options.width == 0 || options.height == 0)) {
 		options.scene->camera->width = options.width;
 		options.scene->camera->height = options.height;
 	}
@@ -165,11 +167,11 @@ static void display_info(Progress& progress)
 	last = elapsed;
 
 	int sample, tile;
-	double total_time, sample_time;
+	double total_time, sample_time, render_time;
 	string status, substatus;
 
 	sample = progress.get_sample();
-	progress.get_tile(tile, total_time, sample_time);
+	progress.get_tile(tile, total_time, sample_time, render_time);
 	progress.get_status(status, substatus);
 
 	if(substatus != "")
@@ -271,6 +273,7 @@ static void keyboard(unsigned char key)
 	else if(key == 'i')
 		options.interactive = !(options.interactive);
 
+	/* Navigation */
 	else if(options.interactive && (key == 'w' || key == 'a' || key == 's' || key == 'd')) {
 		Transform matrix = options.session->scene->camera->matrix;
 		float3 translate;
@@ -290,6 +293,25 @@ static void keyboard(unsigned char key)
 		options.session->scene->camera->matrix = matrix;
 		options.session->scene->camera->need_update = true;
 		options.session->scene->camera->need_device_update = true;
+
+		options.session->reset(session_buffer_params(), options.session_params.samples);
+	}
+
+	/* Set Max Bounces */
+	else if(options.interactive && (key == '0' || key == '1' || key == '2' || key == '3')) {
+		int bounce;
+		switch(key) {
+			case '0': bounce = 0; break;
+			case '1': bounce = 1; break;
+			case '2': bounce = 2; break;
+			case '3': bounce = 3; break;
+			default: bounce = 0; break;
+		}
+
+		options.session->scene->integrator->max_bounce = bounce;
+
+		/* Update and Reset */
+		options.session->scene->integrator->need_update = true;
 
 		options.session->reset(session_buffer_params(), options.session_params.samples);
 	}
@@ -319,6 +341,11 @@ static void options_parse(int argc, const char **argv)
 
 	vector<DeviceType>& types = Device::available_types();
 
+	/* TODO(sergey): Here's a feedback loop happens: on the one hand we want
+	 * the device list to be printed in help message, on the other hand logging
+	 * is not initialized yet so we wouldn't have debug log happening in the
+	 * device initialization.
+	 */
 	foreach(DeviceType type, types) {
 		if(device_names != "")
 			device_names += ", ";
@@ -331,7 +358,8 @@ static void options_parse(int argc, const char **argv)
 
 	/* parse options */
 	ArgParse ap;
-	bool help = false;
+	bool help = false, debug = false;
+	int verbosity = 1;
 
 	ap.options ("Usage: cycles [options] file.xml",
 		"%*", files_parse, "",
@@ -347,6 +375,10 @@ static void options_parse(int argc, const char **argv)
 		"--width  %d", &options.width, "Window width in pixel",
 		"--height %d", &options.height, "Window height in pixel",
 		"--list-devices", &list, "List information about all available devices",
+#ifdef WITH_CYCLES_LOGGING
+		"--debug", &debug, "Enable debug logging",
+		"--verbose %d", &verbosity, "Set verbosity of the logger",
+#endif
 		"--help", &help, "Print help message",
 		NULL);
 
@@ -355,12 +387,19 @@ static void options_parse(int argc, const char **argv)
 		ap.usage();
 		exit(EXIT_FAILURE);
 	}
-	else if(list) {
+
+	if(debug) {
+		util_logging_start();
+		util_logging_verbosity_set(verbosity);
+	}
+
+	if(list) {
 		vector<DeviceInfo>& devices = Device::available_devices();
 		printf("Devices:\n");
 
 		foreach(DeviceInfo& info, devices) {
-			printf("    %s%s\n",
+			printf("    %-10s%s%s\n",
+				Device::string_from_type(info.type).c_str(),
 				info.description.c_str(),
 				(info.display_device)? " (display)": "");
 		}
@@ -435,6 +474,7 @@ using namespace ccl;
 
 int main(int argc, const char **argv)
 {
+	util_logging_init(argv[0]);
 	path_init();
 	options_parse(argc, argv);
 

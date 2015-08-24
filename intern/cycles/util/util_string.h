@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #ifndef __UTIL_STRING_H__
@@ -40,8 +40,10 @@ string string_printf(const char *format, ...) PRINTF_ATTRIBUTE;
 
 bool string_iequals(const string& a, const string& b);
 void string_split(vector<string>& tokens, const string& str, const string& separators = "\t ");
+void string_replace(string& haystack, const string& needle, const string& other);
 bool string_endswith(const string& s, const char *end);
 string string_strip(const string& s);
+string string_remove_trademark(const string& s);
 
 CCL_NAMESPACE_END
 

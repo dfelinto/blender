@@ -38,7 +38,7 @@
 #include "BLI_blenlib.h"
 #include "BLI_math.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_context.h"
 #include "BKE_curve.h"
@@ -71,20 +71,20 @@ static const char *get_curve_defname(int type)
 
 	if ((type & CU_TYPE) == CU_BEZIER) {
 		switch (stype) {
-			case CU_PRIM_CURVE: return CTX_DATA_(BLF_I18NCONTEXT_ID_CURVE, "BezierCurve");
-			case CU_PRIM_CIRCLE: return CTX_DATA_(BLF_I18NCONTEXT_ID_CURVE, "BezierCircle");
-			case CU_PRIM_PATH: return CTX_DATA_(BLF_I18NCONTEXT_ID_CURVE, "CurvePath");
+			case CU_PRIM_CURVE: return CTX_DATA_(BLT_I18NCONTEXT_ID_CURVE, "BezierCurve");
+			case CU_PRIM_CIRCLE: return CTX_DATA_(BLT_I18NCONTEXT_ID_CURVE, "BezierCircle");
+			case CU_PRIM_PATH: return CTX_DATA_(BLT_I18NCONTEXT_ID_CURVE, "CurvePath");
 			default:
-				return CTX_DATA_(BLF_I18NCONTEXT_ID_CURVE, "Curve");
+				return CTX_DATA_(BLT_I18NCONTEXT_ID_CURVE, "Curve");
 		}
 	}
 	else {
 		switch (stype) {
-			case CU_PRIM_CURVE: return CTX_DATA_(BLF_I18NCONTEXT_ID_CURVE, "NurbsCurve");
-			case CU_PRIM_CIRCLE: return CTX_DATA_(BLF_I18NCONTEXT_ID_CURVE, "NurbsCircle");
-			case CU_PRIM_PATH: return CTX_DATA_(BLF_I18NCONTEXT_ID_CURVE, "NurbsPath");
+			case CU_PRIM_CURVE: return CTX_DATA_(BLT_I18NCONTEXT_ID_CURVE, "NurbsCurve");
+			case CU_PRIM_CIRCLE: return CTX_DATA_(BLT_I18NCONTEXT_ID_CURVE, "NurbsCircle");
+			case CU_PRIM_PATH: return CTX_DATA_(BLT_I18NCONTEXT_ID_CURVE, "NurbsPath");
 			default:
-				return CTX_DATA_(BLF_I18NCONTEXT_ID_CURVE, "Curve");
+				return CTX_DATA_(BLT_I18NCONTEXT_ID_CURVE, "Curve");
 		}
 	}
 }
@@ -94,13 +94,13 @@ static const char *get_surf_defname(int type)
 	int stype = type & CU_PRIMITIVE;
 
 	switch (stype) {
-		case CU_PRIM_CURVE: return CTX_DATA_(BLF_I18NCONTEXT_ID_CURVE, "SurfCurve");
-		case CU_PRIM_CIRCLE: return CTX_DATA_(BLF_I18NCONTEXT_ID_CURVE, "SurfCircle");
-		case CU_PRIM_PATCH: return CTX_DATA_(BLF_I18NCONTEXT_ID_CURVE, "SurfPatch");
-		case CU_PRIM_SPHERE: return CTX_DATA_(BLF_I18NCONTEXT_ID_CURVE, "SurfSphere");
-		case CU_PRIM_DONUT: return CTX_DATA_(BLF_I18NCONTEXT_ID_CURVE, "SurfTorus");
+		case CU_PRIM_CURVE: return CTX_DATA_(BLT_I18NCONTEXT_ID_CURVE, "SurfCurve");
+		case CU_PRIM_CIRCLE: return CTX_DATA_(BLT_I18NCONTEXT_ID_CURVE, "SurfCircle");
+		case CU_PRIM_PATCH: return CTX_DATA_(BLT_I18NCONTEXT_ID_CURVE, "SurfPatch");
+		case CU_PRIM_SPHERE: return CTX_DATA_(BLT_I18NCONTEXT_ID_CURVE, "SurfSphere");
+		case CU_PRIM_DONUT: return CTX_DATA_(BLT_I18NCONTEXT_ID_CURVE, "SurfTorus");
 		default:
-			return CTX_DATA_(BLF_I18NCONTEXT_ID_CURVE, "Surface");
+			return CTX_DATA_(BLT_I18NCONTEXT_ID_CURVE, "Surface");
 	}
 }
 
@@ -121,7 +121,7 @@ Nurb *add_nurbs_primitive(bContext *C, Object *obedit, float mat[4][4], int type
 	const float grid = 1.0f;
 	const int cutype = (type & CU_TYPE); // poly, bezier, nurbs, etc
 	const int stype = (type & CU_PRIMITIVE);
-	const int force_3d = ((Curve *)obedit->data)->flag & CU_3D; /* could be adding to an existing 3D curve */
+	const bool force_3d = (((Curve *)obedit->data)->flag & CU_3D) != 0; /* could be adding to an existing 3D curve */
 
 	unit_m4(umat);
 	unit_m4(viewmat);
@@ -460,7 +460,7 @@ Nurb *add_nurbs_primitive(bContext *C, Object *obedit, float mat[4][4], int type
 
 	if (nu) { /* should always be set */
 		nu->flag |= CU_SMOOTH;
-		cu->actnu = BLI_countlist(editnurb);
+		cu->actnu = BLI_listbase_count(editnurb);
 		cu->actvert = CU_ACT_NONE;
 
 		BKE_nurb_test2D(nu);
@@ -488,9 +488,10 @@ static int curvesurf_prim_add(bContext *C, wmOperator *op, int type, int isSurf)
 
 	if (!isSurf) { /* adding curve */
 		if (obedit == NULL || obedit->type != OB_CURVE) {
+			const char *name = get_curve_defname(type);
 			Curve *cu;
 
-			obedit = ED_object_add_type(C, OB_CURVE, loc, rot, true, layer);
+			obedit = ED_object_add_type(C, OB_CURVE, name, loc, rot, true, layer);
 			newob = true;
 
 			cu = (Curve *)obedit->data;
@@ -505,7 +506,8 @@ static int curvesurf_prim_add(bContext *C, wmOperator *op, int type, int isSurf)
 	}
 	else { /* adding surface */
 		if (obedit == NULL || obedit->type != OB_SURF) {
-			obedit = ED_object_add_type(C, OB_SURF, loc, rot, true, layer);
+			const char *name = get_surf_defname(type);
+			obedit = ED_object_add_type(C, OB_SURF, name, loc, rot, true, layer);
 			newob = true;
 		}
 		else {
@@ -513,27 +515,13 @@ static int curvesurf_prim_add(bContext *C, wmOperator *op, int type, int isSurf)
 		}
 	}
 
-	/* rename here, the undo stack checks name for valid undo pushes */
-	if (newob) {
-		if (obedit->type == OB_CURVE) {
-			rename_id((ID *)obedit, get_curve_defname(type));
-			rename_id((ID *)obedit->data, get_curve_defname(type));
-		}
-		else {
-			rename_id((ID *)obedit, get_surf_defname(type));
-			rename_id((ID *)obedit->data, get_surf_defname(type));
-		}
-	}
-
 	/* ED_object_add_type doesnt do an undo, is needed for redo operator on primitive */
 	if (newob && enter_editmode)
 		ED_undo_push(C, "Enter Editmode");
 
-	ED_object_new_primitive_matrix(C, obedit, loc, rot, mat, false);
+	ED_object_new_primitive_matrix(C, obedit, loc, rot, mat);
 	dia = RNA_float_get(op->ptr, "radius");
-	mat[0][0] *= dia;
-	mat[1][1] *= dia;
-	mat[2][2] *= dia;
+	mul_mat3_m4_fl(mat, dia);
 
 	nu = add_nurbs_primitive(C, obedit, mat, type, newob);
 	editnurb = object_editcurve_get(obedit);

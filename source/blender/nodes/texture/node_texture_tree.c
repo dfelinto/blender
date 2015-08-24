@@ -40,12 +40,10 @@
 #include "BLI_threads.h"
 #include "BLI_utildefines.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_context.h"
-#include "BKE_global.h"
 #include "BKE_linestyle.h"
-#include "BKE_main.h"
 #include "BKE_node.h"
 #include "BKE_paint.h"
 
@@ -57,7 +55,6 @@
 
 #include "RNA_access.h"
 
-#include "RE_pipeline.h"
 #include "RE_shader_ext.h"
 
 
@@ -339,7 +336,7 @@ int ntreeTexExecTree(
 	data.osatex = osatex;
 	data.target = texres;
 	data.do_preview = preview;
-	data.do_manage = (shi) ? shi->do_manage : 0;
+	data.do_manage = (shi) ? shi->do_manage : true;
 	data.thread = thread;
 	data.which_output = which_output;
 	data.cfra = cfra;

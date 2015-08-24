@@ -280,7 +280,7 @@ static MDisps *multires_mdisps_initialize_hidden(Mesh *me, int level)
 DerivedMesh *get_multires_dm(Scene *scene, MultiresModifierData *mmd, Object *ob)
 {
 	ModifierData *md = (ModifierData *)mmd;
-	ModifierTypeInfo *mti = modifierType_getInfo(md->type);
+	const ModifierTypeInfo *mti = modifierType_getInfo(md->type);
 	DerivedMesh *tdm = mesh_get_derived_deform(scene, ob, CD_MASK_BAREMESH);
 	DerivedMesh *dm;
 
@@ -340,13 +340,13 @@ static int multires_get_level(Object *ob, MultiresModifierData *mmd,
                               bool render, bool ignore_simplify)
 {
 	if (render)
-		return (mmd->modifier.scene) ? get_render_subsurf_level(&mmd->modifier.scene->r, mmd->renderlvl) : mmd->renderlvl;
+		return (mmd->modifier.scene) ? get_render_subsurf_level(&mmd->modifier.scene->r, mmd->renderlvl, true) : mmd->renderlvl;
 	else if (ob->mode == OB_MODE_SCULPT)
 		return mmd->sculptlvl;
 	else if (ignore_simplify)
 		return mmd->lvl;
 	else
-		return (mmd->modifier.scene) ? get_render_subsurf_level(&mmd->modifier.scene->r, mmd->lvl) : mmd->lvl;
+		return (mmd->modifier.scene) ? get_render_subsurf_level(&mmd->modifier.scene->r, mmd->lvl, false) : mmd->lvl;
 }
 
 void multires_set_tot_level(Object *ob, MultiresModifierData *mmd, int lvl)
@@ -429,7 +429,7 @@ int multiresModifier_reshape(Scene *scene, MultiresModifierData *mmd, Object *ds
 int multiresModifier_reshapeFromDeformMod(Scene *scene, MultiresModifierData *mmd,
                                           Object *ob, ModifierData *md)
 {
-	ModifierTypeInfo *mti = modifierType_getInfo(md->type);
+	const ModifierTypeInfo *mti = modifierType_getInfo(md->type);
 	DerivedMesh *dm, *ndm;
 	int numVerts, result;
 	float (*deformedVerts)[3];
@@ -882,10 +882,12 @@ static void multires_subdivide(MultiresModifierData *mmd, Object *ob, int totlvl
 {
 	Mesh *me = ob->data;
 	MDisps *mdisps;
-	int lvl = mmd->totlvl;
+	const int lvl = mmd->totlvl;
 
 	if ((totlvl > multires_max_levels) || (me->totpoly == 0))
 		return;
+
+	BLI_assert(totlvl > lvl);
 
 	multires_force_update(ob);
 
@@ -893,7 +895,7 @@ static void multires_subdivide(MultiresModifierData *mmd, Object *ob, int totlvl
 	if (!mdisps)
 		mdisps = multires_mdisps_initialize_hidden(me, totlvl);
 
-	if (mdisps->disps && !updateblock && totlvl > 1) {
+	if (mdisps->disps && !updateblock && lvl != 0) {
 		/* upsample */
 		DerivedMesh *lowdm, *cddm, *highdm;
 		CCGElem **highGridData, **lowGridData, **subGridData;
@@ -910,6 +912,7 @@ static void multires_subdivide(MultiresModifierData *mmd, Object *ob, int totlvl
 
 		/* create multires DM from original mesh at low level */
 		lowdm = multires_dm_create_local(ob, cddm, lvl, lvl, simple, has_mask);
+		BLI_assert(lowdm != cddm);
 		cddm->release(cddm);
 
 		/* copy subsurf grids and replace them with low displaced grids */
@@ -1641,7 +1644,8 @@ void multires_free(Multires *mr)
 			lvl = lvl->next;
 		}
 
-		MEM_freeN(mr->verts);
+		/* mr->verts may be NULL when loading old files, see direct_link_mesh() in readfile.c, and T43560. */
+		MEM_SAFE_FREE(mr->verts);
 
 		BLI_freelistN(&mr->levels);
 
@@ -2136,27 +2140,38 @@ void multires_load_old(Object *ob, Mesh *me)
 	me->mr = NULL;
 }
 
-/* If 'ob' and 'to_ob' both have multires modifiers, synchronize them
- * such that 'ob' has the same total number of levels as 'to_ob'. */
-static void multires_sync_levels(Scene *scene, Object *ob, Object *to_ob)
+/* If 'ob_src' and 'ob_dst' both have multires modifiers, synchronize them
+ * such that 'ob_dst' has the same total number of levels as 'ob_src'. */
+void multiresModifier_sync_levels_ex(Object *ob_dst, MultiresModifierData *mmd_src, MultiresModifierData *mmd_dst)
 {
-	MultiresModifierData *mmd = get_multires_modifier(scene, ob, 1);
-	MultiresModifierData *to_mmd = get_multires_modifier(scene, to_ob, 1);
+	if (mmd_src->totlvl == mmd_dst->totlvl) {
+		return;
+	}
 
-	if (!mmd) {
+	if (mmd_src->totlvl > mmd_dst->totlvl) {
+		multires_subdivide(mmd_dst, ob_dst, mmd_src->totlvl, false, mmd_dst->simple);
+	}
+	else {
+		multires_del_higher(mmd_dst, ob_dst, mmd_src->totlvl);
+	}
+}
+
+static void multires_sync_levels(Scene *scene, Object *ob_src, Object *ob_dst)
+{
+	MultiresModifierData *mmd_src = get_multires_modifier(scene, ob_src, true);
+	MultiresModifierData *mmd_dst = get_multires_modifier(scene, ob_dst, true);
+
+	if (!mmd_src) {
 		/* object could have MDISP even when there is no multires modifier
 		 * this could lead to troubles due to i've got no idea how mdisp could be
 		 * upsampled correct without modifier data.
 		 * just remove mdisps if no multires present (nazgul) */
 
-		multires_customdata_delete(ob->data);
+		multires_customdata_delete(ob_src->data);
 	}
 
-	if (mmd && to_mmd) {
-		if (mmd->totlvl > to_mmd->totlvl)
-			multires_del_higher(mmd, ob, to_mmd->totlvl);
-		else
-			multires_subdivide(mmd, ob, to_mmd->totlvl, 0, mmd->simple);
+	if (mmd_src && mmd_dst) {
+		multiresModifier_sync_levels_ex(ob_dst, mmd_src, mmd_dst);
 	}
 }
 
@@ -2275,7 +2290,7 @@ void multiresModifier_scale_disp(Scene *scene, Object *ob)
 void multiresModifier_prepare_join(Scene *scene, Object *ob, Object *to_ob)
 {
 	float smat[3][3], tmat[3][3], mat[3][3];
-	multires_sync_levels(scene, ob, to_ob);
+	multires_sync_levels(scene, to_ob, ob);
 
 	/* construct scale matrix for displacement */
 	BKE_object_scale_to_mat3(to_ob, tmat);
@@ -2323,12 +2338,12 @@ void multires_topology_changed(Mesh *me)
 /***************** Multires interpolation stuff *****************/
 
 /* Find per-corner coordinate with given per-face UV coord */
-int mdisp_rot_face_to_crn(const int corners, const int face_side, const float u, const float v, float *x, float *y)
+int mdisp_rot_face_to_crn(struct MVert *UNUSED(mvert), struct MPoly *mpoly, struct MLoop *UNUSED(mloop), const struct MLoopTri *UNUSED(lt), const int face_side, const float u, const float v, float *x, float *y)
 {
 	const float offset = face_side * 0.5f - 0.5f;
 	int S = 0;
 
-	if (corners == 4) {
+	if (mpoly->totloop == 4) {
 		if (u <= offset && v <= offset) S = 0;
 		else if (u > offset  && v <= offset) S = 1;
 		else if (u > offset  && v > offset) S = 2;
@@ -2351,7 +2366,7 @@ int mdisp_rot_face_to_crn(const int corners, const int face_side, const float u,
 			*y = v - offset;
 		}
 	}
-	else {
+	else if (mpoly->totloop == 3) {
 		int grid_size = offset;
 		float w = (face_side - 1) - u - v;
 		float W1, W2;
@@ -2365,6 +2380,30 @@ int mdisp_rot_face_to_crn(const int corners, const int face_side, const float u,
 
 		*x = (1 - (2 * W1) / (1 - W2)) * grid_size;
 		*y = (1 - (2 * W2) / (1 - W1)) * grid_size;
+	}
+	else {
+		/* the complicated ngon case: find the actual coordinate from
+		 * the barycentric coordinates and finally find the closest vertex
+		 * should work reliably for convex cases only but better than nothing */
+
+#if 0
+		int minS, i;
+		float mindist = FLT_MAX;
+
+		for (i = 0; i < mpoly->totloop; i++) {
+			float len = len_v3v3(NULL, mvert[mloop[mpoly->loopstart + i].v].co);
+			if (len < mindist) {
+				mindist = len;
+				minS = i;
+			}
+		}
+		S = minS;
+#endif
+		/* temp not implemented yet and also not working properly in current master.
+		 * (was worked around by subdividing once) */
+		S = 0;
+		*x = 0;
+		*y = 0;
 	}
 
 	return S;

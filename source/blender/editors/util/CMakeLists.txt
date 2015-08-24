@@ -20,10 +20,11 @@
 
 set(INC
 	../include
-	../../blenfont
 	../../blenkernel
 	../../blenlib
+	../../blentranslation
 	../../bmesh
+	../../imbuf
 	../../gpu
 	../../makesdna
 	../../makesrna
@@ -69,6 +70,7 @@ set(SRC
 	../include/ED_node.h
 	../include/ED_numinput.h
 	../include/ED_object.h
+	../include/ED_outliner.h
 	../include/ED_paint.h
 	../include/ED_particle.h
 	../include/ED_physics.h

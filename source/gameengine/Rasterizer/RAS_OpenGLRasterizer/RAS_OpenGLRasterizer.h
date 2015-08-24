@@ -38,6 +38,7 @@
 
 #include "MT_CmMatrix4x4.h"
 #include <vector>
+#include <map>
 using namespace std;
 
 #include "RAS_IRasterizer.h"
@@ -80,12 +81,7 @@ class RAS_OpenGLRasterizer : public RAS_IRasterizer
 	
 	/* fogging vars */
 	bool m_fogenabled;
-	float m_fogstart;
-	float m_fogdist;
-	float m_fogr;
-	float m_fogg;
-	float m_fogb;
-	
+
 	float m_redback;
 	float m_greenback;
 	float m_blueback;
@@ -198,16 +194,12 @@ public:
 	virtual const MT_Point3& GetCameraPosition();
 	virtual bool GetCameraOrtho();
 	
-	virtual void SetFog(float start, float dist, float r, float g, float b);
-	virtual void SetFogColor(float r, float g, float b);
-	virtual void SetFogStart(float fogstart);
-	virtual void SetFogEnd(float fogend);
-	void DisableFog();
+	virtual void SetFog(short type, float start, float dist, float intensity, float color[3]);
+	virtual void EnableFog(bool enable);
 	virtual void DisplayFog();
-	virtual bool IsFogEnabled();
 
-	virtual void SetBackColor(float red, float green, float blue, float alpha);
-	
+	virtual void SetBackColor(float color[3]);
+
 	virtual void SetDrawingMode(int drawingmode);
 	virtual int GetDrawingMode();
 
@@ -227,25 +219,25 @@ public:
 	virtual void SetDiffuse(float difX, float difY, float difZ, float diffuse);
 	virtual void SetEmissive(float eX, float eY, float eZ, float e);
 
-	virtual void SetAmbientColor(float red, float green, float blue);
+	virtual void SetAmbientColor(float color[3]);
 	virtual void SetAmbient(float factor);
 
 	virtual void SetPolygonOffset(float mult, float add);
 
-	virtual void FlushDebugShapes();
+	virtual void FlushDebugShapes(SCA_IScene *scene);
 
-	virtual void DrawDebugLine(const MT_Vector3 &from,const MT_Vector3 &to, const MT_Vector3 &color)
+	virtual void DrawDebugLine(SCA_IScene *scene, const MT_Vector3 &from,const MT_Vector3 &to, const MT_Vector3 &color)
 	{
 		OglDebugShape line;
 		line.m_type = OglDebugShape::LINE;
 		line.m_pos= from;
 		line.m_param = to;
 		line.m_color = color;
-		m_debugShapes.push_back(line);
+		m_debugShapes[scene].push_back(line);
 	}
 
-	virtual void DrawDebugCircle(const MT_Vector3 &center, const MT_Scalar radius, const MT_Vector3 &color,
-	                             const MT_Vector3 &normal, int nsector)
+	virtual void DrawDebugCircle(SCA_IScene *scene, const MT_Vector3 &center, const MT_Scalar radius,
+								 const MT_Vector3 &color, const MT_Vector3 &normal, int nsector)
 	{
 		OglDebugShape line;
 		line.m_type = OglDebugShape::CIRCLE;
@@ -254,10 +246,11 @@ public:
 		line.m_color = color;
 		line.m_param2.x() = radius;
 		line.m_param2.y() = (float) nsector;
-		m_debugShapes.push_back(line);
+		m_debugShapes[scene].push_back(line);
 	}
 
-	std::vector <OglDebugShape>	m_debugShapes;
+	// We store each debug shape by scene.
+	std::map<SCA_IScene *, std::vector<OglDebugShape> > m_debugShapes;
 
 	virtual void SetTexCoordNum(int num);
 	virtual void SetAttribNum(int num);

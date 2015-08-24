@@ -153,26 +153,16 @@ BSDF_CLOSURE_CLASS_BEGIN(HairReflection, hair_reflection, hair_reflection, LABEL
 	CLOSURE_FLOAT3_PARAM(HairReflectionClosure, sc.N),
 	CLOSURE_FLOAT_PARAM(HairReflectionClosure, sc.data0),
 	CLOSURE_FLOAT_PARAM(HairReflectionClosure, sc.data1),
-#ifdef __HAIR__
 	CLOSURE_FLOAT3_PARAM(HairReflectionClosure, sc.T),
 	CLOSURE_FLOAT_PARAM(HairReflectionClosure, sc.data2),
-#else
-	CLOSURE_FLOAT3_PARAM(HairReflectionClosure, sc.N),
-	CLOSURE_FLOAT_PARAM(HairReflectionClosure, sc.data1),
-#endif
 BSDF_CLOSURE_CLASS_END(HairReflection, hair_reflection)
 
 BSDF_CLOSURE_CLASS_BEGIN(HairTransmission, hair_transmission, hair_transmission, LABEL_GLOSSY)
 	CLOSURE_FLOAT3_PARAM(HairTransmissionClosure, sc.N),
 	CLOSURE_FLOAT_PARAM(HairTransmissionClosure, sc.data0),
 	CLOSURE_FLOAT_PARAM(HairTransmissionClosure, sc.data1),
-#ifdef __HAIR__
 	CLOSURE_FLOAT3_PARAM(HairReflectionClosure, sc.T),
 	CLOSURE_FLOAT_PARAM(HairReflectionClosure, sc.data2),
-#else
-	CLOSURE_FLOAT3_PARAM(HairReflectionClosure, sc.N),
-	CLOSURE_FLOAT_PARAM(HairReflectionClosure, sc.data1),
-#endif
 BSDF_CLOSURE_CLASS_END(HairTransmission, hair_transmission)
 
 VOLUME_CLOSURE_CLASS_BEGIN(VolumeHenyeyGreenstein, henyey_greenstein, LABEL_VOLUME_SCATTER)
@@ -189,11 +179,7 @@ static void register_closure(OSL::ShadingSystem *ss, const char *name, int id, O
 	/* optimization: it's possible to not use a prepare function at all and
 	 * only initialize the actual class when accessing the closure component
 	 * data, but then we need to map the id to the class somehow */
-#ifdef CLOSURE_PREPARE
-	ss->register_closure(name, id, params, prepare, NULL, NULL);
-#else
-	ss->register_closure(name, id, params, prepare, NULL);
-#endif
+	ss->register_closure(name, id, params, prepare, NULL, 16);
 }
 
 void OSLShader::register_closures(OSLShadingSystem *ss_)

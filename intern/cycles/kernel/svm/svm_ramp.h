@@ -11,7 +11,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License
+ * limitations under the License.
  */
 
 #ifndef __SVM_RAMP_H__
@@ -21,7 +21,7 @@ CCL_NAMESPACE_BEGIN
 
 ccl_device float4 rgb_ramp_lookup(KernelGlobals *kg, int offset, float f, bool interpolate)
 {
-	f = clamp(f, 0.0f, 1.0f)*(RAMP_TABLE_SIZE-1);
+	f = saturate(f)*(RAMP_TABLE_SIZE-1);
 
 	/* clamp int as well in case of NaN */
 	int i = clamp(float_to_int(f), 0, RAMP_TABLE_SIZE-1);

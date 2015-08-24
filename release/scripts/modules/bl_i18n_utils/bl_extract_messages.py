@@ -62,8 +62,9 @@ def _gen_check_ctxt(settings):
         "spell_errors": {},
     }
 
+
 def _diff_check_ctxt(check_ctxt, minus_check_ctxt):
-    """Returns check_ctxt - minus_check_ctxt"""
+    """Removes minus_check_ctxt from check_ctxt"""
     for key in check_ctxt:
         if isinstance(check_ctxt[key], set):
             for warning in minus_check_ctxt[key]:
@@ -73,6 +74,7 @@ def _diff_check_ctxt(check_ctxt, minus_check_ctxt):
             for warning in minus_check_ctxt[key]:
                 if warning in check_ctxt[key]:
                     del check_ctxt[key][warning]
+
 
 def _gen_reports(check_ctxt):
     return {
@@ -256,7 +258,7 @@ def dump_rna_messages(msgs, reports, settings, verbose=False):
                                                bpy.types.Panel.__subclasses__() +
                                                bpy.types.Menu.__subclasses__() +
                                                bpy.types.UIList.__subclasses__()
-                                    if cls.__name__ not in _rna_clss_ids}        
+                                    if cls.__name__ not in _rna_clss_ids}
 
         # Collect internal operators
         # extend with all internal operators
@@ -264,8 +266,8 @@ def dump_rna_messages(msgs, reports, settings, verbose=False):
         # XXX Do not skip INTERNAL's anymore, some of those ops show up in UI now!
         # all possible operator names
         #op_ids = (set(cls.bl_rna.identifier for cls in bpy.types.OperatorProperties.__subclasses__()) |
-                  #set(cls.bl_rna.identifier for cls in bpy.types.Operator.__subclasses__()) | 
-                  #set(cls.bl_rna.identifier for cls in bpy.types.OperatorMacro.__subclasses__()))
+        #          set(cls.bl_rna.identifier for cls in bpy.types.Operator.__subclasses__()) |
+        #          set(cls.bl_rna.identifier for cls in bpy.types.OperatorMacro.__subclasses__()))
 
         #get_instance = __import__("_bpy").ops.get_instance
         #path_resolve = type(bpy.context).__base__.path_resolve
@@ -473,7 +475,6 @@ def dump_py_messages_from_files(msgs, reports, files, settings):
 
         return [_extract_string_merge(estr_ls, nds_ls) for estr_ls, nds_ls in bag]
 
-
     i18n_ctxt_ids = {v for v in bpy.app.translations.contexts_C_to_py.values()}
     def _ctxt_to_ctxt(node):
         # We must try, to some extend, to get contexts from vars instead of only literal strings...
@@ -575,8 +576,9 @@ def dump_py_messages_from_files(msgs, reports, files, settings):
     #print(func_translate_args)
 
     # Break recursive nodes look up on some kind of nodes.
-    # E.g. we don’t want to get strings inside subscripts (blah["foo"])!
-    stopper_nodes = {ast.Subscript}
+    # E.g. we don't want to get strings inside subscripts (blah["foo"])!
+    #      we don't want to get strings from comparisons (foo.type == 'BAR').
+    stopper_nodes = {ast.Subscript, ast.Compare}
     # Consider strings separate: ("a" if test else "b")
     separate_nodes = {ast.IfExp}
 
@@ -821,9 +823,9 @@ def dump_messages(do_messages, do_checks, settings):
 
     # Get strings from addons' categories.
     for uid, label, tip in bpy.types.WindowManager.addon_filter[1]['items'](bpy.context.window_manager, bpy.context):
-        process_msg(msgs, settings.DEFAULT_CONTEXT, label, "Addons' categories", reports, None, settings)
+        process_msg(msgs, settings.DEFAULT_CONTEXT, label, "Add-ons' categories", reports, None, settings)
         if tip:
-            process_msg(msgs, settings.DEFAULT_CONTEXT, tip, "Addons' categories", reports, None, settings)
+            process_msg(msgs, settings.DEFAULT_CONTEXT, tip, "Add-ons' categories", reports, None, settings)
 
     # Get strings specific to translations' menu.
     for lng in settings.LANGUAGES:
@@ -896,7 +898,7 @@ def dump_addon_messages(module_name, do_checks, settings):
             del msgs[key]
 
     if check_ctxt:
-        check_ctxt = _diff_check_ctxt(check_ctxt, minus_check_ctxt)
+        _diff_check_ctxt(check_ctxt, minus_check_ctxt)
 
     # and we are done with those!
     del minus_pot
@@ -923,18 +925,18 @@ def main():
         return
 
     import sys
-    back_argv = sys.argv
-    # Get rid of Blender args!
-    sys.argv = sys.argv[sys.argv.index("--") + 1:]
-
     import argparse
+
+    # Get rid of Blender args!
+    argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
+
     parser = argparse.ArgumentParser(description="Process UI messages from inside Blender.")
     parser.add_argument('-c', '--no_checks', default=True, action="store_false", help="No checks over UI messages.")
     parser.add_argument('-m', '--no_messages', default=True, action="store_false", help="No export of UI messages.")
     parser.add_argument('-o', '--output', default=None, help="Output POT file path.")
     parser.add_argument('-s', '--settings', default=None,
                         help="Override (some) default settings. Either a JSon file name, or a JSon string.")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     settings = settings_i18n.I18nSettings()
     settings.from_json(args.settings)
@@ -943,8 +945,6 @@ def main():
         settings.FILE_NAME_POT = args.output
 
     dump_messages(do_messages=args.no_messages, do_checks=args.no_checks, settings=settings)
-
-    sys.argv = back_argv
 
 
 if __name__ == "__main__":

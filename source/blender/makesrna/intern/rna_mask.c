@@ -35,7 +35,7 @@
 #include "DNA_object_types.h"	/* SELECT */
 #include "DNA_scene_types.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_movieclip.h"
 #include "BKE_tracking.h"
@@ -52,12 +52,10 @@
 
 #ifdef RNA_RUNTIME
 
-#include "DNA_mask_types.h"
 #include "DNA_movieclip_types.h"
 
 #include "BKE_depsgraph.h"
 #include "BKE_mask.h"
-#include "BKE_tracking.h"
 
 #include "BLI_math.h"
 
@@ -213,10 +211,13 @@ static void rna_MaskLayer_name_set(PointerRNA *ptr, const char *value)
 {
 	Mask *mask = (Mask *)ptr->id.data;
 	MaskLayer *masklay = (MaskLayer *)ptr->data;
+	char oldname[sizeof(masklay->name)], newname[sizeof(masklay->name)];
 
-	BLI_strncpy(masklay->name, value, sizeof(masklay->name));
+	/* need to be on the stack */
+	BLI_strncpy(oldname, masklay->name, sizeof(masklay->name));
+	BLI_strncpy_utf8(newname, value, sizeof(masklay->name));
 
-	BKE_mask_layer_unique_name(mask, masklay);
+	BKE_mask_layer_rename(mask, masklay, oldname, newname);
 }
 
 static PointerRNA rna_MaskLayer_active_spline_get(PointerRNA *ptr)
@@ -975,7 +976,7 @@ static void rna_def_mask_layer(BlenderRNA *brna)
 	RNA_def_property_enum_sdna(prop, NULL, "falloff");
 	RNA_def_property_enum_items(prop, proportional_falloff_curve_only_items);
 	RNA_def_property_ui_text(prop, "Falloff", "Falloff type the feather");
-	RNA_def_property_translation_context(prop, BLF_I18NCONTEXT_ID_CURVE); /* Abusing id_curve :/ */
+	RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_CURVE); /* Abusing id_curve :/ */
 	RNA_def_property_update(prop, NC_MASK | NA_EDITED, NULL);
 
 	/* filling options */

@@ -108,7 +108,7 @@ static void paintcurve_undo_restore(bContext *C, ListBase *lb)
 
 	uc = (UndoCurve *)lb->first;
 
-	if (strncmp(uc->idname, pc->id.name, BLI_strnlen(uc->idname, sizeof(uc->idname))) == 0) {
+	if (STREQLEN(uc->idname, pc->id.name, BLI_strnlen(uc->idname, sizeof(uc->idname)))) {
 		SWAP(PaintCurvePoint *, pc->points, uc->points);
 		SWAP(int, pc->tot_points, uc->tot_points);
 		SWAP(int, pc->add_index, uc->active_point);
@@ -222,6 +222,28 @@ static int paintcurve_point_co_index(char sel)
 	return i;
 }
 
+static char paintcurve_point_side_index(const BezTriple *bezt, const bool is_first, const char fallback)
+{
+	/* when matching, guess based on endpoint side */
+	if (BEZT_ISSEL_ANY(bezt)) {
+		if ((bezt->f1 & SELECT) == (bezt->f3 & SELECT)) {
+			return is_first ? SEL_F1 : SEL_F3;
+		}
+		else if (bezt->f1 & SELECT) {
+			return SEL_F1;
+		}
+		else if (bezt->f3  & SELECT) {
+			return SEL_F3;
+		}
+		else {
+			return fallback;
+		}
+	}
+	else {
+		return 0;
+	}
+}
+
 /******************* Operators *********************************/
 
 static int paintcurve_new_exec(bContext *C, wmOperator *UNUSED(op))
@@ -295,10 +317,17 @@ static void paintcurve_point_add(bContext *C,  wmOperator *op, const int loc[2])
 	for (i = 0; i < pc->tot_points; i++) {
 		pcp[i].bez.f1 = pcp[i].bez.f2 = pcp[i].bez.f3 = 0;
 	}
-	pcp[add_index].bez.f3 = SELECT;
-	pcp[add_index].bez.h2 = HD_ALIGN;
 
-	pc->add_index = add_index + 1;
+	BKE_paint_curve_clamp_endpoint_add_index(pc, add_index);
+
+	if (pc->add_index != 0) {
+		pcp[add_index].bez.f3 = SELECT;
+		pcp[add_index].bez.h2 = HD_ALIGN;
+	}
+	else {
+		pcp[add_index].bez.f1 = SELECT;
+		pcp[add_index].bez.h1 = HD_ALIGN;
+	}
 
 	WM_paint_cursor_tag_redraw(window, ar);
 }
@@ -329,7 +358,7 @@ void PAINTCURVE_OT_add_point(wmOperatorType *ot)
 {
 	/* identifiers */
 	ot->name = "Add New Paint Curve Point";
-	ot->description = "Add new paint curve point";
+	ot->description = ot->name;
 	ot->idname = "PAINTCURVE_OT_add_point";
 
 	/* api callbacks */
@@ -366,7 +395,7 @@ static int paintcurve_delete_point_exec(bContext *C, wmOperator *op)
 #define DELETE_TAG 2
 
 	for (i = 0, pcp = pc->points; i < pc->tot_points; i++, pcp++) {
-		if ((pcp->bez.f1 & SELECT) || (pcp->bez.f2 & SELECT) || (pcp->bez.f3 & SELECT)) {
+		if (BEZT_ISSEL_ANY(&pcp->bez)) {
 			pcp->bez.f2 |= DELETE_TAG;
 			tot_del++;
 		}
@@ -384,7 +413,7 @@ static int paintcurve_delete_point_exec(bContext *C, wmOperator *op)
 				points_new[j] = pc->points[i];
 
 				if ((i + 1) == pc->add_index) {
-					pc->add_index = j + 1;
+					BKE_paint_curve_clamp_endpoint_add_index(pc, j);
 				}
 				j++;
 			}
@@ -410,8 +439,8 @@ static int paintcurve_delete_point_exec(bContext *C, wmOperator *op)
 void PAINTCURVE_OT_delete_point(wmOperatorType *ot)
 {
 	/* identifiers */
-	ot->name = "Add New Paint Curve Point";
-	ot->description = "Add new paint curve point";
+	ot->name = "Remove Paint Curve Point";
+	ot->description = ot->name;
 	ot->idname = "PAINTCURVE_OT_delete_point";
 
 	/* api callbacks */
@@ -469,7 +498,7 @@ static bool paintcurve_point_select(bContext *C, wmOperator *op, const int loc[2
 		pcp = paintcurve_point_get_closest(pc, loc_fl, false, PAINT_CURVE_SELECT_THRESHOLD, &selflag);
 
 		if (pcp) {
-			pc->add_index = (pcp - pc->points) + 1;
+			BKE_paint_curve_clamp_endpoint_add_index(pc, pcp - pc->points);
 
 			if (selflag == SEL_F2) {
 				if (extend)
@@ -599,9 +628,8 @@ static int paintcurve_slide_invoke(bContext *C, wmOperator *op, const wmEvent *e
 		pcp = NULL;
 		/* just find first selected point */
 		for (i = 0; i < pc->tot_points; i++) {
-			if (pc->points[i].bez.f1 || pc->points[i].bez.f2 || pc->points[i].bez.f3) {
+			if ((select = paintcurve_point_side_index(&pc->points[i].bez, i == 0, SEL_F3))) {
 				pcp = &pc->points[i];
-				select = SEL_F3;
 				break;
 			}
 		}
@@ -631,7 +659,7 @@ static int paintcurve_slide_invoke(bContext *C, wmOperator *op, const wmEvent *e
 
 		/* only select the active point */
 		PAINT_CURVE_POINT_SELECT(pcp, psd->select);
-		pc->add_index = (pcp - pc->points) + 1;
+		BKE_paint_curve_clamp_endpoint_add_index(pc, pcp - pc->points);
 
 		WM_event_add_modal_handler(C, op);
 		WM_paint_cursor_tag_redraw(window, ar);
