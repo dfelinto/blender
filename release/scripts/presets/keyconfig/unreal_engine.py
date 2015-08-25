@@ -64,13 +64,32 @@ kmi = km.keymap_items.new_modal('CONFIRM', 'LEFTMOUSE', 'RELEASE', any=True)
 kmi = km.keymap_items.new_modal('CONFIRM', 'RIGHTMOUSE', 'RELEASE', any=True)
 kmi = km.keymap_items.new_modal('CONFIRM', 'MIDDLEMOUSE', 'RELEASE', any=True)
 
+
+# Map View3D Rotate Modal
+km = kc.keymaps.new('View3D Rotate Modal', space_type='EMPTY', region_type='WINDOW', modal=True)
+
+kmi = km.keymap_items.new_modal('CONFIRM', 'ESC', 'PRESS', any=True)
+kmi = km.keymap_items.new_modal('AXIS_SNAP_ENABLE', 'LEFT_ALT', 'PRESS', any=True)
+kmi = km.keymap_items.new_modal('AXIS_SNAP_DISABLE', 'LEFT_ALT', 'RELEASE', any=True)
+kmi = km.keymap_items.new_modal('CONFIRM', 'LEFTMOUSE', 'RELEASE', any=True)
+
+
+# Map View3D Zoom Modal
+km = kc.keymaps.new('View3D Zoom Modal', space_type='EMPTY', region_type='WINDOW', modal=True)
+
+kmi = km.keymap_items.new_modal('CONFIRM', 'RIGHTMOUSE', 'RELEASE', any=True)
+kmi = km.keymap_items.new_modal('CONFIRM', 'ESC', 'PRESS', any=True)
+
+
 # Map 3D View
 km = kc.keymaps.new('3D View', space_type='VIEW_3D', region_type='WINDOW', modal=False)
 
 kmi = km.keymap_items.new('view3d.manipulator', 'LEFTMOUSE', 'PRESS', any=True)
 kmi_props_setattr(kmi.properties, 'release_confirm', True)
 kmi = km.keymap_items.new('view3d.cursor3d', 'ACTIONMOUSE', 'PRESS')
-#kmi = km.keymap_items.new('view3d.rotate', 'MIDDLEMOUSE', 'PRESS')
+kmi = km.keymap_items.new('view3d.rotate', 'EVT_TWEAK_L', 'ANY', alt=True)
+kmi = km.keymap_items.new('view3d.zoom', 'EVT_TWEAK_R', 'ANY', alt=True)
+kmi = km.keymap_items.new('view3d.move', 'EVT_TWEAK_M', 'ANY', alt=True)
 kmi = km.keymap_items.new('view3d.move', 'MIDDLEMOUSE', 'PRESS', shift=True)
 kmi = km.keymap_items.new('view3d.zoom', 'MIDDLEMOUSE', 'PRESS', ctrl=True)
 kmi = km.keymap_items.new('view3d.dolly', 'MIDDLEMOUSE', 'PRESS', shift=True, ctrl=True)
