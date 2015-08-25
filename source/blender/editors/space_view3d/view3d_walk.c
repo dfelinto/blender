@@ -1197,15 +1197,21 @@ static int walkApply(bContext *C, wmOperator *op, WalkInfo *walk)
 				}
 				case WALK_MOUSE_MOVEVERTICAL:
 				{
-					if (moffset[0] > 0)
-						walk_mouse_move(walk, mat, WALK_BIT_RIGHT, time_redraw, dvec);
-					else if (moffset[0] < 0)
-						walk_mouse_move(walk, mat, WALK_BIT_LEFT, time_redraw, dvec);
+					/* if we both movements at the same time the effect is too unstable */
+					const bool is_vertical = (abs(moffset[1]) - abs(moffset[0])) > 0;
 
-					if (moffset[1] > 0)
-						walk_mouse_move(walk, mat, WALK_BIT_UP, time_redraw, dvec);
-					else if (moffset[1] < 0)
-						walk_mouse_move(walk, mat, WALK_BIT_DOWN, time_redraw, dvec);
+					if (is_vertical) {
+						if (moffset[1] > 0)
+							walk_mouse_move(walk, mat, WALK_BIT_UP, time_redraw, dvec);
+						else if (moffset[1] < 0)
+							walk_mouse_move(walk, mat, WALK_BIT_DOWN, time_redraw, dvec);
+					}
+					else {
+						if (moffset[0] > 0)
+							walk_mouse_move(walk, mat, WALK_BIT_RIGHT, time_redraw, dvec);
+						else if (moffset[0] < 0)
+							walk_mouse_move(walk, mat, WALK_BIT_LEFT, time_redraw, dvec);
+					}
 
 					break;
 				}
