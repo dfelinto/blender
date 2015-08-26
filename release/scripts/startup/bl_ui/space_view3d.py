@@ -3287,6 +3287,7 @@ class VIEW3D_PT_background_image(Panel):
                 has_bg = False
                 if bg.source == 'IMAGE':
                     row = box.row()
+                    row.context_pointer_set("background_image", bg)
                     row.template_ID(bg, "image", open="image.open")
                     if bg.image is not None:
                         box.template_image(bg, "image", bg.image_user, compact=True)

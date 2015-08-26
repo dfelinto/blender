@@ -1189,8 +1189,13 @@ static int image_open_exec(bContext *C, wmOperator *op)
 	}
 	else {
 		Tex *tex = CTX_data_pointer_get_type(C, "texture", &RNA_Texture).data;
+		BGpic *bgpic = CTX_data_pointer_get_type(C, "background_image", &RNA_BackgroundImage).data;
+
 		if (tex && tex->type == TEX_IMAGE) {
 			iuser = &tex->iuser;
+		}
+		else if (bgpic && bgpic->source == V3D_BGPIC_IMAGE) {
+			iuser = &bgpic->iuser;
 		}
 	}
 
