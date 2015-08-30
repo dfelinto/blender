@@ -111,6 +111,15 @@ unsigned int * ImageBase::getImage (unsigned int texId, double ts)
 	return m_avail ? m_image : NULL;
 }
 
+bool ImageBase::loadImage(unsigned int *buffer, unsigned int size)
+{
+	if (getImage(0, -1) != NULL && size >= getBuffSize())
+	{
+		memcpy(buffer, m_image, getBuffSize());
+		return true;
+	}
+	return false;
+}
 
 // refresh image source
 void ImageBase::refresh (void)
@@ -346,7 +355,6 @@ unsigned int * ImageSource::getImage (double ts)
 	return m_image;
 }
 
-
 // refresh source
 void ImageSource::refresh (void)
 {
@@ -500,10 +508,54 @@ PyObject *Image_getSize (PyImage *self, void *closure)
 }
 
 // refresh image
-PyObject *Image_refresh (PyImage *self)
+PyObject *Image_refresh (PyImage *self, PyObject *args)
 {
+	Py_buffer buffer;
+	bool done = true;
+
+	memset(&buffer, 0, sizeof(buffer));
+	if (PyArg_ParseTuple(args, "|s*:refresh", &buffer))
+	{
+		if (buffer.buf)
+		{
+			// a target buffer is provided, verify its format
+			if (buffer.readonly)
+			{
+				PyErr_SetString(PyExc_TypeError, "Buffers passed in argument must be writable");
+			} else if (!PyBuffer_IsContiguous(&buffer, 'C'))
+			{
+				PyErr_SetString(PyExc_TypeError, "Buffers passed in argument must be contiguous in memory");
+			}
+			else if (((intptr_t)buffer.buf & 3) != 0)
+			{
+				PyErr_SetString(PyExc_TypeError, "Buffers passed in argument must be aligned to 4 bytes boundary");
+			}
+			else
+			{
+				// ready to get the image into our buffer
+				try
+				{
+					done = self->m_image->loadImage((unsigned int *)buffer.buf, buffer.len);
+				}
+				catch (Exception & exp)
+				{
+					exp.report();
+				}
+			}
+			PyBuffer_Release(&buffer);
+			if (PyErr_Occurred())
+		        return NULL;
+		}
+	}
+	else
+	{
+		return NULL;
+	}
+
 	self->m_image->refresh();
-	Py_RETURN_NONE;
+	if (done)
+		Py_RETURN_TRUE;
+	Py_RETURN_FALSE;
 }
 
 // get scale

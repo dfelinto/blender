@@ -206,6 +206,38 @@ void ImageViewport::calcImage (unsigned int texId, double ts)
 	}
 }
 
+bool ImageViewport::loadImage(unsigned int *buffer, unsigned int size)
+{
+	unsigned int *tmp_image;
+	bool ret;
+
+	// if scale was changed
+	if (m_scaleChange)
+		// reset image
+		init(m_capSize[0], m_capSize[1]);
+
+	// size must be identical
+	if (size < getBuffSize())
+		return false;
+
+	if (m_avail)
+	{
+		// just copy
+		memcpy(buffer, m_image, getBuffSize());
+		ret = true;
+	}
+	else
+	{
+		tmp_image = m_image;
+		m_image = buffer;
+		calcImage(0, -1);
+		ret = m_avail;
+		m_image = tmp_image;
+		// since the image was not loaded to our buffer, it's not valid
+		m_avail = false;
+	}
+	return ret;
+}
 
 
 // cast Image pointer to ImageViewport
@@ -348,7 +380,7 @@ int ImageViewport_setCaptureSize(PyImage *self, PyObject *value, void *closure)
 // methods structure
 static PyMethodDef imageViewportMethods[] =
 { // methods from ImageBase class
-	{"refresh", (PyCFunction)Image_refresh, METH_NOARGS, "Refresh image - invalidate its current content"},
+	{"refresh", (PyCFunction)Image_refresh, METH_VARARGS, "Refresh image - invalidate its current content"},
 	{NULL}
 };
 // attributes structure

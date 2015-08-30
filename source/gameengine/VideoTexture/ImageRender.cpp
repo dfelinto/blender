@@ -123,28 +123,43 @@ void ImageRender::setBackgroundFromScene (KX_Scene *scene)
 // capture image from viewport
 void ImageRender::calcImage (unsigned int texId, double ts)
 {
-	if (m_rasterizer->GetDrawingMode() != RAS_IRasterizer::KX_TEXTURED ||   // no need for texture
-	        m_camera->GetViewport() ||        // camera must be inactive
-	        m_camera == m_scene->GetActiveCamera())
+	// render the scene from the camera
+	if (!Render())
 	{
-		// no need to compute texture in non texture rendering
 		m_avail = false;
 		return;
 	}
-	// render the scene from the camera
-	Render();
+
 	// get image from viewport
 	ImageViewport::calcImage(texId, ts);
 	// restore OpenGL state
 	m_canvas->EndFrame();
 }
 
-void ImageRender::Render()
+bool ImageRender::loadImage(unsigned int *buffer, unsigned int size)
+{
+	bool ret;
+	if (!Render())
+	{
+		return false;
+	}
+	ret = ImageViewport::loadImage(buffer, size);
+	m_canvas->EndFrame();
+	return ret;
+}
+
+bool ImageRender::Render()
 {
 	RAS_FrameFrustum frustrum;
 
-	if (!m_render)
-		return;
+	if (!m_render ||
+	    m_rasterizer->GetDrawingMode() != RAS_IRasterizer::KX_TEXTURED ||   // no need for texture
+        m_camera->GetViewport() ||        // camera must be inactive
+        m_camera == m_scene->GetActiveCamera())
+	{
+		// no need to compute texture in non texture rendering
+		return false;
+	}
 
 	if (m_mirror)
 	{
@@ -164,7 +179,7 @@ void ImageRender::Render()
 		MT_Scalar observerDistance = mirrorPlaneDTerm - observerWorldPos.dot(mirrorWorldZ);
 		// if distance < 0.01 => observer is on wrong side of mirror, don't render
 		if (observerDistance < 0.01)
-			return;
+			return false;
 		// set camera world position = observerPos + normal * 2 * distance
 		MT_Point3 cameraWorldPos = observerWorldPos + (MT_Scalar(2.0)*observerDistance)*mirrorWorldZ;
 		m_camera->GetSGNode()->SetLocalPosition(cameraWorldPos);
@@ -310,6 +325,8 @@ void ImageRender::Render()
 
 	// restore the canvas area now that the render is completed
 	m_canvas->GetWindowArea() = area;
+
+	return true;
 }
 
 
@@ -406,7 +423,7 @@ static int setBackground(PyImage *self, PyObject *value, void *closure)
 // methods structure
 static PyMethodDef imageRenderMethods[] =
 { // methods from ImageBase class
-	{"refresh", (PyCFunction)Image_refresh, METH_NOARGS, "Refresh image - invalidate its current content"},
+	{"refresh", (PyCFunction)Image_refresh, METH_VARARGS, "Refresh image - invalidate its current content after optionally transferring its content to a target buffer"},
 	{NULL}
 };
 // attributes structure

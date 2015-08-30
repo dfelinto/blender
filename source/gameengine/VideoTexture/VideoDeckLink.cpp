@@ -1117,7 +1117,7 @@ static PyMethodDef videoMethods[] =
 	{"play", (PyCFunction)Video_play, METH_NOARGS, "Play (restart) video"},
 	{"pause", (PyCFunction)Video_pause, METH_NOARGS, "pause video"},
 	{"stop", (PyCFunction)Video_stop, METH_NOARGS, "stop video (play will replay it from start)"},
-	{"refresh", (PyCFunction)Video_refresh, METH_NOARGS, "Refresh video - get its status"},
+	{"refresh", (PyCFunction)Video_refresh, METH_VARARGS, "Refresh video - get its status"},
 	{NULL}
 };
 // attributes structure

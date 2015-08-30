@@ -67,6 +67,9 @@ public:
 	/// set position in viewport
 	void setPosition (GLint pos[2] = NULL);
 
+	/// capture image from viewport to user buffer
+	virtual bool loadImage(unsigned int *buffer, unsigned int size);
+
 protected:
 	/// frame buffer rectangle
 	GLint m_viewport[4];
