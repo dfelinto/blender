@@ -310,7 +310,6 @@ bool ImageRender::Render()
 		// stereo mode change render settings that disturb this render, cancel them all
 		// we don't need to restore them as they are set before each frame render.
 		glDrawBuffer(GL_BACK_LEFT);
-		glColorMask(GL_TRUE, GL_FALSE, GL_FALSE, GL_FALSE);
 		glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 		glDisable(GL_POLYGON_STIPPLE);
 	}
