@@ -2578,7 +2578,7 @@ static void image_init_imageuser(Image *ima, ImageUser *iuser)
 	RenderResult *rr = ima->rr;
 
 	iuser->multi_index = 0;
-	iuser->layer = iuser->view = 0;
+	iuser->layer = iuser->pass = iuser->view = 0;
 	iuser->passtype = SCE_PASS_COMBINED;
 
 	if (rr) {
@@ -2752,25 +2752,47 @@ RenderPass *BKE_image_multilayer_index(RenderResult *rr, ImageUser *iuser)
 		return NULL;
 
 	if (iuser) {
-		short index = 0, rv_index, rl_index = 0;
+		short index = 0, rv_index, rl_index = 0, rp_index;
 		bool is_stereo = (iuser->flag & IMA_SHOW_STEREO) && RE_RenderResult_is_stereo(rr);
+		bool found_left_eye = false;
+		int rp_passtype;
 
 		rv_index = is_stereo ? iuser->multiview_eye : iuser->view;
 		if (RE_HasFakeLayer(rr)) rl_index += 1;
 
 		for (rl = rr->layers.first; rl; rl = rl->next, rl_index++) {
-			for (rpass = rl->passes.first; rpass; rpass = rpass->next, index++) {
-				if (iuser->layer == rl_index &&
-				    iuser->passtype == rpass->passtype &&
-				    rv_index == rpass->view_id)
+
+			if (iuser->layer != rl_index) {
+				index += BLI_listbase_count(&rl->passes);
+				continue;
+			}
+
+			rp_index = 0;
+
+			for (rpass = rl->passes.first; rpass; rpass = rpass->next, index++, rp_index++) {
+				if ((iuser->pass == rp_index) &&
+				    (found_left_eye == false))
+				{
+					if (rv_index == 0) {
+						/* no multiview or left eye */
+						break;
+					}
+					else {
+						found_left_eye = true;
+						rp_passtype = iuser->passtype = rpass->passtype;
+					}
+				}
+				else if(found_left_eye &&
+				        (rpass->passtype == rp_passtype) &&
+				        (rpass->view_id == rv_index))
 				{
 					break;
 				}
 			}
-			if (rpass)
-				break;
+
+			iuser->multi_index = (rpass ? index : 0);
+			break;
 		}
-		iuser->multi_index = (rpass ? index : 0);
 	}
 
 	if (rpass == NULL) {
