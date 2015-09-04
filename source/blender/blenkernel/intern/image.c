@@ -2752,9 +2752,9 @@ RenderPass *BKE_image_multilayer_index(RenderResult *rr, ImageUser *iuser)
 		return NULL;
 
 	if (iuser) {
+#define PASSTYPE_UNSET -1
 		short index = 0, rv_index, rl_index = 0, rp_index;
 		bool is_stereo = (iuser->flag & IMA_SHOW_STEREO) && RE_RenderResult_is_stereo(rr);
-		bool found_left_eye = false;
 		int rp_passtype;
 
 		rv_index = is_stereo ? iuser->multiview_eye : iuser->view;
@@ -2768,21 +2768,20 @@ RenderPass *BKE_image_multilayer_index(RenderResult *rr, ImageUser *iuser)
 			}
 
 			rp_index = 0;
+			rp_passtype = PASSTYPE_UNSET;
 
 			for (rpass = rl->passes.first; rpass; rpass = rpass->next, index++, rp_index++) {
-				if ((iuser->pass == rp_index) &&
-				    (found_left_eye == false))
-				{
+				if (iuser->pass == rp_index) {
 					if (rv_index == 0) {
 						/* no multiview or left eye */
 						break;
 					}
 					else {
-						found_left_eye = true;
-						rp_passtype = iuser->passtype = rpass->passtype;
+						rp_passtype = rpass->passtype;
 					}
 				}
-				else if(found_left_eye &&
+				/* multiview */
+				else if((rp_passtype != PASSTYPE_UNSET) &&
 				        (rpass->passtype == rp_passtype) &&
 				        (rpass->view_id == rv_index))
 				{
@@ -2790,9 +2789,15 @@ RenderPass *BKE_image_multilayer_index(RenderResult *rr, ImageUser *iuser)
 				}
 			}
 
+			/* multiview: fallback in case there is only the buffer for the first eye */
+			if (rp_passtype != PASSTYPE_UNSET && rpass == NULL) {
+				rpass = BLI_findlink(&rl->passes, iuser->pass);
+			}
+
 			iuser->multi_index = (rpass ? index : 0);
 			break;
 		}
+#undef PASSTYPE_UNSET
 	}
 
 	if (rpass == NULL) {
@@ -3722,18 +3727,19 @@ static ImBuf *image_get_render_result(Image *ima, ImageUser *iuser, void **r_loc
 			int rp_passtype = PASSTYPE_UNSET;
 
 			for (rpass = rl->passes.first; rpass; rpass = rpass->next, rp_index++) {
-				if (rp_index == pass) {
-					if (actview != 0) {
-						rp_passtype = rpass->passtype;
+				if (pass == rp_index) {
+					if (actview == 0) {
+						/* no multiview or left eye */
+						break;
 					}
 					else {
-						break;
+						rp_passtype = rpass->passtype;
 					}
 				}
 				/* multiview */
-				else if (rp_passtype != PASSTYPE_UNSET &&
-				        rpass->passtype == rp_passtype &&
-				        rpass->view_id == actview)
+				else if ((rp_passtype != PASSTYPE_UNSET) &&
+				         (rpass->passtype == rp_passtype) &&
+				         (rpass->view_id == actview))
 				{
 					break;
 				}
