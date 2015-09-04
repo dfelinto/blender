@@ -190,7 +190,7 @@ static void image_buffer_rect_update(RenderJob *rj, RenderResult *rr, ImBuf *ibu
 	 *                                              - sergey -
 	 */
 	/* TODO(sergey): Need to check has_combined here? */
-	if (iuser->passtype == SCE_PASS_COMBINED) {
+	if (iuser->pass == 0) {
 		RenderView *rv;
 		size_t view_id = BKE_scene_multiview_view_id_get(&scene->r, viewname);
 		rv = RE_RenderViewGetById(rr, view_id);

@@ -3635,7 +3635,7 @@ static ImBuf *image_get_render_result(Image *ima, ImageUser *iuser, void **r_loc
 	float *rectf, *rectz;
 	unsigned int *rect;
 	float dither;
-	int channels, layer, passtype;
+	int channels, layer, pass;
 	ImBuf *ibuf;
 	int from_render = (ima->render_slot == ima->last_render_slot);
 	int actview;
@@ -3652,7 +3652,7 @@ static ImBuf *image_get_render_result(Image *ima, ImageUser *iuser, void **r_loc
 
 	channels = 4;
 	layer = iuser->layer;
-	passtype = iuser->passtype;
+	pass = iuser->pass;
 	actview = iuser->view;
 
 	if ((ima->flag & IMA_IS_STEREO) && (iuser->flag & IMA_SHOW_STEREO))
@@ -3715,19 +3715,39 @@ static ImBuf *image_get_render_result(Image *ima, ImageUser *iuser, void **r_loc
 	else if (rres.layers.first) {
 		RenderLayer *rl = BLI_findlink(&rres.layers, layer - (rres.have_combined ? 1 : 0));
 		if (rl) {
-			RenderPass *rpass;
 
-			for (rpass = rl->passes.first; rpass; rpass = rpass->next) {
-				if (passtype == rpass->passtype &&
-				    actview == rpass->view_id)
+#define PASSTYPE_UNSET -1
+			RenderPass *rpass;
+			int rp_index = 0;
+			int rp_passtype = PASSTYPE_UNSET;
+
+			for (rpass = rl->passes.first; rpass; rpass = rpass->next, rp_index++) {
+				if (rp_index == pass) {
+					if (actview != 0) {
+						rp_passtype = rpass->passtype;
+					}
+					else {
+						break;
+					}
+				}
+				/* multiview */
+				else if (rp_passtype != PASSTYPE_UNSET &&
+				        rpass->passtype == rp_passtype &&
+				        rpass->view_id == actview)
 				{
 					break;
 				}
 			}
 
+			/* multiview: fallback in case there is only the buffer for the first eye */
+			if (rp_passtype != PASSTYPE_UNSET && rpass == NULL) {
+				rpass = BLI_findlink(&rl->passes, pass);
+			}
+#undef PASSTYPE_UNSET
+
 			if (rpass) {
 				rectf = rpass->rect;
-				if (passtype == SCE_PASS_COMBINED) {
+				if (pass == 0) {
 					if (rectf == NULL) {
 						/* Happens when Save Buffers is enabled.
 						 * Use display buffer stored in the render layer.
