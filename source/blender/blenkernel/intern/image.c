@@ -2740,6 +2740,52 @@ void BKE_image_signal(Image *ima, ImageUser *iuser, int signal)
 	}
 }
 
+#define PASSTYPE_UNSET -1
+/* return renderpass for a given pass index and active view */
+/* fallback to available if there are missing passes for active view */
+static RenderPass *image_render_pass(RenderLayer *rl, const int pass, const int view, int *r_passindex)
+{
+	RenderPass *rpass_ret = NULL;
+	RenderPass *rpass;
+
+	int rp_index = 0;
+	int rp_passtype = PASSTYPE_UNSET;
+
+	for (rpass = rl->passes.first; rpass; rpass = rpass->next, rp_index++) {
+		if (rp_index == pass) {
+			rpass_ret = rpass;
+			if (view == 0) {
+				/* no multiview or left eye */
+				break;
+			}
+			else {
+				rp_passtype = rpass->passtype;
+			}
+		}
+		/* multiview */
+		else if ((rp_passtype != PASSTYPE_UNSET) &&
+		         (rpass->passtype == rp_passtype) &&
+		         (rpass->view_id == view))
+		{
+			rpass_ret = rpass;
+			break;
+		}
+	}
+
+	/* fallback to the first pass in the layer */
+	if (rpass_ret == NULL) {
+		rp_index = 0;
+		rpass_ret = rl->passes.first;
+	}
+
+	if (r_passindex) {
+		*r_passindex = (rpass == rpass_ret ? rp_index : pass);
+	}
+
+	return rpass_ret;
+}
+#undef PASSTYPE_UNSET
+
 /* if layer or pass changes, we need an index for the imbufs list */
 /* note it is called for rendered results, but it doesnt use the index! */
 /* and because rendered results use fake layer/passes, don't correct for wrong indices here */
@@ -2752,61 +2798,23 @@ RenderPass *BKE_image_multilayer_index(RenderResult *rr, ImageUser *iuser)
 		return NULL;
 
 	if (iuser) {
-#define PASSTYPE_UNSET -1
-		short index = 0, rv_index, rl_index = 0, rp_index;
+		short index = 0, rv_index, rl_index = 0;
 		bool is_stereo = (iuser->flag & IMA_SHOW_STEREO) && RE_RenderResult_is_stereo(rr);
-		int rp_passtype;
 
 		rv_index = is_stereo ? iuser->multiview_eye : iuser->view;
 		if (RE_HasFakeLayer(rr)) rl_index += 1;
 
 		for (rl = rr->layers.first; rl; rl = rl->next, rl_index++) {
-
-			if (iuser->layer != rl_index) {
+			if (iuser->layer == rl_index) {
+				int rp_index;
+				rpass = image_render_pass(rl, iuser->pass, rv_index, &rp_index);
+				iuser->multi_index = index + rp_index;
+				break;
+			}
+			else {
 				index += BLI_listbase_count(&rl->passes);
-				continue;
 			}
-
-			rp_index = 0;
-			rp_passtype = PASSTYPE_UNSET;
-
-			for (rpass = rl->passes.first; rpass; rpass = rpass->next, index++, rp_index++) {
-				if (iuser->pass == rp_index) {
-					if (rv_index == 0) {
-						/* no multiview or left eye */
-						break;
-					}
-					else {
-						rp_passtype = rpass->passtype;
-					}
-				}
-				/* multiview */
-				else if((rp_passtype != PASSTYPE_UNSET) &&
-				        (rpass->passtype == rp_passtype) &&
-				        (rpass->view_id == rv_index))
-				{
-					break;
-				}
-			}
-
-			/* multiview: fallback in case there is only the buffer for the first eye */
-			if (rp_passtype != PASSTYPE_UNSET && rpass == NULL) {
-				rpass = BLI_findlink(&rl->passes, iuser->pass);
-			}
-
-			iuser->multi_index = (rpass ? index : 0);
-			break;
 		}
-#undef PASSTYPE_UNSET
-	}
-
-	if (rpass == NULL) {
-		rl = rr->layers.first;
-		if (rl)
-			rpass = rl->passes.first;
-
-		if (rpass && iuser)
-			iuser->passtype = rpass->passtype;
 	}
 
 	return rpass;
@@ -3720,37 +3728,7 @@ static ImBuf *image_get_render_result(Image *ima, ImageUser *iuser, void **r_loc
 	else if (rres.layers.first) {
 		RenderLayer *rl = BLI_findlink(&rres.layers, layer - (rres.have_combined ? 1 : 0));
 		if (rl) {
-
-#define PASSTYPE_UNSET -1
-			RenderPass *rpass;
-			int rp_index = 0;
-			int rp_passtype = PASSTYPE_UNSET;
-
-			for (rpass = rl->passes.first; rpass; rpass = rpass->next, rp_index++) {
-				if (pass == rp_index) {
-					if (actview == 0) {
-						/* no multiview or left eye */
-						break;
-					}
-					else {
-						rp_passtype = rpass->passtype;
-					}
-				}
-				/* multiview */
-				else if ((rp_passtype != PASSTYPE_UNSET) &&
-				         (rpass->passtype == rp_passtype) &&
-				         (rpass->view_id == actview))
-				{
-					break;
-				}
-			}
-
-			/* multiview: fallback in case there is only the buffer for the first eye */
-			if (rp_passtype != PASSTYPE_UNSET && rpass == NULL) {
-				rpass = BLI_findlink(&rl->passes, pass);
-			}
-#undef PASSTYPE_UNSET
-
+			RenderPass *rpass = image_render_pass(rl, pass, actview, NULL);
 			if (rpass) {
 				rectf = rpass->rect;
 				if (pass == 0) {
