@@ -24,7 +24,7 @@
  * ***** END GPL LICENSE BLOCK *****
  */
 
-/** \file blender/blenfont/intern/blf_font_access.c
+/** \file blender/blenfont/intern/blf_font_i18n.c
  *  \ingroup blf
  *
  * API for accessing font files.
@@ -40,6 +40,7 @@
 #include "BLI_fileops.h"
 #include "BLI_path_util.h"
 #include "BLI_string.h"
+#include "BLI_utildefines.h"
 
 #include "BKE_appdir.h"
 

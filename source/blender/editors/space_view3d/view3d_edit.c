@@ -44,6 +44,7 @@
 #include "BLI_math.h"
 #include "BLI_utildefines.h"
 
+#include "BKE_armature.h"
 #include "BKE_camera.h"
 #include "BKE_context.h"
 #include "BKE_font.h"
@@ -631,7 +632,10 @@ static bool view3d_orbit_calc_center(bContext *C, float r_dyn_ofs[3])
 	Scene *scene = CTX_data_scene(C);
 	Object *ob = OBACT;
 
-	if (ob && (ob->mode & OB_MODE_ALL_PAINT) && (BKE_object_pose_armature_get(ob) == NULL)) {
+	if (ob && (ob->mode & OB_MODE_ALL_PAINT) &&
+	    /* with weight-paint + pose-mode, fall through to using calculateTransformCenter */
+	    ((ob->mode & OB_MODE_WEIGHT_PAINT) && BKE_object_pose_armature_get(ob)) == 0)
+	{
 		/* in case of sculpting use last average stroke position as a rotation
 		 * center, in other cases it's not clear what rotation center shall be
 		 * so just rotate around object origin
@@ -3039,24 +3043,7 @@ static int viewselected_exec(bContext *C, wmOperator *op)
 		ok = ED_view3d_minmax_verts(obedit, min, max);    /* only selected */
 	}
 	else if (ob && (ob->mode & OB_MODE_POSE)) {
-		if (ob->pose) {
-			bArmature *arm = ob->data;
-			bPoseChannel *pchan;
-			float vec[3];
-
-			for (pchan = ob->pose->chanbase.first; pchan; pchan = pchan->next) {
-				if (pchan->bone->flag & BONE_SELECTED) {
-					if (pchan->bone->layer & arm->layer) {
-						bPoseChannel *pchan_tx = pchan->custom_tx ? pchan->custom_tx : pchan;
-						ok = 1;
-						mul_v3_m4v3(vec, ob->obmat, pchan_tx->pose_head);
-						minmax_v3v3_v3(min, max, vec);
-						mul_v3_m4v3(vec, ob->obmat, pchan_tx->pose_tail);
-						minmax_v3v3_v3(min, max, vec);
-					}
-				}
-			}
-		}
+		ok = BKE_pose_minmax(ob, min, max, true, true);
 	}
 	else if (BKE_paint_select_face_test(ob)) {
 		ok = paintface_minmax(ob, min, max);
@@ -3765,6 +3752,8 @@ static void axis_set_view(bContext *C, View3D *v3d, ARegion *ar,
 {
 	RegionView3D *rv3d = ar->regiondata; /* no NULL check is needed, poll checks */
 	float quat[4];
+	const short orig_persp = rv3d->persp;
+
 
 	normalize_qt_qt(quat, quat_);
 
@@ -3780,7 +3769,7 @@ static void axis_set_view(bContext *C, View3D *v3d, ARegion *ar,
 			float twmat[3][3];
 
 			/* same as transform manipulator when normal is set */
-			ED_getTransformOrientationMatrix(C, twmat, true);
+			ED_getTransformOrientationMatrix(C, twmat, V3D_ACTIVE);
 
 			mat3_to_quat(obact_quat, twmat);
 			invert_qt(obact_quat);
@@ -3807,16 +3796,31 @@ static void axis_set_view(bContext *C, View3D *v3d, ARegion *ar,
 	}
 
 	if (rv3d->persp == RV3D_CAMOB && v3d->camera) {
+		/* to camera */
 		ED_view3d_smooth_view(C, v3d, ar, v3d->camera, NULL,
 		                      rv3d->ofs, quat, NULL, NULL,
 		                      smooth_viewtx);
 	}
+	else if (orig_persp == RV3D_CAMOB && v3d->camera) {
+		/* from camera */
+		float ofs[3], dist;
+
+		copy_v3_v3(ofs, rv3d->ofs);
+		dist = rv3d->dist;
+
+		/* so we animate _from_ the camera location */
+		ED_view3d_from_object(v3d->camera, rv3d->ofs, NULL, &rv3d->dist, NULL);
+
+		ED_view3d_smooth_view(C, v3d, ar, NULL, NULL,
+		                      ofs, quat, &dist, NULL,
+		                      smooth_viewtx);
+	}
 	else {
+		/* no camera involved */
 		ED_view3d_smooth_view(C, v3d, ar, NULL, NULL,
 		                      NULL, quat, NULL, NULL,
 		                      smooth_viewtx);
 	}
-
 }
 
 static int viewnumpad_exec(bContext *C, wmOperator *op)
@@ -4475,7 +4479,7 @@ void VIEW3D_OT_background_image_add(wmOperatorType *ot)
 	/* properties */
 	RNA_def_string(ot->srna, "name", "Image", MAX_ID_NAME - 2, "Name", "Image name to assign");
 	WM_operator_properties_filesel(ot, FILE_TYPE_FOLDER | FILE_TYPE_IMAGE | FILE_TYPE_MOVIE, FILE_SPECIAL, FILE_OPENFILE,
-	                               WM_FILESEL_FILEPATH | WM_FILESEL_RELPATH, FILE_DEFAULTDISPLAY);
+	                               WM_FILESEL_FILEPATH | WM_FILESEL_RELPATH, FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);
 }
 
 
@@ -4818,10 +4822,17 @@ static float view_autodist_depth_margin(ARegion *ar, const int mval[2], int marg
 	return depth_close;
 }
 
-/* XXX todo Zooms in on a border drawn by the user */
-bool ED_view3d_autodist(Scene *scene, ARegion *ar, View3D *v3d,
-                        const int mval[2], float mouse_worldloc[3],
-                        const bool alphaoverride, const float fallback_depth_pt[3])
+/**
+ * Get the world-space 3d location from a screen-space 2d point.
+ *
+ * \param mval: Input screen-space pixel location.
+ * \param mouse_worldloc: Output world-space loction.
+ * \param fallback_depth_pt: Use this points depth when no depth can be found.
+ */
+bool ED_view3d_autodist(
+        Scene *scene, ARegion *ar, View3D *v3d,
+        const int mval[2], float mouse_worldloc[3],
+        const bool alphaoverride, const float fallback_depth_pt[3])
 {
 	bglMats mats; /* ZBuffer depth vars */
 	float depth_close;

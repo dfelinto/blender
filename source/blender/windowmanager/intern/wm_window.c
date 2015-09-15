@@ -1020,6 +1020,10 @@ static int ghost_event_proc(GHOST_EventHandle evt, GHOST_TUserDataPtr C_void_ptr
 						wm_event_do_handlers(C);
 						wm_event_do_notifiers(C);
 						wm_draw_update(C);
+
+						/* Warning! code above nulls 'C->wm.window', causing BGE to quit, see: T45699.
+						 * Further, its easier to match behavior across platforms, so restore the window. */
+						CTX_wm_window_set(C, win);
 #endif
 					}
 				}
@@ -1553,6 +1557,18 @@ void WM_cursor_warp(wmWindow *win, int x, int y)
 
 		win->eventstate->x = oldx;
 		win->eventstate->y = oldy;
+	}
+}
+
+/**
+ * Set x, y to values we can actually position the cursor to.
+ */
+void WM_cursor_compatible_xy(wmWindow *win, int *x, int *y)
+{
+	float f = GHOST_GetNativePixelSize(win->ghostwin);
+	if (f != 1.0f) {
+		*x = (int)(*x / f) * f;
+		*y = (int)(*y / f) * f;
 	}
 }
 

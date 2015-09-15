@@ -23,7 +23,7 @@
  * ***** END GPL LICENSE BLOCK *****
  */
 
-/** \file blender/blenfont/intern/blt_lang.c
+/** \file blender/blentranslation/intern/blt_lang.c
  *  \ingroup blt
  *
  * Main internationalization functions to set the locale and query available languages.
@@ -40,12 +40,13 @@
 #include "RNA_types.h"
 
 #include "BLT_translation.h"
-#include "BLT_lang.h" /* own include */
+#include "BLT_lang.h"  /* own include */
 
 #include "BLI_fileops.h"
 #include "BLI_linklist.h"
 #include "BLI_path_util.h"
 #include "BLI_string.h"
+#include "BLI_utildefines.h"
 
 #include "BKE_appdir.h"
 
@@ -96,7 +97,7 @@ static void fill_locales(void)
 	BLI_join_dirfile(languages, FILE_MAX, languages_path, "languages");
 	line = lines = BLI_file_read_as_lines(languages);
 
-	/* This whole "parsing" code is a bit weak, in that it expects strictly formated input file...
+	/* This whole "parsing" code is a bit weak, in that it expects strictly formatted input file...
 	 * Should not be a problem, though, as this file is script-generated! */
 
 	/* First loop to find highest locale ID */

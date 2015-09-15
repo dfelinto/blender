@@ -246,6 +246,7 @@ GHOST_TSuccess GHOST_ContextGLX::initializeDrawingContext()
 
 		if (framebuffer_config) {
 			m_context = glXCreateContextAttribsARB(m_display, framebuffer_config[0], s_sharedContext, True, attribs);
+			XFree(framebuffer_config);
 		}
 	}
 	else {
@@ -403,6 +404,8 @@ int GHOST_X11_GL_GetAttributes(
 	attribs[i++] = 0;
 
 	GHOST_ASSERT(i <= attribs_max, "attribute size too small");
+
+	(void)attribs_max;
 
 	return i;
 }

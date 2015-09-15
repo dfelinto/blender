@@ -3275,7 +3275,7 @@ static void init_render_mesh(Render *re, ObjectRen *obr, int timeoffset)
 			if (need_nmap_tangent!=0 && CustomData_get_layer_index(&dm->faceData, CD_TANGENT) == -1) {
 				bool generate_data = false;
 				if (CustomData_get_layer_index(&dm->loopData, CD_TANGENT) == -1) {
-					DM_add_tangent_layer(dm);
+					dm->calcLoopTangents(dm);
 					generate_data = true;
 				}
 				DM_generate_tangent_tessface_data(dm, generate_data);
@@ -5210,7 +5210,7 @@ void RE_Database_FromScene(Render *re, Main *bmain, Scene *scene, unsigned int l
 	/* still bad... doing all */
 	init_render_textures(re);
 	copy_v3_v3(amb, &re->wrld.ambr);
-	init_render_materials(re->main, re->r.mode, amb);
+	init_render_materials(re->main, re->r.mode, amb, (re->r.scemode & R_BUTS_PREVIEW) == 0);
 	set_node_shader_lamp_loop(shade_material_loop);
 
 	/* MAKE RENDER DATA */
@@ -5941,7 +5941,7 @@ void RE_Database_Baking(Render *re, Main *bmain, Scene *scene, unsigned int lay,
 	init_render_textures(re);
 	
 	copy_v3_v3(amb, &re->wrld.ambr);
-	init_render_materials(re->main, re->r.mode, amb);
+	init_render_materials(re->main, re->r.mode, amb, true);
 	
 	set_node_shader_lamp_loop(shade_material_loop);
 	

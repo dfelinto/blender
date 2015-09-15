@@ -128,6 +128,13 @@ void imb_freetilesImBuf(ImBuf *ibuf)
 	ibuf->mall &= ~IB_tiles;
 }
 
+static void imb_free_bitmap_font(ImBuf *ibuf)
+{
+	if (ibuf->userdata && (ibuf->userflags & IB_BITMAPFONT)) {
+		MEM_freeN(ibuf->userdata);
+	}
+}
+
 static void freeencodedbufferImBuf(ImBuf *ibuf)
 {
 	if (ibuf == NULL) return;
@@ -181,6 +188,7 @@ void IMB_freeImBuf(ImBuf *ibuf)
 			imb_freerectImBuf(ibuf);
 			imb_freerectfloatImBuf(ibuf);
 			imb_freetilesImBuf(ibuf);
+			imb_free_bitmap_font(ibuf);
 			IMB_freezbufImBuf(ibuf);
 			IMB_freezbuffloatImBuf(ibuf);
 			freeencodedbufferImBuf(ibuf);
@@ -206,7 +214,18 @@ ImBuf *IMB_makeSingleUser(ImBuf *ibuf)
 {
 	ImBuf *rval;
 
-	if (!ibuf || ibuf->refcounter == 0) { return ibuf; }
+	if (ibuf) {
+		bool is_single;
+		BLI_spin_lock(&refcounter_spin);
+		is_single = (ibuf->refcounter == 0);
+		BLI_spin_unlock(&refcounter_spin);
+		if (is_single) {
+			return ibuf;
+		}
+	}
+	else {
+		return NULL;
+	}
 
 	rval = IMB_dupImBuf(ibuf);
 

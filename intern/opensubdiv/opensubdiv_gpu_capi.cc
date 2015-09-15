@@ -47,11 +47,7 @@
 #include <opensubdiv/osd/cpuGLVertexBuffer.h>
 #include <opensubdiv/osd/cpuEvaluator.h>
 
-#include "opensubdiv_partitioned.h"
-
-//using OpenSubdiv::FarPatchTables;
 using OpenSubdiv::Osd::GLMeshInterface;
-//sing OpenSubdiv::PartitionedGLMeshInterface;
 
 extern "C" char datatoc_gpu_shader_opensubd_display_glsl[];
 
@@ -62,19 +58,19 @@ typedef struct Light {
 	float diffuse[4];
 	float specular[4];
 	float spot_direction[4];
+#ifdef SUPPORT_COLOR_MATERIAL
 	float constant_attenuation;
 	float linear_attenuation;
 	float quadratic_attenuation;
 	float spot_cutoff;
 	float spot_exponent;
 	float spot_cos_cutoff;
-	float pad[2];
+#endif
 } Light;
 
 typedef struct Lighting {
 	Light lights[MAX_LIGHTS];
 	int num_enabled;
-	int pad[3];
 } Lighting;
 
 typedef struct Transform {
@@ -218,7 +214,7 @@ GLuint compileShader(GLenum shaderType,
 		fprintf(stderr, "Section: %s\n", sdefine);
 		fprintf(stderr, "Defines: %s\n", define);
 		fprintf(stderr, "Source: %s\n", sources[2]);
-		exit(1);
+		return 0;
 	}
 
 	return shader;
@@ -229,12 +225,21 @@ GLuint linkProgram(const char *define)
 	GLuint vertexShader = compileShader(GL_VERTEX_SHADER,
 	                                    "VERTEX_SHADER",
 	                                    define);
+	if (vertexShader == 0) {
+		return 0;
+	}
 	GLuint geometryShader = compileShader(GL_GEOMETRY_SHADER,
 	                                      "GEOMETRY_SHADER",
 	                                      define);
+	if (geometryShader == 0) {
+		return 0;
+	}
 	GLuint fragmentShader = compileShader(GL_FRAGMENT_SHADER,
 	                                      "FRAGMENT_SHADER",
 	                                      define);
+	if (fragmentShader == 0) {
+		return 0;
+	}
 
 	GLuint program = glCreateProgram();
 
@@ -283,7 +288,8 @@ GLuint linkProgram(const char *define)
 		glGetProgramInfoLog(program, sizeof(emsg), 0, emsg);
 		fprintf(stderr, "Error linking GLSL program : %s\n", emsg);
 		fprintf(stderr, "Defines: %s\n", define);
-		exit(1);
+		glDeleteProgram(program);
+		return 0;
 	}
 
 	glUniformBlockBinding(program,
@@ -301,7 +307,7 @@ GLuint linkProgram(const char *define)
 	return program;
 }
 
-void bindProgram(PartitionedGLMeshInterface * /*mesh*/,
+void bindProgram(GLMeshInterface * /*mesh*/,
                  int program)
 {
 	glUseProgram(program);
@@ -367,9 +373,10 @@ void bindProgram(PartitionedGLMeshInterface * /*mesh*/,
 
 }  /* namespace */
 
-void openSubdiv_osdGLDisplayInit(void)
+bool openSubdiv_osdGLDisplayInit(void)
 {
 	static bool need_init = true;
+	static bool init_success = false;
 	if (need_init) {
 		g_flat_fill_solid_program = linkProgram("#define FLAT_SHADING\n");
 		g_flat_fill_texture2d_program = linkProgram("#define USE_TEXTURE_2D\n#define FLAT_SHADING\n");
@@ -383,7 +390,13 @@ void openSubdiv_osdGLDisplayInit(void)
 		             sizeof(g_lighting_data), NULL, GL_STATIC_DRAW);
 
 		need_init = false;
+		init_success = g_flat_fill_solid_program != 0 &&
+		               g_flat_fill_texture2d_program != 0 &&
+		               g_smooth_fill_solid_program != 0 &&
+		               g_smooth_fill_texture2d_program != 0 &&
+		               g_wireframe_program;
 	}
+	return init_success;
 }
 
 void openSubdiv_osdGLDisplayDeinit(void)
@@ -447,6 +460,7 @@ void openSubdiv_osdGLMeshDisplayPrepare(int use_osd_glsl,
 		glGetLightfv(GL_LIGHT0 + i,
 		             GL_SPOT_DIRECTION,
 		             g_lighting_data.lights[i].spot_direction);
+#ifdef SUPPORT_COLOR_MATERIAL
 		glGetLightfv(GL_LIGHT0 + i,
 		             GL_CONSTANT_ATTENUATION,
 		             &g_lighting_data.lights[i].constant_attenuation);
@@ -464,10 +478,11 @@ void openSubdiv_osdGLMeshDisplayPrepare(int use_osd_glsl,
 		             &g_lighting_data.lights[i].spot_exponent);
 		g_lighting_data.lights[i].spot_cos_cutoff =
 			cos(g_lighting_data.lights[i].spot_cutoff);
+#endif
 	}
 }
 
-static GLuint preapre_patchDraw(PartitionedGLMeshInterface *mesh,
+static GLuint preapre_patchDraw(GLMeshInterface *mesh,
                                 bool fill_quads)
 {
 	GLint program = 0;
@@ -545,13 +560,11 @@ static void perform_drawElements(GLuint program,
                                  int num_elements,
                                  int start_element)
 {
-	int mode = GL_QUADS;
 	if (program) {
 		glUniform1i(glGetUniformLocation(program, "PrimitiveIdBase"),
 		            patch_index);
 	}
-	mode = GL_LINES_ADJACENCY;
-	glDrawElements(mode,
+	glDrawElements(GL_LINES_ADJACENCY,
 	               num_elements,
 	               GL_UNSIGNED_INT,
 	               (void *)(start_element * sizeof(unsigned int)));
@@ -575,48 +588,43 @@ static void finish_patchDraw(bool fill_quads)
 	}
 }
 
-#if 0
-static void draw_partition_patches_range(PartitionedGLMeshInterface *mesh,
+static void draw_partition_patches_range(GLMeshInterface *mesh,
                                          GLuint program,
-                                         int start_partition,
-                                         int num_partitions)
+                                         int start_patch,
+                                         int num_patches)
 {
-	/* Glue patches from all partitions in the range together. */
-	int patch_index = -1, start_element = -1, num_elements = 0;
-	for (int partition = start_partition;
-	     partition < start_partition + num_partitions;
-	     ++partition)
-	{
-		OsdDrawContext::PatchArrayVector const &patches =
-		        mesh->GetPatchArrays(partition);
-		for (int i = 0; i < (int)patches.size(); ++i) {
-			OsdDrawContext::PatchArray const &patch = patches[i];
-			OsdDrawContext::PatchDescriptor desc = patch.GetDescriptor();
-			OpenSubdiv::FarPatchTables::Type patchType = desc.GetType();
-			if (patchType == OpenSubdiv::FarPatchTables::QUADS) {
-				if (start_element == -1) {
-					patch_index = patch.GetPatchIndex();
-					start_element = patch.GetVertIndex();
-				}
+	int traversed_patches = 0, num_remained_patches = num_patches;
+	const OpenSubdiv::Osd::PatchArrayVector& patches =
+	        mesh->GetPatchTable()->GetPatchArrays();
+	for (int i = 0; i < (int)patches.size(); ++i) {
+		const OpenSubdiv::Osd::PatchArray& patch = patches[i];
+		OpenSubdiv::Far::PatchDescriptor desc = patch.GetDescriptor();
+		OpenSubdiv::Far::PatchDescriptor::Type patchType = desc.GetType();
 
-				assert(patch.GetVertIndex() == start_element + num_elements);
-				num_elements += patch.GetNumIndices();
+		if (patchType == OpenSubdiv::Far::PatchDescriptor::QUADS) {
+			const int num_block_patches = patch.GetNumPatches();
+			if (start_patch >= traversed_patches &&
+			    start_patch < traversed_patches + num_block_patches)
+			{
+				const int num_control_verts = desc.GetNumControlVertices();
+				const int start_draw_patch = start_patch - traversed_patches;
+				const int num_draw_patches = std::min(num_remained_patches,
+				                                      num_block_patches - start_draw_patch);
+				perform_drawElements(program,
+				                     i,
+				                     num_draw_patches * num_control_verts,
+				                     patch.GetIndexBase() + start_draw_patch * num_control_verts);
+				num_remained_patches -= num_draw_patches;
 			}
-			else {
-				assert(!"Discontinuitied are not supported yet.");
+			if (num_remained_patches == 0) {
+				break;
 			}
+			traversed_patches += num_block_patches;
 		}
-	}
-
-	/* Perform actual draw. */
-	perform_drawElements(program,
-	                     patch_index,
-	                     num_elements,
-	                     start_element);
+    }
 }
-#endif
 
-static void draw_all_patches(PartitionedGLMeshInterface *mesh,
+static void draw_all_patches(GLMeshInterface *mesh,
                              GLuint program)
 {
 	const OpenSubdiv::Osd::PatchArrayVector& patches =
@@ -637,30 +645,25 @@ static void draw_all_patches(PartitionedGLMeshInterface *mesh,
 
 void openSubdiv_osdGLMeshDisplay(OpenSubdiv_GLMesh *gl_mesh,
                                  int fill_quads,
-                                 int start_partition,
-                                 int num_partitions)
+                                 int start_patch,
+                                 int num_patches)
 {
-	PartitionedGLMeshInterface *mesh =
-		(PartitionedGLMeshInterface *)(gl_mesh->descriptor);
+	GLMeshInterface *mesh =
+		(GLMeshInterface *)(gl_mesh->descriptor);
 
 	/* Make sure all global invariants are initialized. */
-	openSubdiv_osdGLDisplayInit();
+	if (!openSubdiv_osdGLDisplayInit()) {
+		return;
+	}
 
 	/* Setup GLSL/OpenGL to draw patches in current context. */
 	GLuint program = preapre_patchDraw(mesh, fill_quads != 0);
 
-	if (start_partition != -1) {
-#if 0
+	if (start_patch != -1) {
 		draw_partition_patches_range(mesh,
 		                             program,
-		                             start_partition,
-		                             num_partitions);
-#else
-		(void)num_partitions;
-		if(start_partition == 0) {
-			draw_all_patches(mesh, program);
-		}
-#endif
+		                             start_patch,
+		                             num_patches);
 	}
 	else {
 		draw_all_patches(mesh, program);

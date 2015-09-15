@@ -1469,25 +1469,26 @@ int ED_screen_area_active(const bContext *C)
 	return 0;
 }
 
-/* operator call, WM + Window + screen already existed before */
-/* Do NOT call in area/region queues! */
-void ED_screen_set(bContext *C, bScreen *sc)
+/**
+ * operator call, WM + Window + screen already existed before
+ *
+ * \warning Do NOT call in area/region queues!
+ * \returns success.
+ */
+bool ED_screen_set(bContext *C, bScreen *sc)
 {
 	Main *bmain = CTX_data_main(C);
 	wmWindowManager *wm = CTX_wm_manager(C);
 	wmWindow *win = CTX_wm_window(C);
 	bScreen *oldscreen = CTX_wm_screen(C);
-	ID *id;
 	
 	/* validate screen, it's called with notifier reference */
-	for (id = bmain->screen.first; id; id = id->next)
-		if (sc == (bScreen *)id)
-			break;
-	if (id == NULL)
-		return;
-	
+	if (BLI_findindex(&bmain->screen, sc) == -1) {
+		return true;
+	}
 
-	if (sc->state == SCREENFULL) {             /* find associated full */
+	if (ELEM(sc->state, SCREENMAXIMIZED, SCREENFULL)) {
+		/* find associated full */
 		bScreen *sc1;
 		for (sc1 = bmain->screen.first; sc1; sc1 = sc1->id.next) {
 			ScrArea *sa = sc1->areabase.first;
@@ -1499,8 +1500,9 @@ void ED_screen_set(bContext *C, bScreen *sc)
 	}
 
 	/* check for valid winid */
-	if (sc->winid != 0 && sc->winid != win->winid)
-		return;
+	if (sc->winid != 0 && sc->winid != win->winid) {
+		return false;
+	}
 	
 	if (oldscreen != sc) {
 		wmTimer *wt = oldscreen->animtimer;
@@ -1565,55 +1567,70 @@ void ED_screen_set(bContext *C, bScreen *sc)
 		 */
 		DAG_on_visible_update(bmain, false);
 	}
+
+	return true;
 }
 
-static int ed_screen_used(wmWindowManager *wm, bScreen *sc)
+static bool ed_screen_used(wmWindowManager *wm, bScreen *sc)
 {
 	wmWindow *win;
 
-	for (win = wm->windows.first; win; win = win->next)
-		if (win->screen == sc)
-			return 1;
-	
-	return 0;
+	for (win = wm->windows.first; win; win = win->next) {
+		if (win->screen == sc) {
+			return true;
+		}
+
+		if (ELEM(win->screen->state, SCREENMAXIMIZED, SCREENFULL)) {
+			ScrArea *sa = win->screen->areabase.first;
+			if (sa->full == sc) {
+				return true;
+			}
+		}
+	}
+
+	return false;
 }
 
 /* only call outside of area/region loops */
-void ED_screen_delete(bContext *C, bScreen *sc)
+bool ED_screen_delete(bContext *C, bScreen *sc)
 {
 	Main *bmain = CTX_data_main(C);
 	wmWindowManager *wm = CTX_wm_manager(C);
 	wmWindow *win = CTX_wm_window(C);
 	bScreen *newsc;
-	int delete = 1;
 	
 	/* don't allow deleting temp fullscreens for now */
 	if (ELEM(sc->state, SCREENMAXIMIZED, SCREENFULL)) {
-		return;
+		return false;
 	}
-	
-		
+
 	/* screen can only be in use by one window at a time, so as
 	 * long as we are able to find a screen that is unused, we
 	 * can safely assume ours is not in use anywhere an delete it */
 
 	for (newsc = sc->id.prev; newsc; newsc = newsc->id.prev)
-		if (!ed_screen_used(wm, newsc))
+		if (!ed_screen_used(wm, newsc) && !newsc->temp)
 			break;
 	
 	if (!newsc) {
 		for (newsc = sc->id.next; newsc; newsc = newsc->id.next)
-			if (!ed_screen_used(wm, newsc))
+			if (!ed_screen_used(wm, newsc) && !newsc->temp)
 				break;
 	}
 
-	if (!newsc)
-		return;
+	if (!newsc) {
+		return false;
+	}
 
 	ED_screen_set(C, newsc);
 
-	if (delete && win->screen != sc)
+	if (win->screen != sc) {
 		BKE_libblock_free(bmain, sc);
+		return true;
+	}
+	else {
+		return false;
+	}
 }
 
 static void ed_screen_set_3dview_camera(Scene *scene, bScreen *sc, ScrArea *sa, View3D *v3d)
@@ -1774,6 +1791,8 @@ ScrArea *ED_screen_full_newspace(bContext *C, ScrArea *sa, int type)
  */
 void ED_screen_full_prevspace(bContext *C, ScrArea *sa, const bool was_prev_temp)
 {
+	BLI_assert(sa->full);
+
 	if (sa->flag & AREA_FLAG_STACKED_FULLSCREEN) {
 		/* stacked fullscreen -> only go back to previous screen and don't toggle out of fullscreen */
 		ED_area_prevspace(C, sa);

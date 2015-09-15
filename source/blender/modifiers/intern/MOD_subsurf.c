@@ -38,6 +38,10 @@
 #include "DNA_scene_types.h"
 #include "DNA_object_types.h"
 
+#ifdef WITH_OPENSUBDIV
+#  include "DNA_userdef_types.h"
+#endif
+
 #include "BLI_utildefines.h"
 
 
@@ -125,7 +129,10 @@ static DerivedMesh *applyModifier(ModifierData *md, Object *ob,
 	    do_cddm_convert == false &&
 	    smd->use_opensubdiv)
 	{
-		if ((DAG_get_eval_flags_for_object(md->scene, ob) & DAG_EVAL_NEED_CPU) == 0) {
+		if (U.opensubdiv_compute_type == USER_OPENSUBDIV_COMPUTE_NONE) {
+			modifier_setError(md, "OpenSubdiv is disabled in User Preferences");
+		}
+		else if ((DAG_get_eval_flags_for_object(md->scene, ob) & DAG_EVAL_NEED_CPU) == 0) {
 			subsurf_flags |= SUBSURF_USE_GPU_BACKEND;
 		}
 		else {

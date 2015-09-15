@@ -234,8 +234,14 @@ BVHNode* BVHBuild::run()
 		return NULL;
 
 	/* init spatial splits */
-	if(params.top_level) /* todo: get rid of this */
+	if(params.top_level) {
+		/* NOTE: Technically it is supported by the builder but it's not really
+		 * optimized for speed yet and not really clear yet if it has measurable
+		 * improvement on render time. Needs some extra investigation before
+		 * enabling spatial split for top level BVH.
+		 */
 		params.use_spatial_split = false;
+	}
 
 	spatial_min_overlap = root.bounds().safe_area() * params.spatial_split_alpha;
 	spatial_right_bounds.clear();
@@ -276,6 +282,8 @@ BVHNode* BVHBuild::run()
 		else if(!params.use_spatial_split) {
 			/*rotate(rootnode, 4, 5);*/
 			rootnode->update_visibility();
+		}
+		if(rootnode != NULL) {
 			VLOG(1) << "BVH build statistics:\n"
 			        << "  Build time: " << time_dt() - build_start_time << "\n"
 			        << "  Total number of nodes: "
@@ -525,11 +533,9 @@ BVHNode* BVHBuild::create_leaf_node(const BVHRange& range)
 	/* Extend an array when needed. */
 	if(prim_type.size() < range.end()) {
 		assert(params.use_spatial_split);
-		/* TODO(sergey): We might want to look into different policies of
-		 * re-allocation here, so on the one hand we would not do as much
-		 * re-allocations and on the other hand will have small memory
-		 * overhead.
-		 */
+		prim_type.reserve(references.size());
+		prim_index.reserve(references.size());
+		prim_object.reserve(references.size());
 		prim_type.resize(range.end());
 		prim_index.resize(range.end());
 		prim_object.resize(range.end());

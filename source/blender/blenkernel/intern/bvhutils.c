@@ -60,8 +60,14 @@ float bvhtree_ray_tri_intersection(
 {
 	float dist;
 
+#ifdef USE_KDOPBVH_WATERTIGHT
+	if (isect_ray_tri_watertight_v3(ray->origin, ray->isect_precalc, v0, v1, v2, &dist, NULL))
+#else
 	if (isect_ray_tri_epsilon_v3(ray->origin, ray->direction, v0, v1, v2, &dist, NULL, FLT_EPSILON))
+#endif
+	{
 		return dist;
+	}
 
 	return FLT_MAX;
 }
@@ -113,9 +119,6 @@ static void mesh_faces_nearest_point(void *userdata, int index, const float co[3
 			nearest->dist_sq = dist_sq;
 			copy_v3_v3(nearest->co, nearest_tmp);
 			normal_tri_v3(nearest->no, t0, t1, t2);
-
-			if (t1 == vert[face->v3].co)
-				nearest->flags |= BVH_ONQUAD;
 		}
 
 		t1 = t2;
@@ -202,9 +205,6 @@ static void mesh_faces_spherecast(void *userdata, int index, const BVHTreeRay *r
 			madd_v3_v3v3fl(hit->co, ray->origin, ray->direction, dist);
 
 			normal_tri_v3(hit->no, t0, t1, t2);
-
-			if (t1 == vert[face->v3].co)
-				hit->flags |= BVH_ONQUAD;
 		}
 
 		t1 = t2;
@@ -538,7 +538,7 @@ BVHTree *bvhtree_from_mesh_edges(BVHTreeFromMesh *data, DerivedMesh *dm, float e
 				tree = BLI_bvhtree_new(numEdges, epsilon, tree_type, axis);
 				if (tree != NULL) {
 					for (i = 0; i < numEdges; i++) {
-						float co[4][3];
+						float co[2][3];
 						copy_v3_v3(co[0], vert[edge[i].v1].co);
 						copy_v3_v3(co[1], vert[edge[i].v2].co);
 
@@ -916,7 +916,7 @@ static BVHTree *bvhtree_from_mesh_looptri_create_tree(
 			else {
 				if (vert && looptri) {
 					for (i = 0; i < looptri_num; i++) {
-						float co[4][3];
+						float co[3][3];
 						if (mask && !BLI_BITMAP_TEST_BOOL(mask, i)) {
 							continue;
 						}

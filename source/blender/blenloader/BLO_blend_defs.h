@@ -42,7 +42,7 @@
 enum {
 	/**
 	 * Arbitrary allocated memory
-	 * (owned by #ID's, or will leak on exit)
+	 * (typically owned by #ID's, will be freed when there are no users).
 	 */
 	DATA = BLEND_MAKE_ID('D', 'A', 'T', 'A'),
 	/**
@@ -55,8 +55,8 @@ enum {
 	 */
 	DNA1 = BLEND_MAKE_ID('D', 'N', 'A', '1'),
 	/**
-	 * Used as preview between #REND and #GLOB,
-	 * (ignored for regular file reading)
+	 * Used to store thumbnail previews, written between #REND and #GLOB blocks,
+	 * (ignored for regular file reading).
 	 */
 	TEST = BLEND_MAKE_ID('T', 'E', 'S', 'T'),
 	/**
@@ -74,5 +74,7 @@ enum {
 	 */
 	ENDB = BLEND_MAKE_ID('E', 'N', 'D', 'B'),
 };
+
+#define BLEN_THUMB_MEMSIZE_FILE(_x, _y) (sizeof(int) * (size_t)(2 + (_x) * (_y)))
 
 #endif  /* __BLO_BLEND_DEFS_H__ */

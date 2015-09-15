@@ -379,25 +379,33 @@ typedef struct BVHCallbackUserData {
 	LaplacianSystem *sys;
 } BVHCallbackUserData;
 
-static void bvh_callback(void *userdata, int index, const BVHTreeRay *UNUSED(ray), BVHTreeRayHit *hit)
+static void bvh_callback(void *userdata, int index, const BVHTreeRay *ray, BVHTreeRayHit *hit)
 {
 	BVHCallbackUserData *data = (struct BVHCallbackUserData *)userdata;
 	const MLoopTri *lt = &data->sys->heat.mlooptri[index];
 	const MLoop *mloop = data->sys->heat.mloop;
 	float (*verts)[3] = data->sys->heat.verts;
 	const float *vtri_co[3];
-	float lambda, uv[2], n[3], dir[3];
+	float dist_test;
 
-	mul_v3_v3fl(dir, data->vec, hit->dist);
 	vtri_co[0] = verts[mloop[lt->tri[0]].v];
 	vtri_co[1] = verts[mloop[lt->tri[1]].v];
 	vtri_co[2] = verts[mloop[lt->tri[2]].v];
 
-	if (isect_ray_tri_v3(data->start, dir, UNPACK3(vtri_co), &lambda, uv)) {
-		normal_tri_v3(n, UNPACK3(vtri_co));
-		if (lambda < 1.0f && dot_v3v3(n, data->vec) < -1e-5f) {
-			hit->index = index;
-			hit->dist *= lambda;
+#ifdef USE_KDOPBVH_WATERTIGHT
+	if (isect_ray_tri_watertight_v3(data->start, ray->isect_precalc, UNPACK3(vtri_co), &dist_test, NULL))
+#else
+	UNUSED_VARS(ray);
+	if (isect_ray_tri_v3(data->start, data->vec, UNPACK3(vtri_co), &dist_test, NULL))
+#endif
+	{
+		if (dist_test < hit->dist) {
+			float n[3];
+			normal_tri_v3(n, UNPACK3(vtri_co));
+			if (dot_v3v3(n, data->vec) < -1e-5f) {
+				hit->index = index;
+				hit->dist = dist_test;
+			}
 		}
 	}
 }
@@ -1116,6 +1124,7 @@ typedef struct MeshDeformBind {
 typedef struct MeshDeformIsect {
 	float start[3];
 	float vec[3];
+	float vec_length;
 	float lambda;
 
 	bool isect;
@@ -1222,7 +1231,7 @@ static void harmonic_ray_callback(void *userdata, int index, const BVHTreeRay *r
 		normal_tri_v3(no, UNPACK3(face));
 	}
 
-	dist = len_v3v3(ray->origin, co) / len_v3(isec->vec);
+	dist = len_v3v3(ray->origin, co) / isec->vec_length;
 	if (dist < hit->dist) {
 		hit->index = index;
 		hit->dist = dist;
@@ -1241,7 +1250,7 @@ static MDefBoundIsect *meshdeform_ray_tree_intersect(MeshDeformBind *mdb, const 
 		mdb,
 		&isect_mdef,
 	};
-	float end[3];
+	float end[3], vec_normal[3];
 	// static float epsilon[3] = {1e-4, 1e-4, 1e-4};
 
 	/* happens binding when a cage has no faces */
@@ -1260,10 +1269,11 @@ static MDefBoundIsect *meshdeform_ray_tree_intersect(MeshDeformBind *mdb, const 
 	copy_v3_v3(end, co2);
 #endif
 	sub_v3_v3v3(isect_mdef.vec, end, isect_mdef.start);
+	isect_mdef.vec_length = normalize_v3_v3(vec_normal, isect_mdef.vec);
 
 	hit.index = -1;
 	hit.dist = FLT_MAX;
-	if (BLI_bvhtree_ray_cast(mdb->bvhtree, isect_mdef.start, isect_mdef.vec,
+	if (BLI_bvhtree_ray_cast(mdb->bvhtree, isect_mdef.start, vec_normal,
 	                         0.0, &hit, harmonic_ray_callback, &data) != -1)
 	{
 		const MLoop *mloop = mdb->cagedm_cache.mloop;

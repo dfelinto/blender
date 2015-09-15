@@ -379,12 +379,13 @@ escape_finish:
  */
 char *BLI_str_quoted_substrN(const char *__restrict str, const char *__restrict prefix)
 {
-	size_t prefixLen = strlen(prefix);
 	const char *startMatch, *endMatch;
-	
+
 	/* get the starting point (i.e. where prefix starts, and add prefixLen+1 to it to get be after the first " */
-	startMatch = strstr(str, prefix) + prefixLen + 1;
+	startMatch = strstr(str, prefix);
 	if (startMatch) {
+		const size_t prefixLen = strlen(prefix);
+		startMatch += prefixLen + 1;
 		/* get the end point (i.e. where the next occurance of " is after the starting point) */
 
 		endMatch = startMatch;
@@ -755,7 +756,7 @@ void BLI_str_toupper_ascii(char *str, const size_t len)
  *
  * \param str
  * \param pad
- * \return The number of zeto's stripped.
+ * \return The number of zeros stripped.
  */
 int BLI_str_rstrip_float_zero(char *str, const char pad)
 {

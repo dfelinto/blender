@@ -2356,6 +2356,9 @@ static void SCREEN_OT_marker_jump(wmOperatorType *ot)
 static bool screen_set_is_ok(bScreen *screen, bScreen *screen_prev)
 {
 	return ((screen->winid == 0) &&
+	        /* in typical usage these should have a nonzero winid
+	         * (all temp screens should be used, or closed & freed). */
+	        (screen->temp == false) &&
 	        (screen->state == SCREENNORMAL) &&
 	        (screen != screen_prev) &&
 	        (screen->id.name[2] != '.' || !(U.uiflag & USER_HIDE_DOT)));
@@ -2373,8 +2376,9 @@ static int screen_set_exec(bContext *C, wmOperator *op)
 	int delta = RNA_int_get(op->ptr, "delta");
 	
 	/* temp screens are for userpref or render display */
-	if (screen->temp)
+	if (screen->temp || (sa && sa->full && sa->full->temp)) {
 		return OPERATOR_CANCELLED;
+	}
 	
 	if (delta == 1) {
 		while (tot--) {

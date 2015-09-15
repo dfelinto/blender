@@ -277,7 +277,7 @@ static void py_bvhtree_raycast_cb(void *userdata, int index, const BVHTreeRay *r
 {
 	const PyBVHTree *self = userdata;
 
-	const float (*coords)[3] = self->coords;
+	const float (*coords)[3] = (const float (*)[3])self->coords;
 	const unsigned int *tri = self->tris[index];
 	const float *tri_co[3] = {coords[tri[0]], coords[tri[1]], coords[tri[2]]};
 	float dist;
@@ -306,7 +306,7 @@ static void py_bvhtree_nearest_point_cb(void *userdata, int index, const float c
 {
 	PyBVHTree *self = userdata;
 
-	const float (*coords)[3] = self->coords;
+	const float (*coords)[3] = (const float (*)[3])self->coords;
 	const unsigned int *tri = self->tris[index];
 	const float *tri_co[3] = {coords[tri[0]], coords[tri[1]], coords[tri[2]]};
 	float nearest_tmp[3], dist_sq;
@@ -446,6 +446,43 @@ BLI_INLINE bool overlap_cmp(const void *a_v, const void *b_v)
 	return (memcmp(a, b, sizeof(*a)) != 0);
 }
 
+struct PyBVHTree_OverlapData {
+	PyBVHTree *tree_pair[2];
+	float epsilon;
+};
+
+static bool py_bvhtree_overlap_cb(void *userdata, int index_a, int index_b, int UNUSED(thread))
+{
+	struct PyBVHTree_OverlapData *data = userdata;
+	PyBVHTree *tree_a = data->tree_pair[0];
+	PyBVHTree *tree_b = data->tree_pair[1];
+	const unsigned int *tri_a = tree_a->tris[index_a];
+	const unsigned int *tri_b = tree_b->tris[index_b];
+	const float *tri_a_co[3] = {tree_a->coords[tri_a[0]], tree_a->coords[tri_a[1]], tree_a->coords[tri_a[2]]};
+	const float *tri_b_co[3] = {tree_b->coords[tri_b[0]], tree_b->coords[tri_b[1]], tree_b->coords[tri_b[2]]};
+	float ix_pair[2][3];
+	int verts_shared = 0;
+
+	if (tree_a == tree_b) {
+		if (UNLIKELY(index_a == index_b)) {
+			return false;
+		}
+
+		verts_shared = (
+		        ELEM(tri_a_co[0], UNPACK3(tri_b_co)) +
+		        ELEM(tri_a_co[1], UNPACK3(tri_b_co)) +
+		        ELEM(tri_a_co[2], UNPACK3(tri_b_co)));
+
+		/* if 2 points are shared, bail out */
+		if (verts_shared >= 2) {
+			return false;
+		}
+	}
+
+	return (isect_tri_tri_epsilon_v3(UNPACK3(tri_a_co), UNPACK3(tri_b_co), ix_pair[0], ix_pair[1], data->epsilon) &&
+	        ((verts_shared == 0) || (len_squared_v3v3(ix_pair[0], ix_pair[1]) > data->epsilon)));
+}
+
 PyDoc_STRVAR(py_bvhtree_overlap_doc,
 ".. method:: overlap(other_tree)\n"
 "\n"
@@ -459,6 +496,7 @@ PyDoc_STRVAR(py_bvhtree_overlap_doc,
 );
 static PyObject *py_bvhtree_overlap(PyBVHTree *self, PyBVHTree *other)
 {
+	struct PyBVHTree_OverlapData data;
 	BVHTreeOverlap *overlap;
 	unsigned int overlap_len = 0;
 	PyObject *ret;
@@ -468,7 +506,11 @@ static PyObject *py_bvhtree_overlap(PyBVHTree *self, PyBVHTree *other)
 		return NULL;
 	}
 
-	overlap = BLI_bvhtree_overlap(self->tree, other->tree, &overlap_len);
+	data.tree_pair[0] = self;
+	data.tree_pair[1] = other;
+	data.epsilon = max_ff(self->epsilon, other->epsilon);
+
+	overlap = BLI_bvhtree_overlap(self->tree, other->tree, &overlap_len, py_bvhtree_overlap_cb, &data);
 
 	ret = PyList_New(0);
 
@@ -476,43 +518,34 @@ static PyObject *py_bvhtree_overlap(PyBVHTree *self, PyBVHTree *other)
 		/* pass */
 	}
 	else {
-		const float epsilon = max_ff(self->epsilon, other->epsilon);
 		bool use_unique = (self->orig_index || other->orig_index);
 		GSet *pair_test = use_unique ? BLI_gset_new_ex(overlap_hash, overlap_cmp, __func__, overlap_len) : NULL;
 		/* simple case, no index remapping */
 		unsigned int i;
 
 		for (i = 0; i < overlap_len; i++) {
-			const unsigned int *tri_a = self->tris[overlap[i].indexA];
-			const unsigned int *tri_b = other->tris[overlap[i].indexB];
-			const float *tri_a_co[3] = {self->coords[tri_a[0]], self->coords[tri_a[1]], self->coords[tri_a[2]]};
-			const float *tri_b_co[3] = {other->coords[tri_b[0]], other->coords[tri_b[1]], other->coords[tri_b[2]]};
-
-			if (isect_tri_tri_epsilon_v3(UNPACK3(tri_a_co), UNPACK3(tri_b_co), NULL, NULL, epsilon)) {
-				PyObject *item;
-
-				if (use_unique) {
-					if (self->orig_index) {
-						overlap[i].indexA = self->orig_index[overlap[i].indexA];
-					}
-					if (other->orig_index) {
-						overlap[i].indexB = other->orig_index[overlap[i].indexB];
-					}
-
-					/* skip if its already added */
-					if (!BLI_gset_add(pair_test, &overlap[i])) {
-						continue;
-					}
+			PyObject *item;
+			if (use_unique) {
+				if (self->orig_index) {
+					overlap[i].indexA = self->orig_index[overlap[i].indexA];
+				}
+				if (other->orig_index) {
+					overlap[i].indexB = other->orig_index[overlap[i].indexB];
 				}
 
-				item = PyTuple_New(2);
-				PyTuple_SET_ITEMS(item,
-				        PyLong_FromLong(overlap[i].indexA),
-				        PyLong_FromLong(overlap[i].indexB));
-
-				PyList_Append(ret, item);
-				Py_DECREF(item);
+				/* skip if its already added */
+				if (!BLI_gset_add(pair_test, &overlap[i])) {
+					continue;
+				}
 			}
+
+			item = PyTuple_New(2);
+			PyTuple_SET_ITEMS(item,
+			        PyLong_FromLong(overlap[i].indexA),
+			        PyLong_FromLong(overlap[i].indexB));
+
+			PyList_Append(ret, item);
+			Py_DECREF(item);
 		}
 
 		if (pair_test) {
@@ -818,16 +851,17 @@ static PyObject *C_BVHTree_FromPolygons(PyObject *UNUSED(cls), PyObject *args, P
 #ifndef MATH_STANDALONE
 
 PyDoc_STRVAR(C_BVHTree_FromBMesh_doc,
-".. classmethod:: FromBMesh(bmesh)\n"
+".. classmethod:: FromBMesh(bmesh, epsilon=0.0)\n"
 "\n"
 "   BVH tree based on :class:`BMesh` data.\n"
 "\n"
 "   :arg bmesh: BMesh data.\n"
 "   :type bmesh: :class:`BMesh`\n"
+PYBVH_FROM_GENERIC_EPSILON_DOC
 );
 static PyObject *C_BVHTree_FromBMesh(PyObject *UNUSED(cls), PyObject *args, PyObject *kwargs)
 {
-	const char *keywords[] = {"bmesh", NULL};
+	const char *keywords[] = {"bmesh", "epsilon", NULL};
 
 	BPy_BMesh *py_bm;
 

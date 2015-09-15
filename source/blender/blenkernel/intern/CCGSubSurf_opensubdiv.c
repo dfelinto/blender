@@ -308,6 +308,31 @@ void ccgSubSurf_drawGLMesh(CCGSubSurf *ss, bool fill_quads,
 	}
 }
 
+int ccgSubSurf_getNumGLMeshBaseFaces(CCGSubSurf *ss)
+{
+	const OpenSubdiv_TopologyRefinerDescr *topology_refiner;
+	if (ss->osd_topology_refiner != NULL) {
+		topology_refiner = ss->osd_topology_refiner;
+	}
+	else {
+		topology_refiner = openSubdiv_getGLMeshTopologyRefiner(ss->osd_mesh);
+	}
+	return openSubdiv_topologyRefinerGetNumFaces(topology_refiner);
+}
+
+/* Get number of vertices in base faces in a particular GL mesh. */
+int ccgSubSurf_getNumGLMeshBaseFaceVerts(CCGSubSurf *ss, int face)
+{
+	const OpenSubdiv_TopologyRefinerDescr *topology_refiner;
+	if (ss->osd_topology_refiner != NULL) {
+		topology_refiner = ss->osd_topology_refiner;
+	}
+	else {
+		topology_refiner = openSubdiv_getGLMeshTopologyRefiner(ss->osd_mesh);
+	}
+	return openSubdiv_topologyRefinerGetNumFaceVerts(topology_refiner, face);
+}
+
 void ccgSubSurf_setSkipGrids(CCGSubSurf *ss, bool skip_grids)
 {
 	ss->skip_grids = skip_grids;
@@ -881,7 +906,8 @@ void ccgSubSurf_getMinMax(CCGSubSurf *ss, float r_min[3], float r_max[3])
 	int i;
 	BLI_assert(ss->skip_grids == true);
 	for (i = 0; i < ss->osd_num_coarse_coords; i++) {
-		DO_MINMAX(ss->osd_coarse_coords[i], r_min, r_max);
+		/* Coarse coordinates has normals interleaved into the array. */
+		DO_MINMAX(ss->osd_coarse_coords[2 * i], r_min, r_max);
 	}
 }
 

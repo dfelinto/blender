@@ -53,6 +53,7 @@ Camera::Camera()
 	longitude_min = -M_PI_F;
 	longitude_max = M_PI_F;
 	fov = M_PI_4_F;
+	fov_pre = fov_post = fov;
 	stereo_eye = STEREO_NONE;
 	interocular_distance = 0.065f;
 	convergence_distance = 30.0f * 0.065f;
@@ -94,19 +95,26 @@ Camera::~Camera()
 
 void Camera::compute_auto_viewplane()
 {
-	float aspect = (float)width/(float)height;
-
-	if(width >= height) {
-		viewplane.left = -aspect;
-		viewplane.right = aspect;
-		viewplane.bottom = -1.0f;
+	if(type == CAMERA_PANORAMA) {
+		viewplane.left = 0.0f;
+		viewplane.right = 1.0f;
+		viewplane.bottom = 0.0f;
 		viewplane.top = 1.0f;
 	}
 	else {
-		viewplane.left = -1.0f;
-		viewplane.right = 1.0f;
-		viewplane.bottom = -1.0f/aspect;
-		viewplane.top = 1.0f/aspect;
+		float aspect = (float)width/(float)height;
+		if(width >= height) {
+			viewplane.left = -aspect;
+			viewplane.right = aspect;
+			viewplane.bottom = -1.0f;
+			viewplane.top = 1.0f;
+		}
+		else {
+			viewplane.left = -1.0f;
+			viewplane.right = 1.0f;
+			viewplane.bottom = -1.0f/aspect;
+			viewplane.top = 1.0f/aspect;
+		}
 	}
 }
 
@@ -426,28 +434,28 @@ BoundBox Camera::viewplane_bounds_get()
 
 	if(type == CAMERA_PANORAMA) {
 		if(use_spherical_stereo == false){
-			bounds.grow(make_float3(cameratoworld.w.x,
-			                        cameratoworld.w.y,
-			                        cameratoworld.w.z));
+			bounds.grow(make_float3(cameratoworld.x.w,
+			                        cameratoworld.y.w,
+			                        cameratoworld.z.w));
 		}
 		else {
 			float half_eye_distance = interocular_distance * 0.5f;
 
-			bounds.grow(make_float3(cameratoworld.w.x + half_eye_distance,
-			                        cameratoworld.w.y,
-			                        cameratoworld.w.z));
+			bounds.grow(make_float3(cameratoworld.x.w + half_eye_distance,
+			                        cameratoworld.y.w,
+			                        cameratoworld.z.w));
 
-			bounds.grow(make_float3(cameratoworld.w.x,
-			                        cameratoworld.w.y + half_eye_distance,
-			                        cameratoworld.w.z));
+			bounds.grow(make_float3(cameratoworld.z.w,
+			                        cameratoworld.y.w + half_eye_distance,
+			                        cameratoworld.z.w));
 
-			bounds.grow(make_float3(cameratoworld.w.x - half_eye_distance,
-			                        cameratoworld.w.y,
-			                        cameratoworld.w.z));
+			bounds.grow(make_float3(cameratoworld.x.w - half_eye_distance,
+			                        cameratoworld.y.w,
+			                        cameratoworld.z.w));
 
-			bounds.grow(make_float3(cameratoworld.w.x,
-			                        cameratoworld.w.y - half_eye_distance,
-			                        cameratoworld.w.z));
+			bounds.grow(make_float3(cameratoworld.x.w,
+			                        cameratoworld.y.w - half_eye_distance,
+			                        cameratoworld.z.w));
 		}
 	}
 	else {

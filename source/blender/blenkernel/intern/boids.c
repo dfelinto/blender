@@ -189,6 +189,7 @@ static int rule_goal_avoid(BoidRule *rule, BoidBrainData *bbd, BoidValues *val, 
 
 static int rule_avoid_collision(BoidRule *rule, BoidBrainData *bbd, BoidValues *val, ParticleData *pa)
 {
+	const int raycast_flag = BVH_RAYCAST_DEFAULT & ~(BVH_RAYCAST_WATERTIGHT);
 	BoidRuleAvoidCollision *acbr = (BoidRuleAvoidCollision*) rule;
 	KDTreeNearest *ptn = NULL;
 	ParticleTarget *pt;
@@ -214,7 +215,7 @@ static int rule_avoid_collision(BoidRule *rule, BoidBrainData *bbd, BoidValues *
 		mul_v3_fl(ray_dir, acbr->look_ahead);
 		col.f = 0.0f;
 		hit.index = -1;
-		hit.dist = col.original_ray_length = len_v3(ray_dir);
+		hit.dist = col.original_ray_length = normalize_v3(ray_dir);
 
 		/* find out closest deflector object */
 		for (coll = bbd->sim->colliders->first; coll; coll=coll->next) {
@@ -225,8 +226,11 @@ static int rule_avoid_collision(BoidRule *rule, BoidBrainData *bbd, BoidValues *
 			col.current = coll->ob;
 			col.md = coll->collmd;
 
-			if (col.md && col.md->bvhtree)
-				BLI_bvhtree_ray_cast(col.md->bvhtree, col.co1, ray_dir, radius, &hit, BKE_psys_collision_neartest_cb, &col);
+			if (col.md && col.md->bvhtree) {
+				BLI_bvhtree_ray_cast_ex(
+				        col.md->bvhtree, col.co1, ray_dir, radius, &hit,
+				        BKE_psys_collision_neartest_cb, &col, raycast_flag);
+			}
 		}
 		/* then avoid that object */
 		if (hit.index>=0) {
@@ -759,6 +763,7 @@ static void set_boid_values(BoidValues *val, BoidSettings *boids, ParticleData *
 
 static Object *boid_find_ground(BoidBrainData *bbd, ParticleData *pa, float ground_co[3], float ground_nor[3])
 {
+	const int raycast_flag = BVH_RAYCAST_DEFAULT & ~(BVH_RAYCAST_WATERTIGHT);
 	BoidParticle *bpa = pa->boid;
 
 	if (bpa->data.mode == eBoidMode_Climbing) {
@@ -794,7 +799,7 @@ static Object *boid_find_ground(BoidBrainData *bbd, ParticleData *pa, float grou
 		sub_v3_v3v3(ray_dir, col.co2, col.co1);
 		col.f = 0.0f;
 		hit.index = -1;
-		hit.dist = col.original_ray_length = len_v3(ray_dir);
+		hit.dist = col.original_ray_length = normalize_v3(ray_dir);
 		col.pce.inside = 0;
 
 		for (coll = bbd->sim->colliders->first; coll; coll = coll->next) {
@@ -802,8 +807,11 @@ static Object *boid_find_ground(BoidBrainData *bbd, ParticleData *pa, float grou
 			col.md = coll->collmd;
 			col.fac1 = col.fac2 = 0.f;
 
-			if (col.md && col.md->bvhtree)
-				BLI_bvhtree_ray_cast(col.md->bvhtree, col.co1, ray_dir, radius, &hit, BKE_psys_collision_neartest_cb, &col);
+			if (col.md && col.md->bvhtree) {
+				BLI_bvhtree_ray_cast_ex(
+				        col.md->bvhtree, col.co1, ray_dir, radius, &hit,
+				        BKE_psys_collision_neartest_cb, &col, raycast_flag);
+			}
 		}
 		/* then use that object */
 		if (hit.index>=0) {
@@ -820,14 +828,17 @@ static Object *boid_find_ground(BoidBrainData *bbd, ParticleData *pa, float grou
 		sub_v3_v3v3(ray_dir, col.co2, col.co1);
 		col.f = 0.0f;
 		hit.index = -1;
-		hit.dist = col.original_ray_length = len_v3(ray_dir);
+		hit.dist = col.original_ray_length = normalize_v3(ray_dir);
 
 		for (coll = bbd->sim->colliders->first; coll; coll = coll->next) {
 			col.current = coll->ob;
 			col.md = coll->collmd;
 
-			if (col.md && col.md->bvhtree)
-				BLI_bvhtree_ray_cast(col.md->bvhtree, col.co1, ray_dir, radius, &hit, BKE_psys_collision_neartest_cb, &col);
+			if (col.md && col.md->bvhtree) {
+				BLI_bvhtree_ray_cast_ex(
+				        col.md->bvhtree, col.co1, ray_dir, radius, &hit,
+				        BKE_psys_collision_neartest_cb, &col, raycast_flag);
+			}
 		}
 		/* then use that object */
 		if (hit.index>=0) {
