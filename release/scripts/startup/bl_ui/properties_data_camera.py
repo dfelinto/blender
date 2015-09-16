@@ -147,13 +147,13 @@ class DATA_PT_camera_stereoscopy(CameraButtonsPanel, Panel):
 
     def draw(self, context):
         layout = self.layout
-        # render = context.scene.render
+        render = context.scene.render
         st = context.camera.stereo
         cam = context.camera
-        engine = context.scene.render.engine
+        engine = render.engine
 
-        is_panorama = cam.type == 'PANO' and engine == 'CYCLES'
-        is_spherical_stereo = is_panorama and cam.cycles.use_spherical_stereo
+        is_spherical_stereo = cam.type != 'ORTHO' and engine == 'CYCLES'
+        use_spherical_stereo = is_spherical_stereo and cam.cycles.use_spherical_stereo
 
         col = layout.column()
         col.row().prop(st, "convergence_mode", expand=True)
@@ -164,13 +164,13 @@ class DATA_PT_camera_stereoscopy(CameraButtonsPanel, Panel):
 
         col.prop(st, "interocular_distance")
 
-        if is_panorama:
+        if is_spherical_stereo:
             col.separator()
             col.prop(cam.cycles, "use_spherical_stereo")
 
         col.label(text="Pivot:")
         row = col.row()
-        row.active = not is_spherical_stereo
+        row.active = not use_spherical_stereo
         row.prop(st, "pivot", expand=True)
 
 
