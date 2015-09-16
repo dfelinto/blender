@@ -222,8 +222,7 @@ ccl_device float2 direction_to_panorama(KernelGlobals *kg, float3 dir)
 	}
 }
 
-
-ccl_device float3 panorama_stereo_position(KernelGlobals *kg, float3 dir, float3 pos)
+ccl_device float3 spherical_stereo_position(KernelGlobals *kg, float3 dir, float3 pos)
 {
 	float3 up, side;
 
@@ -244,7 +243,7 @@ ccl_device float3 panorama_stereo_position(KernelGlobals *kg, float3 dir, float3
 	return pos;
 }
 
-ccl_device float3 panorama_stereo_direction(KernelGlobals *kg, float3 dir, float3 pos, float3 newpos)
+ccl_device float3 spherical_stereo_direction(KernelGlobals *kg, float3 dir, float3 pos, float3 newpos)
 {
 	float3 screenpos, dirnew;
 
