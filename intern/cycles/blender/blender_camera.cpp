@@ -136,7 +136,7 @@ static bool blender_camera_use_spherical_stereo(BL::RenderSettings b_render, Ble
 {
 	if(b_render.use_multiview() &&
 	   b_render.views_format() == BL::RenderSettings::views_format_STEREO_3D &&
-	   bcam->type == CAMERA_PANORAMA &&
+	   (bcam->type == CAMERA_PANORAMA || bcam->type == CAMERA_PERSPECTIVE) &&
 	   RNA_boolean_get(ccamera, "use_spherical_stereo"))
 	{
 		return true;
