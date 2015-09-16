@@ -634,7 +634,7 @@ class CyclesCameraSettings(bpy.types.PropertyGroup):
                 name="Spherical Stereo",
                 description="Render every pixel rotating the camera around the "
                             "middle of the interocular distance",
-                default=True,
+                default=False,
                 )
 
     @classmethod
