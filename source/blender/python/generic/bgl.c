@@ -1027,6 +1027,22 @@ static PyObject *Method_##funcname (PyObject *UNUSED(self), PyObject *args)   \
 	ret_ret_##ret;                                                            \
 }
 
+#ifdef _WIN32
+#define BWGL_Wrap(funcname, ret, arg_list)                                    \
+static PyObject *Method_##funcname (PyObject *UNUSED(self), PyObject *args)   \
+{                                                                             \
+	arg_def arg_list;                                                         \
+	ret_def_##ret;                                                            \
+	if (!PyArg_ParseTuple(args, arg_str arg_list, arg_ref arg_list)) {        \
+		return NULL;                                                          \
+	}                                                                         \
+	ret_set_##ret wgl##funcname (arg_var arg_list);                           \
+	ret_ret_##ret;                                                            \
+}
+#else
+#define BWGL_Wrap(funcname, ret, arg_list)
+#endif
+
 /* GL_VERSION_1_0 */
 BGL_Wrap(Accum,                     void,      (GLenum, GLfloat))
 BGL_Wrap(AlphaFunc,                 void,      (GLenum, GLfloat))
@@ -1374,6 +1390,8 @@ BGL_Wrap(CopyTexSubImage3D,         void,      (GLenum, GLint, GLint, GLint, GLi
 BGL_Wrap(DrawRangeElements,         void,      (GLenum, GLuint, GLuint, GLsizei, GLenum, GLvoidP))
 BGL_Wrap(TexImage3D,                void,      (GLenum, GLint, GLint, GLsizei, GLsizei, GLsizei, GLint, GLenum, GLenum, GLvoidP))
 BGL_Wrap(TexSubImage3D,             void,      (GLenum, GLint, GLint, GLint, GLint, GLsizei, GLsizei, GLsizei, GLenum, GLenum, GLvoidP))
+BWGL_Wrap(GetSwapIntervalEXT,       GLint,     (void))
+BWGL_Wrap(SwapIntervalEXT,          GLboolean, (GLint))
 
 
 /* GL_VERSION_1_3 */
@@ -1648,19 +1666,25 @@ BGLU_Wrap(UnProject,         GLint,      (GLdouble, GLdouble, GLdouble, GLdouble
 /** \name Module Definition
  * \{ */
 
-#define MethodDefu(func) {"glu"#func, Method_##func, METH_VARARGS, NULL}
+#define gluMethodDefu(func) {"glu"#func, Method_##func, METH_VARARGS, NULL}
+#define wglMethodDefu(func) {"wgl"#func, Method_##func, METH_VARARGS, NULL}
 
 static struct PyMethodDef BGL_methods[] = {
-	MethodDefu(Perspective),
-	MethodDefu(LookAt),
-	MethodDefu(Ortho2D),
-	MethodDefu(PickMatrix),
-	MethodDefu(Project),
-	MethodDefu(UnProject),
+	gluMethodDefu(Perspective),
+	gluMethodDefu(LookAt),
+	gluMethodDefu(Ortho2D),
+	gluMethodDefu(PickMatrix),
+	gluMethodDefu(Project),
+	gluMethodDefu(UnProject),
+#ifdef _WIN32
+	wglMethodDefu(GetSwapIntervalEXT),
+	wglMethodDefu(SwapIntervalEXT),
+#endif
 	{NULL, NULL, 0, NULL}
 };
 
-#undef MethodDefu
+#undef wglMethodDefu
+#undef gluMethodDefu
 
 static struct PyModuleDef BGL_module_def = {
 	PyModuleDef_HEAD_INIT,
