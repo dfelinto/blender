@@ -49,6 +49,7 @@
 #include "BKE_report.h"
 
 #include "RNA_access.h"
+#include "RNA_define.h"
 
 #include "WM_api.h"
 #include "WM_types.h"
@@ -133,6 +134,43 @@ static void VIEW3D_OT_pastebuffer(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
+/* ************************** offscreen rendering ***************************** */
+
+static int view3d_offscreen_exec(bContext *UNUSED(C), wmOperator *UNUSED(op))
+{
+	/* TODO */
+	return OPERATOR_FINISHED;
+}
+
+void VIEW3D_OT_offscreen(wmOperatorType *ot)
+{
+	PropertyRNA *prop;
+
+	/* identifiers */
+	ot->name = "Offscreen Rendering";
+	ot->idname = "VIEW3D_OT_offscreen";
+	ot->description = "Offscreen render of viewport";
+
+	/* api callbacks */
+	ot->exec = view3d_offscreen_exec;
+	ot->poll = ED_operator_view3d_active;
+
+	/* properties */
+	prop = RNA_def_int(ot->srna, "bind_id", 0, INT_MIN, INT_MAX, "Bind Id", "", INT_MIN, INT_MAX);
+	RNA_def_property_flag(prop, PROP_HIDDEN | PROP_REQUIRED);
+	prop = RNA_def_int(ot->srna, "width", 0, INT_MIN, INT_MAX, "Witdh", "", INT_MIN, INT_MAX);
+	RNA_def_property_flag(prop, PROP_HIDDEN | PROP_REQUIRED);
+	prop = RNA_def_int(ot->srna, "height", 0, INT_MIN, INT_MAX, "Height", "", INT_MIN, INT_MAX);
+	RNA_def_property_flag(prop, PROP_HIDDEN | PROP_REQUIRED);
+	prop = RNA_def_float_matrix(ot->srna, "projection_matrix", 4, 4, NULL, 0.0f, 0.0f, "Projection Matrix", "", 0.0f, 0.0f);
+	RNA_def_property_flag(prop, PROP_HIDDEN | PROP_REQUIRED);
+	prop = RNA_def_float_matrix(ot->srna, "modelview_matrix", 4, 4, NULL, 0.0f, 0.0f, "Modelview Matrix", "", 0.0f, 0.0f);
+	RNA_def_property_flag(prop, PROP_HIDDEN | PROP_REQUIRED);
+
+	/* flags */
+	ot->flag = 0;
+}
+
 /* ************************** registration **********************************/
 
 void view3d_operatortypes(void)
@@ -196,7 +234,9 @@ void view3d_operatortypes(void)
 	WM_operatortype_append(VIEW3D_OT_snap_cursor_to_center);
 	WM_operatortype_append(VIEW3D_OT_snap_cursor_to_selected);
 	WM_operatortype_append(VIEW3D_OT_snap_cursor_to_active);
-		
+
+	WM_operatortype_append(VIEW3D_OT_offscreen);
+
 	transform_operatortypes();
 }
 
