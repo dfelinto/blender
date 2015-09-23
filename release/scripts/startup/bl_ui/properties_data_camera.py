@@ -143,7 +143,7 @@ class DATA_PT_camera_stereoscopy(CameraButtonsPanel, Panel):
     def poll(cls, context):
         render = context.scene.render
         return (super().poll(context) and render.use_multiview and
-                (render.views_format == 'STEREO_3D' or render.engine == 'CYCLES'))
+                render.views_format == 'STEREO_3D')
 
     def draw(self, context):
         layout = self.layout
