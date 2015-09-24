@@ -862,6 +862,7 @@ static int bake(
 
 			if ((ob_iter->transflag & OB_DUPLI) == 0) {
 				bake_highpoly_setup(bmain, scene, &highpoly[i], meshes_lookup_arr, ob_iter, ob_iter->obmat, ob_iter->id.name, false, reports);
+				unit_m4(highpoly[i].mat);
 				i++;
 			}
 			else {
@@ -873,6 +874,10 @@ static int bake(
 					if (dob->ob->type == OB_MESH) {
 						/* note: dob->mat is already in world space, no need to multiply by the parent */
 						bake_highpoly_setup(bmain, scene, &highpoly[i], meshes_lookup_arr, dob->ob, dob->mat, ob_iter->id.name, true, reports);
+
+						/* calculate the baking matrix (from the original object to the dupli) */
+						mul_m4_m4m4(highpoly[i].mat, imat, dob->mat);
+
 						i++;
 					}
 				}
@@ -924,7 +929,7 @@ static int bake(
 		for (i = 0; i < tot_highpoly; i++) {
 			ok = RE_bake_engine(re, highpoly[i].ob, i, pixel_array_high,
 			                    num_pixels, depth, pass_type,
-			                    highpoly[i].is_dupli_object ? (float *)highpoly[i].obmat : NULL,
+			                    highpoly[i].is_dupli_object ? (float *)highpoly[i].mat : NULL,
 			                    result);
 			if (!ok) {
 				BKE_reportf(reports, RPT_ERROR, "Error baking from object \"%s\"", highpoly[i].name + 2);
