@@ -127,9 +127,9 @@ static float blender_camera_focal_distance(BL::RenderEngine b_engine, BL::Object
 	camera_model_matrix(b_engine, b_ob, use_spherical_stereo, b_ob_matrix);
 	Transform obmat = transform_clear_scale(get_transform(b_ob_matrix));
 	Transform dofmat = get_transform(b_dof_object.matrix_world());
-	Transform mat = transform_inverse(obmat) * dofmat;
-
-	return fabsf(transform_get_column(&mat, 3).z);
+	float3 view_dir = normalize(transform_get_column(&obmat, 2));
+	float3 dof_dir = transform_get_column(&obmat, 3) - transform_get_column(&dofmat, 3);
+	return fabsf(dot(view_dir, dof_dir));
 }
 
 static bool blender_camera_use_spherical_stereo(BL::RenderSettings b_render, BlenderCamera *bcam, PointerRNA *ccamera)

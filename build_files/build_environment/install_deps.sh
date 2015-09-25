@@ -35,6 +35,8 @@ required-numpy: \
 -- "$@" \
 )
 
+COMMANDLINE=$@
+
 DISTRO=""
 RPM=""
 SRC="$HOME/src/blender-deps"
@@ -2536,7 +2538,7 @@ install_RPM() {
       if $NUMPY_SKIP; then
         WARNING "Skipping NumPy installation, as requested..."
       else
-        check_package_version_match_RPM python3-numpy $NUMPY_VERSION_MIN
+        check_package_version_ge_RPM python3-numpy $NUMPY_VERSION_MIN
         if [ $? -eq 0 ]; then
           install_packages_RPM python3-numpy
         elif $NUMPY_REQUIRED; then
@@ -3118,6 +3120,10 @@ print_info() {
   PRINT "The same goes for install_deps itself, if you encounter issues, please first erase everything in $SRC and $INST"
   PRINT "(provided obviously you did not add anything yourself in those dirs!), and run install_deps.sh again!"
   PRINT "Often, changes in the libs built by this script, or in your distro package, cannot be handled simply, so..."
+  PRINT ""
+  PRINT ""
+  PRINT "Ran with:"
+  PRINT "    install_deps.sh $COMMANDLINE"
   PRINT ""
   PRINT ""
   PRINT "If you're using CMake add this to your configuration flags:"

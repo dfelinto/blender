@@ -551,6 +551,7 @@ class SEQUENCER_PT_effect(SequencerButtonsPanel, Panel):
 
         if strip.input_count > 0:
             col = layout.column()
+            col.enabled = False
             col.prop(strip, "input_1")
             if strip.input_count > 1:
                 col.prop(strip, "input_2")
@@ -638,8 +639,10 @@ class SEQUENCER_PT_effect(SequencerButtonsPanel, Panel):
             col.prop(strip, "text")
             col.prop(strip, "font_size")
             col.prop(strip, "use_shadow")
-            col.prop(strip, "align")
+            col.prop(strip, "align_x")
+            col.prop(strip, "align_y")
             col.prop(strip, "location")
+            col.prop(strip, "wrap_width")
             layout.operator("sequencer.export_subtitles")
 
         col = layout.column(align=True)

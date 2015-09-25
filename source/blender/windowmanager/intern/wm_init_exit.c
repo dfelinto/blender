@@ -174,6 +174,10 @@ void WM_init(bContext *C, int argc, const char **argv)
 	/* Enforce loading the UI for the initial homefile */
 	G.fileflags &= ~G_FILE_NO_UI;
 
+	/* reports cant be initialized before the wm,
+	 * but keep before file reading, since that may report errors */
+	wm_init_reports(C);
+
 	/* get the default database, plus a wm */
 	wm_homefile_read(C, NULL, G.factory_startup, NULL);
 	
@@ -190,6 +194,10 @@ void WM_init(bContext *C, int argc, const char **argv)
 		GPU_set_linear_mipmap(true);
 		GPU_set_anisotropic(U.anisotropic_filter);
 		GPU_set_gpu_mipmapping(U.use_gpu_mipmap);
+
+#ifdef WITH_OPENSUBDIV
+		openSubdiv_init();
+#endif
 
 		UI_init();
 	}
@@ -225,8 +233,6 @@ void WM_init(bContext *C, int argc, const char **argv)
 	if (!G.background && !wm_start_with_console)
 		GHOST_toggleConsole(3);
 
-	wm_init_reports(C); /* reports cant be initialized before the wm */
-
 	clear_matcopybuf();
 	ED_render_clear_mtex_copybuf();
 
@@ -255,13 +261,24 @@ void WM_init(bContext *C, int argc, const char **argv)
 		/* that prevents loading both the kept session, and the file on the command line */
 	}
 	else {
+		/* note, logic here is from wm_file_read_post,
+		 * call functions that depend on Python being initialized. */
+
 		/* normally 'wm_homefile_read' will do this,
 		 * however python is not initialized when called from this function.
 		 *
 		 * unlikely any handlers are set but its possible,
 		 * note that recovering the last session does its own callbacks. */
+		CTX_wm_window_set(C, CTX_wm_manager(C)->windows.first);
+
 		BLI_callback_exec(CTX_data_main(C), NULL, BLI_CB_EVT_VERSION_UPDATE);
 		BLI_callback_exec(CTX_data_main(C), NULL, BLI_CB_EVT_LOAD_POST);
+
+		wm_file_read_report(C);
+
+		if (!G.background) {
+			CTX_wm_window_set(C, NULL);
+		}
 	}
 }
 

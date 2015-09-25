@@ -1017,7 +1017,6 @@ static int ghost_event_proc(GHOST_EventHandle evt, GHOST_TUserDataPtr C_void_ptr
 						
 #if defined(__APPLE__) || defined(WIN32)
 						/* OSX and Win32 don't return to the mainloop while resize */
-						wm_event_do_handlers(C);
 						wm_event_do_notifiers(C);
 						wm_draw_update(C);
 
@@ -1278,7 +1277,7 @@ void WM_event_timer_sleep(wmWindowManager *wm, wmWindow *UNUSED(win), wmTimer *t
 wmTimer *WM_event_add_timer(wmWindowManager *wm, wmWindow *win, int event_type, double timestep)
 {
 	wmTimer *wt = MEM_callocN(sizeof(wmTimer), "window timer");
-	
+
 	wt->event_type = event_type;
 	wt->ltime = PIL_check_seconds_timer();
 	wt->ntime = wt->ltime + timestep;

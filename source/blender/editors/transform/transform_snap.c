@@ -220,7 +220,7 @@ void drawSnapping(const struct bContext *C, TransInfo *t)
 			h = (((float)hi) / IMG_SIZE_FALLBACK) * G.sima->zoom * yuser_asp;
 			
 			cpack(0xFFFFFF);
-			glTranslatef(t->tsnap.snapPoint[0], t->tsnap.snapPoint[1], 0.0f);
+			glTranslate2fv(t->tsnap.snapPoint);
 			
 			//glRectf(0, 0, 1, 1);
 			
@@ -981,7 +981,7 @@ static void CalcSnapGeometry(TransInfo *t, float *UNUSED(vec))
 						break;
 					}
 					
-					new_dist = len_v3v3(last_p, vec);
+					new_dist = len_squared_v3v3(last_p, vec);
 					
 					if (new_dist < max_dist) {
 						copy_v3_v3(p, vec);

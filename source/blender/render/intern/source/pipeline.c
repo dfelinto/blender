@@ -533,6 +533,17 @@ void RE_FreeAllRender(void)
 #endif
 }
 
+void RE_FreeAllPersistentData(void)
+{
+	Render *re;
+	for (re = RenderGlobal.renderlist.first; re != NULL; re = re->next) {
+		if ((re->r.mode & R_PERSISTENT_DATA) != 0 && re->engine != NULL) {
+			RE_engine_free(re->engine);
+			re->engine = NULL;
+		}
+	}
+}
+
 /* on file load, free all re */
 void RE_FreeAllRenderResults(void)
 {
@@ -3506,6 +3517,11 @@ void RE_BlenderAnim(Render *re, Main *bmain, Scene *scene, Object *camera_overri
 		get_videos_dimensions(re, &rd, &width, &height);
 
 		mh = BKE_movie_handle_get(scene->r.im_format.imtype);
+		if (mh == NULL) {
+			BKE_report(re->reports, RPT_ERROR, "Movie format unsupported");
+			return;
+		}
+
 		re->movie_ctx_arr = MEM_mallocN(sizeof(void *) * totvideos, "Movies' Context");
 
 		for (i = 0; i < totvideos; i++) {

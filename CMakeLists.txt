@@ -2320,9 +2320,14 @@ endif()
 if(WITH_IMAGE_OPENJPEG)
 	if(WITH_SYSTEM_OPENJPEG)
 		# dealt with above
+		set(OPENJPEG_DEFINES "")
 	else()
 		set(OPENJPEG_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/extern/libopenjpeg")
-		add_definitions(-DOPJ_STATIC)
+		set(OPENJPEG_DEFINES "-DOPJ_STATIC")
+	endif()
+	# Special handling of Windows platform where openjpeg is always static.
+	if(WIN32)
+		set(OPENJPEG_DEFINES "-DOPJ_STATIC")
 	endif()
 endif()
 

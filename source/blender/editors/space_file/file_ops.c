@@ -237,6 +237,49 @@ static bool file_is_any_selected(struct FileList *files)
 	return false;
 }
 
+/**
+ * If \a file is outside viewbounds, this adjusts view to make sure it's inside
+ */
+static void file_ensure_inside_viewbounds(ARegion *ar, SpaceFile *sfile, const int file)
+{
+	FileLayout *layout = ED_fileselect_get_layout(sfile, ar);
+	rctf *cur = &ar->v2d.cur;
+	rcti rect;
+	bool changed = true;
+
+	file_tile_boundbox(ar, layout, file, &rect);
+
+	/* down - also use if tile is higher than viewbounds so view is aligned to file name */
+	if (cur->ymin > rect.ymin || layout->tile_h > ar->winy) {
+		cur->ymin = rect.ymin - (2 * layout->tile_border_y);
+		cur->ymax = cur->ymin + ar->winy;
+	}
+	/* up */
+	else if (cur->ymax < rect.ymax) {
+		cur->ymax = rect.ymax + layout->tile_border_y;
+		cur->ymin = cur->ymax - ar->winy;
+	}
+	/* left - also use if tile is wider than viewbounds so view is aligned to file name */
+	else if (cur->xmin > rect.xmin || layout->tile_w > ar->winx) {
+		cur->xmin = rect.xmin - layout->tile_border_x;
+		cur->xmax = cur->xmin + ar->winx;
+	}
+	/* right */
+	else if (cur->xmax < rect.xmax) {
+		cur->xmax = rect.xmax + (2 * layout->tile_border_x);
+		cur->xmin = cur->xmax - ar->winx;
+	}
+	else {
+		BLI_assert(cur->xmin <= rect.xmin && cur->xmax >= rect.xmax &&
+		           cur->ymin <= rect.ymin && cur->ymax >= rect.ymax);
+		changed = false;
+	}
+
+	if (changed) {
+		UI_view2d_curRect_validate(&ar->v2d);
+	}
+}
+
 
 static FileSelect file_select(bContext *C, const rcti *rect, FileSelType select, bool fill, bool do_diropen)
 {
@@ -262,6 +305,20 @@ static FileSelect file_select(bContext *C, const rcti *rect, FileSelType select,
 	if (select != FILE_SEL_ADD && !file_is_any_selected(sfile->files)) {
 		sfile->params->active_file = -1;
 	}
+	else {
+		ARegion *ar = CTX_wm_region(C);
+		const FileLayout *layout = ED_fileselect_get_layout(sfile, ar);
+
+		/* Adjust view to display selection. Doing iterations for first and last
+		 * selected item makes view showing as much of the selection possible.
+		 * Not really useful if tiles are (almost) bigger than viewbounds though. */
+		if (((layout->flag & FILE_LAYOUT_HOR) && ar->winx > (1.2f * layout->tile_w)) ||
+		    ((layout->flag & FILE_LAYOUT_VER) && ar->winy > (2.0f * layout->tile_h)))
+		{
+			file_ensure_inside_viewbounds(ar, sfile, sel.last);
+			file_ensure_inside_viewbounds(ar, sfile, sel.first);
+		}
+	}
 
 	/* update operator for name change event */
 	file_draw_check(C);
@@ -276,6 +333,9 @@ static int file_border_select_find_last_selected(
 	FileLayout *layout = ED_fileselect_get_layout(sfile, ar);
 	rcti bounds_first, bounds_last;
 	int dist_first, dist_last;
+	float mouseco_view[2];
+
+	UI_view2d_region_to_view(&ar->v2d, UNPACK2(mouse_xy), &mouseco_view[0], &mouseco_view[1]);
 
 	file_tile_boundbox(ar, layout, sel->first, &bounds_first);
 	file_tile_boundbox(ar, layout, sel->last, &bounds_last);
@@ -285,18 +345,18 @@ static int file_border_select_find_last_selected(
 	    (layout->flag & FILE_LAYOUT_VER && bounds_first.ymin != bounds_last.ymin))
 	{
 		/* use vertical distance */
-		const int my_loc = mouse_xy[1] - ar->winrct.ymin;
+		const int my_loc = (int)mouseco_view[1];
 		dist_first = BLI_rcti_length_y(&bounds_first, my_loc);
 		dist_last = BLI_rcti_length_y(&bounds_last, my_loc);
 	}
 	else {
 		/* use horizontal distance */
-		const int mx_loc = mouse_xy[0] - ar->winrct.xmin;
+		const int mx_loc = (int)mouseco_view[0];
 		dist_first = BLI_rcti_length_x(&bounds_first, mx_loc);
 		dist_last = BLI_rcti_length_x(&bounds_last, mx_loc);
 	}
 
-	return dist_first < dist_last ? sel->first : sel->last;
+	return (dist_first < dist_last) ? sel->first : sel->last;
 }
 
 static int file_border_select_modal(bContext *C, wmOperator *op, const wmEvent *event)
@@ -339,7 +399,7 @@ static int file_border_select_modal(bContext *C, wmOperator *op, const wmEvent *
 			}
 		}
 		params->sel_first = sel.first; params->sel_last = sel.last;
-		params->active_file = file_border_select_find_last_selected(sfile, ar, &sel, &event->x);
+		params->active_file = file_border_select_find_last_selected(sfile, ar, &sel, event->mval);
 	}
 	else {
 		params->highlight_file = -1;
@@ -570,6 +630,9 @@ static bool file_walk_select_selection_set(
 
 	BLI_assert(IN_RANGE(active, -1, numfiles));
 	fileselect_file_set(sfile, params->active_file);
+
+	/* ensure newly selected file is inside viewbounds */
+	file_ensure_inside_viewbounds(CTX_wm_region(C), sfile, params->active_file);
 
 	/* selection changed */
 	return true;
