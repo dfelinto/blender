@@ -55,7 +55,7 @@
 #include "BKE_main.h"
 #include "BKE_editmesh.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "RNA_define.h"
 #include "RNA_access.h"
@@ -194,7 +194,7 @@ static void mesh_operator_edgering_props(wmOperatorType *ot, const int cuts_defa
 	RNA_def_property_enum_items(prop, proportional_falloff_curve_only_items);
 	RNA_def_property_enum_default(prop, PROP_SMOOTH);
 	RNA_def_property_ui_text(prop, "Profile Shape", "Shape of the profile");
-	RNA_def_property_translation_context(prop, BLF_I18NCONTEXT_ID_CURVE); /* Abusing id_curve :/ */
+	RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_CURVE); /* Abusing id_curve :/ */
 }
 
 static void mesh_operator_edgering_props_get(wmOperator *op, struct EdgeRingOpSubdProps *op_props)
@@ -2204,6 +2204,11 @@ static int edbm_merge_exec(bContext *C, wmOperator *op)
 
 	EDBM_update_generic(em, true, true);
 
+	/* once collapsed, we can't have edge/face selection */
+	if ((em->selectmode & SCE_SELECT_VERTEX) == 0) {
+		EDBM_flag_disable_all(em, BM_ELEM_SELECT);
+	}
+
 	return OPERATOR_FINISHED;
 }
 
@@ -3426,6 +3431,9 @@ static float edbm_fill_grid_vert_tag_angle(BMVert *v)
  */
 static void edbm_fill_grid_prepare(BMesh *bm, int offset, int *r_span, bool span_calc)
 {
+	/* angle differences below this value are considered 'even'
+	 * in that they shouldn't be used to calculate corners used for the 'span' */
+	const float eps_even = 1e-3f;
 	BMEdge *e;
 	BMIter iter;
 	int count;
@@ -3471,13 +3479,15 @@ static void edbm_fill_grid_prepare(BMesh *bm, int offset, int *r_span, bool span
 			v_act = v_act_link->data;
 		}
 
+		/* set this vertex first */
+		BLI_listbase_rotate_first(verts, v_act_link);
+
 		if (offset != 0) {
 			v_act_link = BLI_findlink(verts, offset);
 			v_act = v_act_link->data;
+			BLI_listbase_rotate_first(verts, v_act_link);
 		}
 
-		/* set this vertex first */
-		BLI_listbase_rotate_first(verts, v_act_link);
 		BM_edgeloop_edges_get(el_store, edges);
 
 
@@ -3502,18 +3512,23 @@ static void edbm_fill_grid_prepare(BMesh *bm, int offset, int *r_span, bool span
 
 			qsort(ele_sort, verts_len, sizeof(*ele_sort), BLI_sortutil_cmp_float_reverse);
 
-			for (i = 0; i < 4; i++) {
-				BMVert *v = ele_sort[i].data;
-				BM_elem_flag_enable(v, BM_ELEM_TAG);
-			}
+			/* check that we have at least 3 corners,
+			 * if the angle on the 3rd angle is roughly the same as the last,
+			 * then we can't calculate 3+ corners - fallback to the even span. */
+			if ((ele_sort[2].sort_value - ele_sort[verts_len - 1].sort_value) > eps_even) {
+				for (i = 0; i < 4; i++) {
+					BMVert *v = ele_sort[i].data;
+					BM_elem_flag_enable(v, BM_ELEM_TAG);
+				}
 
-			/* now find the first... */
-			for (v_link = verts->first, i = 0; i < verts_len / 2; v_link = v_link->next, i++) {
-				BMVert *v = v_link->data;
-				if (BM_elem_flag_test(v, BM_ELEM_TAG)) {
-					if (v != v_act) {
-						span = i;
-						break;
+				/* now find the first... */
+				for (v_link = verts->first, i = 0; i < verts_len / 2; v_link = v_link->next, i++) {
+					BMVert *v = v_link->data;
+					if (BM_elem_flag_test(v, BM_ELEM_TAG)) {
+						if (v != v_act) {
+							span = i;
+							break;
+						}
 					}
 				}
 			}
@@ -4270,6 +4285,8 @@ static int edbm_delete_edgeloop_exec(bContext *C, wmOperator *op)
 	}
 
 	BM_mesh_elem_hflag_enable_test(em->bm, BM_FACE, BM_ELEM_SELECT, true, false, BM_ELEM_TAG);
+
+	EDBM_selectmode_flush_ex(em, SCE_SELECT_VERTEX);
 
 	EDBM_update_generic(em, true, true);
 

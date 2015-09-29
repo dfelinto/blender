@@ -1,9 +1,10 @@
 """
 Texture Replacement
 +++++++++++++++++++
+
 Example of how to replace a texture in game with an external image.
-createTexture() and removeTexture() are to be called from a module Python
-Controller.
+``createTexture()`` and ``removeTexture()`` are to be called from a
+module Python Controller.
 """
 from bge import logic
 from bge import texture

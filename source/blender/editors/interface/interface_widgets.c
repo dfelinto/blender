@@ -200,7 +200,7 @@ void ui_draw_anti_tria(float x1, float y1, float x2, float y2, float x3, float y
 
 	/* for each AA step */
 	for (j = 0; j < WIDGET_AA_JITTER; j++) {
-		glTranslatef(jit[j][0], jit[j][1], 0.0f);
+		glTranslate2fv(jit[j]);
 		glDrawArrays(GL_TRIANGLES, 0, 3);
 		glTranslatef(-jit[j][0], -jit[j][1], 0.0f);
 	}
@@ -223,7 +223,7 @@ void ui_draw_anti_roundbox(int mode, float minx, float miny, float maxx, float m
 	glColor4fv(color);
 	
 	for (j = 0; j < WIDGET_AA_JITTER; j++) {
-		glTranslatef(jit[j][0], jit[j][1], 0.0f);
+		glTranslate2fv(jit[j]);
 		UI_draw_roundbox_gl_mode(mode, minx, miny, maxx, maxy, rad);
 		glTranslatef(-jit[j][0], -jit[j][1], 0.0f);
 	}
@@ -749,7 +749,7 @@ static void widgetbase_draw(uiWidgetBase *wtb, uiWidgetColors *wcol)
 		for (j = 0; j < WIDGET_AA_JITTER; j++) {
 			unsigned char emboss[4];
 
-			glTranslatef(jit[j][0], jit[j][1], 0.0f);
+			glTranslate2fv(jit[j]);
 			
 			/* outline */
 			glColor4ubv(tcol);
@@ -783,7 +783,7 @@ static void widgetbase_draw(uiWidgetBase *wtb, uiWidgetColors *wcol)
 
 		/* for each AA step */
 		for (j = 0; j < WIDGET_AA_JITTER; j++) {
-			glTranslatef(jit[j][0], jit[j][1], 0.0f);
+			glTranslate2fv(jit[j]);
 
 			if (wtb->tria1.tot) {
 				glColor4ubv(tcol);
@@ -975,7 +975,7 @@ float UI_text_clip_middle_ex(
 	float strwidth;
 
 	/* Add some epsilon to OK width, avoids 'ellipsing' text that nearly fits!
-     * Better to have a small piece of the last char cut out, than two remaining chars replaced by an allipsis... */
+	 * Better to have a small piece of the last char cut out, than two remaining chars replaced by an allipsis... */
 	okwidth += 1.0f + UI_DPI_FAC;
 
 	BLI_assert(str[0]);
@@ -2587,8 +2587,11 @@ static void ui_draw_but_HSV_v(uiBut *but, const rcti *rect)
 	
 	/* map v from property range to [0,1] */
 	if (but->a1 == UI_GRAD_V_ALT) {
-		float range = but->softmax - but->softmin;
-		v = (v - but->softmin) / range;
+		float min = but->softmin, max = but->softmax;
+		if (color_profile) {
+			ui_block_cm_to_display_space_range(but->block, &min, &max);
+		}
+		v = (v - min) / (max - min);
 	}
 
 	widget_init(&wtb);

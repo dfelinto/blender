@@ -269,17 +269,17 @@ void drawcircball(int mode, const float cent[3], float rad, float tmat[4][4]);
 
 /* backbuffer select and draw support */
 void          ED_view3d_backbuf_validate(struct ViewContext *vc);
-struct ImBuf *ED_view3d_backbuf_read(struct ViewContext *vc, short xmin, short ymin, short xmax, short ymax);
+struct ImBuf *ED_view3d_backbuf_read(struct ViewContext *vc, int xmin, int ymin, int xmax, int ymax);
 unsigned int  ED_view3d_backbuf_sample_rect(
         struct ViewContext *vc, const int mval[2], int size,
         unsigned int min, unsigned int max, float *r_dist);
 int          ED_view3d_backbuf_sample_size_clamp(struct ARegion *ar, const float dist);
 unsigned int ED_view3d_backbuf_sample(struct ViewContext *vc, int x, int y);
 
-/* draws and does a 4x4 sample */
-bool ED_view3d_autodist(struct Scene *scene, struct ARegion *ar, struct View3D *v3d,
-                        const int mval[2], float mouse_worldloc[3],
-                        const bool alphaoverride, const float fallback_depth_pt[3]);
+bool ED_view3d_autodist(
+        struct Scene *scene, struct ARegion *ar, struct View3D *v3d,
+        const int mval[2], float mouse_worldloc[3],
+        const bool alphaoverride, const float fallback_depth_pt[3]);
 
 /* only draw so ED_view3d_autodist_simple can be called many times after */
 void ED_view3d_autodist_init(struct Scene *scene, struct ARegion *ar, struct View3D *v3d, int mode);

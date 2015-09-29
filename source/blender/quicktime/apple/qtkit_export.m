@@ -35,7 +35,7 @@
 #include "DNA_userdef_types.h"
 
 #ifdef WITH_AUDASPACE
-#  include "AUD_C-API.h"
+#  include AUD_DEVICE_H
 #endif
 
 #include "BLI_utildefines.h"
@@ -335,8 +335,8 @@ static OSStatus AudioConverterInputCallback(AudioConverterRef inAudioConverter,
 	
 	qtexport->audioTotalExportedFrames += *ioNumberDataPackets;
 	
-	AUD_readDevice(qtexport->audioInputDevice, (UInt8 *)qtexport->audioInputBuffer,
-	               qtexport->audioInputFormat.mFramesPerPacket * *ioNumberDataPackets);
+	AUD_Device_read(qtexport->audioInputDevice, (UInt8 *)qtexport->audioInputBuffer,
+	                qtexport->audioInputFormat.mFramesPerPacket * *ioNumberDataPackets);
 	
 	ioData->mBuffers[0].mDataByteSize = qtexport->audioInputFormat.mBytesPerPacket * *ioNumberDataPackets;
 	ioData->mBuffers[0].mData = qtexport->audioInputBuffer;
@@ -348,7 +348,9 @@ static OSStatus AudioConverterInputCallback(AudioConverterRef inAudioConverter,
 
 #pragma mark export functions
 
-int start_qt(void *context_v, struct Scene *scene, struct RenderData *rd, int rectx, int recty, ReportList *reports, bool preview, const char *UNUSED(suffix))
+int start_qt(
+        void *context_v, struct Scene *scene, struct RenderData *rd, int UNUSED(rectx), int UNUSED(recty),
+        ReportList *reports, bool preview, const char *UNUSED(suffix))
 {
 	NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
 	NSError *error;
@@ -376,8 +378,7 @@ int start_qt(void *context_v, struct Scene *scene, struct RenderData *rd, int re
 	}
 	else {
 		makeqtstring(rd, name, preview);
-		qtexport->filename = [[NSString alloc] initWithCString:name
-		                                                       encoding:[NSString defaultCStringEncoding]];
+		qtexport->filename = [[NSString alloc] initWithUTF8String:name];
 		qtexport->movie = nil;
 		qtexport->audioFile = NULL;
 
@@ -652,7 +653,9 @@ int start_qt(void *context_v, struct Scene *scene, struct RenderData *rd, int re
 	return success;
 }
 
-int append_qt(void *context_v, struct RenderData *rd, int start_frame, int frame, int *pixels, int rectx, int recty, const char *UNUSED(suffix), ReportList *reports)
+int append_qt(
+        void *context_v, struct RenderData *rd, int start_frame, int frame, int *pixels, int rectx, int recty,
+        const char *UNUSED(suffix), ReportList *reports)
 {
 	NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
 	NSBitmapImageRep *blBitmapFormatImage;
@@ -788,7 +791,7 @@ void end_qt(void *context_v)
 			write_cookie(qtexport->audioConverter, qtexport->audioFile);
 			AudioConverterDispose(qtexport->audioConverter);
 			AudioFileClose(qtexport->audioFile);
-			AUD_closeReadDevice(qtexport->audioInputDevice);
+			AUD_Device_free(qtexport->audioInputDevice);
 			qtexport->audioFile = NULL;
 			qtexport->audioInputDevice = NULL;
 			MEM_freeN(qtexport->audioInputBuffer);

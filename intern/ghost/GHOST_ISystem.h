@@ -240,9 +240,8 @@ public:
 	 * \param   height          The height the window.
 	 * \param   state           The state of the window when opened.
 	 * \param   type            The type of drawing context installed in this window.
-	 * \param   stereoVisual    (in glSettings) Create a stereo visual for quad buffered stereo.
-	 * \param   alphaBackground (in glSettings) Enable transparency of the window with the display background
-	 * \param   numOfAASamples  (in glSettings) Number of samples used for AA (zero if no AA)
+	 * \param glSettings: Misc OpenGL settings.
+	 * \param exclusive: Use to show the window ontop and ignore others (used fullscreen).
 	 * \param   parentWindow    Parent (embedder) window
 	 * \return  The new window (or 0 if creation failed).
 	 */
@@ -377,6 +376,12 @@ public:
 	 * \return          Indication of success.
 	 */
 	virtual GHOST_TSuccess getButtonState(GHOST_TButtonMask mask, bool& isDown) const = 0;
+
+	/**
+	 * Sets 3D mouse deadzone
+	 * \param deadzone: Deadzone of the 3D mouse (both for rotation and pan) relative to full range
+	 */
+	virtual void setNDOFDeadZone(float deadzone) = 0;
 
 	/**
 	 * Toggles console

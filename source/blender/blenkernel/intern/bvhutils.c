@@ -48,19 +48,33 @@
 
 static ThreadRWMutex cache_rwlock = BLI_RWLOCK_INITIALIZER;
 
+/* -------------------------------------------------------------------- */
+/** \name Local Callbacks
+ * \{ */
+
 /* Math stuff for ray casting on mesh faces and for nearest surface */
 
-float bvhtree_ray_tri_intersection(const BVHTreeRay *ray, const float UNUSED(m_dist), const float v0[3], const float v1[3], const float v2[3])
+float bvhtree_ray_tri_intersection(
+        const BVHTreeRay *ray, const float UNUSED(m_dist),
+        const float v0[3], const float v1[3], const float v2[3])
 {
 	float dist;
 
+#ifdef USE_KDOPBVH_WATERTIGHT
+	if (isect_ray_tri_watertight_v3(ray->origin, ray->isect_precalc, v0, v1, v2, &dist, NULL))
+#else
 	if (isect_ray_tri_epsilon_v3(ray->origin, ray->direction, v0, v1, v2, &dist, NULL, FLT_EPSILON))
+#endif
+	{
 		return dist;
+	}
 
 	return FLT_MAX;
 }
 
-static float sphereray_tri_intersection(const BVHTreeRay *ray, float radius, const float m_dist, const float v0[3], const float v1[3], const float v2[3])
+float bvhtree_sphereray_tri_intersection(
+        const BVHTreeRay *ray, float radius, const float m_dist,
+        const float v0[3], const float v1[3], const float v2[3])
 {
 	
 	float idist;
@@ -84,8 +98,8 @@ static float sphereray_tri_intersection(const BVHTreeRay *ray, float radius, con
 static void mesh_faces_nearest_point(void *userdata, int index, const float co[3], BVHTreeNearest *nearest)
 {
 	const BVHTreeFromMesh *data = (BVHTreeFromMesh *) userdata;
-	MVert *vert = data->vert;
-	MFace *face = data->face + index;
+	const MVert *vert = data->vert;
+	const MFace *face = data->face + index;
 
 	const float *t0, *t1, *t2, *t3;
 	t0 = vert[face->v1].co;
@@ -105,9 +119,6 @@ static void mesh_faces_nearest_point(void *userdata, int index, const float co[3
 			nearest->dist_sq = dist_sq;
 			copy_v3_v3(nearest->co, nearest_tmp);
 			normal_tri_v3(nearest->no, t0, t1, t2);
-
-			if (t1 == vert[face->v3].co)
-				nearest->flags |= BVH_ONQUAD;
 		}
 
 		t1 = t2;
@@ -115,6 +126,29 @@ static void mesh_faces_nearest_point(void *userdata, int index, const float co[3
 		t3 = NULL;
 
 	} while (t2);
+}
+/* copy of function above */
+static void mesh_looptri_nearest_point(void *userdata, int index, const float co[3], BVHTreeNearest *nearest)
+{
+	const BVHTreeFromMesh *data = (BVHTreeFromMesh *) userdata;
+	const MVert *vert = data->vert;
+	const MLoopTri *lt = &data->looptri[index];
+	const float *vtri_co[3] = {
+	    vert[data->loop[lt->tri[0]].v].co,
+	    vert[data->loop[lt->tri[1]].v].co,
+	    vert[data->loop[lt->tri[2]].v].co,
+	};
+	float nearest_tmp[3], dist_sq;
+
+	closest_on_tri_to_point_v3(nearest_tmp, co, UNPACK3(vtri_co));
+	dist_sq = len_squared_v3v3(co, nearest_tmp);
+
+	if (dist_sq < nearest->dist_sq) {
+		nearest->index = index;
+		nearest->dist_sq = dist_sq;
+		copy_v3_v3(nearest->co, nearest_tmp);
+		normal_tri_v3(nearest->no, UNPACK3(vtri_co));
+	}
 }
 /* copy of function above (warning, should de-duplicate with editmesh_bvh.c) */
 static void editmesh_faces_nearest_point(void *userdata, int index, const float co[3], BVHTreeNearest *nearest)
@@ -148,8 +182,8 @@ static void editmesh_faces_nearest_point(void *userdata, int index, const float 
 static void mesh_faces_spherecast(void *userdata, int index, const BVHTreeRay *ray, BVHTreeRayHit *hit)
 {
 	const BVHTreeFromMesh *data = (BVHTreeFromMesh *) userdata;
-	MVert *vert = data->vert;
-	MFace *face = data->face + index;
+	const MVert *vert = data->vert;
+	const MFace *face = &data->face[index];
 
 	const float *t0, *t1, *t2, *t3;
 	t0 = vert[face->v1].co;
@@ -163,7 +197,7 @@ static void mesh_faces_spherecast(void *userdata, int index, const BVHTreeRay *r
 		if (data->sphere_radius == 0.0f)
 			dist = bvhtree_ray_tri_intersection(ray, hit->dist, t0, t1, t2);
 		else
-			dist = sphereray_tri_intersection(ray, data->sphere_radius, hit->dist, t0, t1, t2);
+			dist = bvhtree_sphereray_tri_intersection(ray, data->sphere_radius, hit->dist, t0, t1, t2);
 
 		if (dist >= 0 && dist < hit->dist) {
 			hit->index = index;
@@ -171,9 +205,6 @@ static void mesh_faces_spherecast(void *userdata, int index, const BVHTreeRay *r
 			madd_v3_v3v3fl(hit->co, ray->origin, ray->direction, dist);
 
 			normal_tri_v3(hit->no, t0, t1, t2);
-
-			if (t1 == vert[face->v3].co)
-				hit->flags |= BVH_ONQUAD;
 		}
 
 		t1 = t2;
@@ -181,6 +212,32 @@ static void mesh_faces_spherecast(void *userdata, int index, const BVHTreeRay *r
 		t3 = NULL;
 
 	} while (t2);
+}
+/* copy of function above */
+static void mesh_looptri_spherecast(void *userdata, int index, const BVHTreeRay *ray, BVHTreeRayHit *hit)
+{
+	const BVHTreeFromMesh *data = (BVHTreeFromMesh *) userdata;
+	const MVert *vert = data->vert;
+	const MLoopTri *lt = &data->looptri[index];
+	const float *vtri_co[3] = {
+	    vert[data->loop[lt->tri[0]].v].co,
+	    vert[data->loop[lt->tri[1]].v].co,
+	    vert[data->loop[lt->tri[2]].v].co,
+	};
+	float dist;
+
+	if (data->sphere_radius == 0.0f)
+		dist = bvhtree_ray_tri_intersection(ray, hit->dist, UNPACK3(vtri_co));
+	else
+		dist = bvhtree_sphereray_tri_intersection(ray, data->sphere_radius, hit->dist, UNPACK3(vtri_co));
+
+	if (dist >= 0 && dist < hit->dist) {
+		hit->index = index;
+		hit->dist = dist;
+		madd_v3_v3v3fl(hit->co, ray->origin, ray->direction, dist);
+
+		normal_tri_v3(hit->no, UNPACK3(vtri_co));
+	}
 }
 /* copy of function above (warning, should de-duplicate with editmesh_bvh.c) */
 static void editmesh_faces_spherecast(void *userdata, int index, const BVHTreeRay *ray, BVHTreeRayHit *hit)
@@ -200,7 +257,7 @@ static void editmesh_faces_spherecast(void *userdata, int index, const BVHTreeRa
 		if (data->sphere_radius == 0.0f)
 			dist = bvhtree_ray_tri_intersection(ray, hit->dist, t0, t1, t2);
 		else
-			dist = sphereray_tri_intersection(ray, data->sphere_radius, hit->dist, t0, t1, t2);
+			dist = bvhtree_sphereray_tri_intersection(ray, data->sphere_radius, hit->dist, t0, t1, t2);
 
 		if (dist >= 0 && dist < hit->dist) {
 			hit->index = index;
@@ -217,8 +274,8 @@ static void editmesh_faces_spherecast(void *userdata, int index, const BVHTreeRa
 static void mesh_edges_nearest_point(void *userdata, int index, const float co[3], BVHTreeNearest *nearest)
 {
 	const BVHTreeFromMesh *data = (BVHTreeFromMesh *) userdata;
-	MVert *vert = data->vert;
-	MEdge *edge = data->edge + index;
+	const MVert *vert = data->vert;
+	const MEdge *edge = data->edge + index;
 	float nearest_tmp[3], dist_sq;
 
 	const float *t0, *t1;
@@ -262,7 +319,7 @@ static void mesh_verts_spherecast_do(
 static void mesh_verts_spherecast(void *userdata, int index, const BVHTreeRay *ray, BVHTreeRayHit *hit)
 {
 	const BVHTreeFromMesh *data = (BVHTreeFromMesh *)userdata;
-	float *v = data->vert[index].co;
+	const float *v = data->vert[index].co;
 
 	mesh_verts_spherecast_do(data, index, v, ray, hit);
 }
@@ -272,8 +329,8 @@ static void mesh_verts_spherecast(void *userdata, int index, const BVHTreeRay *r
 static void mesh_edges_spherecast(void *userdata, int index, const BVHTreeRay *ray, BVHTreeRayHit *hit)
 {
 	const BVHTreeFromMesh *data = (BVHTreeFromMesh *)userdata;
-	MVert *vert = data->vert;
-	MEdge *edge = &data->edge[index];
+	const MVert *vert = data->vert;
+	const MEdge *edge = &data->edge[index];
 
 	const float radius_sq = SQUARE(data->sphere_radius);
 	float dist;
@@ -311,15 +368,22 @@ static void mesh_edges_spherecast(void *userdata, int index, const BVHTreeRay *r
 	}
 }
 
+/** \} */
+
 /*
  * BVH builders
  */
 
-/* ***** Vertex ***** */
 
-static BVHTree *bvhtree_from_mesh_verts_create_tree(float epsilon, int tree_type, int axis,
-                                                    MVert *vert, const int numVerts,
-                                                    BLI_bitmap *mask, int numVerts_active)
+/* -------------------------------------------------------------------- */
+
+/** \name Vertex Builder
+ * \{ */
+
+static BVHTree *bvhtree_from_mesh_verts_create_tree(
+        float epsilon, int tree_type, int axis,
+        MVert *vert, const int numVerts,
+        BLI_bitmap *mask, int numVerts_active)
 {
 	BVHTree *tree = NULL;
 	int i;
@@ -354,8 +418,9 @@ static BVHTree *bvhtree_from_mesh_verts_create_tree(float epsilon, int tree_type
 	return tree;
 }
 
-static void bvhtree_from_mesh_verts_setup_data(BVHTreeFromMesh *data, BVHTree *tree, const bool is_cached, float epsilon,
-                                               MVert *vert, const bool vert_allocated)
+static void bvhtree_from_mesh_verts_setup_data(
+        BVHTreeFromMesh *data, BVHTree *tree, const bool is_cached, float epsilon,
+        MVert *vert, const bool vert_allocated)
 {
 	memset(data, 0, sizeof(*data));
 
@@ -424,9 +489,10 @@ BVHTree *bvhtree_from_mesh_verts(BVHTreeFromMesh *data, DerivedMesh *dm, float e
  * \param mask if not null, true elements give which vert to add to BVH tree.
  * \param numVerts_active if >= 0, number of active verts to add to BVH tree (else will be computed from mask).
  */
-BVHTree *bvhtree_from_mesh_verts_ex(BVHTreeFromMesh *data, MVert *vert, const int numVerts, const bool vert_allocated,
-                                    BLI_bitmap *mask, int numVerts_active,
-                                    float epsilon, int tree_type, int axis)
+BVHTree *bvhtree_from_mesh_verts_ex(
+        BVHTreeFromMesh *data, MVert *vert, const int numVerts, const bool vert_allocated,
+        BLI_bitmap *mask, int numVerts_active,
+        float epsilon, int tree_type, int axis)
 {
 	BVHTree *tree = bvhtree_from_mesh_verts_create_tree(epsilon, tree_type, axis, vert, numVerts, mask, numVerts_active);
 
@@ -436,7 +502,13 @@ BVHTree *bvhtree_from_mesh_verts_ex(BVHTreeFromMesh *data, MVert *vert, const in
 	return data->tree;
 }
 
-/* ***** Edge ***** */
+/** \} */
+
+
+/* -------------------------------------------------------------------- */
+
+/** \name Edge Builder
+ * \{ */
 
 /* Builds a bvh tree where nodes are the edges of the given dm */
 BVHTree *bvhtree_from_mesh_edges(BVHTreeFromMesh *data, DerivedMesh *dm, float epsilon, int tree_type, int axis)
@@ -466,7 +538,7 @@ BVHTree *bvhtree_from_mesh_edges(BVHTreeFromMesh *data, DerivedMesh *dm, float e
 				tree = BLI_bvhtree_new(numEdges, epsilon, tree_type, axis);
 				if (tree != NULL) {
 					for (i = 0; i < numEdges; i++) {
-						float co[4][3];
+						float co[2][3];
 						copy_v3_v3(co[0], vert[edge[i].v1].co);
 						copy_v3_v3(co[1], vert[edge[i].v2].co);
 
@@ -515,11 +587,18 @@ BVHTree *bvhtree_from_mesh_edges(BVHTreeFromMesh *data, DerivedMesh *dm, float e
 	return data->tree;
 }
 
-/* ***** Tessellated face ***** */
+/** \} */
 
-static BVHTree *bvhtree_from_mesh_faces_create_tree(float epsilon, int tree_type, int axis,
-                                                    BMEditMesh *em, MVert *vert, MFace *face, const int numFaces,
-                                                    BLI_bitmap *mask, int numFaces_active)
+
+/* -------------------------------------------------------------------- */
+
+/** \name Tessellated Face Builder
+ * \{ */
+
+static BVHTree *bvhtree_from_mesh_faces_create_tree(
+        float epsilon, int tree_type, int axis,
+        BMEditMesh *em, MVert *vert, MFace *face, const int numFaces,
+        BLI_bitmap *mask, int numFaces_active)
 {
 	BVHTree *tree = NULL;
 	int i;
@@ -624,10 +703,11 @@ static BVHTree *bvhtree_from_mesh_faces_create_tree(float epsilon, int tree_type
 	return tree;
 }
 
-static void bvhtree_from_mesh_faces_setup_data(BVHTreeFromMesh *data, BVHTree *tree, const bool is_cached,
-                                               float epsilon, BMEditMesh *em,
-                                               MVert *vert, const bool vert_allocated,
-                                               MFace *face, const bool face_allocated)
+static void bvhtree_from_mesh_faces_setup_data(
+        BVHTreeFromMesh *data, BVHTree *tree, const bool is_cached,
+        float epsilon, BMEditMesh *em,
+        MVert *vert, const bool vert_allocated,
+        MFace *face, const bool face_allocated)
 {
 	memset(data, 0, sizeof(*data));
 	data->em_evil = em;
@@ -727,18 +807,288 @@ BVHTree *bvhtree_from_mesh_faces(BVHTreeFromMesh *data, DerivedMesh *dm, float e
  * \param mask if not null, true elements give which faces to add to BVH tree.
  * \param numFaces_active if >= 0, number of active faces to add to BVH tree (else will be computed from mask).
  */
-BVHTree *bvhtree_from_mesh_faces_ex(BVHTreeFromMesh *data, MVert *vert, const bool vert_allocated,
-                                    MFace *face, const int numFaces, const bool face_allocated,
-                                    BLI_bitmap *mask, int numFaces_active, float epsilon, int tree_type, int axis)
+BVHTree *bvhtree_from_mesh_faces_ex(
+        BVHTreeFromMesh *data, MVert *vert, const bool vert_allocated,
+        MFace *face, const int numFaces, const bool face_allocated,
+        BLI_bitmap *mask, int numFaces_active, float epsilon, int tree_type, int axis)
 {
-	BVHTree *tree = bvhtree_from_mesh_faces_create_tree(epsilon, tree_type, axis, NULL, vert, face, numFaces,
-	                                                    mask, numFaces_active);
+	BVHTree *tree = bvhtree_from_mesh_faces_create_tree(
+	        epsilon, tree_type, axis, NULL, vert, face, numFaces,
+	        mask, numFaces_active);
 
 	/* Setup BVHTreeFromMesh */
 	bvhtree_from_mesh_faces_setup_data(data, tree, false, epsilon, NULL, vert, vert_allocated, face, face_allocated);
 
 	return data->tree;
 }
+
+/** \} */
+
+
+/* -------------------------------------------------------------------- */
+
+/** \name LoopTri Face Builder
+ * \{ */
+
+static BVHTree *bvhtree_from_mesh_looptri_create_tree(
+        float epsilon, int tree_type, int axis,
+        BMEditMesh *em, const MVert *vert, const MLoop *mloop, const MLoopTri *looptri, const int looptri_num,
+        BLI_bitmap *mask, int looptri_num_active)
+{
+	BVHTree *tree = NULL;
+	int i;
+
+	if (looptri_num) {
+		if (mask && looptri_num_active < 0) {
+			looptri_num_active = 0;
+			for (i = 0; i < looptri_num; i++) {
+				if (BLI_BITMAP_TEST_BOOL(mask, i)) {
+					looptri_num_active++;
+				}
+			}
+		}
+		else if (!mask) {
+			looptri_num_active = looptri_num;
+		}
+
+		/* Create a bvh-tree of the given target */
+		/* printf("%s: building BVH, total=%d\n", __func__, numFaces); */
+		tree = BLI_bvhtree_new(looptri_num_active, epsilon, tree_type, axis);
+		if (tree) {
+			if (em) {
+				const struct BMLoop *(*looptris)[3] = (void *)em->looptris;
+
+				/* avoid double-up on face searches for quads-ngons */
+				bool insert_prev = false;
+				BMFace *f_prev = NULL;
+
+				/* data->em_evil is only set for snapping, and only for the mesh of the object
+				 * which is currently open in edit mode. When set, the bvhtree should not contain
+				 * faces that will interfere with snapping (e.g. faces that are hidden/selected
+				 * or faces that have selected verts). */
+
+				/* Insert BMesh-tessellation triangles into the bvh tree, unless they are hidden
+				 * and/or selected. Even if the faces themselves are not selected for the snapped
+				 * transform, having a vertex selected means the face (and thus it's tessellated
+				 * triangles) will be moving and will not be a good snap targets. */
+				for (i = 0; i < looptri_num; i++) {
+					const BMLoop **ltri = looptris[i];
+					BMFace *f = ltri[0]->f;
+					bool insert = mask ? BLI_BITMAP_TEST_BOOL(mask, i) : true;
+
+					/* Start with the assumption the triangle should be included for snapping. */
+					if (f == f_prev) {
+						insert = insert_prev;
+					}
+					else if (insert) {
+						if (BM_elem_flag_test(f, BM_ELEM_SELECT) || BM_elem_flag_test(f, BM_ELEM_HIDDEN)) {
+							/* Don't insert triangles tessellated from faces that are hidden or selected */
+							insert = false;
+						}
+						else {
+							BMLoop *l_iter, *l_first;
+							l_iter = l_first = BM_FACE_FIRST_LOOP(f);
+							do {
+								if (BM_elem_flag_test(l_iter->v, BM_ELEM_SELECT)) {
+									/* Don't insert triangles tessellated from faces that have any selected verts */
+									insert = false;
+									break;
+								}
+							} while ((l_iter = l_iter->next) != l_first);
+						}
+
+						/* skip if face doesn't change */
+						f_prev = f;
+						insert_prev = insert;
+					}
+
+					if (insert) {
+						/* No reason found to block hit-testing the triangle for snap, so insert it now.*/
+						float co[3][3];
+						copy_v3_v3(co[0], ltri[0]->v->co);
+						copy_v3_v3(co[1], ltri[1]->v->co);
+						copy_v3_v3(co[2], ltri[2]->v->co);
+
+						BLI_bvhtree_insert(tree, i, co[0], 3);
+					}
+				}
+			}
+			else {
+				if (vert && looptri) {
+					for (i = 0; i < looptri_num; i++) {
+						float co[3][3];
+						if (mask && !BLI_BITMAP_TEST_BOOL(mask, i)) {
+							continue;
+						}
+
+						copy_v3_v3(co[0], vert[mloop[looptri[i].tri[0]].v].co);
+						copy_v3_v3(co[1], vert[mloop[looptri[i].tri[1]].v].co);
+						copy_v3_v3(co[2], vert[mloop[looptri[i].tri[2]].v].co);
+
+						BLI_bvhtree_insert(tree, i, co[0], 3);
+					}
+				}
+			}
+			BLI_bvhtree_balance(tree);
+		}
+	}
+
+	return tree;
+}
+
+static void bvhtree_from_mesh_looptri_setup_data(
+        BVHTreeFromMesh *data, BVHTree *tree, const bool is_cached,
+        float epsilon, BMEditMesh *em,
+        const MVert *vert, const bool vert_allocated,
+        const MLoop *mloop, const bool loop_allocated,
+        const MLoopTri *looptri, const bool looptri_allocated)
+{
+	memset(data, 0, sizeof(*data));
+	data->em_evil = em;
+
+	if (tree) {
+		data->tree = tree;
+		data->cached = is_cached;
+
+		if (em) {
+			data->nearest_callback = editmesh_faces_nearest_point;
+			data->raycast_callback = editmesh_faces_spherecast;
+		}
+		else {
+			data->nearest_callback = mesh_looptri_nearest_point;
+			data->raycast_callback = mesh_looptri_spherecast;
+
+			data->vert = vert;
+			data->vert_allocated = vert_allocated;
+			data->loop = mloop;
+			data->loop_allocated = loop_allocated;
+			data->looptri = looptri;
+			data->looptri_allocated = looptri_allocated;
+		}
+
+		data->sphere_radius = epsilon;
+	}
+	else {
+		if (vert_allocated) {
+			MEM_freeN((void *)vert);
+		}
+		if (looptri_allocated) {
+			MEM_freeN((void *)looptri);
+		}
+	}
+}
+
+/**
+ * Builds a bvh tree where nodes are the looptri faces of the given dm
+ *
+ * \note for editmesh this is currently a duplicate of bvhtree_from_mesh_faces
+ */
+BVHTree *bvhtree_from_mesh_looptri(BVHTreeFromMesh *data, DerivedMesh *dm, float epsilon, int tree_type, int axis)
+{
+	BMEditMesh *em = data->em_evil;
+	const int bvhcache_type = em ? BVHTREE_FROM_FACES_EDITMESH : BVHTREE_FROM_LOOPTRI;
+	BVHTree *tree;
+	MVert *mvert = NULL;
+	MLoop *mloop = NULL;
+	const MLoopTri *looptri = NULL;
+	bool vert_allocated = false;
+	bool loop_allocated = false;
+	bool looptri_allocated = false;
+
+	BLI_rw_mutex_lock(&cache_rwlock, THREAD_LOCK_READ);
+	tree = bvhcache_find(&dm->bvhCache, bvhcache_type);
+	BLI_rw_mutex_unlock(&cache_rwlock);
+
+	if (em == NULL) {
+		MPoly *mpoly;
+		bool poly_allocated = false;
+
+		mvert = DM_get_vert_array(dm, &vert_allocated);
+		mpoly = DM_get_poly_array(dm, &poly_allocated);
+
+		mloop = DM_get_loop_array(dm, &loop_allocated);
+		looptri = DM_get_looptri_array(
+		        dm,
+		        mvert,
+		        mpoly, dm->getNumPolys(dm),
+		        mloop, dm->getNumLoops(dm),
+		        &looptri_allocated);
+
+		if (poly_allocated) {
+			MEM_freeN(mpoly);
+		}
+
+	}
+
+	/* Not in cache */
+	if (tree == NULL) {
+		BLI_rw_mutex_lock(&cache_rwlock, THREAD_LOCK_WRITE);
+		tree = bvhcache_find(&dm->bvhCache, bvhcache_type);
+		if (tree == NULL) {
+			int looptri_num;
+
+			/* BMESH specific check that we have tessfaces,
+			 * we _could_ tessellate here but rather not - campbell
+			 *
+			 * this assert checks we have tessfaces,
+			 * if not caller should use DM_ensure_tessface() */
+			if (em) {
+				looptri_num = em->tottri;
+			}
+			else {
+				looptri_num = dm->getNumLoopTri(dm);
+				BLI_assert(!(looptri_num == 0 && dm->getNumPolys(dm) != 0));
+			}
+
+			tree = bvhtree_from_mesh_looptri_create_tree(
+			        epsilon, tree_type, axis, em,
+			        mvert, mloop, looptri, looptri_num, NULL, -1);
+			if (tree) {
+				/* Save on cache for later use */
+				/* printf("BVHTree built and saved on cache\n"); */
+				bvhcache_insert(&dm->bvhCache, tree, bvhcache_type);
+			}
+		}
+		BLI_rw_mutex_unlock(&cache_rwlock);
+	}
+	else {
+		/* printf("BVHTree is already build, using cached tree\n"); */
+	}
+
+	/* Setup BVHTreeFromMesh */
+	bvhtree_from_mesh_looptri_setup_data(
+	        data, tree, true, epsilon, em,
+	        mvert, vert_allocated,
+	        mloop, loop_allocated,
+	        looptri, looptri_allocated);
+
+	return data->tree;
+}
+
+BVHTree *bvhtree_from_mesh_looptri_ex(
+        BVHTreeFromMesh *data,
+        const struct MVert *vert, const bool vert_allocated,
+        const struct MLoop *mloop, const bool loop_allocated,
+        const struct MLoopTri *looptri, const int looptri_num, const bool looptri_allocated,
+        BLI_bitmap *mask, int looptri_num_active,
+        float epsilon, int tree_type, int axis)
+{
+	BVHTree *tree = bvhtree_from_mesh_looptri_create_tree(
+	        epsilon, tree_type, axis, NULL, vert, mloop, looptri, looptri_num,
+	        mask, looptri_num_active);
+
+	/* Setup BVHTreeFromMesh */
+	bvhtree_from_mesh_looptri_setup_data(
+	        data, tree, false, epsilon, NULL,
+	        vert, vert_allocated,
+	        mloop, loop_allocated,
+	        looptri, looptri_allocated);
+
+	return data->tree;
+}
+
+/** \} */
+
 
 /* Frees data allocated by a call to bvhtree_from_mesh_*. */
 void free_bvhtree_from_mesh(struct BVHTreeFromMesh *data)
@@ -749,13 +1099,19 @@ void free_bvhtree_from_mesh(struct BVHTreeFromMesh *data)
 		}
 
 		if (data->vert_allocated) {
-			MEM_freeN(data->vert);
+			MEM_freeN((void *)data->vert);
 		}
 		if (data->edge_allocated) {
-			MEM_freeN(data->edge);
+			MEM_freeN((void *)data->edge);
 		}
 		if (data->face_allocated) {
-			MEM_freeN(data->face);
+			MEM_freeN((void *)data->face);
+		}
+		if (data->loop_allocated) {
+			MEM_freeN((void *)data->loop);
+		}
+		if (data->looptri_allocated) {
+			MEM_freeN((void *)data->looptri);
 		}
 
 		memset(data, 0, sizeof(*data));
@@ -763,9 +1119,10 @@ void free_bvhtree_from_mesh(struct BVHTreeFromMesh *data)
 }
 
 
-/*
- * BVHCache
- */
+/* -------------------------------------------------------------------- */
+
+/** \name BVHCache
+ * \{ */
 
 typedef struct BVHCacheItem {
 	int type;
@@ -830,4 +1187,4 @@ void bvhcache_free(BVHCache *cache)
 	*cache = NULL;
 }
 
-
+/** \} */

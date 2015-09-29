@@ -41,11 +41,11 @@
 
 #include "KX_KetsjiEngine.h"
 
-#include "ListValue.h"
-#include "IntValue.h"
-#include "VectorValue.h"
-#include "BoolValue.h"
-#include "FloatValue.h"
+#include "EXP_ListValue.h"
+#include "EXP_IntValue.h"
+#include "EXP_VectorValue.h"
+#include "EXP_BoolValue.h"
+#include "EXP_FloatValue.h"
 
 #include "RAS_BucketManager.h"
 #include "RAS_Rect.h"
@@ -61,11 +61,6 @@
 #include "KX_PythonInit.h"
 #include "KX_PyConstraintBinding.h"
 #include "PHY_IPhysicsEnvironment.h"
-
-#ifdef WITH_AUDASPACE
-#  include "AUD_C-API.h"
-#  include "AUD_I3DDevice.h"
-#endif
 
 #include "NG_NetworkScene.h"
 #include "NG_NetworkDeviceInterface.h"
@@ -1160,6 +1155,8 @@ void KX_KetsjiEngine::RenderFrame(KX_Scene* scene, KX_Camera* cam)
 				nearfrust,
 				farfrust,
 				cam->GetSensorFit(),
+				cam->GetShiftHorizontal(),
+				cam->GetShiftVertical(),
 				frustum
 			);
 			if (!cam->GetViewport()) {
@@ -1180,6 +1177,8 @@ void KX_KetsjiEngine::RenderFrame(KX_Scene* scene, KX_Camera* cam)
 				cam->GetSensorWidth(),
 				cam->GetSensorHeight(),
 				cam->GetSensorFit(),
+				cam->GetShiftHorizontal(),
+				cam->GetShiftVertical(),
 				nearfrust,
 				farfrust,
 				frustum
@@ -1249,12 +1248,15 @@ void KX_KetsjiEngine::PostRenderScene(KX_Scene* scene)
 	// We need to first make sure our viewport is correct (enabling multiple viewports can mess this up)
 	m_canvas->SetViewPort(0, 0, m_canvas->GetWidth(), m_canvas->GetHeight());
 	
-	m_rasterizer->FlushDebugShapes();
+	m_rasterizer->FlushDebugShapes(scene);
 	scene->Render2DFilters(m_canvas);
 
 #ifdef WITH_PYTHON
 	PHY_SetActiveEnvironment(scene->GetPhysicsEnvironment());
 	scene->RunDrawingCallbacks(scene->GetPostDrawCB());
+
+	// Python draw callback can also call debug draw functions, so we have to clear debug shapes.
+	m_rasterizer->FlushDebugShapes(scene);
 #endif
 }
 
@@ -1747,6 +1749,16 @@ void	KX_KetsjiEngine::SetAnimRecordMode(bool animation_record, int startFrame)
 		m_bFixedTime = false;
 	}
 	m_currentFrame = startFrame;
+}
+
+int KX_KetsjiEngine::getAnimRecordFrame() const
+{
+	return m_currentFrame;
+}
+
+void KX_KetsjiEngine::setAnimRecordFrame(int framenr)
+{
+	m_currentFrame = framenr;
 }
 
 bool KX_KetsjiEngine::GetUseFixedTime(void) const

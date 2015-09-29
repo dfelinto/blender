@@ -149,8 +149,21 @@ void geom(vec3 co, vec3 nor, mat4 viewinvmat, vec3 attorco, vec2 attuv, vec4 att
 	uv_attribute(attuv, uv);
 	normal = -normalize(nor);	/* blender render normal is negated */
 	vcol_attribute(attvcol, vcol);
+	srgb_to_linearrgb(vcol, vcol);
 	vcol_alpha = attvcol.a;
 	frontback = (gl_FrontFacing)? 1.0: 0.0;
+}
+
+void particle_info(vec4 sprops, vec3 loc, vec3 vel, vec3 avel, out float index, out float age, out float life_time, out vec3 location, out float size, out vec3 velocity, out vec3 angular_velocity)
+{
+    index = sprops.x;
+    age = sprops.y;
+    life_time = sprops.z;
+    size = sprops.w;
+
+    location = loc;
+    velocity = vel;
+    angular_velocity = avel;
 }
 
 void mapping(vec3 vec, mat4 mat, vec3 minvec, vec3 maxvec, float domin, float domax, out vec3 outvec)
@@ -2250,6 +2263,16 @@ void node_bsdf_hair(vec4 color, float offset, float roughnessu, float roughnessv
 	result = color;
 }
 
+void node_bsdf_refraction(vec4 color, float roughness, float ior, vec3 N, out vec4 result)
+{
+	node_bsdf_diffuse(color, 0.0, N, result);
+}
+
+void node_ambient_occlusion(vec4 color, out vec4 result)
+{
+	result = color;
+}
+
 /* emission */
 
 void node_emission(vec4 color, float strength, vec3 N, out vec4 result)
@@ -2581,6 +2604,7 @@ void material_preview_matcap(vec4 color, sampler2D ima, vec4 N, vec4 mask, out v
 	vec3 normal;
 	vec2 tex;
 	
+#ifndef USE_OPENSUBDIV
 	/* remap to 0.0 - 1.0 range. This is done because OpenGL 2.0 clamps colors 
 	 * between shader stages and we want the full range of the normal */
 	normal = vec3(2.0, 2.0, 2.0) * vec3(N.x, N.y, N.z) - vec3(1.0, 1.0, 1.0);
@@ -2588,6 +2612,10 @@ void material_preview_matcap(vec4 color, sampler2D ima, vec4 N, vec4 mask, out v
 		normal.z = 0.0;
 	}
 	normal = normalize(normal);
+#else
+	normal = inpt.v.normal;
+	mask = vec4(1.0, 1.0, 1.0, 1.0);
+#endif
 
 	tex.x = 0.5 + 0.49 * normal.x;
 	tex.y = 0.5 + 0.49 * normal.y;

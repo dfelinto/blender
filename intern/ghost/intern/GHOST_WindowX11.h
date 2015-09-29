@@ -90,7 +90,8 @@ public:
 	    const bool stereoVisual = false,
 	    const bool exclusive = false,
 	    const bool alphaBackground = false,
-	    const GHOST_TUns16 numOfAASamples = 0
+	    const GHOST_TUns16 numOfAASamples = 0,
+	    const bool is_debug = false
 	    );
 
 	bool
@@ -249,7 +250,6 @@ protected:
 	/**
 	 * Sets the cursor grab on the window using
 	 * native window system calls.
-	 * \param warp	Only used when grab is enabled, hides the mouse and allows dragging outside the screen.
 	 */
 	GHOST_TSuccess
 	setWindowCursorGrab(
@@ -358,6 +358,7 @@ private:
 #endif
 
 	bool m_valid_setup;
+	bool m_is_debug_context;
 
 	void icccmSetState(int state);
 	int icccmGetState() const;

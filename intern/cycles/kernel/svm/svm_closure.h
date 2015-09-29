@@ -30,6 +30,7 @@ ccl_device void svm_node_glass_setup(ShaderData *sd, ShaderClosure *sc, int type
 		else {
 			sc->data0 = 0.0f;
 			sc->data1 = 0.0f;
+			sc->data2 = 0.0f;
 			ccl_fetch(sd, flag) |= bsdf_reflection_setup(sc);
 		}
 	}
@@ -62,6 +63,9 @@ ccl_device_inline ShaderClosure *svm_node_closure_get_non_bsdf(ShaderData *sd, C
 	if(ccl_fetch(sd, num_closure) < MAX_CLOSURE) {
 		sc->weight *= mix_weight;
 		sc->type = type;
+		sc->data0 = 0.0f;
+		sc->data1 = 0.0f;
+		sc->data2 = 0.0f;
 #ifdef __OSL__
 		sc->prim = NULL;
 #endif
@@ -393,6 +397,7 @@ ccl_device void svm_node_closure_bsdf(KernelGlobals *kg, ShaderData *sd, float *
 					sc->N = N;
 					sc->data0 = 0.0f;
 					sc->data1 = 0.0f;
+					sc->data2 = 0.0f;
 					ccl_fetch(sd, flag) |= bsdf_transparent_setup(sc);
 				}
 			}
@@ -545,6 +550,7 @@ ccl_device void svm_node_closure_volume(KernelGlobals *kg, ShaderData *sd, float
 			if(sc) {
 				sc->data0 = param2; /* g */
 				sc->data1 = 0.0f;
+				sc->data2 = 0.0f;
 				ccl_fetch(sd, flag) |= volume_henyey_greenstein_setup(sc);
 			}
 			break;

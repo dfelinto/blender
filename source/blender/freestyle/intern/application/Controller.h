@@ -30,21 +30,12 @@
 
 #include <string>
 
-//#include "ConfigIO.h"
 #include "../geometry/FastGrid.h"
 #include "../scene_graph/SceneHash.h"
-#include "../system/Interpreter.h"
-#include "../system/ProgressBar.h"
 #include "../system/Precision.h"
-#include "../system/RenderMonitor.h"
 #include "../system/TimeUtils.h"
 #include "../view_map/FEdgeXDetector.h"
 #include "../view_map/ViewMapBuilder.h"
-
-extern "C" {
-#include "render_types.h"
-#include "DNA_scene_types.h"
-}
 
 #ifdef WITH_CXX_GUARDEDALLOC
 #include "MEM_guardedalloc.h"
@@ -52,16 +43,15 @@ extern "C" {
 
 namespace Freestyle {
 
-class AppView;
-class NodeGroup;
-class WShape;
-class SShape;
-class ViewMap;
-class ViewEdge;
 class AppCanvas;
-class InteractiveShader;
-class Shader;
-class StrokeRenderer;
+class AppView;
+class Interpreter;
+class NodeGroup;
+class ProgressBar;
+class RenderMonitor;
+class SShape;
+class ViewEdge;
+class ViewMap;
 
 class Controller
 {
@@ -136,12 +126,12 @@ public:
 
 	void setComputeSteerableViewMapFlag(bool iBool);
 	bool getComputeSteerableViewMapFlag() const;
-	void setCreaseAngle(real angle) {_creaseAngle = angle;}
-	real getCreaseAngle() const {return _creaseAngle;}
-	void setSphereRadius(real s) {_sphereRadius = s;}
-	real getSphereRadius() const {return _sphereRadius;}
-	void setSuggestiveContourKrDerivativeEpsilon(real dkr) {_suggestiveContourKrDerivativeEpsilon = dkr;}
-	real getSuggestiveContourKrDerivativeEpsilon() const {return _suggestiveContourKrDerivativeEpsilon;}
+	void setCreaseAngle(float angle) {_creaseAngle = angle;}
+	float getCreaseAngle() const {return _creaseAngle;}
+	void setSphereRadius(float s) {_sphereRadius = s;}
+	float getSphereRadius() const {return _sphereRadius;}
+	void setSuggestiveContourKrDerivativeEpsilon(float dkr) {_suggestiveContourKrDerivativeEpsilon = dkr;}
+	float getSuggestiveContourKrDerivativeEpsilon() const {return _suggestiveContourKrDerivativeEpsilon;}
 
 	void setModelsDir(const string& dir);
 	string getModelsDir() const;
@@ -188,11 +178,10 @@ private:
 	// Winged-Edge structure
 	WingedEdge *_winged_edge;
 
-	// Silhouette structure:
 #if 0
+	// Silhouette structure:
 	std::vector<SShape*> _SShapes;
 	NodeGroup *_SRoot;
-#endif
 
 	// Silhouette
 	NodeGroup *_SilhouetteNode;
@@ -201,6 +190,7 @@ private:
 
 	// more Debug info
 	NodeGroup *_DebugNode;
+#endif
 
 	// debug
 	//NodeUser<ViewMap> *_ViewMapNode; // FIXME
@@ -243,9 +233,9 @@ private:
 	bool _ComputeRidges;
 	bool _ComputeSuggestive;
 	bool _ComputeMaterialBoundaries;
-	real _creaseAngle;
-	real _sphereRadius;
-	real _suggestiveContourKrDerivativeEpsilon;
+	float _creaseAngle;
+	float _sphereRadius;
+	float _suggestiveContourKrDerivativeEpsilon;
 
 	bool _ComputeSteerableViewMap;
 

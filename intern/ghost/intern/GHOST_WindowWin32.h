@@ -80,8 +80,7 @@ public:
 	 * \param wantNumOfAASamples Number of samples used for AA (zero if no AA)
 	 * \param parentWindowHwnd
 	 */
-	GHOST_WindowWin32(
-	    GHOST_SystemWin32 *system,
+	GHOST_WindowWin32(GHOST_SystemWin32 *system,
 	    const STR_String& title,
 	    GHOST_TInt32 left,
 	    GHOST_TInt32 top,
@@ -93,8 +92,8 @@ public:
 	    bool warnOld = false,
 		bool alphaBackground = false,
 	    GHOST_TUns16 wantNumOfAASamples = 0,
-	    GHOST_TEmbedderWindowID parentWindowHwnd = 0
-	    );
+	    GHOST_TEmbedderWindowID parentWindowHwnd = 0,
+	    bool is_debug = false);
 
 	/**
 	 * Destructor.
@@ -360,6 +359,7 @@ private:
 	/** Handle input method editors event */
 	GHOST_ImeWin32 m_imeImput;
 #endif
+	bool m_debug_context;
 };
 
 #endif // __GHOST_WINDOWWIN32_H__

@@ -74,7 +74,8 @@ GHOST_WindowWin32::GHOST_WindowWin32(GHOST_SystemWin32 *system,
         GHOST_TDrawingContextType type,
 		bool wantStereoVisual, bool warnOld, bool alphaBackground,
         GHOST_TUns16 wantNumOfAASamples,
-        GHOST_TEmbedderWindowID parentwindowhwnd)
+        GHOST_TEmbedderWindowID parentwindowhwnd,
+        bool is_debug)
     : GHOST_Window(width, height, state,
                    wantStereoVisual, false, wantNumOfAASamples),
       m_inLiveResize(false),
@@ -90,7 +91,8 @@ GHOST_WindowWin32::GHOST_WindowWin32(GHOST_SystemWin32 *system,
       m_tablet(0),
       m_maxPressure(0),
       m_normal_state(GHOST_kWindowStateNormal),
-      m_parentWindowHwnd(parentwindowhwnd)
+      m_parentWindowHwnd(parentwindowhwnd),
+      m_debug_context(is_debug)
 {
 	OSVERSIONINFOEX versionInfo;
 	bool hasMinVersionForTaskbar = false;

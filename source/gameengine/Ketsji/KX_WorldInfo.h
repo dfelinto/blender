@@ -34,11 +34,7 @@
 
 #include "MT_Scalar.h"
 #include "KX_KetsjiEngine.h"
-#include "PyObjectPlus.h"
-
-#ifdef WITH_CXX_GUARDEDALLOC
-#include "MEM_guardedalloc.h"
-#endif
+#include "EXP_PyObjectPlus.h"
 
 #ifdef USE_MATHUTILS
 void KX_WorldInfo_Mathutils_Callback_Init(void);
@@ -88,7 +84,7 @@ public:
 	void setMistIntensity(float intensity);
 	void setMistColor(float r, float g, float b);
 	void setBackColor(float r, float g, float b);
-	const float *getBackColor() const;
+	const float *getBackColorConverted() const;
 	void setAmbientColor(float r, float g, float b);
 	void UpdateBackGround();
 	void UpdateWorldSettings();
@@ -103,10 +99,6 @@ public:
 	static PyObject *pyattr_get_ambient_color(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef);
 	static int pyattr_set_ambient_color(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef, PyObject *value);
 	virtual PyObject *py_repr(void);
-#endif
-
-#ifdef WITH_CXX_GUARDEDALLOC
-	MEM_CXX_CLASS_ALLOC_FUNCS("GE:KX_WorldInfo")
 #endif
 };
 

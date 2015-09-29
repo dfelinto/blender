@@ -34,7 +34,7 @@
 
 #include "BLI_utildefines.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "RNA_define.h"
 #include "RNA_enum_types.h"
@@ -64,13 +64,13 @@ static const char *rna_translate_ui_text(const char *text, const char *text_ctxt
                                          int translate)
 {
 	/* Also return text if UI labels translation is disabled. */
-	if (!text || !text[0] || !translate || !BLF_translate_iface()) {
+	if (!text || !text[0] || !translate || !BLT_translate_iface()) {
 		return text;
 	}
 
 	/* If a text_ctxt is specified, use it! */
 	if (text_ctxt && text_ctxt[0]) {
-		return BLF_pgettext(text_ctxt, text);
+		return BLT_pgettext(text_ctxt, text);
 	}
 
 	/* Else, if an RNA type or property is specified, use its context. */
@@ -82,17 +82,17 @@ static const char *rna_translate_ui_text(const char *text, const char *text_ctxt
 	 *     if default context is not suitable.
 	 */
 	if (prop) {
-		return BLF_pgettext(RNA_property_translation_context(prop), text);
+		return BLT_pgettext(RNA_property_translation_context(prop), text);
 	}
 #else
 	(void)prop;
 #endif
 	if (type) {
-		return BLF_pgettext(RNA_struct_translation_context(type), text);
+		return BLT_pgettext(RNA_struct_translation_context(type), text);
 	}
 
 	/* Else, default context! */
-	return BLF_pgettext(BLF_I18NCONTEXT_DEFAULT, text);
+	return BLT_pgettext(BLT_I18NCONTEXT_DEFAULT, text);
 }
 
 static void rna_uiItemR(uiLayout *layout, PointerRNA *ptr, const char *propname, const char *name, const char *text_ctxt,
@@ -724,6 +724,7 @@ void RNA_api_ui_layout(StructRNA *srna)
 	RNA_def_function_ui_description(func, "Enum. Large widget showing Icon previews");
 	api_ui_item_rna_common(func);
 	RNA_def_boolean(func, "show_labels", false, "", "Show enum label in preview buttons");
+	RNA_def_float(func, "scale", 5.0f, 1.0f, 100.0f, "Scale", "Scale the icon size (by the button size)", 1.0f, 100.0f);
 
 	func = RNA_def_function(srna, "template_histogram", "uiTemplateHistogram");
 	RNA_def_function_ui_description(func, "Item. A histogramm widget to analyze imaga data");

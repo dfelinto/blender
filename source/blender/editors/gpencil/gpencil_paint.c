@@ -40,7 +40,7 @@
 #include "BLI_math.h"
 #include "BLI_utildefines.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "PIL_time.h"
 
@@ -342,29 +342,25 @@ static short gp_stroke_addpoint(tGPsdata *p, const int mval[2], float pressure, 
 			
 			/* store settings */
 			copy_v2_v2_int(&pt->x, mval);
-			pt->pressure = pressure;
+			pt->pressure = 1.0f; /* T44932 - Pressure vals are unreliable, so ignore for now */
 			pt->time = (float)(curtime - p->inittime);
 			
 			/* increment buffer size */
 			gpd->sbuffer_size++;
 		}
 		else {
-			/* normally, we just reset the endpoint to the latest value
+			/* just reset the endpoint to the latest value
 			 *	- assume that pointers for this are always valid...
 			 */
 			pt = ((tGPspoint *)(gpd->sbuffer) + 1);
 			
 			/* store settings */
 			copy_v2_v2_int(&pt->x, mval);
-			pt->pressure = pressure;
+			pt->pressure = 1.0f; /* T44932 - Pressure vals are unreliable, so ignore for now */
 			pt->time = (float)(curtime - p->inittime);
 			
-			/* if this is just the second point we've added, increment the buffer size
-			 * so that it will be drawn properly...
-			 * otherwise, just leave it alone, otherwise we get problems
-			 */
-			if (gpd->sbuffer_size != 2)
-				gpd->sbuffer_size = 2;
+			/* now the buffer has 2 points (and shouldn't be allowed to get any larger) */
+			gpd->sbuffer_size = 2;
 		}
 		
 		/* can keep carrying on this way :) */
@@ -398,7 +394,7 @@ static short gp_stroke_addpoint(tGPsdata *p, const int mval[2], float pressure, 
 		
 		/* store settings */
 		copy_v2_v2_int(&pt->x, mval);
-		pt->pressure = pressure;
+		pt->pressure = 1.0f; /* T44932 - Pressure vals are unreliable, so ignore for now */
 		pt->time = (float)(curtime - p->inittime);
 		
 		/* if there's stroke for this poly line session add (or replace last) point
@@ -760,7 +756,7 @@ static short gp_stroke_eraser_splitdel(bGPDframe *gpf, bGPDstroke *gps, int i)
 	else if (i == gps->totpoints - 2) {
 		/* allocate new points array, and assign most of the old stroke there */
 		gps->totpoints--;
-		gps->points = MEM_callocN(sizeof(bGPDspoint) * gps->totpoints, "gp_stroke_points");
+		gps->points = MEM_mallocN(sizeof(bGPDspoint) * gps->totpoints, "gp_stroke_points");
 		memcpy(gps->points, pt_tmp, sizeof(bGPDspoint) * gps->totpoints);
 		
 		/* free temp buffer */
@@ -774,7 +770,7 @@ static short gp_stroke_eraser_splitdel(bGPDframe *gpf, bGPDstroke *gps, int i)
 	else if (i == 0) {
 		/* allocate new points array, and assign most of the old stroke there */
 		gps->totpoints--;
-		gps->points = MEM_callocN(sizeof(bGPDspoint) * gps->totpoints, "gp_stroke_points");
+		gps->points = MEM_mallocN(sizeof(bGPDspoint) * gps->totpoints, "gp_stroke_points");
 		memcpy(gps->points, pt_tmp + 1, sizeof(bGPDspoint) * gps->totpoints);
 		
 		/* We must adjust timings!
@@ -811,7 +807,7 @@ static short gp_stroke_eraser_splitdel(bGPDframe *gpf, bGPDstroke *gps, int i)
 		BLI_insertlinkafter(&gpf->strokes, gps, gsn);
 		
 		gsn->totpoints = gps->totpoints - i;
-		gsn->points = MEM_callocN(sizeof(bGPDspoint) * gsn->totpoints, "gp_stroke_points");
+		gsn->points = MEM_mallocN(sizeof(bGPDspoint) * gsn->totpoints, "gp_stroke_points");
 		memcpy(gsn->points, pt_tmp + i, sizeof(bGPDspoint) * gsn->totpoints);
 		
 		/* We must adjust timings of this new stroke!
@@ -835,8 +831,8 @@ static short gp_stroke_eraser_splitdel(bGPDframe *gpf, bGPDstroke *gps, int i)
 		
 		/* adjust existing stroke  */
 		gps->totpoints = i;
-		gps->points = MEM_callocN(sizeof(bGPDspoint) * gps->totpoints, "gp_stroke_points");
-		memcpy(gps->points, pt_tmp, sizeof(bGPDspoint) * i);
+		gps->points = MEM_mallocN(sizeof(bGPDspoint) * gps->totpoints, "gp_stroke_points");
+		memcpy(gps->points, pt_tmp, sizeof(bGPDspoint) * gps->totpoints);
 		
 		/* free temp buffer */
 		MEM_freeN(pt_tmp);

@@ -491,7 +491,9 @@ static int python_script_exec(bContext *C, const char *fn, struct Text *text,
 			 * incompatible'.
 			 * So now we load the script file data to a buffer */
 			{
-				const char *pystring = "with open(__file__, 'r') as f: exec(f.read())";
+				const char *pystring =
+				        "ns = globals().copy()\n"
+				        "with open(__file__, 'rb') as f: exec(compile(f.read(), __file__, 'exec'), ns)";
 
 				fclose(fp);
 
@@ -742,9 +744,11 @@ int BPY_context_member_get(bContext *C, const char *member, bContextDataResult *
 		}
 		else {
 			int len = PySequence_Fast_GET_SIZE(seq_fast);
+			PyObject **seq_fast_items = PySequence_Fast_ITEMS(seq_fast);
 			int i;
+
 			for (i = 0; i < len; i++) {
-				PyObject *list_item = PySequence_Fast_GET_ITEM(seq_fast, i);
+				PyObject *list_item = seq_fast_items[i];
 
 				if (BPy_StructRNA_Check(list_item)) {
 #if 0

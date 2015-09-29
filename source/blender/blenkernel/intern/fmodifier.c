@@ -37,7 +37,7 @@
 
 #include "DNA_anim_types.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BLI_blenlib.h"
 #include "BLI_ghash.h"
@@ -1389,6 +1389,8 @@ static float eval_fmodifier_influence(FModifier *fcm, float evaltime)
  *	  working on the 'global' result of the modified curve, not some localised segment,
  *	  so nevaltime gets set to whatever the last time-modifying modifier likes...
  *	- we start from the end of the stack, as only the last one matters for now
+ *
+ * Note: *fcu might be NULL
  */
 float evaluate_time_fmodifiers(FModifierStackStorage *storage, ListBase *modifiers,
                                FCurve *fcu, float cvalue, float evaltime)
@@ -1398,7 +1400,10 @@ float evaluate_time_fmodifiers(FModifierStackStorage *storage, ListBase *modifie
 	/* sanity checks */
 	if (ELEM(NULL, modifiers, modifiers->last))
 		return evaltime;
-		
+
+	if (fcu && fcu->flag & FCURVE_MOD_OFF)
+		return evaltime;
+
 	/* Starting from the end of the stack, calculate the time effects of various stacked modifiers 
 	 * on the time the F-Curve should be evaluated at. 
 	 *
@@ -1454,6 +1459,9 @@ void evaluate_value_fmodifiers(FModifierStackStorage *storage, ListBase *modifie
 	
 	/* sanity checks */
 	if (ELEM(NULL, modifiers, modifiers->first))
+		return;
+
+	if (fcu->flag & FCURVE_MOD_OFF)
 		return;
 	
 	/* evaluate modifiers */

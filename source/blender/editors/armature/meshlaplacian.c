@@ -35,8 +35,9 @@
 #include "BLI_edgehash.h"
 #include "BLI_memarena.h"
 #include "BLI_string.h"
+#include "BLI_alloca.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_DerivedMesh.h"
 #include "BKE_modifier.h"
@@ -84,9 +85,10 @@ struct LaplacianSystem {
 	EdgeHash *edgehash;     /* edge hash for construction */
 
 	struct HeatWeighting {
-		MFace *mface;
+		const MLoopTri *mlooptri;
+		const MLoop *mloop;	/* needed to find vertices by index */
 		int totvert;
-		int totface;
+		int tottri;
 		float (*verts)[3];  /* vertex coordinates */
 		float (*vnors)[3];  /* vertex normals */
 
@@ -100,7 +102,7 @@ struct LaplacianSystem {
 		float *mindist;     /* minimum distance to a bone for all vertices */
 		
 		BVHTree   *bvhtree; /* ray tracing acceleration structure */
-		MFace     **vface;  /* a face that the vertex belongs to */
+		const MLoopTri **vltree;  /* a looptri that the vertex belongs to */
 	} heat;
 
 #ifdef RIGID_DEFORM
@@ -377,30 +379,33 @@ typedef struct BVHCallbackUserData {
 	LaplacianSystem *sys;
 } BVHCallbackUserData;
 
-static void bvh_callback(void *userdata, int index, const BVHTreeRay *UNUSED(ray), BVHTreeRayHit *hit)
+static void bvh_callback(void *userdata, int index, const BVHTreeRay *ray, BVHTreeRayHit *hit)
 {
 	BVHCallbackUserData *data = (struct BVHCallbackUserData *)userdata;
-	MFace *mf = data->sys->heat.mface + index;
+	const MLoopTri *lt = &data->sys->heat.mlooptri[index];
+	const MLoop *mloop = data->sys->heat.mloop;
 	float (*verts)[3] = data->sys->heat.verts;
-	float lambda, uv[2], n[3], dir[3];
+	const float *vtri_co[3];
+	float dist_test;
 
-	mul_v3_v3fl(dir, data->vec, hit->dist);
+	vtri_co[0] = verts[mloop[lt->tri[0]].v];
+	vtri_co[1] = verts[mloop[lt->tri[1]].v];
+	vtri_co[2] = verts[mloop[lt->tri[2]].v];
 
-	if (isect_ray_tri_v3(data->start, dir, verts[mf->v1], verts[mf->v2], verts[mf->v3], &lambda, uv)) {
-		normal_tri_v3(n, verts[mf->v1], verts[mf->v2], verts[mf->v3]);
-		if (lambda < 1.0f && dot_v3v3(n, data->vec) < -1e-5f) {
-			hit->index = index;
-			hit->dist *= lambda;
-		}
-	}
-
-	mul_v3_v3fl(dir, data->vec, hit->dist);
-
-	if (isect_ray_tri_v3(data->start, dir, verts[mf->v1], verts[mf->v3], verts[mf->v4], &lambda, uv)) {
-		normal_tri_v3(n, verts[mf->v1], verts[mf->v3], verts[mf->v4]);
-		if (lambda < 1.0f && dot_v3v3(n, data->vec) < -1e-5f) {
-			hit->index = index;
-			hit->dist *= lambda;
+#ifdef USE_KDOPBVH_WATERTIGHT
+	if (isect_ray_tri_watertight_v3(data->start, ray->isect_precalc, UNPACK3(vtri_co), &dist_test, NULL))
+#else
+	UNUSED_VARS(ray);
+	if (isect_ray_tri_v3(data->start, data->vec, UNPACK3(vtri_co), &dist_test, NULL))
+#endif
+	{
+		if (dist_test < hit->dist) {
+			float n[3];
+			normal_tri_v3(n, UNPACK3(vtri_co));
+			if (dot_v3v3(n, data->vec) < -1e-5f) {
+				hit->index = index;
+				hit->dist = dist_test;
+			}
 		}
 	}
 }
@@ -408,34 +413,36 @@ static void bvh_callback(void *userdata, int index, const BVHTreeRay *UNUSED(ray
 /* Raytracing for vertex to bone/vertex visibility */
 static void heat_ray_tree_create(LaplacianSystem *sys)
 {
-	MFace *mface = sys->heat.mface;
+	const MLoopTri *looptri = sys->heat.mlooptri;
+	const MLoop *mloop = sys->heat.mloop;
 	float (*verts)[3] = sys->heat.verts;
-	int totface = sys->heat.totface;
+	int tottri = sys->heat.tottri;
 	int totvert = sys->heat.totvert;
 	int a;
 
-	sys->heat.bvhtree = BLI_bvhtree_new(totface, 0.0f, 4, 6);
-	sys->heat.vface = MEM_callocN(sizeof(MFace *) * totvert, "HeatVFaces");
+	sys->heat.bvhtree = BLI_bvhtree_new(tottri, 0.0f, 4, 6);
+	sys->heat.vltree = MEM_callocN(sizeof(MLoopTri *) * totvert, "HeatVFaces");
 
-	for (a = 0; a < totface; a++) {
-		MFace *mf = mface + a;
+	for (a = 0; a < tottri; a++) {
+		const MLoopTri *lt = &looptri[a];
 		float bb[6];
+		int vtri[3];
+		
+		vtri[0] = mloop[lt->tri[0]].v;
+		vtri[1] = mloop[lt->tri[1]].v;
+		vtri[2] = mloop[lt->tri[2]].v;
 
 		INIT_MINMAX(bb, bb + 3);
-		minmax_v3v3_v3(bb, bb + 3, verts[mf->v1]);
-		minmax_v3v3_v3(bb, bb + 3, verts[mf->v2]);
-		minmax_v3v3_v3(bb, bb + 3, verts[mf->v3]);
-		if (mf->v4) {
-			minmax_v3v3_v3(bb, bb + 3, verts[mf->v4]);
-		}
+		minmax_v3v3_v3(bb, bb + 3, verts[vtri[0]]);
+		minmax_v3v3_v3(bb, bb + 3, verts[vtri[1]]);
+		minmax_v3v3_v3(bb, bb + 3, verts[vtri[2]]);
 
 		BLI_bvhtree_insert(sys->heat.bvhtree, a, bb, 2);
 		
 		//Setup inverse pointers to use on isect.orig
-		sys->heat.vface[mf->v1] = mf;
-		sys->heat.vface[mf->v2] = mf;
-		sys->heat.vface[mf->v3] = mf;
-		if (mf->v4) sys->heat.vface[mf->v4] = mf;
+		sys->heat.vltree[vtri[0]] = lt;
+		sys->heat.vltree[vtri[1]] = lt;
+		sys->heat.vltree[vtri[2]] = lt;
 	}
 
 	BLI_bvhtree_balance(sys->heat.bvhtree); 
@@ -445,12 +452,12 @@ static int heat_ray_source_visible(LaplacianSystem *sys, int vertex, int source)
 {
 	BVHTreeRayHit hit;
 	BVHCallbackUserData data;
-	MFace *mface;
+	const MLoopTri *lt;
 	float end[3];
 	int visible;
 
-	mface = sys->heat.vface[vertex];
-	if (!mface)
+	lt = sys->heat.vltree[vertex];
+	if (lt == NULL)
 		return 1;
 
 	data.sys = sys;
@@ -568,8 +575,9 @@ static void heat_calc_vnormals(LaplacianSystem *sys)
 
 static void heat_laplacian_create(LaplacianSystem *sys)
 {
-	MFace *mface = sys->heat.mface, *mf;
-	int totface = sys->heat.totface;
+	const MLoopTri *mlooptri = sys->heat.mlooptri, *lt;
+	const MLoop *mloop = sys->heat.mloop;
+	int tottri = sys->heat.tottri;
 	int totvert = sys->heat.totvert;
 	int a;
 
@@ -582,10 +590,12 @@ static void heat_laplacian_create(LaplacianSystem *sys)
 	for (a = 0; a < totvert; a++)
 		laplacian_add_vertex(sys, sys->heat.verts[a], 0);
 
-	for (a = 0, mf = mface; a < totface; a++, mf++) {
-		laplacian_add_triangle(sys, mf->v1, mf->v2, mf->v3);
-		if (mf->v4)
-			laplacian_add_triangle(sys, mf->v1, mf->v3, mf->v4);
+	for (a = 0, lt = mlooptri; a < tottri; a++, lt++) {
+		int vtri[3];
+		vtri[0] = mloop[lt->tri[0]].v;
+		vtri[1] = mloop[lt->tri[1]].v;
+		vtri[2] = mloop[lt->tri[2]].v;
+		laplacian_add_triangle(sys, UNPACK3(vtri));
 	}
 
 	/* for distance computation in set_H */
@@ -598,7 +608,8 @@ static void heat_laplacian_create(LaplacianSystem *sys)
 static void heat_system_free(LaplacianSystem *sys)
 {
 	BLI_bvhtree_free(sys->heat.bvhtree);
-	MEM_freeN(sys->heat.vface);
+	MEM_freeN(sys->heat.vltree);
+	MEM_freeN((void *)sys->heat.mlooptri);
 
 	MEM_freeN(sys->heat.mindist);
 	MEM_freeN(sys->heat.H);
@@ -626,9 +637,9 @@ void heat_bone_weighting(Object *ob, Mesh *me, float (*verts)[3], int numsource,
                          float (*root)[3], float (*tip)[3], int *selected, const char **err_str)
 {
 	LaplacianSystem *sys;
+	MLoopTri *mlooptri;
 	MPoly *mp;
 	MLoop *ml;
-	MFace *mf;
 	float solution, weight;
 	int *vertsflipped = NULL, *mask = NULL;
 	int a, tottri, j, bbone, firstsegment, lastsegment;
@@ -641,15 +652,7 @@ void heat_bone_weighting(Object *ob, Mesh *me, float (*verts)[3], int numsource,
 	*err_str = NULL;
 
 	/* bone heat needs triangulated faces */
-	BKE_mesh_tessface_ensure(me);
-
-	for (tottri = 0, a = 0, mf = me->mface; a < me->totface; mf++, a++) {
-		tottri++;
-		if (mf->v4) tottri++;
-	}
-
-	if (tottri == 0)
-		return;
+	tottri = poly_to_tri_count(me->totpoly, me->totloop);
 
 	/* count triangles and create mask */
 	if (ob->mode & OB_MODE_WEIGHT_PAINT &&
@@ -679,8 +682,17 @@ void heat_bone_weighting(Object *ob, Mesh *me, float (*verts)[3], int numsource,
 	/* create laplacian */
 	sys = laplacian_system_construct_begin(me->totvert, tottri, 1);
 
-	sys->heat.mface = me->mface;
-	sys->heat.totface = me->totface;
+	sys->heat.tottri = poly_to_tri_count(me->totpoly, me->totloop);
+	mlooptri = MEM_mallocN(sizeof(*sys->heat.mlooptri) * sys->heat.tottri, __func__);
+
+	BKE_mesh_recalc_looptri(
+	        me->mloop, me->mpoly,
+	        me->mvert,
+	        me->totloop, me->totpoly,
+	        mlooptri);
+
+	sys->heat.mlooptri = mlooptri;
+	sys->heat.mloop = me->mloop;
 	sys->heat.totvert = me->totvert;
 	sys->heat.verts = verts;
 	sys->heat.root = root;
@@ -1041,18 +1053,26 @@ void rigid_deform_end(int cancel)
 #define MESHDEFORM_TAG_INTERIOR 2
 #define MESHDEFORM_TAG_EXTERIOR 3
 
+/** minimum length for #MDefBoundIsect.len */
 #define MESHDEFORM_LEN_THRESHOLD 1e-6f
 
 #define MESHDEFORM_MIN_INFLUENCE 0.0005f
 
-static int MESHDEFORM_OFFSET[7][3] = {
+static const int MESHDEFORM_OFFSET[7][3] = {
 	{0, 0, 0}, {1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}
 };
 
 typedef struct MDefBoundIsect {
-	float co[3], uvw[4];
-	int nvert, v[4], facing;
+	/* intersection on the cage 'cagecos' */
+	float co[3];
+	/* non-facing intersections are considered interior */
+	bool facing;
+	/* ray-cast index aligned with MPoly (ray-hit-triangle isn't needed) */
+	int poly_index;
+	/* distance from 'co' to the ray-cast start (clamped to avoid zero division) */
 	float len;
+	/* weights aligned with the MPoly's loop indices */
+	float poly_weights[0];
 } MDefBoundIsect;
 
 typedef struct MDefBindInfluence {
@@ -1091,15 +1111,23 @@ typedef struct MeshDeformBind {
 	
 	BVHTree *bvhtree;
 	BVHTreeFromMesh bvhdata;
+
+	/* avoid DM function calls during intersections */
+	struct {
+		const MPoly *mpoly;
+		const MLoop *mloop;
+		const MLoopTri *looptri;
+		const float (*poly_nors)[3];
+	} cagedm_cache;
 } MeshDeformBind;
 
 typedef struct MeshDeformIsect {
 	float start[3];
 	float vec[3];
+	float vec_length;
 	float lambda;
 
-	void *face;
-	int isect;
+	bool isect;
 	float u, v;
 	
 } MeshDeformIsect;
@@ -1169,34 +1197,41 @@ static int meshdeform_tri_intersect(const float orig[3], const float end[3], con
 	return 1;
 }
 
+struct MeshRayCallbackData {
+	MeshDeformBind *mdb;
+	MeshDeformIsect *isec;
+};
+
 static void harmonic_ray_callback(void *userdata, int index, const BVHTreeRay *ray, BVHTreeRayHit *hit)
 {
-	void **data = userdata;
-	MeshDeformBind *mdb = data[1];
-	MFace *mface = data[0], *mf;
-	MeshDeformIsect *isec = data[2];
-	float no[3], co[3], end[3], uvw[3], dist, face[4][3];
+	struct MeshRayCallbackData *data = userdata;
+	MeshDeformBind *mdb = data->mdb;
+	const MLoop *mloop = mdb->cagedm_cache.mloop;
+	const MLoopTri *looptri = mdb->cagedm_cache.looptri, *lt;
+	const float (*poly_nors)[3] = mdb->cagedm_cache.poly_nors;
+	MeshDeformIsect *isec = data->isec;
+	float no[3], co[3], end[3], uvw[3], dist;
+	float *face[3];
 	
-	mf = mface + index;
+	lt = &looptri[index];
 	
-	copy_v3_v3(face[0], mdb->cagecos[mf->v1]);
-	copy_v3_v3(face[1], mdb->cagecos[mf->v2]);
-	copy_v3_v3(face[2], mdb->cagecos[mf->v3]);
-	if (mf->v4)
-		copy_v3_v3(face[3], mdb->cagecos[mf->v4]);
+	face[0] = mdb->cagecos[mloop[lt->tri[0]].v];
+	face[1] = mdb->cagecos[mloop[lt->tri[1]].v];
+	face[2] = mdb->cagecos[mloop[lt->tri[2]].v];
 	
 	add_v3_v3v3(end, isec->start, isec->vec);
 	
-	if (!meshdeform_tri_intersect(ray->origin, end, face[0], face[1], face[2], co, uvw)) 
-		if (!mf->v4 || !meshdeform_tri_intersect(ray->origin, end, face[0], face[2], face[3], co, uvw))
-			return;
-	
-	if (!mf->v4)
-		normal_tri_v3(no, face[0], face[1], face[2]);
-	else
-		normal_quad_v3(no, face[0], face[1], face[2], face[3]);
-	
-	dist = len_v3v3(ray->origin, co) / len_v3(isec->vec);
+	if (!meshdeform_tri_intersect(ray->origin, end, UNPACK3(face), co, uvw))
+		return;
+
+	if (poly_nors) {
+		copy_v3_v3(no, poly_nors[lt->poly]);
+	}
+	else {
+		normal_tri_v3(no, UNPACK3(face));
+	}
+
+	dist = len_v3v3(ray->origin, co) / isec->vec_length;
 	if (dist < hit->dist) {
 		hit->index = index;
 		hit->dist = dist;
@@ -1204,19 +1239,18 @@ static void harmonic_ray_callback(void *userdata, int index, const BVHTreeRay *r
 		
 		isec->isect = (dot_v3v3(no, ray->direction) <= 0.0f);
 		isec->lambda = dist;
-		isec->face = mf;
 	}
 }
 
 static MDefBoundIsect *meshdeform_ray_tree_intersect(MeshDeformBind *mdb, const float co1[3], const float co2[3])
 {
-	MDefBoundIsect *isect;
 	BVHTreeRayHit hit;
 	MeshDeformIsect isect_mdef;
-	float (*cagecos)[3];
-	void *data[3] = {mdb->cagedm->getTessFaceArray(mdb->cagedm), mdb, &isect_mdef};
-	MFace *mface1 = data[0], *mface;
-	float vert[4][3], len, end[3];
+	struct MeshRayCallbackData data = {
+		mdb,
+		&isect_mdef,
+	};
+	float end[3], vec_normal[3];
 	// static float epsilon[3] = {1e-4, 1e-4, 1e-4};
 
 	/* happens binding when a cage has no faces */
@@ -1235,42 +1269,41 @@ static MDefBoundIsect *meshdeform_ray_tree_intersect(MeshDeformBind *mdb, const 
 	copy_v3_v3(end, co2);
 #endif
 	sub_v3_v3v3(isect_mdef.vec, end, isect_mdef.start);
+	isect_mdef.vec_length = normalize_v3_v3(vec_normal, isect_mdef.vec);
 
 	hit.index = -1;
 	hit.dist = FLT_MAX;
-	if (BLI_bvhtree_ray_cast(mdb->bvhtree, isect_mdef.start, isect_mdef.vec,
-	                         0.0, &hit, harmonic_ray_callback, data) != -1)
+	if (BLI_bvhtree_ray_cast(mdb->bvhtree, isect_mdef.start, vec_normal,
+	                         0.0, &hit, harmonic_ray_callback, &data) != -1)
 	{
-		len = isect_mdef.lambda;
-		isect_mdef.face = mface = mface1 + hit.index;
+		const MLoop *mloop = mdb->cagedm_cache.mloop;
+		const MLoopTri *lt = &mdb->cagedm_cache.looptri[hit.index];
+		const MPoly *mp = &mdb->cagedm_cache.mpoly[lt->poly];
+		const float (*cagecos)[3] = mdb->cagecos;
+		const float len = isect_mdef.lambda;
+		MDefBoundIsect *isect;
 
-		/* create MDefBoundIsect */
-		isect = BLI_memarena_alloc(mdb->memarena, sizeof(*isect));
+		float (*mp_cagecos)[3] = BLI_array_alloca(mp_cagecos, mp->totloop);
+		int i;
+
+		/* create MDefBoundIsect, and extra for 'poly_weights[]' */
+		isect = BLI_memarena_alloc(mdb->memarena, sizeof(*isect) + (sizeof(float) * mp->totloop));
 
 		/* compute intersection coordinate */
-		isect->co[0] = co1[0] + isect_mdef.vec[0] * len;
-		isect->co[1] = co1[1] + isect_mdef.vec[1] * len;
-		isect->co[2] = co1[2] + isect_mdef.vec[2] * len;
-
-		isect->len = len_v3v3(co1, isect->co);
-		if (isect->len < MESHDEFORM_LEN_THRESHOLD)
-			isect->len = MESHDEFORM_LEN_THRESHOLD;
-
-		isect->v[0] = mface->v1;
-		isect->v[1] = mface->v2;
-		isect->v[2] = mface->v3;
-		isect->v[3] = mface->v4;
-		isect->nvert = (mface->v4) ? 4 : 3;
+		madd_v3_v3v3fl(isect->co, co1, isect_mdef.vec, len);
 
 		isect->facing = isect_mdef.isect;
 
+		isect->poly_index = lt->poly;
+
+		isect->len = max_ff(len_v3v3(co1, isect->co), MESHDEFORM_LEN_THRESHOLD);
+
 		/* compute mean value coordinates for interpolation */
-		cagecos = mdb->cagecos;
-		copy_v3_v3(vert[0], cagecos[mface->v1]);
-		copy_v3_v3(vert[1], cagecos[mface->v2]);
-		copy_v3_v3(vert[2], cagecos[mface->v3]);
-		if (mface->v4) copy_v3_v3(vert[3], cagecos[mface->v4]);
-		interp_weights_poly_v3(isect->uvw, vert, isect->nvert, isect->co);
+		for (i = 0; i < mp->totloop; i++) {
+			copy_v3_v3(mp_cagecos[i], cagecos[mloop[mp->loopstart + i].v]);
+		}
+
+		interp_weights_poly_v3(isect->poly_weights, mp_cagecos, mp->totloop, isect->co);
 
 		return isect;
 	}
@@ -1418,14 +1451,18 @@ static void meshdeform_bind_floodfill(MeshDeformBind *mdb)
 	MEM_freeN(stack);
 }
 
-static float meshdeform_boundary_phi(MeshDeformBind *UNUSED(mdb), MDefBoundIsect *isect, int cagevert)
+static float meshdeform_boundary_phi(const MeshDeformBind *mdb, const MDefBoundIsect *isect, int cagevert)
 {
-	int a;
+	const MLoop *mloop = mdb->cagedm_cache.mloop;
+	const MPoly *mp = &mdb->cagedm_cache.mpoly[isect->poly_index];
+	int i;
 
-	for (a = 0; a < isect->nvert; a++)
-		if (isect->v[a] == cagevert)
-			return isect->uvw[a];
-	
+	for (i = 0; i < mp->totloop; i++) {
+		if (mloop[mp->loopstart + i].v == cagevert) {
+			return isect->poly_weights[i];
+		}
+	}
+
 	return 0.0f;
 }
 
@@ -1752,7 +1789,7 @@ static void harmonic_coordinates_bind(Scene *UNUSED(scene), MeshDeformModifierDa
 	mdb->totalphi = MEM_callocN(sizeof(float) * mdb->size3, "MeshDeformBindTotalPhi");
 	mdb->boundisect = MEM_callocN(sizeof(*mdb->boundisect) * mdb->size3, "MDefBoundIsect");
 	mdb->semibound = MEM_callocN(sizeof(int) * mdb->size3, "MDefSemiBound");
-	mdb->bvhtree = bvhtree_from_mesh_faces(&mdb->bvhdata, mdb->cagedm, FLT_EPSILON * 100, 4, 6);
+	mdb->bvhtree = bvhtree_from_mesh_looptri(&mdb->bvhdata, mdb->cagedm, FLT_EPSILON * 100, 4, 6);
 	mdb->inside = MEM_callocN(sizeof(int) * mdb->totvert, "MDefInside");
 
 	if (mmd->flag & MOD_MDEF_DYNAMIC_BIND)
@@ -1762,6 +1799,15 @@ static void harmonic_coordinates_bind(Scene *UNUSED(scene), MeshDeformModifierDa
 
 	mdb->memarena = BLI_memarena_new(BLI_MEMARENA_STD_BUFSIZE, "harmonic coords arena");
 	BLI_memarena_use_calloc(mdb->memarena);
+
+	/* initialize data from 'cagedm' for reuse */
+	{
+		DerivedMesh *dm = mdb->cagedm;
+		mdb->cagedm_cache.mpoly = dm->getPolyArray(dm);
+		mdb->cagedm_cache.mloop = dm->getLoopArray(dm);
+		mdb->cagedm_cache.looptri = dm->getLoopTriArray(dm);
+		mdb->cagedm_cache.poly_nors = dm->getPolyDataArray(dm, CD_NORMAL);  /* can be NULL */
+	}
 
 	/* make bounding box equal size in all directions, add padding, and compute
 	 * width of the cells */

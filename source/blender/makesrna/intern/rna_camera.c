@@ -144,15 +144,6 @@ static void rna_def_camera_stereo_data(BlenderRNA *brna)
 	                         "The converge point for the stereo cameras "
 	                         "(often the distance between a projector and the projection screen)");
 	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, NULL);
-
-	prop = RNA_def_property(srna, "viewport_convergence", PROP_FLOAT, PROP_DISTANCE);
-	RNA_def_property_float_sdna(prop, NULL, "convergence_distance");
-	RNA_def_property_range(prop, 0.00001f, FLT_MAX);
-	RNA_def_property_ui_range(prop, 0.0f, 15.f, 1, 2);
-	RNA_def_property_ui_text(prop, "Viewport Convergence",
-	                         "Preview convergence distance for the stereo effect in the viewport "
-	                         "(it does not affect the render!)");
-	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, NULL);
 }
 
 void RNA_def_camera(BlenderRNA *brna)
@@ -290,14 +281,14 @@ void RNA_def_camera(BlenderRNA *brna)
 	RNA_def_property_float_sdna(prop, NULL, "shiftx");
 	RNA_def_property_range(prop, -10.0f, 10.0f);
 	RNA_def_property_ui_range(prop, -2.0, 2.0, 1, 3);
-	RNA_def_property_ui_text(prop, "Shift X", "Perspective Camera horizontal shift");
+	RNA_def_property_ui_text(prop, "Shift X", "Camera horizontal shift");
 	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Camera_update");
 
 	prop = RNA_def_property(srna, "shift_y", PROP_FLOAT, PROP_NONE);
 	RNA_def_property_float_sdna(prop, NULL, "shifty");
 	RNA_def_property_range(prop, -10.0f, 10.0f);
 	RNA_def_property_ui_range(prop, -2.0, 2.0, 1, 3);
-	RNA_def_property_ui_text(prop, "Shift Y", "Perspective Camera vertical shift");
+	RNA_def_property_ui_text(prop, "Shift Y", "Camera vertical shift");
 	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Camera_update");
 
 	prop = RNA_def_property(srna, "dof_distance", PROP_FLOAT, PROP_DISTANCE);

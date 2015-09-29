@@ -40,6 +40,7 @@ Camera::Camera()
 	motion.pre = transform_identity();
 	motion.post = transform_identity();
 	use_motion = false;
+	use_perspective_motion = false;
 
 	aperture_ratio = 1.0f;
 
@@ -52,6 +53,7 @@ Camera::Camera()
 	longitude_min = -M_PI_F;
 	longitude_max = M_PI_F;
 	fov = M_PI_4_F;
+	fov_pre = fov_post = fov;
 
 	sensorwidth = 0.036f;
 	sensorheight = 0.024f;
@@ -90,19 +92,26 @@ Camera::~Camera()
 
 void Camera::compute_auto_viewplane()
 {
-	float aspect = (float)width/(float)height;
-
-	if(width >= height) {
-		viewplane.left = -aspect;
-		viewplane.right = aspect;
-		viewplane.bottom = -1.0f;
+	if(type == CAMERA_PANORAMA) {
+		viewplane.left = 0.0f;
+		viewplane.right = 1.0f;
+		viewplane.bottom = 0.0f;
 		viewplane.top = 1.0f;
 	}
 	else {
-		viewplane.left = -1.0f;
-		viewplane.right = 1.0f;
-		viewplane.bottom = -1.0f/aspect;
-		viewplane.top = 1.0f/aspect;
+		float aspect = (float)width/(float)height;
+		if(width >= height) {
+			viewplane.left = -aspect;
+			viewplane.right = aspect;
+			viewplane.bottom = -1.0f;
+			viewplane.top = 1.0f;
+		}
+		else {
+			viewplane.left = -1.0f;
+			viewplane.right = 1.0f;
+			viewplane.bottom = -1.0f/aspect;
+			viewplane.top = 1.0f/aspect;
+		}
 	}
 }
 
@@ -170,6 +179,23 @@ void Camera::update()
 	dx = transform_direction(&cameratoworld, dx);
 	dy = transform_direction(&cameratoworld, dy);
 
+	/* TODO(sergey): Support other types of camera. */
+	if(type == CAMERA_PERSPECTIVE) {
+		/* TODO(sergey): Move to an utility function and de-duplicate with
+		 * calculation above.
+		 */
+		Transform screentocamera_pre =
+		        transform_inverse(transform_perspective(fov_pre,
+		                                                nearclip,
+		                                                farclip));
+		Transform screentocamera_post =
+		        transform_inverse(transform_perspective(fov_post,
+		                                                nearclip,
+		                                                farclip));
+		perspective_motion.pre = screentocamera_pre * rastertoscreen;
+		perspective_motion.post = screentocamera_post * rastertoscreen;
+	}
+
 	need_update = false;
 	need_device_update = true;
 	need_flags_update = true;
@@ -205,8 +231,10 @@ void Camera::device_update(Device *device, DeviceScene *dscene, Scene *scene)
 
 	/* camera motion */
 	kcam->have_motion = 0;
+	kcam->have_perspective_motion = 0;
 
 	if(need_motion == Scene::MOTION_PASS) {
+		/* TODO(sergey): Support perspective (zoom, fov) motion. */
 		if(type == CAMERA_PANORAMA) {
 			if(use_motion) {
 				kcam->motion.pre = transform_inverse(motion.pre);
@@ -233,6 +261,10 @@ void Camera::device_update(Device *device, DeviceScene *dscene, Scene *scene)
 		if(use_motion) {
 			transform_motion_decompose((DecompMotionTransform*)&kcam->motion, &motion, &matrix);
 			kcam->have_motion = 1;
+		}
+		if(use_perspective_motion) {
+			kcam->perspective_motion = perspective_motion;
+			kcam->have_perspective_motion = 1;
 		}
 	}
 #endif
@@ -393,9 +425,9 @@ BoundBox Camera::viewplane_bounds_get()
 	BoundBox bounds = BoundBox::empty;
 
 	if(type == CAMERA_PANORAMA) {
-		bounds.grow(make_float3(cameratoworld.w.x,
-		                        cameratoworld.w.y,
-		                        cameratoworld.w.z));
+		bounds.grow(make_float3(cameratoworld.x.w,
+		                        cameratoworld.y.w,
+		                        cameratoworld.z.w));
 	}
 	else {
 		bounds.grow(transform_raster_to_world(0.0f, 0.0f));

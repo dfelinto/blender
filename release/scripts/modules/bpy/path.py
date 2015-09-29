@@ -61,7 +61,7 @@ def abspath(path, start=None, library=None):
 
     :arg start: Relative to this path,
        when not set the current filename is used.
-    :type start: string
+    :type start: string or bytes
     :arg library: The library this path is from. This is only included for
        convenience, when the library is not None its path replaces *start*.
     :type library: :class:`bpy.types.Library`
@@ -90,9 +90,11 @@ def relpath(path, start=None):
     """
     Returns the path relative to the current blend file using the "//" prefix.
 
+    :arg path: An absolute path.
+    :type path: string or bytes
     :arg start: Relative to this path,
        when not set the current filename is used.
-    :type start: string
+    :type start: string or bytes
     """
     if isinstance(path, bytes):
         if not path.startswith(b"//"):
@@ -112,6 +114,9 @@ def is_subdir(path, directory):
     """
     Returns true if *path* in a subdirectory of *directory*.
     Both paths must be absolute.
+
+    :arg path: An absolute path.
+    :type path: string or bytes
     """
     from os.path import normpath, normcase
     path = normpath(normcase(path))
@@ -129,7 +134,7 @@ def clean_name(name, replace="_"):
     may cause problems under various circumstances,
     such as writing to a file.
     All characters besides A-Z/a-z, 0-9 are replaced with "_"
-    or the replace argument if defined.
+    or the *replace* argument if defined.
     """
 
     if replace != "_":
@@ -278,22 +283,21 @@ def ensure_ext(filepath, ext, case_sensitive=False):
     """
     Return the path with the extension added if it is not already set.
 
-    :arg ext: The extension to check for.
+    :arg ext: The extension to check for, can be a compound extension. Should
+              start with a dot, such as '.blend' or '.tar.gz'.
     :type ext: string
     :arg case_sensitive: Check for matching case when comparing extensions.
     :type case_sensitive: bool
     """
-    fn_base, fn_ext = _os.path.splitext(filepath)
-    if fn_base and fn_ext:
-        if ((case_sensitive and ext == fn_ext) or
-            (ext.lower() == fn_ext.lower())):
 
+    if case_sensitive:
+        if filepath.endswith(ext):
             return filepath
-        else:
-            return fn_base + ext
-
     else:
-        return filepath + ext
+        if filepath[-len(ext):].lower().endswith(ext.lower()):
+            return filepath
+
+    return filepath + ext
 
 
 def module_names(path, recursive=False):

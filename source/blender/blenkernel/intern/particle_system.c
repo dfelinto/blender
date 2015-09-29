@@ -555,13 +555,28 @@ void initialize_particle(ParticleSimulationData *sim, ParticleData *pa)
 	/* usage other than straight after distribute has to handle this index by itself - jahka*/
 	//pa->num_dmcache = DMCACHE_NOTFOUND; /* assume we don't have a derived mesh face */
 }
+
 static void initialize_all_particles(ParticleSimulationData *sim)
 {
 	ParticleSystem *psys = sim->psys;
+	ParticleSettings *part = psys->part;
+	/* Grid distributionsets UNEXIST flag, need to take care of
+	 * it here because later this flag is being reset.
+	 *
+	 * We can't do it for any distribution, because it'll then
+	 * conflict with texture influence, which does not free
+	 * unexisting particles and only sets flag.
+	 *
+	 * It's not so bad, because only grid distribution sets
+	 * UNEXIST flag.
+	 */
+	const bool emit_from_volume_grid = (part->distr == PART_DISTR_GRID) &&
+	                                   (!ELEM(part->from, PART_FROM_VERT, PART_FROM_CHILD));
 	PARTICLE_P;
-
 	LOOP_PARTICLES {
-		initialize_particle(sim, pa);
+		if (!(emit_from_volume_grid && (pa->flag & PARS_UNEXIST) != 0)) {
+			initialize_particle(sim, pa);
+		}
 	}
 }
 
@@ -609,8 +624,9 @@ static void free_unexisting_particles(ParticleSimulationData *sim)
 		if (psys->particles->boid) {
 			BoidParticle *newboids = MEM_callocN(psys->totpart * sizeof(BoidParticle), "boid particles");
 
-			LOOP_PARTICLES
+			LOOP_PARTICLES {
 				pa->boid = newboids++;
+			}
 
 		}
 	}
@@ -2461,10 +2477,6 @@ static int collision_sphere_to_edges(ParticleCollision *col, float radius, Parti
 	int i;
 
 	for (i=0; i<3; i++) {
-		/* in case of a quad, no need to check "edge" that goes through face twice */
-		if ((pce->x[3] && i==2))
-			continue;
-
 		cur = edge+i;
 		cur->x[0] = pce->x[i]; cur->x[1] = pce->x[(i+1)%3];
 		cur->v[0] = pce->v[i]; cur->v[1] = pce->v[(i+1)%3];
@@ -2508,10 +2520,6 @@ static int collision_sphere_to_verts(ParticleCollision *col, float radius, Parti
 	int i;
 
 	for (i=0; i<3; i++) {
-		/* in case of quad, only check one vert the first time */
-		if (pce->x[3] && i != 1)
-			continue;
-
 		cur = vert+i;
 		cur->x[0] = pce->x[i];
 		cur->v[0] = pce->v[i];
@@ -2539,21 +2547,19 @@ void BKE_psys_collision_neartest_cb(void *userdata, int index, const BVHTreeRay 
 {
 	ParticleCollision *col = (ParticleCollision *) userdata;
 	ParticleCollisionElement pce;
-	MFace *face = col->md->mfaces + index;
+	const MVertTri *vt = &col->md->tri[index];
 	MVert *x = col->md->x;
 	MVert *v = col->md->current_v;
 	float t = hit->dist/col->original_ray_length;
 	int collision = 0;
 
-	pce.x[0] = x[face->v1].co;
-	pce.x[1] = x[face->v2].co;
-	pce.x[2] = x[face->v3].co;
-	pce.x[3] = face->v4 ? x[face->v4].co : NULL;
+	pce.x[0] = x[vt->tri[0]].co;
+	pce.x[1] = x[vt->tri[1]].co;
+	pce.x[2] = x[vt->tri[2]].co;
 
-	pce.v[0] = v[face->v1].co;
-	pce.v[1] = v[face->v2].co;
-	pce.v[2] = v[face->v3].co;
-	pce.v[3] = face->v4 ? v[face->v4].co : NULL;
+	pce.v[0] = v[vt->tri[0]].co;
+	pce.v[1] = v[vt->tri[1]].co;
+	pce.v[2] = v[vt->tri[2]].co;
 
 	pce.tot = 3;
 	pce.inside = 0;
@@ -2563,34 +2569,24 @@ void BKE_psys_collision_neartest_cb(void *userdata, int index, const BVHTreeRay 
 	if (col->hit == col->current && col->pce.index == index && col->pce.tot == 3)
 		return;
 
-	do {
-		collision = collision_sphere_to_tri(col, ray->radius, &pce, &t);
-		if (col->pce.inside == 0) {
-			collision += collision_sphere_to_edges(col, ray->radius, &pce, &t);
-			collision += collision_sphere_to_verts(col, ray->radius, &pce, &t);
-		}
+	collision = collision_sphere_to_tri(col, ray->radius, &pce, &t);
+	if (col->pce.inside == 0) {
+		collision += collision_sphere_to_edges(col, ray->radius, &pce, &t);
+		collision += collision_sphere_to_verts(col, ray->radius, &pce, &t);
+	}
 
-		if (collision) {
-			hit->dist = col->original_ray_length * t;
-			hit->index = index;
-				
-			collision_point_velocity(&col->pce);
+	if (collision) {
+		hit->dist = col->original_ray_length * t;
+		hit->index = index;
 
-			col->hit = col->current;
-		}
+		collision_point_velocity(&col->pce);
 
-		pce.x[1] = pce.x[2];
-		pce.x[2] = pce.x[3];
-		pce.x[3] = NULL;
-
-		pce.v[1] = pce.v[2];
-		pce.v[2] = pce.v[3];
-		pce.v[3] = NULL;
-
-	} while (pce.x[2]);
+		col->hit = col->current;
+	}
 }
 static int collision_detect(ParticleData *pa, ParticleCollision *col, BVHTreeRayHit *hit, ListBase *colliders)
 {
+	const int raycast_flag = BVH_RAYCAST_DEFAULT & ~(BVH_RAYCAST_WATERTIGHT);
 	ColliderCache *coll;
 	float ray_dir[3];
 
@@ -2599,7 +2595,7 @@ static int collision_detect(ParticleData *pa, ParticleCollision *col, BVHTreeRay
 
 	sub_v3_v3v3(ray_dir, col->co2, col->co1);
 	hit->index = -1;
-	hit->dist = col->original_ray_length = len_v3(ray_dir);
+	hit->dist = col->original_ray_length = normalize_v3(ray_dir);
 	col->pce.inside = 0;
 
 	/* even if particle is stationary we want to check for moving colliders */
@@ -2621,8 +2617,11 @@ static int collision_detect(ParticleData *pa, ParticleCollision *col, BVHTreeRay
 		col->fac1 = (col->old_cfra - coll->collmd->time_x) / (coll->collmd->time_xnew - coll->collmd->time_x);
 		col->fac2 = (col->cfra - coll->collmd->time_x) / (coll->collmd->time_xnew - coll->collmd->time_x);
 
-		if (col->md && col->md->bvhtree)
-			BLI_bvhtree_ray_cast(col->md->bvhtree, col->co1, ray_dir, col->radius, hit, BKE_psys_collision_neartest_cb, col);
+		if (col->md && col->md->bvhtree) {
+			BLI_bvhtree_ray_cast_ex(
+			        col->md->bvhtree, col->co1, ray_dir, col->radius, hit,
+			        BKE_psys_collision_neartest_cb, col, raycast_flag);
+		}
 	}
 
 	return hit->index >= 0;
@@ -4213,10 +4212,12 @@ void particle_system_update(Scene *scene, Object *ob, ParticleSystem *psys)
 /* **** Depsgraph evaluation **** */
 
 void BKE_particle_system_eval(EvaluationContext *UNUSED(eval_ctx),
+                              Scene *scene,
                               Object *ob,
                               ParticleSystem *psys)
 {
 	if (G.debug & G_DEBUG_DEPSGRAPH) {
 		printf("%s on %s:%s\n", __func__, ob->id.name, psys->name);
 	}
+	BKE_ptcache_object_reset(scene, ob, PTCACHE_RESET_DEPSGRAPH);
 }

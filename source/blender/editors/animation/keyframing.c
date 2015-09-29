@@ -42,7 +42,7 @@
 #include "BLI_math.h"
 #include "BLI_utildefines.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "DNA_anim_types.h"
 #include "DNA_armature_types.h"
@@ -1717,7 +1717,7 @@ static int insert_key_button_exec(bContext *C, wmOperator *op)
 			 * not have any effect.
 			 */
 			NlaStrip *strip = (NlaStrip *)ptr.data;
-			FCurve *fcu = list_find_fcurve(&strip->fcurves, RNA_property_identifier(prop), flag);
+			FCurve *fcu = list_find_fcurve(&strip->fcurves, RNA_property_identifier(prop), index);
 			
 			success = insert_keyframe_direct(op->reports, ptr, prop, fcu, cfra, 0);
 		}

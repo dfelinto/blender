@@ -86,7 +86,7 @@
 #include "RNA_access.h"
 
 #include "BLF_api.h"
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "transform.h"
 
@@ -105,6 +105,7 @@ static void len_v3_ensure(float v[3], const float length);
 static void postInputRotation(TransInfo *t, float values[3]);
 
 static void ElementRotation(TransInfo *t, TransData *td, float mat[3][3], short around);
+static void initSnapSpatial(TransInfo *t, float r_snap[3]);
 
 
 /* Transform Callbacks */
@@ -239,6 +240,38 @@ void setTransformViewMatrices(TransInfo *t)
 	calculateCenter2D(t);
 }
 
+void setTransformViewAspect(TransInfo *t, float r_aspect[3])
+{
+	copy_v3_fl(r_aspect, 1.0f);
+
+	if (t->spacetype == SPACE_IMAGE) {
+		SpaceImage *sima = t->sa->spacedata.first;
+
+		if (t->options & CTX_MASK) {
+			ED_space_image_get_aspect(sima, &r_aspect[0], &r_aspect[1]);
+		}
+		else if (t->options & CTX_PAINT_CURVE) {
+			/* pass */
+		}
+		else {
+			ED_space_image_get_uv_aspect(sima, &r_aspect[0], &r_aspect[1]);
+		}
+	}
+	else if (t->spacetype == SPACE_CLIP) {
+		SpaceClip *sclip = t->sa->spacedata.first;
+
+		if (t->options & CTX_MOVIECLIP) {
+			ED_space_clip_get_aspect_dimension_aware(sclip, &r_aspect[0], &r_aspect[1]);
+		}
+		else {
+			ED_space_clip_get_aspect(sclip, &r_aspect[0], &r_aspect[1]);
+		}
+	}
+	else if (t->spacetype == SPACE_IPO) {
+		/* depemds on context of usage */
+	}
+}
+
 static void convertViewVec2D(View2D *v2d, float r_vec[3], int dx, int dy)
 {
 	float divx, divy;
@@ -292,25 +325,19 @@ void convertViewVec(TransInfo *t, float r_vec[3], int dx, int dy)
 		}
 	}
 	else if (t->spacetype == SPACE_IMAGE) {
-		float aspx, aspy;
-
 		if (t->options & CTX_MASK) {
 			convertViewVec2D_mask(t->view, r_vec, dx, dy);
-			ED_space_image_get_aspect(t->sa->spacedata.first, &aspx, &aspy);
 		}
 		else if (t->options & CTX_PAINT_CURVE) {
 			r_vec[0] = dx;
 			r_vec[1] = dy;
-
-			aspx = aspy = 1.0;
 		}
 		else {
 			convertViewVec2D(t->view, r_vec, dx, dy);
-			ED_space_image_get_uv_aspect(t->sa->spacedata.first, &aspx, &aspy);
 		}
 
-		r_vec[0] *= aspx;
-		r_vec[1] *= aspy;
+		r_vec[0] *= t->aspect[0];
+		r_vec[1] *= t->aspect[1];
 	}
 	else if (ELEM(t->spacetype, SPACE_IPO, SPACE_NLA)) {
 		convertViewVec2D(t->view, r_vec, dx, dy);
@@ -319,8 +346,6 @@ void convertViewVec(TransInfo *t, float r_vec[3], int dx, int dy)
 		convertViewVec2D(&t->ar->v2d, r_vec, dx, dy);
 	}
 	else if (t->spacetype == SPACE_CLIP) {
-		float aspx, aspy;
-
 		if (t->options & CTX_MASK) {
 			convertViewVec2D_mask(t->view, r_vec, dx, dy);
 		}
@@ -328,21 +353,8 @@ void convertViewVec(TransInfo *t, float r_vec[3], int dx, int dy)
 			convertViewVec2D(t->view, r_vec, dx, dy);
 		}
 
-		if (t->options & CTX_MOVIECLIP) {
-			ED_space_clip_get_aspect_dimension_aware(t->sa->spacedata.first, &aspx, &aspy);
-		}
-		else if (t->options & CTX_MASK) {
-			/* TODO - NOT WORKING, this isnt so bad since its only display aspect */
-			ED_space_clip_get_aspect(t->sa->spacedata.first, &aspx, &aspy);
-		}
-		else {
-			/* should never happen, quiet warnings */
-			BLI_assert(0);
-			aspx = aspy = 1.0f;
-		}
-
-		r_vec[0] *= aspx;
-		r_vec[1] *= aspy;
+		r_vec[0] *= t->aspect[0];
+		r_vec[1] *= t->aspect[1];
 	}
 	else {
 		printf("%s: called in an invalid context\n", __func__);
@@ -364,15 +376,10 @@ void projectIntViewEx(TransInfo *t, const float vec[3], int adr[2], const eV3DPr
 		SpaceImage *sima = t->sa->spacedata.first;
 
 		if (t->options & CTX_MASK) {
-			float aspx, aspy;
 			float v[2];
 
-			ED_space_image_get_aspect(sima, &aspx, &aspy);
-
-			copy_v2_v2(v, vec);
-
-			v[0] = v[0] / aspx;
-			v[1] = v[1] / aspy;
+			v[0] = vec[0] / t->aspect[0];
+			v[1] = vec[1] / t->aspect[1];
 
 			BKE_mask_coord_to_image(sima->image, &sima->iuser, v, v);
 
@@ -386,11 +393,10 @@ void projectIntViewEx(TransInfo *t, const float vec[3], int adr[2], const eV3DPr
 			adr[1] = vec[1];
 		}
 		else {
-			float aspx, aspy, v[2];
+			float v[2];
 
-			ED_space_image_get_uv_aspect(t->sa->spacedata.first, &aspx, &aspy);
-			v[0] = vec[0] / aspx;
-			v[1] = vec[1] / aspy;
+			v[0] = vec[0] / t->aspect[0];
+			v[1] = vec[1] / t->aspect[1];
 
 			UI_view2d_view_to_region(t->view, v[0], v[1], &adr[0], &adr[1]);
 		}
@@ -435,15 +441,10 @@ void projectIntViewEx(TransInfo *t, const float vec[3], int adr[2], const eV3DPr
 			MovieClip *clip = ED_space_clip_get_clip(sc);
 
 			if (clip) {
-				float aspx, aspy;
 				float v[2];
 
-				ED_space_clip_get_aspect(sc, &aspx, &aspy);
-
-				copy_v2_v2(v, vec);
-
-				v[0] = v[0] / aspx;
-				v[1] = v[1] / aspy;
+				v[0] = vec[0] / t->aspect[0];
+				v[1] = vec[1] / t->aspect[1];
 
 				BKE_mask_coord_to_movieclip(sc->clip, &sc->user, v, v);
 
@@ -458,13 +459,10 @@ void projectIntViewEx(TransInfo *t, const float vec[3], int adr[2], const eV3DPr
 			}
 		}
 		else if (t->options & CTX_MOVIECLIP) {
-			float v[2], aspx, aspy;
+			float v[2];
 
-			copy_v2_v2(v, vec);
-			ED_space_clip_get_aspect_dimension_aware(t->sa->spacedata.first, &aspx, &aspy);
-
-			v[0] /= aspx;
-			v[1] /= aspy;
+			v[0] = vec[0] / t->aspect[0];
+			v[1] = vec[1] / t->aspect[1];
 
 			UI_view2d_view_to_region(t->view, v[0], v[1], &adr[0], &adr[1]);
 		}
@@ -520,7 +518,6 @@ void applyAspectRatio(TransInfo *t, float vec[2])
 {
 	if ((t->spacetype == SPACE_IMAGE) && (t->mode == TFM_TRANSLATION) && !(t->options & CTX_PAINT_CURVE)) {
 		SpaceImage *sima = t->sa->spacedata.first;
-		float aspx, aspy;
 
 		if ((sima->flag & SI_COORDFLOATS) == 0) {
 			int width, height;
@@ -530,28 +527,13 @@ void applyAspectRatio(TransInfo *t, float vec[2])
 			vec[1] *= height;
 		}
 
-		ED_space_image_get_uv_aspect(sima, &aspx, &aspy);
-		vec[0] /= aspx;
-		vec[1] /= aspy;
+		vec[0] /= t->aspect[0];
+		vec[1] /= t->aspect[1];
 	}
 	else if ((t->spacetype == SPACE_CLIP) && (t->mode == TFM_TRANSLATION)) {
 		if (t->options & (CTX_MOVIECLIP | CTX_MASK)) {
-			SpaceClip *sc = t->sa->spacedata.first;
-			float aspx, aspy;
-
-
-			if (t->options & CTX_MOVIECLIP) {
-				ED_space_clip_get_aspect_dimension_aware(sc, &aspx, &aspy);
-
-				vec[0] /= aspx;
-				vec[1] /= aspy;
-			}
-			else if (t->options & CTX_MASK) {
-				ED_space_clip_get_aspect(sc, &aspx, &aspy);
-
-				vec[0] /= aspx;
-				vec[1] /= aspy;
-			}
+			vec[0] /= t->aspect[0];
+			vec[1] /= t->aspect[1];
 		}
 	}
 }
@@ -560,7 +542,6 @@ void removeAspectRatio(TransInfo *t, float vec[2])
 {
 	if ((t->spacetype == SPACE_IMAGE) && (t->mode == TFM_TRANSLATION)) {
 		SpaceImage *sima = t->sa->spacedata.first;
-		float aspx, aspy;
 
 		if ((sima->flag & SI_COORDFLOATS) == 0) {
 			int width, height;
@@ -570,24 +551,13 @@ void removeAspectRatio(TransInfo *t, float vec[2])
 			vec[1] /= height;
 		}
 
-		ED_space_image_get_uv_aspect(sima, &aspx, &aspy);
-		vec[0] *= aspx;
-		vec[1] *= aspy;
+		vec[0] *= t->aspect[0];
+		vec[1] *= t->aspect[1];
 	}
 	else if ((t->spacetype == SPACE_CLIP) && (t->mode == TFM_TRANSLATION)) {
 		if (t->options & (CTX_MOVIECLIP | CTX_MASK)) {
-			SpaceClip *sc = t->sa->spacedata.first;
-			float aspx = 1.0f, aspy = 1.0f;
-
-			if (t->options & CTX_MOVIECLIP) {
-				ED_space_clip_get_aspect_dimension_aware(sc, &aspx, &aspy);
-			}
-			else if (t->options & CTX_MASK) {
-				ED_space_clip_get_aspect(sc, &aspx, &aspy);
-			}
-
-			vec[0] *= aspx;
-			vec[1] *= aspy;
+			vec[0] *= t->aspect[0];
+			vec[1] *= t->aspect[1];
 		}
 	}
 }
@@ -829,6 +799,8 @@ enum {
 
 /* for analog input, like trackpad */
 	TFM_MODAL_PROPSIZE       = 26,
+/* node editor insert offset (aka auto-offset) direction toggle */
+	TFM_MODAL_INSERTOFS_TOGGLE_DIR         = 27,
 };
 
 /* called in transform_ops.c, on each regeneration of keymaps */
@@ -861,6 +833,7 @@ wmKeyMap *transform_modal_keymap(wmKeyConfig *keyconf)
 		{TFM_MODAL_EDGESLIDE_UP, "EDGESLIDE_EDGE_NEXT", 0, "Select next Edge Slide Edge", ""},
 		{TFM_MODAL_EDGESLIDE_DOWN, "EDGESLIDE_PREV_NEXT", 0, "Select previous Edge Slide Edge", ""},
 		{TFM_MODAL_PROPSIZE, "PROPORTIONAL_SIZE", 0, "Adjust Proportional Influence", ""},
+		{TFM_MODAL_INSERTOFS_TOGGLE_DIR, "INSERTOFS_TOGGLE_DIR", 0, "Toggle Direction for Node Auto-offset", ""},
 		{0, NULL, 0, NULL, NULL}
 	};
 	
@@ -909,7 +882,10 @@ wmKeyMap *transform_modal_keymap(wmKeyConfig *keyconf)
 	WM_modalkeymap_add_item(keymap, PAGEDOWNKEY, KM_PRESS, KM_SHIFT, 0, TFM_MODAL_AUTOIK_LEN_DEC);
 	WM_modalkeymap_add_item(keymap, WHEELDOWNMOUSE, KM_PRESS, KM_SHIFT, 0, TFM_MODAL_AUTOIK_LEN_INC);
 	WM_modalkeymap_add_item(keymap, WHEELUPMOUSE, KM_PRESS, KM_SHIFT, 0, TFM_MODAL_AUTOIK_LEN_DEC);
-	
+
+	/* node editor only */
+	WM_modalkeymap_add_item(keymap, TKEY, KM_PRESS, 0, 0, TFM_MODAL_INSERTOFS_TOGGLE_DIR);
+
 	return keymap;
 }
 
@@ -1031,9 +1007,9 @@ int transformEvent(TransInfo *t, const wmEvent *event)
 			case TFM_MODAL_TRANSLATE:
 				/* only switch when... */
 				if (ELEM(t->mode, TFM_ROTATION, TFM_RESIZE, TFM_TRACKBALL, TFM_EDGE_SLIDE, TFM_VERT_SLIDE)) {
+					restoreTransObjects(t);
 					resetTransModal(t);
 					resetTransRestrictions(t);
-					restoreTransObjects(t);
 					initTranslation(t);
 					initSnapping(t, NULL); // need to reinit after mode change
 					t->redraw |= TREDRAW_HARD;
@@ -1048,9 +1024,9 @@ int transformEvent(TransInfo *t, const wmEvent *event)
 				else {
 					if (t->obedit && t->obedit->type == OB_MESH) {
 						if ((t->mode == TFM_TRANSLATION) && (t->spacetype == SPACE_VIEW3D)) {
+							restoreTransObjects(t);
 							resetTransModal(t);
 							resetTransRestrictions(t);
-							restoreTransObjects(t);
 
 							/* first try edge slide */
 							initEdgeSlide(t);
@@ -1062,8 +1038,8 @@ int transformEvent(TransInfo *t, const wmEvent *event)
 							/* vert slide can fail on unconnected vertices (rare but possible) */
 							if (t->state == TRANS_CANCEL) {
 								t->state = TRANS_STARTING;
-								resetTransRestrictions(t);
 								restoreTransObjects(t);
+								resetTransRestrictions(t);
 								initTranslation(t);
 							}
 							initSnapping(t, NULL); // need to reinit after mode change
@@ -1087,15 +1063,14 @@ int transformEvent(TransInfo *t, const wmEvent *event)
 				/* only switch when... */
 				if (!(t->options & CTX_TEXTURE) && !(t->options & (CTX_MOVIECLIP | CTX_MASK))) {
 					if (ELEM(t->mode, TFM_ROTATION, TFM_RESIZE, TFM_TRACKBALL, TFM_TRANSLATION, TFM_EDGE_SLIDE, TFM_VERT_SLIDE)) {
+						restoreTransObjects(t);
 						resetTransModal(t);
 						resetTransRestrictions(t);
 						
 						if (t->mode == TFM_ROTATION) {
-							restoreTransObjects(t);
 							initTrackball(t);
 						}
 						else {
-							restoreTransObjects(t);
 							initRotation(t);
 						}
 						initSnapping(t, NULL); // need to reinit after mode change
@@ -1113,9 +1088,9 @@ int transformEvent(TransInfo *t, const wmEvent *event)
 						stopConstraint(t);
 					}
 
+					restoreTransObjects(t);
 					resetTransModal(t);
 					resetTransRestrictions(t);
-					restoreTransObjects(t);
 					initResize(t);
 					initSnapping(t, NULL); // need to reinit after mode change
 					t->redraw |= TREDRAW_HARD;
@@ -1270,6 +1245,25 @@ int transformEvent(TransInfo *t, const wmEvent *event)
 					handled = true;
 				}
 				break;
+			case TFM_MODAL_INSERTOFS_TOGGLE_DIR:
+				if (t->spacetype == SPACE_NODE) {
+					SpaceNode *snode = (SpaceNode *)t->sa->spacedata.first;
+
+					BLI_assert(t->sa->spacetype == t->spacetype);
+
+					if (snode->insert_ofs_dir == SNODE_INSERTOFS_DIR_RIGHT) {
+						snode->insert_ofs_dir = SNODE_INSERTOFS_DIR_LEFT;
+					}
+					else if (snode->insert_ofs_dir == SNODE_INSERTOFS_DIR_LEFT) {
+						snode->insert_ofs_dir = SNODE_INSERTOFS_DIR_RIGHT;
+					}
+					else {
+						BLI_assert(0);
+					}
+
+					t->redraw |= TREDRAW_SOFT;
+				}
+				break;
 			/* Those two are only handled in transform's own handler, see T44634! */
 			case TFM_MODAL_EDGESLIDE_UP:
 			case TFM_MODAL_EDGESLIDE_DOWN:
@@ -1343,9 +1337,9 @@ int transformEvent(TransInfo *t, const wmEvent *event)
 			case GKEY:
 				/* only switch when... */
 				if (ELEM(t->mode, TFM_ROTATION, TFM_RESIZE, TFM_TRACKBALL)) {
+					restoreTransObjects(t);
 					resetTransModal(t);
 					resetTransRestrictions(t);
-					restoreTransObjects(t);
 					initTranslation(t);
 					initSnapping(t, NULL); // need to reinit after mode change
 					t->redraw |= TREDRAW_HARD;
@@ -1355,9 +1349,9 @@ int transformEvent(TransInfo *t, const wmEvent *event)
 			case SKEY:
 				/* only switch when... */
 				if (ELEM(t->mode, TFM_ROTATION, TFM_TRANSLATION, TFM_TRACKBALL)) {
+					restoreTransObjects(t);
 					resetTransModal(t);
 					resetTransRestrictions(t);
-					restoreTransObjects(t);
 					initResize(t);
 					initSnapping(t, NULL); // need to reinit after mode change
 					t->redraw |= TREDRAW_HARD;
@@ -1368,15 +1362,14 @@ int transformEvent(TransInfo *t, const wmEvent *event)
 				/* only switch when... */
 				if (!(t->options & CTX_TEXTURE)) {
 					if (ELEM(t->mode, TFM_ROTATION, TFM_RESIZE, TFM_TRACKBALL, TFM_TRANSLATION)) {
+						restoreTransObjects(t);
 						resetTransModal(t);
 						resetTransRestrictions(t);
 
 						if (t->mode == TFM_ROTATION) {
-							restoreTransObjects(t);
 							initTrackball(t);
 						}
 						else {
-							restoreTransObjects(t);
 							initRotation(t);
 						}
 						initSnapping(t, NULL); // need to reinit after mode change
@@ -1579,7 +1572,7 @@ bool calculateTransformCenter(bContext *C, int centerMode, float cent3d[3], floa
 
 		if (cent3d) {
 			// Copy center from constraint center. Transform center can be local
-			copy_v3_v3(cent3d, t->con.center);
+			copy_v3_v3(cent3d, t->center_global);
 		}
 	}
 
@@ -1726,7 +1719,7 @@ static void drawHelpline(bContext *UNUSED(C), int x, int y, void *customdata)
 				glVertex2fv(cent);
 				glEnd();
 
-				glTranslatef(mval[0], mval[1], 0);
+				glTranslate2fv((const float *)mval);
 				glRotatef(-RAD2DEGF(atan2f(cent[0] - t->mval[0], cent[1] - t->mval[1])), 0, 0, 1);
 
 				setlinestyle(0);
@@ -1738,7 +1731,7 @@ static void drawHelpline(bContext *UNUSED(C), int x, int y, void *customdata)
 			case HLP_HARROW:
 				UI_ThemeColor(TH_VIEW_OVERLAY);
 
-				glTranslatef(mval[0], mval[1], 0);
+				glTranslate2fv((const float *)mval);
 
 				glLineWidth(3.0);
 				drawArrow(RIGHT, 5, 10, 5);
@@ -1748,7 +1741,7 @@ static void drawHelpline(bContext *UNUSED(C), int x, int y, void *customdata)
 			case HLP_VARROW:
 				UI_ThemeColor(TH_VIEW_OVERLAY);
 
-				glTranslatef(mval[0], mval[1], 0);
+				glTranslate2fv((const float *)mval);
 
 				glLineWidth(3.0);
 				drawArrow(UP, 5, 10, 5);
@@ -1799,7 +1792,7 @@ static void drawHelpline(bContext *UNUSED(C), int x, int y, void *customdata)
 				unsigned char col[3], col2[3];
 				UI_GetThemeColor3ubv(TH_GRID, col);
 
-				glTranslatef(mval[0], mval[1], 0);
+				glTranslate2fv((const float *)mval);
 
 				glLineWidth(3.0);
 
@@ -2082,47 +2075,41 @@ bool initTransform(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
 		t->launch_event = LEFTMOUSE;
 	}
 
+	unit_m3(t->spacemtx);
+
 	initTransInfo(C, t, op, event);
+	initTransformOrientation(C, t);
 
 	if (t->spacetype == SPACE_VIEW3D) {
-		initTransformOrientation(C, t);
-
 		t->draw_handle_apply = ED_region_draw_cb_activate(t->ar->type, drawTransformApply, t, REGION_DRAW_PRE_VIEW);
 		t->draw_handle_view = ED_region_draw_cb_activate(t->ar->type, drawTransformView, t, REGION_DRAW_POST_VIEW);
 		t->draw_handle_pixel = ED_region_draw_cb_activate(t->ar->type, drawTransformPixel, t, REGION_DRAW_POST_PIXEL);
 		t->draw_handle_cursor = WM_paint_cursor_activate(CTX_wm_manager(C), helpline_poll, drawHelpline, t);
 	}
 	else if (t->spacetype == SPACE_IMAGE) {
-		unit_m3(t->spacemtx);
 		t->draw_handle_view = ED_region_draw_cb_activate(t->ar->type, drawTransformView, t, REGION_DRAW_POST_VIEW);
 		//t->draw_handle_pixel = ED_region_draw_cb_activate(t->ar->type, drawTransformPixel, t, REGION_DRAW_POST_PIXEL);
 		t->draw_handle_cursor = WM_paint_cursor_activate(CTX_wm_manager(C), helpline_poll, drawHelpline, t);
 	}
 	else if (t->spacetype == SPACE_CLIP) {
-		unit_m3(t->spacemtx);
 		t->draw_handle_view = ED_region_draw_cb_activate(t->ar->type, drawTransformView, t, REGION_DRAW_POST_VIEW);
 		t->draw_handle_cursor = WM_paint_cursor_activate(CTX_wm_manager(C), helpline_poll, drawHelpline, t);
 	}
 	else if (t->spacetype == SPACE_NODE) {
-		unit_m3(t->spacemtx);
 		/*t->draw_handle_apply = ED_region_draw_cb_activate(t->ar->type, drawTransformApply, t, REGION_DRAW_PRE_VIEW);*/
 		t->draw_handle_view = ED_region_draw_cb_activate(t->ar->type, drawTransformView, t, REGION_DRAW_POST_VIEW);
 		t->draw_handle_cursor = WM_paint_cursor_activate(CTX_wm_manager(C), helpline_poll, drawHelpline, t);
 	}
 	else if (t->spacetype == SPACE_IPO) {
-		unit_m3(t->spacemtx);
 		t->draw_handle_view = ED_region_draw_cb_activate(t->ar->type, drawTransformView, t, REGION_DRAW_POST_VIEW);
 		//t->draw_handle_pixel = ED_region_draw_cb_activate(t->ar->type, drawTransformPixel, t, REGION_DRAW_POST_PIXEL);
 		t->draw_handle_cursor = WM_paint_cursor_activate(CTX_wm_manager(C), helpline_poll, drawHelpline, t);
 	}
 	else if (t->spacetype == SPACE_ACTION) {
-		unit_m3(t->spacemtx);
 		t->draw_handle_view = ED_region_draw_cb_activate(t->ar->type, drawTransformView, t, REGION_DRAW_POST_VIEW);
 		//t->draw_handle_pixel = ED_region_draw_cb_activate(t->ar->type, drawTransformPixel, t, REGION_DRAW_POST_PIXEL);
 		t->draw_handle_cursor = WM_paint_cursor_activate(CTX_wm_manager(C), helpline_poll, drawHelpline, t);
 	}
-	else
-		unit_m3(t->spacemtx);
 
 	createTransData(C, t);          // make TransData structs from selection
 
@@ -2160,6 +2147,8 @@ bool initTransform(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
 	}
 
 	initSnapping(t, op); // Initialize snapping data AFTER mode flags
+
+	initSnapSpatial(t, t->snap_spatial);
 
 	/* EVIL! posemode code can switch translation to rotate when 1 bone is selected. will be removed (ton) */
 	/* EVIL2: we gave as argument also texture space context bit... was cleared */
@@ -2299,7 +2288,6 @@ bool initTransform(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
 		postTrans(C, t);
 		return 0;
 	}
-
 
 	/* overwrite initial values if operator supplied a non-null vector */
 	if ((prop = RNA_struct_find_property(op->ptr, "value")) && RNA_property_is_set(op->ptr, prop)) {
@@ -2856,6 +2844,7 @@ static void initBend(TransInfo *t)
 
 	//copy_v3_v3(t->center, ED_view3d_cursor3d_get(t->scene, t->view));
 	calculateCenterCursor(t, t->center);
+	calculateCenterGlobal(t);
 
 	t->val = 0.0f;
 
@@ -4111,6 +4100,38 @@ static void applyTrackball(TransInfo *t, const int UNUSED(mval[2]))
 /* -------------------------------------------------------------------- */
 /* Transform (Translation) */
 
+static void initSnapSpatial(TransInfo *t, float r_snap[3])
+{
+	if (t->spacetype == SPACE_VIEW3D) {
+		RegionView3D *rv3d = t->ar->regiondata;
+
+		if (rv3d) {
+			r_snap[0] = 0.0f;
+			r_snap[1] = rv3d->gridview * 1.0f;
+			r_snap[2] = r_snap[1] * 0.1f;
+		}
+	}
+	else if (ELEM(t->spacetype, SPACE_IMAGE, SPACE_CLIP)) {
+		r_snap[0] = 0.0f;
+		r_snap[1] = 0.125f;
+		r_snap[2] = 0.0625f;
+	}
+	else if (t->spacetype == SPACE_NODE) {
+		r_snap[0] = 0.0f;
+		r_snap[1] = ED_node_grid_size();
+		r_snap[2] = ED_node_grid_size();
+	}
+	else if (t->spacetype == SPACE_IPO) {
+		r_snap[0] = 0.0f;
+		r_snap[1] = 1.0;
+		r_snap[2] = 0.1f;
+	}
+	else {
+		r_snap[0] = 0.0f;
+		r_snap[1] = r_snap[2] = 1.0f;
+	}
+}
+
 /** \name Transform Translation
  * \{ */
 
@@ -4133,34 +4154,7 @@ static void initTranslation(TransInfo *t)
 	t->num.flag = 0;
 	t->num.idx_max = t->idx_max;
 
-	if (t->spacetype == SPACE_VIEW3D) {
-		RegionView3D *rv3d = t->ar->regiondata;
-
-		if (rv3d) {
-			t->snap[0] = 0.0f;
-			t->snap[1] = rv3d->gridview * 1.0f;
-			t->snap[2] = t->snap[1] * 0.1f;
-		}
-	}
-	else if (ELEM(t->spacetype, SPACE_IMAGE, SPACE_CLIP)) {
-		t->snap[0] = 0.0f;
-		t->snap[1] = 0.125f;
-		t->snap[2] = 0.0625f;
-	}
-	else if (t->spacetype == SPACE_NODE) {
-		t->snap[0] = 0.0f;
-		t->snap[1] = ED_node_grid_size() * NODE_GRID_STEPS;
-		t->snap[2] = ED_node_grid_size();
-	}
-	else if (t->spacetype == SPACE_IPO) {
-		t->snap[0] = 0.0f;
-		t->snap[1] = 1.0;
-		t->snap[2] = 0.1f;
-	}
-	else {
-		t->snap[0] = 0.0f;
-		t->snap[1] = t->snap[2] = 1.0f;
-	}
+	copy_v3_v3(t->snap, t->snap_spatial);
 
 	copy_v3_fl(t->num.val_inc, t->snap[1]);
 	t->num.unit_sys = t->scene->unit.system;
@@ -4268,6 +4262,23 @@ static void headerTranslation(TransInfo *t, const float vec[3], char str[MAX_INF
 
 	if (t->flag & T_PROP_EDIT_ALL) {
 		ofs += BLI_snprintf(str + ofs, MAX_INFO_LEN - ofs, IFACE_(" Proportional size: %.2f"), t->prop_size);
+	}
+
+	if (t->spacetype == SPACE_NODE) {
+		SpaceNode *snode = (SpaceNode *)t->sa->spacedata.first;
+
+		if ((snode->flag & SNODE_SKIP_INSOFFSET) == 0) {
+			const char *str_old = BLI_strdup(str);
+			const char *str_dir = (snode->insert_ofs_dir == SNODE_INSERTOFS_DIR_RIGHT) ? "right" : "left";
+			char str_km[MAX_INFO_LEN];
+
+			WM_modalkeymap_items_to_string(t->keymap, TFM_MODAL_INSERTOFS_TOGGLE_DIR, true, sizeof(str_km), str_km);
+
+			ofs += BLI_snprintf(str, MAX_INFO_LEN, "Auto-offset set to %s - press %s to toggle direction  |  %s",
+			                    str_dir, str_km, str_old);
+
+			MEM_freeN((void *)str_old);
+		}
 	}
 }
 
@@ -4445,7 +4456,7 @@ static void applyShrinkFatten(TransInfo *t, const int UNUSED(mval[2]))
 	if (t->keymap) {
 		wmKeyMapItem *kmi = WM_modalkeymap_find_propvalue(t->keymap, TFM_MODAL_RESIZE);
 		if (kmi) {
-			ofs += WM_keymap_item_to_string(kmi, str + ofs, MAX_INFO_LEN - ofs);
+			ofs += WM_keymap_item_to_string(kmi, false, MAX_INFO_LEN - ofs, str + ofs);
 		}
 	}
 	BLI_snprintf(str + ofs, MAX_INFO_LEN - ofs, IFACE_(" or Alt) Even Thickness %s"),
@@ -5324,12 +5335,22 @@ static void slide_origdata_create_data_vert(
 	loop_weights = BLI_array_alloca(loop_weights, l_num);
 	for (j = 0; j < l_num; j++) {
 		BMLoop *l = BM_iter_step(&liter);
+		BMLoop *l_prev, *l_next;
 		void **val_p;
 		if (!BLI_ghash_ensure_p(sod->origfaces, l->f, &val_p)) {
 			BMFace *f_copy = BM_face_copy(sod->bm_origfaces, bm, l->f, true, true);
 			*val_p = f_copy;
 		}
-		loop_weights[j] = BM_loop_calc_face_angle(l);
+
+		if ((l_prev = BM_loop_find_prev_nodouble(l, l->next, FLT_EPSILON)) &&
+		    (l_next = BM_loop_find_next_nodouble(l, l_prev,  FLT_EPSILON)))
+		{
+			loop_weights[j] = angle_v3v3v3(l_prev->v->co, l->v->co, l_next->v->co);
+		}
+		else {
+			loop_weights[j] = 0.0f;
+		}
+
 	}
 
 	/* store cd_loop_groups */
@@ -5349,12 +5370,13 @@ static void slide_origdata_create_data_vert(
 
 static void slide_origdata_create_data(
         TransInfo *t, SlideOrigData *sod,
-        TransDataGenericSlideVert *sv, unsigned int v_stride, unsigned int v_num)
+        TransDataGenericSlideVert *sv_array, unsigned int v_stride, unsigned int v_num)
 {
 	if (sod->use_origfaces) {
 		BMEditMesh *em = BKE_editmesh_from_object(t->obedit);
 		BMesh *bm = em->bm;
 		unsigned int i;
+		TransDataGenericSlideVert *sv;
 
 		int layer_index_dst;
 		int j;
@@ -5374,8 +5396,37 @@ static void slide_origdata_create_data(
 
 		sod->origverts = BLI_ghash_ptr_new_ex(__func__, v_num);
 
-		for (i = 0; i < v_num; i++, sv = POINTER_OFFSET(sv, v_stride)) {
+		for (i = 0, sv = sv_array; i < v_num; i++, sv = POINTER_OFFSET(sv, v_stride)) {
 			slide_origdata_create_data_vert(bm, sod, sv);
+		}
+
+		if (t->flag & T_MIRROR) {
+			TransData *td = t->data;
+			TransDataGenericSlideVert *sv_mirror;
+
+			sod->sv_mirror = MEM_callocN(sizeof(*sv_mirror) * t->total, __func__);
+			sod->totsv_mirror = t->total;
+
+			sv_mirror = sod->sv_mirror;
+
+			for (i = 0; i < t->total; i++, td++) {
+				BMVert *eve = td->extra;
+				if (eve) {
+					sv_mirror->v = eve;
+					copy_v3_v3(sv_mirror->co_orig_3d, eve->co);
+
+					slide_origdata_create_data_vert(bm, sod, sv_mirror);
+					sv_mirror++;
+				}
+				else {
+					sod->totsv_mirror--;
+				}
+			}
+
+			if (sod->totsv_mirror == 0) {
+				MEM_freeN(sod->sv_mirror);
+				sod->sv_mirror = NULL;
+			}
 		}
 	}
 }
@@ -5397,6 +5448,13 @@ static void slide_origdata_interp_data_vert(
 	int j, l_num;
 	float *loop_weights;
 	const bool do_loop_weight = (len_squared_v3v3(sv->v->co, sv->co_orig_3d) > FLT_EPSILON);
+	const float *v_proj_axis = sv->v->no;
+	/* original (l->prev, l, l->next) projections for each loop ('l' remains unchanged) */
+	float v_proj[3][3];
+
+	if (do_loop_weight) {
+		project_plane_v3_v3v3(v_proj[1], sv->co_orig_3d, v_proj_axis);
+	}
 
 	// BM_ITER_ELEM (l, &liter, sv->v, BM_LOOPS_OF_VERT) {
 	BM_iter_init(&liter, bm, BM_LOOPS_OF_VERT, sv->v);
@@ -5417,7 +5475,7 @@ static void slide_origdata_interp_data_vert(
 
 		/* weight the loop */
 		if (do_loop_weight) {
-			const float eps = 0.00001f;
+			const float eps = 1.0e-8f;
 			const BMLoop *l_prev = l->prev;
 			const BMLoop *l_next = l->next;
 			const float *co_prev = slide_origdata_orig_vert_co(sod, l_prev->v);
@@ -5425,24 +5483,32 @@ static void slide_origdata_interp_data_vert(
 			bool co_prev_ok;
 			bool co_next_ok;
 
+
 			/* In the unlikely case that we're next to a zero length edge - walk around the to the next.
 			 * Since we only need to check if the vertex is in this corner,
 			 * its not important _which_ loop - as long as its not overlapping 'sv->co_orig_3d', see: T45096. */
-			while (UNLIKELY(((co_prev_ok = (len_squared_v3v3(sv->co_orig_3d, co_prev) > eps)) == false) &&
+			project_plane_v3_v3v3(v_proj[0], co_prev, v_proj_axis);
+			while (UNLIKELY(((co_prev_ok = (len_squared_v3v3(v_proj[1], v_proj[0]) > eps)) == false) &&
 			                ((l_prev = l_prev->prev) != l->next)))
 			{
 				co_prev = slide_origdata_orig_vert_co(sod, l_prev->v);
+				project_plane_v3_v3v3(v_proj[0], co_prev, v_proj_axis);
 			}
-			while (UNLIKELY(((co_next_ok = (len_squared_v3v3(sv->co_orig_3d, co_next) > eps)) == false) &&
+			project_plane_v3_v3v3(v_proj[2], co_next, v_proj_axis);
+			while (UNLIKELY(((co_next_ok = (len_squared_v3v3(v_proj[1], v_proj[2]) > eps)) == false) &&
 			                ((l_next = l_next->next) != l->prev)))
 			{
 				co_next = slide_origdata_orig_vert_co(sod, l_next->v);
+				project_plane_v3_v3v3(v_proj[2], co_next, v_proj_axis);
 			}
 
-			if (co_prev_ok && co_next_ok && (area_squared_tri_v3(co_prev, sv->co_orig_3d, co_next) > eps)) {
-				const float dist = dist_signed_squared_to_corner_v3v3v3(
-				        sv->v->co, co_prev, sv->co_orig_3d, co_next, f_copy->no);
+			if (co_prev_ok && co_next_ok) {
+				const float dist = dist_signed_squared_to_corner_v3v3v3(sv->v->co, UNPACK3(v_proj), v_proj_axis);
+
 				loop_weights[j] = (dist >= 0.0f) ? 1.0f : ((dist <= -eps) ? 0.0f : (1.0f + (dist / eps)));
+				if (UNLIKELY(!isfinite(loop_weights[j]))) {
+					loop_weights[j] = 0.0f;
+				}
 			}
 			else {
 				loop_weights[j] = 0.0f;
@@ -5478,6 +5544,15 @@ static void slide_origdata_interp_data(
 				slide_origdata_interp_data_vert(sod, bm, is_final, sv);
 			}
 		}
+
+		if (sod->sv_mirror) {
+			sv = sod->sv_mirror;
+			for (i = 0; i < v_num; i++, sv++) {
+				if (sv->cd_loop_groups) {
+					slide_origdata_interp_data_vert(sod, bm, is_final, sv);
+				}
+			}
+		}
 	}
 }
 
@@ -5506,6 +5581,8 @@ static void slide_origdata_free_date(
 		}
 
 		MEM_SAFE_FREE(sod->layer_math_map);
+
+		MEM_SAFE_FREE(sod->sv_mirror);
 	}
 }
 
@@ -6270,7 +6347,7 @@ static bool createEdgeSlideVerts_double_side(TransInfo *t)
 }
 
 /**
- * A simple version of #createEdgeSlideVerts
+ * A simple version of #createEdgeSlideVerts_double_side
  * Which assumes the longest unselected.
  */
 static bool createEdgeSlideVerts_single_side(TransInfo *t)
@@ -6493,8 +6570,6 @@ void freeEdgeSlideVerts(TransInfo *t)
 	MEM_freeN(sld);
 	
 	t->customData = NULL;
-	
-	recalcData(t);
 }
 
 static void initEdgeSlide_ex(TransInfo *t, bool use_double_side)
@@ -6783,8 +6858,6 @@ static void doEdgeSlide(TransInfo *t, float perc)
 			}
 		}
 	}
-	
-	projectEdgeSlideData(t, 0);
 }
 
 static void applyEdgeSlide(TransInfo *t, const int UNUSED(mval[2]))
@@ -6916,13 +6989,13 @@ static void calcVertSlideMouseActiveEdges(struct TransInfo *t, const int mval[2]
 	TransDataVertSlideVert *sv;
 	int i;
 
+	/* note: we could save a matrix-multiply for each vertex
+	 * by finding the closest edge in local-space.
+	 * However this skews the outcome with non-uniform-scale. */
+
 	/* first get the direction of the original mouse position */
 	sub_v2_v2v2(dir, imval_fl, mval_fl);
 	ED_view3d_win_to_delta(t->ar, dir, dir, t->zfac);
-
-	invert_m4_m4(t->obedit->imat, t->obedit->obmat);
-	mul_mat3_m4_v3(t->obedit->imat, dir);
-
 	normalize_v3(dir);
 
 	for (i = 0, sv = sld->sv; i < sld->totsv; i++, sv++) {
@@ -6936,6 +7009,7 @@ static void calcVertSlideMouseActiveEdges(struct TransInfo *t, const int mval[2]
 				float dir_dot;
 
 				sub_v3_v3v3(tdir, sv->co_orig_3d, sv->co_link_orig_3d[j]);
+				mul_mat3_m4_v3(t->obedit->obmat, tdir);
 				project_plane_v3_v3v3(tdir, tdir, t->viewinv[2]);
 
 				normalize_v3(tdir);
@@ -7101,8 +7175,6 @@ void freeVertSlideVerts(TransInfo *t)
 	MEM_freeN(sld);
 
 	t->customData = NULL;
-
-	recalcData(t);
 }
 
 static void initVertSlide(TransInfo *t)
@@ -7270,12 +7342,16 @@ static void drawVertSlide(TransInfo *t)
 			if ((t->mval[0] != t->imval[0]) ||
 			    (t->mval[1] != t->imval[1]))
 			{
-				float zfac = ED_view3d_calc_zfac(t->ar->regiondata, curr_sv->co_orig_3d, NULL);
+				float zfac;
 				float mval_ofs[2];
+				float co_orig_3d[3];
 				float co_dest_3d[3];
 
 				mval_ofs[0] = t->mval[0] - t->imval[0];
 				mval_ofs[1] = t->mval[1] - t->imval[1];
+
+				mul_v3_m4v3(co_orig_3d, t->obedit->obmat, curr_sv->co_orig_3d);
+				zfac = ED_view3d_calc_zfac(t->ar->regiondata, co_orig_3d, NULL);
 
 				ED_view3d_win_to_delta(t->ar, mval_ofs, co_dest_3d, zfac);
 
@@ -7343,8 +7419,6 @@ static void doVertSlide(TransInfo *t, float perc)
 			}
 		}
 	}
-
-	projectVertSlideData(t, false);
 }
 
 static void applyVertSlide(TransInfo *t, const int UNUSED(mval[2]))
@@ -7740,7 +7814,7 @@ static void headerSeqSlide(TransInfo *t, const float val[2], char str[MAX_INFO_L
 	if (t->keymap) {
 		wmKeyMapItem *kmi = WM_modalkeymap_find_propvalue(t->keymap, TFM_MODAL_TRANSLATE);
 		if (kmi) {
-			ofs += WM_keymap_item_to_string(kmi, str + ofs, MAX_INFO_LEN - ofs);
+			ofs += WM_keymap_item_to_string(kmi, false, MAX_INFO_LEN - ofs, str + ofs);
 		}
 	}
 	ofs += BLI_snprintf(str + ofs, MAX_INFO_LEN - ofs, IFACE_(" or Alt) Expand to fit %s"),

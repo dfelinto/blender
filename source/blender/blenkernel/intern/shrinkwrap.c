@@ -50,6 +50,7 @@
 #include "BKE_lattice.h"
 
 #include "BKE_deform.h"
+#include "BKE_editmesh.h"
 #include "BKE_mesh.h"  /* for OMP limits. */
 #include "BKE_subsurf.h"
 
@@ -278,9 +279,17 @@ static void shrinkwrap_calc_normal_projection(ShrinkwrapCalcData *calc, bool for
 		BLI_SPACE_TRANSFORM_SETUP(&local2aux, calc->ob, calc->smd->auxTarget);
 	}
 
+	/* use editmesh to avoid array allocation */
+	if (calc->smd->target && calc->target->type == DM_TYPE_EDITBMESH) {
+		treeData.em_evil = BKE_editmesh_from_object(calc->smd->target);
+	}
+	if (calc->smd->auxTarget && auxMesh->type == DM_TYPE_EDITBMESH) {
+		auxData.em_evil = BKE_editmesh_from_object(calc->smd->auxTarget);
+	}
+
 	/* After sucessufuly build the trees, start projection vertexs */
-	if (bvhtree_from_mesh_faces(&treeData, calc->target, 0.0, 4, 6) &&
-	    (auxMesh == NULL || bvhtree_from_mesh_faces(&auxData, auxMesh, 0.0, 4, 6)))
+	if (bvhtree_from_mesh_looptri(&treeData, calc->target, 0.0, 4, 6) &&
+	    (auxMesh == NULL || bvhtree_from_mesh_looptri(&auxData, auxMesh, 0.0, 4, 6)))
 	{
 
 #ifndef __APPLE__
@@ -381,7 +390,7 @@ static void shrinkwrap_calc_nearest_surface_point(ShrinkwrapCalcData *calc)
 	BVHTreeNearest nearest  = NULL_BVHTreeNearest;
 
 	/* Create a bvh-tree of the given target */
-	bvhtree_from_mesh_faces(&treeData, calc->target, 0.0, 2, 6);
+	bvhtree_from_mesh_looptri(&treeData, calc->target, 0.0, 2, 6);
 	if (treeData.tree == NULL) {
 		OUT_OF_MEMORY();
 		return;

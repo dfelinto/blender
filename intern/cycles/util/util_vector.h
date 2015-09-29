@@ -19,7 +19,8 @@
 
 /* Vector */
 
-#include <string.h>
+#include <cassert>
+#include <cstring>
 #include <vector>
 
 #include "util_aligned_malloc.h"
@@ -40,20 +41,16 @@ CCL_NAMESPACE_BEGIN
  *
  * - Have method to ensure capacity is re-set to 0.
  */
-template<typename value_type>
-class vector : public std::vector<value_type
+template<typename value_type,
 #ifdef WITH_CYCLES_DEBUG
-                                  , GuardedAllocator<value_type>
+         typename allocator_type = GuardedAllocator<value_type>
+#else
+         typename allocator_type = std::allocator<value_type>
 #endif
-                                  >
+        >
+class vector : public std::vector<value_type, allocator_type>
 {
 public:
-#ifdef WITH_CYCLES_DEBUG
-	typedef GuardedAllocator<value_type> allocator_type;
-#else
-	typedef std::allocator<value_type> allocator_type;
-#endif
-
 	/* Default constructor. */
 	explicit vector() : std::vector<value_type, allocator_type>() {  }
 
@@ -63,7 +60,7 @@ public:
 
 	/* Range constructor. */
 	template <class InputIterator>
-	vector (InputIterator first, InputIterator last)
+	vector(InputIterator first, InputIterator last)
 		: std::vector<value_type, allocator_type>(first, last) {  }
 
 	/* Copy constructor. */
@@ -78,7 +75,8 @@ public:
 #endif
 	}
 
-	void free_memory(void) {
+	void free_memory(void)
+	{
 		std::vector<value_type, allocator_type>::resize(0);
 		shrink_to_fit();
 	}
@@ -107,6 +105,7 @@ public:
 	{
 		data = NULL;
 		datasize = 0;
+		capacity = 0;
 	}
 
 	array(size_t newsize)
@@ -114,10 +113,12 @@ public:
 		if(newsize == 0) {
 			data = NULL;
 			datasize = 0;
+			capacity = 0;
 		}
 		else {
 			data = (T*)util_aligned_malloc(sizeof(T)*newsize, alignment);
 			datasize = newsize;
+			capacity = datasize;
 		}
 	}
 
@@ -131,11 +132,13 @@ public:
 		if(from.datasize == 0) {
 			data = NULL;
 			datasize = 0;
+			capacity = 0;
 		}
 		else {
 			data = (T*)util_aligned_malloc(sizeof(T)*from.datasize, alignment);
 			memcpy(data, from.data, from.datasize*sizeof(T));
 			datasize = from.datasize;
+			capacity = datasize;
 		}
 
 		return *this;
@@ -144,6 +147,7 @@ public:
 	array& operator=(const vector<T>& from)
 	{
 		datasize = from.size();
+		capacity = datasize;
 		data = NULL;
 
 		if(datasize > 0) {
@@ -165,13 +169,15 @@ public:
 			clear();
 		}
 		else if(newsize != datasize) {
-			T *newdata = (T*)util_aligned_malloc(sizeof(T)*newsize, alignment);
-			if(data) {
-				memcpy(newdata, data, ((datasize < newsize)? datasize: newsize)*sizeof(T));
-				util_aligned_free(data);
+			if(newsize > capacity) {
+				T *newdata = (T*)util_aligned_malloc(sizeof(T)*newsize, alignment);
+				if(data) {
+					memcpy(newdata, data, ((datasize < newsize)? datasize: newsize)*sizeof(T));
+					util_aligned_free(data);
+				}
+				data = newdata;
+				capacity = newsize;
 			}
-
-			data = newdata;
 			datasize = newsize;
 		}
 	}
@@ -181,6 +187,7 @@ public:
 		util_aligned_free(data);
 		data = NULL;
 		datasize = 0;
+		capacity = 0;
 	}
 
 	size_t size() const
@@ -190,12 +197,26 @@ public:
 
 	T& operator[](size_t i) const
 	{
+		assert(i < datasize);
 		return data[i];
+	}
+
+	void reserve(size_t newcapacity) {
+		if(newcapacity > capacity) {
+			T *newdata = (T*)util_aligned_malloc(sizeof(T)*newcapacity, alignment);
+			if(data) {
+				memcpy(newdata, data, ((datasize < newcapacity)? datasize: newcapacity)*sizeof(T));
+				util_aligned_free(data);
+			}
+			data = newdata;
+			capacity = newcapacity;
+		}
 	}
 
 protected:
 	T *data;
 	size_t datasize;
+	size_t capacity;
 };
 
 CCL_NAMESPACE_END

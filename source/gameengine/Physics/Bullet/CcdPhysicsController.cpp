@@ -697,6 +697,35 @@ CcdPhysicsController::~CcdPhysicsController()
 	}
 }
 
+void CcdPhysicsController::SimulationTick(float timestep)
+{
+	btRigidBody *body = GetRigidBody();
+	if (!body || body->isStaticObject())
+		return;
+
+	// Clamp linear velocity
+	if (m_cci.m_clamp_vel_max > 0.0f || m_cci.m_clamp_vel_min > 0.0f) {
+		const btVector3 &linvel = body->getLinearVelocity();
+		btScalar len = linvel.length();
+
+		if (m_cci.m_clamp_vel_max > 0.0f && len > m_cci.m_clamp_vel_max)
+			body->setLinearVelocity(linvel * (m_cci.m_clamp_vel_max / len));
+		else if (m_cci.m_clamp_vel_min > 0.0f && !btFuzzyZero(len) && len < m_cci.m_clamp_vel_min)
+			body->setLinearVelocity(linvel * (m_cci.m_clamp_vel_min / len));
+	}
+
+	// Clamp angular velocity
+	if (m_cci.m_clamp_angvel_max > 0.0f || m_cci.m_clamp_angvel_min > 0.0f) {
+		const btVector3 &angvel = body->getAngularVelocity();
+		btScalar len = angvel.length();
+
+		if (m_cci.m_clamp_angvel_max > 0.0f && len > m_cci.m_clamp_angvel_max)
+			body->setAngularVelocity(angvel * (m_cci.m_clamp_angvel_max / len));
+		else if (m_cci.m_clamp_angvel_min > 0.0f && !btFuzzyZero(len) && len < m_cci.m_clamp_angvel_min)
+			body->setAngularVelocity(angvel * (m_cci.m_clamp_angvel_min / len));
+	}
+}
+
 
 /**
  * SynchronizeMotionStates ynchronizes dynas, kinematic and deformable entities (and do 'late binding')
@@ -732,19 +761,6 @@ bool		CcdPhysicsController::SynchronizeMotionStates(float time)
 
 	if (body && !body->isStaticObject())
 	{
-		
-		if ((m_cci.m_clamp_vel_max>0.0) || (m_cci.m_clamp_vel_min>0.0))
-		{
-			const btVector3& linvel = body->getLinearVelocity();
-			float len= linvel.length();
-			
-			if ((m_cci.m_clamp_vel_max>0.0) && (len > m_cci.m_clamp_vel_max))
-					body->setLinearVelocity(linvel * (m_cci.m_clamp_vel_max / len));
-			
-			else if ((m_cci.m_clamp_vel_min>0.0) && btFuzzyZero(len)==0 && (len < m_cci.m_clamp_vel_min))
-				body->setLinearVelocity(linvel * (m_cci.m_clamp_vel_min / len));
-		}
-		
 		const btTransform& xform = body->getCenterOfMassTransform();
 		const btMatrix3x3& worldOri = xform.getBasis();
 		const btVector3& worldPos = xform.getOrigin();
@@ -803,6 +819,9 @@ void		CcdPhysicsController::PostProcessReplica(class PHY_IMotionState* motionsta
 	m_MotionState = motionstate;
 	m_registerCount = 0;
 	m_collisionShape = NULL;
+
+	// Clear all old constraints.
+	m_ccdConstraintRefs.clear();
 
 	// always create a new shape to avoid scaling bug
 	if (m_shapeInfo)
@@ -1064,7 +1083,7 @@ void CcdPhysicsController::RefreshCollisions()
 void	CcdPhysicsController::SuspendDynamics(bool ghost)
 {
 	btRigidBody *body = GetRigidBody();
-	if (body && !m_suspended && !GetConstructionInfo().m_bSensor)
+	if (body && !m_suspended && !GetConstructionInfo().m_bSensor && GetPhysicsEnvironment()->IsActiveCcdPhysicsController(this))
 	{
 		btBroadphaseProxy* handle = body->getBroadphaseHandle();
 
@@ -1086,7 +1105,7 @@ void	CcdPhysicsController::SuspendDynamics(bool ghost)
 void	CcdPhysicsController::RestoreDynamics()
 {
 	btRigidBody *body = GetRigidBody();
-	if (body && m_suspended)
+	if (body && m_suspended && GetPhysicsEnvironment()->IsActiveCcdPhysicsController(this))
 	{
 		// before make sure any position change that was done in this logic frame are accounted for
 		SetTransform();

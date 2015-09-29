@@ -42,7 +42,7 @@
 #include "BLI_utildefines.h"
 #include "BLI_ghash.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "DNA_armature_types.h"
 #include "DNA_curve_types.h"
@@ -575,7 +575,7 @@ static int editmode_toggle_exec(bContext *C, wmOperator *op)
 {
 	const int mode_flag = OB_MODE_EDIT;
 	const bool is_mode_set = (CTX_data_edit_object(C) != NULL);
-	ToolSettings *toolsettings =  CTX_data_tool_settings(C);
+	Scene *scene =  CTX_data_scene(C);
 
 	if (!is_mode_set) {
 		Object *ob = CTX_data_active_object(C);
@@ -589,7 +589,7 @@ static int editmode_toggle_exec(bContext *C, wmOperator *op)
 	else
 		ED_object_editmode_exit(C, EM_FREEDATA | EM_FREEUNDO | EM_WAITCURSOR);  /* had EM_DO_UNDO but op flag calls undo too [#24685] */
 	
-	ED_space_image_uv_sculpt_update(CTX_wm_manager(C), toolsettings);
+	ED_space_image_uv_sculpt_update(CTX_wm_manager(C), scene);
 
 	return OPERATOR_FINISHED;
 }
@@ -905,6 +905,8 @@ static void copy_attr(Main *bmain, Scene *scene, View3D *v3d, short event)
 					base->object->rdamping = ob->rdamping;
 					base->object->min_vel = ob->min_vel;
 					base->object->max_vel = ob->max_vel;
+					base->object->min_angvel = ob->min_angvel;
+					base->object->max_angvel = ob->max_angvel;
 					if (ob->gameflag & OB_BOUNDS) {
 						base->object->collision_boundtype = ob->collision_boundtype;
 					}
@@ -2044,6 +2046,8 @@ static int game_physics_copy_exec(bContext *C, wmOperator *UNUSED(op))
 			ob_iter->rdamping = ob->rdamping;
 			ob_iter->min_vel = ob->min_vel;
 			ob_iter->max_vel = ob->max_vel;
+			ob_iter->min_angvel = ob->min_angvel;
+			ob_iter->max_angvel = ob->max_angvel;
 			ob_iter->obstacleRad = ob->obstacleRad;
 			ob_iter->mass = ob->mass;
 			copy_v3_v3(ob_iter->anisotropicFriction, ob->anisotropicFriction);

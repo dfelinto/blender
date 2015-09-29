@@ -62,7 +62,7 @@
 #include "UI_view2d.h"
 
 #include "BLF_api.h"
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "ED_screen.h"
 
@@ -107,15 +107,22 @@ static int rna_property_enum_step(const bContext *C, PointerRNA *ptr, PropertyRN
 	return value;
 }
 
+bool ui_but_menu_step_poll(const uiBut *but)
+{
+	BLI_assert(but->type == UI_BTYPE_MENU);
+
+	/* currenly only RNA buttons */
+	return (but->rnaprop && RNA_property_type(but->rnaprop) == PROP_ENUM);
+}
+
 int ui_but_menu_step(uiBut *but, int direction)
 {
-	/* currenly only RNA buttons */
-	if ((but->rnaprop == NULL) || (RNA_property_type(but->rnaprop) != PROP_ENUM)) {
-		printf("%s: cannot cycle button '%s'\n", __func__, but->str);
-		return 0;
+	if (ui_but_menu_step_poll(but)) {
+		return rna_property_enum_step(but->block->evil_C, &but->rnapoin, but->rnaprop, direction);
 	}
 
-	return rna_property_enum_step(but->block->evil_C, &but->rnapoin, but->rnaprop, direction);
+	printf("%s: cannot cycle button '%s'\n", __func__, but->str);
+	return 0;
 }
 
 /******************** Creating Temporary regions ******************/
@@ -148,13 +155,14 @@ static void ui_region_temp_remove(bContext *C, bScreen *sc, ARegion *ar)
 
 #define UI_TIP_PAD_FAC      1.3f
 #define UI_TIP_PADDING      (int)(UI_TIP_PAD_FAC * UI_UNIT_Y)
+#define UI_TIP_MAXWIDTH     600
 
 #define MAX_TOOLTIP_LINES 8
 typedef struct uiTooltipData {
 	rcti bbox;
 	uiFontStyle fstyle;
-	char lines[MAX_TOOLTIP_LINES][512];
-	char header[512], active_info[512];
+	char lines[MAX_TOOLTIP_LINES][2048];
+	char header[2048], active_info[2048];
 	struct {
 		enum {
 			UI_TIP_STYLE_NORMAL = 0,
@@ -171,6 +179,14 @@ typedef struct uiTooltipData {
 		} color_id : 4;
 		int is_pad : 1;
 	} format[MAX_TOOLTIP_LINES];
+
+	struct {
+		unsigned int x_pos;     /* x cursor position at the end of the last line */
+		unsigned int lines;     /* number of lines, 1 or more with word-wrap */
+	} line_geom[MAX_TOOLTIP_LINES];
+
+	int wrap_width;
+
 	int totline;
 	int toth, lineh;
 } uiTooltipData;
@@ -250,38 +266,48 @@ static void ui_tooltip_region_draw_cb(const bContext *UNUSED(C), ARegion *ar)
 	rgb_tint(alert_color,  0.0f, 0.8f, tone_bg, 0.1f);  /* red        */
 
 	/* draw text */
+	BLF_wordwrap(data->fstyle.uifont_id, data->wrap_width);
+	BLF_wordwrap(blf_mono_font, data->wrap_width);
 
 	bbox.xmin += 0.5f * pad_px;  /* add padding to the text */
-	bbox.ymax -= 0.5f * (BLI_rcti_size_y(&bbox) - data->toth);
-	bbox.ymin = bbox.ymax - data->lineh;
+	bbox.ymax -= 0.25f * pad_px;
 
 	for (i = 0; i < data->totline; i++) {
+		bbox.ymin = bbox.ymax - (data->lineh * data->line_geom[i].lines);
 		if (data->format[i].style == UI_TIP_STYLE_HEADER) {
 			/* draw header and active data (is done here to be able to change color) */
 			uiFontStyle fstyle_header = data->fstyle;
-			float xofs;
+			float xofs, yofs;
 
 			/* override text-style */
 			fstyle_header.shadow = 1;
 			fstyle_header.shadowcolor = rgb_to_grayscale(tip_colors[UI_TIP_LC_MAIN]);
 			fstyle_header.shadx = fstyle_header.shady = 0;
 			fstyle_header.shadowalpha = 1.0f;
+			fstyle_header.word_wrap = true;
 
 			UI_fontstyle_set(&fstyle_header);
 			glColor3fv(tip_colors[UI_TIP_LC_MAIN]);
 			UI_fontstyle_draw(&fstyle_header, &bbox, data->header);
 
-			xofs = BLF_width(fstyle_header.uifont_id, data->header, sizeof(data->header));
+			/* offset to the end of the last line */
+			xofs = data->line_geom[i].x_pos;
+			yofs = data->lineh * (data->line_geom[i].lines - 1);
 			bbox.xmin += xofs;
+			bbox.ymax -= yofs;
 
 			glColor3fv(tip_colors[UI_TIP_LC_ACTIVE]);
-			UI_fontstyle_draw(&data->fstyle, &bbox, data->active_info);
+			fstyle_header.shadow = 0;
+			UI_fontstyle_draw(&fstyle_header, &bbox, data->active_info);
 
+			/* undo offset */
 			bbox.xmin -= xofs;
+			bbox.ymax += yofs;
 		}
 		else if (data->format[i].style == UI_TIP_STYLE_MONO) {
 			uiFontStyle fstyle_mono = data->fstyle;
 			fstyle_mono.uifont_id = blf_mono_font;
+			fstyle_mono.word_wrap = true;
 
 			UI_fontstyle_set(&fstyle_mono);
 			/* XXX, needed because we dont have mono in 'U.uifonts' */
@@ -290,21 +316,25 @@ static void ui_tooltip_region_draw_cb(const bContext *UNUSED(C), ARegion *ar)
 			UI_fontstyle_draw(&fstyle_mono, &bbox, data->lines[i]);
 		}
 		else {
+			uiFontStyle fstyle_normal = data->fstyle;
 			BLI_assert(data->format[i].style == UI_TIP_STYLE_NORMAL);
+			fstyle_normal.word_wrap = true;
+
 			/* draw remaining data */
-			UI_fontstyle_set(&data->fstyle);
+			UI_fontstyle_set(&fstyle_normal);
 			glColor3fv(tip_colors[data->format[i].color_id]);
-			UI_fontstyle_draw(&data->fstyle, &bbox, data->lines[i]);
+			UI_fontstyle_draw(&fstyle_normal, &bbox, data->lines[i]);
 		}
+
+		bbox.ymax -= data->lineh * data->line_geom[i].lines;
+
 		if ((i + 1 != data->totline) && data->format[i + 1].is_pad) {
-			bbox.ymax -= data->lineh * UI_TIP_PAD_FAC;
-			bbox.ymin -= data->lineh * UI_TIP_PAD_FAC;
-		}
-		else {
-			bbox.ymax -= data->lineh;
-			bbox.ymin -= data->lineh;
+			bbox.ymax -= data->lineh * (UI_TIP_PAD_FAC - 1);
 		}
 	}
+
+	BLF_disable(data->fstyle.uifont_id, BLF_WORD_WRAP);
+	BLF_disable(blf_mono_font, BLF_WORD_WRAP);
 
 	if (multisample_enabled)
 		glEnable(GL_MULTISAMPLE_ARB);
@@ -331,10 +361,11 @@ ARegion *ui_tooltip_create(bContext *C, ARegion *butregion, uiBut *but)
 	char buf[512];
 	/* aspect values that shrink text are likely unreadable */
 	const float aspect = min_ff(1.0f, but->block->aspect);
-	float fonth, fontw;
-	int winx, ofsx, ofsy, w = 0, h, i;
+	int fonth, fontw;
+	int winx, ofsx, ofsy, h, i;
 	rctf rect_fl;
 	rcti rect_i;
+	int font_flag = 0;
 
 	uiStringInfo but_tip = {BUT_GET_TIP, NULL};
 	uiStringInfo enum_label = {BUT_GET_RNAENUM_LABEL, NULL};
@@ -513,9 +544,10 @@ ARegion *ui_tooltip_create(bContext *C, ARegion *butregion, uiBut *but)
 			}
 
 			if (data_path) {
+				const char *data_delim = (data_path[0] == '[') ? "" : ".";
 				BLI_snprintf(data->lines[data->totline], sizeof(data->lines[0]),
-				             "%s.%s",  /* no need to translate */
-				             id_path, data_path);
+				             "%s%s%s",  /* no need to translate */
+				             id_path, data_delim, data_path);
 				MEM_freeN(data_path);
 			}
 			else if (prop) {
@@ -570,6 +602,17 @@ ARegion *ui_tooltip_create(bContext *C, ARegion *butregion, uiBut *but)
 
 	UI_fontstyle_set(&data->fstyle);
 
+	data->wrap_width = min_ii(UI_TIP_MAXWIDTH * U.pixelsize / aspect, WM_window_pixels_x(win) - (UI_TIP_PADDING * 2));
+
+	font_flag |= BLF_WORD_WRAP;
+	if (data->fstyle.kerning == 1) {
+		font_flag |= BLF_KERNING_DEFAULT;
+	}
+	BLF_enable(data->fstyle.uifont_id, font_flag);
+	BLF_enable(blf_mono_font, font_flag);
+	BLF_wordwrap(data->fstyle.uifont_id, data->wrap_width);
+	BLF_wordwrap(blf_mono_font, data->wrap_width);
+
 	/* these defines tweaked depending on font */
 #define TIP_BORDER_X (16.0f / aspect)
 #define TIP_BORDER_Y (6.0f / aspect)
@@ -577,32 +620,42 @@ ARegion *ui_tooltip_create(bContext *C, ARegion *butregion, uiBut *but)
 	h = BLF_height_max(data->fstyle.uifont_id);
 
 	for (i = 0, fontw = 0, fonth = 0; i < data->totline; i++) {
+		struct ResultBLF info;
+		int w, x_pos = 0;
+
 		if (data->format[i].style == UI_TIP_STYLE_HEADER) {
-			w = BLF_width(data->fstyle.uifont_id, data->header, sizeof(data->header));
-			if (enum_label.strinfo)
-				w += BLF_width(data->fstyle.uifont_id, data->active_info, sizeof(data->active_info));
+			w = BLF_width_ex(data->fstyle.uifont_id, data->header, sizeof(data->header), &info);
+			if (enum_label.strinfo) {
+				x_pos = info.width + (U.widget_unit / 2);
+				w = max_ii(w, x_pos + BLF_width(data->fstyle.uifont_id, data->active_info, sizeof(data->active_info)));
+			}
 		}
 		else if (data->format[i].style == UI_TIP_STYLE_MONO) {
 			BLF_size(blf_mono_font, data->fstyle.points * U.pixelsize, U.dpi);
 
-			w = BLF_width(blf_mono_font, data->lines[i], sizeof(data->lines[i]));
+			w = BLF_width_ex(blf_mono_font, data->lines[i], sizeof(data->lines[i]), &info);
 		}
 		else {
 			BLI_assert(data->format[i].style == UI_TIP_STYLE_NORMAL);
-			w = BLF_width(data->fstyle.uifont_id, data->lines[i], sizeof(data->lines[i]));
+
+			w = BLF_width_ex(data->fstyle.uifont_id, data->lines[i], sizeof(data->lines[i]), &info);
 		}
 
-		fontw = max_ff(fontw, (float)w);
+		fontw = max_ii(fontw, w);
 
+		fonth += h * info.lines;
 		if ((i + 1 != data->totline) && data->format[i + 1].is_pad) {
-			fonth += h * UI_TIP_PAD_FAC;
+			fonth += h * (UI_TIP_PAD_FAC - 1);
 		}
-		else {
-			fonth += h;
-		}
+
+		data->line_geom[i].lines = info.lines;
+		data->line_geom[i].x_pos = x_pos;
 	}
 
 	//fontw *= aspect;
+
+	BLF_disable(data->fstyle.uifont_id, font_flag);
+	BLF_disable(blf_mono_font, font_flag);
 
 	ar->regiondata = data;
 
@@ -1119,6 +1172,7 @@ ARegion *ui_searchbox_create(bContext *C, ARegion *butregion, uiBut *but)
 	float aspect = but->block->aspect;
 	rctf rect_fl;
 	rcti rect_i;
+	const int margin = UI_POPUP_MARGIN;
 	int winx /*, winy */, ofsx, ofsy;
 	int i;
 	
@@ -1160,8 +1214,6 @@ ARegion *ui_searchbox_create(bContext *C, ARegion *butregion, uiBut *but)
 	
 	/* compute position */
 	if (but->block->flag & UI_BLOCK_SEARCH_MENU) {
-		const int margin_x = UI_POPUP_MARGIN;
-		const int margin_y = MENU_TOP;
 		const int search_but_h = BLI_rctf_size_y(&but->rect) + 10;
 		/* this case is search menu inside other menu */
 		/* we copy region size */
@@ -1169,11 +1221,10 @@ ARegion *ui_searchbox_create(bContext *C, ARegion *butregion, uiBut *but)
 		ar->winrct = butregion->winrct;
 		
 		/* widget rect, in region coords */
-		data->bbox.xmin = margin_x;
-		data->bbox.xmax = BLI_rcti_size_x(&ar->winrct) - margin_x;
-		/* Do not use shadow width for height, gives insane margin with big shadows, and issue T41548 with small ones */
-		data->bbox.ymin = margin_y;
-		data->bbox.ymax = BLI_rcti_size_y(&ar->winrct) - margin_y;
+		data->bbox.xmin = margin;
+		data->bbox.xmax = BLI_rcti_size_x(&ar->winrct) - margin;
+		data->bbox.ymin = margin;
+		data->bbox.ymax = BLI_rcti_size_y(&ar->winrct) - margin;
 		
 		/* check if button is lower half */
 		if (but->rect.ymax < BLI_rctf_cent_y(&but->block->rect)) {
@@ -1185,7 +1236,6 @@ ARegion *ui_searchbox_create(bContext *C, ARegion *butregion, uiBut *but)
 	}
 	else {
 		const int searchbox_width = UI_searchbox_size_x();
-		const int margin = UI_POPUP_MARGIN;
 
 		rect_fl.xmin = but->rect.xmin - 5;   /* align text with button */
 		rect_fl.xmax = but->rect.xmax + 5;   /* symmetrical */

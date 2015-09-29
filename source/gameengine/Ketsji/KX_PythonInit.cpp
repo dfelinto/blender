@@ -61,7 +61,7 @@ extern "C" {
 
 	#  include "marshal.h" /* python header for loading/saving dicts */
 }
-#include "AUD_PyInit.h"
+#include "../../../../intern/audaspace/intern/AUD_PyInit.h"
 
 #endif  /* WITH_PYTHON */
 
@@ -112,8 +112,8 @@ extern "C" {
 #include "RAS_2DFilterManager.h"
 #include "MT_Vector3.h"
 #include "MT_Point3.h"
-#include "ListValue.h"
-#include "InputParser.h"
+#include "EXP_ListValue.h"
+#include "EXP_InputParser.h"
 #include "KX_Scene.h"
 
 #include "NG_NetworkScene.h" //Needed for sendMessage()
@@ -123,7 +123,7 @@ extern "C" {
 
 #include "KX_PyMath.h"
 
-#include "PyObjectPlus.h"
+#include "EXP_PyObjectPlus.h"
 
 #include "KX_PythonInitTypes.h" 
 
@@ -186,17 +186,17 @@ class KX_KetsjiEngine* KX_GetActiveEngine()
 }
 
 /* why is this in python? */
-void	KX_RasterizerDrawDebugLine(const MT_Vector3& from,const MT_Vector3& to,const MT_Vector3& color)
+void KX_RasterizerDrawDebugLine(const MT_Vector3& from,const MT_Vector3& to,const MT_Vector3& color)
 {
 	if (gp_Rasterizer)
-		gp_Rasterizer->DrawDebugLine(from,to,color);
+		gp_Rasterizer->DrawDebugLine(gp_KetsjiScene, from, to, color);
 }
 
 void KX_RasterizerDrawDebugCircle(const MT_Vector3& center, const MT_Scalar radius, const MT_Vector3& color,
                                   const MT_Vector3& normal, int nsector)
 {
 	if (gp_Rasterizer)
-		gp_Rasterizer->DrawDebugCircle(center, radius, color, normal, nsector);
+		gp_Rasterizer->DrawDebugCircle(gp_KetsjiScene, center, radius, color, normal, nsector);
 }
 
 #ifdef WITH_PYTHON
@@ -221,7 +221,7 @@ static void KX_MACRO_addTypesToDict_fn(PyObject *dict, const char *name, long va
 
 
 // temporarily python stuff, will be put in another place later !
-#include "KX_Python.h"
+#include "EXP_Python.h"
 #include "SCA_PythonController.h"
 // List of methods defined in the module
 
@@ -524,6 +524,27 @@ static PyObject *gPySetPhysicsDebug(PyObject *, PyObject *args)
 static PyObject *gPyGetPhysicsTicRate(PyObject *)
 {
 	return PyFloat_FromDouble(PHY_GetActiveEnvironment()->GetFixedTimeStep());
+}
+
+static PyObject *gPySetAnimRecordFrame(PyObject *, PyObject *args)
+{
+	int anim_record_frame;
+
+	if (!PyArg_ParseTuple(args, "i:setAnimRecordFrame", &anim_record_frame))
+		return NULL;
+
+	if (anim_record_frame < 0 && (U.flag & USER_NONEGFRAMES)) {
+		PyErr_Format(PyExc_ValueError, "Frame number must be non-negative (was %i).", anim_record_frame);
+		return NULL;
+	}
+
+	gp_KetsjiEngine->setAnimRecordFrame(anim_record_frame);
+	Py_RETURN_NONE;
+}
+
+static PyObject *gPyGetAnimRecordFrame(PyObject *)
+{
+	return PyLong_FromLong(gp_KetsjiEngine->getAnimRecordFrame());
 }
 
 static PyObject *gPyGetAverageFrameRate(PyObject *)
@@ -887,6 +908,8 @@ static struct PyMethodDef game_methods[] = {
 	{"setLogicTicRate", (PyCFunction) gPySetLogicTicRate, METH_VARARGS, (const char *)"Sets the logic tic rate"},
 	{"getPhysicsTicRate", (PyCFunction) gPyGetPhysicsTicRate, METH_NOARGS, (const char *)"Gets the physics tic rate"},
 	{"setPhysicsTicRate", (PyCFunction) gPySetPhysicsTicRate, METH_VARARGS, (const char *)"Sets the physics tic rate"},
+	{"getAnimRecordFrame", (PyCFunction) gPyGetAnimRecordFrame, METH_NOARGS, (const char *)"Gets the current frame number used for animation recording"},
+	{"setAnimRecordFrame", (PyCFunction) gPySetAnimRecordFrame, METH_VARARGS, (const char *)"Sets the current frame number used for animation recording"},
 	{"getExitKey", (PyCFunction) gPyGetExitKey, METH_NOARGS, (const char *)"Gets the key used to exit the game engine"},
 	{"setExitKey", (PyCFunction) gPySetExitKey, METH_VARARGS, (const char *)"Sets the key used to exit the game engine"},
 	{"getAverageFrameRate", (PyCFunction) gPyGetAverageFrameRate, METH_NOARGS, (const char *)"Gets the estimated average frame rate"},
@@ -1138,10 +1161,6 @@ static PyObject *gPySetGLSLMaterialSetting(PyObject *,
 	else
 		gs->glslflag |= flag;
 
-	/* temporarily store the glsl settings in the scene for the GLSL materials */
-	GameData *gm= &(gp_KetsjiScene->GetBlenderScene()->gm);
-	gm->flag = gs->glslflag;
-
 	/* display lists and GLSL materials need to be remade */
 	if (sceneflag != gs->glslflag) {
 		GPU_materials_free();
@@ -1149,11 +1168,14 @@ static PyObject *gPySetGLSLMaterialSetting(PyObject *,
 			KX_SceneList *scenes = gp_KetsjiEngine->CurrentScenes();
 			KX_SceneList::iterator it;
 
-			for (it=scenes->begin(); it!=scenes->end(); it++)
+			for (it=scenes->begin(); it!=scenes->end(); it++) {
+				// temporarily store the glsl settings in the scene for the GLSL materials
+				(*it)->GetBlenderScene()->gm.flag = gs->glslflag;
 				if ((*it)->GetBucketManager()) {
 					(*it)->GetBucketManager()->ReleaseDisplayLists();
 					(*it)->GetBucketManager()->ReleaseMaterials();
 				}
+			}
 		}
 	}
 
@@ -1266,7 +1288,7 @@ static PyObject *gPyDrawLine(PyObject *, PyObject *args)
 	if (!PyVecTo(ob_color, color))
 		return NULL;
 
-	gp_Rasterizer->DrawDebugLine(from,to,color);
+	gp_Rasterizer->DrawDebugLine(gp_KetsjiScene, from, to, color);
 	
 	Py_RETURN_NONE;
 }

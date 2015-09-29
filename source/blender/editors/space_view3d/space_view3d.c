@@ -928,6 +928,7 @@ static void view3d_main_area_listener(bScreen *sc, ScrArea *sa, ARegion *ar, wmN
 				case ND_SHADING:
 				case ND_NODES:
 				{
+#ifdef WITH_LEGACY_DEPSGRAPH
 					Object *ob = OBACT;
 					if ((v3d->drawtype == OB_MATERIAL) ||
 					    (ob && (ob->mode == OB_MODE_TEXTURE_PAINT)) ||
@@ -935,6 +936,7 @@ static void view3d_main_area_listener(bScreen *sc, ScrArea *sa, ARegion *ar, wmN
 					     (scene->gm.matmode == GAME_MAT_GLSL ||
 					      BKE_scene_use_new_shading_nodes(scene))) ||
 					    !DEG_depsgraph_use_legacy())
+#endif
 					{
 						ED_region_tag_redraw(ar);
 					}
@@ -1093,7 +1095,7 @@ static void view3d_buttons_area_init(wmWindowManager *wm, ARegion *ar)
 
 static void view3d_buttons_area_draw(const bContext *C, ARegion *ar)
 {
-	ED_region_panels(C, ar, 1, NULL, -1);
+	ED_region_panels(C, ar, NULL, -1, true);
 }
 
 static void view3d_buttons_area_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa), ARegion *ar, wmNotifier *wmn)
@@ -1199,7 +1201,7 @@ static void view3d_tools_area_init(wmWindowManager *wm, ARegion *ar)
 
 static void view3d_tools_area_draw(const bContext *C, ARegion *ar)
 {
-	ED_region_panels(C, ar, 1, CTX_data_mode_string(C), -1);
+	ED_region_panels(C, ar, CTX_data_mode_string(C), -1, true);
 }
 
 static void view3d_props_area_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa), ARegion *ar, wmNotifier *wmn)

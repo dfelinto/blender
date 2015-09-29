@@ -287,7 +287,7 @@ void SCREEN_OT_screenshot(wmOperatorType *ot)
 	ot->flag = 0;
 	
 	WM_operator_properties_filesel(ot, FILE_TYPE_FOLDER | FILE_TYPE_IMAGE, FILE_SPECIAL, FILE_SAVE,
-	                               WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY);
+	                               WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);
 	RNA_def_boolean(ot->srna, "full", 1, "Full Screen",
 	                "Capture the whole window (otherwise only capture the active area)");
 }
@@ -354,6 +354,10 @@ static void screenshot_startjob(void *sjv, short *stop, short *do_update, float 
 	
 	if (BKE_imtype_is_movie(rd.im_format.imtype)) {
 		mh = BKE_movie_handle_get(sj->scene->r.im_format.imtype);
+		if (mh == NULL) {
+			printf("Movie format unsupported\n");
+			return;
+		}
 		sj->movie_ctx = mh->context_create();
 		sj->movie_handle = mh;
 

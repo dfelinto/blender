@@ -66,7 +66,7 @@ EnumPropertyItem id_type_items[] = {
 	{ID_MA, "MATERIAL", ICON_MATERIAL_DATA, "Material", ""},
 	{ID_MB, "META", ICON_META_DATA, "MetaBall", ""},
 	{ID_ME, "MESH", ICON_MESH_DATA, "Mesh", ""},
-    {ID_MC, "MOVIECLIP", ICON_CLIP, "MovieClip", ""},
+	{ID_MC, "MOVIECLIP", ICON_CLIP, "MovieClip", ""},
 	{ID_NT, "NODETREE", ICON_NODETREE, "NodeTree", ""},
 	{ID_OB, "OBJECT", ICON_OBJECT_DATA, "Object", ""},
 	{ID_PC, "PAINTCURVE", ICON_CURVE_BEZCURVE, "Paint Curve", ""},
@@ -74,16 +74,18 @@ EnumPropertyItem id_type_items[] = {
 	{ID_PA, "PARTICLE", ICON_PARTICLE_DATA, "Particle", ""},
 	{ID_SCE, "SCENE", ICON_SCENE_DATA, "Scene", ""},
 	{ID_SCR, "SCREEN", ICON_SPLITSCREEN, "Screen", ""},
-    {ID_SO, "SOUND", ICON_PLAY_AUDIO, "Sound", ""},
+	{ID_SO, "SOUND", ICON_PLAY_AUDIO, "Sound", ""},
 	{ID_SPK, "SPEAKER", ICON_SPEAKER, "Speaker", ""},
 	{ID_TXT, "TEXT", ICON_TEXT, "Text", ""},
 	{ID_TE, "TEXTURE", ICON_TEXTURE_DATA, "Texture", ""},
 	{ID_WM, "WINDOWMANAGER", ICON_FULLSCREEN, "Window Manager", ""},
-    {ID_WO, "WORLD", ICON_WORLD_DATA, "World", ""},
+	{ID_WO, "WORLD", ICON_WORLD_DATA, "World", ""},
 	{0, NULL, 0, NULL, NULL}
 };
 
 #ifdef RNA_RUNTIME
+
+#include "DNA_anim_types.h"
 
 #include "BKE_font.h"
 #include "BKE_idprop.h"
@@ -331,6 +333,19 @@ static void rna_ID_user_clear(ID *id)
 	id->flag &= ~LIB_FAKEUSER;
 }
 
+static AnimData * rna_ID_animation_data_create(ID *id, Main *bmain)
+{
+	AnimData *adt = BKE_animdata_add_id(id);
+	DAG_relations_tag_update(bmain);
+	return adt;
+}
+
+static void rna_ID_animation_data_free(ID *id, Main *bmain)
+{
+	BKE_animdata_free(id);
+	DAG_relations_tag_update(bmain);
+}
+
 static void rna_IDPArray_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)
 {
 	IDProperty *prop = (IDProperty *)ptr->data;
@@ -457,17 +472,18 @@ static void rna_ImagePreview_size_set(PointerRNA *ptr, const int *values, enum e
 		BLI_assert(prv_img == BKE_previewimg_id_ensure(id));
 	}
 
-	BKE_previewimg_ensure(prv_img, size);
+	BKE_previewimg_clear_single(prv_img, size);
 
 	if (values[0] && values[1]) {
 		prv_img->rect[size] = MEM_callocN(values[0] * values[1] * sizeof(unsigned int), "prv_rect");
-	}
 
-	prv_img->w[size] = values[0];
-	prv_img->h[size] = values[1];
+		prv_img->w[size] = values[0];
+		prv_img->h[size] = values[1];
+	}
 
 	prv_img->flag[size] |= (PRV_CHANGED | PRV_USER_EDITED);
 }
+
 
 static int rna_ImagePreview_pixels_get_length(PointerRNA *ptr, int length[RNA_MAX_ARRAY_DIMENSION], enum eIconSizes size)
 {
@@ -512,6 +528,70 @@ static void rna_ImagePreview_pixels_set(PointerRNA *ptr, const int *values, enum
 	prv_img->flag[size] |= PRV_USER_EDITED;
 }
 
+
+static int rna_ImagePreview_pixels_float_get_length(
+        PointerRNA *ptr, int length[RNA_MAX_ARRAY_DIMENSION], enum eIconSizes size)
+{
+	ID *id = ptr->id.data;
+	PreviewImage *prv_img = (PreviewImage *)ptr->data;
+
+	BLI_assert(sizeof(unsigned int) == 4);
+
+	if (id != NULL) {
+		BLI_assert(prv_img == BKE_previewimg_id_ensure(id));
+	}
+
+	BKE_previewimg_ensure(prv_img, size);
+
+	length[0] = prv_img->w[size] * prv_img->h[size] * 4;
+
+	return length[0];
+}
+
+static void rna_ImagePreview_pixels_float_get(PointerRNA *ptr, float *values, enum eIconSizes size)
+{
+	ID *id = ptr->id.data;
+	PreviewImage *prv_img = (PreviewImage *)ptr->data;
+
+	unsigned char *data = (unsigned char *)prv_img->rect[size];
+	const size_t len = prv_img->w[size] * prv_img->h[size] * 4;
+	size_t i;
+
+	BLI_assert(sizeof(unsigned int) == 4);
+
+	if (id != NULL) {
+		BLI_assert(prv_img == BKE_previewimg_id_ensure(id));
+	}
+
+	BKE_previewimg_ensure(prv_img, size);
+
+	for (i = 0; i < len; i++) {
+		values[i] = data[i] * (1.0f / 255.0f);
+	}
+}
+
+static void rna_ImagePreview_pixels_float_set(PointerRNA *ptr, const float *values, enum eIconSizes size)
+{
+	ID *id = ptr->id.data;
+	PreviewImage *prv_img = (PreviewImage *)ptr->data;
+
+	unsigned char *data = (unsigned char *)prv_img->rect[size];
+	const size_t len = prv_img->w[size] * prv_img->h[size] * 4;
+	size_t i;
+
+	BLI_assert(sizeof(unsigned int) == 4);
+
+	if (id != NULL) {
+		BLI_assert(prv_img == BKE_previewimg_id_ensure(id));
+	}
+
+	for (i = 0; i < len; i++) {
+		data[i] = FTOCHAR(values[i]);
+	}
+	prv_img->flag[size] |= PRV_USER_EDITED;
+}
+
+
 static void rna_ImagePreview_is_image_custom_set(PointerRNA *ptr, int value)
 {
 	rna_ImagePreview_is_custom_set(ptr, value, ICON_SIZE_PREVIEW);
@@ -541,6 +621,22 @@ static void rna_ImagePreview_image_pixels_set(PointerRNA *ptr, const int *values
 {
 	rna_ImagePreview_pixels_set(ptr, values, ICON_SIZE_PREVIEW);
 }
+
+static int rna_ImagePreview_image_pixels_float_get_length(PointerRNA *ptr, int length[RNA_MAX_ARRAY_DIMENSION])
+{
+	return rna_ImagePreview_pixels_float_get_length(ptr, length, ICON_SIZE_PREVIEW);
+}
+
+static void rna_ImagePreview_image_pixels_float_get(PointerRNA *ptr, float *values)
+{
+	rna_ImagePreview_pixels_float_get(ptr, values, ICON_SIZE_PREVIEW);
+}
+
+static void rna_ImagePreview_image_pixels_float_set(PointerRNA *ptr, const float *values)
+{
+	rna_ImagePreview_pixels_float_set(ptr, values, ICON_SIZE_PREVIEW);
+}
+
 
 static void rna_ImagePreview_is_icon_custom_set(PointerRNA *ptr, int value)
 {
@@ -572,6 +668,22 @@ static void rna_ImagePreview_icon_pixels_set(PointerRNA *ptr, const int *values)
 	rna_ImagePreview_pixels_set(ptr, values, ICON_SIZE_ICON);
 }
 
+static int rna_ImagePreview_icon_pixels_float_get_length(PointerRNA *ptr, int length[RNA_MAX_ARRAY_DIMENSION])
+{
+	return rna_ImagePreview_pixels_float_get_length(ptr, length, ICON_SIZE_ICON);
+}
+
+static void rna_ImagePreview_icon_pixels_float_get(PointerRNA *ptr, float *values)
+{
+	rna_ImagePreview_pixels_float_get(ptr, values, ICON_SIZE_ICON);
+}
+
+static void rna_ImagePreview_icon_pixels_float_set(PointerRNA *ptr, const float *values)
+{
+	rna_ImagePreview_pixels_float_set(ptr, values, ICON_SIZE_ICON);
+}
+
+
 static int rna_ImagePreview_icon_id_get(PointerRNA *ptr)
 {
 	/* Using a callback here allows us to only generate icon matching that preview when icon_id is requested. */
@@ -583,6 +695,14 @@ static void rna_ImagePreview_icon_reload(PreviewImage *prv)
 	if (!(prv->flag[ICON_SIZE_ICON] & PRV_USER_EDITED) && !(prv->flag[ICON_SIZE_PREVIEW] & PRV_USER_EDITED)) {
 		BKE_previewimg_clear(prv);
 	}
+}
+
+static PointerRNA rna_IDPreview_get(PointerRNA *ptr)
+{
+	ID *id = (ID *)ptr->data;
+	PreviewImage *prv_img = BKE_previewimg_id_ensure(id);
+
+	return rna_pointer_inherit_refine(ptr, &RNA_ImagePreview, prv_img);
 }
 
 #else
@@ -731,6 +851,15 @@ static void rna_def_image_preview(BlenderRNA *brna)
 	RNA_def_property_dynamic_array_funcs(prop, "rna_ImagePreview_image_pixels_get_length");
 	RNA_def_property_int_funcs(prop, "rna_ImagePreview_image_pixels_get", "rna_ImagePreview_image_pixels_set", NULL);
 
+	prop = RNA_def_property(srna, "image_pixels_float", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_flag(prop, PROP_DYNAMIC);
+	RNA_def_property_multi_array(prop, 1, NULL);
+	RNA_def_property_ui_text(prop, "Float Image Pixels",
+	                         "Image pixels components, as floats (RGBA concatenated values)");
+	RNA_def_property_dynamic_array_funcs(prop, "rna_ImagePreview_image_pixels_float_get_length");
+	RNA_def_property_float_funcs(prop, "rna_ImagePreview_image_pixels_float_get",
+	                             "rna_ImagePreview_image_pixels_float_set", NULL);
+
 
 	prop = RNA_def_property(srna, "is_icon_custom", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "flag[ICON_SIZE_ICON]", PRV_USER_EDITED);
@@ -749,6 +878,14 @@ static void rna_def_image_preview(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Icon Pixels", "Icon pixels, as bytes (always RGBA 32bits)");
 	RNA_def_property_dynamic_array_funcs(prop, "rna_ImagePreview_icon_pixels_get_length");
 	RNA_def_property_int_funcs(prop, "rna_ImagePreview_icon_pixels_get", "rna_ImagePreview_icon_pixels_set", NULL);
+
+	prop = RNA_def_property(srna, "icon_pixels_float", PROP_FLOAT, PROP_NONE);
+	RNA_def_property_flag(prop, PROP_DYNAMIC);
+	RNA_def_property_multi_array(prop, 1, NULL);
+	RNA_def_property_ui_text(prop, "Float Icon Pixels", "Icon pixels components, as floats (RGBA concatenated values)");
+	RNA_def_property_dynamic_array_funcs(prop, "rna_ImagePreview_icon_pixels_float_get_length");
+	RNA_def_property_float_funcs(prop, "rna_ImagePreview_icon_pixels_float_get",
+	                             "rna_ImagePreview_icon_pixels_float_set", NULL);
 
 	prop = RNA_def_int(srna, "icon_id", 0, INT_MIN, INT_MAX, "Icon ID",
 	                   "Unique integer identifying this preview as an icon (zero means invalid)", INT_MIN, INT_MAX);
@@ -825,6 +962,11 @@ static void rna_def_ID(BlenderRNA *brna)
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 	RNA_def_property_ui_text(prop, "Library", "Library file the datablock is linked from");
 
+	prop = RNA_def_pointer(srna, "preview", "ImagePreview", "Preview",
+	                       "Preview image and icon of this datablock (None if not supported for this type of data)");
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+	RNA_def_property_pointer_funcs(prop, "rna_IDPreview_get", NULL, NULL, NULL);
+
 	/* functions */
 	func = RNA_def_function(srna, "copy", "rna_ID_copy");
 	RNA_def_function_ui_description(func, "Create a copy of this datablock (not supported for all datablocks)");
@@ -835,12 +977,14 @@ static void rna_def_ID(BlenderRNA *brna)
 	RNA_def_function_ui_description(func, "Clear the user count of a datablock so its not saved, "
 	                                "on reload the data will be removed");
 
-	func = RNA_def_function(srna, "animation_data_create", "BKE_animdata_add_id");
+	func = RNA_def_function(srna, "animation_data_create", "rna_ID_animation_data_create");
+	RNA_def_function_flag(func, FUNC_USE_MAIN);
 	RNA_def_function_ui_description(func, "Create animation data to this ID, note that not all ID types support this");
 	parm = RNA_def_pointer(func, "anim_data", "AnimData", "", "New animation data or NULL");
 	RNA_def_function_return(func, parm);
 
-	func = RNA_def_function(srna, "animation_data_clear", "BKE_animdata_free");
+	func = RNA_def_function(srna, "animation_data_clear", "rna_ID_animation_data_free");
+	RNA_def_function_flag(func, FUNC_USE_MAIN);
 	RNA_def_function_ui_description(func, "Clear animation on this this ID");
 
 	func = RNA_def_function(srna, "update_tag", "rna_ID_update_tag");

@@ -28,8 +28,7 @@
  *
  * \addtogroup bmesh BMesh
  *
- * \brief BMesh is a non-manifold boundary representation designed to replace the current, limited EditMesh structure,
- * solving many of the design limitations and maintenance issues of EditMesh.
+ * \brief BMesh is a non-manifold boundary representation designed to support advanced editing operations.
  *
  *
  * \section bm_structure The Structure
@@ -58,10 +57,14 @@
  *
  * \subsection bm_loop The Loop
  *
+ * Loops can be thought of as a *face-corner*, since faces don't reference verts or edges directly.
  * Each loop connects the face to one of its corner vertices,
  * and also references an edge which connects this loop's vertex to the next loop's vertex.
  *
- * Loops store several handy pointers:
+ * Loops allow faces to access their verts and edges,
+ * while edges and faces store their loops, allowing access in the opposite direction too.
+ *
+ * Loop pointers:
  *
  * - BMLoop#v - pointer to the vertex associated with this loop.
  * - BMLoop#e - pointer to the edge associated with this loop,
@@ -78,11 +81,11 @@
  *
  * \subsection bm_edges_and_verts Edges and Vertices
  *
- * Edges and Vertices in BMesh are much like their counterparts in EditMesh,
- * except for some members private to the BMesh api.
+ * Edges and Vertices in BMesh are primitive structures.
  *
- * \note There can be more than one edge between two vertices in bmesh,
- * though the rest of blender (e.g. DerivedMesh, CDDM, CCGSubSurf, etc) does not support this.
+ * \note There can be more than one edge between two vertices in BMesh,
+ * though the rest of Blender (e.g. DerivedMesh, CDDM, CCGSubSurf, etc) does not support this.
+ * So it should only occur temporarily during editing operations.
  *
  *
  * \subsection bm_queries Queries
@@ -107,7 +110,8 @@
  * \subsection bm_iter_api Iterator API
  *
  * Most topological queries in BMesh go through an iterator API (see Queries above).
- * These are defined in bmesh_iterators.h.  If you can, please use the #BM_ITER macro in bmesh_iterators.h
+ * These are defined in bmesh_iterators.h.
+ * If you can, please use the #BM_ITER_MESH, #BM_ITER_ELEM macros in bmesh_iterators.h
  *
  *
  * \subsection bm_walker_api Walker API
@@ -161,7 +165,7 @@
  * - integer - #BMO_OP_SLOT_INT
  * - boolean - #BMO_OP_SLOT_BOOL
  * - float   - #BMO_OP_SLOT_FLT
- * - pointer - #BMO_OP_SLOT_PNT
+ * - pointer - #BMO_OP_SLOT_PTR
  * - matrix  - #BMO_OP_SLOT_MAT
  * - vector  - #BMO_OP_SLOT_VEC
  * - buffer  - #BMO_OP_SLOT_ELEMENT_BUF - a list of verts/edges/faces.
@@ -199,18 +203,6 @@
  *
  * There may be a better place for this section, but adding here for now.
  *
- * \subsection bm_todo_tools Tools
- *
- * Probably most of these will be bmesh operators.
- *
- * - make ngons flat.
- * - solidify (precise mode), keeps even wall thickness, re-creates outlines of offset faces with plane-plane
- *   intersections.
- * - split vert (we already have in our API, just no tool).
- * - flip selected region (invert all faces about the plane defined by the selected region outline)
- * - interactive dissolve (like the knife tool but draw over edges to dissolve)
- *
- *
  * \subsection bm_todo_optimize Optimizations
  *
  * - skip normal calc when its not needed (when calling chain of operators & for modifiers, flag as dirty)
@@ -218,11 +210,6 @@
  * - ability to call BMO's with option not to create return data (will save some time)
  * - binary diff UNDO, currently this uses huge amount of ram when all shapes are stored for each undo step for eg.
  * - use two different iterator types for BMO map/buffer types.
- *
- *
- * \subsection bm_todo_tools_enhance Tool Enhancements
- *
- * - vert slide UV correction (like we have for edge slide)
  */
 
 #ifdef __cplusplus

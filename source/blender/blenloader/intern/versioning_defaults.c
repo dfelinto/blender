@@ -127,8 +127,9 @@ void BLO_update_defaults_startup_blend(Main *bmain)
 
 					/* simple fix for 3d view properties scrollbar being not set to top */
 					if (ar->regiontype == RGN_TYPE_UI) {
-						ar->v2d.cur.ymax = ar->v2d.tot.ymax;
-						ar->v2d.cur.ymin = ar->v2d.cur.ymax - ar->winy;
+						float offset = ar->v2d.tot.ymax - ar->v2d.cur.ymax;
+						ar->v2d.cur.ymax += offset;
+						ar->v2d.cur.ymin += offset;
 					}
 				}
 			}
@@ -150,7 +151,7 @@ void BLO_update_defaults_startup_blend(Main *bmain)
 
 		br = (Brush *)BKE_libblock_find_name_ex(bmain, ID_BR, "Fill");
 		if (!br) {
-			br = BKE_brush_add(bmain, "Fill");
+			br = BKE_brush_add(bmain, "Fill", OB_MODE_TEXTURE_PAINT);
 			br->imagepaint_tool = PAINT_TOOL_FILL;
 			br->ob_mode = OB_MODE_TEXTURE_PAINT;
 		}

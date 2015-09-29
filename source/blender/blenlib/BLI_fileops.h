@@ -58,8 +58,10 @@ int    BLI_exists(const char *path) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
 int    BLI_copy(const char *path, const char *to) ATTR_NONNULL();
 int    BLI_rename(const char *from, const char *to) ATTR_NONNULL();
 int    BLI_delete(const char *path, bool dir, bool recursive) ATTR_NONNULL();
+#if 0  /* Unused */
 int    BLI_move(const char *path, const char *to) ATTR_NONNULL();
 int    BLI_create_symlink(const char *path, const char *to) ATTR_NONNULL();
+#endif
 
 /* keep in sync with the definition of struct direntry in BLI_fileops_types.h */
 #ifdef WIN32
@@ -85,17 +87,25 @@ struct direntry;
 
 bool   BLI_is_dir(const char *path) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
 bool   BLI_is_file(const char *path) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
-void   BLI_dir_create_recursive(const char *dir) ATTR_NONNULL();
+bool   BLI_dir_create_recursive(const char *dir) ATTR_NONNULL();
 double BLI_dir_free_space(const char *dir) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
 char  *BLI_current_working_dir(char *dir, const size_t maxlen) ATTR_NONNULL();
 
 /* Filelist */
 
-unsigned int BLI_filelist_dir_contents(const char *dir, struct direntry **filelist);
+unsigned int BLI_filelist_dir_contents(const char *dir, struct direntry **r_filelist);
+void BLI_filelist_entry_duplicate(struct direntry *dst, const struct direntry *src);
 void BLI_filelist_duplicate(
-        struct direntry **dest_filelist, struct direntry *src_filelist, unsigned int nrentries,
-        void *(*dup_poin)(void *));
-void BLI_filelist_free(struct direntry *filelist, unsigned int nrentries, void (*free_poin)(void *));
+        struct direntry **dest_filelist, struct direntry * const src_filelist, const unsigned int nrentries);
+void BLI_filelist_entry_free(struct direntry *entry);
+void BLI_filelist_free(struct direntry *filelist, const unsigned int nrentries);
+
+void BLI_filelist_entry_size_to_string(const struct stat *st, const uint64_t sz, const bool compact, char r_size[]);
+void BLI_filelist_entry_mode_to_string(
+        const struct stat *st, const bool compact, char r_mode1[], char r_mode2[], char r_mode3[]);
+void BLI_filelist_entry_owner_to_string(const struct stat *st, const bool compact, char r_owner[]);
+void BLI_filelist_entry_datetime_to_string(
+        const struct stat *st, const int64_t ts, const bool compact, char r_time[], char r_date[]);
 
 /* Files */
 
@@ -120,7 +130,7 @@ bool   BLI_file_older(const char *file1, const char *file2) ATTR_WARN_UNUSED_RES
 
 /* read ascii file as lines, empty list if reading fails */
 struct LinkNode *BLI_file_read_as_lines(const char *file) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
-void   BLI_file_free_lines(struct LinkNode *lines) ATTR_NONNULL();
+void   BLI_file_free_lines(struct LinkNode *lines);
 
 /* this weirdo pops up in two places ... */
 #if !defined(WIN32)

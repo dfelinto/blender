@@ -125,6 +125,7 @@ set(SRC_SVM_HEADERS
 	svm/svm_value.h
 	svm/svm_vector_transform.h
 	svm/svm_voronoi.h
+	svm/svm_voxel.h
 	svm/svm_wave.h
 )
 
@@ -188,7 +189,7 @@ if(WITH_CYCLES_CUDA_BINARIES)
 	endif()
 
 	# CUDA version
-	execute_process (COMMAND ${CUDA_NVCC_EXECUTABLE} "--version" OUTPUT_VARIABLE NVCC_OUT)
+	execute_process(COMMAND ${CUDA_NVCC_EXECUTABLE} "--version" OUTPUT_VARIABLE NVCC_OUT)
 	string(REGEX REPLACE ".*release ([0-9]+)\\.([0-9]+).*" "\\1" CUDA_VERSION_MAJOR ${NVCC_OUT})
 	string(REGEX REPLACE ".*release ([0-9]+)\\.([0-9]+).*" "\\2" CUDA_VERSION_MINOR ${NVCC_OUT})
 	set(CUDA_VERSION "${CUDA_VERSION_MAJOR}${CUDA_VERSION_MINOR}")

@@ -112,7 +112,8 @@ void BLI_cleanup_dir(const char *relabase, char *dir) ATTR_NONNULL(2);
 /* doesn't touch trailing slash */
 void BLI_cleanup_path(const char *relabase, char *path) ATTR_NONNULL(2);
 
-void BLI_filename_make_safe(char *fname) ATTR_NONNULL(1);
+bool BLI_filename_make_safe(char *fname) ATTR_NONNULL(1);
+bool BLI_path_make_safe(char *path) ATTR_NONNULL(1);
 
 /* go back one directory */
 bool BLI_parent_dir(char *path) ATTR_NONNULL();
@@ -156,8 +157,6 @@ bool BLI_path_suffix(char *string, size_t maxlen, const char *suffix, const char
 #  define BLI_path_cmp strcmp
 #  define BLI_path_ncmp strncmp
 #endif
-
-void BLI_char_switch(char *string, char from, char to) ATTR_NONNULL();
 
 #ifdef WITH_ICONV
 void BLI_string_to_utf8(char *original, char *utf_8, const char *code);

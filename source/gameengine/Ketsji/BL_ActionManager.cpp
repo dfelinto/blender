@@ -26,6 +26,9 @@
 
 #include "BL_Action.h"
 #include "BL_ActionManager.h"
+#include "DNA_ID.h"
+
+#define IS_TAGGED(_id) ((_id) && (((ID *)_id)->flag & LIB_DOIT))
 
 BL_ActionManager::BL_ActionManager(class KX_GameObject *obj):
 	m_obj(obj),
@@ -63,6 +66,12 @@ float BL_ActionManager::GetActionFrame(short layer)
 	BL_Action *action = GetAction(layer);
 
 	return action ? action->GetFrame() : 0.f;
+}
+
+const char *BL_ActionManager::GetActionName(short layer)
+{
+	BL_Action *action = GetAction(layer);
+	return action ? action->GetName() : "";
 }
 
 void BL_ActionManager::SetActionFrame(short layer, float frame)
@@ -121,6 +130,18 @@ void BL_ActionManager::StopAction(short layer)
 	BL_Action *action = GetAction(layer);
 
 	if (action) action->Stop();
+}
+
+void BL_ActionManager::RemoveTaggedActions()
+{
+	for (BL_ActionMap::iterator it = m_layers.begin(); it != m_layers.end();) {
+		if (IS_TAGGED(it->second->GetAction())) {
+			delete it->second;
+			m_layers.erase(it++);
+		}
+		else
+			++it;
+	}
 }
 
 bool BL_ActionManager::IsActionDone(short layer)

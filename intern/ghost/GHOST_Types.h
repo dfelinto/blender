@@ -58,7 +58,8 @@ typedef struct {
 typedef enum {
 	GHOST_glStereoVisual = (1 << 0),
 	GHOST_glWarnSupport  = (1 << 1),
-	GHOST_glAlphaBackground = (1 << 2),
+	GHOST_glDebugContext = (1 << 2),
+	GHOST_glAlphaBackground = (1 << 3),
 } GHOST_GLFlags;
 
 

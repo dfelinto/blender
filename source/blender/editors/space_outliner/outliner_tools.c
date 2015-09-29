@@ -263,7 +263,90 @@ static void outliner_do_libdata_operation(bContext *C, Scene *scene, SpaceOops *
 	}
 }
 
-/* */
+/* ******************************************** */
+typedef enum eOutliner_PropSceneOps {
+	OL_SCENE_OP_DELETE = 1
+} eOutliner_PropSceneOps;
+
+static EnumPropertyItem prop_scene_op_types[] = {
+	{OL_SCENE_OP_DELETE, "DELETE", ICON_X, "Delete", ""},
+	{0, NULL, 0, NULL, NULL}
+};
+
+static bool outliner_do_scene_operation(
+        bContext *C, eOutliner_PropSceneOps event, ListBase *lb,
+        bool (*operation_cb)(bContext *, eOutliner_PropSceneOps, TreeElement *, TreeStoreElem *))
+{
+	TreeElement *te;
+	TreeStoreElem *tselem;
+	bool success = false;
+
+	for (te = lb->first; te; te = te->next) {
+		tselem = TREESTORE(te);
+		if (tselem->flag & TSE_SELECTED) {
+			if (operation_cb(C, event, te, tselem)) {
+				success = true;
+			}
+		}
+	}
+
+	return success;
+}
+
+static bool scene_cb(bContext *C, eOutliner_PropSceneOps event, TreeElement *UNUSED(te), TreeStoreElem *tselem)
+{
+	Scene *scene = (Scene *)tselem->id;
+
+	if (event == OL_SCENE_OP_DELETE) {
+		if (ED_screen_delete_scene(C, scene)) {
+			WM_event_add_notifier(C, NC_SCENE | NA_REMOVED, scene);
+		}
+		else {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+static int outliner_scene_operation_exec(bContext *C, wmOperator *op)
+{
+	SpaceOops *soops = CTX_wm_space_outliner(C);
+	const eOutliner_PropSceneOps event = RNA_enum_get(op->ptr, "type");
+
+	if (outliner_do_scene_operation(C, event, &soops->tree, scene_cb) == false) {
+		return OPERATOR_CANCELLED;
+	}
+
+	if (event == OL_SCENE_OP_DELETE) {
+		outliner_cleanup_tree(soops);
+		ED_undo_push(C, "Delete Scene(s)");
+	}
+	else {
+		BLI_assert(0);
+		return OPERATOR_CANCELLED;
+	}
+
+	return OPERATOR_FINISHED;
+}
+
+void OUTLINER_OT_scene_operation(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Outliner Scene Operation";
+	ot->idname = "OUTLINER_OT_scene_operation";
+	ot->description = "Context menu for scene operations";
+
+	/* callbacks */
+	ot->invoke = WM_menu_invoke;
+	ot->exec = outliner_scene_operation_exec;
+	ot->poll = ED_operator_outliner_active;
+
+	ot->flag = 0;
+
+	ot->prop = RNA_def_enum(ot->srna, "type", prop_scene_op_types, 0, "Scene Operation", "");
+}
+/* ******************************************** */
 
 static void object_select_cb(bContext *UNUSED(C), Scene *scene, TreeElement *te,
                              TreeStoreElem *UNUSED(tsep), TreeStoreElem *tselem)
@@ -1498,46 +1581,47 @@ static int outliner_data_operation_exec(bContext *C, wmOperator *op)
 			outliner_do_data_operation(soops, datalevel, event, &soops->tree, pchan_cb, NULL);
 			WM_event_add_notifier(C, NC_OBJECT | ND_POSE, NULL);
 			ED_undo_push(C, "PoseChannel operation");
-		}
+
 			break;
-		
+		}
 		case TSE_BONE:
 		{
 			outliner_do_data_operation(soops, datalevel, event, &soops->tree, bone_cb, NULL);
 			WM_event_add_notifier(C, NC_OBJECT | ND_POSE, NULL);
 			ED_undo_push(C, "Bone operation");
-		}
+
 			break;
-			
+		}
 		case TSE_EBONE:
 		{
 			outliner_do_data_operation(soops, datalevel, event, &soops->tree, ebone_cb, NULL);
 			WM_event_add_notifier(C, NC_OBJECT | ND_POSE, NULL);
 			ED_undo_push(C, "EditBone operation");
-		}
+
 			break;
-			
+		}
 		case TSE_SEQUENCE:
 		{
 			Scene *scene = CTX_data_scene(C);
 			outliner_do_data_operation(soops, datalevel, event, &soops->tree, sequence_cb, scene);
-		}
+
 			break;
-			
+		}
 		case TSE_GP_LAYER:
 		{
 			outliner_do_data_operation(soops, datalevel, event, &soops->tree, gp_layer_cb, NULL);
 			WM_event_add_notifier(C, NC_GPENCIL | ND_DATA, NULL);
 			ED_undo_push(C, "Grease Pencil Layer operation");
-		}
+
 			break;
-			
+		}
 		case TSE_RNA_STRUCT:
 			if (event == OL_DOP_SELECT_LINKED) {
 				outliner_do_data_operation(soops, datalevel, event, &soops->tree, data_select_linked_cb, C);
 			}
+
 			break;
-			
+
 		default:
 			BKE_report(op->reports, RPT_WARNING, "Not yet implemented");
 			break;
@@ -1592,8 +1676,12 @@ static int do_outliner_operation_event(bContext *C, Scene *scene, ARegion *ar, S
 		set_operation_types(soops, &soops->tree, &scenelevel, &objectlevel, &idlevel, &datalevel);
 		
 		if (scenelevel) {
-			//if (objectlevel || datalevel || idlevel) error("Mixed selection");
-			//else pupmenu("Scene Operations%t|Delete");
+			if (objectlevel || datalevel || idlevel) {
+				BKE_report(reports, RPT_WARNING, "Mixed selection");
+			}
+			else {
+				WM_operator_name_call(C, "OUTLINER_OT_scene_operation", WM_OP_INVOKE_REGION_WIN, NULL);
+			}
 		}
 		else if (objectlevel) {
 			WM_operator_name_call(C, "OUTLINER_OT_object_operation", WM_OP_INVOKE_REGION_WIN, NULL);

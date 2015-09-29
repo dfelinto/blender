@@ -33,7 +33,7 @@
 
 #ifdef WITH_DECKLINK
 
-#include "PyObjectPlus.h"
+#include "EXP_PyObjectPlus.h"
 #include <structmember.h>
 
 #include "DNA_image_types.h"

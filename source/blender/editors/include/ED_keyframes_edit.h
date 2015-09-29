@@ -41,12 +41,6 @@ struct Scene;
 /* ************************************************ */
 /* Common Macros and Defines */
 
-/* --------- BezTriple Selection ------------- */
-
-#define BEZ_SEL(bezt)    { (bezt)->f1 |=  SELECT; (bezt)->f2 |=  SELECT; (bezt)->f3 |=  SELECT; } (void)0
-#define BEZ_DESEL(bezt)  { (bezt)->f1 &= ~SELECT; (bezt)->f2 &= ~SELECT; (bezt)->f3 &= ~SELECT; } (void)0
-#define BEZ_INVSEL(bezt) { (bezt)->f1 ^=  SELECT; (bezt)->f2 ^=  SELECT; (bezt)->f3 ^=  SELECT; } (void)0
-
 /* --------- Tool Flags ------------ */
 
 /* bezt validation */
@@ -261,7 +255,7 @@ bool delete_fcurve_keys(struct FCurve *fcu);
 void clear_fcurve_keys(struct FCurve *fcu);
 void duplicate_fcurve_keys(struct FCurve *fcu);
 
-void clean_fcurve(struct FCurve *fcu, float thresh);
+void clean_fcurve(struct bAnimContext *ac, struct bAnimListElem *ale, float thresh, bool cleardefault);
 void smooth_fcurve(struct FCurve *fcu);
 void sample_fcurve(struct FCurve *fcu);
 

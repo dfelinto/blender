@@ -86,7 +86,9 @@ class VIEW3D_HT_header(Header):
             row = layout.row(align=True)
             row.prop(toolsettings, "use_snap", text="")
             row.prop(toolsettings, "snap_element", icon_only=True)
-            if snap_element != 'INCREMENT':
+            if snap_element == 'INCREMENT':
+                row.prop(toolsettings, "use_snap_grid_absolute", text="")
+            else:
                 row.prop(toolsettings, "snap_target", text="")
                 if obj:
                     if mode in {'OBJECT', 'POSE'} and snap_element != 'VOLUME':
@@ -728,6 +730,7 @@ class VIEW3D_MT_select_edit_curve(Menu):
         layout.operator("curve.select_random")
         layout.operator("curve.select_nth")
         layout.operator("curve.select_linked", text="Select Linked")
+        layout.operator("curve.select_similar", text="Select Similar")
 
         layout.separator()
 
@@ -758,6 +761,7 @@ class VIEW3D_MT_select_edit_surface(Menu):
         layout.operator("curve.select_random")
         layout.operator("curve.select_nth")
         layout.operator("curve.select_linked", text="Select Linked")
+        layout.operator("curve.select_similar", text="Select Similar")
 
         layout.separator()
 
@@ -1667,7 +1671,7 @@ class VIEW3D_MT_paint_weight(Menu):
         layout.operator("object.vertex_group_clean", text="Clean")
         layout.operator("object.vertex_group_quantize", text="Quantize")
         layout.operator("object.vertex_group_levels", text="Levels")
-        layout.operator("object.vertex_group_blend", text="Blend")
+        layout.operator("object.vertex_group_smooth", text="Smooth")
         props = layout.operator("object.data_transfer", text="Transfer Weights")
         props.use_reverse_transfer = True
         props.data_type = 'VGROUP_WEIGHTS'
@@ -1994,7 +1998,7 @@ class VIEW3D_MT_pose_group(Menu):
 
             layout.separator()
 
-            #layout.operator_context = 'INVOKE_AREA'
+            # layout.operator_context = 'INVOKE_AREA'
             layout.operator("pose.group_unassign")
             layout.operator("pose.group_remove")
 
@@ -2293,7 +2297,7 @@ class VIEW3D_MT_edit_mesh_vertices(Menu):
 
         layout.operator("mesh.blend_from_shape")
 
-        layout.operator("object.vertex_group_blend")
+        layout.operator("object.vertex_group_smooth")
         layout.operator("mesh.shape_propagate_to_all")
 
         layout.separator()
@@ -2468,6 +2472,20 @@ class VIEW3D_MT_edit_mesh_delete(Menu):
 
 class VIEW3D_MT_edit_mesh_showhide(ShowHideMenu, Menu):
     _operator_name = "mesh"
+
+
+class VIEW3D_MT_edit_gpencil_delete(Menu):
+    bl_label = "Delete"
+
+    def draw(self, context):
+        layout = self.layout
+
+        layout.operator_enum("gpencil.delete", "type")
+
+        layout.separator()
+
+        layout.operator("gpencil.dissolve")
+
 
 # Edit Curve
 # draw_curve is used by VIEW3D_MT_edit_curve and VIEW3D_MT_edit_surface
@@ -3274,7 +3292,7 @@ class VIEW3D_PT_background_image(Panel):
                         box.template_image(bg, "image", bg.image_user, compact=True)
                         has_bg = True
 
-                        if use_multiview and bg.view_axis in {'CAMERA','ALL'}:
+                        if use_multiview and bg.view_axis in {'CAMERA', 'ALL'}:
                             box.prop(bg.image, "use_multiview")
 
                             column = box.column()

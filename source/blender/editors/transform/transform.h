@@ -81,6 +81,7 @@ typedef struct TransSnap {
 	bool	project;
 	bool	snap_self;
 	bool	peel;
+	bool	snap_spatial_grid;
 	short  	status;
 	float	snapPoint[3]; /* snapping from this point */
 	float	snapTarget[3]; /* to this point */
@@ -104,8 +105,6 @@ typedef struct TransCon {
 	float mtx[3][3];     /* Matrix of the Constraint space                                            */
 	float imtx[3][3];    /* Inverse Matrix of the Constraint space                                    */
 	float pmtx[3][3];    /* Projection Constraint Matrix (same as imtx with some axis == 0)           */
-	float center[3];     /* transformation center to define where to draw the view widget
-	                      * ALWAYS in global space. Unlike the transformation center                  */
 	int   imval[2];	     /* initial mouse value for visual calculation                                */
 	                     /* the one in TransInfo is not garanty to stay the same (Rotates change it)  */
 	int   mode;          /* Mode flags of the Constraint                                              */
@@ -236,6 +235,10 @@ typedef struct SlideOrigData {
 	/* array size of 'layer_math_map_num'
 	 * maps TransDataVertSlideVert.cd_group index to absolute CustomData layer index */
 	int *layer_math_map;
+
+	/* array of slide vert data especially for mirror verts */
+	TransDataGenericSlideVert *sv_mirror;
+	int totsv_mirror;
 } SlideOrigData;
 
 typedef struct EdgeSlideData {
@@ -357,12 +360,16 @@ typedef struct TransInfo {
 	eRedrawFlag redraw;         /* redraw flag                          */
 	float		prop_size;		/* proportional circle radius           */
 	char		proptext[20];	/* proportional falloff text			*/
-	float       center[3];      /* center of transformation             */
+	float       aspect[3];      /* spaces using non 1:1 aspect, (uv's, f-curve, movie-clip... etc)
+	                             * use for conversion and snapping. */
+	float       center[3];      /* center of transformation (in local-space) */
+	float       center_global[3];  /* center of transformation (in global-space) */
 	float       center2d[2];    /* center in screen coordinates         */
 	int         imval[2];       /* initial mouse position               */
 	short		event_type;		/* event->type used to invoke transform */
 	short       idx_max;		/* maximum index on the input vector	*/
 	float		snap[3];		/* Snapping Gears						*/
+	float		snap_spatial[3]; /* Spatial snapping gears(even when rotating, scaling... etc) */
 	char		frame_side;		/* Mouse side of the cfra, 'L', 'R' or 'B' */
 
 	float		viewmat[4][4];	/* copy from G.vd, prevents feedback,   */
@@ -542,6 +549,7 @@ void transformApply(struct bContext *C, TransInfo *t);
 int  transformEnd(struct bContext *C, TransInfo *t);
 
 void setTransformViewMatrices(TransInfo *t);
+void setTransformViewAspect(TransInfo *t, float r_aspect[3]);
 void convertViewVec(TransInfo *t, float r_vec[3], int dx, int dy);
 void projectIntViewEx(TransInfo *t, const float vec[3], int adr[2], const eV3DProjTest flag);
 void projectIntView(TransInfo *t, const float vec[3], int adr[2]);
@@ -691,6 +699,7 @@ void restoreTransObjects(TransInfo *t);
 void recalcData(TransInfo *t);
 
 void calculateCenter2D(TransInfo *t);
+void calculateCenterGlobal(TransInfo *t);
 
 void calculateCenter(TransInfo *t);
 
@@ -706,6 +715,8 @@ void calculatePropRatio(TransInfo *t);
 
 void getViewVector(TransInfo *t, float coord[3], float vec[3]);
 
+void transform_data_ext_rotate(TransData *td, float mat[3][3], bool use_drot);
+
 /*********************** Transform Orientations ******************************/
 
 void initTransformOrientation(struct bContext *C, TransInfo *t);
@@ -716,7 +727,7 @@ bool createSpaceNormalTangent(float mat[3][3], const float normal[3], const floa
 
 struct TransformOrientation *addMatrixSpace(struct bContext *C, float mat[3][3],
                                             const char *name, const bool overwrite);
-bool applyTransformOrientation(const struct bContext *C, float mat[3][3], char r_name[64]);
+bool applyTransformOrientation(const struct bContext *C, float mat[3][3], char r_name[64], int index);
 
 #define ORIENTATION_NONE	0
 #define ORIENTATION_NORMAL	1
@@ -724,7 +735,8 @@ bool applyTransformOrientation(const struct bContext *C, float mat[3][3], char r
 #define ORIENTATION_EDGE	3
 #define ORIENTATION_FACE	4
 
-int getTransformOrientation(const struct bContext *C, float normal[3], float plane[3], const bool activeOnly);
+int getTransformOrientation_ex(const struct bContext *C, float normal[3], float plane[3], const short around);
+int getTransformOrientation(const struct bContext *C, float normal[3], float plane[3]);
 
 void freeEdgeSlideTempFaces(EdgeSlideData *sld);
 void freeEdgeSlideVerts(TransInfo *t);

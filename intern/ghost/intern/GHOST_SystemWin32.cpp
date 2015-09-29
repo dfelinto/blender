@@ -244,7 +244,8 @@ GHOST_IWindow *GHOST_SystemWin32::createWindow(
 	            ((glSettings.flags & GHOST_glWarnSupport) != 0),
 				((glSettings.flags & GHOST_glAlphaBackground) != 0),
 		        glSettings.numOfAASamples,
-		        parentWindow);
+		        parentWindow,
+		        ((glSettings.flags & GHOST_glDebugContext) != 0));
 
 	if (window->getValid()) {
 		// Store the pointer to the window

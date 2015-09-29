@@ -44,7 +44,6 @@ incs = [
     '#intern/memutil',
     '#intern/moto/include',
     '#intern/container',
-    '#intern/audaspace/intern',
     '#source/gameengine/Rasterizer/RAS_OpenGLRasterizer',
     '#source/gameengine/BlenderRoutines',
     '#source/gameengine/Converter',
@@ -53,6 +52,7 @@ incs = [
     '#source/blender/blenfont',
     '#source/blender/blenlib',
     '#source/blender/blenkernel',
+    '#source/blender/blentranslation',
     '#source/blender',
     '#source/blender/include',
     '#source/blender/makesdna',
@@ -75,11 +75,16 @@ incs = [
 incs.append(env['BF_PTHREADS_INC'])
 incs.append(env['BF_BOOST_INC'])
 
-defs = env['BF_GL_DEFINITIONS']
+defs = []
+defs += env['BF_GL_DEFINITIONS']
 
 if env['WITH_BF_PYTHON']:
     incs += Split(env['BF_PYTHON_INC'])
     defs.append('WITH_PYTHON')
+
+if env['WITH_BF_AUDASPACE']:
+    defs += env['BF_AUDASPACE_DEF']
+    incs.append(env['BF_AUDASPACE_C_INC'])
 
 if env['WITH_BF_FFMPEG']:
     defs.append('WITH_FFMPEG')

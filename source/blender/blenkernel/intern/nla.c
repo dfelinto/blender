@@ -45,7 +45,7 @@
 #include "BLI_string.h"
 #include "BLI_ghash.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "DNA_anim_types.h"
 #include "DNA_scene_types.h"
@@ -59,7 +59,7 @@
 #include "BKE_library.h"
 
 #ifdef WITH_AUDASPACE
-#  include "AUD_C-API.h"
+#  include AUD_SPECIAL_H
 #endif
 
 #include "RNA_access.h"

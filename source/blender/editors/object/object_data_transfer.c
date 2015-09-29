@@ -183,7 +183,8 @@ static EnumPropertyItem *dt_layers_select_src_itemf(
 }
 
 /* Note: DT_layers_select_dst_items enum is from rna_modifier.c */
-static EnumPropertyItem *dt_layers_select_dst_itemf(bContext *C, PointerRNA *ptr, PropertyRNA *UNUSED(prop), bool *r_free)
+static EnumPropertyItem *dt_layers_select_dst_itemf(
+        bContext *C, PointerRNA *ptr, PropertyRNA *UNUSED(prop), bool *r_free)
 {
 	EnumPropertyItem *item = NULL;
 	int totitem = 0;
@@ -206,6 +207,26 @@ static EnumPropertyItem *dt_layers_select_dst_itemf(bContext *C, PointerRNA *ptr
 	*r_free = true;
 
 	return item;
+}
+
+static EnumPropertyItem *dt_layers_select_itemf(bContext *C, PointerRNA *ptr, PropertyRNA *prop, bool *r_free)
+{
+	const bool reverse_transfer = RNA_boolean_get(ptr, "use_reverse_transfer");
+
+	if (STREQ(RNA_property_identifier(prop), "layers_select_dst")) {
+		if (reverse_transfer) {
+			return dt_layers_select_src_itemf(C, ptr, prop, r_free);
+		}
+		else {
+			return dt_layers_select_dst_itemf(C, ptr, prop, r_free);
+		}
+	}
+	else if (reverse_transfer) {
+		return dt_layers_select_dst_itemf(C, ptr, prop, r_free);
+	}
+	else {
+		return dt_layers_select_src_itemf(C, ptr, prop, r_free);
+	}
 }
 
 /* Note: DT_mix_mode_items enum is from rna_modifier.c */
@@ -329,6 +350,8 @@ static int data_transfer_exec(bContext *C, wmOperator *op)
 
 	bool changed = false;
 
+	const bool is_frozen = RNA_boolean_get(op->ptr, "use_freeze");
+
 	const bool reverse_transfer = RNA_boolean_get(op->ptr, "use_reverse_transfer");
 
 	const int data_type = RNA_enum_get(op->ptr, "data_type");
@@ -339,6 +362,7 @@ static int data_transfer_exec(bContext *C, wmOperator *op)
 	const int map_loop_mode = RNA_enum_get(op->ptr, "loop_mapping");
 	const int map_poly_mode = RNA_enum_get(op->ptr, "poly_mapping");
 
+	const bool use_auto_transform = RNA_boolean_get(op->ptr, "use_auto_transform");
 	const bool use_object_transform = RNA_boolean_get(op->ptr, "use_object_transform");
 	const bool use_max_distance = RNA_boolean_get(op->ptr, "use_max_distance");
 	const float max_distance = use_max_distance ? RNA_float_get(op->ptr, "max_distance") : FLT_MAX;
@@ -355,7 +379,13 @@ static int data_transfer_exec(bContext *C, wmOperator *op)
 	const float mix_factor = RNA_float_get(op->ptr, "mix_factor");
 
 	SpaceTransform space_transform_data;
-	SpaceTransform *space_transform = use_object_transform ? &space_transform_data : NULL;
+	SpaceTransform *space_transform = (use_object_transform && !use_auto_transform) ? &space_transform_data : NULL;
+
+	if (is_frozen) {
+		BKE_report(op->reports, RPT_INFO,
+		           "Operator is frozen, changes to its settings won't take effect until you unfreeze it");
+		return OPERATOR_FINISHED;
+	}
 
 	if (reverse_transfer && ((ID *)(ob_src->data))->lib) {
 		/* Do not transfer to linked data, not supported. */
@@ -384,7 +414,8 @@ static int data_transfer_exec(bContext *C, wmOperator *op)
 			if (BKE_object_data_transfer_mesh(
 			        scene, ob_src, ob_dst, data_type, use_create,
 			        map_vert_mode, map_edge_mode, map_loop_mode, map_poly_mode,
-			        space_transform, max_distance, ray_radius, islands_precision,
+			        space_transform, use_auto_transform,
+			        max_distance, ray_radius, islands_precision,
 			        layers_select_src, layers_select_dst,
 			        mix_mode, mix_factor, NULL, false, op->reports))
 			{
@@ -428,9 +459,13 @@ static bool data_transfer_draw_check_prop(PointerRNA *ptr, PropertyRNA *prop)
 
 	const char *prop_id = RNA_property_identifier(prop);
 	const int data_type = RNA_enum_get(ptr, "data_type");
+	bool use_auto_transform = false;
 	bool use_max_distance = false;
 	bool use_modifier = false;
 
+	if ((prop_other = RNA_struct_find_property(ptr, "use_auto_transform"))) {
+		use_auto_transform = RNA_property_boolean_get(ptr, prop_other);
+	}
 	if ((prop_other = RNA_struct_find_property(ptr, "use_max_distance"))) {
 		use_max_distance = RNA_property_boolean_get(ptr, prop_other);
 	}
@@ -447,6 +482,9 @@ static bool data_transfer_draw_check_prop(PointerRNA *ptr, PropertyRNA *prop)
 		return false;
 	}
 
+	if (STREQ(prop_id, "use_object_transform") && use_auto_transform) {
+		return false;
+	}
 	if (STREQ(prop_id, "max_distance") && !use_max_distance) {
 		return false;
 	}
@@ -513,7 +551,11 @@ void OBJECT_OT_data_transfer(wmOperatorType *ot)
 	/* Properties.*/
 	prop = RNA_def_boolean(ot->srna, "use_reverse_transfer", false, "Reverse Transfer",
 	                       "Transfer from selected objects to active one");
-	RNA_def_property_flag(prop, PROP_HIDDEN);
+	RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
+
+	RNA_def_boolean(ot->srna, "use_freeze", false, "Freeze Operator",
+	                "Prevent changes to settings to re-run the operator, "
+	                "handy to change several things at once with heavy geometry");
 
 	/* Data type to transfer. */
 	ot->prop = RNA_def_enum(ot->srna, "data_type", DT_layer_items, 0, "Data Type", "Which data to transfer");
@@ -530,6 +572,9 @@ void OBJECT_OT_data_transfer(wmOperatorType *ot)
 	             "Method used to map source faces to destination ones");
 
 	/* Mapping options and filtering. */
+	RNA_def_boolean(ot->srna, "use_auto_transform", false, "Auto Transform",
+	                "Automatically compute transformation to get the best possible match between source and "
+	                "destination meshes (WARNING: results will never be as good as manual matching of objects)");
 	RNA_def_boolean(ot->srna, "use_object_transform", true, "Object Transform",
 	                "Evaluate source and destination meshes in global space");
 	RNA_def_boolean(ot->srna, "use_max_distance", false, "Only Neighbor Geometry",
@@ -550,11 +595,11 @@ void OBJECT_OT_data_transfer(wmOperatorType *ot)
 	/* How to handle multi-layers types of data. */
 	prop = RNA_def_enum(ot->srna, "layers_select_src", DT_layers_select_src_items, DT_LAYERS_ACTIVE_SRC,
 	                    "Source Layers Selection", "Which layers to transfer, in case of multi-layers types");
-	RNA_def_property_enum_funcs_runtime(prop, NULL, NULL, dt_layers_select_src_itemf);
+	RNA_def_property_enum_funcs_runtime(prop, NULL, NULL, dt_layers_select_itemf);
 
 	prop = RNA_def_enum(ot->srna, "layers_select_dst", DT_layers_select_dst_items, DT_LAYERS_ACTIVE_DST,
 	                    "Destination Layers Matching", "How to match source and destination layers");
-	RNA_def_property_enum_funcs_runtime(prop, NULL, NULL, dt_layers_select_dst_itemf);
+	RNA_def_property_enum_funcs_runtime(prop, NULL, NULL, dt_layers_select_itemf);
 
 	prop = RNA_def_enum(ot->srna, "mix_mode", DT_mix_mode_items, CDT_MIX_TRANSFER, "Mix Mode",
 	                   "How to affect destination elements with source values");

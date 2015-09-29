@@ -43,7 +43,7 @@
 #include "BLI_utildefines.h"
 #include "BLI_math.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_context.h"
 #include "BKE_global.h"
@@ -668,7 +668,7 @@ static uiBut *ui_item_with_label(uiLayout *layout, uiBlock *block, const char *n
 		if (RNA_struct_is_a(ptr->type, &RNA_KeyMapItem)) {
 			char buf[128];
 
-			WM_keymap_item_to_string(ptr->data, buf, sizeof(buf));
+			WM_keymap_item_to_string(ptr->data, false, sizeof(buf), buf);
 
 			but = uiDefButR_prop(block, UI_BTYPE_HOTKEY_EVENT, 0, buf, x, y, w, h, ptr, prop, 0, 0, 0, -1, -1, NULL);
 			UI_but_func_set(but, ui_keymap_but_cb, but, NULL);
@@ -1246,7 +1246,10 @@ void uiItemFullR(uiLayout *layout, PointerRNA *ptr, PropertyRNA *prop, int index
 	}
 
 	/* menus and pie-menus don't show checkbox without this */
-	if (ELEM(layout->root->type, UI_LAYOUT_MENU, UI_LAYOUT_PIEMENU)) {
+	if ((layout->root->type == UI_LAYOUT_MENU) ||
+	    /* use checkboxes only as a fallback in pie-menu's, when no icon is defined */
+	    ((layout->root->type == UI_LAYOUT_PIEMENU) && (icon == ICON_NONE)))
+	{
 		if (type == PROP_BOOLEAN && ((is_array == false) || (index != RNA_NO_INDEX))) {
 			if (is_array) icon = (RNA_property_boolean_get_index(ptr, prop, index)) ? ICON_CHECKBOX_HLT : ICON_CHECKBOX_DEHLT;
 			else icon = (RNA_property_boolean_get(ptr, prop)) ? ICON_CHECKBOX_HLT : ICON_CHECKBOX_DEHLT;
@@ -1266,7 +1269,7 @@ void uiItemFullR(uiLayout *layout, PointerRNA *ptr, PropertyRNA *prop, int index
 	toggle = (flag & UI_ITEM_R_TOGGLE) != 0;
 	expand = (flag & UI_ITEM_R_EXPAND) != 0;
 	icon_only = (flag & UI_ITEM_R_ICON_ONLY) != 0;
-	no_bg = (flag & UI_ITEM_R_NO_BG);
+	no_bg = (flag & UI_ITEM_R_NO_BG) != 0;
 
 	/* get size */
 	ui_item_rna_size(layout, name, icon, ptr, prop, index, icon_only, &w, &h);
@@ -1339,11 +1342,23 @@ void uiItemR(uiLayout *layout, PointerRNA *ptr, const char *propname, int flag, 
 	uiItemFullR(layout, ptr, prop, RNA_NO_INDEX, 0, flag, name, icon);
 }
 
+void uiItemEnumR_prop(uiLayout *layout, const char *name, int icon, struct PointerRNA *ptr, PropertyRNA *prop, int value)
+{
+	if (RNA_property_type(prop) != PROP_ENUM) {
+		const char *propname = RNA_property_identifier(prop);
+		ui_item_disabled(layout, propname);
+		RNA_warning("property not an enum: %s.%s", RNA_struct_identifier(ptr->type), propname);
+		return;
+	}
+
+	uiItemFullR(layout, ptr, prop, RNA_ENUM_VALUE, value, 0, name, icon);
+}
+
 void uiItemEnumR(uiLayout *layout, const char *name, int icon, struct PointerRNA *ptr, const char *propname, int value)
 {
 	PropertyRNA *prop = RNA_struct_find_property(ptr, propname);
 
-	if (!prop || RNA_property_type(prop) != PROP_ENUM) {
+	if (prop == NULL) {
 		ui_item_disabled(layout, propname);
 		RNA_warning("property not found: %s.%s", RNA_struct_identifier(ptr->type), propname);
 		return;
@@ -1419,7 +1434,7 @@ void uiItemsEnumR(uiLayout *layout, struct PointerRNA *ptr, const char *propname
 
 		for (i = 0; i < totitem; i++) {
 			if (item[i].identifier[0]) {
-				uiItemEnumR(column, item[i].name, ICON_NONE, ptr, propname, item[i].value);
+				uiItemEnumR_prop(column, item[i].name, item[i].icon, ptr, prop, item[i].value);
 				ui_but_tip_from_enum_item(block->buttons.last, &item[i]);
 			}
 			else {
@@ -1921,7 +1936,7 @@ void uiItemMenuEnumO(uiLayout *layout, bContext *C, const char *opname, const ch
 	{
 		char keybuf[128];
 		if (WM_key_event_operator_string(C, ot->idname, layout->root->opcontext, NULL, false,
-		                                 keybuf, sizeof(keybuf)))
+		                                 sizeof(keybuf), keybuf))
 		{
 			ui_but_add_shortcut(but, keybuf, false);
 		}
@@ -3372,6 +3387,10 @@ void uiLayoutOperatorButs(
 
 		/* XXX, could give some nicer feedback or not show redo panel at all? */
 		uiItemL(layout, IFACE_("* Redo Unsupported *"), ICON_NONE);
+	}
+	else {
+		/* useful for macros where only one of the steps can't be re-done */
+		UI_block_lock_clear(uiLayoutGetBlock(layout));
 	}
 
 	/* menu */

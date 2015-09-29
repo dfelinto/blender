@@ -119,6 +119,17 @@ static FCurve *rna_Action_fcurve_new(bAction *act, ReportList *reports, const ch
 	return verify_fcurve(act, group, NULL, data_path, index, 1);
 }
 
+static FCurve *rna_Action_fcurve_find(bAction *act, ReportList *reports, const char *data_path, int index)
+{
+	if (data_path[0] == '\0') {
+		BKE_report(reports, RPT_ERROR, "F-Curve data path empty, invalid argument");
+		return NULL;
+	}
+
+	/* Returns NULL if not found. */
+	return list_find_fcurve(&act->curves, data_path, index);
+}
+
 static void rna_Action_fcurve_remove(bAction *act, ReportList *reports, PointerRNA *fcu_ptr)
 {
 	FCurve *fcu = fcu_ptr->data;
@@ -576,8 +587,9 @@ static void rna_def_action_fcurves(BlenderRNA *brna, PropertyRNA *cprop)
 	RNA_def_struct_sdna(srna, "bAction");
 	RNA_def_struct_ui_text(srna, "Action F-Curves", "Collection of action F-Curves");
 
+	/* Action.fcurves.new(...) */
 	func = RNA_def_function(srna, "new", "rna_Action_fcurve_new");
-	RNA_def_function_ui_description(func, "Add a keyframe to the F-Curve");
+	RNA_def_function_ui_description(func, "Add an F-Curve to the action");
 	RNA_def_function_flag(func, FUNC_USE_REPORTS);
 	parm = RNA_def_string(func, "data_path", NULL, 0, "Data Path", "F-Curve data path to use");
 	RNA_def_property_flag(parm, PROP_REQUIRED);
@@ -587,7 +599,19 @@ static void rna_def_action_fcurves(BlenderRNA *brna, PropertyRNA *cprop)
 	parm = RNA_def_pointer(func, "fcurve", "FCurve", "", "Newly created F-Curve");
 	RNA_def_function_return(func, parm);
 
+	/* Action.fcurves.find(...) */
+	func = RNA_def_function(srna, "find", "rna_Action_fcurve_find");
+	RNA_def_function_ui_description(func, "Find an F-Curve. Note that this function performs a linear scan "
+	                                "of all F-Curves in the action.");
+	RNA_def_function_flag(func, FUNC_USE_REPORTS);
+	parm = RNA_def_string(func, "data_path", NULL, 0, "Data Path", "F-Curve data path");
+	RNA_def_property_flag(parm, PROP_REQUIRED);
+	RNA_def_int(func, "index", 0, 0, INT_MAX, "Index", "Array index", 0, INT_MAX);
 
+	parm = RNA_def_pointer(func, "fcurve", "FCurve", "", "The found F-Curve, or None if it doesn't exist");
+	RNA_def_function_return(func, parm);
+
+	/* Action.fcurves.remove(...) */
 	func = RNA_def_function(srna, "remove", "rna_Action_fcurve_remove");
 	RNA_def_function_ui_description(func, "Remove action group");
 	RNA_def_function_flag(func, FUNC_USE_REPORTS);
@@ -626,13 +650,14 @@ static void rna_def_action_pose_markers(BlenderRNA *brna, PropertyRNA *cprop)
 	
 	prop = RNA_def_property(srna, "active", PROP_POINTER, PROP_NONE);
 	RNA_def_property_struct_type(prop, "TimelineMarker");
-	RNA_def_property_flag(prop, PROP_EDITABLE);
+	RNA_def_property_flag(prop, PROP_EDITABLE | PROP_LIB_EXCEPTION);
 	RNA_def_property_pointer_funcs(prop, "rna_Action_active_pose_marker_get",
 	                               "rna_Action_active_pose_marker_set", NULL, NULL);
 	RNA_def_property_ui_text(prop, "Active Pose Marker", "Active pose marker for this action");
 	
 	prop = RNA_def_property(srna, "active_index", PROP_INT, PROP_UNSIGNED);
 	RNA_def_property_int_sdna(prop, NULL, "active_marker");
+	RNA_def_property_flag(prop, PROP_LIB_EXCEPTION);
 	RNA_def_property_int_funcs(prop, "rna_Action_active_pose_marker_index_get",
 	                           "rna_Action_active_pose_marker_index_set", "rna_Action_active_pose_marker_index_range");
 	RNA_def_property_ui_text(prop, "Active Pose Marker Index", "Index of active pose marker");
@@ -664,6 +689,7 @@ static void rna_def_action(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "pose_markers", PROP_COLLECTION, PROP_NONE);
 	RNA_def_property_collection_sdna(prop, NULL, "markers", NULL);
 	RNA_def_property_struct_type(prop, "TimelineMarker");
+	RNA_def_property_flag(prop, PROP_LIB_EXCEPTION); /* T45689 - so that the list isn't greyed out; adding/removing is still banned though */
 	RNA_def_property_ui_text(prop, "Pose Markers", "Markers specific to this action, for labeling poses");
 	rna_def_action_pose_markers(brna, prop);
 	

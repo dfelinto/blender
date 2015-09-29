@@ -252,11 +252,11 @@ static void draw_movieclip_notes(SpaceClip *sc, ARegion *ar)
 	MovieClip *clip = ED_space_clip_get_clip(sc);
 	MovieTracking *tracking = &clip->tracking;
 	char str[256] = {0};
-	bool block = false;
+	bool full_redraw = false;
 
 	if (tracking->stats) {
 		BLI_strncpy(str, tracking->stats->message, sizeof(str));
-		block = true;
+		full_redraw = true;
 	}
 	else {
 		if (sc->flag & SC_LOCK_SELECTION)
@@ -265,7 +265,7 @@ static void draw_movieclip_notes(SpaceClip *sc, ARegion *ar)
 
 	if (str[0]) {
 		float fill_color[4] = {0.0f, 0.0f, 0.0f, 0.6f};
-		ED_region_info_draw(ar, str, block, fill_color);
+		ED_region_info_draw(ar, str, fill_color, full_redraw);
 	}
 }
 
@@ -520,7 +520,7 @@ static void draw_marker_outline(SpaceClip *sc, MovieTrackingTrack *track, MovieT
 
 	/* pattern and search outline */
 	glPushMatrix();
-	glTranslatef(marker_pos[0], marker_pos[1], 0);
+	glTranslate2fv(marker_pos);
 
 	if (!tiny)
 		glLineWidth(3.0f);
@@ -652,7 +652,7 @@ static void draw_marker_areas(SpaceClip *sc, MovieTrackingTrack *track, MovieTra
 
 	/* pattern */
 	glPushMatrix();
-	glTranslatef(marker_pos[0], marker_pos[1], 0);
+	glTranslate2fv(marker_pos);
 
 	if (tiny) {
 		glLineStipple(3, 0xaaaa);
@@ -805,7 +805,7 @@ static void draw_marker_slide_zones(SpaceClip *sc, MovieTrackingTrack *track, Mo
 	}
 
 	glPushMatrix();
-	glTranslatef(marker_pos[0], marker_pos[1], 0);
+	glTranslate2fv(marker_pos);
 
 	dx = 6.0f / width / sc->zoom;
 	dy = 6.0f / height / sc->zoom;
@@ -1786,7 +1786,7 @@ void clip_draw_grease_pencil(bContext *C, int onlyv2d)
 					int framenr = ED_space_clip_get_clip_frame_number(sc);
 					MovieTrackingMarker *marker = BKE_tracking_marker_get(track, framenr);
 
-					glTranslatef(marker->pos[0], marker->pos[1], 0.0f);
+					glTranslate2fv(marker->pos);
 				}
 			}
 

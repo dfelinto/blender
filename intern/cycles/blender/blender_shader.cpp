@@ -22,6 +22,7 @@
 #include "scene.h"
 #include "shader.h"
 
+#include "blender_texture.h"
 #include "blender_sync.h"
 #include "blender_util.h"
 
@@ -589,14 +590,17 @@ static ShaderNode *add_node(Scene *scene,
 
 			/* TODO(sergey): Does not work properly when we change builtin type. */
 			if(b_image.is_updated()) {
-				scene->image_manager->tag_reload_image(image->filename,
-				                                       image->builtin_data,
-				                                       (InterpolationType)b_image_node.interpolation());
+				scene->image_manager->tag_reload_image(
+				        image->filename,
+				        image->builtin_data,
+				        (InterpolationType)b_image_node.interpolation(),
+				        (ExtensionType)b_image_node.extension());
 			}
 		}
 		image->color_space = ImageTextureNode::color_space_enum[(int)b_image_node.color_space()];
 		image->projection = ImageTextureNode::projection_enum[(int)b_image_node.projection()];
 		image->interpolation = (InterpolationType)b_image_node.interpolation();
+		image->extension = (ExtensionType)b_image_node.extension();
 		image->projection_blend = b_image_node.projection_blend();
 		get_tex_mapping(&image->tex_mapping, b_image_node.texture_mapping());
 		node = image;
@@ -629,7 +633,8 @@ static ShaderNode *add_node(Scene *scene,
 			if(b_image.is_updated()) {
 				scene->image_manager->tag_reload_image(env->filename,
 				                                       env->builtin_data,
-				                                       INTERPOLATION_LINEAR);
+				                                       INTERPOLATION_LINEAR,
+				                                       EXTENSION_REPEAT);
 			}
 		}
 		env->color_space = EnvironmentTextureNode::color_space_enum[(int)b_env_node.color_space()];
@@ -735,6 +740,36 @@ static ShaderNode *add_node(Scene *scene,
 		uvm->attribute = b_uvmap_node.uv_map();
 		uvm->from_dupli = b_uvmap_node.from_dupli();
 		node = uvm;
+	}
+	else if(b_node.is_a(&RNA_ShaderNodeTexPointDensity)) {
+		BL::ShaderNodeTexPointDensity b_point_density_node(b_node);
+		PointDensityTextureNode *point_density = new PointDensityTextureNode();
+		point_density->filename = b_point_density_node.name();
+		point_density->space =
+		        PointDensityTextureNode::space_enum[(int)b_point_density_node.space()];
+		point_density->interpolation =
+		        (InterpolationType)b_point_density_node.interpolation();
+		point_density->builtin_data = b_point_density_node.ptr.data;
+
+		/* Transformation form world space to texture space. */
+		BL::Object b_ob(b_point_density_node.object());
+		if(b_ob) {
+			float3 loc, size;
+			point_density_texture_space(b_point_density_node, loc, size);
+			point_density->tfm =
+			        transform_translate(-loc) * transform_scale(size) *
+			        transform_inverse(get_transform(b_ob.matrix_world()));
+		}
+
+		/* TODO(sergey): Use more proper update flag. */
+		if(true) {
+			scene->image_manager->tag_reload_image(
+			        point_density->filename,
+			        point_density->builtin_data,
+			        point_density->interpolation,
+			        EXTENSION_REPEAT);
+		}
+		node = point_density;
 	}
 
 	if(node)
@@ -1141,7 +1176,7 @@ void BlenderSync::sync_world(bool update_all)
 	PointerRNA cscene = RNA_pointer_get(&b_scene.ptr, "cycles");
 
 	/* when doing preview render check for BI's transparency settings,
-	 * this is so because bledner's preview render routines are not able
+	 * this is so because Blender's preview render routines are not able
 	 * to tweak all cycles's settings depending on different circumstances
 	 */
 	if(b_engine.is_preview() == false)

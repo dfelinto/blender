@@ -248,11 +248,12 @@ if(WITH_CODEC_FFMPEG)
 endif()
 
 if(WITH_AUDASPACE)
-	list(APPEND INC
-		../../../intern/audaspace/intern
-		../../../intern/audaspace/FX
+	add_definitions(${AUDASPACE_DEFINITIONS})
+
+	list(APPEND INC_SYS
+		${AUDASPACE_C_INCLUDE_DIRS}
+		${AUDASPACE_PY_INCLUDE_DIRS}
 	)
-	add_definitions(-DWITH_AUDASPACE)
 endif()
 
 if(WITH_BULLET)

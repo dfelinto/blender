@@ -648,7 +648,6 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *main)
 		while (ob) {
 			if (ob->transflag & 1) {
 				ob->transflag -= 1;
-				//ob->ipoflag |= OB_OFFS_OB;
 			}
 			ob = ob->id.next;
 		}
@@ -685,7 +684,6 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *main)
 		}
 		ob = main->object.first;
 		while (ob) {
-			//ob->ipoflag |= OB_OFFS_PARENT;
 			if (ob->dt == 0)
 				ob->dt = OB_SOLID;
 			ob = ob->id.next;
@@ -2401,8 +2399,9 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *main)
 								data->flag |= MINMAX_STICKY;
 							else
 								data->flag &= ~MINMAX_STICKY;
-						}
+
 							break;
+						}
 						case CONSTRAINT_TYPE_ROTLIKE:
 						{
 							bRotateLikeConstraint *data = curcon->data;
@@ -2410,8 +2409,9 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *main)
 							/* version patch from buttons_object.c */
 							if (data->flag == 0)
 								data->flag = ROTLIKE_X|ROTLIKE_Y|ROTLIKE_Z;
-						}
+
 							break;
+						}
 					}
 				}
 			}

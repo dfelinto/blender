@@ -45,7 +45,8 @@
 #include "BLI_blenlib.h"
 
 #ifdef WITH_AUDASPACE
-#  include "AUD_C-API.h"
+#  include AUD_DEVICE_H
+#  include AUD_SPECIAL_H
 #endif
 
 #include "BLI_utildefines.h"
@@ -133,7 +134,7 @@ static int write_audio_frame(FFMpegContext *context)
 	pkt.size = 0;
 	pkt.data = NULL;
 
-	AUD_readDevice(context->audio_mixdown_device, context->audio_input_buffer, context->audio_input_samples);
+	AUD_Device_read(context->audio_mixdown_device, context->audio_input_buffer, context->audio_input_samples);
 	context->audio_time += (double) context->audio_input_samples / (double) c->sample_rate;
 
 #ifdef FFMPEG_HAVE_ENCODE_AUDIO2
@@ -745,7 +746,7 @@ static AVStream *alloc_audio_stream(FFMpegContext *context, RenderData *rd, int 
 	av_dict_free(&opts);
 
 	/* need to prevent floating point exception when using vorbis audio codec,
-	 * initialize this value in the same way as it's done in FFmpeg iteslf (sergey) */
+	 * initialize this value in the same way as it's done in FFmpeg itself (sergey) */
 	st->codec->time_base.num = 1;
 	st->codec->time_base.den = st->codec->sample_rate;
 
@@ -893,7 +894,7 @@ static int start_ffmpeg_impl(FFMpegContext *context, struct RenderData *rd, int 
 			break;
 		case FFMPEG_MPEG4:
 		default:
-			fmt->video_codec = AV_CODEC_ID_MPEG4;
+			fmt->video_codec = context->ffmpeg_codec;
 			break;
 	}
 	if (fmt->video_codec == AV_CODEC_ID_DVVIDEO) {
@@ -1210,7 +1211,7 @@ static void end_ffmpeg_impl(FFMpegContext *context, int is_autosplit)
 #ifdef WITH_AUDASPACE
 	if (is_autosplit == false) {
 		if (context->audio_mixdown_device) {
-			AUD_closeReadDevice(context->audio_mixdown_device);
+			AUD_Device_free(context->audio_mixdown_device);
 			context->audio_mixdown_device = 0;
 		}
 	}
@@ -1233,15 +1234,6 @@ static void end_ffmpeg_impl(FFMpegContext *context, int is_autosplit)
 		context->video_stream = 0;
 	}
 
-	
-	/* Close the output file */
-	if (context->outfile) {
-		for (i = 0; i < context->outfile->nb_streams; i++) {
-			if (&context->outfile->streams[i]) {
-				av_freep(&context->outfile->streams[i]);
-			}
-		}
-	}
 	/* free the temp buffer */
 	if (context->current_frame) {
 		delete_picture(context->current_frame);
@@ -1253,7 +1245,7 @@ static void end_ffmpeg_impl(FFMpegContext *context, int is_autosplit)
 		}
 	}
 	if (context->outfile) {
-		av_free(context->outfile);
+		avformat_free_context(context->outfile);
 		context->outfile = 0;
 	}
 	if (context->audio_input_buffer) {

@@ -47,7 +47,7 @@
 #include "BLI_rand.h"
 #include "BLI_utildefines.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_context.h"
 #include "BKE_group.h"
@@ -854,47 +854,47 @@ static int object_select_grouped_exec(bContext *C, wmOperator *op)
 
 	switch (type) {
 		case OBJECT_GRPSEL_CHILDREN_RECURSIVE:
-			changed = select_grouped_children(C, ob, true);
+			changed |= select_grouped_children(C, ob, true);
 			break;
 		case OBJECT_GRPSEL_CHILDREN:
-			changed = select_grouped_children(C, ob, false);
+			changed |= select_grouped_children(C, ob, false);
 			break;
 		case OBJECT_GRPSEL_PARENT:
-			changed = select_grouped_parent(C);
+			changed |= select_grouped_parent(C);
 			break;
 		case OBJECT_GRPSEL_SIBLINGS:
-			changed = select_grouped_siblings(C, ob);
+			changed |= select_grouped_siblings(C, ob);
 			break;
 		case OBJECT_GRPSEL_TYPE:
-			changed = select_grouped_type(C, ob);
+			changed |= select_grouped_type(C, ob);
 			break;
 		case OBJECT_GRPSEL_LAYER:
-			changed = select_grouped_layer(C, ob);
+			changed |= select_grouped_layer(C, ob);
 			break;
 		case OBJECT_GRPSEL_GROUP:
-			changed = select_grouped_group(C, ob);
+			changed |= select_grouped_group(C, ob);
 			break;
 		case OBJECT_GRPSEL_HOOK:
-			changed = select_grouped_object_hooks(C, ob);
+			changed |= select_grouped_object_hooks(C, ob);
 			break;
 		case OBJECT_GRPSEL_PASS:
-			changed = select_grouped_index_object(C, ob);
+			changed |= select_grouped_index_object(C, ob);
 			break;
 		case OBJECT_GRPSEL_COLOR:
-			changed = select_grouped_color(C, ob);
+			changed |= select_grouped_color(C, ob);
 			break;
 		case OBJECT_GRPSEL_PROPERTIES:
-			changed = select_grouped_gameprops(C, ob);
+			changed |= select_grouped_gameprops(C, ob);
 			break;
 		case OBJECT_GRPSEL_KEYINGSET:
-			changed = select_grouped_keyingset(C, ob, op->reports);
+			changed |= select_grouped_keyingset(C, ob, op->reports);
 			break;
 		case OBJECT_GRPSEL_LAMP_TYPE:
 			if (ob->type != OB_LAMP) {
 				BKE_report(op->reports, RPT_ERROR, "Active object must be a lamp");
 				break;
 			}
-			changed = select_grouped_lamptype(C, ob);
+			changed |= select_grouped_lamptype(C, ob);
 			break;
 		default:
 			break;
@@ -929,11 +929,16 @@ void OBJECT_OT_select_grouped(wmOperatorType *ot)
 }
 
 /************************* Select by Layer **********************/
+enum {
+	OB_SEL_LAYERMATCH_EXACT = 1,
+	OB_SEL_LAYERMATCH_SHARED = 2,
+};
 
 static int object_select_by_layer_exec(bContext *C, wmOperator *op)
 {
 	unsigned int layernum;
-	bool extend, match;
+	bool extend;
+	int match;
 	
 	extend = RNA_boolean_get(op->ptr, "extend");
 	layernum = RNA_int_get(op->ptr, "layers");
@@ -951,13 +956,21 @@ static int object_select_by_layer_exec(bContext *C, wmOperator *op)
 	{
 		bool ok = false;
 
-		if (match == true) /* exact */
-			ok = (base->lay == (1 << (layernum - 1)));
-		else /* shared layers */
-			ok = (base->lay & (1 << (layernum - 1))) != 0;
+		switch (match) {
+			case OB_SEL_LAYERMATCH_EXACT:
+				/* Mask out bits used for local view, only work on real layer ones, see T45783. */
+				ok = ((base->lay & ((1 << 20) - 1)) == (1 << (layernum - 1)));
+				break;
+			case OB_SEL_LAYERMATCH_SHARED:
+				ok = (base->lay & (1 << (layernum - 1))) != 0;
+				break;
+			default:
+				break;
+		}
 
-		if (ok)
+		if (ok) {
 			ED_base_object_select(base, BA_SELECT);
+		}
 	}
 	CTX_DATA_END;
 	
@@ -970,8 +983,8 @@ static int object_select_by_layer_exec(bContext *C, wmOperator *op)
 void OBJECT_OT_select_by_layer(wmOperatorType *ot)
 {
 	static EnumPropertyItem match_items[] = {
-		{1, "EXACT", 0, "Exact Match", ""},
-		{2, "SHARED", 0, "Shared Layers", ""},
+		{OB_SEL_LAYERMATCH_EXACT, "EXACT", 0, "Exact Match", ""},
+		{OB_SEL_LAYERMATCH_SHARED, "SHARED", 0, "Shared Layers", ""},
 		{0, NULL, 0, NULL, NULL}
 	};
 
@@ -989,7 +1002,7 @@ void OBJECT_OT_select_by_layer(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 	
 	/* properties */
-	RNA_def_enum(ot->srna, "match", match_items, 0, "Match", "");
+	RNA_def_enum(ot->srna, "match", match_items, OB_SEL_LAYERMATCH_EXACT, "Match", "");
 	RNA_def_boolean(ot->srna, "extend", false, "Extend", "Extend selection instead of deselecting everything first");
 	RNA_def_int(ot->srna, "layers", 1, 1, 20, "Layer", "", 1, 20);
 }

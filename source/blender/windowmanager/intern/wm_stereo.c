@@ -40,7 +40,6 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_listbase.h"
-#include "BLI_rect.h"
 #include "BLI_utildefines.h"
 
 #include "BIF_gl.h"
@@ -370,7 +369,7 @@ bool WM_stereo3d_enabled(wmWindow *win, bool skip_stereo3d_check)
 {
 	bScreen *screen = win->screen;
 
-	/* some 3d methods change the window arrangment, thus they shouldn't
+	/* some 3d methods change the window arrangement, thus they shouldn't
 	 * toggle on/off just because there is no 3d elements being drawn */
 	if (wm_stereo3d_is_fullscreen_required(win->stereo3d_format->display_mode)) {
 		return GHOST_GetWindowState(win->ghostwin) == GHOST_kWindowStateFullScreen;
@@ -380,7 +379,7 @@ bool WM_stereo3d_enabled(wmWindow *win, bool skip_stereo3d_check)
 		return false;
 	}
 
-	/* some 3d methods change the window arrangment, thus they shouldn't
+	/* some 3d methods change the window arrangement, thus they shouldn't
 	 * toggle on/off just because there is no 3d elements being drawn */
 	if (wm_stereo3d_is_fullscreen_required(win->stereo3d_format->display_mode)) {
 		return GHOST_GetWindowState(win->ghostwin) == GHOST_kWindowStateFullScreen;

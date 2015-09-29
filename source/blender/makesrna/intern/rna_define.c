@@ -42,7 +42,7 @@
 #include "BLI_listbase.h"
 #include "BLI_ghash.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "RNA_define.h"
 
@@ -736,7 +736,7 @@ StructRNA *RNA_def_struct_ptr(BlenderRNA *brna, const char *identifier, StructRN
 	srna->name = identifier; /* may be overwritten later RNA_def_struct_ui_text */
 	srna->description = "";
 	/* may be overwritten later RNA_def_struct_translation_context */
-	srna->translation_context = BLF_I18NCONTEXT_DEFAULT_BPYRNA;
+	srna->translation_context = BLT_I18NCONTEXT_DEFAULT_BPYRNA;
 	srna->flag |= STRUCT_UNDO;
 	if (!srnafrom)
 		srna->icon = ICON_DOT;
@@ -984,7 +984,7 @@ void RNA_def_struct_ui_icon(StructRNA *srna, int icon)
 
 void RNA_def_struct_translation_context(StructRNA *srna, const char *context)
 {
-	srna->translation_context = context ? context : BLF_I18NCONTEXT_DEFAULT_BPYRNA;
+	srna->translation_context = context ? context : BLT_I18NCONTEXT_DEFAULT_BPYRNA;
 }
 
 /* Property Definition */
@@ -1113,7 +1113,7 @@ PropertyRNA *RNA_def_property(StructOrFunctionRNA *cont_, const char *identifier
 	prop->subtype = subtype;
 	prop->name = identifier;
 	prop->description = "";
-	prop->translation_context = BLF_I18NCONTEXT_DEFAULT_BPYRNA;
+	prop->translation_context = BLT_I18NCONTEXT_DEFAULT_BPYRNA;
 	/* a priori not raw editable */
 	prop->rawtype = -1;
 
@@ -1314,8 +1314,10 @@ void RNA_def_property_ui_icon(PropertyRNA *prop, int icon, bool consecutive)
 /**
  * The values hare are a little confusing:
  *
- * \param step For floats this is (step / 100), why /100? - nobody knows.
- * for int's, whole values are used.
+ * \param step: Used as the value to increase/decrease when clicking on number buttons,
+ * \as well as scaling mouse input for click-dragging number buttons.
+ * For floats this is (step * UI_PRECISION_FLOAT_SCALE), why? - nobody knows.
+ * For ints, whole values are used.
  *
  * \param precision The number of zeros to show
  * (as a whole number - common range is 1 - 6), see PRECISION_FLOAT_MAX
@@ -2106,7 +2108,7 @@ void RNA_def_property_collection_sdna(PropertyRNA *prop, const char *structname,
 
 void RNA_def_property_translation_context(PropertyRNA *prop, const char *context)
 {
-	prop->translation_context = context ? context : BLF_I18NCONTEXT_DEFAULT_BPYRNA;
+	prop->translation_context = context ? context : BLT_I18NCONTEXT_DEFAULT_BPYRNA;
 }
 
 /* Functions */
@@ -2857,7 +2859,7 @@ PropertyRNA *RNA_def_float_rotation(StructOrFunctionRNA *cont_, const char *iden
 
 	ASSERT_SOFT_HARD_LIMITS;
 
-	prop = RNA_def_property(cont, identifier, PROP_FLOAT, (len != 0) ? PROP_EULER : PROP_ANGLE);
+	prop = RNA_def_property(cont, identifier, PROP_FLOAT, (len >= 3) ? PROP_EULER : PROP_ANGLE);
 	if (len != 0) {
 		RNA_def_property_array(prop, len);
 		if (default_value) RNA_def_property_float_array_default(prop, default_value);
@@ -2868,7 +2870,7 @@ PropertyRNA *RNA_def_float_rotation(StructOrFunctionRNA *cont_, const char *iden
 	}
 	if (hardmin != hardmax) RNA_def_property_range(prop, hardmin, hardmax);
 	RNA_def_property_ui_text(prop, ui_name, ui_description);
-	RNA_def_property_ui_range(prop, softmin, softmax, 1, 3);
+	RNA_def_property_ui_range(prop, softmin, softmax, 10, 3);
 
 	return prop;
 }

@@ -36,7 +36,7 @@
 #include <float.h>
 
 #ifdef WITH_AUDASPACE
-#  include "AUD_C-API.h"
+#  include AUD_SPECIAL_H
 #endif
 
 #include "MEM_guardedalloc.h"
@@ -52,7 +52,7 @@
 #include "RNA_define.h"
 #include "RNA_enum_types.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_fcurve.h"
 #include "BKE_global.h"
@@ -982,7 +982,7 @@ void GRAPH_OT_delete(wmOperatorType *ot)
 
 /* ******************** Clean Keyframes Operator ************************* */
 
-static void clean_graph_keys(bAnimContext *ac, float thresh)
+static void clean_graph_keys(bAnimContext *ac, float thresh, bool clean_chan)
 {	
 	ListBase anim_data = {NULL, NULL};
 	bAnimListElem *ale;
@@ -994,7 +994,7 @@ static void clean_graph_keys(bAnimContext *ac, float thresh)
 	
 	/* loop through filtered data and clean curves */
 	for (ale = anim_data.first; ale; ale = ale->next) {
-		clean_fcurve((FCurve *)ale->key_data, thresh);
+		clean_fcurve(ac, ale, thresh, clean_chan);
 
 		ale->update |= ANIM_UPDATE_DEFAULT;
 	}
@@ -1009,6 +1009,7 @@ static int graphkeys_clean_exec(bContext *C, wmOperator *op)
 {
 	bAnimContext ac;
 	float thresh;
+	bool clean_chan;
 	
 	/* get editor data */
 	if (ANIM_animdata_get_context(C, &ac) == 0)
@@ -1016,9 +1017,9 @@ static int graphkeys_clean_exec(bContext *C, wmOperator *op)
 		
 	/* get cleaning threshold */
 	thresh = RNA_float_get(op->ptr, "threshold");
-	
+	clean_chan = RNA_boolean_get(op->ptr, "channels");
 	/* clean keyframes */
-	clean_graph_keys(&ac, thresh);
+	clean_graph_keys(&ac, thresh, clean_chan);
 	
 	/* set notifier that keyframes have changed */
 	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
@@ -1043,6 +1044,7 @@ void GRAPH_OT_clean(wmOperatorType *ot)
 	
 	/* properties */
 	ot->prop = RNA_def_float(ot->srna, "threshold", 0.001f, 0.0f, FLT_MAX, "Threshold", "", 0.0f, 1000.0f);
+	RNA_def_boolean(ot->srna, "channels", false, "Channels", "");
 }
 
 /* ******************** Bake F-Curve Operator *********************** */
@@ -1274,7 +1276,7 @@ void GRAPH_OT_sound_bake(wmOperatorType *ot)
 
 	/* properties */
 	WM_operator_properties_filesel(ot, FILE_TYPE_FOLDER | FILE_TYPE_SOUND | FILE_TYPE_MOVIE, FILE_SPECIAL, FILE_OPENFILE,
-	                               WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY);
+	                               WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);
 	RNA_def_float(ot->srna, "low", 0.0f, 0.0, 100000.0, "Lowest frequency",
 	              "Cutoff frequency of a high-pass filter that is applied to the audio data", 0.1, 1000.00);
 	RNA_def_float(ot->srna, "high", 100000.0, 0.0, 100000.0, "Highest frequency",

@@ -58,7 +58,9 @@ public:
 		_pProgressBar = NULL;
 		_pRenderMonitor = NULL;
 		_computeViewIndependent = true;
+#if 0
 		_bbox_diagonal = 1.0;
+#endif
 		_meanEdgeSize = 0;
 		_computeRidgesAndValleys = true;
 		_computeSuggestiveContours = true;
@@ -96,7 +98,7 @@ public:
 	 *    a crease edge if the angle between two faces sharing the edge is smaller than the given threshold.
 	 */
 	// XXX angle should be in radian...
-	inline void setCreaseAngle(real angle)
+	inline void setCreaseAngle(float angle)
 	{
 		if (angle < 0.0)
 			angle = 0.0;
@@ -126,7 +128,7 @@ public:
 	 *  \param dkr
 	 *    The minimal derivative of the radial curvature
 	 */
-	inline void setSuggestiveContourKrDerivativeEpsilon(real dkr)
+	inline void setSuggestiveContourKrDerivativeEpsilon(float dkr)
 	{
 		if (dkr != _kr_derivative_epsilon) {
 			_kr_derivative_epsilon = dkr;
@@ -146,7 +148,7 @@ public:
 	virtual void buildSmoothEdges(WXShape *iShape);
 
 	/*! Sets the current viewpoint */
-	inline void setViewpoint(const Vec3r& ivp)
+	inline void setViewpoint(const Vec3f& ivp)
 	{
 		_Viewpoint = ivp;
 	}
@@ -191,7 +193,7 @@ public:
 	 *  \param r
 	 *    The radius of the sphere expressed as a ratio of the mean edge size
 	 */
-	inline void setSphereRadius(real r)
+	inline void setSphereRadius(float r)
 	{
 		if (r != _sphereRadius) {
 			_sphereRadius = r;
@@ -210,8 +212,10 @@ public:
 	}
 
 protected:
-	Vec3r _Viewpoint;
+	Vec3f _Viewpoint;
+#if 0
 	real _bbox_diagonal; // diagonal of the current processed shape bbox
+#endif
 	//oldtmp values
 	bool _computeViewIndependent;
 	real _meanK1;
@@ -229,11 +233,11 @@ protected:
 	bool _computeMaterialBoundaries;
 	bool _faceSmoothness;
 	bool _faceMarks;
-	real _sphereRadius; // expressed as a ratio of the mean edge size
-	real _creaseAngle; // [-1, 1] compared with the inner product of face normals
+	float _sphereRadius; // expressed as a ratio of the mean edge size
+	float _creaseAngle; // [-1, 1] compared with the inner product of face normals
 	bool _changes;
 
-	real _kr_derivative_epsilon;
+	float _kr_derivative_epsilon;
 
 	ProgressBar *_pProgressBar;
 	RenderMonitor *_pRenderMonitor;

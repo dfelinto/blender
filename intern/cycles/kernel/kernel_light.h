@@ -620,7 +620,12 @@ ccl_device void lamp_light_sample(KernelGlobals *kg, int lamp,
 	}
 }
 
-ccl_device bool lamp_light_eval(KernelGlobals *kg, int lamp, float3 P, float3 D, float t, LightSample *ls)
+#if defined(__KERNEL_CUDA__) && (__CUDA_ARCH__ >= 500) && (defined(i386) || defined(_M_IX86))
+ccl_device_noinline
+#else
+ccl_device
+#endif
+bool lamp_light_eval(KernelGlobals *kg, int lamp, float3 P, float3 D, float t, LightSample *ls)
 {
 	float4 data0 = kernel_tex_fetch(__light_data, lamp*LIGHT_SIZE + 0);
 	float4 data1 = kernel_tex_fetch(__light_data, lamp*LIGHT_SIZE + 1);
@@ -728,15 +733,15 @@ ccl_device bool lamp_light_eval(KernelGlobals *kg, int lamp, float3 P, float3 D,
 		if(dot(D, Ng) >= 0.0f)
 			return false;
 
-		ls->P = make_float3(data0.y, data0.z, data0.w);
+		float3 light_P = make_float3(data0.y, data0.z, data0.w);
 
 		if(!ray_quad_intersect(P, D, t,
-			ls->P, axisu, axisv, &ls->P, &ls->t))
+			light_P, axisu, axisv, &ls->P, &ls->t))
 			return false;
 
 		ls->D = D;
 		ls->Ng = Ng;
-		ls->pdf = area_light_sample(P, &ls->P, axisu, axisv, 0, 0, false);
+		ls->pdf = area_light_sample(P, &light_P, axisu, axisv, 0, 0, false);
 		ls->eval_fac = 0.25f*invarea;
 	}
 	else

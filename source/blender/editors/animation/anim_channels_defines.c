@@ -36,7 +36,7 @@
 #include "BLI_math.h"
 #include "BLI_utildefines.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "DNA_anim_types.h"
 #include "DNA_armature_types.h"
@@ -160,14 +160,16 @@ static bool acf_show_channel_colors(bAnimContext *ac)
 			{
 				SpaceAction *saction = (SpaceAction *)ac->sl;
 				showGroupColors = !(saction->flag & SACTION_NODRAWGCOLORS);
-			}
+
 				break;
+			}
 			case SPACE_IPO:
 			{
 				SpaceIpo *sipo = (SpaceIpo *)ac->sl;
 				showGroupColors = !(sipo->flag & SIPO_NODRAWGCOLORS);
-			}
+
 				break;
+			}
 		}
 	}
 	
@@ -865,7 +867,11 @@ static int acf_group_setting_flag(bAnimContext *ac, eAnimChannel_Settings settin
 			
 		case ACHANNEL_SETTING_MUTE: /* muted */
 			return AGRP_MUTED;
-			
+
+		case ACHANNEL_SETTING_MOD_OFF: /* muted */
+			*neg = 1;
+			return AGRP_MODIFIERS_OFF;
+
 		case ACHANNEL_SETTING_PROTECT: /* protected */
 			return AGRP_PROTECTED;
 			
@@ -946,6 +952,7 @@ static bool acf_fcurve_setting_valid(bAnimContext *ac, bAnimListElem *ale, eAnim
 		/* unsupported */
 		case ACHANNEL_SETTING_SOLO:   /* Solo Flag is only for NLA */
 		case ACHANNEL_SETTING_EXPAND: /* F-Curves are not containers */
+		case ACHANNEL_SETTING_PINNED: /* This is only for NLA Actions */
 			return false;
 		
 		/* conditionally available */
@@ -983,6 +990,10 @@ static int acf_fcurve_setting_flag(bAnimContext *UNUSED(ac), eAnimChannel_Settin
 		case ACHANNEL_SETTING_VISIBLE: /* visibility - graph editor */
 			return FCURVE_VISIBLE;
 			
+		case ACHANNEL_SETTING_MOD_OFF:
+			*neg = 1;
+			return FCURVE_MOD_OFF;
+
 		default: /* unsupported */
 			return 0;
 	}
@@ -3573,8 +3584,8 @@ void ANIM_channel_setting_set(bAnimContext *ac, bAnimListElem *ale, eAnimChannel
 #define ICON_WIDTH      (0.85f * U.widget_unit)
 // width of sliders
 #define SLIDER_WIDTH    (4 * U.widget_unit)
-// width of rename textboxes
-#define RENAME_TEXT_WIDTH (5 * U.widget_unit)
+// min-width of rename textboxes
+#define RENAME_TEXT_MIN_WIDTH (U.widget_unit)
 
 
 /* Helper - Check if a channel needs renaming */
@@ -3977,6 +3988,7 @@ static void draw_setting_widget(bAnimContext *ac, bAnimListElem *ale, const bAni
 {
 	short ptrsize, butType;
 	bool negflag;
+	bool usetoggle = true;
 	int flag, icon;
 	void *ptr;
 	const char *tooltip;
@@ -3998,7 +4010,13 @@ static void draw_setting_widget(bAnimContext *ac, bAnimListElem *ale, const bAni
 			else
 				tooltip = TIP_("Channels are visible in Graph Editor for editing");
 			break;
-			
+
+		case ACHANNEL_SETTING_MOD_OFF:  /* modifiers disabled */
+			icon = ICON_MODIFIER;
+			usetoggle = false;
+			tooltip = TIP_("F-Curve modifiers are disabled");
+			break;
+
 		case ACHANNEL_SETTING_EXPAND: /* expanded triangle */
 			//icon = ((enabled) ? ICON_TRIA_DOWN : ICON_TRIA_RIGHT);
 			icon = ICON_TRIA_RIGHT;
@@ -4059,11 +4077,18 @@ static void draw_setting_widget(bAnimContext *ac, bAnimListElem *ale, const bAni
 	}
 	
 	/* type of button */
-	if (negflag)
-		butType = UI_BTYPE_ICON_TOGGLE_N;
-	else
-		butType = UI_BTYPE_ICON_TOGGLE;
-	
+	if (usetoggle) {
+		if (negflag)
+			butType = UI_BTYPE_ICON_TOGGLE_N;
+		else
+			butType = UI_BTYPE_ICON_TOGGLE;
+	}
+	else {
+		if (negflag)
+			butType = UI_BTYPE_TOGGLE_N;
+		else
+			butType = UI_BTYPE_TOGGLE;
+	}
 	/* draw button for setting */
 	if (ptr && flag) {
 		switch (ptrsize) {
@@ -4091,6 +4116,7 @@ static void draw_setting_widget(bAnimContext *ac, bAnimListElem *ale, const bAni
 				case ACHANNEL_SETTING_PROTECT: /* General - protection flags */
 				case ACHANNEL_SETTING_MUTE: /* General - muting flags */
 				case ACHANNEL_SETTING_PINNED: /* NLA Actions - 'map/nomap' */
+				case ACHANNEL_SETTING_MOD_OFF:
 					UI_but_funcN_set(but, achannel_setting_flush_widget_cb, MEM_dupallocN(ale), SET_INT_IN_POINTER(setting));
 					break;
 					
@@ -4116,6 +4142,7 @@ void ANIM_channel_draw_widgets(const bContext *C, bAnimContext *ac, bAnimListEle
 	View2D *v2d = &ac->ar->v2d;
 	float y, ymid /*, ytext*/;
 	short offset;
+	const bool is_being_renamed = achannel_is_being_renamed(ac, acf, channel_index);
 	
 	/* sanity checks - don't draw anything */
 	if (ELEM(NULL, acf, ale, block))
@@ -4191,7 +4218,7 @@ void ANIM_channel_draw_widgets(const bContext *C, bAnimContext *ac, bAnimListEle
 	}
 	
 	/* step 4) draw text - check if renaming widget is in use... */
-	if (achannel_is_being_renamed(ac, acf, channel_index)) {
+	if (is_being_renamed) {
 		PointerRNA ptr = {{NULL}};
 		PropertyRNA *prop = NULL;
 		
@@ -4200,12 +4227,15 @@ void ANIM_channel_draw_widgets(const bContext *C, bAnimContext *ac, bAnimListEle
 		 *       a callback available (e.g. broken F-Curve rename)
 		 */
 		if (acf->name_prop(ale, &ptr, &prop)) {
-			const float channel_height = ymaxc - yminc;
+			const short margin_x = 3 * iroundf(UI_DPI_FAC);
+			const short channel_height = iroundf(ymaxc - yminc);
+			const short width = ac->ar->winx - offset - (margin_x * 2);
 			uiBut *but;
 			
 			UI_block_emboss_set(block, UI_EMBOSS);
 			
-			but = uiDefButR(block, UI_BTYPE_TEXT, 1, "", offset + 3, yminc, RENAME_TEXT_WIDTH, channel_height,
+			but = uiDefButR(block, UI_BTYPE_TEXT, 1, "", offset + margin_x, yminc,
+			                MAX2(width, RENAME_TEXT_MIN_WIDTH), channel_height,
 			                &ptr, RNA_property_identifier(prop), -1, 0, 0, -1, -1, NULL);
 			
 			/* copy what outliner does here, see outliner_buttons */
@@ -4225,7 +4255,7 @@ void ANIM_channel_draw_widgets(const bContext *C, bAnimContext *ac, bAnimListEle
 	offset = 0;
 	
 	// TODO: when drawing sliders, make those draw instead of these toggles if not enough space
-	if (v2d) {
+	if (v2d && !is_being_renamed) {
 		short draw_sliders = 0;
 		
 		/* check if we need to show the sliders */
@@ -4257,6 +4287,12 @@ void ANIM_channel_draw_widgets(const bContext *C, bAnimContext *ac, bAnimListEle
 			if (acf->has_setting(ac, ale, ACHANNEL_SETTING_MUTE)) {
 				offset += ICON_WIDTH;
 				draw_setting_widget(ac, ale, acf, block, (int)v2d->cur.xmax - offset, ymid, ACHANNEL_SETTING_MUTE);
+			}
+			
+			/* modifiers disable */
+			if (acf->has_setting(ac, ale, ACHANNEL_SETTING_MOD_OFF)) {
+				offset += ICON_WIDTH * 1.2f; /* hack: extra spacing, to avoid touching the mute toggle */
+				draw_setting_widget(ac, ale, acf, block, (int)v2d->cur.xmax - offset, ymid, ACHANNEL_SETTING_MOD_OFF);
 			}
 			
 			/* ----------- */

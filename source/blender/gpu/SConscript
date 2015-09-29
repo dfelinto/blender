@@ -30,7 +30,8 @@ Import ('env')
 sources = env.Glob('intern/*.c')
 sources += env.Glob('shaders/*.c')
 
-defs = env['BF_GL_DEFINITIONS']
+defs = []
+defs += env['BF_GL_DEFINITIONS']
 
 incs = [
     '.',
@@ -60,9 +61,13 @@ if env['WITH_BF_SMOKE']:
 if env['WITH_BF_DDS']:
     defs.append('WITH_DDS')
 
+if env['WITH_BF_OPENSUBDIV']:
+    defs.append('WITH_OPENSUBDIV')
+
 # generated data files
 import os
 sources.extend((
+    os.path.join(env['DATA_SOURCES'], "gpu_shader_geometry.glsl.c"),
     os.path.join(env['DATA_SOURCES'], "gpu_program_smoke_frag.glsl.c"),
     os.path.join(env['DATA_SOURCES'], "gpu_program_smoke_color_frag.glsl.c"),
     os.path.join(env['DATA_SOURCES'], "gpu_shader_simple_frag.glsl.c"),

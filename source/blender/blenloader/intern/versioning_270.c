@@ -42,6 +42,7 @@
 #include "DNA_sequence_types.h"
 #include "DNA_space_types.h"
 #include "DNA_screen_types.h"
+#include "DNA_object_force.h"
 #include "DNA_object_types.h"
 #include "DNA_mesh_types.h"
 #include "DNA_modifier_types.h"
@@ -654,7 +655,9 @@ void blo_do_versions_270(FileData *fd, Library *UNUSED(lib), Main *main)
 			ParticleSystem *psys;
 			for (ob = main->object.first; ob; ob = ob->id.next) {
 				for (psys = ob->particlesystem.first; psys; psys = psys->next) {
-					psys->recalc |= PSYS_RECALC_RESET;
+					if ((psys->pointcache->flag & PTCACHE_BAKED) == 0) {
+						psys->recalc |= PSYS_RECALC_RESET;
+					}
 				}
 			}
 		}
@@ -764,7 +767,6 @@ void blo_do_versions_270(FileData *fd, Library *UNUSED(lib), Main *main)
 						{
 							SpaceImage *sima = (SpaceImage *) sl;
 							sima->iuser.flag |= IMA_SHOW_STEREO;
-							sima->iuser.passtype = SCE_PASS_COMBINED;
 							break;
 						}
 					}
@@ -837,6 +839,30 @@ void blo_do_versions_270(FileData *fd, Library *UNUSED(lib), Main *main)
 					if (md->type == eModifierType_Decimate) {
 						DecimateModifierData *dmd = (DecimateModifierData *)md;
 						dmd->defgrp_factor = 1.0f;
+					}
+				}
+			}
+		}
+	}
+
+	if (!MAIN_VERSION_ATLEAST(main, 275, 3)) {
+		Brush *br;
+#define BRUSH_TORUS (1 << 1)
+		for (br = main->brush.first; br; br = br->id.next) {
+			br->flag &= ~BRUSH_TORUS;
+		}
+#undef BRUSH_TORUS
+	}
+
+	if (!MAIN_VERSION_ATLEAST(main, 276, 2)) {
+		if (!DNA_struct_elem_find(fd->filesdna, "bPoseChannel", "float", "custom_scale")) {
+			Object *ob;
+
+			for (ob = main->object.first; ob; ob = ob->id.next) {
+				if (ob->pose) {
+					bPoseChannel *pchan;
+					for (pchan = ob->pose->chanbase.first; pchan; pchan = pchan->next) {
+						pchan->custom_scale = 1.0f;
 					}
 				}
 			}

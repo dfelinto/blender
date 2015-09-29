@@ -40,12 +40,12 @@ incs = [
     '#/intern/memutil',
     env['BF_GLEW_INC'],
     '#/intern/glew-mx',
-    '#/intern/audaspace/intern',
     '#/intern/cycles/blender',
     '#/intern/smoke/extern',
     '../blenfont',
     '../blenkernel',
     '../blenlib',
+    '../blentranslation',
     '../bmesh',
     '../depsgraph',
     '../editors/include',
@@ -60,7 +60,8 @@ incs = [
     ]
 incs = ' '.join(incs)
 
-defs = env['BF_GL_DEFINITIONS']
+defs = []
+defs += env['BF_GL_DEFINITIONS']
 
 if env['WITH_BF_SMOKE']:
     defs.append('WITH_SMOKE')
@@ -100,6 +101,10 @@ if env['WITH_BF_FFMPEG']:
 if env['WITH_BF_QUICKTIME']:
     defs.append('WITH_QUICKTIME')
     incs += ' ../quicktime'
+    # Quicktime needs audaspace defines
+    if env['WITH_BF_AUDASPACE']:
+        defs += env['BF_AUDASPACE_DEF']
+        incs += ' ' + env['BF_AUDASPACE_C_INC']
 
 if env['WITH_BF_GAMEENGINE']:
     defs.append('WITH_GAMEENGINE')
@@ -138,6 +143,10 @@ if env['WITH_BF_JACK']:
 if env['WITH_BF_FREESTYLE']:
     defs.append('WITH_FREESTYLE')
     incs += ' ../freestyle'
+
+if env['WITH_BF_OPENSUBDIV']:
+    incs += ' #/intern/opensubdiv'
+    defs.append('WITH_OPENSUBDIV')
 
 if env['OURPLATFORM'] == 'linux':
     cflags='-pthread'

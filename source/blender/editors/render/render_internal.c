@@ -33,14 +33,16 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_blenlib.h"
+#include "BLI_listbase.h"
+#include "BLI_rect.h"
+#include "BLI_timecode.h"
 #include "BLI_math.h"
 #include "BLI_threads.h"
 #include "BLI_utildefines.h"
 
 #include "PIL_time.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
@@ -188,7 +190,7 @@ static void image_buffer_rect_update(RenderJob *rj, RenderResult *rr, ImBuf *ibu
 	 *                                              - sergey -
 	 */
 	/* TODO(sergey): Need to check has_combined here? */
-	if (iuser->passtype == SCE_PASS_COMBINED) {
+	if (iuser->pass == 0) {
 		RenderView *rv;
 		size_t view_id = BKE_scene_multiview_view_id_get(&scene->r, viewname);
 		rv = RE_RenderViewGetById(rr, view_id);
@@ -374,7 +376,7 @@ static void make_renderinfo_string(const RenderStats *rs,
 	spos += sprintf(spos, IFACE_("Frame:%d "), (scene->r.cfra));
 
 	/* previous and elapsed time */
-	BLI_timestr(rs->lastframetime, info_time_str, sizeof(info_time_str));
+	BLI_timecode_string_from_time_simple(info_time_str, sizeof(info_time_str), rs->lastframetime);
 
 	if (rs->infostr && rs->infostr[0]) {
 		if (rs->lastframetime != 0.0)
@@ -382,7 +384,7 @@ static void make_renderinfo_string(const RenderStats *rs,
 		else
 			spos += sprintf(spos, "| ");
 
-		BLI_timestr(PIL_check_seconds_timer() - rs->starttime, info_time_str, sizeof(info_time_str));
+		BLI_timecode_string_from_time_simple(info_time_str, sizeof(info_time_str), PIL_check_seconds_timer() - rs->starttime);
 	}
 	else
 		spos += sprintf(spos, "| ");
@@ -523,6 +525,7 @@ static void render_image_update_pass_and_layer(RenderJob *rj, RenderResult *rr, 
 			}
 		}
 
+		iuser->pass = sima->iuser.pass;
 		iuser->layer = sima->iuser.layer;
 
 		RE_ReleaseResult(rj->re);
@@ -790,13 +793,13 @@ static void clean_viewport_memory(Main *bmain, Scene *scene, int renderlay)
 		if ((base->lay & renderlay) == 0) {
 			continue;
 		}
-
 		if (RE_allow_render_generic_object(base->object)) {
 			base->object->id.flag &= ~LIB_DOIT;
 		}
 	}
 
-	for (object = bmain->object.first; object; object = object->id.next) {
+	for (SETLOOPER(scene, sce_iter, base)) {
+		object = base->object;
 		if ((object->id.flag & LIB_DOIT) == 0) {
 			continue;
 		}
@@ -896,7 +899,6 @@ static int screen_render_invoke(bContext *C, wmOperator *op, const wmEvent *even
 	rj->write_still = is_write_still && !is_animation;
 	rj->iuser.scene = scene;
 	rj->iuser.ok = 1;
-	rj->iuser.passtype = SCE_PASS_COMBINED;
 	rj->reports = op->reports;
 	rj->orig_layer = 0;
 	rj->last_layer = 0;

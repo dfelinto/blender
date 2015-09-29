@@ -172,14 +172,15 @@ static XVisualInfo *x11_visualinfo_from_glx(
 	int nbfbconfig;
 	GHOST_TUns16 numOfAASamples = *r_numOfAASamples;
 	int glx_major, glx_minor, glx_version; /* GLX version: major.minor */
+	GHOST_TUns16 actualSamples;
+	int glx_attribs[64];
+	int i;
+
+	*fbconfig = NULL;
 
 	/* Set up the minimum attributes that we require and see if
 	 * X can find us a visual matching those requirements. */
 
-	std::vector<int> attribs;
-	attribs.reserve(40);
-
-	*fbconfig = NULL;
 	if (!glXQueryVersion(display, &glx_major, &glx_minor)) {
 		fprintf(stderr,
 		        "%s:%d: X11 glXQueryVersion() failed, "
@@ -190,13 +191,14 @@ static XVisualInfo *x11_visualinfo_from_glx(
 	}
 	glx_version = glx_major*100 + glx_minor;
 
-#ifdef GHOST_OPENGL_STENCIL
-	const bool needStencil = true;
-#else
-	const bool needStencil = false;
-#endif
-	GHOST_TUns16 actualSamples = numOfAASamples;
-
+	if (glx_version >= 104) {
+		actualSamples = numOfAASamples;
+	}
+	else {
+		numOfAASamples = 0;
+		actualSamples = 0;
+	}
+	
 #ifdef WITH_X11_ALPHA
 	if (   needAlpha
 	    && glx_version >= 103
@@ -207,60 +209,17 @@ static XVisualInfo *x11_visualinfo_from_glx(
 	    ) {
 
 		for (;;) {
-			attribs.clear();
 
-			if (stereoVisual) {
-				attribs.push_back(GLX_STEREO);
-				attribs.push_back(True);
-			}
+			GHOST_X11_GL_GetAttributes(glx_attribs, 64, actualSamples, stereoVisual, needAlpha, true);
 
-			attribs.push_back(GLX_RENDER_TYPE);
-			attribs.push_back(GLX_RGBA_BIT);
-
-			attribs.push_back(GLX_DOUBLEBUFFER);
-			attribs.push_back(True);
-
-			attribs.push_back(GLX_RED_SIZE);
-			attribs.push_back(1);
-
-			attribs.push_back(GLX_BLUE_SIZE);
-			attribs.push_back(1);
-
-			attribs.push_back(GLX_GREEN_SIZE);
-			attribs.push_back(1);
-
-			attribs.push_back(GLX_DEPTH_SIZE);
-			attribs.push_back(1);
-
-			if (needAlpha) {
-				attribs.push_back(GLX_ALPHA_SIZE);
-				attribs.push_back(1);
-			}
-
-			if (needStencil) {
-				attribs.push_back(GLX_STENCIL_SIZE);
-				attribs.push_back(1);
-			}
-
-			/* GLX >= 1.4 required for multi-sample */
-			if (actualSamples > 0 && glx_version >= 104) {
-				attribs.push_back(GLX_SAMPLE_BUFFERS);
-				attribs.push_back(1);
-
-				attribs.push_back(GLX_SAMPLES);
-				attribs.push_back(actualSamples);
-			}
-
-			attribs.push_back(None);
-
-			fbconfigs = glXChooseFBConfig(display, DefaultScreen(display), &attribs[0], &nbfbconfig);
+			fbconfigs = glXChooseFBConfig(display, DefaultScreen(display), glx_attribs, &nbfbconfig);
 
 			/* Any sample level or even zero, which means oversampling disabled, is good
 			 * but we need a valid visual to continue */
 			if (nbfbconfig > 0) {
 				/* take a frame buffer config that has alpha cap */
-				for ( ;nbfbconfig; nbfbconfig--, fbconfigs++) {
-					visual = (XVisualInfo*)glXGetVisualFromFBConfig(display, *fbconfigs);
+				for (i=0 ;i<nbfbconfig; i++) {
+					visual = (XVisualInfo*)glXGetVisualFromFBConfig(display, fbconfigs[i]);
 					if (!visual)
 						continue;
 					/* if we don't need a alpha background, the first config will do, otherwise
@@ -272,10 +231,11 @@ static XVisualInfo *x11_visualinfo_from_glx(
 						if (pict_format->direct.alphaMask <= 0)
 							continue;
 					}
-					*fbconfig = *fbconfigs;
+					*fbconfig = fbconfigs[i];
 					break;
 				}
-				if (nbfbconfig) {
+				XFree(fbconfigs);
+				if (i<nbfbconfig) {
 					if (actualSamples < numOfAASamples) {
 						fprintf(stderr,
 						        "Warning! Unable to find a multisample pixel format that supports exactly %d samples. "
@@ -306,49 +266,9 @@ static XVisualInfo *x11_visualinfo_from_glx(
 	{
 		/* legacy, don't use extension */
 		for (;;) {
-			attribs.clear();
-
-			if (stereoVisual)
-				attribs.push_back(GLX_STEREO);
-
-			attribs.push_back(GLX_RGBA);
-
-			attribs.push_back(GLX_DOUBLEBUFFER);
-
-			attribs.push_back(GLX_RED_SIZE);
-			attribs.push_back(1);
-
-			attribs.push_back(GLX_BLUE_SIZE);
-			attribs.push_back(1);
-
-			attribs.push_back(GLX_GREEN_SIZE);
-			attribs.push_back(1);
-
-			attribs.push_back(GLX_DEPTH_SIZE);
-			attribs.push_back(1);
-
-			if (needAlpha) {
-				attribs.push_back(GLX_ALPHA_SIZE);
-				attribs.push_back(1);
-			}
-
-			if (needStencil) {
-				attribs.push_back(GLX_STENCIL_SIZE);
-				attribs.push_back(1);
-			}
-
-			/* GLX >= 1.4 required for multi-sample */
-			if (actualSamples > 0 && glx_version >= 104) {
-				attribs.push_back(GLX_SAMPLE_BUFFERS);
-				attribs.push_back(1);
-
-				attribs.push_back(GLX_SAMPLES);
-				attribs.push_back(actualSamples);
-			}
-
-			attribs.push_back(None);
-
-			visual = glXChooseVisual(display, DefaultScreen(display), &attribs[0]);
+			GHOST_X11_GL_GetAttributes(glx_attribs, 64, actualSamples, stereoVisual, needAlpha, false);
+			
+			visual = glXChooseVisual(display, DefaultScreen(display), glx_attribs);
 
 			/* Any sample level or even zero, which means oversampling disabled, is good
 			 * but we need a valid visual to continue */
@@ -381,8 +301,7 @@ static XVisualInfo *x11_visualinfo_from_glx(
 }
 
 GHOST_WindowX11::
-GHOST_WindowX11(
-        GHOST_SystemX11 *system,
+GHOST_WindowX11(GHOST_SystemX11 *system,
         Display *display,
         const STR_String &title,
         GHOST_TInt32 left,
@@ -395,7 +314,7 @@ GHOST_WindowX11(
         const bool stereoVisual,
         const bool exclusive,
         const bool alphaBackground,
-        const GHOST_TUns16 numOfAASamples)
+        const GHOST_TUns16 numOfAASamples, const bool is_debug)
     : GHOST_Window(width, height, state, stereoVisual, exclusive, numOfAASamples),
       m_display(display),
       m_visualInfo(NULL),
@@ -412,7 +331,8 @@ GHOST_WindowX11(
 #if defined(WITH_X11_XINPUT) && defined(X_HAVE_UTF8_STRING)
       m_xic(NULL),
 #endif
-      m_valid_setup(false)
+      m_valid_setup(false),
+      m_is_debug_context(is_debug)
 {
 	if (type == GHOST_kDrawingContextTypeOpenGL) {
 		m_visualInfo = x11_visualinfo_from_glx(m_display, stereoVisual, &m_wantNumOfAASamples, alphaBackground, (GLXFBConfig*)&m_fbconfig);
@@ -1394,9 +1314,9 @@ GHOST_Context *GHOST_WindowX11::newDrawingContext(GHOST_TDrawingContextType type
 		        m_display,
 		        m_visualInfo,
 		        (GLXFBConfig)m_fbconfig,
-		        GLX_CONTEXT_OPENGL_CORE_PROFILE_BIT,
+		        GLX_CONTEXT_CORE_PROFILE_BIT_ARB,
 		        3, 2,
-		        GHOST_OPENGL_GLX_CONTEXT_FLAGS,
+		        GHOST_OPENGL_GLX_CONTEXT_FLAGS | (m_is_debug_context ? GLX_CONTEXT_DEBUG_BIT_ARB : 0),
 		        GHOST_OPENGL_GLX_RESET_NOTIFICATION_STRATEGY);
 #elif defined(WITH_GL_PROFILE_ES20)
 		GHOST_Context *context = new GHOST_ContextGLX(
@@ -1408,7 +1328,7 @@ GHOST_Context *GHOST_WindowX11::newDrawingContext(GHOST_TDrawingContextType type
 		        (GLXFBConfig)m_fbconfig,
 		        GLX_CONTEXT_ES2_PROFILE_BIT_EXT,
 		        2, 0,
-		        GHOST_OPENGL_GLX_CONTEXT_FLAGS,
+		        GHOST_OPENGL_GLX_CONTEXT_FLAGS | (m_is_debug_context ? GLX_CONTEXT_DEBUG_BIT_ARB : 0),
 		        GHOST_OPENGL_GLX_RESET_NOTIFICATION_STRATEGY);
 #elif defined(WITH_GL_PROFILE_COMPAT)
 		GHOST_Context *context = new GHOST_ContextGLX(
@@ -1420,7 +1340,7 @@ GHOST_Context *GHOST_WindowX11::newDrawingContext(GHOST_TDrawingContextType type
 		        (GLXFBConfig)m_fbconfig,
 		        0, // profile bit
 		        0, 0,
-		        GHOST_OPENGL_GLX_CONTEXT_FLAGS,
+		        GHOST_OPENGL_GLX_CONTEXT_FLAGS | (m_is_debug_context ? GLX_CONTEXT_DEBUG_BIT_ARB : 0),
 		        GHOST_OPENGL_GLX_RESET_NOTIFICATION_STRATEGY);
 #else
 #  error

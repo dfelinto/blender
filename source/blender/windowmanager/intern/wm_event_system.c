@@ -32,7 +32,6 @@
  * Also some operator reports utility functions.
  */
 
-
 #include <stdlib.h>
 #include <string.h>
 
@@ -63,14 +62,11 @@
 
 #include "ED_fileselect.h"
 #include "ED_info.h"
-#include "ED_outliner.h"
 #include "ED_screen.h"
 #include "ED_view3d.h"
 #include "ED_util.h"
 
 #include "RNA_access.h"
-
-#include "BIF_gl.h"
 
 #include "GPU_debug.h"
 
@@ -621,6 +617,11 @@ void WM_report_banner_show(const bContext *C)
 bool WM_event_is_absolute(const wmEvent *event)
 {
 	return (event->tablet_data != NULL);
+}
+
+void WM_ndof_deadzone_set(float deadzone)
+{
+	GHOST_setNDOFDeadZone(deadzone);
 }
 
 static void wm_add_reports(const bContext *C, ReportList *reports)
@@ -1800,7 +1801,13 @@ static int wm_handler_fileselect_do(bContext *C, ListBase *handlers, wmEventHand
 				const SpaceLink *sl = sa->spacedata.first;
 				const bool was_prev_temp = (sl->next && sl->next->spacetype == SPACE_IMAGE);
 
-				ED_screen_full_prevspace(C, sa, was_prev_temp);
+				if (sa->full) {
+					ED_screen_full_prevspace(C, sa, was_prev_temp);
+				}
+				/* user may have left fullscreen */
+				else {
+					ED_area_prevspace(C, sa);
+				}
 			}
 
 			wm_handler_op_context(C, handler, CTX_wm_window(C)->eventstate);

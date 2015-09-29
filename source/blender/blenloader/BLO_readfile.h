@@ -36,6 +36,7 @@
 extern "C" {
 #endif
 
+struct BlendThumbnail;
 struct bScreen;
 struct LinkNode;
 struct Main;
@@ -195,10 +196,13 @@ BLO_blendhandle_close(BlendHandle *bh);
 bool BLO_has_bfile_extension(const char *str);
 
 /**
- * return ok when a blenderfile, in dir is the filename,
- * in group the type of libdata
+ * \param path the full path to explode.
+ * \param r_dir the string that'll contain path up to blend file itself ('library' path).
+ * \param r_group the string that'll contain 'group' part of the path, if any. May be NULL.
+ * \param r_name the string that'll contain data's name part of the path, if any. May be NULL.
+ * \return true if path contains a blend file.
  */
-bool BLO_is_a_library(const char *path, char *dir, char *group);
+bool BLO_library_path_explode(const char *path, char *r_dir, char **r_group, char **r_name);
 
 
 /**
@@ -274,6 +278,15 @@ void BLO_expand_main(void *fdhandle, struct Main *mainvar);
 /* Update defaults in startup.blend & userprefs.blend, without having to save and embed it */
 void BLO_update_defaults_userpref_blend(void);
 void BLO_update_defaults_startup_blend(struct Main *mainvar);
+
+/**
+ * Does a very light reading of given .blend file to extract its stored thumbnail.
+ *
+ * \param filepath The path of the file to extract thumbnail from.
+ * \return The raw thumbnail
+ *         (MEM-allocated, as stored in file, use BKE_main_thumbnail_to_imbuf() to convert it to ImBuf image).
+ */
+struct BlendThumbnail *BLO_thumbnail_from_file(const char *filepath);
 
 #ifdef __cplusplus
 } 

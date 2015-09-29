@@ -49,6 +49,7 @@
 #include "BKE_main.h"
 #include "BKE_report.h"
 #include "BKE_scene.h"
+#include "BKE_screen.h"
 
 #include "BIF_gl.h"
 #include "BIF_glutil.h"
@@ -136,6 +137,9 @@ struct SmoothView3DStore {
 	struct SmoothView3DState org;  /* original */
 
 	bool to_camera;
+
+	/* When smooth-view is enabled, store the 'rv3d->view' here,
+	 * assign back when the view motion is completed. */
 	char org_view;
 
 	double time_allowed;
@@ -179,12 +183,12 @@ void ED_view3d_smooth_view_ex(
 	/* if smoothview runs multiple times... */
 	if (rv3d->sms == NULL) {
 		view3d_smooth_view_state_backup(&sms.org, v3d, rv3d);
-		sms.org_view = rv3d->view;
 	}
 	else {
 		sms.org = rv3d->sms->org;
-		sms.org_view = rv3d->sms->org_view;
 	}
+	sms.org_view = rv3d->view;
+
 	/* sms.to_camera = false; */  /* initizlized to zero anyway */
 
 	/* note on camera locking, this is a little confusing but works ok.
@@ -784,7 +788,13 @@ bool ED_view3d_viewplane_get(
  */
 void ED_view3d_polygon_offset(const RegionView3D *rv3d, const float dist)
 {
-	float viewdist = rv3d->dist;
+	float viewdist;
+
+	if (rv3d->rflag & RV3D_ZOFFSET_DISABLED) {
+		return;
+	}
+
+	viewdist = rv3d->dist;
 
 	/* special exception for ortho camera (viewdist isnt used for perspective cameras) */
 	if (dist != 0.0f) {
@@ -1568,7 +1578,6 @@ static int game_engine_poll(bContext *C)
 
 	if (CTX_wm_window(C) == NULL) return 0;
 	if ((screen = CTX_wm_screen(C)) == NULL) return 0;
-	if (CTX_wm_area(C) == NULL) return 0;
 
 	if (CTX_data_mode_enum(C) != CTX_MODE_OBJECT)
 		return 0;
@@ -1586,20 +1595,18 @@ bool ED_view3d_context_activate(bContext *C)
 	ARegion *ar;
 
 	/* sa can be NULL when called from python */
-	if (sa == NULL || sa->spacetype != SPACE_VIEW3D)
-		for (sa = sc->areabase.first; sa; sa = sa->next)
-			if (sa->spacetype == SPACE_VIEW3D)
-				break;
+	if (sa == NULL || sa->spacetype != SPACE_VIEW3D) {
+		sa = BKE_screen_find_big_area(sc, SPACE_VIEW3D, 0);
+	}
 
-	if (!sa)
+	if (sa == NULL) {
 		return false;
+	}
 	
-	for (ar = sa->regionbase.first; ar; ar = ar->next)
-		if (ar->regiontype == RGN_TYPE_WINDOW)
-			break;
-	
-	if (!ar)
+	ar = BKE_area_find_region_active_win(sa);
+	if (ar == NULL) {
 		return false;
+	}
 	
 	/* bad context switch .. */
 	CTX_wm_area_set(C, sa);
@@ -1778,7 +1785,7 @@ float ED_view3d_radius_to_dist(
 			lens = params.lens;
 			sensor_size = BKE_camera_sensor_size(params.sensor_fit, params.sensor_x, params.sensor_y);
 
-			/* ignore 'rv3d->camzoom' because we wan't to fit to the cameras frame */
+			/* ignore 'rv3d->camzoom' because we want to fit to the cameras frame */
 			zoom = CAMERA_PARAM_ZOOM_INIT_CAMOB;
 		}
 		else {

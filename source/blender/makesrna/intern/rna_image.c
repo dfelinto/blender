@@ -211,7 +211,7 @@ static int rna_Image_file_format_get(PointerRNA *ptr)
 {
 	Image *image = (Image *)ptr->data;
 	ImBuf *ibuf = BKE_image_acquire_ibuf(image, NULL, NULL);
-	int imtype = BKE_image_ftype_to_imtype(ibuf ? ibuf->ftype : 0);
+	int imtype = BKE_image_ftype_to_imtype(ibuf ? ibuf->ftype : 0, ibuf ? &ibuf->foptions : NULL);
 
 	BKE_image_release_ibuf(image, ibuf, NULL);
 
@@ -222,8 +222,9 @@ static void rna_Image_file_format_set(PointerRNA *ptr, int value)
 {
 	Image *image = (Image *)ptr->data;
 	if (BKE_imtype_is_movie(value) == 0) { /* should be able to throw an error here */
-		int ftype = BKE_image_imtype_to_ftype(value);
-		BKE_image_file_format_set(image, ftype);
+		ImbFormatOptions options;
+		int ftype = BKE_image_imtype_to_ftype(value, &options);
+		BKE_image_file_format_set(image, ftype, &options);
 	}
 }
 
@@ -537,6 +538,11 @@ static void rna_def_imageuser(BlenderRNA *brna)
 	RNA_def_property_int_sdna(prop, NULL, "layer");
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE); /* image_multi_cb */
 	RNA_def_property_ui_text(prop, "Layer", "Layer in multilayer image");
+
+	prop = RNA_def_property(srna, "multilayer_pass", PROP_INT, PROP_UNSIGNED);
+	RNA_def_property_int_sdna(prop, NULL, "pass");
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE); /* image_multi_cb */
+	RNA_def_property_ui_text(prop, "Pass", "Pass in multilayer image");
 
 	prop = RNA_def_property(srna, "multilayer_view", PROP_INT, PROP_UNSIGNED);
 	RNA_def_property_int_sdna(prop, NULL, "view");

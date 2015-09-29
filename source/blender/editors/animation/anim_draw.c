@@ -86,7 +86,7 @@ static void draw_cfra_number(Scene *scene, View2D *v2d, const float cfra, const 
 		BLI_timecode_string_from_time(&numstr[4], sizeof(numstr) - 4, 0, FRA2TIME(cfra), FPS, U.timecode_style);
 	}
 	else {
-		BLI_timecode_string_from_time_simple(&numstr[4], sizeof(numstr) - 4, 1, cfra);
+		BLI_timecode_string_from_time_seconds(&numstr[4], sizeof(numstr) - 4, 1, cfra);
 	}
 
 	slen = UI_fontstyle_string_width(fstyle, numstr) - 1;
@@ -289,12 +289,22 @@ static float normalization_factor_get(Scene *scene, FCurve *fcu, short flag, flo
 	if (flag & ANIM_UNITCONV_NORMALIZE_FREEZE) {
 		if (r_offset)
 			*r_offset = fcu->prev_offset;
+		if (fcu->prev_norm_factor == 0.0f) {
+			/* Happens when Auto Normalize was disabled before
+			 * any curves were displayed.
+			 */
+			return 1.0f;
+		}
 		return fcu->prev_norm_factor;
 	}
 
 	if (G.moving & G_TRANSFORM_FCURVES) {
 		if (r_offset)
 			*r_offset = fcu->prev_offset;
+		if (fcu->prev_norm_factor == 0.0f) {
+			/* Same as above. */
+			return 1.0f;
+		}
 		return fcu->prev_norm_factor;
 	}
 
@@ -342,7 +352,7 @@ static float normalization_factor_get(Scene *scene, FCurve *fcu, short flag, flo
 		}
 		offset = -min_coord - range / 2.0f;
 	}
-
+	BLI_assert(factor != 0.0f);
 	if (r_offset) {
 		*r_offset = offset;
 	}
@@ -494,11 +504,14 @@ void ANIM_center_frame(struct bContext *C, int smooth_viewtx)
 
 	switch (U.view_frame_type) {
 		case ZOOM_FRAME_MODE_SECONDS:
-			newrct.xmax = scene->r.cfra + U.view_frame_seconds * FPS + 1;
-			newrct.xmin = scene->r.cfra - U.view_frame_seconds * FPS - 1;
+		{
+			const float fps = FPS;
+			newrct.xmax = scene->r.cfra + U.view_frame_seconds * fps + 1;
+			newrct.xmin = scene->r.cfra - U.view_frame_seconds * fps - 1;
 			newrct.ymax = ar->v2d.cur.ymax;
 			newrct.ymin = ar->v2d.cur.ymin;
 			break;
+		}
 
 		/* hardest case of all, look for all keyframes around frame and display those */
 		case ZOOM_FRAME_MODE_KEYFRAMES:

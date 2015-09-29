@@ -49,8 +49,9 @@
 
 #include "MEM_guardedalloc.h"
 
-static struct ImBuf *imb_load_dpx_cineon(unsigned char *mem, size_t size, int use_cineon, int flags,
-                                         char colorspace[IM_MAX_SPACE])
+static struct ImBuf *imb_load_dpx_cineon(
+        const unsigned char *mem, size_t size, int use_cineon, int flags,
+        char colorspace[IM_MAX_SPACE])
 {
 	ImBuf *ibuf;
 	LogImageFile *image;
@@ -85,7 +86,7 @@ static struct ImBuf *imb_load_dpx_cineon(unsigned char *mem, size_t size, int us
 	}
 
 	logImageClose(image);
-	ibuf->ftype = use_cineon ? CINEON : DPX;
+	ibuf->ftype = use_cineon ? IMB_FTYPE_CINEON : IMB_FTYPE_DPX;
 
 	if (flags & IB_alphamode_detect)
 		ibuf->flags |= IB_alphamode_premul;
@@ -114,17 +115,17 @@ static int imb_save_dpx_cineon(ImBuf *ibuf, const char *filename, int use_cineon
 		return 0;
 	}
 
-	if (ibuf->ftype & CINEON_10BIT)
+	if (ibuf->foptions.flag & CINEON_10BIT)
 		bitspersample = 10;
-	else if (ibuf->ftype & CINEON_12BIT)
+	else if (ibuf->foptions.flag & CINEON_12BIT)
 		bitspersample = 12;
-	else if (ibuf->ftype & CINEON_16BIT)
+	else if (ibuf->foptions.flag & CINEON_16BIT)
 		bitspersample = 16;
 	else
 		bitspersample = 8;
 
 	logImage = logImageCreate(filename, use_cineon, ibuf->x, ibuf->y, bitspersample, (depth == 4),
-	                          (ibuf->ftype & CINEON_LOG), -1, -1, -1, "Blender");
+	                          (ibuf->foptions.flag & CINEON_LOG), -1, -1, -1, "Blender");
 
 	if (logImage == NULL) {
 		printf("DPX/Cineon: error creating file.\n");
@@ -181,12 +182,12 @@ int imb_save_cineon(struct ImBuf *buf, const char *myfile, int flags)
 	return imb_save_dpx_cineon(buf, myfile, 1, flags);
 }
 
-int imb_is_cineon(unsigned char *buf)
+int imb_is_cineon(const unsigned char *buf)
 {
 	return logImageIsCineon(buf);
 }
 
-ImBuf *imb_load_cineon(unsigned char *mem, size_t size, int flags, char colorspace[IM_MAX_SPACE])
+ImBuf *imb_load_cineon(const unsigned char *mem, size_t size, int flags, char colorspace[IM_MAX_SPACE])
 {
 	if (imb_is_cineon(mem))
 		return imb_load_dpx_cineon(mem, size, 1, flags, colorspace);
@@ -198,12 +199,12 @@ int imb_save_dpx(struct ImBuf *buf, const char *myfile, int flags)
 	return imb_save_dpx_cineon(buf, myfile, 0, flags);
 }
 
-int imb_is_dpx(unsigned char *buf)
+int imb_is_dpx(const unsigned char *buf)
 {
 	return logImageIsDpx(buf);
 }
 
-ImBuf *imb_load_dpx(unsigned char *mem, size_t size, int flags, char colorspace[IM_MAX_SPACE])
+ImBuf *imb_load_dpx(const unsigned char *mem, size_t size, int flags, char colorspace[IM_MAX_SPACE])
 {
 	if (imb_is_dpx(mem))
 		return imb_load_dpx_cineon(mem, size, 0, flags, colorspace);

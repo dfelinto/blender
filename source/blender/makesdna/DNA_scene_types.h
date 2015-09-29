@@ -873,14 +873,12 @@ typedef struct GameData {
 
 /* GameData.matmode */
 enum {
+#ifdef DNA_DEPRECATED
 	GAME_MAT_TEXFACE    = 0, /* deprecated */
+#endif
 	GAME_MAT_MULTITEX   = 1,
 	GAME_MAT_GLSL       = 2,
 };
-
-#if (DNA_DEPRECATED_GCC_POISON == 1)
-#pragma GCC poison GAME_MAT_TEXFACE
-#endif
 
 /* GameData.lodflag */
 #define SCE_LOD_USE_HYST		(1 << 0)
@@ -943,6 +941,9 @@ typedef struct Paint {
 	
 	/* flags used for symmetry */
 	int symmetry_flags;
+
+	float tile_offset[3];
+	int pad2;
 } Paint;
 
 /* ------------------------------------------- */
@@ -1031,7 +1032,6 @@ typedef struct Sculpt {
 	float pad;
 
 	struct Object *gravity_object;
-	void *pad2;
 } Sculpt;
 
 typedef struct UvSculpt {
@@ -1443,6 +1443,8 @@ typedef struct Scene {
 	
 	/* RigidBody simulation world+settings */
 	struct RigidBodyWorld *rigidbody_world;
+
+	struct PreviewImage *preview;
 } Scene;
 
 /* **************** RENDERDATA ********************* */
@@ -1562,6 +1564,7 @@ typedef struct Scene {
 #define R_STAMP_SEQSTRIP	0x0200
 #define R_STAMP_RENDERTIME	0x0400
 #define R_STAMP_CAMERALENS	0x0800
+#define R_STAMP_STRIPMETA	0x1000
 #define R_STAMP_ALL (R_STAMP_TIME|R_STAMP_FRAME|R_STAMP_DATE|R_STAMP_CAMERA|R_STAMP_SCENE| \
                      R_STAMP_NOTE|R_STAMP_MARKER|R_STAMP_FILENAME|R_STAMP_SEQSTRIP|        \
                      R_STAMP_RENDERTIME|R_STAMP_CAMERALENS)
@@ -1577,12 +1580,7 @@ enum {
 	/*R_COLOR_MANAGEMENT_PREDIVIDE    = (1 << 1)*/  /* deprecated, shouldn't be used */
 };
 
-#if 0  /* TODO */
-#if (DNA_DEPRECATED_GCC_POISON == 1)
-#pragma GCC poison R_COLOR_MANAGEMENT
-#endif
-#endif
-
+#ifdef DNA_DEPRECATED
 /* subimtype, flag options for imtype */
 enum {
 	R_OPENEXR_HALF	= 1,  /*deprecated*/
@@ -1597,10 +1595,6 @@ enum {
 	R_JPEG2K_CINE_PRESET	=     256,                                   /*deprecated*/
 	R_JPEG2K_CINE_48FPS		=     512,                                   /*deprecated*/
 };
-
-#if (DNA_DEPRECATED_GCC_POISON == 1)
-#pragma GCC poison R_OPENEXR_HALF R_OPENEXR_ZBUF R_PREVIEW_JPG R_CINEON_LOG R_TIFF_16BIT
-#pragma GCC poison R_JPEG2K_12BIT R_JPEG2K_16BIT R_JPEG2K_YCC R_JPEG2K_CINE_PRESET R_JPEG2K_CINE_48FPS
 #endif
 
 /* bake_mode: same as RE_BAKE_xxx defines */
@@ -1706,6 +1700,8 @@ extern const char *RE_engine_id_CYCLES;
 #define SCE_SNAP_PEEL_OBJECT	4
 #define SCE_SNAP_PROJECT		8
 #define SCE_SNAP_NO_SELF		16
+#define SCE_SNAP_ABS_GRID		32
+
 /* toolsettings->snap_target */
 #define SCE_SNAP_TARGET_CLOSEST	0
 #define SCE_SNAP_TARGET_CENTER	1
@@ -1804,15 +1800,12 @@ typedef enum eVGroupSelect {
 #define AUDIO_VOLUME_ANIMATED     (1<<3)
 
 enum {
+#ifdef DNA_DEPRECATED
 	FFMPEG_MULTIPLEX_AUDIO  = 1,  /* deprecated, you can choose none as audiocodec now */
+#endif
 	FFMPEG_AUTOSPLIT_OUTPUT = 2,
 	FFMPEG_LOSSLESS_OUTPUT  = 4,
 };
-
-#if (DNA_DEPRECATED_GCC_POISON == 1)
-#pragma GCC poison FFMPEG_MULTIPLEX_AUDIO
-#endif
-
 
 /* Paint.flags */
 typedef enum {
@@ -1828,7 +1821,10 @@ typedef enum SymmetryFlags {
 	PAINT_SYMM_X = (1 << 0),
 	PAINT_SYMM_Y = (1 << 1),
 	PAINT_SYMM_Z = (1 << 2),
-	PAINT_SYMMETRY_FEATHER = (1 << 3)
+	PAINT_SYMMETRY_FEATHER = (1 << 3),
+	PAINT_TILE_X = (1 << 4),
+	PAINT_TILE_Y = (1 << 5),
+	PAINT_TILE_Z = (1 << 6),
 } SymmetryFlags;
 
 #define PAINT_SYMM_AXIS_ALL (PAINT_SYMM_X | PAINT_SYMM_Y | PAINT_SYMM_Z)
@@ -1836,10 +1832,12 @@ typedef enum SymmetryFlags {
 /* Sculpt.flags */
 /* These can eventually be moved to paint flags? */
 typedef enum SculptFlags {
+#ifdef DNA_DEPRECATED
 	/* deprecated, part of paint struct symmetry_flags now */
 	SCULPT_SYMM_X = (1 << 0),
 	SCULPT_SYMM_Y = (1 << 1),
 	SCULPT_SYMM_Z = (1 << 2),
+#endif
 
 	SCULPT_LOCK_X = (1 << 3),
 	SCULPT_LOCK_Y = (1 << 4),
@@ -1869,11 +1867,6 @@ typedef enum ImagePaintMode {
 	IMAGEPAINT_MODE_MATERIAL, /* detect texture paint slots from the material */
 	IMAGEPAINT_MODE_IMAGE,    /* select texture paint image directly */
 } ImagePaintMode;
-
-#if (DNA_DEPRECATED_GCC_POISON == 1)
-#pragma GCC poison SCULPT_SYMM_X SCULPT_SYMM_Y SCULPT_SYMM_Z SCULPT_SYMMETRY_FEATHER
-#endif
-
 
 /* ImagePaintSettings.flag */
 #define IMAGEPAINT_DRAWING				1

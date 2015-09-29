@@ -37,7 +37,7 @@
 #include "BLI_threads.h"
 #include "BLI_utildefines.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "IMB_imbuf_types.h"
 #include "IMB_imbuf.h"        /* for rectcpy */
@@ -262,7 +262,6 @@ static void env_set_imats(Render *re)
 
 void env_rotate_scene(Render *re, float mat[4][4], int do_rotate)
 {
-	GroupObject *go;
 	ObjectRen *obr;
 	ObjectInstanceRen *obi;
 	LampRen *lar = NULL;
@@ -321,19 +320,18 @@ void env_rotate_scene(Render *re, float mat[4][4], int do_rotate)
 		invert_m4(obr->ob->imat_ren);
 	}
 	
-	for (go = re->lights.first; go; go = go->next) {
-		lar = go->lampren;
-		
+	for (lar = re->lampren.first; lar; lar = lar->next) {
+		float lamp_imat[4][4];
+
 		/* copy from add_render_lamp */
 		if (do_rotate == 1)
 			mul_m4_m4m4(tmpmat, re->viewmat, lar->lampmat);
 		else
 			mul_m4_m4m4(tmpmat, re->viewmat_orig, lar->lampmat);
-		invert_m4_m4(go->ob->imat, tmpmat);
-		
+
+		invert_m4_m4(lamp_imat, tmpmat);
 		copy_m3_m4(lar->mat, tmpmat);
-		
-		copy_m3_m4(lar->imat, go->ob->imat);
+		copy_m3_m4(lar->imat, lamp_imat);
 
 		lar->vec[0]= -tmpmat[2][0];
 		lar->vec[1]= -tmpmat[2][1];
@@ -498,7 +496,8 @@ static void render_envmap(Render *re, EnvMap *env)
 			float *alpha;
 			float *rect;
 
-			rect = RE_RenderLayerGetPass(rl, SCE_PASS_COMBINED, re->viewname);
+			/* envmap is rendered independently of multiview  */
+			rect = RE_RenderLayerGetPass(rl, SCE_PASS_COMBINED, "");
 			ibuf = IMB_allocImBuf(envre->rectx, envre->recty, 24, IB_rect | IB_rectfloat);
 			memcpy(ibuf->rect_float, rect, ibuf->channels * ibuf->x * ibuf->y * sizeof(float));
 			

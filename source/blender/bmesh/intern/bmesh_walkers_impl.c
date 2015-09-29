@@ -86,6 +86,30 @@ static bool bmw_mask_check_face(BMWalker *walker, BMFace *f)
 /** \} */
 
 
+/** \name BMesh Queries (modified to check walker flags)
+ * \{ */
+
+/**
+ * Check for a wire edge, taking ignoring hidden.
+ */
+static bool bmw_edge_is_wire(const BMWalker *walker, const BMEdge *e)
+{
+	if (walker->flag & BMW_FLAG_TEST_HIDDEN) {
+		/* check if this is a wire edge, ignoring hidden faces */
+		if (BM_edge_is_wire(e)) {
+			return true;
+		}
+		else {
+			return BM_edge_is_all_face_flag_test(e, BM_ELEM_HIDDEN, false);
+		}
+	}
+	else {
+		return BM_edge_is_wire(e);
+	}
+}
+/** \} */
+
+
 /** \name Shell Walker
  * \{
  *
@@ -239,6 +263,10 @@ static void bmw_LoopShellWalker_visitLoop(BMWalker *walker, BMLoop *l)
 		return;
 	}
 
+	if (!bmw_mask_check_face(walker, l->f)) {
+		return;
+	}
+
 	shellWalk = BMW_state_add(walker);
 	shellWalk->curloop = l;
 	BLI_gset_insert(walker->visit_set, l);
@@ -364,9 +392,13 @@ static void bmw_LoopShellWalker_visitEdgeWire(BMWalker *walker, BMEdge *e)
 {
 	BMwLoopShellWireWalker *shellWalk = NULL;
 
-	BLI_assert(BM_edge_is_wire(e));
+	BLI_assert(bmw_edge_is_wire(walker, e));
 
 	if (BLI_gset_haskey(walker->visit_set_alt, e)) {
+		return;
+	}
+
+	if (!bmw_mask_check_edge(walker, e)) {
 		return;
 	}
 
@@ -385,9 +417,13 @@ static void bmw_LoopShellWireWalker_visitVert(BMWalker *walker, BMVert *v, const
 		return;
 	}
 
+	if (!bmw_mask_check_vert(walker, v)) {
+		return;
+	}
+
 	e = v->e;
 	do {
-		if (BM_edge_is_wire(e) && (e != e_from)) {
+		if (bmw_edge_is_wire(walker, e) && (e != e_from)) {
 			BMVert *v_other;
 			BMIter iter;
 			BMLoop *l;
@@ -397,6 +433,7 @@ static void bmw_LoopShellWireWalker_visitVert(BMWalker *walker, BMVert *v, const
 			/* check if we step onto a non-wire vertex */
 			v_other = BM_edge_other_vert(e, v);
 			BM_ITER_ELEM (l, &iter, v_other, BM_LOOPS_OF_VERT) {
+
 				bmw_LoopShellWalker_visitLoop(walker, l);
 			}
 		}
@@ -434,8 +471,18 @@ static void bmw_LoopShellWireWalker_begin(BMWalker *walker, void *data)
 		case BM_EDGE:
 		{
 			BMEdge *e = (BMEdge *)h;
-			if (BM_edge_is_wire(e)) {
-				bmw_LoopShellWalker_visitEdgeWire(walker, e);
+			if (bmw_mask_check_edge(walker, e)) {
+				bmw_LoopShellWireWalker_visitVert(walker, e->v1, NULL);
+				bmw_LoopShellWireWalker_visitVert(walker, e->v2, NULL);
+			}
+			else {
+				BMLoop *l_iter, *l_first;
+
+				l_iter = l_first = e->l;
+				do {
+					bmw_LoopShellWalker_visitLoop(walker, l_iter);
+					bmw_LoopShellWalker_visitLoop(walker, l_iter->next);
+				} while ((l_iter = l_iter->radial_next) != l_first);
 			}
 			break;
 		}
@@ -1197,7 +1244,7 @@ static void *bmw_FaceLoopWalker_step(BMWalker *walker)
  *
  * Starts at a tool-flagged edge and walks over the edge ring
  * Conditions for starting and stepping the edge ring have been
- * tuned in an attempt to match the edge rings built by EditMesh
+ * tuned to match behavior users expect (dating back to v2.4x).
  */
 static void bmw_EdgeringWalker_begin(BMWalker *walker, void *data)
 {
@@ -1625,7 +1672,7 @@ static BMWalker bmw_ConnectedVertexWalker_Type = {
 BMWalker *bm_walker_types[] = {
 	&bmw_VertShellWalker_Type,          /* BMW_VERT_SHELL */
 	&bmw_LoopShellWalker_Type,          /* BMW_LOOP_SHELL */
-    &bmw_LoopShellWireWalker_Type,      /* BMW_LOOP_SHELL_WIRE */
+	&bmw_LoopShellWireWalker_Type,      /* BMW_LOOP_SHELL_WIRE */
 	&bmw_FaceShellWalker_Type,          /* BMW_FACE_SHELL */
 	&bmw_EdgeLoopWalker_Type,           /* BMW_EDGELOOP */
 	&bmw_FaceLoopWalker_Type,           /* BMW_FACELOOP */

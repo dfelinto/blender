@@ -568,7 +568,7 @@ static int calc_manipulator_stats(const bContext *C)
 			{
 				if (obedit || ob->mode & OB_MODE_POSE) {
 					float mat[3][3];
-					ED_getTransformOrientationMatrix(C, mat, (v3d->around == V3D_ACTIVE));
+					ED_getTransformOrientationMatrix(C, mat, v3d->around);
 					copy_m4_m3(rv3d->twmat, mat);
 					break;
 				}
@@ -583,7 +583,7 @@ static int calc_manipulator_stats(const bContext *C)
 					 * and users who select many bones will understand whats going on and what local means
 					 * when they start transforming */
 					float mat[3][3];
-					ED_getTransformOrientationMatrix(C, mat, (v3d->around == V3D_ACTIVE));
+					ED_getTransformOrientationMatrix(C, mat, v3d->around);
 					copy_m4_m3(rv3d->twmat, mat);
 					break;
 				}
@@ -602,7 +602,7 @@ static int calc_manipulator_stats(const bContext *C)
 			default: /* V3D_MANIP_CUSTOM */
 			{
 				float mat[3][3];
-				if (applyTransformOrientation(C, mat, NULL)) {
+				if (applyTransformOrientation(C, mat, NULL, v3d->twmode - V3D_MANIP_CUSTOM)) {
 					copy_m4_m3(rv3d->twmat, mat);
 				}
 				break;
@@ -643,7 +643,7 @@ static void test_manipulator_axis(const bContext *C)
 
 static float screen_aligned(RegionView3D *rv3d, float mat[4][4])
 {
-	glTranslatef(mat[3][0], mat[3][1], mat[3][2]);
+	glTranslate3fv(mat[3]);
 
 	/* sets view screen aligned */
 	glRotatef(-360.0f * saacos(rv3d->viewquat[0]) / (float)M_PI, rv3d->viewquat[1], rv3d->viewquat[2], rv3d->viewquat[3]);
@@ -923,7 +923,7 @@ static void draw_manipulator_rotate(
 	/* prepare for screen aligned draw */
 	size = len_v3(rv3d->twmat[0]);
 	glPushMatrix();
-	glTranslatef(rv3d->twmat[3][0], rv3d->twmat[3][1], rv3d->twmat[3][2]);
+	glTranslate3fv(rv3d->twmat[3]);
 
 	if (arcs) {
 		/* clipplane makes nice handles, calc here because of multmatrix but with translate! */
@@ -1362,7 +1362,7 @@ static void draw_manipulator_translate(
 
 	manipulator_axis_order(rv3d, axis_order);
 
-	// XXX if (moving) glTranslatef(t->vec[0], t->vec[1], t->vec[2]);
+	// XXX if (moving) glTranslate3fv(t->vec);
 	glDisable(GL_DEPTH_TEST);
 
 	/* center circle, do not add to selection when shift is pressed (planar constraint) */

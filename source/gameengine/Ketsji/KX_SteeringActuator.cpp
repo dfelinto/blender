@@ -561,7 +561,7 @@ PyAttributeDef KX_SteeringActuator::Attributes[] = {
 	KX_PYATTRIBUTE_RO_FUNCTION("steeringVec", KX_SteeringActuator, pyattr_get_steeringVec),
 	KX_PYATTRIBUTE_SHORT_RW("facingMode", 0, 6, true, KX_SteeringActuator, m_facingMode),
 	KX_PYATTRIBUTE_INT_RW("pathUpdatePeriod", -1, 100000, true, KX_SteeringActuator, m_pathUpdatePeriod),
-    KX_PYATTRIBUTE_BOOL_RW("lockZVelocity", KX_SteeringActuator, m_lockzvel),
+	KX_PYATTRIBUTE_BOOL_RW("lockZVelocity", KX_SteeringActuator, m_lockzvel),
 	{ NULL }	//Sentinel
 };
 
@@ -610,8 +610,7 @@ int KX_SteeringActuator::pyattr_set_navmesh(void *self, const struct KX_PYATTRIB
 	if (!ConvertPythonToGameObject(value, &gameobj, true, "actuator.object = value: KX_SteeringActuator"))
 		return PY_SET_ATTR_FAIL; // ConvertPythonToGameObject sets the error
 
-    if (dynamic_cast<KX_NavMeshObject *>(gameobj) == NULL)
-	{
+	if (dynamic_cast<KX_NavMeshObject *>(gameobj) == NULL) {
 		PyErr_Format(PyExc_TypeError, "KX_NavMeshObject is expected");
 		return PY_SET_ATTR_FAIL;
 	}

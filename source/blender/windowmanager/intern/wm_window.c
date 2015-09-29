@@ -47,7 +47,7 @@
 #include "BLI_blenlib.h"
 #include "BLI_utildefines.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_blender.h"
 #include "BKE_context.h"
@@ -75,8 +75,6 @@
 #include "GPU_extensions.h"
 #include "GPU_init_exit.h"
 #include "GPU_glew.h"
-
-#include "UI_interface.h"
 
 /* for assert */
 #ifndef NDEBUG
@@ -400,6 +398,10 @@ static void wm_window_add_ghostwindow(wmWindowManager *wm, const char *title, wm
 	if (win->stereo3d_format->display_mode == S3D_DISPLAY_PAGEFLIP)
 		glSettings.flags |= GHOST_glStereoVisual;
 
+	if (G.debug & G_DEBUG_GPU) {
+		glSettings.flags |= GHOST_glDebugContext;
+	}
+
 	if (!(U.uiflag2 & USER_OPENGL_NO_WARN_SUPPORT))
 		glSettings.flags |= GHOST_glWarnSupport;
 
@@ -512,6 +514,11 @@ void wm_window_add_ghostwindows(wmWindowManager *wm)
 			if (wm_init_state.override_flag & WIN_OVERRIDE_WINSTATE) {
 				win->windowstate = wm_init_state.windowstate;
 				wm_init_state.override_flag &= ~WIN_OVERRIDE_WINSTATE;
+			}
+
+			/* without this, cursor restore may fail, T45456 */
+			if (win->cursor == 0) {
+				win->cursor = CURSOR_STD;
 			}
 
 			wm_window_add_ghostwindow(wm, "Blender", win);
@@ -1010,9 +1017,12 @@ static int ghost_event_proc(GHOST_EventHandle evt, GHOST_TUserDataPtr C_void_ptr
 						
 #if defined(__APPLE__) || defined(WIN32)
 						/* OSX and Win32 don't return to the mainloop while resize */
-						wm_event_do_handlers(C);
 						wm_event_do_notifiers(C);
 						wm_draw_update(C);
+
+						/* Warning! code above nulls 'C->wm.window', causing BGE to quit, see: T45699.
+						 * Further, its easier to match behavior across platforms, so restore the window. */
+						CTX_wm_window_set(C, win);
 #endif
 					}
 				}
@@ -1159,6 +1169,8 @@ static int wm_window_timer(const bContext *C)
 					wm_jobs_timer(C, wm, wt);
 				else if (wt->event_type == TIMERAUTOSAVE)
 					wm_autosave_timer(C, wm, wt);
+				else if (wt->event_type == TIMERNOTIFIER)
+					WM_main_add_notifier(GET_UINT_FROM_POINTER(wt->customdata), NULL);
 				else if (win) {
 					wmEvent event;
 					wm_event_init_from_window(win, &event);
@@ -1265,7 +1277,7 @@ void WM_event_timer_sleep(wmWindowManager *wm, wmWindow *UNUSED(win), wmTimer *t
 wmTimer *WM_event_add_timer(wmWindowManager *wm, wmWindow *win, int event_type, double timestep)
 {
 	wmTimer *wt = MEM_callocN(sizeof(wmTimer), "window timer");
-	
+
 	wt->event_type = event_type;
 	wt->ltime = PIL_check_seconds_timer();
 	wt->ntime = wt->ltime + timestep;
@@ -1275,6 +1287,23 @@ wmTimer *WM_event_add_timer(wmWindowManager *wm, wmWindow *win, int event_type, 
 	
 	BLI_addtail(&wm->timers, wt);
 	
+	return wt;
+}
+
+wmTimer *WM_event_add_timer_notifier(wmWindowManager *wm, wmWindow *win, unsigned int type, double timestep)
+{
+	wmTimer *wt = MEM_callocN(sizeof(wmTimer), "window timer");
+
+	wt->event_type = TIMERNOTIFIER;
+	wt->ltime = PIL_check_seconds_timer();
+	wt->ntime = wt->ltime + timestep;
+	wt->stime = wt->ltime;
+	wt->timestep = timestep;
+	wt->win = win;
+	wt->customdata = SET_UINT_IN_POINTER(type);
+
+	BLI_addtail(&wm->timers, wt);
+
 	return wt;
 }
 
@@ -1308,6 +1337,12 @@ void WM_event_remove_timer(wmWindowManager *wm, wmWindow *UNUSED(win), wmTimer *
 			}
 		}
 	}
+}
+
+void WM_event_remove_timer_notifier(wmWindowManager *wm, wmWindow *win, wmTimer *timer)
+{
+	timer->customdata = NULL;
+	WM_event_remove_timer(wm, win, timer);
 }
 
 /* ******************* clipboard **************** */
@@ -1521,6 +1556,18 @@ void WM_cursor_warp(wmWindow *win, int x, int y)
 
 		win->eventstate->x = oldx;
 		win->eventstate->y = oldy;
+	}
+}
+
+/**
+ * Set x, y to values we can actually position the cursor to.
+ */
+void WM_cursor_compatible_xy(wmWindow *win, int *x, int *y)
+{
+	float f = GHOST_GetNativePixelSize(win->ghostwin);
+	if (f != 1.0f) {
+		*x = (int)(*x / f) * f;
+		*y = (int)(*y / f) * f;
 	}
 }
 

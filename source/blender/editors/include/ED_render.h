@@ -49,6 +49,7 @@ void ED_render_id_flush_update(struct Main *bmain, struct ID *id);
 void ED_render_engine_changed(struct Main *bmain);
 void ED_render_engine_area_exit(struct Main *bmain, struct ScrArea *sa);
 void ED_render_scene_update(struct Main *bmain, struct Scene *scene, int updated);
+void ED_render_scene_update_pre(struct Main *bmain, struct Scene *scene, bool time);
 
 void ED_viewport_render_kill_jobs(struct wmWindowManager *wm, struct Main *bmain, bool free_database);
 struct Scene *ED_render_job_get_scene(const struct bContext *C);
@@ -70,7 +71,7 @@ enum {
 	PR_ICON_DEFERRED = 3,
 };
 
-void ED_preview_init_dbase(void);
+void ED_preview_ensure_dbase(void);
 void ED_preview_free_dbase(void);
 
 void ED_preview_shader_job(const struct bContext *C, void *owner, struct ID *id, struct ID *parent, struct MTex *slot, int sizex, int sizey, int method);

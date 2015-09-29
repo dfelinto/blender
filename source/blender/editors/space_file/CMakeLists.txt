@@ -24,12 +24,14 @@ set(INC
 	../../blenkernel
 	../../blenlib
 	../../blenloader
+	../../blentranslation
 	../../imbuf
 	../../gpu
 	../../makesdna
 	../../makesrna
 	../../render/extern/include
 	../../windowmanager
+	../../../../intern/atomic
 	../../../../intern/guardedalloc
 	../../../../intern/glew-mx
 )

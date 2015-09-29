@@ -36,7 +36,7 @@
 #include "BLI_string.h"
 #include "BLI_math.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_context.h"
 #include "BKE_modifier.h"
@@ -237,10 +237,13 @@ static void edgering_preview_calc_edges(RingSelOpData *lcd, DerivedMesh *dm, con
 	edge_stack = BLI_stack_new(sizeof(BMEdge *), __func__);
 
 	eed_last = NULL;
-	for (eed = eed_start = BMW_begin(&walker, eed_start); eed; eed = BMW_step(&walker)) {
+	for (eed = eed_last = BMW_begin(&walker, lcd->eed); eed; eed = BMW_step(&walker)) {
 		BLI_stack_push(edge_stack, &eed);
-		eed_last = eed;
 	}
+	BMW_end(&walker);
+
+
+	eed_start = *(BMEdge **)BLI_stack_peek(edge_stack);
 
 	edges = MEM_mallocN(
 	        (sizeof(*edges) * (BLI_stack_count(edge_stack) + (eed_last != eed_start))) * previewlines, __func__);
@@ -310,7 +313,6 @@ static void edgering_preview_calc_edges(RingSelOpData *lcd, DerivedMesh *dm, con
 
 	BLI_stack_free(edge_stack);
 
-	BMW_end(&walker);
 	lcd->edges = edges;
 	lcd->totedge = tot;
 }
@@ -428,8 +430,9 @@ static void ringsel_finish(bContext *C, wmOperator *op)
 			                   cuts, seltype, SUBD_CORNER_PATH, 0, true,
 			                   use_only_quads, 0);
 
-			/* when used in a macro tessface is already re-recalculated */
-			EDBM_update_generic(em, (is_macro == false), true);
+			/* when used in a macro the tessfaces will be recalculated anyway,
+			 * this is needed here because modifiers depend on updated tessellation, see T45920 */
+			EDBM_update_generic(em, true, true);
 
 			if (is_single) {
 				/* de-select endpoints */
@@ -854,7 +857,7 @@ void MESH_OT_loopcut(wmOperatorType *ot)
 	RNA_def_property_enum_items(prop, proportional_falloff_curve_only_items);
 	RNA_def_property_enum_default(prop, PROP_INVSQUARE);
 	RNA_def_property_ui_text(prop, "Falloff", "Falloff type the feather");
-	RNA_def_property_translation_context(prop, BLF_I18NCONTEXT_ID_CURVE); /* Abusing id_curve :/ */
+	RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_CURVE); /* Abusing id_curve :/ */
 
 	prop = RNA_def_int(ot->srna, "edge_index", -1, -1, INT_MAX, "Edge Index", "", 0, INT_MAX);
 	RNA_def_property_flag(prop, PROP_HIDDEN);

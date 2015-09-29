@@ -191,6 +191,8 @@ typedef struct bNode {
 	float width, height;	/* node custom width and height */
 	float miniwidth;		/* node width if hidden */
 	float offsetx, offsety;	/* additional offset from loc */
+	float anim_init_locx;	/* initial locx for insert offset animation */
+	float anim_ofsx;		/* offset that will be added to locx for insert offset animation */
 	
 	int update;				/* update flags */
 	
@@ -386,6 +388,8 @@ typedef struct bNodeTree {
 	int (*test_break)(void *);
 	void (*update_draw)(void *);
 	void *tbh, *prh, *sdh, *udh;
+
+	void *duplilock;
 	
 } bNodeTree;
 
@@ -725,6 +729,8 @@ typedef struct NodeTexImage {
 	int projection;
 	float projection_blend;
 	int interpolation;
+	int extension;
+	int pad;
 } NodeTexImage;
 
 typedef struct NodeTexChecker {
@@ -787,6 +793,18 @@ typedef struct NodeShaderVectTransform {
 	int convert_from, convert_to;
 	int pad;
 } NodeShaderVectTransform;
+
+typedef struct NodeShaderTexPointDensity {
+	NodeTexBase base;
+	short point_source, pad;
+	int particle_system;
+	float radius;
+	int resolution;
+	short space;
+	short interpolation;
+	short color_source;
+	short pad2;
+} NodeShaderTexPointDensity;
 
 /* TEX_output */
 typedef struct TexNodeOutput {
@@ -962,6 +980,10 @@ typedef struct NodeSunBeams {
 #define SHD_PROJ_EQUIRECTANGULAR	0
 #define SHD_PROJ_MIRROR_BALL		1
 
+#define SHD_IMAGE_EXTENSION_REPEAT	0
+#define SHD_IMAGE_EXTENSION_EXTEND	1
+#define SHD_IMAGE_EXTENSION_CLIP	2
+
 /* image texture */
 #define SHD_PROJ_FLAT				0
 #define SHD_PROJ_BOX				1
@@ -1022,14 +1044,12 @@ enum {
 
 /* subsurface */
 enum {
+#ifdef DNA_DEPRECATED
 	SHD_SUBSURFACE_COMPATIBLE		= 0, // Deprecated
+#endif
 	SHD_SUBSURFACE_CUBIC			= 1,
 	SHD_SUBSURFACE_GAUSSIAN			= 2,
 };
-
-#if (DNA_DEPRECATED_GCC_POISON == 1)
-#pragma GCC poison SHD_SUBSURFACE_COMPATIBLE
-#endif
 
 /* blur node */
 #define CMP_NODE_BLUR_ASPECT_NONE		0
@@ -1089,5 +1109,23 @@ enum {
 };
 
 #define CMP_NODE_PLANETRACKDEFORM_MBLUR_SAMPLES_MAX 64
+
+/* Point Density shader node */
+
+enum {
+	SHD_POINTDENSITY_SOURCE_PSYS = 0,
+	SHD_POINTDENSITY_SOURCE_OBJECT = 1,
+};
+
+enum {
+	SHD_POINTDENSITY_SPACE_OBJECT = 0,
+	SHD_POINTDENSITY_SPACE_WORLD  = 1,
+};
+
+enum {
+	SHD_POINTDENSITY_COLOR_PARTAGE   = 1,
+	SHD_POINTDENSITY_COLOR_PARTSPEED = 2,
+	SHD_POINTDENSITY_COLOR_PARTVEL   = 3,
+};
 
 #endif

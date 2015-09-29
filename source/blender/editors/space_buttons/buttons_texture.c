@@ -37,7 +37,7 @@
 #include "BLI_string.h"
 #include "BLI_utildefines.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "DNA_brush_types.h"
 #include "DNA_ID.h"
@@ -539,6 +539,9 @@ static void template_texture_select(bContext *C, void *user_p, void *UNUSED(arg)
 				if (user->ptr.data == part->mtex[a])
 					part->texact = a;
 		}
+
+		if (sbuts && tex)
+			sbuts->preview = 1;
 	}
 
 	ct->user = user;

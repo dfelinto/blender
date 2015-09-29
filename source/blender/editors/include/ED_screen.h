@@ -57,15 +57,18 @@ void    ED_region_set(const struct bContext *C, struct ARegion *ar);
 void    ED_region_update_rect(struct bContext *C, struct ARegion *ar);
 void    ED_region_init(struct bContext *C, struct ARegion *ar);
 void    ED_region_tag_redraw(struct ARegion *ar);
-void    ED_region_tag_redraw_partial(struct ARegion *ar, struct rcti *rct);
+void    ED_region_tag_redraw_partial(struct ARegion *ar, const struct rcti *rct);
 void    ED_region_tag_redraw_overlay(struct ARegion *ar);
 void    ED_region_tag_refresh_ui(struct ARegion *ar);
 void    ED_region_panels_init(struct wmWindowManager *wm, struct ARegion *ar);
-void    ED_region_panels(const struct bContext *C, struct ARegion *ar, int vertical, const char *context, int contextnr);
+void    ED_region_panels(
+            const struct bContext *C, struct ARegion *ar,
+            const char *context, int contextnr,
+            const bool vertical);
 void    ED_region_header_init(struct ARegion *ar);
 void    ED_region_header(const struct bContext *C, struct ARegion *ar);
 void    ED_region_toggle_hidden(struct bContext *C, struct ARegion *ar);
-void    ED_region_info_draw(struct ARegion *ar, const char *text, int block, float fill_color[4]);
+void    ED_region_info_draw(struct ARegion *ar, const char *text, float fill_color[4], const bool full_redraw);
 void    ED_region_image_metadata_draw(int x, int y, struct ImBuf *ibuf, rctf frame, float zoomx, float zoomy);
 void    ED_region_grid_draw(struct ARegion *ar, float zoomx, float zoomy);
 float	ED_region_blend_factor(struct ARegion *ar);
@@ -99,10 +102,10 @@ void    ED_screen_refresh(struct wmWindowManager *wm, struct wmWindow *win);
 void    ED_screen_do_listen(struct bContext *C, struct wmNotifier *note);
 bScreen *ED_screen_duplicate(struct wmWindow *win, struct bScreen *sc);
 bScreen *ED_screen_add(struct wmWindow *win, struct Scene *scene, const char *name);
-void    ED_screen_set(struct bContext *C, struct bScreen *sc);
-void    ED_screen_delete(struct bContext *C, struct bScreen *sc);
+bool    ED_screen_set(struct bContext *C, struct bScreen *sc);
+bool    ED_screen_delete(struct bContext *C, struct bScreen *sc);
 void    ED_screen_set_scene(struct bContext *C, struct bScreen *screen, struct Scene *scene);
-void    ED_screen_delete_scene(struct bContext *C, struct Scene *scene);
+bool    ED_screen_delete_scene(struct bContext *C, struct Scene *scene);
 void    ED_screen_set_subwinactive(struct bContext *C, struct wmEvent *event);
 void    ED_screen_exit(struct bContext *C, struct wmWindow *window, struct bScreen *screen);
 void    ED_screen_animation_timer(struct bContext *C, int redraws, int refresh, int sync, int enable);
@@ -121,6 +124,7 @@ void    ED_update_for_newframe(struct Main *bmain, struct Scene *scene, int mute
 void    ED_refresh_viewport_fps(struct bContext *C);
 int		ED_screen_animation_play(struct bContext *C, int sync, int mode);
 bScreen	*ED_screen_animation_playing(const struct wmWindowManager *wm);
+bScreen *ED_screen_animation_no_scrub(const struct wmWindowManager *wm);
 
 /* screen keymaps */
 void    ED_operatortypes_screen(void);

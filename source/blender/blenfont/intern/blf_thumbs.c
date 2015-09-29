@@ -45,7 +45,7 @@
 #include "blf_internal_types.h"
 
 #include "BLF_api.h"
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BLI_strict_flags.h"
 
@@ -84,13 +84,13 @@ void BLF_thumb_preview(
 
 	/* Always create the image with a white font,
 	 * the caller can theme how it likes */
-	memcpy(font->buf_info.col, font_color, sizeof(font->buf_info.col));
+	memcpy(font->buf_info.col_init, font_color, sizeof(font->buf_info.col_init));
 	font->pos[1] = (float)h;
 
 	font_size_curr = font_size;
 
 	for (i = 0; i < draw_str_lines; i++) {
-		const char *draw_str_i18n = BLF_translate_do(BLF_I18NCONTEXT_DEFAULT, draw_str[i]);
+		const char *draw_str_i18n = BLT_translate_do(BLT_I18NCONTEXT_DEFAULT, draw_str[i]);
 		const size_t draw_str_i18n_len = strlen(draw_str_i18n);
 		int draw_str_i18n_nbr = 0;
 
@@ -110,10 +110,10 @@ void BLF_thumb_preview(
 		if (blf_font_count_missing_chars(
 		        font, draw_str_i18n, draw_str_i18n_len, &draw_str_i18n_nbr) > (draw_str_i18n_nbr / 2))
 		{
-			blf_font_buffer(font, draw_str[i]);
+			blf_font_draw_buffer(font, draw_str[i], (size_t)draw_str_i18n_nbr, NULL);
 		}
 		else {
-			blf_font_buffer(font, draw_str_i18n);
+			blf_font_draw_buffer(font, draw_str_i18n, draw_str_i18n_len, NULL);
 		}
 	}
 

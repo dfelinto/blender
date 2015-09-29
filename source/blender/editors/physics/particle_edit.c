@@ -424,8 +424,8 @@ static bool PE_create_shape_tree(PEData *data, Object *shapeob)
 		return false;
 	}
 	
-	DM_ensure_tessface(dm);
-	return bvhtree_from_mesh_faces(&data->shape_bvh, dm, 0.0f, 4, 8);
+	DM_ensure_looptri(dm);
+	return (bvhtree_from_mesh_looptri(&data->shape_bvh, dm, 0.0f, 4, 8) != NULL);
 }
 
 static void PE_free_shape_tree(PEData *data)
@@ -1685,10 +1685,10 @@ void PARTICLE_OT_select_random(wmOperatorType *ot)
 
 	/* properties */
 	RNA_def_float_percentage (ot->srna, "percent", 50.0f, 0.0f, 100.0f, "Percent",
-                           "Percentage (mean) of elements in randomly selected set",
-                           0.0f, 100.0f);
+	                          "Percentage (mean) of elements in randomly selected set",
+	                          0.0f, 100.0f);
 	ot->prop = RNA_def_enum (ot->srna, "type", select_random_type_items, RAN_HAIR,
-                           "Type", "Select either hair or points");
+	                         "Type", "Select either hair or points");
 }
 
 /************************ select linked operator ************************/
@@ -3485,7 +3485,7 @@ static int brush_add(PEData *data, short number)
 	if (psmd->dm->deformedOnly || psys->part->use_modifier_stack)
 		dm = psmd->dm;
 	else {
-		dm = mesh_get_derived_deform(scene, ob, CD_MASK_BAREMESH);
+		dm = mesh_get_derived_deform(scene, ob, CD_MASK_BAREMESH | CD_MASK_MFACE);
 		release_dm = true;
 	}
 

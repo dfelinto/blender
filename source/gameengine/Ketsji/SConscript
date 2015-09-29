@@ -30,7 +30,8 @@ import sys
 Import ('env')
 
 sources = env.Glob('*.cpp')
-defs = env['BF_GL_DEFINITIONS']
+defs = []
+defs += env['BF_GL_DEFINITIONS']
 
 incs = [
     '.',
@@ -40,8 +41,6 @@ incs = [
     '#source/blender',
     env['BF_GLEW_INC'],
     '#/intern/glew-mx',
-    '#intern/audaspace/FX',
-    '#intern/audaspace/intern',
     '#intern/moto/include',
     '#source/blender/blenfont',
     '#source/blender/blenkernel',
@@ -85,6 +84,11 @@ if  env['WITH_BF_SDL']:
 if env['WITH_BF_PYTHON']:
     incs += ' ' + env['BF_PYTHON_INC']
     defs.append('WITH_PYTHON')
+
+if env['WITH_BF_AUDASPACE']:
+    defs += env['BF_AUDASPACE_DEF']
+    incs += ' ' + env['BF_AUDASPACE_C_INC']
+    incs += ' ' + env['BF_AUDASPACE_PY_INC']
 
 if env['WITH_BF_FFMPEG']:
     defs.append('WITH_FFMPEG')

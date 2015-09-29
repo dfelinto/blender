@@ -44,7 +44,7 @@
 #  include "BLI_edgehash.h"
 #endif
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "DNA_material_types.h"
 #include "DNA_curve_types.h"
@@ -129,6 +129,9 @@
  */
 
 /* ------------------------------------------------------------------------- */
+
+#define CD_MASK_RENDER_INTERNAL \
+    (CD_MASK_BAREMESH | CD_MASK_MFACE | CD_MASK_MTFACE | CD_MASK_MCOL)
 
 static void split_v_renderfaces(ObjectRen *obr, int startvlak, int UNUSED(startvert), int UNUSED(usize), int vsize, int uIndex, int UNUSED(cyclu), int cyclv)
 {
@@ -378,7 +381,7 @@ static void calc_vertexnormals(Render *UNUSED(re), ObjectRen *obr, bool do_verte
 {
 	int a;
 
-		/* clear all vertex normals */
+	/* clear all vertex normals */
 	if (do_vertex_normal) {
 		for (a=0; a<obr->totvert; a++) {
 			VertRen *ver= RE_findOrAddVert(obr, a);
@@ -386,8 +389,8 @@ static void calc_vertexnormals(Render *UNUSED(re), ObjectRen *obr, bool do_verte
 		}
 	}
 
-		/* calculate cos of angles and point-masses, use as weight factor to
-		 * add face normal to vertex */
+	/* calculate cos of angles and point-masses, use as weight factor to
+	 * add face normal to vertex */
 	for (a=0; a<obr->totvlak; a++) {
 		VlakRen *vlr= RE_findOrAddVlak(obr, a);
 		if (do_vertex_normal && vlr->flag & ME_SMOOTH) {
@@ -404,7 +407,7 @@ static void calc_vertexnormals(Render *UNUSED(re), ObjectRen *obr, bool do_verte
 		}
 	}
 
-		/* do solid faces */
+	/* do solid faces */
 	for (a=0; a<obr->totvlak; a++) {
 		VlakRen *vlr= RE_findOrAddVlak(obr, a);
 
@@ -1250,7 +1253,7 @@ static void get_particle_uvco_mcol(short from, DerivedMesh *dm, float *fuv, int 
 	/* get uvco */
 	if (sd->uvco && ELEM(from, PART_FROM_FACE, PART_FROM_VOLUME)) {
 		for (i=0; i<sd->totuv; i++) {
-			if (num != DMCACHE_NOTFOUND) {
+			if (!ELEM(num, DMCACHE_NOTFOUND, DMCACHE_ISCHILD)) {
 				MFace *mface = dm->getTessFaceData(dm, num, CD_MFACE);
 				MTFace *mtface = (MTFace*)CustomData_get_layer_n(&dm->faceData, CD_MTFACE, i);
 				mtface += num;
@@ -3175,7 +3178,7 @@ static void init_render_mesh(Render *re, ObjectRen *obr, int timeoffset)
 	/* origindex currently used when using autosmooth, or baking to vertex colors. */
 	need_origindex = (do_autosmooth || ((re->flag & R_BAKING) && (re->r.bake_flag & R_BAKE_VCOL)));
 
-	mask= CD_MASK_BAREMESH|CD_MASK_MTFACE|CD_MASK_MCOL;
+	mask = CD_MASK_RENDER_INTERNAL;
 	if (!timeoffset)
 		if (need_orco)
 			mask |= CD_MASK_ORCO;
@@ -3269,8 +3272,14 @@ static void init_render_mesh(Render *re, ObjectRen *obr, int timeoffset)
 			RE_set_customdata_names(obr, &dm->faceData);
 
 			/* add tangent layer if we need one */
-			if (need_nmap_tangent!=0 && CustomData_get_layer_index(&dm->faceData, CD_TANGENT) == -1)
-				DM_add_tangent_layer(dm);
+			if (need_nmap_tangent!=0 && CustomData_get_layer_index(&dm->faceData, CD_TANGENT) == -1) {
+				bool generate_data = false;
+				if (CustomData_get_layer_index(&dm->loopData, CD_TANGENT) == -1) {
+					dm->calcLoopTangents(dm);
+					generate_data = true;
+				}
+				DM_generate_tangent_tessface_data(dm, generate_data);
+			}
 			
 			/* still to do for keys: the correct local texture coordinate */
 
@@ -4581,10 +4590,12 @@ static void init_render_object_data(Render *re, ObjectRen *obr, int timeoffset)
 			/* the emitter mesh wasn't rendered so the modifier stack wasn't
 			 * evaluated with render settings */
 			DerivedMesh *dm;
+			const CustomDataMask mask = CD_MASK_RENDER_INTERNAL;
+
 			if (re->r.scemode & R_VIEWPORT_PREVIEW)
-				dm = mesh_create_derived_view(re->scene, ob, CD_MASK_BAREMESH|CD_MASK_MTFACE|CD_MASK_MCOL);
+				dm = mesh_create_derived_view(re->scene, ob, mask);
 			else
-				dm = mesh_create_derived_render(re->scene, ob,	CD_MASK_BAREMESH|CD_MASK_MTFACE|CD_MASK_MCOL);
+				dm = mesh_create_derived_render(re->scene, ob, mask);
 			dm->release(dm);
 		}
 
@@ -4884,7 +4895,7 @@ static void dupli_render_particle_set(Render *re, Object *ob, int timeoffset, in
 			/* this is to make sure we get render level duplis in groups:
 			 * the derivedmesh must be created before init_render_mesh,
 			 * since object_duplilist does dupliparticles before that */
-			dm = mesh_create_derived_render(re->scene, ob, CD_MASK_BAREMESH|CD_MASK_MTFACE|CD_MASK_MCOL);
+			dm = mesh_create_derived_render(re->scene, ob, CD_MASK_RENDER_INTERNAL);
 			dm->release(dm);
 
 			for (psys=ob->particlesystem.first; psys; psys=psys->next)
@@ -5005,7 +5016,9 @@ static void database_init_objects(Render *re, unsigned int renderlay, int nolamp
 				dupli_render_particle_set(re, ob, timeoffset, 0, 1);
 				duplilist = object_duplilist(re->eval_ctx, re->scene, ob);
 				duplilist_apply_data = duplilist_apply(ob, NULL, duplilist);
-				dupli_render_particle_set(re, ob, timeoffset, 0, 0);
+				/* postpone 'dupli_render_particle_set', since RE_addRenderInstance reads
+				 * index values from 'dob->persistent_id[0]', referencing 'psys->child' which
+				 * may be smaller once the particle system is restored, see: T45563. */
 
 				for (dob= duplilist->first, i = 0; dob; dob= dob->next, ++i) {
 					DupliExtraData *dob_extra = &duplilist_apply_data->extra[i];
@@ -5097,6 +5110,9 @@ static void database_init_objects(Render *re, unsigned int renderlay, int nolamp
 					
 					if (re->test_break(re->tbh)) break;
 				}
+
+				/* restore particle system */
+				dupli_render_particle_set(re, ob, timeoffset, 0, false);
 
 				if (duplilist_apply_data) {
 					duplilist_restore(duplilist, duplilist_apply_data);
@@ -5194,7 +5210,7 @@ void RE_Database_FromScene(Render *re, Main *bmain, Scene *scene, unsigned int l
 	/* still bad... doing all */
 	init_render_textures(re);
 	copy_v3_v3(amb, &re->wrld.ambr);
-	init_render_materials(re->main, re->r.mode, amb);
+	init_render_materials(re->main, re->r.mode, amb, (re->r.scemode & R_BUTS_PREVIEW) == 0);
 	set_node_shader_lamp_loop(shade_material_loop);
 
 	/* MAKE RENDER DATA */
@@ -5925,7 +5941,7 @@ void RE_Database_Baking(Render *re, Main *bmain, Scene *scene, unsigned int lay,
 	init_render_textures(re);
 	
 	copy_v3_v3(amb, &re->wrld.ambr);
-	init_render_materials(re->main, re->r.mode, amb);
+	init_render_materials(re->main, re->r.mode, amb, true);
 	
 	set_node_shader_lamp_loop(shade_material_loop);
 	

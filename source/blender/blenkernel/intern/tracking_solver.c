@@ -43,7 +43,7 @@
 #include "BLI_listbase.h"
 #include "BLI_string.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_fcurve.h"
 #include "BKE_tracking.h"
@@ -368,8 +368,8 @@ MovieReconstructContext *BKE_tracking_reconstruction_context_new(MovieClip *clip
 		(tracking->settings.reconstruction_flag & TRACKING_USE_KEYFRAME_SELECTION) != 0;
 
 	tracking_cameraIntrinscisOptionsFromTracking(tracking,
-                                                 width, height,
-                                                 &context->camera_intrinsics_options);
+	                                             width, height,
+	                                             &context->camera_intrinsics_options);
 
 	context->tracks_map = tracks_map_new(context->object_name, context->is_camera, num_tracks, 0);
 

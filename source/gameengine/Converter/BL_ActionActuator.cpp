@@ -49,8 +49,8 @@
 #include "MT_Matrix4x4.h"
 
 #include "BKE_action.h"
-#include "FloatValue.h"
-#include "PyObjectPlus.h"
+#include "EXP_FloatValue.h"
+#include "EXP_PyObjectPlus.h"
 #include "KX_PyMath.h"
 
 extern "C" {
@@ -90,7 +90,7 @@ BL_ActionActuator::BL_ActionActuator(SCA_IObject *gameobj,
 	m_stridelength(stride),
 	m_layer_weight(layer_weight),
 	m_playtype(playtype),
-    m_blendmode(blend_mode),
+	m_blendmode(blend_mode),
 	m_priority(priority),
 	m_layer(layer),
 	m_ipo_flags(ipo_flags),

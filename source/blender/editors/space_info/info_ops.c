@@ -42,7 +42,7 @@
 #include "BLI_math.h"
 #include "BLI_utildefines.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_bpath.h"
 #include "BKE_context.h"
@@ -485,7 +485,7 @@ void FILE_OT_find_missing_files(wmOperatorType *ot)
 	RNA_def_boolean(ot->srna, "find_all", false, "Find All", "Find all files in the search path (not just missing)");
 
 	WM_operator_properties_filesel(ot, 0, FILE_SPECIAL, FILE_OPENFILE,
-	                               WM_FILESEL_DIRECTORY, FILE_DEFAULTDISPLAY);
+	                               WM_FILESEL_DIRECTORY, FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);
 }
 
 /********************* report box operator *********************/

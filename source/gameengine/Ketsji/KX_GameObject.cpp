@@ -69,11 +69,11 @@
 #include "BL_ActionManager.h"
 #include "BL_Action.h"
 
-#include "PyObjectPlus.h" /* python stuff */
+#include "EXP_PyObjectPlus.h" /* python stuff */
 #include "BLI_utildefines.h"
 
 #ifdef WITH_PYTHON
-#  include "KX_PythonCallBack.h"
+#  include "EXP_PythonCallBack.h"
 #  include "python_utildefines.h"
 #endif
 
@@ -469,6 +469,11 @@ void KX_GameObject::StopAction(short layer)
 	GetActionManager()->StopAction(layer);
 }
 
+void KX_GameObject::RemoveTaggedActions()
+{
+	GetActionManager()->RemoveTaggedActions();
+}
+
 bool KX_GameObject::IsActionDone(short layer)
 {
 	return GetActionManager()->IsActionDone(layer);
@@ -487,6 +492,11 @@ void KX_GameObject::UpdateActionIPOs()
 float KX_GameObject::GetActionFrame(short layer)
 {
 	return GetActionManager()->GetActionFrame(layer);
+}
+
+const char *KX_GameObject::GetActionName(short layer)
+{
+	return GetActionManager()->GetActionName(layer);
 }
 
 void KX_GameObject::SetActionFrame(short layer, float frame)
@@ -1578,6 +1588,14 @@ void KX_GameObject::RunCollisionCallbacks(KX_GameObject *collider, const MT_Vect
 	if (!m_collisionCallbacks || PyList_GET_SIZE(m_collisionCallbacks) == 0)
 		return;
 
+	/** Current logic controller is set by each python logic bricks before run,
+	 * but if no python logic brick ran the logic manager can be wrong 
+	 * (if the user use muti scenes) and it will cause problems with function
+	 * ConvertPythonToGameObject which use the current logic manager for object's name.
+	 * Note: the scene is already set in logic frame loop.
+	 */
+	SCA_ILogicBrick::m_sCurrentLogicManager = GetScene()->GetLogicManager();
+
 	PyObject *args[] = {collider->GetProxy(), PyObjectFrom(point), PyObjectFrom(normal)};
 	RunPythonCallBackList(m_collisionCallbacks, args, 1, ARRAY_SIZE(args));
 
@@ -1598,7 +1616,8 @@ void KX_GameObject::Resume(void)
 {
 	if (m_suspended) {
 		SCA_IObject::Resume();
-		if (GetPhysicsController())
+		// Child objects must be static, so we block changing to dynamic
+		if (GetPhysicsController() && !GetParent())
 			GetPhysicsController()->RestoreDynamics();
 
 		m_suspended = false;
@@ -1656,10 +1675,11 @@ CListValue* KX_GameObject::GetChildrenRecursive()
 KX_Scene* KX_GameObject::GetScene()
 {
 	SG_Node* node = this->GetSGNode();
-    if (node == NULL)
-        // this happens for object in non active layers, rely on static scene then
-        return KX_GetActiveScene();
-    return static_cast<KX_Scene*>(node->GetSGClientInfo());
+	if (node == NULL) {
+		// this happens for object in non active layers, rely on static scene then
+		return KX_GetActiveScene();
+	}
+	return static_cast<KX_Scene*>(node->GetSGClientInfo());
 }
 
 /* ---------------------------------------------------------------------
@@ -1944,6 +1964,7 @@ PyMethodDef KX_GameObject::Methods[] = {
 	KX_PYMETHODTABLE_KEYWORDS(KX_GameObject, playAction),
 	KX_PYMETHODTABLE(KX_GameObject, stopAction),
 	KX_PYMETHODTABLE(KX_GameObject, getActionFrame),
+	KX_PYMETHODTABLE(KX_GameObject, getActionName),
 	KX_PYMETHODTABLE(KX_GameObject, setActionFrame),
 	KX_PYMETHODTABLE(KX_GameObject, isPlayingAction),
 	
@@ -1965,6 +1986,8 @@ PyAttributeDef KX_GameObject::Attributes[] = {
 	KX_PYATTRIBUTE_RO_FUNCTION("isSuspendDynamics",		KX_GameObject, pyattr_get_is_suspend_dynamics),
 	KX_PYATTRIBUTE_RW_FUNCTION("linVelocityMin",		KX_GameObject, pyattr_get_lin_vel_min, pyattr_set_lin_vel_min),
 	KX_PYATTRIBUTE_RW_FUNCTION("linVelocityMax",		KX_GameObject, pyattr_get_lin_vel_max, pyattr_set_lin_vel_max),
+	KX_PYATTRIBUTE_RW_FUNCTION("angularVelocityMin", KX_GameObject, pyattr_get_ang_vel_min, pyattr_set_ang_vel_min),
+	KX_PYATTRIBUTE_RW_FUNCTION("angularVelocityMax", KX_GameObject, pyattr_get_ang_vel_max, pyattr_set_ang_vel_max),
 	KX_PYATTRIBUTE_RW_FUNCTION("visible",	KX_GameObject, pyattr_get_visible,	pyattr_set_visible),
 	KX_PYATTRIBUTE_RW_FUNCTION("record_animation",	KX_GameObject, pyattr_get_record_animation,	pyattr_set_record_animation),
 	KX_PYATTRIBUTE_BOOL_RW    ("occlusion", KX_GameObject, m_bOccluder),
@@ -2483,6 +2506,54 @@ int KX_GameObject::pyattr_set_lin_vel_max(void *self_v, const KX_PYATTRIBUTE_DEF
 
 	if (spc)
 		spc->SetLinVelocityMax(val);
+
+	return PY_SET_ATTR_SUCCESS;
+}
+
+PyObject *KX_GameObject::pyattr_get_ang_vel_min(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef)
+{
+	KX_GameObject *self = static_cast<KX_GameObject*>(self_v);
+	PHY_IPhysicsController *spc = self->GetPhysicsController();
+	return PyFloat_FromDouble(spc ? spc->GetAngularVelocityMin() : 0.0f);
+}
+
+int KX_GameObject::pyattr_set_ang_vel_min(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef, PyObject *value)
+{
+	KX_GameObject *self = static_cast<KX_GameObject*>(self_v);
+	PHY_IPhysicsController *spc = self->GetPhysicsController();
+	MT_Scalar val = PyFloat_AsDouble(value);
+	if (val < 0.0f) { /* also accounts for non float */
+		PyErr_SetString(PyExc_AttributeError,
+		                "gameOb.angularVelocityMin = float: KX_GameObject, expected a nonnegative float");
+		return PY_SET_ATTR_FAIL;
+	}
+
+	if (spc)
+		spc->SetAngularVelocityMin(val);
+
+	return PY_SET_ATTR_SUCCESS;
+}
+
+PyObject *KX_GameObject::pyattr_get_ang_vel_max(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef)
+{
+	KX_GameObject *self = static_cast<KX_GameObject*>(self_v);
+	PHY_IPhysicsController *spc = self->GetPhysicsController();
+	return PyFloat_FromDouble(spc ? spc->GetAngularVelocityMax() : 0.0f);
+}
+
+int KX_GameObject::pyattr_set_ang_vel_max(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef, PyObject *value)
+{
+	KX_GameObject *self = static_cast<KX_GameObject*>(self_v);
+	PHY_IPhysicsController *spc = self->GetPhysicsController();
+	MT_Scalar val = PyFloat_AsDouble(value);
+	if (val < 0.0f) { /* also accounts for non float */
+		PyErr_SetString(PyExc_AttributeError,
+		                "gameOb.angularVelocityMax = float: KX_GameObject, expected a nonnegative float");
+		return PY_SET_ATTR_FAIL;
+	}
+
+	if (spc)
+		spc->SetAngularVelocityMax(val);
 
 	return PY_SET_ATTR_SUCCESS;
 }
@@ -3368,7 +3439,8 @@ PyObject *KX_GameObject::PySuspendDynamics(PyObject *args)
 
 PyObject *KX_GameObject::PyRestoreDynamics()
 {
-	if (GetPhysicsController())
+	// Child objects must be static, so we block changing to dynamic
+	if (GetPhysicsController() && !GetParent())
 		GetPhysicsController()->RestoreDynamics();
 	Py_RETURN_NONE;
 }
@@ -3858,7 +3930,7 @@ KX_PYMETHODDEF_DOC(KX_GameObject, stopAction,
 	"stopAction(layer=0)\n"
 	"Stop playing the action on the given layer\n")
 {
-	short layer=0;
+	short layer = 0;
 
 	if (!PyArg_ParseTuple(args, "|h:stopAction", &layer))
 		return NULL;
@@ -3874,7 +3946,7 @@ KX_PYMETHODDEF_DOC(KX_GameObject, getActionFrame,
 	"getActionFrame(layer=0)\n"
 	"Gets the current frame of the action playing in the supplied layer\n")
 {
-	short layer=0;
+	short layer = 0;
 
 	if (!PyArg_ParseTuple(args, "|h:getActionFrame", &layer))
 		return NULL;
@@ -3884,11 +3956,25 @@ KX_PYMETHODDEF_DOC(KX_GameObject, getActionFrame,
 	return PyFloat_FromDouble(GetActionFrame(layer));
 }
 
+KX_PYMETHODDEF_DOC(KX_GameObject, getActionName,
+	"getActionName(layer=0)\n"
+	"Gets the name of the current action playing in the supplied layer\n")
+{
+	short layer = 0;
+
+	if (!PyArg_ParseTuple(args, "|h:getActionName", &layer))
+		return NULL;
+
+	layer_check(layer, "getActionName");
+
+	return PyUnicode_FromString(GetActionName(layer));
+}
+
 KX_PYMETHODDEF_DOC(KX_GameObject, setActionFrame,
 	"setActionFrame(frame, layer=0)\n"
 	"Set the current frame of the action playing in the supplied layer\n")
 {
-	short layer=0;
+	short layer = 0;
 	float frame;
 
 	if (!PyArg_ParseTuple(args, "f|h:setActionFrame", &frame, &layer))
@@ -3905,7 +3991,7 @@ KX_PYMETHODDEF_DOC(KX_GameObject, isPlayingAction,
 	"isPlayingAction(layer=0)\n"
 	"Checks to see if there is an action playing in the given layer\n")
 {
-	short layer=0;
+	short layer = 0;
 
 	if (!PyArg_ParseTuple(args, "|h:isPlayingAction", &layer))
 		return NULL;
@@ -4003,11 +4089,11 @@ bool ConvertPythonToGameObject(PyObject *value, KX_GameObject **object, bool py_
 		}
 	}
 	
-	if (	PyObject_TypeCheck(value, &KX_GameObject::Type)	||
-			PyObject_TypeCheck(value, &KX_LightObject::Type)	||
-			PyObject_TypeCheck(value, &KX_Camera::Type)			||
-            PyObject_TypeCheck(value, &KX_FontObject::Type) ||
-            PyObject_TypeCheck(value, &KX_NavMeshObject::Type))
+	if (PyObject_TypeCheck(value, &KX_GameObject::Type)	||
+	    PyObject_TypeCheck(value, &KX_LightObject::Type)	||
+	    PyObject_TypeCheck(value, &KX_Camera::Type)			||
+	    PyObject_TypeCheck(value, &KX_FontObject::Type) ||
+	    PyObject_TypeCheck(value, &KX_NavMeshObject::Type))
 	{
 		*object = static_cast<KX_GameObject*>BGE_PROXY_REF(value);
 		

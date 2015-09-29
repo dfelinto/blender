@@ -45,7 +45,7 @@
 #include "BLI_listbase.h"
 #include "BLI_math_vector.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_animsys.h"
 #include "BKE_context.h"
@@ -201,9 +201,11 @@ static int material_slot_assign_exec(bContext *C, wmOperator *UNUSED(op))
 			ListBase *nurbs = BKE_curve_editNurbs_get((Curve *)ob->data);
 
 			if (nurbs) {
-				for (nu = nurbs->first; nu; nu = nu->next)
-					if (isNurbsel(nu))
+				for (nu = nurbs->first; nu; nu = nu->next) {
+					if (ED_curve_nurb_select_check(ob->data, nu)) {
 						nu->mat_nr = ob->actcol - 1;
+					}
+				}
 			}
 		}
 		else if (ob->type == OB_FONT) {
@@ -478,7 +480,7 @@ static int new_material_exec(bContext *C, wmOperator *UNUSED(op))
 
 	if (prop) {
 		/* when creating new ID blocks, use is already 1, but RNA
-		 * pointer se also increases user, so this compensates it */
+		 * pointer use also increases user, so this compensates it */
 		ma->id.us--;
 
 		RNA_id_pointer_create(&ma->id, &idptr);
@@ -1618,7 +1620,7 @@ void TEXTURE_OT_envmap_save(wmOperatorType *ot)
 	RNA_def_property_flag(prop, PROP_HIDDEN);
 
 	WM_operator_properties_filesel(ot, FILE_TYPE_FOLDER | FILE_TYPE_IMAGE | FILE_TYPE_MOVIE, FILE_SPECIAL, FILE_SAVE,
-	                               WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY);
+	                               WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);
 }
 
 static int envmap_clear_exec(bContext *C, wmOperator *UNUSED(op))

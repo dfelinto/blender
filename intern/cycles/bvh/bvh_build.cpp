@@ -65,15 +65,18 @@ public:
 /* Constructor / Destructor */
 
 BVHBuild::BVHBuild(const vector<Object*>& objects_,
-	vector<int>& prim_type_, vector<int>& prim_index_, vector<int>& prim_object_,
-	const BVHParams& params_, Progress& progress_)
-: objects(objects_),
-  prim_type(prim_type_),
-  prim_index(prim_index_),
-  prim_object(prim_object_),
-  params(params_),
-  progress(progress_),
-  progress_start_time(0.0)
+                   array<int>& prim_type_,
+                   array<int>& prim_index_,
+                   array<int>& prim_object_,
+                   const BVHParams& params_,
+                   Progress& progress_)
+ : objects(objects_),
+   prim_type(prim_type_),
+   prim_index(prim_index_),
+   prim_object(prim_object_),
+   params(params_),
+   progress(progress_),
+   progress_start_time(0.0)
 {
 	spatial_min_overlap = 0.0f;
 }
@@ -231,8 +234,14 @@ BVHNode* BVHBuild::run()
 		return NULL;
 
 	/* init spatial splits */
-	if(params.top_level) /* todo: get rid of this */
+	if(params.top_level) {
+		/* NOTE: Technically it is supported by the builder but it's not really
+		 * optimized for speed yet and not really clear yet if it has measurable
+		 * improvement on render time. Needs some extra investigation before
+		 * enabling spatial split for top level BVH.
+		 */
 		params.use_spatial_split = false;
+	}
 
 	spatial_min_overlap = root.bounds().safe_area() * params.spatial_split_alpha;
 	spatial_right_bounds.clear();
@@ -273,6 +282,8 @@ BVHNode* BVHBuild::run()
 		else if(!params.use_spatial_split) {
 			/*rotate(rootnode, 4, 5);*/
 			rootnode->update_visibility();
+		}
+		if(rootnode != NULL) {
 			VLOG(1) << "BVH build statistics:\n"
 			        << "  Build time: " << time_dt() - build_start_time << "\n"
 			        << "  Total number of nodes: "
@@ -446,18 +457,10 @@ BVHNode *BVHBuild::create_object_leaf_nodes(const BVHReference *ref, int start, 
 		return new LeafNode(bounds, 0, 0, 0);
 	}
 	else if(num == 1) {
-		if(start == prim_index.size()) {
-			assert(params.use_spatial_split);
-
-			prim_type.push_back(ref->prim_type());
-			prim_index.push_back(ref->prim_index());
-			prim_object.push_back(ref->prim_object());
-		}
-		else {
-			prim_type[start] = ref->prim_type();
-			prim_index[start] = ref->prim_index();
-			prim_object[start] = ref->prim_object();
-		}
+		assert(start < prim_type.size());
+		prim_type[start] = ref->prim_type();
+		prim_index[start] = ref->prim_index();
+		prim_object[start] = ref->prim_object();
 
 		uint visibility = objects[ref->prim_object()]->visibility;
 		return new LeafNode(ref->bounds(), visibility, start, start+1);
@@ -484,17 +487,9 @@ BVHNode *BVHBuild::create_primitive_leaf_node(const int *p_type,
                                               int num)
 {
 	for(int i = 0; i < num; ++i) {
-		if(start + i == prim_index.size()) {
-			assert(params.use_spatial_split);
-			prim_type.push_back(p_type[i]);
-			prim_index.push_back(p_index[i]);
-			prim_object.push_back(p_object[i]);
-		}
-		else {
-			prim_type[start + i] = p_type[i];
-			prim_index[start + i] = p_index[i];
-			prim_object[start + i] = p_object[i];
-		}
+		prim_type[start + i] = p_type[i];
+		prim_index[start + i] = p_index[i];
+		prim_object[start + i] = p_object[i];
 	}
 	return new LeafNode(bounds, visibility, start, start + num);
 }
@@ -533,6 +528,17 @@ BVHNode* BVHBuild::create_leaf_node(const BVHRange& range)
 			}
 			ob_num++;
 		}
+	}
+
+	/* Extend an array when needed. */
+	if(prim_type.size() < range.end()) {
+		assert(params.use_spatial_split);
+		prim_type.reserve(references.size());
+		prim_index.reserve(references.size());
+		prim_object.reserve(references.size());
+		prim_type.resize(range.end());
+		prim_index.resize(range.end());
+		prim_object.resize(range.end());
 	}
 
 	/* Create leaf nodes for every existing primitive. */

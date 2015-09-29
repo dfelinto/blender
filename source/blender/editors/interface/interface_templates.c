@@ -47,7 +47,7 @@
 #include "BLI_fnmatch.h"
 
 #include "BLF_api.h"
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_colortools.h"
 #include "BKE_context.h"
@@ -372,7 +372,7 @@ static const char *template_id_context(StructRNA *type)
 	if (type) {
 		return BKE_idcode_to_translation_context(RNA_type_to_ID_code(type));
 	}
-	return BLF_I18NCONTEXT_DEFAULT;
+	return BLT_I18NCONTEXT_DEFAULT;
 }
 #endif
 
@@ -485,31 +485,31 @@ static void template_ID(
 		int w = id ? UI_UNIT_X : (flag & UI_ID_OPEN) ? UI_UNIT_X * 3 : UI_UNIT_X * 6;
 		
 		/* i18n markup, does nothing! */
-		BLF_I18N_MSGID_MULTI_CTXT("New", BLF_I18NCONTEXT_DEFAULT,
-		                                 BLF_I18NCONTEXT_ID_SCENE,
-		                                 BLF_I18NCONTEXT_ID_OBJECT,
-		                                 BLF_I18NCONTEXT_ID_MESH,
-		                                 BLF_I18NCONTEXT_ID_CURVE,
-		                                 BLF_I18NCONTEXT_ID_METABALL,
-		                                 BLF_I18NCONTEXT_ID_MATERIAL,
-		                                 BLF_I18NCONTEXT_ID_TEXTURE,
-		                                 BLF_I18NCONTEXT_ID_IMAGE,
-		                                 BLF_I18NCONTEXT_ID_LATTICE,
-		                                 BLF_I18NCONTEXT_ID_LAMP,
-		                                 BLF_I18NCONTEXT_ID_CAMERA,
-		                                 BLF_I18NCONTEXT_ID_WORLD,
-		                                 BLF_I18NCONTEXT_ID_SCREEN,
-		                                 BLF_I18NCONTEXT_ID_TEXT,
+		BLT_I18N_MSGID_MULTI_CTXT("New", BLT_I18NCONTEXT_DEFAULT,
+		                                 BLT_I18NCONTEXT_ID_SCENE,
+		                                 BLT_I18NCONTEXT_ID_OBJECT,
+		                                 BLT_I18NCONTEXT_ID_MESH,
+		                                 BLT_I18NCONTEXT_ID_CURVE,
+		                                 BLT_I18NCONTEXT_ID_METABALL,
+		                                 BLT_I18NCONTEXT_ID_MATERIAL,
+		                                 BLT_I18NCONTEXT_ID_TEXTURE,
+		                                 BLT_I18NCONTEXT_ID_IMAGE,
+		                                 BLT_I18NCONTEXT_ID_LATTICE,
+		                                 BLT_I18NCONTEXT_ID_LAMP,
+		                                 BLT_I18NCONTEXT_ID_CAMERA,
+		                                 BLT_I18NCONTEXT_ID_WORLD,
+		                                 BLT_I18NCONTEXT_ID_SCREEN,
+		                                 BLT_I18NCONTEXT_ID_TEXT,
 		);
-		BLF_I18N_MSGID_MULTI_CTXT("New", BLF_I18NCONTEXT_ID_SPEAKER,
-		                                 BLF_I18NCONTEXT_ID_SOUND,
-		                                 BLF_I18NCONTEXT_ID_ARMATURE,
-		                                 BLF_I18NCONTEXT_ID_ACTION,
-		                                 BLF_I18NCONTEXT_ID_NODETREE,
-		                                 BLF_I18NCONTEXT_ID_BRUSH,
-		                                 BLF_I18NCONTEXT_ID_PARTICLESETTINGS,
-		                                 BLF_I18NCONTEXT_ID_GPENCIL,
-		                                 BLF_I18NCONTEXT_ID_FREESTYLELINESTYLE,
+		BLT_I18N_MSGID_MULTI_CTXT("New", BLT_I18NCONTEXT_ID_SPEAKER,
+		                                 BLT_I18NCONTEXT_ID_SOUND,
+		                                 BLT_I18NCONTEXT_ID_ARMATURE,
+		                                 BLT_I18NCONTEXT_ID_ACTION,
+		                                 BLT_I18NCONTEXT_ID_NODETREE,
+		                                 BLT_I18NCONTEXT_ID_BRUSH,
+		                                 BLT_I18NCONTEXT_ID_PARTICLESETTINGS,
+		                                 BLT_I18NCONTEXT_ID_GPENCIL,
+		                                 BLT_I18NCONTEXT_ID_FREESTYLELINESTYLE,
 		);
 		
 		if (newop) {
@@ -943,21 +943,21 @@ static uiLayout *draw_modifier(
 				
 				if (!(ob->mode & OB_MODE_PARTICLE_EDIT)) {
 					if (ELEM(psys->part->ren_as, PART_DRAW_GR, PART_DRAW_OB))
-						uiItemO(row, CTX_IFACE_(BLF_I18NCONTEXT_OPERATOR_DEFAULT, "Convert"), ICON_NONE,
+						uiItemO(row, CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Convert"), ICON_NONE,
 						        "OBJECT_OT_duplicates_make_real");
 					else if (psys->part->ren_as == PART_DRAW_PATH && psys->pathcache)
-						uiItemO(row, CTX_IFACE_(BLF_I18NCONTEXT_OPERATOR_DEFAULT, "Convert"), ICON_NONE,
+						uiItemO(row, CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Convert"), ICON_NONE,
 						        "OBJECT_OT_modifier_convert");
 				}
 			}
 			else {
 				uiLayoutSetOperatorContext(row, WM_OP_INVOKE_DEFAULT);
-				uiItemEnumO(row, "OBJECT_OT_modifier_apply", CTX_IFACE_(BLF_I18NCONTEXT_OPERATOR_DEFAULT, "Apply"),
+				uiItemEnumO(row, "OBJECT_OT_modifier_apply", CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Apply"),
 				            0, "apply_as", MODIFIER_APPLY_DATA);
 				
 				if (modifier_isSameTopology(md) && !modifier_isNonGeometrical(md)) {
 					uiItemEnumO(row, "OBJECT_OT_modifier_apply",
-					            CTX_IFACE_(BLF_I18NCONTEXT_OPERATOR_DEFAULT, "Apply as Shape Key"),
+					            CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Apply as Shape Key"),
 					            0, "apply_as", MODIFIER_APPLY_SHAPE);
 				}
 			}
@@ -968,7 +968,7 @@ static uiLayout *draw_modifier(
 			if (!ELEM(md->type, eModifierType_Fluidsim, eModifierType_Softbody, eModifierType_ParticleSystem,
 			           eModifierType_Cloth, eModifierType_Smoke))
 			{
-				uiItemO(row, CTX_IFACE_(BLF_I18NCONTEXT_OPERATOR_DEFAULT, "Copy"), ICON_NONE,
+				uiItemO(row, CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Copy"), ICON_NONE,
 				        "OBJECT_OT_modifier_copy");
 			}
 		}
@@ -1614,7 +1614,8 @@ void uiTemplateColorRamp(uiLayout *layout, PointerRNA *ptr, const char *propname
 typedef struct IconViewMenuArgs {
 	PointerRNA ptr;
 	PropertyRNA *prop;
-	int show_labels;
+	bool show_labels;
+	float icon_scale;
 } IconViewMenuArgs;
 
 /* ID Search browse menu, open */
@@ -1627,9 +1628,12 @@ static uiBlock *ui_icon_view_menu_cb(bContext *C, ARegion *ar, void *arg_litem)
 	EnumPropertyItem *item;
 	int a;
 	bool free;
+	int w, h;
 
 	/* arg_litem is malloced, can be freed by parent button */
 	args = *((IconViewMenuArgs *) arg_litem);
+	w = UI_UNIT_X * (args.icon_scale);
+	h = UI_UNIT_X * (args.icon_scale + args.show_labels);
 
 	block = UI_block_begin(C, ar, "_popup", UI_EMBOSS_PULLDOWN);
 	UI_block_flag_enable(block, UI_BLOCK_LOOP);
@@ -1638,9 +1642,6 @@ static uiBlock *ui_icon_view_menu_cb(bContext *C, ARegion *ar, void *arg_litem)
 
 	for (a = 0; item[a].identifier; a++) {
 		int x, y;
-		/* XXX hardcoded size to 5 units */
-		const int w = UI_UNIT_X * 5;
-		const int h = args.show_labels ? 6 * UI_UNIT_Y : UI_UNIT_Y * 5;
 
 		x = (a % 8) * w;
 		y = (a / 8) * h;
@@ -1670,7 +1671,10 @@ static uiBlock *ui_icon_view_menu_cb(bContext *C, ARegion *ar, void *arg_litem)
 	return block;
 }
 
-void uiTemplateIconView(uiLayout *layout, PointerRNA *ptr, const char *propname, int show_labels)
+/**
+ * \param icon_scale: Scale of the icon, 1x == button height.
+ */
+void uiTemplateIconView(uiLayout *layout, PointerRNA *ptr, const char *propname, int show_labels, float icon_scale)
 {
 	PropertyRNA *prop = RNA_struct_find_property(ptr, propname);
 	IconViewMenuArgs *cb_args;
@@ -1695,6 +1699,7 @@ void uiTemplateIconView(uiLayout *layout, PointerRNA *ptr, const char *propname,
 	cb_args->ptr = *ptr;
 	cb_args->prop = prop;
 	cb_args->show_labels = show_labels;
+	cb_args->icon_scale = icon_scale;
 
 	but = uiDefBlockButN(block, ui_icon_view_menu_cb, cb_args, "", 0, 0, UI_UNIT_X * 6, UI_UNIT_Y * 6, "");
 
@@ -3299,7 +3304,7 @@ static void operator_search_cb(const bContext *C, void *UNUSED(arg), const char 
 				/* check for hotkey */
 				if (len < sizeof(name) - 6) {
 					if (WM_key_event_operator_string(C, ot->idname, WM_OP_EXEC_DEFAULT, NULL, true,
-					                                 &name[len + 1], sizeof(name) - len - 1))
+					                                 sizeof(name) - len - 1, &name[len + 1]))
 					{
 						name[len] = UI_SEP_CHAR;
 					}
@@ -3338,7 +3343,8 @@ void uiTemplateOperatorSearch(uiLayout *layout)
 #define B_STOPCOMPO     4
 #define B_STOPSEQ       5
 #define B_STOPCLIP      6
-#define B_STOPOTHER     7
+#define B_STOPFILE      7
+#define B_STOPOTHER     8
 
 static void do_running_jobs(bContext *C, void *UNUSED(arg), int event)
 {
@@ -3359,6 +3365,9 @@ static void do_running_jobs(bContext *C, void *UNUSED(arg), int event)
 			WM_jobs_stop(CTX_wm_manager(C), CTX_wm_area(C), NULL);
 			break;
 		case B_STOPCLIP:
+			WM_jobs_stop(CTX_wm_manager(C), CTX_wm_area(C), NULL);
+			break;
+		case B_STOPFILE:
 			WM_jobs_stop(CTX_wm_manager(C), CTX_wm_area(C), NULL);
 			break;
 		case B_STOPOTHER:
@@ -3390,6 +3399,12 @@ void uiTemplateRunningJobs(uiLayout *layout, bContext *C)
 		if (WM_jobs_test(wm, sa, WM_JOB_TYPE_ANY))
 			owner = sa;
 		handle_event = B_STOPCLIP;
+	}
+	else if (sa->spacetype == SPACE_FILE) {
+		if (WM_jobs_test(wm, sa, WM_JOB_TYPE_FILESEL_READDIR)) {
+			owner = sa;
+		}
+		handle_event = B_STOPFILE;
 	}
 	else {
 		Scene *scene;
@@ -3469,7 +3484,8 @@ void uiTemplateReportsBanner(uiLayout *layout, bContext *C)
 	ui_abs = uiLayoutAbsolute(layout, false);
 	block = uiLayoutGetBlock(ui_abs);
 	
-	width = BLF_width(style->widget.uifont_id, report->message, report->len);
+	UI_fontstyle_set(&style->widgetlabel);
+	width = BLF_width(style->widgetlabel.uifont_id, report->message, report->len);
 	width = min_ii((int)(rti->widthfac * width), width);
 	width = max_ii(width, 10);
 	

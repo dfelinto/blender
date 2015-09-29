@@ -10,7 +10,7 @@ set(MY_WC_COMMIT_TIMESTAMP 0)
 # Guess if this is a git working copy and then look up the revision
 if(EXISTS ${SOURCE_DIR}/.git)
 	# The FindGit.cmake module is part of the standard distribution
-	include(FindGit)
+	find_package(Git)
 	if(GIT_FOUND)
 		message(STATUS "-- Found Git: ${GIT_EXECUTABLE}")
 
@@ -97,6 +97,10 @@ if(EXISTS ${SOURCE_DIR}/.git)
 		                WORKING_DIRECTORY ${SOURCE_DIR}
 		                OUTPUT_VARIABLE MY_WC_COMMIT_TIMESTAMP
 		                OUTPUT_STRIP_TRAILING_WHITESPACE)
+		# May fail in rare cases
+		if(MY_WC_COMMIT_TIMESTAMP STREQUAL "")
+			set(MY_WC_COMMIT_TIMESTAMP 0)
+		endif()
 
 		# Update GIT index before getting dirty files
 		execute_process(COMMAND git update-index -q --refresh

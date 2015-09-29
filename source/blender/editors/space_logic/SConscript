@@ -35,9 +35,9 @@ incs = [
     '#/intern/glew-mx',
     '../include',
     '../interface',
-    '../../blenfont',
     '../../blenkernel',
     '../../blenlib',
+    '../../blentranslation',
     '../../gpu',
     '../../imbuf',
     '../../makesdna',
@@ -46,7 +46,8 @@ incs = [
     ]
 incs = ' '.join(incs)
 
-defs = env['BF_GL_DEFINITIONS']
+defs = []
+defs += env['BF_GL_DEFINITIONS']
 
 if env['WITH_BF_GAMEENGINE']:
     defs.append('WITH_GAMEENGINE')

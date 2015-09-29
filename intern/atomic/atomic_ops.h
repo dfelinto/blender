@@ -123,13 +123,13 @@ atomic_cas_uint64(uint64_t *v, uint64_t old, uint64_t _new)
 ATOMIC_INLINE uint64_t
 atomic_add_uint64(uint64_t *p, uint64_t x)
 {
-    return InterlockedExchangeAdd64((int64_t *)p, (int64_t)x)+x;
+	return InterlockedExchangeAdd64((int64_t *)p, (int64_t)x) + x;
 }
 
 ATOMIC_INLINE uint64_t
 atomic_sub_uint64(uint64_t *p, uint64_t x)
 {
-    return InterlockedExchangeAdd64((int64_t *)p, -((int64_t)x))-((int64_t)x);
+	return InterlockedExchangeAdd64((int64_t *)p, -((int64_t)x)) - x;
 }
 
 ATOMIC_INLINE uint64_t
@@ -216,7 +216,7 @@ atomic_sub_uint64(uint64_t *p, uint64_t x)
 }
 
 ATOMIC_INLINE uint64_t
-atomic_cas_uint32(uint64_t *v, uint64_t old, uint64_t _new)
+atomic_cas_uint64(uint64_t *v, uint64_t old, uint64_t _new)
 {
 	assert(sizeof(uint64_t) == sizeof(unsigned long));
 
@@ -236,7 +236,7 @@ atomic_sub_uint64(uint64_t *p, uint64_t x)
 }
 
 ATOMIC_INLINE uint64_t
-atomic_cas_uint32(uint64_t *v, uint64_t old, uint64_t _new)
+atomic_cas_uint64(uint64_t *v, uint64_t old, uint64_t _new)
 {
 	return __sync_val_compare_and_swap(v, old, _new);
 }
@@ -269,13 +269,13 @@ atomic_cas_uint32(uint32_t *v, uint32_t old, uint32_t _new)
 ATOMIC_INLINE uint32_t
 atomic_add_uint32(uint32_t *p, uint32_t x)
 {
-    return InterlockedExchangeAdd(p, x)+x;
+	return InterlockedExchangeAdd(p, x) + x;
 }
 
 ATOMIC_INLINE uint32_t
 atomic_sub_uint32(uint32_t *p, uint32_t x)
 {
-    return InterlockedExchangeAdd(p, -((int32_t)x))-((int32_t)x);
+	return InterlockedExchangeAdd(p, -((int32_t)x)) - x;
 }
 
 ATOMIC_INLINE uint32_t

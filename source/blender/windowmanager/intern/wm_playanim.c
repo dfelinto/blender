@@ -72,11 +72,15 @@
 #include "WM_api.h"  /* only for WM_main_playanim */
 
 #ifdef WITH_AUDASPACE
-#include "AUD_C-API.h"
+#  include AUD_DEVICE_H
+#  include AUD_HANDLE_H
+#  include AUD_SOUND_H
+#  include AUD_SPECIAL_H
 
-AUD_Sound *source = NULL;
-AUD_Handle *playback_handle = NULL;
-AUD_Handle *scrub_handle = NULL;
+static AUD_Sound *source = NULL;
+static AUD_Handle *playback_handle = NULL;
+static AUD_Handle *scrub_handle = NULL;
+static AUD_Device *audio_device = NULL;
 #endif
 
 /* simple limiter to avoid flooding memory */
@@ -532,7 +536,7 @@ static void update_sound_fps(void)
 		/* swaptime stores the 1.0/fps ratio */
 		double speed = 1.0 / (swaptime * fps_movie);
 
-		AUD_setSoundPitch(playback_handle, speed);
+		AUD_Handle_setPitch(playback_handle, speed);
 	}
 #endif
 }
@@ -554,30 +558,30 @@ static void change_frame(PlayState *ps, int cx)
 
 #ifdef WITH_AUDASPACE
 	if (scrub_handle) {
-		AUD_stop(scrub_handle);
+		AUD_Handle_stop(scrub_handle);
 		scrub_handle = NULL;
 	}
 
 	if (playback_handle) {
-		AUD_Status status = AUD_getStatus(playback_handle);
+		AUD_Status status = AUD_Handle_getStatus(playback_handle);
 		if (status != AUD_STATUS_PLAYING) {
-			AUD_stop(playback_handle);
-			playback_handle = AUD_play(source, 1);
+			AUD_Handle_stop(playback_handle);
+			playback_handle = AUD_Device_play(audio_device, source, 1);
 			if (playback_handle) {
-				AUD_seek(playback_handle, i / fps_movie);
+				AUD_Handle_setPosition(playback_handle, i / fps_movie);
 				scrub_handle = AUD_pauseAfter(playback_handle, 1 / fps_movie);
 			}
 			update_sound_fps();
 		}
 		else {
-			AUD_seek(playback_handle, i / fps_movie);
+			AUD_Handle_setPosition(playback_handle, i / fps_movie);
 			scrub_handle = AUD_pauseAfter(playback_handle, 1 / fps_movie);
 		}
 	}
 	else if (source) {
-		playback_handle = AUD_play(source, 1);
+		playback_handle = AUD_Device_play(audio_device, source, 1);
 		if (playback_handle) {
-			AUD_seek(playback_handle, i / fps_movie);
+			AUD_Handle_setPosition(playback_handle, i / fps_movie);
 			scrub_handle = AUD_pauseAfter(playback_handle, 1 / fps_movie);
 		}
 		update_sound_fps();
@@ -828,10 +832,10 @@ static int ghost_event_proc(GHOST_EventHandle evt, GHOST_TUserDataPtr ps_void)
 									picture = picture->next;
 								}
 								if (playback_handle)
-									AUD_stop(playback_handle);
-								playback_handle = AUD_play(source, 1);
+									AUD_Handle_stop(playback_handle);
+								playback_handle = AUD_Device_play(audio_device, source, 1);
 								if (playback_handle)
-									AUD_seek(playback_handle, i / fps_movie);
+									AUD_Handle_setPosition(playback_handle, i / fps_movie);
 								update_sound_fps();
 							}
 #endif
@@ -841,7 +845,7 @@ static int ghost_event_proc(GHOST_EventHandle evt, GHOST_TUserDataPtr ps_void)
 							ps->wait2 = true;
 #ifdef WITH_AUDASPACE
 							if (playback_handle) {
-								AUD_stop(playback_handle);
+								AUD_Handle_stop(playback_handle);
 								playback_handle = NULL;
 							}
 #endif
@@ -862,10 +866,10 @@ static int ghost_event_proc(GHOST_EventHandle evt, GHOST_TUserDataPtr ps_void)
 								picture = picture->next;
 							}
 							if (playback_handle)
-								AUD_stop(playback_handle);
-							playback_handle = AUD_play(source, 1);
+								AUD_Handle_stop(playback_handle);
+							playback_handle = AUD_Device_play(audio_device, source, 1);
 							if (playback_handle)
-								AUD_seek(playback_handle, i / fps_movie);
+								AUD_Handle_setPosition(playback_handle, i / fps_movie);
 							update_sound_fps();
 						}
 #endif
@@ -882,7 +886,7 @@ static int ghost_event_proc(GHOST_EventHandle evt, GHOST_TUserDataPtr ps_void)
 							ps->wait2 = !ps->wait2;
 #ifdef WITH_AUDASPACE
 							if (playback_handle) {
-								AUD_stop(playback_handle);
+								AUD_Handle_stop(playback_handle);
 								playback_handle = NULL;
 							}
 #endif
@@ -1097,18 +1101,6 @@ static char *wm_main_playanim_intern(int argc, const char **argv)
 	
 	PlayState ps = {0};
 
-#ifdef WITH_AUDASPACE
-	AUD_DeviceSpecs specs;
-
-	specs.rate = AUD_RATE_44100;
-	specs.format = AUD_FORMAT_S16;
-	specs.channels = AUD_CHANNELS_STEREO;
-
-	if (!AUD_init(AUD_OPENAL_DEVICE, specs, AUD_DEFAULT_BUFFER_SIZE))
-		AUD_init(AUD_NULL_DEVICE, specs, AUD_DEFAULT_BUFFER_SIZE);
-
-#endif
-
 	/* ps.doubleb   = true;*/ /* UNUSED */
 	ps.go        = true;
 	ps.direction = true;
@@ -1281,7 +1273,7 @@ static char *wm_main_playanim_intern(int argc, const char **argv)
 	build_pict_list(&ps, filepath, (efra - sfra) + 1, ps.fstep, ps.fontid);
 
 #ifdef WITH_AUDASPACE
-	source = AUD_load(filepath);
+	source = AUD_Sound_file(filepath);
 	{
 		struct anim *anim_movie = ((struct PlayAnimPict *)picsbase.first)->anim;
 		if (anim_movie) {
@@ -1338,8 +1330,8 @@ static char *wm_main_playanim_intern(int argc, const char **argv)
 
 #ifdef WITH_AUDASPACE
 		if (playback_handle)
-			AUD_stop(playback_handle);
-		playback_handle = AUD_play(source, 1);
+			AUD_Handle_stop(playback_handle);
+		playback_handle = AUD_Device_play(audio_device, source, 1);
 		update_sound_fps();
 #endif
 
@@ -1508,12 +1500,16 @@ static char *wm_main_playanim_intern(int argc, const char **argv)
 	added_images = 0;
 
 #ifdef WITH_AUDASPACE
-	if (playback_handle)
-		AUD_stop(playback_handle);
-	if (scrub_handle)
-		AUD_stop(scrub_handle);
-	AUD_unload(source);
-	AUD_exit();
+	if (playback_handle) {
+		AUD_Handle_stop(playback_handle);
+		playback_handle = NULL;
+	}
+	if (scrub_handle) {
+		AUD_Handle_stop(scrub_handle);
+		scrub_handle = NULL;
+	}
+	AUD_Sound_free(source);
+	source = NULL;
 #endif
 
 #if 0 // XXX25
@@ -1551,18 +1547,43 @@ static char *wm_main_playanim_intern(int argc, const char **argv)
 
 void WM_main_playanim(int argc, const char **argv)
 {
+	const char *argv_next[2];
 	bool looping = true;
+
+#ifdef WITH_AUDASPACE
+	{
+		AUD_DeviceSpecs specs;
+
+		specs.rate = AUD_RATE_44100;
+		specs.format = AUD_FORMAT_S16;
+		specs.channels = AUD_CHANNELS_STEREO;
+
+		AUD_initOnce();
+
+		if (!(audio_device = AUD_init("OpenAL", specs, 1024, "Blender"))) {
+			audio_device = AUD_init("Null", specs, 0, "Blender");
+		}
+	}
+#endif
 
 	while (looping) {
 		const char *filepath = wm_main_playanim_intern(argc, argv);
 
 		if (filepath) {	/* use simple args */
-			argv[1] = "-a";
-			argv[2] = filepath;
-			argc = 3;
+			argv_next[0] = argv[0];
+			argv_next[1] = filepath;
+			argc = 2;
+
+			/* continue with new args */
+			argv = argv_next;
 		}
 		else {
 			looping = false;
 		}
 	}
+
+#ifdef WITH_AUDASPACE
+	AUD_exit(audio_device);
+	AUD_exitOnce();
+#endif
 }

@@ -64,6 +64,8 @@
  * For a complete implementation example look at the Cycles Bake commit.
  */
 
+#include <limits.h>
+
 #include "MEM_guardedalloc.h"
 
 #include "BLI_math.h"
@@ -73,6 +75,7 @@
 #include "BKE_cdderivedmesh.h"
 #include "BKE_image.h"
 #include "BKE_node.h"
+#include "BKE_mesh.h"
 
 #include "IMB_imbuf_types.h"
 #include "IMB_imbuf.h"
@@ -357,88 +360,65 @@ static void mesh_calc_tri_tessface(
         TriTessFace *triangles, Mesh *me, bool tangent, DerivedMesh *dm)
 {
 	int i;
-	int p_id;
-	MFace *mface;
 	MVert *mvert;
 	TSpace *tspace;
 	float *precomputed_normals = NULL;
 	bool calculate_normal;
+	const int tottri = poly_to_tri_count(me->totpoly, me->totloop);
+	MLoopTri *looptri;
+	/* calculate normal for each polygon only once */
+	unsigned int mpoly_prev = UINT_MAX;
+	float no[3];
 
-	mface = CustomData_get_layer(&me->fdata, CD_MFACE);
 	mvert = CustomData_get_layer(&me->vdata, CD_MVERT);
+	looptri = MEM_mallocN(sizeof(*looptri) * tottri, __func__);
 
 	if (tangent) {
 		DM_ensure_normals(dm);
-		DM_add_tangent_layer(dm);
+		DM_calc_loop_tangents(dm);
 
-		precomputed_normals = dm->getTessFaceDataArray(dm, CD_NORMAL);
+		precomputed_normals = dm->getPolyDataArray(dm, CD_NORMAL);
 		calculate_normal = precomputed_normals ? false : true;
 
-		//mface = dm->getTessFaceArray(dm);
-		//mvert = dm->getVertArray(dm);
-
-		tspace = dm->getTessFaceDataArray(dm, CD_TANGENT);
+		tspace = dm->getLoopDataArray(dm, CD_TANGENT);
 		BLI_assert(tspace);
 	}
 
-	p_id = -1;
-	for (i = 0; i < me->totface; i++) {
-		MFace *mf = &mface[i];
-		TSpace *ts = tangent ? &tspace[i * 4] : NULL;
+	BKE_mesh_recalc_looptri(
+	            me->mloop, me->mpoly,
+	            me->mvert,
+	            me->totloop, me->totpoly,
+	            looptri);
 
-		p_id++;
+	for (i = 0; i < tottri; i++) {
+		MLoopTri *lt = &looptri[i];
+		MPoly *mp = &me->mpoly[lt->poly];
 
-		triangles[p_id].mverts[0] = &mvert[mf->v1];
-		triangles[p_id].mverts[1] = &mvert[mf->v2];
-		triangles[p_id].mverts[2] = &mvert[mf->v3];
-		triangles[p_id].is_smooth = (mf->flag & ME_SMOOTH) != 0;
+		triangles[i].mverts[0] = &mvert[me->mloop[lt->tri[0]].v];
+		triangles[i].mverts[1] = &mvert[me->mloop[lt->tri[1]].v];
+		triangles[i].mverts[2] = &mvert[me->mloop[lt->tri[2]].v];
+		triangles[i].is_smooth = (mp->flag & ME_SMOOTH) != 0;
 
 		if (tangent) {
-			triangles[p_id].tspace[0] = &ts[0];
-			triangles[p_id].tspace[1] = &ts[1];
-			triangles[p_id].tspace[2] = &ts[2];
+			triangles[i].tspace[0] = &tspace[lt->tri[0]];
+			triangles[i].tspace[1] = &tspace[lt->tri[1]];
+			triangles[i].tspace[2] = &tspace[lt->tri[2]];
 
 			if (calculate_normal) {
-				if (mf->v4 != 0) {
-					normal_quad_v3(triangles[p_id].normal,
-					               mvert[mf->v1].co,
-					               mvert[mf->v2].co,
-					               mvert[mf->v3].co,
-					               mvert[mf->v4].co);
+				if (lt->poly != mpoly_prev) {
+					const MPoly *mp = &me->mpoly[lt->poly];
+					BKE_mesh_calc_poly_normal(mp, &me->mloop[mp->loopstart], me->mvert, no);
+					mpoly_prev = lt->poly;
 				}
-				else {
-					normal_tri_v3(triangles[p_id].normal,
-					              triangles[p_id].mverts[0]->co,
-					              triangles[p_id].mverts[1]->co,
-					              triangles[p_id].mverts[2]->co);
-				}
+				copy_v3_v3(triangles[i].normal, no);
 			}
 			else {
-				copy_v3_v3(triangles[p_id].normal, &precomputed_normals[3 * i]);
-			}
-		}
-
-		/* 4 vertices in the face */
-		if (mf->v4 != 0) {
-			p_id++;
-
-			triangles[p_id].mverts[0] = &mvert[mf->v1];
-			triangles[p_id].mverts[1] = &mvert[mf->v3];
-			triangles[p_id].mverts[2] = &mvert[mf->v4];
-			triangles[p_id].is_smooth = (mf->flag & ME_SMOOTH) != 0;
-
-			if (tangent) {
-				triangles[p_id].tspace[0] = &ts[0];
-				triangles[p_id].tspace[1] = &ts[2];
-				triangles[p_id].tspace[2] = &ts[3];
-
-				/* same normal as the other "triangle" */
-				copy_v3_v3(triangles[p_id].normal, triangles[p_id - 1].normal);
+				copy_v3_v3(triangles[i].normal, &precomputed_normals[lt->poly]);
 			}
 		}
 	}
 
-	BLI_assert(p_id < me->totface * 2);
+	MEM_freeN(looptri);
 }
 
 bool RE_bake_pixels_populate_from_objects(
@@ -493,6 +473,7 @@ bool RE_bake_pixels_populate_from_objects(
 		mesh_calc_tri_tessface(tris_high[i], highpoly[i].me, false, NULL);
 
 		dm_highpoly[i] = CDDM_from_mesh(highpoly[i].me);
+		DM_ensure_tessface(dm_highpoly[i]);
 
 		if (dm_highpoly[i]->getNumTessFaces(dm_highpoly[i]) != 0) {
 			/* Create a bvh-tree for each highpoly object */

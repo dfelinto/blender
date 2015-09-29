@@ -81,7 +81,7 @@ void ED_image_draw_cursor(ARegion *ar, const float cursor[2])
 	y_fac = zoom[1];
 	
 	cpack(0xFFFFFF);
-	glTranslatef(cursor[0], cursor[1], 0.0);
+	glTranslate2fv(cursor);
 	fdrawline(-0.05f * x_fac, 0, 0, 0.05f * y_fac);
 	fdrawline(0, 0.05f * y_fac, 0.05f * x_fac, 0.0f);
 	fdrawline(0.05f * x_fac, 0.0f, 0.0f, -0.05f * y_fac);
@@ -598,7 +598,9 @@ static void draw_uvs(SpaceImage *sima, Scene *scene, Object *obedit)
 		/* first try existing derivedmesh */
 		if (!draw_uvs_dm_shadow(em->derivedFinal)) {
 			/* create one if it does not exist */
-			cagedm = editbmesh_get_derived_cage_and_final(scene, obedit, me->edit_btmesh, &finaldm, CD_MASK_BAREMESH | CD_MASK_MTFACE);
+			cagedm = editbmesh_get_derived_cage_and_final(
+			        scene, obedit, me->edit_btmesh, CD_MASK_BAREMESH | CD_MASK_MTFACE,
+			        &finaldm);
 
 			/* when sync selection is enabled, all faces are drawn (except for hidden)
 			 * so if cage is the same as the final, theres no point in drawing this */
