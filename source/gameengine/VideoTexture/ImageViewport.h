@@ -35,6 +35,7 @@
 #include "Common.h"
 
 #include "ImageBase.h"
+#include "RAS_IOffScreen.h"
 
 
 /// class for viewport access
@@ -42,7 +43,7 @@ class ImageViewport : public ImageBase
 {
 public:
 	/// constructor
-	ImageViewport (void);
+	ImageViewport (PyRASOffScreen *offscreen=NULL);
 
 	/// destructor
 	virtual ~ImageViewport (void);

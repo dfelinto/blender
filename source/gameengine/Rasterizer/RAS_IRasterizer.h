@@ -55,6 +55,7 @@ class RAS_IPolyMaterial;
 class RAS_MeshSlot;
 class RAS_ILightObject;
 class SCA_IScene;
+class RAS_IOffScreen;
 
 typedef vector<unsigned short> KX_IndexArray;
 typedef vector<RAS_TexVert> KX_VertexArray;
@@ -256,6 +257,12 @@ public:
 	 */
 	virtual void SetFocalLength(const float focallength) = 0;
 	virtual float GetFocalLength() = 0;
+
+	/**
+	 * Create an offscreen render buffer that can be used as target for render.
+	 * For the time being, it is only used in VideoTexture for custom render.
+	 */
+	virtual RAS_IOffScreen *CreateOffScreen(int width, int height) = 0;
 
 	/**
 	 * SwapBuffers swaps the back buffer with the front buffer.

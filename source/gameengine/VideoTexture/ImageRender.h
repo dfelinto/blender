@@ -39,6 +39,7 @@
 #include "DNA_screen_types.h"
 #include "RAS_ICanvas.h"
 #include "RAS_IRasterizer.h"
+#include "RAS_IOffScreen.h"
 
 #include "ImageViewport.h"
 
@@ -48,7 +49,7 @@ class ImageRender : public ImageViewport
 {
 public:
 	/// constructor
-	ImageRender(KX_Scene *scene, KX_Camera *camera);
+	ImageRender(KX_Scene *scene, KX_Camera *camera, PyRASOffScreen *offscreen);
 	ImageRender(KX_Scene *scene, KX_GameObject *observer, KX_GameObject *mirror, RAS_IPolyMaterial * mat);
 
 	/// destructor
@@ -73,6 +74,8 @@ protected:
 	KX_Camera * m_camera;
 	/// do we own the camera?
 	bool m_owncamera;
+	/// if offscreen render
+	PyRASOffScreen *m_offscreen;
 	/// for mirror operation
 	KX_GameObject * m_observer;
 	KX_GameObject * m_mirror;

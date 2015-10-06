@@ -45,14 +45,24 @@
 
 
 // constructor
-ImageViewport::ImageViewport (void) : m_alpha(false), m_texInit(false)
+ImageViewport::ImageViewport (PyRASOffScreen *offscreen) : m_alpha(false), m_texInit(false)
 {
 	// get viewport rectangle
-	RAS_Rect rect = KX_GetActiveEngine()->GetCanvas()->GetWindowArea();
-	m_viewport[0] = rect.GetLeft();
-	m_viewport[1] = rect.GetBottom();
-	m_viewport[2] = rect.GetWidth();
-	m_viewport[3] = rect.GetHeight();
+	if (offscreen)
+	{
+		m_viewport[0] = 0;
+		m_viewport[1] = 0;
+		m_viewport[2] = offscreen->ofs->GetWidth();
+		m_viewport[3] = offscreen->ofs->GetHeight();
+	}
+	else
+	{
+		RAS_Rect rect = KX_GetActiveEngine()->GetCanvas()->GetWindowArea();
+		m_viewport[0] = rect.GetLeft();
+		m_viewport[1] = rect.GetBottom();
+		m_viewport[2] = rect.GetWidth();
+		m_viewport[3] = rect.GetHeight();
+	}
 	
 	//glGetIntegerv(GL_VIEWPORT, m_viewport);
 	// create buffer for viewport image
@@ -60,7 +70,7 @@ ImageViewport::ImageViewport (void) : m_alpha(false), m_texInit(false)
 	//          float (1 float = 4 bytes per pixel)
 	m_viewportImage = new BYTE [4 * getViewportSize()[0] * getViewportSize()[1]];
 	// set attributes
-	setWhole(false);
+	setWhole((offscreen) ? true : false);
 }
 
 // destructor
@@ -139,8 +149,8 @@ void ImageViewport::calcImage (unsigned int texId, double ts)
 		m_texInit = true;
 	}
 	// if texture can be directly created
-	if (texId != 0 && m_pyfilter == NULL && m_capSize[0] == calcSize(m_capSize[0])
-	    && m_capSize[1] == calcSize(m_capSize[1]) && !m_flip && !m_zbuff && !m_depth)
+	if (texId != 0 && m_pyfilter == NULL && m_size[0] == m_capSize[0]
+	    && m_size[1] == m_capSize[1] && !m_flip && !m_zbuff && !m_depth)
 	{
 		// just copy current viewport to texture
 		glBindTexture(GL_TEXTURE_2D, texId);

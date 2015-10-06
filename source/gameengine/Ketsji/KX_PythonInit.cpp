@@ -108,6 +108,7 @@ extern "C" {
 #include "BL_ArmatureObject.h"
 #include "RAS_IRasterizer.h"
 #include "RAS_ICanvas.h"
+#include "RAS_IOffScreen.h"
 #include "RAS_BucketManager.h"
 #include "RAS_2DFilterManager.h"
 #include "MT_Vector3.h"
@@ -1448,6 +1449,137 @@ static PyObject *gPyGetDisplayDimensions(PyObject *)
 	return result;
 }
 
+
+/* python wrapper around RAS_IOffScreen
+ * Should eventually gets its own file
+ */
+
+static void PyRASOffScreen__tp_dealloc(PyRASOffScreen *self)
+{
+	if (self->ofs)
+		delete self->ofs;
+	Py_TYPE(self)->tp_free((PyObject *)self);
+}
+
+PyDoc_STRVAR(py_RASOffScreen_doc,
+"RASOffscreen(width, height) -> new GPU Offscreen object"
+"initialized to hold a framebuffer object of ``width`` x ``height``.\n"
+""
+);
+
+PyDoc_STRVAR(RASOffScreen_width_doc, "Offscreen buffer width.\n\n:type: integer");
+static PyObject *RASOffScreen_width_get(PyRASOffScreen *self, void *UNUSED(type))
+{
+	return PyLong_FromLong(self->ofs->GetWidth());
+}
+
+PyDoc_STRVAR(RASOffScreen_height_doc, "Offscreen buffer height.\n\n:type: GLsizei");
+static PyObject *RASOffScreen_height_get(PyRASOffScreen *self, void *UNUSED(type))
+{
+	return PyLong_FromLong(self->ofs->GetHeight());
+}
+
+static PyGetSetDef RASOffScreen_getseters[] = {
+	{(char *)"width", (getter)RASOffScreen_width_get, (setter)NULL, RASOffScreen_width_doc, NULL},
+	{(char *)"height", (getter)RASOffScreen_height_get, (setter)NULL, RASOffScreen_height_doc, NULL},
+	{NULL, NULL, NULL, NULL, NULL}  /* Sentinel */
+};
+
+static int PyRASOffScreen__tp_init(PyRASOffScreen *self, PyObject *args, PyObject *kwargs)
+{
+	int width, height;
+	const char *keywords[] = {"width", "height",  NULL};
+
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "ii:RASOffscreen", (char **)keywords, &width, &height)) {
+		return -1;
+	}
+
+	if (width <= 0) {
+		PyErr_SetString(PyExc_ValueError, "negative 'width' given");
+		return -1;
+	}
+
+	if (height <= 0) {
+		PyErr_SetString(PyExc_ValueError, "negative 'height' given");
+		return -1;
+	}
+
+	if (!gp_Rasterizer)
+	{
+		PyErr_SetString(PyExc_SystemError, "no rasterizer");
+		return -1;
+	}
+	self->ofs = gp_Rasterizer->CreateOffScreen(width, height);
+	if (!self->ofs) {
+		PyErr_SetString(PyExc_SystemError, "creation failed");
+		return -1;
+	}
+	return 0;
+}
+
+PyTypeObject PyRASOffScreen_Type = {
+	PyVarObject_HEAD_INIT(NULL, 0)
+	"RASOffScreen",                              /* tp_name */
+	sizeof(PyRASOffScreen),                      /* tp_basicsize */
+	0,                                           /* tp_itemsize */
+	/* methods */
+	(destructor)PyRASOffScreen__tp_dealloc,      /* tp_dealloc */
+	NULL,                                        /* tp_print */
+	NULL,                                        /* tp_getattr */
+	NULL,                                        /* tp_setattr */
+	NULL,                                        /* tp_compare */
+	NULL,                                        /* tp_repr */
+	NULL,                                        /* tp_as_number */
+	NULL,                                        /* tp_as_sequence */
+	NULL,                                        /* tp_as_mapping */
+	NULL,                                        /* tp_hash */
+	NULL,                                        /* tp_call */
+	NULL,                                        /* tp_str */
+	NULL,                                        /* tp_getattro */
+	NULL,                                        /* tp_setattro */
+	NULL,                                        /* tp_as_buffer */
+	Py_TPFLAGS_DEFAULT,                          /* tp_flags */
+	py_RASOffScreen_doc,                         /* Documentation string */
+	NULL,                                        /* tp_traverse */
+	NULL,                                        /* tp_clear */
+	NULL,                                        /* tp_richcompare */
+	0,                                           /* tp_weaklistoffset */
+	NULL,                                        /* tp_iter */
+	NULL,                                        /* tp_iternext */
+	NULL,                                        /* tp_methods */
+	NULL,                                        /* tp_members */
+	RASOffScreen_getseters,                      /* tp_getset */
+	NULL,                                        /* tp_base */
+	NULL,                                        /* tp_dict */
+	NULL,                                        /* tp_descr_get */
+	NULL,                                        /* tp_descr_set */
+	0,                                           /* tp_dictoffset */
+	(initproc)PyRASOffScreen__tp_init,           /* tp_init */
+	(allocfunc)PyType_GenericAlloc,              /* tp_alloc */
+	(newfunc)PyType_GenericNew,                  /* tp_new */
+	(freefunc)0,                                 /* tp_free */
+	NULL,                                        /* tp_is_gc */
+	NULL,                                        /* tp_bases */
+	NULL,                                        /* tp_mro */
+	NULL,                                        /* tp_cache */
+	NULL,                                        /* tp_subclasses */
+	NULL,                                        /* tp_weaklist */
+	(destructor) NULL                            /* tp_del */
+};
+
+
+static PyObject *gPyOffScreenCreate(PyObject *UNUSED(self), PyObject *args)
+{
+	int width;
+	int height;
+
+	if (!PyArg_ParseTuple(args, "ii:offscreen_create", &width, &height))
+		return NULL;
+
+	return PyObject_CallObject((PyObject *) &PyRASOffScreen_Type, args);
+}
+
+
 PyDoc_STRVAR(Rasterizer_module_documentation,
 "This is the Python API for the game engine of Rasterizer"
 );
@@ -1502,10 +1634,9 @@ static struct PyMethodDef rasterizer_methods[] = {
 	{"showProperties",(PyCFunction) gPyShowProperties, METH_VARARGS, "show or hide the debug properties"},
 	{"autoDebugList",(PyCFunction) gPyAutoDebugList, METH_VARARGS, "enable or disable auto adding debug properties to the debug  list"},
 	{"clearDebugList",(PyCFunction) gPyClearDebugList, METH_NOARGS, "clears the debug property list"},
+	{"offScreenCreate", (PyCFunction) gPyOffScreenCreate, METH_VARARGS, "create an offscreen buffer object, arguments are width and height in pixels"},
 	{ NULL, (PyCFunction) NULL, 0, NULL }
 };
-
-
 
 PyDoc_STRVAR(GameLogic_module_documentation,
 "This is the Python API for the game engine of bge.logic"
@@ -2303,6 +2434,8 @@ PyMODINIT_FUNC initRasterizerPythonBinding()
 {
 	PyObject *m;
 	PyObject *d;
+
+	PyType_Ready(&PyRASOffScreen_Type);
 
 	m = PyModule_Create(&Rasterizer_module_def);
 	PyDict_SetItemString(PySys_GetObject("modules"), Rasterizer_module_def.m_name, m);

@@ -180,7 +180,7 @@ public:
 	virtual float GetEyeSeparation();
 	virtual void SetFocalLength(const float focallength);
 	virtual float GetFocalLength();
-
+	virtual RAS_IOffScreen *CreateOffScreen(int width, int height);
 	virtual void SwapBuffers();
 
 	virtual void IndexPrimitives(class RAS_MeshSlot &ms);
