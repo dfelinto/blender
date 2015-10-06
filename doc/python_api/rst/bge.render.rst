@@ -90,6 +90,29 @@ Constants
 
    Right eye being used during stereoscopic rendering.
 
+*****
+Types
+*****
+
+.. class:: RASOffScreen
+
+   An off-screen render buffer object. 
+
+   Use bge.render.offScreenCreate() to create it.
+   Currently it can only be used in the :class:`bge.texture.ImageRender` constructor to render on a FBO rather than the 
+   default viewport.
+
+  .. attribute:: width
+
+     The width in pixel of the FBO
+
+     :type: integer
+
+  .. attribute:: height
+
+     The height in pixel of the FBO
+
+     :type: integer
 
 *********
 Functions
@@ -362,3 +385,14 @@ Functions
    Get the current vsync value
 
    :rtype: One of VSYNC_OFF, VSYNC_ON, VSYNC_ADAPTIVE
+
+.. function:: offScreenCreate(width,height)
+
+   Create a Off-screen render buffer object.
+
+   :arg width: the width of the buffer in pixels
+   :type width: integer
+   :arg height: the height of the buffer in pixels
+   :type height: integer
+   :rtype: :class:`RASOffScreen`
+

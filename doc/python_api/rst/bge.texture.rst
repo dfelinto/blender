@@ -545,14 +545,17 @@ Image classes
 
       :type: bool
 
-.. class:: ImageRender(scene, camera)
+.. class:: ImageRender(scene, camera, fbo=None)
 
-   Image source from render.
+   Image source from render. The render is done on a custom framebuffer object if fbo is specified, otherwise on 
+   the default framebuffer.
    
    :arg scene: Scene in which the image has to be taken.
    :type scene: :class:`~bge.types.KX_Scene`
    :arg camera: Camera from which the image has to be taken.
    :type camera: :class:`~bge.types.KX_Camera`
+   :arg fbo: Off-screen render buffer object (optional)
+   :type fbo: :class:`~bge.render.RASOffScreen`
 
    .. attribute:: alpha
 
