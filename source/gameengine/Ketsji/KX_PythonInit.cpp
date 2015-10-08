@@ -470,6 +470,21 @@ static PyObject *gPyGetExitKey(PyObject *)
 	return PyLong_FromLong(KX_KetsjiEngine::GetExitKey());
 }
 
+static PyObject *gPySetRender(PyObject *, PyObject *args)
+{
+	int render;
+	if (!PyArg_ParseTuple(args, "i:setRender", &render))
+		return NULL;
+	KX_KetsjiEngine::SetRender(render);
+	Py_RETURN_NONE;
+}
+
+static PyObject *gPyGetRender(PyObject *)
+{
+	return PyBool_FromLong(KX_KetsjiEngine::GetRender());
+}
+
+
 static PyObject *gPySetMaxLogicFrame(PyObject *, PyObject *args)
 {
 	int frame;
@@ -913,6 +928,8 @@ static struct PyMethodDef game_methods[] = {
 	{"setAnimRecordFrame", (PyCFunction) gPySetAnimRecordFrame, METH_VARARGS, (const char *)"Sets the current frame number used for animation recording"},
 	{"getExitKey", (PyCFunction) gPyGetExitKey, METH_NOARGS, (const char *)"Gets the key used to exit the game engine"},
 	{"setExitKey", (PyCFunction) gPySetExitKey, METH_VARARGS, (const char *)"Sets the key used to exit the game engine"},
+	{"setRender", (PyCFunction) gPySetRender, METH_VARARGS, (const char *)"Set the global render flag"},
+	{"getRender", (PyCFunction) gPyGetRender, METH_NOARGS, (const char *)"get the global render flag value"},
 	{"getAverageFrameRate", (PyCFunction) gPyGetAverageFrameRate, METH_NOARGS, (const char *)"Gets the estimated average frame rate"},
 	{"getBlendFileList", (PyCFunction)gPyGetBlendFileList, METH_VARARGS, (const char *)"Gets a list of blend files in the same directory as the current blend file"},
 	{"PrintGLInfo", (PyCFunction)pyPrintExt, METH_NOARGS, (const char *)"Prints GL Extension Info"},
@@ -1578,7 +1595,6 @@ static PyObject *gPyOffScreenCreate(PyObject *UNUSED(self), PyObject *args)
 
 	return PyObject_CallObject((PyObject *) &PyRASOffScreen_Type, args);
 }
-
 
 PyDoc_STRVAR(Rasterizer_module_documentation,
 "This is the Python API for the game engine of Rasterizer"

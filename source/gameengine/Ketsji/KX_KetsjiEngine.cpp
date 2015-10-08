@@ -106,7 +106,7 @@ double KX_KetsjiEngine::m_suspendeddelta = 0.0;
 double KX_KetsjiEngine::m_average_framerate = 0.0;
 bool   KX_KetsjiEngine::m_restrict_anim_fps = false;
 short  KX_KetsjiEngine::m_exitkey = 130; //ESC Key
-
+bool   KX_KetsjiEngine::m_doRender = true;
 
 /**
  *	Constructor of the Ketsji Engine
@@ -733,7 +733,7 @@ bool KX_KetsjiEngine::NextFrame()
 	// Start logging time spend outside main loop
 	m_logger->StartLog(tc_outside, m_kxsystem->GetTimeInSeconds(), true);
 	
-	return doRender;
+	return doRender && m_doRender;
 }
 
 
@@ -1849,6 +1849,16 @@ void KX_KetsjiEngine::SetExitKey(short key)
 short KX_KetsjiEngine::GetExitKey()
 {
 	return m_exitkey;
+}
+
+void KX_KetsjiEngine::SetRender(bool render)
+{
+	m_doRender = render;
+}
+
+bool KX_KetsjiEngine::GetRender()
+{
+	return m_doRender;
 }
 
 void KX_KetsjiEngine::SetShowFramerate(bool frameRate)

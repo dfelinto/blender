@@ -104,7 +104,6 @@ private:
 	int					m_activecam;
 	bool				m_bFixedTime;
 	
-	
 	bool				m_firstframe;
 	int					m_currentFrame;
 
@@ -125,6 +124,8 @@ private:
 	static double			m_suspendeddelta;
 
 	static short			m_exitkey; /* Key used to exit the BGE */
+
+	static bool				m_doRender;  /* whether or not the scene should be rendered after the logic frame */
 
 	int					m_exitcode;
 	STR_String			m_exitstring;
@@ -361,6 +362,16 @@ public:
 	static void SetExitKey(short key);
 
 	static short GetExitKey();
+
+	/**
+	 * Activate or deactivates the render of the scene after the logic frame
+	 * \param render	true (render) or false (do not render)
+	 */
+	static void SetRender(bool render);
+	/**
+	 * Get the current render flag value
+	 */
+	static bool GetRender();
 
 	/**
 	 * \Sets the display for frame rate on or off.
