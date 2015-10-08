@@ -352,12 +352,17 @@ static Image *rna_Main_images_new(Main *bmain, const char *name, int width, int 
 	id_us_min(&image->id);
 	return image;
 }
-static Image *rna_Main_images_load(Main *bmain, ReportList *reports, const char *filepath)
+static Image *rna_Main_images_load(Main *bmain, ReportList *reports, const char *filepath, int check_existing)
 {
 	Image *ima;
 
 	errno = 0;
-	ima = BKE_image_load(bmain, filepath);
+	if (check_existing) {
+		ima = BKE_image_load_exists(filepath);
+	}
+	else {
+		ima = BKE_image_load(bmain, filepath);
+	}
 
 	if (!ima) {
 		BKE_reportf(reports, RPT_ERROR, "Cannot read '%s': %s", filepath,
@@ -436,12 +441,17 @@ static void rna_Main_metaballs_remove(Main *bmain, ReportList *reports, PointerR
 	}
 }
 
-static VFont *rna_Main_fonts_load(Main *bmain, ReportList *reports, const char *filepath)
+static VFont *rna_Main_fonts_load(Main *bmain, ReportList *reports, const char *filepath, int check_existing)
 {
 	VFont *font;
-
 	errno = 0;
-	font = BKE_vfont_load(bmain, filepath);
+
+	if (check_existing) {
+		font = BKE_vfont_load_exists(bmain, filepath);
+	}
+	else {
+		font = BKE_vfont_load(bmain, filepath);
+	}
 
 	if (!font)
 		BKE_reportf(reports, RPT_ERROR, "Cannot read '%s': %s", filepath,
@@ -553,9 +563,17 @@ static void rna_Main_speakers_remove(Main *bmain, ReportList *reports, PointerRN
 	}
 }
 
-static bSound *rna_Main_sounds_load(Main *bmain, const char *name)
+static bSound *rna_Main_sounds_load(Main *bmain, const char *name, int check_existing)
 {
-	bSound *sound = BKE_sound_new_file(bmain, name);
+	bSound *sound;
+
+	if (check_existing) {
+		sound = BKE_sound_new_file_exists(bmain, name);
+	}
+	else {
+		sound = BKE_sound_new_file(bmain, name);
+	}
+
 	id_us_min(&sound->id);
 	return sound;
 }
@@ -675,12 +693,18 @@ static void rna_Main_palettes_remove(Main *bmain, ReportList *reports, PointerRN
 	}
 }
 
-static MovieClip *rna_Main_movieclip_load(Main *bmain, ReportList *reports, const char *filepath)
+static MovieClip *rna_Main_movieclip_load(Main *bmain, ReportList *reports, const char *filepath, int check_existing)
 {
 	MovieClip *clip;
 
 	errno = 0;
-	clip = BKE_movieclip_file_add(bmain, filepath);
+
+	if (check_existing) {
+		clip = BKE_movieclip_file_add_exists(bmain, filepath);
+	}
+	else {
+		clip = BKE_movieclip_file_add(bmain, filepath);
+	}
 
 	if (!clip)
 		BKE_reportf(reports, RPT_ERROR, "Cannot read '%s': %s", filepath,
@@ -1207,6 +1231,7 @@ void RNA_def_main_images(BlenderRNA *brna, PropertyRNA *cprop)
 	RNA_def_function_ui_description(func, "Load a new image into the main database");
 	parm = RNA_def_string_file_path(func, "filepath", "File Path", 0, "", "path of the file to load");
 	RNA_def_property_flag(parm, PROP_REQUIRED);
+	RNA_def_boolean(func, "check_existing", false, "", "Using existing data-block if this file is already loaded");
 	/* return type */
 	parm = RNA_def_pointer(func, "image", "Image", "", "New image datablock");
 	RNA_def_function_return(func, parm);
@@ -1351,6 +1376,7 @@ void RNA_def_main_fonts(BlenderRNA *brna, PropertyRNA *cprop)
 	RNA_def_function_ui_description(func, "Load a new font into the main database");
 	parm = RNA_def_string_file_path(func, "filepath", "File Path", 0, "", "path of the font to load");
 	RNA_def_property_flag(parm, PROP_REQUIRED);
+	RNA_def_boolean(func, "check_existing", false, "", "Using existing data-block if this file is already loaded");
 	/* return type */
 	parm = RNA_def_pointer(func, "vfont", "VectorFont", "", "New font datablock");
 	RNA_def_function_return(func, parm);
@@ -1614,6 +1640,7 @@ void RNA_def_main_sounds(BlenderRNA *brna, PropertyRNA *cprop)
 	RNA_def_function_ui_description(func, "Add a new sound to the main database from a file");
 	parm = RNA_def_string_file_path(func, "filepath", "Path", FILE_MAX, "", "path for the datablock");
 	RNA_def_property_flag(parm, PROP_REQUIRED);
+	RNA_def_boolean(func, "check_existing", false, "", "Using existing data-block if this file is already loaded");
 	/* return type */
 	parm = RNA_def_pointer(func, "sound", "Sound", "", "New text datablock");
 	RNA_def_function_return(func, parm);
@@ -1837,6 +1864,7 @@ void RNA_def_main_movieclips(BlenderRNA *brna, PropertyRNA *cprop)
 	RNA_def_function_ui_description(func, "Add a new movie clip to the main database from a file");
 	parm = RNA_def_string_file_path(func, "filepath", "Path", FILE_MAX, "", "path for the datablock");
 	RNA_def_property_flag(parm, PROP_REQUIRED);
+	RNA_def_boolean(func, "check_existing", false, "", "Using existing data-block if this file is already loaded");
 	/* return type */
 	parm = RNA_def_pointer(func, "clip", "MovieClip", "", "New movie clip datablock");
 	RNA_def_function_return(func, parm);

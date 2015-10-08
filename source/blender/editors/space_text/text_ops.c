@@ -1062,16 +1062,17 @@ static int text_convert_whitespace_exec(bContext *C, wmOperator *op)
 	for (tmp = text->lines.first; tmp; tmp = tmp->next) {
 		char *new_line;
 
+		BLI_assert(tmp->line);
+
 		flatten_string(st, &fs, tmp->line);
 		new_line = BLI_strdup(fs.buf);
 		flatten_string_free(&fs);
 
-		/* Put new_line in the tmp->line spot still need to try and set the curc correctly. */
-		if (tmp->line)
-			MEM_freeN(tmp->line);
+		MEM_freeN(tmp->line);
 		if (tmp->format)
 			MEM_freeN(tmp->format);
 		
+		/* Put new_line in the tmp->line spot still need to try and set the curc correctly. */
 		tmp->line = new_line;
 		tmp->len = strlen(new_line);
 		tmp->format = NULL;
@@ -1088,6 +1089,8 @@ static int text_convert_whitespace_exec(bContext *C, wmOperator *op)
 			const int   text_check_line_len = tmp->len;
 			char *tmp_line_cur = tmp_line;
 			const size_t tab_len = st->tabnumber;
+
+			BLI_assert(text_check_line);
 
 			for (a = 0; a < text_check_line_len;) {
 				/* A tab can only start at a position multiple of tab_len... */
@@ -1135,12 +1138,11 @@ static int text_convert_whitespace_exec(bContext *C, wmOperator *op)
 				flatten_string_free(&fs);
 #endif
 
-				/* Put new_line in the tmp->line spot still need to try and set the curc correctly. */
-				if (tmp->line)
-					MEM_freeN(tmp->line);
+				MEM_freeN(tmp->line);
 				if (tmp->format)
 					MEM_freeN(tmp->format);
 
+				/* Put new_line in the tmp->line spot still need to try and set the curc correctly. */
 				tmp->line = BLI_strdup(tmp_line);
 				tmp->len = strlen(tmp_line);
 				tmp->format = NULL;
@@ -2367,20 +2369,22 @@ static int flatten_column_to_offset(SpaceText *st, const char *str, int index)
 	return j;
 }
 
-static TextLine *get_first_visible_line(SpaceText *st, ARegion *ar, int *y)
+static TextLine *get_line_pos_wrapped(SpaceText *st, ARegion *ar, int *y)
 {
 	TextLine *linep = st->text->lines.first;
-	int i;
-	for (i = st->top; i > 0 && linep; ) {
-		int lines = text_get_visible_lines(st, ar, linep->line);
-		
-		if (i - lines < 0) {
-			*y += i;
+	int i, lines;
+
+	if (*y < -st->top) {
+		return NULL;  /* We are beyond the first line... */
+	}
+
+	for (i = -st->top; i <= *y && linep; linep = linep->next, i += lines) {
+		lines = text_get_visible_lines(st, ar, linep->line);
+
+		if (i + lines > *y) {
+			/* We found the line matching given vertical 'coordinate', now set y relative to this line's start. */
+			*y -= i;
 			break;
-		}
-		else {
-			linep = linep->next;
-			i -= lines;
 		}
 	}
 	return linep;
@@ -2391,23 +2395,22 @@ static void text_cursor_set_to_pos_wrapped(SpaceText *st, ARegion *ar, int x, in
 	Text *text = st->text;
 	int max = wrap_width(st, ar); /* column */
 	int charp = -1;               /* mem */
-	int loop = 1, found = 0;      /* flags */
-	char ch;
+	bool found = false;           /* flags */
 	
-	/* Point to first visible line */
-	TextLine *linep = get_first_visible_line(st, ar, &y);
-	
-	while (loop && linep) {
+	/* Point to line matching given y position, if any. */
+	TextLine *linep = get_line_pos_wrapped(st, ar, &y);
+
+	if (linep) {
 		int i = 0, start = 0, end = max; /* column */
-		int j = 0, curs = 0, endj = 0;   /* mem */
-		int chop = 1;                    /* flags */
-		
-		for (; loop; j += BLI_str_utf8_size_safe(linep->line + j)) {
+		int j, curs = 0, endj = 0;       /* mem */
+		bool chop = true;                /* flags */
+		char ch;
+
+		for (j = 0 ; !found && ((ch = linep->line[j]) != '\0'); j += BLI_str_utf8_size_safe(linep->line + j)) {
 			int chars;
 			int columns = BLI_str_utf8_char_width_safe(linep->line + j); /* = 1 for tab */
 			
 			/* Mimic replacement of tabs */
-			ch = linep->line[j];
 			if (ch == '\t') {
 				chars = st->tabnumber - i % st->tabnumber;
 				ch = ' ';
@@ -2420,7 +2423,8 @@ static void text_cursor_set_to_pos_wrapped(SpaceText *st, ARegion *ar, int x, in
 				/* Gone too far, go back to last wrap point */
 				if (y < 0) {
 					charp = endj;
-					loop = 0;
+					y = 0;
+					found = true;
 					break;
 					/* Exactly at the cursor */
 				}
@@ -2428,7 +2432,7 @@ static void text_cursor_set_to_pos_wrapped(SpaceText *st, ARegion *ar, int x, in
 					/* current position could be wrapped to next line */
 					/* this should be checked when end of current line would be reached */
 					charp = curs = j;
-					found = 1;
+					found = true;
 					/* Prepare curs for next wrap */
 				}
 				else if (i - end <= x && i + columns - end > x) {
@@ -2438,68 +2442,70 @@ static void text_cursor_set_to_pos_wrapped(SpaceText *st, ARegion *ar, int x, in
 					end = MIN2(end, i);
 					
 					if (found) {
-						/* exact cursor position was found, check if it's */
-						/* still on needed line (hasn't been wrapped) */
-						if (charp > endj && !chop && ch != '\0') charp = endj;
-						loop = 0;
+						/* exact cursor position was found, check if it's still on needed line (hasn't been wrapped) */
+						if (charp > endj && !chop && ch != '\0')
+							charp = endj;
 						break;
 					}
 					
-					if (chop) endj = j;
+					if (chop)
+						endj = j;
 					start = end;
 					end += max;
 					
 					if (j < linep->len)
 						y--;
 					
-					chop = 1;
+					chop = true;
 					if (y == 0 && i + columns - start > x) {
 						charp = curs;
-						loop = 0;
+						found = true;
 						break;
 					}
 				}
 				else if (ch == ' ' || ch == '-' || ch == '\0') {
 					if (found) {
-						loop = 0;
 						break;
 					}
 					
 					if (y == 0 && i + columns - start > x) {
 						charp = curs;
-						loop = 0;
+						found = true;
 						break;
 					}
 					end = i + 1;
 					endj = j;
-					chop = 0;
+					chop = false;
 				}
 				i += columns;
 			}
-			
-			if (ch == '\0') break;
 		}
+
+		BLI_assert(y == 0);
 		
-		if (!loop || found) break;
-		
-		if (!linep->next) {
+		if (!found) {
+			/* On correct line but didn't meet cursor, must be at end */
 			charp = linep->len;
-			break;
 		}
-		
-		/* On correct line but didn't meet cursor, must be at end */
-		if (y == 0) {
-			charp = linep->len;
-			break;
-		}
-		linep = linep->next;
-		
-		y--;
+	}
+	else if (y < 0) {  /* Before start of text. */
+		linep = st->text->lines.first;
+		charp = 0;
+	}
+	else {  /* Beyond end of text */
+		linep = st->text->lines.last;
+		charp = linep->len;
 	}
 
-	if (linep && charp != -1) {
-		if (sel) { text->sell = linep; text->selc = charp; }
-		else     { text->curl = linep; text->curc = charp; }
+	BLI_assert(linep && charp != -1);
+
+	if (sel) {
+		text->sell = linep;
+		text->selc = charp;
+	}
+	else {
+		text->curl = linep;
+		text->curc = charp;
 	}
 }
 

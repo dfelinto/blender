@@ -138,6 +138,8 @@ static bool ui_mouse_motion_keynav_test(struct uiKeyNavLock *keynav, const wmEve
 
 #define MENU_TOWARDS_MARGIN 20  /* margin in pixels */
 #define MENU_TOWARDS_WIGGLE_ROOM 64  /* tolerance in pixels */
+/* drag-lock distance threshold in pixels */
+#define BUTTON_DRAGLOCK_THRESH      3
 
 typedef enum uiButtonActivateType {
 	BUTTON_ACTIVATE_OVER,
@@ -527,6 +529,30 @@ static bool ui_but_is_cursor_warp(uiBut *but)
 	}
 
 	return false;
+}
+
+/**
+ * Ignore mouse movements within some horizontal pixel threshold before starting to drag
+ */
+static bool ui_but_dragedit_update_mval(uiHandleButtonData *data, int mx)
+{
+	if (mx == data->draglastx)
+		return false;
+
+	if (data->draglock) {
+		if (ABS(mx - data->dragstartx) <= BUTTON_DRAGLOCK_THRESH) {
+			return false;
+		}
+#ifdef USE_DRAG_MULTINUM
+		if (ELEM(data->multi_data.init, BUTTON_MULTI_INIT_UNSET, BUTTON_MULTI_INIT_SETUP)) {
+			return false;
+		}
+#endif
+		data->draglock = false;
+		data->dragstartx = mx;  /* ignore mouse movement within drag-lock */
+	}
+
+	return true;
 }
 
 static float ui_mouse_scale_warp_factor(const bool shift)
@@ -3936,8 +3962,12 @@ static float ui_numedit_apply_snapf(
 		/* snapping by 10's for float buttons is quite annoying (location, scale...),
 		 * but allow for rotations */
 		if (softrange >= 21.0f) {
+			UnitSettings *unit = but->block->unit;
 			int unit_type = UI_but_unit_type_get(but);
-			if (!ELEM(unit_type, PROP_UNIT_ROTATION)) {
+			if ((unit_type == PROP_UNIT_ROTATION) && (unit->system_rotation != USER_UNIT_ROT_RADIANS)) {
+				/* pass (degrees)*/
+			}
+			else {
 				softrange = 20.0f;
 			}
 		}
@@ -3993,23 +4023,10 @@ static bool ui_numedit_but_NUM(
 	int lvalue, temp;
 	bool changed = false;
 	const bool is_float = ui_but_is_float(but);
-	
-	if (mx == data->draglastx)
-		return changed;
-	
-	/* drag-lock - prevent unwanted scroll adjustments */
-	/* change value (now 3) to adjust threshold in pixels */
-	if (data->draglock) {
-		if (abs(mx - data->dragstartx) <= 3)
-			return changed;
-#ifdef USE_DRAG_MULTINUM
-		if (ELEM(data->multi_data.init, BUTTON_MULTI_INIT_UNSET, BUTTON_MULTI_INIT_SETUP)) {
-			return changed;
-		}
-#endif
 
-		data->draglock = false;
-		data->dragstartx = mx;  /* ignore mouse movement within drag-lock */
+	/* prevent unwanted drag adjustments */
+	if (ui_but_dragedit_update_mval(data, mx) == false) {
+		return changed;
 	}
 
 	softmin = but->softmin;
@@ -4332,6 +4349,13 @@ static bool ui_numedit_but_SLI(
 	/* note, 'offs' is really from the widget drawing rounded corners see 'widget_numslider' */
 	float offs;
 
+	/* prevent unwanted drag adjustments */
+	if ((but->type != UI_BTYPE_SCROLL) &&
+	    (ui_but_dragedit_update_mval(data, mx) == false))
+	{
+		return changed;
+	}
+
 	softmin = but->softmin;
 	softmax = but->softmax;
 	softrange = softmax - softmin;
@@ -4511,6 +4535,10 @@ static int ui_do_but_SLI(bContext *C, uiBlock *block, uiBut *but, uiHandleButton
 				}
 			}
 			else {
+#ifdef USE_CONT_MOUSE_CORRECT
+				/* reset! */
+				copy_v2_fl(data->ungrab_mval, FLT_MAX);
+#endif
 				click = 1;
 			}
 		}
@@ -6670,28 +6698,42 @@ static bool ui_but_menu(bContext *C, uiBut *but)
 		int w = uiLayoutGetWidth(layout);
 		wmKeyMap *km;
 		wmKeyMapItem *kmi = NULL;
-		int kmi_id = WM_key_event_operator_id(C, but->optype->idname, but->opcontext, prop, true, &km);
+		/* We want to know if this op has a shortcut, be it hotkey or not. */
+		int kmi_id = WM_key_event_operator_id(C, but->optype->idname, but->opcontext, prop, false, &km);
 
 		if (kmi_id)
 			kmi = WM_keymap_item_find_id(km, kmi_id);
 
-		/* keyboard shortcuts */
-		if ((kmi) && ISKEYBOARD(kmi->type)) {
+		/* We do have a shortcut, but only keyboard ones are editbale that way... */
+		if (kmi) {
+			if (ISKEYBOARD(kmi->type)) {
+#if 0			/* would rather use a block but, but gets weirdly positioned... */
+				uiDefBlockBut(block, menu_change_shortcut, but, "Change Shortcut",
+				              0, 0, uiLayoutGetWidth(layout), UI_UNIT_Y, "");
+#endif
 
-			/* would rather use a block but, but gets weirdly positioned... */
-			//uiDefBlockBut(block, menu_change_shortcut, but, "Change Shortcut", 0, 0, uiLayoutGetWidth(layout), UI_UNIT_Y, "");
-			
-			but2 = uiDefIconTextBut(block, UI_BTYPE_BUT, 0, 0, CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Change Shortcut"),
-			                        0, 0, w, UI_UNIT_Y, NULL, 0, 0, 0, 0, "");
-			UI_but_func_set(but2, popup_change_shortcut_func, but, NULL);
+				but2 = uiDefIconTextBut(block, UI_BTYPE_BUT, 0, ICON_NONE,
+				                        CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Change Shortcut"),
+				                        0, 0, w, UI_UNIT_Y, NULL, 0, 0, 0, 0, "");
+				UI_but_func_set(but2, popup_change_shortcut_func, but, NULL);
 
-			but2 = uiDefIconTextBut(block, UI_BTYPE_BUT, 0, 0, CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Remove Shortcut"),
-			                        0, 0, w, UI_UNIT_Y, NULL, 0, 0, 0, 0, "");
-			UI_but_func_set(but2, remove_shortcut_func, but, NULL);
+				but2 = uiDefIconTextBut(block, UI_BTYPE_BUT, 0, ICON_NONE,
+				                        CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Remove Shortcut"),
+				                        0, 0, w, UI_UNIT_Y, NULL, 0, 0, 0, 0, "");
+				UI_but_func_set(but2, remove_shortcut_func, but, NULL);
+			}
+			else {
+				but2 = uiDefIconTextBut(block, UI_BTYPE_BUT, 0, ICON_NONE, IFACE_("Non-Keyboard Shortcut"),
+				                        0, 0, w, UI_UNIT_Y, NULL, 0, 0, 0, 0,
+				                        TIP_("Only keyboard shortcuts can be edited that way, "
+				                             "please use User Preferences otherwise"));
+				UI_but_flag_enable(but2, UI_BUT_DISABLED);
+			}
 		}
 		/* only show 'add' if there's a suitable key map for it to go in */
 		else if (WM_keymap_guess_opname(C, but->optype->idname)) {
-			but2 = uiDefIconTextBut(block, UI_BTYPE_BUT, 0, 0, CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Add Shortcut"),
+			but2 = uiDefIconTextBut(block, UI_BTYPE_BUT, 0, ICON_NONE,
+			                        CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Add Shortcut"),
 			                        0, 0, w, UI_UNIT_Y, NULL, 0, 0, 0, 0, "");
 			UI_but_func_set(but2, popup_add_shortcut_func, but, NULL);
 		}

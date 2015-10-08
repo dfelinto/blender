@@ -1013,6 +1013,15 @@ void BKE_sequencer_sort(Scene *scene)
 	*(ed->seqbasep) = seqbase;
 }
 
+/** Comparision function suitable to be used with BLI_listbase_sort()... */
+int BKE_sequencer_cmp_time_startdisp(const void *a, const void *b)
+{
+	const Sequence *seq_a = a;
+	const Sequence *seq_b = b;
+
+	return (seq_a->startdisp > seq_b->startdisp);
+}
+
 static int clear_scene_in_allseqs_cb(Sequence *seq, void *arg_pt)
 {
 	if (seq->scene == (Scene *)arg_pt)
@@ -3009,12 +3018,17 @@ static ImBuf *seq_render_mask(const SeqRenderData *context, Mask *mask, float nr
 		return NULL;
 	}
 	else {
+		AnimData *adt;
 		Mask *mask_temp;
 		MaskRasterHandle *mr_handle;
 
 		mask_temp = BKE_mask_copy_nolib(mask);
 
 		BKE_mask_evaluate(mask_temp, mask->sfra + nr, true);
+
+		/* anim-data */
+		adt = BKE_animdata_from_id(&mask->id);
+		BKE_animsys_evaluate_animdata(context->scene, &mask_temp->id, adt, nr, ADT_RECALC_ANIM);
 
 		maskbuf = MEM_mallocN(sizeof(float) * context->rectx * context->recty, __func__);
 
@@ -3408,7 +3422,7 @@ static ImBuf *do_render_strip_uncached(const SeqRenderData *context, Sequence *s
 
 		case SEQ_TYPE_MASK:
 		{
-			/* ibuf is alwats new */
+			/* ibuf is always new */
 			ibuf = seq_render_mask_strip(context, seq, nr);
 
 			copy_to_ibuf_still(context, seq, nr, ibuf);

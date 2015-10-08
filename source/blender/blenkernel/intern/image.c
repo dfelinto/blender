@@ -704,8 +704,7 @@ void BKE_image_alpha_mode_from_extension(Image *image)
 Image *BKE_image_load(Main *bmain, const char *filepath)
 {
 	Image *ima;
-	int file, len;
-	const char *libname;
+	int file;
 	char str[FILE_MAX];
 
 	BLI_strncpy(str, filepath, sizeof(str));
@@ -717,13 +716,7 @@ Image *BKE_image_load(Main *bmain, const char *filepath)
 		return NULL;
 	close(file);
 
-	/* create a short library name */
-	len = strlen(filepath);
-
-	while (len > 0 && filepath[len - 1] != '/' && filepath[len - 1] != '\\') len--;
-	libname = filepath + len;
-
-	ima = image_alloc(bmain, libname, IMA_SRC_FILE, IMA_TYPE_IMAGE);
+	ima = image_alloc(bmain, BLI_path_basename(filepath), IMA_SRC_FILE, IMA_TYPE_IMAGE);
 	BLI_strncpy(ima->name, filepath, sizeof(ima->name));
 
 	if (BLI_testextensie_array(filepath, imb_ext_movie))
@@ -746,7 +739,7 @@ Image *BKE_image_load_exists_ex(const char *filepath, bool *r_exists)
 	BLI_strncpy(str, filepath, sizeof(str));
 	BLI_path_abs(str, G.main->name);
 
-	/* first search an identical image */
+	/* first search an identical filepath */
 	for (ima = G.main->image.first; ima; ima = ima->id.next) {
 		if (ima->source != IMA_SRC_VIEWER && ima->source != IMA_SRC_GENERATED) {
 			BLI_strncpy(strtest, ima->name, sizeof(ima->name));

@@ -45,6 +45,7 @@
 
 #include "BKE_cdderivedmesh.h"
 #include "BKE_lattice.h"
+#include "BKE_library_query.h"
 #include "BKE_modifier.h"
 
 #include "MEM_guardedalloc.h"
@@ -91,12 +92,11 @@ static bool isDisabled(ModifierData *md, int UNUSED(useRenderParams))
 
 static void foreachObjectLink(
         ModifierData *md, Object *ob,
-        void (*walk)(void *userData, Object *ob, Object **obpoin),
-        void *userData)
+        ObjectWalkFunc walk, void *userData)
 {
 	ArmatureModifierData *amd = (ArmatureModifierData *) md;
 
-	walk(userData, ob, &amd->object);
+	walk(userData, ob, &amd->object, IDWALK_NOP);
 }
 
 static void updateDepgraph(ModifierData *md, DagForest *forest,

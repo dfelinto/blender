@@ -1253,11 +1253,16 @@ static void createTransArmatureVerts(TransInfo *t)
 				if (ebo->flag & BONE_TIPSEL) {
 					copy_v3_v3(td->iloc, ebo->tail);
 
-					/* don't allow single selected tips to have a modified center,
-					 * causes problem with snapping T45974 */
-					copy_v3_v3(td->center,
-					           ((t->around == V3D_LOCAL) &&
-					            (ebo->flag & BONE_ROOTSEL)) ? ebo->head : td->iloc);
+					/* Don't allow single selected tips to have a modified center,
+					 * causes problem with snapping (see T45974).
+					 * However, in rotation mode, we want to keep that 'rotate bone around root with
+					 * only its tip selected' behavior (see T46325). */
+					if ((t->around == V3D_LOCAL) && ((t->mode == TFM_ROTATION) || (ebo->flag & BONE_ROOTSEL))) {
+						copy_v3_v3(td->center, ebo->head);
+					}
+					else {
+						copy_v3_v3(td->center, td->iloc);
+					}
 
 					td->loc = ebo->tail;
 					td->flag = TD_SELECTED;
@@ -5554,7 +5559,7 @@ void autokeyframe_ob_cb_func(bContext *C, Scene *scene, View3D *v3d, Object *ob,
 		
 		if (IS_AUTOKEY_FLAG(scene, ONLYKEYINGSET) && (active_ks)) {
 			/* only insert into active keyingset 
-			 * NOTE: we assume here that the active Keying Set does not need to have its iterator overridden spe
+			 * NOTE: we assume here that the active Keying Set does not need to have its iterator overridden
 			 */
 			ANIM_apply_keyingset(C, &dsources, NULL, active_ks, MODIFYKEY_MODE_INSERT, cfra);
 		}

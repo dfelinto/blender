@@ -286,7 +286,6 @@ static void draw_movieclip_buffer(const bContext *C, SpaceClip *sc, ARegion *ar,
 	MovieClip *clip = ED_space_clip_get_clip(sc);
 	int filter = GL_LINEAR;
 	int x, y;
-	rctf frame;
 
 	/* find window pixel coordinates of origin */
 	UI_view2d_view_to_region(&ar->v2d, 0.0f, 0.0f, &x, &y);
@@ -313,10 +312,12 @@ static void draw_movieclip_buffer(const bContext *C, SpaceClip *sc, ARegion *ar,
 	/* reset zoom */
 	glPixelZoom(1.0f, 1.0f);
 
-	BLI_rctf_init(&frame, 0.0f, ibuf->x, 0.0f, ibuf->y);
 
-	if (sc->flag & SC_SHOW_METADATA)
-		ED_region_image_metadata_draw(x, y, ibuf, frame, zoomx * width / ibuf->x, zoomy * height / ibuf->y);
+	if (sc->flag & SC_SHOW_METADATA) {
+		rctf frame;
+		BLI_rctf_init(&frame, 0.0f, ibuf->x, 0.0f, ibuf->y);
+		ED_region_image_metadata_draw(x, y, ibuf, &frame, zoomx * width / ibuf->x, zoomy * height / ibuf->y);
+	}
 
 	if (ibuf->planes == 32)
 		glDisable(GL_BLEND);
@@ -1259,7 +1260,7 @@ static void draw_tracking_tracks(SpaceClip *sc, Scene *scene, ARegion *ar, Movie
 	/* ** find window pixel coordinates of origin ** */
 
 	/* UI_view2d_view_to_region_no_clip return integer values, this could
-	 * lead to 1px flickering when view is locked to selection during playbeck.
+	 * lead to 1px flickering when view is locked to selection during playback.
 	 * to avoid this flickering, calculate base point in the same way as it happens
 	 * in UI_view2d_view_to_region_no_clip, but do it in floats here */
 

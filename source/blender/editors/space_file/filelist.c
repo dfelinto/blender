@@ -532,6 +532,7 @@ void filelist_sort(struct FileList *filelist)
 			case FILE_SORT_NONE:  /* Should never reach this point! */
 			default:
 				BLI_assert(0);
+				break;
 		}
 
 		filelist_filter_clear(filelist);
@@ -2215,11 +2216,9 @@ static int filelist_readjob_list_dir(
 			}
 			/* Otherwise, do not check extensions for directories! */
 			else if (!(entry->typeflag & FILE_TYPE_DIR)) {
+				entry->typeflag = file_extension_type(root, entry->relpath);
 				if (filter_glob[0] && BLI_testextensie_glob(entry->relpath, filter_glob)) {
-					entry->typeflag = FILE_TYPE_OPERATOR;
-				}
-				else {
-					entry->typeflag = file_extension_type(root, entry->relpath);
+					entry->typeflag |= FILE_TYPE_OPERATOR;
 				}
 			}
 

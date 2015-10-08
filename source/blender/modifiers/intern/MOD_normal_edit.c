@@ -38,6 +38,7 @@
 #include "BLI_bitmap.h"
 
 #include "BKE_cdderivedmesh.h"
+#include "BKE_library_query.h"
 #include "BKE_mesh.h"
 #include "BKE_deform.h"
 
@@ -84,7 +85,7 @@ static void generate_vert_coordinates(
 
 		/* Translate our coordinates so that center of ob_center is at (0, 0, 0). */
 		/* Get ob_center (world) coordinates in ob local coordinates.
-		 * No need to take into accound ob_center's space here, see T44027. */
+		 * No need to take into account ob_center's space here, see T44027. */
 		invert_m4_m4(inv_obmat, ob->obmat);
 		mul_v3_m4v3(diff, inv_obmat, ob_center->obmat[3]);
 		negate_v3(diff);
@@ -450,14 +451,7 @@ static void foreachObjectLink(ModifierData *md, Object *ob, ObjectWalkFunc walk,
 {
 	NormalEditModifierData *smd = (NormalEditModifierData *) md;
 
-	walk(userData, ob, &smd->target);
-}
-
-static void foreachIDLink(ModifierData *md, Object *ob, IDWalkFunc walk, void *userData)
-{
-	NormalEditModifierData *smd = (NormalEditModifierData *) md;
-
-	walk(userData, ob, (ID **)&smd->target);
+	walk(userData, ob, &smd->target, IDWALK_NOP);
 }
 
 static bool isDisabled(ModifierData *md, int UNUSED(useRenderParams))
@@ -524,6 +518,6 @@ ModifierTypeInfo modifierType_NormalEdit = {
 	/* dependsOnTime */     NULL,
 	/* dependsOnNormals */  dependsOnNormals,
 	/* foreachObjectLink */ foreachObjectLink,
-	/* foreachIDLink */     foreachIDLink,
+	/* foreachIDLink */     NULL,
 	/* foreachTexLink */    NULL,
 };

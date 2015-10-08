@@ -58,6 +58,7 @@
 #include "BKE_effect.h"
 #include "BKE_global.h"
 #include "BKE_library.h"
+#include "BKE_library_query.h"
 #include "BKE_mesh.h"
 #include "BKE_object.h"
 #include "BKE_pointcache.h"
@@ -957,6 +958,20 @@ void BKE_rigidbody_world_groups_relink(RigidBodyWorld *rbw)
 		rbw->effector_weights->group = (Group *)rbw->effector_weights->group->id.newid;
 }
 
+void BKE_rigidbody_world_id_loop(RigidBodyWorld *rbw, RigidbodyWorldIDFunc func, void *userdata)
+{
+	func(rbw, (ID **)&rbw->group, userdata, IDWALK_NOP);
+	func(rbw, (ID **)&rbw->constraints, userdata, IDWALK_NOP);
+	func(rbw, (ID **)&rbw->effector_weights->group, userdata, IDWALK_NOP);
+
+	if (rbw->objects) {
+		int i;
+		for (i = 0; i < rbw->numbodies; i++) {
+			func(rbw, (ID **)&rbw->objects[i], userdata, IDWALK_NOP);
+		}
+	}
+}
+
 /* Add rigid body settings to the specified object */
 RigidBodyOb *BKE_rigidbody_create_object(Scene *scene, Object *ob, short type)
 {
@@ -1597,6 +1612,7 @@ void BKE_rigidbody_calc_center_of_mass(Object *ob, float r_center[3]) { zero_v3(
 struct RigidBodyWorld *BKE_rigidbody_create_world(Scene *scene) { return NULL; }
 struct RigidBodyWorld *BKE_rigidbody_world_copy(RigidBodyWorld *rbw) { return NULL; }
 void BKE_rigidbody_world_groups_relink(struct RigidBodyWorld *rbw) {}
+void BKE_rigidbody_world_id_loop(struct RigidBodyWorld *rbw, RigidbodyWorldIDFunc func, void *userdata) {}
 struct RigidBodyOb *BKE_rigidbody_create_object(Scene *scene, Object *ob, short type) { return NULL; }
 struct RigidBodyCon *BKE_rigidbody_create_constraint(Scene *scene, Object *ob, short type) { return NULL; }
 struct RigidBodyWorld *BKE_rigidbody_get_world(Scene *scene) { return NULL; }

@@ -48,7 +48,8 @@ void		wm_window_free			(bContext *C, wmWindowManager *wm, wmWindow *win);
 void		wm_window_close			(bContext *C, wmWindowManager *wm, wmWindow *win);
 
 void		wm_window_title				(wmWindowManager *wm, wmWindow *win);
-void		wm_window_add_ghostwindows	(wmWindowManager *wm);
+void		wm_window_ghostwindows_ensure(wmWindowManager *wm);
+void		wm_window_ghostwindows_remove_invalid(bContext *C, wmWindowManager *wm);
 void		wm_window_process_events	(const bContext *C);
 void		wm_window_process_events_nosleep(void);
 
@@ -64,7 +65,9 @@ bool		wm_window_get_swap_interval(wmWindow *win, int *intervalOut);
 
 float		wm_window_pixelsize(wmWindow *win);
 
-void		wm_get_cursor_position	(wmWindow *win, int *x, int *y);
+void		wm_get_cursor_position			(wmWindow *win, int *x, int *y);
+void		wm_cursor_position_from_ghost	(wmWindow *win, int *x, int *y);
+void		wm_cursor_position_to_ghost		(wmWindow *win, int *x, int *y);
 
 void		wm_window_testbreak		(void);
 
