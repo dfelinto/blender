@@ -295,7 +295,7 @@ public:
 	 * Sets the modelview matrix.
 	 */
 	virtual void SetViewMatrix(const MT_Matrix4x4 &mat, const MT_Matrix3x3 &ori,
-	                           const MT_Point3 &pos, bool perspective) = 0;
+	                           const MT_Point3 &pos, const MT_Vector3 &scale, bool perspective) = 0;
 
 	/**
 	 */

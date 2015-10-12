@@ -91,6 +91,7 @@ RAS_OpenGLRasterizer::RAS_OpenGLRasterizer(RAS_ICanvas* canvas, int storage)
 	m_time(0.0),
 	m_campos(0.0f, 0.0f, 0.0f),
 	m_camortho(false),
+	m_camnegscale(false),
 	m_stereomode(RAS_STEREO_NOSTEREO),
 	m_curreye(RAS_STEREO_LEFTEYE),
 	m_eyeseparation(0.0),
@@ -866,6 +867,7 @@ MT_Matrix4x4 RAS_OpenGLRasterizer::GetOrthoMatrix(
 void RAS_OpenGLRasterizer::SetViewMatrix(const MT_Matrix4x4 &mat, 
 										 const MT_Matrix3x3 & camOrientMat3x3,
 										 const MT_Point3 & pos,
+										 const MT_Vector3 &scale,
 										 bool perspective)
 {
 	m_viewmatrix = mat;
@@ -908,6 +910,7 @@ void RAS_OpenGLRasterizer::SetViewMatrix(const MT_Matrix4x4 &mat,
 		}
 	}
 
+	m_viewmatrix.tscale(scale[0], scale[1], scale[2], 1.0);
 	m_viewinvmatrix = m_viewmatrix;
 	m_viewinvmatrix.invert();
 
@@ -918,6 +921,7 @@ void RAS_OpenGLRasterizer::SetViewMatrix(const MT_Matrix4x4 &mat,
 	glMatrixMode(GL_MODELVIEW);
 	glLoadMatrixd(glviewmat);
 	m_campos = pos;
+	m_camnegscale = ((scale[0] < 0.0) ^ (scale[1] < 0.0) ^ (scale[2] < 0.0)) ? true : false;
 }
 
 
@@ -1050,6 +1054,9 @@ void RAS_OpenGLRasterizer::SetAlphaBlend(int alphablend)
 
 void RAS_OpenGLRasterizer::SetFrontFace(bool ccw)
 {
+	if (m_camnegscale)
+		ccw = !ccw;
+
 	if (m_last_frontface == ccw)
 		return;
 
