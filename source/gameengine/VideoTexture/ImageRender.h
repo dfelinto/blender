@@ -100,9 +100,6 @@ protected:
 	/// render 3d scene to image
 	virtual void calcImage (unsigned int texId, double ts);
 
-	/// render 3d scene to user buffer
-	virtual bool loadImage(unsigned int *buffer, unsigned int size);
-
 	bool Render();
 	void SetupRenderFrame(KX_Scene *scene, KX_Camera* cam);
 	void RenderFrame(KX_Scene* scene, KX_Camera* cam);

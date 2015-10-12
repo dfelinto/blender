@@ -149,18 +149,6 @@ void ImageRender::calcImage (unsigned int texId, double ts)
 	}
 }
 
-bool ImageRender::loadImage(unsigned int *buffer, unsigned int size)
-{
-	bool ret;
-	if (!Render())
-	{
-		return false;
-	}
-	ret = ImageViewport::loadImage(buffer, size);
-	m_canvas->EndFrame();
-	return ret;
-}
-
 bool ImageRender::Render()
 {
 	RAS_FrameFrustum frustrum;
