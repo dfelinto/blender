@@ -485,6 +485,9 @@ void ED_region_do_draw(bContext *C, ARegion *ar)
 	if (at->do_lock)
 		return;
 
+	if ((ar->flag & AREA_FLAG_MUTE) != 0)
+		return;
+
 	/* if no partial draw rect set, full rect */
 	if (ar->drawrct.xmin == ar->drawrct.xmax) {
 		ar->drawrct = ar->winrct;
