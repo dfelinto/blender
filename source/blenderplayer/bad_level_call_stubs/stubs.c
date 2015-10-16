@@ -307,6 +307,7 @@ void WM_cursor_modal_set(struct wmWindow *win, int curor) RET_NONE
 void WM_cursor_modal_restore(struct wmWindow *win) RET_NONE
 void WM_cursor_time(struct wmWindow *win, int nr) RET_NONE
 void WM_cursor_warp(struct wmWindow *win, int x, int y) RET_NONE
+void WM_window_close(struct wmWindow *win, struct bContext *C) RET_NONE
 
 void WM_ndof_deadzone_set(float deadzone) RET_NONE
 
@@ -442,6 +443,13 @@ void ED_node_tree_path_get_fixedbuf(struct SpaceNode *snode, char *value, int ma
 void ED_node_tree_start(struct SpaceNode *snode, struct bNodeTree *ntree, struct ID *id, struct ID *from){}
 void ED_node_tree_push(struct SpaceNode *snode, struct bNodeTree *ntree, struct bNode *gnode){}
 void ED_node_tree_pop(struct SpaceNode *snode){}
+void ED_view3d_draw_offscreen(
+         struct Scene *scene, struct View3D *v3d, struct ARegion *ar, int winx, int winy, float viewmat[4][4],
+         float winmat[4][4], bool do_bgpic, bool do_sky, bool is_persp,
+         struct GPUOffScreen *ofs,
+         struct GPUFX *fx, struct GPUFXSettings *fx_settings,
+         const char *viewname) RET_NONE
+void ED_view3d_draw_offscreen_init(struct Scene *scene, struct View3D *v3d) RET_NONE
 int ED_view3d_scene_layer_set(int lay, const int *values, int *active) RET_ZERO
 void ED_view3d_quadview_update(struct ScrArea *sa, struct ARegion *ar, bool do_clip) RET_NONE
 void ED_view3d_from_m4(float mat[4][4], float ofs[3], float quat[4], float *dist) RET_NONE

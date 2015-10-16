@@ -42,6 +42,7 @@ incs = [
     '../blenkernel',
     '../blenlib',
     '../bmesh',
+    '../editors/include',
     '../imbuf',
     '../include',
     '../makesdna',

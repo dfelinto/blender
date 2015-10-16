@@ -42,6 +42,7 @@
 #include "BLI_math_base.h"
 #include "BLI_math_vector.h"
 
+#include "BKE_context.h"
 #include "BKE_global.h"
 
 #include "GPU_glew.h"
@@ -52,6 +53,12 @@
 #include "GPU_simple_shader.h"
 
 #include "intern/gpu_private.h"
+
+#include "DNA_scene_types.h"
+#include "DNA_screen_types.h"
+#include "DNA_view3d_types.h"
+
+#include "ED_view3d.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -1607,6 +1614,77 @@ int GPU_offscreen_width(const GPUOffScreen *ofs)
 int GPU_offscreen_height(const GPUOffScreen *ofs)
 {
 	return ofs->color->h_orig;
+}
+
+int GPU_offscreen_fb_object(const GPUOffScreen *ofs)
+{
+	return ofs->fb->object;
+}
+
+int GPU_offscreen_color_object(const GPUOffScreen *ofs)
+{
+	return ofs->color->bindcode;
+}
+
+
+/* GPUOffScreen Draw*/
+
+static void gpu_offscreen_draw_setup(GPUOffScreen *ofs)
+{
+	GPU_offscreen_bind(ofs, true);
+}
+
+static void gpu_offscreen_draw_reset(GPUOffScreen *ofs)
+{
+	GPU_offscreen_unbind(ofs, true);
+}
+
+static void gpu_offscreen_draw_doit(
+        GPUOffScreen *ofs,
+        bContext *C,
+        float modelviewmat[4][4],
+		float projmat[4][4])
+{
+	View3D *v3d = CTX_wm_view3d(C);
+	Scene *scene = CTX_data_scene(C);
+	ARegion *ar = CTX_wm_region(C);
+
+	int width = GPU_offscreen_width(ofs);
+	int height = GPU_offscreen_height(ofs);
+	GPUFX *fx = GPU_fx_compositor_create();
+
+	/* full copy */
+	GPUFXSettings fx_settings = v3d->fx_settings;
+
+	ED_view3d_draw_offscreen_init(scene, v3d);
+
+	GPU_offscreen_bind(ofs, true); /* bind */
+
+	ED_view3d_draw_offscreen(
+	            scene,
+	            v3d,
+	            ar,
+	            width,
+	            height,
+	            projmat,
+	            modelviewmat,
+	            false,
+	            true,
+	            true,
+	            "",
+	            fx,
+	            &fx_settings,
+	            ofs);
+
+	GPU_fx_compositor_destroy(fx);
+	GPU_offscreen_unbind(ofs, true); /* unbind */
+}
+
+void GPU_offscreen_draw_view3d(GPUOffScreen *ofs, struct bContext *C, float projection_matrix[4][4], float modelview_matrix[4][4])
+{
+	gpu_offscreen_draw_setup(ofs);
+	gpu_offscreen_draw_doit(ofs, C, projection_matrix, modelview_matrix);
+	gpu_offscreen_draw_reset(ofs);
 }
 
 /* GPUShader */
