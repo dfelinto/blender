@@ -346,12 +346,6 @@ void wm_window_close(bContext *C, wmWindowManager *wm, wmWindow *win)
 	}		
 }
 
-void WM_window_close(wmWindow *win, bContext *C)
-{
-	wmWindowManager *wm = CTX_wm_manager(C);
-	wm_window_close(C, wm, win);
-}
-
 void wm_window_title(wmWindowManager *wm, wmWindow *win)
 {
 	if (win->screen && win->screen->temp) {

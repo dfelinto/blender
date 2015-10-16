@@ -46,7 +46,6 @@ set(INC_SYS
 
 set(SRC
 	gpu.c
-	gpu_offscreen.c
 	bpy.c
 	bpy_app.c
 	bpy_app_build_options.c
