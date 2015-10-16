@@ -384,10 +384,6 @@ void RNA_api_window(StructRNA *srna)
 
 	RNA_def_function(srna, "cursor_modal_restore", "WM_cursor_modal_restore");
 	RNA_def_function_ui_description(func, "Restore the previous cursor after calling ``cursor_modal_set``");
-
-	func = RNA_def_function(srna, "close", "WM_window_close");
-	RNA_def_function_flag(func, FUNC_USE_CONTEXT);
-	RNA_def_function_ui_description(func, "Close the current window");
 }
 
 void RNA_api_wm(StructRNA *srna)
