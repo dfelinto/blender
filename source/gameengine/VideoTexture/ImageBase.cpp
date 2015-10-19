@@ -32,7 +32,6 @@
 extern "C" {
 #include "bgl.h"
 }
-#include "glew-mx.h"
 
 #include <vector>
 #include <string.h>
@@ -49,6 +48,14 @@ extern "C" {
 #endif
 
 // ImageBase class implementation
+
+ExceptionID ImageHasExports;
+ExceptionID InvalidColorChannel;
+ExceptionID InvalidImageMode;
+
+ExpDesc ImageHasExportsDesc(ImageHasExports, "Image has exported buffers, cannot resize");
+ExpDesc InvalidColorChannelDesc(InvalidColorChannel, "Invalid or too many color channels specified. At most 4 values within R, G, B, A, 0, 1");
+ExpDesc InvalidImageModeDesc(InvalidImageMode, "Invalid image mode, only RGBA and BGRA are supported");
 
 // constructor
 ImageBase::ImageBase (bool staticSrc) : m_image(NULL), m_imgSize(0),
@@ -111,11 +118,27 @@ unsigned int * ImageBase::getImage (unsigned int texId, double ts)
 	return m_avail ? m_image : NULL;
 }
 
-bool ImageBase::loadImage(unsigned int *buffer, unsigned int size)
+bool ImageBase::loadImage(unsigned int *buffer, unsigned int size, unsigned int format, double ts)
 {
-	if (getImage(0, -1) != NULL && size >= getBuffSize())
+	unsigned int *d, *s, v, len;
+	if (getImage(0, ts) != NULL && size >= getBuffSize())
 	{
-		memcpy(buffer, m_image, getBuffSize());
+		switch (format)
+		{
+		case GL_RGBA:
+			memcpy(buffer, m_image, getBuffSize());
+			break;
+		case GL_BGRA:
+			len = (unsigned int)m_size[0] * m_size[1];
+			for (s=m_image, d=buffer; len; len--)
+			{
+				v = *s++;
+				*d++ = VT_SWAPBR(v);
+			}
+			break;
+		default:
+			THRWEXCP(InvalidImageMode,S_OK);
+		}
 		return true;
 	}
 	return false;
@@ -188,11 +211,20 @@ void ImageBase::setFilter (PyFilter * filt)
 	m_pyfilter = filt;
 }
 
-ExceptionID ImageHasExports;
-ExceptionID InvalidColorChannel;
+void ImageBase::swapImageBR()
+{
+	unsigned int size, v, *s;
 
-ExpDesc ImageHasExportsDesc(ImageHasExports, "Image has exported buffers, cannot resize");
-ExpDesc InvalidColorChannelDesc(InvalidColorChannel, "Invalid or too many color channels specified. At most 4 values within R, G, B, A, 0, 1");
+	if (m_avail)
+	{
+		size = 1 * m_size[0] * m_size[1];
+		for (s=m_image; size; size--)
+		{
+			v = *s;
+			*s++ = VT_SWAPBR(v);
+		}
+	}
+}
 
 // initialize image data
 void ImageBase::init (short width, short height)
@@ -512,9 +544,12 @@ PyObject *Image_refresh (PyImage *self, PyObject *args)
 {
 	Py_buffer buffer;
 	bool done = true;
+	char *mode = NULL;
+	double ts = -1.0;
+	unsigned int format;
 
 	memset(&buffer, 0, sizeof(buffer));
-	if (PyArg_ParseTuple(args, "|s*:refresh", &buffer))
+	if (PyArg_ParseTuple(args, "|s*sd:refresh", &buffer, &mode, &ts))
 	{
 		if (buffer.buf)
 		{
@@ -535,7 +570,14 @@ PyObject *Image_refresh (PyImage *self, PyObject *args)
 				// ready to get the image into our buffer
 				try
 				{
-					done = self->m_image->loadImage((unsigned int *)buffer.buf, buffer.len);
+					if (mode == NULL || !strcmp(mode, "RGBA"))
+						format = GL_RGBA;
+					else if (!strcmp(mode, "BGRA"))
+						format = GL_BGRA;
+					else
+						THRWEXCP(InvalidImageMode,S_OK);
+
+					done = self->m_image->loadImage((unsigned int *)buffer.buf, buffer.len, format, ts);
 				}
 				catch (Exception & exp)
 				{

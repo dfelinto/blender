@@ -140,9 +140,12 @@ PyObject *Video_getStatus(PyImage *self, void *closure)
 PyObject *Video_refresh(PyImage *self, PyObject *args)
 {
 	Py_buffer buffer;
+	char *mode = NULL;
+	unsigned int format;
+	double ts = -1.0;
 
 	memset(&buffer, 0, sizeof(buffer));
-	if (PyArg_ParseTuple(args, "|s*:refresh", &buffer))
+	if (PyArg_ParseTuple(args, "|s*sd:refresh", &buffer, &mode, &ts))
 	{
 		if (buffer.buf)
 		{
@@ -163,7 +166,14 @@ PyObject *Video_refresh(PyImage *self, PyObject *args)
 				// ready to get the image into our buffer
 				try
 				{
-					if (!self->m_image->loadImage((unsigned int *)buffer.buf, buffer.len))
+					if (mode == NULL || !strcmp(mode, "RGBA"))
+						format = GL_RGBA;
+					else if (!strcmp(mode, "BGRA"))
+						format = GL_BGRA;
+					else
+						THRWEXCP(InvalidImageMode,S_OK);
+
+					if (!self->m_image->loadImage((unsigned int *)buffer.buf, buffer.len, format, ts))
 						PyErr_SetString(PyExc_TypeError, "Could not load the buffer, perhaps size is not compatible");
 				}
 				catch (Exception & exp)

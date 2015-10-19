@@ -173,12 +173,17 @@ Video classes
       :return: Whether the video was playing.
       :rtype: bool
 
-   .. method:: refresh()
+   .. method:: refresh(buffer=None, format="RGBA", ts=-1.0)
 
-      Refresh video - get its status.
-      
-      :value: see `FFmpeg Video and Image Status`_.
+      Refresh video - get its status and optionally copy the frame to an external buffer.
 
+      :arg buffer: An optional object that implements the buffer protocol. If specified, the image is copied to the buffer, which must be big enough or an exception is thrown.
+      :type buffer: any buffer type
+      :arg format: An optional image format specifier for the image that will be copied to the buffer. Only valid values are "RGBA" or "BGRA"
+      :type format: str
+      :arg ts: An optional timestamp (in seconds from the start of the movie) of the frame to be copied to the buffer.
+      :type ts: float
+      :return: see `FFmpeg Video and Image Status`_.
       :rtype: int
 
 *************
@@ -244,12 +249,15 @@ Image classes
          * :class:`FilterRGB24`
          * :class:`FilterRGBA32`
 
-   .. method:: refresh()
+   .. method:: refresh(buffer=None, format="RGBA")
 
-      Refresh image, i.e. load it.
+      Refresh image, get its status and optionally copy the frame to an external buffer.
       
-      :value: see `FFmpeg Video and Image Status`_.
-
+      :arg buffer: An optional object that implements the buffer protocol. If specified, the image is copied to the buffer, which must be big enough or an exception is thrown.
+      :type buffer: any buffer type
+      :arg format: An optional image format specifier for the image that will be copied to the buffer. Only valid values are "RGBA" or "BGRA"
+      :type format: str
+      :return: see `FFmpeg Video and Image Status`_.
       :rtype: int
 
    .. method:: reload(newname=None)
@@ -411,9 +419,14 @@ Image classes
       
       :type: :class:`~bgl.Buffer` or None
 
-   .. method:: refresh()
+   .. method:: refresh(buffer=None, format="RGBA")
 
-      Refresh image - invalidate its current content.
+      Refresh image - render and copy the image to an external buffer (optional) then invalidate its current content.
+
+      :arg buffer: An optional object that implements the buffer protocol. If specified, the image is rendered and copied to the buffer, which must be big enough or an exception is thrown.
+      :type buffer: any buffer type
+      :arg format: An optional image format specifier for the image that will be copied to the buffer. Only valid values are "RGBA" or "BGRA"
+      :type format: str
 
    .. attribute:: scale
 
@@ -498,9 +511,14 @@ Image classes
       
       :type: :class:`~bgl.Buffer` or None
 
-   .. method:: refresh()
+   .. method:: refresh(buffer=None, format="RGBA")
 
-      Refresh image - invalidate its current content.
+      Refresh image - calculate and copy the image to an external buffer (optional) then invalidate its current content.
+
+      :arg buffer: An optional object that implements the buffer protocol. If specified, the image is calculated and copied to the buffer, which must be big enough or an exception is thrown.
+      :type buffer: any buffer type
+      :arg format: An optional image format specifier for the image that will be copied to the buffer. Only valid values are "RGBA" or "BGRA"
+      :type format: str
 
    .. attribute:: scale
 
@@ -602,9 +620,14 @@ Image classes
       
       :type: :class:`~bgl.Buffer` or None
 
-   .. method:: refresh()
+   .. method:: refresh(buffer=None, format="RGBA")
 
-      Refresh image - invalidate its current content.
+      Refresh video - render and copy the image to an external buffer (optional) then invalidate its current content.
+
+      :arg buffer: An optional object that implements the buffer protocol. If specified, the image is copied to the buffer, which must be big enough or an exception is thrown. The transfer to the buffer is optimal if no processing of the image is needed. This is the case if flip=False, alpha=True, scale=False, whole=True, depth=False, zbuff=False and no filter is set.
+      :type buffer: any buffer type
+      :arg format: An optional image format specifier for the image that will be copied to the buffer. Only valid values are "RGBA" or "BGRA"
+      :type format: str
 
    .. attribute:: scale
 
@@ -692,9 +715,14 @@ Image classes
       
       :type: sequence of two ints
 
-   .. method:: refresh()
+   .. method:: refresh(buffer=None, format="RGBA")
 
-      Refresh image - invalidate its current content.
+      Refresh video - copy the viewport to an external buffer (optional) then invalidate its current content.
+
+      :arg buffer: An optional object that implements the buffer protocol. If specified, the image is copied to the buffer, which must be big enough or an exception is thrown. The transfer to the buffer is optimal if no processing of the image is needed. This is the case if flip=False, alpha=True, scale=False, whole=True, depth=False, zbuff=False and no filter is set.
+      :type buffer: any buffer type
+      :arg format: An optional image format specifier for the image that will be copied to the buffer. Only valid values are "RGBA" or "BGRA"
+      :type format: str
 
    .. attribute:: scale
 

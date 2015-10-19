@@ -98,7 +98,10 @@ protected:
 
 
 	/// render 3d scene to image
-	virtual void calcImage (unsigned int texId, double ts);
+	virtual void calcImage (unsigned int texId, double ts) { calcViewport(texId, ts, GL_RGBA); }
+
+	/// render 3d scene to image
+	virtual void calcViewport (unsigned int texId, double ts, unsigned int format);
 
 	bool Render();
 	void SetupRenderFrame(KX_Scene *scene, KX_Camera* cam);

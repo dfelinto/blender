@@ -136,7 +136,7 @@ void ImageViewport::setPosition (GLint pos[2])
 
 
 // capture image from viewport
-void ImageViewport::calcImage (unsigned int texId, double ts)
+void ImageViewport::calcViewport (unsigned int texId, double ts, unsigned int format)
 {
 	// if scale was changed
 	if (m_scaleChange)
@@ -167,6 +167,7 @@ void ImageViewport::calcImage (unsigned int texId, double ts)
 			//     the filter, it's ok
 			glReadPixels(m_upLeft[0], m_upLeft[1], (GLsizei)m_capSize[0], (GLsizei)m_capSize[1],
 			        GL_DEPTH_COMPONENT, GL_FLOAT, m_viewportImage);
+
 			// filter loaded data
 			FilterZZZA filt;
 			filterImage(filt, (float *)m_viewportImage, m_capSize);
@@ -192,16 +193,26 @@ void ImageViewport::calcImage (unsigned int texId, double ts)
 						m_size[1] == m_capSize[1] &&
 						!m_flip &&
 						!m_pyfilter) {
-						glReadPixels(m_upLeft[0], m_upLeft[1], (GLsizei)m_capSize[0], (GLsizei)m_capSize[1], GL_RGBA,
+						glReadPixels(m_upLeft[0], m_upLeft[1], (GLsizei)m_capSize[0], (GLsizei)m_capSize[1], format,
 							GL_UNSIGNED_BYTE, m_image);
 						m_avail = true;
 					}
-					else {
-						glReadPixels(m_upLeft[0], m_upLeft[1], (GLsizei)m_capSize[0], (GLsizei)m_capSize[1], GL_RGBA,
+					else if (!m_pyfilter)
+					{
+						glReadPixels(m_upLeft[0], m_upLeft[1], (GLsizei)m_capSize[0], (GLsizei)m_capSize[1], format,
 							GL_UNSIGNED_BYTE, m_viewportImage);
-						// filter loaded data
 						FilterRGBA32 filt;
 						filterImage(filt, m_viewportImage, m_capSize);
+					}
+					else
+					{
+						glReadPixels(m_upLeft[0], m_upLeft[1], (GLsizei)m_capSize[0], (GLsizei)m_capSize[1], GL_RGBA,
+							GL_UNSIGNED_BYTE, m_viewportImage);
+						FilterRGBA32 filt;
+						filterImage(filt, m_viewportImage, m_capSize);
+						if (format == GL_BGRA)
+							// in place byte swapping
+							swapImageBR();
 					}
 				}
 				else {
@@ -210,13 +221,16 @@ void ImageViewport::calcImage (unsigned int texId, double ts)
 					// filter loaded data
 					FilterRGB24 filt;
 					filterImage(filt, m_viewportImage, m_capSize);
+					if (format == GL_BGRA)
+						// in place byte swapping
+						swapImageBR();
 				}
 			}
 		}
 	}
 }
 
-bool ImageViewport::loadImage(unsigned int *buffer, unsigned int size)
+bool ImageViewport::loadImage(unsigned int *buffer, unsigned int size, unsigned int format, double ts)
 {
 	unsigned int *tmp_image;
 	bool ret;
@@ -233,14 +247,13 @@ bool ImageViewport::loadImage(unsigned int *buffer, unsigned int size)
 	if (m_avail)
 	{
 		// just copy
-		memcpy(buffer, m_image, getBuffSize());
-		ret = true;
+		return ImageBase::loadImage(buffer, size, format, ts);
 	}
 	else
 	{
 		tmp_image = m_image;
 		m_image = buffer;
-		calcImage(0, -1);
+		calcViewport(0, ts, format);
 		ret = m_avail;
 		m_image = tmp_image;
 		// since the image was not loaded to our buffer, it's not valid

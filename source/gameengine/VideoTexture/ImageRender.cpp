@@ -130,7 +130,7 @@ void ImageRender::setBackgroundFromScene (KX_Scene *scene)
 
 
 // capture image from viewport
-void ImageRender::calcImage (unsigned int texId, double ts)
+void ImageRender::calcViewport (unsigned int texId, double ts, unsigned int format)
 {
 	// render the scene from the camera
 	if (!Render())
@@ -140,7 +140,7 @@ void ImageRender::calcImage (unsigned int texId, double ts)
 	}
 
 	// get image from viewport
-	ImageViewport::calcImage(texId, ts);
+	ImageViewport::calcViewport(texId, ts, format);
 	// restore OpenGL state
 	m_canvas->EndFrame();
 	if (m_offscreen)

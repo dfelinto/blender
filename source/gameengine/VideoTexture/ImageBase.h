@@ -40,6 +40,7 @@
 
 #include "FilterBase.h"
 
+#include "glew-mx.h"
 
 // forward declarations
 struct PyImage;
@@ -105,7 +106,11 @@ public:
 	static short calcSize(short size);
 
 	/// calculate image from sources and send it to a target buffer instead of a texture
-	virtual bool loadImage(unsigned int *buffer, unsigned int size);
+    /// format is GL_RGBA or GL_BGRA
+	virtual bool loadImage(unsigned int *buffer, unsigned int size, unsigned int format, double ts);
+
+	/// swap the B and R channel in-place in the image buffer
+	void swapImageBR();
 
 	/// number of buffer pointing to m_image, public because not handled by this class
 	int m_exports;
