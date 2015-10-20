@@ -854,6 +854,12 @@ BHead *blo_nextbhead(FileData *fd, BHead *thisblock)
 	return(bhead);
 }
 
+/* Warning! Caller's responsability to ensure given bhead **is** and ID one! */
+const char *bhead_id_name(const FileData *fd, const BHead *bhead)
+{
+	return (const char *)POINTER_OFFSET(bhead, sizeof(*bhead) + fd->id_name_offs);
+}
+
 static void decode_blender_header(FileData *fd)
 {
 	char header[SIZEOFBLENDERHEADER], num[4];
@@ -1293,12 +1299,27 @@ void blo_freefiledata(FileData *fd)
 
 /* ************ DIV ****************** */
 
+/**
+ * Check whether given path ends with a blend file compatible extension (.blend, .ble or .blend.gz).
+ *
+ * \param str The path to check.
+ * \return true is this path ends with a blender file extension.
+ */
 bool BLO_has_bfile_extension(const char *str)
 {
 	const char *ext_test[4] = {".blend", ".ble", ".blend.gz", NULL};
 	return BLI_testextensie_array(str, ext_test);
 }
 
+/**
+ * Try to explode given path into its 'library components' (i.e. a .blend file, id type/group, and datablock itself).
+ *
+ * \param path the full path to explode.
+ * \param r_dir the string that'll contain path up to blend file itself ('library' path).
+ * \param r_group the string that'll contain 'group' part of the path, if any. May be NULL.
+ * \param r_name the string that'll contain data's name part of the path, if any. May be NULL.
+ * \return true if path contains a blend file.
+ */
 bool BLO_library_path_explode(const char *path, char *r_dir, char **r_group, char **r_name)
 {
 	/* We might get some data names with slashes, so we have to go up in path until we find blend file itself,
@@ -1355,6 +1376,13 @@ bool BLO_library_path_explode(const char *path, char *r_dir, char **r_group, cha
 	return true;
 }
 
+/**
+ * Does a very light reading of given .blend file to extract its stored thumbnail.
+ *
+ * \param filepath The path of the file to extract thumbnail from.
+ * \return The raw thumbnail
+ *         (MEM-allocated, as stored in file, use BKE_main_thumbnail_to_imbuf() to convert it to ImBuf image).
+ */
 BlendThumbnail *BLO_thumbnail_from_file(const char *filepath)
 {
 	FileData *fd;
@@ -1772,9 +1800,9 @@ void blo_end_packed_pointer_map(FileData *fd, Main *oldmain)
 
 
 /* undo file support: add all library pointers in lookup */
-void blo_add_library_pointer_map(ListBase *mainlist, FileData *fd)
+void blo_add_library_pointer_map(ListBase *old_mainlist, FileData *fd)
 {
-	Main *ptr = mainlist->first;
+	Main *ptr = old_mainlist->first;
 	ListBase *lbarray[MAX_LIBARRAY];
 	
 	for (ptr = ptr->next; ptr; ptr = ptr->next) {
@@ -1785,6 +1813,8 @@ void blo_add_library_pointer_map(ListBase *mainlist, FileData *fd)
 				oldnewmap_insert(fd->libmap, id, id, GS(id->name));
 		}
 	}
+
+	fd->old_mainlist = old_mainlist;
 }
 
 
@@ -7822,14 +7852,66 @@ static BHead *read_data_into_oldnewmap(FileData *fd, BHead *bhead, const char *a
 
 static BHead *read_libblock(FileData *fd, Main *main, BHead *bhead, int flag, ID **r_id)
 {
-	/* this routine reads a libblock and its direct data. Use link functions
-	 * to connect it all
+	/* this routine reads a libblock and its direct data. Use link functions to connect it all
 	 */
 	ID *id;
 	ListBase *lb;
 	const char *allocname;
 	bool wrong_id = false;
-	
+
+	/* In undo case, most libs and linked data should be kept as is from previous state (see BLO_read_from_memfile).
+	 * However, some needed by the snapshot being read may have been removed in previous one, and would go missing.
+	 * This leads e.g. to desappearing objects in some undo/redo case, see T34446.
+     * That means we have to carefully check whether current lib or libdata already exits in old main, if it does
+     * we merely copy it over into new main area, otherwise we have to do a full read of that bhead... */
+	if (fd->memfile && ELEM(bhead->code, ID_LI, ID_ID)) {
+		const char *idname = bhead_id_name(fd, bhead);
+
+		/* printf("Checking %s...\n", idname); */
+
+		if (bhead->code == ID_LI) {
+			Main *libmain = fd->old_mainlist->first;
+			/* Skip oldmain itself... */
+			for (libmain = libmain->next; libmain; libmain = libmain->next) {
+				/* printf("... against %s: ", libmain->curlib ? libmain->curlib->id.name : "<NULL>"); */
+				if (libmain->curlib && STREQ(idname, libmain->curlib->id.name)) {
+					Main *oldmain = fd->old_mainlist->first;
+					/* printf("FOUND!\n"); */
+					/* In case of a library, we need to re-add its main to fd->mainlist, because if we have later
+					 * a missing ID_ID, we need to get the correct lib it is linked to!
+					 * Order is crucial, we cannot bulk-add it in BLO_read_from_memfile() like it used to be... */
+					BLI_remlink(fd->old_mainlist, libmain);
+					BLI_remlink_safe(&oldmain->library, libmain->curlib);
+					BLI_addtail(fd->mainlist, libmain);
+					BLI_addtail(&main->library, libmain->curlib);
+
+					if (r_id) {
+						*r_id = NULL;  /* Just in case... */
+					}
+					return blo_nextbhead(fd, bhead);
+				}
+				/* printf("nothing...\n"); */
+			}
+		}
+		else {
+			/* printf("... in %s (%s): ", main->curlib ? main->curlib->id.name : "<NULL>", main->curlib ? main->curlib->name : "<NULL>"); */
+			if ((id = BKE_libblock_find_name_ex(main, GS(idname), idname + 2))) {
+				/* printf("FOUND!\n"); */
+				/* Even though we found our linked ID, there is no guarantee its address is still the same... */
+				if (id != bhead->old) {
+					oldnewmap_insert(fd->libmap, bhead->old, id, GS(id->name));
+				}
+
+				/* No need to do anything else for ID_ID, it's assumed already present in its lib's main... */
+				if (r_id) {
+					*r_id = NULL;  /* Just in case... */
+				}
+				return blo_nextbhead(fd, bhead);
+			}
+			/* printf("nothing...\n"); */
+		}
+	}
+
 	/* read libblock */
 	id = read_struct(fd, bhead, "lib block");
 	if (r_id)
@@ -7855,7 +7937,7 @@ static BHead *read_libblock(FileData *fd, Main *main, BHead *bhead, int flag, ID
 	if (id->flag & LIB_FAKEUSER) id->us= 1;
 	else id->us = 0;
 	id->icon_id = 0;
-	id->flag &= ~(LIB_ID_RECALC|LIB_ID_RECALC_DATA|LIB_DOIT);
+	id->flag &= ~(LIB_ID_RECALC | LIB_ID_RECALC_DATA | LIB_DOIT | LIB_MISSING);
 	
 	/* this case cannot be direct_linked: it's just the ID part */
 	if (bhead->code == ID_ID) {
@@ -8300,26 +8382,10 @@ BlendFileData *blo_read_file_internal(FileData *fd, const char *filepath)
 			bhead = NULL;
 			break;
 		
-		case ID_LI:
-			/* skip library datablocks in undo, this works together with
-			 * BLO_read_from_memfile, where the old main->library is restored
-			 * overwriting  the libraries from the memory file. previously
-			 * it did not save ID_LI/ID_ID blocks in this case, but they are
-			 * needed to make quit.blend recover them correctly. */
-			if (fd->memfile)
-				bhead = blo_nextbhead(fd, bhead);
-			else
-				bhead = read_libblock(fd, bfd->main, bhead, LIB_LOCAL, NULL);
-			break;
 		case ID_ID:
-			/* same as above */
-			if (fd->memfile)
-				bhead = blo_nextbhead(fd, bhead);
-			else
-				/* always adds to the most recently loaded
-				 * ID_LI block, see direct_link_library.
-				 * this is part of the file format definition. */
-				bhead = read_libblock(fd, mainlist.last, bhead, LIB_READ+LIB_EXTERN, NULL);
+			/* Always adds to the most recently loaded ID_LI block, see direct_link_library.
+			 * This is part of the file format definition. */
+			bhead = read_libblock(fd, mainlist.last, bhead, LIB_READ | LIB_EXTERN, NULL);
 			break;
 			
 			/* in 2.50+ files, the file identifier for screens is patched, forward compatibility */
@@ -8473,11 +8539,6 @@ static BHead *find_bhead_from_idname(FileData *fd, const char *idname)
 #endif
 }
 
-const char *bhead_id_name(const FileData *fd, const BHead *bhead)
-{
-	return (const char *)POINTER_OFFSET(bhead, sizeof(*bhead) + fd->id_name_offs);
-}
-
 static ID *is_yet_read(FileData *fd, Main *mainvar, BHead *bhead)
 {
 	const char *idname= bhead_id_name(fd, bhead);
@@ -8563,7 +8624,7 @@ static void expand_doit_library(void *fdhandle, Main *mainvar, void *old)
 	}
 }
 
-static void (*expand_doit)(void *, Main *, void *);
+static BLOExpandDoitCallback expand_doit;
 
 // XXX deprecated - old animation system
 static void expand_ipo(FileData *fd, Main *mainvar, Ipo *ipo)
@@ -9338,11 +9399,23 @@ static void expand_gpencil(FileData *fd, Main *mainvar, bGPdata *gpd)
 		expand_animdata(fd, mainvar, gpd->adt);
 }
 
-void BLO_main_expander(void (*expand_doit_func)(void *, Main *, void *))
+/**
+ * Set the callback func used over all ID data found by \a BLO_expand_main func.
+ *
+ * \param expand_doit_func Called for each ID block it finds.
+ */
+void BLO_main_expander(BLOExpandDoitCallback expand_doit_func)
 {
 	expand_doit = expand_doit_func;
 }
 
+/**
+ * Loop over all ID data in Main to mark relations.
+ * Set (id->flag & LIB_NEED_EXPAND) to mark expanding. Flags get cleared after expanding.
+ *
+ * \param fdhandle usually filedata, or own handle.
+ * \param mainvar the Main database to expand.
+ */
 void BLO_expand_main(void *fdhandle, Main *mainvar)
 {
 	ListBase *lbarray[MAX_LIBARRAY];
@@ -9454,101 +9527,86 @@ static bool object_in_any_scene(Main *mainvar, Object *ob)
 {
 	Scene *sce;
 	
-	for (sce= mainvar->scene.first; sce; sce= sce->id.next) {
-		if (BKE_scene_base_find(sce, ob))
-			return 1;
+	for (sce = mainvar->scene.first; sce; sce = sce->id.next) {
+		if (BKE_scene_base_find(sce, ob)) {
+			return true;
+		}
 	}
 	
-	return 0;
+	return false;
 }
 
-static void give_base_to_objects(Main *mainvar, Scene *sce, Library *lib, const short idcode, const bool is_link, const short active_lay)
+static void give_base_to_objects(Main *mainvar, Scene *scene, View3D *v3d, Library *lib, const short flag)
 {
 	Object *ob;
 	Base *base;
-	const bool is_group_append = (is_link == false && idcode == ID_GR);
+	const unsigned int active_lay = (flag & FILE_ACTIVELAY) ? BKE_screen_view3d_layer_active(v3d, scene) : 0;
+	const bool is_link = (flag & FILE_LINK) != 0;
+
+	BLI_assert(scene);
 
 	/* give all objects which are LIB_INDIRECT a base, or for a group when *lib has been set */
 	for (ob = mainvar->object.first; ob; ob = ob->id.next) {
-		if (ob->id.flag & LIB_INDIRECT) {
-			/* IF below is quite confusing!
-			 * if we are appending, but this object wasnt just added along with a group,
-			 * then this is already used indirectly in the scene somewhere else and we didnt just append it.
-			 *
-			 * (ob->id.flag & LIB_PRE_EXISTING)==0 means that this is a newly appended object - Campbell */
-			if (is_group_append==0 || (ob->id.flag & LIB_PRE_EXISTING)==0) {
-				bool do_it = false;
-				
-				if (ob->id.us == 0) {
-					do_it = true;
-				}
-				else if (idcode==ID_GR) {
-					if ((is_link == false) && (ob->id.lib == lib)) {
-						if ((ob->flag & OB_FROMGROUP) && object_in_any_scene(mainvar, ob)==0) {
-							do_it = true;
-						}
-					}
-				}
-				else {
-					/* when appending, make sure any indirectly loaded objects
-					 * get a base else they cant be accessed at all [#27437] */
-					if ((is_link == false) && (ob->id.lib == lib)) {
-						/* we may be appending from a scene where we already
-						 *  have a linked object which is not in any scene [#27616] */
-						if ((ob->id.flag & LIB_PRE_EXISTING)==0) {
-							if (object_in_any_scene(mainvar, ob)==0) {
-								do_it = true;
-							}
-						}
-					}
-				}
-				
-				if (do_it) {
-					base = MEM_callocN(sizeof(Base), "add_ext_base");
-					BLI_addtail(&sce->base, base);
-					
-					if (active_lay) ob->lay = sce->lay;
-					
-					base->lay = ob->lay;
-					base->object = ob;
-					base->flag = ob->flag;
+		if ((ob->id.flag & LIB_INDIRECT) && (ob->id.flag & LIB_PRE_EXISTING) == 0) {
+			bool do_it = false;
 
-					CLAMP_MIN(ob->id.us, 0);
-					ob->id.us += 1;
-					
-					ob->id.flag -= LIB_INDIRECT;
-					ob->id.flag |= LIB_EXTERN;
+			if (ob->id.us == 0) {
+				do_it = true;
+			}
+			else if (!is_link && (ob->id.lib == lib) && (object_in_any_scene(mainvar, ob) == 0)) {
+				/* When appending, make sure any indirectly loaded objects get a base, else they cant be accessed at all
+				 * (see T27437). */
+				do_it = true;
+			}
+
+			if (do_it) {
+				base = MEM_callocN(sizeof(Base), __func__);
+				BLI_addtail(&scene->base, base);
+
+				if (active_lay) {
+					ob->lay = active_lay;
 				}
+
+				base->lay = ob->lay;
+				base->object = ob;
+				base->flag = ob->flag;
+
+				CLAMP_MIN(ob->id.us, 0);
+				ob->id.us += 1;
+
+				ob->id.flag &= ~LIB_INDIRECT;
+				ob->id.flag |= LIB_EXTERN;
 			}
 		}
 	}
 }
 
-static void give_base_to_groups(Main *mainvar, Scene *scene)
+static void give_base_to_groups(
+        Main *mainvar, Scene *scene, View3D *v3d, Library *UNUSED(lib), const short UNUSED(flag))
 {
 	Group *group;
-	
+	Base *base;
+	Object *ob;
+	const unsigned int active_lay = BKE_screen_view3d_layer_active(v3d, scene);
+
 	/* give all objects which are tagged a base */
 	for (group = mainvar->group.first; group; group = group->id.next) {
 		if (group->id.flag & LIB_DOIT) {
-			Base *base;
-			Object *ob;
-
 			/* any indirect group should not have been tagged */
-			BLI_assert((group->id.flag & LIB_INDIRECT)==0);
-			
+			BLI_assert((group->id.flag & LIB_INDIRECT) == 0);
+
 			/* BKE_object_add(...) messes with the selection */
 			ob = BKE_object_add_only_object(mainvar, OB_EMPTY, group->id.name + 2);
 			ob->type = OB_EMPTY;
-			ob->lay = scene->lay;
-			
+			ob->lay = active_lay;
+
 			/* assign the base */
 			base = BKE_scene_base_add(scene, ob);
 			base->flag |= SELECT;
-			base->object->flag= base->flag;
+			base->object->flag = base->flag;
 			DAG_id_tag_update(&ob->id, OB_RECALC_OB | OB_RECALC_DATA | OB_RECALC_TIME);
 			scene->basact = base;
-			
+
 			/* assign the group */
 			ob->dup_group = group;
 			ob->transflag |= OB_DUPLIGROUP;
@@ -9557,11 +9615,30 @@ static void give_base_to_groups(Main *mainvar, Scene *scene)
 	}
 }
 
+static ID *create_placeholder(Main *mainvar, const char *idname, const short flag)
+{
+	const short idcode = GS(idname);
+	ListBase *lb = which_libbase(mainvar, idcode);
+	ID *ph_id = BKE_libblock_alloc_notest(idcode);
+
+	memcpy(ph_id->name, idname, sizeof(ph_id->name));
+	BKE_libblock_init_empty(ph_id);
+	ph_id->lib = mainvar->curlib;
+	ph_id->flag = flag | LIB_MISSING;
+	ph_id->us = (flag & LIB_FAKEUSER) ? 1 : 0;
+	ph_id->icon_id = 0;
+
+	BLI_addtail(lb, ph_id);
+	id_sort_by_name(lb, ph_id);
+
+	return ph_id;
+}
+
 /* returns true if the item was found
  * but it may already have already been appended/linked */
-static ID *append_named_part(Main *mainl, FileData *fd, const char *idname, const short idcode)
+static ID *link_named_part(Main *mainl, FileData *fd, const short idcode, const char *name)
 {
-	BHead *bhead = find_bhead_from_code_name(fd, idcode, idname);
+	BHead *bhead = find_bhead_from_code_name(fd, idcode, name);
 	ID *id;
 
 	if (bhead) {
@@ -9597,8 +9674,10 @@ static ID *append_named_part(Main *mainl, FileData *fd, const char *idname, cons
 	return id;
 }
 
-/* simple reader for copy/paste buffers */
-void BLO_library_append_all(Main *mainl, BlendHandle *bh)
+/**
+ * Simple reader for copy/paste buffers.
+ */
+void BLO_library_link_all(Main *mainl, BlendHandle *bh)
 {
 	FileData *fd = (FileData *)(bh);
 	BHead *bhead;
@@ -9618,33 +9697,33 @@ void BLO_library_append_all(Main *mainl, BlendHandle *bh)
 	}
 }
 
-
-static ID *append_named_part_ex(const bContext *C, Main *mainl, FileData *fd, const char *idname, const int idcode, const int flag)
+static ID *link_named_part_ex(
+        Main *mainl, FileData *fd, const short idcode, const char *name, const short flag,
+		Scene *scene, View3D *v3d)
 {
-	ID *id= append_named_part(mainl, fd, idname, idcode);
+	ID *id = link_named_part(mainl, fd, idcode, name);
 
 	if (id && (GS(id->name) == ID_OB)) {	/* loose object: give a base */
-		Scene *scene = CTX_data_scene(C); /* can be NULL */
 		if (scene) {
 			Base *base;
 			Object *ob;
-			
-			base= MEM_callocN(sizeof(Base), "app_nam_part");
+
+			base = MEM_callocN(sizeof(Base), "app_nam_part");
 			BLI_addtail(&scene->base, base);
-			
+
 			ob = (Object *)id;
-			
+
 			/* link at active layer (view3d if available in context, else scene one */
-			if ((flag & FILE_ACTIVELAY)) {
-				View3D *v3d = CTX_wm_view3d(C);
+			if (flag & FILE_ACTIVELAY) {
 				ob->lay = BKE_screen_view3d_layer_active(v3d, scene);
 			}
-			
+
 			ob->mode = OB_MODE_OBJECT;
 			base->lay = ob->lay;
 			base->object = ob;
+			base->flag = ob->flag;
 			ob->id.us++;
-			
+
 			if (flag & FILE_AUTOSELECT) {
 				base->flag |= SELECT;
 				base->object->flag = base->flag;
@@ -9653,47 +9732,91 @@ static ID *append_named_part_ex(const bContext *C, Main *mainl, FileData *fd, co
 		}
 	}
 	else if (id && (GS(id->name) == ID_GR)) {
-		/* tag as needing to be instanced */
+		/* tag as needing to be instantiated */
 		if (flag & FILE_GROUP_INSTANCE)
 			id->flag |= LIB_DOIT;
 	}
-	
+
 	return id;
 }
 
-ID *BLO_library_append_named_part(Main *mainl, BlendHandle **bh, const char *idname, const int idcode)
+/**
+ * Link a named datablock from an external blend file.
+ *
+ * \param mainl The main database to link from (not the active one).
+ * \param bh The blender file handle.
+ * \param idcode The kind of datablock to link.
+ * \param name The name of the datablock (without the 2 char ID prefix).
+ * \return the linked ID when found.
+ */
+ID *BLO_library_link_named_part(Main *mainl, BlendHandle **bh, const short idcode, const char *name)
 {
 	FileData *fd = (FileData*)(*bh);
-	return append_named_part(mainl, fd, idname, idcode);
+	return link_named_part(mainl, fd, idcode, name);
 }
 
-ID *BLO_library_append_named_part_ex(const bContext *C, Main *mainl, BlendHandle **bh, const char *idname, const int idcode, const short flag)
+/**
+ * Link a named datablock from an external blend file.
+ * Optionally instantiate the object/group in the scene when the flags are set.
+ *
+ * \param mainl The main database to link from (not the active one).
+ * \param bh The blender file handle.
+ * \param idcode The kind of datablock to link.
+ * \param name The name of the datablock (without the 2 char ID prefix).
+ * \param flag Options for linking, used for instantiating.
+ * \param scene The scene in which to instantiate objects/groups (if NULL, no instantiation is done).
+ * \param v3d The active View3D (only to define active layers for instantiated objects & groups, can be NULL).
+ * \return the linked ID when found.
+ */
+ID *BLO_library_link_named_part_ex(
+        Main *mainl, BlendHandle **bh,
+        const short idcode, const char *name, const short flag,
+        Scene *scene, View3D *v3d)
 {
 	FileData *fd = (FileData*)(*bh);
-	return append_named_part_ex(C, mainl, fd, idname, idcode, flag);
+	return link_named_part_ex(mainl, fd, idcode, name, flag, scene, v3d);
 }
 
-static void append_id_part(FileData *fd, Main *mainvar, ID *id, ID **r_id)
+static void link_id_part(ReportList *reports, FileData *fd, Main *mainvar, ID *id, ID **r_id)
 {
-	BHead *bhead = find_bhead_from_idname(fd, id->name);
+	BHead *bhead = NULL;
+
+	if (fd) {
+		bhead = find_bhead_from_idname(fd, id->name);
+	}
+
+	id->flag &= ~LIB_READ;
 
 	if (bhead) {
-		id->flag &= ~LIB_READ;
 		id->flag |= LIB_NEED_EXPAND;
 		// printf("read lib block %s\n", id->name);
 		read_libblock(fd, mainvar, bhead, id->flag, r_id);
+	}
+	else {
+		blo_reportf_wrap(
+		        reports, RPT_WARNING,
+		        TIP_("LIB ERROR: %s: '%s' missing from '%s', parent '%s'"),
+		        BKE_idcode_to_name(GS(id->name)),
+		        id->name + 2,
+		        mainvar->curlib->filepath,
+		        library_parent_filepath(mainvar->curlib));
+
+		/* Generate a placeholder for this ID (simplified version of read_libblock actually...). */
+		if (r_id) {
+			*r_id = create_placeholder(mainvar, id->name, id->flag);
+		}
 	}
 }
 
 /* common routine to append/link something from a library */
 
-static Main *library_append_begin(Main *mainvar, FileData **fd, const char *filepath)
+static Main *library_link_begin(Main *mainvar, FileData **fd, const char *filepath)
 {
 	Main *mainl;
 
 	(*fd)->mainlist = MEM_callocN(sizeof(ListBase), "FileData.mainlist");
 	
-	/* clear for group instancing tag */
+	/* clear for group instantiating tag */
 	BKE_main_id_tag_listbase(&(mainvar->group), false);
 
 	/* make mains */
@@ -9712,77 +9835,72 @@ static Main *library_append_begin(Main *mainvar, FileData **fd, const char *file
 	return mainl;
 }
 
-Main *BLO_library_append_begin(Main *mainvar, BlendHandle **bh, const char *filepath)
+/**
+ * Initialize the BlendHandle for linking library data.
+ *
+ * \param mainvar The current main database, e.g. G.main or CTX_data_main(C).
+ * \param bh A blender file handle as returned by \a BLO_blendhandle_from_file or \a BLO_blendhandle_from_memory.
+ * \param filepath Used for relative linking, copied to the \a lib->name.
+ * \return the library Main, to be passed to \a BLO_library_append_named_part as \a mainl.
+ */
+Main *BLO_library_link_begin(Main *mainvar, BlendHandle **bh, const char *filepath)
 {
 	FileData *fd = (FileData*)(*bh);
-	return library_append_begin(mainvar, &fd, filepath);
+	return library_link_begin(mainvar, &fd, filepath);
 }
 
-
-/* Context == NULL signifies not to do any scene manipulation */
-static void library_append_end(const bContext *C, Main *mainl, FileData **fd, int idcode, short flag)
+/* scene and v3d may be NULL. */
+static void library_link_end(Main *mainl, FileData **fd, const short flag, Scene *scene, View3D *v3d)
 {
 	Main *mainvar;
 	Library *curlib;
-	
+
 	/* expander now is callback function */
 	BLO_main_expander(expand_doit_library);
-	
+
 	/* make main consistent */
 	BLO_expand_main(*fd, mainl);
-	
+
 	/* do this when expand found other libs */
 	read_libraries(*fd, (*fd)->mainlist);
-	
+
 	curlib = mainl->curlib;
-	
+
 	/* make the lib path relative if required */
 	if (flag & FILE_RELPATH) {
 		/* use the full path, this could have been read by other library even */
 		BLI_strncpy(curlib->name, curlib->filepath, sizeof(curlib->name));
-		
+
 		/* uses current .blend file as reference */
 		BLI_path_rel(curlib->name, G.main->name);
 	}
-	
+
 	blo_join_main((*fd)->mainlist);
 	mainvar = (*fd)->mainlist->first;
 	MEM_freeN((*fd)->mainlist);
 	mainl = NULL; /* blo_join_main free's mainl, cant use anymore */
-	
+
 	lib_link_all(*fd, mainvar);
 	lib_verify_nodetree(mainvar, false);
 	fix_relpaths_library(G.main->name, mainvar); /* make all relative paths, relative to the open blend file */
-	
-	if (C) {
-		Scene *scene = CTX_data_scene(C);
-		
-		/* give a base to loose objects. If group append, do it for objects too */
-		if (scene) {
-			const bool is_link = (flag & FILE_LINK) != 0;
-			if (idcode == ID_SCE) {
-				/* don't instance anything when linking in scenes, assume the scene its self instances the data */
-			}
-			else {
-				give_base_to_objects(mainvar, scene, curlib, idcode, is_link, flag & FILE_ACTIVELAY);
-				
-				if (flag & FILE_GROUP_INSTANCE) {
-					give_base_to_groups(mainvar, scene);
-				}
-			}
-		}
-		else {
-			printf("library_append_end, scene is NULL (objects wont get bases)\n");
+
+	/* Give a base to loose objects. If group append, do it for objects too.
+	 * Only directly linked objects & groups are instantiated by `BLO_library_link_named_part_ex()` & co,
+	 * here we handle indirect ones and other possible edge-cases. */
+	if (scene) {
+		give_base_to_objects(mainvar, scene, v3d, curlib, flag);
+
+		if (flag & FILE_GROUP_INSTANCE) {
+			give_base_to_groups(mainvar, scene, v3d, curlib, flag);
 		}
 	}
+	else {
+		/* printf("library_append_end, scene is NULL (objects wont get bases)\n"); */
+	}
 
-	/* clear group instancing tag */
+	/* clear group instantiating tag */
 	BKE_main_id_tag_listbase(&(mainvar->group), false);
-	
-	/* has been removed... erm, why? s..ton) */
-	/* 20040907: looks like they are give base already in append_named_part(); -Nathan L */
-	/* 20041208: put back. It only linked direct, not indirect objects (ton) */
-	
+
 	/* patch to prevent switch_endian happens twice */
 	if ((*fd)->flags & FD_FLAGS_SWITCH_ENDIAN) {
 		blo_freefiledata(*fd);
@@ -9790,10 +9908,21 @@ static void library_append_end(const bContext *C, Main *mainl, FileData **fd, in
 	}
 }
 
-void BLO_library_append_end(const bContext *C, struct Main *mainl, BlendHandle **bh, int idcode, short flag)
+/**
+ * Finalize linking from a given .blend file (library).
+ * Optionally instance the indirect object/group in the scene when the flags are set.
+ * \note Do not use \a bh after calling this function, it may frees it.
+ *
+ * \param mainl The main database to link from (not the active one).
+ * \param bh The blender file handle (WARNING! may be freed by this function!).
+ * \param flag Options for linking, used for instantiating.
+ * \param scene The scene in which to instantiate objects/groups (if NULL, no instantiation is done).
+ * \param v3d The active View3D (only to define active layers for instantiated objects & groups, can be NULL).
+ */
+void BLO_library_link_end(Main *mainl, BlendHandle **bh, short flag, Scene *scene, View3D *v3d)
 {
 	FileData *fd = (FileData*)(*bh);
-	library_append_end(C, mainl, &fd, idcode, flag);
+	library_link_end(mainl, &fd, flag, scene, v3d);
 	*bh = (BlendHandle*)fd;
 }
 
@@ -9921,6 +10050,7 @@ static void read_libraries(FileData *basefd, ListBase *mainlist)
 					}
 					else {
 						mainptr->curlib->filedata = NULL;
+						mainptr->curlib->id.flag |= LIB_MISSING;
 					}
 					
 					if (fd == NULL) {
@@ -9930,37 +10060,29 @@ static void read_libraries(FileData *basefd, ListBase *mainlist)
 				}
 				if (fd) {
 					do_it = true;
-					a = set_listbasepointers(mainptr, lbarray);
-					while (a--) {
-						ID *id = lbarray[a]->first;
-						
-						while (id) {
-							ID *idn = id->next;
-							if (id->flag & LIB_READ) {
-								ID *realid = NULL;
-								BLI_remlink(lbarray[a], id);
-								
-								append_id_part(fd, mainptr, id, &realid);
-								if (!realid) {
-									blo_reportf_wrap(
-									        fd->reports, RPT_WARNING,
-									        TIP_("LIB ERROR: %s: '%s' missing from '%s', parent '%s'"),
-									        BKE_idcode_to_name(GS(id->name)),
-									        id->name + 2,
-									        mainptr->curlib->filepath,
-									        library_parent_filepath(mainptr->curlib));
-								}
-								
-								change_idid_adr(mainlist, basefd, id, realid);
-								
-								MEM_freeN(id);
-							}
-							id = idn;
-						}
-					}
-					
-					BLO_expand_main(fd, mainptr);
 				}
+				a = set_listbasepointers(mainptr, lbarray);
+				while (a--) {
+					ID *id = lbarray[a]->first;
+
+					while (id) {
+						ID *idn = id->next;
+						if (id->flag & LIB_READ) {
+							ID *realid = NULL;
+							BLI_remlink(lbarray[a], id);
+
+							link_id_part(basefd->reports, fd, mainptr, id, &realid);
+
+							BLI_assert(realid != NULL);
+
+							change_idid_adr(mainlist, basefd, id, realid);
+
+							MEM_freeN(id);
+						}
+						id = idn;
+					}
+				}
+				BLO_expand_main(fd, mainptr);
 			}
 			
 			mainptr = mainptr->next;
@@ -9968,6 +10090,7 @@ static void read_libraries(FileData *basefd, ListBase *mainlist)
 	}
 	
 	/* test if there are unread libblocks */
+	/* XXX This code block is kept for 2.77, until we are sure it never gets reached anymore. Can be removed later. */
 	for (mainptr = mainl->next; mainptr; mainptr = mainptr->next) {
 		a = set_listbasepointers(mainptr, lbarray);
 		while (a--) {
@@ -9976,10 +10099,12 @@ static void read_libraries(FileData *basefd, ListBase *mainlist)
 			for (id = lbarray[a]->first; id; id = idn) {
 				idn = id->next;
 				if (id->flag & LIB_READ) {
+					BLI_assert(0);
 					BLI_remlink(lbarray[a], id);
 					blo_reportf_wrap(
 					        basefd->reports, RPT_WARNING,
-					        TIP_("LIB ERROR: %s: '%s' unread lib block missing from '%s', parent '%s'"),
+					        TIP_("LIB ERROR: %s: '%s' unread lib block missing from '%s', parent '%s' - "
+					             "Please file a bug report if you see this message"),
 					        BKE_idcode_to_name(GS(id->name)),
 					        id->name + 2,
 					        mainptr->curlib->filepath,

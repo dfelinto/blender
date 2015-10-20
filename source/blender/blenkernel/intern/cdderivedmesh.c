@@ -967,7 +967,7 @@ static void cdDM_drawMappedFacesGLSL(
 		int *mat_orig_to_new;
 		int tot_active_mat;
 		GPUBuffer *buffer = NULL;
-		char *varray;
+		unsigned char *varray;
 		size_t max_element_size = 0;
 		int tot_loops = 0;
 
@@ -1072,7 +1072,7 @@ static void cdDM_drawMappedFacesGLSL(
 						if (matconv[i].attribs.mcol[b].array) {
 							const MLoopCol *mloopcol = matconv[i].attribs.mcol[b].array;
 							for (j = 0; j < mpoly->totloop; j++)
-								copy_v4_v4_char((char *)&varray[offset + j * max_element_size], &mloopcol[mpoly->loopstart + j].r);
+								copy_v4_v4_uchar(&varray[offset + j * max_element_size], &mloopcol[mpoly->loopstart + j].r);
 							offset += sizeof(unsigned char) * 4;
 						}
 					}
@@ -1482,7 +1482,7 @@ static void cdDM_buffer_copy_mcol(
 
 	for (i = 0; i < totpoly; i++, mpoly++) {
 		for (j = 0; j < mpoly->totloop; j++) {
-			copy_v3_v3_char((char *)&varray[start], &mloopcol[mpoly->loopstart + j].r);
+			copy_v3_v3_uchar(&varray[start], &mloopcol[mpoly->loopstart + j].r);
 			start += 3;
 		}
 	}
@@ -2547,7 +2547,7 @@ void CDDM_calc_normals_mapping_ex(DerivedMesh *dm, const bool only_face_normals)
 
 	/* calculate face normals */
 	BKE_mesh_calc_normals_poly(
-	        cddm->mvert, dm->numVertData, CDDM_get_loops(dm), CDDM_get_polys(dm),
+	        cddm->mvert, NULL, dm->numVertData, CDDM_get_loops(dm), CDDM_get_polys(dm),
 	        dm->numLoopData, dm->numPolyData, face_nors,
 	        only_face_normals);
 
@@ -2597,7 +2597,7 @@ void CDDM_calc_normals(DerivedMesh *dm)
 	/* we don't want to overwrite any referenced layers */
 	cddm->mvert = CustomData_duplicate_referenced_layer(&dm->vertData, CD_MVERT, dm->numVertData);
 
-	BKE_mesh_calc_normals_poly(cddm->mvert, dm->numVertData, CDDM_get_loops(dm), CDDM_get_polys(dm),
+	BKE_mesh_calc_normals_poly(cddm->mvert, NULL, dm->numVertData, CDDM_get_loops(dm), CDDM_get_polys(dm),
 	                           dm->numLoopData, dm->numPolyData, NULL, false);
 
 	cddm->dm.dirty &= ~DM_DIRTY_NORMALS;
@@ -2646,7 +2646,7 @@ void CDDM_calc_loop_normals_spacearr(
 	if (!pnors) {
 		pnors = CustomData_add_layer(pdata, CD_NORMAL, CD_CALLOC, NULL, numPolys);
 	}
-	BKE_mesh_calc_normals_poly(mverts, numVerts, mloops, mpolys, numLoops, numPolys, pnors,
+	BKE_mesh_calc_normals_poly(mverts, NULL, numVerts, mloops, mpolys, numLoops, numPolys, pnors,
 	                           (dm->dirty & DM_DIRTY_NORMALS) ? false : true);
 
 	dm->dirty &= ~DM_DIRTY_NORMALS;

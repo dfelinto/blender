@@ -107,13 +107,13 @@ static EnumPropertyItem dupli_items[] = {
 #endif
 
 static EnumPropertyItem collision_bounds_items[] = {
-	{OB_BOUND_BOX, "BOX", 0, "Box", ""},
-	{OB_BOUND_SPHERE, "SPHERE", 0, "Sphere", ""},
-	{OB_BOUND_CYLINDER, "CYLINDER", 0, "Cylinder", ""},
-	{OB_BOUND_CONE, "CONE", 0, "Cone", ""},
-	{OB_BOUND_CONVEX_HULL, "CONVEX_HULL", 0, "Convex Hull", ""},
-	{OB_BOUND_TRIANGLE_MESH, "TRIANGLE_MESH", 0, "Triangle Mesh", ""},
-	{OB_BOUND_CAPSULE, "CAPSULE", 0, "Capsule", ""},
+	{OB_BOUND_BOX, "BOX", ICON_MESH_CUBE, "Box", ""},
+	{OB_BOUND_SPHERE, "SPHERE", ICON_MESH_UVSPHERE, "Sphere", ""},
+	{OB_BOUND_CYLINDER, "CYLINDER", ICON_MESH_CYLINDER, "Cylinder", ""},
+	{OB_BOUND_CONE, "CONE", ICON_MESH_CONE, "Cone", ""},
+	{OB_BOUND_CONVEX_HULL, "CONVEX_HULL", ICON_MESH_ICOSPHERE, "Convex Hull", ""},
+	{OB_BOUND_TRIANGLE_MESH, "TRIANGLE_MESH", ICON_MESH_MONKEY, "Triangle Mesh", ""},
+	{OB_BOUND_CAPSULE, "CAPSULE", ICON_MESH_CAPSULE, "Capsule", ""},
 	/*{OB_DYN_MESH, "DYNAMIC_MESH", 0, "Dynamic Mesh", ""}, */
 	{0, NULL, 0, NULL, NULL}
 };
@@ -535,11 +535,14 @@ static void rna_Object_dup_group_set(PointerRNA *ptr, PointerRNA value)
 	/* must not let this be set if the object belongs in this group already,
 	 * thus causing a cycle/infinite-recursion leading to crashes on load [#25298]
 	 */
-	if (BKE_group_object_exists(grp, ob) == 0)
+	if (BKE_group_object_exists(grp, ob) == 0) {
 		ob->dup_group = grp;
-	else
+		id_lib_extern((ID *)grp);
+	}
+	else {
 		BKE_report(NULL, RPT_ERROR,
 		           "Cannot set dupli-group as object belongs in group being instanced, thus causing a cycle");
+	}
 }
 
 static void rna_VertexGroup_name_set(PointerRNA *ptr, const char *value)
@@ -1770,6 +1773,14 @@ static void rna_def_object_game_settings(BlenderRNA *brna)
 	RNA_def_property_range(prop, 0.0, 1000.0);
 	RNA_def_property_float_default(prop, 55.0f);
 	RNA_def_property_ui_text(prop, "Fall Speed Max", "Maximum speed at which the character will fall");
+
+	prop = RNA_def_property(srna, "jump_max", PROP_INT, PROP_NONE);
+	RNA_def_property_int_sdna(prop, NULL, "max_jumps");
+	RNA_def_property_range(prop, 1, CHAR_MAX);
+	RNA_def_property_ui_range(prop, 1, 10, 1, 1);
+	RNA_def_property_int_default(prop, 1);
+	RNA_def_property_ui_text(prop, "Max Jumps",
+	                         "The maximum number of jumps the character can make before it hits the ground");
 
 	/* Collision Masks */
 	prop = RNA_def_property(srna, "collision_group", PROP_BOOLEAN, PROP_LAYER_MEMBER);

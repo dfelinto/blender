@@ -191,31 +191,6 @@ int BLI_split_name_num(char *left, int *nr, const char *name, const char delim)
 }
 
 /**
- * Looks for a string of digits within name (using BLI_stringdec) and adjusts it by add.
- */
-void BLI_newname(char *name, int add)
-{
-	char head[UNIQUE_NAME_MAX], tail[UNIQUE_NAME_MAX];
-	int pic;
-	unsigned short digits;
-	
-	pic = BLI_stringdec(name, head, tail, &digits);
-	
-	/* are we going from 100 -> 99 or from 10 -> 9 */
-	if (add < 0 && digits < 4 && digits > 0) {
-		int i, exp;
-		exp = 1;
-		for (i = digits; i > 1; i--) exp *= 10;
-		if (pic >= exp && (pic + add) < exp) digits--;
-	}
-	
-	pic += add;
-	
-	if (digits == 4 && pic < 0) pic = 0;
-	BLI_stringenc(name, head, tail, digits, pic);
-}
-
-/**
  * Ensures name is unique (according to criteria specified by caller in unique_check callback),
  * incrementing its numeric suffix as necessary. Returns true if name had to be adjusted.
  *
@@ -332,14 +307,15 @@ static int BLI_path_unc_prefix_len(const char *path); /* defined below in same f
 
 /* ******************** string encoding ***************** */
 
-/* This is quite an ugly function... its purpose is to
- * take the dir name, make it absolute, and clean it up, replacing
- * excess file entry stuff (like /tmp/../tmp/../)
- * note that dir isn't protected for max string names... 
- * 
- * If relbase is NULL then its ignored
+/**
+ * Remove redundant characters from \a path and optionally make absolute.
+ *
+ * \param relbase: The path this is relative to, or ignored when NULL.
+ * \param path: Can be any input, and this function converts it to a regular full path.
+ * Also removes garbage from directory paths, like `/../` or double slashes etc.
+ *
+ * \note \a path isn't protected for max string names...
  */
-
 void BLI_cleanup_path(const char *relabase, char *path)
 {
 	ptrdiff_t a;
@@ -428,6 +404,9 @@ void BLI_cleanup_path(const char *relabase, char *path)
 #endif
 }
 
+/**
+ * Cleanup filepath ensuring a trailing slash.
+ */
 void BLI_cleanup_dir(const char *relabase, char *dir)
 {
 	BLI_cleanup_path(relabase, dir);
@@ -435,6 +414,9 @@ void BLI_cleanup_dir(const char *relabase, char *dir)
 
 }
 
+/**
+ * Cleanup filepath ensuring no trailing slash.
+ */
 void BLI_cleanup_file(const char *relabase, char *path)
 {
 	BLI_cleanup_path(relabase, path);
@@ -453,6 +435,8 @@ void BLI_cleanup_file(const char *relabase, char *path)
  *
  * \note Space case ' ' is a bit of an edge case here - in theory it is allowed, but again can be an issue
  *       in some cases, so we simply replace it by an underscore too (good practice anyway).
+ *       REMOVED based on popular demand (see T45900).
+ *       Percent '%' char is a bit same case - not recommended to use it, but supported by all decent FS/OS around...
  *
  * \note On Windows, it also ensures there is no '.' (dot char) at the end of the file, this can lead to issues...
  *
@@ -461,9 +445,9 @@ void BLI_cleanup_file(const char *relabase, char *path)
  */
 bool BLI_filename_make_safe(char *fname)
 {
-	const char *invalid =     "\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f"
+	const char *invalid = "\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f"
 	                      "\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1a\x1b\x1c\x1d\x1e\x1f"
-	                      "/\\?%*:|\"<> ";
+	                      "/\\?*:|\"<>";
 	char *fn;
 	bool changed = false;
 
@@ -977,7 +961,7 @@ bool BLI_path_frame_range(char *path, int sta, int end, int digits)
  */
 bool BLI_path_frame_get(char *path, int *r_frame, int *r_numdigits)
 {
-	if (path && *path) {
+	if (*path) {
 		char *file = (char *)BLI_last_slash(path);
 		char *c;
 		int len, numdigits;
@@ -1026,9 +1010,9 @@ bool BLI_path_frame_get(char *path, int *r_frame, int *r_numdigits)
 	return false;
 }
 
-void BLI_path_frame_strip(char *path, bool setsharp, char *ext)
+void BLI_path_frame_strip(char *path, bool set_frame_char, char *ext)
 {
-	if (path && *path) {
+	if (*path) {
 		char *file = (char *)BLI_last_slash(path);
 		char *c, *suffix;
 		int len;
@@ -1063,15 +1047,12 @@ void BLI_path_frame_strip(char *path, bool setsharp, char *ext)
 		if (numdigits) {
 			/* replace the number with the suffix and terminate the string */
 			while (numdigits--) {
-				if (ext) *ext++ = *suffix;
-
-				if (setsharp) *c++ = '#';
-				else *c++ = *suffix;
-
+				*ext++ = *suffix;
+				*c++ = set_frame_char ? '#' : *suffix;
 				suffix++;
 			}
-			*c = 0;
-			if (ext) *ext = 0;
+			*c = '\0';
+			*ext = '\0';
 		}
 	}
 }
@@ -1087,9 +1068,14 @@ bool BLI_path_frame_check_chars(const char *path)
 }
 
 /**
- * If path begins with "//", strips that and replaces it with basepath directory. Also converts
- * a drive-letter prefix to something more sensible if this is a non-drive-letter-based system.
- * Returns true if "//" prefix expansion was done.
+ * If path begins with "//", strips that and replaces it with basepath directory.
+ *
+ * \note Also converts drive-letter prefix to something more sensible
+ * if this is a non-drive-letter-based system.
+ *
+ * \param path: The path to convert.
+ * \param basepath: The directory to base relative paths with.
+ * \return true if the path was relative (started with "//").
  */
 bool BLI_path_abs(char *path, const char *basepath)
 {
@@ -2005,38 +1991,3 @@ void BLI_path_native_slash(char *path)
 	BLI_str_replace_char(path + BLI_path_unc_prefix_len(path), '\\', '/');
 #endif
 }
-
-
-#ifdef WITH_ICONV
-
-/**
- * Converts a string encoded in the charset named by *code to UTF-8.
- * Opens a new iconv context each time it is run, which is probably not the
- * most efficient. */
-void BLI_string_to_utf8(char *original, char *utf_8, const char *code)
-{
-	size_t inbytesleft = strlen(original);
-	size_t outbytesleft = 512;
-	size_t rv = 0;
-	iconv_t cd;
-	
-	if (NULL == code) {
-		code = locale_charset();
-	}
-	cd = iconv_open("UTF-8", code);
-
-	if (cd == (iconv_t)(-1)) {
-		printf("iconv_open Error");
-		*utf_8 = '\0';
-		return;
-	}
-	rv = iconv(cd, &original, &inbytesleft, &utf_8, &outbytesleft);
-	if (rv == (size_t) -1) {
-		printf("iconv Error\n");
-		iconv_close(cd);
-		return;
-	}
-	*utf_8 = '\0';
-	iconv_close(cd);
-}
-#endif // WITH_ICONV
