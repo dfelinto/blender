@@ -54,7 +54,7 @@ bool RAS_OpenGLOffScreen::Create(int width, int height)
 		return false;
 	}
 
-	m_ofs = GPU_offscreen_create(width, height, err_out);
+	m_ofs = GPU_offscreen_create(width, height, 0, err_out);
 	if (m_ofs == NULL)
 	{
 		printf("RAS_OpenGLOffScreen::Create(): failed creating an offscreen buffer (%s)\n", err_out);
