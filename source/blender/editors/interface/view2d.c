@@ -63,7 +63,7 @@
 
 #include "interface_intern.h"
 
-static void ui_view2d_curRect_validate_resize(View2D *v2d, int resize, int mask_scrollers);
+static void ui_view2d_curRect_validate_resize(View2D *v2d, bool resize, bool mask_scrollers);
 
 /* *********************************************************************** */
 
@@ -116,7 +116,7 @@ static int view2d_scroll_mapped(int scroll)
 }
 
 /* called each time cur changes, to dynamically update masks */
-static void view2d_masks(View2D *v2d, int check_scrollers)
+static void view2d_masks(View2D *v2d, bool check_scrollers)
 {
 	int scroll;
 	
@@ -368,7 +368,7 @@ void UI_view2d_region_reinit(View2D *v2d, short type, int winx, int winy)
  * 'cur' is not allowed to be: larger than max, smaller than min, or outside of 'tot'
  */
 // XXX pre2.5 -> this used to be called  test_view2d()
-static void ui_view2d_curRect_validate_resize(View2D *v2d, int resize, int mask_scrollers)
+static void ui_view2d_curRect_validate_resize(View2D *v2d, bool resize, bool mask_scrollers)
 {
 	float totwidth, totheight, curwidth, curheight, width, height;
 	float winx, winy;
@@ -472,7 +472,7 @@ static void ui_view2d_curRect_validate_resize(View2D *v2d, int resize, int mask_
 	/* check if we should restore aspect ratio (if view size changed) */
 	if (v2d->keepzoom & V2D_KEEPASPECT) {
 		bool do_x = false, do_y = false, do_cur /* , do_win */ /* UNUSED */;
-		float /* curRatio, */ /* UNUSED */ winRatio;
+		float curRatio, winRatio;
 		
 		/* when a window edge changes, the aspect ratio can't be used to
 		 * find which is the best new 'cur' rect. thats why it stores 'old' 
@@ -480,7 +480,7 @@ static void ui_view2d_curRect_validate_resize(View2D *v2d, int resize, int mask_
 		if (winx != v2d->oldwinx) do_x = true;
 		if (winy != v2d->oldwiny) do_y = true;
 		
-		/* curRatio = height / width; */ /* UNUSED */
+		curRatio = height / width;
 		winRatio = winy / winx;
 		
 		/* both sizes change (area/region maximized)  */
@@ -490,7 +490,7 @@ static void ui_view2d_curRect_validate_resize(View2D *v2d, int resize, int mask_
 				if (fabsf(winx - v2d->oldwinx) > fabsf(winy - v2d->oldwiny)) do_y = false;
 				else do_x = false;
 			}
-			else if (winRatio > 1.0f) {
+			else if (winRatio > curRatio) {
 				do_x = false;
 			}
 			else {
@@ -899,7 +899,7 @@ void UI_view2d_curRect_reset(View2D *v2d)
 /* ------------------ */
 
 /* Change the size of the maximum viewable area (i.e. 'tot' rect) */
-void UI_view2d_totRect_set_resize(View2D *v2d, int width, int height, int resize)
+void UI_view2d_totRect_set_resize(View2D *v2d, int width, int height, bool resize)
 {
 //	int scroll = view2d_scroll_mapped(v2d->scroll);
 	

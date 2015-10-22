@@ -1215,10 +1215,10 @@ void WM_operator_properties_filesel(wmOperatorType *ot, int filter, short type, 
 	PropertyRNA *prop;
 
 	static EnumPropertyItem file_display_items[] = {
-		{FILE_DEFAULTDISPLAY, "FILE_DEFAULTDISPLAY", 0, "Default", "Automatically determine display type for files"},
-		{FILE_SHORTDISPLAY, "FILE_SHORTDISPLAY", ICON_SHORTDISPLAY, "Short List", "Display files as short list"},
-		{FILE_LONGDISPLAY, "FILE_LONGDISPLAY", ICON_LONGDISPLAY, "Long List", "Display files as a detailed list"},
-		{FILE_IMGDISPLAY, "FILE_IMGDISPLAY", ICON_IMGDISPLAY, "Thumbnails", "Display files as thumbnails"},
+		{FILE_DEFAULTDISPLAY, "DEFAULT", 0, "Default", "Automatically determine display type for files"},
+		{FILE_SHORTDISPLAY, "LIST_SHORT", ICON_SHORTDISPLAY, "Short List", "Display files as short list"},
+		{FILE_LONGDISPLAY, "LIST_LONG", ICON_LONGDISPLAY, "Long List", "Display files as a detailed list"},
+		{FILE_IMGDISPLAY, "THUMBNAIL", ICON_IMGDISPLAY, "Thumbnails", "Display files as thumbnails"},
 		{0, NULL, 0, NULL, NULL}
 	};
 
@@ -2247,6 +2247,17 @@ static int wm_operator_winactive_normal(bContext *C)
 	return 1;
 }
 
+/* included for script-access */
+static void WM_OT_window_close(wmOperatorType *ot)
+{
+	ot->name = "Close Window";
+	ot->idname = "WM_OT_window_close";
+	ot->description = "Close the current Blender window";
+
+	ot->exec = wm_window_close_exec;
+	ot->poll = WM_operator_winactive;
+}
+
 static void WM_OT_window_duplicate(wmOperatorType *ot)
 {
 	ot->name = "Duplicate Window";
@@ -2629,7 +2640,7 @@ static short wm_link_append_flag(wmOperator *op)
 typedef struct WMLinkAppendDataItem {
 	char *name;
 	BLI_bitmap *libraries;  /* All libs (from WMLinkAppendData.libraries) to try to load this ID from. */
-	int idcode;
+	short idcode;
 
 	ID *new_id;
 	void *customdata;
@@ -2675,7 +2686,7 @@ static void wm_link_append_data_library_add(WMLinkAppendData *lapp_data, const c
 }
 
 static WMLinkAppendDataItem *wm_link_append_data_item_add(
-        WMLinkAppendData *lapp_data, const char *idname, const int idcode, void *customdata)
+        WMLinkAppendData *lapp_data, const char *idname, const short idcode, void *customdata)
 {
 	WMLinkAppendDataItem *item = BLI_memarena_alloc(lapp_data->memarena, sizeof(*item));
 	size_t len = strlen(idname) + 1;
@@ -2742,7 +2753,7 @@ static void wm_link_do(
 				continue;
 			}
 
-			new_id = BLO_library_link_named_part_ex(mainl, &bh, item->name, item->idcode, flag, scene, v3d);
+			new_id = BLO_library_link_named_part_ex(mainl, &bh, item->idcode, item->name, flag, scene, v3d);
 			if (new_id) {
 				/* If the link is sucessful, clear item's libs 'todo' flags.
 				 * This avoids trying to link same item with other libraries to come. */
@@ -5250,6 +5261,7 @@ void wm_operatortype_init(void)
 	/* reserve size is set based on blender default setup */
 	global_ops_hash = BLI_ghash_str_new_ex("wm_operatortype_init gh", 2048);
 
+	WM_operatortype_append(WM_OT_window_close);
 	WM_operatortype_append(WM_OT_window_duplicate);
 	WM_operatortype_append(WM_OT_read_history);
 	WM_operatortype_append(WM_OT_read_homefile);

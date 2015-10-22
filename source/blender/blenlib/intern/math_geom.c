@@ -1256,38 +1256,27 @@ bool isect_ray_tri_v3(
 /**
  * if clip is nonzero, will only return true if lambda is >= 0.0
  * (i.e. intersection point is along positive d)
+ *
+ * \note #line_plane_factor_v3() shares logic.
  */
 bool isect_ray_plane_v3(
         const float p1[3], const float d[3],
-        const float v0[3], const float v1[3], const float v2[3],
+        const float plane[4],
         float *r_lambda, const bool clip)
 {
-	const float epsilon = 0.00000001f;
-	float p[3], s[3], e1[3], e2[3], q[3];
-	float a, f;
-	/* float  u, v; */ /*UNUSED*/
+	float h[3], plane_co[3];
+	float dot;
 
-	sub_v3_v3v3(e1, v1, v0);
-	sub_v3_v3v3(e2, v2, v0);
-
-	cross_v3_v3v3(p, d, e2);
-	a = dot_v3v3(e1, p);
-	/* note: these values were 0.000001 in 2.4x but for projection snapping on
-	 * a human head (1BU == 1m), subsurf level 2, this gave many errors - campbell */
-	if ((a > -epsilon) && (a < epsilon)) return false;
-	f = 1.0f / a;
-
-	sub_v3_v3v3(s, p1, v0);
-
-	/* u = f * dot_v3v3(s, p); */ /*UNUSED*/
-
-	cross_v3_v3v3(q, s, e1);
-
-	/* v = f * dot_v3v3(d, q); */ /*UNUSED*/
-
-	*r_lambda = f * dot_v3v3(e2, q);
-	if (clip && (*r_lambda < 0.0f)) return false;
-
+	dot = dot_v3v3(plane, d);
+	if (dot == 0.0f) {
+		return false;
+	}
+	mul_v3_v3fl(plane_co, plane, (-plane[3] / len_squared_v3(plane)));
+	sub_v3_v3v3(h, p1, plane_co);
+	*r_lambda = -dot_v3v3(plane, h) / dot;
+	if (clip && (*r_lambda < 0.0f)) {
+		return false;
+	}
 	return true;
 }
 
@@ -1384,16 +1373,14 @@ bool isect_ray_tri_watertight_v3(
 	const float cy = c_ky - sy * c_kz;
 
 	/* Calculate scaled barycentric coordinates. */
-	float u = cx * by - cy * bx;
-	int sign_mask = (float_as_int(u) & (int)0x80000000);
-	float v = ax * cy - ay * cx;
-	float w, det;
+	const float u = cx * by - cy * bx;
+	const float v = ax * cy - ay * cx;
+	const float w = bx * ay - by * ax;
+	float det;
 
-	if (sign_mask != (float_as_int(v) & (int)0x80000000)) {
-		return false;
-	}
-	w = bx * ay - by * ax;
-	if (sign_mask != (float_as_int(w) & (int)0x80000000)) {
+	if ((u < 0.0f || v < 0.0f || w < 0.0f) &&
+	    (u > 0.0f || v > 0.0f || w > 0.0f))
+	{
 		return false;
 	}
 
@@ -1406,8 +1393,9 @@ bool isect_ray_tri_watertight_v3(
 		/* Calculate scaled z-coordinates of vertices and use them to calculate
 		 * the hit distance.
 		 */
+		const int sign_det = (float_as_int(det) & (int)0x80000000);
 		const float t = (u * a_kz + v * b_kz + w * c_kz) * sz;
-		const float sign_t = xor_fl(t, sign_mask);
+		const float sign_t = xor_fl(t, sign_det);
 		if ((sign_t < 0.0f)
 		    /* differ from Cycles, don't read r_lambda's original value
 		     * otherwise we won't match any of the other intersect functions here...

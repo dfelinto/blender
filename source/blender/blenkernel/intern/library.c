@@ -59,6 +59,7 @@
 #include "DNA_movieclip_types.h"
 #include "DNA_mask_types.h"
 #include "DNA_node_types.h"
+#include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
 #include "DNA_speaker_types.h"
@@ -263,8 +264,6 @@ bool id_make_local(ID *id, bool test)
 			return false; /* not implemented */
 		case ID_TXT:
 			return false; /* not implemented */
-		case ID_SCRIPT:
-			return false; /* deprecated */
 		case ID_SO:
 			return false; /* not implemented */
 		case ID_GR:
@@ -359,8 +358,6 @@ bool id_copy(ID *id, ID **newid, bool test)
 		case ID_TXT:
 			if (!test) *newid = (ID *)BKE_text_copy(G.main, (Text *)id);
 			return true;
-		case ID_SCRIPT:
-			return false;  /* deprecated */
 		case ID_SO:
 			return false;  /* not implemented */
 		case ID_GR:
@@ -495,8 +492,6 @@ ListBase *which_libbase(Main *mainlib, short type)
 			return &(mainlib->vfont);
 		case ID_TXT:
 			return &(mainlib->text);
-		case ID_SCRIPT:
-			return &(mainlib->script);
 		case ID_SPK:
 			return &(mainlib->speaker);
 		case ID_SO:
@@ -613,7 +608,6 @@ int set_listbasepointers(Main *main, ListBase **lb)
 	lb[a++] = &(main->palettes);
 	lb[a++] = &(main->paintcurves);
 	lb[a++] = &(main->brush);
-	lb[a++] = &(main->script);
 	lb[a++] = &(main->particle);
 	lb[a++] = &(main->speaker);
 
@@ -648,7 +642,7 @@ int set_listbasepointers(Main *main, ListBase **lb)
  * Allocates and returns memory of the right size for the specified block type,
  * initialized to zero.
  */
-static ID *alloc_libblock_notest(short type)
+void *BKE_libblock_alloc_notest(short type)
 {
 	ID *id = NULL;
 	
@@ -706,9 +700,6 @@ static ID *alloc_libblock_notest(short type)
 			break;
 		case ID_TXT:
 			id = MEM_callocN(sizeof(Text), "text");
-			break;
-		case ID_SCRIPT:
-			//XXX id = MEM_callocN(sizeof(Script), "script");
 			break;
 		case ID_SPK:
 			id = MEM_callocN(sizeof(Speaker), "speaker");
@@ -770,7 +761,7 @@ void *BKE_libblock_alloc(Main *bmain, short type, const char *name)
 	ID *id = NULL;
 	ListBase *lb = which_libbase(bmain, type);
 	
-	id = alloc_libblock_notest(type);
+	id = BKE_libblock_alloc_notest(type);
 	if (id) {
 		BKE_main_lock(bmain);
 		BLI_addtail(lb, id);
@@ -783,6 +774,118 @@ void *BKE_libblock_alloc(Main *bmain, short type, const char *name)
 	}
 	DAG_id_type_tag(bmain, type);
 	return id;
+}
+
+/**
+ * Initialize an ID of given type, such that it has valid 'empty' data.
+ * ID is assumed to be just calloc'ed.
+ */
+void BKE_libblock_init_empty(ID *id)
+{
+	/* Note that only ID types that are not valid when filled of zero should have a callback here. */
+	switch (GS(id->name)) {
+		case ID_SCE:
+			BKE_scene_init((Scene *)id);
+			break;
+		case ID_LI:
+			/* Nothing to do. */
+			break;
+		case ID_OB:
+		{
+			Object *ob = (Object *)id;
+			ob->type = OB_EMPTY;
+			BKE_object_init(ob);
+			break;
+		}
+		case ID_ME:
+			BKE_mesh_init((Mesh *)id);
+			break;
+		case ID_CU:
+			BKE_curve_init((Curve *)id);
+			break;
+		case ID_MB:
+			BKE_mball_init((MetaBall *)id);
+			break;
+		case ID_MA:
+			BKE_material_init((Material *)id);
+			break;
+		case ID_TE:
+			BKE_texture_default((Tex *)id);
+			break;
+		case ID_IM:
+			/* Image is a bit complicated, for now assume NULLified im is OK. */
+			break;
+		case ID_LT:
+			BKE_lattice_init((Lattice *)id);
+			break;
+		case ID_LA:
+			BKE_lamp_init((Lamp *)id);
+			break;
+		case ID_SPK:
+			BKE_speaker_init((Speaker *)id);
+			break;
+		case ID_CA:
+			BKE_camera_init((Camera *)id);
+			break;
+		case ID_IP:
+			/* Should not be needed - animation from lib pre-2.5 is broken anyway. */
+			BLI_assert(0);
+			break;
+		case ID_KE:
+			/* Shapekeys are a complex topic too - they depend on their 'user' data type...
+			 * They are not linkable, though, so it should never reach here anyway. */
+			BLI_assert(0);
+			break;
+		case ID_WO:
+			BKE_world_init((World *)id);
+			break;
+		case ID_SCR:
+			/* Nothing to do. */
+			break;
+		case ID_VF:
+			BKE_vfont_init((VFont *)id);
+			break;
+		case ID_TXT:
+			BKE_text_init((Text *)id);
+			break;
+		case ID_SO:
+			/* Another fuzzy case, think NULLified content is OK here... */
+			break;
+		case ID_GR:
+			/* Nothing to do. */
+			break;
+		case ID_AR:
+			/* Nothing to do. */
+			break;
+		case ID_AC:
+			/* Nothing to do. */
+			break;
+		case ID_NT:
+			ntreeInitDefault((bNodeTree *)id);
+			break;
+		case ID_BR:
+			BKE_brush_init((Brush *)id);
+			break;
+		case ID_PA:
+			/* Nothing to do. */
+			break;
+		case ID_PC:
+			/* Nothing to do. */
+			break;
+		case ID_WM:
+			/* We should never reach this. */
+			BLI_assert(0);
+			break;
+		case ID_GD:
+			/* Nothing to do. */
+			break;
+		case ID_MSK:
+			/* Nothing to do. */
+			break;
+		case ID_LS:
+			BKE_linestyle_init((FreestyleLineStyle *)id);
+			break;
+	}
 }
 
 /* by spec, animdata is first item after ID */
@@ -838,7 +941,7 @@ void *BKE_libblock_copy_nolib(ID *id, const bool do_action)
 	ID *idn;
 	size_t idn_len;
 
-	idn = alloc_libblock_notest(GS(id->name));
+	idn = BKE_libblock_alloc_notest(GS(id->name));
 	assert(idn != NULL);
 
 	BLI_strncpy(idn->name, id->name, sizeof(idn->name));
@@ -1018,9 +1121,6 @@ void BKE_libblock_free_ex(Main *bmain, void *idv, bool do_id_user)
 			break;
 		case ID_TXT:
 			BKE_text_free((Text *)id);
-			break;
-		case ID_SCRIPT:
-			/* deprecated */
 			break;
 		case ID_SPK:
 			BKE_speaker_free((Speaker *)id);
@@ -1720,7 +1820,7 @@ void rename_id(ID *id, const char *name)
  */
 void name_uiprefix_id(char *name, const ID *id)
 {
-	name[0] = id->lib ? 'L' : ' ';
+	name[0] = id->lib ? (ID_MISSING(id) ? 'M' : 'L') : ' ';
 	name[1] = (id->flag & LIB_FAKEUSER) ? 'F' : ((id->us == 0) ? '0' : ' ');
 	name[2] = ' ';
 

@@ -15,27 +15,36 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  *
- * The Original Code is Copyright (C) 2005 Blender Foundation.
- * All rights reserved.
- *
- * The Original Code is: all of this file.
- *
- * Contributor(s): Benoit Bolsee.
- *
  * ***** END GPL LICENSE BLOCK *****
  */
 
-/** \file blender/python/intern/gpu.h
- *  \ingroup pythonintern
+/** \file blender/blenlib/intern/memory_utils.c
+ *  \ingroup bli
+ *  \brief Generic memory manipulation API.
  *
- * Initializes the gpu Python module.
+ * This is to extend on existing functions
+ * such as ``memcpy`` & ``memcmp``.
  */
+#include <string.h>
 
-#ifndef __GPU_H__
-#define __GPU_H__
+#include "BLI_sys_types.h"
+#include "BLI_utildefines.h"
 
-PyObject *GPU_initPython(void);
+#include "BLI_memory_utils.h"
 
-PyObject *BPyInit_gpu_offscreen(void);
+#include "BLI_strict_flags.h"
 
-#endif /* __GPU_H__ */
+/**
+ * Check if memory is zero'd, as with memset(s, 0, nbytes)
+ */
+bool BLI_memory_is_zero(const void *s, const size_t nbytes)
+{
+	const char *s_byte = s;
+	const char *s_end = (const char *)s + nbytes;
+
+	while ((s_byte != s_end) && (*s_byte == 0)) {
+		s_byte++;
+	}
+
+	return (s_byte == s_end);
+}

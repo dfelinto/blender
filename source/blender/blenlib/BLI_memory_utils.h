@@ -15,27 +15,20 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  *
- * The Original Code is Copyright (C) 2005 Blender Foundation.
- * All rights reserved.
- *
- * The Original Code is: all of this file.
- *
- * Contributor(s): Benoit Bolsee.
- *
  * ***** END GPL LICENSE BLOCK *****
  */
 
-/** \file blender/python/intern/gpu.h
- *  \ingroup pythonintern
- *
- * Initializes the gpu Python module.
+#ifndef __BLI_MEMORY_UTILS_H__
+#define __BLI_MEMORY_UTILS_H__
+
+/** \file BLI_memory_utils.h
+ *  \ingroup bli
+ *  \brief Generic memory manipulation API.
  */
 
-#ifndef __GPU_H__
-#define __GPU_H__
+/* it may be defined already */
+#ifndef __BLI_UTILDEFINES_H__
+bool BLI_memory_is_zero(const void *arr, const size_t size);
+#endif
 
-PyObject *GPU_initPython(void);
-
-PyObject *BPyInit_gpu_offscreen(void);
-
-#endif /* __GPU_H__ */
+#endif  /* __BLI_MEMORY_UTILS_H__ */

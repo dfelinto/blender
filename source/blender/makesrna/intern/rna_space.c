@@ -3735,13 +3735,13 @@ static void rna_def_fileselect_params(BlenderRNA *brna)
 	PropertyRNA *prop;
 	
 	static EnumPropertyItem file_display_items[] = {
-		{FILE_SHORTDISPLAY, "FILE_SHORTDISPLAY", ICON_SHORTDISPLAY, "Short List", "Display files as short list"},
-		{FILE_LONGDISPLAY, "FILE_LONGDISPLAY", ICON_LONGDISPLAY, "Long List", "Display files as a detailed list"},
-		{FILE_IMGDISPLAY, "FILE_IMGDISPLAY", ICON_IMGDISPLAY, "Thumbnails", "Display files as thumbnails"},
+		{FILE_SHORTDISPLAY, "LIST_SHORT", ICON_SHORTDISPLAY, "Short List", "Display files as short list"},
+		{FILE_LONGDISPLAY,  "LIST_LONG", ICON_LONGDISPLAY, "Long List", "Display files as a detailed list"},
+		{FILE_IMGDISPLAY, "THUMBNAIL", ICON_IMGDISPLAY, "Thumbnails", "Display files as thumbnails"},
 		{0, NULL, 0, NULL, NULL}
 	};
 
-	static EnumPropertyItem thumbnail_size_items[] = {
+	static EnumPropertyItem display_size_items[] = {
 	    {32,    "TINY",     0,      "Tiny", ""},
 	    {64,    "SMALL",    0,      "Small", ""},
 	    {128,   "NORMAL",   0,      "Normal", ""},
@@ -3940,10 +3940,11 @@ static void rna_def_fileselect_params(BlenderRNA *brna)
 	RNA_def_property_flag(prop, PROP_TEXTEDIT_UPDATE);
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_FILE_LIST, NULL);
 
-	prop = RNA_def_property(srna, "thumbnail_size", PROP_ENUM, PROP_NONE);
+	prop = RNA_def_property(srna, "display_size", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "thumbnail_size");
-	RNA_def_property_enum_items(prop, thumbnail_size_items);
-	RNA_def_property_ui_text(prop, "Thumbnails Size", "Change the size of the thumbnails");
+	RNA_def_property_enum_items(prop, display_size_items);
+	RNA_def_property_ui_text(prop, "Display Size",
+	                         "Change the size of the display (width of columns or thumbnails size)");
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_FILE_LIST, NULL);
 }
 

@@ -1356,6 +1356,7 @@ char BKE_imtype_valid_channels(const char imtype, bool write_file)
 			if (write_file) break;
 			/* fall-through */
 		case R_IMF_IMTYPE_TARGA:
+		case R_IMF_IMTYPE_RAWTGA:
 		case R_IMF_IMTYPE_IRIS:
 		case R_IMF_IMTYPE_PNG:
 		case R_IMF_IMTYPE_RADHDR:
@@ -4444,14 +4445,7 @@ float *BKE_image_get_float_pixels_for_frame(struct Image *image, int frame)
 
 int BKE_image_sequence_guess_offset(Image *image)
 {
-	unsigned short numlen;
-	char head[FILE_MAX], tail[FILE_MAX];
-	char num[FILE_MAX] = {0};
-
-	BLI_stringdec(image->name, head, tail, &numlen);
-	BLI_strncpy(num, image->name + strlen(head), numlen + 1);
-
-	return atoi(num);
+	return BLI_stringdec(image->name, NULL, NULL, NULL);
 }
 
 bool BKE_image_has_anim(Image *ima)
