@@ -122,6 +122,109 @@ ccl_device void kernel_branched_path_surface_connect_light(KernelGlobals *kg, RN
 #endif
 }
 
+/* branched path tracing: connect path directly to position on one or more lights and add it to L */
+ccl_device void kernel_branched_path_surface_connect_light_full_unoccluded(KernelGlobals *kg, RNG *rng,
+	ShaderData *sd, PathState *state, bool sample_all_lights, float3 *L_full, float3 *L_unoccluded)
+{
+	*L_unoccluded = make_float3(0.0f, 0.0f, 0.0f);
+	*L_full = make_float3(0.0f, 0.0f, 0.0f);
+#ifdef __EMISSION__
+	Ray light_ray;
+	float3 L_light;
+
+#ifdef __OBJECT_MOTION__
+	light_ray.time = sd->time;
+#endif
+
+	if(sample_all_lights) {
+		/* lamp sampling */
+		for(int i = 0; i < kernel_data.integrator.num_all_lights; i++) {
+			if(UNLIKELY(light_select_reached_max_bounces(kg, i, state->bounce)))
+			   continue;
+
+			int num_samples = light_select_num_samples(kg, i);
+			float num_samples_inv = 1.0f / (num_samples*kernel_data.integrator.num_all_lights);
+			RNG lamp_rng = cmj_hash(*rng, i);
+
+			if(kernel_data.integrator.pdf_triangles != 0.0f)
+				num_samples_inv *= 0.5f;
+
+			for(int j = 0; j < num_samples; j++) {
+				float light_u, light_v;
+				path_branched_rng_2D(kg, &lamp_rng, state, j, num_samples, PRNG_LIGHT_U, &light_u, &light_v);
+
+				LightSample ls;
+				lamp_light_sample(kg, i, light_u, light_v, sd->P, &ls);
+
+				if(direct_emission_shaderless(kg, sd, &ls, &light_ray, &L_light)) {
+					L_light *= num_samples_inv;
+
+					/* trace shadow ray */
+					float3 shadow;
+					if(!shadow_blocked(kg, state, &light_ray, &shadow))
+						*L_unoccluded += L_light*shadow;
+
+					*L_full += L_light;
+				}
+			}
+		}
+
+		/* mesh light sampling */
+		if(kernel_data.integrator.pdf_triangles != 0.0f) {
+			int num_samples = kernel_data.integrator.mesh_light_samples;
+			float num_samples_inv = 1.0f / num_samples;
+
+			if(kernel_data.integrator.num_all_lights)
+				num_samples_inv *= 0.5f;
+
+			for(int j = 0; j < num_samples; j++) {
+				float light_t = path_branched_rng_1D(kg, rng, state, j, num_samples, PRNG_LIGHT);
+				float light_u, light_v;
+				path_branched_rng_2D(kg, rng, state, j, num_samples, PRNG_LIGHT_U, &light_u, &light_v);
+
+				/* only sample triangle lights */
+				if(kernel_data.integrator.num_all_lights)
+					light_t = 0.5f*light_t;
+
+				LightSample ls;
+				light_sample(kg, light_t, light_u, light_v, sd->time, sd->P, state->bounce, &ls);
+
+				if(direct_emission_shaderless(kg, sd, &ls, &light_ray, &L_light)) {
+					L_light *= num_samples_inv;
+
+					/* trace shadow ray */
+					float3 shadow;
+					if(!shadow_blocked(kg, state, &light_ray, &shadow))
+						*L_unoccluded += L_light * shadow;
+
+					*L_full += L_light;
+				}
+			}
+		}
+	}
+	else {
+		/* sample one light at random */
+		float light_t = path_state_rng_1D(kg, rng, state, PRNG_LIGHT);
+		float light_u, light_v;
+		path_state_rng_2D(kg, rng, state, PRNG_LIGHT_U, &light_u, &light_v);
+
+		LightSample ls;
+		light_sample(kg, light_t, light_u, light_v, sd->time, sd->P, state->bounce, &ls);
+
+		/* sample random light */
+		if(direct_emission_shaderless(kg, sd, &ls, &light_ray, &L_light)) {
+			/* trace shadow ray */
+			float3 shadow;
+
+			if(!shadow_blocked(kg, state, &light_ray, &shadow))
+				*L_unoccluded += L_light*shadow;
+
+			*L_full += L_light;
+		}
+	}
+#endif
+}
+
 /* branched path tracing: bounce off or through surface to with new direction stored in ray */
 ccl_device bool kernel_branched_path_surface_bounce(KernelGlobals *kg, RNG *rng,
 	ShaderData *sd, const ShaderClosure *sc, int sample, int num_samples,
@@ -214,6 +317,36 @@ ccl_device_inline void kernel_path_surface_connect_light(KernelGlobals *kg, ccl_
 			/* accumulate */
 			path_radiance_accum_light(L, throughput, &L_light, shadow, 1.0f, state->bounce, is_lamp);
 		}
+	}
+#endif
+}
+
+/* path tracing: connect path directly to position on a light and return both the unoccluded and the full light */
+ccl_device_inline void kernel_path_surface_connect_light_full_unoccluded(KernelGlobals *kg, ccl_addr_space RNG *rng,
+	ShaderData *sd, ccl_addr_space PathState *state, float3 *L_full, float3 *L_unoccluded)
+{
+	*L_unoccluded = make_float3(0.0f, 0.0f, 0.0f);
+	*L_full = make_float3(0.0f, 0.0f, 0.0f);
+#ifdef __EMISSION__
+	float light_t = path_state_rng_1D(kg, rng, state, PRNG_LIGHT);
+	float light_u, light_v;
+	path_state_rng_2D(kg, rng, state, PRNG_LIGHT_U, &light_u, &light_v);
+
+	Ray light_ray;
+
+#ifdef __OBJECT_MOTION__
+	light_ray.time = ccl_fetch(sd, time);
+#endif
+
+	LightSample ls;
+	light_sample(kg, light_t, light_u, light_v, ccl_fetch(sd, time), ccl_fetch(sd, P), state->bounce, &ls);
+
+	if(direct_emission_shaderless(kg, sd, &ls, &light_ray, L_full)) {
+		/* trace shadow ray */
+		float3 shadow;
+
+		if(!shadow_blocked(kg, state, &light_ray, &shadow))
+			*L_unoccluded = *L_full * shadow;
 	}
 #endif
 }

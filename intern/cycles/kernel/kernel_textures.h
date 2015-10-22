@@ -72,6 +72,9 @@ KERNEL_TEX(float, texture_float, __lookup_table)
 /* sobol */
 KERNEL_TEX(uint, texture_uint, __sobol_directions)
 
+/* ies lights */
+KERNEL_TEX(float, texture_float, __ies)
+
 /* full-float image */
 KERNEL_IMAGE_TEX(float4, texture_image_float4, __tex_image_float_000)
 KERNEL_IMAGE_TEX(float4, texture_image_float4, __tex_image_float_001)
@@ -173,9 +176,9 @@ KERNEL_IMAGE_TEX(uchar4, texture_image_uchar4, __tex_image_094)
 KERNEL_IMAGE_TEX(uchar4, texture_image_uchar4, __tex_image_095)
 KERNEL_IMAGE_TEX(uchar4, texture_image_uchar4, __tex_image_096)
 KERNEL_IMAGE_TEX(uchar4, texture_image_uchar4, __tex_image_097)
-KERNEL_IMAGE_TEX(uchar4, texture_image_uchar4, __tex_image_098)
 
 /* Kepler and above */
+KERNEL_IMAGE_TEX(uchar4, texture_image_uchar4, __tex_image_098)
 KERNEL_IMAGE_TEX(uchar4, texture_image_uchar4, __tex_image_099)
 KERNEL_IMAGE_TEX(uchar4, texture_image_uchar4, __tex_image_100)
 KERNEL_IMAGE_TEX(uchar4, texture_image_uchar4, __tex_image_101)

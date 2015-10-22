@@ -241,7 +241,7 @@ ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input,
 	/* light passes */
 	PathRadiance L;
 
-	shader_setup_from_sample(kg, &sd, P, Ng, I, shader, object, prim, u, v, t, time, bounce, transparent_bounce);
+	shader_setup_from_sample(kg, &sd, P, Ng, I, shader, object, prim, u, v, t, time, bounce, transparent_bounce, LAMP_NONE);
 	sd.I = sd.N;
 
 	/* update differentials */
@@ -449,11 +449,9 @@ ccl_device void kernel_shader_evaluate(KernelGlobals *kg, ccl_global uint4 *inpu
 	else { // SHADER_EVAL_BACKGROUND
 		/* setup ray */
 		Ray ray;
-		float u = __uint_as_float(in.x);
-		float v = __uint_as_float(in.y);
 
 		ray.P = make_float3(0.0f, 0.0f, 0.0f);
-		ray.D = equirectangular_to_direction(u, v);
+		ray.D = make_float3(__uint_as_float(in.x), __uint_as_float(in.y), __uint_as_float(in.z));
 		ray.t = 0.0f;
 #ifdef __CAMERA_MOTION__
 		ray.time = 0.5f;

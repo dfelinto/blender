@@ -51,7 +51,7 @@ ccl_device_noinline float3 direct_emissive_eval(KernelGlobals *kg,
 	else
 #endif
 	{
-		shader_setup_from_sample(kg, sd, ls->P, ls->Ng, I, ls->shader, ls->object, ls->prim, ls->u, ls->v, t, time, bounce+1, transparent_bounce);
+		shader_setup_from_sample(kg, sd, ls->P, ls->Ng, I, ls->shader, ls->object, ls->prim, ls->u, ls->v, t, time, bounce+1, transparent_bounce, ls->lamp);
 
 		ls->Ng = ccl_fetch(sd, Ng);
 
@@ -71,6 +71,58 @@ ccl_device_noinline float3 direct_emissive_eval(KernelGlobals *kg,
 	return eval;
 }
 
+ccl_device_noinline bool direct_emission_shaderless(KernelGlobals *kg,
+	ShaderData *sd, LightSample *ls, Ray *ray, float3 *light_eval
+#ifdef __SPLIT_KERNEL__
+	, ShaderData *sd_DL
+#endif
+	)
+{
+	if(ls->pdf == 0.0f)
+		return false;
+
+	/* todo: implement */
+	differential3 dD = differential3_zero();
+
+	/* evaluate closure */
+	*light_eval = direct_emissive_eval(kg, ls, -ls->D, dD, ls->t, ccl_fetch(sd, time), 0, 0
+#ifdef __SPLIT_KERNEL__
+	                                         ,sd_DL
+#endif
+	                                  )
+	            * fmaxf(dot(ls->D, ccl_fetch(sd, N)), 0.0f) / ls->pdf;
+
+	if(is_zero(*light_eval))
+		return false;
+
+	if(ls->shader & SHADER_CAST_SHADOW) {
+		/* setup ray */
+		bool transmit = (dot(ccl_fetch(sd, Ng), ls->D) < 0.0f);
+		ray->P = ray_offset(sd->P, (transmit)? -ccl_fetch(sd, Ng): ccl_fetch(sd, Ng));
+
+		if(ls->t == FLT_MAX) {
+			/* distant light */
+			ray->D = ls->D;
+			ray->t = ls->t;
+		}
+		else {
+			/* other lights, avoid self-intersection */
+			ray->D = ray_offset(ls->P, ls->Ng) - ray->P;
+			ray->D = normalize_len(ray->D, &ray->t);
+		}
+
+		ray->dP = ccl_fetch(sd, dP);
+		ray->dD = differential3_zero();
+	}
+	else {
+		/* signal to not cast shadow ray */
+		ray->t = 0.0f;
+	}
+
+	return true;
+}
+
+/* The argument sd_DL is meaningful only for split kernel. Other uses can just pass NULL */
 ccl_device_noinline bool direct_emission(KernelGlobals *kg, ShaderData *sd,
 	LightSample *ls, Ray *ray, BsdfEval *eval, bool *is_lamp,
 	int bounce, int transparent_bounce
@@ -290,7 +342,7 @@ ccl_device_noinline float3 indirect_background(KernelGlobals *kg, ccl_addr_space
 	/* check if background light exists or if we should skip pdf */
 	int res = kernel_data.integrator.pdf_background_res;
 
-	if(!(state->flag & PATH_RAY_MIS_SKIP) && res) {
+	if(!(state->flag & PATH_RAY_MIS_SKIP) && (res || kernel_data.integrator.num_portals)) {
 		/* multiple importance sampling, get background light pdf for ray
 		 * direction, and compute weight with respect to BSDF pdf */
 		float pdf = background_light_pdf(kg, ray->P, ray->D);

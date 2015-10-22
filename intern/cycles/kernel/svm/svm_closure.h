@@ -616,6 +616,36 @@ ccl_device void svm_node_closure_holdout(ShaderData *sd, float *stack, uint4 nod
 	ccl_fetch(sd, flag) |= SD_HOLDOUT;
 }
 
+ccl_device void svm_node_closure_shadow_catcher(ShaderData *sd, float *stack, uint4 node)
+{
+	uint mix_weight_offset = node.y;
+	float mix_weight = 1.0f;
+
+	if(stack_valid(mix_weight_offset)) {
+		mix_weight = stack_load_float(stack, mix_weight_offset);
+
+		if(mix_weight == 0.0f)
+			return;
+	}
+
+	if(sd->ray_depth == 0) {
+		svm_node_closure_get_non_bsdf(sd, CLOSURE_SHADOW_CATCHER_ID, mix_weight);
+
+		sd->flag |= SD_SHADOW_CATCHER;
+	}
+	else {
+		ShaderClosure *sc = svm_node_closure_get_bsdf(sd, mix_weight);
+
+		if(sc) {
+			sc->N = sd->N;
+			sc->data0 = 0.0f;
+			sc->data1 = 0.0f;
+			sc->data2 = 0.0f;
+			sd->flag |= bsdf_diffuse_setup(sc);
+		}
+	}
+}
+
 ccl_device void svm_node_closure_ambient_occlusion(ShaderData *sd, float *stack, uint4 node)
 {
 	uint mix_weight_offset = node.y;

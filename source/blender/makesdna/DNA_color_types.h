@@ -168,6 +168,8 @@ typedef struct ColorManagedViewSettings {
 	char view_transform[64];   /* view transform which is being applied when displaying buffer on the screen */
 	float exposure;            /* fstop exposure */
 	float gamma;               /* post-display gamma transform */
+	float white_value; /* tonemapping parameter */
+	float pad3;
 	struct CurveMapping *curve_mapping;  /* pre-display RGB curves transform */
 	void *pad2;
 } ColorManagedViewSettings;

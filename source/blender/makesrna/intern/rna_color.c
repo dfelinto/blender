@@ -1136,6 +1136,13 @@ static void rna_def_colormanage(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Gamma", "Amount of gamma modification applied after display transform");
 	RNA_def_property_update(prop, NC_WINDOW, "rna_ColorManagement_update");
 
+	prop = RNA_def_property(srna, "white_value", PROP_FLOAT, PROP_FACTOR);
+	RNA_def_property_float_sdna(prop, NULL, "white_value");
+	RNA_def_property_range(prop, 0.0f, 10.0f);
+	RNA_def_property_float_default(prop, 0.0f);
+	RNA_def_property_ui_text(prop, "White Value", "The brightness that is mapped to white by the tonemapper, in f-stops (0 disables tonemapping)");
+	RNA_def_property_update(prop, NC_WINDOW, "rna_ColorManagement_update");
+
 	prop = RNA_def_property(srna, "curve_mapping", PROP_POINTER, PROP_NONE);
 	RNA_def_property_pointer_sdna(prop, NULL, "curve_mapping");
 	RNA_def_property_ui_text(prop, "Curve", "Color curve mapping applied before display transform");

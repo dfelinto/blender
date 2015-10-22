@@ -250,9 +250,9 @@ ccl_device float4 svm_image_texture(KernelGlobals *kg, int id, float x, float y,
 		case 94: r = kernel_tex_image_interp(__tex_image_094, x, y); break;
 		case 95: r = kernel_tex_image_interp(__tex_image_095, x, y); break;
 		case 96: r = kernel_tex_image_interp(__tex_image_096, x, y); break;
-		case 97: r = kernel_tex_image_interp(__tex_image_097, x, y); break;
 
 #if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 300)
+		case 97: r = kernel_tex_image_interp(__tex_image_097, x, y); break;
 		case 98: r = kernel_tex_image_interp(__tex_image_098, x, y); break;
 		case 99: r = kernel_tex_image_interp(__tex_image_099, x, y); break;
 		case 100: r = kernel_tex_image_interp(__tex_image_100, x, y); break;

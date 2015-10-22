@@ -17,6 +17,7 @@
 #include "tile.h"
 
 #include "util_algorithm.h"
+#include "util_hilbert.h"
 #include "util_types.h"
 
 CCL_NAMESPACE_BEGIN
@@ -192,6 +193,8 @@ list<Tile>::iterator TileManager::next_background_tile(int device, TileOrder til
 	
 	int64_t centx = cordx / 2, centy = cordy / 2;
 
+	int64_t hilbert_n = hilbert_roundpow2(max((params.width + tile_size.x - 1) / tile_size.x, (params.height + tile_size.y - 1) / tile_size.y));
+
 	for(iter = state.tiles.begin(); iter != state.tiles.end(); iter++) {
 		if(iter->device == logical_device && iter->rendering == false) {
 			Tile &cur_tile = *iter;
@@ -217,6 +220,9 @@ list<Tile>::iterator TileManager::next_background_tile(int device, TileOrder til
 				case TILE_BOTTOM_TO_TOP:
 					distx = cordx + cur_tile.y;
 					break; 
+				case TILE_HILBERT:
+					distx = hilbert_xy2d(hilbert_n, cur_tile.x / tile_size.x, cur_tile.y / tile_size.y);
+					break;
 				default:
 					break;
 			}

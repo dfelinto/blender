@@ -1374,6 +1374,7 @@ void BKE_color_managed_view_settings_init(ColorManagedViewSettings *settings)
 
 	settings->gamma = 1.0f;
 	settings->exposure = 0.0f;
+	settings->white_value = 0.0f;
 }
 
 void BKE_color_managed_view_settings_copy(ColorManagedViewSettings *new_settings,
@@ -1385,6 +1386,7 @@ void BKE_color_managed_view_settings_copy(ColorManagedViewSettings *new_settings
 	new_settings->flag = settings->flag;
 	new_settings->exposure = settings->exposure;
 	new_settings->gamma = settings->gamma;
+	new_settings->white_value = settings->white_value;
 
 	if (settings->curve_mapping)
 		new_settings->curve_mapping = curvemapping_copy(settings->curve_mapping);

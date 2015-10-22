@@ -515,6 +515,9 @@ static void xml_read_shader_graph(const XMLReadState& state, Shader *shader, pug
 			xml_read_enum(&wave->type, WaveTextureNode::type_enum, node, "type");
 			snode = wave;
 		}
+		else if(string_iequals(node.name(), "ies_light")) {
+			snode = new IESLightNode();
+		}
 		else if(string_iequals(node.name(), "normal")) {
 			NormalNode *normal = new NormalNode();
 			xml_read_float3(&normal->direction, node, "direction");
