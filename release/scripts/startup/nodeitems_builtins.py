@@ -222,6 +222,7 @@ shader_node_categories = [
         NodeItem("ShaderNodeBackground", poll=world_shader_nodes_poll),
         NodeItem("ShaderNodeAmbientOcclusion", poll=object_shader_nodes_poll),
         NodeItem("ShaderNodeHoldout", poll=object_shader_nodes_poll),
+        NodeItem("ShaderNodeShadowCatcher", poll=object_shader_nodes_poll),
         NodeItem("ShaderNodeVolumeAbsorption"),
         NodeItem("ShaderNodeVolumeScatter"),
         ]),
@@ -238,6 +239,7 @@ shader_node_categories = [
         NodeItem("ShaderNodeTexChecker"),
         NodeItem("ShaderNodeTexBrick"),
         NodeItem("ShaderNodeTexPointDensity"),
+        NodeItem("ShaderNodeIESLight"),
         ]),
     ShaderNewNodeCategory("SH_NEW_OP_COLOR", "Color", items=[
         NodeItem("ShaderNodeMixRGB"),

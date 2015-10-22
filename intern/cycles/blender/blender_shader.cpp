@@ -328,6 +328,9 @@ static ShaderNode *add_node(Scene *scene,
 	else if(b_node.is_a(&RNA_ShaderNodeHoldout)) {
 		node = new HoldoutNode();
 	}
+	else if(b_node.is_a(&RNA_ShaderNodeShadowCatcher)) {
+		node = new ShadowCatcherNode();
+	}
 	else if(b_node.is_a(&RNA_ShaderNodeBsdfAnisotropic)) {
 		BL::ShaderNodeBsdfAnisotropic b_aniso_node(b_node);
 		AnisotropicBsdfNode *aniso = new AnisotropicBsdfNode();
@@ -718,6 +721,13 @@ static ShaderNode *add_node(Scene *scene,
 		sky->ground_albedo = b_sky_node.ground_albedo();
 		get_tex_mapping(&sky->tex_mapping, b_sky_node.texture_mapping());
 		node = sky;
+	}
+	else if(b_node.is_a(&RNA_ShaderNodeIESLight)) {
+		BL::ShaderNodeIESLight b_ies_node(b_node);
+		IESLightNode *ies = new IESLightNode();
+		ies->filename = blender_absolute_path(b_data, b_ntree, b_ies_node.filepath());
+		ies->ies = get_text_content(b_ies_node.ies().ptr);
+		node = ies;
 	}
 	else if(b_node.is_a(&RNA_ShaderNodeNormalMap)) {
 		BL::ShaderNodeNormalMap b_normal_map_node(b_node);

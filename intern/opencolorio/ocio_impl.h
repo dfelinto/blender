@@ -109,7 +109,8 @@ public:
 
 	virtual bool supportGLSLDraw(void) = 0;
 	virtual bool setupGLSLDraw(struct OCIO_GLSLDrawState **state_r, OCIO_ConstProcessorRcPtr *processor,
-	                           OCIO_CurveMappingSettings *curve_mapping_settings, float dither, bool predivide) = 0;
+	                           OCIO_CurveMappingSettings *curve_mapping_settings, float dither,
+	                           float white_value, float exposure, bool predivide) = 0;
 	virtual void finishGLSLDraw(struct OCIO_GLSLDrawState *state) = 0;
 	virtual void freeGLState(struct OCIO_GLSLDrawState *state_r) = 0;
 
@@ -198,7 +199,8 @@ public:
 
 	bool supportGLSLDraw(void);
 	bool setupGLSLDraw(struct OCIO_GLSLDrawState **state_r, OCIO_ConstProcessorRcPtr *processor,
-	                   OCIO_CurveMappingSettings *curve_mapping_settings, float dither, bool predivide);
+	                   OCIO_CurveMappingSettings *curve_mapping_settings, float dither,
+					   float white_value, float exposure, bool predivide);
 	void finishGLSLDraw(struct OCIO_GLSLDrawState *state);
 	void freeGLState(struct OCIO_GLSLDrawState *state_r);
 
@@ -288,7 +290,8 @@ public:
 
 	bool supportGLSLDraw(void);
 	bool setupGLSLDraw(struct OCIO_GLSLDrawState **state_r, OCIO_ConstProcessorRcPtr *processor,
-	                   OCIO_CurveMappingSettings *curve_mapping_settings, float dither, bool predivide);
+	                   OCIO_CurveMappingSettings *curve_mapping_settings, float dither,
+					   float white_value, float exposure, bool predivide);
 	void finishGLSLDraw(struct OCIO_GLSLDrawState *state);
 	void freeGLState(struct OCIO_GLSLDrawState *state_r);
 

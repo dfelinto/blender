@@ -44,6 +44,8 @@ public:
 	float3 axisv;
 	float sizev;
 
+	Transform tfm;
+
 	int map_resolution;
 
 	float spot_angle;
@@ -85,6 +87,9 @@ protected:
 	void device_update_points(Device *device, DeviceScene *dscene, Scene *scene);
 	void device_update_distribution(Device *device, DeviceScene *dscene, Scene *scene, Progress& progress);
 	void device_update_background(Device *device, DeviceScene *dscene, Scene *scene, Progress& progress);
+	void device_update_background_cdf(Device *device, DeviceScene *dscene, Progress& progress, Light *background);
+	bool device_update_portals(Device *device, DeviceScene *dscene, Scene *scene, Light *background);
+	void device_update_portals_cdf(Device *device, DeviceScene *dscene, Scene *scene, Progress& progress, Light *background);
 };
 
 CCL_NAMESPACE_END

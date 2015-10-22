@@ -626,7 +626,7 @@ void BKE_text_unlink(Main *bmain, Text *text)
 		if (!ntree)
 			continue;
 		for (node = ntree->nodes.first; node; node = node->next) {
-			if (ELEM(node->type, SH_NODE_SCRIPT, NODE_FRAME)) {
+			if (ELEM(node->type, SH_NODE_SCRIPT, NODE_FRAME) || ELEM(node->type, SH_NODE_IESLIGHT, NODE_FRAME)) {
 				if ((Text *)node->id == text) {
 					node->id = NULL;
 				}

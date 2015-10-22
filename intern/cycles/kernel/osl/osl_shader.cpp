@@ -212,6 +212,20 @@ static void flatten_surface_closure_tree(ShaderData *sd, int path_flag,
 						}
 						break;
 					}
+					case CClosurePrimitive::ShadowCatcher: {
+						sc.sample_weight = 0.0f;
+						sc.type = CLOSURE_SHADOW_CATCHER_ID;
+						sc.data0 = 0.0f;
+						sc.data1 = 0.0f;
+						sc.data2 = 0.0f;
+						sc.prim = NULL;
+
+						if(sd->num_closure < MAX_CLOSURE) {
+							sd->closure[sd->num_closure++] = sc;
+							sd->flag |= SD_SHADOW_CATCHER;
+						}
+						break;
+					}
 					case CClosurePrimitive::Emissive: {
 						/* sample weight */
 						float sample_weight = fabsf(average(weight));
@@ -474,6 +488,7 @@ static void flatten_volume_closure_tree(ShaderData *sd,
 						break;
 					}
 					case CClosurePrimitive::Holdout:
+					case CClosurePrimitive::ShadowCatcher:
 						break; /* not implemented */
 					case CClosurePrimitive::Background:
 					case CClosurePrimitive::BSDF:

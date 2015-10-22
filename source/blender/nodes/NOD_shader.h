@@ -108,6 +108,7 @@ void register_node_type_sh_bsdf_toon(void);
 void register_node_type_sh_bsdf_anisotropic(void);
 void register_node_type_sh_emission(void);
 void register_node_type_sh_holdout(void);
+void register_node_type_sh_shadow_catcher(void);
 void register_node_type_sh_volume_absorption(void);
 void register_node_type_sh_volume_scatter(void);
 void register_node_type_sh_bsdf_hair(void);
@@ -133,6 +134,7 @@ void register_node_type_sh_tex_musgrave(void);
 void register_node_type_sh_tex_noise(void);
 void register_node_type_sh_tex_checker(void);
 void register_node_type_sh_bump(void);
+void register_node_type_sh_ieslight(void);
 
 #endif
 

@@ -226,6 +226,8 @@ void OSLShader::register_closures(OSLShadingSystem *ss_)
 		closure_background_params(), closure_background_prepare);
 	register_closure(ss, "holdout", id++,
 		closure_holdout_params(), closure_holdout_prepare);
+	register_closure(ss, "shadow_catcher", id++,
+		closure_shadow_catcher_params(), closure_shadow_catcher_prepare);
 	register_closure(ss, "ambient_occlusion", id++,
 		closure_ambient_occlusion_params(), closure_ambient_occlusion_prepare);
 	register_closure(ss, "diffuse_ramp", id++,

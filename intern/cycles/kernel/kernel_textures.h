@@ -72,6 +72,9 @@ KERNEL_TEX(float, texture_float, __lookup_table)
 /* sobol */
 KERNEL_TEX(uint, texture_uint, __sobol_directions)
 
+/* ies lights */
+KERNEL_TEX(float, texture_float, __ies)
+
 /* full-float image */
 KERNEL_IMAGE_TEX(float4, texture_image_float4, __tex_image_float_000)
 KERNEL_IMAGE_TEX(float4, texture_image_float4, __tex_image_float_001)
