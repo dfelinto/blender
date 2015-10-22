@@ -238,22 +238,6 @@ public:
 	static ShaderEnum space_enum;
 };
 
-class IESLightNode : public ShaderNode {
-public:
-	SHADER_NODE_NO_CLONE_CLASS(IESLightNode)
-	
-	~IESLightNode();
-	ShaderNode *clone() const;
-
-	ImageManager *image_manager;
-
-	string filename;
-	string ies;
-	int slot;
-
-	virtual int get_group() { return NODE_GROUP_LEVEL_2; }
-};
-
 class MappingNode : public ShaderNode {
 public:
 	SHADER_NODE_CLASS(MappingNode)
@@ -381,11 +365,6 @@ class HoldoutNode : public ShaderNode {
 public:
 	SHADER_NODE_CLASS(HoldoutNode)
 	virtual int get_group() { return NODE_GROUP_LEVEL_1; }
-};
-
-class ShadowCatcherNode : public ShaderNode {
-public:
-	SHADER_NODE_CLASS(ShadowCatcherNode)
 };
 
 class AmbientOcclusionNode : public ShaderNode {

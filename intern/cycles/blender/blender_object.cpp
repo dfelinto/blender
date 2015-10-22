@@ -150,8 +150,6 @@ void BlenderSync::sync_light(BL::Object b_parent, int persistent_id[OBJECT_PERSI
 	light->co = transform_get_column(&tfm, 3);
 	light->dir = -transform_get_column(&tfm, 2);
 
-	light->tfm = tfm;
-
 	/* shader */
 	vector<uint> used_shaders;
 
