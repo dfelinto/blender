@@ -332,6 +332,11 @@ ccl_device_inline bool operator==(const int2 a, const int2 b)
 	return (a.x == b.x && a.y == b.y);
 }
 
+ccl_device_inline float2 operator-(const float2 a, const int2 b)
+{
+	return make_float2(a.x-b.x, a.y-b.y);
+}
+
 ccl_device_inline float len(const float2 a)
 {
 	return sqrtf(dot(a, a));
@@ -1125,6 +1130,12 @@ ccl_device_inline float triangle_area(const float3 v1, const float3 v2, const fl
 }
 
 #endif
+
+/* Cubic interpolation between b and c, a and d are the previous and next point */
+ccl_device_inline float cubic_interp(float a, float b, float c, float d, float x)
+{
+	return (((-0.5f*a + 1.5f*b - 1.5f*c + 0.5f*d)*x + (a - 2.5f*b + 2.0f*c-0.5f*d))*x + (-0.5f*a+0.5f*c))*x + b;
+}
 
 /* Orthonormal vectors */
 

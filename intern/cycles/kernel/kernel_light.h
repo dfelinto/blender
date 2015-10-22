@@ -371,97 +371,266 @@ ccl_device float3 background_portal_sample(KernelGlobals *kg,
 	return make_float3(0.0f, 0.0f, 0.0f);
 }
 
+ccl_device_inline float2 direction_to_rectified(float3 D, float3 ex, float3 ey, float3 N)
+{
+	float d = 1.0f / dot(D, N);
+	float x = dot(D, ex) * d;
+	float y = dot(D, ey) * d;
+	return make_float2((atanf(x) + M_PI_2_F)*M_1_PI_F, (atanf(y) + M_PI_2_F)*M_1_PI_F);
+}
+
+ccl_device_inline float3 rectified_to_direction(float u, float v)
+{
+	float lx = tanf(M_PI_F*u - M_PI_2_F);
+	float ly = tanf(M_PI_F*v - M_PI_2_F);
+	return make_float3(lx, ly, 1.0f) / sqrtf(lx*lx + ly*ly + 1.0f);
+}
+
+/* Returns the sum of the rectanble [0, 0]*[xi, yi] */
+#define SUM_LOOKUP(xi, yi) (((xi) > 0 && (yi) > 0)? kernel_tex_fetch(__light_background_conditional_cdf, (portal*res + (yi) - 1)*res + (xi) - 1).y : 0.0f)
+#define BI_LERP(xi, xf, yi, yf) ((1.0f - (xf)) * ((1.0f - (yf)) * SUM_LOOKUP((xi)  , (yi)) + (yf) * SUM_LOOKUP((xi)  , (yi)+1)) \
+                                       + (xf)  * ((1.0f - (yf)) * SUM_LOOKUP((xi)+1, (yi)) + (yf) * SUM_LOOKUP((xi)+1, (yi)+1)))
+#define Y_LERP(xi, yi, yf) ((1.0f - (yf)) * SUM_LOOKUP((xi), (yi)) + (yf) * SUM_LOOKUP((xi), (yi)+1))
+/* Returns the sum of the rectangle [lx, ly]*[hx, hy] */
+ccl_device_inline float rectified_area(KernelGlobals *kg, int portal, float lx, float ly, float hx, float hy)
+{
+	int res = kernel_data.integrator.pdf_background_res;
+	float lower_left, lower_right, upper_left, upper_right;
+	int lxi = (int) lx, lyi = (int) ly, hxi = (int) hx, hyi = (int) hy;
+	float lxf = lx - lxi, lyf = ly - lyi, hxf = hx - hxi, hyf = hy - hyi;
+	lower_left  = BI_LERP(lxi, lxf, lyi, lyf);
+	lower_right = BI_LERP(hxi, hxf, lyi, lyf);
+	upper_left  = BI_LERP(lxi, lxf, hyi, hyf);
+	upper_right = BI_LERP(hxi, hxf, hyi, hyf);
+	return upper_right - upper_left - lower_right + lower_left;
+}
+
+/* Returns the sum of the rectangle [lx, ly]*[hx, hy] */
+ccl_device_inline float rectified_area_i(KernelGlobals *kg, int portal, float lx, float ly, int hxi, float hy)
+{
+	int res = kernel_data.integrator.pdf_background_res;
+	float lower_left, lower_right, upper_left, upper_right;
+	int lxi = (int) lx, lyi = (int) ly, hyi = (int) hy;
+	float lxf = lx - lxi, lyf = ly - lyi, hyf = hy - hyi;
+	lower_left = BI_LERP(lxi, lxf, lyi, lyf);
+	lower_right = Y_LERP(hxi, lyi, lyf);
+	upper_left = BI_LERP(lxi, lxf, hyi, hyf);
+	upper_right = Y_LERP(hxi, hyi, hyf);
+	return upper_right - upper_left - lower_right + lower_left;
+}
+
+/* Returns the sum of the rectangle [x, ly]*[x+1, hy] */
+ccl_device_inline float rectified_area_conditional(KernelGlobals *kg, int portal, int x, float ly, int hyi)
+{
+	int res = kernel_data.integrator.pdf_background_res;
+	int lyi = (int) ly;
+	float lyf = ly - lyi;
+
+	float lower_left  = Y_LERP(x, lyi, lyf);
+	float lower_right = SUM_LOOKUP(x, hyi);
+	float upper_left  = Y_LERP(x+1, lyi, lyf);
+	float upper_right = SUM_LOOKUP(x+1, hyi);
+
+	return upper_right - upper_left - lower_right + lower_left;
+}
+
+ccl_device_inline float rectified_pdf(KernelGlobals *kg, int portal, int x, int y, float w, float h, float total) {
+	int res = kernel_data.integrator.pdf_background_res;
+	float val = kernel_tex_fetch(__light_background_conditional_cdf, (portal*res + y)*res + x  ).x;
+	return res * res * M_1_PI_F * M_1_PI_F * val / total;
+}
+
+ccl_device float background_portal_combined_pdf(KernelGlobals *kg, float3 P, float3 D)
+{
+	int possible = 0;
+	float pdf = 0.0f;
+	float summed_contrib = 0.0f;
+	int res = kernel_data.integrator.pdf_background_res;
+	for(int portal = 0; portal < kernel_data.integrator.num_portals; portal++) {
+		float3 lightpos, dir;
+		if(!background_portal_data_fetch_and_check_side(kg, P, portal, &lightpos, &dir))
+			continue;
+		possible++;
+
+		float4 data1 = kernel_tex_fetch(__light_data, (portal + kernel_data.integrator.portal_offset)*LIGHT_SIZE + 1);
+		float4 data2 = kernel_tex_fetch(__light_data, (portal + kernel_data.integrator.portal_offset)*LIGHT_SIZE + 2);
+		float3 axisu = make_float3(data1.y, data1.z, data1.w);
+		float3 axisv = make_float3(data2.y, data2.z, data2.w);
+
+		float3 ex = normalize(axisu);
+		float3 ey = normalize(axisv);
+		float3 N = normalize(-dir);
+		float2 p1, p2;
+		p1 = direction_to_rectified(lightpos + 0.5f*(axisu + axisv) - P, ex, ey, N) * res;
+		p2 = direction_to_rectified(lightpos - 0.5f*(axisu + axisv) - P, ex, ey, N) * res;
+		float2 loR = make_float2(min(p1.x, p2.x), min(p1.y, p2.y));
+		float2 hiR = make_float2(max(p1.x, p2.x), max(p1.y, p2.y));
+		float contrib = rectified_area(kg, portal, loR.x, loR.y, hiR.x, hiR.y);
+		summed_contrib += contrib;
+
+		if(dot(D, dir) >= 0.0f)
+			continue;
+
+		float2 dirR = direction_to_rectified(D, ex, ey, N) * res;
+		if(loR.x <= dirR.x && hiR.x >= dirR.x && loR.y <= dirR.y && hiR.y >= dirR.y) {
+			float3 w_local = rectified_to_direction(dirR.x / res, dirR.y / res);
+			pdf += contrib * rectified_pdf(kg, portal, dirR.x, dirR.y, hiR.x - loR.x, hiR.y - loR.y, contrib) * w_local.z / ((1 - w_local.x*w_local.x)*(1 - w_local.y*w_local.y));
+		}
+	}
+
+	if(possible > 0)
+		return pdf / summed_contrib;
+	else
+		return 1.0f / M_4PI_F;
+}
+
+ccl_device float3 background_portal_combined_sample(KernelGlobals *kg, float3 P, float randu, float randv, float *pdf)
+{
+	int res = kernel_data.integrator.pdf_background_res;
+	float summed_contrib = 0.0f;
+	for(int portal = 0; portal < kernel_data.integrator.num_portals; portal++) {
+		float3 lightpos, dir;
+		if(!background_portal_data_fetch_and_check_side(kg, P, portal, &lightpos, &dir))
+			continue;
+		float4 data1 = kernel_tex_fetch(__light_data, (portal + kernel_data.integrator.portal_offset)*LIGHT_SIZE + 1);
+		float4 data2 = kernel_tex_fetch(__light_data, (portal + kernel_data.integrator.portal_offset)*LIGHT_SIZE + 2);
+		float3 axisu = make_float3(data1.y, data1.z, data1.w);
+		float3 axisv = make_float3(data2.y, data2.z, data2.w);
+
+		float3 ex = normalize(axisu);
+		float3 ey = normalize(axisv);
+		float3 N = normalize(-dir);
+
+		float2 p1, p2;
+		p1 = direction_to_rectified(lightpos + 0.5f*(axisu + axisv) - P, ex, ey, N) * res;
+		p2 = direction_to_rectified(lightpos - 0.5f*(axisu + axisv) - P, ex, ey, N) * res;
+		float2 loR = make_float2(min(p1.x, p2.x), min(p1.y, p2.y));
+		float2 hiR = make_float2(max(p1.x, p2.x), max(p1.y, p2.y));
+		summed_contrib += rectified_area(kg, portal, loR.x, loR.y, hiR.x, hiR.y);
+	}
+	randu *= summed_contrib;
+	for(int portal = 0; portal < kernel_data.integrator.num_portals; portal++) {
+		float3 lightpos, dir;
+		if(!background_portal_data_fetch_and_check_side(kg, P, portal, &lightpos, &dir))
+			continue;
+		float4 data1 = kernel_tex_fetch(__light_data, (portal + kernel_data.integrator.portal_offset)*LIGHT_SIZE + 1);
+		float4 data2 = kernel_tex_fetch(__light_data, (portal + kernel_data.integrator.portal_offset)*LIGHT_SIZE + 2);
+		float3 axisu = make_float3(data1.y, data1.z, data1.w);
+		float3 axisv = make_float3(data2.y, data2.z, data2.w);
+
+		float3 ex = normalize(axisu);
+		float3 ey = normalize(axisv);
+		float3 N = normalize(-dir);
+		float2 p1, p2;
+		p1 = direction_to_rectified(lightpos + 0.5f*(axisu + axisv) - P, ex, ey, N) * res;
+		p2 = direction_to_rectified(lightpos - 0.5f*(axisu + axisv) - P, ex, ey, N) * res;
+		/* Coordinates of the portal rectangle */
+		float2 loR = make_float2(min(p1.x, p2.x), min(p1.y, p2.y));
+		float2 hiR = make_float2(max(p1.x, p2.x), max(p1.y, p2.y));
+		/* Coordinates of the portal rectangle, rounded to pixels */
+		int2 loRi = make_int2((int) loR.x, (int) loR.y);
+		int2 hiRi = make_int2((int) ceilf(hiR.x), (int) ceilf(hiR.y));
+		float contrib = rectified_area(kg, portal, loR.x, loR.y, hiR.x, hiR.y);
+		randu -= contrib;
+		if(randu >= 0)
+			continue;
+
+		/* Portal is found! */
+		randu = randu / contrib + 1.0f;
+
+		int lowX = loRi.x;
+		int highX = hiRi.x;
+		float Pfac = 1.0f / contrib;
+		while(lowX + 1 < highX) {
+			int midX = (int) (0.5f*lowX + 0.5f*highX);
+			float Pa = rectified_area_i(kg, portal, loR.x, loR.y, midX, hiR.y) * Pfac;
+			if(Pa > randu)
+				highX = midX;
+			else
+				lowX = midX;
+		}
+		float Palow  = rectified_area_i(kg, portal, loR.x, loR.y,  lowX, hiR.y) * Pfac;
+		float Pahigh = rectified_area_i(kg, portal, loR.x, loR.y, highX, hiR.y) * Pfac;
+		float x = lowX + (randu - Palow) / (Pahigh - Palow);
+
+		Pfac = 1.0f / rectified_area_i(kg, portal, lowX, loR.y, highX, hiR.y);
+		int lowY = loRi.y;
+		int highY = hiRi.y;
+		while(lowY + 1 < highY) {
+			int midY = (int) (0.5f*lowY + 0.5f*highY);
+			float Pa = rectified_area_conditional(kg, portal, lowX, loR.y, midY) * Pfac;
+			if(Pa > randv)
+				highY = midY;
+			else
+				lowY = midY;
+		}
+		Palow  = rectified_area_conditional(kg, portal, lowX, loR.y,  lowY) * Pfac;
+		Pahigh = rectified_area_conditional(kg, portal, lowX, loR.y, highY) * Pfac;
+		float y = lowY + (randv - Palow) / (Pahigh - Palow);
+
+		float3 w_local = rectified_to_direction(x / res, y / res);
+
+		/* Total PDF is (PDF of sampling x and y) * (Mapping to solid angle PDF) * (PDF of sampling this portal) */
+		*pdf = rectified_pdf(kg, portal, lowX, lowY, hiR.x - loR.x, hiR.y - loR.y, contrib);
+		*pdf *= w_local.z / ((1 - w_local.x*w_local.x)*(1 - w_local.y*w_local.y));
+		*pdf *= contrib / summed_contrib;
+
+		return ex*w_local.x + ey*w_local.y + N*w_local.z;
+	}
+
+	*pdf = 1.0f / M_4PI_F;
+	return sample_uniform_sphere(randu, randv);
+}
+
+#undef SUM_LOOKUP
 ccl_device float3 background_light_sample(KernelGlobals *kg, float3 P, float randu, float randv, float *pdf)
 {
-	/* Probability of sampling portals instead of the map. */
-	float portal_sampling_pdf = kernel_data.integrator.portal_pdf;
-
-	/* Check if there are portals in the scene which we can sample. */
-	if(portal_sampling_pdf > 0.0f) {
-		int num_portals = background_num_possible_portals(kg, P);
-		if(num_portals > 0) {
-			if(portal_sampling_pdf == 1.0f || randu < portal_sampling_pdf) {
-				if(portal_sampling_pdf < 1.0f) {
-					randu /= portal_sampling_pdf;
-				}
+	if(kernel_data.integrator.num_portals != 0) {
+		if(kernel_data.integrator.pdf_background_res != 0) {
+			/* Sample Portal-windowed background */
+			return background_portal_combined_sample(kg, P, randu, randv, pdf);
+		}
+		else {
+			/* Sample portals */
+			int num_portals = background_num_possible_portals(kg, P);
+			if(num_portals > 0) {
 				int portal;
-				float3 D = background_portal_sample(kg, P, randu, randv, num_portals, &portal, pdf);
-				if(num_portals > 1) {
-					/* Ignore the chosen portal, its pdf is already included. */
-					*pdf += background_portal_pdf(kg, P, D, portal, NULL);
-				}
-				/* We could also have sampled the map, so combine with MIS. */
-				if(portal_sampling_pdf < 1.0f) {
-					float cdf_pdf = background_map_pdf(kg, D);
-					*pdf = (portal_sampling_pdf * (*pdf)
-					     + (1.0f - portal_sampling_pdf) * cdf_pdf);
-				}
+                                float3 D = background_portal_sample(kg, P, randu, randv, num_portals, &portal, pdf);
+                                if(num_portals > 1) {
+                                        /* Ignore the sampled portal, its pdf is already included. */
+                                        *pdf += background_portal_pdf(kg, P, D, portal, NULL);
+                                }
 				return D;
-			} else {
-				/* Sample map, but with nonzero portal_sampling_pdf for MIS. */
-				randu = (randu - portal_sampling_pdf) / (1.0f - portal_sampling_pdf);
-			}
-		} else {
-			/* We can't sample a portal.
-			 * Check if we can sample the map instead.
-			 */
-			if(portal_sampling_pdf == 1.0f) {
-				/* Use uniform as a fallback if we can't sample the map. */
-				*pdf = 1.0f / M_4PI_F;
-				return sample_uniform_sphere(randu, randv);
 			}
 			else {
-				portal_sampling_pdf = 0.0f;
+				/* No portals possible here, use fallback sampling */
+				*pdf = 1.0f / M_4PI_F;
+				return sample_uniform_sphere(randu, randv);
+
 			}
 		}
 	}
 
-	float3 D = background_map_sample(kg, randu, randv, pdf);
-	/* Use MIS if portals could be sampled as well. */
-	if(portal_sampling_pdf > 0.0f) {
-		float portal_pdf = background_portal_pdf(kg, P, D, -1, NULL);
-		*pdf = (portal_sampling_pdf * portal_pdf
-		     + (1.0f - portal_sampling_pdf) * (*pdf));
-	}
-	return D;
+	/* Sample background */
+	return background_map_sample(kg, randu, randv, pdf);
 }
 
 ccl_device float background_light_pdf(KernelGlobals *kg, float3 P, float3 direction)
 {
-	/* Probability of sampling portals instead of the map. */
-	float portal_sampling_pdf = kernel_data.integrator.portal_pdf;
-
-	if(portal_sampling_pdf > 0.0f) {
-		bool is_possible = false;
-		float portal_pdf = background_portal_pdf(kg, P, direction, -1, &is_possible);
-		if(portal_pdf == 0.0f) {
-			if(portal_sampling_pdf == 1.0f) {
-				/* If there are no possible portals at this point,
-				 * the fallback sampling would have been used.
-				 * Otherwise, the direction would not be sampled at all => pdf = 0
-				 */
+	if(kernel_data.integrator.num_portals != 0) {
+		if(kernel_data.integrator.pdf_background_res != 0) {
+			return background_portal_combined_pdf(kg, P, direction) * kernel_data.integrator.pdf_lights;
+		}
+		else {
+			bool is_possible = false;
+			float portal_pdf = background_portal_pdf(kg, P, direction, -1, &is_possible);
+			if(portal_pdf == 0.0f)
 				return is_possible? 0.0f: kernel_data.integrator.pdf_lights / M_4PI_F;
-			}
-			else {
-				/* We can only sample the map. */
-				return background_map_pdf(kg, direction) * kernel_data.integrator.pdf_lights;
-			}
-		} else {
-			if(portal_sampling_pdf == 1.0f) {
-				/* We can only sample portals. */
+			else
 				return portal_pdf * kernel_data.integrator.pdf_lights;
-			}
-			else {
-				/* We can sample both, so combine with MIS. */
-				return (background_map_pdf(kg, direction) * (1.0f - portal_sampling_pdf)
-				      + portal_pdf * portal_sampling_pdf) * kernel_data.integrator.pdf_lights;
-			}
 		}
 	}
 
-	/* No portals in the scene, so must sample the map.
-	 * At least one of them is always possible if we have a LIGHT_BACKGROUND.
-	 */
 	return background_map_pdf(kg, direction) * kernel_data.integrator.pdf_lights;
 }
 #endif

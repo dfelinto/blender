@@ -29,7 +29,7 @@
 CCL_NAMESPACE_BEGIN
 
 /* generic */
-#define TEX_NUM_IMAGES			94
+#define TEX_NUM_IMAGES			93
 #define TEX_IMAGE_BYTE_START	TEX_NUM_FLOAT_IMAGES
 
 /* extended gpu */
@@ -82,6 +82,10 @@ public:
 	                      ExtensionType extension);
 	bool is_float_image(const string& filename, void *builtin_data, bool& is_linear);
 
+	int add_ies(const string& ies);
+	int add_ies_from_file(const string& filename);
+	void remove_ies(int slot);
+
 	void device_update(Device *device, DeviceScene *dscene, Progress& progress);
 	void device_update_slot(Device *device, DeviceScene *dscene, int slot, Progress *progress);
 	void device_free(Device *device, DeviceScene *dscene);
@@ -112,6 +116,23 @@ public:
 		int users;
 	};
 
+	class IESLight {
+	public:
+		IESLight(const string& ies);
+		IESLight();
+		~IESLight();
+		bool parse();
+		bool process();
+
+		string ies;
+		uint hash;
+		int users;
+
+		int v_angles_num, h_angles_num;
+		vector<float> v_angles, h_angles;
+		vector<float*> intensity;
+	};
+
 private:
 	int tex_num_images;
 	int tex_num_float_images;
@@ -121,6 +142,7 @@ private:
 
 	vector<Image*> images;
 	vector<Image*> float_images;
+	vector<IESLight*> ies_lights;
 	void *osl_texture_system;
 	bool pack_images;
 
@@ -131,6 +153,7 @@ private:
 	void device_free_image(Device *device, DeviceScene *dscene, int slot);
 
 	void device_pack_images(Device *device, DeviceScene *dscene, Progress& progess);
+	void device_update_ies(Device *device, DeviceScene *dscene);
 };
 
 CCL_NAMESPACE_END

@@ -43,6 +43,7 @@ BufferParams::BufferParams()
 	full_height = 0;
 
 	Pass::add(PASS_COMBINED, passes);
+	Pass::add(PASS_SHADOWCATCHER, passes);
 }
 
 void BufferParams::get_offset_stride(int& offset, int& stride)
@@ -296,6 +297,17 @@ bool RenderBuffers::get_pass_rect(PassType type, float exposure, int sample, int
 				}
 			}
 			else {
+				int shadowcatcher_offset = 0;
+				bool found_shadowcatcher = false;
+				foreach(Pass& pass, params.passes) {
+					if(pass.type != PASS_SHADOWCATCHER)
+						shadowcatcher_offset += pass.components;
+					else {
+						found_shadowcatcher = true;
+						break;
+					}
+				}
+
 				for(int i = 0; i < size; i++, in += pass_stride, pixels += 4) {
 					float4 f = make_float4(in[0], in[1], in[2], in[3]);
 
@@ -303,8 +315,15 @@ bool RenderBuffers::get_pass_rect(PassType type, float exposure, int sample, int
 					pixels[1] = f.y*scale_exposure;
 					pixels[2] = f.z*scale_exposure;
 
+					float pixel_alpha = f.w*scale;
+					if (found_shadowcatcher) {
+						float3 shadowcatcher_val = *((float3*) (in - pass_offset + shadowcatcher_offset));
+						float L_shaded = shadowcatcher_val.x, L_full = shadowcatcher_val.y, L_fac = shadowcatcher_val.z*scale;
+						if (L_fac > 0.0f && L_full > 0.0f)
+							pixel_alpha += (1.0f - L_shaded / L_full) * L_fac;
+					}
 					/* clamp since alpha might be > 1.0 due to russian roulette */
-					pixels[3] = saturate(f.w*scale);
+					pixels[3] = saturate(pixel_alpha);
 				}
 			}
 		}

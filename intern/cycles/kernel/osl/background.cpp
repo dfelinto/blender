@@ -63,6 +63,18 @@ public:
 	HoldoutClosure () : CClosurePrimitive(Holdout) {}
 };
 
+/// Shadow catcher closure
+///
+/// This will be used by the shader to mark the
+/// weight of the shadow catcher for the current shading
+/// point. No parameters, only the weight will be
+/// used
+///
+class ShadowCatcherClosure : CClosurePrimitive {
+public:
+	ShadowCatcherClosure () : CClosurePrimitive(ShadowCatcher) {}
+};
+
 /// ambient occlusion closure
 ///
 /// We only have a ambient occlusion closure for the shaders
@@ -88,12 +100,22 @@ CCLOSURE_PREPARE(closure_background_prepare, GenericBackgroundClosure)
 ClosureParam *closure_holdout_params()
 {
 	static ClosureParam params[] = {
-	    CLOSURE_FINISH_PARAM(HoldoutClosure)
+		CLOSURE_FINISH_PARAM(HoldoutClosure)
 	};
 	return params;
 }
 
 CCLOSURE_PREPARE(closure_holdout_prepare, HoldoutClosure)
+
+ClosureParam *closure_shadow_catcher_params()
+{
+	static ClosureParam params[] = {
+		CLOSURE_FINISH_PARAM(ShadowCatcherClosure)
+	};
+	return params;
+}
+
+CCLOSURE_PREPARE(closure_shadow_catcher_prepare, ShadowCatcherClosure)
 
 ClosureParam *closure_ambient_occlusion_params()
 {

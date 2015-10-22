@@ -2877,6 +2877,30 @@ static bNodeSocket *rna_NodeOutputFile_slots_new(ID *id, bNode *node, bContext *
 	return sock;
 }
 
+static void rna_ShaderNodeIESLight_mode_set(PointerRNA *ptr, int value)
+{
+	bNode *node = (bNode *)ptr->data;
+	NodeShaderIESLight *nss = node->storage;
+
+	if (nss->mode != value) {
+		nss->mode = value;
+		nss->filepath[0] = '\0';
+
+		/* replace text datablock by filepath */
+		if (node->id) {
+			Text *text = (Text *)node->id;
+
+			if (value == NODE_IES_EXTERNAL && text->name) {
+				BLI_strncpy(nss->filepath, text->name, sizeof(nss->filepath));
+				BLI_path_rel(nss->filepath, G.main->name);
+			}
+
+			id_us_min(node->id);
+			node->id = NULL;
+		}
+	}
+}
+
 static void rna_ShaderNodeScript_mode_set(PointerRNA *ptr, int value)
 {
 	bNode *node = (bNode *)ptr->data;
@@ -3137,6 +3161,12 @@ static EnumPropertyItem node_hair_items[] = {
 static EnumPropertyItem node_script_mode_items[] = {
 	{NODE_SCRIPT_INTERNAL, "INTERNAL", 0, "Internal", "Use internal text datablock"},
 	{NODE_SCRIPT_EXTERNAL, "EXTERNAL", 0, "External", "Use external .osl or .oso file"},
+	{0, NULL, 0, NULL, NULL}
+};
+
+static EnumPropertyItem node_ies_mode_items[] = {
+	{NODE_IES_INTERNAL, "INTERNAL", 0, "Internal", "Use internal text datablock"},
+	{NODE_IES_EXTERNAL, "EXTERNAL", 0, "External", "Use external .ies file"},
 	{0, NULL, 0, NULL, NULL}
 };
 
@@ -4173,6 +4203,32 @@ static void def_sh_subsurface(StructRNA *srna)
 	RNA_def_property_enum_items(prop, prop_subsurface_falloff_items);
 	RNA_def_property_ui_text(prop, "Falloff", "Function to determine how much light nearby points contribute based on their distance to the shading point");
 	RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_ShaderNodeSubsurface_update");
+}
+
+static void def_sh_ies_light(StructRNA *srna)
+{
+	PropertyRNA *prop;
+
+	prop = RNA_def_property(srna, "ies", PROP_POINTER, PROP_NONE);
+	RNA_def_property_pointer_sdna(prop, NULL, "id");
+	RNA_def_property_struct_type(prop, "Text");
+	RNA_def_property_flag(prop, PROP_EDITABLE | PROP_ID_REFCOUNT);
+	RNA_def_property_ui_text(prop, "IES", "Internal IES file");
+	RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+	RNA_def_struct_sdna_from(srna, "NodeShaderIESLight", "storage");
+
+	prop = RNA_def_property(srna, "filepath", PROP_STRING, PROP_FILEPATH);
+	RNA_def_property_ui_text(prop, "File Path", "IES light path");
+	RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+	prop = RNA_def_property(srna, "mode", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_funcs(prop, NULL, "rna_ShaderNodeIESLight_mode_set", NULL);
+	RNA_def_property_enum_items(prop, node_ies_mode_items);
+	RNA_def_property_ui_text(prop, "IES Source", "");
+	RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+	RNA_def_struct_sdna_from(srna, "bNode", NULL);
 }
 
 static void def_sh_script(StructRNA *srna)

@@ -505,6 +505,7 @@ closure color ashikhmin_velvet(normal N, float sigma) BUILTIN;
 closure color emission() BUILTIN;
 closure color background() BUILTIN;
 closure color holdout() BUILTIN;
+closure color shadow_catcher() BUILTIN;
 closure color ambient_occlusion() BUILTIN;
 
 // BSSRDF

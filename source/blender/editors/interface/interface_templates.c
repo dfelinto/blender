@@ -3645,6 +3645,7 @@ void uiTemplateColormanagedViewSettings(uiLayout *layout, bContext *UNUSED(C), P
 	col = uiLayoutColumn(layout, false);
 	uiItemR(col, &view_transform_ptr, "exposure", 0, NULL, ICON_NONE);
 	uiItemR(col, &view_transform_ptr, "gamma", 0, NULL, ICON_NONE);
+	uiItemR(col, &view_transform_ptr, "white_value", 0, NULL, ICON_NONE);
 
 	uiItemR(col, &view_transform_ptr, "look", 0, IFACE_("Look"), ICON_NONE);
 

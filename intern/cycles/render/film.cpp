@@ -166,6 +166,9 @@ void Pass::add(PassType type, vector<Pass>& passes)
 			pass.exposure = false;
 			break;
 #endif
+		case PASS_SHADOWCATCHER:
+			pass.components = 4;
+			break;
 	}
 
 	passes.push_back(pass);
@@ -212,6 +215,12 @@ static float filter_func_gaussian(float v, float width)
 	return expf(-2.0f*v*v);
 }
 
+static float filter_func_blackman_harris(float v, float width)
+{
+	v = M_2PI_F * (v / width + 0.5f);
+	return 0.35875f - 0.48829f*cosf(v) + 0.14128f*cosf(2.0f*v) - 0.01168f*cosf(3.0f*v);
+}
+
 static vector<float> filter_table(FilterType type, float width)
 {
 	const int filter_table_size = FILTER_TABLE_SIZE-1;
@@ -226,6 +235,10 @@ static vector<float> filter_table(FilterType type, float width)
 			break;
 		case FILTER_GAUSSIAN:
 			filter_func = filter_func_gaussian;
+			break;
+		case FILTER_BLACKMAN_HARRIS:
+			filter_func = filter_func_blackman_harris;
+			width *= 2.0f;
 			break;
 		default:
 			assert(0);
@@ -272,6 +285,7 @@ Film::Film()
 {
 	exposure = 0.8f;
 	Pass::add(PASS_COMBINED, passes);
+	Pass::add(PASS_SHADOWCATCHER, passes);
 	pass_alpha_threshold = 0.5f;
 
 	filter_type = FILTER_BOX;
@@ -420,6 +434,10 @@ void Film::device_update(Device *device, DeviceScene *dscene, Scene *scene)
 				kfilm->pass_ray_bounces = kfilm->pass_stride;
 				break;
 #endif
+
+			case PASS_SHADOWCATCHER:
+				kfilm->pass_shadowcatcher = kfilm->pass_stride;
+				break;
 
 			case PASS_NONE:
 				break;
