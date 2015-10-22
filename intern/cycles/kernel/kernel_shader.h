@@ -227,8 +227,7 @@ ccl_device_inline void shader_setup_from_subsurface(KernelGlobals *kg, ShaderDat
 
 ccl_device void shader_setup_from_sample(KernelGlobals *kg, ShaderData *sd,
 	const float3 P, const float3 Ng, const float3 I,
-	int shader, int object, int prim, float u, float v, float t,
-	float time, int bounce, int transparent_bounce, int lamp)
+	int shader, int object, int prim, float u, float v, float t, float time, int bounce, int transparent_bounce)
 {
 	/* vectors */
 	ccl_fetch(sd, P) = P;
@@ -236,12 +235,7 @@ ccl_device void shader_setup_from_sample(KernelGlobals *kg, ShaderData *sd,
 	ccl_fetch(sd, Ng) = Ng;
 	ccl_fetch(sd, I) = I;
 	ccl_fetch(sd, shader) = shader;
-	if(prim != PRIM_NONE)
-		ccl_fetch(sd, type) = PRIMITIVE_TRIANGLE;
-	else if(lamp != LAMP_NONE)
-		ccl_fetch(sd, type) = PRIMITIVE_LAMP;
-	else
-		ccl_fetch(sd, type) = PRIMITIVE_NONE;
+	ccl_fetch(sd, type) = (prim == PRIM_NONE)? PRIMITIVE_NONE: PRIMITIVE_TRIANGLE;
 
 	/* primitive */
 #ifdef __INSTANCING__
@@ -277,18 +271,6 @@ ccl_device void shader_setup_from_sample(KernelGlobals *kg, ShaderData *sd,
 
 #ifdef __OBJECT_MOTION__
 		shader_setup_object_transforms(kg, sd, time);
-	}
-	else if(lamp != LAMP_NONE) {
-		Transform tfm;
-		tfm.x = kernel_tex_fetch(__light_data, lamp*LIGHT_SIZE + 5);
-		tfm.y = kernel_tex_fetch(__light_data, lamp*LIGHT_SIZE + 6);
-		tfm.z = kernel_tex_fetch(__light_data, lamp*LIGHT_SIZE + 7);
-		tfm.w = make_float4(0.0f, 0.0f, 0.0f, 1.0f);
-		ccl_fetch(sd, ob_tfm) = tfm;
-		tfm.x = kernel_tex_fetch(__light_data, lamp*LIGHT_SIZE + 9);
-		tfm.y = kernel_tex_fetch(__light_data, lamp*LIGHT_SIZE + 10);
-		tfm.z = kernel_tex_fetch(__light_data, lamp*LIGHT_SIZE + 11);
-		ccl_fetch(sd, ob_itfm) = tfm;
 	}
 
 	ccl_fetch(sd, time) = time;
@@ -365,7 +347,7 @@ ccl_device void shader_setup_from_displace(KernelGlobals *kg, ShaderData *sd,
 
 	/* watch out: no instance transform currently */
 
-	shader_setup_from_sample(kg, sd, P, Ng, I, shader, object, prim, u, v, 0.0f, TIME_INVALID, 0, 0, LAMP_NONE);
+	shader_setup_from_sample(kg, sd, P, Ng, I, shader, object, prim, u, v, 0.0f, TIME_INVALID, 0, 0);
 }
 
 /* ShaderData setup from ray into background */
@@ -795,22 +777,6 @@ ccl_device float3 shader_holdout_eval(KernelGlobals *kg, ShaderData *sd)
 		ShaderClosure *sc = ccl_fetch_array(sd, closure, i);
 
 		if(CLOSURE_IS_HOLDOUT(sc->type))
-			weight += sc->weight;
-	}
-
-	return weight;
-}
-
-/* Shadow Catcher */
-
-ccl_device float3 shader_shadow_catcher_eval(KernelGlobals *kg, ShaderData *sd)
-{
-	float3 weight = make_float3(0.0f, 0.0f, 0.0f);
-
-	for(int i = 0; i < sd->num_closure; i++) {
-		ShaderClosure *sc = &sd->closure[i];
-
-		if(CLOSURE_IS_SHADOW_CATCHER(sc->type))
 			weight += sc->weight;
 	}
 

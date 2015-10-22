@@ -35,7 +35,6 @@ set(SRC_OSL
 	node_absorption_volume.osl
 	node_holdout.osl
 	node_hsv.osl
-	node_ies_light.osl
 	node_image_texture.osl
 	node_invert.osl
 	node_layer_weight.osl

@@ -875,12 +875,6 @@ typedef struct NodeShaderUVMap {
 	char uv_map[64];
 } NodeShaderUVMap;
 
-typedef struct NodeShaderIESLight {
-	int mode;
-
-	char filepath[1024];
-} NodeShaderIESLight;
-
 typedef struct NodeSunBeams {
 	float source[2];
 
@@ -894,9 +888,6 @@ typedef struct NodeSunBeams {
 /* script node flag */
 #define NODE_SCRIPT_AUTO_UPDATE		1
 
-/* ies node mode */
-#define NODE_IES_INTERNAL		0
-#define NODE_IES_EXTERNAL		1
 
 /* frame node flags */
 #define NODE_FRAME_SHRINK		1	/* keep the bounding box minimal */

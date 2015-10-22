@@ -347,19 +347,6 @@ static inline string blender_absolute_path(BL::BlendData b_data, BL::ID b_id, co
 	return path;
 }
 
-static inline string get_text_content(PointerRNA ptr)
-{
-	if(ptr.data == NULL)
-		return "";
-
-	string content;
-	BL::Text::lines_iterator iter;
-	iter.begin(ptr);
-	for(iter.begin(ptr); iter; ++iter)
-		content += iter->body() + "\n";
-	return content;
-}
-
 /* Texture Space */
 
 static inline void mesh_texture_space(BL::Mesh b_mesh, float3& loc, float3& size)

@@ -44,7 +44,6 @@ set(SRC_HEADERS
 	util_function.h
 	util_half.h
 	util_hash.h
-	util_hilbert.h
 	util_image.h
 	util_list.h
 	util_logging.h

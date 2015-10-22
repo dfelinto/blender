@@ -36,7 +36,7 @@ CCL_NAMESPACE_BEGIN
 /* constants */
 #define OBJECT_SIZE 		11
 #define OBJECT_VECTOR_SIZE	6
-#define LIGHT_SIZE		12
+#define LIGHT_SIZE			5
 #define FILTER_TABLE_SIZE	256
 #define RAMP_TABLE_SIZE		256
 #define PARTICLE_SIZE 		5
@@ -349,7 +349,6 @@ typedef enum PassType {
 	PASS_BVH_TRAVERSED_INSTANCES = (1 << 27),
 	PASS_RAY_BOUNCES = (1 << 28),
 #endif
-	PASS_SHADOWCATCHER = (1 << 29),
 } PassType;
 
 #define PASS_ALL (~0)
@@ -522,8 +521,6 @@ typedef enum PrimitiveType {
 	PRIMITIVE_MOTION_TRIANGLE = 2,
 	PRIMITIVE_CURVE = 4,
 	PRIMITIVE_MOTION_CURVE = 8,
-	/* Lamp primitive is not included below on purpose, since it is no real traceable primitive */
-	PRIMITIVE_LAMP = 16,
 
 	PRIMITIVE_ALL_TRIANGLE = (PRIMITIVE_TRIANGLE|PRIMITIVE_MOTION_TRIANGLE),
 	PRIMITIVE_ALL_CURVE = (PRIMITIVE_CURVE|PRIMITIVE_MOTION_CURVE),
@@ -652,10 +649,9 @@ enum ShaderDataFlag {
 	SD_SCATTER        = (1 << 7),   /* have volume phase closure? */
 	SD_AO             = (1 << 8),   /* have ao closure? */
 	SD_TRANSPARENT    = (1 << 9),  /* have transparent closure? */
-	SD_SHADOW_CATCHER = (1 << 27),
 
 	SD_CLOSURE_FLAGS = (SD_EMISSION|SD_BSDF|SD_BSDF_HAS_EVAL|SD_BSSRDF|
-	                    SD_HOLDOUT|SD_ABSORPTION|SD_SCATTER|SD_AO|SD_SHADOW_CATCHER),
+	                    SD_HOLDOUT|SD_ABSORPTION|SD_SCATTER|SD_AO),
 
 	/* shader flags */
 	SD_USE_MIS                = (1 << 10),  /* direct light sample */
@@ -858,7 +854,7 @@ typedef struct KernelFilm {
 	int pass_shadow;
 	float pass_shadow_scale;
 	int filter_table_offset;
-	int pass_shadowcatcher;
+	int pass_pad2;
 
 	int pass_mist;
 	float mist_start;
@@ -898,6 +894,7 @@ typedef struct KernelIntegrator {
 	int pdf_background_res;
 
 	/* light portals */
+	float portal_pdf;
 	int num_portals;
 	int portal_offset;
 
@@ -954,8 +951,7 @@ typedef struct KernelIntegrator {
 	float volume_step_size;
 	int volume_samples;
 
-	/* ies lights */
-	int ies_stride;
+	int pad;
 } KernelIntegrator;
 
 typedef struct KernelBVH {
