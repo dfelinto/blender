@@ -14,7 +14,7 @@ uniform float image_texture_height;
 /* Curve mapping parameters
  *
  * See documentation for OCIO_CurveMappingSettings to get fields descriptions.
- * (this ones pretty much copies stuff from C structure.)
+ * (this ones pretyt much copies stuff from C structure.)
  */
 uniform sampler1D curve_mapping_texture;
 uniform int curve_mapping_lut_size;
@@ -141,44 +141,9 @@ vec4 apply_dither(vec2 st, vec4 col)
 }
 #endif
 
-#ifdef USE_TONEMAP
-/* The inverse of the squared white value parameter */
-uniform float white_inv_sqr;
-
-vec4 apply_tonemap(vec4 col)
-{
-	vec4 result;
-	result[0] = col[0] * (1 + col[0] * white_inv_sqr) / (1 + col[0]);
-	result[1] = col[1] * (1 + col[1] * white_inv_sqr) / (1 + col[1]);
-	result[2] = col[2] * (1 + col[2] * white_inv_sqr) / (1 + col[2]);
-	result[3] = col[3];
-	return result;
-}
-#endif
-
-#ifdef USE_EXPOSURE
-uniform float gain;
-
-vec4 apply_exposure(vec4 col)
-{
-	vec4 result;
-	result[0] = col[0] * gain;
-	result[1] = col[1] * gain;
-	result[2] = col[2] * gain;
-	result[3] = col[3];
-	return result;
-}
-#endif
-
 void main()
 {
 	vec4 col = texture2D(image_texture, gl_TexCoord[0].st);
-#ifdef USE_EXPOSURE
-	col = apply_exposure(col);
-#endif
-#ifdef USE_TONEMAP
-	col = apply_tonemap(col);
-#endif
 #ifdef USE_CURVE_MAPPING
 	col = curvemapping_evaluate_premulRGBF(col);
 #endif

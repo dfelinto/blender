@@ -54,7 +54,6 @@ enum_bvh_types = (
 enum_filter_types = (
     ('BOX', "Box", "Box filter"),
     ('GAUSSIAN', "Gaussian", "Gaussian filter"),
-    ('BLACKMAN_HARRIS', "Blackman-Harris", "Blackman-Harris filter"),
     )
 
 enum_aperture_types = (
@@ -92,7 +91,6 @@ enum_tile_order = (
     ('LEFT_TO_RIGHT', "Left to Right", "Render from left to right"),
     ('TOP_TO_BOTTOM', "Top to Bottom", "Render from top to bottom"),
     ('BOTTOM_TO_TOP', "Bottom to Top", "Render from bottom to top"),
-    ('HILBERT', "Hilbert Curve", "Render along a hilbert curve"),
     )
 
 enum_use_layer_samples = (

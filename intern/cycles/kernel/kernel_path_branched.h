@@ -197,8 +197,6 @@ ccl_device float4 kernel_branched_path_integrate(KernelGlobals *kg, RNG *rng, in
 	debug_data_init(&debug_data);
 #endif
 
-	float3 shadowcatcher = make_float3(0.0f, 0.0f, 0.0f);
-
 	/* Main Loop
 	 * Here we only handle transparency intersections from the camera ray.
 	 * Indirect bounces are handled in kernel_branched_path_surface_indirect_light().
@@ -399,23 +397,6 @@ ccl_device float4 kernel_branched_path_integrate(KernelGlobals *kg, RNG *rng, in
 		}
 #endif
 
-		if((sd.flag & SD_SHADOW_CATCHER) && (state.flag & PATH_RAY_CAMERA)) {
-			if(kernel_data.background.transparent) {
-				float shadow_catcher_weight;
-				shadow_catcher_weight = average(shader_shadow_catcher_eval(kg, &sd) * throughput);
-
-				float3 L_full, L_unoccluded;
-				PathState hit_state = state;
-				bool all = kernel_data.integrator.sample_all_lights_direct;
-				kernel_branched_path_surface_connect_light_full_unoccluded(kg, rng, &sd, &hit_state, all, &L_full, &L_unoccluded);
-
-				shadowcatcher = throughput * make_float3(average(L_unoccluded), average(L_full), shadow_catcher_weight);
-				L_transparent += shadow_catcher_weight;
-				if(shadow_catcher_weight == 1.0f)
-					break;
-			}
-		}
-
 		/* holdout mask objects do not write data passes */
 		kernel_write_data_passes(kg, buffer, &L, &sd, sample, &state, throughput);
 
@@ -508,7 +489,6 @@ ccl_device float4 kernel_branched_path_integrate(KernelGlobals *kg, RNG *rng, in
 	float3 L_sum = path_radiance_clamp_and_sum(kg, &L);
 
 	kernel_write_light_passes(kg, buffer, &L, sample);
-	kernel_write_pass_float3(buffer + kernel_data.film.pass_shadowcatcher, sample, shadowcatcher);
 
 #ifdef __KERNEL_DEBUG__
 	kernel_write_debug_passes(kg, buffer, &state, &debug_data, sample);
