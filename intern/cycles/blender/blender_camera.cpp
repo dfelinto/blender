@@ -139,18 +139,6 @@ static float blender_camera_focal_distance(BL::RenderEngine b_engine, BL::Object
 	return fabsf(dot(view_dir, dof_dir));
 }
 
-static bool blender_camera_use_spherical_stereo(BL::RenderSettings b_render, BlenderCamera *bcam, PointerRNA *ccamera)
-{
-	if(b_render.use_multiview() &&
-	   b_render.views_format() == BL::RenderSettings::views_format_STEREO_3D &&
-	   (bcam->type == CAMERA_PANORAMA || bcam->type == CAMERA_PERSPECTIVE) &&
-	   RNA_boolean_get(ccamera, "use_spherical_stereo"))
-	{
-		return true;
-	}
-	return false;
-}
-
 static void blender_camera_from_object(BlenderCamera *bcam, BL::RenderEngine b_engine, BL::RenderSettings b_render,
                                        BL::Object b_ob, bool skip_panorama = false)
 {
@@ -206,7 +194,7 @@ static void blender_camera_from_object(BlenderCamera *bcam, BL::RenderEngine b_e
 
 		bcam->interocular_distance = b_camera.stereo().interocular_distance();
 		bcam->convergence_distance = b_camera.stereo().convergence_distance();
-		bcam->use_spherical_stereo = blender_camera_use_spherical_stereo(b_render, bcam, &ccamera);
+		bcam->use_spherical_stereo = b_engine.use_spherical_stereo(b_ob);
 
 		bcam->ortho_scale = b_camera.ortho_scale();
 

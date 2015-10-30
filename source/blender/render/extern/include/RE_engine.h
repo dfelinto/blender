@@ -62,6 +62,7 @@ struct BakePixel;
 #define RE_USE_SAVE_BUFFERS		64
 #define RE_USE_TEXTURE_PREVIEW		128
 #define RE_USE_SHADING_NODES_CUSTOM 	256
+#define RE_USE_SPHERICAL_STEREO 512
 
 /* RenderEngine.flag */
 #define RE_ENGINE_ANIMATION		1
@@ -144,6 +145,7 @@ const char *RE_engine_active_view_get(RenderEngine *engine);
 void RE_engine_active_view_set(RenderEngine *engine, const char *viewname);
 float RE_engine_get_camera_shift_x(RenderEngine *engine, struct Object *camera);
 void RE_engine_get_camera_model_matrix(RenderEngine *engine, struct Object *camera, float *r_modelmat);
+int RE_engine_get_spherical_stereo(RenderEngine *engine, struct Object *camera);
 
 int RE_engine_test_break(RenderEngine *engine);
 void RE_engine_update_stats(RenderEngine *engine, const char *stats, const char *info);

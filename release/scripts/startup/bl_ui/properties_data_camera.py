@@ -150,10 +150,9 @@ class DATA_PT_camera_stereoscopy(CameraButtonsPanel, Panel):
         render = context.scene.render
         st = context.camera.stereo
         cam = context.camera
-        engine = render.engine
 
-        is_spherical_stereo = cam.type != 'ORTHO' and engine == 'CYCLES'
-        use_spherical_stereo = is_spherical_stereo and cam.cycles.use_spherical_stereo
+        is_spherical_stereo = cam.type != 'ORTHO' and render.use_spherical_stereo
+        use_spherical_stereo = is_spherical_stereo and cam.use_spherical_stereo
 
         col = layout.column()
         col.row().prop(st, "convergence_mode", expand=True)

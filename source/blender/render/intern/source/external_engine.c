@@ -395,6 +395,16 @@ void RE_engine_get_camera_model_matrix(RenderEngine *engine, Object *camera, flo
 	BKE_camera_multiview_model_matrix(re ? &re->r : NULL, camera, re->viewname, (float (*)[4])r_modelmat);
 }
 
+int RE_engine_get_spherical_stereo(RenderEngine *engine, Object *camera)
+{
+	Render *re = engine->re;
+
+	if ((engine->type->flag & RE_USE_SPHERICAL_STEREO) == 0)
+		return 0;
+
+	return BKE_camera_multiview_spherical_stereo(re ? &re->r : NULL, camera) ? 1 : 0;
+}
+
 rcti* RE_engine_get_current_tiles(Render *re, int *r_total_tiles, bool *r_needs_free)
 {
 	static rcti tiles_static[BLENDER_MAX_THREADS];

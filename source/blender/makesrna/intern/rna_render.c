@@ -524,6 +524,12 @@ static void rna_def_render_engine(BlenderRNA *brna)
 	prop = RNA_def_float_matrix(func, "r_model_matrix", 4, 4, NULL, 0.0f, 0.0f, "Model Matrix", "Normalized camera model matrix", 0.0f, 0.0f);
 	RNA_def_property_flag(prop, PROP_REQUIRED);
 
+	func = RNA_def_function(srna, "use_spherical_stereo", "RE_engine_get_spherical_stereo");
+	prop = RNA_def_pointer(func, "camera", "Object", "", "");
+	RNA_def_property_flag(prop, PROP_REQUIRED);
+	prop = RNA_def_boolean(func, "use_spherical_stereo", 0, "Spherical Stereo", "");
+	RNA_def_function_return(func, prop);
+
 	func = RNA_def_function(srna, "update_stats", "RE_engine_update_stats");
 	RNA_def_function_ui_description(func, "Update and signal to redraw render status text");
 	prop = RNA_def_string(func, "stats", NULL, 0, "Stats", "");
@@ -651,6 +657,10 @@ static void rna_def_render_engine(BlenderRNA *brna)
 
 	prop = RNA_def_property(srna, "bl_use_save_buffers", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "type->flag", RE_USE_SAVE_BUFFERS);
+	RNA_def_property_flag(prop, PROP_REGISTER_OPTIONAL);
+
+	prop = RNA_def_property(srna, "bl_use_spherical_stereo", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "type->flag", RE_USE_SPHERICAL_STEREO);
 	RNA_def_property_flag(prop, PROP_REGISTER_OPTIONAL);
 
 	RNA_define_verify_sdna(1);
