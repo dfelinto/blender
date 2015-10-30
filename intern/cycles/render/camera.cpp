@@ -480,7 +480,7 @@ BoundBox Camera::viewplane_bounds_get()
 	BoundBox bounds = BoundBox::empty;
 
 	if(type == CAMERA_PANORAMA) {
-		if(use_spherical_stereo == false){
+		if(use_spherical_stereo == false) {
 			bounds.grow(make_float3(cameratoworld.x.w,
 			                        cameratoworld.y.w,
 			                        cameratoworld.z.w));
