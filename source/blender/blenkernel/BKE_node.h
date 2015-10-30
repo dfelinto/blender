@@ -172,7 +172,10 @@ typedef struct bNodeType {
 	/* Additional drawing on backdrop */
 	void (*draw_backdrop)(struct SpaceNode *snode, struct ImBuf *backdrop, struct bNode *node, int x, int y);
 
-	/// Optional custom label function for the node header.
+	/**
+	 * Optional custom label function for the node header.
+	 * \note Used as a fallback when #bNode.label isn't set.
+	 */
 	void (*labelfunc)(struct bNodeTree *ntree, struct bNode *node, char *label, int maxlen);
 	/// Optional custom resize handle polling.
 	int (*resize_area_func)(struct bNode *node, int x, int y);
@@ -337,6 +340,7 @@ struct GHashIterator *ntreeTypeGetIterator(void);
 
 void ntreeSetTypes(const struct bContext *C, struct bNodeTree *ntree);
 
+void ntreeInitDefault(struct bNodeTree *ntree);
 struct bNodeTree *ntreeAddTree(struct Main *bmain, const char *name, const char *idname);
 
 /* copy/free funcs, need to manage ID users */

@@ -1006,16 +1006,27 @@ void KX_Scene::RemoveObject(class CValue* gameobj)
 	//newobj->SetSGNode(0);
 }
 
+void KX_Scene::RemoveDupliGroup(class CValue *gameobj)
+{
+	KX_GameObject *newobj = (KX_GameObject *) gameobj;
+
+	if (newobj->IsDupliGroup()) {
+		for (int i = 0; i < newobj->GetInstanceObjects()->GetCount(); i++) {
+			CValue *obj = newobj->GetInstanceObjects()->GetValue(i);
+			DelayedRemoveObject(obj);
+		}
+	}
+}
+
 void KX_Scene::DelayedRemoveObject(class CValue* gameobj)
 {
-	//KX_GameObject* newobj = (KX_GameObject*) gameobj;
+	RemoveDupliGroup(gameobj);
+
 	if (!m_euthanasyobjects->SearchValue(gameobj))
 	{
 		m_euthanasyobjects->Add(gameobj->AddRef());
-	} 
+	}
 }
-
-
 
 int KX_Scene::NewRemoveObject(class CValue* gameobj)
 {
@@ -1678,10 +1689,6 @@ void KX_Scene::UpdateAnimations(double curtime)
 
 	BLI_task_pool_work_and_wait(pool);
 	BLI_task_pool_free(pool);
-
-	for (int i=0; i<m_animatedlist->GetCount(); ++i) {
-		((KX_GameObject*)m_animatedlist->GetValue(i))->UpdateActionIPOs();
-	}
 }
 
 void KX_Scene::LogicUpdateFrame(double curtime, bool frame)

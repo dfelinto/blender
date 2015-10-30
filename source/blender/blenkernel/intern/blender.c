@@ -256,7 +256,6 @@ static void setup_app_data(bContext *C, BlendFileData *bfd, const char *filepath
 		/* comes from readfile.c */
 		SWAP(ListBase, G.main->wm, bfd->main->wm);
 		SWAP(ListBase, G.main->screen, bfd->main->screen);
-		SWAP(ListBase, G.main->script, bfd->main->script);
 		
 		/* we re-use current screen */
 		curscreen = CTX_wm_screen(C);
@@ -1069,11 +1068,11 @@ int BKE_copybuffer_paste(bContext *C, const char *libname, ReportList *reports)
 	BKE_main_id_flag_all(bmain, LIB_PRE_EXISTING, true);
 	
 	/* here appending/linking starts */
-	mainl = BLO_library_append_begin(bmain, &bh, libname);
+	mainl = BLO_library_link_begin(bmain, &bh, libname);
 	
-	BLO_library_append_all(mainl, bh);
+	BLO_library_link_all(mainl, bh);
 
-	BLO_library_append_end(C, mainl, &bh, 0, 0);
+	BLO_library_link_end(mainl, &bh, 0, scene, CTX_wm_view3d(C));
 	
 	/* mark all library linked objects to be updated */
 	BKE_main_lib_objects_recalc_all(bmain);

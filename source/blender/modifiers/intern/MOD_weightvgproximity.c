@@ -42,6 +42,7 @@
 #include "BKE_cdderivedmesh.h"
 #include "BKE_deform.h"
 #include "BKE_library.h"
+#include "BKE_library_query.h"
 #include "BKE_modifier.h"
 #include "BKE_texture.h"          /* Texture masking. */
 
@@ -123,7 +124,7 @@ static void get_vert2geom_distance(int numVerts, float (*v_cos)[3],
 		 * If we already had an hit before, we assume this vertex is going to have a close hit to
 		 * that other vertex, so we can initiate the "nearest.dist" with the expected value to that
 		 * last hit.
-		 * This will lead in prunning of the search tree.
+		 * This will lead in pruning of the search tree.
 		 */
 		if (dist_v) {
 			nearest_v.dist_sq = nearest_v.index != -1 ? len_squared_v3v3(tmp_co, nearest_v.co) : FLT_MAX;
@@ -287,20 +288,18 @@ static bool dependsOnTime(ModifierData *md)
 	return 0;
 }
 
-static void foreachObjectLink(ModifierData *md, Object *ob,
-                              void (*walk)(void *userData, Object *ob, Object **obpoin),
-                              void *userData)
+static void foreachObjectLink(ModifierData *md, Object *ob, ObjectWalkFunc walk, void *userData)
 {
 	WeightVGProximityModifierData *wmd = (WeightVGProximityModifierData *) md;
-	walk(userData, ob, &wmd->proximity_ob_target);
-	walk(userData, ob, &wmd->mask_tex_map_obj);
+	walk(userData, ob, &wmd->proximity_ob_target, IDWALK_NOP);
+	walk(userData, ob, &wmd->mask_tex_map_obj, IDWALK_NOP);
 }
 
 static void foreachIDLink(ModifierData *md, Object *ob, IDWalkFunc walk, void *userData)
 {
 	WeightVGProximityModifierData *wmd = (WeightVGProximityModifierData *) md;
 
-	walk(userData, ob, (ID **)&wmd->mask_texture);
+	walk(userData, ob, (ID **)&wmd->mask_texture, IDWALK_USER);
 
 	foreachObjectLink(md, ob, (ObjectWalkFunc)walk, userData);
 }

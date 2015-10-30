@@ -56,7 +56,7 @@ class FILEBROWSER_HT_header(Header):
 
             layout.prop(params, "display_type", expand=True, text="")
 
-            layout.prop(params, "thumbnail_size", text="")
+            layout.prop(params, "display_size", text="")
 
             layout.prop(params, "sort_method", expand=True, text="")
 
@@ -228,6 +228,11 @@ class FILEBROWSER_PT_advanced_filter(Panel):
     bl_region_type = 'TOOLS'
     bl_category = "Filter"
     bl_label = "Advanced Filter"
+
+    @classmethod
+    def poll(cls, context):
+        # only useful in append/link (library) context currently...
+        return context.space_data.params.use_library_browsing
 
     def draw(self, context):
         layout = self.layout

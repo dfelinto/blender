@@ -857,6 +857,7 @@ static void node_shader_buts_tex_environment(uiLayout *layout, bContext *C, Poin
 	node_buts_image_user(layout, C, &iuserptr, &imaptr, &iuserptr);
 
 	uiItemR(layout, ptr, "color_space", 0, "", ICON_NONE);
+	uiItemR(layout, ptr, "interpolation", 0, "", ICON_NONE);
 	uiItemR(layout, ptr, "projection", 0, "", ICON_NONE);
 }
 
@@ -898,6 +899,7 @@ static void node_shader_buts_tex_environment_ex(uiLayout *layout, bContext *C, P
 	}
 
 	uiItemR(layout, ptr, "color_space", 0, IFACE_("Color Space"), ICON_NONE);
+	uiItemR(layout, ptr, "interpolation", 0, IFACE_("Interpolation"), ICON_NONE);
 	uiItemR(layout, ptr, "projection", 0, IFACE_("Projection"), ICON_NONE);
 }
 
@@ -2033,6 +2035,7 @@ static void node_composit_buts_stabilize2d(uiLayout *layout, bContext *C, Pointe
 		return;
 
 	uiItemR(layout, ptr, "filter_type", 0, "", ICON_NONE);
+	uiItemR(layout, ptr, "invert", 0, NULL, ICON_NONE);
 }
 
 static void node_composit_buts_translate(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)

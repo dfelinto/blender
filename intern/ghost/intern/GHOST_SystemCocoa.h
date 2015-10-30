@@ -297,9 +297,8 @@ protected:
 	 */
 	GHOST_TInt32 m_cursorDelta_x, m_cursorDelta_y;
 	
-	/** Multitouch trackpad availability */
-	bool m_hasMultiTouchTrackpad;
-	
+	/** Temporarily ignore momentum scroll events */
+	bool m_ignoreMomentumScroll;
 };
 
 #endif // __GHOST_SYSTEMCOCOA_H__

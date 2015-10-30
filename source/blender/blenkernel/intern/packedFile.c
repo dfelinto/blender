@@ -262,8 +262,6 @@ void packAll(Main *bmain, ReportList *reports, bool verbose)
 		BKE_reportf(reports, RPT_INFO, "Packed %d files", tot);
 	else if (verbose)
 		BKE_report(reports, RPT_INFO, "No new files have been packed");
-
-
 }
 
 
@@ -582,7 +580,7 @@ int unpackImage(ReportList *reports, Image *ima, int how)
 {
 	int ret_value = RET_ERROR;
 
-	if (ima != NULL && ima->name[0]) {
+	if (ima != NULL) {
 		while (ima->packedfiles.last) {
 			char localname[FILE_MAX], absname[FILE_MAX];
 			char *newname;
@@ -605,7 +603,9 @@ int unpackImage(ReportList *reports, Image *ima, int how)
 				}
 
 				/* keep the new name in the image for non-pack specific reasons */
-				BLI_strncpy(ima->name, newname, sizeof(imapf->filepath));
+				if (how != PF_REMOVE) {
+					BLI_strncpy(ima->name, newname, sizeof(imapf->filepath));
+				}
 				MEM_freeN(newname);
 			}
 			else {

@@ -87,18 +87,19 @@ void		WM_init_splash		(struct bContext *C);
 
 void		WM_check			(struct bContext *C);
 
-struct wmWindow	*WM_window_open	(struct bContext *C, const struct rcti *rect);
-
 int			WM_window_pixels_x		(struct wmWindow *win);
 int			WM_window_pixels_y		(struct wmWindow *win);
 bool		WM_window_is_fullscreen	(struct wmWindow *win);
 
 /* defines for 'type' WM_window_open_temp */
-#define WM_WINDOW_RENDER		0
-#define WM_WINDOW_USERPREFS		1
-// #define WM_WINDOW_FILESEL		2  // UNUSED
+enum {
+	WM_WINDOW_RENDER = 1,
+	WM_WINDOW_USERPREFS,
+	// WM_WINDOW_FILESEL // UNUSED
+};
 
-void		WM_window_open_temp	(struct bContext *C, struct rcti *position, int type);
+struct wmWindow	*WM_window_open(struct bContext *C, const struct rcti *rect);
+struct wmWindow *WM_window_open_temp(struct bContext *C, const struct rcti *rect_init, int type);
 			
 			/* returns true if draw method is triple buffer */
 bool		WM_is_draw_triple(struct wmWindow *win);
@@ -111,6 +112,7 @@ void		WM_file_autoexec_init(const char *filepath);
 bool		WM_file_read(struct bContext *C, const char *filepath, struct ReportList *reports);
 void		WM_autosave_init(struct wmWindowManager *wm);
 void		WM_recover_last_session(struct bContext *C, struct ReportList *reports);
+void		WM_file_tag_modified(const struct bContext *C);
 
 			/* mouse cursors */
 void		WM_cursor_set(struct wmWindow *win, int curs);
@@ -289,6 +291,7 @@ void		WM_operator_properties_gesture_straightline(struct wmOperatorType *ot, int
 void		WM_operator_properties_select_all(struct wmOperatorType *ot);
 void		WM_operator_properties_select_action(struct wmOperatorType *ot, int default_action);
 void		WM_operator_properties_select_action_simple(struct wmOperatorType *ot, int default_action);
+void        WM_operator_properties_select_random(struct wmOperatorType *ot);
 
 bool        WM_operator_check_ui_enabled(const struct bContext *C, const char *idname);
 wmOperator *WM_operator_last_redo(const struct bContext *C);

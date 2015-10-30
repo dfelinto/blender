@@ -534,7 +534,7 @@ static bool ui_but_is_cursor_warp(uiBut *but)
 /**
  * Ignore mouse movements within some horizontal pixel threshold before starting to drag
  */
-static bool ui_but_dragedit_poll(uiHandleButtonData *data, int mx)
+static bool ui_but_dragedit_update_mval(uiHandleButtonData *data, int mx)
 {
 	if (mx == data->draglastx)
 		return false;
@@ -3962,8 +3962,12 @@ static float ui_numedit_apply_snapf(
 		/* snapping by 10's for float buttons is quite annoying (location, scale...),
 		 * but allow for rotations */
 		if (softrange >= 21.0f) {
+			UnitSettings *unit = but->block->unit;
 			int unit_type = UI_but_unit_type_get(but);
-			if (!ELEM(unit_type, PROP_UNIT_ROTATION)) {
+			if ((unit_type == PROP_UNIT_ROTATION) && (unit->system_rotation != USER_UNIT_ROT_RADIANS)) {
+				/* pass (degrees)*/
+			}
+			else {
 				softrange = 20.0f;
 			}
 		}
@@ -4021,7 +4025,7 @@ static bool ui_numedit_but_NUM(
 	const bool is_float = ui_but_is_float(but);
 
 	/* prevent unwanted drag adjustments */
-	if (ui_but_dragedit_poll(data, mx) == false) {
+	if (ui_but_dragedit_update_mval(data, mx) == false) {
 		return changed;
 	}
 
@@ -4346,7 +4350,9 @@ static bool ui_numedit_but_SLI(
 	float offs;
 
 	/* prevent unwanted drag adjustments */
-	if (ui_but_dragedit_poll(data, mx) == false) {
+	if ((but->type != UI_BTYPE_SCROLL) &&
+	    (ui_but_dragedit_update_mval(data, mx) == false))
+	{
 		return changed;
 	}
 
@@ -6708,12 +6714,12 @@ static bool ui_but_menu(bContext *C, uiBut *but)
 
 				but2 = uiDefIconTextBut(block, UI_BTYPE_BUT, 0, ICON_NONE,
 				                        CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Change Shortcut"),
-										0, 0, w, UI_UNIT_Y, NULL, 0, 0, 0, 0, "");
+				                        0, 0, w, UI_UNIT_Y, NULL, 0, 0, 0, 0, "");
 				UI_but_func_set(but2, popup_change_shortcut_func, but, NULL);
 
 				but2 = uiDefIconTextBut(block, UI_BTYPE_BUT, 0, ICON_NONE,
 				                        CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Remove Shortcut"),
-										0, 0, w, UI_UNIT_Y, NULL, 0, 0, 0, 0, "");
+				                        0, 0, w, UI_UNIT_Y, NULL, 0, 0, 0, 0, "");
 				UI_but_func_set(but2, remove_shortcut_func, but, NULL);
 			}
 			else {
@@ -7549,8 +7555,14 @@ static void button_activate_state(bContext *C, uiBut *but, uiHandleButtonState s
 	else if (data->state == BUTTON_STATE_NUM_EDITING) {
 		ui_numedit_end(but, data);
 
-		if (but->flag & UI_BUT_DRIVEN)
-			WM_report(C, RPT_INFO, "Can't edit driven number value, see graph editor for the driver setup.");
+		if (but->flag & UI_BUT_DRIVEN) {
+			/* Only warn when editing stepping/dragging the value.
+			 * No warnings should show for editing driver expressions though!
+			 */
+			if (state != BUTTON_STATE_TEXT_EDITING) {
+				WM_report(C, RPT_INFO, "Can't edit driven number value, see graph editor for the driver setup.");
+			}
+		}
 
 		if (ui_but_is_cursor_warp(but)) {
 

@@ -78,6 +78,16 @@ static void rna_Image_animated_update(Main *UNUSED(bmain), Scene *UNUSED(scene),
 	}
 }
 
+static int rna_Image_is_stereo_3d_get(PointerRNA *ptr)
+{
+	return BKE_image_is_stereo((Image *)ptr->data);
+}
+
+static int rna_Image_is_multiview_get(PointerRNA *ptr)
+{
+	return BKE_image_is_multiview((Image *)ptr->data);
+}
+
 static int rna_Image_dirty_get(PointerRNA *ptr)
 {
 	return BKE_image_is_dirty((Image *)ptr->data);
@@ -486,7 +496,7 @@ static void rna_def_imageuser(BlenderRNA *brna)
 
 	srna = RNA_def_struct(brna, "ImageUser", NULL);
 	RNA_def_struct_ui_text(srna, "Image User",
-	                       "Parameters defining how an Image datablock is used by another datablock");
+	                       "Parameters defining how an Image data-block is used by another data-block");
 	RNA_def_struct_path_func(srna, "rna_ImageUser_path");
 
 	prop = RNA_def_property(srna, "use_auto_refresh", PROP_BOOLEAN, PROP_NONE);
@@ -566,9 +576,9 @@ static void rna_def_image_packed_files(BlenderRNA *brna)
 
 	prop = RNA_def_property(srna, "filepath", PROP_STRING, PROP_FILEPATH);
 	RNA_def_property_string_sdna(prop, NULL, "filepath");
-	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 	RNA_def_struct_name_property(srna, prop);
-	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+
+	RNA_api_image_packed_file(srna);
 }
 
 static void rna_def_render_slot(BlenderRNA *brna)
@@ -639,7 +649,7 @@ static void rna_def_image(BlenderRNA *brna)
 	};
 
 	srna = RNA_def_struct(brna, "Image", "ID");
-	RNA_def_struct_ui_text(srna, "Image", "Image datablock referencing an external or packed image");
+	RNA_def_struct_ui_text(srna, "Image", "Image data-block referencing an external or packed image");
 	RNA_def_struct_ui_icon(srna, ICON_IMAGE_DATA);
 
 	prop = RNA_def_property(srna, "filepath", PROP_STRING, PROP_FILEPATH);
@@ -716,12 +726,12 @@ static void rna_def_image(BlenderRNA *brna)
 	RNA_def_property_update(prop, NC_IMAGE | ND_DISPLAY, "rna_Image_views_format_update");
 
 	prop = RNA_def_property(srna, "is_stereo_3d", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "flag", IMA_IS_STEREO);
+	RNA_def_property_boolean_funcs(prop, "rna_Image_is_stereo_3d_get", NULL);
 	RNA_def_property_ui_text(prop, "Stereo 3D", "Image has left and right views");
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 
 	prop = RNA_def_property(srna, "is_multiview", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "flag", IMA_IS_MULTIVIEW);
+	RNA_def_property_boolean_funcs(prop, "rna_Image_is_multiview_get", NULL);
 	RNA_def_property_ui_text(prop, "Multiple Views", "Image has more than one view");
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 

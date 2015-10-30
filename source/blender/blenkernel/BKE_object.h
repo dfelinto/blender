@@ -85,6 +85,7 @@ bool BKE_object_is_in_editmode(struct Object *ob);
 bool BKE_object_is_in_editmode_vgroup(struct Object *ob);
 bool BKE_object_is_in_wpaint_select_vert(struct Object *ob);
 
+void BKE_object_init(struct Object *ob);
 struct Object *BKE_object_add_only_object(
         struct Main *bmain,
         int type, const char *name)
@@ -234,6 +235,7 @@ int BKE_object_is_modified(struct Scene *scene, struct Object *ob);
 int BKE_object_is_deform_modified(struct Scene *scene, struct Object *ob);
 
 void BKE_object_relink(struct Object *ob);
+void BKE_object_data_relink(struct Object *ob);
 
 struct MovieClip *BKE_object_movieclip_get(struct Scene *scene, struct Object *ob, bool use_default);
 

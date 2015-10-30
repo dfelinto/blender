@@ -175,7 +175,7 @@ static int rna_Lattice_size_editable(PointerRNA *ptr)
 {
 	Lattice *lt = (Lattice *)ptr->data;
 
-	return lt->key == NULL;
+	return (lt->key == NULL) ? PROP_EDITABLE : 0;
 }
 
 static void rna_Lattice_points_u_set(PointerRNA *ptr, int value)
@@ -291,7 +291,7 @@ static void rna_def_lattice(BlenderRNA *brna)
 	PropertyRNA *prop;
 
 	srna = RNA_def_struct(brna, "Lattice", "ID");
-	RNA_def_struct_ui_text(srna, "Lattice", "Lattice datablock defining a grid for deforming other objects");
+	RNA_def_struct_ui_text(srna, "Lattice", "Lattice data-block defining a grid for deforming other objects");
 	RNA_def_struct_ui_icon(srna, ICON_LATTICE_DATA);
 
 	prop = RNA_def_property(srna, "points_u", PROP_INT, PROP_NONE);

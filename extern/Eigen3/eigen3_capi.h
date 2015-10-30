@@ -28,5 +28,6 @@
 #define __EIGEN3_C_API_H__
 
 #include "intern/eigenvalues.h"
+#include "intern/svd.h"
 
 #endif  /* __EIGEN3_C_API_H__ */

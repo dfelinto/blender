@@ -1561,8 +1561,8 @@ void DM_update_weight_mcol(
 			ml = mloop + mp->loopstart;
 
 			for (j = 0; j < mp->totloop; j++, ml++, l_index++) {
-				copy_v4_v4_char((char *)&wtcol_l[l_index],
-				                (char *)&wtcol_v[ml->v]);
+				copy_v4_v4_uchar(&wtcol_l[l_index][0],
+				                 &wtcol_v[ml->v][0]);
 			}
 		}
 		MEM_freeN(wtcol_v);
@@ -2626,13 +2626,13 @@ static CustomDataMask object_get_datamask(const Scene *scene, Object *ob, bool *
 {
 	Object *actob = scene->basact ? scene->basact->object : NULL;
 	CustomDataMask mask = ob->customdata_mask;
-	bool editing = BKE_paint_select_face_test(ob);
 
 	if (r_need_mapping) {
 		*r_need_mapping = false;
 	}
 
 	if (ob == actob) {
+		bool editing = BKE_paint_select_face_test(ob);
 
 		/* weight paint and face select need original indices because of selection buffer drawing */
 		if (r_need_mapping) {
@@ -3453,7 +3453,7 @@ void DM_draw_attrib_vertex(DMVertexAttribs *attribs, int a, int index, int vert,
 
 		if (attribs->mcol[b].array) {
 			const MLoopCol *cp = &attribs->mcol[b].array[loop];
-			copy_v4_v4_char((char *)col, &cp->r);
+			copy_v4_v4_uchar(col, &cp->r);
 		}
 		else {
 			col[0] = 0; col[1] = 0; col[2] = 0; col[3] = 0;

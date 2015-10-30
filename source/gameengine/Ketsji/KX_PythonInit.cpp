@@ -37,9 +37,6 @@
 #endif
 
 #ifdef WITH_PYTHON
-#  ifdef   _POSIX_C_SOURCE
-#    undef _POSIX_C_SOURCE
-#  endif
 #  ifdef   _XOPEN_SOURCE
 #    undef _XOPEN_SOURCE
 #  endif
@@ -1804,6 +1801,7 @@ PyMODINIT_FUNC initGameLogicPythonBinding()
 	KX_MACRO_addTypesToDict(d, KX_GAME_QUIT, KX_GameActuator::KX_GAME_QUIT);
 	KX_MACRO_addTypesToDict(d, KX_GAME_SAVECFG, KX_GameActuator::KX_GAME_SAVECFG);
 	KX_MACRO_addTypesToDict(d, KX_GAME_LOADCFG, KX_GameActuator::KX_GAME_LOADCFG);
+	KX_MACRO_addTypesToDict(d, KX_GAME_SCREENSHOT, KX_GameActuator::KX_GAME_SCREENSHOT);
 
 	/* Scene Actuator Modes */
 	KX_MACRO_addTypesToDict(d, KX_SCENE_RESTART, KX_SceneActuator::KX_SCENE_RESTART);

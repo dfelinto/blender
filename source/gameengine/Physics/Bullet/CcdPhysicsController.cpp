@@ -81,24 +81,24 @@ void BlenderBulletCharacterController::updateAction(btCollisionWorld *collisionW
 	m_motionState->setWorldTransform(getGhostObject()->getWorldTransform());
 }
 
-int BlenderBulletCharacterController::getMaxJumps() const
+unsigned char BlenderBulletCharacterController::getMaxJumps() const
 {
 	return m_maxJumps;
 }
 
-void BlenderBulletCharacterController::setMaxJumps(int maxJumps)
+void BlenderBulletCharacterController::setMaxJumps(unsigned char maxJumps)
 {
 	m_maxJumps = maxJumps;
 }
 
-int BlenderBulletCharacterController::getJumpCount() const
+unsigned char BlenderBulletCharacterController::getJumpCount() const
 {
 	return m_jumps;
 }
 
 bool BlenderBulletCharacterController::canJump() const
 {
-	return onGround() || m_jumps < m_maxJumps;
+	return (onGround() && m_maxJumps > 0) || m_jumps < m_maxJumps;
 }
 
 void BlenderBulletCharacterController::jump()
@@ -533,6 +533,7 @@ bool CcdPhysicsController::CreateCharacterController()
 
 	m_characterController->setJumpSpeed(m_cci.m_jumpSpeed);
 	m_characterController->setFallSpeed(m_cci.m_fallSpeed);
+	m_characterController->setMaxJumps(m_cci.m_maxJumps);
 
 	return true;
 }
@@ -1193,16 +1194,12 @@ void CcdPhysicsController::SetMass(MT_Scalar newmass)
 	btRigidBody *body = GetRigidBody();
 	if (body && !m_suspended && newmass>MT_EPSILON && GetMass()>MT_EPSILON)
 	{
-		btVector3 grav = body->getGravity();
-		btVector3 accel = grav / GetMass();
-
 		btBroadphaseProxy* handle = body->getBroadphaseHandle();
 		GetPhysicsEnvironment()->UpdateCcdPhysicsController(this,
 			newmass,
 			body->getCollisionFlags(),
 			handle->m_collisionFilterGroup,
 			handle->m_collisionFilterMask);
-		body->setGravity(accel);
 	}
 }
 		
@@ -1283,7 +1280,13 @@ void		CcdPhysicsController::ApplyForce(const MT_Vector3& forcein,bool local)
 void		CcdPhysicsController::SetAngularVelocity(const MT_Vector3& ang_vel,bool local)
 {
 	btVector3 angvel(ang_vel.x(),ang_vel.y(),ang_vel.z());
-	if (m_object && angvel.length2() > (SIMD_EPSILON*SIMD_EPSILON))
+
+	/* Refuse tiny tiny velocities, as they might cause instabilities. */
+	float vel_squared = angvel.length2();
+	if (vel_squared > 0 && vel_squared <= (SIMD_EPSILON*SIMD_EPSILON))
+		angvel = btVector3(0, 0, 0);
+
+	if (m_object)
 	{
 		m_object->activate(true);
 		if (m_object->isStaticObject())
@@ -1305,9 +1308,14 @@ void		CcdPhysicsController::SetAngularVelocity(const MT_Vector3& ang_vel,bool lo
 }
 void		CcdPhysicsController::SetLinearVelocity(const MT_Vector3& lin_vel,bool local)
 {
-
 	btVector3 linVel(lin_vel.x(),lin_vel.y(),lin_vel.z());
-	if (m_object/* && linVel.length2() > (SIMD_EPSILON*SIMD_EPSILON)*/)
+
+	/* Refuse tiny tiny velocities, as they might cause instabilities. */
+	float vel_squared = linVel.length2();
+	if (vel_squared > 0 && vel_squared <= (SIMD_EPSILON*SIMD_EPSILON))
+		linVel = btVector3(0, 0, 0);
+
+	if (m_object)
 	{
 		m_object->activate(true);
 		if (m_object->isStaticObject())
@@ -1858,8 +1866,10 @@ bool CcdShapeConstructionInfo::SetMesh(RAS_MeshObject *meshobj, DerivedMesh *dm,
 	if (!dm) {
 		free_dm = true;
 		dm = CDDM_from_mesh(meshobj->GetMesh());
-		DM_ensure_tessface(dm);
 	}
+
+	// Some meshes with modifiers returns 0 polys, call DM_ensure_tessface avoid this.
+	DM_ensure_tessface(dm);
 
 	MVert *mvert = dm->getVertArray(dm);
 	MFace *mface = dm->getTessFaceArray(dm);

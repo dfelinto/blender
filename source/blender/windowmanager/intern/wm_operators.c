@@ -59,10 +59,13 @@
 #include "PIL_time.h"
 
 #include "BLI_blenlib.h"
+#include "BLI_bitmap.h"
 #include "BLI_dial.h"
 #include "BLI_dynstr.h" /*for WM_operator_pystring */
+#include "BLI_linklist.h"
 #include "BLI_linklist_stack.h"
 #include "BLI_math.h"
+#include "BLI_memarena.h"
 #include "BLI_utildefines.h"
 #include "BLI_ghash.h"
 
@@ -1212,10 +1215,10 @@ void WM_operator_properties_filesel(wmOperatorType *ot, int filter, short type, 
 	PropertyRNA *prop;
 
 	static EnumPropertyItem file_display_items[] = {
-		{FILE_DEFAULTDISPLAY, "FILE_DEFAULTDISPLAY", 0, "Default", "Automatically determine display type for files"},
-		{FILE_SHORTDISPLAY, "FILE_SHORTDISPLAY", ICON_SHORTDISPLAY, "Short List", "Display files as short list"},
-		{FILE_LONGDISPLAY, "FILE_LONGDISPLAY", ICON_LONGDISPLAY, "Long List", "Display files as a detailed list"},
-		{FILE_IMGDISPLAY, "FILE_IMGDISPLAY", ICON_IMGDISPLAY, "Thumbnails", "Display files as thumbnails"},
+		{FILE_DEFAULTDISPLAY, "DEFAULT", 0, "Default", "Automatically determine display type for files"},
+		{FILE_SHORTDISPLAY, "LIST_SHORT", ICON_SHORTDISPLAY, "Short List", "Display files as short list"},
+		{FILE_LONGDISPLAY, "LIST_LONG", ICON_LONGDISPLAY, "Long List", "Display files as a detailed list"},
+		{FILE_IMGDISPLAY, "THUMBNAIL", ICON_IMGDISPLAY, "Thumbnails", "Display files as thumbnails"},
 		{0, NULL, 0, NULL, NULL}
 	};
 
@@ -1318,6 +1321,22 @@ void WM_operator_properties_select_action_simple(wmOperatorType *ot, int default
 	};
 
 	wm_operator_properties_select_action_ex(ot, default_action, select_actions);
+}
+
+/**
+ * Use for all select random operators.
+ * Adds properties: percent, seed, action.
+ */
+void WM_operator_properties_select_random(wmOperatorType *ot)
+{
+	RNA_def_float_percentage(
+	        ot->srna, "percent", 50.f, 0.0f, 100.0f,
+	        "Percent", "Percentage of objects to select randomly", 0.f, 100.0f);
+	RNA_def_int(
+	        ot->srna, "seed", 0, 0, INT_MAX,
+	        "Random Seed", "Seed for the random number generator", 0, 255);
+
+	WM_operator_properties_select_action_simple(ot, SEL_SELECT);
 }
 
 void WM_operator_properties_select_all(wmOperatorType *ot)
@@ -1539,6 +1558,8 @@ static uiBlock *wm_block_create_redo(bContext *C, ARegion *ar, void *arg_op)
 	if (op->type->flag & OPTYPE_MACRO) {
 		for (op = op->macro.first; op; op = op->next) {
 			uiLayoutOperatorButs(C, layout, op, NULL, 'H', UI_LAYOUT_OP_SHOW_TITLE);
+			if (op->next)
+				uiItemS(layout);
 		}
 	}
 	else {
@@ -2226,6 +2247,17 @@ static int wm_operator_winactive_normal(bContext *C)
 	return 1;
 }
 
+/* included for script-access */
+static void WM_OT_window_close(wmOperatorType *ot)
+{
+	ot->name = "Close Window";
+	ot->idname = "WM_OT_window_close";
+	ot->description = "Close the current Blender window";
+
+	ot->exec = wm_window_close_exec;
+	ot->poll = WM_operator_winactive;
+}
+
 static void WM_OT_window_duplicate(wmOperatorType *ot)
 {
 	ot->name = "Duplicate Window";
@@ -2588,106 +2620,150 @@ static int wm_link_append_invoke(bContext *C, wmOperator *op, const wmEvent *UNU
 
 static short wm_link_append_flag(wmOperator *op)
 {
+	PropertyRNA *prop;
 	short flag = 0;
 
-	if (RNA_boolean_get(op->ptr, "autoselect")) flag |= FILE_AUTOSELECT;
-	if (RNA_boolean_get(op->ptr, "active_layer")) flag |= FILE_ACTIVELAY;
-	if (RNA_struct_find_property(op->ptr, "relative_path") && RNA_boolean_get(op->ptr, "relative_path")) flag |= FILE_RELPATH;
-	if (RNA_boolean_get(op->ptr, "link")) flag |= FILE_LINK;
-	if (RNA_boolean_get(op->ptr, "instance_groups")) flag |= FILE_GROUP_INSTANCE;
+	if (RNA_boolean_get(op->ptr, "autoselect"))
+		flag |= FILE_AUTOSELECT;
+	if (RNA_boolean_get(op->ptr, "active_layer"))
+		flag |= FILE_ACTIVELAY;
+	if ((prop = RNA_struct_find_property(op->ptr, "relative_path")) && RNA_property_boolean_get(op->ptr, prop))
+		flag |= FILE_RELPATH;
+	if (RNA_boolean_get(op->ptr, "link"))
+		flag |= FILE_LINK;
+	if (RNA_boolean_get(op->ptr, "instance_groups"))
+		flag |= FILE_GROUP_INSTANCE;
 
 	return flag;
 }
 
-/* Helper.
- *     if `name` is non-NULL, we assume a single-item link/append.
- *     else if `*todo_libraries` is NULL we assume first-run.
- */
-static void wm_link_append_do_libgroup(
-        bContext *C, wmOperator *op, const char *root, const char *libname, char *group, char *name,
-        const short flag, GSet **todo_libraries)
+typedef struct WMLinkAppendDataItem {
+	char *name;
+	BLI_bitmap *libraries;  /* All libs (from WMLinkAppendData.libraries) to try to load this ID from. */
+	short idcode;
+
+	ID *new_id;
+	void *customdata;
+} WMLinkAppendDataItem;
+
+typedef struct WMLinkAppendData {
+	LinkNodePair libraries;
+	LinkNodePair items;
+	int num_libraries;
+	int num_items;
+	short flag;
+
+	/* Internal 'private' data */
+	MemArena *memarena;
+} WMLinkAppendData;
+
+static WMLinkAppendData *wm_link_append_data_new(const int flag)
 {
-	Main *bmain = CTX_data_main(C);
+	MemArena *ma = BLI_memarena_new(BLI_MEMARENA_STD_BUFSIZE, __func__);
+	WMLinkAppendData *lapp_data = BLI_memarena_calloc(ma, sizeof(*lapp_data));
+
+	lapp_data->flag = flag;
+	lapp_data->memarena = ma;
+
+	return lapp_data;
+}
+
+static void wm_link_append_data_free(WMLinkAppendData *lapp_data)
+{
+	BLI_memarena_free(lapp_data->memarena);
+}
+
+/* WARNING! *Never* call wm_link_append_data_library_add() after having added some items! */
+
+static void wm_link_append_data_library_add(WMLinkAppendData *lapp_data, const char *libname)
+{
+	size_t len = strlen(libname) + 1;
+	char *libpath = BLI_memarena_alloc(lapp_data->memarena, len);
+
+	BLI_strncpy(libpath, libname, len);
+	BLI_linklist_append_arena(&lapp_data->libraries, libpath, lapp_data->memarena);
+	lapp_data->num_libraries++;
+}
+
+static WMLinkAppendDataItem *wm_link_append_data_item_add(
+        WMLinkAppendData *lapp_data, const char *idname, const short idcode, void *customdata)
+{
+	WMLinkAppendDataItem *item = BLI_memarena_alloc(lapp_data->memarena, sizeof(*item));
+	size_t len = strlen(idname) + 1;
+
+	item->name = BLI_memarena_alloc(lapp_data->memarena, len);
+	BLI_strncpy(item->name, idname, len);
+	item->idcode = idcode;
+	item->libraries = BLI_BITMAP_NEW_MEMARENA(lapp_data->memarena, lapp_data->num_libraries);
+
+	item->new_id = NULL;
+	item->customdata = customdata;
+
+	BLI_linklist_append_arena(&lapp_data->items, item, lapp_data->memarena);
+	lapp_data->num_items++;
+
+	return item;
+}
+
+static void wm_link_do(
+        WMLinkAppendData *lapp_data, ReportList *reports, Main *bmain, Scene *scene, View3D *v3d)
+{
 	Main *mainl;
 	BlendHandle *bh;
 	Library *lib;
 
-	char path[FILE_MAX_LIBEXTRA], relname[FILE_MAX];
-	int idcode;
-	const bool is_first_run = (*todo_libraries == NULL);
+	const int flag = lapp_data->flag;
 
-	BLI_assert(group);
-	idcode = BKE_idcode_from_name(group);
+	LinkNode *liblink, *itemlink;
+	int lib_idx, item_idx;
 
-	bh = BLO_blendhandle_from_file(libname, op->reports);
+	BLI_assert(lapp_data->num_items && lapp_data->num_libraries);
 
-	if (bh == NULL) {
-		/* unlikely since we just browsed it, but possible
-		 * error reports will have been made by BLO_blendhandle_from_file() */
-		return;
-	}
+	for (lib_idx = 0, liblink = lapp_data->libraries.list; liblink; lib_idx++, liblink = liblink->next) {
+		char *libname = liblink->link;
 
-	/* here appending/linking starts */
-	mainl = BLO_library_append_begin(bmain, &bh, libname);
-	lib = mainl->curlib;
-	BLI_assert(lib);
+		bh = BLO_blendhandle_from_file(libname, reports);
 
-	if (mainl->versionfile < 250) {
-		BKE_reportf(op->reports, RPT_WARNING,
-		            "Linking or appending from a very old .blend file format (%d.%d), no animation conversion will "
-		            "be done! You may want to re-save your lib file with current Blender",
-		            mainl->versionfile, mainl->subversionfile);
-	}
-
-	if (name) {
-		BLO_library_append_named_part_ex(C, mainl, &bh, name, idcode, flag);
-	}
-	else {
-		if (is_first_run) {
-			*todo_libraries = BLI_gset_new(BLI_ghashutil_strhash_p, BLI_ghashutil_strcmp, __func__);
+		if (bh == NULL) {
+			/* Unlikely since we just browsed it, but possible
+			 * Error reports will have been made by BLO_blendhandle_from_file() */
+			continue;
 		}
 
-		RNA_BEGIN (op->ptr, itemptr, "files")
-		{
-			char curr_libname[FILE_MAX];
-			int curr_idcode;
+		/* here appending/linking starts */
+		mainl = BLO_library_link_begin(bmain, &bh, libname);
+		lib = mainl->curlib;
+		BLI_assert(lib);
+		UNUSED_VARS_NDEBUG(lib);
 
-			RNA_string_get(&itemptr, "name", relname);
+		if (mainl->versionfile < 250) {
+			BKE_reportf(reports, RPT_WARNING,
+			            "Linking or appending from a very old .blend file format (%d.%d), no animation conversion will "
+			            "be done! You may want to re-save your lib file with current Blender",
+			            mainl->versionfile, mainl->subversionfile);
+		}
 
-			BLI_join_dirfile(path, sizeof(path), root, relname);
+		/* For each lib file, we try to link all items belonging to that lib,
+		 * and tag those successful to not try to load them again with the other libs. */
+		for (item_idx = 0, itemlink = lapp_data->items.list; itemlink; item_idx++, itemlink = itemlink->next) {
+			WMLinkAppendDataItem *item = itemlink->link;
+			ID *new_id;
 
-			if (BLO_library_path_explode(path, curr_libname, &group, &name)) {
-				if (!group || !name) {
-					continue;
-				}
+			if (!BLI_BITMAP_TEST(item->libraries, lib_idx)) {
+				continue;
+			}
 
-				curr_idcode = BKE_idcode_from_name(group);
-
-				if ((idcode == curr_idcode) && (BLI_path_cmp(curr_libname, libname) == 0)) {
-					BLO_library_append_named_part_ex(C, mainl, &bh, name, idcode, flag);
-				}
-				else if (is_first_run) {
-					BLI_join_dirfile(path, sizeof(path), curr_libname, group);
-					if (!BLI_gset_haskey(*todo_libraries, path)) {
-						BLI_gset_insert(*todo_libraries, BLI_strdup(path));
-					}
-				}
+			new_id = BLO_library_link_named_part_ex(mainl, &bh, item->idcode, item->name, flag, scene, v3d);
+			if (new_id) {
+				/* If the link is sucessful, clear item's libs 'todo' flags.
+				 * This avoids trying to link same item with other libraries to come. */
+				BLI_BITMAP_SET_ALL(item->libraries, false, lapp_data->num_libraries);
+				item->new_id = new_id;
 			}
 		}
-		RNA_END;
-	}
-	BLO_library_append_end(C, mainl, &bh, idcode, flag);
 
-	BLO_blendhandle_close(bh);
-
-	/* mark all library linked objects to be updated */
-	BKE_main_lib_objects_recalc_all(bmain);
-	IMB_colormanagement_check_file_config(bmain);
-
-	/* append, rather than linking */
-	if ((flag & FILE_LINK) == 0) {
-		BLI_assert(BLI_findindex(&bmain->library, lib) != -1);
-		BKE_library_make_local(bmain, lib, true);
+		BLO_library_link_end(mainl, &bh, flag, scene, v3d);
+		BLO_blendhandle_close(bh);
 	}
 }
 
@@ -2696,12 +2772,11 @@ static int wm_link_append_exec(bContext *C, wmOperator *op)
 	Main *bmain = CTX_data_main(C);
 	Scene *scene = CTX_data_scene(C);
 	PropertyRNA *prop;
+	WMLinkAppendData *lapp_data;
 	char path[FILE_MAX_LIBEXTRA], root[FILE_MAXDIR], libname[FILE_MAX], relname[FILE_MAX];
 	char *group, *name;
 	int totfiles = 0;
 	short flag;
-
-	GSet *todo_libraries = NULL;
 
 	RNA_string_get(op->ptr, "filename", relname);
 	RNA_string_get(op->ptr, "directory", root);
@@ -2710,15 +2785,15 @@ static int wm_link_append_exec(bContext *C, wmOperator *op)
 
 	/* test if we have a valid data */
 	if (!BLO_library_path_explode(path, libname, &group, &name)) {
-		BKE_report(op->reports, RPT_ERROR, "Not a library");
+		BKE_reportf(op->reports, RPT_ERROR, "'%s': not a library", path);
 		return OPERATOR_CANCELLED;
 	}
 	else if (!group) {
-		BKE_report(op->reports, RPT_ERROR, "Nothing indicated");
+		BKE_reportf(op->reports, RPT_ERROR, "'%s': nothing indicated", path);
 		return OPERATOR_CANCELLED;
 	}
 	else if (BLI_path_cmp(bmain->name, libname) == 0) {
-		BKE_report(op->reports, RPT_ERROR, "Cannot use current file as library");
+		BKE_reportf(op->reports, RPT_ERROR, "'%s': cannot use current file as library", path);
 		return OPERATOR_CANCELLED;
 	}
 
@@ -2728,55 +2803,112 @@ static int wm_link_append_exec(bContext *C, wmOperator *op)
 		totfiles = RNA_property_collection_length(op->ptr, prop);
 		if (totfiles == 0) {
 			if (!name) {
-				BKE_report(op->reports, RPT_ERROR, "Nothing indicated");
+				BKE_reportf(op->reports, RPT_ERROR, "'%s': nothing indicated", path);
 				return OPERATOR_CANCELLED;
 			}
 		}
 	}
 	else if (!name) {
-		BKE_report(op->reports, RPT_ERROR, "Nothing indicated");
+		BKE_reportf(op->reports, RPT_ERROR, "'%s': nothing indicated", path);
 		return OPERATOR_CANCELLED;
 	}
 
 	flag = wm_link_append_flag(op);
 
 	/* sanity checks for flag */
-	if (scene->id.lib && (flag & FILE_GROUP_INSTANCE)) {
-		/* TODO, user never gets this message */
-		BKE_reportf(op->reports, RPT_WARNING, "Scene '%s' is linked, group instance disabled", scene->id.name + 2);
+	if (scene && scene->id.lib) {
+		BKE_reportf(op->reports, RPT_WARNING,
+		            "Scene '%s' is linked, instantiation of objects & groups is disabled", scene->id.name + 2);
 		flag &= ~FILE_GROUP_INSTANCE;
+		scene = NULL;
 	}
 
 	/* from here down, no error returns */
 
-	/* now we have or selected, or an indicated file */
-	if (RNA_boolean_get(op->ptr, "autoselect"))
+	if (scene && RNA_boolean_get(op->ptr, "autoselect")) {
 		BKE_scene_base_deselect_all(scene);
+	}
 	
 	/* tag everything, all untagged data can be made local
 	 * its also generally useful to know what is new
 	 *
-	 * take extra care BKE_main_id_flag_all(LIB_LINK_TAG, false) is called after! */
-	BKE_main_id_flag_all(bmain, LIB_PRE_EXISTING, 1);
+	 * take extra care BKE_main_id_flag_all(bmain, LIB_PRE_EXISTING, false) is called after! */
+	BKE_main_id_flag_all(bmain, LIB_PRE_EXISTING, true);
 
+	/* We define our working data...
+	 * Note that here, each item 'uses' one library, and only one. */
+	lapp_data = wm_link_append_data_new(flag);
 	if (totfiles != 0) {
-		name = NULL;
+		GHash *libraries = BLI_ghash_new(BLI_ghashutil_strhash_p, BLI_ghashutil_strcmp, __func__);
+		int lib_idx = 0;
+
+		RNA_BEGIN (op->ptr, itemptr, "files")
+		{
+			RNA_string_get(&itemptr, "name", relname);
+
+			BLI_join_dirfile(path, sizeof(path), root, relname);
+
+			if (BLO_library_path_explode(path, libname, &group, &name)) {
+				if (!group || !name) {
+					continue;
+				}
+
+				if (!BLI_ghash_haskey(libraries, libname)) {
+					BLI_ghash_insert(libraries, BLI_strdup(libname), SET_INT_IN_POINTER(lib_idx));
+					lib_idx++;
+					wm_link_append_data_library_add(lapp_data, libname);
+				}
+			}
+		}
+		RNA_END;
+
+		RNA_BEGIN (op->ptr, itemptr, "files")
+		{
+			RNA_string_get(&itemptr, "name", relname);
+
+			BLI_join_dirfile(path, sizeof(path), root, relname);
+
+			if (BLO_library_path_explode(path, libname, &group, &name)) {
+				WMLinkAppendDataItem *item;
+				if (!group || !name) {
+					printf("skipping %s\n", path);
+					continue;
+				}
+
+				lib_idx = GET_INT_FROM_POINTER(BLI_ghash_lookup(libraries, libname));
+
+				item = wm_link_append_data_item_add(lapp_data, name, BKE_idcode_from_name(group), NULL);
+				BLI_BITMAP_ENABLE(item->libraries, lib_idx);
+			}
+		}
+		RNA_END;
+
+		BLI_ghash_free(libraries, MEM_freeN, NULL);
+	}
+	else {
+		WMLinkAppendDataItem *item;
+
+		wm_link_append_data_library_add(lapp_data, libname);
+		item = wm_link_append_data_item_add(lapp_data, name, BKE_idcode_from_name(group), NULL);
+		BLI_BITMAP_ENABLE(item->libraries, 0);
 	}
 
-	wm_link_append_do_libgroup(C, op, root, libname, group, name, flag, &todo_libraries);
+	/* XXX We'd need re-entrant locking on Main for this to work... */
+	/* BKE_main_lock(bmain); */
 
-	if (todo_libraries) {
-		GSetIterator libs_it;
+	wm_link_do(lapp_data, op->reports, bmain, scene, CTX_wm_view3d(C));
 
-		GSET_ITER(libs_it, todo_libraries) {
-			char *libpath = (char *)BLI_gsetIterator_getKey(&libs_it);
+	/* BKE_main_unlock(bmain); */
 
-			BLO_library_path_explode(libpath, libname, &group, NULL);
+	wm_link_append_data_free(lapp_data);
 
-			wm_link_append_do_libgroup(C, op, root, libname, group, NULL, flag, &todo_libraries);
-		}
+	/* mark all library linked objects to be updated */
+	BKE_main_lib_objects_recalc_all(bmain);
+	IMB_colormanagement_check_file_config(bmain);
 
-		BLI_gset_free(todo_libraries, MEM_freeN);
+	/* append, rather than linking */
+	if ((flag & FILE_LINK) == 0) {
+		BKE_library_make_local(bmain, NULL, true);
 	}
 
 	/* important we unset, otherwise these object wont
@@ -5129,6 +5261,7 @@ void wm_operatortype_init(void)
 	/* reserve size is set based on blender default setup */
 	global_ops_hash = BLI_ghash_str_new_ex("wm_operatortype_init gh", 2048);
 
+	WM_operatortype_append(WM_OT_window_close);
 	WM_operatortype_append(WM_OT_window_duplicate);
 	WM_operatortype_append(WM_OT_read_history);
 	WM_operatortype_append(WM_OT_read_homefile);

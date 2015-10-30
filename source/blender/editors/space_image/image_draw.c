@@ -813,7 +813,7 @@ void draw_image_main(const bContext *C, ARegion *ar)
 	show_viewer = (ima && ima->source == IMA_SRC_VIEWER) != 0;
 	show_render = (show_viewer && ima->type == IMA_TYPE_R_RESULT) != 0;
 	show_paint = (ima && (sima->mode == SI_MODE_PAINT) && (show_viewer == false) && (show_render == false));
-	show_stereo3d = (ima && (ima->flag & IMA_IS_STEREO) && (sima->iuser.flag & IMA_SHOW_STEREO));
+	show_stereo3d = (ima && BKE_image_is_stereo(ima) && (sima->iuser.flag & IMA_SHOW_STEREO));
 	show_multilayer = ima && BKE_image_is_multilayer(ima);
 
 	if (show_viewer) {
@@ -855,7 +855,7 @@ void draw_image_main(const bContext *C, ARegion *ar)
 			BLI_rctf_init(&frame, 0.0f, ibuf->x, 0.0f, ibuf->y);
 			UI_view2d_view_to_region(&ar->v2d, 0.0f, 0.0f, &x, &y);
 
-			ED_region_image_metadata_draw(x, y, ibuf, frame, zoomx, zoomy);
+			ED_region_image_metadata_draw(x, y, ibuf, &frame, zoomx, zoomy);
 		}
 	}
 

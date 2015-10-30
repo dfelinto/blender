@@ -1570,7 +1570,9 @@ bool RNA_property_editable(PointerRNA *ptr, PropertyRNA *prop)
 
 	prop = rna_ensure_property(prop);
 	flag = prop->editable ? prop->editable(ptr) : prop->flag;
-	return (flag & PROP_EDITABLE) && (!id || !id->lib || (prop->flag & PROP_LIB_EXCEPTION));
+	return ((flag & PROP_EDITABLE) &&
+	        (flag & PROP_REGISTER) == 0 &&
+	        (!id || !id->lib || (prop->flag & PROP_LIB_EXCEPTION)));
 }
 
 bool RNA_property_editable_flag(PointerRNA *ptr, PropertyRNA *prop)
@@ -6530,7 +6532,7 @@ bool RNA_property_copy(PointerRNA *ptr, PointerRNA *fromptr, PropertyRNA *prop, 
 		 * since prop in this case is just a fake wrapper around actual IDProp data, and not a 'real' PropertyRNA. */
 		prop = (PropertyRNA *)rna_idproperty_find(ptr, ((IDProperty *)fromprop)->name);
 
-		/* its possible the custom-prop doesn't exist on this datablock */
+		/* its possible the custom-prop doesn't exist on this data-block */
 		if (prop == NULL) {
 			return false;
 		}

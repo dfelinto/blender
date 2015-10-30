@@ -1934,10 +1934,18 @@ static int graphkeys_framejump_exec(bContext *C, wmOperator *UNUSED(op))
 		SpaceIpo *sipo = (SpaceIpo *)ac.sl;
 		Scene *scene = ac.scene;
 		
-		/* take the average values, rounding to the nearest int for the current frame */
-		CFRA = iroundf(ked.f1 / ked.i1);
-		SUBFRA = 0.f;
-		sipo->cursorVal = ked.f2 / (float)ked.i1;
+		/* take the average values, rounding to the nearest int as necessary for int results */
+		if (sipo->mode == SIPO_MODE_DRIVERS) {
+			/* Drivers Mode - Affects cursor (float) */
+			sipo->cursorTime = ked.f1 / (float)ked.i1;
+			sipo->cursorVal  = ked.f2 / (float)ked.i1;
+		}
+		else {
+			/* Animation Mode - Affects current frame (int) */
+			CFRA = iroundf(ked.f1 / ked.i1);
+			SUBFRA = 0.f;
+			sipo->cursorVal = ked.f2 / (float)ked.i1;
+		}
 	}
 	
 	/* set notifier that things have changed */
@@ -1987,6 +1995,7 @@ static void snap_graph_keys(bAnimContext *ac, short mode)
 	bAnimListElem *ale;
 	int filter;
 	
+	SpaceIpo *sipo = (SpaceIpo *)ac->sl;
 	KeyframeEditData ked;
 	KeyframeEditFunc edit_cb;
 	float cursor_value = 0.0f;
@@ -1995,9 +2004,7 @@ static void snap_graph_keys(bAnimContext *ac, short mode)
 	filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_CURVE_VISIBLE | ANIMFILTER_FOREDIT | ANIMFILTER_NODUPLIS);
 	ANIM_animdata_filter(ac, &anim_data, filter, ac->data, ac->datatype);
 	
-	/* get beztriple editing callbacks */
-	edit_cb = ANIM_editkeyframes_snap(mode);
-	
+	/* init custom data for iterating over keyframes */
 	memset(&ked, 0, sizeof(KeyframeEditData)); 
 	ked.scene = ac->scene;
 	if (mode == GRAPHKEYS_SNAP_NEAREST_MARKER) {
@@ -2005,9 +2012,20 @@ static void snap_graph_keys(bAnimContext *ac, short mode)
 		ked.list.last = (ac->markers) ? ac->markers->last : NULL;
 	}
 	else if (mode == GRAPHKEYS_SNAP_VALUE) {
-		SpaceIpo *sipo = (SpaceIpo *)ac->sl;
 		cursor_value = (sipo) ? sipo->cursorVal : 0.0f;
 	}
+	else if (mode == GRAPHKEYS_SNAP_CFRA) {
+		/* In drivers mode, use the cursor value instead
+		 * (We need to use a different callback for that though)
+		 */
+		if (sipo->mode == SIPO_MODE_DRIVERS) {
+			ked.f1 = sipo->cursorTime;
+			mode = SNAP_KEYS_TIME;
+		}
+	}
+	
+	/* get beztriple editing callbacks */
+	edit_cb = ANIM_editkeyframes_snap(mode);
 	
 	/* snap keyframes */
 	for (ale = anim_data.first; ale; ale = ale->next) {
@@ -2030,7 +2048,7 @@ static void snap_graph_keys(bAnimContext *ac, short mode)
 		}
 		else 
 			ANIM_fcurve_keyframes_loop(&ked, ale->key_data, NULL, edit_cb, calchandles_fcurve);
-
+		
 		ale->update |= ANIM_UPDATE_DEFAULT;
 	}
 
@@ -2104,18 +2122,16 @@ static void mirror_graph_keys(bAnimContext *ac, short mode)
 	bAnimListElem *ale;
 	int filter;
 	
+	SpaceIpo *sipo = (SpaceIpo *)ac->sl;
 	KeyframeEditData ked;
 	KeyframeEditFunc edit_cb;
 	float cursor_value = 0.0f;
 
-	/* get beztriple editing callbacks */
-	edit_cb = ANIM_editkeyframes_mirror(mode);
-	
+	/* init custom data for looping over keyframes */
 	memset(&ked, 0, sizeof(KeyframeEditData)); 
 	ked.scene = ac->scene;
 	
-	/* for 'first selected marker' mode, need to find first selected marker first! */
-	// XXX should this be made into a helper func in the API?
+	/* store mode-specific custom data... */
 	if (mode == GRAPHKEYS_MIRROR_MARKER) {
 		TimeMarker *marker = NULL;
 		
@@ -2129,9 +2145,20 @@ static void mirror_graph_keys(bAnimContext *ac, short mode)
 			return;
 	}
 	else if (mode == GRAPHKEYS_MIRROR_VALUE) {
-		SpaceIpo *sipo = (SpaceIpo *)ac->sl;
 		cursor_value = (sipo) ? sipo->cursorVal : 0.0f;
 	}
+	else if (mode == GRAPHKEYS_MIRROR_CFRA) {
+		/* In drivers mode, use the cursor value instead
+		 * (We need to use a different callback for that though)
+		 */
+		if (sipo->mode == SIPO_MODE_DRIVERS) {
+			ked.f1 = sipo->cursorTime;
+			mode = MIRROR_KEYS_TIME;
+		}
+	}
+	
+	/* get beztriple editing callbacks */
+	edit_cb = ANIM_editkeyframes_mirror(mode);
 	
 	/* filter data */
 	filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_CURVE_VISIBLE | ANIMFILTER_FOREDIT | ANIMFILTER_NODUPLIS);
@@ -2158,7 +2185,7 @@ static void mirror_graph_keys(bAnimContext *ac, short mode)
 		}
 		else 
 			ANIM_fcurve_keyframes_loop(&ked, ale->key_data, NULL, edit_cb, calchandles_fcurve);
-
+		
 		ale->update |= ANIM_UPDATE_DEFAULT;
 	}
 

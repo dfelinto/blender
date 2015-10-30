@@ -81,6 +81,7 @@
 #include "BKE_packedFile.h"
 #include "BKE_report.h"
 #include "BKE_sound.h"
+#include "BKE_scene.h"
 #include "BKE_screen.h"
 
 #include "BLO_readfile.h"
@@ -338,11 +339,13 @@ static void wm_init_userdef(bContext *C, const bool from_memory)
 #define BKE_READ_EXOTIC_FAIL_FORMAT     -2 /* file format is not supported */
 #define BKE_READ_EXOTIC_FAIL_OPEN       -1 /* Can't open the file */
 #define BKE_READ_EXOTIC_OK_BLEND         0 /* .blend file */
+#if 0
 #define BKE_READ_EXOTIC_OK_OTHER         1 /* other supported formats */
+#endif
 
 
 /* intended to check for non-blender formats but for now it only reads blends */
-static int wm_read_exotic(Scene *UNUSED(scene), const char *name)
+static int wm_read_exotic(const char *name)
 {
 	int len;
 	gzFile gzfile;
@@ -438,7 +441,14 @@ void wm_file_read_report(bContext *C)
 static void wm_file_read_post(bContext *C, bool is_startup_file)
 {
 	bool addons_loaded = false;
-	CTX_wm_window_set(C, CTX_wm_manager(C)->windows.first);
+	wmWindowManager *wm = CTX_wm_manager(C);
+
+	if (!G.background) {
+		/* remove windows which failed to be added via WM_check */
+		wm_window_ghostwindows_remove_invalid(C, wm);
+	}
+
+	CTX_wm_window_set(C, wm->windows.first);
 
 	ED_editors_init(C);
 	DAG_on_visible_update(CTX_data_main(C), true);
@@ -467,6 +477,12 @@ static void wm_file_read_post(bContext *C, bool is_startup_file)
 	BLI_callback_exec(CTX_data_main(C), NULL, BLI_CB_EVT_VERSION_UPDATE);
 	BLI_callback_exec(CTX_data_main(C), NULL, BLI_CB_EVT_LOAD_POST);
 
+	/* would otherwise be handled by event loop */
+	if (G.background) {
+		Main *bmain = CTX_data_main(C);
+		BKE_scene_update_tagged(bmain->eval_ctx, bmain, CTX_data_scene(C));
+	}
+
 	WM_event_add_notifier(C, NC_WM | ND_FILEREAD, NULL);
 
 	/* report any errors.
@@ -482,9 +498,11 @@ static void wm_file_read_post(bContext *C, bool is_startup_file)
 		CTX_wm_window_set(C, NULL); /* exits queues */
 	}
 
-//	undo_editmode_clear();
-	BKE_undo_reset();
-	BKE_undo_write(C, "original");  /* save current state */
+	if (!G.background) {
+//		undo_editmode_clear();
+		BKE_undo_reset();
+		BKE_undo_write(C, "original");  /* save current state */
+	}
 }
 
 bool WM_file_read(bContext *C, const char *filepath, ReportList *reports)
@@ -506,7 +524,7 @@ bool WM_file_read(bContext *C, const char *filepath, ReportList *reports)
 	/* first try to append data from exotic file formats... */
 	/* it throws error box when file doesn't exist and returns -1 */
 	/* note; it should set some error message somewhere... (ton) */
-	retval = wm_read_exotic(CTX_data_scene(C), filepath);
+	retval = wm_read_exotic(filepath);
 	
 	/* we didn't succeed, now try to read Blender file */
 	if (retval == BKE_READ_EXOTIC_OK_BLEND) {
@@ -555,8 +573,10 @@ bool WM_file_read(bContext *C, const char *filepath, ReportList *reports)
 
 		success = true;
 	}
+#if 0
 	else if (retval == BKE_READ_EXOTIC_OK_OTHER)
 		BKE_undo_write(C, "Import file");
+#endif
 	else if (retval == BKE_READ_EXOTIC_FAIL_OPEN) {
 		BKE_reportf(reports, RPT_ERROR, "Cannot read file '%s': %s", filepath,
 		            errno ? strerror(errno) : TIP_("unable to open the file"));
@@ -912,13 +932,18 @@ static ImBuf *blend_file_thumb(Scene *scene, bScreen *screen, BlendThumbnail **t
 
 	/* gets scaled to BLEN_THUMB_SIZE */
 	if (scene->camera) {
-		ibuf = ED_view3d_draw_offscreen_imbuf_simple(scene, scene->camera,
-		                                             BLEN_THUMB_SIZE * 2, BLEN_THUMB_SIZE * 2,
-		                                             IB_rect, OB_SOLID, false, false, false, R_ALPHAPREMUL, NULL, err_out);
+		ibuf = ED_view3d_draw_offscreen_imbuf_simple(
+		        scene, scene->camera,
+		        BLEN_THUMB_SIZE * 2, BLEN_THUMB_SIZE * 2,
+		        IB_rect, OB_SOLID, false, false, false, R_ALPHAPREMUL, 0, NULL,
+		        NULL, err_out);
 	}
 	else {
-		ibuf = ED_view3d_draw_offscreen_imbuf(scene, v3d, ar, BLEN_THUMB_SIZE * 2, BLEN_THUMB_SIZE * 2,
-		                                      IB_rect, false, R_ALPHAPREMUL, NULL, err_out);
+		ibuf = ED_view3d_draw_offscreen_imbuf(
+		        scene, v3d, ar,
+		        BLEN_THUMB_SIZE * 2, BLEN_THUMB_SIZE * 2,
+		        IB_rect, false, R_ALPHAPREMUL, 0, NULL,
+		        NULL, err_out);
 	}
 
 	if (ibuf) {
@@ -1289,3 +1314,13 @@ void wm_open_init_use_scripts(wmOperator *op, bool use_prefs)
 }
 
 /** \} */
+
+void WM_file_tag_modified(const bContext *C)
+{
+	wmWindowManager *wm = CTX_wm_manager(C);
+	if (wm->file_saved) {
+		wm->file_saved = 0;
+		/* notifier that data changed, for save-over warning or header */
+		WM_event_add_notifier(C, NC_WM | ND_DATACHANGED, NULL);
+	}
+}

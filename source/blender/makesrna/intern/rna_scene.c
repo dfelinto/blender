@@ -330,7 +330,7 @@ EnumPropertyItem normal_swizzle_items[] = {
 };
 
 EnumPropertyItem bake_save_mode_items[] = {
-	{R_BAKE_SAVE_INTERNAL, "INTERNAL", 0, "Internal", "Save the baking map in an internal image datablock"},
+	{R_BAKE_SAVE_INTERNAL, "INTERNAL", 0, "Internal", "Save the baking map in an internal image data-block"},
 	{R_BAKE_SAVE_EXTERNAL, "EXTERNAL", 0, "External", "Save the baking map in an external file"},
 	{0, NULL, 0, NULL, NULL}
 };
@@ -554,6 +554,7 @@ static void rna_Scene_set_set(PointerRNA *ptr, PointerRNA value)
 			return;
 	}
 
+	id_lib_extern((ID *)set);
 	scene->set = set;
 }
 
@@ -1950,7 +1951,7 @@ static void rna_Stereo3dFormat_update(Main *UNUSED(bmain), Scene *UNUSED(scene),
 		ImBuf *ibuf;
 		void *lock;
 
-		if ((ima->flag & IMA_IS_STEREO) == 0)
+		if (!BKE_image_is_stereo(ima))
 			return;
 
 		ibuf = BKE_image_acquire_ibuf(ima, NULL, &lock);
@@ -2051,12 +2052,12 @@ static void rna_def_tool_settings(BlenderRNA  *brna)
 	};
 	
 	static EnumPropertyItem gpencil_source_3d_items[] = {
-		{GP_TOOL_SOURCE_SCENE, "SCENE", 0, "Scene", 
+		{GP_TOOL_SOURCE_SCENE, "SCENE", 0, "Scene",
 		 "Grease Pencil data attached to the current scene is used, "
-	     "unless the active object already has Grease Pencil data (i.e. for old files)"},
+		 "unless the active object already has Grease Pencil data (i.e. for old files)"},
 		{GP_TOOL_SOURCE_OBJECT, "OBJECT", 0, "Object",
-		 "Grease Pencil datablocks attached to the active object are used "
-	     "(required using pre 2.73 add-ons, e.g. BSurfaces)"},
+		 "Grease Pencil data-blocks attached to the active object are used "
+		 "(required using pre 2.73 add-ons, e.g. BSurfaces)"},
 		{0, NULL, 0, NULL, NULL}
 	};
 
@@ -3397,7 +3398,7 @@ static void rna_def_freestyle_settings(BlenderRNA *brna)
 	srna = RNA_def_struct(brna, "FreestyleSettings", NULL);
 	RNA_def_struct_sdna(srna, "FreestyleConfig");
 	RNA_def_struct_nested(brna, srna, "SceneRenderLayer");
-	RNA_def_struct_ui_text(srna, "Freestyle Settings", "Freestyle settings for a SceneRenderLayer datablock");
+	RNA_def_struct_ui_text(srna, "Freestyle Settings", "Freestyle settings for a SceneRenderLayer data-block");
 
 	prop = RNA_def_property(srna, "modules", PROP_COLLECTION, PROP_NONE);
 	RNA_def_property_collection_sdna(prop, NULL, "modules", NULL);
@@ -3481,7 +3482,7 @@ static void rna_def_scene_game_recast_data(BlenderRNA *brna)
 	srna = RNA_def_struct(brna, "SceneGameRecastData", NULL);
 	RNA_def_struct_sdna(srna, "RecastData");
 	RNA_def_struct_nested(brna, srna, "Scene");
-	RNA_def_struct_ui_text(srna, "Recast Data", "Recast data for a Game datablock");
+	RNA_def_struct_ui_text(srna, "Recast Data", "Recast data for a Game data-block");
 
 	prop = RNA_def_property(srna, "cell_size", PROP_FLOAT, PROP_NONE);
 	RNA_def_property_float_sdna(prop, NULL, "cellsize");
@@ -3585,7 +3586,7 @@ static void rna_def_bake_data(BlenderRNA *brna)
 	srna = RNA_def_struct(brna, "BakeSettings", NULL);
 	RNA_def_struct_sdna(srna, "BakeData");
 	RNA_def_struct_nested(brna, srna, "RenderSettings");
-	RNA_def_struct_ui_text(srna, "Bake Data", "Bake data for a Scene datablock");
+	RNA_def_struct_ui_text(srna, "Bake Data", "Bake data for a Scene data-block");
 
 	prop = RNA_def_property(srna, "cage_object", PROP_STRING, PROP_NONE);
 	RNA_def_property_string_sdna(prop, NULL, "cage");
@@ -3778,7 +3779,7 @@ static void rna_def_scene_game_data(BlenderRNA *brna)
 	srna = RNA_def_struct(brna, "SceneGameData", NULL);
 	RNA_def_struct_sdna(srna, "GameData");
 	RNA_def_struct_nested(brna, srna, "Scene");
-	RNA_def_struct_ui_text(srna, "Game Data", "Game data for a Scene datablock");
+	RNA_def_struct_ui_text(srna, "Game Data", "Game data for a Scene data-block");
 	
 	prop = RNA_def_property(srna, "resolution_x", PROP_INT, PROP_PIXEL);
 	RNA_def_property_int_sdna(prop, NULL, "xplay");
@@ -5080,7 +5081,7 @@ static void rna_def_scene_render_data(BlenderRNA *brna)
 	RNA_def_struct_sdna(srna, "RenderData");
 	RNA_def_struct_nested(brna, srna, "Scene");
 	RNA_def_struct_path_func(srna, "rna_RenderSettings_path");
-	RNA_def_struct_ui_text(srna, "Render Data", "Rendering settings for a Scene datablock");
+	RNA_def_struct_ui_text(srna, "Render Data", "Rendering settings for a Scene data-block");
 
 	/* Render Data */
 	prop = RNA_def_property(srna, "image_settings", PROP_POINTER, PROP_NONE);
@@ -5365,6 +5366,11 @@ static void rna_def_scene_render_data(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Shutter", "Time taken in frames between shutter open and close");
 	RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
 	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, "rna_Scene_glsl_update");
+
+	prop = RNA_def_property(srna, "motion_blur_shutter_curve", PROP_POINTER, PROP_NONE);
+	RNA_def_property_pointer_sdna(prop, NULL, "mblur_shutter_curve");
+	RNA_def_property_struct_type(prop, "CurveMapping");
+	RNA_def_property_ui_text(prop, "Shutter Curve", "Curve defining the shutter's openness over time");
 	
 	/* border */
 	prop = RNA_def_property(srna, "use_border", PROP_BOOLEAN, PROP_NONE);
@@ -6504,7 +6510,7 @@ void RNA_def_scene(BlenderRNA *brna)
 	RNA_def_property_pointer_sdna(prop, NULL, "gpd");
 	RNA_def_property_struct_type(prop, "GreasePencil");
 	RNA_def_property_flag(prop, PROP_EDITABLE | PROP_ID_REFCOUNT);
-	RNA_def_property_ui_text(prop, "Grease Pencil Data", "Grease Pencil datablock");
+	RNA_def_property_ui_text(prop, "Grease Pencil Data", "Grease Pencil data-block");
 	RNA_def_property_update(prop, NC_GPENCIL | ND_DATA | NA_EDITED, NULL);
 	
 	/* Transform Orientations */

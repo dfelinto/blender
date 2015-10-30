@@ -513,7 +513,6 @@ static void build_dag_object(DagForest *dag, DagNode *scenenode, Main *bmain, Sc
 	}
 
 	/* also build a custom data mask for dependencies that need certain layers */
-	node->customdata_mask = 0;
 	
 	if (ob->type == OB_ARMATURE) {
 		if (ob->pose) {
@@ -1140,7 +1139,7 @@ void dag_add_relation(DagForest *forest, DagNode *fob1, DagNode *fob2, short rel
 
 	/* TODO(sergey): Find a better place for this. */
 #ifdef WITH_OPENSUBDIV
-	if ((rel & DAG_RL_DATA_DATA) != 0) {
+	if ((rel & (DAG_RL_DATA_DATA | DAG_RL_DATA_OB)) != 0) {
 		if (fob1->type == ID_OB) {
 			if ((fob1->eval_flags & DAG_EVAL_NEED_CPU) == 0) {
 				Object *ob2 = fob2->ob;
@@ -1447,7 +1446,7 @@ static void dag_scene_free(Scene *sce)
 	}
 }
 
-/* Chech whether object data needs to be evaluated before it
+/* Check whether object data needs to be evaluated before it
  * might be used by others.
  *
  * Means that mesh object needs to have proper derivedFinal,
@@ -1659,7 +1658,7 @@ static void dag_scene_build(Main *bmain, Scene *sce)
 	/* temporal...? */
 	sce->recalc |= SCE_PRV_CHANGED; /* test for 3d preview */
 
-	/* Make sure that new dependencies which came from invisble layers
+	/* Make sure that new dependencies which came from invisible layers
 	 * are tagged for update (if they're needed for objects which were
 	 * tagged for update).
 	 */
@@ -2521,7 +2520,8 @@ void DAG_on_visible_update(Main *bmain, const bool do_time)
 	}
 }
 
-static void dag_id_flush_update__isDependentTexture(void *userData, Object *UNUSED(ob), ID **idpoin)
+static void dag_id_flush_update__isDependentTexture(
+        void *userData, Object *UNUSED(ob), ID **idpoin, int UNUSED(cd_flag))
 {
 	struct { ID *id; bool is_dependent; } *data = userData;
 	

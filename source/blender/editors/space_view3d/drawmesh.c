@@ -410,7 +410,10 @@ static void draw_textured_begin(Scene *scene, View3D *v3d, RegionView3D *rv3d, O
 		solidtex = false;
 		Gtexdraw.is_lit = 0;
 	}
-	else if (v3d->drawtype == OB_SOLID || ((ob->mode & OB_MODE_EDIT) && v3d->drawtype != OB_TEXTURE)) {
+	else if ((v3d->drawtype == OB_SOLID) ||
+	         ((ob->mode & OB_MODE_EDIT) && (v3d->drawtype != OB_TEXTURE)) ||
+	         ((ob->mode & OB_MODE_TEXTURE_PAINT) && BKE_scene_use_new_shading_nodes(scene)))
+	{
 		/* draw with default lights in solid draw mode and edit mode */
 		solidtex = true;
 		Gtexdraw.is_lit = -1;
@@ -664,7 +667,7 @@ static void update_tface_color_layer(DerivedMesh *dm, bool use_mcol)
 		else if (ma && (ma->shade_flag & MA_OBCOLOR)) {
 			int loop_index = mp->loopstart;
 			for (j = 0; j < mp->totloop; j++, loop_index++) {
-				copy_v3_v3_char(&finalCol[loop_index].r, (char *)Gtexdraw.obcol);
+				copy_v3_v3_uchar(&finalCol[loop_index].r, Gtexdraw.obcol);
 			}
 			copy_mode = COPY_PREV;
 		}

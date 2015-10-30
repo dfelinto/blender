@@ -69,6 +69,9 @@ void ImageManager::set_extended_image_limits(const DeviceInfo& info)
 	else if((info.type == DEVICE_CUDA || info.type == DEVICE_MULTI) && info.extended_images) {
 		tex_num_images = TEX_EXTENDED_NUM_IMAGES_GPU;
 	}
+	else if(info.pack_images) {
+		tex_num_images = TEX_PACKED_NUM_IMAGES;
+	}
 }
 
 bool ImageManager::set_animation_frame_update(int frame)
@@ -447,6 +450,9 @@ bool ImageManager::file_load_image(Image *img, device_vector<uchar4>& tex_img)
 
 	/* read RGBA pixels */
 	uchar *pixels = (uchar*)tex_img.resize(width, height, depth);
+	if(pixels == NULL) {
+		return false;
+	}
 	bool cmyk = false;
 
 	if(in) {
@@ -570,6 +576,9 @@ bool ImageManager::file_load_float_image(Image *img, device_vector<float4>& tex_
 
 	/* read RGBA pixels */
 	float *pixels = (float*)tex_img.resize(width, height, depth);
+	if(pixels == NULL) {
+		return false;
+	}
 	bool cmyk = false;
 
 	if(in) {

@@ -96,6 +96,7 @@ typedef struct OGLRender {
 	ImageUser iuser;
 
 	GPUOffScreen *ofs;
+	int ofs_samples;
 	GPUFX *fx;
 	int sizex, sizey;
 	int write_still;
@@ -104,7 +105,7 @@ typedef struct OGLRender {
 	bMovieHandle *mh;
 	int cfrao, nfra;
 
-	size_t totvideos;
+	int totvideos;
 
 	/* quick lookup */
 	int view_id;
@@ -228,13 +229,8 @@ static void screen_opengl_views_setup(OGLRender *oglrender)
 	}
 
 	BLI_lock_thread(LOCK_DRAW_IMAGE);
-	if (is_multiview && BKE_scene_multiview_is_stereo3d(rd)) {
-		oglrender->ima->flag |= IMA_IS_STEREO;
-	}
-	else {
-		oglrender->ima->flag &= ~IMA_IS_STEREO;
+	if (!(is_multiview && BKE_scene_multiview_is_stereo3d(rd)))
 		oglrender->iuser.flag &= ~IMA_SHOW_STEREO;
-	}
 	BLI_unlock_thread(LOCK_DRAW_IMAGE);
 
 	/* will only work for non multiview correctly */
@@ -279,6 +275,9 @@ static void screen_opengl_render_doit(OGLRender *oglrender, RenderResult *rr)
 		        &context);
 
 		context.view_id = BKE_scene_multiview_view_id_get(&scene->r, viewname);
+		context.gpu_offscreen = oglrender->ofs;
+		context.gpu_samples = oglrender->ofs_samples;
+
 		ibuf = BKE_sequencer_give_ibuf(&context, CFRA, chanshown);
 
 		if (ibuf) {
@@ -375,63 +374,23 @@ static void screen_opengl_render_doit(OGLRender *oglrender, RenderResult *rr)
 
 		rect = MEM_mallocN(sizex * sizey * sizeof(unsigned char) * 4, "offscreen rect");
 
-		if ((scene->r.mode & R_OSA) == 0) {
-			ED_view3d_draw_offscreen(
-			        scene, v3d, ar, sizex, sizey, NULL, winmat,
-			        draw_bgpic, draw_sky, is_persp,
-			        oglrender->ofs, oglrender->fx, &fx_settings, viewname);
-			GPU_offscreen_read_pixels(oglrender->ofs, GL_UNSIGNED_BYTE, rect);
-		}
-		else {
-			/* simple accumulation, less hassle then FSAA FBO's */
-			static float jit_ofs[32][2];
-			float winmat_jitter[4][4];
-			int *accum_buffer = MEM_mallocN(sizex * sizey * sizeof(int) * 4, "accum1");
-			int i, j;
-
-			BLI_jitter_init(jit_ofs, scene->r.osa);
-
-			/* first sample buffer, also initializes 'rv3d->persmat' */
-			ED_view3d_draw_offscreen(
-			        scene, v3d, ar, sizex, sizey, NULL, winmat,
-			        draw_bgpic, draw_sky, is_persp,
-			        oglrender->ofs, oglrender->fx, &fx_settings, viewname);
-			GPU_offscreen_read_pixels(oglrender->ofs, GL_UNSIGNED_BYTE, rect);
-
-			for (i = 0; i < sizex * sizey * 4; i++)
-				accum_buffer[i] = rect[i];
-
-			/* skip the first sample */
-			for (j = 1; j < scene->r.osa; j++) {
-				copy_m4_m4(winmat_jitter, winmat);
-				window_translate_m4(winmat_jitter, rv3d->persmat,
-				                    (jit_ofs[j][0] * 2.0f) / sizex,
-				                    (jit_ofs[j][1] * 2.0f) / sizey);
-
-				ED_view3d_draw_offscreen(
-				        scene, v3d, ar, sizex, sizey, NULL, winmat_jitter,
-				        draw_bgpic, draw_sky, is_persp,
-				        oglrender->ofs, oglrender->fx, &fx_settings, viewname);
-				GPU_offscreen_read_pixels(oglrender->ofs, GL_UNSIGNED_BYTE, rect);
-
-				for (i = 0; i < sizex * sizey * 4; i++)
-					accum_buffer[i] += rect[i];
-			}
-
-			for (i = 0; i < sizex * sizey * 4; i++)
-				rect[i] = accum_buffer[i] / scene->r.osa;
-
-			MEM_freeN(accum_buffer);
-		}
+		ED_view3d_draw_offscreen(
+		        scene, v3d, ar, sizex, sizey, NULL, winmat,
+		        draw_bgpic, draw_sky, is_persp, viewname,
+		        oglrender->fx, &fx_settings,
+		        oglrender->ofs);
+		GPU_offscreen_read_pixels(oglrender->ofs, GL_UNSIGNED_BYTE, rect);
 
 		GPU_offscreen_unbind(oglrender->ofs, true); /* unbind */
 	}
 	else {
 		/* shouldnt suddenly give errors mid-render but possible */
 		char err_out[256] = "unknown";
-		ImBuf *ibuf_view = ED_view3d_draw_offscreen_imbuf_simple(scene, scene->camera, oglrender->sizex, oglrender->sizey,
-		                                                         IB_rect, OB_SOLID, false, true, true,
-		                                                         (draw_sky) ? R_ADDSKY : R_ALPHAPREMUL, viewname, err_out);
+		ImBuf *ibuf_view = ED_view3d_draw_offscreen_imbuf_simple(
+		        scene, scene->camera, oglrender->sizex, oglrender->sizey,
+		        IB_rect, OB_SOLID, false, true, true,
+		        (draw_sky) ? R_ADDSKY : R_ALPHAPREMUL, oglrender->ofs_samples, viewname,
+		        oglrender->ofs, err_out);
 		camera = scene->camera;
 
 		if (ibuf_view) {
@@ -541,6 +500,7 @@ static bool screen_opengl_render_init(bContext *C, wmOperator *op)
 	GPUOffScreen *ofs;
 	OGLRender *oglrender;
 	int sizex, sizey;
+	const int samples = (scene->r.mode & R_OSA) ? scene->r.osa : 0;
 	bool is_view_context = RNA_boolean_get(op->ptr, "view_context");
 	const bool is_animation = RNA_boolean_get(op->ptr, "animation");
 	const bool is_sequencer = RNA_boolean_get(op->ptr, "sequencer");
@@ -585,7 +545,7 @@ static bool screen_opengl_render_init(bContext *C, wmOperator *op)
 	sizey = (scene->r.size * scene->r.ysch) / 100;
 
 	/* corrects render size with actual size, not every card supports non-power-of-two dimensions */
-	ofs = GPU_offscreen_create(sizex, sizey, err_out);
+	ofs = GPU_offscreen_create(sizex, sizey, samples, err_out);
 
 	if (!ofs) {
 		BKE_reportf(op->reports, RPT_ERROR, "Failed to create OpenGL off-screen buffer, %s", err_out);
@@ -597,6 +557,7 @@ static bool screen_opengl_render_init(bContext *C, wmOperator *op)
 	op->customdata = oglrender;
 
 	oglrender->ofs = ofs;
+	oglrender->ofs_samples = samples;
 	oglrender->sizex = sizex;
 	oglrender->sizey = sizey;
 	oglrender->bmain = CTX_data_main(C);
@@ -661,7 +622,7 @@ static void screen_opengl_render_end(bContext *C, OGLRender *oglrender)
 {
 	Main *bmain = CTX_data_main(C);
 	Scene *scene = oglrender->scene;
-	size_t i;
+	int i;
 
 	if (oglrender->mh) {
 		if (BKE_imtype_is_movie(scene->r.im_format.imtype)) {
@@ -719,7 +680,8 @@ static bool screen_opengl_render_anim_initialize(bContext *C, wmOperator *op)
 	oglrender->reports = op->reports;
 
 	if (BKE_imtype_is_movie(scene->r.im_format.imtype)) {
-		size_t i, width, height;
+		size_t width, height;
+		int i;
 
 		BKE_scene_multiview_videos_dimensions_get(&scene->r, oglrender->sizex, oglrender->sizey, &width, &height);
 		oglrender->mh = BKE_movie_handle_get(scene->r.im_format.imtype);
@@ -911,7 +873,7 @@ static int screen_opengl_render_invoke(bContext *C, wmOperator *op, const wmEven
 	}
 	
 	oglrender = op->customdata;
-	render_view_open(C, event->x, event->y);
+	render_view_open(C, event->x, event->y, op->reports);
 	
 	/* view may be changed above (R_OUTPUT_WINDOW) */
 	oglrender->win = CTX_wm_window(C);

@@ -153,10 +153,14 @@ void transpose_m4_m4(float R[4][4], float A[4][4]);
 
 int compare_m4m4(float mat1[4][4], float mat2[4][4], float limit);
 
-void normalize_m3(float R[3][3]);
-void normalize_m3_m3(float R[3][3], float A[3][3]);
-void normalize_m4(float R[4][4]);
-void normalize_m4_m4(float R[4][4], float A[4][4]);
+void normalize_m3_ex(float R[3][3], float r_scale[3]) ATTR_NONNULL();
+void normalize_m3(float R[3][3]) ATTR_NONNULL();
+void normalize_m3_m3_ex(float R[3][3], float A[3][3], float r_scale[3]) ATTR_NONNULL();
+void normalize_m3_m3(float R[3][3], float A[3][3]) ATTR_NONNULL();
+void normalize_m4_ex(float R[4][4], float r_scale[3]) ATTR_NONNULL();
+void normalize_m4(float R[4][4]) ATTR_NONNULL();
+void normalize_m4_m4_ex(float R[4][4], float A[4][4], float r_scale[3]) ATTR_NONNULL();
+void normalize_m4_m4(float R[4][4], float A[4][4]) ATTR_NONNULL();
 
 void orthogonalize_m3(float R[3][3], int axis);
 void orthogonalize_m4(float R[4][4], int axis);
@@ -215,6 +219,8 @@ void mat4_to_loc_rot_size(float loc[3], float rot[3][3], float size[3], float wm
 void mat4_to_loc_quat(float loc[3], float quat[4], float wmat[4][4]);
 void mat4_decompose(float loc[3], float quat[4], float size[3], float wmat[4][4]);
 
+void mat3_polar_decompose(float mat3[3][3], float r_U[3][3], float r_P[3][3]);
+
 void loc_eul_size_to_mat4(float R[4][4],
                           const float loc[3], const float eul[3], const float size[3]);
 void loc_eulO_size_to_mat4(float R[4][4],
@@ -226,6 +232,9 @@ void loc_axisangle_size_to_mat4(float R[4][4],
 
 void blend_m3_m3m3(float R[3][3], float A[3][3], float B[3][3], const float t);
 void blend_m4_m4m4(float R[4][4], float A[4][4], float B[4][4], const float t);
+
+void interp_m3_m3m3(float R[3][3], float A[3][3], float B[3][3], const float t);
+void interp_m4_m4m4(float R[4][4], float A[4][4], float B[4][4], const float t);
 
 bool is_negative_m3(float mat[3][3]);
 bool is_negative_m4(float mat[4][4]);

@@ -50,9 +50,9 @@
 #include "GHOST_TimerTask.h"
 #include "GHOST_WindowManager.h"
 #include "GHOST_WindowCocoa.h"
+
 #ifdef WITH_INPUT_NDOF
-#include "GHOST_NDOFManagerCocoa.h"
-#include "GHOST_NDOFManager3Dconnexion.h"
+  #include "GHOST_NDOFManagerCocoa.h"
 #endif
 
 #include "AssertMacros.h"
@@ -284,7 +284,7 @@ extern "C" int GHOST_HACK_getFirstFile(char buf[FIRSTFILEBUFLG])
  * CocoaAppDelegate
  * ObjC object to capture applicationShouldTerminate, and send quit event
  **/
-@interface CocoaAppDelegate : NSObject {
+@interface CocoaAppDelegate : NSObject <NSFileManagerDelegate> {
 	GHOST_SystemCocoa *systemCocoa;
 }
 - (void)setSystemCocoa:(GHOST_SystemCocoa *)sysCocoa;
@@ -370,12 +370,11 @@ GHOST_SystemCocoa::GHOST_SystemCocoa()
 	rstring = (char*)malloc( len );
 	sysctl( mib, 2, rstring, &len, NULL, 0 );
 	
-	m_hasMultiTouchTrackpad = false;
-	
 	free( rstring );
 	rstring = NULL;
 	
 	m_ignoreWindowSizedMessages = false;
+	m_ignoreMomentumScroll = false;
 }
 
 GHOST_SystemCocoa::~GHOST_SystemCocoa()
@@ -1223,10 +1222,10 @@ bool GHOST_SystemCocoa::handleTabletEvent(void *eventPtr)
 	NSEvent *event = (NSEvent *)eventPtr;
 
 	switch ([event subtype]) {
-		case NX_SUBTYPE_TABLET_POINT:
+		case NSTabletPointEventSubtype:
 			handleTabletEvent(eventPtr, NSTabletPoint);
 			return true;
-		case NX_SUBTYPE_TABLET_PROXIMITY:
+		case NSTabletProximityEventSubtype:
 			handleTabletEvent(eventPtr, NSTabletProximity);
 			return true;
 		default:
@@ -1317,6 +1316,7 @@ GHOST_TSuccess GHOST_SystemCocoa::handleMouseEvent(void *eventPtr)
 						GHOST_TInt32 x_warp, y_warp, x_accum, y_accum, x, y;
 						
 						window->getCursorGrabInitPos(x_warp, y_warp);
+						window->screenToClientIntern(x_warp, y_warp, x_warp, y_warp);
 						
 						window->getCursorGrabAccum(x_accum, y_accum);
 						x_accum += [event deltaX];
@@ -1368,6 +1368,7 @@ GHOST_TSuccess GHOST_SystemCocoa::handleMouseEvent(void *eventPtr)
 						
 						//Post event
 						window->getCursorGrabInitPos(x_cur, y_cur);
+						window->screenToClientIntern(x_cur, y_cur, x_cur, y_cur);
 						window->clientToScreenIntern(x_cur + x_accum, y_cur + y_accum, x, y);
 						pushEvent(new GHOST_EventCursor([event timestamp] * 1000, GHOST_kEventCursorMove, window, x, y));
 						break;
@@ -1388,25 +1389,36 @@ GHOST_TSuccess GHOST_SystemCocoa::handleMouseEvent(void *eventPtr)
 				}
 			}
 			break;
-			
-			/* these events only happen on swiping trackpads or tablets */
-			/* warning: using tablet + trackpad at same time frustrates this static variable */
-		case NSEventTypeBeginGesture:
-			m_hasMultiTouchTrackpad = 1;
-			break;
-		case NSEventTypeEndGesture:
-			m_hasMultiTouchTrackpad = 0;
-			break;
-			
+
 		case NSScrollWheel:
 			{
-				int *momentum = NULL;
+				NSEventPhase momentumPhase = NSEventPhaseNone;
+				NSEventPhase phase = NSEventPhaseNone;
+				bool hasMultiTouch = false;
 				
 				if ([event respondsToSelector:@selector(momentumPhase)])
-					momentum = (int *)[event momentumPhase];
+					momentumPhase = [event momentumPhase];
+				if ([event respondsToSelector:@selector(phase)])
+					phase = [event phase];
+				if ([event respondsToSelector:@selector(hasPreciseScrollingDeltas)])
+					hasMultiTouch = [event hasPreciseScrollingDeltas];
+
+				/* when pressing a key while momentum scrolling continues after
+				 * lifting fingers off the trackpad, the action can unexpectedly
+				 * change from e.g. scrolling to zooming. this works around the
+				 * issue by ignoring momentum scroll after a key press */
+				if (momentumPhase)
+				{
+					if (m_ignoreMomentumScroll)
+						break;
+				}
+				else
+				{
+					m_ignoreMomentumScroll = false;
+				}
 
 				/* standard scrollwheel case, if no swiping happened, and no momentum (kinetic scroll) works */
-				if (!m_hasMultiTouchTrackpad && momentum == NULL) {
+				if (!hasMultiTouch && momentumPhase == NSEventPhaseNone) {
 					GHOST_TInt32 delta;
 					
 					double deltaF = [event deltaY];
@@ -1422,16 +1434,14 @@ GHOST_TSuccess GHOST_SystemCocoa::handleMouseEvent(void *eventPtr)
 					GHOST_TInt32 x, y;
 					double dx;
 					double dy;
-					
+
 #if MAC_OS_X_VERSION_MIN_REQUIRED >= 1070
-					int phase = [event phase];
-					
 					/* with 10.7 nice scrolling deltas are supported */
 					dx = [event scrollingDeltaX];
 					dy = [event scrollingDeltaY];
 					
 					/* however, wacom tablet (intuos5) needs old deltas, it then has momentum and phase at zero */
-					if (phase == 0 && momentum==NULL) {
+					if (phase == NSEventPhaseNone && momentumPhase == NSEventPhaseNone) {
 						dx = [event deltaX];
 						dy = [event deltaY];
 					}
@@ -1566,6 +1576,7 @@ GHOST_TSuccess GHOST_SystemCocoa::handleKeyEvent(void *eventPtr)
 				pushEvent( new GHOST_EventKey([event timestamp] * 1000, GHOST_kEventKeyUp, window, keyCode, 0, NULL) );
 				//printf("Key up rawCode=0x%x charsIgnoringModifiers=%c keyCode=%u ascii=%i %c utf8=%s\n",[event keyCode],[charsIgnoringModifiers length]>0?[charsIgnoringModifiers characterAtIndex:0]:' ',keyCode,ascii,ascii, utf8_buf);
 			}
+			m_ignoreMomentumScroll = true;
 			break;
 	
 		case NSFlagsChanged: 
@@ -1585,6 +1596,7 @@ GHOST_TSuccess GHOST_SystemCocoa::handleKeyEvent(void *eventPtr)
 			}
 			
 			m_modifierMask = modifiers;
+			m_ignoreMomentumScroll = true;
 			break;
 			
 		default:

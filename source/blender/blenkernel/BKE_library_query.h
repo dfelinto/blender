@@ -38,6 +38,16 @@ enum {
 	IDWALK_NOP = 0,
 	IDWALK_NEVER_NULL = (1 << 0),
 	IDWALK_NEVER_SELF = (1 << 1),
+
+	/**
+	 * Adjusts #ID.us reference-count.
+	 * \note keep in sync with 'newlibadr_us' use in readfile.c
+	 */
+	IDWALK_USER = (1 << 8),
+	/**
+	 * Ensure #ID.us is at least 1 on use.
+	 */
+	IDWALK_USER_ONE = (1 << 9),
 };
 
 /* Call a callback for each ID link which the given ID uses.
@@ -53,5 +63,6 @@ enum {
 
 /* Loop over all of the ID's this datablock links to. */
 void BKE_library_foreach_ID_link(struct ID *id, LibraryIDLinkCallback callback, void *user_data, int flag);
+void BKE_library_update_ID_link_user(struct ID *id_dst, struct ID *id_src, const int cd_flag);
 
 #endif  /* __BKE_LIBRARY_QUERY_H__ */

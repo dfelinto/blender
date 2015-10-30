@@ -240,7 +240,7 @@ static void graph_main_area_draw(const bContext *C, ARegion *ar)
 	UI_view2d_view_ortho(v2d);
 	
 	/* grid */
-	unitx = (sipo->flag & SIPO_DRAWTIME) ? V2D_UNIT_SECONDS : V2D_UNIT_FRAMESCALE;
+	unitx = ((sipo->mode == SIPO_MODE_ANIMATION) && (sipo->flag & SIPO_DRAWTIME)) ? V2D_UNIT_SECONDS : V2D_UNIT_FRAMESCALE;
 	grid = UI_view2d_grid_calc(CTX_data_scene(C), v2d, unitx, V2D_GRID_NOCLAMP, unity, V2D_GRID_NOCLAMP, ar->winx, ar->winy);
 	UI_view2d_grid_draw(v2d, grid, V2D_GRIDLINES_ALL);
 	
@@ -286,10 +286,33 @@ static void graph_main_area_draw(const bContext *C, ARegion *ar)
 		glDisable(GL_BLEND);
 	}
 	
-	/* current frame */
-	if (sipo->flag & SIPO_DRAWTIME) flag |= DRAWCFRA_UNIT_SECONDS;
-	if ((sipo->flag & SIPO_NODRAWCFRANUM) == 0) flag |= DRAWCFRA_SHOW_NUMBOX;
-	ANIM_draw_cfra(C, v2d, flag);
+	/* current frame or vertical component of vertical component of the cursor */
+	if (sipo->mode == SIPO_MODE_DRIVERS) {
+		/* cursor x-value */
+		float vec[2];
+		
+		vec[0] = sipo->cursorTime;
+		
+		/* to help differentiate this from the current frame, draw slightly darker like the horizontal one */
+		UI_ThemeColorShadeAlpha(TH_CFRAME, -40, -50);
+		glLineWidth(2.0);
+		
+		glEnable(GL_BLEND);
+		glBegin(GL_LINE_STRIP);
+		vec[1] = v2d->cur.ymin;
+		glVertex2fv(vec);
+			
+		vec[1] = v2d->cur.ymax;
+		glVertex2fv(vec);
+		glEnd(); // GL_LINE_STRIP
+		glDisable(GL_BLEND);
+	}
+	else {
+		/* current frame */
+		if (sipo->flag & SIPO_DRAWTIME) flag |= DRAWCFRA_UNIT_SECONDS;
+		if ((sipo->flag & SIPO_NODRAWCFRANUM) == 0) flag |= DRAWCFRA_SHOW_NUMBOX;
+		ANIM_draw_cfra(C, v2d, flag);
+	}
 	
 	/* markers */
 	UI_view2d_view_orthoSpecial(ar, v2d, 1);
@@ -665,7 +688,7 @@ void ED_spacetype_ipo(void)
 	art = MEM_callocN(sizeof(ARegionType), "spacetype graphedit region");
 	art->regionid = RGN_TYPE_UI;
 	art->prefsizex = 200;
-	art->keymapflag = ED_KEYMAP_UI;
+	art->keymapflag = ED_KEYMAP_UI | ED_KEYMAP_FRAMES;
 	art->listener = graph_region_listener;
 	art->init = graph_buttons_area_init;
 	art->draw = graph_buttons_area_draw;

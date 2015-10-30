@@ -39,6 +39,7 @@ CCL_NAMESPACE_BEGIN
 #define LIGHT_SIZE			5
 #define FILTER_TABLE_SIZE	256
 #define RAMP_TABLE_SIZE		256
+#define SHUTTER_TABLE_SIZE		256
 #define PARTICLE_SIZE 		5
 #define TIME_INVALID		FLT_MAX
 
@@ -770,7 +771,7 @@ typedef struct KernelCamera {
 
 	/* stereo */
 	int stereo_eye;
-	int pad;
+	int pad2;
 	float interocular_distance;
 	float convergence_distance;
 
@@ -826,6 +827,9 @@ typedef struct KernelCamera {
 	 * Used for camera zoom motion blur,
 	 */
 	PerspectiveMotionTransform perspective_motion;
+
+	int shutter_table_offset;
+	int pad;
 } KernelCamera;
 
 typedef struct KernelFilm {

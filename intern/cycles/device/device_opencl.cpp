@@ -130,7 +130,12 @@ bool opencl_kernel_use_split(const string& platform_name,
                              const cl_device_type device_type)
 {
 	if(getenv("CYCLES_OPENCL_SPLIT_KERNEL_TEST") != NULL) {
+		VLOG(1) << "Forcing split kernel to use.";
 		return true;
+	}
+	if(getenv("CYCLES_OPENCL_MEGA_KERNEL_TEST") != NULL) {
+		VLOG(1) << "Forcing mega kernel to use.";
+		return false;
 	}
 	/* TODO(sergey): Replace string lookups with more enum-like API,
 	 * similar to device/vendor checks blender's gpu.
@@ -581,7 +586,7 @@ public:
 	                          ProgramName program_name,
 	                          thread_scoped_lock& slot_locker)
 	{
-		switch (program_name) {
+		switch(program_name) {
 			case OCL_DEV_BASE_PROGRAM:
 				store_something<cl_program>(platform,
 				                            device,
@@ -3690,7 +3695,7 @@ string device_opencl_capabilities(void)
 	APPEND_STRING_INFO(clGetDeviceInfo, id, "\t\t\tDevice " name, what)
 
 	vector<cl_device_id> device_ids;
-	for (cl_uint platform = 0; platform < num_platforms; ++platform) {
+	for(cl_uint platform = 0; platform < num_platforms; ++platform) {
 		cl_platform_id platform_id = platform_ids[platform];
 
 		result += string_printf("Platform #%u\n", platform);
@@ -3715,7 +3720,7 @@ string device_opencl_capabilities(void)
 		                             num_devices,
 		                             &device_ids[0],
 		                             NULL));
-		for (cl_uint device = 0; device < num_devices; ++device) {
+		for(cl_uint device = 0; device < num_devices; ++device) {
 			cl_device_id device_id = device_ids[device];
 
 			result += string_printf("\t\tDevice: #%u\n", device);

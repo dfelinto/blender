@@ -513,8 +513,8 @@ void	CcdPhysicsEnvironment::AddCcdPhysicsController(CcdPhysicsController* ctrl)
 
 void CcdPhysicsEnvironment::RemoveConstraint(btTypedConstraint *con)
 {
-	btRigidBody rbA = con->getRigidBodyA();
-	btRigidBody rbB = con->getRigidBodyB();
+	btRigidBody &rbA = con->getRigidBodyA();
+	btRigidBody &rbB = con->getRigidBodyB();
 	rbA.activate();
 	rbB.activate();
 	m_dynamicsWorld->removeConstraint(con);
@@ -3162,6 +3162,7 @@ void CcdPhysicsEnvironment::ConvertObject(KX_GameObject *gameobj, RAS_MeshObject
 	ci.m_stepHeight = isbulletchar ? shapeprops->m_step_height : 0.f;
 	ci.m_jumpSpeed = isbulletchar ? shapeprops->m_jump_speed : 0.f;
 	ci.m_fallSpeed = isbulletchar ? shapeprops->m_fall_speed : 0.f;
+	ci.m_maxJumps = isbulletchar ? shapeprops->m_max_jumps : 0;
 
 	//mmm, for now, take this for the size of the dynamicobject
 	// Blender uses inertia for radius of dynamic object

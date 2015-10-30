@@ -1112,19 +1112,20 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
 	t->redraw = TREDRAW_HARD;  /* redraw first time */
 	
 	if (event) {
-		copy_v2_v2_int(t->imval, event->mval);
 		t->event_type = event->type;
+		t->mouse.imval[0] = event->mval[0];
+		t->mouse.imval[1] = event->mval[1];
 	}
 	else {
-		t->imval[0] = 0;
-		t->imval[1] = 0;
+		t->mouse.imval[0] = 0;
+		t->mouse.imval[1] = 0;
 	}
 	
-	t->con.imval[0] = t->imval[0];
-	t->con.imval[1] = t->imval[1];
+	t->con.imval[0] = t->mouse.imval[0];
+	t->con.imval[1] = t->mouse.imval[1];
 	
-	t->mval[0] = t->imval[0];
-	t->mval[1] = t->imval[1];
+	t->mval[0] = t->mouse.imval[0];
+	t->mval[1] = t->mouse.imval[1];
 	
 	t->transform        = NULL;
 	t->handleEvent      = NULL;
@@ -1665,8 +1666,14 @@ void calculateCenterCursorGraph2D(TransInfo *t, float r_center[2])
 	Scene *scene = t->scene;
 	
 	/* cursor is combination of current frame, and graph-editor cursor value */
-	r_center[0] = (float)(scene->r.cfra);
-	r_center[1] = sipo->cursorVal;
+	if (sipo->mode == SIPO_MODE_DRIVERS) {
+		r_center[0] = sipo->cursorTime;
+		r_center[1] = sipo->cursorVal;
+	}
+	else {
+		r_center[0] = (float)(scene->r.cfra);
+		r_center[1] = sipo->cursorVal;
+	}
 }
 
 void calculateCenterMedian(TransInfo *t, float r_center[3])

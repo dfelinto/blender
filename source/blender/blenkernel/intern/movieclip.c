@@ -603,9 +603,8 @@ static void detect_clip_source(MovieClip *clip)
 MovieClip *BKE_movieclip_file_add(Main *bmain, const char *name)
 {
 	MovieClip *clip;
-	int file, len;
-	const char *libname;
-	char str[FILE_MAX], strtest[FILE_MAX];
+	int file;
+	char str[FILE_MAX];
 
 	BLI_strncpy(str, name, sizeof(str));
 	BLI_path_abs(str, bmain->name);
@@ -616,29 +615,10 @@ MovieClip *BKE_movieclip_file_add(Main *bmain, const char *name)
 		return NULL;
 	close(file);
 
-	/* ** first search an identical clip ** */
-	for (clip = bmain->movieclip.first; clip; clip = clip->id.next) {
-		BLI_strncpy(strtest, clip->name, sizeof(clip->name));
-		BLI_path_abs(strtest, G.main->name);
-
-		if (STREQ(strtest, str)) {
-			BLI_strncpy(clip->name, name, sizeof(clip->name));  /* for stringcode */
-			clip->id.us++;  /* officially should not, it doesn't link here! */
-
-			return clip;
-		}
-	}
-
 	/* ** add new movieclip ** */
 
 	/* create a short library name */
-	len = strlen(name);
-
-	while (len > 0 && name[len - 1] != '/' && name[len - 1] != '\\')
-		len--;
-	libname = name + len;
-
-	clip = movieclip_alloc(bmain, libname);
+	clip = movieclip_alloc(bmain, BLI_path_basename(name));
 	BLI_strncpy(clip->name, name, sizeof(clip->name));
 
 	detect_clip_source(clip);
@@ -653,6 +633,37 @@ MovieClip *BKE_movieclip_file_add(Main *bmain, const char *name)
 	movieclip_calc_length(clip);
 
 	return clip;
+}
+
+MovieClip *BKE_movieclip_file_add_exists_ex(Main *bmain, const char *filepath, bool *r_exists)
+{
+	MovieClip *clip;
+	char str[FILE_MAX], strtest[FILE_MAX];
+
+	BLI_strncpy(str, filepath, sizeof(str));
+	BLI_path_abs(str, bmain->name);
+
+	/* first search an identical filepath */
+	for (clip = bmain->movieclip.first; clip; clip = clip->id.next) {
+		BLI_strncpy(strtest, clip->name, sizeof(clip->name));
+		BLI_path_abs(strtest, ID_BLEND_PATH(bmain, &clip->id));
+
+		if (BLI_path_cmp(strtest, str) == 0) {
+			clip->id.us++;  /* officially should not, it doesn't link here! */
+			if (r_exists)
+				*r_exists = true;
+			return clip;
+		}
+	}
+
+	if (r_exists)
+		*r_exists = false;
+	return BKE_movieclip_file_add(bmain, filepath);
+}
+
+MovieClip *BKE_movieclip_file_add_exists(Main *bmain, const char *filepath)
+{
+	return BKE_movieclip_file_add_exists_ex(bmain, filepath, NULL);
 }
 
 static void real_ibuf_size(MovieClip *clip, MovieClipUser *user, ImBuf *ibuf, int *width, int *height)
@@ -847,7 +858,7 @@ static ImBuf *movieclip_get_postprocessed_ibuf(MovieClip *clip, MovieClipUser *u
 	bool need_postprocess = false;
 
 	/* cache isn't threadsafe itself and also loading of movies
-	 * can't happen from concurent threads that's why we use lock here */
+	 * can't happen from concurrent threads that's why we use lock here */
 	BLI_lock_thread(LOCK_MOVIECLIP);
 
 	/* try to obtain cached postprocessed frame first */
