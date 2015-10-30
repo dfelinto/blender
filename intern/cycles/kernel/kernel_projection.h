@@ -226,26 +226,20 @@ ccl_device float3 spherical_stereo_position(KernelGlobals *kg, float3 dir, float
 {
 	float3 up, side;
 
-	if(kernel_data.cam.stereo_eye == STEREO_NONE)
-		return pos;
+	/* kernel_data.cam.stereo_eye is STEREO_NONE return pos */
+	/* STEREO_NONE means either non stereo, or stereo without spherical stereo */
 
 	up = make_float3(0.0f, 0.0f, 1.0f);
 	side = normalize(cross(dir, up));
 
-	switch(kernel_data.cam.stereo_eye) {
-		case STEREO_LEFT:
-			return pos - (side * kernel_data.cam.interocular_distance * 0.5f);
-			break;
-		case STEREO_RIGHT:
-			return pos + (side * kernel_data.cam.interocular_distance * 0.5f);
-			break;
-	}
-	return pos;
+	return pos + (kernel_data.cam.stereo_eye * side * kernel_data.cam.interocular_distance * 0.5f);
 }
 
 ccl_device float3 spherical_stereo_direction(KernelGlobals *kg, float3 dir, float3 pos, float3 newpos)
 {
 	float3 screenpos, dirnew;
+
+	/* STEREO_NONE means either non stereo, or stereo without spherical stereo */
 
 	if(kernel_data.cam.stereo_eye == STEREO_NONE)
 		return dir;

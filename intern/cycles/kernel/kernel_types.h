@@ -460,9 +460,9 @@ enum PanoramaType {
 
 /* Stereo Type */
 enum StereoEye {
-	STEREO_NONE,
-	STEREO_LEFT,
-	STEREO_RIGHT
+	STEREO_NONE =  0,
+	STEREO_LEFT = -1,
+	STEREO_RIGHT = 1,
 };
 
 /* Differential */
