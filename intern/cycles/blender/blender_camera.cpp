@@ -409,11 +409,11 @@ static void blender_camera_sync(Camera *cam, BlenderCamera *bcam, int width, int
 
 	if(cam->use_spherical_stereo) {
 		if(strcmp(viewname, "left") == 0)
-			cam->stereo_eye = STEREO_LEFT;
+			cam->stereo_eye = Camera::STEREO_LEFT;
 		else if(strcmp(viewname, "right") == 0)
-			cam->stereo_eye = STEREO_RIGHT;
+			cam->stereo_eye = Camera::STEREO_RIGHT;
 		else
-			cam->stereo_eye = STEREO_NONE;
+			cam->stereo_eye = Camera::STEREO_NONE;
 	}
 
 	/* anamorphic lens bokeh */

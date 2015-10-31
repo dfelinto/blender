@@ -47,6 +47,13 @@ public:
 		MOTION_POSITION_END,
 	};
 
+	/* Stereo Type */
+	enum StereoEye {
+		STEREO_NONE,
+		STEREO_LEFT,
+		STEREO_RIGHT,
+	};
+
 	/* motion blur */
 	float shuttertime;
 	MotionPosition motion_position;

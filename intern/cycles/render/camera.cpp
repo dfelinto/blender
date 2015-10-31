@@ -340,8 +340,19 @@ void Camera::device_update(Device *device, DeviceScene *dscene, Scene *scene)
 	kcam->equirectangular_range = make_float4(longitude_min - longitude_max, -longitude_min,
 	                                          latitude_min -  latitude_max, -latitude_min + M_PI_2_F);
 
-	kcam->stereo_eye = stereo_eye;
-	kcam->interocular_distance = interocular_distance;
+	switch(stereo_eye) {
+		case STEREO_LEFT:
+			kcam->interocular_offset = -interocular_distance * 0.5f;
+			break;
+		case STEREO_RIGHT:
+			kcam->interocular_offset = interocular_distance * 0.5f;
+			break;
+		case STEREO_NONE:
+		default:
+			kcam->interocular_offset = 0.0f;
+			break;
+	}
+
 	kcam->convergence_distance = convergence_distance;
 
 	/* sensor size */

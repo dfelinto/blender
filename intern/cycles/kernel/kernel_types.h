@@ -458,13 +458,6 @@ enum PanoramaType {
 	PANORAMA_FISHEYE_EQUISOLID
 };
 
-/* Stereo Type */
-enum StereoEye {
-	STEREO_NONE =  0,
-	STEREO_LEFT = -1,
-	STEREO_RIGHT = 1,
-};
-
 /* Differential */
 
 typedef struct differential3 {
@@ -770,9 +763,8 @@ typedef struct KernelCamera {
 	float4 equirectangular_range;
 
 	/* stereo */
-	int stereo_eye;
-	int pad2;
-	float interocular_distance;
+	int pad1, pad2;
+	float interocular_offset;
 	float convergence_distance;
 
 	/* matrices */
