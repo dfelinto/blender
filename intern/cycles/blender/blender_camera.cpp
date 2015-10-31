@@ -105,7 +105,7 @@ static void blender_camera_init(BlenderCamera *bcam, BL::RenderSettings b_render
 	bcam->pixelaspect.y = b_render.pixel_aspect_y();
 }
 
-static float blender_camera_focal_distance(BL::RenderEngine b_engine, BL::Object b_ob, BL::Camera b_camera)
+static float blender_camera_focal_distance(BL::RenderEngine b_engine, BL::Object b_ob, BL::Camera b_camera, BlenderCamera *bcam)
 {
 	BL::Object b_dof_object = b_camera.dof_object();
 
@@ -114,7 +114,7 @@ static float blender_camera_focal_distance(BL::RenderEngine b_engine, BL::Object
 	
 	/* for dof object, return distance along camera Z direction */
 	BL::Array<float, 16> b_ob_matrix;
-	b_engine.camera_model_matrix(b_ob, b_ob_matrix);
+	b_engine.camera_model_matrix(b_ob, bcam->use_spherical_stereo, b_ob_matrix);
 	Transform obmat = transform_clear_scale(get_transform(b_ob_matrix));
 	Transform dofmat = get_transform(b_dof_object.matrix_world());
 	float3 view_dir = normalize(transform_get_column(&obmat, 2));
@@ -200,10 +200,10 @@ static void blender_camera_from_object(BlenderCamera *bcam, BL::RenderEngine b_e
 
 		bcam->apertureblades = RNA_int_get(&ccamera, "aperture_blades");
 		bcam->aperturerotation = RNA_float_get(&ccamera, "aperture_rotation");
-		bcam->focaldistance = blender_camera_focal_distance(b_engine, b_ob, b_camera);
+		bcam->focaldistance = blender_camera_focal_distance(b_engine, b_ob, b_camera, bcam);
 		bcam->aperture_ratio = RNA_float_get(&ccamera, "aperture_ratio");
 
-		bcam->shift.x = b_engine.camera_shift_x(b_ob);
+		bcam->shift.x = b_engine.camera_shift_x(b_ob, bcam->use_spherical_stereo);
 		bcam->shift.y = b_camera.shift_y();
 
 		bcam->sensor_width = b_camera.sensor_width();
@@ -498,7 +498,7 @@ void BlenderSync::sync_camera(BL::RenderSettings b_render, BL::Object b_override
 	if(b_ob) {
 		BL::Array<float, 16> b_ob_matrix;
 		blender_camera_from_object(&bcam, b_engine, b_ob);
-		b_engine.camera_model_matrix(b_ob, b_ob_matrix);
+		b_engine.camera_model_matrix(b_ob, bcam.use_spherical_stereo, b_ob_matrix);
 		bcam.matrix = get_transform(b_ob_matrix);
 	}
 
@@ -517,7 +517,7 @@ void BlenderSync::sync_camera_motion(BL::RenderSettings b_render,
 
 	Camera *cam = scene->camera;
 	BL::Array<float, 16> b_ob_matrix;
-	b_engine.camera_model_matrix(b_ob, b_ob_matrix);
+	b_engine.camera_model_matrix(b_ob, cam->use_spherical_stereo, b_ob_matrix);
 	Transform tfm = get_transform(b_ob_matrix);
 	tfm = blender_camera_matrix(tfm, cam->type, cam->panorama_type);
 

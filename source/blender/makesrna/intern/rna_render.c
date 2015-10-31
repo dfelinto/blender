@@ -515,12 +515,14 @@ static void rna_def_render_engine(BlenderRNA *brna)
 	func = RNA_def_function(srna, "camera_shift_x", "RE_engine_get_camera_shift_x");
 	prop = RNA_def_pointer(func, "camera", "Object", "", "");
 	RNA_def_property_flag(prop, PROP_REQUIRED);
+	prop = RNA_def_boolean(func, "use_spherical_stereo", 0, "Spherical Stereo", "");
 	prop = RNA_def_float(func, "shift_x", 0.0f, 0.0f, FLT_MAX, "Shift X", "", 0.0f, FLT_MAX);
 	RNA_def_function_return(func, prop);
 
 	func = RNA_def_function(srna, "camera_model_matrix", "RE_engine_get_camera_model_matrix");
 	prop = RNA_def_pointer(func, "camera", "Object", "", "");
 	RNA_def_property_flag(prop, PROP_REQUIRED);
+	prop = RNA_def_boolean(func, "use_spherical_stereo", 0, "Spherical Stereo", "");
 	prop = RNA_def_float_matrix(func, "r_model_matrix", 4, 4, NULL, 0.0f, 0.0f, "Model Matrix", "Normalized camera model matrix", 0.0f, 0.0f);
 	RNA_def_property_flag(prop, PROP_REQUIRED);
 
