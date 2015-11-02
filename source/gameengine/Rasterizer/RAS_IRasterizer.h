@@ -262,7 +262,7 @@ public:
 	 * Create an offscreen render buffer that can be used as target for render.
 	 * For the time being, it is only used in VideoTexture for custom render.
 	 */
-	virtual RAS_IOffScreen *CreateOffScreen(int width, int height) = 0;
+	virtual RAS_IOffScreen *CreateOffScreen(int width, int height, int samples) = 0;
 
 	/**
 	 * SwapBuffers swaps the back buffer with the front buffer.

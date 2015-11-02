@@ -1621,6 +1621,11 @@ int GPU_offscreen_color_texture(const GPUOffScreen *ofs)
 	return ofs->color->bindcode;
 }
 
+int GPU_offscreen_color_target(const GPUOffScreen *ofs)
+{
+	return ofs->color->target;
+}
+
 /* GPUShader */
 
 struct GPUShader {

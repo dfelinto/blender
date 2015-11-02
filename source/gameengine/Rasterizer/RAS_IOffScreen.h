@@ -48,16 +48,19 @@ class RAS_IOffScreen
 public:
 	int		m_width;
 	int     m_height;
+	int	    m_samples;
 
 	virtual ~RAS_IOffScreen() {}
 
-	virtual bool Create(int width, int height) = 0;
+	virtual bool Create(int width, int height, int samples) = 0;
 	virtual void Destroy() = 0;
 	virtual void Bind() = 0;
+	virtual void Blit() = 0;
 	virtual void Unbind() = 0;
 
 	virtual int GetWidth() { return m_width; }
 	virtual int GetHeight() { return m_height; }
+	virtual int GetSamples() { return m_samples; }
 };
 
 #ifdef WITH_PYTHON

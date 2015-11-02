@@ -139,7 +139,11 @@ void ImageRender::calcViewport (unsigned int texId, double ts, unsigned int form
 		return;
 	}
 
-	// get image from viewport
+	// In case multisample is active, blit the FBO
+	if (m_offscreen)
+		m_offscreen->ofs->Blit();
+
+	// get image from viewport (or FBO)
 	ImageViewport::calcViewport(texId, ts, format);
 	// restore OpenGL state
 	m_canvas->EndFrame();

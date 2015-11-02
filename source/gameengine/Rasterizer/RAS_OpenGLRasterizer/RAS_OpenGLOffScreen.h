@@ -34,14 +34,17 @@ class RAS_OpenGLOffScreen : public RAS_IOffScreen
 {
 	GPUOffScreen *m_ofs;
 	RAS_ICanvas *m_canvas;
+	unsigned int m_blitfbo;
+	unsigned int m_blittex;
 	bool m_bound;
 
 public:
 	RAS_OpenGLOffScreen(RAS_ICanvas *canvas);
 	~RAS_OpenGLOffScreen();
 
-	bool Create(int width, int height);
+	bool Create(int width, int height, int samples);
 	void Destroy();
 	void Bind();
+	void Blit();
 	void Unbind();
 };

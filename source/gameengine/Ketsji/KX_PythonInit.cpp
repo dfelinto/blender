@@ -1501,10 +1501,11 @@ static PyGetSetDef RASOffScreen_getseters[] = {
 
 static int PyRASOffScreen__tp_init(PyRASOffScreen *self, PyObject *args, PyObject *kwargs)
 {
-	int width, height;
-	const char *keywords[] = {"width", "height",  NULL};
+	int width, height, samples;
+	const char *keywords[] = {"width", "height", "samples", NULL};
 
-	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "ii:RASOffscreen", (char **)keywords, &width, &height)) {
+	samples = 0;
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "ii|i:RASOffscreen", (char **)keywords, &width, &height, &samples)) {
 		return -1;
 	}
 
@@ -1518,12 +1519,17 @@ static int PyRASOffScreen__tp_init(PyRASOffScreen *self, PyObject *args, PyObjec
 		return -1;
 	}
 
+	if (samples < 0) {
+		PyErr_SetString(PyExc_ValueError, "negative 'samples' given");
+		return -1;
+	}
+
 	if (!gp_Rasterizer)
 	{
 		PyErr_SetString(PyExc_SystemError, "no rasterizer");
 		return -1;
 	}
-	self->ofs = gp_Rasterizer->CreateOffScreen(width, height);
+	self->ofs = gp_Rasterizer->CreateOffScreen(width, height, samples);
 	if (!self->ofs) {
 		PyErr_SetString(PyExc_SystemError, "creation failed");
 		return -1;
@@ -1586,8 +1592,10 @@ static PyObject *gPyOffScreenCreate(PyObject *UNUSED(self), PyObject *args)
 {
 	int width;
 	int height;
+	int samples;
 
-	if (!PyArg_ParseTuple(args, "ii:offscreen_create", &width, &height))
+	samples = 0;
+	if (!PyArg_ParseTuple(args, "ii|i:offscreen_create", &width, &height, &samples))
 		return NULL;
 
 	return PyObject_CallObject((PyObject *) &PyRASOffScreen_Type, args);
