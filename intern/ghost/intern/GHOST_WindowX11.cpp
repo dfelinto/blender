@@ -168,13 +168,10 @@ static XVisualInfo *x11_visualinfo_from_glx(
         GLXFBConfig *fbconfig)
 {
 	XVisualInfo *visual = NULL;
-	GLXFBConfig *fbconfigs;
-	int nbfbconfig;
 	GHOST_TUns16 numOfAASamples = *r_numOfAASamples;
 	int glx_major, glx_minor, glx_version; /* GLX version: major.minor */
 	GHOST_TUns16 actualSamples;
 	int glx_attribs[64];
-	int i;
 
 	*fbconfig = NULL;
 
@@ -207,6 +204,9 @@ static XVisualInfo *x11_visualinfo_from_glx(
 	    && (glXGetVisualFromFBConfig ||
 	        (glXGetVisualFromFBConfig = (PFNGLXGETVISUALFROMFBCONFIGPROC)glXGetProcAddressARB((const GLubyte *)"glXGetVisualFromFBConfig")) != NULL)
 	    ) {
+		GLXFBConfig *fbconfigs;
+		int nbfbconfig;
+		int i;
 
 		for (;;) {
 

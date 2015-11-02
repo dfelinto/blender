@@ -225,9 +225,10 @@ void registerAllExceptions(void)
 	SourceVideoEmptyDesc.registerDesc();
 	SourceVideoCreationDesc.registerDesc();
 	OffScreenInvalidDesc.registerDesc();
+#ifdef WITH_DECKLINK
+	AutoDetectionNotAvailDesc.registerDesc();
 	DeckLinkBadDisplayModeDesc.registerDesc();
 	DeckLinkBadPixelFormatDesc.registerDesc();
-	AutoDetectionNotAvailDesc.registerDesc();
 	DeckLinkOpenCardDesc.registerDesc();
 	DeckLinkBadFormatDesc.registerDesc();
 	DeckLinkInternalErrorDesc.registerDesc();
@@ -236,4 +237,5 @@ void registerAllExceptions(void)
 	VideoDeckLinkOpenCardDesc.registerDesc();
 	VideoDeckLinkDvpInternalErrorDesc.registerDesc();
 	VideoDeckLinkPinMemoryErrorDesc.registerDesc();
+#endif
 }
