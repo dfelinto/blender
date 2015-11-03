@@ -64,10 +64,16 @@ public:
 	float getClip (void) { return m_clip; }
 	/// set whole buffer use
 	void setClip (float clip) { m_clip = clip; }
+	/// render frame (public so that it is accessible from python)
+	bool Render();
+	/// in case fbo is used, method to unbind
+	void Unbind();
 
 protected:
 	/// true if ready to render
 	bool m_render;
+	/// is render done already?
+	bool m_done;
 	/// rendered scene
 	KX_Scene * m_scene;
 	/// camera for render
@@ -103,9 +109,6 @@ protected:
 	/// render 3d scene to image
 	virtual void calcViewport (unsigned int texId, double ts, unsigned int format);
 
-	bool Render();
-	void SetupRenderFrame(KX_Scene *scene, KX_Camera* cam);
-	void RenderFrame(KX_Scene* scene, KX_Camera* cam);
 	void setBackgroundFromScene(KX_Scene *scene);
 	void SetWorldSettings(KX_WorldInfo* wi);
 };

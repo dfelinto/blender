@@ -44,7 +44,7 @@ public:
 
 	bool Create(int width, int height, int samples);
 	void Destroy();
-	void Bind();
+	void Bind(RAS_OFS_BIND_MODE mode);
 	void Blit();
 	void Unbind();
 };

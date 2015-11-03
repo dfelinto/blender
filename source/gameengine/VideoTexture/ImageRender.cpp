@@ -68,6 +68,7 @@ ExpDesc MirrorTooSmallDesc(MirrorTooSmall, "Mirror is too small");
 ImageRender::ImageRender (KX_Scene *scene, KX_Camera * camera, PyRASOffScreen * offscreen) :
     ImageViewport(offscreen),
     m_render(true),
+    m_done(false),
     m_scene(scene),
     m_camera(camera),
     m_owncamera(false),
@@ -133,24 +134,26 @@ void ImageRender::setBackgroundFromScene (KX_Scene *scene)
 void ImageRender::calcViewport (unsigned int texId, double ts, unsigned int format)
 {
 	// render the scene from the camera
-	if (!Render())
+	if (!m_done)
 	{
-		m_avail = false;
-		return;
+		if (!Render())
+		{
+			return;
+		}
 	}
-
-	// In case multisample is active, blit the FBO
-	if (m_offscreen)
-		m_offscreen->ofs->Blit();
+	else if (m_offscreen)
+	{
+		m_offscreen->ofs->Bind(RAS_IOffScreen::RAS_OFS_BIND_READ);
+	}
 
 	// get image from viewport (or FBO)
 	ImageViewport::calcViewport(texId, ts, format);
-	// restore OpenGL state
-	m_canvas->EndFrame();
 	if (m_offscreen)
 	{
 		m_offscreen->ofs->Unbind();
 	}
+	// so that next time we render again
+	m_done = false;
 }
 
 bool ImageRender::Render()
@@ -238,7 +241,7 @@ bool ImageRender::Render()
 	if (m_offscreen)
 	{
 		// bind the fbo and set the viewport to full size
-		m_offscreen->ofs->Bind();
+		m_offscreen->ofs->Bind(RAS_IOffScreen::RAS_OFS_BIND_RENDER);
 		// this is needed to stop crashing in canvas check
 		m_canvas->UpdateViewPort(0, 0, m_offscreen->ofs->GetWidth(), m_offscreen->ofs->GetHeight());
 	}
@@ -345,10 +348,25 @@ bool ImageRender::Render()
 
 	// restore the canvas area now that the render is completed
 	m_canvas->GetWindowArea() = area;
+	m_canvas->EndFrame();
 
+	// In case multisample is active, blit the FBO
+	if (m_offscreen)
+		m_offscreen->ofs->Blit();
+	// remember that we have done render
+	m_done = true;
+	// the image is not available at this stage
+	m_avail = false;
 	return true;
 }
 
+void ImageRender::Unbind()
+{
+	if (m_offscreen)
+	{
+		m_offscreen->ofs->Unbind();
+	}
+}
 
 // cast Image pointer to ImageRender
 inline ImageRender * getImageRender (PyImage *self)
@@ -411,6 +429,24 @@ static int ImageRender_init(PyObject *pySelf, PyObject *args, PyObject *kwds)
 	return 0;
 }
 
+// refresh image
+static PyObject *ImageRender_render(PyImage *self)
+{
+	ImageRender *imageRender = getImageRender(self);
+
+	if (!imageRender)
+	{
+		PyErr_SetString(PyExc_TypeError, "Incomplete ImageRender() object");
+		return NULL;
+	}
+	if (!imageRender->Render())
+	{
+		Py_RETURN_FALSE;
+	}
+	imageRender->Unbind();
+	Py_RETURN_TRUE;
+}
+
 
 // get background color
 static PyObject *getBackground (PyImage *self, void *closure)
@@ -450,6 +486,7 @@ static int setBackground(PyImage *self, PyObject *value, void *closure)
 static PyMethodDef imageRenderMethods[] =
 { // methods from ImageBase class
 	{"refresh", (PyCFunction)Image_refresh, METH_VARARGS, "Refresh image - invalidate its current content after optionally transferring its content to a target buffer"},
+	{"render", (PyCFunction)ImageRender_render, METH_NOARGS, "Render scene - run before refresh() to performs asynchronous render"},
 	{NULL}
 };
 // attributes structure
@@ -640,6 +677,7 @@ static PyGetSetDef imageMirrorGetSets[] =
 ImageRender::ImageRender (KX_Scene *scene, KX_GameObject *observer, KX_GameObject *mirror, RAS_IPolyMaterial *mat) :
     ImageViewport(),
     m_render(false),
+    m_done(false),
     m_scene(scene),
     m_offscreen(NULL),
     m_observer(observer),

@@ -46,6 +46,10 @@ struct Image;
 class RAS_IOffScreen
 {
 public:
+	enum RAS_OFS_BIND_MODE {
+		RAS_OFS_BIND_RENDER = 0,
+		RAS_OFS_BIND_READ,
+	};
 	int		m_width;
 	int     m_height;
 	int	    m_samples;
@@ -54,7 +58,7 @@ public:
 
 	virtual bool Create(int width, int height, int samples) = 0;
 	virtual void Destroy() = 0;
-	virtual void Bind() = 0;
+	virtual void Bind(RAS_OFS_BIND_MODE mode) = 0;
 	virtual void Blit() = 0;
 	virtual void Unbind() = 0;
 

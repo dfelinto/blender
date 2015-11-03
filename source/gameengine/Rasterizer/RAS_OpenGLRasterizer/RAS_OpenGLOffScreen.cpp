@@ -133,11 +133,14 @@ void RAS_OpenGLOffScreen::Destroy()
 	m_samples = 0;
 }
 
-void RAS_OpenGLOffScreen::Bind()
+void RAS_OpenGLOffScreen::Bind(RAS_OFS_BIND_MODE mode)
 {
 	if (m_ofs)
 	{
-		GPU_offscreen_bind(m_ofs, false);
+		if (mode == RAS_OFS_BIND_RENDER || !m_blitfbo)
+			GPU_offscreen_bind(m_ofs, false);
+		else
+			glBindFramebuffer(GL_READ_FRAMEBUFFER, m_blitfbo);
 		m_bound = true;
 	}
 }
