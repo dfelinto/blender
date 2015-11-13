@@ -206,6 +206,11 @@ BMEdge *BM_edge_create(
 	return e;
 }
 
+/**
+ * \note In most cases a \a l_example should be NULL,
+ * since this is a low level API and we shouldn't attempt to be clever and guess whats intended.
+ * In cases where copying adjacent loop-data is useful, see #BM_face_copy_shared.
+ */
 static BMLoop *bm_loop_create(
         BMesh *bm, BMVert *v, BMEdge *e, BMFace *f,
         const BMLoop *l_example, const eBMCreateFlag create_flag)
@@ -216,6 +221,14 @@ static BMLoop *bm_loop_create(
 
 	BLI_assert((l_example == NULL) || (l_example->head.htype == BM_LOOP));
 	BLI_assert(!(create_flag & 1));
+
+#ifndef NDEBUG
+	if (l_example) {
+		/* ensure passing a loop is either sharing the same vertex, or entirely disconnected
+		 * use to catch mistake passing in loop offset-by-one. */
+		BLI_assert((v == l_example->v) || !ELEM(v, l_example->prev->v, l_example->next->v));
+	}
+#endif
 
 	/* --- assign all members --- */
 	l->head.data = NULL;
@@ -247,6 +260,9 @@ static BMLoop *bm_loop_create(
 
 	if (!(create_flag & BM_CREATE_SKIP_CD)) {
 		if (l_example) {
+			/* no need to copy attrs, just handle customdata */
+			// BM_elem_attrs_copy(bm, bm, l_example, l);
+			CustomData_bmesh_free_block_data(&bm->ldata, l->head.data);
 			CustomData_bmesh_copy_data(&bm->ldata, &bm->ldata, l_example->head.data, &l->head.data);
 		}
 		else {
@@ -264,7 +280,7 @@ static BMLoop *bm_face_boundary_add(
 #ifdef USE_BMESH_HOLES
 	BMLoopList *lst = BLI_mempool_calloc(bm->looplistpool);
 #endif
-	BMLoop *l = bm_loop_create(bm, startv, starte, f, starte->l, create_flag);
+	BMLoop *l = bm_loop_create(bm, startv, starte, f, NULL /* starte->l */, create_flag);
 	
 	bmesh_radial_append(starte, l);
 
@@ -439,7 +455,7 @@ BMFace *BM_face_create(
 	startl->v = verts[0];
 	startl->e = edges[0];
 	for (i = 1; i < len; i++) {
-		l = bm_loop_create(bm, verts[i], edges[i], f, edges[i]->l, create_flag);
+		l = bm_loop_create(bm, verts[i], edges[i], f, NULL /* edges[i]->l */, create_flag);
 		
 		l->f = f;
 		bmesh_radial_append(edges[i], l);
@@ -896,7 +912,7 @@ static bool bm_loop_reverse_loop(BMesh *bm, BMFace *f
 #endif
 
 	const int len = f->len;
-	const bool do_disps = CustomData_has_layer(&bm->ldata, CD_MDISPS);
+	const int cd_loop_mdisp_offset = CustomData_get_offset(&bm->ldata, CD_MDISPS);
 	BMLoop *l_iter, *oldprev, *oldnext;
 	BMEdge **edar = BLI_array_alloca(edar, len);
 	int i, j, edok;
@@ -913,12 +929,12 @@ static bool bm_loop_reverse_loop(BMesh *bm, BMFace *f
 		l_iter->prev = oldnext;
 		l_iter = oldnext;
 		
-		if (do_disps) {
+		if (cd_loop_mdisp_offset != -1) {
 			float (*co)[3];
 			int x, y, sides;
 			MDisps *md;
 			
-			md = CustomData_bmesh_get(&bm->ldata, l_iter->head.data, CD_MDISPS);
+			md = BM_ELEM_CD_GET_VOID_P(l_iter, cd_loop_mdisp_offset);
 			if (!md->totdisp || !md->disps)
 				continue;
 
@@ -926,12 +942,25 @@ static bool bm_loop_reverse_loop(BMesh *bm, BMFace *f
 			co = md->disps;
 			
 			for (x = 0; x < sides; x++) {
+				float *co_a, *co_b;
+
 				for (y = 0; y < x; y++) {
-					swap_v3_v3(co[y * sides + x], co[sides * x + y]);
-					SWAP(float, co[y * sides + x][0], co[y * sides + x][1]);
-					SWAP(float, co[x * sides + y][0], co[x * sides + y][1]);
+					co_a = co[y * sides + x];
+					co_b = co[x * sides + y];
+
+					swap_v3_v3(co_a, co_b);
+					SWAP(float, co_a[0], co_a[1]);
+					SWAP(float, co_b[0], co_b[1]);
+
+					co_a[2] *= -1.0f;
+					co_b[2] *= -1.0f;
 				}
-				SWAP(float, co[x * sides + x][0], co[x * sides + x][1]);
+
+				co_a = co[x * sides + x];
+
+				SWAP(float, co_a[0], co_a[1]);
+
+				co_a[2] *= -1.0f;
 			}
 		}
 	}
@@ -957,6 +986,7 @@ static bool bm_loop_reverse_loop(BMesh *bm, BMFace *f
 	for (i = 0, l_iter = l_first; i < len; i++, l_iter = l_iter->next)
 		bmesh_radial_append(l_iter->e, l_iter);
 
+#ifndef NDEBUG
 	/* validate radial */
 	for (i = 0, l_iter = l_first; i < len; i++, l_iter = l_iter->next) {
 		BM_CHECK_ELEMENT(l_iter);
@@ -966,6 +996,7 @@ static bool bm_loop_reverse_loop(BMesh *bm, BMFace *f
 	}
 
 	BM_CHECK_ELEMENT(f);
+#endif
 
 	/* Loop indices are no more valid! */
 	bm->elem_index_dirty |= BM_LOOP;
@@ -1092,6 +1123,7 @@ BMFace *BM_faces_join(BMesh *bm, BMFace **faces, int totface, const bool do_del)
 	BMVert *v1 = NULL, *v2 = NULL;
 	const char *err = NULL;
 	int i, tote = 0;
+	const int cd_loop_mdisp_offset = CustomData_get_offset(&bm->ldata, CD_MDISPS);
 
 	if (UNLIKELY(!totface)) {
 		BMESH_ASSERT(0);
@@ -1222,11 +1254,19 @@ BMFace *BM_faces_join(BMesh *bm, BMFace **faces, int totface, const bool do_del)
 	BM_ELEM_API_FLAG_DISABLE(f_new, _FLAG_JF);
 
 	/* handle multi-res data */
-	if (CustomData_has_layer(&bm->ldata, CD_MDISPS)) {
+	if (cd_loop_mdisp_offset != -1) {
+		float f_center[3];
+		float (*faces_center)[3] = BLI_array_alloca(faces_center, totface);
+
+		BM_face_calc_center_mean(f_new, f_center);
+		for (i = 0; i < totface; i++) {
+			BM_face_calc_center_mean(faces[i], faces_center[i]);
+		}
+
 		l_iter = l_first = BM_FACE_FIRST_LOOP(f_new);
 		do {
 			for (i = 0; i < totface; i++) {
-				BM_loop_interp_multires(bm, l_iter, faces[i]);
+				BM_loop_interp_multires_ex(bm, l_iter, faces[i], f_center, faces_center[i], cd_loop_mdisp_offset);
 			}
 		} while ((l_iter = l_iter->next) != l_first);
 	}

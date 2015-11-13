@@ -2386,7 +2386,7 @@ static int sequencer_separate_images_exec(bContext *C, wmOperator *op)
 			/* remove seq so overlap tests don't conflict,
 			 * see seq_free_sequence below for the real free'ing */
 			BLI_remlink(ed->seqbasep, seq);
-			/* if (seq->ipo) seq->ipo->id.us--; */
+			/* if (seq->ipo) id_us_min(&seq->ipo->id); */
 			/* XXX, remove fcurve and assign to split image strips */
 
 			start_ofs = cfra = BKE_sequence_tx_get_final_left(seq, false);
@@ -3858,8 +3858,7 @@ static int sequencer_export_subtitles_invoke(bContext *C, wmOperator *op, const 
 static int sequencer_export_subtitles_exec(bContext *C, wmOperator *op)
 {
 	Scene *scene = CTX_data_scene(C);
-	Sequence *seq = BKE_sequencer_active_get(scene);
-	Sequence *seq_next;
+	Sequence *seq, *seq_next;
 	Editing *ed = BKE_sequencer_editing_get(scene, false);
 	ListBase text_seq = {0};
 	int iter = 0;

@@ -163,8 +163,13 @@ void id_lib_extern(ID *id)
 void id_us_ensure_real(ID *id)
 {
 	if (id) {
-		if (ID_REAL_USERS(id) <= 0) {
-			id->us = MAX2(id->us, 0) + 1;
+		const int limit = ID_FAKE_USERS(id);
+		if (id->us <= limit) {
+			if (id->us < limit) {
+				printf("ID user count error: %s (from '%s')\n", id->name, id->lib ? id->lib->filepath : "[Main]");
+				BLI_assert(0);
+			}
+			id->us = limit + 1;
 		}
 	}
 }
@@ -172,6 +177,7 @@ void id_us_ensure_real(ID *id)
 void id_us_plus(ID *id)
 {
 	if (id) {
+		BLI_assert(id->us >= 0);
 		id->us++;
 		if (id->flag & LIB_INDIRECT) {
 			id->flag -= LIB_INDIRECT;
@@ -184,15 +190,31 @@ void id_us_plus(ID *id)
 void id_us_min(ID *id)
 {
 	if (id) {
-		if (id->us < 2 && (id->flag & LIB_FAKEUSER)) {
-			id->us = 1;
-		}
-		else if (id->us <= 0) {
-			printf("ID user decrement error: %s\n", id->name);
+		const int limit = ID_FAKE_USERS(id);
+		if (id->us <= limit) {
+			printf("ID user decrement error: %s (from '%s')\n", id->name, id->lib ? id->lib->filepath : "[Main]");
+			BLI_assert(0);
+			id->us = limit;
 		}
 		else {
 			id->us--;
 		}
+	}
+}
+
+void id_fake_user_set(ID *id)
+{
+	if (id && !(id->flag & LIB_FAKEUSER)) {
+		id->flag |= LIB_FAKEUSER;
+		id_us_plus(id);
+	}
+}
+
+void id_fake_user_clear(ID *id)
+{
+	if (id && (id->flag & LIB_FAKEUSER)) {
+		id->flag &= ~LIB_FAKEUSER;
+		id_us_min(id);
 	}
 }
 
@@ -264,8 +286,6 @@ bool id_make_local(ID *id, bool test)
 			return false; /* not implemented */
 		case ID_TXT:
 			return false; /* not implemented */
-		case ID_SCRIPT:
-			return false; /* deprecated */
 		case ID_SO:
 			return false; /* not implemented */
 		case ID_GR:
@@ -360,8 +380,6 @@ bool id_copy(ID *id, ID **newid, bool test)
 		case ID_TXT:
 			if (!test) *newid = (ID *)BKE_text_copy(G.main, (Text *)id);
 			return true;
-		case ID_SCRIPT:
-			return false;  /* deprecated */
 		case ID_SO:
 			return false;  /* not implemented */
 		case ID_GR:
@@ -410,11 +428,11 @@ bool id_unlink(ID *id, int test)
 			break;
 		case ID_GR:
 			if (test) return true;
-			BKE_group_unlink((Group *)id);
+			BKE_group_unlink(mainlib, (Group *)id);
 			break;
 		case ID_OB:
 			if (test) return true;
-			BKE_object_unlink((Object *)id);
+			BKE_object_unlink(mainlib, (Object *)id);
 			break;
 	}
 
@@ -496,8 +514,6 @@ ListBase *which_libbase(Main *mainlib, short type)
 			return &(mainlib->vfont);
 		case ID_TXT:
 			return &(mainlib->text);
-		case ID_SCRIPT:
-			return &(mainlib->script);
 		case ID_SPK:
 			return &(mainlib->speaker);
 		case ID_SO:
@@ -584,8 +600,9 @@ int set_listbasepointers(Main *main, ListBase **lb)
 	/* BACKWARDS! also watch order of free-ing! (mesh<->mat), first items freed last.
 	 * This is important because freeing data decreases usercounts of other datablocks,
 	 * if this data is its self freed it can crash. */
+	lb[a++] = &(main->library);  /* Libraries may be accessed from pretty much any other ID... */
 	lb[a++] = &(main->ipo);
-	lb[a++] = &(main->action); // xxx moved here to avoid problems when freeing with animato (aligorith)
+	lb[a++] = &(main->action); /* moved here to avoid problems when freeing with animato (aligorith) */
 	lb[a++] = &(main->key);
 	lb[a++] = &(main->gpencil); /* referenced by nodes, objects, view, scene etc, before to free after. */
 	lb[a++] = &(main->nodetree);
@@ -614,7 +631,6 @@ int set_listbasepointers(Main *main, ListBase **lb)
 	lb[a++] = &(main->palettes);
 	lb[a++] = &(main->paintcurves);
 	lb[a++] = &(main->brush);
-	lb[a++] = &(main->script);
 	lb[a++] = &(main->particle);
 	lb[a++] = &(main->speaker);
 
@@ -624,7 +640,6 @@ int set_listbasepointers(Main *main, ListBase **lb)
 	lb[a++] = &(main->object);
 	lb[a++] = &(main->linestyle); /* referenced by scenes */
 	lb[a++] = &(main->scene);
-	lb[a++] = &(main->library);
 	lb[a++] = &(main->wm);
 	lb[a++] = &(main->mask);
 	
@@ -707,9 +722,6 @@ void *BKE_libblock_alloc_notest(short type)
 			break;
 		case ID_TXT:
 			id = MEM_callocN(sizeof(Text), "text");
-			break;
-		case ID_SCRIPT:
-			//XXX id = MEM_callocN(sizeof(Script), "script");
 			break;
 		case ID_SPK:
 			id = MEM_callocN(sizeof(Speaker), "speaker");
@@ -857,9 +869,6 @@ void BKE_libblock_init_empty(ID *id)
 			break;
 		case ID_TXT:
 			BKE_text_init((Text *)id);
-			break;
-		case ID_SCRIPT:
-			BLI_assert(0);
 			break;
 		case ID_SO:
 			/* Another fuzzy case, think NULLified content is OK here... */
@@ -1012,23 +1021,23 @@ static void BKE_library_free(Library *lib)
 		freePackedFile(lib->packedfile);
 }
 
-static void (*free_windowmanager_cb)(bContext *, wmWindowManager *) = NULL;
+static BKE_library_free_window_manager_cb free_windowmanager_cb = NULL;
 
-void BKE_library_callback_free_window_manager_set(void (*func)(bContext *C, wmWindowManager *) )
+void BKE_library_callback_free_window_manager_set(BKE_library_free_window_manager_cb func)
 {
 	free_windowmanager_cb = func;
 }
 
-static void (*free_notifier_reference_cb)(const void *) = NULL;
+static BKE_library_free_notifier_reference_cb free_notifier_reference_cb = NULL;
 
-void BKE_library_callback_free_notifier_reference_set(void (*func)(const void *) )
+void BKE_library_callback_free_notifier_reference_set(BKE_library_free_notifier_reference_cb func)
 {
 	free_notifier_reference_cb = func;
 }
 
-static void (*free_editor_id_reference_cb)(const ID *) = NULL;
+static BKE_library_free_editor_id_reference_cb free_editor_id_reference_cb = NULL;
 
-void BKE_library_callback_free_editor_id_reference_set(void (*func)(const ID *))
+void BKE_library_callback_free_editor_id_reference_set(BKE_library_free_editor_id_reference_cb func)
 {
 	free_editor_id_reference_cb = func;
 }
@@ -1135,9 +1144,6 @@ void BKE_libblock_free_ex(Main *bmain, void *idv, bool do_id_user)
 		case ID_TXT:
 			BKE_text_free((Text *)id);
 			break;
-		case ID_SCRIPT:
-			/* deprecated */
-			break;
 		case ID_SPK:
 			BKE_speaker_free((Speaker *)id);
 			break;
@@ -1214,14 +1220,14 @@ void BKE_libblock_free_us(Main *bmain, void *idv)      /* test users */
 {
 	ID *id = idv;
 	
-	id->us--;
+	id_us_min(id);
 
-	if (id->us < 0) {
-		if (id->lib) printf("ERROR block %s %s users %d\n", id->lib->name, id->name, id->us);
-		else printf("ERROR block %s users %d\n", id->name, id->us);
-	}
 	if (id->us == 0) {
-		if (GS(id->name) == ID_OB) BKE_object_unlink((Object *)id);
+		switch (GS(id->name)) {
+			case ID_OB:
+				BKE_object_unlink(bmain, (Object *)id);
+				break;
+		}
 		
 		BKE_libblock_free(bmain, id);
 	}
@@ -1622,10 +1628,7 @@ void id_clear_lib_data(Main *bmain, ID *id)
 
 	BKE_id_lib_local_paths(bmain, id->lib, id);
 
-	if (id->flag & LIB_FAKEUSER) {
-		id->us--;
-		id->flag &= ~LIB_FAKEUSER;
-	}
+	id_fake_user_clear(id);
 
 	id->lib = NULL;
 	id->flag = LIB_LOCAL;

@@ -52,6 +52,7 @@
 #include "BKE_cdderivedmesh.h"
 #include "BKE_editmesh.h"
 #include "BKE_key.h"
+#include "BKE_library.h"
 #include "BKE_material.h"
 #include "BKE_modifier.h"
 #include "BKE_mesh.h"
@@ -800,7 +801,8 @@ void DM_to_mesh(DerivedMesh *dm, Mesh *me, Object *ob, CustomDataMask mask, bool
 	 * stack*/
 	if (tmp.totvert != me->totvert && !did_shapekeys && me->key) {
 		printf("%s: YEEK! this should be recoded! Shape key loss!: ID '%s'\n", __func__, tmp.id.name);
-		if (tmp.key) tmp.key->id.us--;
+		if (tmp.key)
+			id_us_min(&tmp.key->id);
 		tmp.key = NULL;
 	}
 
@@ -1443,7 +1445,7 @@ static void calc_weightpaint_vert_array(
 	MDeformVert *dv = DM_get_vert_data_layer(dm, CD_MDEFORMVERT);
 	int numVerts = dm->getNumVerts(dm);
 
-	if (dv) {
+	if (dv && (ob->actdef != 0)) {
 		unsigned char (*wc)[4] = r_wtcol_v;
 		unsigned int i;
 
@@ -1468,7 +1470,10 @@ static void calc_weightpaint_vert_array(
 	}
 	else {
 		unsigned char col[4];
-		if (draw_flag & (CALC_WP_GROUP_USER_ACTIVE | CALC_WP_GROUP_USER_ALL)) {
+		if ((ob->actdef == 0) && !BLI_listbase_is_empty(&ob->defbase)) {
+			ARRAY_SET_ITEMS(col, 0xff, 0, 0xff, 0xff);
+		}
+		else if (draw_flag & (CALC_WP_GROUP_USER_ACTIVE | CALC_WP_GROUP_USER_ALL)) {
 			copy_v3_v3_char((char *)col, dm_wcinfo->alert_color);
 			col[3] = 255;
 		}

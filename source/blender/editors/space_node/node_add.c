@@ -107,7 +107,7 @@ static bool add_reroute_intersect_check(bNodeLink *link, float mcoords[][2], int
 
 		for (i = 0; i < tot - 1; i++)
 			for (b = 0; b < NODE_LINK_RESOL; b++)
-				if (isect_line_line_v2(mcoords[i], mcoords[i + 1], coord_array[b], coord_array[b + 1]) > 0) {
+				if (isect_seg_seg_v2(mcoords[i], mcoords[i + 1], coord_array[b], coord_array[b + 1]) > 0) {
 					result[0] = (mcoords[i][0] + mcoords[i + 1][0]) / 2.0f;
 					result[1] = (mcoords[i][1] + mcoords[i + 1][1]) / 2.0f;
 					return 1;
@@ -487,7 +487,7 @@ static int new_node_tree_exec(bContext *C, wmOperator *op)
 		/* RNA_property_pointer_set increases the user count,
 		 * fixed here as the editor is the initial user.
 		 */
-		ntree->id.us--;
+		id_us_min(&ntree->id);
 
 		RNA_id_pointer_create(&ntree->id, &idptr);
 		RNA_property_pointer_set(&ptr, prop, idptr);

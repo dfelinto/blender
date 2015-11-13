@@ -141,6 +141,8 @@ private:
 	float			m_overrideCamNear;
 	float			m_overrideCamFar;
 	float			m_overrideCamLens;
+	/// Default camera zoom.
+	float m_overrideCamZoom;
 
 	bool m_stereo;
 	int m_curreye;
@@ -269,6 +271,7 @@ public:
 
 	void			GetSceneViewport(KX_Scene* scene, KX_Camera* cam, RAS_Rect& area, RAS_Rect& viewport);
 
+	/// Sets zoom for camera objects, useful only with extend and scale framing mode.
 	void SetCameraZoom(float camzoom);
 	
 	void EnableCameraOverride(const STR_String& forscene);
@@ -278,6 +281,8 @@ public:
 	void SetCameraOverrideViewMatrix(const MT_CmMatrix4x4& mat);
 	void SetCameraOverrideClipping(float near, float far);
 	void SetCameraOverrideLens(float lens);
+	/// Sets zoom for default camera, = 2 in embedded mode.
+	void SetCameraOverrideZoom(float camzoom);
 
 	// Update animations for object in this scene
 	void UpdateAnimations(KX_Scene *scene);

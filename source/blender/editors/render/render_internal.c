@@ -192,7 +192,7 @@ static void image_buffer_rect_update(RenderJob *rj, RenderResult *rr, ImBuf *ibu
 	/* TODO(sergey): Need to check has_combined here? */
 	if (iuser->pass == 0) {
 		RenderView *rv;
-		size_t view_id = BKE_scene_multiview_view_id_get(&scene->r, viewname);
+		const int view_id = BKE_scene_multiview_view_id_get(&scene->r, viewname);
 		rv = RE_RenderViewGetById(rr, view_id);
 
 		/* find current float rect for display, first case is after composite... still weak */
@@ -1639,4 +1639,46 @@ Scene *ED_render_job_get_current_scene(const bContext *C)
 		return rj->current_scene;
 	}
 	return NULL;
+}
+
+/* Motion blur curve preset */
+
+static int render_shutter_curve_preset_exec(bContext *C, wmOperator *op)
+{
+	Scene *scene = CTX_data_scene(C);
+	CurveMapping *mblur_shutter_curve = &scene->r.mblur_shutter_curve;
+	CurveMap *cm = mblur_shutter_curve->cm;
+	int preset = RNA_enum_get(op->ptr, "shape");
+
+	cm->flag &= ~CUMA_EXTEND_EXTRAPOLATE;
+	mblur_shutter_curve->preset = preset;
+	curvemap_reset(cm,
+	               &mblur_shutter_curve->clipr,
+	               mblur_shutter_curve->preset,
+	               CURVEMAP_SLOPE_POS_NEG);
+	curvemapping_changed(mblur_shutter_curve, false);
+
+	return OPERATOR_FINISHED;
+}
+
+void RENDER_OT_shutter_curve_preset(wmOperatorType *ot)
+{
+	PropertyRNA *prop;
+	static EnumPropertyItem prop_shape_items[] = {
+		{CURVE_PRESET_SHARP, "SHARP", 0, "Sharp", ""},
+		{CURVE_PRESET_SMOOTH, "SMOOTH", 0, "Smooth", ""},
+		{CURVE_PRESET_MAX, "MAX", 0, "Max", ""},
+		{CURVE_PRESET_LINE, "LINE", 0, "Line", ""},
+		{CURVE_PRESET_ROUND, "ROUND", 0, "Round", ""},
+		{CURVE_PRESET_ROOT, "ROOT", 0, "Root", ""},
+		{0, NULL, 0, NULL, NULL}};
+
+	ot->name = "Shutter Curve Preset";
+	ot->description = "Set shutter curve";
+	ot->idname = "RENDER_OT_shutter_curve_preset";
+
+	ot->exec = render_shutter_curve_preset_exec;
+
+	prop = RNA_def_enum(ot->srna, "shape", prop_shape_items, CURVE_PRESET_SMOOTH, "Mode", "");
+	RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_CURVE); /* Abusing id_curve :/ */
 }

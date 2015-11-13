@@ -48,6 +48,7 @@
 
 #include "BLI_blenlib.h"
 #include "BLI_math.h"
+#include "BLI_jitter.h"
 #include "BLI_utildefines.h"
 #include "BLI_endian_switch.h"
 #include "BLI_threads.h"
@@ -1427,10 +1428,6 @@ static void backdrawview3d(Scene *scene, ARegion *ar, View3D *v3d)
 
 	if (rv3d->rflag & RV3D_CLIPPING)
 		ED_view3d_clipping_disable();
-
-	/* it is important to end a view in a transform compatible with buttons */
-//	persp(PERSP_WIN);  /* set ortho */
-
 }
 
 void view3d_opengl_read_pixels(ARegion *ar, int x, int y, int w, int h, int format, int type, void *data)
@@ -2386,7 +2383,6 @@ void ED_view3d_draw_depth(Scene *scene, ARegion *ar, View3D *v3d, bool alphaover
 	glClear(GL_DEPTH_BUFFER_BIT);
 	
 	glLoadMatrixf(rv3d->viewmat);
-//	persp(PERSP_STORE);  /* store correct view for persp(PERSP_VIEW) calls */
 	
 	if (rv3d->rflag & RV3D_CLIPPING) {
 		ED_view3d_clipping_set(rv3d);
@@ -2643,6 +2639,9 @@ CustomDataMask ED_view3d_screen_datamask(const bScreen *screen)
 	return mask;
 }
 
+/**
+ * \note keep this synced with #ED_view3d_mats_rv3d_backup/#ED_view3d_mats_rv3d_restore
+ */
 void ED_view3d_update_viewmat(Scene *scene, View3D *v3d, ARegion *ar, float viewmat[4][4], float winmat[4][4])
 {
 	RegionView3D *rv3d = ar->regiondata;
@@ -2914,6 +2913,47 @@ static void view3d_main_area_setup_view(Scene *scene, View3D *v3d, ARegion *ar, 
 	glLoadMatrixf(rv3d->winmat);
 	glMatrixMode(GL_MODELVIEW);
 	glLoadMatrixf(rv3d->viewmat);
+}
+
+/**
+ * Store values from #RegionView3D, set when drawing.
+ * This is needed when we draw with to a viewport using a different matrix (offscreen drawing for example).
+ *
+ * Values set by #ED_view3d_update_viewmat should be handled here.
+ */
+struct RV3DMatrixStore {
+	float winmat[4][4];
+	float viewmat[4][4];
+	float viewinv[4][4];
+	float persmat[4][4];
+	float persinv[4][4];
+	float viewcamtexcofac[4];
+	float pixsize;
+};
+
+void *ED_view3d_mats_rv3d_backup(struct RegionView3D *rv3d)
+{
+	struct RV3DMatrixStore *rv3dmat = MEM_mallocN(sizeof(*rv3dmat), __func__);
+	copy_m4_m4(rv3dmat->winmat, rv3d->winmat);
+	copy_m4_m4(rv3dmat->viewmat, rv3d->viewmat);
+	copy_m4_m4(rv3dmat->persmat, rv3d->persmat);
+	copy_m4_m4(rv3dmat->persinv, rv3d->persinv);
+	copy_m4_m4(rv3dmat->viewinv, rv3d->viewinv);
+	copy_v4_v4(rv3dmat->viewcamtexcofac, rv3d->viewcamtexcofac);
+	rv3dmat->pixsize = rv3d->pixsize;
+	return (void *)rv3dmat;
+}
+
+void ED_view3d_mats_rv3d_restore(struct RegionView3D *rv3d, void *rv3dmat_pt)
+{
+	struct RV3DMatrixStore *rv3dmat = rv3dmat_pt;
+	copy_m4_m4(rv3d->winmat, rv3dmat->winmat);
+	copy_m4_m4(rv3d->viewmat, rv3dmat->viewmat);
+	copy_m4_m4(rv3d->persmat, rv3dmat->persmat);
+	copy_m4_m4(rv3d->persinv, rv3dmat->persinv);
+	copy_m4_m4(rv3d->viewinv, rv3dmat->viewinv);
+	copy_v4_v4(rv3d->viewcamtexcofac, rv3dmat->viewcamtexcofac);
+	rv3d->pixsize = rv3dmat->pixsize;
 }
 
 void ED_view3d_draw_offscreen_init(Scene *scene, View3D *v3d)
@@ -3255,14 +3295,19 @@ void ED_view3d_draw_offscreen(
 ImBuf *ED_view3d_draw_offscreen_imbuf(
         Scene *scene, View3D *v3d, ARegion *ar, int sizex, int sizey,
         unsigned int flag, bool draw_background,
-        int alpha_mode, int samples, const char *viewname,
+        int alpha_mode, int samples, bool full_samples, const char *viewname,
         /* output vars */
-        GPUOffScreen *ofs, char err_out[256])
+        GPUFX *fx, GPUOffScreen *ofs, char err_out[256])
 {
 	RegionView3D *rv3d = ar->regiondata;
 	ImBuf *ibuf;
 	const bool draw_sky = (alpha_mode == R_ADDSKY) && v3d && (v3d->flag3 & V3D_SHOW_WORLD);
 	const bool own_ofs = (ofs == NULL);
+
+	/* view state */
+	GPUFXSettings fx_settings = {NULL};
+	bool is_ortho = false;
+	float winmat[4][4];
 
 	if (UNLIKELY(v3d == NULL))
 		return NULL;
@@ -3272,7 +3317,7 @@ ImBuf *ED_view3d_draw_offscreen_imbuf(
 		glPushAttrib(GL_LIGHTING_BIT);
 
 		/* bind */
-		ofs = GPU_offscreen_create(sizex, sizey, samples, err_out);
+		ofs = GPU_offscreen_create(sizex, sizey, full_samples ? 0 : samples, err_out);
 		if (ofs == NULL) {
 			glPopAttrib();
 			return NULL;
@@ -3283,10 +3328,12 @@ ImBuf *ED_view3d_draw_offscreen_imbuf(
 
 	GPU_offscreen_bind(ofs, true);
 
+	/* read in pixels & stamp */
+	ibuf = IMB_allocImBuf(sizex, sizey, 32, flag);
+
 	/* render 3d view */
 	if (rv3d->persp == RV3D_CAMOB && v3d->camera) {
 		CameraParams params;
-		GPUFXSettings fx_settings = {NULL};
 		Object *camera = BKE_camera_multiview_render(scene, v3d->camera, viewname);
 
 		BKE_camera_params_init(&params);
@@ -3300,26 +3347,100 @@ ImBuf *ED_view3d_draw_offscreen_imbuf(
 
 		BKE_camera_to_gpu_dof(camera, &fx_settings);
 
-		ED_view3d_draw_offscreen(
-		        scene, v3d, ar, sizex, sizey, NULL, params.winmat,
-		        draw_background, draw_sky, !params.is_ortho, viewname,
-		        NULL, &fx_settings,
-		        ofs);
+		is_ortho = params.is_ortho;
+		copy_m4_m4(winmat, params.winmat);
 	}
 	else {
-		ED_view3d_draw_offscreen(
-		        scene, v3d, ar, sizex, sizey, NULL, NULL,
-		        draw_background, draw_sky, true, viewname,
-		        NULL, NULL, ofs);
+		rctf viewplane;
+		float clipsta, clipend;
+
+		fx_settings = v3d->fx_settings;
+
+		is_ortho = ED_view3d_viewplane_get(v3d, rv3d, sizex, sizey, &viewplane, &clipsta, &clipend, NULL);
+		if (is_ortho) {
+			orthographic_m4(winmat, viewplane.xmin, viewplane.xmax, viewplane.ymin, viewplane.ymax, -clipend, clipend);
+		}
+		else {
+			perspective_m4(winmat, viewplane.xmin, viewplane.xmax, viewplane.ymin, viewplane.ymax, clipsta, clipend);
+		}
 	}
 
-	/* read in pixels & stamp */
-	ibuf = IMB_allocImBuf(sizex, sizey, 32, flag);
+	if ((samples && full_samples) == 0) {
+		/* Single-pass render, common case */
+		ED_view3d_draw_offscreen(
+		        scene, v3d, ar, sizex, sizey, NULL, winmat,
+		        draw_background, draw_sky, !is_ortho, viewname,
+		        fx, &fx_settings, ofs);
 
-	if (ibuf->rect_float)
-		GPU_offscreen_read_pixels(ofs, GL_FLOAT, ibuf->rect_float);
-	else if (ibuf->rect)
-		GPU_offscreen_read_pixels(ofs, GL_UNSIGNED_BYTE, ibuf->rect);
+		if (ibuf->rect_float) {
+			GPU_offscreen_read_pixels(ofs, GL_FLOAT, ibuf->rect_float);
+		}
+		else if (ibuf->rect) {
+			GPU_offscreen_read_pixels(ofs, GL_UNSIGNED_BYTE, ibuf->rect);
+		}
+	}
+	else {
+		/* Multi-pass render, use accumulation buffer & jitter for 'full' oversampling.
+		 * Use becauise OpenGL may use a lower quality MSAA, and only oversample edges. */
+		static float jit_ofs[32][2];
+		float winmat_jitter[4][4];
+		/* use imbuf as temp storage, before writing into it from accumulation buffer */
+		unsigned char *rect_temp = ibuf->rect ? (void *)ibuf->rect : (void *)ibuf->rect_float;
+		unsigned int *accum_buffer = MEM_mallocN(sizex * sizey * sizeof(int[4]), "accum1");
+		unsigned int i;
+		int j;
+
+		BLI_jitter_init(jit_ofs, scene->r.osa);
+
+		/* first sample buffer, also initializes 'rv3d->persmat' */
+		ED_view3d_draw_offscreen(
+		        scene, v3d, ar, sizex, sizey, NULL, winmat,
+		        draw_background, draw_sky, !is_ortho, viewname,
+		        fx, &fx_settings, ofs);
+		GPU_offscreen_read_pixels(ofs, GL_UNSIGNED_BYTE, rect_temp);
+
+		i = sizex * sizey * 4;
+		while (i--) {
+			accum_buffer[i] = rect_temp[i];
+		}
+
+		/* skip the first sample */
+		for (j = 1; j < samples; j++) {
+			copy_m4_m4(winmat_jitter, winmat);
+			window_translate_m4(
+			        winmat_jitter, rv3d->persmat,
+			        (jit_ofs[j][0] * 2.0f) / sizex,
+			        (jit_ofs[j][1] * 2.0f) / sizey);
+
+			ED_view3d_draw_offscreen(
+			        scene, v3d, ar, sizex, sizey, NULL, winmat_jitter,
+			        draw_background, draw_sky, !is_ortho, viewname,
+			        fx, &fx_settings, ofs);
+			GPU_offscreen_read_pixels(ofs, GL_UNSIGNED_BYTE, rect_temp);
+
+			i = sizex * sizey * 4;
+			while (i--) {
+				accum_buffer[i] += rect_temp[i];
+			}
+		}
+
+		if (ibuf->rect_float) {
+			float *rect_float = ibuf->rect_float;
+			i = sizex * sizey * 4;
+			while (i--) {
+				rect_float[i] = (float)(accum_buffer[i] / samples) * (1.0f / 255.0f);
+			}
+		}
+		else {
+			unsigned char *rect_ub = (unsigned char *)ibuf->rect;
+			i = sizex * sizey * 4;
+			while (i--) {
+				rect_ub[i] = accum_buffer[i] / samples;
+			}
+		}
+
+		MEM_freeN(accum_buffer);
+	}
 
 	/* unbind */
 	GPU_offscreen_unbind(ofs, true);
@@ -3329,7 +3450,7 @@ ImBuf *ED_view3d_draw_offscreen_imbuf(
 
 		glPopAttrib();
 	}
-	
+
 	if (ibuf->rect_float && ibuf->rect)
 		IMB_rect_from_float(ibuf);
 
@@ -3347,8 +3468,8 @@ ImBuf *ED_view3d_draw_offscreen_imbuf(
 ImBuf *ED_view3d_draw_offscreen_imbuf_simple(
         Scene *scene, Object *camera, int width, int height,
         unsigned int flag, int drawtype, bool use_solid_tex, bool use_gpencil, bool draw_background,
-        int alpha_mode, int samples, const char *viewname,
-        GPUOffScreen *ofs, char err_out[256])
+        int alpha_mode, int samples, bool full_samples, const char *viewname,
+        GPUFX *fx, GPUOffScreen *ofs, char err_out[256])
 {
 	View3D v3d = {NULL};
 	ARegion ar = {NULL};
@@ -3397,10 +3518,8 @@ ImBuf *ED_view3d_draw_offscreen_imbuf_simple(
 
 	return ED_view3d_draw_offscreen_imbuf(
 	        scene, &v3d, &ar, width, height, flag,
-	        draw_background, alpha_mode, samples, viewname,
-	        ofs, err_out);
-
-	// seq_view3d_cb(scene, cfra, render_size, seqrectx, seqrecty);
+	        draw_background, alpha_mode, samples, full_samples, viewname,
+	        fx, ofs, err_out);
 }
 
 

@@ -272,7 +272,6 @@ typedef struct ccdf_minmax {
 } ccdf_minmax;
 
 
-
 typedef struct ccd_Mesh {
 	int mvert_num, tri_num;
 	const MVert *mvert;
@@ -284,8 +283,6 @@ typedef struct ccd_Mesh {
 	float bbmin[3];
 	float bbmax[3];
 } ccd_Mesh;
-
-
 
 
 static ccd_Mesh *ccd_mesh_make(Object *ob)
@@ -559,8 +556,6 @@ static void ccd_update_deflector_hash(Scene *scene, Object *vertexowner, GHash *
 		base = base->next;
 	} /* while (base) */
 }
-
-
 
 
 /*--- collider caching and dicing ---*/
@@ -2234,7 +2229,7 @@ static void softbody_calc_forcesEx(Scene *scene, Object *ob, float forcetime, fl
 	/* bproot= sb->bpoint; */ /* need this for proper spring addressing */ /* UNUSED */
 
 	if (do_springcollision || do_aero)
-	sb_sfesf_threads_run(scene, ob, timenow, sb->totspring, NULL);
+		sb_sfesf_threads_run(scene, ob, timenow, sb->totspring, NULL);
 
 	/* after spring scan because it uses Effoctors too */
 	do_effector= pdInitEffectors(scene, ob, NULL, sb->effector_weights, true);
@@ -2252,8 +2247,6 @@ static void softbody_calc_forcesEx(Scene *scene, Object *ob, float forcetime, fl
 	/* finish matrix and solve */
 	pdEndEffectors(&do_effector);
 }
-
-
 
 
 static void softbody_calc_forces(Scene *scene, Object *ob, float forcetime, float timenow, int nl_flags)

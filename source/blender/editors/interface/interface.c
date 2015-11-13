@@ -1093,7 +1093,6 @@ static bool ui_but_event_property_operator_string(const bContext *C, uiBut *but,
 			
 			/* check each until one works... */
 			for (i = 0; (i < num_ops) && (ctx_toggle_opnames[i]); i++) {
-				//printf("\t%s\n", ctx_toggle_opnames[i]);
 				if (WM_key_event_operator_string(C, ctx_toggle_opnames[i], WM_OP_INVOKE_REGION_WIN, prop_path, false,
 				                                 buf_len, buf))
 				{
@@ -2197,6 +2196,63 @@ void ui_but_string_get(uiBut *but, char *str, const size_t maxlen)
 	ui_but_string_get_ex(but, str, maxlen, -1);
 }
 
+/**
+ * A version of #ui_but_string_get_ex for dynamic buffer sizes
+ * (where #ui_but_string_get_max_length returns 0).
+ *
+ * \param r_str_size: size of the returned string (including terminator).
+ */
+char *ui_but_string_get_dynamic(uiBut *but, int *r_str_size)
+{
+	char *str = NULL;
+	*r_str_size = 1;
+
+	if (but->rnaprop && ELEM(but->type, UI_BTYPE_TEXT, UI_BTYPE_SEARCH_MENU)) {
+		PropertyType type;
+
+		type = RNA_property_type(but->rnaprop);
+
+		if (type == PROP_STRING) {
+			/* RNA string */
+			str = RNA_property_string_get_alloc(&but->rnapoin, but->rnaprop, NULL, 0, r_str_size);
+			(*r_str_size) += 1;
+		}
+		else if (type == PROP_ENUM) {
+			/* RNA enum */
+			int value = RNA_property_enum_get(&but->rnapoin, but->rnaprop);
+			const char *value_id;
+			if (!RNA_property_enum_name(but->block->evil_C, &but->rnapoin, but->rnaprop, value, &value_id)) {
+				value_id = "";
+			}
+
+			*r_str_size = strlen(value_id) + 1;
+			str = BLI_strdupn(value_id, *r_str_size);
+		}
+		else if (type == PROP_POINTER) {
+			/* RNA pointer */
+			PointerRNA ptr = RNA_property_pointer_get(&but->rnapoin, but->rnaprop);
+			str = RNA_struct_name_get_alloc(&ptr, NULL, 0, r_str_size);
+			(*r_str_size) += 1;
+		}
+		else {
+			BLI_assert(0);
+		}
+	}
+	else {
+		BLI_assert(0);
+	}
+
+	if (UNLIKELY(str == NULL)) {
+		/* should never happen, paranoid check */
+		*r_str_size = 1;
+		str = BLI_strdup("");
+		BLI_assert(0);
+
+	}
+
+	return str;
+}
+
 #ifdef WITH_PYTHON
 
 static bool ui_set_but_string_eval_num_unit(bContext *C, uiBut *but, const char *str, double *value)
@@ -2927,198 +2983,9 @@ void UI_block_align_begin(uiBlock *block)
 	/* buttons declared after this call will get this align nr */ // XXX flag?
 }
 
-static bool buts_are_horiz(uiBut *but1, uiBut *but2)
-{
-	float dx, dy;
-
-	/* simple case which can fail if buttons shift apart
-	 * with proportional layouts, see: [#38602] */
-	if ((but1->rect.ymin == but2->rect.ymin) &&
-	    (but1->rect.xmin != but2->rect.xmin))
-	{
-		return true;
-	}
-
-	dx = fabsf(but1->rect.xmax - but2->rect.xmin);
-	dy = fabsf(but1->rect.ymin - but2->rect.ymax);
-	
-	return (dx <= dy);
-}
-
 void UI_block_align_end(uiBlock *block)
 {
 	block->flag &= ~UI_BUT_ALIGN;  /* all 4 flags */
-}
-
-bool ui_but_can_align(uiBut *but)
-{
-	return !ELEM(but->type, UI_BTYPE_LABEL, UI_BTYPE_CHECKBOX, UI_BTYPE_CHECKBOX_N, UI_BTYPE_SEPR, UI_BTYPE_SEPR_LINE);
-}
-
-static void ui_block_align_calc_but(uiBut *first, short nr)
-{
-	uiBut *prev, *but = NULL, *next;
-	int flag = 0, cols = 0, rows = 0;
-	
-	/* auto align */
-
-	for (but = first; but && but->alignnr == nr; but = but->next) {
-		if (but->next && but->next->alignnr == nr) {
-			if (buts_are_horiz(but, but->next)) cols++;
-			else rows++;
-		}
-	}
-
-	/* rows == 0: 1 row, cols == 0: 1 column */
-	
-	/* note;  how it uses 'flag' in loop below (either set it, or OR it) is confusing */
-	for (but = first, prev = NULL; but && but->alignnr == nr; prev = but, but = but->next) {
-		next = but->next;
-		if (next && next->alignnr != nr)
-			next = NULL;
-
-		/* clear old flag */
-		but->drawflag &= ~UI_BUT_ALIGN;
-			
-		if (flag == 0) {  /* first case */
-			if (next) {
-				if (buts_are_horiz(but, next)) {
-					if (rows == 0)
-						flag = UI_BUT_ALIGN_RIGHT;
-					else 
-						flag = UI_BUT_ALIGN_DOWN | UI_BUT_ALIGN_RIGHT;
-				}
-				else {
-					flag = UI_BUT_ALIGN_DOWN;
-				}
-			}
-		}
-		else if (next == NULL) {  /* last case */
-			if (prev) {
-				if (buts_are_horiz(prev, but)) {
-					if (rows == 0)
-						flag = UI_BUT_ALIGN_LEFT;
-					else
-						flag = UI_BUT_ALIGN_TOP | UI_BUT_ALIGN_LEFT;
-				}
-				else {
-					flag = UI_BUT_ALIGN_TOP;
-				}
-			}
-		}
-		else if (buts_are_horiz(but, next)) {
-			/* check if this is already second row */
-			if (prev && buts_are_horiz(prev, but) == 0) {
-				flag &= ~UI_BUT_ALIGN_LEFT;
-				flag |= UI_BUT_ALIGN_TOP;
-				/* exception case: bottom row */
-				if (rows > 0) {
-					uiBut *bt = but;
-					while (bt && bt->alignnr == nr) {
-						if (bt->next && bt->next->alignnr == nr && buts_are_horiz(bt, bt->next) == 0) {
-							break;
-						}
-						bt = bt->next;
-					}
-					if (bt == NULL || bt->alignnr != nr) flag = UI_BUT_ALIGN_TOP | UI_BUT_ALIGN_RIGHT;
-				}
-			}
-			else {
-				flag |= UI_BUT_ALIGN_LEFT;
-			}
-		}
-		else {
-			if (cols == 0) {
-				flag |= UI_BUT_ALIGN_TOP;
-			}
-			else {  /* next button switches to new row */
-				
-				if (prev && buts_are_horiz(prev, but))
-					flag |= UI_BUT_ALIGN_LEFT;
-				else {
-					flag &= ~UI_BUT_ALIGN_LEFT;
-					flag |= UI_BUT_ALIGN_TOP;
-				}
-				
-				if ((flag & UI_BUT_ALIGN_TOP) == 0) {  /* stil top row */
-					if (prev) {
-						if (next && buts_are_horiz(but, next))
-							flag = UI_BUT_ALIGN_DOWN | UI_BUT_ALIGN_LEFT | UI_BUT_ALIGN_RIGHT;
-						else {
-							/* last button in top row */
-							flag = UI_BUT_ALIGN_DOWN | UI_BUT_ALIGN_LEFT;
-						}
-					}
-					else 
-						flag |= UI_BUT_ALIGN_DOWN;
-				}
-				else 
-					flag |= UI_BUT_ALIGN_TOP;
-			}
-		}
-		
-		but->drawflag |= flag;
-		
-		/* merge coordinates */
-		if (prev) {
-			/* simple cases */
-			if (rows == 0) {
-				but->rect.xmin = (prev->rect.xmax + but->rect.xmin) / 2.0f;
-				prev->rect.xmax = but->rect.xmin;
-			}
-			else if (cols == 0) {
-				but->rect.ymax = (prev->rect.ymin + but->rect.ymax) / 2.0f;
-				prev->rect.ymin = but->rect.ymax;
-			}
-			else {
-				if (buts_are_horiz(prev, but)) {
-					but->rect.xmin = (prev->rect.xmax + but->rect.xmin) / 2.0f;
-					prev->rect.xmax = but->rect.xmin;
-					/* copy height too */
-					but->rect.ymax = prev->rect.ymax;
-				}
-				else if (prev->prev && buts_are_horiz(prev->prev, prev) == 0) {
-					/* the previous button is a single one in its row */
-					but->rect.ymax = (prev->rect.ymin + but->rect.ymax) / 2.0f;
-					prev->rect.ymin = but->rect.ymax;
-					
-					but->rect.xmin = prev->rect.xmin;
-					if (next && buts_are_horiz(but, next) == 0)
-						but->rect.xmax = prev->rect.xmax;
-				}
-				else {
-					/* the previous button is not a single one in its row */
-					but->rect.ymax = prev->rect.ymin;
-				}
-			}
-		}
-	}
-}
-
-void ui_block_align_calc(uiBlock *block)
-{
-	uiBut *but;
-	short nr;
-
-	/* align buttons with same align nr */
-	for (but = block->buttons.first; but; ) {
-		if (but->alignnr) {
-			nr = but->alignnr;
-			ui_block_align_calc_but(but, nr);
-
-			/* skip with same number */
-			for (; but && but->alignnr == nr; but = but->next) {
-				/* pass */
-			}
-
-			if (!but) {
-				break;
-			}
-		}
-		else {
-			but = but->next;
-		}
-	}
 }
 
 struct ColorManagedDisplay *ui_block_cm_display_get(uiBlock *block)
@@ -3556,8 +3423,7 @@ static uiBut *ui_def_but_rna(
 		else if (proptype == PROP_STRING) {
 			min = 0;
 			max = RNA_property_string_maxlength(prop);
-			if (max == 0) /* interface code should ideally support unlimited length */
-				max = UI_MAX_DRAW_STR;
+			/* note, 'max' may be zero (code for dynamically resized array) */
 		}
 	}
 

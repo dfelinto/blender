@@ -894,7 +894,7 @@ void psys_get_birth_coords(ParticleSimulationData *sim, ParticleData *pa, Partic
 				float q_imat[4];
 
 				mat4_to_quat(q_obmat, ob->obmat);
-				invert_qt_qt(q_imat, q_obmat);
+				invert_qt_qt_normalized(q_imat, q_obmat);
 
 
 				if (part->rotmode != PART_ROT_NOR_TAN) {
@@ -4216,7 +4216,7 @@ void BKE_particlesystem_id_loop(ParticleSystem *psys, ParticleSystemIDFunc func,
 {
 	ParticleTarget *pt;
 
-	func(psys, (ID **)&psys->part, userdata, IDWALK_NOP);
+	func(psys, (ID **)&psys->part, userdata, IDWALK_USER | IDWALK_NEVER_NULL);
 	func(psys, (ID **)&psys->target_ob, userdata, IDWALK_NOP);
 	func(psys, (ID **)&psys->parent, userdata, IDWALK_NOP);
 

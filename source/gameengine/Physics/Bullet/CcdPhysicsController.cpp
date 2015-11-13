@@ -1194,16 +1194,12 @@ void CcdPhysicsController::SetMass(MT_Scalar newmass)
 	btRigidBody *body = GetRigidBody();
 	if (body && !m_suspended && newmass>MT_EPSILON && GetMass()>MT_EPSILON)
 	{
-		btVector3 grav = body->getGravity();
-		btVector3 accel = grav / GetMass();
-
 		btBroadphaseProxy* handle = body->getBroadphaseHandle();
 		GetPhysicsEnvironment()->UpdateCcdPhysicsController(this,
 			newmass,
 			body->getCollisionFlags(),
 			handle->m_collisionFilterGroup,
 			handle->m_collisionFilterMask);
-		body->setGravity(accel);
 	}
 }
 		
@@ -1870,8 +1866,10 @@ bool CcdShapeConstructionInfo::SetMesh(RAS_MeshObject *meshobj, DerivedMesh *dm,
 	if (!dm) {
 		free_dm = true;
 		dm = CDDM_from_mesh(meshobj->GetMesh());
-		DM_ensure_tessface(dm);
 	}
+
+	// Some meshes with modifiers returns 0 polys, call DM_ensure_tessface avoid this.
+	DM_ensure_tessface(dm);
 
 	MVert *mvert = dm->getVertArray(dm);
 	MFace *mface = dm->getTessFaceArray(dm);

@@ -172,7 +172,7 @@ static void unlink_material_cb(bContext *UNUSED(C), Scene *UNUSED(scene), TreeEl
 	if (LIKELY(matar != NULL)) {
 		for (a = 0; a < totcol; a++) {
 			if (a == te->index && matar[a]) {
-				matar[a]->id.us--;
+				id_us_min(&matar[a]->id);
 				matar[a] = NULL;
 			}
 		}
@@ -208,15 +208,16 @@ static void unlink_texture_cb(bContext *UNUSED(C), Scene *UNUSED(scene), TreeEle
 	for (a = 0; a < MAX_MTEX; a++) {
 		if (a == te->index && mtex[a]) {
 			if (mtex[a]->tex) {
-				mtex[a]->tex->id.us--;
+				id_us_min(&mtex[a]->tex->id);
 				mtex[a]->tex = NULL;
 			}
 		}
 	}
 }
 
-static void unlink_group_cb(bContext *UNUSED(C), Scene *UNUSED(scene), TreeElement *UNUSED(te),
-                            TreeStoreElem *tsep, TreeStoreElem *tselem)
+static void unlink_group_cb(
+        bContext *C, Scene *UNUSED(scene), TreeElement *UNUSED(te),
+        TreeStoreElem *tsep, TreeStoreElem *tselem)
 {
 	Group *group = (Group *)tselem->id;
 	
@@ -227,7 +228,8 @@ static void unlink_group_cb(bContext *UNUSED(C), Scene *UNUSED(scene), TreeEleme
 		}
 	}
 	else {
-		BKE_group_unlink(group);
+		Main *bmain = CTX_data_main(C);
+		BKE_group_unlink(bmain, group);
 	}
 }
 
@@ -419,10 +421,7 @@ static void id_fake_user_set_cb(bContext *UNUSED(C), Scene *UNUSED(scene), TreeE
 {
 	ID *id = tselem->id;
 	
-	if ((id) && ((id->flag & LIB_FAKEUSER) == 0)) {
-		id->flag |= LIB_FAKEUSER;
-		id_us_plus(id);
-	}
+	id_fake_user_set(id);
 }
 
 static void id_fake_user_clear_cb(bContext *UNUSED(C), Scene *UNUSED(scene), TreeElement *UNUSED(te),
@@ -430,10 +429,7 @@ static void id_fake_user_clear_cb(bContext *UNUSED(C), Scene *UNUSED(scene), Tre
 {
 	ID *id = tselem->id;
 	
-	if ((id) && (id->flag & LIB_FAKEUSER)) {
-		id->flag &= ~LIB_FAKEUSER;
-		id_us_min(id);
-	}
+	id_fake_user_clear(id);
 }
 
 static void id_select_linked_cb(bContext *C, Scene *UNUSED(scene), TreeElement *UNUSED(te),
@@ -516,15 +512,20 @@ static void group_instance_cb(bContext *C, Scene *scene, TreeElement *UNUSED(te)
 	id_lib_extern(&group->id);
 }
 
-void outliner_do_object_operation(bContext *C, Scene *scene_act, SpaceOops *soops, ListBase *lb, 
-                                  void (*operation_cb)(bContext *C, Scene *scene, TreeElement *,
-                                                       TreeStoreElem *, TreeStoreElem *))
+/**
+ * \param select_recurse: Set to false for operations which are already recursively operating on their children.
+ */
+void outliner_do_object_operation_ex(
+        bContext *C, Scene *scene_act, SpaceOops *soops, ListBase *lb,
+        void (*operation_cb)(bContext *C, Scene *scene, TreeElement *,
+                             TreeStoreElem *, TreeStoreElem *),
+        bool select_recurse)
 {
 	TreeElement *te;
-	TreeStoreElem *tselem;
 	
 	for (te = lb->first; te; te = te->next) {
-		tselem = TREESTORE(te);
+		TreeStoreElem *tselem = TREESTORE(te);
+		bool select_handled = false;
 		if (tselem->flag & TSE_SELECTED) {
 			if (tselem->type == 0 && te->idcode == ID_OB) {
 				// when objects selected in other scenes... dunno if that should be allowed
@@ -536,12 +537,23 @@ void outliner_do_object_operation(bContext *C, Scene *scene_act, SpaceOops *soop
 				 * only use 'scene_act' when 'scene_owner' is NULL, which can happen when the
 				 * outliner isn't showing scenes: Visible Layer draw mode for eg. */
 				operation_cb(C, scene_owner ? scene_owner : scene_act, te, NULL, tselem);
+				select_handled = true;
 			}
 		}
 		if (TSELEM_OPEN(tselem, soops)) {
-			outliner_do_object_operation(C, scene_act, soops, &te->subtree, operation_cb);
+			if ((select_handled == false) || select_recurse) {
+				outliner_do_object_operation_ex(C, scene_act, soops, &te->subtree, operation_cb, select_recurse);
+			}
 		}
 	}
+}
+
+void outliner_do_object_operation(
+        bContext *C, Scene *scene_act, SpaceOops *soops, ListBase *lb,
+        void (*operation_cb)(bContext *C, Scene *scene, TreeElement *,
+                             TreeStoreElem *, TreeStoreElem *))
+{
+	outliner_do_object_operation_ex(C, scene_act, soops, lb, operation_cb, true);
 }
 
 /* ******************************************** */
@@ -782,7 +794,7 @@ static Base *outline_delete_hierarchy(bContext *C, Scene *scene, Base *base)
 	Object *parent;
 
 	if (!base) {
-	    return NULL;
+		return NULL;
 	}
 
 	for (child_base = scene->base.first; child_base; child_base = base_next) {
@@ -876,7 +888,7 @@ static int outliner_object_operation_exec(bContext *C, wmOperator *op)
 	}
 	else if (event == OL_OP_SELECT_HIERARCHY) {
 		Scene *sce = scene;  // to be able to delete, scenes are set...
-		outliner_do_object_operation(C, scene, soops, &soops->tree, object_select_hierarchy_cb);
+		outliner_do_object_operation_ex(C, scene, soops, &soops->tree, object_select_hierarchy_cb, false);
 		if (scene != sce) {
 			ED_screen_set_scene(C, CTX_wm_screen(C), sce);
 		}	
@@ -903,7 +915,7 @@ static int outliner_object_operation_exec(bContext *C, wmOperator *op)
 		WM_event_add_notifier(C, NC_SCENE | ND_OB_ACTIVE, scene);
 	}
 	else if (event == OL_OP_DELETE_HIERARCHY) {
-		outliner_do_object_operation(C, scene, soops, &soops->tree, object_delete_hierarchy_cb);
+		outliner_do_object_operation_ex(C, scene, soops, &soops->tree, object_delete_hierarchy_cb, false);
 
 		/* XXX: See OL_OP_DELETE comment above. */
 		outliner_cleanup_tree(soops);

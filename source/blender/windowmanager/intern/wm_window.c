@@ -371,17 +371,14 @@ void wm_window_title(wmWindowManager *wm, wmWindow *win)
 	}
 }
 
+static float wm_window_get_virtual_pixelsize(void)
+{
+	return ((U.virtual_pixel == VIRTUAL_PIXEL_NATIVE) ? 1.0f : 2.0f);
+}
+
 float wm_window_pixelsize(wmWindow *win)
 {
-	float pixelsize = GHOST_GetNativePixelSize(win->ghostwin);
-	
-	switch (U.virtual_pixel) {
-		default:
-		case VIRTUAL_PIXEL_NATIVE:
-			return pixelsize;
-		case VIRTUAL_PIXEL_DOUBLE:
-			return 2.0f * pixelsize;
-	}
+	return (GHOST_GetNativePixelSize(win->ghostwin) * wm_window_get_virtual_pixelsize());
 }
 
 /* belongs to below */
@@ -415,7 +412,12 @@ static void wm_window_ghostwindow_add(wmWindowManager *wm, const char *title, wm
 	
 	ghostwin = GHOST_CreateWindow(g_system, title,
 	                              win->posx, posy, win->sizex, win->sizey,
+#ifdef __APPLE__
+	                              /* we agreed to not set any fullscreen or iconized state on startup */
+	                              GHOST_kWindowStateNormal,
+#else
 	                              (GHOST_TWindowState)win->windowstate,
+#endif
 	                              GHOST_kDrawingContextTypeOpenGL,
 	                              glSettings);
 	
@@ -434,11 +436,6 @@ static void wm_window_ghostwindow_add(wmWindowManager *wm, const char *title, wm
 		if (win->eventstate == NULL)
 			win->eventstate = MEM_callocN(sizeof(wmEvent), "window event state");
 		
-#ifdef __APPLE__
-		/* set the state here, else OSX would not recognize changed screen resolution */
-		/* we agreed to not set any fullscreen or iconized state on startup */
-		GHOST_SetWindowState(ghostwin, GHOST_kWindowStateNormal);
-#endif
 		/* store actual window size in blender window */
 		bounds = GHOST_GetClientBounds(win->ghostwin);
 		win->sizex = GHOST_GetWidthRectangle(bounds);
@@ -626,6 +623,7 @@ wmWindow *WM_window_open_temp(bContext *C, const rcti *rect_init, int type)
 	Scene *scene = CTX_data_scene(C);
 	const char *title;
 	rcti rect = *rect_init;
+	const short px_virtual = (short)wm_window_get_virtual_pixelsize();
 
 	/* changes rect to fit within desktop */
 	wm_window_check_position(&rect);
@@ -642,10 +640,11 @@ wmWindow *WM_window_open_temp(bContext *C, const rcti *rect_init, int type)
 		win->posx = rect.xmin;
 		win->posy = rect.ymin;
 	}
-	
-	win->sizex = BLI_rcti_size_x(&rect);
-	win->sizey = BLI_rcti_size_y(&rect);
-	
+
+	/* multiply with virtual pixelsize, ghost handles native one (e.g. for retina) */
+	win->sizex = BLI_rcti_size_x(&rect) * px_virtual;
+	win->sizey = BLI_rcti_size_y(&rect) * px_virtual;
+
 	if (win->ghostwin) {
 		wm_window_set_size(win, win->sizex, win->sizey);
 		wm_window_raise(win);

@@ -2887,7 +2887,7 @@ static void rna_ShaderNodeScript_mode_set(PointerRNA *ptr, int value)
 		nss->filepath[0] = '\0';
 		nss->flag &= ~NODE_SCRIPT_AUTO_UPDATE;
 
-		/* replace text datablock by filepath */
+		/* replace text data-block by filepath */
 		if (node->id) {
 			Text *text = (Text *)node->id;
 
@@ -3016,9 +3016,6 @@ static int point_density_color_source_from_shader(NodeShaderTexPointDensity *sha
 	}
 }
 
-/* TODO(sergey): This function assumes allocated array was passed,
- * works fine with Cycles via C++ RNA, but fails with call from python.
- */
 void rna_ShaderNodePointDensity_density_calc(bNode *self,
                                              Scene *scene,
                                              int settings,
@@ -3027,6 +3024,11 @@ void rna_ShaderNodePointDensity_density_calc(bNode *self,
 {
 	NodeShaderTexPointDensity *shader_point_density = self->storage;
 	PointDensity pd;
+
+	if (scene == NULL) {
+		*length = 0;
+		return;
+	}
 
 	*length = 4 * shader_point_density->resolution *
 	              shader_point_density->resolution *
@@ -3135,7 +3137,7 @@ static EnumPropertyItem node_hair_items[] = {
 };
 
 static EnumPropertyItem node_script_mode_items[] = {
-	{NODE_SCRIPT_INTERNAL, "INTERNAL", 0, "Internal", "Use internal text datablock"},
+	{NODE_SCRIPT_INTERNAL, "INTERNAL", 0, "Internal", "Use internal text data-block"},
 	{NODE_SCRIPT_EXTERNAL, "EXTERNAL", 0, "External", "Use external .osl or .oso file"},
 	{0, NULL, 0, NULL, NULL}
 };
@@ -5826,6 +5828,11 @@ static void def_cmp_stabilize2d(StructRNA *srna)
 	RNA_def_property_enum_items(prop, node_sampler_type_items);
 	RNA_def_property_ui_text(prop, "Filter", "Method to use to filter stabilization");
 	RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+	prop = RNA_def_property(srna, "invert", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "custom2", CMP_NODEFLAG_STABILIZE_INVERSE);
+	RNA_def_property_ui_text(prop, "Invert", "Invert stabilization to re-introduce motion to the frame");
+	RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
 }
 
 static void def_cmp_moviedistortion(StructRNA *srna)
@@ -7943,7 +7950,7 @@ static void rna_def_nodetree(BlenderRNA *brna)
 	RNA_def_property_pointer_sdna(prop, NULL, "gpd");
 	RNA_def_property_struct_type(prop, "GreasePencil");
 	RNA_def_property_flag(prop, PROP_EDITABLE | PROP_ID_REFCOUNT);
-	RNA_def_property_ui_text(prop, "Grease Pencil Data", "Grease Pencil datablock");
+	RNA_def_property_ui_text(prop, "Grease Pencil Data", "Grease Pencil data-block");
 	RNA_def_property_update(prop, NC_NODE, NULL);
 	
 	prop = RNA_def_property(srna, "type", PROP_ENUM, PROP_NONE);
@@ -8081,7 +8088,7 @@ static void rna_def_shader_nodetree(BlenderRNA *brna)
 
 	srna = RNA_def_struct(brna, "ShaderNodeTree", "NodeTree");
 	RNA_def_struct_ui_text(srna, "Shader Node Tree",
-	                       "Node tree consisting of linked nodes used for materials (and other shading datablocks)");
+	                       "Node tree consisting of linked nodes used for materials (and other shading data-blocks)");
 	RNA_def_struct_sdna(srna, "bNodeTree");
 	RNA_def_struct_ui_icon(srna, ICON_MATERIAL);
 }

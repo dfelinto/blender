@@ -133,7 +133,20 @@ bConstraintOb *BKE_constraints_make_evalob(Scene *scene, Object *ob, void *subda
 			if (ob) {
 				cob->ob = ob;
 				cob->type = datatype;
-				cob->rotOrder = EULER_ORDER_DEFAULT; // TODO: when objects have rotation order too, use that
+				
+				if (cob->ob->rotmode > 0) {
+					/* Should be some kind of Euler order, so use it */
+					/* NOTE: Versions <= 2.76 assumed that "default" order
+					 *       would always get used, so we may seem some rig
+					 *       breakage as a result. However, this change here
+					 *       is needed to fix T46599
+					 */
+					cob->rotOrder = ob->rotmode;
+				}
+				else {
+					/* Quats/Axis-Angle, so Eulers should just use default order */
+					cob->rotOrder = EULER_ORDER_DEFAULT;
+				}
 				copy_m4_m4(cob->matrix, ob->obmat);
 			}
 			else
@@ -3863,7 +3876,7 @@ static void pivotcon_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *ta
 
 
 	/* correct the pivot by the rotation axis otherwise the pivot translates when it shouldnt */
-	mat3_to_axis_angle(axis, &angle, rotMat);
+	mat3_normalized_to_axis_angle(axis, &angle, rotMat);
 	if (angle) {
 		float dvec[3];
 		sub_v3_v3v3(vec, pivot, cob->matrix[3]);

@@ -391,14 +391,14 @@ static void view3d_boxview_sync_axis(RegionView3D *rv3d_dst, RegionView3D *rv3d_
 	if (UNLIKELY(ED_view3d_quat_from_axis_view(rv3d_src->view, viewinv) == false)) {
 		return;
 	}
-	invert_qt(viewinv);
+	invert_qt_normalized(viewinv);
 	mul_qt_v3(viewinv, view_src_x);
 	mul_qt_v3(viewinv, view_src_y);
 
 	if (UNLIKELY(ED_view3d_quat_from_axis_view(rv3d_dst->view, viewinv) == false)) {
 		return;
 	}
-	invert_qt(viewinv);
+	invert_qt_normalized(viewinv);
 	mul_qt_v3(viewinv, view_dst_x);
 	mul_qt_v3(viewinv, view_dst_y);
 
@@ -614,10 +614,10 @@ static void view3d_orbit_apply_dyn_ofs(
         const float oldquat[4], const float viewquat[4])
 {
 	float q1[4];
-	conjugate_qt_qt(q1, oldquat);
+	invert_qt_qt_normalized(q1, oldquat);
 	mul_qt_qtqt(q1, q1, viewquat);
 
-	conjugate_qt(q1);  /* conj == inv for unit quat */
+	invert_qt_normalized(q1);
 
 	sub_v3_v3(r_ofs, dyn_ofs);
 	mul_qt_v3(q1, r_ofs);
@@ -640,7 +640,7 @@ static bool view3d_orbit_calc_center(bContext *C, float r_dyn_ofs[3])
 		 * center, in other cases it's not clear what rotation center shall be
 		 * so just rotate around object origin
 		 */
-		if (ob->mode & (OB_MODE_SCULPT | OB_MODE_TEXTURE_PAINT)) {
+		if (ob->mode & (OB_MODE_SCULPT | OB_MODE_TEXTURE_PAINT | OB_MODE_VERTEX_PAINT | OB_MODE_WEIGHT_PAINT)) {
 			float stroke[3];
 			BKE_paint_stroke_get_average(scene, ob, stroke);
 			copy_v3_v3(lastofs, stroke);
@@ -931,7 +931,7 @@ static void viewrotate_apply_snap(ViewOpsData *vod)
 	int x, y, z;
 	bool found = false;
 
-	invert_qt_qt(viewquat_inv, vod->viewquat);
+	invert_qt_qt_normalized(viewquat_inv, vod->viewquat);
 
 	mul_qt_v3(viewquat_inv, zaxis);
 	normalize_v3(zaxis);
@@ -969,11 +969,11 @@ static void viewrotate_apply_snap(ViewOpsData *vod)
 		normalize_qt(viewquat_align);
 		mul_qt_qtqt(viewquat_align, vod->viewquat, viewquat_align);
 		normalize_qt(viewquat_align);
-		invert_qt_qt(viewquat_align_inv, viewquat_align);
+		invert_qt_qt_normalized(viewquat_align_inv, viewquat_align);
 
 		vec_to_quat(quat_snap, zaxis_best, OB_NEGZ, OB_POSY);
-		invert_qt(quat_snap);
 		normalize_qt(quat_snap);
+		invert_qt_normalized(quat_snap);
 
 		/* check if we can find the roll */
 		found = false;
@@ -992,7 +992,7 @@ static void viewrotate_apply_snap(ViewOpsData *vod)
 			normalize_qt(quat_final);
 
 			/* compare 2 vector angles to find the least roll */
-			invert_qt_qt(quat_final_inv, quat_final);
+			invert_qt_qt_normalized(quat_final_inv, quat_final);
 			mul_qt_v3(viewquat_align_inv, xaxis1);
 			mul_qt_v3(quat_final_inv, xaxis2);
 			angle = angle_v3v3(xaxis1, xaxis2);
@@ -1097,7 +1097,7 @@ static void viewrotate_apply(ViewOpsData *vod, int x, int y)
 		mul_qt_qtqt(quat_local_x, vod->viewquat, quat_local_x);
 
 		/* Perform the orbital rotation */
-		axis_angle_normalized_to_quat(quat_global_z, zvec_global, sensitivity * vod->reverse * (x - vod->oldx));
+		axis_angle_to_quat_single(quat_global_z, 'Z', sensitivity * vod->reverse * (x - vod->oldx));
 		mul_qt_qtqt(vod->viewquat, quat_local_x, quat_global_z);
 
 		viewrotate_apply_dyn_ofs(vod, vod->viewquat);
@@ -1356,7 +1356,7 @@ static float view3d_ndof_pan_speed_calc_from_dist(RegionView3D *rv3d, const floa
 #if 0
 	mul_mat3_m4_v3(rv3d->viewinv, tvec);
 #else
-	invert_qt_qt(viewinv, rv3d->viewquat);
+	invert_qt_qt_normalized(viewinv, rv3d->viewquat);
 	mul_qt_v3(viewinv, tvec);
 #endif
 
@@ -1425,7 +1425,7 @@ static void view3d_ndof_pan_zoom(const struct wmNDOFMotionData *ndof, ScrArea *s
 		mul_v3_fl(pan_vec, speed * ndof->dt);
 
 		/* transform motion from view to world coordinates */
-		invert_qt_qt(view_inv, rv3d->viewquat);
+		invert_qt_qt_normalized(view_inv, rv3d->viewquat);
 		mul_qt_v3(view_inv, pan_vec);
 
 		/* move center of view opposite of hand motion (this is camera mode, not object mode) */
@@ -1453,7 +1453,7 @@ static void view3d_ndof_orbit(const struct wmNDOFMotionData *ndof, ScrArea *sa, 
 
 	rv3d->view = RV3D_VIEW_USER;
 
-	invert_qt_qt(view_inv, rv3d->viewquat);
+	invert_qt_qt_normalized(view_inv, rv3d->viewquat);
 
 	if (U.ndof_flag & NDOF_TURNTABLE) {
 		float rot[3];
@@ -1470,7 +1470,7 @@ static void view3d_ndof_orbit(const struct wmNDOFMotionData *ndof, ScrArea *sa, 
 
 		/* Perform the up/down rotation */
 		angle = ndof->dt * rot[0];
-		axis_angle_to_quat(quat, xvec, angle * 2);
+		axis_angle_to_quat(quat, xvec, angle);
 		mul_qt_qtqt(rv3d->viewquat, rv3d->viewquat, quat);
 
 		/* Perform the orbital rotation */
@@ -1482,10 +1482,7 @@ static void view3d_ndof_orbit(const struct wmNDOFMotionData *ndof, ScrArea *sa, 
 		rv3d->rot_axis[1] = 0;
 		rv3d->rot_axis[2] = 1;
 
-		quat[0] = cosf(angle);
-		quat[1] = 0.0f;
-		quat[2] = 0.0f;
-		quat[3] = sinf(angle);
+		axis_angle_to_quat_single(quat, 'Z', angle);
 		mul_qt_qtqt(rv3d->viewquat, rv3d->viewquat, quat);
 
 	}
@@ -1525,7 +1522,7 @@ void view3d_ndof_fly(
 	bool has_rotate = NDOF_HAS_ROTATE;
 
 	float view_inv[4];
-	invert_qt_qt(view_inv, rv3d->viewquat);
+	invert_qt_qt_normalized(view_inv, rv3d->viewquat);
 
 	rv3d->rot_angle = 0.0f;  /* disable onscreen rotation doo-dad */
 
@@ -1598,7 +1595,7 @@ void view3d_ndof_fly(
 				float view_direction[3] = {0.0f, 0.0f, -1.0f}; /* view -z (into screen) */
 
 				/* find new inverse since viewquat has changed */
-				invert_qt_qt(view_inv, rv3d->viewquat);
+				invert_qt_qt_normalized(view_inv, rv3d->viewquat);
 				/* could apply reverse rotation to existing view_inv to save a few cycles */
 
 				/* transform view vectors to world coordinates */
@@ -3079,8 +3076,6 @@ static int viewselected_exec(bContext *C, wmOperator *op)
 		view3d_from_minmax(C, v3d, ar, min, max, ok_dist, smooth_viewtx);
 	}
 
-// XXX	BIF_view3d_previewrender_signal(curarea, PR_DBASE|PR_DISPRECT);
-
 	return OPERATOR_FINISHED;
 }
 
@@ -3765,7 +3760,7 @@ static void axis_set_view(bContext *C, View3D *v3d, ARegion *ar,
 			ED_getTransformOrientationMatrix(C, twmat, V3D_ACTIVE);
 
 			mat3_to_quat(obact_quat, twmat);
-			invert_qt(obact_quat);
+			invert_qt_normalized(obact_quat);
 			mul_qt_qtqt(quat, quat, obact_quat);
 
 			rv3d->view = view = RV3D_VIEW_USER;
@@ -3992,14 +3987,12 @@ static int vieworbit_exec(bContext *C, wmOperator *op)
 			}
 
 			if (ELEM(orbitdir, V3D_VIEW_STEPLEFT, V3D_VIEW_STEPRIGHT)) {
-				const float zvec[3] = {0.0f, 0.0f, 1.0f};
-
 				if (orbitdir == V3D_VIEW_STEPRIGHT) {
 					angle = -angle;
 				}
 
 				/* z-axis */
-				axis_angle_normalized_to_quat(quat_mul, zvec, angle);
+				axis_angle_to_quat_single(quat_mul, 'Z', angle);
 			}
 			else {
 
@@ -5004,7 +4997,7 @@ void ED_view3d_distance_set(RegionView3D *rv3d, const float dist)
 #if 0
 	mul_mat3_m4_v3(rv3d->viewinv, tvec);
 #else
-	invert_qt_qt(viewinv, rv3d->viewquat);
+	invert_qt_qt_normalized(viewinv, rv3d->viewquat);
 	mul_qt_v3(viewinv, tvec);
 #endif
 	sub_v3_v3(rv3d->ofs, tvec);
@@ -5036,16 +5029,12 @@ void ED_view3d_from_m4(float mat[4][4], float ofs[3], float quat[4], float *dist
 
 	/* Quat */
 	if (quat) {
-		float imat[3][3];
-		invert_m3_m3(imat, nmat);
-		mat3_to_quat(quat, imat);
+		mat3_normalized_to_quat(quat, nmat);
+		invert_qt_normalized(quat);
 	}
 
 	if (ofs && dist) {
-		float vec[3] = {0.0f, 0.0f, -(*dist)};
-
-		mul_m3_v3(nmat, vec);
-		sub_v3_v3(ofs, vec);
+		madd_v3_v3fl(ofs, nmat[2], *dist);
 	}
 }
 

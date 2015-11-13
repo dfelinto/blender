@@ -1169,7 +1169,7 @@ static int image_open_exec(bContext *C, wmOperator *op)
 	if (iod->pprop.prop) {
 		/* when creating new ID blocks, use is already 1, but RNA
 		 * pointer se also increases user, so this compensates it */
-		ima->id.us--;
+		id_us_min(&ima->id);
 		if ((frame_seq_len > 1) && ima->source == IMA_SRC_FILE) {
 			ima->source = IMA_SRC_SEQUENCE;
 		}
@@ -1758,9 +1758,9 @@ static bool save_image_doit(bContext *C, SpaceImage *sima, wmOperator *op, SaveI
 		}
 		/* individual multiview images */
 		else if (imf->views_format == R_IMF_VIEWS_INDIVIDUAL) {
-			size_t i;
+			int i;
 			unsigned char planes = ibuf->planes;
-			const size_t totviews = (rr ? BLI_listbase_count(&rr->views) : BLI_listbase_count(&ima->views));
+			const int totviews = (rr ? BLI_listbase_count(&rr->views) : BLI_listbase_count(&ima->views));
 
 			if (!is_multilayer) {
 				ED_space_image_release_buffer(sima, ibuf, lock);
@@ -2276,7 +2276,7 @@ static int image_new_exec(bContext *C, wmOperator *op)
 	if (prop) {
 		/* when creating new ID blocks, use is already 1, but RNA
 		 * pointer se also increases user, so this compensates it */
-		ima->id.us--;
+		id_us_min(&ima->id);
 
 		RNA_id_pointer_create(&ima->id, &idptr);
 		RNA_property_pointer_set(&ptr, prop, idptr);
