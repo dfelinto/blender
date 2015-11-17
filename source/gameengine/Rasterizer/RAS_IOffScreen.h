@@ -53,6 +53,7 @@ public:
 	int		m_width;
 	int     m_height;
 	int	    m_samples;
+	unsigned int m_colorrb;
 
 	virtual ~RAS_IOffScreen() {}
 
@@ -64,6 +65,7 @@ public:
 
 	virtual int GetWidth() { return m_width; }
 	virtual int GetHeight() { return m_height; }
+	virtual unsigned int GetColorTexture() { return m_colorrb; }
 	virtual int GetSamples() { return m_samples; }
 };
 

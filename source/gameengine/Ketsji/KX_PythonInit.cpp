@@ -1492,9 +1492,16 @@ static PyObject *RASOffScreen_height_get(PyRASOffScreen *self, void *UNUSED(type
 	return PyLong_FromLong(self->ofs->GetHeight());
 }
 
+PyDoc_STRVAR(RASOffScreen_color_texture_doc, "Offscreen buffer color texture.\n\n:type: GLint");
+static PyObject *RASOffScreen_color_texture_get(PyRASOffScreen *self, void *UNUSED(type))
+{
+	return PyLong_FromLong(self->ofs->GetColorTexture());
+}
+
 static PyGetSetDef RASOffScreen_getseters[] = {
 	{(char *)"width", (getter)RASOffScreen_width_get, (setter)NULL, RASOffScreen_width_doc, NULL},
 	{(char *)"height", (getter)RASOffScreen_height_get, (setter)NULL, RASOffScreen_height_doc, NULL},
+	{(char *)"color_texture", (getter)RASOffScreen_color_texture_get, (setter)NULL, RASOffScreen_color_texture_doc, NULL},
 	{NULL, NULL, NULL, NULL, NULL}  /* Sentinel */
 };
 

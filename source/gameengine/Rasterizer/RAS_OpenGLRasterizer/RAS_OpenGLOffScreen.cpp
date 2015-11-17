@@ -33,11 +33,12 @@
 #include "RAS_ICanvas.h"
 
 RAS_OpenGLOffScreen::RAS_OpenGLOffScreen(RAS_ICanvas *canvas)
-    :m_canvas(canvas), m_depthrb(0), m_colorrb(0), m_fbo(0), m_blitfbo(0), m_blitrbo(0), m_bound(false)
+    :m_canvas(canvas), m_depthrb(0), m_fbo(0), m_blitfbo(0), m_blitrbo(0), m_bound(false)
 {
 	m_width = 0;
 	m_height = 0;
 	m_samples = 0;
+	m_colorrb = 0;
 }
 
 RAS_OpenGLOffScreen::~RAS_OpenGLOffScreen()
