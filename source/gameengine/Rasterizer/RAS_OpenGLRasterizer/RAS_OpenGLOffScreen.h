@@ -32,12 +32,10 @@ class RAS_ICanvas;
 
 class RAS_OpenGLOffScreen : public RAS_IOffScreen
 {
+	GPUOffScreen *m_ofs;
 	RAS_ICanvas *m_canvas;
-	// these are GL objects
-	unsigned int m_depthrb;
-	unsigned int m_fbo;
 	unsigned int m_blitfbo;
-	unsigned int m_blitrbo;
+	unsigned int m_blittex;
 	bool m_bound;
 
 public:
