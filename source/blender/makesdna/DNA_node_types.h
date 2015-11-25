@@ -742,6 +742,7 @@ typedef struct NodeTexEnvironment {
 	ImageUser iuser;
 	int color_space;
 	int projection;
+	struct GPUNodeLink *normal_transform_link;
 } NodeTexEnvironment;
 
 typedef struct NodeTexGradient {

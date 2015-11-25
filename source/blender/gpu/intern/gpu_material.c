@@ -114,6 +114,10 @@ struct GPUMaterial {
 
 	ListBase lamps;
 	bool bound;
+
+	/* for passing parameters to the world nodetree */
+	GPUNodeLink *normalLink; 
+	GPUNodeLink *roughnessLink;
 };
 
 struct GPULamp {
@@ -410,9 +414,14 @@ Scene *GPU_material_scene(GPUMaterial *material)
 	return material->scene;
 }
 
-GPUMatType GPU_Material_get_type(GPUMaterial *material)
+GPUMatType GPU_material_get_type(GPUMaterial *material)
 {
 	return material->type;
+}
+
+void GPU_material_set_type(GPUMaterial *material, GPUMatType type)
+{
+	material->type = type;
 }
 
 
@@ -425,6 +434,36 @@ void GPU_material_output_link(GPUMaterial *material, GPUNodeLink *link)
 {
 	if (!material->outlink)
 		material->outlink = link;
+}
+
+void GPU_material_empty_output_link(GPUMaterial *material)
+{
+	material->outlink = NULL;
+}
+
+GPUNodeLink *GPU_material_get_output_link(GPUMaterial *material)
+{
+	return material->outlink;
+}
+
+void GPU_material_set_normal_link(GPUMaterial *material, GPUNodeLink *link)
+{
+	material->normalLink = link;
+}
+
+GPUNodeLink *GPU_material_get_normal_link(GPUMaterial *material)
+{
+	return material->normalLink;
+}
+
+void GPU_material_set_roughness_link(GPUMaterial *material, GPUNodeLink *link)
+{
+	material->roughnessLink = link;
+}
+
+GPUNodeLink *GPU_material_get_roughness_link(GPUMaterial *material)
+{
+	return material->roughnessLink;
 }
 
 void GPU_material_enable_alpha(GPUMaterial *material)
@@ -1626,9 +1665,10 @@ static GPUNodeLink *GPU_blender_material(GPUMaterial *mat, Material *ma)
 static GPUNodeLink *gpu_material_diffuse_bsdf(GPUMaterial *mat, Material *ma)
 {
 	static float roughness = 0.0f;
+	static float ambient[4] = {0.2f, 0.2f, 0.2f, 1.0f};
 	GPUNodeLink *outlink;
 
-	GPU_link(mat, "node_bsdf_diffuse", GPU_uniform(&ma->r), GPU_uniform(&roughness), GPU_builtin(GPU_VIEW_NORMAL), &outlink);
+	GPU_link(mat, "node_bsdf_diffuse", GPU_uniform(&ma->r), GPU_uniform(&roughness), GPU_builtin(GPU_VIEW_NORMAL), GPU_uniform(&ambient), &outlink);
 
 	return outlink;
 }

@@ -52,6 +52,36 @@ static void node_shader_init_vect_transform(bNodeTree *UNUSED(ntree), bNode *nod
 	node->storage = vect;
 }
 
+static GPUNodeLink *gpu_get_input_link(GPUNodeStack *in)
+{
+	if (in->link)
+		return in->link;
+	else
+		return GPU_uniform(in->vec);
+}
+
+static int node_shader_gpu_vect_transform(GPUMaterial *mat, bNode *node, bNodeExecData *UNUSED(execdata), GPUNodeStack *in, GPUNodeStack *out)
+{
+	NodeShaderVectTransform *vect = node->storage;
+	int ret = 0;
+
+	GPU_link(mat, "set_rgba", gpu_get_input_link(&in[0]), &in[0].link);
+
+	if (vect->convert_from == 1)
+		ret |= !GPU_link(mat, "node_vector_transform", in[0].link, GPU_builtin(GPU_OBJECT_MATRIX), &in[0].link);
+	else if (vect->convert_from == 2)
+		ret |= !GPU_link(mat, "node_vector_transform", in[0].link, GPU_builtin(GPU_INVERSE_VIEW_MATRIX), &in[0].link);
+
+	if (vect->convert_to == 1)
+		ret |= !GPU_link(mat, "node_vector_transform", in[0].link, GPU_builtin(GPU_INVERSE_OBJECT_MATRIX), &in[0].link);
+	else if (vect->convert_to == 2)
+		ret |= !GPU_link(mat, "node_vector_transform", in[0].link, GPU_builtin(GPU_VIEW_MATRIX), &in[0].link);
+
+	out[0].link = in[0].link;
+
+	return !ret;
+}
+
 void register_node_type_sh_vect_transform(void)
 {
 	static bNodeType ntype;
@@ -61,6 +91,7 @@ void register_node_type_sh_vect_transform(void)
 	node_type_init(&ntype, node_shader_init_vect_transform);
 	node_type_socket_templates(&ntype, sh_node_vect_transform_in, sh_node_vect_transform_out);
 	node_type_storage(&ntype, "NodeShaderVectTransform", node_free_standard_storage, node_copy_standard_storage);
+	node_type_gpu(&ntype, node_shader_gpu_vect_transform);
 
 	nodeRegisterType(&ntype);
 }

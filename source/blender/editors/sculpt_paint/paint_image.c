@@ -1418,9 +1418,9 @@ static int texture_paint_toggle_exec(bContext *C, wmOperator *op)
 
 		BKE_paint_init(&scene->toolsettings->unified_paint_settings, &imapaint->paint, PAINT_CURSOR_TEXTURE_PAINT);
 
-		if (U.glreslimit != 0)
-			GPU_free_images();
-		GPU_paint_set_mipmap(0);
+		//if (U.glreslimit != 0)
+		//	GPU_free_images();
+		//GPU_paint_set_mipmap(0);
 
 		toggle_paint_cursor(C, 1);
 	}

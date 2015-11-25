@@ -26,6 +26,9 @@
  */
 
 #include "../node_shader_util.h"
+#include "BKE_node.h"
+#include "BKE_scene.h"
+#include "GPU_material.h"
 
 /* **************** OUTPUT ******************** */
 
@@ -43,10 +46,62 @@ static bNodeSocketTemplate sh_node_bsdf_diffuse_out[] = {
 
 static int node_shader_gpu_bsdf_diffuse(GPUMaterial *mat, bNode *UNUSED(node), bNodeExecData *UNUSED(execdata), GPUNodeStack *in, GPUNodeStack *out)
 {
+	Scene *scene = GPU_material_scene(mat);
+	World *wo = scene->world;
+	float horiz_col[4] = {0.2f};
+	GPUNodeLink *envLink, *normalLink, *viewNormalLink;
+
+
 	if (!in[2].link)
 		in[2].link = GPU_builtin(GPU_VIEW_NORMAL);
+	else {
+		/* Convert to view space normal in case a Normal is plugged. This is because cycles uses world normals */
+		GPU_link(mat, "node_vector_transform", in[2].link, GPU_builtin(GPU_VIEW_MATRIX), &in[2].link);
+	}
 
-	return GPU_stack_link(mat, "node_bsdf_diffuse", in, out);
+	GPU_link(mat, "set_rgb", in[2].link, &viewNormalLink);
+	GPU_link(mat, "node_vector_transform", in[2].link, GPU_builtin(GPU_INVERSE_VIEW_MATRIX), &normalLink); /* Send world normal for sampling */
+
+	/* ENVIRONMENT PREVIEW */
+
+	/* Use horizon color by default */
+	horiz_col[0] = wo->horr;
+	horiz_col[1] = wo->horg;
+	horiz_col[2] = wo->horb;
+	envLink = GPU_uniform(&horiz_col);
+
+	/* If there is already a valid output do not attempt to do the world sampling. Because the output would be overwriten */
+	if( GPU_material_get_output_link(mat) )
+		return GPU_stack_link(mat, "node_bsdf_diffuse", in, out, envLink);
+
+	GPU_material_set_normal_link(mat, normalLink); /* THIS IS BAD TOO */
+
+	/* First run the normal into the World node tree 
+	 * The environment texture nodes will save the nodelink of it.
+	 */
+	GPU_material_set_type(mat, GPU_MATERIAL_TYPE_ENV_NORMAL); /* THIS IS BAD */
+
+	/* XXX Memory leak here below */
+	if (BKE_scene_use_new_shading_nodes(scene) && wo->nodetree && wo->use_nodes) {
+		ntreeGPUMaterialNodes(wo->nodetree, mat, NODE_NEW_SHADING);
+		GPU_material_empty_output_link(mat);
+	} else {
+		/* old fixed function world */
+	}
+
+	/* XXX Memory leak here below */
+	GPU_material_set_type(mat, GPU_MATERIAL_TYPE_ENV_SAMPLING_DIFFUSE); /* THIS IS BAD */
+
+	if (BKE_scene_use_new_shading_nodes(scene) && wo->nodetree && wo->use_nodes) {
+		ntreeGPUMaterialNodes(wo->nodetree, mat, NODE_NEW_SHADING);
+		envLink = GPU_material_get_output_link(mat);
+		GPU_material_empty_output_link(mat);
+	} else {
+		/* old fixed function world */
+	}
+	GPU_material_set_type(mat, GPU_MATERIAL_TYPE_MESH);
+
+	return GPU_stack_link(mat, "node_bsdf_diffuse", in, out, envLink);
 }
 
 /* node type definition */

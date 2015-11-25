@@ -591,7 +591,8 @@ int GPU_verify_image(Image *ima, ImageUser *iuser, int tftile, bool compare, boo
 						ibuf->x, ibuf->y, ibuf->x, ibuf->x);
 					IMB_buffer_float_unpremultiply(srgb_frect, ibuf->x, ibuf->y);
 					/* clamp buffer colors to 1.0 to avoid artifacts due to glu for hdr images */
-					IMB_buffer_float_clamp(srgb_frect, ibuf->x, ibuf->y);
+					if (!GTS.gpu_mipmap && ibuf->miptot == 1)
+						IMB_buffer_float_clamp(srgb_frect, ibuf->x, ibuf->y);
 					frect = srgb_frect + texwinsy*ibuf->x + texwinsx;
 				}
 				else
@@ -617,7 +618,8 @@ int GPU_verify_image(Image *ima, ImageUser *iuser, int tftile, bool compare, boo
 							ibuf->x, ibuf->y, ibuf->x, ibuf->x);
 					IMB_buffer_float_unpremultiply(srgb_frect, ibuf->x, ibuf->y);
 					/* clamp buffer colors to 1.0 to avoid artifacts due to glu for hdr images */
-					IMB_buffer_float_clamp(srgb_frect, ibuf->x, ibuf->y);
+					if (!GTS.gpu_mipmap && ibuf->miptot == 1)
+						IMB_buffer_float_clamp(srgb_frect, ibuf->x, ibuf->y);
 				}
 				else
 					frect = ibuf->rect_float;

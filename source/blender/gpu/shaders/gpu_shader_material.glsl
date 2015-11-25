@@ -2168,62 +2168,79 @@ float hypot(float x, float y)
 
 /* bsdfs */
 
-void node_bsdf_diffuse(vec4 color, float roughness, vec3 N, out vec4 result)
+void node_bsdf_diffuse(vec4 color, float roughness, vec3 N, vec4 ambient_light, out vec4 result)
 {
 	/* ambient light */
-	vec3 L = vec3(0.2);
+	vec3 L = ambient_light.rgb;
 
 	/* directional lights */
 	for(int i = 0; i < NUM_LIGHTS; i++) {
 		vec3 light_position = gl_LightSource[i].position.xyz;
 		vec3 light_diffuse = gl_LightSource[i].diffuse.rgb;
 
-		float bsdf = max(dot(N, light_position), 0.0);
+		float bsdf = max(dot(normalize(N), light_position), 0.0) * M_1_PI;
 		L += light_diffuse*bsdf;
 	}
 
-	result = vec4(L*color.rgb, 1.0);
+	//result = vec4(L*color.rgb, 1.0);
+	result = vec4(ambient_light.rgb*color.rgb, 1.0);
 }
 
-void node_bsdf_glossy(vec4 color, float roughness, vec3 N, out vec4 result)
+void node_bsdf_glossy(vec4 color, float roughness, vec3 N, vec3 viewvec, vec4 ambient_light, out vec4 result)
 {
+	N = normalize(N);
+	viewvec = (gl_ProjectionMatrix[3][3] == 0.0)? normalize(viewvec): vec3(0.0, 0.0, -1.0);
+
+	float NV = max( 0.0, dot(N, -viewvec) );
+
 	/* ambient light */
-	vec3 L = vec3(0.2);
+	vec3 L = ambient_light.rgb;
 
 	/* directional lights */
 	for(int i = 0; i < NUM_LIGHTS; i++) {
 		vec3 light_position = gl_LightSource[i].position.xyz;
 		vec3 H = gl_LightSource[i].halfVector.xyz;
-		vec3 light_diffuse = gl_LightSource[i].diffuse.rgb;
 		vec3 light_specular = gl_LightSource[i].specular.rgb;
 
-		/* we mix in some diffuse so low roughness still shows up */
-		float bsdf = 0.5*pow(max(dot(N, H), 0.0), 1.0/roughness);
-		bsdf += 0.5*max(dot(N, light_position), 0.0);
+		float NH = max( 0.0, dot(N, H) );
+		float NL = max( 0.0, dot(N, light_position) );
+
+		/* GGX Spec */
+		float a = max( 1e-8, roughness);
+
+		/* G_smith */
+		float k = a * 0.5;
+		float G = 1.0 / ((NL*(1.0-k) + k) * (NV*(1.0-k) + k));
+
+		float tmp = a / (NH*NH*(a*a-1.0)+1.0);
+		float D = tmp * tmp * M_1_PI;
+
+		float bsdf = D * G * NL * NV / 4.0 ;
 		L += light_specular*bsdf;
 	}
 
-	result = vec4(L*color.rgb, 1.0);
+	//result = vec4(L*color.rgb, 1.0);
+	result = vec4(ambient_light.rgb*color.rgb, 1.0);
 }
 
 void node_bsdf_anisotropic(vec4 color, float roughness, float anisotropy, float rotation, vec3 N, vec3 T, out vec4 result)
 {
-	node_bsdf_diffuse(color, 0.0, N, result);
+	node_bsdf_diffuse(color, 0.0, N, vec4(0.2), result);
 }
 
 void node_bsdf_glass(vec4 color, float roughness, float ior, vec3 N, out vec4 result)
 {
-	node_bsdf_diffuse(color, 0.0, N, result);
+	node_bsdf_diffuse(color, 0.0, N, vec4(0.2), result);
 }
 
 void node_bsdf_toon(vec4 color, float size, float tsmooth, vec3 N, out vec4 result)
 {
-	node_bsdf_diffuse(color, 0.0, N, result);
+	node_bsdf_diffuse(color, 0.0, N, vec4(0.2), result);
 }
 
 void node_bsdf_translucent(vec4 color, vec3 N, out vec4 result)
 {
-	node_bsdf_diffuse(color, 0.0, N, result);
+	node_bsdf_diffuse(color, 0.0, N, vec4(0.2), result);
 }
 
 void node_bsdf_transparent(vec4 color, out vec4 result)
@@ -2237,12 +2254,12 @@ void node_bsdf_transparent(vec4 color, out vec4 result)
 
 void node_bsdf_velvet(vec4 color, float sigma, vec3 N, out vec4 result)
 {
-	node_bsdf_diffuse(color, 0.0, N, result);
+	node_bsdf_diffuse(color, 0.0, N, vec4(0.2), result);
 }
 
 void node_subsurface_scattering(vec4 color, float scale, vec3 radius, float sharpen, float texture_blur, vec3 N, out vec4 result)
 {
-	node_bsdf_diffuse(color, 0.0, N, result);
+	node_bsdf_diffuse(color, 0.0, N, vec4(0.2), result);
 }
 
 void node_bsdf_hair(vec4 color, float offset, float roughnessu, float roughnessv, out vec4 result)
@@ -2266,6 +2283,12 @@ void background_transform_to_world(vec3 viewvec, out vec3 worldvec)
 
 	vec4 co = vec4(co_homogenous.xyz / co_homogenous.w, 0.0);
 	worldvec = (gl_ModelViewMatrixInverse * co).xyz;
+}
+
+void background_sampling_default(vec3 viewvec, mat4 viewinvmat, out vec3 worldvec)
+{
+	viewvec = (gl_ProjectionMatrix[3][3] == 0.0)? normalize(viewvec): vec3(0.0, 0.0, -1.0);
+	worldvec = normalize( (viewinvmat*vec4(viewvec,0.0)).xyz );
 }
 
 void node_background(vec4 color, float strength, vec3 N, out vec4 result)
@@ -2408,6 +2431,49 @@ void node_tex_coord_background(vec3 I, vec3 N, mat4 viewinvmat, mat4 obinvmat, v
 	reflection = -coords;
 }
 
+void node_tex_coord_background_sampling_normal(vec3 I, vec3 N, mat4 viewmat, mat4 obinvmat, vec4 camerafac,
+	vec3 attr_orco, vec3 attr_uv,
+	out vec3 generated, out vec3 normal, out vec3 uv, out vec3 object,
+	out vec3 camera, out vec3 window, out vec3 reflection)
+{
+	//N = (viewinvmat * vec4(N, 0.0) ).xyz;
+
+	generated = N;
+	normal = -N;
+	uv = vec3(attr_uv.xy, 0.0);
+	object = N;
+
+	camera = (viewmat * vec4(N, 0.0) ).xyz * vec3(1.0, 1.0, -1.0);
+	window = (gl_ProjectionMatrix[3][3] == 0.0) ? 
+	              vec3(mtex_2d_mapping(N).xy * camerafac.xy + camerafac.zw, 0.0) : 
+	              vec3(vec2(0.5) * camerafac.xy + camerafac.zw, 0.0);
+
+	reflection = -N;
+}
+
+
+void node_tex_coord_background_sampling(vec3 I, vec3 N, mat4 viewinvmat, mat4 obinvmat, vec4 camerafac,
+	vec3 attr_orco, vec3 attr_uv,
+	out vec3 generated, out vec3 normal, out vec3 uv, out vec3 object,
+	out vec3 camera, out vec3 window, out vec3 reflection)
+{
+	I = (gl_ProjectionMatrix[3][3] == 0.0)? normalize(I): vec3(0.0, 0.0, -1.0);
+	vec3 wI = (viewinvmat * vec4(I,0.0)).xyz;
+
+	generated = wI;
+	normal = -wI;
+	uv = vec3(attr_uv.xy, 0.0);
+	object = wI;
+
+	camera = I * vec3(1.0, 1.0, -1.0);
+	window = (gl_ProjectionMatrix[3][3] == 0.0) ? 
+	              vec3(mtex_2d_mapping(I).xy * camerafac.xy + camerafac.zw, 0.0) : 
+	              vec3(vec2(0.5) * camerafac.xy + camerafac.zw, 0.0);
+
+	reflection = -wI;
+}
+
+
 /* textures */
 
 void node_tex_gradient(vec3 co, out vec4 color, out float fac)
@@ -2434,16 +2500,16 @@ void node_tex_clouds(vec3 co, float size, out vec4 color, out float fac)
 	fac = 1.0;
 }
 
-void node_tex_environment_equirectangular(vec3 co, sampler2D ima, out vec4 color)
+void node_tex_environment_equirectangular(vec3 co, sampler2D ima, float Lod, out vec4 color)
 {
 	vec3 nco = normalize(co);
 	float u = -atan(nco.y, nco.x)/(2.0*M_PI) + 0.5;
 	float v = atan(nco.z, hypot(nco.x, nco.y))/M_PI + 0.5;
 
-	color = texture2D(ima, vec2(u, v));
+	color = texture2DLod(ima, vec2(u, v), Lod);
 }
 
-void node_tex_environment_mirror_ball(vec3 co, sampler2D ima, out vec4 color)
+void node_tex_environment_mirror_ball(vec3 co, sampler2D ima, float Lod, out vec4 color)
 {
 	vec3 nco = normalize(co);
 
@@ -2456,7 +2522,7 @@ void node_tex_environment_mirror_ball(vec3 co, sampler2D ima, out vec4 color)
 	float u = 0.5*(nco.x + 1.0);
 	float v = 0.5*(nco.z + 1.0);
 
-	color = texture2D(ima, vec2(u, v));
+	color = texture2DLod(ima, vec2(u, v), Lod);
 }
 
 void node_tex_environment_empty(vec3 co, out vec4 color)
@@ -2552,9 +2618,54 @@ void node_object_info(out vec3 location, out float object_index, out float mater
 	random = 0.0;
 }
 
-void node_normal_map(float strength, vec4 color, vec3 N, out vec3 result)
+void node_vector_transform(vec3 Vector, mat4 mat, out vec3 result)
 {
-	result = N;
+	result = ( mat * vec4(Vector,0.0) ).xyz;
+}
+
+void node_normal_map_tangent(float strength, vec4 color, vec3 N, vec4 T, mat4 viewmat, mat4 obmat, mat4 viewinvmat, mat4 obinvmat, out vec3 result)
+{
+	color = ( color - vec4(0.5))*vec4(2.0);
+	N = normalize((obinvmat*(viewinvmat*vec4(N, 0.0))).xyz);
+	T = vec4( normalize((obinvmat*(viewinvmat*vec4(T.xyz, 0.0))).xyz), T.w);
+	vec3 B = T.w * cross(N, T.xyz);
+	vec3 No = color.x*T.xyz + color.y*B + color.z*N;
+	result = normalize(N + (No - N) * max(strength, 0.0));
+	result = normalize((obmat*vec4(result,0.0)).xyz);
+}
+
+void node_normal_map_object(float strength, vec4 color, vec3 N, vec4 T, mat4 viewmat, mat4 obmat, mat4 viewinvmat, mat4 obinvmat, out vec3 result)
+{
+	color = ( color - vec4(0.5))*vec4(2.0);
+	vec3 No = color.xyz * vec3(1.0, -1.0, 1.0);
+	N = normalize((obinvmat*(viewinvmat*vec4(N, 0.0))).xyz);
+	result = normalize(N + (No - N) * max(strength, 0.0));
+	result = normalize((obmat*vec4(result,0.0)).xyz);
+}
+
+void node_normal_map_world(float strength, vec4 color, vec3 N, vec4 T, mat4 viewmat, mat4 obmat, mat4 viewinvmat, mat4 obinvmat, out vec3 result)
+{
+	color = ( color - vec4(0.5))*vec4(2.0);
+	vec3 No = color.xyz * vec3(1.0, -1.0, 1.0);
+	N = normalize((viewinvmat*vec4(N, 0.0)).xyz);
+	result = normalize(N + (No - N) * max(strength, 0.0));
+}
+
+void node_normal_map_blend_object(float strength, vec4 color, vec3 N, vec4 T, mat4 viewmat, mat4 obmat, mat4 viewinvmat, mat4 obinvmat, out vec3 result)
+{
+	color = ( color - vec4(0.5))*vec4(2.0);
+	vec3 No = color.xzy * vec3(1.0, -1.0, 1.0);
+	N = normalize((obinvmat*(viewinvmat*vec4(N, 0.0))).xyz);
+	result = normalize(N + (No - N) * max(strength, 0.0));
+	result = normalize((obmat*vec4(result,0.0)).xyz);
+}
+
+void node_normal_map_blend_world(float strength, vec4 color, vec3 N, vec4 T, mat4 viewmat, mat4 obmat, mat4 viewinvmat, mat4 obinvmat, out vec3 result)
+{
+	color = ( color - vec4(0.5))*vec4(2.0);
+	vec3 No = color.xzy * vec3(1.0, -1.0, 1.0);
+	N = normalize((viewinvmat*vec4(N, 0.0)).xyz);
+	result = normalize(N + (No - N) * max(strength, 0.0));
 }
 
 void node_bump(float strength, float dist, float height, vec3 N, out vec3 result)
@@ -2573,6 +2684,180 @@ void node_output_world(vec4 surface, vec4 volume, out vec4 result)
 {
 	result = surface;
 }
+
+/* environment shader */
+
+void env_sampling_sharp(vec3 I, vec3 N, mat4 viewinvmat, out vec3 result)
+{
+	result = reflect(normalize(I), normalize(N));
+}
+
+/* Hammersley points set */
+uniform vec4 hammersley32[32] 	= vec4[32](vec4(0,0,1,0),vec4(0.03125,0.5,-1,1.224646798818428e-16),vec4(0.0625,0.25,0,1),vec4(0.09375,0.75,-1.8369701961596905e-16,-1),vec4(0.125,0.125,0.7071067811865475,0.7071067811865475),vec4(0.15625,0.625,-0.7071067811865476,-0.7071067811865474),vec4(0.1875,0.375,-0.7071067811865474,0.7071067811865476),vec4(0.21875,0.875,0.7071067811865474,-0.7071067811865476),vec4(0.25,0.0625,0.9238795325112867,0.3826834323650898),vec4(0.28125,0.5625,-0.9238795325112867,-0.38268343236508967),vec4(0.3125,0.3125,-0.3826834323650897,0.9238795325112867),vec4(0.34375,0.8125,0.38268343236509006,-0.9238795325112866),vec4(0.375,0.1875,0.3826834323650898,0.9238795325112867),vec4(0.40625,0.6875,-0.38268343236509034,-0.9238795325112865),vec4(0.4375,0.4375,-0.9238795325112867,0.3826834323650898),vec4(0.46875,0.9375,0.9238795325112865,-0.38268343236509034),vec4(0.5,0.03125,0.9807852804032304,0.19509032201612825),vec4(0.53125,0.53125,-0.9807852804032304,-0.19509032201612836),vec4(0.5625,0.28125,-0.1950903220161282,0.9807852804032304),vec4(0.59375,0.78125,0.19509032201612828,-0.9807852804032304),vec4(0.625,0.15625,0.5555702330196022,0.8314696123025452),vec4(0.65625,0.65625,-0.555570233019602,-0.8314696123025453),vec4(0.6875,0.40625,-0.8314696123025453,0.555570233019602),vec4(0.71875,0.90625,0.8314696123025452,-0.5555702330196022),vec4(0.75,0.09375,0.8314696123025452,0.5555702330196022),vec4(0.78125,0.59375,-0.8314696123025455,-0.5555702330196018),vec4(0.8125,0.34375,-0.5555702330196018,0.8314696123025455),vec4(0.84375,0.84375,0.5555702330196017,-0.8314696123025455),vec4(0.875,0.21875,0.19509032201612825,0.9807852804032304),vec4(0.90625,0.71875,-0.19509032201612864,-0.9807852804032304),vec4(0.9375,0.46875,-0.9807852804032303,0.19509032201612844),vec4(0.96875,0.96875,0.9807852804032304,-0.19509032201612864));
+
+/* needed for uint type and bitwise operation */
+#extension GL_EXT_gpu_shader4: enable
+
+/* Tiny Encryption Algorithm (used for noise generation) */
+uvec2 TEA(uvec2 v)
+{
+	/* set up */
+	uint v0 = uint(v.x);
+	uint v1 = uint(v.y);
+	uint sum = 0u;
+
+    /* cache key */
+    uint k[4] = uint[4](0xA341316Cu , 0xC8013EA4u , 0xAD90777Du , 0x7E95761Eu );   
+
+    /* basic cycle start */
+    for (int i = 0; i < 3; i++) {                       
+        sum += 0x9e3779b9u;  /* a key schedule constant */
+        v0 += ((v1 << 4u) + k[0]) ^ (v1 + sum) ^ ((v1 >> 5u) + k[1]);
+        v1 += ((v0 << 4u) + k[2]) ^ (v0 + sum) ^ ((v0 >> 5u) + k[3]);
+    }
+
+    return uvec2(v0, v1);
+}
+
+/* From http://holger.dammertz.org/stuff/notes_HammersleyOnHemisphere.html */
+uint radicalInverse_VdC(uint bits) {
+	bits = (bits << 16u) | (bits >> 16u);
+	bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);
+	bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);
+	bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);
+	bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);
+	return bits;
+}
+
+vec4 hammersley2d(uint i, uint N, uvec2 random) {
+	float E1 = fract( float(i) / float(N) + float( random.x & uint(0xffff) ) / float(1<<16) );
+	float E2 = float( radicalInverse_VdC(i) ^ uint(random.y) ) * 2.3283064365386963e-10;
+	float phi = 2.0f * M_PI * E2;
+	return vec4( E1, E2, cos(phi), sin(phi) );
+}
+
+vec3 importance_sample_GGX(vec4 Xi, float a2)
+{
+	float Phi = 2.0 * M_PI * Xi.y;
+	float CosTheta = sqrt( (1.0 - Xi.x) / ( 1.0 + (a2 - 1.0) * Xi.x ) );
+	float SinTheta = sqrt( 1.0 - CosTheta * CosTheta );
+
+	return vec3(SinTheta*Xi.z, SinTheta*Xi.w, CosTheta);
+}
+
+vec3 tangentSpace( vec3 vector, vec3 N, vec3 T, vec3 B)
+{
+	return T * vector.x + B * vector.y + N * vector.z;
+}
+
+void env_sampling_glossy(vec3 I, vec3 N, float roughness, float precalcLodFactor, float maxLod, mat4 viewinvmat, sampler2D ima, out vec3 result)
+{
+	/* handle perspective/orthographic */
+	//I = (gl_ProjectionMatrix[3][3] == 0.0)? normalize(I): vec3(0.0, 0.0, -1.0);
+	//I = normalize( (viewinvmat*vec4(I,0.0)).xyz );
+	I = normalize(I);
+
+	/* Noise for the importance sample Envmap */
+	uvec2 random = uvec2(gl_FragCoord.x,gl_FragCoord.y);
+	random = TEA(random);
+	random.x ^= uint( 21389u );
+	random.y ^= uint( 49233u );
+
+	/* Generate tangent space */
+	//N = normalize( (viewinvmat * vec4(N, 0.0)).xyz );
+	N = normalize(N);
+	vec3 UpVector = abs(N.z) < 0.99999 ? vec3(0.0,0.0,1.0) : vec3(1.0,0.0,0.0);
+	vec3 T = normalize( cross(UpVector,N) );
+	vec3 B = cross(N,T);
+
+	//roughness = max( 0.0132, roughness * roughness ); /* Error threshold */
+	float a  = max(1e-8, roughness);
+	float a2 = max(1e-8, a*a);
+
+	float NV = max(1e-8, abs(dot(I, N)));
+
+	vec3 V;
+	V.x = sqrt( 1.0 - NV * NV );
+	V.y = 0.0;
+	V.z = NV;
+
+	float Vis_SmithV = NV + sqrt( NV * (NV - NV * a2) + a2 );
+
+	/* Integrating Envmap */
+	vec4 color;
+	vec3 FilteredColor = vec3(0.0);
+	float Weight = 0.0;
+	float IntegralA = 0.0;
+	float IntegralB = 0.0;
+
+	const uint NumSamples = 32u;
+	for ( uint i = 0u; i < NumSamples; i++ ) {
+		vec4 Xi = hammersley2d( i, NumSamples, random );
+		vec3 H = importance_sample_GGX(Xi, a2);
+		vec3 tH = tangentSpace( importance_sample_GGX(Xi, a2), N, T, B );
+		vec3 L = reflect(I, tH);
+
+		/* Sampling Environment */
+		float NL = max(1e-8, dot( N, L ));
+		float NH = max(1e-8, dot( N, tH ));
+
+		float d = (NH * NH) * (a2 - 1.0) + 1.0;
+		float pdf = (NH * a2) / (M_PI * d*d);
+
+		float distortion = sqrt(1.0-L.z*L.z); /* Distortion for Equirectangular Env */
+		float Lod = precalcLodFactor - 0.5*log2( pdf * distortion);
+
+		node_tex_environment_equirectangular(L, ima, Lod, color);
+		srgb_to_linearrgb(color, color);
+		FilteredColor += color.rgb * NL;
+		Weight += NL;
+
+		/* Step 2 Integrating BRDF */
+		L = -reflect(V, H);
+		NL = max(1e-8, L.z);
+		NH = max(1e-8, H.z);
+		float VH = max(1e-8, dot( V, H ));
+
+	    float Vis_SmithL = NL + sqrt( NL * (NL - NL * a2) + a2 );
+		float Vis = 1.0 / ( Vis_SmithV * Vis_SmithL );
+
+		/* Incident light = nl
+		 * pdf = D * nh / (4 * vh)
+		 * nl * Vis / pdf */
+		float nl_Vis_PDF = NL * Vis * (4.0 * VH / NH);
+
+		float Fc = pow( 1.0 - VH, 5.0 );
+		IntegralA += (1.0 - Fc) * nl_Vis_PDF;
+		IntegralB += Fc * nl_Vis_PDF;
+	}
+
+	IntegralA = IntegralA / NumSamples;
+	IntegralB = IntegralB / NumSamples;
+	FilteredColor = FilteredColor / max( Weight, 0.001 );
+
+	result = FilteredColor*(IntegralA+IntegralB);
+}
+
+/* http://seblagarde.wordpress.com/2012/01/08/pi-or-not-to-pi-in-game-lighting-equation/ */
+void irradianceFromSH(vec3 n, vec3 sh0, vec3 sh1, vec3 sh2, vec3 sh3, vec3 sh4, vec3 sh5, vec3 sh6, vec3 sh7, vec3 sh8, out vec4 irradiance)
+{
+	vec3 sh = vec3(0.0);
+
+	sh += 0.282095 * sh0;
+
+	sh += -0.488603 * n.z * sh1;
+	sh += 0.488603 * n.y * sh2;
+	sh += -0.488603 * n.x * sh3;
+
+	sh += 1.092548 * n.x * n.z * sh4;
+	sh += -1.092548 * n.z * n.y * sh5;
+	sh += 0.315392 * (3.0 * n.y * n.y - 1.0) * sh6;
+	sh += -1.092548 * n.x * n.y * sh7;
+	sh += 0.546274 * (n.x * n.x - n.z * n.z) * sh8;
+
+	irradiance = vec4( sh, 1.0 );
+}
+
 
 /* ********************** matcap style render ******************** */
 

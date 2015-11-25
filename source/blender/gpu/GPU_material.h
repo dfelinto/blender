@@ -100,6 +100,10 @@ typedef enum GPUOpenGLBuiltin {
 typedef enum GPUMatType {
 	GPU_MATERIAL_TYPE_MESH  = 1,
 	GPU_MATERIAL_TYPE_WORLD = 2,
+	GPU_MATERIAL_TYPE_ENV_SAMPLING_GLOSSY = 3,
+	GPU_MATERIAL_TYPE_ENV_SAMPLING_SHARP = 4,
+	GPU_MATERIAL_TYPE_ENV_SAMPLING_DIFFUSE = 5,
+	GPU_MATERIAL_TYPE_ENV_NORMAL = 6,
 } GPUMatType;
 
 
@@ -192,7 +196,14 @@ GPUNodeLink *GPU_opengl_builtin(GPUOpenGLBuiltin builtin);
 bool GPU_link(GPUMaterial *mat, const char *name, ...);
 bool GPU_stack_link(GPUMaterial *mat, const char *name, GPUNodeStack *in, GPUNodeStack *out, ...);
 
+void GPU_material_set_normal_link(GPUMaterial *material, GPUNodeLink *link);
+GPUNodeLink *GPU_material_get_normal_link(GPUMaterial *material);
+void GPU_material_set_roughness_link(GPUMaterial *material, GPUNodeLink *link);
+GPUNodeLink *GPU_material_get_roughness_link(GPUMaterial *material);
+
 void GPU_material_output_link(GPUMaterial *material, GPUNodeLink *link);
+void GPU_material_empty_output_link(GPUMaterial *material);
+GPUNodeLink *GPU_material_get_output_link(GPUMaterial *material);
 void GPU_material_enable_alpha(GPUMaterial *material);
 GPUBlendMode GPU_material_alpha_blend(GPUMaterial *material, float obcol[4]);
 
@@ -211,7 +222,8 @@ void GPU_material_bind_uniforms(GPUMaterial *material, float obmat[4][4], float 
 void GPU_material_unbind(GPUMaterial *material);
 bool GPU_material_bound(GPUMaterial *material);
 struct Scene *GPU_material_scene(GPUMaterial *material);
-GPUMatType GPU_Material_get_type(GPUMaterial *material);
+GPUMatType GPU_material_get_type(GPUMaterial *material);
+void GPU_material_set_type(GPUMaterial *material, GPUMatType type);
 
 void GPU_material_vertex_attributes(GPUMaterial *material,
 	struct GPUVertexAttribs *attrib);

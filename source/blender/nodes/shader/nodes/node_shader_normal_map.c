@@ -46,9 +46,16 @@ static void node_shader_init_normal_map(bNodeTree *UNUSED(ntree), bNode *node)
 	node->storage = attr;
 }
 
-static int gpu_shader_normal_map(GPUMaterial *mat, bNode *UNUSED(node), bNodeExecData *UNUSED(execdata), GPUNodeStack *in, GPUNodeStack *out)
+static int gpu_shader_normal_map(GPUMaterial *mat, bNode *node, bNodeExecData *UNUSED(execdata), GPUNodeStack *in, GPUNodeStack *out)
 {
-	return GPU_stack_link(mat, "node_normal_map", in, out, GPU_builtin(GPU_VIEW_NORMAL));
+	NodeShaderNormalMap *storage = node->storage;
+	static const char *space[] = {"node_normal_map_tangent", 
+								  "node_normal_map_object", 
+								  "node_normal_map_world", 
+								  "node_normal_map_blend_object",
+								  "node_normal_map_blend_world"};
+
+	return GPU_stack_link(mat, space[storage->space], in, out, GPU_builtin(GPU_VIEW_NORMAL), GPU_attribute(CD_TANGENT, ""), GPU_builtin(GPU_VIEW_MATRIX), GPU_builtin(GPU_OBJECT_MATRIX) , GPU_builtin(GPU_INVERSE_VIEW_MATRIX), GPU_builtin(GPU_INVERSE_OBJECT_MATRIX));
 }
 
 /* node type definition */
