@@ -49,8 +49,8 @@
 #include "MT_Matrix4x4.h"
 
 #include "BKE_action.h"
-#include "FloatValue.h"
-#include "PyObjectPlus.h"
+#include "EXP_FloatValue.h"
+#include "EXP_PyObjectPlus.h"
 #include "KX_PyMath.h"
 
 extern "C" {
@@ -90,7 +90,7 @@ BL_ActionActuator::BL_ActionActuator(SCA_IObject *gameobj,
 	m_stridelength(stride),
 	m_layer_weight(layer_weight),
 	m_playtype(playtype),
-    m_blendmode(blend_mode),
+	m_blendmode(blend_mode),
 	m_priority(priority),
 	m_layer(layer),
 	m_ipo_flags(ipo_flags),
@@ -307,6 +307,7 @@ bool BL_ActionActuator::Update(double curtime, bool frame)
 		}
 
 		switch (m_playtype) {
+			case ACT_ACTION_FROM_PROP:
 			case ACT_ACTION_LOOP_STOP:
 				obj->StopAction(m_layer); // Stop the action after getting the frame
 
@@ -333,6 +334,17 @@ bool BL_ActionActuator::Update(double curtime, bool frame)
 	}
 
 	return m_flag & ACT_FLAG_ACTIVE;
+}
+
+void BL_ActionActuator::DecLink()
+{
+	SCA_IActuator::DecLink();
+	/* In this case no controllers use this action actuator,
+	   and it should stop its action. */
+	if (m_links == 0) {
+		KX_GameObject *obj = (KX_GameObject *)GetParent();
+		obj->StopAction(m_layer);
+	}
 }
 
 #ifdef WITH_PYTHON

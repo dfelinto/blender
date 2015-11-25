@@ -44,6 +44,8 @@ extern "C" {
 #include "DNA_object_types.h"
 #include "DNA_sequence_types.h"
 
+#include "BKE_depsgraph.h"
+
 #include "RNA_access.h"
 }
 
@@ -56,11 +58,12 @@ extern "C" {
 
 static DEG_EditorUpdateIDCb deg_editor_update_id_cb = NULL;
 static DEG_EditorUpdateSceneCb deg_editor_update_scene_cb = NULL;
+static DEG_EditorUpdateScenePreCb deg_editor_update_scene_pre_cb = NULL;
 
 Depsgraph::Depsgraph()
   : root_node(NULL),
     need_update(false),
-    layers((1 << 20) - 1)
+    layers(0)
 {
 	BLI_spin_init(&lock);
 }
@@ -351,6 +354,21 @@ DepsRelation *Depsgraph::add_new_relation(OperationDepsNode *from,
 {
 	/* Create new relation, and add it to the graph. */
 	DepsRelation *rel = OBJECT_GUARDED_NEW(DepsRelation, from, to, type, description);
+	/* TODO(sergey): Find a better place for this. */
+#ifdef WITH_OPENSUBDIV
+	ComponentDepsNode *comp_node = from->owner;
+	if (comp_node->type == DEPSNODE_TYPE_GEOMETRY) {
+		IDDepsNode *id_to = to->owner->owner;
+		IDDepsNode *id_from = from->owner->owner;
+		Object *object_to = (Object *)id_to->id;
+		if (id_to != id_from && (object_to->recalc & OB_RECALC_ALL)) {
+			if ((id_from->eval_flags & DAG_EVAL_NEED_CPU) == 0) {
+				id_from->tag_update(this);
+				id_from->eval_flags |= DAG_EVAL_NEED_CPU;
+			}
+		}
+	}
+#endif
 	return rel;
 }
 
@@ -452,10 +470,19 @@ void DEG_graph_free(Depsgraph *graph)
 
 /* Set callbacks which are being called when depsgraph changes. */
 void DEG_editors_set_update_cb(DEG_EditorUpdateIDCb id_func,
-                               DEG_EditorUpdateSceneCb scene_func)
+                               DEG_EditorUpdateSceneCb scene_func,
+                               DEG_EditorUpdateScenePreCb scene_pre_func)
 {
 	deg_editor_update_id_cb = id_func;
 	deg_editor_update_scene_cb = scene_func;
+	deg_editor_update_scene_pre_cb = scene_pre_func;
+}
+
+void DEG_editors_update_pre(Main *bmain, Scene *scene, bool time)
+{
+	if (deg_editor_update_scene_pre_cb != NULL) {
+		deg_editor_update_scene_pre_cb(bmain, scene, time);
+	}
 }
 
 void deg_editors_id_update(Main *bmain, ID *id)

@@ -20,7 +20,6 @@
 
 #include "bvh_params.h"
 
-#include "util_string.h"
 #include "util_types.h"
 #include "util_vector.h"
 
@@ -30,7 +29,6 @@ class BVHNode;
 struct BVHStackEntry;
 class BVHParams;
 class BoundBox;
-class CacheData;
 class LeafNode;
 class Object;
 class Progress;
@@ -87,7 +85,6 @@ public:
 	PackedBVH pack;
 	BVHParams params;
 	vector<Object*> objects;
-	string cache_filename;
 
 	static BVH *create(const BVHParams& params, const vector<Object*>& objects);
 	virtual ~BVH() {}
@@ -95,14 +92,8 @@ public:
 	void build(Progress& progress);
 	void refit(Progress& progress);
 
-	void clear_cache_except();
-
 protected:
 	BVH(const BVHParams& params, const vector<Object*>& objects);
-
-	/* cache */
-	bool cache_read(CacheData& key);
-	void cache_write(CacheData& key);
 
 	/* triangles and strands*/
 	void pack_primitives();

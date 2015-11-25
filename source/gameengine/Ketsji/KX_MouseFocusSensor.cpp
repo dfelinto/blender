@@ -36,10 +36,13 @@
 #  pragma warning(disable:4786)
 #endif
 
+#include <stdio.h>
+
 #include "MT_Point3.h"
 #include "RAS_FramingManager.h"
 #include "RAS_ICanvas.h"
 #include "RAS_IRasterizer.h"
+#include "RAS_MeshObject.h"
 #include "SCA_IScene.h"
 #include "KX_Scene.h"
 #include "KX_Camera.h"
@@ -141,7 +144,7 @@ bool KX_MouseFocusSensor::Evaluate()
 	return result;
 }
 
-bool KX_MouseFocusSensor::RayHit(KX_ClientObjectInfo *client_info, KX_RayCast *result, void * const data)
+bool KX_MouseFocusSensor::RayHit(KX_ClientObjectInfo *client_info, KX_RayCast *result, void *UNUSED(data))
 {
 	KX_GameObject* hitKXObj = client_info->m_gameobject;
 	
@@ -163,15 +166,17 @@ bool KX_MouseFocusSensor::RayHit(KX_ClientObjectInfo *client_info, KX_RayCast *r
 		}
 		else
 		{
-			if (m_bFindMaterial)
-			{
-				if (client_info->m_auxilary_info)
-				{
-					bFound = (m_propertyname== ((char*)client_info->m_auxilary_info));
+			if (m_bFindMaterial) {
+				for (unsigned int i = 0; i < hitKXObj->GetMeshCount(); ++i) {
+					RAS_MeshObject *meshObj = hitKXObj->GetMesh(i);
+					for (unsigned int j = 0; j < meshObj->NumMaterials(); ++j) {
+						bFound = strcmp(m_propertyname.ReadPtr(), meshObj->GetMaterialName(j).ReadPtr() + 2) == 0;
+						if (bFound)
+							break;
+					}
 				}
 			}
-			else
-			{
+			else {
 				bFound = hitKXObj->GetProperty(m_propertyname) != NULL;
 			}
 		}
@@ -193,8 +198,10 @@ bool KX_MouseFocusSensor::RayHit(KX_ClientObjectInfo *client_info, KX_RayCast *r
 /* this function is used to pre-filter the object before casting the ray on them.
  * This is useful for "X-Ray" option when we want to see "through" unwanted object.
  */
-bool KX_MouseFocusSensor::NeedRayCast(KX_ClientObjectInfo* client)
+bool KX_MouseFocusSensor::NeedRayCast(KX_ClientObjectInfo *client, void *UNUSED(data))
 {
+	KX_GameObject *hitKXObj = client->m_gameobject;
+
 	if (client->m_type > KX_ClientObjectInfo::ACTOR)
 	{
 		// Unknown type of object, skip it.
@@ -206,14 +213,21 @@ bool KX_MouseFocusSensor::NeedRayCast(KX_ClientObjectInfo* client)
 	{
 		if (m_bFindMaterial)
 		{
-			// not quite correct: an object may have multiple material
-			// should check all the material and not only the first one
-			if (!client->m_auxilary_info || (m_propertyname != ((char*)client->m_auxilary_info)))
+			bool found = false;
+			for (unsigned int i = 0; i < hitKXObj->GetMeshCount(); ++i) {
+				RAS_MeshObject *meshObj = hitKXObj->GetMesh(i);
+				for (unsigned int j = 0; j < meshObj->NumMaterials(); ++j) {
+					found = strcmp(m_propertyname.ReadPtr(), meshObj->GetMaterialName(j).ReadPtr() + 2) == 0;
+					if (found)
+						break;
+				}
+			}
+			if (!found)
 				return false;
 		}
 		else
 		{
-			if (client->m_gameobject->GetProperty(m_propertyname) == NULL)
+			if (hitKXObj->GetProperty(m_propertyname) == NULL)
 				return false;
 		}
 	}
@@ -342,7 +356,7 @@ bool KX_MouseFocusSensor::ParentObjectHasFocusCamera(KX_Camera *cam)
 	PHY_IPhysicsEnvironment* physics_environment = m_kxscene->GetPhysicsEnvironment();
 
 	// get UV mapping
-	KX_RayCast::Callback<KX_MouseFocusSensor> callback(this,physics_controller,NULL,false,true);
+	KX_RayCast::Callback<KX_MouseFocusSensor, void> callback(this,physics_controller,NULL,false,true);
 	 
 	KX_RayCast::RayTest(physics_environment, m_prevSourcePoint, m_prevTargetPoint, callback);
 	

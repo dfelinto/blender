@@ -131,6 +131,7 @@ void GPENCIL_OT_select_less(struct wmOperatorType *ot);
 
 void GPENCIL_OT_duplicate(struct wmOperatorType *ot);
 void GPENCIL_OT_delete(struct wmOperatorType *ot);
+void GPENCIL_OT_dissolve(struct wmOperatorType *ot);
 void GPENCIL_OT_copy(struct wmOperatorType *ot);
 void GPENCIL_OT_paste(struct wmOperatorType *ot);
 
@@ -202,8 +203,4 @@ typedef enum ACTCONT_TYPES {
 	ACTCONT_GPENCIL
 } ACTCONT_TYPES;
 
-
-
-
 #endif /* __GPENCIL_INTERN_H__ */
-

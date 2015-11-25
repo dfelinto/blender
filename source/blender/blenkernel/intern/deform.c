@@ -49,7 +49,7 @@
 #include "BLI_string.h"
 #include "BLI_utildefines.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_customdata.h"
 #include "BKE_data_transfer.h"
@@ -92,8 +92,10 @@ bDeformGroup *defgroup_duplicate(bDeformGroup *ingroup)
 {
 	bDeformGroup *outgroup;
 
-	if (!ingroup)
+	if (!ingroup) {
+		BLI_assert(0);
 		return NULL;
+	}
 
 	outgroup = MEM_callocN(sizeof(bDeformGroup), "copy deformGroup");
 
@@ -355,7 +357,7 @@ void defvert_normalize_lock_map(
 	else if (dvert->totweight == 1) {
 		MDeformWeight *dw = dvert->dw;
 		if ((dw->def_nr < vgroup_tot) && vgroup_subset[dw->def_nr]) {
-			if (LIKELY(defbase_tot >= 1) && lock_flags[0]) {
+			if ((dw->def_nr < defbase_tot) && (lock_flags[dw->def_nr] == false)) {
 				dw->weight = 1.0f;
 			}
 		}
@@ -770,6 +772,9 @@ MDeformWeight *defvert_find_index(const MDeformVert *dvert, const int defgroup)
 			}
 		}
 	}
+	else {
+		BLI_assert(0);
+	}
 
 	return NULL;
 }
@@ -781,8 +786,10 @@ MDeformWeight *defvert_verify_index(MDeformVert *dvert, const int defgroup)
 	MDeformWeight *dw_new;
 
 	/* do this check always, this function is used to check for it */
-	if (!dvert || defgroup < 0)
+	if (!dvert || defgroup < 0) {
+		BLI_assert(0);
 		return NULL;
+	}
 
 	dw_new = defvert_find_index(dvert, defgroup);
 	if (dw_new)
@@ -813,8 +820,10 @@ void defvert_add_index_notest(MDeformVert *dvert, int defgroup, const float weig
 	MDeformWeight *dw_new;
 
 	/* do this check always, this function is used to check for it */
-	if (!dvert || defgroup < 0)
+	if (!dvert || defgroup < 0) {
+		BLI_assert(0);
 		return;
+	}
 
 	dw_new = MEM_callocN(sizeof(MDeformWeight) * (dvert->totweight + 1), "defvert_add_to group, new deformWeight");
 	if (dvert->dw) {
@@ -834,7 +843,6 @@ void defvert_add_index_notest(MDeformVert *dvert, int defgroup, const float weig
 void defvert_remove_group(MDeformVert *dvert, MDeformWeight *dw)
 {
 	if (dvert && dw) {
-		MDeformWeight *dw_new;
 		int i = dw - dvert->dw;
 
 		/* Security check! */
@@ -847,20 +855,13 @@ void defvert_remove_group(MDeformVert *dvert, MDeformWeight *dw)
 		 * this deform weight, and reshuffle the others.
 		 */
 		if (dvert->totweight) {
-			dw_new = MEM_mallocN(sizeof(MDeformWeight) * (dvert->totweight), __func__);
-			if (dvert->dw) {
-#if 1           /* since we don't care about order, swap this with the last, save a memcpy */
-				if (i != dvert->totweight) {
-					dvert->dw[i] = dvert->dw[dvert->totweight];
-				}
-				memcpy(dw_new, dvert->dw, sizeof(MDeformWeight) * dvert->totweight);
-#else
-				memcpy(dw_new, dvert->dw, sizeof(MDeformWeight) * i);
-				memcpy(dw_new + i, dvert->dw + i + 1, sizeof(MDeformWeight) * (dvert->totweight - i));
-#endif
-				MEM_freeN(dvert->dw);
+			BLI_assert(dvert->dw != NULL);
+
+			if (i != dvert->totweight) {
+				dvert->dw[i] = dvert->dw[dvert->totweight];
 			}
-			dvert->dw = dw_new;
+
+			dvert->dw = MEM_reallocN(dvert->dw, sizeof(MDeformWeight) * dvert->totweight);
 		}
 		else {
 			/* If there are no other deform weights left then just remove this one. */
@@ -1162,7 +1163,7 @@ static bool data_transfer_layersmapping_vgroups_multisrc_to_dst(
 					}
 					data_transfer_layersmapping_add_item(r_map, CD_FAKE_MDEFORMVERT, mix_mode, mix_factor, mix_weights,
 					                                     data_src, data_dst, idx_src, idx_src,
-					                                     elem_size, 0, 0, 0, vgroups_datatransfer_interp);
+					                                     elem_size, 0, 0, 0, vgroups_datatransfer_interp, NULL);
 				}
 			}
 			break;
@@ -1210,7 +1211,7 @@ static bool data_transfer_layersmapping_vgroups_multisrc_to_dst(
 						data_transfer_layersmapping_add_item(
 						        r_map, CD_FAKE_MDEFORMVERT, mix_mode, mix_factor, mix_weights,
 						        data_src, data_dst, idx_src, idx_dst,
-						        elem_size, 0, 0, 0, vgroups_datatransfer_interp);
+						        elem_size, 0, 0, 0, vgroups_datatransfer_interp, NULL);
 					}
 				}
 				break;
@@ -1316,7 +1317,7 @@ bool data_transfer_layersmapping_vgroups(
 
 			data_transfer_layersmapping_add_item(r_map, CD_FAKE_MDEFORMVERT, mix_mode, mix_factor, mix_weights,
 			                                     data_src, data_dst, idx_src, idx_dst,
-			                                     elem_size, 0, 0, 0, vgroups_datatransfer_interp);
+			                                     elem_size, 0, 0, 0, vgroups_datatransfer_interp, NULL);
 		}
 	}
 	else {

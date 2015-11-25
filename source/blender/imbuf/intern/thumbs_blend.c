@@ -25,119 +25,97 @@
  */
 
 
+#include <stdlib.h>
 #include <string.h>
-
-#include "zlib.h"
 
 #include "BLI_utildefines.h"
 #include "BLI_endian_switch.h"
 #include "BLI_fileops.h"
+#include "BLI_linklist.h"
 
 #include "BLO_blend_defs.h"
+#include "BLO_readfile.h"
 
 #include "BKE_global.h"
+#include "BKE_idcode.h"
+#include "BKE_icons.h"
+#include "BKE_library.h"
+#include "BKE_main.h"
+
+#include "DNA_ID.h"  /* For preview images... */
 
 #include "IMB_imbuf_types.h"
 #include "IMB_imbuf.h"
 #include "IMB_thumbs.h"
 
-/* extracts the thumbnail from between the 'REND' and the 'GLOB'
- * chunks of the header, don't use typical blend loader because its too slow */
+#include "MEM_guardedalloc.h"
 
-static ImBuf *loadblend_thumb(gzFile gzfile)
+ImBuf *IMB_thumb_load_blend(const char *blen_path, const char *blen_group, const char *blen_id)
 {
-	char buf[12];
-	int bhead[24 / sizeof(int)]; /* max size on 64bit */
-	char endian, pointer_size;
-	char endian_switch;
-	int sizeof_bhead;
+	ImBuf *ima = NULL;
 
-	/* read the blend file header */
-	if (gzread(gzfile, buf, 12) != 12)
-		return NULL;
-	if (!STREQLEN(buf, "BLENDER", 7))
-		return NULL;
+	if (blen_group && blen_id) {
+		LinkNode *ln, *names, *lp, *previews = NULL;
+		struct BlendHandle *libfiledata = BLO_blendhandle_from_file(blen_path, NULL);
+		int idcode = BKE_idcode_from_name(blen_group);
+		int i, nprevs, nnames;
 
-	if (buf[7] == '-')
-		pointer_size = 8;
-	else if (buf[7] == '_')
-		pointer_size = 4;
-	else
-		return NULL;
-
-	sizeof_bhead = 16 + pointer_size;
-
-	if (buf[8] == 'V')
-		endian = B_ENDIAN;  /* big: PPC */
-	else if (buf[8] == 'v')
-		endian = L_ENDIAN;  /* little: x86 */
-	else
-		return NULL;
-
-	endian_switch = ((ENDIAN_ORDER != endian)) ? 1 : 0;
-
-	while (gzread(gzfile, bhead, sizeof_bhead) == sizeof_bhead) {
-		if (endian_switch)
-			BLI_endian_switch_int32(&bhead[1]);  /* length */
-
-		if (bhead[0] == REND) {
-			gzseek(gzfile, bhead[1], SEEK_CUR); /* skip to the next */
+		if (libfiledata == NULL) {
+			return ima;
 		}
-		else {
-			break;
+
+		/* Note: we should handle all previews for a same group at once, would avoid reopening .blend file
+		 *       for each and every ID. However, this adds some complexity, so keep it for later. */
+		names = BLO_blendhandle_get_datablock_names(libfiledata, idcode, &nnames);
+		previews = BLO_blendhandle_get_previews(libfiledata, idcode, &nprevs);
+
+		BLO_blendhandle_close(libfiledata);
+
+		if (!previews || (nnames != nprevs)) {
+			if (previews != 0) {
+				/* No previews at all is not a bug! */
+				printf("%s: error, found %d items, %d previews\n", __func__, nnames, nprevs);
+			}
+			BLI_linklist_free(previews, BKE_previewimg_freefunc);
+			BLI_linklist_free(names, free);
+			return ima;
 		}
-	}
 
-	/* using 'TEST' since new names segfault when loading in old blenders */
-	if (bhead[0] == TEST) {
-		ImBuf *img = NULL;
-		int size[2];
+		for (i = 0, ln = names, lp = previews; i < nnames; i++, ln = ln->next, lp = lp->next) {
+			const char *blockname = ln->link;
+			PreviewImage *img = lp->link;
 
-		if (gzread(gzfile, size, sizeof(size)) != sizeof(size))
-			return NULL;
+			if (STREQ(blockname, blen_id)) {
+				if (img) {
+					unsigned int w = img->w[ICON_SIZE_PREVIEW];
+					unsigned int h = img->h[ICON_SIZE_PREVIEW];
+					unsigned int *rect = img->rect[ICON_SIZE_PREVIEW];
 
-		if (endian_switch) {
-			BLI_endian_switch_int32(&size[0]);
-			BLI_endian_switch_int32(&size[1]);
+					if (w > 0 && h > 0 && rect) {
+						/* first allocate imbuf for copying preview into it */
+						ima = IMB_allocImBuf(w, h, 32, IB_rect);
+						memcpy(ima->rect, rect, w * h * sizeof(unsigned int));
+					}
+				}
+				break;
+			}
 		}
-		/* length */
-		bhead[1] -= sizeof(int) * 2;
 
-		/* inconsistent image size, quit early */
-		if (bhead[1] != size[0] * size[1] * sizeof(int))
-			return NULL;
-	
-		/* finally malloc and read the data */
-		img = IMB_allocImBuf(size[0], size[1], 32, IB_rect | IB_metadata);
-	
-		if (gzread(gzfile, img->rect, bhead[1]) != bhead[1]) {
-			IMB_freeImBuf(img);
-			img = NULL;
-		}
-	
-		return img;
-	}
-	
-	return NULL;
-}
-
-ImBuf *IMB_thumb_load_blend(const char *path)
-{
-	gzFile gzfile;
-	/* not necessarily a gzip */
-	gzfile = BLI_gzopen(path, "rb");
-
-	if (NULL == gzfile) {
-		return NULL;
+		BLI_linklist_free(previews, BKE_previewimg_freefunc);
+		BLI_linklist_free(names, free);
 	}
 	else {
-		ImBuf *img = loadblend_thumb(gzfile);
+		BlendThumbnail *data;
 
-		/* read ok! */
-		gzclose(gzfile);
+		data = BLO_thumbnail_from_file(blen_path);
+		ima = BKE_main_thumbnail_to_imbuf(NULL, data);
 
-		return img;
+		if (data) {
+			MEM_freeN(data);
+		}
 	}
+
+	return ima;
 }
 
 /* add a fake passepartout overlay to a byte buffer, use for blend file thumbnails */

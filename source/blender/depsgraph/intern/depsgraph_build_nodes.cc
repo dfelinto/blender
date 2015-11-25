@@ -448,7 +448,7 @@ void DepsgraphNodeBuilder::build_object(Scene *scene, Base *base, Object *ob)
 
 	/* particle systems */
 	if (ob->particlesystem.first) {
-		build_particles(ob);
+		build_particles(scene, ob);
 	}
 
 	/* grease pencil */
@@ -676,7 +676,7 @@ void DepsgraphNodeBuilder::build_rigidbody(Scene *scene)
 	}
 }
 
-void DepsgraphNodeBuilder::build_particles(Object *ob)
+void DepsgraphNodeBuilder::build_particles(Scene *scene, Object *ob)
 {
 	/**
 	 * Particle Systems Nodes
@@ -707,7 +707,7 @@ void DepsgraphNodeBuilder::build_particles(Object *ob)
 		/* this particle system */
 		// TODO: for now, this will just be a placeholder "ubereval" node
 		add_operation_node(psys_comp,
-		                   DEPSOP_TYPE_EXEC, function_bind(BKE_particle_system_eval, _1, ob, psys),
+		                   DEPSOP_TYPE_EXEC, function_bind(BKE_particle_system_eval, _1, scene, ob, psys),
 		                   DEG_OPCODE_PSYS_EVAL,
 		                   psys->name);
 	}
@@ -897,6 +897,9 @@ void DepsgraphNodeBuilder::build_proxy_rig(Object *ob)
 void DepsgraphNodeBuilder::build_shapekeys(Key *key)
 {
 	build_animdata(&key->id);
+
+	add_operation_node(&key->id, DEPSNODE_TYPE_GEOMETRY, DEPSOP_TYPE_EXEC, NULL,
+	                   DEG_OPCODE_PLACEHOLDER, "Shapekey Eval");
 }
 
 /* ObData Geometry Evaluation */
@@ -1098,7 +1101,7 @@ void DepsgraphNodeBuilder::build_nodetree(DepsNode *owner_node, bNodeTree *ntree
 	build_animdata(ntree_id);
 
 	/* Parameters for drivers. */
-	add_operation_node(ntree_id, DEPSNODE_TYPE_PARAMETERS, DEPSOP_TYPE_EXEC, NULL,
+	add_operation_node(ntree_id, DEPSNODE_TYPE_PARAMETERS, DEPSOP_TYPE_POST, NULL,
 	                   DEG_OPCODE_PLACEHOLDER, "Parameters Eval");
 
 	/* nodetree's nodes... */
@@ -1111,9 +1114,9 @@ void DepsgraphNodeBuilder::build_nodetree(DepsNode *owner_node, bNodeTree *ntree
 				build_texture(owner_node, (Tex *)bnode->id);
 			}
 			else if (bnode->type == NODE_GROUP) {
-				bNodeTree *ntree = (bNodeTree *)bnode->id;
-				if ((ntree_id->flag & LIB_DOIT) == 0) {
-					build_nodetree(owner_node, ntree);
+				bNodeTree *group_ntree = (bNodeTree *)bnode->id;
+				if ((group_ntree->id.flag & LIB_DOIT) == 0) {
+					build_nodetree(owner_node, group_ntree);
 				}
 			}
 		}

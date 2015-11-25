@@ -8,7 +8,8 @@ Intro
 
 .. module:: bge.render
 
-Example of using a :class:`bge.types.SCA_MouseSensor`, and two :class:`bge.types.KX_ObjectActuator` to implement MouseLook:
+Example of using a :class:`bge.types.SCA_MouseSensor`,
+and two :class:`bge.types.KX_ObjectActuator` to implement MouseLook:
 
 .. note::
    This can also be achieved with the :class:`bge.types.KX_MouseActuator`.
@@ -77,7 +78,9 @@ Constants
 
 .. DATA:: VSYNC_ADAPTIVE
 
-   Enables adaptive vsync if supported. Adaptive vsync enables vsync if the framerate is above the monitors refresh rate. Otherwise, vsync is diabled if the framerate is too low.
+   Enables adaptive vsync if supported.
+   Adaptive vsync enables vsync if the framerate is above the monitors refresh rate.
+   Otherwise, vsync is diabled if the framerate is too low.
 
 .. data:: LEFT_EYE
 
@@ -108,40 +111,55 @@ Functions
 
    Set the width and height of the window (in pixels). This also works for fullscreen applications.
 
+   .. note:: Only works in the standalone player, not the Blender-embedded player.
+
+   :arg width: width in pixels
    :type width: integer
+   :arg height: height in pixels
    :type height: integer
 
 .. function:: setFullScreen(enable)
 
    Set whether or not the window should be fullscreen.
 
+   .. note:: Only works in the standalone player, not the Blender-embedded player.
+
+   :arg enable: ``True`` to set full screen, ``False`` to set windowed.
    :type enable: bool
 
 .. function:: getFullScreen()
 
    Returns whether or not the window is fullscreen.
 
+   .. note:: Only works in the standalone player, not the Blender-embedded player; there it always returns False.
+
    :rtype: bool
 
 .. function:: getDisplayDimensions()
 
-   Get the actual display dimensions, in pixels, of the physical display (e.g., the monitor).
+   Get the display dimensions, in pixels, of the display (e.g., the
+   monitor). Can return the size of the entire view, so the
+   combination of all monitors; for example, ``(3840, 1080)`` for two
+   side-by-side 1080p monitors.
    
-   :type dimension: list [width,heigh] 
+   :rtype: tuple (width, height)
 
 .. function:: makeScreenshot(filename)
 
    Writes an image file with the current displayed frame.
 
-   The image is written to *'filename'*. The path may be absolute (eg. "/home/foo/image") or relative when started with
-   "//" (eg. "//image"). Note that absolute paths are not portable between platforms.
-   If the filename contains a "#", it will be replaced by an incremental index so that screenshots can be taken multiple
-   times without overwriting the previous ones (eg. "image-#").
+   The image is written to *'filename'*.
+   The path may be absolute (eg. ``/home/foo/image``) or relative when started with
+   ``//`` (eg. ``//image``). Note that absolute paths are not portable between platforms.
+   If the filename contains a ``#``,
+   it will be replaced by an incremental index so that screenshots can be taken multiple
+   times without overwriting the previous ones (eg. ``image-#``).
 
-   Settings for the image are taken from the render settings (file format and respective settings, gamma and colospace
-   conversion, etc). The image resolution matches the framebuffer, meaning, the window size and aspect ratio.
-   When running from the standalone player, instead of the embedded player, only PNG files are supported. Additional
-   color conversions are also not supported.
+   Settings for the image are taken from the render settings (file format and respective settings,
+   gamma and colospace conversion, etc).
+   The image resolution matches the framebuffer, meaning, the window size and aspect ratio.
+   When running from the standalone player, instead of the embedded player, only PNG files are supported.
+   Additional color conversions are also not supported.
 
    :arg filename: path and name of the file to write
    :type filename: string
@@ -149,13 +167,14 @@ Functions
 
 .. function:: enableVisibility(visible)
 
-   Doesn't really do anything...
+   Deprecated; doesn't do anything.
 
 
 .. function:: showMouse(visible)
 
    Enables or disables the operating system mouse cursor.
 
+   :arg visible:
    :type visible: boolean
 
 
@@ -163,15 +182,15 @@ Functions
 
    Sets the mouse cursor position.
 
+   :arg x: X-coordinate in screen pixel coordinates.
    :type x: integer
+   :arg y: Y-coordinate in screen pixel coordinates.
    :type y: integer
 
 
 .. function:: setBackgroundColor(rgba)
 
-   Sets the window background color. (Deprecated: use KX_WorldInfo.background_color)
-
-   :type rgba: list [r, g, b, a]
+   Deprecated and no longer functional. Use :py:meth:`bge.types.KX_WorldInfo.backgroundColor` instead.
 
 
 .. function:: setEyeSeparation(eyesep)
@@ -215,6 +234,7 @@ Functions
 
    Set the material mode to use for OpenGL rendering.
 
+   :arg mode: material mode
    :type mode: KX_TEXFACE_MATERIAL, KX_BLENDER_MULTITEX_MATERIAL, KX_BLENDER_GLSL_MATERIAL
 
    .. note:: Changes will only affect newly created scenes.
@@ -231,14 +251,17 @@ Functions
 
    Enables or disables a GLSL material setting.
 
+   :arg setting:
    :type setting: string (lights, shaders, shadows, ramps, nodes, extra_textures)
+   :arg enable:
    :type enable: boolean
 
 
-.. function:: getGLSLMaterialSetting(setting, enable)
+.. function:: getGLSLMaterialSetting(setting)
 
    Get the state of a GLSL material setting.
 
+   :arg setting:
    :type setting: string (lights, shaders, shadows, ramps, nodes, extra_textures)
    :rtype: boolean
 
@@ -299,24 +322,28 @@ Functions
 
    Show or hide the framerate.
 
+   :arg enable:
    :type enable: boolean
 
 .. function:: showProfile(enable)
 
    Show or hide the profile.
 
+   :arg enable:
    :type enable: boolean
 
 .. function:: showProperties(enable)
 
    Show or hide the debug properties.
 
+   :arg enable:
    :type enable: boolean
 
 .. function:: autoDebugList(enable)
 
    Enable or disable auto adding debug properties to the debug list.
 
+   :arg enable:
    :type enable: boolean
 
 .. function:: clearDebugList()

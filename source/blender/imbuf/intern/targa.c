@@ -264,7 +264,7 @@ int imb_savetarga(struct ImBuf *ibuf, const char *name, int flags)
 		buf[2] = 11;
 	}
 
-	if (ibuf->ftype == RAWTGA) buf[2] &= ~8;
+	if (ibuf->foptions.flag & RAWTGA) buf[2] &= ~8;
 	
 	buf[8] = 0;
 	buf[9] = 0;
@@ -289,7 +289,7 @@ int imb_savetarga(struct ImBuf *ibuf, const char *name, int flags)
 		return 0;
 	}
 
-	if (ibuf->ftype == RAWTGA) {
+	if (ibuf->foptions.flag & RAWTGA) {
 		ok = dumptarga(ibuf, fildes);
 	}
 	else {
@@ -314,7 +314,7 @@ int imb_savetarga(struct ImBuf *ibuf, const char *name, int flags)
 }
 
 
-static int checktarga(TARGA *tga, unsigned char *mem)
+static int checktarga(TARGA *tga, const unsigned char *mem)
 {
 	tga->numid = mem[0];
 	tga->maptyp = mem[1];
@@ -350,7 +350,7 @@ static int checktarga(TARGA *tga, unsigned char *mem)
 	return 1;
 }
 
-int imb_is_a_targa(unsigned char *buf)
+int imb_is_a_targa(const unsigned char *buf)
 {
 	TARGA tga;
 	
@@ -372,9 +372,9 @@ static void complete_partial_load(struct ImBuf *ibuf, unsigned int *rect)
 	}
 }
 
-static void decodetarga(struct ImBuf *ibuf, unsigned char *mem, size_t mem_size, int psize)
+static void decodetarga(struct ImBuf *ibuf, const unsigned char *mem, size_t mem_size, int psize)
 {
-	unsigned char *mem_end = mem + mem_size;
+	const unsigned char *mem_end = mem + mem_size;
 	int count, col, size;
 	unsigned int *rect;
 	uchar *cp = (uchar *) &col;
@@ -490,9 +490,9 @@ partial_load:
 	complete_partial_load(ibuf, rect);
 }
 
-static void ldtarga(struct ImBuf *ibuf, unsigned char *mem, size_t mem_size, int psize)
+static void ldtarga(struct ImBuf *ibuf, const unsigned char *mem, size_t mem_size, int psize)
 {
-	unsigned char *mem_end = mem + mem_size;
+	const unsigned char *mem_end = mem + mem_size;
 	int col, size;
 	unsigned int *rect;
 	uchar *cp = (uchar *) &col;
@@ -550,13 +550,14 @@ partial_load:
 }
 
 
-ImBuf *imb_loadtarga(unsigned char *mem, size_t mem_size, int flags, char colorspace[IM_MAX_SPACE])
+ImBuf *imb_loadtarga(const unsigned char *mem, size_t mem_size, int flags, char colorspace[IM_MAX_SPACE])
 {
 	TARGA tga;
 	struct ImBuf *ibuf;
-	int col, count, size;
-	unsigned int *rect, *cmap = NULL /*, mincol = 0*/, maxcol = 0;
-	uchar *cp = (uchar *) &col;
+	int count, size;
+	unsigned int *rect, *cmap = NULL /*, mincol = 0*/, cmap_max = 0;
+	int32_t cp_data;
+	uchar *cp = (uchar *) &cp_data;
 
 	if (checktarga(&tga, mem) == 0) {
 		return NULL;
@@ -568,7 +569,9 @@ ImBuf *imb_loadtarga(unsigned char *mem, size_t mem_size, int flags, char colors
 	else ibuf = IMB_allocImBuf(tga.xsize, tga.ysize, (tga.pixsize + 0x7) & ~0x7, IB_rect);
 
 	if (ibuf == NULL) return NULL;
-	ibuf->ftype = TGA;
+	ibuf->ftype = IMB_FTYPE_TGA;
+	if (tga.imgtyp < 4)
+		ibuf->foptions.flag |= RAWTGA;
 	mem = mem + 18 + tga.numid;
 	
 	cp[0] = 0xff;
@@ -577,10 +580,10 @@ ImBuf *imb_loadtarga(unsigned char *mem, size_t mem_size, int flags, char colors
 	if (tga.mapsize) {
 		/* load color map */
 		/*mincol = tga.maporig;*/ /*UNUSED*/
-		maxcol = tga.mapsize;
-		cmap = MEM_callocN(sizeof(unsigned int) * maxcol, "targa cmap");
+		cmap_max = tga.mapsize;
+		cmap = MEM_callocN(sizeof(unsigned int) * cmap_max, "targa cmap");
 
-		for (count = 0; count < maxcol; count++) {
+		for (count = 0; count < cmap_max; count++) {
 			switch (tga.mapbits >> 3) {
 				case 4:
 					cp[0] = mem[3];
@@ -601,14 +604,16 @@ ImBuf *imb_loadtarga(unsigned char *mem, size_t mem_size, int flags, char colors
 					mem += 2;
 					break;
 				case 1:
-					col = *mem++;
+					cp_data = *mem++;
 					break;
 			}
-			cmap[count] = col;
+			cmap[count] = cp_data;
 		}
 		
 		size = 0;
-		for (col = maxcol - 1; col > 0; col >>= 1) size++;
+		for (int cmap_index = cmap_max - 1; cmap_index > 0; cmap_index >>= 1) {
+			size++;
+		}
 		ibuf->planes = size;
 
 		if (tga.mapbits != 32) {    /* set alpha bits  */
@@ -653,14 +658,17 @@ ImBuf *imb_loadtarga(unsigned char *mem, size_t mem_size, int flags, char colors
 		/* apply color map */
 		rect = ibuf->rect;
 		for (size = ibuf->x * ibuf->y; size > 0; --size, ++rect) {
-			col = *rect;
-			if (col >= 0 && col < maxcol) *rect = cmap[col];
+			int cmap_index = *rect;
+			if (cmap_index >= 0 && cmap_index < cmap_max) {
+				*rect = cmap[cmap_index];
+			}
 		}
 
 		MEM_freeN(cmap);
 	}
 	
 	if (tga.pixsize == 16) {
+		unsigned int col;
 		rect = ibuf->rect;
 		for (size = ibuf->x * ibuf->y; size > 0; --size, ++rect) {
 			col = *rect;

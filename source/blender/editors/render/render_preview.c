@@ -94,7 +94,10 @@
 #include "ED_datafiles.h"
 #include "ED_render.h"
 
-
+#ifndef NDEBUG
+/* Used for database init assert(). */
+#  include "BLI_threads.h"
+#endif
 
 ImBuf *get_brush_icon(Brush *brush)
 {
@@ -161,6 +164,7 @@ typedef struct ShaderPreview {
 	unsigned int *pr_rect;
 	int pr_method;
 
+	Main *bmain;
 	Main *pr_main;
 } ShaderPreview;
 
@@ -171,6 +175,7 @@ typedef struct IconPreviewSize {
 } IconPreviewSize;
 
 typedef struct IconPreview {
+	Main *bmain;
 	Scene *scene;
 	void *owner;
 	ID *id;
@@ -202,11 +207,16 @@ static Main *load_main_from_memory(const void *blend, int blend_size)
 }
 #endif
 
-void ED_preview_init_dbase(void)
+void ED_preview_ensure_dbase(void)
 {
 #ifndef WITH_HEADLESS
-	G_pr_main = load_main_from_memory(datatoc_preview_blend, datatoc_preview_blend_size);
-	G_pr_main_cycles = load_main_from_memory(datatoc_preview_cycles_blend, datatoc_preview_cycles_blend_size);
+	static bool base_initialized = false;
+	BLI_assert(BLI_thread_is_main());
+	if (!base_initialized) {
+		G_pr_main = load_main_from_memory(datatoc_preview_blend, datatoc_preview_blend_size);
+		G_pr_main_cycles = load_main_from_memory(datatoc_preview_cycles_blend, datatoc_preview_cycles_blend_size);
+		base_initialized = true;
+	}
 #endif
 }
 
@@ -261,12 +271,14 @@ static Scene *preview_get_scene(Main *pr_main)
 
 /* call this with a pointer to initialize preview scene */
 /* call this with NULL to restore assigned ID pointers in preview scene */
-static Scene *preview_prepare_scene(Scene *scene, ID *id, int id_type, ShaderPreview *sp)
+static Scene *preview_prepare_scene(Main *bmain, Scene *scene, ID *id, int id_type, ShaderPreview *sp)
 {
 	Scene *sce;
 	Base *base;
 	Main *pr_main = sp->pr_main;
-	
+
+	memcpy(pr_main->name, bmain->name, sizeof(pr_main->name));
+
 	sce = preview_get_scene(pr_main);
 	if (sce) {
 		
@@ -555,10 +567,16 @@ static bool ed_preview_draw_rect(ScrArea *sa, int split, int first, rcti *rect, 
 
 	RE_AcquireResultImageViews(re, &rres);
 
-	/* material preview only needs monoscopy (view 0) */
-	rv = RE_RenderViewGetById(&rres, 0);
+	if (!BLI_listbase_is_empty(&rres.views)) {
+		/* material preview only needs monoscopy (view 0) */
+		rv = RE_RenderViewGetById(&rres, 0);
+	}
+	else {
+		/* possible the job clears the views but we're still drawing T45496 */
+		rv = NULL;
+	}
 
-	if (rv->rectf) {
+	if (rv && rv->rectf) {
 		
 		if (ABS(rres.rectx - newx) < 2 && ABS(rres.recty - newy) < 2) {
 
@@ -596,7 +614,7 @@ void ED_preview_draw(const bContext *C, void *idp, void *parentp, void *slotp, r
 		ID *id = (ID *)idp;
 		ID *parent = (ID *)parentp;
 		MTex *slot = (MTex *)slotp;
-		SpaceButs *sbuts = sa->spacedata.first;
+		SpaceButs *sbuts = CTX_wm_space_buts(C);
 		ShaderPreview *sp = WM_jobs_customdata(wm, sa);
 		rcti newrect;
 		int ok;
@@ -621,11 +639,13 @@ void ED_preview_draw(const bContext *C, void *idp, void *parentp, void *slotp, r
 		/* start a new preview render job if signalled through sbuts->preview,
 		 * if no render result was found and no preview render job is running,
 		 * or if the job is running and the size of preview changed */
-		if ((sbuts->spacetype == SPACE_BUTS && sbuts->preview) ||
+		if ((sbuts != NULL && sbuts->preview) ||
 		    (!ok && !WM_jobs_test(wm, sa, WM_JOB_TYPE_RENDER_PREVIEW)) ||
 		    (sp && (ABS(sp->sizex - newx) >= 2 || ABS(sp->sizey - newy) > 2)))
 		{
-			sbuts->preview = 0;
+			if (sbuts != NULL) {
+				sbuts->preview = 0;
+			}
 			ED_preview_shader_job(C, sa, id, parent, slot, newx, newy, PR_BUTS_RENDER);
 		}
 	}
@@ -712,7 +732,7 @@ static void shader_preview_render(ShaderPreview *sp, ID *id, int split, int firs
 	}
 	
 	/* get the stuff from the builtin preview dbase */
-	sce = preview_prepare_scene(sp->scene, id, idtype, sp);
+	sce = preview_prepare_scene(sp->bmain, sp->scene, id, idtype, sp);
 	if (sce == NULL) return;
 	
 	if (!split || first) sprintf(name, "Preview %p", sp->owner);
@@ -767,7 +787,7 @@ static void shader_preview_render(ShaderPreview *sp, ID *id, int split, int firs
 	}
 
 	/* unassign the pointers, reset vars */
-	preview_prepare_scene(sp->scene, NULL, GS(id->name), sp);
+	preview_prepare_scene(sp->bmain, sp->scene, NULL, GS(id->name), sp);
 	
 	/* XXX bad exception, end-exec is not being called in render, because it uses local main */
 //	if (idtype == ID_TE) {
@@ -1075,6 +1095,7 @@ static void icon_preview_startjob_all_sizes(void *customdata, short *stop, short
 		sp->pr_method = is_render ? PR_ICON_RENDER : PR_ICON_DEFERRED;
 		sp->pr_rect = cur_size->rect;
 		sp->id = ip->id;
+		sp->bmain = ip->bmain;
 
 		if (is_render) {
 			BLI_assert(ip->id);
@@ -1135,12 +1156,15 @@ static void icon_preview_free(void *customdata)
 	MEM_freeN(ip);
 }
 
-void ED_preview_icon_render(Scene *scene, ID *id, unsigned int *rect, int sizex, int sizey)
+void ED_preview_icon_render(Main *bmain, Scene *scene, ID *id, unsigned int *rect, int sizex, int sizey)
 {
 	IconPreview ip = {NULL};
 	short stop = false, update = false;
 	float progress = 0.0f;
 
+	ED_preview_ensure_dbase();
+
+	ip.bmain = bmain;
 	ip.scene = scene;
 	ip.owner = id;
 	ip.id = id;
@@ -1158,7 +1182,9 @@ void ED_preview_icon_job(const bContext *C, void *owner, ID *id, unsigned int *r
 {
 	wmJob *wm_job;
 	IconPreview *ip, *old_ip;
-	
+
+	ED_preview_ensure_dbase();
+
 	/* suspended start means it starts after 1 timer step, see WM_jobs_timer below */
 	wm_job = WM_jobs_get(CTX_wm_manager(C), CTX_wm_window(C), owner, "Icon Preview",
 	                     WM_JOB_EXCL_RENDER | WM_JOB_SUSPEND, WM_JOB_TYPE_RENDER_PREVIEW);
@@ -1171,6 +1197,7 @@ void ED_preview_icon_job(const bContext *C, void *owner, ID *id, unsigned int *r
 		BLI_movelisttolist(&ip->sizes, &old_ip->sizes);
 
 	/* customdata for preview thread */
+	ip->bmain = CTX_data_main(C);
 	ip->scene = CTX_data_scene(C);
 	ip->owner = owner;
 	ip->id = id;
@@ -1199,6 +1226,8 @@ void ED_preview_shader_job(const bContext *C, void *owner, ID *id, ID *parent, M
 		return;
 	}
 
+	ED_preview_ensure_dbase();
+
 	wm_job = WM_jobs_get(CTX_wm_manager(C), CTX_wm_window(C), owner, "Shader Preview",
 	                    WM_JOB_EXCL_RENDER, WM_JOB_TYPE_RENDER_PREVIEW);
 	sp = MEM_callocN(sizeof(ShaderPreview), "shader preview");
@@ -1212,6 +1241,7 @@ void ED_preview_shader_job(const bContext *C, void *owner, ID *id, ID *parent, M
 	sp->id = id;
 	sp->parent = parent;
 	sp->slot = slot;
+	sp->bmain = CTX_data_main(C);
 
 	/* hardcoded preview .blend for cycles/internal, this should be solved
 	 * once with custom preview .blend path for external engines */

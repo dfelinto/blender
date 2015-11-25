@@ -40,6 +40,13 @@ CCL_NAMESPACE_BEGIN
 #define TEX_EXTENDED_NUM_IMAGES_CPU		1024
 #define TEX_EXTENDED_IMAGE_BYTE_START	TEX_EXTENDED_NUM_FLOAT_IMAGES
 
+/* Limitations for packed images.
+ *
+ * Technically number of textures is unlimited, but it should in
+ * fact be in sync with CPU limitations.
+ */
+#define TEX_PACKED_NUM_IMAGES			1024
+
 /* color to use when textures are not found */
 #define TEX_IMAGE_MISSING_R 1
 #define TEX_IMAGE_MISSING_G 0
@@ -55,11 +62,24 @@ public:
 	ImageManager();
 	~ImageManager();
 
-	int add_image(const string& filename, void *builtin_data, bool animated, float frame,
-		bool& is_float, bool& is_linear, InterpolationType interpolation, bool use_alpha);
+	int add_image(const string& filename,
+	              void *builtin_data,
+	              bool animated,
+	              float frame,
+	              bool& is_float,
+	              bool& is_linear,
+	              InterpolationType interpolation,
+	              ExtensionType extension,
+	              bool use_alpha);
 	void remove_image(int slot);
-	void remove_image(const string& filename, void *builtin_data, InterpolationType interpolation);
-	void tag_reload_image(const string& filename, void *builtin_data, InterpolationType interpolation);
+	void remove_image(const string& filename,
+	                  void *builtin_data,
+	                  InterpolationType interpolation,
+	                  ExtensionType extension);
+	void tag_reload_image(const string& filename,
+	                      void *builtin_data,
+	                      InterpolationType interpolation,
+	                      ExtensionType extension);
 	bool is_float_image(const string& filename, void *builtin_data, bool& is_linear);
 
 	void device_update(Device *device, DeviceScene *dscene, Progress& progress);
@@ -87,6 +107,7 @@ public:
 		bool animated;
 		float frame;
 		InterpolationType interpolation;
+		ExtensionType extension;
 
 		int users;
 	};

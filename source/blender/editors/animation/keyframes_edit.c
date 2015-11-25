@@ -455,7 +455,7 @@ static short ok_bezier_selected(KeyframeEditData *UNUSED(ked), BezTriple *bezt)
 	/* this macro checks all beztriple handles for selection... 
 	 * only one of the verts has to be selected for this to be ok...
 	 */
-	if (BEZSELECTED(bezt))
+	if (BEZT_ISSEL_ANY(bezt))
 		return KEYFRAME_OK_ALL;
 	else
 		return 0;
@@ -714,6 +714,14 @@ static short snap_bezier_horizontal(KeyframeEditData *UNUSED(ked), BezTriple *be
 	return 0;
 }
 
+/* frame to snap to is stored in the custom data -> first float value slot */
+static short snap_bezier_time(KeyframeEditData *ked, BezTriple *bezt)
+{
+	if (bezt->f2 & SELECT)
+		bezt->vec[1][0] = ked->f1;
+	return 0;
+}
+
 /* value to snap to is stored in the custom data -> first float value slot */
 static short snap_bezier_value(KeyframeEditData *ked, BezTriple *bezt)
 {
@@ -736,6 +744,8 @@ KeyframeEditFunc ANIM_editkeyframes_snap(short type)
 			return snap_bezier_nearestsec;
 		case SNAP_KEYS_HORIZONTAL: /* snap handles to same value */
 			return snap_bezier_horizontal;
+		case SNAP_KEYS_TIME: /* snap to given frame/time */
+			return snap_bezier_time;
 		case SNAP_KEYS_VALUE: /* snap to given value */
 			return snap_bezier_value;
 		default: /* just in case */
@@ -812,6 +822,16 @@ static short mirror_bezier_marker(KeyframeEditData *ked, BezTriple *bezt)
 	return 0;
 }
 
+static short mirror_bezier_time(KeyframeEditData *ked, BezTriple *bezt)
+{
+	/* value to mirror over is strored in f1 */
+	if (bezt->f2 & SELECT) {
+		mirror_bezier_xaxis_ex(bezt, ked->f1);
+	}
+	
+	return 0;
+}
+
 static short mirror_bezier_value(KeyframeEditData *ked, BezTriple *bezt)
 {
 	/* value to mirror over is stored in the custom data -> first float value slot */
@@ -835,6 +855,8 @@ KeyframeEditFunc ANIM_editkeyframes_mirror(short type)
 			return mirror_bezier_xaxis;
 		case MIRROR_KEYS_MARKER: /* mirror over marker */
 			return mirror_bezier_marker; 
+		case MIRROR_KEYS_TIME: /* mirror over frame/time */
+			return mirror_bezier_time;
 		case MIRROR_KEYS_VALUE: /* mirror over given value */
 			return mirror_bezier_value;
 		default: /* just in case */
@@ -1181,7 +1203,7 @@ static short select_bezier_add(KeyframeEditData *ked, BezTriple *bezt)
 			bezt->f3 |= SELECT;
 	}
 	else {
-		BEZ_SEL(bezt);
+		BEZT_SEL_ALL(bezt);
 	}
 	
 	return 0;
@@ -1199,7 +1221,7 @@ static short select_bezier_subtract(KeyframeEditData *ked, BezTriple *bezt)
 			bezt->f3 &= ~SELECT;
 	}
 	else {
-		BEZ_DESEL(bezt);
+		BEZT_DESEL_ALL(bezt);
 	}
 	
 	return 0;
@@ -1252,7 +1274,7 @@ static short selmap_build_bezier_more(KeyframeEditData *ked, BezTriple *bezt)
 	int i = ked->curIndex;
 	
 	/* if current is selected, just make sure it stays this way */
-	if (BEZSELECTED(bezt)) {
+	if (BEZT_ISSEL_ANY(bezt)) {
 		map[i] = 1;
 		return 0;
 	}
@@ -1261,7 +1283,7 @@ static short selmap_build_bezier_more(KeyframeEditData *ked, BezTriple *bezt)
 	if (i > 0) {
 		BezTriple *prev = bezt - 1;
 		
-		if (BEZSELECTED(prev)) {
+		if (BEZT_ISSEL_ANY(prev)) {
 			map[i] = 1;
 			return 0;
 		}
@@ -1271,7 +1293,7 @@ static short selmap_build_bezier_more(KeyframeEditData *ked, BezTriple *bezt)
 	if (i < (fcu->totvert - 1)) {
 		BezTriple *next = bezt + 1;
 		
-		if (BEZSELECTED(next)) {
+		if (BEZT_ISSEL_ANY(next)) {
 			map[i] = 1;
 			return 0;
 		}
@@ -1289,12 +1311,12 @@ static short selmap_build_bezier_less(KeyframeEditData *ked, BezTriple *bezt)
 	/* if current is selected, check the left/right keyframes
 	 * since it might need to be deselected (but otherwise no)
 	 */
-	if (BEZSELECTED(bezt)) {
+	if (BEZT_ISSEL_ANY(bezt)) {
 		/* if previous is not selected, we're on the tip of an iceberg */
 		if (i > 0) {
 			BezTriple *prev = bezt - 1;
 			
-			if (BEZSELECTED(prev) == 0)
+			if (BEZT_ISSEL_ANY(prev) == 0)
 				return 0;
 		}
 		else if (i == 0) {
@@ -1306,7 +1328,7 @@ static short selmap_build_bezier_less(KeyframeEditData *ked, BezTriple *bezt)
 		if (i < (fcu->totvert - 1)) {
 			BezTriple *next = bezt + 1;
 			
-			if (BEZSELECTED(next) == 0)
+			if (BEZT_ISSEL_ANY(next) == 0)
 				return 0;
 		}
 		else if (i == (fcu->totvert - 1)) {
@@ -1344,10 +1366,10 @@ short bezt_selmap_flush(KeyframeEditData *ked, BezTriple *bezt)
 	
 	/* select or deselect based on whether the map allows it or not */
 	if (on) {
-		BEZ_SEL(bezt);
+		BEZT_SEL_ALL(bezt);
 	}
 	else {
-		BEZ_DESEL(bezt);
+		BEZT_DESEL_ALL(bezt);
 	}
 	
 	return 0;

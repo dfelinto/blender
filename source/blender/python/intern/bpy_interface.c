@@ -29,12 +29,6 @@
  * be accesses from scripts.
  */
 
- 
-/* grr, python redefines */
-#ifdef _POSIX_C_SOURCE
-#  undef _POSIX_C_SOURCE
-#endif
-
 #include <Python.h>
 
 #ifdef WIN32
@@ -491,7 +485,9 @@ static int python_script_exec(bContext *C, const char *fn, struct Text *text,
 			 * incompatible'.
 			 * So now we load the script file data to a buffer */
 			{
-				const char *pystring = "with open(__file__, 'r') as f: exec(f.read())";
+				const char *pystring =
+				        "ns = globals().copy()\n"
+				        "with open(__file__, 'rb') as f: exec(compile(f.read(), __file__, 'exec'), ns)";
 
 				fclose(fp);
 
@@ -607,7 +603,7 @@ int BPY_button_exec(bContext *C, const char *expr, double *value, const bool ver
 	return error_ret;
 }
 
-int BPY_string_exec(bContext *C, const char *expr)
+int BPY_string_exec_ex(bContext *C, const char *expr, bool use_eval)
 {
 	PyGILState_STATE gilstate;
 	PyObject *main_mod = NULL;
@@ -630,7 +626,7 @@ int BPY_string_exec(bContext *C, const char *expr)
 	bmain_back = bpy_import_main_get();
 	bpy_import_main_set(CTX_data_main(C));
 
-	retval = PyRun_String(expr, Py_eval_input, py_dict, py_dict);
+	retval = PyRun_String(expr, use_eval ? Py_eval_input : Py_file_input, py_dict, py_dict);
 
 	bpy_import_main_set(bmain_back);
 
@@ -650,6 +646,10 @@ int BPY_string_exec(bContext *C, const char *expr)
 	return error_ret;
 }
 
+int BPY_string_exec(bContext *C, const char *expr)
+{
+	return BPY_string_exec_ex(C, expr, true);
+}
 
 void BPY_modules_load_user(bContext *C)
 {
@@ -738,9 +738,11 @@ int BPY_context_member_get(bContext *C, const char *member, bContextDataResult *
 		}
 		else {
 			int len = PySequence_Fast_GET_SIZE(seq_fast);
+			PyObject **seq_fast_items = PySequence_Fast_ITEMS(seq_fast);
 			int i;
+
 			for (i = 0; i < len; i++) {
-				PyObject *list_item = PySequence_Fast_GET_ITEM(seq_fast, i);
+				PyObject *list_item = seq_fast_items[i];
 
 				if (BPy_StructRNA_Check(list_item)) {
 #if 0
@@ -784,7 +786,6 @@ int BPY_context_member_get(bContext *C, const char *member, bContextDataResult *
 }
 
 #ifdef WITH_PYTHON_MODULE
-#include "BLI_fileops.h"
 /* TODO, reloading the module isn't functional at the moment. */
 
 static void bpy_module_free(void *mod);
@@ -821,7 +822,7 @@ static void bpy_module_delay_init(PyObject *bpy_proxy)
 	char filename_abs[1024];
 
 	BLI_strncpy(filename_abs, filename_rel, sizeof(filename_abs));
-	BLI_path_cwd(filename_abs);
+	BLI_path_cwd(filename_abs, sizeof(filename_abs));
 
 	argv[0] = filename_abs;
 	argv[1] = NULL;

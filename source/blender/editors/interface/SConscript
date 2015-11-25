@@ -37,6 +37,7 @@ incs = [
     '../../blenfont',
     '../../blenkernel',
     '../../blenlib',
+    '../../blentranslation',
     '../../gpu',
     '../../imbuf',
     '../../makesdna',
@@ -46,7 +47,8 @@ incs = [
     '../../windowmanager',
     ]
 
-defs = env['BF_GL_DEFINITIONS']
+defs = []
+defs += env['BF_GL_DEFINITIONS']
 
 if env['OURPLATFORM'] in ('win32-vc', 'win32-mingw', 'win64-vc', 'win64-mingw'):
     if env['WITH_BF_IME']:

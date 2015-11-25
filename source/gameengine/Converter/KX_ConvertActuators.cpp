@@ -42,8 +42,7 @@
 #include "KX_ConvertActuators.h"
 
 #ifdef WITH_AUDASPACE
-#  include "AUD_C-API.h"
-#  include "AUD_ChannelMapperFactory.h"
+#  include AUD_SOUND_H
 #endif
 
 // Actuators
@@ -55,7 +54,6 @@
 
 // Ketsji specific logicbricks
 #include "KX_SceneActuator.h"
-#include "KX_IpoActuator.h"
 #include "KX_SoundActuator.h"
 #include "KX_ObjectActuator.h"
 #include "KX_TrackToActuator.h"
@@ -75,7 +73,7 @@
 #include "KX_Scene.h"
 #include "KX_KetsjiEngine.h"
 
-#include "IntValue.h"
+#include "EXP_IntValue.h"
 #include "KX_GameObject.h"
 
 /* This little block needed for linking to Blender... */
@@ -263,32 +261,6 @@ void BL_ConvertActuators(const char* maggiename,
 				else
 					printf ("Discarded shape action actuator from non-mesh object [%s]\n", blenderobject->id.name+2);
 			}
-		case ACT_IPO:
-			{
-				bIpoActuator* ipoact = (bIpoActuator*) bact->data;
-				bool ipochild = (ipoact->flag & ACT_IPOCHILD) !=0;
-				STR_String propname = ipoact->name;
-				STR_String frameProp = ipoact->frameProp;
-				// first bit?
-				bool ipo_as_force = (ipoact->flag & ACT_IPOFORCE);
-				bool local = (ipoact->flag & ACT_IPOLOCAL);
-				bool ipo_add = (ipoact->flag & ACT_IPOADD);
-				
-				KX_IpoActuator* tmpbaseact = new KX_IpoActuator(
-				            gameobj,
-				            propname ,
-				            frameProp,
-				            ipoact->sta,
-				            ipoact->end,
-				            ipochild,
-				            ipoact->type + 1, // + 1, because Blender starts to count at zero,
-				            // Ketsji at 1, because zero is reserved for "NoDef"
-				            ipo_as_force,
-				            ipo_add,
-				            local);
-				baseact = tmpbaseact;
-				break;
-			}
 		case ACT_LAMP:
 			{
 				break;
@@ -385,7 +357,7 @@ void BL_ConvertActuators(const char* maggiename,
 				{
 					bSound* sound = soundact->sound;
 					bool is3d = soundact->flag & ACT_SND_3D_SOUND ? true : false;
-					boost::shared_ptr<AUD_IFactory> snd_sound;
+					AUD_Sound* snd_sound = NULL;
 					KX_3DSoundSettings settings;
 					settings.cone_inner_angle = RAD2DEGF(soundact->sound3D.cone_inner_angle);
 					settings.cone_outer_angle = RAD2DEGF(soundact->sound3D.cone_outer_angle);
@@ -404,27 +376,12 @@ void BL_ConvertActuators(const char* maggiename,
 					}
 					else
 					{
-						snd_sound = *reinterpret_cast<boost::shared_ptr<AUD_IFactory>*>(sound->playback_handle);
+						snd_sound = sound->playback_handle;
 
 						// if sound shall be 3D but isn't mono, we have to make it mono!
 						if (is3d)
 						{
-							try
-							{
-								boost::shared_ptr<AUD_IReader> reader = snd_sound->createReader();
-								if (reader->getSpecs().channels != AUD_CHANNELS_MONO)
-								{
-									AUD_DeviceSpecs specs;
-									specs.channels = AUD_CHANNELS_MONO;
-									specs.rate = AUD_RATE_INVALID;
-									specs.format = AUD_FORMAT_INVALID;
-									snd_sound = boost::shared_ptr<AUD_IFactory>(new AUD_ChannelMapperFactory(snd_sound, specs));
-								}
-							}
-							catch(AUD_Exception&)
-							{
-								// sound cannot be played... ignore
-							}
+							snd_sound = AUD_Sound_rechannel(snd_sound, AUD_CHANNELS_MONO);
 						}
 					}
 					KX_SoundActuator* tmpsoundact =
@@ -435,6 +392,10 @@ void BL_ConvertActuators(const char* maggiename,
 						is3d,
 						settings,
 						soundActuatorType);
+
+					// if we made it mono, we have to free it
+					if(sound && snd_sound && snd_sound != sound->playback_handle)
+						AUD_Sound_free(snd_sound);
 
 					tmpsoundact->SetName(bact->name);
 					baseact = tmpsoundact;
@@ -516,6 +477,13 @@ void BL_ConvertActuators(const char* maggiename,
 				case ACT_EDOB_REPLACE_MESH:
 					{
 						RAS_MeshObject *tmpmesh = converter->FindGameMesh(editobact->me);
+
+						if (!tmpmesh) {
+							std::cout << "Warning: object \"" << objectname <<
+							"\" from ReplaceMesh actuator \"" << uniquename <<
+							"\" uses a mesh not owned by an object in scene \"" <<
+							scene->GetName() << "\"." << std::endl;
+						}
 
 						KX_SCA_ReplaceMeshActuator* tmpreplaceact = new KX_SCA_ReplaceMeshActuator(
 						            gameobj,
@@ -816,6 +784,12 @@ void BL_ConvertActuators(const char* maggiename,
 				case ACT_GAME_LOADCFG:
 					{
 						mode = KX_GameActuator::KX_GAME_LOADCFG;
+						break;
+					}
+					case ACT_GAME_SCREENSHOT:
+					{
+						mode = KX_GameActuator::KX_GAME_SCREENSHOT;
+						filename = gameact->filename;
 						break;
 					}
 				default:

@@ -35,6 +35,7 @@
 
 #include "BKE_cdderivedmesh.h"
 #include "BKE_dynamicpaint.h"
+#include "BKE_library_query.h"
 #include "BKE_modifier.h"
 
 #include "depsgraph_private.h"
@@ -76,24 +77,24 @@ static CustomDataMask requiredDataMask(Object *UNUSED(ob), ModifierData *md)
 			if (surface->format == MOD_DPAINT_SURFACE_F_IMAGESEQ || 
 			    surface->init_color_type == MOD_DPAINT_INITIAL_TEXTURE)
 			{
-				dataMask |= (1 << CD_MTFACE);
+				dataMask |= CD_MASK_MLOOPUV | CD_MASK_MTEXPOLY;
 			}
 			/* mcol */
 			if (surface->type == MOD_DPAINT_SURFACE_T_PAINT ||
 			    surface->init_color_type == MOD_DPAINT_INITIAL_VERTEXCOLOR)
 			{
-				dataMask |= (1 << CD_MCOL);
+				dataMask |= CD_MASK_MLOOPCOL;
 			}
 			/* CD_MDEFORMVERT */
 			if (surface->type == MOD_DPAINT_SURFACE_T_WEIGHT) {
-				dataMask |= (1 << CD_MDEFORMVERT);
+				dataMask |= CD_MASK_MDEFORMVERT;
 			}
 		}
 	}
 
 	if (pmd->brush) {
 		if (pmd->brush->flags & MOD_DPAINT_USE_MATERIAL) {
-			dataMask |= (1 << CD_MTFACE);
+			dataMask |= CD_MASK_MLOOPUV | CD_MASK_MTEXPOLY;
 		}
 	}
 	return dataMask;
@@ -170,12 +171,12 @@ static void foreachIDLink(ModifierData *md, Object *ob,
 		DynamicPaintSurface *surface = pmd->canvas->surfaces.first;
 
 		for (; surface; surface = surface->next) {
-			walk(userData, ob, (ID **)&surface->brush_group);
-			walk(userData, ob, (ID **)&surface->init_texture);
+			walk(userData, ob, (ID **)&surface->brush_group, IDWALK_NOP);
+			walk(userData, ob, (ID **)&surface->init_texture, IDWALK_USER);
 		}
 	}
 	if (pmd->brush) {
-		walk(userData, ob, (ID **)&pmd->brush->mat);
+		walk(userData, ob, (ID **)&pmd->brush->mat, IDWALK_USER);
 	}
 }
 

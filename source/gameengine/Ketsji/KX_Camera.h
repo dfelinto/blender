@@ -40,7 +40,7 @@
 #include "MT_Vector3.h"
 #include "MT_Point3.h"
 #include "KX_GameObject.h"
-#include "IntValue.h"
+#include "EXP_IntValue.h"
 #include "RAS_CameraData.h"
 
 #ifdef WITH_PYTHON
@@ -206,6 +206,10 @@ public:
 	float				GetSensorHeight() const;
 	/** Gets the mode FOV is calculating from sensor dimensions */
 	short				GetSensorFit() const;
+	/** Gets the horizontal shift of the sensor - for camera matching */
+	float				GetShiftHorizontal() const;
+	/** Gets the vertical shift of the sensor - for camera matching */
+	float				GetShiftVertical() const;
 	/** Gets the near clip distance. */
 	float				GetCameraNear() const;
 	/** Gets the far clip distance. */
@@ -306,7 +310,11 @@ public:
 	static int			pyattr_set_near(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef, PyObject *value);
 	static PyObject*	pyattr_get_far(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef);
 	static int			pyattr_set_far(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef, PyObject *value);
-	
+	static PyObject*	pyattr_get_shift_x(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef);
+	static int			pyattr_set_shift_x(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef, PyObject *value);
+	static PyObject*	pyattr_get_shift_y(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef);
+	static int			pyattr_set_shift_y(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef, PyObject *value);
+
 	static PyObject*	pyattr_get_use_viewport(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef);
 	static int			pyattr_set_use_viewport(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef, PyObject *value);
 	

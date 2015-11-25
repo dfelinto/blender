@@ -41,7 +41,7 @@
 #endif
 
 #ifdef WIN32
-#  if defined(_MSC_VER) && _MSC_VER >= 1800 && defined(_M_X64)
+#  if defined(_MSC_VER) && defined(_M_X64)
 #    include <math.h> /* needed for _set_FMA3_enable */
 #  endif
 #  include <windows.h>
@@ -297,6 +297,7 @@ static int print_help(int UNUSED(argc), const char **UNUSED(argv), void *data)
 
 	BLI_argsPrintArgDoc(ba, "--python");
 	BLI_argsPrintArgDoc(ba, "--python-text");
+	BLI_argsPrintArgDoc(ba, "--python-expr");
 	BLI_argsPrintArgDoc(ba, "--python-console");
 	BLI_argsPrintArgDoc(ba, "--addons");
 
@@ -324,6 +325,7 @@ static int print_help(int UNUSED(argc), const char **UNUSED(argv), void *data)
 	BLI_argsPrintArgDoc(ba, "--debug-depsgraph");
 	BLI_argsPrintArgDoc(ba, "--debug-depsgraph-no-threads");
 
+	BLI_argsPrintArgDoc(ba, "--debug-gpumem");
 	BLI_argsPrintArgDoc(ba, "--debug-wm");
 	BLI_argsPrintArgDoc(ba, "--debug-all");
 
@@ -335,7 +337,6 @@ static int print_help(int UNUSED(argc), const char **UNUSED(argv), void *data)
 	printf("Misc Options:\n");
 	BLI_argsPrintArgDoc(ba, "--factory-startup");
 	printf("\n");
-	BLI_argsPrintArgDoc(ba, "--env-system-config");
 	BLI_argsPrintArgDoc(ba, "--env-system-datafiles");
 	BLI_argsPrintArgDoc(ba, "--env-system-scripts");
 	BLI_argsPrintArgDoc(ba, "--env-system-python");
@@ -365,21 +366,22 @@ static int print_help(int UNUSED(argc), const char **UNUSED(argv), void *data)
 	BLI_argsPrintArgDoc(ba, "--enable-new-depsgraph");
 
 	printf("Argument Parsing:\n");
-	printf("\targuments must be separated by white space. eg\n");
-	printf("\t\t\"blender -ba test.blend\"\n");
+	printf("\tArguments must be separated by white space, eg:\n");
+	printf("\t# blender -ba test.blend\n");
 	printf("\t...will ignore the 'a'\n");
-	printf("\t\t\"blender -b test.blend -f8\"\n");
-	printf("\t...will ignore 8 because there is no space between the -f and the frame value\n\n");
+	printf("\t# blender -b test.blend -f8\n");
+	printf("\t...will ignore '8' because there is no space between the '-f' and the frame value\n\n");
 
 	printf("Argument Order:\n");
-	printf("\targuments are executed in the order they are given. eg\n");
-	printf("\t\t\"blender --background test.blend --render-frame 1 --render-output /tmp\"\n");
-	printf("\t...will not render to /tmp because '--render-frame 1' renders before the output path is set\n");
-	printf("\t\t\"blender --background --render-output /tmp test.blend --render-frame 1\"\n");
-	printf("\t...will not render to /tmp because loading the blend file overwrites the render output that was set\n");
-	printf("\t\t\"blender --background test.blend --render-output /tmp --render-frame 1\" works as expected.\n\n");
+	printf("\tArguments are executed in the order they are given. eg:\n");
+	printf("\t# blender --background test.blend --render-frame 1 --render-output '/tmp'\n");
+	printf("\t...will not render to '/tmp' because '--render-frame 1' renders before the output path is set\n");
+	printf("\t# blender --background --render-output /tmp test.blend --render-frame 1\n");
+	printf("\t...will not render to '/tmp' because loading the blend file overwrites the render output that was set\n");
+	printf("\t# blender --background test.blend --render-output /tmp --render-frame 1\n");
+	printf("\t...works as expected.\n\n");
 
-	printf("\nEnvironment Variables:\n");
+	printf("Environment Variables:\n");
 	printf("  $BLENDER_USER_CONFIG      Directory for user configuration files.\n");
 	printf("  $BLENDER_USER_SCRIPTS     Directory for user scripts.\n");
 	printf("  $BLENDER_SYSTEM_SCRIPTS   Directory for system wide scripts.\n");
@@ -399,6 +401,96 @@ static int print_help(int UNUSED(argc), const char **UNUSED(argv), void *data)
 	exit(0);
 
 	return 0;
+}
+
+static bool parse_int_relative(
+        const char *str, int pos, int neg,
+        int *r_value, const char **r_err_msg)
+{
+	char *str_end = NULL;
+	long value;
+
+	errno = 0;
+
+	switch (*str) {
+		case '+':
+			value = pos + strtol(str + 1, &str_end, 10);
+			break;
+		case '-':
+			value = (neg - strtol(str + 1, &str_end, 10)) + 1;
+			break;
+		default:
+			value = strtol(str, &str_end, 10);
+			break;
+	}
+
+
+	if (*str_end != '\0') {
+		static const char *msg = "not a number";
+		*r_err_msg = msg;
+		return false;
+	}
+	else if ((errno == ERANGE) || ((value < INT_MIN || value > INT_MAX))) {
+		static const char *msg = "exceeds range";
+		*r_err_msg = msg;
+		return false;
+	}
+	else {
+		*r_value = (int)value;
+		return true;
+	}
+}
+
+static bool parse_int_relative_clamp(
+        const char *str, int pos, int neg, int min, int max,
+        int *r_value, const char **r_err_msg)
+{
+	if (parse_int_relative(str, pos, neg, r_value, r_err_msg)) {
+		CLAMP(*r_value, min, max);
+		return true;
+	}
+	else {
+		return false;
+	}
+}
+
+static bool parse_int(
+        const char *str,
+        int *r_value, const char **r_err_msg)
+{
+	char *str_end = NULL;
+	long value;
+
+	errno = 0;
+	value = strtol(str, &str_end, 10);
+
+	if (*str_end != '\0') {
+		static const char *msg = "not a number";
+		*r_err_msg = msg;
+		return false;
+	}
+	else if ((errno == ERANGE) || ((value < INT_MIN || value > INT_MAX))) {
+		static const char *msg = "exceeds range";
+		*r_err_msg = msg;
+		return false;
+	}
+	else {
+		*r_value = (int)value;
+		return true;
+	}
+}
+
+static bool parse_int_clamp(
+        const char *str, int min, int max,
+        int *r_value, const char **r_err_msg)
+{
+	if (parse_int(str, r_value, r_err_msg)) {
+		CLAMP(*r_value, min, max);
+		return true;
+	}
+	else {
+		return false;
+	}
 }
 
 static int end_arguments(int UNUSED(argc), const char **UNUSED(argv), void *UNUSED(data))
@@ -443,7 +535,7 @@ static int debug_mode(int UNUSED(argc), const char **UNUSED(argv), void *data)
 	G.debug |= G_DEBUG;  /* std output printf's */
 	printf(BLEND_VERSION_STRING_FMT);
 	MEM_set_memory_debug();
-#ifdef DEBUG
+#ifndef NDEBUG
 	BLI_mempool_set_memory_debug();
 #endif
 
@@ -487,8 +579,16 @@ static int debug_mode_memory(int UNUSED(argc), const char **UNUSED(argv), void *
 
 static int set_debug_value(int argc, const char **argv, void *UNUSED(data))
 {
+	const char *arg_id = "--debug-value";
 	if (argc > 1) {
-		G.debug_value = atoi(argv[1]);
+		const char *err_msg = NULL;
+		int value;
+		if (!parse_int(argv[1], &value, &err_msg)) {
+			printf("\nError: %s '%s %s'.\n", err_msg, arg_id, argv[1]);
+			return 1;
+		}
+
+		G.debug_value = value;
 
 		return 1;
 	}
@@ -742,19 +842,23 @@ static int playback_mode(int argc, const char **argv, void *UNUSED(data))
 
 static int prefsize(int argc, const char **argv, void *UNUSED(data))
 {
-	int stax, stay, sizx, sizy;
+	const char *arg_id = "-p / --window-geometry";
+	int params[4], i;
 
 	if (argc < 5) {
-		fprintf(stderr, "-p requires four arguments\n");
+		fprintf(stderr, "Error: requires four arguments '%s'\n", arg_id);
 		exit(1);
 	}
 
-	stax = atoi(argv[1]);
-	stay = atoi(argv[2]);
-	sizx = atoi(argv[3]);
-	sizy = atoi(argv[4]);
+	for (i = 0; i < 4; i++) {
+		const char *err_msg = NULL;
+		if (!parse_int(argv[i + 1], &params[i], &err_msg)) {
+			printf("\nError: %s '%s %s'.\n", err_msg, arg_id, argv[1]);
+			exit(1);
+		}
+	}
 
-	WM_init_state_size_set(stax, stay, sizx, sizy);
+	WM_init_state_size_set(UNPACK4(params));
 
 	return 4;
 }
@@ -822,7 +926,7 @@ static int no_glsl(int UNUSED(argc), const char **UNUSED(argv), void *UNUSED(dat
 
 static int no_audio(int UNUSED(argc), const char **UNUSED(argv), void *UNUSED(data))
 {
-	BKE_sound_force_device(0);
+	BKE_sound_force_device("Null");
 	return 0;
 }
 
@@ -833,7 +937,7 @@ static int set_audio(int argc, const char **argv, void *UNUSED(data))
 		exit(1);
 	}
 
-	BKE_sound_force_device(BKE_sound_define_from_str(argv[1]));
+	BKE_sound_force_device(argv[1]);
 	return 1;
 }
 
@@ -923,8 +1027,14 @@ static int set_image_type(int argc, const char **argv, void *data)
 
 static int set_threads(int argc, const char **argv, void *UNUSED(data))
 {
+	const char *arg_id = "-t / --threads";
 	if (argc > 1) {
-		int threads = atoi(argv[1]);
+		const char *err_msg = NULL;
+		int threads;
+		if (!parse_int(argv[1], &threads, &err_msg)) {
+			printf("\nError: %s '%s %s'.\n", err_msg, arg_id, argv[1]);
+			return 1;
+		}
 
 		if (threads >= 0 && threads <= BLENDER_MAX_THREADS) {
 			BLI_system_num_threads_override_set(threads);
@@ -935,21 +1045,27 @@ static int set_threads(int argc, const char **argv, void *UNUSED(data))
 		return 1;
 	}
 	else {
-		printf("\nError: you must specify a number of threads between 0 and %d '-t / --threads'.\n", BLENDER_MAX_THREADS);
+		printf("\nError: you must specify a number of threads between 0 and %d '%s'.\n", BLENDER_MAX_THREADS, arg_id);
 		return 0;
 	}
 }
 
 static int depsgraph_use_new(int UNUSED(argc), const char **UNUSED(argv), void *UNUSED(data))
 {
+	printf("Using new dependency graph.\n");
 	DEG_depsgraph_switch_to_new();
 	return 0;
 }
 
 static int set_verbosity(int argc, const char **argv, void *UNUSED(data))
 {
+	const char *arg_id = "--verbose";
 	if (argc > 1) {
-		int level = atoi(argv[1]);
+		const char *err_msg = NULL;
+		int level;
+		if (!parse_int(argv[1], &level, &err_msg)) {
+			printf("\nError: %s '%s %s'.\n", err_msg, arg_id, argv[1]);
+		}
 
 #ifdef WITH_LIBMV
 		libmv_setLoggingVerbosity(level);
@@ -1054,32 +1170,29 @@ static int set_ge_parameters(int argc, const char **argv, void *data)
 
 static int render_frame(int argc, const char **argv, void *data)
 {
+	const char *arg_id = "-f / --render-frame";
 	bContext *C = data;
 	Scene *scene = CTX_data_scene(C);
 	if (scene) {
 		Main *bmain = CTX_data_main(C);
 
 		if (argc > 1) {
-			Render *re = RE_NewRender(scene->id.name);
+			const char *err_msg = NULL;
+			Render *re;
 			int frame;
 			ReportList reports;
 
-			switch (*argv[1]) {
-				case '+':
-					frame = scene->r.sfra + atoi(argv[1] + 1);
-					break;
-				case '-':
-					frame = (scene->r.efra - atoi(argv[1] + 1)) + 1;
-					break;
-				default:
-					frame = atoi(argv[1]);
-					break;
+			if (!parse_int_relative_clamp(
+			        argv[1], scene->r.sfra, scene->r.efra, MINAFRAME, MAXFRAME,
+			        &frame, &err_msg))
+			{
+				printf("\nError: %s '%s %s'.\n", err_msg, arg_id, argv[1]);
+				return 1;
 			}
 
+			re = RE_NewRender(scene->id.name);
 			BLI_begin_threaded_malloc();
 			BKE_reports_init(&reports, RPT_PRINT);
-
-			frame = CLAMPIS(frame, MINAFRAME, MAXFRAME);
 
 			RE_SetReports(re, &reports);
 			RE_BlenderAnim(re, bmain, scene, NULL, scene->lay, frame, frame, scene->r.frame_step);
@@ -1088,12 +1201,12 @@ static int render_frame(int argc, const char **argv, void *data)
 			return 1;
 		}
 		else {
-			printf("\nError: frame number must follow '-f / --render-frame'.\n");
+			printf("\nError: frame number must follow '%s'.\n", arg_id);
 			return 0;
 		}
 	}
 	else {
-		printf("\nError: no blend loaded. cannot use '-f / --render-frame'.\n");
+		printf("\nError: no blend loaded. cannot use '%s'.\n", arg_id);
 		return 0;
 	}
 }
@@ -1137,63 +1250,78 @@ static int set_scene(int argc, const char **argv, void *data)
 
 static int set_start_frame(int argc, const char **argv, void *data)
 {
+	const char *arg_id = "-s / --frame-start";
 	bContext *C = data;
 	Scene *scene = CTX_data_scene(C);
 	if (scene) {
 		if (argc > 1) {
-			int frame = atoi(argv[1]);
-			(scene->r.sfra) = CLAMPIS(frame, MINFRAME, MAXFRAME);
+			const char *err_msg = NULL;
+			if (!parse_int_relative_clamp(
+			        argv[1], scene->r.sfra, scene->r.sfra - 1, MINAFRAME, MAXFRAME,
+			        &scene->r.sfra, &err_msg))
+			{
+				printf("\nError: %s '%s %s'.\n", err_msg, arg_id, argv[1]);
+			}
 			return 1;
 		}
 		else {
-			printf("\nError: frame number must follow '-s / --frame-start'.\n");
+			printf("\nError: frame number must follow '%s'.\n", arg_id);
 			return 0;
 		}
 	}
 	else {
-		printf("\nError: no blend loaded. cannot use '-s / --frame-start'.\n");
+		printf("\nError: no blend loaded. cannot use '%s'.\n", arg_id);
 		return 0;
 	}
 }
 
 static int set_end_frame(int argc, const char **argv, void *data)
 {
+	const char *arg_id = "-e / --frame-end";
 	bContext *C = data;
 	Scene *scene = CTX_data_scene(C);
 	if (scene) {
 		if (argc > 1) {
-			int frame = atoi(argv[1]);
-			(scene->r.efra) = CLAMPIS(frame, MINFRAME, MAXFRAME);
+			const char *err_msg = NULL;
+			if (!parse_int_relative_clamp(
+			        argv[1], scene->r.efra, scene->r.efra - 1, MINAFRAME, MAXFRAME,
+			        &scene->r.efra, &err_msg))
+			{
+				printf("\nError: %s '%s %s'.\n", err_msg, arg_id, argv[1]);
+			}
 			return 1;
 		}
 		else {
-			printf("\nError: frame number must follow '-e / --frame-end'.\n");
+			printf("\nError: frame number must follow '%s'.\n", arg_id);
 			return 0;
 		}
 	}
 	else {
-		printf("\nError: no blend loaded. cannot use '-e / --frame-end'.\n");
+		printf("\nError: no blend loaded. cannot use '%s'.\n", arg_id);
 		return 0;
 	}
 }
 
 static int set_skip_frame(int argc, const char **argv, void *data)
 {
+	const char *arg_id = "-j / --frame-jump";
 	bContext *C = data;
 	Scene *scene = CTX_data_scene(C);
 	if (scene) {
 		if (argc > 1) {
-			int frame = atoi(argv[1]);
-			(scene->r.frame_step) = CLAMPIS(frame, 1, MAXFRAME);
+			const char *err_msg = NULL;
+			if (!parse_int_clamp(argv[1], 1, MAXFRAME, &scene->r.frame_step, &err_msg)) {
+				printf("\nError: %s '%s %s'.\n", err_msg, arg_id, argv[1]);
+			}
 			return 1;
 		}
 		else {
-			printf("\nError: number of frames to step must follow '-j / --frame-jump'.\n");
+			printf("\nError: number of frames to step must follow '%s'.\n", arg_id);
 			return 0;
 		}
 	}
 	else {
-		printf("\nError: no blend loaded. cannot use '-j / --frame-jump'.\n");
+		printf("\nError: no blend loaded. cannot use '%s'.\n", arg_id);
 		return 0;
 	}
 }
@@ -1235,7 +1363,7 @@ static int run_python_file(int argc, const char **argv, void *data)
 		/* Make the path absolute because its needed for relative linked blends to be found */
 		char filename[FILE_MAX];
 		BLI_strncpy(filename, argv[1], sizeof(filename));
-		BLI_path_cwd(filename);
+		BLI_path_cwd(filename, sizeof(filename));
 
 		BPY_CTX_SETUP(BPY_filepath_exec(C, filename, NULL));
 
@@ -1282,6 +1410,27 @@ static int run_python_text(int argc, const char **argv, void *data)
 #endif /* WITH_PYTHON */
 }
 
+static int run_python_expr(int argc, const char **argv, void *data)
+{
+#ifdef WITH_PYTHON
+	bContext *C = data;
+
+	/* workaround for scripts not getting a bpy.context.scene, causes internal errors elsewhere */
+	if (argc > 1) {
+		BPY_CTX_SETUP(BPY_string_exec_ex(C, argv[1], false));
+		return 1;
+	}
+	else {
+		printf("\nError: you must specify a Python expression after '%s'.\n", argv[0]);
+		return 0;
+	}
+#else
+	UNUSED_VARS(argc, argv, data);
+	printf("This blender was built without python support\n");
+	return 0;
+#endif /* WITH_PYTHON */
+}
+
 static int run_python_console(int UNUSED(argc), const char **argv, void *data)
 {
 #ifdef WITH_PYTHON
@@ -1302,11 +1451,18 @@ static int set_addons(int argc, const char **argv, void *data)
 	/* workaround for scripts not getting a bpy.context.scene, causes internal errors elsewhere */
 	if (argc > 1) {
 #ifdef WITH_PYTHON
-		const int slen = strlen(argv[1]) + 128;
+		const char script_str[] =
+		        "from addon_utils import check, enable\n"
+		        "for m in '%s'.split(','):\n"
+		        "    if check(m)[1] is False:\n"
+		        "        enable(m, persistent=True)";
+		const int slen = strlen(argv[1]) + (sizeof(script_str) - 2);
 		char *str = malloc(slen);
 		bContext *C = data;
-		BLI_snprintf(str, slen, "[__import__('addon_utils').enable(i, default_set=False) for i in '%s'.split(',')]", argv[1]);
-		BPY_CTX_SETUP(BPY_string_exec(C, str));
+		BLI_snprintf(str, slen, script_str, argv[1]);
+
+		BLI_assert(strlen(str) + 1 == slen);
+		BPY_CTX_SETUP(BPY_string_exec_ex(C, str, false));
 		free(str);
 #else
 		UNUSED_VARS(argv, data);
@@ -1322,6 +1478,8 @@ static int set_addons(int argc, const char **argv, void *data)
 static int load_file(int UNUSED(argc), const char **argv, void *data)
 {
 	bContext *C = data;
+	ReportList reports;
+	bool success;
 
 	/* Make the path absolute because its needed for relative linked blends to be found */
 	char filename[FILE_MAX];
@@ -1332,72 +1490,37 @@ static int load_file(int UNUSED(argc), const char **argv, void *data)
 	}
 
 	BLI_strncpy(filename, argv[0], sizeof(filename));
-	BLI_path_cwd(filename);
+	BLI_path_cwd(filename, sizeof(filename));
 
-	if (G.background) {
-		int retval;
+	/* load the file */
+	BKE_reports_init(&reports, RPT_PRINT);
+	WM_file_autoexec_init(filename);
+	success = WM_file_read(C, filename, &reports);
+	BKE_reports_clear(&reports);
 
-		BLI_callback_exec(CTX_data_main(C), NULL, BLI_CB_EVT_LOAD_PRE);
-
-		retval = BKE_read_file(C, filename, NULL);
-
-		/* we successfully loaded a blend file, get sure that
-		 * pointcache works */
-		if (retval != BKE_READ_FILE_FAIL) {
-			wmWindowManager *wm = CTX_wm_manager(C);
-			Main *bmain = CTX_data_main(C);
-
-			/* special case, 2.4x files */
-			if (wm == NULL && BLI_listbase_is_empty(&bmain->wm)) {
-				extern void wm_add_default(bContext *C);
-
-				/* wm_add_default() needs the screen to be set. */
-				CTX_wm_screen_set(C, bmain->screen.first);
-				wm_add_default(C);
-			}
-
-			CTX_wm_manager_set(C, NULL); /* remove wm to force check */
-			WM_check(C);
-			if (bmain->name[0]) {
-				G.save_over = 1;
-				G.relbase_valid = 1;
-			}
-			else {
-				G.save_over = 0;
-				G.relbase_valid = 0;
-			}
-			if (CTX_wm_manager(C) == NULL) CTX_wm_manager_set(C, wm);  /* reset wm */
-
-			/* WM_file_read would call normally */
-			ED_editors_init(C);
-			DAG_on_visible_update(bmain, true);
-			BKE_scene_update_tagged(bmain->eval_ctx, bmain, CTX_data_scene(C));
+	if (success) {
+		if (G.background) {
+			/* ensuer we use 'C->data.scene' for background render */
+			CTX_wm_window_set(C, NULL);
 		}
-		else {
-			/* failed to load file, stop processing arguments */
+	}
+	else {
+		/* failed to load file, stop processing arguments if running in background mode */
+		if (G.background) {
+			/* Set is_break if running in the background mode so
+			 * blender will return non-zero exit code which then
+			 * could be used in automated script to control how
+			 * good or bad things are.
+			 */
+			G.is_break = true;
 			return -1;
 		}
 
-		/* WM_file_read() runs normally but since we're in background mode do here */
-#ifdef WITH_PYTHON
-		/* run any texts that were loaded in and flagged as modules */
-		BPY_python_reset(C);
-#endif
-
-		BLI_callback_exec(CTX_data_main(C), NULL, BLI_CB_EVT_LOAD_POST);
-
-		/* happens for the UI on file reading too (huh? (ton))*/
-		// XXX		BKE_undo_reset();
-		//			BKE_undo_write("original");	/* save current state */
-	}
-	else {
-		/* we are not running in background mode here, but start blender in UI mode with
-		 * a file - this should do everything a 'load file' does */
-		ReportList reports;
-		BKE_reports_init(&reports, RPT_PRINT);
-		WM_file_autoexec_init(filename);
-		WM_file_read(C, filename, &reports);
-		BKE_reports_clear(&reports);
+		/* Just pretend a file was loaded, so the user can press Save and it'll save at the filename from the CLI. */
+		BLI_strncpy(G.main->name, filename, FILE_MAX);
+		G.relbase_valid = true;
+		G.save_over = true;
+		printf("... opened default scene instead; saving will write to %s\n", filename);
 	}
 
 	G.file_loaded = 1;
@@ -1409,15 +1532,17 @@ static void setupArguments(bContext *C, bArgs *ba, SYS_SystemHandle *syshandle)
 {
 	static char output_doc[] = "<path>"
 		"\n\tSet the render path and file name."
-		"\n\tUse // at the start of the path to"
-		"\n\t\trender relative to the blend file."
-		"\n\tThe # characters are replaced by the frame number, and used to define zero padding."
-		"\n\t\tani_##_test.png becomes ani_01_test.png"
-		"\n\t\ttest-######.png becomes test-000001.png"
-		"\n\t\tWhen the filename does not contain #, The suffix #### is added to the filename"
-		"\n\tThe frame number will be added at the end of the filename."
-		"\n\t\teg: blender -b foobar.blend -o //render_ -F PNG -x 1 -a"
-		"\n\t\t//render_ becomes //render_####, writing frames as //render_0001.png//";
+		"\n\tUse '//' at the start of the path to render relative to the blend file."
+		"\n"
+		"\n\tThe '#' characters are replaced by the frame number, and used to define zero padding."
+		"\n\t* 'ani_##_test.png' becomes 'ani_01_test.png'"
+		"\n\t* 'test-######.png' becomes 'test-000001.png'"
+		"\n"
+		"\n\tWhen the filename does not contain '#', The suffix '####' is added to the filename."
+		"\n"
+		"\n\tThe frame number will be added at the end of the filename, eg:"
+		"\n\t# blender -b foobar.blend -o //render_ -F PNG -x 1 -a"
+		"\n\t'//render_' becomes '//render_####', writing frames as '//render_0001.png'";
 
 	static char format_doc[] = "<format>"
 		"\n\tSet the render format, Valid options are..."
@@ -1442,14 +1567,14 @@ static void setupArguments(bContext *C, bArgs *ba, SYS_SystemHandle *syshandle)
 		"\n\t-g linearmipmap\t\tLinear Texture Mipmapping instead of Nearest (default)";
 
 	static char debug_doc[] = "\n\tTurn debugging on\n"
-		"\n\t* Prints every operator call and their arguments"
+		"\n\t* Enables memory error detection"
 		"\n\t* Disables mouse grab (to interact with a debugger in some cases)"
-		"\n\t* Keeps python sys.stdin rather than setting it to None";
+		"\n\t* Keeps Python's 'sys.stdin' rather than setting it to None";
 
 	//BLI_argsAdd(ba, pass, short_arg, long_arg, doc, cb, C);
 
 	/* end argument processing after -- */
-	BLI_argsAdd(ba, -1, "--", NULL, "\n\tEnds option processing, following arguments passed unchanged. Access via python's sys.argv", end_arguments, NULL);
+	BLI_argsAdd(ba, -1, "--", NULL, "\n\tEnds option processing, following arguments passed unchanged. Access via Python's 'sys.argv'", end_arguments, NULL);
 
 	/* first pass: background mode, disable python and commands that exit after usage */
 	BLI_argsAdd(ba, 1, "-h", "--help", "\n\tPrint this help text and exit", print_help, ba);
@@ -1467,8 +1592,8 @@ static void setupArguments(bContext *C, bArgs *ba, SYS_SystemHandle *syshandle)
 #  define   PY_DISABLE_AUTO ", (compiled as non-standard default)"
 #endif
 
-	BLI_argsAdd(ba, 1, "-y", "--enable-autoexec", "\n\tEnable automatic python script execution" PY_ENABLE_AUTO, enable_python, NULL);
-	BLI_argsAdd(ba, 1, "-Y", "--disable-autoexec", "\n\tDisable automatic python script execution (pydrivers & startup scripts)" PY_DISABLE_AUTO, disable_python, NULL);
+	BLI_argsAdd(ba, 1, "-y", "--enable-autoexec", "\n\tEnable automatic Python script execution" PY_ENABLE_AUTO, enable_python, NULL);
+	BLI_argsAdd(ba, 1, "-Y", "--disable-autoexec", "\n\tDisable automatic Python script execution (pydrivers & startup scripts)" PY_DISABLE_AUTO, disable_python, NULL);
 
 	BLI_argsAdd(ba, 1, NULL, "--disable-crash-handler", "\n\tDisable the crash handler", disable_crash_handler, NULL);
 	BLI_argsAdd(ba, 1, NULL, "--disable-abort-handler", "\n\tDisable the abort handler", disable_abort_handler, NULL);
@@ -1490,10 +1615,10 @@ static void setupArguments(bContext *C, bArgs *ba, SYS_SystemHandle *syshandle)
 	BLI_argsAdd(ba, 1, NULL, "--debug-freestyle", "\n\tEnable debug/profiling messages from Freestyle rendering", debug_mode_generic, (void *)G_DEBUG_FREESTYLE);
 #endif
 
-	BLI_argsAdd(ba, 1, NULL, "--debug-python", "\n\tEnable debug messages for python", debug_mode_generic, (void *)G_DEBUG_PYTHON);
+	BLI_argsAdd(ba, 1, NULL, "--debug-python", "\n\tEnable debug messages for Python", debug_mode_generic, (void *)G_DEBUG_PYTHON);
 	BLI_argsAdd(ba, 1, NULL, "--debug-events", "\n\tEnable debug messages for the event system", debug_mode_generic, (void *)G_DEBUG_EVENTS);
 	BLI_argsAdd(ba, 1, NULL, "--debug-handlers", "\n\tEnable debug messages for event handling", debug_mode_generic, (void *)G_DEBUG_HANDLERS);
-	BLI_argsAdd(ba, 1, NULL, "--debug-wm",     "\n\tEnable debug messages for the window manager", debug_mode_generic, (void *)G_DEBUG_WM);
+	BLI_argsAdd(ba, 1, NULL, "--debug-wm",     "\n\tEnable debug messages for the window manager, also prints every operator call", debug_mode_generic, (void *)G_DEBUG_WM);
 	BLI_argsAdd(ba, 1, NULL, "--debug-all",    "\n\tEnable all debug messages (excludes libmv)", debug_mode_generic, (void *)G_DEBUG_ALL);
 
 	BLI_argsAdd(ba, 1, NULL, "--debug-fpe", "\n\tEnable floating point exceptions", set_fpe, NULL);
@@ -1508,15 +1633,16 @@ static void setupArguments(bContext *C, bArgs *ba, SYS_SystemHandle *syshandle)
 
 	BLI_argsAdd(ba, 1, NULL, "--debug-value", "<value>\n\tSet debug value of <value> on startup\n", set_debug_value, NULL);
 	BLI_argsAdd(ba, 1, NULL, "--debug-jobs",  "\n\tEnable time profiling for background jobs.", debug_mode_generic, (void *)G_DEBUG_JOBS);
+	BLI_argsAdd(ba, 1, NULL, "--debug-gpu",  "\n\tEnable gpu debug context and information for OpenGL 4.3+.", debug_mode_generic, (void *)G_DEBUG_GPU);
 	BLI_argsAdd(ba, 1, NULL, "--debug-depsgraph", "\n\tEnable debug messages from dependency graph", debug_mode_generic, (void *)G_DEBUG_DEPSGRAPH);
-	BLI_argsAdd(ba, 1, NULL, "--debug-depsgraph-no-threads", "\n\tSwitch dependency graph to a single threaded evlauation", debug_mode_generic, (void *)G_DEBUG_DEPSGRAPH_NO_THREADS);
+	BLI_argsAdd(ba, 1, NULL, "--debug-depsgraph-no-threads", "\n\tSwitch dependency graph to a single threaded evaluation", debug_mode_generic, (void *)G_DEBUG_DEPSGRAPH_NO_THREADS);
 	BLI_argsAdd(ba, 1, NULL, "--debug-gpumem", "\n\tEnable GPU memory stats in status bar", debug_mode_generic, (void *)G_DEBUG_GPU_MEM);
 
 	BLI_argsAdd(ba, 1, NULL, "--enable-new-depsgraph", "\n\tUse new dependency graph", depsgraph_use_new, NULL);
 
 	BLI_argsAdd(ba, 1, NULL, "--verbose", "<verbose>\n\tSet logging verbosity level.", set_verbosity, NULL);
 
-	BLI_argsAdd(ba, 1, NULL, "--factory-startup", "\n\tSkip reading the "STRINGIFY (BLENDER_STARTUP_FILE)" in the users home directory", set_factory_startup, NULL);
+	BLI_argsAdd(ba, 1, NULL, "--factory-startup", "\n\tSkip reading the " STRINGIFY(BLENDER_STARTUP_FILE) " in the users home directory", set_factory_startup, NULL);
 
 	/* TODO, add user env vars? */
 	BLI_argsAdd(ba, 1, NULL, "--env-system-datafiles",  "\n\tSet the "STRINGIFY_ARG (BLENDER_SYSTEM_DATAFILES)" environment variable", set_env, NULL);
@@ -1543,11 +1669,12 @@ static void setupArguments(bContext *C, bArgs *ba, SYS_SystemHandle *syshandle)
 	BLI_argsAdd(ba, 4, "-f", "--render-frame", "<frame>\n\tRender frame <frame> and save it.\n\t+<frame> start frame relative, -<frame> end frame relative.", render_frame, C);
 	BLI_argsAdd(ba, 4, "-a", "--render-anim", "\n\tRender frames from start to end (inclusive)", render_animation, C);
 	BLI_argsAdd(ba, 4, "-S", "--scene", "<name>\n\tSet the active scene <name> for rendering", set_scene, C);
-	BLI_argsAdd(ba, 4, "-s", "--frame-start", "<frame>\n\tSet start to frame <frame> (use before the -a argument)", set_start_frame, C);
-	BLI_argsAdd(ba, 4, "-e", "--frame-end", "<frame>\n\tSet end to frame <frame> (use before the -a argument)", set_end_frame, C);
+	BLI_argsAdd(ba, 4, "-s", "--frame-start", "<frame>\n\tSet start to frame <frame>, supports +/- for relative frames too.", set_start_frame, C);
+	BLI_argsAdd(ba, 4, "-e", "--frame-end", "<frame>\n\tSet end to frame <frame>, supports +/- for relative frames too.", set_end_frame, C);
 	BLI_argsAdd(ba, 4, "-j", "--frame-jump", "<frames>\n\tSet number of frames to step forward after each rendered frame", set_skip_frame, C);
 	BLI_argsAdd(ba, 4, "-P", "--python", "<filename>\n\tRun the given Python script file", run_python_file, C);
 	BLI_argsAdd(ba, 4, NULL, "--python-text", "<name>\n\tRun the given Python script text block", run_python_text, C);
+	BLI_argsAdd(ba, 4, NULL, "--python-expr", "<expression>\n\tRun the given expression as a Python script", run_python_expr, C);
 	BLI_argsAdd(ba, 4, NULL, "--python-console", "\n\tRun blender with an interactive console", run_python_console, C);
 	BLI_argsAdd(ba, 4, NULL, "--addons", "\n\tComma separated list of addons (no spaces)", set_addons, C);
 
@@ -1606,7 +1733,7 @@ int main(
 
 #ifdef WIN32
 	/* FMA3 support in the 2013 CRT is broken on Vista and Windows 7 RTM (fixed in SP1). Just disable it. */
-#  if defined(_MSC_VER) && _MSC_VER >= 1800 && defined(_M_X64)
+#  if defined(_MSC_VER) && defined(_M_X64)
 	_set_FMA3_enable(0);
 #  endif
 
@@ -1632,7 +1759,7 @@ int main(
 		int i;
 		for (i = 0; i < argc; i++) {
 			if (STREQ(argv[i], "--debug") || STREQ(argv[i], "-d") ||
-			    STREQ(argv[i], "--debug-memory"))
+			    STREQ(argv[i], "--debug-memory") || STREQ(argv[i], "--debug-all"))
 			{
 				printf("Switching to fully guarded memory allocator.\n");
 				MEM_use_guarded_allocator();

@@ -32,11 +32,11 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_array.h"
+#include "BLI_stack.h"
 #include "BLI_string.h"
 #include "BLI_math.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_context.h"
 #include "BKE_modifier.h"
@@ -224,7 +224,8 @@ static void edgering_preview_calc_edges(RingSelOpData *lcd, DerivedMesh *dm, con
 	BMEdge *eed, *eed_last;
 	BMVert *v[2][2] = {{NULL}}, *v_last;
 	float (*edges)[2][3] = NULL;
-	BLI_array_declare(edges);
+	BLI_Stack *edge_stack;
+
 	int i, tot = 0;
 
 	BMW_init(&walker, bm, BMW_EDGERING,
@@ -232,10 +233,27 @@ static void edgering_preview_calc_edges(RingSelOpData *lcd, DerivedMesh *dm, con
 	         BMW_FLAG_TEST_HIDDEN,
 	         BMW_NIL_LAY);
 
+
+	edge_stack = BLI_stack_new(sizeof(BMEdge *), __func__);
+
+	eed_last = NULL;
+	for (eed = eed_last = BMW_begin(&walker, lcd->eed); eed; eed = BMW_step(&walker)) {
+		BLI_stack_push(edge_stack, &eed);
+	}
+	BMW_end(&walker);
+
+
+	eed_start = *(BMEdge **)BLI_stack_peek(edge_stack);
+
+	edges = MEM_mallocN(
+	        (sizeof(*edges) * (BLI_stack_count(edge_stack) + (eed_last != eed_start))) * previewlines, __func__);
+
 	v_last   = NULL;
 	eed_last = NULL;
 
-	for (eed = eed_start = BMW_begin(&walker, eed_start); eed; eed = BMW_step(&walker)) {
+	while (!BLI_stack_is_empty(edge_stack)) {
+		BLI_stack_pop(edge_stack, &eed);
+
 		if (eed_last) {
 			if (v_last) {
 				v[1][0] = v[0][0];
@@ -249,8 +267,6 @@ static void edgering_preview_calc_edges(RingSelOpData *lcd, DerivedMesh *dm, con
 
 			edgering_find_order(eed_last, eed, v_last, v);
 			v_last = v[0][0];
-
-			BLI_array_grow_items(edges, previewlines);
 
 			for (i = 1; i <= previewlines; i++) {
 				const float fac = (i / ((float)previewlines + 1));
@@ -279,8 +295,6 @@ static void edgering_preview_calc_edges(RingSelOpData *lcd, DerivedMesh *dm, con
 
 		edgering_find_order(eed_last, eed_start, v_last, v);
 
-		BLI_array_grow_items(edges, previewlines);
-
 		for (i = 1; i <= previewlines; i++) {
 			const float fac = (i / ((float)previewlines + 1));
 			float v_cos[2][2][3];
@@ -297,7 +311,8 @@ static void edgering_preview_calc_edges(RingSelOpData *lcd, DerivedMesh *dm, con
 		}
 	}
 
-	BMW_end(&walker);
+	BLI_stack_free(edge_stack);
+
 	lcd->edges = edges;
 	lcd->totedge = tot;
 }
@@ -386,7 +401,7 @@ static void ringsel_finish(bContext *C, wmOperator *op)
 {
 	RingSelOpData *lcd = op->customdata;
 	const int cuts = RNA_int_get(op->ptr, "number_cuts");
-	const float smoothness = 0.292f * RNA_float_get(op->ptr, "smoothness");
+	const float smoothness = RNA_float_get(op->ptr, "smoothness");
 	const int smooth_falloff = RNA_enum_get(op->ptr, "falloff");
 #ifdef BMW_EDGERING_NGON
 	const bool use_only_quads = false;
@@ -415,8 +430,9 @@ static void ringsel_finish(bContext *C, wmOperator *op)
 			                   cuts, seltype, SUBD_CORNER_PATH, 0, true,
 			                   use_only_quads, 0);
 
-			/* when used in a macro tessface is already re-recalculated */
-			EDBM_update_generic(em, (is_macro == false), true);
+			/* when used in a macro the tessfaces will be recalculated anyway,
+			 * this is needed here because modifiers depend on updated tessellation, see T45920 */
+			EDBM_update_generic(em, true, true);
 
 			if (is_single) {
 				/* de-select endpoints */
@@ -829,21 +845,21 @@ void MESH_OT_loopcut(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_BLOCKING;
 
 	/* properties */
-	prop = RNA_def_int(ot->srna, "number_cuts", 1, 1, INT_MAX, "Number of Cuts", "", 1, 100);
+	prop = RNA_def_int(ot->srna, "number_cuts", 1, 1, 1000000, "Number of Cuts", "", 1, 100);
 	/* avoid re-using last var because it can cause _very_ high poly meshes and annoy users (or worse crash) */
 	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 
-	prop = RNA_def_float(ot->srna, "smoothness", 0.0f, -FLT_MAX, FLT_MAX,
+	prop = RNA_def_float(ot->srna, "smoothness", 0.0f, -1e3f, 1e3f,
 	                     "Smoothness", "Smoothness factor", -SUBD_SMOOTH_MAX, SUBD_SMOOTH_MAX);
 	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 
 	prop = RNA_def_property(ot->srna, "falloff", PROP_ENUM, PROP_NONE);
-	RNA_def_property_enum_items(prop, proportional_falloff_curve_only_items);
+	RNA_def_property_enum_items(prop, rna_enum_proportional_falloff_curve_only_items);
 	RNA_def_property_enum_default(prop, PROP_INVSQUARE);
 	RNA_def_property_ui_text(prop, "Falloff", "Falloff type the feather");
-	RNA_def_property_translation_context(prop, BLF_I18NCONTEXT_ID_CURVE); /* Abusing id_curve :/ */
+	RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_CURVE); /* Abusing id_curve :/ */
 
-	prop = RNA_def_int(ot->srna, "edge_index", -1, -1, INT_MAX, "Number of Cuts", "", 0, INT_MAX);
+	prop = RNA_def_int(ot->srna, "edge_index", -1, -1, INT_MAX, "Edge Index", "", 0, INT_MAX);
 	RNA_def_property_flag(prop, PROP_HIDDEN);
 
 #ifdef USE_LOOPSLIDE_HACK

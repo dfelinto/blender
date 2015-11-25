@@ -40,9 +40,12 @@ void BKE_brush_system_init(void);
 void BKE_brush_system_exit(void);
 
 /* datablock functions */
-struct Brush *BKE_brush_add(struct Main *bmain, const char *name);
+void BKE_brush_init(struct Brush *brush);
+struct Brush *BKE_brush_add(struct Main *bmain, const char *name, short ob_mode);
+struct Brush *BKE_brush_first_search(struct Main *bmain, short ob_mode);
 struct Brush *BKE_brush_copy(struct Brush *brush);
 void BKE_brush_make_local(struct Brush *brush);
+void BKE_brush_unlink(struct Main *bmain, struct Brush *brush);
 void BKE_brush_free(struct Brush *brush);
 
 void BKE_brush_sculpt_reset(struct Brush *brush);
@@ -63,6 +66,7 @@ void BKE_brush_randomize_texture_coords(struct UnifiedPaintSettings *ups, bool m
 
 /* brush curve */
 void BKE_brush_curve_preset(struct Brush *b, int preset);
+float BKE_brush_curve_strength_clamped(struct Brush *br, float p, const float len);
 float BKE_brush_curve_strength(struct Brush *br, float p, const float len);
 
 /* sampling */

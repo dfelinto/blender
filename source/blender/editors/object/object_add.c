@@ -55,7 +55,7 @@
 #include "BLI_math.h"
 #include "BLI_string.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_action.h"
 #include "BKE_anim.h"
@@ -116,7 +116,7 @@
 /* this is an exact copy of the define in rna_lamp.c
  * kept here because of linking order.
  * Icons are only defined here */
-EnumPropertyItem lamp_type_items[] = {
+EnumPropertyItem rna_enum_lamp_type_items[] = {
 	{LA_LOCAL, "POINT", ICON_LAMP_POINT, "Point", "Omnidirectional point light source"},
 	{LA_SUN, "SUN", ICON_LAMP_SUN, "Sun", "Constant direction parallel ray light source"},
 	{LA_SPOT, "SPOT", ICON_LAMP_SPOT, "Spot", "Directional cone light source"},
@@ -263,7 +263,7 @@ void ED_object_add_unit_props(wmOperatorType *ot)
 {
 	PropertyRNA *prop;
 
-	prop = RNA_def_float(ot->srna, "radius", 1.0f, 0.0, FLT_MAX, "Radius", "", 0.001, 100.00);
+	prop = RNA_def_float(ot->srna, "radius", 1.0f, 0.0, OBJECT_ADD_SIZE_MAXF, "Radius", "", 0.001, 100.00);
 	RNA_def_property_subtype(prop, PROP_DISTANCE);
 }
 
@@ -281,11 +281,12 @@ void ED_object_add_generic_props(wmOperatorType *ot, bool do_editmode)
 		RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 	}
 
-	prop = RNA_def_float_vector_xyz(ot->srna, "location", 3, NULL, -FLT_MAX, FLT_MAX, "Location",
-	                                "Location for the newly added object", -FLT_MAX, FLT_MAX);
+	prop = RNA_def_float_vector_xyz(ot->srna, "location", 3, NULL, -OBJECT_ADD_SIZE_MAXF, OBJECT_ADD_SIZE_MAXF,
+	                                "Location", "Location for the newly added object", -1000.0f, 1000.0f);
 	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
-	prop = RNA_def_float_rotation(ot->srna, "rotation", 3, NULL, -FLT_MAX, FLT_MAX, "Rotation",
-	                              "Rotation for the newly added object", (float)-M_PI * 2.0f, (float)M_PI * 2.0f);
+	prop = RNA_def_float_rotation(ot->srna, "rotation", 3, NULL, -OBJECT_ADD_SIZE_MAXF, OBJECT_ADD_SIZE_MAXF,
+	                              "Rotation", "Rotation for the newly added object",
+	                              DEG2RADF(-360.0f), DEG2RADF(360.0f));
 	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 
 	prop = RNA_def_boolean_layer_member(ot->srna, "layers", 20, NULL, "Layer", "");
@@ -481,7 +482,7 @@ void OBJECT_OT_add(wmOperatorType *ot)
 
 	/* properties */
 	ED_object_add_unit_props(ot);
-	RNA_def_enum(ot->srna, "type", object_type_items, 0, "Type", "");
+	RNA_def_enum(ot->srna, "type", rna_enum_object_type_items, 0, "Type", "");
 
 	ED_object_add_generic_props(ot, true);
 }
@@ -508,19 +509,19 @@ static int effector_add_exec(bContext *C, wmOperator *op)
 
 	if (type == PFIELD_GUIDE) {
 		Curve *cu;
-		const char *name = CTX_DATA_(BLF_I18NCONTEXT_ID_OBJECT, "CurveGuide");
+		const char *name = CTX_DATA_(BLT_I18NCONTEXT_ID_OBJECT, "CurveGuide");
 		ob = ED_object_add_type(C, OB_CURVE, name, loc, rot, false, layer);
 
 		cu = ob->data;
 		cu->flag |= CU_PATH | CU_3D;
 		ED_object_editmode_enter(C, 0);
 		ED_object_new_primitive_matrix(C, ob, loc, rot, mat);
-		BLI_addtail(&cu->editnurb->nurbs, add_nurbs_primitive(C, ob, mat, CU_NURBS | CU_PRIM_PATH, dia));
+		BLI_addtail(&cu->editnurb->nurbs, ED_curve_add_nurbs_primitive(C, ob, mat, CU_NURBS | CU_PRIM_PATH, dia));
 		if (!enter_editmode)
 			ED_object_editmode_exit(C, EM_FREEDATA);
 	}
 	else {
-		const char *name = CTX_DATA_(BLF_I18NCONTEXT_ID_OBJECT, "Field");
+		const char *name = CTX_DATA_(BLT_I18NCONTEXT_ID_OBJECT, "Field");
 		ob = ED_object_add_type(C, OB_EMPTY, name, loc, rot, false, layer);
 		BKE_object_obdata_size_init(ob, dia);
 		if (ELEM(type, PFIELD_WIND, PFIELD_VORTEX))
@@ -640,7 +641,7 @@ static int object_metaball_add_exec(bContext *C, wmOperator *op)
 	ED_object_new_primitive_matrix(C, obedit, loc, rot, mat);
 	dia = RNA_float_get(op->ptr, "radius");
 
-	add_metaball_primitive(C, obedit, mat, dia, RNA_enum_get(op->ptr, "type"));
+	ED_mball_add_primitive(C, obedit, mat, dia, RNA_enum_get(op->ptr, "type"));
 
 	/* userdef */
 	if (newob && !enter_editmode) {
@@ -667,7 +668,7 @@ void OBJECT_OT_metaball_add(wmOperatorType *ot)
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
-	ot->prop = RNA_def_enum(ot->srna, "type", metaelem_type_items, 0, "Primitive", "");
+	ot->prop = RNA_def_enum(ot->srna, "type", rna_enum_metaelem_type_items, 0, "Primitive", "");
 
 	ED_object_add_unit_props(ot);
 	ED_object_add_generic_props(ot, true);
@@ -814,7 +815,7 @@ void OBJECT_OT_empty_add(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
 	/* properties */
-	ot->prop = RNA_def_enum(ot->srna, "type", object_empty_drawtype_items, 0, "Type", "");
+	ot->prop = RNA_def_enum(ot->srna, "type", rna_enum_object_empty_drawtype_items, 0, "Type", "");
 
 	ED_object_add_unit_props(ot);
 	ED_object_add_generic_props(ot, false);
@@ -897,13 +898,13 @@ void OBJECT_OT_drop_named_image(wmOperatorType *ot)
 static const char *get_lamp_defname(int type)
 {
 	switch (type) {
-		case LA_LOCAL: return CTX_DATA_(BLF_I18NCONTEXT_ID_LAMP, "Point");
-		case LA_SUN: return CTX_DATA_(BLF_I18NCONTEXT_ID_LAMP, "Sun");
-		case LA_SPOT: return CTX_DATA_(BLF_I18NCONTEXT_ID_LAMP, "Spot");
-		case LA_HEMI: return CTX_DATA_(BLF_I18NCONTEXT_ID_LAMP, "Hemi");
-		case LA_AREA: return CTX_DATA_(BLF_I18NCONTEXT_ID_LAMP, "Area");
+		case LA_LOCAL: return CTX_DATA_(BLT_I18NCONTEXT_ID_LAMP, "Point");
+		case LA_SUN: return CTX_DATA_(BLT_I18NCONTEXT_ID_LAMP, "Sun");
+		case LA_SPOT: return CTX_DATA_(BLT_I18NCONTEXT_ID_LAMP, "Spot");
+		case LA_HEMI: return CTX_DATA_(BLT_I18NCONTEXT_ID_LAMP, "Hemi");
+		case LA_AREA: return CTX_DATA_(BLT_I18NCONTEXT_ID_LAMP, "Area");
 		default:
-			return CTX_DATA_(BLF_I18NCONTEXT_ID_LAMP, "Lamp");
+			return CTX_DATA_(BLT_I18NCONTEXT_ID_LAMP, "Lamp");
 	}
 }
 
@@ -950,8 +951,8 @@ void OBJECT_OT_lamp_add(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
 	/* properties */
-	ot->prop = RNA_def_enum(ot->srna, "type", lamp_type_items, 0, "Type", "");
-	RNA_def_property_translation_context(ot->prop, BLF_I18NCONTEXT_ID_LAMP);
+	ot->prop = RNA_def_enum(ot->srna, "type", rna_enum_lamp_type_items, 0, "Type", "");
+	RNA_def_property_translation_context(ot->prop, BLT_I18NCONTEXT_ID_LAMP);
 
 	ED_object_add_unit_props(ot);
 	ED_object_add_generic_props(ot, false);
@@ -1194,88 +1195,15 @@ void OBJECT_OT_delete(wmOperatorType *ot)
 /**************************** Copy Utilities ******************************/
 
 /* after copying objects, copied data should get new pointers */
-static void copy_object_set_idnew(bContext *C, int dupflag)
+static void copy_object_set_idnew(bContext *C)
 {
 	Main *bmain = CTX_data_main(C);
-	Material *ma, *mao;
-	ID *id;
-	int a;
 
-	/* XXX check object pointers */
 	CTX_DATA_BEGIN (C, Object *, ob, selected_editable_objects)
 	{
-		BKE_object_relink(ob);
+		BKE_libblock_relink(&ob->id);
 	}
 	CTX_DATA_END;
-
-	/* materials */
-	if (dupflag & USER_DUP_MAT) {
-		mao = bmain->mat.first;
-		while (mao) {
-			if (mao->id.newid) {
-				ma = (Material *)mao->id.newid;
-
-				if (dupflag & USER_DUP_TEX) {
-					for (a = 0; a < MAX_MTEX; a++) {
-						if (ma->mtex[a]) {
-							id = (ID *)ma->mtex[a]->tex;
-							if (id) {
-								ID_NEW_US(ma->mtex[a]->tex)
-								else
-									ma->mtex[a]->tex = BKE_texture_copy(ma->mtex[a]->tex);
-								id->us--;
-							}
-						}
-					}
-				}
-#if 0 // XXX old animation system
-				id = (ID *)ma->ipo;
-				if (id) {
-					ID_NEW_US(ma->ipo)
-					else
-						ma->ipo = copy_ipo(ma->ipo);
-					id->us--;
-				}
-#endif // XXX old animation system
-			}
-			mao = mao->id.next;
-		}
-	}
-
-#if 0 // XXX old animation system
-	  /* lamps */
-	if (dupflag & USER_DUP_IPO) {
-		Lamp *la = bmain->lamp.first;
-		while (la) {
-			if (la->id.newid) {
-				Lamp *lan = (Lamp *)la->id.newid;
-				id = (ID *)lan->ipo;
-				if (id) {
-					ID_NEW_US(lan->ipo)
-					else
-						lan->ipo = copy_ipo(lan->ipo);
-					id->us--;
-				}
-			}
-			la = la->id.next;
-		}
-	}
-
-	/* ipos */
-	ipo = bmain->ipo.first;
-	while (ipo) {
-		if (ipo->id.lib == NULL && ipo->id.newid) {
-			Ipo *ipon = (Ipo *)ipo->id.newid;
-			IpoCurve *icu;
-			for (icu = ipon->curve.first; icu; icu = icu->next) {
-				if (icu->driver) {
-					ID_NEW(icu->driver->ob);
-				}
-			}
-		}
-		ipo = ipo->id.next;
-	}
-#endif // XXX old animation system
 
 	set_sca_new_poins();
 
@@ -1467,7 +1395,7 @@ static void make_object_duplilist_real(bContext *C, Scene *scene, Base *base,
 	if (parent_gh)
 		BLI_ghash_free(parent_gh, NULL, NULL);
 
-	copy_object_set_idnew(C, 0);
+	copy_object_set_idnew(C);
 
 	free_object_duplilist(lb);
 
@@ -1659,7 +1587,7 @@ static int convert_exec(bContext *C, wmOperator *op)
 
 				/* decrement original mesh's usage count  */
 				me = newob->data;
-				me->id.us--;
+				id_us_min(&me->id);
 
 				/* make a new copy of the mesh */
 				newob->data = BKE_mesh_copy(me);
@@ -1684,7 +1612,7 @@ static int convert_exec(bContext *C, wmOperator *op)
 
 				/* decrement original mesh's usage count  */
 				me = newob->data;
-				me->id.us--;
+				id_us_min(&me->id);
 
 				/* make a new copy of the mesh */
 				newob->data = BKE_mesh_copy(me);
@@ -1715,7 +1643,7 @@ static int convert_exec(bContext *C, wmOperator *op)
 				newob = basen->object;
 
 				/* decrement original curve's usage count  */
-				((Curve *)newob->data)->id.us--;
+				id_us_min(&((Curve *)newob->data)->id);
 
 				/* make a new copy of the curve */
 				newob->data = BKE_curve_copy(ob->data);
@@ -1736,19 +1664,19 @@ static int convert_exec(bContext *C, wmOperator *op)
 			cu->type = OB_CURVE;
 
 			if (cu->vfont) {
-				cu->vfont->id.us--;
+				id_us_min(&cu->vfont->id);
 				cu->vfont = NULL;
 			}
 			if (cu->vfontb) {
-				cu->vfontb->id.us--;
+				id_us_min(&cu->vfontb->id);
 				cu->vfontb = NULL;
 			}
 			if (cu->vfonti) {
-				cu->vfonti->id.us--;
+				id_us_min(&cu->vfonti->id);
 				cu->vfonti = NULL;
 			}
 			if (cu->vfontbi) {
-				cu->vfontbi->id.us--;
+				id_us_min(&cu->vfontbi->id);
 				cu->vfontbi = NULL;
 			}
 
@@ -1786,7 +1714,7 @@ static int convert_exec(bContext *C, wmOperator *op)
 					newob = basen->object;
 
 					/* decrement original curve's usage count  */
-					((Curve *)newob->data)->id.us--;
+					id_us_min(&((Curve *)newob->data)->id);
 
 					/* make a new copy of the curve */
 					newob->data = BKE_curve_copy(ob->data);
@@ -1821,7 +1749,7 @@ static int convert_exec(bContext *C, wmOperator *op)
 				newob = basen->object;
 
 				mb = newob->data;
-				mb->id.us--;
+				id_us_min(&mb->id);
 
 				newob->data = BKE_mesh_add(bmain, "Mesh");
 				newob->type = OB_MESH;
@@ -1987,7 +1915,7 @@ static Base *object_add_duplicate_internal(Main *bmain, Scene *scene, Base *base
 					ID_NEW_US(obn->mat[a])
 					else
 						obn->mat[a] = BKE_material_copy(obn->mat[a]);
-					id->us--;
+					id_us_min(id);
 
 					if (dupflag & USER_DUP_ACT) {
 						BKE_animdata_copy_id_action(&obn->mat[a]->id);
@@ -2008,7 +1936,7 @@ static Base *object_add_duplicate_internal(Main *bmain, Scene *scene, Base *base
 						BKE_animdata_copy_id_action(&psys->part->id);
 					}
 
-					id->us--;
+					id_us_min(id);
 				}
 			}
 		}
@@ -2022,12 +1950,9 @@ static Base *object_add_duplicate_internal(Main *bmain, Scene *scene, Base *base
 					ID_NEW_US2(obn->data)
 					else {
 						obn->data = BKE_mesh_copy(obn->data);
-						if (obn->fluidsimSettings) {
-							obn->fluidsimSettings->orgMesh = (Mesh *)obn->data;
-						}
 						didit = 1;
 					}
-					id->us--;
+					id_us_min(id);
 				}
 				break;
 			case OB_CURVE:
@@ -2037,7 +1962,7 @@ static Base *object_add_duplicate_internal(Main *bmain, Scene *scene, Base *base
 						obn->data = BKE_curve_copy(obn->data);
 						didit = 1;
 					}
-					id->us--;
+					id_us_min(id);
 				}
 				break;
 			case OB_SURF:
@@ -2047,7 +1972,7 @@ static Base *object_add_duplicate_internal(Main *bmain, Scene *scene, Base *base
 						obn->data = BKE_curve_copy(obn->data);
 						didit = 1;
 					}
-					id->us--;
+					id_us_min(id);
 				}
 				break;
 			case OB_FONT:
@@ -2057,7 +1982,7 @@ static Base *object_add_duplicate_internal(Main *bmain, Scene *scene, Base *base
 						obn->data = BKE_curve_copy(obn->data);
 						didit = 1;
 					}
-					id->us--;
+					id_us_min(id);
 				}
 				break;
 			case OB_MBALL:
@@ -2067,7 +1992,7 @@ static Base *object_add_duplicate_internal(Main *bmain, Scene *scene, Base *base
 						obn->data = BKE_mball_copy(obn->data);
 						didit = 1;
 					}
-					id->us--;
+					id_us_min(id);
 				}
 				break;
 			case OB_LAMP:
@@ -2077,7 +2002,7 @@ static Base *object_add_duplicate_internal(Main *bmain, Scene *scene, Base *base
 						obn->data = BKE_lamp_copy(obn->data);
 						didit = 1;
 					}
-					id->us--;
+					id_us_min(id);
 				}
 				break;
 			case OB_ARMATURE:
@@ -2091,7 +2016,7 @@ static Base *object_add_duplicate_internal(Main *bmain, Scene *scene, Base *base
 						BKE_pose_rebuild(obn, obn->data);
 						didit = 1;
 					}
-					id->us--;
+					id_us_min(id);
 				}
 				break;
 			case OB_LATTICE:
@@ -2101,7 +2026,7 @@ static Base *object_add_duplicate_internal(Main *bmain, Scene *scene, Base *base
 						obn->data = BKE_lattice_copy(obn->data);
 						didit = 1;
 					}
-					id->us--;
+					id_us_min(id);
 				}
 				break;
 			case OB_CAMERA:
@@ -2111,7 +2036,7 @@ static Base *object_add_duplicate_internal(Main *bmain, Scene *scene, Base *base
 						obn->data = BKE_camera_copy(obn->data);
 						didit = 1;
 					}
-					id->us--;
+					id_us_min(id);
 				}
 				break;
 			case OB_SPEAKER:
@@ -2121,7 +2046,7 @@ static Base *object_add_duplicate_internal(Main *bmain, Scene *scene, Base *base
 						obn->data = BKE_speaker_copy(obn->data);
 						didit = 1;
 					}
-					id->us--;
+					id_us_min(id);
 				}
 				break;
 		}
@@ -2158,7 +2083,7 @@ static Base *object_add_duplicate_internal(Main *bmain, Scene *scene, Base *base
 							ID_NEW_US((*matarar)[a])
 							else
 								(*matarar)[a] = BKE_material_copy((*matarar)[a]);
-							id->us--;
+							id_us_min(id);
 						}
 					}
 				}
@@ -2189,7 +2114,7 @@ Base *ED_object_add_duplicate(Main *bmain, Scene *scene, Base *base, int dupflag
 	ob = basen->object;
 
 	/* link own references to the newly duplicated data [#26816] */
-	BKE_object_relink(ob);
+	BKE_libblock_relink(&ob->id);
 	set_sca_new_poins_ob(ob);
 
 	/* DAG_relations_tag_update(bmain); */ /* caller must do */
@@ -2234,7 +2159,7 @@ static int duplicate_exec(bContext *C, wmOperator *op)
 	}
 	CTX_DATA_END;
 
-	copy_object_set_idnew(C, dupflag);
+	copy_object_set_idnew(C);
 
 	DAG_relations_tag_update(bmain);
 
@@ -2261,7 +2186,7 @@ void OBJECT_OT_duplicate(wmOperatorType *ot)
 
 	/* to give to transform */
 	RNA_def_boolean(ot->srna, "linked", 0, "Linked", "Duplicate object but not object data, linking to the original data");
-	prop = RNA_def_enum(ot->srna, "mode", transform_mode_types, TFM_TRANSLATION, "Mode", "");
+	prop = RNA_def_enum(ot->srna, "mode", rna_enum_transform_mode_types, TFM_TRANSLATION, "Mode", "");
 	RNA_def_property_flag(prop, PROP_HIDDEN);
 }
 
@@ -2319,7 +2244,7 @@ static int add_named_exec(bContext *C, wmOperator *op)
 	ED_base_object_select(basen, BA_SELECT);
 	ED_base_object_activate(C, basen);
 
-	copy_object_set_idnew(C, dupflag);
+	copy_object_set_idnew(C);
 
 	DAG_relations_tag_update(bmain);
 

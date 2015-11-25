@@ -53,10 +53,6 @@
 #include "bpy_intern_string.h"
 
 #ifdef USE_PYRNA_INVALIDATE_WEAKREF
-#  include "MEM_guardedalloc.h"
-#endif
-
-#ifdef USE_PYRNA_INVALIDATE_WEAKREF
 #  include "BLI_ghash.h"
 #endif
 
@@ -924,7 +920,7 @@ static PyObject *pyrna_prop_str(BPy_PropertyRNA *self)
 
 	type = RNA_property_type(self->prop);
 
-	if (RNA_enum_id_from_value(property_type_items, type, &type_id) == 0) {
+	if (RNA_enum_id_from_value(rna_enum_property_type_items, type, &type_id) == 0) {
 		PyErr_SetString(PyExc_RuntimeError, "could not use property type, internal error"); /* should never happen */
 		return NULL;
 	}
@@ -992,15 +988,16 @@ static PyObject *pyrna_prop_repr(BPy_PropertyRNA *self)
 
 	path = RNA_path_from_ID_to_property(&self->ptr, self->prop);
 	if (path) {
+		const char *data_delim = (path[0] == '[') ? "" : ".";
 		if (GS(id->name) == ID_NT) { /* nodetree paths are not accurate */
 			ret = PyUnicode_FromFormat("bpy.data...%s",
 			                           path);
 		}
 		else {
-			ret = PyUnicode_FromFormat("bpy.data.%s[%R].%s",
+			ret = PyUnicode_FromFormat("bpy.data.%s[%R]%s%s",
 			                           BKE_idcode_to_name_plural(GS(id->name)),
 			                           tmp_str,
-			                           path);
+			                           data_delim, path);
 		}
 
 		MEM_freeN((void *)path);
@@ -2641,6 +2638,7 @@ static int prop_subscript_ass_array_slice(PointerRNA *ptr, PropertyRNA *prop,
                                           int start, int stop, int length, PyObject *value_orig)
 {
 	PyObject *value;
+	PyObject **value_items;
 	int count;
 	void *values_alloc = NULL;
 	int ret = 0;
@@ -2662,6 +2660,7 @@ static int prop_subscript_ass_array_slice(PointerRNA *ptr, PropertyRNA *prop,
 		return -1;
 	}
 
+	value_items = PySequence_Fast_ITEMS(value);
 	switch (RNA_property_type(prop)) {
 		case PROP_FLOAT:
 		{
@@ -2677,7 +2676,7 @@ static int prop_subscript_ass_array_slice(PointerRNA *ptr, PropertyRNA *prop,
 				RNA_property_float_get_array(ptr, prop, values);
 
 			for (count = start; count < stop; count++) {
-				fval = PyFloat_AsDouble(PySequence_Fast_GET_ITEM(value, count - start));
+				fval = PyFloat_AsDouble(value_items[count - start]);
 				CLAMP(fval, min, max);
 				values[count] = fval;
 			}
@@ -2697,7 +2696,7 @@ static int prop_subscript_ass_array_slice(PointerRNA *ptr, PropertyRNA *prop,
 				RNA_property_boolean_get_array(ptr, prop, values);
 
 			for (count = start; count < stop; count++)
-				values[count] = PyLong_AsLong(PySequence_Fast_GET_ITEM(value, count - start));
+				values[count] = PyLong_AsLong(value_items[count - start]);
 
 			if (PyErr_Occurred()) ret = -1;
 			else                  RNA_property_boolean_set_array(ptr, prop, values);
@@ -2718,7 +2717,7 @@ static int prop_subscript_ass_array_slice(PointerRNA *ptr, PropertyRNA *prop,
 				RNA_property_int_get_array(ptr, prop, values);
 
 			for (count = start; count < stop; count++) {
-				ival = PyLong_AsLong(PySequence_Fast_GET_ITEM(value, count - start));
+				ival = PyLong_AsLong(value_items[count - start]);
 				CLAMP(ival, min, max);
 				values[count] = ival;
 			}
@@ -3359,7 +3358,7 @@ static PyObject *pyrna_prop_path_from_id(BPy_PropertyRNA *self)
 PyDoc_STRVAR(pyrna_prop_as_bytes_doc,
 ".. method:: as_bytes()\n"
 "\n"
-"   Returns this string property as a byte rather then a python string.\n"
+"   Returns this string property as a byte rather than a python string.\n"
 "\n"
 "   :return: The string as bytes.\n"
 "   :rtype: bytes\n"
@@ -3388,6 +3387,21 @@ static PyObject *pyrna_prop_as_bytes(BPy_PropertyRNA *self)
 
 		return ret;
 	}
+}
+
+PyDoc_STRVAR(pyrna_prop_update_doc,
+".. method:: update()\n"
+"\n"
+"   Execute the properties update callback.\n"
+"\n"
+"   .. note::\n"
+"      This is called when assigning a property,\n"
+"      however in rare cases its useful to call explicitly.\n"
+);
+static PyObject *pyrna_prop_update(BPy_PropertyRNA *self)
+{
+	RNA_property_update(BPy_GetContext(), &self->ptr, self->prop);
+	Py_RETURN_NONE;
 }
 
 PyDoc_STRVAR(pyrna_struct_type_recast_doc,
@@ -4723,6 +4737,7 @@ static struct PyMethodDef pyrna_struct_methods[] = {
 static struct PyMethodDef pyrna_prop_methods[] = {
 	{"path_from_id", (PyCFunction)pyrna_prop_path_from_id, METH_NOARGS, pyrna_prop_path_from_id_doc},
 	{"as_bytes", (PyCFunction)pyrna_prop_as_bytes, METH_NOARGS, pyrna_prop_as_bytes_doc},
+	{"update", (PyCFunction)pyrna_prop_update, METH_NOARGS, pyrna_prop_update_doc},
 	{"__dir__", (PyCFunction)pyrna_prop_dir, METH_NOARGS, NULL},
 	{NULL, NULL, 0, NULL}
 };
@@ -5239,7 +5254,7 @@ static PyObject *pyrna_func_call(BPy_FunctionRNA *self, PyObject *args, PyObject
 		good_args_str = BLI_dynstr_get_cstring(good_args);
 
 		PyErr_Format(PyExc_TypeError,
-		             "%.200s.%.200s(): was called with invalid keyword arguments(s) (%s), expected (%s)",
+		             "%.200s.%.200s(): was called with invalid keyword argument(s) (%s), expected (%s)",
 		             RNA_struct_identifier(self_ptr->type), RNA_function_identifier(self_func),
 		             bad_args_str, good_args_str);
 
@@ -7450,8 +7465,14 @@ static void bpy_class_free(void *pyob_ptr)
 	PyGILState_Release(gilstate);
 }
 
+/**
+ * \note This isn't essential to run on startup, since subtypes will lazy initialize.
+ * But keep running in debug mode so we get immediate notification of bad class hierarchy
+ * or any errors in "bpy_types.py" at load time, so errors don't go unnoticed.
+ */
 void pyrna_alloc_types(void)
 {
+#ifdef DEBUG
 	PyGILState_STATE gilstate;
 
 	PointerRNA ptr;
@@ -7479,6 +7500,7 @@ void pyrna_alloc_types(void)
 	RNA_PROP_END;
 
 	PyGILState_Release(gilstate);
+#endif  /* DEBUG */
 }
 
 

@@ -45,6 +45,8 @@
 #include "IMB_colormanagement.h"
 #include "IMB_colormanagement_intern.h"
 
+#define IMAGIC 0732
+
 typedef struct {
 	unsigned short  imagic;      /* stuff saved on disk . . */
 	unsigned short  type;
@@ -74,6 +76,8 @@ typedef struct {
 	const int            *rowsize;   /* for rle images */
 } IMAGE;
 
+#define HEADER_SIZE 512
+
 #define RINTLUM (79)
 #define GINTLUM (156)
 #define BINTLUM (21)
@@ -99,21 +103,31 @@ typedef struct {
 // #define IBUFSIZE(pixels)    ((pixels + (pixels >> 6)) << 2) // UNUSED
 // #define RLE_NOP         0x00
 
+/* local struct for mem access */
+typedef struct MFileOffset {
+	const uchar *_file_data;
+	unsigned int _file_offset;
+} MFileOffset;
+
+#define MFILE_DATA(inf) ((void)0, (inf)->_file_data + (inf)->_file_offset)
+#define MFILE_STEP(inf, step) { (inf)->_file_offset += step; } ((void)0)
+#define MFILE_SEEK(inf, pos)  { (inf)->_file_offset  = pos;  } ((void)0)
+
 /* funcs */
-static void readheader(FILE *inf, IMAGE *image);
+static void readheader(MFileOffset *inf, IMAGE *image);
 static int writeheader(FILE *outf, IMAGE *image);
 
-static unsigned short getshort(FILE *inf);
-static unsigned int getlong(FILE *inf);
+static unsigned short getshort(MFileOffset *inf);
+static unsigned int getlong(MFileOffset *inf);
 static void putshort(FILE *outf, unsigned short val);
 static int putlong(FILE *outf, unsigned int val);
 static int writetab(FILE *outf, unsigned int *tab, int len);
-static void readtab(FILE *inf, unsigned int *tab, int len);
+static void readtab(MFileOffset *inf, unsigned int *tab, int len);
 
-static void expandrow(unsigned char *optr, unsigned char *iptr, int z);
-static void expandrow2(float *optr, unsigned char *iptr, int z);
-static void interleaverow(unsigned char *lptr, unsigned char *cptr, int z, int n);
-static void interleaverow2(float *lptr, unsigned char *cptr, int z, int n);
+static void expandrow(unsigned char *optr, const unsigned char *iptr, int z);
+static void expandrow2(float *optr, const unsigned char *iptr, int z);
+static void interleaverow(unsigned char *lptr, const unsigned char *cptr, int z, int n);
+static void interleaverow2(float *lptr, const unsigned char *cptr, int z, int n);
 static int compressrow(unsigned char *lbuf, unsigned char *rlebuf, int z, int cnt);
 static void lumrow(unsigned char *rgbptr, unsigned char *lumptr, int n);
 
@@ -122,27 +136,22 @@ static void lumrow(unsigned char *rgbptr, unsigned char *lumptr, int n);
  *
  */
 
-static uchar *file_data;
-static int file_offset;
-
-static unsigned short getshort(FILE *inf)
+static unsigned short getshort(MFileOffset *inf)
 {
-	unsigned char *buf;
-	(void)inf; /* unused */
+	const unsigned char *buf;
 
-	buf = file_data + file_offset;
-	file_offset += 2;
+	buf = MFILE_DATA(inf);
+	MFILE_STEP(inf, 2);
 	
 	return (buf[0] << 8) + (buf[1] << 0);
 }
 
-static unsigned int getlong(FILE *inf)
+static unsigned int getlong(MFileOffset *mofs)
 {
-	unsigned char *buf;
-	(void)inf; /* unused */
+	const unsigned char *buf;
 	
-	buf = file_data + file_offset;
-	file_offset += 4;
+	buf = MFILE_DATA(mofs);
+	MFILE_STEP(mofs, 4);
 	
 	return (buf[0] << 24) + (buf[1] << 16) + (buf[2] << 8) + (buf[3] << 0);
 }
@@ -167,7 +176,7 @@ static int putlong(FILE *outf, unsigned int val)
 	return fwrite(buf, 4, 1, outf);
 }
 
-static void readheader(FILE *inf, IMAGE *image)
+static void readheader(MFileOffset *inf, IMAGE *image)
 {
 	memset(image, 0, sizeof(IMAGE));
 	image->imagic = getshort(inf);
@@ -207,7 +216,7 @@ static int writetab(FILE *outf, unsigned int *tab, int len)
 	return r;
 }
 
-static void readtab(FILE *inf, unsigned int *tab, int len)
+static void readtab(MFileOffset *inf, unsigned int *tab, int len)
 {
 	while (len) {
 		*tab++ = getlong(inf);
@@ -238,7 +247,7 @@ static void test_endian_zbuf(struct ImBuf *ibuf)
 /* this one is only def-ed once, strangely... */
 #define GSS(x) (((uchar *)(x))[1] << 8 | ((uchar *)(x))[0])
 
-int imb_is_a_iris(unsigned char *mem)
+int imb_is_a_iris(const unsigned char *mem)
 {
 	return ((GS(mem) == IMAGIC) || (GSS(mem) == IMAGIC));
 }
@@ -250,14 +259,14 @@ int imb_is_a_iris(unsigned char *mem)
  *
  */
 
-struct ImBuf *imb_loadiris(unsigned char *mem, size_t size, int flags, char colorspace[IM_MAX_SPACE])
+struct ImBuf *imb_loadiris(const unsigned char *mem, size_t size, int flags, char colorspace[IM_MAX_SPACE])
 {
 	unsigned int *base, *lptr = NULL;
 	float *fbase, *fptr = NULL;
 	unsigned int *zbase, *zptr;
-	unsigned char *rledat;
+	const unsigned char *rledat;
 	unsigned int *starttab, *lengthtab;
-	FILE *inf = NULL;
+	MFileOffset _inf_data = {mem, 0}, *inf = &_inf_data;
 	IMAGE image;
 	int x, y, z, tablen;
 	int xsize, ysize, zsize;
@@ -272,9 +281,6 @@ struct ImBuf *imb_loadiris(unsigned char *mem, size_t size, int flags, char colo
 	colorspace_set_default_role(colorspace, IM_MAX_SPACE, COLOR_ROLE_DEFAULT_BYTE);
 
 	/*printf("new iris\n");*/
-	
-	file_data = mem;
-	file_offset = 0;
 	
 	readheader(inf, &image);
 	if (image.imagic != IMAGIC) {
@@ -295,7 +301,7 @@ struct ImBuf *imb_loadiris(unsigned char *mem, size_t size, int flags, char colo
 	
 	if (flags & IB_test) {
 		ibuf = IMB_allocImBuf(image.xsize, image.ysize, 8 * image.zsize, 0);
-		if (ibuf) ibuf->ftype = IMAGIC;
+		if (ibuf) ibuf->ftype = IMB_FTYPE_IMAGIC;
 		return(ibuf);
 	}
 	
@@ -304,7 +310,7 @@ struct ImBuf *imb_loadiris(unsigned char *mem, size_t size, int flags, char colo
 		tablen = ysize * zsize * sizeof(int);
 		starttab = (unsigned int *)MEM_mallocN(tablen, "iris starttab");
 		lengthtab = (unsigned int *)MEM_mallocN(tablen, "iris endtab");
-		file_offset = 512;
+		MFILE_SEEK(inf, HEADER_SIZE);
 		
 		readtab(inf, starttab, tablen);
 		readtab(inf, lengthtab, tablen);
@@ -335,10 +341,9 @@ struct ImBuf *imb_loadiris(unsigned char *mem, size_t size, int flags, char colo
 				for (z = 0; z < zsize; z++) {
 					lptr = base;
 					for (y = 0; y < ysize; y++) {
-						file_offset = starttab[y + z * ysize];
-						
-						rledat = file_data + file_offset;
-						file_offset += lengthtab[y + z * ysize];
+						MFILE_SEEK(inf, starttab[y + z * ysize]);
+						rledat = MFILE_DATA(inf);
+						MFILE_STEP(inf, lengthtab[y + z * ysize]);
 						
 						expandrow((uchar *)lptr, rledat, 3 - z);
 						lptr += xsize;
@@ -351,11 +356,9 @@ struct ImBuf *imb_loadiris(unsigned char *mem, size_t size, int flags, char colo
 				for (y = 0; y < ysize; y++) {
 				
 					for (z = 0; z < zsize; z++) {
-						
-						file_offset = starttab[y + z * ysize];
-
-						rledat = file_data + file_offset;
-						file_offset += lengthtab[y + z * ysize];
+						MFILE_SEEK(inf, starttab[y + z * ysize]);
+						rledat = MFILE_DATA(inf);
+						MFILE_STEP(inf, lengthtab[y + z * ysize]);
 						
 						if (z < 4) expandrow((uchar *)lptr, rledat, 3 - z);
 						else if (z < 8) expandrow((uchar *)zptr, rledat, 7 - z);
@@ -377,10 +380,9 @@ struct ImBuf *imb_loadiris(unsigned char *mem, size_t size, int flags, char colo
 				for (z = 0; z < zsize; z++) {
 					fptr = fbase;
 					for (y = 0; y < ysize; y++) {
-						file_offset = starttab[y + z * ysize];
-						
-						rledat = file_data + file_offset;
-						file_offset += lengthtab[y + z * ysize];
+						MFILE_SEEK(inf, starttab[y + z * ysize]);
+						rledat = MFILE_DATA(inf);
+						MFILE_STEP(inf, lengthtab[y + z * ysize]);
 						
 						expandrow2(fptr, rledat, 3 - z);
 						fptr += xsize * 4;
@@ -393,11 +395,9 @@ struct ImBuf *imb_loadiris(unsigned char *mem, size_t size, int flags, char colo
 				for (y = 0; y < ysize; y++) {
 				
 					for (z = 0; z < zsize; z++) {
-						
-						file_offset = starttab[y + z * ysize];
-
-						rledat = file_data + file_offset;
-						file_offset += lengthtab[y + z * ysize];
+						MFILE_SEEK(inf, starttab[y + z * ysize]);
+						rledat = MFILE_DATA(inf);
+						MFILE_STEP(inf, lengthtab[y + z * ysize]);
 						
 						expandrow2(fptr, rledat, 3 - z);
 						
@@ -420,8 +420,8 @@ struct ImBuf *imb_loadiris(unsigned char *mem, size_t size, int flags, char colo
 			base = ibuf->rect;
 			zbase = (unsigned int *)ibuf->zbuf;
 			
-			file_offset = 512;
-			rledat = file_data + file_offset;
+			MFILE_SEEK(inf, HEADER_SIZE);
+			rledat = MFILE_DATA(inf);
 			
 			for (z = 0; z < zsize; z++) {
 				
@@ -444,8 +444,8 @@ struct ImBuf *imb_loadiris(unsigned char *mem, size_t size, int flags, char colo
 
 			fbase = ibuf->rect_float;
 
-			file_offset = 512;
-			rledat = file_data + file_offset;
+			MFILE_SEEK(inf, HEADER_SIZE);
+			rledat = MFILE_DATA(inf);
 			
 			for (z = 0; z < zsize; z++) {
 				
@@ -528,7 +528,7 @@ struct ImBuf *imb_loadiris(unsigned char *mem, size_t size, int flags, char colo
 		
 	}
 
-	ibuf->ftype = IMAGIC;
+	ibuf->ftype = IMB_FTYPE_IMAGIC;
 
 	test_endian_zbuf(ibuf);
 
@@ -541,7 +541,7 @@ struct ImBuf *imb_loadiris(unsigned char *mem, size_t size, int flags, char colo
 
 /* static utility functions for longimagedata */
 
-static void interleaverow(unsigned char *lptr, unsigned char *cptr, int z, int n)
+static void interleaverow(unsigned char *lptr, const unsigned char *cptr, int z, int n)
 {
 	lptr += z;
 	while (n--) {
@@ -550,7 +550,7 @@ static void interleaverow(unsigned char *lptr, unsigned char *cptr, int z, int n
 	}
 }
 
-static void interleaverow2(float *lptr, unsigned char *cptr, int z, int n)
+static void interleaverow2(float *lptr, const unsigned char *cptr, int z, int n)
 {
 	lptr += z;
 	while (n--) {
@@ -560,7 +560,7 @@ static void interleaverow2(float *lptr, unsigned char *cptr, int z, int n)
 	}
 }
 
-static void expandrow2(float *optr, unsigned char *iptr, int z)
+static void expandrow2(float *optr, const unsigned char *iptr, int z)
 {
 	unsigned short pixel, count;
 	float pixel_f;
@@ -616,7 +616,7 @@ static void expandrow2(float *optr, unsigned char *iptr, int z)
 	}
 }
 
-static void expandrow(unsigned char *optr, unsigned char *iptr, int z)
+static void expandrow(unsigned char *optr, const unsigned char *iptr, int z)
 {
 	unsigned char pixel, count;
 
@@ -703,7 +703,7 @@ static int output_iris(unsigned int *lptr, int xsize, int ysize, int zsize, cons
 	lumbuf = (unsigned int *)MEM_mallocN(xsize * sizeof(int), "iris lumbuf");
 
 	memset(image, 0, sizeof(IMAGE));
-	image->imagic = IMAGIC;
+	image->imagic = IMB_FTYPE_IMAGIC;
 	image->type = RLE(1);
 	if (zsize > 1)
 		image->dim = 3;
@@ -715,8 +715,8 @@ static int output_iris(unsigned int *lptr, int xsize, int ysize, int zsize, cons
 	image->min = 0;
 	image->max = 255;
 	goodwrite *= writeheader(outf, image);
-	fseek(outf, 512 + 2 * tablen, SEEK_SET);
-	pos = 512 + 2 * tablen;
+	fseek(outf, HEADER_SIZE + (2 * tablen), SEEK_SET);
+	pos = HEADER_SIZE + (2 * tablen);
 	
 	for (y = 0; y < ysize; y++) {
 		for (z = 0; z < zsize; z++) {
@@ -746,7 +746,7 @@ static int output_iris(unsigned int *lptr, int xsize, int ysize, int zsize, cons
 		if (zptr) zptr += xsize;
 	}
 
-	fseek(outf, 512, SEEK_SET);
+	fseek(outf, HEADER_SIZE, SEEK_SET);
 	goodwrite *= writetab(outf, starttab, tablen);
 	goodwrite *= writetab(outf, lengthtab, tablen);
 	MEM_freeN(image);

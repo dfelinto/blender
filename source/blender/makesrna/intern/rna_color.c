@@ -154,7 +154,7 @@ static char *rna_ColorRamp_path(PointerRNA *ptr)
 {
 	char *path = NULL;
 	
-	/* handle the cases where a single datablock may have 2 ramp types */
+	/* handle the cases where a single data-block may have 2 ramp types */
 	if (ptr->id.data) {
 		ID *id = ptr->id.data;
 		
@@ -195,9 +195,8 @@ static char *rna_ColorRamp_path(PointerRNA *ptr)
 			
 			case ID_LS:
 			{
-				char *path = BKE_linestyle_path_to_color_ramp((FreestyleLineStyle *)id, (ColorBand *)ptr->data);
-				if (path)
-					return path;
+				/* may be NULL */
+				path = BKE_linestyle_path_to_color_ramp((FreestyleLineStyle *)id, (ColorBand *)ptr->data);
 				break;
 			}
 			

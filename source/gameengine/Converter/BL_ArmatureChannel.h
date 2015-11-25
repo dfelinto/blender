@@ -35,7 +35,7 @@
 #include "DNA_action_types.h"
 #include "CTR_HashedPtr.h"
 #include "CTR_Map.h"
-#include "PyObjectPlus.h"
+#include "EXP_PyObjectPlus.h"
 
 class SCA_IObject;
 class KX_GameObject;
@@ -59,6 +59,11 @@ public:
 	BL_ArmatureChannel(class BL_ArmatureObject *armature, 
 						struct bPoseChannel *posechannel);
 	virtual ~BL_ArmatureChannel();
+
+	inline const char *GetName()
+	{
+		return m_posechannel->name;
+	}
 
 #ifdef WITH_PYTHON
 	// Python access

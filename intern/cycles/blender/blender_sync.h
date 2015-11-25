@@ -53,7 +53,12 @@ public:
 
 	/* sync */
 	bool sync_recalc();
-	void sync_data(BL::SpaceView3D b_v3d, BL::Object b_override, void **python_thread_state, const char *layer = 0);
+	void sync_data(BL::RenderSettings b_render,
+	               BL::SpaceView3D b_v3d,
+	               BL::Object b_override,
+	               int width, int height,
+	               void **python_thread_state,
+	               const char *layer = 0);
 	void sync_render_layers(BL::SpaceView3D b_v3d, const char *layer);
 	void sync_integrator();
 	void sync_camera(BL::RenderSettings b_render, BL::Object b_override, int width, int height);
@@ -75,7 +80,11 @@ private:
 	void sync_lamps(bool update_all);
 	void sync_materials(bool update_all);
 	void sync_objects(BL::SpaceView3D b_v3d, float motion_time = 0.0f);
-	void sync_motion(BL::SpaceView3D b_v3d, BL::Object b_override, void **python_thread_state);
+	void sync_motion(BL::RenderSettings b_render,
+	                 BL::SpaceView3D b_v3d,
+	                 BL::Object b_override,
+	                 int width, int height,
+	                 void **python_thread_state);
 	void sync_film();
 	void sync_view();
 	void sync_world(bool update_all);
@@ -85,12 +94,23 @@ private:
 	void sync_nodes(Shader *shader, BL::ShaderNodeTree b_ntree);
 	Mesh *sync_mesh(BL::Object b_ob, bool object_updated, bool hide_tris);
 	void sync_curves(Mesh *mesh, BL::Mesh b_mesh, BL::Object b_ob, bool motion, int time_index = 0);
-	Object *sync_object(BL::Object b_parent, int persistent_id[OBJECT_PERSISTENT_ID_SIZE], BL::DupliObject b_dupli_ob,
-	                                 Transform& tfm, uint layer_flag, float motion_time, bool hide_tris, bool *use_portal);
+	Object *sync_object(BL::Object b_parent,
+	                    int persistent_id[OBJECT_PERSISTENT_ID_SIZE],
+	                    BL::DupliObject b_dupli_ob,
+	                    Transform& tfm,
+	                    uint layer_flag,
+	                    float motion_time,
+	                    bool hide_tris,
+	                    bool use_camera_cull,
+	                    float camera_cull_margin,
+	                    bool *use_portal);
 	void sync_light(BL::Object b_parent, int persistent_id[OBJECT_PERSISTENT_ID_SIZE], BL::Object b_ob, Transform& tfm, bool *use_portal);
 	void sync_background_light(bool use_portal);
 	void sync_mesh_motion(BL::Object b_ob, Object *object, float motion_time);
-	void sync_camera_motion(BL::Object b_ob, float motion_time);
+	void sync_camera_motion(BL::RenderSettings b_render,
+	                        BL::Object b_ob,
+	                        int width, int height,
+	                        float motion_time);
 
 	/* particles */
 	bool sync_dupli_particle(BL::Object b_ob, BL::DupliObject b_dup, Object *object);
@@ -130,7 +150,8 @@ private:
 		: scene_layer(0), layer(0),
 		  holdout_layer(0), exclude_layer(0),
 		  material_override(PointerRNA_NULL),
-		  use_background(true),
+		  use_background_shader(true),
+		  use_background_ao(true),
 		  use_surfaces(true),
 		  use_hair(true),
 		  use_viewport_visibility(false),
@@ -144,7 +165,8 @@ private:
 		uint holdout_layer;
 		uint exclude_layer;
 		BL::Material material_override;
-		bool use_background;
+		bool use_background_shader;
+		bool use_background_ao;
 		bool use_surfaces;
 		bool use_hair;
 		bool use_viewport_visibility;

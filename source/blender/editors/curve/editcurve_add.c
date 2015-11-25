@@ -38,7 +38,7 @@
 #include "BLI_blenlib.h"
 #include "BLI_math.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_context.h"
 #include "BKE_curve.h"
@@ -71,20 +71,20 @@ static const char *get_curve_defname(int type)
 
 	if ((type & CU_TYPE) == CU_BEZIER) {
 		switch (stype) {
-			case CU_PRIM_CURVE: return CTX_DATA_(BLF_I18NCONTEXT_ID_CURVE, "BezierCurve");
-			case CU_PRIM_CIRCLE: return CTX_DATA_(BLF_I18NCONTEXT_ID_CURVE, "BezierCircle");
-			case CU_PRIM_PATH: return CTX_DATA_(BLF_I18NCONTEXT_ID_CURVE, "CurvePath");
+			case CU_PRIM_CURVE: return CTX_DATA_(BLT_I18NCONTEXT_ID_CURVE, "BezierCurve");
+			case CU_PRIM_CIRCLE: return CTX_DATA_(BLT_I18NCONTEXT_ID_CURVE, "BezierCircle");
+			case CU_PRIM_PATH: return CTX_DATA_(BLT_I18NCONTEXT_ID_CURVE, "CurvePath");
 			default:
-				return CTX_DATA_(BLF_I18NCONTEXT_ID_CURVE, "Curve");
+				return CTX_DATA_(BLT_I18NCONTEXT_ID_CURVE, "Curve");
 		}
 	}
 	else {
 		switch (stype) {
-			case CU_PRIM_CURVE: return CTX_DATA_(BLF_I18NCONTEXT_ID_CURVE, "NurbsCurve");
-			case CU_PRIM_CIRCLE: return CTX_DATA_(BLF_I18NCONTEXT_ID_CURVE, "NurbsCircle");
-			case CU_PRIM_PATH: return CTX_DATA_(BLF_I18NCONTEXT_ID_CURVE, "NurbsPath");
+			case CU_PRIM_CURVE: return CTX_DATA_(BLT_I18NCONTEXT_ID_CURVE, "NurbsCurve");
+			case CU_PRIM_CIRCLE: return CTX_DATA_(BLT_I18NCONTEXT_ID_CURVE, "NurbsCircle");
+			case CU_PRIM_PATH: return CTX_DATA_(BLT_I18NCONTEXT_ID_CURVE, "NurbsPath");
 			default:
-				return CTX_DATA_(BLF_I18NCONTEXT_ID_CURVE, "Curve");
+				return CTX_DATA_(BLT_I18NCONTEXT_ID_CURVE, "Curve");
 		}
 	}
 }
@@ -94,18 +94,18 @@ static const char *get_surf_defname(int type)
 	int stype = type & CU_PRIMITIVE;
 
 	switch (stype) {
-		case CU_PRIM_CURVE: return CTX_DATA_(BLF_I18NCONTEXT_ID_CURVE, "SurfCurve");
-		case CU_PRIM_CIRCLE: return CTX_DATA_(BLF_I18NCONTEXT_ID_CURVE, "SurfCircle");
-		case CU_PRIM_PATCH: return CTX_DATA_(BLF_I18NCONTEXT_ID_CURVE, "SurfPatch");
-		case CU_PRIM_SPHERE: return CTX_DATA_(BLF_I18NCONTEXT_ID_CURVE, "SurfSphere");
-		case CU_PRIM_DONUT: return CTX_DATA_(BLF_I18NCONTEXT_ID_CURVE, "SurfTorus");
+		case CU_PRIM_CURVE: return CTX_DATA_(BLT_I18NCONTEXT_ID_CURVE, "SurfCurve");
+		case CU_PRIM_CIRCLE: return CTX_DATA_(BLT_I18NCONTEXT_ID_CURVE, "SurfCircle");
+		case CU_PRIM_PATCH: return CTX_DATA_(BLT_I18NCONTEXT_ID_CURVE, "SurfPatch");
+		case CU_PRIM_SPHERE: return CTX_DATA_(BLT_I18NCONTEXT_ID_CURVE, "SurfSphere");
+		case CU_PRIM_DONUT: return CTX_DATA_(BLT_I18NCONTEXT_ID_CURVE, "SurfTorus");
 		default:
-			return CTX_DATA_(BLF_I18NCONTEXT_ID_CURVE, "Surface");
+			return CTX_DATA_(BLT_I18NCONTEXT_ID_CURVE, "Surface");
 	}
 }
 
 
-Nurb *add_nurbs_primitive(bContext *C, Object *obedit, float mat[4][4], int type, int newob)
+Nurb *ED_curve_add_nurbs_primitive(bContext *C, Object *obedit, float mat[4][4], int type, int newob)
 {
 	static int xzproj = 0;   /* this function calls itself... */
 	ListBase *editnurb = object_editcurve_get(obedit);
@@ -346,7 +346,7 @@ Nurb *add_nurbs_primitive(bContext *C, Object *obedit, float mat[4][4], int type
 			break;
 		case CU_PRIM_TUBE: /* Cylinder */
 			if (cutype == CU_NURBS) {
-				nu = add_nurbs_primitive(C, obedit, mat, CU_NURBS | CU_PRIM_CIRCLE, 0); /* circle */
+				nu = ED_curve_add_nurbs_primitive(C, obedit, mat, CU_NURBS | CU_PRIM_CIRCLE, 0); /* circle */
 				nu->resolu = cu->resolu;
 				nu->flag = CU_SMOOTH;
 				BLI_addtail(editnurb, nu); /* temporal for extrude and translate */
@@ -423,7 +423,7 @@ Nurb *add_nurbs_primitive(bContext *C, Object *obedit, float mat[4][4], int type
 				float tmp_vec[3] = {0.f, 0.f, 1.f};
 
 				xzproj = 1;
-				nu = add_nurbs_primitive(C, obedit, mat, CU_NURBS | CU_PRIM_CIRCLE, 0); /* circle */
+				nu = ED_curve_add_nurbs_primitive(C, obedit, mat, CU_NURBS | CU_PRIM_CIRCLE, 0); /* circle */
 				xzproj = 0;
 				nu->resolu = cu->resolu;
 				nu->resolv = cu->resolv;
@@ -523,7 +523,7 @@ static int curvesurf_prim_add(bContext *C, wmOperator *op, int type, int isSurf)
 	dia = RNA_float_get(op->ptr, "radius");
 	mul_mat3_m4_fl(mat, dia);
 
-	nu = add_nurbs_primitive(C, obedit, mat, type, newob);
+	nu = ED_curve_add_nurbs_primitive(C, obedit, mat, type, newob);
 	editnurb = object_editcurve_get(obedit);
 	BLI_addtail(editnurb, nu);
 

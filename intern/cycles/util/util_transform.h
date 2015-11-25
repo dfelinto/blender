@@ -55,6 +55,11 @@ typedef struct DecompMotionTransform {
 	float4 post_x, post_y;
 } DecompMotionTransform;
 
+typedef struct PerspectiveMotionTransform {
+	Transform pre;
+	Transform post;
+} PerspectiveMotionTransform;
+
 /* Functions */
 
 ccl_device_inline float3 transform_perspective(const Transform *t, const float3 a)
@@ -342,7 +347,12 @@ ccl_device_inline Transform transform_quick_inverse(Transform M)
 	 * scale can be inverted but what about shearing? */
 	Transform R;
 	float det = M.x.x*(M.z.z*M.y.y - M.z.y*M.y.z) - M.y.x*(M.z.z*M.x.y - M.z.y*M.x.z) + M.z.x*(M.y.z*M.x.y - M.y.y*M.x.z);
-
+	if(det == 0.0f) {
+		M.x.x += 1e-8f;
+		M.y.y += 1e-8f;
+		M.z.z += 1e-8f;
+		det = M.x.x*(M.z.z*M.y.y - M.z.y*M.y.z) - M.y.x*(M.z.z*M.x.y - M.z.y*M.x.z) + M.z.x*(M.y.z*M.x.y - M.y.y*M.x.z);
+	}
 	det = (det != 0.0f)? 1.0f/det: 0.0f;
 
 	float3 Rx = det*make_float3(M.z.z*M.y.y - M.z.y*M.y.z, M.z.y*M.x.z - M.z.z*M.x.y, M.y.z*M.x.y - M.y.y*M.x.z);

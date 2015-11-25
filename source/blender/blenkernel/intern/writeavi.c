@@ -147,7 +147,9 @@ bMovieHandle *BKE_movie_handle_get(const char imtype)
 #endif
 
 	/* in case all above are disabled */
-	(void)imtype;return &mh;
+	(void)imtype;
+
+	return (mh.append_movie != append_stub) ? &mh : NULL;
 }
 
 /* ****************************************************************** */
@@ -213,8 +215,6 @@ static int start_avi(void *context_v, Scene *UNUSED(scene), RenderData *rd, int 
 
 	if (AVI_open_compress(name, avi, 1, format) != AVI_ERROR_NONE) {
 		BKE_report(reports, RPT_ERROR, "Cannot open or start AVI movie file");
-		MEM_freeN(avi);
-		avi = NULL;
 		return 0;
 	}
 			
@@ -298,8 +298,10 @@ static void context_free_avi(void *context_v)
 void BKE_movie_filepath_get(char *string, RenderData *rd, bool preview, const char *suffix)
 {
 	bMovieHandle *mh = BKE_movie_handle_get(rd->im_format.imtype);
-	if (mh->get_movie_path)
+	if (mh && mh->get_movie_path) {
 		mh->get_movie_path(string, rd, preview, suffix);
-	else
+	}
+	else {
 		string[0] = '\0';
+	}
 }

@@ -60,7 +60,7 @@ extern "C"{
 
 
 // XXX Clean these up <<<
-#include "Value.h"
+#include "EXP_Value.h"
 #include "KX_Scene.h"
 #include "KX_RayCast.h"
 #include "KX_GameObject.h"
@@ -99,9 +99,9 @@ RAS_OpenGLRasterizer::RAS_OpenGLRasterizer(RAS_ICanvas* canvas, int storage)
 	m_motionblur(0),
 	m_motionblurvalue(-1.0),
 	m_usingoverrideshader(false),
-    m_clientobject(NULL),
-    m_auxilaryClientInfo(NULL),
-    m_drawingmode(KX_TEXTURED),
+	m_clientobject(NULL),
+	m_auxilaryClientInfo(NULL),
+	m_drawingmode(KX_TEXTURED),
 	m_texco_num(0),
 	m_attrib_num(0),
 	//m_last_alphablend(GPU_BLEND_SOLID),
@@ -356,9 +356,10 @@ void RAS_OpenGLRasterizer::ClearCachingInfo(void)
 	m_materialCachingInfo = 0;
 }
 
-void RAS_OpenGLRasterizer::FlushDebugShapes()
+void RAS_OpenGLRasterizer::FlushDebugShapes(SCA_IScene *scene)
 {
-	if (m_debugShapes.empty())
+	std::vector<OglDebugShape> &debugShapes = m_debugShapes[scene];
+	if (debugShapes.empty())
 		return;
 
 	// DrawDebugLines
@@ -372,28 +373,26 @@ void RAS_OpenGLRasterizer::FlushDebugShapes()
 
 	//draw lines
 	glBegin(GL_LINES);
-	for (unsigned int i=0;i<m_debugShapes.size();i++)
-	{
-		if (m_debugShapes[i].m_type != OglDebugShape::LINE)
+	for (unsigned int i = 0; i < debugShapes.size(); i++) {
+		if (debugShapes[i].m_type != OglDebugShape::LINE)
 			continue;
-		glColor4f(m_debugShapes[i].m_color[0],m_debugShapes[i].m_color[1],m_debugShapes[i].m_color[2],1.f);
-		const MT_Scalar* fromPtr = &m_debugShapes[i].m_pos.x();
-		const MT_Scalar* toPtr= &m_debugShapes[i].m_param.x();
+		glColor4f(debugShapes[i].m_color[0], debugShapes[i].m_color[1], debugShapes[i].m_color[2], 1.0f);
+		const MT_Scalar *fromPtr = &debugShapes[i].m_pos.x();
+		const MT_Scalar *toPtr= &debugShapes[i].m_param.x();
 		glVertex3dv(fromPtr);
 		glVertex3dv(toPtr);
 	}
 	glEnd();
 
 	//draw circles
-	for (unsigned int i=0;i<m_debugShapes.size();i++)
-	{
-		if (m_debugShapes[i].m_type != OglDebugShape::CIRCLE)
+	for (unsigned int i = 0; i < debugShapes.size(); i++) {
+		if (debugShapes[i].m_type != OglDebugShape::CIRCLE)
 			continue;
 		glBegin(GL_LINE_LOOP);
-		glColor4f(m_debugShapes[i].m_color[0],m_debugShapes[i].m_color[1],m_debugShapes[i].m_color[2],1.f);
+		glColor4f(debugShapes[i].m_color[0], debugShapes[i].m_color[1], debugShapes[i].m_color[2], 1.0f);
 
 		static const MT_Vector3 worldUp(0.0, 0.0, 1.0);
-		MT_Vector3 norm = m_debugShapes[i].m_param;
+		MT_Vector3 norm = debugShapes[i].m_param;
 		MT_Matrix3x3 tr;
 		if (norm.fuzzyZero() || norm == worldUp)
 		{
@@ -408,14 +407,14 @@ void RAS_OpenGLRasterizer::FlushDebugShapes()
 				yaxis.x(), yaxis.y(), yaxis.z(),
 				norm.x(), norm.y(), norm.z());
 		}
-		MT_Scalar rad = m_debugShapes[i].m_param2.x();
-		int n = (int) m_debugShapes[i].m_param2.y();
+		MT_Scalar rad = debugShapes[i].m_param2.x();
+		int n = (int)debugShapes[i].m_param2.y();
 		for (int j = 0; j<n; j++)
 		{
 			MT_Scalar theta = j*M_PI*2/n;
 			MT_Vector3 pos(cos(theta) * rad, sin(theta) * rad, 0.0);
 			pos = pos*tr;
-			pos += m_debugShapes[i].m_pos;
+			pos += debugShapes[i].m_pos;
 			const MT_Scalar* posPtr = &pos.x();
 			glVertex3dv(posPtr);
 		}
@@ -425,13 +424,11 @@ void RAS_OpenGLRasterizer::FlushDebugShapes()
 	if (light) glEnable(GL_LIGHTING);
 	if (tex) glEnable(GL_TEXTURE_2D);
 
-	m_debugShapes.clear();
+	debugShapes.clear();
 }
 
 void RAS_OpenGLRasterizer::EndFrame()
 {
-	FlushDebugShapes();
-
 	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 
 	glDisable(GL_MULTISAMPLE_ARB);
@@ -670,7 +667,9 @@ void RAS_OpenGLRasterizer::IndexPrimitives_3DText(RAS_MeshSlot& ms,
 			// triangle and quad text drawing
 			for (i=0; i<it.totindex; i+=numvert)
 			{
-				float v[4][3];
+				float  v[4][3];
+				const float  *v_ptr[4] = {NULL};
+				const float *uv_ptr[4] = {NULL};
 				int glattrib, unit;
 
 				for (j=0; j<numvert; j++) {
@@ -679,6 +678,9 @@ void RAS_OpenGLRasterizer::IndexPrimitives_3DText(RAS_MeshSlot& ms,
 					v[j][0] = vertex->getXYZ()[0];
 					v[j][1] = vertex->getXYZ()[1];
 					v[j][2] = vertex->getXYZ()[2];
+					v_ptr[j] = v[j];
+
+					uv_ptr[j] = vertex->getUV(0);
 				}
 
 				// find the right opengl attribute
@@ -688,7 +690,9 @@ void RAS_OpenGLRasterizer::IndexPrimitives_3DText(RAS_MeshSlot& ms,
 						if (m_attrib[unit] == RAS_TEXCO_UV)
 							glattrib = unit;
 
-				GPU_render_text(polymat->GetMTFace(), polymat->GetDrawingMode(), mytext, mytext.Length(), polymat->GetMCol(), v[0], v[1], v[2], v[3], glattrib);
+				GPU_render_text(
+				        polymat->GetMTexPoly(), polymat->GetDrawingMode(), mytext, mytext.Length(), polymat->GetMCol(),
+				        v_ptr, uv_ptr, glattrib);
 
 				ClearCachingInfo();
 			}
@@ -1211,10 +1215,9 @@ void RAS_OpenGLRasterizer::RemoveLight(RAS_ILightObject* lightobject)
 		m_lights.erase(lit);
 }
 
-bool RAS_OpenGLRasterizer::RayHit(struct KX_ClientObjectInfo *client, KX_RayCast *result, void * const data)
+bool RAS_OpenGLRasterizer::RayHit(struct KX_ClientObjectInfo *client, KX_RayCast *result, double *oglmatrix)
 {
 	if (result->m_hitMesh) {
-		double* const oglmatrix = (double* const) data;
 
 		RAS_Polygon* poly = result->m_hitMesh->GetPolygon(result->m_hitPolygon);
 		if (!poly->IsVisible())
@@ -1299,7 +1302,7 @@ void RAS_OpenGLRasterizer::applyTransform(double* oglmatrix,int objectdrawmode )
 		                   up[0],   up[1],   up[2],   0,
 		                   0,       0,       0,       1};
 
-		glTranslated(objpos[0],objpos[1],objpos[2]);
+		glTranslatef(objpos[0],objpos[1],objpos[2]);
 		glMultMatrixd(maat);
 
 	}
@@ -1324,7 +1327,7 @@ void RAS_OpenGLRasterizer::applyTransform(double* oglmatrix,int objectdrawmode )
 			if (!physics_controller && parent)
 				physics_controller = parent->GetPhysicsController();
 
-			KX_RayCast::Callback<RAS_OpenGLRasterizer> callback(this, physics_controller, oglmatrix);
+			KX_RayCast::Callback<RAS_OpenGLRasterizer, double> callback(this, physics_controller, oglmatrix);
 			if (!KX_RayCast::RayTest(physics_environment, frompoint, topoint, callback))
 			{
 				// couldn't find something to cast the shadow on...
@@ -1359,9 +1362,13 @@ static void DisableForText()
 		for (int i=0; i<RAS_MAX_TEXCO; i++) {
 			glActiveTextureARB(GL_TEXTURE0_ARB+i);
 
-			if (GLEW_ARB_texture_cube_map)
+			if (GLEW_ARB_texture_cube_map) {
 				glDisable(GL_TEXTURE_CUBE_MAP_ARB);
-
+				glDisable(GL_TEXTURE_GEN_S);
+				glDisable(GL_TEXTURE_GEN_T);
+				glDisable(GL_TEXTURE_GEN_Q);
+				glDisable(GL_TEXTURE_GEN_R);
+			}
 			glDisable(GL_TEXTURE_2D);
 		}
 

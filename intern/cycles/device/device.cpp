@@ -31,6 +31,29 @@
 
 CCL_NAMESPACE_BEGIN
 
+/* Device Requested Features */
+
+std::ostream& operator <<(std::ostream &os,
+                          const DeviceRequestedFeatures& requested_features)
+{
+	os << "Experimental features: "
+	   << (requested_features.experimental ? "On" : "Off") << std::endl;
+	os << "Max closure count: " << requested_features.max_closure << std::endl;
+	os << "Max nodes group: " << requested_features.max_nodes_group << std::endl;
+	/* TODO(sergey): Decode bitflag into list of names. */
+	os << "Nodes features: " << requested_features.nodes_features << std::endl;
+	/* TODO(sergey): Make it utility function to convert bool to string. */
+	os << "Use hair: "
+	   << (requested_features.use_hair ? "True" : "False")  << std::endl;
+	os << "Use object motion: "
+	   << (requested_features.use_object_motion ? "True" : "False")  << std::endl;
+	os << "Use camera motion: "
+	   << (requested_features.use_camera_motion ? "True" : "False")  << std::endl;
+	os << "Use Baking: "
+	   << (requested_features.use_baking ? "True" : "False")  << std::endl;
+	return os;
+}
+
 /* Device */
 
 Device::~Device()
@@ -327,13 +350,10 @@ string Device::device_capabilities()
 #endif
 
 #ifdef WITH_OPENCL
-	/* TODO(sergey): Needs proper usable implementation. */
-	/*
 	if(device_opencl_init()) {
 		capabilities += "\nOpenCL device capabilities:\n";
 		capabilities += device_opencl_capabilities();
 	}
-	*/
 #endif
 
 	return capabilities;

@@ -54,15 +54,18 @@
 #include "DNA_windowmanager_types.h"
 #include "DNA_mesh_types.h" /* only for USE_BMESH_SAVE_AS_COMPAT */
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "PIL_time.h"
 
 #include "BLI_blenlib.h"
+#include "BLI_bitmap.h"
 #include "BLI_dial.h"
 #include "BLI_dynstr.h" /*for WM_operator_pystring */
+#include "BLI_linklist.h"
 #include "BLI_linklist_stack.h"
 #include "BLI_math.h"
+#include "BLI_memarena.h"
 #include "BLI_utildefines.h"
 #include "BLI_ghash.h"
 
@@ -74,6 +77,7 @@
 #include "BKE_brush.h"
 #include "BKE_context.h"
 #include "BKE_depsgraph.h"
+#include "BKE_icons.h"
 #include "BKE_idprop.h"
 #include "BKE_image.h"
 #include "BKE_library.h"
@@ -89,7 +93,6 @@
 
 #include "BKE_idcode.h"
 
-#include "BIF_gl.h"
 #include "BIF_glutil.h" /* for paint cursor */
 #include "BLF_api.h"
 
@@ -171,8 +174,8 @@ void WM_operatortype_append(void (*opfunc)(wmOperatorType *))
 	ot = MEM_callocN(sizeof(wmOperatorType), "operatortype");
 	ot->srna = RNA_def_struct_ptr(&BLENDER_RNA, "", &RNA_OperatorProperties);
 	/* Set the default i18n context now, so that opfunc can redefine it if needed! */
-	RNA_def_struct_translation_context(ot->srna, BLF_I18NCONTEXT_OPERATOR_DEFAULT);
-	ot->translation_context = BLF_I18NCONTEXT_OPERATOR_DEFAULT;
+	RNA_def_struct_translation_context(ot->srna, BLT_I18NCONTEXT_OPERATOR_DEFAULT);
+	ot->translation_context = BLT_I18NCONTEXT_OPERATOR_DEFAULT;
 	opfunc(ot);
 
 	if (ot->name == NULL) {
@@ -194,8 +197,8 @@ void WM_operatortype_append_ptr(void (*opfunc)(wmOperatorType *, void *), void *
 	ot = MEM_callocN(sizeof(wmOperatorType), "operatortype");
 	ot->srna = RNA_def_struct_ptr(&BLENDER_RNA, "", &RNA_OperatorProperties);
 	/* Set the default i18n context now, so that opfunc can redefine it if needed! */
-	RNA_def_struct_translation_context(ot->srna, BLF_I18NCONTEXT_OPERATOR_DEFAULT);
-	ot->translation_context = BLF_I18NCONTEXT_OPERATOR_DEFAULT;
+	RNA_def_struct_translation_context(ot->srna, BLT_I18NCONTEXT_OPERATOR_DEFAULT);
+	ot->translation_context = BLT_I18NCONTEXT_OPERATOR_DEFAULT;
 	opfunc(ot, userdata);
 	RNA_def_struct_ui_text(ot->srna, ot->name, ot->description ? ot->description : UNDOCUMENTED_OPERATOR_TIP);
 	RNA_def_struct_identifier(ot->srna, ot->idname);
@@ -405,7 +408,7 @@ wmOperatorType *WM_operatortype_append_macro(const char *idname, const char *nam
 	RNA_def_struct_ui_text(ot->srna, ot->name, ot->description);
 	RNA_def_struct_identifier(ot->srna, ot->idname);
 	/* Use i18n context from ext.srna if possible (py operators). */
-	i18n_context = ot->ext.srna ? RNA_struct_translation_context(ot->ext.srna) : BLF_I18NCONTEXT_OPERATOR_DEFAULT;
+	i18n_context = ot->ext.srna ? RNA_struct_translation_context(ot->ext.srna) : BLT_I18NCONTEXT_OPERATOR_DEFAULT;
 	RNA_def_struct_translation_context(ot->srna, i18n_context);
 	ot->translation_context = i18n_context;
 
@@ -432,8 +435,8 @@ void WM_operatortype_append_macro_ptr(void (*opfunc)(wmOperatorType *, void *), 
 		ot->description = UNDOCUMENTED_OPERATOR_TIP;
 
 	/* Set the default i18n context now, so that opfunc can redefine it if needed! */
-	RNA_def_struct_translation_context(ot->srna, BLF_I18NCONTEXT_OPERATOR_DEFAULT);
-	ot->translation_context = BLF_I18NCONTEXT_OPERATOR_DEFAULT;
+	RNA_def_struct_translation_context(ot->srna, BLT_I18NCONTEXT_OPERATOR_DEFAULT);
+	ot->translation_context = BLT_I18NCONTEXT_OPERATOR_DEFAULT;
 	opfunc(ot, userdata);
 
 	RNA_def_struct_ui_text(ot->srna, ot->name, ot->description);
@@ -543,7 +546,7 @@ void WM_operator_py_idname(char *to, const char *from)
 		/* note, we use ascii tolower instead of system tolower, because the
 		 * latter depends on the locale, and can lead to idname mismatch */
 		memcpy(to, from, sizeof(char) * ofs);
-		BLI_ascii_strtolower(to, ofs);
+		BLI_str_tolower_ascii(to, ofs);
 
 		to[ofs] = '.';
 		BLI_strncpy(to + (ofs + 1), sep + 4, OP_MAX_TYPENAME - (ofs + 1));
@@ -564,7 +567,7 @@ void WM_operator_bl_idname(char *to, const char *from)
 			int ofs = (sep - from);
 
 			memcpy(to, from, sizeof(char) * ofs);
-			BLI_ascii_strtoupper(to, ofs);
+			BLI_str_toupper_ascii(to, ofs);
 			strcpy(to + ofs, "_OT_");
 			strcpy(to + (ofs + 4), sep + 1);
 		}
@@ -1207,18 +1210,17 @@ bool WM_operator_filesel_ensure_ext_imtype(wmOperator *op, const struct ImageFor
 }
 
 /* default properties for fileselect */
-void WM_operator_properties_filesel(wmOperatorType *ot, int filter, short type, short action, short flag, short display)
+void WM_operator_properties_filesel(wmOperatorType *ot, int filter, short type, short action, short flag, short display, short sort)
 {
 	PropertyRNA *prop;
 
 	static EnumPropertyItem file_display_items[] = {
-		{FILE_DEFAULTDISPLAY, "FILE_DEFAULTDISPLAY", 0, "Default", "Automatically determine display type for files"},
-		{FILE_SHORTDISPLAY, "FILE_SHORTDISPLAY", ICON_SHORTDISPLAY, "Short List", "Display files as short list"},
-		{FILE_LONGDISPLAY, "FILE_LONGDISPLAY", ICON_LONGDISPLAY, "Long List", "Display files as a detailed list"},
-		{FILE_IMGDISPLAY, "FILE_IMGDISPLAY", ICON_IMGDISPLAY, "Thumbnails", "Display files as thumbnails"},
+		{FILE_DEFAULTDISPLAY, "DEFAULT", 0, "Default", "Automatically determine display type for files"},
+		{FILE_SHORTDISPLAY, "LIST_SHORT", ICON_SHORTDISPLAY, "Short List", "Display files as short list"},
+		{FILE_LONGDISPLAY, "LIST_LONG", ICON_LONGDISPLAY, "Long List", "Display files as a detailed list"},
+		{FILE_IMGDISPLAY, "THUMBNAIL", ICON_IMGDISPLAY, "Thumbnails", "Display files as thumbnails"},
 		{0, NULL, 0, NULL, NULL}
 	};
-
 
 	if (flag & WM_FILESEL_FILEPATH)
 		RNA_def_string_file_path(ot->srna, "filepath", NULL, FILE_MAX, "File Path", "Path to file");
@@ -1262,6 +1264,8 @@ void WM_operator_properties_filesel(wmOperatorType *ot, int filter, short type, 
 	RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 	prop = RNA_def_boolean(ot->srna, "filter_folder", (filter & FILE_TYPE_FOLDER) != 0, "Filter folders", "");
 	RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
+	prop = RNA_def_boolean(ot->srna, "filter_blenlib", (filter & FILE_TYPE_BLENDERLIB) != 0, "Filter Blender IDs", "");
+	RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 
 	prop = RNA_def_int(ot->srna, "filemode", type, FILE_LOADLIB, FILE_SPECIAL,
 	                   "File Browser Mode", "The setting for the file browser mode to load a .blend file, a library or a special file",
@@ -1280,6 +1284,10 @@ void WM_operator_properties_filesel(wmOperatorType *ot, int filter, short type, 
 
 	prop = RNA_def_enum(ot->srna, "display_type", file_display_items, display, "Display Type", "");
 	RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
+
+	prop = RNA_def_enum(ot->srna, "sort_method", rna_enum_file_sort_items, sort, "File sorting mode", "");
+	RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
+
 }
 
 static void wm_operator_properties_select_action_ex(wmOperatorType *ot, int default_action,
@@ -1313,6 +1321,22 @@ void WM_operator_properties_select_action_simple(wmOperatorType *ot, int default
 	};
 
 	wm_operator_properties_select_action_ex(ot, default_action, select_actions);
+}
+
+/**
+ * Use for all select random operators.
+ * Adds properties: percent, seed, action.
+ */
+void WM_operator_properties_select_random(wmOperatorType *ot)
+{
+	RNA_def_float_percentage(
+	        ot->srna, "percent", 50.f, 0.0f, 100.0f,
+	        "Percent", "Percentage of objects to select randomly", 0.f, 100.0f);
+	RNA_def_int(
+	        ot->srna, "seed", 0, 0, INT_MAX,
+	        "Random Seed", "Seed for the random number generator", 0, 255);
+
+	WM_operator_properties_select_action_simple(ot, SEL_SELECT);
 }
 
 void WM_operator_properties_select_all(wmOperatorType *ot)
@@ -1517,7 +1541,8 @@ static uiBlock *wm_block_create_redo(bContext *C, ARegion *ar, void *arg_op)
 
 	block = UI_block_begin(C, ar, __func__, UI_EMBOSS);
 	UI_block_flag_disable(block, UI_BLOCK_LOOP);
-	UI_block_flag_enable(block, UI_BLOCK_KEEP_OPEN | UI_BLOCK_MOVEMOUSE_QUIT);
+	/* UI_BLOCK_NUMSELECT for layer buttons */
+	UI_block_flag_enable(block, UI_BLOCK_NUMSELECT | UI_BLOCK_KEEP_OPEN | UI_BLOCK_MOVEMOUSE_QUIT);
 
 	/* if register is not enabled, the operator gets freed on OPERATOR_FINISHED
 	 * ui_apply_but_funcs_after calls ED_undo_operator_repeate_cb and crashes */
@@ -1533,6 +1558,8 @@ static uiBlock *wm_block_create_redo(bContext *C, ARegion *ar, void *arg_op)
 	if (op->type->flag & OPTYPE_MACRO) {
 		for (op = op->macro.first; op; op = op->next) {
 			uiLayoutOperatorButs(C, layout, op, NULL, 'H', UI_LAYOUT_OP_SHOW_TITLE);
+			if (op->next)
+				uiItemS(layout);
 		}
 	}
 	else {
@@ -1554,6 +1581,9 @@ typedef struct wmOpPopUp {
 /* Only invoked by OK button in popups created with wm_block_dialog_create() */
 static void dialog_exec_cb(bContext *C, void *arg1, void *arg2)
 {
+	wmWindowManager *wm = CTX_wm_manager(C);
+	wmWindow *win = CTX_wm_window(C);
+
 	wmOpPopUp *data = arg1;
 	uiBlock *block = arg2;
 
@@ -1566,7 +1596,11 @@ static void dialog_exec_cb(bContext *C, void *arg1, void *arg2)
 	/* in this case, wm_operator_ui_popup_cancel wont run */
 	MEM_freeN(data);
 
-	UI_popup_block_close(C, block);
+	/* check window before 'block->handle' incase the
+	 * popup execution closed the window and freed the block. see T44688. */
+	if (BLI_findindex(&wm->windows, win) != -1) {
+		UI_popup_block_close(C, win, block);
+	}
 }
 
 static void dialog_check_cb(bContext *C, void *op_ptr, void *UNUSED(arg))
@@ -1597,7 +1631,7 @@ static uiBlock *wm_block_dialog_create(bContext *C, ARegion *ar, void *userData)
 
 	/* intentionally don't use 'UI_BLOCK_MOVEMOUSE_QUIT', some dialogues have many items
 	 * where quitting by accident is very annoying */
-	UI_block_flag_enable(block, UI_BLOCK_KEEP_OPEN);
+	UI_block_flag_enable(block, UI_BLOCK_KEEP_OPEN | UI_BLOCK_NUMSELECT);
 
 	layout = UI_block_layout(block, UI_LAYOUT_VERTICAL, UI_LAYOUT_PANEL, 0, 0, data->width, data->height, 0, style);
 	
@@ -1840,21 +1874,16 @@ static void WM_OT_operator_defaults(wmOperatorType *ot)
 
 static void wm_block_splash_close(bContext *C, void *arg_block, void *UNUSED(arg))
 {
-	UI_popup_block_close(C, arg_block);
+	wmWindow *win = CTX_wm_window(C);
+	UI_popup_block_close(C, win, arg_block);
 }
 
 static uiBlock *wm_block_create_splash(bContext *C, ARegion *ar, void *arg_unused);
 
-/* XXX: hack to refresh splash screen with updated preset menu name,
- * since popup blocks don't get regenerated like panels do */
-static void wm_block_splash_refreshmenu(bContext *UNUSED(C), void *UNUSED(arg_block), void *UNUSED(arg))
+static void wm_block_splash_refreshmenu(bContext *C, void *UNUSED(arg_block), void *UNUSED(arg))
 {
-	/* ugh, causes crashes in other buttons, disabling for now until 
-	 * a better fix */
-#if 0
-	UI_popup_block_close(C, arg_block);
-	UI_popup_block_invoke(C, wm_block_create_splash, NULL);
-#endif
+	ARegion *ar_menu = CTX_wm_menu(C);
+	ED_region_tag_refresh_ui(ar_menu);
 }
 
 static int wm_resource_check_prev(void)
@@ -1936,7 +1965,7 @@ static uiBlock *wm_block_create_splash(bContext *C, ARegion *ar, void *UNUSED(ar
 	/* note on UI_BLOCK_NO_WIN_CLIP, the window size is not always synchronized
 	 * with the OS when the splash shows, window clipping in this case gives
 	 * ugly results and clipping the splash isn't useful anyway, just disable it [#32938] */
-	UI_block_flag_enable(block, UI_BLOCK_KEEP_OPEN | UI_BLOCK_NO_WIN_CLIP);
+	UI_block_flag_enable(block, UI_BLOCK_LOOP | UI_BLOCK_KEEP_OPEN | UI_BLOCK_NO_WIN_CLIP);
 
 	/* XXX splash scales with pixelsize, should become widget-units */
 	but = uiDefBut(block, UI_BTYPE_IMAGE, 0, "", 0, 0.5f * U.widget_unit, U.pixelsize * 501, U.pixelsize * 282, ibuf, 0.0, 0.0, 0, 0, ""); /* button owns the imbuf now */
@@ -2218,6 +2247,17 @@ static int wm_operator_winactive_normal(bContext *C)
 	return 1;
 }
 
+/* included for script-access */
+static void WM_OT_window_close(wmOperatorType *ot)
+{
+	ot->name = "Close Window";
+	ot->idname = "WM_OT_window_close";
+	ot->description = "Close the current Blender window";
+
+	ot->exec = wm_window_close_exec;
+	ot->poll = WM_operator_winactive;
+}
+
 static void WM_OT_window_duplicate(wmOperatorType *ot)
 {
 	ot->name = "Duplicate Window";
@@ -2296,7 +2336,7 @@ static void WM_OT_read_history(wmOperatorType *ot)
 	ot->description = "Reloads history and bookmarks";
 
 	ot->invoke = WM_operator_confirm;
-	ot->exec = wm_history_read_exec;
+	ot->exec = wm_history_file_read_exec;
 
 	/* this operator is only used for loading settings from a previous blender install */
 	ot->flag = OPTYPE_INTERNAL;
@@ -2489,7 +2529,7 @@ static void WM_OT_open_mainfile(wmOperatorType *ot)
 	/* omit window poll so this can work in background mode */
 
 	WM_operator_properties_filesel(ot, FILE_TYPE_FOLDER | FILE_TYPE_BLENDER, FILE_BLENDER, FILE_OPENFILE,
-	                               WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY);
+	                               WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);
 
 	RNA_def_boolean(ot->srna, "load_ui", true, "Load UI", "Load user interface setup in the .blend file");
 	RNA_def_boolean(ot->srna, "use_scripts", true, "Trusted Source",
@@ -2580,43 +2620,180 @@ static int wm_link_append_invoke(bContext *C, wmOperator *op, const wmEvent *UNU
 
 static short wm_link_append_flag(wmOperator *op)
 {
+	PropertyRNA *prop;
 	short flag = 0;
 
-	if (RNA_boolean_get(op->ptr, "autoselect")) flag |= FILE_AUTOSELECT;
-	if (RNA_boolean_get(op->ptr, "active_layer")) flag |= FILE_ACTIVELAY;
-	if (RNA_struct_find_property(op->ptr, "relative_path") && RNA_boolean_get(op->ptr, "relative_path")) flag |= FILE_RELPATH;
-	if (RNA_boolean_get(op->ptr, "link")) flag |= FILE_LINK;
-	if (RNA_boolean_get(op->ptr, "instance_groups")) flag |= FILE_GROUP_INSTANCE;
+	if (RNA_boolean_get(op->ptr, "autoselect"))
+		flag |= FILE_AUTOSELECT;
+	if (RNA_boolean_get(op->ptr, "active_layer"))
+		flag |= FILE_ACTIVELAY;
+	if ((prop = RNA_struct_find_property(op->ptr, "relative_path")) && RNA_property_boolean_get(op->ptr, prop))
+		flag |= FILE_RELPATH;
+	if (RNA_boolean_get(op->ptr, "link"))
+		flag |= FILE_LINK;
+	if (RNA_boolean_get(op->ptr, "instance_groups"))
+		flag |= FILE_GROUP_INSTANCE;
 
 	return flag;
+}
+
+typedef struct WMLinkAppendDataItem {
+	char *name;
+	BLI_bitmap *libraries;  /* All libs (from WMLinkAppendData.libraries) to try to load this ID from. */
+	short idcode;
+
+	ID *new_id;
+	void *customdata;
+} WMLinkAppendDataItem;
+
+typedef struct WMLinkAppendData {
+	LinkNodePair libraries;
+	LinkNodePair items;
+	int num_libraries;
+	int num_items;
+	short flag;
+
+	/* Internal 'private' data */
+	MemArena *memarena;
+} WMLinkAppendData;
+
+static WMLinkAppendData *wm_link_append_data_new(const int flag)
+{
+	MemArena *ma = BLI_memarena_new(BLI_MEMARENA_STD_BUFSIZE, __func__);
+	WMLinkAppendData *lapp_data = BLI_memarena_calloc(ma, sizeof(*lapp_data));
+
+	lapp_data->flag = flag;
+	lapp_data->memarena = ma;
+
+	return lapp_data;
+}
+
+static void wm_link_append_data_free(WMLinkAppendData *lapp_data)
+{
+	BLI_memarena_free(lapp_data->memarena);
+}
+
+/* WARNING! *Never* call wm_link_append_data_library_add() after having added some items! */
+
+static void wm_link_append_data_library_add(WMLinkAppendData *lapp_data, const char *libname)
+{
+	size_t len = strlen(libname) + 1;
+	char *libpath = BLI_memarena_alloc(lapp_data->memarena, len);
+
+	BLI_strncpy(libpath, libname, len);
+	BLI_linklist_append_arena(&lapp_data->libraries, libpath, lapp_data->memarena);
+	lapp_data->num_libraries++;
+}
+
+static WMLinkAppendDataItem *wm_link_append_data_item_add(
+        WMLinkAppendData *lapp_data, const char *idname, const short idcode, void *customdata)
+{
+	WMLinkAppendDataItem *item = BLI_memarena_alloc(lapp_data->memarena, sizeof(*item));
+	size_t len = strlen(idname) + 1;
+
+	item->name = BLI_memarena_alloc(lapp_data->memarena, len);
+	BLI_strncpy(item->name, idname, len);
+	item->idcode = idcode;
+	item->libraries = BLI_BITMAP_NEW_MEMARENA(lapp_data->memarena, lapp_data->num_libraries);
+
+	item->new_id = NULL;
+	item->customdata = customdata;
+
+	BLI_linklist_append_arena(&lapp_data->items, item, lapp_data->memarena);
+	lapp_data->num_items++;
+
+	return item;
+}
+
+static void wm_link_do(
+        WMLinkAppendData *lapp_data, ReportList *reports, Main *bmain, Scene *scene, View3D *v3d)
+{
+	Main *mainl;
+	BlendHandle *bh;
+	Library *lib;
+
+	const int flag = lapp_data->flag;
+
+	LinkNode *liblink, *itemlink;
+	int lib_idx, item_idx;
+
+	BLI_assert(lapp_data->num_items && lapp_data->num_libraries);
+
+	for (lib_idx = 0, liblink = lapp_data->libraries.list; liblink; lib_idx++, liblink = liblink->next) {
+		char *libname = liblink->link;
+
+		bh = BLO_blendhandle_from_file(libname, reports);
+
+		if (bh == NULL) {
+			/* Unlikely since we just browsed it, but possible
+			 * Error reports will have been made by BLO_blendhandle_from_file() */
+			continue;
+		}
+
+		/* here appending/linking starts */
+		mainl = BLO_library_link_begin(bmain, &bh, libname);
+		lib = mainl->curlib;
+		BLI_assert(lib);
+		UNUSED_VARS_NDEBUG(lib);
+
+		if (mainl->versionfile < 250) {
+			BKE_reportf(reports, RPT_WARNING,
+			            "Linking or appending from a very old .blend file format (%d.%d), no animation conversion will "
+			            "be done! You may want to re-save your lib file with current Blender",
+			            mainl->versionfile, mainl->subversionfile);
+		}
+
+		/* For each lib file, we try to link all items belonging to that lib,
+		 * and tag those successful to not try to load them again with the other libs. */
+		for (item_idx = 0, itemlink = lapp_data->items.list; itemlink; item_idx++, itemlink = itemlink->next) {
+			WMLinkAppendDataItem *item = itemlink->link;
+			ID *new_id;
+
+			if (!BLI_BITMAP_TEST(item->libraries, lib_idx)) {
+				continue;
+			}
+
+			new_id = BLO_library_link_named_part_ex(mainl, &bh, item->idcode, item->name, flag, scene, v3d);
+			if (new_id) {
+				/* If the link is sucessful, clear item's libs 'todo' flags.
+				 * This avoids trying to link same item with other libraries to come. */
+				BLI_BITMAP_SET_ALL(item->libraries, false, lapp_data->num_libraries);
+				item->new_id = new_id;
+			}
+		}
+
+		BLO_library_link_end(mainl, &bh, flag, scene, v3d);
+		BLO_blendhandle_close(bh);
+	}
 }
 
 static int wm_link_append_exec(bContext *C, wmOperator *op)
 {
 	Main *bmain = CTX_data_main(C);
 	Scene *scene = CTX_data_scene(C);
-	Main *mainl = NULL;
-	BlendHandle *bh;
-	Library *lib;
 	PropertyRNA *prop;
-	char name[FILE_MAX], dir[FILE_MAX], libname[FILE_MAX], group[BLO_GROUP_MAX];
-	int idcode, totfiles = 0;
+	WMLinkAppendData *lapp_data;
+	char path[FILE_MAX_LIBEXTRA], root[FILE_MAXDIR], libname[FILE_MAX], relname[FILE_MAX];
+	char *group, *name;
+	int totfiles = 0;
 	short flag;
 
-	RNA_string_get(op->ptr, "filename", name);
-	RNA_string_get(op->ptr, "directory", dir);
+	RNA_string_get(op->ptr, "filename", relname);
+	RNA_string_get(op->ptr, "directory", root);
+
+	BLI_join_dirfile(path, sizeof(path), root, relname);
 
 	/* test if we have a valid data */
-	if (BLO_is_a_library(dir, libname, group) == 0) {
-		BKE_report(op->reports, RPT_ERROR, "Not a library");
+	if (!BLO_library_path_explode(path, libname, &group, &name)) {
+		BKE_reportf(op->reports, RPT_ERROR, "'%s': not a library", path);
 		return OPERATOR_CANCELLED;
 	}
-	else if (group[0] == 0) {
-		BKE_report(op->reports, RPT_ERROR, "Nothing indicated");
+	else if (!group) {
+		BKE_reportf(op->reports, RPT_ERROR, "'%s': nothing indicated", path);
 		return OPERATOR_CANCELLED;
 	}
 	else if (BLI_path_cmp(bmain->name, libname) == 0) {
-		BKE_report(op->reports, RPT_ERROR, "Cannot use current file as library");
+		BKE_reportf(op->reports, RPT_ERROR, "'%s': cannot use current file as library", path);
 		return OPERATOR_CANCELLED;
 	}
 
@@ -2625,84 +2802,113 @@ static int wm_link_append_exec(bContext *C, wmOperator *op)
 	if (prop) {
 		totfiles = RNA_property_collection_length(op->ptr, prop);
 		if (totfiles == 0) {
-			if (name[0] == '\0') {
-				BKE_report(op->reports, RPT_ERROR, "Nothing indicated");
+			if (!name) {
+				BKE_reportf(op->reports, RPT_ERROR, "'%s': nothing indicated", path);
 				return OPERATOR_CANCELLED;
 			}
 		}
 	}
-	else if (name[0] == '\0') {
-		BKE_report(op->reports, RPT_ERROR, "Nothing indicated");
+	else if (!name) {
+		BKE_reportf(op->reports, RPT_ERROR, "'%s': nothing indicated", path);
 		return OPERATOR_CANCELLED;
 	}
 
-	bh = BLO_blendhandle_from_file(libname, op->reports);
-
-	if (bh == NULL) {
-		/* unlikely since we just browsed it, but possible
-		 * error reports will have been made by BLO_blendhandle_from_file() */
-		return OPERATOR_CANCELLED;
-	}
-
-
-	/* from here down, no error returns */
-
-	idcode = BKE_idcode_from_name(group);
-
-	/* now we have or selected, or an indicated file */
-	if (RNA_boolean_get(op->ptr, "autoselect"))
-		BKE_scene_base_deselect_all(scene);
-
-	
 	flag = wm_link_append_flag(op);
 
 	/* sanity checks for flag */
-	if (scene->id.lib && (flag & FILE_GROUP_INSTANCE)) {
-		/* TODO, user never gets this message */
-		BKE_reportf(op->reports, RPT_WARNING, "Scene '%s' is linked, group instance disabled", scene->id.name + 2);
+	if (scene && scene->id.lib) {
+		BKE_reportf(op->reports, RPT_WARNING,
+		            "Scene '%s' is linked, instantiation of objects & groups is disabled", scene->id.name + 2);
 		flag &= ~FILE_GROUP_INSTANCE;
+		scene = NULL;
 	}
 
+	/* from here down, no error returns */
 
+	if (scene && RNA_boolean_get(op->ptr, "autoselect")) {
+		BKE_scene_base_deselect_all(scene);
+	}
+	
 	/* tag everything, all untagged data can be made local
 	 * its also generally useful to know what is new
 	 *
-	 * take extra care BKE_main_id_flag_all(LIB_LINK_TAG, false) is called after! */
-	BKE_main_id_flag_all(bmain, LIB_PRE_EXISTING, 1);
+	 * take extra care BKE_main_id_flag_all(bmain, LIB_PRE_EXISTING, false) is called after! */
+	BKE_main_id_flag_all(bmain, LIB_PRE_EXISTING, true);
 
-	/* here appending/linking starts */
-	mainl = BLO_library_append_begin(bmain, &bh, libname);
-	lib = mainl->curlib;
-	BLI_assert(lib);
+	/* We define our working data...
+	 * Note that here, each item 'uses' one library, and only one. */
+	lapp_data = wm_link_append_data_new(flag);
+	if (totfiles != 0) {
+		GHash *libraries = BLI_ghash_new(BLI_ghashutil_strhash_p, BLI_ghashutil_strcmp, __func__);
+		int lib_idx = 0;
 
-	if (mainl->versionfile < 250) {
-		BKE_reportf(op->reports, RPT_WARNING,
-		            "Linking or appending from a very old .blend file format (%d.%d), no animation conversion will "
-		            "be done! You may want to re-save your lib file with current Blender",
-		            mainl->versionfile, mainl->subversionfile);
-	}
-
-	if (totfiles == 0) {
-		BLO_library_append_named_part_ex(C, mainl, &bh, name, idcode, flag);
-	}
-	else {
 		RNA_BEGIN (op->ptr, itemptr, "files")
 		{
-			RNA_string_get(&itemptr, "name", name);
-			BLO_library_append_named_part_ex(C, mainl, &bh, name, idcode, flag);
+			RNA_string_get(&itemptr, "name", relname);
+
+			BLI_join_dirfile(path, sizeof(path), root, relname);
+
+			if (BLO_library_path_explode(path, libname, &group, &name)) {
+				if (!group || !name) {
+					continue;
+				}
+
+				if (!BLI_ghash_haskey(libraries, libname)) {
+					BLI_ghash_insert(libraries, BLI_strdup(libname), SET_INT_IN_POINTER(lib_idx));
+					lib_idx++;
+					wm_link_append_data_library_add(lapp_data, libname);
+				}
+			}
 		}
 		RNA_END;
+
+		RNA_BEGIN (op->ptr, itemptr, "files")
+		{
+			RNA_string_get(&itemptr, "name", relname);
+
+			BLI_join_dirfile(path, sizeof(path), root, relname);
+
+			if (BLO_library_path_explode(path, libname, &group, &name)) {
+				WMLinkAppendDataItem *item;
+				if (!group || !name) {
+					printf("skipping %s\n", path);
+					continue;
+				}
+
+				lib_idx = GET_INT_FROM_POINTER(BLI_ghash_lookup(libraries, libname));
+
+				item = wm_link_append_data_item_add(lapp_data, name, BKE_idcode_from_name(group), NULL);
+				BLI_BITMAP_ENABLE(item->libraries, lib_idx);
+			}
+		}
+		RNA_END;
+
+		BLI_ghash_free(libraries, MEM_freeN, NULL);
 	}
-	BLO_library_append_end(C, mainl, &bh, idcode, flag);
-	
+	else {
+		WMLinkAppendDataItem *item;
+
+		wm_link_append_data_library_add(lapp_data, libname);
+		item = wm_link_append_data_item_add(lapp_data, name, BKE_idcode_from_name(group), NULL);
+		BLI_BITMAP_ENABLE(item->libraries, 0);
+	}
+
+	/* XXX We'd need re-entrant locking on Main for this to work... */
+	/* BKE_main_lock(bmain); */
+
+	wm_link_do(lapp_data, op->reports, bmain, scene, CTX_wm_view3d(C));
+
+	/* BKE_main_unlock(bmain); */
+
+	wm_link_append_data_free(lapp_data);
+
 	/* mark all library linked objects to be updated */
 	BKE_main_lib_objects_recalc_all(bmain);
 	IMB_colormanagement_check_file_config(bmain);
 
 	/* append, rather than linking */
 	if ((flag & FILE_LINK) == 0) {
-		BLI_assert(BLI_findindex(&bmain->library, lib) != -1);
-		BKE_library_make_local(bmain, lib, true);
+		BKE_library_make_local(bmain, NULL, true);
 	}
 
 	/* important we unset, otherwise these object wont
@@ -2714,10 +2920,9 @@ static int wm_link_append_exec(bContext *C, wmOperator *op)
 	
 	/* free gpu materials, some materials depend on existing objects, such as lamps so freeing correctly refreshes */
 	GPU_materials_free();
-	BLO_blendhandle_close(bh);
 
 	/* XXX TODO: align G.lib with other directory storage (like last opened image etc...) */
-	BLI_strncpy(G.lib, dir, FILE_MAX);
+	BLI_strncpy(G.lib, root, FILE_MAX);
 
 	WM_event_add_notifier(C, NC_WINDOW, NULL);
 
@@ -2757,9 +2962,9 @@ static void WM_OT_link(wmOperatorType *ot)
 	ot->flag |= OPTYPE_UNDO;
 
 	WM_operator_properties_filesel(
-	        ot, FILE_TYPE_FOLDER | FILE_TYPE_BLENDER, FILE_LOADLIB, FILE_OPENFILE,
+	        ot, FILE_TYPE_FOLDER | FILE_TYPE_BLENDER | FILE_TYPE_BLENDERLIB, FILE_LOADLIB, FILE_OPENFILE,
 	        WM_FILESEL_FILEPATH | WM_FILESEL_DIRECTORY | WM_FILESEL_FILENAME | WM_FILESEL_RELPATH | WM_FILESEL_FILES,
-	        FILE_DEFAULTDISPLAY);
+	        FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);
 	
 	wm_link_append_properties_common(ot, true);
 }
@@ -2777,9 +2982,9 @@ static void WM_OT_append(wmOperatorType *ot)
 	ot->flag |= OPTYPE_UNDO;
 
 	WM_operator_properties_filesel(
-		ot, FILE_TYPE_FOLDER | FILE_TYPE_BLENDER, FILE_LOADLIB, FILE_OPENFILE,
+		ot, FILE_TYPE_FOLDER | FILE_TYPE_BLENDER | FILE_TYPE_BLENDERLIB, FILE_LOADLIB, FILE_OPENFILE,
 		WM_FILESEL_FILEPATH | WM_FILESEL_DIRECTORY | WM_FILESEL_FILENAME | WM_FILESEL_FILES,
-		FILE_DEFAULTDISPLAY);
+		FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);
 
 	wm_link_append_properties_common(ot, false);
 }
@@ -2870,7 +3075,7 @@ static void WM_OT_recover_auto_save(wmOperatorType *ot)
 	ot->invoke = wm_recover_auto_save_invoke;
 
 	WM_operator_properties_filesel(ot, FILE_TYPE_BLENDER, FILE_BLENDER, FILE_OPENFILE,
-	                               WM_FILESEL_FILEPATH, FILE_LONGDISPLAY);
+	                               WM_FILESEL_FILEPATH, FILE_LONGDISPLAY, FILE_SORT_TIME);
 }
 
 /* *************** save file as **************** */
@@ -3003,7 +3208,7 @@ static void WM_OT_save_as_mainfile(wmOperatorType *ot)
 	/* omit window poll so this can work in background mode */
 
 	WM_operator_properties_filesel(ot, FILE_TYPE_FOLDER | FILE_TYPE_BLENDER, FILE_BLENDER, FILE_SAVE,
-	                               WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY);
+	                               WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);
 	RNA_def_boolean(ot->srna, "compress", false, "Compress", "Write compressed .blend file");
 	RNA_def_boolean(ot->srna, "relative_remap", true, "Remap Relative",
 	                "Remap relative paths when saving in a different directory");
@@ -3070,7 +3275,7 @@ static void WM_OT_save_mainfile(wmOperatorType *ot)
 	/* omit window poll so this can work in background mode */
 	
 	WM_operator_properties_filesel(ot, FILE_TYPE_FOLDER | FILE_TYPE_BLENDER, FILE_BLENDER, FILE_SAVE,
-	                               WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY);
+	                               WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);
 	RNA_def_boolean(ot->srna, "compress", false, "Compress", "Write compressed .blend file");
 	RNA_def_boolean(ot->srna, "relative_remap", false, "Remap Relative",
 	                "Remap relative paths when saving in a different directory");
@@ -3118,7 +3323,7 @@ static int wm_console_toggle_exec(bContext *UNUSED(C), wmOperator *UNUSED(op))
 static void WM_OT_console_toggle(wmOperatorType *ot)
 {
 	/* XXX Have to mark these for xgettext, as under linux they do not exists... */
-	ot->name = CTX_N_(BLF_I18NCONTEXT_OPERATOR_DEFAULT, "Toggle System Console");
+	ot->name = CTX_N_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Toggle System Console");
 	ot->idname = "WM_OT_console_toggle";
 	ot->description = N_("Toggle System Console");
 	
@@ -4253,8 +4458,7 @@ static int radial_control_invoke(bContext *C, wmOperator *op, const wmEvent *eve
 {
 	wmWindowManager *wm;
 	RadialControl *rc;
-	int min_value_int, max_value_int, step_int;
-	float step_float, precision;
+
 
 	if (!(op->customdata = rc = MEM_callocN(sizeof(RadialControl), "RadialControl")))
 		return OPERATOR_CANCELLED;
@@ -4267,17 +4471,29 @@ static int radial_control_invoke(bContext *C, wmOperator *op, const wmEvent *eve
 	/* get type, initial, min, and max values of the property */
 	switch ((rc->type = RNA_property_type(rc->prop))) {
 		case PROP_INT:
-			rc->initial_value = RNA_property_int_get(&rc->ptr, rc->prop);
-			RNA_property_int_ui_range(&rc->ptr, rc->prop, &min_value_int,
-			                          &max_value_int, &step_int);
-			rc->min_value = min_value_int;
-			rc->max_value = max_value_int;
+		{
+			int value, min, max, step;
+
+			value = RNA_property_int_get(&rc->ptr, rc->prop);
+			RNA_property_int_ui_range(&rc->ptr, rc->prop, &min, &max, &step);
+
+			rc->initial_value = value;
+			rc->min_value = min_ii(value, min);
+			rc->max_value = max_ii(value, max);
 			break;
+		}
 		case PROP_FLOAT:
-			rc->initial_value = RNA_property_float_get(&rc->ptr, rc->prop);
-			RNA_property_float_ui_range(&rc->ptr, rc->prop, &rc->min_value,
-			                            &rc->max_value, &step_float, &precision);
+		{
+			float value, min, max, step, precision;
+
+			value = RNA_property_float_get(&rc->ptr, rc->prop);
+			RNA_property_float_ui_range(&rc->ptr, rc->prop, &min, &max, &step, &precision);
+
+			rc->initial_value = value;
+			rc->min_value = min_ff(value, min);
+			rc->max_value = max_ff(value, max);
 			break;
+		}
 		default:
 			BKE_report(op->reports, RPT_ERROR, "Property must be an integer or a float");
 			MEM_freeN(rc);
@@ -4364,7 +4580,7 @@ static void radial_control_cancel(bContext *C, wmOperator *op)
 static int radial_control_modal(bContext *C, wmOperator *op, const wmEvent *event)
 {
 	RadialControl *rc = op->customdata;
-	float new_value, dist, zoom[2];
+	float new_value, dist = 0.0f, zoom[2];
 	float delta[2], ret = OPERATOR_RUNNING_MODAL;
 	bool snap;
 	float angle_precision = 0.0f;
@@ -4473,7 +4689,7 @@ static int radial_control_modal(bContext *C, wmOperator *op, const wmEvent *even
 							break;
 						case PROP_PERCENTAGE:
 							new_value = ((dist - WM_RADIAL_CONTROL_DISPLAY_MIN_SIZE) / WM_RADIAL_CONTROL_DISPLAY_WIDTH) * 100.0f;
-							if (snap) new_value = ((int)(new_value + 2.5)) / 5 * 5;
+							if (snap) new_value = ((int)(new_value + 2.5f)) / 5 * 5;
 							break;
 						case PROP_FACTOR:
 							new_value = (WM_RADIAL_CONTROL_DISPLAY_SIZE - dist) / WM_RADIAL_CONTROL_DISPLAY_WIDTH;
@@ -4607,113 +4823,137 @@ static void redraw_timer_window_swap(bContext *C)
 	CTX_wm_window_set(C, win);  /* XXX context manipulation warning! */
 }
 
+enum {
+	eRTDrawRegion = 0,
+	eRTDrawRegionSwap = 1,
+	eRTDrawWindow = 2,
+	eRTDrawWindowSwap = 3,
+	eRTAnimationStep = 4,
+	eRTAnimationPlay = 5,
+	eRTUndo = 6,
+};
+
 static EnumPropertyItem redraw_timer_type_items[] = {
-	{0, "DRAW", 0, "Draw Region", "Draw Region"},
-	{1, "DRAW_SWAP", 0, "Draw Region + Swap", "Draw Region and Swap"},
-	{2, "DRAW_WIN", 0, "Draw Window", "Draw Window"},
-	{3, "DRAW_WIN_SWAP", 0, "Draw Window + Swap", "Draw Window and Swap"},
-	{4, "ANIM_STEP", 0, "Anim Step", "Animation Steps"},
-	{5, "ANIM_PLAY", 0, "Anim Play", "Animation Playback"},
-	{6, "UNDO", 0, "Undo/Redo", "Undo/Redo"},
+	{eRTDrawRegion, "DRAW", 0, "Draw Region", "Draw Region"},
+	{eRTDrawRegionSwap, "DRAW_SWAP", 0, "Draw Region + Swap", "Draw Region and Swap"},
+	{eRTDrawWindow, "DRAW_WIN", 0, "Draw Window", "Draw Window"},
+	{eRTDrawWindowSwap, "DRAW_WIN_SWAP", 0, "Draw Window + Swap", "Draw Window and Swap"},
+	{eRTAnimationStep, "ANIM_STEP", 0, "Anim Step", "Animation Steps"},
+	{eRTAnimationPlay, "ANIM_PLAY", 0, "Anim Play", "Animation Playback"},
+	{eRTUndo, "UNDO", 0, "Undo/Redo", "Undo/Redo"},
 	{0, NULL, 0, NULL, NULL}
 };
 
-static int redraw_timer_exec(bContext *C, wmOperator *op)
+
+static void redraw_timer_step(
+        bContext *C, Main *bmain, Scene *scene,
+        wmWindow *win, ScrArea *sa, ARegion *ar,
+        const int type, const int cfra)
 {
-	ARegion *ar = CTX_wm_region(C);
-	double stime = PIL_check_seconds_timer();
-	int type = RNA_enum_get(op->ptr, "type");
-	int iter = RNA_int_get(op->ptr, "iterations");
-	int a;
-	float time;
-	const char *infostr = "";
-	
-	WM_cursor_wait(1);
-
-	for (a = 0; a < iter; a++) {
-		if (type == 0) {
-			if (ar) {
-				ED_region_do_draw(C, ar);
-				ar->do_draw = false;
-			}
+	if (type == eRTDrawRegion) {
+		if (ar) {
+			ED_region_do_draw(C, ar);
+			ar->do_draw = false;
 		}
-		else if (type == 1) {
-			wmWindow *win = CTX_wm_window(C);
-			CTX_wm_menu_set(C, NULL);
-		
-			ED_region_tag_redraw(ar);
-			wm_draw_update(C);
-			
-			CTX_wm_window_set(C, win);  /* XXX context manipulation warning! */
-		}
-		else if (type == 2) {
-			wmWindow *win = CTX_wm_window(C);
-			ScrArea *sa;
-			
-			ScrArea *sa_back = CTX_wm_area(C);
-			ARegion *ar_back = CTX_wm_region(C);
+	}
+	else if (type == eRTDrawRegionSwap) {
+		CTX_wm_menu_set(C, NULL);
 
-			CTX_wm_menu_set(C, NULL);
-			
-			for (sa = CTX_wm_screen(C)->areabase.first; sa; sa = sa->next) {
-				ARegion *ar_iter;
-				CTX_wm_area_set(C, sa);
+		ED_region_tag_redraw(ar);
+		wm_draw_update(C);
 
-				for (ar_iter = sa->regionbase.first; ar_iter; ar_iter = ar_iter->next) {
-					if (ar_iter->swinid) {
-						CTX_wm_region_set(C, ar_iter);
-						ED_region_do_draw(C, ar_iter);
-						ar->do_draw = false;
-					}
+		CTX_wm_window_set(C, win);  /* XXX context manipulation warning! */
+	}
+	else if (type == eRTDrawWindow) {
+		ScrArea *sa_iter;
+
+		CTX_wm_menu_set(C, NULL);
+
+		for (sa_iter = win->screen->areabase.first; sa_iter; sa_iter = sa_iter->next) {
+			ARegion *ar_iter;
+			CTX_wm_area_set(C, sa_iter);
+
+			for (ar_iter = sa_iter->regionbase.first; ar_iter; ar_iter = ar_iter->next) {
+				if (ar_iter->swinid) {
+					CTX_wm_region_set(C, ar_iter);
+					ED_region_do_draw(C, ar_iter);
+					ar_iter->do_draw = false;
 				}
 			}
-
-			CTX_wm_window_set(C, win);  /* XXX context manipulation warning! */
-
-			CTX_wm_area_set(C, sa_back);
-			CTX_wm_region_set(C, ar_back);
 		}
-		else if (type == 3) {
+
+		CTX_wm_window_set(C, win);  /* XXX context manipulation warning! */
+
+		CTX_wm_area_set(C, sa);
+		CTX_wm_region_set(C, ar);
+	}
+	else if (type == eRTDrawWindowSwap) {
+		redraw_timer_window_swap(C);
+	}
+	else if (type == eRTAnimationStep) {
+		scene->r.cfra += (cfra == scene->r.cfra) ? 1 : -1;
+		BKE_scene_update_for_newframe(bmain->eval_ctx, bmain, scene, scene->lay);
+	}
+	else if (type == eRTAnimationPlay) {
+		/* play anim, return on same frame as started with */
+		int tot = (scene->r.efra - scene->r.sfra) + 1;
+
+		while (tot--) {
+			/* todo, ability to escape! */
+			scene->r.cfra++;
+			if (scene->r.cfra > scene->r.efra)
+				scene->r.cfra = scene->r.sfra;
+
+			BKE_scene_update_for_newframe(bmain->eval_ctx, bmain, scene, scene->lay);
 			redraw_timer_window_swap(C);
 		}
-		else if (type == 4) {
-			Main *bmain = CTX_data_main(C);
-			Scene *scene = CTX_data_scene(C);
-			
-			if (a & 1) scene->r.cfra--;
-			else scene->r.cfra++;
-			BKE_scene_update_for_newframe(bmain->eval_ctx, bmain, scene, scene->lay);
-		}
-		else if (type == 5) {
+	}
+	else { /* eRTUndo */
+		ED_undo_pop(C);
+		ED_undo_redo(C);
+	}
+}
 
-			/* play anim, return on same frame as started with */
-			Main *bmain = CTX_data_main(C);
-			Scene *scene = CTX_data_scene(C);
-			int tot = (scene->r.efra - scene->r.sfra) + 1;
+static int redraw_timer_exec(bContext *C, wmOperator *op)
+{
+	Main *bmain = CTX_data_main(C);
+	Scene *scene = CTX_data_scene(C);
+	wmWindow *win = CTX_wm_window(C);
+	ScrArea *sa = CTX_wm_area(C);
+	ARegion *ar = CTX_wm_region(C);
+	double time_start, time_delta;
+	const int type = RNA_enum_get(op->ptr, "type");
+	const int iter = RNA_int_get(op->ptr, "iterations");
+	const double time_limit = (double)RNA_float_get(op->ptr, "time_limit");
+	const int cfra = scene->r.cfra;
+	int a, iter_steps = 0;
+	const char *infostr = "";
 
-			while (tot--) {
-				/* todo, ability to escape! */
-				scene->r.cfra++;
-				if (scene->r.cfra > scene->r.efra)
-					scene->r.cfra = scene->r.sfra;
+	WM_cursor_wait(1);
 
-				BKE_scene_update_for_newframe(bmain->eval_ctx, bmain, scene, scene->lay);
-				redraw_timer_window_swap(C);
+	time_start = PIL_check_seconds_timer();
+
+	for (a = 0; a < iter; a++) {
+		redraw_timer_step(C, bmain, scene, win, sa, ar, type, cfra);
+		iter_steps += 1;
+
+		if (time_limit != 0.0) {
+			if ((PIL_check_seconds_timer() - time_start) > time_limit) {
+				break;
 			}
-		}
-		else { /* 6 */
-			ED_undo_pop(C);
-			ED_undo_redo(C);
+			a = 0;
 		}
 	}
 	
-	time = (float)((PIL_check_seconds_timer() - stime) * 1000);
+	time_delta = (PIL_check_seconds_timer() - time_start) * 1000;
 
 	RNA_enum_description(redraw_timer_type_items, type, &infostr);
 
 	WM_cursor_wait(0);
 
-	BKE_reportf(op->reports, RPT_WARNING, "%d x %s: %.2f ms,  average: %.4f", iter, infostr, time, time / iter);
+	BKE_reportf(op->reports, RPT_WARNING,
+	            "%d x %s: %.4f ms, average: %.8f ms",
+	            iter_steps, infostr, time_delta, time_delta / iter_steps);
 	
 	return OPERATOR_FINISHED;
 }
@@ -4728,8 +4968,10 @@ static void WM_OT_redraw_timer(wmOperatorType *ot)
 	ot->exec = redraw_timer_exec;
 	ot->poll = WM_operator_winactive;
 
-	ot->prop = RNA_def_enum(ot->srna, "type", redraw_timer_type_items, 0, "Type", "");
+	ot->prop = RNA_def_enum(ot->srna, "type", redraw_timer_type_items, eRTDrawRegion, "Type", "");
 	RNA_def_int(ot->srna, "iterations", 10, 1, INT_MAX, "Iterations", "Number of times to redraw", 1, 1000);
+	RNA_def_float(ot->srna, "time_limit", 0.0, 0.0, FLT_MAX,
+	              "Time Limit", "Seconds to run the test for (override iterations)", 0.0, 60.0);
 
 }
 
@@ -4775,6 +5017,7 @@ static void WM_OT_dependency_relations(wmOperatorType *ot)
 /* *************************** Mat/tex/etc. previews generation ************* */
 
 typedef struct PreviewsIDEnsureStack {
+	bContext *C;
 	Scene *scene;
 
 	BLI_LINKSTACK_DECLARE(id_stack, ID *);
@@ -4799,7 +5042,7 @@ static bool previews_id_ensure_callback(void *todo_v, ID **idptr, int UNUSED(cd_
 
 	if (id && (id->flag & LIB_DOIT)) {
 		if (ELEM(GS(id->name), ID_MA, ID_TE, ID_IM, ID_WO, ID_LA)) {
-			previews_id_ensure(NULL, todo->scene, id);
+			previews_id_ensure(todo->C, todo->scene, id);
 		}
 		id->flag &= ~LIB_DOIT;  /* Tag the ID as done in any case. */
 		BLI_LINKSTACK_PUSH(todo->id_stack, id);
@@ -4824,6 +5067,7 @@ static int previews_ensure_exec(bContext *C, wmOperator *UNUSED(op))
 
 	for (scene = bmain->scene.first; scene; scene = scene->id.next) {
 		preview_id_stack.scene = scene;
+		preview_id_stack.C = C;
 		id = (ID *)scene;
 
 		do {
@@ -4855,6 +5099,72 @@ static void WM_OT_previews_ensure(wmOperatorType *ot)
 
 	ot->exec = previews_ensure_exec;
 }
+
+/* *************************** Datablocks previews clear ************* */
+
+/* Only types supporting previews currently. */
+static EnumPropertyItem preview_id_type_items[] = {
+    {FILTER_ID_SCE, "SCENE", 0, "Scenes", ""},
+    {FILTER_ID_GR, "GROUP", 0, "Groups", ""},
+    {FILTER_ID_OB, "OBJECT", 0, "Objects", ""},
+    {FILTER_ID_MA, "MATERIAL", 0, "Materials", ""},
+    {FILTER_ID_LA, "LAMP", 0, "Lamps", ""},
+    {FILTER_ID_WO, "WORLD", 0, "Worlds", ""},
+    {FILTER_ID_TE, "TEXTURE", 0, "Textures", ""},
+    {FILTER_ID_IM, "IMAGE", 0, "Images", ""},
+#if 0  /* XXX TODO */
+    {FILTER_ID_BR, "BRUSH", 0, "Brushes", ""},
+#endif
+    {0, NULL, 0, NULL, NULL}
+};
+
+static int previews_clear_exec(bContext *C, wmOperator *op)
+{
+	Main *bmain = CTX_data_main(C);
+	ListBase *lb[] = {&bmain->object, &bmain->group,
+	                  &bmain->mat, &bmain->world, &bmain->lamp, &bmain->tex, &bmain->image, NULL};
+	int i;
+
+	const int id_filters = RNA_enum_get(op->ptr, "id_type");
+
+	for (i = 0; lb[i]; i++) {
+		ID *id = lb[i]->first;
+
+		if (!id) continue;
+
+//		printf("%s: %d, %d, %d -> %d\n", id->name, GS(id->name), BKE_idcode_to_idfilter(GS(id->name)),
+//		                                 id_filters, BKE_idcode_to_idfilter(GS(id->name)) & id_filters);
+
+		if (!id || !(BKE_idcode_to_idfilter(GS(id->name)) & id_filters)) {
+			continue;
+		}
+
+		for (; id; id = id->next) {
+			PreviewImage *prv_img = BKE_previewimg_id_ensure(id);
+
+			BKE_previewimg_clear(prv_img);
+		}
+	}
+
+	return OPERATOR_FINISHED;
+}
+
+static void WM_OT_previews_clear(wmOperatorType *ot)
+{
+	ot->name = "Clear DataBlock Previews";
+	ot->idname = "WM_OT_previews_clear";
+	ot->description = "Clear datablock previews (only for some types like objects, materials, textures, etc.)";
+
+	ot->exec = previews_clear_exec;
+	ot->invoke = WM_menu_invoke;
+
+	ot->prop = RNA_def_enum_flag(ot->srna, "id_type", preview_id_type_items,
+	                             FILTER_ID_SCE | FILTER_ID_OB | FILTER_ID_GR |
+		                         FILTER_ID_MA | FILTER_ID_LA | FILTER_ID_WO | FILTER_ID_TE | FILTER_ID_IM,
+	                             "DataBlock Type", "Which datablock previews to clear");
+}
+
+/* *************************** Doc from UI ************* */
 
 static int doc_view_manual_ui_context_exec(bContext *C, wmOperator *UNUSED(op))
 {
@@ -4923,11 +5233,11 @@ static void WM_OT_stereo3d_set(wmOperatorType *ot)
 	ot->check = wm_stereo3d_set_check;
 	ot->cancel = wm_stereo3d_set_cancel;
 
-	prop = RNA_def_enum(ot->srna, "display_mode", stereo3d_display_items, S3D_DISPLAY_ANAGLYPH, "Display Mode", "");
+	prop = RNA_def_enum(ot->srna, "display_mode", rna_enum_stereo3d_display_items, S3D_DISPLAY_ANAGLYPH, "Display Mode", "");
 	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
-	prop = RNA_def_enum(ot->srna, "anaglyph_type", stereo3d_anaglyph_type_items, S3D_ANAGLYPH_REDCYAN, "Anaglyph Type", "");
+	prop = RNA_def_enum(ot->srna, "anaglyph_type", rna_enum_stereo3d_anaglyph_type_items, S3D_ANAGLYPH_REDCYAN, "Anaglyph Type", "");
 	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
-	prop = RNA_def_enum(ot->srna, "interlace_type", stereo3d_interlace_type_items, S3D_INTERLACE_ROW, "Interlace Type", "");
+	prop = RNA_def_enum(ot->srna, "interlace_type", rna_enum_stereo3d_interlace_type_items, S3D_INTERLACE_ROW, "Interlace Type", "");
 	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 	prop = RNA_def_boolean(ot->srna, "use_interlace_swap", false, "Swap Left/Right",
 	                       "Swap left and right stereo channels");
@@ -4951,6 +5261,7 @@ void wm_operatortype_init(void)
 	/* reserve size is set based on blender default setup */
 	global_ops_hash = BLI_ghash_str_new_ex("wm_operatortype_init gh", 2048);
 
+	WM_operatortype_append(WM_OT_window_close);
 	WM_operatortype_append(WM_OT_window_duplicate);
 	WM_operatortype_append(WM_OT_read_history);
 	WM_operatortype_append(WM_OT_read_homefile);
@@ -4984,6 +5295,7 @@ void wm_operatortype_init(void)
 	WM_operatortype_append(WM_OT_console_toggle);
 #endif
 	WM_operatortype_append(WM_OT_previews_ensure);
+	WM_operatortype_append(WM_OT_previews_clear);
 	WM_operatortype_append(WM_OT_doc_view_manual_ui_context);
 }
 

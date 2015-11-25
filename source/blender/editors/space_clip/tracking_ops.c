@@ -68,7 +68,7 @@
 #include "RNA_access.h"
 #include "RNA_define.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "PIL_time.h"
 
@@ -1426,6 +1426,7 @@ static int track_markers_invoke(bContext *C, wmOperator *op, const wmEvent *UNUS
 	}
 
 	clip = ED_space_clip_get_clip(sc);
+	BLI_assert(clip != NULL);
 	framenr = ED_space_clip_get_clip_frame_number(sc);
 
 	if (WM_jobs_test(CTX_wm_manager(C), sa, WM_JOB_TYPE_ANY)) {
@@ -1504,6 +1505,7 @@ void CLIP_OT_track_markers(wmOperatorType *ot)
 	ot->exec = track_markers_exec;
 	ot->invoke = track_markers_invoke;
 	ot->modal = track_markers_modal;
+	ot->poll = ED_space_clip_tracking_poll;
 
 	/* flags */
 	ot->flag = OPTYPE_UNDO;
@@ -3860,7 +3862,7 @@ static int create_plane_track_tracks_exec(bContext *C, wmOperator *op)
 		clip->tracking.act_track = NULL;
 		clip->tracking.act_plane_track = plane_track;
 
-		/* Copute homoraphies and apply them on marker's corner, so we've got
+		/* Compute homoraphies and apply them on marker's corner, so we've got
 		 * quite nice motion from the very beginning.
 		 */
 		BKE_tracking_track_plane_from_existing_motion(plane_track, framenr);

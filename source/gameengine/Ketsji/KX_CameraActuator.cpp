@@ -40,7 +40,7 @@
 #include <float.h>
 #include "KX_GameObject.h"
 
-#include "PyObjectPlus.h" 
+#include "EXP_PyObjectPlus.h" 
 
 /* ------------------------------------------------------------------------- */
 /* Native functions                                                          */
@@ -288,19 +288,23 @@ bool KX_CameraActuator::Update(double curtime, bool frame)
 	from[1] += fac * fp1[1];
 	from[2] += fac * fp1[2];
 	
-	/* alleen alstie ervoor ligt: cross testen en loodrechte bijtellen */
+	/* only for it lies: cross test and perpendicular bites up */
 	if (inp < 0.0f) {
-		if (fp1[0] * fp2[1] - fp1[1] * fp2[0] > 0.0f) {
+		/* Don't do anything if the cross product is too small.
+		 * The camera up-axis becomes unstable and starts to oscillate.
+		 * The 0.01f threshold is arbitrary but seems to work well in practice. */
+		float cross = fp1[0] * fp2[1] - fp1[1] * fp2[0];
+		if (cross > 0.01f) {
 			from[0] -= fac * fp1[1];
 			from[1] += fac * fp1[0];
 		}
-		else {
+		else if (cross < -0.01f) {
 			from[0] += fac * fp1[1];
 			from[1] -= fac * fp1[0];
 		}
 	}
 
-	/* CONSTRAINT 5: minimum / maximum afstand */
+	/* CONSTRAINT 5: minimum / maximum distance */
 
 	rc[0] = (lookat[0]-from[0]);
 	rc[1] = (lookat[1]-from[1]);
@@ -323,7 +327,7 @@ bool KX_CameraActuator::Update(double curtime, bool frame)
 	}
 
 
-	/* CONSTRAINT 7: track to schaduw */
+	/* CONSTRAINT 7: track to floor below actor */
 	rc[0] = (lookat[0]-from[0]);
 	rc[1] = (lookat[1]-from[1]);
 	rc[2] = (lookat[2]-from[2]);

@@ -34,6 +34,7 @@
 #define __BIF_GL_H__
 
 #include "GPU_glew.h"
+#include "BLI_utildefines.h"
 
 /*
  * these should be phased out. cpack should be replaced in
@@ -47,6 +48,7 @@
  * */
 void cpack(unsigned int x);
 
+#ifdef WITH_GL_PROFILE_COMPAT
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
 #  define glMultMatrixf(x)  \
 	glMultMatrixf(_Generic((x), \
@@ -66,17 +68,42 @@ void cpack(unsigned int x);
 	        float (*)[4]: (float *)(x), \
 	        float [4][4]: (float *)(x)) \
 )
-/* hacking pointsize and linewidth */
-#define glPointSize(f)  glPointSize(U.pixelsize * _Generic((f), double: (float)(f), default: (f)))
-#define glLineWidth(f)  glLineWidth(U.pixelsize * _Generic((f), double: (float)(f), default: (f)))
 #else
 #  define glMultMatrixf(x)  glMultMatrixf((float *)(x))
 #  define glLoadMatrixf(x)  glLoadMatrixf((float *)(x))
-#define glPointSize(f)  glPointSize(U.pixelsize * (f))
-#define glLineWidth(f)  glLineWidth(U.pixelsize * (f))
-#endif
+#endif  /* C11 */
+#endif  /* WITH_GL_PROFILE_COMPAT */
+
+
+/* hacking pointsize and linewidth */
+#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
+#  define glPointSize(f)  glPointSize(U.pixelsize * _Generic((f), double: (float)(f), default: (f)))
+#  define glLineWidth(f)  glLineWidth(U.pixelsize * _Generic((f), double: (float)(f), default: (f)))
+#else
+#  define glPointSize(f)  glPointSize(U.pixelsize * (f))
+#  define glLineWidth(f)  glLineWidth(U.pixelsize * (f))
+#endif  /* C11 */
 
 #define GLA_PIXEL_OFS 0.375f
+
+
+BLI_INLINE void glTranslate3iv(const int vec[3])    { glTranslatef(UNPACK3_EX((const float), vec, ));       }
+BLI_INLINE void glTranslate2iv(const int vec[2])    { glTranslatef(UNPACK2_EX((const float), vec, ), 0.0f); }
+BLI_INLINE void glTranslate3fv(const float vec[3])  { glTranslatef(UNPACK3(vec));       }
+BLI_INLINE void glTranslate2fv(const float vec[2])  { glTranslatef(UNPACK2(vec), 0.0f); }
+BLI_INLINE void glTranslate3dv(const double vec[3]) { glTranslated(UNPACK3(vec));       }
+BLI_INLINE void glTranslate2dv(const double vec[2]) { glTranslated(UNPACK2(vec), 0.0f); }
+
+BLI_INLINE void glScale3iv(const int vec[3])    { glTranslatef(UNPACK3_EX((const float), vec, ));       }
+BLI_INLINE void glScale2iv(const int vec[2])    { glTranslatef(UNPACK2_EX((const float), vec, ), 0.0f); }
+BLI_INLINE void glScale3fv(const float vec[3])  { glScalef(UNPACK3(vec));      }
+BLI_INLINE void glScale2fv(const float vec[2])  { glScalef(UNPACK2(vec), 0.0); }
+BLI_INLINE void glScale3dv(const double vec[3]) { glScaled(UNPACK3(vec));      }
+BLI_INLINE void glScale2dv(const double vec[2]) { glScaled(UNPACK2(vec), 0.0); }
+
+/* v2 versions don't make much sense for rotation */
+BLI_INLINE void glRotate3fv(const float angle, const float vec[3])   { glRotatef(angle, UNPACK3(vec)); }
+BLI_INLINE void glRotate3dv(const double angle, const double vec[3]) { glRotated(angle, UNPACK3(vec)); }
 
 #endif /* #ifdef __BIF_GL_H__ */
 

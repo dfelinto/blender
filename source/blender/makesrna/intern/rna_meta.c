@@ -189,13 +189,13 @@ static void rna_def_metaelement(BlenderRNA *brna)
 
 	srna = RNA_def_struct(brna, "MetaElement", NULL);
 	RNA_def_struct_sdna(srna, "MetaElem");
-	RNA_def_struct_ui_text(srna, "Meta Element", "Blobby element in a Metaball datablock");
+	RNA_def_struct_ui_text(srna, "Meta Element", "Blobby element in a Metaball data-block");
 	RNA_def_struct_path_func(srna, "rna_MetaElement_path");
 	RNA_def_struct_ui_icon(srna, ICON_OUTLINER_DATA_META);
 
 	/* enums */
 	prop = RNA_def_property(srna, "type", PROP_ENUM, PROP_NONE);
-	RNA_def_property_enum_items(prop, metaelem_type_items);
+	RNA_def_property_enum_items(prop, rna_enum_metaelem_type_items);
 	RNA_def_property_ui_text(prop, "Type", "Metaball types");
 	RNA_def_property_update(prop, 0, "rna_MetaBall_update_data");
 	
@@ -272,7 +272,7 @@ static void rna_def_metaball_elements(BlenderRNA *brna, PropertyRNA *cprop)
 
 	func = RNA_def_function(srna, "new", "rna_MetaBall_elements_new");
 	RNA_def_function_ui_description(func, "Add a new element to the metaball");
-	RNA_def_enum(func, "type", metaelem_type_items, MB_BALL, "", "type for the new meta-element");
+	RNA_def_enum(func, "type", rna_enum_metaelem_type_items, MB_BALL, "", "type for the new meta-element");
 	parm = RNA_def_pointer(func, "element", "MetaElement", "", "The newly created meta-element");
 	RNA_def_function_return(func, parm);
 
@@ -304,7 +304,7 @@ static void rna_def_metaball(BlenderRNA *brna)
 	};
 	
 	srna = RNA_def_struct(brna, "MetaBall", "ID");
-	RNA_def_struct_ui_text(srna, "MetaBall", "Metaball datablock to defined blobby surfaces");
+	RNA_def_struct_ui_text(srna, "MetaBall", "Metaball data-block to defined blobby surfaces");
 	RNA_def_struct_ui_icon(srna, ICON_META_DATA);
 
 	prop = RNA_def_property(srna, "elements", PROP_COLLECTION, PROP_NONE);

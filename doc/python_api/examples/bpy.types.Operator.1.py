@@ -1,6 +1,7 @@
 """
 Invoke Function
 +++++++++++++++
+
 :class:`Operator.invoke` is used to initialize the operator from the context
 at the moment the operator is called.
 invoke() is typically used to assign properties which are then used by
@@ -31,7 +32,7 @@ class SimpleMouseOperator(bpy.types.Operator):
     y = bpy.props.IntProperty()
 
     def execute(self, context):
-        # rather then printing, use the report function,
+        # rather than printing, use the report function,
         # this way the message appears in the header,
         self.report({'INFO'}, "Mouse coords are %d %d" % (self.x, self.y))
         return {'FINISHED'}

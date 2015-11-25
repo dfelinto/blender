@@ -65,7 +65,7 @@ UvVertMap *BKE_mesh_uv_vert_map_create(
 	unsigned int a;
 	int i, totuv, nverts;
 
-	bool *winding;
+	bool *winding = NULL;
 	BLI_buffer_declare_static(vec2f, tf_uv_buf, BLI_BUFFER_NOP, 32);
 
 	totuv = 0;
@@ -79,14 +79,12 @@ UvVertMap *BKE_mesh_uv_vert_map_create(
 	if (totuv == 0)
 		return NULL;
 
-	winding = MEM_callocN(sizeof(*winding) * totpoly, "winding");
 	vmap = (UvVertMap *)MEM_callocN(sizeof(*vmap), "UvVertMap");
-
-	if (!vmap)
-		return NULL;
-
-	vmap->vert = (UvMapVert **)MEM_callocN(sizeof(*vmap->vert) * totvert, "UvMapVert*");
 	buf = vmap->buf = (UvMapVert *)MEM_callocN(sizeof(*vmap->buf) * (size_t)totuv, "UvMapVert");
+	vmap->vert = (UvMapVert **)MEM_callocN(sizeof(*vmap->vert) * totvert, "UvMapVert*");
+	if (use_winding) {
+		winding = MEM_callocN(sizeof(*winding) * totpoly, "winding");
+	}
 
 	if (!vmap->vert || !vmap->buf) {
 		BKE_mesh_uv_vert_map_free(vmap);
@@ -96,7 +94,11 @@ UvVertMap *BKE_mesh_uv_vert_map_create(
 	mp = mpoly;
 	for (a = 0; a < totpoly; a++, mp++) {
 		if (!selected || (!(mp->flag & ME_HIDE) && (mp->flag & ME_FACE_SEL))) {
-			float (*tf_uv)[2]     = (float (*)[2])BLI_buffer_resize_data(&tf_uv_buf, vec2f, mp->totloop);
+			float (*tf_uv)[2] = NULL;
+
+			if (use_winding) {
+				tf_uv = (float (*)[2])BLI_buffer_reinit_data(&tf_uv_buf, vec2f, (size_t)mp->totloop);
+			}
 
 			nverts = mp->totloop;
 
@@ -107,14 +109,16 @@ UvVertMap *BKE_mesh_uv_vert_map_create(
 				buf->next = vmap->vert[mloop[mp->loopstart + i].v];
 				vmap->vert[mloop[mp->loopstart + i].v] = buf;
 
-				copy_v2_v2(tf_uv[i], mloopuv[mpoly[a].loopstart + i].uv);
+				if (use_winding) {
+					copy_v2_v2(tf_uv[i], mloopuv[mpoly[a].loopstart + i].uv);
+				}
+
 				buf++;
 			}
 
-			if (use_winding)
+			if (use_winding) {
 				winding[a] = cross_poly_v2((const float (*)[2])tf_uv, (unsigned int)nverts) > 0;
-			else
-				winding[a] = 0;
+			}
 		}
 	}
 
@@ -142,7 +146,7 @@ UvVertMap *BKE_mesh_uv_vert_map_create(
 
 
 				if (fabsf(uv[0] - uv2[0]) < limit[0] && fabsf(uv[1] - uv2[1]) < limit[1] &&
-				    winding[iterv->f] == winding[v->f])
+				    (!use_winding || winding[iterv->f] == winding[v->f]))
 				{
 					if (lastv) lastv->next = next;
 					else vlist = next;
@@ -161,7 +165,10 @@ UvVertMap *BKE_mesh_uv_vert_map_create(
 		vmap->vert[a] = newvlist;
 	}
 
-	MEM_freeN(winding);
+	if (use_winding)  {
+		MEM_freeN(winding);
+	}
+
 	BLI_buffer_free(&tf_uv_buf);
 
 	return vmap;
@@ -393,6 +400,37 @@ void BKE_mesh_origindex_map_create(MeshElemMap **r_map, int **r_mem,
 			MeshElemMap *map_ele = &map[final_origindex[i]];
 			map_ele->indices[map_ele->count++] = i;
 		}
+	}
+
+	*r_map = map;
+	*r_mem = indices;
+}
+
+/**
+ * A version of #BKE_mesh_origindex_map_create that takes a looptri array.
+ * Making a poly -> looptri map.
+ */
+void BKE_mesh_origindex_map_create_looptri(
+        MeshElemMap **r_map, int **r_mem,
+        const MPoly *mpoly, const int mpoly_num,
+        const MLoopTri *looptri, const int looptri_num)
+{
+	MeshElemMap *map = MEM_callocN(sizeof(MeshElemMap) * (size_t)mpoly_num, "poly-tessface map");
+	int *indices = MEM_mallocN(sizeof(int) * (size_t)looptri_num, "poly-tessface map mem");
+	int *index_step;
+	int i;
+
+	/* create offsets */
+	index_step = indices;
+	for (i = 0; i < mpoly_num; i++) {
+		map[i].indices = index_step;
+		index_step += ME_POLY_TRI_TOT(&mpoly[i]);
+	}
+
+	/* assign poly-tessface users */
+	for (i = 0; i < looptri_num; i++) {
+		MeshElemMap *map_ele = &map[looptri[i].poly];
+		map_ele->indices[map_ele->count++] = i;
 	}
 
 	*r_map = map;
@@ -759,8 +797,8 @@ bool BKE_mesh_calc_islands_loop_poly_uv(
 
 	/* Those are used to detect 'inner cuts', i.e. edges that are borders, and yet have two or more polys of
 	 * a same group using them (typical case: seam used to unwrap properly a cylinder). */
-	BLI_bitmap *edge_borders;
-	int num_edge_borders;
+	BLI_bitmap *edge_borders = NULL;
+	int num_edge_borders = 0;
 	char *edge_border_count = NULL;
 	int *edge_innercut_indices = NULL;
 	int num_einnercuts = 0;
@@ -779,6 +817,12 @@ bool BKE_mesh_calc_islands_loop_poly_uv(
 
 	if (!num_poly_groups) {
 		/* Should never happen... */
+		MEM_freeN(edge_poly_map);
+		MEM_freeN(edge_poly_mem);
+
+		if (edge_borders) {
+			MEM_freeN(edge_borders);
+		}
 		return false;
 	}
 
@@ -823,9 +867,17 @@ bool BKE_mesh_calc_islands_loop_poly_uv(
 		                          num_einnercuts, edge_innercut_indices);
 	}
 
+	MEM_freeN(edge_poly_map);
+	MEM_freeN(edge_poly_mem);
+
 	MEM_freeN(poly_indices);
 	MEM_freeN(loop_indices);
 	MEM_freeN(poly_groups);
+
+	if (edge_borders) {
+		MEM_freeN(edge_borders);
+	}
+
 	if (num_edge_borders) {
 		MEM_freeN(edge_border_count);
 		MEM_freeN(edge_innercut_indices);

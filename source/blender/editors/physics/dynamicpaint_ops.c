@@ -30,7 +30,7 @@
 #include "BLI_string.h"
 #include "BLI_utildefines.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "DNA_dynamicpaint_types.h"
 #include "DNA_modifier_types.h"
@@ -202,7 +202,7 @@ void DPAINT_OT_type_toggle(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 	
 	/* properties */
-	prop = RNA_def_enum(ot->srna, "type", prop_dynamicpaint_type_items, MOD_DYNAMICPAINT_TYPE_CANVAS, "Type", "");
+	prop = RNA_def_enum(ot->srna, "type", rna_enum_prop_dynamicpaint_type_items, MOD_DYNAMICPAINT_TYPE_CANVAS, "Type", "");
 	ot->prop = prop;
 }
 
@@ -396,13 +396,8 @@ static int dynamicPaint_initBake(struct bContext *C, struct wmOperator *op)
 	/* Bake was successful:
 	 *  Report for ended bake and how long it took */
 	if (status) {
-		/* Format time string */
-		char time_str[30];
-		double time = PIL_check_seconds_timer() - timer;
-		BLI_timestr(time, time_str, sizeof(time_str));
-
 		/* Show bake info */
-		BKE_reportf(op->reports, RPT_INFO, "Bake complete! (%s)", time_str);
+		BKE_reportf(op->reports, RPT_INFO, "Bake complete! (%.2f)", PIL_check_seconds_timer() - timer);
 	}
 	else {
 		if (strlen(canvas->error)) { /* If an error occurred */

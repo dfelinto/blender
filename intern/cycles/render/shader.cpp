@@ -18,6 +18,7 @@
 #include "camera.h"
 #include "device.h"
 #include "graph.h"
+#include "integrator.h"
 #include "light.h"
 #include "mesh.h"
 #include "nodes.h"
@@ -153,6 +154,7 @@ Shader::Shader()
 	has_bssrdf_bump = false;
 	has_heterogeneous_volume = false;
 	has_object_dependency = false;
+	has_integrator_dependency = false;
 
 	used = false;
 
@@ -338,6 +340,7 @@ void ShaderManager::device_update_common(Device *device,
 	uint *shader_flag = dscene->shader_flag.resize(shader_flag_size);
 	uint i = 0;
 	bool has_volumes = false;
+	bool has_transparent_shadow = false;
 
 	foreach(Shader *shader, scene->shaders) {
 		uint flag = 0;
@@ -355,8 +358,8 @@ void ShaderManager::device_update_common(Device *device,
 				flag |= SD_HAS_ONLY_VOLUME;
 
 			/* todo: this could check more fine grained, to skip useless volumes
-			 * enclosed inside an opaque bsdf, although we still need to handle
-			 * the case with camera inside volumes too */
+			 * enclosed inside an opaque bsdf.
+			 */
 			flag |= SD_HAS_TRANSPARENT_SHADOW;
 		}
 		if(shader->heterogeneous_volume && shader->has_heterogeneous_volume)
@@ -382,6 +385,8 @@ void ShaderManager::device_update_common(Device *device,
 
 		shader_flag[i++] = flag;
 		shader_flag[i++] = shader->pass_id;
+
+		has_transparent_shadow |= (flag & SD_HAS_TRANSPARENT_SHADOW);
 	}
 
 	device->tex_alloc("__shader_flag", dscene->shader_flag);
@@ -404,6 +409,10 @@ void ShaderManager::device_update_common(Device *device,
 	/* integrator */
 	KernelIntegrator *kintegrator = &dscene->data.integrator;
 	kintegrator->use_volumes = has_volumes;
+	/* TODO(sergey): De-duplicate with flags set in integrator.cpp. */
+	if(scene->integrator->transparent_shadows) {
+		kintegrator->transparent_shadows = has_transparent_shadow;
+	}
 }
 
 void ShaderManager::device_free_common(Device *device, DeviceScene *dscene, Scene *scene)
@@ -481,42 +490,42 @@ void ShaderManager::add_default(Scene *scene)
 	}
 }
 
-/* NOTE: Expects max_group and features to be initialized in the callee. */
 void ShaderManager::get_requested_graph_features(ShaderGraph *graph,
-                                                 int& max_group,
-                                                 int& features)
+                                                 DeviceRequestedFeatures *requested_features)
 {
 	foreach(ShaderNode *node, graph->nodes) {
-		max_group = max(max_group, node->get_group());
-		features |= node->get_feature();
+		requested_features->max_nodes_group = max(requested_features->max_nodes_group,
+		                                          node->get_group());
+		requested_features->nodes_features |= node->get_feature();
 		if(node->special_type == SHADER_SPECIAL_TYPE_CLOSURE) {
 			BsdfNode *bsdf_node = static_cast<BsdfNode*>(node);
 			if(CLOSURE_IS_VOLUME(bsdf_node->closure)) {
-				features |= NODE_FEATURE_VOLUME;
+				requested_features->nodes_features |= NODE_FEATURE_VOLUME;
 			}
+		}
+		if(node->has_surface_bssrdf()) {
+			requested_features->use_subsurface = true;
 		}
 	}
 }
 
 void ShaderManager::get_requested_features(Scene *scene,
-                                           int& max_group,
-                                           int& features)
+                                           DeviceRequestedFeatures *requested_features)
 {
-	max_group = NODE_GROUP_LEVEL_0;
-	features = 0;
+	requested_features->max_nodes_group = NODE_GROUP_LEVEL_0;
+	requested_features->nodes_features = 0;
 	for(int i = 0; i < scene->shaders.size(); i++) {
 		Shader *shader = scene->shaders[i];
 		/* Gather requested features from all the nodes from the graph nodes. */
-		get_requested_graph_features(shader->graph, max_group, features);
+		get_requested_graph_features(shader->graph, requested_features);
 		/* Gather requested features from the graph itself. */
 		if(shader->graph_bump) {
 			get_requested_graph_features(shader->graph_bump,
-			                             max_group,
-			                             features);
+			                             requested_features);
 		}
 		ShaderNode *output_node = shader->graph->output();
 		if(output_node->input("Displacement")->link != NULL) {
-			features |= NODE_FEATURE_BUMP;
+			requested_features->nodes_features |= NODE_FEATURE_BUMP;
 		}
 	}
 }

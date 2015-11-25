@@ -254,7 +254,7 @@ static int return_editcurve_indexar(
 	}
 	if (totvert == 0) return 0;
 	
-	*r_indexar = index = MEM_mallocN(4 * totvert, "hook indexar");
+	*r_indexar = index = MEM_mallocN(sizeof(*index) * totvert, "hook indexar");
 	*r_tot = totvert;
 	nr = 0;
 	zero_v3(r_cent);
@@ -318,6 +318,8 @@ static bool object_hook_index_array(Scene *scene, Object *obedit,
 			EDBM_mesh_load(obedit);
 			EDBM_mesh_make(scene->toolsettings, obedit);
 
+			DAG_id_tag_update(&obedit->id, 0);
+
 			em = me->edit_btmesh;
 
 			EDBM_mesh_normals_update(em);
@@ -331,8 +333,8 @@ static bool object_hook_index_array(Scene *scene, Object *obedit,
 		}
 		case OB_CURVE:
 		case OB_SURF:
-			load_editNurb(obedit);
-			make_editNurb(obedit);
+			ED_curve_editnurb_load(obedit);
+			ED_curve_editnurb_make(obedit);
 			return return_editcurve_indexar(obedit, r_tot, r_indexar, r_cent);
 		case OB_LATTICE:
 		{

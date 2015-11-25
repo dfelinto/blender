@@ -757,7 +757,7 @@ static void init_iconfile_list(struct ListBase *list)
 		}
 	}
 
-	BLI_filelist_free(dir, totfile, NULL);
+	BLI_filelist_free(dir, totfile);
 	dir = NULL;
 }
 
@@ -900,7 +900,7 @@ void UI_icons_init(int first_dyn_id)
 
 /* Render size for preview images and icons
  */
-static int preview_render_size(enum eIconSizes size)
+int UI_preview_render_size(enum eIconSizes size)
 {
 	switch (size) {
 		case ICON_SIZE_ICON:
@@ -916,7 +916,7 @@ static int preview_render_size(enum eIconSizes size)
  */
 static void icon_create_rect(struct PreviewImage *prv_img, enum eIconSizes size)
 {
-	unsigned int render_size = preview_render_size(size);
+	unsigned int render_size = UI_preview_render_size(size);
 
 	if (!prv_img) {
 		if (G.debug & G_DEBUG)
@@ -995,7 +995,7 @@ static void icon_set_image(
 			scene = CTX_data_scene(C);
 		}
 		/* Immediate version */
-		ED_preview_icon_render(scene, id, prv_img->rect[size], prv_img->w[size], prv_img->h[size]);
+		ED_preview_icon_render(CTX_data_main(C), scene, id, prv_img->rect[size], prv_img->w[size], prv_img->h[size]);
 	}
 }
 
@@ -1229,6 +1229,7 @@ static void icon_draw_size(
 			
 			/* preview images use premul alpha ... */
 			glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+
 			icon_draw_rect(x, y, w, h, aspect, pi->w[size], pi->h[size], pi->rect[size], alpha, rgb, is_preview);
 			glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 		}
@@ -1311,15 +1312,15 @@ static int ui_id_brush_get_icon(const bContext *C, ID *id)
 
 		/* reset the icon */
 		if (mode == OB_MODE_SCULPT) {
-			items = brush_sculpt_tool_items;
+			items = rna_enum_brush_sculpt_tool_items;
 			tool = br->sculpt_tool;
 		}
 		else if (mode == OB_MODE_VERTEX_PAINT) {
-			items = brush_vertex_tool_items;
+			items = rna_enum_brush_vertex_tool_items;
 			tool = br->vertexpaint_tool;
 		}
 		else if (mode == OB_MODE_TEXTURE_PAINT) {
-			items = brush_image_tool_items;
+			items = rna_enum_brush_image_tool_items;
 			tool = br->imagepaint_tool;
 		}
 
@@ -1391,6 +1392,70 @@ int UI_rnaptr_icon_get(bContext *C, PointerRNA *ptr, int rnaicon, const bool big
 	}
 
 	return rnaicon;
+}
+
+int UI_idcode_icon_get(const int idcode)
+{
+	switch (idcode) {
+		case ID_AC:
+			return ICON_ANIM_DATA;
+		case ID_AR:
+			return ICON_ARMATURE_DATA;
+		case ID_BR:
+			return ICON_BRUSH_DATA;
+		case ID_CA:
+			return ICON_CAMERA_DATA;
+		case ID_CU:
+			return ICON_CURVE_DATA;
+		case ID_GD:
+			return ICON_GREASEPENCIL;
+		case ID_GR:
+			return ICON_GROUP;
+		case ID_IM:
+			return ICON_IMAGE_DATA;
+		case ID_LA:
+			return ICON_LAMP_DATA;
+		case ID_LS:
+			return ICON_LINE_DATA;
+		case ID_LT:
+			return ICON_LATTICE_DATA;
+		case ID_MA:
+			return ICON_MATERIAL_DATA;
+		case ID_MB:
+			return ICON_META_DATA;
+		case ID_MC:
+			return ICON_CLIP;
+		case ID_ME:
+			return ICON_MESH_DATA;
+		case ID_MSK:
+			return ICON_MOD_MASK;  /* TODO! this would need its own icon! */
+		case ID_NT:
+			return ICON_NODETREE;
+		case ID_OB:
+			return ICON_OBJECT_DATA;
+		case ID_PA:
+			return ICON_PARTICLE_DATA;
+		case ID_PAL:
+			return ICON_COLOR;  /* TODO! this would need its own icon! */
+		case ID_PC:
+			return ICON_CURVE_BEZCURVE;  /* TODO! this would need its own icon! */
+		case ID_SCE:
+			return ICON_SCENE_DATA;
+		case ID_SPK:
+			return ICON_SPEAKER;
+		case ID_SO:
+			return ICON_SOUND;
+		case ID_TE:
+			return ICON_TEXTURE_DATA;
+		case ID_TXT:
+			return ICON_TEXT;
+		case ID_VF:
+			return ICON_FONT_DATA;
+		case ID_WO:
+			return ICON_WORLD_DATA;
+		default:
+			return ICON_NONE;
+	}
 }
 
 static void icon_draw_at_size(

@@ -41,7 +41,7 @@
 #include "BLI_utildefines.h"
 #include "BLI_mempool.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_animsys.h"
 #include "BKE_context.h"
@@ -220,7 +220,7 @@ static void do_item_rename(ARegion *ar, TreeElement *te, TreeStoreElem *tselem, 
 	else if (tselem->id->lib) {
 		BKE_report(reports, RPT_WARNING, "Cannot edit external libdata");
 	}
-	else if (te->idcode == ID_LI && te->parent) {
+	else if (te->idcode == ID_LI && ((Library *)tselem->id)->parent) {
 		BKE_report(reports, RPT_WARNING, "Cannot edit the path of an indirectly linked library");
 	}
 	else {
@@ -789,7 +789,7 @@ static void outliner_find_panel(Scene *UNUSED(scene), ARegion *ar, SpaceOops *so
 	else {
 		/* pop up panel - no previous, or user didn't want search after previous */
 		name[0] = '\0';
-// XXX		if (sbutton(name, 0, sizeof(name)-1, "Find: ") && name[0]) {
+// XXX		if (sbutton(name, 0, sizeof(name) - 1, "Find: ") && name[0]) {
 //			te = outliner_find_name(soops, &soops->tree, name, flags, NULL, &prevFound);
 //		}
 //		else return; /* XXX RETURN! XXX */

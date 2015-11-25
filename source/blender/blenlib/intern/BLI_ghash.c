@@ -653,7 +653,7 @@ GHash *BLI_ghash_copy(GHash *gh, GHashKeyCopyFP keycopyfp, GHashValCopyFP valcop
 }
 
 /**
- * Reverve given ammount of entries (resize \a gh accordingly if needed).
+ * Reserve given amount of entries (resize \a gh accordingly if needed).
  */
 void BLI_ghash_reserve(GHash *gh, const unsigned int nentries_reserve)
 {
@@ -1354,6 +1354,15 @@ GSet *BLI_gset_ptr_new_ex(const char *info, const unsigned int nentries_reserve)
 GSet *BLI_gset_ptr_new(const char *info)
 {
 	return BLI_gset_ptr_new_ex(info, 0);
+}
+
+GSet *BLI_gset_str_new_ex(const char *info, const unsigned int nentries_reserve)
+{
+	return BLI_gset_new_ex(BLI_ghashutil_strhash_p, BLI_ghashutil_strcmp, info, nentries_reserve);
+}
+GSet *BLI_gset_str_new(const char *info)
+{
+	return BLI_gset_str_new_ex(info, 0);
 }
 
 GSet *BLI_gset_pair_new_ex(const char *info, const unsigned int nentries_reserve)

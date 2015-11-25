@@ -44,7 +44,7 @@
 #include "BLI_blenlib.h"
 #include "BLI_utildefines.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_context.h"
 #include "BKE_curve.h"
@@ -133,7 +133,10 @@ static void graph_panel_view(const bContext *C, Panel *pa)
 	sub = uiLayoutColumn(col, true);
 	uiLayoutSetActive(sub, RNA_boolean_get(&spaceptr, "show_cursor"));
 	row = uiLayoutSplit(sub, 0.7f, true);
-	uiItemR(row, &sceneptr, "frame_current", 0, IFACE_("Cursor X"), ICON_NONE);
+	if (sipo->mode == SIPO_MODE_DRIVERS)
+		uiItemR(row, &spaceptr, "cursor_position_x", 0, IFACE_("Cursor X"), ICON_NONE);
+	else
+		uiItemR(row, &sceneptr, "frame_current", 0, IFACE_("Cursor X"), ICON_NONE);
 	uiItemEnumO(row, "GRAPH_OT_snap", IFACE_("To Keys"), 0, "type", GRAPHKEYS_SNAP_CFRA);
 	
 	row = uiLayoutSplit(sub, 0.7f, true);
@@ -229,7 +232,7 @@ static short get_active_fcurve_keyframe_edit(FCurve *fcu, BezTriple **bezt, BezT
 	 *	  wants to edit numerically, there is likely to only be 1 vert selected
 	 */
 	for (i = 0, b = fcu->bezt; i < fcu->totvert; i++, b++) {
-		if (BEZSELECTED(b)) {
+		if (BEZT_ISSEL_ANY(b)) {
 			/* found 
 			 *	- 'previous' is either the one before, of the keyframe itself (which is still fine)
 			 *		XXX: we can just make this null instead if needed
@@ -355,7 +358,14 @@ static void graph_panel_key_properties(const bContext *C, Panel *pa)
 		
 		/* interpolation */
 		col = uiLayoutColumn(layout, false);
-		uiItemR(col, &bezt_ptr, "interpolation", 0, NULL, ICON_NONE);
+		if (fcu->flag & FCURVE_DISCRETE_VALUES) {
+			uiLayout *split = uiLayoutSplit(col, 0.33f, true);
+			uiItemL(split, IFACE_("Interpolation:"), ICON_NONE);
+			uiItemL(split, IFACE_("None for Enum/Boolean"), ICON_IPO_CONSTANT);
+		}
+		else {
+			uiItemR(col, &bezt_ptr, "interpolation", 0, NULL, ICON_NONE);
+		}
 		
 		/* easing type */
 		if (bezt->ipo > BEZT_IPO_BEZ)
@@ -696,13 +706,13 @@ static void graph_panel_drivers(const bContext *C, Panel *pa)
 	col = uiLayoutColumn(pa->layout, false);
 	block = uiLayoutGetBlock(col);
 	but = uiDefIconTextBut(block, UI_BTYPE_BUT, B_IPO_DEPCHANGE, ICON_FILE_REFRESH, IFACE_("Update Dependencies"),
-	               0, 0, 10 * UI_UNIT_X, 22,
+	               0, 0, 10 * UI_UNIT_X, UI_UNIT_Y,
 	               NULL, 0.0, 0.0, 0, 0,
 	               TIP_("Force updates of dependencies"));
 	UI_but_func_set(but, driver_update_flags_cb, fcu, NULL);
 
 	but = uiDefIconTextBut(block, UI_BTYPE_BUT, B_IPO_DEPCHANGE, ICON_ZOOMOUT, IFACE_("Remove Driver"),
-	               0, 0, 10 * UI_UNIT_X, 18,
+	               0, 0, 10 * UI_UNIT_X, UI_UNIT_Y,
 	               NULL, 0.0, 0.0, 0, 0,
 	               TIP_("Remove this driver"));
 	UI_but_funcN_set(but, driver_remove_cb, MEM_dupallocN(ale), NULL);
@@ -883,6 +893,7 @@ static void graph_panel_modifiers(const bContext *C, Panel *pa)
 	FModifier *fcm;
 	uiLayout *col, *row;
 	uiBlock *block;
+	bool active;
 	
 	if (!graph_panel_context(C, &ale, &fcu))
 		return;
@@ -907,9 +918,11 @@ static void graph_panel_modifiers(const bContext *C, Panel *pa)
 		uiItemO(row, "", ICON_PASTEDOWN, "GRAPH_OT_fmodifier_paste");
 	}
 	
+	active = !(fcu->flag & FCURVE_MOD_OFF);
 	/* draw each modifier */
 	for (fcm = fcu->modifiers.first; fcm; fcm = fcm->next) {
 		col = uiLayoutColumn(pa->layout, true);
+		uiLayoutSetActive(col, active);
 		
 		ANIM_uiTemplate_fmodifier_draw(col, ale->id, &fcu->modifiers, fcm);
 	}
@@ -926,7 +939,7 @@ void graph_buttons_register(ARegionType *art)
 	pt = MEM_callocN(sizeof(PanelType), "spacetype graph panel view");
 	strcpy(pt->idname, "GRAPH_PT_view");
 	strcpy(pt->label, N_("View Properties"));
-	strcpy(pt->translation_context, BLF_I18NCONTEXT_DEFAULT_BPYRNA);
+	strcpy(pt->translation_context, BLT_I18NCONTEXT_DEFAULT_BPYRNA);
 	pt->draw = graph_panel_view;
 	pt->flag |= PNL_DEFAULT_CLOSED;
 	BLI_addtail(&art->paneltypes, pt);
@@ -934,7 +947,7 @@ void graph_buttons_register(ARegionType *art)
 	pt = MEM_callocN(sizeof(PanelType), "spacetype graph panel properties");
 	strcpy(pt->idname, "GRAPH_PT_properties");
 	strcpy(pt->label, N_("Active F-Curve"));
-	strcpy(pt->translation_context, BLF_I18NCONTEXT_DEFAULT_BPYRNA);
+	strcpy(pt->translation_context, BLT_I18NCONTEXT_DEFAULT_BPYRNA);
 	pt->draw = graph_panel_properties;
 	pt->poll = graph_panel_poll;
 	BLI_addtail(&art->paneltypes, pt);
@@ -942,7 +955,7 @@ void graph_buttons_register(ARegionType *art)
 	pt = MEM_callocN(sizeof(PanelType), "spacetype graph panel properties");
 	strcpy(pt->idname, "GRAPH_PT_key_properties");
 	strcpy(pt->label, N_("Active Keyframe"));
-	strcpy(pt->translation_context, BLF_I18NCONTEXT_DEFAULT_BPYRNA);
+	strcpy(pt->translation_context, BLT_I18NCONTEXT_DEFAULT_BPYRNA);
 	pt->draw = graph_panel_key_properties;
 	pt->poll = graph_panel_poll;
 	BLI_addtail(&art->paneltypes, pt);
@@ -951,7 +964,7 @@ void graph_buttons_register(ARegionType *art)
 	pt = MEM_callocN(sizeof(PanelType), "spacetype graph panel drivers");
 	strcpy(pt->idname, "GRAPH_PT_drivers");
 	strcpy(pt->label, N_("Drivers"));
-	strcpy(pt->translation_context, BLF_I18NCONTEXT_DEFAULT_BPYRNA);
+	strcpy(pt->translation_context, BLT_I18NCONTEXT_DEFAULT_BPYRNA);
 	pt->draw = graph_panel_drivers;
 	pt->poll = graph_panel_drivers_poll;
 	BLI_addtail(&art->paneltypes, pt);
@@ -959,7 +972,7 @@ void graph_buttons_register(ARegionType *art)
 	pt = MEM_callocN(sizeof(PanelType), "spacetype graph panel modifiers");
 	strcpy(pt->idname, "GRAPH_PT_modifiers");
 	strcpy(pt->label, N_("Modifiers"));
-	strcpy(pt->translation_context, BLF_I18NCONTEXT_DEFAULT_BPYRNA);
+	strcpy(pt->translation_context, BLT_I18NCONTEXT_DEFAULT_BPYRNA);
 	pt->draw = graph_panel_modifiers;
 	pt->poll = graph_panel_poll;
 	BLI_addtail(&art->paneltypes, pt);

@@ -28,7 +28,7 @@
  * todo: clean this up ... */
 
 extern "C" {
-void BLI_timestr(double _time, char *str, size_t maxlen);
+size_t BLI_timecode_string_from_time_simple(char *str, size_t maxlen, double time_seconds);
 void BKE_image_user_frame_calc(void *iuser, int cfra, int fieldnr);
 void BKE_image_user_file_path(void *iuser, void *ima, char *path);
 unsigned char *BKE_image_get_pixels_for_frame(void *image, int frame);
@@ -59,6 +59,16 @@ static inline void colorramp_to_array(BL::ColorRamp ramp, float4 *data, int size
 
 		ramp.evaluate((float)i/(float)(size-1), color);
 		data[i] = make_float4(color[0], color[1], color[2], color[3]);
+	}
+}
+
+static inline void curvemapping_to_array(BL::CurveMapping cumap, float *data, int size)
+{
+	cumap.update();
+	BL::CurveMap curve = cumap.curves[0];
+	for(int i = 0; i < size; i++) {
+		float t = (float)i/(float)(size-1);
+		data[i] = curve.evaluate(t);
 	}
 }
 
@@ -196,7 +206,11 @@ static inline uint get_layer(BL::Array<int, 20> array)
 	return layer;
 }
 
-static inline uint get_layer(BL::Array<int, 20> array, BL::Array<int, 8> local_array, bool use_local, bool is_light = false)
+static inline uint get_layer(BL::Array<int, 20> array,
+                             BL::Array<int, 8> local_array,
+                             bool use_local,
+                             bool is_light = false,
+                             uint scene_layers = (1 << 20) - 1)
 {
 	uint layer = 0;
 
@@ -205,9 +219,13 @@ static inline uint get_layer(BL::Array<int, 20> array, BL::Array<int, 8> local_a
 			layer |= (1 << i);
 
 	if(is_light) {
-		/* consider lamps on all local view layers */
-		for(uint i = 0; i < 8; i++)
-			layer |= (1 << (20+i));
+		/* Consider light is visible if it was visible without layer
+		 * override, which matches behavior of Blender Internal.
+		 */
+		if(layer & scene_layers) {
+			for(uint i = 0; i < 8; i++)
+				layer |= (1 << (20+i));
+		}
 	}
 	else {
 		for(uint i = 0; i < 8; i++)
@@ -354,11 +372,20 @@ static inline void mesh_texture_space(BL::Mesh b_mesh, float3& loc, float3& size
 }
 
 /* object used for motion blur */
-static inline bool object_use_motion(BL::Object b_ob)
+static inline bool object_use_motion(BL::Object b_parent, BL::Object b_ob)
 {
 	PointerRNA cobject = RNA_pointer_get(&b_ob.ptr, "cycles");
 	bool use_motion = get_boolean(cobject, "use_motion_blur");
-	
+	/* If motion blur is enabled for the object we also check
+	 * whether it's enabled for the parent object as well.
+	 *
+	 * This way we can control motion blur from the dupligroup
+	 * duplicator much easier.
+	 */
+	if(use_motion && b_parent.ptr.data != b_ob.ptr.data) {
+		PointerRNA parent_cobject = RNA_pointer_get(&b_parent.ptr, "cycles");
+		use_motion &= get_boolean(parent_cobject, "use_motion_blur");
+	}
 	return use_motion;
 }
 
@@ -375,11 +402,20 @@ static inline uint object_motion_steps(BL::Object b_ob)
 }
 
 /* object uses deformation motion blur */
-static inline bool object_use_deform_motion(BL::Object b_ob)
+static inline bool object_use_deform_motion(BL::Object b_parent, BL::Object b_ob)
 {
 	PointerRNA cobject = RNA_pointer_get(&b_ob.ptr, "cycles");
 	bool use_deform_motion = get_boolean(cobject, "use_deform_motion");
-	
+	/* If motion blur is enabled for the object we also check
+	 * whether it's enabled for the parent object as well.
+	 *
+	 * This way we can control motion blur from the dupligroup
+	 * duplicator much easier.
+	 */
+	if(use_deform_motion && b_parent.ptr.data != b_ob.ptr.data) {
+		PointerRNA parent_cobject = RNA_pointer_get(&b_parent.ptr, "cycles");
+		use_deform_motion &= get_boolean(parent_cobject, "use_deform_motion");
+	}
 	return use_deform_motion;
 }
 

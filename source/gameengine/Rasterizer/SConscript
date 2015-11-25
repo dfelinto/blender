@@ -44,9 +44,11 @@ incs = [
     '#source/blender/blenkernel',
     '#source/blender/gpu',
     '#source/blender/makesdna',
+    '#source/blender/imbuf',
     ]
 
-defs = env['BF_GL_DEFINITIONS']
+defs = []
+defs += env['BF_GL_DEFINITIONS']
 
 if env['WITH_BF_PYTHON']:
     incs.extend(Split(env['BF_PYTHON_INC']))

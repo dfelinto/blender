@@ -64,6 +64,7 @@
 #include "BKE_cdderivedmesh.h"
 #include "BKE_effect.h"
 #include "BKE_global.h"
+#include "BKE_library.h"
 #include "BKE_modifier.h"
 #include "BKE_object.h"
 #include "BKE_particle.h"
@@ -139,7 +140,7 @@ void free_partdeflect(PartDeflect *pd)
 		return;
 
 	if (pd->tex)
-		pd->tex->id.us--;
+		id_us_min(&pd->tex->id);
 
 	if (pd->rng)
 		BLI_rng_free(pd->rng);
@@ -391,6 +392,7 @@ static void eff_tri_ray_hit(void *UNUSED(userData), int UNUSED(index), const BVH
 // get visibility of a wind ray
 static float eff_calc_visibility(ListBase *colliders, EffectorCache *eff, EffectorData *efd, EffectedPoint *point)
 {
+	const int raycast_flag = BVH_RAYCAST_DEFAULT & ~(BVH_RAYCAST_WATERTIGHT);
 	ListBase *colls = colliders;
 	ColliderCache *col;
 	float norm[3], len = 0.0;
@@ -422,7 +424,10 @@ static float eff_calc_visibility(ListBase *colliders, EffectorCache *eff, Effect
 			hit.dist = len + FLT_EPSILON;
 
 			/* check if the way is blocked */
-			if (BLI_bvhtree_ray_cast(collmd->bvhtree, point->loc, norm, 0.0f, &hit, eff_tri_ray_hit, NULL)>=0) {
+			if (BLI_bvhtree_ray_cast_ex(
+			        collmd->bvhtree, point->loc, norm, 0.0f, &hit,
+			        eff_tri_ray_hit, NULL, raycast_flag) != -1)
+			{
 				absorption= col->ob->pd->absorption;
 
 				/* visibility is only between 0 and 1, calculated from 1-absorption */
@@ -506,7 +511,7 @@ float effector_falloff(EffectorCache *eff, EffectorData *efd, EffectedPoint *UNU
 			if (falloff == 0.0f)
 				break;
 
-			madd_v3_v3v3fl(temp, efd->vec_to_point, efd->nor, -fac);
+			madd_v3_v3v3fl(temp, efd->vec_to_point2, efd->nor, -fac);
 			r_fac= len_v3(temp);
 			falloff*= falloff_func_rad(eff->pd, r_fac);
 			break;
@@ -542,15 +547,14 @@ int closest_point_on_surface(SurfaceModifierData *surmd, const float co[3], floa
 		}
 
 		if (surface_vel) {
-			MFace *mface = CDDM_get_tessface(surmd->dm, nearest.index);
+			const MLoop *mloop = surmd->bvhtree->loop;
+			const MLoopTri *lt = &surmd->bvhtree->looptri[nearest.index];
 			
-			copy_v3_v3(surface_vel, surmd->v[mface->v1].co);
-			add_v3_v3(surface_vel, surmd->v[mface->v2].co);
-			add_v3_v3(surface_vel, surmd->v[mface->v3].co);
-			if (mface->v4)
-				add_v3_v3(surface_vel, surmd->v[mface->v4].co);
+			copy_v3_v3(surface_vel, surmd->v[mloop[lt->tri[0]].v].co);
+			add_v3_v3(surface_vel, surmd->v[mloop[lt->tri[1]].v].co);
+			add_v3_v3(surface_vel, surmd->v[mloop[lt->tri[2]].v].co);
 
-			mul_v3_fl(surface_vel, mface->v4 ? 0.25f : (1.0f / 3.0f));
+			mul_v3_fl(surface_vel, (1.0f / 3.0f));
 		}
 		return 1;
 	}
@@ -684,10 +688,10 @@ int get_effector_data(EffectorCache *eff, EffectorData *efd, EffectedPoint *poin
 }
 static void get_effector_tot(EffectorCache *eff, EffectorData *efd, EffectedPoint *point, int *tot, int *p, int *step)
 {
-	if (eff->pd->shape == PFIELD_SHAPE_POINTS) {
-		efd->index = p;
+	*p = 0;
+	efd->index = p;
 
-		*p = 0;
+	if (eff->pd->shape == PFIELD_SHAPE_POINTS) {
 		*tot = eff->ob->derivedFinal ? eff->ob->derivedFinal->numVertData : 1;
 
 		if (*tot && eff->pd->forcefield == PFIELD_HARMONIC && point->index >= 0) {
@@ -696,9 +700,6 @@ static void get_effector_tot(EffectorCache *eff, EffectorData *efd, EffectedPoin
 		}
 	}
 	else if (eff->psys) {
-		efd->index = p;
-
-		*p = 0;
 		*tot = eff->psys->totpart;
 		
 		if (eff->pd->forcefield == PFIELD_CHARGE) {
@@ -724,7 +725,6 @@ static void get_effector_tot(EffectorCache *eff, EffectorData *efd, EffectedPoin
 		}
 	}
 	else {
-		*p = 0;
 		*tot = 1;
 	}
 }

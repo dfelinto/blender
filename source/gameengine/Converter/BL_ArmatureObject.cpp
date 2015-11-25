@@ -60,9 +60,10 @@ extern "C" {
 #include "DNA_scene_types.h"
 #include "DNA_constraint_types.h"
 #include "RNA_access.h"
-#include "KX_PythonSeq.h"
 #include "KX_PythonInit.h"
 #include "KX_KetsjiEngine.h"
+
+#include "EXP_ListWrapper.h"
 
 #include "MT_Matrix4x4.h"
 
@@ -176,6 +177,10 @@ static void game_blend_poses(bPose *dst, bPose *src, float srcweight, short mode
 			
 			copy_qt_qt(dquat, dchan->quat);
 			copy_qt_qt(squat, schan->quat);
+			// Normalize quaternions so that interpolation/multiplication result is correct.
+			normalize_qt(dquat);
+			normalize_qt(squat);
+
 			if (mode==BL_Action::ACT_BLEND_BLEND)
 				interp_qt_qtqt(dchan->quat, dquat, squat, srcweight);
 			else {
@@ -230,9 +235,11 @@ BL_ArmatureObject::BL_ArmatureObject(
 	m_origObjArma = armature; // Keep a copy of the original armature so we can fix drivers later
 	m_objArma = BKE_object_copy(armature);
 	m_objArma->data = BKE_armature_copy((bArmature *)armature->data);
+	// During object replication ob->data is increase, we decrease it now because we get a copy.
+	id_us_min(&((bArmature *)m_origObjArma->data)->id);
 	m_pose = m_objArma->pose;
-    // need this to get iTaSC working ok in the BGE
-    m_pose->flag |= POSE_GAME_ENGINE;
+	// need this to get iTaSC working ok in the BGE
+	m_pose->flag |= POSE_GAME_ENGINE;
 	memcpy(m_obmat, m_objArma->obmat, sizeof(m_obmat));
 
 	// The side-effect of this method registers this object as "animatable" with the KX_Scene.
@@ -250,8 +257,10 @@ BL_ArmatureObject::~BL_ArmatureObject()
 		delete channel;
 	}
 
-	if (m_objArma)
+	if (m_objArma) {
+		BKE_libblock_free(G.main, m_objArma->data);
 		BKE_libblock_free(G.main, m_objArma);
+	}
 }
 
 
@@ -611,16 +620,58 @@ PyAttributeDef BL_ArmatureObject::Attributes[] = {
 	{NULL} //Sentinel
 };
 
+static int bl_armature_object_get_constraints_size_cb(void *self_v)
+{
+	return ((BL_ArmatureObject *)self_v)->GetConstraintNumber();
+}
+
+static PyObject *bl_armature_object_get_constraints_item_cb(void *self_v, int index)
+{
+	return ((BL_ArmatureObject *)self_v)->GetConstraint(index)->GetProxy();
+}
+
+static const char *bl_armature_object_get_constraints_item_name_cb(void *self_v, int index)
+{
+	return ((BL_ArmatureObject *)self_v)->GetConstraint(index)->GetName();
+}
+
 PyObject *BL_ArmatureObject::pyattr_get_constraints(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef)
 {
-	return KX_PythonSeq_CreatePyObject((static_cast<BL_ArmatureObject*>(self_v))->m_proxy, KX_PYGENSEQ_OB_TYPE_CONSTRAINTS);
+	return (new CListWrapper(self_v,
+							 ((BL_ArmatureObject *)self_v)->GetProxy(),
+							 NULL,
+							 bl_armature_object_get_constraints_size_cb,
+							 bl_armature_object_get_constraints_item_cb,
+							 bl_armature_object_get_constraints_item_name_cb,
+							 NULL))->NewProxy(true);
+}
+
+static int bl_armature_object_get_channels_size_cb(void *self_v)
+{
+	return ((BL_ArmatureObject *)self_v)->GetChannelNumber();
+}
+
+static PyObject *bl_armature_object_get_channels_item_cb(void *self_v, int index)
+{
+	return ((BL_ArmatureObject *)self_v)->GetChannel(index)->GetProxy();
+}
+
+static const char *bl_armature_object_get_channels_item_name_cb(void *self_v, int index)
+{
+	return ((BL_ArmatureObject *)self_v)->GetChannel(index)->GetName();
 }
 
 PyObject *BL_ArmatureObject::pyattr_get_channels(void *self_v, const KX_PYATTRIBUTE_DEF *attrdef)
 {
-	BL_ArmatureObject* self = static_cast<BL_ArmatureObject*>(self_v);
+	BL_ArmatureObject *self = static_cast<BL_ArmatureObject *>(self_v);
 	self->LoadChannels(); // make sure we have the channels
-	return KX_PythonSeq_CreatePyObject((static_cast<BL_ArmatureObject*>(self_v))->m_proxy, KX_PYGENSEQ_OB_TYPE_CHANNELS);
+	return (new CListWrapper(self_v,
+							 self->GetProxy(),
+							 NULL,
+							 bl_armature_object_get_channels_size_cb,
+							 bl_armature_object_get_channels_item_cb,
+							 bl_armature_object_get_channels_item_name_cb,
+							 NULL))->NewProxy(true);
 }
 
 KX_PYMETHODDEF_DOC_NOARGS(BL_ArmatureObject, update, 

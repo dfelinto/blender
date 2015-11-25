@@ -19,6 +19,7 @@
 #include "device_network.h"
 
 #include "util_foreach.h"
+#include "util_logging.h"
 
 #if defined(WITH_NETWORK)
 
@@ -162,7 +163,10 @@ public:
 		snd.write_buffer(host, size);
 	}
 
-	void tex_alloc(const char *name, device_memory& mem, InterpolationType interpolation, bool periodic)
+	void tex_alloc(const char *name,
+	               device_memory& mem,
+	               InterpolationType interpolation,
+	               ExtensionType extension)
 	{
 		VLOG(1) << "Texture allocate: " << name << ", " << mem.memory_size() << " bytes.";
 
@@ -177,7 +181,7 @@ public:
 		snd.add(name_string);
 		snd.add(mem);
 		snd.add(interpolation);
-		snd.add(periodic);
+		snd.add(extension);
 		snd.write();
 		snd.write_buffer((void*)mem.data_pointer, mem.memory_size());
 	}
@@ -570,13 +574,13 @@ protected:
 			network_device_memory mem;
 			string name;
 			InterpolationType interpolation;
-			bool periodic;
+			ExtensionType extension_type;
 			device_ptr client_pointer;
 
 			rcv.read(name);
 			rcv.read(mem);
 			rcv.read(interpolation);
-			rcv.read(periodic);
+			rcv.read(extension_type);
 			lock.unlock();
 
 			client_pointer = mem.device_pointer;
@@ -592,7 +596,7 @@ protected:
 
 			rcv.read_buffer((uint8_t*)mem.data_pointer, data_size);
 
-			device->tex_alloc(name.c_str(), mem, interpolation, periodic);
+			device->tex_alloc(name.c_str(), mem, interpolation, extension_type);
 
 			pointer_mapping_insert(client_pointer, mem.device_pointer);
 		}

@@ -150,6 +150,7 @@ void RenderLayersBaseProg::executePixelSampled(float output[4], float x, float y
 			expected_element_size = 4;
 		}
 		else {
+			expected_element_size = 0;
 			BLI_assert(!"Something horribly wrong just happened");
 		}
 		BLI_assert(expected_element_size == actual_element_size);
@@ -388,3 +389,29 @@ RenderLayersUVOperation::RenderLayersUVOperation() : RenderLayersBaseProg(SCE_PA
 {
 	this->addOutputSocket(COM_DT_VECTOR);
 }
+
+/* ******** Debug Render Layers Cycles Operation ******** */
+
+#ifdef WITH_CYCLES_DEBUG
+
+RenderLayersCyclesDebugOperation::RenderLayersCyclesDebugOperation(
+        int pass,
+        int debug_pass_type)
+	: RenderLayersBaseProg(pass, RE_debug_pass_num_channels_get(debug_pass_type))
+{
+	switch (m_elementsize) {
+		case 1:
+			this->addOutputSocket(COM_DT_VALUE);
+			break;
+		case 3:
+			this->addOutputSocket(COM_DT_VECTOR);
+			break;
+		case 4:
+			this->addOutputSocket(COM_DT_COLOR);
+			break;
+		default:
+			BLI_assert(!"Unkown debug pass type element size.");
+	}
+}
+
+#endif

@@ -50,9 +50,9 @@
 #include "GHOST_TimerTask.h"
 #include "GHOST_WindowManager.h"
 #include "GHOST_WindowCocoa.h"
+
 #ifdef WITH_INPUT_NDOF
-#include "GHOST_NDOFManagerCocoa.h"
-#include "GHOST_NDOFManager3Dconnexion.h"
+  #include "GHOST_NDOFManagerCocoa.h"
 #endif
 
 #include "AssertMacros.h"
@@ -284,7 +284,7 @@ extern "C" int GHOST_HACK_getFirstFile(char buf[FIRSTFILEBUFLG])
  * CocoaAppDelegate
  * ObjC object to capture applicationShouldTerminate, and send quit event
  **/
-@interface CocoaAppDelegate : NSObject {
+@interface CocoaAppDelegate : NSObject <NSFileManagerDelegate> {
 	GHOST_SystemCocoa *systemCocoa;
 }
 - (void)setSystemCocoa:(GHOST_SystemCocoa *)sysCocoa;
@@ -370,12 +370,11 @@ GHOST_SystemCocoa::GHOST_SystemCocoa()
 	rstring = (char*)malloc( len );
 	sysctl( mib, 2, rstring, &len, NULL, 0 );
 	
-	m_hasMultiTouchTrackpad = false;
-	
 	free( rstring );
 	rstring = NULL;
 	
 	m_ignoreWindowSizedMessages = false;
+	m_ignoreMomentumScroll = false;
 }
 
 GHOST_SystemCocoa::~GHOST_SystemCocoa()
@@ -796,58 +795,57 @@ GHOST_TSuccess GHOST_SystemCocoa::handleWindowEvent(GHOST_TEventType eventType, 
 	if (!validWindow(window)) {
 		return GHOST_kFailure;
 	}
-		switch (eventType) {
-			case GHOST_kEventWindowClose:
-				// check for index of mainwindow as it would quit blender without dialog and discard
-				if ([windowsList count] > 1  && window->getCocoaWindow() != [windowsList objectAtIndex:[windowsList count] - 1]) {
-					pushEvent( new GHOST_Event(getMilliSeconds(), GHOST_kEventWindowClose, window) );
-				}
-				else {
-					handleQuitRequest(); // -> quit dialog
-				}
-				break;
-			case GHOST_kEventWindowActivate:
-				m_windowManager->setActiveWindow(window);
-				window->loadCursor(window->getCursorVisibility(), window->getCursorShape());
-				pushEvent( new GHOST_Event(getMilliSeconds(), GHOST_kEventWindowActivate, window) );
-				break;
-			case GHOST_kEventWindowDeactivate:
-				m_windowManager->setWindowInactive(window);
-				pushEvent( new GHOST_Event(getMilliSeconds(), GHOST_kEventWindowDeactivate, window) );
-				break;
-			case GHOST_kEventWindowUpdate:
-				if (m_nativePixel) {
-					window->setNativePixelSize();
-					pushEvent( new GHOST_Event(getMilliSeconds(), GHOST_kEventNativeResolutionChange, window) );
-				}
-				pushEvent( new GHOST_Event(getMilliSeconds(), GHOST_kEventWindowUpdate, window) );
-				break;
-			case GHOST_kEventWindowMove:
-				pushEvent( new GHOST_Event(getMilliSeconds(), GHOST_kEventWindowMove, window) );
-				break;
-			case GHOST_kEventWindowSize:
-				if (!m_ignoreWindowSizedMessages)
-				{
-					//Enforce only one resize message per event loop (coalescing all the live resize messages)
-					window->updateDrawingContext();
-					pushEvent( new GHOST_Event(getMilliSeconds(), GHOST_kEventWindowSize, window) );
-					//Mouse up event is trapped by the resizing event loop, so send it anyway to the window manager
-					pushEvent(new GHOST_EventButton(getMilliSeconds(), GHOST_kEventButtonUp, window, convertButton(0)));
-					//m_ignoreWindowSizedMessages = true;
-				}
-				break;
-			case GHOST_kEventNativeResolutionChange:
-				
-				if (m_nativePixel) {
-					window->setNativePixelSize();
-					pushEvent( new GHOST_Event(getMilliSeconds(), GHOST_kEventNativeResolutionChange, window) );
-				}
+	switch (eventType) {
+		case GHOST_kEventWindowClose:
+			// check for index of mainwindow as it would quit blender without dialog and discard
+			if ([windowsList count] > 1  && window->getCocoaWindow() != [windowsList objectAtIndex:[windowsList count] - 1]) {
+				pushEvent( new GHOST_Event(getMilliSeconds(), GHOST_kEventWindowClose, window) );
+			}
+			else {
+				handleQuitRequest(); // -> quit dialog
+			}
+			break;
+		case GHOST_kEventWindowActivate:
+			m_windowManager->setActiveWindow(window);
+			window->loadCursor(window->getCursorVisibility(), window->getCursorShape());
+			pushEvent( new GHOST_Event(getMilliSeconds(), GHOST_kEventWindowActivate, window) );
+			break;
+		case GHOST_kEventWindowDeactivate:
+			m_windowManager->setWindowInactive(window);
+			pushEvent( new GHOST_Event(getMilliSeconds(), GHOST_kEventWindowDeactivate, window) );
+			break;
+		case GHOST_kEventWindowUpdate:
+			if (m_nativePixel) {
+				window->setNativePixelSize();
+				pushEvent( new GHOST_Event(getMilliSeconds(), GHOST_kEventNativeResolutionChange, window) );
+			}
+			pushEvent( new GHOST_Event(getMilliSeconds(), GHOST_kEventWindowUpdate, window) );
+			break;
+		case GHOST_kEventWindowMove:
+			pushEvent( new GHOST_Event(getMilliSeconds(), GHOST_kEventWindowMove, window) );
+			break;
+		case GHOST_kEventWindowSize:
+			if (!m_ignoreWindowSizedMessages) {
+				//Enforce only one resize message per event loop (coalescing all the live resize messages)
+				window->updateDrawingContext();
+				pushEvent( new GHOST_Event(getMilliSeconds(), GHOST_kEventWindowSize, window) );
+				//Mouse up event is trapped by the resizing event loop, so send it anyway to the window manager
+				pushEvent(new GHOST_EventButton(getMilliSeconds(), GHOST_kEventButtonUp, window, convertButton(0)));
+				//m_ignoreWindowSizedMessages = true;
+			}
+			break;
+		case GHOST_kEventNativeResolutionChange:
 
-			default:
-				return GHOST_kFailure;
-				break;
-		}
-	
+			if (m_nativePixel) {
+				window->setNativePixelSize();
+				pushEvent( new GHOST_Event(getMilliSeconds(), GHOST_kEventNativeResolutionChange, window) );
+			}
+
+		default:
+			return GHOST_kFailure;
+			break;
+	}
+
 	m_outsideLoopEventProcessed = true;
 	return GHOST_kSuccess;
 }
@@ -1046,16 +1044,17 @@ GHOST_TSuccess GHOST_SystemCocoa::handleDraggingEvent(GHOST_TEventType eventType
 					}
 					
 					eventData = (GHOST_TEventDataPtr) ibuf;
-				}
+
 					break;
-					
+				}
 				default:
 					return GHOST_kFailure;
 					break;
 			}
 			pushEvent(new GHOST_EventDragnDrop(getMilliSeconds(),eventType,draggedObjectType,window,mouseX,mouseY,eventData));
-		}
+
 			break;
+		}
 		default:
 			return GHOST_kFailure;
 	}
@@ -1223,10 +1222,10 @@ bool GHOST_SystemCocoa::handleTabletEvent(void *eventPtr)
 	NSEvent *event = (NSEvent *)eventPtr;
 
 	switch ([event subtype]) {
-		case NX_SUBTYPE_TABLET_POINT:
+		case NSTabletPointEventSubtype:
 			handleTabletEvent(eventPtr, NSTabletPoint);
 			return true;
-		case NX_SUBTYPE_TABLET_PROXIMITY:
+		case NSTabletProximityEventSubtype:
 			handleTabletEvent(eventPtr, NSTabletProximity);
 			return true;
 		default:
@@ -1238,12 +1237,12 @@ bool GHOST_SystemCocoa::handleTabletEvent(void *eventPtr)
 
 #if MAC_OS_X_VERSION_MAX_ALLOWED < 1070
 enum {
-    NSEventPhaseNone = 0,
-    NSEventPhaseBegan = 0x1 << 0,
-    NSEventPhaseStationary = 0x1 << 1,
-    NSEventPhaseChanged = 0x1 << 2,
-    NSEventPhaseEnded = 0x1 << 3,
-    NSEventPhaseCancelled = 0x1 << 4,
+	NSEventPhaseNone = 0,
+	NSEventPhaseBegan = 0x1 << 0,
+	NSEventPhaseStationary = 0x1 << 1,
+	NSEventPhaseChanged = 0x1 << 2,
+	NSEventPhaseEnded = 0x1 << 3,
+	NSEventPhaseCancelled = 0x1 << 4,
 };
 typedef NSUInteger NSEventPhase;
 
@@ -1317,6 +1316,7 @@ GHOST_TSuccess GHOST_SystemCocoa::handleMouseEvent(void *eventPtr)
 						GHOST_TInt32 x_warp, y_warp, x_accum, y_accum, x, y;
 						
 						window->getCursorGrabInitPos(x_warp, y_warp);
+						window->screenToClientIntern(x_warp, y_warp, x_warp, y_warp);
 						
 						window->getCursorGrabAccum(x_accum, y_accum);
 						x_accum += [event deltaX];
@@ -1368,6 +1368,7 @@ GHOST_TSuccess GHOST_SystemCocoa::handleMouseEvent(void *eventPtr)
 						
 						//Post event
 						window->getCursorGrabInitPos(x_cur, y_cur);
+						window->screenToClientIntern(x_cur, y_cur, x_cur, y_cur);
 						window->clientToScreenIntern(x_cur + x_accum, y_cur + y_accum, x, y);
 						pushEvent(new GHOST_EventCursor([event timestamp] * 1000, GHOST_kEventCursorMove, window, x, y));
 						break;
@@ -1388,25 +1389,36 @@ GHOST_TSuccess GHOST_SystemCocoa::handleMouseEvent(void *eventPtr)
 				}
 			}
 			break;
-			
-			/* these events only happen on swiping trackpads or tablets */
-			/* warning: using tablet + trackpad at same time frustrates this static variable */
-		case NSEventTypeBeginGesture:
-			m_hasMultiTouchTrackpad = 1;
-			break;
-		case NSEventTypeEndGesture:
-			m_hasMultiTouchTrackpad = 0;
-			break;
-			
+
 		case NSScrollWheel:
 			{
-				int *momentum = NULL;
+				NSEventPhase momentumPhase = NSEventPhaseNone;
+				NSEventPhase phase = NSEventPhaseNone;
+				bool hasMultiTouch = false;
 				
 				if ([event respondsToSelector:@selector(momentumPhase)])
-					momentum = (int *)[event momentumPhase];
+					momentumPhase = [event momentumPhase];
+				if ([event respondsToSelector:@selector(phase)])
+					phase = [event phase];
+				if ([event respondsToSelector:@selector(hasPreciseScrollingDeltas)])
+					hasMultiTouch = [event hasPreciseScrollingDeltas];
+
+				/* when pressing a key while momentum scrolling continues after
+				 * lifting fingers off the trackpad, the action can unexpectedly
+				 * change from e.g. scrolling to zooming. this works around the
+				 * issue by ignoring momentum scroll after a key press */
+				if (momentumPhase)
+				{
+					if (m_ignoreMomentumScroll)
+						break;
+				}
+				else
+				{
+					m_ignoreMomentumScroll = false;
+				}
 
 				/* standard scrollwheel case, if no swiping happened, and no momentum (kinetic scroll) works */
-				if (!m_hasMultiTouchTrackpad && momentum == NULL) {
+				if (!hasMultiTouch && momentumPhase == NSEventPhaseNone) {
 					GHOST_TInt32 delta;
 					
 					double deltaF = [event deltaY];
@@ -1422,16 +1434,14 @@ GHOST_TSuccess GHOST_SystemCocoa::handleMouseEvent(void *eventPtr)
 					GHOST_TInt32 x, y;
 					double dx;
 					double dy;
-					
+
 #if MAC_OS_X_VERSION_MIN_REQUIRED >= 1070
-					int phase = [event phase];
-					
 					/* with 10.7 nice scrolling deltas are supported */
 					dx = [event scrollingDeltaX];
 					dy = [event scrollingDeltaY];
 					
 					/* however, wacom tablet (intuos5) needs old deltas, it then has momentum and phase at zero */
-					if (phase == 0 && momentum==NULL) {
+					if (phase == NSEventPhaseNone && momentumPhase == NSEventPhaseNone) {
 						dx = [event deltaX];
 						dy = [event deltaY];
 					}
@@ -1566,6 +1576,7 @@ GHOST_TSuccess GHOST_SystemCocoa::handleKeyEvent(void *eventPtr)
 				pushEvent( new GHOST_EventKey([event timestamp] * 1000, GHOST_kEventKeyUp, window, keyCode, 0, NULL) );
 				//printf("Key up rawCode=0x%x charsIgnoringModifiers=%c keyCode=%u ascii=%i %c utf8=%s\n",[event keyCode],[charsIgnoringModifiers length]>0?[charsIgnoringModifiers characterAtIndex:0]:' ',keyCode,ascii,ascii, utf8_buf);
 			}
+			m_ignoreMomentumScroll = true;
 			break;
 	
 		case NSFlagsChanged: 
@@ -1585,6 +1596,7 @@ GHOST_TSuccess GHOST_SystemCocoa::handleKeyEvent(void *eventPtr)
 			}
 			
 			m_modifierMask = modifiers;
+			m_ignoreMomentumScroll = true;
 			break;
 			
 		default:

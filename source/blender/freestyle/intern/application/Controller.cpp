@@ -88,14 +88,14 @@ Controller::Controller()
 	_RootNode = new NodeGroup;
 	_RootNode->addRef();
 
-	_SilhouetteNode = NULL;
 #if 0
+	_SilhouetteNode = NULL;
 	_ProjectedSilhouette = NULL;
 	_VisibleProjectedSilhouette = NULL;
-#endif
 
 	_DebugNode = new NodeGroup;
 	_DebugNode->addRef();
+#endif
 
 	_winged_edge = NULL;
 
@@ -106,7 +106,9 @@ Controller::Controller()
 
 	_ProgressBar = new ProgressBar;
 	_SceneNumFaces = 0;
+#if 0
 	_minEdgeSize = DBL_MAX;
+#endif
 	_EPSILON = 1.0e-6;
 	_bboxDiag = 0;
 
@@ -142,6 +144,7 @@ Controller::~Controller()
 			delete _RootNode;
 	}
 
+#if 0
 	if (NULL != _SilhouetteNode) {
 		int ref = _SilhouetteNode->destroy();
 		if (0 == ref)
@@ -153,6 +156,7 @@ Controller::~Controller()
 		if (0 == ref)
 			delete _DebugNode;
 	}
+#endif
 
 	if (_winged_edge) {
 		delete _winged_edge;
@@ -262,9 +266,11 @@ int Controller::LoadMesh(Render *re, SceneRenderLayer *srl)
 	}
 	_SceneNumFaces += loader.numFacesRead();
 
+#if 0
 	if (loader.minEdgeSize() < _minEdgeSize) {
 		_minEdgeSize = loader.minEdgeSize();
 	}
+#endif
 
 #if 0  // DEBUG
 	ScenePrettyPrinter spp;
@@ -283,14 +289,14 @@ int Controller::LoadMesh(Render *re, SceneRenderLayer *srl)
 	if (_EnableViewMapCache) {
 
 		NodeCamera *cam;
-		if (freestyle_proj[3][3] != 0.0)
+		if (g_freestyle.proj[3][3] != 0.0)
 			cam = new NodeOrthographicCamera;
 		else
 			cam = new NodePerspectiveCamera;
 		double proj[16];
 		for (int i = 0; i < 4; i++) {
 			for (int j = 0; j < 4; j++) {
-				proj[i * 4 + j] = freestyle_proj[i][j];
+				proj[i * 4 + j] = g_freestyle.proj[i][j];
 			}
 		}
 		cam->setProjectionMatrix(proj);
@@ -404,11 +410,14 @@ void Controller::DeleteWingedEdge()
 	_Grid.clear();
 	_Scene3dBBox.clear();
 	_SceneNumFaces = 0;
+#if 0
 	_minEdgeSize = DBL_MAX;
+#endif
 }
 
 void Controller::DeleteViewMap(bool freeCache)
 {
+#if 0
 	_pView->DetachSilhouette();
 	if (NULL != _SilhouetteNode) {
 		int ref = _SilhouetteNode->destroy();
@@ -418,7 +427,6 @@ void Controller::DeleteViewMap(bool freeCache)
 		}
 	}
 
-#if 0
 	if (NULL != _ProjectedSilhouette) {
 		int ref = _ProjectedSilhouette->destroy();
 		if (0 == ref) {
@@ -433,7 +441,6 @@ void Controller::DeleteViewMap(bool freeCache)
 			_VisibleProjectedSilhouette = NULL;
 		}
 	}
-#endif
 
 	_pView->DetachDebug();
 	if (NULL != _DebugNode) {
@@ -441,6 +448,7 @@ void Controller::DeleteViewMap(bool freeCache)
 		if (0 == ref)
 			_DebugNode->addRef();
 	}
+#endif
 
 	if (NULL != _ViewMap) {
 		if (freeCache || !_EnableViewMapCache) {
@@ -469,7 +477,7 @@ void Controller::ComputeViewMap()
 	// Restore the context of view:
 	// we need to perform all these operations while the 
 	// 3D context is on.
-	Vec3r vp(freestyle_viewpoint[0], freestyle_viewpoint[1], freestyle_viewpoint[2]);
+	Vec3f vp(UNPACK3(g_freestyle.viewpoint));
 
 #if 0
 	if (G.debug & G_DEBUG_FREESTYLE) {
@@ -479,7 +487,7 @@ void Controller::ComputeViewMap()
 	real mv[4][4];
 	for (int i = 0; i < 4; i++) {
 		for (int j = 0; j < 4; j++) {
-			mv[i][j] = freestyle_mv[i][j];
+			mv[i][j] = g_freestyle.mv[i][j];
 #if 0
 			if (G.debug & G_DEBUG_FREESTYLE) {
 				cout << mv[i][j] << " ";
@@ -501,7 +509,7 @@ void Controller::ComputeViewMap()
 	real proj[4][4];
 	for (int i = 0; i < 4; i++) {
 		for (int j = 0; j < 4; j++) {
-			proj[i][j] = freestyle_proj[i][j];
+			proj[i][j] = g_freestyle.proj[i][j];
 #if 0
 			if (G.debug & G_DEBUG_FREESTYLE) {
 				cout << proj[i][j] << " ";
@@ -517,7 +525,7 @@ void Controller::ComputeViewMap()
 
 	int viewport[4];
 	for (int i = 0; i < 4; i++)
-		viewport[i] = freestyle_viewport[i];
+		viewport[i] = g_freestyle.viewport[i];
 
 #if 0
 	if (G.debug & G_DEBUG_FREESTYLE) {
@@ -533,7 +541,7 @@ void Controller::ComputeViewMap()
 	}
 	_Chrono.start();
 
-	edgeDetector.setViewpoint(Vec3r(vp));
+	edgeDetector.setViewpoint(vp);
 	edgeDetector.enableOrthographicProjection(proj[3][3] != 0.0);
 	edgeDetector.enableRidgesAndValleysFlag(_ComputeRidges);
 	edgeDetector.enableSuggestiveContours(_ComputeSuggestive);
@@ -557,20 +565,20 @@ void Controller::ComputeViewMap()
 	//----------------------------------------------------------
 	ViewMapBuilder vmBuilder;
 	vmBuilder.setEnableQI(_EnableQI);
-	vmBuilder.setViewpoint(Vec3r(vp));
+	vmBuilder.setViewpoint(vp);
 	vmBuilder.setTransform(mv, proj, viewport, _pView->GetFocalLength(), _pView->GetAspect(), _pView->GetFovyRadian());
 	vmBuilder.setFrustum(_pView->znear(), _pView->zfar());
 	vmBuilder.setGrid(&_Grid);
 	vmBuilder.setRenderMonitor(_pRenderMonitor);
 
+#if 0
 	// Builds a tesselated form of the silhouette for display purpose:
 	//---------------------------------------------------------------
 	ViewMapTesselator3D sTesselator3d;
-#if 0
 	ViewMapTesselator2D sTesselator2d;
 	sTesselator2d.setNature(_edgeTesselationNature);
-#endif
 	sTesselator3d.setNature(_edgeTesselationNature);
+#endif
 
 	if (G.debug & G_DEBUG_FREESTYLE) {
 		cout << "\n===  Building the view map  ===" << endl;
@@ -584,12 +592,12 @@ void Controller::ComputeViewMap()
 		printf("ViewMap edge count : %i\n", _ViewMap->viewedges_size());
 	}
 
+#if 0
 	// Tesselate the 3D edges:
 	_SilhouetteNode = sTesselator3d.Tesselate(_ViewMap);
 	_SilhouetteNode->addRef();
 
 	// Tesselate 2D edges
-#if 0
 	_ProjectedSilhouette = sTesselator2d.Tesselate(_ViewMap);
 	_ProjectedSilhouette->addRef();
 #endif
@@ -599,13 +607,13 @@ void Controller::ComputeViewMap()
 		printf("ViewMap building : %lf\n", duration);
 	}
 
-	_pView->AddSilhouette(_SilhouetteNode);
 #if 0
+	_pView->AddSilhouette(_SilhouetteNode);
 	_pView->AddSilhouette(_WRoot);
 	_pView->Add2DSilhouette(_ProjectedSilhouette);
 	_pView->Add2DVisibleSilhouette(_VisibleProjectedSilhouette);
-#endif
 	_pView->AddDebug(_DebugNode);
+#endif
 
 	// Draw the steerable density map:
 	//--------------------------------

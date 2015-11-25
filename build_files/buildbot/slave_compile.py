@@ -52,12 +52,18 @@ if 'cmake' in builder:
         cmake_options.append(['-G', '"Visual Studio 12 2013"'])
 
     cmake_options.append("-C../blender.git/build_files/cmake/config/blender_full.cmake")
-    cmake_options.append("-DWITH_CYCLES_CUDA_BINARIES=1")
+    if 'win32' not in builder:
+        cmake_options.append("-DWITH_CYCLES_CUDA_BINARIES=1")
+    else:
+        cmake_options.append("-DWITH_CYCLES_CUDA_BINARIES=0")
     # configure and make
     retcode = subprocess.call(['cmake', blender_dir] + cmake_options)
     if retcode != 0:
         sys.exit(retcode)
-    if 'win' in builder:
+
+    if 'win32' in builder:
+        retcode = subprocess.call(['msbuild', 'INSTALL.vcxproj', '/Property:PlatformToolset=v120_xp', '/p:Configuration=Release'])
+    elif 'win64' in builder:
         retcode = subprocess.call(['msbuild', 'INSTALL.vcxproj', '/p:Configuration=Release'])
     else:
         retcode = subprocess.call(['make', '-s', '-j4', 'install'])

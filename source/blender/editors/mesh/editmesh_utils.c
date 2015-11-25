@@ -380,6 +380,10 @@ void EDBM_mesh_make(ToolSettings *ts, Object *ob)
 	EDBM_selectmode_flush(me->edit_btmesh);
 }
 
+/**
+ * \warning This can invalidate the #DerivedMesh cache of other objects (for linked duplicates).
+ * Most callers should run #DAG_id_tag_update on \a ob, see: T46738.
+ */
 void EDBM_mesh_load(Object *ob)
 {
 	Mesh *me = ob->data;
@@ -671,7 +675,7 @@ UvVertMap *BM_uv_vert_map_create(
 			float (*tf_uv)[2];
 
 			if (use_winding) {
-				tf_uv = (float (*)[2])BLI_buffer_resize_data(&tf_uv_buf, vec2f, efa->len);
+				tf_uv = (float (*)[2])BLI_buffer_reinit_data(&tf_uv_buf, vec2f, efa->len);
 			}
 
 			BM_ITER_ELEM_INDEX(l, &liter, efa, BM_LOOPS_OF_FACE, i) {
@@ -764,11 +768,11 @@ UvMapVert *BM_uv_vert_map_at_index(UvVertMap *vmap, unsigned int v)
 	return vmap->vert[v];
 }
 
-/* from editmesh_lib.c in trunk */
-
 
 /* A specialized vert map used by stitch operator */
-UvElementMap *BM_uv_element_map_create(BMesh *bm, const bool selected, const bool do_islands)
+UvElementMap *BM_uv_element_map_create(
+        BMesh *bm,
+        const bool selected, const bool use_winding, const bool do_islands)
 {
 	BMVert *ev;
 	BMFace *efa;
@@ -807,14 +811,22 @@ UvElementMap *BM_uv_element_map_create(BMesh *bm, const bool selected, const boo
 	element_map->vert = (UvElement **)MEM_callocN(sizeof(*element_map->vert) * totverts, "UvElementVerts");
 	buf = element_map->buf = (UvElement *)MEM_callocN(sizeof(*element_map->buf) * totuv, "UvElement");
 
-	winding = MEM_mallocN(sizeof(*winding) * totfaces, "winding");
+	if (use_winding) {
+		winding = MEM_mallocN(sizeof(*winding) * totfaces, "winding");
+	}
 
 	BM_ITER_MESH_INDEX (efa, &iter, bm, BM_FACES_OF_MESH, j) {
 
-		winding[j] = false;
+		if (use_winding) {
+			winding[j] = false;
+		}
 
 		if (!selected || BM_elem_flag_test(efa, BM_ELEM_SELECT)) {
-			float (*tf_uv)[2]     = (float (*)[2])BLI_buffer_resize_data(&tf_uv_buf, vec2f, efa->len);
+			float (*tf_uv)[2];
+
+			if (use_winding) {
+				tf_uv = (float (*)[2])BLI_buffer_reinit_data(&tf_uv_buf, vec2f, efa->len);
+			}
 
 			BM_ITER_ELEM_INDEX (l, &liter, efa, BM_LOOPS_OF_FACE, i) {
 				buf->l = l;
@@ -825,13 +837,17 @@ UvElementMap *BM_uv_element_map_create(BMesh *bm, const bool selected, const boo
 				buf->next = element_map->vert[BM_elem_index_get(l->v)];
 				element_map->vert[BM_elem_index_get(l->v)] = buf;
 
-				luv = BM_ELEM_CD_GET_VOID_P(l, cd_loop_uv_offset);
-				copy_v2_v2(tf_uv[i], luv->uv);
+				if (use_winding) {
+					luv = BM_ELEM_CD_GET_VOID_P(l, cd_loop_uv_offset);
+					copy_v2_v2(tf_uv[i], luv->uv);
+				}
 
 				buf++;
 			}
 
-			winding[j] = cross_poly_v2((const float (*)[2])tf_uv, efa->len) > 0;
+			if (use_winding) {
+				winding[j] = cross_poly_v2((const float (*)[2])tf_uv, efa->len) > 0;
+			}
 		}
 	}
 
@@ -864,7 +880,7 @@ UvElementMap *BM_uv_element_map_create(BMesh *bm, const bool selected, const boo
 				sub_v2_v2v2(uvdiff, uv2, uv);
 
 				if (fabsf(uvdiff[0]) < STD_UV_CONNECT_LIMIT && fabsf(uvdiff[1]) < STD_UV_CONNECT_LIMIT &&
-				    winding[BM_elem_index_get(iterv->l->f)] == winding[BM_elem_index_get(v->l->f)])
+				    (!use_winding || winding[BM_elem_index_get(iterv->l->f)] == winding[BM_elem_index_get(v->l->f)]))
 				{
 					if (lastv) lastv->next = next;
 					else vlist = next;
@@ -884,7 +900,9 @@ UvElementMap *BM_uv_element_map_create(BMesh *bm, const bool selected, const boo
 		element_map->vert[i] = newvlist;
 	}
 
-	MEM_freeN(winding);
+	if (use_winding) {
+		MEM_freeN(winding);
+	}
 
 	if (do_islands) {
 		unsigned int *map;

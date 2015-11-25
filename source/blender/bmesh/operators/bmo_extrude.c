@@ -137,7 +137,7 @@ void bmo_extrude_discrete_faces_exec(BMesh *bm, BMOperator *op)
  * This function won't crash if its not but won't work right either.
  * \a e_b is the new edge.
  *
- * \note The edge this face comes from needs to be from the first and second verts fo the face.
+ * \note The edge this face comes from needs to be from the first and second verts to the face.
  * The caller must ensure this else we will copy from the wrong source.
  */
 static void bm_extrude_copy_face_loop_attributes(BMesh *bm, BMFace *f)
@@ -728,9 +728,9 @@ static void solidify_add_thickness(BMesh *bm, const float dist)
 		if (BMO_elem_flag_test(bm, f, FACE_MARK)) {
 
 			/* array for passing verts to angle_poly_v3 */
-			float  *face_angles = BLI_buffer_resize_data(&face_angles_buf, float, f->len);
+			float  *face_angles = BLI_buffer_reinit_data(&face_angles_buf, float, f->len);
 			/* array for receiving angles from angle_poly_v3 */
-			float **verts = BLI_buffer_resize_data(&verts_buf, float *, f->len);
+			float **verts = BLI_buffer_reinit_data(&verts_buf, float *, f->len);
 
 			BM_ITER_ELEM_INDEX (l, &loopIter, f, BM_LOOPS_OF_FACE, i) {
 				verts[i] = l->v->co;

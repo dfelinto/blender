@@ -43,7 +43,7 @@
 #include "BLI_threads.h"
 #include "BLI_utildefines.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_node.h"
 #include "BKE_scene.h"
@@ -474,9 +474,7 @@ static void occ_build_split(OcclusionTree *tree, int begin, int end, int *split)
 		if (tree->co[a][axis] > mid) {
 			enda--;
 			SWAP(OccFace, tree->face[a], tree->face[enda]);
-			SWAP(float, tree->co[a][0], tree->co[enda][0]);
-			SWAP(float, tree->co[a][1], tree->co[enda][1]);
-			SWAP(float, tree->co[a][2], tree->co[enda][2]);
+			swap_v3_v3(tree->co[a], tree->co[enda]);
 		}
 		else
 			a++;

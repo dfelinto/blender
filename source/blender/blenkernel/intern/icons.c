@@ -37,8 +37,11 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "DNA_group_types.h"
 #include "DNA_lamp_types.h"
 #include "DNA_material_types.h"
+#include "DNA_object_types.h"
+#include "DNA_scene_types.h"
 #include "DNA_texture_types.h"
 #include "DNA_world_types.h"
 #include "DNA_brush_types.h"
@@ -221,13 +224,16 @@ PreviewImage *BKE_previewimg_copy(PreviewImage *prv)
 PreviewImage **BKE_previewimg_id_get_p(ID *id)
 {
 	switch (GS(id->name)) {
-#define ID_PRV_CASE(id_code, id_struct) case id_code: { return &((id_struct *)id)->preview; }
+#define ID_PRV_CASE(id_code, id_struct) case id_code: { return &((id_struct *)id)->preview; } ((void)0)
 		ID_PRV_CASE(ID_MA, Material);
 		ID_PRV_CASE(ID_TE, Tex);
 		ID_PRV_CASE(ID_WO, World);
 		ID_PRV_CASE(ID_LA, Lamp);
 		ID_PRV_CASE(ID_IM, Image);
 		ID_PRV_CASE(ID_BR, Brush);
+		ID_PRV_CASE(ID_OB, Object);
+		ID_PRV_CASE(ID_GR, Group);
+		ID_PRV_CASE(ID_SCE, Scene);
 #undef ID_PRV_CASE
 	}
 

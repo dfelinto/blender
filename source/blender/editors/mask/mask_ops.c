@@ -516,7 +516,7 @@ static bool spline_under_mouse_get(const bContext *C,
 	MaskLayer *mask_layer;
 	int width, height;
 	float pixel_co[2];
-	float closest_dist_squared;
+	float closest_dist_squared = 0.0f;
 	MaskLayer *closest_layer = NULL;
 	MaskSpline *closest_spline = NULL;
 	bool undistort = false;
@@ -929,7 +929,6 @@ static int slide_point_modal(bContext *C, wmOperator *op, const wmEvent *event)
 
 				if (data->is_sliding_new_point) {
 					if (ELEM(data->which_handle, MASK_WHICH_HANDLE_LEFT, MASK_WHICH_HANDLE_RIGHT)) {
-						BezTriple *bezt = &data->point->bezt;
 						float vec[2];
 						short self_handle = (data->which_handle == MASK_WHICH_HANDLE_LEFT) ? 0 : 2;
 						short other_handle = (data->which_handle == MASK_WHICH_HANDLE_LEFT) ? 2 : 0;
@@ -1005,12 +1004,12 @@ static int slide_point_modal(bContext *C, wmOperator *op, const wmEvent *event)
 					w = len_v2(vec);
 
 					if (is_overall_feather) {
-						float delta;
+						float w_delta;
 
 						if (dot_v2v2(no, vec) <= 0.0f)
 							w = -w;
 
-						delta = w - data->weight * data->weight_scalar;
+						w_delta = w - data->weight * data->weight_scalar;
 
 						if (data->orig_spline == NULL) {
 							/* restore weight for currently sliding point, so orig_spline would be created
@@ -1025,7 +1024,7 @@ static int slide_point_modal(bContext *C, wmOperator *op, const wmEvent *event)
 							*weight = w * weight_scalar;
 						}
 
-						slide_point_delta_all_feather(data, delta);
+						slide_point_delta_all_feather(data, w_delta);
 					}
 					else {
 						if (dot_v2v2(no, vec) <= 0.0f)
@@ -1081,7 +1080,6 @@ static int slide_point_modal(bContext *C, wmOperator *op, const wmEvent *event)
 				}
 
 				if (data->is_sliding_new_point) {
-					BezTriple *bezt = &data->point->bezt;
 					if (len_squared_v2v2(bezt->vec[0], bezt->vec[1]) < FLT_EPSILON) {
 						bezt->h1 = HD_VECT;
 					}
@@ -2209,7 +2207,7 @@ static int mask_duplicate_exec(bContext *C, wmOperator *UNUSED(op))
 				}
 				if (end >= start) {
 					int tot_point;
-					int tot_point_shape_start;
+					int tot_point_shape_start = 0;
 					MaskSpline *new_spline = BKE_mask_spline_add(mask_layer);
 					MaskSplinePoint *new_point;
 					int b;

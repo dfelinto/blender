@@ -33,7 +33,7 @@
 #define __KX_ISCENECONVERTER_H__
 
 #include "STR_String.h"
-#include "KX_Python.h"
+#include "EXP_Python.h"
 
 #ifdef WITH_CXX_GUARDEDALLOC
 #include "MEM_guardedalloc.h"
@@ -64,6 +64,7 @@ public:
 
 	// handle any pending merges from asynchronous loads
 	virtual void MergeAsyncLoads()=0;
+	virtual void FinalizeAsyncLoads() = 0;
 
 	virtual void	SetAlwaysUseExpandFraming(bool to_what) = 0;
 

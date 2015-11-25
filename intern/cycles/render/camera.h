@@ -32,12 +32,26 @@ class Scene;
 /* Camera
  *
  * The camera parameters are quite standard, tested to be both compatible with
- * Renderman, and Blender after remapping. */
+ * Renderman, and Blender after remapping.
+ */
 
 class Camera {
 public:
+	/* Specifies an offset for the shutter's time interval. */
+	enum MotionPosition {
+		/* Shutter opens at the current frame. */
+		MOTION_POSITION_START,
+		/* Shutter is fully open at the current frame. */
+		MOTION_POSITION_CENTER,
+		/* Shutter closes at the current frame. */
+		MOTION_POSITION_END,
+	};
+
 	/* motion blur */
 	float shuttertime;
+	MotionPosition motion_position;
+	float shutter_curve[RAMP_TABLE_SIZE];
+	size_t shutter_table_offset;
 
 	/* depth of field */
 	float focaldistance;
@@ -83,7 +97,9 @@ public:
 
 	/* motion */
 	MotionTransform motion;
-	bool use_motion;
+	bool use_motion, use_perspective_motion;
+	float fov_pre, fov_post;
+	PerspectiveMotionTransform perspective_motion;
 
 	/* computed camera parameters */
 	Transform screentoworld;
@@ -118,7 +134,7 @@ public:
 
 	void device_update(Device *device, DeviceScene *dscene, Scene *scene);
 	void device_update_volume(Device *device, DeviceScene *dscene, Scene *scene);
-	void device_free(Device *device, DeviceScene *dscene);
+	void device_free(Device *device, DeviceScene *dscene, Scene *scene);
 
 	bool modified(const Camera& cam);
 	bool motion_modified(const Camera& cam);

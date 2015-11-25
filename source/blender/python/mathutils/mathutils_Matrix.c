@@ -843,7 +843,7 @@ static PyObject *C_Matrix_Shear(PyObject *cls, PyObject *args)
 		/* 3 or 4, apply as 3x3, resize later if needed */
 		float factor[2];
 
-		if (mathutils_array_parse(factor, 2, 2, fac, "Matrix.Shear()") < 0) {
+		if (mathutils_array_parse(factor, 2, 2, fac, "Matrix.Shear()") == -1) {
 			return NULL;
 		}
 
@@ -1120,8 +1120,7 @@ static PyObject *Matrix_to_euler(MatrixObject *self, PyObject *args)
 	float eul[3], eul_compatf[3];
 	EulerObject *eul_compat = NULL;
 
-	float tmat[3][3];
-	float (*mat)[3];
+	float mat[3][3];
 
 	if (BaseMath_ReadCallback(self) == -1)
 		return NULL;
@@ -1138,11 +1137,10 @@ static PyObject *Matrix_to_euler(MatrixObject *self, PyObject *args)
 
 	/*must be 3-4 cols, 3-4 rows, square matrix */
 	if (self->num_row == 3 && self->num_col == 3) {
-		mat = (float (*)[3])self->matrix;
+		copy_m3_m3(mat, (float (*)[3])self->matrix);
 	}
 	else if (self->num_row == 4 && self->num_col == 4) {
-		copy_m3_m4(tmat, (float (*)[4])self->matrix);
-		mat = tmat;
+		copy_m3_m4(mat, (float (*)[4])self->matrix);
 	}
 	else {
 		PyErr_SetString(PyExc_ValueError,
@@ -1158,13 +1156,15 @@ static PyObject *Matrix_to_euler(MatrixObject *self, PyObject *args)
 			return NULL;
 	}
 
+	normalize_m3(mat);
+
 	if (eul_compat) {
-		if (order == 1) mat3_to_compatible_eul(eul, eul_compatf, mat);
-		else            mat3_to_compatible_eulO(eul, eul_compatf, order, mat);
+		if (order == 1) mat3_normalized_to_compatible_eul(eul, eul_compatf, mat);
+		else            mat3_normalized_to_compatible_eulO(eul, eul_compatf, order, mat);
 	}
 	else {
-		if (order == 1) mat3_to_eul(eul, mat);
-		else mat3_to_eulO(eul, order, mat);
+		if (order == 1) mat3_normalized_to_eul(eul, mat);
+		else            mat3_normalized_to_eulO(eul, order, mat);
 	}
 
 	return Euler_CreatePyObject(eul, order, NULL);
@@ -2055,7 +2055,7 @@ static PyObject *Matrix_richcmpr(PyObject *a, PyObject *b, int op)
 
 static Py_hash_t Matrix_hash(MatrixObject *self)
 {
-	float mat[SQUARE(MATRIX_MAX_DIM)];
+	float mat[MATRIX_MAX_DIM * MATRIX_MAX_DIM];
 
 	if (BaseMath_ReadCallback(self) == -1)
 		return -1;
@@ -2122,7 +2122,7 @@ static int Matrix_ass_item_row(MatrixObject *self, int row, PyObject *value)
 		return -1;
 	}
 
-	if (mathutils_array_parse(vec, self->num_col, self->num_col, value, "matrix[i] = value assignment") < 0) {
+	if (mathutils_array_parse(vec, self->num_col, self->num_col, value, "matrix[i] = value assignment") == -1) {
 		return -1;
 	}
 
@@ -2147,7 +2147,7 @@ static int Matrix_ass_item_col(MatrixObject *self, int col, PyObject *value)
 		return -1;
 	}
 
-	if (mathutils_array_parse(vec, self->num_row, self->num_row, value, "matrix[i] = value assignment") < 0) {
+	if (mathutils_array_parse(vec, self->num_row, self->num_row, value, "matrix[i] = value assignment") == -1) {
 		return -1;
 	}
 
@@ -2188,7 +2188,7 @@ static PyObject *Matrix_slice(MatrixObject *self, int begin, int end)
  * sequence slice (set)*/
 static int Matrix_ass_slice(MatrixObject *self, int begin, int end, PyObject *value)
 {
-	PyObject *value_fast = NULL;
+	PyObject *value_fast;
 
 	if (BaseMath_ReadCallback_ForWrite(self) == -1)
 		return -1;
@@ -2203,6 +2203,7 @@ static int Matrix_ass_slice(MatrixObject *self, int begin, int end, PyObject *va
 		return -1;
 	}
 	else {
+		PyObject **value_fast_items = PySequence_Fast_ITEMS(value_fast);
 		const int size = end - begin;
 		int row, col;
 		float mat[MATRIX_MAX_DIM * MATRIX_MAX_DIM];
@@ -2221,11 +2222,12 @@ static int Matrix_ass_slice(MatrixObject *self, int begin, int end, PyObject *va
 		/* parse sub items */
 		for (row = begin; row < end; row++) {
 			/* parse each sub sequence */
-			PyObject *item = PySequence_Fast_GET_ITEM(value_fast, row - begin);
+			PyObject *item = value_fast_items[row - begin];
 
 			if (mathutils_array_parse(vec, self->num_col, self->num_col, item,
-			                          "matrix[begin:end] = value assignment") < 0)
+			                          "matrix[begin:end] = value assignment") == -1)
 			{
+				Py_DECREF(value_fast);
 				return -1;
 			}
 

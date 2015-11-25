@@ -54,7 +54,7 @@
 #include "BLI_linklist.h"
 #include "BLI_string.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_appdir.h"
 #include "BKE_key.h"
@@ -215,8 +215,7 @@ void modifiers_clearErrors(Object *ob)
 	}
 }
 
-void modifiers_foreachObjectLink(Object *ob, ObjectWalkFunc walk,
-                                 void *userData)
+void modifiers_foreachObjectLink(Object *ob, ObjectWalkFunc walk, void *userData)
 {
 	ModifierData *md = ob->modifiers.first;
 

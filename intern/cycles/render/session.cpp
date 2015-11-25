@@ -22,12 +22,15 @@
 #include "device.h"
 #include "graph.h"
 #include "integrator.h"
+#include "mesh.h"
+#include "object.h"
 #include "scene.h"
 #include "session.h"
 #include "bake.h"
 
 #include "util_foreach.h"
 #include "util_function.h"
+#include "util_logging.h"
 #include "util_math.h"
 #include "util_opengl.h"
 #include "util_task.h"
@@ -604,6 +607,7 @@ void Session::run_cpu()
 
 DeviceRequestedFeatures Session::get_requested_device_features()
 {
+	/* TODO(sergey): Consider moving this to the Scene level. */
 	DeviceRequestedFeatures requested_features;
 	requested_features.experimental = params.experimental;
 	if(!params.background) {
@@ -615,9 +619,28 @@ DeviceRequestedFeatures Session::get_requested_device_features()
 		requested_features.max_closure = get_max_closure_count();
 		scene->shader_manager->get_requested_features(
 		        scene,
-		        requested_features.max_nodes_group,
-		        requested_features.nodes_features);
+		        &requested_features);
 	}
+
+	/* This features are not being tweaked as often as shaders,
+	 * so could be done selective magic for the viewport as well.
+	 */
+	requested_features.use_hair = false;
+	requested_features.use_object_motion = false;
+	requested_features.use_camera_motion = scene->camera->use_motion;
+	foreach(Object *object, scene->objects) {
+		Mesh *mesh = object->mesh;
+		if(mesh->curves.size() > 0) {
+			requested_features.use_hair = true;
+		}
+		requested_features.use_object_motion |= object->use_motion | mesh->use_motion_blur;
+		requested_features.use_camera_motion |= mesh->use_motion_blur;
+	}
+
+	BakeManager *bake_manager = scene->bake_manager;
+	requested_features.use_baking = bake_manager->get_baking();
+	requested_features.use_integrator_branched = (scene->integrator->method == Integrator::BRANCHED_PATH);
+
 	return requested_features;
 }
 
@@ -628,7 +651,9 @@ void Session::load_kernels()
 	if(!kernels_loaded) {
 		progress.set_status("Loading render kernels (may take a few minutes the first time)");
 
-		if(!device->load_kernels(get_requested_device_features())) {
+		DeviceRequestedFeatures requested_features = get_requested_device_features();
+		VLOG(2) << "Requested features:\n" << requested_features;
+		if(!device->load_kernels(requested_features)) {
 			string message = device->error_message();
 			if(message.empty())
 				message = "Failed loading render kernel, see console for errors";
@@ -806,16 +831,21 @@ void Session::update_status_time(bool show_pause, bool show_done)
 	string status, substatus;
 
 	if(!params.progressive) {
-		bool is_gpu = params.device.type == DEVICE_CUDA || params.device.type == DEVICE_OPENCL;
-		bool is_multidevice = params.device.multi_devices.size() > 1;
-		bool is_cpu = params.device.type == DEVICE_CPU;
+		const int progress_sample = progress.get_sample(), num_samples = tile_manager.num_samples;
+		const bool is_gpu = params.device.type == DEVICE_CUDA || params.device.type == DEVICE_OPENCL;
+		const bool is_multidevice = params.device.multi_devices.size() > 1;
+		const bool is_cpu = params.device.type == DEVICE_CPU;
+		const bool is_last_tile = (num_samples * num_tiles - progress_sample) < num_samples;
 
 		substatus = string_printf("Path Tracing Tile %d/%d", tile, num_tiles);
 
-		if(((is_gpu && !is_multidevice) || (is_cpu && num_tiles == 1)) && !device->info.use_split_kernel) {
+		if((is_gpu && !is_multidevice && !device->info.use_split_kernel) ||
+		   (is_cpu && (num_tiles == 1 || is_last_tile)))
+		{
 			/* When using split-kernel (OpenCL) each thread in a tile will be working on a different
 			 * sample. Can't display sample number when device uses split-kernel
 			 */
+
 			/* when rendering on GPU multithreading happens within single tile, as in
 			 * tiles are handling sequentially and in this case we could display
 			 * currently rendering sample number
@@ -823,17 +853,21 @@ void Session::update_status_time(bool show_pause, bool show_done)
 			 * also display the info on CPU, when using 1 tile only
 			 */
 
-			int sample = progress.get_sample(), num_samples = tile_manager.num_samples;
-
+			int status_sample = progress_sample;
 			if(tile > 1) {
 				/* sample counter is global for all tiles, subtract samples
 				 * from already finished tiles to get sample counter for
 				 * current tile only
 				 */
-				sample -= (tile - 1) * num_samples;
+				if(is_cpu && is_last_tile && num_tiles > 1) {
+					status_sample = num_samples - (num_samples * num_tiles - progress_sample);
+				}
+				else {
+					status_sample -= (tile - 1) * num_samples;
+				}
 			}
 
-			substatus += string_printf(", Sample %d/%d", sample, num_samples);
+			substatus += string_printf(", Sample %d/%d", status_sample, num_samples);
 		}
 	}
 	else if(tile_manager.num_samples == USHRT_MAX)

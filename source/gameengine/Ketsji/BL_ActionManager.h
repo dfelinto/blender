@@ -51,15 +51,13 @@ private:
 	class KX_GameObject* m_obj;
 	BL_ActionMap 		 m_layers;
 
+	// The last update time to avoid double animation update.
+	float m_prevUpdate;
+
 	/**
 	 * Check if an action exists
 	 */
 	BL_Action* GetAction(short layer);
-
-	/**
-	 * Add new action with given layer
-	 */
-	BL_Action* AddAction(short layer);
 
 public:
 	BL_ActionManager(class KX_GameObject* obj);
@@ -80,6 +78,11 @@ public:
 	 * Gets the current frame of an action
 	 */
 	float GetActionFrame(short layer);
+
+	/**
+	 * Gets the name of the current action
+	 */        
+	const char *GetActionName(short layer);
 
 	/**
 	 * Sets the current frame of an action
@@ -107,6 +110,11 @@ public:
 	void StopAction(short layer);
 
 	/**
+	 * Remove playing tagged actions.
+	 */
+	void RemoveTaggedActions();
+
+	/**
 	 * Check if an action has finished playing
 	 */
 	bool IsActionDone(short layer);
@@ -115,11 +123,6 @@ public:
 	 * Update any running actions
 	 */
 	void Update(float);
-
-	/**
-	 * Update object IPOs (note: not thread-safe!)
-	 */
-	void UpdateIPOs();
 
 #ifdef WITH_CXX_GUARDEDALLOC
 	MEM_CXX_CLASS_ALLOC_FUNCS("GE:BL_ActionManager")

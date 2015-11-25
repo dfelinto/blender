@@ -697,7 +697,7 @@ static int armature_symmetrize_exec(bContext *C, wmOperator *op)
 /* following conventions from #MESH_OT_symmetrize */
 void ARMATURE_OT_symmetrize(wmOperatorType *ot)
 {
-	/* subset of 'symmetrize_direction_items' */
+	/* subset of 'rna_enum_symmetrize_direction_items' */
 	static EnumPropertyItem arm_symmetrize_direction_items[] = {
 		{-1, "NEGATIVE_X", 0, "-X to +X", ""},
 		{+1, "POSITIVE_X", 0, "+X to -X", ""},
@@ -1036,7 +1036,7 @@ void ARMATURE_OT_subdivide(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 	
 	/* Properties */
-	prop = RNA_def_int(ot->srna, "number_cuts", 1, 1, INT_MAX, "Number of Cuts", "", 1, 10);
+	prop = RNA_def_int(ot->srna, "number_cuts", 1, 1, 1000, "Number of Cuts", "", 1, 10);
 	/* avoid re-using last var because it can cause _very_ high poly meshes and annoy users (or worse crash) */
 	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }

@@ -410,6 +410,10 @@ m_ccdMode(0),
 m_solverType(-1),
 m_profileTimings(0),
 m_enableSatCollisionDetection(false),
+m_deactivationTime(2.0f),
+m_linearDeactivationThreshold(0.8f),
+m_angularDeactivationThreshold(1.0f),
+m_contactBreakingThreshold(0.02f),
 m_solver(NULL),
 m_ownPairCache(NULL),
 m_filterCallback(NULL),
@@ -452,6 +456,7 @@ m_scalingPropagated(false)
 	SetSolverType(1);//issues with quickstep and memory allocations
 //	m_dynamicsWorld = new btDiscreteDynamicsWorld(dispatcher,m_broadphase,m_solver,m_collisionConfiguration);
 	m_dynamicsWorld = new btSoftRigidDynamicsWorld(dispatcher,m_broadphase,m_solver,m_collisionConfiguration);
+	m_dynamicsWorld->setInternalTickCallback(&CcdPhysicsEnvironment::StaticSimulationSubtickCallback, this);
 	//m_dynamicsWorld->getSolverInfo().m_linearSlop = 0.01f;
 	//m_dynamicsWorld->getSolverInfo().m_solverMode=	SOLVER_USE_WARMSTARTING +	SOLVER_USE_2_FRICTION_DIRECTIONS +	SOLVER_RANDMIZE_ORDER +	SOLVER_USE_FRICTION_WARMSTARTING;
 
@@ -466,21 +471,15 @@ void	CcdPhysicsEnvironment::AddCcdPhysicsController(CcdPhysicsController* ctrl)
 		return;
 	}
 
-	/* In the case of compound child controller (see also RemoveCcdPhysicsController)
-	 * we add the controller to the trigger controlers list : m_triggerControllers
-	 * if it use collision callbacks.
-	 */
-	if (ctrl->Registered()) {
-		m_triggerControllers.insert(ctrl);
-	}
-
 	btRigidBody* body = ctrl->GetRigidBody();
 	btCollisionObject* obj = ctrl->GetCollisionObject();
 
 	//this m_userPointer is just used for triggers, see CallbackTriggers
 	obj->setUserPointer(ctrl);
-	if (body)
-		body->setGravity( m_gravity );
+	if (body) {
+		body->setGravity(m_gravity);
+		body->setSleepingThresholds(m_linearDeactivationThreshold, m_angularDeactivationThreshold);
+	}
 
 	if (body)
 	{
@@ -512,23 +511,32 @@ void	CcdPhysicsEnvironment::AddCcdPhysicsController(CcdPhysicsController* ctrl)
 	assert(obj->getBroadphaseHandle());
 }
 
-		
+void CcdPhysicsEnvironment::RemoveConstraint(btTypedConstraint *con)
+{
+	btRigidBody &rbA = con->getRigidBodyA();
+	btRigidBody &rbB = con->getRigidBodyB();
+	rbA.activate();
+	rbB.activate();
+	m_dynamicsWorld->removeConstraint(con);
+
+	if (rbA.getUserPointer()) {
+		((CcdPhysicsController *)rbA.getUserPointer())->removeCcdConstraintRef(con);
+	}
+
+	if (rbB.getUserPointer()) {
+		((CcdPhysicsController *)rbB.getUserPointer())->removeCcdConstraintRef(con);
+	}
+
+	/* Since we remove the constraint in the onwer and the target, we can delete it,
+	 * KX_ConstraintWrapper keep the constraint id not the pointer, so no problems. */
+	delete con;
+}
 
 bool	CcdPhysicsEnvironment::RemoveCcdPhysicsController(CcdPhysicsController* ctrl)
 {
 	// if the physics controller is already removed we do nothing
 	if (!m_controllers.erase(ctrl)) {
 		return false;
-	}
-
-	/* In the case of compound child controller which use collision callbacks
-	 * we remove it from the m_triggerControllers list but leave m_registerCount
-	 * to know in AddCcdPhysicsController if we have to add it in m_triggerControllers
-	 * and to avoid an useless added in RequestCollisionCallback, indeed we can't register
-	 * more than one time a controller.
-	 */
-	if (ctrl->Registered()) {
-		m_triggerControllers.erase(ctrl);
 	}
 
 	//also remove constraint
@@ -545,11 +553,7 @@ bool	CcdPhysicsEnvironment::RemoveCcdPhysicsController(CcdPhysicsController* ctr
 		for (int i = ctrl->getNumCcdConstraintRefs() - 1; i >= 0; i--)
 		{
 			btTypedConstraint* con = ctrl->getCcdConstraintRef(i);
-			con->getRigidBodyA().activate();
-			con->getRigidBodyB().activate();
-			m_dynamicsWorld->removeConstraint(con);
-			ctrl->removeCcdConstraintRef(con);
-			//delete con; //might be kept by python KX_ConstraintWrapper
+			RemoveConstraint(con);
 		}
 		m_dynamicsWorld->removeRigidBody(ctrl->GetRigidBody());
 
@@ -564,7 +568,7 @@ bool	CcdPhysicsEnvironment::RemoveCcdPhysicsController(CcdPhysicsController* ctr
 		}
 
 		if (vehicle_constraint > 0)
-			RemoveConstraint(vehicle_constraint);
+			RemoveConstraintById(vehicle_constraint);
 	} else
 	{
 		//if a softbody
@@ -695,10 +699,30 @@ void CcdPhysicsEnvironment::DebugDrawWorld()
 			m_dynamicsWorld->debugDrawWorld();
 }
 
+void CcdPhysicsEnvironment::StaticSimulationSubtickCallback(btDynamicsWorld *world, btScalar timeStep)
+{
+	// Get the pointer to the CcdPhysicsEnvironment associated with this Bullet world.
+	CcdPhysicsEnvironment *this_ = static_cast<CcdPhysicsEnvironment*>(world->getWorldUserInfo());
+	this_->SimulationSubtickCallback(timeStep);
+}
+
+void CcdPhysicsEnvironment::SimulationSubtickCallback(btScalar timeStep)
+{
+	std::set<CcdPhysicsController*>::iterator it;
+
+	for (it = m_controllers.begin(); it != m_controllers.end(); it++) {
+		(*it)->SimulationTick(timeStep);
+	}
+}
+
 bool	CcdPhysicsEnvironment::ProceedDeltaTime(double curTime,float timeStep,float interval)
 {
 	std::set<CcdPhysicsController*>::iterator it;
 	int i;
+
+	// Update Bullet global variables.
+	gDeactivationTime = m_deactivationTime;
+	gContactBreakingThreshold = m_contactBreakingThreshold;
 
 	for (it=m_controllers.begin(); it!=m_controllers.end(); it++)
 	{
@@ -919,21 +943,32 @@ void		CcdPhysicsEnvironment::SetNumIterations(int numIter)
 }
 void		CcdPhysicsEnvironment::SetDeactivationTime(float dTime)
 {
-	gDeactivationTime = dTime;
+	m_deactivationTime = dTime;
 }
 void		CcdPhysicsEnvironment::SetDeactivationLinearTreshold(float linTresh)
 {
-	gLinearSleepingTreshold = linTresh;
+	m_linearDeactivationThreshold = linTresh;
+
+	// Update from all controllers.
+	for (std::set<CcdPhysicsController*>::iterator it = m_controllers.begin(); it != m_controllers.end(); it++) {
+		if ((*it)->GetRigidBody())
+			(*it)->GetRigidBody()->setSleepingThresholds(m_linearDeactivationThreshold, m_angularDeactivationThreshold);
+	}
 }
 void		CcdPhysicsEnvironment::SetDeactivationAngularTreshold(float angTresh)
 {
-	gAngularSleepingTreshold = angTresh;
+	m_angularDeactivationThreshold = angTresh;
+
+	// Update from all controllers.
+	for (std::set<CcdPhysicsController*>::iterator it = m_controllers.begin(); it != m_controllers.end(); it++) {
+		if ((*it)->GetRigidBody())
+			(*it)->GetRigidBody()->setSleepingThresholds(m_linearDeactivationThreshold, m_angularDeactivationThreshold);
+	}
 }
 
 void		CcdPhysicsEnvironment::SetContactBreakingTreshold(float contactBreakingTreshold)
 {
-	gContactBreakingThreshold = contactBreakingTreshold;
-
+	m_contactBreakingThreshold = contactBreakingTreshold;
 }
 
 
@@ -1079,11 +1114,12 @@ int			CcdPhysicsEnvironment::CreateUniversalD6Constraint(
 	return 0;
 }
 
-
-
-void		CcdPhysicsEnvironment::RemoveConstraint(int	constraintId)
+void CcdPhysicsEnvironment::RemoveConstraintById(int constraintId)
 {
-	
+	// For soft body constraints
+	if (constraintId == 0)
+		return;
+
 	int i;
 	int numConstraints = m_dynamicsWorld->getNumConstraints();
 	for (i=0;i<numConstraints;i++)
@@ -1091,9 +1127,7 @@ void		CcdPhysicsEnvironment::RemoveConstraint(int	constraintId)
 		btTypedConstraint* constraint = m_dynamicsWorld->getConstraint(i);
 		if (constraint->getUserConstraintId() == constraintId)
 		{
-			constraint->getRigidBodyA().activate();
-			constraint->getRigidBodyB().activate();
-			m_dynamicsWorld->removeConstraint(constraint);
+			RemoveConstraint(constraint);
 			break;
 		}
 	}
@@ -1371,98 +1405,111 @@ struct OcclusionBuffer
 {
 	struct WriteOCL
 	{
-		static inline bool Process(btScalar& q,btScalar v) { if (q<v) q=v;return(false); }
-		static inline void Occlusion(bool& flag) { flag = true; }
+		static inline bool Process(btScalar &q, btScalar v)
+		{
+			if (q < v) {
+				q = v;
+			}
+			return false;
+		}
+		static inline void Occlusion(bool &flag)
+		{
+			flag = true;
+		}
 	};
+
 	struct QueryOCL
 	{
-		static inline bool Process(btScalar& q,btScalar v) { return(q<=v); }
-		static inline void Occlusion(bool& flag) { }
+		static inline bool Process(btScalar &q, btScalar v)
+		{
+			return (q <= v);
+		}
+		static inline void Occlusion(bool &flag)
+		{
+		}
 	};
-	btScalar*						m_buffer;
-	size_t							m_bufferSize;
-	bool							m_initialized;
-	bool							m_occlusion;
-	int								m_sizes[2];
-	btScalar						m_scales[2];
-	btScalar						m_offsets[2];
-	btScalar						m_wtc[16];		// world to clip transform
-	btScalar						m_mtc[16];		// model to clip transform
+
+	btScalar *m_buffer;
+	size_t m_bufferSize;
+	bool m_initialized;
+	bool m_occlusion;
+	int m_sizes[2];
+	btScalar m_scales[2];
+	btScalar m_offsets[2];
+	btScalar m_wtc[16]; // world to clip transform
+	btScalar m_mtc[16]; // model to clip transform
 	// constructor: size=largest dimension of the buffer. 
 	// Buffer size depends on aspect ratio
 	OcclusionBuffer()
 	{
-		m_initialized=false;
+		m_initialized = false;
 		m_occlusion = false;
 		m_buffer = NULL;
 		m_bufferSize = 0;
 	}
-	// multiplication of column major matrices: m=m1*m2
+	// multiplication of column major matrices: m = m1 * m2
 	template<typename T1, typename T2>
-	void		CMmat4mul(btScalar* m, const T1* m1, const T2* m2)
+	void CMmat4mul(btScalar *m, const T1 *m1, const T2 *m2)
 	{
-		m[ 0] = btScalar(m1[ 0]*m2[ 0]+m1[ 4]*m2[ 1]+m1[ 8]*m2[ 2]+m1[12]*m2[ 3]);
-		m[ 1] = btScalar(m1[ 1]*m2[ 0]+m1[ 5]*m2[ 1]+m1[ 9]*m2[ 2]+m1[13]*m2[ 3]);
-		m[ 2] = btScalar(m1[ 2]*m2[ 0]+m1[ 6]*m2[ 1]+m1[10]*m2[ 2]+m1[14]*m2[ 3]);
-		m[ 3] = btScalar(m1[ 3]*m2[ 0]+m1[ 7]*m2[ 1]+m1[11]*m2[ 2]+m1[15]*m2[ 3]);
+		m[0] = btScalar(m1[0] * m2[0] + m1[4] * m2[1] + m1[8] * m2[2] + m1[12] * m2[3]);
+		m[1] = btScalar(m1[1] * m2[0] + m1[5] * m2[1] + m1[9] * m2[2] + m1[13] * m2[3]);
+		m[2] = btScalar(m1[2] * m2[0] + m1[6] * m2[1] + m1[10] * m2[2] + m1[14] * m2[3]);
+		m[3] = btScalar(m1[3] * m2[0] + m1[7] * m2[1] + m1[11] * m2[2] + m1[15] * m2[3]);
 
-		m[ 4] = btScalar(m1[ 0]*m2[ 4]+m1[ 4]*m2[ 5]+m1[ 8]*m2[ 6]+m1[12]*m2[ 7]);
-		m[ 5] = btScalar(m1[ 1]*m2[ 4]+m1[ 5]*m2[ 5]+m1[ 9]*m2[ 6]+m1[13]*m2[ 7]);
-		m[ 6] = btScalar(m1[ 2]*m2[ 4]+m1[ 6]*m2[ 5]+m1[10]*m2[ 6]+m1[14]*m2[ 7]);
-		m[ 7] = btScalar(m1[ 3]*m2[ 4]+m1[ 7]*m2[ 5]+m1[11]*m2[ 6]+m1[15]*m2[ 7]);
+		m[4] = btScalar(m1[0] * m2[4] + m1[4] * m2[5] + m1[8] * m2[6] + m1[12] * m2[7]);
+		m[5] = btScalar(m1[1] * m2[4] + m1[5] * m2[5] + m1[9] * m2[6] + m1[13] * m2[7]);
+		m[6] = btScalar(m1[2] * m2[4] + m1[6] * m2[5] + m1[10] * m2[6] + m1[14] * m2[7]);
+		m[7] = btScalar(m1[3] * m2[4] + m1[7] * m2[5] + m1[11] * m2[6] + m1[15] * m2[7]);
 
-		m[ 8] = btScalar(m1[ 0]*m2[ 8]+m1[ 4]*m2[ 9]+m1[ 8]*m2[10]+m1[12]*m2[11]);
-		m[ 9] = btScalar(m1[ 1]*m2[ 8]+m1[ 5]*m2[ 9]+m1[ 9]*m2[10]+m1[13]*m2[11]);
-		m[10] = btScalar(m1[ 2]*m2[ 8]+m1[ 6]*m2[ 9]+m1[10]*m2[10]+m1[14]*m2[11]);
-		m[11] = btScalar(m1[ 3]*m2[ 8]+m1[ 7]*m2[ 9]+m1[11]*m2[10]+m1[15]*m2[11]);
+		m[8] = btScalar(m1[0] * m2[8] + m1[4] * m2[9] + m1[8] * m2[10] + m1[12] * m2[11]);
+		m[9] = btScalar(m1[1] * m2[8] + m1[5] * m2[9] + m1[9] * m2[10] + m1[13] * m2[11]);
+		m[10] = btScalar(m1[2] * m2[8] + m1[6] * m2[9] + m1[10] * m2[10] + m1[14] * m2[11]);
+		m[11] = btScalar(m1[3] * m2[8] + m1[7] * m2[9] + m1[11] * m2[10] + m1[15] * m2[11]);
 
-		m[12] = btScalar(m1[ 0]*m2[12]+m1[ 4]*m2[13]+m1[ 8]*m2[14]+m1[12]*m2[15]);
-		m[13] = btScalar(m1[ 1]*m2[12]+m1[ 5]*m2[13]+m1[ 9]*m2[14]+m1[13]*m2[15]);
-		m[14] = btScalar(m1[ 2]*m2[12]+m1[ 6]*m2[13]+m1[10]*m2[14]+m1[14]*m2[15]);
-		m[15] = btScalar(m1[ 3]*m2[12]+m1[ 7]*m2[13]+m1[11]*m2[14]+m1[15]*m2[15]);
+		m[12] = btScalar(m1[0] * m2[12] + m1[4] * m2[13] + m1[8] * m2[14] + m1[12] * m2[15]);
+		m[13] = btScalar(m1[1] * m2[12] + m1[5] * m2[13] + m1[9] * m2[14] + m1[13] * m2[15]);
+		m[14] = btScalar(m1[2] * m2[12] + m1[6] * m2[13] + m1[10] * m2[14] + m1[14] * m2[15]);
+		m[15] = btScalar(m1[3] * m2[12] + m1[7] * m2[13] + m1[11] * m2[14] + m1[15] * m2[15]);
 	}
-	void		setup(int size, const int *view, double modelview[16], double projection[16])
+
+	void setup(int size, const int *view, double modelview[16], double projection[16])
 	{
-		m_initialized=false;
-		m_occlusion=false;
+		m_initialized = false;
+		m_occlusion = false;
 		// compute the size of the buffer
-		int			maxsize;
-		double		ratio;
-		maxsize = (view[2] > view[3]) ? view[2] : view[3];
+		int maxsize = (view[2] > view[3]) ? view[2] : view[3];
 		assert(maxsize > 0);
-		ratio = 1.0/(2*maxsize);
+		double ratio = 1.0 / (2 * maxsize);
 		// ensure even number
-		m_sizes[0] = 2*((int)(size*view[2]*ratio+0.5));
-		m_sizes[1] = 2*((int)(size*view[3]*ratio+0.5));
-		m_scales[0]=btScalar(m_sizes[0]/2);
-		m_scales[1]=btScalar(m_sizes[1]/2);
-		m_offsets[0]=m_scales[0]+0.5f;
-		m_offsets[1]=m_scales[1]+0.5f;
+		m_sizes[0] = 2 * ((int)(size * view[2] * ratio + 0.5));
+		m_sizes[1] = 2 * ((int)(size * view[3] * ratio + 0.5));
+		m_scales[0] = btScalar(m_sizes[0] / 2);
+		m_scales[1] = btScalar(m_sizes[1] / 2);
+		m_offsets[0] = m_scales[0] + 0.5f;
+		m_offsets[1] = m_scales[1] + 0.5f;
 		// prepare matrix
 		// at this time of the rendering, the modelview matrix is the 
 		// world to camera transformation and the projection matrix is
 		// camera to clip transformation. combine both so that
 		CMmat4mul(m_wtc, projection, modelview);
 	}
-	void		initialize()
+
+	void initialize()
 	{
-		size_t newsize = (m_sizes[0]*m_sizes[1])*sizeof(btScalar);
-		if (m_buffer)
-		{
+		size_t newsize = (m_sizes[0] * m_sizes[1]) * sizeof(btScalar);
+		if (m_buffer) {
 			// see if we can reuse
-			if (newsize > m_bufferSize)
-			{
+			if (newsize > m_bufferSize) {
 				free(m_buffer);
 				m_buffer = NULL;
 				m_bufferSize = 0;
 			}
 		}
-		if (!m_buffer)
-		{
-			m_buffer = (btScalar*)calloc(1, newsize);
+		if (!m_buffer) {
+			m_buffer = (btScalar *)calloc(1, newsize);
 			m_bufferSize = newsize;
-		} else
-		{
+		} 
+		else {
 			// buffer exists already, just clears it
 			memset(m_buffer, 0, newsize);
 		}
@@ -1471,163 +1518,169 @@ struct OcclusionBuffer
 		m_initialized = true;
 		m_occlusion = false;
 	}
-	void		SetModelMatrix(double *fl)
+
+	void SetModelMatrix(double *fl)
 	{
 		CMmat4mul(m_mtc,m_wtc,fl);
-		if (!m_initialized)
+		if (!m_initialized) {
 			initialize();
+		}
 	}
 
 	// transform a segment in world coordinate to clip coordinate
-	void		transformW(const btVector3& x, btVector4& t)
+	void transformW(const btVector3 &x, btVector4 &t)
 	{
-		t[0]	=	x[0]*m_wtc[0]+x[1]*m_wtc[4]+x[2]*m_wtc[8]+m_wtc[12];
-		t[1]	=	x[0]*m_wtc[1]+x[1]*m_wtc[5]+x[2]*m_wtc[9]+m_wtc[13];
-		t[2]	=	x[0]*m_wtc[2]+x[1]*m_wtc[6]+x[2]*m_wtc[10]+m_wtc[14];
-		t[3]	=	x[0]*m_wtc[3]+x[1]*m_wtc[7]+x[2]*m_wtc[11]+m_wtc[15];
+		t[0] = x[0] * m_wtc[0] + x[1] * m_wtc[4] + x[2] * m_wtc[8] + m_wtc[12];
+		t[1] = x[0] * m_wtc[1] + x[1] * m_wtc[5] + x[2] * m_wtc[9] + m_wtc[13];
+		t[2] = x[0] * m_wtc[2] + x[1] * m_wtc[6] + x[2] * m_wtc[10] + m_wtc[14];
+		t[3] = x[0] * m_wtc[3] + x[1] * m_wtc[7] + x[2] * m_wtc[11] + m_wtc[15];
 	}
-	void		transformM(const float* x, btVector4& t)
+
+	void transformM(const float *x, btVector4 &t)
 	{
-		t[0]	=	x[0]*m_mtc[0]+x[1]*m_mtc[4]+x[2]*m_mtc[8]+m_mtc[12];
-		t[1]	=	x[0]*m_mtc[1]+x[1]*m_mtc[5]+x[2]*m_mtc[9]+m_mtc[13];
-		t[2]	=	x[0]*m_mtc[2]+x[1]*m_mtc[6]+x[2]*m_mtc[10]+m_mtc[14];
-		t[3]	=	x[0]*m_mtc[3]+x[1]*m_mtc[7]+x[2]*m_mtc[11]+m_mtc[15];
+		t[0] = x[0] * m_mtc[0] + x[1] * m_mtc[4] + x[2] * m_mtc[8] + m_mtc[12];
+		t[1] = x[0] * m_mtc[1] + x[1] * m_mtc[5] + x[2] * m_mtc[9] + m_mtc[13];
+		t[2] = x[0] * m_mtc[2] + x[1] * m_mtc[6] + x[2] * m_mtc[10] + m_mtc[14];
+		t[3] = x[0] * m_mtc[3] + x[1] * m_mtc[7] + x[2] * m_mtc[11] + m_mtc[15];
 	}
 	// convert polygon to device coordinates
-	static bool	project(btVector4* p,int n)
+	static bool project(btVector4 *p, int n)
 	{
-		for (int i=0;i<n;++i)
-		{
-			p[i][2]=1/p[i][3];
-			p[i][0]*=p[i][2];
-			p[i][1]*=p[i][2];
+		for (int i = 0; i < n; ++i) {
+			p[i][2] = 1 / p[i][3];
+			p[i][0] *= p[i][2];
+			p[i][1] *= p[i][2];
 		}
-		return(true);
+		return true;
 	}
 	// pi: closed polygon in clip coordinate, NP = number of segments
 	// po: same polygon with clipped segments removed
 	template <const int NP>
-	static int	clip(const btVector4* pi,btVector4* po)
+	static int clip(const btVector4 *pi, btVector4 *po)
 	{
-		btScalar	s[2*NP];
-		btVector4	pn[2*NP];
-		int			i, j, m, n, ni;
+		btScalar s[2 * NP];
+		btVector4 pn[2 * NP];
+		int i, j, m, n, ni;
 		// deal with near clipping
-		for (i=0, m=0;i<NP;++i)
-		{
-			s[i]=pi[i][2]+pi[i][3];
-			if (s[i]<0) m+=1<<i;
+		for (i = 0, m = 0; i < NP; ++i) {
+			s[i] = pi[i][2] + pi[i][3];
+			if (s[i] < 0) {
+				m += 1 << i;
+			}
 		}
-		if (m==((1<<NP)-1)) 
-			return(0);
-		if (m!=0)
-		{
-			for (i=NP-1,j=0,n=0;j<NP;i=j++)
-			{
-				const btVector4&	a=pi[i];
-				const btVector4&	b=pi[j];
-				const btScalar		t=s[i]/(a[3]+a[2]-b[3]-b[2]);
-				if ((t>0)&&(t<1))
-				{
-					pn[n][0]	=	a[0]+(b[0]-a[0])*t;
-					pn[n][1]	=	a[1]+(b[1]-a[1])*t;
-					pn[n][2]	=	a[2]+(b[2]-a[2])*t;
-					pn[n][3]	=	a[3]+(b[3]-a[3])*t;
+		if (m == ((1 << NP) - 1)) {
+			return 0;
+		}
+		if (m != 0) {
+			for (i = NP - 1, j = 0, n = 0; j < NP; i = j++) {
+				const btVector4 &a = pi[i];
+				const btVector4 &b = pi[j];
+				const btScalar t = s[i] / (a[3] + a[2] - b[3] - b[2]);
+				if ((t > 0) && (t < 1)) {
+					pn[n][0] = a[0] + (b[0] - a[0]) * t;
+					pn[n][1] = a[1] + (b[1] - a[1]) * t;
+					pn[n][2] = a[2] + (b[2] - a[2]) * t;
+					pn[n][3] = a[3] + (b[3] - a[3]) * t;
 					++n;
 				}
-				if (s[j]>0) pn[n++]=b;
+				if (s[j] > 0) {
+					pn[n++] = b;
+				}
 			}
 			// ready to test far clipping, start from the modified polygon
 			pi = pn;
 			ni = n;
-		} else
-		{
+		}
+		else {
 			// no clipping on the near plane, keep same vector
 			ni = NP;
 		}
 		// now deal with far clipping
-		for (i=0, m=0;i<ni;++i)
-		{
-			s[i]=pi[i][2]-pi[i][3];
-			if (s[i]>0) m+=1<<i;
+		for (i = 0, m = 0; i < ni; ++i) {
+			s[i] = pi[i][2] - pi[i][3];
+			if (s[i] > 0) {
+				m += 1 << i;
+			}
 		}
-		if (m==((1<<ni)-1)) 
-			return(0);
-		if (m!=0)
-		{
-			for (i=ni-1,j=0,n=0;j<ni;i=j++)
-			{
-				const btVector4&	a=pi[i];
-				const btVector4&	b=pi[j];
-				const btScalar		t=s[i]/(a[2]-a[3]-b[2]+b[3]);
-				if ((t>0)&&(t<1))
-				{
-					po[n][0]	=	a[0]+(b[0]-a[0])*t;
-					po[n][1]	=	a[1]+(b[1]-a[1])*t;
-					po[n][2]	=	a[2]+(b[2]-a[2])*t;
-					po[n][3]	=	a[3]+(b[3]-a[3])*t;
+		if (m == ((1 << ni) - 1)) {
+			return 0;
+		}
+		if (m != 0) {
+			for (i = ni - 1, j = 0, n = 0;j < ni; i = j++) {
+				const btVector4 &a = pi[i];
+				const btVector4 &b = pi[j];
+				const btScalar t = s[i] / (a[2] - a[3] - b[2] + b[3]);
+				if ((t > 0) && (t < 1)) {
+					po[n][0] = a[0] + (b[0] - a[0]) * t;
+					po[n][1] = a[1] + (b[1] - a[1]) * t;
+					po[n][2] = a[2] + (b[2] - a[2]) * t;
+					po[n][3] = a[3] + (b[3] - a[3]) * t;
 					++n;
 				}
-				if (s[j]<0) po[n++]=b;
+				if (s[j] < 0) {
+					po[n++] = b;
+				}
 			}
-			return(n);
+			return n;
 		}
-		for (int i=0;i<ni;++i) po[i]=pi[i];
-		return(ni);
+		for (int i = 0; i < ni; ++i) {
+			po[i] = pi[i];
+		}
+		return ni;
 	}
 	// write or check a triangle to buffer. a,b,c in device coordinates (-1,+1)
 	template <typename POLICY>
-	inline bool	draw(	const btVector4& a,
-						const btVector4& b,
-						const btVector4& c,
-						const float face,
-						const btScalar minarea)
+	inline bool draw(const btVector4 &a,
+					 const btVector4 &b,
+					 const btVector4 &c,
+					 const float face,
+					 const btScalar minarea)
 	{
-		const btScalar		a2=btCross(b-a,c-a)[2];
-		if ((face*a2)<0.f || btFabs(a2)<minarea)
+		const btScalar a2 = btCross(b - a, c - a)[2];
+		if ((face * a2) < 0.0f || btFabs(a2) < minarea) {
 			return false;
+		}
 		// further down we are normally going to write to the Zbuffer, mark it so
 		POLICY::Occlusion(m_occlusion);
 
-		int x[3], y[3], ib=1, ic=2;
+		int x[3], y[3], ib = 1, ic = 2;
 		btScalar z[3];
-		x[0]=(int)(a.x()*m_scales[0]+m_offsets[0]);
-		y[0]=(int)(a.y()*m_scales[1]+m_offsets[1]);
-		z[0]=a.z();
-		if (a2 < 0.f)
-		{
+		x[0] = (int)(a.x() * m_scales[0] + m_offsets[0]);
+		y[0] = (int)(a.y() * m_scales[1] + m_offsets[1]);
+		z[0] = a.z();
+		if (a2 < 0.f) {
 			// negative aire is possible with double face => must
 			// change the order of b and c otherwise the algorithm doesn't work
-			ib=2;
-			ic=1;
+			ib = 2;
+			ic = 1;
 		}
-		x[ib]=(int)(b.x()*m_scales[0]+m_offsets[0]);
-		x[ic]=(int)(c.x()*m_scales[0]+m_offsets[0]);
-		y[ib]=(int)(b.y()*m_scales[1]+m_offsets[1]);
-		y[ic]=(int)(c.y()*m_scales[1]+m_offsets[1]);
-		z[ib]=b.z();
-		z[ic]=c.z();
-		const int		mix=btMax(0,btMin(x[0],btMin(x[1],x[2])));
-		const int		mxx=btMin(m_sizes[0],1+btMax(x[0],btMax(x[1],x[2])));
-		const int		miy=btMax(0,btMin(y[0],btMin(y[1],y[2])));
-		const int		mxy=btMin(m_sizes[1],1+btMax(y[0],btMax(y[1],y[2])));
-		const int		width=mxx-mix;
-		const int		height=mxy-miy;
-		if ((width*height) <= 1)
-		{
+		x[ib] = (int)(b.x() * m_scales[0] + m_offsets[0]);
+		x[ic] = (int)(c.x() * m_scales[0] + m_offsets[0]);
+		y[ib] = (int)(b.y() * m_scales[1] + m_offsets[1]);
+		y[ic] = (int)(c.y() * m_scales[1] + m_offsets[1]);
+		z[ib] = b.z();
+		z[ic] = c.z();
+		const int mix = btMax(0, btMin(x[0], btMin(x[1], x[2])));
+		const int mxx = btMin(m_sizes[0], 1 + btMax(x[0], btMax(x[1], x[2])));
+		const int miy = btMax(0, btMin(y[0], btMin(y[1], y[2])));
+		const int mxy = btMin(m_sizes[1], 1 + btMax(y[0], btMax(y[1], y[2])));
+		const int width = mxx - mix;
+		const int height = mxy - miy;
+		if ((width * height) <= 1) {
 			// degenerated in at most one single pixel
-			btScalar* scan=&m_buffer[miy*m_sizes[0]+mix];
+			btScalar *scan = &m_buffer[miy * m_sizes[0] + mix];
 			// use for loop to detect the case where width or height == 0
-			for (int iy=miy;iy<mxy;++iy)
-			{
-				for (int ix=mix;ix<mxx;++ix)
-				{
-					if (POLICY::Process(*scan,z[0])) 
-						return(true);
-					if (POLICY::Process(*scan,z[1])) 
-						return(true);
-					if (POLICY::Process(*scan,z[2])) 
-						return(true);
+			for (int iy = miy; iy < mxy; ++iy) {
+				for (int ix = mix; ix < mxx; ++ix) {
+					if (POLICY::Process(*scan, z[0])) {
+						return true;
+					}
+					if (POLICY::Process(*scan, z[1])) {
+						return true;
+					}
+					if (POLICY::Process(*scan, z[2])) {
+						return true;
+					}
 				}
 			}
 		}
@@ -1639,182 +1692,236 @@ struct OcclusionBuffer
 			// sort the y coord to make formula simpler
 			int ytmp;
 			btScalar ztmp;
-			if (y[0] > y[1]) { ytmp=y[1];y[1]=y[0];y[0]=ytmp;ztmp=z[1];z[1]=z[0];z[0]=ztmp; }
-			if (y[0] > y[2]) { ytmp=y[2];y[2]=y[0];y[0]=ytmp;ztmp=z[2];z[2]=z[0];z[0]=ztmp; }
-			if (y[1] > y[2]) { ytmp=y[2];y[2]=y[1];y[1]=ytmp;ztmp=z[2];z[2]=z[1];z[1]=ztmp; }
-			int	dy[] = {y[0] - y[1],
+			if (y[0] > y[1]) {
+				ytmp = y[1];
+				y[1] = y[0];
+				y[0] = ytmp;
+				ztmp = z[1];
+				z[1] = z[0];
+				z[0] = ztmp;
+			}
+			if (y[0] > y[2]) {
+				ytmp = y[2];
+				y[2] = y[0];
+				y[0] = ytmp;
+				ztmp = z[2];
+				z[2] = z[0];
+				z[0] = ztmp;
+			}
+			if (y[1] > y[2]) {
+				ytmp = y[2];
+				y[2] = y[1];
+				y[1] = ytmp;
+				ztmp = z[2];
+				z[2] = z[1];
+				z[1] = ztmp;
+			}
+			int dy[] = {y[0] - y[1],
 			            y[1] - y[2],
 			            y[2] - y[0]};
 			btScalar dzy[3];
-			dzy[0] = (dy[0]) ? (z[0] - z[1]) / dy[0] : btScalar(0.f);
-			dzy[1] = (dy[1]) ? (z[1] - z[2]) / dy[1] : btScalar(0.f);
-			dzy[2] = (dy[2]) ? (z[2] - z[0]) / dy[2] : btScalar(0.f);
+			dzy[0] = (dy[0]) ? (z[0] - z[1]) / dy[0] : btScalar(0.0f);
+			dzy[1] = (dy[1]) ? (z[1] - z[2]) / dy[1] : btScalar(0.0f);
+			dzy[2] = (dy[2]) ? (z[2] - z[0]) / dy[2] : btScalar(0.0f);
 			btScalar v[3] = {dzy[0] * (miy - y[0]) + z[0],
 			                 dzy[1] * (miy - y[1]) + z[1],
 			                 dzy[2] * (miy - y[2]) + z[2]};
-			dy[0] = y[1]-y[0];
-			dy[1] = y[0]-y[1];
-			dy[2] = y[2]-y[0];
-			btScalar* scan=&m_buffer[miy*m_sizes[0]+mix];
-			for (int iy=miy;iy<mxy;++iy)
-			{
-				if (dy[0] >= 0 && POLICY::Process(*scan,v[0])) 
-					return(true);
-				if (dy[1] >= 0 && POLICY::Process(*scan,v[1])) 
-					return(true);
-				if (dy[2] >= 0 && POLICY::Process(*scan,v[2])) 
-					return(true);
-				scan+=m_sizes[0];
-				v[0] += dzy[0]; v[1] += dzy[1]; v[2] += dzy[2];
-				dy[0]--; dy[1]++, dy[2]--;
+			dy[0] = y[1] - y[0];
+			dy[1] = y[0] - y[1];
+			dy[2] = y[2] - y[0];
+			btScalar *scan = &m_buffer[miy * m_sizes[0] + mix];
+			for (int iy = miy; iy < mxy; ++iy) {
+				if (dy[0] >= 0 && POLICY::Process(*scan, v[0])) {
+					return true;
+				}
+				if (dy[1] >= 0 && POLICY::Process(*scan, v[1])) {
+					return true;
+				}
+				if (dy[2] >= 0 && POLICY::Process(*scan, v[2])) {
+					return true;
+				}
+				scan += m_sizes[0];
+				v[0] += dzy[0];
+				v[1] += dzy[1];
+				v[2] += dzy[2];
+				dy[0]--;
+				dy[1]++;
+				dy[2]--;
 			}
-		} else if (height == 1)
-		{
+		}
+		else if (height == 1) {
 			// Degenerated in at least 2 horizontal lines
 			// The algorithm below doesn't work when face has a single pixel width
 			// We cannot use general formulas because the plane is degenerated. 
 			// We have to interpolate along the 3 edges that overlaps and process each pixel.
 			int xtmp;
 			btScalar ztmp;
-			if (x[0] > x[1]) { xtmp=x[1];x[1]=x[0];x[0]=xtmp;ztmp=z[1];z[1]=z[0];z[0]=ztmp; }
-			if (x[0] > x[2]) { xtmp=x[2];x[2]=x[0];x[0]=xtmp;ztmp=z[2];z[2]=z[0];z[0]=ztmp; }
-			if (x[1] > x[2]) { xtmp=x[2];x[2]=x[1];x[1]=xtmp;ztmp=z[2];z[2]=z[1];z[1]=ztmp; }
+			if (x[0] > x[1]) {
+				xtmp = x[1];
+				x[1] = x[0];
+				x[0] = xtmp;
+				ztmp = z[1];
+				z[1] = z[0];
+				z[0] = ztmp;
+			}
+			if (x[0] > x[2]) {
+				xtmp = x[2];
+				x[2] = x[0];
+				x[0] = xtmp;
+				ztmp = z[2];
+				z[2] = z[0];
+				z[0] = ztmp;
+			}
+			if (x[1] > x[2]) {
+				xtmp = x[2];
+				x[2] = x[1];
+				x[1] = xtmp;
+				ztmp = z[2];
+				z[2] = z[1];
+				z[1] = ztmp;
+			}
 			int dx[] = {x[0] - x[1],
 			            x[1] - x[2],
 			            x[2] - x[0]};
 			btScalar dzx[3];
-			dzx[0] = (dx[0]) ? (z[0]-z[1])/dx[0] : btScalar(0.f);
-			dzx[1] = (dx[1]) ? (z[1]-z[2])/dx[1] : btScalar(0.f);
-			dzx[2] = (dx[2]) ? (z[2]-z[0])/dx[2] : btScalar(0.f);
+			dzx[0] = (dx[0]) ? (z[0]-z[1]) / dx[0] : btScalar(0.0f);
+			dzx[1] = (dx[1]) ? (z[1]-z[2]) / dx[1] : btScalar(0.0f);
+			dzx[2] = (dx[2]) ? (z[2]-z[0]) / dx[2] : btScalar(0.0f);
 			btScalar v[3] = {dzx[0] * (mix - x[0]) + z[0],
 			                 dzx[1] * (mix - x[1]) + z[1],
 			                 dzx[2] * (mix - x[2]) + z[2]};
-			dx[0] = x[1]-x[0];
-			dx[1] = x[0]-x[1];
-			dx[2] = x[2]-x[0];
-			btScalar* scan=&m_buffer[miy*m_sizes[0]+mix];
-			for (int ix=mix;ix<mxx;++ix)
-			{
-				if (dx[0] >= 0 && POLICY::Process(*scan,v[0])) 
-					return(true);
-				if (dx[1] >= 0 && POLICY::Process(*scan,v[1])) 
-					return(true);
-				if (dx[2] >= 0 && POLICY::Process(*scan,v[2])) 
-					return(true);
+			dx[0] = x[1] - x[0];
+			dx[1] = x[0] - x[1];
+			dx[2] = x[2] - x[0];
+			btScalar *scan = &m_buffer[miy * m_sizes[0] + mix];
+			for (int ix = mix; ix < mxx; ++ix) {
+				if (dx[0] >= 0 && POLICY::Process(*scan, v[0])) {
+					return true;
+				}
+				if (dx[1] >= 0 && POLICY::Process(*scan, v[1])) {
+					return true;
+				}
+				if (dx[2] >= 0 && POLICY::Process(*scan, v[2])) {
+					return true;
+				}
 				scan++;
-				v[0] += dzx[0]; v[1] += dzx[1]; v[2] += dzx[2];
-				dx[0]--; dx[1]++, dx[2]--;
+				v[0] += dzx[0];
+				v[1] += dzx[1];
+				v[2] += dzx[2];
+				dx[0]--;
+				dx[1]++;
+				dx[2]--;
 			}
 		}
 		else {
 			// general case
-			const int       dx[] = {y[0] - y[1],
-			                        y[1] - y[2],
-			                        y[2] - y[0]};
-			const int       dy[] = {x[1] - x[0] - dx[0] * width,
-			                        x[2] - x[1] - dx[1] * width,
-			                        x[0] - x[2] - dx[2] * width};
-			const int       a = x[2] * y[0] + x[0] * y[1] - x[2] * y[1] - x[0] * y[2] + x[1] * y[2] - x[1] * y[0];
-			const btScalar  ia = 1 / (btScalar)a;
-			const btScalar  dzx = ia*(y[2]*(z[1]-z[0])+y[1]*(z[0]-z[2])+y[0]*(z[2]-z[1]));
-			const btScalar  dzy = ia*(x[2]*(z[0]-z[1])+x[0]*(z[1]-z[2])+x[1]*(z[2]-z[0]))-(dzx*width);
-			int             c[] = {miy*x[1]+mix*y[0]-x[1]*y[0]-mix*y[1]+x[0]*y[1]-miy*x[0],
-			                        miy*x[2]+mix*y[1]-x[2]*y[1]-mix*y[2]+x[1]*y[2]-miy*x[1],
-			                        miy*x[0]+mix*y[2]-x[0]*y[2]-mix*y[0]+x[2]*y[0]-miy*x[2]};
-			btScalar        v = ia*((z[2]*c[0])+(z[0]*c[1])+(z[1]*c[2]));
-			btScalar       *scan = &m_buffer[miy*m_sizes[0]];
-			for (int iy=miy;iy<mxy;++iy)
-			{
-				for (int ix=mix;ix<mxx;++ix)
-				{
-					if ((c[0]>=0)&&(c[1]>=0)&&(c[2]>=0))
-					{
-						if (POLICY::Process(scan[ix],v)) 
-							return(true);
+			const int dx[] = {y[0] - y[1],
+							  y[1] - y[2],
+							  y[2] - y[0]};
+			const int dy[] = {x[1] - x[0] - dx[0] * width,
+							  x[2] - x[1] - dx[1] * width,
+							  x[0] - x[2] - dx[2] * width};
+			const int a = x[2] * y[0] + x[0] * y[1] - x[2] * y[1] - x[0] * y[2] + x[1] * y[2] - x[1] * y[0];
+			const btScalar ia = 1 / (btScalar)a;
+			const btScalar dzx = ia * (y[2] * (z[1] - z[0]) + y[1] * (z[0] - z[2]) + y[0] * (z[2] - z[1]));
+			const btScalar dzy = ia * (x[2] * (z[0] - z[1]) + x[0] * (z[1] - z[2]) + x[1] * (z[2] - z[0])) - (dzx * width);
+			int c[] = {miy * x[1] + mix * y[0] - x[1] * y[0] - mix * y[1] + x[0] * y[1] - miy * x[0],
+					   miy * x[2] + mix * y[1] - x[2] * y[1] - mix * y[2] + x[1] * y[2] - miy * x[1],
+					   miy * x[0] + mix * y[2] - x[0] * y[2] - mix * y[0] + x[2] * y[0] - miy * x[2]};
+			btScalar v = ia * ((z[2] * c[0]) + (z[0] * c[1]) + (z[1] * c[2]));
+			btScalar *scan = &m_buffer[miy * m_sizes[0]];
+
+			for (int iy = miy; iy < mxy; ++iy) {
+				for (int ix = mix; ix < mxx; ++ix) {
+					if ((c[0] >= 0) && (c[1] >= 0) && (c[2] >= 0)) {
+						if (POLICY::Process(scan[ix], v)) {
+							return true;
+						}
 					}
-					c[0]+=dx[0];c[1]+=dx[1];c[2]+=dx[2];v+=dzx;
+					c[0] += dx[0]; c[1] += dx[1]; c[2] += dx[2]; v += dzx;
 				}
-				c[0]+=dy[0];c[1]+=dy[1];c[2]+=dy[2];v+=dzy;
-				scan+=m_sizes[0];
+				c[0] += dy[0]; c[1] += dy[1]; c[2] += dy[2]; v += dzy;
+				scan += m_sizes[0];
 			}
 		}
-		return(false);
+		return false;
 	}
 	// clip than write or check a polygon 
-	template <const int NP,typename POLICY>
-	inline bool	clipDraw(	const btVector4* p,
-							const float face,
-							btScalar minarea)
+	template <const int NP, typename POLICY>
+	inline bool clipDraw(const btVector4 *p,
+						 const float face,
+						 btScalar minarea)
 	{
-		btVector4	o[NP*2];
-		int			n=clip<NP>(p,o);
-		bool		earlyexit=false;
-		if (n)
-		{
-			project(o,n);
-			for (int i=2;i<n && !earlyexit;++i)
-			{
-				earlyexit|=draw<POLICY>(o[0],o[i-1],o[i],face,minarea);
+		btVector4 o[NP * 2];
+		int n = clip<NP>(p, o);
+		bool earlyexit = false;
+		if (n) {
+			project(o, n);
+			for (int i = 2; i < n && !earlyexit; ++i) {
+				earlyexit |= draw<POLICY>(o[0], o[i - 1], o[i], face, minarea);
 			}
 		}
-		return(earlyexit);
+		return earlyexit;
 	}
 	// add a triangle (in model coordinate)
 	// face =  0.f if face is double side, 
 	//      =  1.f if face is single sided and scale is positive
 	//      = -1.f if face is single sided and scale is negative
-	void		appendOccluderM(const float* a,
-								const float* b,
-								const float* c,
-								const float face)
+	void appendOccluderM(const float *a,
+						 const float *b,
+						 const float *c,
+						 const float face)
 	{
-		btVector4	p[3];
-		transformM(a,p[0]);
-		transformM(b,p[1]);
-		transformM(c,p[2]);
-		clipDraw<3,WriteOCL>(p,face,btScalar(0.f));
+		btVector4 p[3];
+		transformM(a, p[0]);
+		transformM(b, p[1]);
+		transformM(c, p[2]);
+		clipDraw<3, WriteOCL>(p, face, btScalar(0.0f));
 	}
 	// add a quad (in model coordinate)
-	void		appendOccluderM(const float* a,
-								const float* b,
-								const float* c,
-								const float* d,
-								const float face)
+	void appendOccluderM(const float *a,
+						 const float *b,
+						 const float *c,
+						 const float *d,
+						 const float face)
 	{
-		btVector4	p[4];
-		transformM(a,p[0]);
-		transformM(b,p[1]);
-		transformM(c,p[2]);
-		transformM(d,p[3]);
-		clipDraw<4,WriteOCL>(p,face,btScalar(0.f));
+		btVector4 p[4];
+		transformM(a, p[0]);
+		transformM(b, p[1]);
+		transformM(c, p[2]);
+		transformM(d, p[3]);
+		clipDraw<4, WriteOCL>(p, face, btScalar(0.0f));
 	}
 	// query occluder for a box (c=center, e=extend) in world coordinate
-	inline bool	queryOccluderW(	const btVector3& c,
-								const btVector3& e)
+	inline bool queryOccluderW(const btVector3 &c,
+							   const btVector3 &e)
 	{
-		if (!m_occlusion)
+		if (!m_occlusion) {
 			// no occlusion yet, no need to check
 			return true;
-		btVector4	x[8];
-		transformW(btVector3(c[0]-e[0],c[1]-e[1],c[2]-e[2]),x[0]);
-		transformW(btVector3(c[0]+e[0],c[1]-e[1],c[2]-e[2]),x[1]);
-		transformW(btVector3(c[0]+e[0],c[1]+e[1],c[2]-e[2]),x[2]);
-		transformW(btVector3(c[0]-e[0],c[1]+e[1],c[2]-e[2]),x[3]);
-		transformW(btVector3(c[0]-e[0],c[1]-e[1],c[2]+e[2]),x[4]);
-		transformW(btVector3(c[0]+e[0],c[1]-e[1],c[2]+e[2]),x[5]);
-		transformW(btVector3(c[0]+e[0],c[1]+e[1],c[2]+e[2]),x[6]);
-		transformW(btVector3(c[0]-e[0],c[1]+e[1],c[2]+e[2]),x[7]);
-		for (int i=0;i<8;++i)
-		{
-			// the box is clipped, it's probably a large box, don't waste our time to check
-			if ((x[i][2]+x[i][3])<=0) return(true);
 		}
-		static const int d[] = {1,0,3,2,
-		                        4,5,6,7,
-		                        4,7,3,0,
-		                        6,5,1,2,
-		                        7,6,2,3,
-		                        5,4,0,1};
+		btVector4 x[8];
+		transformW(btVector3(c[0] - e[0], c[1] - e[1], c[2] - e[2]), x[0]);
+		transformW(btVector3(c[0] + e[0], c[1] - e[1], c[2] - e[2]), x[1]);
+		transformW(btVector3(c[0] + e[0], c[1] + e[1], c[2] - e[2]), x[2]);
+		transformW(btVector3(c[0] - e[0], c[1] + e[1], c[2] - e[2]), x[3]);
+		transformW(btVector3(c[0] - e[0], c[1] - e[1], c[2] + e[2]), x[4]);
+		transformW(btVector3(c[0] + e[0], c[1] - e[1], c[2] + e[2]), x[5]);
+		transformW(btVector3(c[0] + e[0], c[1] + e[1], c[2] + e[2]), x[6]);
+		transformW(btVector3(c[0] - e[0], c[1] + e[1], c[2] + e[2]), x[7]);
+
+		for (int i = 0; i < 8; ++i) {
+			// the box is clipped, it's probably a large box, don't waste our time to check
+			if ((x[i][2] + x[i][3]) <= 0) {
+				return true;
+			}
+		}
+		static const int d[] = {1, 0, 3, 2,
+		                        4, 5, 6, 7,
+		                        4, 7, 3, 0,
+		                        6, 5, 1, 2,
+		                        7, 6, 2, 3,
+		                        5, 4, 0, 1};
 		for (unsigned int i = 0; i < (sizeof(d) / sizeof(d[0]));) {
 			const btVector4 p[] = {x[d[i + 0]],
 			                       x[d[i + 1]],
@@ -2027,6 +2134,9 @@ CcdPhysicsEnvironment::~CcdPhysicsEnvironment()
 float	CcdPhysicsEnvironment::GetConstraintParam(int constraintId,int param)
 {
 	btTypedConstraint* typedConstraint = GetConstraintById(constraintId);
+	if (!typedConstraint)
+		return 0.0f;
+
 	switch (typedConstraint->getUserConstraintType())
 	{
 	case PHY_GENERIC_6DOF_CONSTRAINT:
@@ -2066,6 +2176,9 @@ float	CcdPhysicsEnvironment::GetConstraintParam(int constraintId,int param)
 void	CcdPhysicsEnvironment::SetConstraintParam(int constraintId,int param,float value0,float value1)
 {
 	btTypedConstraint* typedConstraint = GetConstraintById(constraintId);
+	if (!typedConstraint)
+		return;
+
 	switch (typedConstraint->getUserConstraintType())
 	{
 	case PHY_GENERIC_6DOF_CONSTRAINT:
@@ -2175,6 +2288,9 @@ void	CcdPhysicsEnvironment::SetConstraintParam(int constraintId,int param,float 
 
 btTypedConstraint*	CcdPhysicsEnvironment::GetConstraintById(int constraintId)
 {
+	// For soft body constraints
+	if (constraintId == 0)
+		return NULL;
 
 	int numConstraints = m_dynamicsWorld->getNumConstraints();
 	int i;
@@ -2199,10 +2315,7 @@ void CcdPhysicsEnvironment::AddSensor(PHY_IPhysicsController* ctrl)
 bool CcdPhysicsEnvironment::RemoveCollisionCallback(PHY_IPhysicsController* ctrl)
 {
 	CcdPhysicsController* ccdCtrl = (CcdPhysicsController*)ctrl;
-	if (!ccdCtrl->Unregister())
-		return false;
-	m_triggerControllers.erase(ccdCtrl);
-	return true;
+	return ccdCtrl->Unregister();
 }
 
 
@@ -2246,11 +2359,7 @@ void CcdPhysicsEnvironment::AddTouchCallback(int response_class, PHY_ResponseCal
 bool CcdPhysicsEnvironment::RequestCollisionCallback(PHY_IPhysicsController* ctrl)
 {
 	CcdPhysicsController* ccdCtrl = static_cast<CcdPhysicsController*>(ctrl);
-
-	if (!ccdCtrl->Register())
-		return false;
-	m_triggerControllers.insert(ccdCtrl);
-	return true;
+	return ccdCtrl->Register();
 }
 
 void	CcdPhysicsEnvironment::CallbackTriggers()
@@ -2289,16 +2398,17 @@ void	CcdPhysicsEnvironment::CallbackTriggers()
 		//m_internalOwner is set in 'addPhysicsController'
 		CcdPhysicsController* ctrl0 = static_cast<CcdPhysicsController*>(rb0->getUserPointer());
 		CcdPhysicsController* ctrl1 = static_cast<CcdPhysicsController*>(rb1->getUserPointer());
+		bool usecallback = false;
 
-		std::set<CcdPhysicsController*>::const_iterator iter = m_triggerControllers.find(ctrl0);
-		if (iter == m_triggerControllers.end())
-		{
-			iter = m_triggerControllers.find(ctrl1);
+		// Test if one of the controller is registered and use collision callback.
+		if (ctrl0->Registered())
+			usecallback = true;
+		else if (ctrl1->Registered()) {
 			colliding_ctrl0 = false;
+			usecallback = true;
 		}
 
-		if (iter != m_triggerControllers.end())
-		{
+		if (usecallback) {
 			static PHY_CollData coll_data;
 			const btManifoldPoint &cp = manifold->getContactPoint(0);
 
@@ -2961,6 +3071,10 @@ PHY_IPhysicsController* CcdPhysicsEnvironment::CreateConeController(float conera
 	
 float		CcdPhysicsEnvironment::getAppliedImpulse(int	constraintid)
 {
+	// For soft body constraints
+	if (constraintid == 0)
+		return 0.0f;
+
 	int i;
 	int numConstraints = m_dynamicsWorld->getNumConstraints();
 	for (i=0;i<numConstraints;i++)
@@ -3072,7 +3186,7 @@ void CcdPhysicsEnvironment::ConvertObject(KX_GameObject *gameobj, RAS_MeshObject
 {
 	Object* blenderobject = gameobj->GetBlenderObject();
 
-	bool isbulletdyna = (blenderobject->gameflag & OB_DYNAMIC) != 0;;
+	bool isbulletdyna = (blenderobject->gameflag & OB_DYNAMIC) != 0;
 	bool isbulletsensor = (blenderobject->gameflag & OB_SENSOR) != 0;
 	bool isbulletchar = (blenderobject->gameflag & OB_CHARACTER) != 0;
 	bool isbulletsoftbody = (blenderobject->gameflag & OB_SOFT_BODY) != 0;
@@ -3092,9 +3206,7 @@ void CcdPhysicsEnvironment::ConvertObject(KX_GameObject *gameobj, RAS_MeshObject
 	{
 		KX_BlenderSceneConverter *converter = (KX_BlenderSceneConverter*)KX_GetActiveEngine()->GetSceneConverter();
 		parent = converter->FindGameObject(blenderparent);
-		isbulletdyna = false;
 		isbulletsoftbody = false;
-		shapeprops->m_mass = 0.f;
 	}
 
 	if (!isbulletdyna)
@@ -3118,9 +3230,12 @@ void CcdPhysicsEnvironment::ConvertObject(KX_GameObject *gameobj, RAS_MeshObject
 	ci.m_mass = isbulletdyna ? shapeprops->m_mass : 0.f;
 	ci.m_clamp_vel_min = shapeprops->m_clamp_vel_min;
 	ci.m_clamp_vel_max = shapeprops->m_clamp_vel_max;
+	ci.m_clamp_angvel_min = shapeprops->m_clamp_angvel_min;
+	ci.m_clamp_angvel_max = shapeprops->m_clamp_angvel_max;
 	ci.m_stepHeight = isbulletchar ? shapeprops->m_step_height : 0.f;
 	ci.m_jumpSpeed = isbulletchar ? shapeprops->m_jump_speed : 0.f;
 	ci.m_fallSpeed = isbulletchar ? shapeprops->m_fall_speed : 0.f;
+	ci.m_maxJumps = isbulletchar ? shapeprops->m_max_jumps : 0;
 
 	//mmm, for now, take this for the size of the dynamicobject
 	// Blender uses inertia for radius of dynamic object
@@ -3548,6 +3663,9 @@ void CcdPhysicsEnvironment::ConvertObject(KX_GameObject *gameobj, RAS_MeshObject
 			}
 		}
 	}
+
+	if (parent)
+		physicscontroller->SuspendDynamics(false);
 
 	CcdPhysicsController* parentCtrl = parent ? (CcdPhysicsController*)parent->GetPhysicsController() : 0;
 	physicscontroller->SetParentCtrl(parentCtrl);

@@ -220,7 +220,7 @@ class BONE_PT_display(BoneButtonsPanel, Panel):
             col = split.column()
             col.prop(bone, "hide", text="Hide")
             sub = col.column()
-            sub.active = bool(pchan.custom_shape)
+            sub.active = bool(pchan and pchan.custom_shape)
             sub.prop(bone, "show_wire", text="Wireframe")
 
             if pchan:
@@ -229,6 +229,8 @@ class BONE_PT_display(BoneButtonsPanel, Panel):
                 col.label(text="Custom Shape:")
                 col.prop(pchan, "custom_shape", text="")
                 if pchan.custom_shape:
+                    col.prop(pchan, "use_custom_shape_bone_size", text="Bone Size")
+                    col.prop(pchan, "custom_shape_scale", text="Scale")
                     col.prop_search(pchan, "custom_shape_transform", ob.pose, "bones", text="At")
 
 

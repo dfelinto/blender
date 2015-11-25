@@ -1547,7 +1547,7 @@ static void draw_pose_dofs(Object *ob)
 							glPushMatrix();
 							
 							copy_v3_v3(posetrans, pchan->pose_mat[3]);
-							glTranslatef(posetrans[0], posetrans[1], posetrans[2]);
+							glTranslate3fv(posetrans);
 							
 							if (pchan->parent) {
 								copy_m4_m4(mat, pchan->parent->pose_mat);
@@ -1778,7 +1778,7 @@ static void draw_pose_bones(Scene *scene, View3D *v3d, ARegion *ar, Base *base,
 							}
 
 							draw_custom_bone(scene, v3d, rv3d, pchan->custom,
-							                 OB_SOLID, arm->flag, flag, index, bone->length);
+							                 OB_SOLID, arm->flag, flag, index, PCHAN_CUSTOM_DRAW_SIZE(pchan));
 						}
 					}
 					else {
@@ -1869,7 +1869,7 @@ static void draw_pose_bones(Scene *scene, View3D *v3d, ARegion *ar, Base *base,
 								flag |= BONE_DRAW_ACTIVE;
 							
 							draw_custom_bone(scene, v3d, rv3d, pchan->custom,
-							                 OB_WIRE, arm->flag, flag, index, bone->length);
+							                 OB_WIRE, arm->flag, flag, index, PCHAN_CUSTOM_DRAW_SIZE(pchan));
 							
 							glPopMatrix();
 						}
@@ -2366,7 +2366,7 @@ static void draw_ghost_poses_range(Scene *scene, View3D *v3d, ARegion *ar, Base 
 	bArmature *arm = ob->data;
 	bPose *posen, *poseo;
 	float start, end, stepsize, range, colfac;
-	int cfrao, flago, ipoflago;
+	int cfrao, flago;
 	
 	start = (float)arm->ghostsf;
 	end = (float)arm->ghostef;
@@ -2381,8 +2381,6 @@ static void draw_ghost_poses_range(Scene *scene, View3D *v3d, ARegion *ar, Base 
 	cfrao = CFRA;
 	flago = arm->flag;
 	arm->flag &= ~(ARM_DRAWNAMES | ARM_DRAWAXES);
-	ipoflago = ob->ipoflag;
-	ob->ipoflag |= OB_DISABLE_PATH;
 	
 	/* copy the pose */
 	poseo = ob->pose;
@@ -2418,7 +2416,6 @@ static void draw_ghost_poses_range(Scene *scene, View3D *v3d, ARegion *ar, Base 
 	ob->pose = poseo;
 	arm->flag = flago;
 	ob->mode |= OB_MODE_POSE;
-	ob->ipoflag = ipoflago;
 }
 
 /* draw ghosts on keyframes in action within range 
@@ -2462,8 +2459,7 @@ static void draw_ghost_poses_keys(Scene *scene, View3D *v3d, ARegion *ar, Base *
 	cfrao = CFRA;
 	flago = arm->flag;
 	arm->flag &= ~(ARM_DRAWNAMES | ARM_DRAWAXES);
-	ob->ipoflag |= OB_DISABLE_PATH;
-	
+
 	/* copy the pose */
 	poseo = ob->pose;
 	BKE_pose_copy_data(&posen, ob->pose, 1);

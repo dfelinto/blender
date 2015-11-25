@@ -74,6 +74,7 @@
 #include "BKE_particle.h"
 #include "BKE_pointcache.h"
 #include "BKE_scene.h"
+#include "BKE_subsurf.h"
 #include "BKE_unit.h"
 #include "BKE_tracking.h"
 
@@ -176,7 +177,6 @@ typedef struct drawDMFacesSel_userData {
 	BMesh *bm;
 
 	BMFace *efa_act;
-	const int *orig_index_mf_to_mpoly;
 	const int *orig_index_mp_to_orig;
 } drawDMFacesSel_userData;
 
@@ -289,8 +289,6 @@ static bool check_ob_drawface_dot(Scene *sce, View3D *vd, char dt)
 
 bool draw_glsl_material(Scene *scene, Object *ob, View3D *v3d, const char dt)
 {
-	if (!GPU_glsl_support())
-		return false;
 	if (G.f & G_PICKSEL)
 		return false;
 	if (!check_object_draw_texture(scene, v3d, dt))
@@ -829,7 +827,7 @@ void view3d_cached_text_draw_add(const float co[3],
 	BLI_LINKS_PREPEND(g_v3d_strings[g_v3d_string_level], vos);
 
 	copy_v3_v3(vos->vec, co);
-	copy_v4_v4_char((char *)vos->col.ub, (const char *)col);
+	copy_v4_v4_uchar(vos->col.ub, col);
 	vos->xoffs = xoffs;
 	vos->flag = flag;
 	vos->str_len = str_len;
@@ -976,7 +974,7 @@ static void drawcube_size(const float size[3])
 {
 
 	glPushMatrix();
-	glScalef(size[0],  size[1],  size[2]);
+	glScale3fv(size);
 	
 
 	glBegin(GL_LINE_STRIP);
@@ -1198,7 +1196,7 @@ static void drawlamp(View3D *v3d, RegionView3D *rv3d, Base *base,
 	Object *ob = base->object;
 	const float pixsize = ED_view3d_pixel_size(rv3d, ob->obmat[3]);
 	Lamp *la = ob->data;
-	float vec[3], lvec[3], vvec[3], circrad, x, y, z;
+	float vec[3], lvec[3], vvec[3], circrad;
 	float lampsize;
 	float imat[4][4];
 
@@ -1315,7 +1313,7 @@ static void drawlamp(View3D *v3d, RegionView3D *rv3d, Base *base,
 		mul_v3_v3fl(v2, imat[0], circrad * 2.5f);
 		
 		/* center */
-		glTranslatef(vec[0], vec[1], vec[2]);
+		glTranslate3fv(vec);
 		
 		setlinestyle(3);
 		
@@ -1344,8 +1342,8 @@ static void drawlamp(View3D *v3d, RegionView3D *rv3d, Base *base,
 	if (is_view) {
 		/* skip drawing extra info */
 	}
-	else if ((la->type == LA_SPOT) || (la->type == LA_YF_PHOTON)) {
-
+	else if (la->type == LA_SPOT) {
+		float x, y, z, z_abs;
 		copy_v3_fl3(lvec, 0.0f, 0.0f, 1.0f);
 		copy_v3_fl3(vvec, rv3d->persmat[0][2], rv3d->persmat[1][2], rv3d->persmat[2][2]);
 		mul_transposed_mat3_m4_v3(ob->obmat, vvec);
@@ -1358,46 +1356,75 @@ static void drawlamp(View3D *v3d, RegionView3D *rv3d, Base *base,
 		mul_v3_fl(lvec, x);
 		mul_v3_fl(vvec, x);
 
-		/* draw the angled sides of the cone */
-		glBegin(GL_LINE_STRIP);
-		glVertex3fv(vvec);
-		glVertex3fv(vec);
-		glVertex3fv(lvec);
-		glEnd();
-		
 		x *= y;
 
-		/* draw the circle/square at the end of the cone */
-		glTranslatef(0.0, 0.0, x);
+		z_abs = fabsf(z);
+
 		if (la->mode & LA_SQUARE) {
-			float tvec[3];
-			float z_abs = fabsf(z);
+			/* draw pyramid */
+			const float vertices[5][3] = {
+			    /* 5 of vertex coords of pyramid */
+			    {0.0f, 0.0f, 0.0f},
+			    {z_abs, z_abs, x},
+			    {-z_abs, -z_abs, x},
+			    {z_abs, -z_abs, x},
+			    {-z_abs, z_abs, x},
+			};
+			const unsigned char indices[] = {
+			    0, 1, 3,
+			    0, 3, 2,
+			    0, 2, 4,
+			    0, 1, 4,
+			};
 
-			tvec[0] = tvec[1] = z_abs;
-			tvec[2] = 0.0;
+			/* Draw call:
+			 * activate and specify pointer to vertex array */
+			glEnableClientState(GL_VERTEX_ARRAY);
+			glVertexPointer(3, GL_FLOAT, 0, vertices);
+			/* draw the pyramid */
+			glDrawElements(GL_LINE_STRIP, 12, GL_UNSIGNED_BYTE, indices);
 
-			glBegin(GL_LINE_LOOP);
-			glVertex3fv(tvec);
-			tvec[1] = -z_abs; /* neg */
-			glVertex3fv(tvec);
-			tvec[0] = -z_abs; /* neg */
-			glVertex3fv(tvec);
-			tvec[1] = z_abs; /* pos */
-			glVertex3fv(tvec);
-			glEnd();
+			/* deactivate vertex arrays after drawing */
+			glDisableClientState(GL_VERTEX_ARRAY);
+
+			glTranslatef(0.0f, 0.0f, x);
+
+			/* draw the square representing spotbl */
+			if (la->type == LA_SPOT) {
+				float blend = z_abs * (1.0f - pow2f(la->spotblend));
+
+				/* hide line if it is zero size or overlaps with outer border,
+				 * previously it adjusted to always to show it but that seems
+				 * confusing because it doesn't show the actual blend size */
+				if (blend != 0.0f && blend != z_abs) {
+					fdrawbox(blend, -blend, -blend, blend);
+				}
+			}
 		}
 		else {
-			circ(0.0, 0.0, fabsf(z));
-		}
 
-		/* draw the circle/square representing spotbl */
-		if (la->type == LA_SPOT) {
-			float spotblcirc = fabsf(z) * (1.0f - pow2f(la->spotblend));
-			/* hide line if it is zero size or overlaps with outer border,
-			 * previously it adjusted to always to show it but that seems
-			 * confusing because it doesn't show the actual blend size */
-			if (spotblcirc != 0 && spotblcirc != fabsf(z))
-				circ(0.0, 0.0, spotblcirc);
+			/* draw the angled sides of the cone */
+			glBegin(GL_LINE_STRIP);
+			glVertex3fv(vvec);
+			glVertex3fv(vec);
+			glVertex3fv(lvec);
+			glEnd();
+
+			/* draw the circle at the end of the cone */
+			glTranslatef(0.0f, 0.0f, x);
+			circ(0.0f, 0.0f, z_abs);
+
+			/* draw the circle representing spotbl */
+			if (la->type == LA_SPOT) {
+				float blend = z_abs * (1.0f - pow2f(la->spotblend));
+
+				/* hide line if it is zero size or overlaps with outer border,
+				* previously it adjusted to always to show it but that seems
+				* confusing because it doesn't show the actual blend size */
+				if (blend != 0.0f && blend != z_abs) {
+					circ(0.0f, 0.0f, blend);
+				}
+			}
 		}
 
 		if (drawcone)
@@ -1538,7 +1565,7 @@ static void drawlamp(View3D *v3d, RegionView3D *rv3d, Base *base,
 	glPopMatrix();
 }
 
-static void draw_limit_line(float sta, float end, const short dflag, unsigned int col)
+static void draw_limit_line(float sta, float end, const short dflag, const unsigned char col[3])
 {
 	glBegin(GL_LINES);
 	glVertex3f(0.0, 0.0, -sta);
@@ -1549,7 +1576,7 @@ static void draw_limit_line(float sta, float end, const short dflag, unsigned in
 		glPointSize(3.0);
 		glBegin(GL_POINTS);
 		if ((dflag & DRAW_CONSTCOLOR) == 0) {
-			cpack(col);
+			glColor3ubv(col);
 		}
 		glVertex3f(0.0, 0.0, -sta);
 		glVertex3f(0.0, 0.0, -end);
@@ -1659,7 +1686,7 @@ static void draw_viewport_object_reconstruction(Scene *scene, Base *base, View3D
 			GPU_select_load_id(base->selcol + (tracknr << 16));
 
 		glPushMatrix();
-		glTranslatef(track->bundle_pos[0], track->bundle_pos[1], track->bundle_pos[2]);
+		glTranslate3fv(track->bundle_pos);
 		glScalef(v3d->bundle_size / 0.05f / camera_size[0],
 		         v3d->bundle_size / 0.05f / camera_size[1],
 		         v3d->bundle_size / 0.05f / camera_size[2]);
@@ -1876,7 +1903,7 @@ static void drawcamera_stereo3d(
         Scene *scene, View3D *v3d, RegionView3D *rv3d, Object *ob, const Camera *cam,
         float vec[4][3], float drawsize, const float scale[3])
 {
-	int i, j;
+	int i;
 	float obmat[4][4];
 	float vec_lr[2][4][3];
 	const float fac = (cam->stereo.pivot == CAM_S3D_PIVOT_CENTER) ? 2.0f : 1.0f;
@@ -1909,7 +1936,7 @@ static void drawcamera_stereo3d(
 			        ((BKE_camera_multiview_shift_x(&scene->r, ob, names[i]) - cam->shiftx) *
 			         (drawsize * scale[0] * fac));
 
-			for (j = 0; j < 4; j++) {
+			for (int j = 0; j < 4; j++) {
 				vec_lr[i][j][0] += shift_x;
 			}
 		}
@@ -1927,7 +1954,7 @@ static void drawcamera_stereo3d(
 
 		/* convergence plane */
 		if (is_stereo3d_plane || is_stereo3d_volume) {
-			for (j = 0; j < 4; j++) {
+			for (int j = 0; j < 4; j++) {
 				mul_m4_v3(obmat, vec_lr[i][j]);
 			}
 		}
@@ -2053,14 +2080,20 @@ static void drawcamera(Scene *scene, View3D *v3d, RegionView3D *rv3d, Base *base
 	float vec[4][3], asp[2], shift[2], scale[3];
 	int i;
 	float drawsize;
-	const bool is_view = (rv3d->persp == RV3D_CAMOB && ob == v3d->camera);
 	MovieClip *clip = BKE_object_movieclip_get(scene, base->object, false);
 
+	const bool is_active = (ob == v3d->camera);
+	const bool is_view = (rv3d->persp == RV3D_CAMOB && is_active);
+	const bool is_multiview = (scene->r.scemode & R_MULTIVIEW) != 0;
 	const bool is_stereo3d = drawcamera_is_stereo3d(scene, v3d, ob);
+	const bool is_stereo3d_view = (scene->r.views_format == SCE_VIEWS_FORMAT_STEREO_3D);
 	const bool is_stereo3d_cameras = (ob == scene->camera) &&
-	                                 (scene->r.scemode & R_MULTIVIEW) &&
-	                                 (scene->r.views_format == SCE_VIEWS_FORMAT_STEREO_3D) &&
+	                                 is_multiview &&
+	                                 is_stereo3d_view &&
 	                                 (v3d->stereo3d_flag & V3D_S3D_DISPCAMERAS);
+	const bool is_selection_camera_stereo = (G.f & G_PICKSEL) &&
+	                                        is_view && is_multiview &&
+	                                        is_stereo3d_view;
 
 	/* draw data for movie clip set as active for scene */
 	if (clip) {
@@ -2087,9 +2120,17 @@ static void drawcamera(Scene *scene, View3D *v3d, RegionView3D *rv3d, Base *base
 
 	cam = ob->data;
 
-	scale[0] = 1.0f / len_v3(ob->obmat[0]);
-	scale[1] = 1.0f / len_v3(ob->obmat[1]);
-	scale[2] = 1.0f / len_v3(ob->obmat[2]);
+	/* BKE_camera_multiview_model_matrix already accounts for scale, don't do it here */
+	if (is_selection_camera_stereo) {
+		scale[0] = 1.0f;
+		scale[1] = 1.0f;
+		scale[2] = 1.0f;
+	}
+	else {
+		scale[0] = 1.0f / len_v3(ob->obmat[0]);
+		scale[1] = 1.0f / len_v3(ob->obmat[1]);
+		scale[2] = 1.0f / len_v3(ob->obmat[2]);
+	}
 
 	BKE_camera_view_frame_ex(scene, cam, cam->drawsize, is_view, scale,
 	                         asp, shift, &drawsize, vec);
@@ -2098,8 +2139,24 @@ static void drawcamera(Scene *scene, View3D *v3d, RegionView3D *rv3d, Base *base
 	glDisable(GL_CULL_FACE);
 
 	/* camera frame */
-	if (!is_stereo3d_cameras)
-		drawcamera_frame(vec, GL_LINE_LOOP);
+	if (!is_stereo3d_cameras) {
+		/* make sure selection uses the same matrix for camera as the one used while viewing */
+		if (is_selection_camera_stereo) {
+			float obmat[4][4];
+			bool is_left = v3d->multiview_eye == STEREO_LEFT_ID;
+
+			glPushMatrix();
+			glLoadMatrixf(rv3d->viewmat);
+			BKE_camera_multiview_model_matrix(&scene->r, ob, is_left ? STEREO_LEFT_NAME : STEREO_RIGHT_NAME, obmat);
+			glMultMatrixf(obmat);
+
+			drawcamera_frame(vec, GL_LINE_LOOP);
+			glPopMatrix();
+		}
+		else {
+			drawcamera_frame(vec, GL_LINE_LOOP);
+		}
+	}
 
 	if (is_view)
 		return;
@@ -2118,7 +2175,7 @@ static void drawcamera(Scene *scene, View3D *v3d, RegionView3D *rv3d, Base *base
 	 * for active cameras so the wire can be seen side-on */
 	for (i = 0; i < 2; i++) {
 		if (i == 0) glBegin(GL_LINE_LOOP);
-		else if (i == 1 && (ob == v3d->camera)) glBegin(GL_TRIANGLES);
+		else if (i == 1 && is_active) glBegin(GL_TRIANGLES);
 		else break;
 
 		tvec[0] = shift[0] + ((-0.7f * drawsize) * scale[0]);
@@ -2148,15 +2205,20 @@ static void drawcamera(Scene *scene, View3D *v3d, RegionView3D *rv3d, Base *base
 			glMultMatrixf(nobmat);
 
 			if (cam->flag & CAM_SHOWLIMITS) {
-				draw_limit_line(cam->clipsta, cam->clipend, dflag, 0x77FFFF);
+				const unsigned char col[3] = {128, 128, 60}, col_hi[3] = {255, 255, 120};
+
+				draw_limit_line(cam->clipsta, cam->clipend, dflag, (is_active ? col_hi : col));
 				/* qdn: was yafray only, now also enabled for Blender to be used with defocus composite node */
 				draw_focus_cross(BKE_camera_object_dof_distance(ob), cam->drawsize);
 			}
 
 			if (cam->flag & CAM_SHOWMIST) {
 				World *world = scene->world;
+				const unsigned char col[3] = {128, 128, 128}, col_hi[3] = {255, 255, 255};
+
 				if (world) {
-					draw_limit_line(world->miststa, world->miststa + world->mistdist, dflag, 0xFFFFFF);
+					draw_limit_line(world->miststa, world->miststa + world->mistdist,
+					                dflag, (is_active ? col_hi : col));
 				}
 			}
 			glPopMatrix();
@@ -2985,12 +3047,9 @@ static int draw_dm_faces_sel__compareDrawOptions(void *userData, int index, int 
 
 	unsigned char *col, *next_col;
 
-	if (!data->orig_index_mf_to_mpoly)
-		return 0;
-
-	i = DM_origindex_mface_mpoly(data->orig_index_mf_to_mpoly, data->orig_index_mp_to_orig, index);
+	i = data->orig_index_mp_to_orig ? data->orig_index_mp_to_orig[index] : index;
 	efa = (i != ORIGINDEX_NONE) ? BM_face_at_index(data->bm, i) : NULL;
-	i = DM_origindex_mface_mpoly(data->orig_index_mf_to_mpoly, data->orig_index_mp_to_orig, next_index);
+	i = data->orig_index_mp_to_orig ? data->orig_index_mp_to_orig[next_index] : next_index;
 	next_efa = (i != ORIGINDEX_NONE) ? BM_face_at_index(data->bm, i) : NULL;
 
 	if (ELEM(NULL, efa, next_efa))
@@ -3036,13 +3095,9 @@ static void draw_dm_faces_sel(BMEditMesh *em, DerivedMesh *dm, unsigned char *ba
 #endif
 	data.efa_act = efa_act;
 	/* double lookup */
-	data.orig_index_mf_to_mpoly = DM_get_tessface_data_layer(dm, CD_ORIGINDEX);
 	data.orig_index_mp_to_orig  = DM_get_poly_data_layer(dm, CD_ORIGINDEX);
-	if ((data.orig_index_mf_to_mpoly && data.orig_index_mp_to_orig) == false) {
-		data.orig_index_mf_to_mpoly = data.orig_index_mp_to_orig = NULL;
-	}
 
-	dm->drawMappedFaces(dm, draw_dm_faces_sel__setDrawOptions, NULL, draw_dm_faces_sel__compareDrawOptions, &data, 0);
+	dm->drawMappedFaces(dm, draw_dm_faces_sel__setDrawOptions, NULL, draw_dm_faces_sel__compareDrawOptions, &data, DM_DRAW_SKIP_HIDDEN);
 }
 
 static DMDrawOption draw_dm_creases__setDrawOptions(void *userData, int index)
@@ -3133,11 +3188,6 @@ static void draw_dm_bweights(BMEditMesh *em, Scene *scene, DerivedMesh *dm)
 			glLineWidth(1.0);
 		}
 	}
-}
-
-static int draw_dm_override_material_color(int UNUSED(nr), void *UNUSED(attribs))
-{
-	return 1;
 }
 
 /* Second section of routines: Combine first sets to form fancy
@@ -3549,7 +3599,12 @@ static void draw_em_measure_stats(ARegion *ar, View3D *v3d, Object *ob, BMEditMe
 				bool is_first = true;
 
 				BM_ITER_ELEM (loop, &liter, efa, BM_LOOPS_OF_FACE) {
-					if (is_face_sel || (do_moving && BM_elem_flag_test(loop->v, BM_ELEM_SELECT))) {
+					if (is_face_sel ||
+					    (do_moving &&
+					     (BM_elem_flag_test(loop->v, BM_ELEM_SELECT) ||
+					      BM_elem_flag_test(loop->prev->v, BM_ELEM_SELECT) ||
+					      BM_elem_flag_test(loop->next->v, BM_ELEM_SELECT))))
+					{
 						float angle;
 						float v2_local[3];
 
@@ -3742,7 +3797,7 @@ static void draw_em_fancy(Scene *scene, ARegion *ar, View3D *v3d,
 			/* use the cageDM since it always overlaps the editmesh faces */
 			glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
 			cageDM->drawMappedFaces(cageDM, draw_em_fancy__setFaceOpts,
-			                        GPU_enable_material, NULL, me->edit_btmesh, 0);
+			                        GPU_enable_material, NULL, me->edit_btmesh, DM_DRAW_SKIP_HIDDEN);
 			glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 		}
 		else if (check_object_draw_texture(scene, v3d, dt)) {
@@ -3766,7 +3821,7 @@ static void draw_em_fancy(Scene *scene, ARegion *ar, View3D *v3d,
 
 			glEnable(GL_LIGHTING);
 			glFrontFace((ob->transflag & OB_NEG_SCALE) ? GL_CW : GL_CCW);
-			finalDM->drawMappedFaces(finalDM, draw_em_fancy__setFaceOpts, GPU_enable_material, NULL, me->edit_btmesh, 0);
+			finalDM->drawMappedFaces(finalDM, draw_em_fancy__setFaceOpts, GPU_enable_material, NULL, me->edit_btmesh, DM_DRAW_SKIP_HIDDEN);
 
 			glFrontFace(GL_CCW);
 			glDisable(GL_LIGHTING);
@@ -3994,7 +4049,7 @@ static void draw_mesh_fancy(Scene *scene, ARegion *ar, View3D *v3d, RegionView3D
 
 	/* Check to draw dynamic paint colors (or weights from WeightVG modifiers).
 	 * Note: Last "preview-active" modifier in stack will win! */
-	if (DM_get_tessface_data_layer(dm, CD_PREVIEW_MCOL) && modifiers_isPreview(ob))
+	if (DM_get_loop_data_layer(dm, CD_PREVIEW_MLOOPCOL) && modifiers_isPreview(ob))
 		draw_flags |= DRAW_MODIFIERS_PREVIEW;
 
 	/* Unwanted combination */
@@ -4006,9 +4061,15 @@ static void draw_mesh_fancy(Scene *scene, ARegion *ar, View3D *v3d, RegionView3D
 	}
 	
 	/* check polys instead of tessfaces because of dyntopo where tessfaces don't exist */
-	no_edges = (dm->getNumEdges(dm) == 0);
-	no_faces = (dm->getNumPolys(dm) == 0);
-	
+	if (dm->type == DM_TYPE_CCGDM) {
+		no_edges = !subsurf_has_edges(dm);
+		no_faces = !subsurf_has_faces(dm);
+	}
+	else {
+		no_edges = (dm->getNumEdges(dm) == 0);
+		no_faces = (dm->getNumPolys(dm) == 0);
+	}
+
 	/* vertexpaint, faceselect wants this, but it doesnt work for shaded? */
 	glFrontFace((ob->transflag & OB_NEG_SCALE) ? GL_CW : GL_CCW);
 
@@ -4122,7 +4183,7 @@ static void draw_mesh_fancy(Scene *scene, ARegion *ar, View3D *v3d, RegionView3D
 				glEnable(GL_LIGHTING);
 				glEnable(GL_COLOR_MATERIAL);
 
-				dm->drawMappedFaces(dm, NULL, draw_dm_override_material_color, NULL, NULL, DM_DRAW_USE_COLORS);
+				dm->drawMappedFaces(dm, NULL, NULL, NULL, NULL, DM_DRAW_USE_COLORS);
 				glDisable(GL_COLOR_MATERIAL);
 				glDisable(GL_LIGHTING);
 
@@ -4281,8 +4342,9 @@ static bool draw_mesh_object(Scene *scene, ARegion *ar, View3D *v3d, RegionView3
 		if (obedit != ob)
 			finalDM = cageDM = editbmesh_get_derived_base(ob, em);
 		else
-			cageDM = editbmesh_get_derived_cage_and_final(scene, ob, em, &finalDM,
-			                                              scene->customdata_mask);
+			cageDM = editbmesh_get_derived_cage_and_final(
+			        scene, ob, em, scene->customdata_mask,
+			        &finalDM);
 
 		DM_update_materials(finalDM, ob);
 		if (cageDM != finalDM) {
@@ -4599,7 +4661,7 @@ static bool drawCurveDerivedMesh(Scene *scene, View3D *v3d, RegionView3D *rv3d, 
 
 	glFrontFace((ob->transflag & OB_NEG_SCALE) ? GL_CW : GL_CCW);
 
-	if (dt > OB_WIRE && dm->getNumTessFaces(dm)) {
+	if (dt > OB_WIRE && dm->getNumPolys(dm)) {
 		int glsl = draw_glsl_material(scene, ob, v3d, dt);
 		GPU_begin_object_materials(v3d, rv3d, scene, ob, glsl, NULL);
 
@@ -5037,7 +5099,6 @@ static void draw_new_particle_system(Scene *scene, View3D *v3d, RegionView3D *rv
 	bool select = (ob->flag & SELECT) != 0, create_cdata = false, need_v = false;
 	GLint polygonmode[2];
 	char numstr[32];
-	size_t numstr_len;
 	unsigned char tcol[4] = {0, 0, 0, 255};
 
 /* 1. */
@@ -5541,8 +5602,8 @@ static void draw_new_particle_system(Scene *scene, View3D *v3d, RegionView3D *rv
 			if (part->draw & PART_DRAW_HAIR_GRID) {
 				ClothModifierData *clmd = psys->clmd;
 				if (clmd) {
-					float *a = clmd->hair_grid_min;
-					float *b = clmd->hair_grid_max;
+					float *gmin = clmd->hair_grid_min;
+					float *gmax = clmd->hair_grid_max;
 					int *res = clmd->hair_grid_res;
 					int i;
 					
@@ -5556,20 +5617,20 @@ static void draw_new_particle_system(Scene *scene, View3D *v3d, RegionView3D *rv
 					else
 						UI_ThemeColor(TH_WIRE);
 					glBegin(GL_LINES);
-					glVertex3f(a[0], a[1], a[2]); glVertex3f(b[0], a[1], a[2]);
-					glVertex3f(b[0], a[1], a[2]); glVertex3f(b[0], b[1], a[2]);
-					glVertex3f(b[0], b[1], a[2]); glVertex3f(a[0], b[1], a[2]);
-					glVertex3f(a[0], b[1], a[2]); glVertex3f(a[0], a[1], a[2]);
+					glVertex3f(gmin[0], gmin[1], gmin[2]); glVertex3f(gmax[0], gmin[1], gmin[2]);
+					glVertex3f(gmax[0], gmin[1], gmin[2]); glVertex3f(gmax[0], gmax[1], gmin[2]);
+					glVertex3f(gmax[0], gmax[1], gmin[2]); glVertex3f(gmin[0], gmax[1], gmin[2]);
+					glVertex3f(gmin[0], gmax[1], gmin[2]); glVertex3f(gmin[0], gmin[1], gmin[2]);
 					
-					glVertex3f(a[0], a[1], b[2]); glVertex3f(b[0], a[1], b[2]);
-					glVertex3f(b[0], a[1], b[2]); glVertex3f(b[0], b[1], b[2]);
-					glVertex3f(b[0], b[1], b[2]); glVertex3f(a[0], b[1], b[2]);
-					glVertex3f(a[0], b[1], b[2]); glVertex3f(a[0], a[1], b[2]);
+					glVertex3f(gmin[0], gmin[1], gmax[2]); glVertex3f(gmax[0], gmin[1], gmax[2]);
+					glVertex3f(gmax[0], gmin[1], gmax[2]); glVertex3f(gmax[0], gmax[1], gmax[2]);
+					glVertex3f(gmax[0], gmax[1], gmax[2]); glVertex3f(gmin[0], gmax[1], gmax[2]);
+					glVertex3f(gmin[0], gmax[1], gmax[2]); glVertex3f(gmin[0], gmin[1], gmax[2]);
 					
-					glVertex3f(a[0], a[1], a[2]); glVertex3f(a[0], a[1], b[2]);
-					glVertex3f(b[0], a[1], a[2]); glVertex3f(b[0], a[1], b[2]);
-					glVertex3f(a[0], b[1], a[2]); glVertex3f(a[0], b[1], b[2]);
-					glVertex3f(b[0], b[1], a[2]); glVertex3f(b[0], b[1], b[2]);
+					glVertex3f(gmin[0], gmin[1], gmin[2]); glVertex3f(gmin[0], gmin[1], gmax[2]);
+					glVertex3f(gmax[0], gmin[1], gmin[2]); glVertex3f(gmax[0], gmin[1], gmax[2]);
+					glVertex3f(gmin[0], gmax[1], gmin[2]); glVertex3f(gmin[0], gmax[1], gmax[2]);
+					glVertex3f(gmax[0], gmax[1], gmin[2]); glVertex3f(gmax[0], gmax[1], gmax[2]);
 					glEnd();
 					
 					if (select)
@@ -5578,26 +5639,26 @@ static void draw_new_particle_system(Scene *scene, View3D *v3d, RegionView3D *rv
 						UI_ThemeColorShadeAlpha(TH_WIRE, 0, -100);
 					glEnable(GL_BLEND);
 					glBegin(GL_LINES);
-					for (i = 1; i < res[0]-1; ++i) {
-						float f = interpf(b[0], a[0], (float)i / (float)(res[0]-1));
-						glVertex3f(f, a[1], a[2]); glVertex3f(f, b[1], a[2]);
-						glVertex3f(f, b[1], a[2]); glVertex3f(f, b[1], b[2]);
-						glVertex3f(f, b[1], b[2]); glVertex3f(f, a[1], b[2]);
-						glVertex3f(f, a[1], b[2]); glVertex3f(f, a[1], a[2]);
+					for (i = 1; i < res[0] - 1; ++i) {
+						float f = interpf(gmax[0], gmin[0], (float)i / (float)(res[0] - 1));
+						glVertex3f(f, gmin[1], gmin[2]); glVertex3f(f, gmax[1], gmin[2]);
+						glVertex3f(f, gmax[1], gmin[2]); glVertex3f(f, gmax[1], gmax[2]);
+						glVertex3f(f, gmax[1], gmax[2]); glVertex3f(f, gmin[1], gmax[2]);
+						glVertex3f(f, gmin[1], gmax[2]); glVertex3f(f, gmin[1], gmin[2]);
 					}
-					for (i = 1; i < res[1]-1; ++i) {
-						float f = interpf(b[1], a[1], (float)i / (float)(res[1]-1));
-						glVertex3f(a[0], f, a[2]); glVertex3f(b[0], f, a[2]);
-						glVertex3f(b[0], f, a[2]); glVertex3f(b[0], f, b[2]);
-						glVertex3f(b[0], f, b[2]); glVertex3f(a[0], f, b[2]);
-						glVertex3f(a[0], f, b[2]); glVertex3f(a[0], f, a[2]);
+					for (i = 1; i < res[1] - 1; ++i) {
+						float f = interpf(gmax[1], gmin[1], (float)i / (float)(res[1] - 1));
+						glVertex3f(gmin[0], f, gmin[2]); glVertex3f(gmax[0], f, gmin[2]);
+						glVertex3f(gmax[0], f, gmin[2]); glVertex3f(gmax[0], f, gmax[2]);
+						glVertex3f(gmax[0], f, gmax[2]); glVertex3f(gmin[0], f, gmax[2]);
+						glVertex3f(gmin[0], f, gmax[2]); glVertex3f(gmin[0], f, gmin[2]);
 					}
-					for (i = 1; i < res[2]-1; ++i) {
-						float f = interpf(b[2], a[2], (float)i / (float)(res[2]-1));
-						glVertex3f(a[0], a[1], f); glVertex3f(b[0], a[1], f);
-						glVertex3f(b[0], a[1], f); glVertex3f(b[0], b[1], f);
-						glVertex3f(b[0], b[1], f); glVertex3f(a[0], b[1], f);
-						glVertex3f(a[0], b[1], f); glVertex3f(a[0], a[1], f);
+					for (i = 1; i < res[2] - 1; ++i) {
+						float f = interpf(gmax[2], gmin[2], (float)i / (float)(res[2] - 1));
+						glVertex3f(gmin[0], gmin[1], f); glVertex3f(gmax[0], gmin[1], f);
+						glVertex3f(gmax[0], gmin[1], f); glVertex3f(gmax[0], gmax[1], f);
+						glVertex3f(gmax[0], gmax[1], f); glVertex3f(gmin[0], gmax[1], f);
+						glVertex3f(gmin[0], gmax[1], f); glVertex3f(gmin[0], gmin[1], f);
 					}
 					glEnd();
 					glDisable(GL_BLEND);
@@ -5649,7 +5710,7 @@ static void draw_new_particle_system(Scene *scene, View3D *v3d, RegionView3D *rv
 
 			for (a = 0, pa = psys->particles; a < totpart; a++, pa++) {
 				float vec_txt[3];
-				numstr_len = BLI_snprintf_rlen(numstr, sizeof(numstr), "%i", a);
+				size_t numstr_len = BLI_snprintf_rlen(numstr, sizeof(numstr), "%i", a);
 				/* use worldspace because object matrix is already applied */
 				mul_v3_m4v3(vec_txt, ob->imat, cache[a]->co);
 				view3d_cached_text_draw_add(vec_txt, numstr, numstr_len,
@@ -5778,7 +5839,7 @@ static void draw_ptcache_edit(Scene *scene, View3D *v3d, PTCacheEdit *edit)
 	PTCacheEditPoint *point;
 	PTCacheEditKey *key;
 	ParticleEditSettings *pset = PE_settings(scene);
-	int i, k, totpoint = edit->totpoint, timed = pset->flag & PE_FADE_TIME ? pset->fade_frames : 0;
+	int i, k, totpoint = edit->totpoint, timed = (pset->flag & PE_FADE_TIME) ? pset->fade_frames : 0;
 	int totkeys = 1;
 	float sel_col[3];
 	float nosel_col[3];
@@ -5852,16 +5913,16 @@ static void draw_ptcache_edit(Scene *scene, View3D *v3d, PTCacheEdit *edit)
 		if (pset->selectmode == SCE_SELECT_POINT) {
 			float *pd = NULL, *pdata = NULL;
 			float *cd = NULL, *cdata = NULL;
-			int totkeys = 0;
+			int totkeys_visible = 0;
 
 			for (i = 0, point = edit->points; i < totpoint; i++, point++)
 				if (!(point->flag & PEP_HIDE))
-					totkeys += point->totkey;
+					totkeys_visible += point->totkey;
 
-			if (totkeys) {
+			if (totkeys_visible) {
 				if (edit->points && !(edit->points->keys->flag & PEK_USE_WCO))
-					pd = pdata = MEM_callocN(totkeys * 3 * sizeof(float), "particle edit point data");
-				cd = cdata = MEM_callocN(totkeys * (timed ? 4 : 3) * sizeof(float), "particle edit color data");
+					pd = pdata = MEM_callocN(totkeys_visible * 3 * sizeof(float), "particle edit point data");
+				cd = cdata = MEM_callocN(totkeys_visible * (timed ? 4 : 3) * sizeof(float), "particle edit color data");
 			}
 
 			for (i = 0, point = edit->points; i < totpoint; i++, point++) {
@@ -5918,7 +5979,7 @@ static void draw_ptcache_edit(Scene *scene, View3D *v3d, PTCacheEdit *edit)
 						glColor3fv(nosel_col);
 					/* has to be like this.. otherwise selection won't work, have try glArrayElement later..*/
 					glBegin(GL_POINTS);
-					glVertex3fv(key->flag & PEK_USE_WCO ? key->world_co : key->co);
+					glVertex3fv((key->flag & PEK_USE_WCO) ? key->world_co : key->co);
 					glEnd();
 				}
 			}
@@ -6223,8 +6284,8 @@ static void drawvertsN(Nurb *nu, const char sel, const bool hide_handles, const 
 			if (bezt->hide == 0) {
 				if (sel == 1 && bezt == vert) {
 					UI_ThemeColor(TH_ACTIVE_VERT);
-					bglVertex3fv(bezt->vec[1]);
 
+					if (bezt->f2 & SELECT) bglVertex3fv(bezt->vec[1]);
 					if (!hide_handles) {
 						if (bezt->f1 & SELECT) bglVertex3fv(bezt->vec[0]);
 						if (bezt->f3 & SELECT) bglVertex3fv(bezt->vec[2]);
@@ -7155,7 +7216,7 @@ static void draw_bb_quadric(BoundBox *bb, char type, bool around_origin)
 	glPushMatrix();
 	if (type == OB_BOUND_SPHERE) {
 		float scale = MAX3(size[0], size[1], size[2]);
-		glTranslatef(cent[0], cent[1], cent[2]);
+		glTranslate3fv(cent);
 		glScalef(scale, scale, scale);
 		gluSphere(qobj, 1.0, 8, 5);
 	}
@@ -7203,6 +7264,9 @@ static void draw_bounding_volume(Object *ob, char type)
 	}
 	else if (ob->type == OB_ARMATURE) {
 		bb = BKE_armature_boundbox_get(ob);
+	}
+	else if (ob->type == OB_LATTICE) {
+		bb = BKE_lattice_boundbox_get(ob);
 	}
 	else {
 		const float min[3] = {-1.0f, -1.0f, -1.0f}, max[3] = {1.0f, 1.0f, 1.0f};
@@ -7300,7 +7364,7 @@ static void drawObjectSelect(Scene *scene, View3D *v3d, ARegion *ar, Base *base,
 		}
 
 		if (dm) {
-			has_faces = dm->getNumTessFaces(dm) > 0;
+			has_faces = (dm->getNumPolys(dm) != 0);
 		}
 		else {
 			has_faces = BKE_displist_has_faces(&ob->curve_cache->disp);
@@ -7621,7 +7685,10 @@ void draw_object(Scene *scene, ARegion *ar, View3D *v3d, Base *base, const short
 		}
 	}
 
-	if ((md = modifiers_findByType(ob, eModifierType_Smoke)) && (modifier_isEnabled(scene, md, eModifierMode_Realtime))) {
+	if (((base->flag & OB_FROMDUPLI) == 0) &&
+	    (md = modifiers_findByType(ob, eModifierType_Smoke)) &&
+	    (modifier_isEnabled(scene, md, eModifierMode_Realtime)))
+	{
 		smd = (SmokeModifierData *)md;
 
 		if (smd->domain) {
@@ -8000,14 +8067,15 @@ void draw_object(Scene *scene, ARegion *ar, View3D *v3d, Base *base, const short
 		/* only draw domains */
 		if (smd->domain) {
 			SmokeDomainSettings *sds = smd->domain;
-			float p0[3], p1[3], viewnormal[3];
-			BoundBox bb;
+			float viewnormal[3];
 
 			glLoadMatrixf(rv3d->viewmat);
 			glMultMatrixf(ob->obmat);
 
 			/* draw adaptive domain bounds */
-			if (sds->flags & MOD_SMOKE_ADAPTIVE_DOMAIN) {
+			if ((sds->flags & MOD_SMOKE_ADAPTIVE_DOMAIN) && !render_override) {
+				float p0[3], p1[3];
+				BoundBox bb;
 				/* draw domain max bounds */
 				VECSUBFAC(p0, sds->p0, sds->cell_size, sds->adapt_res);
 				VECADDFAC(p1, sds->p1, sds->cell_size, sds->adapt_res);
@@ -8022,7 +8090,9 @@ void draw_object(Scene *scene, ARegion *ar, View3D *v3d, Base *base, const short
 			}
 
 			/* don't show smoke before simulation starts, this could be made an option in the future */
-			if (smd->domain->fluid && CFRA >= smd->domain->point_cache[0]->startframe) {
+			if (sds->fluid && CFRA >= sds->point_cache[0]->startframe) {
+				float p0[3], p1[3];
+
 				/* get view vector */
 				invert_m4_m4(ob->imat, ob->obmat);
 				mul_v3_mat3_m4v3(viewnormal, ob->imat, rv3d->viewinv[2]);
@@ -8039,21 +8109,15 @@ void draw_object(Scene *scene, ARegion *ar, View3D *v3d, Base *base, const short
 				p1[2] = (sds->p0[2] + sds->cell_size[2] * sds->res_max[2] + sds->obj_shift_f[2]) * fabsf(ob->size[2]);
 
 				if (!sds->wt || !(sds->viewsettings & MOD_SMOKE_VIEW_SHOWBIG)) {
-					smd->domain->tex = NULL;
+					sds->tex = NULL;
 					GPU_create_smoke(smd, 0);
-					draw_smoke_volume(sds, ob, sds->tex,
-					                  p0, p1,
-					                  sds->res, sds->dx, sds->scale * sds->maxres,
-					                  viewnormal, sds->tex_shadow, sds->tex_flame);
+					draw_smoke_volume(sds, ob, p0, p1, sds->res, viewnormal);
 					GPU_free_smoke(smd);
 				}
 				else if (sds->wt && (sds->viewsettings & MOD_SMOKE_VIEW_SHOWBIG)) {
 					sds->tex = NULL;
 					GPU_create_smoke(smd, 1);
-					draw_smoke_volume(sds, ob, sds->tex,
-					                  p0, p1,
-					                  sds->res_wt, sds->dx, sds->scale * sds->maxres,
-					                  viewnormal, sds->tex_shadow, sds->tex_flame);
+					draw_smoke_volume(sds, ob, p0, p1, sds->res_wt, viewnormal);
 					GPU_free_smoke(smd);
 				}
 
@@ -8420,7 +8484,7 @@ static void bbs_mesh_solid_EM(BMEditMesh *em, Scene *scene, View3D *v3d,
 	cpack(0);
 
 	if (use_faceselect) {
-		dm->drawMappedFaces(dm, bbs_mesh_solid__setSolidDrawOptions, NULL, NULL, em->bm, 0);
+		dm->drawMappedFaces(dm, bbs_mesh_solid__setSolidDrawOptions, NULL, NULL, em->bm, DM_DRAW_SKIP_HIDDEN | DM_DRAW_SELECT_USE_EDITMODE);
 
 		if (check_ob_drawface_dot(scene, v3d, ob->dt)) {
 			glPointSize(UI_GetThemeValuef(TH_FACEDOT_SIZE));
@@ -8432,7 +8496,7 @@ static void bbs_mesh_solid_EM(BMEditMesh *em, Scene *scene, View3D *v3d,
 
 	}
 	else {
-		dm->drawMappedFaces(dm, bbs_mesh_mask__setSolidDrawOptions, NULL, NULL, em->bm, 0);
+		dm->drawMappedFaces(dm, bbs_mesh_mask__setSolidDrawOptions, NULL, NULL, em->bm, DM_DRAW_SKIP_SELECT | DM_DRAW_SKIP_HIDDEN | DM_DRAW_SELECT_USE_EDITMODE);
 	}
 }
 
@@ -8476,7 +8540,7 @@ static void bbs_mesh_solid_verts(Scene *scene, Object *ob)
 
 	DM_update_materials(dm, ob);
 
-	dm->drawMappedFaces(dm, bbs_mesh_solid_hide2__setDrawOpts, GPU_enable_material, NULL, me, 0);
+	dm->drawMappedFaces(dm, bbs_mesh_solid_hide2__setDrawOpts, GPU_enable_material, NULL, me, DM_DRAW_SKIP_HIDDEN);
 
 	bbs_obmode_mesh_verts(ob, dm, 1);
 	bm_vertoffs = me->totvert + 1;
@@ -8493,7 +8557,7 @@ static void bbs_mesh_solid_faces(Scene *scene, Object *ob)
 	DM_update_materials(dm, ob);
 
 	if ((me->editflag & ME_EDIT_PAINT_FACE_SEL))
-		dm->drawMappedFaces(dm, bbs_mesh_solid_hide__setDrawOpts, NULL, NULL, me, 0);
+		dm->drawMappedFaces(dm, bbs_mesh_solid_hide__setDrawOpts, NULL, NULL, me, DM_DRAW_SKIP_HIDDEN);
 	else
 		dm->drawMappedFaces(dm, bbs_mesh_solid__setDrawOpts, NULL, NULL, me, 0);
 

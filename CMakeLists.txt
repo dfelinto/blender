@@ -47,13 +47,10 @@ endif()
 
 cmake_minimum_required(VERSION 2.8)
 
-if(NOT (${CMAKE_VERSION} VERSION_LESS 3.0))
-	# keep until CMake-3.0 is min requirement
-	cmake_policy(SET CMP0043 OLD)
-endif()
-
 if(NOT EXECUTABLE_OUTPUT_PATH)
-	set(FIRST_RUN "TRUE")
+	set(FIRST_RUN TRUE)
+else()
+	set(FIRST_RUN FALSE)
 endif()
 
 # this starts out unset
@@ -66,11 +63,21 @@ set(CMAKE_BUILD_TYPE_INIT "Release")
 # set_property(GLOBAL PROPERTY RULE_MESSAGES OFF)
 
 # global compile definitions since add_definitions() adds for all.
-set_property(DIRECTORY APPEND PROPERTY COMPILE_DEFINITIONS_DEBUG           DEBUG _DEBUG)
-set_property(DIRECTORY APPEND PROPERTY COMPILE_DEFINITIONS_RELEASE         NDEBUG)
-set_property(DIRECTORY APPEND PROPERTY COMPILE_DEFINITIONS_MINSIZEREL      NDEBUG)
-set_property(DIRECTORY APPEND PROPERTY COMPILE_DEFINITIONS_RELWITHDEBINFO  NDEBUG)
 
+if(NOT (${CMAKE_VERSION} VERSION_LESS 3.0))
+	set_property(DIRECTORY APPEND PROPERTY COMPILE_DEFINITIONS
+		$<$<CONFIG:Debug>:DEBUG;_DEBUG>
+		$<$<CONFIG:Release>:NDEBUG>
+		$<$<CONFIG:MinSizeRel>:NDEBUG>
+		$<$<CONFIG:RelWithDebInfo>:NDEBUG>
+	)
+else()
+	# keep until CMake-3.0 is min requirement
+	set_property(DIRECTORY APPEND PROPERTY COMPILE_DEFINITIONS_DEBUG           DEBUG _DEBUG)
+	set_property(DIRECTORY APPEND PROPERTY COMPILE_DEFINITIONS_RELEASE         NDEBUG)
+	set_property(DIRECTORY APPEND PROPERTY COMPILE_DEFINITIONS_MINSIZEREL      NDEBUG)
+	set_property(DIRECTORY APPEND PROPERTY COMPILE_DEFINITIONS_RELWITHDEBINFO  NDEBUG)
+endif()
 
 #-----------------------------------------------------------------------------
 # Set policy
@@ -129,7 +136,7 @@ macro(option_defaults_init)
 		set(${_var} ON)
 		list(APPEND _init_vars "${_var}")
 	endforeach()
-	unset(_INC)
+	unset(_var)
 endmacro()
 
 # remove from namespace
@@ -157,25 +164,30 @@ option_defaults_init(
 	_init_SDL
 	_init_FFTW3
 	_init_GAMEENGINE
+	_init_OPENSUBDIV
 )
 
 # customize...
-if(UNIX AND NOT APPLE)
+if (UNIX AND NOT APPLE)
 	# some of these libraries are problematic on Linux
 	# disable less important dependencies by default
-	set(_init_BUILDINFO                      OFF)
 	set(_init_CODEC_FFMPEG                   OFF)
 	set(_init_CYCLES_OSL                     OFF)
 	set(_init_IMAGE_OPENEXR                  OFF)
 	set(_init_IMAGE_REDCODE                  OFF)
 	set(_init_INPUT_NDOF                     OFF)
 	set(_init_JACK                           OFF)
-	set(_init_LIBMV_SCHUR_SPECIALIZATION     OFF)
 	set(_init_OPENCOLLADA                    OFF)
 	set(_init_OPENCOLORIO                    OFF)
 	set(_init_SDL                            OFF)
 	set(_init_FFTW3                          OFF)
-	set(_init_GAMEENGINE                     OFF)
+	set(_init_OPENSUBDIV                     OFF)
+elseif(WIN32)
+	set(_init_JACK                           OFF)
+elseif(APPLE)
+	set(_init_INPUT_NDOF                     OFF)
+	set(_init_JACK                           OFF)
+	set(_init_OPENSUBDIV                     OFF)
 endif()
 
 
@@ -220,7 +232,15 @@ mark_as_advanced(WITH_SYSTEM_BULLET)
 option(WITH_GAMEENGINE    "Enable Game Engine" ${_init_GAMEENGINE})
 option(WITH_PLAYER        "Build Player" OFF)
 option(WITH_OPENCOLORIO   "Enable OpenColorIO color management" ${_init_OPENCOLORIO})
-option(WITH_COMPOSITOR    "Enable the tile based nodal compositor" ON)
+
+# Compositor
+option(WITH_COMPOSITOR         "Enable the tile based nodal compositor" ON)
+option(WITH_COMPOSITOR_WERROR  "Treat warnings as errors in compositor code" OFF)
+mark_as_advanced(WITH_COMPOSITOR_WERROR)
+
+option(WITH_OPENSUBDIV    "Enable OpenSubdiv for surface subdivision" _init_OPENSUBDIV)
+option(WITH_SUBSURF_WERROR  "Treat warnings as errors in subsurf code" OFF)
+mark_as_advanced(WITH_COMPOSITOR_WERROR)
 
 # GHOST Windowing Library Options
 option(WITH_GHOST_DEBUG   "Enable debugging output for the GHOST library" OFF)
@@ -238,7 +258,13 @@ option(WITH_HEADLESS      "Build without graphical support (renderfarm, server m
 mark_as_advanced(WITH_HEADLESS)
 
 option(WITH_AUDASPACE    "Build with blenders audio library (only disable if you know what you're doing!)" ON)
+option(WITH_SYSTEM_AUDASPACE "Build with external audaspace library installed on the system (only enable if you know what you're doing!)" OFF)
 mark_as_advanced(WITH_AUDASPACE)
+mark_as_advanced(WITH_SYSTEM_AUDASPACE)
+
+if(NOT WITH_AUDASPACE)
+	set(WITH_SYSTEM_AUDASPACE OFF)
+endif()
 
 option(WITH_OPENMP        "Enable OpenMP (has to be supported by the compiler)" ON)
 
@@ -317,9 +343,11 @@ if(UNIX AND NOT APPLE)
 endif()
 
 # Camera/motion tracking
-option(WITH_LIBMV         "Enable libmv structure from motion library" ON)
+option(WITH_LIBMV         "Enable Libmv structure from motion library" ON)
 option(WITH_LIBMV_SCHUR_SPECIALIZATIONS "Enable fixed-size schur specializations." ${_init_LIBMV_SCHUR_SPECIALIZATION})
+option(WITH_LIBMV_WERROR  "Treat warnings as errors in Libmv (and Blender's motion tracking) code")
 mark_as_advanced(WITH_LIBMV_SCHUR_SPECIALIZATIONS)
+mark_as_advanced(WITH_LIBMV_WERROR)
 
 # Freestyle
 option(WITH_FREESTYLE     "Enable Freestyle (advanced edges rendering)" ON)
@@ -353,18 +381,20 @@ if(UNIX AND NOT APPLE)
 endif()
 
 # Cycles
-option(WITH_CYCLES					"Enable cycles Render Engine" ON)
-option(WITH_CYCLES_STANDALONE		"Build cycles standalone application" OFF)
-option(WITH_CYCLES_STANDALONE_GUI	"Build cycles standalone with GUI" OFF)
+option(WITH_CYCLES					"Enable Cycles Render Engine" ON)
+option(WITH_CYCLES_STANDALONE		"Build Cycles standalone application" OFF)
+option(WITH_CYCLES_STANDALONE_GUI	"Build Cycles standalone with GUI" OFF)
 option(WITH_CYCLES_OSL				"Build Cycles with OSL support" ${_init_CYCLES_OSL})
-option(WITH_CYCLES_CUDA_BINARIES	"Build cycles CUDA binaries" OFF)
+option(WITH_CYCLES_CUDA_BINARIES	"Build Cycles CUDA binaries" OFF)
 set(CYCLES_CUDA_BINARIES_ARCH sm_20 sm_21 sm_30 sm_35 sm_50 sm_52 CACHE STRING "CUDA architectures to build binaries for")
 mark_as_advanced(CYCLES_CUDA_BINARIES_ARCH)
 unset(PLATFORM_DEFAULT)
-option(WITH_CYCLES_LOGGING	"Build cycles with logging support" ON)
-option(WITH_CYCLES_DEBUG	"Build cycles with extra debug capabilities" OFF)
+option(WITH_CYCLES_LOGGING	"Build Cycles with logging support" ON)
+option(WITH_CYCLES_DEBUG	"Build Cycles with extra debug capabilities" OFF)
+option(WITH_CYCLES_WERROR	"Treat warnings as errors in Cycles code" OFF)
 mark_as_advanced(WITH_CYCLES_LOGGING)
 mark_as_advanced(WITH_CYCLES_DEBUG)
+mark_as_advanced(WITH_CYCLES_WERROR)
 
 # LLVM
 option(WITH_LLVM					"Use LLVM" OFF)
@@ -394,7 +424,6 @@ option(WITH_BOOST					"Enable features depending on boost" ON)
 
 # Unit testsing
 option(WITH_GTESTS "Enable GTest unit testing" OFF)
-option(WITH_TESTS_PERFORMANCE "Enable performance tests" OFF)
 
 
 # Documentation
@@ -411,7 +440,6 @@ option(WITH_GL_EGL              "Use the EGL OpenGL system library instead of th
 option(WITH_GL_PROFILE_COMPAT   "Support using the OpenGL 'compatibility' profile. (deprecated)"                                                    ON )
 option(WITH_GL_PROFILE_CORE     "Support using the OpenGL 3.2+ 'core' profile."                                                                     OFF)
 option(WITH_GL_PROFILE_ES20     "Support using OpenGL ES 2.0. (thru either EGL or the AGL/WGL/XGL 'es20' profile)"                                  OFF)
-option(WITH_GPU_DEBUG           "Create a debug OpenGL context (allows inserting custom messages and getting notifications for bad GL use)"         OFF)
 
 mark_as_advanced(
 	WITH_GLEW_MX
@@ -420,7 +448,6 @@ mark_as_advanced(
 	WITH_GL_PROFILE_COMPAT
 	WITH_GL_PROFILE_CORE
 	WITH_GL_PROFILE_ES20
-	WITH_GPU_DEBUG
 )
 
 if(WITH_GL_PROFILE_COMPAT)
@@ -450,6 +477,7 @@ mark_as_advanced(WITH_CPP11)
 
 # Dependency graph
 option(WITH_LEGACY_DEPSGRAPH "Build Blender with legacy dependency graph" ON)
+mark_as_advanced(WITH_LEGACY_DEPSGRAPH)
 
 # avoid using again
 option_defaults_clear()
@@ -489,7 +517,11 @@ if(APPLE)
 	endif()
 	
 	execute_process(COMMAND uname -r OUTPUT_VARIABLE MAC_SYS) # check for actual system-version
-	if(${MAC_SYS} MATCHES 14)
+	if(${MAC_SYS} MATCHES 15)
+		set(OSX_SYSTEM 10.11)
+		# throw an error here, older cmake cannot handle 2 digit subversion!
+		cmake_minimum_required(VERSION 3.0.0)
+	elseif(${MAC_SYS} MATCHES 14)
 		set(OSX_SYSTEM 10.10)
 		# throw an error here, older cmake cannot handle 2 digit subversion!
 		cmake_minimum_required(VERSION 3.0.0)
@@ -506,13 +538,11 @@ if(APPLE)
 	else()
 		set(OSX_SYSTEM unsupported)
 	endif()
-	message(STATUS "Detected system-version: " ${OSX_SYSTEM})
 	
 	# workaround for incorrect cmake xcode lookup for developer previews - XCODE_VERSION does not take xcode-select path into accout
 	# but would always look into /Applications/Xcode.app while dev versions are named Xcode<version>-DP<preview_number>
 	execute_process(COMMAND xcode-select --print-path  OUTPUT_VARIABLE XCODE_CHECK OUTPUT_STRIP_TRAILING_WHITESPACE)
 	string(REPLACE "/Contents/Developer" "" XCODE_BUNDLE ${XCODE_CHECK}) # truncate to bundlepath in any case
-	message(STATUS "Xcode-bundle : " ${XCODE_BUNDLE})
 	
 	if(${CMAKE_GENERATOR} MATCHES "Xcode")
 	
@@ -540,8 +570,8 @@ if(APPLE)
 		string(SUBSTRING "${XCODE_VERS_BUILD_NR}" 6 3 XCODE_VERSION) # truncate away build-nr
 		unset(XCODE_VERS_BUILD_NR)
 	endif()
-	
-	message(STATUS "Detected Xcode-version: " ${XCODE_VERSION})
+
+	message(STATUS "Detected OS X ${OSX_SYSTEM} and Xcode ${XCODE_VERSION} at ${XCODE_BUNDLE}")
 
 	if(${XCODE_VERSION} VERSION_LESS 4.3)
 		set(CMAKE_OSX_SYSROOT /Developer/SDKs/MacOSX${OSX_SYSTEM}.sdk CACHE PATH "" FORCE)  # use guaranteed existing sdk
@@ -654,17 +684,19 @@ endif()
 # auto enable openimageio for cycles
 if(WITH_CYCLES)
 	set(WITH_OPENIMAGEIO ON)
+
+	# auto enable llvm for cycles_osl
+	if(WITH_CYCLES_OSL)
+		set(WITH_LLVM ON CACHE BOOL "" FORCE)
+	endif()
+else()
+	set(WITH_CYCLES_OSL OFF)
 endif()
 
 # auto enable openimageio linking dependencies
 if(WITH_OPENIMAGEIO)
 	set(WITH_IMAGE_OPENEXR ON)
 	set(WITH_IMAGE_TIFF ON)
-endif()
-
-# auto enable llvm for cycles_osl
-if(WITH_CYCLES_OSL)
-	set(WITH_LLVM ON CACHE BOOL "" FORCE)
 endif()
 
 # don't store paths to libs for portable distribution
@@ -691,6 +723,34 @@ endif()
 TEST_STDBOOL_SUPPORT()
 if(HAVE_STDBOOL_H)
 	add_definitions(-DHAVE_STDBOOL_H)
+endif()
+
+if(WITH_AUDASPACE)
+	if(WITH_SYSTEM_AUDASPACE)
+		set(AUDASPACE_DEFINITIONS
+			-DWITH_AUDASPACE
+			-DWITH_SYSTEM_AUDASPACE
+			"-DAUD_DEVICE_H=<AUD_Device.h>"
+			"-DAUD_SPECIAL_H=<AUD_Special.h>"
+			"-DAUD_SOUND_H=<AUD_Sound.h>"
+			"-DAUD_HANDLE_H=<AUD_Handle.h>"
+			"-DAUD_SEQUENCE_H=<AUD_Sequence.h>"
+			"-DAUD_TYPES_H=<AUD_Types.h>"
+			"-DAUD_PYTHON_H=<python/PyAPI.h>"
+		)
+	else()
+		set(AUDASPACE_C_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/intern/audaspace/intern")
+		set(AUDASPACE_PY_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/intern/audaspace/intern")
+		set(AUDASPACE_DEFINITIONS
+			-DWITH_AUDASPACE
+			"-DAUD_DEVICE_H=<AUD_C-API.h>"
+			"-DAUD_SPECIAL_H=<AUD_C-API.h>"
+			"-DAUD_SOUND_H=<AUD_C-API.h>"
+			"-DAUD_HANDLE_H=<AUD_C-API.h>"
+			"-DAUD_SEQUENCE_H=<AUD_C-API.h>"
+			"-DAUD_TYPES_H=<AUD_Space.h>"
+		)
+	endif()
 endif()
 
 #-----------------------------------------------------------------------------
@@ -794,6 +854,14 @@ if(WITH_X11)
 
 endif()
 
+
+# ----------------------------------------------------------------------------
+# Main Platform Checks
+#
+# - UNIX
+# - WIN32
+# - APPLE
+
 if(UNIX AND NOT APPLE)
 	macro(find_package_wrapper)
 		if(WITH_STATIC_LIBS)
@@ -862,6 +930,13 @@ if(UNIX AND NOT APPLE)
 	endif()
 
 	# Audio IO
+	if(WITH_SYSTEM_AUDASPACE)
+		find_package_wrapper(Audaspace)
+		if(NOT AUDASPACE_FOUND OR NOT AUDASPACE_C_FOUND)
+			message(FATAL_ERROR "Audaspace external library not found!")
+		endif()
+	endif()
+
 	if(WITH_OPENAL)
 		find_package_wrapper(OpenAL)
 		if(NOT OPENAL_FOUND)
@@ -1062,9 +1137,9 @@ if(UNIX AND NOT APPLE)
 	endif()
 
 	if(WITH_LLVM)
-        find_package_wrapper(LLVM)
+		find_package_wrapper(LLVM)
 
-        if(NOT LLVM_FOUND)
+		if(NOT LLVM_FOUND)
 			set(WITH_LLVM OFF)
 			message(STATUS "LLVM not found")
 		endif()
@@ -1073,6 +1148,18 @@ if(UNIX AND NOT APPLE)
 	if(WITH_LLVM OR WITH_SDL_DYNLOAD)
 		# Fix for conflict with Mesa llvmpipe
 		set(PLATFORM_LINKFLAGS "${PLATFORM_LINKFLAGS} -Wl,--version-script='${CMAKE_SOURCE_DIR}/source/creator/blender.map'")
+	endif()
+
+	if(WITH_OPENSUBDIV)
+		find_package_wrapper(OpenSubdiv)
+
+		set(OPENSUBDIV_LIBRARIES ${OPENSUBDIV_LIBRARIES})
+		set(OPENSUBDIV_LIBPATH)  # TODO, remove and reference the absolute path everywhere
+
+		if(NOT OPENSUBDIV_FOUND)
+			set(WITH_OPENSUBDIV OFF)
+			message(STATUS "OpenSubdiv not found")
+		endif()
 	endif()
 
 	# OpenSuse needs lutil, ArchLinux not, for now keep, can avoid by using --as-needed
@@ -1102,22 +1189,16 @@ if(UNIX AND NOT APPLE)
 	if(CMAKE_COMPILER_IS_GNUCC)
 		set(PLATFORM_CFLAGS "-pipe -fPIC -funsigned-char -fno-strict-aliasing")
 
-		if(NOT "${CMAKE_C_COMPILER_VERSION}" VERSION_LESS "5.0")
-			# GCC5 uses gnu11, until we update, force c89
-			# though some c11 features can still be used.
-			set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu89")
-		endif()
-
 		# use ld.gold linker if available, could make optional
 		execute_process(
 		        COMMAND ${CMAKE_C_COMPILER} -fuse-ld=gold -Wl,--version
 		        ERROR_QUIET OUTPUT_VARIABLE LD_VERSION)
-		if ("${LD_VERSION}" MATCHES "GNU gold")
+		if("${LD_VERSION}" MATCHES "GNU gold")
 			set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fuse-ld=gold")
 			set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fuse-ld=gold")
-		else ()
-			message(INFO "GNU gold linker isn't available, using the default system linker.")
-		endif ()
+		else()
+			message(STATUS "GNU gold linker isn't available, using the default system linker.")
+		endif()
 		unset(LD_VERSION)
 
 	# CLang is the same as GCC for now.
@@ -1187,26 +1268,17 @@ elseif(WIN32)
 		set(CMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_SKIP TRUE)
 		include(InstallRequiredSystemLibraries)
 
-		set(CMAKE_CXX_FLAGS "/nologo /J /Gd /EHsc /MP" CACHE STRING "MSVC MT C++ flags " FORCE)
-		set(CMAKE_C_FLAGS   "/nologo /J /Gd /MP"       CACHE STRING "MSVC MT C++ flags " FORCE)
+		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /nologo /J /Gd /MP /EHsc")
+		set(CMAKE_C_FLAGS     "${CMAKE_C_FLAGS} /nologo /J /Gd /MP")
 
-		if(CMAKE_CL_64)
-			set(CMAKE_CXX_FLAGS_DEBUG "/Od /RTC1 /MTd /Zi /MP" CACHE STRING "MSVC MT flags " FORCE)
-		else()
-			set(CMAKE_CXX_FLAGS_DEBUG "/Od /RTC1 /MTd /ZI /MP" CACHE STRING "MSVC MT flags " FORCE)
-		endif()
-		set(CMAKE_CXX_FLAGS_RELEASE "/O2 /Ob2 /MT /MP" CACHE STRING "MSVC MT flags " FORCE)
-		set(CMAKE_CXX_FLAGS_MINSIZEREL "/O1 /Ob1 /MT /MP" CACHE STRING "MSVC MT flags " FORCE)
-		set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "/O2 /Ob1 /MT /Zi /MP" CACHE STRING "MSVC MT flags " FORCE)
-		if(CMAKE_CL_64)
-			set(CMAKE_C_FLAGS_DEBUG "/Od /RTC1 /MTd /Zi /MP" CACHE STRING "MSVC MT flags " FORCE)
-		else()
-			set(CMAKE_C_FLAGS_DEBUG "/Od /RTC1 /MTd /ZI /MP" CACHE STRING "MSVC MT flags " FORCE)
-		endif()
-		set(CMAKE_C_FLAGS_RELEASE "/O2 /Ob2 /MT /MP" CACHE STRING "MSVC MT flags " FORCE)
-		set(CMAKE_C_FLAGS_MINSIZEREL "/O1 /Ob1 /MT /MP" CACHE STRING "MSVC MT flags " FORCE)
-		set(CMAKE_C_FLAGS_RELWITHDEBINFO "/O2 /Ob1 /MT /Zi /MP" CACHE STRING "MSVC MT flags " FORCE)
-
+		set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MTd")
+		set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} /MTd")
+		set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT")
+		set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /MT")
+		set(CMAKE_CXX_FLAGS_MINSIZEREL "${CMAKE_CXX_FLAGS_MINSIZEREL} /MT")
+		set(CMAKE_C_FLAGS_MINSIZEREL "${CMAKE_C_FLAGS_MINSIZEREL} /MT")
+		set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} /MT")
+		set(CMAKE_C_FLAGS_RELWITHDEBINFO "${CMAKE_C_FLAGS_RELWITHDEBINFO} /MT")
 
 		set(PLATFORM_LINKFLAGS "/SUBSYSTEM:CONSOLE /STACK:2097152 /INCREMENTAL:NO /NODEFAULTLIB:msvcrt.lib /NODEFAULTLIB:msvcmrt.lib /NODEFAULTLIB:msvcurt.lib /NODEFAULTLIB:msvcrtd.lib")
 
@@ -1372,7 +1444,7 @@ elseif(WIN32)
 		endif()
 
 		if(WITH_PYTHON)
-			set(PYTHON_VERSION 3.4) # CACHE STRING)
+			set(PYTHON_VERSION 3.5) # CACHE STRING)
 
 			string(REPLACE "." "" _PYTHON_VERSION_NO_DOTS ${PYTHON_VERSION})
 			# Use shared libs for vc2008 and vc2010 until we actually have vc2010 libs
@@ -1495,11 +1567,28 @@ elseif(WIN32)
 			)
 		endif()
 
+		if(WITH_OPENSUBDIV)
+			set(OPENSUBDIV_INCLUDE_DIR ${LIBDIR}/opensubdiv/include)
+			set(OPENSUBDIV_LIBPATH ${LIBDIR}/opensubdiv/lib)
+			set(OPENSUBDIV_LIBRARIES ${OPENSUBDIV_LIBPATH}/osdCPU.lib ${OPENSUBDIV_LIBPATH}/osdGPU.lib)
+			find_package(OpenSubdiv)
+		endif()
+
 		if(WITH_SDL)
 			set(SDL ${LIBDIR}/sdl)
 			set(SDL_INCLUDE_DIR ${SDL}/include)
 			set(SDL_LIBRARY SDL2)
 			set(SDL_LIBPATH ${SDL}/lib)
+		endif()
+
+		# Audio IO
+		if(WITH_SYSTEM_AUDASPACE)
+			set(AUDASPACE_INCLUDE_DIRS ${LIBDIR}/audaspace/include/audaspace)
+			set(AUDASPACE_LIBRARIES ${LIBDIR}/audaspace/lib/audaspace.lib)
+			set(AUDASPACE_C_INCLUDE_DIRS ${LIBDIR}/audaspace/include/audaspace)
+			set(AUDASPACE_C_LIBRARIES ${LIBDIR}/audaspace/lib/audaspace-c.lib)
+			set(AUDASPACE_PY_INCLUDE_DIRS ${LIBDIR}/audaspace/include/audaspace)
+			set(AUDASPACE_PY_LIBRARIES ${LIBDIR}/audaspace/lib/audaspace-py.lib)
 		endif()
 
 		# used in many places so include globally, like OpenGL
@@ -1821,6 +1910,17 @@ elseif(APPLE)
 		endif()
 	endif()
 
+	if(WITH_OPENSUBDIV)
+		set(OPENSUBDIV ${LIBDIR}/opensubdiv)
+		set(OPENSUBDIV_LIBPATH ${OPENSUBDIV}/lib)
+		find_library(OSL_LIB_UTIL NAMES osdutil PATHS ${OPENSUBDIV_LIBPATH})
+		find_library(OSL_LIB_CPU NAMES osdCPU PATHS ${OPENSUBDIV_LIBPATH})
+		find_library(OSL_LIB_GPU NAMES osdGPU PATHS ${OPENSUBDIV_LIBPATH})
+		set(OPENSUBDIV_INCLUDE_DIR ${OPENSUBDIV}/include)
+		set(OPENSUBDIV_INCLUDE_DIRS ${OPENSUBDIV_INCLUDE_DIR})
+		list(APPEND OPENSUBDIV_LIBRARIES ${OSL_LIB_UTIL} ${OSL_LIB_CPU} ${OSL_LIB_GPU})
+	endif()
+
 	if(WITH_JACK)
 		find_library(JACK_FRAMEWORK
 			NAMES jackmp
@@ -1840,7 +1940,7 @@ elseif(APPLE)
 
 	if(WITH_PYTHON)
 		# we use precompiled libraries for py 3.4 and up by default
-		set(PYTHON_VERSION 3.4)
+		set(PYTHON_VERSION 3.5)
 		if(NOT WITH_PYTHON_MODULE AND NOT WITH_PYTHON_FRAMEWORK)
 			# normally cached but not since we include them with blender
 			set(PYTHON_INCLUDE_DIR "${LIBDIR}/python/include/python${PYTHON_VERSION}m")
@@ -2213,9 +2313,14 @@ endif()
 if(WITH_IMAGE_OPENJPEG)
 	if(WITH_SYSTEM_OPENJPEG)
 		# dealt with above
+		set(OPENJPEG_DEFINES "")
 	else()
 		set(OPENJPEG_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/extern/libopenjpeg")
-		add_definitions(-DOPJ_STATIC)
+		set(OPENJPEG_DEFINES "-DOPJ_STATIC")
+	endif()
+	# Special handling of Windows platform where openjpeg is always static.
+	if(WIN32)
+		set(OPENJPEG_DEFINES "-DOPJ_STATIC")
 	endif()
 endif()
 
@@ -2348,10 +2453,6 @@ if(WITH_GL_EGL)
 	list(APPEND GL_DEFINITIONS -DWITH_EGL)
 endif()
 
-if(WITH_GPU_DEBUG)
-	list(APPEND GL_DEFINITIONS -DWITH_GPU_DEBUG)
-endif()
-
 #-----------------------------------------------------------------------------
 # Configure OpenMP.
 if(WITH_OPENMP)
@@ -2470,9 +2571,9 @@ if(CMAKE_COMPILER_IS_GNUCC)
 
 	ADD_CHECK_C_COMPILER_FLAG(C_WARNINGS C_WARN_ALL -Wall)
 	ADD_CHECK_C_COMPILER_FLAG(C_WARNINGS C_WARN_CAST_ALIGN -Wcast-align)
-	ADD_CHECK_C_COMPILER_FLAG(C_WARNINGS C_WARN_ERROR_DECLARATION_AFTER_STATEMENT -Werror=declaration-after-statement)
 	ADD_CHECK_C_COMPILER_FLAG(C_WARNINGS C_WARN_ERROR_IMPLICIT_FUNCTION_DECLARATION -Werror=implicit-function-declaration)
 	ADD_CHECK_C_COMPILER_FLAG(C_WARNINGS C_WARN_ERROR_RETURN_TYPE  -Werror=return-type)
+	ADD_CHECK_C_COMPILER_FLAG(C_WARNINGS C_WARN_ERROR_VLA -Werror=vla)
 	# system headers sometimes do this, disable for now, was: -Werror=strict-prototypes
 	ADD_CHECK_C_COMPILER_FLAG(C_WARNINGS C_WARN_STRICT_PROTOTYPES  -Wstrict-prototypes)
 	ADD_CHECK_C_COMPILER_FLAG(C_WARNINGS C_WARN_MISSING_PROTOTYPES -Wmissing-prototypes)
@@ -2501,6 +2602,11 @@ if(CMAKE_COMPILER_IS_GNUCC)
 		ADD_CHECK_CXX_COMPILER_FLAG(CXX_WARNINGS CXX_WARN_REDUNDANT_DECLS -Wredundant-decls)
 	endif()
 
+	# versions before gcc4.8 include global name-space.
+	if(NOT "${CMAKE_C_COMPILER_VERSION}" VERSION_LESS "4.8")
+		ADD_CHECK_C_COMPILER_FLAG(C_WARNINGS C_WARN_SHADOW -Wshadow)
+	endif()
+
 	# disable because it gives warnings for printf() & friends.
 	# ADD_CHECK_C_COMPILER_FLAG(C_WARNINGS C_WARN_DOUBLE_PROMOTION -Wdouble-promotion -Wno-error=double-promotion)
 
@@ -2517,7 +2623,6 @@ if(CMAKE_COMPILER_IS_GNUCC)
 	ADD_CHECK_CXX_COMPILER_FLAG(CXX_WARNINGS CXX_WARN_NO_DIV_BY_ZERO -Wno-div-by-zero)
 	ADD_CHECK_CXX_COMPILER_FLAG(CXX_WARNINGS CXX_WARN_TYPE_LIMITS -Wtype-limits)
 	ADD_CHECK_CXX_COMPILER_FLAG(CXX_WARNINGS CXX_WARN_ERROR_RETURN_TYPE  -Werror=return-type)
-	ADD_CHECK_CXX_COMPILER_FLAG(CXX_WARNINGS CXX_WARN_ERROR_DECLARATION_AFTER_STATEMENT -Werror=declaration-after-statement)
 	ADD_CHECK_CXX_COMPILER_FLAG(CXX_WARNINGS CXX_WARN_ERROR_IMPLICIT_FUNCTION_DECLARATION -Werror=implicit-function-declaration)
 	ADD_CHECK_CXX_COMPILER_FLAG(CXX_WARNINGS CXX_WARN_NO_CHAR_SUBSCRIPTS -Wno-char-subscripts)
 	ADD_CHECK_CXX_COMPILER_FLAG(CXX_WARNINGS CXX_WARN_NO_UNKNOWN_PRAGMAS -Wno-unknown-pragmas)
@@ -2554,7 +2659,6 @@ elseif(CMAKE_C_COMPILER_ID MATCHES "Clang")
 
 	# strange, clang complains these are not supported, but then yses them.
 	ADD_CHECK_C_COMPILER_FLAG(C_WARNINGS C_WARN_ALL -Wall)
-	ADD_CHECK_C_COMPILER_FLAG(C_WARNINGS C_WARN_ERROR_DECLARATION_AFTER_STATEMENT -Werror=declaration-after-statement)
 	ADD_CHECK_C_COMPILER_FLAG(C_WARNINGS C_WARN_ERROR_IMPLICIT_FUNCTION_DECLARATION -Werror=implicit-function-declaration)
 	ADD_CHECK_C_COMPILER_FLAG(C_WARNINGS C_WARN_ERROR_RETURN_TYPE  -Werror=return-type)
 	ADD_CHECK_C_COMPILER_FLAG(C_WARNINGS C_WARN_NO_AUTOLOGICAL_COMPARE -Wno-tautological-compare)
@@ -2669,6 +2773,12 @@ if(WITH_CPP11)
 	endif()
 endif()
 
+# Visual Studio has all standards it supports available by default
+if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_C_COMPILER_ID MATCHES "Clang" OR CMAKE_C_COMPILER_ID MATCHES "Intel")
+	# Use C99 + GNU extensions, works with GCC, Clang, ICC
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu99")
+endif()
+
 # Include warnings first, so its possible to disable them with user defined flags
 # eg: -Wno-uninitialized
 set(CMAKE_C_FLAGS "${C_WARNINGS} ${CMAKE_C_FLAGS} ${PLATFORM_CFLAGS}")
@@ -2758,25 +2868,29 @@ include(build_files/cmake/packaging.cmake)
 # Print Final Configuration
 
 if(FIRST_RUN)
-	set(_config_msg "\n* Blender Configuration *")
-	macro(info_cfg_option
-		_setting)
-		set(_msg "   * ${_setting}")
+
+	set(_config_msg "\nBlender Configuration\n=====================")
+
+	function(info_cfg_option
+		_setting
+		)
+
+		set(_msg "  - ${_setting}")
 		string(LENGTH "${_msg}" _len)
 		while("32" GREATER "${_len}")
 			set(_msg "${_msg} ")
 			 math(EXPR _len "${_len} + 1")
 		endwhile()
 
-		set(_config_msg "${_config_msg}\n${_msg}${${_setting}}")
-	endmacro()
+		set(_config_msg "${_config_msg}\n${_msg}${${_setting}}" PARENT_SCOPE)
+	endfunction()
 
-	macro(info_cfg_text
-		_text)
-		set(_config_msg "${_config_msg}\n\n  ${_text}")
+	function(info_cfg_text
+		_text
+		)
 
-
-	endmacro()
+		set(_config_msg "${_config_msg}\n\n  ${_text}" PARENT_SCOPE)
+	endfunction()
 
 	message(STATUS "C Compiler:   \"${CMAKE_C_COMPILER_ID}\"")
 	message(STATUS "C++ Compiler: \"${CMAKE_CXX_COMPILER_ID}\"")
@@ -2855,7 +2969,6 @@ if(FIRST_RUN)
 	info_cfg_option(WITH_GL_PROFILE_COMPAT)
 	info_cfg_option(WITH_GL_PROFILE_CORE)
 	info_cfg_option(WITH_GL_PROFILE_ES20)
-	info_cfg_option(WITH_GPU_DEBUG)
 	if(WIN32)
 		info_cfg_option(WITH_GL_ANGLE)
 	endif()

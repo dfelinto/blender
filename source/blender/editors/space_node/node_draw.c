@@ -41,10 +41,11 @@
 #include "BLI_math.h"
 #include "BLI_blenlib.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_context.h"
 #include "BKE_depsgraph.h"
+#include "BKE_library.h"
 #include "BKE_main.h"
 #include "BKE_node.h"
 
@@ -85,9 +86,7 @@ void ED_node_tree_update(const bContext *C)
 	if (snode) {
 		snode_set_context(C);
 
-		if (snode->nodetree && snode->nodetree->id.us == 0) {
-			snode->nodetree->id.us = 1;
-		}
+		id_us_ensure_real(&snode->nodetree->id);
 	}
 }
 
@@ -306,6 +305,12 @@ void node_to_view(struct bNode *node, float x, float y, float *rx, float *ry)
 	nodeToView(node, x, y, rx, ry);
 	*rx *= UI_DPI_FAC;
 	*ry *= UI_DPI_FAC;
+}
+
+void node_to_updated_rect(struct bNode *node, rctf *r_rect)
+{
+	node_to_view(node, node->offsetx, node->offsety, &r_rect->xmin, &r_rect->ymax);
+	node_to_view(node, node->offsetx + node->width, node->offsety - node->height, &r_rect->xmax, &r_rect->ymin);
 }
 
 void node_from_view(struct bNode *node, float x, float y, float *rx, float *ry)

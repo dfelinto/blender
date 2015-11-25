@@ -33,7 +33,6 @@ Import ('env')
 window_system = env['OURPLATFORM']
 
 sources = env.Glob('intern/*.cpp')
-sources2 = env.Glob('intern/GHOST_NDOFManager3Dconnexion.c')
 if window_system == 'darwin':
     sources += env.Glob('intern/*.mm')
     #remove, will be readded below if needed.
@@ -48,7 +47,8 @@ sources.remove('intern' + os.sep + 'GHOST_ContextWGL.cpp')
 
 pf = ['GHOST_DisplayManager', 'GHOST_System', 'GHOST_SystemPaths', 'GHOST_Window', 'GHOST_DropTarget', 'GHOST_NDOFManager', 'GHOST_Context']
 
-defs = env['BF_GL_DEFINITIONS']
+defs = []
+defs += env['BF_GL_DEFINITIONS']
 
 if env['WITH_BF_GL_EGL']:
     defs.append('WITH_EGL')
@@ -117,6 +117,11 @@ elif window_system in ('win32-vc', 'win32-mingw', 'cygwin', 'linuxcross', 'win64
             pass
 
         try:
+            sources.remove('intern' + os.sep + f + 'Unix.cpp')
+        except ValueError:
+            pass
+
+        try:
             sources.remove('intern' + os.sep + f + 'SDL.cpp')
         except ValueError:
             pass
@@ -135,6 +140,10 @@ elif window_system == 'darwin':
 
         try:
             sources.remove('intern' + os.sep + f + 'X11.cpp')
+        except ValueError:
+            pass
+        try:
+            sources.remove('intern' + os.sep + f + 'Unix.cpp')
         except ValueError:
             pass
         try:
@@ -175,7 +184,7 @@ else:
         elif window_system=='darwin':
             sources.remove('intern' + os.sep + 'GHOST_NDOFManagerCocoa.mm')
         else:
-            sources.remove('intern' + os.sep + 'GHOST_NDOFManagerX11.cpp')
+            sources.remove('intern' + os.sep + 'GHOST_NDOFManagerUnix.cpp')
     except ValueError:
         pass
 
@@ -192,7 +201,3 @@ elif window_system == 'darwin' and env['C_COMPILER_ID'] == 'gcc' and  env['CCVER
 
 else:
     env.BlenderLib ('bf_intern_ghost', sources, Split(incs), defines=defs, libtype=['intern','player'], priority = [40,15] )
-    
-if window_system == 'darwin' and env['WITH_BF_3DMOUSE']: # build seperate to circumvent extern "C" linkage issues
-    env.BlenderLib ('bf_intern_ghostndof3dconnexion', sources2, Split(incs), defines=defs, libtype=['intern','player'], priority = [40,15] )
-

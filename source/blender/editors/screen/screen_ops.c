@@ -37,7 +37,7 @@
 #include "BLI_dlrbTree.h"
 #include "BLI_utildefines.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "DNA_armature_types.h"
 #include "DNA_lattice_types.h"
@@ -81,6 +81,7 @@
 
 #include "UI_interface.h"
 #include "UI_resources.h"
+#include "UI_view2d.h"
 
 #include "screen_intern.h"  /* own module include */
 
@@ -727,7 +728,8 @@ static void actionzone_apply(bContext *C, wmOperator *op, int type)
 
 static int actionzone_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
-	AZone *az = is_in_area_actionzone(CTX_wm_area(C), &event->x);
+	ScrArea *sa = CTX_wm_area(C);
+	AZone *az = is_in_area_actionzone(sa, &event->x);
 	sActionzoneData *sad;
 	
 	/* quick escape */
@@ -736,7 +738,7 @@ static int actionzone_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 	
 	/* ok we do the actionzone */
 	sad = op->customdata = MEM_callocN(sizeof(sActionzoneData), "sActionzoneData");
-	sad->sa1 = CTX_wm_area(C);
+	sad->sa1 = sa;
 	sad->az = az;
 	sad->x = event->x; sad->y = event->y;
 	
@@ -990,6 +992,11 @@ static int area_dupli_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 	rect.ymax = rect.ymin + BLI_rcti_size_y(&rect) / U.pixelsize;
 
 	newwin = WM_window_open(C, &rect);
+	if (newwin == NULL) {
+		BKE_report(op->reports, RPT_ERROR, "Failed to open window!");
+		goto finally;
+	}
+
 	*newwin->stereo3d_format = *win->stereo3d_format;
 	
 	/* allocs new screen and adds to newly created window, using window size */
@@ -1003,11 +1010,18 @@ static int area_dupli_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 
 	/* screen, areas init */
 	WM_event_add_notifier(C, NC_SCREEN | NA_EDITED, NULL);
-	
+
+
+finally:
 	if (event->type == EVT_ACTIONZONE_AREA)
 		actionzone_exit(op);
 	
-	return OPERATOR_FINISHED;
+	if (newwin) {
+		return OPERATOR_FINISHED;
+	}
+	else {
+		return OPERATOR_CANCELLED;
+	}
 }
 
 static void SCREEN_OT_area_dupli(wmOperatorType *ot)
@@ -1929,6 +1943,12 @@ static void region_scale_validate_size(RegionMoveData *rmd)
 
 static void region_scale_toggle_hidden(bContext *C, RegionMoveData *rmd)
 {
+	/* hidden areas may have bad 'View2D.cur' value,
+	 * correct before displaying. see T45156 */
+	if (rmd->ar->flag & RGN_FLAG_HIDDEN) {
+		UI_view2d_curRect_validate(&rmd->ar->v2d);
+	}
+
 	region_toggle_hidden(C, rmd->ar, 0);
 	region_scale_validate_size(rmd);
 }
@@ -2348,6 +2368,9 @@ static void SCREEN_OT_marker_jump(wmOperatorType *ot)
 static bool screen_set_is_ok(bScreen *screen, bScreen *screen_prev)
 {
 	return ((screen->winid == 0) &&
+	        /* in typical usage these should have a nonzero winid
+	         * (all temp screens should be used, or closed & freed). */
+	        (screen->temp == false) &&
 	        (screen->state == SCREENNORMAL) &&
 	        (screen != screen_prev) &&
 	        (screen->id.name[2] != '.' || !(U.uiflag & USER_HIDE_DOT)));
@@ -2365,8 +2388,9 @@ static int screen_set_exec(bContext *C, wmOperator *op)
 	int delta = RNA_int_get(op->ptr, "delta");
 	
 	/* temp screens are for userpref or render display */
-	if (screen->temp)
+	if (screen->temp || (sa && sa->full && sa->full->temp)) {
 		return OPERATOR_CANCELLED;
+	}
 	
 	if (delta == 1) {
 		while (tot--) {
@@ -3618,6 +3642,19 @@ bScreen *ED_screen_animation_playing(const wmWindowManager *wm)
 	wmWindow *win;
 
 	for (win = wm->windows.first; win; win = win->next) {
+		if (win->screen->animtimer || win->screen->scrubbing) {
+			return win->screen;
+		}
+	}
+
+	return NULL;
+}
+
+bScreen *ED_screen_animation_no_scrub(const wmWindowManager *wm)
+{
+	wmWindow *win;
+
+	for (win = wm->windows.first; win; win = win->next) {
 		if (win->screen->animtimer) {
 			return win->screen;
 		}
@@ -3625,6 +3662,7 @@ bScreen *ED_screen_animation_playing(const wmWindowManager *wm)
 
 	return NULL;
 }
+
 
 /* toggle operator */
 int ED_screen_animation_play(bContext *C, int sync, int mode)
@@ -3800,7 +3838,7 @@ static int fullscreen_back_exec(bContext *C, wmOperator *op)
 		return OPERATOR_CANCELLED;
 	}
 
-	ED_screen_full_prevspace(C, sa);
+	ED_screen_full_prevspace(C, sa, false);
 
 	return OPERATOR_FINISHED;
 }
@@ -3819,7 +3857,7 @@ static void SCREEN_OT_back_to_previous(struct wmOperatorType *ot)
 
 /* *********** show user pref window ****** */
 
-static int userpref_show_invoke(bContext *C, wmOperator *UNUSED(op), const wmEvent *event)
+static int userpref_show_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
 	wmWindow *win = CTX_wm_window(C);
 	rcti rect;
@@ -3836,9 +3874,13 @@ static int userpref_show_invoke(bContext *C, wmOperator *UNUSED(op), const wmEve
 	rect.ymax = rect.ymin + sizey;
 	
 	/* changes context! */
-	WM_window_open_temp(C, &rect, WM_WINDOW_USERPREFS);
-	
-	return OPERATOR_FINISHED;
+	if (WM_window_open_temp(C, &rect, WM_WINDOW_USERPREFS) != NULL) {
+		return OPERATOR_FINISHED;
+	}
+	else {
+		BKE_report(op->reports, RPT_ERROR, "Failed to open window!");
+		return OPERATOR_CANCELLED;
+	}
 }
 
 
@@ -3964,7 +4006,9 @@ static int scene_delete_exec(bContext *C, wmOperator *UNUSED(op))
 {
 	Scene *scene = CTX_data_scene(C);
 
-	ED_screen_delete_scene(C, scene);
+	if (ED_screen_delete_scene(C, scene) == false) {
+		return OPERATOR_CANCELLED;
+	}
 
 	if (G.debug & G_DEBUG)
 		printf("scene delete %p\n", scene);

@@ -35,7 +35,7 @@
 #include "BLI_utildefines.h"
 #include "BLI_math.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "RNA_define.h"
 #include "RNA_access.h"
@@ -999,13 +999,13 @@ static void rna_def_sound_actuator(BlenderRNA *brna)
 	RNA_def_property_ui_range(prop, 0.0, 1.0, 1, 2);
 	RNA_def_property_range(prop, 0.0, 2.0);
 	RNA_def_property_ui_text(prop, "Volume", "Initial volume of the sound");
-	RNA_def_property_translation_context(prop, BLF_I18NCONTEXT_ID_SOUND);
+	RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_SOUND);
 	RNA_def_property_update(prop, NC_LOGIC, NULL);
 
 	prop = RNA_def_property(srna, "pitch", PROP_FLOAT, PROP_NONE);
 	RNA_def_property_ui_range(prop, -12.0, 12.0, 1, 2);
 	RNA_def_property_ui_text(prop, "Pitch", "Pitch of the sound");
-	RNA_def_property_translation_context(prop, BLF_I18NCONTEXT_ID_SOUND);
+	RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_SOUND);
 	RNA_def_property_update(prop, NC_LOGIC, NULL);
 	
 	/* floats - 3D Parameters */
@@ -1706,6 +1706,7 @@ static void rna_def_game_actuator(BlenderRNA *brna)
 		{ACT_GAME_QUIT, "QUIT", 0, "Quit Game", ""},
 		{ACT_GAME_SAVECFG, "SAVECFG", 0, "Save bge.logic.globalDict", ""},
 		{ACT_GAME_LOADCFG, "LOADCFG", 0, "Load bge.logic.globalDict", ""},
+		{ACT_GAME_SCREENSHOT, "SCREENSHOT", 0, "Screenshot", ""},
 		{0, NULL, 0, NULL, NULL}
 	};
 	
@@ -1722,8 +1723,8 @@ static void rna_def_game_actuator(BlenderRNA *brna)
 	/* ACT_GAME_LOAD */
 	prop = RNA_def_property(srna, "filename", PROP_STRING, PROP_FILEPATH);
 	RNA_def_property_ui_text(prop, "File",
-	                         "Load this blend file, use the \"//\" prefix for a path relative to the current "
-	                         "blend file");
+	                         "The file to use, depending on the mode (e.g. the blend file to load or a destination "
+	                         "for saving a screenshot) - use the \"//\" prefix for a relative path");
 	RNA_def_property_update(prop, NC_LOGIC, NULL);
 	/*XXX to do: an operator that calls file_browse with relative_path on and blender filtering active */
 }

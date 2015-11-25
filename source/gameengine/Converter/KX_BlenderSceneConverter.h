@@ -32,7 +32,7 @@
 #ifndef __KX_BLENDERSCENECONVERTER_H__
 #define __KX_BLENDERSCENECONVERTER_H__
 
-#include "KX_HashedPtr.h"
+#include "EXP_HashedPtr.h"
 #include "CTR_Map.h"
 #include <stdio.h>
 
@@ -184,6 +184,7 @@ public:
 	bool FreeBlendFile(const char *path);
 
 	virtual void MergeAsyncLoads();
+	virtual void FinalizeAsyncLoads();
 	void AddScenesToMergeQueue(class KX_LibLoadStatus *status);
  
 	void PrintStats() {

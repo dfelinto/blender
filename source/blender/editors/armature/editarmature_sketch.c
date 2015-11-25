@@ -436,7 +436,7 @@ static float sk_clampPointSize(SK_Point *pt, float size)
 
 static void sk_drawPoint(GLUquadric *quad, SK_Point *pt, float size)
 {
-	glTranslatef(pt->p[0], pt->p[1], pt->p[2]);
+	glTranslate3fv(pt->p);
 	gluSphere(quad, sk_clampPointSize(pt, size), 8, 8);
 }
 
@@ -455,7 +455,7 @@ static void sk_drawEdge(GLUquadric *quad, SK_Point *pt0, SK_Point *pt1, float si
 
 	angle = angle_normalized_v3v3(vec2, vec1);
 
-	glRotatef(angle * (float)(180.0 / M_PI) + 180.0f, axis[0], axis[1], axis[2]);
+	glRotate3fv(angle * (float)(180.0 / M_PI) + 180.0f, axis);
 
 	gluCylinder(quad, sk_clampPointSize(pt1, size), sk_clampPointSize(pt0, size), length, 8, 8);
 }
@@ -475,7 +475,7 @@ static void sk_drawNormal(GLUquadric *quad, SK_Point *pt, float size, float heig
 
 	angle = angle_normalized_v3v3(vec2, pt->no);
 
-	glRotatef(angle * (float)(180.0 / M_PI), axis[0], axis[1], axis[2]);
+	glRotate3fv(angle * (float)(180.0 / M_PI), axis);
 
 	glColor3f(0, 1, 1);
 	gluCylinder(quad, sk_clampPointSize(pt, size), 0, sk_clampPointSize(pt, height), 10, 2);
@@ -1779,14 +1779,13 @@ int sk_detectMergeGesture(bContext *C, SK_Gesture *gest, SK_Sketch *UNUSED(sketc
 {
 	ARegion *ar = CTX_wm_region(C);
 	if (gest->nb_segments > 2 && gest->nb_intersections == 2) {
-		short start_val[2], end_val[2];
-		short dist;
+		int start_val[2], end_val[2];
+		int dist;
 
-		if ((ED_view3d_project_short_global(ar, gest->stk->points[0].p,           start_val, V3D_PROJ_TEST_NOP) == V3D_PROJ_RET_OK) &&
-		    (ED_view3d_project_short_global(ar, sk_lastStrokePoint(gest->stk)->p, end_val,   V3D_PROJ_TEST_NOP) == V3D_PROJ_RET_OK))
+		if ((ED_view3d_project_int_global(ar, gest->stk->points[0].p,           start_val, V3D_PROJ_TEST_NOP) == V3D_PROJ_RET_OK) &&
+		    (ED_view3d_project_int_global(ar, sk_lastStrokePoint(gest->stk)->p, end_val,   V3D_PROJ_TEST_NOP) == V3D_PROJ_RET_OK))
 		{
-
-			dist = MAX2(ABS(start_val[0] - end_val[0]), ABS(start_val[1] - end_val[1]));
+			dist = len_manhattan_v2v2_int(start_val, end_val);
 
 			/* if gesture is a circle */
 			if (dist <= 20) {
@@ -2112,7 +2111,7 @@ static void sk_drawSketch(Scene *scene, View3D *UNUSED(v3d), SK_Sketch *sketch, 
 
 			glColor3fv(colors[index]);
 			glPushMatrix();
-			glTranslatef(p->p[0], p->p[1], p->p[2]);
+			glTranslate3fv(p->p);
 			gluSphere(quad, 0.02, 8, 8);
 			glPopMatrix();
 		}

@@ -236,6 +236,8 @@ struct CcdConstructionInfo
 		m_mass(0.f),
 		m_clamp_vel_min(-1.f),
 		m_clamp_vel_max(-1.f),
+	    m_clamp_angvel_min(0.0f),
+	    m_clamp_angvel_max(0.0f),
 		m_restitution(0.1f),
 		m_friction(0.5f),
 		m_linearDamping(0.1f),
@@ -302,6 +304,8 @@ struct CcdConstructionInfo
 	btScalar	m_mass;
 	btScalar	m_clamp_vel_min;  
 	btScalar	m_clamp_vel_max;  
+	btScalar	m_clamp_angvel_min;  // Minimum angular velocity, in radians/sec.
+	btScalar	m_clamp_angvel_max;  // Maximum angular velocity, in radians/sec.
 	btScalar	m_restitution;
 	btScalar	m_friction;
 	btScalar	m_linearDamping;
@@ -312,7 +316,8 @@ struct CcdConstructionInfo
 	float	m_stepHeight;
 	float	m_jumpSpeed;
 	float	m_fallSpeed;
-	
+	unsigned char m_maxJumps;
+
 	int		m_gamesoftFlag;
 	float	m_soft_linStiff;			/* linear stiffness 0..1 */
 	float	m_soft_angStiff;		/* angular stiffness 0..1 */
@@ -403,19 +408,19 @@ class BlenderBulletCharacterController : public btKinematicCharacterController, 
 {
 private:
 	btMotionState* m_motionState;
-	int m_jumps;
-	int m_maxJumps;
+	unsigned char m_jumps;
+	unsigned char m_maxJumps;
 
 public:
 	BlenderBulletCharacterController(btMotionState *motionState, btPairCachingGhostObject *ghost, btConvexShape* shape, float stepHeight);
 
 	virtual void updateAction(btCollisionWorld *collisionWorld, btScalar dt);
 
-	int getMaxJumps() const;
+	unsigned char getMaxJumps() const;
 
-	void setMaxJumps(int maxJumps);
+	void setMaxJumps(unsigned char maxJumps);
 
-	int getJumpCount() const;
+	unsigned char getJumpCount() const;
 
 	virtual bool canJump() const;
 
@@ -428,9 +433,9 @@ public:
 	virtual bool OnGround(){ return onGround(); }
 	virtual float GetGravity() { return getGravity(); }
 	virtual void SetGravity(float gravity) { setGravity(gravity); }
-	virtual int GetMaxJumps() { return getMaxJumps(); }
-	virtual void SetMaxJumps(int maxJumps) { setMaxJumps(maxJumps); }
-	virtual int GetJumpCount() { return getJumpCount(); }
+	virtual unsigned char GetMaxJumps() { return getMaxJumps(); }
+	virtual void SetMaxJumps(unsigned char maxJumps) { setMaxJumps(maxJumps); }
+	virtual unsigned char GetJumpCount() { return getJumpCount(); }
 	virtual void SetWalkDirection(const MT_Vector3& dir)
 	{
 		btVector3 vec = btVector3(dir[0], dir[1], dir[2]);
@@ -579,6 +584,13 @@ protected:
 		 * SynchronizeMotionStates ynchronizes dynas, kinematic and deformable entities (and do 'late binding')
 		 */
 		virtual bool		SynchronizeMotionStates(float time);
+
+		/**
+		 * Called for every physics simulation step. Use this method for
+		 * things like limiting linear and angular velocity.
+		 */
+		void SimulationTick(float timestep);
+
 		/**
 		 * WriteMotionStateToDynamics ynchronizes dynas, kinematic and deformable entities (and do 'late binding')
 		 */
@@ -699,6 +711,23 @@ protected:
 		virtual float GetLinVelocityMax() const 
 		{
 			return m_cci.m_clamp_vel_max;
+		}
+
+		virtual void SetAngularVelocityMin(float val)
+		{
+			m_cci.m_clamp_angvel_min = val;
+		}
+		virtual float GetAngularVelocityMin() const
+		{
+			return m_cci.m_clamp_angvel_min;
+		}
+		virtual void SetAngularVelocityMax(float val)
+		{
+			m_cci.m_clamp_angvel_max = val;
+		}
+		virtual float GetAngularVelocityMax() const
+		{
+			return m_cci.m_clamp_angvel_max;
 		}
 
 		bool	WantsSleeping();

@@ -327,6 +327,7 @@ class VIEW3D_PT_tools_meshedit(View3DPanel, Panel):
         col.operator("mesh.edge_face_add")
         col.operator("mesh.subdivide")
         col.operator("mesh.loopcut_slide")
+        col.operator("mesh.offset_edge_loops_slide")
         col.operator("mesh.duplicate_move", text="Duplicate")
         row = col.row(align=True)
         row.operator("mesh.spin")
@@ -366,7 +367,7 @@ class VIEW3D_PT_tools_meshweight(View3DPanel, Panel):
         col.operator("object.vertex_group_clean", text="Clean")
         col.operator("object.vertex_group_quantize", text="Quantize")
         col.operator("object.vertex_group_levels", text="Levels")
-        col.operator("object.vertex_group_blend", text="Blend")
+        col.operator("object.vertex_group_smooth", text="Smooth")
         col.operator("object.vertex_group_limit_total", text="Limit Total")
         col.operator("object.vertex_group_fix", text="Fix Deforms")
 
@@ -1550,6 +1551,15 @@ class VIEW3D_PT_sculpt_symmetry(Panel, View3DPaintPanel):
         row.prop(sculpt, "lock_x", text="X", toggle=True)
         row.prop(sculpt, "lock_y", text="Y", toggle=True)
         row.prop(sculpt, "lock_z", text="Z", toggle=True)
+
+        layout.label(text="Tiling:")
+
+        row = layout.row(align=True)
+        row.prop(sculpt, "tile_x", text="X", toggle=True)
+        row.prop(sculpt, "tile_y", text="Y", toggle=True)
+        row.prop(sculpt, "tile_z", text="Z", toggle=True)
+
+        layout.column().prop(sculpt, "tile_offset", text="Tile Offset")
 
 
 class VIEW3D_PT_tools_brush_appearance(Panel, View3DPaintPanel):

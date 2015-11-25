@@ -369,7 +369,7 @@ void DEG_evaluate_on_refresh(EvaluationContext *eval_ctx,
 {
 	/* Update time on primary timesource. */
 	TimeSourceDepsNode *tsrc = graph->find_time_source();
-	tsrc->cfra = BKE_scene_frame_get(scene);;
+	tsrc->cfra = BKE_scene_frame_get(scene);
 
 	DEG_evaluate_on_refresh_ex(eval_ctx, graph, graph->layers);
 }
@@ -391,4 +391,9 @@ void DEG_evaluate_on_framechange(EvaluationContext *eval_ctx,
 
 	/* Perform recalculation updates. */
 	DEG_evaluate_on_refresh_ex(eval_ctx, graph, layers);
+}
+
+bool DEG_needs_eval(Depsgraph *graph)
+{
+	return graph->entry_tags.size() != 0;
 }

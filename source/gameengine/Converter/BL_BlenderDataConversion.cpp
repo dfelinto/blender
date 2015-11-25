@@ -562,11 +562,11 @@ static void GetUVs(BL_Material *material, MTF_localLayer *layers, MFace *mface, 
 // ------------------------------------
 static bool ConvertMaterial(
 	BL_Material *material,
-	Material *mat, 
-	MTFace* tface,  
+	Material *mat,
+	MTFace *tface,
 	const char *tfaceName,
-	MFace* mface, 
-	MCol* mmcol,
+	MFace *mface,
+	MCol *mmcol,
 	bool glslmat)
 {
 	material->Initialize();
@@ -583,41 +583,41 @@ static bool ConvertMaterial(
 	if (validmat) {
 
 		// use lighting?
-		material->ras_mode |= ( mat->mode & MA_SHLESS )?0:USE_LIGHT;
-		material->ras_mode |= ( mat->game.flag & GEMAT_BACKCULL )?0:TWOSIDED;
+		material->ras_mode |= (mat->mode & MA_SHLESS) ? 0 : USE_LIGHT;
+		material->ras_mode |= (mat->game.flag & GEMAT_BACKCULL) ? 0 : TWOSIDED;
 
 		// cast shadows?
-		material->ras_mode |= ( (mat->mode2 & MA_CASTSHADOW) && (mat->mode & MA_SHADBUF) )?CAST_SHADOW:0;
+		material->ras_mode |= ((mat->mode2 & MA_CASTSHADOW) && (mat->mode & MA_SHADBUF)) ? CAST_SHADOW : 0;
 
 		// only shadows?
-		material->ras_mode |= ( mat->mode & MA_ONLYCAST )?ONLY_SHADOW:0;
+		material->ras_mode |= (mat->mode & MA_ONLYCAST) ? ONLY_SHADOW : 0;
 
-		MTex *mttmp = 0;
+		MTex *mttmp = NULL;
 		int valid_index = 0;
-		
+
 		/* In Multitexture use the face texture if and only if
 		 * it is set in the buttons
 		 * In GLSL is not working yet :/ 3.2011 */
 		bool facetex = false;
-		if (validface && mat->mode &MA_FACETEXTURE) 
+		if (validface && mat->mode & MA_FACETEXTURE) {
 			facetex = true;
-	
-		// foreach MTex
-		for (int i=0; i<MAXTEX; i++) {
-			// use face tex
+		}
 
-			if (i==0 && facetex ) {
+		// foreach MTex
+		for (int i = 0; i < MAXTEX; i++) {
+			// use face tex
+			if (i == 0 && facetex ) {
 				facetex = false;
-				Image*tmp = (Image*)(tface->tpage);
+				Image *tmp = (Image *)(tface->tpage);
 
 				if (tmp) {
 					material->img[i] = tmp;
 					material->texname[i] = material->img[i]->id.name;
 					material->flag[i] |= MIPMAP;
 
-					material->flag[i] |= ( mat->game.alpha_blend & GEMAT_ALPHA_SORT )?USEALPHA:0;
-					material->flag[i] |= ( mat->game.alpha_blend & GEMAT_ALPHA )?USEALPHA:0;
-					material->flag[i] |= ( mat->game.alpha_blend & GEMAT_ADD )?CALCALPHA:0;
+					material->flag[i] |= (mat->game.alpha_blend & GEMAT_ALPHA_SORT) ? USEALPHA : 0;
+					material->flag[i] |= (mat->game.alpha_blend & GEMAT_ALPHA) ? USEALPHA : 0;
+					material->flag[i] |= (mat->game.alpha_blend & GEMAT_ADD) ? CALCALPHA : 0;
 
 					if (material->img[i]->flag & IMA_REFLECT) {
 						material->mapping[i].mapping |= USEREFL;
@@ -643,44 +643,43 @@ static bool ConvertMaterial(
 			mttmp = getMTexFromMaterial(mat, i);
 			if (mttmp) {
 				if (mttmp->tex) {
-					if ( mttmp->tex->type == TEX_IMAGE ) {
+					if (mttmp->tex->type == TEX_IMAGE) {
 						material->mtexname[i] = mttmp->tex->id.name;
 						material->img[i] = mttmp->tex->ima;
-						if ( material->img[i] ) {
+						if (material->img[i]) {
 
 							material->texname[i] = material->img[i]->id.name;
-							material->flag[i] |= ( mttmp->tex->imaflag &TEX_MIPMAP )?MIPMAP:0;
-							// -----------------------
-							if (material->img[i] && (material->img[i]->flag & IMA_IGNORE_ALPHA) == 0)
-								material->flag[i]	|= USEALPHA;
-							// -----------------------
-							if ( mttmp->tex->imaflag &TEX_CALCALPHA ) {
-								material->flag[i]	|= CALCALPHA;
+							material->flag[i] |= (mttmp->tex->imaflag &TEX_MIPMAP) ? MIPMAP : 0;
+							if (material->img[i] && (material->img[i]->flag & IMA_IGNORE_ALPHA) == 0) {
+								material->flag[i] |= USEALPHA;
 							}
-							else if (mttmp->tex->flag &TEX_NEGALPHA) {
-								material->flag[i]	|= USENEGALPHA;
+							if (mttmp->tex->imaflag & TEX_CALCALPHA) {
+								material->flag[i] |= CALCALPHA;
+							}
+							else if (mttmp->tex->flag & TEX_NEGALPHA) {
+								material->flag[i] |= USENEGALPHA;
 							}
 
 							material->color_blend[i] = mttmp->colfac;
-							material->flag[i] |= ( mttmp->mapto  & MAP_ALPHA		)?TEXALPHA:0;
-							material->flag[i] |= ( mttmp->texflag& MTEX_NEGATIVE	)?TEXNEG:0;
+							material->flag[i] |= (mttmp->mapto & MAP_ALPHA) ? TEXALPHA : 0;
+							material->flag[i] |= (mttmp->texflag & MTEX_NEGATIVE) ? TEXNEG : 0;
 
-							if (!glslmat && (material->flag[i] & TEXALPHA))
+							if (!glslmat && (material->flag[i] & TEXALPHA)) {
 								texalpha = 1;
+							}
 						}
 					}
 					else if (mttmp->tex->type == TEX_ENVMAP) {
-						if ( mttmp->tex->env->stype == ENV_LOAD ) {
-					
-							material->mtexname[i]     = mttmp->tex->id.name;
+						if (mttmp->tex->env->stype == ENV_LOAD) {
+							material->mtexname[i] = mttmp->tex->id.name;
 							EnvMap *env = mttmp->tex->env;
 							env->ima = mttmp->tex->ima;
 							material->cubemap[i] = env;
 
-							if (material->cubemap[i])
-							{
-								if (!material->cubemap[i]->cube[0])
+							if (material->cubemap[i]) {
+								if (!material->cubemap[i]->cube[0]) {
 									BL_Texture::SplitEnvMap(material->cubemap[i]);
+								}
 
 								material->texname[i] = material->cubemap[i]->ima->id.name;
 								material->mapping[i].mapping |= USEENV;
@@ -695,29 +694,36 @@ static bool ConvertMaterial(
 					if (mat->septex & (1 << i)) {
 						// If this texture slot isn't in use, set it to disabled to prevent multi-uv problems
 						material->mapping[i].mapping = DISABLE;
-					} else {
-						material->mapping[i].mapping |= ( mttmp->texco  & TEXCO_REFL	)?USEREFL:0;
+					} 
+					else {
+						material->mapping[i].mapping |= (mttmp->texco & TEXCO_REFL) ? USEREFL : 0;
 
 						if (mttmp->texco & TEXCO_OBJECT) {
 							material->mapping[i].mapping |= USEOBJ;
-							if (mttmp->object)
+							if (mttmp->object) {
 								material->mapping[i].objconame = mttmp->object->id.name;
+							}
 						}
-						else if (mttmp->texco &TEXCO_REFL)
+						else if (mttmp->texco & TEXCO_REFL) {
 							material->mapping[i].mapping |= USEREFL;
-						else if (mttmp->texco &(TEXCO_ORCO|TEXCO_GLOB))
+						}
+						else if (mttmp->texco & (TEXCO_ORCO | TEXCO_GLOB)) {
 							material->mapping[i].mapping |= USEORCO;
+						}
 						else if (mttmp->texco & TEXCO_UV) {
 							/* string may be "" but thats detected as empty after */
 							material->mapping[i].uvCoName = mttmp->uvname;
 							material->mapping[i].mapping |= USEUV;
 						}
-						else if (mttmp->texco &TEXCO_NORM)
+						else if (mttmp->texco & TEXCO_NORM) {
 							material->mapping[i].mapping |= USENORM;
-						else if (mttmp->texco &TEXCO_TANGENT)
+						}
+						else if (mttmp->texco & TEXCO_TANGENT) {
 							material->mapping[i].mapping |= USETANG;
-						else
+						}
+						else {
 							material->mapping[i].mapping |= DISABLE;
+						}
 
 						material->mapping[i].scale[0] = mttmp->size[0];
 						material->mapping[i].scale[1] = mttmp->size[1];
@@ -771,59 +777,60 @@ static bool ConvertMaterial(
 
 		material->num_enabled = valid_index;
 
-		material->speccolor[0]	= mat->specr;
-		material->speccolor[1]	= mat->specg;
-		material->speccolor[2]	= mat->specb;
-		material->hard			= (float)mat->har/4.0f;
-		material->matcolor[0]	= mat->r;
-		material->matcolor[1]	= mat->g;
-		material->matcolor[2]	= mat->b;
-		material->matcolor[3]	= mat->alpha;
-		material->alpha			= mat->alpha;
-		material->emit			= mat->emit;
-		material->spec_f		= mat->spec;
-		material->ref			= mat->ref;
-		material->amb			= mat->amb;
+		material->speccolor[0] = mat->specr;
+		material->speccolor[1] = mat->specg;
+		material->speccolor[2] = mat->specb;
+		material->hard = (float)mat->har / 4.0f;
+		material->matcolor[0] = mat->r;
+		material->matcolor[1] = mat->g;
+		material->matcolor[2] = mat->b;
+		material->matcolor[3] = mat->alpha;
+		material->alpha = mat->alpha;
+		material->emit = mat->emit;
+		material->spec_f = mat->spec;
+		material->ref = mat->ref;
+		material->amb = mat->amb;
 
-		material->ras_mode |= (mat->material_type == MA_TYPE_WIRE)? WIRE: 0;
+		material->ras_mode |= (mat->material_type == MA_TYPE_WIRE) ? WIRE : 0;
 	}
 	else { // No Material
 		int valid = 0;
 
 		// check for tface tex to fallback on
-		if ( validface ) {
-			material->img[0] = (Image*)(tface->tpage);
+		if (validface) {
+			material->img[0] = (Image *)(tface->tpage);
 			// ------------------------
 			if (material->img[0]) {
 				material->texname[0] = material->img[0]->id.name;
-				material->mapping[0].mapping |= ( (material->img[0]->flag & IMA_REFLECT)!=0 )?USEREFL:0;
+				material->mapping[0].mapping |= ((material->img[0]->flag & IMA_REFLECT) != 0) ? USEREFL : 0;
 
 				/* see if depth of the image is 32bits */
 				if (BKE_image_has_alpha(material->img[0])) {
 					material->flag[0] |= USEALPHA;
 					material->alphablend = GEMAT_ALPHA;
 				}
-				else
+				else {
 					material->alphablend = GEMAT_SOLID;
-
+				}
 				valid++;
 			}
 		}
-		else
+		else {
 			material->alphablend = GEMAT_SOLID;
+		}
 
 		material->SetUsers(-1);
-		material->num_enabled	= valid;
-		material->IdMode		= TEXFACE;
-		material->speccolor[0]	= 1.f;
-		material->speccolor[1]	= 1.f;
-		material->speccolor[2]	= 1.f;
-		material->hard			= 35.f;
-		material->matcolor[0]	= 0.5f;
-		material->matcolor[1]	= 0.5f;
-		material->matcolor[2]	= 0.5f;
-		material->spec_f		= 0.5f;
-		material->ref			= 0.8f;
+		material->num_enabled = valid;
+		material->IdMode = TEXFACE;
+		material->speccolor[0] = 1.0f;
+		material->speccolor[1] = 1.0f;
+		material->speccolor[2] = 1.0f;
+		material->hard = 35.0f;
+		material->matcolor[0] = 0.5f;
+		material->matcolor[1] = 0.5f;
+		material->matcolor[2] = 0.5f;
+		material->spec_f = 0.5f;
+		material->ref = 0.8f;
 
 		// No material - old default TexFace properties
 		material->ras_mode |= USE_LIGHT;
@@ -831,13 +838,13 @@ static bool ConvertMaterial(
 
 	/* No material, what to do? let's see what is in the UV and set the material accordingly
 	 * light and visible is always on */
-	if ( validface ) {
-		material->tile	= tface->tile;
+	if (validface) {
+		material->tile = tface->tile;
 	}
 	else {
 		// nothing at all
-		material->alphablend	= GEMAT_SOLID;
-		material->tile		= 0;
+		material->alphablend = GEMAT_SOLID;
+		material->tile = 0;
 	}
 
 	if (validmat && validface) {
@@ -845,13 +852,14 @@ static bool ConvertMaterial(
 	}
 
 	// with ztransp enabled, enforce alpha blending mode
-	if (validmat && (mat->mode & MA_TRANSP) && (mat->mode & MA_ZTRANSP) && (material->alphablend == GEMAT_SOLID))
+	if (validmat && (mat->mode & MA_TRANSP) && (mat->mode & MA_ZTRANSP) && (material->alphablend == GEMAT_SOLID)) {
 		material->alphablend = GEMAT_ALPHA;
+	}
 
 	// always zsort alpha + add
-	if ((ELEM(material->alphablend, GEMAT_ALPHA, GEMAT_ALPHA_SORT, GEMAT_ADD) || texalpha) && (material->alphablend != GEMAT_CLIP )) {
+	if ((ELEM(material->alphablend, GEMAT_ALPHA, GEMAT_ALPHA_SORT, GEMAT_ADD) || texalpha) && (material->alphablend != GEMAT_CLIP)) {
 		material->ras_mode |= ALPHA;
-		material->ras_mode |= (mat && (mat->game.alpha_blend & GEMAT_ALPHA_SORT))? ZSORT: 0;
+		material->ras_mode |= (mat && (mat->game.alpha_blend & GEMAT_ALPHA_SORT)) ? ZSORT : 0;
 	}
 
 	// XXX The RGB values here were meant to be temporary storage for the conversion process,
@@ -860,24 +868,24 @@ static bool ConvertMaterial(
 	GetRGB(use_vcol, mface, mmcol, mat, rgb);
 
 	// swap the material color, so MCol on bitmap font works
-	if (validmat && (use_vcol == false) && (mat->game.flag & GEMAT_TEXT))
-	{
+	if (validmat && (use_vcol == false) && (mat->game.flag & GEMAT_TEXT)) {
 		material->rgb[0] = KX_rgbaint2uint_new(rgb[0]);
 		material->rgb[1] = KX_rgbaint2uint_new(rgb[1]);
 		material->rgb[2] = KX_rgbaint2uint_new(rgb[2]);
 		material->rgb[3] = KX_rgbaint2uint_new(rgb[3]);
 	}
 
-	if (validmat)
-		material->matname	=(mat->id.name);
+	if (validmat) {
+		material->matname =(mat->id.name);
+	}
 
 	if (tface) {
-		material->tface		= *tface;
+		ME_MTEXFACE_CPY(&material->mtexpoly, tface);
 	}
 	else {
-		memset(&material->tface, 0, sizeof(material->tface));
+		memset(&material->mtexpoly, 0, sizeof(material->mtexpoly));
 	}
-	material->material	= mat;
+	material->material = mat;
 	return true;
 }
 
@@ -959,8 +967,16 @@ RAS_MeshObject* BL_ConvertMesh(Mesh* mesh, Object* blenderobj, KX_Scene* scene, 
 	int totface = dm->getNumTessFaces(dm);
 	const char *tfaceName = "";
 
+	/* needs to be rewritten for loopdata */
 	if (tface) {
-		DM_add_tangent_layer(dm);
+		if (CustomData_get_layer_index(&dm->faceData, CD_TANGENT) == -1) {
+			bool generate_data = false;
+			if (CustomData_get_layer_index(&dm->loopData, CD_TANGENT) == -1) {
+				DM_calc_loop_tangents(dm);
+				generate_data = true;
+			}
+			DM_generate_tangent_tessface_data(dm, generate_data);
+		}
 		tangent = (float(*)[4])dm->getTessFaceDataArray(dm, CD_TANGENT);
 	}
 
@@ -995,7 +1011,6 @@ RAS_MeshObject* BL_ConvertMesh(Mesh* mesh, Object* blenderobj, KX_Scene* scene, 
 	meshobj->m_sharedvertex_map.resize(totvert);
 
 	Material* ma = 0;
-	bool collider = true;
 	MT_Point2 uvs[4][RAS_TexVert::MAX_UNIT];
 	unsigned int rgb[4] = {0};
 
@@ -1071,23 +1086,13 @@ RAS_MeshObject* BL_ConvertMesh(Mesh* mesh, Object* blenderobj, KX_Scene* scene, 
 		}
 
 		{
-			bool visible = true;
-			bool twoside = false;
 
 			RAS_MaterialBucket* bucket = material_from_mesh(ma, mface, tface, mcol, layers, lightlayer, rgb, uvs, tfaceName, scene, converter);
 
 			// set render flags
-			if (ma)
-			{
-				visible = ((ma->game.flag & GEMAT_INVISIBLE)==0);
-				twoside = ((ma->game.flag  & GEMAT_BACKCULL)==0);
-				collider = ((ma->game.flag & GEMAT_NOPHYSICS)==0);
-			}
-			else {
-				visible = true;
-				twoside = false;
-				collider = true;
-			}
+			bool visible = ((ma->game.flag & GEMAT_INVISIBLE)==0);
+			bool twoside = ((ma->game.flag  & GEMAT_BACKCULL)==0);
+			bool collider = ((ma->game.flag & GEMAT_NOPHYSICS)==0);
 
 			/* mark face as flat, so vertices are split */
 			bool flat = (mface->flag & ME_SMOOTH) == 0;
@@ -1211,12 +1216,15 @@ static PHY_ShapeProps *CreateShapePropsFromBlenderObject(struct Object* blendero
 //	velocity clamping XXX
 	shapeProps->m_clamp_vel_min = blenderobject->min_vel;
 	shapeProps->m_clamp_vel_max = blenderobject->max_vel;
-	
+	shapeProps->m_clamp_angvel_min = blenderobject->min_angvel;
+	shapeProps->m_clamp_angvel_max = blenderobject->max_angvel;
+
 //  Character physics properties
 	shapeProps->m_step_height = blenderobject->step_height;
 	shapeProps->m_jump_speed = blenderobject->jump_speed;
 	shapeProps->m_fall_speed = blenderobject->fall_speed;
-	
+	shapeProps->m_max_jumps = blenderobject->max_jumps;
+
 	return shapeProps;
 }
 
@@ -1400,16 +1408,6 @@ static void BL_CreatePhysicsObjectNew(KX_GameObject* gameobj,
 	if ((blenderobject->gameflag & OB_RECORD_ANIMATION) != 0)
 		gameobj->SetRecordAnimation(true);
 
-	// store materialname in auxinfo, needed for touchsensors
-	if (meshobj)
-	{
-		const STR_String& matname=meshobj->GetMaterialName(0);
-		gameobj->getClientInfo()->m_auxilary_info = (matname.Length() ? (void*)(matname.ReadPtr()+2) : NULL);
-	} else
-	{
-		gameobj->getClientInfo()->m_auxilary_info = 0;
-	}
-
 	delete shapeprops;
 	delete smmaterial;
 	if (dm) {
@@ -1470,7 +1468,7 @@ static KX_LightObject *gamelight_from_blamp(Object *ob, Lamp *la, unsigned int l
 static KX_Camera *gamecamera_from_bcamera(Object *ob, KX_Scene *kxscene, KX_BlenderSceneConverter *converter)
 {
 	Camera* ca = static_cast<Camera*>(ob->data);
-	RAS_CameraData camdata(ca->lens, ca->ortho_scale, ca->sensor_x, ca->sensor_y, ca->sensor_fit, ca->clipsta, ca->clipend, ca->type == CAM_PERSP, ca->YF_dofdist);
+	RAS_CameraData camdata(ca->lens, ca->ortho_scale, ca->sensor_x, ca->sensor_y, ca->sensor_fit, ca->shiftx, ca->shifty, ca->clipsta, ca->clipend, ca->type == CAM_PERSP, ca->YF_dofdist);
 	KX_Camera *gamecamera;
 	
 	gamecamera= new KX_Camera(kxscene, KX_Scene::m_callbacks, camdata);
@@ -1731,6 +1729,18 @@ static void UNUSED_FUNCTION(print_active_constraints2)(Object *ob) //not used, u
 	}
 }
 
+// Copy base layer to object layer like in BKE_scene_set_background
+static void blenderSceneSetBackground(Scene *blenderscene)
+{
+	Scene *it;
+	Base *base;
+
+	for (SETLOOPER(blenderscene, it, base)) {
+		base->object->lay = base->lay;
+		base->object->flag = base->flag;
+	}
+}
+
 static KX_GameObject* getGameOb(STR_String busc,CListValue* sumolist)
 {
 
@@ -1983,6 +1993,9 @@ void BL_ConvertBlenderObjects(struct Main* maggie,
 	}
 
 	SetDefaultLightMode(blenderscene);
+
+	blenderSceneSetBackground(blenderscene);
+
 	// Let's support scene set.
 	// Beware of name conflict in linked data, it will not crash but will create confusion
 	// in Python scripting and in certain actuators (replace mesh). Linked scene *should* have
@@ -2051,14 +2064,13 @@ void BL_ConvertBlenderObjects(struct Main* maggie,
 														converter,
 														libloading);
 
-						/* Insert object to the constraint game object list
-						 * so we can check later if there is a instance in the scene or
-						 * an instance and its actual group definition. */
-						convertedlist.insert((KX_GameObject*)gameobj->AddRef());
-
 						bool isInActiveLayer = false;
-						if (gameobj)
-						{
+						if (gameobj) {
+							/* Insert object to the constraint game object list
+							 * so we can check later if there is a instance in the scene or
+							 * an instance and its actual group definition. */
+							convertedlist.insert((KX_GameObject*)gameobj->AddRef());
+
 							/* macro calls object conversion funcs */
 							BL_CONVERTBLENDEROBJECT_SINGLE;
 
@@ -2183,8 +2195,6 @@ void BL_ConvertBlenderObjects(struct Main* maggie,
 			case PARSKEL: // skinned - ignore
 				break;
 			case PAROBJECT:
-			case PARCURVE:
-			case PARKEY:
 			case PARVERT3:
 			default:
 				// unhandled
@@ -2316,7 +2326,13 @@ void BL_ConvertBlenderObjects(struct Main* maggie,
 
 			/* Store constraints of grouped and instanced objects for all layers */
 			gameobj->AddConstraint(dat);
-						
+
+			/** if it's during libload we only add constraints in the object but
+			 * doesn't create it. Constraint will be replicated later in scene->MergeScene
+			 */
+			if (libloading)
+				continue;
+
 			/* Skipped already converted constraints. 
 			 * This will happen when a group instance is made from a linked group instance
 			 * and both are on the active layer. */

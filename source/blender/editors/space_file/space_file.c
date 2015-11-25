@@ -117,6 +117,8 @@ static void file_free(SpaceLink *sl)
 {	
 	SpaceFile *sfile = (SpaceFile *) sl;
 	
+	BLI_assert(sfile->previews_timer == NULL);
+
 	if (sfile->files) {
 		// XXXXX would need to do thumbnails_stop here, but no context available
 		filelist_freelib(sfile->files);
@@ -170,7 +172,12 @@ static void file_exit(wmWindowManager *wm, ScrArea *sa)
 {
 	SpaceFile *sfile = (SpaceFile *)sa->spacedata.first;
 
-	ED_fileselect_exit(wm, sfile);
+	if (sfile->previews_timer) {
+		WM_event_remove_timer_notifier(wm, NULL, sfile->previews_timer);
+		sfile->previews_timer = NULL;
+	}
+
+	ED_fileselect_exit(wm, sa, sfile);
 }
 
 static SpaceLink *file_duplicate(SpaceLink *sl)
@@ -211,13 +218,15 @@ static void file_refresh(const bContext *C, ScrArea *sa)
 	}
 	if (!sfile->files) {
 		sfile->files = filelist_new(params->type);
-		filelist_setdir(sfile->files, params->dir);
-		params->active_file = -1; /* added this so it opens nicer (ton) */
+		params->highlight_file = -1; /* added this so it opens nicer (ton) */
 	}
+	filelist_setdir(sfile->files, params->dir);
+	filelist_setrecursion(sfile->files, params->recursion_level);
 	filelist_setsorting(sfile->files, params->sort);
-	filelist_setfilter_options(sfile->files, params->flag & FILE_HIDE_DOT,
+	filelist_setfilter_options(sfile->files, (params->flag & FILE_HIDE_DOT) != 0,
 	                                         false, /* TODO hide_parent, should be controllable? */
 	                                         params->flag & FILE_FILTER ? params->filter : 0,
+	                                         params->filter_id,
 	                                         params->filter_glob,
 	                                         params->filter_search);
 
@@ -227,39 +236,45 @@ static void file_refresh(const bContext *C, ScrArea *sa)
 	sfile->bookmarknr = fsmenu_get_active_indices(fsmenu, FS_CATEGORY_BOOKMARKS, params->dir);
 	sfile->recentnr = fsmenu_get_active_indices(fsmenu, FS_CATEGORY_RECENT, params->dir);
 
-	if (filelist_empty(sfile->files)) {
-		thumbnails_stop(wm, sfile->files);
-		filelist_readdir(sfile->files);
-		filelist_sort(sfile->files);
-		BLI_strncpy(params->dir, filelist_dir(sfile->files), FILE_MAX);
-	}
-	else if (filelist_need_sorting(sfile->files)) {
-		thumbnails_stop(wm, sfile->files);
-		filelist_sort(sfile->files);
+	if (filelist_force_reset(sfile->files)) {
+		filelist_readjob_stop(wm, sa);
+		filelist_clear(sfile->files);
 	}
 
-	if ((params->display == FILE_IMGDISPLAY) && filelist_need_thumbnails(sfile->files)) {
-		if (!thumbnails_running(wm, sfile->files)) {
-			thumbnails_start(sfile->files, C);
+	if (filelist_empty(sfile->files)) {
+		if (!filelist_pending(sfile->files)) {
+			filelist_readjob_start(sfile->files, C);
 		}
 	}
-	else {
-		/* stop any running thumbnail jobs if we're not displaying them - speedup for NFS */
-		thumbnails_stop(wm, sfile->files);
-	}
 
+	filelist_sort(sfile->files);
 	filelist_filter(sfile->files);
 
+	if (params->display == FILE_IMGDISPLAY) {
+		filelist_cache_previews_set(sfile->files, true);
+	}
+	else {
+		filelist_cache_previews_set(sfile->files, false);
+		if (sfile->previews_timer) {
+			WM_event_remove_timer_notifier(wm, CTX_wm_window(C), sfile->previews_timer);
+			sfile->previews_timer = NULL;
+		}
+	}
+
 	if (params->renamefile[0] != '\0') {
-		int idx = filelist_find(sfile->files, params->renamefile);
+		int idx = filelist_file_findpath(sfile->files, params->renamefile);
 		if (idx >= 0) {
-			struct direntry *file = filelist_file(sfile->files, idx);
+			FileDirEntry *file = filelist_file(sfile->files, idx);
 			if (file) {
-				file->selflag |= FILE_SEL_EDITING;
+				filelist_entry_select_set(sfile->files, file, FILE_SEL_ADD, FILE_SEL_EDITING, CHECK_ALL);
 			}
 		}
 		BLI_strncpy(sfile->params->renameedit, sfile->params->renamefile, sizeof(sfile->params->renameedit));
-		params->renamefile[0] = '\0';
+		/* File listing is now async, do not clear renamefile if matching entry not found
+		 * and dirlist is not finished! */
+		if (idx >= 0 || filelist_is_ready(sfile->files)) {
+			params->renamefile[0] = '\0';
+		}
 	}
 
 	if (sfile->layout) {
@@ -278,7 +293,7 @@ static void file_refresh(const bContext *C, ScrArea *sa)
 
 static void file_listener(bScreen *UNUSED(sc), ScrArea *sa, wmNotifier *wmn)
 {
-	/* SpaceFile *sfile = (SpaceFile *)sa->spacedata.first; */
+	SpaceFile *sfile = (SpaceFile *)sa->spacedata.first;
 
 	/* context changes */
 	switch (wmn->category) {
@@ -291,6 +306,12 @@ static void file_listener(bScreen *UNUSED(sc), ScrArea *sa, wmNotifier *wmn)
 				case ND_SPACE_FILE_PARAMS:
 					ED_area_tag_refresh(sa);
 					ED_area_tag_redraw(sa);
+					break;
+				case ND_SPACE_FILE_PREVIEW:
+					if (sfile->files && filelist_cache_previews_update(sfile->files)) {
+						ED_area_tag_refresh(sa);
+						ED_area_tag_redraw(sa);
+					}
 					break;
 			}
 			break;
@@ -377,7 +398,7 @@ static void file_main_area_draw(const bContext *C, ARegion *ar)
 	UI_view2d_view_ortho(v2d);
 	
 	/* on first read, find active file */
-	if (params->active_file == -1) {
+	if (params->highlight_file == -1) {
 		wmEvent *event = CTX_wm_window(C)->eventstate;
 		file_highlight_set(sfile, ar, event->x, event->y);
 	}
@@ -397,6 +418,7 @@ static void file_main_area_draw(const bContext *C, ARegion *ar)
 static void file_operatortypes(void)
 {
 	WM_operatortype_append(FILE_OT_select);
+	WM_operatortype_append(FILE_OT_select_walk);
 	WM_operatortype_append(FILE_OT_select_all_toggle);
 	WM_operatortype_append(FILE_OT_select_border);
 	WM_operatortype_append(FILE_OT_select_bookmark);
@@ -419,6 +441,7 @@ static void file_operatortypes(void)
 	WM_operatortype_append(FILE_OT_delete);
 	WM_operatortype_append(FILE_OT_rename);
 	WM_operatortype_append(FILE_OT_smoothscroll);
+	WM_operatortype_append(FILE_OT_filepath_drop);
 }
 
 /* NOTE: do not add .blend file reading on this level */
@@ -461,6 +484,49 @@ static void file_keymap(struct wmKeyConfig *keyconf)
 	RNA_boolean_set(kmi->ptr, "extend", true);
 	RNA_boolean_set(kmi->ptr, "fill", true);
 	RNA_boolean_set(kmi->ptr, "open", false);
+
+
+	/* arrow keys navigation (walk selecting) */
+	kmi = WM_keymap_add_item(keymap, "FILE_OT_select_walk", UPARROWKEY, KM_PRESS, 0, 0);
+	RNA_enum_set(kmi->ptr, "direction", FILE_SELECT_WALK_UP);
+	kmi = WM_keymap_add_item(keymap, "FILE_OT_select_walk", UPARROWKEY, KM_PRESS, KM_SHIFT, 0);
+	RNA_enum_set(kmi->ptr, "direction", FILE_SELECT_WALK_UP);
+	RNA_boolean_set(kmi->ptr, "extend", true);
+	kmi = WM_keymap_add_item(keymap, "FILE_OT_select_walk", UPARROWKEY, KM_PRESS, KM_SHIFT | KM_CTRL, 0);
+	RNA_enum_set(kmi->ptr, "direction", FILE_SELECT_WALK_UP);
+	RNA_boolean_set(kmi->ptr, "extend", true);
+	RNA_boolean_set(kmi->ptr, "fill", true);
+
+	kmi = WM_keymap_add_item(keymap, "FILE_OT_select_walk", DOWNARROWKEY, KM_PRESS, 0, 0);
+	RNA_enum_set(kmi->ptr, "direction", FILE_SELECT_WALK_DOWN);
+	kmi = WM_keymap_add_item(keymap, "FILE_OT_select_walk", DOWNARROWKEY, KM_PRESS, KM_SHIFT, 0);
+	RNA_enum_set(kmi->ptr, "direction", FILE_SELECT_WALK_DOWN);
+	RNA_boolean_set(kmi->ptr, "extend", true);
+	kmi = WM_keymap_add_item(keymap, "FILE_OT_select_walk", DOWNARROWKEY, KM_PRESS, KM_SHIFT | KM_CTRL, 0);
+	RNA_enum_set(kmi->ptr, "direction", FILE_SELECT_WALK_DOWN);
+	RNA_boolean_set(kmi->ptr, "extend", true);
+	RNA_boolean_set(kmi->ptr, "fill", true);
+
+	kmi = WM_keymap_add_item(keymap, "FILE_OT_select_walk", LEFTARROWKEY, KM_PRESS, 0, 0);
+	RNA_enum_set(kmi->ptr, "direction", FILE_SELECT_WALK_LEFT);
+	kmi = WM_keymap_add_item(keymap, "FILE_OT_select_walk", LEFTARROWKEY, KM_PRESS, KM_SHIFT, 0);
+	RNA_enum_set(kmi->ptr, "direction", FILE_SELECT_WALK_LEFT);
+	RNA_boolean_set(kmi->ptr, "extend", true);
+	kmi = WM_keymap_add_item(keymap, "FILE_OT_select_walk", LEFTARROWKEY, KM_PRESS, KM_SHIFT | KM_CTRL, 0);
+	RNA_enum_set(kmi->ptr, "direction", FILE_SELECT_WALK_LEFT);
+	RNA_boolean_set(kmi->ptr, "extend", true);
+	RNA_boolean_set(kmi->ptr, "fill", true);
+
+	kmi = WM_keymap_add_item(keymap, "FILE_OT_select_walk", RIGHTARROWKEY, KM_PRESS, 0, 0);
+	RNA_enum_set(kmi->ptr, "direction", FILE_SELECT_WALK_RIGHT);
+	kmi = WM_keymap_add_item(keymap, "FILE_OT_select_walk", RIGHTARROWKEY, KM_PRESS, KM_SHIFT, 0);
+	RNA_enum_set(kmi->ptr, "direction", FILE_SELECT_WALK_RIGHT);
+	RNA_boolean_set(kmi->ptr, "extend", true);
+	kmi = WM_keymap_add_item(keymap, "FILE_OT_select_walk", RIGHTARROWKEY, KM_PRESS, KM_SHIFT | KM_CTRL, 0);
+	RNA_enum_set(kmi->ptr, "direction", FILE_SELECT_WALK_RIGHT);
+	RNA_boolean_set(kmi->ptr, "extend", true);
+	RNA_boolean_set(kmi->ptr, "fill", true);
+
 
 	/* front and back mouse folder navigation */
 	WM_keymap_add_item(keymap, "FILE_OT_previous", BUTTON4MOUSE, KM_CLICK, 0, 0);
@@ -517,7 +583,7 @@ static void file_tools_area_init(wmWindowManager *wm, ARegion *ar)
 
 static void file_tools_area_draw(const bContext *C, ARegion *ar)
 {
-	ED_region_panels(C, ar, 1, NULL, -1);
+	ED_region_panels(C, ar, NULL, -1, true);
 }
 
 static void file_tools_area_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa), ARegion *UNUSED(ar), wmNotifier *UNUSED(wmn))
@@ -596,6 +662,30 @@ static void file_ui_area_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa), AReg
 	}
 }
 
+static int filepath_drop_poll(bContext *C, wmDrag *drag, const wmEvent *UNUSED(event))
+{
+	if (drag->type == WM_DRAG_PATH) {
+		SpaceFile *sfile = CTX_wm_space_file(C);
+		if (sfile) {
+			return 1;
+		}
+	}
+	return 0;
+}
+
+static void filepath_drop_copy(wmDrag *drag, wmDropBox *drop)
+{
+	RNA_string_set(drop->ptr, "filepath", drag->path);
+}
+
+/* region dropbox definition */
+static void file_dropboxes(void)
+{
+	ListBase *lb = WM_dropboxmap_find("Window", SPACE_EMPTY, RGN_TYPE_WINDOW);
+
+	WM_dropbox_add(lb, "FILE_OT_filepath_drop", filepath_drop_poll, filepath_drop_copy);
+}
+
 /* only called once, from space/spacetypes.c */
 void ED_spacetype_file(void)
 {
@@ -614,7 +704,8 @@ void ED_spacetype_file(void)
 	st->listener = file_listener;
 	st->operatortypes = file_operatortypes;
 	st->keymap = file_keymap;
-	
+	st->dropboxes = file_dropboxes;
+
 	/* regions: main window */
 	art = MEM_callocN(sizeof(ARegionType), "spacetype file region");
 	art->regionid = RGN_TYPE_WINDOW;

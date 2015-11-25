@@ -66,6 +66,8 @@ void BLI_rctf_interp(struct rctf *rect, const struct rctf *rect_a, const struct 
 //void BLI_rcti_interp(struct rctf *rect, struct rctf *rect_a, struct rctf *rect_b, float fac);
 bool BLI_rctf_clamp_pt_v(const struct rctf *rect, float xy[2]);
 bool BLI_rcti_clamp_pt_v(const struct rcti *rect, int xy[2]);
+bool BLI_rctf_clamp(struct rctf *rect, const struct rctf *rect_bounds, float r_xy[2]);
+bool BLI_rcti_clamp(struct rcti *rect, const struct rcti *rect_bounds, int r_xy[2]);
 bool BLI_rctf_compare(const struct rctf *rect_a, const struct rctf *rect_b, const float limit);
 bool BLI_rcti_compare(const struct rcti *rect_a, const struct rcti *rect_b);
 bool BLI_rctf_isect(const struct rctf *src1, const struct rctf *src2, struct rctf *dest);
@@ -78,6 +80,10 @@ bool BLI_rctf_isect_x(const rctf *rect, const float x);
 bool BLI_rctf_isect_y(const rctf *rect, const float y);
 bool BLI_rctf_isect_pt(const struct rctf *rect, const float x, const float y);
 bool BLI_rctf_isect_pt_v(const struct rctf *rect, const float xy[2]);
+int BLI_rcti_length_x(const rcti *rect, const int x);
+int BLI_rcti_length_y(const rcti *rect, const int y);
+float BLI_rctf_length_x(const rctf *rect, const float x);
+float BLI_rctf_length_y(const rctf *rect, const float y);
 bool BLI_rcti_isect_segment(const struct rcti *rect, const int s1[2], const int s2[2]);
 bool BLI_rctf_isect_segment(const struct rctf *rect, const float s1[2], const float s2[2]);
 bool BLI_rcti_isect_circle(const struct rcti *rect, const float xy[2], const float radius);
@@ -88,6 +94,7 @@ void BLI_rcti_union(struct rcti *rcti1, const struct rcti *rcti2);
 void BLI_rctf_union(struct rctf *rctf1, const struct rctf *rctf2);
 void BLI_rcti_rctf_copy(struct rcti *dst, const struct rctf *src);
 void BLI_rctf_rcti_copy(struct rctf *dst, const struct rcti *src);
+void BLI_rcti_rctf_copy_floor(struct rcti *dst, const struct rctf *src);
 
 void BLI_rctf_rotate_expand(rctf *dst, const rctf *src, const float angle);
 

@@ -37,7 +37,7 @@
 
 #include "BLI_utildefines.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_context.h"
 #include "BKE_depsgraph.h"
@@ -313,7 +313,7 @@ void uiTemplateHeader3D(uiLayout *layout, struct bContext *C)
 
 	row = uiLayoutRow(layout, false);
 	{
-		EnumPropertyItem *item = object_mode_items;
+		EnumPropertyItem *item = rna_enum_object_mode_items;
 		const char *name = "";
 		int icon = ICON_OBJECT_DATAMODE;
 

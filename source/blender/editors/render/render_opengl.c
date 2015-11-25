@@ -96,6 +96,8 @@ typedef struct OGLRender {
 	ImageUser iuser;
 
 	GPUOffScreen *ofs;
+	int ofs_samples;
+	bool ofs_full_samples;
 	GPUFX *fx;
 	int sizex, sizey;
 	int write_still;
@@ -104,7 +106,7 @@ typedef struct OGLRender {
 	bMovieHandle *mh;
 	int cfrao, nfra;
 
-	size_t totvideos;
+	int totvideos;
 
 	/* quick lookup */
 	int view_id;
@@ -228,22 +230,17 @@ static void screen_opengl_views_setup(OGLRender *oglrender)
 	}
 
 	BLI_lock_thread(LOCK_DRAW_IMAGE);
-	if (is_multiview && BKE_scene_multiview_is_stereo3d(rd)) {
-		oglrender->ima->flag |= IMA_IS_STEREO;
-	}
-	else {
-		oglrender->ima->flag &= ~IMA_IS_STEREO;
+	if (!(is_multiview && BKE_scene_multiview_is_stereo3d(rd)))
 		oglrender->iuser.flag &= ~IMA_SHOW_STEREO;
-	}
 	BLI_unlock_thread(LOCK_DRAW_IMAGE);
 
 	/* will only work for non multiview correctly */
 	if (v3d) {
 		camera = BKE_camera_multiview_render(oglrender->scene, v3d->camera, "new opengl render view");
-		BKE_render_result_stamp_info(oglrender->scene, camera, rr);
+		BKE_render_result_stamp_info(oglrender->scene, camera, rr, false);
 	}
 	else {
-		BKE_render_result_stamp_info(oglrender->scene, oglrender->scene->camera, rr);
+		BKE_render_result_stamp_info(oglrender->scene, oglrender->scene->camera, rr, false);
 	}
 
 	RE_ReleaseResult(oglrender->re);
@@ -257,8 +254,6 @@ static void screen_opengl_render_doit(OGLRender *oglrender, RenderResult *rr)
 	RegionView3D *rv3d = oglrender->rv3d;
 	Object *camera = NULL;
 	ImBuf *ibuf;
-	float winmat[4][4];
-	float *rectf = RE_RenderViewGetById(rr, oglrender->view_id)->rectf;
 	int sizex = oglrender->sizex;
 	int sizey = oglrender->sizey;
 	const short view_context = (v3d != NULL);
@@ -279,37 +274,35 @@ static void screen_opengl_render_doit(OGLRender *oglrender, RenderResult *rr)
 		        &context);
 
 		context.view_id = BKE_scene_multiview_view_id_get(&scene->r, viewname);
+		context.gpu_offscreen = oglrender->ofs;
+		context.gpu_fx = oglrender->fx;
+		context.gpu_full_samples = oglrender->ofs_full_samples;
+
 		ibuf = BKE_sequencer_give_ibuf(&context, CFRA, chanshown);
 
 		if (ibuf) {
-			ImBuf *linear_ibuf;
-
-			BLI_assert((oglrender->sizex == ibuf->x) && (oglrender->sizey == ibuf->y));
-
-			linear_ibuf = IMB_dupImBuf(ibuf);
+			ImBuf *out = IMB_dupImBuf(ibuf);
 			IMB_freeImBuf(ibuf);
-
-			if (linear_ibuf->rect_float == NULL) {
-				/* internally sequencer working in display space and stores both bytes and float buffers in that space.
-				 * It is possible that byte->float onversion didn't happen in sequencer (e.g. when adding image sequence/movie
-				 * into sequencer) there'll be only byte buffer. Create float buffer from existing byte buffer, making it linear
-				 */
-
-				IMB_float_from_rect(linear_ibuf);
+			/* OpenGL render is considered to be preview and should be
+			 * as fast as possible. So currently we're making sure sequencer
+			 * result is always byte to simplify color management pipeline.
+			 *
+			 * TODO(sergey): In the case of output to float container (EXR)
+			 * it actually makes sense to keep float buffer instead.
+			 */
+			if (out->rect_float != NULL) {
+				IMB_rect_from_float(out);
+				imb_freerectfloatImBuf(out);
 			}
-			else {
-				/* ensure float buffer is in linear space, not in display space */
-				BKE_sequencer_imbuf_from_sequencer_space(scene, linear_ibuf);
-			}
-
-			memcpy(rectf, linear_ibuf->rect_float, sizeof(float) * 4 * oglrender->sizex * oglrender->sizey);
-
-			IMB_freeImBuf(linear_ibuf);
+			BLI_assert((oglrender->sizex == ibuf->x) && (oglrender->sizey == ibuf->y));
+			RE_render_result_rect_from_ibuf(rr, &scene->r, out, oglrender->view_id);
+			IMB_freeImBuf(out);
 		}
 
 		if (gpd) {
 			int i;
 			unsigned char *gp_rect;
+			unsigned char *render_rect = (unsigned char *)RE_RenderViewGetById(rr, oglrender->view_id)->rect32;
 
 			GPU_offscreen_bind(oglrender->ofs, true);
 
@@ -326,113 +319,40 @@ static void screen_opengl_render_doit(OGLRender *oglrender, RenderResult *rr)
 			gp_rect = MEM_mallocN(sizex * sizey * sizeof(unsigned char) * 4, "offscreen rect");
 			GPU_offscreen_read_pixels(oglrender->ofs, GL_UNSIGNED_BYTE, gp_rect);
 
-			BLI_assert(rectf != NULL);
-
 			for (i = 0; i < sizex * sizey * 4; i += 4) {
-				float  col_src[4];
-				rgba_uchar_to_float(col_src, &gp_rect[i]);
-				blend_color_mix_float(&rectf[i], &rectf[i], col_src);
+				blend_color_mix_byte(&render_rect[i], &render_rect[i], &gp_rect[i]);
 			}
 			GPU_offscreen_unbind(oglrender->ofs, true);
 
 			MEM_freeN(gp_rect);
 		}
 	}
-	else if (view_context) {
-		bool is_persp;
-		/* full copy */
-		GPUFXSettings fx_settings = v3d->fx_settings;
-
-		ED_view3d_draw_offscreen_init(scene, v3d);
-
-		GPU_offscreen_bind(oglrender->ofs, true); /* bind */
-
-		/* render 3d view */
-		if (rv3d->persp == RV3D_CAMOB && v3d->camera) {
-#if 0
-			const bool is_ortho = (scene->r.mode & R_ORTHO) != 0;
-#endif
-			camera = BKE_camera_multiview_render(oglrender->scene, v3d->camera, viewname);
-			RE_GetCameraWindow(oglrender->re, camera, scene->r.cfra, winmat);
-			if (camera->type == OB_CAMERA) {
-				Camera *cam = camera->data;
-				is_persp = cam->type == CAM_PERSP;
-			}
-			else
-				is_persp = true;
-			BKE_camera_to_gpu_dof(camera, &fx_settings);
-		}
-		else {
-			rctf viewplane;
-			float clipsta, clipend;
-
-			bool is_ortho = ED_view3d_viewplane_get(v3d, rv3d, sizex, sizey, &viewplane, &clipsta, &clipend, NULL);
-			if (is_ortho) orthographic_m4(winmat, viewplane.xmin, viewplane.xmax, viewplane.ymin, viewplane.ymax, -clipend, clipend);
-			else perspective_m4(winmat, viewplane.xmin, viewplane.xmax, viewplane.ymin, viewplane.ymax, clipsta, clipend);
-
-			is_persp = !is_ortho;
-		}
-
-		rect = MEM_mallocN(sizex * sizey * sizeof(unsigned char) * 4, "offscreen rect");
-
-		if ((scene->r.mode & R_OSA) == 0) {
-			ED_view3d_draw_offscreen(
-			        scene, v3d, ar, sizex, sizey, NULL, winmat,
-			        draw_bgpic, draw_sky, is_persp,
-			        oglrender->ofs, oglrender->fx, &fx_settings, viewname);
-			GPU_offscreen_read_pixels(oglrender->ofs, GL_UNSIGNED_BYTE, rect);
-		}
-		else {
-			/* simple accumulation, less hassle then FSAA FBO's */
-			static float jit_ofs[32][2];
-			float winmat_jitter[4][4];
-			int *accum_buffer = MEM_mallocN(sizex * sizey * sizeof(int) * 4, "accum1");
-			int i, j;
-
-			BLI_jitter_init(jit_ofs, scene->r.osa);
-
-			/* first sample buffer, also initializes 'rv3d->persmat' */
-			ED_view3d_draw_offscreen(
-			        scene, v3d, ar, sizex, sizey, NULL, winmat,
-			        draw_bgpic, draw_sky, is_persp,
-			        oglrender->ofs, oglrender->fx, &fx_settings, viewname);
-			GPU_offscreen_read_pixels(oglrender->ofs, GL_UNSIGNED_BYTE, rect);
-
-			for (i = 0; i < sizex * sizey * 4; i++)
-				accum_buffer[i] = rect[i];
-
-			/* skip the first sample */
-			for (j = 1; j < scene->r.osa; j++) {
-				copy_m4_m4(winmat_jitter, winmat);
-				window_translate_m4(winmat_jitter, rv3d->persmat,
-				                    (jit_ofs[j][0] * 2.0f) / sizex,
-				                    (jit_ofs[j][1] * 2.0f) / sizey);
-
-				ED_view3d_draw_offscreen(
-				        scene, v3d, ar, sizex, sizey, NULL, winmat_jitter,
-				        draw_bgpic, draw_sky, is_persp,
-				        oglrender->ofs, oglrender->fx, &fx_settings, viewname);
-				GPU_offscreen_read_pixels(oglrender->ofs, GL_UNSIGNED_BYTE, rect);
-
-				for (i = 0; i < sizex * sizey * 4; i++)
-					accum_buffer[i] += rect[i];
-			}
-
-			for (i = 0; i < sizex * sizey * 4; i++)
-				rect[i] = accum_buffer[i] / scene->r.osa;
-
-			MEM_freeN(accum_buffer);
-		}
-
-		GPU_offscreen_unbind(oglrender->ofs, true); /* unbind */
-	}
 	else {
 		/* shouldnt suddenly give errors mid-render but possible */
 		char err_out[256] = "unknown";
-		ImBuf *ibuf_view = ED_view3d_draw_offscreen_imbuf_simple(scene, scene->camera, oglrender->sizex, oglrender->sizey,
-		                                                         IB_rect, OB_SOLID, false, true, true,
-		                                                         (draw_sky) ? R_ADDSKY : R_ALPHAPREMUL, viewname, err_out);
-		camera = scene->camera;
+		ImBuf *ibuf_view;
+		const int alpha_mode = (draw_sky) ? R_ADDSKY : R_ALPHAPREMUL;
+
+		if (view_context) {
+			ibuf_view = ED_view3d_draw_offscreen_imbuf(
+			       scene, v3d, ar, sizex, sizey,
+			       IB_rect, draw_bgpic,
+			       alpha_mode, oglrender->ofs_samples, oglrender->ofs_full_samples, viewname,
+			       oglrender->fx, oglrender->ofs, err_out);
+
+			/* for stamp only */
+			if (rv3d->persp == RV3D_CAMOB && v3d->camera) {
+				camera = BKE_camera_multiview_render(oglrender->scene, v3d->camera, viewname);
+			}
+		}
+		else {
+			ibuf_view = ED_view3d_draw_offscreen_imbuf_simple(
+			        scene, scene->camera, oglrender->sizex, oglrender->sizey,
+			        IB_rect, OB_SOLID, false, true, true,
+			        alpha_mode, oglrender->ofs_samples, oglrender->ofs_full_samples, viewname,
+			        oglrender->fx, oglrender->ofs, err_out);
+			camera = scene->camera;
+		}
 
 		if (ibuf_view) {
 			/* steal rect reference from ibuf */
@@ -492,7 +412,7 @@ static void screen_opengl_render_write(OGLRender *oglrender)
 	        &scene->r.im_format, (scene->r.scemode & R_EXTENSION) != 0, false, NULL);
 
 	/* write images as individual images or stereo */
-	BKE_render_result_stamp_info(scene, scene->camera, rr);
+	BKE_render_result_stamp_info(scene, scene->camera, rr, false);
 	ok = RE_WriteRenderViewsImage(oglrender->reports, rr, scene, false, name);
 
 	RE_ReleaseResultImage(oglrender->re);
@@ -541,6 +461,8 @@ static bool screen_opengl_render_init(bContext *C, wmOperator *op)
 	GPUOffScreen *ofs;
 	OGLRender *oglrender;
 	int sizex, sizey;
+	const int samples = (scene->r.mode & R_OSA) ? scene->r.osa : 0;
+	const bool full_samples = (samples != 0) && (scene->r.scemode & R_FULL_SAMPLE);
 	bool is_view_context = RNA_boolean_get(op->ptr, "view_context");
 	const bool is_animation = RNA_boolean_get(op->ptr, "animation");
 	const bool is_sequencer = RNA_boolean_get(op->ptr, "sequencer");
@@ -585,7 +507,7 @@ static bool screen_opengl_render_init(bContext *C, wmOperator *op)
 	sizey = (scene->r.size * scene->r.ysch) / 100;
 
 	/* corrects render size with actual size, not every card supports non-power-of-two dimensions */
-	ofs = GPU_offscreen_create(sizex, sizey, err_out);
+	ofs = GPU_offscreen_create(sizex, sizey, full_samples ? 0 : samples, err_out);
 
 	if (!ofs) {
 		BKE_reportf(op->reports, RPT_ERROR, "Failed to create OpenGL off-screen buffer, %s", err_out);
@@ -597,6 +519,8 @@ static bool screen_opengl_render_init(bContext *C, wmOperator *op)
 	op->customdata = oglrender;
 
 	oglrender->ofs = ofs;
+	oglrender->ofs_samples = samples;
+	oglrender->ofs_full_samples = full_samples;
 	oglrender->sizex = sizex;
 	oglrender->sizey = sizey;
 	oglrender->bmain = CTX_data_main(C);
@@ -661,7 +585,7 @@ static void screen_opengl_render_end(bContext *C, OGLRender *oglrender)
 {
 	Main *bmain = CTX_data_main(C);
 	Scene *scene = oglrender->scene;
-	size_t i;
+	int i;
 
 	if (oglrender->mh) {
 		if (BKE_imtype_is_movie(scene->r.im_format.imtype)) {
@@ -706,7 +630,7 @@ static void screen_opengl_render_cancel(bContext *C, wmOperator *op)
 }
 
 /* share between invoke and exec */
-static int screen_opengl_render_anim_initialize(bContext *C, wmOperator *op)
+static bool screen_opengl_render_anim_initialize(bContext *C, wmOperator *op)
 {
 	/* initialize animation */
 	OGLRender *oglrender;
@@ -719,11 +643,19 @@ static int screen_opengl_render_anim_initialize(bContext *C, wmOperator *op)
 	oglrender->reports = op->reports;
 
 	if (BKE_imtype_is_movie(scene->r.im_format.imtype)) {
-		size_t i, width, height;
+		size_t width, height;
+		int i;
 
 		BKE_scene_multiview_videos_dimensions_get(&scene->r, oglrender->sizex, oglrender->sizey, &width, &height);
-		oglrender->movie_ctx_arr = MEM_mallocN(sizeof(void *) * oglrender->totvideos, "Movies");
 		oglrender->mh = BKE_movie_handle_get(scene->r.im_format.imtype);
+
+		if (oglrender->mh == NULL) {
+			BKE_report(oglrender->reports, RPT_ERROR, "Movie format unsupported");
+			screen_opengl_render_end(C, oglrender);
+			return false;
+		}
+
+		oglrender->movie_ctx_arr = MEM_mallocN(sizeof(void *) * oglrender->totvideos, "Movies");
 
 		for (i = 0; i < oglrender->totvideos; i++) {
 			const char *suffix = BKE_scene_multiview_view_id_suffix_get(&scene->r, i);
@@ -733,7 +665,7 @@ static int screen_opengl_render_anim_initialize(bContext *C, wmOperator *op)
 			                                oglrender->sizey, oglrender->reports, PRVRANGEON != 0, suffix))
 			{
 				screen_opengl_render_end(C, oglrender);
-				return 0;
+				return false;
 			}
 		}
 	}
@@ -742,7 +674,7 @@ static int screen_opengl_render_anim_initialize(bContext *C, wmOperator *op)
 	oglrender->nfra = PSFRA;
 	scene->r.cfra = PSFRA;
 
-	return 1;
+	return true;
 }
 
 static bool screen_opengl_render_anim_step(bContext *C, wmOperator *op)
@@ -807,15 +739,15 @@ static bool screen_opengl_render_anim_step(bContext *C, wmOperator *op)
 	rr = RE_AcquireResultRead(oglrender->re);
 
 	if (is_movie) {
-		ok = RE_WriteRenderViewsMovie(oglrender->reports, rr, scene, &scene->r, oglrender->mh, oglrender->sizex,
-		                              oglrender->sizey, oglrender->movie_ctx_arr, oglrender->totvideos, PRVRANGEON != 0);
+		ok = RE_WriteRenderViewsMovie(oglrender->reports, rr, scene, &scene->r, oglrender->mh,
+		                              oglrender->movie_ctx_arr, oglrender->totvideos, PRVRANGEON != 0);
 		if (ok) {
 			printf("Append frame %d", scene->r.cfra);
 			BKE_reportf(op->reports, RPT_INFO, "Appended frame: %d", scene->r.cfra);
 		}
 	}
 	else {
-		BKE_render_result_stamp_info(scene, scene->camera, rr);
+		BKE_render_result_stamp_info(scene, scene->camera, rr, false);
 		ok = RE_WriteRenderViewsImage(op->reports, rr, scene, true, name);
 		if (ok) {
 			printf("Saved: %s", name);
@@ -904,7 +836,7 @@ static int screen_opengl_render_invoke(bContext *C, wmOperator *op, const wmEven
 	}
 	
 	oglrender = op->customdata;
-	render_view_open(C, event->x, event->y);
+	render_view_open(C, event->x, event->y, op->reports);
 	
 	/* view may be changed above (R_OUTPUT_WINDOW) */
 	oglrender->win = CTX_wm_window(C);

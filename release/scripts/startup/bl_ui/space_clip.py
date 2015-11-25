@@ -520,6 +520,7 @@ class CLIP_PT_tools_object(CLIP_PT_reconstruction_panel, Panel):
     bl_space_type = 'CLIP_EDITOR'
     bl_region_type = 'TOOLS'
     bl_label = "Object"
+    bl_category = "Solve"
 
     @classmethod
     def poll(cls, context):
@@ -1155,6 +1156,8 @@ class CLIP_MT_view(Menu):
             layout.operator("clip.view_zoom_in")
             layout.operator("clip.view_zoom_out")
 
+            layout.separator()
+            layout.prop(sc, "show_metadata")
             layout.separator()
 
             ratios = ((1, 8), (1, 4), (1, 2), (1, 1), (2, 1), (4, 1), (8, 1))

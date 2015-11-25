@@ -117,7 +117,7 @@ static void imb_stereo3d_write_anaglyph(Stereo3DData *s3d, enum eStereo3dAnaglyp
 					to[0] = from[r][0];
 					to[1] = from[g][1];
 					to[2] = from[b][2];
-					to[3] = MAX2(from[0][2], from[0][2]);
+					to[3] = MAX2(from[0][3], from[0][3]);
 				}
 			}
 		}
@@ -154,7 +154,7 @@ static void imb_stereo3d_write_anaglyph(Stereo3DData *s3d, enum eStereo3dAnaglyp
 					to[0] = from[r][0];
 					to[1] = from[g][1];
 					to[2] = from[b][2];
-					to[3] = MAX2(from[0][2], from[0][2]);
+					to[3] = MAX2(from[0][3], from[0][3]);
 				}
 			}
 		}
@@ -343,7 +343,7 @@ static void imb_stereo3d_write_interlace(Stereo3DData *s3d, enum eStereo3dInterl
 						};
 						char i = (char) swap;
 						for (x = 0; x < width; x++, from[0] += 3, from[1] += 3, to += 3) {
-							copy_v3_v3_char((char *)to, (char *)from[i]);
+							copy_v3_v3_uchar(to, from[i]);
 							i = !i;
 						}
 					}
@@ -357,7 +357,7 @@ static void imb_stereo3d_write_interlace(Stereo3DData *s3d, enum eStereo3dInterl
 						};
 						char i = (char) swap;
 						for (x = 0; x < width; x++, from[0] += 4, from[1] += 4, to += 4) {
-							copy_v4_v4_char((char *)to, (char *)from[i]);
+							copy_v4_v4_uchar(to, from[i]);
 							i = !i;
 						}
 					}
@@ -392,7 +392,7 @@ static void imb_stereo3d_write_interlace(Stereo3DData *s3d, enum eStereo3dInterl
 						};
 						char j = i;
 						for (x = 0; x < width; x++, from[0] += 3, from[1] += 3, to += 3) {
-							copy_v3_v3_char((char *)to, (char *)from[j]);
+							copy_v3_v3_uchar(to, from[j]);
 							j = !j;
 						}
 						i = !i;
@@ -408,7 +408,7 @@ static void imb_stereo3d_write_interlace(Stereo3DData *s3d, enum eStereo3dInterl
 						};
 						char j = i;
 						for (x = 0; x < width; x++, from[0] += 4, from[1] += 4, to += 4) {
-							copy_v4_v4_char((char *)to, (char *)from[j]);
+							copy_v4_v4_uchar(to, from[j]);
 							j = !j;
 						}
 						i = !i;
@@ -620,7 +620,7 @@ static void imb_stereo3d_squeeze_rectf(float *rectf, Stereo3dFormat *s3d, const 
 	        width, height, width, width);
 
 	IMB_scaleImBuf_threaded(ibuf, x, y);
-	rectf = MEM_dupallocN(ibuf->rect_float);
+	memcpy(rectf, ibuf->rect_float, x * y * sizeof(float[4]));
 	IMB_freeImBuf(ibuf);
 }
 
@@ -645,7 +645,7 @@ static void imb_stereo3d_squeeze_rect(int *rect, Stereo3dFormat *s3d, const size
 	        width, height, width, width);
 
 	IMB_scaleImBuf_threaded(ibuf, x, y);
-	rect = MEM_dupallocN(ibuf->rect);
+	memcpy(rect, ibuf->rect, x * y * sizeof(unsigned int));
 	IMB_freeImBuf(ibuf);
 }
 
@@ -1035,7 +1035,7 @@ static void imb_stereo3d_read_interlace(Stereo3DData *s3d, enum eStereo3dInterla
 						};
 						char i = (char) swap;
 						for (x = 0; x < width; x++, from += 3, to[0] += 3, to[1] += 3) {
-							copy_v3_v3_char((char *)to[i], (char *)from);
+							copy_v3_v3_uchar(to[i], from);
 							i = !i;
 						}
 					}
@@ -1049,7 +1049,7 @@ static void imb_stereo3d_read_interlace(Stereo3DData *s3d, enum eStereo3dInterla
 						};
 						char i = (char) swap;
 						for (x = 0; x < width; x++, from += 4, to[0] += 4, to[1] += 4) {
-							copy_v4_v4_char((char *)to[i], (char *)from);
+							copy_v4_v4_uchar(to[i], from);
 							i = !i;
 						}
 					}
@@ -1084,7 +1084,7 @@ static void imb_stereo3d_read_interlace(Stereo3DData *s3d, enum eStereo3dInterla
 						};
 						char j = i;
 						for (x = 0; x < width; x++, from += 3, to[0] += 3, to[1] += 3) {
-							copy_v3_v3_char((char *)to[j], (char *)from);
+							copy_v3_v3_uchar(to[j], from);
 							j = !j;
 						}
 						i = !i;
@@ -1100,7 +1100,7 @@ static void imb_stereo3d_read_interlace(Stereo3DData *s3d, enum eStereo3dInterla
 						};
 						char j = i;
 						for (x = 0; x < width; x++, from += 4, to[0] += 4, to[1] += 4) {
-							copy_v4_v4_char((char *)to[j], (char *)from);
+							copy_v4_v4_uchar(to[j], from);
 							j = !j;
 						}
 						i = !i;

@@ -165,20 +165,27 @@ if(WITH_BUILDINFO)
 	#       except when used as an include path.
 
 	# include the output directory, where the buildinfo.h file is generated
-	include_directories(${CMAKE_BINARY_DIR}/source/creator)
+	include_directories(${CMAKE_CURRENT_BINARY_DIR})
+
+
+	# XXX, "_buildinfo.h" is used twice here,
+	# because we rely on that file being detected as missing
+	# every build so that the real header "buildinfo.h" is updated.
+	#
+	# Keep this until we find a better way to resolve!
 
 	# a custom target that is always built
 	add_custom_target(buildinfo ALL
-		DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/buildinfo.h)
+		DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/_buildinfo.h)
 
-	# creates svnheader.h using cmake script
-	add_custom_command(OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/buildinfo.h
+	# creates buildinfo.h using cmake script
+	add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/_buildinfo.h
 		COMMAND ${CMAKE_COMMAND}
 		-DSOURCE_DIR=${CMAKE_SOURCE_DIR}
 		-P ${CMAKE_SOURCE_DIR}/build_files/cmake/buildinfo.cmake)
 
 	# buildinfo.h is a generated file
-	set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/buildinfo.h
+	set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/buildinfo.h
 		PROPERTIES GENERATED TRUE
 		HEADER_FILE_ONLY TRUE)
 
@@ -285,7 +292,8 @@ elseif(APPLE)
 	else()
 		set(TARGETDIR_VER blender.app/Contents/Resources/${BLENDER_VERSION})
 	endif()
-
+	# Skip relinking on cpack / install
+	set_target_properties(blender PROPERTIES BUILD_WITH_INSTALL_RPATH true)
 endif()
 
 
@@ -671,14 +679,31 @@ elseif(WIN32)
 			)
 
 			if(WITH_PYTHON_INSTALL_NUMPY)
+				add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${BLENDER_VERSION}/python/lib/site-packages
+					COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/${BLENDER_VERSION}/python/lib/site-packages)
+
 				add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${BLENDER_VERSION}/python/lib/site-packages/numpy
 					COMMAND ${CMAKE_COMMAND} -E tar xzvf "${LIBDIR}/release/python${_PYTHON_VERSION_NO_DOTS}_numpy_1.9.tar.gz"
 					DEPENDS ${LIBDIR}/release/python${_PYTHON_VERSION_NO_DOTS}_numpy_1.9.tar.gz
+						${CMAKE_CURRENT_BINARY_DIR}/${BLENDER_VERSION}/python/lib/site-packages
 					WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${BLENDER_VERSION}/python/lib/site-packages)
 				add_custom_target(python_numpy ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${BLENDER_VERSION}/python/lib/site-packages/numpy)
 				install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${BLENDER_VERSION}/python/lib/site-packages/numpy
 						DESTINATION ${BLENDER_VERSION}/python/lib/site-packages)
 			endif()
+
+
+			# TODO(sergey): For unti we've got better way to deal with python binary
+			install(
+				FILES ${LIBDIR}/python/lib/python${_PYTHON_VERSION_NO_DOTS}.dll
+				DESTINATION ${BLENDER_VERSION}/python/bin
+				CONFIGURATIONS Release;RelWithDebInfo;MinSizeRel
+			)
+			install(
+				FILES ${LIBDIR}/python/lib/python${_PYTHON_VERSION_NO_DOTS}_d.dll
+				DESTINATION ${BLENDER_VERSION}/python/bin
+				CONFIGURATIONS Debug
+			)
 		endif()
 
 		unset(_PYTHON_VERSION_NO_DOTS)
@@ -771,6 +796,16 @@ elseif(WIN32)
 	if(WITH_SDL)
 		install(
 			FILES ${LIBDIR}/sdl/lib/SDL2.dll
+			DESTINATION "."
+		)
+	endif()
+	
+	if(WITH_SYSTEM_AUDASPACE)
+		install(
+			FILES
+				${LIBDIR}/audaspace/lib/audaspace.dll
+				${LIBDIR}/audaspace/lib/audaspace-c.dll
+				${LIBDIR}/audaspace/lib/audaspace-py.dll
 			DESTINATION "."
 		)
 	endif()
@@ -895,9 +930,10 @@ elseif(APPLE)
 
 		add_custom_command(
 			OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/python
-			COMMAND rm -rf ${CMAKE_CURRENT_BINARY_DIR}/python/
-			COMMAND mkdir ${CMAKE_CURRENT_BINARY_DIR}/python/
-			COMMAND unzip -q ${LIBDIR}/release/${PYTHON_ZIP} -d ${CMAKE_CURRENT_BINARY_DIR}/python/
+			COMMAND ${CMAKE_COMMAND} -E remove_directory "${CMAKE_CURRENT_BINARY_DIR}/python/"
+			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/python/"
+			COMMAND ${CMAKE_COMMAND} -E chdir "${CMAKE_CURRENT_BINARY_DIR}/python/"
+			        ${CMAKE_COMMAND} -E tar xzfv "${LIBDIR}/release/${PYTHON_ZIP}"
 			DEPENDS ${LIBDIR}/release/${PYTHON_ZIP})
 
 		add_dependencies(blender extractpyzip)
@@ -913,6 +949,10 @@ elseif(APPLE)
 			${CMAKE_CURRENT_BINARY_DIR}/python/lib/python${PYTHON_VERSION}/site-packages
 		)
 
+		install(DIRECTORY ${LIBDIR}/python/bin
+			DESTINATION ${TARGETDIR_VER}/python
+			USE_SOURCE_PERMISSIONS
+		)
 	endif()
 	
 	# install blenderplayer bundle - copy of blender.app above. re-using macros et al
@@ -954,9 +994,10 @@ elseif(APPLE)
 		if(WITH_PYTHON AND NOT WITH_PYTHON_FRAMEWORK)
 			add_custom_command(
 				OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/python
-				COMMAND rm -rf ${CMAKE_CURRENT_BINARY_DIR}/python/
-				COMMAND mkdir ${CMAKE_CURRENT_BINARY_DIR}/python/
-				COMMAND unzip -q ${LIBDIR}/release/${PYTHON_ZIP} -d ${CMAKE_CURRENT_BINARY_DIR}/python/
+				COMMAND ${CMAKE_COMMAND} -E remove_directory "${CMAKE_CURRENT_BINARY_DIR}/python/"
+				COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/python/"
+				COMMAND ${CMAKE_COMMAND} -E chdir "${CMAKE_CURRENT_BINARY_DIR}/python/"
+				        ${CMAKE_COMMAND} -E tar xzfv "${LIBDIR}/release/${PYTHON_ZIP}"
 				DEPENDS ${LIBDIR}/release/${PYTHON_ZIP})
 
 			# copy extracted python files
@@ -980,7 +1021,7 @@ if(DEFINED BLENDER_TEXT_FILES_DESTINATION)
 		"
 		file(READ \"${CMAKE_SOURCE_DIR}/release/text/readme.html\" DATA_SRC)
 		string(REGEX REPLACE \"BLENDER_VERSION\" \"${BLENDER_VERSION}\" DATA_DST \"\${DATA_SRC}\")
-		file(WRITE \"\${CMAKE_BINARY_DIR}/release/text/readme.html\" \"\${DATA_DST}\")
+		file(WRITE \"${CMAKE_BINARY_DIR}/release/text/readme.html\" \"\${DATA_DST}\")
 		unset(DATA_SRC)
 		unset(DATA_DST)
 		"
@@ -1008,7 +1049,6 @@ unset(BLENDER_TEXT_FILES_DESTINATION)
 add_dependencies(blender makesdna)
 
 setup_blender_sorted_libs()
-
 target_link_libraries(blender ${BLENDER_SORTED_LIBS})
 
 setup_liblinks(blender)

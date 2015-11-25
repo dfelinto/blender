@@ -43,6 +43,8 @@
  *  - ``m4`` = mat4 = matrix 4x4
  *  - ``eul`` = euler rotation
  *  - ``eulO`` = euler with order
+ *  - ``plane`` = plane 4, (vec3, distance)
+ *  - ``plane3`` = plane 3 (same as a ``plane`` with a zero 4th component)
  *
  * \subsection mathabbrev_all Function Type Abbreviations
  *
@@ -71,5 +73,7 @@
 #include "BLI_math_vector.h"
 #include "BLI_math_geom.h"
 #include "BLI_math_interp.h"
+#include "BLI_math_solvers.h"
+#include "BLI_math_statistics.h"
 
 #endif /* __BLI_MATH_H__ */

@@ -317,7 +317,7 @@ float BM_loop_point_side_of_loop_test(const BMLoop *l, const float co[3])
  * Check if a point is inside the edge defined by a loop
  * (within the plane defined by the loops edge & face normal).
  *
- * \return signed, squared distablce to the edge plane, less than 0.0 when outside.
+ * \return signed, squared distance to the edge plane, less than 0.0 when outside.
  */
 float BM_loop_point_side_of_edge_test(const BMLoop *l, const float co[3])
 {
@@ -1376,6 +1376,46 @@ void BM_edge_ordered_verts_ex(
 void BM_edge_ordered_verts(const BMEdge *edge, BMVert **r_v1, BMVert **r_v2)
 {
 	BM_edge_ordered_verts_ex(edge, r_v1, r_v2, edge->l);
+}
+
+/**
+ * \return The previous loop, over \a eps_sq distance from \a l (or \a NULL if l_stop is reached).
+ */
+BMLoop *BM_loop_find_prev_nodouble(BMLoop *l, BMLoop *l_stop, const float eps_sq)
+{
+	BMLoop *l_step = l->prev;
+
+	BLI_assert(!ELEM(l_stop, NULL, l));
+
+	while (UNLIKELY(len_squared_v3v3(l->v->co, l_step->v->co) < eps_sq)) {
+		l_step = l_step->prev;
+		BLI_assert(l_step != l);
+		if (UNLIKELY(l_step == l_stop)) {
+			return NULL;
+		}
+	}
+
+	return l_step;
+}
+
+/**
+ * \return The next loop, over \a eps_sq distance from \a l (or \a NULL if l_stop is reached).
+ */
+BMLoop *BM_loop_find_next_nodouble(BMLoop *l, BMLoop *l_stop, const float eps_sq)
+{
+	BMLoop *l_step = l->next;
+
+	BLI_assert(!ELEM(l_stop, NULL, l));
+
+	while (UNLIKELY(len_squared_v3v3(l->v->co, l_step->v->co) < eps_sq)) {
+		l_step = l_step->next;
+		BLI_assert(l_step != l);
+		if (UNLIKELY(l_step == l_stop)) {
+			return NULL;
+		}
+	}
+
+	return l_step;
 }
 
 /**

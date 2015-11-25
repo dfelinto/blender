@@ -563,7 +563,7 @@ static int bake(
 	Object *ob_cage = NULL;
 
 	BakeHighPolyData *highpoly = NULL;
-	int tot_highpoly;
+	int tot_highpoly = 0;
 
 	char restrict_flag_low = ob_low->restrictflag;
 	char restrict_flag_cage = 0;
@@ -584,7 +584,6 @@ static int bake(
 
 	size_t num_pixels;
 	int tot_materials;
-	int i;
 
 	RE_bake_engine_set_engine_parameters(re, bmain, scene);
 
@@ -641,7 +640,7 @@ static int bake(
 
 		num_pixels = (size_t)width * (size_t)height * bake_images.size;
 
-		for (i = 0; i < bake_images.size; i++) {
+		for (int i = 0; i < bake_images.size; i++) {
 			bake_images.data[i].width = width;
 			bake_images.data[i].height = height;
 			bake_images.data[i].offset = (is_split_materials ? num_pixels : 0);
@@ -650,8 +649,9 @@ static int bake(
 
 		if (!is_split_materials) {
 			/* saving a single image */
-			for (i = 0; i < tot_materials; i++)
+			for (int i = 0; i < tot_materials; i++) {
 				bake_images.lookup[i] = 0;
+			}
 		}
 	}
 
@@ -689,7 +689,6 @@ static int bake(
 	/* get the mesh as it arrives in the renderer */
 	me_low = BKE_mesh_new_from_object(bmain, scene, ob_low, 1, 2, 0, 0);
 	BKE_mesh_split_faces(me_low);
-	BKE_mesh_tessface_ensure(me_low);
 
 	/* populate the pixel array with the face data */
 	if ((is_selected_to_active && (ob_cage == NULL) && is_cage) == false)
@@ -706,8 +705,7 @@ static int bake(
 		if (ob_cage) {
 			me_cage = BKE_mesh_new_from_object(bmain, scene, ob_cage, 1, 2, 0, 0);
 			BKE_mesh_split_faces(me_cage);
-			BKE_mesh_tessface_ensure(me_cage);
-			if (me_low->totface != me_cage->totface) {
+			if ((me_low->totpoly != me_cage->totpoly) || (me_low->totloop != me_cage->totloop)) {
 				BKE_report(reports, RPT_ERROR,
 				           "Invalid cage object, the cage mesh must have the same number "
 				           "of faces as the active object");
@@ -740,7 +738,6 @@ static int bake(
 			/* get the cage mesh as it arrives in the renderer */
 			me_cage = BKE_mesh_new_from_object(bmain, scene, ob_low, 1, 2, 0, 0);
 			BKE_mesh_split_faces(me_cage);
-			BKE_mesh_tessface_ensure(me_cage);
 			RE_bake_pixels_populate(me_cage, pixel_array_low, num_pixels, &bake_images, uv_layer);
 		}
 
@@ -769,7 +766,6 @@ static int bake(
 			highpoly[i].me = BKE_mesh_new_from_object(bmain, scene, highpoly[i].ob, 1, 2, 0, 0);
 			highpoly[i].ob->restrictflag &= ~OB_RESTRICT_RENDER;
 			BKE_mesh_split_faces(highpoly[i].me);
-			BKE_mesh_tessface_ensure(highpoly[i].me);
 
 			/* lowpoly to highpoly transformation matrix */
 			copy_m4_m4(highpoly[i].obmat, highpoly[i].ob->obmat);
@@ -873,7 +869,6 @@ cage_cleanup:
 
 					me_nores = BKE_mesh_new_from_object(bmain, scene, ob_low, 1, 2, 0, 0);
 					BKE_mesh_split_faces(me_nores);
-					BKE_mesh_tessface_ensure(me_nores);
 					RE_bake_pixels_populate(me_nores, pixel_array_low, num_pixels, &bake_images, uv_layer);
 
 					RE_bake_normal_world_to_tangent(pixel_array_low, num_pixels, depth, result, me_nores, normal_swizzle, ob_low->obmat);
@@ -895,7 +890,7 @@ cage_cleanup:
 	}
 	else {
 		/* save the results */
-		for (i = 0; i < bake_images.size; i++) {
+		for (int i = 0; i < bake_images.size; i++) {
 			BakeImage *bk_image = &bake_images.data[i];
 
 			if (is_save_internal) {
@@ -1336,7 +1331,7 @@ void OBJECT_OT_bake(wmOperatorType *ot)
 	ot->invoke = bake_invoke;
 	ot->poll = ED_operator_object_active_editable_mesh;
 
-	RNA_def_enum(ot->srna, "type", render_pass_type_items, SCE_PASS_COMBINED, "Type",
+	RNA_def_enum(ot->srna, "type", rna_enum_render_pass_type_items, SCE_PASS_COMBINED, "Type",
 	             "Type of pass to bake, some of them may not be supported by the current render engine");
 	RNA_def_string_file_path(ot->srna, "filepath", NULL, FILE_MAX, "File Path",
 	                         "Image filepath to use when saving externally");
@@ -1352,12 +1347,12 @@ void OBJECT_OT_bake(wmOperatorType *ot)
 	              "Distance to use for the inward ray cast when using selected to active", 0.0f, 1.0f);
 	RNA_def_string(ot->srna, "cage_object", NULL, MAX_NAME, "Cage Object",
 	               "Object to use as cage, instead of calculating the cage from the active object with cage extrusion");
-	RNA_def_enum(ot->srna, "normal_space", normal_space_items, R_BAKE_SPACE_TANGENT, "Normal Space",
+	RNA_def_enum(ot->srna, "normal_space", rna_enum_normal_space_items, R_BAKE_SPACE_TANGENT, "Normal Space",
 	             "Choose normal space for baking");
-	RNA_def_enum(ot->srna, "normal_r", normal_swizzle_items, R_BAKE_POSX, "R", "Axis to bake in red channel");
-	RNA_def_enum(ot->srna, "normal_g", normal_swizzle_items, R_BAKE_POSY, "G", "Axis to bake in green channel");
-	RNA_def_enum(ot->srna, "normal_b", normal_swizzle_items, R_BAKE_POSZ, "B", "Axis to bake in blue channel");
-	RNA_def_enum(ot->srna, "save_mode", bake_save_mode_items, R_BAKE_SAVE_INTERNAL, "Save Mode",
+	RNA_def_enum(ot->srna, "normal_r", rna_enum_normal_swizzle_items, R_BAKE_POSX, "R", "Axis to bake in red channel");
+	RNA_def_enum(ot->srna, "normal_g", rna_enum_normal_swizzle_items, R_BAKE_POSY, "G", "Axis to bake in green channel");
+	RNA_def_enum(ot->srna, "normal_b", rna_enum_normal_swizzle_items, R_BAKE_POSZ, "B", "Axis to bake in blue channel");
+	RNA_def_enum(ot->srna, "save_mode", rna_enum_bake_save_mode_items, R_BAKE_SAVE_INTERNAL, "Save Mode",
 	             "Choose how to save the baking map");
 	RNA_def_boolean(ot->srna, "use_clear", false, "Clear",
 	                "Clear Images before baking (only for internal saving)");

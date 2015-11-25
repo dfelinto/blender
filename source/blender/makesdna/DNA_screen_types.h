@@ -68,7 +68,8 @@ typedef struct bScreen {
 	char do_draw_drag;					/* notifier for dragging draw. */
 	char swap;							/* indicator to survive swap-exchange systems */
 	char skip_handling;					/* set to delay screen handling after switching back from maximized area */
-	char pad[7];
+	char scrubbing;						/* set when scrubbing to avoid some costly updates */
+	char pad[6];
 	
 	short mainwin;						/* screensize subwindow, for screenedges and global menus */
 	short subwinactive;					/* active subwindow */
@@ -289,7 +290,6 @@ enum {
 #define AREAGRID	4
 #define AREAMINX	32
 #define HEADERY		26
-#define AREAMINY	(HEADERY+EDGEWIDTH)
 
 #define HEADERDOWN	1
 #define HEADERTOP	2

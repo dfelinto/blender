@@ -43,7 +43,7 @@
 #include "BLI_math.h"
 
 #include "BLF_api.h"
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_animsys.h"
 #include "BKE_context.h"
@@ -1256,9 +1256,9 @@ static void property_enum_translate(PropertyRNA *prop, EnumPropertyItem **r_item
 	if (!(prop->flag & PROP_ENUM_NO_TRANSLATE)) {
 		int i;
 
-		/* Note: Only do those tests once, and then use BLF_pgettext. */
-		bool do_iface = BLF_translate_iface();
-		bool do_tooltip = BLF_translate_tooltips();
+		/* Note: Only do those tests once, and then use BLT_pgettext. */
+		bool do_iface = BLT_translate_iface();
+		bool do_tooltip = BLT_translate_tooltips();
 		EnumPropertyItem *nitem;
 
 		if (!(do_iface || do_tooltip))
@@ -1289,10 +1289,10 @@ static void property_enum_translate(PropertyRNA *prop, EnumPropertyItem **r_item
 
 		for (i = 0; nitem[i].identifier; i++) {
 			if (nitem[i].name && do_iface) {
-				nitem[i].name = BLF_pgettext(prop->translation_context, nitem[i].name);
+				nitem[i].name = BLT_pgettext(prop->translation_context, nitem[i].name);
 			}
 			if (nitem[i].description && do_tooltip) {
-				nitem[i].description = BLF_pgettext(NULL, nitem[i].description);
+				nitem[i].description = BLT_pgettext(NULL, nitem[i].description);
 			}
 		}
 
@@ -1505,8 +1505,8 @@ bool RNA_property_enum_name_gettexted(bContext *C, PointerRNA *ptr, PropertyRNA 
 
 	if (result) {
 		if (!(prop->flag & PROP_ENUM_NO_TRANSLATE)) {
-			if (BLF_translate_iface()) {
-				*name = BLF_pgettext(prop->translation_context, *name);
+			if (BLT_translate_iface()) {
+				*name = BLT_pgettext(prop->translation_context, *name);
 			}
 		}
 	}
@@ -1570,7 +1570,9 @@ bool RNA_property_editable(PointerRNA *ptr, PropertyRNA *prop)
 
 	prop = rna_ensure_property(prop);
 	flag = prop->editable ? prop->editable(ptr) : prop->flag;
-	return (flag & PROP_EDITABLE) && (!id || !id->lib || (prop->flag & PROP_LIB_EXCEPTION));
+	return ((flag & PROP_EDITABLE) &&
+	        (flag & PROP_REGISTER) == 0 &&
+	        (!id || !id->lib || (prop->flag & PROP_LIB_EXCEPTION)));
 }
 
 bool RNA_property_editable_flag(PointerRNA *ptr, PropertyRNA *prop)
@@ -1692,6 +1694,15 @@ static void rna_property_update(bContext *C, Main *bmain, Scene *scene, PointerR
 		 * not especially nice  */
 		DAG_id_tag_update(ptr->id.data, OB_RECALC_OB | OB_RECALC_DATA | OB_RECALC_TIME);
 		WM_main_add_notifier(NC_WINDOW, NULL);
+		/* Not nice as well, but the only way to make sure material preview
+		 * is updated with custom nodes.
+		 */
+		if ((prop->flag & PROP_IDPROPERTY) != 0 &&
+		    (ptr->id.data != NULL) &&
+		    (GS(((ID *)ptr->id.data)->name) == ID_NT))
+		{
+			WM_main_add_notifier(NC_MATERIAL | ND_SHADING, NULL);
+		}
 	}
 }
 
@@ -3385,7 +3396,7 @@ static int rna_raw_access(ReportList *reports, PointerRNA *ptr, PropertyRNA *pro
                           void *inarray, RawPropertyType intype, int inlen, int set)
 {
 	StructRNA *ptype;
-	PointerRNA itemptr;
+	PointerRNA itemptr_base;
 	PropertyRNA *itemprop, *iprop;
 	PropertyType itemtype = 0;
 	RawArray in;
@@ -3400,8 +3411,8 @@ static int rna_raw_access(ReportList *reports, PointerRNA *ptr, PropertyRNA *pro
 	ptype = RNA_property_pointer_type(ptr, prop);
 
 	/* try to get item property pointer */
-	RNA_pointer_create(NULL, ptype, NULL, &itemptr);
-	itemprop = RNA_struct_find_property(&itemptr, propname);
+	RNA_pointer_create(NULL, ptype, NULL, &itemptr_base);
+	itemprop = RNA_struct_find_property(&itemptr_base, propname);
 
 	if (itemprop) {
 		/* we have item property pointer */
@@ -3416,7 +3427,7 @@ static int rna_raw_access(ReportList *reports, PointerRNA *ptr, PropertyRNA *pro
 		}
 
 		/* check item array */
-		itemlen = RNA_property_array_length(&itemptr, itemprop);
+		itemlen = RNA_property_array_length(&itemptr_base, itemprop);
 
 		/* dynamic array? need to get length per item */
 		if (itemprop->getlength) {
@@ -4211,7 +4222,7 @@ static bool rna_path_parse(PointerRNA *ptr, const char *path,
 		*r_index = index;
 
 	if (prop_elem && (prop_elem->ptr.data != curptr.data || prop_elem->prop != prop || prop_elem->index != index)) {
-		PropertyElemRNA *prop_elem = MEM_mallocN(sizeof(PropertyElemRNA), __func__);
+		prop_elem = MEM_mallocN(sizeof(PropertyElemRNA), __func__);
 		prop_elem->ptr = curptr;
 		prop_elem->prop = prop;
 		prop_elem->index = index;
@@ -4494,12 +4505,12 @@ static char *rna_idp_path(PointerRNA *ptr, IDProperty *haystack, IDProperty *nee
 						break;
 					}
 					else {
-						int i;
+						int j;
 						link.name = iter->name;
-						for (i = 0; i < iter->len; i++, array++) {
+						for (j = 0; j < iter->len; j++, array++) {
 							PointerRNA child_ptr;
-							if (RNA_property_collection_lookup_int(ptr, prop, i, &child_ptr)) {
-								link.index = i;
+							if (RNA_property_collection_lookup_int(ptr, prop, j, &child_ptr)) {
+								link.index = j;
 								if ((path = rna_idp_path(&child_ptr, array, needle, &link))) {
 									break;
 								}
@@ -4711,6 +4722,7 @@ char *RNA_path_full_struct_py(struct PointerRNA *ptr)
 char *RNA_path_full_property_py(PointerRNA *ptr, PropertyRNA *prop, int index)
 {
 	char *id_path;
+	const char *data_delim;
 	char *data_path;
 
 	char *ret;
@@ -4724,13 +4736,15 @@ char *RNA_path_full_property_py(PointerRNA *ptr, PropertyRNA *prop, int index)
 
 	data_path = RNA_path_from_ID_to_property(ptr, prop);
 
+	data_delim = (data_path && data_path[0] == '[') ? "" : ".";
+
 	if ((index == -1) || (RNA_property_array_check(prop) == false)) {
-		ret = BLI_sprintfN("%s.%s",
-		                   id_path, data_path);
+		ret = BLI_sprintfN("%s%s%s",
+		                   id_path, data_delim, data_path);
 	}
 	else {
-		ret = BLI_sprintfN("%s.%s[%d]",
-		                   id_path, data_path, index);
+		ret = BLI_sprintfN("%s%s%s[%d]",
+		                   id_path, data_delim, data_path, index);
 	}
 	MEM_freeN(id_path);
 	if (data_path) {
@@ -5445,7 +5459,6 @@ char *RNA_property_as_string(bContext *C, PointerRNA *ptr, PropertyRNA *prop, in
 {
 	int type = RNA_property_type(prop);
 	int len = RNA_property_array_length(ptr, prop);
-	int i;
 
 	DynStr *dynstr = BLI_dynstr_new();
 	char *cstring;
@@ -5467,7 +5480,7 @@ char *RNA_property_as_string(bContext *C, PointerRNA *ptr, PropertyRNA *prop, in
 
 					RNA_property_boolean_get_array(ptr, prop, buf);
 					BLI_dynstr_append(dynstr, "(");
-					for (i = 0; i < len; i++) {
+					for (int i = 0; i < len; i++) {
 						BLI_dynstr_appendf(dynstr, i ? ", %s" : "%s", bool_as_py_string(buf[i]));
 					}
 					if (len == 1)
@@ -5493,7 +5506,7 @@ char *RNA_property_as_string(bContext *C, PointerRNA *ptr, PropertyRNA *prop, in
 
 					RNA_property_int_get_array(ptr, prop, buf);
 					BLI_dynstr_append(dynstr, "(");
-					for (i = 0; i < len; i++) {
+					for (int i = 0; i < len; i++) {
 						BLI_dynstr_appendf(dynstr, i ? ", %d" : "%d", buf[i]);
 					}
 					if (len == 1)
@@ -5519,7 +5532,7 @@ char *RNA_property_as_string(bContext *C, PointerRNA *ptr, PropertyRNA *prop, in
 
 					RNA_property_float_get_array(ptr, prop, buf);
 					BLI_dynstr_append(dynstr, "(");
-					for (i = 0; i < len; i++) {
+					for (int i = 0; i < len; i++) {
 						BLI_dynstr_appendf(dynstr, i ? ", %g" : "%g", buf[i]);
 					}
 					if (len == 1)
@@ -6518,7 +6531,7 @@ bool RNA_property_copy(PointerRNA *ptr, PointerRNA *fromptr, PropertyRNA *prop, 
 		 * since prop in this case is just a fake wrapper around actual IDProp data, and not a 'real' PropertyRNA. */
 		prop = (PropertyRNA *)rna_idproperty_find(ptr, ((IDProperty *)fromprop)->name);
 
-		/* its possible the custom-prop doesn't exist on this datablock */
+		/* its possible the custom-prop doesn't exist on this data-block */
 		if (prop == NULL) {
 			return false;
 		}

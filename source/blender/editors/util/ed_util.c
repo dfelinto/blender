@@ -49,7 +49,7 @@
 #include "BIF_gl.h"
 #include "BIF_glutil.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_context.h"
 #include "BKE_global.h"
@@ -111,7 +111,7 @@ void ED_editors_init(bContext *C)
 
 	/* image editor paint mode */
 	if (sce) {
-		ED_space_image_paint_update(wm, sce->toolsettings);
+		ED_space_image_paint_update(wm, sce);
 	}
 
 	SWAP(int, reports->flag, reports_flag_prev);

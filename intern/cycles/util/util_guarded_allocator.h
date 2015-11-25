@@ -42,7 +42,7 @@ void util_guarded_mem_free(size_t n);
 
 /* Guarded allocator for the use with STL. */
 template <typename T>
-class GuardedAllocator: public std::allocator<T> {
+class GuardedAllocator : public std::allocator<T> {
 public:
 	template<typename _Tp1>
 	struct rebind {
@@ -54,7 +54,7 @@ public:
 		util_guarded_mem_alloc(n * sizeof(T));
 #ifdef WITH_BLENDER_GUARDEDALLOC
 		(void)hint;
-		return (T*)MEM_mallocN(n * sizeof(T), "Cycles Alloc");
+		return (T*)MEM_mallocN_aligned(n * sizeof(T), 16, "Cycles Alloc");
 #else
 		return std::allocator<T>::allocate(n, hint);
 #endif

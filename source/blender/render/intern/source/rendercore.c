@@ -548,9 +548,9 @@ static void add_filt_passes(RenderLayer *rl, int curmask, int rectx, int offset,
 					fp[2]= shr->winspeed[2];
 					fp[3]= shr->winspeed[3];
 				}
-			}
-				break;
 
+				break;
+			}
 			case SCE_PASS_RAYHITS:
 				/*  */
 				col= shr->rayhits;
@@ -1622,7 +1622,8 @@ void zbufshade_sss_tile(RenderPart *pa)
 	VlakRen *vlr;
 	Material *mat= re->sss_mat;
 	float (*co)[3], (*color)[3], *area, *fcol;
-	int x, y, seed, quad, totpoint, display = !(re->r.scemode & (R_BUTS_PREVIEW|R_VIEWPORT_PREVIEW));
+	int x, y, seed, quad, totpoint;
+	const bool display = (re->r.scemode & (R_BUTS_PREVIEW | R_VIEWPORT_PREVIEW)) == 0;
 	int *ro, *rz, *rp, *rbo, *rbz, *rbp, lay;
 #if 0
 	PixStr *ps;
@@ -1970,9 +1971,9 @@ void add_halo_flare(Render *re)
 
 		rect = RE_RenderLayerGetPass(rl, SCE_PASS_COMBINED, re->viewname);
 
-		if (rl==NULL || rect)
-			return;
-		
+		if (rect==NULL)
+			continue;
+
 		mode= R.r.mode;
 		R.r.mode &= ~R_PANORAMA;
 		

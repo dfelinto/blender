@@ -61,6 +61,7 @@
 #include "BKE_library.h"
 #include "BKE_main.h"
 #include "BKE_modifier.h"
+#include "BKE_object.h"
 
 #include "BKE_deform.h"
 
@@ -250,12 +251,10 @@ void BKE_lattice_resize(Lattice *lt, int uNew, int vNew, int wNew, Object *ltOb)
 	MEM_freeN(vertexCos);
 }
 
-Lattice *BKE_lattice_add(Main *bmain, const char *name)
+void BKE_lattice_init(Lattice *lt)
 {
-	Lattice *lt;
-	
-	lt = BKE_libblock_alloc(bmain, ID_LT, name);
-	
+	BLI_assert(MEMCMP_STRUCT_OFS_IS_ZERO(lt, id));
+
 	lt->flag = LT_GRID;
 	
 	lt->typeu = lt->typev = lt->typew = KEY_BSPLINE;
@@ -263,7 +262,16 @@ Lattice *BKE_lattice_add(Main *bmain, const char *name)
 	lt->def = MEM_callocN(sizeof(BPoint), "lattvert"); /* temporary */
 	BKE_lattice_resize(lt, 2, 2, 2, NULL);  /* creates a uniform lattice */
 	lt->actbp = LT_ACTBP_NONE;
-		
+}
+
+Lattice *BKE_lattice_add(Main *bmain, const char *name)
+{
+	Lattice *lt;
+
+	lt = BKE_libblock_alloc(bmain, ID_LT, name);
+
+	BKE_lattice_init(lt);
+
 	return lt;
 }
 
@@ -352,8 +360,8 @@ void BKE_lattice_make_local(Lattice *lt)
 			if (ob->data == lt) {
 				if (ob->id.lib == NULL) {
 					ob->data = lt_new;
-					lt_new->id.us++;
-					lt->id.us--;
+					id_us_plus(&lt_new->id);
+					id_us_min(&lt->id);
 				}
 			}
 		}
@@ -1136,6 +1144,48 @@ void BKE_lattice_center_median(Lattice *lt, float cent[3])
 		add_v3_v3(cent, lt->def[i].vec);
 
 	mul_v3_fl(cent, 1.0f / (float)numVerts);
+}
+
+static void boundbox_lattice(Object *ob)
+{
+	BoundBox *bb;
+	Lattice *lt;
+	float min[3], max[3];
+
+	if (ob->bb == NULL)
+		ob->bb = MEM_mallocN(sizeof(BoundBox), "Lattice boundbox");
+
+	bb = ob->bb;
+	lt = ob->data;
+
+	INIT_MINMAX(min, max);
+	BKE_lattice_minmax_dl(ob, lt, min, max);
+	BKE_boundbox_init_from_minmax(bb, min, max);
+}
+
+BoundBox *BKE_lattice_boundbox_get(Object *ob)
+{
+	boundbox_lattice(ob);
+
+	return ob->bb;
+}
+
+void BKE_lattice_minmax_dl(Object *ob, Lattice *lt, float min[3], float max[3])
+{
+	DispList *dl = ob->curve_cache ? BKE_displist_find(&ob->curve_cache->disp, DL_VERTS) : NULL;
+
+	if (!dl) {
+		BKE_lattice_minmax(lt, min, max);
+	}
+	else {
+		int i, numVerts;
+		
+		if (lt->editlatt) lt = lt->editlatt->latt;
+		numVerts = lt->pntsu * lt->pntsv * lt->pntsw;
+
+		for (i = 0; i < numVerts; i++)
+			minmax_v3v3_v3(min, max, &dl->verts[i * 3]);
+	}
 }
 
 void BKE_lattice_minmax(Lattice *lt, float min[3], float max[3])

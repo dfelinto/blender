@@ -27,7 +27,6 @@
 
 #include "BLI_utildefines.h"
 #include "BLI_compiler_attrs.h"
-#include "BLI_string.h"
 
 /* for MinGW32 definition of NULL, could use BLI_blenlib.h instead too */
 #include <stddef.h>
@@ -43,24 +42,24 @@
 #include "DNA_sequence_types.h"
 #include "DNA_space_types.h"
 #include "DNA_screen_types.h"
+#include "DNA_object_force.h"
 #include "DNA_object_types.h"
 #include "DNA_mesh_types.h"
 #include "DNA_modifier_types.h"
 #include "DNA_particle_types.h"
 #include "DNA_linestyle_types.h"
 #include "DNA_actuator_types.h"
-#include "DNA_camera_types.h"
 #include "DNA_view3d_types.h"
 
 #include "DNA_genfile.h"
 
+#include "BKE_colortools.h"
 #include "BKE_main.h"
 #include "BKE_modifier.h"
 #include "BKE_node.h"
 #include "BKE_scene.h"
 #include "BKE_sequencer.h"
 #include "BKE_screen.h"
-#include "BKE_sequencer.h"
 
 #include "BLI_math.h"
 #include "BLI_listbase.h"
@@ -657,7 +656,9 @@ void blo_do_versions_270(FileData *fd, Library *UNUSED(lib), Main *main)
 			ParticleSystem *psys;
 			for (ob = main->object.first; ob; ob = ob->id.next) {
 				for (psys = ob->particlesystem.first; psys; psys = psys->next) {
-					psys->recalc |= PSYS_RECALC_RESET;
+					if ((psys->pointcache->flag & PTCACHE_BAKED) == 0) {
+						psys->recalc |= PSYS_RECALC_RESET;
+					}
 				}
 			}
 		}
@@ -767,7 +768,6 @@ void blo_do_versions_270(FileData *fd, Library *UNUSED(lib), Main *main)
 						{
 							SpaceImage *sima = (SpaceImage *) sl;
 							sima->iuser.flag |= IMA_SHOW_STEREO;
-							sima->iuser.passtype = SCE_PASS_COMBINED;
 							break;
 						}
 					}
@@ -830,5 +830,110 @@ void blo_do_versions_270(FileData *fd, Library *UNUSED(lib), Main *main)
 				scene->r.simplify_particles_render = scene->r.simplify_particles;
 			}
 		}
+
+		if (!DNA_struct_elem_find(fd->filesdna, "DecimateModifierData", "float", "defgrp_factor")) {
+			Object *ob;
+
+			for (ob = main->object.first; ob; ob = ob->id.next) {
+				ModifierData *md;
+				for (md = ob->modifiers.first; md; md = md->next) {
+					if (md->type == eModifierType_Decimate) {
+						DecimateModifierData *dmd = (DecimateModifierData *)md;
+						dmd->defgrp_factor = 1.0f;
+					}
+				}
+			}
+		}
 	}
+
+	if (!MAIN_VERSION_ATLEAST(main, 275, 3)) {
+		Brush *br;
+#define BRUSH_TORUS (1 << 1)
+		for (br = main->brush.first; br; br = br->id.next) {
+			br->flag &= ~BRUSH_TORUS;
+		}
+#undef BRUSH_TORUS
+	}
+
+	if (!MAIN_VERSION_ATLEAST(main, 276, 2)) {
+		if (!DNA_struct_elem_find(fd->filesdna, "bPoseChannel", "float", "custom_scale")) {
+			Object *ob;
+
+			for (ob = main->object.first; ob; ob = ob->id.next) {
+				if (ob->pose) {
+					bPoseChannel *pchan;
+					for (pchan = ob->pose->chanbase.first; pchan; pchan = pchan->next) {
+						pchan->custom_scale = 1.0f;
+					}
+				}
+			}
+		}
+
+		{
+			bScreen *screen;
+#define RV3D_VIEW_PERSPORTHO	 7
+			for (screen = main->screen.first; screen; screen = screen->id.next) {
+				ScrArea *sa;
+				for (sa = screen->areabase.first; sa; sa = sa->next) {
+					SpaceLink *sl;
+					for (sl = sa->spacedata.first; sl; sl = sl->next) {
+						if (sl->spacetype == SPACE_VIEW3D) {
+							ARegion *ar;
+							ListBase *lb = (sl == sa->spacedata.first) ? &sa->regionbase : &sl->regionbase;
+							for (ar = lb->first; ar; ar = ar->next) {
+								if (ar->regiontype == RGN_TYPE_WINDOW) {
+									if (ar->regiondata) {
+										RegionView3D *rv3d = ar->regiondata;
+										if (rv3d->view == RV3D_VIEW_PERSPORTHO) {
+											rv3d->view = RV3D_VIEW_USER;
+										}
+									}
+								}
+							}
+							break;
+						}
+					}
+				}
+			}
+#undef RV3D_VIEW_PERSPORTHO
+		}
+
+		{
+			Lamp *lamp;
+#define LA_YF_PHOTON	5
+			for (lamp = main->lamp.first; lamp; lamp = lamp->id.next) {
+				if (lamp->type == LA_YF_PHOTON) {
+					lamp->type = LA_LOCAL;
+				}
+			}
+#undef LA_YF_PHOTON
+		}
+
+		{
+			Object *ob;
+			for (ob = main->object.first; ob; ob = ob->id.next) {
+				if (ob->body_type == OB_BODY_TYPE_CHARACTER && (ob->gameflag & OB_BOUNDS) && ob->collision_boundtype == OB_BOUND_TRIANGLE_MESH) {
+					ob->boundtype = ob->collision_boundtype = OB_BOUND_BOX;
+				}
+			}
+		}
+
+	}
+
+	{
+		if (!DNA_struct_elem_find(fd->filesdna, "RenderData", "CurveMapping", "mblur_shutter_curve")) {
+			Scene *scene;
+			for (scene = main->scene.first; scene != NULL; scene = scene->id.next) {
+				CurveMapping *curve_mapping = &scene->r.mblur_shutter_curve;
+				curvemapping_set_defaults(curve_mapping, 1, 0.0f, 0.0f, 1.0f, 1.0f);
+				curvemapping_initialize(curve_mapping);
+				curvemap_reset(curve_mapping->cm,
+				               &curve_mapping->clipr,
+				               CURVE_PRESET_MAX,
+				               CURVEMAP_SLOPE_POS_NEG);
+			}
+		}
+	}
+
+
 }

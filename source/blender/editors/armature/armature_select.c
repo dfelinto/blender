@@ -425,7 +425,7 @@ static int ebone_select_flag(EditBone *ebone)
 }
 
 /* context: editmode armature in view3d */
-bool mouse_armature(bContext *C, const int mval[2], bool extend, bool deselect, bool toggle)
+bool ED_armature_select_pick(bContext *C, const int mval[2], bool extend, bool deselect, bool toggle)
 {
 	Object *obedit = CTX_data_edit_object(C);
 	bArmature *arm = obedit->data;
@@ -910,7 +910,7 @@ void ARMATURE_OT_select_similar(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
 	/* properties */
-	ot->prop = RNA_def_enum(ot->srna, "type", prop_similar_types, 0, "Type", "");
+	ot->prop = RNA_def_enum(ot->srna, "type", prop_similar_types, SIMEDBONE_LENGTH, "Type", "");
 	RNA_def_float(ot->srna, "threshold", 0.1f, 0.0f, 1.0f, "Threshold", "", 0.0f, 1.0f);
 }
 
@@ -929,7 +929,7 @@ static int armature_select_hierarchy_exec(bContext *C, wmOperator *op)
 	ob = obedit;
 	arm = (bArmature *)ob->data;
 
-	 ebone_active = arm->act_edbone;
+	ebone_active = arm->act_edbone;
 	if (ebone_active == NULL) {
 		return OPERATOR_CANCELLED;
 	}

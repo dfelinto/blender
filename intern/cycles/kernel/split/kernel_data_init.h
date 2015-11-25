@@ -31,7 +31,7 @@
  * Un-initialized Ray --------------|                                  |--- Initialized Ray
  * Un-initialized PathState --------|                                  |--- Initialized PathState
  * Un-initialized QueueData --------|                                  |--- Initialized QueueData (to QUEUE_EMPTY_SLOT)
- * Un-initilaized QueueIndex -------|                                  |--- Initialized QueueIndex (to 0)
+ * Un-initialized QueueIndex -------|                                  |--- Initialized QueueIndex (to 0)
  * Un-initialized use_queues_flag---|                                  |--- Initialized use_queues_flag (to false)
  * Un-initialized ray_state --------|                                  |--- Initialized ray_state
  * parallel_samples --------------- |                                  |--- Initialized per_sample_output_buffers
@@ -51,9 +51,9 @@
  * The number of elements in the queues is initialized to 0;
  */
 ccl_device void kernel_data_init(
-        ccl_global char *globals,
-        ccl_global char *shader_data_sd,                  /* Arguments related to ShaderData */
-        ccl_global char *shader_data_sd_DL_shadow,        /* Arguments related to ShaderData */
+        KernelGlobals *kg,
+        ShaderData *sd,
+        ShaderData *sd_DL_shadow,
 
         ccl_global float3 *P_sd,
         ccl_global float3 *P_sd_DL_shadow,
@@ -175,18 +175,10 @@ ccl_device void kernel_data_init(
 #endif
         int parallel_samples)                        /* Number of samples to be processed in parallel */
 {
-
-	/* Load kernel globals structure */
-	KernelGlobals *kg = (KernelGlobals *)globals;
-
 	kg->data = data;
 #define KERNEL_TEX(type, ttype, name) \
 	kg->name = name;
 #include "../kernel_textures.h"
-
-	/* Load ShaderData structure */
-	ShaderData *sd = (ShaderData *)shader_data_sd;
-	ShaderData *sd_DL_shadow = (ShaderData *)shader_data_sd_DL_shadow;
 
 	sd->P = P_sd;
 	sd_DL_shadow->P = P_sd_DL_shadow;
@@ -291,13 +283,13 @@ ccl_device void kernel_data_init(
 
 	/* Initialize queue data and queue index. */
 	if(thread_index < queuesize) {
-		/* Initialize active ray queue */
+		/* Initialize active ray queue. */
 		Queue_data[QUEUE_ACTIVE_AND_REGENERATED_RAYS * queuesize + thread_index] = QUEUE_EMPTY_SLOT;
-		/* Initialize background and buffer update queue */
+		/* Initialize background and buffer update queue. */
 		Queue_data[QUEUE_HITBG_BUFF_UPDATE_TOREGEN_RAYS * queuesize + thread_index] = QUEUE_EMPTY_SLOT;
-		/* Initialize shadow ray cast of AO queue */
+		/* Initialize shadow ray cast of AO queue. */
 		Queue_data[QUEUE_SHADOW_RAY_CAST_AO_RAYS * queuesize + thread_index] = QUEUE_EMPTY_SLOT;
-		/* Initialize shadow ray cast of direct lighting queue */
+		/* Initialize shadow ray cast of direct lighting queue. */
 		Queue_data[QUEUE_SHADOW_RAY_CAST_DL_RAYS * queuesize + thread_index] = QUEUE_EMPTY_SLOT;
 	}
 
@@ -316,7 +308,6 @@ ccl_device void kernel_data_init(
 	int y = get_global_id(1);
 
 	if(x < (sw * parallel_samples) && y < sh) {
-
 		int ray_index = x + y * (sw * parallel_samples);
 
 		/* This is the first assignment to ray_state;
@@ -384,7 +375,7 @@ ccl_device void kernel_data_init(
 		                        &Ray_coop[ray_index]);
 
 		if(Ray_coop[ray_index].t != 0.0f) {
-			/* Initialize throuput, L_transparent, Ray, PathState;
+			/* Initialize throughput, L_transparent, Ray, PathState;
 			 * These rays proceed with path-iteration.
 			 */
 			throughput_coop[ray_index] = make_float3(1.0f, 1.0f, 1.0f);
@@ -400,12 +391,10 @@ ccl_device void kernel_data_init(
 #endif
 		} else {
 			/* These rays do not participate in path-iteration. */
-
 			float4 L_rad = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
 			/* Accumulate result in output buffer. */
 			kernel_write_pass_float4(per_sample_output_buffers, my_sample, L_rad);
 			path_rng_end(kg, rng_state, rng_coop[ray_index]);
-
 			ASSIGN_RAY_STATE(ray_state, ray_index, RAY_TO_REGENERATE);
 		}
 	}

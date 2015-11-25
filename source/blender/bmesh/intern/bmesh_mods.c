@@ -282,7 +282,7 @@ BMFace *BM_face_split(
         BMLoop **r_l, BMEdge *example,
         const bool no_double)
 {
-	const bool has_mdisp = CustomData_has_layer(&bm->ldata, CD_MDISPS);
+	const int cd_loop_mdisp_offset = CustomData_get_offset(&bm->ldata, CD_MDISPS);
 	BMFace *f_new, *f_tmp;
 
 	BLI_assert(l_a != l_b);
@@ -300,7 +300,7 @@ BMFace *BM_face_split(
 	}
 
 	/* do we have a multires layer? */
-	if (has_mdisp) {
+	if (cd_loop_mdisp_offset != -1) {
 		f_tmp = BM_face_copy(bm, bm, f, false, false);
 	}
 	
@@ -312,19 +312,17 @@ BMFace *BM_face_split(
 	
 	if (f_new) {
 		/* handle multires update */
-		if (has_mdisp) {
-			BMLoop *l_iter;
-			BMLoop *l_first;
+		if (cd_loop_mdisp_offset != -1) {
+			float f_dst_center[3];
+			float f_src_center[3];
 
-			l_iter = l_first = BM_FACE_FIRST_LOOP(f);
-			do {
-				BM_loop_interp_multires(bm, l_iter, f_tmp);
-			} while ((l_iter = l_iter->next) != l_first);
+			BM_face_calc_center_mean(f_tmp, f_src_center);
 
-			l_iter = l_first = BM_FACE_FIRST_LOOP(f_new);
-			do {
-				BM_loop_interp_multires(bm, l_iter, f_tmp);
-			} while ((l_iter = l_iter->next) != l_first);
+			BM_face_calc_center_mean(f, f_dst_center);
+			BM_face_interp_multires_ex(bm, f, f_tmp, f_dst_center, f_src_center, cd_loop_mdisp_offset);
+
+			BM_face_calc_center_mean(f_new, f_dst_center);
+			BM_face_interp_multires_ex(bm, f_new, f_tmp, f_dst_center, f_src_center, cd_loop_mdisp_offset);
 
 #if 0
 			/* BM_face_multires_bounds_smooth doesn't flip displacement correct */
@@ -334,7 +332,7 @@ BMFace *BM_face_split(
 		}
 	}
 
-	if (has_mdisp) {
+	if (cd_loop_mdisp_offset != -1) {
 		BM_face_kill(bm, f_tmp);
 	}
 
@@ -1068,32 +1066,8 @@ BMEdge *BM_vert_collapse_faces(
 		/* single face or no faces */
 		/* same as BM_vert_collapse_edge() however we already
 		 * have vars to perform this operation so don't call. */
-		e_new = bmesh_jekv(bm, e_kill, v_kill, do_del, true);
+		e_new = bmesh_jekv(bm, e_kill, v_kill, do_del, true, kill_degenerate_faces);
 		/* e_new = BM_edge_exists(tv, tv2); */ /* same as return above */
-
-		if (e_new && kill_degenerate_faces) {
-			BMFace **bad_faces = NULL;
-			BLI_array_staticdeclare(bad_faces, BM_DEFAULT_ITER_STACK_SIZE);
-
-			BMIter fiter;
-			BMFace *f;
-			BMVert *verts[2] = {e_new->v1, e_new->v2};
-			int i;
-
-			for (i = 0; i < 2; i++) {
-				/* cant kill data we loop on, build a list and remove those */
-				BLI_array_empty(bad_faces);
-				BM_ITER_ELEM (f, &fiter, verts[i], BM_FACES_OF_VERT) {
-					if (UNLIKELY(f->len < 3)) {
-						BLI_array_append(bad_faces, f);
-					}
-				}
-				while ((f = BLI_array_pop(bad_faces))) {
-					BM_face_kill(bm, f);
-				}
-			}
-			BLI_array_free(bad_faces);
-		}
 	}
 
 	return e_new;
@@ -1143,6 +1117,16 @@ BMEdge *BM_vert_collapse_edge(
 #undef DO_V_INTERP
 
 /**
+ * Collapse and edge into a single vertex.
+ */
+BMVert *BM_edge_collapse(
+        BMesh *bm, BMEdge *e_kill, BMVert *v_kill,
+        const bool do_del, const bool kill_degenerate_faces)
+{
+	return bmesh_jvke(bm, e_kill, v_kill, do_del, true, kill_degenerate_faces);
+}
+
+/**
  * \brief Edge Split
  *
  * <pre>
@@ -1167,7 +1151,7 @@ BMVert *BM_edge_split(BMesh *bm, BMEdge *e, BMVert *v, BMEdge **r_e, float fac)
 	BMFace **oldfaces = NULL;
 	BMEdge *e_dummy;
 	BLI_array_staticdeclare(oldfaces, 32);
-	const bool do_mdisp = (e->l && CustomData_has_layer(&bm->ldata, CD_MDISPS));
+	const int cd_loop_mdisp_offset = CustomData_get_offset(&bm->ldata, CD_MDISPS);
 
 	BLI_assert(BM_vert_in_edge(e, v) == true);
 
@@ -1177,7 +1161,7 @@ BMVert *BM_edge_split(BMesh *bm, BMEdge *e, BMVert *v, BMEdge **r_e, float fac)
 	}
 
 	/* do we have a multi-res layer? */
-	if (do_mdisp) {
+	if (cd_loop_mdisp_offset != -1) {
 		BMLoop *l;
 		int i;
 		
@@ -1212,14 +1196,18 @@ BMVert *BM_edge_split(BMesh *bm, BMEdge *e, BMVert *v, BMEdge **r_e, float fac)
 	BM_data_interp_face_vert_edge(bm, v_other, v, v_new, e, fac);
 	BM_data_interp_from_verts(bm, v, v_other, v_new, fac);
 
-	if (do_mdisp) {
+	if (cd_loop_mdisp_offset != -1) {
 		int i, j;
 
 		/* interpolate new/changed loop data from copied old faces */
-		for (j = 0; j < 2; j++) {
-			for (i = 0; i < BLI_array_count(oldfaces); i++) {
+		for (i = 0; i < BLI_array_count(oldfaces); i++) {
+			float f_center_old[3];
+
+			BM_face_calc_center_mean(oldfaces[i], f_center_old);
+
+			for (j = 0; j < 2; j++) {
 				BMEdge *e1 = j ? *r_e : e;
-				BMLoop *l, *l2;
+				BMLoop *l;
 				
 				l = e1->l;
 
@@ -1227,16 +1215,16 @@ BMVert *BM_edge_split(BMesh *bm, BMEdge *e, BMVert *v, BMEdge **r_e, float fac)
 					BMESH_ASSERT(0);
 					break;
 				}
-				
+
 				do {
 					/* check this is an old face */
 					if (BM_ELEM_API_FLAG_TEST(l->f, _FLAG_OVERLAP)) {
-						BMLoop *l2_first;
+						float f_center[3];
 
-						l2 = l2_first = BM_FACE_FIRST_LOOP(l->f);
-						do {
-							BM_loop_interp_multires(bm, l2, oldfaces[i]);
-						} while ((l2 = l2->next) != l2_first);
+						BM_face_calc_center_mean(l->f, f_center);
+						BM_face_interp_multires_ex(
+						        bm, l->f, oldfaces[i],
+						        f_center, f_center_old, cd_loop_mdisp_offset);
 					}
 					l = l->radial_next;
 				} while (l != e1->l);

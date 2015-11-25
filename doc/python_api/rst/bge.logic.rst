@@ -258,7 +258,8 @@ General functions
 
    Sets the world gravity.
    
-   :type gravity: list [fx, fy, fz]
+   :arg gravity: gravity vector
+   :type gravity: Vector((fx, fy, fz))
 
 .. function:: getSpectrum()
 
@@ -336,6 +337,28 @@ General functions
    :type ticrate: float
 
    .. warning: Not implimented yet
+
+.. function:: getAnimRecordFrame()
+
+    Gets the current frame number used for recording animations. This
+    number is incremented automatically by Blender when the "Record
+    animation" feature is turned on.
+
+    :rtype: int
+
+.. function:: setAnimRecordFrame(framenr)
+
+    Sets the current frame number used for recording animations. This
+    number is automatically incremented by Blender when the "Record
+    animation" feature is turned on.
+
+    The frame number Must be non-negative, unless Blender has
+    :attr:`bpy.types.UserPreferencesEdit.use_negative_frames` enabled
+    in its user preferences. Only use non-negative numbers to be on
+    the safe side, unless you know what you are doing.
+
+    :arg framenr: The new frame number.
+    :type framenr: int
 
 .. function:: getExitKey()
 
@@ -894,6 +917,8 @@ Various
 2D Filter
 ---------
 
+.. _Two-D-FilterActuator-mode:
+
 .. data:: RAS_2DFILTER_BLUR
 
    :value: 2
@@ -1288,5 +1313,3 @@ See :class:`bge.types.KX_StateActuator.operation`
    Add bits to state mask
 
    :value: 3
-
-.. _Two-D-FilterActuator-mode:

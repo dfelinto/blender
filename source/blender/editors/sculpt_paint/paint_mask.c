@@ -69,7 +69,7 @@
 
 static EnumPropertyItem mode_items[] = {
 	{PAINT_MASK_FLOOD_VALUE, "VALUE", 0, "Value", "Set mask to the level specified by the 'value' property"},
-    {PAINT_MASK_FLOOD_VALUE_INVERSE, "VALUE_INVERSE", 0, "Value Inverted", "Set mask to the level specified by the inverted 'value' property"},
+	{PAINT_MASK_FLOOD_VALUE_INVERSE, "VALUE_INVERSE", 0, "Value Inverted", "Set mask to the level specified by the inverted 'value' property"},
 	{PAINT_MASK_INVERT, "INVERT", 0, "Invert", "Invert the mask"},
 	{0}};
 
@@ -133,7 +133,7 @@ static int mask_flood_fill_exec(bContext *C, wmOperator *op)
 	if (multires)
 		multires_mark_as_modified(ob, MULTIRES_COORDS_MODIFIED);
 
-	sculpt_undo_push_end();
+	sculpt_undo_push_end(C);
 
 	if (nodes)
 		MEM_freeN(nodes);
@@ -265,7 +265,7 @@ int ED_sculpt_mask_box_select(struct bContext *C, ViewContext *vc, const rcti *r
 	if (multires)
 		multires_mark_as_modified(ob, MULTIRES_COORDS_MODIFIED);
 
-	sculpt_undo_push_end();
+	sculpt_undo_push_end(C);
 
 	ED_region_tag_redraw(ar);
 
@@ -290,7 +290,7 @@ typedef struct LassoMaskData {
 static bool is_effected_lasso(LassoMaskData *data, float co[3])
 {
 	float scr_co_f[2];
-	short scr_co_s[2];
+	int   scr_co_s[2];
 	float co_final[3];
 
 	flip_v3_v3(co_final, co, data->symmpass);
@@ -301,8 +301,13 @@ static bool is_effected_lasso(LassoMaskData *data, float co[3])
 	scr_co_s[1] = scr_co_f[1];
 
 	/* clip against screen, because lasso is limited to screen only */
-	if (scr_co_s[0] < data->rect.xmin || scr_co_s[1] < data->rect.ymin || scr_co_s[0] >= data->rect.xmax || scr_co_s[1] >= data->rect.ymax)
+	if ((scr_co_s[0] < data->rect.xmin) ||
+	    (scr_co_s[1] < data->rect.ymin) ||
+	    (scr_co_s[0] >= data->rect.xmax) ||
+	    (scr_co_s[1] >= data->rect.ymax))
+	{
 		return false;
+	}
 
 	scr_co_s[0] -= data->rect.xmin;
 	scr_co_s[1] -= data->rect.ymin;
@@ -415,7 +420,7 @@ static int paint_mask_gesture_lasso_exec(bContext *C, wmOperator *op)
 		if (multires)
 			multires_mark_as_modified(ob, MULTIRES_COORDS_MODIFIED);
 
-		sculpt_undo_push_end();
+		sculpt_undo_push_end(C);
 
 		ED_region_tag_redraw(vc.ar);
 		MEM_freeN((void *)mcords);
@@ -434,7 +439,7 @@ void PAINT_OT_mask_lasso_gesture(wmOperatorType *ot)
 
 	ot->name = "Mask Lasso Gesture";
 	ot->idname = "PAINT_OT_mask_lasso_gesture";
-	ot->description = "Add mask within the lasso as you move the pointer";
+	ot->description = "Add mask within the lasso as you move the brush";
 
 	ot->invoke = WM_gesture_lasso_invoke;
 	ot->modal = WM_gesture_lasso_modal;

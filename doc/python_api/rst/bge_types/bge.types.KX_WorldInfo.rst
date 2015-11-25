@@ -1,4 +1,4 @@
-KX_WordlInfo(PyObjectPlus)
+KX_WorldInfo(PyObjectPlus)
 =============================
 
 .. module:: bge.types
@@ -7,7 +7,7 @@ base class --- :class:`PyObjectPlus`
 
 .. class:: KX_WorldInfo(PyObjectPlus)
 
-   A wolrd object.
+   A world object.
 
    .. code-block:: python
 
@@ -63,17 +63,17 @@ base class --- :class:`PyObjectPlus`
       The color of the mist. Black = [0.0, 0.0, 0.0], White = [1.0, 1.0, 1.0].
       Mist and background color sould always set to the same color.
 
-      :type: :class:`mathutils.Vector`
+      :type: :class:`mathutils.Color`
 
    .. attribute:: backgroundColor
 
       The color of the background. Black = [0.0, 0.0, 0.0], White = [1.0, 1.0, 1.0].
       Mist and background color sould always set to the same color.
 
-      :type: :class:`mathutils.Vector`
+      :type: :class:`mathutils.Color`
 
    .. attribute:: ambientColor
 
       The color of the ambient light. Black = [0.0, 0.0, 0.0], White = [1.0, 1.0, 1.0].
 
-      :type: :class:`mathutils.Vector`
+      :type: :class:`mathutils.Color`

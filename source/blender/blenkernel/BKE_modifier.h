@@ -104,8 +104,9 @@ typedef enum {
 	eModifierTypeFlag_UsesPreview = (1 << 9)
 } ModifierTypeFlag;
 
-typedef void (*ObjectWalkFunc)(void *userData, struct Object *ob, struct Object **obpoin);
-typedef void (*IDWalkFunc)(void *userData, struct Object *ob, struct ID **idpoin);
+/* IMPORTANT! Keep ObjectWalkFunc and IDWalkFunc signatures compatible. */
+typedef void (*ObjectWalkFunc)(void *userData, struct Object *ob, struct Object **obpoin, int cd_flag);
+typedef void (*IDWalkFunc)(void *userData, struct Object *ob, struct ID **idpoin, int cd_flag);
 typedef void (*TexWalkFunc)(void *userData, struct Object *ob, struct ModifierData *md, const char *propname);
 
 typedef enum ModifierApplyFlag {
@@ -116,6 +117,12 @@ typedef enum ModifierApplyFlag {
 	MOD_APPLY_IGNORE_SIMPLIFY = 1 << 3, /* Ignore scene simplification flag and use subdivisions
 	                                     * level set in multires modifier.
 	                                     */
+	MOD_APPLY_ALLOW_GPU = 1 << 4,  /* Allow modifier to be applied and stored in the GPU.
+	                                * Used by the viewport in order to be able to have SS
+	                                * happening on GPU.
+	                                * Render pipeline (including viewport render) should
+	                                * have DM on the CPU.
+	                                */
 } ModifierApplyFlag;
 
 

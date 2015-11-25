@@ -118,7 +118,7 @@ static void rna_def_camera_stereo_data(BlenderRNA *brna)
 	srna = RNA_def_struct(brna, "CameraStereoData", NULL);
 	RNA_def_struct_sdna(srna, "CameraStereoSettings");
 	RNA_def_struct_nested(brna, srna, "Camera");
-	RNA_def_struct_ui_text(srna, "Stereo", "Stereoscopy settings for a Camera datablock");
+	RNA_def_struct_ui_text(srna, "Stereo", "Stereoscopy settings for a Camera data-block");
 
 	prop = RNA_def_property(srna, "convergence_mode", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_items(prop, convergence_mode_items);
@@ -143,15 +143,6 @@ static void rna_def_camera_stereo_data(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Convergence Plane Distance",
 	                         "The converge point for the stereo cameras "
 	                         "(often the distance between a projector and the projection screen)");
-	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, NULL);
-
-	prop = RNA_def_property(srna, "viewport_convergence", PROP_FLOAT, PROP_DISTANCE);
-	RNA_def_property_float_sdna(prop, NULL, "convergence_distance");
-	RNA_def_property_range(prop, 0.00001f, FLT_MAX);
-	RNA_def_property_ui_range(prop, 0.0f, 15.f, 1, 2);
-	RNA_def_property_ui_text(prop, "Viewport Convergence",
-	                         "Preview convergence distance for the stereo effect in the viewport "
-	                         "(it does not affect the render!)");
 	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, NULL);
 }
 
@@ -189,7 +180,7 @@ void RNA_def_camera(BlenderRNA *brna)
 	};
 
 	srna = RNA_def_struct(brna, "Camera", "ID");
-	RNA_def_struct_ui_text(srna, "Camera", "Camera datablock for storing camera settings");
+	RNA_def_struct_ui_text(srna, "Camera", "Camera data-block for storing camera settings");
 	RNA_def_struct_ui_icon(srna, ICON_CAMERA_DATA);
 
 	/* Enums */
@@ -290,14 +281,14 @@ void RNA_def_camera(BlenderRNA *brna)
 	RNA_def_property_float_sdna(prop, NULL, "shiftx");
 	RNA_def_property_range(prop, -10.0f, 10.0f);
 	RNA_def_property_ui_range(prop, -2.0, 2.0, 1, 3);
-	RNA_def_property_ui_text(prop, "Shift X", "Perspective Camera horizontal shift");
+	RNA_def_property_ui_text(prop, "Shift X", "Camera horizontal shift");
 	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Camera_update");
 
 	prop = RNA_def_property(srna, "shift_y", PROP_FLOAT, PROP_NONE);
 	RNA_def_property_float_sdna(prop, NULL, "shifty");
 	RNA_def_property_range(prop, -10.0f, 10.0f);
 	RNA_def_property_ui_range(prop, -2.0, 2.0, 1, 3);
-	RNA_def_property_ui_text(prop, "Shift Y", "Perspective Camera vertical shift");
+	RNA_def_property_ui_text(prop, "Shift Y", "Camera vertical shift");
 	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Camera_update");
 
 	prop = RNA_def_property(srna, "dof_distance", PROP_FLOAT, PROP_DISTANCE);

@@ -32,11 +32,10 @@
 #include "BLI_fileops.h"
 #include "BLI_path_util.h"
 
+#include "BKE_blender.h"  /* BLENDER_VERSION */
 #include "BKE_appdir.h"  /* own include */
 
 #include "GHOST_Path-api.h"
-
-#include "../blenkernel/BKE_blender.h"  /* BLENDER_VERSION, bad level include (no function call) */
 
 #include "MEM_guardedalloc.h"
 
@@ -512,7 +511,7 @@ const char *BKE_appdir_folder_id_version(const int folder_id, const int ver, con
  * (must be FILE_MAX minimum)
  * \param name The name of the executable (usually argv[0]) to be checked
  */
-static void bli_where_am_i(char *fullname, const size_t maxlen, const char *name)
+static void where_am_i(char *fullname, const size_t maxlen, const char *name)
 {
 #ifdef WITH_BINRELOC
 	/* linux uses binreloc since argv[0] is not reliable, call br_init( NULL ) first */
@@ -549,15 +548,7 @@ static void bli_where_am_i(char *fullname, const size_t maxlen, const char *name
 
 		BLI_strncpy(fullname, name, maxlen);
 		if (name[0] == '.') {
-			char wdir[FILE_MAX] = "";
-			BLI_current_working_dir(wdir, sizeof(wdir));     /* backup cwd to restore after */
-
-			// not needed but avoids annoying /./ in name
-			if (name[1] == SEP)
-				BLI_join_dirfile(fullname, maxlen, wdir, name + 2);
-			else
-				BLI_join_dirfile(fullname, maxlen, wdir, name);
-
+			BLI_path_cwd(fullname, maxlen);
 #ifdef _WIN32
 			BLI_path_program_extensions_add_win32(fullname, maxlen);
 #endif
@@ -582,7 +573,7 @@ static void bli_where_am_i(char *fullname, const size_t maxlen, const char *name
 
 void BKE_appdir_program_path_init(const char *argv0)
 {
-	bli_where_am_i(bprogname, sizeof(bprogname), argv0);
+	where_am_i(bprogname, sizeof(bprogname), argv0);
 	BLI_split_dir_part(bprogname, bprogdir, sizeof(bprogdir));
 }
 
@@ -609,7 +600,7 @@ bool BKE_appdir_program_python_search(
 	const char *basename = "python";
 	char python_ver[16];
 	/* check both possible names */
-	const char *python_names[] = {basename, python_ver};
+	const char *python_names[] = {python_ver, basename};
 	int i;
 
 	bool is_found = false;
@@ -665,7 +656,7 @@ bool BKE_appdir_program_python_search(
  * \param maxlen The size of the fullname buffer
  * \param userdir Directory specified in user preferences 
  */
-static void BLI_where_is_temp(char *fullname, char *basename, const size_t maxlen, char *userdir)
+static void where_is_temp(char *fullname, char *basename, const size_t maxlen, char *userdir)
 {
 	/* Clear existing temp dir, if needed. */
 	BKE_tempdir_session_purge();
@@ -753,7 +744,7 @@ static void BLI_where_is_temp(char *fullname, char *basename, const size_t maxle
  */
 void BKE_tempdir_init(char *userdir)
 {
-	BLI_where_is_temp(btempdir_session, btempdir_base, FILE_MAX, userdir);
+	where_is_temp(btempdir_session, btempdir_base, FILE_MAX, userdir);
 ;
 }
 
@@ -778,7 +769,7 @@ const char *BKE_tempdir_base(void)
  */
 void BKE_tempdir_system_init(char *dir)
 {
-	BLI_where_is_temp(dir, NULL, FILE_MAX, NULL);
+	where_is_temp(dir, NULL, FILE_MAX, NULL);
 }
 
 /**

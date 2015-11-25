@@ -45,7 +45,8 @@
 #include "BLI_blenlib.h"
 
 #ifdef WITH_AUDASPACE
-#  include "AUD_C-API.h"
+#  include AUD_DEVICE_H
+#  include AUD_SPECIAL_H
 #endif
 
 #include "BLI_utildefines.h"
@@ -133,7 +134,7 @@ static int write_audio_frame(FFMpegContext *context)
 	pkt.size = 0;
 	pkt.data = NULL;
 
-	AUD_readDevice(context->audio_mixdown_device, context->audio_input_buffer, context->audio_input_samples);
+	AUD_Device_read(context->audio_mixdown_device, context->audio_input_buffer, context->audio_input_samples);
 	context->audio_time += (double) context->audio_input_samples / (double) c->sample_rate;
 
 #ifdef FFMPEG_HAVE_ENCODE_AUDIO2
@@ -745,7 +746,7 @@ static AVStream *alloc_audio_stream(FFMpegContext *context, RenderData *rd, int 
 	av_dict_free(&opts);
 
 	/* need to prevent floating point exception when using vorbis audio codec,
-	 * initialize this value in the same way as it's done in FFmpeg iteslf (sergey) */
+	 * initialize this value in the same way as it's done in FFmpeg itself (sergey) */
 	st->codec->time_base.num = 1;
 	st->codec->time_base.den = st->codec->sample_rate;
 
@@ -808,7 +809,7 @@ static int start_ffmpeg_impl(FFMpegContext *context, struct RenderData *rd, int 
 	AVFormatContext *of;
 	AVOutputFormat *fmt;
 	AVDictionary *opts = NULL;
-	char name[256], error[1024];
+	char name[FILE_MAX], error[1024];
 	const char **exts;
 
 	context->ffmpeg_type = rd->ffcodecdata.type;
@@ -846,7 +847,10 @@ static int start_ffmpeg_impl(FFMpegContext *context, struct RenderData *rd, int 
 		BKE_report(reports, RPT_ERROR, "Error opening output file");
 		return 0;
 	}
-	
+
+
+	/* Returns after this must 'goto fail;' */
+
 	of->oformat = fmt;
 	of->packet_size = rd->ffcodecdata.mux_packet_size;
 	if (context->ffmpeg_audio_codec != AV_CODEC_ID_NONE) {
@@ -893,21 +897,21 @@ static int start_ffmpeg_impl(FFMpegContext *context, struct RenderData *rd, int 
 			break;
 		case FFMPEG_MPEG4:
 		default:
-			fmt->video_codec = AV_CODEC_ID_MPEG4;
+			fmt->video_codec = context->ffmpeg_codec;
 			break;
 	}
 	if (fmt->video_codec == AV_CODEC_ID_DVVIDEO) {
 		if (rectx != 720) {
 			BKE_report(reports, RPT_ERROR, "Render width has to be 720 pixels for DV!");
-			return 0;
+			goto fail;
 		}
 		if (rd->frs_sec != 25 && recty != 480) {
 			BKE_report(reports, RPT_ERROR, "Render height has to be 480 pixels for DV-NTSC!");
-			return 0;
+			goto fail;
 		}
 		if (rd->frs_sec == 25 && recty != 576) {
 			BKE_report(reports, RPT_ERROR, "Render height has to be 576 pixels for DV-PAL!");
-			return 0;
+			goto fail;
 		}
 	}
 	
@@ -915,8 +919,7 @@ static int start_ffmpeg_impl(FFMpegContext *context, struct RenderData *rd, int 
 		fmt->audio_codec = AV_CODEC_ID_PCM_S16LE;
 		if (context->ffmpeg_audio_codec != AV_CODEC_ID_NONE && rd->ffcodecdata.audio_mixrate != 48000 && rd->ffcodecdata.audio_channels != 2) {
 			BKE_report(reports, RPT_ERROR, "FFMPEG only supports 48khz / stereo audio for DV!");
-			av_dict_free(&opts);
-			return 0;
+			goto fail;
 		}
 	}
 	
@@ -928,9 +931,7 @@ static int start_ffmpeg_impl(FFMpegContext *context, struct RenderData *rd, int 
 				BKE_report(reports, RPT_ERROR, error);
 			else
 				BKE_report(reports, RPT_ERROR, "Error initializing video stream");
-
-			av_dict_free(&opts);
-			return 0;
+			goto fail;
 		}
 	}
 
@@ -941,22 +942,18 @@ static int start_ffmpeg_impl(FFMpegContext *context, struct RenderData *rd, int 
 				BKE_report(reports, RPT_ERROR, error);
 			else
 				BKE_report(reports, RPT_ERROR, "Error initializing audio stream");
-			av_dict_free(&opts);
-			return 0;
+			goto fail;
 		}
 	}
 	if (!(fmt->flags & AVFMT_NOFILE)) {
 		if (avio_open(&of->pb, name, AVIO_FLAG_WRITE) < 0) {
 			BKE_report(reports, RPT_ERROR, "Could not open file for writing");
-			av_dict_free(&opts);
-			return 0;
+			goto fail;
 		}
 	}
 	if (avformat_write_header(of, NULL) < 0) {
 		BKE_report(reports, RPT_ERROR, "Could not initialize streams, probably unsupported codec combination");
-		av_dict_free(&opts);
-		avio_close(of->pb);
-		return 0;
+		goto fail;
 	}
 
 	context->outfile = of;
@@ -964,6 +961,26 @@ static int start_ffmpeg_impl(FFMpegContext *context, struct RenderData *rd, int 
 	av_dict_free(&opts);
 
 	return 1;
+
+
+fail:
+	if (of->pb) {
+		avio_close(of->pb);
+	}
+
+	if (context->video_stream && context->video_stream->codec) {
+		avcodec_close(context->video_stream->codec);
+		context->video_stream = NULL;
+	}
+
+	if (context->audio_stream && context->audio_stream->codec) {
+		avcodec_close(context->audio_stream->codec);
+		context->audio_stream = NULL;
+	}
+
+	av_dict_free(&opts);
+	avformat_free_context(of);
+	return 0;
 }
 
 /**
@@ -1197,8 +1214,6 @@ int BKE_ffmpeg_append(void *context_v, RenderData *rd, int start_frame, int fram
 
 static void end_ffmpeg_impl(FFMpegContext *context, int is_autosplit)
 {
-	unsigned int i;
-	
 	PRINT("Closing ffmpeg...\n");
 
 #if 0
@@ -1210,7 +1225,7 @@ static void end_ffmpeg_impl(FFMpegContext *context, int is_autosplit)
 #ifdef WITH_AUDASPACE
 	if (is_autosplit == false) {
 		if (context->audio_mixdown_device) {
-			AUD_closeReadDevice(context->audio_mixdown_device);
+			AUD_Device_free(context->audio_mixdown_device);
 			context->audio_mixdown_device = 0;
 		}
 	}
@@ -1233,15 +1248,11 @@ static void end_ffmpeg_impl(FFMpegContext *context, int is_autosplit)
 		context->video_stream = 0;
 	}
 
-	
-	/* Close the output file */
-	if (context->outfile) {
-		for (i = 0; i < context->outfile->nb_streams; i++) {
-			if (&context->outfile->streams[i]) {
-				av_freep(&context->outfile->streams[i]);
-			}
-		}
+	if (context->audio_stream && context->audio_stream->codec) {
+		avcodec_close(context->audio_stream->codec);
+		context->audio_stream = 0;
 	}
+
 	/* free the temp buffer */
 	if (context->current_frame) {
 		delete_picture(context->current_frame);
@@ -1253,7 +1264,7 @@ static void end_ffmpeg_impl(FFMpegContext *context, int is_autosplit)
 		}
 	}
 	if (context->outfile) {
-		av_free(context->outfile);
+		avformat_free_context(context->outfile);
 		context->outfile = 0;
 	}
 	if (context->audio_input_buffer) {

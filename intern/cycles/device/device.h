@@ -92,6 +92,20 @@ public:
 	 */
 	int nodes_features;
 
+	/* BVH/sampling kernel features. */
+	bool use_hair;
+	bool use_object_motion;
+	bool use_camera_motion;
+
+	/* Denotes whether baking functionality is needed. */
+	bool use_baking;
+
+	/* Use subsurface scattering materials. */
+	bool use_subsurface;
+
+	/* Use branched integrator. */
+	bool use_integrator_branched;
+
 	DeviceRequestedFeatures()
 	{
 		/* TODO(sergey): Find more meaningful defaults. */
@@ -99,6 +113,12 @@ public:
 		max_closure = 0;
 		max_nodes_group = 0;
 		nodes_features = 0;
+		use_hair = false;
+		use_object_motion = false;
+		use_camera_motion = false;
+		use_baking = false;
+		use_subsurface = false;
+		use_integrator_branched = false;
 	}
 
 	bool modified(const DeviceRequestedFeatures& requested_features)
@@ -106,9 +126,53 @@ public:
 		return !(experimental == requested_features.experimental &&
 		         max_closure == requested_features.max_closure &&
 		         max_nodes_group == requested_features.max_nodes_group &&
-		         nodes_features == requested_features.nodes_features);
+		         nodes_features == requested_features.nodes_features &&
+		         use_hair == requested_features.use_hair &&
+		         use_object_motion == requested_features.use_object_motion &&
+		         use_camera_motion == requested_features.use_camera_motion &&
+		         use_baking == requested_features.use_baking &&
+		         use_subsurface == requested_features.use_subsurface &&
+		         use_integrator_branched == requested_features.use_integrator_branched);
+	}
+
+	/* Convert the requested features structure to a build options,
+	 * which could then be passed to compilers.
+	 */
+	string get_build_options(void) const
+	{
+		string build_options = "";
+		if(experimental) {
+			build_options += "-D__KERNEL_EXPERIMENTAL__ ";
+		}
+		build_options += "-D__NODES_MAX_GROUP__=" +
+			string_printf("%d", max_nodes_group);
+		build_options += " -D__NODES_FEATURES__=" +
+			string_printf("%d", nodes_features);
+		build_options += string_printf(" -D__MAX_CLOSURE__=%d", max_closure);
+		if(!use_hair) {
+			build_options += " -D__NO_HAIR__";
+		}
+		if(!use_object_motion) {
+			build_options += " -D__NO_OBJECT_MOTION__";
+		}
+		if(!use_camera_motion) {
+			build_options += " -D__NO_CAMERA_MOTION__";
+		}
+		if(!use_baking) {
+			build_options += " -D__NO_BAKING__";
+		}
+		if(!use_subsurface) {
+			build_options += " -D__NO_SUBSURFACE__";
+		}
+		if(!use_integrator_branched) {
+			build_options += " -D__NO_BRANCHED_PATH__";
+		}
+		return build_options;
 	}
 };
+
+std::ostream& operator <<(std::ostream &os,
+                          const DeviceRequestedFeatures& requested_features);
 
 /* Device */
 
@@ -153,10 +217,10 @@ public:
 	virtual void tex_alloc(const char * /*name*/,
 	                       device_memory& /*mem*/,
 	                       InterpolationType interpolation = INTERPOLATION_NONE,
-	                       bool periodic = false)
+	                       ExtensionType extension = EXTENSION_REPEAT)
 	{
 		(void)interpolation;  /* Ignored. */
-		(void)periodic;  /* Ignored. */
+		(void)extension;  /* Ignored. */
 	};
 	virtual void tex_free(device_memory& /*mem*/) {};
 

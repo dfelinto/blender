@@ -279,7 +279,7 @@ static void sculpt_undo_bmesh_restore_generic(bContext *C,
 		unode->applied = true;
 	}
 
-	if (ELEM(unode->type, SCULPT_UNDO_MASK, SCULPT_UNDO_MASK)) {
+	if (unode->type == SCULPT_UNDO_MASK) {
 		int i, totnode;
 		PBVHNode **nodes;
 
@@ -695,7 +695,8 @@ static void sculpt_undo_store_hidden(Object *ob, SculptUndoNode *unode)
 	}
 	else {
 		MVert *mvert;
-		int *vert_indices, allvert;
+		const int *vert_indices;
+		int allvert;
 		int i;
 		
 		BKE_pbvh_node_num_verts(pbvh, node, NULL, &allvert);
@@ -846,7 +847,8 @@ SculptUndoNode *sculpt_undo_push_node(Object *ob, PBVHNode *node,
 		memcpy(unode->grids, grids, sizeof(int) * totgrid);
 	}
 	else {
-		int *vert_indices, allvert;
+		const int *vert_indices;
+		int allvert;
 		BKE_pbvh_node_num_verts(ss->pbvh, node, NULL, &allvert);
 		BKE_pbvh_node_get_verts(ss->pbvh, node, &vert_indices, NULL);
 		memcpy(unode->index, vert_indices, sizeof(int) * unode->totvert);
@@ -882,7 +884,7 @@ void sculpt_undo_push_begin(const char *name)
 	                         sculpt_undo_restore, sculpt_undo_free, sculpt_undo_cleanup);
 }
 
-void sculpt_undo_push_end(void)
+void sculpt_undo_push_end(const bContext *C)
 {
 	ListBase *lb = undo_paint_push_get_list(UNDO_PAINT_MESH);
 	SculptUndoNode *unode;
@@ -899,4 +901,6 @@ void sculpt_undo_push_end(void)
 	}
 
 	ED_undo_paint_push_end(UNDO_PAINT_MESH);
+
+	WM_file_tag_modified(C);
 }

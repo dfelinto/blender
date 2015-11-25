@@ -34,7 +34,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-
 #define CASE_CODE_RETURN_STR(code) case code: return #code;
 
 static const char *get_glew_error_enum_string(GLenum error)
@@ -61,6 +60,9 @@ GLenum glew_chk(GLenum error, const char *file, int line, const char *text)
 	if (error != GLEW_OK) {
 		const char *code = get_glew_error_enum_string(error);
 		const char *msg  = (const char *)glewGetErrorString(error);
+
+		if (error == GLEW_ERROR_NO_GL_VERSION)
+			return GLEW_OK;
 
 #ifndef NDEBUG
 		fprintf(stderr,

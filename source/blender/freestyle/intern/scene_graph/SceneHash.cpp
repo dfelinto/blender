@@ -30,9 +30,9 @@ namespace Freestyle {
 
 string SceneHash::toString()
 {
-	 stringstream ss;
-	 ss << hex << _sum;
-	 return ss.str();
+	stringstream ss;
+	ss << hex << _sum;
+	return ss.str();
 }
 
 void SceneHash::visitNodeSceneRenderLayer(NodeSceneRenderLayer& node)
@@ -59,7 +59,7 @@ void SceneHash::visitNodeCamera(NodeCamera& cam)
 
 void SceneHash::visitIndexedFaceSet(IndexedFaceSet& ifs)
 {
-	const real *v = ifs.vertices();
+	const float *v = ifs.vertices();
 	const unsigned n = ifs.vsize();
 
 	for (unsigned i = 0; i < n; i++) {

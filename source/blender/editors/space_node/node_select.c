@@ -249,9 +249,9 @@ static bool node_select_grouped_name(SpaceNode *snode, bNode *node_act, const bo
 	bool changed = false;
 	const unsigned int delims[] = {'.', '-', '_', '\0'};
 	size_t pref_len_act, pref_len_curr;
-	char *sep, *suf_act, *suf_curr;
+	const char *sep, *suf_act, *suf_curr;
 
-	pref_len_act = BLI_str_partition_ex_utf8(node_act->name, delims, &sep, &suf_act, from_right);
+	pref_len_act = BLI_str_partition_ex_utf8(node_act->name, NULL, delims, &sep, &suf_act, from_right);
 
 	/* Note: in case we are searching for suffix, and found none, use whole name as suffix. */
 	if (from_right && !(sep && suf_act)) {
@@ -263,7 +263,7 @@ static bool node_select_grouped_name(SpaceNode *snode, bNode *node_act, const bo
 		if (node->flag & SELECT) {
 			continue;
 		}
-		pref_len_curr = BLI_str_partition_ex_utf8(node->name, delims, &sep, &suf_curr, from_right);
+		pref_len_curr = BLI_str_partition_ex_utf8(node->name, NULL, delims, &sep, &suf_curr, from_right);
 
 		/* Same as with active node name! */
 		if (from_right && !(sep && suf_curr)) {
@@ -531,7 +531,15 @@ static int node_borderselect_exec(bContext *C, wmOperator *op)
 	UI_view2d_region_to_view_rctf(&ar->v2d, &rectf, &rectf);
 	
 	for (node = snode->edittree->nodes.first; node; node = node->next) {
-		if (BLI_rctf_isect(&rectf, &node->totr, NULL)) {
+		bool select;
+		if (node->type == NODE_FRAME) {
+			select = BLI_rctf_inside_rctf(&rectf, &node->totr);
+		}
+		else {
+			select = BLI_rctf_isect(&rectf, &node->totr, NULL);
+		}
+
+		if (select) {
 			nodeSetSelected(node, (gesture_mode == GESTURE_MODAL_SELECT));
 		}
 		else if (!extend) {

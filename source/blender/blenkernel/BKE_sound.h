@@ -35,6 +35,10 @@
 
 #define SOUND_WAVE_SAMPLES_PER_SECOND 250
 
+#ifdef WITH_SYSTEM_AUDASPACE
+#  include AUD_DEVICE_H
+#endif
+
 struct bSound;
 struct Main;
 struct Sequence;
@@ -47,16 +51,19 @@ typedef struct SoundWaveform {
 void BKE_sound_init_once(void);
 void BKE_sound_exit_once(void);
 
+void *BKE_sound_get_device(void);
+
 void BKE_sound_init(struct Main *main);
 
 void BKE_sound_init_main(struct Main *bmain);
 
 void BKE_sound_exit(void);
 
-void BKE_sound_force_device(int device);
-int BKE_sound_define_from_str(const char *str);
+void BKE_sound_force_device(const char *device);
 
-struct bSound *BKE_sound_new_file(struct Main *main, const char *filename);
+struct bSound *BKE_sound_new_file(struct Main *main, const char *filepath);
+struct bSound *BKE_sound_new_file_exists_ex(struct Main *bmain, const char *filepath, bool *r_exists);
+struct bSound *BKE_sound_new_file_exists(struct Main *bmain, const char *filepath);
 
 // XXX unused currently
 #if 0
@@ -75,7 +82,7 @@ void BKE_sound_load(struct Main *main, struct bSound *sound);
 
 void BKE_sound_free(struct bSound *sound);
 
-#ifdef __AUD_C_API_H__
+#if defined(__AUD_C_API_H__) || defined(WITH_SYSTEM_AUDASPACE)
 AUD_Device *BKE_sound_mixdown(struct Scene *scene, AUD_DeviceSpecs specs, int start, float volume);
 #endif
 
@@ -135,6 +142,8 @@ void BKE_sound_update_scene(struct Main *bmain, struct Scene *scene);
 void *BKE_sound_get_factory(void *sound);
 
 float BKE_sound_get_length(struct bSound *sound);
+
+char **BKE_sound_get_device_names(void);
 
 bool BKE_sound_is_jack_supported(void);
 

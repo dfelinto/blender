@@ -145,7 +145,12 @@ bool BlenderSync::sync_recalc()
 	return recalc;
 }
 
-void BlenderSync::sync_data(BL::SpaceView3D b_v3d, BL::Object b_override, void **python_thread_state, const char *layer)
+void BlenderSync::sync_data(BL::RenderSettings b_render,
+                            BL::SpaceView3D b_v3d,
+                            BL::Object b_override,
+                            int width, int height,
+                            void **python_thread_state,
+                            const char *layer)
 {
 	sync_render_layers(b_v3d, layer);
 	sync_integrator();
@@ -156,8 +161,17 @@ void BlenderSync::sync_data(BL::SpaceView3D b_v3d, BL::Object b_override, void *
 
 	mesh_synced.clear(); /* use for objects and motion sync */
 
-	sync_objects(b_v3d);
-	sync_motion(b_v3d, b_override, python_thread_state);
+	if(scene->need_motion() == Scene::MOTION_PASS ||
+	   scene->need_motion() == Scene::MOTION_NONE ||
+	   scene->camera->motion_position == Camera::MOTION_POSITION_CENTER)
+	{
+		sync_objects(b_v3d);
+	}
+	sync_motion(b_render,
+	            b_v3d,
+	            b_override,
+	            width, height,
+	            python_thread_state);
 
 	mesh_synced.clear();
 }
@@ -313,7 +327,8 @@ void BlenderSync::sync_render_layers(BL::SpaceView3D b_v3d, const char *layer)
 			render_layer.exclude_layer = 0;
 			render_layer.holdout_layer = 0;
 			render_layer.material_override = PointerRNA_NULL;
-			render_layer.use_background = true;
+			render_layer.use_background_shader = true;
+			render_layer.use_background_ao = true;
 			render_layer.use_hair = true;
 			render_layer.use_surfaces = true;
 			render_layer.use_viewport_visibility = true;
@@ -345,7 +360,8 @@ void BlenderSync::sync_render_layers(BL::SpaceView3D b_v3d, const char *layer)
 			render_layer.layer |= render_layer.holdout_layer;
 
 			render_layer.material_override = b_rlay->material_override();
-			render_layer.use_background = b_rlay->use_sky();
+			render_layer.use_background_shader = b_rlay->use_sky();
+			render_layer.use_background_ao = b_rlay->use_ao();
 			render_layer.use_surfaces = b_rlay->use_solid();
 			render_layer.use_hair = b_rlay->use_strand();
 			render_layer.use_viewport_visibility = false;
@@ -418,7 +434,6 @@ SceneParams BlenderSync::get_scene_params(BL::Scene b_scene, bool background, bo
 		params.bvh_type = (SceneParams::BVHType)RNA_enum_get(&cscene, "debug_bvh_type");
 
 	params.use_bvh_spatial_split = RNA_boolean_get(&cscene, "debug_use_spatial_splits");
-	params.use_bvh_cache = (background)? RNA_boolean_get(&cscene, "use_cache"): false;
 
 	if(background && params.shadingsystem != SHADINGSYSTEM_OSL)
 		params.persistent_data = r.use_persistent_data();

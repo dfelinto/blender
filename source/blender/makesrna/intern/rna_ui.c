@@ -29,7 +29,7 @@
 
 #include "DNA_screen_types.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_idprop.h"
 
@@ -43,7 +43,7 @@
 #include "WM_types.h"
 
 /* see WM_types.h */
-EnumPropertyItem operator_context_items[] = {
+EnumPropertyItem rna_enum_operator_context_items[] = {
 	{WM_OP_INVOKE_DEFAULT, "INVOKE_DEFAULT", 0, "Invoke Default", ""},
 	{WM_OP_INVOKE_REGION_WIN, "INVOKE_REGION_WIN", 0, "Invoke Region Window", ""},
 	{WM_OP_INVOKE_REGION_CHANNELS, "INVOKE_REGION_CHANNELS", 0, "Invoke Region Channels", ""},
@@ -59,7 +59,7 @@ EnumPropertyItem operator_context_items[] = {
 	{0, NULL, 0, NULL, NULL}
 };
 
-EnumPropertyItem uilist_layout_type_items[] = {
+EnumPropertyItem rna_enum_uilist_layout_type_items[] = {
 	{UILST_LAYOUT_DEFAULT, "DEFAULT", 0, "Default Layout", "Use the default, multi-rows layout"},
 	{UILST_LAYOUT_COMPACT, "COMPACT", 0, "Compact Layout", "Use the compact, single-row layout"},
 	{UILST_LAYOUT_GRID, "GRID", 0, "Grid Layout", "Use the grid-based layout"},
@@ -199,7 +199,7 @@ static StructRNA *rna_Panel_register(Main *bmain, ReportList *reports, void *dat
 	RNA_pointer_create(NULL, &RNA_Panel, &dummypanel, &dummyptr);
 
 	/* We have to set default context! Else we get a void string... */
-	strcpy(dummypt.translation_context, BLF_I18NCONTEXT_DEFAULT_BPYRNA);
+	strcpy(dummypt.translation_context, BLT_I18NCONTEXT_DEFAULT_BPYRNA);
 
 	/* validate the python class */
 	if (validate(&dummyptr, data, have_function) != 0)
@@ -700,7 +700,7 @@ static StructRNA *rna_Menu_register(Main *bmain, ReportList *reports, void *data
 	RNA_pointer_create(NULL, &RNA_Menu, &dummymenu, &dummymtr);
 
 	/* We have to set default context! Else we get a void string... */
-	strcpy(dummymt.translation_context, BLF_I18NCONTEXT_DEFAULT_BPYRNA);
+	strcpy(dummymt.translation_context, BLT_I18NCONTEXT_DEFAULT_BPYRNA);
 
 	/* validate the python class */
 	if (validate(&dummymtr, data, have_function) != 0)
@@ -886,7 +886,7 @@ static void rna_def_ui_layout(BlenderRNA *brna)
 	RNA_def_property_boolean_funcs(prop, "rna_UILayout_active_get", "rna_UILayout_active_set");
 	
 	prop = RNA_def_property(srna, "operator_context", PROP_ENUM, PROP_NONE);
-	RNA_def_property_enum_items(prop, operator_context_items);
+	RNA_def_property_enum_items(prop, rna_enum_operator_context_items);
 	RNA_def_property_enum_funcs(prop, "rna_UILayout_op_context_get", "rna_UILayout_op_context_set", NULL);
 	
 	prop = RNA_def_property(srna, "enabled", PROP_BOOLEAN, PROP_NONE);
@@ -936,7 +936,7 @@ static void rna_def_panel(BlenderRNA *brna)
 	RNA_def_struct_sdna(srna, "Panel");
 	RNA_def_struct_refine_func(srna, "rna_Panel_refine");
 	RNA_def_struct_register_funcs(srna, "rna_Panel_register", "rna_Panel_unregister", NULL);
-	RNA_def_struct_translation_context(srna, BLF_I18NCONTEXT_DEFAULT_BPYRNA);
+	RNA_def_struct_translation_context(srna, BLT_I18NCONTEXT_DEFAULT_BPYRNA);
 
 	/* poll */
 	func = RNA_def_function(srna, "poll", NULL);
@@ -986,7 +986,7 @@ static void rna_def_panel(BlenderRNA *brna)
 
 	prop = RNA_def_property(srna, "bl_translation_context", PROP_STRING, PROP_NONE);
 	RNA_def_property_string_sdna(prop, NULL, "type->translation_context");
-	RNA_def_property_string_default(prop, BLF_I18NCONTEXT_DEFAULT_BPYRNA);
+	RNA_def_property_string_default(prop, BLT_I18NCONTEXT_DEFAULT_BPYRNA);
 	RNA_def_property_flag(prop, PROP_REGISTER_OPTIONAL);
 	RNA_define_verify_sdna(true);
 
@@ -996,13 +996,13 @@ static void rna_def_panel(BlenderRNA *brna)
 
 	prop = RNA_def_property(srna, "bl_space_type", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "type->space_type");
-	RNA_def_property_enum_items(prop, space_type_items);
+	RNA_def_property_enum_items(prop, rna_enum_space_type_items);
 	RNA_def_property_flag(prop, PROP_REGISTER);
 	RNA_def_property_ui_text(prop, "Space type", "The space where the panel is going to be used in");
 	
 	prop = RNA_def_property(srna, "bl_region_type", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "type->region_type");
-	RNA_def_property_enum_items(prop, region_type_items);
+	RNA_def_property_enum_items(prop, rna_enum_region_type_items);
 	RNA_def_property_flag(prop, PROP_REGISTER);
 	RNA_def_property_ui_text(prop, "Region Type", "The region where the panel is going to be used in");
 
@@ -1052,7 +1052,7 @@ static void rna_def_uilist(BlenderRNA *brna)
 
 	/* Data */
 	prop = RNA_def_property(srna, "layout_type", PROP_ENUM, PROP_NONE);
-	RNA_def_property_enum_items(prop, uilist_layout_type_items);
+	RNA_def_property_enum_items(prop, rna_enum_uilist_layout_type_items);
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 
 	/* Filter options */
@@ -1187,7 +1187,7 @@ static void rna_def_header(BlenderRNA *brna)
 
 	prop = RNA_def_property(srna, "bl_space_type", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "type->space_type");
-	RNA_def_property_enum_items(prop, space_type_items);
+	RNA_def_property_enum_items(prop, rna_enum_space_type_items);
 	RNA_def_property_flag(prop, PROP_REGISTER);
 	RNA_def_property_ui_text(prop, "Space type", "The space where the header is going to be used in");
 
@@ -1206,7 +1206,7 @@ static void rna_def_menu(BlenderRNA *brna)
 	RNA_def_struct_sdna(srna, "Menu");
 	RNA_def_struct_refine_func(srna, "rna_Menu_refine");
 	RNA_def_struct_register_funcs(srna, "rna_Menu_register", "rna_Menu_unregister", NULL);
-	RNA_def_struct_translation_context(srna, BLF_I18NCONTEXT_DEFAULT_BPYRNA);
+	RNA_def_struct_translation_context(srna, BLT_I18NCONTEXT_DEFAULT_BPYRNA);
 
 	/* poll */
 	func = RNA_def_function(srna, "poll", NULL);
@@ -1247,7 +1247,7 @@ static void rna_def_menu(BlenderRNA *brna)
 
 	prop = RNA_def_property(srna, "bl_translation_context", PROP_STRING, PROP_NONE);
 	RNA_def_property_string_sdna(prop, NULL, "type->translation_context");
-	RNA_def_property_string_default(prop, BLF_I18NCONTEXT_DEFAULT_BPYRNA);
+	RNA_def_property_string_default(prop, BLT_I18NCONTEXT_DEFAULT_BPYRNA);
 	RNA_def_property_flag(prop, PROP_REGISTER_OPTIONAL);
 
 	prop = RNA_def_property(srna, "bl_description", PROP_STRING, PROP_NONE);

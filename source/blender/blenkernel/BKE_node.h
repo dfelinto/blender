@@ -172,7 +172,10 @@ typedef struct bNodeType {
 	/* Additional drawing on backdrop */
 	void (*draw_backdrop)(struct SpaceNode *snode, struct ImBuf *backdrop, struct bNode *node, int x, int y);
 
-	/// Optional custom label function for the node header.
+	/**
+	 * Optional custom label function for the node header.
+	 * \note Used as a fallback when #bNode.label isn't set.
+	 */
 	void (*labelfunc)(struct bNodeTree *ntree, struct bNode *node, char *label, int maxlen);
 	/// Optional custom resize handle polling.
 	int (*resize_area_func)(struct bNode *node, int x, int y);
@@ -217,18 +220,6 @@ typedef struct bNodeType {
 	ExtensionRNA ext;
 } bNodeType;
 
-/* node->exec, now in use for composites (#define for break is same as ready yes) */
-#define NODE_PROCESSING	1
-#define NODE_READY		2
-#define NODE_BREAK		2
-#define NODE_FINISHED	4
-#define NODE_FREEBUFS	8
-#define NODE_SKIPPED	16
-
-/* sim_exec return value */
-#define NODE_EXEC_FINISHED	0
-#define NODE_EXEC_SUSPEND	1
-
 /* nodetype->nclass, for add-menu and themes */
 #define NODE_CLASS_INPUT			0
 #define NODE_CLASS_OUTPUT			1
@@ -236,22 +227,22 @@ typedef struct bNodeType {
 #define NODE_CLASS_OP_VECTOR		4
 #define NODE_CLASS_OP_FILTER		5
 #define NODE_CLASS_GROUP			6
-#define NODE_CLASS_FILE				7
+// #define NODE_CLASS_FILE				7
 #define NODE_CLASS_CONVERTOR		8
 #define NODE_CLASS_MATTE			9
 #define NODE_CLASS_DISTORT			10
-#define NODE_CLASS_OP_DYNAMIC		11 /* deprecated */
+// #define NODE_CLASS_OP_DYNAMIC		11 /* deprecated */
 #define NODE_CLASS_PATTERN			12
 #define NODE_CLASS_TEXTURE			13
-#define NODE_CLASS_EXECUTION		14
-#define NODE_CLASS_GETDATA			15
-#define NODE_CLASS_SETDATA			16
-#define NODE_CLASS_MATH				17
-#define NODE_CLASS_MATH_VECTOR		18
-#define NODE_CLASS_MATH_ROTATION	19
-#define NODE_CLASS_PARTICLES		25
-#define NODE_CLASS_TRANSFORM		30
-#define NODE_CLASS_COMBINE			31
+// #define NODE_CLASS_EXECUTION		14
+// #define NODE_CLASS_GETDATA			15
+// #define NODE_CLASS_SETDATA			16
+// #define NODE_CLASS_MATH				17
+// #define NODE_CLASS_MATH_VECTOR		18
+// #define NODE_CLASS_MATH_ROTATION	19
+// #define NODE_CLASS_PARTICLES		25
+// #define NODE_CLASS_TRANSFORM		30
+// #define NODE_CLASS_COMBINE			31
 #define NODE_CLASS_SCRIPT			32
 #define NODE_CLASS_INTERFACE		33
 #define NODE_CLASS_SHADER 			40
@@ -337,6 +328,7 @@ struct GHashIterator *ntreeTypeGetIterator(void);
 
 void ntreeSetTypes(const struct bContext *C, struct bNodeTree *ntree);
 
+void ntreeInitDefault(struct bNodeTree *ntree);
 struct bNodeTree *ntreeAddTree(struct Main *bmain, const char *name, const char *idname);
 
 /* copy/free funcs, need to manage ID users */
@@ -373,6 +365,7 @@ void            ntreeFreeCache(struct bNodeTree *ntree);
 
 int             ntreeNodeExists(struct bNodeTree *ntree, struct bNode *testnode);
 int             ntreeOutputExists(struct bNode *node, struct bNodeSocket *testsock);
+void            ntreeNodeFlagSet(const bNodeTree *ntree, const int flag, const bool enable);
 struct bNodeTree *ntreeLocalize(struct bNodeTree *ntree);
 void            ntreeLocalSync(struct bNodeTree *localtree, struct bNodeTree *ntree);
 void            ntreeLocalMerge(struct bNodeTree *localtree, struct bNodeTree *ntree);
@@ -475,6 +468,15 @@ void            nodeDetachNode(struct bNode *node);
 
 struct bNode   *nodeFindNodebyName(struct bNodeTree *ntree, const char *name);
 int             nodeFindNode(struct bNodeTree *ntree, struct bNodeSocket *sock, struct bNode **nodep, int *sockindex);
+struct bNode   *nodeFindRootParent(bNode *node);
+
+bool            nodeIsChildOf(const bNode *parent, const bNode *child);
+
+void nodeChainIter(
+        const bNodeTree *ntree, const bNode *node_start,
+        bool (*callback)(bNode *, bNode *, void *, const bool), void *userdata,
+        const bool reversed);
+void nodeParentsIter(bNode *node, bool (*callback)(bNode *, void *), void *userdata);
 
 struct bNodeLink *nodeFindLink(struct bNodeTree *ntree, struct bNodeSocket *from, struct bNodeSocket *to);
 int             nodeCountSocketLinks(struct bNodeTree *ntree, struct bNodeSocket *sock);
@@ -610,8 +612,8 @@ bool BKE_node_is_connected_to_output(struct bNodeTree *ntree, struct bNode *node
 #define NODE_UNDEFINED	-2		/* node type is not registered */
 #define NODE_CUSTOM		-1		/* for dynamically registered custom types */
 #define NODE_GROUP		2
-#define __NODE_FORLOOP	3		/* deprecated */
-#define __NODE_WHILELOOP	4	/* deprecated */
+// #define NODE_FORLOOP	3		/* deprecated */
+// #define NODE_WHILELOOP	4	/* deprecated */
 #define NODE_FRAME		5
 #define NODE_REROUTE	6
 #define NODE_GROUP_INPUT	7
@@ -782,20 +784,12 @@ struct ShadeResult;
 #define SH_NODE_COMBXYZ					189
 #define SH_NODE_OUTPUT_LINESTYLE		190
 #define SH_NODE_UVALONGSTROKE			191
+#define SH_NODE_TEX_POINTDENSITY		192
 
 /* custom defines options for Material node */
 #define SH_NODE_MAT_DIFF   1
 #define SH_NODE_MAT_SPEC   2
 #define SH_NODE_MAT_NEG    4
-/* custom defines: states for Script node. These are bit indices */
-#define NODE_DYNAMIC_READY	0 /* 1 */
-#define NODE_DYNAMIC_LOADED	1 /* 2 */
-#define NODE_DYNAMIC_NEW	2 /* 4 */
-#define NODE_DYNAMIC_UPDATED	3 /* 8 */
-#define NODE_DYNAMIC_ADDEXIST	4 /* 16 */
-#define NODE_DYNAMIC_ERROR	5 /* 32 */
-#define NODE_DYNAMIC_REPARSE	6 /* 64 */
-#define NODE_DYNAMIC_SET	15 /* sign */
 
 /* API */
 
@@ -848,6 +842,7 @@ void            ntreeGPUMaterialNodes(struct bNodeTree *ntree, struct GPUMateria
 #define RRES_OUT_SUBSURFACE_DIRECT		28
 #define RRES_OUT_SUBSURFACE_INDIRECT	29
 #define RRES_OUT_SUBSURFACE_COLOR		30
+#define RRES_OUT_DEBUG				31
 
 /* note: types are needed to restore callbacks, don't change values */
 #define CMP_NODE_VIEWER		201
@@ -890,7 +885,7 @@ void            ntreeGPUMaterialNodes(struct bNodeTree *ntree, struct GPUMateria
 #define CMP_NODE_CHANNEL_MATTE	238
 #define CMP_NODE_FLIP		239
 #define CMP_NODE_SPLITVIEWER	240
-#define CMP_NODE_INDEX_MASK	241
+// #define CMP_NODE_INDEX_MASK	241
 #define CMP_NODE_MAP_UV		242
 #define CMP_NODE_ID_MASK	243
 #define CMP_NODE_DEFOCUS	244
@@ -945,9 +940,6 @@ void            ntreeGPUMaterialNodes(struct bNodeTree *ntree, struct GPUMateria
 /* channel toggles */
 #define CMP_CHAN_RGB		1
 #define CMP_CHAN_A			2
-#define CMP_CHAN_R			4
-#define CMP_CHAN_G			8
-#define CMP_CHAN_B			16
 
 /* filter types */
 #define CMP_FILT_SOFT		0

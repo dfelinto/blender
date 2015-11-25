@@ -99,13 +99,8 @@
 #endif //WITH_FFMPEG
 
 #ifdef WITH_REDCODE
-#ifdef _WIN32 /* on windows we use the ones in extern instead */
-#include "libredcode/format.h"
-#include "libredcode/codec.h"
-#else
-#include "libredcode/format.h"
-#include "libredcode/codec.h"
-#endif
+#  include "libredcode/format.h"
+#  include "libredcode/codec.h"
 #endif
 
 #include "IMB_colormanagement.h"
@@ -270,6 +265,8 @@ void IMB_close_anim_proxies(struct anim *anim)
 struct anim *IMB_open_anim(const char *name, int ib_flags, int streamindex, char colorspace[IM_MAX_SPACE])
 {
 	struct anim *anim;
+
+	BLI_assert(!BLI_path_is_rel(name));
 
 	anim = (struct anim *)MEM_callocN(sizeof(struct anim), "anim struct");
 	if (anim != NULL) {
@@ -1427,11 +1424,18 @@ int IMB_anim_get_duration(struct anim *anim, IMB_Timecode_Type tc)
 }
 
 bool IMB_anim_get_fps(struct anim *anim,
-                     short *frs_sec, float *frs_sec_base)
+                     short *frs_sec, float *frs_sec_base, bool no_av_base)
 {
 	if (anim->frs_sec) {
 		*frs_sec = anim->frs_sec;
 		*frs_sec_base = anim->frs_sec_base;
+#ifdef WITH_FFMPEG
+		if (no_av_base) {
+			*frs_sec_base /= AV_TIME_BASE;
+		}
+#else
+		UNUSED_VARS(no_av_base);
+#endif
 		return true;
 	}
 	return false;

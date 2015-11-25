@@ -137,7 +137,30 @@ base class --- :class:`SCA_IObject`
 
       .. note::
 
-         A value of 0.0 disables this option (rather then setting it stationary).
+         A value of 0.0 disables this option (rather than setting it stationary).
+
+   .. attribute:: angularVelocityMin
+
+      Enforces the object keeps rotating at a minimum velocity. A value of 0.0 disables this.
+
+      :type: non-negative float
+
+      .. note::
+
+         Applies to dynamic and rigid body objects only.
+         While objects are stationary the minimum velocity will not be applied.
+
+
+   .. attribute:: angularVelocityMax
+
+      Clamp the maximum angular velocity to prevent objects rotating beyond a set speed.
+      A value of 0.0 disables clamping; it does not stop rotation.
+
+      :type: non-negative float
+
+      .. note::
+
+         Applies to dynamic and rigid body objects only.
 
    .. attribute:: localInertia
 
@@ -776,7 +799,7 @@ base class --- :class:`SCA_IObject`
       :return: the first object hit or None if no object or object does not match prop
       :rtype: :class:`KX_GameObject`
 
-   .. method:: rayCast(objto, objfrom, dist, prop, face, xray, poly)
+   .. method:: rayCast(objto, objfrom, dist, prop, face, xray, poly, mask)
 
       Look from a point/object to another point/object and find first object hit within dist that matches prop.
       if poly is 0, returns a 3-tuple with object reference, hit point and hit normal or (None, None, None) if no hit.
@@ -828,6 +851,8 @@ base class --- :class:`SCA_IObject`
          * 2: return value is a 5-tuple and the 5th element is a 2-tuple (u, v) with the UV mapping of the hit point or None if no hit, or the object doesn't use a mesh collision shape, or doesn't have a UV mapping.
 
       :type poly: integer
+      :arg mask: collision mask: The collision mask (16 layers mapped to a 16-bit integer) is combined with each object's collision group, to hit only a subset of the objects in the scene. Only those objects for which ``collisionGroup & mask`` is true can be hit.
+      :type mask: bitfield
       :return: (object, hitpoint, hitnormal) or (object, hitpoint, hitnormal, polygon) or (object, hitpoint, hitnormal, polygon, hituv).
 
          * object, hitpoint and hitnormal are None if no hit.
@@ -948,6 +973,16 @@ base class --- :class:`SCA_IObject`
 
       :return: The current frame of the action
       :rtype: float
+
+   .. method:: getActionName(layer=0)
+
+      Gets the name of the current action playing in the supplied layer.
+
+      :arg layer: The layer that you want to get the action name from.
+      :type layer: integer
+
+      :return: The name of the current action
+      :rtype: string
 
    .. method:: setActionFrame(frame, layer=0)
 

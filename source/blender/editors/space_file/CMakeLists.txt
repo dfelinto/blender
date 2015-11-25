@@ -24,12 +24,14 @@ set(INC
 	../../blenkernel
 	../../blenlib
 	../../blenloader
+	../../blentranslation
 	../../imbuf
 	../../gpu
 	../../makesdna
 	../../makesrna
 	../../render/extern/include
 	../../windowmanager
+	../../../../intern/atomic
 	../../../../intern/guardedalloc
 	../../../../intern/glew-mx
 )
@@ -42,6 +44,7 @@ set(SRC
 	file_draw.c
 	file_ops.c
 	file_panels.c
+	file_utils.c
 	filelist.c
 	filesel.c
 	fsmenu.c

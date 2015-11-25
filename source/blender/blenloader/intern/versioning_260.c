@@ -57,7 +57,7 @@
 #include "BLI_blenlib.h"
 #include "BLI_math.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_anim.h"
 #include "BKE_image.h"
@@ -275,7 +275,7 @@ static void do_versions_nodetree_multi_file_output_format_2_62_1(Scene *sce, bNo
 
 				BLI_snprintf(sockpath, sizeof(sockpath), "%s_Image", filename);
 				sock = ntreeCompositOutputFileAddSocket(ntree, node, sockpath, &nimf->format);
-				/* XXX later do_versions copies path from socket name, need to set this explicitely */
+				/* XXX later do_versions copies path from socket name, need to set this explicitly */
 				BLI_strncpy(sock->name, sockpath, sizeof(sock->name));
 				if (old_image->link) {
 					old_image->link->tosock = sock;
@@ -284,7 +284,7 @@ static void do_versions_nodetree_multi_file_output_format_2_62_1(Scene *sce, bNo
 
 				BLI_snprintf(sockpath, sizeof(sockpath), "%s_Z", filename);
 				sock = ntreeCompositOutputFileAddSocket(ntree, node, sockpath, &nimf->format);
-				/* XXX later do_versions copies path from socket name, need to set this explicitely */
+				/* XXX later do_versions copies path from socket name, need to set this explicitly */
 				BLI_strncpy(sock->name, sockpath, sizeof(sock->name));
 				if (old_z->link) {
 					old_z->link->tosock = sock;
@@ -293,7 +293,7 @@ static void do_versions_nodetree_multi_file_output_format_2_62_1(Scene *sce, bNo
 			}
 			else {
 				sock = ntreeCompositOutputFileAddSocket(ntree, node, filename, &nimf->format);
-				/* XXX later do_versions copies path from socket name, need to set this explicitely */
+				/* XXX later do_versions copies path from socket name, need to set this explicitly */
 				BLI_strncpy(sock->name, filename, sizeof(sock->name));
 				if (old_image->link) {
 					old_image->link->tosock = sock;
@@ -343,7 +343,7 @@ static void do_versions_mesh_mloopcol_swap_2_62_1(Mesh *me)
 		if (layer->type == CD_MLOOPCOL) {
 			mloopcol = (MLoopCol *)layer->data;
 			for (i = 0; i < me->totloop; i++, mloopcol++) {
-				SWAP(char, mloopcol->r, mloopcol->b);
+				SWAP(unsigned char, mloopcol->r, mloopcol->b);
 			}
 		}
 	}
@@ -1864,7 +1864,6 @@ void blo_do_versions_260(FileData *fd, Library *UNUSED(lib), Main *main)
 
 	if (main->versionfile < 265 || (main->versionfile == 265 && main->subversionfile < 5)) {
 		Scene *scene;
-		Image *image;
 		Tex *tex;
 
 		for (scene = main->scene.first; scene; scene = scene->id.next) {
@@ -1904,7 +1903,7 @@ void blo_do_versions_260(FileData *fd, Library *UNUSED(lib), Main *main)
 			}
 		}
 
-		for (image = main->image.first; image; image = image->id.next) {
+		for (Image *image = main->image.first; image; image = image->id.next) {
 			if (image->flag & IMA_DO_PREMUL) {
 				image->alpha_mode = IMA_ALPHA_STRAIGHT;
 			}
@@ -1915,7 +1914,7 @@ void blo_do_versions_260(FileData *fd, Library *UNUSED(lib), Main *main)
 
 		for (tex = main->tex.first; tex; tex = tex->id.next) {
 			if (tex->type == TEX_IMAGE && (tex->imaflag & TEX_USEALPHA) == 0) {
-				image = blo_do_versions_newlibadr(fd, tex->id.lib, tex->ima);
+				Image *image = blo_do_versions_newlibadr(fd, tex->id.lib, tex->ima);
 
 				if (image && (image->flag & IMA_DO_PREMUL) == 0)
 					image->flag |= IMA_IGNORE_ALPHA;

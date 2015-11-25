@@ -49,7 +49,7 @@
 #include "RAS_Rect.h"
 
 
-#include "PyObjectPlus.h"
+#include "EXP_PyObjectPlus.h"
 #include "RAS_2DFilterManager.h"
 
 /**
@@ -339,6 +339,7 @@ public:
 	void RemoveNodeDestructObject(SG_IObject* node,
 	                              CValue* gameobj);
 	void RemoveObject(CValue* gameobj);
+	void RemoveDupliGroup(CValue *gameobj);
 	void DelayedRemoveObject(CValue* gameobj);
 	
 	int NewRemoveObject(CValue* gameobj);

@@ -18,8 +18,10 @@ DO_OUT_HTML=true
 DO_OUT_HTML_ZIP=true
 DO_OUT_PDF=false
 
+if [ -z $BLENDER_BIN ] ; then
+	BLENDER_BIN="./blender.bin"
+fi
 
-BLENDER="./blender.bin"
 SSH_USER=$1
 SSH_HOST=$SSH_USER"@blender.org"
 SSH_UPLOAD="/data/www/vhosts/www.blender.org/api" # blender_python_api_VERSION, added after
@@ -52,7 +54,7 @@ SPHINXBASE=doc/python_api
 
 if $DO_EXE_BLENDER ; then
 	# dont delete existing docs, now partial updates are used for quick builds.
-	$BLENDER --background -noaudio --factory-startup --python $SPHINXBASE/sphinx_doc_gen.py
+	$BLENDER_BIN --background -noaudio --factory-startup --python $SPHINXBASE/sphinx_doc_gen.py
 fi
 
 
@@ -108,6 +110,9 @@ if $DO_UPLOAD ; then
 
 	## symlink the dir to a static URL
 	#ssh $SSH_USER@blender.org 'rm '$SSH_UPLOAD'/250PythonDoc && ln -s '$SSH_UPLOAD_FULL' '$SSH_UPLOAD'/250PythonDoc'
+	if [ "$blender_version_cycle" = "release" ] ; then
+		ssh $SSH_USER@blender.org 'rm '$SSH_UPLOAD'/blender_python_api_current && ln -s '$SSH_UPLOAD_FULL' '$SSH_UPLOAD'/blender_python_api_current'
+	fi
 
 	# better redirect
 	ssh $SSH_USER@blender.org 'echo "<html><head><title>Redirecting...</title><meta http-equiv=\"REFRESH\" content=\"0;url=../blender_python_api_'$BLENDER_VERSION'/\"></head><body>Redirecting...</body></html>" > '$SSH_UPLOAD'/250PythonDoc/index.html'

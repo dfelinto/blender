@@ -42,7 +42,7 @@
 #include "BLI_math.h"
 #include "BLI_utildefines.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "DNA_anim_types.h"
 #include "DNA_armature_types.h"
@@ -1645,14 +1645,45 @@ static int delete_key_v3d_exec(bContext *C, wmOperator *op)
 			
 			for (fcu = act->curves.first; fcu; fcu = fcn) {
 				fcn = fcu->next;
-
+				
+				/* don't touch protected F-Curves */
 				if (BKE_fcurve_is_protected(fcu)) {
 					BKE_reportf(op->reports, RPT_WARNING,
 					            "Not deleting keyframe for locked F-Curve '%s', object '%s'",
 					            fcu->rna_path, id->name + 2);
 					continue;
 				}
-
+				
+				/* special exception for bones, as this makes this operator more convenient to use
+				 * NOTE: This is only done in pose mode. In object mode, we're dealign with the entire object.
+				 */
+				if ((ob->mode & OB_MODE_POSE) && strstr(fcu->rna_path, "pose.bones[\"")) {
+					bPoseChannel *pchan;
+					char *bone_name;
+					
+					/* get bone-name, and check if this bone is selected */
+					bone_name = BLI_str_quoted_substrN(fcu->rna_path, "pose.bones[");
+					pchan = BKE_pose_channel_find_name(ob->pose, bone_name);
+					if (bone_name) MEM_freeN(bone_name);
+					
+					/* skip if bone is not selected */
+					if ((pchan) && (pchan->bone)) {
+						/* bones are only selected/editable if visible... */
+						bArmature *arm = (bArmature *)ob->data;
+					
+						/* skipping - not visible on currently visible layers */
+						if ((arm->layer & pchan->bone->layer) == 0)
+							continue;
+						/* skipping - is currently hidden */
+						if (pchan->bone->flag & BONE_HIDDEN_P)
+							continue;
+						
+						/* selection flag... */
+						if ((pchan->bone->flag & BONE_SELECTED) == 0)
+							continue;
+					}
+				}
+				
 				/* delete keyframes on current frame 
 				 * WARNING: this can delete the next F-Curve, hence the "fcn" copying
 				 */
@@ -1661,7 +1692,11 @@ static int delete_key_v3d_exec(bContext *C, wmOperator *op)
 		}
 		
 		/* report success (or failure) */
-		BKE_reportf(op->reports, RPT_INFO, "Object '%s' successfully had %d keyframes removed", id->name + 2, success);
+		if (success)
+			BKE_reportf(op->reports, RPT_INFO, "Object '%s' successfully had %d keyframes removed", id->name + 2, success);
+		else
+			BKE_reportf(op->reports, RPT_ERROR, "No keyframes removed from Object '%s'", id->name + 2);
+		
 		DAG_id_tag_update(&ob->id, OB_RECALC_OB);
 	}
 	CTX_DATA_END;
@@ -1676,7 +1711,7 @@ void ANIM_OT_keyframe_delete_v3d(wmOperatorType *ot)
 {
 	/* identifiers */
 	ot->name = "Delete Keyframe";
-	ot->description = "Remove keyframes on current frame for selected objects";
+	ot->description = "Remove keyframes on current frame for selected objects and bones";
 	ot->idname = "ANIM_OT_keyframe_delete_v3d";
 	
 	/* callbacks */
@@ -1717,7 +1752,7 @@ static int insert_key_button_exec(bContext *C, wmOperator *op)
 			 * not have any effect.
 			 */
 			NlaStrip *strip = (NlaStrip *)ptr.data;
-			FCurve *fcu = list_find_fcurve(&strip->fcurves, RNA_property_identifier(prop), flag);
+			FCurve *fcu = list_find_fcurve(&strip->fcurves, RNA_property_identifier(prop), index);
 			
 			success = insert_keyframe_direct(op->reports, ptr, prop, fcu, cfra, 0);
 		}
@@ -1801,19 +1836,55 @@ static int delete_key_button_exec(bContext *C, wmOperator *op)
 	UI_context_active_but_prop_get(C, &ptr, &prop, &index);
 
 	if (ptr.id.data && ptr.data && prop) {
-		path = RNA_path_from_ID_to_property(&ptr, prop);
-		
-		if (path) {
-			if (all) {
-				/* -1 indicates operating on the entire array (or the property itself otherwise) */
-				index = -1;
-			}
+		if (ptr.type == &RNA_NlaStrip) {
+			/* Handle special properties for NLA Strips, whose F-Curves are stored on the
+			 * strips themselves. These are stored separately or else the properties will
+			 * not have any effect.
+			 */
+			ID *id = ptr.id.data;
+			NlaStrip *strip = (NlaStrip *)ptr.data;
+			FCurve *fcu = list_find_fcurve(&strip->fcurves, RNA_property_identifier(prop), 0);
 			
-			success = delete_keyframe(op->reports, ptr.id.data, NULL, NULL, path, index, cfra, 0);
-			MEM_freeN(path);
+			BLI_assert(fcu != NULL); /* NOTE: This should be true, or else we wouldn't be able to get here */
+			
+			if (BKE_fcurve_is_protected(fcu)) {
+				BKE_reportf(op->reports, RPT_WARNING,
+				            "Not deleting keyframe for locked F-Curve for NLA Strip influence on %s - %s '%s'",
+				            strip->name, BKE_idcode_to_name(GS(id->name)), id->name + 2);
+			}
+			else {
+				/* remove the keyframe directly
+				 * NOTE: cannot use delete_keyframe_fcurve(), as that will free the curve,
+				 *       and delete_keyframe() expects the FCurve to be part of an action
+				 */
+				bool found = false;
+				int i;
+				
+				/* try to find index of beztriple to get rid of */
+				i = binarysearch_bezt_index(fcu->bezt, cfra, fcu->totvert, &found);
+				if (found) {
+					/* delete the key at the index (will sanity check + do recalc afterwards) */
+					delete_fcurve_key(fcu, i, 1);
+					success = true;
+				}
+			}
 		}
-		else if (G.debug & G_DEBUG)
-			printf("Button Delete-Key: no path to property\n");
+		else {
+			/* standard properties */
+			path = RNA_path_from_ID_to_property(&ptr, prop);
+			
+			if (path) {
+				if (all) {
+					/* -1 indicates operating on the entire array (or the property itself otherwise) */
+					index = -1;
+				}
+				
+				success = delete_keyframe(op->reports, ptr.id.data, NULL, NULL, path, index, cfra, 0);
+				MEM_freeN(path);
+			}
+			else if (G.debug & G_DEBUG)
+				printf("Button Delete-Key: no path to property\n");
+		}
 	}
 	else if (G.debug & G_DEBUG) {
 		printf("ptr.data = %p, prop = %p\n", (void *)ptr.data, (void *)prop);

@@ -64,6 +64,8 @@
  * For a complete implementation example look at the Cycles Bake commit.
  */
 
+#include <limits.h>
+
 #include "MEM_guardedalloc.h"
 
 #include "BLI_math.h"
@@ -73,6 +75,7 @@
 #include "BKE_cdderivedmesh.h"
 #include "BKE_image.h"
 #include "BKE_node.h"
+#include "BKE_mesh.h"
 
 #include "IMB_imbuf_types.h"
 #include "IMB_imbuf.h"
@@ -83,6 +86,8 @@
 #include "render_types.h"
 #include "zbuf.h"
 
+/* Remove when Cycles moves from MFace to MLoopTri */
+#define USE_MFACE_WORKAROUND
 
 /* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ */
 /* defined in pipeline.c, is hardcopy of active dynamic allocated Render */
@@ -349,96 +354,110 @@ static bool cast_ray_highpoly(
 	return hit_mesh != -1;
 }
 
+#ifdef USE_MFACE_WORKAROUND
+/**
+ * Until cycles moves to #MLoopTri, we need to keep face-rotation in sync with #test_index_face
+ *
+ * We only need to consider quads since #BKE_mesh_recalc_tessellation doesn't execute this on triangles.
+ */
+static void test_index_face_looptri(const MPoly *mp, MLoop *mloop, MLoopTri *lt)
+{
+	if (mp->totloop == 4) {
+		if (UNLIKELY((mloop[mp->loopstart + 2].v == 0) ||
+		             (mloop[mp->loopstart + 3].v == 0)))
+		{
+			/* remap: (2, 3, 0, 1) */
+			unsigned int l = mp->loopstart;
+			ARRAY_SET_ITEMS(lt[0].tri, l + 2, l + 3, l + 0);
+			ARRAY_SET_ITEMS(lt[1].tri, l + 2, l + 0, l + 1);
+		}
+	}
+}
+#endif
+
 /**
  * This function populates an array of verts for the triangles of a mesh
  * Tangent and Normals are also stored
  */
-static void mesh_calc_tri_tessface(
-        TriTessFace *triangles, Mesh *me, bool tangent, DerivedMesh *dm)
+static TriTessFace *mesh_calc_tri_tessface(
+        Mesh *me, bool tangent, DerivedMesh *dm)
 {
 	int i;
-	int p_id;
-	MFace *mface;
 	MVert *mvert;
 	TSpace *tspace;
 	float *precomputed_normals = NULL;
 	bool calculate_normal;
 
-	mface = CustomData_get_layer(&me->fdata, CD_MFACE);
+	const int tottri = poly_to_tri_count(me->totpoly, me->totloop);
+	MLoopTri *looptri;
+	TriTessFace *triangles;
+
+	/* calculate normal for each polygon only once */
+	unsigned int mpoly_prev = UINT_MAX;
+	float no[3];
+
+#ifdef USE_MFACE_WORKAROUND
+	unsigned int mpoly_prev_testindex = UINT_MAX;
+#endif
+
 	mvert = CustomData_get_layer(&me->vdata, CD_MVERT);
+	looptri = MEM_mallocN(sizeof(*looptri) * tottri, __func__);
+	triangles = MEM_mallocN(sizeof(TriTessFace) * tottri, __func__);
 
 	if (tangent) {
 		DM_ensure_normals(dm);
-		DM_add_tangent_layer(dm);
+		DM_calc_loop_tangents(dm);
 
-		precomputed_normals = dm->getTessFaceDataArray(dm, CD_NORMAL);
+		precomputed_normals = dm->getPolyDataArray(dm, CD_NORMAL);
 		calculate_normal = precomputed_normals ? false : true;
 
-		//mface = dm->getTessFaceArray(dm);
-		//mvert = dm->getVertArray(dm);
-
-		tspace = dm->getTessFaceDataArray(dm, CD_TANGENT);
+		tspace = dm->getLoopDataArray(dm, CD_TANGENT);
 		BLI_assert(tspace);
 	}
 
-	p_id = -1;
-	for (i = 0; i < me->totface; i++) {
-		MFace *mf = &mface[i];
-		TSpace *ts = tangent ? &tspace[i * 4] : NULL;
+	BKE_mesh_recalc_looptri(
+	            me->mloop, me->mpoly,
+	            me->mvert,
+	            me->totloop, me->totpoly,
+	            looptri);
 
-		p_id++;
+	for (i = 0; i < tottri; i++) {
+		const MLoopTri *lt = &looptri[i];
+		const MPoly *mp = &me->mpoly[lt->poly];
 
-		triangles[p_id].mverts[0] = &mvert[mf->v1];
-		triangles[p_id].mverts[1] = &mvert[mf->v2];
-		triangles[p_id].mverts[2] = &mvert[mf->v3];
-		triangles[p_id].is_smooth = (mf->flag & ME_SMOOTH) != 0;
+#ifdef USE_MFACE_WORKAROUND
+		if (lt->poly != mpoly_prev_testindex) {
+			test_index_face_looptri(mp, me->mloop, &looptri[i]);
+			mpoly_prev_testindex = lt->poly;
+		}
+#endif
+
+		triangles[i].mverts[0] = &mvert[me->mloop[lt->tri[0]].v];
+		triangles[i].mverts[1] = &mvert[me->mloop[lt->tri[1]].v];
+		triangles[i].mverts[2] = &mvert[me->mloop[lt->tri[2]].v];
+		triangles[i].is_smooth = (mp->flag & ME_SMOOTH) != 0;
 
 		if (tangent) {
-			triangles[p_id].tspace[0] = &ts[0];
-			triangles[p_id].tspace[1] = &ts[1];
-			triangles[p_id].tspace[2] = &ts[2];
+			triangles[i].tspace[0] = &tspace[lt->tri[0]];
+			triangles[i].tspace[1] = &tspace[lt->tri[1]];
+			triangles[i].tspace[2] = &tspace[lt->tri[2]];
 
 			if (calculate_normal) {
-				if (mf->v4 != 0) {
-					normal_quad_v3(triangles[p_id].normal,
-					               mvert[mf->v1].co,
-					               mvert[mf->v2].co,
-					               mvert[mf->v3].co,
-					               mvert[mf->v4].co);
+				if (lt->poly != mpoly_prev) {
+					BKE_mesh_calc_poly_normal(mp, &me->mloop[mp->loopstart], me->mvert, no);
+					mpoly_prev = lt->poly;
 				}
-				else {
-					normal_tri_v3(triangles[p_id].normal,
-					              triangles[p_id].mverts[0]->co,
-					              triangles[p_id].mverts[1]->co,
-					              triangles[p_id].mverts[2]->co);
-				}
+				copy_v3_v3(triangles[i].normal, no);
 			}
 			else {
-				copy_v3_v3(triangles[p_id].normal, &precomputed_normals[3 * i]);
-			}
-		}
-
-		/* 4 vertices in the face */
-		if (mf->v4 != 0) {
-			p_id++;
-
-			triangles[p_id].mverts[0] = &mvert[mf->v1];
-			triangles[p_id].mverts[1] = &mvert[mf->v3];
-			triangles[p_id].mverts[2] = &mvert[mf->v4];
-			triangles[p_id].is_smooth = (mf->flag & ME_SMOOTH) != 0;
-
-			if (tangent) {
-				triangles[p_id].tspace[0] = &ts[0];
-				triangles[p_id].tspace[1] = &ts[2];
-				triangles[p_id].tspace[2] = &ts[3];
-
-				/* same normal as the other "triangle" */
-				copy_v3_v3(triangles[p_id].normal, triangles[p_id - 1].normal);
+				copy_v3_v3(triangles[i].normal, &precomputed_normals[lt->poly]);
 			}
 		}
 	}
 
-	BLI_assert(p_id < me->totface * 2);
+	MEM_freeN(looptri);
+
+	return triangles;
 }
 
 bool RE_bake_pixels_populate_from_objects(
@@ -471,28 +490,23 @@ bool RE_bake_pixels_populate_from_objects(
 
 	if (!is_cage) {
 		dm_low = CDDM_from_mesh(me_low);
-		tris_low = MEM_mallocN(sizeof(TriTessFace) * (me_low->totface * 2), "MVerts Lowpoly Mesh");
-		mesh_calc_tri_tessface(tris_low, me_low, true, dm_low);
+		tris_low = mesh_calc_tri_tessface(me_low, true, dm_low);
 	}
 	else if (is_custom_cage) {
-		tris_low = MEM_mallocN(sizeof(TriTessFace) * (me_low->totface * 2), "MVerts Lowpoly Mesh");
-		mesh_calc_tri_tessface(tris_low, me_low, false, NULL);
-
-		tris_cage = MEM_mallocN(sizeof(TriTessFace) * (me_low->totface * 2), "MVerts Cage Mesh");
-		mesh_calc_tri_tessface(tris_cage, me_cage, false, NULL);
+		tris_low = mesh_calc_tri_tessface(me_low, false, NULL);
+		tris_cage = mesh_calc_tri_tessface(me_cage, false, NULL);
 	}
 	else {
-		tris_cage = MEM_mallocN(sizeof(TriTessFace) * (me_low->totface * 2), "MVerts Cage Mesh");
-		mesh_calc_tri_tessface(tris_cage, me_cage, false, NULL);
+		tris_cage = mesh_calc_tri_tessface(me_cage, false, NULL);
 	}
 
 	invert_m4_m4(imat_low, mat_low);
 
 	for (i = 0; i < tot_highpoly; i++) {
-		tris_high[i] = MEM_mallocN(sizeof(TriTessFace) * highpoly[i].me->totface, "MVerts Highpoly Mesh");
-		mesh_calc_tri_tessface(tris_high[i], highpoly[i].me, false, NULL);
+		tris_high[i] = mesh_calc_tri_tessface(highpoly[i].me, false, NULL);
 
 		dm_highpoly[i] = CDDM_from_mesh(highpoly[i].me);
+		DM_ensure_tessface(dm_highpoly[i]);
 
 		if (dm_highpoly[i]->getNumTessFaces(dm_highpoly[i]) != 0) {
 			/* Create a bvh-tree for each highpoly object */
@@ -602,12 +616,28 @@ void RE_bake_pixels_populate(
 	size_t i;
 	int a, p_id;
 
-	MTFace *mtface;
-	MFace *mface;
+	const MLoopUV *mloopuv;
+	const int tottri = poly_to_tri_count(me->totpoly, me->totloop);
+	MLoopTri *looptri;
+#ifdef USE_MFACE_WORKAROUND
+	unsigned int mpoly_prev_testindex = UINT_MAX;
+#endif
 
 	/* we can't bake in edit mode */
 	if (me->edit_btmesh)
 		return;
+
+	if ((uv_layer == NULL) || (uv_layer[0] == '\0')) {
+		mloopuv = CustomData_get_layer(&me->ldata, CD_MLOOPUV);
+	}
+	else {
+		int uv_id = CustomData_get_named_layer(&me->ldata, CD_MLOOPUV, uv_layer);
+		mloopuv = CustomData_get_layer_n(&me->ldata, CD_MTFACE, uv_id);
+	}
+
+	if (mloopuv == NULL)
+		return;
+
 
 	bd.pixel_array = pixel_array;
 	bd.zspan = MEM_callocN(sizeof(ZSpan) * bake_images->size, "bake zspan");
@@ -621,54 +651,52 @@ void RE_bake_pixels_populate(
 		zbuf_alloc_span(&bd.zspan[i], bake_images->data[i].width, bake_images->data[i].height, R.clipcrop);
 	}
 
-	if ((uv_layer == NULL) || (uv_layer[0] == '\0')) {
-		mtface = CustomData_get_layer(&me->fdata, CD_MTFACE);
-	}
-	else {
-		int uv_id = CustomData_get_named_layer(&me->fdata, CD_MTFACE, uv_layer);
-		mtface = CustomData_get_layer_n(&me->fdata, CD_MTFACE, uv_id);
-	}
+	looptri = MEM_mallocN(sizeof(*looptri) * tottri, __func__);
 
-	mface = CustomData_get_layer(&me->fdata, CD_MFACE);
-
-	if (mtface == NULL)
-		return;
+	BKE_mesh_recalc_looptri(
+	        me->mloop, me->mpoly,
+	        me->mvert,
+	        me->totloop, me->totpoly,
+	        looptri);
 
 	p_id = -1;
-	for (i = 0; i < me->totface; i++) {
-		float vec[4][2];
-		MTFace *mtf = &mtface[i];
-		MFace *mf = &mface[i];
-		int mat_nr = mf->mat_nr;
+	for (i = 0; i < tottri; i++) {
+		const MLoopTri *lt = &looptri[i];
+		const MPoly *mp = &me->mpoly[lt->poly];
+		float vec[3][2];
+		int mat_nr = mp->mat_nr;
 		int image_id = bake_images->lookup[mat_nr];
 
 		bd.bk_image = &bake_images->data[image_id];
 		bd.primitive_id = ++p_id;
 
-		for (a = 0; a < 4; a++) {
+#ifdef USE_MFACE_WORKAROUND
+		if (lt->poly != mpoly_prev_testindex) {
+			test_index_face_looptri(mp, me->mloop, &looptri[i]);
+			mpoly_prev_testindex = lt->poly;
+		}
+#endif
+
+		for (a = 0; a < 3; a++) {
+			const float *uv = mloopuv[lt->tri[a]].uv;
+
 			/* Note, workaround for pixel aligned UVs which are common and can screw up our intersection tests
 			 * where a pixel gets in between 2 faces or the middle of a quad,
 			 * camera aligned quads also have this problem but they are less common.
 			 * Add a small offset to the UVs, fixes bug #18685 - Campbell */
-			vec[a][0] = mtf->uv[a][0] * (float)bd.bk_image->width - (0.5f + 0.001f);
-			vec[a][1] = mtf->uv[a][1] * (float)bd.bk_image->height - (0.5f + 0.002f);
+			vec[a][0] = uv[0] * (float)bd.bk_image->width - (0.5f + 0.001f);
+			vec[a][1] = uv[1] * (float)bd.bk_image->height - (0.5f + 0.002f);
 		}
 
 		bake_differentials(&bd, vec[0], vec[1], vec[2]);
 		zspan_scanconvert(&bd.zspan[image_id], (void *)&bd, vec[0], vec[1], vec[2], store_bake_pixel);
-
-		/* 4 vertices in the face */
-		if (mf->v4 != 0) {
-			bd.primitive_id = ++p_id;
-
-			bake_differentials(&bd, vec[0], vec[2], vec[3]);
-			zspan_scanconvert(&bd.zspan[image_id], (void *)&bd, vec[0], vec[2], vec[3], store_bake_pixel);
-		}
 	}
 
 	for (i = 0; i < bake_images->size; i++) {
 		zbuf_free_span(&bd.zspan[i]);
 	}
+
+	MEM_freeN(looptri);
 	MEM_freeN(bd.zspan);
 }
 
@@ -737,8 +765,7 @@ void RE_bake_normal_world_to_tangent(
 
 	DerivedMesh *dm = CDDM_from_mesh(me);
 
-	triangles = MEM_mallocN(sizeof(TriTessFace) * (me->totface * 2), "MVerts Mesh");
-	mesh_calc_tri_tessface(triangles, me, true, dm);
+	triangles = mesh_calc_tri_tessface(me, true, dm);
 
 	BLI_assert(num_pixels >= 3);
 

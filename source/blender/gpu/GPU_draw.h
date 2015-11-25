@@ -39,12 +39,13 @@ extern "C" {
 struct ImBuf;
 struct Image;
 struct ImageUser;
-struct MTFace;
+struct MTexPoly;
 struct Object;
 struct Scene;
 struct View3D;
 struct RegionView3D;
 struct SmokeModifierData;
+struct DupliObject;
 
 /* OpenGL drawing functions related to shading. These are also
  * shared with the game engine, where there were previously
@@ -68,9 +69,13 @@ void GPU_state_init(void);
 void GPU_begin_object_materials(struct View3D *v3d, struct RegionView3D *rv3d, 
                                 struct Scene *scene, struct Object *ob, bool glsl, bool *do_alpha_after);
 void GPU_end_object_materials(void);
+bool GPU_object_materials_check(void);
 
 int GPU_enable_material(int nr, void *attribs);
 void GPU_disable_material(void);
+
+void GPU_begin_dupli_object(struct DupliObject *dob);
+void GPU_end_dupli_object(void);
 
 void GPU_material_diffuse_get(int nr, float diff[4]);
 bool GPU_material_use_matcaps_get(void);
@@ -83,7 +88,7 @@ int GPU_get_material_alpha_blend(void);
  *   be drawn using one or the other
  * - passing NULL clears the state again */
 
-int GPU_set_tpage(struct MTFace *tface, int mipmap, int transp);
+int GPU_set_tpage(struct MTexPoly *mtexpoly, int mipmap, int transp);
 void GPU_clear_tpage(bool force);
 
 /* Lights
@@ -97,9 +102,11 @@ int GPU_scene_object_lights(struct Scene *scene, struct Object *ob,
 /* Text render
  * - based on moving uv coordinates */
 
-void GPU_render_text(struct MTFace *tface, int mode,
-	const char *textstr, int textlen, unsigned int *col,
-	float *v1, float *v2, float *v3, float *v4, int glattrib);
+void GPU_render_text(
+        struct MTexPoly *mtexpoly, int mode,
+        const char *textstr, int textlen, unsigned int *col,
+        const float *v_quad[4], const float *uv_quad[4],
+        int glattrib);
 
 /* Mipmap settings
  * - these will free textures on changes */
@@ -140,6 +147,11 @@ void GPU_create_smoke(struct SmokeModifierData *smd, int highres);
 
 /* Delayed free of OpenGL buffers by main thread */
 void GPU_free_unused_buffers(void);
+
+#ifdef WITH_OPENSUBDIV
+struct DerivedMesh;
+void GPU_draw_update_fvar_offset(struct DerivedMesh *dm);
+#endif
 
 #ifdef __cplusplus
 }

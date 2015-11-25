@@ -47,7 +47,7 @@
 #include "BLI_utildefines.h"
 #include "BLI_ghash.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_action.h"
 #include "BKE_anim.h"
@@ -485,6 +485,9 @@ bPoseChannel *BKE_pose_channel_verify(bPose *pose, const char *name)
 	chan = MEM_callocN(sizeof(bPoseChannel), "verifyPoseChannel");
 	
 	BLI_strncpy(chan->name, name, sizeof(chan->name));
+
+	chan->custom_scale = 1.0f;
+
 	/* init vars to prevent math errors */
 	unit_qt(chan->quat);
 	unit_axis_angle(chan->rotAxis, &chan->rotAngle);
@@ -713,6 +716,57 @@ void BKE_pose_channels_hash_free(bPose *pose)
 	if (pose->chanhash) {
 		BLI_ghash_free(pose->chanhash, NULL, NULL);
 		pose->chanhash = NULL;
+	}
+}
+
+/**
+ * Selectively remove pose channels.
+ */
+void BKE_pose_channels_remove(
+        Object *ob,
+        bool (*filter_fn)(const char *bone_name, void *user_data), void *user_data)
+{
+	/*  First erase any associated pose channel */
+	if (ob->pose) {
+		bPoseChannel *pchan, *pchan_next;
+		bConstraint *con;
+
+		for (pchan = ob->pose->chanbase.first; pchan; pchan = pchan_next) {
+			pchan_next = pchan->next;
+
+			if (filter_fn(pchan->name, user_data)) {
+				BKE_pose_channel_free(pchan);
+				if (ob->pose->chanhash) {
+					BLI_ghash_remove(ob->pose->chanhash, pchan->name, NULL, NULL);
+				}
+				BLI_freelinkN(&ob->pose->chanbase, pchan);
+			}
+			else {
+				for (con = pchan->constraints.first; con; con = con->next) {
+					const bConstraintTypeInfo *cti = BKE_constraint_typeinfo_get(con);
+					ListBase targets = {NULL, NULL};
+					bConstraintTarget *ct;
+
+					if (cti && cti->get_constraint_targets) {
+						cti->get_constraint_targets(con, &targets);
+
+						for (ct = targets.first; ct; ct = ct->next) {
+							if (ct->tar == ob) {
+								if (ct->subtarget[0]) {
+									if (filter_fn(ct->subtarget, user_data)) {
+										con->flag |= CONSTRAINT_DISABLE;
+										ct->subtarget[0] = 0;
+									}
+								}
+							}
+						}
+
+						if (cti->flush_constraint_targets)
+							cti->flush_constraint_targets(con, &targets, 0);
+					}
+				}
+			}
+		}
 	}
 }
 

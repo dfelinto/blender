@@ -40,8 +40,8 @@
 
 // #define JP2_FILEHEADER_SIZE 14  /* UNUSED */
 
-static char JP2_HEAD[] = {0x0, 0x0, 0x0, 0x0C, 0x6A, 0x50, 0x20, 0x20, 0x0D, 0x0A, 0x87, 0x0A};
-static char J2K_HEAD[] = {0xFF, 0x4F, 0xFF, 0x51, 0x00};
+static const char JP2_HEAD[] = {0x0, 0x0, 0x0, 0x0C, 0x6A, 0x50, 0x20, 0x20, 0x0D, 0x0A, 0x87, 0x0A};
+static const char J2K_HEAD[] = {0xFF, 0x4F, 0xFF, 0x51, 0x00};
 
 /* We only need this because of how the presets are set */
 /* this typedef is copied from 'openjpeg-1.5.0/applications/codec/image_to_j2k.c' */
@@ -58,17 +58,22 @@ typedef struct img_folder {
 	float *rates;
 } img_fol_t;
 
-static int check_jp2(unsigned char *mem) /* J2K_CFMT */
+enum {
+    DCP_CINEMA2K = 3,
+    DCP_CINEMA4K = 4,
+};
+
+static int check_jp2(const unsigned char *mem) /* J2K_CFMT */
 {
 	return memcmp(JP2_HEAD, mem, sizeof(JP2_HEAD)) ? 0 : 1;
 }
 
-static int check_j2k(unsigned char *mem) /* J2K_CFMT */
+static int check_j2k(const unsigned char *mem) /* J2K_CFMT */
 {
 	return memcmp(J2K_HEAD, mem, sizeof(J2K_HEAD)) ? 0 : 1;
 }
 
-int imb_is_a_jp2(unsigned char *buf)
+int imb_is_a_jp2(const unsigned char *buf)
 {
 	return check_jp2(buf);
 }
@@ -116,7 +121,7 @@ static void info_callback(const char *msg, void *client_data)
 	} \
 	} (void)0 \
 
-struct ImBuf *imb_jp2_decode(unsigned char *mem, size_t size, int flags, char colorspace[IM_MAX_SPACE])
+struct ImBuf *imb_jp2_decode(const unsigned char *mem, size_t size, int flags, char colorspace[IM_MAX_SPACE])
 {
 	struct ImBuf *ibuf = NULL;
 	bool use_float = false; /* for precision higher then 8 use float */
@@ -170,7 +175,8 @@ struct ImBuf *imb_jp2_decode(unsigned char *mem, size_t size, int flags, char co
 	opj_setup_decoder(dinfo, &parameters);
 
 	/* open a byte stream */
-	cio = opj_cio_open((opj_common_ptr)dinfo, mem, size);
+	/* note, we can't avoid removing 'const' cast here */
+	cio = opj_cio_open((opj_common_ptr)dinfo, (unsigned char *)mem, size);
 
 	/* decode the stream and fill the image structure */
 	image = opj_decode(dinfo, cio);
@@ -231,11 +237,11 @@ struct ImBuf *imb_jp2_decode(unsigned char *mem, size_t size, int flags, char co
 		return NULL;
 	}
 	
-	ibuf->ftype = JP2;
+	ibuf->ftype = IMB_FTYPE_JP2;
 	if (is_jp2)
-		ibuf->ftype |= JP2_JP2;
+		ibuf->foptions.flag |= JP2_JP2;
 	else
-		ibuf->ftype |= JP2_J2K;
+		ibuf->foptions.flag |= JP2_J2K;
 	
 	if (use_float) {
 		float *rect_float = ibuf->rect_float;
@@ -458,7 +464,6 @@ static void cinema_parameters(opj_cparameters_t *parameters)
 
 	/* 9-7 transform */
 	parameters->irreversible = 1;
-
 }
 
 static void cinema_setup_encoder(opj_cparameters_t *parameters, opj_image_t *image, img_fol_t *img_fol)
@@ -478,6 +483,9 @@ static void cinema_setup_encoder(opj_cparameters_t *parameters, opj_image_t *ima
 				        image->comps[0].w, image->comps[0].h);
 				parameters->cp_rsiz = STD_RSIZ;
 			}
+			else {
+				parameters->cp_rsiz = DCP_CINEMA2K;
+			}
 			break;
 	
 		case CINEMA4K_24:
@@ -492,6 +500,9 @@ static void cinema_setup_encoder(opj_cparameters_t *parameters, opj_image_t *ima
 				        "(4K profile) compliance requires that at least one of coordinates match 4096 x 2160\n",
 				        image->comps[0].w, image->comps[0].h);
 				parameters->cp_rsiz = STD_RSIZ;
+			}
+			else {
+				parameters->cp_rsiz = DCP_CINEMA2K;
 			}
 			parameters->numpocs = initialise_4K_poc(parameters->POC, parameters->numresolution);
 			break;
@@ -586,12 +597,12 @@ static opj_image_t *ibuftoimage(ImBuf *ibuf, opj_cparameters_t *parameters)
 		chanel_colormanage_cb = linearrgb_to_srgb;
 	}
 	
-	if (ibuf->ftype & JP2_CINE) {
+	if (ibuf->foptions.flag & JP2_CINE) {
 		
 		if (ibuf->x == 4096 || ibuf->y == 2160)
 			parameters->cp_cinema = CINEMA4K_24;
 		else {
-			if (ibuf->ftype & JP2_CINE_48FPS) {
+			if (ibuf->foptions.flag & JP2_CINE_48FPS) {
 				parameters->cp_cinema = CINEMA2K_48;
 			}
 			else {
@@ -606,16 +617,16 @@ static opj_image_t *ibuftoimage(ImBuf *ibuf, opj_cparameters_t *parameters)
 			cinema_parameters(parameters);
 		}
 		
-		color_space = CLRSPC_SYCC;
+		color_space = (ibuf->foptions.flag & JP2_YCC) ? CLRSPC_SYCC : CLRSPC_SRGB;
 		prec = 12;
 		numcomps = 3;
 	}
 	else {
 		/* Get settings from the imbuf */
-		color_space = (ibuf->ftype & JP2_YCC) ? CLRSPC_SYCC : CLRSPC_SRGB;
+		color_space = (ibuf->foptions.flag & JP2_YCC) ? CLRSPC_SYCC : CLRSPC_SRGB;
 		
-		if (ibuf->ftype & JP2_16BIT) prec = 16;
-		else if (ibuf->ftype & JP2_12BIT) prec = 12;
+		if (ibuf->foptions.flag & JP2_16BIT) prec = 16;
+		else if (ibuf->foptions.flag & JP2_12BIT) prec = 12;
 		else prec = 8;
 		
 		/* 32bit images == alpha channel */
@@ -951,7 +962,7 @@ static opj_image_t *ibuftoimage(ImBuf *ibuf, opj_cparameters_t *parameters)
 /* Found write info at http://users.ece.gatech.edu/~slabaugh/personal/c/bitmapUnix.c */
 int imb_savejp2(struct ImBuf *ibuf, const char *name, int flags)
 {
-	int quality = ibuf->ftype & 0xff;
+	int quality = ibuf->foptions.quality;
 	
 	int bSuccess;
 	opj_cparameters_t parameters;   /* compression parameters */
@@ -991,9 +1002,9 @@ int imb_savejp2(struct ImBuf *ibuf, const char *name, int flags)
 		opj_cinfo_t *cinfo = NULL;
 
 		/* get a JP2 compressor handle */
-		if (ibuf->ftype & JP2_JP2)
+		if (ibuf->foptions.flag & JP2_JP2)
 			cinfo = opj_create_compress(CODEC_JP2);
-		else if (ibuf->ftype & JP2_J2K)
+		else if (ibuf->foptions.flag & JP2_J2K)
 			cinfo = opj_create_compress(CODEC_J2K);
 		else
 			BLI_assert(!"Unsupported codec was specified in save settings");

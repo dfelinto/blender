@@ -69,7 +69,8 @@
 
 #include "DNA_material_types.h" 
 #include "DNA_meshdata_types.h" 
-#include "DNA_texture_types.h" 
+#include "DNA_texture_types.h"
+#include "DNA_particle_types.h"
 
 #include "BKE_customdata.h"
 #include "BKE_DerivedMesh.h"
@@ -1362,7 +1363,9 @@ void project_renderdata(Render *re,
 
 /* ------------------------------------------------------------------------- */
 
-ObjectInstanceRen *RE_addRenderInstance(Render *re, ObjectRen *obr, Object *ob, Object *par, int index, int psysindex, float mat[4][4], int lay)
+ObjectInstanceRen *RE_addRenderInstance(
+        Render *re, ObjectRen *obr, Object *ob, Object *par,
+        int index, int psysindex, float mat[4][4], int lay, const DupliObject *dob)
 {
 	ObjectInstanceRen *obi;
 	float mat3[3][3];
@@ -1374,6 +1377,35 @@ ObjectInstanceRen *RE_addRenderInstance(Render *re, ObjectRen *obr, Object *ob, 
 	obi->index= index;
 	obi->psysindex= psysindex;
 	obi->lay= lay;
+
+	/* Fill particle info */
+	if (par && dob) {
+		const ParticleSystem *psys = dob->particle_system;
+		if (psys) {
+			int part_index;
+			if (obi->index < psys->totpart) {
+				part_index = obi->index;
+			}
+			else if (psys->child) {
+				part_index = psys->child[obi->index - psys->totpart].parent;
+			}
+			else {
+				part_index = -1;
+			}
+
+			if (part_index >= 0) {
+				const ParticleData *p = &psys->particles[part_index];
+				obi->part_index = part_index;
+				obi->part_size = p->size;
+				obi->part_age = RE_GetStats(re)->cfra - p->time;
+				obi->part_lifetime = p->lifetime;
+
+				copy_v3_v3(obi->part_co, p->state.co);
+				copy_v3_v3(obi->part_vel, p->state.vel);
+				copy_v3_v3(obi->part_avel, p->state.ave);
+			}
+		}
+	}
 
 	if (mat) {
 		copy_m4_m4(obi->mat, mat);
@@ -1387,6 +1419,18 @@ ObjectInstanceRen *RE_addRenderInstance(Render *re, ObjectRen *obr, Object *ob, 
 
 	return obi;
 }
+
+void RE_instance_get_particle_info(struct ObjectInstanceRen *obi, float *index, float *age, float *lifetime, float co[3], float *size, float vel[3], float angvel[3])
+{
+	*index = obi->part_index;
+	*age = obi->part_age;
+	*lifetime = obi->part_lifetime;
+	copy_v3_v3(co, obi->part_co);
+	*size = obi->part_size;
+	copy_v3_v3(vel, obi->part_vel);
+	copy_v3_v3(angvel, obi->part_avel);
+}
+
 
 void RE_makeRenderInstances(Render *re)
 {

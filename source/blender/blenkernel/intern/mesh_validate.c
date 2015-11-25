@@ -171,10 +171,10 @@ static int search_poly_cmp(const void *v1, const void *v2)
 		return sp1->invalid ? (sp2->invalid ? 0 : 1) : -1;
 	/* Else, sort on first non-equal verts (remember verts of valid polys are sorted). */
 	for (idx = 0; idx < max_idx; idx++) {
-		const int v1 = sp1->verts[idx];
-		const int v2 = sp2->verts[idx];
-		if (v1 != v2) {
-			return (v1 > v2) ? 1 : -1;
+		const int v1_i = sp1->verts[idx];
+		const int v2_i = sp2->verts[idx];
+		if (v1_i != v2_i) {
+			return (v1_i > v2_i) ? 1 : -1;
 		}
 	}
 	return sp1->numverts > sp2->numverts ? 1 : sp1->numverts < sp2->numverts ? -1 : 0;
@@ -241,6 +241,7 @@ bool BKE_mesh_validate_arrays(Mesh *mesh,
 		struct {
 			int verts : 1;
 			int verts_weight : 1;
+			int loops_edge : 1;
 		};
 		int as_flag;
 	} fix_flag;
@@ -495,18 +496,19 @@ bool BKE_mesh_validate_arrays(Mesh *mesh,
 		SortPoly *sort_polys = MEM_callocN(sizeof(SortPoly) * totpoly, "mesh validate's sort_polys");
 		SortPoly *prev_sp, *sp = sort_polys;
 		int prev_end;
+
 		for (i = 0, mp = mpolys; i < totpoly; i++, mp++, sp++) {
 			sp->index = i;
 
 			if (mp->loopstart < 0 || mp->totloop < 3) {
 				/* Invalid loop data. */
-				PRINT_ERR("\tPoly %u is invalid (loopstart: %u, totloop: %u)\n",
+				PRINT_ERR("\tPoly %u is invalid (loopstart: %d, totloop: %d)\n",
 				          sp->index, mp->loopstart, mp->totloop);
 				sp->invalid = true;
 			}
 			else if (mp->loopstart + mp->totloop > totloop) {
 				/* Invalid loop data. */
-				PRINT_ERR("\tPoly %u uses loops out of range (loopstart: %u, loopend: %u, max nbr of loops: %u)\n",
+				PRINT_ERR("\tPoly %u uses loops out of range (loopstart: %d, loopend: %d, max nbr of loops: %u)\n",
 				          sp->index, mp->loopstart, mp->loopstart + mp->totloop - 1, totloop - 1);
 				sp->invalid = true;
 			}
@@ -518,6 +520,14 @@ bool BKE_mesh_validate_arrays(Mesh *mesh,
 				sp->numverts = mp->totloop;
 				sp->loopstart = mp->loopstart;
 
+				/* Ideally we would only have to do that once on all vertices before we start checking each poly, but
+				 * several polys can use same vert, so we have to ensure here all verts of current poly are cleared. */
+				for (j = 0, ml = &mloops[sp->loopstart]; j < mp->totloop; j++, ml++) {
+					if (ml->v < totvert) {
+						mverts[ml->v].flag &= ~ME_VERT_TMP_TAG;
+					}
+				}
+
 				/* Test all poly's loops' vert idx. */
 				for (j = 0, ml = &mloops[sp->loopstart]; j < mp->totloop; j++, ml++, v++) {
 					if (ml->v >= totvert) {
@@ -525,22 +535,14 @@ bool BKE_mesh_validate_arrays(Mesh *mesh,
 						PRINT_ERR("\tLoop %u has invalid vert reference (%u)\n", sp->loopstart + j, ml->v);
 						sp->invalid = true;
 					}
+					else if (mverts[ml->v].flag & ME_VERT_TMP_TAG) {
+						PRINT_ERR("\tPoly %u has duplicated vert reference at corner (%u)\n", i, j);
+						sp->invalid = true;
+					}
 					else {
 						mverts[ml->v].flag |= ME_VERT_TMP_TAG;
 					}
 					*v = ml->v;
-				}
-
-				/* is the same vertex used more than once */
-				if (!sp->invalid) {
-					v = sp->verts;
-					for (j = 0; j < mp->totloop; j++, v++) {
-						if ((mverts[*v].flag & ME_VERT_TMP_TAG) == 0) {
-							PRINT_ERR("\tPoly %u has duplicate vert reference at corner (%u)\n", i, j);
-							sp->invalid = true;
-						}
-						mverts[*v].flag &= ~ME_VERT_TMP_TAG;
-					}
 				}
 
 				if (sp->invalid)
@@ -552,7 +554,7 @@ bool BKE_mesh_validate_arrays(Mesh *mesh,
 					v2 = mloops[sp->loopstart + (j + 1) % mp->totloop].v;
 					if (!BLI_edgehash_haskey(edge_hash, v1, v2)) {
 						/* Edge not existing. */
-						PRINT_ERR("\tPoly %u needs missing edge (%u, %u)\n", sp->index, v1, v2);
+						PRINT_ERR("\tPoly %u needs missing edge (%d, %d)\n", sp->index, v1, v2);
 						if (do_fixes)
 							recalc_flag.edges = true;
 						else
@@ -564,7 +566,8 @@ bool BKE_mesh_validate_arrays(Mesh *mesh,
 						if (do_fixes) {
 							int prev_e = ml->e;
 							ml->e = GET_INT_FROM_POINTER(BLI_edgehash_lookup(edge_hash, v1, v2));
-							PRINT_ERR("\tLoop %u has invalid edge reference (%u), fixed using edge %u\n",
+							fix_flag.loops_edge = true;
+							PRINT_ERR("\tLoop %u has invalid edge reference (%d), fixed using edge %u\n",
 							          sp->loopstart + j, prev_e, ml->e);
 						}
 						else {
@@ -580,7 +583,8 @@ bool BKE_mesh_validate_arrays(Mesh *mesh,
 							if (do_fixes) {
 								int prev_e = ml->e;
 								ml->e = GET_INT_FROM_POINTER(BLI_edgehash_lookup(edge_hash, v1, v2));
-								PRINT_ERR("\tPoly %u has invalid edge reference (%u), fixed using edge %u\n",
+								fix_flag.loops_edge = true;
+								PRINT_ERR("\tPoly %u has invalid edge reference (%d), fixed using edge %u\n",
 								          sp->index, prev_e, ml->e);
 							}
 							else {
@@ -591,31 +595,10 @@ bool BKE_mesh_validate_arrays(Mesh *mesh,
 					}
 				}
 
-				/* Now check that that poly does not use a same vertex more than once! */
 				if (!sp->invalid) {
-					const int *prev_v = v = sp->verts;
-					j = sp->numverts;
-
-					qsort(sp->verts, j, sizeof(int), int_cmp);
-
-					for (j--, v++; j; j--, v++) {
-						if (*v != *prev_v) {
-							int dlt = v - prev_v;
-							if (dlt > 1) {
-								PRINT_ERR("\tPoly %u is invalid, it multi-uses vertex %u (%u times)\n",
-								          sp->index, *prev_v, dlt);
-								sp->invalid = true;
-							}
-							prev_v = v;
-						}
-					}
-					if (v - prev_v > 1) { /* Don't forget final verts! */
-						PRINT_ERR("\tPoly %u is invalid, it multi-uses vertex %u (%u times)\n",
-						          sp->index, *prev_v, (int)(v - prev_v));
-						sp->invalid = true;
-					}
+					/* Needed for checking polys using same verts below. */
+					qsort(sp->verts, sp->numverts, sizeof(int), int_cmp);
 				}
-			
 			}
 		}
 
@@ -627,72 +610,75 @@ bool BKE_mesh_validate_arrays(Mesh *mesh,
 		for (i = 1; i < totpoly; i++, sp++) {
 			int p1_nv = sp->numverts, p2_nv = prev_sp->numverts;
 			const int *p1_v = sp->verts, *p2_v = prev_sp->verts;
-			short p1_sub = true, p2_sub = true;
-			if (sp->invalid)
+
+			if (sp->invalid) {
+				/* break, because all known invalid polys have been put at the end by qsort with search_poly_cmp. */
 				break;
+			}
+
 			/* Test same polys. */
 #if 0
-			/* NOTE: This performs a sub-set test. */
-			/* XXX This (and the sort of verts list) is better than systematic
-			 *     search of all verts of one list into the other if lists have
-			 *     a fair amount of elements.
-			 *     Not sure however it's worth it in this case?
-			 *     But as we also need sorted vert list to check verts multi-used
-			 *     (in first pass of checks)... */
-			/* XXX If we consider only "equal" polys (i.e. using exactly same set of verts)
-			 *     as invalid, better to replace this by a simple memory cmp... */
-			while ((p1_nv && p2_nv) && (p1_sub || p2_sub)) {
-				if (*p1_v < *p2_v) {
-					if (p1_sub)
-						p1_sub = false;
-					p1_nv--;
-					p1_v++;
-				}
-				else if (*p2_v < *p1_v) {
-					if (p2_sub)
-						p2_sub = false;
-					p2_nv--;
-					p2_v++;
-				}
-				else {
-					/* Equality, both next verts. */
-					p1_nv--;
-					p2_nv--;
-					p1_v++;
-					p2_v++;
-				}
-			}
-			if (p1_nv && p1_sub)
-				p1_sub = false;
-			else if (p2_nv && p2_sub)
-				p2_sub = false;
+			{
+				bool p1_sub = true, p2_sub = true;
 
-			if (p1_sub && p2_sub) {
-				PRINT("\tPolys %u and %u use same vertices, considering poly %u as invalid.\n",
-				      prev_sp->index, sp->index, sp->index);
-				sp->invalid = true;
-			}
-			/* XXX In fact, these might be valid? :/ */
-			else if (p1_sub) {
-				PRINT("\t%u is a sub-poly of %u, considering it as invalid.\n", sp->index, prev_sp->index);
-				sp->invalid = true;
-			}
-			else if (p2_sub) {
-				PRINT("\t%u is a sub-poly of %u, considering it as invalid.\n", prev_sp->index, sp->index);
-				prev_sp->invalid = true;
-				prev_sp = sp; /* sp is new reference poly. */
+				/* NOTE: This performs a sub-set test. */
+				/* XXX This (and the sort of verts list) is better than systematic
+				 *     search of all verts of one list into the other if lists have
+				 *     a fair amount of elements.
+				 *     Not sure however it's worth it in this case?
+				 *     But as we also need sorted vert list to check verts multi-used
+				 *     (in first pass of checks)... */
+				/* XXX If we consider only "equal" polys (i.e. using exactly same set of verts)
+				 *     as invalid, better to replace this by a simple memory cmp... */
+				while ((p1_nv && p2_nv) && (p1_sub || p2_sub)) {
+					if (*p1_v < *p2_v) {
+						if (p1_sub)
+							p1_sub = false;
+						p1_nv--;
+						p1_v++;
+					}
+					else if (*p2_v < *p1_v) {
+						if (p2_sub)
+							p2_sub = false;
+						p2_nv--;
+						p2_v++;
+					}
+					else {
+						/* Equality, both next verts. */
+						p1_nv--;
+						p2_nv--;
+						p1_v++;
+						p2_v++;
+					}
+				}
+				if (p1_nv && p1_sub)
+					p1_sub = false;
+				else if (p2_nv && p2_sub)
+					p2_sub = false;
+
+				if (p1_sub && p2_sub) {
+					PRINT("\tPolys %u and %u use same vertices, considering poly %u as invalid.\n",
+						  prev_sp->index, sp->index, sp->index);
+					sp->invalid = true;
+				}
+				/* XXX In fact, these might be valid? :/ */
+				else if (p1_sub) {
+					PRINT("\t%u is a sub-poly of %u, considering it as invalid.\n", sp->index, prev_sp->index);
+					sp->invalid = true;
+				}
+				else if (p2_sub) {
+					PRINT("\t%u is a sub-poly of %u, considering it as invalid.\n", prev_sp->index, sp->index);
+					prev_sp->invalid = true;
+					prev_sp = sp; /* sp is new reference poly. */
+				}
 			}
 #else
-			if (0) {
-				p1_sub += 0;
-				p2_sub += 0;
-			}
 			if ((p1_nv == p2_nv) && (memcmp(p1_v, p2_v, p1_nv * sizeof(*p1_v)) == 0)) {
 				if (do_verbose) {
-					PRINT_ERR("\tPolys %u and %u use same vertices (%u",
+					PRINT_ERR("\tPolys %u and %u use same vertices (%d",
 					          prev_sp->index, sp->index, *p1_v);
 					for (j = 1; j < p1_nv; j++)
-						PRINT_ERR(", %u", p1_v[j]);
+						PRINT_ERR(", %d", p1_v[j]);
 					PRINT_ERR("), considering poly %u as invalid.\n", sp->index);
 				}
 				else {
@@ -741,7 +727,7 @@ bool BKE_mesh_validate_arrays(Mesh *mesh,
 				}
 				/* Multi-used loops. */
 				else if (prev_end > sp->loopstart) {
-					PRINT_ERR("\tPolys %u and %u share loops from %u to %u, considering poly %u as invalid.\n",
+					PRINT_ERR("\tPolys %u and %u share loops from %d to %d, considering poly %u as invalid.\n",
 					          prev_sp->index, sp->index, sp->loopstart, prev_end, sp->index);
 					if (do_fixes) {
 						REMOVE_POLY_TAG((&mpolys[sp->index]));
@@ -846,7 +832,7 @@ bool BKE_mesh_validate_arrays(Mesh *mesh,
 			int tot_elem = 0;
 
 			if (msel->index < 0) {
-				PRINT_ERR("\tMesh select element %d type %d index is negative, "
+				PRINT_ERR("\tMesh select element %u type %d index is negative, "
 				          "resetting selection stack.\n", i, msel->type);
 				free_flag.mselect = do_fixes;
 				break;
@@ -865,7 +851,7 @@ bool BKE_mesh_validate_arrays(Mesh *mesh,
 			}
 
 			if (msel->index > tot_elem) {
-				PRINT_ERR("\tMesh select element %d type %d index %d is larger than data array size %d, "
+				PRINT_ERR("\tMesh select element %u type %d index %d is larger than data array size %d, "
 				          "resetting selection stack.\n", i, msel->type, msel->index, tot_elem);
 
 				free_flag.mselect = do_fixes;
@@ -884,9 +870,7 @@ bool BKE_mesh_validate_arrays(Mesh *mesh,
 
 	*r_changed = (fix_flag.as_flag || free_flag.as_flag || recalc_flag.as_flag);
 
-	if (do_fixes == false) {
-		BLI_assert(*r_changed == false);
-	}
+	BLI_assert((*r_changed == false) || (do_fixes == true));
 
 	return is_valid;
 }
@@ -978,6 +962,24 @@ bool BKE_mesh_validate_all_customdata(CustomData *vdata, CustomData *edata,
 	if (tot_vcolloop > MAX_MCOL) {
 		PRINT_ERR("\tMore VCol layers than %d allowed, %d last ones won't be available for render, shaders, etc.\n",
 		          MAX_MCOL, tot_vcolloop - MAX_MCOL);
+	}
+
+	/* check indices of clone/stencil */
+	if (do_fixes && CustomData_get_clone_layer(pdata, CD_MTEXPOLY) >= tot_texpoly) {
+		CustomData_set_layer_clone(pdata, CD_MTEXPOLY, 0);
+		is_change_p = true;
+	}
+	if (do_fixes && CustomData_get_clone_layer(ldata, CD_MLOOPUV) >= tot_uvloop) {
+		CustomData_set_layer_clone(ldata, CD_MLOOPUV, 0);
+		is_change_l = true;
+	}
+	if (do_fixes && CustomData_get_stencil_layer(pdata, CD_MTEXPOLY) >= tot_texpoly) {
+		CustomData_set_layer_stencil(pdata, CD_MTEXPOLY, 0);
+		is_change_p = true;
+	}
+	if (do_fixes && CustomData_get_stencil_layer(ldata, CD_MLOOPUV) >= tot_uvloop) {
+		CustomData_set_layer_stencil(ldata, CD_MLOOPUV, 0);
+		is_change_l = true;
 	}
 
 	*r_change = (is_change_v || is_change_e || is_change_l || is_change_p);

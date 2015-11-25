@@ -48,7 +48,7 @@
 #include "GHOST_DisplayManagerX11.h"
 #include "GHOST_EventDragnDrop.h"
 #ifdef WITH_INPUT_NDOF
-#  include "GHOST_NDOFManagerX11.h"
+#  include "GHOST_NDOFManagerUnix.h"
 #endif
 
 #ifdef WITH_XDND
@@ -202,7 +202,7 @@ init()
 
 	if (success) {
 #ifdef WITH_INPUT_NDOF
-		m_ndofManager = new GHOST_NDOFManagerX11(*this);
+		m_ndofManager = new GHOST_NDOFManagerUnix(*this);
 #endif
 		m_displayManager = new GHOST_DisplayManagerX11(this);
 
@@ -280,10 +280,8 @@ getAllDisplayDimensions(
  * \param	height	The height the window.
  * \param	state	The state of the window when opened.
  * \param	type	The type of drawing context installed in this window.
- * \param	stereoVisual	Stereo visual for quad buffered stereo.
- * \param	exclusive	Use to show the window ontop and ignore others
- *						(used fullscreen).
- * \param	numOfAASamples	Number of samples used for AA (zero if no AA)
+ * \param glSettings: Misc OpenGL settings.
+ * \param exclusive: Use to show the window ontop and ignore others (used fullscreen).
  * \param	parentWindow    Parent (embedder) window
  * \return	The new window (or 0 if creation failed).
  */
@@ -308,7 +306,7 @@ createWindow(const STR_String& title,
 	                             left, top, width, height,
 	                             state, parentWindow, type,
 	                             ((glSettings.flags & GHOST_glStereoVisual) != 0), exclusive,
-	                             glSettings.numOfAASamples);
+	                             glSettings.numOfAASamples, (glSettings.flags & GHOST_glDebugContext) != 0);
 
 	if (window) {
 		/* Both are now handle in GHOST_WindowX11.cpp
@@ -591,7 +589,7 @@ processEvents(
 		}
 
 #ifdef WITH_INPUT_NDOF
-		if (static_cast<GHOST_NDOFManagerX11 *>(m_ndofManager)->processEvents()) {
+		if (static_cast<GHOST_NDOFManagerUnix *>(m_ndofManager)->processEvents()) {
 			anyProcessed = true;
 		}
 #endif

@@ -93,6 +93,8 @@
 
 #ifdef WITH_SMOKE
 
+static ThreadMutex object_update_lock = BLI_MUTEX_INITIALIZER;
+
 #ifdef _WIN32
 #include <time.h>
 #include <stdio.h>
@@ -146,8 +148,8 @@ struct SmokeModifierData;
 // timestep default value for nice appearance 0.1f
 #define DT_DEFAULT 0.1f
 
-#define ADD_IF_LOWER_POS(a, b) (MIN2((a) + (b), MAX2((a), (b))))
-#define ADD_IF_LOWER_NEG(a, b) (MAX2((a) + (b), MIN2((a), (b))))
+#define ADD_IF_LOWER_POS(a, b) (min_ff((a) + (b), max_ff((a), (b))))
+#define ADD_IF_LOWER_NEG(a, b) (max_ff((a) + (b), min_ff((a), (b))))
 #define ADD_IF_LOWER(a, b) (((b) > 0) ? ADD_IF_LOWER_POS((a), (b)) : ADD_IF_LOWER_NEG((a), (b)))
 
 #else /* WITH_SMOKE */
@@ -267,7 +269,7 @@ static void smoke_set_domain_from_derivedmesh(SmokeDomainSettings *sds, Object *
 	}
 	/* apply object scale */
 	for (i = 0; i < 3; i++) {
-		size[i] = fabs(size[i] * ob->size[i]);
+		size[i] = fabsf(size[i] * ob->size[i]);
 	}
 	copy_v3_v3(sds->global_size, size);
 	copy_v3_v3(sds->dp0, min);
@@ -727,7 +729,8 @@ static void obstacles_from_derivedmesh(Object *coll_ob, SmokeDomainSettings *sds
 	{
 		DerivedMesh *dm = NULL;
 		MVert *mvert = NULL;
-		MFace *mface = NULL;
+		const MLoopTri *looptri;
+		const MLoop *mloop;
 		BVHTreeFromMesh treeData = {NULL};
 		int numverts, i, z;
 
@@ -742,7 +745,8 @@ static void obstacles_from_derivedmesh(Object *coll_ob, SmokeDomainSettings *sds
 		dm = CDDM_copy(scs->dm);
 		CDDM_calc_normals(dm);
 		mvert = dm->getVertArray(dm);
-		mface = dm->getTessFaceArray(dm);
+		mloop = dm->getLoopArray(dm);
+		looptri = dm->getLoopTriArray(dm);
 		numverts = dm->getNumVerts(dm);
 
 		// DG TODO
@@ -790,7 +794,7 @@ static void obstacles_from_derivedmesh(Object *coll_ob, SmokeDomainSettings *sds
 			copy_v3_v3(&scs->verts_old[i * 3], co);
 		}
 
-		if (bvhtree_from_mesh_faces(&treeData, dm, 0.0f, 4, 6)) {
+		if (bvhtree_from_mesh_looptri(&treeData, dm, 0.0f, 4, 6)) {
 #pragma omp parallel for schedule(static)
 			for (z = sds->res_min[2]; z < sds->res_max[2]; z++) {
 				int x, y;
@@ -805,13 +809,14 @@ static void obstacles_from_derivedmesh(Object *coll_ob, SmokeDomainSettings *sds
 
 						/* find the nearest point on the mesh */
 						if (BLI_bvhtree_find_nearest(treeData.tree, ray_start, &nearest, treeData.nearest_callback, &treeData) != -1) {
+							const MLoopTri *lt = &looptri[nearest.index];
 							float weights[4];
-							int v1, v2, v3, f_index = nearest.index;
+							int v1, v2, v3;
 
 							/* calculate barycentric weights for nearest point */
-							v1 = mface[f_index].v1;
-							v2 = (nearest.flags & BVH_ONQUAD) ? mface[f_index].v3 : mface[f_index].v2;
-							v3 = (nearest.flags & BVH_ONQUAD) ? mface[f_index].v4 : mface[f_index].v3;
+							v1 = mloop[lt->tri[0]].v;
+							v2 = mloop[lt->tri[1]].v;
+							v3 = mloop[lt->tri[2]].v;
 							interp_weights_face_v3(weights, mvert[v1].co, mvert[v2].co, mvert[v3].co, NULL, nearest.co);
 
 							// DG TODO
@@ -1233,7 +1238,7 @@ static void emit_from_particles(Object *flow_ob, SmokeDomainSettings *sds, Smoke
 		float solid = sfs->particle_size * 0.5f;
 		float smooth = 0.5f; /* add 0.5 cells of linear falloff to reduce aliasing */
 		int hires_multiplier = 1;
-		int i, z;
+		int z;
 		KDTree *tree;
 
 		sim.scene = scene;
@@ -1353,7 +1358,7 @@ static void emit_from_particles(Object *flow_ob, SmokeDomainSettings *sds, Smoke
 			const float hr_smooth = smooth * powf(hr, 1.0f / 3.0f);
 
 			/* setup loop bounds */
-			for (i = 0; i < 3; i++) {
+			for (int i = 0; i < 3; i++) {
 				min[i] = em->min[i] * hires_multiplier;
 				max[i] = em->max[i] * hires_multiplier;
 				res[i] = em->res[i] * hires_multiplier;
@@ -1432,10 +1437,12 @@ static void emit_from_particles(Object *flow_ob, SmokeDomainSettings *sds, Smoke
 }
 
 static void sample_derivedmesh(
-        SmokeFlowSettings *sfs, MVert *mvert, MTFace *tface, MFace *mface,
+        SmokeFlowSettings *sfs,
+        const MVert *mvert, const MLoop *mloop, const MLoopTri *mlooptri, const MLoopUV *mloopuv,
         float *influence_map, float *velocity_map, int index, const int base_res[3], float flow_center[3],
         BVHTreeFromMesh *treeData, const float ray_start[3], const float *vert_vel,
-        bool has_velocity, int defgrp_index, MDeformVert *dvert, float x, float y, float z)
+        bool has_velocity, int defgrp_index, MDeformVert *dvert,
+        float x, float y, float z)
 {
 	float ray_dir[3] = {1.0f, 0.0f, 0.0f};
 	BVHTreeRayHit hit = {0};
@@ -1486,9 +1493,9 @@ static void sample_derivedmesh(
 			sample_str = 0.0f;
 
 		/* calculate barycentric weights for nearest point */
-		v1 = mface[f_index].v1;
-		v2 = (nearest.flags & BVH_ONQUAD) ? mface[f_index].v3 : mface[f_index].v2;
-		v3 = (nearest.flags & BVH_ONQUAD) ? mface[f_index].v4 : mface[f_index].v3;
+		v1 = mloop[mlooptri[f_index].tri[0]].v;
+		v2 = mloop[mlooptri[f_index].tri[1]].v;
+		v3 = mloop[mlooptri[f_index].tri[2]].v;
 		interp_weights_face_v3(weights, mvert[v1].co, mvert[v2].co, mvert[v3].co, NULL, nearest.co);
 
 		if (sfs->flags & MOD_SMOKE_FLOW_INITVELOCITY && velocity_map) {
@@ -1536,9 +1543,14 @@ static void sample_derivedmesh(
 				tex_co[1] = ((y - flow_center[1]) / base_res[1]) / sfs->texture_size;
 				tex_co[2] = ((z - flow_center[2]) / base_res[2] - sfs->texture_offset) / sfs->texture_size;
 			}
-			else if (tface) {
-				interp_v2_v2v2v2(tex_co, tface[f_index].uv[0], tface[f_index].uv[(nearest.flags & BVH_ONQUAD) ? 2 : 1],
-				                 tface[f_index].uv[(nearest.flags & BVH_ONQUAD) ? 3 : 2], weights);
+			else if (mloopuv) {
+				const float *uv[3];
+				uv[0] = mloopuv[mlooptri[f_index].tri[0]].uv;
+				uv[1] = mloopuv[mlooptri[f_index].tri[1]].uv;
+				uv[2] = mloopuv[mlooptri[f_index].tri[2]].uv;
+
+				interp_v2_v2v2v2(tex_co, UNPACK3(uv), weights);
+
 				/* map between -1.0f and 1.0f */
 				tex_co[0] = tex_co[0] * 2.0f - 1.0f;
 				tex_co[1] = tex_co[1] * 2.0f - 1.0f;
@@ -1567,8 +1579,9 @@ static void emit_from_derivedmesh(Object *flow_ob, SmokeDomainSettings *sds, Smo
 		MDeformVert *dvert = NULL;
 		MVert *mvert = NULL;
 		MVert *mvert_orig = NULL;
-		MFace *mface = NULL;
-		MTFace *tface = NULL;
+		const MLoopTri *mlooptri = NULL;
+		const MLoopUV *mloopuv = NULL;
+		const MLoop *mloop = NULL;
 		BVHTreeFromMesh treeData = {NULL};
 		int numOfVerts, i, z;
 		float flow_center[3] = {0};
@@ -1586,10 +1599,11 @@ static void emit_from_derivedmesh(Object *flow_ob, SmokeDomainSettings *sds, Smo
 		CDDM_calc_normals(dm);
 		mvert = dm->getVertArray(dm);
 		mvert_orig = dm->dupVertArray(dm);  /* copy original mvert and restore when done */
-		mface = dm->getTessFaceArray(dm);
 		numOfVerts = dm->getNumVerts(dm);
 		dvert = dm->getVertDataArray(dm, CD_MDEFORMVERT);
-		tface = CustomData_get_layer_named(&dm->faceData, CD_MTFACE, sfs->uvlayer_name);
+		mloopuv = CustomData_get_layer_named(&dm->loopData, CD_MLOOPUV, sfs->uvlayer_name);
+		mloop = dm->getLoopArray(dm);
+		mlooptri = dm->getLoopTriArray(dm);
 
 		if (sfs->flags & MOD_SMOKE_FLOW_INITVELOCITY) {
 			vert_vel = MEM_callocN(sizeof(float) * numOfVerts * 3, "smoke_flow_velocity");
@@ -1650,7 +1664,7 @@ static void emit_from_derivedmesh(Object *flow_ob, SmokeDomainSettings *sds, Smo
 			res[i] = em->res[i] * hires_multiplier;
 		}
 
-		if (bvhtree_from_mesh_faces(&treeData, dm, 0.0f, 4, 6)) {
+		if (bvhtree_from_mesh_looptri(&treeData, dm, 0.0f, 4, 6)) {
 #pragma omp parallel for schedule(static)
 			for (z = min[2]; z < max[2]; z++) {
 				int x, y;
@@ -1666,8 +1680,11 @@ static void emit_from_derivedmesh(Object *flow_ob, SmokeDomainSettings *sds, Smo
 							int index = smoke_get_index(lx - em->min[0], em->res[0], ly - em->min[1], em->res[1], lz - em->min[2]);
 							float ray_start[3] = {((float)lx) + 0.5f, ((float)ly) + 0.5f, ((float)lz) + 0.5f};
 
-							sample_derivedmesh(sfs, mvert, tface, mface, em->influence, em->velocity, index, sds->base_res, flow_center, &treeData, ray_start,
-												vert_vel, has_velocity, defgrp_index, dvert, (float)lx, (float)ly, (float)lz);
+							sample_derivedmesh(
+							        sfs, mvert, mloop, mlooptri, mloopuv,
+							        em->influence, em->velocity, index, sds->base_res, flow_center,
+							        &treeData, ray_start,vert_vel, has_velocity, defgrp_index, dvert,
+							        (float)lx, (float)ly, (float)lz);
 						}
 
 						/* take high res samples if required */
@@ -1681,8 +1698,12 @@ static void emit_from_derivedmesh(Object *flow_ob, SmokeDomainSettings *sds, Smo
 							int index = smoke_get_index(x - min[0], res[0], y - min[1], res[1], z - min[2]);
 							float ray_start[3] = {lx + 0.5f*hr, ly + 0.5f*hr, lz + 0.5f*hr};
 
-							sample_derivedmesh(sfs, mvert, tface, mface, em->influence_high, NULL, index, sds->base_res, flow_center, &treeData, ray_start,
-												vert_vel, has_velocity, defgrp_index, dvert, lx, ly, lz); /* x,y,z needs to be always lowres */
+							sample_derivedmesh(
+							        sfs, mvert, mloop, mlooptri, mloopuv,
+							        em->influence_high, NULL, index, sds->base_res, flow_center,
+							        &treeData, ray_start, vert_vel, has_velocity, defgrp_index, dvert,
+							        /* x,y,z needs to be always lowres */
+							        lx, ly, lz);
 						}
 
 					}
@@ -1711,10 +1732,11 @@ static void emit_from_derivedmesh(Object *flow_ob, SmokeDomainSettings *sds, Smo
 
 static void adjustDomainResolution(SmokeDomainSettings *sds, int new_shift[3], EmissionMap *emaps, unsigned int numflowobj, float dt)
 {
+	const int block_size = sds->amplify + 1;
 	int min[3] = {32767, 32767, 32767}, max[3] = {-32767, -32767, -32767}, res[3];
 	int total_cells = 1, res_changed = 0, shift_changed = 0;
 	float min_vel[3], max_vel[3];
-	int x, y, z, i;
+	int x, y, z;
 	float *density = smoke_get_density(sds->fluid);
 	float *fuel = smoke_get_fuel(sds->fluid);
 	float *bigdensity = smoke_turbulence_get_density(sds->wt);
@@ -1722,7 +1744,6 @@ static void adjustDomainResolution(SmokeDomainSettings *sds, int new_shift[3], E
 	float *vx = smoke_get_velocity_x(sds->fluid);
 	float *vy = smoke_get_velocity_y(sds->fluid);
 	float *vz = smoke_get_velocity_z(sds->fluid);
-	int block_size = sds->amplify + 1;
 	int wt_res[3];
 
 	if (sds->flags & MOD_SMOKE_HIGHRES && sds->wt) {
@@ -1789,8 +1810,7 @@ static void adjustDomainResolution(SmokeDomainSettings *sds, int new_shift[3], E
 			}
 
 	/* also apply emission maps */
-	for (i = 0; i < numflowobj; i++)
-	{
+	for (int i = 0; i < numflowobj; i++) {
 		EmissionMap *em = &emaps[i];
 
 		for (x = em->min[0]; x < em->max[0]; x++)
@@ -1817,7 +1837,7 @@ static void adjustDomainResolution(SmokeDomainSettings *sds, int new_shift[3], E
 	mul_v3_fl(max_vel, 1.0f / sds->dx);
 	clampBoundsInDomain(sds, min, max, min_vel, max_vel, sds->adapt_margin + 1, dt);
 
-	for (i = 0; i < 3; i++) {
+	for (int i = 0; i < 3; i++) {
 		/* calculate new resolution */
 		res[i] = max[i] - min[i];
 		total_cells *= res[i];
@@ -1917,7 +1937,6 @@ static void adjustDomainResolution(SmokeDomainSettings *sds, int new_shift[3], E
 						n_vz[index_new] = o_vz[index_old];
 
 						if (sds->flags & MOD_SMOKE_HIGHRES && turb_old) {
-							int block_size = sds->amplify + 1;
 							int i, j, k;
 							/* old grid index */
 							int xx_o = xo * block_size;
@@ -2145,7 +2164,9 @@ static void update_flowsfluids(Scene *scene, Object *ob, SmokeDomainSettings *sd
 					}
 					else { /* MOD_SMOKE_FLOW_SOURCE_MESH */
 						/* update flow object frame */
+						BLI_mutex_lock(&object_update_lock);
 						subframe_updateObject(scene, collob, 1, 5, BKE_scene_frame_get(scene), for_render);
+						BLI_mutex_unlock(&object_update_lock);
 
 						/* apply flow */
 						emit_from_derivedmesh(collob, sds, sfs, &em_temp, sdt);
@@ -2631,7 +2652,7 @@ static void smokeModifier_process(SmokeModifierData *smd, Scene *scene, Object *
 
 		if (smd->flow->dm) smd->flow->dm->release(smd->flow->dm);
 		smd->flow->dm = CDDM_copy(dm);
-		DM_ensure_tessface(smd->flow->dm);
+		DM_ensure_looptri(smd->flow->dm);
 
 		if (scene->r.cfra > smd->time)
 		{
@@ -2654,7 +2675,7 @@ static void smokeModifier_process(SmokeModifierData *smd, Scene *scene, Object *
 				smd->coll->dm->release(smd->coll->dm);
 
 			smd->coll->dm = CDDM_copy(dm);
-			DM_ensure_tessface(smd->coll->dm);
+			DM_ensure_looptri(smd->coll->dm);
 		}
 
 		smd->time = scene->r.cfra;

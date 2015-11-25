@@ -36,7 +36,7 @@
 #include "BLI_listbase.h"
 #include "BLI_math.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_context.h"
 #include "BKE_image.h"
@@ -107,7 +107,7 @@ static bool add_reroute_intersect_check(bNodeLink *link, float mcoords[][2], int
 
 		for (i = 0; i < tot - 1; i++)
 			for (b = 0; b < NODE_LINK_RESOL; b++)
-				if (isect_line_line_v2(mcoords[i], mcoords[i + 1], coord_array[b], coord_array[b + 1]) > 0) {
+				if (isect_seg_seg_v2(mcoords[i], mcoords[i + 1], coord_array[b], coord_array[b + 1]) > 0) {
 					result[0] = (mcoords[i][0] + mcoords[i + 1][0]) / 2.0f;
 					result[1] = (mcoords[i][1] + mcoords[i + 1][1]) / 2.0f;
 					return 1;
@@ -380,7 +380,7 @@ void NODE_OT_add_file(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
 	WM_operator_properties_filesel(ot, FILE_TYPE_FOLDER | FILE_TYPE_IMAGE | FILE_TYPE_MOVIE, FILE_SPECIAL, FILE_OPENFILE,
-	                               WM_FILESEL_FILEPATH | WM_FILESEL_RELPATH, FILE_DEFAULTDISPLAY);
+	                               WM_FILESEL_FILEPATH | WM_FILESEL_RELPATH, FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);
 	RNA_def_string(ot->srna, "name", "Image", MAX_ID_NAME - 2, "Name", "Datablock name to assign");
 }
 
@@ -487,7 +487,7 @@ static int new_node_tree_exec(bContext *C, wmOperator *op)
 		/* RNA_property_pointer_set increases the user count,
 		 * fixed here as the editor is the initial user.
 		 */
-		ntree->id.us--;
+		id_us_min(&ntree->id);
 
 		RNA_id_pointer_create(&ntree->id, &idptr);
 		RNA_property_pointer_set(&ptr, prop, idptr);

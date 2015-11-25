@@ -27,7 +27,7 @@
 #ifndef __KX_LIBLOADSTATUS_H__
 #define __KX_LIBLOADSTATUS_H__
 
-#include "PyObjectPlus.h"
+#include "EXP_PyObjectPlus.h"
 
 class KX_LibLoadStatus : public PyObjectPlus
 {
@@ -42,6 +42,9 @@ private:
 	float	m_progress;
 	double	m_starttime;
 	double	m_endtime;
+
+	// The current status of this libload, used by the scene converter.
+	bool m_finished;
 
 #ifdef WITH_PYTHON
 	PyObject*	m_finish_cb;
@@ -67,6 +70,11 @@ public:
 
 	void SetData(void *data);
 	void *GetData();
+
+	inline bool IsFinished() const
+	{
+		return m_finished;
+	}
 
 	void SetProgress(float progress);
 	float GetProgress();

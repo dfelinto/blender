@@ -84,6 +84,7 @@ void drawnodespace(const bContext *C, ARegion *ar);
 void node_set_cursor(struct wmWindow *win, struct SpaceNode *snode, float cursor[2]);
 	/* DPI scaled coords */
 void node_to_view(struct bNode *node, float x, float y, float *rx, float *ry);
+void node_to_updated_rect(struct bNode *node, rctf *r_rect);
 void node_from_view(struct bNode *node, float x, float y, float *rx, float *ry);
 
 /* node_buttons.c */
@@ -132,7 +133,7 @@ void NODE_OT_backimage_sample(struct wmOperatorType *ot);
 /* drawnode.c */
 void node_draw_link(struct View2D *v2d, struct SpaceNode *snode, struct bNodeLink *link);
 void node_draw_link_bezier(struct View2D *v2d, struct SpaceNode *snode, struct bNodeLink *link, int th_col1, bool do_shaded, int th_col2, bool do_triple, int th_col3);
-int  node_link_bezier_points(struct View2D *v2d, struct SpaceNode *snode, struct bNodeLink *link, float coord_array[][2], int resol);
+bool node_link_bezier_points(struct View2D *v2d, struct SpaceNode *snode, struct bNodeLink *link, float coord_array[][2], int resol);
 // void node_draw_link_straight(View2D *v2d, SpaceNode *snode, bNodeLink *link, int th_col1, int do_shaded, int th_col2, int do_triple, int th_col3 );
 void draw_nodespace_back_pix(const struct bContext *C, struct ARegion *ar, struct SpaceNode *snode, bNodeInstanceKey parent_key);
 
@@ -165,6 +166,8 @@ void NODE_OT_attach(struct wmOperatorType *ot);
 void NODE_OT_detach(struct wmOperatorType *ot);
 
 void NODE_OT_link_viewer(struct wmOperatorType *ot);
+
+void NODE_OT_insert_offset(wmOperatorType *ot);
 
 /* node_edit.c */
 void snode_notify(struct bContext *C, struct SpaceNode *snode);
@@ -225,7 +228,8 @@ extern const char *node_context_dir[];
 #define NODE_DYS        (U.widget_unit / 2)
 #define NODE_DY         U.widget_unit
 #define NODE_SOCKDY     (0.08f * U.widget_unit)
-#define NODE_WIDTH(node)	(node->width * UI_DPI_FAC)
+#define NODE_WIDTH(node)  (node->width * UI_DPI_FAC)
+#define NODE_HEIGHT(node) (node->height * UI_DPI_FAC)
 #define NODE_MARGIN_X   (0.75f * U.widget_unit)
 #define NODE_SOCKSIZE   (0.25f * U.widget_unit)
 #define NODE_LINK_RESOL 12

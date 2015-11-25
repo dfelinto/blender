@@ -97,7 +97,29 @@ MINLINE void copy_v4_fl(float r[4], float f)
 	r[3] = f;
 }
 
-/* short */
+/* unsigned char */
+MINLINE void copy_v2_v2_uchar(unsigned char r[2], const unsigned char a[2])
+{
+	r[0] = a[0];
+	r[1] = a[1];
+}
+
+MINLINE void copy_v3_v3_uchar(unsigned char r[3], const unsigned char a[3])
+{
+	r[0] = a[0];
+	r[1] = a[1];
+	r[2] = a[2];
+}
+
+MINLINE void copy_v4_v4_uchar(unsigned char r[4], const unsigned char a[4])
+{
+	r[0] = a[0];
+	r[1] = a[1];
+	r[2] = a[2];
+	r[3] = a[3];
+}
+
+/* char */
 MINLINE void copy_v2_v2_char(char r[2], const char a[2])
 {
 	r[0] = a[0];
@@ -966,22 +988,46 @@ MINLINE bool equals_v4v4(const float v1[4], const float v2[4])
 
 MINLINE bool compare_v2v2(const float v1[2], const float v2[2], const float limit)
 {
-	if (fabsf(v1[0] - v2[0]) <= limit)
-		if (fabsf(v1[1] - v2[1]) <= limit)
-			return true;
-
-	return false;
+	return (compare_ff(v1[0], v2[0], limit) &&
+	        compare_ff(v1[1], v2[1], limit));
 }
 
 MINLINE bool compare_v3v3(const float v1[3], const float v2[3], const float limit)
 {
-	if (fabsf(v1[0] - v2[0]) <= limit)
-		if (fabsf(v1[1] - v2[1]) <= limit)
-			if (fabsf(v1[2] - v2[2]) <= limit)
-				return true;
-
-	return false;
+	return (compare_ff(v1[0], v2[0], limit) &&
+	        compare_ff(v1[1], v2[1], limit) &&
+	        compare_ff(v1[2], v2[2], limit));
 }
+
+MINLINE bool compare_v4v4(const float v1[4], const float v2[4], const float limit)
+{
+	return (compare_ff(v1[0], v2[0], limit) &&
+	        compare_ff(v1[1], v2[1], limit) &&
+	        compare_ff(v1[2], v2[2], limit) &&
+	        compare_ff(v1[3], v2[3], limit));
+}
+
+MINLINE bool compare_v2v2_relative(const float v1[2], const float v2[2], const float limit, const int max_ulps)
+{
+	return (compare_ff_relative(v1[0], v2[0], limit, max_ulps) &&
+	        compare_ff_relative(v1[1], v2[1], limit, max_ulps));
+}
+
+MINLINE bool compare_v3v3_relative(const float v1[3], const float v2[3], const float limit, const int max_ulps)
+{
+	return (compare_ff_relative(v1[0], v2[0], limit, max_ulps) &&
+	        compare_ff_relative(v1[1], v2[1], limit, max_ulps) &&
+	        compare_ff_relative(v1[2], v2[2], limit, max_ulps));
+}
+
+MINLINE bool compare_v4v4_relative(const float v1[4], const float v2[4], const float limit, const int max_ulps)
+{
+	return (compare_ff_relative(v1[0], v2[0], limit, max_ulps) &&
+	        compare_ff_relative(v1[1], v2[1], limit, max_ulps) &&
+	        compare_ff_relative(v1[2], v2[2], limit, max_ulps) &&
+	        compare_ff_relative(v1[3], v2[3], limit, max_ulps));
+}
+
 
 MINLINE bool compare_len_v3v3(const float v1[3], const float v2[3], const float limit)
 {
@@ -1003,17 +1049,6 @@ MINLINE bool compare_len_squared_v3v3(const float v1[3], const float v2[3], cons
 	z = v1[2] - v2[2];
 
 	return ((x * x + y * y + z * z) <= limit_sq);
-}
-
-MINLINE bool compare_v4v4(const float v1[4], const float v2[4], const float limit)
-{
-	if (fabsf(v1[0] - v2[0]) <= limit)
-		if (fabsf(v1[1] - v2[1]) <= limit)
-			if (fabsf(v1[2] - v2[2]) <= limit)
-				if (fabsf(v1[3] - v2[3]) <= limit)
-					return true;
-
-	return false;
 }
 
 /**

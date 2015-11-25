@@ -53,7 +53,7 @@
 #include "BLI_blenlib.h"
 #include "BLI_array.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_context.h"
 #include "BKE_customdata.h"
@@ -1135,7 +1135,9 @@ static void uv_select_linked(Scene *scene, Image *ima, BMEditMesh *em, const flo
 	const int cd_poly_tex_offset = CustomData_get_offset(&em->bm->pdata, CD_MTEXPOLY);
 
 	BM_mesh_elem_table_ensure(em->bm, BM_FACE); /* we can use this too */
-	vmap = BM_uv_vert_map_create(em->bm, limit, !select_faces, false);
+
+	/* use winding so we don't consider overlapping islands as connected, see T44320 */
+	vmap = BM_uv_vert_map_create(em->bm, limit, !select_faces, true);
 
 	if (vmap == NULL)
 		return;
@@ -3330,7 +3332,7 @@ static bool uv_snap_uvs_offset(Scene *scene, Image *ima, Object *obedit, const f
 	BMFace *efa;
 	BMLoop *l;
 	BMIter iter, liter;
-	MTexPoly *tface;
+	MTexPoly *mtexpoly;
 	MLoopUV *luv;
 	bool changed = false;
 
@@ -3338,8 +3340,8 @@ static bool uv_snap_uvs_offset(Scene *scene, Image *ima, Object *obedit, const f
 	const int cd_poly_tex_offset = CustomData_get_offset(&em->bm->pdata, CD_MTEXPOLY);
 
 	BM_ITER_MESH (efa, &iter, em->bm, BM_FACES_OF_MESH) {
-		tface = BM_ELEM_CD_GET_VOID_P(efa, cd_poly_tex_offset);
-		if (!uvedit_face_visible_test(scene, ima, efa, tface))
+		mtexpoly = BM_ELEM_CD_GET_VOID_P(efa, cd_poly_tex_offset);
+		if (!uvedit_face_visible_test(scene, ima, efa, mtexpoly))
 			continue;
 
 		BM_ITER_ELEM (l, &liter, efa, BM_LOOPS_OF_FACE) {
@@ -4117,7 +4119,13 @@ static int uv_seams_from_islands_exec(bContext *C, wmOperator *op)
 		}
 	}
 
-	me->drawflag |= ME_DRAWSEAMS;
+	if (mark_seams) {
+		me->drawflag |= ME_DRAWSEAMS;
+	}
+	if (mark_sharp) {
+		me->drawflag |= ME_DRAWSHARP;
+	}
+
 
 	BM_uv_vert_map_free(vmap);
 
@@ -4187,12 +4195,16 @@ static int uv_mark_seam_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSE
 	uiPopupMenu *pup;
 	uiLayout *layout;
 
+	if (RNA_struct_property_is_set(op->ptr, "clear")) {
+		return uv_mark_seam_exec(C, op);
+	}
+
 	pup = UI_popup_menu_begin(C, IFACE_("Edges"), ICON_NONE);
 	layout = UI_popup_menu_layout(pup);
 
 	uiLayoutSetOperatorContext(layout, WM_OP_EXEC_DEFAULT);
-	uiItemBooleanO(layout, CTX_IFACE_(BLF_I18NCONTEXT_OPERATOR_DEFAULT, "Mark Seam"), ICON_NONE, op->type->idname, "clear", false);
-	uiItemBooleanO(layout, CTX_IFACE_(BLF_I18NCONTEXT_OPERATOR_DEFAULT, "Clear Seam"), ICON_NONE, op->type->idname, "clear", true);
+	uiItemBooleanO(layout, CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Mark Seam"), ICON_NONE, op->type->idname, "clear", false);
+	uiItemBooleanO(layout, CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Clear Seam"), ICON_NONE, op->type->idname, "clear", true);
 
 	UI_popup_menu_end(C, pup);
 

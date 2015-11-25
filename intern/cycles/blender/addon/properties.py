@@ -54,6 +54,7 @@ enum_bvh_types = (
 enum_filter_types = (
     ('BOX', "Box", "Box filter"),
     ('GAUSSIAN', "Gaussian", "Gaussian filter"),
+    ('BLACKMAN_HARRIS', "Blackman-Harris", "Blackman-Harris filter"),
     )
 
 enum_aperture_types = (
@@ -463,11 +464,6 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
                 description="Use BVH spatial splits: longer builder time, faster render",
                 default=False,
                 )
-        cls.use_cache = BoolProperty(
-                name="Cache BVH",
-                description="Cache last built BVH to disk for faster re-render if no geometry changed",
-                default=False,
-                )
         cls.tile_order = EnumProperty(
                 name="Tile Order",
                 description="Tile order for rendering",
@@ -508,6 +504,30 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
                 ('SUBSURFACE_DIRECT', "Subsurface Direct", ""),
                 ('SUBSURFACE_INDIRECT', "Subsurface Indirect", ""),
                 ('SUBSURFACE_COLOR', "Subsurface Color", ""),
+                ),
+            )
+
+        cls.use_camera_cull = BoolProperty(
+                name="Use Camera Cull",
+                description="Allow objects to be culled based on the camera frustum",
+                default=False,
+                )
+
+        cls.camera_cull_margin = FloatProperty(
+                name="Camera Cull Margin",
+                description="Margin for the camera space culling",
+                default=0.1,
+                min=0.0, max=5.0
+                )
+
+        cls.motion_blur_position = EnumProperty(
+            name="Motion Blur Position",
+            default='CENTER',
+            description="Offset for the shutter's time interval, allows to change the motion blur trails",
+            items=(
+                ('START', "Start on Frame", "The shutter opens at the current frame"),
+                ('CENTER', "Center on Frame", "The shutter is open during the current frame"),
+                ('END', "End on Frame", "The shutter closes at the current frame"),
                 ),
             )
 
@@ -730,7 +750,7 @@ class CyclesWorldSettings(bpy.types.PropertyGroup):
                 name="Map Resolution",
                 description="Importance map size is resolution x resolution; "
                             "higher values potentially produce less noise, at the cost of memory and speed",
-                min=4, max=8096,
+                min=4, max=8192,
                 default=256,
                 )
         cls.samples = IntProperty(
@@ -738,6 +758,12 @@ class CyclesWorldSettings(bpy.types.PropertyGroup):
                 description="Number of light samples to render for each AA sample",
                 min=1, max=10000,
                 default=4,
+                )
+        cls.max_bounces = IntProperty(
+                name="Max Bounces",
+                description="Maximum number of bounces the background light will contribute to the render",
+                min=0, max=1024,
+                default=1024,
                 )
         cls.homogeneous_volume = BoolProperty(
                 name="Homogeneous Volume",
@@ -888,6 +914,12 @@ class CyclesObjectBlurSettings(bpy.types.PropertyGroup):
                 description="Control accuracy of deformation motion blur, more steps gives more memory usage (actual number of steps is 2^(steps - 1))",
                 min=1, soft_max=8,
                 default=1,
+                )
+
+        cls.use_camera_cull = BoolProperty(
+                name="Use Camera Cull",
+                description="Allow this object and its duplicators to be culled by camera space culling",
+                default=False,
                 )
 
     @classmethod

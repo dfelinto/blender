@@ -40,7 +40,6 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_listbase.h"
-#include "BLI_rect.h"
 #include "BLI_utildefines.h"
 
 #include "BIF_gl.h"
@@ -370,14 +369,20 @@ bool WM_stereo3d_enabled(wmWindow *win, bool skip_stereo3d_check)
 {
 	bScreen *screen = win->screen;
 
+	/* some 3d methods change the window arrangement, thus they shouldn't
+	 * toggle on/off just because there is no 3d elements being drawn */
+	if (wm_stereo3d_is_fullscreen_required(win->stereo3d_format->display_mode)) {
+		return GHOST_GetWindowState(win->ghostwin) == GHOST_kWindowStateFullScreen;
+	}
+
 	if ((skip_stereo3d_check == false) && (ED_screen_stereo3d_required(screen) == false)) {
 		return false;
 	}
 
+	/* some 3d methods change the window arrangement, thus they shouldn't
+	 * toggle on/off just because there is no 3d elements being drawn */
 	if (wm_stereo3d_is_fullscreen_required(win->stereo3d_format->display_mode)) {
-		if (GHOST_GetWindowState(win->ghostwin) != GHOST_kWindowStateFullScreen) {
-			return false;
-		}
+		return GHOST_GetWindowState(win->ghostwin) == GHOST_kWindowStateFullScreen;
 	}
 
 	return true;
@@ -448,9 +453,10 @@ static void wm_stereo3d_set_init(bContext *C, wmOperator *op)
 int wm_stereo3d_set_exec(bContext *C, wmOperator *op)
 {
 	wmWindowManager *wm = CTX_wm_manager(C);
-	wmWindow *win = CTX_wm_window(C);
-	const bool is_fullscreen = WM_window_is_fullscreen(win);
-	char prev_display_mode = win->stereo3d_format->display_mode;
+	wmWindow *win_src = CTX_wm_window(C);
+	wmWindow *win_dst = NULL;
+	const bool is_fullscreen = WM_window_is_fullscreen(win_src);
+	char prev_display_mode = win_src->stereo3d_format->display_mode;
 	Stereo3dData *s3dd;
 	bool ok = true;
 
@@ -464,14 +470,14 @@ int wm_stereo3d_set_exec(bContext *C, wmOperator *op)
 	}
 
 	s3dd = op->customdata;
-	*win->stereo3d_format = s3dd->stereo3d_format;
+	*win_src->stereo3d_format = s3dd->stereo3d_format;
 
 	if (prev_display_mode == S3D_DISPLAY_PAGEFLIP &&
-	    prev_display_mode != win->stereo3d_format->display_mode)
+	    prev_display_mode != win_src->stereo3d_format->display_mode)
 	{
 		/* in case the hardward supports pageflip but not the display */
-		if (wm_window_duplicate_exec(C, op) == OPERATOR_FINISHED) {
-			wm_window_close(C, wm, win);
+		if ((win_dst = wm_window_copy_test(C, win_src))) {
+			/* pass */
 		}
 		else {
 			BKE_report(op->reports, RPT_ERROR,
@@ -479,23 +485,26 @@ int wm_stereo3d_set_exec(bContext *C, wmOperator *op)
 			ok = false;
 		}
 	}
-	else if (win->stereo3d_format->display_mode == S3D_DISPLAY_PAGEFLIP) {
+	else if (win_src->stereo3d_format->display_mode == S3D_DISPLAY_PAGEFLIP) {
+		/* ED_screen_duplicate() can't handle other cases yet T44688 */
+		if (win_src->screen->state != SCREENNORMAL) {
+			BKE_report(op->reports, RPT_ERROR,
+			           "Failed to switch to Time Sequential mode when in fullscreen");
+			ok = false;
+		}
 		/* pageflip requires a new window to be created with the proper OS flags */
-		if (wm_window_duplicate_exec(C, op) == OPERATOR_FINISHED) {
+		else if ((win_dst = wm_window_copy_test(C, win_src))) {
 			if (wm_stereo3d_quadbuffer_supported()) {
-				wm_window_close(C, wm, win);
 				BKE_report(op->reports, RPT_INFO, "Quad-buffer window successfully created");
 			}
 			else {
-				wmWindow *win_new = wm->windows.last;
-				wm_window_close(C, wm, win_new);
-				win->stereo3d_format->display_mode = prev_display_mode;
+				wm_window_close(C, wm, win_dst);
+				win_dst = NULL;
 				BKE_report(op->reports, RPT_ERROR, "Quad-buffer not supported by the system");
 				ok = false;
 			}
 		}
 		else {
-			win->stereo3d_format->display_mode = prev_display_mode;
 			BKE_report(op->reports, RPT_ERROR,
 			           "Failed to create a window compatible with the time sequential display method");
 			ok = false;
@@ -511,12 +520,17 @@ int wm_stereo3d_set_exec(bContext *C, wmOperator *op)
 	MEM_freeN(op->customdata);
 
 	if (ok) {
+		if (win_dst) {
+			wm_window_close(C, wm, win_src);
+		}
+
 		WM_event_add_notifier(C, NC_WINDOW, NULL);
 		return OPERATOR_FINISHED;
 	}
 	else {
 		/* without this, the popup won't be freed freed properly T44688 */
-		CTX_wm_window_set(C, win);
+		CTX_wm_window_set(C, win_src);
+		win_src->stereo3d_format->display_mode = prev_display_mode;
 		return OPERATOR_CANCELLED;
 	}
 }

@@ -90,7 +90,7 @@ static const int NAN_INT = 0x7FC00000;
 #endif
 
 /* do not redefine functions from C99, POSIX.1-2001 or MSVC12 (partial C99) */
-#if !(defined(_ISOC99_SOURCE) || (defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 200112L) || (defined(_MSC_VER) && _MSC_VER >= 1800))
+#if !(defined(_ISOC99_SOURCE) || (defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 200112L) || defined(_MSC_VER))
 
 #ifndef sqrtf
 #define sqrtf(a) ((float)sqrt(a))
@@ -195,6 +195,9 @@ MINLINE int min_iii(int a, int b, int c);
 MINLINE int max_iii(int a, int b, int c);
 MINLINE int min_iiii(int a, int b, int c, int d);
 MINLINE int max_iiii(int a, int b, int c, int d);
+
+MINLINE int compare_ff(float a, float b, const float max_diff);
+MINLINE int compare_ff_relative(float a, float b, const float max_diff, const int max_ulps);
 
 MINLINE float signf(float f);
 MINLINE int signum_i_ex(float a, float eps);

@@ -43,7 +43,7 @@
 #include "BLI_kdopbvh.h"
 #include "BLI_utildefines.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "DNA_armature_types.h"
 #include "DNA_constraint_types.h"
@@ -76,6 +76,7 @@
 #include "BKE_idprop.h"
 #include "BKE_shrinkwrap.h"
 #include "BKE_editmesh.h"
+#include "BKE_scene.h"
 #include "BKE_tracking.h"
 #include "BKE_movieclip.h"
 
@@ -132,7 +133,20 @@ bConstraintOb *BKE_constraints_make_evalob(Scene *scene, Object *ob, void *subda
 			if (ob) {
 				cob->ob = ob;
 				cob->type = datatype;
-				cob->rotOrder = EULER_ORDER_DEFAULT; // TODO: when objects have rotation order too, use that
+				
+				if (cob->ob->rotmode > 0) {
+					/* Should be some kind of Euler order, so use it */
+					/* NOTE: Versions <= 2.76 assumed that "default" order
+					 *       would always get used, so we may seem some rig
+					 *       breakage as a result. However, this change here
+					 *       is needed to fix T46599
+					 */
+					cob->rotOrder = ob->rotmode;
+				}
+				else {
+					/* Quats/Axis-Angle, so Eulers should just use default order */
+					cob->rotOrder = EULER_ORDER_DEFAULT;
+				}
 				copy_m4_m4(cob->matrix, ob->obmat);
 			}
 			else
@@ -446,7 +460,7 @@ static void contarget_get_mesh_mat(Object *ob, const char *substring, float mat[
 			copy_v3_v3(plane, tmat[1]);
 			
 			cross_v3_v3v3(mat[0], normal, plane);
-			if (len_v3(mat[0]) < 1e-3f) {
+			if (len_squared_v3(mat[0]) < SQUARE(1e-3f)) {
 				copy_v3_v3(plane, tmat[0]);
 				cross_v3_v3v3(mat[0], normal, plane);
 			}
@@ -2716,8 +2730,8 @@ static void stretchto_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *t
 				float hard = min_ff(bulge, bulge_max);
 				
 				float range = bulge_max - 1.0f;
-				float scale = (range > 0.0f) ? 1.0f / range : 0.0f;
-				float soft = 1.0f + range * atanf((bulge - 1.0f) * scale) / (float)M_PI_2;
+				float scale_fac = (range > 0.0f) ? 1.0f / range : 0.0f;
+				float soft = 1.0f + range * atanf((bulge - 1.0f) * scale_fac) / (float)M_PI_2;
 				
 				bulge = interpf(soft, hard, data->bulge_smooth);
 			}
@@ -2728,8 +2742,8 @@ static void stretchto_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *t
 				float hard = max_ff(bulge, bulge_min);
 				
 				float range = 1.0f - bulge_min;
-				float scale = (range > 0.0f) ? 1.0f / range : 0.0f;
-				float soft = 1.0f - range * atanf((1.0f - bulge) * scale) / (float)M_PI_2;
+				float scale_fac = (range > 0.0f) ? 1.0f / range : 0.0f;
+				float soft = 1.0f - range * atanf((1.0f - bulge) * scale_fac) / (float)M_PI_2;
 				
 				bulge = interpf(soft, hard, data->bulge_smooth);
 			}
@@ -3437,7 +3451,7 @@ static void shrinkwrap_get_tarmat(bConstraint *con, bConstraintOb *cob, bConstra
 					if (scon->shrinkType == MOD_SHRINKWRAP_NEAREST_VERTEX)
 						bvhtree_from_mesh_verts(&treeData, target, 0.0, 2, 6);
 					else
-						bvhtree_from_mesh_faces(&treeData, target, 0.0, 2, 6);
+						bvhtree_from_mesh_looptri(&treeData, target, 0.0, 2, 6);
 					
 					if (treeData.tree == NULL) {
 						fail = true;
@@ -3489,7 +3503,7 @@ static void shrinkwrap_get_tarmat(bConstraint *con, bConstraintOb *cob, bConstra
 						break;
 					}
 
-					bvhtree_from_mesh_faces(&treeData, target, scon->dist, 4, 6);
+					bvhtree_from_mesh_looptri(&treeData, target, scon->dist, 4, 6);
 					if (treeData.tree == NULL) {
 						fail = true;
 						break;
@@ -3862,7 +3876,7 @@ static void pivotcon_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *ta
 
 
 	/* correct the pivot by the rotation axis otherwise the pivot translates when it shouldnt */
-	mat3_to_axis_angle(axis, &angle, rotMat);
+	mat3_normalized_to_axis_angle(axis, &angle, rotMat);
 	if (angle) {
 		float dvec[3];
 		sub_v3_v3v3(vec, pivot, cob->matrix[3]);
@@ -3923,7 +3937,8 @@ static void followtrack_evaluate(bConstraint *con, bConstraintOb *cob, ListBase 
 	MovieTrackingTrack *track;
 	MovieTrackingObject *tracking_object;
 	Object *camob = data->camera ? data->camera : scene->camera;
-	int framenr;
+	float ctime = BKE_scene_frame_get(scene);
+	float framenr;
 
 	if (data->flag & FOLLOWTRACK_ACTIVECLIP)
 		clip = scene->clip;
@@ -3946,7 +3961,7 @@ static void followtrack_evaluate(bConstraint *con, bConstraintOb *cob, ListBase 
 	if (!track)
 		return;
 
-	framenr = BKE_movieclip_remap_scene_to_clip_frame(clip, scene->r.cfra);
+	framenr = BKE_movieclip_remap_scene_to_clip_frame(clip, ctime);
 
 	if (data->flag & FOLLOWTRACK_USE_3D_POSITION) {
 		if (track->flag & TRACK_HAS_BUNDLE) {
@@ -3974,7 +3989,6 @@ static void followtrack_evaluate(bConstraint *con, bConstraintOb *cob, ListBase 
 		}
 	}
 	else {
-		MovieTrackingMarker *marker;
 		float vec[3], disp[3], axis[3], mat[4][4];
 		float aspect = (scene->r.xsch * scene->r.xasp) / (scene->r.ysch * scene->r.yasp);
 		float len, d;
@@ -4000,10 +4014,7 @@ static void followtrack_evaluate(bConstraint *con, bConstraintOb *cob, ListBase 
 			float pos[2], rmat[4][4];
 
 			BKE_movieclip_get_size(clip, NULL, &width, &height);
-
-			marker = BKE_tracking_marker_get(track, framenr);
-
-			add_v2_v2v2(pos, marker->pos, track->offset);
+			BKE_tracking_marker_get_subframe_position(track, framenr, pos);
 
 			if (data->flag & FOLLOWTRACK_USE_UNDISTORTION) {
 				/* Undistortion need to happen in pixel space. */
@@ -4108,8 +4119,9 @@ static void followtrack_evaluate(bConstraint *con, bConstraintOb *cob, ListBase 
 					mul_v3_m4v3(ray_end, imat, cob->matrix[3]);
 
 					sub_v3_v3v3(ray_nor, ray_end, ray_start);
+					normalize_v3(ray_nor);
 
-					bvhtree_from_mesh_faces(&treeData, target, 0.0f, 4, 6);
+					bvhtree_from_mesh_looptri(&treeData, target, 0.0f, 4, 6);
 
 					hit.dist = FLT_MAX;
 					hit.index = -1;
@@ -4173,7 +4185,8 @@ static void camerasolver_evaluate(bConstraint *con, bConstraintOb *cob, ListBase
 		float mat[4][4], obmat[4][4];
 		MovieTracking *tracking = &clip->tracking;
 		MovieTrackingObject *object = BKE_tracking_object_get_camera(tracking);
-		int framenr = BKE_movieclip_remap_scene_to_clip_frame(clip, scene->r.cfra);
+		float ctime = BKE_scene_frame_get(scene);
+		float framenr = BKE_movieclip_remap_scene_to_clip_frame(clip, ctime);
 
 		BKE_tracking_camera_get_reconstructed_interpolate(tracking, object, framenr, mat);
 
@@ -4238,7 +4251,8 @@ static void objectsolver_evaluate(bConstraint *con, bConstraintOb *cob, ListBase
 
 		if (object) {
 			float mat[4][4], obmat[4][4], imat[4][4], cammat[4][4], camimat[4][4], parmat[4][4];
-			int framenr = BKE_movieclip_remap_scene_to_clip_frame(clip, scene->r.cfra);
+			float ctime = BKE_scene_frame_get(scene);
+			float framenr = BKE_movieclip_remap_scene_to_clip_frame(clip, ctime);
 
 			BKE_object_where_is_calc_mat4(scene, camob, cammat);
 
@@ -4881,11 +4895,12 @@ void BKE_constraints_solve(ListBase *conlist, bConstraintOb *cob, float ctime)
 		 *    since some constraints may not convert the solution back to the input space before blending
 		 *    but all are guaranteed to end up in good "worldspace" result
 		 */
-		/* Note: all kind of stuff here before (caused trouble), much easier to just interpolate, or did I miss something? -jahka (r.32105) */
+		/* Note: all kind of stuff here before (caused trouble), much easier to just interpolate,
+		 * or did I miss something? -jahka (r.32105) */
 		if (enf < 1.0f) {
 			float solution[4][4];
 			copy_m4_m4(solution, cob->matrix);
-			blend_m4_m4m4(cob->matrix, oldmat, solution, enf);
+			interp_m4_m4m4(cob->matrix, oldmat, solution, enf);
 		}
 	}
 }

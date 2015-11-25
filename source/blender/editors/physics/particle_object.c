@@ -202,7 +202,7 @@ static int new_particle_settings_exec(bContext *C, wmOperator *UNUSED(op))
 	ob= ptr.id.data;
 
 	if (psys->part)
-		psys->part->id.us--;
+		id_us_min(&psys->part->id);
 
 	psys->part = part;
 
@@ -696,7 +696,7 @@ static bool remap_hair_emitter(Scene *scene, Object *ob, ParticleSystem *psys,
 	}
 	else {
 		/* warning: this rebuilds target_psmd->dm! */
-		dm = mesh_get_derived_deform(scene, target_ob, CD_MASK_BAREMESH);
+		dm = mesh_get_derived_deform(scene, target_ob, CD_MASK_BAREMESH | CD_MASK_MFACE);
 	}
 	target_dm = target_psmd->dm;
 	/* don't modify the original vertices */
@@ -998,7 +998,7 @@ static void remove_particle_systems_from_object(Object *ob_to)
 static bool copy_particle_systems_to_object(Scene *scene, Object *ob_from, ParticleSystem *single_psys_from, Object *ob_to, int space)
 {
 	ModifierData *md;
-	ParticleSystem *psys_start, *psys, *psys_from;
+	ParticleSystem *psys_start = NULL, *psys, *psys_from;
 	ParticleSystem **tmp_psys;
 	DerivedMesh *final_dm;
 	CustomDataMask cdmask;
@@ -1095,6 +1095,7 @@ static bool copy_particle_systems_to_object(Scene *scene, Object *ob_from, Parti
 				break;
 			default:
 				/* should not happen */
+				from_mat = to_mat = NULL;
 				BLI_assert(false);
 				break;
 		}

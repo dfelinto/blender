@@ -26,7 +26,7 @@
  * Throughput_coop ------------------------------------|--- kernel_lamp_emission --|--- PathRadiance_coop
  * Ray_coop -------------------------------------------|                           |--- Queue_data(QUEUE_ACTIVE_AND_REGENERATED_RAYS)
  * PathState_coop -------------------------------------|                           |--- Queue_index(QUEUE_ACTIVE_AND_REGENERATED_RAYS)
- * kg (globals + data) --------------------------------|                           |
+ * kg (globals) ---------------------------------------|                           |
  * Intersection_coop ----------------------------------|                           |
  * ray_state ------------------------------------------|                           |
  * Queue_data (QUEUE_ACTIVE_AND_REGENERATED_RAYS) -----|                           |
@@ -37,12 +37,11 @@
  * sh -------------------------------------------------|                           |
  * parallel_samples -----------------------------------|                           |
  *
- * note : shader_data is neither input nor output. Its just filled and consumed in the same, kernel_lamp_emission, kernel.
+ * note : sd is neither input nor output. Its just filled and consumed in the same, kernel_lamp_emission, kernel.
  */
 ccl_device void kernel_lamp_emission(
-        ccl_global char *globals,
-        ccl_constant KernelData *data,
-        ccl_global char *shader_data,          /* Required for lamp emission */
+        KernelGlobals *kg,
+        ShaderData *sd,                        /* Required for lamp emission */
         ccl_global float3 *throughput_coop,    /* Required for lamp emission */
         PathRadiance *PathRadiance_coop,       /* Required for lamp emission */
         ccl_global Ray *Ray_coop,              /* Required for lamp emission */
@@ -59,8 +58,6 @@ ccl_device void kernel_lamp_emission(
 	if(IS_STATE(ray_state, ray_index, RAY_ACTIVE) ||
 	   IS_STATE(ray_state, ray_index, RAY_HIT_BACKGROUND))
 	{
-		KernelGlobals *kg = (KernelGlobals *)globals;
-		ShaderData *sd = (ShaderData *)shader_data;
 		PathRadiance *L = &PathRadiance_coop[ray_index];
 
 		float3 throughput = throughput_coop[ray_index];

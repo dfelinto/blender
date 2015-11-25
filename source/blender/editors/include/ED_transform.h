@@ -83,7 +83,8 @@ enum TfmMode {
 	TFM_ALIGN,
 	TFM_EDGE_SLIDE,
 	TFM_VERT_SLIDE,
-	TFM_SEQ_SLIDE
+	TFM_SEQ_SLIDE,
+	TFM_BONE_ENVELOPE_DIST,
 };
 
 /* TRANSFORM CONTEXTS */
@@ -93,7 +94,6 @@ enum TfmMode {
 #define CTX_NO_PET          (1 << 2)
 #define CTX_NO_MIRROR       (1 << 3)
 #define CTX_AUTOCONFIRM     (1 << 4)
-#define CTX_NDOF            (1 << 5)
 #define CTX_MOVIECLIP       (1 << 6)
 #define CTX_MASK            (1 << 7)
 #define CTX_PAINT_CURVE     (1 << 8)
@@ -126,7 +126,7 @@ void BIF_createTransformOrientation(struct bContext *C, struct ReportList *repor
 void BIF_selectTransformOrientation(struct bContext *C, struct TransformOrientation *ts);
 void BIF_selectTransformOrientationValue(struct bContext *C, int orientation);
 
-void ED_getTransformOrientationMatrix(const struct bContext *C, float orientation_mat[3][3], const bool activeOnly);
+void ED_getTransformOrientationMatrix(const struct bContext *C, float orientation_mat[3][3], const short around);
 
 int BIF_countTransformOrientation(const struct bContext *C);
 

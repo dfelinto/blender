@@ -169,8 +169,8 @@ void BKE_armature_make_local(bArmature *arm)
 			if (ob->data == arm) {
 				if (ob->id.lib == NULL) {
 					ob->data = arm_new;
-					arm_new->id.us++;
-					arm->id.us--;
+					id_us_plus(&arm_new->id);
+					id_us_min(&arm->id);
 				}
 			}
 		}
@@ -1141,8 +1141,7 @@ void BKE_armature_loc_world_to_pose(Object *ob, const float inloc[3], float outl
  * Not exported, as it is only used in this file currently... */
 static void get_offset_bone_mat(Bone *bone, float offs_bone[4][4])
 {
-	if (!bone->parent)
-		return;
+	BLI_assert(bone->parent != NULL);
 
 	/* Bone transform itself. */
 	copy_m4_m3(offs_bone, bone->bone_mat);
@@ -1326,18 +1325,20 @@ void BKE_armature_mat_pose_to_bone_ex(Object *ob, bPoseChannel *pchan, float inm
 /* same as BKE_object_mat3_to_rot() */
 void BKE_pchan_mat3_to_rot(bPoseChannel *pchan, float mat[3][3], bool use_compat)
 {
+	BLI_ASSERT_UNIT_M3(mat);
+
 	switch (pchan->rotmode) {
 		case ROT_MODE_QUAT:
-			mat3_to_quat(pchan->quat, mat);
+			mat3_normalized_to_quat(pchan->quat, mat);
 			break;
 		case ROT_MODE_AXISANGLE:
-			mat3_to_axis_angle(pchan->rotAxis, &pchan->rotAngle, mat);
+			mat3_normalized_to_axis_angle(pchan->rotAxis, &pchan->rotAngle, mat);
 			break;
 		default: /* euler */
 			if (use_compat)
-				mat3_to_compatible_eulO(pchan->eul, pchan->eul, pchan->rotmode, mat);
+				mat3_normalized_to_compatible_eulO(pchan->eul, pchan->eul, pchan->rotmode, mat);
 			else
-				mat3_to_eulO(pchan->eul, pchan->rotmode, mat);
+				mat3_normalized_to_eulO(pchan->eul, pchan->rotmode, mat);
 			break;
 	}
 }
@@ -1506,6 +1507,8 @@ void vec_roll_to_mat3_normalized(const float nor[3], const float roll, float mat
 	float theta;
 	float rMatrix[3][3], bMatrix[3][3];
 
+	BLI_ASSERT_UNIT_V3(nor);
+
 	theta = 1.0f + nor[1];
 
 	/* With old algo, 1.0e-13f caused T23954 and T31333, 1.0e-6f caused T27675 and T30438,
@@ -1566,15 +1569,14 @@ void vec_roll_to_mat3(const float vec[3], const float roll, float mat[3][3])
 
 /* recursive part, calculates restposition of entire tree of children */
 /* used by exiting editmode too */
-void BKE_armature_where_is_bone(Bone *bone, Bone *prevbone)
+void BKE_armature_where_is_bone(Bone *bone, Bone *prevbone, const bool use_recursion)
 {
 	float vec[3];
 
 	/* Bone Space */
 	sub_v3_v3v3(vec, bone->tail, bone->head);
+	bone->length = len_v3(vec);
 	vec_roll_to_mat3(vec, bone->roll, bone->bone_mat);
-
-	bone->length = len_v3v3(bone->head, bone->tail);
 
 	/* this is called on old file reading too... */
 	if (bone->xwidth == 0.0f) {
@@ -1597,9 +1599,11 @@ void BKE_armature_where_is_bone(Bone *bone, Bone *prevbone)
 	}
 
 	/* and the kiddies */
-	prevbone = bone;
-	for (bone = bone->childbase.first; bone; bone = bone->next) {
-		BKE_armature_where_is_bone(bone, prevbone);
+	if (use_recursion) {
+		prevbone = bone;
+		for (bone = bone->childbase.first; bone; bone = bone->next) {
+			BKE_armature_where_is_bone(bone, prevbone, use_recursion);
+		}
 	}
 }
 
@@ -1611,7 +1615,7 @@ void BKE_armature_where_is(bArmature *arm)
 
 	/* hierarchical from root to children */
 	for (bone = arm->bonebase.first; bone; bone = bone->next) {
-		BKE_armature_where_is_bone(bone, NULL);
+		BKE_armature_where_is_bone(bone, NULL, true);
 	}
 }
 
@@ -2182,20 +2186,14 @@ static int minmax_armature(Object *ob, float r_min[3], float r_max[3])
 	return (BLI_listbase_is_empty(&ob->pose->chanbase) == false);
 }
 
-static void boundbox_armature(Object *ob, float loc[3], float size[3])
+static void boundbox_armature(Object *ob)
 {
 	BoundBox *bb;
 	float min[3], max[3];
-	float mloc[3], msize[3];
 
 	if (ob->bb == NULL)
-		ob->bb = MEM_callocN(sizeof(BoundBox), "Armature boundbox");
+		ob->bb = MEM_mallocN(sizeof(BoundBox), "Armature boundbox");
 	bb = ob->bb;
-
-	if (!loc)
-		loc = mloc;
-	if (!size)
-		size = msize;
 
 	INIT_MINMAX(min, max);
 	if (!minmax_armature(ob, min, max)) {
@@ -2203,20 +2201,54 @@ static void boundbox_armature(Object *ob, float loc[3], float size[3])
 		max[0] = max[1] = max[2] = 1.0f;
 	}
 
-	mid_v3_v3v3(loc, min, max);
-
-	size[0] = (max[0] - min[0]) / 2.0f;
-	size[1] = (max[1] - min[1]) / 2.0f;
-	size[2] = (max[2] - min[2]) / 2.0f;
-
 	BKE_boundbox_init_from_minmax(bb, min, max);
 }
 
 BoundBox *BKE_armature_boundbox_get(Object *ob)
 {
-	boundbox_armature(ob, NULL, NULL);
+	boundbox_armature(ob);
 
 	return ob->bb;
+}
+
+bool BKE_pose_minmax(Object *ob, float r_min[3], float r_max[3], bool use_hidden, bool use_select)
+{
+	bool changed = false;
+
+	if (ob->pose) {
+		bArmature *arm = ob->data;
+		bPoseChannel *pchan;
+
+		for (pchan = ob->pose->chanbase.first; pchan; pchan = pchan->next) {
+			/* XXX pchan->bone may be NULL for duplicated bones, see duplicateEditBoneObjects() comment
+			 *     (editarmature.c:2592)... Skip in this case too! */
+			if (pchan->bone &&
+			    (!((use_hidden == false) && (PBONE_VISIBLE(arm, pchan->bone) == false)) &&
+			     !((use_select == true)  && ((pchan->bone->flag & BONE_SELECTED) == 0))))
+			{
+				bPoseChannel *pchan_tx = (pchan->custom && pchan->custom_tx) ? pchan->custom_tx : pchan;
+				BoundBox *bb_custom = ((pchan->custom) && !(arm->flag & ARM_NO_CUSTOM)) ?
+				                      BKE_object_boundbox_get(pchan->custom) : NULL;
+				if (bb_custom) {
+					float mat[4][4], smat[4][4];
+					scale_m4_fl(smat, PCHAN_CUSTOM_DRAW_SIZE(pchan));
+					mul_m4_series(mat, ob->obmat, pchan_tx->pose_mat, smat);
+					BKE_boundbox_minmax(bb_custom, mat, r_min, r_max);
+				}
+				else {
+					float vec[3];
+					mul_v3_m4v3(vec, ob->obmat, pchan_tx->pose_head);
+					minmax_v3v3_v3(r_min, r_max, vec);
+					mul_v3_m4v3(vec, ob->obmat, pchan_tx->pose_tail);
+					minmax_v3v3_v3(r_min, r_max, vec);
+				}
+
+				changed = true;
+			}
+		}
+	}
+
+	return changed;
 }
 
 /************** Graph evaluation ********************/

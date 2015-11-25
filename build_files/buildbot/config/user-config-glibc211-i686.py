@@ -4,9 +4,9 @@ BF_NUMJOBS = 4
 WITHOUT_BF_OVERWRITE_INSTALL = True
 
 # Python configuration
-BF_PYTHON_VERSION = '3.4'
+BF_PYTHON_VERSION = '3.5'
 BF_PYTHON_ABI_FLAGS = 'm'
-BF_PYTHON = '/opt/lib/python-3.4'
+BF_PYTHON = '/opt/lib/python-3.5'
 WITH_BF_PYTHON_INSTALL_NUMPY = True
 WITH_BF_PYTHON_INSTALL_REQUESTS = True
 
@@ -165,6 +165,15 @@ BF_BOOST_LIBPATH = '${BF_BOOST}/lib'
 
 # Ocean Simulation
 WITH_BF_OCEANSIM = True
+
+# OpenSubdiv
+WITH_BF_OPENSUBDIV = True
+WITH_BF_STATICOPENSUBDIV = True
+BF_OPENSUBDIV = '/opt/lib/opensubdiv'
+BF_OPENSUBDIV_INC = '${BF_OPENSUBDIV}/include'
+BF_OPENSUBDIV_LIB = 'osdCPU osdGPU'
+BF_OPENSUBDIV_LIBPATH = '${BF_OPENSUBDIV}/lib'
+BF_OPENSUBDIV_LIB_STATIC = '${BF_OPENSUBDIV}/lib/libosdCPU.a ${BF_OPENSUBDIV}/lib/libosdGPU.a'
 
 # Compilation and optimization
 BF_DEBUG = False

@@ -98,7 +98,7 @@ static void partialvis_update_mesh(Object *ob,
 	Mesh *me = ob->data;
 	MVert *mvert;
 	const float *paint_mask;
-	int *vert_indices;
+	const int *vert_indices;
 	int totvert, i;
 	bool any_changed = false, any_visible = false;
 			
@@ -417,7 +417,7 @@ static int hide_show_exec(bContext *C, wmOperator *op)
 		MEM_freeN(nodes);
 	
 	/* end undo */
-	sculpt_undo_push_end();
+	sculpt_undo_push_end(C);
 
 	/* ensure that edges and faces get hidden as well (not used by
 	 * sculpt but it looks wrong when entering editmode otherwise) */

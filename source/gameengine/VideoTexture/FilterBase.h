@@ -33,7 +33,7 @@
 
 #include "Common.h"
 
-#include "PyObjectPlus.h"
+#include "EXP_PyObjectPlus.h"
 
 #include "PyTypeList.h"
 
@@ -116,6 +116,10 @@ protected:
 		// otherwise return converted pixel
 		return m_previous->m_filter->convert(src, x, y, size, pixSize);
 	}
+
+#ifdef WITH_CXX_GUARDEDALLOC
+	MEM_CXX_CLASS_ALLOC_FUNCS("GE:FilterBase")
+#endif
 };
 
 

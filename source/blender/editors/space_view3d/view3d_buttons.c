@@ -45,7 +45,7 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BLI_math.h"
 #include "BLI_blenlib.h"
@@ -992,9 +992,8 @@ static void v3d_transform_butsR(uiLayout *layout, PointerRNA *ptr)
 
 	if (ptr->type == &RNA_Object) {
 		Object *ob = ptr->data;
-		/* dimensions and material support just happen to be the same checks
-		 * later we may want to add dimensions for lattice, armature etc too */
-		if (OB_TYPE_SUPPORT_MATERIAL(ob->type)) {
+		/* dimensions and editmode just happen to be the same checks */
+		if (OB_TYPE_SUPPORT_EDITMODE(ob->type)) {
 			uiItemR(layout, ptr, "dimensions", 0, NULL, ICON_NONE);
 		}
 	}
@@ -1157,7 +1156,7 @@ static void view3d_panel_transform(const bContext *C, Panel *pa)
 		}
 		else {
 			View3D *v3d = CTX_wm_view3d(C);
-			const float lim = 10000.0f * max_ff(1.0f, v3d->grid);
+			const float lim = 10000.0f * max_ff(1.0f, ED_view3d_grid_scale(scene, v3d, NULL));
 			v3d_editvertex_buts(col, v3d, ob, lim);
 		}
 	}
@@ -1179,7 +1178,7 @@ void view3d_buttons_register(ARegionType *art)
 	pt = MEM_callocN(sizeof(PanelType), "spacetype view3d panel object");
 	strcpy(pt->idname, "VIEW3D_PT_transform");
 	strcpy(pt->label, N_("Transform"));  /* XXX C panels not  available through RNA (bpy.types)! */
-	strcpy(pt->translation_context, BLF_I18NCONTEXT_DEFAULT_BPYRNA);
+	strcpy(pt->translation_context, BLT_I18NCONTEXT_DEFAULT_BPYRNA);
 	pt->draw = view3d_panel_transform;
 	pt->poll = view3d_panel_transform_poll;
 	BLI_addtail(&art->paneltypes, pt);
@@ -1187,7 +1186,7 @@ void view3d_buttons_register(ARegionType *art)
 	pt = MEM_callocN(sizeof(PanelType), "spacetype view3d panel vgroup");
 	strcpy(pt->idname, "VIEW3D_PT_vgroup");
 	strcpy(pt->label, N_("Vertex Weights"));  /* XXX C panels are not available through RNA (bpy.types)! */
-	strcpy(pt->translation_context, BLF_I18NCONTEXT_DEFAULT_BPYRNA);
+	strcpy(pt->translation_context, BLT_I18NCONTEXT_DEFAULT_BPYRNA);
 	pt->draw = view3d_panel_vgroup;
 	pt->poll = view3d_panel_vgroup_poll;
 	BLI_addtail(&art->paneltypes, pt);

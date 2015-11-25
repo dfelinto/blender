@@ -42,6 +42,7 @@
 
 #include "BKE_cdderivedmesh.h"
 #include "BKE_global.h"
+#include "BKE_library_query.h"
 #include "BKE_modifier.h"
 #include "BKE_deform.h"
 #include "BKE_editmesh.h"
@@ -114,12 +115,11 @@ static bool isDisabled(ModifierData *md, int UNUSED(useRenderParams))
 
 static void foreachObjectLink(
         ModifierData *md, Object *ob,
-        void (*walk)(void *userData, Object *ob, Object **obpoin),
-        void *userData)
+        ObjectWalkFunc walk, void *userData)
 {
 	MeshDeformModifierData *mmd = (MeshDeformModifierData *) md;
 
-	walk(userData, ob, &mmd->object);
+	walk(userData, ob, &mmd->object, IDWALK_NOP);
 }
 
 static void updateDepgraph(ModifierData *md, DagForest *forest,
@@ -234,7 +234,7 @@ typedef struct MeshdeformUserdata {
 	float (*icagemat)[3];
 } MeshdeformUserdata;
 
-static void meshdeform_vert_task(void * userdata, int iter)
+static void meshdeform_vert_task(void *userdata, void *UNUSED(userdata_chunck), int iter)
 {
 	MeshdeformUserdata *data = userdata;
 	/*const*/ MeshDeformModifierData *mmd = data->mmd;
@@ -318,7 +318,7 @@ static void meshdeformModifier_do(
 	 */
 	if (mmd->object == md->scene->obedit) {
 		BMEditMesh *em = BKE_editmesh_from_object(mmd->object);
-		tmpdm = editbmesh_get_derived_cage_and_final(md->scene, mmd->object, em, &cagedm, 0);
+		tmpdm = editbmesh_get_derived_cage_and_final(md->scene, mmd->object, em, 0, &cagedm);
 		if (tmpdm)
 			tmpdm->release(tmpdm);
 	}

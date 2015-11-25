@@ -61,7 +61,6 @@ void GPU_extensions_disable(void);
 
 bool GPU_glsl_support(void);
 bool GPU_non_power_of_two_support(void);
-bool GPU_vertex_buffer_support(void);
 bool GPU_display_list_support(void);
 bool GPU_bicubic_bump_support(void);
 bool GPU_geometry_shader_support(void);
@@ -130,6 +129,8 @@ GPUTexture *GPU_texture_create_depth(int w, int h, char err_out[256]);
 GPUTexture *GPU_texture_create_vsm_shadow_map(int size, char err_out[256]);
 GPUTexture *GPU_texture_create_2D_procedural(int w, int h, const float *pixels, bool repeat, char err_out[256]);
 GPUTexture *GPU_texture_create_1D_procedural(int w, const float *pixels, char err_out[256]);
+GPUTexture *GPU_texture_create_2D_multisample(int w, int h, const float *pixels, GPUHDRType hdr, int samples, char err_out[256]);
+GPUTexture *GPU_texture_create_depth_multisample(int w, int h, int samples, char err_out[256]);
 GPUTexture *GPU_texture_from_blender(struct Image *ima,
 	struct ImageUser *iuser, bool is_data, double time, int mipmap);
 GPUTexture *GPU_texture_from_preview(struct PreviewImage *prv, int mipmap);
@@ -179,20 +180,21 @@ void GPU_framebuffer_blur(GPUFrameBuffer *fb, GPUTexture *tex, GPUFrameBuffer *b
  * - wrapper around framebuffer and texture for simple offscreen drawing
  * - changes size if graphics card can't support it */
 
-GPUOffScreen *GPU_offscreen_create(int width, int height, char err_out[256]);
+GPUOffScreen *GPU_offscreen_create(int width, int height, int samples, char err_out[256]);
 void GPU_offscreen_free(GPUOffScreen *ofs);
 void GPU_offscreen_bind(GPUOffScreen *ofs, bool save);
 void GPU_offscreen_unbind(GPUOffScreen *ofs, bool restore);
 void GPU_offscreen_read_pixels(GPUOffScreen *ofs, int type, void *pixels);
 int GPU_offscreen_width(const GPUOffScreen *ofs);
 int GPU_offscreen_height(const GPUOffScreen *ofs);
+int GPU_offscreen_color_texture(const GPUOffScreen *ofs);
 
 /* Builtin/Non-generated shaders */
 typedef enum GPUProgramType {
 	GPU_PROGRAM_TYPE_FRAGMENT = 0
 } GPUProgramType;
 
-
+/* TODO: remove ARB program support (recode smoke shader in GLSL) */
 GPUProgram *GPU_program_shader_create(GPUProgramType type, const char *code);
 void GPU_program_free(GPUProgram *program);
 void GPU_program_parameter_4f(GPUProgram *program, unsigned int location, float x, float y, float z, float w);
@@ -204,6 +206,19 @@ void GPU_program_unbind(GPUProgram *);
  * - must call texture bind before setting a texture as uniform! */
 
 GPUShader *GPU_shader_create(const char *vertexcode, const char *fragcode, const char *geocode, const char *libcode, const char *defines, int input, int output, int number);
+enum {
+	GPU_SHADER_FLAGS_NONE = 0,
+	GPU_SHADER_FLAGS_SPECIAL_OPENSUBDIV = (1 << 0),
+};
+GPUShader *GPU_shader_create_ex(const char *vertexcode,
+                                const char *fragcode,
+                                const char *geocode,
+                                const char *libcode,
+                                const char *defines,
+                                int input,
+                                int output,
+                                int number,
+                                const int flags);
 void GPU_shader_free(GPUShader *shader);
 
 void GPU_shader_bind(GPUShader *shader);

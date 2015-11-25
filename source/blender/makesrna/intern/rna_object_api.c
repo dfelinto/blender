@@ -175,7 +175,7 @@ static void dupli_render_particle_set(Scene *scene, Object *ob, int level, int e
 			/* this is to make sure we get render level duplis in groups:
 			 * the derivedmesh must be created before init_render_mesh,
 			 * since object_duplilist does dupliparticles before that */
-			dm = mesh_create_derived_render(scene, ob, CD_MASK_BAREMESH | CD_MASK_MTFACE | CD_MASK_MCOL);
+			dm = mesh_create_derived_render(scene, ob, CD_MASK_BAREMESH | CD_MASK_MLOOPUV | CD_MASK_MLOOPCOL);
 			dm->release(dm);
 
 			for (psys = ob->particlesystem.first; psys; psys = psys->next)
@@ -229,7 +229,7 @@ static PointerRNA rna_Object_shape_key_add(Object *ob, bContext *C, ReportList *
 {
 	KeyBlock *kb = NULL;
 
-	if ((kb = BKE_object_insert_shape_key(ob, name, from_mix))) {
+	if ((kb = BKE_object_shapekey_insert(ob, name, from_mix))) {
 		PointerRNA keyptr;
 
 		RNA_pointer_create((ID *)ob->data, &RNA_ShapeKey, kb, &keyptr);
@@ -241,6 +241,29 @@ static PointerRNA rna_Object_shape_key_add(Object *ob, bContext *C, ReportList *
 		BKE_reportf(reports, RPT_ERROR, "Object '%s' does not support shapes", ob->id.name + 2);
 		return PointerRNA_NULL;
 	}
+}
+
+static void rna_Object_shape_key_remove(
+        Object *ob, Main *bmain, ReportList *reports,
+        PointerRNA *kb_ptr)
+{
+	KeyBlock *kb = kb_ptr->data;
+	Key *key = BKE_key_from_object(ob);
+
+	if ((key == NULL) || BLI_findindex(&key->block, kb) == -1) {
+		BKE_reportf(reports, RPT_ERROR, "ShapeKey not found");
+		return;
+	}
+
+	if (!BKE_object_shapekey_remove(bmain, ob, kb)) {
+		BKE_reportf(reports, RPT_ERROR, "Could not remove ShapeKey");
+		return;
+	}
+
+	DAG_id_tag_update(&ob->id, OB_RECALC_DATA);
+	WM_main_add_notifier(NC_OBJECT | ND_DRAW, ob);
+
+	RNA_POINTER_INVALIDATE(kb_ptr);
 }
 
 static int rna_Object_is_visible(Object *ob, Scene *sce)
@@ -286,18 +309,10 @@ static void rna_Mesh_assign_verts_to_group(Object *ob, bDeformGroup *group, int 
 #endif
 
 /* don't call inside a loop */
-static int dm_tessface_to_poly_index(DerivedMesh *dm, int tessface_index)
+static int dm_looptri_to_poly_index(DerivedMesh *dm, const MLoopTri *lt)
 {
-	if (tessface_index != ORIGINDEX_NONE) {
-		/* double lookup */
-		const int *index_mf_to_mpoly;
-		if ((index_mf_to_mpoly = dm->getTessFaceDataArray(dm, CD_ORIGINDEX))) {
-			const int *index_mp_to_orig = dm->getPolyDataArray(dm, CD_ORIGINDEX);
-			return DM_origindex_mface_mpoly(index_mf_to_mpoly, index_mp_to_orig, tessface_index);
-		}
-	}
-
-	return ORIGINDEX_NONE;
+	const int *index_mp_to_orig = dm->getPolyDataArray(dm, CD_ORIGINDEX);
+	return index_mp_to_orig ? index_mp_to_orig[lt->poly] : lt->poly;
 }
 
 static void rna_Object_ray_cast(Object *ob, ReportList *reports, float ray_start[3], float ray_end[3],
@@ -311,7 +326,7 @@ static void rna_Object_ray_cast(Object *ob, ReportList *reports, float ray_start
 	}
 
 	/* no need to managing allocation or freeing of the BVH data. this is generated and freed as needed */
-	bvhtree_from_mesh_faces(&treeData, ob->derivedFinal, 0.0f, 4, 6);
+	bvhtree_from_mesh_looptri(&treeData, ob->derivedFinal, 0.0f, 4, 6);
 
 	/* may fail if the mesh has no faces, in that case the ray-cast misses */
 	if (treeData.tree != NULL) {
@@ -328,7 +343,7 @@ static void rna_Object_ray_cast(Object *ob, ReportList *reports, float ray_start
 			if (hit.dist <= dist) {
 				copy_v3_v3(r_location, hit.co);
 				copy_v3_v3(r_normal, hit.no);
-				*index = dm_tessface_to_poly_index(ob->derivedFinal, hit.index);
+				*index = dm_looptri_to_poly_index(ob->derivedFinal, &treeData.looptri[hit.index]);
 				free_bvhtree_from_mesh(&treeData);
 				return;
 			}
@@ -353,7 +368,7 @@ static void rna_Object_closest_point_on_mesh(Object *ob, ReportList *reports, fl
 	}
 
 	/* no need to managing allocation or freeing of the BVH data. this is generated and freed as needed */
-	bvhtree_from_mesh_faces(&treeData, ob->derivedFinal, 0.0f, 4, 6);
+	bvhtree_from_mesh_looptri(&treeData, ob->derivedFinal, 0.0f, 4, 6);
 
 	if (treeData.tree == NULL) {
 		BKE_reportf(reports, RPT_ERROR, "Object '%s' could not create internal data for finding nearest point",
@@ -369,7 +384,7 @@ static void rna_Object_closest_point_on_mesh(Object *ob, ReportList *reports, fl
 		if (BLI_bvhtree_find_nearest(treeData.tree, point_co, &nearest, treeData.nearest_callback, &treeData) != -1) {
 			copy_v3_v3(n_location, nearest.co);
 			copy_v3_v3(n_normal, nearest.no);
-			*index = dm_tessface_to_poly_index(ob->derivedFinal, nearest.index);
+			*index = dm_looptri_to_poly_index(ob->derivedFinal, &treeData.looptri[nearest.index]);
 			free_bvhtree_from_mesh(&treeData);
 			return;
 		}
@@ -522,7 +537,7 @@ void RNA_api_object(StructRNA *srna)
 
 	/* mesh */
 	func = RNA_def_function(srna, "to_mesh", "rna_Object_to_mesh");
-	RNA_def_function_ui_description(func, "Create a Mesh datablock with modifiers applied");
+	RNA_def_function_ui_description(func, "Create a Mesh data-block with modifiers applied");
 	RNA_def_function_flag(func, FUNC_USE_REPORTS);
 	parm = RNA_def_pointer(func, "scene", "Scene", "", "Scene within which to evaluate modifiers");
 	RNA_def_property_flag(parm, PROP_REQUIRED | PROP_NEVER_NULL);
@@ -557,13 +572,20 @@ void RNA_api_object(StructRNA *srna)
 
 	/* Shape key */
 	func = RNA_def_function(srna, "shape_key_add", "rna_Object_shape_key_add");
-	RNA_def_function_ui_description(func, "Add shape key to an object");
+	RNA_def_function_ui_description(func, "Add shape key to this object");
 	RNA_def_function_flag(func, FUNC_USE_CONTEXT | FUNC_USE_REPORTS);
 	RNA_def_string(func, "name", "Key", 0, "", "Unique name for the new keyblock"); /* optional */
 	RNA_def_boolean(func, "from_mix", 1, "", "Create new shape from existing mix of shapes");
 	parm = RNA_def_pointer(func, "key", "ShapeKey", "", "New shape keyblock");
 	RNA_def_property_flag(parm, PROP_RNAPTR);
 	RNA_def_function_return(func, parm);
+
+	func = RNA_def_function(srna, "shape_key_remove", "rna_Object_shape_key_remove");
+	RNA_def_function_ui_description(func, "Remove a Shape Key from this object");
+	RNA_def_function_flag(func, FUNC_USE_MAIN | FUNC_USE_REPORTS);
+	parm = RNA_def_pointer(func, "key", "ShapeKey", "", "Keyblock to be removed");
+	RNA_def_property_flag(parm, PROP_REQUIRED | PROP_NEVER_NULL | PROP_RNAPTR);
+	RNA_def_property_clear_flag(parm, PROP_THICK_WRAP);
 
 	/* Ray Cast */
 	func = RNA_def_function(srna, "ray_cast", "rna_Object_ray_cast");
@@ -591,7 +613,7 @@ void RNA_api_object(StructRNA *srna)
 
 	/* Nearest Point */
 	func = RNA_def_function(srna, "closest_point_on_mesh", "rna_Object_closest_point_on_mesh");
-	RNA_def_function_ui_description(func, "Find the nearest point on the object");
+	RNA_def_function_ui_description(func, "Find the nearest point in object space");
 	RNA_def_function_flag(func, FUNC_USE_REPORTS);
 
 	/* location of point for test and max distance */

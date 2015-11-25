@@ -343,33 +343,37 @@ void BLI_end_threads(ListBase *threadbase)
 /* how many threads are native on this system? */
 int BLI_system_thread_count(void)
 {
-	int t;
+	static int t = -1;
+
+	if (num_threads_override != 0) {
+		return num_threads_override;
+	}
+	else if (LIKELY(t != -1)) {
+		return t;
+	}
+
+	{
 #ifdef WIN32
-	SYSTEM_INFO info;
-	GetSystemInfo(&info);
-	t = (int) info.dwNumberOfProcessors;
+		SYSTEM_INFO info;
+		GetSystemInfo(&info);
+		t = (int) info.dwNumberOfProcessors;
 #else 
 #   ifdef __APPLE__
-	int mib[2];
-	size_t len;
-	
-	mib[0] = CTL_HW;
-	mib[1] = HW_NCPU;
-	len = sizeof(t);
-	sysctl(mib, 2, &t, &len, NULL, 0);
+		int mib[2];
+		size_t len;
+
+		mib[0] = CTL_HW;
+		mib[1] = HW_NCPU;
+		len = sizeof(t);
+		sysctl(mib, 2, &t, &len, NULL, 0);
 #   else
-	t = (int)sysconf(_SC_NPROCESSORS_ONLN);
+		t = (int)sysconf(_SC_NPROCESSORS_ONLN);
 #   endif
 #endif
+	}
 
-	if (num_threads_override > 0)
-		return num_threads_override;
-	
-	if (t > RE_MAX_THREAD)
-		return RE_MAX_THREAD;
-	if (t < 1)
-		return 1;
-	
+	CLAMP(t, 1, RE_MAX_THREAD);
+
 	return t;
 }
 
@@ -385,56 +389,45 @@ int BLI_system_num_threads_override_get(void)
 
 /* Global Mutex Locks */
 
+static ThreadMutex *global_mutex_from_type(const int type)
+{
+	switch (type) {
+		case LOCK_IMAGE:
+			return &_image_lock;
+		case LOCK_DRAW_IMAGE:
+			return &_image_draw_lock;
+		case LOCK_VIEWER:
+			return &_viewer_lock;
+		case LOCK_CUSTOM1:
+			return &_custom1_lock;
+		case LOCK_RCACHE:
+			return &_rcache_lock;
+		case LOCK_OPENGL:
+			return &_opengl_lock;
+		case LOCK_NODES:
+			return &_nodes_lock;
+		case LOCK_MOVIECLIP:
+			return &_movieclip_lock;
+		case LOCK_COLORMANAGE:
+			return &_colormanage_lock;
+		case LOCK_FFTW:
+			return &_fftw_lock;
+		case LOCK_VIEW3D:
+			return &_view3d_lock;
+		default:
+			BLI_assert(0);
+			return NULL;
+	}
+}
+
 void BLI_lock_thread(int type)
 {
-	if (type == LOCK_IMAGE)
-		pthread_mutex_lock(&_image_lock);
-	else if (type == LOCK_DRAW_IMAGE)
-		pthread_mutex_lock(&_image_draw_lock);
-	else if (type == LOCK_VIEWER)
-		pthread_mutex_lock(&_viewer_lock);
-	else if (type == LOCK_CUSTOM1)
-		pthread_mutex_lock(&_custom1_lock);
-	else if (type == LOCK_RCACHE)
-		pthread_mutex_lock(&_rcache_lock);
-	else if (type == LOCK_OPENGL)
-		pthread_mutex_lock(&_opengl_lock);
-	else if (type == LOCK_NODES)
-		pthread_mutex_lock(&_nodes_lock);
-	else if (type == LOCK_MOVIECLIP)
-		pthread_mutex_lock(&_movieclip_lock);
-	else if (type == LOCK_COLORMANAGE)
-		pthread_mutex_lock(&_colormanage_lock);
-	else if (type == LOCK_FFTW)
-		pthread_mutex_lock(&_fftw_lock);
-	else if (type == LOCK_VIEW3D)
-		pthread_mutex_lock(&_view3d_lock);
+	pthread_mutex_lock(global_mutex_from_type(type));
 }
 
 void BLI_unlock_thread(int type)
 {
-	if (type == LOCK_IMAGE)
-		pthread_mutex_unlock(&_image_lock);
-	else if (type == LOCK_DRAW_IMAGE)
-		pthread_mutex_unlock(&_image_draw_lock);
-	else if (type == LOCK_VIEWER)
-		pthread_mutex_unlock(&_viewer_lock);
-	else if (type == LOCK_CUSTOM1)
-		pthread_mutex_unlock(&_custom1_lock);
-	else if (type == LOCK_RCACHE)
-		pthread_mutex_unlock(&_rcache_lock);
-	else if (type == LOCK_OPENGL)
-		pthread_mutex_unlock(&_opengl_lock);
-	else if (type == LOCK_NODES)
-		pthread_mutex_unlock(&_nodes_lock);
-	else if (type == LOCK_MOVIECLIP)
-		pthread_mutex_unlock(&_movieclip_lock);
-	else if (type == LOCK_COLORMANAGE)
-		pthread_mutex_unlock(&_colormanage_lock);
-	else if (type == LOCK_FFTW)
-		pthread_mutex_unlock(&_fftw_lock);
-	else if (type == LOCK_VIEW3D)
-		pthread_mutex_unlock(&_view3d_lock);
+	pthread_mutex_unlock(global_mutex_from_type(type));
 }
 
 /* Mutex Locks */
@@ -615,6 +608,11 @@ void BLI_condition_wait(ThreadCondition *cond, ThreadMutex *mutex)
 	pthread_cond_wait(cond, mutex);
 }
 
+void BLI_condition_wait_global_mutex(ThreadCondition *cond, const int type)
+{
+	pthread_cond_wait(cond, global_mutex_from_type(type));
+}
+
 void BLI_condition_notify_one(ThreadCondition *cond)
 {
 	pthread_cond_signal(cond);
@@ -775,6 +773,17 @@ int BLI_thread_queue_size(ThreadQueue *queue)
 	pthread_mutex_unlock(&queue->mutex);
 
 	return size;
+}
+
+bool BLI_thread_queue_is_empty(ThreadQueue *queue)
+{
+	bool is_empty;
+
+	pthread_mutex_lock(&queue->mutex);
+	is_empty = BLI_gsqueue_is_empty(queue->queue);
+	pthread_mutex_unlock(&queue->mutex);
+
+	return is_empty;
 }
 
 void BLI_thread_queue_nowait(ThreadQueue *queue)

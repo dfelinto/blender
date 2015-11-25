@@ -48,6 +48,7 @@
 #include "BKE_cdderivedmesh.h"
 #include "BKE_displist.h"
 #include "BKE_curve.h"
+#include "BKE_library_query.h"
 #include "BKE_modifier.h"
 
 #include "MOD_util.h"
@@ -90,15 +91,14 @@ static void copyData(ModifierData *md, ModifierData *target)
 
 static void foreachObjectLink(
         ModifierData *md, Object *ob,
-        void (*walk)(void *userData, Object *ob, Object **obpoin),
-        void *userData)
+        ObjectWalkFunc walk, void *userData)
 {
 	ArrayModifierData *amd = (ArrayModifierData *) md;
 
-	walk(userData, ob, &amd->start_cap);
-	walk(userData, ob, &amd->end_cap);
-	walk(userData, ob, &amd->curve_ob);
-	walk(userData, ob, &amd->offset_ob);
+	walk(userData, ob, &amd->start_cap, IDWALK_NOP);
+	walk(userData, ob, &amd->end_cap, IDWALK_NOP);
+	walk(userData, ob, &amd->curve_ob, IDWALK_NOP);
+	walk(userData, ob, &amd->offset_ob, IDWALK_NOP);
 }
 
 static void updateDepgraph(ModifierData *md, DagForest *forest,
@@ -509,8 +509,8 @@ static DerivedMesh *arrayModifier_doArray(
 #endif
 
 			if (amd->curve_ob->curve_cache && amd->curve_ob->curve_cache->path) {
-				float scale = mat4_to_scale(amd->curve_ob->obmat);
-				length = scale * amd->curve_ob->curve_cache->path->totdist;
+				float scale_fac = mat4_to_scale(amd->curve_ob->obmat);
+				length = scale_fac * amd->curve_ob->curve_cache->path->totdist;
 			}
 		}
 	}

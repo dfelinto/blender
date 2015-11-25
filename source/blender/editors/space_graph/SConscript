@@ -33,11 +33,10 @@ incs = [
     '#/intern/guardedalloc',
     env['BF_GLEW_INC'],
     '#/intern/glew-mx',
-    '#/intern/audaspace/intern',
     '../include',
-    '../../blenfont',
     '../../blenkernel',
     '../../blenlib',
+    '../../blentranslation',
     '../../gpu',
     '../../imbuf',
     '../../makesdna',
@@ -45,7 +44,12 @@ incs = [
     '../../windowmanager',
     ]
 
-defs = env['BF_GL_DEFINITIONS']
+defs = []
+defs += env['BF_GL_DEFINITIONS']
+
+if env['WITH_BF_AUDASPACE']:
+    defs += env['BF_AUDASPACE_DEF']
+    incs.append(env['BF_AUDASPACE_C_INC'])
 
 if env['WITH_BF_INTERNATIONAL']:
     defs.append('WITH_INTERNATIONAL')

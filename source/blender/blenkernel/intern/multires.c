@@ -1464,10 +1464,10 @@ DerivedMesh *multires_make_derived_from_derived(DerivedMesh *dm,
 	gridData = result->getGridData(result);
 	result->getGridKey(result, &key);
 
-	subGridData = MEM_callocN(sizeof(CCGElem *) * numGrids, "subGridData*");
+	subGridData = MEM_mallocN(sizeof(CCGElem *) * numGrids, "subGridData*");
 
 	for (i = 0; i < numGrids; i++) {
-		subGridData[i] = MEM_callocN(key.elem_size * gridSize * gridSize, "subGridData");
+		subGridData[i] = MEM_mallocN(key.elem_size * gridSize * gridSize, "subGridData");
 		memcpy(subGridData[i], gridData[i], key.elem_size * gridSize * gridSize);
 	}
 
@@ -1855,7 +1855,7 @@ static void multires_load_old_dm(DerivedMesh *dm, Mesh *me, int totlvl)
 	Multires *mr = me->mr;
 	MVert *vsrc, *vdst;
 	unsigned int src, dst;
-	int st = multires_side_tot[totlvl - 1] - 1;
+	int st_last = multires_side_tot[totlvl - 1] - 1;
 	int extedgelen = multires_side_tot[totlvl] - 2;
 	int *vvmap; // inorder for dst, map to src
 	int crossedgelen;
@@ -1901,7 +1901,7 @@ static void multires_load_old_dm(DerivedMesh *dm, Mesh *me, int totlvl)
 		int sides = lvl1->faces[i].v[3] ? 4 : 3;
 
 		vvmap[dst] = src + lvl1->totedge + i;
-		dst += 1 + sides * (st - 1) * st;
+		dst += 1 + sides * (st_last - 1) * st_last;
 	}
 
 
@@ -1943,7 +1943,7 @@ static void multires_load_old_dm(DerivedMesh *dm, Mesh *me, int totlvl)
 				lvl = lvl->next;
 			}
 
-			dst += sides * (st - 1) * st;
+			dst += sides * (st_last - 1) * st_last;
 
 			if (sides == 4) ++totquad;
 			else ++tottri;
@@ -1967,7 +1967,7 @@ static void multires_load_old_dm(DerivedMesh *dm, Mesh *me, int totlvl)
 		dst = 0;
 		for (j = 0; j < lvl1->totface; ++j) {
 			int sides = lvl1->faces[j].v[3] ? 4 : 3;
-			int ldst = dst + 1 + sides * (st - 1);
+			int ldst = dst + 1 + sides * (st_last - 1);
 
 			for (s = 0; s < sides; ++s) {
 				int st2 = multires_side_tot[totlvl - 1] - 2;
@@ -1984,7 +1984,7 @@ static void multires_load_old_dm(DerivedMesh *dm, Mesh *me, int totlvl)
 				                        find_old_edge(emap[0], lvl1->edges, cv, nv)->mid,
 				                        st2, st4);
 
-				ldst += (st - 1) * (st - 1);
+				ldst += (st_last - 1) * (st_last - 1);
 			}
 
 
@@ -2338,12 +2338,12 @@ void multires_topology_changed(Mesh *me)
 /***************** Multires interpolation stuff *****************/
 
 /* Find per-corner coordinate with given per-face UV coord */
-int mdisp_rot_face_to_crn(const int corners, const int face_side, const float u, const float v, float *x, float *y)
+int mdisp_rot_face_to_crn(struct MVert *UNUSED(mvert), struct MPoly *mpoly, struct MLoop *UNUSED(mloop), const struct MLoopTri *UNUSED(lt), const int face_side, const float u, const float v, float *x, float *y)
 {
 	const float offset = face_side * 0.5f - 0.5f;
 	int S = 0;
 
-	if (corners == 4) {
+	if (mpoly->totloop == 4) {
 		if (u <= offset && v <= offset) S = 0;
 		else if (u > offset  && v <= offset) S = 1;
 		else if (u > offset  && v > offset) S = 2;
@@ -2366,7 +2366,7 @@ int mdisp_rot_face_to_crn(const int corners, const int face_side, const float u,
 			*y = v - offset;
 		}
 	}
-	else {
+	else if (mpoly->totloop == 3) {
 		int grid_size = offset;
 		float w = (face_side - 1) - u - v;
 		float W1, W2;
@@ -2380,6 +2380,30 @@ int mdisp_rot_face_to_crn(const int corners, const int face_side, const float u,
 
 		*x = (1 - (2 * W1) / (1 - W2)) * grid_size;
 		*y = (1 - (2 * W2) / (1 - W1)) * grid_size;
+	}
+	else {
+		/* the complicated ngon case: find the actual coordinate from
+		 * the barycentric coordinates and finally find the closest vertex
+		 * should work reliably for convex cases only but better than nothing */
+
+#if 0
+		int minS, i;
+		float mindist = FLT_MAX;
+
+		for (i = 0; i < mpoly->totloop; i++) {
+			float len = len_v3v3(NULL, mvert[mloop[mpoly->loopstart + i].v].co);
+			if (len < mindist) {
+				mindist = len;
+				minS = i;
+			}
+		}
+		S = minS;
+#endif
+		/* temp not implemented yet and also not working properly in current master.
+		 * (was worked around by subdividing once) */
+		S = 0;
+		*x = 0;
+		*y = 0;
 	}
 
 	return S;

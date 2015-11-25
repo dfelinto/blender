@@ -50,6 +50,7 @@ incs = [
     '../render/intern/include',
     '../windowmanager',
     '../../../intern/guardedalloc',
+    '../../../intern/atomic',
 
     # data files
     env['DATA_HEADERS'],
@@ -57,6 +58,9 @@ incs = [
 
 if env['OURPLATFORM'] in ('win32-vc', 'win32-mingw', 'linuxcross', 'win64-vc'):
     incs.append(env['BF_PTHREADS_INC'])
+
+if env['WITH_BF_CYCLES'] and env['WITH_BF_CYCLES_DEBUG']:
+    defs.append('WITH_CYCLES_DEBUG')
 
 if False: # gives link errors 'win' in env['OURPLATFORM']:
     # split into 3 modules to work around command length limit on Windows

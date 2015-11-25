@@ -61,11 +61,14 @@ MINLINE void swap_v2_v2(float a[2], float b[2]);
 MINLINE void swap_v3_v3(float a[3], float b[3]);
 MINLINE void swap_v4_v4(float a[4], float b[4]);
 
+/* unsigned char */
+MINLINE void copy_v2_v2_uchar(unsigned char r[2], const unsigned char a[2]);
+MINLINE void copy_v3_v3_uchar(unsigned char r[3], const unsigned char a[3]);
+MINLINE void copy_v4_v4_uchar(unsigned char r[4], const unsigned char a[4]);
 /* char */
 MINLINE void copy_v2_v2_char(char r[2], const char a[2]);
 MINLINE void copy_v3_v3_char(char r[3], const char a[3]);
 MINLINE void copy_v4_v4_char(char r[4], const char a[4]);
-
 /* short */
 MINLINE void copy_v2_v2_short(short r[2], const short a[2]);
 MINLINE void copy_v3_v3_short(short r[3], const short a[3]);
@@ -240,13 +243,18 @@ MINLINE bool is_one_v3(const float a[3])  ATTR_WARN_UNUSED_RESULT;
 
 MINLINE bool equals_v2v2(const float v1[2], const float v2[2])  ATTR_WARN_UNUSED_RESULT;
 MINLINE bool equals_v3v3(const float a[3], const float b[3])  ATTR_WARN_UNUSED_RESULT;
+MINLINE bool equals_v4v4(const float a[4], const float b[4])  ATTR_WARN_UNUSED_RESULT;
+
 MINLINE bool compare_v2v2(const float a[2], const float b[2], const float limit)  ATTR_WARN_UNUSED_RESULT;
 MINLINE bool compare_v3v3(const float a[3], const float b[3], const float limit)  ATTR_WARN_UNUSED_RESULT;
+MINLINE bool compare_v4v4(const float a[4], const float b[4], const float limit)  ATTR_WARN_UNUSED_RESULT;
+
+MINLINE bool compare_v2v2_relative(const float a[2], const float b[2], const float limit, const int max_ulps)  ATTR_WARN_UNUSED_RESULT;
+MINLINE bool compare_v3v3_relative(const float a[3], const float b[3], const float limit, const int max_ulps)  ATTR_WARN_UNUSED_RESULT;
+MINLINE bool compare_v4v4_relative(const float a[4], const float b[4], const float limit, const int max_ulps)  ATTR_WARN_UNUSED_RESULT;
+
 MINLINE bool compare_len_v3v3(const float a[3], const float b[3], const float limit)  ATTR_WARN_UNUSED_RESULT;
 MINLINE bool compare_len_squared_v3v3(const float a[3], const float b[3], const float limit)  ATTR_WARN_UNUSED_RESULT;
-
-MINLINE bool compare_v4v4(const float a[4], const float b[4], const float limit)  ATTR_WARN_UNUSED_RESULT;
-MINLINE bool equals_v4v4(const float a[4], const float b[4])  ATTR_WARN_UNUSED_RESULT;
 
 MINLINE float line_point_side_v2(const float l1[2], const float l2[2], const float pt[2]) ATTR_WARN_UNUSED_RESULT;
 
@@ -302,7 +310,7 @@ MINLINE void normal_float_to_short_v3(short r[3], const float n[3]);
 void minmax_v3v3_v3(float min[3], float max[3], const float vec[3]);
 void minmax_v2v2_v2(float min[2], float max[2], const float vec[2]);
 
-void minmax_v3v3_v3_array(float r_min[3], float r_max[3], float (*vec_arr)[3], int nbr);
+void minmax_v3v3_v3_array(float r_min[3], float r_max[3], const float (*vec_arr)[3], int nbr);
 
 void dist_ensure_v3_v3fl(float v1[3], const float v2[3], const float dist);
 void dist_ensure_v2_v2fl(float v1[2], const float v2[2], const float dist);

@@ -40,7 +40,7 @@
 #include "BLI_math.h"
 #include "BLI_utildefines.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "DNA_anim_types.h"
 #include "DNA_gpencil_types.h"
@@ -223,7 +223,7 @@ static bool get_keyframe_extents(bAnimContext *ac, float *min, float *max, const
 				float tmin, tmax;
 
 				/* get range and apply necessary scaling before processing */
-				if (calc_fcurve_range(fcu, &tmin, &tmax, onlySel, true)) {
+				if (calc_fcurve_range(fcu, &tmin, &tmax, onlySel, false)) {
 
 					if (adt) {
 						tmin = BKE_nla_tweakedit_remap(adt, tmin, NLATIME_CONVERT_MAP);
@@ -237,7 +237,7 @@ static bool get_keyframe_extents(bAnimContext *ac, float *min, float *max, const
 				}
 			}
 		}
-		
+
 		/* free memory */
 		ANIM_animdata_freelist(&anim_data);
 	}
@@ -275,8 +275,12 @@ static int actkeys_previewrange_exec(bContext *C, wmOperator *UNUSED(op))
 	/* set the range directly */
 	get_keyframe_extents(&ac, &min, &max, false);
 	scene->r.flag |= SCER_PRV_RANGE;
-	scene->r.psfra = iroundf(min);
-	scene->r.pefra = iroundf(max);
+	scene->r.psfra = floorf(min);
+	scene->r.pefra = ceilf(max);
+
+	if (scene->r.psfra == scene->r.pefra) {
+		scene->r.pefra = scene->r.psfra + 1;
+	}
 	
 	/* set notifier that things have changed */
 	// XXX err... there's nothing for frame ranges yet, but this should do fine too
@@ -630,8 +634,8 @@ void ACTION_OT_paste(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 	
 	/* props */
-	RNA_def_enum(ot->srna, "offset", keyframe_paste_offset_items, KEYFRAME_PASTE_OFFSET_CFRA_START, "Offset", "Paste time offset of keys");
-	RNA_def_enum(ot->srna, "merge", keyframe_paste_merge_items, KEYFRAME_PASTE_MERGE_MIX, "Type", "Method of merging pasted keys and existing");
+	RNA_def_enum(ot->srna, "offset", rna_enum_keyframe_paste_offset_items, KEYFRAME_PASTE_OFFSET_CFRA_START, "Offset", "Paste time offset of keys");
+	RNA_def_enum(ot->srna, "merge", rna_enum_keyframe_paste_merge_items, KEYFRAME_PASTE_MERGE_MIX, "Type", "Method of merging pasted keys and existing");
 	prop = RNA_def_boolean(ot->srna, "flipped", false, "Flipped", "Paste keyframes from mirrored bones if they exist");
 	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
@@ -898,7 +902,7 @@ void ACTION_OT_delete(wmOperatorType *ot)
 
 /* ******************** Clean Keyframes Operator ************************* */
 
-static void clean_action_keys(bAnimContext *ac, float thresh)
+static void clean_action_keys(bAnimContext *ac, float thresh, bool clean_chan)
 {	
 	ListBase anim_data = {NULL, NULL};
 	bAnimListElem *ale;
@@ -910,7 +914,7 @@ static void clean_action_keys(bAnimContext *ac, float thresh)
 	
 	/* loop through filtered data and clean curves */
 	for (ale = anim_data.first; ale; ale = ale->next) {
-		clean_fcurve((FCurve *)ale->key_data, thresh);
+		clean_fcurve(ac, ale, thresh, clean_chan);
 
 		ale->update |= ANIM_UPDATE_DEFAULT;
 	}
@@ -925,6 +929,7 @@ static int actkeys_clean_exec(bContext *C, wmOperator *op)
 {
 	bAnimContext ac;
 	float thresh;
+	bool clean_chan;
 	
 	/* get editor data */
 	if (ANIM_animdata_get_context(C, &ac) == 0)
@@ -937,9 +942,10 @@ static int actkeys_clean_exec(bContext *C, wmOperator *op)
 		
 	/* get cleaning threshold */
 	thresh = RNA_float_get(op->ptr, "threshold");
+	clean_chan = RNA_boolean_get(op->ptr, "channels");
 	
 	/* clean keyframes */
-	clean_action_keys(&ac, thresh);
+	clean_action_keys(&ac, thresh, clean_chan);
 	
 	/* set notifier that keyframes have changed */
 	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
@@ -964,6 +970,7 @@ void ACTION_OT_clean(wmOperatorType *ot)
 	
 	/* properties */
 	ot->prop = RNA_def_float(ot->srna, "threshold", 0.001f, 0.0f, FLT_MAX, "Threshold", "", 0.0f, 1000.0f);
+	RNA_def_boolean(ot->srna, "channels", false, "Channels", "");
 }
 
 /* ******************** Sample Keyframes Operator *********************** */
@@ -1216,7 +1223,7 @@ void ACTION_OT_interpolation_type(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 	
 	/* id-props */
-	ot->prop = RNA_def_enum(ot->srna, "type", beztriple_interpolation_mode_items, 0, "Type", "");
+	ot->prop = RNA_def_enum(ot->srna, "type", rna_enum_beztriple_interpolation_mode_items, 0, "Type", "");
 }
 
 /* ******************** Set Handle-Type Operator *********************** */
@@ -1298,7 +1305,7 @@ void ACTION_OT_handle_type(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 	
 	/* id-props */
-	ot->prop = RNA_def_enum(ot->srna, "type", keyframe_handle_type_items, 0, "Type", "");
+	ot->prop = RNA_def_enum(ot->srna, "type", rna_enum_keyframe_handle_type_items, 0, "Type", "");
 }
 
 /* ******************** Set Keyframe-Type Operator *********************** */
@@ -1400,7 +1407,7 @@ void ACTION_OT_keyframe_type(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 	
 	/* id-props */
-	ot->prop = RNA_def_enum(ot->srna, "type", beztriple_keyframe_type_items, 0, "Type", "");
+	ot->prop = RNA_def_enum(ot->srna, "type", rna_enum_beztriple_keyframe_type_items, 0, "Type", "");
 }
 
 /* ************************************************************************** */

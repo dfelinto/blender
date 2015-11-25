@@ -26,10 +26,10 @@ BF_FFMPEG_LIBPATH='${BF_FFMPEG}/lib'
 BF_FFMPEG_LIB = 'avcodec avdevice avformat avutil mp3lame swscale x264 xvidcore theora theoradec theoraenc vorbis vorbisenc vorbisfile ogg bz2'
 #bz2 is a standard osx dynlib
 
-BF_PYTHON_VERSION = '3.4'
+BF_PYTHON_VERSION = '3.5'
 WITH_OSX_STATICPYTHON = True
 
-# python 3.4 uses precompiled libraries in bf svn /lib by default
+# python 3.5 uses precompiled libraries in bf svn /lib by default
 BF_PYTHON = LIBDIR + '/python'
 BF_PYTHON_INC = '${BF_PYTHON}/include/python${BF_PYTHON_VERSION}m'
 # BF_PYTHON_BINARY = '${BF_PYTHON}/bin/python${BF_PYTHON_VERSION}'
@@ -51,6 +51,8 @@ BF_OPENAL_INC = '${BF_OPENAL}/include' # only headers from libdir needed for pro
 BF_CXX = '/usr'
 WITH_BF_STATICCXX = False
 BF_CXX_LIB_STATIC = '${BF_CXX}/lib/libstdc++.a'
+
+WITH_BF_AUDASPACE = True
 
 # we use simply jack framework
 WITH_BF_JACK = True
@@ -213,6 +215,12 @@ WITH_BF_FREESTYLE = True
 #OpenMP ( will be checked for compiler support and turned off eventually )
 WITH_BF_OPENMP = True
 
+WITH_BF_OPENSUBDIV = False
+BF_OPENSUBDIV = LIBDIR + '/opensubdiv'
+BF_OPENSUBDIV_INC = '${BF_OPENSUBDIV}/include'
+BF_OPENSUBDIV_LIB = 'osdCPU osdGPU'
+BF_OPENSUBDIV_LIBPATH = '${BF_OPENSUBDIV}/lib'
+
 #Ray trace optimization
 WITH_BF_RAYOPTIMIZATION = True
 BF_RAYOPTIMIZATION_SSE_FLAGS = []
@@ -240,7 +248,7 @@ REL_CXXFLAGS = []
 REL_CCFLAGS = ['-O2']
 
 CC_WARN = ['-Wall']
-C_WARN = ['-Wno-char-subscripts', '-Wpointer-arith', '-Wcast-align', '-Wdeclaration-after-statement', '-Wno-unknown-pragmas', '-Wstrict-prototypes']
+C_WARN = ['-Wno-char-subscripts', '-Wpointer-arith', '-Wcast-align', '-Wvla', '-Wno-unknown-pragmas', '-Wstrict-prototypes']
 CXX_WARN = ['-Wno-invalid-offsetof', '-Wno-sign-compare']
 
 ##FIX_STUBS_WARNINGS = -Wno-unused

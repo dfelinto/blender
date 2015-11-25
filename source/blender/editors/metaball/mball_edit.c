@@ -63,7 +63,7 @@
 #include "mball_intern.h"
 
 /* This function is used to free all MetaElems from MetaBall */
-void free_editMball(Object *obedit)
+void ED_mball_editmball_free(Object *obedit)
 {
 	MetaBall *mb = (MetaBall *)obedit->data;
 
@@ -73,7 +73,7 @@ void free_editMball(Object *obedit)
 
 /* This function is called, when MetaBall Object is
  * switched from object mode to edit mode */
-void make_editMball(Object *obedit)
+void ED_mball_editmball_make(Object *obedit)
 {
 	MetaBall *mb = (MetaBall *)obedit->data;
 	MetaElem *ml; /*, *newml;*/
@@ -91,12 +91,12 @@ void make_editMball(Object *obedit)
 /* This function is called, when MetaBall Object switched from
  * edit mode to object mode. List of MetaElements is copied
  * from object->data->edit_elems to object->data->elems. */
-void load_editMball(Object *UNUSED(obedit))
+void ED_mball_editmball_load(Object *UNUSED(obedit))
 {
 }
 
 /* Add metaelem primitive to metaball object (which is in edit mode) */
-MetaElem *add_metaball_primitive(bContext *UNUSED(C), Object *obedit, float mat[4][4], float dia, int type)
+MetaElem *ED_mball_add_primitive(bContext *UNUSED(C), Object *obedit, float mat[4][4], float dia, int type)
 {
 	MetaBall *mball = (MetaBall *)obedit->data;
 	MetaElem *ml;
@@ -372,17 +372,22 @@ static int select_random_metaelems_exec(bContext *C, wmOperator *op)
 	MetaBall *mb = (MetaBall *)obedit->data;
 	MetaElem *ml;
 	const bool select = (RNA_enum_get(op->ptr, "action") == SEL_SELECT);
-	float percent = RNA_float_get(op->ptr, "percent") / 100.0f;
+	const float randfac = RNA_float_get(op->ptr, "percent") / 100.0f;
+	const int seed = RNA_int_get(op->ptr, "seed");
 	
+	RNG *rng = BLI_rng_new_srandom(seed);
+
 	for (ml = mb->editelems->first; ml; ml = ml->next) {
-		if (BLI_frand() < percent) {
+		if (BLI_rng_get_float(rng) < randfac) {
 			if (select)
 				ml->flag |= SELECT;
 			else
 				ml->flag &= ~SELECT;
 		}
 	}
-	
+
+	BLI_rng_free(rng);
+
 	WM_event_add_notifier(C, NC_GEOM | ND_SELECT, mb);
 	
 	return OPERATOR_FINISHED;
@@ -404,8 +409,7 @@ void MBALL_OT_select_random_metaelems(struct wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 	
 	/* properties */
-	RNA_def_float_percentage(ot->srna, "percent", 50.f, 0.0f, 100.0f, "Percent", "Percentage of elements to select randomly", 0.f, 100.0f);
-	WM_operator_properties_select_action_simple(ot, SEL_SELECT);
+	WM_operator_properties_select_random(ot);
 }
 
 /***************************** Duplicate operator *****************************/
@@ -532,7 +536,7 @@ void MBALL_OT_hide_metaelems(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 	
 	/* props */
-	RNA_def_boolean(ot->srna, "unselected", 0, "Unselected", "Hide unselected rather than selected");
+	RNA_def_boolean(ot->srna, "unselected", false, "Unselected", "Hide unselected rather than selected");
 }
 
 /***************************** Unhide operator *****************************/
@@ -575,7 +579,7 @@ void MBALL_OT_reveal_metaelems(wmOperatorType *ot)
 
 /* Select MetaElement with mouse click (user can select radius circle or
  * stiffness circle) */
-bool mouse_mball(bContext *C, const int mval[2], bool extend, bool deselect, bool toggle)
+bool ED_mball_select_pick(bContext *C, const int mval[2], bool extend, bool deselect, bool toggle)
 {
 	static MetaElem *startelem = NULL;
 	Object *obedit = CTX_data_edit_object(C);

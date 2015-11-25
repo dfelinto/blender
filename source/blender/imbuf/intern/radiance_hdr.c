@@ -37,13 +37,10 @@
  * ----------------------------------------------------------------------
  */
 
-#ifdef WIN32
-#  include "BLI_utildefines.h"
-#endif
-
 #include "MEM_guardedalloc.h"
 
 #include "BLI_fileops.h"
+#include "BLI_utildefines.h"
 
 #include "imbuf.h"
 
@@ -72,11 +69,11 @@ typedef float fCOLOR[3];
 #define COPY_RGBE(c1, c2) (c2[RED] = c1[RED], c2[GRN] = c1[GRN], c2[BLU] = c1[BLU], c2[EXP] = c1[EXP])
 
 /* read routines */
-static unsigned char *oldreadcolrs(RGBE *scan, unsigned char *mem, int xmax, unsigned char *mem_eof)
+static const unsigned char *oldreadcolrs(RGBE *scan, const unsigned char *mem, int xmax, const unsigned char *mem_eof)
 {
 	int i, rshift = 0, len = xmax;
 	while (len > 0) {
-		if (mem_eof - mem < 4) {
+		if (UNLIKELY(mem_eof - mem < 4)) {
 			return NULL;
 		}
 		scan[0][RED] = *mem++;
@@ -100,15 +97,15 @@ static unsigned char *oldreadcolrs(RGBE *scan, unsigned char *mem, int xmax, uns
 	return mem;
 }
 
-static unsigned char *freadcolrs(RGBE *scan, unsigned char *mem, int xmax, unsigned char *mem_eof)
+static const unsigned char *freadcolrs(RGBE *scan, const unsigned char *mem, int xmax, const unsigned char *mem_eof)
 {
 	int i, j, code, val;
 
-	if (mem_eof - mem < 4) {
+	if (UNLIKELY(mem_eof - mem < 4)) {
 		return NULL;
 	}
 
-	if ((xmax < MINELEN) | (xmax > MAXELEN)) {
+	if (UNLIKELY((xmax < MINELEN) | (xmax > MAXELEN))) {
 		return oldreadcolrs(scan, mem, xmax, mem_eof);
 	}
 
@@ -128,25 +125,31 @@ static unsigned char *freadcolrs(RGBE *scan, unsigned char *mem, int xmax, unsig
 		return oldreadcolrs(scan + 1, mem, xmax - 1, mem_eof);
 	}
 
-	if (((scan[0][BLU] << 8) | i) != xmax) {
+	if (UNLIKELY(((scan[0][BLU] << 8) | i) != xmax)) {
 		return NULL;
 	}
 
 	for (i = 0; i < 4; i++) {
-		if (mem_eof - mem < 2) {
+		if (UNLIKELY(mem_eof - mem < 2)) {
 			return NULL;
 		}
 		for (j = 0; j < xmax; ) {
 			code = *mem++;
 			if (code > 128) {
 				code &= 127;
+				if (UNLIKELY(code + j > xmax)) {
+					return NULL;
+				}
 				val = *mem++;
 				while (code--) {
 					scan[j++][i] = (unsigned char)val;
 				}
 			}
 			else {
-				if (mem_eof - mem < code) {
+				if (UNLIKELY(mem_eof - mem < code)) {
+					return NULL;
+				}
+				if (UNLIKELY(code + j > xmax)) {
 					return NULL;
 				}
 				while (code--) {
@@ -194,7 +197,7 @@ static void FLOAT2RGBE(fCOLOR fcol, RGBE rgbe)
 
 /* ImBuf read */
 
-int imb_is_a_hdr(unsigned char *buf)
+int imb_is_a_hdr(const unsigned char *buf)
 {
 	/* For recognition, Blender only loads first 32 bytes, so use #?RADIANCE id instead */
 	/* update: actually, the 'RADIANCE' part is just an optional program name, the magic word is really only the '#?' part */
@@ -204,7 +207,7 @@ int imb_is_a_hdr(unsigned char *buf)
 	return 0;
 }
 
-struct ImBuf *imb_loadhdr(unsigned char *mem, size_t size, int flags, char colorspace[IM_MAX_SPACE])
+struct ImBuf *imb_loadhdr(const unsigned char *mem, size_t size, int flags, char colorspace[IM_MAX_SPACE])
 {
 	struct ImBuf *ibuf;
 	RGBE *sline;
@@ -213,7 +216,7 @@ struct ImBuf *imb_loadhdr(unsigned char *mem, size_t size, int flags, char color
 	int found = 0;
 	int width = 0, height = 0;
 	int x, y;
-	unsigned char *ptr, *mem_eof = mem + size;
+	const unsigned char *ptr, *mem_eof = mem + size;
 	char oriY[80], oriX[80];
 
 	if (imb_is_a_hdr((void *)mem)) {
@@ -240,13 +243,17 @@ struct ImBuf *imb_loadhdr(unsigned char *mem, size_t size, int flags, char color
 			if (flags & IB_test) ibuf = IMB_allocImBuf(width, height, 32, 0);
 			else ibuf = IMB_allocImBuf(width, height, 32, (flags & IB_rect) | IB_rectfloat);
 
-			if (ibuf == NULL) return NULL;
-			ibuf->ftype = RADHDR;
+			if (UNLIKELY(ibuf == NULL)) {
+				return NULL;
+			}
+			ibuf->ftype = IMB_FTYPE_RADHDR;
 
 			if (flags & IB_alphamode_detect)
 				ibuf->flags |= IB_alphamode_premul;
 
-			if (flags & IB_test) return ibuf;
+			if (flags & IB_test) {
+				return ibuf;
+			}
 
 			/* read in and decode the actual data */
 			sline = (RGBE *)MEM_mallocN(sizeof(*sline) * width, __func__);
@@ -290,7 +297,9 @@ static int fwritecolrs(FILE *file, int width, int channels, unsigned char *ibufs
 	fCOLOR fcol;
 	RGBE rgbe, *rgbe_scan;
 
-	if ((ibufscan == NULL) && (fpscan == NULL)) return 0;
+	if (UNLIKELY((ibufscan == NULL) && (fpscan == NULL))) {
+		return 0;
+	}
 
 	rgbe_scan = (RGBE *)MEM_mallocN(sizeof(RGBE) * width, "radhdr_write_tmpscan");
 
@@ -381,7 +390,9 @@ int imb_savehdr(struct ImBuf *ibuf, const char *name, int flags)
 	
 	(void)flags; /* unused */
 	
-	if (file == NULL) return 0;
+	if (file == NULL) {
+		return 0;
+	}
 
 	writeHeader(file, width, height);
 

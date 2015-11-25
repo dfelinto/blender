@@ -87,18 +87,19 @@ void		WM_init_splash		(struct bContext *C);
 
 void		WM_check			(struct bContext *C);
 
-struct wmWindow	*WM_window_open	(struct bContext *C, const struct rcti *rect);
-
 int			WM_window_pixels_x		(struct wmWindow *win);
 int			WM_window_pixels_y		(struct wmWindow *win);
 bool		WM_window_is_fullscreen	(struct wmWindow *win);
 
 /* defines for 'type' WM_window_open_temp */
-#define WM_WINDOW_RENDER		0
-#define WM_WINDOW_USERPREFS		1
-// #define WM_WINDOW_FILESEL		2  // UNUSED
+enum {
+	WM_WINDOW_RENDER = 1,
+	WM_WINDOW_USERPREFS,
+	// WM_WINDOW_FILESEL // UNUSED
+};
 
-void		WM_window_open_temp	(struct bContext *C, struct rcti *position, int type);
+struct wmWindow	*WM_window_open(struct bContext *C, const struct rcti *rect);
+struct wmWindow *WM_window_open_temp(struct bContext *C, const struct rcti *rect_init, int type);
 			
 			/* returns true if draw method is triple buffer */
 bool		WM_is_draw_triple(struct wmWindow *win);
@@ -111,6 +112,7 @@ void		WM_file_autoexec_init(const char *filepath);
 bool		WM_file_read(struct bContext *C, const char *filepath, struct ReportList *reports);
 void		WM_autosave_init(struct wmWindowManager *wm);
 void		WM_recover_last_session(struct bContext *C, struct ReportList *reports);
+void		WM_file_tag_modified(const struct bContext *C);
 
 			/* mouse cursors */
 void		WM_cursor_set(struct wmWindow *win, int curs);
@@ -130,6 +132,7 @@ void		WM_paint_cursor_end(struct wmWindowManager *wm, void *handle);
 void		WM_paint_cursor_tag_redraw(struct wmWindow *win, struct ARegion *ar);
 
 void		WM_cursor_warp		(struct wmWindow *win, int x, int y);
+void		WM_cursor_compatible_xy(wmWindow *win, int *x, int *y);
 float		WM_cursor_pressure	(const struct wmWindow *win);
 
 			/* event map */
@@ -181,6 +184,9 @@ void		WM_event_add_mousemove(struct bContext *C);
 bool        WM_modal_tweak_exit(const struct wmEvent *event, int tweak_event);
 bool		WM_event_is_absolute(const struct wmEvent *event);
 
+			/* 3D mouse */
+void		WM_ndof_deadzone_set(float deadzone);
+
 			/* notifiers */
 void		WM_event_add_notifier(const struct bContext *C, unsigned int type, void *reference);
 void		WM_main_add_notifier(unsigned int type, void *reference);
@@ -205,7 +211,9 @@ void wm_event_init_from_window(struct wmWindow *win, struct wmEvent *event);
 
 			/* at maximum, every timestep seconds it triggers event_type events */
 struct wmTimer *WM_event_add_timer(struct wmWindowManager *wm, struct wmWindow *win, int event_type, double timestep);
+struct wmTimer *WM_event_add_timer_notifier(struct wmWindowManager *wm, struct wmWindow *win, unsigned int type, double timestep);
 void		WM_event_remove_timer(struct wmWindowManager *wm, struct wmWindow *win, struct wmTimer *timer);
+void		WM_event_remove_timer_notifier(struct wmWindowManager *wm, struct wmWindow *win, struct wmTimer *timer);
 void        WM_event_timer_sleep(struct wmWindowManager *wm, struct wmWindow *win, struct wmTimer *timer, bool do_sleep);
 
 		/* operator api, default callbacks */
@@ -273,7 +281,7 @@ void		WM_operator_properties_create(struct PointerRNA *ptr, const char *opstring
 void		WM_operator_properties_create_ptr(struct PointerRNA *ptr, struct wmOperatorType *ot);
 void        WM_operator_properties_clear(struct PointerRNA *ptr);
 void		WM_operator_properties_free(struct PointerRNA *ptr);
-void		WM_operator_properties_filesel(struct wmOperatorType *ot, int filter, short type, short action, short flag, short display);
+void		WM_operator_properties_filesel(struct wmOperatorType *ot, int filter, short type, short action, short flag, short display, short sort);
 void        WM_operator_properties_border(struct wmOperatorType *ot);
 void        WM_operator_properties_border_to_rcti(struct wmOperator *op, struct rcti *rect);
 void        WM_operator_properties_border_to_rctf(struct wmOperator *op, rctf *rect);
@@ -283,6 +291,7 @@ void		WM_operator_properties_gesture_straightline(struct wmOperatorType *ot, int
 void		WM_operator_properties_select_all(struct wmOperatorType *ot);
 void		WM_operator_properties_select_action(struct wmOperatorType *ot, int default_action);
 void		WM_operator_properties_select_action_simple(struct wmOperatorType *ot, int default_action);
+void        WM_operator_properties_select_random(struct wmOperatorType *ot);
 
 bool        WM_operator_check_ui_enabled(const struct bContext *C, const char *idname);
 wmOperator *WM_operator_last_redo(const struct bContext *C);
@@ -389,7 +398,9 @@ void		wmOrtho2_pixelspace(const float x, const float y);
 
 			/* utilities */
 void		WM_framebuffer_index_set(int index);
+void		WM_framebuffer_index_get(int index, int *r_col);
 int			WM_framebuffer_to_index(unsigned int col);
+void		WM_framebuffer_to_index_array(unsigned int *col, const unsigned int size);
 
 			/* threaded Jobs Manager */
 enum {
@@ -410,7 +421,7 @@ enum {
 	WM_JOB_TYPE_OBJECT_SIM_FLUID,
 	WM_JOB_TYPE_OBJECT_BAKE_TEXTURE,
 	WM_JOB_TYPE_OBJECT_BAKE,
-	WM_JOB_TYPE_FILESEL_THUMBNAIL,
+	WM_JOB_TYPE_FILESEL_READDIR,
 	WM_JOB_TYPE_CLIP_BUILD_PROXY,
 	WM_JOB_TYPE_CLIP_TRACK_MARKERS,
 	WM_JOB_TYPE_CLIP_SOLVE_CAMERA,

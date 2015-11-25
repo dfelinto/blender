@@ -107,7 +107,9 @@ void EDBM_mesh_reveal(struct BMEditMesh *em);
 
 void EDBM_update_generic(struct BMEditMesh *em, const bool do_tessface, const bool is_destructive);
 
-struct UvElementMap *BM_uv_element_map_create(struct BMesh *bm, const bool selected, const bool do_islands);
+struct UvElementMap *BM_uv_element_map_create(
+        struct BMesh *bm,
+        const bool selected, const bool use_winding, const bool do_islands);
 void                 BM_uv_element_map_free(struct UvElementMap *vmap);
 struct UvElement    *BM_uv_element_get(struct UvElementMap *map, struct BMFace *efa, struct BMLoop *l);
 
@@ -194,7 +196,7 @@ void EMBM_project_snap_verts(struct bContext *C, struct ARegion *ar, struct BMEd
 
 
 /* editface.c */
-void paintface_flush_flags(struct Object *ob);
+void paintface_flush_flags(struct Object *ob, short flag);
 bool paintface_mouse_select(struct bContext *C, struct Object *ob, const int mval[2], bool extend, bool deselect, bool toggle);
 int  do_paintface_box_select(struct ViewContext *vc, struct rcti *rect, bool select, bool extend);
 void paintface_deselect_all_visible(struct Object *ob, int action, bool flush_flags);
@@ -241,6 +243,11 @@ void                 ED_vgroup_parray_mirror_assign(struct Object *ob,
 void                 ED_vgroup_parray_remove_zero(struct MDeformVert **dvert_array, const int dvert_tot,
                                                   const bool *vgroup_validmap, const int vgroup_tot,
                                                   const float epsilon, const bool keep_single);
+void                 ED_vgroup_parray_to_weight_array(const struct MDeformVert **dvert_array, const int dvert_tot,
+                                                      float *dvert_weights, const int def_nr);
+void                 ED_vgroup_parray_from_weight_array(struct MDeformVert **dvert_array, const int dvert_tot,
+                                                        const float *dvert_weights, const int def_nr,
+                                                        const bool remove_zero);
 void                 ED_vgroup_mirror(struct Object *ob,
                                       const bool mirror_weights, const bool flip_vgroups,
                                       const bool all_vgroups, const bool use_topology,

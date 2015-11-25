@@ -208,14 +208,11 @@ static void bm_loop_customdata_merge(
 			 */
 			const void *data_src;
 
-			CustomData_data_add(
+			CustomData_data_mix_value(
 			        type,
 			        BM_ELEM_CD_GET_VOID_P(l_a_inner_inset, offset),
-			        BM_ELEM_CD_GET_VOID_P(l_b_inner_inset, offset));
-			CustomData_data_multiply(
-			        type,
-			        BM_ELEM_CD_GET_VOID_P(l_a_inner_inset, offset),
-			        0.5f);
+			        BM_ELEM_CD_GET_VOID_P(l_b_inner_inset, offset),
+			        CDT_MIX_MIX, 0.5f);
 			CustomData_data_copy_value(
 			        type,
 			        BM_ELEM_CD_GET_VOID_P(l_a_inner_inset, offset),
@@ -574,7 +571,7 @@ void bmo_inset_region_exec(BMesh *bm, BMOperator *op)
 	BMVert *v;
 	BMEdge *e;
 	BMFace *f;
-	int i, j, k;
+	int i, k;
 
 	if (use_interpolate) {
 		interp_arena = BLI_memarena_new(BLI_MEMARENA_STD_BUFSIZE, __func__);
@@ -660,9 +657,10 @@ void bmo_inset_region_exec(BMesh *bm, BMOperator *op)
 			es->l = es->e_old->l; /* must be a boundary */
 		}
 
-
 		/* run the separate arg */
-		bmesh_edge_separate(bm, es->e_old, es->l, false);
+		if (!BM_edge_is_boundary(es->e_old)) {
+			bmesh_edge_separate(bm, es->e_old, es->l, false);
+		}
 
 		/* calc edge-split info */
 		es->e_new = es->l->e;
@@ -724,7 +722,7 @@ void bmo_inset_region_exec(BMesh *bm, BMOperator *op)
 	 * here but don't do this since we will be splitting them off (iterating stuff you modify is bad juju)
 	 * instead loop over edges then their verts */
 	for (i = 0, es = edge_info; i < edge_info_len; i++, es++) {
-		for (j = 0; j < 2; j++) {
+		for (int j = 0; j < 2; j++) {
 			v = (j == 0) ? es->e_new->v1 : es->e_new->v2;
 
 			/* end confusing part - just pretend this is a typical loop on verts */
@@ -1006,6 +1004,7 @@ void bmo_inset_region_exec(BMesh *bm, BMOperator *op)
 	/* create faces */
 	for (i = 0, es = edge_info; i < edge_info_len; i++, es++) {
 		BMVert *varr[4] = {NULL};
+		int j;
 		/* get the verts in the correct order */
 		BM_edge_ordered_verts_ex(es->e_new, &varr[1], &varr[0], es->l);
 #if 0
@@ -1097,6 +1096,8 @@ void bmo_inset_region_exec(BMesh *bm, BMOperator *op)
 				InterpFace *iface = iface_array[BM_elem_index_get(es->l->f)];
 				const int i_a = BM_elem_index_get(l_a_other);
 				const int i_b = BM_elem_index_get(l_b_other);
+				CustomData_bmesh_free_block_data(&bm->ldata, l_b->head.data);
+				CustomData_bmesh_free_block_data(&bm->ldata, l_a->head.data);
 				CustomData_bmesh_copy_data(&bm->ldata, &bm->ldata, iface->blocks_l[i_a], &l_b->head.data);
 				CustomData_bmesh_copy_data(&bm->ldata, &bm->ldata, iface->blocks_l[i_b], &l_a->head.data);
 

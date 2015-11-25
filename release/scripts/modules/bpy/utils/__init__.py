@@ -161,7 +161,7 @@ def load_scripts(reload_scripts=False, refresh_scripts=False):
         # modification time changes. This `won't` work for packages so...
         # its not perfect.
         for module_name in [ext.module for ext in _user_preferences.addons]:
-            _addon_utils.disable(module_name, default_set=False)
+            _addon_utils.disable(module_name)
 
     def register_module_call(mod):
         register = getattr(mod, "register", None)
@@ -251,7 +251,7 @@ def load_scripts(reload_scripts=False, refresh_scripts=False):
         _initialize()
         del _addon_utils._initialize
     else:
-        _addon_utils.reset_all(reload_scripts)
+        _addon_utils.reset_all(reload_scripts=reload_scripts)
     del _initialize
 
     # run the active integration preset
@@ -377,46 +377,31 @@ def preset_paths(subdir):
 
 def smpte_from_seconds(time, fps=None):
     """
-    Returns an SMPTE formatted string from the time in seconds: "HH:MM:SS:FF".
+    Returns an SMPTE formatted string from the *time*:
+    ``HH:MM:SS:FF``.
 
     If the *fps* is not given the current scene is used.
+
+    :arg time: time in seconds.
+    :type time: int, float or ``datetime.timedelta``.
+    :return: the frame string.
+    :rtype: string
     """
-    import math
 
-    if fps is None:
-        fps = _bpy.context.scene.render.fps
-
-    hours = minutes = seconds = frames = 0
-
-    if time < 0:
-        time = - time
-        neg = "-"
-    else:
-        neg = ""
-
-    if time >= 3600.0:  # hours
-        hours = int(time / 3600.0)
-        time = time % 3600.0
-    if time >= 60.0:  # minutes
-        minutes = int(time / 60.0)
-        time = time % 60.0
-
-    seconds = int(time)
-    frames = int(round(math.floor(((time - seconds) * fps))))
-
-    return "%s%02d:%02d:%02d:%02d" % (neg, hours, minutes, seconds, frames)
+    return smpte_from_frame(time_to_frame(time, fps=fps), fps)
 
 
 def smpte_from_frame(frame, fps=None, fps_base=None):
     """
-    Returns an SMPTE formatted string from the frame: "HH:MM:SS:FF".
+    Returns an SMPTE formatted string from the *frame*:
+    ``HH:MM:SS:FF``.
 
     If *fps* and *fps_base* are not given the current scene is used.
 
-    :arg time: time in seconds.
-    :type time: number or timedelta object
-    :return: the frame.
-    :rtype: float
+    :arg frame: frame number.
+    :type frame: int or float.
+    :return: the frame string.
+    :rtype: string
     """
 
     if fps is None:
@@ -425,7 +410,17 @@ def smpte_from_frame(frame, fps=None, fps_base=None):
     if fps_base is None:
         fps_base = _bpy.context.scene.render.fps_base
 
-    return smpte_from_seconds((frame * fps_base) / fps, fps)
+    sign = "-" if frame < 0 else ""
+    frame = abs(frame * fps_base)
+
+    return (
+        "%s%02d:%02d:%02d:%02d" % (
+        sign,
+        int(frame / (3600 * fps)),          # HH
+        int((frame / (60 * fps)) % 60),     # MM
+        int((frame / fps) % 60),            # SS
+        int(frame % fps),                   # FF
+        ))
 
 
 def time_from_frame(frame, fps=None, fps_base=None):
@@ -435,7 +430,7 @@ def time_from_frame(frame, fps=None, fps_base=None):
     If *fps* and *fps_base* are not given the current scene is used.
 
     :arg frame: number.
-    :type frame: the frame number
+    :type frame: int or float.
     :return: the time in seconds.
     :rtype: datetime.timedelta
     """
@@ -459,7 +454,7 @@ def time_to_frame(time, fps=None, fps_base=None):
     If *fps* and *fps_base* are not given the current scene is used.
 
     :arg time: time in seconds.
-    :type time: number or a datetime.timedelta object
+    :type time: number or a ``datetime.timedelta`` object
     :return: the frame.
     :rtype: float
     """
@@ -641,10 +636,10 @@ def unregister_module(module, verbose=False):
 # we start with the built-in default mapping
 def _blender_default_map():
     import sys
-    import rna_wiki_reference as ref_mod
+    import rna_manual_reference as ref_mod
     ret = (ref_mod.url_manual_prefix, ref_mod.url_manual_mapping)
     # avoid storing in memory
-    del sys.modules["rna_wiki_reference"]
+    del sys.modules["rna_manual_reference"]
     return ret
 
 # hooks for doc lookups

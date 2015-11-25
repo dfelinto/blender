@@ -23,27 +23,12 @@
 
 /** \file BLI_buffer.h
  *  \ingroup bli
- *
- * \note this more or less fills same purpose as BLI_array, but makes
- * it much easier to resize the array outside of the function it was
- * declared in since.
- *
- * Usage examples:
- * \code{.c}
- * BLI_buffer_declare_static(int, my_int_array, BLI_BUFFER_NOP, 32);
- *
- * BLI_buffer_append(my_int_array, int, 42);
- * assert(my_int_array.count == 1);
- * assert(BLI_buffer_at(my_int_array, int, 0) == 42);
- *
- * BLI_buffer_free(&my_int_array);
- * \endcode
  */
 
 typedef struct {
 	void *data;
-	const int elem_size;
-	int count, alloc_count;
+	const size_t elem_size;
+	size_t count, alloc_count;
 	int flag;
 } BLI_Buffer;
 
@@ -79,7 +64,7 @@ enum {
 #define BLI_buffer_at(buffer_, type_, index_) ( \
 	(((type_ *)(buffer_)->data)[ \
 	        (BLI_assert(sizeof(type_) == (buffer_)->elem_size)), \
-	        (BLI_assert(index_ >= 0 && index_ < (buffer_)->count)), \
+	        (BLI_assert((int)(index_) >= 0 && (size_t)(index_) < (buffer_)->count)), \
 	        index_]))
 
 #define BLI_buffer_array(buffer_, type_) ( \
@@ -87,6 +72,9 @@ enum {
 
 #define BLI_buffer_resize_data(buffer_, type_, new_count_) ( \
 	(BLI_buffer_resize(buffer_, new_count_), new_count_ ? BLI_buffer_array(buffer_, type_) : NULL))
+
+#define BLI_buffer_reinit_data(buffer_, type_, new_count_) ( \
+	(BLI_buffer_reinit(buffer_, new_count_), new_count_ ? BLI_buffer_array(buffer_, type_) : NULL))
 
 #define BLI_buffer_append(buffer_, type_, val_)  ( \
 	BLI_buffer_resize(buffer_, (buffer_)->count + 1), \
@@ -98,7 +86,10 @@ enum {
 } (void)0
 
 /* Never decreases the amount of memory allocated */
-void BLI_buffer_resize(BLI_Buffer *buffer, int new_count);
+void BLI_buffer_resize(BLI_Buffer *buffer, const size_t new_count);
+
+/* Ensure size, throwing away old data, respecting BLI_BUFFER_USE_CALLOC */
+void BLI_buffer_reinit(BLI_Buffer *buffer, const size_t new_count);
 
 /* Does not free the buffer structure itself */
 void _bli_buffer_free(BLI_Buffer *buffer);

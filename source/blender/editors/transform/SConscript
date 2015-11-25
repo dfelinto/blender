@@ -37,15 +37,18 @@ incs = [
     '../../blenfont',
     '../../blenkernel',
     '../../blenlib',
+    '../../blentranslation',
     '../../bmesh',
     '../../gpu',
     '../../ikplugin',
     '../../makesdna',
     '../../makesrna',
     '../../windowmanager',
+    '../../depsgraph',
     ]
 
-defs = env['BF_GL_DEFINITIONS']
+defs = []
+defs += env['BF_GL_DEFINITIONS']
 
 if env['WITH_BF_INTERNATIONAL']:
     defs.append('WITH_INTERNATIONAL')

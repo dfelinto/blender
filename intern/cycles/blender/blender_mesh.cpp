@@ -85,7 +85,7 @@ static void mikk_get_texture_coordinate(const SMikkTSpaceContext *context, float
 		BL::MeshTextureFace tf = userdata->layer->data[face_num];
 		float3 tfuv;
 
-		switch (vert_num) {
+		switch(vert_num) {
 			case 0:
 				tfuv = get_float3(tf.uv1());
 				break;
@@ -242,8 +242,16 @@ static void create_mesh_volume_attribute(BL::Object b_ob, Mesh *mesh, ImageManag
 	bool animated = false;
 
 	volume_data->manager = image_manager;
-	volume_data->slot = image_manager->add_image(Attribute::standard_name(std),
-		b_ob.ptr.data, animated, frame, is_float, is_linear, INTERPOLATION_LINEAR, true);
+	volume_data->slot = image_manager->add_image(
+	        Attribute::standard_name(std),
+	        b_ob.ptr.data,
+	        animated,
+	        frame,
+	        is_float,
+	        is_linear,
+	        INTERPOLATION_LINEAR,
+	        EXTENSION_REPEAT,
+	        true);
 }
 
 static void create_mesh_volume_attributes(Scene *scene, BL::Object b_ob, Mesh *mesh, float frame)
@@ -834,6 +842,7 @@ void BlenderSync::sync_mesh_motion(BL::Object b_ob, Object *object, float motion
 		return;
 	}
 
+	/* TODO(sergey): Perform preliminary check for number of verticies. */
 	if(numverts) {
 		/* find attributes */
 		Attribute *attr_mP = mesh->attributes.find(ATTR_STD_MOTION_VERTEX_POSITION);
@@ -865,7 +874,9 @@ void BlenderSync::sync_mesh_motion(BL::Object b_ob, Object *object, float motion
 
 		/* in case of new attribute, we verify if there really was any motion */
 		if(new_attribute) {
-			if(i != numverts || memcmp(mP, &mesh->verts[0], sizeof(float3)*numverts) == 0) {
+			if(b_mesh.vertices.length() != numverts ||
+			   memcmp(mP, &mesh->verts[0], sizeof(float3)*numverts) == 0)
+			{
 				/* no motion, remove attributes again */
 				VLOG(1) << "No actual deformation motion for object " << b_ob.name();
 				mesh->attributes.remove(ATTR_STD_MOTION_VERTEX_POSITION);

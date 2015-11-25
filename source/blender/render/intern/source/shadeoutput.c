@@ -894,7 +894,7 @@ void calc_R_ref(ShadeInput *shi)
 
 }
 
-/* called from ray.c */
+/* called from rayshade.c */
 void shade_color(ShadeInput *shi, ShadeResult *shr)
 {
 	Material *ma= shi->mat;
@@ -1188,12 +1188,10 @@ float lamp_get_visibility(LampRen *lar, const float co[3], float lv[3], float *d
 		return 1.0f;
 	}
 	else {
-		float visifac= 1.0f, t;
+		float visifac= 1.0f;
 		
 		sub_v3_v3v3(lv, co, lar->co);
-		*dist = len_v3(lv);
-		t = 1.0f / (*dist);
-		mul_v3_fl(lv, t);
+		mul_v3_fl(lv, 1.0f / (*dist = len_v3(lv)));
 		
 		/* area type has no quad or sphere option */
 		if (lar->type==LA_AREA) {
@@ -1241,7 +1239,7 @@ float lamp_get_visibility(LampRen *lar, const float co[3], float lv[3], float *d
 			
 			if (visifac > 0.0f) {
 				if (lar->type==LA_SPOT) {
-					float inpr;
+					float inpr, t;
 					
 					if (lar->mode & LA_SQUARE) {
 						if (dot_v3v3(lv, lar->vec) > 0.0f) {
@@ -1475,6 +1473,9 @@ static void shade_one_light(LampRen *lar, ShadeInput *shi, ShadeResult *shr, int
 					i*= shadfac[3];
 					shr->shad[3] = shadfac[3]; /* store this for possible check in troublesome cases */
 				}
+				else {
+					shr->shad[3] = 1.0f;  /* No shadow at all! */
+				}
 			}
 		}
 		
@@ -1611,9 +1612,6 @@ static void shade_lamp_loop_only_shadow(ShadeInput *shi, ShadeResult *shr)
 		for (go=lights->first; go; go= go->next) {
 			lar= go->lampren;
 			if (lar==NULL) continue;
-			
-			/* yafray: ignore shading by photonlights, not used in Blender */
-			if (lar->type==LA_YF_PHOTON) continue;
 			
 			if (lar->mode & LA_LAYER) if ((lar->lay & shi->obi->lay)==0) continue;
 			if ((lar->lay & shi->lay)==0) continue;
@@ -1812,7 +1810,7 @@ void shade_lamp_loop(ShadeInput *shi, ShadeResult *shr)
 		shr->combined[1]= shi->g;
 		shr->combined[2]= shi->b;
 		shr->alpha= shi->alpha;
-		return;
+		goto finally_shadeless;
 	}
 
 	if ( (ma->mode & (MA_VERTEXCOL|MA_VERTEXCOLP))== MA_VERTEXCOL ) {	/* vertexcolor light */
@@ -1854,9 +1852,6 @@ void shade_lamp_loop(ShadeInput *shi, ShadeResult *shr)
 		for (go=lights->first; go; go= go->next) {
 			lar= go->lampren;
 			if (lar==NULL) continue;
-			
-			/* yafray: ignore shading by photonlights, not used in Blender */
-			if (lar->type==LA_YF_PHOTON) continue;
 			
 			/* test for lamp layer */
 			if (lar->mode & LA_LAYER) if ((lar->lay & shi->obi->lay)==0) continue;
@@ -2003,7 +1998,11 @@ void shade_lamp_loop(ShadeInput *shi, ShadeResult *shr)
 		add_v3_v3(shr->combined, shr->emit);
 	if (shi->combinedflag & SCE_PASS_SPEC)
 		add_v3_v3(shr->combined, shr->spec);
-	
+
+
+	/* Last section of this function applies to shadeless colors too */
+finally_shadeless:
+
 	/* modulate by the object color */
 	if ((ma->shade_flag & MA_OBCOLOR) && shi->obr->ob) {
 		if (!(ma->sss_flag & MA_DIFF_SSS) || !sss_pass_done(&R, ma)) {
@@ -2028,7 +2027,7 @@ static float lamp_get_data_internal(ShadeInput *shi, GroupObject *go, float col[
 	LampRen *lar = go->lampren;
 	float visifac, inp;
 
-	if (!lar || lar->type == LA_YF_PHOTON
+	if (!lar
 	    || ((lar->mode & LA_LAYER) && (lar->lay & shi->obi->lay) == 0)
 	    || (lar->lay & shi->lay) == 0)
 		return 0.0f;

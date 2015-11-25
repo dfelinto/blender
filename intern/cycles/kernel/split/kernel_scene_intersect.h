@@ -32,7 +32,7 @@
  * use_queues_flag --------------------------------|                                          |
  * parallel_samples -------------------------------|                                          |
  * QueueData(QUEUE_ACTIVE_AND_REGENERATED_RAYS) ---|                                          |
- * kg (data + globals) ----------------------------|                                          |
+ * kg (globals) -----------------------------------|                                          |
  * rng_coop ---------------------------------------|                                          |
  * sw ---------------------------------------------|                                          |
  * sh ---------------------------------------------|                                          |
@@ -63,8 +63,7 @@
  */
 
 ccl_device void kernel_scene_intersect(
-        ccl_global char *globals,
-        ccl_constant KernelData *data,
+        KernelGlobals *kg,
         ccl_global uint *rng_coop,
         ccl_global Ray *Ray_coop,              /* Required for scene_intersect */
         ccl_global PathState *PathState_coop,  /* Required for scene_intersect */
@@ -85,9 +84,6 @@ ccl_device void kernel_scene_intersect(
 
 	if(!IS_STATE(ray_state, ray_index, RAY_ACTIVE))
 		return;
-
-	/* Load kernel globals structure */
-	KernelGlobals *kg = (KernelGlobals *)globals;
 
 #ifdef __KERNEL_DEBUG__
 	DebugData *debug_data = &debugdata_coop[ray_index];
@@ -123,13 +119,16 @@ ccl_device void kernel_scene_intersect(
 #ifdef __KERNEL_DEBUG__
 	if(state.flag & PATH_RAY_CAMERA) {
 		debug_data->num_bvh_traversal_steps += isect->num_traversal_steps;
+		debug_data->num_bvh_traversed_instances += isect->num_traversed_instances;
 	}
+	debug_data->num_ray_bounces++;
 #endif
 
 	if(!hit) {
 		/* Change the state of rays that hit the background;
 		 * These rays undergo special processing in the
-		 * background_bufferUpdate kernel*/
+		 * background_bufferUpdate kernel.
+		 */
 		ASSIGN_RAY_STATE(ray_state, ray_index, RAY_HIT_BACKGROUND);
 	}
 }

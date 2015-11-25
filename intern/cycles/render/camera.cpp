@@ -18,17 +18,36 @@
 #include "mesh.h"
 #include "object.h"
 #include "scene.h"
+#include "tables.h"
 
 #include "device.h"
 
 #include "util_foreach.h"
+#include "util_function.h"
+#include "util_math_cdf.h"
 #include "util_vector.h"
 
 CCL_NAMESPACE_BEGIN
 
+static float shutter_curve_eval(float x,
+                                float shutter_curve[RAMP_TABLE_SIZE])
+{
+	x *= RAMP_TABLE_SIZE;
+	int index = (int)x;
+	float frac = x - index;
+	if(index < RAMP_TABLE_SIZE - 1) {
+		return lerp(shutter_curve[index], shutter_curve[index + 1], frac);
+	}
+	else {
+		return shutter_curve[RAMP_TABLE_SIZE - 1];
+	}
+}
+
 Camera::Camera()
 {
 	shuttertime = 1.0f;
+	motion_position = MOTION_POSITION_CENTER;
+	shutter_table_offset = TABLE_OFFSET_INVALID;
 
 	aperturesize = 0.0f;
 	focaldistance = 10.0f;
@@ -40,6 +59,7 @@ Camera::Camera()
 	motion.pre = transform_identity();
 	motion.post = transform_identity();
 	use_motion = false;
+	use_perspective_motion = false;
 
 	aperture_ratio = 1.0f;
 
@@ -52,6 +72,7 @@ Camera::Camera()
 	longitude_min = -M_PI_F;
 	longitude_max = M_PI_F;
 	fov = M_PI_4_F;
+	fov_pre = fov_post = fov;
 
 	sensorwidth = 0.036f;
 	sensorheight = 0.024f;
@@ -82,6 +103,12 @@ Camera::Camera()
 	need_device_update = true;
 	need_flags_update = true;
 	previous_need_motion = -1;
+
+	/* Initialize shutter curve. */
+	const int num_shutter_points = sizeof(shutter_curve) / sizeof(*shutter_curve);
+	for(int i = 0; i < num_shutter_points; ++i) {
+		shutter_curve[i] = 1.0f;
+	}
 }
 
 Camera::~Camera()
@@ -90,19 +117,26 @@ Camera::~Camera()
 
 void Camera::compute_auto_viewplane()
 {
-	float aspect = (float)width/(float)height;
-
-	if(width >= height) {
-		viewplane.left = -aspect;
-		viewplane.right = aspect;
-		viewplane.bottom = -1.0f;
+	if(type == CAMERA_PANORAMA) {
+		viewplane.left = 0.0f;
+		viewplane.right = 1.0f;
+		viewplane.bottom = 0.0f;
 		viewplane.top = 1.0f;
 	}
 	else {
-		viewplane.left = -1.0f;
-		viewplane.right = 1.0f;
-		viewplane.bottom = -1.0f/aspect;
-		viewplane.top = 1.0f/aspect;
+		float aspect = (float)width/(float)height;
+		if(width >= height) {
+			viewplane.left = -aspect;
+			viewplane.right = aspect;
+			viewplane.bottom = -1.0f;
+			viewplane.top = 1.0f;
+		}
+		else {
+			viewplane.left = -1.0f;
+			viewplane.right = 1.0f;
+			viewplane.bottom = -1.0f/aspect;
+			viewplane.top = 1.0f/aspect;
+		}
 	}
 }
 
@@ -116,7 +150,6 @@ void Camera::update()
 	Transform bordertofull = transform_inverse(fulltoborder);
 
 	/* ndc to raster */
-	Transform screentocamera;
 	Transform ndctoraster = transform_scale(width, height, 1.0f) * bordertofull;
 
 	/* raster to screen */
@@ -126,14 +159,15 @@ void Camera::update()
 	Transform rastertoscreen = transform_inverse(screentoraster);
 
 	/* screen to camera */
+	Transform cameratoscreen;
 	if(type == CAMERA_PERSPECTIVE)
-		screentocamera = transform_inverse(transform_perspective(fov, nearclip, farclip));
+		cameratoscreen = transform_perspective(fov, nearclip, farclip);
 	else if(type == CAMERA_ORTHOGRAPHIC)
-		screentocamera = transform_inverse(transform_orthographic(nearclip, farclip));
+		cameratoscreen = transform_orthographic(nearclip, farclip);
 	else
-		screentocamera = transform_identity();
+		cameratoscreen = transform_identity();
 	
-	Transform cameratoscreen = transform_inverse(screentocamera);
+	Transform screentocamera = transform_inverse(cameratoscreen);
 
 	rastertocamera = screentocamera * rastertoscreen;
 	cameratoraster = screentoraster * cameratoscreen;
@@ -170,6 +204,23 @@ void Camera::update()
 	dx = transform_direction(&cameratoworld, dx);
 	dy = transform_direction(&cameratoworld, dy);
 
+	/* TODO(sergey): Support other types of camera. */
+	if(type == CAMERA_PERSPECTIVE) {
+		/* TODO(sergey): Move to an utility function and de-duplicate with
+		 * calculation above.
+		 */
+		Transform screentocamera_pre =
+		        transform_inverse(transform_perspective(fov_pre,
+		                                                nearclip,
+		                                                farclip));
+		Transform screentocamera_post =
+		        transform_inverse(transform_perspective(fov_post,
+		                                                nearclip,
+		                                                farclip));
+		perspective_motion.pre = screentocamera_pre * rastertoscreen;
+		perspective_motion.post = screentocamera_post * rastertoscreen;
+	}
+
 	need_update = false;
 	need_device_update = true;
 	need_flags_update = true;
@@ -205,8 +256,10 @@ void Camera::device_update(Device *device, DeviceScene *dscene, Scene *scene)
 
 	/* camera motion */
 	kcam->have_motion = 0;
+	kcam->have_perspective_motion = 0;
 
 	if(need_motion == Scene::MOTION_PASS) {
+		/* TODO(sergey): Support perspective (zoom, fov) motion. */
 		if(type == CAMERA_PANORAMA) {
 			if(use_motion) {
 				kcam->motion.pre = transform_inverse(motion.pre);
@@ -234,6 +287,10 @@ void Camera::device_update(Device *device, DeviceScene *dscene, Scene *scene)
 			transform_motion_decompose((DecompMotionTransform*)&kcam->motion, &motion, &matrix);
 			kcam->have_motion = 1;
 		}
+		if(use_perspective_motion) {
+			kcam->perspective_motion = perspective_motion;
+			kcam->have_perspective_motion = 1;
+		}
 	}
 #endif
 
@@ -246,6 +303,23 @@ void Camera::device_update(Device *device, DeviceScene *dscene, Scene *scene)
 	/* motion blur */
 #ifdef __CAMERA_MOTION__
 	kcam->shuttertime = (need_motion == Scene::MOTION_BLUR) ? shuttertime: -1.0f;
+
+	if(need_motion == Scene::MOTION_BLUR) {
+		vector<float> shutter_table;
+		util_cdf_inverted(SHUTTER_TABLE_SIZE,
+		                  0.0f,
+		                  1.0f,
+		                  function_bind(shutter_curve_eval, _1, shutter_curve),
+		                  false,
+		                  shutter_table);
+		shutter_table_offset = scene->lookup_tables->add_table(dscene,
+		                                                       shutter_table);
+		kcam->shutter_table_offset = (int)shutter_table_offset;
+	}
+	else if(shutter_table_offset != TABLE_OFFSET_INVALID) {
+		scene->lookup_tables->remove_table(shutter_table_offset);
+		shutter_table_offset = TABLE_OFFSET_INVALID;
+	}
 #else
 	kcam->shuttertime = -1.0f;
 #endif
@@ -309,9 +383,14 @@ void Camera::device_update_volume(Device * /*device*/,
 	need_flags_update = false;
 }
 
-void Camera::device_free(Device * /*device*/, DeviceScene * /*dscene*/)
+void Camera::device_free(Device * /*device*/,
+                         DeviceScene * /*dscene*/,
+                         Scene *scene)
 {
-	/* nothing to free, only writing to constant memory */
+	if(shutter_table_offset != TABLE_OFFSET_INVALID) {
+		scene->lookup_tables->remove_table(shutter_table_offset);
+		shutter_table_offset = TABLE_OFFSET_INVALID;
+	}
 }
 
 bool Camera::modified(const Camera& cam)
@@ -393,9 +472,9 @@ BoundBox Camera::viewplane_bounds_get()
 	BoundBox bounds = BoundBox::empty;
 
 	if(type == CAMERA_PANORAMA) {
-		bounds.grow(make_float3(cameratoworld.w.x,
-		                        cameratoworld.w.y,
-		                        cameratoworld.w.z));
+		bounds.grow(make_float3(cameratoworld.x.w,
+		                        cameratoworld.y.w,
+		                        cameratoworld.z.w));
 	}
 	else {
 		bounds.grow(transform_raster_to_world(0.0f, 0.0f));

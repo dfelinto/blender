@@ -331,7 +331,10 @@ if env['OURPLATFORM']=='darwin':
     print B.bc.OKGREEN + "Available SDK's: \n" + B.bc.ENDC + MACOSX_SDK_CHECK.replace('\t', '')
 
     if env['MACOSX_SDK'] == '': # no set sdk, choosing best one found
-        if 'OS X 10.10' in MACOSX_SDK_CHECK:
+        if 'OS X 10.11' in MACOSX_SDK_CHECK:
+            env['MACOSX_DEPLOYMENT_TARGET'] = '10.6'
+            env['MACOSX_SDK']='/Developer/SDKs/MacOSX10.11.sdk'
+        elif 'OS X 10.10' in MACOSX_SDK_CHECK:
             env['MACOSX_DEPLOYMENT_TARGET'] = '10.6'
             env['MACOSX_SDK']='/Developer/SDKs/MacOSX10.10.sdk'
         elif 'OS X 10.9' in MACOSX_SDK_CHECK:
@@ -495,6 +498,13 @@ if env['WITH_BF_CPP11']:
     else:
         env['CXXFLAGS'].append('-std=c++11')
 
+if env['OURPLATFORM'] in ('win32-vc', 'win64-vc'):
+    # Visual Studio has all standards it supports available by default
+    pass
+else:
+    # Use C99 + GNU extensions, works with GCC, Clang, ICC
+    env['CFLAGS'].append('-std=gnu99')
+
 #check for additional debug libnames
 
 if env.has_key('BF_DEBUG_LIBS'):
@@ -513,6 +523,10 @@ if env['WITH_BF_STATICCXX']:
         env['LLIBS'].remove('stdc++')
     else:
         print '\tcould not remove stdc++ library from LLIBS, WITH_BF_STATICCXX may not work for your platform'
+
+# audaspace is needed for the game engine
+if not env['WITH_BF_AUDASPACE']:
+    env['WITH_BF_GAMEENGINE'] = False
 
 # check target for blenderplayer. Set WITH_BF_PLAYER if found on cmdline
 if 'blenderplayer' in B.targets:
@@ -540,12 +554,24 @@ else:
     env['CPPFLAGS'].append('-D__LITTLE_ENDIAN__')
 
 # TODO, make optional (as with CMake)
-env['CPPFLAGS'].append('-DWITH_AUDASPACE')
 env['CPPFLAGS'].append('-DWITH_AVI')
 env['CPPFLAGS'].append('-DWITH_OPENNL')
 
 if env['OURPLATFORM'] not in ('win32-vc', 'win64-vc'):
     env['CPPFLAGS'].append('-DHAVE_STDBOOL_H')
+
+# Audaspace
+
+if env['WITH_BF_AUDASPACE']:
+    env['BF_AUDASPACE_C_INC'] = '#intern/audaspace/intern'
+    env['BF_AUDASPACE_PY_INC'] = '#intern/audaspace/intern'
+    env['BF_AUDASPACE_DEF'] = ['WITH_AUDASPACE']
+    env['BF_AUDASPACE_DEF'].append('AUD_DEVICE_H="<AUD_C-API.h>"')
+    env['BF_AUDASPACE_DEF'].append('AUD_SPECIAL_H="<AUD_C-API.h>"')
+    env['BF_AUDASPACE_DEF'].append('AUD_SOUND_H="<AUD_C-API.h>"')
+    env['BF_AUDASPACE_DEF'].append('AUD_HANDLE_H="<AUD_C-API.h>"')
+    env['BF_AUDASPACE_DEF'].append('AUD_SEQUENCE_H="<AUD_C-API.h>"')
+    env['BF_AUDASPACE_DEF'].append('AUD_TYPES_H="<AUD_Space.h>"')
 
 # OpenGL
 
@@ -766,6 +792,8 @@ if B.targets != ['cudakernels']:
     data_to_c_simple("release/datafiles/preview_cycles.blend")
 
     # --- glsl ---
+    data_to_c_simple("source/blender/gpu/shaders/gpu_shader_geometry.glsl")
+
     data_to_c_simple("source/blender/gpu/shaders/gpu_program_smoke_frag.glsl")
     data_to_c_simple("source/blender/gpu/shaders/gpu_program_smoke_color_frag.glsl")
 
@@ -789,6 +817,7 @@ if B.targets != ['cudakernels']:
     data_to_c_simple("source/blender/gpu/shaders/gpu_shader_fx_depth_resolve.glsl")
     data_to_c_simple("source/blender/gpu/shaders/gpu_shader_fx_vert.glsl")
     data_to_c_simple("intern/opencolorio/gpu_shader_display_transform.glsl")
+    data_to_c_simple("intern/opensubdiv/gpu_shader_opensubd_display.glsl")
 
     # --- blender ---
     data_to_c_simple("release/datafiles/bfont.pfb")
@@ -1299,6 +1328,15 @@ if env['OURPLATFORM'] in ('win32-vc', 'win32-mingw', 'win64-vc', 'linuxcross'):
 
     windlls = env.Install(dir=env['BF_INSTALLDIR'], source = dllsources)
     allinstall += windlls
+
+    # TODO(sergey): For unti we've got better way to deal with python binary
+    if env['WITH_BF_PYTHON']:
+        py_target = os.path.join(env['BF_INSTALLDIR'], VERSION, 'python', 'bin')
+        if env['BF_DEBUG']:
+            allinstall += env.Install(dir=py_target, source = ['${BF_PYTHON_LIBPATH}/${BF_PYTHON_DLL}_d.dll'])
+        else:
+            allinstall += env.Install(dir=py_target, source = ['${BF_PYTHON_LIBPATH}/${BF_PYTHON_DLL}.dll'])
+
 
 if env['OURPLATFORM'] == 'win64-mingw':
     dllsources = []

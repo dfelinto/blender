@@ -41,7 +41,7 @@
 #include "BLI_listbase.h"
 #include "BLI_math.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "DNA_mask_types.h"
 #include "DNA_node_types.h"
@@ -49,6 +49,7 @@
 #include "DNA_space_types.h"
 #include "DNA_sequence_types.h"
 
+#include "BKE_animsys.h"
 #include "BKE_curve.h"
 #include "BKE_global.h"
 #include "BKE_library.h"
@@ -179,6 +180,16 @@ void BKE_mask_layer_unique_name(Mask *mask, MaskLayer *masklay)
 {
 	BLI_uniquename(&mask->masklayers, masklay, DATA_("MaskLayer"), '.', offsetof(MaskLayer, name),
 	               sizeof(masklay->name));
+}
+
+void BKE_mask_layer_rename(Mask *mask, MaskLayer *masklay, char *oldname, char *newname)
+{
+	BLI_strncpy(masklay->name, newname, sizeof(masklay->name));
+
+	BKE_mask_layer_unique_name(mask, masklay);
+
+	/* now fix animation paths */
+	BKE_animdata_fix_paths_rename_all(&mask->id, "layers", oldname, masklay->name);
 }
 
 MaskLayer *BKE_mask_layer_copy(MaskLayer *masklay)
@@ -793,7 +804,7 @@ static Mask *mask_alloc(Main *bmain, const char *name)
 
 	mask = BKE_libblock_alloc(bmain, ID_MSK, name);
 
-	mask->id.flag |= LIB_FAKEUSER;
+	id_fake_user_set(&mask->id);
 
 	return mask;
 }
@@ -832,10 +843,7 @@ Mask *BKE_mask_copy_nolib(Mask *mask)
 	BKE_mask_layer_copy_list(&mask_new->masklayers, &mask->masklayers);
 
 	/* enable fake user by default */
-	if (!(mask_new->id.flag & LIB_FAKEUSER)) {
-		mask_new->id.flag |= LIB_FAKEUSER;
-		mask_new->id.us++;
-	}
+	id_fake_user_set(&mask->id);
 
 	return mask_new;
 }
@@ -851,10 +859,7 @@ Mask *BKE_mask_copy(Mask *mask)
 	BKE_mask_layer_copy_list(&mask_new->masklayers, &mask->masklayers);
 
 	/* enable fake user by default */
-	if (!(mask_new->id.flag & LIB_FAKEUSER)) {
-		mask_new->id.flag |= LIB_FAKEUSER;
-		mask_new->id.us++;
-	}
+	id_fake_user_set(&mask->id);
 
 	if (mask->id.lib) {
 		BKE_id_lib_local_paths(G.main, mask->id.lib, &mask_new->id);

@@ -39,7 +39,7 @@
 #include "SCA_LogicManager.h"
 #include "SCA_ISensor.h"
 #include "SCA_IActuator.h"
-#include "PyObjectPlus.h"
+#include "EXP_PyObjectPlus.h"
 
 #ifdef WITH_PYTHON
 #include "compile.h"
@@ -470,7 +470,7 @@ void SCA_PythonController::Trigger(SCA_LogicManager* logicmgr)
 PyObject *SCA_PythonController::PyActivate(PyObject *value)
 {
 	if (m_sCurrentController != this) {
-		PyErr_SetString(PyExc_SystemError, "Cannot add an actuator from a non-active controller");
+		PyErr_SetString(PyExc_SystemError, "Cannot activate an actuator from a non-active controller");
 		return NULL;
 	}
 	
@@ -485,7 +485,7 @@ PyObject *SCA_PythonController::PyActivate(PyObject *value)
 PyObject *SCA_PythonController::PyDeActivate(PyObject *value)
 {
 	if (m_sCurrentController != this) {
-		PyErr_SetString(PyExc_SystemError, "Cannot add an actuator from a non-active controller");
+		PyErr_SetString(PyExc_SystemError, "Cannot deactivate an actuator from a non-active controller");
 		return NULL;
 	}
 	

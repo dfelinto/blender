@@ -587,7 +587,7 @@ static void sequencer_preview_area_draw(const bContext *C, ARegion *ar)
 			draw_image_seq(C, scene, ar, sseq, scene->r.cfra, over_cfra - scene->r.cfra, true, false);
 	}
 
-	if ((U.uiflag & USER_SHOW_FPS) && ED_screen_animation_playing(wm)) {
+	if ((U.uiflag & USER_SHOW_FPS) && ED_screen_animation_no_scrub(wm)) {
 		rcti rect;
 		ED_region_visible_rect(ar, &rect);
 		ED_scene_draw_fps(scene, &rect);
@@ -657,7 +657,7 @@ static void sequencer_buttons_area_init(wmWindowManager *wm, ARegion *ar)
 
 static void sequencer_buttons_area_draw(const bContext *C, ARegion *ar)
 {
-	ED_region_panels(C, ar, 1, NULL, -1);
+	ED_region_panels(C, ar, NULL, -1, true);
 }
 
 static void sequencer_buttons_area_listener(bScreen *UNUSED(sc), ScrArea *UNUSED(sa), ARegion *ar, wmNotifier *wmn)

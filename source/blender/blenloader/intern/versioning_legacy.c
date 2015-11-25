@@ -648,7 +648,6 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *main)
 		while (ob) {
 			if (ob->transflag & 1) {
 				ob->transflag -= 1;
-				//ob->ipoflag |= OB_OFFS_OB;
 			}
 			ob = ob->id.next;
 		}
@@ -685,7 +684,6 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *main)
 		}
 		ob = main->object.first;
 		while (ob) {
-			//ob->ipoflag |= OB_OFFS_PARENT;
 			if (ob->dt == 0)
 				ob->dt = OB_SOLID;
 			ob = ob->id.next;
@@ -1292,7 +1290,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *main)
 		Object *ob;
 
 		for (vf = main->vfont.first; vf; vf = vf->id.next) {
-			if (STREQ(vf->name + strlen(vf->name)-6, ".Bfont")) {
+			if (STREQ(vf->name + strlen(vf->name) - 6, ".Bfont")) {
 				strcpy(vf->name, FO_BUILTIN_NAME);
 			}
 		}
@@ -2401,8 +2399,9 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *main)
 								data->flag |= MINMAX_STICKY;
 							else
 								data->flag &= ~MINMAX_STICKY;
-						}
+
 							break;
+						}
 						case CONSTRAINT_TYPE_ROTLIKE:
 						{
 							bRotateLikeConstraint *data = curcon->data;
@@ -2410,8 +2409,9 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *main)
 							/* version patch from buttons_object.c */
 							if (data->flag == 0)
 								data->flag = ROTLIKE_X|ROTLIKE_Y|ROTLIKE_Z;
-						}
+
 							break;
+						}
 					}
 				}
 			}
@@ -2480,7 +2480,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *main)
 
 		for (group = main->group.first; group; group = group->id.next)
 			if (group->layer == 0)
-				group->layer = (1<<20)-1;
+				group->layer = (1 << 20) - 1;
 
 		/* now, subversion control! */
 		if (main->subversionfile < 3) {
@@ -3246,7 +3246,6 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *main)
 		idproperties_fix_group_lengths(main->key);
 		idproperties_fix_group_lengths(main->world);
 		idproperties_fix_group_lengths(main->screen);
-		idproperties_fix_group_lengths(main->script);
 		idproperties_fix_group_lengths(main->vfont);
 		idproperties_fix_group_lengths(main->text);
 		idproperties_fix_group_lengths(main->sound);

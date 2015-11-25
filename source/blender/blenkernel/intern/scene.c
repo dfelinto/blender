@@ -58,7 +58,7 @@
 #include "BLI_threads.h"
 #include "BLI_task.h"
 
-#include "BLF_translation.h"
+#include "BLT_translation.h"
 
 #include "BKE_anim.h"
 #include "BKE_animsys.h"
@@ -72,6 +72,7 @@
 #include "BKE_global.h"
 #include "BKE_gpencil.h"
 #include "BKE_group.h"
+#include "BKE_icons.h"
 #include "BKE_idprop.h"
 #include "BKE_image.h"
 #include "BKE_library.h"
@@ -253,6 +254,8 @@ Scene *BKE_scene_copy(Scene *sce, int type)
 			}
 			new_srl = new_srl->next;
 		}
+
+		curvemapping_copy_data(&scen->r.mblur_shutter_curve, &sce->r.mblur_shutter_curve);
 	}
 
 	/* tool settings */
@@ -341,6 +344,10 @@ Scene *BKE_scene_copy(Scene *sce, int type)
 		}
 	}
 
+	if (sce->preview) {
+		scen->preview = BKE_previewimg_copy(sce->preview);
+	}
+
 	return scen;
 }
 
@@ -361,7 +368,7 @@ void BKE_scene_free(Scene *sce)
 
 	base = sce->base.first;
 	while (base) {
-		base->object->id.us--;
+		id_us_min(&base->object->id);
 		base = base->next;
 	}
 	/* do not free objects! */
@@ -371,7 +378,7 @@ void BKE_scene_free(Scene *sce)
 		/* since the grease pencil data is freed before the scene.
 		 * since grease pencil data is not (yet?), shared between objects
 		 * its probably safe not to do this, some save and reload will free this. */
-		sce->gpd->id.us--;
+		id_us_min(&sce->gpd->id);
 #endif
 		sce->gpd = NULL;
 	}
@@ -450,17 +457,21 @@ void BKE_scene_free(Scene *sce)
 	BKE_sound_destroy_scene(sce);
 
 	BKE_color_managed_view_settings_free(&sce->view_settings);
+
+	BKE_previewimg_free(&sce->preview);
+	curvemapping_free_data(&sce->r.mblur_shutter_curve);
 }
 
-Scene *BKE_scene_add(Main *bmain, const char *name)
+void BKE_scene_init(Scene *sce)
 {
-	Scene *sce;
 	ParticleEditSettings *pset;
 	int a;
 	const char *colorspace_name;
 	SceneRenderView *srv;
+	CurveMapping *mblur_shutter_curve;
 
-	sce = BKE_libblock_alloc(bmain, ID_SCE, name);
+	BLI_assert(MEMCMP_STRUCT_OFS_IS_ZERO(sce, id));
+
 	sce->lay = sce->layact = 1;
 	
 	sce->r.mode = R_GAMMA | R_OSA | R_SHADOW | R_SSS | R_ENVMAP | R_RAYTRACE;
@@ -562,8 +573,17 @@ Scene *BKE_scene_add(Main *bmain, const char *name)
 	sce->r.line_thickness_mode = R_LINE_THICKNESS_ABSOLUTE;
 	sce->r.unit_line_thickness = 1.0f;
 
+	mblur_shutter_curve = &sce->r.mblur_shutter_curve;
+	curvemapping_set_defaults(mblur_shutter_curve, 1, 0.0f, 0.0f, 1.0f, 1.0f);
+	curvemapping_initialize(mblur_shutter_curve);
+	curvemap_reset(mblur_shutter_curve->cm,
+	               &mblur_shutter_curve->clipr,
+	               CURVE_PRESET_MAX,
+	               CURVEMAP_SLOPE_POS_NEG);
+
 	sce->toolsettings = MEM_callocN(sizeof(struct ToolSettings), "Tool Settings Struct");
 	sce->toolsettings->doublimit = 0.001;
+	sce->toolsettings->vgroup_weight = 1.0f;
 	sce->toolsettings->uvcalc_margin = 0.001f;
 	sce->toolsettings->unwrapper = 1;
 	sce->toolsettings->select_thresh = 0.01f;
@@ -729,6 +749,17 @@ Scene *BKE_scene_add(Main *bmain, const char *name)
 	copy_v2_fl2(sce->safe_areas.title_center, 17.5f / 100.0f, 5.0f / 100.0f);
 	copy_v2_fl2(sce->safe_areas.action_center, 15.0f / 100.0f, 5.0f / 100.0f);
 
+	sce->preview = NULL;
+}
+
+Scene *BKE_scene_add(Main *bmain, const char *name)
+{
+	Scene *sce;
+
+	sce = BKE_libblock_alloc(bmain, ID_SCE, name);
+
+	BKE_scene_init(sce);
+
 	return sce;
 }
 
@@ -750,6 +781,11 @@ Base *BKE_scene_base_find(Scene *scene, Object *ob)
 	return BLI_findptr(&scene->base, ob, offsetof(Base, object));
 }
 
+/**
+ * Sets the active scene, mainly used when running in background mode (``--scene`` command line argument).
+ * This is also called to set the scene directly, bypassing windowing code.
+ * Otherwise #ED_screen_set_scene is used when changing scenes by the user.
+ */
 void BKE_scene_set_background(Main *bmain, Scene *scene)
 {
 	Scene *sce;
@@ -1340,7 +1376,7 @@ static void scene_do_rb_simulation_recursive(Scene *scene, float ctime)
  *
  * Ideally Mballs shouldn't do such an iteration and use DAG
  * queries instead. For the time being we've got new DAG
- * let's keep it simple and update mballs in a ingle thread.
+ * let's keep it simple and update mballs in a single thread.
  */
 #define MBALL_SINGLETHREAD_HACK
 
@@ -1730,15 +1766,16 @@ void BKE_scene_update_tagged(EvaluationContext *eval_ctx, Main *bmain, Scene *sc
 	 * in the future this should handle updates for all datablocks, not
 	 * only objects and scenes. - brecht */
 #ifdef WITH_LEGACY_DEPSGRAPH
-	if (use_new_eval) {
-		DEG_evaluate_on_refresh(eval_ctx, scene->depsgraph, scene);
-	}
-	else {
+	if (!use_new_eval) {
 		scene_update_tagged_recursive(eval_ctx, bmain, scene, scene);
 	}
-#else
-	DEG_evaluate_on_refresh(eval_ctx, scene->depsgraph, scene);
+	else
 #endif
+	{
+		DEG_evaluate_on_refresh(eval_ctx, scene->depsgraph, scene);
+		/* TODO(sergey): This is to beocme a node in new depsgraph. */
+		BKE_mask_update_scene(bmain, scene);
+	}
 
 	/* update sound system animation (TODO, move to depsgraph) */
 	BKE_sound_update_scene(bmain, scene);
@@ -1815,6 +1852,8 @@ void BKE_scene_update_for_newframe_ex(EvaluationContext *eval_ctx, Main *bmain, 
 	/* TODO(sergey): Pass to evaluation routines instead of storing layer in the graph? */
 	(void) do_invisible_flush;
 #endif
+
+	DAG_editors_update_pre(bmain, sce, true);
 
 	/* keep this first */
 	BLI_callback_exec(bmain, &sce->id, BLI_CB_EVT_FRAME_CHANGE_PRE);
@@ -2096,8 +2135,8 @@ bool BKE_scene_use_new_shading_nodes(const Scene *scene)
 
 bool BKE_scene_use_shading_nodes_custom(Scene *scene)
 {
-	   RenderEngineType *type = RE_engines_find(scene->r.engine);
-	   return (type && type->flag & RE_USE_SHADING_NODES_CUSTOM);
+	RenderEngineType *type = RE_engines_find(scene->r.engine);
+	return (type && type->flag & RE_USE_SHADING_NODES_CUSTOM);
 }
 
 bool BKE_scene_uses_blender_internal(const  Scene *scene)
@@ -2209,10 +2248,10 @@ double BKE_scene_unit_scale(const UnitSettings *unit, const int unit_type, doubl
 
 /******************** multiview *************************/
 
-size_t BKE_scene_multiview_num_views_get(const RenderData *rd)
+int BKE_scene_multiview_num_views_get(const RenderData *rd)
 {
 	SceneRenderView *srv;
-	size_t totviews	= 0;
+	int totviews = 0;
 
 	if ((rd->scemode & R_MULTIVIEW) == 0)
 		return 1;
@@ -2345,7 +2384,7 @@ const char *BKE_scene_multiview_render_view_name_get(const RenderData *rd, const
 		return "";
 }
 
-size_t BKE_scene_multiview_view_id_get(const RenderData *rd, const char *viewname)
+int BKE_scene_multiview_view_id_get(const RenderData *rd, const char *viewname)
 {
 	SceneRenderView *srv;
 	size_t nr;
@@ -2416,7 +2455,7 @@ const char *BKE_scene_multiview_view_suffix_get(const RenderData *rd, const char
 		return viewname;
 }
 
-const char *BKE_scene_multiview_view_id_suffix_get(const RenderData *rd, const size_t view_id)
+const char *BKE_scene_multiview_view_id_suffix_get(const RenderData *rd, const int view_id)
 {
 	if ((rd->scemode & R_MULTIVIEW) == 0) {
 		return "";
@@ -2427,11 +2466,11 @@ const char *BKE_scene_multiview_view_id_suffix_get(const RenderData *rd, const s
 	}
 }
 
-void BKE_scene_multiview_view_prefix_get(Scene *scene, const char *name, char *rprefix, char **rext)
+void BKE_scene_multiview_view_prefix_get(Scene *scene, const char *name, char *rprefix, const char **rext)
 {
 	SceneRenderView *srv;
 	size_t index_act;
-	char *suf_act;
+	const char *suf_act;
 	const char delims[] = {'.', '\0'};
 
 	rprefix[0] = '\0';
@@ -2439,6 +2478,7 @@ void BKE_scene_multiview_view_prefix_get(Scene *scene, const char *name, char *r
 	/* begin of extension */
 	index_act = BLI_str_rpartition(name, delims, rext, &suf_act);
 	BLI_assert(index_act > 0);
+	UNUSED_VARS_NDEBUG(index_act);
 
 	for (srv = scene->r.views.first; srv; srv = srv->next) {
 		if (BKE_scene_multiview_is_render_view_active(&scene->r, srv)) {
@@ -2470,7 +2510,7 @@ void BKE_scene_multiview_videos_dimensions_get(
 	}
 }
 
-size_t BKE_scene_multiview_num_videos_get(const RenderData *rd)
+int BKE_scene_multiview_num_videos_get(const RenderData *rd)
 {
 	if (BKE_imtype_is_movie(rd->im_format.imtype) == false)
 		return 0;

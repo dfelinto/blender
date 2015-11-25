@@ -21,7 +21,7 @@ BF_FFMPEG_LIB = 'avformat-55.lib avcodec-55.lib avdevice-55.lib avutil-52.lib sw
 BF_FFMPEG_DLL = '${BF_FFMPEG_LIBPATH}/avformat-55.dll ${BF_FFMPEG_LIBPATH}/avcodec-55.dll ${BF_FFMPEG_LIBPATH}/avdevice-55.dll ${BF_FFMPEG_LIBPATH}/avutil-52.dll ${BF_FFMPEG_LIBPATH}/swscale-2.dll'
 
 BF_PYTHON = LIBDIR + '/python'
-BF_PYTHON_VERSION = '3.4'
+BF_PYTHON_VERSION = '3.5'
 BF_PYTHON_INC = '${BF_PYTHON}/include/python${BF_PYTHON_VERSION}'
 BF_PYTHON_BINARY = 'python'
 BF_PYTHON_LIB = 'python${BF_PYTHON_VERSION[0]}${BF_PYTHON_VERSION[2]}'
@@ -41,6 +41,8 @@ BF_ICONV = LIBDIR + '/iconv'
 BF_ICONV_INC = '${BF_ICONV}/include'
 BF_ICONV_LIB = 'iconv'
 BF_ICONV_LIBPATH = '${BF_ICONV}/lib'
+
+WITH_BF_AUDASPACE = True
 
 WITH_BF_JACK = False
 BF_JACK = LIBDIR + '/jack'
@@ -207,6 +209,12 @@ BF_RAYOPTIMIZATION_SSE_FLAGS = ['/arch:SSE']
 
 #Freestyle
 WITH_BF_FREESTYLE = True
+
+WITH_BF_OPENSUBDIV = True
+BF_OPENSUBDIV = LIBDIR + '/opensubdiv'
+BF_OPENSUBDIV_INC = '${BF_OPENSUBDIV}/include'
+BF_OPENSUBDIV_LIB = 'osdCPU osdGPU'
+BF_OPENSUBDIV_LIBPATH = '${BF_OPENSUBDIV}/lib'
 
 WITH_BF_STATICOPENGL = False
 BF_OPENGL_INC = '${BF_OPENGL}/include'

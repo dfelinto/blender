@@ -85,7 +85,6 @@ set(SRC
 	KX_GameObject.cpp
 	KX_IpoConvert.cpp
 	KX_IPO_SGController.cpp
-	KX_IpoActuator.cpp
 	KX_KetsjiEngine.cpp
 	KX_Light.cpp
 	KX_LightIpoSGController.cpp
@@ -108,7 +107,6 @@ set(SRC
 	KX_PythonInit.cpp
 	KX_PythonInitTypes.cpp
 	KX_PythonMain.cpp
-	KX_PythonSeq.cpp
 	KX_RadarSensor.cpp
 	KX_RayCast.cpp
 	KX_RayEventManager.cpp
@@ -164,7 +162,6 @@ set(SRC
 	KX_IScalarInterpolator.h
 	KX_ISceneConverter.h
 	KX_ISystem.h
-	KX_IpoActuator.h
 	KX_KetsjiEngine.h
 	KX_Light.h
 	KX_LightIpoSGController.h
@@ -188,7 +185,6 @@ set(SRC
 	KX_PythonInit.h
 	KX_PythonInitTypes.h
 	KX_PythonMain.h
-	KX_PythonSeq.h
 	KX_RadarSensor.h
 	KX_RayCast.h
 	KX_RayEventManager.h
@@ -248,11 +244,12 @@ if(WITH_CODEC_FFMPEG)
 endif()
 
 if(WITH_AUDASPACE)
-	list(APPEND INC
-		../../../intern/audaspace/intern
-		../../../intern/audaspace/FX
+	add_definitions(${AUDASPACE_DEFINITIONS})
+
+	list(APPEND INC_SYS
+		${AUDASPACE_C_INCLUDE_DIRS}
+		${AUDASPACE_PY_INCLUDE_DIRS}
 	)
-	add_definitions(-DWITH_AUDASPACE)
 endif()
 
 if(WITH_BULLET)
