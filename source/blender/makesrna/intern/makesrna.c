@@ -466,7 +466,7 @@ static const char *rna_parameter_type_name(PropertyRNA *parm)
 		}
 		case PROP_COLLECTION:
 		{
-			return "CollectionListBase";
+			return "ListBase";
 		}
 		default:
 			return "<error, no type specified>";

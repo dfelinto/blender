@@ -142,16 +142,3 @@ int _bli_array_findindex(const void *arr, unsigned int arr_len, size_t arr_strid
 	}
 	return -1;
 }
-
-/* XXX Don't know where to put this... */
-int BLI_memcmp_null(char *p, const size_t size) {
-	const char null_buff[4096] = {0};
-	char *null = (char *)null_buff;
-
-	if (UNLIKELY((size) > 4096)) {
-		null = alloca(sizeof(*null) * size);
-		memset(null, 0, sizeof(*null) * size);
-	}
-
-	return memcmp(p, null, size);
-}

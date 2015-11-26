@@ -46,6 +46,4 @@ int _bli_array_findindex(const void *arr, unsigned int arr_len, size_t arr_strid
 #define BLI_array_findindex(arr, arr_len, p) \
 	_bli_array_findindex(arr, arr_len, sizeof(*(arr)), p)
 
-int BLI_memcmp_null(char *p, const size_t size);
-
 #endif  /* __BLI_ARRAY_UTILS_H__ */
