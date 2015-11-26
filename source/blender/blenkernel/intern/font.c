@@ -95,9 +95,10 @@ void BKE_vfont_free_data(struct VFont *vfont)
 	}
 }
 
-/** Free (or release) any data used by this font (does not free the font itself). */
 void BKE_vfont_free(struct VFont *vf)
 {
+	if (vf == NULL) return;
+
 	BKE_vfont_free_data(vf);
 
 	if (vf->packedfile) {

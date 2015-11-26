@@ -52,28 +52,38 @@
 
 #include "GPU_material.h"
 
-/** Free (or release) any data used by this world (does not free the world itself). */
-void BKE_world_free(World *wrld)
+void BKE_world_free_ex(World *wrld, bool do_id_user)
 {
+	MTex *mtex;
 	int a;
+	
+	for (a = 0; a < MAX_MTEX; a++) {
+		mtex = wrld->mtex[a];
+		if (do_id_user && mtex && mtex->tex)
+			id_us_min(&mtex->tex->id);
+		if (mtex)
+			MEM_freeN(mtex);
+	}
+	BKE_previewimg_free(&wrld->preview);
 
 	BKE_animdata_free((ID *)wrld);
 
-	for (a = 0; a < MAX_MTEX; a++) {
-		MEM_SAFE_FREE(wrld->mtex[a]);
-	}
-
 	/* is no lib link block, but world extension */
 	if (wrld->nodetree) {
-		ntreeFreeTree(wrld->nodetree);
+		ntreeFreeTree_ex(wrld->nodetree, do_id_user);
 		MEM_freeN(wrld->nodetree);
-		wrld->nodetree = NULL;
 	}
 
-	GPU_material_free(&wrld->gpumaterial);
+	if (wrld->gpumaterial.first)
+		GPU_material_free(&wrld->gpumaterial);
 	
 	BKE_icon_id_delete((struct ID *)wrld);
-	BKE_previewimg_free(&wrld->preview);
+	wrld->id.icon_id = 0;
+}
+
+void BKE_world_free(World *wrld)
+{
+	BKE_world_free_ex(wrld, true);
 }
 
 void BKE_world_init(World *wrld)

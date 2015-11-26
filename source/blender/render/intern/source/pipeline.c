@@ -2217,8 +2217,7 @@ static void free_all_freestyle_renders(void)
 			if (freestyle_render) {
 				freestyle_scene = freestyle_render->scene;
 				RE_FreeRender(freestyle_render);
-				BKE_libblock_unlink(re1->freestyle_bmain, freestyle_scene);
-				BKE_libblock_free(re1->freestyle_bmain, freestyle_scene);
+				BKE_scene_unlink(re1->freestyle_bmain, freestyle_scene, NULL);
 			}
 		}
 		BLI_freelistN(&re1->freestyle_renders);

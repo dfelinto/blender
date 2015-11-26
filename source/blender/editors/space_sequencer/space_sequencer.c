@@ -32,7 +32,6 @@
 #include <string.h>
 #include <stdio.h>
 
-#include "DNA_gpencil_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_mask_types.h"
 
@@ -42,7 +41,6 @@
 #include "BLI_utildefines.h"
 
 #include "BKE_context.h"
-#include "BKE_library.h"
 #include "BKE_screen.h"
 #include "BKE_sequencer.h"
 #include "BKE_global.h"
@@ -689,18 +687,6 @@ static void sequencer_buttons_area_listener(bScreen *UNUSED(sc), ScrArea *UNUSED
 			break;
 	}
 }
-
-static void sequencer_id_remap(ScrArea *UNUSED(sa), SpaceLink *slink, ID *old_id, ID *new_id)
-{
-	SpaceSeq *sseq = (SpaceSeq *)slink;
-
-	if ((ID *)sseq->gpd == old_id) {
-		sseq->gpd = (bGPdata *)new_id;
-		id_us_min(old_id);
-		id_us_plus(new_id);
-	}
-}
-
 /* ************************************* */
 
 /* only called once, from space/spacetypes.c */
@@ -722,7 +708,6 @@ void ED_spacetype_sequencer(void)
 	st->dropboxes = sequencer_dropboxes;
 	st->refresh = sequencer_refresh;
 	st->listener = sequencer_listener;
-	st->id_remap = sequencer_id_remap;
 
 	/* regions: main window */
 	art = MEM_callocN(sizeof(ARegionType), "spacetype sequencer region");

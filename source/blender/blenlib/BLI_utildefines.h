@@ -695,15 +695,6 @@ extern void BLI_system_backtrace(FILE *fp);
 #  define UNLIKELY(x)     (x)
 #endif
 
-/* XXX Defined in array_utils.c for now. I do not know where we should put it actually... */
-extern int BLI_memcmp_null(char *p, const size_t size);
-
-#define MEMCMP_NULL_STRUCT_OFS(struct_var, member) \
-	(BLI_memcmp_null( \
-	       (char *)(struct_var)  + OFFSETOF_STRUCT(struct_var, member), \
-	       sizeof(*(struct_var)) - OFFSETOF_STRUCT(struct_var, member)) == 0)
-
-
 #ifdef __cplusplus
 }
 #endif
