@@ -457,7 +457,7 @@ static void rna_def_keyboard_sensor(BlenderRNA *brna)
 
 	prop = RNA_def_property(srna, "key", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "key");
-	RNA_def_property_enum_items(prop, event_type_items);
+	RNA_def_property_enum_items(prop, rna_enum_event_type_items);
 	RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_UI_EVENTS);
 	RNA_def_property_enum_funcs(prop, NULL, "rna_Sensor_keyboard_key_set", NULL);
 	RNA_def_property_ui_text(prop, "Key",  "");
@@ -466,7 +466,7 @@ static void rna_def_keyboard_sensor(BlenderRNA *brna)
 	
 	prop = RNA_def_property(srna, "modifier_key_1", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "qual");
-	RNA_def_property_enum_items(prop, event_type_items);
+	RNA_def_property_enum_items(prop, rna_enum_event_type_items);
 	RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_UI_EVENTS);
 	RNA_def_property_enum_funcs(prop, NULL, "rna_Sensor_keyboard_modifier_set", NULL);
 	RNA_def_property_ui_text(prop, "Modifier Key", "Modifier key code");
@@ -474,7 +474,7 @@ static void rna_def_keyboard_sensor(BlenderRNA *brna)
 	
 	prop = RNA_def_property(srna, "modifier_key_2", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "qual2");
-	RNA_def_property_enum_items(prop, event_type_items);
+	RNA_def_property_enum_items(prop, rna_enum_event_type_items);
 	RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_UI_EVENTS);
 	RNA_def_property_enum_funcs(prop, NULL, "rna_Sensor_keyboard_modifier2_set", NULL);
 	RNA_def_property_ui_text(prop, "Second Modifier Key", "Modifier key code");
@@ -590,7 +590,7 @@ static void rna_def_actuator_sensor(BlenderRNA *brna)
 	RNA_def_struct_ui_text(srna, "Actuator Sensor", "Sensor to detect state modifications of actuators");
 	RNA_def_struct_sdna_from(srna, "bActuatorSensor", "data");
 
-	/* XXX if eventually have Logics using RNA 100%, we could use the actuator datablock isntead of its name */
+	/* XXX if eventually have Logics using RNA 100%, we could use the actuator data-block isntead of its name */
 	prop = RNA_def_property(srna, "actuator", PROP_STRING, PROP_NONE);
 	RNA_def_property_string_sdna(prop, NULL, "name");
 	RNA_def_property_ui_text(prop, "Actuator", "Actuator name, actuator active state modifications will be detected");
@@ -660,7 +660,7 @@ static void rna_def_collision_sensor(BlenderRNA *brna)
 	RNA_def_property_update(prop, NC_LOGIC, NULL);
 
 #if 0
-	/* XXX either use a datablock look up to store the string name (material)
+	/* XXX either use a data-block look up to store the string name (material)
 	 * or to do a doversion and use a material pointer. */
 	prop = RNA_def_property(srna, "material", PROP_POINTER, PROP_NONE);
 	RNA_def_property_struct_type(prop, "Material");
@@ -768,7 +768,7 @@ static void rna_def_ray_sensor(BlenderRNA *brna)
 	RNA_def_property_update(prop, NC_LOGIC, NULL);
 
 #if 0
-	/* XXX either use a datablock look up to store the string name (material)
+	/* XXX either use a data-block look up to store the string name (material)
 	 * or to do a doversion and use a material pointer. */
 	prop = RNA_def_property(srna, "material", PROP_POINTER, PROP_NONE);
 	RNA_def_property_struct_type(prop, "Material");

@@ -159,7 +159,7 @@ typedef struct RenderResult {
 	ListBase layers;
 	
 	/* multiView maps to a StringVector in OpenEXR */
-	ListBase views;
+	ListBase views;  /* RenderView */
 
 	/* allowing live updates: */
 	volatile rcti renrect;
@@ -231,6 +231,9 @@ struct RenderStats *RE_GetStats(struct Render *re);
 void RE_ResultGet32(struct Render *re, unsigned int *rect);
 void RE_AcquiredResultGet32(struct Render *re, struct RenderResult *result, unsigned int *rect, const int view_id);
 
+void RE_render_result_rect_from_ibuf(struct RenderResult *rr, struct RenderData *rd,
+    struct ImBuf *ibuf, const int view_id);
+
 struct RenderLayer *RE_GetRenderLayer(struct RenderResult *rr, const char *name);
 float *RE_RenderLayerGetPass(volatile struct RenderLayer *rl, int passtype, const char *viewname);
 
@@ -273,10 +276,12 @@ void RE_init_threadcount(Render *re);
 /* the main processor, assumes all was set OK! */
 void RE_TileProcessor(struct Render *re);
 
-bool RE_WriteRenderViewsImage(struct ReportList *reports, struct RenderResult *rr, struct Scene *scene, const bool stamp, char *name);
-bool RE_WriteRenderViewsMovie(struct ReportList *reports, struct RenderResult *rr, struct Scene *scene, struct RenderData *rd,
-                              struct bMovieHandle *mh, const size_t width, const size_t height, void **movie_ctx_arr,
-                              const size_t totvideos, bool preview);
+bool RE_WriteRenderViewsImage(
+        struct ReportList *reports, struct RenderResult *rr, struct Scene *scene, const bool stamp, char *name);
+bool RE_WriteRenderViewsMovie(
+        struct ReportList *reports, struct RenderResult *rr, struct Scene *scene, struct RenderData *rd,
+        struct bMovieHandle *mh, void **movie_ctx_arr,
+        const int totvideos, bool preview);
 
 /* only RE_NewRender() needed, main Blender render calls */
 void RE_BlenderFrame(struct Render *re, struct Main *bmain, struct Scene *scene,

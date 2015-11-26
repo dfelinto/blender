@@ -142,12 +142,8 @@ ccl_device_inline bool triangle_intersect(KernelGlobals *kg,
 	float U = Cx * By - Cy * Bx;
 	float V = Ax * Cy - Ay * Cx;
 	float W = Bx * Ay - By * Ax;
-	const int sign_mask = (__float_as_int(U) & 0x80000000);
-	/* TODO(sergey): Check if multiplication plus sign check is faster
-	 * or at least same speed (but robust for endian types).
-	 */
-	if(sign_mask != (__float_as_int(V) & 0x80000000) ||
-	   sign_mask != (__float_as_int(W) & 0x80000000))
+	if((U < 0.0f || V < 0.0f || W < 0.0f) &&
+	   (U > 0.0f || V > 0.0f || W > 0.0f))
 	{
 		return false;
 	}
@@ -162,9 +158,10 @@ ccl_device_inline bool triangle_intersect(KernelGlobals *kg,
 	 * the hit distance.
 	 */
 	const float T = (U * A_kz + V * B_kz + W * C_kz) * Sz;
-	const float sign_T = xor_signmask(T, sign_mask);
+	const int sign_det = (__float_as_int(det) & 0x80000000);
+	const float sign_T = xor_signmask(T, sign_det);
 	if((sign_T < 0.0f) ||
-	   (sign_T > isect->t * xor_signmask(det, sign_mask)))
+	   (sign_T > isect->t * xor_signmask(det, sign_det)))
 	{
 		return false;
 	}
@@ -207,12 +204,11 @@ ccl_device_inline bool triangle_intersect(KernelGlobals *kg,
 ccl_device_inline void triangle_intersect_subsurface(
         KernelGlobals *kg,
         const IsectPrecalc *isect_precalc,
-        Intersection *isect_array,
+        SubsurfaceIntersection *ss_isect,
         float3 P,
         int object,
         int triAddr,
         float tmax,
-        uint *num_hits,
         uint *lcg_state,
         int max_hits)
 {
@@ -245,13 +241,12 @@ ccl_device_inline void triangle_intersect_subsurface(
 
 	/* Calculate scaled barycentric coordinates. */
 	float U = Cx * By - Cy * Bx;
-	int sign_mask = (__float_as_int(U) & 0x80000000);
 	float V = Ax * Cy - Ay * Cx;
-	if(sign_mask != (__float_as_int(V) & 0x80000000)) {
-		return;
-	}
 	float W = Bx * Ay - By * Ax;
-	if(sign_mask != (__float_as_int(W) & 0x80000000)) {
+
+	if((U < 0.0f || V < 0.0f || W < 0.0f) &&
+	   (U > 0.0f || V > 0.0f || W > 0.0f))
+	{
 		return;
 	}
 
@@ -264,10 +259,11 @@ ccl_device_inline void triangle_intersect_subsurface(
 	/* Calculate scaled z−coordinates of vertices and use them to calculate
 	 * the hit distance.
 	 */
+	const int sign_det = (__float_as_int(det) & 0x80000000);
 	const float T = (U * A_kz + V * B_kz + W * C_kz) * Sz;
-	const float sign_T = xor_signmask(T, sign_mask);
+	const float sign_T = xor_signmask(T, sign_det);
 	if((sign_T < 0.0f) ||
-	   (sign_T > tmax * xor_signmask(det, sign_mask)))
+	   (sign_T > tmax * xor_signmask(det, sign_det)))
 	{
 		return;
 	}
@@ -275,29 +271,36 @@ ccl_device_inline void triangle_intersect_subsurface(
 	/* Normalize U, V, W, and T. */
 	const float inv_det = 1.0f / det;
 
-	(*num_hits)++;
+	ss_isect->num_hits++;
 	int hit;
 
-	if(*num_hits <= max_hits) {
-		hit = *num_hits - 1;
+	if(ss_isect->num_hits <= max_hits) {
+		hit = ss_isect->num_hits - 1;
 	}
 	else {
 		/* reservoir sampling: if we are at the maximum number of
 		 * hits, randomly replace element or skip it */
-		hit = lcg_step_uint(lcg_state) % *num_hits;
+		hit = lcg_step_uint(lcg_state) % ss_isect->num_hits;
 
 		if(hit >= max_hits)
 			return;
 	}
 
 	/* record intersection */
-	Intersection *isect = &isect_array[hit];
+	Intersection *isect = &ss_isect->hits[hit];
 	isect->prim = triAddr;
 	isect->object = object;
 	isect->type = PRIMITIVE_TRIANGLE;
 	isect->u = U * inv_det;
 	isect->v = V * inv_det;
 	isect->t = T * inv_det;
+
+	/* Record geometric normal. */
+	/* TODO(sergey): Use float4_to_float3() on just an edges. */
+	const float3 v0 = float4_to_float3(tri_a);
+	const float3 v1 = float4_to_float3(tri_b);
+	const float3 v2 = float4_to_float3(tri_c);
+	ss_isect->Ng[hit] = normalize(cross(v1 - v0, v2 - v0));
 }
 #endif
 

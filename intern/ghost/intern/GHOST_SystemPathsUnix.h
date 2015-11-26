@@ -24,43 +24,43 @@
  * ***** END GPL LICENSE BLOCK *****
  */
 
-/** \file ghost/intern/GHOST_SystemPathsX11.h
+/** \file ghost/intern/GHOST_SystemPathsUnix.h
  *  \ingroup GHOST
  */
 
 
-#ifndef __GHOST_SYSTEMPATHSX11_H__
-#define __GHOST_SYSTEMPATHSX11_H__
+#ifndef __GHOST_SYSTEMPATHSUNIX_H__
+#define __GHOST_SYSTEMPATHSUNIX_H__
 
 #include "GHOST_SystemPaths.h"
 #include "../GHOST_Types.h"
 
 
-class GHOST_SystemPathsX11 : public GHOST_SystemPaths {
+class GHOST_SystemPathsUnix : public GHOST_SystemPaths {
 public:
 
 	/**
 	 * Constructor
 	 * this class should only be instanciated by GHOST_ISystem.
 	 */
-	GHOST_SystemPathsX11();
+	GHOST_SystemPathsUnix();
 	
 	/**
 	 * Destructor.
 	 */
-	~GHOST_SystemPathsX11();
+	~GHOST_SystemPathsUnix();
 
 	/**
 	 * Determine the base dir in which shared resources are located. It will first try to use
 	 * "unpack and run" path, then look for properly installed path, including versioning.
-	 * \return Unsigned char string pointing to system dir (eg /usr/share/blender/).
+	 * \return Unsigned char string pointing to system dir (eg `/usr/share/blender/`).
 	 */
 	const GHOST_TUns8 *getSystemDir(int version, const char *versionstr) const;
 
 	/**
 	 * Determine the base dir in which user configuration is stored, including versioning.
 	 * If needed, it will create the base directory.
-	 * \return Unsigned char string pointing to user dir (eg ~/.blender/).
+	 * \return Unsigned char string pointing to user dir (eg `~/.config/.blender/`).
 	 */
 	const GHOST_TUns8 *getUserDir(int version, const char *versionstr) const;
 
@@ -76,5 +76,4 @@ public:
 	void addToSystemRecentFiles(const char *filename) const;
 };
 
-#endif
-
+#endif  /* __GHOST_SYSTEMPATHSUNIX_H__ */

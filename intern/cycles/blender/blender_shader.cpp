@@ -107,6 +107,32 @@ static ShaderSocketType convert_socket_type(BL::NodeSocket b_socket)
 	}
 }
 
+#ifdef WITH_OSL
+static ShaderSocketType convert_osl_socket_type(OSL::OSLQuery& query,
+                                                BL::NodeSocket b_socket)
+{
+	ShaderSocketType socket_type = convert_socket_type(b_socket);
+#if OSL_LIBRARY_VERSION_CODE < 10701
+	(void) query;
+#else
+	if(socket_type == SHADER_SOCKET_VECTOR) {
+		/* TODO(sergey): Do we need compatible_name() here? */
+		const OSL::OSLQuery::Parameter *param = query.getparam(b_socket.name());
+		assert(param != NULL);
+		if(param != NULL) {
+			if(param->type.vecsemantics == TypeDesc::POINT) {
+				socket_type = SHADER_SOCKET_POINT;
+			}
+			else if(param->type.vecsemantics == TypeDesc::NORMAL) {
+				socket_type = SHADER_SOCKET_NORMAL;
+			}
+		}
+	}
+#endif
+	return socket_type;
+}
+#endif  /* WITH_OSL */
+
 static void set_default_value(ShaderInput *input, BL::NodeSocket b_sock, BL::BlendData b_data, BL::ID b_id)
 {
 	/* copy values for non linked inputs */
@@ -184,6 +210,7 @@ static ShaderNode *add_node(Scene *scene,
                             BL::RenderEngine b_engine,
                             BL::BlendData b_data,
                             BL::Scene b_scene,
+                            const bool background,
                             ShaderGraph *graph,
                             BL::ShaderNodeTree b_ntree,
                             BL::ShaderNode b_node)
@@ -507,6 +534,23 @@ static ShaderNode *add_node(Scene *scene,
 			BL::ShaderNodeScript b_script_node(b_node);
 			OSLScriptNode *script_node = new OSLScriptNode();
 
+			OSLShaderManager *manager = (OSLShaderManager*)scene->shader_manager;
+			string bytecode_hash = b_script_node.bytecode_hash();
+
+			/* Gather additional information from the shader, such as
+			 * input/output type info needed for proper node construction.
+			 */
+			OSL::OSLQuery query;
+#if OSL_LIBRARY_VERSION_CODE >= 10701
+			if(!bytecode_hash.empty()) {
+				query.open_bytecode(b_script_node.bytecode());
+			}
+			else {
+				!OSLShaderManager::osl_query(query, b_script_node.filepath());
+			}
+			/* TODO(sergey): Add proper query info error parsing. */
+#endif
+
 			/* Generate inputs/outputs from node sockets
 			 *
 			 * Note: the node sockets are generated from OSL parameters,
@@ -519,7 +563,7 @@ static ShaderNode *add_node(Scene *scene,
 			for(b_script_node.inputs.begin(b_input); b_input != b_script_node.inputs.end(); ++b_input) {
 				script_node->input_names.push_back(ustring(b_input->name()));
 				ShaderInput *input = script_node->add_input(script_node->input_names.back().c_str(),
-				                                            convert_socket_type(*b_input));
+				                                            convert_osl_socket_type(query, *b_input));
 				set_default_value(input, *b_input, b_data, b_ntree);
 			}
 
@@ -528,13 +572,10 @@ static ShaderNode *add_node(Scene *scene,
 			for(b_script_node.outputs.begin(b_output); b_output != b_script_node.outputs.end(); ++b_output) {
 				script_node->output_names.push_back(ustring(b_output->name()));
 				script_node->add_output(script_node->output_names.back().c_str(),
-				                        convert_socket_type(*b_output));
+				                        convert_osl_socket_type(query, *b_output));
 			}
 
 			/* load bytecode or filepath */
-			OSLShaderManager *manager = (OSLShaderManager*)scene->shader_manager;
-			string bytecode_hash = b_script_node.bytecode_hash();
-
 			if(!bytecode_hash.empty()) {
 				/* loaded bytecode if not already done */
 				if(!manager->shader_test_loaded(bytecode_hash))
@@ -763,6 +804,8 @@ static ShaderNode *add_node(Scene *scene,
 
 		/* TODO(sergey): Use more proper update flag. */
 		if(true) {
+			int settings = background ? 1 : 0;  /* 1 - render settings, 0 - vewport settings. */
+			b_point_density_node.cache_point_density(b_scene, settings);
 			scene->image_manager->tag_reload_image(
 			        point_density->filename,
 			        point_density->builtin_data,
@@ -852,6 +895,7 @@ static void add_nodes(Scene *scene,
                       BL::RenderEngine b_engine,
                       BL::BlendData b_data,
                       BL::Scene b_scene,
+                      const bool background,
                       ShaderGraph *graph,
                       BL::ShaderNodeTree b_ntree,
                       const ProxyMap &proxy_input_map,
@@ -937,6 +981,7 @@ static void add_nodes(Scene *scene,
 				          b_engine,
 				          b_data,
 				          b_scene,
+				          background,
 				          graph,
 				          b_group_ntree,
 				          group_proxy_input_map,
@@ -984,6 +1029,7 @@ static void add_nodes(Scene *scene,
 				                b_engine,
 				                b_data,
 				                b_scene,
+				                background,
 				                graph,
 				                b_ntree,
 				                BL::ShaderNode(*b_node));
@@ -1046,6 +1092,7 @@ static void add_nodes(Scene *scene,
                       BL::RenderEngine b_engine,
                       BL::BlendData b_data,
                       BL::Scene b_scene,
+                      const bool background,
                       ShaderGraph *graph,
                       BL::ShaderNodeTree b_ntree)
 {
@@ -1054,6 +1101,7 @@ static void add_nodes(Scene *scene,
 	          b_engine,
 	          b_data,
 	          b_scene,
+	          background,
 	          graph,
 	          b_ntree,
 	          empty_proxy_map,
@@ -1083,7 +1131,7 @@ void BlenderSync::sync_materials(bool update_all)
 			if(b_mat->use_nodes() && b_mat->node_tree()) {
 				BL::ShaderNodeTree b_ntree(b_mat->node_tree());
 
-				add_nodes(scene, b_engine, b_data, b_scene, graph, b_ntree);
+				add_nodes(scene, b_engine, b_data, b_scene, !preview, graph, b_ntree);
 			}
 			else {
 				ShaderNode *closure, *out;
@@ -1126,7 +1174,7 @@ void BlenderSync::sync_world(bool update_all)
 		if(b_world && b_world.use_nodes() && b_world.node_tree()) {
 			BL::ShaderNodeTree b_ntree(b_world.node_tree());
 
-			add_nodes(scene, b_engine, b_data, b_scene, graph, b_ntree);
+			add_nodes(scene, b_engine, b_data, b_scene, !preview, graph, b_ntree);
 
 			/* volume */
 			PointerRNA cworld = RNA_pointer_get(&b_world.ptr, "cycles");
@@ -1167,6 +1215,10 @@ void BlenderSync::sync_world(bool update_all)
 
 			background->visibility = visibility;
 		}
+		else {
+			background->ao_factor = 0.0f;
+			background->ao_distance = FLT_MAX;
+		}
 
 		shader->set_graph(graph);
 		shader->tag_update(scene);
@@ -1184,7 +1236,8 @@ void BlenderSync::sync_world(bool update_all)
 	else
 		background->transparent = b_scene.render().alpha_mode() == BL::RenderSettings::alpha_mode_TRANSPARENT;
 
-	background->use = render_layer.use_background;
+	background->use_shader = render_layer.use_background_shader;
+	background->use_ao = render_layer.use_background_ao;
 
 	if(background->modified(prevbackground))
 		background->tag_update(scene);
@@ -1212,7 +1265,7 @@ void BlenderSync::sync_lamps(bool update_all)
 
 				BL::ShaderNodeTree b_ntree(b_lamp->node_tree());
 
-				add_nodes(scene, b_engine, b_data, b_scene, graph, b_ntree);
+				add_nodes(scene, b_engine, b_data, b_scene, !preview, graph, b_ntree);
 			}
 			else {
 				ShaderNode *closure, *out;

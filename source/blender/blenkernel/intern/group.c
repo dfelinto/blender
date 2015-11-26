@@ -73,9 +73,8 @@ void BKE_group_free(Group *group)
 	}
 }
 
-void BKE_group_unlink(Group *group)
+void BKE_group_unlink(Main *bmain, Group *group)
 {
-	Main *bmain = G.main;
 	Material *ma;
 	Object *ob;
 	Scene *sce;
@@ -183,6 +182,7 @@ static bool group_object_add_internal(Group *group, Object *ob)
 	BLI_addtail(&group->gobject, go);
 	
 	go->ob = ob;
+	id_us_ensure_real(&go->ob->id);
 	
 	return true;
 }

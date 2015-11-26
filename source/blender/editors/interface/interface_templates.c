@@ -275,7 +275,7 @@ static void template_id_cb(bContext *C, void *arg_litem, void *arg_event)
 
 			if (id && CTX_wm_window(C)->eventstate->shift) {
 				/* only way to force-remove data (on save) */
-				id->flag &= ~LIB_FAKEUSER;
+				id_fake_user_clear(id);
 				id->us = 0;
 			}
 
@@ -2418,15 +2418,15 @@ void uiTemplatePalette(uiLayout *layout, PointerRNA *ptr, const char *propname, 
 	uiLayoutRow(col, true);
 
 	for (; color; color = color->next) {
-		PointerRNA ptr;
+		PointerRNA color_ptr;
 
 		if (row_cols >= cols_per_row) {
 			uiLayoutRow(col, true);
 			row_cols = 0;
 		}
 
-		RNA_pointer_create(&palette->id, &RNA_PaletteColor, color, &ptr);
-		uiDefButR(block, UI_BTYPE_COLOR, 0, "", 0, 0, UI_UNIT_X, UI_UNIT_Y, &ptr, "color", -1, 0.0, 1.0,
+		RNA_pointer_create(&palette->id, &RNA_PaletteColor, color, &color_ptr);
+		uiDefButR(block, UI_BTYPE_COLOR, 0, "", 0, 0, UI_UNIT_X, UI_UNIT_Y, &color_ptr, "color", -1, 0.0, 1.0,
 		          UI_PALETTE_COLOR, col_id, "");
 		row_cols++;
 		col_id++;

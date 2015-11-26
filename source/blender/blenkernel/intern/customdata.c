@@ -909,6 +909,7 @@ static void layerInterp_mloopuv(
         const float *sub_weights, int count, void *dest)
 {
 	float uv[2];
+	int flag = 0;
 	int i;
 
 	zero_v2(uv);
@@ -916,9 +917,12 @@ static void layerInterp_mloopuv(
 	if (sub_weights) {
 		const float *sub_weight = sub_weights;
 		for (i = 0; i < count; i++) {
-			float weight = weights ? weights[i] : 1.0f;
+			float weight = (weights ? weights[i] : 1.0f) * (*sub_weight);
 			const MLoopUV *src = sources[i];
-			madd_v2_v2fl(uv, src->uv, (*sub_weight) * weight);
+			madd_v2_v2fl(uv, src->uv, weight);
+			if (weight > 0.0f) {
+				flag |= src->flag;
+			}
 			sub_weight++;
 		}
 	}
@@ -927,12 +931,15 @@ static void layerInterp_mloopuv(
 			float weight = weights ? weights[i] : 1;
 			const MLoopUV *src = sources[i];
 			madd_v2_v2fl(uv, src->uv, weight);
+			if (weight > 0.0f) {
+				flag |= src->flag;
+			}
 		}
 	}
 
 	/* delay writing to the destination incase dest is in sources */
-	((MLoopUV *)dest)->flag = ((MLoopUV *)sources)->flag;
 	copy_v2_v2(((MLoopUV *)dest)->uv, uv);
+	((MLoopUV *)dest)->flag = flag;
 }
 
 /* origspace is almost exact copy of mloopuv's, keep in sync */
@@ -1303,7 +1310,7 @@ static const LayerTypeInfo LAYERTYPEINFO[CD_NUMTYPES] = {
 	/* 35: CD_GRID_PAINT_MASK */
 	{sizeof(GridPaintMask), "GridPaintMask", 1, NULL, layerCopy_grid_paint_mask,
 	 layerFree_grid_paint_mask, NULL, NULL, NULL},
-	/* 36: CD_SKIN_NODE */
+	/* 36: CD_MVERT_SKIN */
 	{sizeof(MVertSkin), "MVertSkin", 1, NULL, NULL, NULL,
 	 layerInterp_mvert_skin, NULL, layerDefault_mvert_skin},
 	/* 37: CD_FREESTYLE_EDGE */
@@ -1318,7 +1325,6 @@ static const LayerTypeInfo LAYERTYPEINFO[CD_NUMTYPES] = {
 	{sizeof(short[2]), "vec2s", 1, NULL, NULL, NULL, NULL, NULL, NULL},
 };
 
-/* note, numbers are from trunk and need updating for bmesh */
 
 static const char *LAYERTYPENAMES[CD_NUMTYPES] = {
 	/*   0-4 */ "CDMVert", "CDMSticky", "CDMDeformVert", "CDMEdge", "CDMFace",

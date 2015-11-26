@@ -74,10 +74,15 @@ typedef enum TaskPriority {
 
 typedef struct TaskPool TaskPool;
 typedef void (*TaskRunFunction)(TaskPool *__restrict pool, void *taskdata, int threadid);
+typedef void (*TaskFreeFunction)(TaskPool *__restrict pool, void *taskdata, int threadid);
 
 TaskPool *BLI_task_pool_create(TaskScheduler *scheduler, void *userdata);
+TaskPool *BLI_task_pool_create_background(TaskScheduler *scheduler, void *userdata);
 void BLI_task_pool_free(TaskPool *pool);
 
+void BLI_task_pool_push_ex(
+        TaskPool *pool, TaskRunFunction run, void *taskdata,
+        bool free_taskdata, TaskFreeFunction freedata, TaskPriority priority);
 void BLI_task_pool_push(TaskPool *pool, TaskRunFunction run,
 	void *taskdata, bool free_taskdata, TaskPriority priority);
 
@@ -107,10 +112,12 @@ ThreadMutex *BLI_task_pool_user_mutex(TaskPool *pool);
 size_t BLI_task_pool_tasks_done(TaskPool *pool);
 
 /* Parallel for routines */
-typedef void (*TaskParallelRangeFunc)(void *userdata, int iter);
+typedef void (*TaskParallelRangeFunc)(void *userdata, void *userdata_chunk, int iter);
 void BLI_task_parallel_range_ex(
         int start, int stop,
         void *userdata,
+        void *userdata_chunk,
+        const size_t userdata_chunk_size,
         TaskParallelRangeFunc func,
         const int range_threshold,
         const bool use_dynamic_scheduling);

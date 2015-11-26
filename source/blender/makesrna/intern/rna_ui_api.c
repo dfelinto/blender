@@ -50,7 +50,7 @@
 #define DEF_ICON_BLANK_SKIP
 #define DEF_ICON(name) {ICON_##name, (#name), 0, (#name), ""},
 #define DEF_VICO(name) {VICO_##name, (#name), 0, (#name), ""},
-EnumPropertyItem icon_items[] = {
+EnumPropertyItem rna_enum_icon_items[] = {
 #include "UI_icons.h"
 	{0, NULL, 0, NULL, NULL}
 };
@@ -389,7 +389,7 @@ static void api_ui_item_common(FunctionRNA *func)
 	api_ui_item_common_text(func);
 
 	prop = RNA_def_property(func, "icon", PROP_ENUM, PROP_NONE);
-	RNA_def_property_enum_items(prop, icon_items);
+	RNA_def_property_enum_items(prop, rna_enum_icon_items);
 	RNA_def_property_ui_text(prop, "Icon", "Override automatic icon of the item");
 }
 
@@ -698,10 +698,10 @@ void RNA_api_ui_layout(StructRNA *srna)
 	func = RNA_def_function(srna, "template_preview", "uiTemplatePreview");
 	RNA_def_function_ui_description(func, "Item. A preview window for materials, textures, lamps or worlds");
 	RNA_def_function_flag(func, FUNC_USE_CONTEXT);
-	parm = RNA_def_pointer(func, "id", "ID", "", "ID datablock");
+	parm = RNA_def_pointer(func, "id", "ID", "", "ID data-block");
 	RNA_def_property_flag(parm, PROP_REQUIRED);
 	RNA_def_boolean(func, "show_buttons", true, "", "Show preview buttons?");
-	RNA_def_pointer(func, "parent", "ID", "", "ID datablock");
+	RNA_def_pointer(func, "parent", "ID", "", "ID data-block");
 	RNA_def_pointer(func, "slot", "TextureSlot", "", "Texture slot");
 	RNA_def_string(func, "preview_id", NULL, 0, "",
 	               "Identifier of this preview widget, if not set the ID type will be used "
@@ -843,7 +843,7 @@ void RNA_api_ui_layout(StructRNA *srna)
 	               "Identifier of a string property in items, to use as tooltip content");
 	RNA_def_int(func, "rows", 5, 0, INT_MAX, "", "Default and minimum number of rows to display", 0, INT_MAX);
 	RNA_def_int(func, "maxrows", 5, 0, INT_MAX, "", "Default maximum number of rows to display", 0, INT_MAX);
-	RNA_def_enum(func, "type", uilist_layout_type_items, UILST_LAYOUT_DEFAULT, "Type", "Type of layout to use");
+	RNA_def_enum(func, "type", rna_enum_uilist_layout_type_items, UILST_LAYOUT_DEFAULT, "Type", "Type of layout to use");
 	RNA_def_int(func, "columns", 9, 0, INT_MAX, "", "Number of items to display per row, for GRID layout", 0, INT_MAX);
 
 	func = RNA_def_function(srna, "template_running_jobs", "uiTemplateRunningJobs");

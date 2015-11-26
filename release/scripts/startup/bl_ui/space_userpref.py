@@ -174,7 +174,6 @@ class USERPREF_PT_interface(Panel):
         if sys.platform[:3] == "win":
             col.label("Warnings")
             col.prop(view, "use_quit_dialog")
-            col.prop(view, "use_gl_warn_support")
 
         row.separator()
         row.separator()
@@ -452,16 +451,14 @@ class USERPREF_PT_system(Panel):
         col.prop(system, "use_gpu_mipmap")
         col.prop(system, "use_16bit_textures")
 
-        if system.is_occlusion_query_supported():
-            col.separator()
-            col.label(text="Selection")
-            col.prop(system, "select_method", text="")
+        col.separator()
+        col.label(text="Selection")
+        col.prop(system, "select_method", text="")
 
         col.separator()
 
         col.label(text="Anisotropic Filtering")
         col.prop(system, "anisotropic_filter", text="")
-        col.prop(system, "use_vertex_buffer_objects")
 
         col.separator()
 

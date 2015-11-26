@@ -204,7 +204,8 @@ typedef struct SceneRenderLayer {
 #define SCE_LAY_SKY		16
 #define SCE_LAY_STRAND	32
 #define SCE_LAY_FRS		64
-	/* flags between 128 and 0x8000 are set to 1 already, for future options */
+#define SCE_LAY_AO		128
+	/* flags between 256 and 0x8000 are set to 1 already, for future options */
 
 #define SCE_LAY_ALL_Z		0x8000
 #define SCE_LAY_XOR			0x10000
@@ -698,10 +699,13 @@ typedef struct RenderData {
 	short pad;
 
 	/* MultiView */
-	ListBase views;
+	ListBase views;  /* SceneRenderView */
 	short actview;
 	short views_format;
 	short pad8[2];
+
+	/* Motion blur shutter */
+	struct CurveMapping mblur_shutter_curve;
 } RenderData;
 
 /* *************************************************************** */
@@ -1129,6 +1133,10 @@ typedef struct UnifiedPaintSettings {
 	char draw_anchored;
 	char do_linear_conversion;
 
+	/* store last location of stroke or whether the mesh was hit. Valid only while stroke is active */
+	float last_location[3];
+	int last_hit;
+
 	float anchored_initial_mouse[2];
 
 	/* radius of brush, premultiplied with pressure.
@@ -1411,7 +1419,7 @@ typedef struct Scene {
 	void *pad1;
 	struct  DagForest *theDag;
 	short dagflags;
-	short recalc;				/* recalc = counterpart of ob->recalc */
+	short pad3;
 
 	/* User-Defined KeyingSets */
 	int active_keyingset;			/* index of the active KeyingSet. first KeyingSet has index 1, 'none' active is 0, 'add new' is -1 */
@@ -1734,9 +1742,6 @@ extern const char *RE_engine_id_CYCLES;
 #define SCE_SELECT_PATH		1
 #define SCE_SELECT_POINT	2
 #define SCE_SELECT_END		4
-
-/* sce->recalc (now in use by previewrender) */
-#define SCE_PRV_CHANGED		1
 
 /* toolsettings->prop_mode (proportional falloff) */
 #define PROP_SMOOTH            0

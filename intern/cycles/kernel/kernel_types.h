@@ -37,8 +37,9 @@ CCL_NAMESPACE_BEGIN
 #define OBJECT_SIZE 		11
 #define OBJECT_VECTOR_SIZE	6
 #define LIGHT_SIZE			5
-#define FILTER_TABLE_SIZE	256
+#define FILTER_TABLE_SIZE	1024
 #define RAMP_TABLE_SIZE		256
+#define SHUTTER_TABLE_SIZE		256
 #define PARTICLE_SIZE 		5
 #define TIME_INVALID		FLT_MAX
 
@@ -179,7 +180,7 @@ CCL_NAMESPACE_BEGIN
 #  define __KERNEL_DEBUG__
 #endif
 
-/* Scene-based selective featrues compilation/ */
+/* Scene-based selective featrues compilation. */
 #ifdef __NO_CAMERA_MOTION__
 #  undef __CAMERA_MOTION__
 #endif
@@ -188,6 +189,12 @@ CCL_NAMESPACE_BEGIN
 #endif
 #ifdef __NO_HAIR__
 #  undef __HAIR__
+#endif
+#ifdef __NO_SUBSURFACE__
+#  undef __SUBSURFACE__
+#endif
+#ifdef __NO_BRANCHED_PATH__
+#  undef __BRANCHED_PATH__
 #endif
 
 /* Random Numbers */
@@ -745,6 +752,30 @@ typedef struct PathState {
 #endif
 } PathState;
 
+/* Subsurface */
+
+/* Struct to gather multiple SSS hits. */
+struct SubsurfaceIntersection
+{
+	Ray ray;
+	float3 weight[BSSRDF_MAX_HITS];
+
+	int num_hits;
+	Intersection hits[BSSRDF_MAX_HITS];
+	float3 Ng[BSSRDF_MAX_HITS];
+};
+
+/* Struct to gather SSS indirect rays and delay tracing them. */
+struct SubsurfaceIndirectRays
+{
+	bool need_update_volume_stack;
+	PathState state;
+
+	int num_rays;
+	Ray rays[BSSRDF_MAX_HITS];
+	float3 throughputs[BSSRDF_MAX_HITS];
+};
+
 /* Constant Kernel Data
  *
  * These structs are passed from CPU to various devices, and the struct layout
@@ -813,6 +844,9 @@ typedef struct KernelCamera {
 	 * Used for camera zoom motion blur,
 	 */
 	PerspectiveMotionTransform perspective_motion;
+
+	int shutter_table_offset;
+	int pad;
 } KernelCamera;
 
 typedef struct KernelFilm {

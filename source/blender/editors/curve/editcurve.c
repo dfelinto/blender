@@ -49,6 +49,7 @@
 #include "BKE_fcurve.h"
 #include "BKE_global.h"
 #include "BKE_key.h"
+#include "BKE_library.h"
 #include "BKE_main.h"
 #include "BKE_report.h"
 #include "BKE_animsys.h"
@@ -1177,7 +1178,7 @@ static void remap_hooks_and_vertex_parents(Object *obedit)
 }
 
 /* load editNurb in object */
-void load_editNurb(Object *obedit)
+void ED_curve_editnurb_load(Object *obedit)
 {
 	ListBase *editnurb = object_editcurve_get(obedit);
 
@@ -1209,7 +1210,7 @@ void load_editNurb(Object *obedit)
 }
 
 /* make copy in cu->editnurb */
-void make_editNurb(Object *obedit)
+void ED_curve_editnurb_make(Object *obedit)
 {
 	Curve *cu = (Curve *)obedit->data;
 	EditNurb *editnurb = cu->editnurb;
@@ -1252,7 +1253,7 @@ void make_editNurb(Object *obedit)
 	}
 }
 
-void free_editNurb(Object *obedit)
+void ED_curve_editnurb_free(Object *obedit)
 {
 	Curve *cu = obedit->data;
 
@@ -1298,10 +1299,10 @@ static int separate_exec(bContext *C, wmOperator *op)
 	newob = newbase->object;
 	newcu = newob->data = BKE_curve_copy(oldcu);
 	newcu->editnurb = NULL;
-	oldcu->id.us--; /* because new curve is a copy: reduce user count */
+	id_us_min(&oldcu->id); /* because new curve is a copy: reduce user count */
 
 	/* 3. put new object in editmode, clear it and set separated nurbs */
-	make_editNurb(newob);
+	ED_curve_editnurb_make(newob);
 	newedit = newcu->editnurb;
 	BKE_nurbList_free(&newedit->nurbs);
 	BKE_curve_editNurb_keyIndex_free(newedit);
@@ -1309,8 +1310,8 @@ static int separate_exec(bContext *C, wmOperator *op)
 	BLI_movelisttolist(&newedit->nurbs, &newnurb);
 
 	/* 4. put old object out of editmode and delete separated geometry */
-	load_editNurb(newob);
-	free_editNurb(newob);
+	ED_curve_editnurb_load(newob);
+	ED_curve_editnurb_free(newob);
 	curve_delete_segments(oldob, true);
 
 	DAG_id_tag_update(&oldob->id, OB_RECALC_DATA);  /* this is the original one */
@@ -4163,7 +4164,7 @@ void CURVE_OT_make_segment(wmOperatorType *ot)
 
 /***************** pick select from 3d view **********************/
 
-bool mouse_nurb(bContext *C, const int mval[2], bool extend, bool deselect, bool toggle)
+bool ED_curve_editnurb_select_pick(bContext *C, const int mval[2], bool extend, bool deselect, bool toggle)
 {
 	Object *obedit = CTX_data_edit_object(C);
 	Curve *cu = obedit->data;
@@ -4953,7 +4954,7 @@ void CURVE_OT_extrude(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
 	/* to give to transform */
-	RNA_def_enum(ot->srna, "mode", transform_mode_types, TFM_TRANSLATION, "Mode", "");
+	RNA_def_enum(ot->srna, "mode", rna_enum_transform_mode_types, TFM_TRANSLATION, "Mode", "");
 }
 
 /***************** make cyclic operator **********************/

@@ -29,6 +29,7 @@
 CCL_NAMESPACE_BEGIN
 
 class AttributeRequestSet;
+class Scene;
 class Shader;
 class ShaderInput;
 class ShaderOutput;
@@ -189,10 +190,22 @@ public:
 	ShaderInput *add_input(const char *name, ShaderSocketType type, ShaderInput::DefaultValue value, int usage=ShaderInput::USE_ALL);
 	ShaderOutput *add_output(const char *name, ShaderSocketType type);
 
+	ShaderInput *get_input(const char *name);
+	ShaderOutput *get_output(const char *name);
+
 	virtual ShaderNode *clone() const = 0;
 	virtual void attributes(Shader *shader, AttributeRequestSet *attributes);
 	virtual void compile(SVMCompiler& compiler) = 0;
 	virtual void compile(OSLCompiler& compiler) = 0;
+
+	/* ** Node optimization ** */
+	/* Check whether the node can be replaced with single constant. */
+	virtual bool constant_fold(ShaderOutput * /*socket*/, float3 * /*optimized_value*/) { return false; }
+
+	/* Simplify settings used by artists to the ones which are simpler to
+	 * evaluate in the kernel but keep the final result unchanged.
+	 */
+	virtual void simplify_settings(Scene * /*scene*/) {};
 
 	virtual bool has_surface_emission() { return false; }
 	virtual bool has_surface_transparent() { return false; }
@@ -200,6 +213,7 @@ public:
 	virtual bool has_bssrdf_bump() { return false; }
 	virtual bool has_spatial_varying() { return false; }
 	virtual bool has_object_dependency() { return false; }
+	virtual bool has_integrator_dependency() { return false; }
 
 	vector<ShaderInput*> inputs;
 	vector<ShaderOutput*> outputs;
@@ -248,6 +262,18 @@ public:
 	virtual void compile(SVMCompiler& compiler); \
 	virtual void compile(OSLCompiler& compiler); \
 
+class ShaderNodeIDComparator
+{
+public:
+	bool operator()(const ShaderNode *n1, const ShaderNode *n2) const
+	{
+		return n1->id < n2->id;
+	}
+};
+
+typedef set<ShaderNode*, ShaderNodeIDComparator> ShaderNodeSet;
+typedef map<ShaderNode*, ShaderNode*, ShaderNodeIDComparator> ShaderNodeMap;
+
 /* Graph
  *
  * Shader graph of nodes. Also does graph manipulations for default inputs,
@@ -272,7 +298,10 @@ public:
 	void relink(vector<ShaderInput*> inputs, vector<ShaderInput*> outputs, ShaderOutput *output);
 
 	void remove_unneeded_nodes();
-	void finalize(bool do_bump = false, bool do_osl = false);
+	void finalize(Scene *scene,
+	              bool do_bump = false,
+	              bool do_osl = false,
+	              bool do_simplify = false);
 
 	int get_num_closures();
 
@@ -281,11 +310,13 @@ public:
 protected:
 	typedef pair<ShaderNode* const, ShaderNode*> NodePair;
 
-	void find_dependencies(set<ShaderNode*>& dependencies, ShaderInput *input);
-	void copy_nodes(set<ShaderNode*>& nodes, map<ShaderNode*, ShaderNode*>& nnodemap);
+	void find_dependencies(ShaderNodeSet& dependencies, ShaderInput *input);
+	void copy_nodes(ShaderNodeSet& nodes, ShaderNodeMap& nnodemap);
 
 	void break_cycles(ShaderNode *node, vector<bool>& visited, vector<bool>& on_stack);
-	void clean();
+	void clean(Scene *scene);
+	void simplify_settings(Scene *scene);
+	void constant_fold(set<ShaderNode*>& visited, ShaderNode *node);
 	void bump_from_displacement();
 	void refine_bump_nodes();
 	void default_inputs(bool do_osl);

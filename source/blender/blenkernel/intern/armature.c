@@ -169,8 +169,8 @@ void BKE_armature_make_local(bArmature *arm)
 			if (ob->data == arm) {
 				if (ob->id.lib == NULL) {
 					ob->data = arm_new;
-					arm_new->id.us++;
-					arm->id.us--;
+					id_us_plus(&arm_new->id);
+					id_us_min(&arm->id);
 				}
 			}
 		}
@@ -1325,18 +1325,20 @@ void BKE_armature_mat_pose_to_bone_ex(Object *ob, bPoseChannel *pchan, float inm
 /* same as BKE_object_mat3_to_rot() */
 void BKE_pchan_mat3_to_rot(bPoseChannel *pchan, float mat[3][3], bool use_compat)
 {
+	BLI_ASSERT_UNIT_M3(mat);
+
 	switch (pchan->rotmode) {
 		case ROT_MODE_QUAT:
-			mat3_to_quat(pchan->quat, mat);
+			mat3_normalized_to_quat(pchan->quat, mat);
 			break;
 		case ROT_MODE_AXISANGLE:
-			mat3_to_axis_angle(pchan->rotAxis, &pchan->rotAngle, mat);
+			mat3_normalized_to_axis_angle(pchan->rotAxis, &pchan->rotAngle, mat);
 			break;
 		default: /* euler */
 			if (use_compat)
-				mat3_to_compatible_eulO(pchan->eul, pchan->eul, pchan->rotmode, mat);
+				mat3_normalized_to_compatible_eulO(pchan->eul, pchan->eul, pchan->rotmode, mat);
 			else
-				mat3_to_eulO(pchan->eul, pchan->rotmode, mat);
+				mat3_normalized_to_eulO(pchan->eul, pchan->rotmode, mat);
 			break;
 	}
 }

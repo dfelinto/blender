@@ -90,11 +90,6 @@
 #include "BKE_unit.h"
 #include "BKE_world.h"
 
-#ifdef WITH_OPENSUBDIV
-#  include "BKE_modifier.h"
-#  include "CCGSubSurf.h"
-#endif
-
 #include "DEG_depsgraph.h"
 
 #include "RE_engine.h"
@@ -259,6 +254,8 @@ Scene *BKE_scene_copy(Scene *sce, int type)
 			}
 			new_srl = new_srl->next;
 		}
+
+		curvemapping_copy_data(&scen->r.mblur_shutter_curve, &sce->r.mblur_shutter_curve);
 	}
 
 	/* tool settings */
@@ -371,7 +368,7 @@ void BKE_scene_free(Scene *sce)
 
 	base = sce->base.first;
 	while (base) {
-		base->object->id.us--;
+		id_us_min(&base->object->id);
 		base = base->next;
 	}
 	/* do not free objects! */
@@ -381,7 +378,7 @@ void BKE_scene_free(Scene *sce)
 		/* since the grease pencil data is freed before the scene.
 		 * since grease pencil data is not (yet?), shared between objects
 		 * its probably safe not to do this, some save and reload will free this. */
-		sce->gpd->id.us--;
+		id_us_min(&sce->gpd->id);
 #endif
 		sce->gpd = NULL;
 	}
@@ -462,6 +459,7 @@ void BKE_scene_free(Scene *sce)
 	BKE_color_managed_view_settings_free(&sce->view_settings);
 
 	BKE_previewimg_free(&sce->preview);
+	curvemapping_free_data(&sce->r.mblur_shutter_curve);
 }
 
 void BKE_scene_init(Scene *sce)
@@ -470,6 +468,7 @@ void BKE_scene_init(Scene *sce)
 	int a;
 	const char *colorspace_name;
 	SceneRenderView *srv;
+	CurveMapping *mblur_shutter_curve;
 
 	BLI_assert(MEMCMP_STRUCT_OFS_IS_ZERO(sce, id));
 
@@ -573,6 +572,14 @@ void BKE_scene_init(Scene *sce)
 	
 	sce->r.line_thickness_mode = R_LINE_THICKNESS_ABSOLUTE;
 	sce->r.unit_line_thickness = 1.0f;
+
+	mblur_shutter_curve = &sce->r.mblur_shutter_curve;
+	curvemapping_set_defaults(mblur_shutter_curve, 1, 0.0f, 0.0f, 1.0f, 1.0f);
+	curvemapping_initialize(mblur_shutter_curve);
+	curvemap_reset(mblur_shutter_curve->cm,
+	               &mblur_shutter_curve->clipr,
+	               CURVE_PRESET_MAX,
+	               CURVEMAP_SLOPE_POS_NEG);
 
 	sce->toolsettings = MEM_callocN(sizeof(struct ToolSettings), "Tool Settings Struct");
 	sce->toolsettings->doublimit = 0.001;
@@ -1373,11 +1380,6 @@ static void scene_do_rb_simulation_recursive(Scene *scene, float ctime)
  */
 #define MBALL_SINGLETHREAD_HACK
 
-/* Need this because CCFDM holds some OpenGL resources. */
-#ifdef WITH_OPENSUBDIV
-#  define OPENSUBDIV_GL_WORKAROUND
-#endif
-
 #ifdef WITH_LEGACY_DEPSGRAPH
 typedef struct StatisicsEntry {
 	struct StatisicsEntry *next, *prev;
@@ -1579,47 +1581,6 @@ static bool scene_need_update_objects(Main *bmain)
 		DAG_id_type_tagged(bmain, ID_AR);     /* Armature */
 }
 
-#ifdef OPENSUBDIV_GL_WORKAROUND
-/* CCG DrivedMesh currently hold some OpenGL handles, which could only be
- * released from the main thread.
- *
- * Ideally we need to use gpu_buffer_free, but it's a bit tricky because
- * some buffers are only accessible from OpenSubdiv side.
- */
-static void scene_free_unused_opensubdiv_cache(Scene *scene)
-{
-	Base *base;
-	for (base = scene->base.first; base; base = base->next) {
-		Object *object = base->object;
-		if (object->type == OB_MESH && object->recalc & OB_RECALC_DATA) {
-			ModifierData *md = object->modifiers.last;
-			if (md != NULL && md->type == eModifierType_Subsurf) {
-				SubsurfModifierData *smd = (SubsurfModifierData *) md;
-				bool object_in_editmode = object->mode == OB_MODE_EDIT;
-				if (!smd->use_opensubdiv ||
-				    DAG_get_eval_flags_for_object(scene, object) & DAG_EVAL_NEED_CPU)
-				{
-					if (smd->mCache != NULL) {
-						ccgSubSurf_free_osd_mesh(smd->mCache);
-					}
-					if (smd->emCache != NULL) {
-						ccgSubSurf_free_osd_mesh(smd->emCache);
-					}
-				}
-				if (object_in_editmode && smd->mCache != NULL) {
-					ccgSubSurf_free(smd->mCache);
-					smd->mCache = NULL;
-				}
-				if (!object_in_editmode && smd->emCache != NULL) {
-					ccgSubSurf_free(smd->emCache);
-					smd->emCache = NULL;
-				}
-			}
-		}
-	}
-}
-#endif
-
 static void scene_update_objects(EvaluationContext *eval_ctx, Main *bmain, Scene *scene, Scene *scene_parent)
 {
 	TaskScheduler *task_scheduler = BLI_task_scheduler_get();
@@ -1637,10 +1598,6 @@ static void scene_update_objects(EvaluationContext *eval_ctx, Main *bmain, Scene
 	if (!scene_need_update_objects(bmain)) {
 		return;
 	}
-
-#ifdef OPENSUBDIV_GL_WORKAROUND
-	scene_free_unused_opensubdiv_cache(scene);
-#endif
 
 	state.eval_ctx = eval_ctx;
 	state.scene = scene;
@@ -1815,11 +1772,6 @@ void BKE_scene_update_tagged(EvaluationContext *eval_ctx, Main *bmain, Scene *sc
 	else
 #endif
 	{
-#ifdef OPENSUBDIV_GL_WORKAROUND
-		if (DEG_needs_eval(scene->depsgraph)) {
-			scene_free_unused_opensubdiv_cache(scene);
-		}
-#endif
 		DEG_evaluate_on_refresh(eval_ctx, scene->depsgraph, scene);
 		/* TODO(sergey): This is to beocme a node in new depsgraph. */
 		BKE_mask_update_scene(bmain, scene);
@@ -2296,10 +2248,10 @@ double BKE_scene_unit_scale(const UnitSettings *unit, const int unit_type, doubl
 
 /******************** multiview *************************/
 
-size_t BKE_scene_multiview_num_views_get(const RenderData *rd)
+int BKE_scene_multiview_num_views_get(const RenderData *rd)
 {
 	SceneRenderView *srv;
-	size_t totviews	= 0;
+	int totviews = 0;
 
 	if ((rd->scemode & R_MULTIVIEW) == 0)
 		return 1;
@@ -2432,7 +2384,7 @@ const char *BKE_scene_multiview_render_view_name_get(const RenderData *rd, const
 		return "";
 }
 
-size_t BKE_scene_multiview_view_id_get(const RenderData *rd, const char *viewname)
+int BKE_scene_multiview_view_id_get(const RenderData *rd, const char *viewname)
 {
 	SceneRenderView *srv;
 	size_t nr;
@@ -2503,7 +2455,7 @@ const char *BKE_scene_multiview_view_suffix_get(const RenderData *rd, const char
 		return viewname;
 }
 
-const char *BKE_scene_multiview_view_id_suffix_get(const RenderData *rd, const size_t view_id)
+const char *BKE_scene_multiview_view_id_suffix_get(const RenderData *rd, const int view_id)
 {
 	if ((rd->scemode & R_MULTIVIEW) == 0) {
 		return "";
@@ -2558,7 +2510,7 @@ void BKE_scene_multiview_videos_dimensions_get(
 	}
 }
 
-size_t BKE_scene_multiview_num_videos_get(const RenderData *rd)
+int BKE_scene_multiview_num_videos_get(const RenderData *rd)
 {
 	if (BKE_imtype_is_movie(rd->im_format.imtype) == false)
 		return 0;

@@ -395,8 +395,10 @@ void BKE_particlesettings_free(ParticleSettings *part)
 
 	for (a = 0; a < MAX_MTEX; a++) {
 		mtex = part->mtex[a];
-		if (mtex && mtex->tex) mtex->tex->id.us--;
-		if (mtex) MEM_freeN(mtex);
+		if (mtex && mtex->tex)
+			id_us_min(&mtex->tex->id);
+		if (mtex)
+			MEM_freeN(mtex);
 	}
 }
 
@@ -567,7 +569,7 @@ void psys_free(Object *ob, ParticleSystem *psys)
 			ob->transflag &= ~OB_DUPLIPARTS;
 
 		if (psys->part) {
-			psys->part->id.us--;
+			id_us_min(&psys->part->id);
 			psys->part = NULL;
 		}
 
@@ -3315,8 +3317,8 @@ void BKE_particlesettings_make_local(ParticleSettings *part)
 			for (psys = ob->particlesystem.first; psys; psys = psys->next) {
 				if (psys->part == part && ob->id.lib == 0) {
 					psys->part = part_new;
-					part_new->id.us++;
-					part->id.us--;
+					id_us_plus(&part_new->id);
+					id_us_min(&part->id);
 				}
 			}
 		}
@@ -3836,19 +3838,19 @@ void psys_get_particle_on_path(ParticleSimulationData *sim, int p, ParticleKey *
 
 			/* try to estimate correct velocity */
 			if (vel) {
-				ParticleKey tstate;
+				ParticleKey tstate_tmp;
 				float length = len_v3(state->vel);
 
 				if (t >= 0.001f) {
-					tstate.time = t - 0.001f;
-					psys_get_particle_on_path(sim, p, &tstate, 0);
-					sub_v3_v3v3(state->vel, state->co, tstate.co);
+					tstate_tmp.time = t - 0.001f;
+					psys_get_particle_on_path(sim, p, &tstate_tmp, 0);
+					sub_v3_v3v3(state->vel, state->co, tstate_tmp.co);
 					normalize_v3(state->vel);
 				}
 				else {
-					tstate.time = t + 0.001f;
-					psys_get_particle_on_path(sim, p, &tstate, 0);
-					sub_v3_v3v3(state->vel, tstate.co, state->co);
+					tstate_tmp.time = t + 0.001f;
+					psys_get_particle_on_path(sim, p, &tstate_tmp, 0);
+					sub_v3_v3v3(state->vel, tstate_tmp.co, state->co);
 					normalize_v3(state->vel);
 				}
 
@@ -4013,10 +4015,18 @@ void psys_get_dupli_texture(ParticleSystem *psys, ParticleSettings *part,
 	float loc[3];
 	int num;
 
+	/* XXX: on checking '(psmd->dm != NULL)'
+	 * This is incorrect but needed for metaball evaluation.
+	 * Ideally this would be calculated via the depsgraph, however with metaballs,
+	 * the entire scenes dupli's are scanned, which also looks into uncalculated data.
+	 *
+	 * For now just include this workaround as an alternative to crashing,
+	 * but longer term metaballs should behave in a more manageable way, see: T46622. */
+
 	uv[0] = uv[1] = 0.f;
 
 	if (cpa) {
-		if (part->childtype == PART_CHILD_FACES) {
+		if ((part->childtype == PART_CHILD_FACES) && (psmd->dm != NULL)) {
 			mtface = CustomData_get_layer(&psmd->dm->faceData, CD_MTFACE);
 			if (mtface) {
 				mface = psmd->dm->getTessFaceData(psmd->dm, cpa->num, CD_MFACE);
@@ -4032,7 +4042,7 @@ void psys_get_dupli_texture(ParticleSystem *psys, ParticleSettings *part,
 		}
 	}
 
-	if (part->from == PART_FROM_FACE) {
+	if ((part->from == PART_FROM_FACE) && (psmd->dm != NULL)) {
 		mtface = CustomData_get_layer(&psmd->dm->faceData, CD_MTFACE);
 		num = pa->num_dmcache;
 

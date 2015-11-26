@@ -751,13 +751,13 @@ static void rna_particle_settings_set(PointerRNA *ptr, PointerRNA value)
 
 	if (psys->part) {
 		old_type = psys->part->type;
-		psys->part->id.us--;
+		id_us_min(&psys->part->id);
 	}
 
 	psys->part = (ParticleSettings *)value.data;
 
 	if (psys->part) {
-		psys->part->id.us++;
+		id_us_plus(&psys->part->id);
 		psys_check_boid_data(psys);
 		if (old_type != psys->part->type)
 			psys->recalc |= PSYS_RECALC_TYPE;
@@ -1724,7 +1724,7 @@ static void rna_def_particle_settings_mtex(BlenderRNA *brna)
 	srna = RNA_def_struct(brna, "ParticleSettingsTextureSlot", "TextureSlot");
 	RNA_def_struct_sdna(srna, "MTex");
 	RNA_def_struct_ui_text(srna, "Particle Settings Texture Slot",
-	                       "Texture slot for textures in a Particle Settings datablock");
+	                       "Texture slot for textures in a Particle Settings data-block");
 
 	prop = RNA_def_property(srna, "texture_coords", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "texco");
@@ -1994,13 +1994,6 @@ static void rna_def_particle_settings(BlenderRNA *brna)
 		{PART_KINK_WAVE, "WAVE", 0, "Wave", ""},
 		{PART_KINK_BRAID, "BRAID", 0, "Braid", ""},
 		{PART_KINK_SPIRAL, "SPIRAL", 0, "Spiral", ""},
-		{0, NULL, 0, NULL, NULL}
-	};
-
-	static EnumPropertyItem kink_axis_items[] = {
-		{0, "X", 0, "X", ""},
-		{1, "Y", 0, "Y", ""},
-		{2, "Z", 0, "Z", ""},
 		{0, NULL, 0, NULL, NULL}
 	};
 
@@ -2421,7 +2414,7 @@ static void rna_def_particle_settings(BlenderRNA *brna)
 	RNA_def_property_update(prop, 0, "rna_Particle_redo_child");
 
 	prop = RNA_def_property(srna, "kink_axis", PROP_ENUM, PROP_NONE);
-	RNA_def_property_enum_items(prop, kink_axis_items);
+	RNA_def_property_enum_items(prop, rna_enum_object_axis_unsigned_items);
 	RNA_def_property_ui_text(prop, "Axis", "Which axis to use for offset");
 	RNA_def_property_update(prop, 0, "rna_Particle_redo_child");
 

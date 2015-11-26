@@ -1266,8 +1266,6 @@ static void bmo_flag_layer_alloc(BMesh *bm)
 	BLI_mempool_destroy(foldpool);
 
 	bm->elem_index_dirty &= ~(BM_VERT | BM_EDGE | BM_FACE);
-
-
 }
 
 static void bmo_flag_layer_free(BMesh *bm)
@@ -1913,7 +1911,6 @@ error:
 	fprintf(stderr, "         ");
 	{
 		int pos = (int)(fmt - ofmt);
-		int i;
 		for (i = 0; i < pos; i++) {
 			fprintf(stderr, " ");
 		}

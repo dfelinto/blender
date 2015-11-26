@@ -51,6 +51,7 @@
 #include "BKE_curve.h"
 #include "BKE_depsgraph.h"
 #include "BKE_font.h"
+#include "BKE_library.h"
 #include "BKE_main.h"
 #include "BKE_object.h"
 #include "BKE_report.h"
@@ -538,7 +539,7 @@ static void txt_add_object(bContext *C, TextLine *firstline, int totline, const 
 
 	cu = obedit->data;
 	cu->vfont = BKE_vfont_builtin_get();
-	cu->vfont->id.us++;
+	id_us_plus(&cu->vfont->id);
 
 	for (tmp = firstline, a = 0; nbytes < MAXTEXT && a < totline; tmp = tmp->next, a++) {
 		size_t nchars_line, nbytes_line;
@@ -1509,7 +1510,7 @@ void FONT_OT_textbox_remove(wmOperatorType *ot)
 
 /***************** editmode enter/exit ********************/
 
-void make_editText(Object *obedit)
+void ED_curve_editfont_make(Object *obedit)
 {
 	Curve *cu = obedit->data;
 	EditFont *ef = cu->editfont;
@@ -1545,7 +1546,7 @@ void make_editText(Object *obedit)
 	BKE_vfont_select_clamp(obedit);
 }
 
-void load_editText(Object *obedit)
+void ED_curve_editfont_load(Object *obedit)
 {
 	Curve *cu = obedit->data;
 	EditFont *ef = cu->editfont;
@@ -1574,7 +1575,7 @@ void load_editText(Object *obedit)
 	cu->selend = ef->selend;
 }
 
-void free_editText(Object *obedit)
+void ED_curve_editfont_free(Object *obedit)
 {
 	BKE_curve_editfont_free((Curve *)obedit->data);
 }
@@ -1727,7 +1728,7 @@ static int font_open_exec(bContext *C, wmOperator *op)
 	if (pprop->prop) {
 		/* when creating new ID blocks, use is already 1, but RNA
 		 * pointer se also increases user, so this compensates it */
-		font->id.us--;
+		id_us_min(&font->id);
 	
 		RNA_id_pointer_create(&font->id, &idptr);
 		RNA_property_pointer_set(&pprop->ptr, pprop->prop, idptr);
@@ -1885,7 +1886,7 @@ void undo_push_font(bContext *C, const char *name)
 /**
  * TextBox selection
  */
-bool mouse_font(bContext *C, const int mval[2], bool extend, bool deselect, bool toggle)
+bool ED_curve_editfont_select_pick(bContext *C, const int mval[2], bool extend, bool deselect, bool toggle)
 {
 	Object *obedit = CTX_data_edit_object(C);
 	Curve *cu = obedit->data;

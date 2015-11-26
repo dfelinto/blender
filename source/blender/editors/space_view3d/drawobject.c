@@ -289,8 +289,6 @@ static bool check_ob_drawface_dot(Scene *sce, View3D *vd, char dt)
 
 bool draw_glsl_material(Scene *scene, Object *ob, View3D *v3d, const char dt)
 {
-	if (!GPU_glsl_support())
-		return false;
 	if (G.f & G_PICKSEL)
 		return false;
 	if (!check_object_draw_texture(scene, v3d, dt))
@@ -1344,7 +1342,7 @@ static void drawlamp(View3D *v3d, RegionView3D *rv3d, Base *base,
 	if (is_view) {
 		/* skip drawing extra info */
 	}
-	else if ((la->type == LA_SPOT) || (la->type == LA_YF_PHOTON)) {
+	else if (la->type == LA_SPOT) {
 		float x, y, z, z_abs;
 		copy_v3_fl3(lvec, 0.0f, 0.0f, 1.0f);
 		copy_v3_fl3(vvec, rv3d->persmat[0][2], rv3d->persmat[1][2], rv3d->persmat[2][2]);
@@ -1567,7 +1565,7 @@ static void drawlamp(View3D *v3d, RegionView3D *rv3d, Base *base,
 	glPopMatrix();
 }
 
-static void draw_limit_line(float sta, float end, const short dflag, unsigned int col)
+static void draw_limit_line(float sta, float end, const short dflag, const unsigned char col[3])
 {
 	glBegin(GL_LINES);
 	glVertex3f(0.0, 0.0, -sta);
@@ -1578,7 +1576,7 @@ static void draw_limit_line(float sta, float end, const short dflag, unsigned in
 		glPointSize(3.0);
 		glBegin(GL_POINTS);
 		if ((dflag & DRAW_CONSTCOLOR) == 0) {
-			cpack(col);
+			glColor3ubv(col);
 		}
 		glVertex3f(0.0, 0.0, -sta);
 		glVertex3f(0.0, 0.0, -end);
@@ -1905,7 +1903,7 @@ static void drawcamera_stereo3d(
         Scene *scene, View3D *v3d, RegionView3D *rv3d, Object *ob, const Camera *cam,
         float vec[4][3], float drawsize, const float scale[3])
 {
-	int i, j;
+	int i;
 	float obmat[4][4];
 	float vec_lr[2][4][3];
 	const float fac = (cam->stereo.pivot == CAM_S3D_PIVOT_CENTER) ? 2.0f : 1.0f;
@@ -1938,7 +1936,7 @@ static void drawcamera_stereo3d(
 			        ((BKE_camera_multiview_shift_x(&scene->r, ob, names[i]) - cam->shiftx) *
 			         (drawsize * scale[0] * fac));
 
-			for (j = 0; j < 4; j++) {
+			for (int j = 0; j < 4; j++) {
 				vec_lr[i][j][0] += shift_x;
 			}
 		}
@@ -1956,7 +1954,7 @@ static void drawcamera_stereo3d(
 
 		/* convergence plane */
 		if (is_stereo3d_plane || is_stereo3d_volume) {
-			for (j = 0; j < 4; j++) {
+			for (int j = 0; j < 4; j++) {
 				mul_m4_v3(obmat, vec_lr[i][j]);
 			}
 		}
@@ -2084,7 +2082,8 @@ static void drawcamera(Scene *scene, View3D *v3d, RegionView3D *rv3d, Base *base
 	float drawsize;
 	MovieClip *clip = BKE_object_movieclip_get(scene, base->object, false);
 
-	const bool is_view = (rv3d->persp == RV3D_CAMOB && ob == v3d->camera);
+	const bool is_active = (ob == v3d->camera);
+	const bool is_view = (rv3d->persp == RV3D_CAMOB && is_active);
 	const bool is_multiview = (scene->r.scemode & R_MULTIVIEW) != 0;
 	const bool is_stereo3d = drawcamera_is_stereo3d(scene, v3d, ob);
 	const bool is_stereo3d_view = (scene->r.views_format == SCE_VIEWS_FORMAT_STEREO_3D);
@@ -2176,7 +2175,7 @@ static void drawcamera(Scene *scene, View3D *v3d, RegionView3D *rv3d, Base *base
 	 * for active cameras so the wire can be seen side-on */
 	for (i = 0; i < 2; i++) {
 		if (i == 0) glBegin(GL_LINE_LOOP);
-		else if (i == 1 && (ob == v3d->camera)) glBegin(GL_TRIANGLES);
+		else if (i == 1 && is_active) glBegin(GL_TRIANGLES);
 		else break;
 
 		tvec[0] = shift[0] + ((-0.7f * drawsize) * scale[0]);
@@ -2206,15 +2205,20 @@ static void drawcamera(Scene *scene, View3D *v3d, RegionView3D *rv3d, Base *base
 			glMultMatrixf(nobmat);
 
 			if (cam->flag & CAM_SHOWLIMITS) {
-				draw_limit_line(cam->clipsta, cam->clipend, dflag, 0x77FFFF);
+				const unsigned char col[3] = {128, 128, 60}, col_hi[3] = {255, 255, 120};
+
+				draw_limit_line(cam->clipsta, cam->clipend, dflag, (is_active ? col_hi : col));
 				/* qdn: was yafray only, now also enabled for Blender to be used with defocus composite node */
 				draw_focus_cross(BKE_camera_object_dof_distance(ob), cam->drawsize);
 			}
 
 			if (cam->flag & CAM_SHOWMIST) {
 				World *world = scene->world;
+				const unsigned char col[3] = {128, 128, 128}, col_hi[3] = {255, 255, 255};
+
 				if (world) {
-					draw_limit_line(world->miststa, world->miststa + world->mistdist, dflag, 0xFFFFFF);
+					draw_limit_line(world->miststa, world->miststa + world->mistdist,
+					                dflag, (is_active ? col_hi : col));
 				}
 			}
 			glPopMatrix();
@@ -5095,7 +5099,6 @@ static void draw_new_particle_system(Scene *scene, View3D *v3d, RegionView3D *rv
 	bool select = (ob->flag & SELECT) != 0, create_cdata = false, need_v = false;
 	GLint polygonmode[2];
 	char numstr[32];
-	size_t numstr_len;
 	unsigned char tcol[4] = {0, 0, 0, 255};
 
 /* 1. */
@@ -5599,8 +5602,8 @@ static void draw_new_particle_system(Scene *scene, View3D *v3d, RegionView3D *rv
 			if (part->draw & PART_DRAW_HAIR_GRID) {
 				ClothModifierData *clmd = psys->clmd;
 				if (clmd) {
-					float *a = clmd->hair_grid_min;
-					float *b = clmd->hair_grid_max;
+					float *gmin = clmd->hair_grid_min;
+					float *gmax = clmd->hair_grid_max;
 					int *res = clmd->hair_grid_res;
 					int i;
 					
@@ -5614,20 +5617,20 @@ static void draw_new_particle_system(Scene *scene, View3D *v3d, RegionView3D *rv
 					else
 						UI_ThemeColor(TH_WIRE);
 					glBegin(GL_LINES);
-					glVertex3f(a[0], a[1], a[2]); glVertex3f(b[0], a[1], a[2]);
-					glVertex3f(b[0], a[1], a[2]); glVertex3f(b[0], b[1], a[2]);
-					glVertex3f(b[0], b[1], a[2]); glVertex3f(a[0], b[1], a[2]);
-					glVertex3f(a[0], b[1], a[2]); glVertex3f(a[0], a[1], a[2]);
+					glVertex3f(gmin[0], gmin[1], gmin[2]); glVertex3f(gmax[0], gmin[1], gmin[2]);
+					glVertex3f(gmax[0], gmin[1], gmin[2]); glVertex3f(gmax[0], gmax[1], gmin[2]);
+					glVertex3f(gmax[0], gmax[1], gmin[2]); glVertex3f(gmin[0], gmax[1], gmin[2]);
+					glVertex3f(gmin[0], gmax[1], gmin[2]); glVertex3f(gmin[0], gmin[1], gmin[2]);
 					
-					glVertex3f(a[0], a[1], b[2]); glVertex3f(b[0], a[1], b[2]);
-					glVertex3f(b[0], a[1], b[2]); glVertex3f(b[0], b[1], b[2]);
-					glVertex3f(b[0], b[1], b[2]); glVertex3f(a[0], b[1], b[2]);
-					glVertex3f(a[0], b[1], b[2]); glVertex3f(a[0], a[1], b[2]);
+					glVertex3f(gmin[0], gmin[1], gmax[2]); glVertex3f(gmax[0], gmin[1], gmax[2]);
+					glVertex3f(gmax[0], gmin[1], gmax[2]); glVertex3f(gmax[0], gmax[1], gmax[2]);
+					glVertex3f(gmax[0], gmax[1], gmax[2]); glVertex3f(gmin[0], gmax[1], gmax[2]);
+					glVertex3f(gmin[0], gmax[1], gmax[2]); glVertex3f(gmin[0], gmin[1], gmax[2]);
 					
-					glVertex3f(a[0], a[1], a[2]); glVertex3f(a[0], a[1], b[2]);
-					glVertex3f(b[0], a[1], a[2]); glVertex3f(b[0], a[1], b[2]);
-					glVertex3f(a[0], b[1], a[2]); glVertex3f(a[0], b[1], b[2]);
-					glVertex3f(b[0], b[1], a[2]); glVertex3f(b[0], b[1], b[2]);
+					glVertex3f(gmin[0], gmin[1], gmin[2]); glVertex3f(gmin[0], gmin[1], gmax[2]);
+					glVertex3f(gmax[0], gmin[1], gmin[2]); glVertex3f(gmax[0], gmin[1], gmax[2]);
+					glVertex3f(gmin[0], gmax[1], gmin[2]); glVertex3f(gmin[0], gmax[1], gmax[2]);
+					glVertex3f(gmax[0], gmax[1], gmin[2]); glVertex3f(gmax[0], gmax[1], gmax[2]);
 					glEnd();
 					
 					if (select)
@@ -5637,25 +5640,25 @@ static void draw_new_particle_system(Scene *scene, View3D *v3d, RegionView3D *rv
 					glEnable(GL_BLEND);
 					glBegin(GL_LINES);
 					for (i = 1; i < res[0] - 1; ++i) {
-						float f = interpf(b[0], a[0], (float)i / (float)(res[0] - 1));
-						glVertex3f(f, a[1], a[2]); glVertex3f(f, b[1], a[2]);
-						glVertex3f(f, b[1], a[2]); glVertex3f(f, b[1], b[2]);
-						glVertex3f(f, b[1], b[2]); glVertex3f(f, a[1], b[2]);
-						glVertex3f(f, a[1], b[2]); glVertex3f(f, a[1], a[2]);
+						float f = interpf(gmax[0], gmin[0], (float)i / (float)(res[0] - 1));
+						glVertex3f(f, gmin[1], gmin[2]); glVertex3f(f, gmax[1], gmin[2]);
+						glVertex3f(f, gmax[1], gmin[2]); glVertex3f(f, gmax[1], gmax[2]);
+						glVertex3f(f, gmax[1], gmax[2]); glVertex3f(f, gmin[1], gmax[2]);
+						glVertex3f(f, gmin[1], gmax[2]); glVertex3f(f, gmin[1], gmin[2]);
 					}
 					for (i = 1; i < res[1] - 1; ++i) {
-						float f = interpf(b[1], a[1], (float)i / (float)(res[1] - 1));
-						glVertex3f(a[0], f, a[2]); glVertex3f(b[0], f, a[2]);
-						glVertex3f(b[0], f, a[2]); glVertex3f(b[0], f, b[2]);
-						glVertex3f(b[0], f, b[2]); glVertex3f(a[0], f, b[2]);
-						glVertex3f(a[0], f, b[2]); glVertex3f(a[0], f, a[2]);
+						float f = interpf(gmax[1], gmin[1], (float)i / (float)(res[1] - 1));
+						glVertex3f(gmin[0], f, gmin[2]); glVertex3f(gmax[0], f, gmin[2]);
+						glVertex3f(gmax[0], f, gmin[2]); glVertex3f(gmax[0], f, gmax[2]);
+						glVertex3f(gmax[0], f, gmax[2]); glVertex3f(gmin[0], f, gmax[2]);
+						glVertex3f(gmin[0], f, gmax[2]); glVertex3f(gmin[0], f, gmin[2]);
 					}
 					for (i = 1; i < res[2] - 1; ++i) {
-						float f = interpf(b[2], a[2], (float)i / (float)(res[2] - 1));
-						glVertex3f(a[0], a[1], f); glVertex3f(b[0], a[1], f);
-						glVertex3f(b[0], a[1], f); glVertex3f(b[0], b[1], f);
-						glVertex3f(b[0], b[1], f); glVertex3f(a[0], b[1], f);
-						glVertex3f(a[0], b[1], f); glVertex3f(a[0], a[1], f);
+						float f = interpf(gmax[2], gmin[2], (float)i / (float)(res[2] - 1));
+						glVertex3f(gmin[0], gmin[1], f); glVertex3f(gmax[0], gmin[1], f);
+						glVertex3f(gmax[0], gmin[1], f); glVertex3f(gmax[0], gmax[1], f);
+						glVertex3f(gmax[0], gmax[1], f); glVertex3f(gmin[0], gmax[1], f);
+						glVertex3f(gmin[0], gmax[1], f); glVertex3f(gmin[0], gmin[1], f);
 					}
 					glEnd();
 					glDisable(GL_BLEND);
@@ -5707,7 +5710,7 @@ static void draw_new_particle_system(Scene *scene, View3D *v3d, RegionView3D *rv
 
 			for (a = 0, pa = psys->particles; a < totpart; a++, pa++) {
 				float vec_txt[3];
-				numstr_len = BLI_snprintf_rlen(numstr, sizeof(numstr), "%i", a);
+				size_t numstr_len = BLI_snprintf_rlen(numstr, sizeof(numstr), "%i", a);
 				/* use worldspace because object matrix is already applied */
 				mul_v3_m4v3(vec_txt, ob->imat, cache[a]->co);
 				view3d_cached_text_draw_add(vec_txt, numstr, numstr_len,
@@ -5910,16 +5913,16 @@ static void draw_ptcache_edit(Scene *scene, View3D *v3d, PTCacheEdit *edit)
 		if (pset->selectmode == SCE_SELECT_POINT) {
 			float *pd = NULL, *pdata = NULL;
 			float *cd = NULL, *cdata = NULL;
-			int totkeys = 0;
+			int totkeys_visible = 0;
 
 			for (i = 0, point = edit->points; i < totpoint; i++, point++)
 				if (!(point->flag & PEP_HIDE))
-					totkeys += point->totkey;
+					totkeys_visible += point->totkey;
 
-			if (totkeys) {
+			if (totkeys_visible) {
 				if (edit->points && !(edit->points->keys->flag & PEK_USE_WCO))
-					pd = pdata = MEM_callocN(totkeys * 3 * sizeof(float), "particle edit point data");
-				cd = cdata = MEM_callocN(totkeys * (timed ? 4 : 3) * sizeof(float), "particle edit color data");
+					pd = pdata = MEM_callocN(totkeys_visible * 3 * sizeof(float), "particle edit point data");
+				cd = cdata = MEM_callocN(totkeys_visible * (timed ? 4 : 3) * sizeof(float), "particle edit color data");
 			}
 
 			for (i = 0, point = edit->points; i < totpoint; i++, point++) {
@@ -8087,7 +8090,7 @@ void draw_object(Scene *scene, ARegion *ar, View3D *v3d, Base *base, const short
 			}
 
 			/* don't show smoke before simulation starts, this could be made an option in the future */
-			if (smd->domain->fluid && CFRA >= smd->domain->point_cache[0]->startframe) {
+			if (sds->fluid && CFRA >= sds->point_cache[0]->startframe) {
 				float p0[3], p1[3];
 
 				/* get view vector */
@@ -8106,21 +8109,15 @@ void draw_object(Scene *scene, ARegion *ar, View3D *v3d, Base *base, const short
 				p1[2] = (sds->p0[2] + sds->cell_size[2] * sds->res_max[2] + sds->obj_shift_f[2]) * fabsf(ob->size[2]);
 
 				if (!sds->wt || !(sds->viewsettings & MOD_SMOKE_VIEW_SHOWBIG)) {
-					smd->domain->tex = NULL;
+					sds->tex = NULL;
 					GPU_create_smoke(smd, 0);
-					draw_smoke_volume(sds, ob, sds->tex,
-					                  p0, p1,
-					                  sds->res, sds->dx, sds->scale * sds->maxres,
-					                  viewnormal, sds->tex_shadow, sds->tex_flame);
+					draw_smoke_volume(sds, ob, p0, p1, sds->res, viewnormal);
 					GPU_free_smoke(smd);
 				}
 				else if (sds->wt && (sds->viewsettings & MOD_SMOKE_VIEW_SHOWBIG)) {
 					sds->tex = NULL;
 					GPU_create_smoke(smd, 1);
-					draw_smoke_volume(sds, ob, sds->tex,
-					                  p0, p1,
-					                  sds->res_wt, sds->dx, sds->scale * sds->maxres,
-					                  viewnormal, sds->tex_shadow, sds->tex_flame);
+					draw_smoke_volume(sds, ob, p0, p1, sds->res_wt, viewnormal);
 					GPU_free_smoke(smd);
 				}
 

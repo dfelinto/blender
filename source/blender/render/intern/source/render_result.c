@@ -485,7 +485,7 @@ static void set_pass_name(char *passname, int passtype, int channel, const char 
 
 static RenderPass *render_layer_add_pass(RenderResult *rr, RenderLayer *rl, int channels, int passtype, const char *viewname)
 {
-	const size_t view_id = BLI_findstringindex(&rr->views, viewname, offsetof(RenderView, name));
+	const int view_id = BLI_findstringindex(&rr->views, viewname, offsetof(RenderView, name));
 	const char *typestr = name_from_passtype(passtype, -1);
 	RenderPass *rpass = MEM_callocN(sizeof(RenderPass), typestr);
 	size_t rectsize = ((size_t)rr->rectx) * rr->recty * channels;
@@ -1527,7 +1527,7 @@ ImBuf *render_result_rect_to_ibuf(RenderResult *rr, RenderData *rd, const int vi
 	return ibuf;
 }
 
-void render_result_rect_from_ibuf(RenderResult *rr, RenderData *UNUSED(rd), ImBuf *ibuf, const int view_id)
+void RE_render_result_rect_from_ibuf(RenderResult *rr, RenderData *UNUSED(rd), ImBuf *ibuf, const int view_id)
 {
 	RenderView *rv = RE_RenderViewGetById(rr, view_id);
 

@@ -76,7 +76,6 @@
 
 void ED_undo_push(bContext *C, const char *str)
 {
-	wmWindowManager *wm = CTX_wm_manager(C);
 	Object *obedit = CTX_data_edit_object(C);
 	Object *obact = CTX_data_active_object(C);
 
@@ -111,11 +110,7 @@ void ED_undo_push(bContext *C, const char *str)
 		BKE_undo_write(C, str);
 	}
 
-	if (wm->file_saved) {
-		wm->file_saved = 0;
-		/* notifier that data changed, for save-over warning or header */
-		WM_event_add_notifier(C, NC_WM | ND_DATACHANGED, NULL);
-	}
+	WM_file_tag_modified(C);
 }
 
 /* note: also check undo_history_exec() in bottom if you change notifiers */
@@ -466,8 +461,6 @@ static int get_undo_system(bContext *C)
 		}
 	}
 	else {
-		Object *obact = CTX_data_active_object(C);
-		
 		if (obact) {
 			if (obact->mode & OB_MODE_PARTICLE_EDIT)
 				return UNDOSYSTEM_PARTICLE;

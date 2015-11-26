@@ -37,13 +37,6 @@
  *  the Software into proprietary programs. 
  */
 
-/*
-#define NL_DEBUG
-#define NL_PARANOID
-*/
-
-#define NL_USE_SUPERLU
-
 #ifndef nlOPENNL_H
 #define nlOPENNL_H
 
@@ -51,25 +44,15 @@
 extern "C" {
 #endif
 
-#define NL_VERSION_0_0 1
-
 /* Datatypes */
 
 typedef unsigned int	NLenum;
 typedef unsigned char	NLboolean;
-typedef unsigned int	NLbitfield;
-typedef void			NLvoid;
-typedef signed char		NLbyte;		/* 1-byte signed */
-typedef short			NLshort;	/* 2-byte signed */
 typedef int				NLint;		/* 4-byte signed */
-typedef unsigned char	NLubyte;	/* 1-byte unsigned */
-typedef unsigned short	NLushort;	/* 2-byte unsigned */
 typedef unsigned int	NLuint;		/* 4-byte unsigned */
-typedef int				NLsizei;	/* 4-byte signed */
-typedef float			NLfloat;	/* single precision float */
 typedef double			NLdouble;	/* double precision float */
 
-typedef void* NLContext;
+typedef struct NLContext NLContext;
 
 /* Constants */
 
@@ -86,55 +69,41 @@ typedef void* NLContext;
 #define NL_SOLVER              0x100
 #define NL_NB_VARIABLES        0x101
 #define NL_LEAST_SQUARES       0x102
-#define NL_SYMMETRIC           0x106
 #define NL_ERROR               0x108
 #define NL_NB_ROWS             0x110
 #define NL_NB_RIGHT_HAND_SIDES 0x112 /* 4 max */
 
 /* Contexts */
 
-NLContext nlNewContext(void);
-void nlDeleteContext(NLContext context);
-void nlMakeCurrent(NLContext context);
-NLContext nlGetCurrent(void);
+NLContext *nlNewContext(void);
+void nlDeleteContext(NLContext *context);
 
 /* State get/set */
 
-void nlSolverParameterf(NLenum pname, NLdouble param);
-void nlSolverParameteri(NLenum pname, NLint param);
-
-void nlGetBooleanv(NLenum pname, NLboolean* params);
-void nlGetFloatv(NLenum pname, NLdouble* params);
-void nlGetIntergerv(NLenum pname, NLint* params);
-
-void nlEnable(NLenum pname);
-void nlDisable(NLenum pname);
-NLboolean nlIsEnabled(NLenum pname);
+void nlSolverParameteri(NLContext *context, NLenum pname, NLint param);
 
 /* Variables */
 
-void nlSetVariable(NLuint rhsindex, NLuint index, NLdouble value);
-NLdouble nlGetVariable(NLuint rhsindex, NLuint index);
-void nlLockVariable(NLuint index);
-void nlUnlockVariable(NLuint index);
-NLboolean nlVariableIsLocked(NLuint index);
+void nlSetVariable(NLContext *context, NLuint rhsindex, NLuint index, NLdouble value);
+NLdouble nlGetVariable(NLContext *context, NLuint rhsindex, NLuint index);
+void nlLockVariable(NLContext *context, NLuint index);
+void nlUnlockVariable(NLContext *context, NLuint index);
 
 /* Begin/End */
 
-void nlBegin(NLenum primitive);
-void nlEnd(NLenum primitive);
+void nlBegin(NLContext *context, NLenum primitive);
+void nlEnd(NLContext *context, NLenum primitive);
 
 /* Setting elements in matrix/vector */
 
-void nlMatrixAdd(NLuint row, NLuint col, NLdouble value);
-void nlRightHandSideAdd(NLuint rhsindex, NLuint index, NLdouble value);
-void nlRightHandSideSet(NLuint rhsindex, NLuint index, NLdouble value);
+void nlMatrixAdd(NLContext *context, NLuint row, NLuint col, NLdouble value);
+void nlRightHandSideAdd(NLContext *context, NLuint rhsindex, NLuint index, NLdouble value);
+void nlRightHandSideSet(NLContext *context, NLuint rhsindex, NLuint index, NLdouble value);
 
 /* Solve */
 
-void nlPrintMatrix(void);
-NLboolean nlSolve(void);
-NLboolean nlSolveAdvanced(NLint *permutation, NLboolean solveAgain);
+void nlPrintMatrix(NLContext *context);
+NLboolean nlSolve(NLContext *context, NLboolean solveAgain);
 
 #ifdef __cplusplus
 }

@@ -106,7 +106,9 @@ Controller::Controller()
 
 	_ProgressBar = new ProgressBar;
 	_SceneNumFaces = 0;
+#if 0
 	_minEdgeSize = DBL_MAX;
+#endif
 	_EPSILON = 1.0e-6;
 	_bboxDiag = 0;
 
@@ -264,9 +266,11 @@ int Controller::LoadMesh(Render *re, SceneRenderLayer *srl)
 	}
 	_SceneNumFaces += loader.numFacesRead();
 
+#if 0
 	if (loader.minEdgeSize() < _minEdgeSize) {
 		_minEdgeSize = loader.minEdgeSize();
 	}
+#endif
 
 #if 0  // DEBUG
 	ScenePrettyPrinter spp;
@@ -285,14 +289,14 @@ int Controller::LoadMesh(Render *re, SceneRenderLayer *srl)
 	if (_EnableViewMapCache) {
 
 		NodeCamera *cam;
-		if (freestyle_proj[3][3] != 0.0)
+		if (g_freestyle.proj[3][3] != 0.0)
 			cam = new NodeOrthographicCamera;
 		else
 			cam = new NodePerspectiveCamera;
 		double proj[16];
 		for (int i = 0; i < 4; i++) {
 			for (int j = 0; j < 4; j++) {
-				proj[i * 4 + j] = freestyle_proj[i][j];
+				proj[i * 4 + j] = g_freestyle.proj[i][j];
 			}
 		}
 		cam->setProjectionMatrix(proj);
@@ -406,7 +410,9 @@ void Controller::DeleteWingedEdge()
 	_Grid.clear();
 	_Scene3dBBox.clear();
 	_SceneNumFaces = 0;
+#if 0
 	_minEdgeSize = DBL_MAX;
+#endif
 }
 
 void Controller::DeleteViewMap(bool freeCache)
@@ -471,7 +477,7 @@ void Controller::ComputeViewMap()
 	// Restore the context of view:
 	// we need to perform all these operations while the 
 	// 3D context is on.
-	Vec3f vp(freestyle_viewpoint[0], freestyle_viewpoint[1], freestyle_viewpoint[2]);
+	Vec3f vp(UNPACK3(g_freestyle.viewpoint));
 
 #if 0
 	if (G.debug & G_DEBUG_FREESTYLE) {
@@ -481,7 +487,7 @@ void Controller::ComputeViewMap()
 	real mv[4][4];
 	for (int i = 0; i < 4; i++) {
 		for (int j = 0; j < 4; j++) {
-			mv[i][j] = freestyle_mv[i][j];
+			mv[i][j] = g_freestyle.mv[i][j];
 #if 0
 			if (G.debug & G_DEBUG_FREESTYLE) {
 				cout << mv[i][j] << " ";
@@ -503,7 +509,7 @@ void Controller::ComputeViewMap()
 	real proj[4][4];
 	for (int i = 0; i < 4; i++) {
 		for (int j = 0; j < 4; j++) {
-			proj[i][j] = freestyle_proj[i][j];
+			proj[i][j] = g_freestyle.proj[i][j];
 #if 0
 			if (G.debug & G_DEBUG_FREESTYLE) {
 				cout << proj[i][j] << " ";
@@ -519,7 +525,7 @@ void Controller::ComputeViewMap()
 
 	int viewport[4];
 	for (int i = 0; i < 4; i++)
-		viewport[i] = freestyle_viewport[i];
+		viewport[i] = g_freestyle.viewport[i];
 
 #if 0
 	if (G.debug & G_DEBUG_FREESTYLE) {

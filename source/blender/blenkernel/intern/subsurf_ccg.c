@@ -30,6 +30,9 @@
  */
 
 #if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L
+#  ifdef __GNUC__
+#    pragma GCC diagnostic ignored "-Wvla"
+#  endif
 #  define USE_DYNSIZE
 #endif
 
@@ -1912,6 +1915,10 @@ static void ccgDM_buffer_copy_normal(
 	int shademodel;
 	int start = 0;
 
+	/* we are in sculpt mode, disable loop normals (since they won't get updated) */
+	if (ccgdm->pbvh)
+		lnors = NULL;
+
 	CCG_key_top_level(&key, ss);
 
 	for (i = 0; i < totface; i++) {
@@ -2722,8 +2729,8 @@ static void ccgDM_drawMappedFacesGLSL(DerivedMesh *dm,
 	CCGSubSurf *ss = ccgdm->ss;
 	CCGKey key;
 	GPUVertexAttribs gattribs;
-	int a, b, do_draw, new_matnr;
-	DMFlagMat *faceFlags = ccgdm->faceFlags;
+	int a, b;
+	const DMFlagMat *faceFlags = ccgdm->faceFlags;
 	unsigned char *varray;
 	size_t max_element_size = 0;
 	int tot_loops = 0;
@@ -2734,8 +2741,6 @@ static void ccgDM_drawMappedFacesGLSL(DerivedMesh *dm,
 
 #ifdef WITH_OPENSUBDIV
 	if (ccgdm->useGpuBackend) {
-		CCGSubSurf *ss = ccgdm->ss;
-		const DMFlagMat *faceFlags = ccgdm->faceFlags;
 		const int level = ccgSubSurf_getSubdivisionLevels(ss);
 		const int face_side = 1 << level;
 		const int grid_side = 1 << (level - 1);
@@ -2756,6 +2761,7 @@ static void ccgDM_drawMappedFacesGLSL(DerivedMesh *dm,
 			                                              : num_face_verts * grid_patches;
 			int new_matnr;
 			bool new_draw_smooth;
+
 			if (faceFlags) {
 				new_draw_smooth = (faceFlags[i].flag & ME_SMOOTH);
 				new_matnr = (faceFlags[i].mat_nr + 1);
@@ -2804,15 +2810,12 @@ static void ccgDM_drawMappedFacesGLSL(DerivedMesh *dm,
 	CCG_key_top_level(&key, ss);
 	ccgdm_pbvh_update(ccgdm);
 
-	/* workaround for NVIDIA GPUs on Mac not supporting vertex arrays + interleaved formats, see T43342 */
-	if ((GPU_type_matches(GPU_DEVICE_NVIDIA, GPU_OS_MAC, GPU_DRIVER_ANY) && (U.gameflags & USER_DISABLE_VBO)) ||
-	        setDrawOptions != NULL)
-	{
+	if (setDrawOptions != NULL) {
 		const float (*lnors)[3] = dm->getLoopDataArray(dm, CD_NORMAL);
 		DMVertexAttribs attribs = {{{NULL}}};
 		int i;
 		int matnr = -1;
-		do_draw = 0;
+		int do_draw = 0;
 
 #define PASSATTRIB(dx, dy, vert) {                                            \
 	if (attribs.totorco)                                                      \
@@ -2831,6 +2834,7 @@ static void ccgDM_drawMappedFacesGLSL(DerivedMesh *dm,
 			int origIndex = ccgDM_getFaceMapIndex(ss, f);
 
 			int numVerts = ccgSubSurf_getFaceNumVerts(f);
+			int new_matnr;
 
 			if (faceFlags) {
 				drawSmooth = (lnors || (faceFlags[index].flag & ME_SMOOTH));
@@ -2977,6 +2981,9 @@ static void ccgDM_drawMappedFacesGLSL(DerivedMesh *dm,
 
 		/* part one, check what attributes are needed per material */
 		for (a = 0; a < tot_active_mat; a++) {
+			int new_matnr;
+			int do_draw;
+
 			new_matnr = dm->drawObject->materials[a].mat_nr;
 
 			/* map from original material index to new
@@ -3025,11 +3032,8 @@ static void ccgDM_drawMappedFacesGLSL(DerivedMesh *dm,
 
 		/* part two, generate and fill the arrays with the data */
 		if (max_element_size > 0) {
-			buffer = GPU_buffer_alloc(max_element_size * dm->drawObject->tot_loop_verts, false);
+			buffer = GPU_buffer_alloc(max_element_size * dm->drawObject->tot_loop_verts);
 
-			if (buffer == NULL) {
-				buffer = GPU_buffer_alloc(max_element_size * dm->drawObject->tot_loop_verts, true);
-			}
 			varray = GPU_buffer_lock_stream(buffer, GPU_BINDING_ARRAY);
 			if (varray == NULL) {
 				GPU_buffers_unbind();
@@ -3042,12 +3046,12 @@ static void ccgDM_drawMappedFacesGLSL(DerivedMesh *dm,
 
 			for (a = 0; a < totpoly; a++) {
 				CCGFace *f = ccgdm->faceMap[a].face;
-				int index = GET_INT_FROM_POINTER(ccgSubSurf_getFaceFaceHandle(f));
+				int orig_index = GET_INT_FROM_POINTER(ccgSubSurf_getFaceFaceHandle(f));
 				int S, x, y, numVerts = ccgSubSurf_getFaceNumVerts(f);
 				int i;
 
 				if (faceFlags) {
-					i = mat_orig_to_new[faceFlags[index].mat_nr];
+					i = mat_orig_to_new[faceFlags[orig_index].mat_nr];
 				}
 				else {
 					i = mat_orig_to_new[0];
@@ -3126,6 +3130,9 @@ static void ccgDM_drawMappedFacesGLSL(DerivedMesh *dm,
 		}
 
 		for (a = 0; a < tot_active_mat; a++) {
+			int new_matnr;
+			int do_draw;
+
 			new_matnr = dm->drawObject->materials[a].mat_nr;
 
 			do_draw = setMaterial(new_matnr + 1, &gattribs);
@@ -3173,7 +3180,7 @@ static void ccgDM_drawMappedFacesMat(DerivedMesh *dm,
 	int edgeSize = ccgSubSurf_getEdgeSize(ss);
 	DMFlagMat *faceFlags = ccgdm->faceFlags;
 	const float (*lnors)[3] = dm->getLoopDataArray(dm, CD_NORMAL);
-	int a, i, numVerts, matnr, new_matnr, totface;
+	int a, i, numVerts, matnr, totface;
 
 #ifdef WITH_OPENSUBDIV
 	if (ccgdm->useGpuBackend) {
@@ -3219,6 +3226,7 @@ static void ccgDM_drawMappedFacesMat(DerivedMesh *dm,
 		int S, x, y, drawSmooth;
 		int index = GET_INT_FROM_POINTER(ccgSubSurf_getFaceFaceHandle(f));
 		int origIndex = ccgDM_getFaceMapIndex(ss, f);
+		int new_matnr;
 		
 		numVerts = ccgSubSurf_getFaceNumVerts(f);
 
@@ -3424,7 +3432,7 @@ static void ccgDM_drawFacesTex_common(DerivedMesh *dm,
 			CCGFace *f = ccgdm->faceMap[polyindex].face;
 			int numVerts = ccgSubSurf_getFaceNumVerts(f);
 			int index = ccgDM_getFaceMapIndex(ss, f);
-			int origIndex = GET_INT_FROM_POINTER(ccgSubSurf_getFaceFaceHandle(f));
+			int orig_index = GET_INT_FROM_POINTER(ccgSubSurf_getFaceFaceHandle(f));
 			int mat_nr;
 			int facequads = numVerts * gridFaces * gridFaces;
 			int actualFace = ccgdm->faceMap[polyindex].startFace;
@@ -3435,7 +3443,7 @@ static void ccgDM_drawFacesTex_common(DerivedMesh *dm,
 			}
 
 			if (faceFlags) {
-				mat_nr = faceFlags[origIndex].mat_nr;
+				mat_nr = faceFlags[orig_index].mat_nr;
 			}
 			else {
 				mat_nr = 0;
@@ -3552,7 +3560,6 @@ static void ccgDM_drawMappedFaces(DerivedMesh *dm,
 
 #ifdef WITH_OPENSUBDIV
 	if (ccgdm->useGpuBackend) {
-		DMFlagMat *faceFlags = ccgdm->faceFlags;
 		int new_matnr;
 		bool draw_smooth, do_draw = true;
 		if (setDrawOptions == NULL) {

@@ -66,31 +66,14 @@ int openSubdiv_getAvailableEvaluators(void)
 #endif  /* OPENSUBDIV_HAS_OPENCL */
 
 #ifdef OPENSUBDIV_HAS_GLSL_TRANSFORM_FEEDBACK
-	if (GLEW_ARB_texture_buffer_object) {
+	if (GLEW_VERSION_3_0 || GLEW_ARB_texture_buffer_object) {
+		// TODO(merwin): remove extension check once Blender moves to 3.2 core
 		flags |= OPENSUBDIV_EVALUATOR_GLSL_TRANSFORM_FEEDBACK;
 	}
 #endif  /* OPENSUBDIV_HAS_GLSL_TRANSFORM_FEEDBACK */
 
 #ifdef OPENSUBDIV_HAS_GLSL_COMPUTE
-	static bool vendor_checked = false;
-	static bool disable_glsl_compute = false;
-	/* Force disable GLSL Compute on AMD hardware because it has really
-	 * hard time evaluating required shaders.
-	 */
-	if (!vendor_checked) {
-		vendor_checked = true;
-		const char *vendor = (const char *)glGetString(GL_VENDOR);
-		const char *renderer = (const char *)glGetString(GL_RENDERER);
-		if (vendor != NULL && renderer != NULL) {
-			if (strstr(vendor, "ATI") ||
-			    strstr(renderer, "Mesa DRI R") ||
-			    (strstr(renderer, "Gallium ") && strstr(renderer, " on ATI ")))
-			{
-				disable_glsl_compute = true;
-			}
-		}
-	}
-	if (!disable_glsl_compute) {
+	if (GLEW_VERSION_4_3 || GLEW_ARB_compute_shader) {
 		flags |= OPENSUBDIV_EVALUATOR_GLSL_COMPUTE;
 	}
 #endif  /* OPENSUBDIV_HAS_GLSL_COMPUTE */

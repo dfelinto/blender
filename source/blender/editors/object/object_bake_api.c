@@ -584,7 +584,6 @@ static int bake(
 
 	size_t num_pixels;
 	int tot_materials;
-	int i;
 
 	RE_bake_engine_set_engine_parameters(re, bmain, scene);
 
@@ -641,7 +640,7 @@ static int bake(
 
 		num_pixels = (size_t)width * (size_t)height * bake_images.size;
 
-		for (i = 0; i < bake_images.size; i++) {
+		for (int i = 0; i < bake_images.size; i++) {
 			bake_images.data[i].width = width;
 			bake_images.data[i].height = height;
 			bake_images.data[i].offset = (is_split_materials ? num_pixels : 0);
@@ -650,8 +649,9 @@ static int bake(
 
 		if (!is_split_materials) {
 			/* saving a single image */
-			for (i = 0; i < tot_materials; i++)
+			for (int i = 0; i < tot_materials; i++) {
 				bake_images.lookup[i] = 0;
+			}
 		}
 	}
 
@@ -890,7 +890,7 @@ cage_cleanup:
 	}
 	else {
 		/* save the results */
-		for (i = 0; i < bake_images.size; i++) {
+		for (int i = 0; i < bake_images.size; i++) {
 			BakeImage *bk_image = &bake_images.data[i];
 
 			if (is_save_internal) {
@@ -1331,7 +1331,7 @@ void OBJECT_OT_bake(wmOperatorType *ot)
 	ot->invoke = bake_invoke;
 	ot->poll = ED_operator_object_active_editable_mesh;
 
-	RNA_def_enum(ot->srna, "type", render_pass_type_items, SCE_PASS_COMBINED, "Type",
+	RNA_def_enum(ot->srna, "type", rna_enum_render_pass_type_items, SCE_PASS_COMBINED, "Type",
 	             "Type of pass to bake, some of them may not be supported by the current render engine");
 	RNA_def_string_file_path(ot->srna, "filepath", NULL, FILE_MAX, "File Path",
 	                         "Image filepath to use when saving externally");
@@ -1347,12 +1347,12 @@ void OBJECT_OT_bake(wmOperatorType *ot)
 	              "Distance to use for the inward ray cast when using selected to active", 0.0f, 1.0f);
 	RNA_def_string(ot->srna, "cage_object", NULL, MAX_NAME, "Cage Object",
 	               "Object to use as cage, instead of calculating the cage from the active object with cage extrusion");
-	RNA_def_enum(ot->srna, "normal_space", normal_space_items, R_BAKE_SPACE_TANGENT, "Normal Space",
+	RNA_def_enum(ot->srna, "normal_space", rna_enum_normal_space_items, R_BAKE_SPACE_TANGENT, "Normal Space",
 	             "Choose normal space for baking");
-	RNA_def_enum(ot->srna, "normal_r", normal_swizzle_items, R_BAKE_POSX, "R", "Axis to bake in red channel");
-	RNA_def_enum(ot->srna, "normal_g", normal_swizzle_items, R_BAKE_POSY, "G", "Axis to bake in green channel");
-	RNA_def_enum(ot->srna, "normal_b", normal_swizzle_items, R_BAKE_POSZ, "B", "Axis to bake in blue channel");
-	RNA_def_enum(ot->srna, "save_mode", bake_save_mode_items, R_BAKE_SAVE_INTERNAL, "Save Mode",
+	RNA_def_enum(ot->srna, "normal_r", rna_enum_normal_swizzle_items, R_BAKE_POSX, "R", "Axis to bake in red channel");
+	RNA_def_enum(ot->srna, "normal_g", rna_enum_normal_swizzle_items, R_BAKE_POSY, "G", "Axis to bake in green channel");
+	RNA_def_enum(ot->srna, "normal_b", rna_enum_normal_swizzle_items, R_BAKE_POSZ, "B", "Axis to bake in blue channel");
+	RNA_def_enum(ot->srna, "save_mode", rna_enum_bake_save_mode_items, R_BAKE_SAVE_INTERNAL, "Save Mode",
 	             "Choose how to save the baking map");
 	RNA_def_boolean(ot->srna, "use_clear", false, "Clear",
 	                "Clear Images before baking (only for internal saving)");

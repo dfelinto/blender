@@ -974,7 +974,7 @@ static void rna_def_mask_layer(BlenderRNA *brna)
 
 	prop = RNA_def_property(srna, "falloff", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "falloff");
-	RNA_def_property_enum_items(prop, proportional_falloff_curve_only_items);
+	RNA_def_property_enum_items(prop, rna_enum_proportional_falloff_curve_only_items);
 	RNA_def_property_ui_text(prop, "Falloff", "Falloff type the feather");
 	RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_CURVE); /* Abusing id_curve :/ */
 	RNA_def_property_update(prop, NC_MASK | NA_EDITED, NULL);
@@ -1037,7 +1037,7 @@ static void rna_def_mask(BlenderRNA *brna)
 	rna_def_mask_layer(brna);
 
 	srna = RNA_def_struct(brna, "Mask", "ID");
-	RNA_def_struct_ui_text(srna, "Mask", "Mask datablock defining mask for compositing");
+	RNA_def_struct_ui_text(srna, "Mask", "Mask data-block defining mask for compositing");
 	RNA_def_struct_ui_icon(srna, ICON_MOD_MASK);
 
 	/* mask layers */

@@ -116,14 +116,14 @@ BLI_INLINE bool   BLI_ghashIterator_done(GHashIterator *ghi)       { return !ghi
 #  define _gh_Entry void
 #endif
 
-#define GHASH_ITER(gh_iter_, ghash_)                                          \
-	for (BLI_ghashIterator_init(&gh_iter_, ghash_);                           \
-	     BLI_ghashIterator_done(&gh_iter_) == false;                          \
+#define GHASH_ITER(gh_iter_, ghash_) \
+	for (BLI_ghashIterator_init(&gh_iter_, ghash_); \
+	     BLI_ghashIterator_done(&gh_iter_) == false; \
 	     BLI_ghashIterator_step(&gh_iter_))
 
-#define GHASH_ITER_INDEX(gh_iter_, ghash_, i_)                                \
-	for (BLI_ghashIterator_init(&gh_iter_, ghash_), i_ = 0;                   \
-	     BLI_ghashIterator_done(&gh_iter_) == false;                          \
+#define GHASH_ITER_INDEX(gh_iter_, ghash_, i_) \
+	for (BLI_ghashIterator_init(&gh_iter_, ghash_), i_ = 0; \
+	     BLI_ghashIterator_done(&gh_iter_) == false; \
 	     BLI_ghashIterator_step(&gh_iter_), i_++)
 
 /** \name Callbacks for GHash
@@ -249,14 +249,14 @@ BLI_INLINE void *BLI_gsetIterator_getKey(GSetIterator *gsi) { return BLI_ghashIt
 BLI_INLINE void BLI_gsetIterator_step(GSetIterator *gsi) { BLI_ghashIterator_step((GHashIterator *)gsi); }
 BLI_INLINE bool BLI_gsetIterator_done(GSetIterator *gsi) { return BLI_ghashIterator_done((GHashIterator *)gsi); }
 
-#define GSET_ITER(gs_iter_, gset_)                                            \
-	for (BLI_gsetIterator_init(&gs_iter_, gset_);                             \
-	     BLI_gsetIterator_done(&gs_iter_) == false;                           \
+#define GSET_ITER(gs_iter_, gset_) \
+	for (BLI_gsetIterator_init(&gs_iter_, gset_); \
+	     BLI_gsetIterator_done(&gs_iter_) == false; \
 	     BLI_gsetIterator_step(&gs_iter_))
 
-#define GSET_ITER_INDEX(gs_iter_, gset_, i_)                                  \
-	for (BLI_gsetIterator_init(&gs_iter_, gset_), i_ = 0;                     \
-	     BLI_gsetIterator_done(&gs_iter_) == false;                           \
+#define GSET_ITER_INDEX(gs_iter_, gset_, i_) \
+	for (BLI_gsetIterator_init(&gs_iter_, gset_), i_ = 0; \
+	     BLI_gsetIterator_done(&gs_iter_) == false; \
 	     BLI_gsetIterator_step(&gs_iter_), i_++)
 
 

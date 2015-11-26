@@ -859,7 +859,6 @@ static void knife_cut_face(KnifeTool_OpData *kcd, BMFace *f, ListBase *hits)
 static void knife_add_cut(KnifeTool_OpData *kcd)
 {
 	int i;
-	KnifeLineHit *lh;
 	GHash *facehits;
 	BMFace *f;
 	Ref *r;
@@ -877,7 +876,7 @@ static void knife_add_cut(KnifeTool_OpData *kcd)
 	/* make facehits: map face -> list of linehits touching it */
 	facehits = BLI_ghash_ptr_new("knife facehits");
 	for (i = 0; i < kcd->totlinehit; i++) {
-		lh = &kcd->linehits[i];
+		KnifeLineHit *lh = &kcd->linehits[i];
 		if (lh->f) {
 			add_hit_to_facehits(kcd, facehits, lh->f, lh);
 		}
@@ -908,15 +907,14 @@ static void knife_add_cut(KnifeTool_OpData *kcd)
 
 
 	if (kcd->prev.bmface) {
-		KnifeLineHit *lh;
 		/* was "in face" but now we have a KnifeVert it is snapped to */
-		lh = &kcd->linehits[kcd->totlinehit - 1];
+		KnifeLineHit *lh = &kcd->linehits[kcd->totlinehit - 1];
 		kcd->prev.vert = lh->v;
 		kcd->prev.bmface = NULL;
 	}
 
 	if (kcd->is_drag_hold) {
-		lh = &kcd->linehits[kcd->totlinehit - 1];
+		KnifeLineHit *lh = &kcd->linehits[kcd->totlinehit - 1];
 		linehit_to_knifepos(&kcd->prev, lh);
 	}
 
@@ -1672,7 +1670,7 @@ static void knife_find_line_hits(KnifeTool_OpData *kcd)
 		knife_project_v2(kcd, kfe->v2->cageco, se2);
 		isect_kind = (kfe_verts_in_cut) ? -1 : isect_seg_seg_v2_point(s1, s2, se1, se2, sint);
 		if (isect_kind == -1) {
-			/* isect_seg_seg_v2 doesn't do tolerance test around ends of s1-s2 */
+			/* isect_seg_seg_v2_simple doesn't do tolerance test around ends of s1-s2 */
 			closest_to_line_segment_v2(sint, s1, se1, se2);
 			if (len_squared_v2v2(sint, s1) <= line_tol_sq)
 				isect_kind = 1;
@@ -2480,7 +2478,7 @@ static bool find_hole_chains(KnifeTool_OpData *kcd, ListBase *hole, BMFace *f, L
 				for (k = 0; k < nh && ok; k++) {
 					if (k == i || (k + 1) % nh == i)
 						continue;
-					if (isect_line_line_v2(hco[i], fco[j], hco[k], hco[(k + 1) % nh]))
+					if (isect_seg_seg_v2(hco[i], fco[j], hco[k], hco[(k + 1) % nh]))
 						ok = false;
 				}
 				if (!ok)
@@ -2488,7 +2486,7 @@ static bool find_hole_chains(KnifeTool_OpData *kcd, ListBase *hole, BMFace *f, L
 				for (k = 0; k < nf && ok; k++) {
 					if (k == j || (k + 1) % nf == j)
 						continue;
-					if (isect_line_line_v2(hco[i], fco[j], fco[k], fco[(k + 1) % nf]))
+					if (isect_seg_seg_v2(hco[i], fco[j], fco[k], fco[(k + 1) % nf]))
 						ok = false;
 				}
 				if (ok) {

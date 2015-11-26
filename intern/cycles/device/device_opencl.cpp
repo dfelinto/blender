@@ -130,7 +130,12 @@ bool opencl_kernel_use_split(const string& platform_name,
                              const cl_device_type device_type)
 {
 	if(getenv("CYCLES_OPENCL_SPLIT_KERNEL_TEST") != NULL) {
+		VLOG(1) << "Forcing split kernel to use.";
 		return true;
+	}
+	if(getenv("CYCLES_OPENCL_MEGA_KERNEL_TEST") != NULL) {
+		VLOG(1) << "Forcing mega kernel to use.";
+		return false;
 	}
 	/* TODO(sergey): Replace string lookups with more enum-like API,
 	 * similar to device/vendor checks blender's gpu.
@@ -1110,7 +1115,7 @@ public:
 	{
 		/* this is blocking */
 		size_t size = mem.memory_size();
-		if(size != 0){
+		if(size != 0) {
 			opencl_assert(clEnqueueWriteBuffer(cqCommandQueue,
 			                                   CL_MEM_PTR(mem.device_pointer),
 			                                   CL_TRUE,
@@ -1380,7 +1385,7 @@ public:
 protected:
 	string kernel_build_options(const string *debug_src = NULL)
 	{
-		string build_options = " -cl-fast-relaxed-math ";
+		string build_options = "-cl-fast-relaxed-math ";
 
 		if(platform_name == "NVIDIA CUDA") {
 			build_options += "-D__KERNEL_OPENCL_NVIDIA__ "
@@ -1543,34 +1548,6 @@ protected:
 		if(program) {
 			clReleaseProgram(program);
 		}
-	}
-
-	string build_options_from_requested_features(
-	        const DeviceRequestedFeatures& requested_features)
-	{
-		string build_options = "";
-		if(requested_features.experimental) {
-			build_options += " -D__KERNEL_EXPERIMENTAL__";
-		}
-		build_options += " -D__NODES_MAX_GROUP__=" +
-			string_printf("%d", requested_features.max_nodes_group);
-		build_options += " -D__NODES_FEATURES__=" +
-			string_printf("%d", requested_features.nodes_features);
-		build_options += string_printf(" -D__MAX_CLOSURE__=%d",
-		                               requested_features.max_closure);
-		if(!requested_features.use_hair) {
-			build_options += " -D__NO_HAIR__";
-		}
-		if(!requested_features.use_object_motion) {
-			build_options += " -D__NO_OBJECT_MOTION__";
-		}
-		if(!requested_features.use_camera_motion) {
-			build_options += " -D__NO_CAMERA_MOTION__";
-		}
-		if(!requested_features.use_baking) {
-			build_options += " -D__NO_BAKING__";
-		}
-		return build_options;
 	}
 
 	/* ** Those guys are for workign around some compiler-specific bugs ** */
@@ -2307,7 +2284,7 @@ public:
 #ifdef __WORK_STEALING__
 		build_options += " -D__WORK_STEALING__";
 #endif
-		build_options += build_options_from_requested_features(requested_features);
+		build_options += requested_features.get_build_options();
 
 		/* Set compute device build option. */
 		cl_device_type device_type;
@@ -3580,7 +3557,7 @@ protected:
 	string build_options_for_base_program(
 	        const DeviceRequestedFeatures& requested_features)
 	{
-		return build_options_from_requested_features(requested_features);
+		return requested_features.get_build_options();
 	}
 };
 

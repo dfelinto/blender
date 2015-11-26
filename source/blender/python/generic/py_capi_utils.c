@@ -533,15 +533,6 @@ const char *PyC_UnicodeAsByte(PyObject *py_str, PyObject **coerce)
 		if (PyBytes_Check(py_str)) {
 			return PyBytes_AS_STRING(py_str);
 		}
-#ifdef WIN32
-		/* bug [#31856] oddly enough, Python3.2 --> 3.3 on Windows will throw an
-		 * exception here this needs to be fixed in python:
-		 * see: bugs.python.org/issue15859 */
-		else if (!PyUnicode_Check(py_str)) {
-			PyErr_BadArgument();
-			return NULL;
-		}
-#endif
 		else if ((*coerce = PyUnicode_EncodeFSDefault(py_str))) {
 			return PyBytes_AS_STRING(*coerce);
 		}
@@ -710,7 +701,7 @@ void PyC_RunQuicky(const char *filepath, int n, ...)
 			}
 
 			if (ret == NULL) {
-				printf("PyC_InlineRun error, line:%d\n", __LINE__);
+				printf("%s error, line:%d\n", __func__, __LINE__);
 				PyErr_Print();
 				PyErr_Clear();
 
@@ -784,7 +775,7 @@ void PyC_RunQuicky(const char *filepath, int n, ...)
 						Py_DECREF(ret);
 					}
 					else {
-						printf("PyC_InlineRun error on arg '%d', line:%d\n", i, __LINE__);
+						printf("%s error on arg '%d', line:%d\n", __func__, i, __LINE__);
 						PyC_ObSpit("failed converting:", item_new);
 						PyErr_Print();
 						PyErr_Clear();
@@ -795,11 +786,11 @@ void PyC_RunQuicky(const char *filepath, int n, ...)
 				va_end(vargs);
 			}
 			else {
-				printf("PyC_InlineRun error, 'values' not a list, line:%d\n", __LINE__);
+				printf("%s error, 'values' not a list, line:%d\n", __func__, __LINE__);
 			}
 		}
 		else {
-			printf("PyC_InlineRun error line:%d\n", __LINE__);
+			printf("%s error line:%d\n", __func__, __LINE__);
 			PyErr_Print();
 			PyErr_Clear();
 		}

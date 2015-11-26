@@ -54,9 +54,7 @@ struct MVert;
 
 typedef struct GPUBuffer {
 	size_t size;        /* in bytes */
-	void *pointer;   /* used with vertex arrays */
 	unsigned int id; /* used with vertex buffer objects */
-	bool use_vbo;    /* true for VBOs, false for vertex arrays */
 } GPUBuffer;
 
 typedef struct GPUBufferMaterial {
@@ -156,7 +154,7 @@ typedef struct GPUAttrib {
 void GPU_global_buffer_pool_free(void);
 void GPU_global_buffer_pool_free_unused(void);
 
-GPUBuffer *GPU_buffer_alloc(size_t size, bool force_vertex_arrays);
+GPUBuffer *GPU_buffer_alloc(size_t size);
 void GPU_buffer_free(GPUBuffer *buffer);
 
 void GPU_drawobject_free(struct DerivedMesh *dm);
@@ -231,7 +229,7 @@ GPU_PBVH_Buffers *GPU_build_mesh_pbvh_buffers(
 GPU_PBVH_Buffers *GPU_build_grid_pbvh_buffers(int *grid_indices, int totgrid,
                                     unsigned int **grid_hidden, int gridsize, const struct CCGKey *key);
 
-GPU_PBVH_Buffers *GPU_build_bmesh_pbvh_buffers(int smooth_shading);
+GPU_PBVH_Buffers *GPU_build_bmesh_pbvh_buffers(bool smooth_shading);
 
 /* update */
 

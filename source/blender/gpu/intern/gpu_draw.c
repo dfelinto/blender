@@ -182,17 +182,17 @@ void GPU_render_text(
 			uv[2][1] = (uv_quad[2][1] - centery) * sizey + transy;
 			
 			glBegin(GL_POLYGON);
-			if (glattrib >= 0) glVertexAttrib2fvARB(glattrib, uv[0]);
+			if (glattrib >= 0) glVertexAttrib2fv(glattrib, uv[0]);
 			else glTexCoord2fv(uv[0]);
 			if (col) gpu_mcol(col[0]);
 			glVertex3f(sizex * v1[0] + movex, sizey * v1[1] + movey, v1[2]);
 			
-			if (glattrib >= 0) glVertexAttrib2fvARB(glattrib, uv[1]);
+			if (glattrib >= 0) glVertexAttrib2fv(glattrib, uv[1]);
 			else glTexCoord2fv(uv[1]);
 			if (col) gpu_mcol(col[1]);
 			glVertex3f(sizex * v2[0] + movex, sizey * v2[1] + movey, v2[2]);
 
-			if (glattrib >= 0) glVertexAttrib2fvARB(glattrib, uv[2]);
+			if (glattrib >= 0) glVertexAttrib2fv(glattrib, uv[2]);
 			else glTexCoord2fv(uv[2]);
 			if (col) gpu_mcol(col[2]);
 			glVertex3f(sizex * v3[0] + movex, sizey * v3[1] + movey, v3[2]);
@@ -201,7 +201,7 @@ void GPU_render_text(
 				uv[3][0] = (uv_quad[3][0] - centerx) * sizex + transx;
 				uv[3][1] = (uv_quad[3][1] - centery) * sizey + transy;
 
-				if (glattrib >= 0) glVertexAttrib2fvARB(glattrib, uv[3]);
+				if (glattrib >= 0) glVertexAttrib2fv(glattrib, uv[3]);
 				else glTexCoord2fv(uv[3]);
 				if (col) gpu_mcol(col[3]);
 				glVertex3f(sizex * v4[0] + movex, sizey * v4[1] + movey, v4[2]);
@@ -438,10 +438,7 @@ static void gpu_set_alpha_blend(GPUBlendMode alphablend)
 		glDisable(GL_SAMPLE_ALPHA_TO_COVERAGE);
 
 		/* for OpenGL render we use the alpha channel, this makes alpha blend correct */
-		if (GLEW_VERSION_1_4)
-			glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-		else
-			glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+		glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 		
 		/* if U.glalphaclip == 1.0, some cards go bonkers...
 		 * turn off alpha test in this case */
@@ -1029,14 +1026,14 @@ static bool GPU_check_scaled_image(ImBuf *ibuf, Image *ima, float *frect, int x,
 
 		/* float rectangles are already continuous in memory so we can use IMB_scaleImBuf */
 		if (frect) {
-			ImBuf *ibuf = IMB_allocFromBuffer(NULL, frect, w, h);
-			IMB_scaleImBuf(ibuf, rectw, recth);
+			ImBuf *ibuf_scale = IMB_allocFromBuffer(NULL, frect, w, h);
+			IMB_scaleImBuf(ibuf_scale, rectw, recth);
 
 			glBindTexture(GL_TEXTURE_2D, ima->bindcode);
 			glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, rectw, recth, GL_RGBA,
-			                GL_FLOAT, ibuf->rect_float);
+			                GL_FLOAT, ibuf_scale->rect_float);
 
-			IMB_freeImBuf(ibuf);
+			IMB_freeImBuf(ibuf_scale);
 		}
 		/* byte images are not continuous in memory so do manual interpolation */
 		else {
@@ -2039,33 +2036,31 @@ int GPU_scene_object_lights(Scene *scene, Object *ob, int lay, float viewmat[4][
 
 static void gpu_multisample(bool enable)
 {
-	if (GLEW_VERSION_1_3 || GLEW_ARB_multisample) {
 #ifdef __linux__
-		/* changing multisample from the default (enabled) causes problems on some
-		 * systems (NVIDIA/Linux) when the pixel format doesn't have a multisample buffer */
-		bool toggle_ok = true;
+	/* changing multisample from the default (enabled) causes problems on some
+	 * systems (NVIDIA/Linux) when the pixel format doesn't have a multisample buffer */
+	bool toggle_ok = true;
 
-		if (GPU_type_matches(GPU_DEVICE_NVIDIA, GPU_OS_UNIX, GPU_DRIVER_ANY)) {
-			int samples = 0;
-			glGetIntegerv(GL_SAMPLES, &samples);
+	if (GPU_type_matches(GPU_DEVICE_NVIDIA, GPU_OS_UNIX, GPU_DRIVER_ANY)) {
+		int samples = 0;
+		glGetIntegerv(GL_SAMPLES, &samples);
 
-			if (samples == 0)
-				toggle_ok = false;
-		}
+		if (samples == 0)
+			toggle_ok = false;
+	}
 
-		if (toggle_ok) {
-			if (enable)
-				glEnable(GL_MULTISAMPLE);
-			else
-				glDisable(GL_MULTISAMPLE);
-		}
-#else
+	if (toggle_ok) {
 		if (enable)
 			glEnable(GL_MULTISAMPLE);
 		else
 			glDisable(GL_MULTISAMPLE);
-#endif
 	}
+#else
+	if (enable)
+		glEnable(GL_MULTISAMPLE);
+	else
+		glDisable(GL_MULTISAMPLE);
+#endif
 }
 
 /* Default OpenGL State */

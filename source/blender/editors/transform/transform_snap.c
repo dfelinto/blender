@@ -85,7 +85,7 @@
 
 #define TRANSFORM_DIST_MAX_PX 1000.0f
 #define TRANSFORM_SNAP_MAX_PX 100.0f
-#define TRANSFORM_DIST_INVALID NAN_FLT
+#define TRANSFORM_DIST_INVALID -FLT_MAX
 
 /* use half of flt-max so we can scale up without an exception */
 
@@ -889,13 +889,13 @@ static float ResizeBetween(TransInfo *t, const float p1[3], const float p2[3])
 
 	sub_v3_v3v3(d1, p1, t->center_global);
 	sub_v3_v3v3(d2, p2, t->center_global);
-	
-	project_v3_v3v3(d1, d1, d2);
 
 	if (t->con.applyRot != NULL && (t->con.mode & CON_APPLY)) {
 		mul_m3_v3(t->con.pmtx, d1);
 		mul_m3_v3(t->con.pmtx, d2);
 	}
+
+	project_v3_v3v3(d1, d1, d2);
 	
 	len_d1 = len_v3(d1);
 
@@ -1545,6 +1545,13 @@ static bool snapDerivedMesh(short snap_mode, ARegion *ar, Object *ob, DerivedMes
 				/* We cannot aford a bbox with some null dimension, which may happen in some cases...
 				 * Threshold is rather high, but seems to be needed to get good behavior, see T46099. */
 				bb = BKE_boundbox_ensure_minimum_dimensions(bb, &bb_temp, 1e-1f);
+
+				/* Exact value here is arbitrary (ideally we would scale in pixel-space based on 'r_dist_px'),
+				 * scale up so we can snap against verts & edges on the boundbox, see T46816. */
+				if (ELEM(snap_mode, SCE_SNAP_MODE_VERTEX, SCE_SNAP_MODE_EDGE)) {
+					BKE_boundbox_scale(&bb_temp, bb, 1.0f + 1e-1f);
+					bb = &bb_temp;
+				}
 
 				if (!BKE_boundbox_ray_hit_check(bb, ray_start_local, ray_normal_local, &len_diff)) {
 					return retval;

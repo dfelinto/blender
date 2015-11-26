@@ -133,7 +133,10 @@ static void graph_panel_view(const bContext *C, Panel *pa)
 	sub = uiLayoutColumn(col, true);
 	uiLayoutSetActive(sub, RNA_boolean_get(&spaceptr, "show_cursor"));
 	row = uiLayoutSplit(sub, 0.7f, true);
-	uiItemR(row, &sceneptr, "frame_current", 0, IFACE_("Cursor X"), ICON_NONE);
+	if (sipo->mode == SIPO_MODE_DRIVERS)
+		uiItemR(row, &spaceptr, "cursor_position_x", 0, IFACE_("Cursor X"), ICON_NONE);
+	else
+		uiItemR(row, &sceneptr, "frame_current", 0, IFACE_("Cursor X"), ICON_NONE);
 	uiItemEnumO(row, "GRAPH_OT_snap", IFACE_("To Keys"), 0, "type", GRAPHKEYS_SNAP_CFRA);
 	
 	row = uiLayoutSplit(sub, 0.7f, true);
@@ -355,7 +358,14 @@ static void graph_panel_key_properties(const bContext *C, Panel *pa)
 		
 		/* interpolation */
 		col = uiLayoutColumn(layout, false);
-		uiItemR(col, &bezt_ptr, "interpolation", 0, NULL, ICON_NONE);
+		if (fcu->flag & FCURVE_DISCRETE_VALUES) {
+			uiLayout *split = uiLayoutSplit(col, 0.33f, true);
+			uiItemL(split, IFACE_("Interpolation:"), ICON_NONE);
+			uiItemL(split, IFACE_("None for Enum/Boolean"), ICON_IPO_CONSTANT);
+		}
+		else {
+			uiItemR(col, &bezt_ptr, "interpolation", 0, NULL, ICON_NONE);
+		}
 		
 		/* easing type */
 		if (bezt->ipo > BEZT_IPO_BEZ)

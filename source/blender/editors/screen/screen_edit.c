@@ -1272,16 +1272,20 @@ void ED_region_exit(bContext *C, ARegion *ar)
 
 	CTX_wm_region_set(C, ar);
 	WM_event_remove_handlers(C, &ar->handlers);
-	if (ar->swinid)
+	if (ar->swinid) {
 		wm_subwindow_close(CTX_wm_window(C), ar->swinid);
-	ar->swinid = 0;
+		ar->swinid = 0;
+	}
 	
-	if (ar->headerstr)
+	if (ar->headerstr) {
 		MEM_freeN(ar->headerstr);
-	ar->headerstr = NULL;
+		ar->headerstr = NULL;
+	}
 	
-	if (ar->regiontimer)
+	if (ar->regiontimer) {
 		WM_event_remove_timer(CTX_wm_manager(C), CTX_wm_window(C), ar->regiontimer);
+		ar->regiontimer = NULL;
+	}
 
 	CTX_wm_region_set(C, prevar);
 }
@@ -1855,6 +1859,7 @@ void ED_screen_full_restore(bContext *C, ScrArea *sa)
  */
 ScrArea *ED_screen_state_toggle(bContext *C, wmWindow *win, ScrArea *sa, const short state)
 {
+	wmWindowManager *wm = CTX_wm_manager(C);
 	bScreen *sc, *oldscreen;
 	ARegion *ar;
 
@@ -1862,8 +1867,14 @@ ScrArea *ED_screen_state_toggle(bContext *C, wmWindow *win, ScrArea *sa, const s
 		/* ensure we don't have a button active anymore, can crash when
 		 * switching screens with tooltip open because region and tooltip
 		 * are no longer in the same screen */
-		for (ar = sa->regionbase.first; ar; ar = ar->next)
+		for (ar = sa->regionbase.first; ar; ar = ar->next) {
 			UI_blocklist_free(C, &ar->uiblocks);
+
+			if (ar->regiontimer) {
+				WM_event_remove_timer(wm, NULL, ar->regiontimer);
+				ar->regiontimer = NULL;
+			}
+		}
 
 		/* prevent hanging header prints */
 		ED_area_headerprint(sa, NULL);
@@ -2121,8 +2132,6 @@ void ED_update_for_newframe(Main *bmain, Scene *scene, int UNUSED(mute))
 		}
 	}
 #endif
-
-	//extern void audiostream_scrub(unsigned int frame);	/* seqaudio.c */
 	
 	ED_clip_update_frame(bmain, scene->r.cfra);
 
@@ -2132,16 +2141,7 @@ void ED_update_for_newframe(Main *bmain, Scene *scene, int UNUSED(mute))
 
 	/* this function applies the changes too */
 	BKE_scene_update_for_newframe(bmain->eval_ctx, bmain, scene, layers);
-	
-	//if ((CFRA > 1) && (!mute) && (scene->r.audio.flag & AUDIO_SCRUB))
-	//	audiostream_scrub( CFRA );
-	
-	/* 3d window, preview */
-	//BIF_view3d_previewrender_signal(curarea, PR_DBASE|PR_DISPRECT);
-	
-	/* all movie/sequence images */
-	//BIF_image_update_frame();
-	
+
 	/* composite */
 	if (scene->use_nodes && scene->nodetree)
 		ntreeCompositTagAnimated(scene->nodetree);

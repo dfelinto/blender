@@ -133,7 +133,7 @@ static int mask_flood_fill_exec(bContext *C, wmOperator *op)
 	if (multires)
 		multires_mark_as_modified(ob, MULTIRES_COORDS_MODIFIED);
 
-	sculpt_undo_push_end();
+	sculpt_undo_push_end(C);
 
 	if (nodes)
 		MEM_freeN(nodes);
@@ -265,7 +265,7 @@ int ED_sculpt_mask_box_select(struct bContext *C, ViewContext *vc, const rcti *r
 	if (multires)
 		multires_mark_as_modified(ob, MULTIRES_COORDS_MODIFIED);
 
-	sculpt_undo_push_end();
+	sculpt_undo_push_end(C);
 
 	ED_region_tag_redraw(ar);
 
@@ -420,7 +420,7 @@ static int paint_mask_gesture_lasso_exec(bContext *C, wmOperator *op)
 		if (multires)
 			multires_mark_as_modified(ob, MULTIRES_COORDS_MODIFIED);
 
-		sculpt_undo_push_end();
+		sculpt_undo_push_end(C);
 
 		ED_region_tag_redraw(vc.ar);
 		MEM_freeN((void *)mcords);
@@ -439,7 +439,7 @@ void PAINT_OT_mask_lasso_gesture(wmOperatorType *ot)
 
 	ot->name = "Mask Lasso Gesture";
 	ot->idname = "PAINT_OT_mask_lasso_gesture";
-	ot->description = "Add mask within the lasso as you move the pointer";
+	ot->description = "Add mask within the lasso as you move the brush";
 
 	ot->invoke = WM_gesture_lasso_invoke;
 	ot->modal = WM_gesture_lasso_modal;

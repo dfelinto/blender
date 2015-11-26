@@ -894,7 +894,7 @@ void psys_get_birth_coords(ParticleSimulationData *sim, ParticleData *pa, Partic
 				float q_imat[4];
 
 				mat4_to_quat(q_obmat, ob->obmat);
-				invert_qt_qt(q_imat, q_obmat);
+				invert_qt_qt_normalized(q_imat, q_obmat);
 
 
 				if (part->rotmode != PART_ROT_NOR_TAN) {
@@ -1215,8 +1215,8 @@ void psys_get_pointcache_start_end(Scene *scene, ParticleSystem *psys, int *sfra
 {
 	ParticleSettings *part = psys->part;
 
-	*sfra = MAX2(1, (int)part->sta);
-	*efra = MIN2((int)(part->end + part->lifetime + 1.0f), MAX2(scene->r.pefra, scene->r.efra));
+	*sfra = max_ii(1, (int)part->sta);
+	*efra = min_ii((int)(part->end + part->lifetime + 1.0f), max_ii(scene->r.pefra, scene->r.efra));
 }
 
 /************************************************/
@@ -1939,7 +1939,7 @@ static void sphclassical_calc_dens(ParticleData *pa, float UNUSED(dfra), SPHData
 	pfr.mass = sphdata->mass;
 
 	sph_evaluate_func( NULL, psys, pa->state.co, &pfr, interaction_radius, sphclassical_density_accum_cb);
-	pa->sphdensity = MIN2(MAX2(data[0], fluid->rest_density * 0.9f), fluid->rest_density * 1.1f);
+	pa->sphdensity = min_ff(max_ff(data[0], fluid->rest_density * 0.9f), fluid->rest_density * 1.1f);
 }
 
 void psys_sph_init(ParticleSimulationData *sim, SPHData *sphdata)
@@ -3489,7 +3489,6 @@ static void dynamics_step(ParticleSimulationData *sim, float cfra)
 		case PART_PHYS_FLUID:
 		{
 			SPHData sphdata;
-			ParticleSettings *part = sim->psys->part;
 			psys_sph_init(sim, &sphdata);
 
 			if (part->fluid->solver == SPH_SOLVER_DDR) {
@@ -4216,7 +4215,7 @@ void BKE_particlesystem_id_loop(ParticleSystem *psys, ParticleSystemIDFunc func,
 {
 	ParticleTarget *pt;
 
-	func(psys, (ID **)&psys->part, userdata, IDWALK_NOP);
+	func(psys, (ID **)&psys->part, userdata, IDWALK_USER | IDWALK_NEVER_NULL);
 	func(psys, (ID **)&psys->target_ob, userdata, IDWALK_NOP);
 	func(psys, (ID **)&psys->parent, userdata, IDWALK_NOP);
 

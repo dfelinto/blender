@@ -1228,12 +1228,7 @@ static void icon_draw_size(
 			if (!pi->rect[size]) return;  /* something has gone wrong! */
 			
 			/* preview images use premul alpha ... */
-			if (GLEW_VERSION_1_4) {
-				glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-			}
-			else {
-				glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-			}
+			glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 
 			icon_draw_rect(x, y, w, h, aspect, pi->w[size], pi->h[size], pi->rect[size], alpha, rgb, is_preview);
 			glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -1317,15 +1312,15 @@ static int ui_id_brush_get_icon(const bContext *C, ID *id)
 
 		/* reset the icon */
 		if (mode == OB_MODE_SCULPT) {
-			items = brush_sculpt_tool_items;
+			items = rna_enum_brush_sculpt_tool_items;
 			tool = br->sculpt_tool;
 		}
 		else if (mode == OB_MODE_VERTEX_PAINT) {
-			items = brush_vertex_tool_items;
+			items = rna_enum_brush_vertex_tool_items;
 			tool = br->vertexpaint_tool;
 		}
 		else if (mode == OB_MODE_TEXTURE_PAINT) {
-			items = brush_image_tool_items;
+			items = rna_enum_brush_image_tool_items;
 			tool = br->imagepaint_tool;
 		}
 

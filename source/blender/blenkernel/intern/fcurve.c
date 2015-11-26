@@ -1235,7 +1235,7 @@ static float dvar_eval_rotDiff(ChannelDriver *driver, DriverVar *dvar)
 	mat4_to_quat(q1, pchan->pose_mat);
 	mat4_to_quat(q2, pchan2->pose_mat);
 	
-	invert_qt(q1);
+	invert_qt_normalized(q1);
 	mul_qt_qtqt(quat, q1, q2);
 	angle = 2.0f * (saacos(quat[0]));
 	angle = ABS(angle);
@@ -2436,11 +2436,11 @@ static float fcurve_eval_samples(FCurve *fcu, FPoint *fpts, float evaltime)
 		float t = fabsf(evaltime - floorf(evaltime));
 		
 		/* find the one on the right frame (assume that these are spaced on 1-frame intervals) */
-		fpt = prevfpt + (int)(evaltime - prevfpt->vec[0]);
+		fpt = prevfpt + ((int)evaltime - (int)prevfpt->vec[0]);
 		
 		/* if not exactly on the frame, perform linear interpolation with the next one */
-		if (t != 0.0f) 
-			cvalue = interpf(fpt->vec[1], (fpt + 1)->vec[1], t);
+		if ((t != 0.0f) && (t < 1.0f))
+			cvalue = interpf(fpt->vec[1], (fpt + 1)->vec[1], 1.0f - t);
 		else
 			cvalue = fpt->vec[1];
 	}

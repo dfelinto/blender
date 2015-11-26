@@ -356,20 +356,20 @@ static bool ED_object_editmode_load_ex(Main *bmain, Object *obedit, const bool f
 		DAG_relations_tag_update(bmain);
 	}
 	else if (ELEM(obedit->type, OB_CURVE, OB_SURF)) {
-		load_editNurb(obedit);
-		if (freedata) free_editNurb(obedit);
+		ED_curve_editnurb_load(obedit);
+		if (freedata) ED_curve_editnurb_free(obedit);
 	}
 	else if (obedit->type == OB_FONT) {
-		load_editText(obedit);
-		if (freedata) free_editText(obedit);
+		ED_curve_editfont_load(obedit);
+		if (freedata) ED_curve_editfont_free(obedit);
 	}
 	else if (obedit->type == OB_LATTICE) {
-		load_editLatt(obedit);
-		if (freedata) free_editLatt(obedit);
+		ED_lattice_editlatt_load(obedit);
+		if (freedata) ED_lattice_editlatt_free(obedit);
 	}
 	else if (obedit->type == OB_MBALL) {
-		load_editMball(obedit);
-		if (freedata) free_editMball(obedit);
+		ED_mball_editmball_load(obedit);
+		if (freedata) ED_mball_editmball_free(obedit);
 	}
 
 	/* Tag update so no access to freed data referenced from
@@ -532,28 +532,28 @@ void ED_object_editmode_enter(bContext *C, int flag)
 	else if (ob->type == OB_FONT) {
 		scene->obedit = ob; /* XXX for context */
 		ok = 1;
-		make_editText(ob);
+		ED_curve_editfont_make(ob);
 
 		WM_event_add_notifier(C, NC_SCENE | ND_MODE | NS_EDITMODE_TEXT, scene);
 	}
 	else if (ob->type == OB_MBALL) {
 		scene->obedit = ob; /* XXX for context */
 		ok = 1;
-		make_editMball(ob);
+		ED_mball_editmball_make(ob);
 
 		WM_event_add_notifier(C, NC_SCENE | ND_MODE | NS_EDITMODE_MBALL, scene);
 	}
 	else if (ob->type == OB_LATTICE) {
 		scene->obedit = ob; /* XXX for context */
 		ok = 1;
-		make_editLatt(ob);
+		ED_lattice_editlatt_make(ob);
 
 		WM_event_add_notifier(C, NC_SCENE | ND_MODE | NS_EDITMODE_LATTICE, scene);
 	}
 	else if (ob->type == OB_SURF || ob->type == OB_CURVE) {
 		ok = 1;
 		scene->obedit = ob; /* XXX for context */
-		make_editNurb(ob);
+		ED_curve_editnurb_make(ob);
 
 		WM_event_add_notifier(C, NC_SCENE | ND_MODE | NS_EDITMODE_CURVE, scene);
 	}
@@ -934,16 +934,20 @@ static void copy_attr(Main *bmain, Scene *scene, View3D *v3d, short event)
 						cu1->wordspace = cu->wordspace;
 						cu1->ulpos = cu->ulpos;
 						cu1->ulheight = cu->ulheight;
-						if (cu1->vfont) cu1->vfont->id.us--;
+						if (cu1->vfont)
+							id_us_min(&cu1->vfont->id);
 						cu1->vfont = cu->vfont;
 						id_us_plus((ID *)cu1->vfont);
-						if (cu1->vfontb) cu1->vfontb->id.us--;
+						if (cu1->vfontb)
+							id_us_min(&cu1->vfontb->id);
 						cu1->vfontb = cu->vfontb;
 						id_us_plus((ID *)cu1->vfontb);
-						if (cu1->vfonti) cu1->vfonti->id.us--;
+						if (cu1->vfonti)
+							id_us_min(&cu1->vfonti->id);
 						cu1->vfonti = cu->vfonti;
 						id_us_plus((ID *)cu1->vfonti);
-						if (cu1->vfontbi) cu1->vfontbi->id.us--;
+						if (cu1->vfontbi)
+							id_us_min(&cu1->vfontbi->id);
 						cu1->vfontbi = cu->vfontbi;
 						id_us_plus((ID *)cu1->vfontbi);
 						
@@ -1502,13 +1506,13 @@ static void UNUSED_FUNCTION(image_aspect) (Scene *scene, View3D *v3d)
 
 static EnumPropertyItem *object_mode_set_itemsf(bContext *C, PointerRNA *UNUSED(ptr), PropertyRNA *UNUSED(prop), bool *r_free)
 {
-	EnumPropertyItem *input = object_mode_items;
+	EnumPropertyItem *input = rna_enum_object_mode_items;
 	EnumPropertyItem *item = NULL;
 	Object *ob;
 	int totitem = 0;
 
 	if (!C) /* needed for docs */
-		return object_mode_items;
+		return rna_enum_object_mode_items;
 
 	ob = CTX_data_active_object(C);
 	if (ob) {
@@ -1676,7 +1680,7 @@ void OBJECT_OT_mode_set(wmOperatorType *ot)
 	/* flags */
 	ot->flag = 0; /* no register/undo here, leave it to operators being called */
 	
-	ot->prop = RNA_def_enum(ot->srna, "mode", object_mode_items, OB_MODE_OBJECT, "Mode", "");
+	ot->prop = RNA_def_enum(ot->srna, "mode", rna_enum_object_mode_items, OB_MODE_OBJECT, "Mode", "");
 	RNA_def_enum_funcs(ot->prop, object_mode_set_itemsf);
 	RNA_def_property_flag(ot->prop, PROP_SKIP_SAVE);
 
@@ -1734,7 +1738,7 @@ void OBJECT_OT_game_property_new(wmOperatorType *ot)
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
-	RNA_def_enum(ot->srna, "type", gameproperty_type_items, GPROP_FLOAT, "Type", "Type of game property to add");
+	RNA_def_enum(ot->srna, "type", rna_enum_gameproperty_type_items, GPROP_FLOAT, "Type", "Type of game property to add");
 	RNA_def_string(ot->srna, "name", NULL, MAX_NAME, "Name", "Name of the game property to add");
 }
 

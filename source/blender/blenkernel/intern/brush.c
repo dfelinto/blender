@@ -136,7 +136,7 @@ void BKE_brush_init(Brush *brush)
 	BLI_assert(MEMCMP_STRUCT_OFS_IS_ZERO(brush, id));
 
 	/* enable fake user by default */
-	brush->id.flag |= LIB_FAKEUSER;
+	id_fake_user_set(&brush->id);
 
 	brush_defaults(brush);
 
@@ -193,11 +193,8 @@ Brush *BKE_brush_copy(Brush *brush)
 	brushn->curve = curvemapping_copy(brush->curve);
 
 	/* enable fake user by default */
-	if (!(brushn->id.flag & LIB_FAKEUSER)) {
-		brushn->id.flag |= LIB_FAKEUSER;
-		brushn->id.us++;
-	}
-	
+	id_fake_user_set(&brush->id);
+
 	if (brush->id.lib) {
 		BKE_id_lib_local_paths(G.main, brush->id.lib, &brushn->id);
 	}
@@ -223,11 +220,27 @@ void BKE_brush_free(Brush *brush)
 		MEM_freeN(brush->gradient);
 }
 
+/**
+ * \note Currently users don't remove brushes from the UI (as is done for scene, text... etc)
+ * This is only used by RNA, which can remove brushes.
+ */
+void BKE_brush_unlink(Main *bmain, Brush *brush)
+{
+	Brush *brush_iter;
+
+	for (brush_iter = bmain->brush.first; brush_iter; brush_iter = brush_iter->id.next) {
+		if (brush_iter->toggle_brush == brush) {
+			brush_iter->toggle_brush = NULL;
+		}
+	}
+}
+
 static void extern_local_brush(Brush *brush)
 {
 	id_lib_extern((ID *)brush->mtex.tex);
 	id_lib_extern((ID *)brush->mask_mtex.tex);
 	id_lib_extern((ID *)brush->clone.image);
+	id_lib_extern((ID *)brush->toggle_brush);
 	id_lib_extern((ID *)brush->paint_curve);
 }
 
@@ -264,15 +277,11 @@ void BKE_brush_make_local(Brush *brush)
 		extern_local_brush(brush);
 
 		/* enable fake user by default */
-		if (!(brush->id.flag & LIB_FAKEUSER)) {
-			brush->id.flag |= LIB_FAKEUSER;
-			brush->id.us++;
-		}
+		id_fake_user_set(&brush->id);
 	}
 	else if (is_local && is_lib) {
-		Brush *brush_new = BKE_brush_copy(brush);
-		brush_new->id.us = 1; /* only keep fake user */
-		brush_new->id.flag |= LIB_FAKEUSER;
+		Brush *brush_new = BKE_brush_copy(brush);  /* Ensures FAKE_USER is set */
+		id_us_min(&brush_new->id);  /* Remove user added by standard BKE_libblock_copy(). */
 
 		/* Remap paths of new ID using old library as base. */
 		BKE_id_lib_local_paths(bmain, brush->id.lib, &brush_new->id);
@@ -489,7 +498,7 @@ int BKE_brush_texture_set_nr(Brush *brush, int nr)
 	if (idtest == NULL) { /* new tex */
 		if (id) idtest = (ID *)BKE_texture_copy((Tex *)id);
 		else idtest = (ID *)BKE_texture_add(G.main, "Tex");
-		idtest->us--;
+		id_us_min(idtest);
 	}
 	if (idtest != id) {
 		BKE_brush_texture_delete(brush);
@@ -506,7 +515,7 @@ int BKE_brush_texture_set_nr(Brush *brush, int nr)
 int BKE_brush_texture_delete(Brush *brush)
 {
 	if (brush->mtex.tex)
-		brush->mtex.tex->id.us--;
+		id_us_min(&brush->mtex.tex->id);
 
 	return 1;
 }
@@ -532,7 +541,7 @@ int BKE_brush_clone_image_set_nr(Brush *brush, int nr)
 int BKE_brush_clone_image_delete(Brush *brush)
 {
 	if (brush && brush->clone.image) {
-		brush->clone.image->id.us--;
+		id_us_min(&brush->clone.image->id);
 		brush->clone.image = NULL;
 		return 1;
 	}

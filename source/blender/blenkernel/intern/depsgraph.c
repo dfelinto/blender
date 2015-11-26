@@ -1139,7 +1139,7 @@ void dag_add_relation(DagForest *forest, DagNode *fob1, DagNode *fob2, short rel
 
 	/* TODO(sergey): Find a better place for this. */
 #ifdef WITH_OPENSUBDIV
-	if ((rel & DAG_RL_DATA_DATA) != 0) {
+	if ((rel & (DAG_RL_DATA_DATA | DAG_RL_DATA_OB)) != 0) {
 		if (fob1->type == ID_OB) {
 			if ((fob1->eval_flags & DAG_EVAL_NEED_CPU) == 0) {
 				Object *ob2 = fob2->ob;
@@ -1654,9 +1654,6 @@ static void dag_scene_build(Main *bmain, Scene *sce)
 			printf(" %s\n", base->object->id.name);
 		}
 	}
-
-	/* temporal...? */
-	sce->recalc |= SCE_PRV_CHANGED; /* test for 3d preview */
 
 	/* Make sure that new dependencies which came from invisible layers
 	 * are tagged for update (if they're needed for objects which were

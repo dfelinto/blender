@@ -287,7 +287,7 @@ static void rna_def_dopesheet(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Source",
 	                         "ID-Block representing source data, usually ID_SCE (i.e. Scene)");
 	
-	/* Show datablock filters */
+	/* Show data-block filters */
 	prop = RNA_def_property(srna, "show_datablock_filters", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "flag", ADS_FLAG_SHOW_DBFILTERS);
 	RNA_def_property_ui_text(prop, "Show Datablock Filters",
@@ -395,7 +395,8 @@ static void rna_def_dopesheet(BlenderRNA *brna)
 	
 	prop = RNA_def_property(srna, "show_modifiers", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_negative_sdna(prop, NULL, "filterflag", ADS_FILTER_NOMODIFIERS);
-	RNA_def_property_ui_text(prop, "Display Modifier Data", "Include visualization of animation data related to datablocks linked to modifiers");
+	RNA_def_property_ui_text(prop, "Display Modifier Data",
+	                         "Include visualization of animation data related to data-blocks linked to modifiers");
 	RNA_def_property_ui_icon(prop, ICON_MODIFIER, 0);
 	RNA_def_property_update(prop, NC_ANIMATION | ND_ANIMCHAN | NA_EDITED, NULL);
 	
@@ -703,7 +704,7 @@ static void rna_def_action(BlenderRNA *brna)
 	 * but is still available/editable in 'emergencies' */
 	prop = RNA_def_property(srna, "id_root", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "idroot");
-	RNA_def_property_enum_items(prop, id_type_items);
+	RNA_def_property_enum_items(prop, rna_enum_id_type_items);
 	RNA_def_property_ui_text(prop, "ID Root Type",
 	                         "Type of ID block that action can be used on - "
 	                         "DO NOT CHANGE UNLESS YOU KNOW WHAT YOU ARE DOING");

@@ -466,7 +466,10 @@ static void paint_brush_stroke_add_step(bContext *C, wmOperator *op, const float
 		copy_v2_v2(mouse_out, mouse_in);
 	}
 
-	if (!paint_brush_update(C, brush, mode, stroke, mouse_in, mouse_out, pressure, location)) {
+
+	ups->last_hit = paint_brush_update(C, brush, mode, stroke, mouse_in, mouse_out, pressure, location);
+	copy_v3_v3(ups->last_location, location);
+	if (!ups->last_hit) {
 		return;
 	}
 
@@ -870,8 +873,7 @@ static void paint_stroke_add_sample(const Paint *paint,
                                     float x, float y, float pressure)
 {
 	PaintSample *sample = &stroke->samples[stroke->cur_sample];
-	int max_samples = MIN2(PAINT_MAX_INPUT_SAMPLES,
-	                       MAX2(paint->num_input_samples, 1));
+	int max_samples = CLAMPIS(paint->num_input_samples, 1, PAINT_MAX_INPUT_SAMPLES);
 
 	sample->mouse[0] = x;
 	sample->mouse[1] = y;

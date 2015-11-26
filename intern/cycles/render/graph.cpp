@@ -117,6 +117,30 @@ ShaderOutput *ShaderNode::add_output(const char *name, ShaderSocketType type)
 	return output;
 }
 
+ShaderInput *ShaderNode::get_input(const char *name)
+{
+	foreach(ShaderInput *input, inputs) {
+		if(strcmp(input->name, name) == 0)
+			return input;
+	}
+
+	/* Should never happen. */
+	assert(!"No Shader Input!");
+	return NULL;
+}
+
+ShaderOutput *ShaderNode::get_output(const char *name)
+{
+	foreach(ShaderOutput *output, outputs) {
+		if(strcmp(output->name, name) == 0)
+			return output;
+	}
+
+	/* Should never happen. */
+	assert(!"No Shader Output!");
+	return NULL;
+}
+
 void ShaderNode::attributes(Shader *shader, AttributeRequestSet *attributes)
 {
 	foreach(ShaderInput *input, inputs) {
@@ -168,11 +192,11 @@ ShaderGraph *ShaderGraph::copy()
 	ShaderGraph *newgraph = new ShaderGraph();
 
 	/* copy nodes */
-	set<ShaderNode*> nodes_all;
+	ShaderNodeSet nodes_all;
 	foreach(ShaderNode *node, nodes)
 		nodes_all.insert(node);
 
-	map<ShaderNode*, ShaderNode*> nodes_copy;
+	ShaderNodeMap nodes_copy;
 	copy_nodes(nodes_all, nodes_copy);
 
 	/* add nodes (in same order, so output is still first) */
@@ -242,7 +266,10 @@ void ShaderGraph::relink(vector<ShaderInput*> inputs, vector<ShaderInput*> outpu
 	}
 }
 
-void ShaderGraph::finalize(bool do_bump, bool do_osl)
+void ShaderGraph::finalize(Scene *scene,
+                           bool do_bump,
+                           bool do_osl,
+                           bool do_simplify)
 {
 	/* before compiling, the shader graph may undergo a number of modifications.
 	 * currently we set default geometry shader inputs, and create automatic bump
@@ -250,7 +277,7 @@ void ShaderGraph::finalize(bool do_bump, bool do_osl)
 	 * modified afterwards. */
 
 	if(!finalized) {
-		clean();
+		clean(scene);
 		default_inputs(do_osl);
 		refine_bump_nodes();
 
@@ -269,14 +296,17 @@ void ShaderGraph::finalize(bool do_bump, bool do_osl)
 
 		finalized = true;
 	}
+	else if(do_simplify) {
+		simplify_settings(scene);
+	}
 }
 
-void ShaderGraph::find_dependencies(set<ShaderNode*>& dependencies, ShaderInput *input)
+void ShaderGraph::find_dependencies(ShaderNodeSet& dependencies, ShaderInput *input)
 {
 	/* find all nodes that this input depends on directly and indirectly */
 	ShaderNode *node = (input->link)? input->link->parent: NULL;
 
-	if(node) {
+	if(node != NULL && dependencies.find(node) == dependencies.end()) {
 		foreach(ShaderInput *in, node->inputs)
 			find_dependencies(dependencies, in);
 
@@ -284,7 +314,7 @@ void ShaderGraph::find_dependencies(set<ShaderNode*>& dependencies, ShaderInput 
 	}
 }
 
-void ShaderGraph::copy_nodes(set<ShaderNode*>& nodes, map<ShaderNode*, ShaderNode*>& nnodemap)
+void ShaderGraph::copy_nodes(ShaderNodeSet& nodes, ShaderNodeMap& nnodemap)
 {
 	/* copy a set of nodes, and the links between them. the assumption is
 	 * made that all nodes that inputs are linked to are in the set too. */
@@ -330,7 +360,13 @@ void ShaderGraph::copy_nodes(set<ShaderNode*>& nodes, map<ShaderNode*, ShaderNod
 		}
 	}
 }
+/* Graph simplification */
+/* ******************** */
 
+/* Step 1: Remove unused nodes.
+ * Remove nodes which are not needed in the graph, such as proxies,
+ * mix nodes with a factor of 0 or 1, emission shaders without contribution...
+ */
 void ShaderGraph::remove_unneeded_nodes()
 {
 	vector<bool> removed(num_node_ids, false);
@@ -526,6 +562,48 @@ void ShaderGraph::remove_unneeded_nodes()
 	}
 }
 
+/* Step 2: Constant folding.
+ * Try to constant fold some nodes, and pipe result directly to
+ * the input socket of connected nodes.
+ */
+void ShaderGraph::constant_fold(set<ShaderNode*>& done, ShaderNode *node)
+{
+	/* Only fold each node once. */
+	if(done.find(node) != done.end())
+		return;
+
+	done.insert(node);
+
+	/* Fold nodes connected to inputs first. */
+	foreach(ShaderInput *in, node->inputs) {
+		if(in->link) {
+			constant_fold(done, in->link->parent);
+		}
+	}
+
+	/* Then fold self. */
+	foreach(ShaderOutput *output, node->outputs) {
+		float3 optimized_value = make_float3(0.0f, 0.0f, 0.0f);
+
+		if(node->constant_fold(output, &optimized_value)) {
+			/* Apply optimized value to connected sockets. */
+			vector<ShaderInput*> links(output->links);
+			foreach(ShaderInput *in, links) {
+				in->value = optimized_value;
+				disconnect(in);
+			}
+		}
+	}
+}
+
+/* Step 3: Simplification.*/
+void ShaderGraph::simplify_settings(Scene *scene)
+{
+	foreach(ShaderNode *node, nodes) {
+		node->simplify_settings(scene);
+	}
+}
+
 void ShaderGraph::break_cycles(ShaderNode *node, vector<bool>& visited, vector<bool>& on_stack)
 {
 	visited[node->id] = true;
@@ -550,10 +628,27 @@ void ShaderGraph::break_cycles(ShaderNode *node, vector<bool>& visited, vector<b
 	on_stack[node->id] = false;
 }
 
-void ShaderGraph::clean()
+void ShaderGraph::clean(Scene *scene)
 {
-	/* remove proxy and unnecessary nodes */
+	/* Graph simplification:
+	 *  1: Remove unnecesarry nodes
+	 *  2: Constant folding
+	 *  3: Simplification
+	 *  4: De-duplication
+	 */
+
+	/* 1: Remove proxy and unnecessary nodes. */
 	remove_unneeded_nodes();
+
+	/* 2: Constant folding. */
+	set<ShaderNode*> done;
+	constant_fold(done, output());
+
+	/* 3: Simplification. */
+	simplify_settings(scene);
+
+	/* 4: De-duplication. */
+	/* TODO(dingto): Implement */
 
 	/* we do two things here: find cycles and break them, and remove unused
 	 * nodes that don't feed into the output. how cycles are broken is
@@ -659,14 +754,14 @@ void ShaderGraph::refine_bump_nodes()
 	foreach(ShaderNode *node, nodes) {
 		if(node->name == ustring("bump") && node->input("Height")->link) {
 			ShaderInput *bump_input = node->input("Height");
-			set<ShaderNode*> nodes_bump;
+			ShaderNodeSet nodes_bump;
 
 			/* make 2 extra copies of the subgraph defined in Bump input */
-			map<ShaderNode*, ShaderNode*> nodes_dx;
-			map<ShaderNode*, ShaderNode*> nodes_dy;
+			ShaderNodeMap nodes_dx;
+			ShaderNodeMap nodes_dy;
 
 			/* find dependencies for the given input */
-			find_dependencies(nodes_bump, bump_input );
+			find_dependencies(nodes_bump, bump_input);
 
 			copy_nodes(nodes_bump, nodes_dx);
 			copy_nodes(nodes_bump, nodes_dy);
@@ -725,13 +820,13 @@ void ShaderGraph::bump_from_displacement()
 		return;
 	
 	/* find dependencies for the given input */
-	set<ShaderNode*> nodes_displace;
+	ShaderNodeSet nodes_displace;
 	find_dependencies(nodes_displace, displacement_in);
 
 	/* copy nodes for 3 bump samples */
-	map<ShaderNode*, ShaderNode*> nodes_center;
-	map<ShaderNode*, ShaderNode*> nodes_dx;
-	map<ShaderNode*, ShaderNode*> nodes_dy;
+	ShaderNodeMap nodes_center;
+	ShaderNodeMap nodes_dx;
+	ShaderNodeMap nodes_dy;
 
 	copy_nodes(nodes_displace, nodes_center);
 	copy_nodes(nodes_displace, nodes_dx);

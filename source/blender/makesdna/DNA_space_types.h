@@ -147,7 +147,8 @@ typedef struct SpaceButs {
 #define CONTEXT_LOGIC   6
 
 /* sbuts->mainb old (deprecated) */
-#define BUTS_VIEW           0
+#ifdef DNA_DEPRECATED_ALLOW
+// #define BUTS_VIEW           0
 #define BUTS_LAMP           1
 #define BUTS_MAT            2
 #define BUTS_TEX            3
@@ -159,9 +160,10 @@ typedef struct SpaceButs {
 #define BUTS_FPAINT         9
 #define BUTS_RADIO          10
 #define BUTS_SCRIPT         11
-#define BUTS_SOUND          12
+// #define BUTS_SOUND          12
 #define BUTS_CONSTRAINT     13
-#define BUTS_EFFECTS        14
+// #define BUTS_EFFECTS        14
+#endif
 
 /* buts->mainb new */
 typedef enum eSpaceButtons_Context {
@@ -327,8 +329,10 @@ typedef struct SpaceIpo {
 	short autosnap;         /* time-transform autosnapping settings for Graph editor (eAnimEdit_AutoSnap in DNA_action_types.h) */
 	int flag;               /* settings for Graph editor (eGraphEdit_Flag) */
 	
+	float cursorTime;       /* time value for cursor (when in drivers mode; animation uses current frame) */
 	float cursorVal;        /* cursor value (y-value, x-value is current frame) */
 	int around;             /* pivot point for transforms */
+	int pad;
 } SpaceIpo;
 
 
@@ -964,7 +968,11 @@ typedef enum eSpaceImage_Flag {
 	SI_COLOR_CORRECTION   = (1 << 24),
 
 	SI_NO_DRAW_TEXPAINT   = (1 << 25),
-	SI_DRAW_METADATA      = (1 << 26)
+	SI_DRAW_METADATA      = (1 << 26),
+
+	SI_SHOW_R             = (1 << 27),
+	SI_SHOW_G             = (1 << 28),
+	SI_SHOW_B             = (1 << 29),
 } eSpaceImage_Flag;
 
 /* Text Editor ============================================ */

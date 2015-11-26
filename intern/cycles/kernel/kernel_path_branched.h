@@ -91,10 +91,27 @@ ccl_device_noinline void kernel_branched_path_surface_indirect_light(KernelGloba
 			float3 tp = throughput;
 			Ray bsdf_ray;
 
-			if(!kernel_branched_path_surface_bounce(kg, &bsdf_rng, sd, sc, j, num_samples, &tp, &ps, L, &bsdf_ray))
+			if(!kernel_branched_path_surface_bounce(kg,
+			                                        &bsdf_rng,
+			                                        sd,
+			                                        sc,
+			                                        j,
+			                                        num_samples,
+			                                        &tp,
+			                                        &ps,
+			                                        L,
+			                                        &bsdf_ray))
+			{
 				continue;
+			}
 
-			kernel_path_indirect(kg, rng, bsdf_ray, tp*num_samples_inv, num_samples, ps, L);
+			kernel_path_indirect(kg,
+			                     rng,
+			                     &bsdf_ray,
+			                     tp*num_samples_inv,
+			                     num_samples,
+			                     &ps,
+			                     L);
 
 			/* for render passes, sum and reset indirect light pass variables
 			 * for the next samples */
@@ -128,10 +145,16 @@ ccl_device void kernel_branched_path_subsurface_scatter(KernelGlobals *kg,
 		/* do subsurface scatter step with copy of shader data, this will
 		 * replace the BSSRDF with a diffuse BSDF closure */
 		for(int j = 0; j < num_samples; j++) {
-			ShaderData bssrdf_sd[BSSRDF_MAX_HITS];
+			SubsurfaceIntersection ss_isect;
 			float bssrdf_u, bssrdf_v;
 			path_branched_rng_2D(kg, &bssrdf_rng, state, j, num_samples, PRNG_BSDF_U, &bssrdf_u, &bssrdf_v);
-			int num_hits = subsurface_scatter_multi_step(kg, sd, bssrdf_sd, state->flag, sc, &lcg_state, bssrdf_u, bssrdf_v, true);
+			int num_hits = subsurface_scatter_multi_intersect(kg,
+			                                                  &ss_isect,
+			                                                  sd,
+			                                                  sc,
+			                                                  &lcg_state,
+			                                                  bssrdf_u, bssrdf_v,
+			                                                  true);
 #ifdef __VOLUME__
 			Ray volume_ray = *ray;
 			bool need_update_volume_stack = kernel_data.integrator.use_volumes &&
@@ -140,6 +163,15 @@ ccl_device void kernel_branched_path_subsurface_scatter(KernelGlobals *kg,
 
 			/* compute lighting with the BSDF closure */
 			for(int hit = 0; hit < num_hits; hit++) {
+				ShaderData bssrdf_sd = *sd;
+				subsurface_scatter_multi_setup(kg,
+				                               &ss_isect,
+				                               hit,
+				                               &bssrdf_sd,
+				                               state->flag,
+				                               sc,
+				                               true);
+
 				PathState hit_state = *state;
 
 				path_state_branch(&hit_state, j, num_samples);
@@ -147,7 +179,7 @@ ccl_device void kernel_branched_path_subsurface_scatter(KernelGlobals *kg,
 #ifdef __VOLUME__
 				if(need_update_volume_stack) {
 					/* Setup ray from previous surface point to the new one. */
-					float3 P = ray_offset(bssrdf_sd[hit].P, -bssrdf_sd[hit].Ng);
+					float3 P = ray_offset(bssrdf_sd.P, -bssrdf_sd.Ng);
 					volume_ray.D = normalize_len(P - volume_ray.P,
 					                             &volume_ray.t);
 
@@ -155,9 +187,6 @@ ccl_device void kernel_branched_path_subsurface_scatter(KernelGlobals *kg,
 					    kg,
 					    &volume_ray,
 					    hit_state.volume_stack);
-
-					/* Move volume ray forward. */
-					volume_ray.P = P;
 				}
 #endif
 
@@ -165,15 +194,27 @@ ccl_device void kernel_branched_path_subsurface_scatter(KernelGlobals *kg,
 				/* direct light */
 				if(kernel_data.integrator.use_direct_light) {
 					bool all = kernel_data.integrator.sample_all_lights_direct;
-					kernel_branched_path_surface_connect_light(kg, rng,
-						&bssrdf_sd[hit], &hit_state, throughput, num_samples_inv, L, all);
+					kernel_branched_path_surface_connect_light(
+					        kg,
+					        rng,
+					        &bssrdf_sd,
+					        &hit_state,
+					        throughput,
+					        num_samples_inv,
+					        L,
+					        all);
 				}
 #endif
 
 				/* indirect light */
-				kernel_branched_path_surface_indirect_light(kg, rng,
-					&bssrdf_sd[hit], throughput, num_samples_inv,
-					&hit_state, L);
+				kernel_branched_path_surface_indirect_light(
+				        kg,
+				        rng,
+				        &bssrdf_sd,
+				        throughput,
+				        num_samples_inv,
+				        &hit_state,
+				        L);
 			}
 		}
 	}
@@ -285,12 +326,25 @@ ccl_device float4 kernel_branched_path_integrate(KernelGlobals *kg, RNG *rng, in
 
 					VolumeIntegrateResult result = kernel_volume_decoupled_scatter(kg,
 						&ps, &pray, &volume_sd, &tp, rphase, rscatter, &volume_segment, NULL, false);
-						
+
 					(void)result;
 					kernel_assert(result == VOLUME_PATH_SCATTERED);
 
-					if(kernel_path_volume_bounce(kg, rng, &volume_sd, &tp, &ps, &L, &pray)) {
-						kernel_path_indirect(kg, rng, pray, tp*num_samples_inv, num_samples, ps, &L);
+					if(kernel_path_volume_bounce(kg,
+					                             rng,
+					                             &volume_sd,
+					                             &tp,
+					                             &ps,
+					                             &L,
+					                             &pray))
+					{
+						kernel_path_indirect(kg,
+						                     rng,
+						                     &pray,
+						                     tp*num_samples_inv,
+						                     num_samples,
+						                     &ps,
+						                     &L);
 
 						/* for render passes, sum and reset indirect light pass variables
 						 * for the next samples */
@@ -326,15 +380,28 @@ ccl_device float4 kernel_branched_path_integrate(KernelGlobals *kg, RNG *rng, in
 
 				VolumeIntegrateResult result = kernel_volume_integrate(
 					kg, &ps, &volume_sd, &volume_ray, &L, &tp, rng, heterogeneous);
-				
+
 #ifdef __VOLUME_SCATTER__
 				if(result == VOLUME_PATH_SCATTERED) {
 					/* todo: support equiangular, MIS and all light sampling.
 					 * alternatively get decoupled ray marching working on the GPU */
 					kernel_path_volume_connect_light(kg, rng, &volume_sd, tp, &state, &L);
 
-					if(kernel_path_volume_bounce(kg, rng, &volume_sd, &tp, &ps, &L, &pray)) {
-						kernel_path_indirect(kg, rng, pray, tp, num_samples, ps, &L);
+					if(kernel_path_volume_bounce(kg,
+					                             rng,
+					                             &volume_sd,
+					                             &tp,
+					                             &ps,
+					                             &L,
+					                             &pray))
+					{
+						kernel_path_indirect(kg,
+						                     rng,
+						                     &pray,
+						                     tp,
+						                     num_samples,
+						                     &ps,
+						                     &L);
 
 						/* for render passes, sum and reset indirect light pass variables
 						 * for the next samples */
