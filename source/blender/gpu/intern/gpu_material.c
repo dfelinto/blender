@@ -1763,7 +1763,7 @@ GPUMaterial *GPU_material_matcap(Scene *scene, Material *ma, bool use_opensubdiv
 	return mat;
 }
 
-GPUMaterial *GPU_material_world(struct Scene *scene, struct World *wo)
+GPUMaterial *GPU_material_world(struct Scene *scene, struct World *wo, bool use_spherical_harmonics)
 {
 	LinkData *link;
 	GPUMaterial *mat;
@@ -1775,8 +1775,8 @@ GPUMaterial *GPU_material_world(struct Scene *scene, struct World *wo)
 	/* allocate material */
 	mat = GPU_material_construct_begin(NULL);
 	mat->scene = scene;
-	mat->type = GPU_MATERIAL_TYPE_WORLD;
-	
+	mat->type = (use_spherical_harmonics) ? GPU_MATERIAL_TYPE_WORLD_SH : GPU_MATERIAL_TYPE_WORLD;
+
 	/* create nodes */
 	if (BKE_scene_use_new_shading_nodes(scene) && wo->nodetree && wo->use_nodes)
 		ntreeGPUMaterialNodes(wo->nodetree, mat, NODE_NEW_SHADING);
@@ -1787,6 +1787,9 @@ GPUMaterial *GPU_material_world(struct Scene *scene, struct World *wo)
 	if (GPU_material_do_color_management(mat))
 		if (mat->outlink)
 			GPU_link(mat, "linearrgb_to_srgb", mat->outlink, &mat->outlink);
+
+	//VERY BAD but it works
+	mat->type = GPU_MATERIAL_TYPE_WORLD;
 
 	GPU_material_construct_end(mat, wo->id.name);
 	

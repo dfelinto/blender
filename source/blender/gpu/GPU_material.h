@@ -105,10 +105,11 @@ typedef enum GPUOpenGLBuiltin {
 typedef enum GPUMatType {
 	GPU_MATERIAL_TYPE_MESH  = 1,
 	GPU_MATERIAL_TYPE_WORLD = 2,
-	GPU_MATERIAL_TYPE_ENV_SAMPLING_GLOSSY = 3,
-	GPU_MATERIAL_TYPE_ENV_SAMPLING_SHARP = 4,
-	GPU_MATERIAL_TYPE_ENV_SAMPLING_DIFFUSE = 5,
-	GPU_MATERIAL_TYPE_ENV_NORMAL = 6,
+	GPU_MATERIAL_TYPE_WORLD_SH = 3,
+	GPU_MATERIAL_TYPE_ENV_SAMPLING_GLOSSY = 4,
+	GPU_MATERIAL_TYPE_ENV_SAMPLING_SHARP = 5,
+	GPU_MATERIAL_TYPE_ENV_SAMPLING_DIFFUSE = 6,
+	GPU_MATERIAL_TYPE_ENV_NORMAL = 7,
 } GPUMatType;
 
 
@@ -216,7 +217,7 @@ void GPU_material_enable_alpha(GPUMaterial *material);
 GPUBlendMode GPU_material_alpha_blend(GPUMaterial *material, float obcol[4]);
 
 /* High level functions to create and use GPU materials */
-GPUMaterial *GPU_material_world(struct Scene *scene, struct World *wo);
+GPUMaterial *GPU_material_world(struct Scene *scene, struct World *wo, bool use_spherical_harmonics);
 
 GPUMaterial *GPU_material_from_blender(struct Scene *scene, struct Material *ma, bool use_opensubdiv);
 GPUMaterial *GPU_material_matcap(struct Scene *scene, struct Material *ma, bool use_opensubdiv);

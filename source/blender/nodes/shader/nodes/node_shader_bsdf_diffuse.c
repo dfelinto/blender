@@ -51,7 +51,6 @@ static int node_shader_gpu_bsdf_diffuse(GPUMaterial *mat, bNode *UNUSED(node), b
 	float horiz_col[4] = {0.2f};
 	GPUNodeLink *envLink, *normalLink, *viewNormalLink;
 
-
 	if (!in[2].link)
 		in[2].link = GPU_builtin(GPU_VIEW_NORMAL);
 	else {
@@ -71,7 +70,7 @@ static int node_shader_gpu_bsdf_diffuse(GPUMaterial *mat, bNode *UNUSED(node), b
 	envLink = GPU_uniform(&horiz_col);
 
 	/* If there is already a valid output do not attempt to do the world sampling. Because the output would be overwriten */
-	if( GPU_material_get_output_link(mat) )
+	if( GPU_material_get_output_link(mat) )//|| IF USE REALISTIC PREV NOT CHECKed )
 		return GPU_stack_link(mat, "node_bsdf_diffuse", in, out, envLink);
 
 	GPU_material_set_normal_link(mat, normalLink); /* THIS IS BAD TOO */

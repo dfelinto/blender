@@ -2943,6 +2943,10 @@ class VIEW3D_PT_view3d_display(Panel):
         col.prop(view, "show_world")
 
         col = layout.column()
+        col.active = view.show_world
+        col.prop(view, "show_world_sh")
+
+        col = layout.column()
         display_all = not view.show_only_render
         col.active = display_all
         col.prop(view, "show_outline_selected")
@@ -3049,6 +3053,9 @@ class VIEW3D_PT_view3d_shading(Panel):
         if view.viewport_shade == 'TEXTURED' or context.mode == 'PAINT_TEXTURE':
             if scene.render.use_shading_nodes or gs.material_mode != 'GLSL':
                 col.prop(view, "show_textured_shadeless")
+
+        if scene.render.use_shading_nodes and view.viewport_shade == 'MATERIAL' :
+            col.prop(view, "use_realistic_mat")
 
         col.prop(view, "show_backface_culling")
 

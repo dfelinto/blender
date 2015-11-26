@@ -55,7 +55,7 @@ static int node_shader_gpu_tex_coord(GPUMaterial *mat, bNode *UNUSED(node), bNod
 		                      GPU_builtin(GPU_INVERSE_VIEW_MATRIX), GPU_builtin(GPU_INVERSE_OBJECT_MATRIX),
 		                      GPU_builtin(GPU_CAMERA_TEXCO_FACTORS), orco, mtface);
 	}
-	else if (type == GPU_MATERIAL_TYPE_WORLD) {
+	else if (type == GPU_MATERIAL_TYPE_WORLD || type == GPU_MATERIAL_TYPE_WORLD_SH) {
 		return GPU_stack_link(mat, "node_tex_coord_background", in, out,
 		                      GPU_builtin(GPU_VIEW_POSITION), GPU_builtin(GPU_VIEW_NORMAL),
 		                      GPU_builtin(GPU_INVERSE_VIEW_MATRIX), GPU_builtin(GPU_INVERSE_OBJECT_MATRIX),

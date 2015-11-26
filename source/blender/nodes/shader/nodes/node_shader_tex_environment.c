@@ -182,25 +182,15 @@ static int node_shader_gpu_tex_environment(GPUMaterial *mat, bNode *node, bNodeE
 	GPUNodeLink *lodLink = GPU_uniform(&Lod);
 	GPUMatType type = GPU_material_get_type(mat);
 	GPUNodeLink *normal_transformed;
-
-	if (type == GPU_MATERIAL_TYPE_WORLD)
-		printf("GPU_MATERIAL_TYPE_WORLD\n");
-	else if (type == GPU_MATERIAL_TYPE_ENV_NORMAL)
-		printf("GPU_MATERIAL_TYPE_ENV_NORMAL\n");
-	else 
-		printf("GPU_MATERIAL_TYPE_ENV_SAMPLING\n");
+	bool isBackground = (type == GPU_MATERIAL_TYPE_WORLD || type == GPU_MATERIAL_TYPE_WORLD_SH);
 
 	if (type == GPU_MATERIAL_TYPE_ENV_NORMAL) {
 		if (in[0].link) {
 			GPU_link(mat, "set_rgb", in[0].link, &normal_transformed);
-			printf("NormalLink Storing %d \n",normal_transformed);
 			/* Should use another bridge. Preferably a per EnvTex Node Bridge.
 			 * Currently only one custom normal get back from the graph.
 			 */
 			GPU_material_set_normal_link(mat, normal_transformed); /* THIS IS BAD TOO */
-		}
-		else {
-			printf("NormalLink Not stored\n");
 		}
 
 		return GPU_stack_link(mat, "node_tex_environment_empty", in, out);
@@ -213,21 +203,20 @@ static int node_shader_gpu_tex_environment(GPUMaterial *mat, bNode *node, bNodeE
 		
 		if (type == GPU_MATERIAL_TYPE_MESH)
 			in[0].link = GPU_builtin(GPU_VIEW_POSITION);
-		if (type == GPU_MATERIAL_TYPE_WORLD)
+		else if (isBackground)
 			GPU_link(mat, "background_transform_to_world", GPU_builtin(GPU_VIEW_POSITION), &in[0].link);
 		else
 			GPU_link(mat, "background_sampling_default", GPU_builtin(GPU_VIEW_POSITION), GPU_builtin(GPU_INVERSE_VIEW_MATRIX), &in[0].link);
 	}
 
-	if (type != GPU_MATERIAL_TYPE_WORLD) {
+	if (!isBackground) {
 		/* This may be an overcheck */
-		printf("NormalLink Fallback %d\n",GPU_material_get_normal_link(mat));
 		GPU_link(mat, "set_rgb", GPU_material_get_normal_link(mat), &normal_transformed);
 	}
 
 	node_shader_gpu_tex_mapping(mat, node, in, out);
 
-	if (type == GPU_MATERIAL_TYPE_ENV_SAMPLING_DIFFUSE) {
+	if (type == GPU_MATERIAL_TYPE_ENV_SAMPLING_DIFFUSE || type == GPU_MATERIAL_TYPE_WORLD_SH) {
 		// SH with NORMALS
 		float shCoef[9][3] = { { 0.0f } };
 
@@ -251,10 +240,11 @@ static int node_shader_gpu_tex_environment(GPUMaterial *mat, bNode *node, bNodeE
 		}
 		BKE_image_release_ibuf(ima, ibuf, NULL);
 
-		return GPU_link(mat, "irradianceFromSH", normal_transformed, GPU_uniform(shCoef[0]), 
-						 GPU_uniform(shCoef[1]), GPU_uniform(shCoef[2]), GPU_uniform(shCoef[3]), GPU_uniform(shCoef[4]), 
-						 GPU_uniform(shCoef[5]), GPU_uniform(shCoef[6]), GPU_uniform(shCoef[7]), GPU_uniform(shCoef[8]), 
-						 &out[0].link);
+		return GPU_link(mat, "irradianceFromSH", (isBackground) ? in[0].link : normal_transformed, GPU_uniform(shCoef[0]), 
+							 GPU_uniform(shCoef[1]), GPU_uniform(shCoef[2]), GPU_uniform(shCoef[3]), GPU_uniform(shCoef[4]), 
+							 GPU_uniform(shCoef[5]), GPU_uniform(shCoef[6]), GPU_uniform(shCoef[7]), GPU_uniform(shCoef[8]), 
+							 &out[0].link);
+
 		
 	} else if (type == GPU_MATERIAL_TYPE_ENV_SAMPLING_GLOSSY) {
 		// REFLECTION GLOSSY

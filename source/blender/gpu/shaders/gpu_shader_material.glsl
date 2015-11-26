@@ -2199,6 +2199,13 @@ void node_bsdf_diffuse(vec4 color, float roughness, vec3 N, vec4 ambient_light, 
 {
 	/* ambient light */
 	vec3 L = ambient_light.rgb;
+	result = vec4(ambient_light.rgb*color.rgb, 1.0);
+}
+
+void node_bsdf_diffuse_light(vec4 color, float roughness, vec3 N, vec4 ambient_light, out vec4 result)
+{
+	/* ambient light */
+	vec3 L = ambient_light.rgb;
 
 	/* directional lights */
 	for(int i = 0; i < NUM_LIGHTS; i++) {
@@ -2209,8 +2216,7 @@ void node_bsdf_diffuse(vec4 color, float roughness, vec3 N, vec4 ambient_light, 
 		L += light_diffuse*bsdf;
 	}
 
-	//result = vec4(L*color.rgb, 1.0);
-	result = vec4(ambient_light.rgb*color.rgb, 1.0);
+	result = vec4(L*color.rgb, 1.0);
 }
 
 void node_bsdf_glossy(vec4 color, float roughness, vec3 N, vec3 viewvec, vec4 ambient_light, out vec4 result)
@@ -2296,7 +2302,7 @@ void node_bsdf_hair(vec4 color, float offset, float roughnessu, float roughnessv
 
 void node_bsdf_refraction(vec4 color, float roughness, float ior, vec3 N, out vec4 result)
 {
-	node_bsdf_diffuse(color, 0.0, N, result);
+	node_bsdf_diffuse(color, 0.0, N, vec4(0.2), result);
 }
 
 void node_ambient_occlusion(vec4 color, out vec4 result)
@@ -2319,7 +2325,7 @@ void background_transform_to_world(vec3 viewvec, out vec3 worldvec)
 	vec4 co_homogenous = (gl_ProjectionMatrixInverse * v);
 
 	vec4 co = vec4(co_homogenous.xyz / co_homogenous.w, 0.0);
-	worldvec = (gl_ModelViewMatrixInverse * co).xyz;
+	worldvec = normalize( (gl_ModelViewMatrixInverse * co).xyz );
 }
 
 void background_sampling_default(vec3 viewvec, mat4 viewinvmat, out vec3 worldvec)

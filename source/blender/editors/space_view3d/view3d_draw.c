@@ -2973,7 +2973,7 @@ static void view3d_main_area_clear(Scene *scene, View3D *v3d, ARegion *ar)
 		
 		if (glsl) {
 			RegionView3D *rv3d = ar->regiondata;
-			GPUMaterial *gpumat = GPU_material_world(scene, scene->world);
+			GPUMaterial *gpumat = GPU_material_world(scene, scene->world, (v3d->flag3 & V3D_SHOW_WORLD_SH));
 
 			/* calculate full shader for background */
 			GPU_material_bind(gpumat, 1, 1, 1.0, true, rv3d->viewmat, rv3d->viewinv, rv3d->viewcamtexcofac, (v3d->scenelock != 0));
