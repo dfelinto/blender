@@ -78,6 +78,7 @@
 #include "GPU_draw.h"
 #include "GPU_extensions.h"
 #include "GPU_material.h"
+#include "GPU_simple_shader.h"
 
 #include "PIL_time.h"
 
@@ -804,8 +805,6 @@ void GPU_create_gl_tex(unsigned int *bind, unsigned int *rect, float *frect, int
 
 	if (GLEW_EXT_texture_filter_anisotropic)
 		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, GPU_get_anisotropic());
-	/* set to modulate with vertex color */
-	glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
 
 	if (ibuf)
 		IMB_freeImBuf(ibuf);
@@ -846,8 +845,6 @@ bool GPU_upload_dxt_texture(ImBuf *ibuf)
 
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, gpu_get_mipmap_filter(0));
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, gpu_get_mipmap_filter(1));
-
-	glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
 
 	if (GLEW_EXT_texture_filter_anisotropic)
 		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, GPU_get_anisotropic());
@@ -1414,7 +1411,7 @@ static struct GPUMaterialState {
 	int totmat;
 
 	/* set when called inside GPU_begin_object_materials / GPU_end_object_materials
-	 * otherwise calling GPU_enable_material returns zero */
+	 * otherwise calling GPU_object_material_bind returns zero */
 	bool is_enabled;
 
 	Material **gmatbuf;
@@ -1668,7 +1665,7 @@ void GPU_begin_object_materials(View3D *v3d, RegionView3D *rv3d, Scene *scene, O
 	}
 
 	/* let's start with a clean state */
-	GPU_disable_material();
+	GPU_object_material_unbind();
 }
 
 static int GPU_get_particle_info(GPUParticleInfo *pi)
@@ -1701,7 +1698,7 @@ static int GPU_get_particle_info(GPUParticleInfo *pi)
 		return 0;
 }
 
-int GPU_enable_material(int nr, void *attribs)
+int GPU_object_material_bind(int nr, void *attribs)
 {
 	GPUVertexAttribs *gattribs = attribs;
 	GPUMaterial *gpumat;
@@ -1824,7 +1821,7 @@ int GPU_get_material_alpha_blend(void)
 	return GMS.lastalphablend;
 }
 
-void GPU_disable_material(void)
+void GPU_object_material_unbind(void)
 {
 	GMS.lastmatnr = -1;
 	GMS.lastretval = 1;
@@ -1868,7 +1865,7 @@ bool GPU_object_materials_check(void)
 
 void GPU_end_object_materials(void)
 {
-	GPU_disable_material();
+	GPU_object_material_unbind();
 
 	GMS.is_enabled = false;
 
@@ -1894,7 +1891,6 @@ void GPU_end_object_materials(void)
 
 int GPU_default_lights(void)
 {
-	float zero[4] = {0.0f, 0.0f, 0.0f, 0.0f}, position[4];
 	int a, count = 0;
 	
 	/* initialize */
@@ -1918,41 +1914,27 @@ int GPU_default_lights(void)
 		U.light[2].spec[3] = 1.0;
 	}
 
-	glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, GL_FALSE);
+	GPU_simple_shader_light_set_viewer(false);
 
 	for (a = 0; a < 8; a++) {
-		if (a < 3) {
-			if (U.light[a].flag) {
-				glEnable(GL_LIGHT0 + a);
+		if (a < 3 && U.light[a].flag) {
+			GPULightData light = {0};
 
-				normalize_v3_v3(position, U.light[a].vec);
-				position[3] = 0.0f;
-				
-				glLightfv(GL_LIGHT0 + a, GL_POSITION, position); 
-				glLightfv(GL_LIGHT0 + a, GL_DIFFUSE, U.light[a].col); 
-				glLightfv(GL_LIGHT0 + a, GL_SPECULAR, U.light[a].spec); 
+			light.type = GPU_LIGHT_SUN;
 
-				count++;
-			}
-			else {
-				glDisable(GL_LIGHT0 + a);
+			normalize_v3_v3(light.direction, U.light[a].vec);
+			copy_v3_v3(light.diffuse, U.light[a].col);
+			copy_v3_v3(light.specular, U.light[a].spec);
 
-				glLightfv(GL_LIGHT0 + a, GL_POSITION, zero); 
-				glLightfv(GL_LIGHT0 + a, GL_DIFFUSE, zero); 
-				glLightfv(GL_LIGHT0 + a, GL_SPECULAR, zero);
-			}
+			GPU_simple_shader_light_set(a, &light);
 
-			/* clear stuff from other opengl lamp usage */
-			glLightf(GL_LIGHT0 + a, GL_SPOT_CUTOFF, 180.0);
-			glLightf(GL_LIGHT0 + a, GL_CONSTANT_ATTENUATION, 1.0);
-			glLightf(GL_LIGHT0 + a, GL_LINEAR_ATTENUATION, 0.0);
+			count++;
 		}
 		else
-			glDisable(GL_LIGHT0 + a);
+			GPU_simple_shader_light_set(a, NULL);
 	}
-	
-	glDisable(GL_LIGHTING);
 
+	glDisable(GL_LIGHTING);
 	glDisable(GL_COLOR_MATERIAL);
 
 	return count;
@@ -1963,15 +1945,14 @@ int GPU_scene_object_lights(Scene *scene, Object *ob, int lay, float viewmat[4][
 	Base *base;
 	Lamp *la;
 	int count;
-	float position[4], direction[4], energy[4];
 	
 	/* disable all lights */
 	for (count = 0; count < 8; count++)
-		glDisable(GL_LIGHT0 + count);
+		GPU_simple_shader_light_set(count, NULL);
 	
 	/* view direction for specular is not computed correct by default in
 	 * opengl, so we set the settings ourselfs */
-	glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, ortho ? GL_FALSE : GL_TRUE);
+	GPU_simple_shader_light_set_viewer(!ortho);
 
 	count = 0;
 
@@ -1988,41 +1969,37 @@ int GPU_scene_object_lights(Scene *scene, Object *ob, int lay, float viewmat[4][
 		glPushMatrix();
 		glLoadMatrixf((float *)viewmat);
 		
-		if (la->type == LA_SUN) {
-			/* sun lamp */
-			copy_v3_v3(direction, base->object->obmat[2]);
-			direction[3] = 0.0;
+		/* setup light */
+		GPULightData light = {0};
 
-			glLightfv(GL_LIGHT0+count, GL_POSITION, direction); 
+		mul_v3_v3fl(light.diffuse, &la->r, la->energy);
+		mul_v3_v3fl(light.specular, &la->r, la->energy);
+
+		if (la->type == LA_SUN) {
+			/* directional sun light */
+			light.type = GPU_LIGHT_SUN;
+			normalize_v3_v3(light.direction, base->object->obmat[2]);
 		}
 		else {
-			/* other lamps with attenuation */
-			copy_v3_v3(position, base->object->obmat[3]);
-			position[3] = 1.0f;
+			/* other lamps with position attenuation */
+			copy_v3_v3(light.position, base->object->obmat[3]);
 
-			glLightfv(GL_LIGHT0+count, GL_POSITION, position); 
-			glLightf(GL_LIGHT0+count, GL_CONSTANT_ATTENUATION, 1.0);
-			glLightf(GL_LIGHT0+count, GL_LINEAR_ATTENUATION, la->att1 / la->dist);
-			glLightf(GL_LIGHT0+count, GL_QUADRATIC_ATTENUATION, la->att2 / (la->dist * la->dist));
+			light.constant_attenuation = 1.0f;
+			light.linear_attenuation = la->att1 / la->dist;
+			light.quadratic_attenuation = la->att2 / (la->dist * la->dist);
 			
 			if (la->type == LA_SPOT) {
-				/* spot lamp */
-				negate_v3_v3(direction, base->object->obmat[2]);
-				glLightfv(GL_LIGHT0 + count, GL_SPOT_DIRECTION, direction);
-				glLightf(GL_LIGHT0 + count, GL_SPOT_CUTOFF, RAD2DEGF(la->spotsize * 0.5f));
-				glLightf(GL_LIGHT0 + count, GL_SPOT_EXPONENT, 128.0f * la->spotblend);
+				light.type = GPU_LIGHT_SPOT;
+				negate_v3_v3(light.direction, base->object->obmat[2]);
+				normalize_v3(light.direction);
+				light.spot_cutoff = RAD2DEGF(la->spotsize * 0.5f);
+				light.spot_exponent = 128.0f * la->spotblend;
 			}
 			else
-				glLightf(GL_LIGHT0 + count, GL_SPOT_CUTOFF, 180.0);
+				light.type = GPU_LIGHT_POINT;
 		}
 		
-		/* setup energy */
-		mul_v3_v3fl(energy, &la->r, la->energy);
-		energy[3] = 1.0;
-
-		glLightfv(GL_LIGHT0 + count, GL_DIFFUSE, energy); 
-		glLightfv(GL_LIGHT0 + count, GL_SPECULAR, energy);
-		glEnable(GL_LIGHT0 + count);
+		GPU_simple_shader_light_set(count, &light);
 		
 		glPopMatrix();
 		
@@ -2063,11 +2040,15 @@ static void gpu_multisample(bool enable)
 #endif
 }
 
-/* Default OpenGL State */
+/* Default OpenGL State
+ *
+ * This is called on startup, for opengl offscreen render and to restore state
+ * for the game engine. Generally we should always return to this state when
+ * temporarily modifying the state for drawing, though that are (undocumented)
+ * exceptions that we should try to get rid of. */
 
 void GPU_state_init(void)
 {
-	/* also called when doing opengl rendering and in the game engine */
 	float mat_ambient[] = { 0.0, 0.0, 0.0, 0.0 };
 	float mat_specular[] = { 0.5, 0.5, 0.5, 1.0 };
 	int a, x, y;
@@ -2092,6 +2073,7 @@ void GPU_state_init(void)
 	glDisable(GL_DEPTH_TEST);
 	glDisable(GL_FOG);
 	glDisable(GL_LIGHTING);
+	glDisable(GL_COLOR_MATERIAL);
 	glDisable(GL_LOGIC_OP);
 	glDisable(GL_STENCIL_TEST);
 	glDisable(GL_TEXTURE_1D);

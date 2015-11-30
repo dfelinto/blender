@@ -769,11 +769,14 @@ struct SubsurfaceIntersection
 struct SubsurfaceIndirectRays
 {
 	bool need_update_volume_stack;
-	PathState state;
+	bool tracing;
+	PathState state[BSSRDF_MAX_HITS];
+	PathRadiance direct_L;
 
 	int num_rays;
 	Ray rays[BSSRDF_MAX_HITS];
 	float3 throughputs[BSSRDF_MAX_HITS];
+	PathRadiance L[BSSRDF_MAX_HITS];
 };
 
 /* Constant Kernel Data
