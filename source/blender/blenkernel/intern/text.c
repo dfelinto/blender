@@ -152,9 +152,12 @@ static void init_undo_text(Text *text)
 	text->undo_buf = MEM_mallocN(text->undo_len, "undo buf");
 }
 
+/** Free (or release) any data used by this text (does not free the text itself). */
 void BKE_text_free(Text *text)
 {
 	TextLine *tmp;
+
+	/* No animdata here. */
 
 	for (tmp = text->lines.first; tmp; tmp = tmp->next) {
 		MEM_freeN(tmp->line);
@@ -164,10 +167,10 @@ void BKE_text_free(Text *text)
 	
 	BLI_freelistN(&text->lines);
 
-	if (text->name) MEM_freeN(text->name);
-	MEM_freeN(text->undo_buf);
+	MEM_SAFE_FREE(text->name);
+	MEM_SAFE_FREE(text->undo_buf);
 #ifdef WITH_PYTHON
-	if (text->compiled) BPY_text_free_code(text);
+	BPY_text_free_code(text);
 #endif
 }
 
