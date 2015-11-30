@@ -127,9 +127,8 @@ typedef struct ID {
 	 * to.
 	 */
 	short flag;
-	int flag2;
 	int us;
-	int icon_id;
+	int icon_id, pad2;
 	IDProperty *properties;
 } ID;
 
@@ -298,14 +297,6 @@ enum {
 	LIB_ANIM_NO_RECALC  = 1 << 14,
 
 	LIB_ID_RECALC_ALL   = (LIB_ID_RECALC | LIB_ID_RECALC_DATA),
-};
-
-/* id->flag2: set first 16 bits always at zero while reading */
-enum {
-	/* tag datablock has having an extra user. */
-	LIB_EXTRAUSER       = 1 << 0,
-	/* tag datablock has having actually increased usercount for the extra virtual user. */
-	LIB_EXTRAUSER_SET   = 1 << 1,
 };
 
 /* To filter ID types (filter_id) */

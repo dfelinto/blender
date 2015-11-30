@@ -599,7 +599,7 @@ static void free_undo(void *me_v)
 		MEM_freeN(me->key);
 	}
 
-	BKE_mesh_free(me);
+	BKE_mesh_free(me, false);
 	MEM_freeN(me);
 }
 

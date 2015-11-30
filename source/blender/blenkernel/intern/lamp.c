@@ -55,7 +55,7 @@
 
 void BKE_lamp_init(Lamp *la)
 {
-	BLI_assert(MEMCMP_NULL_STRUCT_OFS(la, id));
+	BLI_assert(MEMCMP_STRUCT_OFS_IS_ZERO(la, id));
 
 	la->r = la->g = la->b = la->k = 1.0f;
 	la->haint = la->energy = 1.0f;
