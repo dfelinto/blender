@@ -527,7 +527,8 @@ static int group_unlink_exec(bContext *C, wmOperator *UNUSED(op))
 	if (!group)
 		return OPERATOR_CANCELLED;
 
-	BKE_group_unlink(bmain, group);
+	BKE_libblock_unlink(bmain, group, false);
+	BKE_libblock_free(bmain, group);
 
 	WM_event_add_notifier(C, NC_OBJECT | ND_DRAW, NULL);
 
