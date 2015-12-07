@@ -58,6 +58,8 @@
 #include "BIF_gl.h"
 #include "BIF_glutil.h"
 
+#include "GPU_basic_shader.h"
+
 #include "ED_anim_api.h"
 #include "ED_gpencil.h"
 #include "ED_markers.h"
@@ -177,7 +179,11 @@ void color3ubv_from_seq(Scene *curscene, Sequence *seq, unsigned char col[3])
 			blendcol[0] = blendcol[1] = blendcol[2] = 128;
 			if (seq->flag & SEQ_MUTE) UI_GetColorPtrBlendShade3ubv(col, blendcol, col, 0.5, 20);
 			break;
-		
+
+		case SEQ_TYPE_TEXT:
+			UI_GetThemeColor3ubv(TH_SEQ_TEXT, col);
+			break;
+
 		default:
 			col[0] = 10; col[1] = 255; col[2] = 40;
 			break;
@@ -1290,7 +1296,7 @@ void draw_image_seq(const bContext *C, Scene *scene, ARegion *ar, SpaceSeq *sseq
 
 	glColor4f(1.0, 1.0, 1.0, 1.0);
 
-	glEnable(GL_TEXTURE_2D);
+	GPU_basic_shader_bind(GPU_SHADER_TEXTURE_2D | GPU_SHADER_USE_COLOR);
 	glGenTextures(1, (GLuint *)&texid);
 
 	glBindTexture(GL_TEXTURE_2D, texid);
@@ -1365,7 +1371,7 @@ void draw_image_seq(const bContext *C, Scene *scene, ARegion *ar, SpaceSeq *sseq
 	glEnd();
 
 	glBindTexture(GL_TEXTURE_2D, 0);
-	glDisable(GL_TEXTURE_2D);
+	GPU_basic_shader_bind(GPU_SHADER_USE_COLOR);
 	if (sseq->mainb == SEQ_DRAW_IMG_IMBUF && sseq->flag & SEQ_USE_ALPHA)
 		glDisable(GL_BLEND);
 	glDeleteTextures(1, &texid);

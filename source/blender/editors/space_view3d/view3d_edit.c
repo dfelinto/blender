@@ -700,7 +700,7 @@ static bool view3d_orbit_calc_center(bContext *C, float r_dyn_ofs[3])
 	}
 	else {
 		/* If there's no selection, lastofs is unmodified and last value since static */
-		is_set = calculateTransformCenter(C, V3D_CENTROID, lastofs, NULL);
+		is_set = calculateTransformCenter(C, V3D_AROUND_CENTER_MEAN, lastofs, NULL);
 	}
 
 	copy_v3_v3(r_dyn_ofs, lastofs);
@@ -3757,7 +3757,7 @@ static void axis_set_view(bContext *C, View3D *v3d, ARegion *ar,
 			float twmat[3][3];
 
 			/* same as transform manipulator when normal is set */
-			ED_getTransformOrientationMatrix(C, twmat, V3D_ACTIVE);
+			ED_getTransformOrientationMatrix(C, twmat, V3D_AROUND_ACTIVE);
 
 			mat3_to_quat(obact_quat, twmat);
 			invert_qt_normalized(obact_quat);
@@ -5168,10 +5168,11 @@ bool ED_view3d_snap_from_ray(
 
 	/* try snap edge, then face if it fails */
 	ret = snapObjectsRayEx(
-	        scene, NULL, NULL, NULL, obedit, SCE_SNAP_MODE_FACE,
-	        NULL, NULL,
+	        scene, NULL, NULL, NULL, obedit,
+	        NULL, SNAP_ALL, SCE_SNAP_MODE_FACE,
 	        ray_start, ray_normal, &ray_dist,
-	        NULL, NULL, r_co, r_no_dummy, SNAP_ALL);
+	        r_co, r_no_dummy, NULL, NULL,
+	        NULL, NULL);
 
 	return ret;
 }
@@ -5216,8 +5217,10 @@ bool ED_view3d_snap_from_region(
 				ray_dist = TRANSFORM_DIST_MAX_RAY;
 			}
 			if (snapObjectsEx(
-			        scene, NULL, v3d, ar, obedit, elem_type[i],
-			        mval, &dist_px, r_co, r_no_ptr, &ray_dist, SNAP_ALL))
+			        scene, v3d, ar, NULL, obedit,
+			        mval, SNAP_ALL, elem_type[i],
+			        &ray_dist,
+			        r_co, r_no_ptr, &dist_px))
 			{
 				is_hit = true;
 			}

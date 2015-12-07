@@ -288,14 +288,14 @@ ccl_device int subsurface_scatter_multi_intersect(
 	                           sd->object,
 	                           lcg_state,
 	                           BSSRDF_MAX_HITS);
-	/* TODO(sergey): Investigate whether scene_intersect_subsurface() could
-	 * indeed return more than BSSRDF_MAX_HITS hits.
-	 */
 	int num_eval_hits = min(ss_isect->num_hits, BSSRDF_MAX_HITS);
 
 	for(int hit = 0; hit < num_eval_hits; hit++) {
 		/* Quickly retrieve P and Ng without setting up ShaderData. */
-		float3 hit_P = ray->P + ss_isect->hits[hit].t * ray->D;
+		float3 hit_P = triangle_refine_subsurface(kg,
+		                                          sd,
+		                                          &ss_isect->hits[hit],
+		                                          ray);
 		float3 hit_Ng = ss_isect->Ng[hit];
 		if(ss_isect->hits[hit].object != OBJECT_NONE) {
 			object_normal_transform(kg, sd, &hit_Ng);

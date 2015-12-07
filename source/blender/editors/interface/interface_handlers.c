@@ -2186,6 +2186,32 @@ static void ui_but_drop(bContext *C, const wmEvent *event, uiBut *but, uiHandleB
 
 /* ******************* copy and paste ********************  */
 
+static void ui_but_copy_data_path(uiBut *but, const bool full_path)
+{
+	char *id_path;
+
+	if (but->rnapoin.id.data == NULL) {
+		return;
+	}
+
+	if (full_path) {
+		if (but->rnaprop) {
+			id_path = RNA_path_full_property_py_ex(&but->rnapoin, but->rnaprop, but->rnaindex, true);
+		}
+		else {
+			id_path = RNA_path_full_struct_py(&but->rnapoin);
+		}
+	}
+	else {
+		id_path = RNA_path_from_ID_to_property(&but->rnapoin, but->rnaprop);
+	}
+
+	if (id_path) {
+		WM_clipboard_text_set(id_path, false);
+		MEM_freeN(id_path);
+	}
+}
+
 /* c = copy, v = paste */
 static void ui_but_copy_paste(bContext *C, uiBut *but, uiHandleButtonData *data, char mode)
 {
@@ -6375,10 +6401,10 @@ static uiBlock *menu_change_shortcut(bContext *C, ARegion *ar, void *arg)
 	uiLayout *layout;
 	uiStyle *style = UI_style_get_dpi();
 	IDProperty *prop = (but->opptr) ? but->opptr->data : NULL;
-	int kmi_id = WM_key_event_operator_id(C, but->optype->idname, but->opcontext, prop, true, &km);
 
-	kmi = WM_keymap_item_find_id(km, kmi_id);
-	
+	kmi = WM_key_event_operator(C, but->optype->idname, but->opcontext, prop, true, &km);
+	BLI_assert(kmi != NULL);
+
 	RNA_pointer_create(&wm->id, &RNA_KeyMapItem, kmi, &ptr);
 	
 	block = UI_block_begin(C, ar, "_popup", UI_EMBOSS);
@@ -6482,9 +6508,10 @@ static void remove_shortcut_func(bContext *C, void *arg1, void *UNUSED(arg2))
 	wmKeyMap *km;
 	wmKeyMapItem *kmi;
 	IDProperty *prop = (but->opptr) ? but->opptr->data : NULL;
-	int kmi_id = WM_key_event_operator_id(C, but->optype->idname, but->opcontext, prop, true, &km);
-	
-	kmi = WM_keymap_item_find_id(km, kmi_id);
+
+	kmi = WM_key_event_operator(C, but->optype->idname, but->opcontext, prop, true, &km);
+	BLI_assert(kmi != NULL);
+
 	WM_keymap_remove_item(km, kmi);
 	
 	but_shortcut_name_func(C, but, 0);
@@ -6727,12 +6754,8 @@ static bool ui_but_menu(bContext *C, uiBut *but)
 		IDProperty *prop = (but->opptr) ? but->opptr->data : NULL;
 		int w = uiLayoutGetWidth(layout);
 		wmKeyMap *km;
-		wmKeyMapItem *kmi = NULL;
 		/* We want to know if this op has a shortcut, be it hotkey or not. */
-		int kmi_id = WM_key_event_operator_id(C, but->optype->idname, but->opcontext, prop, false, &km);
-
-		if (kmi_id)
-			kmi = WM_keymap_item_find_id(km, kmi_id);
+		wmKeyMapItem *kmi = WM_key_event_operator(C, but->optype->idname, but->opcontext, prop, false, &km);
 
 		/* We do have a shortcut, but only keyboard ones are editbale that way... */
 		if (kmi) {
@@ -6838,6 +6861,12 @@ static int ui_do_button(bContext *C, uiBlock *block, uiBut *but, const wmEvent *
 					but = labelbut;
 					data = but->active;
 				}
+			}
+
+			/* special case, copy-data-path */
+			if ((event->type == CKEY) && event->shift) {
+				ui_but_copy_data_path(but, event->alt != 0);
+				return WM_UI_HANDLER_BREAK;
 			}
 
 			ui_but_copy_paste(C, but, data, (event->type == CKEY) ? 'c' : 'v');
