@@ -1747,9 +1747,7 @@ bool ED_screen_delete_scene(bContext *C, Scene *scene)
 
 	ED_screen_set_scene(C, CTX_wm_screen(C), newscene);
 
-	BKE_libblock_remap(bmain, scene, newscene, true, false, false);
-
-	BKE_libblock_free(bmain, scene);
+	BKE_scene_unlink(bmain, scene, newscene);
 
 	return true;
 }

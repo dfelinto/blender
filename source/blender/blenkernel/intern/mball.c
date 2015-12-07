@@ -66,13 +66,28 @@
 
 /* Functions */
 
-/** Free (or release) any data used by this mball (does not free the mball itself). */
+void BKE_mball_unlink(MetaBall *mb)
+{
+	int a;
+	
+	for (a = 0; a < mb->totcol; a++) {
+		if (mb->mat[a])
+			id_us_min(&mb->mat[a]->id);
+		mb->mat[a] = NULL;
+	}
+}
+
+
+/* do not free mball itself */
 void BKE_mball_free(MetaBall *mb)
 {
-	BKE_animdata_free((ID *)mb);
-
-	MEM_SAFE_FREE(mb->mat);
-
+	BKE_mball_unlink(mb);
+	
+	if (mb->adt) {
+		BKE_animdata_free((ID *)mb);
+		mb->adt = NULL;
+	}
+	if (mb->mat) MEM_freeN(mb->mat);
 	BLI_freelistN(&mb->elems);
 	if (mb->disp.first) BKE_displist_free(&mb->disp);
 }
