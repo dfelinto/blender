@@ -247,7 +247,6 @@ typedef enum ScenePassType {
 	SCE_PASS_SUBSURFACE_INDIRECT      = (1 << 29),
 	SCE_PASS_SUBSURFACE_COLOR         = (1 << 30),
 	SCE_PASS_DEBUG                    = (1 << 31),  /* This is a virtual pass. */
-	SCE_PASS_CUSTOM                   = (1 << 32),
 } ScenePassType;
 
 /* note, srl->passflag is treestore element 'nr' in outliner, short still... */
@@ -452,7 +451,7 @@ typedef struct BakeData {
 	short margin, flag;
 
 	float cage_extrusion;
-	int custom_flag;
+	float pad2;
 
 	char normal_swizzle[3];
 	char normal_space;

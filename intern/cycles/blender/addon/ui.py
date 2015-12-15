@@ -1438,41 +1438,6 @@ class CyclesRender_PT_bake(CyclesButtonsPanel, Panel):
             row.prop(cbk, "normal_g", text="")
             row.prop(cbk, "normal_b", text="")
 
-        elif cscene.bake_type == 'CUSTOM':
-            split = layout.split()
-
-            col = split.column()
-            col.label(text="Diffuse:")
-            row = col.row(align=True)
-            row.prop(cbk, "use_pass_diffuse_direct", text="Direct", toggle=True)
-            row.prop(cbk, "use_pass_diffuse_indirect", text="Indirect", toggle=True)
-            row.prop(cbk, "use_pass_diffuse_color", text="Color", toggle=True)
-            col.label(text="Glossy:")
-            row = col.row(align=True)
-            row.prop(cbk, "use_pass_glossy_direct", text="Direct", toggle=True)
-            row.prop(cbk, "use_pass_glossy_indirect", text="Indirect", toggle=True)
-            row.prop(cbk, "use_pass_glossy_color", text="Color", toggle=True)
-
-            col.separator()
-            col.prop(cbk, "use_pass_shadow")
-            col.prop(cbk, "use_pass_ambient_occlusion")
-
-            col = split.column()
-            col.label(text="Transmission:")
-            row = col.row(align=True)
-            row.prop(cbk, "use_pass_transmission_direct", text="Direct", toggle=True)
-            row.prop(cbk, "use_pass_transmission_indirect", text="Indirect", toggle=True)
-            row.prop(cbk, "use_pass_transmission_color", text="Color", toggle=True)
-            col.label(text="Subsurface:")
-            row = col.row(align=True)
-            row.prop(cbk, "use_pass_subsurface_direct", text="Direct", toggle=True)
-            row.prop(cbk, "use_pass_subsurface_indirect", text="Indirect", toggle=True)
-            row.prop(cbk, "use_pass_subsurface_color", text="Color", toggle=True)
-
-            col.separator()
-            col.prop(cbk, "use_pass_emit", text="Emission")
-            col.prop(cbk, "use_pass_environment")
-
 
 class CyclesParticle_PT_CurveSettings(CyclesButtonsPanel, Panel):
     bl_label = "Cycles Hair Settings"

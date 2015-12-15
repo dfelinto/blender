@@ -74,7 +74,6 @@ EnumPropertyItem rna_enum_render_pass_type_items[] = {
 #ifdef WITH_CYCLES_DEBUG
 	{SCE_PASS_DEBUG, "DEBUG", 0, "Pass used for render engine debugging", ""},
 #endif
-	{SCE_PASS_CUSTOM, "CUSTOM", 0, "Custom", ""},
 	{0, NULL, 0, NULL, NULL}
 };
 
@@ -163,7 +162,7 @@ static void engine_render(RenderEngine *engine, struct Scene *scene)
 }
 
 static void engine_bake(RenderEngine *engine, struct Scene *scene,
-                        struct Object *object, const int pass_type, const int custom_flag,
+                        struct Object *object, const int pass_type,
                         const int object_id, const struct BakePixel *pixel_array,
                         const int num_pixels, const int depth, void *result)
 {
@@ -179,7 +178,6 @@ static void engine_bake(RenderEngine *engine, struct Scene *scene,
 	RNA_parameter_set_lookup(&list, "scene", &scene);
 	RNA_parameter_set_lookup(&list, "object", &object);
 	RNA_parameter_set_lookup(&list, "pass_type", &pass_type);
-	RNA_parameter_set_lookup(&list, "custom_flag", &custom_flag);
 	RNA_parameter_set_lookup(&list, "object_id", &object_id);
 	RNA_parameter_set_lookup(&list, "pixel_array", &pixel_array);
 	RNA_parameter_set_lookup(&list, "num_pixels", &num_pixels);
@@ -435,8 +433,6 @@ static void rna_def_render_engine(BlenderRNA *brna)
 	prop = RNA_def_pointer(func, "object", "Object", "", "");
 	RNA_def_property_flag(prop, PROP_REQUIRED);
 	prop = RNA_def_enum(func, "pass_type", rna_enum_render_pass_type_items, 0, "Pass", "Pass to bake");
-	RNA_def_property_flag(prop, PROP_REQUIRED);
-	prop = RNA_def_int(func, "custom_flag", 0, 0, INT_MAX, "Custom Passes", "Passes to bake in custom mode", 0, INT_MAX);
 	RNA_def_property_flag(prop, PROP_REQUIRED);
 	prop = RNA_def_int(func, "object_id", 0, 0, INT_MAX, "Object Id", "Id of the current object being baked in relation to the others", 0, INT_MAX);
 	RNA_def_property_flag(prop, PROP_REQUIRED);

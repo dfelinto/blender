@@ -486,7 +486,6 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
             description="Type of pass to bake",
             items=(
                 ('COMBINED', "Combined", ""),
-                ('CUSTOM', "Custom", ""),
                 ('AO', "Ambient Occlusion", ""),
                 ('SHADOW', "Shadow", ""),
                 ('NORMAL', "Normal", ""),
