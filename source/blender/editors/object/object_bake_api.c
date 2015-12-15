@@ -85,6 +85,7 @@ typedef struct BakeAPIRender {
 	ListBase selected_objects;
 
 	ScenePassType pass_type;
+	ScenePassType custom_flag;
 	int margin;
 
 	int save_mode;
@@ -550,7 +551,7 @@ static size_t initialize_internal_images(BakeImages *bake_images, ReportList *re
 
 static int bake(
         Render *re, Main *bmain, Scene *scene, Object *ob_low, ListBase *selected_objects, ReportList *reports,
-        const ScenePassType pass_type, const int margin,
+        const ScenePassType pass_type, const ScenePassType custom_flag, const int margin,
         const BakeSaveMode save_mode, const bool is_clear, const bool is_split_materials,
         const bool is_automatic_name, const bool is_selected_to_active, const bool is_cage,
         const float cage_extrusion, const int normal_space, const BakeNormalSwizzle normal_swizzle[],
@@ -792,7 +793,7 @@ static int bake(
 		/* the baking itself */
 		for (i = 0; i < tot_highpoly; i++) {
 			ok = RE_bake_engine(re, highpoly[i].ob, i, pixel_array_high,
-			                    num_pixels, depth, pass_type, result);
+			                    num_pixels, depth, pass_type, custom_flag, result);
 			if (!ok) {
 				BKE_reportf(reports, RPT_ERROR, "Error baking from object \"%s\"", highpoly[i].ob->id.name + 2);
 				goto cage_cleanup;
@@ -818,7 +819,7 @@ cage_cleanup:
 		ob_low->restrictflag &= ~OB_RESTRICT_RENDER;
 
 		if (RE_bake_has_engine(re)) {
-			ok = RE_bake_engine(re, ob_low, 0, pixel_array_low, num_pixels, depth, pass_type, result);
+			ok = RE_bake_engine(re, ob_low, 0, pixel_array_low, num_pixels, depth, pass_type, custom_flag, result);
 		}
 		else {
 			BKE_report(reports, RPT_ERROR, "Current render engine does not support baking");
@@ -1030,6 +1031,7 @@ static void bake_init_api_data(wmOperator *op, bContext *C, BakeAPIRender *bkr)
 	bkr->sa = sc ? BKE_screen_find_big_area(sc, SPACE_IMAGE, 10) : NULL;
 
 	bkr->pass_type = RNA_enum_get(op->ptr, "type");
+	bkr->custom_flag = RNA_int_get(op->ptr, "custom_flag");
 	bkr->margin = RNA_int_get(op->ptr, "margin");
 
 	bkr->save_mode = RNA_enum_get(op->ptr, "save_mode");
@@ -1099,7 +1101,7 @@ static int bake_exec(bContext *C, wmOperator *op)
 	if (bkr.is_selected_to_active) {
 		result = bake(
 		        bkr.render, bkr.main, bkr.scene, bkr.ob, &bkr.selected_objects, bkr.reports,
-		        bkr.pass_type, bkr.margin, bkr.save_mode,
+		        bkr.pass_type, bkr.custom_flag, bkr.margin, bkr.save_mode,
 		        bkr.is_clear, bkr.is_split_materials, bkr.is_automatic_name, true, bkr.is_cage,
 		        bkr.cage_extrusion, bkr.normal_space, bkr.normal_swizzle,
 		        bkr.custom_cage, bkr.filepath, bkr.width, bkr.height, bkr.identifier, bkr.sa,
@@ -1112,7 +1114,7 @@ static int bake_exec(bContext *C, wmOperator *op)
 			Object *ob_iter = link->ptr.data;
 			result = bake(
 			        bkr.render, bkr.main, bkr.scene, ob_iter, NULL, bkr.reports,
-			        bkr.pass_type, bkr.margin, bkr.save_mode,
+			        bkr.pass_type, bkr.custom_flag, bkr.margin, bkr.save_mode,
 			        is_clear, bkr.is_split_materials, bkr.is_automatic_name, false, bkr.is_cage,
 			        bkr.cage_extrusion, bkr.normal_space, bkr.normal_swizzle,
 			        bkr.custom_cage, bkr.filepath, bkr.width, bkr.height, bkr.identifier, bkr.sa,
@@ -1151,7 +1153,7 @@ static void bake_startjob(void *bkv, short *UNUSED(stop), short *do_update, floa
 	if (bkr->is_selected_to_active) {
 		bkr->result = bake(
 		        bkr->render, bkr->main, bkr->scene, bkr->ob, &bkr->selected_objects, bkr->reports,
-		        bkr->pass_type, bkr->margin, bkr->save_mode,
+		        bkr->pass_type, bkr->custom_flag, bkr->margin, bkr->save_mode,
 		        bkr->is_clear, bkr->is_split_materials, bkr->is_automatic_name, true, bkr->is_cage,
 		        bkr->cage_extrusion, bkr->normal_space, bkr->normal_swizzle,
 		        bkr->custom_cage, bkr->filepath, bkr->width, bkr->height, bkr->identifier, bkr->sa,
@@ -1164,7 +1166,7 @@ static void bake_startjob(void *bkv, short *UNUSED(stop), short *do_update, floa
 			Object *ob_iter = link->ptr.data;
 			bkr->result = bake(
 			        bkr->render, bkr->main, bkr->scene, ob_iter, NULL, bkr->reports,
-			        bkr->pass_type, bkr->margin, bkr->save_mode,
+			        bkr->pass_type, bkr->custom_flag, bkr->margin, bkr->save_mode,
 			        is_clear, bkr->is_split_materials, bkr->is_automatic_name, false, bkr->is_cage,
 			        bkr->cage_extrusion, bkr->normal_space, bkr->normal_swizzle,
 			        bkr->custom_cage, bkr->filepath, bkr->width, bkr->height, bkr->identifier, bkr->sa,
@@ -1272,6 +1274,11 @@ static void bake_set_props(wmOperator *op, Scene *scene)
 	if (!RNA_property_is_set(op->ptr, prop)) {
 		RNA_property_boolean_set(op->ptr, prop, (bake->flag & R_BAKE_AUTO_NAME) != 0);
 	}
+
+	prop = RNA_struct_find_property(op->ptr, "custom_flag");
+	if (!RNA_property_is_set(op->ptr, prop)) {
+		RNA_property_int_set(op->ptr, prop, bake->custom_flag);
+	}
 }
 
 static int bake_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
@@ -1333,6 +1340,7 @@ void OBJECT_OT_bake(wmOperatorType *ot)
 
 	RNA_def_enum(ot->srna, "type", rna_enum_render_pass_type_items, SCE_PASS_COMBINED, "Type",
 	             "Type of pass to bake, some of them may not be supported by the current render engine");
+	RNA_def_int(ot->srna, "custom_flag", 0, 0, INT_MAX, "Custom Passes", "Passes to include for custom baking", 0, INT_MAX);
 	RNA_def_string_file_path(ot->srna, "filepath", NULL, FILE_MAX, "File Path",
 	                         "Image filepath to use when saving externally");
 	RNA_def_int(ot->srna, "width", 512, 1, INT_MAX, "Width",

@@ -3747,6 +3747,87 @@ static void rna_def_bake_data(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Cage",
 	                         "Cast rays to active object from a cage");
 	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+	/* custom pass flags */
+	prop = RNA_def_property(srna, "use_pass_diffuse_direct", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "custom_flag", SCE_PASS_DIFFUSE_DIRECT);
+	RNA_def_property_ui_text(prop, "Diffuse Direct", "Deliver diffuse direct pass");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+	prop = RNA_def_property(srna, "use_pass_diffuse_indirect", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "custom_flag", SCE_PASS_DIFFUSE_INDIRECT);
+	RNA_def_property_ui_text(prop, "Diffuse Indirect", "Deliver diffuse indirect pass");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+	prop = RNA_def_property(srna, "use_pass_diffuse_color", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "custom_flag", SCE_PASS_DIFFUSE_COLOR);
+	RNA_def_property_ui_text(prop, "Diffuse Color", "Deliver diffuse color pass");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+	prop = RNA_def_property(srna, "use_pass_glossy_direct", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "custom_flag", SCE_PASS_GLOSSY_DIRECT);
+	RNA_def_property_ui_text(prop, "Glossy Direct", "Deliver glossy direct pass");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+	prop = RNA_def_property(srna, "use_pass_glossy_indirect", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "custom_flag", SCE_PASS_GLOSSY_INDIRECT);
+	RNA_def_property_ui_text(prop, "Glossy Indirect", "Deliver glossy indirect pass");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+	prop = RNA_def_property(srna, "use_pass_glossy_color", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "custom_flag", SCE_PASS_GLOSSY_COLOR);
+	RNA_def_property_ui_text(prop, "Glossy Color", "Deliver glossy color pass");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+	prop = RNA_def_property(srna, "use_pass_transmission_direct", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "custom_flag", SCE_PASS_TRANSM_DIRECT);
+	RNA_def_property_ui_text(prop, "Transmission Direct", "Deliver transmission direct pass");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+	prop = RNA_def_property(srna, "use_pass_transmission_indirect", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "custom_flag", SCE_PASS_TRANSM_INDIRECT);
+	RNA_def_property_ui_text(prop, "Transmission Indirect", "Deliver transmission indirect pass");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+	prop = RNA_def_property(srna, "use_pass_transmission_color", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "custom_flag", SCE_PASS_TRANSM_COLOR);
+	RNA_def_property_ui_text(prop, "Transmission Color", "Deliver transmission color pass");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+	prop = RNA_def_property(srna, "use_pass_subsurface_direct", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "custom_flag", SCE_PASS_SUBSURFACE_DIRECT);
+	RNA_def_property_ui_text(prop, "Subsurface Direct", "Deliver subsurface direct pass");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+	prop = RNA_def_property(srna, "use_pass_subsurface_indirect", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "custom_flag", SCE_PASS_SUBSURFACE_INDIRECT);
+	RNA_def_property_ui_text(prop, "Subsurface Indirect", "Deliver subsurface indirect pass");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+	prop = RNA_def_property(srna, "use_pass_subsurface_color", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "custom_flag", SCE_PASS_SUBSURFACE_COLOR);
+	RNA_def_property_ui_text(prop, "Subsurface Color", "Deliver subsurface color pass");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+	prop = RNA_def_property(srna, "use_pass_emit", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "custom_flag", SCE_PASS_EMIT);
+	RNA_def_property_ui_text(prop, "Emit", "Deliver emission pass");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+	prop = RNA_def_property(srna, "use_pass_environment", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "custom_flag", SCE_PASS_ENVIRONMENT);
+	RNA_def_property_ui_text(prop, "Environment", "Deliver environment lighting pass");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+	prop = RNA_def_property(srna, "use_pass_shadow", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "custom_flag", SCE_PASS_SHADOW);
+	RNA_def_property_ui_text(prop, "Shadow", "Deliver shadow pass");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+	prop = RNA_def_property(srna, "use_pass_ambient_occlusion", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "custom_flag", SCE_PASS_AO);
+	RNA_def_property_ui_text(prop, "AO", "Deliver AO pass");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
 }
 
 static void rna_def_scene_game_data(BlenderRNA *brna)

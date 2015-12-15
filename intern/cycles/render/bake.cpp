@@ -131,7 +131,7 @@ void BakeManager::set_shader_limit(const size_t x, const size_t y)
 	m_shader_limit = (size_t)pow(2, ceil(log(m_shader_limit)/log(2)));
 }
 
-bool BakeManager::bake(Device *device, DeviceScene *dscene, Scene *scene, Progress& progress, ShaderEvalType shader_type, BakeData *bake_data, float result[])
+bool BakeManager::bake(Device *device, DeviceScene *dscene, Scene *scene, Progress& progress, ShaderEvalType shader_type, const int custom_flag, BakeData *bake_data, float result[])
 {
 	size_t num_pixels = bake_data->size();
 
@@ -155,8 +155,10 @@ bool BakeManager::bake(Device *device, DeviceScene *dscene, Scene *scene, Progre
 
 		/* setup input for device task */
 		device_vector<uint4> d_input;
-		uint4 *d_input_data = d_input.resize(shader_size * 2);
-		size_t d_input_size = 0;
+		uint4 *d_input_data = d_input.resize(1 + shader_size * 2);
+		size_t d_input_size = 1;
+
+		d_input_data[0] = make_uint4(custom_flag, 0, 0, 0);
 
 		for(size_t i = shader_offset; i < (shader_offset + shader_size); i++) {
 			d_input_data[d_input_size++] = bake_data->data(i);
@@ -254,7 +256,7 @@ bool BakeManager::is_aa_pass(ShaderEvalType type)
 	}
 }
 
-bool BakeManager::is_light_pass(ShaderEvalType type)
+bool BakeManager::is_light_pass(ShaderEvalType type, const int custom_flag)
 {
 	switch(type) {
 		case SHADER_EVAL_AO:
@@ -269,6 +271,23 @@ bool BakeManager::is_light_pass(ShaderEvalType type)
 		case SHADER_EVAL_TRANSMISSION_INDIRECT:
 		case SHADER_EVAL_SUBSURFACE_INDIRECT:
 			return true;
+		case SHADER_EVAL_CUSTOM:
+			if(((custom_flag & PASS_AO) != 0) ||
+			   ((custom_flag & PASS_SHADOW) != 0) ||
+			   ((custom_flag & PASS_DIFFUSE_DIRECT) != 0) ||
+			   ((custom_flag & PASS_GLOSSY_DIRECT) != 0) ||
+			   ((custom_flag & PASS_TRANSMISSION_DIRECT) != 0) ||
+			   ((custom_flag & PASS_SUBSURFACE_DIRECT) != 0) ||
+			   ((custom_flag & PASS_DIFFUSE_INDIRECT) != 0) ||
+			   ((custom_flag & PASS_GLOSSY_INDIRECT) != 0) ||
+			   ((custom_flag & PASS_TRANSMISSION_INDIRECT) != 0) ||
+			   ((custom_flag & PASS_SUBSURFACE_INDIRECT) != 0))
+			{
+				return true;
+			}
+			else {
+				return false;
+			}
 		default:
 			return false;
 	}
