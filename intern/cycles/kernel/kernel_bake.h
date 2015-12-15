@@ -175,7 +175,7 @@ ccl_device bool is_aa_pass(ShaderEvalType type)
 	}
 }
 
-ccl_device bool is_light_pass(ShaderEvalType type)
+ccl_device bool is_light_pass(ShaderEvalType type, const int custom_flag)
 {
 	switch(type) {
 		case SHADER_EVAL_AO:
@@ -190,6 +190,23 @@ ccl_device bool is_light_pass(ShaderEvalType type)
 		case SHADER_EVAL_TRANSMISSION_INDIRECT:
 		case SHADER_EVAL_SUBSURFACE_INDIRECT:
 			return true;
+		case SHADER_EVAL_CUSTOM:
+			if(((custom_flag & PASS_AO) != 0) ||
+			   ((custom_flag & PASS_SHADOW) != 0) ||
+			   ((custom_flag & PASS_DIFFUSE_DIRECT) != 0) ||
+			   ((custom_flag & PASS_GLOSSY_DIRECT) != 0) ||
+			   ((custom_flag & PASS_TRANSMISSION_DIRECT) != 0) ||
+			   ((custom_flag & PASS_SUBSURFACE_DIRECT) != 0) ||
+			   ((custom_flag & PASS_DIFFUSE_INDIRECT) != 0) ||
+			   ((custom_flag & PASS_GLOSSY_INDIRECT) != 0) ||
+			   ((custom_flag & PASS_TRANSMISSION_INDIRECT) != 0) ||
+			   ((custom_flag & PASS_SUBSURFACE_INDIRECT) != 0))
+			{
+				return true;
+			}
+			else {
+				return false;
+			}
 		default:
 			return false;
 	}
@@ -212,9 +229,11 @@ ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input,
                                      ShaderEvalType type, int i, int offset, int sample)
 {
 	ShaderData sd;
-	uint4 in = input[i * 2];
-	uint4 diff = input[i * 2 + 1];
+	uint4 data = input[0];
+	uint4 in = input[1 + i * 2];
+	uint4 diff = input[1 + i * 2 + 1];
 
+	int custom_flag = data.x;
 	float3 out;
 
 	int object = in.x;
@@ -280,12 +299,28 @@ ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input,
 	sd.dv.dy = dvdy;
 
 	/* light passes */
-	if(is_light_pass(type)) {
+	if(is_light_pass(type, custom_flag)) {
+		bool is_combined;
+		bool is_ao;
+		bool is_sss;
+
+		if (type == SHADER_EVAL_CUSTOM) {
+			is_combined = false;
+			is_ao = ((custom_flag & PASS_AO) != 0);
+			is_sss = ((custom_flag & PASS_SUBSURFACE_DIRECT) != 0) ||
+			         ((custom_flag & PASS_SUBSURFACE_INDIRECT) != 0);
+		}
+		else {
+			is_combined = (type == SHADER_EVAL_COMBINED);
+			is_ao = (type == SHADER_EVAL_AO);
+			is_sss = ((type == SHADER_EVAL_SUBSURFACE_DIRECT) ||
+			          (type == SHADER_EVAL_SUBSURFACE_INDIRECT));
+		}
+
 		compute_light_pass(kg, &sd, &L, rng,
-		                   (type == SHADER_EVAL_COMBINED),
-		                   (type == SHADER_EVAL_AO),
-		                   (type == SHADER_EVAL_SUBSURFACE_DIRECT ||
-		                    type == SHADER_EVAL_SUBSURFACE_INDIRECT),
+		                   is_combined,
+		                   is_ao,
+		                   is_sss,
 		                   sample);
 	}
 
@@ -406,6 +441,62 @@ ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input,
 			shader_eval_surface(kg, &sd, 0.f, 0, SHADER_CONTEXT_MAIN);
 			out = safe_divide_color(L.indirect_subsurface, shader_bsdf_subsurface(kg, &sd));
 #endif
+			break;
+		}
+		case SHADER_EVAL_CUSTOM:
+		{
+			float3 color_diffuse, color_glossy, color_transmission, color_subsurface;
+
+			out = float3();
+
+			shader_eval_surface(kg, &sd, 0.f, 0, SHADER_CONTEXT_MAIN);
+
+			color_diffuse = shader_bsdf_diffuse(kg, &sd);
+			color_glossy = shader_bsdf_glossy(kg, &sd);
+			color_transmission = shader_bsdf_transmission(kg, &sd);
+#ifdef __SUBSURFACE__
+			color_subsurface = shader_bsdf_subsurface(kg, &sd);
+#endif
+
+			if((custom_flag & PASS_DIFFUSE_DIRECT) != 0)
+				out += safe_divide_color(L.direct_diffuse, color_diffuse);
+			if((custom_flag & PASS_DIFFUSE_INDIRECT) != 0)
+				out += safe_divide_color(L.indirect_diffuse, color_diffuse);
+			if((custom_flag & PASS_DIFFUSE_COLOR) != 0)
+				out += color_diffuse;
+
+			if((custom_flag & PASS_GLOSSY_DIRECT) != 0)
+				out += safe_divide_color(L.direct_glossy, color_glossy);
+			if((custom_flag & PASS_GLOSSY_INDIRECT) != 0)
+				out += safe_divide_color(L.indirect_glossy, color_glossy);
+			if((custom_flag & PASS_GLOSSY_COLOR) != 0)
+				out += color_glossy;
+
+			if((custom_flag & PASS_TRANSMISSION_DIRECT) != 0)
+				out += safe_divide_color(L.direct_transmission, color_transmission);
+			if((custom_flag & PASS_TRANSMISSION_INDIRECT) != 0)
+				out += safe_divide_color(L.indirect_transmission, color_transmission);
+			if((custom_flag & PASS_TRANSMISSION_COLOR) != 0)
+				out += color_transmission;
+
+#ifdef __SUBSURFACE__
+			if((custom_flag & PASS_SUBSURFACE_DIRECT) != 0)
+				out += safe_divide_color(L.direct_subsurface, color_subsurface);
+			if((custom_flag & PASS_SUBSURFACE_INDIRECT) != 0)
+				out += safe_divide_color(L.indirect_subsurface, color_subsurface);
+			if((custom_flag & PASS_SUBSURFACE_COLOR) != 0)
+				out += color_subsurface;
+#endif
+
+			if((custom_flag & PASS_SHADOW) != 0)
+				out += make_float3(L.shadow.x, L.shadow.y, L.shadow.z);
+			if((custom_flag & PASS_AO) != 0)
+				out += L.ao;
+			if((custom_flag & PASS_EMISSION) != 0) {
+				shader_eval_surface(kg, &sd, 0.f, 0, SHADER_CONTEXT_EMISSION);
+				out += shader_emissive_eval(kg, &sd);
+			}
+
 			break;
 		}
 #endif

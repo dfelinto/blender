@@ -234,6 +234,7 @@ typedef enum ShaderEvalType {
 
 	/* extra */
 	SHADER_EVAL_ENVIRONMENT,
+	SHADER_EVAL_CUSTOM,
 } ShaderEvalType;
 
 /* Path Tracing
