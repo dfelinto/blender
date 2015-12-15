@@ -548,6 +548,64 @@ static PyObject *gPyGetAverageFrameRate(PyObject *)
 	return PyFloat_FromDouble(KX_KetsjiEngine::GetAverageFrameRate());
 }
 
+static PyObject *gPyGetUseExternalClock(PyObject *)
+{
+	return PyBool_FromLong(gp_KetsjiEngine->GetUseExternalClock());
+}
+
+static PyObject *gPySetUseExternalClock(PyObject *, PyObject *args)
+{
+	bool bUseExternalClock;
+
+	if (!PyArg_ParseTuple(args, "p:setUseExternalClock", &bUseExternalClock))
+		return NULL;
+
+	gp_KetsjiEngine->SetUseExternalClock(bUseExternalClock);
+	Py_RETURN_NONE;
+}
+
+static PyObject *gPyGetClockTime(PyObject *)
+{
+	return PyFloat_FromDouble(gp_KetsjiEngine->GetClockTime());
+}
+
+static PyObject *gPySetClockTime(PyObject *, PyObject *args)
+{
+	double externalClockTime;
+
+	if (!PyArg_ParseTuple(args, "d:setClockTime", &externalClockTime))
+		return NULL;
+
+	gp_KetsjiEngine->SetClockTime(externalClockTime);
+	Py_RETURN_NONE;
+}
+
+static PyObject *gPyGetFrameTime(PyObject *)
+{
+	return PyFloat_FromDouble(gp_KetsjiEngine->GetFrameTime());
+}
+
+static PyObject *gPyGetRealTime(PyObject *)
+{
+	return PyFloat_FromDouble(gp_KetsjiEngine->GetRealTime());
+}
+
+static PyObject *gPyGetTimeScale(PyObject *)
+{
+	return PyFloat_FromDouble(gp_KetsjiEngine->GetTimeScale());
+}
+
+static PyObject *gPySetTimeScale(PyObject *, PyObject *args)
+{
+	double time_scale;
+
+	if (!PyArg_ParseTuple(args, "d:setTimeScale", &time_scale))
+			return NULL;
+
+	gp_KetsjiEngine->SetTimeScale(time_scale);
+	Py_RETURN_NONE;
+}
+
 static PyObject *gPyGetBlendFileList(PyObject *, PyObject *args)
 {
 	char cpath[sizeof(gp_GamePythonPath)];
@@ -647,71 +705,10 @@ static PyObject *pyPrintStats(PyObject *,PyObject *,PyObject *)
 
 static PyObject *pyPrintExt(PyObject *,PyObject *,PyObject *)
 {
-#define pprint(x) std::cout << x << std::endl;
-	bool count=0;
-	bool support=0;
-	pprint("Supported Extensions...");
-	pprint(" GL_ARB_shader_objects supported?       "<< (GLEW_ARB_shader_objects?"yes.":"no."));
-	count = 1;
-
-	support= GLEW_ARB_vertex_shader;
-	pprint(" GL_ARB_vertex_shader supported?        "<< (support?"yes.":"no."));
-	count = 1;
-	if (support) {
-		pprint(" ----------Details----------");
-		int max=0;
-		glGetIntegerv(GL_MAX_VERTEX_UNIFORM_COMPONENTS_ARB, (GLint*)&max);
-		pprint("  Max uniform components." << max);
-
-		glGetIntegerv(GL_MAX_VARYING_FLOATS_ARB, (GLint*)&max);
-		pprint("  Max varying floats." << max);
-
-		glGetIntegerv(GL_MAX_VERTEX_TEXTURE_IMAGE_UNITS_ARB, (GLint*)&max);
-		pprint("  Max vertex texture units." << max);
-	
-		glGetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS_ARB, (GLint*)&max);
-		pprint("  Max combined texture units." << max);
-		pprint("");
-	}
-
-	support=GLEW_ARB_fragment_shader;
-	pprint(" GL_ARB_fragment_shader supported?      "<< (support?"yes.":"no."));
-	count = 1;
-	if (support) {
-		pprint(" ----------Details----------");
-		int max=0;
-		glGetIntegerv(GL_MAX_FRAGMENT_UNIFORM_COMPONENTS_ARB, (GLint*)&max);
-		pprint("  Max uniform components." << max);
-		pprint("");
-	}
-
-	support = GLEW_ARB_texture_cube_map;
-	pprint(" GL_ARB_texture_cube_map supported?     "<< (support?"yes.":"no."));
-	count = 1;
-	if (support) {
-		pprint(" ----------Details----------");
-		int size=0;
-		glGetIntegerv(GL_MAX_CUBE_MAP_TEXTURE_SIZE_ARB, (GLint*)&size);
-		pprint("  Max cubemap size." << size);
-		pprint("");
-	}
-
-	support = GLEW_ARB_multitexture;
-	count = 1;
-	pprint(" GL_ARB_multitexture supported?         "<< (support?"yes.":"no."));
-	if (support) {
-		pprint(" ----------Details----------");
-		int units=0;
-		glGetIntegerv(GL_MAX_TEXTURE_UNITS_ARB, (GLint*)&units);
-		pprint("  Max texture units available.  " << units);
-		pprint("");
-	}
-
-	pprint(" GL_ARB_texture_env_combine supported?  "<< (GLEW_ARB_texture_env_combine?"yes.":"no."));
-	count = 1;
-
-	if (!count)
-		pprint("No extenstions are used in this build");
+	if (gp_Rasterizer)
+		gp_Rasterizer->PrintHardwareInfo();
+	else
+		printf("Warning: no rasterizer detected for PrintGLInfo!\n");
 
 	Py_RETURN_NONE;
 }
@@ -908,7 +905,19 @@ static struct PyMethodDef game_methods[] = {
 	{"setAnimRecordFrame", (PyCFunction) gPySetAnimRecordFrame, METH_VARARGS, (const char *)"Sets the current frame number used for animation recording"},
 	{"getExitKey", (PyCFunction) gPyGetExitKey, METH_NOARGS, (const char *)"Gets the key used to exit the game engine"},
 	{"setExitKey", (PyCFunction) gPySetExitKey, METH_VARARGS, (const char *)"Sets the key used to exit the game engine"},
+	{"getUseExternalClock", (PyCFunction) gPyGetUseExternalClock, METH_NOARGS, (const char *)"Get if we use the time provided by an external clock"},
+	{"setUseExternalClock", (PyCFunction) gPySetUseExternalClock, METH_VARARGS, (const char *)"Set if we use the time provided by an external clock"},
+	{"getClockTime", (PyCFunction) gPyGetClockTime, METH_NOARGS, (const char *)"Get the last BGE render time. "
+	"The BGE render time is the simulated time corresponding to the next scene that will be renderered"},
+	{"setClockTime", (PyCFunction) gPySetClockTime, METH_VARARGS, (const char *)"Set the BGE render time. "
+	"The BGE render time is the simulated time corresponding to the next scene that will be rendered"},
+	{"getFrameTime", (PyCFunction) gPyGetFrameTime, METH_NOARGS, (const char *)"Get the BGE last frametime. "
+	"The BGE frame time is the simulated time corresponding to the last call of the logic system"},
+	{"getRealTime", (PyCFunction) gPyGetRealTime, METH_NOARGS, (const char *)"Get the real system time. "
+	"The real-time corresponds to the system time" },
 	{"getAverageFrameRate", (PyCFunction) gPyGetAverageFrameRate, METH_NOARGS, (const char *)"Gets the estimated average frame rate"},
+	{"getTimeScale", (PyCFunction) gPyGetTimeScale, METH_NOARGS, (const char *)"Get the time multiplier"},
+	{"setTimeScale", (PyCFunction) gPySetTimeScale, METH_VARARGS, (const char *)"Set the time multiplier"},
 	{"getBlendFileList", (PyCFunction)gPyGetBlendFileList, METH_VARARGS, (const char *)"Gets a list of blend files in the same directory as the current blend file"},
 	{"PrintGLInfo", (PyCFunction)pyPrintExt, METH_NOARGS, (const char *)"Prints GL Extension Info"},
 	{"PrintMemInfo", (PyCFunction)pyPrintStats, METH_NOARGS, (const char *)"Print engine statistics"},

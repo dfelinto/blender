@@ -38,7 +38,6 @@
 #include "BKE_image.h"
 #include "BLI_blenlib.h"
 
-#include "RAS_OpenGLRasterizer/RAS_GLExtensionManager.h"
 #include "RAS_ICanvas.h"
 #include "RAS_Rect.h"
 
@@ -196,7 +195,7 @@ bool BL_Texture::InitFromImage(int unit,  Image *img, bool mipmap)
 
 void BL_Texture::InitGLTex(unsigned int *pix,int x,int y,bool mipmap)
 {
-	if (!GPU_non_power_of_two_support() && (!is_power_of_2_i(x) || !is_power_of_2_i(y)) ) {
+	if (!GPU_full_non_power_of_two_support() && (!is_power_of_2_i(x) || !is_power_of_2_i(y)) ) {
 		InitNonPow2Tex(pix, x,y,mipmap);
 		return;
 	}

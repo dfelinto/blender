@@ -81,7 +81,6 @@ variables on the UI for now
 #include "BKE_scene.h"
 
 #include  "PIL_time.h"
-// #include  "ONL_opennl.h" remove linking to ONL for now
 
 /* callbacks for errors and interrupts and some goo */
 static int (*SB_localInterruptCallBack)(void) = NULL;
@@ -1214,9 +1213,9 @@ static int sb_detect_face_collisionCached(float face_v1[3], float face_v2[3], fl
 					sub_v3_v3v3(edge2, nv3, nv2);
 					cross_v3_v3v3(d_nvect, edge2, edge1);
 					normalize_v3(d_nvect);
-					if (isect_line_tri_v3(nv1, nv2, face_v1, face_v2, face_v3, &t, NULL) ||
-					    isect_line_tri_v3(nv2, nv3, face_v1, face_v2, face_v3, &t, NULL) ||
-					    isect_line_tri_v3(nv3, nv1, face_v1, face_v2, face_v3, &t, NULL) )
+					if (isect_line_segment_tri_v3(nv1, nv2, face_v1, face_v2, face_v3, &t, NULL) ||
+					    isect_line_segment_tri_v3(nv2, nv3, face_v1, face_v2, face_v3, &t, NULL) ||
+					    isect_line_segment_tri_v3(nv3, nv1, face_v1, face_v2, face_v3, &t, NULL) )
 					{
 						madd_v3_v3fl(force, d_nvect, -0.5f);
 						*damp=tune*ob->pd->pdef_sbdamp;
@@ -1397,7 +1396,7 @@ static int sb_detect_edge_collisionCached(float edge_v1[3], float edge_v2[3], fl
 
 					cross_v3_v3v3(d_nvect, edge2, edge1);
 					normalize_v3(d_nvect);
-					if ( isect_line_tri_v3(edge_v1, edge_v2, nv1, nv2, nv3, &t, NULL)) {
+					if (isect_line_segment_tri_v3(edge_v1, edge_v2, nv1, nv2, nv3, &t, NULL)) {
 						float v1[3], v2[3];
 						float intrusiondepth, i1, i2;
 						sub_v3_v3v3(v1, edge_v1, nv2);
@@ -1811,14 +1810,14 @@ static void dfdx_spring(int ia, int ic, int op, float dir[3], float L, float len
 			for (j=0;j<3;j++) {
 				delta_ij = (i==j ? (1.0f): (0.0f));
 				m=factor*(dir[i]*dir[j] + (1-L/len)*(delta_ij - dir[i]*dir[j]));
-				nlMatrixAdd(ia+i, op+ic+j, m);
+				EIG_linear_solver_matrix_add(ia+i, op+ic+j, m);
 			}
 	}
 	else {
 		for (i=0;i<3;i++)
 			for (j=0;j<3;j++) {
 				m=factor*dir[i]*dir[j];
-				nlMatrixAdd(ia+i, op+ic+j, m);
+				EIG_linear_solver_matrix_add(ia+i, op+ic+j, m);
 			}
 	}
 }
@@ -1827,13 +1826,13 @@ static void dfdx_spring(int ia, int ic, int op, float dir[3], float L, float len
 static void dfdx_goal(int ia, int ic, int op, float factor)
 {
 	int i;
-	for (i=0;i<3;i++) nlMatrixAdd(ia+i, op+ic+i, factor);
+	for (i=0;i<3;i++) EIG_linear_solver_matrix_add(ia+i, op+ic+i, factor);
 }
 
 static void dfdv_goal(int ia, int ic, float factor)
 {
 	int i;
-	for (i=0;i<3;i++) nlMatrixAdd(ia+i, ic+i, factor);
+	for (i=0;i<3;i++) EIG_linear_solver_matrix_add(ia+i, ic+i, factor);
 }
 */
 static void sb_spring_force(Object *ob, int bpi, BodySpring *bs, float iks, float UNUSED(forcetime))

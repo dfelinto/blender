@@ -61,7 +61,10 @@
 #include "IMB_imbuf_types.h"
 
 #include "GPU_extensions.h"
+#include "GPU_framebuffer.h"
 #include "GPU_material.h"
+#include "GPU_shader.h"
+#include "GPU_texture.h"
 
 #include "gpu_codegen.h"
 
@@ -1784,18 +1787,21 @@ GPUMaterial *GPU_material_from_blender(Scene *scene, Material *ma, bool use_open
 	mat->is_opensubdiv = use_opensubdiv;
 
 	/* render pipeline option */
-	if (ma->mode & MA_TRANSP)
+	bool new_shading_nodes = BKE_scene_use_new_shading_nodes(scene);
+	if (!new_shading_nodes && (ma->mode & MA_TRANSP))
+		GPU_material_enable_alpha(mat);
+	else if (new_shading_nodes && ma->alpha < 1.0f)
 		GPU_material_enable_alpha(mat);
 
 	if (!(scene->gm.flag & GAME_GLSL_NO_NODES) && ma->nodetree && ma->use_nodes) {
 		/* create nodes */
-		if (BKE_scene_use_new_shading_nodes(scene))
+		if (new_shading_nodes)
 			ntreeGPUMaterialNodes(ma->nodetree, mat, NODE_NEW_SHADING);
 		else
 			ntreeGPUMaterialNodes(ma->nodetree, mat, NODE_OLD_SHADING);
 	}
 	else {
-		if (BKE_scene_use_new_shading_nodes(scene)) {
+		if (new_shading_nodes) {
 			/* create simple diffuse material instead of nodes */
 			outlink = gpu_material_diffuse_bsdf(mat, ma);
 		}
@@ -2310,7 +2316,7 @@ GPUShaderExport *GPU_shader_export(struct Scene *scene, struct Material *ma)
 					if (GPU_texture_opengl_bindcode(input->tex)) {
 						uniform->type = GPU_DYNAMIC_SAMPLER_2DBUFFER;
 						glBindTexture(GL_TEXTURE_2D, GPU_texture_opengl_bindcode(input->tex));
-						uniform->texsize = GPU_texture_opengl_width(input->tex) * GPU_texture_opengl_height(input->tex);
+						uniform->texsize = GPU_texture_width(input->tex) * GPU_texture_height(input->tex);
 						uniform->texpixels = MEM_mallocN(uniform->texsize*4, "RGBApixels");
 						glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, uniform->texpixels); 
 						glBindTexture(GL_TEXTURE_2D, 0);

@@ -75,11 +75,13 @@
 #include "BKE_subsurf.h"
 #include "BKE_DerivedMesh.h"
 
+#include "GPU_basic_shader.h"
 #include "GPU_buffers.h"
 #include "GPU_draw.h"
 #include "GPU_extensions.h"
 #include "GPU_material.h"
-#include "GPU_basic_shader.h"
+#include "GPU_shader.h"
+#include "GPU_texture.h"
 
 #include "PIL_time.h"
 
@@ -730,7 +732,7 @@ void GPU_create_gl_tex(unsigned int *bind, unsigned int *rect, float *frect, int
 	/* scale if not a power of two. this is not strictly necessary for newer
 	 * GPUs (OpenGL version >= 2.0) since they support non-power-of-two-textures 
 	 * Then don't bother scaling for hardware that supports NPOT textures! */
-	if ((!GPU_non_power_of_two_support() && !is_power_of_2_resolution(rectw, recth)) ||
+	if ((!GPU_full_non_power_of_two_support() && !is_power_of_2_resolution(rectw, recth)) ||
 		is_over_resolution_limit(rectw, recth)) {
 		rectw = smaller_power_of_2_limit(rectw);
 		recth = smaller_power_of_2_limit(recth);
@@ -755,12 +757,12 @@ void GPU_create_gl_tex(unsigned int *bind, unsigned int *rect, float *frect, int
 
 	if (use_high_bit_depth) {
 		if (GLEW_ARB_texture_float)
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, rectw, recth, 0, GL_RGBA, GL_FLOAT, frect);
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F_ARB, rectw, recth, 0, GL_RGBA, GL_FLOAT, frect);
 		else
 			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16, rectw, recth, 0, GL_RGBA, GL_FLOAT, frect);
 	}
 	else
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, rectw, recth, 0, GL_RGBA, GL_UNSIGNED_BYTE, rect);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, rectw, recth, 0, GL_RGBA, GL_UNSIGNED_BYTE, rect);
 
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, gpu_get_mipmap_filter(1));
 
@@ -786,12 +788,12 @@ void GPU_create_gl_tex(unsigned int *bind, unsigned int *rect, float *frect, int
 				ImBuf *mip = ibuf->mipmap[i - 1];
 				if (use_high_bit_depth) {
 					if (GLEW_ARB_texture_float)
-						glTexImage2D(GL_TEXTURE_2D, i, GL_RGBA16F, mip->x, mip->y, 0, GL_RGBA, GL_FLOAT, mip->rect_float);
+						glTexImage2D(GL_TEXTURE_2D, i, GL_RGBA16F_ARB, mip->x, mip->y, 0, GL_RGBA, GL_FLOAT, mip->rect_float);
 					else
 						glTexImage2D(GL_TEXTURE_2D, i, GL_RGBA16, mip->x, mip->y, 0, GL_RGBA, GL_FLOAT, mip->rect_float);
 				}
 				else {
-					glTexImage2D(GL_TEXTURE_2D, i, GL_RGBA, mip->x, mip->y, 0, GL_RGBA, GL_UNSIGNED_BYTE, mip->rect);
+					glTexImage2D(GL_TEXTURE_2D, i, GL_RGBA8, mip->x, mip->y, 0, GL_RGBA, GL_UNSIGNED_BYTE, mip->rect);
 				}
 			}
 		}
@@ -1000,7 +1002,7 @@ void GPU_paint_set_mipmap(bool mipmap)
 /* check if image has been downscaled and do scaled partial update */
 static bool GPU_check_scaled_image(ImBuf *ibuf, Image *ima, float *frect, int x, int y, int w, int h)
 {
-	if ((!GPU_non_power_of_two_support() && !is_power_of_2_resolution(ibuf->x, ibuf->y)) ||
+	if ((!GPU_full_non_power_of_two_support() && !is_power_of_2_resolution(ibuf->x, ibuf->y)) ||
 	    is_over_resolution_limit(ibuf->x, ibuf->y))
 	{
 		int x_limit = smaller_power_of_2_limit(ibuf->x);

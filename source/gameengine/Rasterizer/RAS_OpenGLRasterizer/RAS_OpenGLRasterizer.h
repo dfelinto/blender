@@ -56,7 +56,6 @@ class RAS_OpenGLLight;
 
 enum RAS_STORAGE_TYPE	{
 	RAS_AUTO_STORAGE,
-	RAS_IMMEDIATE,
 	RAS_VA,
 	RAS_VBO,
 };
@@ -139,11 +138,10 @@ protected:
 	 * Examples of concrete strategies: Vertex Arrays, VBOs, Immediate Mode*/
 	int m_storage_type;
 	RAS_IStorage *m_storage;
-	RAS_IStorage *m_failsafe_storage; /* So derived mesh can use immediate mode */
 
 public:
 	double GetTime();
-	RAS_OpenGLRasterizer(RAS_ICanvas *canv, int storage=RAS_AUTO_STORAGE);
+	RAS_OpenGLRasterizer(RAS_ICanvas *canv, RAS_STORAGE_TYPE storage);
 	virtual ~RAS_OpenGLRasterizer();
 
 	/*enum DrawType
@@ -186,8 +184,8 @@ public:
 	virtual void SwapBuffers();
 
 	virtual void IndexPrimitives(class RAS_MeshSlot &ms);
-	virtual void IndexPrimitivesMulti(class RAS_MeshSlot &ms);
 	virtual void IndexPrimitives_3DText(class RAS_MeshSlot &ms, class RAS_IPolyMaterial *polymat);
+	virtual void DrawDerivedMesh(class RAS_MeshSlot &ms);
 
 	virtual void SetProjectionMatrix(MT_CmMatrix4x4 &mat);
 	virtual void SetProjectionMatrix(const MT_Matrix4x4 &mat);
@@ -299,17 +297,17 @@ public:
 
 	void RenderBox2D(int xco, int yco, int width, int height, float percentage);
 	void RenderText3D(int fontid, const char *text, int size, int dpi,
-	                  const float color[4], const double mat[16], float aspect);
+	                  const float color[4], const float mat[16], float aspect);
 	void RenderText2D(RAS_TEXT_RENDER_MODE mode, const char *text,
 	                  int xco, int yco, int width, int height);
 
-	void applyTransform(double *oglmatrix, int objectdrawmode);
+	void applyTransform(float *oglmatrix, int objectdrawmode);
 
 	void PushMatrix();
 	void PopMatrix();
 
 	/// \see KX_RayCast
-	bool RayHit(struct KX_ClientObjectInfo *client, class KX_RayCast *result, double *oglmatrix);
+	bool RayHit(struct KX_ClientObjectInfo *client, class KX_RayCast *result, float *oglmatrix);
 	/// \see KX_RayCast
 	bool NeedRayCast(struct KX_ClientObjectInfo *, void *UNUSED(data)) { return true; }
 
@@ -325,6 +323,10 @@ public:
 
 	void SetAuxilaryClientInfo(void *inf);
 
+	/**
+	 * Prints information about what the hardware supports.
+	 */
+	virtual void PrintHardwareInfo();
 
 #ifdef WITH_CXX_GUARDEDALLOC
 	MEM_CXX_CLASS_ALLOC_FUNCS("GE:RAS_OpenGLRasterizer")
