@@ -1438,41 +1438,38 @@ class CyclesRender_PT_bake(CyclesButtonsPanel, Panel):
             row.prop(cbk, "normal_g", text="")
             row.prop(cbk, "normal_b", text="")
 
-        elif cscene.bake_type == 'CUSTOM':
-            split = layout.split()
+        elif cscene.bake_type == 'COMBINED':
+            box = layout.box()
+            box.label(text="Combined Settings:")
 
-            col = split.column()
-            col.label(text="Diffuse:")
-            row = col.row(align=True)
-            row.prop(cbk, "use_pass_diffuse_direct", text="Direct", toggle=True)
-            row.prop(cbk, "use_pass_diffuse_indirect", text="Indirect", toggle=True)
-            row.prop(cbk, "use_pass_diffuse_color", text="Color", toggle=True)
-            col.label(text="Glossy:")
-            row = col.row(align=True)
-            row.prop(cbk, "use_pass_glossy_direct", text="Direct", toggle=True)
-            row.prop(cbk, "use_pass_glossy_indirect", text="Indirect", toggle=True)
-            row.prop(cbk, "use_pass_glossy_color", text="Color", toggle=True)
+            row = box.row()
+            row.prop(cbk, "use_pass_ambient_occlusion")
+            row.prop(cbk, "use_pass_emit")
 
-            col.separator()
-            col.prop(cbk, "use_pass_shadow")
-            col.prop(cbk, "use_pass_ambient_occlusion")
+            row = box.row(align=True)
+            row.prop(cbk, "use_pass_direct", toggle=True)
+            row.prop(cbk, "use_pass_indirect", toggle=True)
 
-            col = split.column()
-            col.label(text="Transmission:")
-            row = col.row(align=True)
-            row.prop(cbk, "use_pass_transmission_direct", text="Direct", toggle=True)
-            row.prop(cbk, "use_pass_transmission_indirect", text="Indirect", toggle=True)
-            row.prop(cbk, "use_pass_transmission_color", text="Color", toggle=True)
-            col.label(text="Subsurface:")
-            row = col.row(align=True)
-            row.prop(cbk, "use_pass_subsurface_direct", text="Direct", toggle=True)
-            row.prop(cbk, "use_pass_subsurface_indirect", text="Indirect", toggle=True)
-            row.prop(cbk, "use_pass_subsurface_color", text="Color", toggle=True)
+            split = box.split()
+            split.active = cbk.use_pass_direct or cbk.use_pass_indirect
 
-            col.separator()
-            col.prop(cbk, "use_pass_emit", text="Emission")
-            col.prop(cbk, "use_pass_environment")
+            sub = split.column()
+            sub.prop(cbk, "use_pass_diffuse")
+            sub.prop(cbk, "use_pass_glossy")
 
+            sub = split.column()
+            sub.prop(cbk, "use_pass_transmission")
+            sub.prop(cbk, "use_pass_subsurface")
+
+        elif cscene.bake_type in {'DIFFUSE', 'GLOSSY', 'TRANSMISSION', 'SUBSURFACE'}:
+            layout.separator()
+            box = layout.box()
+            box.label(text="{0} Settings:".format(cscene.bake_type.title()))
+
+            row = box.row(align=True)
+            row.prop(cbk, "use_pass_direct", toggle=True)
+            row.prop(cbk, "use_pass_indirect", toggle=True)
+            row.prop(cbk, "use_pass_color", toggle=True)
 
 class CyclesParticle_PT_CurveSettings(CyclesButtonsPanel, Panel):
     bl_label = "Cycles Hair Settings"

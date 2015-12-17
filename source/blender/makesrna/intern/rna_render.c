@@ -74,7 +74,6 @@ EnumPropertyItem rna_enum_render_pass_type_items[] = {
 #ifdef WITH_CYCLES_DEBUG
 	{SCE_PASS_DEBUG, "DEBUG", 0, "Pass used for render engine debugging", ""},
 #endif
-	{SCE_PASS_CUSTOM, "CUSTOM", 0, "Custom", ""},
 	{0, NULL, 0, NULL, NULL}
 };
 
@@ -82,6 +81,21 @@ EnumPropertyItem rna_enum_render_pass_debug_type_items[] = {
 	{RENDER_PASS_DEBUG_BVH_TRAVERSAL_STEPS, "BVH_TRAVERSAL_STEPS", 0, "BVH Traversal Steps", ""},
 	{RENDER_PASS_DEBUG_BVH_TRAVERSED_INSTANCES, "BVH_TRAVERSED_INSTANCES", 0, "BVH Traversed Instances", ""},
 	{RENDER_PASS_DEBUG_RAY_BOUNCES, "RAY_BOUNCES", 0, "Ray Steps", ""},
+	{0, NULL, 0, NULL, NULL}
+};
+
+EnumPropertyItem rna_enum_bake_pass_type_items[] = {
+	{SCE_PASS_COMBINED, "COMBINED", 0, "Combined", ""},
+	{SCE_PASS_AO, "AO", 0, "AO", ""},
+	{SCE_PASS_SHADOW, "SHADOW", 0, "Shadow", ""},
+	{SCE_PASS_NORMAL, "NORMAL", 0, "Normal", ""},
+	{SCE_PASS_UV, "UV", 0, "UV", ""},
+	{SCE_PASS_EMIT, "EMIT", 0, "Emit", ""},
+	{SCE_PASS_ENVIRONMENT, "ENVIRONMENT", 0, "Environment", ""},
+	{SCE_PASS_DIFFUSE_COLOR, "DIFFUSE", 0, "Diffuse", ""},
+	{SCE_PASS_GLOSSY_COLOR, "GLOSSY", 0, "Glossy", ""},
+	{SCE_PASS_TRANSM_COLOR, "TRANSMISSION", 0, "Transmission", ""},
+	{SCE_PASS_SUBSURFACE_COLOR, "SUBSURFACE", 0, "Subsurface", ""},
 	{0, NULL, 0, NULL, NULL}
 };
 
@@ -163,7 +177,7 @@ static void engine_render(RenderEngine *engine, struct Scene *scene)
 }
 
 static void engine_bake(RenderEngine *engine, struct Scene *scene,
-                        struct Object *object, const int pass_type, const int custom_flag,
+                        struct Object *object, const int pass_type, const int pass_filter,
                         const int object_id, const struct BakePixel *pixel_array,
                         const int num_pixels, const int depth, void *result)
 {
@@ -179,7 +193,7 @@ static void engine_bake(RenderEngine *engine, struct Scene *scene,
 	RNA_parameter_set_lookup(&list, "scene", &scene);
 	RNA_parameter_set_lookup(&list, "object", &object);
 	RNA_parameter_set_lookup(&list, "pass_type", &pass_type);
-	RNA_parameter_set_lookup(&list, "custom_flag", &custom_flag);
+	RNA_parameter_set_lookup(&list, "pass_filter", &pass_filter);
 	RNA_parameter_set_lookup(&list, "object_id", &object_id);
 	RNA_parameter_set_lookup(&list, "pixel_array", &pixel_array);
 	RNA_parameter_set_lookup(&list, "num_pixels", &num_pixels);
@@ -434,9 +448,9 @@ static void rna_def_render_engine(BlenderRNA *brna)
 	RNA_def_property_flag(prop, PROP_REQUIRED);
 	prop = RNA_def_pointer(func, "object", "Object", "", "");
 	RNA_def_property_flag(prop, PROP_REQUIRED);
-	prop = RNA_def_enum(func, "pass_type", rna_enum_render_pass_type_items, 0, "Pass", "Pass to bake");
+	prop = RNA_def_enum(func, "pass_type", rna_enum_bake_pass_type_items, 0, "Pass", "Pass to bake");
 	RNA_def_property_flag(prop, PROP_REQUIRED);
-	prop = RNA_def_int(func, "custom_flag", 0, 0, INT_MAX, "Custom Passes", "Passes to bake in custom mode", 0, INT_MAX);
+	prop = RNA_def_int(func, "pass_filter", 0, 0, INT_MAX, "Pass Filter", "Filter to combined, diffuse, glossy, transmission and subsurface passes", 0, INT_MAX);
 	RNA_def_property_flag(prop, PROP_REQUIRED);
 	prop = RNA_def_int(func, "object_id", 0, 0, INT_MAX, "Object Id", "Id of the current object being baked in relation to the others", 0, INT_MAX);
 	RNA_def_property_flag(prop, PROP_REQUIRED);

@@ -1030,4 +1030,12 @@ void blo_do_versions_270(FileData *fd, Library *UNUSED(lib), Main *main)
 				gpd->flag &= ~GP_DATA_SHOW_ONIONSKINS;
 		}
 	}
+	if (!MAIN_VERSION_ATLEAST(main, 276, 5)) {
+		if (!DNA_struct_elem_find(fd->filesdna, "BakeData", "int", "pass_filter")) {
+			Scene *scene;
+			for (scene = main->scene.first; scene != NULL; scene = scene->id.next) {
+				scene->r.bake.pass_filter = R_BAKE_PASS_FILTER_ALL;
+			}
+		}
+	}
 }

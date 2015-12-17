@@ -247,7 +247,6 @@ typedef enum ScenePassType {
 	SCE_PASS_SUBSURFACE_INDIRECT      = (1 << 29),
 	SCE_PASS_SUBSURFACE_COLOR         = (1 << 30),
 	SCE_PASS_DEBUG                    = (1 << 31),  /* This is a virtual pass. */
-	SCE_PASS_CUSTOM                   = (1 << 32),
 } ScenePassType;
 
 /* note, srl->passflag is treestore element 'nr' in outliner, short still... */
@@ -452,7 +451,7 @@ typedef struct BakeData {
 	short margin, flag;
 
 	float cage_extrusion;
-	int custom_flag;
+	int pass_filter;
 
 	char normal_swizzle[3];
 	char normal_space;
@@ -478,6 +477,22 @@ typedef enum BakeSaveMode {
 	R_BAKE_SAVE_INTERNAL = 0,
 	R_BAKE_SAVE_EXTERNAL = 1,
 } BakeSaveMode;
+
+/* bake->pass_filter */
+typedef enum BakePassFilter{
+	R_BAKE_PASS_FILTER_NONE           = 0,
+	R_BAKE_PASS_FILTER_AO             = (1 << 0),
+	R_BAKE_PASS_FILTER_EMIT           = (1 << 1),
+	R_BAKE_PASS_FILTER_DIFFUSE        = (1 << 2),
+	R_BAKE_PASS_FILTER_GLOSSY         = (1 << 3),
+	R_BAKE_PASS_FILTER_TRANSM         = (1 << 4),
+	R_BAKE_PASS_FILTER_SUBSURFACE     = (1 << 5),
+	R_BAKE_PASS_FILTER_DIRECT         = (1 << 6),
+	R_BAKE_PASS_FILTER_INDIRECT       = (1 << 7),
+	R_BAKE_PASS_FILTER_COLOR          = (1 << 8),
+} BakePassFilter;
+
+#define R_BAKE_PASS_FILTER_ALL (~0)
 
 /* *************************************************************** */
 /* Render Data */
