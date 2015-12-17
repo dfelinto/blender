@@ -19,7 +19,7 @@ CCL_NAMESPACE_BEGIN
 #undef USE_BAKE_JITTER
 
 ccl_device void compute_light_pass(KernelGlobals *kg, ShaderData *sd, PathRadiance *L, RNG rng,
-                                   const bool is_combined, const bool is_ao, const bool is_sss, int sample)
+                                   const bool is_ao, const bool is_sss, int sample)
 {
 	/* initialize master radiance accumulator */
 	kernel_assert(kernel_data.film.use_light_pass);
@@ -56,13 +56,13 @@ ccl_device void compute_light_pass(KernelGlobals *kg, ShaderData *sd, PathRadian
 #endif
 
 		/* sample ambient occlusion */
-		if(is_combined || is_ao) {
+		if(is_ao) {
 			kernel_path_ao(kg, sd, &L_sample, &state, &rng, throughput);
 		}
 
 #ifdef __SUBSURFACE__
 		/* sample subsurface scattering */
-		if((is_combined || is_sss_sample) && (sd->flag & SD_BSSRDF)) {
+		if(is_sss_sample && ((sd->flag & SD_BSSRDF) != 0)) {
 			/* when mixing BSSRDF and BSDF closures we should skip BSDF lighting if scattering was successful */
 			SubsurfaceIndirectRays ss_indirect;
 			kernel_path_subsurface_init_indirect(&ss_indirect);
@@ -124,13 +124,13 @@ ccl_device void compute_light_pass(KernelGlobals *kg, ShaderData *sd, PathRadian
 		/* branched path tracer */
 
 		/* sample ambient occlusion */
-		if(is_combined || is_ao) {
+		if(is_ao) {
 			kernel_branched_path_ao(kg, sd, &L_sample, &state, &rng, throughput);
 		}
 
 #ifdef __SUBSURFACE__
 		/* sample subsurface scattering */
-		if((is_combined || is_sss_sample) && (sd->flag & SD_BSSRDF)) {
+		if(is_sss_sample && ((sd->flag & SD_BSSRDF) != 0)) {
 			/* when mixing BSSRDF and BSDF closures we should skip BSDF lighting if scattering was successful */
 			kernel_branched_path_subsurface_scatter(kg, sd, &L_sample, &state, &rng, &ray, throughput);
 		}
@@ -330,19 +330,16 @@ ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input,
 
 	/* light passes */
 	if(is_light_pass(type, pass_filter)) {
-		bool is_combined;
 		bool is_ao;
 		bool is_sss;
 
 		if (type == SHADER_EVAL_COMBINED) {
-			is_combined = true;
 			is_ao = (pass_filter & BAKE_FILTER_AO) != 0;
 			is_sss = ((pass_filter & BAKE_FILTER_SUBSURFACE) != 0) &&
 			         (((pass_filter & BAKE_FILTER_DIRECT) != 0) ||
 			          ((pass_filter & BAKE_FILTER_INDIRECT) != 0));
 		}
 		else {
-			is_combined = false;
 			is_ao = type == SHADER_EVAL_AO;
 			is_sss = (type == SHADER_EVAL_SUBSURFACE) &&
 			         (((pass_filter & BAKE_FILTER_DIRECT) != 0) ||
@@ -350,7 +347,6 @@ ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input,
 		}
 
 		compute_light_pass(kg, &sd, &L, rng,
-		                   is_combined,
 		                   is_ao,
 		                   is_sss,
 		                   sample);
