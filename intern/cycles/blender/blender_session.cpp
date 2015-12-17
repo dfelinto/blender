@@ -328,8 +328,6 @@ static ShaderEvalType get_shader_type(const string& pass_type)
 	/* extra */
 	else if(strcmp(shader_type, "ENVIRONMENT")==0)
 		return SHADER_EVAL_ENVIRONMENT;
-	else if(strcmp(shader_type, "CUSTOM")==0)
-		return SHADER_EVAL_CUSTOM;
 
 	else
 		return SHADER_EVAL_BAKE;
