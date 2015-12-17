@@ -391,20 +391,6 @@ EnumPropertyItem rna_enum_stereo3d_interlace_type_items[] = {
 	{0, NULL, 0, NULL, NULL}
 };
 
-EnumPropertyItem rna_enum_bake_pass_filter_type_items[] = {
-	{R_BAKE_PASS_FILTER_NONE, "NONE", 0, "None", ""},
-	{R_BAKE_PASS_FILTER_AO, "AO", 0, "AO", ""},
-	{R_BAKE_PASS_FILTER_EMIT, "EMIT", 0, "Emit", ""},
-	{R_BAKE_PASS_FILTER_DIRECT, "DIRECT", 0, "Direct", ""},
-	{R_BAKE_PASS_FILTER_INDIRECT, "INDIRECT", 0, "Indirect", ""},
-	{R_BAKE_PASS_FILTER_COLOR, "COLOR", 0, "COlor", ""},
-	{R_BAKE_PASS_FILTER_DIFFUSE, "DIFFUSE", 0, "Diffuse", ""},
-	{R_BAKE_PASS_FILTER_GLOSSY, "GLOSSY", 0, "Glossy", ""},
-	{R_BAKE_PASS_FILTER_TRANSM, "TRANSMISSION", 0, "Transmission", ""},
-	{R_BAKE_PASS_FILTER_SUBSURFACE, "SUBSURFACE", 0, "Subsurface", ""},
-	{0, NULL, 0, NULL, NULL}
-};
-
 #ifdef RNA_RUNTIME
 
 #include "DNA_anim_types.h"
@@ -3761,56 +3747,6 @@ static void rna_def_bake_data(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Cage",
 	                         "Cast rays to active object from a cage");
 	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
-
-	/* custom passes flags */
-	prop = RNA_def_property(srna, "use_pass_ambient_occlusion", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "pass_filter", R_BAKE_PASS_FILTER_AO);
-	RNA_def_property_ui_text(prop, "AO", "Deliver AO pass");
-
-	prop = RNA_def_property(srna, "use_pass_emit", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "pass_filter", R_BAKE_PASS_FILTER_EMIT);
-	RNA_def_property_ui_text(prop, "Emit", "Deliver emission pass");
-
-	prop = RNA_def_property(srna, "use_pass_direct", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "pass_filter", R_BAKE_PASS_FILTER_DIRECT);
-	RNA_def_property_ui_text(prop, "Direct", "Deliver direct lighting");
-	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
-
-	prop = RNA_def_property(srna, "use_pass_indirect", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "pass_filter", R_BAKE_PASS_FILTER_INDIRECT);
-	RNA_def_property_ui_text(prop, "Indirect", "Deliver indirect lighting");
-	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
-
-	prop = RNA_def_property(srna, "use_pass_color", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "pass_filter", R_BAKE_PASS_FILTER_COLOR);
-	RNA_def_property_ui_text(prop, "Color", "Color the pass");
-	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
-
-	prop = RNA_def_property(srna, "use_pass_diffuse", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "pass_filter", R_BAKE_PASS_FILTER_DIFFUSE);
-	RNA_def_property_ui_text(prop, "Diffuse", "Deliver diffuse pass");
-	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
-
-	prop = RNA_def_property(srna, "use_pass_glossy", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "pass_filter", R_BAKE_PASS_FILTER_GLOSSY);
-	RNA_def_property_ui_text(prop, "Glossy", "Deliver glossy pass");
-	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
-
-	prop = RNA_def_property(srna, "use_pass_transmission", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "pass_filter", R_BAKE_PASS_FILTER_TRANSM);
-	RNA_def_property_ui_text(prop, "Transmission", "Deliver transmission pass");
-	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
-
-	prop = RNA_def_property(srna, "use_pass_subsurface", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "pass_filter", R_BAKE_PASS_FILTER_SUBSURFACE);
-	RNA_def_property_ui_text(prop, "Subsurface", "Deliver subsurface pass");
-	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
-
-	prop = RNA_def_property(srna, "type", PROP_ENUM, PROP_NONE);
-	RNA_def_property_enum_sdna(prop, NULL, "pass_filter");
-	RNA_def_property_enum_funcs(prop, NULL, NULL, NULL);
-	RNA_def_property_enum_items(prop, rna_enum_bake_pass_filter_type_items);
-	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 }
 
 static void rna_def_scene_game_data(BlenderRNA *brna)

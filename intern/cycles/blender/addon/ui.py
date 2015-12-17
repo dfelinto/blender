@@ -1438,38 +1438,6 @@ class CyclesRender_PT_bake(CyclesButtonsPanel, Panel):
             row.prop(cbk, "normal_g", text="")
             row.prop(cbk, "normal_b", text="")
 
-        elif cscene.bake_type == 'COMBINED':
-            box = layout.box()
-            box.label(text="Combined Settings:")
-
-            row = box.row()
-            row.prop(cbk, "use_pass_ambient_occlusion")
-            row.prop(cbk, "use_pass_emit")
-
-            row = box.row(align=True)
-            row.prop(cbk, "use_pass_direct", toggle=True)
-            row.prop(cbk, "use_pass_indirect", toggle=True)
-
-            split = box.split()
-            split.active = cbk.use_pass_direct or cbk.use_pass_indirect
-
-            sub = split.column()
-            sub.prop(cbk, "use_pass_diffuse")
-            sub.prop(cbk, "use_pass_glossy")
-
-            sub = split.column()
-            sub.prop(cbk, "use_pass_transmission")
-            sub.prop(cbk, "use_pass_subsurface")
-
-        elif cscene.bake_type in {'DIFFUSE', 'GLOSSY', 'TRANSMISSION', 'SUBSURFACE'}:
-            layout.separator()
-            box = layout.box()
-            box.label(text="{0} Settings:".format(cscene.bake_type.title()))
-
-            row = box.row(align=True)
-            row.prop(cbk, "use_pass_direct", toggle=True)
-            row.prop(cbk, "use_pass_indirect", toggle=True)
-            row.prop(cbk, "use_pass_color", toggle=True)
 
 class CyclesParticle_PT_CurveSettings(CyclesButtonsPanel, Panel):
     bl_label = "Cycles Hair Settings"

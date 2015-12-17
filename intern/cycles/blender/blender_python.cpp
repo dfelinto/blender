@@ -190,9 +190,9 @@ static PyObject *bake_func(PyObject * /*self*/, PyObject *args)
 	PyObject *pysession, *pyobject;
 	PyObject *pypixel_array, *pyresult;
 	const char *pass_type;
-	int num_pixels, depth, object_id, pass_filter;
+	int num_pixels, depth, object_id;
 
-	if(!PyArg_ParseTuple(args, "OOsiiOiiO", &pysession, &pyobject, &pass_type, &pass_filter, &object_id, &pypixel_array, &num_pixels, &depth, &pyresult))
+	if(!PyArg_ParseTuple(args, "OOsiOiiO", &pysession, &pyobject, &pass_type, &object_id, &pypixel_array, &num_pixels, &depth, &pyresult))
 		return NULL;
 
 	BlenderSession *session = (BlenderSession*)PyLong_AsVoidPtr(pysession);
@@ -209,7 +209,7 @@ static PyObject *bake_func(PyObject * /*self*/, PyObject *args)
 
 	python_thread_state_save(&session->python_thread_state);
 
-	session->bake(b_object, pass_type, pass_filter, object_id, b_bake_pixel, (size_t)num_pixels, depth, (float *)b_result);
+	session->bake(b_object, pass_type, object_id, b_bake_pixel, (size_t)num_pixels, depth, (float *)b_result);
 
 	python_thread_state_restore(&session->python_thread_state);
 
