@@ -3765,20 +3765,20 @@ static void rna_def_bake_data(BlenderRNA *brna)
 	/* custom passes flags */
 	prop = RNA_def_property(srna, "use_pass_ambient_occlusion", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "pass_filter", R_BAKE_PASS_FILTER_AO);
-	RNA_def_property_ui_text(prop, "AO", "Deliver AO pass");
+	RNA_def_property_ui_text(prop, "AO", "Add ambient occlusion contribution");
 
 	prop = RNA_def_property(srna, "use_pass_emit", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "pass_filter", R_BAKE_PASS_FILTER_EMIT);
-	RNA_def_property_ui_text(prop, "Emit", "Deliver emission pass");
+	RNA_def_property_ui_text(prop, "Emit", "Add emission contribution");
 
 	prop = RNA_def_property(srna, "use_pass_direct", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "pass_filter", R_BAKE_PASS_FILTER_DIRECT);
-	RNA_def_property_ui_text(prop, "Direct", "Deliver direct lighting");
+	RNA_def_property_ui_text(prop, "Direct", "Add direct lighting contribution");
 	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
 
 	prop = RNA_def_property(srna, "use_pass_indirect", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "pass_filter", R_BAKE_PASS_FILTER_INDIRECT);
-	RNA_def_property_ui_text(prop, "Indirect", "Deliver indirect lighting");
+	RNA_def_property_ui_text(prop, "Indirect", "Add indirect lighting contribution");
 	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
 
 	prop = RNA_def_property(srna, "use_pass_color", PROP_BOOLEAN, PROP_NONE);
@@ -3788,22 +3788,22 @@ static void rna_def_bake_data(BlenderRNA *brna)
 
 	prop = RNA_def_property(srna, "use_pass_diffuse", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "pass_filter", R_BAKE_PASS_FILTER_DIFFUSE);
-	RNA_def_property_ui_text(prop, "Diffuse", "Deliver diffuse pass");
+	RNA_def_property_ui_text(prop, "Diffuse", "Add diffuse contribution");
 	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
 
 	prop = RNA_def_property(srna, "use_pass_glossy", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "pass_filter", R_BAKE_PASS_FILTER_GLOSSY);
-	RNA_def_property_ui_text(prop, "Glossy", "Deliver glossy pass");
+	RNA_def_property_ui_text(prop, "Glossy", "Add glossy contribution");
 	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
 
 	prop = RNA_def_property(srna, "use_pass_transmission", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "pass_filter", R_BAKE_PASS_FILTER_TRANSM);
-	RNA_def_property_ui_text(prop, "Transmission", "Deliver transmission pass");
+	RNA_def_property_ui_text(prop, "Transmission", "Add transmission contribution");
 	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
 
 	prop = RNA_def_property(srna, "use_pass_subsurface", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "pass_filter", R_BAKE_PASS_FILTER_SUBSURFACE);
-	RNA_def_property_ui_text(prop, "Subsurface", "Deliver subsurface pass");
+	RNA_def_property_ui_text(prop, "Subsurface", "Add subsurface contribution");
 	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
 
 	prop = RNA_def_property(srna, "pass_filter", PROP_ENUM, PROP_NONE);
