@@ -397,7 +397,7 @@ EnumPropertyItem rna_enum_bake_pass_filter_type_items[] = {
 	{R_BAKE_PASS_FILTER_EMIT, "EMIT", 0, "Emit", ""},
 	{R_BAKE_PASS_FILTER_DIRECT, "DIRECT", 0, "Direct", ""},
 	{R_BAKE_PASS_FILTER_INDIRECT, "INDIRECT", 0, "Indirect", ""},
-	{R_BAKE_PASS_FILTER_COLOR, "COLOR", 0, "COlor", ""},
+	{R_BAKE_PASS_FILTER_COLOR, "COLOR", 0, "Color", ""},
 	{R_BAKE_PASS_FILTER_DIFFUSE, "DIFFUSE", 0, "Diffuse", ""},
 	{R_BAKE_PASS_FILTER_GLOSSY, "GLOSSY", 0, "Glossy", ""},
 	{R_BAKE_PASS_FILTER_TRANSM, "TRANSMISSION", 0, "Transmission", ""},
