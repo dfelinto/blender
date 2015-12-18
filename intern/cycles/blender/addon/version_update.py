@@ -140,26 +140,3 @@ def do_versions(self):
     # Euler order was ZYX in previous versions.
     if bpy.data.version <= (2, 73, 4):
         foreach_cycles_node(mapping_node_order_flip)
-
-    # Baking types changed
-    if bpy.data.version <= (2, 76, 4):
-        for scene in bpy.data.scenes:
-            cscene = scene.cycles
-            bake_type = cscene.bake_type
-
-            if not '_' in bake_type:
-                cscene.bake_pass_type = bake_type
-                continue
-
-            cscene.bake_pass_type, end = bake_type.split('_')
-            if end == 'DIRECT':
-                scene.render.bake.use_pass_indirect = False
-                scene.render.bake.use_pass_color = False
-
-            elif end == 'INDIRECT':
-                scene.render.bake.use_pass_direct = False
-                scene.render.bake.use_pass_color = False
-
-            elif end == 'COLOR':
-                scene.render.bake.use_pass_direct = False
-                scene.render.bake.use_pass_indirect = False
