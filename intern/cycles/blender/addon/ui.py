@@ -1428,45 +1428,45 @@ class CyclesRender_PT_bake(CyclesButtonsPanel, Panel):
 
         if cscene.bake_type == 'NORMAL':
             layout.separator()
-            box = layout.box()
-            box.label(text="Normal Settings:")
-            box.prop(cbk, "normal_space", text="Space")
+            col = layout.column()
+            col.label(text="Normal Settings:")
+            col.prop(cbk, "normal_space", text="Space")
 
-            row = box.row(align=True)
+            row = col.row(align=True)
             row.label(text="Swizzle:")
             row.prop(cbk, "normal_r", text="")
             row.prop(cbk, "normal_g", text="")
             row.prop(cbk, "normal_b", text="")
 
         elif cscene.bake_type == 'COMBINED':
-            box = layout.box()
-            box.label(text="Combined Settings:")
+            col = layout.column()
+            col.label(text="Combined Settings:")
 
-            row = box.row()
+            row = col.row()
             row.prop(cbk, "use_pass_ambient_occlusion")
             row.prop(cbk, "use_pass_emit")
 
-            row = box.row(align=True)
+            row = col.row(align=True)
             row.prop(cbk, "use_pass_direct", toggle=True)
             row.prop(cbk, "use_pass_indirect", toggle=True)
 
-            split = box.split()
+            split = col.split()
             split.active = cbk.use_pass_direct or cbk.use_pass_indirect
 
-            sub = split.column()
-            sub.prop(cbk, "use_pass_diffuse")
-            sub.prop(cbk, "use_pass_glossy")
+            col = split.column()
+            col.prop(cbk, "use_pass_diffuse")
+            col.prop(cbk, "use_pass_glossy")
 
-            sub = split.column()
-            sub.prop(cbk, "use_pass_transmission")
-            sub.prop(cbk, "use_pass_subsurface")
+            col = split.column()
+            col.prop(cbk, "use_pass_transmission")
+            col.prop(cbk, "use_pass_subsurface")
 
         elif cscene.bake_type in {'DIFFUSE', 'GLOSSY', 'TRANSMISSION', 'SUBSURFACE'}:
             layout.separator()
-            box = layout.box()
-            box.label(text="{0} Settings:".format(cscene.bake_type.title()))
+            col = layout.column()
+            col.label(text="{0} Settings:".format(cscene.bake_type.title()))
 
-            row = box.row(align=True)
+            row = col.row(align=True)
             row.prop(cbk, "use_pass_direct", toggle=True)
             row.prop(cbk, "use_pass_indirect", toggle=True)
             row.prop(cbk, "use_pass_color", toggle=True)
