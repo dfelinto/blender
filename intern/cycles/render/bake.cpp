@@ -270,20 +270,14 @@ bool BakeManager::is_light_pass(ShaderEvalType type, const int pass_filter)
 			return ((pass_filter & BAKE_FILTER_DIRECT) != 0) ||
 			       ((pass_filter & BAKE_FILTER_INDIRECT) != 0);
 		case SHADER_EVAL_COMBINED:
-			if(((pass_filter & BAKE_FILTER_AO) != 0) ||
-			   ((pass_filter & BAKE_FILTER_EMISSION) != 0) ||
-			   ((((pass_filter & BAKE_FILTER_DIRECT) != 0) ||
-			     ((pass_filter & BAKE_FILTER_INDIRECT) != 0)) &&
-			    (((pass_filter & BAKE_FILTER_DIFFUSE) != 0) ||
-			     ((pass_filter & BAKE_FILTER_GLOSSY) != 0) ||
-			     ((pass_filter & BAKE_FILTER_TRANSMISSION) != 0) ||
-			     ((pass_filter & BAKE_FILTER_SUBSURFACE) != 0))))
-			{
-				return true;
-			}
-			else {
-				return false;
-			}
+			return ((pass_filter & BAKE_FILTER_AO) != 0) ||
+			       ((pass_filter & BAKE_FILTER_EMISSION) != 0) ||
+			       ((((pass_filter & BAKE_FILTER_DIRECT) != 0) ||
+			         ((pass_filter & BAKE_FILTER_INDIRECT) != 0)) &&
+			        (((pass_filter & BAKE_FILTER_DIFFUSE) != 0) ||
+			         ((pass_filter & BAKE_FILTER_GLOSSY) != 0) ||
+			         ((pass_filter & BAKE_FILTER_TRANSMISSION) != 0) ||
+			         ((pass_filter & BAKE_FILTER_SUBSURFACE) != 0)));
 		default:
 			return false;
 	}

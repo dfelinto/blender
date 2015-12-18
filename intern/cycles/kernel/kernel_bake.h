@@ -188,20 +188,14 @@ ccl_device bool is_light_pass(ShaderEvalType type, const int pass_filter)
 			return ((pass_filter & BAKE_FILTER_DIRECT) != 0) ||
 			       ((pass_filter & BAKE_FILTER_INDIRECT) != 0);
 		case SHADER_EVAL_COMBINED:
-			if(((pass_filter & BAKE_FILTER_AO) != 0) ||
-			   ((pass_filter & BAKE_FILTER_EMISSION) != 0) ||
-			   ((((pass_filter & BAKE_FILTER_DIRECT) != 0) ||
-		         ((pass_filter & BAKE_FILTER_INDIRECT) != 0)) &&
-			    (((pass_filter & BAKE_FILTER_DIFFUSE) != 0) ||
-			     ((pass_filter & BAKE_FILTER_GLOSSY) != 0) ||
-			     ((pass_filter & BAKE_FILTER_TRANSMISSION) != 0) ||
-			     ((pass_filter & BAKE_FILTER_SUBSURFACE) != 0))))
-			{
-				return true;
-			}
-			else {
-				return false;
-			}
+			return ((pass_filter & BAKE_FILTER_AO) != 0) ||
+			       ((pass_filter & BAKE_FILTER_EMISSION) != 0) ||
+			       ((((pass_filter & BAKE_FILTER_DIRECT) != 0) ||
+			         ((pass_filter & BAKE_FILTER_INDIRECT) != 0)) &&
+			        (((pass_filter & BAKE_FILTER_DIFFUSE) != 0) ||
+			         ((pass_filter & BAKE_FILTER_GLOSSY) != 0) ||
+			         ((pass_filter & BAKE_FILTER_TRANSMISSION) != 0) ||
+			         ((pass_filter & BAKE_FILTER_SUBSURFACE) != 0)));
 		default:
 			return false;
 	}
@@ -232,7 +226,7 @@ ccl_device float3 kernel_bake_evaluate_direct_indirect(KernelGlobals *kg, Shader
 
 	if(is_color) {
 		if(is_direct || is_indirect) {
-			/* leave direct and diffuse channel colored */
+			/* Leave direct and diffuse channel colored. */
 			color = make_float3(1.0f, 1.0f, 1.0f);
 		}
 		else {
@@ -246,11 +240,13 @@ ccl_device float3 kernel_bake_evaluate_direct_indirect(KernelGlobals *kg, Shader
 		color = shader_bsdf(kg, sd);
 	}
 
-	if (is_direct)
+	if(is_direct) {
 		out += safe_divide_color(direct, color);
+	}
 
-	if (is_indirect)
+	if(is_indirect) {
 		out += safe_divide_color(indirect, color);
+	}
 
 	return out;
 }
@@ -330,8 +326,7 @@ ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input,
 
 	/* light passes */
 	if(is_light_pass(type, pass_filter)) {
-		bool is_ao;
-		bool is_sss;
+		bool is_ao, is_sss;
 
 		if (type == SHADER_EVAL_COMBINED) {
 			is_ao = (pass_filter & BAKE_FILTER_AO) != 0;
@@ -340,7 +335,7 @@ ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input,
 			          ((pass_filter & BAKE_FILTER_INDIRECT) != 0));
 		}
 		else {
-			is_ao = type == SHADER_EVAL_AO;
+			is_ao = (type == SHADER_EVAL_AO);
 			is_sss = (type == SHADER_EVAL_SUBSURFACE) &&
 			         (((pass_filter & BAKE_FILTER_DIRECT) != 0) ||
 			          ((pass_filter & BAKE_FILTER_INDIRECT) != 0));
