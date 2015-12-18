@@ -1031,7 +1031,7 @@ static void bake_init_api_data(wmOperator *op, bContext *C, BakeAPIRender *bkr)
 	bkr->sa = sc ? BKE_screen_find_big_area(sc, SPACE_IMAGE, 10) : NULL;
 
 	bkr->pass_type = RNA_enum_get(op->ptr, "type");
-	bkr->pass_filter = RNA_int_get(op->ptr, "pass_filter");
+	bkr->pass_filter = RNA_enum_get(op->ptr, "pass_filter");
 	bkr->margin = RNA_int_get(op->ptr, "margin");
 
 	bkr->save_mode = RNA_enum_get(op->ptr, "save_mode");
@@ -1277,7 +1277,7 @@ static void bake_set_props(wmOperator *op, Scene *scene)
 
 	prop = RNA_struct_find_property(op->ptr, "pass_filter");
 	if (!RNA_property_is_set(op->ptr, prop)) {
-		RNA_property_int_set(op->ptr, prop, bake->pass_filter);
+		RNA_property_enum_set(op->ptr, prop, bake->pass_filter);
 	}
 }
 
@@ -1327,6 +1327,8 @@ static int bake_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event)
 
 void OBJECT_OT_bake(wmOperatorType *ot)
 {
+	PropertyRNA *prop;
+
 	/* identifiers */
 	ot->name = "Bake";
 	ot->description = "Bake image textures of selected objects";
@@ -1340,7 +1342,9 @@ void OBJECT_OT_bake(wmOperatorType *ot)
 
 	RNA_def_enum(ot->srna, "type", rna_enum_bake_pass_type_items, SCE_PASS_COMBINED, "Type",
 	             "Type of pass to bake, some of them may not be supported by the current render engine");
-	RNA_def_int(ot->srna, "pass_filter", 0, 0, INT_MAX, "Pass Filter", "Filter to combined, diffuse, glossy, transmission and subsurface passes", 0, INT_MAX);
+	prop = RNA_def_enum(ot->srna, "pass_filter", rna_enum_bake_pass_filter_type_items, R_BAKE_PASS_FILTER_NONE, "Pass Filter",
+	             "Filter to combined, diffuse, glossy, transmission and subsurface passes");
+	RNA_def_property_flag(prop, PROP_ENUM_FLAG);
 	RNA_def_string_file_path(ot->srna, "filepath", NULL, FILE_MAX, "File Path",
 	                         "Image filepath to use when saving externally");
 	RNA_def_int(ot->srna, "width", 512, 1, INT_MAX, "Width",

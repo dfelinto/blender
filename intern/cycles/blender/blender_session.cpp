@@ -539,25 +539,25 @@ static int bake_pass_filter_get(const int pass_filter)
 {
 	int flag = BAKE_FILTER_NONE;
 
-	if((pass_filter & BL::BakeSettings::type_DIRECT) != 0)
+	if((pass_filter & BL::BakeSettings::pass_filter_DIRECT) != 0)
 		flag |= BAKE_FILTER_DIRECT;
-	if((pass_filter & BL::BakeSettings::type_INDIRECT) != 0)
+	if((pass_filter & BL::BakeSettings::pass_filter_INDIRECT) != 0)
 		flag |= BAKE_FILTER_INDIRECT;
-	if((pass_filter & BL::BakeSettings::type_COLOR) != 0)
+	if((pass_filter & BL::BakeSettings::pass_filter_COLOR) != 0)
 		flag |= BAKE_FILTER_COLOR;
 
-	if((pass_filter & BL::BakeSettings::type_DIFFUSE) != 0)
+	if((pass_filter & BL::BakeSettings::pass_filter_DIFFUSE) != 0)
 		flag |= BAKE_FILTER_DIFFUSE;
-	if((pass_filter & BL::BakeSettings::type_GLOSSY) != 0)
+	if((pass_filter & BL::BakeSettings::pass_filter_GLOSSY) != 0)
 		flag |= BAKE_FILTER_GLOSSY;
-	if((pass_filter & BL::BakeSettings::type_TRANSMISSION) != 0)
+	if((pass_filter & BL::BakeSettings::pass_filter_TRANSMISSION) != 0)
 		flag |= BAKE_FILTER_TRANSMISSION;
-	if((pass_filter & BL::BakeSettings::type_SUBSURFACE) != 0)
+	if((pass_filter & BL::BakeSettings::pass_filter_SUBSURFACE) != 0)
 		flag |= BAKE_FILTER_SUBSURFACE;
 
-	if((pass_filter & BL::BakeSettings::type_EMIT) != 0)
+	if((pass_filter & BL::BakeSettings::pass_filter_EMIT) != 0)
 		flag |= BAKE_FILTER_EMISSION;
-	if((pass_filter & BL::BakeSettings::type_AO) != 0)
+	if((pass_filter & BL::BakeSettings::pass_filter_AO) != 0)
 		flag |= BAKE_FILTER_AO;
 
 	return flag;

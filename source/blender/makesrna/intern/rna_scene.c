@@ -3806,10 +3806,11 @@ static void rna_def_bake_data(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Subsurface", "Deliver subsurface pass");
 	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
 
-	prop = RNA_def_property(srna, "type", PROP_ENUM, PROP_NONE);
+	prop = RNA_def_property(srna, "pass_filter", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "pass_filter");
-	RNA_def_property_enum_funcs(prop, NULL, NULL, NULL);
 	RNA_def_property_enum_items(prop, rna_enum_bake_pass_filter_type_items);
+	RNA_def_property_flag(prop, PROP_ENUM_FLAG);
+	RNA_def_property_ui_text(prop, "Pass Filter",  "Passes to include in the active baking pass");
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 }
 
