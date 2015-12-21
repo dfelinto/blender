@@ -427,6 +427,66 @@ static bool bake_object_check(Object *ob, ReportList *reports)
 	return true;
 }
 
+static bool bake_pass_filter_check(ScenePassType pass_type, const int pass_filter, ReportList *reports)
+{
+	switch (pass_type) {
+		case SCE_PASS_COMBINED:
+			if ((pass_filter & R_BAKE_PASS_FILTER_EMIT) != 0) {
+				return true;
+			}
+
+			if (((pass_filter & R_BAKE_PASS_FILTER_DIFFUSE) != 0) ||
+			    ((pass_filter & R_BAKE_PASS_FILTER_INDIRECT) != 0))
+			{
+				if (((pass_filter & R_BAKE_PASS_FILTER_DIFFUSE) != 0) ||
+				    ((pass_filter & R_BAKE_PASS_FILTER_GLOSSY) != 0) ||
+				    ((pass_filter & R_BAKE_PASS_FILTER_TRANSM) != 0) ||
+				    ((pass_filter & R_BAKE_PASS_FILTER_SUBSURFACE) != 0))
+				{
+					return true;
+				}
+
+				if ((pass_filter & R_BAKE_PASS_FILTER_AO) != 0) {
+					BKE_report(reports, RPT_ERROR,
+					           "Combined bake pass Ambient Occlusion contribution requires an enabled light pass. "
+					           "Bake the Ambient Occlusion pass type instead.");
+				}
+				else {
+					BKE_report(reports, RPT_ERROR, "Combined bake pass requires Emit, or a light pass with "
+					           "Direct or Indirect contributions enabled");
+				}
+
+				return false;
+			}
+			else {
+				BKE_report(reports, RPT_ERROR,
+				           "Combined bake pass requires Emit, or a light pass with "
+				           "Direct or Indirect contributions enabled");
+				return false;
+			}
+			break;
+		case SCE_PASS_DIFFUSE_COLOR:
+		case SCE_PASS_GLOSSY_COLOR:
+		case SCE_PASS_TRANSM_COLOR:
+		case SCE_PASS_SUBSURFACE_COLOR:
+			if (((pass_filter & R_BAKE_PASS_FILTER_COLOR) != 0) ||
+			    ((pass_filter & R_BAKE_PASS_FILTER_DIFFUSE) != 0) ||
+			    ((pass_filter & R_BAKE_PASS_FILTER_INDIRECT) != 0))
+			{
+				return true;
+			}
+			else {
+				BKE_report(reports, RPT_ERROR,
+				           "Bake pass requires Direct, Indirect, or Color contributions to be enabled");
+				return false;
+			}
+			break;
+		default:
+			return true;
+			break;
+	}
+}
+
 /* before even getting in the bake function we check for some basic errors */
 static bool bake_objects_check(Main *bmain, Object *ob, ListBase *selected_objects,
                                ReportList *reports, const bool is_selected_to_active)
@@ -1087,6 +1147,10 @@ static int bake_exec(bContext *C, wmOperator *op)
 	/* setup new render */
 	RE_test_break_cb(re, NULL, bake_break);
 
+	if (!bake_pass_filter_check(bkr.pass_type, bkr.pass_filter, bkr.reports)) {
+		goto finally;
+	}
+
 	if (!bake_objects_check(bkr.main, bkr.ob, &bkr.selected_objects, bkr.reports, bkr.is_selected_to_active)) {
 		goto finally;
 	}
@@ -1139,6 +1203,11 @@ static void bake_startjob(void *bkv, short *UNUSED(stop), short *do_update, floa
 	bkr->progress = progress;
 
 	RE_SetReports(bkr->render, bkr->reports);
+
+	if (!bake_pass_filter_check(bkr->pass_type, bkr->pass_filter, bkr->reports)) {
+		bkr->result = OPERATOR_CANCELLED;
+		return;
+	}
 
 	if (!bake_objects_check(bkr->main, bkr->ob, &bkr->selected_objects, bkr->reports, bkr->is_selected_to_active)) {
 		bkr->result = OPERATOR_CANCELLED;
