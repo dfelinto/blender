@@ -2252,9 +2252,9 @@ static void ui_but_copy_paste(bContext *C, uiBut *but, uiHandleButtonData *data,
 		}
 		else if (mode == 'c') {
 			/* Get many decimal places, then strip trailing zeros.
-			 * note: too high values start to give strange results (6 or so is ok) */
+			 * note: too high values start to give strange results */
 			char buf_copy[UI_MAX_DRAW_STR];
-			ui_but_string_get_ex(but, buf_copy, sizeof(buf_copy), 6);
+			ui_but_string_get_ex(but, buf_copy, sizeof(buf_copy), UI_PRECISION_FLOAT_MAX);
 			BLI_str_rstrip_float_zero(buf_copy, '\0');
 
 			WM_clipboard_text_set(buf_copy, 0);
@@ -9464,7 +9464,7 @@ static int ui_pie_handler(bContext *C, const wmEvent *event, uiPopupBlockHandle 
 						block->pie_data.flags |= UI_PIE_ANIMATION_FINISHED;
 					}
 
-					for (uiBut *but = block->buttons.first; but; but = but->next) {
+					for (but = block->buttons.first; but; but = but->next) {
 						if (but->pie_dir != UI_RADIAL_NONE) {
 							float vec[2];
 							float center[2];
@@ -9503,7 +9503,7 @@ static int ui_pie_handler(bContext *C, const wmEvent *event, uiPopupBlockHandle 
 				}
 
 				if (len_sq < 1.0f) {
-					uiBut *but = ui_but_find_active_in_region(menu->region);
+					but = ui_but_find_active_in_region(menu->region);
 
 					if (but) {
 						return ui_but_pie_menu_apply(C, menu, but, true);
@@ -9529,10 +9529,10 @@ static int ui_pie_handler(bContext *C, const wmEvent *event, uiPopupBlockHandle 
 					block->pie_data.flags |= UI_PIE_CLICK_STYLE;
 				}
 				else {
-					uiBut *but = ui_but_find_active_in_region(menu->region);
+					but = ui_but_find_active_in_region(menu->region);
 
 					if (but && (U.pie_menu_confirm > 0) &&
-						(dist >= U.pie_menu_threshold + U.pie_menu_confirm))
+					    (dist >= U.pie_menu_threshold + U.pie_menu_confirm))
 					{
 						if (but)
 							return ui_but_pie_menu_apply(C, menu, but, true);
@@ -9559,7 +9559,7 @@ static int ui_pie_handler(bContext *C, const wmEvent *event, uiPopupBlockHandle 
 
 						/* here instead, we use the offset location to account for the initial direction timeout */
 						if ((U.pie_menu_confirm > 0) &&
-							(dist >= U.pie_menu_threshold + U.pie_menu_confirm))
+						    (dist >= U.pie_menu_threshold + U.pie_menu_confirm))
 						{
 							block->pie_data.flags |= UI_PIE_GESTURE_END_WAIT;
 							copy_v2_v2(block->pie_data.last_pos, event_xy);
@@ -9617,9 +9617,9 @@ static int ui_pie_handler(bContext *C, const wmEvent *event, uiPopupBlockHandle 
 				case ZKEY:
 				{
 					if ((event->val  == KM_PRESS || event->val == KM_DBL_CLICK) &&
-						!IS_EVENT_MOD(event, shift, ctrl, oskey))
+					    !IS_EVENT_MOD(event, shift, ctrl, oskey))
 					{
-						for (uiBut *but = block->buttons.first; but; but = but->next) {
+						for (but = block->buttons.first; but; but = but->next) {
 							if (but->menu_key == event->type) {
 								ui_but_pie_button_activate(C, but, menu);
 							}
@@ -9641,7 +9641,7 @@ static int ui_pie_handler(bContext *C, const wmEvent *event, uiPopupBlockHandle 
 				CASE_NUM_TO_DIR(8, UI_RADIAL_N);
 				CASE_NUM_TO_DIR(9, UI_RADIAL_NE);
 				{
-					uiBut *but = ui_block_pie_dir_activate(block, event, num_dir);
+					but = ui_block_pie_dir_activate(block, event, num_dir);
 					retval = ui_but_pie_button_activate(C, but, menu);
 					break;
 				}
