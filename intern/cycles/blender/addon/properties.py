@@ -483,7 +483,7 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
         cls.bake_type = EnumProperty(
             name="Bake Type",
             default='COMBINED',
-            description="Deprecated, use bake_pass_type instead",
+            description="Type of pass to bake",
             items=(
                 ('COMBINED', "Combined", ""),
                 ('AO', "Ambient Occlusion", ""),
@@ -504,25 +504,6 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
                 ('SUBSURFACE_DIRECT', "Subsurface Direct", ""),
                 ('SUBSURFACE_INDIRECT', "Subsurface Indirect", ""),
                 ('SUBSURFACE_COLOR', "Subsurface Color", ""),
-                ),
-            )
-
-        cls.bake_pass_type = EnumProperty(
-            name="Bake Type",
-            default='COMBINED',
-            description="Type of pass to bake",
-            items=(
-                ('COMBINED', "Combined", ""),
-                ('AO', "Ambient Occlusion", ""),
-                ('SHADOW', "Shadow", ""),
-                ('NORMAL', "Normal", ""),
-                ('UV', "UV", ""),
-                ('EMIT', "Emit", ""),
-                ('ENVIRONMENT', "Environment", ""),
-                ('DIFFUSE', "Diffuse", ""),
-                ('GLOSSY', "Glossy", ""),
-                ('TRANSMISSION', "Transmission", ""),
-                ('SUBSURFACE', "Subsurface", ""),
                 ),
             )
 
