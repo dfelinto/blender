@@ -140,3 +140,57 @@ def do_versions(self):
     # Euler order was ZYX in previous versions.
     if bpy.data.version <= (2, 73, 4):
         foreach_cycles_node(mapping_node_order_flip)
+
+    # Baking types changed
+    if bpy.data.version <= (2, 76, 4):
+
+        bake_lookup = [
+            'COMBINED',
+            'AO',
+            'SHADOW',
+            'NORMAL',
+            'UV',
+            'EMIT',
+            'ENVIRONMENT',
+            'DIFFUSE_DIRECT',
+            'DIFFUSE_INDIRECT',
+            'DIFFUSE_COLOR',
+            'GLOSSY_DIRECT',
+            'GLOSSY_INDIRECT',
+            'GLOSSY_COLOR',
+            'TRANSMISSION_DIRECT',
+            'TRANSMISSION_INDIRECT',
+            'TRANSMISSION_COLOR',
+            'SUBSURFACE_DIRECT',
+            'SUBSURFACE_INDIRECT',
+            'SUBSURFACE_COLOR']
+
+        for scene in bpy.data.scenes:
+            cscene = scene.cycles
+
+            # Old bake type
+            bake_type_idx = cscene.get("bake_type")
+
+            if bake_type_idx == None:
+                cscene.bake_type = 'COMBINED'
+                continue
+
+            # File doesn't need versioning
+            if bake_type_idx < bake_lookup.index('DIFFUSE_DIRECT'):
+                continue
+
+            # File needs versioning
+            bake_type = bake_lookup[bake_type_idx]
+            cscene.bake_type, end = bake_type.split('_')
+
+            if end == 'DIRECT':
+                scene.render.bake.use_pass_indirect = False
+                scene.render.bake.use_pass_color = False
+
+            elif end == 'INDIRECT':
+                scene.render.bake.use_pass_direct = False
+                scene.render.bake.use_pass_color = False
+
+            elif end == 'COLOR':
+                scene.render.bake.use_pass_direct = False
+                scene.render.bake.use_pass_indirect = False
