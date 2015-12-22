@@ -219,7 +219,7 @@ ccl_device float3 kernel_bake_evaluate_direct_indirect(KernelGlobals *kg, Shader
                                                        float3 direct, float3 indirect, const int pass_filter)
 {
 	float3 color;
-	bool is_color = (pass_filter & BAKE_FILTER_COLOR) != 0;
+	const bool is_color = (pass_filter & BAKE_FILTER_COLOR) != 0;
 	const bool is_direct = (pass_filter & BAKE_FILTER_DIRECT) != 0;
 	const bool is_indirect = (pass_filter & BAKE_FILTER_INDIRECT) != 0;
 	float3 out = make_float3(0.0f, 0.0f, 0.0f);
