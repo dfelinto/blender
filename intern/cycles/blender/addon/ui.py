@@ -1403,10 +1403,10 @@ class CyclesRender_PT_bake(CyclesButtonsPanel, Panel):
         cscene = scene.cycles
         cbk = scene.render.bake
 
-        layout.operator("object.bake", icon='RENDER_STILL').type = cscene.bake_pass_type
+        layout.operator("object.bake", icon='RENDER_STILL').type = cscene.bake_type
 
         col = layout.column()
-        col.prop(cscene, "bake_pass_type")
+        col.prop(cscene, "bake_type")
         col.separator()
 
         split = layout.split()
@@ -1426,7 +1426,7 @@ class CyclesRender_PT_bake(CyclesButtonsPanel, Panel):
         else:
             sub.prop(cbk, "cage_extrusion", text="Ray Distance")
 
-        if cscene.bake_pass_type == 'NORMAL':
+        if cscene.bake_type == 'NORMAL':
             layout.separator()
             col = layout.column()
             col.label(text="Normal Settings:")
@@ -1438,7 +1438,7 @@ class CyclesRender_PT_bake(CyclesButtonsPanel, Panel):
             row.prop(cbk, "normal_g", text="")
             row.prop(cbk, "normal_b", text="")
 
-        elif cscene.bake_pass_type == 'COMBINED':
+        elif cscene.bake_type == 'COMBINED':
             col = layout.column()
             col.label(text="Combined Settings:")
 
@@ -1461,10 +1461,10 @@ class CyclesRender_PT_bake(CyclesButtonsPanel, Panel):
             col.prop(cbk, "use_pass_transmission")
             col.prop(cbk, "use_pass_subsurface")
 
-        elif cscene.bake_pass_type in {'DIFFUSE', 'GLOSSY', 'TRANSMISSION', 'SUBSURFACE'}:
+        elif cscene.bake_type in {'DIFFUSE', 'GLOSSY', 'TRANSMISSION', 'SUBSURFACE'}:
             layout.separator()
             col = layout.column()
-            col.label(text="{0} Settings:".format(cscene.bake_pass_type.title()))
+            col.label(text="{0} Settings:".format(cscene.bake_type.title()))
 
             row = col.row(align=True)
             row.prop(cbk, "use_pass_direct", toggle=True)
