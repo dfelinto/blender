@@ -252,14 +252,12 @@ ccl_device float3 kernel_bake_evaluate_direct_indirect(KernelGlobals *kg, Shader
 }
 
 ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input, ccl_global float4 *output,
-                                     ShaderEvalType type, int i, int offset, int sample)
+                                     ShaderEvalType type, int pass_filter, int i, int offset, int sample)
 {
 	ShaderData sd;
-	uint4 data = input[0];
-	uint4 in = input[1 + i * 2];
-	uint4 diff = input[1 + i * 2 + 1];
+	uint4 in = input[i * 2];
+	uint4 diff = input[i * 2 + 1];
 
-	int pass_filter = data.x;
 	float3 out = make_float3(0.0f, 0.0f, 0.0f);
 
 	int object = in.x;

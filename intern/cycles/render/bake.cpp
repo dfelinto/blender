@@ -155,10 +155,8 @@ bool BakeManager::bake(Device *device, DeviceScene *dscene, Scene *scene, Progre
 
 		/* setup input for device task */
 		device_vector<uint4> d_input;
-		uint4 *d_input_data = d_input.resize(1 + shader_size * 2);
-		size_t d_input_size = 1;
-
-		d_input_data[0] = make_uint4(pass_filter, 0, 0, 0);
+		uint4 *d_input_data = d_input.resize(shader_size * 2);
+		size_t d_input_size = 0;
 
 		for(size_t i = shader_offset; i < (shader_offset + shader_size); i++) {
 			d_input_data[d_input_size++] = bake_data->data(i);
@@ -185,6 +183,7 @@ bool BakeManager::bake(Device *device, DeviceScene *dscene, Scene *scene, Progre
 		task.shader_input = d_input.device_pointer;
 		task.shader_output = d_output.device_pointer;
 		task.shader_eval_type = shader_type;
+		task.shader_filter = pass_filter;
 		task.shader_x = 0;
 		task.offset = shader_offset;
 		task.shader_w = d_output.size();
