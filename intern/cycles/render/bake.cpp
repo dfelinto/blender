@@ -256,7 +256,7 @@ bool BakeManager::is_aa_pass(ShaderEvalType type)
 	}
 }
 
-/* keep it synced with kernel_bake.h::is_light_pass */
+/* Keep it synced with kernel_bake.h::is_light_pass. */
 bool BakeManager::is_light_pass(ShaderEvalType type, const int pass_filter)
 {
 	switch(type) {

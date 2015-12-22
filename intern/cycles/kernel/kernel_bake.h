@@ -175,7 +175,7 @@ ccl_device bool is_aa_pass(ShaderEvalType type)
 	}
 }
 
-/* keep it synced with BakeManager::is_light_pass */
+/* Keep it synced with BakeManager::is_light_pass. */
 ccl_device bool is_light_pass(ShaderEvalType type, const int pass_filter)
 {
 	switch(type) {
