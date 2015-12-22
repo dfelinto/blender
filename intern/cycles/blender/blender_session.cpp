@@ -563,7 +563,14 @@ static int bake_pass_filter_get(const int pass_filter)
 	return flag;
 }
 
-void BlenderSession::bake(BL::Object b_object, const string& pass_type, const int pass_filter, const int object_id, BL::BakePixel pixel_array, const size_t num_pixels, const int /*depth*/, float result[])
+void BlenderSession::bake(BL::Object b_object,
+                          const string& pass_type,
+                          const int pass_filter,
+                          const int object_id,
+                          BL::BakePixel pixel_array,
+                          const size_t num_pixels,
+                          const int /*depth*/,
+                          float result[])
 {
 	ShaderEvalType shader_type = get_shader_type(pass_type);
 	size_t object_index = OBJECT_NONE;
