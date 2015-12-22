@@ -1471,6 +1471,7 @@ class CyclesRender_PT_bake(CyclesButtonsPanel, Panel):
             row.prop(cbk, "use_pass_indirect", toggle=True)
             row.prop(cbk, "use_pass_color", toggle=True)
 
+
 class CyclesParticle_PT_CurveSettings(CyclesButtonsPanel, Panel):
     bl_label = "Cycles Hair Settings"
     bl_context = "particle"

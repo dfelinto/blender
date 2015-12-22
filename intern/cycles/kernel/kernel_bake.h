@@ -339,10 +339,7 @@ ccl_device void kernel_bake_evaluate(KernelGlobals *kg, ccl_global uint4 *input,
 			          ((pass_filter & BAKE_FILTER_INDIRECT) != 0));
 		}
 
-		compute_light_pass(kg, &sd, &L, rng,
-		                   is_ao,
-		                   is_sss,
-		                   sample);
+		compute_light_pass(kg, &sd, &L, rng, is_ao, is_sss, sample);
 	}
 
 	switch(type) {
