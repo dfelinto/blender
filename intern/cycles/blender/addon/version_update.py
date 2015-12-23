@@ -144,7 +144,7 @@ def do_versions(self):
     # Baking types changed
     if bpy.data.version <= (2, 76, 4):
 
-        bake_lookup = [
+        bake_lookup = (
             'COMBINED',
             'AO',
             'SHADOW',
@@ -163,7 +163,9 @@ def do_versions(self):
             'TRANSMISSION_COLOR',
             'SUBSURFACE_DIRECT',
             'SUBSURFACE_INDIRECT',
-            'SUBSURFACE_COLOR']
+            'SUBSURFACE_COLOR')
+
+        diffuse_direct_idx = bake_lookup.index('DIFFUSE_DIRECT')
 
         for scene in bpy.data.scenes:
             cscene = scene.cycles
@@ -171,12 +173,12 @@ def do_versions(self):
             # Old bake type
             bake_type_idx = cscene.get("bake_type")
 
-            if bake_type_idx == None:
+            if bake_type_idx is None:
                 cscene.bake_type = 'COMBINED'
                 continue
 
             # File doesn't need versioning
-            if bake_type_idx < bake_lookup.index('DIFFUSE_DIRECT'):
+            if bake_type_idx < diffuse_direct_idx:
                 continue
 
             # File needs versioning
