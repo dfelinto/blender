@@ -74,6 +74,7 @@ typedef enum DynMatProperty {
 	DYN_LAMP_VEC = 2,
 	DYN_LAMP_IMAT = 4,
 	DYN_LAMP_PERSMAT = 8,
+	DYN_LAMP_MAT = 16,
 } DynMatProperty;
 
 static struct GPUWorld {
@@ -123,6 +124,7 @@ struct GPUMaterial {
 	/* for passing parameters to the world nodetree */
 	GPUNodeLink *normalLink; 
 	GPUNodeLink *roughnessLink;
+	GPUNodeLink *lampcoLink;
 	
 	bool is_opensubdiv;
 };
@@ -143,9 +145,11 @@ struct GPULamp {
 	float obmat[4][4];
 	float imat[4][4];
 	float dynimat[4][4];
+	float dynmat[4][4];
 
 	float spotsi, spotbl, k;
 	float spotvec[2];
+	float areavec[2];
 	float dyndist, dynatt1, dynatt2;
 	float dist, att1, att2;
 	float shadow_color[3];
@@ -153,8 +157,11 @@ struct GPULamp {
 	float bias, d, clipend;
 	int size;
 
+	float area_size, area_size_y;
+
 	int falloff_type;
 	struct CurveMapping *curfalloff;
+	bool use_realistic_lighting;
 
 	float winmat[4][4];
 	float viewmat[4][4];
@@ -352,6 +359,10 @@ void GPU_material_bind(GPUMaterial *material, int oblay, int viewlay, double tim
 				if (material->dynproperty & DYN_LAMP_IMAT) {
 					mul_m4_m4m4(lamp->dynimat, lamp->imat, viewinv);
 				}
+
+				if (material->dynproperty & DYN_LAMP_MAT) {
+					mul_m4_m4m4(lamp->dynmat, viewmat, lamp->obmat);
+				}
 				
 				if (material->dynproperty & DYN_LAMP_PERSMAT) {
 					if (!GPU_lamp_has_shadow_buffer(lamp)) /* The lamp matrices are already updated if we're using shadow buffers */
@@ -496,6 +507,16 @@ GPUNodeLink *GPU_material_get_roughness_link(GPUMaterial *material)
 	return material->roughnessLink;
 }
 
+void GPU_material_set_lampco_link(GPUMaterial *material, GPUNodeLink *link)
+{
+	material->lampcoLink = link;
+}
+
+GPUNodeLink *GPU_material_get_lampco_link(GPUMaterial *material)
+{
+	return material->lampcoLink;
+}
+
 void GPU_material_enable_alpha(GPUMaterial *material)
 {
 	material->alpha = 1;
@@ -537,6 +558,13 @@ static GPUNodeLink *lamp_get_visibility(GPUMaterial *mat, GPULamp *lamp, GPUNode
 	if (lamp->type == LA_SUN || lamp->type == LA_HEMI) {
 		mat->dynproperty |= DYN_LAMP_VEC;
 		GPU_link(mat, "lamp_visibility_sun_hemi", GPU_dynamic_uniform(lamp->dynvec, GPU_DYNAMIC_LAMP_DYNVEC, lamp->ob), lv, dist, &visifac);
+
+		if (GPU_material_get_type(mat) == GPU_MATERIAL_TYPE_ENV_SAMPLING_GLOSSY ||
+			GPU_material_get_type(mat) == GPU_MATERIAL_TYPE_ENV_SAMPLING_DIFFUSE) {
+			//To line up with cycles : value is arbitrary
+			float visfact_cycles = 0.125f;
+			GPU_link(mat, "set_value", GPU_uniform(&visfact_cycles), &visifac);
+		}
 		return visifac;
 	}
 	else {
@@ -546,28 +574,34 @@ static GPUNodeLink *lamp_get_visibility(GPUMaterial *mat, GPULamp *lamp, GPUNode
 		if (lamp->type == LA_AREA)
 			return visifac;
 
-		switch (lamp->falloff_type) {
-			case LA_FALLOFF_CONSTANT:
-				break;
-			case LA_FALLOFF_INVLINEAR:
-				GPU_link(mat, "lamp_falloff_invlinear", GPU_dynamic_uniform(&lamp->dist, GPU_DYNAMIC_LAMP_DISTANCE, lamp->ob), *dist, &visifac);
-				break;
-			case LA_FALLOFF_INVSQUARE:
-				GPU_link(mat, "lamp_falloff_invsquare", GPU_dynamic_uniform(&lamp->dist, GPU_DYNAMIC_LAMP_DISTANCE, lamp->ob), *dist, &visifac);
-				break;
-			case LA_FALLOFF_SLIDERS:
-				GPU_link(mat, "lamp_falloff_sliders", GPU_dynamic_uniform(&lamp->dist, GPU_DYNAMIC_LAMP_DISTANCE, lamp->ob), GPU_dynamic_uniform(&lamp->att1, GPU_DYNAMIC_LAMP_ATT1, lamp->ob), GPU_dynamic_uniform(&lamp->att2, GPU_DYNAMIC_LAMP_ATT2, lamp->ob), *dist, &visifac);
-				break;
-			case LA_FALLOFF_CURVE:
-			{
-				float *array;
-				int size;
+		if (GPU_material_get_type(mat) == GPU_MATERIAL_TYPE_ENV_SAMPLING_GLOSSY ||
+			GPU_material_get_type(mat) == GPU_MATERIAL_TYPE_ENV_SAMPLING_DIFFUSE) {
+			GPU_link(mat, "lamp_falloff_realistic", GPU_dynamic_uniform(&lamp->dist, GPU_DYNAMIC_LAMP_DISTANCE, lamp->ob), *dist, &visifac);
+		}
+		else {
+			switch (lamp->falloff_type) {
+				case LA_FALLOFF_CONSTANT:
+					break;
+				case LA_FALLOFF_INVLINEAR:
+					GPU_link(mat, "lamp_falloff_invlinear", GPU_dynamic_uniform(&lamp->dist, GPU_DYNAMIC_LAMP_DISTANCE, lamp->ob), *dist, &visifac);
+					break;
+				case LA_FALLOFF_INVSQUARE:
+					GPU_link(mat, "lamp_falloff_invsquare", GPU_dynamic_uniform(&lamp->dist, GPU_DYNAMIC_LAMP_DISTANCE, lamp->ob), *dist, &visifac);
+					break;
+				case LA_FALLOFF_SLIDERS:
+					GPU_link(mat, "lamp_falloff_sliders", GPU_dynamic_uniform(&lamp->dist, GPU_DYNAMIC_LAMP_DISTANCE, lamp->ob), GPU_dynamic_uniform(&lamp->att1, GPU_DYNAMIC_LAMP_ATT1, lamp->ob), GPU_dynamic_uniform(&lamp->att2, GPU_DYNAMIC_LAMP_ATT2, lamp->ob), *dist, &visifac);
+					break;
+				case LA_FALLOFF_CURVE:
+				{
+					float *array;
+					int size;
 
-				curvemapping_initialize(lamp->curfalloff);
-				curvemapping_table_RGBA(lamp->curfalloff, &array, &size);
-				GPU_link(mat, "lamp_falloff_curve", GPU_dynamic_uniform(&lamp->dist, GPU_DYNAMIC_LAMP_DISTANCE, lamp->ob), GPU_texture(size, array), *dist, &visifac);
+					curvemapping_initialize(lamp->curfalloff);
+					curvemapping_table_RGBA(lamp->curfalloff, &array, &size);
+					GPU_link(mat, "lamp_falloff_curve", GPU_dynamic_uniform(&lamp->dist, GPU_DYNAMIC_LAMP_DISTANCE, lamp->ob), GPU_texture(size, array), *dist, &visifac);
 
-				break;
+					break;
+				}
 			}
 		}
 
@@ -590,7 +624,13 @@ static GPUNodeLink *lamp_get_visibility(GPUMaterial *mat, GPULamp *lamp, GPUNode
 			GPU_link(mat, "lamp_visibility_spot", GPU_dynamic_uniform(&lamp->spotsi, GPU_DYNAMIC_LAMP_SPOTSIZE, lamp->ob), GPU_dynamic_uniform(&lamp->spotbl, GPU_DYNAMIC_LAMP_SPOTSIZE, lamp->ob), inpr, visifac, &visifac);
 		}
 
-		GPU_link(mat, "lamp_visibility_clamp", visifac, &visifac);
+		if (GPU_material_get_type(mat) == GPU_MATERIAL_TYPE_ENV_SAMPLING_GLOSSY ||
+			GPU_material_get_type(mat) == GPU_MATERIAL_TYPE_ENV_SAMPLING_DIFFUSE) {
+			//Do nothing
+		}
+		else{
+			GPU_link(mat, "lamp_visibility_clamp", visifac, &visifac);
+		}
 
 		return visifac;
 	}
@@ -800,6 +840,7 @@ static void shade_one_light(GPUShadeInput *shi, GPUShadeResult *shr, GPULamp *la
 	GPUNodeLink *lv, *dist, *visifac, *is, *inp, *i, *vn, *view;
 	GPUNodeLink *outcol, *specfac, *t, *shadfac = NULL, *lcol;
 	float one = 1.0f;
+	bool use_realistic_preview = ( GPU_material_get_type(mat) == GPU_MATERIAL_TYPE_ENV_SAMPLING_DIFFUSE || GPU_material_get_type(mat) == GPU_MATERIAL_TYPE_ENV_SAMPLING_GLOSSY );
 
 	if ((lamp->mode & LA_ONLYSHADOW) && !(ma->mode & MA_SHADOW))
 		return;
@@ -816,32 +857,47 @@ static void shade_one_light(GPUShadeInput *shi, GPUShadeResult *shr, GPULamp *la
 	
 	GPU_link(mat, "shade_inp", vn, lv, &inp);
 
-	if (lamp->mode & LA_NO_DIFF) {
-		GPU_link(mat, "shade_is_no_diffuse", &is);
-	}
-	else if (lamp->type == LA_HEMI) {
-		GPU_link(mat, "shade_is_hemi", inp, &is);
+	if (use_realistic_preview) {
+		if (lamp->type == LA_AREA) {
+			mat->dynproperty |= DYN_LAMP_VEC|DYN_LAMP_CO|DYN_LAMP_MAT;
+			GPU_link(mat, "node_bsdf_diffuse_one_rectangular_light", GPU_dynamic_uniform((float *)lamp->areavec, GPU_DYNAMIC_LAMP_AREASCALE, lamp->ob), GPU_dynamic_uniform((float*)lamp->dynmat, GPU_DYNAMIC_LAMP_DYNMAT, lamp->ob), vn, GPU_builtin(GPU_VIEW_POSITION), GPU_dynamic_uniform(lamp->dynco, GPU_DYNAMIC_LAMP_DYNCO, lamp->ob), dist, GPU_uniform(&lamp->area_size), GPU_uniform(&lamp->area_size_y), &is);
+		}
+		else if (lamp->type == LA_SUN)
+			GPU_link(mat, "node_bsdf_diffuse_one_sun_light", inp, vn, lv, view, dist, GPU_uniform(&lamp->area_size), shi->har, &is);
+		else if (lamp->type == LA_HEMI)
+			GPU_link(mat, "node_bsdf_diffuse_one_hemi_light", inp, vn, lv, view, dist, shi->har, &is);
+		else
+			GPU_link(mat, "node_bsdf_diffuse_one_sphere_light", inp, vn, lv, view, dist, GPU_uniform(&lamp->area_size), shi->har, &is);
 	}
 	else {
-		if (lamp->type == LA_AREA) {
-			float area[4][4] = {{0.0f}}, areasize = 0.0f;
-
-			mat->dynproperty |= DYN_LAMP_VEC|DYN_LAMP_CO;
-			GPU_link(mat, "shade_inp_area", GPU_builtin(GPU_VIEW_POSITION), GPU_dynamic_uniform(lamp->dynco, GPU_DYNAMIC_LAMP_DYNCO, lamp->ob), GPU_dynamic_uniform(lamp->dynvec, GPU_DYNAMIC_LAMP_DYNVEC, lamp->ob), vn, GPU_uniform((float*)area),
-				GPU_uniform(&areasize), GPU_uniform(&lamp->k), &inp);
+		if (lamp->mode & LA_NO_DIFF) {
+			GPU_link(mat, "shade_is_no_diffuse", &is);
 		}
+		else if (lamp->type == LA_HEMI) {
+			GPU_link(mat, "shade_is_hemi", inp, &is);
+		}
+		else {
+			if (lamp->type == LA_AREA) {
+				float area[4][4] = {{0.0f}}, areasize = 0.0f;
 
-		is = inp; /* Lambert */
+				mat->dynproperty |= DYN_LAMP_VEC|DYN_LAMP_CO|DYN_LAMP_MAT;
+				GPU_link(mat, "shade_inp_area", GPU_builtin(GPU_VIEW_POSITION), GPU_dynamic_uniform(lamp->dynco, GPU_DYNAMIC_LAMP_DYNCO, lamp->ob), 
+					GPU_dynamic_uniform(lamp->dynvec, GPU_DYNAMIC_LAMP_DYNVEC, lamp->ob), vn, GPU_dynamic_uniform((float*)lamp->dynmat, GPU_DYNAMIC_LAMP_DYNMAT, lamp->ob),
+					GPU_uniform(&lamp->area_size), GPU_uniform(&lamp->area_size_y), &inp);
+			}
 
-		if (!(mat->scene->gm.flag & GAME_GLSL_NO_SHADERS)) {
-			if (ma->diff_shader == MA_DIFF_ORENNAYAR)
-				GPU_link(mat, "shade_diffuse_oren_nayer", inp, vn, lv, view, GPU_uniform(&ma->roughness), &is);
-			else if (ma->diff_shader == MA_DIFF_TOON)
-				GPU_link(mat, "shade_diffuse_toon", vn, lv, view, GPU_uniform(&ma->param[0]), GPU_uniform(&ma->param[1]), &is);
-			else if (ma->diff_shader == MA_DIFF_MINNAERT)
-				GPU_link(mat, "shade_diffuse_minnaert", inp, vn, view, GPU_uniform(&ma->darkness), &is);
-			else if (ma->diff_shader == MA_DIFF_FRESNEL)
-				GPU_link(mat, "shade_diffuse_fresnel", vn, lv, view, GPU_uniform(&ma->param[0]), GPU_uniform(&ma->param[1]), &is);
+			is = inp; /* Lambert */
+
+			if (!(mat->scene->gm.flag & GAME_GLSL_NO_SHADERS)) {
+				if (ma->diff_shader == MA_DIFF_ORENNAYAR)
+					GPU_link(mat, "shade_diffuse_oren_nayer", inp, vn, lv, view, GPU_uniform(&ma->roughness), &is);
+				else if (ma->diff_shader == MA_DIFF_TOON)
+					GPU_link(mat, "shade_diffuse_toon", vn, lv, view, GPU_uniform(&ma->param[0]), GPU_uniform(&ma->param[1]), &is);
+				else if (ma->diff_shader == MA_DIFF_MINNAERT)
+					GPU_link(mat, "shade_diffuse_minnaert", inp, vn, view, GPU_uniform(&ma->darkness), &is);
+				else if (ma->diff_shader == MA_DIFF_FRESNEL)
+					GPU_link(mat, "shade_diffuse_fresnel", vn, lv, view, GPU_uniform(&ma->param[0]), GPU_uniform(&ma->param[1]), &is);
+			}
 		}
 	}
 
@@ -852,9 +908,38 @@ static void shade_one_light(GPUShadeInput *shi, GPUShadeResult *shr, GPULamp *la
 	i = is;
 	GPU_link(mat, "shade_visifac", i, visifac, shi->refl, &i);
 	
-	GPU_link(mat, "set_rgb", GPU_dynamic_uniform(lamp->dyncol, GPU_DYNAMIC_LAMP_DYNCOL, lamp->ob), &lcol);
-	shade_light_textures(mat, lamp, &lcol);
-	GPU_link(mat, "shade_mul_value_v3", GPU_dynamic_uniform(&lamp->dynenergy, GPU_DYNAMIC_LAMP_DYNENERGY, lamp->ob), lcol, &lcol);	
+	if (use_realistic_preview && lamp->la->use_nodes) {
+		GPUNodeLink *lamp_nodetree_out, *lamp_lv;
+		GPUMatType type = GPU_material_get_type(mat);
+
+		/* to pass the lamp coordinates to the lamp shadertree */
+		GPU_link(mat, "shade_mul_value_v3", dist, lv, &lamp_lv);
+		GPU_material_set_lampco_link(mat, lamp_lv);
+
+		GPU_material_set_type(mat, GPU_MATERIAL_TYPE_LAMP);
+
+		ntreeGPUMaterialNodes(lamp->la->nodetree, mat, NODE_NEW_SHADING);
+		lamp_nodetree_out = GPU_material_get_output_link(mat);
+		GPU_material_empty_output_link(mat);
+
+		GPU_link(mat, "set_rgb", lamp_nodetree_out, &lcol);
+
+		/* Correct sun Intensity */
+		if (lamp->type == LA_SUN || lamp->type == LA_HEMI) {
+			float factor = 100.0f;
+			GPU_link(mat, "shade_mul_value_v3", GPU_uniform(&factor), lcol, &lcol);
+		}
+
+		/* to switch light on and off */
+		GPU_link(mat, "shade_mul_value_v3", GPU_dynamic_uniform(&lamp->dynenergy, GPU_DYNAMIC_LAMP_DYNENERGY, lamp->ob), lcol, &lcol);
+
+		GPU_material_set_type(mat, type);
+	} else {
+		GPU_link(mat, "set_rgb", GPU_dynamic_uniform(lamp->dyncol, GPU_DYNAMIC_LAMP_DYNCOL, lamp->ob), &lcol);
+		shade_light_textures(mat, lamp, &lcol);
+		GPU_link(mat, "shade_mul_value_v3", GPU_dynamic_uniform(&lamp->dynenergy, GPU_DYNAMIC_LAMP_DYNENERGY, lamp->ob), lcol, &lcol);
+	}
+
 
 #if 0
 	if (ma->mode & MA_TANGENT_VN)
@@ -868,7 +953,7 @@ static void shade_one_light(GPUShadeInput *shi, GPUShadeResult *shr, GPULamp *la
 		if (!(mat->scene->gm.flag & GAME_GLSL_NO_SHADOWS)) {
 			mat->dynproperty |= DYN_LAMP_PERSMAT;
 			
-			if (lamp->la->shadowmap_type == LA_SHADMAP_VARIANCE) {
+			if ( use_realistic_preview || lamp->la->shadowmap_type == LA_SHADMAP_VARIANCE) {
 				GPU_link(mat, "test_shadowbuf_vsm",
 					GPU_builtin(GPU_VIEW_POSITION),
 					GPU_dynamic_texture(lamp->tex, GPU_DYNAMIC_SAMPLER_2DSHADOW, lamp->ob),
@@ -923,7 +1008,21 @@ static void shade_one_light(GPUShadeInput *shi, GPUShadeResult *shr, GPULamp *la
 		}
 	}
 
-	if (mat->scene->gm.flag & GAME_GLSL_NO_SHADERS) {
+	if (use_realistic_preview) {
+		if (lamp->type == LA_AREA) {
+			GPU_link(mat, "node_bsdf_glossy_one_area_light", vn, lv, view, dist, GPU_dynamic_uniform((float *)lamp->areavec, GPU_DYNAMIC_LAMP_AREASCALE, lamp->ob), GPU_builtin(GPU_INVERSE_VIEW_MATRIX), GPU_dynamic_uniform((float *)lamp->dynimat, GPU_DYNAMIC_LAMP_DYNIMAT, lamp->ob), GPU_dynamic_uniform((float*)lamp->dynmat, GPU_DYNAMIC_LAMP_DYNMAT, lamp->ob), GPU_uniform(&lamp->area_size), GPU_uniform(&lamp->area_size_y), shi->har, &specfac);
+		}
+		else if (lamp->type == LA_SUN || lamp->type == LA_HEMI) {
+			GPU_link(mat, "node_bsdf_glossy_one_sun_light", vn, lv, view, dist, GPU_uniform(&lamp->area_size), shi->har, &specfac);
+		}
+		else
+			GPU_link(mat, "node_bsdf_glossy_one_sphere_light", vn, lv, view, dist, GPU_uniform(&lamp->area_size), shi->har, &specfac);
+
+		GPU_link(mat, "shade_spec_t", shadfac, shi->spec, visifac, specfac, &t); 
+		GPU_link(mat, "shade_add_spec", t, lcol, shi->specrgb, &outcol);
+		GPU_link(mat, "shade_add_clamped", shr->spec, outcol, &shr->spec);
+	}
+	else if (mat->scene->gm.flag & GAME_GLSL_NO_SHADERS) {
 		/* pass */
 	}
 	else if (!(lamp->mode & LA_NO_SPEC) && !(lamp->mode & LA_ONLYSHADOW) &&
@@ -946,8 +1045,6 @@ static void shade_one_light(GPUShadeInput *shi, GPUShadeResult *shr, GPULamp *la
 			else
 				GPU_link(mat, "shade_toon_spec", vn, lv, view, GPU_uniform(&ma->param[2]), GPU_uniform(&ma->param[3]), &specfac);
 
-			if (lamp->type == LA_AREA)
-				GPU_link(mat, "shade_spec_area_inp", specfac, inp, &specfac);
 
 			GPU_link(mat, "shade_spec_t", shadfac, shi->spec, visifac, specfac, &t); 
 
@@ -974,12 +1071,13 @@ static void material_lights(GPUShadeInput *shi, GPUShadeResult *shr)
 	Object *ob;
 	Scene *sce_iter;
 	GPULamp *lamp;
-	
+	bool use_realistic_preview = ( GPU_material_get_type(shi->gpumat) == GPU_MATERIAL_TYPE_ENV_SAMPLING_DIFFUSE || GPU_material_get_type(shi->gpumat) == GPU_MATERIAL_TYPE_ENV_SAMPLING_GLOSSY );
+
 	for (SETLOOPER(shi->gpumat->scene, sce_iter, base)) {
 		ob = base->object;
 
 		if (ob->type == OB_LAMP) {
-			lamp = GPU_lamp_from_blender(shi->gpumat->scene, ob, NULL);
+			lamp = GPU_lamp_from_blender(shi->gpumat->scene, ob, NULL, use_realistic_preview);
 			if (lamp)
 				shade_one_light(shi, shr, lamp);
 		}
@@ -996,7 +1094,7 @@ static void material_lights(GPUShadeInput *shi, GPUShadeResult *shr)
 					copy_m4_m4(omat, ob_iter->obmat);
 					copy_m4_m4(ob_iter->obmat, dob->mat);
 
-					lamp = GPU_lamp_from_blender(shi->gpumat->scene, ob_iter, ob);
+					lamp = GPU_lamp_from_blender(shi->gpumat->scene, ob_iter, ob, use_realistic_preview);
 					if (lamp)
 						shade_one_light(shi, shr, lamp);
 
@@ -1701,7 +1799,7 @@ static GPUNodeLink *gpu_material_diffuse_bsdf(GPUMaterial *mat, Material *ma)
 	static float ambient[4] = {0.2f, 0.2f, 0.2f, 1.0f};
 	GPUNodeLink *outlink;
 
-	GPU_link(mat, "node_bsdf_diffuse", GPU_uniform(&ma->r), GPU_uniform(&roughness), GPU_builtin(GPU_VIEW_NORMAL), GPU_uniform(&ambient), &outlink);
+	GPU_link(mat, "node_bsdf_diffuse_lights", GPU_uniform(&ma->r), GPU_uniform(&roughness), GPU_builtin(GPU_VIEW_NORMAL), GPU_builtin(GPU_VIEW_POSITION), GPU_uniform(&ambient), &outlink);
 
 	return outlink;
 }
@@ -1805,7 +1903,7 @@ GPUMaterial *GPU_material_world(struct Scene *scene, struct World *wo, bool use_
 }
 
 
-GPUMaterial *GPU_material_from_blender(Scene *scene, Material *ma, bool use_opensubdiv)
+GPUMaterial *GPU_material_from_blender(Scene *scene, Material *ma, bool use_opensubdiv, bool use_realistic_preview)
 {
 	GPUMaterial *mat;
 	GPUNodeLink *outlink;
@@ -1823,7 +1921,7 @@ GPUMaterial *GPU_material_from_blender(Scene *scene, Material *ma, bool use_open
 	/* allocate material */
 	mat = GPU_material_construct_begin(ma);
 	mat->scene = scene;
-	mat->type = GPU_MATERIAL_TYPE_MESH;
+	mat->type = (use_realistic_preview)? GPU_MATERIAL_TYPE_MESH_REAL_SH : GPU_MATERIAL_TYPE_MESH;
 	mat->is_opensubdiv = use_opensubdiv;
 
 	/* render pipeline option */
@@ -1853,6 +1951,9 @@ GPUMaterial *GPU_material_from_blender(Scene *scene, Material *ma, bool use_open
 	if (GPU_material_do_color_management(mat))
 		if (mat->outlink)
 			GPU_link(mat, "linearrgb_to_srgb", mat->outlink, &mat->outlink);
+
+	//VERY BAD but it works
+	mat->type = GPU_MATERIAL_TYPE_MESH;
 
 	GPU_material_construct_end(mat, ma->id.name);
 
@@ -1934,6 +2035,9 @@ void GPU_lamp_update(GPULamp *lamp, int lay, int hide, float obmat[4][4])
 	lamp->spotvec[0] = obmat_scale[0] / obmat_scale[2];
 	lamp->spotvec[1] = obmat_scale[1] / obmat_scale[2];
 
+	lamp->areavec[0] = obmat_scale[0];
+	lamp->areavec[1] = obmat_scale[1];
+
 	/* makeshadowbuf */
 	gpu_lamp_calc_winmat(lamp);
 }
@@ -1942,6 +2046,7 @@ void GPU_lamp_update_colors(GPULamp *lamp, float r, float g, float b, float ener
 {
 	lamp->energy = energy;
 	if (lamp->mode & LA_NEG) lamp->energy = -lamp->energy;
+	if (BKE_scene_use_new_shading_nodes(lamp->scene)) lamp->energy = 1.0f;
 
 	lamp->col[0] = r;
 	lamp->col[1] = g;
@@ -1961,7 +2066,7 @@ void GPU_lamp_update_spot(GPULamp *lamp, float spotsize, float spotblend)
 	lamp->spotbl = (1.0f - lamp->spotsi) * spotblend;
 }
 
-static void gpu_lamp_from_blender(Scene *scene, Object *ob, Object *par, Lamp *la, GPULamp *lamp)
+static void gpu_lamp_from_blender(Scene *scene, Object *ob, Object *par, Lamp *la, GPULamp *lamp, bool use_realistic_preview)
 {
 	lamp->scene = scene;
 	lamp->ob = ob;
@@ -1971,6 +2076,9 @@ static void gpu_lamp_from_blender(Scene *scene, Object *ob, Object *par, Lamp *l
 	/* add_render_lamp */
 	lamp->mode = la->mode;
 	lamp->type = la->type;
+
+	lamp->area_size = la->area_size;
+	lamp->area_size_y = la->area_sizey;
 
 	lamp->energy = la->energy;
 	if (lamp->mode & LA_NEG) lamp->energy = -lamp->energy;
@@ -2003,6 +2111,31 @@ static void gpu_lamp_from_blender(Scene *scene, Object *ob, Object *par, Lamp *l
 
 	/* arbitrary correction for the fact we do no soft transition */
 	lamp->bias *= 0.25f;
+
+	if (use_realistic_preview) {
+		float small_vsm = 64.0f;
+		float big_vsm = 2048.0f;
+		float tmp, angle_fac;
+		float area_fac = lamp->area_size;
+
+		/* Shadow map size to fake area light*/
+		area_fac = 1.0f - exp(-area_fac);
+		angle_fac = la->spotsize / DEG2RADF(180.0f);
+		angle_fac = -log(1.0f - angle_fac);
+
+		CLAMP(area_fac, 0.0f, 1.0f);
+		tmp = (big_vsm + area_fac * (small_vsm - big_vsm))*angle_fac;
+		CLAMP(tmp, 1.0f, 2048.0f);
+		lamp->size = (int)tmp;
+
+		lamp->mode &= ~(LA_HALO | LA_NEG | LA_SPHERE | LA_SQUARE);
+		lamp->energy = 1.0f;
+		lamp->la->shadowmap_type = LA_SHADMAP_VARIANCE;
+		lamp->bias = 0.00001f; // Sharp shadow
+
+		if (la->area_shape == LA_AREA_SQUARE)
+			lamp->area_size_y = la->area_size;
+	}
 }
 
 static void gpu_lamp_shadow_free(GPULamp *lamp)
@@ -2029,7 +2162,7 @@ static void gpu_lamp_shadow_free(GPULamp *lamp)
 	}
 }
 
-GPULamp *GPU_lamp_from_blender(Scene *scene, Object *ob, Object *par)
+GPULamp *GPU_lamp_from_blender(Scene *scene, Object *ob, Object *par, bool use_realistic_preview)
 {
 	Lamp *la;
 	GPULamp *lamp;
@@ -2049,9 +2182,10 @@ GPULamp *GPU_lamp_from_blender(Scene *scene, Object *ob, Object *par)
 	BLI_addtail(&ob->gpulamp, link);
 
 	la = ob->data;
-	gpu_lamp_from_blender(scene, ob, par, la, lamp);
+	gpu_lamp_from_blender(scene, ob, par, la, lamp, use_realistic_preview);
 
-	if ((la->type == LA_SPOT && (la->mode & (LA_SHAD_BUF | LA_SHAD_RAY))) || (la->type == LA_SUN && (la->mode & LA_SHAD_RAY))) {
+	if ( (use_realistic_preview && (la->type == LA_SUN || la->type == LA_SPOT)) ||
+		 (la->type == LA_SPOT && (la->mode & (LA_SHAD_BUF | LA_SHAD_RAY))) || (la->type == LA_SUN && (la->mode & LA_SHAD_RAY))) {
 		/* opengl */
 		lamp->fb = GPU_framebuffer_create();
 		if (!lamp->fb) {
@@ -2059,7 +2193,8 @@ GPULamp *GPU_lamp_from_blender(Scene *scene, Object *ob, Object *par)
 			return lamp;
 		}
 
-		if (lamp->la->shadowmap_type == LA_SHADMAP_VARIANCE) {
+		if ( use_realistic_preview || lamp->la->shadowmap_type == LA_SHADMAP_VARIANCE) {
+
 			/* Shadow depth map */
 			lamp->depthtex = GPU_texture_create_depth(lamp->size, lamp->size, NULL);
 			if (!lamp->depthtex) {
@@ -2131,8 +2266,9 @@ GPULamp *GPU_lamp_from_blender(Scene *scene, Object *ob, Object *par)
 			
 			if (!GPU_framebuffer_check_valid(lamp->fb, NULL)) {
 				gpu_lamp_shadow_free(lamp);
-				return lamp;				
-			}						
+				return lamp;
+			}
+
 		}
 
 		GPU_framebuffer_restore();
@@ -2230,6 +2366,8 @@ void GPU_lamp_shadow_buffer_unbind(GPULamp *lamp)
 	if (lamp->la->shadowmap_type == LA_SHADMAP_VARIANCE) {
 		GPU_shader_unbind();
 		GPU_framebuffer_blur(lamp->fb, lamp->tex, lamp->blurfb, lamp->blurtex);
+		//TODO : only do this second blur if realistic preview 
+		GPU_framebuffer_blur(lamp->fb, lamp->tex, lamp->blurfb, lamp->blurtex);
 	}
 
 	GPU_framebuffer_texture_unbind(lamp->fb, lamp->tex);
@@ -2322,7 +2460,7 @@ GPUShaderExport *GPU_shader_export(struct Scene *scene, struct Material *ma)
 	int i, liblen, fraglen;
 
 	/* TODO(sergey): How to detemine whether we need OSD or not here? */
-	mat = GPU_material_from_blender(scene, ma, false);
+	mat = GPU_material_from_blender(scene, ma, false, false);
 	pass = (mat)? mat->pass: NULL;
 
 	if (pass && pass->fragmentcode && pass->vertexcode) {

@@ -2495,10 +2495,11 @@ static void gpu_render_lamp_update(Scene *scene, View3D *v3d,
 	View3DShadow *shadow;
 	unsigned int layers;
 	
-	lamp = GPU_lamp_from_blender(scene, ob, par);
+	lamp = GPU_lamp_from_blender(scene, ob, par, BKE_scene_use_new_shading_nodes(scene));
 	
 	if (lamp) {
-		GPU_lamp_update(lamp, lay, (ob->restrictflag & OB_RESTRICT_RENDER), obmat);
+		bool hide = (ob->restrictflag & OB_RESTRICT_VIEW);
+		GPU_lamp_update(lamp, lay, hide, obmat);
 		GPU_lamp_update_colors(lamp, la->r, la->g, la->b, la->energy);
 		
 		layers = lay & v3d->lay;
@@ -2968,6 +2969,9 @@ void ED_view3d_draw_offscreen_init(Scene *scene, View3D *v3d)
  */
 static void view3d_main_area_clear(Scene *scene, View3D *v3d, ARegion *ar)
 {
+	GPUFXSettings *fx_settings = &v3d->fx_settings;
+	bool use_color_correction = (fx_settings->fx_flag && (fx_settings->fx_flag & GPU_FX_FLAG_COLORMANAGEMENT)) ? false : true;
+
 	if (scene->world && (v3d->flag3 & V3D_SHOW_WORLD)) {
 		bool glsl = BKE_scene_use_new_shading_nodes(scene) && scene->world->nodetree && scene->world->use_nodes;
 		
@@ -3026,10 +3030,17 @@ static void view3d_main_area_clear(Scene *scene, View3D *v3d, ARegion *ar)
 			static GLushort indices[VIEWGRAD_RES_X - 1][VIEWGRAD_RES_X - 1][4];
 			static bool buf_calculated = false;
 
-			IMB_colormanagement_pixel_to_display_space_v3(col_hor, &scene->world->horr, &scene->view_settings,
-			                                              &scene->display_settings);
-			IMB_colormanagement_pixel_to_display_space_v3(col_zen, &scene->world->zenr, &scene->view_settings,
-			                                              &scene->display_settings);
+			if (use_color_correction) {
+				IMB_colormanagement_pixel_to_display_space_v3(col_hor, &scene->world->horr, &scene->view_settings,
+				                                              &scene->display_settings);
+				IMB_colormanagement_pixel_to_display_space_v3(col_zen, &scene->world->zenr, &scene->view_settings,
+				                                              &scene->display_settings);
+			}
+			else {
+				copy_v3_v3(col_hor, &scene->world->horr);
+				copy_v3_v3(col_zen, &scene->world->zenr);
+			}
+
 
 			glMatrixMode(GL_PROJECTION);
 			glPushMatrix();
@@ -3132,8 +3143,13 @@ static void view3d_main_area_clear(Scene *scene, View3D *v3d, ARegion *ar)
 		}
 		else {  /* solid sky */
 			float col_hor[3];
-			IMB_colormanagement_pixel_to_display_space_v3(col_hor, &scene->world->horr, &scene->view_settings,
+			if (use_color_correction) {
+				IMB_colormanagement_pixel_to_display_space_v3(col_hor, &scene->world->horr, &scene->view_settings,
 			                                              &scene->display_settings);
+			}
+			else {
+				copy_v3_v3(col_hor, &scene->world->horr);
+			}
 
 			glClearColor(col_hor[0], col_hor[1], col_hor[2], 1.0);
 			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -3234,7 +3250,8 @@ void ED_view3d_draw_offscreen(
 			v3d->fx_settings.ssao = NULL;
 		}
 
-		do_compositing = GPU_fx_compositor_initialize_passes(fx, &ar->winrct, NULL, fx_settings);
+		do_compositing = GPU_fx_compositor_initialize_passes(fx, &ar->winrct, NULL, fx_settings, scene);
+		
 
 		if (ssao)
 			v3d->fx_settings.ssao = ssao;
@@ -3877,7 +3894,7 @@ static void view3d_main_area_draw_objects(const bContext *C, Scene *scene, View3
 			fx_settings.dof = NULL;
 		}
 
-		do_compositing = GPU_fx_compositor_initialize_passes(rv3d->compositor, &ar->winrct, &ar->drawrct, &fx_settings);
+		do_compositing = GPU_fx_compositor_initialize_passes(rv3d->compositor, &ar->winrct, &ar->drawrct, &fx_settings, scene);
 	}
 	
 	/* clear the background */

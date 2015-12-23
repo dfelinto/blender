@@ -103,13 +103,15 @@ typedef enum GPUOpenGLBuiltin {
 } GPUOpenGLBuiltin;
 
 typedef enum GPUMatType {
-	GPU_MATERIAL_TYPE_MESH  = 1,
-	GPU_MATERIAL_TYPE_WORLD = 2,
-	GPU_MATERIAL_TYPE_WORLD_SH = 3,
-	GPU_MATERIAL_TYPE_ENV_SAMPLING_GLOSSY = 4,
-	GPU_MATERIAL_TYPE_ENV_SAMPLING_SHARP = 5,
-	GPU_MATERIAL_TYPE_ENV_SAMPLING_DIFFUSE = 6,
-	GPU_MATERIAL_TYPE_ENV_NORMAL = 7,
+	GPU_MATERIAL_TYPE_MESH = 1,
+	GPU_MATERIAL_TYPE_MESH_REAL_SH = 2,
+	GPU_MATERIAL_TYPE_WORLD = 3,
+	GPU_MATERIAL_TYPE_WORLD_SH = 4,
+	GPU_MATERIAL_TYPE_LAMP = 5,
+	GPU_MATERIAL_TYPE_ENV_SAMPLING_GLOSSY = 6,
+	GPU_MATERIAL_TYPE_ENV_SAMPLING_SHARP = 7,
+	GPU_MATERIAL_TYPE_ENV_SAMPLING_DIFFUSE = 8,
+	GPU_MATERIAL_TYPE_ENV_NORMAL = 9,
 } GPUMatType;
 
 
@@ -166,6 +168,8 @@ typedef enum GPUDynamicType {
 	GPU_DYNAMIC_LAMP_SPOTSIZE        = 10 | GPU_DYNAMIC_GROUP_LAMP,
 	GPU_DYNAMIC_LAMP_SPOTBLEND       = 11 | GPU_DYNAMIC_GROUP_LAMP,
 	GPU_DYNAMIC_LAMP_SPOTSCALE       = 12 | GPU_DYNAMIC_GROUP_LAMP,
+	GPU_DYNAMIC_LAMP_DYNMAT          = 13 | GPU_DYNAMIC_GROUP_LAMP,
+	GPU_DYNAMIC_LAMP_AREASCALE       = 14 | GPU_DYNAMIC_GROUP_LAMP,
 
 	GPU_DYNAMIC_SAMPLER_2DBUFFER     = 1  | GPU_DYNAMIC_GROUP_SAMPLER,
 	GPU_DYNAMIC_SAMPLER_2DIMAGE      = 2  | GPU_DYNAMIC_GROUP_SAMPLER,
@@ -209,6 +213,8 @@ void GPU_material_set_normal_link(GPUMaterial *material, GPUNodeLink *link);
 GPUNodeLink *GPU_material_get_normal_link(GPUMaterial *material);
 void GPU_material_set_roughness_link(GPUMaterial *material, GPUNodeLink *link);
 GPUNodeLink *GPU_material_get_roughness_link(GPUMaterial *material);
+void GPU_material_set_lampco_link(GPUMaterial *material, GPUNodeLink *link);
+GPUNodeLink *GPU_material_get_lampco_link(GPUMaterial *material);
 
 void GPU_material_output_link(GPUMaterial *material, GPUNodeLink *link);
 void GPU_material_empty_output_link(GPUMaterial *material);
@@ -219,7 +225,7 @@ GPUBlendMode GPU_material_alpha_blend(GPUMaterial *material, float obcol[4]);
 /* High level functions to create and use GPU materials */
 GPUMaterial *GPU_material_world(struct Scene *scene, struct World *wo, bool use_spherical_harmonics);
 
-GPUMaterial *GPU_material_from_blender(struct Scene *scene, struct Material *ma, bool use_opensubdiv);
+GPUMaterial *GPU_material_from_blender(struct Scene *scene, struct Material *ma, bool use_opensubdiv, bool use_realistic_preview);
 GPUMaterial *GPU_material_matcap(struct Scene *scene, struct Material *ma, bool use_opensubdiv);
 void GPU_material_free(struct ListBase *gpumaterial);
 
@@ -306,7 +312,7 @@ void GPU_free_shader_export(GPUShaderExport *shader);
 
 /* Lamps */
 
-GPULamp *GPU_lamp_from_blender(struct Scene *scene, struct Object *ob, struct Object *par);
+GPULamp *GPU_lamp_from_blender(struct Scene *scene, struct Object *ob, struct Object *par, bool use_realistic_preview);
 void GPU_lamp_free(struct Object *ob);
 
 bool GPU_lamp_has_shadow_buffer(GPULamp *lamp);

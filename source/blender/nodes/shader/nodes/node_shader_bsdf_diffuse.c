@@ -49,7 +49,10 @@ static int node_shader_gpu_bsdf_diffuse(GPUMaterial *mat, bNode *UNUSED(node), b
 	Scene *scene = GPU_material_scene(mat);
 	World *wo = scene->world;
 	float horiz_col[4] = {0.2f};
+	float one = 1.0f;
 	GPUNodeLink *envLink, *normalLink, *viewNormalLink;
+	GPUMatType type = GPU_material_get_type(mat);
+	int ret = 0;
 
 	if (!in[2].link)
 		in[2].link = GPU_builtin(GPU_VIEW_NORMAL);
@@ -58,10 +61,14 @@ static int node_shader_gpu_bsdf_diffuse(GPUMaterial *mat, bNode *UNUSED(node), b
 		GPU_link(mat, "node_vector_transform", in[2].link, GPU_builtin(GPU_VIEW_MATRIX), &in[2].link);
 	}
 
-	GPU_link(mat, "set_rgb", in[2].link, &viewNormalLink);
-	GPU_link(mat, "node_vector_transform", in[2].link, GPU_builtin(GPU_INVERSE_VIEW_MATRIX), &normalLink); /* Send world normal for sampling */
+	if (!in[1].link)
+		in[1].link = GPU_uniform(in[1].vec);
 
-	/* ENVIRONMENT PREVIEW */
+	if (!in[0].link)
+		in[0].link = GPU_uniform(in[0].vec);
+
+	ret |= GPU_link(mat, "set_rgb", in[2].link, &viewNormalLink);
+	ret |= GPU_link(mat, "node_vector_transform", in[2].link, GPU_builtin(GPU_INVERSE_VIEW_MATRIX), &normalLink); /* Send world normal for sampling */
 
 	/* Use horizon color by default */
 	horiz_col[0] = wo->horr;
@@ -69,38 +76,70 @@ static int node_shader_gpu_bsdf_diffuse(GPUMaterial *mat, bNode *UNUSED(node), b
 	horiz_col[2] = wo->horb;
 	envLink = GPU_uniform(&horiz_col);
 
-	/* If there is already a valid output do not attempt to do the world sampling. Because the output would be overwriten */
-	if( GPU_material_get_output_link(mat) )//|| IF USE REALISTIC PREV NOT CHECKed )
-		return GPU_stack_link(mat, "node_bsdf_diffuse", in, out, envLink);
+	/* ENVIRONMENT PREVIEW */
+	if (type == GPU_MATERIAL_TYPE_MESH_REAL_SH) {
 
-	GPU_material_set_normal_link(mat, normalLink); /* THIS IS BAD TOO */
+		extern Material defmaterial;
+		GPUShadeInput shi;
+		GPUShadeResult shr;
 
-	/* First run the normal into the World node tree 
-	 * The environment texture nodes will save the nodelink of it.
-	 */
-	GPU_material_set_type(mat, GPU_MATERIAL_TYPE_ENV_NORMAL); /* THIS IS BAD */
+		/* If there is already a valid output do not attempt to do the world sampling. Because the output would be overwriten */
+		if( GPU_material_get_output_link(mat) )
+			return GPU_stack_link(mat, "node_bsdf_diffuse_lights", in, out, GPU_builtin(GPU_VIEW_POSITION), envLink);
+	
+		/* Analytic Lighting (lamps)*/
+		GPU_shadeinput_set(mat, &defmaterial, &shi);
+		/* Diffuse Color/Intensity */
+		ret |= !GPU_link(mat, "set_rgb", in[0].link, &shi.rgb);
+		/* PLZ HALP WHY IS THIS NEEDED : also pointing the strange thing in gpu_shader_material.glsl -> node_bsdf_diffuse_one_sphere_light() */
+		ret |= !GPU_link(mat, "basic_srgb_to_linear", shi.rgb, &shi.rgb);
+		ret |= !GPU_link(mat, "basic_srgb_to_linear", shi.rgb, &shi.rgb);
+		ret |= !GPU_link(mat, "basic_srgb_to_linear", shi.rgb, &shi.rgb);
+		ret |= !GPU_link(mat, "basic_srgb_to_linear", shi.rgb, &shi.rgb);
+		/* Roughness : Range 0-1 */
+		ret |= !GPU_link(mat, "set_value", in[1].link, &shi.har);
+		/* Diffuse Intensity */
+		ret |= !GPU_link(mat, "set_value", GPU_uniform(&one), &shi.refl);
+		/* Normals : inverted View normals */
+		ret |= !GPU_link(mat, "viewN_to_shadeN", in[2].link, &shi.vn);
+		/* Compute shading */
+		GPU_material_set_type(mat, GPU_MATERIAL_TYPE_ENV_SAMPLING_DIFFUSE); /* THIS IS BAD */
+		GPU_shaderesult_set(&shi, &shr);
+		/* End of Analytic Lighting */
 
-	/* XXX Memory leak here below */
-	if (BKE_scene_use_new_shading_nodes(scene) && wo->nodetree && wo->use_nodes) {
-		ntreeGPUMaterialNodes(wo->nodetree, mat, NODE_NEW_SHADING);
-		GPU_material_empty_output_link(mat);
+		GPU_material_set_normal_link(mat, normalLink); /* THIS IS BAD TOO */
+
+		/* First run the normal into the World node tree 
+		 * The environment texture nodes will save the nodelink of it.
+		 */
+		GPU_material_set_type(mat, GPU_MATERIAL_TYPE_ENV_NORMAL); /* THIS IS BAD */
+
+		/* XXX Memory leak here below */
+		if (BKE_scene_use_new_shading_nodes(scene) && wo->nodetree && wo->use_nodes) {
+			ntreeGPUMaterialNodes(wo->nodetree, mat, NODE_NEW_SHADING);
+			GPU_material_empty_output_link(mat);
+		} else {
+			/* old fixed function world */
+		}
+
+		/* XXX Memory leak here below */
+		GPU_material_set_type(mat, GPU_MATERIAL_TYPE_ENV_SAMPLING_DIFFUSE); /* THIS IS BAD */
+
+		if (BKE_scene_use_new_shading_nodes(scene) && wo->nodetree && wo->use_nodes) {
+			ntreeGPUMaterialNodes(wo->nodetree, mat, NODE_NEW_SHADING);
+			envLink = GPU_material_get_output_link(mat);
+			GPU_material_empty_output_link(mat);
+		} else {
+			/* old fixed function world */
+		}
+		GPU_material_set_type(mat, type);
+
+		ret |= GPU_stack_link(mat, "node_bsdf_diffuse", in, out, GPU_builtin(GPU_VIEW_POSITION), envLink, shr.diff);
 	} else {
-		/* old fixed function world */
+		ret |= GPU_stack_link(mat, "node_bsdf_diffuse_lights", in, out, GPU_builtin(GPU_VIEW_POSITION), envLink);
 	}
-
-	/* XXX Memory leak here below */
-	GPU_material_set_type(mat, GPU_MATERIAL_TYPE_ENV_SAMPLING_DIFFUSE); /* THIS IS BAD */
-
-	if (BKE_scene_use_new_shading_nodes(scene) && wo->nodetree && wo->use_nodes) {
-		ntreeGPUMaterialNodes(wo->nodetree, mat, NODE_NEW_SHADING);
-		envLink = GPU_material_get_output_link(mat);
-		GPU_material_empty_output_link(mat);
-	} else {
-		/* old fixed function world */
-	}
-	GPU_material_set_type(mat, GPU_MATERIAL_TYPE_MESH);
-
-	return GPU_stack_link(mat, "node_bsdf_diffuse", in, out, envLink);
+	
+	return ret;
 }
 
 /* node type definition */

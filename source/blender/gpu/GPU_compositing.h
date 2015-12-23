@@ -40,6 +40,7 @@ extern "C" {
 typedef struct GPUFX GPUFX;
 struct GPUDOFSettings;
 struct GPUSSAOSettings;
+struct GPUCCSettings;
 struct GPUOffScreen;
 struct GPUFXSettings;
 struct rcti;
@@ -65,10 +66,12 @@ typedef enum GPUFXShaderEffect {
 	GPU_SHADER_FX_DEPTH_OF_FIELD_HQ_PASS_THREE = 9,
 
 	GPU_SHADER_FX_DEPTH_RESOLVE = 10,
+
+	GPU_SHADER_FX_COLORMANAGE = 11,
 } GPUFXShaderEffect;
 
 /* keep in synch with enum above! */
-#define MAX_FX_SHADERS 11
+#define MAX_FX_SHADERS 12
 
 /* generate a new FX compositor */
 GPUFX *GPU_fx_compositor_create(void);
@@ -79,7 +82,7 @@ void GPU_fx_compositor_destroy(GPUFX *fx);
 /* initialize a framebuffer with size taken from the viewport */
 bool GPU_fx_compositor_initialize_passes(
         GPUFX *fx, const struct rcti *rect, const struct rcti *scissor_rect,
-        const struct GPUFXSettings *fx_settings);
+        const struct GPUFXSettings *fx_settings, struct Scene *scene);
 
 /* do compositing on the fx passes that have been initialized */
 bool GPU_fx_do_composite_pass(GPUFX *fx, float projmat[4][4], bool is_persp, struct Scene *scene, struct GPUOffScreen *ofs);

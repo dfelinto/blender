@@ -434,9 +434,12 @@ static EnumPropertyItem *rna_ColorManagedDisplaySettings_display_device_itemf(
 	return items;
 }
 
-static void rna_ColorManagedDisplaySettings_display_device_update(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *ptr)
+static void rna_ColorManagedDisplaySettings_display_device_update(Main *UNUSED(bmain), Scene *scene, PointerRNA *ptr)
 {
 	ID *id = ptr->id.data;
+
+	ColorManagedDisplaySettings *display_settings = &scene->display_settings;
+	display_settings->lut_is_outdated = 1;
 
 	if (!id)
 		return;
@@ -655,9 +658,12 @@ static char *rna_ColorManagedInputColorspaceSettings_path(PointerRNA *UNUSED(ptr
 	return BLI_sprintfN("colorspace_settings");
 }
 
-static void rna_ColorManagement_update(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *ptr)
+static void rna_ColorManagement_update(Main *UNUSED(bmain), Scene *scene, PointerRNA *ptr)
 {
 	ID *id = ptr->id.data;
+	
+	ColorManagedViewSettings *view_settings = &scene->view_settings;
+	view_settings->lut_is_outdated = 1;
 
 	if (!id)
 		return;

@@ -88,6 +88,7 @@ extern char datatoc_gpu_shader_sep_gaussian_blur_vert_glsl[];
 extern char datatoc_gpu_shader_sep_gaussian_blur_frag_glsl[];
 extern char datatoc_gpu_shader_fx_vert_glsl[];
 extern char datatoc_gpu_shader_fx_ssao_frag_glsl[];
+extern char datatoc_gpu_shader_fx_colormanage_frag_glsl[];
 extern char datatoc_gpu_shader_fx_dof_frag_glsl[];
 extern char datatoc_gpu_shader_fx_dof_vert_glsl[];
 extern char datatoc_gpu_shader_fx_dof_hq_frag_glsl[];
@@ -599,6 +600,10 @@ GPUTexture *GPU_texture_create_3D(int w, int h, int depth, int channels, const f
 	if (channels == 4) {
 		format = GL_RGBA;
 		internalformat = GL_RGBA;
+	}
+	if (channels == 3) {
+		format = GL_RGB;
+		internalformat = GL_RGB16F; //For 3DLUT
 	}
 	else {
 		format = GL_RED;
@@ -2266,6 +2271,10 @@ GPUShader *GPU_shader_get_builtin_fx_shader(int effects, bool persp)
 
 			case GPU_SHADER_FX_DEPTH_RESOLVE:
 				GG.shaders.fx_shaders[offset] = GPU_shader_create(datatoc_gpu_shader_fx_vert_glsl, datatoc_gpu_shader_fx_depth_resolve_glsl, NULL, NULL, defines, 0, 0, 0);
+				break;
+
+			case GPU_SHADER_FX_COLORMANAGE:
+				GG.shaders.fx_shaders[offset] = GPU_shader_create(datatoc_gpu_shader_fx_vert_glsl, datatoc_gpu_shader_fx_colormanage_frag_glsl, NULL, datatoc_gpu_shader_fx_lib_glsl, defines, 0, 0, 0);
 		}
 	}
 

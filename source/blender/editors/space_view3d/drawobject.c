@@ -1190,7 +1190,7 @@ static void draw_transp_sun_volume(Lamp *la)
 }
 #endif
 
-static void drawlamp(View3D *v3d, RegionView3D *rv3d, Base *base,
+static void drawlamp(Scene *scene, View3D *v3d, RegionView3D *rv3d, Base *base,
                      const char dt, const short dflag, const unsigned char ob_wire_col[4], const bool is_obact)
 {
 	Object *ob = base->object;
@@ -1330,9 +1330,17 @@ static void drawlamp(View3D *v3d, RegionView3D *rv3d, Base *base,
 
 	}
 	
-	if (la->type == LA_LOCAL) {
-		if (la->mode & LA_SPHERE) {
-			drawcircball(GL_LINE_LOOP, vec, la->dist, imat);
+
+	if (BKE_scene_use_new_shading_nodes(scene)) {
+		if (la->type == LA_LOCAL || la->type == LA_SPOT) {
+			drawcircball(GL_LINE_LOOP, vec, la->area_size, imat);
+		}
+	}
+	else {
+		if (la->type == LA_LOCAL) {
+			if (la->mode & LA_SPHERE) {
+				drawcircball(GL_LINE_LOOP, vec, la->dist, imat);
+			}
 		}
 	}
 	
@@ -7898,7 +7906,7 @@ void draw_object(Scene *scene, ARegion *ar, View3D *v3d, Base *base, const short
 				break;
 			case OB_LAMP:
 				if (!render_override) {
-					drawlamp(v3d, rv3d, base, dt, dflag, ob_wire_col, is_obact);
+					drawlamp(scene, v3d, rv3d, base, dt, dflag, ob_wire_col, is_obact);
 				}
 				break;
 			case OB_CAMERA:

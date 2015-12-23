@@ -1624,7 +1624,7 @@ void GPU_begin_object_materials(View3D *v3d, RegionView3D *rv3d, Scene *scene, O
 
 			if (glsl) {
 				GMS.gmatbuf[0] = &defmaterial;
-				GPU_material_from_blender(GMS.gscene, &defmaterial, GMS.is_opensubdiv);
+				GPU_material_from_blender(GMS.gscene, &defmaterial, GMS.is_opensubdiv, (v3d->flag3 & V3D_REALISTIC_MAT));
 			}
 
 			GMS.alphablend[0] = GPU_BLEND_SOLID;
@@ -1638,7 +1638,7 @@ void GPU_begin_object_materials(View3D *v3d, RegionView3D *rv3d, Scene *scene, O
 			if (ma == NULL) ma = &defmaterial;
 
 			/* create glsl material if requested */
-			gpumat = glsl? GPU_material_from_blender(GMS.gscene, ma, GMS.is_opensubdiv): NULL;
+			gpumat = glsl? GPU_material_from_blender(GMS.gscene, ma, GMS.is_opensubdiv, (v3d->flag3 & V3D_REALISTIC_MAT)): NULL;
 
 			if (gpumat) {
 				/* do glsl only if creating it succeed, else fallback */
@@ -1742,7 +1742,7 @@ int GPU_enable_material(int nr, void *attribs)
 	/* unbind glsl material */
 	if (GMS.gboundmat) {
 		if (GMS.is_alpha_pass) glDepthMask(0);
-		GPU_material_unbind(GPU_material_from_blender(GMS.gscene, GMS.gboundmat, GMS.is_opensubdiv));
+		GPU_material_unbind(GPU_material_from_blender(GMS.gscene, GMS.gboundmat, GMS.is_opensubdiv, false));
 		GMS.gboundmat = NULL;
 	}
 
@@ -1769,7 +1769,7 @@ int GPU_enable_material(int nr, void *attribs)
 
 			float auto_bump_scale;
 
-			gpumat = GPU_material_from_blender(GMS.gscene, mat, GMS.is_opensubdiv);
+			gpumat = GPU_material_from_blender(GMS.gscene, mat, GMS.is_opensubdiv, false);
 			GPU_material_vertex_attributes(gpumat, gattribs);
 
 			if (GMS.dob)
@@ -1836,7 +1836,7 @@ void GPU_disable_material(void)
 			glDisable(GL_CULL_FACE);
 
 		if (GMS.is_alpha_pass) glDepthMask(0);
-		GPU_material_unbind(GPU_material_from_blender(GMS.gscene, GMS.gboundmat, GMS.is_opensubdiv));
+		GPU_material_unbind(GPU_material_from_blender(GMS.gscene, GMS.gboundmat, GMS.is_opensubdiv, false));
 		GMS.gboundmat = NULL;
 	}
 
@@ -2162,7 +2162,8 @@ void GPU_draw_update_fvar_offset(DerivedMesh *dm)
 
 		gpu_material = GPU_material_from_blender(GMS.gscene,
 		                                         material,
-		                                         GMS.is_opensubdiv);
+		                                         GMS.is_opensubdiv,
+		                                         false);
 
 		GPU_material_update_fvar_offset(gpu_material, dm);
 	}

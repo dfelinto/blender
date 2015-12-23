@@ -49,7 +49,7 @@ static int node_shader_gpu_tex_coord(GPUMaterial *mat, bNode *UNUSED(node), bNod
 	GPUMatType type = GPU_material_get_type(mat);
 	GPUNodeLink *normalLink = GPU_material_get_normal_link(mat);
 	
-	if (type == GPU_MATERIAL_TYPE_MESH) {
+	if (type == GPU_MATERIAL_TYPE_MESH || type == GPU_MATERIAL_TYPE_MESH_REAL_SH) {
 		return GPU_stack_link(mat, "node_tex_coord", in, out,
 		                      GPU_builtin(GPU_VIEW_POSITION), GPU_builtin(GPU_VIEW_NORMAL),
 		                      GPU_builtin(GPU_INVERSE_VIEW_MATRIX), GPU_builtin(GPU_INVERSE_OBJECT_MATRIX),
