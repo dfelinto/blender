@@ -55,6 +55,7 @@
 #include "DNA_genfile.h"
 
 #include "BKE_colortools.h"
+#include "BKE_library.h"
 #include "BKE_main.h"
 #include "BKE_modifier.h"
 #include "BKE_node.h"
@@ -1037,6 +1038,20 @@ void blo_do_versions_270(FileData *fd, Library *UNUSED(lib), Main *main)
 		}
 	}
 	if (!MAIN_VERSION_ATLEAST(main, 276, 5)) {
+		ListBase *lbarray[MAX_LIBARRAY];
+		int a;
+
+		/* Important to clear all non-persistent flags from older versions here, otherwise they could collide
+		 * with any new persistent flag we may add in the future. */
+		a = set_listbasepointers(main, lbarray);
+		while (a--) {
+			for (ID *id = lbarray[a]->first; id; id = id->next) {
+				id->flag &= LIB_FAKEUSER;
+			}
+		}
+	}
+
+	if (!MAIN_VERSION_ATLEAST(main, 276, 6)) {
 		Scene *scene;
 		for (scene = main->scene.first; scene != NULL; scene = scene->id.next) {
 			scene->r.bake.pass_filter = R_BAKE_PASS_FILTER_ALL;

@@ -85,6 +85,7 @@ int     BM_vert_face_count(const BMVert *v) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL
 BMEdge *BM_vert_other_disk_edge(BMVert *v, BMEdge *e) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
 
 bool    BM_vert_is_edge_pair(const BMVert *v) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
+bool    BM_vert_edge_pair(BMVert *v, BMEdge **r_e_a, BMEdge **r_e_b);
 bool    BM_vert_face_check(BMVert *v) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
 bool    BM_vert_is_wire(const BMVert *v) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
 BLI_INLINE bool    BM_edge_is_wire(const BMEdge *e) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
@@ -150,6 +151,7 @@ bool    BM_face_share_face_check(BMFace *f_a, BMFace *f_b) ATTR_WARN_UNUSED_RESU
 bool    BM_face_share_edge_check(BMFace *f_a, BMFace *f_b) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
 bool    BM_face_share_vert_check(BMFace *f_a, BMFace *f_b) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
 
+bool    BM_loop_share_edge_check(BMLoop *l_a, BMLoop *l_b) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
 
 bool    BM_edge_share_face_check(BMEdge *e1, BMEdge *e2) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
 bool    BM_edge_share_quad_check(BMEdge *e1, BMEdge *e2) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();

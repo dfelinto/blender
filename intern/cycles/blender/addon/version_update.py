@@ -142,7 +142,7 @@ def do_versions(self):
         foreach_cycles_node(mapping_node_order_flip)
 
     # Baking types changed
-    if bpy.data.version <= (2, 76, 4):
+    if bpy.data.version <= (2, 76, 5):
 
         bake_lookup = (
             'COMBINED',
