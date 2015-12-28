@@ -435,7 +435,7 @@ static bool bake_pass_filter_check(ScenePassType pass_type, const int pass_filte
 				return true;
 			}
 
-			if (((pass_filter & R_BAKE_PASS_FILTER_DIFFUSE) != 0) ||
+			if (((pass_filter & R_BAKE_PASS_FILTER_DIRECT) != 0) ||
 			    ((pass_filter & R_BAKE_PASS_FILTER_INDIRECT) != 0))
 			{
 				if (((pass_filter & R_BAKE_PASS_FILTER_DIFFUSE) != 0) ||
@@ -470,7 +470,7 @@ static bool bake_pass_filter_check(ScenePassType pass_type, const int pass_filte
 		case SCE_PASS_TRANSM_COLOR:
 		case SCE_PASS_SUBSURFACE_COLOR:
 			if (((pass_filter & R_BAKE_PASS_FILTER_COLOR) != 0) ||
-			    ((pass_filter & R_BAKE_PASS_FILTER_DIFFUSE) != 0) ||
+			    ((pass_filter & R_BAKE_PASS_FILTER_DIRECT) != 0) ||
 			    ((pass_filter & R_BAKE_PASS_FILTER_INDIRECT) != 0))
 			{
 				return true;
