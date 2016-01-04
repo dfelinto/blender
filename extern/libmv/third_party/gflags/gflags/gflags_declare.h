@@ -37,6 +37,11 @@
 #ifndef GFLAGS_DECLARE_H_
 #define GFLAGS_DECLARE_H_
 
+
+// ---------------------------------------------------------------------------
+// Namespace of gflags library symbols.
+#define GFLAGS_NAMESPACE google
+
 // ---------------------------------------------------------------------------
 // Windows DLL import/export.
 
@@ -69,7 +74,7 @@
 #  include <inttypes.h>                 // a third place for uint32_t or u_int32_t
 #endif
 
-namespace gflags {
+namespace GFLAGS_NAMESPACE {
 
 #if 1 // C99
 typedef int32_t          int32;
@@ -90,7 +95,7 @@ typedef unsigned __int64 uint64;
 #  error Do not know how to define a 32-bit integer quantity on your system
 #endif
 
-} // namespace gflags
+} // namespace GFLAGS_NAMESPACE
 
 
 namespace fLS {
@@ -113,13 +118,13 @@ typedef std::string clstring;
   DECLARE_VARIABLE(bool, B, name)
 
 #define DECLARE_int32(name) \
-  DECLARE_VARIABLE(::gflags::int32, I, name)
+  DECLARE_VARIABLE(::GFLAGS_NAMESPACE::int32, I, name)
 
 #define DECLARE_int64(name) \
-  DECLARE_VARIABLE(::gflags::int64, I64, name)
+  DECLARE_VARIABLE(::GFLAGS_NAMESPACE::int64, I64, name)
 
 #define DECLARE_uint64(name) \
-  DECLARE_VARIABLE(::gflags::uint64, U64, name)
+  DECLARE_VARIABLE(::GFLAGS_NAMESPACE::uint64, U64, name)
 
 #define DECLARE_double(name) \
   DECLARE_VARIABLE(double, D, name)
