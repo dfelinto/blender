@@ -306,7 +306,7 @@ void *BLI_file_read_text_as_mem(const char *filepath, size_t pad_bytes, size_t *
 		}
 
 		const long int filelen_read = fread(mem, 1, filelen, fp);
-		if ((filelen_read < 0) || (!feof(fp) ) || ferror(fp)) {
+		if ((filelen_read < 0) || ferror(fp)) {
 			MEM_freeN(mem);
 			mem = NULL;
 			goto finally;
@@ -320,10 +320,11 @@ void *BLI_file_read_text_as_mem(const char *filepath, size_t pad_bytes, size_t *
 		}
 
 		*r_size = filelen_read;
-	}
 
 finally:
-	fclose(fp);
+		fclose(fp);
+	}
+
 	return mem;
 }
 
@@ -346,17 +347,18 @@ void *BLI_file_read_binary_as_mem(const char *filepath, size_t pad_bytes, size_t
 		}
 
 		const long int filelen_read = fread(mem, 1, filelen, fp);
-		if ((filelen_read != filelen) || (!feof(fp) ) || ferror(fp)) {
+		if ((filelen_read != filelen) || ferror(fp)) {
 			MEM_freeN(mem);
 			mem = NULL;
 			goto finally;
 		}
 
 		*r_size = filelen_read;
-	}
 
 finally:
-	fclose(fp);
+		fclose(fp);
+	}
+
 	return mem;
 }
 

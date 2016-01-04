@@ -643,8 +643,8 @@ static void parallel_range_func(
  *                       (similar to OpenMP's firstprivate).
  * \param userdata_chunk_size Memory size of \a userdata_chunk.
  * \param func Callback function.
- * \param range_threshold Minimum size of processed range to start using tasks
- *                        (below this, loop is done in main thread only).
+ * \param use_threading If \a true, actually split-execute loop in threads, else just do a sequential forloop
+ *                      (allows caller to use any kind of test to switch on parallelization or not).
  * \param use_dynamic_scheduling If \a true, the whole range is divided in a lot of small chunks (of size 32 currently),
  *                               otherwise whole range is split in a few big chunks (num_threads * 2 chunks currently).
  */
@@ -654,7 +654,7 @@ void BLI_task_parallel_range_ex(
         void *userdata_chunk,
         const size_t userdata_chunk_size,
         TaskParallelRangeFunc func,
-        const int range_threshold,
+        const bool use_threading,
         const bool use_dynamic_scheduling)
 {
 	TaskScheduler *task_scheduler;
@@ -667,7 +667,7 @@ void BLI_task_parallel_range_ex(
 	/* If it's not enough data to be crunched, don't bother with tasks at all,
 	 * do everything from the main thread.
 	 */
-	if (stop - start < range_threshold) {
+	if (!use_threading) {
 		const bool use_userdata_chunk = (userdata_chunk_size != 0) && (userdata_chunk != NULL);
 		void *userdata_chunk_local = NULL;
 
@@ -706,8 +706,10 @@ void BLI_task_parallel_range_ex(
 		state.chunk_size = 32;
 	}
 	else {
-		state.chunk_size = (stop - start) / (num_tasks);
+		state.chunk_size = max_ii(1, (stop - start) / (num_tasks));
 	}
+
+	num_tasks = max_ii(1, (stop - start) / state.chunk_size);
 
 	for (i = 0; i < num_tasks; i++) {
 		BLI_task_pool_push(task_pool,
@@ -731,7 +733,7 @@ void BLI_task_parallel_range(
         void *userdata,
         TaskParallelRangeFunc func)
 {
-	BLI_task_parallel_range_ex(start, stop, userdata, NULL, 0, func, 64, false);
+	BLI_task_parallel_range_ex(start, stop, userdata, NULL, 0, func, (stop - start) > 64, false);
 }
 
 #undef MALLOCA

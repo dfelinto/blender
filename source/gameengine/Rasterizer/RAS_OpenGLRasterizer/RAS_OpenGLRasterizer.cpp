@@ -553,6 +553,8 @@ void RAS_OpenGLRasterizer::SetEye(const StereoEye eye)
 			break;
 		case RAS_STEREO_VINTERLACE:
 		{
+			// OpenGL stippling is deprecated, it is no longer possible to affect all shaders
+			// this way, offscreen rendering and then compositing may be the better solution
 			glEnable(GL_POLYGON_STIPPLE);
 			glPolygonStipple((const GLubyte*) ((m_curreye == RAS_STEREO_LEFTEYE) ? left_eye_vinterlace_mask : right_eye_vinterlace_mask));
 			if (m_curreye == RAS_STEREO_RIGHTEYE)
@@ -774,7 +776,7 @@ static DMDrawOption CheckTexDM(MTexPoly *mtexpoly, const bool has_mcol, int matn
 			unsigned char rgba[4];
 			current_polymat->GetMaterialRGBAColor(rgba);
 			glColor4ubv((const GLubyte *)rgba);
-			return DM_DRAW_OPTION_NO_MCOL;
+			return DM_DRAW_OPTION_NORMAL;
 		}
 		return DM_DRAW_OPTION_NORMAL;
 	}
