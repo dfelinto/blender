@@ -76,6 +76,8 @@
 
 #include "object_intern.h"
 
+/* prototypes */
+static void bake_set_props(wmOperator *op, Scene *scene);
 
 typedef struct BakeAPIRender {
 	Object *ob;
@@ -1140,6 +1142,9 @@ static int bake_exec(bContext *C, wmOperator *op)
 	Render *re;
 	int result = OPERATOR_CANCELLED;
 	BakeAPIRender bkr = {NULL};
+	Scene *scene = CTX_data_scene(C);
+
+	bake_set_props(op, scene);
 
 	bake_init_api_data(op, C, &bkr);
 	re = bkr.render;
