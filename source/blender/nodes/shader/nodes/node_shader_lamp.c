@@ -61,7 +61,7 @@ static void node_shader_exec_lamp(void *data, int UNUSED(thread), bNode *node, b
 static int gpu_shader_lamp(GPUMaterial *mat, bNode *node, bNodeExecData *UNUSED(execdata), GPUNodeStack *in, GPUNodeStack *out)
 {
 	if (node->id) {
-		GPULamp *lamp = GPU_lamp_from_blender(GPU_material_scene(mat), (Object *)node->id, NULL);
+		GPULamp *lamp = GPU_lamp_from_blender(GPU_material_scene(mat), (Object *)node->id, NULL, false);
 		GPUNodeLink *col, *lv, *dist, *visifac, *shadow, *energy;
 
 		visifac = GPU_lamp_get_data(mat, lamp, &col, &lv, &dist, &shadow, &energy);

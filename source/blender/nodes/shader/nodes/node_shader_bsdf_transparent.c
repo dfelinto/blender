@@ -39,9 +39,38 @@ static bNodeSocketTemplate sh_node_bsdf_transparent_out[] = {
 	{	-1, 0, ""	}
 };
 
+#define IN_COLOR 0
+
+/* XXX this is also done as a local static function in gpu_codegen.c,
+ * but we need this to hack around the crappy material node.
+ */
+static GPUNodeLink *gpu_get_input_link(GPUNodeStack *in)
+{
+	if (in->link)
+		return in->link;
+	else
+		return GPU_uniform(in->vec);
+}
+
 static int node_shader_gpu_bsdf_transparent(GPUMaterial *mat, bNode *UNUSED(node), bNodeExecData *UNUSED(execdata), GPUNodeStack *in, GPUNodeStack *out)
 {
-	return GPU_stack_link(mat, "node_bsdf_transparent", in, out);
+	if (GPU_material_get_type(mat) == GPU_MATERIAL_TYPE_MESH_REAL_SH) {
+		GPUBrdfInput brdf;
+
+		GPU_brdf_input_initialize(&brdf);
+
+		brdf.mat       = mat;
+		brdf.type      = GPU_BRDF_TRANSPARENT;
+		brdf.color     = gpu_get_input_link(&in[IN_COLOR]);
+
+		GPU_shade_BRDF(&brdf);
+
+		out[0].link = brdf.output;
+		return 1;
+	} 
+	else {
+		return GPU_stack_link(mat, "node_bsdf_transparent", in, out, GPU_get_world_horicol());
+	}
 }
 
 /* node type definition */

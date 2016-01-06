@@ -492,7 +492,7 @@ static void gpu_verify_reflection(Image *ima)
 	}
 }
 
-int GPU_verify_image(Image *ima, ImageUser *iuser, int tftile, bool compare, bool mipmap, bool is_data)
+int GPU_verify_image(Image *ima, ImageUser *iuser, int tftile, bool compare, bool mipmap, bool is_data, bool is_envmap)
 {
 	ImBuf *ibuf = NULL;
 	unsigned int *bind = NULL;
@@ -695,7 +695,7 @@ int GPU_verify_image(Image *ima, ImageUser *iuser, int tftile, bool compare, boo
 		GPU_create_gl_tex_compressed(bind, rect, rectw, recth, mipmap, ima, ibuf);
 	else
 #endif
-		GPU_create_gl_tex(bind, rect, frect, rectw, recth, mipmap, use_high_bit_depth, ima);
+		GPU_create_gl_tex(bind, rect, frect, rectw, recth, mipmap, use_high_bit_depth, ima, is_envmap);
 	
 	/* mark as non-color data texture */
 	if (*bind) {
@@ -720,7 +720,7 @@ int GPU_verify_image(Image *ima, ImageUser *iuser, int tftile, bool compare, boo
 
 /* Image *ima can be NULL */
 void GPU_create_gl_tex(unsigned int *bind, unsigned int *rect, float *frect, int rectw, int recth,
-                       bool mipmap, bool use_high_bit_depth, Image *ima)
+                       bool mipmap, bool use_high_bit_depth, Image *ima, bool is_envmap)
 {
 	ImBuf *ibuf = NULL;
 
@@ -802,6 +802,11 @@ void GPU_create_gl_tex(unsigned int *bind, unsigned int *rect, float *frect, int
 	}
 	else {
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	}
+
+	if (is_envmap) {
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	}
 
 	if (GLEW_EXT_texture_filter_anisotropic)
@@ -886,7 +891,7 @@ void GPU_create_gl_tex_compressed(unsigned int *bind, unsigned int *pix, int x, 
 #ifndef WITH_DDS
 	(void)ibuf;
 	/* Fall back to uncompressed if DDS isn't enabled */
-	GPU_create_gl_tex(bind, pix, NULL, x, y, mipmap, 0, ima);
+	GPU_create_gl_tex(bind, pix, NULL, x, y, mipmap, 0, ima, false);
 #else
 
 
@@ -895,7 +900,7 @@ void GPU_create_gl_tex_compressed(unsigned int *bind, unsigned int *pix, int x, 
 
 	if (GPU_upload_dxt_texture(ibuf) == 0) {
 		glDeleteTextures(1, (GLuint *)bind);
-		GPU_create_gl_tex(bind, pix, NULL, x, y, mipmap, 0, ima);
+		GPU_create_gl_tex(bind, pix, NULL, x, y, mipmap, 0, ima, false);
 	}
 #endif
 }
@@ -929,7 +934,7 @@ int GPU_set_tpage(MTexPoly *mtexpoly, int mipmap, int alphablend)
 	gpu_verify_alpha_blend(alphablend);
 	gpu_verify_reflection(ima);
 
-	if (GPU_verify_image(ima, NULL, mtexpoly->tile, 1, mipmap, false)) {
+	if (GPU_verify_image(ima, NULL, mtexpoly->tile, 1, mipmap, false, false)) {
 		GTS.curtile = GTS.tile;
 		GTS.curima = GTS.ima;
 		GTS.curtilemode = GTS.tilemode;
@@ -1624,7 +1629,7 @@ void GPU_begin_object_materials(View3D *v3d, RegionView3D *rv3d, Scene *scene, O
 
 			if (glsl) {
 				GMS.gmatbuf[0] = &defmaterial;
-				GPU_material_from_blender(GMS.gscene, &defmaterial, GMS.is_opensubdiv);
+				GPU_material_from_blender(GMS.gscene, &defmaterial, GMS.is_opensubdiv, (v3d->flag3 & V3D_REALISTIC_MAT));
 			}
 
 			GMS.alphablend[0] = GPU_BLEND_SOLID;
@@ -1638,7 +1643,7 @@ void GPU_begin_object_materials(View3D *v3d, RegionView3D *rv3d, Scene *scene, O
 			if (ma == NULL) ma = &defmaterial;
 
 			/* create glsl material if requested */
-			gpumat = glsl? GPU_material_from_blender(GMS.gscene, ma, GMS.is_opensubdiv): NULL;
+			gpumat = glsl? GPU_material_from_blender(GMS.gscene, ma, GMS.is_opensubdiv, (v3d->flag3 & V3D_REALISTIC_MAT)): NULL;
 
 			if (gpumat) {
 				/* do glsl only if creating it succeed, else fallback */
@@ -1742,7 +1747,7 @@ int GPU_enable_material(int nr, void *attribs)
 	/* unbind glsl material */
 	if (GMS.gboundmat) {
 		if (GMS.is_alpha_pass) glDepthMask(0);
-		GPU_material_unbind(GPU_material_from_blender(GMS.gscene, GMS.gboundmat, GMS.is_opensubdiv));
+		GPU_material_unbind(GPU_material_from_blender(GMS.gscene, GMS.gboundmat, GMS.is_opensubdiv, false));
 		GMS.gboundmat = NULL;
 	}
 
@@ -1769,7 +1774,7 @@ int GPU_enable_material(int nr, void *attribs)
 
 			float auto_bump_scale;
 
-			gpumat = GPU_material_from_blender(GMS.gscene, mat, GMS.is_opensubdiv);
+			gpumat = GPU_material_from_blender(GMS.gscene, mat, GMS.is_opensubdiv, false);
 			GPU_material_vertex_attributes(gpumat, gattribs);
 
 			if (GMS.dob)
@@ -1836,7 +1841,7 @@ void GPU_disable_material(void)
 			glDisable(GL_CULL_FACE);
 
 		if (GMS.is_alpha_pass) glDepthMask(0);
-		GPU_material_unbind(GPU_material_from_blender(GMS.gscene, GMS.gboundmat, GMS.is_opensubdiv));
+		GPU_material_unbind(GPU_material_from_blender(GMS.gscene, GMS.gboundmat, GMS.is_opensubdiv, false));
 		GMS.gboundmat = NULL;
 	}
 
@@ -2162,7 +2167,8 @@ void GPU_draw_update_fvar_offset(DerivedMesh *dm)
 
 		gpu_material = GPU_material_from_blender(GMS.gscene,
 		                                         material,
-		                                         GMS.is_opensubdiv);
+		                                         GMS.is_opensubdiv,
+		                                         false);
 
 		GPU_material_update_fvar_offset(gpu_material, dm);
 	}

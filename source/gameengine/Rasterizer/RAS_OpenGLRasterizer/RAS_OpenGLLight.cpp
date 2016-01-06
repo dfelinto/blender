@@ -161,7 +161,7 @@ GPULamp *RAS_OpenGLLight::GetGPULamp()
 	KX_LightObject* kxlight = (KX_LightObject*)m_light;
 
 	if (m_glsl)
-		return GPU_lamp_from_blender(kxlight->GetScene()->GetBlenderScene(), kxlight->GetBlenderObject(), kxlight->GetBlenderGroupObject());
+		return GPU_lamp_from_blender(kxlight->GetScene()->GetBlenderScene(), kxlight->GetBlenderObject(), kxlight->GetBlenderGroupObject(), false);
 	else
 		return NULL;
 }

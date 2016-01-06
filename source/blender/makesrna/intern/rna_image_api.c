@@ -245,7 +245,7 @@ static int rna_Image_gl_load(Image *image, ReportList *reports, int frame, int f
 	}
 
 	GPU_create_gl_tex(bind, ibuf->rect, ibuf->rect_float, ibuf->x, ibuf->y,
-	                  (filter != GL_NEAREST && filter != GL_LINEAR), false, image);
+	                  (filter != GL_NEAREST && filter != GL_LINEAR), false, image, false);
 
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, (GLint)filter);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, (GLint)mag);

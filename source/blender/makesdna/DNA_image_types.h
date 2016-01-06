@@ -150,7 +150,8 @@ typedef struct Image {
 
 	RenderSlot render_slots[8];  /* 8 = IMA_MAX_RENDER_SLOT */
 
-	int last_projection;
+	short last_projection;
+	short is_envmap;
 	float SH_Coefs[9][3];
 } Image;
 

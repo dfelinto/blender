@@ -163,7 +163,7 @@ typedef struct Scopes {
 #define SCOPES_WAVEFRM_YCC_JPEG	4
 
 typedef struct ColorManagedViewSettings {
-	int flag, pad;
+	int flag, lut_is_outdated;
 	char look[64];   /* look which is being applied when displaying buffer on the screen (prior to view transform) */
 	char view_transform[64];   /* view transform which is being applied when displaying buffer on the screen */
 	float exposure;            /* fstop exposure */
@@ -174,6 +174,7 @@ typedef struct ColorManagedViewSettings {
 
 typedef struct ColorManagedDisplaySettings {
 	char display_device[64];
+	int lut_is_outdated, pad;
 } ColorManagedDisplaySettings;
 
 typedef struct ColorManagedColorspaceSettings {

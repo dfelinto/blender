@@ -526,6 +526,23 @@ static void rna_SpaceView3D_viewport_shade_update(Main *bmain, Scene *scene, Poi
 	ED_view3d_shade_update(bmain, scene, v3d, sa);
 }
 
+static void rna_SpaceView3D_viewport_real_shading_update(Main *bmain, Scene *scene, PointerRNA *ptr)
+{
+	View3D *v3d = (View3D *)(ptr->data);
+	ScrArea *sa = rna_area_from_space(ptr);
+	GPU_materials_free();
+	ED_view3d_shade_update(bmain, scene, v3d, sa);
+}
+
+static void rna_SpaceView3D_world_background_shader_update(Main *bmain, Scene *scene, PointerRNA *ptr)
+{
+	View3D *v3d = (View3D *)(ptr->data);
+	ScrArea *sa = rna_area_from_space(ptr);
+	World *world = scene->world;
+	GPU_material_free(&world->gpumaterial);
+	ED_view3d_shade_update(bmain, scene, v3d, sa);
+}
+
 static void rna_SpaceView3D_matcap_update(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *ptr)
 {
 	View3D *v3d = (View3D *)(ptr->data);
@@ -2543,12 +2560,12 @@ static void rna_def_space_view3d(BlenderRNA *brna)
 	prop = RNA_def_property(srna, "show_world_sh", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "flag3", V3D_SHOW_WORLD_SH);
 	RNA_def_property_ui_text(prop, "Use Diffuse Background", "Show diffuse world lighting in the background");
-	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, "rna_SpaceView3D_world_background_shader_update");
 
 	prop = RNA_def_property(srna, "use_realistic_mat", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "flag3", V3D_REALISTIC_MAT);
 	RNA_def_property_ui_text(prop, "Realistic Material Preview", "Use a more accurate preview of the shaders in the viewport");
-	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, NULL);
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, "rna_SpaceView3D_viewport_real_shading_update");
 
 	prop = RNA_def_property(srna, "use_occlude_geometry", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "flag", V3D_ZBUF_SELECT);

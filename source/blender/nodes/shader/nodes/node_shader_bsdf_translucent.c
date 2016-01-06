@@ -26,6 +26,10 @@
  */
 
 #include "../node_shader_util.h"
+#include "BKE_node.h"
+#include "BKE_scene.h"
+#include "GPU_material.h"
+#include "DNA_material_types.h"
 
 /* **************** OUTPUT ******************** */
 
@@ -40,12 +44,49 @@ static bNodeSocketTemplate sh_node_bsdf_translucent_out[] = {
 	{	-1, 0, ""	}
 };
 
-static int node_shader_gpu_bsdf_translucent(GPUMaterial *mat, bNode *UNUSED(node), bNodeExecData *UNUSED(execdata), GPUNodeStack *in, GPUNodeStack *out)
-{
-	if (!in[1].link)
-		in[1].link = GPU_builtin(GPU_VIEW_NORMAL);
+#define IN_COLOR 0
+#define IN_NORMAL 1
 
-	return GPU_stack_link(mat, "node_bsdf_translucent", in, out);
+/* XXX this is also done as a local static function in gpu_codegen.c,
+ * but we need this to hack around the crappy material node.
+ */
+static GPUNodeLink *gpu_get_input_link(GPUNodeStack *in)
+{
+	if (in->link)
+		return in->link;
+	else
+		return GPU_uniform(in->vec);
+}
+
+static int node_shader_gpu_bsdf_translucent(GPUMaterial *mat, bNode *node, bNodeExecData *UNUSED(execdata), GPUNodeStack *in, GPUNodeStack *out)
+{
+	if (!in[IN_NORMAL].link)
+		in[IN_NORMAL].link = GPU_builtin(GPU_VIEW_NORMAL);
+	else {
+		/* Convert to view space normal in case a Normal is plugged. This is because cycles uses world normals */
+		GPU_link(mat, "node_vector_transform", in[IN_NORMAL].link, GPU_builtin(GPU_VIEW_MATRIX), &in[IN_NORMAL].link);
+	}
+
+	if (GPU_material_get_type(mat) == GPU_MATERIAL_TYPE_MESH_REAL_SH) {
+		GPUBrdfInput brdf;
+		float zero = 0.0f;
+
+		GPU_brdf_input_initialize(&brdf);
+
+		brdf.mat       = mat;
+		brdf.type      = GPU_BRDF_TRANSLUCENT;
+		brdf.color     = gpu_get_input_link(&in[IN_COLOR]);
+		brdf.normal    = gpu_get_input_link(&in[IN_NORMAL]);
+		brdf.roughness = GPU_uniform(&zero);
+
+		GPU_shade_BRDF(&brdf);
+
+		out[0].link = brdf.output;
+		return 1;
+	} 
+	else
+		return GPU_stack_link(mat, "node_bsdf_translucent_lights", in, out, GPU_builtin(GPU_VIEW_POSITION), GPU_get_world_horicol());
+
 }
 
 /* node type definition */

@@ -86,6 +86,7 @@ struct GPUNodeLink {
 
 	GPUNodeLinkImage image;
 	bool image_isdata;
+	bool image_isenvmap;
 
 	bool texture;
 	int texturesize;
@@ -137,6 +138,7 @@ typedef struct GPUInput {
 	struct ImageUser *iuser;     /* image user */
 	struct PreviewImage *prv;    /* preview images & icons */
 	bool image_isdata;           /* image does not contain color data */
+	bool image_isenvmap;         /* image is envmap and should be clamped */
 	float *dynamicvec;           /* vector data in case it is dynamic */
 	GPUDynamicType dynamictype;  /* origin of the dynamic uniform */
 	void *dynamicdata;           /* data source of the dynamic uniform */

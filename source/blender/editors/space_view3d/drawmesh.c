@@ -317,7 +317,7 @@ static bool set_draw_settings_cached(int clearcache, MTexPoly *texface, Material
 		if (textured) {
 			if (texpaint) {
 				c_badtex = false;
-				if (GPU_verify_image(ima, NULL, 0, 1, 0, false)) {
+				if (GPU_verify_image(ima, NULL, 0, 1, 0, false, false)) {
 					glEnable(GL_TEXTURE_2D);
 					glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE);
 					glTexEnvi(GL_TEXTURE_ENV, GL_COMBINE_RGB, GL_MODULATE);
@@ -462,7 +462,7 @@ static void draw_textured_begin(Scene *scene, View3D *v3d, RegionView3D *rv3d, O
 		/* load the stencil texture here */
 		if (Gtexdraw.stencil != NULL) {
 			glActiveTexture(GL_TEXTURE2);
-			if (GPU_verify_image(Gtexdraw.stencil, NULL, false, false, false, false)) {
+			if (GPU_verify_image(Gtexdraw.stencil, NULL, false, false, false, false, false)) {
 				float col[4] = {imapaint->stencil_col[0], imapaint->stencil_col[1], imapaint->stencil_col[2], 1.0f};
 				glEnable(GL_TEXTURE_2D);
 				glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE);
@@ -1041,7 +1041,7 @@ static void tex_mat_set_texture_cb(void *userData, int mat_nr, void *attribs)
 	if (ED_object_get_active_image(data->ob, mat_nr, &ima, &iuser, &node, NULL)) {
 		/* get openl texture */
 		int mipmap = 1;
-		int bindcode = (ima) ? GPU_verify_image(ima, iuser, 0, 0, mipmap, false) : 0;
+		int bindcode = (ima) ? GPU_verify_image(ima, iuser, 0, 0, mipmap, false, false) : 0;
 		float zero[4] = {0.0f, 0.0f, 0.0f, 0.0f};
 
 		if (bindcode) {

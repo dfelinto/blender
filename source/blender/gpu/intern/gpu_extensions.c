@@ -88,6 +88,7 @@ extern char datatoc_gpu_shader_sep_gaussian_blur_vert_glsl[];
 extern char datatoc_gpu_shader_sep_gaussian_blur_frag_glsl[];
 extern char datatoc_gpu_shader_fx_vert_glsl[];
 extern char datatoc_gpu_shader_fx_ssao_frag_glsl[];
+extern char datatoc_gpu_shader_fx_colormanage_frag_glsl[];
 extern char datatoc_gpu_shader_fx_dof_frag_glsl[];
 extern char datatoc_gpu_shader_fx_dof_vert_glsl[];
 extern char datatoc_gpu_shader_fx_dof_hq_frag_glsl[];
@@ -600,6 +601,10 @@ GPUTexture *GPU_texture_create_3D(int w, int h, int depth, int channels, const f
 		format = GL_RGBA;
 		internalformat = GL_RGBA;
 	}
+	if (channels == 3) {
+		format = GL_RGB;
+		internalformat = GL_RGB16F; //For 3DLUT
+	}
 	else {
 		format = GL_RED;
 		internalformat = GL_INTENSITY;
@@ -698,7 +703,7 @@ GPUTexture *GPU_texture_create_3D(int w, int h, int depth, int channels, const f
 	return tex;
 }
 
-GPUTexture *GPU_texture_from_blender(Image *ima, ImageUser *iuser, bool is_data, double time, int mipmap)
+GPUTexture *GPU_texture_from_blender(Image *ima, ImageUser *iuser, bool is_data, bool is_envmap, double time, int mipmap)
 {
 	GPUTexture *tex;
 	GLint w, h, border, lastbindcode, bindcode;
@@ -707,7 +712,7 @@ GPUTexture *GPU_texture_from_blender(Image *ima, ImageUser *iuser, bool is_data,
 
 	GPU_update_image_time(ima, time);
 	/* this binds a texture, so that's why to restore it with lastbindcode */
-	bindcode = GPU_verify_image(ima, iuser, 0, 0, mipmap, is_data);
+	bindcode = GPU_verify_image(ima, iuser, 0, 0, mipmap, is_data, is_envmap);
 
 	if (ima->gputexture) {
 		ima->gputexture->bindcode = bindcode;
@@ -756,7 +761,7 @@ GPUTexture *GPU_texture_from_preview(PreviewImage *prv, int mipmap)
 	
 	/* this binds a texture, so that's why to restore it */
 	if (bindcode == 0) {
-		GPU_create_gl_tex(&bindcode, prv->rect[0], NULL, prv->w[0], prv->h[0], mipmap, 0, NULL);
+		GPU_create_gl_tex(&bindcode, prv->rect[0], NULL, prv->w[0], prv->h[0], mipmap, 0, NULL, false);
 	}
 	if (tex) {
 		tex->bindcode = bindcode;
@@ -2266,6 +2271,10 @@ GPUShader *GPU_shader_get_builtin_fx_shader(int effects, bool persp)
 
 			case GPU_SHADER_FX_DEPTH_RESOLVE:
 				GG.shaders.fx_shaders[offset] = GPU_shader_create(datatoc_gpu_shader_fx_vert_glsl, datatoc_gpu_shader_fx_depth_resolve_glsl, NULL, NULL, defines, 0, 0, 0);
+				break;
+
+			case GPU_SHADER_FX_COLORMANAGE:
+				GG.shaders.fx_shaders[offset] = GPU_shader_create(datatoc_gpu_shader_fx_vert_glsl, datatoc_gpu_shader_fx_colormanage_frag_glsl, NULL, datatoc_gpu_shader_fx_lib_glsl, defines, 0, 0, 0);
 		}
 	}
 

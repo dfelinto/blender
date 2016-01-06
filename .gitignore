@@ -9,6 +9,8 @@ __pycache__/
 *~
 *.swp
 *.swo
+*.sublime-project
+*.sublime-workspace
 *#
 
 # QtCreator

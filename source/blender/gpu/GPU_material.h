@@ -103,13 +103,13 @@ typedef enum GPUOpenGLBuiltin {
 } GPUOpenGLBuiltin;
 
 typedef enum GPUMatType {
-	GPU_MATERIAL_TYPE_MESH  = 1,
-	GPU_MATERIAL_TYPE_WORLD = 2,
-	GPU_MATERIAL_TYPE_WORLD_SH = 3,
-	GPU_MATERIAL_TYPE_ENV_SAMPLING_GLOSSY = 4,
-	GPU_MATERIAL_TYPE_ENV_SAMPLING_SHARP = 5,
-	GPU_MATERIAL_TYPE_ENV_SAMPLING_DIFFUSE = 6,
-	GPU_MATERIAL_TYPE_ENV_NORMAL = 7,
+	GPU_MATERIAL_TYPE_MESH = 1,
+	GPU_MATERIAL_TYPE_MESH_REAL_SH = 2,
+	GPU_MATERIAL_TYPE_WORLD = 3,
+	GPU_MATERIAL_TYPE_WORLD_SH = 4,
+	GPU_MATERIAL_TYPE_LAMP = 5,
+	GPU_MATERIAL_TYPE_ENV_NORMAL = 6,
+	GPU_MATERIAL_TYPE_ENV_BRDF = 7,
 } GPUMatType;
 
 
@@ -166,6 +166,8 @@ typedef enum GPUDynamicType {
 	GPU_DYNAMIC_LAMP_SPOTSIZE        = 10 | GPU_DYNAMIC_GROUP_LAMP,
 	GPU_DYNAMIC_LAMP_SPOTBLEND       = 11 | GPU_DYNAMIC_GROUP_LAMP,
 	GPU_DYNAMIC_LAMP_SPOTSCALE       = 12 | GPU_DYNAMIC_GROUP_LAMP,
+	GPU_DYNAMIC_LAMP_DYNMAT          = 13 | GPU_DYNAMIC_GROUP_LAMP,
+	GPU_DYNAMIC_LAMP_AREASCALE       = 14 | GPU_DYNAMIC_GROUP_LAMP,
 
 	GPU_DYNAMIC_SAMPLER_2DBUFFER     = 1  | GPU_DYNAMIC_GROUP_SAMPLER,
 	GPU_DYNAMIC_SAMPLER_2DIMAGE      = 2  | GPU_DYNAMIC_GROUP_SAMPLER,
@@ -194,7 +196,7 @@ typedef enum GPUDynamicType {
 GPUNodeLink *GPU_attribute(CustomDataType type, const char *name);
 GPUNodeLink *GPU_uniform(float *num);
 GPUNodeLink *GPU_dynamic_uniform(float *num, GPUDynamicType dynamictype, void *data);
-GPUNodeLink *GPU_image(struct Image *ima, struct ImageUser *iuser, bool is_data);
+GPUNodeLink *GPU_image(struct Image *ima, struct ImageUser *iuser, bool is_data, bool is_envmap);
 GPUNodeLink *GPU_image_preview(struct PreviewImage *prv);
 GPUNodeLink *GPU_texture(int size, float *pixels);
 GPUNodeLink *GPU_dynamic_texture(struct GPUTexture *tex, GPUDynamicType dynamictype, void *data);
@@ -207,19 +209,19 @@ bool GPU_stack_link(GPUMaterial *mat, const char *name, GPUNodeStack *in, GPUNod
 
 void GPU_material_set_normal_link(GPUMaterial *material, GPUNodeLink *link);
 GPUNodeLink *GPU_material_get_normal_link(GPUMaterial *material);
-void GPU_material_set_roughness_link(GPUMaterial *material, GPUNodeLink *link);
-GPUNodeLink *GPU_material_get_roughness_link(GPUMaterial *material);
-
+void GPU_material_set_lampco_link(GPUMaterial *material, GPUNodeLink *link);
+GPUNodeLink *GPU_material_get_lampco_link(GPUMaterial *material);
 void GPU_material_output_link(GPUMaterial *material, GPUNodeLink *link);
 void GPU_material_empty_output_link(GPUMaterial *material);
 GPUNodeLink *GPU_material_get_output_link(GPUMaterial *material);
 void GPU_material_enable_alpha(GPUMaterial *material);
+GPUNodeLink *GPU_get_world_horicol(void);
 GPUBlendMode GPU_material_alpha_blend(GPUMaterial *material, float obcol[4]);
 
 /* High level functions to create and use GPU materials */
 GPUMaterial *GPU_material_world(struct Scene *scene, struct World *wo, bool use_spherical_harmonics);
 
-GPUMaterial *GPU_material_from_blender(struct Scene *scene, struct Material *ma, bool use_opensubdiv);
+GPUMaterial *GPU_material_from_blender(struct Scene *scene, struct Material *ma, bool use_opensubdiv, bool use_realistic_preview);
 GPUMaterial *GPU_material_matcap(struct Scene *scene, struct Material *ma, bool use_opensubdiv);
 void GPU_material_free(struct ListBase *gpumaterial);
 
@@ -239,6 +241,47 @@ void GPU_material_vertex_attributes(GPUMaterial *material,
 
 bool GPU_material_do_color_management(GPUMaterial *mat);
 bool GPU_material_use_new_shading_nodes(GPUMaterial *mat);
+
+/* BRDF Shading */
+
+typedef enum GPUBrdfType {
+	GPU_BRDF_DIFFUSE                  = 0,
+	
+	GPU_BRDF_GLOSSY_SHARP             = 1,
+	GPU_BRDF_GLOSSY_GGX               = 2,
+	GPU_BRDF_GLOSSY_BECKMANN          = 3,
+	GPU_BRDF_GLOSSY_ASHIKHMIN_SHIRLEY = 4,
+
+	GPU_BRDF_ANISO_SHARP              = 5,
+	GPU_BRDF_ANISO_GGX                = 6,
+	GPU_BRDF_ANISO_BECKMANN           = 7,
+	GPU_BRDF_ANISO_ASHIKHMIN_SHIRLEY  = 8,
+
+	GPU_BRDF_REFRACT_SHARP            = 9,
+	GPU_BRDF_REFRACT_GGX              = 10,
+	GPU_BRDF_REFRACT_BECKMANN         = 11,
+
+	GPU_BRDF_VELVET                   = 12,
+	GPU_BRDF_TRANSLUCENT              = 13,
+	GPU_BRDF_TRANSPARENT              = 14,
+	GPU_BRDF_TOON                     = 15,
+} GPUBrdfType;
+
+typedef struct GPUBrdfInput {
+	GPUMaterial *mat;
+	GPUBrdfType type;
+
+	GPUNodeLink *normal, *color, *roughness, *ior;
+	GPUNodeLink *sigma, *toon_size, *toon_smooth, *anisotropy;
+	GPUNodeLink *aniso_rotation, *aniso_tangent;
+
+	GPUNodeLink *output;
+} GPUBrdfInput;
+
+void GPU_brdf_input_initialize(GPUBrdfInput *brdf);
+void GPU_shade_BRDF(GPUBrdfInput *brdf);
+void GPU_material_set_brdf_link(GPUMaterial *material, GPUBrdfInput *brdf);
+GPUBrdfInput *GPU_material_get_brdf_link(GPUMaterial *material);
 
 /* Exported shading */
 
@@ -306,7 +349,7 @@ void GPU_free_shader_export(GPUShaderExport *shader);
 
 /* Lamps */
 
-GPULamp *GPU_lamp_from_blender(struct Scene *scene, struct Object *ob, struct Object *par);
+GPULamp *GPU_lamp_from_blender(struct Scene *scene, struct Object *ob, struct Object *par, bool use_realistic_preview);
 void GPU_lamp_free(struct Object *ob);
 
 bool GPU_lamp_has_shadow_buffer(GPULamp *lamp);

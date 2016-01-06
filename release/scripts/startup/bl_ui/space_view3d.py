@@ -3065,7 +3065,9 @@ class VIEW3D_PT_view3d_shading(Panel):
 
         fx_settings = view.fx_settings
 
+
         if view.viewport_shade not in {'BOUNDBOX', 'WIREFRAME'}:
+            col.prop(fx_settings, "use_colormanagement", text="Apply Color Management")
             sub = col.column()
             sub.active = view.region_3d.view_perspective == 'CAMERA'
             sub.prop(fx_settings, "use_dof")

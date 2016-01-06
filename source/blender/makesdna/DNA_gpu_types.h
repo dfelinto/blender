@@ -61,8 +61,9 @@ typedef struct GPUFXSettings {
 
 /* shaderfx enables */
 typedef enum eGPUFXFlags {
-	GPU_FX_FLAG_DOF         = (1 << 0),
-	GPU_FX_FLAG_SSAO        = (1 << 1),
+	GPU_FX_FLAG_DOF              = (1 << 0),
+	GPU_FX_FLAG_SSAO             = (1 << 1),
+	GPU_FX_FLAG_COLORMANAGEMENT  = (1 << 2),
 } eGPUFXFlags;
 
 #endif  /* __DNA_GPU_TYPES_H__ */

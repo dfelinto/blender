@@ -26,6 +26,7 @@
  */
 
 #include "../node_shader_util.h"
+#include "GPU_material.h"
 
 /* **************** INPUT ********************* */
 
@@ -46,7 +47,15 @@ static bNodeSocketTemplate sh_node_light_falloff_out[] = {
 
 static int node_shader_gpu_light_falloff(GPUMaterial *mat, bNode *UNUSED(node), bNodeExecData *UNUSED(execdata), GPUNodeStack *in, GPUNodeStack *out)
 {
-	return GPU_stack_link(mat, "node_light_falloff", in, out);
+	if (GPU_material_get_type(mat) == GPU_MATERIAL_TYPE_LAMP) {
+		GPUNodeLink *lampcoLink = GPU_material_get_lampco_link(mat);
+		if (lampcoLink)
+			return GPU_stack_link(mat, "node_light_falloff", in, out, lampcoLink);
+		else
+			return 0;
+	}
+	else
+		return GPU_stack_link(mat, "node_light_falloff", in, out, GPU_builtin(GPU_VIEW_POSITION));
 }
 
 /* node type definition */

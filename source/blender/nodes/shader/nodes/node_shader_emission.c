@@ -42,6 +42,14 @@ static bNodeSocketTemplate sh_node_emission_out[] = {
 
 static int node_shader_gpu_emission(GPUMaterial *mat, bNode *UNUSED(node), bNodeExecData *UNUSED(execdata), GPUNodeStack *in, GPUNodeStack *out)
 {
+	float factor = 0.01f;
+
+	if (!in[0].link)
+		in[0].link = GPU_uniform(in[0].vec);
+
+	if ( GPU_material_get_type(mat) == GPU_MATERIAL_TYPE_LAMP )
+		GPU_link(mat, "shade_mul_value", GPU_uniform(&factor), in[0].link, &in[0].link);
+
 	return GPU_stack_link(mat, "node_emission", in, out, GPU_builtin(GPU_VIEW_NORMAL));
 }
 

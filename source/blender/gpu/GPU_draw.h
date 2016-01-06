@@ -131,9 +131,9 @@ void GPU_set_gpu_mipmapping(int gpu_mipmap);
 void GPU_paint_update_image(struct Image *ima, ImageUser *iuser, int x, int y, int w, int h);
 void GPU_update_images_framechange(void);
 int GPU_update_image_time(struct Image *ima, double time);
-int GPU_verify_image(struct Image *ima, struct ImageUser *iuser, int tftile, bool compare, bool mipmap, bool is_data);
+int GPU_verify_image(struct Image *ima, struct ImageUser *iuser, int tftile, bool compare, bool mipmap, bool is_data, bool is_envmap);
 void GPU_create_gl_tex(unsigned int *bind, unsigned int *rect, float *frect, int rectw, int recth,
-                       bool mipmap, bool use_hight_bit_depth, struct Image *ima);
+                       bool mipmap, bool use_hight_bit_depth, struct Image *ima, bool is_envmap);
 void GPU_create_gl_tex_compressed(unsigned int *bind, unsigned int *pix, int x, int y, int mipmap, struct Image *ima, struct ImBuf *ibuf);
 bool GPU_upload_dxt_texture(struct ImBuf *ibuf);
 void GPU_free_image(struct Image *ima);

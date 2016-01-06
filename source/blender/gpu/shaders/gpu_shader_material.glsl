@@ -179,7 +179,7 @@ void camera(vec3 co, out vec3 outview, out float outdepth, out float outdist)
 {
 	outdepth = abs(co.z);
 	outdist = length(co);
-	outview = normalize(co);
+	outview = normalize(co*vec3(1.0,1.0,-1.0));
 }
 
 void lamp(vec4 col, float energy, vec3 lv, float dist, vec3 shadow, float visifac, out vec4 outcol, out vec3 outlv, out float outdist, out vec4 outshadow, out float outvisifac)
@@ -1554,6 +1554,12 @@ void lamp_visibility_other(vec3 co, vec3 lampco, out vec3 lv, out float dist, ou
 	visifac = 1.0;
 }
 
+void lamp_falloff_realistic(float lampdist, float dist, out float visifac)
+{
+	// visifac = 1.0/(dist*dist + 1e-8);
+	visifac = 1.0;
+}
+
 void lamp_falloff_invlinear(float lampdist, float dist, out float visifac)
 {
 	visifac = lampdist/(lampdist + dist);
@@ -1667,47 +1673,65 @@ void shade_is_hemi(float inp, out float is)
 	is = 0.5*inp + 0.5;
 }
 
-float area_lamp_energy(mat4 area, vec3 co, vec3 vn)
+float rectangleSolidAngle(vec3 worldPos ,vec3 p0 ,vec3 p1 ,vec3 p2 ,vec3 p3 )
 {
-	vec3 vec[4], c[4];
-	float rad[4], fac;
-	
-	vec[0] = normalize(co - area[0].xyz);
-	vec[1] = normalize(co - area[1].xyz);
-	vec[2] = normalize(co - area[2].xyz);
-	vec[3] = normalize(co - area[3].xyz);
+	vec3 v0 = p0 - worldPos ;
+	vec3 v1 = p1 - worldPos ;
+	vec3 v2 = p2 - worldPos ;
+	vec3 v3 = p3 - worldPos ;
 
-	c[0] = normalize(cross(vec[0], vec[1]));
-	c[1] = normalize(cross(vec[1], vec[2]));
-	c[2] = normalize(cross(vec[2], vec[3]));
-	c[3] = normalize(cross(vec[3], vec[0]));
+	vec3 n0 = normalize ( cross (v0 , v1 ));
+	vec3 n1 = normalize ( cross (v1 , v2 ));
+	vec3 n2 = normalize ( cross (v2 , v3 ));
+	vec3 n3 = normalize ( cross (v3 , v0 ));
 
-	rad[0] = acos(dot(vec[0], vec[1]));
-	rad[1] = acos(dot(vec[1], vec[2]));
-	rad[2] = acos(dot(vec[2], vec[3]));
-	rad[3] = acos(dot(vec[3], vec[0]));
+	float g0 = acos ( dot (-n0 , n1 ));
+	float g1 = acos ( dot (-n1 , n2 ));
+	float g2 = acos ( dot (-n2 , n3 ));
+	float g3 = acos ( dot (-n3 , n0 ));
 
-	fac=  rad[0]*dot(vn, c[0]);
-	fac+= rad[1]*dot(vn, c[1]);
-	fac+= rad[2]*dot(vn, c[2]);
-	fac+= rad[3]*dot(vn, c[3]);
-
-	return max(fac, 0.0);
+	return g0 + g1 + g2 + g3 - 2.0 * M_PI;
 }
 
-void shade_inp_area(vec3 position, vec3 lampco, vec3 lampvec, vec3 vn, mat4 area, float areasize, float k, out float inp)
+float area_lamp_energy(mat4 lampmat, vec3 co, vec3 n, vec3 lampco, vec2 areasize)
 {
-	vec3 co = position;
-	vec3 vec = co - lampco;
+	n = -n;
 
-	if(dot(vec, lampvec) < 0.0) {
-		inp = 0.0;
-	}
-	else {
-		float intens = area_lamp_energy(area, co, vn);
+	vec3 right = normalize(vec3(lampmat*vec4(1.0,0.0,0.0,0.0))); //lamp right axis
+	vec3 up = normalize(vec3(lampmat*vec4(0.0,1.0,0.0,0.0))); //lamp up axis
+	vec3 lampv = normalize(vec3(lampmat*vec4(0.0,0.0,-1.0,0.0)));; //lamp projection axis
 
-		inp = pow(intens*areasize, k);
+	float illuminance = 0.0;
+
+	if ( dot ( co - lampco , lampv ) > 0.0 )
+	{
+		float width = areasize.x / 2.0;
+		float height = areasize.y / 2.0;
+
+		vec3 p0 = lampco + right * -width + up *  height;
+		vec3 p1 = lampco + right * -width + up * -height;
+		vec3 p2 = lampco + right *  width + up * -height;
+		vec3 p3 = lampco + right *  width + up *  height;
+
+		float solidAngle = rectangleSolidAngle ( co , p0 , p1 , p2 , p3 );
+
+		illuminance = solidAngle * 0.2 * (
+		max(0.0, dot( normalize ( p0 - co ) , n ) )+
+		max(0.0, dot( normalize ( p1 - co ) , n ) )+
+		max(0.0, dot( normalize ( p2 - co ) , n ) )+
+		max(0.0, dot( normalize ( p3 - co ) , n ) )+
+		max(0.0, dot( normalize ( lampco - co ) , n )));
 	}
+
+	float normalization = 1 / (areasize.x * areasize.y);
+
+	return illuminance * normalization * M_PI;
+}
+
+void shade_inp_area(vec3 co, vec3 lampco, vec3 lampvec, vec3 vn, mat4 lampmat, float areasize, float areasizey, out float inp)
+{
+	vec2 asize = vec2(areasize,areasizey);
+	inp = area_lamp_energy(lampmat, co, vn, lampco, asize);
 }
 
 void shade_diffuse_oren_nayer(float nl, vec3 n, vec3 l, vec3 v, float rough, out float is)
@@ -2189,120 +2213,596 @@ float hypot(float x, float y)
 	return sqrt(x*x + y*y);
 }
 
+float inverseDistance(vec3 V)
+{
+	return max( 1 / length(V), 1e-8);
+}
+
+void viewN_to_shadeN(vec3 N, out vec3 shadeN)
+{
+	shadeN = normalize(-N); 
+}
+
+void basic_srgb_to_linear(vec4 srgb, out vec4 linear)
+{
+	linear.r = pow(srgb.r, 0.4545454);
+	linear.g = pow(srgb.g, 0.4545454);
+	linear.b = pow(srgb.b, 0.4545454);
+	linear.a = srgb.a;
+}
+
+void spec_bsdf_ggx(vec3 N, vec3 H, vec3 L, vec3 V, float roughness, out float bsdf)
+{
+	/* GGX Spec */
+	float a  = max(1e-4, roughness); /* Artifacts appear with roughness below this threshold */
+	float a2 = max(1e-8, a*a);
+
+	float NH = clamp(dot(N, H), 1e-8, 1);
+	float NL = clamp(dot(N, L), 1e-8, 1);
+	float NV = clamp(dot(N, V), 1e-8, 1);
+
+	/* G_Smith_GGX */
+	float G_V = 2 / (1 + sqrt(1 + a2 * (1 - NV*NV) / (NV*NV) ) ); 
+	float G_L = 2 / (1 + sqrt(1 + a2 * (1 - NL*NL) / (NL*NL) ) ); 
+	float G = G_V * G_L;
+
+	/* D_GGX */
+	float tmp = (NH * a2 - NH) * NH + 1.0 ;
+	float D = a2 / (tmp * tmp * M_PI) ;
+
+	bsdf = (D * G * 4.0) / NV;
+}
+
+void diffuse_bsdf_oren_nayar(float NL, vec3 N, vec3 L, vec3 V, float roughness, out float bsdf)
+{
+	NL = max(0.0, NL);
+	float LV = max(0.0, dot(L, V) );
+	float NV = max(1e-8, dot(N, V) );
+
+	float sigma = roughness;
+	float div = 1.0 / (M_PI + ((3.0 * M_PI - 4.0) / 6.0) * sigma);
+
+	float A = 1.0 * div;
+	float B = sigma * div;
+
+	float s = LV - NL * NV;
+	float t = mix(1.0, max(NL, NV), step(0.0, s));
+	float oren_nayer_diff = NL * (A + B * s / t);
+
+	float lambert_diff = NL * M_1_PI;
+
+	bsdf = mix(lambert_diff, oren_nayer_diff, roughness);
+}
+
+
+vec3 linePlaneIntersect(vec3 LineOrigin, vec3 LineVec, vec3 PlaneOrigin, vec3 PlaneNormal)
+{
+	return LineOrigin + LineVec * ( dot(PlaneNormal, PlaneOrigin - LineOrigin) / dot(PlaneNormal, LineVec) );
+}
+
+void mostRepresentativePointSphereOrTube(float light_radius, float light_length, vec3 lampY, float light_distance, vec3 R, inout vec3 L, inout float roughness, inout float energy_conservation)
+{
+	L = light_distance * L;
+
+	/* Tube Light */
+	if(light_length>0){
+		roughness = max(3e-3, roughness); /* Artifacts appear with roughness below this threshold */
+		
+		// Use Tube Light specular instead of a plane.
+		// Energy conservation
+		// asin(x) is angle to sphere, atan(x) is angle to disk, saturate(x) is free and in the middle
+		//float LineAngle = clamp( light_length / light_distance, 0.0, 1.0);
+
+		//energy_conservation *= roughness / clamp(roughness + 0.5 * LineAngle, 0.0, 1.0);
+
+		// Closest point on line segment to ray
+		vec3 L01 = lampY * light_length;
+		vec3 L0 = L - 0.5 * L01;
+		vec3 L1 = L + 0.5 * L01;
+
+		// Shortest distance
+		float a = light_length * light_length;
+		float b = dot( R, L01 );
+		float t = clamp( dot( L0, b*R - L01 ) / (a - b*b), 0.0, 1.0);
+		L = L0 + t * L01;
+	}
+
+	/* Sphere Light */
+	if(light_radius>0){
+		roughness = max(3e-3, roughness); /* Artifacts appear with roughness below this threshold */
+
+		/* energy preservation */
+		float SphereAngle = clamp( light_radius / light_distance, 0.0, 1.0);
+		energy_conservation *= pow( roughness / clamp(roughness + 0.5 * SphereAngle, 0.0, 1.0), 2.0);
+
+		/* sphere light */
+		vec3 ClosestPointOnRay =  dot(L, R) * R;
+		vec3 CenterToRay = ClosestPointOnRay - L;
+		vec3 ClosestPointOnSphere = L + CenterToRay * clamp( light_radius * inverseDistance(CenterToRay), 0.0, 1.0);
+		L = ClosestPointOnSphere;
+	}
+
+	L = normalize(L);
+}
+
 /*********** NEW SHADER NODES ***************/
 
 #define NUM_LIGHTS 3
 
 /* bsdfs */
-
-void node_bsdf_diffuse(vec4 color, float roughness, vec3 N, vec4 ambient_light, out vec4 result)
+void node_bsdf_diffuse(vec4 color, float roughness, vec3 N, vec3 V, vec4 ambient_light, vec4 direct_light, out vec4 result)
 {
-	/* ambient light */
-	vec3 L = ambient_light.rgb;
-	result = vec4(ambient_light.rgb*color.rgb, 1.0);
+	shade_view(V, V); V = -V;
+
+	/* oren_nayar approximation for ambient */
+	float NV = clamp(dot(N, V), 0.0, 0.999);
+	float fac = 1.0 - pow(1.0 - NV, 1.3);
+	float BRDF = mix(1.0, 0.78, fac*roughness);
+
+	result = vec4( (ambient_light.rgb * BRDF + direct_light.rgb) * color.rgb, 1.0);
 }
 
-void node_bsdf_diffuse_light(vec4 color, float roughness, vec3 N, vec4 ambient_light, out vec4 result)
+void node_bsdf_glossy(vec4 color, float roughness, vec3 N, vec3 V, vec4 ambient_light, vec4 direct_light, out vec4 result)
 {
+	result = vec4( (ambient_light.rgb + direct_light.rgb) * color.rgb, 1.0);
+}
+
+void node_bsdf_refraction(vec4 color, float roughness, float ior, vec3 N, vec3 V, vec4 ambient_light, vec4 direct_light, out vec4 result)
+{
+	shade_view(V, V); V = -V;
+
+	ior = (gl_FrontFacing) ? ior : 1.0/ior;
+	float c = abs(dot(V, N));
+	float g = ior * ior - 1.0 + c * c;
+
+	if(g > 0.0) 
+		result = vec4(color.rgb * (direct_light.rgb + ambient_light.rgb), 1.0);
+	else
+		result = vec4(0.0, 0.0, 0.0, 1.0);
+}
+
+void node_bsdf_glass(vec4 color, float roughness, float ior, vec3 N, vec3 V, vec4 reflected_light, vec4 refracted_light, out vec4 result)
+{
+	shade_view(V, V); V = -V;
+	N = normalize(N);
+
+	float fresnel = fresnel_dielectric(V, N, (gl_FrontFacing)? ior: 1.0/ior);
+
+	result = vec4( mix(refracted_light, reflected_light, fresnel).rgb * color.rgb, 1.0);
+}
+
+void node_bsdf_translucent(vec4 color, float roughness, vec3 N, vec3 V, vec4 ambient_light, vec4 direct_light, out vec4 result)
+{
+	result = vec4( (ambient_light.rgb + direct_light.rgb) * color.rgb, 1.0);
+}
+
+void node_bsdf_transparent(vec4 color, vec4 background, out vec4 result)
+{
+	result = vec4(background.rgb * color.rgb, 1.0);
+}
+
+/* bsdfs with opengl Lights */
+void node_bsdf_diffuse_lights(vec4 color, float roughness, vec3 N, vec3 V, vec4 ambient_light, out vec4 result)
+{
+	shade_view(V, V); V = -V;
+
 	/* ambient light */
-	vec3 L = ambient_light.rgb;
+	vec3 accumulator = ambient_light.rgb;
+	float bsdf = 0.0;
+	
+	/* oren_nayar approximation for ambient */
+	float NV = clamp(dot(N, V), 0.0, 0.999);
+	float fac = 1.0 - pow(1.0 - NV, 1.3);
+	accumulator *= mix(1.0, 0.78, fac*roughness);
 
 	/* directional lights */
 	for(int i = 0; i < NUM_LIGHTS; i++) {
-		vec3 light_position = gl_LightSource[i].position.xyz;
+		vec3 L = gl_LightSource[i].position.xyz;
 		vec3 light_diffuse = gl_LightSource[i].diffuse.rgb;
 
-		float bsdf = max(dot(normalize(N), light_position), 0.0) * M_1_PI;
-		L += light_diffuse*bsdf;
+		diffuse_bsdf_oren_nayar(dot(N,L), N, L, V, roughness, bsdf);
+		accumulator += bsdf * light_diffuse;
 	}
 
-	result = vec4(L*color.rgb, 1.0);
+	result = vec4(accumulator*color.rgb, 1.0);
 }
 
-void node_bsdf_glossy(vec4 color, float roughness, vec3 N, vec3 viewvec, vec4 ambient_light, out vec4 result)
+void node_bsdf_glossy_lights(vec4 color, float roughness, vec3 N, vec3 V, vec4 ambient_light, out vec4 result)
 {
+	shade_view(V, V); V = -V;
 	N = normalize(N);
-	viewvec = (gl_ProjectionMatrix[3][3] == 0.0)? normalize(viewvec): vec3(0.0, 0.0, -1.0);
 
-	float NV = max( 0.0, dot(N, -viewvec) );
+	vec3 accumulator = ambient_light.rgb;
 
-	/* ambient light */
-	vec3 L = ambient_light.rgb;
+	if (roughness < 1e-4) {
+		//Instead of a tiny bright spot
+		result = vec4(accumulator * color.rgb, 1.0);
+		return;
+	}
+
+	float specfac = 0.0;
 
 	/* directional lights */
 	for(int i = 0; i < NUM_LIGHTS; i++) {
-		vec3 light_position = gl_LightSource[i].position.xyz;
-		vec3 H = gl_LightSource[i].halfVector.xyz;
+		vec3 L = gl_LightSource[i].position.xyz;
 		vec3 light_specular = gl_LightSource[i].specular.rgb;
+		vec3 H = normalize(L + V);
 
-		float NH = max( 0.0, dot(N, H) );
-		float NL = max( 0.0, dot(N, light_position) );
-
-		/* GGX Spec */
-		float a = max( 1e-8, roughness);
-
-		/* G_smith */
-		float k = a * 0.5;
-		float G = 1.0 / ((NL*(1.0-k) + k) * (NV*(1.0-k) + k));
-
-		float tmp = a / (NH*NH*(a*a-1.0)+1.0);
-		float D = tmp * tmp * M_1_PI;
-
-		float bsdf = D * G * NL * NV / 4.0 ;
-		L += light_specular*bsdf;
+		spec_bsdf_ggx(N, H, L, V, roughness, specfac);
+		accumulator += light_specular * specfac;
 	}
 
-	//result = vec4(L*color.rgb, 1.0);
-	result = vec4(ambient_light.rgb*color.rgb, 1.0);
+	result = vec4(M_1_PI * M_1_PI * accumulator * color.rgb, 1.0); /* M_1_P to reduce Brightness */
+}
+
+void node_bsdf_refraction_lights(vec4 color, float roughness, float ior, vec3 N, vec3 V, vec4 ambient_light, out vec4 result)
+{
+	node_bsdf_glossy_lights(color, roughness, N, V, ambient_light, result);
+}
+
+void node_bsdf_glass_lights(vec4 color, float roughness, float ior, vec3 N, vec3 V, vec4 ambient_light, out vec4 result)
+{
+	node_bsdf_glossy_lights(color, roughness, N, V, ambient_light, result);
+}
+
+void node_bsdf_translucent_lights(vec4 color, vec3 N, vec3 V, vec4 ambient_light, out vec4 result)
+{
+	N = -N;
+	node_bsdf_diffuse_lights(color, 0.0, N, V, ambient_light, result);
+}
+
+/* bsdfs with physical Lights */
+
+/* DIFFUSE */
+
+void node_bsdf_diffuse_sphere_light(vec3 N, vec3 L, vec3 V, float light_distance, float light_radius, float roughness, out float diff)
+{
+	light_radius = max(light_radius, 0.0001);
+	float sqrDist =  light_distance * light_distance;
+	float cosTheta = clamp(dot(N, L), -0.999, 0.999) ; 
+	float sqrLightRadius = light_radius * light_radius ;
+	float h = min(light_radius / light_distance , 0.9999) ;
+	float h2 = h*h;
+
+	float illuminance = 0.0 ;
+	if ( cosTheta * cosTheta > h2 )
+	{
+		illuminance = M_PI * h2 * clamp(cosTheta, 0.0, 1.0) ;
+	}
+	else
+	{
+		float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
+		float x = sqrt(1.0 / h2 - 1.0);
+		float y = -x * ( cosTheta / sinTheta );
+		float sinThetaSqrtY = sinTheta * sqrt(1.0 - y * y);
+		illuminance = (cosTheta * acos(y) - x * sinThetaSqrtY ) * h2 + atan(sinThetaSqrtY / x);
+	}
+
+	/* Energy conservation + cycle matching */
+	diff = max(illuminance, 0.0) * 2.5 * M_1_PI / sqrLightRadius;
+}
+
+void node_bsdf_diffuse_sun_light(vec3 N, vec3 L, vec3 V, float light_distance, float light_radius, float roughness, out float diff)
+{
+	light_radius = max(light_radius, 0.0001);
+	float sqrDist =  light_distance * light_distance;
+	float cosTheta = clamp(dot(N, L), -0.999, 0.999) ; 
+	float sqrLightRadius = light_radius * light_radius ;
+	float h = min(light_radius / light_distance , 0.9999) ;
+	float h2 = h*h;
+
+	float illuminance = 0.0 ;
+	if ( cosTheta * cosTheta > h2 )
+	{
+		illuminance = M_PI * h2 * clamp(cosTheta, 0.0, 1.0) ;
+	}
+	else
+	{
+		float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
+		float x = sqrt(1.0 / h2 - 1.0);
+		float y = -x * ( cosTheta / sinTheta );
+		float sinThetaSqrtY = sinTheta * sqrt(1.0 - y * y);
+		illuminance = (cosTheta * acos(y) - x * sinThetaSqrtY ) * h2 + atan(sinThetaSqrtY / x);
+	}
+
+	/* Energy conservation + cycle matching */
+	diff = max(illuminance, 0.0) * 2.5 / sqrLightRadius;
+}
+
+void node_bsdf_diffuse_area_light(vec3 N, vec3 L, vec3 V, float light_distance, vec3 lampco, vec2 scale, mat4 lampmat, float areasizex, float areasizey, float roughness, out float diff)
+{
+	N = -N;
+
+	vec3 lampX = normalize( (lampmat * vec4(1.0,0.0,0.0,0.0) ).xyz ); //lamp right axis
+	vec3 lampY = normalize( (lampmat * vec4(0.0,1.0,0.0,0.0) ).xyz ); //lamp up axis
+	vec3 lampZ = normalize( (lampmat * vec4(0.0,0.0,1.0,0.0) ).xyz ); //lamp projection axis
+
+	diff = 0.0;
+
+	areasizex *= scale.x;
+	areasizey *= scale.y;
+
+	if ( dot(-L, lampZ) > 0.0 )
+	{
+		float width = areasizex / 2.0;
+		float height = areasizey / 2.0;
+
+		vec3 p0 = lampco + lampX * -width + lampY *  height;
+		vec3 p1 = lampco + lampX * -width + lampY * -height;
+		vec3 p2 = lampco + lampX *  width + lampY * -height;
+		vec3 p3 = lampco + lampX *  width + lampY *  height;
+
+		float solidAngle = rectangleSolidAngle(V, p0, p1, p2, p3);
+
+		diff = solidAngle * 0.2 * (
+			max(0.0, dot( normalize(p0 - V), N) ) +
+			max(0.0, dot( normalize(p1 - V), N) ) +
+			max(0.0, dot( normalize(p2 - V), N) ) +
+			max(0.0, dot( normalize(p3 - V), N) ) +
+			max(0.0, dot( -L, N) )
+		);
+	}
+
+	/* Energy conservation + cycle matching */
+	diff *= 8.0 / (areasizex * areasizey);
+}
+
+/* GLOSSY SHARP */
+
+void node_bsdf_glossy_sharp_sphere_light(vec3 N, vec3 L, vec3 V, float light_distance, float light_radius, float roughness, out float specfac)
+{
+	L = light_distance * L;
+	N = normalize(N);
+	shade_view(V, V);
+
+	vec3 R = -reflect(V, N);
+
+	/* Does not behave well when light get very close to the surface or penetrate it */
+	vec3 C = max(0.0, dot(L, R)) * R - L;
+	specfac = ( length(C) < light_radius ) ? 1.0 : 0.0;
+
+	/* Energy conservation + cycle matching */
+	specfac *= 2.5 / (light_radius * light_radius);
+}
+
+void node_bsdf_glossy_sharp_area_light(vec3 N, vec3 L, vec3 V, float light_distance, vec2 scale, mat4 viewinvmat, mat4 lampinvmat, mat4 lampmat, float areasizex, float areasizey, float roughness, out float specfac)
+{
+	L = light_distance * L;
+	N = normalize(N);
+	shade_view(V, V);
+
+	vec3 lampX = normalize( (lampmat * vec4(1.0,0.0,0.0,0.0) ).xyz ); //lamp right axis
+	vec3 lampY = normalize( (lampmat * vec4(0.0,1.0,0.0,0.0) ).xyz ); //lamp up axis
+	vec3 lampZ = normalize( (lampmat * vec4(0.0,0.0,1.0,0.0) ).xyz ); //lamp projection axis
+
+	areasizex *= scale.x;
+	areasizey *= scale.y;
+	float width = areasizex / 2.0;
+	float height = areasizey / 2.0;
+
+	/* Find the intersection point E between the reflection vector and the light plane */
+	vec3 R = reflect(V, N);
+	vec3 E = linePlaneIntersect(vec3(0.0), R, L, lampZ);
+	vec3 pointOnLightPlane = E - L;
+	float A = dot(lampX, pointOnLightPlane);
+	float B = dot(lampY, pointOnLightPlane);
+
+	specfac = (A < width && B < height) ? 1.0 : 0.0;
+	specfac *= (A > -width && B > -height) ? 1.0 : 0.0;
+
+	/* Masking */
+	specfac *= (dot(-L, lampZ) > 0.0) ? 1.0 : 0.0;
+	specfac *= (dot(R, lampZ) > 0.0) ? 1.0 : 0.0;
+
+	/* Energy conservation + cycle matching */
+	specfac *= 25.0 / (areasizex * areasizey);
+}
+
+void node_bsdf_glossy_sharp_sun_light(vec3 N, vec3 L, vec3 V, float light_distance, float light_radius, float roughness, out float specfac)
+{
+	//TODO Find a better approximation
+	specfac = 0.0;
+}
+
+/* GLOSSY GGX */
+
+void node_bsdf_glossy_ggx_sphere_light(vec3 N, vec3 L, vec3 V, float light_distance, float light_radius, float roughness, out float specfac)
+{
+	if (roughness < 1e-4 && light_radius == 0) {
+		//Instead of a tiny bright spot
+		specfac = 0.0;
+		return;
+	}
+
+	N = normalize(N);
+	shade_view(V, V);
+
+	vec3 R = reflect(V, N);
+	float energy_conservation = 1.0;
+
+	mostRepresentativePointSphereOrTube(light_radius, 0.0, vec3(0.0), light_distance, R, L, roughness, energy_conservation);
+
+	vec3 H = normalize(L + V);
+	spec_bsdf_ggx(N, H, L, V, roughness, specfac);
+
+	specfac *= energy_conservation * 1.6 * M_1_PI / (light_distance * light_distance);
+}
+
+void node_bsdf_glossy_ggx_area_light(vec3 N, vec3 L, vec3 V, float light_distance, vec2 scale, mat4 viewinvmat, mat4 lampinvmat, mat4 lampmat, float areasizex, float areasizey, float roughness, out float specfac)
+{
+	if (areasizex == 0 || areasizey == 0) {
+		//Instead of a tiny bright spot
+		specfac = 0.0;
+		return;
+	}
+
+	areasizex *= scale.x;
+	areasizey *= scale.y;
+
+	//Used later for Masking
+	vec3 lampZ = normalize( (lampmat * vec4(0.0,0.0,1.0,0.0) ).xyz ); //lamp projection axis
+	float masking = max(dot( normalize(-L), lampZ), 0.0);
+	//End of masking
+
+	N = normalize(N);
+	shade_view(V, V);
+
+	vec3 R = reflect(V,N);
+	//R = normalize(mix(N, R, 1 - roughness)); //Dominant Direction 
+
+	float energy_conservation = 1.0;
+
+	float max_size = max(areasizex, areasizey);
+	float min_size = min(areasizex, areasizey);
+	vec3 lampVec = (areasizex > areasizey) ? normalize( (lampmat * vec4(1.0,0.0,0.0,0.0) ).xyz ) : normalize( (lampmat * vec4(0.0,1.0,0.0,0.0) ).xyz ); //lamp up axis
+
+
+	mostRepresentativePointSphereOrTube(min_size/2, max_size-min_size, lampVec, light_distance, R, L, roughness, energy_conservation);
+
+	vec3 H = normalize(L + V);
+
+	spec_bsdf_ggx(N, H, L, V, roughness, specfac);
+
+	//energy_conservation
+	float LineAngle = clamp( (max_size-min_size) / light_distance, 0.0, 1.0);
+	float energy_conservation_line = energy_conservation * ( roughness / clamp(roughness + 0.5 * LineAngle, 0.0, 1.1));
+	//Empirical modification for low roughness matching
+	float energy_conservation_mod = energy_conservation * (1 + roughness) / ( max_size/min_size );
+	energy_conservation = mix(energy_conservation_mod, energy_conservation_line, min(roughness/0.3, 0.9*(1.1-roughness)/0.1)); //Empiric
+
+	specfac *= energy_conservation / (light_distance * light_distance);
+	specfac *= 2.9; //Cycles matching //Empiric
+	specfac *= masking;
+}
+
+void node_bsdf_glossy_ggx_sun_light(vec3 N, vec3 L, vec3 V, float light_distance, float light_radius, float roughness, out float specfac)
+{
+	//TODO Find a better approximation
+	if (roughness < 1e-4 && light_radius == 0.0) {
+		//Instead of a tiny bright spot
+		specfac = 0.0;
+		return;
+	}
+
+	N = normalize(N);
+	shade_view(V, V);
+
+	vec3 R = reflect(V,N);
+	float energy_conservation = 1.0;
+
+
+	/* GGX Spec */
+	if(light_radius > 0.0){
+		//roughness = max(3e-3, roughness); /* Artifacts appear with roughness below this threshold */
+
+		/* energy preservation */
+		// float SphereAngle = clamp( light_radius / light_distance, 0.0, 1.0);
+		// energy_conservation = 2*a / (2*a + SphereAngle); //( x / (x + 0.5 * y))^2;
+		// energy_conservation *= energy_conservation;
+
+		float radius = sin(light_radius); //Disk radius
+		float distance = cos(light_radius); // Distance to disk
+
+		/* disk light */
+		float LR = dot(L, R);
+		vec3 S = normalize(R - LR * L);
+		vec3 L = LR < distance ? normalize(distance * L + S * radius) : R;
+	}
+
+	//L = normalize(L);
+	vec3 H = normalize(L + V);
+	spec_bsdf_ggx(N, H, L, V, roughness, specfac);
+	specfac *= energy_conservation;
+}
+
+/* REFRACT SHARP */
+
+void node_bsdf_refract_sharp_sphere_light(vec3 N, vec3 L, vec3 V, float light_distance, float ior, float light_radius, float roughness, out float specfac)
+{
+	L = light_distance * L;
+	N = normalize(N);
+	shade_view(V, V);
+
+	vec3 R = refract(-V, N, (gl_FrontFacing) ? 1.0/ior : ior);
+
+	/* Does not behave well when light get very close to the surface or penetrate it */
+	vec3 C = max(0.0, dot(L, R)) * R - L;
+	specfac = ( length(C) < light_radius ) ? 1.0 : 0.0;
+
+	/* Energy conservation + cycle matching */
+	specfac *= 2.5 / (light_radius * light_radius);
+}
+
+void node_bsdf_refract_sharp_area_light(vec3 N, vec3 L, vec3 V, float light_distance, float ior, vec2 scale, mat4 viewinvmat, mat4 lampinvmat, mat4 lampmat, float areasizex, float areasizey, float roughness, out float specfac)
+{
+	L = light_distance * L;
+	N = normalize(N);
+	shade_view(V, V);
+
+	vec3 lampX = normalize( (lampmat * vec4(1.0,0.0,0.0,0.0) ).xyz ); //lamp right axis
+	vec3 lampY = normalize( (lampmat * vec4(0.0,1.0,0.0,0.0) ).xyz ); //lamp up axis
+	vec3 lampZ = normalize( (lampmat * vec4(0.0,0.0,1.0,0.0) ).xyz ); //lamp projection axis
+
+	areasizex *= scale.x;
+	areasizey *= scale.y;
+	float width = areasizex / 2.0;
+	float height = areasizey / 2.0;
+
+	/* Find the intersection point E between the reflection vector and the light plane */
+	vec3 R = refract(-V, N, (gl_FrontFacing) ? 1.0/ior : ior);
+	vec3 E = linePlaneIntersect(vec3(0.0), R, L, lampZ);
+	vec3 pointOnLightPlane = E - L;
+	float A = dot(lampX, pointOnLightPlane);
+	float B = dot(lampY, pointOnLightPlane);
+
+	specfac = (A < width && B < height) ? 1.0 : 0.0;
+	specfac *= (A > -width && B > -height) ? 1.0 : 0.0;
+
+	/* Masking */
+	specfac *= (dot(-L, lampZ) > 0.0) ? 1.0 : 0.0;
+	specfac *= (dot(-R, lampZ) > 0.0) ? 1.0 : 0.0;
+
+	/* Energy conservation + cycle matching */
+	specfac *= 25.0 / (areasizex * areasizey);
+}
+
+void node_bsdf_refract_sharp_sun_light(vec3 N, vec3 L, vec3 V, float light_distance, float ior, float light_radius, float roughness, out float specfac)
+{
+	//TODO Find a better approximation
+	specfac = 0.0;
+}
+
+
+/* Others Bsdfs */
+void default_diffuse(vec4 color, vec3 normal, out vec4 result)
+{
+	node_bsdf_diffuse_lights(color, 0.0, normal, vec3(0.0), vec4(0.2), result);
 }
 
 void node_bsdf_anisotropic(vec4 color, float roughness, float anisotropy, float rotation, vec3 N, vec3 T, out vec4 result)
 {
-	node_bsdf_diffuse(color, 0.0, N, vec4(0.2), result);
+	default_diffuse(color, N, result);
 }
 
-void node_bsdf_glass(vec4 color, float roughness, float ior, vec3 N, out vec4 result)
-{
-	node_bsdf_diffuse(color, 0.0, N, vec4(0.2), result);
-}
 
 void node_bsdf_toon(vec4 color, float size, float tsmooth, vec3 N, out vec4 result)
 {
-	node_bsdf_diffuse(color, 0.0, N, vec4(0.2), result);
-}
-
-void node_bsdf_translucent(vec4 color, vec3 N, out vec4 result)
-{
-	node_bsdf_diffuse(color, 0.0, N, vec4(0.2), result);
-}
-
-void node_bsdf_transparent(vec4 color, out vec4 result)
-{
-	/* this isn't right */
-	result.r = color.r;
-	result.g = color.g;
-	result.b = color.b;
-	result.a = 0.0;
+	default_diffuse(color, N, result);
 }
 
 void node_bsdf_velvet(vec4 color, float sigma, vec3 N, out vec4 result)
 {
-	node_bsdf_diffuse(color, 0.0, N, vec4(0.2), result);
+	default_diffuse(color, N, result);
 }
 
 void node_subsurface_scattering(vec4 color, float scale, vec3 radius, float sharpen, float texture_blur, vec3 N, out vec4 result)
 {
-	node_bsdf_diffuse(color, 0.0, N, vec4(0.2), result);
+	default_diffuse(color, N, result);
 }
 
 void node_bsdf_hair(vec4 color, float offset, float roughnessu, float roughnessv, out vec4 result)
 {
 	result = color;
-}
-
-void node_bsdf_refraction(vec4 color, float roughness, float ior, vec3 N, out vec4 result)
-{
-	node_bsdf_diffuse(color, 0.0, N, vec4(0.2), result);
 }
 
 void node_ambient_occlusion(vec4 color, out vec4 result)
@@ -2315,6 +2815,96 @@ void node_ambient_occlusion(vec4 color, out vec4 result)
 void node_emission(vec4 color, float strength, vec3 N, out vec4 result)
 {
 	result = color*strength;
+}
+
+/* blackbody */
+
+void node_blackbody(float T, out vec4 col)
+{
+	float u = ( 0.860117757f + 1.54118254e-4f * T + 1.28641212e-7f * T*T ) / ( 1.0f + 8.42420235e-4f * T + 7.08145163e-7f * T*T );
+	float v = ( 0.317398726f + 4.22806245e-5f * T + 4.20481691e-8f * T*T ) / ( 1.0f - 2.89741816e-5f * T + 1.61456053e-7f * T*T );
+
+	float x = 3*u / ( 2*u - 8*v + 4 );
+	float y = 2*v / ( 2*u - 8*v + 4 );
+	float z = 1 - x - y;
+
+	float Y = 1;
+	float X = Y/y * x;
+	float Z = Y/y * z;
+
+	mat3 XYZtoRGB = mat3(
+		3.2404542, -0.9692660,  0.0556434,
+		-1.5371385, 1.8760108, -0.2040259,
+		-0.4985314,  0.0415560, 1.0572252
+	);
+
+	col = vec4(( XYZtoRGB * vec3( X, Y, Z ) ), 1.0);
+}
+
+vec3 xyz_to_rgb(float x, float y, float z)
+{
+	return vec3( 3.240479 * x + -1.537150 * y + -0.498535 * z,
+	             -0.969256 * x +  1.875991 * y +  0.041556 * z,
+	              0.055648 * x + -0.204043 * y +  1.057311 * z);
+}
+
+// CIE colour matching functions xBar, yBar, and zBar for
+//	 wavelengths from 380 through 780 nanometers, every 5
+//	 nanometers.  For a wavelength lambda in this range:
+//		  cie_colour_match[(lambda - 380) / 5][0] = xBar
+//		  cie_colour_match[(lambda - 380) / 5][1] = yBar
+//		  cie_colour_match[(lambda - 380) / 5][2] = zBar
+uniform vec3 node_wavelength_LUT[81] = {
+	vec3(0.0014f,0.0000f,0.0065f), vec3(0.0022f,0.0001f,0.0105f), vec3(0.0042f,0.0001f,0.0201f),
+	vec3(0.0076f,0.0002f,0.0362f), vec3(0.0143f,0.0004f,0.0679f), vec3(0.0232f,0.0006f,0.1102f),
+	vec3(0.0435f,0.0012f,0.2074f), vec3(0.0776f,0.0022f,0.3713f), vec3(0.1344f,0.0040f,0.6456f),
+	vec3(0.2148f,0.0073f,1.0391f), vec3(0.2839f,0.0116f,1.3856f), vec3(0.3285f,0.0168f,1.6230f),
+	vec3(0.3483f,0.0230f,1.7471f), vec3(0.3481f,0.0298f,1.7826f), vec3(0.3362f,0.0380f,1.7721f),
+	vec3(0.3187f,0.0480f,1.7441f), vec3(0.2908f,0.0600f,1.6692f), vec3(0.2511f,0.0739f,1.5281f),
+	vec3(0.1954f,0.0910f,1.2876f), vec3(0.1421f,0.1126f,1.0419f), vec3(0.0956f,0.1390f,0.8130f),
+	vec3(0.0580f,0.1693f,0.6162f), vec3(0.0320f,0.2080f,0.4652f), vec3(0.0147f,0.2586f,0.3533f),
+	vec3(0.0049f,0.3230f,0.2720f), vec3(0.0024f,0.4073f,0.2123f), vec3(0.0093f,0.5030f,0.1582f),
+	vec3(0.0291f,0.6082f,0.1117f), vec3(0.0633f,0.7100f,0.0782f), vec3(0.1096f,0.7932f,0.0573f),
+	vec3(0.1655f,0.8620f,0.0422f), vec3(0.2257f,0.9149f,0.0298f), vec3(0.2904f,0.9540f,0.0203f),
+	vec3(0.3597f,0.9803f,0.0134f), vec3(0.4334f,0.9950f,0.0087f), vec3(0.5121f,1.0000f,0.0057f),
+	vec3(0.5945f,0.9950f,0.0039f), vec3(0.6784f,0.9786f,0.0027f), vec3(0.7621f,0.9520f,0.0021f),
+	vec3(0.8425f,0.9154f,0.0018f), vec3(0.9163f,0.8700f,0.0017f), vec3(0.9786f,0.8163f,0.0014f),
+	vec3(1.0263f,0.7570f,0.0011f), vec3(1.0567f,0.6949f,0.0010f), vec3(1.0622f,0.6310f,0.0008f),
+	vec3(1.0456f,0.5668f,0.0006f), vec3(1.0026f,0.5030f,0.0003f), vec3(0.9384f,0.4412f,0.0002f),
+	vec3(0.8544f,0.3810f,0.0002f), vec3(0.7514f,0.3210f,0.0001f), vec3(0.6424f,0.2650f,0.0000f),
+	vec3(0.5419f,0.2170f,0.0000f), vec3(0.4479f,0.1750f,0.0000f), vec3(0.3608f,0.1382f,0.0000f),
+	vec3(0.2835f,0.1070f,0.0000f), vec3(0.2187f,0.0816f,0.0000f), vec3(0.1649f,0.0610f,0.0000f),
+	vec3(0.1212f,0.0446f,0.0000f), vec3(0.0874f,0.0320f,0.0000f), vec3(0.0636f,0.0232f,0.0000f),
+	vec3(0.0468f,0.0170f,0.0000f), vec3(0.0329f,0.0119f,0.0000f), vec3(0.0227f,0.0082f,0.0000f),
+	vec3(0.0158f,0.0057f,0.0000f), vec3(0.0114f,0.0041f,0.0000f), vec3(0.0081f,0.0029f,0.0000f),
+	vec3(0.0058f,0.0021f,0.0000f), vec3(0.0041f,0.0015f,0.0000f), vec3(0.0029f,0.0010f,0.0000f),
+	vec3(0.0020f,0.0007f,0.0000f), vec3(0.0014f,0.0005f,0.0000f), vec3(0.0010f,0.0004f,0.0000f),
+	vec3(0.0007f,0.0002f,0.0000f), vec3(0.0005f,0.0002f,0.0000f), vec3(0.0003f,0.0001f,0.0000f),
+	vec3(0.0002f,0.0001f,0.0000f), vec3(0.0002f,0.0001f,0.0000f), vec3(0.0001f,0.0000f,0.0000f),
+	vec3(0.0001f,0.0000f,0.0000f), vec3(0.0001f,0.0000f,0.0000f), vec3(0.0000f,0.0000f,0.0000f)
+};
+
+void node_wavelength(float w, out vec4 col)
+{
+	float ii = (w-380.0f) * (1.0f/5.0f);  // scaled 0..80
+	int i = int(ii);
+	vec3 color;
+	
+	if(i < 0 || i >= 80) {
+		color = vec3(0.0f, 0.0f, 0.0f);
+	}
+	else {
+		ii -= i;
+		color = mix(node_wavelength_LUT[i], node_wavelength_LUT[i+1], ii);
+	}
+	
+	color = xyz_to_rgb(color.x, color.y, color.z);
+	color *= 1.0f/2.52f;	// Empirical scale from lg to make all comps <= 1
+	
+	/* Clamp to zero if values are smaller */
+	col = vec4(max(color, vec3(0.0f, 0.0f, 0.0f)), 1.0);
+
+	// srgb_to_linearrgb(col, col);
 }
 
 /* background */
@@ -2331,12 +2921,12 @@ void background_transform_to_world(vec3 viewvec, out vec3 worldvec)
 void background_sampling_default(vec3 viewvec, mat4 viewinvmat, out vec3 worldvec)
 {
 	viewvec = (gl_ProjectionMatrix[3][3] == 0.0)? normalize(viewvec): vec3(0.0, 0.0, -1.0);
-	worldvec = normalize( (viewinvmat*vec4(viewvec,0.0)).xyz );
+	worldvec = normalize( (viewinvmat * vec4(viewvec,0.0)).xyz );
 }
 
 void node_background(vec4 color, float strength, vec3 N, out vec4 result)
 {
-	result = color*strength;
+	result = vec4(color.rgb * strength, 1.0);
 }
 
 /* closures */
@@ -2426,6 +3016,22 @@ void node_geometry(vec3 I, vec3 N, mat4 toworld,
 
 	parametric = vec3(0.0);
 	backfacing = (gl_FrontFacing)? 0.0: 1.0;
+	pointiness = 0.5;
+}
+
+void node_geometry_lamp(vec3 I, vec3 N, mat4 toworld,
+	out vec3 position, out vec3 normal, out vec3 tangent,
+	out vec3 true_normal, out vec3 incoming, out vec3 parametric,
+	out float backfacing, out float pointiness)
+{
+	position = (toworld*vec4(I-N, 1.0)).xyz;
+	normal = normalize((toworld*vec4(N, 0.0)).xyz);
+	tangent = vec3(0.0);
+	true_normal = normal;
+	incoming = normal;
+
+	parametric = vec3(0.0);
+	backfacing = 0.0;
 	pointiness = 0.0;
 }
 
@@ -2597,10 +3203,225 @@ void node_tex_musgrave(vec3 co, float scale, float detail, float dimension, floa
 	fac = 1.0;
 }
 
+#define TEX_NOISE_PERLIN 0
+#define TEX_NOISE_VORONOI_F1 1
+#define TEX_NOISE_VORONOI_F2 2
+#define TEX_NOISE_VORONOI_F3 3
+#define TEX_NOISE_VORONOI_F4 4
+#define TEX_NOISE_VORONOI_F2_F1 5
+#define TEX_NOISE_VORONOI_CRACKLE 6
+#define TEX_NOISE_CELL_NOISE 7
+
+int texture_quick_floor(float x)
+{
+	return int(x) - ((x < 0) ? 1 : 0);
+}
+
+float texture_fade(float t)
+{
+	return t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
+}
+
+float texture_scale3(float result)
+{
+	return 0.9820 * result;
+}
+
+float texture_nerp(float t, float a, float b)
+{
+	return (1.0 - t) * a + t * b;
+}
+
+float texture_grad(int hash, float x, float y, float z)
+{
+	// use vectors pointing to the edges of the cube
+	int h = hash & 15;
+	float u = h<8 ? x : y;
+	float v = h<4 ? y : h == 12 || h == 14 ? x : z;
+	return (bool(h&1) ? -u : u) + (bool(h&2) ? -v : v);
+}
+
+uint texture_rot(uint x, uint k)
+{
+	return (x<<k) | (x>>(uint(32)-k));
+}
+
+uint texture_hash(int kx, int ky, int kz)
+{
+	uint deadbeef = uint(0xdeadbeef);
+	uint len = uint(3);
+
+	uint a = deadbeef + uint(len << 2) + uint(13);
+	uint b = a;
+	uint c = a;
+
+	c += uint(kz);
+	b += uint(ky);
+	a += uint(kx);
+
+	c ^= b;
+	c -= texture_rot(b,uint(14));
+	a ^= c;
+	a -= texture_rot(c,uint(11));
+	b ^= a;
+	b -= texture_rot(a,uint(25));
+	c ^= b;
+	c -= texture_rot(b,uint(16));
+	a ^= c;
+	a -= texture_rot(c,uint(4));
+	b ^= a;
+	b -= texture_rot(a,uint(14));
+	c ^= b;
+	c -= texture_rot(b,uint(24));
+
+	return c;
+}
+
+float texture_perlin (float x, float y, float z) {
+
+	int X = texture_quick_floor(x);
+	float fx = x-float(X);
+	int Y = texture_quick_floor(y);
+	float fy = y-float(Y);
+	int Z = texture_quick_floor(z);
+	float fz = z-float(Z);
+
+	float u = texture_fade(fx);
+	float v = texture_fade(fy);
+	float w = texture_fade(fz);
+
+    float result = texture_nerp (w, texture_nerp (v, texture_nerp (u, texture_grad (int(texture_hash (X  , Y  , Z  )), fx     ,fy     , fz     ),
+                                                                      texture_grad (int(texture_hash (X+1, Y  , Z  )), fx-1.0, fy     , fz     )),
+                                                     texture_nerp (u, texture_grad (int(texture_hash (X  , Y+1, Z  )), fx     ,fy-1.0 , fz     ),
+                                                                      texture_grad (int(texture_hash (X+1, Y+1, Z  )), fx-1.0, fy-1.0 , fz     ))),
+                                    texture_nerp (v, texture_nerp (u, texture_grad (int(texture_hash (X  , Y  , Z+1)), fx     ,fy     , fz-1.0 ),
+                                                                      texture_grad (int(texture_hash (X+1, Y  , Z+1)), fx-1.0, fy     , fz-1.0 )),
+                                                     texture_nerp (u, texture_grad (int(texture_hash (X  , Y+1, Z+1)), fx     ,fy-1.0 , fz-1.0 ),
+                                                                      texture_grad (int(texture_hash (X+1, Y+1, Z+1)), fx-1.0, fy-1.0 , fz-1.0 ))));
+	return texture_scale3(result);
+}
+
+// perlin noise in range -1..1
+float texture_snoise(vec3 p)
+{
+	return texture_perlin(p.x, p.y, p.z);
+}
+
+// perlin noise in range 0..1
+float texture_noise(vec3 p)
+{
+	float r = texture_perlin(p.x, p.y, p.z);
+	return 0.5*r + 0.5;
+}
+
+float texture_safe_noise(vec3 p, int type)
+{
+	float f = 0.0;
+
+	/* Perlin noise in range -1..1 */
+	if (type == 0)
+		f = texture_snoise(p);
+
+	/* Perlin noise in range 0..1 */
+	else
+		f = texture_noise(p);
+
+	/* can happen for big coordinates, things even out to 0.5 then anyway */
+	if (isinf(f))
+		return 0.5;
+
+	return f;
+}
+
+float texture_noise_basis(vec3 p, int basis)
+{
+	if (basis == TEX_NOISE_PERLIN)
+		return texture_safe_noise(p, 1);
+	/* not supported in cycles? */
+	/*
+	if (basis == TEX_NOISE_VORONOI_F1)
+		return voronoi_F1S(p);
+	if (basis == TEX_NOISE_VORONOI_F2)
+		return voronoi_F2S(p);
+	if (basis == TEX_NOISE_VORONOI_F3)
+		return voronoi_F3S(p);
+	if (basis == TEX_NOISE_VORONOI_F4)
+		return voronoi_F4S(p);
+	if (basis == TEX_NOISE_VORONOI_F2_F1)
+		return voronoi_F1F2S(p);
+	if (basis == TEX_NOISE_VORONOI_CRACKLE)
+		return voronoi_CrS(p);
+	if (basis == TEX_NOISE_CELL_NOISE)
+		return texture_cellnoise(p);
+	*/
+	return 0.0;
+}
+
+float texture_noise_turbulence(vec3 p, int basis, float details, int hard)
+{
+
+	float fscale = 1.0;
+	float amp = 1.0;
+	float sum = 0.0;
+	int i, n;
+
+	float octaves = clamp(details, 0.0, 16.0);
+	n = int(octaves);
+
+	for (i = 0; i <= n; i++) {
+		float t = texture_noise_basis(fscale * p, basis);
+
+		if (hard==1)
+			t = abs(2.0 * t - 1.0);
+
+		sum += t * amp;
+		amp *= 0.5;
+		fscale *= 2.0;
+	}
+
+	float rmd = octaves - floor(octaves);
+
+	if (rmd != 0.0) {
+		float t = texture_noise_basis(fscale * p, basis);
+
+		if (bool(hard))
+			t = abs(2.0 * t - 1.0);
+
+		float sum2 = sum + t * amp;
+
+		sum *= (float(1 << n) / float((1 << (n + 1)) - 1));
+		sum2 *= (float(1 << (n + 1)) / float((1 << (n + 2)) - 1));
+
+		return (1.0 - rmd) * sum + rmd * sum2;
+	}
+	else {
+		sum *= (float(1 << n) / float((1 << (n + 1)) - 1));
+		return sum;
+	}
+}
+
 void node_tex_noise(vec3 co, float scale, float detail, float distortion, out vec4 color, out float fac)
 {
-	color = vec4(1.0);
-	fac = 1.0;
+	int basis = TEX_NOISE_PERLIN;
+	int hard = 0;
+
+	co *= scale;
+
+	if(distortion != 0.0) {
+		vec3 r, offset = vec3(13.5);
+
+		r.x = texture_noise_basis(co + offset, basis) * distortion;
+		r.y = texture_noise_basis(co, basis) * distortion;
+		r.z = texture_noise_basis(co - offset, basis) * distortion;
+
+		co += r;
+	}
+
+	fac = texture_noise_turbulence(co, basis, detail, hard);
+	color = vec4(fac,
+		texture_noise_turbulence(vec3(co.y, co.x, co.z), basis, detail, hard),
+		texture_noise_turbulence(vec3(co.y, co.z, co.x), basis, detail, hard),
+		1.0);
 }
 
 void node_tex_sky(vec3 co, out vec4 color)
@@ -2646,11 +3467,18 @@ void node_light_path(
 	transparent_depth = 1.0;
 }
 
-void node_light_falloff(float strength, float tsmooth, out float quadratic, out float linear, out float constant)
+void node_light_falloff(float strength, float tsmooth, vec3 ray, out float quadratic, out float linear, out float constant)
 {
+	float ray_length = length(ray);
+
+	if (tsmooth > 0.0) {
+		float squared = ray_length * ray_length;
+		strength *= squared / (tsmooth + squared);
+	}
+
 	quadratic = strength;
-	linear = strength;
-	constant = strength;
+	linear = (strength * ray_length);
+	constant = (strength * ray_length * ray_length);
 }
 
 void node_object_info(out vec3 location, out float object_index, out float material_index, out float random)
@@ -2728,11 +3556,22 @@ void node_output_world(vec4 surface, vec4 volume, out vec4 result)
 	result = surface;
 }
 
+void node_output_lamp(vec4 surface, out vec4 result)
+{
+	result = surface;
+}
+
+
 /* environment shader */
 
-void env_sampling_sharp(vec3 I, vec3 N, mat4 viewinvmat, out vec3 result)
+void env_sampling_reflect_sharp(vec3 I, vec3 N, mat4 viewinvmat, out vec3 result)
 {
 	result = reflect(normalize(I), normalize(N));
+}
+
+void env_sampling_refract_sharp(vec3 I, vec3 N, float eta, out vec3 result)
+{
+	result = refract(normalize(I), normalize(N), (gl_FrontFacing) ? 1.0/eta : eta);
 }
 
 /* Hammersley points set */
@@ -2793,7 +3632,7 @@ vec3 tangentSpace( vec3 vector, vec3 N, vec3 T, vec3 B)
 	return T * vector.x + B * vector.y + N * vector.z;
 }
 
-void env_sampling_glossy(vec3 I, vec3 N, float roughness, float precalcLodFactor, float maxLod, mat4 viewinvmat, sampler2D ima, out vec3 result)
+void env_sampling_reflect_glossy(vec3 I, vec3 N, float roughness, float precalcLodFactor, float maxLod, mat4 viewinvmat, sampler2D ima, out vec3 result)
 {
 	/* handle perspective/orthographic */
 	//I = (gl_ProjectionMatrix[3][3] == 0.0)? normalize(I): vec3(0.0, 0.0, -1.0);
@@ -2837,7 +3676,7 @@ void env_sampling_glossy(vec3 I, vec3 N, float roughness, float precalcLodFactor
 	for ( uint i = 0u; i < NumSamples; i++ ) {
 		vec4 Xi = hammersley2d( i, NumSamples, random );
 		vec3 H = importance_sample_GGX(Xi, a2);
-		vec3 tH = tangentSpace( importance_sample_GGX(Xi, a2), N, T, B );
+		vec3 tH = tangentSpace( H, N, T, B );
 		vec3 L = reflect(I, tH);
 
 		/* Sampling Environment */
@@ -2850,7 +3689,11 @@ void env_sampling_glossy(vec3 I, vec3 N, float roughness, float precalcLodFactor
 		float distortion = sqrt(1.0-L.z*L.z); /* Distortion for Equirectangular Env */
 		float Lod = precalcLodFactor - 0.5*log2( pdf * distortion);
 
-		node_tex_environment_equirectangular(L, ima, Lod, color);
+		if (NL > 0 && pdf > 0)
+			node_tex_environment_equirectangular(L, ima, Lod, color);
+		else
+			continue;
+
 		srgb_to_linearrgb(color, color);
 		FilteredColor += color.rgb * NL;
 		Weight += NL;
@@ -2874,9 +3717,9 @@ void env_sampling_glossy(vec3 I, vec3 N, float roughness, float precalcLodFactor
 		IntegralB += Fc * nl_Vis_PDF;
 	}
 
-	IntegralA = IntegralA / NumSamples;
-	IntegralB = IntegralB / NumSamples;
-	FilteredColor = FilteredColor / max( Weight, 0.001 );
+	IntegralA /= NumSamples;
+	IntegralB /= NumSamples;
+	FilteredColor /= max( Weight, 0.001 );
 
 	result = FilteredColor*(IntegralA+IntegralB);
 }

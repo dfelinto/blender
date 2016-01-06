@@ -40,6 +40,9 @@
 #include "BLI_rand.h"
 #include "BLI_listbase.h"
 
+#include "BKE_colortools.h"
+#include "BKE_scene.h"
+
 #include "DNA_vec_types.h"
 #include "DNA_view3d_types.h"
 #include "DNA_scene_types.h"
@@ -49,6 +52,8 @@
 
 #include "GPU_extensions.h"
 #include "GPU_compositing.h"
+
+#include "IMB_colormanagement.h"
 
 #include "GPU_glew.h"
 
@@ -103,6 +108,8 @@ struct GPUFX {
 	int ssao_sample_count_cache;
 	GPUTexture *ssao_spiral_samples_tex;
 
+	/* 3D Lut for color correction */
+	GPUTexture *colorc_3dLut;
 
 	GPUFXSettings settings;
 
@@ -152,6 +159,67 @@ static GPUTexture * create_concentric_sample_texture(int side)
 	return tex;
 }
 #endif
+
+static GPUTexture *create_3DLUT_from_display_settings(GPUFX *fx, Scene *scene)
+{
+	const int LUT3D_EDGE_SIZE = 16;
+	int num_3d_entries = 3 * LUT3D_EDGE_SIZE * LUT3D_EDGE_SIZE * LUT3D_EDGE_SIZE;
+	int offset;
+	int x,y,z;
+	GPUTexture *tex;
+	ColorManagedViewSettings *view_settings = &scene->view_settings;
+	ColorManagedDisplaySettings *display_settings = &scene->display_settings;
+	float tmp_pix[3];
+	char *display_name = "sRGB";
+
+	float *lut3d = MEM_callocN(sizeof(float) * num_3d_entries, "Post-Process GPU 3D LUT");
+	ColorManagedViewSettings *view_settings_mod = MEM_callocN(sizeof(ColorManagedViewSettings), "LUT Modified View Settings");
+	ColorManagedDisplaySettings *display_settings_mod = MEM_callocN(sizeof(ColorManagedDisplaySettings), "LUT Modified Display Settings");
+
+	BKE_color_managed_view_settings_copy(view_settings_mod, view_settings);
+	BKE_color_managed_display_settings_copy(display_settings_mod, display_settings);
+
+	/* Setting this to not affect the LUT
+	 * Exposure control and gamma is done in the shader itself for better resolution 
+	 * Except if we use curve mapping */
+	if ((view_settings->flag & COLORMANAGE_VIEW_USE_CURVES) == 0) {
+		view_settings_mod->exposure = 0.0;
+		view_settings_mod->gamma = 1.0;
+	}
+
+	/* XXX slow, low res ... need to find another way */
+	for (z = 0; z < LUT3D_EDGE_SIZE; z++)
+	{
+		for (y = 0; y < LUT3D_EDGE_SIZE; y++)
+		{
+			for (x = 0; x < LUT3D_EDGE_SIZE; x++)
+			{
+				offset = (x + y * LUT3D_EDGE_SIZE + z * LUT3D_EDGE_SIZE * LUT3D_EDGE_SIZE) * 3;
+
+				/* Apply Linear color through Color Management to get the LUT+ColorCurve+DisplaySpace */
+				lut3d[offset+0] = (float)x / ((float)LUT3D_EDGE_SIZE - 1.0f); //R
+				lut3d[offset+1] = (float)y / ((float)LUT3D_EDGE_SIZE - 1.0f); //G
+				lut3d[offset+2] = (float)z / ((float)LUT3D_EDGE_SIZE - 1.0f); //B
+
+				IMB_colormanagement_pixel_to_display_space_v3(tmp_pix, &lut3d[offset], view_settings_mod, display_settings_mod);
+
+				lut3d[offset+0] = tmp_pix[0];
+				lut3d[offset+1] = tmp_pix[1];
+				lut3d[offset+2] = tmp_pix[2];
+
+			}
+		}
+	}
+
+	tex = GPU_texture_create_3D(LUT3D_EDGE_SIZE, LUT3D_EDGE_SIZE, LUT3D_EDGE_SIZE, 3, lut3d);
+
+	MEM_freeN(lut3d);
+	BKE_color_managed_view_settings_free(view_settings_mod);
+	MEM_freeN(view_settings_mod);
+	MEM_freeN(display_settings_mod);
+
+	return tex;
+}
 
 static GPUTexture *create_spiral_sample_texture(int numsaples)
 {
@@ -268,6 +336,11 @@ static void cleanup_fx_gl_data(GPUFX *fx, bool do_fbo)
 		GPU_framebuffer_free(fx->gbuffer);
 		fx->gbuffer = NULL;
 	}
+
+	if (fx->colorc_3dLut) {
+		GPU_texture_free(fx->colorc_3dLut);
+		fx->colorc_3dLut = NULL;
+	}
 }
 
 /* destroy a text compositor */
@@ -295,7 +368,7 @@ static GPUTexture * create_jitter_texture(void)
 
 bool GPU_fx_compositor_initialize_passes(
         GPUFX *fx, const rcti *rect, const rcti *scissor_rect,
-        const GPUFXSettings *fx_settings)
+        const GPUFXSettings *fx_settings, struct Scene *scene)
 {
 	int w = BLI_rcti_size_x(rect), h = BLI_rcti_size_y(rect);
 	char err_out[256];
@@ -339,6 +412,9 @@ bool GPU_fx_compositor_initialize_passes(
 		num_passes++;
 
 	if (fx_flag & GPU_FX_FLAG_SSAO)
+		num_passes++;
+
+	if (fx_flag & GPU_FX_FLAG_COLORMANAGEMENT)
 		num_passes++;
 
 	if (!fx->gbuffer) {
@@ -388,6 +464,25 @@ bool GPU_fx_compositor_initialize_passes(
 		if (fx->ssao_spiral_samples_tex) {
 			GPU_texture_free(fx->ssao_spiral_samples_tex);
 			fx->ssao_spiral_samples_tex = NULL;
+		}
+	}
+
+	if (fx_flag & GPU_FX_FLAG_COLORMANAGEMENT) {
+		ColorManagedViewSettings *view_settings = &scene->view_settings;;
+		ColorManagedDisplaySettings *display_settings = &scene->display_settings;;
+		if (!fx->colorc_3dLut || view_settings->lut_is_outdated || display_settings->lut_is_outdated) {
+			if (fx->colorc_3dLut) {
+				GPU_texture_free(fx->colorc_3dLut);
+			}
+			fx->colorc_3dLut = create_3DLUT_from_display_settings(fx, scene);
+			view_settings->lut_is_outdated = 0;
+			display_settings->lut_is_outdated = 0;
+		}
+	}
+	else {
+		if (fx->colorc_3dLut) {
+			GPU_texture_free(fx->colorc_3dLut);
+			fx->colorc_3dLut = NULL;
 		}
 	}
 
@@ -1257,6 +1352,62 @@ bool GPU_fx_do_composite_pass(GPUFX *fx, float projmat[4][4], bool is_persp, str
 				SWAP(GPUTexture *, target, src);
 				numslots = 0;
 			}
+		}
+	}
+
+	if (fx->effects & GPU_FX_FLAG_COLORMANAGEMENT) {
+		GPUShader *colormanage_shader;
+		colormanage_shader = GPU_shader_get_builtin_fx_shader(GPU_SHADER_FX_COLORMANAGE, is_persp);
+		if (colormanage_shader) {
+			int color_uniform, exposure_uniform, gamma_uniform, lut3d_uniform, displayspace_uniform, offscreen_uniform;
+			ColorManagedViewSettings *view_settings = &scene->view_settings;
+			ColorManagedDisplaySettings *display_settings = &scene->display_settings;
+			float one = 1.0f, zero = 0.0f;
+			float displayspace = (BKE_scene_check_color_management_enabled(scene)) ? 1.0f : 0.0f;
+			bool use_curve_mapping = (view_settings->flag & COLORMANAGE_VIEW_USE_CURVES) != 0;
+
+			color_uniform = GPU_shader_get_uniform(colormanage_shader, "colorbuffer");
+			lut3d_uniform = GPU_shader_get_uniform(colormanage_shader, "lut3d_texture");
+			exposure_uniform = GPU_shader_get_uniform(colormanage_shader, "exposure");
+			gamma_uniform = GPU_shader_get_uniform(colormanage_shader, "gamma");
+			displayspace_uniform = GPU_shader_get_uniform(colormanage_shader, "displayspace_is_srgb");
+			offscreen_uniform = GPU_shader_get_uniform(colormanage_shader, "is_offscreen");
+
+			GPU_shader_bind(colormanage_shader);
+			
+			GPU_shader_uniform_vector(colormanage_shader, exposure_uniform, 1, 1, (use_curve_mapping) ? &zero : &view_settings->exposure);
+			GPU_shader_uniform_vector(colormanage_shader, gamma_uniform, 1, 1, (use_curve_mapping) ? &one : &view_settings->gamma);
+			GPU_shader_uniform_vector(colormanage_shader, displayspace_uniform, 1, 1, &displayspace);
+			GPU_shader_uniform_vector(colormanage_shader, offscreen_uniform, 1, 1, (ofs) ? &one : &zero);
+
+			GPU_texture_bind(src, numslots++);
+			GPU_shader_uniform_texture(colormanage_shader, color_uniform, src);
+
+			GPU_texture_bind(fx->colorc_3dLut, numslots++);
+			GPU_shader_uniform_texture(colormanage_shader, lut3d_uniform, fx->colorc_3dLut);
+
+			/* draw */
+			gpu_fx_bind_render_target(&passes_left, fx, ofs, target);
+
+			glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+			/* disable bindings */
+			GPU_texture_unbind(src);
+
+			/* may not be attached, in that case this just returns */
+			if (target) {
+				GPU_framebuffer_texture_detach(target);
+				if (ofs) {
+					GPU_offscreen_bind(ofs, false);
+				}
+				else {
+					GPU_framebuffer_restore();
+				}
+			}
+
+			/* swap here, after src/target have been unbound */
+			SWAP(GPUTexture *, target, src);
+			numslots = 0;
 		}
 	}
 

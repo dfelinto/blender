@@ -77,6 +77,7 @@ set(SRC
 	shaders/gpu_shader_vsm_store_frag.glsl
 	shaders/gpu_shader_vsm_store_vert.glsl
 	shaders/gpu_shader_fx_depth_resolve.glsl
+	shaders/gpu_shader_fx_colormanage_frag.glsl
 
 	GPU_buffers.h
 	GPU_draw.h
@@ -112,6 +113,7 @@ data_to_c_simple(shaders/gpu_shader_fx_dof_hq_frag.glsl SRC)
 data_to_c_simple(shaders/gpu_shader_fx_dof_hq_vert.glsl SRC)
 data_to_c_simple(shaders/gpu_shader_fx_dof_hq_geo.glsl SRC)
 data_to_c_simple(shaders/gpu_shader_fx_depth_resolve.glsl SRC)
+data_to_c_simple(shaders/gpu_shader_fx_colormanage_frag.glsl SRC)
 data_to_c_simple(shaders/gpu_shader_fx_lib.glsl SRC)
 
 if(WITH_GAMEENGINE)

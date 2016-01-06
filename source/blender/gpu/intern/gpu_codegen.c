@@ -1000,7 +1000,7 @@ void GPU_pass_bind(GPUPass *pass, double time, int mipmap)
 	/* now bind the textures */
 	for (input = inputs->first; input; input = input->next) {
 		if (input->ima)
-			input->tex = GPU_texture_from_blender(input->ima, input->iuser, input->image_isdata, time, mipmap);
+			input->tex = GPU_texture_from_blender(input->ima, input->iuser, input->image_isdata, input->image_isenvmap, time, mipmap);
 		else if (input->prv)
 			input->tex = GPU_texture_from_preview(input->prv, mipmap);
 
@@ -1180,6 +1180,7 @@ static void gpu_node_input_link(GPUNode *node, GPUNodeLink *link, const GPUType 
 			input->ima = link->ptr1;
 			input->iuser = link->ptr2;
 			input->image_isdata = link->image_isdata;
+			input->image_isenvmap = link->image_isenvmap;
 		}
 		input->textarget = GL_TEXTURE_2D;
 		input->textype = GPU_TEX2D;
@@ -1375,7 +1376,7 @@ GPUNodeLink *GPU_dynamic_uniform(float *num, GPUDynamicType dynamictype, void *d
 	return link;
 }
 
-GPUNodeLink *GPU_image(Image *ima, ImageUser *iuser, bool is_data)
+GPUNodeLink *GPU_image(Image *ima, ImageUser *iuser, bool is_data, bool is_envmap)
 {
 	GPUNodeLink *link = GPU_node_link_create();
 
@@ -1383,6 +1384,7 @@ GPUNodeLink *GPU_image(Image *ima, ImageUser *iuser, bool is_data)
 	link->ptr1 = ima;
 	link->ptr2 = iuser;
 	link->image_isdata = is_data;
+	link->image_isenvmap = is_envmap;
 
 	return link;
 }
