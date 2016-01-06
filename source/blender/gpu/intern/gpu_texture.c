@@ -375,14 +375,14 @@ GPUTexture *GPU_texture_create_3D(int w, int h, int depth, int channels, const f
 	return tex;
 }
 
-GPUTexture *GPU_texture_from_blender(Image *ima, ImageUser *iuser, bool is_data, double time, int mipmap)
+GPUTexture *GPU_texture_from_blender(Image *ima, ImageUser *iuser, bool is_data, short do_clip, double time, int mipmap)
 {
 	GPUTexture *tex;
 	GLint w, h, border, bindcode;
 
 	GPU_update_image_time(ima, time);
 	/* this binds a texture, so that's why to restore it to 0 */
-	bindcode = GPU_verify_image(ima, iuser, 0, 0, mipmap, is_data);
+	bindcode = GPU_verify_image(ima, iuser, 0, 0, mipmap, is_data, do_clip);
 
 	if (ima->gputexture) {
 		ima->gputexture->bindcode = bindcode;
@@ -429,7 +429,7 @@ GPUTexture *GPU_texture_from_preview(PreviewImage *prv, int mipmap)
 	
 	/* this binds a texture, so that's why we restore it to 0 */
 	if (bindcode == 0) {
-		GPU_create_gl_tex(&bindcode, prv->rect[0], NULL, prv->w[0], prv->h[0], mipmap, 0, NULL);
+		GPU_create_gl_tex(&bindcode, prv->rect[0], NULL, prv->w[0], prv->h[0], mipmap, 0, NULL, false);
 	}
 	if (tex) {
 		tex->bindcode = bindcode;
