@@ -151,8 +151,8 @@ void ED_editors_exit(bContext *C)
 	}
 
 	/* global in meshtools... */
-	ED_mesh_mirror_spatial_table(NULL, NULL, NULL, 'e');
-	ED_mesh_mirror_topo_table(NULL, 'e');
+	ED_mesh_mirror_spatial_table(NULL, NULL, NULL, NULL, 'e');
+	ED_mesh_mirror_topo_table(NULL, NULL, 'e');
 }
 
 /* flush any temp data from object editing to DNA before writing files,
@@ -343,4 +343,24 @@ void ED_spacedata_id_unref(struct SpaceLink *sl, const ID *id)
 			ED_node_id_unref((SpaceNode *)sl, id);
 			break;
 	}
+}
+
+static int ed_flush_edits_exec(bContext *C, wmOperator *UNUSED(op))
+{
+	ED_editors_flush_edits(C, false);
+	return OPERATOR_FINISHED;
+}
+
+void ED_OT_flush_edits(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Flush Edits";
+	ot->description = "Flush edit data from active editing modes";
+	ot->idname = "ED_OT_flush_edits";
+
+	/* api callbacks */
+	ot->exec = ed_flush_edits_exec;
+
+	/* flags */
+	ot->flag = OPTYPE_INTERNAL;
 }

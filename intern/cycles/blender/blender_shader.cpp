@@ -220,14 +220,24 @@ static ShaderNode *add_node(Scene *scene,
 	/* existing blender nodes */
 	if(b_node.is_a(&RNA_ShaderNodeRGBCurve)) {
 		BL::ShaderNodeRGBCurve b_curve_node(b_node);
+		BL::CurveMapping mapping(b_curve_node.mapping());
 		RGBCurvesNode *curves = new RGBCurvesNode();
-		curvemapping_color_to_array(b_curve_node.mapping(), curves->curves, RAMP_TABLE_SIZE, true);
+		curvemapping_color_to_array(mapping,
+		                            curves->curves,
+		                            RAMP_TABLE_SIZE,
+		                            true);
+		curvemapping_minmax(mapping, true, &curves->min_x, &curves->max_x);
 		node = curves;
 	}
 	if(b_node.is_a(&RNA_ShaderNodeVectorCurve)) {
 		BL::ShaderNodeVectorCurve b_curve_node(b_node);
+		BL::CurveMapping mapping(b_curve_node.mapping());
 		VectorCurvesNode *curves = new VectorCurvesNode();
-		curvemapping_color_to_array(b_curve_node.mapping(), curves->curves, RAMP_TABLE_SIZE, false);
+		curvemapping_color_to_array(mapping,
+		                            curves->curves,
+		                            RAMP_TABLE_SIZE,
+		                            false);
+		curvemapping_minmax(mapping, false, &curves->min_x, &curves->max_x);
 		node = curves;
 	}
 	else if(b_node.is_a(&RNA_ShaderNodeValToRGB)) {
@@ -708,6 +718,7 @@ static ShaderNode *add_node(Scene *scene,
 		BL::ShaderNodeTexWave b_wave_node(b_node);
 		WaveTextureNode *wave = new WaveTextureNode();
 		wave->type = WaveTextureNode::type_enum[(int)b_wave_node.wave_type()];
+		wave->profile = WaveTextureNode::profile_enum[(int)b_wave_node.wave_profile()];
 		get_tex_mapping(&wave->tex_mapping, b_wave_node.texture_mapping());
 		node = wave;
 	}

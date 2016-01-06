@@ -55,10 +55,9 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "GPU_extensions.h"
 #include "GPU_glew.h"
-
-extern GLubyte stipple_quarttone[128]; /* glutil.c, bad level data */
+#include "GPU_shader.h"
+#include "GPU_basic_shader.h"
 
 static void bmdm_get_tri_colpreview(BMLoop *ls[3], MLoopCol *lcol[3], unsigned char(*color_vert_array)[4]);
 
@@ -732,8 +731,7 @@ static void emDM_drawMappedFaces(
 	const int lasttri = tottri - 1; /* compare agasint this a lot */
 	DMDrawOption draw_option;
 	int i, flush;
-	const int skip_normals = !glIsEnabled(GL_LIGHTING); /* could be passed as an arg */
-
+	const int skip_normals = !(flag & DM_DRAW_NEED_NORMALS);
 	const float (*lnors)[3] = dm->getLoopDataArray(dm, CD_NORMAL);
 	MLoopCol *lcol[3] = {NULL} /* , dummylcol = {0} */;
 	unsigned char(*color_vert_array)[4] = em->derivedVertColor;
@@ -755,7 +753,8 @@ static void emDM_drawMappedFaces(
 	}
 	if (has_vcol_preview || has_fcol_preview) {
 		flag |= DM_DRAW_ALWAYS_SMOOTH;
-		glDisable(GL_LIGHTING);  /* grr */
+		/* weak, this logic should really be moved higher up */
+		setMaterial = NULL;
 	}
 
 	if (bmdm->vertexCos) {
@@ -804,8 +803,8 @@ static void emDM_drawMappedFaces(
 					if (poly_prev != GL_ZERO) glEnd();
 					poly_prev = GL_ZERO; /* force glBegin */
 
-					glEnable(GL_POLYGON_STIPPLE);
-					glPolygonStipple(stipple_quarttone);
+					GPU_basic_shader_bind(GPU_SHADER_STIPPLE | GPU_SHADER_USE_COLOR);
+					GPU_basic_shader_stipple(GPU_SHADER_STIPPLE_QUARTTONE);
 				}
 
 				if      (has_vcol_preview) bmdm_get_tri_colpreview(ltri, lcol, color_vert_array);
@@ -867,7 +866,7 @@ static void emDM_drawMappedFaces(
 					glEnd();
 					poly_prev = GL_ZERO; /* force glBegin */
 
-					glDisable(GL_POLYGON_STIPPLE);
+					GPU_basic_shader_bind(GPU_SHADER_USE_COLOR);
 				}
 			}
 		}
@@ -903,8 +902,8 @@ static void emDM_drawMappedFaces(
 					if (poly_prev != GL_ZERO) glEnd();
 					poly_prev = GL_ZERO; /* force glBegin */
 
-					glEnable(GL_POLYGON_STIPPLE);
-					glPolygonStipple(stipple_quarttone);
+					GPU_basic_shader_bind(GPU_SHADER_STIPPLE | GPU_SHADER_USE_COLOR);
+					GPU_basic_shader_stipple(GPU_SHADER_STIPPLE_QUARTTONE);
 				}
 
 				if      (has_vcol_preview) bmdm_get_tri_colpreview(ltri, lcol, color_vert_array);
@@ -968,7 +967,7 @@ static void emDM_drawMappedFaces(
 					glEnd();
 					poly_prev = GL_ZERO; /* force glBegin */
 
-					glDisable(GL_POLYGON_STIPPLE);
+					GPU_basic_shader_bind(GPU_SHADER_USE_COLOR);
 				}
 			}
 		}

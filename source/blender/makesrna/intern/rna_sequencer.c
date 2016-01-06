@@ -66,6 +66,7 @@ EnumPropertyItem rna_enum_sequence_modifier_type_items[] = {
 	{seqModifierType_HueCorrect, "HUE_CORRECT", ICON_NONE, "Hue Correct", ""},
 	{seqModifierType_BrightContrast, "BRIGHT_CONTRAST", ICON_NONE, "Bright/Contrast", ""},
 	{seqModifierType_Mask, "MASK", ICON_NONE, "Mask", ""},
+	{seqModifierType_WhiteBalance, "WHITE_BALANCE", ICON_NONE, "White Balance", ""},
 	{0, NULL, 0, NULL, NULL}
 };
 
@@ -595,19 +596,6 @@ static PointerRNA rna_SequenceEditor_meta_stack_get(CollectionPropertyIterator *
 static void rna_Sequence_filepath_set(PointerRNA *ptr, const char *value)
 {
 	Sequence *seq = (Sequence *)(ptr->data);
-
-	if (seq->type == SEQ_TYPE_SOUND_RAM && seq->sound) {
-		/* for sound strips we need to update the sound as well.
-		 * arguably, this could load in a new sound rather than modify an existing one.
-		 * but while using the sequencer its most likely your not using the sound in the game engine too.
-		 */
-		PointerRNA id_ptr;
-		RNA_id_pointer_create((ID *)seq->sound, &id_ptr);
-		RNA_string_set(&id_ptr, "filepath", value);
-		BKE_sound_load(G.main, seq->sound);
-		BKE_sound_update_scene_sound(seq->scene_sound, seq->sound);
-	}
-
 	BLI_split_dirfile(value, seq->strip->dir, seq->strip->stripdata->name, sizeof(seq->strip->dir),
 	                  sizeof(seq->strip->stripdata->name));
 }
@@ -955,6 +943,8 @@ static StructRNA *rna_SequenceModifier_refine(struct PointerRNA *ptr)
 			return &RNA_HueCorrectModifier;
 		case seqModifierType_BrightContrast:
 			return &RNA_BrightContrastModifier;
+		case seqModifierType_WhiteBalance:
+			return &RNA_WhiteBalanceModifier;
 		default:
 			return &RNA_SequenceModifier;
 	}
@@ -1043,7 +1033,7 @@ static SequenceModifierData *rna_Sequence_modifier_new(Sequence *seq, bContext *
 		Scene *scene = CTX_data_scene(C);
 		SequenceModifierData *smd;
 
-		smd = BKE_sequence_modifier_new(seq, name, type);
+		smd = BKE_sequence_modifier_new(seq, name, type, scene);
 
 		BKE_sequence_invalidate_cache_for_modifier(scene, seq);
 
@@ -2031,6 +2021,7 @@ static void rna_def_sound(BlenderRNA *brna)
 	RNA_def_struct_sdna(srna, "Sequence");
 
 	prop = RNA_def_property(srna, "sound", PROP_POINTER, PROP_NONE);
+	RNA_def_property_flag(prop, PROP_EDITABLE);
 	RNA_def_property_struct_type(prop, "Sound");
 	RNA_def_property_ui_text(prop, "Sound", "Sound data-block used by this sequence");
 	RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_Sequence_update");
@@ -2057,12 +2048,6 @@ static void rna_def_sound(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Pan", "Playback panning of the sound (only for Mono sources)");
 	RNA_def_property_float_funcs(prop, NULL, "rna_Sequence_pan_set", NULL);
 	RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_Sequence_update");
-
-	prop = RNA_def_property(srna, "filepath", PROP_STRING, PROP_FILEPATH);
-	RNA_def_property_ui_text(prop, "File", "");
-	RNA_def_property_string_funcs(prop, "rna_Sequence_filepath_get", "rna_Sequence_filepath_length",
-	                              "rna_Sequence_filepath_set");
-	RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_Sequence_filepath_update");
 
 	prop = RNA_def_property(srna, "show_waveform", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "flag", SEQ_AUDIO_DRAW_WAVEFORM);
@@ -2496,6 +2481,22 @@ static void rna_def_colorbalance_modifier(BlenderRNA *brna)
 	RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_SequenceModifier_update");
 }
 
+static void rna_def_whitebalance_modifier(BlenderRNA *brna)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	srna = RNA_def_struct(brna, "WhiteBalanceModifier", "SequenceModifier");
+	RNA_def_struct_sdna(srna, "WhiteBalanceModifierData");
+	RNA_def_struct_ui_text(srna, "WhiteBalanceModifier", "White balance modifier for sequence strip");
+
+	prop = RNA_def_property(srna, "white_value", PROP_FLOAT, PROP_COLOR_GAMMA);
+	RNA_def_property_range(prop, 0.0, 1.0);
+	RNA_def_property_float_sdna(prop, NULL, "white_value");
+	RNA_def_property_ui_text(prop, "White value", "This color defines white in the strip");
+	RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_SequenceModifier_update");
+}
+
 static void rna_def_curves_modifier(BlenderRNA *brna)
 {
 	StructRNA *srna;
@@ -2558,6 +2559,7 @@ static void rna_def_modifiers(BlenderRNA *brna)
 	rna_def_curves_modifier(brna);
 	rna_def_hue_modifier(brna);
 	rna_def_brightcontrast_modifier(brna);
+	rna_def_whitebalance_modifier(brna);
 }
 
 void RNA_def_sequencer(BlenderRNA *brna)

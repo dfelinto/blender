@@ -2186,6 +2186,32 @@ static void ui_but_drop(bContext *C, const wmEvent *event, uiBut *but, uiHandleB
 
 /* ******************* copy and paste ********************  */
 
+static void ui_but_copy_data_path(uiBut *but, const bool full_path)
+{
+	char *id_path;
+
+	if (but->rnapoin.id.data == NULL) {
+		return;
+	}
+
+	if (full_path) {
+		if (but->rnaprop) {
+			id_path = RNA_path_full_property_py_ex(&but->rnapoin, but->rnaprop, but->rnaindex, true);
+		}
+		else {
+			id_path = RNA_path_full_struct_py(&but->rnapoin);
+		}
+	}
+	else {
+		id_path = RNA_path_from_ID_to_property(&but->rnapoin, but->rnaprop);
+	}
+
+	if (id_path) {
+		WM_clipboard_text_set(id_path, false);
+		MEM_freeN(id_path);
+	}
+}
+
 /* c = copy, v = paste */
 static void ui_but_copy_paste(bContext *C, uiBut *but, uiHandleButtonData *data, char mode)
 {
@@ -2226,9 +2252,9 @@ static void ui_but_copy_paste(bContext *C, uiBut *but, uiHandleButtonData *data,
 		}
 		else if (mode == 'c') {
 			/* Get many decimal places, then strip trailing zeros.
-			 * note: too high values start to give strange results (6 or so is ok) */
+			 * note: too high values start to give strange results */
 			char buf_copy[UI_MAX_DRAW_STR];
-			ui_but_string_get_ex(but, buf_copy, sizeof(buf_copy), 6);
+			ui_but_string_get_ex(but, buf_copy, sizeof(buf_copy), UI_PRECISION_FLOAT_MAX);
 			BLI_str_rstrip_float_zero(buf_copy, '\0');
 
 			WM_clipboard_text_set(buf_copy, 0);
@@ -6375,10 +6401,10 @@ static uiBlock *menu_change_shortcut(bContext *C, ARegion *ar, void *arg)
 	uiLayout *layout;
 	uiStyle *style = UI_style_get_dpi();
 	IDProperty *prop = (but->opptr) ? but->opptr->data : NULL;
-	int kmi_id = WM_key_event_operator_id(C, but->optype->idname, but->opcontext, prop, true, &km);
 
-	kmi = WM_keymap_item_find_id(km, kmi_id);
-	
+	kmi = WM_key_event_operator(C, but->optype->idname, but->opcontext, prop, true, &km);
+	BLI_assert(kmi != NULL);
+
 	RNA_pointer_create(&wm->id, &RNA_KeyMapItem, kmi, &ptr);
 	
 	block = UI_block_begin(C, ar, "_popup", UI_EMBOSS);
@@ -6482,9 +6508,10 @@ static void remove_shortcut_func(bContext *C, void *arg1, void *UNUSED(arg2))
 	wmKeyMap *km;
 	wmKeyMapItem *kmi;
 	IDProperty *prop = (but->opptr) ? but->opptr->data : NULL;
-	int kmi_id = WM_key_event_operator_id(C, but->optype->idname, but->opcontext, prop, true, &km);
-	
-	kmi = WM_keymap_item_find_id(km, kmi_id);
+
+	kmi = WM_key_event_operator(C, but->optype->idname, but->opcontext, prop, true, &km);
+	BLI_assert(kmi != NULL);
+
 	WM_keymap_remove_item(km, kmi);
 	
 	but_shortcut_name_func(C, but, 0);
@@ -6727,12 +6754,8 @@ static bool ui_but_menu(bContext *C, uiBut *but)
 		IDProperty *prop = (but->opptr) ? but->opptr->data : NULL;
 		int w = uiLayoutGetWidth(layout);
 		wmKeyMap *km;
-		wmKeyMapItem *kmi = NULL;
 		/* We want to know if this op has a shortcut, be it hotkey or not. */
-		int kmi_id = WM_key_event_operator_id(C, but->optype->idname, but->opcontext, prop, false, &km);
-
-		if (kmi_id)
-			kmi = WM_keymap_item_find_id(km, kmi_id);
+		wmKeyMapItem *kmi = WM_key_event_operator(C, but->optype->idname, but->opcontext, prop, false, &km);
 
 		/* We do have a shortcut, but only keyboard ones are editbale that way... */
 		if (kmi) {
@@ -6838,6 +6861,12 @@ static int ui_do_button(bContext *C, uiBlock *block, uiBut *but, const wmEvent *
 					but = labelbut;
 					data = but->active;
 				}
+			}
+
+			/* special case, copy-data-path */
+			if ((event->type == CKEY) && event->shift) {
+				ui_but_copy_data_path(but, event->alt != 0);
+				return WM_UI_HANDLER_BREAK;
 			}
 
 			ui_but_copy_paste(C, but, data, (event->type == CKEY) ? 'c' : 'v');
@@ -9375,6 +9404,7 @@ static int ui_pie_handler(bContext *C, const wmEvent *event, uiPopupBlockHandle 
 {
 	ARegion *ar;
 	uiBlock *block;
+	uiBut *but;
 	float event_xy[2];
 	double duration;
 	bool is_click_style;
@@ -9394,6 +9424,9 @@ static int ui_pie_handler(bContext *C, const wmEvent *event, uiPopupBlockHandle 
 
 	is_click_style = (block->pie_data.flags & UI_PIE_CLICK_STYLE);
 
+	/* if there's an active modal button, don't check events or outside, except for search menu */
+	but = ui_but_find_active_in_region(ar);
+
 	if (menu->scrolltimer == NULL) {
 		menu->scrolltimer =
 		    WM_event_add_timer(CTX_wm_manager(C), CTX_wm_window(C), TIMER, PIE_MENU_INTERVAL);
@@ -9409,209 +9442,214 @@ static int ui_pie_handler(bContext *C, const wmEvent *event, uiPopupBlockHandle 
 
 	dist = ui_block_calc_pie_segment(block, event_xy);
 
-	if (event->type == TIMER) {
-		if (event->customdata == menu->scrolltimer) {
-			/* deactivate initial direction after a while */
-			if (duration > 0.01 * U.pie_initial_timeout) {
-				block->pie_data.flags &= ~UI_PIE_INITIAL_DIRECTION;
-			}
-
-			/* handle animation */
-			if (!(block->pie_data.flags & UI_PIE_ANIMATION_FINISHED)) {
-				double final_time = 0.01 * U.pie_animation_timeout;
-				float fac = duration / final_time;
-				float pie_radius = U.pie_menu_radius * UI_DPI_FAC;
-
-				if (fac > 1.0f) {
-					fac = 1.0f;
-					block->pie_data.flags |= UI_PIE_ANIMATION_FINISHED;
-				}
-
-				for (uiBut *but = block->buttons.first; but; but = but->next) {
-					if (but->pie_dir != UI_RADIAL_NONE) {
-						float vec[2];
-						float center[2];
-			
-						ui_but_pie_dir(but->pie_dir, vec);
-
-						center[0] = (vec[0] > 0.01f) ? 0.5f : ((vec[0] < -0.01f) ? -0.5f : 0.0f);
-						center[1] = (vec[1] > 0.99f) ? 0.5f : ((vec[1] < -0.99f) ? -0.5f : 0.0f);
-
-						center[0] *= BLI_rctf_size_x(&but->rect);
-						center[1] *= BLI_rctf_size_y(&but->rect);
-						
-						mul_v2_fl(vec, pie_radius);
-						add_v2_v2(vec, center);
-						mul_v2_fl(vec, fac);
-						add_v2_v2(vec, block->pie_data.pie_center_spawned);
-						            
-						BLI_rctf_recenter(&but->rect, vec[0], vec[1]);
-					}
-				}
-				block->pie_data.alphafac = fac;
-
-				ED_region_tag_redraw(ar);
-			}
-		}
-
-		/* check pie velociy here if gesture has ended */
-		if (block->pie_data.flags & UI_PIE_GESTURE_END_WAIT) {
-			float len_sq = 10;
-
-			/* use a time threshold to ensure we leave time to the mouse to move */
-			if (duration - block->pie_data.duration_gesture > 0.02) {
-				len_sq = len_squared_v2v2(event_xy, block->pie_data.last_pos);
-				copy_v2_v2(block->pie_data.last_pos, event_xy);
-				block->pie_data.duration_gesture = duration;
-			}
-
-			if (len_sq < 1.0f) {
-				uiBut *but = ui_but_find_active_in_region(menu->region);
-
-				if (but) {
-					return ui_but_pie_menu_apply(C, menu, but, true);
-				}
-			}
-		}
-	}
-
-	if (event->type == block->pie_data.event && !is_click_style) {
-		if (event->val != KM_RELEASE) {
-			ui_handle_menu_button(C, event, menu);
-
-			if (len_squared_v2v2(event_xy, block->pie_data.pie_center_init) > PIE_CLICK_THRESHOLD_SQ) {
-				block->pie_data.flags |= UI_PIE_DRAG_STYLE;
-			}
-			/* why redraw here? It's simple, we are getting many double click events here.
-			 * Those operate like mouse move events almost */
-			ED_region_tag_redraw(ar);
-		}
-		else {
-			/* distance from initial point */
-			if (!(block->pie_data.flags & UI_PIE_DRAG_STYLE)) {
-				block->pie_data.flags |= UI_PIE_CLICK_STYLE;
-			}
-			else {
-				uiBut *but = ui_but_find_active_in_region(menu->region);
-
-				if (but && (U.pie_menu_confirm > 0) &&
-				    (dist >= U.pie_menu_threshold + U.pie_menu_confirm))
-				{
-					if (but)
-						return ui_but_pie_menu_apply(C, menu, but, true);
-				}
-
-				retval = ui_but_pie_menu_apply(C, menu, but, true);
-
-			}
-		}
+	if (but && button_modal_state(but->active->state)) {
+		retval = ui_handle_menu_button(C, event, menu);
 	}
 	else {
-		/* direction from numpad */
-		RadialDirection num_dir = UI_RADIAL_NONE;
-
-		switch (event->type) {
-			case MOUSEMOVE:
-				if (!is_click_style) {
-					float len_sq = len_squared_v2v2(event_xy, block->pie_data.pie_center_init);
-
-					/* here we use the initial position explicitly */
-					if (len_sq > PIE_CLICK_THRESHOLD_SQ) {
-						block->pie_data.flags |= UI_PIE_DRAG_STYLE;
-					}
-
-					/* here instead, we use the offset location to account for the initial direction timeout */
-					if ((U.pie_menu_confirm > 0) &&
-					    (dist >= U.pie_menu_threshold + U.pie_menu_confirm))
-					{
-						block->pie_data.flags |= UI_PIE_GESTURE_END_WAIT;
-						copy_v2_v2(block->pie_data.last_pos, event_xy);
-						block->pie_data.duration_gesture = duration;
-					}
+		if (event->type == TIMER) {
+			if (event->customdata == menu->scrolltimer) {
+				/* deactivate initial direction after a while */
+				if (duration > 0.01 * U.pie_initial_timeout) {
+					block->pie_data.flags &= ~UI_PIE_INITIAL_DIRECTION;
 				}
 
-				ui_handle_menu_button(C, event, menu);
-				
-				/* mouse move should always refresh the area for pie menus */
-				ED_region_tag_redraw(ar);
-				break;
+				/* handle animation */
+				if (!(block->pie_data.flags & UI_PIE_ANIMATION_FINISHED)) {
+					double final_time = 0.01 * U.pie_animation_timeout;
+					float fac = duration / final_time;
+					float pie_radius = U.pie_menu_radius * UI_DPI_FAC;
 
-			case LEFTMOUSE:
-				if (is_click_style) {
-					if (block->pie_data.flags & UI_PIE_INVALID_DIR) {
-						menu->menuretval = UI_RETURN_CANCEL;
+					if (fac > 1.0f) {
+						fac = 1.0f;
+						block->pie_data.flags |= UI_PIE_ANIMATION_FINISHED;
 					}
-					else {
-						retval = ui_handle_menu_button(C, event, menu);
-					}
-				}
-				break;
 
-			case ESCKEY:
-			case RIGHTMOUSE:
-				menu->menuretval = UI_RETURN_CANCEL;
-				break;
+					for (but = block->buttons.first; but; but = but->next) {
+						if (but->pie_dir != UI_RADIAL_NONE) {
+							float vec[2];
+							float center[2];
 
-			case AKEY:
-			case BKEY:
-			case CKEY:
-			case DKEY:
-			case EKEY:
-			case FKEY:
-			case GKEY:
-			case HKEY:
-			case IKEY:
-			case JKEY:
-			case KKEY:
-			case LKEY:
-			case MKEY:
-			case NKEY:
-			case OKEY:
-			case PKEY:
-			case QKEY:
-			case RKEY:
-			case SKEY:
-			case TKEY:
-			case UKEY:
-			case VKEY:
-			case WKEY:
-			case XKEY:
-			case YKEY:
-			case ZKEY:
-			{
-				if ((event->val  == KM_PRESS || event->val == KM_DBL_CLICK) &&
-				    !IS_EVENT_MOD(event, shift, ctrl, oskey))
-				{
-					for (uiBut *but = block->buttons.first; but; but = but->next) {
-						if (but->menu_key == event->type) {
-							ui_but_pie_button_activate(C, but, menu);
+							ui_but_pie_dir(but->pie_dir, vec);
+
+							center[0] = (vec[0] > 0.01f) ? 0.5f : ((vec[0] < -0.01f) ? -0.5f : 0.0f);
+							center[1] = (vec[1] > 0.99f) ? 0.5f : ((vec[1] < -0.99f) ? -0.5f : 0.0f);
+
+							center[0] *= BLI_rctf_size_x(&but->rect);
+							center[1] *= BLI_rctf_size_y(&but->rect);
+
+							mul_v2_fl(vec, pie_radius);
+							add_v2_v2(vec, center);
+							mul_v2_fl(vec, fac);
+							add_v2_v2(vec, block->pie_data.pie_center_spawned);
+
+							BLI_rctf_recenter(&but->rect, vec[0], vec[1]);
 						}
 					}
+					block->pie_data.alphafac = fac;
+
+					ED_region_tag_redraw(ar);
 				}
-				break;
 			}
+
+			/* check pie velociy here if gesture has ended */
+			if (block->pie_data.flags & UI_PIE_GESTURE_END_WAIT) {
+				float len_sq = 10;
+
+				/* use a time threshold to ensure we leave time to the mouse to move */
+				if (duration - block->pie_data.duration_gesture > 0.02) {
+					len_sq = len_squared_v2v2(event_xy, block->pie_data.last_pos);
+					copy_v2_v2(block->pie_data.last_pos, event_xy);
+					block->pie_data.duration_gesture = duration;
+				}
+
+				if (len_sq < 1.0f) {
+					but = ui_but_find_active_in_region(menu->region);
+
+					if (but) {
+						return ui_but_pie_menu_apply(C, menu, but, true);
+					}
+				}
+			}
+		}
+
+		if (event->type == block->pie_data.event && !is_click_style) {
+			if (event->val != KM_RELEASE) {
+				ui_handle_menu_button(C, event, menu);
+
+				if (len_squared_v2v2(event_xy, block->pie_data.pie_center_init) > PIE_CLICK_THRESHOLD_SQ) {
+					block->pie_data.flags |= UI_PIE_DRAG_STYLE;
+				}
+				/* why redraw here? It's simple, we are getting many double click events here.
+				 * Those operate like mouse move events almost */
+				ED_region_tag_redraw(ar);
+			}
+			else {
+				/* distance from initial point */
+				if (!(block->pie_data.flags & UI_PIE_DRAG_STYLE)) {
+					block->pie_data.flags |= UI_PIE_CLICK_STYLE;
+				}
+				else {
+					but = ui_but_find_active_in_region(menu->region);
+
+					if (but && (U.pie_menu_confirm > 0) &&
+					    (dist >= U.pie_menu_threshold + U.pie_menu_confirm))
+					{
+						if (but)
+							return ui_but_pie_menu_apply(C, menu, but, true);
+					}
+
+					retval = ui_but_pie_menu_apply(C, menu, but, true);
+
+				}
+			}
+		}
+		else {
+			/* direction from numpad */
+			RadialDirection num_dir = UI_RADIAL_NONE;
+
+			switch (event->type) {
+				case MOUSEMOVE:
+					if (!is_click_style) {
+						float len_sq = len_squared_v2v2(event_xy, block->pie_data.pie_center_init);
+
+						/* here we use the initial position explicitly */
+						if (len_sq > PIE_CLICK_THRESHOLD_SQ) {
+							block->pie_data.flags |= UI_PIE_DRAG_STYLE;
+						}
+
+						/* here instead, we use the offset location to account for the initial direction timeout */
+						if ((U.pie_menu_confirm > 0) &&
+						    (dist >= U.pie_menu_threshold + U.pie_menu_confirm))
+						{
+							block->pie_data.flags |= UI_PIE_GESTURE_END_WAIT;
+							copy_v2_v2(block->pie_data.last_pos, event_xy);
+							block->pie_data.duration_gesture = duration;
+						}
+					}
+
+					ui_handle_menu_button(C, event, menu);
+
+					/* mouse move should always refresh the area for pie menus */
+					ED_region_tag_redraw(ar);
+					break;
+
+				case LEFTMOUSE:
+					if (is_click_style) {
+						if (block->pie_data.flags & UI_PIE_INVALID_DIR) {
+							menu->menuretval = UI_RETURN_CANCEL;
+						}
+						else {
+							retval = ui_handle_menu_button(C, event, menu);
+						}
+					}
+					break;
+
+				case ESCKEY:
+				case RIGHTMOUSE:
+					menu->menuretval = UI_RETURN_CANCEL;
+					break;
+
+				case AKEY:
+				case BKEY:
+				case CKEY:
+				case DKEY:
+				case EKEY:
+				case FKEY:
+				case GKEY:
+				case HKEY:
+				case IKEY:
+				case JKEY:
+				case KKEY:
+				case LKEY:
+				case MKEY:
+				case NKEY:
+				case OKEY:
+				case PKEY:
+				case QKEY:
+				case RKEY:
+				case SKEY:
+				case TKEY:
+				case UKEY:
+				case VKEY:
+				case WKEY:
+				case XKEY:
+				case YKEY:
+				case ZKEY:
+				{
+					if ((event->val  == KM_PRESS || event->val == KM_DBL_CLICK) &&
+					    !IS_EVENT_MOD(event, shift, ctrl, oskey))
+					{
+						for (but = block->buttons.first; but; but = but->next) {
+							if (but->menu_key == event->type) {
+								ui_but_pie_button_activate(C, but, menu);
+							}
+						}
+					}
+					break;
+				}
 
 #define CASE_NUM_TO_DIR(n, d) \
 			case (ZEROKEY + n): case (PAD0 + n): \
 				{ if (num_dir == UI_RADIAL_NONE) num_dir = d; } (void)0
 
-			CASE_NUM_TO_DIR(1, UI_RADIAL_SW);
-			CASE_NUM_TO_DIR(2, UI_RADIAL_S);
-			CASE_NUM_TO_DIR(3, UI_RADIAL_SE);
-			CASE_NUM_TO_DIR(4, UI_RADIAL_W);
-			CASE_NUM_TO_DIR(6, UI_RADIAL_E);
-			CASE_NUM_TO_DIR(7, UI_RADIAL_NW);
-			CASE_NUM_TO_DIR(8, UI_RADIAL_N);
-			CASE_NUM_TO_DIR(9, UI_RADIAL_NE);
-			{
-				uiBut *but = ui_block_pie_dir_activate(block, event, num_dir);
-				retval = ui_but_pie_button_activate(C, but, menu);
-				break;
-			}
+				CASE_NUM_TO_DIR(1, UI_RADIAL_SW);
+				CASE_NUM_TO_DIR(2, UI_RADIAL_S);
+				CASE_NUM_TO_DIR(3, UI_RADIAL_SE);
+				CASE_NUM_TO_DIR(4, UI_RADIAL_W);
+				CASE_NUM_TO_DIR(6, UI_RADIAL_E);
+				CASE_NUM_TO_DIR(7, UI_RADIAL_NW);
+				CASE_NUM_TO_DIR(8, UI_RADIAL_N);
+				CASE_NUM_TO_DIR(9, UI_RADIAL_NE);
+				{
+					but = ui_block_pie_dir_activate(block, event, num_dir);
+					retval = ui_but_pie_button_activate(C, but, menu);
+					break;
+				}
 #undef CASE_NUM_TO_DIR
-			default:
-				retval = ui_handle_menu_button(C, event, menu);
-				break;
+				default:
+					retval = ui_handle_menu_button(C, event, menu);
+					break;
+			}
 		}
 	}
 

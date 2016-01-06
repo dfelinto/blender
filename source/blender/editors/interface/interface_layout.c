@@ -923,7 +923,17 @@ void uiItemsFullEnumO(
 			target = uiLayoutColumn(split, layout->align);
 		}
 
-		if (radial) {
+		if (0 && radial) {
+			/* XXX Disabled as temporary workaround!
+			 *
+			 * Normally, we always draw a button for all items even if they're unavailable (we draw invisible
+			 * dummy buttons then), so items are always at the same position. This causes issues with current
+			 * 'Object Mode' pie since more than 8 modes exist now (see T46973).
+			 * Disabling this until more than 8 items per pie are supported (or a better solution is found).
+			 * We should work on that ASAP though.
+			 *
+			 * - Julian (Dec 2015)
+			 */
 			RNA_property_enum_items_gettexted_all(block->evil_C, &ptr, prop, &item_array, NULL, &free);
 		}
 		else {
@@ -973,6 +983,7 @@ void uiItemsFullEnumO(
 				}
 				else {
 					if (radial) {
+						/* invisible dummy button to ensure all items are always at the same position */
 						uiItemS(target);
 					}
 					else {
@@ -1513,7 +1524,7 @@ static void rna_search_cb(const struct bContext *C, void *arg_but, const char *s
 
 #if 0       /* this name is used for a string comparison and can't be modified, TODO */
 			/* if ever enabled, make name_ui be MAX_ID_NAME+1 */
-			name_uiprefix_id(name_ui, id);
+			BKE_id_ui_prefix(name_ui, id);
 #else
 			BLI_strncpy(name_ui, id->name + 2, sizeof(name_ui));
 #endif

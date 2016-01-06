@@ -1180,7 +1180,7 @@ static unsigned char *proxy_thread_next_frame(ProxyQueue *queue, MovieClip *clip
 	return mem;
 }
 
-static void proxy_task_func(TaskPool *pool, void *task_data, int UNUSED(threadid))
+static void proxy_task_func(TaskPool * __restrict pool, void *task_data, int UNUSED(threadid))
 {
 	ProxyThread *data = (ProxyThread *)task_data;
 	ProxyQueue *queue = (ProxyQueue *)BLI_task_pool_userdata(pool);
@@ -1534,7 +1534,7 @@ static int clip_set_2d_cursor_exec(bContext *C, wmOperator *op)
 	bool show_cursor = false;
 
 	show_cursor |= sclip->mode == SC_MODE_MASKEDIT;
-	show_cursor |= sclip->around == V3D_CURSOR;
+	show_cursor |= sclip->around == V3D_AROUND_CURSOR;
 
 	if (!show_cursor) {
 		return OPERATOR_CANCELLED;

@@ -651,7 +651,7 @@ void BKE_scene_init(Scene *sce)
 	}
 	pset->brush[PE_BRUSH_CUT].strength = 100;
 
-	sce->r.ffcodecdata.audio_mixrate = 44100;
+	sce->r.ffcodecdata.audio_mixrate = 48000;
 	sce->r.ffcodecdata.audio_volume = 1.0f;
 	sce->r.ffcodecdata.audio_bitrate = 192;
 	sce->r.ffcodecdata.audio_channels = 2;
@@ -750,6 +750,53 @@ void BKE_scene_init(Scene *sce)
 	copy_v2_fl2(sce->safe_areas.action_center, 15.0f / 100.0f, 5.0f / 100.0f);
 
 	sce->preview = NULL;
+	
+	/* GP Sculpt brushes */
+	{
+		GP_BrushEdit_Settings *gset = &sce->toolsettings->gp_sculpt;
+		GP_EditBrush_Data *gp_brush;
+		
+		gp_brush = &gset->brush[GP_EDITBRUSH_TYPE_SMOOTH];
+		gp_brush->size = 25;
+		gp_brush->strength = 0.3f;
+		gp_brush->flag = GP_EDITBRUSH_FLAG_USE_FALLOFF | GP_EDITBRUSH_FLAG_SMOOTH_PRESSURE;
+		
+		gp_brush = &gset->brush[GP_EDITBRUSH_TYPE_THICKNESS];
+		gp_brush->size = 25;
+		gp_brush->strength = 0.5f;
+		gp_brush->flag = GP_EDITBRUSH_FLAG_USE_FALLOFF;
+		
+		gp_brush = &gset->brush[GP_EDITBRUSH_TYPE_GRAB];
+		gp_brush->size = 50;
+		gp_brush->strength = 0.3f;
+		gp_brush->flag = GP_EDITBRUSH_FLAG_USE_FALLOFF;
+		
+		gp_brush = &gset->brush[GP_EDITBRUSH_TYPE_PUSH];
+		gp_brush->size = 25;
+		gp_brush->strength = 0.3f;
+		gp_brush->flag = GP_EDITBRUSH_FLAG_USE_FALLOFF;
+		
+		gp_brush = &gset->brush[GP_EDITBRUSH_TYPE_TWIST];
+		gp_brush->size = 50;
+		gp_brush->strength = 0.3f; // XXX?
+		gp_brush->flag = GP_EDITBRUSH_FLAG_USE_FALLOFF;
+		
+		gp_brush = &gset->brush[GP_EDITBRUSH_TYPE_PINCH];
+		gp_brush->size = 50;
+		gp_brush->strength = 0.5f; // XXX?
+		gp_brush->flag = GP_EDITBRUSH_FLAG_USE_FALLOFF;
+		
+		gp_brush = &gset->brush[GP_EDITBRUSH_TYPE_RANDOMIZE];
+		gp_brush->size = 25;
+		gp_brush->strength = 0.5f;
+		gp_brush->flag = GP_EDITBRUSH_FLAG_USE_FALLOFF;
+	}
+	
+	/* GP Stroke Placement */
+	sce->toolsettings->gpencil_v3d_align = GP_PROJECT_VIEWSPACE;
+	sce->toolsettings->gpencil_v2d_align = GP_PROJECT_VIEWSPACE;
+	sce->toolsettings->gpencil_seq_align = GP_PROJECT_VIEWSPACE;
+	sce->toolsettings->gpencil_ima_align = GP_PROJECT_VIEWSPACE;
 }
 
 Scene *BKE_scene_add(Main *bmain, const char *name)
@@ -1425,7 +1472,7 @@ static void scene_update_all_bases(EvaluationContext *eval_ctx, Scene *scene, Sc
 	}
 }
 
-static void scene_update_object_func(TaskPool *pool, void *taskdata, int threadid)
+static void scene_update_object_func(TaskPool * __restrict pool, void *taskdata, int threadid)
 {
 /* Disable print for now in favor of summary statistics at the end of update. */
 #define PRINT if (false) printf
@@ -1710,8 +1757,8 @@ static void prepare_mesh_for_viewport_render(Main *bmain, Scene *scene)
 	if (obedit) {
 		Mesh *mesh = obedit->data;
 		if ((obedit->type == OB_MESH) &&
-		    ((obedit->id.flag & LIB_ID_RECALC_ALL) ||
-		     (mesh->id.flag & LIB_ID_RECALC_ALL)))
+		    ((obedit->id.tag & LIB_TAG_ID_RECALC_ALL) ||
+		     (mesh->id.tag & LIB_TAG_ID_RECALC_ALL)))
 		{
 			if (check_rendered_viewport_visible(bmain)) {
 				BMesh *bm = mesh->edit_btmesh->bm;
@@ -1754,7 +1801,7 @@ void BKE_scene_update_tagged(EvaluationContext *eval_ctx, Main *bmain, Scene *sc
 
 	/* removed calls to quick_cache, see pointcache.c */
 	
-	/* clear "LIB_DOIT" flag from all materials, to prevent infinite recursion problems later 
+	/* clear "LIB_TAG_DOIT" flag from all materials, to prevent infinite recursion problems later
 	 * when trying to find materials with drivers that need evaluating [#32017] 
 	 */
 	BKE_main_id_tag_idcode(bmain, ID_MA, false);
@@ -1913,7 +1960,7 @@ void BKE_scene_update_for_newframe_ex(EvaluationContext *eval_ctx, Main *bmain, 
 	}
 #endif
 
-	/* clear "LIB_DOIT" flag from all materials, to prevent infinite recursion problems later 
+	/* clear "LIB_TAG_DOIT" flag from all materials, to prevent infinite recursion problems later
 	 * when trying to find materials with drivers that need evaluating [#32017] 
 	 */
 	BKE_main_id_tag_idcode(bmain, ID_MA, false);

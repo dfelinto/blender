@@ -42,10 +42,10 @@ extern "C" {
  * and keep comment above the defines.
  * Use STRINGIFY() rather than defining with quotes */
 #define BLENDER_VERSION         276
-#define BLENDER_SUBVERSION      2
+#define BLENDER_SUBVERSION      5
 /* Several breakages with 270, e.g. constraint deg vs rad */
 #define BLENDER_MINVERSION      270
-#define BLENDER_MINSUBVERSION   5
+#define BLENDER_MINSUBVERSION   6
 
 /* used by packaging tools */
 /* can be left blank, otherwise a,b,c... etc with no quotes */

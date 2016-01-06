@@ -42,9 +42,11 @@
 #include "BLI_dynstr.h"
 #include "BLI_ghash.h"
 
+#include "GPU_extensions.h"
 #include "GPU_glew.h"
 #include "GPU_material.h"
-#include "GPU_extensions.h"
+#include "GPU_shader.h"
+#include "GPU_texture.h"
 
 #include "BLI_sys_types.h" /* for intptr_t support */
 
@@ -829,10 +831,11 @@ static char *code_generate_geometry(ListBase *nodes, bool use_opensubdiv)
 			for (input = node->inputs.first; input; input = input->next) {
 				if (input->source == GPU_SOURCE_ATTRIB && input->attribfirst) {
 					if (input->attribtype == CD_MTFACE) {
-						BLI_dynstr_appendf(ds, "%s %s var%d;\n",
+						BLI_dynstr_appendf(ds, "%s %s var%d%s;\n",
 						                   GLEW_VERSION_3_0 ? "in" : "varying",
 						                   GPU_DATATYPE_STR[input->type],
-						                   input->attribid);
+						                   input->attribid,
+						                   GLEW_VERSION_3_0 ? "[]" : "");
 						BLI_dynstr_appendf(ds, "uniform int fvar%d_offset;\n",
 						                   input->attribid);
 					}
@@ -997,18 +1000,21 @@ void GPU_pass_bind(GPUPass *pass, double time, int mipmap)
 
 	GPU_shader_bind(shader);
 
-	/* now bind the textures */
+	/* create the textures */
 	for (input = inputs->first; input; input = input->next) {
 		if (input->ima)
 			input->tex = GPU_texture_from_blender(input->ima, input->iuser, input->image_isdata, input->image_isenvmap, time, mipmap);
 		else if (input->prv)
 			input->tex = GPU_texture_from_preview(input->prv, mipmap);
+	}
 
+	/* bind the textures, in second loop so texture binding during
+	 * create doesn't overwrite already bound textures */
+	for (input = inputs->first; input; input = input->next) {
 		if (input->tex && input->bindtex) {
 			GPU_texture_bind(input->tex, input->texid);
 			GPU_shader_uniform_texture(shader, input->shaderloc, input->tex);
 		}
-			
 	}
 }
 

@@ -41,6 +41,8 @@
 #  include "opensubdiv_device_context_cuda.h"
 #endif  /* OPENSUBDIV_HAS_CUDA */
 
+static bool gpu_legacy_support_global = false;
+
 int openSubdiv_getAvailableEvaluators(void)
 {
 	if (!openSubdiv_supportGPUDisplay()) {
@@ -66,8 +68,7 @@ int openSubdiv_getAvailableEvaluators(void)
 #endif  /* OPENSUBDIV_HAS_OPENCL */
 
 #ifdef OPENSUBDIV_HAS_GLSL_TRANSFORM_FEEDBACK
-	if (GLEW_VERSION_3_0 || GLEW_ARB_texture_buffer_object) {
-		// TODO(merwin): remove extension check once Blender moves to 3.2 core
+	if (GLEW_VERSION_4_1) {
 		flags |= OPENSUBDIV_EVALUATOR_GLSL_TRANSFORM_FEEDBACK;
 	}
 #endif  /* OPENSUBDIV_HAS_GLSL_TRANSFORM_FEEDBACK */
@@ -81,13 +82,19 @@ int openSubdiv_getAvailableEvaluators(void)
 	return flags;
 }
 
-void openSubdiv_init(void)
+void openSubdiv_init(bool gpu_legacy_support)
 {
 	/* Ensure all OpenGL strings are cached. */
 	(void)openSubdiv_getAvailableEvaluators();
+	gpu_legacy_support_global = gpu_legacy_support;
 }
 
 void openSubdiv_cleanup(void)
 {
 	openSubdiv_osdGLDisplayDeinit();
+}
+
+bool openSubdiv_gpu_legacy_support(void)
+{
+	return gpu_legacy_support_global;
 }

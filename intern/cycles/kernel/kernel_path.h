@@ -452,7 +452,7 @@ ccl_device bool kernel_path_subsurface_scatter(
 		 * the second one should be converted to a diffuse BSDF to
 		 * avoid this.
 		 */
-		kernel_assert(ss_indirect->num_rays == 0);
+		kernel_assert(!ss_indirect->tracing);
 
 		uint lcg_state = lcg_state_init(rng, state, 0x68bc21eb);
 
@@ -485,9 +485,10 @@ ccl_device bool kernel_path_subsurface_scatter(
 			                               sc,
 			                               false);
 
-			PathState *hit_state = &ss_indirect->state;
+			PathState *hit_state = &ss_indirect->state[ss_indirect->num_rays];
 			Ray *hit_ray = &ss_indirect->rays[ss_indirect->num_rays];
 			float3 *hit_tp = &ss_indirect->throughputs[ss_indirect->num_rays];
+			PathRadiance *hit_L = &ss_indirect->L[ss_indirect->num_rays];
 
 			*hit_state = *state;
 			*hit_ray = *ray;
@@ -495,20 +496,42 @@ ccl_device bool kernel_path_subsurface_scatter(
 
 			hit_state->rng_offset += PRNG_BOUNCE_NUM;
 
-			kernel_path_surface_connect_light(kg, rng, sd, *hit_tp, state, L);
+			path_radiance_init(hit_L, kernel_data.film.use_light_pass);
+			hit_L->direct_throughput = L->direct_throughput;
+			path_radiance_copy_indirect(hit_L, L);
+
+			kernel_path_surface_connect_light(kg, rng, sd, *hit_tp, state, hit_L);
 
 			if(kernel_path_surface_bounce(kg,
 			                              rng,
 			                              sd,
 			                              hit_tp,
 			                              hit_state,
-			                              L,
+			                              hit_L,
 			                              hit_ray))
 			{
 #ifdef __LAMP_MIS__
 				hit_state->ray_t = 0.0f;
 #endif
+
+#ifdef __VOLUME__
+				if(ss_indirect->need_update_volume_stack) {
+					Ray volume_ray = *ray;
+					/* Setup ray from previous surface point to the new one. */
+					volume_ray.D = normalize_len(hit_ray->P - volume_ray.P,
+					                             &volume_ray.t);
+
+					kernel_volume_stack_update_for_subsurface(
+					    kg,
+					    &volume_ray,
+					    hit_state->volume_stack);
+				}
+#endif
+				path_radiance_reset_indirect(L);
 				ss_indirect->num_rays++;
+			}
+			else {
+				path_radiance_accum_sample(L, hit_L, 1);
 			}
 		}
 		return true;
@@ -516,46 +539,54 @@ ccl_device bool kernel_path_subsurface_scatter(
 	return false;
 }
 
+ccl_device_inline void kernel_path_subsurface_init_indirect(
+        SubsurfaceIndirectRays *ss_indirect)
+{
+	ss_indirect->tracing = false;
+	ss_indirect->num_rays = 0;
+}
+
+ccl_device void kernel_path_subsurface_accum_indirect(
+        SubsurfaceIndirectRays *ss_indirect,
+        PathRadiance *L)
+{
+	if(ss_indirect->tracing) {
+		path_radiance_sum_indirect(L);
+		path_radiance_accum_sample(&ss_indirect->direct_L, L, 1);
+		if(ss_indirect->num_rays == 0) {
+			*L = ss_indirect->direct_L;
+		}
+	}
+}
+
 ccl_device void kernel_path_subsurface_setup_indirect(
         KernelGlobals *kg,
         SubsurfaceIndirectRays *ss_indirect,
-        PathRadiance *L,
         PathState *state,
-        Ray *orig_ray,
         Ray *ray,
+        PathRadiance *L,
         float3 *throughput)
 {
+	if(!ss_indirect->tracing) {
+		ss_indirect->direct_L = *L;
+	}
+	ss_indirect->tracing = true;
+
 	/* Setup state, ray and throughput for indirect SSS rays. */
 	ss_indirect->num_rays--;
 
 	Ray *indirect_ray = &ss_indirect->rays[ss_indirect->num_rays];
+	PathRadiance *indirect_L = &ss_indirect->L[ss_indirect->num_rays];
 
-	*state = ss_indirect->state;
+	*state = ss_indirect->state[ss_indirect->num_rays];
+	*ray = *indirect_ray;
+	*L = *indirect_L;
 	*throughput = ss_indirect->throughputs[ss_indirect->num_rays];
 
-#ifdef __VOLUME__
-	if(ss_indirect->need_update_volume_stack) {
-		Ray volume_ray = *orig_ray;
-
-		/* Setup ray from previous surface point to the new one. */
-		volume_ray.D = normalize_len(indirect_ray->P - volume_ray.P,
-		                             &volume_ray.t);
-
-		kernel_volume_stack_update_for_subsurface(kg,
-		                                          &volume_ray,
-		                                          state->volume_stack);
-	}
-#endif
-
-	*ray = *indirect_ray;
-
-	/* For render passes, sum and reset indirect light pass variables
-	 * for the next samples.
-	 */
-	path_radiance_sum_indirect(L);
-	path_radiance_reset_indirect(L);
+	state->rng_offset += ss_indirect->num_rays * PRNG_BOUNCE_NUM;
 }
-#endif
+
+#endif  /* __SUBSURFACE__ */
 
 ccl_device float4 kernel_path_integrate(KernelGlobals *kg, RNG *rng, int sample, Ray ray, ccl_global float *buffer)
 {
@@ -576,13 +607,7 @@ ccl_device float4 kernel_path_integrate(KernelGlobals *kg, RNG *rng, int sample,
 
 #ifdef __SUBSURFACE__
 	SubsurfaceIndirectRays ss_indirect;
-	ss_indirect.num_rays = 0;
-
-	/* TODO(sergey): Avoid having explicit copy of the pre-subsurface scatter
-	 * ray by storing an updated version of state in the ss_indirect which will
-	 * be updated to the new volume stack.
-	 */
-	Ray ss_orig_ray;
+	kernel_path_subsurface_init_indirect(&ss_indirect);
 
 	for(;;) {
 #endif
@@ -833,11 +858,10 @@ ccl_device float4 kernel_path_integrate(KernelGlobals *kg, RNG *rng, int sample,
 			                                  &throughput,
 			                                  &ss_indirect))
 			{
-				ss_orig_ray = ray;
 				break;
 			}
 		}
-#endif
+#endif  /* __SUBSURFACE__ */
 
 		/* direct lighting */
 		kernel_path_surface_connect_light(kg, rng, &sd, throughput, &state, &L);
@@ -848,23 +872,24 @@ ccl_device float4 kernel_path_integrate(KernelGlobals *kg, RNG *rng, int sample,
 	}
 
 #ifdef __SUBSURFACE__
+		kernel_path_subsurface_accum_indirect(&ss_indirect, &L);
+
 		/* Trace indirect subsurface rays by restarting the loop. this uses less
 		 * stack memory than invoking kernel_path_indirect.
 		 */
 		if(ss_indirect.num_rays) {
 			kernel_path_subsurface_setup_indirect(kg,
 			                                      &ss_indirect,
-			                                      &L,
 			                                      &state,
-			                                      &ss_orig_ray,
 			                                      &ray,
+			                                      &L,
 			                                      &throughput);
 		}
 		else {
 			break;
 		}
 	}
-#endif
+#endif  /* __SUBSURFACE__ */
 
 	float3 L_sum = path_radiance_clamp_and_sum(kg, &L);
 

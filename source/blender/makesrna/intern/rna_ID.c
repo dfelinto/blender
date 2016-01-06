@@ -90,9 +90,11 @@ EnumPropertyItem rna_enum_id_type_items[] = {
 #include "BKE_font.h"
 #include "BKE_idprop.h"
 #include "BKE_library.h"
+#include "BKE_library_query.h"
 #include "BKE_animsys.h"
 #include "BKE_material.h"
 #include "BKE_depsgraph.h"
+#include "BKE_global.h"  /* XXX, remove me */
 
 #include "WM_api.h"
 
@@ -113,7 +115,7 @@ void rna_ID_name_set(PointerRNA *ptr, const char *value)
 {
 	ID *id = (ID *)ptr->data;
 	BLI_strncpy_utf8(id->name + 2, value, sizeof(id->name) - 2);
-	test_idbutton(id->name);
+	BLI_libblock_ensure_unique_name(G.main, id->name);
 }
 
 static int rna_ID_name_editable(PointerRNA *ptr)
@@ -934,24 +936,24 @@ static void rna_def_ID(BlenderRNA *brna)
 	RNA_def_property_boolean_funcs(prop, NULL, "rna_ID_fake_user_set");
 
 	prop = RNA_def_property(srna, "tag", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "flag", LIB_DOIT);
+	RNA_def_property_boolean_sdna(prop, NULL, "tag", LIB_TAG_DOIT);
 	RNA_def_property_flag(prop, PROP_LIB_EXCEPTION);
 	RNA_def_property_ui_text(prop, "Tag",
 	                         "Tools can use this to tag data for their own purposes "
 	                         "(initial state is undefined)");
 
 	prop = RNA_def_property(srna, "is_updated", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "flag", LIB_ID_RECALC);
+	RNA_def_property_boolean_sdna(prop, NULL, "tag", LIB_TAG_ID_RECALC);
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 	RNA_def_property_ui_text(prop, "Is Updated", "Datablock is tagged for recalculation");
 
 	prop = RNA_def_property(srna, "is_updated_data", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "flag", LIB_ID_RECALC_DATA);
+	RNA_def_property_boolean_sdna(prop, NULL, "tag", LIB_TAG_ID_RECALC_DATA);
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 	RNA_def_property_ui_text(prop, "Is Updated Data", "Datablock data is tagged for recalculation");
 
 	prop = RNA_def_property(srna, "is_library_indirect", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "flag", LIB_INDIRECT);
+	RNA_def_property_boolean_sdna(prop, NULL, "tag", LIB_TAG_INDIRECT);
 	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 	RNA_def_property_ui_text(prop, "Is Indirect", "Is this ID block linked indirectly");
 
@@ -974,6 +976,14 @@ static void rna_def_ID(BlenderRNA *brna)
 	func = RNA_def_function(srna, "user_clear", "rna_ID_user_clear");
 	RNA_def_function_ui_description(func, "Clear the user count of a data-block so its not saved, "
 	                                "on reload the data will be removed");
+
+	func = RNA_def_function(srna, "user_of_id", "BKE_library_ID_use_ID");
+	RNA_def_function_ui_description(func, "Count the number of times that ID uses/references given one");
+	parm = RNA_def_pointer(func, "id", "ID", "", "ID to count usages");
+	RNA_def_property_flag(parm, PROP_NEVER_NULL);
+	parm = RNA_def_int(func, "count", 0, 0, INT_MAX,
+	                   "", "Number of usages/references of given id by current datablock", 0, INT_MAX);
+	RNA_def_function_return(func, parm);
 
 	func = RNA_def_function(srna, "animation_data_create", "rna_ID_animation_data_create");
 	RNA_def_function_flag(func, FUNC_USE_MAIN);

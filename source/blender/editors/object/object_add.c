@@ -261,10 +261,7 @@ static void view_align_update(struct Main *UNUSED(main), struct Scene *UNUSED(sc
 
 void ED_object_add_unit_props(wmOperatorType *ot)
 {
-	PropertyRNA *prop;
-
-	prop = RNA_def_float(ot->srna, "radius", 1.0f, 0.0, OBJECT_ADD_SIZE_MAXF, "Radius", "", 0.001, 100.00);
-	RNA_def_property_subtype(prop, PROP_DISTANCE);
+	RNA_def_float_distance(ot->srna, "radius", 1.0f, 0.0, OBJECT_ADD_SIZE_MAXF, "Radius", "", 0.001, 100.00);
 }
 
 void ED_object_add_generic_props(wmOperatorType *ot, bool do_editmode)
@@ -291,6 +288,11 @@ void ED_object_add_generic_props(wmOperatorType *ot, bool do_editmode)
 
 	prop = RNA_def_boolean_layer_member(ot->srna, "layers", 20, NULL, "Layer", "");
 	RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
+}
+
+void ED_object_add_mesh_props(wmOperatorType *ot)
+{
+	RNA_def_boolean(ot->srna, "calc_uvs", false, "Generate UVs", "Generate a default UV map");
 }
 
 bool ED_object_add_generic_get_opts(bContext *C, wmOperator *op, const char view_align_axis,
@@ -1157,12 +1159,12 @@ static int object_delete_exec(bContext *C, wmOperator *op)
 		return OPERATOR_CANCELLED;
 
 	/* delete has to handle all open scenes */
-	BKE_main_id_flag_listbase(&bmain->scene, LIB_DOIT, 1);
+	BKE_main_id_flag_listbase(&bmain->scene, LIB_TAG_DOIT, 1);
 	for (win = wm->windows.first; win; win = win->next) {
 		scene = win->screen->scene;
 		
-		if (scene->id.flag & LIB_DOIT) {
-			scene->id.flag &= ~LIB_DOIT;
+		if (scene->id.tag & LIB_TAG_DOIT) {
+			scene->id.tag &= ~LIB_TAG_DOIT;
 			
 			DAG_relations_tag_update(bmain);
 
@@ -1543,7 +1545,7 @@ static int convert_exec(bContext *C, wmOperator *op)
 
 			/* flag data thats not been edited (only needed for !keep_original) */
 			if (ob->data) {
-				((ID *)ob->data)->flag |= LIB_DOIT;
+				((ID *)ob->data)->tag |= LIB_TAG_DOIT;
 			}
 
 			/* possible metaball basis is not in this scene */
@@ -1789,7 +1791,7 @@ static int convert_exec(bContext *C, wmOperator *op)
 
 		if (!keep_original && (ob->flag & OB_DONE)) {
 			DAG_id_tag_update(&ob->id, OB_RECALC_DATA);
-			((ID *)ob->data)->flag &= ~LIB_DOIT; /* flag not to convert this datablock again */
+			((ID *)ob->data)->tag &= ~LIB_TAG_DOIT; /* flag not to convert this datablock again */
 		}
 	}
 	CTX_DATA_END;

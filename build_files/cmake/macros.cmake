@@ -103,6 +103,23 @@ macro(file_list_suffix
 
 endmacro()
 
+if(UNIX AND NOT APPLE)
+	macro(find_package_static)
+		set(_cmake_find_library_suffixes_back ${CMAKE_FIND_LIBRARY_SUFFIXES})
+		set(CMAKE_FIND_LIBRARY_SUFFIXES .a ${CMAKE_FIND_LIBRARY_SUFFIXES})
+		find_package(${ARGV})
+		set(CMAKE_FIND_LIBRARY_SUFFIXES ${_cmake_find_library_suffixes_back})
+		unset(_cmake_find_library_suffixes_back)
+	endmacro()
+
+	macro(find_library_static)
+		set(_cmake_find_library_suffixes_back ${CMAKE_FIND_LIBRARY_SUFFIXES})
+		set(CMAKE_FIND_LIBRARY_SUFFIXES .a ${CMAKE_FIND_LIBRARY_SUFFIXES})
+		find_library(${ARGV})
+		set(CMAKE_FIND_LIBRARY_SUFFIXES ${_cmake_find_library_suffixes_back})
+		unset(_cmake_find_library_suffixes_back)
+	endmacro()
+endif()
 
 function(target_link_libraries_optimized
 	TARGET
@@ -452,6 +469,11 @@ function(setup_liblinks
 	if(WIN32 AND NOT UNIX)
 		target_link_libraries(${target} ${PTHREADS_LIBRARIES})
 	endif()
+	if(UNIX AND NOT APPLE)
+		if(WITH_OPENMP_STATIC)
+			target_link_libraries(${target} ${OpenMP_LIBRARIES})
+		endif()
+	endif()
 
 	# We put CLEW and CUEW here because OPENSUBDIV_LIBRARIES dpeends on them..
 	if(WITH_CYCLES OR WITH_COMPOSITOR OR WITH_OPENSUBDIV)
@@ -574,7 +596,6 @@ function(SETUP_BLENDER_SORTED_LIBS)
 		ge_phys_bullet
 		bf_intern_smoke
 		extern_lzma
-		extern_colamd
 		ge_logic_ketsji
 		extern_recastnavigation
 		ge_logic
@@ -604,12 +625,13 @@ function(SETUP_BLENDER_SORTED_LIBS)
 		cycles_subd
 		bf_intern_raskter
 		bf_intern_opencolorio
+		bf_intern_eigen
 		extern_rangetree
 		extern_wcwidth
-		extern_libmv
+		bf_intern_libmv
 		extern_glog
+		extern_gflags
 		extern_sdlew
-		extern_eigen3
 
 		bf_intern_glew_mx
 	)
@@ -674,10 +696,6 @@ function(SETUP_BLENDER_SORTED_LIBS)
 
 	if(WITH_INTERNATIONAL)
 		list(APPEND BLENDER_SORTED_LIBS bf_intern_locale)
-	endif()
-
-	if(WITH_OPENNL)
-		list_insert_after(BLENDER_SORTED_LIBS "bf_render" "bf_intern_opennl")
 	endif()
 
 	if(WITH_BULLET)
@@ -1192,7 +1210,7 @@ macro(blender_project_hack_post)
 		# MINGW workaround for -ladvapi32 being included which surprisingly causes
 		# string formatting of floats, eg: printf("%.*f", 3, value). to crash blender
 		# with a meaningless stack trace. by overriding this flag we ensure we only
-		# have libs we define and that cmake & scons builds match.
+		# have libs we define.
 		set(CMAKE_C_STANDARD_LIBRARIES "" CACHE STRING "" FORCE)
 		set(CMAKE_CXX_STANDARD_LIBRARIES "" CACHE STRING "" FORCE)
 		mark_as_advanced(

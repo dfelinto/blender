@@ -304,8 +304,9 @@ public:
 		}
 #endif
 
-		if(getenv("CYCLES_CUDA_EXTRA_CFLAGS")) {
-			command += string(" ") + getenv("CYCLES_CUDA_EXTRA_CFLAGS");
+		const char* extra_cflags = getenv("CYCLES_CUDA_EXTRA_CFLAGS");
+		if(extra_cflags) {
+			command += string(" ") + string(extra_cflags);
 		}
 
 #ifdef WITH_CYCLES_DEBUG
@@ -725,6 +726,7 @@ public:
 		CUfunction cuShader;
 		CUdeviceptr d_input = cuda_device_ptr(task.shader_input);
 		CUdeviceptr d_output = cuda_device_ptr(task.shader_output);
+		CUdeviceptr d_output_luma = cuda_device_ptr(task.shader_output_luma);
 
 		/* get kernel function */
 		if(task.shader_eval_type >= SHADER_EVAL_BAKE) {
@@ -746,13 +748,18 @@ public:
 				int shader_w = min(shader_chunk_size, end - shader_x);
 
 				/* pass in parameters */
-				void *args[] = {&d_input,
-								 &d_output,
-								 &task.shader_eval_type,
-								 &shader_x,
-								 &shader_w,
-								 &offset,
-								 &sample};
+				void *args[8];
+				int arg = 0;
+				args[arg++] = &d_input;
+				args[arg++] = &d_output;
+				if(task.shader_eval_type < SHADER_EVAL_BAKE) {
+					args[arg++] = &d_output_luma;
+				}
+				args[arg++] = &task.shader_eval_type;
+				args[arg++] = &shader_x;
+				args[arg++] = &shader_w;
+				args[arg++] = &offset;
+				args[arg++] = &sample;
 
 				/* launch kernel */
 				int threads_per_block;
@@ -829,7 +836,7 @@ public:
 			if(mem.data_type == TYPE_HALF)
 				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F_ARB, pmem.w, pmem.h, 0, GL_RGBA, GL_HALF_FLOAT, NULL);
 			else
-				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, pmem.w, pmem.h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, pmem.w, pmem.h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 			glBindTexture(GL_TEXTURE_2D, 0);

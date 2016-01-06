@@ -525,41 +525,78 @@ BMFace *BM_face_create_verts(
 int bmesh_elem_check(void *element, const char htype)
 {
 	BMHeader *head = element;
-	int err = 0;
+	enum {
+		IS_NULL                                     = (1 << 0),
+		IS_WRONG_TYPE                               = (1 << 1),
+
+		IS_VERT_WRONG_EDGE_TYPE                     = (1 << 2),
+
+		IS_EDGE_NULL_DISK_LINK                      = (1 << 3),
+		IS_EDGE_WRONG_LOOP_TYPE                     = (1 << 4),
+		IS_EDGE_WRONG_FACE_TYPE                     = (1 << 5),
+		IS_EDGE_NULL_RADIAL_LINK                    = (1 << 6),
+		IS_EDGE_ZERO_FACE_LENGTH                    = (1 << 7),
+
+		IS_LOOP_WRONG_FACE_TYPE                     = (1 << 8),
+		IS_LOOP_WRONG_EDGE_TYPE                     = (1 << 9),
+		IS_LOOP_WRONG_VERT_TYPE                     = (1 << 10),
+		IS_LOOP_VERT_NOT_IN_EDGE                    = (1 << 11),
+		IS_LOOP_NULL_CYCLE_LINK                     = (1 << 12),
+		IS_LOOP_ZERO_FACE_LENGTH                    = (1 << 13),
+		IS_LOOP_WRONG_FACE_LENGTH                   = (1 << 14),
+		IS_LOOP_WRONG_RADIAL_LENGTH                 = (1 << 15),
+
+		IS_FACE_NULL_LOOP                           = (1 << 16),
+		IS_FACE_WRONG_LOOP_FACE                     = (1 << 17),
+		IS_FACE_NULL_EDGE                           = (1 << 18),
+		IS_FACE_NULL_VERT                           = (1 << 19),
+		IS_FACE_LOOP_VERT_NOT_IN_EDGE               = (1 << 20),
+		IS_FACE_LOOP_WRONG_RADIAL_LENGTH            = (1 << 21),
+		IS_FACE_LOOP_WRONG_DISK_LENGTH              = (1 << 22),
+		IS_FACE_LOOP_DUPE_LOOP                      = (1 << 23),
+		IS_FACE_LOOP_DUPE_VERT                      = (1 << 24),
+		IS_FACE_LOOP_DUPE_EDGE                      = (1 << 25),
+		IS_FACE_WRONG_LENGTH                        = (1 << 26),
+	} err = 0;
 
 	if (!element)
-		return (1 << 0);
+		return IS_NULL;
 
 	if (head->htype != htype)
-		return (1 << 1);
+		return IS_WRONG_TYPE;
 	
 	switch (htype) {
 		case BM_VERT:
 		{
 			BMVert *v = element;
 			if (v->e && v->e->head.htype != BM_EDGE) {
-				err |= (1 << 2);
+				err |= IS_VERT_WRONG_EDGE_TYPE;
 			}
 			break;
 		}
 		case BM_EDGE:
 		{
 			BMEdge *e = element;
-			if (e->l && e->l->head.htype != BM_LOOP)
-				err |= (1 << 3);
-			if (e->l && e->l->f->head.htype != BM_FACE)
-				err |= (1 << 4);
 			if (e->v1_disk_link.prev == NULL ||
 			    e->v2_disk_link.prev == NULL ||
 			    e->v1_disk_link.next == NULL ||
 			    e->v2_disk_link.next == NULL)
 			{
-				err |= (1 << 5);
+				err |= IS_EDGE_NULL_DISK_LINK;
 			}
-			if (e->l && (e->l->radial_next == NULL || e->l->radial_prev == NULL))
-				err |= (1 << 6);
-			if (e->l && e->l->f->len <= 0)
-				err |= (1 << 7);
+
+			if (e->l && e->l->head.htype != BM_LOOP) {
+				err |= IS_EDGE_WRONG_LOOP_TYPE;
+			}
+			if (e->l && e->l->f->head.htype != BM_FACE) {
+				err |= IS_EDGE_WRONG_FACE_TYPE;
+			}
+			if (e->l && (e->l->radial_next == NULL || e->l->radial_prev == NULL)) {
+				err |= IS_EDGE_NULL_RADIAL_LINK;
+			}
+			if (e->l && e->l->f->len <= 0) {
+				err |= IS_EDGE_ZERO_FACE_LENGTH;
+			}
 			break;
 		}
 		case BM_LOOP:
@@ -567,21 +604,26 @@ int bmesh_elem_check(void *element, const char htype)
 			BMLoop *l = element, *l2;
 			int i;
 
-			if (l->f->head.htype != BM_FACE)
-				err |= (1 << 8);
-			if (l->e->head.htype != BM_EDGE)
-				err |= (1 << 9);
-			if (l->v->head.htype != BM_VERT)
-				err |= (1 << 10);
+			if (l->f->head.htype != BM_FACE) {
+				err |= IS_LOOP_WRONG_FACE_TYPE;
+			}
+			if (l->e->head.htype != BM_EDGE) {
+				err |= IS_LOOP_WRONG_EDGE_TYPE;
+			}
+			if (l->v->head.htype != BM_VERT) {
+				err |= IS_LOOP_WRONG_VERT_TYPE;
+			}
 			if (!BM_vert_in_edge(l->e, l->v)) {
 				fprintf(stderr, "%s: fatal bmesh error (vert not in edge)! (bmesh internal error)\n", __func__);
-				err |= (1 << 11);
+				err |= IS_LOOP_VERT_NOT_IN_EDGE;
 			}
 
-			if (l->radial_next == NULL || l->radial_prev == NULL)
-				err |= (1 << 12);
-			if (l->f->len <= 0)
-				err |= (1 << 13);
+			if (l->radial_next == NULL || l->radial_prev == NULL) {
+				err |= IS_LOOP_NULL_CYCLE_LINK;
+			}
+			if (l->f->len <= 0) {
+				err |= IS_LOOP_ZERO_FACE_LENGTH;
+			}
 
 			/* validate boundary loop -- invalid for hole loops, of course,
 			 * but we won't be allowing those for a while yet */
@@ -595,11 +637,13 @@ int bmesh_elem_check(void *element, const char htype)
 				i++;
 			} while ((l2 = l2->next) != l);
 
-			if (i != l->f->len || l2 != l)
-				err |= (1 << 14);
+			if (i != l->f->len || l2 != l) {
+				err |= IS_LOOP_WRONG_FACE_LENGTH;
+			}
 
-			if (!bmesh_radial_validate(bmesh_radial_length(l), l))
-				err |= (1 << 15);
+			if (!bmesh_radial_validate(bmesh_radial_length(l), l)) {
+				err |= IS_LOOP_WRONG_RADIAL_LENGTH;
+			}
 
 			break;
 		}
@@ -616,36 +660,73 @@ int bmesh_elem_check(void *element, const char htype)
 			if (!f->l_first)
 #endif
 			{
-				err |= (1 << 16);
+				err |= IS_FACE_NULL_LOOP;
 			}
 			l_iter = l_first = BM_FACE_FIRST_LOOP(f);
 			do {
 				if (l_iter->f != f) {
 					fprintf(stderr, "%s: loop inside one face points to another! (bmesh internal error)\n", __func__);
-					err |= (1 << 17);
+					err |= IS_FACE_WRONG_LOOP_FACE;
 				}
 
-				if (!l_iter->e)
-					err |= (1 << 18);
-				if (!l_iter->v)
-					err |= (1 << 19);
+				if (!l_iter->e) {
+					err |= IS_FACE_NULL_EDGE;
+				}
+				if (!l_iter->v) {
+					err |= IS_FACE_NULL_VERT;
+				}
 				if (l_iter->e && l_iter->v) {
-					if (!BM_vert_in_edge(l_iter->e, l_iter->v) || !BM_vert_in_edge(l_iter->e, l_iter->next->v)) {
-						err |= (1 << 20);
+					if (!BM_vert_in_edge(l_iter->e, l_iter->v) ||
+					    !BM_vert_in_edge(l_iter->e, l_iter->next->v))
+					{
+						err |= IS_FACE_LOOP_VERT_NOT_IN_EDGE;
 					}
 
-					if (!bmesh_radial_validate(bmesh_radial_length(l_iter), l_iter))
-						err |= (1 << 21);
+					if (!bmesh_radial_validate(bmesh_radial_length(l_iter), l_iter)) {
+						err |= IS_FACE_LOOP_WRONG_RADIAL_LENGTH;
+					}
 
-					if (!bmesh_disk_count(l_iter->v) || !bmesh_disk_count(l_iter->next->v))
-						err |= (1 << 22);
+					if (bmesh_disk_count_ex(l_iter->v, 2) < 2) {
+						err |= IS_FACE_LOOP_WRONG_DISK_LENGTH;
+					}
+				}
+
+				/* check for duplicates */
+				if (BM_ELEM_API_FLAG_TEST(l_iter, _FLAG_ELEM_CHECK)) {
+					err |= IS_FACE_LOOP_DUPE_LOOP;
+				}
+				BM_ELEM_API_FLAG_ENABLE(l_iter, _FLAG_ELEM_CHECK);
+				if (l_iter->v) {
+					if (BM_ELEM_API_FLAG_TEST(l_iter->v, _FLAG_ELEM_CHECK)) {
+						err |= IS_FACE_LOOP_DUPE_VERT;
+					}
+					BM_ELEM_API_FLAG_ENABLE(l_iter->v, _FLAG_ELEM_CHECK);
+				}
+				if (l_iter->e) {
+					if (BM_ELEM_API_FLAG_TEST(l_iter->e, _FLAG_ELEM_CHECK)) {
+						err |= IS_FACE_LOOP_DUPE_EDGE;
+					}
+					BM_ELEM_API_FLAG_ENABLE(l_iter->e, _FLAG_ELEM_CHECK);
 				}
 
 				len++;
 			} while ((l_iter = l_iter->next) != l_first);
 
-			if (len != f->len)
-				err |= (1 << 23);
+			/* cleanup duplicates flag */
+			l_iter = l_first = BM_FACE_FIRST_LOOP(f);
+			do {
+				BM_ELEM_API_FLAG_DISABLE(l_iter, _FLAG_ELEM_CHECK);
+				if (l_iter->v) {
+					BM_ELEM_API_FLAG_DISABLE(l_iter->v, _FLAG_ELEM_CHECK);
+				}
+				if (l_iter->e) {
+					BM_ELEM_API_FLAG_DISABLE(l_iter->e, _FLAG_ELEM_CHECK);
+				}
+			} while ((l_iter = l_iter->next) != l_first);
+
+			if (len != f->len) {
+				err |= IS_FACE_WRONG_LENGTH;
+			}
 			break;
 		}
 		default:
@@ -823,14 +904,71 @@ void BM_face_kill(BMesh *bm, BMFace *f)
 
 	bm_kill_only_face(bm, f);
 }
+
+/**
+ * A version of #BM_face_kill which removes edges and verts
+ * which have no remaining connected geometry.
+ */
+void BM_face_kill_loose(BMesh *bm, BMFace *f)
+{
+#ifdef USE_BMESH_HOLES
+	BMLoopList *ls, *ls_next;
+#endif
+
+	BM_CHECK_ELEMENT(f);
+
+#ifdef USE_BMESH_HOLES
+	for (ls = f->loops.first; ls; ls = ls_next)
+#else
+	if (f->l_first)
+#endif
+	{
+		BMLoop *l_iter, *l_next, *l_first;
+
+#ifdef USE_BMESH_HOLES
+		ls_next = ls->next;
+		l_iter = l_first = ls->first;
+#else
+		l_iter = l_first = f->l_first;
+#endif
+
+		do {
+			BMEdge *e;
+			l_next = l_iter->next;
+
+			e = l_iter->e;
+			bmesh_radial_loop_remove(l_iter, e);
+			bm_kill_only_loop(bm, l_iter);
+
+			if (e->l == NULL) {
+				BMVert *v1 = e->v1, *v2 = e->v2;
+
+				bmesh_disk_edge_remove(e, e->v1);
+				bmesh_disk_edge_remove(e, e->v2);
+				bm_kill_only_edge(bm, e);
+
+				if (v1->e == NULL) {
+					bm_kill_only_vert(bm, v1);
+				}
+				if (v2->e == NULL) {
+					bm_kill_only_vert(bm, v2);
+				}
+			}
+		} while ((l_iter = l_next) != l_first);
+
+#ifdef USE_BMESH_HOLES
+		BLI_mempool_free(bm->looplistpool, ls);
+#endif
+	}
+
+	bm_kill_only_face(bm, f);
+}
+
 /**
  * kills \a e and all faces that use it.
  */
 void BM_edge_kill(BMesh *bm, BMEdge *e)
 {
-
-	bmesh_disk_edge_remove(e, e->v1);
-	bmesh_disk_edge_remove(e, e->v2);
 
 	if (e->l) {
 		BMLoop *l = e->l, *lnext, *startl = e->l;
@@ -849,6 +987,9 @@ void BM_edge_kill(BMesh *bm, BMEdge *e)
 			l = lnext;
 		} while (l != startl);
 	}
+
+	bmesh_disk_edge_remove(e, e->v1);
+	bmesh_disk_edge_remove(e, e->v2);
 	
 	bm_kill_only_edge(bm, e);
 }
@@ -2436,6 +2577,30 @@ void BM_vert_separate_hflag(
 
 	if (edges_separate) {
 		bmesh_vert_separate__cleanup(bm, edges_separate);
+	}
+}
+
+void BM_vert_separate_wire_hflag(
+        BMesh *UNUSED(bm), BMVert *v_dst, BMVert *v_src,
+        const char hflag)
+{
+	LinkNode *edges_hflag = NULL;
+	BMEdge *e_iter, *e_first;
+
+	e_iter = e_first = v_src->e;
+	do {
+		if (BM_elem_flag_test(e_iter, hflag)) {
+			if (BM_edge_is_wire(e_iter)) {
+				BLI_linklist_prepend_alloca(&edges_hflag, e_iter);
+			}
+		}
+	} while ((e_iter = BM_DISK_EDGE_NEXT(e_iter, v_src)) != e_first);
+
+	if (edges_hflag) {
+		do {
+			e_iter = edges_hflag->link;
+			bmesh_disk_vert_replace(e_iter, v_dst, v_src);
+		} while ((edges_hflag = edges_hflag->next));
 	}
 }
 

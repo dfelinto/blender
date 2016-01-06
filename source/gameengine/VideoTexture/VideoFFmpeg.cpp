@@ -34,7 +34,10 @@
 // INT64_C fix for some linux machines (C99ism)
 #ifndef __STDC_CONSTANT_MACROS
 #define __STDC_CONSTANT_MACROS
+#ifdef  __STDC_CONSTANT_MACROS  /* quiet warning */
 #endif
+#endif
+
 #include <stdint.h>
 
 
@@ -1024,11 +1027,11 @@ AVFrame *VideoFFmpeg::grabFrame(long position)
 			AVFrame *input = m_frame;
 			short counter = 0;
 
-			/* While the data is not read properly (png, tiffs, etc formats may need several pass)*/
-			while ((input->data[0] == 0 && input->data[1] == 0 && input->data[2] == 0 && input->data[3] == 0) && counter < 10) {
+			/* If m_isImage, while the data is not read properly (png, tiffs, etc formats may need several pass), else don't need while loop*/
+			do {
 				avcodec_decode_video2(m_codecCtx, m_frame, &frameFinished, &packet);
 				counter++;
-			}
+			} while ((input->data[0] == 0 && input->data[1] == 0 && input->data[2] == 0 && input->data[3] == 0) && counter < 10 && m_isImage);
 
 			// remember dts to compute exact frame number
 			dts = packet.dts;

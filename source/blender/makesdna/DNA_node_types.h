@@ -779,7 +779,7 @@ typedef struct NodeTexMusgrave {
 typedef struct NodeTexWave {
 	NodeTexBase base;
 	int wave_type;
-	int pad;
+	int wave_profile;
 } NodeTexWave;
 
 typedef struct NodeTexMagic {
@@ -972,6 +972,9 @@ typedef struct NodeSunBeams {
 /* wave texture */
 #define SHD_WAVE_BANDS		0
 #define SHD_WAVE_RINGS		1
+
+#define SHD_WAVE_PROFILE_SIN	0
+#define SHD_WAVE_PROFILE_SAW	1
 
 /* sky texture */
 #define SHD_SKY_OLD		0

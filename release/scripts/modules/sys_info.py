@@ -21,7 +21,7 @@
 # classes for extracting info from blenders internal classes
 
 
-def write_sysinfo(op):
+def write_sysinfo(filepath):
     import sys
 
     import textwrap
@@ -29,14 +29,6 @@ def write_sysinfo(op):
 
     import bpy
     import bgl
-
-    output_filename = "system-info.txt"
-
-    output = bpy.data.texts.get(output_filename)
-    if output:
-        output.clear()
-    else:
-        output = bpy.data.texts.new(name=output_filename)
 
     # pretty repr
     def prepr(v):
@@ -48,6 +40,8 @@ def write_sysinfo(op):
             r = r[1:-1]
         return r
 
+
+    output = open(filepath, 'w', encoding="utf-8")
 
     header = "= Blender %s System Information =\n" % bpy.app.version_string
     lilies = "%s\n\n" % ((len(header) - 1) * "=")
@@ -170,8 +164,7 @@ def write_sysinfo(op):
         output.write("version:\t%r\n" % (bgl.glGetString(bgl.GL_VERSION)))
         output.write("extensions:\n")
 
-        glext = bgl.glGetString(bgl.GL_EXTENSIONS)
-        glext = textwrap.wrap(glext, 70)
+        glext = sorted(bgl.glGetString(bgl.GL_EXTENSIONS).split())
         for l in glext:
             output.write("\t%s\n" % l)
 
@@ -179,29 +172,31 @@ def write_sysinfo(op):
         limit = bgl.Buffer(bgl.GL_INT, 1)
         bgl.glGetIntegerv(bgl.GL_MAX_TEXTURE_UNITS, limit)
         output.write("Maximum Fixed Function Texture Units:\t%d\n" % limit[0])
+        bgl.glGetIntegerv(bgl.GL_MAX_ELEMENTS_VERTICES, limit)
+        output.write("Maximum DrawElements Vertices:\t%d\n" % limit[0])
+        bgl.glGetIntegerv(bgl.GL_MAX_ELEMENTS_INDICES, limit)
+        output.write("Maximum DrawElements Indices:\t%d\n" % limit[0])
 
         output.write("\nGLSL:\n")
-        if version[0] > '1':
-            bgl.glGetIntegerv(bgl.GL_MAX_VARYING_FLOATS, limit)
-            output.write("Maximum Varying Floats:\t%d\n" % limit[0])
-            bgl.glGetIntegerv(bgl.GL_MAX_VERTEX_ATTRIBS, limit)
-            output.write("Maximum Vertex Attributes:\t%d\n" % limit[0])
-            bgl.glGetIntegerv(bgl.GL_MAX_VERTEX_UNIFORM_COMPONENTS, limit)
-            output.write("Maximum Vertex Uniform Components:\t%d\n" % limit[0])
-            bgl.glGetIntegerv(bgl.GL_MAX_FRAGMENT_UNIFORM_COMPONENTS, limit)
-            output.write("Maximum Fragment Uniform Components:\t%d\n" % limit[0])
-            bgl.glGetIntegerv(bgl.GL_MAX_VERTEX_TEXTURE_IMAGE_UNITS, limit)
-            output.write("Maximum Vertex Image Units:\t%d\n" % limit[0])
-            bgl.glGetIntegerv(bgl.GL_MAX_TEXTURE_IMAGE_UNITS, limit)
-            output.write("Maximum Fragment Image Units:\t%d\n" % limit[0])
-            bgl.glGetIntegerv(bgl.GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, limit)
-            output.write("Maximum Pipeline Image Units:\t%d\n" % limit[0])
+        bgl.glGetIntegerv(bgl.GL_MAX_VARYING_FLOATS, limit)
+        output.write("Maximum Varying Floats:\t%d\n" % limit[0])
+        bgl.glGetIntegerv(bgl.GL_MAX_VERTEX_ATTRIBS, limit)
+        output.write("Maximum Vertex Attributes:\t%d\n" % limit[0])
+        bgl.glGetIntegerv(bgl.GL_MAX_VERTEX_UNIFORM_COMPONENTS, limit)
+        output.write("Maximum Vertex Uniform Components:\t%d\n" % limit[0])
+        bgl.glGetIntegerv(bgl.GL_MAX_FRAGMENT_UNIFORM_COMPONENTS, limit)
+        output.write("Maximum Fragment Uniform Components:\t%d\n" % limit[0])
+        bgl.glGetIntegerv(bgl.GL_MAX_VERTEX_TEXTURE_IMAGE_UNITS, limit)
+        output.write("Maximum Vertex Image Units:\t%d\n" % limit[0])
+        bgl.glGetIntegerv(bgl.GL_MAX_TEXTURE_IMAGE_UNITS, limit)
+        output.write("Maximum Fragment Image Units:\t%d\n" % limit[0])
+        bgl.glGetIntegerv(bgl.GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, limit)
+        output.write("Maximum Pipeline Image Units:\t%d\n" % limit[0])
 
     if bpy.app.build_options.cycles:
         import cycles
         output.write(title("Cycles"))
         output.write(cycles.engine.system_info())
 
-    output.current_line_index = 0
+    output.close()
 
-    op.report({'INFO'}, "System information generated in 'system-info.txt'")

@@ -65,8 +65,8 @@
 #define CUDA_KERNEL_MAX_REGISTERS 63
 #define CUDA_KERNEL_BRANCHED_MAX_REGISTERS 63
 
-/* 5.0 and 5.2 */
-#elif __CUDA_ARCH__ == 500 || __CUDA_ARCH__ == 520
+/* 5.0, 5.2 and 5.3 */
+#elif __CUDA_ARCH__ == 500 || __CUDA_ARCH__ == 520 || __CUDA_ARCH__ == 530
 #define CUDA_MULTIPRESSOR_MAX_REGISTERS 65536
 #define CUDA_MULTIPROCESSOR_MAX_BLOCKS 32
 #define CUDA_BLOCK_MAX_THREADS 1024
@@ -159,12 +159,26 @@ kernel_cuda_convert_to_half_float(uchar4 *rgba, float *buffer, float sample_scal
 
 extern "C" __global__ void
 CUDA_LAUNCH_BOUNDS(CUDA_THREADS_BLOCK_WIDTH, CUDA_KERNEL_MAX_REGISTERS)
-kernel_cuda_shader(uint4 *input, float4 *output, int type, int sx, int sw, int offset, int sample)
+kernel_cuda_shader(uint4 *input,
+                   float4 *output,
+                   float *output_luma,
+                   int type,
+                   int sx,
+                   int sw,
+                   int offset,
+                   int sample)
 {
 	int x = sx + blockDim.x*blockIdx.x + threadIdx.x;
 
-	if(x < sx + sw)
-		kernel_shader_evaluate(NULL, input, output, (ShaderEvalType)type, x, sample);
+	if(x < sx + sw) {
+		kernel_shader_evaluate(NULL,
+		                       input,
+		                       output,
+		                       output_luma,
+		                       (ShaderEvalType)type, 
+		                       x,
+		                       sample);
+	}
 }
 
 extern "C" __global__ void

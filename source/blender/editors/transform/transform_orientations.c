@@ -544,7 +544,7 @@ static unsigned int bm_mesh_elems_select_get_n__internal(
 		if (i == 0) {
 			/* pass */
 		}
-		else {
+		else if (i == n) {
 			return i;
 		}
 	}
@@ -591,7 +591,7 @@ int getTransformOrientation_ex(const bContext *C, float normal[3], float plane[3
 	Base *base;
 	Object *ob = OBACT;
 	int result = ORIENTATION_NONE;
-	const bool activeOnly = (around == V3D_ACTIVE);
+	const bool activeOnly = (around == V3D_AROUND_ACTIVE);
 
 	zero_v3(normal);
 	zero_v3(plane);
@@ -756,10 +756,10 @@ int getTransformOrientation_ex(const bContext *C, float normal[3], float plane[3
 
 					if (bm_mesh_verts_select_get_n(em->bm, &v, 1) == 1) {
 						copy_v3_v3(normal, v->no);
+						BMEdge *e_pair[2];
 
-						if (BM_vert_is_edge_pair(v)) {
+						if (BM_vert_edge_pair(v, &e_pair[0], &e_pair[1])) {
 							bool v_pair_swap = false;
-							BMEdge *e_pair[2] = {v->e, BM_DISK_EDGE_NEXT(v->e, v)};
 							BMVert *v_pair[2] = {BM_edge_other_vert(e_pair[0], v), BM_edge_other_vert(e_pair[1], v)};
 							float dir_pair[2][3];
 
@@ -854,7 +854,7 @@ int getTransformOrientation_ex(const bContext *C, float normal[3], float plane[3
 							/* exception */
 							if (flag) {
 								float tvec[3];
-								if ((around == V3D_LOCAL) ||
+								if ((around == V3D_AROUND_LOCAL_ORIGINS) ||
 								    ELEM(flag, SEL_F2, SEL_F1 | SEL_F3, SEL_F1 | SEL_F2 | SEL_F3))
 								{
 									BKE_nurb_bezt_calc_normal(nu, bezt, tvec);
@@ -1044,8 +1044,8 @@ int getTransformOrientation_ex(const bContext *C, float normal[3], float plane[3
 
 int getTransformOrientation(const bContext *C, float normal[3], float plane[3])
 {
-	/* dummy value, not V3D_ACTIVE and not V3D_LOCAL */
-	short around = V3D_CENTER;
+	/* dummy value, not V3D_AROUND_ACTIVE and not V3D_AROUND_LOCAL_ORIGINS */
+	short around = V3D_AROUND_CENTER_BOUNDS;
 
 	return getTransformOrientation_ex(C, normal, plane, around);
 }

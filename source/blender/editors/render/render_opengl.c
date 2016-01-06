@@ -69,9 +69,9 @@
 #include "RNA_access.h"
 #include "RNA_define.h"
 
-#include "GPU_extensions.h"
 #include "GPU_glew.h"
 #include "GPU_compositing.h"
+#include "GPU_framebuffer.h"
 
 
 #include "render_intern.h"
@@ -559,7 +559,7 @@ static bool screen_opengl_render_init(bContext *C, wmOperator *op)
 	/* create image and image user */
 	oglrender->ima = BKE_image_verify_viewer(IMA_TYPE_R_RESULT, "Render Result");
 	BKE_image_signal(oglrender->ima, NULL, IMA_SIGNAL_FREE);
-	BKE_image_backup_render(oglrender->scene, oglrender->ima);
+	BKE_image_backup_render(oglrender->scene, oglrender->ima, true);
 
 	oglrender->iuser.scene = scene;
 	oglrender->iuser.ok = 1;

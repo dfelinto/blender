@@ -129,10 +129,10 @@
 static void transform_around_single_fallback(TransInfo *t)
 {
 	if ((t->total == 1) &&
-	    (ELEM(t->around, V3D_CENTER, V3D_CENTROID, V3D_ACTIVE)) &&
+	    (ELEM(t->around, V3D_AROUND_CENTER_BOUNDS, V3D_AROUND_CENTER_MEAN, V3D_AROUND_ACTIVE)) &&
 	    (ELEM(t->mode, TFM_RESIZE, TFM_ROTATION, TFM_TRACKBALL)))
 	{
-		t->around = V3D_LOCAL;
+		t->around = V3D_AROUND_LOCAL_ORIGINS;
 	}
 }
 
@@ -681,7 +681,7 @@ static void bone_children_clear_transflag(int mode, short around, ListBase *lb)
 		}
 		else if ((bone->flag & BONE_TRANSFORM) &&
 		         (mode == TFM_ROTATION || mode == TFM_TRACKBALL) &&
-		         (around == V3D_LOCAL))
+		         (around == V3D_AROUND_LOCAL_ORIGINS))
 		{
 			bone->flag |= BONE_TRANSFORM_CHILD;
 		}
@@ -1275,7 +1275,9 @@ static void createTransArmatureVerts(TransInfo *t)
 					 * causes problem with snapping (see T45974).
 					 * However, in rotation mode, we want to keep that 'rotate bone around root with
 					 * only its tip selected' behavior (see T46325). */
-					if ((t->around == V3D_LOCAL) && ((t->mode == TFM_ROTATION) || (ebo->flag & BONE_ROOTSEL))) {
+					if ((t->around == V3D_AROUND_LOCAL_ORIGINS) &&
+					    ((t->mode == TFM_ROTATION) || (ebo->flag & BONE_ROOTSEL)))
+					{
 						copy_v3_v3(td->center, ebo->head);
 					}
 					else {
@@ -1551,7 +1553,7 @@ static void createTransCurveVerts(TransInfo *t)
 					TransDataCurveHandleFlags *hdata = NULL;
 					float axismtx[3][3];
 
-					if (t->around == V3D_LOCAL) {
+					if (t->around == V3D_AROUND_LOCAL_ORIGINS) {
 						float normal[3], plane[3];
 
 						BKE_nurb_bezt_calc_normal(nu, bezt, normal);
@@ -1574,7 +1576,7 @@ static void createTransCurveVerts(TransInfo *t)
 						copy_v3_v3(td->iloc, bezt->vec[0]);
 						td->loc = bezt->vec[0];
 						copy_v3_v3(td->center, bezt->vec[(hide_handles ||
-						                                  (t->around == V3D_LOCAL) ||
+						                                  (t->around == V3D_AROUND_LOCAL_ORIGINS) ||
 						                                  (bezt->f2 & SELECT)) ? 1 : 0]);
 						if (hide_handles) {
 							if (bezt->f2 & SELECT) td->flag = TD_SELECTED;
@@ -1591,7 +1593,7 @@ static void createTransCurveVerts(TransInfo *t)
 
 						copy_m3_m3(td->smtx, smtx);
 						copy_m3_m3(td->mtx, mtx);
-						if (t->around == V3D_LOCAL) {
+						if (t->around == V3D_AROUND_LOCAL_ORIGINS) {
 							copy_m3_m3(td->axismtx, axismtx);
 						}
 
@@ -1623,7 +1625,7 @@ static void createTransCurveVerts(TransInfo *t)
 
 						copy_m3_m3(td->smtx, smtx);
 						copy_m3_m3(td->mtx, mtx);
-						if (t->around == V3D_LOCAL) {
+						if (t->around == V3D_AROUND_LOCAL_ORIGINS) {
 							copy_m3_m3(td->axismtx, axismtx);
 						}
 
@@ -1644,7 +1646,7 @@ static void createTransCurveVerts(TransInfo *t)
 						copy_v3_v3(td->iloc, bezt->vec[2]);
 						td->loc = bezt->vec[2];
 						copy_v3_v3(td->center, bezt->vec[(hide_handles ||
-						                                  (t->around == V3D_LOCAL) ||
+						                                  (t->around == V3D_AROUND_LOCAL_ORIGINS) ||
 						                                  (bezt->f2 & SELECT)) ? 1 : 2]);
 						if (hide_handles) {
 							if (bezt->f2 & SELECT) td->flag = TD_SELECTED;
@@ -1663,7 +1665,7 @@ static void createTransCurveVerts(TransInfo *t)
 
 						copy_m3_m3(td->smtx, smtx);
 						copy_m3_m3(td->mtx, mtx);
-						if (t->around == V3D_LOCAL) {
+						if (t->around == V3D_AROUND_LOCAL_ORIGINS) {
 							copy_m3_m3(td->axismtx, axismtx);
 						}
 
@@ -1863,7 +1865,7 @@ static void createTransParticleVerts(bContext *C, TransInfo *t)
 		if (!(point->flag & PEP_TRANSFORM)) continue;
 
 		if (psys && !(psys->flag & PSYS_GLOBAL_HAIR))
-			psys_mat_hair_to_global(ob, psmd->dm, psys->part->from, psys->particles + i, mat);
+			psys_mat_hair_to_global(ob, psmd->dm_final, psys->part->from, psys->particles + i, mat);
 
 		for (k = 0, key = point->keys; k < point->totkey; k++, key++) {
 			if (key->flag & PEK_USE_WCO) {
@@ -1937,7 +1939,7 @@ void flushTransParticles(TransInfo *t)
 		if (!(point->flag & PEP_TRANSFORM)) continue;
 
 		if (psys && !(psys->flag & PSYS_GLOBAL_HAIR)) {
-			psys_mat_hair_to_global(ob, psmd->dm, psys->part->from, psys->particles + i, mat);
+			psys_mat_hair_to_global(ob, psmd->dm_final, psys->part->from, psys->particles + i, mat);
 			invert_m4_m4(imat, mat);
 
 			for (k = 0, key = point->keys; k < point->totkey; k++, key++) {
@@ -2261,7 +2263,7 @@ static void VertsToTransData(TransInfo *t, TransData *td, TransDataExtension *tx
 		copy_v3_v3(td->center, v_island->co);
 		copy_m3_m3(td->axismtx, v_island->axismtx);
 	}
-	else if (t->around == V3D_LOCAL) {
+	else if (t->around == V3D_AROUND_LOCAL_ORIGINS) {
 		copy_v3_v3(td->center, td->loc);
 		createSpaceNormal(td->axismtx, no);
 	}
@@ -2392,7 +2394,7 @@ static void createTransEditVerts(TransInfo *t)
 		editmesh_set_connectivity_distance(em->bm, mtx, dists);
 	}
 
-	if (t->around == V3D_LOCAL) {
+	if (t->around == V3D_AROUND_LOCAL_ORIGINS) {
 		island_info = editmesh_islands_info_calc(em, &island_info_tot, &island_vert_map);
 	}
 
@@ -2760,7 +2762,7 @@ static void createTransUVs(bContext *C, TransInfo *t)
 	int count = 0, countsel = 0, count_rejected = 0;
 	const bool is_prop_edit = (t->flag & T_PROP_EDIT) != 0;
 	const bool is_prop_connected = (t->flag & T_PROP_CONNECTED) != 0;
-	const bool is_island_center = (t->around == V3D_LOCAL);
+	const bool is_island_center = (t->around == V3D_AROUND_LOCAL_ORIGINS);
 	const int cd_loop_uv_offset = CustomData_get_offset(&em->bm->ldata, CD_MLOOPUV);
 	const int cd_poly_tex_offset = CustomData_get_offset(&em->bm->pdata, CD_MTEXPOLY);
 
@@ -4019,7 +4021,8 @@ static bool graph_edit_is_translation_mode(TransInfo *t)
 
 static bool graph_edit_use_local_center(TransInfo *t)
 {
-	return (t->around == V3D_LOCAL) && !graph_edit_is_translation_mode(t);
+	return ((t->around == V3D_AROUND_LOCAL_ORIGINS) &&
+	        (graph_edit_is_translation_mode(t) == false));
 }
 
 
@@ -5436,7 +5439,9 @@ static void set_trans_object_base_flags(TransInfo *t)
 
 			if (parsel) {
 				/* rotation around local centers are allowed to propagate */
-				if ((t->mode == TFM_ROTATION || t->mode == TFM_TRACKBALL) && t->around == V3D_LOCAL) {
+				if ((t->around == V3D_AROUND_LOCAL_ORIGINS) &&
+				    (t->mode == TFM_ROTATION || t->mode == TFM_TRACKBALL))
+				{
 					base->flag |= BA_TRANSFORM_CHILD;
 				}
 				else {
@@ -5486,7 +5491,9 @@ static int count_proportional_objects(TransInfo *t)
 	Base *base;
 
 	/* rotations around local centers are allowed to propagate, so we take all objects */
-	if (!((t->mode == TFM_ROTATION || t->mode == TFM_TRACKBALL) && t->around == V3D_LOCAL)) {
+	if (!((t->around == V3D_AROUND_LOCAL_ORIGINS) &&
+	      (t->mode == TFM_ROTATION || t->mode == TFM_TRACKBALL)))
+	{
 		/* mark all parents */
 		for (base = scene->base.first; base; base = base->next) {
 			if (TESTBASELIB_BGMODE(v3d, scene, base)) {
@@ -5607,22 +5614,22 @@ void autokeyframe_ob_cb_func(bContext *C, Scene *scene, View3D *v3d, Object *ob,
 				do_loc = true;
 			}
 			else if (tmode == TFM_ROTATION) {
-				if (v3d->around == V3D_ACTIVE) {
+				if (v3d->around == V3D_AROUND_ACTIVE) {
 					if (ob != OBACT)
 						do_loc = true;
 				}
-				else if (v3d->around == V3D_CURSOR)
+				else if (v3d->around == V3D_AROUND_CURSOR)
 					do_loc = true;
 				
 				if ((v3d->flag & V3D_ALIGN) == 0)
 					do_rot = true;
 			}
 			else if (tmode == TFM_RESIZE) {
-				if (v3d->around == V3D_ACTIVE) {
+				if (v3d->around == V3D_AROUND_ACTIVE) {
 					if (ob != OBACT)
 						do_loc = true;
 				}
-				else if (v3d->around == V3D_CURSOR)
+				else if (v3d->around == V3D_AROUND_CURSOR)
 					do_loc = true;
 				
 				if ((v3d->flag & V3D_ALIGN) == 0)
@@ -5747,14 +5754,14 @@ void autokeyframe_pose_cb_func(bContext *C, Scene *scene, View3D *v3d, Object *o
 							do_loc = true;
 					}
 					else if (tmode == TFM_ROTATION) {
-						if (ELEM(v3d->around, V3D_CURSOR, V3D_ACTIVE))
+						if (ELEM(v3d->around, V3D_AROUND_CURSOR, V3D_AROUND_ACTIVE))
 							do_loc = true;
 							
 						if ((v3d->flag & V3D_ALIGN) == 0)
 							do_rot = true;
 					}
 					else if (tmode == TFM_RESIZE) {
-						if (ELEM(v3d->around, V3D_CURSOR, V3D_ACTIVE))
+						if (ELEM(v3d->around, V3D_AROUND_CURSOR, V3D_AROUND_ACTIVE))
 							do_loc = true;
 							
 						if ((v3d->flag & V3D_ALIGN) == 0)
@@ -5935,6 +5942,10 @@ static void special_aftertrans_update__mesh(bContext *UNUSED(C), TransInfo *t)
 		}
 
 		EDBM_automerge(t->scene, t->obedit, true, hflag);
+
+		if ((em->selectmode & SCE_SELECT_VERTEX) == 0) {
+			EDBM_select_flush(em);
+		}
 	}
 }
 
@@ -6269,7 +6280,7 @@ void special_aftertrans_update(bContext *C, TransInfo *t)
 		if (t->obedit->type == OB_MESH) {
 			BMEditMesh *em = BKE_editmesh_from_object(t->obedit);
 			/* table needs to be created for each edit command, since vertices can move etc */
-			ED_mesh_mirror_spatial_table(t->obedit, em, NULL, 'e');
+			ED_mesh_mirror_spatial_table(t->obedit, em, NULL, NULL, 'e');
 		}
 	}
 	else if ((t->flag & T_POSE) && (t->poseobj)) {
@@ -7756,45 +7767,7 @@ static void createTransGPencil(bContext *C, TransInfo *t)
 			 */
 			// XXX: should this be allowed when framelock is enabled?
 			if (gpf->framenum != cfra) {
-				bGPDframe *new_frame = gpencil_frame_duplicate(gpf);
-				bGPDframe *gf;
-				bool found = false;
-				
-				/* Find frame to insert it before */
-				for (gf = gpf->next; gf; gf = gf->next) {
-					if (gf->framenum > cfra) {
-						/* Add it here */
-						BLI_insertlinkbefore(&gpl->frames, gf, new_frame);
-						
-						found = true;
-						break;
-					}
-					else if (gf->framenum == cfra) {
-						/* This only happens when we're editing with framelock on...
-						 * - Delete the new frame and don't do anything else here...
-						 */
-						//printf("GP Frame convert to TransData - Copy aborted for frame %d -> %d\n", gpf->framenum, gf->framenum);
-						free_gpencil_strokes(new_frame);
-						MEM_freeN(new_frame);
-						new_frame = NULL;
-						
-						found = true;
-						break;
-					}
-				}
-				
-				if (found == false) {
-					/* Add new frame to the end */
-					BLI_addtail(&gpl->frames, new_frame);
-				}
-				
-				/* Edit the new frame instead, if it did get created + added */
-				if (new_frame) {
-					// TODO: tag this one as being "newly created" so that we can remove it if the edit is cancelled
-					new_frame->framenum = cfra;
-					
-					gpf = new_frame;
-				}
+				gpf = gpencil_frame_addcopy(gpl, cfra);
 			}
 			
 			/* Loop over strokes, adding TransData for points as needed... */
@@ -7919,7 +7892,8 @@ void createTransData(bContext *C, TransInfo *t)
 		}
 	}
 	else if (t->options & CTX_GPENCIL_STROKES) {
-		t->flag |= T_POINTS; // XXX...
+		t->options |= CTX_GPENCIL_STROKES;
+		t->flag |= T_POINTS;
 		createTransGPencil(C, t);
 		
 		if (t->data && (t->flag & T_PROP_EDIT)) {

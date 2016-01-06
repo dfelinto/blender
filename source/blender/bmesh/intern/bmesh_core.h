@@ -58,6 +58,8 @@ BMFace *BM_face_create_verts(
 void    BM_face_edges_kill(BMesh *bm, BMFace *f);
 void    BM_face_verts_kill(BMesh *bm, BMFace *f);
 
+void    BM_face_kill_loose(BMesh *bm, BMFace *f);
+
 void    BM_face_kill(BMesh *bm, BMFace *f);
 void    BM_edge_kill(BMesh *bm, BMEdge *e);
 void    BM_vert_kill(BMesh *bm, BMVert *v);
@@ -82,6 +84,9 @@ void    BM_vert_separate(
 void BM_vert_separate_hflag(
         BMesh *bm, BMVert *v, const char hflag, const bool copy_select,
         BMVert ***r_vout, int *r_vout_len);
+void BM_vert_separate_wire_hflag(
+        BMesh *bm, BMVert *v_dst, BMVert *v_src,
+        const char hflag);
 
 /* EULER API - For modifying structure */
 BMFace *bmesh_sfme(

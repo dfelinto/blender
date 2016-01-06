@@ -158,6 +158,7 @@ class SpellChecker:
         "ringnoise",
         "rolloff",
         "runtime",
+        "scanline",
         "screencast", "screenshot", "screenshots",
         "selfcollision",
         "shadowbuffer", "shadowbuffers",
@@ -408,6 +409,7 @@ class SpellChecker:
         # Blender terms
         "audaspace",
         "bbone",
+        "bmesh",
         "breakdowner",
         "bspline",
         "bweight",

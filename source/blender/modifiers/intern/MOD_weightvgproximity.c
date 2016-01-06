@@ -117,7 +117,7 @@ static void vert2geom_task_cb(void *userdata, void *userdata_chunk, int iter)
 
 			/* Compute and store result. If invalid (-1 idx), keep FLT_MAX dist. */
 			BLI_bvhtree_find_nearest(data->treeData[i]->tree, tmp_co, &nearest,
-									 data->treeData[i]->nearest_callback, data->treeData[i]);
+			                         data->treeData[i]->nearest_callback, data->treeData[i]);
 			data->dist[i][iter] = sqrtf(nearest.dist_sq);
 
 			if (nearest.index != -1) {
@@ -136,7 +136,7 @@ static void get_vert2geom_distance(int numVerts, float (*v_cos)[3],
                                    DerivedMesh *target, const SpaceTransform *loc2trgt)
 {
 	Vert2GeomData data = {0};
-	Vert2GeomDataChunk data_chunk = {0};
+	Vert2GeomDataChunk data_chunk = {{{0}}};
 
 	BVHTreeFromMesh treeData_v = {NULL};
 	BVHTreeFromMesh treeData_e = {NULL};
@@ -176,7 +176,8 @@ static void get_vert2geom_distance(int numVerts, float (*v_cos)[3],
 	data.dist[1] = dist_e;
 	data.dist[2] = dist_f;
 
-	BLI_task_parallel_range_ex(0, numVerts, &data, &data_chunk, sizeof(data_chunk), vert2geom_task_cb, 10000, false);
+	BLI_task_parallel_range_ex(
+	            0, numVerts, &data, &data_chunk, sizeof(data_chunk), vert2geom_task_cb, numVerts > 10000, false);
 
 	if (dist_v)
 		free_bvhtree_from_mesh(&treeData_v);

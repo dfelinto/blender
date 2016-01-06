@@ -249,7 +249,7 @@ DO_SHOW_DEPS=false
 
 SUDO="sudo"
 
-PYTHON_VERSION="3.5.0"
+PYTHON_VERSION="3.5.1"
 PYTHON_VERSION_MIN="3.5"
 PYTHON_FORCE_BUILD=false
 PYTHON_FORCE_REBUILD=false
@@ -674,7 +674,7 @@ DEPS_COMMON_INFO="\"COMMON DEPENDENCIES:
 
 Those libraries should be available as packages in all recent distributions (optional ones are [between brackets]):
 
-    * Basics of dev environment (cmake or scons, gcc, svn , git, ...).
+    * Basics of dev environment (cmake, gcc, svn , git, ...).
     * libjpeg, libpng, libtiff, [libopenjpeg], [libopenal].
     * libx11, libxcursor, libxi, libxrandr, libxinerama (and other libx... as needed).
     * libsqlite3, libbz2, libssl, libfftw3, libxml2, libtinyxml, yasm, libyaml-cpp.
@@ -731,7 +731,7 @@ download() {
   done
 
   if [ $error -eq 1 ]; then
-    ERROR "wget could not find $1, or could not write it to $2, exiting"
+    ERROR "wget could not find ${sources[@]}, or could not write it to $2, exiting"
     exit 1
   fi
 }
@@ -1527,7 +1527,7 @@ clean_LLVM() {
 
 compile_LLVM() {
   # To be changed each time we make edits that would modify the compiled result!
-  llvm_magic=2
+  llvm_magic=3
   _init_llvm
 
   # Clean install if needed!
@@ -1700,7 +1700,7 @@ compile_OSL() {
     if [ ! -z $LLVM_VERSION_FOUND ]; then
       cmake_d="$cmake_d -D LLVM_VERSION=$LLVM_VERSION_FOUND"
       if [ -d $INST/llvm ]; then
-        cmake_d="$cmake_d -D LLVM_ROOT_DIR=$INST/llvm"
+        cmake_d="$cmake_d -D LLVM_DIRECTORY=$INST/llvm"
         cmake_d="$cmake_d -D LLVM_STATIC=ON"
       fi
     fi
@@ -2126,7 +2126,7 @@ install_DEB() {
   OGG_DEV="libogg-dev"
   THEORA_DEV="libtheora-dev"
 
-  _packages="gawk cmake cmake-curses-gui scons build-essential libjpeg-dev libpng-dev \
+  _packages="gawk cmake cmake-curses-gui build-essential libjpeg-dev libpng-dev \
              libfreetype6-dev libx11-dev \
              libxcursor-dev libxi-dev wget libsqlite3-dev libxrandr-dev libxinerama-dev \
              libbz2-dev libncurses5-dev libssl-dev liblzma-dev libreadline-dev $OPENJPEG_DEV \
@@ -2208,6 +2208,13 @@ install_DEB() {
 
   PRINT ""
   install_packages_DEB $_packages
+
+  PRINT""
+  SNDFILE_DEV="libsndfile1-dev"
+  check_package_DEB $SNDFILE_DEV
+  if [ $? -eq 0 ]; then
+    install_packages_DEB $SNDFILE_DEV
+  fi
 
   PRINT ""
   X264_DEV="libx264-dev"
@@ -2678,7 +2685,7 @@ install_RPM() {
   OGG_DEV="libogg-devel"
   THEORA_DEV="libtheora-devel"
 
-  _packages="gcc gcc-c++ git make cmake scons libtiff-devel libjpeg-devel\
+  _packages="gcc gcc-c++ git make cmake libtiff-devel libjpeg-devel\
              libpng-devel libX11-devel libXi-devel libXcursor-devel libXrandr-devel libXinerama-devel \
              wget ncurses-devel readline-devel $OPENJPEG_DEV openal-soft-devel \
              glew-devel yasm $THEORA_DEV $VORBIS_DEV $OGG_DEV patch \
@@ -2760,6 +2767,13 @@ install_RPM() {
         MP3LAME_USE=true
       fi
     fi
+  fi
+
+  PRINT""
+  SNDFILE_DEV="libsndfile-devel"
+  check_package_RPM $SNDFILE_DEV
+  if [ $? -eq 0 ]; then
+    install_packages_RMP $SNDFILE_DEV
   fi
 
   if [ "$WITH_ALL" = true ]; then
@@ -2924,7 +2938,7 @@ install_RPM() {
 
 
   PRINT ""
-  _do_compile_osl=true
+  _do_compile_osl=false
   if [ "$OSL_SKIP" = true ]; then
     WARNING "Skipping OpenShadingLanguage installation, as requested..."
   elif [ "$OSL_FORCE_BUILD" = true ]; then
@@ -3107,7 +3121,7 @@ install_ARCH() {
   OGG_DEV="libogg"
   THEORA_DEV="libtheora"
 
-  _packages="base-devel git scons cmake \
+  _packages="base-devel git cmake \
              libxi libxcursor libxrandr libxinerama glew libpng libtiff wget openal \
              $OPENJPEG_DEV $VORBIS_DEV $OGG_DEV $THEORA_DEV yasm sdl fftw \
              libxml2 yaml-cpp tinyxml"
@@ -3124,6 +3138,13 @@ install_ARCH() {
 
   PRINT ""
   install_packages_ARCH $_packages
+
+  PRINT""
+  SNDFILE_DEV="libsndfile"
+  check_package_ARCH $SNDFILE_DEV
+  if [ $? -eq 0 ]; then
+    install_packages_ARCH $SNDFILE_DEV
+  fi
 
   PRINT ""
   X264_DEV="x264"
@@ -3664,6 +3685,13 @@ print_info() {
 
   _buildargs=""
 
+  _1="-D WITH_CODEC_SNDFILE=ON"
+  PRINT "  $_1"
+  _buildargs="$_buildargs -U *SNDFILE* $_1"
+
+  _1="-D PYTHON_VERSION=$PYTHON_VERSION_MIN"
+  PRINT "  $_1"
+  _buildargs="$_buildargs -U *PYTHON* $_1"
   if [ -d $INST/python-$PYTHON_VERSION_MIN ]; then
     _1="-D PYTHON_ROOT_DIR=$INST/python-$PYTHON_VERSION_MIN"
     PRINT "  $_1"
@@ -3675,25 +3703,29 @@ print_info() {
     _2="-D Boost_NO_SYSTEM_PATHS=ON"
     PRINT "  $_1"
     PRINT "  $_2"
-    _buildargs="$_buildargs $_1 $_2"
+    _buildargs="$_buildargs -U *BOOST* -U *Boost* $_1 $_2"
   fi
 
   if [ -d $INST/ocio ]; then
-    _1="-D OPENCOLORIO_ROOT_DIR=$INST/ocio"
+    _1="-D WITH_OPENCOLORIO=ON"
+    _2="-D OPENCOLORIO_ROOT_DIR=$INST/ocio"
     PRINT "  $_1"
-    _buildargs="$_buildargs $_1"
+    PRINT "  $_2"
+    _buildargs="$_buildargs -U *OPENCOLORIO* $_1 $_2"
   fi
 
   if [ -d $INST/openexr ]; then
     _1="-D OPENEXR_ROOT_DIR=$INST/openexr"
     PRINT "  $_1"
-    _buildargs="$_buildargs $_1"
+    _buildargs="$_buildargs -U *OPENEXR* $_1"
   fi
 
   if [ -d $INST/oiio ]; then
-    _1="-D OPENIMAGEIO_ROOT_DIR=$INST/oiio"
+    _1="-D WITH_OPENIMAGEIO=ON"
+    _2="-D OPENIMAGEIO_ROOT_DIR=$INST/oiio"
     PRINT "  $_1"
-    _buildargs="$_buildargs $_1"
+    PRINT "  $_2"
+    _buildargs="$_buildargs -U *OPENIMAGEIO* $_1 $_2"
   fi
 
   if [ "$OSL_SKIP" = false ]; then
@@ -3703,7 +3735,7 @@ print_info() {
     PRINT "  $_1"
     PRINT "  $_2"
     PRINT "  $_3"
-    _buildargs="$_buildargs $_1 $_2 $_3"
+    _buildargs="$_buildargs -U *LLVM* -U *CYCLES* $_1 $_2 $_3"
     if [ -d $INST/osl ]; then
       _1="-D CYCLES_OSL=$INST/osl"
       PRINT "  $_1"
@@ -3729,13 +3761,13 @@ print_info() {
     _2="-D OPENSUBDIV_ROOT_DIR=$INST/osd"
     PRINT "  $_1"
     PRINT "  $_2"
-    _buildargs="$_buildargs $_1 $_2"
+    _buildargs="$_buildargs -U *OPENSUBDIV* $_1 $_2"
   fi
 
   if [ "$WITH_OPENCOLLADA" = true ]; then
     _1="-D WITH_OPENCOLLADA=ON"
     PRINT "  $_1"
-    _buildargs="$_buildargs $_1"
+    _buildargs="$_buildargs -U *COLLADA* $_1"
   fi
 
   if [ "$FFMPEG_SKIP" = false ]; then
@@ -3743,7 +3775,7 @@ print_info() {
     _2="-D FFMPEG_LIBRARIES='avformat;avcodec;avutil;avdevice;swscale;rt;`print_info_ffmpeglink`'"
     PRINT "  $_1"
     PRINT "  $_2"
-    _buildargs="$_buildargs $_1 $_2"
+    _buildargs="$_buildargs -U *FFMPEG* $_1 $_2"
     if [ -d $INST/ffmpeg ]; then
       _1="-D FFMPEG=$INST/ffmpeg"
       PRINT "  $_1"
@@ -3754,89 +3786,6 @@ print_info() {
   PRINT ""
   PRINT "Or even simpler, just run (in your blender-source dir):"
   PRINT "  make -j$THREADS BUILD_CMAKE_ARGS=\"$_buildargs\""
-
-  PRINT ""
-  PRINT "If you're using SCons add this to your user-config:"
-
-  if [ -d $INST/python-$PYTHON_VERSION_MIN ]; then
-    PRINT "BF_PYTHON = '$INST/python-$PYTHON_VERSION_MIN'"
-    PRINT "BF_PYTHON_ABI_FLAGS = 'm'"
-  fi
-
-  if [ "$OCIO_SKIP" = false ]; then
-    PRINT "WITH_BF_OCIO = True"
-    if [ -d $INST/ocio ]; then
-      PRINT "BF_OCIO = '$INST/ocio'"
-    fi
-  fi
-
-  if [ -d $INST/openexr ]; then
-    PRINT "BF_OPENEXR = '$INST/openexr'"
-
-    _ilm_libs_ext=""
-    #~ version_ge $OPENEXR_VERSION "2.1.0"
-    #~ if [ $? -eq 0 ]; then
-      #~ _ilm_libs_ext=`echo $OPENEXR_VERSION | sed -r 's/([0-9]+)\.([0-9]+).*/-\1_\2/'`
-    #~ fi
-    PRINT "BF_OPENEXR_LIB = 'Half IlmImf$_ilm_libs_ext Iex$_ilm_libs_ext Imath$_ilm_libs_ext '"
-    # BF_OPENEXR_LIB does not work, things like '-lIlmImf-2_1' do not suit ld.
-    # For now, hack around!!!
-    PRINT "BF_OPENEXR_LIB_STATIC = '\${BF_OPENEXR}/lib/libHalf.so \${BF_OPENEXR}/lib/libIlmImf$_ilm_libs_ext.so \${BF_OPENEXR}/lib/libIex$_ilm_libs_ext.so \${BF_OPENEXR}/lib/libImath$_ilm_libs_ext.so \${BF_OPENEXR}/lib/libIlmThread$_ilm_libs_ext.so'"
-    PRINT "WITH_BF_STATICOPENEXR = True"
-  fi
-
-  if [ "$OIIO_SKIP" = false ]; then
-    PRINT "WITH_BF_OIIO = True"
-    if [ -d $INST/oiio ]; then
-      PRINT "BF_OIIO = '$INST/oiio'"
-    fi
-  fi
-
-  PRINT "WITH_BF_CYCLES = True"
-
-  if [ -d $INST/osl ]; then
-    PRINT "BF_OSL = '$INST/osl'"
-  fi
-
-  if [ "$OSD_SKIP" = false ]; then
-    PRINT "WITH_BF_OPENSUBDIV = True"
-    if [ -d $INST/osd ]; then
-      PRINT "BF_OPENSUBDIV = '$INST/osd'"
-    fi
-  fi
-
-  if [ "$BOOST_SKIP" = false ]; then
-    PRINT "WITH_BF_BOOST = True"
-    if [ -d $INST/boost ]; then
-      PRINT "BF_BOOST = '$INST/boost'"
-    fi
-  fi
-
-  if [ "$WITH_OPENCOLLADA" = true ]; then
-    PRINT "WITH_BF_COLLADA = True"
-    if [ -d $INST/opencollada ]; then
-      PRINT "BF_OPENCOLLADA = '$INST/opencollada'"
-    fi
-  fi
-
-  if [ "$FFMPEG_SKIP" = false ]; then
-    _ffmpeg_list_sep=" "
-    if [ -d $INST/ffmpeg ]; then
-      PRINT "BF_FFMPEG = '$INST/ffmpeg'"
-    fi
-    PRINT "BF_FFMPEG_LIB = 'avformat avcodec swscale avutil avdevice `print_info_ffmpeglink`'"
-  fi
-
-  if [ "$WITH_ALL" = false ]; then
-    PRINT "WITH_BF_3DMOUSE = False"
-  # No libspacenav in official arch repos...
-  elif [ "$DISTRO" = "ARCH" ]; then
-    PRINT "WITH_BF_3DMOUSE = False"
-  fi
-
-  if [ "$WITH_OPENCOLLADA" = true ]; then
-    PRINT "LLIBS = [\""xml2"\", \""expat"\"] + LLIBS"
-  fi
 }
 
 #### "Main" ####

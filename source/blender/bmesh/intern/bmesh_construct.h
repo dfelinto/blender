@@ -29,6 +29,8 @@
 
 struct BMAllocTemplate;
 
+bool BM_verts_from_edges(BMVert **vert_arr, BMEdge **edge_arr, const int len);
+
 bool BM_edges_from_verts(BMEdge **edge_arr, BMVert **vert_arr, const int len);
 void BM_edges_from_verts_ensure(BMesh *bm, BMEdge **edge_arr, BMVert **vert_arr, const int len);
 
@@ -38,7 +40,7 @@ BMFace *BM_face_create_quad_tri(
 
 void BM_face_copy_shared(
         BMesh *bm, BMFace *f,
-        BMElemFilterFunc filter_fn, void *user_data);
+        BMLoopFilterFunc filter_fn, void *user_data);
 
 BMFace *BM_face_create_ngon(
         BMesh *bm, BMVert *v1, BMVert *v2, BMEdge **edges, const int len,

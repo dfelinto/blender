@@ -141,8 +141,9 @@ void openSubdiv_osdGLMeshDisplay(OpenSubdiv_GLMesh *gl_mesh,
 /* ** Utility functions ** */
 int openSubdiv_supportGPUDisplay(void);
 int openSubdiv_getAvailableEvaluators(void);
-void openSubdiv_init(void);
+void openSubdiv_init(bool gpu_legacy_support);
 void openSubdiv_cleanup(void);
+bool openSubdiv_gpu_legacy_support(void);
 
 #ifdef __cplusplus
 }

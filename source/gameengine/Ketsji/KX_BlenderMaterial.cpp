@@ -39,7 +39,6 @@
 #include "RAS_BucketManager.h"
 #include "RAS_MeshObject.h"
 #include "RAS_IRasterizer.h"
-#include "RAS_OpenGLRasterizer/RAS_GLExtensionManager.h"
 
 #include "GPU_draw.h"
 
@@ -676,13 +675,13 @@ void KX_BlenderMaterial::ActivatGLMaterials( RAS_IRasterizer* rasty )const
 			mMaterial->matcolor[0]*mMaterial->emit,
 			mMaterial->matcolor[1]*mMaterial->emit,
 			mMaterial->matcolor[2]*mMaterial->emit,
-			1.0 );
+			1.0f );
 
 		rasty->SetAmbient(mMaterial->amb);
 	}
 
 	if (mMaterial->material)
-		rasty->SetPolygonOffset(-mMaterial->material->zoffs, 0.0);
+		rasty->SetPolygonOffset(-mMaterial->material->zoffs, 0.0f);
 }
 
 

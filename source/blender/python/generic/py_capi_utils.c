@@ -38,8 +38,10 @@
 
 #include "python_utildefines.h"
 
+#ifndef MATH_STANDALONE
 /* only for BLI_strncpy_wchar_from_utf8, should replace with py funcs but too late in release now */
 #include "BLI_string_utf8.h"
+#endif
 
 #ifdef _WIN32
 #include "BLI_path_util.h"  /* BLI_setenv() */
@@ -198,6 +200,27 @@ void PyC_List_Fill(PyObject *list, PyObject *value)
 		Py_INCREF(value);
 	}
 }
+
+/**
+ * Use with PyArg_ParseTuple's "O&" formatting.
+ */
+int PyC_ParseBool(PyObject *o, void *p)
+{
+	bool *bool_p = p;
+	long value;
+	if (((value = PyLong_AsLong(o)) == -1) || !ELEM(value, 0, 1)) {
+		PyErr_Format(PyExc_ValueError,
+		             "expected a bool or int (0/1), got %s",
+		             Py_TYPE(o)->tp_name);
+		return 0;
+	}
+
+	*bool_p = value ? true : false;
+	return 1;
+}
+
+
+#ifndef MATH_STANDALONE
 
 /* for debugging */
 void PyC_ObSpit(const char *name, PyObject *var)
@@ -948,14 +971,14 @@ PyObject *PyC_FlagSet_FromBitfield(PyC_FlagSet *items, int flag)
 
 
 /**
- * \return -1 on error, else 0
+ * \return success
  *
  * \note it is caller's responsibility to acquire & release GIL!
  */
-int PyC_RunString_AsNumber(const char *expr, double *value, const char *filename)
+bool PyC_RunString_AsNumber(const char *expr, double *value, const char *filename)
 {
 	PyObject *py_dict, *mod, *retval;
-	int error_ret = 0;
+	bool ok = true;
 	PyObject *main_mod = NULL;
 
 	PyC_MainModule_Backup(&main_mod);
@@ -975,7 +998,7 @@ int PyC_RunString_AsNumber(const char *expr, double *value, const char *filename
 	retval = PyRun_String(expr, Py_eval_input, py_dict, py_dict);
 
 	if (retval == NULL) {
-		error_ret = -1;
+		ok = false;
 	}
 	else {
 		double val;
@@ -1001,7 +1024,7 @@ int PyC_RunString_AsNumber(const char *expr, double *value, const char *filename
 		Py_DECREF(retval);
 
 		if (val == -1 && PyErr_Occurred()) {
-			error_ret = -1;
+			ok = false;
 		}
 		else if (!finite(val)) {
 			*value = 0.0;
@@ -1013,23 +1036,7 @@ int PyC_RunString_AsNumber(const char *expr, double *value, const char *filename
 
 	PyC_MainModule_Restore(main_mod);
 
-	return error_ret;
+	return ok;
 }
 
-/**
- * Use with PyArg_ParseTuple's "O&" formatting.
- */
-int PyC_ParseBool(PyObject *o, void *p)
-{
-	bool *bool_p = p;
-	long value;
-	if (((value = PyLong_AsLong(o)) == -1) || !ELEM(value, 0, 1)) {
-		PyErr_Format(PyExc_ValueError,
-		             "expected a bool or int (0/1), got %s",
-		             Py_TYPE(o)->tp_name);
-		return 0;
-	}
-
-	*bool_p = value ? true : false;
-	return 1;
-}
+#endif  /* #ifndef MATH_STANDALONE */

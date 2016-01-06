@@ -58,6 +58,8 @@
 #include "BIF_gl.h"
 #include "BIF_glutil.h"
 
+#include "GPU_basic_shader.h"
+
 #include "WM_types.h"
 
 #include "UI_interface.h"
@@ -1063,7 +1065,7 @@ static void draw_plane_marker_image(Scene *scene,
 		}
 
 		if (display_buffer) {
-			GLuint texid, last_texid;
+			GLuint texid;
 			float frame_corners[4][2] = {{0.0f, 0.0f},
 			                             {1.0f, 0.0f},
 			                             {1.0f, 1.0f},
@@ -1083,11 +1085,9 @@ static void draw_plane_marker_image(Scene *scene,
 				glBlendFunc(GL_SRC_ALPHA,  GL_ONE_MINUS_SRC_ALPHA);
 			}
 
-			glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
 			glColor4f(1.0, 1.0, 1.0, plane_track->image_opacity);
 
-			last_texid = glaGetOneInteger(GL_TEXTURE_2D);
-			glEnable(GL_TEXTURE_2D);
+			GPU_basic_shader_bind(GPU_SHADER_TEXTURE_2D | GPU_SHADER_USE_COLOR);
 			glGenTextures(1, (GLuint *)&texid);
 
 			glBindTexture(GL_TEXTURE_2D, texid);
@@ -1110,8 +1110,8 @@ static void draw_plane_marker_image(Scene *scene,
 
 			glPopMatrix();
 
-			glBindTexture(GL_TEXTURE_2D, last_texid);
-			glDisable(GL_TEXTURE_2D);
+			glBindTexture(GL_TEXTURE_2D, 0);
+			GPU_basic_shader_bind(GPU_SHADER_USE_COLOR);
 
 			if (transparent) {
 				glDisable(GL_BLEND);

@@ -181,11 +181,17 @@ AnimData *ANIM_nla_mapping_get(bAnimContext *ac, bAnimListElem *ale)
 	/* abort if rendering - we may get some race condition issues... */
 	if (G.is_rendering) return NULL;
 	
-	/* handling depends on the type of animation-context we've got */
-	if (ale) {
-		/* NLA Control Curves occur on NLA strips, and shouldn't be subjected to this kind of mapping */
-		if (ale->type != ANIMTYPE_NLACURVE)
-			return ale->adt;
+	/* apart from strictly keyframe-related contexts, this shouldn't even happen */
+	// XXX: nla and channel here may not be necessary...
+	if (ELEM(ac->datatype, ANIMCONT_ACTION, ANIMCONT_SHAPEKEY, ANIMCONT_DOPESHEET,
+	                       ANIMCONT_FCURVES, ANIMCONT_NLA, ANIMCONT_CHANNEL))
+	{
+		/* handling depends on the type of animation-context we've got */
+		if (ale) {
+			/* NLA Control Curves occur on NLA strips, and shouldn't be subjected to this kind of mapping */
+			if (ale->type != ANIMTYPE_NLACURVE)
+				return ale->adt;
+		}
 	}
 	
 	/* cannot handle... */
@@ -403,7 +409,6 @@ static bool find_prev_next_keyframes(struct bContext *C, int *nextfra, int *prev
 {
 	Scene *scene = CTX_data_scene(C);
 	Object *ob = CTX_data_active_object(C);
-	bGPdata *gpd = CTX_data_gpencil_data(C);
 	Mask *mask = CTX_data_edit_mask(C);
 	bDopeSheet ads = {NULL};
 	DLRBT_Tree keys;
@@ -425,11 +430,12 @@ static bool find_prev_next_keyframes(struct bContext *C, int *nextfra, int *prev
 
 	/* populate tree with keyframe nodes */
 	scene_to_keylist(&ads, scene, &keys, NULL);
+	gpencil_to_keylist(&ads, scene->gpd, &keys);
 
-	if (ob)
+	if (ob) {
 		ob_to_keylist(&ads, ob, &keys, NULL);
-
-	gpencil_to_keylist(&ads, gpd, &keys);
+		gpencil_to_keylist(&ads, ob->gpd, &keys);
+	}
 
 	if (mask) {
 		MaskLayer *masklay = BKE_mask_layer_active(mask);
