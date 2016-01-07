@@ -41,12 +41,47 @@ static bNodeSocketTemplate sh_node_bsdf_velvet_out[] = {
 	{	-1, 0, ""	}
 };
 
+#define IN_COLOR 0
+#define IN_SIGMA 1
+#define IN_NORMAL 2
+
+/* XXX this is also done as a local static function in gpu_codegen.c,
+ * but we need this to hack around the crappy material node.
+ */
+static GPUNodeLink *gpu_get_input_link(GPUNodeStack *in)
+{
+	if (in->link)
+		return in->link;
+	else
+		return GPU_uniform(in->vec);
+}
+
 static int node_shader_gpu_bsdf_velvet(GPUMaterial *mat, bNode *UNUSED(node), bNodeExecData *UNUSED(execdata), GPUNodeStack *in, GPUNodeStack *out)
 {
-	if (!in[2].link)
-		in[2].link = GPU_builtin(GPU_VIEW_NORMAL);
+	if (!in[IN_NORMAL].link)
+		in[IN_NORMAL].link = GPU_builtin(GPU_VIEW_NORMAL);
+	else {
+		/* Convert to view space normal in case a Normal is plugged. This is because cycles uses world normals */
+		GPU_link(mat, "node_vector_transform", in[IN_NORMAL].link, GPU_builtin(GPU_VIEW_MATRIX), &in[IN_NORMAL].link);
+	}
+	if (GPU_material_get_type(mat) == GPU_MATERIAL_TYPE_MESH_REAL_SH) {
+		GPUBrdfInput brdf;
 
-	return GPU_stack_link(mat, "node_bsdf_velvet", in, out);
+		GPU_brdf_input_initialize(&brdf);
+
+		brdf.mat       = mat;
+		brdf.type      = GPU_BRDF_VELVET;
+		brdf.color     = gpu_get_input_link(&in[IN_COLOR]);
+		brdf.sigma     = gpu_get_input_link(&in[IN_SIGMA]);
+		brdf.normal    = gpu_get_input_link(&in[IN_NORMAL]);
+
+		GPU_shade_BRDF(&brdf);
+
+		out[0].link = brdf.output;
+		return 1;
+	}
+	else
+		return GPU_stack_link(mat, "node_bsdf_velvet_lights", in, out, GPU_builtin(GPU_VIEW_POSITION), GPU_get_world_horicol());
 }
 
 /* node type definition */

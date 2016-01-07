@@ -48,7 +48,7 @@ void getVectorFromLatLong(float u, float v, float *vec)
 
 static void getTexelVectorSolidAngle(int x, int y, int width, int height, float *texelVect)
 {
-	float u, v, x0, y0, x1, y1;
+	float u, v;
 	float halfTexelSize[2];
 	float cornerVect[4][3];
 	float edgeVect0[3];
@@ -216,7 +216,7 @@ static int node_shader_gpu_tex_environment(GPUMaterial *mat, bNode *node, bNodeE
 
 	node_shader_gpu_tex_mapping(mat, node, in, out);
 
-	if (type == GPU_MATERIAL_TYPE_WORLD_SH || (brdf && (brdf->type == GPU_BRDF_DIFFUSE || brdf->type == GPU_BRDF_TRANSLUCENT))) {
+	if (type == GPU_MATERIAL_TYPE_WORLD_SH || (brdf && (brdf->type == GPU_BRDF_DIFFUSE || brdf->type == GPU_BRDF_TRANSLUCENT || brdf->type == GPU_BRDF_VELVET))) {
 		// SH with NORMALS
 		float shCoef[9][3] = { { 0.0f } };
 

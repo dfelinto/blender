@@ -2253,6 +2253,45 @@ void spec_bsdf_ggx(vec3 N, vec3 H, vec3 L, vec3 V, float roughness, out float bs
 	bsdf = (D * G * 4.0) / NV;
 }
 
+void bsdf_ashikhmin_velvet(vec3 N, vec3 H, vec3 L, vec3 V, float sigma, out float bsdf)
+{
+	/* TODO optimize for display */
+	sigma = max(sigma, 1e-2);
+	float m_1_sig2 = 1 / (sigma * sigma);
+
+	N = normalize(N);
+	L = normalize(L);
+	V = normalize(V);
+
+	float NL = dot(N, L);
+
+	bsdf = 0.0;
+
+	if(NL > 0) {
+		float NV = dot(N, V);
+		float NH = dot(N, H);
+		float VH = abs(dot(V, H));
+
+		if(abs(NV) > 1e-5 && abs(NH) < 1.0f-1e-5 && VH > 1e-5) {
+			float NHdivVH = NH / VH;
+			NHdivVH = max(NHdivVH, 1e-5);
+
+			float fac1 = 2 * abs(NHdivVH * NV);
+			float fac2 = 2 * abs(NHdivVH * NL);
+
+			float sinNH2 = 1 - NH * NH;
+			float sinNH4 = sinNH2 * sinNH2;
+			float cotan2 = (NH * NH) / sinNH2;
+
+			float D = exp(-cotan2 * m_1_sig2) * m_1_sig2 * M_1_PI / sinNH4;
+			float G = min(1.0, min(fac1, fac2)); // TODO: derive G from D analytically
+
+			bsdf = 0.25 * (D * G) / NV;
+		}
+
+	}
+}
+
 void diffuse_bsdf_oren_nayar(float NL, vec3 N, vec3 L, vec3 V, float roughness, out float bsdf)
 {
 	NL = max(0.0, NL);
@@ -2381,6 +2420,11 @@ void node_bsdf_transparent(vec4 color, vec4 background, out vec4 result)
 	result = vec4(background.rgb * color.rgb, 1.0);
 }
 
+void node_bsdf_velvet(vec4 color, float sigma, vec3 N, vec3 V, vec4 ambient_light, vec4 direct_light, out vec4 result)
+{
+	result = vec4( (ambient_light.rgb + direct_light.rgb) * color.rgb, 1.0);
+}
+
 /* bsdfs with opengl Lights */
 void node_bsdf_diffuse_lights(vec4 color, float roughness, vec3 N, vec3 V, vec4 ambient_light, out vec4 result)
 {
@@ -2451,6 +2495,27 @@ void node_bsdf_translucent_lights(vec4 color, vec3 N, vec3 V, vec4 ambient_light
 	node_bsdf_diffuse_lights(color, 0.0, N, V, ambient_light, result);
 }
 
+void node_bsdf_velvet_lights(vec4 color, float sigma, vec3 N, vec3 V, vec4 ambient_light, out vec4 result)
+{
+	shade_view(V, V); V = -V;
+
+	/* ambient light */
+	vec3 accumulator = ambient_light.rgb;
+	float bsdf = 0.0;
+
+	/* directional lights */
+	for(int i = 0; i < NUM_LIGHTS; i++) {
+		vec3 L = gl_LightSource[i].position.xyz;
+		vec3 light_specular = gl_LightSource[i].specular.rgb;
+		vec3 H = normalize(L + V);
+
+		bsdf_ashikhmin_velvet(N, H, L, V, sigma, bsdf);
+		accumulator += bsdf * light_specular;
+	}
+
+	result = vec4(accumulator * color.rgb, 1.0);
+}
+
 /* bsdfs with physical Lights */
 
 /* DIFFUSE */
@@ -2480,33 +2545,6 @@ void node_bsdf_diffuse_sphere_light(vec3 N, vec3 L, vec3 V, float light_distance
 
 	/* Energy conservation + cycle matching */
 	diff = max(illuminance, 0.0) * 2.5 * M_1_PI / sqrLightRadius;
-}
-
-void node_bsdf_diffuse_sun_light(vec3 N, vec3 L, vec3 V, float light_distance, float light_radius, float roughness, out float diff)
-{
-	light_radius = max(light_radius, 0.0001);
-	float sqrDist =  light_distance * light_distance;
-	float cosTheta = clamp(dot(N, L), -0.999, 0.999) ; 
-	float sqrLightRadius = light_radius * light_radius ;
-	float h = min(light_radius / light_distance , 0.9999) ;
-	float h2 = h*h;
-
-	float illuminance = 0.0 ;
-	if ( cosTheta * cosTheta > h2 )
-	{
-		illuminance = M_PI * h2 * clamp(cosTheta, 0.0, 1.0) ;
-	}
-	else
-	{
-		float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
-		float x = sqrt(1.0 / h2 - 1.0);
-		float y = -x * ( cosTheta / sinTheta );
-		float sinThetaSqrtY = sinTheta * sqrt(1.0 - y * y);
-		illuminance = (cosTheta * acos(y) - x * sinThetaSqrtY ) * h2 + atan(sinThetaSqrtY / x);
-	}
-
-	/* Energy conservation + cycle matching */
-	diff = max(illuminance, 0.0) * 2.5 / sqrLightRadius;
 }
 
 void node_bsdf_diffuse_area_light(vec3 N, vec3 L, vec3 V, float light_distance, vec3 lampco, vec2 scale, mat4 lampmat, float areasizex, float areasizey, float roughness, out float diff)
@@ -2545,6 +2583,33 @@ void node_bsdf_diffuse_area_light(vec3 N, vec3 L, vec3 V, float light_distance, 
 
 	/* Energy conservation + cycle matching */
 	diff *= 8.0 / (areasizex * areasizey);
+}
+
+void node_bsdf_diffuse_sun_light(vec3 N, vec3 L, vec3 V, float light_distance, float light_radius, float roughness, out float diff)
+{
+	light_radius = max(light_radius, 0.0001);
+	float sqrDist =  light_distance * light_distance;
+	float cosTheta = clamp(dot(N, L), -0.999, 0.999) ; 
+	float sqrLightRadius = light_radius * light_radius ;
+	float h = min(light_radius / light_distance , 0.9999) ;
+	float h2 = h*h;
+
+	float illuminance = 0.0 ;
+	if ( cosTheta * cosTheta > h2 )
+	{
+		illuminance = M_PI * h2 * clamp(cosTheta, 0.0, 1.0) ;
+	}
+	else
+	{
+		float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
+		float x = sqrt(1.0 / h2 - 1.0);
+		float y = -x * ( cosTheta / sinTheta );
+		float sinThetaSqrtY = sinTheta * sqrt(1.0 - y * y);
+		illuminance = (cosTheta * acos(y) - x * sinThetaSqrtY ) * h2 + atan(sinThetaSqrtY / x);
+	}
+
+	/* Energy conservation + cycle matching */
+	diff = max(illuminance, 0.0) * 2.5 / sqrLightRadius;
 }
 
 /* GLOSSY SHARP */
@@ -2772,6 +2837,47 @@ void node_bsdf_refract_sharp_sun_light(vec3 N, vec3 L, vec3 V, float light_dista
 	specfac = 0.0;
 }
 
+/* VELVET */
+
+void node_bsdf_velvet_sphere_light(vec3 N, vec3 L, vec3 V, float light_distance, float sigma, float light_radius, out float specfac)
+{
+	L = L;
+	N = normalize(N);
+	shade_view(V, V);
+	vec3 H = normalize(L + V);
+
+	bsdf_ashikhmin_velvet(N, H, L, V, sigma, specfac);
+
+	/* Energy conservation + cycle matching */
+	specfac *= 8.0 / (light_distance * light_distance);
+}
+
+void node_bsdf_velvet_area_light(vec3 N, vec3 L, vec3 V, float light_distance, float sigma, vec2 scale, mat4 viewinvmat, mat4 lampinvmat, mat4 lampmat, float areasizex, float areasizey, out float specfac)
+{
+	L = L;
+	N = normalize(N);
+	shade_view(V, V);
+	vec3 H = normalize(L + V);
+
+	areasizex *= scale.x;
+	areasizey *= scale.y;
+
+	bsdf_ashikhmin_velvet(N, H, L, V, sigma, specfac);
+
+	/* Energy conservation + cycle matching */
+	specfac *= 25.0 / (areasizex * areasizey);
+	specfac *= 1.0 / (light_distance * light_distance);
+}
+
+void node_bsdf_velvet_sun_light(vec3 N, vec3 L, vec3 V, float light_distance, float sigma, float light_radius, out float specfac)
+{
+	N = normalize(N);
+	shade_view(V, V);
+	vec3 H = normalize(L + V);
+
+	bsdf_ashikhmin_velvet(N, H, L, V, sigma, specfac);
+}
+
 
 /* Others Bsdfs */
 void default_diffuse(vec4 color, vec3 normal, out vec4 result)
@@ -2784,13 +2890,7 @@ void node_bsdf_anisotropic(vec4 color, float roughness, float anisotropy, float 
 	default_diffuse(color, N, result);
 }
 
-
 void node_bsdf_toon(vec4 color, float size, float tsmooth, vec3 N, out vec4 result)
-{
-	default_diffuse(color, N, result);
-}
-
-void node_bsdf_velvet(vec4 color, float sigma, vec3 N, out vec4 result)
 {
 	default_diffuse(color, N, result);
 }
