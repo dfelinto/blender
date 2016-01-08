@@ -375,7 +375,8 @@ bool GPU_fx_compositor_initialize_passes(
 	int w = BLI_rcti_size_x(rect), h = BLI_rcti_size_y(rect);
 	char err_out[256];
 	int num_passes = 0;
-	char fx_flag;
+	char fx_flag, fx_flag2;
+	bool no_fx;
 
 	fx->effects = 0;
 
@@ -388,6 +389,7 @@ bool GPU_fx_compositor_initialize_passes(
 	}
 
 	fx_flag = fx_settings->fx_flag;
+	fx_flag2 = fx_settings->fx_flag2;
 
 	/* disable effects if no options passed for them */
 	if (!fx_settings->dof) {
@@ -397,7 +399,10 @@ bool GPU_fx_compositor_initialize_passes(
 		fx_flag &= ~GPU_FX_FLAG_SSAO;
 	}
 
-	if (!fx_flag) {
+	/* we must test every supported effect in case a non supported fx from the future arrives */
+	no_fx = !(fx_flag || (fx_flag2 & GPU_FX_FLAG_COLORMANAGEMENT));
+
+	if (no_fx) {
 		cleanup_fx_gl_data(fx, true);
 		return false;
 	}
@@ -416,7 +421,7 @@ bool GPU_fx_compositor_initialize_passes(
 	if (fx_flag & GPU_FX_FLAG_SSAO)
 		num_passes++;
 
-	if (fx_flag & GPU_FX_FLAG_COLORMANAGEMENT)
+	if (fx_flag2 & GPU_FX_FLAG_COLORMANAGEMENT)
 		num_passes++;
 
 	if (!fx->gbuffer) {
@@ -469,7 +474,7 @@ bool GPU_fx_compositor_initialize_passes(
 		}
 	}
 
-	if (fx_flag & GPU_FX_FLAG_COLORMANAGEMENT) {
+	if (fx_flag2 & GPU_FX_FLAG_COLORMANAGEMENT) {
 		ColorManagedViewSettings *view_settings = &scene->view_settings;;
 		ColorManagedDisplaySettings *display_settings = &scene->display_settings;;
 		if (!fx->colorc_3dLut || view_settings->lut_is_outdated || display_settings->lut_is_outdated) {
@@ -627,7 +632,7 @@ bool GPU_fx_compositor_initialize_passes(
 		fx->restore_stencil = false;
 	}
 
-	fx->effects = fx_flag;
+	fx->effects = fx_flag | fx_flag2;
 
 	if (fx_settings)
 		fx->settings = *fx_settings;

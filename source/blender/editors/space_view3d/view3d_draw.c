@@ -2974,7 +2974,7 @@ void ED_view3d_draw_offscreen_init(Scene *scene, View3D *v3d)
 static void view3d_main_region_clear(Scene *scene, View3D *v3d, ARegion *ar)
 {
 	GPUFXSettings *fx_settings = &v3d->fx_settings;
-	bool use_color_correction = (fx_settings->fx_flag && (fx_settings->fx_flag & GPU_FX_FLAG_COLORMANAGEMENT)) ? false : true;
+	bool use_color_correction = (fx_settings->fx_flag2 && (fx_settings->fx_flag2 & GPU_FX_FLAG_COLORMANAGEMENT)) ? false : true;
 
 	if (scene->world && (v3d->flag3 & V3D_SHOW_WORLD)) {
 		bool glsl = BKE_scene_use_new_shading_nodes(scene) && scene->world->nodetree && scene->world->use_nodes;
@@ -3246,8 +3246,12 @@ void ED_view3d_draw_offscreen(
 		view3d_main_region_setup_view(scene, v3d, ar, viewmat, winmat);
 
 	/* framebuffer fx needed, we need to draw offscreen first */
-	if (v3d->fx_settings.fx_flag && fx) {
+	if ((v3d->fx_settings.fx_flag || v3d->fx_settings.fx_flag2) && fx) {
 		GPUSSAOSettings *ssao = NULL;
+		char fx_flag2 = v3d->fx_settings.fx_flag2;
+
+		/* Don't do color management fx for offscreen */
+		v3d->fx_settings.fx_flag2 &= ~GPU_FX_FLAG_COLORMANAGEMENT;
 
 		if (v3d->drawtype < OB_SOLID) {
 			ssao = v3d->fx_settings.ssao;
@@ -3256,6 +3260,7 @@ void ED_view3d_draw_offscreen(
 
 		do_compositing = GPU_fx_compositor_initialize_passes(fx, &ar->winrct, NULL, fx_settings, scene);
 		
+		v3d->fx_settings.fx_flag2 = fx_flag2;
 
 		if (ssao)
 			v3d->fx_settings.ssao = ssao;
@@ -3885,7 +3890,7 @@ static void view3d_main_region_draw_objects(const bContext *C, Scene *scene, Vie
 #endif
 
 	/* framebuffer fx needed, we need to draw offscreen first */
-	if (v3d->fx_settings.fx_flag && v3d->drawtype >= OB_SOLID) {
+	if ((v3d->fx_settings.fx_flag || v3d->fx_settings.fx_flag2) && v3d->drawtype >= OB_SOLID) {
 		GPUFXSettings fx_settings;
 		BKE_screen_gpu_fx_validate(&v3d->fx_settings);
 		fx_settings = v3d->fx_settings;

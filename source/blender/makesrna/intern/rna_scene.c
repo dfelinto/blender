@@ -4363,7 +4363,7 @@ static void rna_def_gpu_fx(BlenderRNA *brna)
 
 
 	prop = RNA_def_property(srna, "use_colormanagement", PROP_BOOLEAN, PROP_NONE);
-	RNA_def_property_boolean_sdna(prop, NULL, "fx_flag", GPU_FX_FLAG_COLORMANAGEMENT);
+	RNA_def_property_boolean_sdna(prop, NULL, "fx_flag2", GPU_FX_FLAG_COLORMANAGEMENT);
 	RNA_def_property_ui_text(prop, "Color Management", "Use color management on viewport");
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, "rna_GPUFXSettings_fx_update");
 }

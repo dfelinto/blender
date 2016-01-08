@@ -548,7 +548,7 @@ static bool screen_opengl_render_init(bContext *C, wmOperator *op)
 		 * running notifiers again will overwrite */
 		oglrender->scene->customdata_mask |= oglrender->scene->customdata_mask_modal;
 
-		if (oglrender->v3d->fx_settings.fx_flag & (GPU_FX_FLAG_DOF | GPU_FX_FLAG_SSAO)) {
+		if (oglrender->v3d->fx_settings.fx_flag) {
 			oglrender->fx = GPU_fx_compositor_create();
 		}
 	}

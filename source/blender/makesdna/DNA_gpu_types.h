@@ -56,7 +56,8 @@ typedef struct GPUFXSettings {
 	GPUDOFSettings *dof;
 	GPUSSAOSettings *ssao;
 	char fx_flag;  /* eGPUFXFlags */
-	char pad[7];
+	char fx_flag2; /* eGPUFXFlags */
+	char pad[6];
 } GPUFXSettings;
 
 /* shaderfx enables */
