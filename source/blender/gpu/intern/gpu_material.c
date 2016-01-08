@@ -2067,7 +2067,23 @@ static GPUNodeLink *gpu_material_diffuse_bsdf(GPUMaterial *mat, Material *ma)
 	static float ambient[4] = {0.2f, 0.2f, 0.2f, 1.0f};
 	GPUNodeLink *outlink;
 
-	GPU_link(mat, "node_bsdf_diffuse_lights", GPU_uniform(&ma->r), GPU_uniform(&roughness), GPU_builtin(GPU_VIEW_NORMAL), GPU_builtin(GPU_VIEW_POSITION), GPU_uniform(&ambient), &outlink);
+	if (GPU_material_get_type(mat) == GPU_MATERIAL_TYPE_MESH_REAL_SH) {
+		GPUBrdfInput brdf;
+
+		GPU_brdf_input_initialize(&brdf);
+
+		brdf.mat       = mat;
+		brdf.type      = GPU_BRDF_DIFFUSE;
+		brdf.color     = GPU_uniform(&ma->r);
+		brdf.roughness = GPU_uniform(&roughness);
+		brdf.normal    = GPU_builtin(GPU_VIEW_NORMAL);
+
+		GPU_shade_BRDF(&brdf);
+
+		outlink = brdf.output;
+	} 
+	else
+		GPU_link(mat, "node_bsdf_diffuse_lights", GPU_uniform(&ma->r), GPU_uniform(&roughness), GPU_builtin(GPU_VIEW_NORMAL), GPU_builtin(GPU_VIEW_POSITION), GPU_uniform(&ambient), &outlink);
 
 	return outlink;
 }

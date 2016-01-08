@@ -2900,7 +2900,7 @@ void node_subsurface_scattering(vec4 color, float scale, vec3 radius, float shar
 	default_diffuse(color, N, result);
 }
 
-void node_bsdf_hair(vec4 color, float offset, float roughnessu, float roughnessv, out vec4 result)
+void node_bsdf_hair(vec4 color, float offset, float roughnessu, float roughnessv, vec3 tangent, out vec4 result)
 {
 	result = color;
 }
