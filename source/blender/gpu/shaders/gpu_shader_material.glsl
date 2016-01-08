@@ -2407,7 +2407,7 @@ void node_bsdf_glass(vec4 color, float roughness, float ior, vec3 N, vec3 V, vec
 
 	float fresnel = fresnel_dielectric(V, N, (gl_FrontFacing)? ior: 1.0/ior);
 
-	result = vec4( mix(refracted_light, reflected_light, fresnel).rgb * color.rgb, 1.0);
+	result = vec4( mix(refracted_light, reflected_light, fresnel).rgb, 1.0);
 }
 
 void node_bsdf_translucent(vec4 color, float roughness, vec3 N, vec3 V, vec4 ambient_light, vec4 direct_light, out vec4 result)
