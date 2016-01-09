@@ -306,7 +306,6 @@ createWindow(const STR_String& title,
 	                             left, top, width, height,
 	                             state, parentWindow, type,
 	                             ((glSettings.flags & GHOST_glStereoVisual) != 0), exclusive,
-	                             ((glSettings.flags & GHOST_glAlphaBackground) != 0),
 	                             glSettings.numOfAASamples, (glSettings.flags & GHOST_glDebugContext) != 0);
 
 	if (window) {

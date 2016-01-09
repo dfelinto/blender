@@ -213,7 +213,6 @@ void registerAllExceptions(void)
 	ImageSizesNotMatchDesc.registerDesc();
 	ImageHasExportsDesc.registerDesc();
 	InvalidColorChannelDesc.registerDesc();
-	InvalidImageModeDesc.registerDesc();
 	SceneInvalidDesc.registerDesc();
 	CameraInvalidDesc.registerDesc();
 	ObserverInvalidDesc.registerDesc();
@@ -224,18 +223,4 @@ void registerAllExceptions(void)
 	MirrorTooSmallDesc.registerDesc();
 	SourceVideoEmptyDesc.registerDesc();
 	SourceVideoCreationDesc.registerDesc();
-	OffScreenInvalidDesc.registerDesc();
-#ifdef WITH_DECKLINK
-	AutoDetectionNotAvailDesc.registerDesc();
-	DeckLinkBadDisplayModeDesc.registerDesc();
-	DeckLinkBadPixelFormatDesc.registerDesc();
-	DeckLinkOpenCardDesc.registerDesc();
-	DeckLinkBadFormatDesc.registerDesc();
-	DeckLinkInternalErrorDesc.registerDesc();
-	SourceVideoOnlyCaptureDesc.registerDesc();
-	VideoDeckLinkBadFormatDesc.registerDesc();
-	VideoDeckLinkOpenCardDesc.registerDesc();
-	VideoDeckLinkDvpInternalErrorDesc.registerDesc();
-	VideoDeckLinkPinMemoryErrorDesc.registerDesc();
-#endif
 }

@@ -734,11 +734,6 @@ int GPU_texture_opengl_bindcode(const GPUTexture *tex)
 	return tex->bindcode;
 }
 
-int GPU_texture_opengl_target(const GPUTexture *tex)
-{
-	return tex->target;
-}
-
 GPUFrameBuffer *GPU_texture_framebuffer(GPUTexture *tex)
 {
 	return tex->fb;

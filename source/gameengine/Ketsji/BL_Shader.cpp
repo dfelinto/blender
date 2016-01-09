@@ -32,7 +32,6 @@
 #include "MT_Matrix4x4.h"
 #include "MT_Matrix3x3.h"
 #include "KX_PyMath.h"
-#include "KX_PythonInit.h"
 #include "MEM_guardedalloc.h"
 
 #include "RAS_MeshObject.h"
@@ -68,30 +67,20 @@ BL_Uniform::~BL_Uniform()
 #endif
 }
 
-bool BL_Uniform::Apply(class BL_Shader *shader)
+void BL_Uniform::Apply(class BL_Shader *shader)
 {
 #ifdef SORT_UNIFORMS
-	RAS_IRasterizer *ras;
 	MT_assert(mType > UNI_NONE && mType < UNI_MAX && mData);
 
-	if (!mDirty)
-		return false;
+	if (!mDirty) {
+		return;
+	}
 
-	mDirty = false;
 	switch (mType) {
 		case UNI_FLOAT:
 		{
 			float *f = (float *)mData;
 			glUniform1fARB(mLoc, (GLfloat)*f);
-			break;
-		}
-		case UNI_FLOAT_EYE:
-		{
-			float *f = (float*)mData;
-			ras = KX_GetActiveEngine()->GetRasterizer();
-			*f = (ras->GetEye() == RAS_IRasterizer::RAS_STEREO_LEFTEYE) ? 0.0f : 0.5f;
-			glUniform1fARB(mLoc, (GLfloat)*f);
-			mDirty = (ras->Stereo()) ? true : false;
 			break;
 		}
 		case UNI_INT:
@@ -149,7 +138,7 @@ bool BL_Uniform::Apply(class BL_Shader *shader)
 			break;
 		}
 	}
-	return mDirty;
+	mDirty = false;
 #endif
 }
 
@@ -285,9 +274,11 @@ void BL_Shader::ApplyShader()
 		return;
 	}
 
+	for (unsigned int i = 0; i < mUniforms.size(); i++) {
+		mUniforms[i]->Apply(this);
+	}
+
 	mDirty = false;
-	for (unsigned int i=0; i<mUniforms.size(); i++)
-		mDirty |= mUniforms[i]->Apply(this);
 #endif
 }
 
@@ -323,71 +314,64 @@ bool BL_Shader::LinkProgram()
 		return false;
 	}
 
-	if (vertProg[0] != 0)
-	{
-		// -- vertex shader ------------------
-		tmpVert = glCreateShaderObjectARB(GL_VERTEX_SHADER_ARB);
-		glShaderSourceARB(tmpVert, 1, (const char**)&vertProg, 0);
-		glCompileShaderARB(tmpVert);
-		glGetObjectParameterivARB(tmpVert, GL_OBJECT_INFO_LOG_LENGTH_ARB, (GLint*)&vertlen);
+	// -- vertex shader ------------------
+	tmpVert = glCreateShaderObjectARB(GL_VERTEX_SHADER_ARB);
+	glShaderSourceARB(tmpVert, 1, (const char **)&vertProg, 0);
+	glCompileShaderARB(tmpVert);
+	glGetObjectParameterivARB(tmpVert, GL_OBJECT_INFO_LOG_LENGTH_ARB, (GLint *)&vertlen);
 
-		// print info if any
-		if (vertlen > 0 && vertlen < MAX_LOG_LEN) {
-			logInf = (char*)MEM_mallocN(vertlen, "vert-log");
-			glGetInfoLogARB(tmpVert, vertlen, (GLsizei*)&char_len, logInf);
-			if (char_len > 0) {
-				spit("---- Vertex Shader Error ----");
-				spit(logInf);
-			}
-			MEM_freeN(logInf);
-			logInf = 0;
+	// print info if any
+	if (vertlen > 0 && vertlen < MAX_LOG_LEN) {
+		logInf = (char *)MEM_mallocN(vertlen, "vert-log");
+		glGetInfoLogARB(tmpVert, vertlen, (GLsizei *)&char_len, logInf);
+
+		if (char_len > 0) {
+			spit("---- Vertex Shader Error ----");
+			spit(logInf);
 		}
-		// check for compile errors
-		glGetObjectParameterivARB(tmpVert, GL_OBJECT_COMPILE_STATUS_ARB, (GLint*)&vertstatus);
-		if (!vertstatus) {
-			spit("---- Vertex shader failed to compile ----");
-			goto programError;
-		}
+
+		MEM_freeN(logInf);
+		logInf = 0;
 	}
 
-	if (fragProg[0] != 0)
-	{
-		// -- fragment shader ----------------
-		tmpFrag = glCreateShaderObjectARB(GL_FRAGMENT_SHADER_ARB);
-		glShaderSourceARB(tmpFrag, 1, (const char**)&fragProg, 0);
-		glCompileShaderARB(tmpFrag);
-		glGetObjectParameterivARB(tmpFrag, GL_OBJECT_INFO_LOG_LENGTH_ARB, (GLint*)&fraglen);
-		if (fraglen > 0 && fraglen < MAX_LOG_LEN) {
-			logInf = (char*)MEM_mallocN(fraglen, "frag-log");
-			glGetInfoLogARB(tmpFrag, fraglen, (GLsizei*)&char_len, logInf);
-			if (char_len > 0) {
-				spit("---- Fragment Shader Error ----");
-				spit(logInf);
-			}
-			MEM_freeN(logInf);
-			logInf = 0;
+	// check for compile errors
+	glGetObjectParameterivARB(tmpVert, GL_OBJECT_COMPILE_STATUS_ARB, (GLint *)&vertstatus);
+	if (!vertstatus) {
+		spit("---- Vertex shader failed to compile ----");
+		goto programError;
+	}
+
+	// -- fragment shader ----------------
+	tmpFrag = glCreateShaderObjectARB(GL_FRAGMENT_SHADER_ARB);
+	glShaderSourceARB(tmpFrag, 1, (const char **)&fragProg, 0);
+	glCompileShaderARB(tmpFrag);
+	glGetObjectParameterivARB(tmpFrag, GL_OBJECT_INFO_LOG_LENGTH_ARB, (GLint *)&fraglen);
+
+	if (fraglen > 0 && fraglen < MAX_LOG_LEN) {
+		logInf = (char *)MEM_mallocN(fraglen, "frag-log");
+		glGetInfoLogARB(tmpFrag, fraglen, (GLsizei *)&char_len, logInf);
+
+		if (char_len > 0) {
+			spit("---- Fragment Shader Error ----");
+			spit(logInf);
 		}
 
-		glGetObjectParameterivARB(tmpFrag, GL_OBJECT_COMPILE_STATUS_ARB, (GLint*)&fragstatus);
-		if (!fragstatus) {
-			spit("---- Fragment shader failed to compile ----");
-			goto programError;
-		}
+		MEM_freeN(logInf);
+		logInf = 0;
 	}
-	
-	if (!tmpFrag && !tmpVert)
-	{
-		spit("---- No shader given ----");
+
+	glGetObjectParameterivARB(tmpFrag, GL_OBJECT_COMPILE_STATUS_ARB, (GLint *)&fragstatus);
+
+	if (!fragstatus) {
+		spit("---- Fragment shader failed to compile ----");
 		goto programError;
 	}
 
 	// -- program ------------------------
 	// set compiled vert/frag shader & link
 	tmpProg = glCreateProgramObjectARB();
-	if (tmpVert)
-		glAttachObjectARB(tmpProg, tmpVert);
-	if (tmpFrag)
-		glAttachObjectARB(tmpProg, tmpFrag);
+	glAttachObjectARB(tmpProg, tmpVert);
+	glAttachObjectARB(tmpProg, tmpFrag);
 	glLinkProgramARB(tmpProg);
 	glGetObjectParameterivARB(tmpProg, GL_OBJECT_INFO_LOG_LENGTH_ARB, (GLint *)&proglen);
 	glGetObjectParameterivARB(tmpProg, GL_OBJECT_LINK_STATUS_ARB, (GLint *)&progstatus);
@@ -412,10 +396,8 @@ bool BL_Shader::LinkProgram()
 
 	// set
 	mShader = tmpProg;
-	if (tmpVert)
-		glDeleteObjectARB(tmpVert);
-	if (tmpFrag)
-		glDeleteObjectARB(tmpFrag);
+	glDeleteObjectARB(tmpVert);
+	glDeleteObjectARB(tmpFrag);
 	mOk = 1;
 	mError = 0;
 	return true;
@@ -766,7 +748,6 @@ PyMethodDef BL_Shader::Methods[] = {
 	KX_PYMETHODTABLE(BL_Shader, validate),
 	// access functions
 	KX_PYMETHODTABLE(BL_Shader, isValid),
-	KX_PYMETHODTABLE(BL_Shader, setUniformEyef),
 	KX_PYMETHODTABLE(BL_Shader, setUniform1f),
 	KX_PYMETHODTABLE(BL_Shader, setUniform2f),
 	KX_PYMETHODTABLE(BL_Shader, setUniform3f),
@@ -1031,29 +1012,6 @@ KX_PYMETHODDEF_DOC(BL_Shader, setUniform4f, "setUniform4f(name, fx,fy,fz, fw) ")
 			SetUniformfv(loc, BL_Uniform::UNI_FLOAT4, array, (sizeof(float) * 4));
 #else
 			SetUniform(loc, array, 4);
-#endif
-		}
-		Py_RETURN_NONE;
-	}
-	return NULL;
-}
-
-KX_PYMETHODDEF_DOC(BL_Shader, setUniformEyef, "setUniformEyef(name)")
-{
-	if (mError) {
-		Py_RETURN_NONE;
-	}
-	const char *uniform;
-	float value = 0.0f;
-	if (PyArg_ParseTuple(args, "s:setUniformEyef", &uniform))
-	{
-		int loc = GetUniformLocation(uniform);
-		if (loc != -1)
-		{
-#ifdef SORT_UNIFORMS
-			SetUniformfv(loc, BL_Uniform::UNI_FLOAT_EYE, &value, sizeof(float));
-#else
-			SetUniform(loc, (int)value);
 #endif
 		}
 		Py_RETURN_NONE;

@@ -66,7 +66,6 @@ public:
 	        Window window,
 	        Display *display,
 	        XVisualInfo *visualInfo,
-	        GLXFBConfig fbconfig,
 	        int contextProfileMask,
 	        int contextMajorVersion,
 	        int contextMinorVersion,
@@ -129,7 +128,6 @@ private:
 
 	Display *m_display;
 	XVisualInfo *m_visualInfo;
-	GLXFBConfig m_fbconfig;
 	Window   m_window;
 
 	const int m_contextProfileMask;
@@ -153,7 +151,6 @@ private:
 int GHOST_X11_GL_GetAttributes(
         int *attribs, int attribs_max,
         int samples, bool is_stereo_visual,
-	bool need_alpha,
         bool for_fb_config);
 
 #endif // __GHOST_CONTEXTGLX_H__
