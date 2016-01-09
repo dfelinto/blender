@@ -651,7 +651,7 @@ void psys_render_set(Object *ob, ParticleSystem *psys, float viewmat[4][4], floa
 		psys->recalc |= PSYS_RECALC_RESET;
 }
 
-void psys_render_restore(Scene *scene, Object *ob, ParticleSystem *psys)
+void psys_render_restore(Object *ob, ParticleSystem *psys)
 {
 	ParticleRenderData *data;
 	ParticleSystemModifierData *psmd = psys_get_modifier(ob, psys);
@@ -702,7 +702,12 @@ void psys_render_restore(Scene *scene, Object *ob, ParticleSystem *psys)
 
 	if (psmd->dm_final) {
 		if (!psmd->dm_final->deformedOnly) {
-			psmd->dm_deformed = CDDM_copy(mesh_get_derived_deform(scene, ob, CD_MASK_BAREMESH | CD_MASK_MFACE));
+			if (ob->derivedDeform) {
+				psmd->dm_deformed = CDDM_copy(ob->derivedDeform);
+			}
+			else {
+				psmd->dm_deformed = CDDM_from_mesh((Mesh *)ob->data);
+			}
 			DM_ensure_tessface(psmd->dm_deformed);
 		}
 		psys_calc_dmcache(ob, psmd->dm_final, psmd->dm_deformed, psys);

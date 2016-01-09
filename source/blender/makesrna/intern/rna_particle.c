@@ -592,7 +592,7 @@ static void rna_ParticleSystem_set_resolution(ParticleSystem *particlesystem, Sc
 		ParticleSystemModifierData *psmd = psys_get_modifier(object, particlesystem);
 		
 		if (particlesystem->renderdata) {
-			psys_render_restore(scene, object, particlesystem);
+			psys_render_restore(object, particlesystem);
 		}
 		
 		psmd->flag &= ~eParticleSystemFlag_psys_updated;
@@ -2411,7 +2411,7 @@ static void rna_def_particle_settings(BlenderRNA *brna)
 	RNA_def_property_update(prop, 0, "rna_Particle_redo_child");
 
 	prop = RNA_def_property(srna, "kink_axis", PROP_ENUM, PROP_NONE);
-	RNA_def_property_enum_items(prop, rna_enum_object_axis_unsigned_items);
+	RNA_def_property_enum_items(prop, rna_enum_axis_xyz_items);
 	RNA_def_property_ui_text(prop, "Axis", "Which axis to use for offset");
 	RNA_def_property_update(prop, 0, "rna_Particle_redo_child");
 
