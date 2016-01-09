@@ -311,7 +311,6 @@ function(SETUP_LIBDIRS)
 	if(WITH_MEM_JEMALLOC)
 		link_directories(${JEMALLOC_LIBPATH})
 	endif()
-
 	if(WIN32 AND NOT UNIX)
 		link_directories(${PTHREADS_LIBPATH})
 	endif()
@@ -703,6 +702,14 @@ function(SETUP_BLENDER_SORTED_LIBS)
 
 	if(WITH_BULLET AND NOT WITH_SYSTEM_BULLET)
 		list_insert_after(BLENDER_SORTED_LIBS "ge_logic_ngnetwork" "extern_bullet")
+	endif()
+
+	if(WITH_DECKLINK)
+		list(APPEND BLENDER_SORTED_LIBS bf_intern_decklink)
+	endif()
+
+	if(WIN32)
+		list(APPEND BLENDER_SORTED_LIBS bf_intern_gpudirect)
 	endif()
 
 	if(WITH_OPENSUBDIV)
