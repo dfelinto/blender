@@ -1,4 +1,5 @@
-/* ***** BEGIN GPL LICENSE BLOCK *****
+/*
+ * ***** BEGIN GPL LICENSE BLOCK *****
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -276,7 +277,7 @@ public:
 	 */
 	virtual GHOST_TSuccess beginFullScreen(
 	        const GHOST_DisplaySetting& setting, GHOST_IWindow **window,
-	        const bool stereoVisual, const bool alphaBackground = 0, const GHOST_TUns16 numOfAASamples = 0) = 0;
+	        const bool stereoVisual, const GHOST_TUns16 numOfAASamples = 0) = 0;
 
 	/**
 	 * Updates the resolution while in fullscreen mode.
