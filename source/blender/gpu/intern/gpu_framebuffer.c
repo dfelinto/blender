@@ -637,3 +637,8 @@ int GPU_offscreen_color_texture(const GPUOffScreen *ofs)
 	return GPU_texture_opengl_bindcode(ofs->color);
 }
 
+int GPU_offscreen_color_target(const GPUOffScreen *ofs)
+{
+	return GPU_texture_opengl_target(ofs->color);
+}
+
