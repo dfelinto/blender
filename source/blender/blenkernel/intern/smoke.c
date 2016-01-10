@@ -126,7 +126,7 @@ void smoke_initWaveletBlenderRNA(struct WTURBULENCE *UNUSED(wt), float *UNUSED(s
 void smoke_initBlenderRNA(struct FLUID_3D *UNUSED(fluid), float *UNUSED(alpha), float *UNUSED(beta), float *UNUSED(dt_factor), float *UNUSED(vorticity),
                           int *UNUSED(border_colli), float *UNUSED(burning_rate), float *UNUSED(flame_smoke), float *UNUSED(flame_smoke_color),
                           float *UNUSED(flame_vorticity), float *UNUSED(flame_ignition_temp), float *UNUSED(flame_max_temp)) {}
-struct DerivedMesh *smokeModifier_do(SmokeModifierData *UNUSED(smd), Scene *UNUSED(scene), Object *UNUSED(ob), DerivedMesh *UNUSED(dm), bool UNUSED(for_render)) { return NULL; }
+struct DerivedMesh *smokeModifier_do(SmokeModifierData *UNUSED(smd), Scene *UNUSED(scene), Object *UNUSED(ob), DerivedMesh *UNUSED(dm)) { return NULL; }
 float smoke_get_velocity_at(struct Object *UNUSED(ob), float UNUSED(position[3]), float UNUSED(velocity[3])) { return 0.0f; }
 
 #endif /* WITH_SMOKE */
@@ -2155,6 +2155,7 @@ static void update_flowsfluids(Scene *scene, Object *ob, SmokeDomainSettings *sd
 						active_fields |= SM_ACTIVE_COLOR_SET;
 					}
 					else if (!equals_v3v3(sds->active_color, sfs->color)) {
+						copy_v3_v3(sds->active_color, sfs->color);
 						active_fields |= SM_ACTIVE_COLORS;
 					}
 				}
@@ -2173,6 +2174,7 @@ static void update_flowsfluids(Scene *scene, Object *ob, SmokeDomainSettings *sd
 			active_fields |= SM_ACTIVE_COLOR_SET;
 		}
 		else if (!equals_v3v3(sds->active_color, sds->flame_smoke_color)) {
+			copy_v3_v3(sds->active_color, sds->flame_smoke_color);
 			active_fields |= SM_ACTIVE_COLORS;
 		}
 	}
