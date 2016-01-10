@@ -62,7 +62,6 @@ GHOST_ContextGLX::GHOST_ContextGLX(
         Window window,
         Display *display,
         XVisualInfo *visualInfo,
-        GLXFBConfig fbconfig,
         int contextProfileMask,
         int contextMajorVersion,
         int contextMinorVersion,
@@ -71,7 +70,6 @@ GHOST_ContextGLX::GHOST_ContextGLX(
     : GHOST_Context(stereoVisual, numOfAASamples),
       m_display(display),
       m_visualInfo(visualInfo),
-      m_fbconfig(fbconfig),
       m_window(window),
       m_contextProfileMask(contextProfileMask),
       m_contextMajorVersion(contextMajorVersion),
@@ -287,25 +285,19 @@ const bool GLXEW_ARB_create_context_robustness =
 		attribs[i++] = 0;
 
 		/* Create a GL 3.x context */
-		if (m_fbconfig)
+		GLXFBConfig *framebuffer_config = NULL;
 		{
-			m_context = glXCreateContextAttribsARB(m_display, m_fbconfig, s_sharedContext, True, attribs);
+			int glx_attribs[64];
+			int fbcount = 0;
+
+			GHOST_X11_GL_GetAttributes(glx_attribs, 64, m_numOfAASamples, m_stereoVisual, true);
+
+			framebuffer_config = glXChooseFBConfig(m_display, DefaultScreen(m_display), glx_attribs, &fbcount);
 		}
-		else {
-			GLXFBConfig *framebuffer_config = NULL;
-			{
-				int glx_attribs[64];
-				int fbcount = 0;
 
-				GHOST_X11_GL_GetAttributes(glx_attribs, 64, m_numOfAASamples, m_stereoVisual, false, true);
-
-				framebuffer_config = glXChooseFBConfig(m_display, DefaultScreen(m_display), glx_attribs, &fbcount);
-			}
-
-			if (framebuffer_config) {
-				m_context = glXCreateContextAttribsARB(m_display, framebuffer_config[0], s_sharedContext, True, attribs);
-				XFree(framebuffer_config);
-			}
+		if (framebuffer_config) {
+			m_context = glXCreateContextAttribsARB(m_display, framebuffer_config[0], s_sharedContext, True, attribs);
+			XFree(framebuffer_config);
 		}
 	}
 	else {
@@ -409,10 +401,15 @@ GHOST_TSuccess GHOST_ContextGLX::getSwapInterval(int &intervalOut)
 int GHOST_X11_GL_GetAttributes(
         int *attribs, int attribs_max,
         int samples, bool is_stereo_visual,
-	bool need_alpha,
         bool for_fb_config)
 {
 	int i = 0;
+
+#ifdef GHOST_OPENGL_ALPHA
+	const bool need_alpha = true;
+#else
+	const bool need_alpha = false;
+#endif
 
 #ifdef GHOST_OPENGL_STENCIL
 	const bool need_stencil = true;

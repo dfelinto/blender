@@ -35,7 +35,6 @@
 #include "Common.h"
 
 #include "ImageBase.h"
-#include "RAS_IOffScreen.h"
 
 
 /// class for viewport access
@@ -43,7 +42,7 @@ class ImageViewport : public ImageBase
 {
 public:
 	/// constructor
-	ImageViewport (PyRASOffScreen *offscreen=NULL);
+	ImageViewport (void);
 
 	/// destructor
 	virtual ~ImageViewport (void);
@@ -68,9 +67,6 @@ public:
 	/// set position in viewport
 	void setPosition (GLint pos[2] = NULL);
 
-	/// capture image from viewport to user buffer
-	virtual bool loadImage(unsigned int *buffer, unsigned int size, unsigned int format, double ts);
-
 protected:
 	/// frame buffer rectangle
 	GLint m_viewport[4];
@@ -93,10 +89,7 @@ protected:
 	bool m_texInit;
 
 	/// capture image from viewport
-	virtual void calcImage (unsigned int texId, double ts) { calcViewport(texId, ts, GL_RGBA); }
-
-	/// capture image from viewport
-	virtual void calcViewport (unsigned int texId, double ts, unsigned int format);
+	virtual void calcImage (unsigned int texId, double ts);
 
 	/// get viewport size
 	GLint * getViewportSize (void) { return m_viewport + 2; }

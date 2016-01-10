@@ -36,8 +36,7 @@
 #define NULL 0
 #endif
 
-#ifndef _HRESULT_DEFINED
-#define _HRESULT_DEFINED
+#ifndef HRESULT
 #define HRESULT long
 #endif
 
