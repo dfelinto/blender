@@ -15,26 +15,18 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  *
- * The Original Code is Copyright (C) 2012 Blender Foundation.
- * All rights reserved.
- *
- * The Original Code is: all of this file.
- *
- * Contributor(s): Peter Larabell.
+ * Contributor(s): Bastien Montagne
  *
  * ***** END GPL LICENSE BLOCK *****
  */
-/** \file raskter.h
- *  \ingroup RASKTER
+
+/** \file blender/python/intern/bpy_rna_id_collection.h
+ *  \ingroup pythonintern
  */
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+#ifndef __BPY_RNA_ID_COLLECTION_H__
+#define __BPY_RNA_ID_COLLECTION_H__
 
-int PLX_raskterize(float (*base_verts)[2], int num_base_verts,
-                   float *buf, int buf_x, int buf_y);
+int BPY_rna_id_collection_module(PyObject *);
 
-#ifdef __cplusplus
-}
-#endif
+#endif  /* __BPY_RNA_ID_COLLECTION_H__ */
