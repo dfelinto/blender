@@ -114,7 +114,7 @@ def vector_curve_node_remap(node):
         node.mapping.update()
 
 
-def custom_bake_remap(scene)
+def custom_bake_remap(scene):
     """
     Remap bake types into the new types and set the flags accordingly
     """
@@ -148,11 +148,11 @@ def custom_bake_remap(scene)
 
     if bake_type_idx is None:
         cscene.bake_type = 'COMBINED'
-        continue
+        return
 
     # File doesn't need versioning
     if bake_type_idx < diffuse_direct_idx:
-        continue
+        return
 
     # File needs versioning
     bake_type = bake_lookup[bake_type_idx]
