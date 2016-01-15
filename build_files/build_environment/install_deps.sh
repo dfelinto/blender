@@ -596,7 +596,7 @@ while true; do
     ;;
     --skip-osd)
       OSD_SKIP=true; shift; continue
-    ;;    
+    ;;
     --skip-opencollada)
       OPENCOLLADA_SKIP=true; shift; continue
     ;;
@@ -630,7 +630,7 @@ NUMPY_SOURCE=( "http://sourceforge.net/projects/numpy/files/NumPy/$NUMPY_VERSION
 
 _boost_version_nodots=`echo "$BOOST_VERSION" | sed -r 's/\./_/g'`
 BOOST_SOURCE=( "http://sourceforge.net/projects/boost/files/boost/$BOOST_VERSION/boost_$_boost_version_nodots.tar.bz2/download" )
-BOOST_BUILD_MODULES="--with-system --with-filesystem --with-thread --with-regex --with-locale --with-date_time"
+BOOST_BUILD_MODULES="--with-system --with-filesystem --with-thread --with-regex --with-locale --with-date_time --with-wave"
 
 OCIO_SOURCE=( "https://github.com/imageworks/OpenColorIO/tarball/v$OCIO_VERSION" )
 
@@ -660,7 +660,7 @@ OSL_SOURCE_REPO_UID="7d40ff5fe8e47b030042afb92d0e955f5aa96f48"
 OSL_SOURCE_REPO_BRANCH="blender-fixes"
 
 OSD_USE_REPO=true
-# Script foo to make the version string compliant with the archive name: 
+# Script foo to make the version string compliant with the archive name:
 # ${Varname//SearchForThisChar/ReplaceWithThisChar}
 OSD_SOURCE=( "https://github.com/PixarAnimationStudios/OpenSubdiv/archive/v${OSD_VERSION//./_}.tar.gz" )
 OSD_SOURCE_REPO=( "https://github.com/PixarAnimationStudios/OpenSubdiv.git" )
@@ -1042,7 +1042,7 @@ clean_Boost() {
 
 compile_Boost() {
   # To be changed each time we make edits that would modify the compiled result!
-  boost_magic=8
+  boost_magic=9
 
   _init_boost
 
@@ -1141,7 +1141,7 @@ compile_OCIO() {
     # Always refresh the whole build!
     if [ -d build ]; then
       rm -rf build
-    fi    
+    fi
     mkdir build
     cd build
 
@@ -1237,7 +1237,7 @@ compile_ILMBASE() {
     # Always refresh the whole build!
     if [ -d build ]; then
       rm -rf build
-    fi    
+    fi
     mkdir build
     cd build
 
@@ -1344,7 +1344,7 @@ compile_OPENEXR() {
     # Always refresh the whole build!
     if [ -d build ]; then
       rm -rf build
-    fi    
+    fi
     mkdir build
     cd build
 
@@ -1449,7 +1449,7 @@ compile_OIIO() {
     # Always refresh the whole build!
     if [ -d build ]; then
       rm -rf build
-    fi    
+    fi
     mkdir build
     cd build
 
@@ -1677,7 +1677,7 @@ compile_OSL() {
     # Always refresh the whole build!
     if [ -d build ]; then
       rm -rf build
-    fi    
+    fi
     mkdir build
     cd build
 
@@ -1796,7 +1796,7 @@ compile_OSD() {
     # Always refresh the whole build!
     if [ -d build ]; then
       rm -rf build
-    fi    
+    fi
     mkdir build
     cd build
 
@@ -2545,7 +2545,7 @@ get_package_version_RPM() {
     yum info $1 | grep Version | tail -n 1 | sed -r 's/.*:\s+(([0-9]+\.?)+).*/\1/'
   elif [ "$RPM" = "SUSE" ]; then
     zypper info $1 | grep Version | tail -n 1 | sed -r 's/.*:\s+(([0-9]+\.?)+).*/\1/'
-  fi  
+  fi
 }
 
 check_package_RPM() {
@@ -2786,7 +2786,7 @@ install_RPM() {
   SNDFILE_DEV="libsndfile-devel"
   check_package_RPM $SNDFILE_DEV
   if [ $? -eq 0 ]; then
-    install_packages_RMP $SNDFILE_DEV
+    install_packages_RPM $SNDFILE_DEV
   fi
 
   if [ "$WITH_ALL" = true ]; then
@@ -3367,7 +3367,7 @@ install_ARCH() {
 
   if [ "$_do_compile_osl" = true ]; then
     if [ "$have_llvm" = true ]; then
-      #XXX Note: will fail to build with LLVM 3.2! 
+      #XXX Note: will fail to build with LLVM 3.2!
       install_packages_ARCH intel-tbb
       PRINT ""
       compile_OSL

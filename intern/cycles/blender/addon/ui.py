@@ -187,7 +187,7 @@ class CyclesRender_PT_sampling(CyclesButtonsPanel, Panel):
             sub.prop(cscene, "subsurface_samples", text="Subsurface")
             sub.prop(cscene, "volume_samples", text="Volume")
 
-        if use_cpu(context) or cscene.feature_set == 'EXPERIMENTAL':
+        if not (use_opencl(context) and cscene.feature_set != 'EXPERIMENTAL'):
             layout.row().prop(cscene, "sampling_pattern", text="Pattern")
 
         for rl in scene.render.layers:
@@ -1457,6 +1457,39 @@ class CyclesRender_PT_bake(CyclesButtonsPanel, Panel):
             row.prop(cbk, "normal_r", text="")
             row.prop(cbk, "normal_g", text="")
             row.prop(cbk, "normal_b", text="")
+
+
+class CyclesRender_PT_debug(CyclesButtonsPanel, Panel):
+    bl_label = "Debug"
+    bl_context = "render"
+    bl_options = {'DEFAULT_CLOSED'}
+    COMPAT_ENGINES = {'CYCLES'}
+
+    @classmethod
+    def poll(cls, context):
+        return bpy.app.debug_value == 256
+
+    def draw(self, context):
+        layout = self.layout
+
+        scene = context.scene
+        cscene = scene.cycles
+
+        col = layout.column()
+
+        col.label('CPU Flags:')
+        row = layout.row(align=True)
+        row.prop(cscene, "debug_use_cpu_sse2", toggle=True)
+        row.prop(cscene, "debug_use_cpu_sse3", toggle=True)
+        row.prop(cscene, "debug_use_cpu_sse41", toggle=True)
+        row.prop(cscene, "debug_use_cpu_avx", toggle=True)
+        row.prop(cscene, "debug_use_cpu_avx2", toggle=True)
+
+        col = layout.column()
+        col.label('OpenCL Flags:')
+        col.prop(cscene, "debug_opencl_kernel_type", text="Kernel")
+        col.prop(cscene, "debug_opencl_device_type", text="Device")
+        col.prop(cscene, "debug_use_opencl_debug", text="Debug")
 
 
 class CyclesParticle_PT_CurveSettings(CyclesButtonsPanel, Panel):
