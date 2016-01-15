@@ -298,11 +298,13 @@ void BKE_paint_brush_set(Paint *p, Brush *br)
 	}
 }
 
-/** Free (or release) any data used by this paint curve (does not free the pcurve itself). */
 void BKE_paint_curve_free(PaintCurve *pc)
 {
-	MEM_SAFE_FREE(pc->points);
-	pc->tot_points = 0;
+	if (pc->points) {
+		MEM_freeN(pc->points);
+		pc->points = NULL;
+		pc->tot_points = 0;
+	}
 }
 
 PaintCurve *BKE_paint_curve_add(Main *bmain, const char *name)
@@ -376,7 +378,6 @@ Palette *BKE_palette_add(Main *bmain, const char *name)
 	return palette;
 }
 
-/** Free (or release) any data used by this palette (does not free the palette itself). */
 void BKE_palette_free(Palette *palette)
 {
 	BLI_freelistN(&palette->colors);

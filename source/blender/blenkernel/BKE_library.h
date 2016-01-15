@@ -65,39 +65,8 @@ void  BKE_libblock_free_ex(struct Main *bmain, void *idv, bool do_id_user) ATTR_
 void  BKE_libblock_free_us(struct Main *bmain, void *idv) ATTR_NONNULL();
 void  BKE_libblock_free_data(struct Main *bmain, struct ID *id) ATTR_NONNULL();
 
-void  BKE_libblock_delete(struct Main *bmain, void *idv) ATTR_NONNULL();
-
 struct ID *BKE_libblock_find_name_ex(struct Main *bmain, const short type, const char *name) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
 struct ID *BKE_libblock_find_name(const short type, const char *name) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
-
-/* Also IDRemap->flag. */
-enum {
-	/* Do not remap indirect usages of IDs (that is, when user is some linked data). */
-	ID_REMAP_SKIP_INDIRECT_USAGE    = 1 << 0,
-	/* This flag should always be set, *except for 'unlink' scenarios* (only relevant when new_id == NULL).
-	 * Basically, when unset, NEVER_NULL ID usages will keep pointing to old_id, but (if needed) old_id user count
-	 * will still be decremented. This is mandatory for 'delete ID' case, but in all other situation this would lead
-	 * to invalid user counts! */
-	ID_REMAP_SKIP_NEVER_NULL_USAGE  = 1 << 1,
-	/* This tells the callback func to flag with LIB_DOIT all IDs using target one with a 'never NULL' pointer
-	 * (like e.g. Object->data). */
-	ID_REMAP_FLAG_NEVER_NULL_USAGE  = 1 << 2,
-	/* This tells the callback func to force setting IDs using target one with a 'never NULL' pointer to NULL.
-	 * WARNING! Use with extreme care, this will leave database in broken state! */
-	ID_REMAP_FORCE_NEVER_NULL_USAGE = 1 << 3,
-};
-
-/* Note: Requiring new_id to be non-null, this *may* not be the case ultimately, but makes things simpler for now. */
-void BKE_libblock_remap_locked(
-        struct Main *bmain, void *old_idv, void *new_idv,
-        const short remap_flags) ATTR_NONNULL(1, 2);
-void BKE_libblock_remap(
-        struct Main *bmain, void *old_idv, void *new_idv,
-        const short remap_flags) ATTR_NONNULL(1, 2);
-
-void BKE_libblock_unlink(struct Main *bmain, void *idv, const bool do_flag_never_null) ATTR_NONNULL();
-
-void BKE_libblock_relink_ex(void *idv, void *old_idv, void *new_idv, const bool us_min_never_null) ATTR_NONNULL(1);
 
 void BKE_id_lib_local_paths(struct Main *bmain, struct Library *lib, struct ID *id);
 void id_lib_extern(struct ID *id);
@@ -111,6 +80,7 @@ void id_fake_user_clear(struct ID *id);
 bool id_make_local(struct ID *id, bool test);
 bool id_single_user(struct bContext *C, struct ID *id, struct PointerRNA *ptr, struct PropertyRNA *prop);
 bool id_copy(struct ID *id, struct ID **newid, bool test);
+bool id_unlink(struct ID *id, int test);
 void id_sort_by_name(struct ListBase *lb, struct ID *id);
 
 bool new_id(struct ListBase *lb, struct ID *id, const char *name);
@@ -150,11 +120,11 @@ void BKE_library_make_local(struct Main *bmain, struct Library *lib, bool untagg
 
 typedef void (*BKE_library_free_window_manager_cb)(struct bContext *, struct wmWindowManager *);
 typedef void (*BKE_library_free_notifier_reference_cb)(const void *);
-typedef void (*BKE_library_remap_editor_id_reference_cb)(struct ID *, struct ID *);
+typedef void (*BKE_library_free_editor_id_reference_cb)(const struct ID *);
 
 void BKE_library_callback_free_window_manager_set(BKE_library_free_window_manager_cb func);
 void BKE_library_callback_free_notifier_reference_set(BKE_library_free_notifier_reference_cb func);
-void BKE_library_callback_remap_editor_id_reference_set(BKE_library_remap_editor_id_reference_cb func);
+void BKE_library_callback_free_editor_id_reference_set(BKE_library_free_editor_id_reference_cb func);
 
 /* use when "" is given to new_id() */
 #define ID_FALLBACK_NAME N_("Untitled")

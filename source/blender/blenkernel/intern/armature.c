@@ -118,25 +118,30 @@ void BKE_armature_bonelist_free(ListBase *lb)
 	BLI_freelistN(lb);
 }
 
-/** Free (or release) any data used by this armature (does not free the armature itself). */
 void BKE_armature_free(bArmature *arm)
 {
-	BKE_animdata_free(&arm->id);
+	if (arm) {
+		BKE_armature_bonelist_free(&arm->bonebase);
 
-	BKE_armature_bonelist_free(&arm->bonebase);
+		/* free editmode data */
+		if (arm->edbo) {
+			BLI_freelistN(arm->edbo);
 
-	/* free editmode data */
-	if (arm->edbo) {
-		BLI_freelistN(arm->edbo);
+			MEM_freeN(arm->edbo);
+			arm->edbo = NULL;
+		}
 
-		MEM_freeN(arm->edbo);
-		arm->edbo = NULL;
-	}
+		/* free sketch */
+		if (arm->sketch) {
+			freeSketch(arm->sketch);
+			arm->sketch = NULL;
+		}
 
-	/* free sketch */
-	if (arm->sketch) {
-		freeSketch(arm->sketch);
-		arm->sketch = NULL;
+		/* free animation data */
+		if (arm->adt) {
+			BKE_animdata_free(&arm->id);
+			arm->adt = NULL;
+		}
 	}
 }
 

@@ -69,6 +69,36 @@ static int cu_isectLL(const float v1[3], const float v2[3], const float v3[3], c
                       short cox, short coy,
                       float *lambda, float *mu, float vec[3]);
 
+void BKE_curve_unlink(Curve *cu)
+{
+	int a;
+
+	for (a = 0; a < cu->totcol; a++) {
+		if (cu->mat[a])
+			id_us_min(&cu->mat[a]->id);
+		cu->mat[a] = NULL;
+	}
+	if (cu->vfont)
+		id_us_min(&cu->vfont->id);
+	cu->vfont = NULL;
+
+	if (cu->vfontb)
+		id_us_min(&cu->vfontb->id);
+	cu->vfontb = NULL;
+
+	if (cu->vfonti)
+		id_us_min(&cu->vfonti->id);
+	cu->vfonti = NULL;
+
+	if (cu->vfontbi)
+		id_us_min(&cu->vfontbi->id);
+	cu->vfontbi = NULL;
+
+	if (cu->key)
+		id_us_min(&cu->key->id);
+	cu->key = NULL;
+}
+
 /* frees editcurve entirely */
 void BKE_curve_editfont_free(Curve *cu)
 {
@@ -110,21 +140,26 @@ void BKE_curve_editNurb_free(Curve *cu)
 	}
 }
 
-/** Free (or release) any data used by this curve (does not free the curve itself). */
+/* don't free curve itself */
 void BKE_curve_free(Curve *cu)
 {
-	BKE_animdata_free((ID *)cu);
-
 	BKE_nurbList_free(&cu->nurb);
 	BKE_curve_editfont_free(cu);
 
 	BKE_curve_editNurb_free(cu);
+	BKE_curve_unlink(cu);
+	BKE_animdata_free((ID *)cu);
 
-	MEM_SAFE_FREE(cu->mat);
-	MEM_SAFE_FREE(cu->str);
-	MEM_SAFE_FREE(cu->strinfo);
-	MEM_SAFE_FREE(cu->bb);
-	MEM_SAFE_FREE(cu->tb);
+	if (cu->mat)
+		MEM_freeN(cu->mat);
+	if (cu->str)
+		MEM_freeN(cu->str);
+	if (cu->strinfo)
+		MEM_freeN(cu->strinfo);
+	if (cu->bb)
+		MEM_freeN(cu->bb);
+	if (cu->tb)
+		MEM_freeN(cu->tb);
 }
 
 void BKE_curve_init(Curve *cu)
