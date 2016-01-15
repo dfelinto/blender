@@ -1400,6 +1400,62 @@ static int view3d_context(const bContext *C, const char *member, bContextDataRes
 	return -1; /* found but not available */
 }
 
+static void view3d_id_remap(ScrArea *sa, SpaceLink *slink, ID *old_id, ID *new_id)
+{
+	View3D *v3d;
+	ARegion *ar;
+	RegionView3D *rv3d = NULL;
+	BGpic *bgpic;
+
+	if (sa->spacetype == SPACE_VIEW3D) {
+		for (ar = sa->regionbase.first; ar; ar = ar->next) {
+			if (ar->regiontype == RGN_TYPE_WINDOW) {
+				rv3d = (RegionView3D *)ar->regiondata;
+			}
+		}
+	}
+
+	for (v3d = (View3D *)slink; v3d; v3d = v3d->localvd) {
+		if ((ID *)v3d->camera == old_id) {
+			v3d->camera = (Object *)new_id;
+			if (!new_id && rv3d && (rv3d->persp == RV3D_CAMOB)) {
+				rv3d->persp = RV3D_PERSP;
+			}
+		}
+		if ((ID *)v3d->ob_centre == old_id) {
+			v3d->ob_centre = (Object *)new_id;
+			if (new_id == NULL) {  /* Otherwise, bonename may remain valid... We could be smart and check this, too? */
+				v3d->ob_centre_bone[0] = '\0';
+			}
+		}
+
+		if ((ID *)v3d->defmaterial == old_id) {
+			v3d->defmaterial = (Material *)new_id;
+		}
+#if 0  /* XXX Deprecated? */
+		if ((ID *)v3d->gpd == old_id) {
+			v3d->gpd = (bGPData *)new_id;
+		}
+#endif
+
+		for (bgpic = v3d->bgpicbase.first; bgpic; bgpic = bgpic->next) {
+			if ((ID *)bgpic->ima == old_id) {
+				bgpic->ima = (Image *)new_id;
+				id_us_min(old_id);
+				id_us_plus(new_id);
+			}
+			if ((ID *)bgpic->clip == old_id) {
+				bgpic->clip = (MovieClip *)new_id;
+				id_us_min(old_id);
+				id_us_plus(new_id);
+			}
+		}
+
+		if (rv3d) {
+			rv3d = rv3d->localvd;
+		}
+	}
+}
 
 /* only called once, from space/spacetypes.c */
 void ED_spacetype_view3d(void)
@@ -1419,7 +1475,8 @@ void ED_spacetype_view3d(void)
 	st->keymap = view3d_keymap;
 	st->dropboxes = view3d_dropboxes;
 	st->context = view3d_context;
-	
+	st->id_remap = view3d_id_remap;
+
 	/* regions: main window */
 	art = MEM_callocN(sizeof(ARegionType), "spacetype view3d main region");
 	art->regionid = RGN_TYPE_WINDOW;
