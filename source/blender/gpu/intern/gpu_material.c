@@ -1723,13 +1723,13 @@ static void shade_one_brdf_light(GPUBrdfInput *brdf, GPULamp *lamp)
 	GPUMaterial *mat = brdf->mat;
 	GPUNodeLink *lco, *lv, *dist, *visifac, *vn, *view;
 	GPUNodeLink *shadfac = NULL, *lcol, *inp, *inpr, *output;
-	float one = 1.0f, sun_fac = 0.125f;
+	float one = 1.0f, sun_fac = 1.0f;
 
 	/* from get_lamp_visibility */
 	if (lamp->type == LA_SUN || lamp->type == LA_HEMI) {
 		mat->dynproperty |= DYN_LAMP_VEC;
 		GPU_link(mat, "lamp_visibility_sun_hemi", GPU_dynamic_uniform(lamp->dynvec, GPU_DYNAMIC_LAMP_DYNVEC, lamp->ob), &lv, &dist, &visifac);
-		//GPU_link(mat, "set_value", GPU_uniform(&sun_fac), &visifac);
+		GPU_link(mat, "set_value", GPU_uniform(&sun_fac), &visifac);
 	}
 	else {
 		mat->dynproperty |= DYN_LAMP_CO;

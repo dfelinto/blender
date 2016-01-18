@@ -2272,7 +2272,7 @@ void bsdf_ashikhmin_velvet(vec3 N, vec3 H, vec3 L, vec3 V, float sigma, out floa
 		float NH = dot(N, H);
 		float VH = abs(dot(V, H));
 
-		if(abs(NV) > 1e-5 && abs(NH) < 1.0f-1e-5 && VH > 1e-5) {
+		if(abs(NV) > 1e-5 && abs(NH) < 1.0-1e-5 && VH > 1e-5) {
 			float NHdivVH = NH / VH;
 			NHdivVH = max(NHdivVH, 1e-5);
 
@@ -2445,7 +2445,7 @@ void node_bsdf_diffuse_lights(vec4 color, float roughness, vec3 N, vec3 V, vec4 
 		vec3 light_diffuse = gl_LightSource[i].diffuse.rgb;
 
 		diffuse_bsdf_oren_nayar(dot(N,L), N, L, V, roughness, bsdf);
-		accumulator += bsdf * light_diffuse;
+		accumulator += bsdf * light_diffuse * M_PI; /* M_PI to make preview brighter */
 	}
 
 	result = vec4(accumulator*color.rgb, 1.0);
@@ -2460,7 +2460,7 @@ void node_bsdf_glossy_lights(vec4 color, float roughness, vec3 N, vec3 V, vec4 a
 
 	if (roughness < 1e-4) {
 		//Instead of a tiny bright spot
-		result = vec4(accumulator * color.rgb, 1.0);
+		result = vec4(accumulator * color.rgb, 1.0); //Should take roughness into account -> waiting LUT
 		return;
 	}
 
@@ -2473,10 +2473,10 @@ void node_bsdf_glossy_lights(vec4 color, float roughness, vec3 N, vec3 V, vec4 a
 		vec3 H = normalize(L + V);
 
 		spec_bsdf_ggx(N, H, L, V, roughness, specfac);
-		accumulator += light_specular * specfac;
+		accumulator += light_specular * M_1_PI * specfac; /* M_1_PI to Reduce hotness */
 	}
 
-	result = vec4(M_1_PI * M_1_PI * accumulator * color.rgb, 1.0); /* M_1_P to reduce Brightness */
+	result = vec4(accumulator * color.rgb, 1.0); /* M_1_P to reduce Brightness */
 }
 
 void node_bsdf_refraction_lights(vec4 color, float roughness, float ior, vec3 N, vec3 V, vec4 ambient_light, out vec4 result)
@@ -2609,7 +2609,7 @@ void node_bsdf_diffuse_sun_light(vec3 N, vec3 L, vec3 V, float light_distance, f
 	}
 
 	/* Energy conservation + cycle matching */
-	diff = max(illuminance, 0.0) * 2.5 / sqrLightRadius;
+	diff = max(illuminance, 0.0) * M_1_PI * M_1_PI / sqrLightRadius;
 }
 
 /* GLOSSY SHARP */
@@ -2777,7 +2777,7 @@ void node_bsdf_glossy_ggx_sun_light(vec3 N, vec3 L, vec3 V, float light_distance
 	//L = normalize(L);
 	vec3 H = normalize(L + V);
 	spec_bsdf_ggx(N, H, L, V, roughness, specfac);
-	specfac *= energy_conservation;
+	specfac *= energy_conservation * M_1_PI * M_1_PI; // not good enough
 }
 
 /* REFRACT SHARP */
@@ -2921,8 +2921,8 @@ void node_emission(vec4 color, float strength, vec3 N, out vec4 result)
 
 void node_blackbody(float T, out vec4 col)
 {
-	float u = ( 0.860117757f + 1.54118254e-4f * T + 1.28641212e-7f * T*T ) / ( 1.0f + 8.42420235e-4f * T + 7.08145163e-7f * T*T );
-	float v = ( 0.317398726f + 4.22806245e-5f * T + 4.20481691e-8f * T*T ) / ( 1.0f - 2.89741816e-5f * T + 1.61456053e-7f * T*T );
+	float u = ( 0.860117757 + 1.54118254e-4 * T + 1.28641212e-7 * T*T ) / ( 1.0 + 8.42420235e-4 * T + 7.08145163e-7 * T*T );
+	float v = ( 0.317398726 + 4.22806245e-5 * T + 4.20481691e-8 * T*T ) / ( 1.0 - 2.89741816e-5 * T + 1.61456053e-7 * T*T );
 
 	float x = 3*u / ( 2*u - 8*v + 4 );
 	float y = 2*v / ( 2*u - 8*v + 4 );
@@ -2954,44 +2954,44 @@ vec3 xyz_to_rgb(float x, float y, float z)
 //		  cie_colour_match[(lambda - 380) / 5][0] = xBar
 //		  cie_colour_match[(lambda - 380) / 5][1] = yBar
 //		  cie_colour_match[(lambda - 380) / 5][2] = zBar
-uniform vec3 node_wavelength_LUT[81] = {
-	vec3(0.0014f,0.0000f,0.0065f), vec3(0.0022f,0.0001f,0.0105f), vec3(0.0042f,0.0001f,0.0201f),
-	vec3(0.0076f,0.0002f,0.0362f), vec3(0.0143f,0.0004f,0.0679f), vec3(0.0232f,0.0006f,0.1102f),
-	vec3(0.0435f,0.0012f,0.2074f), vec3(0.0776f,0.0022f,0.3713f), vec3(0.1344f,0.0040f,0.6456f),
-	vec3(0.2148f,0.0073f,1.0391f), vec3(0.2839f,0.0116f,1.3856f), vec3(0.3285f,0.0168f,1.6230f),
-	vec3(0.3483f,0.0230f,1.7471f), vec3(0.3481f,0.0298f,1.7826f), vec3(0.3362f,0.0380f,1.7721f),
-	vec3(0.3187f,0.0480f,1.7441f), vec3(0.2908f,0.0600f,1.6692f), vec3(0.2511f,0.0739f,1.5281f),
-	vec3(0.1954f,0.0910f,1.2876f), vec3(0.1421f,0.1126f,1.0419f), vec3(0.0956f,0.1390f,0.8130f),
-	vec3(0.0580f,0.1693f,0.6162f), vec3(0.0320f,0.2080f,0.4652f), vec3(0.0147f,0.2586f,0.3533f),
-	vec3(0.0049f,0.3230f,0.2720f), vec3(0.0024f,0.4073f,0.2123f), vec3(0.0093f,0.5030f,0.1582f),
-	vec3(0.0291f,0.6082f,0.1117f), vec3(0.0633f,0.7100f,0.0782f), vec3(0.1096f,0.7932f,0.0573f),
-	vec3(0.1655f,0.8620f,0.0422f), vec3(0.2257f,0.9149f,0.0298f), vec3(0.2904f,0.9540f,0.0203f),
-	vec3(0.3597f,0.9803f,0.0134f), vec3(0.4334f,0.9950f,0.0087f), vec3(0.5121f,1.0000f,0.0057f),
-	vec3(0.5945f,0.9950f,0.0039f), vec3(0.6784f,0.9786f,0.0027f), vec3(0.7621f,0.9520f,0.0021f),
-	vec3(0.8425f,0.9154f,0.0018f), vec3(0.9163f,0.8700f,0.0017f), vec3(0.9786f,0.8163f,0.0014f),
-	vec3(1.0263f,0.7570f,0.0011f), vec3(1.0567f,0.6949f,0.0010f), vec3(1.0622f,0.6310f,0.0008f),
-	vec3(1.0456f,0.5668f,0.0006f), vec3(1.0026f,0.5030f,0.0003f), vec3(0.9384f,0.4412f,0.0002f),
-	vec3(0.8544f,0.3810f,0.0002f), vec3(0.7514f,0.3210f,0.0001f), vec3(0.6424f,0.2650f,0.0000f),
-	vec3(0.5419f,0.2170f,0.0000f), vec3(0.4479f,0.1750f,0.0000f), vec3(0.3608f,0.1382f,0.0000f),
-	vec3(0.2835f,0.1070f,0.0000f), vec3(0.2187f,0.0816f,0.0000f), vec3(0.1649f,0.0610f,0.0000f),
-	vec3(0.1212f,0.0446f,0.0000f), vec3(0.0874f,0.0320f,0.0000f), vec3(0.0636f,0.0232f,0.0000f),
-	vec3(0.0468f,0.0170f,0.0000f), vec3(0.0329f,0.0119f,0.0000f), vec3(0.0227f,0.0082f,0.0000f),
-	vec3(0.0158f,0.0057f,0.0000f), vec3(0.0114f,0.0041f,0.0000f), vec3(0.0081f,0.0029f,0.0000f),
-	vec3(0.0058f,0.0021f,0.0000f), vec3(0.0041f,0.0015f,0.0000f), vec3(0.0029f,0.0010f,0.0000f),
-	vec3(0.0020f,0.0007f,0.0000f), vec3(0.0014f,0.0005f,0.0000f), vec3(0.0010f,0.0004f,0.0000f),
-	vec3(0.0007f,0.0002f,0.0000f), vec3(0.0005f,0.0002f,0.0000f), vec3(0.0003f,0.0001f,0.0000f),
-	vec3(0.0002f,0.0001f,0.0000f), vec3(0.0002f,0.0001f,0.0000f), vec3(0.0001f,0.0000f,0.0000f),
-	vec3(0.0001f,0.0000f,0.0000f), vec3(0.0001f,0.0000f,0.0000f), vec3(0.0000f,0.0000f,0.0000f)
-};
+uniform vec3 node_wavelength_LUT[81] = vec3[81](
+	vec3(0.0014,0.0000,0.0065), vec3(0.0022,0.0001,0.0105), vec3(0.0042,0.0001,0.0201),
+	vec3(0.0076,0.0002,0.0362), vec3(0.0143,0.0004,0.0679), vec3(0.0232,0.0006,0.1102),
+	vec3(0.0435,0.0012,0.2074), vec3(0.0776,0.0022,0.3713), vec3(0.1344,0.0040,0.6456),
+	vec3(0.2148,0.0073,1.0391), vec3(0.2839,0.0116,1.3856), vec3(0.3285,0.0168,1.6230),
+	vec3(0.3483,0.0230,1.7471), vec3(0.3481,0.0298,1.7826), vec3(0.3362,0.0380,1.7721),
+	vec3(0.3187,0.0480,1.7441), vec3(0.2908,0.0600,1.6692), vec3(0.2511,0.0739,1.5281),
+	vec3(0.1954,0.0910,1.2876), vec3(0.1421,0.1126,1.0419), vec3(0.0956,0.1390,0.8130),
+	vec3(0.0580,0.1693,0.6162), vec3(0.0320,0.2080,0.4652), vec3(0.0147,0.2586,0.3533),
+	vec3(0.0049,0.3230,0.2720), vec3(0.0024,0.4073,0.2123), vec3(0.0093,0.5030,0.1582),
+	vec3(0.0291,0.6082,0.1117), vec3(0.0633,0.7100,0.0782), vec3(0.1096,0.7932,0.0573),
+	vec3(0.1655,0.8620,0.0422), vec3(0.2257,0.9149,0.0298), vec3(0.2904,0.9540,0.0203),
+	vec3(0.3597,0.9803,0.0134), vec3(0.4334,0.9950,0.0087), vec3(0.5121,1.0000,0.0057),
+	vec3(0.5945,0.9950,0.0039), vec3(0.6784,0.9786,0.0027), vec3(0.7621,0.9520,0.0021),
+	vec3(0.8425,0.9154,0.0018), vec3(0.9163,0.8700,0.0017), vec3(0.9786,0.8163,0.0014),
+	vec3(1.0263,0.7570,0.0011), vec3(1.0567,0.6949,0.0010), vec3(1.0622,0.6310,0.0008),
+	vec3(1.0456,0.5668,0.0006), vec3(1.0026,0.5030,0.0003), vec3(0.9384,0.4412,0.0002),
+	vec3(0.8544,0.3810,0.0002), vec3(0.7514,0.3210,0.0001), vec3(0.6424,0.2650,0.0000),
+	vec3(0.5419,0.2170,0.0000), vec3(0.4479,0.1750,0.0000), vec3(0.3608,0.1382,0.0000),
+	vec3(0.2835,0.1070,0.0000), vec3(0.2187,0.0816,0.0000), vec3(0.1649,0.0610,0.0000),
+	vec3(0.1212,0.0446,0.0000), vec3(0.0874,0.0320,0.0000), vec3(0.0636,0.0232,0.0000),
+	vec3(0.0468,0.0170,0.0000), vec3(0.0329,0.0119,0.0000), vec3(0.0227,0.0082,0.0000),
+	vec3(0.0158,0.0057,0.0000), vec3(0.0114,0.0041,0.0000), vec3(0.0081,0.0029,0.0000),
+	vec3(0.0058,0.0021,0.0000), vec3(0.0041,0.0015,0.0000), vec3(0.0029,0.0010,0.0000),
+	vec3(0.0020,0.0007,0.0000), vec3(0.0014,0.0005,0.0000), vec3(0.0010,0.0004,0.0000),
+	vec3(0.0007,0.0002,0.0000), vec3(0.0005,0.0002,0.0000), vec3(0.0003,0.0001,0.0000),
+	vec3(0.0002,0.0001,0.0000), vec3(0.0002,0.0001,0.0000), vec3(0.0001,0.0000,0.0000),
+	vec3(0.0001,0.0000,0.0000), vec3(0.0001,0.0000,0.0000), vec3(0.0000,0.0000,0.0000)
+);
 
 void node_wavelength(float w, out vec4 col)
 {
-	float ii = (w-380.0f) * (1.0f/5.0f);  // scaled 0..80
+	float ii = (w-380.0) * (1.0/5.0);  // scaled 0..80
 	int i = int(ii);
 	vec3 color;
 	
 	if(i < 0 || i >= 80) {
-		color = vec3(0.0f, 0.0f, 0.0f);
+		color = vec3(0.0, 0.0, 0.0);
 	}
 	else {
 		ii -= i;
@@ -2999,10 +2999,10 @@ void node_wavelength(float w, out vec4 col)
 	}
 	
 	color = xyz_to_rgb(color.x, color.y, color.z);
-	color *= 1.0f/2.52f;	// Empirical scale from lg to make all comps <= 1
+	color *= 1.0/2.52;	// Empirical scale from lg to make all comps <= 1
 	
 	/* Clamp to zero if values are smaller */
-	col = vec4(max(color, vec3(0.0f, 0.0f, 0.0f)), 1.0);
+	col = vec4(max(color, vec3(0.0, 0.0, 0.0)), 1.0);
 
 	// srgb_to_linearrgb(col, col);
 }
@@ -3714,7 +3714,7 @@ uint radicalInverse_VdC(uint bits) {
 vec4 hammersley2d(uint i, uint N, uvec2 random) {
 	float E1 = fract( float(i) / float(N) + float( random.x & uint(0xffff) ) / float(1<<16) );
 	float E2 = float( radicalInverse_VdC(i) ^ uint(random.y) ) * 2.3283064365386963e-10;
-	float phi = 2.0f * M_PI * E2;
+	float phi = 2.0 * M_PI * E2;
 	return vec4( E1, E2, cos(phi), sin(phi) );
 }
 
