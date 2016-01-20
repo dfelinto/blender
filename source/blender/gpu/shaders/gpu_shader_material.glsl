@@ -1,3 +1,6 @@
+#if __VERSION__ < 130
+#define uint unsigned int
+#endif
 
 float exp_blender(float f)
 {
@@ -3427,7 +3430,7 @@ float texture_safe_noise(vec3 p, int type)
 		f = texture_noise(p);
 
 	/* can happen for big coordinates, things even out to 0.5 then anyway */
-	if (isinf(f))
+	if (f > 1.18118254e+36 || f < -1.18118254e+36)
 		return 0.5;
 
 	return f;
