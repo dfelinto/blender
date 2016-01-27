@@ -983,7 +983,7 @@ static bool paint_stroke_curve_end(bContext *C, wmOperator *op, PaintStroke *str
 			return true;
 
 #ifdef DEBUG_TIME
-		TIMEIT_START_AVERAGED(whole_stroke);
+		TIMEIT_START(stroke);
 #endif
 
 		pcp = pc->points;
@@ -1044,7 +1044,7 @@ static bool paint_stroke_curve_end(bContext *C, wmOperator *op, PaintStroke *str
 		stroke_done(C, op);
 
 #ifdef DEBUG_TIME
-		TIMEIT_END_AVERAGED(whole_stroke);
+		TIMEIT_END(stroke);
 #endif
 
 		return true;
