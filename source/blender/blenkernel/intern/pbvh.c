@@ -30,7 +30,6 @@
 #include "BLI_math.h"
 #include "BLI_utildefines.h"
 #include "BLI_ghash.h"
-#include "BLI_task.h"
 
 #include "BKE_pbvh.h"
 #include "BKE_ccg.h"
@@ -42,8 +41,6 @@
 #include "GPU_buffers.h"
 
 #include "bmesh.h"
-
-#include "atomic_ops.h"
 
 #include "pbvh_intern.h"
 
@@ -934,112 +931,13 @@ static bool update_search_cb(PBVHNode *node, void *data_v)
 	return true;
 }
 
-typedef struct PBVHUpdateData {
-	PBVH *bvh;
-	PBVHNode **nodes;
-	int totnode;
-
-	float (*fnors)[3];
-	float (*vnors)[3];
-	int flag;
-} PBVHUpdateData;
-
-static void pbvh_update_normals_accum_task_cb(void *userdata, const int n)
-{
-	PBVHUpdateData *data = userdata;
-
-	PBVH *bvh = data->bvh;
-	PBVHNode *node = data->nodes[n];
-	float (*fnors)[3] = data->fnors;
-	float (*vnors)[3] = data->vnors;
-
-	if ((node->flag & PBVH_UpdateNormals)) {
-		unsigned int mpoly_prev = UINT_MAX;
-		float fn[3];
-
-		const int *faces = node->prim_indices;
-		const int totface = node->totprim;
-
-		for (int i = 0; i < totface; ++i) {
-			const MLoopTri *lt = &bvh->looptri[faces[i]];
-			const unsigned int vtri[3] = {
-				bvh->mloop[lt->tri[0]].v,
-				bvh->mloop[lt->tri[1]].v,
-				bvh->mloop[lt->tri[2]].v,
-			};
-			const int sides = 3;
-
-			/* Face normal and mask */
-			if (lt->poly != mpoly_prev) {
-				const MPoly *mp = &bvh->mpoly[lt->poly];
-				BKE_mesh_calc_poly_normal(mp, &bvh->mloop[mp->loopstart], bvh->verts, fn);
-				mpoly_prev = lt->poly;
-
-				if (fnors) {
-					/* We can assume a face is only present in one node ever. */
-					copy_v3_v3(fnors[lt->poly], fn);
-				}
-			}
-
-			for (int j = sides; j--; ) {
-				const int v = vtri[j];
-
-				if (bvh->verts[v].flag & ME_VERT_PBVH_UPDATE) {
-					/* Note: This avoids `lock, add_v3_v3, unlock` and is five to ten times quicker than a spinlock.
-					 *       Not exact equivalent though, since atomicity is only ensured for one component
-					 *       of the vector at a time, but here it shall not make any sensible difference. */
-					for (int k = 3; k--; ) {
-						/* Atomic float addition.
-						 * Note that since collision are unlikely, loop will nearly always run once. */
-						float oldval, newval;
-						uint32_t prevval;
-						do {
-							oldval = vnors[v][k];
-							newval = oldval + fn[k];
-							prevval = atomic_cas_uint32(
-							              (uint32_t *)&vnors[v][k], *(uint32_t *)(&oldval), *(uint32_t *)(&newval));
-						} while (UNLIKELY(prevval != *(uint32_t *)(&oldval)));
-					}
-				}
-			}
-		}
-	}
-}
-
-static void pbvh_update_normals_store_task_cb(void *userdata, const int n)
-{
-	PBVHUpdateData *data = userdata;
-	PBVH *bvh = data->bvh;
-	PBVHNode *node = data->nodes[n];
-	float (*vnors)[3] = data->vnors;
-
-	if (node->flag & PBVH_UpdateNormals) {
-		const int *verts = node->vert_indices;
-		const int totvert = node->uniq_verts;
-
-		for (int i = 0; i < totvert; ++i) {
-			const int v = verts[i];
-			MVert *mvert = &bvh->verts[v];
-
-			/* mvert is shared between nodes, hence between threads. */
-			if (atomic_fetch_and_and_uint8((uint8_t *)&mvert->flag, (uint8_t)~ME_VERT_PBVH_UPDATE) & ME_VERT_PBVH_UPDATE)
-			{
-				normalize_v3(vnors[v]);
-				normal_float_to_short_v3(mvert->no, vnors[v]);
-			}
-		}
-
-		node->flag &= ~PBVH_UpdateNormals;
-	}
-}
-
 static void pbvh_update_normals(PBVH *bvh, PBVHNode **nodes,
-                                int totnode, float (*fnors)[3])
+                                int totnode, float (*face_nors)[3])
 {
-	float (*vnors)[3];
+	float (*vnor)[3];
 
 	if (bvh->type == PBVH_BMESH) {
-		BLI_assert(fnors == NULL);
+		BLI_assert(face_nors == NULL);
 		pbvh_bmesh_normals_update(nodes, totnode);
 		return;
 	}
@@ -1049,7 +947,7 @@ static void pbvh_update_normals(PBVH *bvh, PBVHNode **nodes,
 
 	/* could be per node to save some memory, but also means
 	 * we have to store for each vertex which node it is in */
-	vnors = MEM_callocN(sizeof(*vnors) * bvh->totvert, __func__);
+	vnor = MEM_callocN(sizeof(float) * 3 * bvh->totvert, "bvh temp vnors");
 
 	/* subtle assumptions:
 	 * - We know that for all edited vertices, the nodes with faces
@@ -1061,46 +959,104 @@ static void pbvh_update_normals(PBVH *bvh, PBVHNode **nodes,
 	 *   can only update vertices marked with ME_VERT_PBVH_UPDATE.
 	 */
 
-	PBVHUpdateData data = {
-	    .bvh = bvh, .nodes = nodes,
-		.fnors = fnors, .vnors = vnors,
-	};
+	int n;
+#pragma omp parallel for private(n) schedule(static) if (totnode > PBVH_OMP_LIMIT)
+	for (n = 0; n < totnode; n++) {
+		PBVHNode *node = nodes[n];
 
-	BLI_task_parallel_range(0, totnode, &data, pbvh_update_normals_accum_task_cb, totnode > PBVH_OMP_LIMIT);
+		if ((node->flag & PBVH_UpdateNormals)) {
+			unsigned int mpoly_prev = UINT_MAX;
+			float fn[3];
 
-	BLI_task_parallel_range(0, totnode, &data, pbvh_update_normals_store_task_cb, totnode > PBVH_OMP_LIMIT);
+			const int *faces = node->prim_indices;
+			const int totface = node->totprim;
 
-	MEM_freeN(vnors);
-}
+			for (int i = 0; i < totface; ++i) {
+				const MLoopTri *lt = &bvh->looptri[faces[i]];
+				const unsigned int vtri[3] = {
+				    bvh->mloop[lt->tri[0]].v,
+				    bvh->mloop[lt->tri[1]].v,
+				    bvh->mloop[lt->tri[2]].v,
+				};
+				const int sides = 3;
 
-static void pbvh_update_BB_redraw_task_cb(void *userdata, const int n)
-{
-	PBVHUpdateData *data = userdata;
-	PBVH *bvh = data->bvh;
-	PBVHNode *node = data->nodes[n];
-	const int flag = data->flag;
+				/* Face normal and mask */
+				if (lt->poly != mpoly_prev) {
+					const MPoly *mp = &bvh->mpoly[lt->poly];
+					BKE_mesh_calc_poly_normal(mp, &bvh->mloop[mp->loopstart], bvh->verts, fn);
+					mpoly_prev = lt->poly;
 
-	if ((flag & PBVH_UpdateBB) && (node->flag & PBVH_UpdateBB))
-		/* don't clear flag yet, leave it for flushing later */
-		/* Note that bvh usage is read-only here, so no need to thread-protect it. */
-		update_node_vb(bvh, node);
+					if (face_nors) {
+						copy_v3_v3(face_nors[lt->poly], fn);
+					}
+				}
 
-	if ((flag & PBVH_UpdateOriginalBB) && (node->flag & PBVH_UpdateOriginalBB))
-		node->orig_vb = node->vb;
+				for (int j = 0; j < sides; ++j) {
+					int v = vtri[j];
 
-	if ((flag & PBVH_UpdateRedraw) && (node->flag & PBVH_UpdateRedraw))
-		node->flag &= ~PBVH_UpdateRedraw;
+					if (bvh->verts[v].flag & ME_VERT_PBVH_UPDATE) {
+						/* this seems like it could be very slow but profile
+						 * does not show this, so just leave it for now? */
+#pragma omp atomic
+						vnor[v][0] += fn[0];
+#pragma omp atomic
+						vnor[v][1] += fn[1];
+#pragma omp atomic
+						vnor[v][2] += fn[2];
+					}
+				}
+			}
+		}
+	}
+
+#pragma omp parallel for private(n) schedule(static) if (totnode > PBVH_OMP_LIMIT)
+	for (n = 0; n < totnode; n++) {
+		PBVHNode *node = nodes[n];
+
+		if (node->flag & PBVH_UpdateNormals) {
+			const int *verts = node->vert_indices;
+			const int totvert = node->uniq_verts;
+
+			for (int i = 0; i < totvert; ++i) {
+				const int v = verts[i];
+				MVert *mvert = &bvh->verts[v];
+
+				if (mvert->flag & ME_VERT_PBVH_UPDATE) {
+					float no[3];
+
+					copy_v3_v3(no, vnor[v]);
+					normalize_v3(no);
+					normal_float_to_short_v3(mvert->no, no);
+
+					mvert->flag &= ~ME_VERT_PBVH_UPDATE;
+				}
+			}
+
+			node->flag &= ~PBVH_UpdateNormals;
+		}
+	}
+
+	MEM_freeN(vnor);
 }
 
 void pbvh_update_BB_redraw(PBVH *bvh, PBVHNode **nodes, int totnode, int flag)
 {
 	/* update BB, redraw flag */
-	PBVHUpdateData data = {
-	    .bvh = bvh, .nodes = nodes,
-		.flag = flag,
-	};
+	int n;
+#pragma omp parallel for private(n) schedule(static) if (totnode > PBVH_OMP_LIMIT)
+	for (n = 0; n < totnode; n++) {
+		PBVHNode *node = nodes[n];
 
-	BLI_task_parallel_range(0, totnode, &data, pbvh_update_BB_redraw_task_cb, totnode > PBVH_OMP_LIMIT);
+		if ((flag & PBVH_UpdateBB) && (node->flag & PBVH_UpdateBB))
+			/* don't clear flag yet, leave it for flushing later */
+			update_node_vb(bvh, node);
+
+		if ((flag & PBVH_UpdateOriginalBB) && (node->flag & PBVH_UpdateOriginalBB))
+			node->orig_vb = node->vb;
+
+		if ((flag & PBVH_UpdateRedraw) && (node->flag & PBVH_UpdateRedraw))
+			node->flag &= ~PBVH_UpdateRedraw;
+	}
 }
 
 static void pbvh_update_draw_buffers(PBVH *bvh, PBVHNode **nodes, int totnode)
@@ -1218,7 +1174,7 @@ static int pbvh_flush_bb(PBVH *bvh, PBVHNode *node, int flag)
 	return update;
 }
 
-void BKE_pbvh_update(PBVH *bvh, int flag, float (*fnors)[3])
+void BKE_pbvh_update(PBVH *bvh, int flag, float (*face_nors)[3])
 {
 	if (!bvh->nodes)
 		return;
@@ -1230,7 +1186,7 @@ void BKE_pbvh_update(PBVH *bvh, int flag, float (*fnors)[3])
 	                       &nodes, &totnode);
 
 	if (flag & PBVH_UpdateNormals)
-		pbvh_update_normals(bvh, nodes, totnode, fnors);
+		pbvh_update_normals(bvh, nodes, totnode, face_nors);
 
 	if (flag & (PBVH_UpdateBB | PBVH_UpdateOriginalBB | PBVH_UpdateRedraw))
 		pbvh_update_BB_redraw(bvh, nodes, totnode, flag);
@@ -1818,7 +1774,7 @@ static void pbvh_node_check_diffuse_changed(PBVH *bvh, PBVHNode *node)
 		node->flag |= PBVH_UpdateDrawBuffers;
 }
 
-void BKE_pbvh_draw(PBVH *bvh, float (*planes)[4], float (*fnors)[3],
+void BKE_pbvh_draw(PBVH *bvh, float (*planes)[4], float (*face_nors)[3],
                    DMSetMaterial setMaterial, bool wireframe, bool fast)
 {
 	PBVHNodeDrawData draw_data = {setMaterial, wireframe, fast};
@@ -1831,7 +1787,7 @@ void BKE_pbvh_draw(PBVH *bvh, float (*planes)[4], float (*fnors)[3],
 	BKE_pbvh_search_gather(bvh, update_search_cb, SET_INT_IN_POINTER(PBVH_UpdateNormals | PBVH_UpdateDrawBuffers),
 	                       &nodes, &totnode);
 
-	pbvh_update_normals(bvh, nodes, totnode, fnors);
+	pbvh_update_normals(bvh, nodes, totnode, face_nors);
 	pbvh_update_draw_buffers(bvh, nodes, totnode);
 
 	if (nodes) MEM_freeN(nodes);
