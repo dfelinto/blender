@@ -246,21 +246,21 @@ static void smoke_set_domain_from_derivedmesh(SmokeDomainSettings *sds, Object *
 		scale = res / size[0];
 		sds->scale = size[0] / fabsf(ob->size[0]);
 		sds->base_res[0] = res;
-		sds->base_res[1] = (int)(size[1] * scale + 0.5f);
-		sds->base_res[2] = (int)(size[2] * scale + 0.5f);
+		sds->base_res[1] = max_ii((int)(size[1] * scale + 0.5f), 4);
+		sds->base_res[2] = max_ii((int)(size[2] * scale + 0.5f), 4);
 	}
 	else if (size[1] >= MAX2(size[0], size[2])) {
 		scale = res / size[1];
 		sds->scale = size[1] / fabsf(ob->size[1]);
-		sds->base_res[0] = (int)(size[0] * scale + 0.5f);
+		sds->base_res[0] = max_ii((int)(size[0] * scale + 0.5f), 4);
 		sds->base_res[1] = res;
-		sds->base_res[2] = (int)(size[2] * scale + 0.5f);
+		sds->base_res[2] = max_ii((int)(size[2] * scale + 0.5f), 4);
 	}
 	else {
 		scale = res / size[2];
 		sds->scale = size[2] / fabsf(ob->size[2]);
-		sds->base_res[0] = (int)(size[0] * scale + 0.5f);
-		sds->base_res[1] = (int)(size[1] * scale + 0.5f);
+		sds->base_res[0] = max_ii((int)(size[0] * scale + 0.5f), 4);
+		sds->base_res[1] = max_ii((int)(size[1] * scale + 0.5f), 4);
 		sds->base_res[2] = res;
 	}
 
@@ -284,6 +284,7 @@ static int smokeModifier_init(SmokeModifierData *smd, Object *ob, Scene *scene, 
 		add_v3_fl(sds->shift_f, 0.5f);
 		zero_v3(sds->prev_loc);
 		mul_m4_v3(ob->obmat, sds->prev_loc);
+		copy_m4_m4(sds->obmat, ob->obmat);
 
 		/* set resolutions */
 		if (smd->domain->flags & MOD_SMOKE_ADAPTIVE_DOMAIN) {
@@ -527,6 +528,14 @@ void smokeModifier_createType(struct SmokeModifierData *smd)
 
 			smd->domain->viewsettings = MOD_SMOKE_VIEW_SHOWBIG;
 			smd->domain->effector_weights = BKE_add_effector_weights(NULL);
+
+#ifdef WITH_OPENVDB_BLOSC
+			smd->domain->openvdb_comp = VDB_COMPRESSION_BLOSC;
+#else
+			smd->domain->openvdb_comp = VDB_COMPRESSION_ZIP;
+#endif
+			smd->domain->data_depth = 0;
+			smd->domain->cache_file_format = PTCACHE_FILE_PTCACHE;
 		}
 		else if (smd->type & MOD_SMOKE_TYPE_FLOW)
 		{
@@ -617,6 +626,9 @@ void smokeModifier_copy(struct SmokeModifierData *smd, struct SmokeModifierData 
 
 		MEM_freeN(tsmd->domain->effector_weights);
 		tsmd->domain->effector_weights = MEM_dupallocN(smd->domain->effector_weights);
+		tsmd->domain->openvdb_comp = smd->domain->openvdb_comp;
+		tsmd->domain->data_depth = smd->domain->data_depth;
+		tsmd->domain->cache_file_format = smd->domain->cache_file_format;
 	}
 	else if (tsmd->flow) {
 		tsmd->flow->psys = smd->flow->psys;
@@ -697,7 +709,7 @@ typedef struct ObstaclesFromDMData {
 	float *velocityX, *velocityY, *velocityZ;
 } ObstaclesFromDMData;
 
-static void obstacles_from_derivedmesh_task_cb(void *userdata, void *UNUSED(userdata_chunk), int z)
+static void obstacles_from_derivedmesh_task_cb(void *userdata, const int z)
 {
 	ObstaclesFromDMData *data = userdata;
 	SmokeDomainSettings *sds = data->sds;
@@ -825,8 +837,8 @@ static void obstacles_from_derivedmesh(
 			    .has_velocity = has_velocity, .vert_vel = vert_vel,
 			    .velocityX = velocityX, .velocityY = velocityY, .velocityZ = velocityZ
 			};
-			BLI_task_parallel_range_ex(
-			            sds->res_min[2], sds->res_max[2], &data, NULL, 0, obstacles_from_derivedmesh_task_cb, true, false);
+			BLI_task_parallel_range(
+			            sds->res_min[2], sds->res_max[2], &data, obstacles_from_derivedmesh_task_cb, true);
 		}
 		/* free bvh tree */
 		free_bvhtree_from_mesh(&treeData);
@@ -1131,7 +1143,7 @@ typedef struct EmitFromParticlesData {
 	float hr_smooth;
 } EmitFromParticlesData;
 
-static void emit_from_particles_task_cb(void *userdata, void *UNUSED(userdata_chunk), int z)
+static void emit_from_particles_task_cb(void *userdata, const int z)
 {
 	EmitFromParticlesData *data = userdata;
 	SmokeFlowSettings *sfs = data->sfs;
@@ -1342,7 +1354,7 @@ static void emit_from_particles(
 			    .solid = solid, .smooth = smooth, .hr_smooth = hr_smooth,
 			};
 
-			BLI_task_parallel_range_ex(min[2], max[2], &data, NULL, 0, emit_from_particles_task_cb, true, false);
+			BLI_task_parallel_range(min[2], max[2], &data, emit_from_particles_task_cb, true);
 		}
 
 		if (sfs->flags & MOD_SMOKE_FLOW_USE_PART_SIZE) {
@@ -1514,7 +1526,7 @@ typedef struct EmitFromDMData {
 	int *min, *max, *res;
 } EmitFromDMData;
 
-static void emit_from_derivedmesh_task_cb(void *userdata, void *UNUSED(userdata_chunk), int z)
+static void emit_from_derivedmesh_task_cb(void *userdata, const int z)
 {
 	EmitFromDMData *data = userdata;
 	EmissionMap *em = data->em;
@@ -1667,7 +1679,7 @@ static void emit_from_derivedmesh(Object *flow_ob, SmokeDomainSettings *sds, Smo
 			    .flow_center = flow_center, .min = min, .max = max, .res = res,
 			};
 
-			BLI_task_parallel_range_ex(min[2], max[2], &data, NULL, 0, emit_from_derivedmesh_task_cb, true, false);
+			BLI_task_parallel_range(min[2], max[2], &data, emit_from_derivedmesh_task_cb, true);
 		}
 		/* free bvh tree */
 		free_bvhtree_from_mesh(&treeData);
@@ -2383,7 +2395,7 @@ typedef struct UpdateEffectorsData {
 	unsigned char *obstacle;
 } UpdateEffectorsData;
 
-static void update_effectors_task_cb(void *userdata, void *UNUSED(userdata_chunk), int x)
+static void update_effectors_task_cb(void *userdata, const int x)
 {
 	UpdateEffectorsData *data = userdata;
 	SmokeDomainSettings *sds = data->sds;
@@ -2457,7 +2469,7 @@ static void update_effectors(Scene *scene, Object *ob, SmokeDomainSettings *sds,
 		data.velocity_z = smoke_get_velocity_z(sds->fluid);
 		data.obstacle = smoke_get_obstacle(sds->fluid);
 
-		BLI_task_parallel_range_ex(0, sds->res[0], &data, NULL, 0, update_effectors_task_cb, true, false);
+		BLI_task_parallel_range(0, sds->res[0], &data, update_effectors_task_cb, true);
 	}
 
 	pdEndEffectors(&effectors);

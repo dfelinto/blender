@@ -1112,6 +1112,8 @@ class SEQUENCER_PT_modifiers(SequencerButtonsPanel, Panel):
                     box.prop_search(mod, "input_mask_strip", sequences_object, "sequences", text="Mask")
                 else:
                     box.prop(mod, "input_mask_id")
+                    row = box.row()
+                    row.prop(mod, "mask_time", expand=True)
 
                 if mod.type == 'COLOR_BALANCE':
                     box.prop(mod, "color_multiply")
@@ -1127,6 +1129,18 @@ class SEQUENCER_PT_modifiers(SequencerButtonsPanel, Panel):
                 elif mod.type == 'WHITE_BALANCE':
                     col = box.column()
                     col.prop(mod, "white_value")
+                elif mod.type == 'TONEMAP':
+                    col = box.column()
+                    col.prop(mod, "tonemap_type")
+                    if mod.tonemap_type == 'RD_PHOTORECEPTOR':
+                        col.prop(mod, "intensity")
+                        col.prop(mod, "contrast")
+                        col.prop(mod, "adaptation")
+                        col.prop(mod, "correction")
+                    elif mod.tonemap_type == 'RH_SIMPLE':
+                        col.prop(mod, "key")
+                        col.prop(mod, "offset")
+                        col.prop(mod, "gamma")
 
 class SEQUENCER_PT_grease_pencil(GreasePencilDataPanel, SequencerButtonsPanel_Output, Panel):
     bl_space_type = 'SEQUENCE_EDITOR'

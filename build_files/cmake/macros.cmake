@@ -282,6 +282,9 @@ function(SETUP_LIBDIRS)
 	if(WITH_OPENCOLORIO)
 		link_directories(${OPENCOLORIO_LIBPATH})
 	endif()
+	if(WITH_OPENVDB)
+		link_directories(${OPENVDB_LIBPATH})
+	endif()
 	if(WITH_IMAGE_OPENJPEG AND WITH_SYSTEM_OPENJPEG)
 		link_directories(${OPENJPEG_LIBPATH})
 	endif()
@@ -399,6 +402,9 @@ function(setup_liblinks
 		else()
 			target_link_libraries(${target} ${OPENSUBDIV_LIBRARIES})
 		endif()
+	endif()
+	if(WITH_OPENVDB)
+		target_link_libraries(${target} ${OPENVDB_LIBRARIES})
 	endif()
 	if(WITH_CYCLES_OSL)
 		target_link_libraries(${target} ${OSL_LIBRARIES})
@@ -713,6 +719,10 @@ function(SETUP_BLENDER_SORTED_LIBS)
 		list(APPEND BLENDER_SORTED_LIBS bf_intern_opensubdiv)
 	endif()
 
+	if(WITH_OPENVDB)
+		list(APPEND BLENDER_SORTED_LIBS bf_intern_openvdb)
+	endif()
+
 	foreach(SORTLIB ${BLENDER_SORTED_LIBS})
 		set(REMLIB ${SORTLIB})
 		foreach(SEARCHLIB ${BLENDER_LINK_LIBS})
@@ -797,17 +807,6 @@ macro(TEST_SSE_SUPPORT
 	endif()
 
 	unset(CMAKE_REQUIRED_FLAGS)
-endmacro()
-
-macro(TEST_STDBOOL_SUPPORT)
-	include(CheckCSourceRuns)
-
-	# This program will compile correctly if and only if
-	# this C compiler supports C99 stdbool.
-	check_c_source_runs("
-		#include <stdbool.h>
-		int main(void) { return (int)false; }"
-	HAVE_STDBOOL_H)
 endmacro()
 
 # Only print message if running CMake first time
@@ -1478,17 +1477,21 @@ function(find_python_package
 		)
 
 		 if(NOT EXISTS "${PYTHON_${_upper_package}_PATH}")
-			message(WARNING "'${package}' path could not be found in:\n"
-			                "'${PYTHON_LIBPATH}/python${PYTHON_VERSION}/site-packages/${package}', "
-			                "'${PYTHON_LIBPATH}/python${_PY_VER_MAJOR}/site-packages/${package}', "
-			                "'${PYTHON_LIBPATH}/python${PYTHON_VERSION}/dist-packages/${package}', "
-			                "'${PYTHON_LIBPATH}/python${_PY_VER_MAJOR}/dist-packages/${package}', "
-			                "WITH_PYTHON_INSTALL_${_upper_package} option will be ignored when installing python")
+			message(WARNING
+				"Python package '${package}' path could not be found in:\n"
+				"'${PYTHON_LIBPATH}/python${PYTHON_VERSION}/site-packages/${package}', "
+				"'${PYTHON_LIBPATH}/python${_PY_VER_MAJOR}/site-packages/${package}', "
+				"'${PYTHON_LIBPATH}/python${PYTHON_VERSION}/dist-packages/${package}', "
+				"'${PYTHON_LIBPATH}/python${_PY_VER_MAJOR}/dist-packages/${package}', "
+				"\n"
+				"The 'WITH_PYTHON_INSTALL_${_upper_package}' option will be ignored when installing Python.\n"
+				"The build will be usable, only add-ons that depend on this package won't be functional."
+			)
 			set(WITH_PYTHON_INSTALL_${_upper_package} OFF PARENT_SCOPE)
 		else()
 			message(STATUS "${package} found at '${PYTHON_${_upper_package}_PATH}'")
 		endif()
-	  endif()
+	endif()
 endfunction()
 
 # like Python's 'print(dir())'

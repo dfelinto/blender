@@ -28,7 +28,8 @@ DebugFlags::CPU::CPU()
     avx(true),
     sse41(true),
     sse3(true),
-    sse2(true)
+    sse2(true),
+    qbvh(true)
 {
 	reset();
 }
@@ -52,6 +53,8 @@ void DebugFlags::CPU::reset()
 
 #undef STRINGIFY
 #undef CHECK_CPU_FLAGS
+
+	qbvh = true;
 }
 
 DebugFlags::OpenCL::OpenCL()
@@ -111,7 +114,7 @@ void DebugFlags::reset()
 }
 
 std::ostream& operator <<(std::ostream &os,
-                          const DebugFlagsRef debug_flags)
+                          DebugFlagsConstRef debug_flags)
 {
 	os << "CPU flags:\n"
 	   << "  AVX2   : " << string_from_bool(debug_flags.cpu.avx2)  << "\n"

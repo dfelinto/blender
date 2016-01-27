@@ -41,6 +41,9 @@ public:
 		bool sse41;
 		bool sse3;
 		bool sse2;
+
+		/* Whether QBVH usage is allowed or not. */
+		bool qbvh;
 	};
 
 	/* Descriptor of OpenCL feature-set to be used. */
@@ -122,13 +125,14 @@ private:
 };
 
 typedef DebugFlags& DebugFlagsRef;
+typedef const DebugFlags& DebugFlagsConstRef;
 
 inline DebugFlags& DebugFlags() {
   return DebugFlags::get();
 }
 
 std::ostream& operator <<(std::ostream &os,
-                          const DebugFlagsRef debug_flags);
+                          DebugFlagsConstRef debug_flags);
 
 CCL_NAMESPACE_END
 
