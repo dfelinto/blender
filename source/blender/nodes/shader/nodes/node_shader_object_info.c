@@ -39,7 +39,7 @@ static bNodeSocketTemplate sh_node_object_info_out[] = {
 
 static int node_shader_gpu_object_info(GPUMaterial *mat, bNode *UNUSED(node), bNodeExecData *UNUSED(execdata), GPUNodeStack *in, GPUNodeStack *out)
 {
-	return GPU_stack_link(mat, "node_object_info", in, out);
+	return GPU_stack_link(mat, "node_object_info", in, out, GPU_builtin(GPU_OBJECT_MATRIX));
 }
 
 /* node type definition */

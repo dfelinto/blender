@@ -156,6 +156,21 @@ static void SHFilter(ImBuf *ibuf, float *SHCoef)
 	}
 }
 
+static void get_precalc_lod_factors(Image *ima, ImageUser *iuser, float *maxLod, float *precalcLodFactor, float *sampleNumber)
+{
+		*maxLod = 0.0f;
+		*precalcLodFactor = 0.0f;
+		*sampleNumber = 32.0f; /* Hardcoded for now */
+
+		ImBuf *ibuf = BKE_image_acquire_ibuf(ima, iuser, NULL);
+		if (ibuf) {
+			*maxLod = log((float)ibuf->y)/log(2);
+			*precalcLodFactor = 0.5f * log( (float)ibuf->x * (float)ibuf->y / *sampleNumber) / log(2);
+			*precalcLodFactor -= 2.0f; /* Biasing the factor to get more accurate sampling */
+		}
+		BKE_image_release_ibuf(ima, ibuf, NULL);
+}
+
 static void node_shader_init_tex_environment(bNodeTree *UNUSED(ntree), bNode *node)
 {
 	NodeTexEnvironment *tex = MEM_callocN(sizeof(NodeTexEnvironment), "NodeTexEnvironment");
@@ -179,7 +194,7 @@ static int node_shader_gpu_tex_environment(GPUMaterial *mat, bNode *node, bNodeE
 	int isdata = tex->color_space == SHD_COLORSPACE_NONE;
 	int ret;
 	GPUMatType type = GPU_material_get_type(mat);
-	GPUNodeLink *normal_transformed;
+	GPUNodeLink *normal_transformed, *tangent_transformed;
 	GPUBrdfInput *brdf = NULL;
 	bool isBackground = (type == GPU_MATERIAL_TYPE_WORLD || type == GPU_MATERIAL_TYPE_WORLD_SH);
 
@@ -190,6 +205,18 @@ static int node_shader_gpu_tex_environment(GPUMaterial *mat, bNode *node, bNodeE
 			 * Currently only one custom normal get back from the graph.
 			 */
 			GPU_material_set_normal_link(mat, normal_transformed); /* THIS IS BAD TOO */
+		}
+
+		return GPU_stack_link(mat, "node_tex_environment_empty", in, out);
+	}
+
+	if (type == GPU_MATERIAL_TYPE_ENV_TANGENT) {
+		if (in[0].link) {
+			GPU_link(mat, "set_rgb", in[0].link, &tangent_transformed);
+			/* Should use another bridge. Preferably a per EnvTex Node Bridge.
+			 * Currently only one custom normal get back from the graph.
+			 */
+			GPU_material_set_tangent_link(mat, tangent_transformed); /* THIS IS BAD TOO */
 		}
 
 		return GPU_stack_link(mat, "node_tex_environment_empty", in, out);
@@ -212,6 +239,8 @@ static int node_shader_gpu_tex_environment(GPUMaterial *mat, bNode *node, bNodeE
 		brdf = GPU_material_get_brdf_link(mat);
 		if (brdf->type == GPU_BRDF_TRANSLUCENT)
 			GPU_link(mat, "viewN_to_shadeN", normal_transformed, &normal_transformed);
+		if (brdf->type == GPU_BRDF_ANISO_GGX)
+			GPU_link(mat, "set_rgb", GPU_material_get_tangent_link(mat), &tangent_transformed);
 	}
 
 	node_shader_gpu_tex_mapping(mat, node, in, out);
@@ -247,22 +276,54 @@ static int node_shader_gpu_tex_environment(GPUMaterial *mat, bNode *node, bNodeE
 
 	} else if (brdf && brdf->type == GPU_BRDF_GLOSSY_GGX) {
 		// REFLECTION GLOSSY
-		float maxLod = 0.0f;
-		float precalcLodFactor = 0.0f;
-		float sampleNumber = 32.0f; /* Hardcoded for now */
+		float maxLod, precalcLodFactor, sampleNumber;
+		get_precalc_lod_factors(ima, iuser, &maxLod, &precalcLodFactor, &sampleNumber);
+
+		return GPU_link(mat, "env_sampling_reflect_glossy", in[0].link, normal_transformed,
+						brdf->roughness, GPU_uniform(&precalcLodFactor), GPU_uniform(&maxLod), GPU_builtin(GPU_INVERSE_VIEW_MATRIX),
+						GPU_image(ima, iuser, isdata, true), &out[0].link);
+
+	} else if (brdf && brdf->type == GPU_BRDF_ANISO_GGX) {
+		// REFLECTION ANISO
+		float maxLod, precalcLodFactor, sampleNumber;
+		maxLod = 0.0f, precalcLodFactor = 0.0f, sampleNumber = 64.0f; /* Hardcoded for now */
 
 		ImBuf *ibuf = BKE_image_acquire_ibuf(ima, iuser, NULL);
 		if (ibuf) {
 			maxLod = log((float)ibuf->y)/log(2);
 			precalcLodFactor = 0.5f * log( (float)ibuf->x * (float)ibuf->y / sampleNumber) / log(2);
-			precalcLodFactor -= 0.5f; /* Biasing the factor to get more accurate sampling */
+			//precalcLodFactor -= 2.0f; /* Biasing the factor to get more accurate sampling */
 		}
 		BKE_image_release_ibuf(ima, ibuf, NULL);
 
-		return GPU_link(mat, "env_sampling_reflect_glossy", in[0].link, normal_transformed, 
-						brdf->roughness, GPU_uniform(&precalcLodFactor), GPU_uniform(&maxLod), GPU_builtin(GPU_INVERSE_VIEW_MATRIX), 
+		return GPU_link(mat, "env_sampling_reflect_aniso", in[0].link, normal_transformed,
+						brdf->roughness, brdf->anisotropy, brdf->aniso_rotation, tangent_transformed,
+						GPU_uniform(&precalcLodFactor), GPU_uniform(&maxLod), GPU_builtin(GPU_INVERSE_VIEW_MATRIX),
 						GPU_image(ima, iuser, isdata, true), &out[0].link);
 
+	} else if (brdf && brdf->type == GPU_BRDF_REFRACT_GGX) {
+		// REFRACTION GLOSSY
+		float maxLod, precalcLodFactor, sampleNumber;
+		get_precalc_lod_factors(ima, iuser, &maxLod, &precalcLodFactor, &sampleNumber);
+		precalcLodFactor += 1.0f; /* Biasing the factor Again */
+
+		return GPU_link(mat, "env_sampling_refract_glossy", in[0].link, normal_transformed, brdf->ior,
+						brdf->roughness, GPU_uniform(&precalcLodFactor), GPU_uniform(&maxLod), GPU_builtin(GPU_INVERSE_VIEW_MATRIX),
+						GPU_image(ima, iuser, isdata, true), &out[0].link);
+
+	} else if (brdf && brdf->type == GPU_BRDF_GLASS_GGX) {
+		// GLASS GLOSSY
+		float maxLod, precalcLodFactor, sampleNumber;
+		get_precalc_lod_factors(ima, iuser, &maxLod, &precalcLodFactor, &sampleNumber);
+		precalcLodFactor += 1.0f; /* Biasing the factor Again */
+
+		return GPU_link(mat, "env_sampling_glass_glossy", in[0].link, normal_transformed, brdf->ior,
+						brdf->roughness, GPU_uniform(&precalcLodFactor), GPU_uniform(&maxLod), GPU_builtin(GPU_INVERSE_VIEW_MATRIX),
+						GPU_image(ima, iuser, isdata, true), &out[0].link);
+
+	} else if (brdf && brdf->type == GPU_BRDF_GLASS_SHARP) {
+		// GLASS SHARP
+		return GPU_link(mat, "env_sampling_glass_sharp", in[0].link, normal_transformed, brdf->ior,	GPU_image(ima, iuser, isdata, true), &out[0].link);
 	} else {
 		float zero = 0.0f;
 		GPUNodeLink *lodLink = GPU_uniform(&zero);

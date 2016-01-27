@@ -41,6 +41,21 @@ static void node_shader_init_tangent(bNodeTree *UNUSED(ntree), bNode *node)
 	node->storage = attr;
 }
 
+static int node_shader_gpu_tangent(GPUMaterial *mat, bNode *node, bNodeExecData *UNUSED(execdata), GPUNodeStack *in, GPUNodeStack *out)
+{
+	NodeShaderTangent *attr = node->storage;
+	float vec[3] = {0.0f};
+
+	if (attr->axis == SHD_TANGENT_AXIS_Z)
+		vec[2] = 1.0f;
+	else if (attr->axis == SHD_TANGENT_AXIS_Y)
+		vec[1] = -1.0f;
+	else
+		vec[0] = 1.0f;
+
+	return GPU_stack_link(mat, "node_tangent", in, out, GPU_uniform(&vec), GPU_builtin(GPU_VIEW_NORMAL), GPU_builtin(GPU_INVERSE_VIEW_MATRIX), GPU_builtin(GPU_INVERSE_VIEW_MATRIX), GPU_builtin(GPU_OBJECT_MATRIX), GPU_builtin(GPU_INVERSE_OBJECT_MATRIX));
+}
+
 /* node type definition */
 void register_node_type_sh_tangent(void)
 {
@@ -52,6 +67,7 @@ void register_node_type_sh_tangent(void)
 	node_type_size_preset(&ntype, NODE_SIZE_MIDDLE);
 	node_type_init(&ntype, node_shader_init_tangent);
 	node_type_storage(&ntype, "NodeShaderTangent", node_free_standard_storage, node_copy_standard_storage);
+	node_type_gpu(&ntype, node_shader_gpu_tangent);
 
 	nodeRegisterType(&ntype);
 }

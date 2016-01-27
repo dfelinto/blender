@@ -2503,6 +2503,7 @@ static void gpu_render_lamp_update(Scene *scene, View3D *v3d,
 		bool hide = (ob->restrictflag & OB_RESTRICT_VIEW);
 		GPU_lamp_update(lamp, lay, hide, obmat);
 		GPU_lamp_update_colors(lamp, la->r, la->g, la->b, la->energy);
+		GPU_lamp_update_size(lamp, la->area_size, la->area_sizey);
 		
 		layers = lay & v3d->lay;
 		if (srl)

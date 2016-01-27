@@ -44,18 +44,65 @@ static bNodeSocketTemplate sh_node_bsdf_anisotropic_out[] = {
 	{	-1, 0, ""	}
 };
 
+#define IN_COLOR 0
+#define IN_ROUGHNESS 1
+#define IN_ANISOTROPY 2
+#define IN_ROTATION 3
+#define IN_NORMAL 4
+#define IN_TANGENT 5
+
 static void node_shader_init_anisotropic(bNodeTree *UNUSED(ntree), bNode *node)
 {
 	node->custom1 = SHD_GLOSSY_GGX;
 }
 
+/* XXX this is also done as a local static function in gpu_codegen.c,
+ * but we need this to hack around the crappy material node.
+ */
+static GPUNodeLink *gpu_get_input_link(GPUNodeStack *in)
+{
+	if (in->link)
+		return in->link;
+	else
+		return GPU_uniform(in->vec);
+}
+
 static int node_shader_gpu_bsdf_anisotropic(GPUMaterial *mat, bNode *UNUSED(node), bNodeExecData *UNUSED(execdata), GPUNodeStack *in, GPUNodeStack *out)
 {
-	if (!in[4].link)
-		in[4].link = GPU_builtin(GPU_VIEW_NORMAL);
+	if (!in[IN_NORMAL].link)
+		in[IN_NORMAL].link = GPU_builtin(GPU_VIEW_NORMAL);
+	else {
+		/* Convert to view space normal in case a Normal is plugged. This is because cycles uses world normals */
+		GPU_link(mat, "mat_vec_mul", in[IN_NORMAL].link, GPU_builtin(GPU_VIEW_MATRIX), &in[IN_NORMAL].link);
+	}
 
-	return GPU_stack_link(mat, "node_bsdf_anisotropic", in, out);
-}
+	if (!in[IN_TANGENT].link)
+		GPU_link(mat, "default_tangent", GPU_builtin(GPU_VIEW_NORMAL), GPU_attribute(CD_ORCO, ""), GPU_builtin(GPU_OBJECT_MATRIX), GPU_builtin(GPU_VIEW_MATRIX), GPU_builtin(GPU_INVERSE_VIEW_MATRIX), &in[IN_TANGENT].link);
+	else {
+		GPU_link(mat, "mat_vec_mul", in[IN_TANGENT].link, GPU_builtin(GPU_VIEW_MATRIX), &in[IN_TANGENT].link);
+	}
+
+	if (GPU_material_get_type(mat) == GPU_MATERIAL_TYPE_MESH_REAL_SH) {
+		GPUBrdfInput brdf;
+
+		GPU_brdf_input_initialize(&brdf);
+
+		brdf.mat            = mat;
+		brdf.type           = GPU_BRDF_ANISO_GGX;
+		brdf.color          = gpu_get_input_link(&in[IN_COLOR]);
+		brdf.roughness      = gpu_get_input_link(&in[IN_ROUGHNESS]);
+		brdf.anisotropy     = gpu_get_input_link(&in[IN_ANISOTROPY]);
+		brdf.aniso_rotation = gpu_get_input_link(&in[IN_ROTATION]);
+		brdf.normal         = gpu_get_input_link(&in[IN_NORMAL]);
+		brdf.aniso_tangent  = gpu_get_input_link(&in[IN_TANGENT]);
+
+		GPU_shade_BRDF(&brdf);
+
+		out[0].link = brdf.output;
+		return 1;
+	}
+	else
+		return GPU_stack_link(mat, "node_bsdf_anisotropic_lights", in, out, GPU_builtin(GPU_VIEW_POSITION), GPU_get_world_horicol());}
 
 /* node type definition */
 void register_node_type_sh_bsdf_anisotropic(void)

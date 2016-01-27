@@ -73,7 +73,7 @@ static int node_shader_gpu_bsdf_refraction(GPUMaterial *mat, bNode *node, bNodeE
 		in[IN_NORMAL].link = GPU_builtin(GPU_VIEW_NORMAL);
 	else {
 		/* Convert to view space normal in case a Normal is plugged. This is because cycles uses world normals */
-		GPU_link(mat, "node_vector_transform", in[IN_NORMAL].link, GPU_builtin(GPU_VIEW_MATRIX), &in[IN_NORMAL].link);
+		GPU_link(mat, "mat_vec_mul", in[IN_NORMAL].link, GPU_builtin(GPU_VIEW_MATRIX), &in[IN_NORMAL].link);
 	}
 
 	if (GPU_material_get_type(mat) == GPU_MATERIAL_TYPE_MESH_REAL_SH) {
@@ -82,7 +82,7 @@ static int node_shader_gpu_bsdf_refraction(GPUMaterial *mat, bNode *node, bNodeE
 		GPU_brdf_input_initialize(&brdf);
 
 		brdf.mat       = mat;
-		brdf.type      = (node->custom1 == SHD_GLOSSY_SHARP) ? GPU_BRDF_REFRACT_SHARP : GPU_BRDF_REFRACT_SHARP;
+		brdf.type      = (node->custom1 == SHD_GLOSSY_SHARP) ? GPU_BRDF_REFRACT_SHARP : GPU_BRDF_REFRACT_GGX;
 		brdf.color     = gpu_get_input_link(&in[IN_COLOR]);
 		brdf.roughness = gpu_get_input_link(&in[IN_ROUGHNESS]);
 		brdf.ior       = gpu_get_input_link(&in[IN_IOR]);

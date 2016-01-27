@@ -64,18 +64,32 @@ static int node_shader_gpu_vect_transform(GPUMaterial *mat, bNode *node, bNodeEx
 {
 	NodeShaderVectTransform *vect = node->storage;
 	int ret = 0;
+	float isPoint = 0.0;
 
-	GPU_link(mat, "set_rgba", gpu_get_input_link(&in[0]), &in[0].link);
+	GPU_link(mat, "set_rgb", gpu_get_input_link(&in[0]), &in[0].link);
 
-	if (vect->convert_from == 1)
-		ret |= !GPU_link(mat, "node_vector_transform", in[0].link, GPU_builtin(GPU_OBJECT_MATRIX), &in[0].link);
-	else if (vect->convert_from == 2)
-		ret |= !GPU_link(mat, "node_vector_transform", in[0].link, GPU_builtin(GPU_INVERSE_VIEW_MATRIX), &in[0].link);
+	if (vect->type == SHD_VECT_TRANSFORM_TYPE_POINT)
+		isPoint = 1.0;
 
-	if (vect->convert_to == 1)
-		ret |= !GPU_link(mat, "node_vector_transform", in[0].link, GPU_builtin(GPU_INVERSE_OBJECT_MATRIX), &in[0].link);
-	else if (vect->convert_to == 2)
-		ret |= !GPU_link(mat, "node_vector_transform", in[0].link, GPU_builtin(GPU_VIEW_MATRIX), &in[0].link);
+	if (vect->convert_from == SHD_VECT_TRANSFORM_SPACE_OBJECT)
+		ret |= !GPU_link(mat, "node_vector_transform", in[0].link, GPU_builtin(GPU_OBJECT_MATRIX), GPU_uniform(&isPoint), &in[0].link);
+	else if (vect->convert_from == SHD_VECT_TRANSFORM_SPACE_CAMERA){
+		ret |= !GPU_link(mat, "invert_z", in[0].link, &in[0].link);
+		ret |= !GPU_link(mat, "node_vector_transform", in[0].link, GPU_builtin(GPU_INVERSE_VIEW_MATRIX), GPU_uniform(&isPoint), &in[0].link);
+	}
+
+	if (vect->convert_to == SHD_VECT_TRANSFORM_SPACE_OBJECT)
+		ret |= !GPU_link(mat, "node_vector_transform", in[0].link, GPU_builtin(GPU_INVERSE_OBJECT_MATRIX), GPU_uniform(&isPoint), &in[0].link);
+	else if (vect->convert_to == SHD_VECT_TRANSFORM_SPACE_CAMERA){
+		ret |= !GPU_link(mat, "node_vector_transform", in[0].link, GPU_builtin(GPU_VIEW_MATRIX), GPU_uniform(&isPoint), &in[0].link);
+		ret |= !GPU_link(mat, "invert_z", in[0].link, &in[0].link);
+	}
+
+	if (vect->type == SHD_VECT_TRANSFORM_TYPE_NORMAL){
+		GPUNodeLink *tmp;
+		ret |= !GPU_link(mat, "vec_math_normalize", in[0].link, &in[0].link, &tmp);
+	}
+
 
 	out[0].link = in[0].link;
 
