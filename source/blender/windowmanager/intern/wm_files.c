@@ -429,7 +429,7 @@ void wm_file_read_report(bContext *C)
 
 	if (reports) {
 		if (!G.background) {
-			WM_report_banner_show(C);
+			WM_report_banner_show();
 		}
 	}
 }
@@ -469,6 +469,8 @@ static void wm_file_read_post(bContext *C, bool is_startup_file)
 		BPY_python_reset(C);
 		addons_loaded = true;
 	}
+#else
+	UNUSED_VARS(is_startup_file);
 #endif  /* WITH_PYTHON */
 
 	WM_operatortype_last_properties_clear_all();

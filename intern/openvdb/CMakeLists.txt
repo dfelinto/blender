@@ -14,27 +14,57 @@
 # along with this program; if not, write to the Free Software Foundation,
 # Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
 #
-# The Original Code is Copyright (C) 2012, Blender Foundation
+# The Original Code is Copyright (C) 2015, Blender Foundation
 # All rights reserved.
 #
 # The Original Code is: all of this file.
 #
-# Contributor(s): Peter Larabell
+# Contributor(s): Kevin Dietrich.
 #
 # ***** END GPL LICENSE BLOCK *****
 
 set(INC
 	.
+	intern
 )
 
 set(INC_SYS
-	
 )
 
 set(SRC
-	raskter.c
-
-	raskter.h
+	openvdb_capi.h
 )
 
-blender_add_lib(bf_intern_raskter "${SRC}" "${INC}" "${INC_SYS}")
+if(WITH_OPENVDB)
+	add_definitions(
+		-DWITH_OPENVDB
+	)
+
+	list(APPEND INC_SYS
+		${BOOST_INCLUDE_DIR}
+		${TBB_INCLUDE_DIRS}
+		${OPENEXR_INCLUDE_DIRS}
+		${OPENVDB_INCLUDE_DIRS}
+	)
+
+	list(APPEND SRC
+		intern/openvdb_dense_convert.cc
+		intern/openvdb_reader.cc
+		intern/openvdb_writer.cc
+		openvdb_capi.cc
+		openvdb_util.cc
+
+		intern/openvdb_dense_convert.h
+		intern/openvdb_reader.h
+		intern/openvdb_writer.h
+		openvdb_util.h
+	)
+
+	if(WITH_OPENVDB_BLOSC)
+		add_definitions(
+			-DWITH_OPENVDB_BLOSC
+		)
+	endif()
+endif()
+
+blender_add_lib(bf_intern_openvdb "${SRC}" "${INC}" "${INC_SYS}")

@@ -325,9 +325,6 @@ static int node_shader_gpu_tex_environment(GPUMaterial *mat, bNode *node, bNodeE
 		// GLASS SHARP
 		return GPU_link(mat, "env_sampling_glass_sharp", in[0].link, normal_transformed, brdf->ior,	GPU_image(ima, iuser, isdata, true), &out[0].link);
 	} else {
-		float zero = 0.0f;
-		GPUNodeLink *lodLink = GPU_uniform(&zero);
-
 		if (brdf && brdf->type == GPU_BRDF_GLOSSY_SHARP) {
 			GPU_link(mat, "env_sampling_reflect_sharp", in[0].link, normal_transformed, GPU_builtin(GPU_INVERSE_VIEW_MATRIX), &in[0].link);
 		}
@@ -336,9 +333,9 @@ static int node_shader_gpu_tex_environment(GPUMaterial *mat, bNode *node, bNodeE
 		}
 		
 		if (tex->projection == SHD_PROJ_EQUIRECTANGULAR)
-			ret = GPU_stack_link(mat, "node_tex_environment_equirectangular", in, out, GPU_image(ima, iuser, isdata, true), lodLink);
+			ret = GPU_stack_link(mat, "node_tex_environment_equirectangular", in, out, GPU_image(ima, iuser, isdata, true));
 		else
-			ret = GPU_stack_link(mat, "node_tex_environment_mirror_ball", in, out, GPU_image(ima, iuser, isdata, true), lodLink);
+			ret = GPU_stack_link(mat, "node_tex_environment_mirror_ball", in, out, GPU_image(ima, iuser, isdata, true));
 	}
 
 

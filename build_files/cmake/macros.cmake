@@ -282,6 +282,9 @@ function(SETUP_LIBDIRS)
 	if(WITH_OPENCOLORIO)
 		link_directories(${OPENCOLORIO_LIBPATH})
 	endif()
+	if(WITH_OPENVDB)
+		link_directories(${OPENVDB_LIBPATH})
+	endif()
 	if(WITH_IMAGE_OPENJPEG AND WITH_SYSTEM_OPENJPEG)
 		link_directories(${OPENJPEG_LIBPATH})
 	endif()
@@ -400,6 +403,9 @@ function(setup_liblinks
 			target_link_libraries(${target} ${OPENSUBDIV_LIBRARIES})
 		endif()
 	endif()
+	if(WITH_OPENVDB)
+		target_link_libraries(${target} ${OPENVDB_LIBRARIES} ${TBB_LIBRARIES})
+	endif()
 	if(WITH_CYCLES_OSL)
 		target_link_libraries(${target} ${OSL_LIBRARIES})
 	endif()
@@ -478,7 +484,11 @@ function(setup_liblinks
 	# We put CLEW and CUEW here because OPENSUBDIV_LIBRARIES dpeends on them..
 	if(WITH_CYCLES OR WITH_COMPOSITOR OR WITH_OPENSUBDIV)
 		target_link_libraries(${target} "extern_clew")
-		target_link_libraries(${target} "extern_cuew")
+		if(WITH_CUDA_DYNLOAD)
+			target_link_libraries(${target} "extern_cuew")
+		else()
+			target_link_libraries(${target} ${CUDA_CUDA_LIBRARY})
+		endif()
 	endif()
 
 	#system libraries with no dependencies such as platform link libs or opengl should go last
@@ -623,7 +633,6 @@ function(SETUP_BLENDER_SORTED_LIBS)
 		cycles_kernel
 		cycles_util
 		cycles_subd
-		bf_intern_raskter
 		bf_intern_opencolorio
 		bf_intern_eigen
 		extern_rangetree
@@ -708,6 +717,10 @@ function(SETUP_BLENDER_SORTED_LIBS)
 
 	if(WITH_OPENSUBDIV)
 		list(APPEND BLENDER_SORTED_LIBS bf_intern_opensubdiv)
+	endif()
+
+	if(WITH_OPENVDB)
+		list(APPEND BLENDER_SORTED_LIBS bf_intern_openvdb)
 	endif()
 
 	foreach(SORTLIB ${BLENDER_SORTED_LIBS})
@@ -796,15 +809,11 @@ macro(TEST_SSE_SUPPORT
 	unset(CMAKE_REQUIRED_FLAGS)
 endmacro()
 
-macro(TEST_STDBOOL_SUPPORT)
-	include(CheckCSourceRuns)
-
-	# This program will compile correctly if and only if
-	# this C compiler supports C99 stdbool.
-	check_c_source_runs("
-		#include <stdbool.h>
-		int main(void) { return (int)false; }"
-	HAVE_STDBOOL_H)
+# Only print message if running CMake first time
+macro(message_first_run)
+	if(FIRST_RUN)
+		message(${ARGV})
+	endif()
 endmacro()
 
 macro(TEST_UNORDERED_MAP_SUPPORT)
@@ -813,11 +822,11 @@ macro(TEST_UNORDERED_MAP_SUPPORT)
 	# and define the include path
 	# This module defines
 	#  HAVE_UNORDERED_MAP, whether unordered_map implementation was found
-	#  
+	#
 	#  HAVE_STD_UNORDERED_MAP_HEADER, <unordered_map.h> was found
 	#  HAVE_UNORDERED_MAP_IN_STD_NAMESPACE, unordered_map is in namespace std
 	#  HAVE_UNORDERED_MAP_IN_TR1_NAMESPACE, unordered_map is in namespace std::tr1
-	#  
+	#
 	#  UNORDERED_MAP_INCLUDE_PREFIX, include path prefix for unordered_map, if found
 	#  UNORDERED_MAP_NAMESPACE, namespace for unordered_map, if found
 
@@ -841,7 +850,7 @@ macro(TEST_UNORDERED_MAP_SUPPORT)
 		                          }"
 		                          HAVE_UNORDERED_MAP_IN_STD_NAMESPACE)
 		if(HAVE_UNORDERED_MAP_IN_STD_NAMESPACE)
-			message(STATUS "Found unordered_map/set in std namespace.")
+			message_first_run(STATUS "Found unordered_map/set in std namespace.")
 
 			set(HAVE_UNORDERED_MAP "TRUE")
 			set(UNORDERED_MAP_INCLUDE_PREFIX "")
@@ -854,26 +863,26 @@ macro(TEST_UNORDERED_MAP_SUPPORT)
 			                          }"
 			                          HAVE_UNORDERED_MAP_IN_TR1_NAMESPACE)
 			if(HAVE_UNORDERED_MAP_IN_TR1_NAMESPACE)
-				message(STATUS "Found unordered_map/set in std::tr1 namespace.")
+				message_first_run(STATUS "Found unordered_map/set in std::tr1 namespace.")
 
 				set(HAVE_UNORDERED_MAP "TRUE")
 				set(UNORDERED_MAP_INCLUDE_PREFIX "")
 				set(UNORDERED_MAP_NAMESPACE "std::tr1")
 			else()
-				message(STATUS "Found <unordered_map> but cannot find either std::unordered_map "
-				        "or std::tr1::unordered_map.")
+				message_first_run(STATUS "Found <unordered_map> but cannot find either std::unordered_map "
+				                  "or std::tr1::unordered_map.")
 			endif()
 		endif()
 	else()
 		CHECK_INCLUDE_FILE_CXX("tr1/unordered_map" HAVE_UNORDERED_MAP_IN_TR1_NAMESPACE)
 		if(HAVE_UNORDERED_MAP_IN_TR1_NAMESPACE)
-			message(STATUS "Found unordered_map/set in std::tr1 namespace.")
+			message_first_run(STATUS "Found unordered_map/set in std::tr1 namespace.")
 
 			set(HAVE_UNORDERED_MAP "TRUE")
 			set(UNORDERED_MAP_INCLUDE_PREFIX "tr1")
 			set(UNORDERED_MAP_NAMESPACE "std::tr1")
 		else()
-			message(STATUS "Unable to find <unordered_map> or <tr1/unordered_map>. ")
+			message_first_run(STATUS "Unable to find <unordered_map> or <tr1/unordered_map>. ")
 		endif()
 	endif()
 endmacro()
@@ -910,7 +919,7 @@ macro(TEST_SHARED_PTR_SUPPORT)
 		                          HAVE_SHARED_PTR_IN_STD_NAMESPACE)
 
 		if(HAVE_SHARED_PTR_IN_STD_NAMESPACE)
-			message("-- Found shared_ptr in std namespace using <memory> header.")
+			message_first_run("-- Found shared_ptr in std namespace using <memory> header.")
 			set(SHARED_PTR_FOUND TRUE)
 		else()
 			CHECK_CXX_SOURCE_COMPILES("#include <memory>
@@ -920,7 +929,7 @@ macro(TEST_SHARED_PTR_SUPPORT)
 			                           }"
 			                          HAVE_SHARED_PTR_IN_TR1_NAMESPACE)
 			if(HAVE_SHARED_PTR_IN_TR1_NAMESPACE)
-				message("-- Found shared_ptr in std::tr1 namespace using <memory> header.")
+				message_first_run("-- Found shared_ptr in std::tr1 namespace using <memory> header.")
 				set(SHARED_PTR_TR1_NAMESPACE TRUE)
 				set(SHARED_PTR_FOUND TRUE)
 			endif()
@@ -941,7 +950,7 @@ macro(TEST_SHARED_PTR_SUPPORT)
 			                           }"
 			                           HAVE_SHARED_PTR_IN_TR1_NAMESPACE_FROM_TR1_MEMORY_HEADER)
 			if(HAVE_SHARED_PTR_IN_TR1_NAMESPACE_FROM_TR1_MEMORY_HEADER)
-				message("-- Found shared_ptr in std::tr1 namespace using <tr1/memory> header.")
+				message_first_run("-- Found shared_ptr in std::tr1 namespace using <tr1/memory> header.")
 				set(SHARED_PTR_TR1_MEMORY_HEADER TRUE)
 				set(SHARED_PTR_TR1_NAMESPACE TRUE)
 				set(SHARED_PTR_FOUND TRUE)
@@ -1468,17 +1477,21 @@ function(find_python_package
 		)
 
 		 if(NOT EXISTS "${PYTHON_${_upper_package}_PATH}")
-			message(WARNING "'${package}' path could not be found in:\n"
-			                "'${PYTHON_LIBPATH}/python${PYTHON_VERSION}/site-packages/${package}', "
-			                "'${PYTHON_LIBPATH}/python${_PY_VER_MAJOR}/site-packages/${package}', "
-			                "'${PYTHON_LIBPATH}/python${PYTHON_VERSION}/dist-packages/${package}', "
-			                "'${PYTHON_LIBPATH}/python${_PY_VER_MAJOR}/dist-packages/${package}', "
-			                "WITH_PYTHON_INSTALL_${_upper_package} option will be ignored when installing python")
+			message(WARNING
+				"Python package '${package}' path could not be found in:\n"
+				"'${PYTHON_LIBPATH}/python${PYTHON_VERSION}/site-packages/${package}', "
+				"'${PYTHON_LIBPATH}/python${_PY_VER_MAJOR}/site-packages/${package}', "
+				"'${PYTHON_LIBPATH}/python${PYTHON_VERSION}/dist-packages/${package}', "
+				"'${PYTHON_LIBPATH}/python${_PY_VER_MAJOR}/dist-packages/${package}', "
+				"\n"
+				"The 'WITH_PYTHON_INSTALL_${_upper_package}' option will be ignored when installing Python.\n"
+				"The build will be usable, only add-ons that depend on this package won't be functional."
+			)
 			set(WITH_PYTHON_INSTALL_${_upper_package} OFF PARENT_SCOPE)
 		else()
 			message(STATUS "${package} found at '${PYTHON_${_upper_package}_PATH}'")
 		endif()
-	  endif()
+	endif()
 endfunction()
 
 # like Python's 'print(dir())'

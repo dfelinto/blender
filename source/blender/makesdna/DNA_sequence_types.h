@@ -308,7 +308,8 @@ typedef struct SequenceModifierData {
 	char name[64]; /* MAX_NAME */
 
 	/* mask input, either sequence or mask ID */
-	int mask_input_type, pad;
+	int mask_input_type;
+	int mask_time;
 
 	struct Sequence *mask_sequence;
 	struct Mask     *mask_id;
@@ -351,6 +352,19 @@ typedef struct WhiteBalanceModifierData {
 	float white_value[3];
 	float pad;
 } WhiteBalanceModifierData;
+
+typedef struct SequencerTonemapModifierData {
+	SequenceModifierData modifier;
+
+	float key, offset, gamma;
+	float intensity, contrast, adaptation, correction;
+	int type;
+} SequencerTonemapModifierData;
+
+enum {
+	SEQ_TONEMAP_RH_SIMPLE = 0,
+	SEQ_TONEMAP_RD_PHOTORECEPTOR = 1,
+};
 
 /* ***************** Scopes ****************** */
 
@@ -528,6 +542,7 @@ enum {
 	seqModifierType_BrightContrast = 4,
 	seqModifierType_Mask           = 5,
 	seqModifierType_WhiteBalance   = 6,
+	seqModifierType_Tonemap        = 7,
 
 	NUM_SEQUENCE_MODIFIER_TYPES
 };
@@ -541,6 +556,13 @@ enum {
 enum {
 	SEQUENCE_MASK_INPUT_STRIP   = 0,
 	SEQUENCE_MASK_INPUT_ID      = 1
+};
+
+enum {
+	/* Mask animation will be remapped relative to the strip start frame. */
+	SEQUENCE_MASK_TIME_RELATIVE = 0,
+	/* Global (scene) frame number will be used to access the mask. */
+	SEQUENCE_MASK_TIME_ABSOLUTE = 1,
 };
 
 #endif  /* __DNA_SEQUENCE_TYPES_H__ */

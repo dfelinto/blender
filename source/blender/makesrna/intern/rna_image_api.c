@@ -48,6 +48,7 @@
 
 #ifdef RNA_RUNTIME
 
+#include <errno.h>
 #include "BKE_image.h"
 #include "BKE_packedFile.h"
 #include "BKE_main.h"
@@ -101,7 +102,7 @@ static void rna_Image_save_render(Image *image, bContext *C, ReportList *reports
 			write_ibuf->dither = scene->r.dither_intensity;
 
 			if (!BKE_imbuf_write(write_ibuf, path, &scene->r.im_format)) {
-				BKE_reportf(reports, RPT_ERROR, "Could not write image '%s'", path);
+				BKE_reportf(reports, RPT_ERROR, "Could not write image: %s, '%s'", strerror(errno), path);
 			}
 
 			if (write_ibuf != ibuf)
@@ -223,7 +224,7 @@ static void rna_Image_scale(Image *image, ReportList *reports, int width, int he
 static int rna_Image_gl_load(Image *image, ReportList *reports, int frame, int filter, int mag)
 {
 	ImBuf *ibuf;
-	unsigned int *bind = &image->bindcode;
+	unsigned int *bind = &image->bindcode[TEXTARGET_TEXTURE_2D];
 	int error = GL_NO_ERROR;
 	ImageUser iuser = {NULL};
 	void *lock;
@@ -244,7 +245,7 @@ static int rna_Image_gl_load(Image *image, ReportList *reports, int frame, int f
 		return (int)GL_INVALID_OPERATION;
 	}
 
-	GPU_create_gl_tex(bind, ibuf->rect, ibuf->rect_float, ibuf->x, ibuf->y,
+	GPU_create_gl_tex(bind, ibuf->rect, ibuf->rect_float, GL_TEXTURE_2D, ibuf->x, ibuf->y,
 	                  (filter != GL_NEAREST && filter != GL_LINEAR), false, image, false);
 
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, (GLint)filter);
@@ -254,7 +255,7 @@ static int rna_Image_gl_load(Image *image, ReportList *reports, int frame, int f
 
 	if (error) {
 		glDeleteTextures(1, (GLuint *)bind);
-		image->bindcode = 0;
+		image->bindcode[TEXTARGET_TEXTURE_2D] = 0;
 	}
 
 	BKE_image_release_ibuf(image, ibuf, NULL);
@@ -264,7 +265,7 @@ static int rna_Image_gl_load(Image *image, ReportList *reports, int frame, int f
 
 static int rna_Image_gl_touch(Image *image, ReportList *reports, int frame, int filter, int mag)
 {
-	unsigned int *bind = &image->bindcode;
+	unsigned int *bind = &image->bindcode[TEXTARGET_TEXTURE_2D];
 	int error = GL_NO_ERROR;
 
 	BKE_image_tag_time(image);

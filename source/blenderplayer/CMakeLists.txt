@@ -167,7 +167,6 @@ endif()
 		bf_blenkernel # duplicate for linking
 		bf_intern_mikktspace
 		extern_recastnavigation
-		bf_intern_raskter
 		bf_intern_opencolorio
 		bf_intern_glew_mx
 		bf_intern_eigen
@@ -219,6 +218,10 @@ endif()
 		list(APPEND BLENDER_SORTED_LIBS bf_intern_opensubdiv)
 	endif()
 
+	if(WITH_OPENVDB)
+		list(APPEND BLENDER_SORTED_LIBS bf_intern_openvdb)
+	endif()
+
 	foreach(SORTLIB ${BLENDER_SORTED_LIBS})
 		set(REMLIB ${SORTLIB})
 		foreach(SEARCHLIB ${BLENDER_LINK_LIBS})
@@ -256,5 +259,9 @@ setup_liblinks(blenderplayer)
 # We put CLEW and CUEW here because OPENSUBDIV_LIBRARIES dpeends on them..
 if(WITH_CYCLES OR WITH_COMPOSITOR OR WITH_OPENSUBDIV)
 	target_link_libraries(blenderplayer "extern_clew")
-	target_link_libraries(blenderplayer "extern_cuew")
+	if(WITH_CUDA_DYNLOAD)
+		target_link_libraries(blenderplayer "extern_cuew")
+	else()
+		target_link_libraries(${target} ${CUDA_CUDA_LIBRARY})
+	endif()
 endif()

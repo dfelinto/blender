@@ -31,7 +31,6 @@ add_subdirectory(libmv)
 add_subdirectory(memutil)
 add_subdirectory(opencolorio)
 add_subdirectory(mikktspace)
-add_subdirectory(raskter)
 add_subdirectory(glew-mx)
 add_subdirectory(eigen)
 
@@ -82,4 +81,8 @@ endif()
 # only windows needs utf16 converter
 if(WIN32)
 	add_subdirectory(utfconv)
+endif()
+
+if(WITH_OPENVDB)
+	add_subdirectory(openvdb)
 endif()

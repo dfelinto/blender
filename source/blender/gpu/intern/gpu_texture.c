@@ -70,11 +70,10 @@ static unsigned char *GPU_texture_convert_pixels(int length, const float *fpixel
 	unsigned char *pixels, *p;
 	const float *fp = fpixels;
 	const int len = 4 * length;
-	int a;
 
 	p = pixels = MEM_callocN(sizeof(unsigned char) * len, "GPUTexturePixels");
 
-	for (a = 0; a < len; a++, p++, fp++)
+	for (int a = 0; a < len; a++, p++, fp++)
 		*p = FTOCHAR((*fp));
 
 	return pixels;
@@ -97,7 +96,6 @@ static GPUTexture *GPU_texture_create_nD(
         GPUHDRType hdr_type, int components, int samples,
         char err_out[256])
 {
-	GPUTexture *tex;
 	GLenum type, format, internalformat;
 	void *pixels = NULL;
 
@@ -105,7 +103,7 @@ static GPUTexture *GPU_texture_create_nD(
 		CLAMP_MAX(samples, GPU_max_color_texture_samples());
 	}
 
-	tex = MEM_callocN(sizeof(GPUTexture), "GPUTexture");
+	GPUTexture *tex = MEM_callocN(sizeof(GPUTexture), "GPUTexture");
 	tex->w = w;
 	tex->h = h;
 	tex->number = -1;
@@ -183,7 +181,7 @@ static GPUTexture *GPU_texture_create_nD(
 
 		if (fpixels && hdr_type == GPU_HDR_NONE) {
 			type = GL_UNSIGNED_BYTE;
-			pixels = GPU_texture_convert_pixels(w*h, fpixels);
+			pixels = GPU_texture_convert_pixels(w * h, fpixels);
 		}
 	}
 
@@ -194,9 +192,9 @@ static GPUTexture *GPU_texture_create_nD(
 			glTexSubImage1D(tex->target, 0, 0, w, format, type,
 				pixels ? pixels : fpixels);
 
-			if (tex->w > w)
-				GPU_glTexSubImageEmpty(tex->target, format, w, 0,
-					tex->w-w, 1);
+			if (tex->w > w) {
+				GPU_glTexSubImageEmpty(tex->target, format, w, 0, tex->w - w, 1);
+			}
 		}
 	}
 	else {
@@ -213,9 +211,9 @@ static GPUTexture *GPU_texture_create_nD(
 				format, type, pixels ? pixels : fpixels);
 
 			if (tex->w > w)
-				GPU_glTexSubImageEmpty(tex->target, format, w, 0, tex->w-w, tex->h);
+				GPU_glTexSubImageEmpty(tex->target, format, w, 0, tex->w - w, tex->h);
 			if (tex->h > h)
-				GPU_glTexSubImageEmpty(tex->target, format, 0, h, w, tex->h-h);
+				GPU_glTexSubImageEmpty(tex->target, format, 0, h, w, tex->h - h);
 		}
 	}
 
@@ -247,16 +245,10 @@ static GPUTexture *GPU_texture_create_nD(
 
 GPUTexture *GPU_texture_create_3D(int w, int h, int depth, int channels, const float *fpixels)
 {
-	GPUTexture *tex;
 	GLenum type, format, internalformat;
 	void *pixels = NULL;
-	int r_width;
-	bool rescale = false;
 
-	if (!GLEW_VERSION_1_2)
-		return NULL;
-
-	tex = MEM_callocN(sizeof(GPUTexture), "GPUTexture");
+	GPUTexture *tex = MEM_callocN(sizeof(GPUTexture), "GPUTexture");
 	tex->w = w;
 	tex->h = h;
 	tex->depth = depth;
@@ -295,6 +287,10 @@ GPUTexture *GPU_texture_create_3D(int w, int h, int depth, int channels, const f
 
 	/* 3D textures are quite heavy, test if it's possible to create them first */
 	glTexImage3D(GL_PROXY_TEXTURE_3D, 0, internalformat, tex->w, tex->h, tex->depth, 0, format, type, NULL);
+
+	bool rescale = false;
+	int r_width;
+
 	glGetTexLevelParameteriv(GL_PROXY_TEXTURE_3D, 0, GL_TEXTURE_WIDTH, &r_width);
 
 	while (r_width == 0) {
@@ -321,16 +317,17 @@ GPUTexture *GPU_texture_create_3D(int w, int h, int depth, int channels, const f
 	/* hardcore stuff, 3D texture rescaling - warning, this is gonna hurt your performance a lot, but we need it
 	 * for gooseberry */
 	if (rescale && fpixels) {
-		unsigned int i, j, k;
-		unsigned int xf = w / tex->w, yf = h / tex->h, zf = depth / tex->depth;
-		float *tex3d = MEM_mallocN(channels * sizeof(float)*tex->w*tex->h*tex->depth, "tex3d");
+		/* FIXME: should these be floating point? */
+		const unsigned int xf = w / tex->w, yf = h / tex->h, zf = depth / tex->depth;
+		float *tex3d = MEM_mallocN(channels * sizeof(float) * tex->w * tex->h * tex->depth, "tex3d");
 
 		GPU_print_error_debug("You need to scale a 3D texture, feel the pain!");
 
-		for (k = 0; k < tex->depth; k++) {
-			for (j = 0; j < tex->h; j++) {
-				for (i = 0; i < tex->w; i++) {
-					/* obviously doing nearest filtering here, it's going to be slow in any case, let's not make it worse */
+		for (unsigned k = 0; k < tex->depth; k++) {
+			for (unsigned j = 0; j < tex->h; j++) {
+				for (unsigned i = 0; i < tex->w; i++) {
+					/* obviously doing nearest filtering here,
+					 * it's going to be slow in any case, let's not make it worse */
 					float xb = i * xf;
 					float yb = j * yf;
 					float zb = k * zf;
@@ -375,45 +372,57 @@ GPUTexture *GPU_texture_create_3D(int w, int h, int depth, int channels, const f
 	return tex;
 }
 
-GPUTexture *GPU_texture_from_blender(Image *ima, ImageUser *iuser, bool is_data, short do_clip, double time, int mipmap)
+GPUTexture *GPU_texture_from_blender(Image *ima, ImageUser *iuser, int textarget, bool is_data, short do_clip, double time, int mipmap)
 {
-	GPUTexture *tex;
-	GLint w, h, border, bindcode;
-
-	GPU_update_image_time(ima, time);
+	int gputt;
 	/* this binds a texture, so that's why to restore it to 0 */
-	bindcode = GPU_verify_image(ima, iuser, 0, 0, mipmap, is_data, do_clip);
+	GLint bindcode = GPU_verify_image(ima, iuser, textarget, 0, 0, mipmap, is_data, do_clip);
+	GPU_update_image_time(ima, time);
 
-	if (ima->gputexture) {
-		ima->gputexture->bindcode = bindcode;
-		glBindTexture(GL_TEXTURE_2D, 0);
-		return ima->gputexture;
+	if (textarget == GL_TEXTURE_2D)
+		gputt = TEXTARGET_TEXTURE_2D;
+	else
+		gputt = TEXTARGET_TEXTURE_CUBE_MAP;
+
+	if (ima->gputexture[gputt]) {
+		ima->gputexture[gputt]->bindcode = bindcode;
+		glBindTexture(textarget, 0);
+		return ima->gputexture[gputt];
 	}
 
-	tex = MEM_callocN(sizeof(GPUTexture), "GPUTexture");
+	GPUTexture *tex = MEM_callocN(sizeof(GPUTexture), "GPUTexture");
 	tex->bindcode = bindcode;
 	tex->number = -1;
 	tex->refcount = 1;
-	tex->target = GL_TEXTURE_2D;
+	tex->target = textarget;
 	tex->target_base = GL_TEXTURE_2D;
 	tex->fromblender = 1;
 
-	ima->gputexture= tex;
+	ima->gputexture[gputt] = tex;
 
 	if (!glIsTexture(tex->bindcode)) {
 		GPU_ASSERT_NO_GL_ERRORS("Blender Texture Not Loaded");
 	}
 	else {
-		glBindTexture(GL_TEXTURE_2D, tex->bindcode);
-		glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &w);
-		glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &h);
-		glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_BORDER, &border);
+		GLint w, h, border;
+
+		GLenum gettarget;
+
+		if (textarget == GL_TEXTURE_2D)
+			gettarget = GL_TEXTURE_2D;
+		else
+			gettarget = GL_TEXTURE_CUBE_MAP_POSITIVE_X;
+
+		glBindTexture(textarget, tex->bindcode);
+		glGetTexLevelParameteriv(gettarget, 0, GL_TEXTURE_WIDTH, &w);
+		glGetTexLevelParameteriv(gettarget, 0, GL_TEXTURE_HEIGHT, &h);
+		glGetTexLevelParameteriv(gettarget, 0, GL_TEXTURE_BORDER, &border);
 
 		tex->w = w - border;
 		tex->h = h - border;
 	}
 
-	glBindTexture(GL_TEXTURE_2D, 0);
+	glBindTexture(textarget, 0);
 
 	return tex;
 }
@@ -421,7 +430,6 @@ GPUTexture *GPU_texture_from_blender(Image *ima, ImageUser *iuser, bool is_data,
 GPUTexture *GPU_texture_from_preview(PreviewImage *prv, int mipmap)
 {
 	GPUTexture *tex = prv->gputexture[0];
-	GLint w, h;
 	GLuint bindcode = 0;
 	
 	if (tex)
@@ -429,7 +437,7 @@ GPUTexture *GPU_texture_from_preview(PreviewImage *prv, int mipmap)
 	
 	/* this binds a texture, so that's why we restore it to 0 */
 	if (bindcode == 0) {
-		GPU_create_gl_tex(&bindcode, prv->rect[0], NULL, prv->w[0], prv->h[0], mipmap, 0, NULL, false);
+		GPU_create_gl_tex(&bindcode, prv->rect[0], NULL, prv->w[0], prv->h[0], GL_TEXTURE_2D, mipmap, 0, NULL, false);
 	}
 	if (tex) {
 		tex->bindcode = bindcode;
@@ -450,6 +458,8 @@ GPUTexture *GPU_texture_from_preview(PreviewImage *prv, int mipmap)
 		GPU_ASSERT_NO_GL_ERRORS("Blender Texture Not Loaded");
 	}
 	else {
+		GLint w, h;
+
 		glBindTexture(GL_TEXTURE_2D, tex->bindcode);
 		glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &w);
 		glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &h);
@@ -483,7 +493,8 @@ GPUTexture *GPU_texture_create_2D(int w, int h, const float *fpixels, GPUHDRType
 	
 	return tex;
 }
-GPUTexture *GPU_texture_create_2D_multisample(int w, int h, const float *fpixels, GPUHDRType hdr, int samples, char err_out[256])
+GPUTexture *GPU_texture_create_2D_multisample(
+        int w, int h, const float *fpixels, GPUHDRType hdr, int samples, char err_out[256])
 {
 	GPUTexture *tex = GPU_texture_create_nD(w, h, 2, fpixels, 0, hdr, 4, samples, err_out);
 
@@ -601,8 +612,6 @@ void GPU_invalid_tex_free(void)
 
 void GPU_texture_bind(GPUTexture *tex, int number)
 {
-	GLenum arbnumber;
-
 	if (number >= GPU_max_textures()) {
 		fprintf(stderr, "Not enough texture slots.\n");
 		return;
@@ -619,7 +628,7 @@ void GPU_texture_bind(GPUTexture *tex, int number)
 
 	GPU_ASSERT_NO_GL_ERRORS("Pre Texture Bind");
 
-	arbnumber = (GLenum)((GLuint)GL_TEXTURE0 + number);
+	GLenum arbnumber = (GLenum)((GLuint)GL_TEXTURE0 + number);
 	if (number != 0) glActiveTexture(arbnumber);
 	if (tex->bindcode != 0) {
 		glBindTexture(tex->target, tex->bindcode);
@@ -636,8 +645,6 @@ void GPU_texture_bind(GPUTexture *tex, int number)
 
 void GPU_texture_unbind(GPUTexture *tex)
 {
-	GLenum arbnumber;
-
 	if (tex->number >= GPU_max_textures()) {
 		fprintf(stderr, "Not enough texture slots.\n");
 		return;
@@ -648,9 +655,11 @@ void GPU_texture_unbind(GPUTexture *tex)
 	
 	GPU_ASSERT_NO_GL_ERRORS("Pre Texture Unbind");
 
-	arbnumber = (GLenum)((GLuint)GL_TEXTURE0 + tex->number);
+	GLenum arbnumber = (GLenum)((GLuint)GL_TEXTURE0 + tex->number);
 	if (tex->number != 0) glActiveTexture(arbnumber);
 	glBindTexture(tex->target, 0);
+	glDisable(tex->target);
+	glBindTexture(tex->target_base, 0);
 	glDisable(tex->target_base);
 	if (tex->number != 0) glActiveTexture(GL_TEXTURE0);
 
@@ -666,8 +675,6 @@ int GPU_texture_bound_number(GPUTexture *tex)
 
 void GPU_texture_filter_mode(GPUTexture *tex, bool compare, bool use_filter)
 {
-	GLenum arbnumber;
-
 	if (tex->number >= GPU_max_textures()) {
 		fprintf(stderr, "Not enough texture slots.\n");
 		return;
@@ -678,7 +685,7 @@ void GPU_texture_filter_mode(GPUTexture *tex, bool compare, bool use_filter)
 
 	GPU_ASSERT_NO_GL_ERRORS("Pre Texture Unbind");
 
-	arbnumber = (GLenum)((GLuint)GL_TEXTURE0 + tex->number);
+	GLenum arbnumber = (GLenum)((GLuint)GL_TEXTURE0 + tex->number);
 	if (tex->number != 0) glActiveTexture(arbnumber);
 
 	if (tex->depth) {

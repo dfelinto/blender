@@ -1506,19 +1506,15 @@ static void stitch_calculate_edge_normal(BMEditMesh *em, UvEdge *edge, float *no
 static void stitch_draw(const bContext *UNUSED(C), ARegion *UNUSED(ar), void *arg)
 {
 	int i, index = 0;
-	float pointsize = UI_GetThemeValuef(TH_VERTEX_SIZE);
 	StitchState *state = (StitchState *)arg;
 	StitchPreviewer *stitch_preview = state->stitch_preview;
 
 	glPushClientAttrib(GL_CLIENT_VERTEX_ARRAY_BIT);
 	glEnableClientState(GL_VERTEX_ARRAY);
 
-	glPointSize(pointsize * 2.0f);
-
 	glEnable(GL_BLEND);
 
 	UI_ThemeColor4(TH_STITCH_PREVIEW_ACTIVE);
-	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 	glVertexPointer(2, GL_FLOAT, 0, stitch_preview->static_tris);
 	glDrawArrays(GL_TRIANGLES, 0, stitch_preview->num_static_tris * 3);
 
@@ -1542,6 +1538,8 @@ static void stitch_draw(const bContext *UNUSED(C), ARegion *UNUSED(ar), void *ar
 
 	/* draw vert preview */
 	if (state->mode == STITCH_VERT) {
+		glPointSize(UI_GetThemeValuef(TH_VERTEX_SIZE) * 2.0f);
+
 		UI_ThemeColor4(TH_STITCH_PREVIEW_STITCHABLE);
 		glVertexPointer(2, GL_FLOAT, 0, stitch_preview->preview_stitchable);
 		glDrawArrays(GL_POINTS, 0, stitch_preview->num_stitchable);
@@ -1562,8 +1560,6 @@ static void stitch_draw(const bContext *UNUSED(C), ARegion *UNUSED(ar), void *ar
 
 	glPopClientAttrib();
 	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-
-	glPointSize(1.0);
 }
 
 static UvEdge *uv_edge_get(BMLoop *l, StitchState *state)

@@ -64,13 +64,15 @@
 
 #include "RNA_access.h"
 
-#include "raskter.h"
-
 #include "libmv-capi.h"
 #include "tracking_private.h"
 
 typedef struct MovieDistortion {
 	struct libmv_CameraIntrinsics *intrinsics;
+	/* Parameters needed for coordinates normalization. */
+	float principal[2];
+	float pixel_aspect;
+	float focal;
 } MovieDistortion;
 
 static struct {
@@ -810,38 +812,54 @@ static bGPDlayer *track_mask_gpencil_layer_get(MovieTrackingTrack *track)
 	return NULL;
 }
 
+typedef struct TrackMaskSetPixelData {
+	float *mask;
+	int mask_width;
+	int mask_height;
+} TrackMaskSetPixelData;
+
+static void track_mask_set_pixel_cb(int x, int x_end, int y, void *user_data)
+{
+	TrackMaskSetPixelData *data = (TrackMaskSetPixelData *)user_data;
+	size_t index =     (size_t)y * data->mask_width + x;
+	size_t index_end = (size_t)y * data->mask_width + x_end;
+	do {
+		data->mask[index] = 1.0f;
+	} while (++index != index_end);
+}
+
 static void track_mask_gpencil_layer_rasterize(int frame_width, int frame_height,
                                                MovieTrackingMarker *marker, bGPDlayer *layer,
                                                float *mask, int mask_width, int mask_height)
 {
 	bGPDframe *frame = layer->frames.first;
+	TrackMaskSetPixelData data;
+
+	data.mask = mask;
+	data.mask_width = mask_width;
+	data.mask_height = mask_height;
 
 	while (frame) {
 		bGPDstroke *stroke = frame->strokes.first;
 
 		while (stroke) {
 			bGPDspoint *stroke_points = stroke->points;
-			float *mask_points, *fp;
-			int i;
-
 			if (stroke->flag & GP_STROKE_2DSPACE) {
-				fp = mask_points = MEM_callocN(2 * stroke->totpoints * sizeof(float),
+				int *mask_points, *point;
+				point = mask_points = MEM_callocN(2 * stroke->totpoints * sizeof(int),
 				                               "track mask rasterization points");
-
-				for (i = 0; i < stroke->totpoints; i++, fp += 2) {
-					fp[0] = (stroke_points[i].x - marker->search_min[0]) * frame_width / mask_width;
-					fp[1] = (stroke_points[i].y - marker->search_min[1]) * frame_height / mask_height;
+				for (int i = 0; i < stroke->totpoints; i++, point += 2) {
+					point[0] = (stroke_points[i].x - marker->search_min[0]) * frame_width;
+					point[1] = (stroke_points[i].y - marker->search_min[1]) * frame_height;
 				}
-
 				/* TODO: add an option to control whether AA is enabled or not */
-				PLX_raskterize((float (*)[2])mask_points, stroke->totpoints, mask, mask_width, mask_height);
-
+				fill_poly_v2i_n(0, 0, mask_width, mask_height,
+				                (const int (*)[2])mask_points, stroke->totpoints,
+				                track_mask_set_pixel_cb, &data);
 				MEM_freeN(mask_points);
 			}
-
 			stroke = stroke->next;
 		}
-
 		frame = frame->next;
 	}
 }
@@ -1864,6 +1882,11 @@ MovieDistortion *BKE_tracking_distortion_new(MovieTracking *tracking,
 	distortion = MEM_callocN(sizeof(MovieDistortion), "BKE_tracking_distortion_create");
 	distortion->intrinsics = libmv_cameraIntrinsicsNew(&camera_intrinsics_options);
 
+	const MovieTrackingCamera *camera = &tracking->camera;
+	copy_v2_v2(distortion->principal, camera->principal);
+	distortion->pixel_aspect = camera->pixel_aspect;
+	distortion->focal = camera->focal;
+
 	return distortion;
 }
 
@@ -1876,6 +1899,11 @@ void BKE_tracking_distortion_update(MovieDistortion *distortion, MovieTracking *
 	                                             calibration_width,
 	                                             calibration_height,
 	                                             &camera_intrinsics_options);
+
+	const MovieTrackingCamera *camera = &tracking->camera;
+	copy_v2_v2(distortion->principal, camera->principal);
+	distortion->pixel_aspect = camera->pixel_aspect;
+	distortion->focal = camera->focal;
 
 	libmv_cameraIntrinsicsUpdate(&camera_intrinsics_options, distortion->intrinsics);
 }
@@ -1890,7 +1918,7 @@ MovieDistortion *BKE_tracking_distortion_copy(MovieDistortion *distortion)
 	MovieDistortion *new_distortion;
 
 	new_distortion = MEM_callocN(sizeof(MovieDistortion), "BKE_tracking_distortion_create");
-
+	*new_distortion = *distortion;
 	new_distortion->intrinsics = libmv_cameraIntrinsicsCopy(distortion->intrinsics);
 
 	return new_distortion;
@@ -1948,6 +1976,36 @@ ImBuf *BKE_tracking_distortion_exec(MovieDistortion *distortion, MovieTracking *
 	return resibuf;
 }
 
+void BKE_tracking_distortion_distort_v2(MovieDistortion *distortion,
+                                        const float co[2],
+                                        float r_co[2])
+{
+	const float aspy = 1.0f / distortion->pixel_aspect;
+
+	/* Normalize coords. */
+	float inv_focal = 1.0f / distortion->focal;
+	double x = (co[0] - distortion->principal[0]) * inv_focal,
+	       y = (co[1] - distortion->principal[1] * aspy) * inv_focal;
+
+	libmv_cameraIntrinsicsApply(distortion->intrinsics, x, y, &x, &y);
+
+	/* Result is in image coords already. */
+	r_co[0] = x;
+	r_co[1] = y;
+}
+
+void BKE_tracking_distortion_undistort_v2(MovieDistortion *distortion,
+                                          const float co[2],
+                                          float r_co[2])
+{
+	double x = co[0], y = co[1];
+	libmv_cameraIntrinsicsInvert(distortion->intrinsics, x, y, &x, &y);
+
+	const float aspy = 1.0f / distortion->pixel_aspect;
+	r_co[0] = (float)x * distortion->focal + distortion->principal[0];
+	r_co[1] = (float)y * distortion->focal + distortion->principal[1] * aspy;
+}
+
 void BKE_tracking_distortion_free(MovieDistortion *distortion)
 {
 	libmv_cameraIntrinsicsDestroy(distortion->intrinsics);
@@ -1957,40 +2015,43 @@ void BKE_tracking_distortion_free(MovieDistortion *distortion)
 
 void BKE_tracking_distort_v2(MovieTracking *tracking, const float co[2], float r_co[2])
 {
-	MovieTrackingCamera *camera = &tracking->camera;
+	const MovieTrackingCamera *camera = &tracking->camera;
+	const float aspy = 1.0f / tracking->camera.pixel_aspect;
 
 	libmv_CameraIntrinsicsOptions camera_intrinsics_options;
-	double x, y;
-	float aspy = 1.0f / tracking->camera.pixel_aspect;
-
 	tracking_cameraIntrinscisOptionsFromTracking(tracking,
 	                                             0, 0,
 	                                             &camera_intrinsics_options);
+	libmv_CameraIntrinsics *intrinsics =
+	        libmv_cameraIntrinsicsNew(&camera_intrinsics_options);
 
-	/* normalize coords */
-	x = (co[0] - camera->principal[0]) / camera->focal;
-	y = (co[1] - camera->principal[1] * aspy) / camera->focal;
+	/* Normalize coordinates. */
+	double x = (co[0] - camera->principal[0]) / camera->focal,
+	       y = (co[1] - camera->principal[1] * aspy) / camera->focal;
 
-	libmv_cameraIntrinsicsApply(&camera_intrinsics_options, x, y, &x, &y);
+	libmv_cameraIntrinsicsApply(intrinsics, x, y, &x, &y);
+	libmv_cameraIntrinsicsDestroy(intrinsics);
 
-	/* result is in image coords already */
+	/* Result is in image coords already. */
 	r_co[0] = x;
 	r_co[1] = y;
 }
 
 void BKE_tracking_undistort_v2(MovieTracking *tracking, const float co[2], float r_co[2])
 {
-	MovieTrackingCamera *camera = &tracking->camera;
+	const MovieTrackingCamera *camera = &tracking->camera;
+	const float aspy = 1.0f / tracking->camera.pixel_aspect;
 
 	libmv_CameraIntrinsicsOptions camera_intrinsics_options;
-	double x = co[0], y = co[1];
-	float aspy = 1.0f / tracking->camera.pixel_aspect;
-
 	tracking_cameraIntrinscisOptionsFromTracking(tracking,
 	                                             0, 0,
 	                                             &camera_intrinsics_options);
+	libmv_CameraIntrinsics *intrinsics =
+	        libmv_cameraIntrinsicsNew(&camera_intrinsics_options);
 
-	libmv_cameraIntrinsicsInvert(&camera_intrinsics_options, x, y, &x, &y);
+	double x = co[0], y = co[1];
+	libmv_cameraIntrinsicsInvert(intrinsics, x, y, &x, &y);
+	libmv_cameraIntrinsicsDestroy(intrinsics);
 
 	r_co[0] = (float)x * camera->focal + camera->principal[0];
 	r_co[1] = (float)y * camera->focal + camera->principal[1] * aspy;

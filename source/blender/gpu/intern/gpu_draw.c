@@ -88,7 +88,6 @@
 #include "smoke_API.h"
 
 #ifdef WITH_OPENSUBDIV
-#  include "DNA_mesh_types.h"
 #  include "BKE_editmesh.h"
 
 #  include "gpu_codegen.h"
@@ -117,11 +116,8 @@ void GPU_render_text(
 		const float *v3 = v_quad[2];
 		const float *v4 = v_quad[3];
 		Image *ima = (Image *)mtexpoly->tpage;
-		ImBuf *first_ibuf;
 		const size_t textlen_st = textlen;
-		size_t index;
 		float centerx, centery, sizex, sizey, transx, transy, movex, movey, advance;
-		float advance_tab;
 		
 		/* multiline */
 		float line_start = 0.0f, line_height;
@@ -143,14 +139,14 @@ void GPU_render_text(
 		glPushMatrix();
 		
 		/* get the tab width */
-		first_ibuf = BKE_image_get_first_ibuf(ima);
+		ImBuf *first_ibuf = BKE_image_get_first_ibuf(ima);
 		matrixGlyph(first_ibuf, ' ', &centerx, &centery,
 			&sizex, &sizey, &transx, &transy, &movex, &movey, &advance);
 		
-		advance_tab = advance * 4; /* tab width could also be an option */
+		float advance_tab = advance * 4; /* tab width could also be an option */
 		
 		
-		for (index = 0; index < textlen_st; ) {
+		for (size_t index = 0; index < textlen_st; ) {
 			unsigned int character;
 			float uv[4][2];
 
@@ -221,25 +217,26 @@ void GPU_render_text(
 	}
 }
 
-/* Checking powers of two for images since opengl 1.x requires it */
+/* Checking powers of two for images since OpenGL ES requires it */
 
 static bool is_power_of_2_resolution(int w, int h)
 {
 	return is_power_of_2_i(w) && is_power_of_2_i(h);
 }
 
-static bool is_over_resolution_limit(int w, int h)
+static bool is_over_resolution_limit(GLenum textarget, int w, int h)
 {
-	int reslimit = (U.glreslimit != 0)?
-		min_ii(U.glreslimit, GPU_max_texture_size()) :
-		GPU_max_texture_size();
+	int size = (textarget == GL_TEXTURE_2D)?
+	GPU_max_texture_size() : GPU_max_cube_map_size();
+	int reslimit = (U.glreslimit != 0) ?
+		min_ii(U.glreslimit, size) : size;
 
 	return (w > reslimit || h > reslimit);
 }
 
 static int smaller_power_of_2_limit(int num)
 {
-	int reslimit = (U.glreslimit != 0)?
+	int reslimit = (U.glreslimit != 0) ?
 		min_ii(U.glreslimit, GPU_max_texture_size()) :
 		GPU_max_texture_size();
 	/* take texture clamping into account */
@@ -298,7 +295,11 @@ static void gpu_generate_mipmap(GLenum target)
 			glEnable(target);
 	}
 
-	glGenerateMipmapEXT(target);
+	/* TODO: simplify when we transition to GL >= 3 */
+	if (GLEW_VERSION_3_0 || GLEW_ARB_framebuffer_object)
+		glGenerateMipmap(target);
+	else if (GLEW_EXT_framebuffer_object)
+		glGenerateMipmapEXT(target);
 
 	if (is_ati && !target_enabled)
 		glDisable(target);
@@ -361,8 +362,9 @@ void GPU_set_anisotropic(float value)
 		GPU_free_images();
 
 		/* Clamp value to the maximum value the graphics card supports */
-		if (value > GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT)
-			value = GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT;
+		const float max = GPU_max_texture_anisotropy();
+		if (value > max)
+			value = max;
 
 		GTS.anisotropic = value;
 	}
@@ -377,9 +379,7 @@ float GPU_get_anisotropic(void)
 
 static void gpu_make_repbind(Image *ima)
 {
-	ImBuf *ibuf;
-	
-	ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL);
+	ImBuf *ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL);
 	if (ibuf == NULL)
 		return;
 
@@ -390,12 +390,25 @@ static void gpu_make_repbind(Image *ima)
 		ima->tpageflag &= ~IMA_MIPMAP_COMPLETE;
 	}
 
-	ima->totbind = ima->xrep*ima->yrep;
+	ima->totbind = ima->xrep * ima->yrep;
 
-	if (ima->totbind>1)
+	if (ima->totbind > 1) {
 		ima->repbind = MEM_callocN(sizeof(int) * ima->totbind, "repbind");
+	}
 
 	BKE_image_release_ibuf(ima, ibuf, NULL);
+}
+
+static unsigned int *gpu_get_image_bindcode(Image *ima, GLenum textarget)
+{
+	unsigned int *bind = 0;
+
+	if (textarget == GL_TEXTURE_2D)
+		bind = &ima->bindcode[TEXTARGET_TEXTURE_2D];
+	else if (textarget == GL_TEXTURE_CUBE_MAP)
+		bind = &ima->bindcode[TEXTARGET_TEXTURE_CUBE_MAP];
+
+	return bind;
 }
 
 void GPU_clear_tpage(bool force)
@@ -496,21 +509,19 @@ static void gpu_verify_reflection(Image *ima)
 	}
 }
 
-int GPU_verify_image(Image *ima, ImageUser *iuser, int tftile, bool compare, bool mipmap, bool is_data, bool is_envmap)
+int GPU_verify_image(Image *ima, ImageUser *iuser, int textarget, int tftile, bool compare, bool mipmap, bool is_data,  bool is_envmap)
 {
-	ImBuf *ibuf = NULL;
 	unsigned int *bind = NULL;
-	int rectw, recth, tpx = 0, tpy = 0, y;
-	unsigned int *tilerect = NULL, *rect = NULL;
-	float *ftilerect = NULL, *frect = NULL;
+	int tpx = 0, tpy = 0;
+	unsigned int *rect = NULL;
+	float *frect = NULL;
 	float *srgb_frect = NULL;
-	short texwindx, texwindy, texwinsx, texwinsy;
-	/* flag to determine whether high resolution format is used */
+	/* flag to determine whether deep format is used */
 	bool use_high_bit_depth = false, do_color_management = false;
 
 	/* initialize tile mode and number of repeats */
 	GTS.ima = ima;
-	GTS.tilemode = (ima && (ima->tpageflag & (IMA_TILES|IMA_TWINANIM)));
+	GTS.tilemode = (ima && (ima->tpageflag & (IMA_TILES | IMA_TWINANIM)));
 	GTS.tileXRep = 0;
 	GTS.tileYRep = 0;
 
@@ -553,7 +564,7 @@ int GPU_verify_image(Image *ima, ImageUser *iuser, int tftile, bool compare, boo
 		return 0;
 
 	/* check if we have a valid image buffer */
-	ibuf = BKE_image_acquire_ibuf(ima, iuser, NULL);
+	ImBuf *ibuf = BKE_image_acquire_ibuf(ima, iuser, NULL);
 
 	if (ibuf == NULL)
 		return 0;
@@ -589,18 +600,18 @@ int GPU_verify_image(Image *ima, ImageUser *iuser, int tftile, bool compare, boo
 		if (GTS.tile >= ima->totbind) GTS.tile = 0;
 		
 		/* this happens when you change repeat buttons */
-		if (ima->repbind) bind = &ima->repbind[GTS.tile];
-		else bind = &ima->bindcode;
+		if (ima->repbind && textarget == GL_TEXTURE_2D) bind = &ima->repbind[GTS.tile];
+		else bind = gpu_get_image_bindcode(ima, textarget);
 		
 		if (*bind == 0) {
-			texwindx = ibuf->x / ima->xrep;
-			texwindy = ibuf->y / ima->yrep;
+			short texwindx = ibuf->x / ima->xrep;
+			short texwindy = ibuf->y / ima->yrep;
 			
 			if (GTS.tile >= ima->xrep * ima->yrep)
 				GTS.tile = ima->xrep * ima->yrep - 1;
 	
-			texwinsy = GTS.tile / ima->xrep;
-			texwinsx = GTS.tile - texwinsy * ima->xrep;
+			short texwinsy = GTS.tile / ima->xrep;
+			short texwinsx = GTS.tile - texwinsy * ima->xrep;
 	
 			texwinsx *= texwindx;
 			texwinsy *= texwindy;
@@ -618,18 +629,20 @@ int GPU_verify_image(Image *ima, ImageUser *iuser, int tftile, bool compare, boo
 					/* clamp buffer colors to 1.0 to avoid artifacts due to glu for hdr images */
 					if (!GTS.gpu_mipmap && ibuf->miptot == 1)
 						IMB_buffer_float_clamp(srgb_frect, ibuf->x, ibuf->y);
-					frect = srgb_frect + texwinsy*ibuf->x + texwinsx;
+					frect = srgb_frect + texwinsy * ibuf->x + texwinsx;
 				}
-				else
-					frect = ibuf->rect_float + texwinsy*ibuf->x + texwinsx;
+				else {
+					frect = ibuf->rect_float + texwinsy * ibuf->x + texwinsx;
+				}
 			}
-			else
-				rect = ibuf->rect + texwinsy*ibuf->x + texwinsx;
+			else {
+				rect = ibuf->rect + texwinsy * ibuf->x + texwinsx;
+			}
 		}
 	}
 	else {
 		/* regular image mode */
-		bind= &ima->bindcode;
+		bind = gpu_get_image_bindcode(ima, textarget);
 
 		if (*bind == 0) {
 			tpx = ibuf->x;
@@ -638,9 +651,10 @@ int GPU_verify_image(Image *ima, ImageUser *iuser, int tftile, bool compare, boo
 			if (use_high_bit_depth) {
 				if (do_color_management) {
 					frect = srgb_frect = MEM_mallocN(ibuf->x * ibuf->y * sizeof(*srgb_frect) * 4, "floar_buf_col_cor");
-					IMB_buffer_float_from_float(srgb_frect, ibuf->rect_float,
-							ibuf->channels, IB_PROFILE_SRGB, IB_PROFILE_LINEAR_RGB, true,
-							ibuf->x, ibuf->y, ibuf->x, ibuf->x);
+					IMB_buffer_float_from_float(
+					        srgb_frect, ibuf->rect_float,
+					        ibuf->channels, IB_PROFILE_SRGB, IB_PROFILE_LINEAR_RGB, true,
+					        ibuf->x, ibuf->y, ibuf->x, ibuf->x);
 					IMB_buffer_float_unpremultiply(srgb_frect, ibuf->x, ibuf->y);
 					/* clamp buffer colors to 1.0 to avoid artifacts due to glu for hdr images */
 					if (!GTS.gpu_mipmap && ibuf->miptot == 1)
@@ -654,24 +668,25 @@ int GPU_verify_image(Image *ima, ImageUser *iuser, int tftile, bool compare, boo
 
 	if (*bind != 0) {
 		/* enable opengl drawing with textures */
-		glBindTexture(GL_TEXTURE_2D, *bind);
+		glBindTexture(textarget, *bind);
 		BKE_image_release_ibuf(ima, ibuf, NULL);
 		return *bind;
 	}
 
-	rectw = tpx;
-	recth = tpy;
+	const int rectw = tpx;
+	const int recth = tpy;
+
+	unsigned *tilerect = NULL;
+	float *ftilerect = NULL;
 
 	/* for tiles, copy only part of image into buffer */
 	if (GTS.tilemode) {
 		if (use_high_bit_depth) {
-			float *frectrow, *ftilerectrow;
+			ftilerect = MEM_mallocN(rectw * recth * sizeof(*ftilerect), "tilerect");
 
-			ftilerect = MEM_mallocN(rectw*recth*sizeof(*ftilerect), "tilerect");
-
-			for (y = 0; y < recth; y++) {
-				frectrow = &frect[y * ibuf->x];
-				ftilerectrow = &ftilerect[y * rectw];
+			for (int y = 0; y < recth; y++) {
+				const float *frectrow = &frect[y * ibuf->x];
+				float *ftilerectrow = &ftilerect[y * rectw];
 
 				memcpy(ftilerectrow, frectrow, tpx * sizeof(*frectrow));
 			}
@@ -679,13 +694,11 @@ int GPU_verify_image(Image *ima, ImageUser *iuser, int tftile, bool compare, boo
 			frect = ftilerect;
 		}
 		else {
-			unsigned int *rectrow, *tilerectrow;
+			tilerect = MEM_mallocN(rectw * recth * sizeof(*tilerect), "tilerect");
 
-			tilerect = MEM_mallocN(rectw*recth*sizeof(*tilerect), "tilerect");
-
-			for (y = 0; y < recth; y++) {
-				rectrow = &rect[y * ibuf->x];
-				tilerectrow = &tilerect[y * rectw];
+			for (int y = 0; y < recth; y++) {
+				const unsigned *rectrow = &rect[y * ibuf->x];
+				unsigned *tilerectrow = &tilerect[y * rectw];
 
 				memcpy(tilerectrow, rectrow, tpx * sizeof(*rectrow));
 			}
@@ -696,10 +709,10 @@ int GPU_verify_image(Image *ima, ImageUser *iuser, int tftile, bool compare, boo
 
 #ifdef WITH_DDS
 	if (ibuf->ftype == IMB_FTYPE_DDS)
-		GPU_create_gl_tex_compressed(bind, rect, rectw, recth, mipmap, ima, ibuf);
+		GPU_create_gl_tex_compressed(bind, rect, rectw, recth, textarget, mipmap, ima, ibuf);
 	else
 #endif
-		GPU_create_gl_tex(bind, rect, frect, rectw, recth, mipmap, use_high_bit_depth, ima, is_envmap);
+		GPU_create_gl_tex(bind, rect, frect, rectw, recth, textarget, mipmap, use_high_bit_depth, ima, is_envmap);
 	
 	/* mark as non-color data texture */
 	if (*bind) {
@@ -722,9 +735,76 @@ int GPU_verify_image(Image *ima, ImageUser *iuser, int tftile, bool compare, boo
 	return *bind;
 }
 
+static void **gpu_gen_cube_map(unsigned int *rect, float *frect, int rectw, int recth, bool use_high_bit_depth)
+{
+	size_t block_size = use_high_bit_depth ? sizeof(float) * 4 : sizeof(unsigned char) * 4;
+	void **sides = NULL;
+	int h = recth / 2;
+	int w = rectw / 3;
+
+	if ((use_high_bit_depth && frect == NULL) || (!use_high_bit_depth && rect == NULL) || w != h)
+		return sides;
+
+	/* PosX, NegX, PosY, NegY, PosZ, NegZ */
+	sides = MEM_mallocN(sizeof(void*) * 6, "");
+	for (int i = 0; i < 6; i++)
+		sides[i] = MEM_mallocN(block_size * w * h, "");
+
+	/* divide image into six parts */
+	/* ______________________
+	 * |      |      |      |
+	 * | NegX | NegY | PosX |
+	 * |______|______|______|
+	 * |      |      |      |
+	 * | NegZ | PosZ | PosY |
+	 * |______|______|______|
+	*/
+	if (use_high_bit_depth) {
+		float (*frectb)[4] = (float(*)[4])frect;
+		float (**fsides)[4] = (float(**)[4])sides;
+
+		for (int y = 0; y < h; y++) {
+			for (int x = 0; x < w; x++) {
+				memcpy(&fsides[0][x * h + y], &frectb[(recth - y - 1) * rectw + 2 * w + x], block_size);
+				memcpy(&fsides[1][x * h + y], &frectb[(y + h) * rectw + w - 1 - x], block_size);
+				memcpy(&fsides[3][y * w + x], &frectb[(recth - y - 1) * rectw + 2 * w - 1 - x], block_size);
+				memcpy(&fsides[5][y * w + x], &frectb[(h - y - 1) * rectw + w - 1 - x], block_size);
+			}
+			memcpy(&fsides[2][y * w], frectb[y * rectw + 2 * w], block_size * w);
+			memcpy(&fsides[4][y * w], frectb[y * rectw + w], block_size * w);
+		}
+	}
+	else {
+		unsigned int **isides = (unsigned int **)sides;
+
+		for (int y = 0; y < h; y++) {
+			for (int x = 0; x < w; x++) {
+				isides[0][x * h + y] = rect[(recth - y - 1) * rectw + 2 * w + x];
+				isides[1][x * h + y] = rect[(y + h) * rectw + w - 1 - x];
+				isides[3][y * w + x] = rect[(recth - y - 1) * rectw + 2 * w - 1 - x];
+				isides[5][y * w + x] = rect[(h - y - 1) * rectw + w - 1 - x];
+			}
+			memcpy(&isides[2][y * w], &rect[y * rectw + 2 * w], block_size * w);
+			memcpy(&isides[4][y * w], &rect[y * rectw + w], block_size * w);
+		}
+	}
+
+	return sides;
+}
+
+static void gpu_del_cube_map(void **cube_map)
+{
+	int i;
+	if (cube_map == NULL)
+		return;
+	for (i = 0; i < 6; i++)
+		MEM_freeN(cube_map[i]);
+	MEM_freeN(cube_map);
+}
+
 /* Image *ima can be NULL */
 void GPU_create_gl_tex(unsigned int *bind, unsigned int *rect, float *frect, int rectw, int recth,
-                       bool mipmap, bool use_high_bit_depth, Image *ima, bool is_envmap)
+	int textarget, bool mipmap, bool use_high_bit_depth, Image *ima, bool is_envmap)
 {
 	ImBuf *ibuf = NULL;
 
@@ -734,11 +814,13 @@ void GPU_create_gl_tex(unsigned int *bind, unsigned int *rect, float *frect, int
 	/* scale if not a power of two. this is not strictly necessary for newer
 	 * GPUs (OpenGL version >= 2.0) since they support non-power-of-two-textures 
 	 * Then don't bother scaling for hardware that supports NPOT textures! */
-	if ((!GPU_full_non_power_of_two_support() && !is_power_of_2_resolution(rectw, recth)) ||
-		is_over_resolution_limit(rectw, recth)) {
+	if (textarget == GL_TEXTURE_2D &&
+			(!GPU_full_non_power_of_two_support() && !is_power_of_2_resolution(rectw, recth) ||
+			is_over_resolution_limit(textarget, rectw, recth)))
+	{
 		rectw = smaller_power_of_2_limit(rectw);
 		recth = smaller_power_of_2_limit(recth);
-		
+
 		if (use_high_bit_depth) {
 			ibuf = IMB_allocFromBuffer(NULL, frect, tpx, tpy);
 			IMB_scaleImBuf(ibuf, rectw, recth);
@@ -755,57 +837,119 @@ void GPU_create_gl_tex(unsigned int *bind, unsigned int *rect, float *frect, int
 
 	/* create image */
 	glGenTextures(1, (GLuint *)bind);
-	glBindTexture(GL_TEXTURE_2D, *bind);
+	glBindTexture(textarget, *bind);
 
-	if (use_high_bit_depth) {
-		if (GLEW_ARB_texture_float)
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F_ARB, rectw, recth, 0, GL_RGBA, GL_FLOAT, frect);
+	if (textarget == GL_TEXTURE_2D) {
+		if (use_high_bit_depth) {
+			if (GLEW_ARB_texture_float)
+				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F_ARB, rectw, recth, 0, GL_RGBA, GL_FLOAT, frect);
+			else
+				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16, rectw, recth, 0, GL_RGBA, GL_FLOAT, frect);
+		}
 		else
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16, rectw, recth, 0, GL_RGBA, GL_FLOAT, frect);
-	}
-	else
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, rectw, recth, 0, GL_RGBA, GL_UNSIGNED_BYTE, rect);
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, rectw, recth, 0, GL_RGBA, GL_UNSIGNED_BYTE, rect);
 
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, gpu_get_mipmap_filter(1));
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, gpu_get_mipmap_filter(1));
 
-	if (GPU_get_mipmap() && mipmap) {
-		if (GTS.gpu_mipmap) {
-			gpu_generate_mipmap(GL_TEXTURE_2D);
+		if (GPU_get_mipmap() && mipmap) {
+			if (GTS.gpu_mipmap) {
+				gpu_generate_mipmap(GL_TEXTURE_2D);
+			}
+			else {
+				int i;
+				if (!ibuf) {
+					if (use_high_bit_depth) {
+						ibuf = IMB_allocFromBuffer(NULL, frect, tpx, tpy);
+					}
+					else {
+						ibuf = IMB_allocFromBuffer(rect, NULL, tpx, tpy);
+					}
+				}
+				IMB_makemipmap(ibuf, true);
+
+				for (i = 1; i < ibuf->miptot; i++) {
+					ImBuf *mip = ibuf->mipmap[i - 1];
+					if (use_high_bit_depth) {
+						if (GLEW_ARB_texture_float)
+							glTexImage2D(GL_TEXTURE_2D, i, GL_RGBA16F_ARB, mip->x, mip->y, 0, GL_RGBA, GL_FLOAT, mip->rect_float);
+						else
+							glTexImage2D(GL_TEXTURE_2D, i, GL_RGBA16, mip->x, mip->y, 0, GL_RGBA, GL_FLOAT, mip->rect_float);
+					}
+					else {
+						glTexImage2D(GL_TEXTURE_2D, i, GL_RGBA8, mip->x, mip->y, 0, GL_RGBA, GL_UNSIGNED_BYTE, mip->rect);
+					}
+				}
+			}
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, gpu_get_mipmap_filter(0));
+			if (ima)
+				ima->tpageflag |= IMA_MIPMAP_COMPLETE;
 		}
 		else {
-			int i;
-
-			if (!ibuf) {
-				if (use_high_bit_depth) {
-					ibuf = IMB_allocFromBuffer(NULL, frect, tpx, tpy);
-				}
-				else {
-					ibuf = IMB_allocFromBuffer(rect, NULL, tpx, tpy);
-				}
-			}
-
-			IMB_makemipmap(ibuf, true);
-
-			for (i = 1; i < ibuf->miptot; i++) {
-				ImBuf *mip = ibuf->mipmap[i - 1];
-				if (use_high_bit_depth) {
-					if (GLEW_ARB_texture_float)
-						glTexImage2D(GL_TEXTURE_2D, i, GL_RGBA16F_ARB, mip->x, mip->y, 0, GL_RGBA, GL_FLOAT, mip->rect_float);
-					else
-						glTexImage2D(GL_TEXTURE_2D, i, GL_RGBA16, mip->x, mip->y, 0, GL_RGBA, GL_FLOAT, mip->rect_float);
-				}
-				else {
-					glTexImage2D(GL_TEXTURE_2D, i, GL_RGBA8, mip->x, mip->y, 0, GL_RGBA, GL_UNSIGNED_BYTE, mip->rect);
-				}
-			}
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 		}
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, gpu_get_mipmap_filter(0));
-
-		if (ima)
-			ima->tpageflag |= IMA_MIPMAP_COMPLETE;
 	}
-	else {
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	else if (textarget == GL_TEXTURE_CUBE_MAP) {
+		int w = rectw / 3, h = recth / 2;
+
+		if (h == w && is_power_of_2_i(h) && !is_over_resolution_limit(textarget, h, w)) {
+			void **cube_map = gpu_gen_cube_map(rect, frect, rectw, recth, use_high_bit_depth);
+			GLenum informat = use_high_bit_depth ? (GLEW_ARB_texture_float ? GL_RGBA16F_ARB : GL_RGBA16) : GL_RGBA8;
+			GLenum type = use_high_bit_depth ? GL_FLOAT : GL_UNSIGNED_BYTE;
+
+			if (cube_map)
+				for (int i = 0; i < 6; i++)
+					glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, informat, w, h, 0, GL_RGBA, type, cube_map[i]);
+
+			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, gpu_get_mipmap_filter(1));
+
+			if (GPU_get_mipmap() && mipmap) {
+				if (GTS.gpu_mipmap) {
+					gpu_generate_mipmap(GL_TEXTURE_CUBE_MAP);
+				}
+				else {
+					if (!ibuf) {
+						if (use_high_bit_depth) {
+							ibuf = IMB_allocFromBuffer(NULL, frect, tpx, tpy);
+						}
+						else {
+							ibuf = IMB_allocFromBuffer(rect, NULL, tpx, tpy);
+						}
+					}
+
+					IMB_makemipmap(ibuf, true);
+
+					for (int i = 1; i < ibuf->miptot; i++) {
+						ImBuf *mip = ibuf->mipmap[i - 1];
+						void **mip_cube_map = gpu_gen_cube_map(mip->rect, mip->rect_float,
+													mip->x, mip->y, use_high_bit_depth);
+						int mipw = mip->x / 3, miph = mip->y / 2;
+
+						if (mip_cube_map) {
+							for (int j = 0; j < 6; j++) {
+								glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + j, i,
+									informat, mipw, miph, 0, GL_RGBA, type, mip_cube_map[j]);
+							}
+						}
+						gpu_del_cube_map(mip_cube_map);
+					}
+				}
+				glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, gpu_get_mipmap_filter(0));
+
+				if (ima)
+					ima->tpageflag |= IMA_MIPMAP_COMPLETE;
+			}
+			else {
+				glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			}
+			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+			gpu_del_cube_map(cube_map);
+		}
+		else {
+			printf("Incorrect envmap size\n");
+		}
 	}
 
 	if (is_envmap) {
@@ -814,7 +958,7 @@ void GPU_create_gl_tex(unsigned int *bind, unsigned int *rect, float *frect, int
 	}
 
 	if (GLEW_EXT_texture_filter_anisotropic)
-		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, GPU_get_anisotropic());
+		glTexParameterf(textarget, GL_TEXTURE_MAX_ANISOTROPY_EXT, GPU_get_anisotropic());
 
 	if (ibuf)
 		IMB_freeImBuf(ibuf);
@@ -860,13 +1004,13 @@ bool GPU_upload_dxt_texture(ImBuf *ibuf)
 		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, GPU_get_anisotropic());
 
 	blocksize = (ibuf->dds_data.fourcc == FOURCC_DXT1) ? 8 : 16;
-	for (i = 0; i < ibuf->dds_data.nummipmaps && (width||height); ++i) {
+	for (i = 0; i < ibuf->dds_data.nummipmaps && (width || height); ++i) {
 		if (width == 0)
 			width = 1;
 		if (height == 0)
 			height = 1;
 
-		size = ((width+3)/4)*((height+3)/4)*blocksize;
+		size = ((width + 3) / 4) * ((height + 3) / 4) * blocksize;
 
 		glCompressedTexImage2D(GL_TEXTURE_2D, i, format, width, height,
 			0, size, ibuf->dds_data.data + offset);
@@ -886,21 +1030,21 @@ bool GPU_upload_dxt_texture(ImBuf *ibuf)
 #endif
 }
 
-void GPU_create_gl_tex_compressed(unsigned int *bind, unsigned int *pix, int x, int y, int mipmap, Image *ima, ImBuf *ibuf)
+void GPU_create_gl_tex_compressed(
+        unsigned int *bind, unsigned int *pix, int x, int y,
+        int textarget, int mipmap, Image *ima, ImBuf *ibuf)
 {
 #ifndef WITH_DDS
 	(void)ibuf;
 	/* Fall back to uncompressed if DDS isn't enabled */
-	GPU_create_gl_tex(bind, pix, NULL, x, y, mipmap, 0, ima, false);
+	GPU_create_gl_tex(bind, pix, NULL, x, y, textarget, mipmap, 0, ima, false);
 #else
-
-
 	glGenTextures(1, (GLuint *)bind);
-	glBindTexture(GL_TEXTURE_2D, *bind);
+	glBindTexture(textarget, *bind);
 
-	if (GPU_upload_dxt_texture(ibuf) == 0) {
+	if (textarget == GL_TEXTURE_2D && GPU_upload_dxt_texture(ibuf) == 0) {
 		glDeleteTextures(1, (GLuint *)bind);
-		GPU_create_gl_tex(bind, pix, NULL, x, y, mipmap, 0, ima, false);
+		GPU_create_gl_tex(bind, pix, NULL, x, y, textarget, mipmap, 0, ima, false);
 	}
 #endif
 }
@@ -920,21 +1064,19 @@ static void gpu_verify_repeat(Image *ima)
 
 int GPU_set_tpage(MTexPoly *mtexpoly, int mipmap, int alphablend)
 {
-	Image *ima;
-	
 	/* check if we need to clear the state */
 	if (mtexpoly == NULL) {
 		GPU_clear_tpage(false);
 		return 0;
 	}
 
-	ima = mtexpoly->tpage;
+	Image *ima = mtexpoly->tpage;
 	GTS.lasttface = mtexpoly;
 
 	gpu_verify_alpha_blend(alphablend);
 	gpu_verify_reflection(ima);
 
-	if (GPU_verify_image(ima, NULL, mtexpoly->tile, 1, mipmap, false, false)) {
+	if (GPU_verify_image(ima, NULL, GL_TEXTURE_2D, mtexpoly->tile, 1, mipmap, false, false)) {
 		GTS.curtile = GTS.tile;
 		GTS.curima = GTS.ima;
 		GTS.curtilemode = GTS.tilemode;
@@ -969,20 +1111,25 @@ int GPU_set_tpage(MTexPoly *mtexpoly, int mipmap, int alphablend)
  * re-uploaded to OpenGL */
 void GPU_paint_set_mipmap(bool mipmap)
 {
-	Image *ima;
-	
 	if (!GTS.domipmap)
 		return;
 
 	GTS.texpaint = !mipmap;
 
 	if (mipmap) {
-		for (ima = G.main->image.first; ima; ima = ima->id.next) {
-			if (ima->bindcode) {
+		for (Image *ima = G.main->image.first; ima; ima = ima->id.next) {
+			if (BKE_image_has_bindcode(ima)) {
 				if (ima->tpageflag & IMA_MIPMAP_COMPLETE) {
-					glBindTexture(GL_TEXTURE_2D, ima->bindcode);
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, gpu_get_mipmap_filter(0));
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, gpu_get_mipmap_filter(1));
+					if (ima->bindcode[TEXTARGET_TEXTURE_2D]) {
+						glBindTexture(GL_TEXTURE_2D, ima->bindcode[TEXTARGET_TEXTURE_2D]);
+						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, gpu_get_mipmap_filter(0));
+						glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, gpu_get_mipmap_filter(1));
+					}
+					if (ima->bindcode[TEXTARGET_TEXTURE_CUBE_MAP]) {
+						glBindTexture(GL_TEXTURE_CUBE_MAP, ima->bindcode[TEXTARGET_TEXTURE_CUBE_MAP]);
+						glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, gpu_get_mipmap_filter(0));
+						glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, gpu_get_mipmap_filter(1));
+					}
 				}
 				else
 					GPU_free_image(ima);
@@ -993,11 +1140,18 @@ void GPU_paint_set_mipmap(bool mipmap)
 
 	}
 	else {
-		for (ima = G.main->image.first; ima; ima = ima->id.next) {
-			if (ima->bindcode) {
-				glBindTexture(GL_TEXTURE_2D, ima->bindcode);
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, gpu_get_mipmap_filter(1));
+		for (Image *ima = G.main->image.first; ima; ima = ima->id.next) {
+			if (BKE_image_has_bindcode(ima)) {
+				if (ima->bindcode[TEXTARGET_TEXTURE_2D]) {
+					glBindTexture(GL_TEXTURE_2D, ima->bindcode[TEXTARGET_TEXTURE_2D]);
+					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, gpu_get_mipmap_filter(1));
+				}
+				if (ima->bindcode[TEXTARGET_TEXTURE_CUBE_MAP]) {
+					glBindTexture(GL_TEXTURE_CUBE_MAP, ima->bindcode[TEXTARGET_TEXTURE_CUBE_MAP]);
+					glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+					glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, gpu_get_mipmap_filter(1));
+				}
 			}
 			else
 				ima->tpageflag &= ~IMA_MIPMAP_COMPLETE;
@@ -1010,7 +1164,7 @@ void GPU_paint_set_mipmap(bool mipmap)
 static bool GPU_check_scaled_image(ImBuf *ibuf, Image *ima, float *frect, int x, int y, int w, int h)
 {
 	if ((!GPU_full_non_power_of_two_support() && !is_power_of_2_resolution(ibuf->x, ibuf->y)) ||
-	    is_over_resolution_limit(ibuf->x, ibuf->y))
+		is_over_resolution_limit(GL_TEXTURE_2D, ibuf->x, ibuf->y))
 	{
 		int x_limit = smaller_power_of_2_limit(ibuf->x);
 		int y_limit = smaller_power_of_2_limit(ibuf->y);
@@ -1036,7 +1190,7 @@ static bool GPU_check_scaled_image(ImBuf *ibuf, Image *ima, float *frect, int x,
 			ImBuf *ibuf_scale = IMB_allocFromBuffer(NULL, frect, w, h);
 			IMB_scaleImBuf(ibuf_scale, rectw, recth);
 
-			glBindTexture(GL_TEXTURE_2D, ima->bindcode);
+			glBindTexture(GL_TEXTURE_2D, ima->bindcode[TEXTARGET_TEXTURE_2D]);
 			glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, rectw, recth, GL_RGBA,
 			                GL_FLOAT, ibuf_scale->rect_float);
 
@@ -1056,7 +1210,7 @@ static bool GPU_check_scaled_image(ImBuf *ibuf, Image *ima, float *frect, int x,
 					bilinear_interpolation_color_wrap(ibuf, (unsigned char *)(p + i + j * (rectw)), NULL, u, v);
 				}
 			}
-			glBindTexture(GL_TEXTURE_2D, ima->bindcode);
+			glBindTexture(GL_TEXTURE_2D, ima->bindcode[TEXTARGET_TEXTURE_2D]);
 			glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, rectw, recth, GL_RGBA,
 			                GL_UNSIGNED_BYTE, scalerect);
 
@@ -1078,12 +1232,10 @@ static bool GPU_check_scaled_image(ImBuf *ibuf, Image *ima, float *frect, int x,
 
 void GPU_paint_update_image(Image *ima, ImageUser *iuser, int x, int y, int w, int h)
 {
-	ImBuf *ibuf;
+	ImBuf *ibuf = BKE_image_acquire_ibuf(ima, iuser, NULL);
 	
-	ibuf = BKE_image_acquire_ibuf(ima, iuser, NULL);
-	
-	if (ima->repbind || (GPU_get_mipmap() && !GTS.gpu_mipmap) || !ima->bindcode || !ibuf ||
-		(w == 0) || (h == 0))
+	if (ima->repbind || (GPU_get_mipmap() && !GTS.gpu_mipmap) || BKE_image_has_bindcode(ima) || !ibuf ||
+	    (w == 0) || (h == 0))
 	{
 		/* these cases require full reload still */
 		GPU_free_image(ima);
@@ -1105,7 +1257,7 @@ void GPU_paint_update_image(Image *ima, ImageUser *iuser, int x, int y, int w, i
 				return;
 			}
 
-			glBindTexture(GL_TEXTURE_2D, ima->bindcode);
+			glBindTexture(GL_TEXTURE_2D, ima->bindcode[TEXTARGET_TEXTURE_2D]);
 			glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, w, h, GL_RGBA, GL_FLOAT, buffer);
 
 			MEM_freeN(buffer);
@@ -1128,7 +1280,7 @@ void GPU_paint_update_image(Image *ima, ImageUser *iuser, int x, int y, int w, i
 			return;
 		}
 
-		glBindTexture(GL_TEXTURE_2D, ima->bindcode);
+		glBindTexture(GL_TEXTURE_2D, ima->bindcode[TEXTARGET_TEXTURE_2D]);
 
 		glGetIntegerv(GL_UNPACK_ROW_LENGTH, &row_length);
 		glGetIntegerv(GL_UNPACK_SKIP_PIXELS, &skip_pixels);
@@ -1159,9 +1311,7 @@ void GPU_paint_update_image(Image *ima, ImageUser *iuser, int x, int y, int w, i
 
 void GPU_update_images_framechange(void)
 {
-	Image *ima;
-	
-	for (ima = G.main->image.first; ima; ima = ima->id.next) {
+	for (Image *ima = G.main->image.first; ima; ima = ima->id.next) {
 		if (ima->tpageflag & IMA_TWINANIM) {
 			if (ima->twend >= ima->xrep * ima->yrep)
 				ima->twend = ima->xrep * ima->yrep - 1;
@@ -1177,10 +1327,6 @@ void GPU_update_images_framechange(void)
 
 int GPU_update_image_time(Image *ima, double time)
 {
-	int	inc = 0;
-	float diff;
-	int	newframe;
-
 	if (!ima)
 		return 0;
 
@@ -1190,17 +1336,19 @@ int GPU_update_image_time(Image *ima, double time)
 	if (ima->lastupdate > (float)time)
 		ima->lastupdate = (float)time;
 
+	int inc = 0;
+
 	if (ima->tpageflag & IMA_TWINANIM) {
 		if (ima->twend >= ima->xrep * ima->yrep) ima->twend = ima->xrep * ima->yrep - 1;
 		
 		/* check: is the bindcode not in the array? Then free. (still to do) */
 		
-		diff = (float)((float)time - ima->lastupdate);
+		float diff = (float)((float)time - ima->lastupdate);
 		inc = (int)(diff * (float)ima->animspeed);
 
 		ima->lastupdate += ((float)inc / (float)ima->animspeed);
 
-		newframe = ima->lastframe + inc;
+		int newframe = ima->lastframe + inc;
 
 		if (newframe > (int)ima->twend) {
 			if (ima->twend - ima->twsta != 0)
@@ -1288,17 +1436,14 @@ static void gpu_queue_image_for_free(Image *ima)
 
 void GPU_free_unused_buffers(void)
 {
-	LinkNode *node;
-	Image *ima;
-
 	if (!BLI_thread_is_main())
 		return;
 
 	BLI_lock_thread(LOCK_OPENGL);
 
 	/* images */
-	for (node = image_free_queue; node; node = node->next) {
-		ima = node->link;
+	for (LinkNode *node = image_free_queue; node; node = node->next) {
+		Image *ima = node->link;
 
 		/* check in case it was freed in the meantime */
 		if (G.main && BLI_findindex(&G.main->image, ima) != -1)
@@ -1321,16 +1466,17 @@ void GPU_free_image(Image *ima)
 		return;
 	}
 
-	/* free regular image binding */
-	if (ima->bindcode) {
-		glDeleteTextures(1, (GLuint *)&ima->bindcode);
-		ima->bindcode = 0;
-	}
-
-	/* free glsl image binding */
-	if (ima->gputexture) {
-		GPU_texture_free(ima->gputexture);
-		ima->gputexture = NULL;
+	for (int i = 0; i < TEXTARGET_COUNT; i++) {
+		/* free regular image binding */
+		if (ima->bindcode[i]) {
+			glDeleteTextures(1, (GLuint *)&ima->bindcode[i]);
+			ima->bindcode[i] = 0;
+		}
+		/* free glsl image binding */
+		if (ima->gputexture[i]) {
+			GPU_texture_free(ima->gputexture[i]);
+			ima->gputexture[i] = NULL;
+		}
 	}
 
 	/* free repeated image binding */
@@ -1341,25 +1487,21 @@ void GPU_free_image(Image *ima)
 		ima->repbind = NULL;
 	}
 
-	ima->tpageflag &= ~(IMA_MIPMAP_COMPLETE|IMA_GLBIND_IS_DATA);
+	ima->tpageflag &= ~(IMA_MIPMAP_COMPLETE | IMA_GLBIND_IS_DATA);
 }
 
 void GPU_free_images(void)
 {
-	Image *ima;
-
 	if (G.main)
-		for (ima = G.main->image.first; ima; ima = ima->id.next)
+		for (Image *ima = G.main->image.first; ima; ima = ima->id.next)
 			GPU_free_image(ima);
 }
 
 /* same as above but only free animated images */
 void GPU_free_images_anim(void)
 {
-	Image *ima;
-
 	if (G.main)
-		for (ima = G.main->image.first; ima; ima = ima->id.next)
+		for (Image *ima = G.main->image.first; ima; ima = ima->id.next)
 			if (BKE_image_is_animated(ima))
 				GPU_free_image(ima);
 }
@@ -1367,7 +1509,6 @@ void GPU_free_images_anim(void)
 
 void GPU_free_images_old(void)
 {
-	Image *ima;
 	static int lasttime = 0;
 	int ctime = (int)PIL_check_seconds_timer();
 
@@ -1384,12 +1525,12 @@ void GPU_free_images_old(void)
 
 	lasttime = ctime;
 
-	ima = G.main->image.first;
+	Image *ima = G.main->image.first;
 	while (ima) {
 		if ((ima->flag & IMA_NOCOLLECT) == 0 && ctime - ima->lastused > U.textimeout) {
 			/* If it's in GL memory, deallocate and set time tag to current time
 			 * This gives textures a "second chance" to be used before dying. */
-			if (ima->bindcode || ima->repbind) {
+			if (BKE_image_has_bindcode(ima) || ima->repbind) {
 				GPU_free_image(ima);
 				ima->lastused = ctime;
 			}
@@ -1451,8 +1592,9 @@ static struct GPUMaterialState {
 } GMS = {NULL};
 
 /* fixed function material, alpha handed by caller */
-static void gpu_material_to_fixed(GPUMaterialFixed *smat, const Material *bmat, const int gamma, const Object *ob, const int new_shading_nodes, 
-                                  const bool dimdown)
+static void gpu_material_to_fixed(
+        GPUMaterialFixed *smat, const Material *bmat, const int gamma, const Object *ob,
+        const int new_shading_nodes, const bool dimdown)
 {
 	if (bmat->mode & MA_SHLESS) {
 		copy_v3_v3(smat->diff, &bmat->r);
@@ -1521,7 +1663,9 @@ void GPU_end_dupli_object(void)
 	GMS.dob = NULL;
 }
 
-void GPU_begin_object_materials(View3D *v3d, RegionView3D *rv3d, Scene *scene, Object *ob, bool glsl, bool *do_alpha_after)
+void GPU_begin_object_materials(
+        View3D *v3d, RegionView3D *rv3d, Scene *scene, Object *ob,
+        bool glsl, bool *do_alpha_after)
 {
 	Material *ma;
 	GPUMaterial *gpumat;
@@ -1578,13 +1722,13 @@ void GPU_begin_object_materials(View3D *v3d, RegionView3D *rv3d, Scene *scene, O
 
 	GMS.two_sided_lighting = false;
 	if (ob && ob->type == OB_MESH)
-		GMS.two_sided_lighting = (((Mesh*)ob->data)->flag & ME_TWOSIDED) != 0;
+		GMS.two_sided_lighting = (((Mesh *)ob->data)->flag & ME_TWOSIDED) != 0;
 
 	GMS.gob = ob;
 	GMS.gscene = scene;
 	GMS.is_opensubdiv = use_opensubdiv;
 	GMS.totmat = use_matcap ? 1 : ob->totcol + 1;  /* materials start from 1, default material is 0 */
-	GMS.glay = (v3d->localvd)? v3d->localvd->lay: v3d->lay; /* keep lamps visible in local view */
+	GMS.glay = (v3d->localvd) ? v3d->localvd->lay : v3d->lay; /* keep lamps visible in local view */
 	GMS.gscenelock = (v3d->scenelock != 0);
 	GMS.gviewmat = rv3d->viewmat;
 	GMS.gviewinv = rv3d->viewinv;
@@ -1646,7 +1790,7 @@ void GPU_begin_object_materials(View3D *v3d, RegionView3D *rv3d, Scene *scene, O
 			if (ma == NULL) ma = &defmaterial;
 
 			/* create glsl material if requested */
-			gpumat = glsl? GPU_material_from_blender(GMS.gscene, ma, GMS.is_opensubdiv, (v3d->flag3 & V3D_REALISTIC_MAT)): NULL;
+			gpumat = glsl ? GPU_material_from_blender(GMS.gscene, ma, GMS.is_opensubdiv, (v3d->flag3 & V3D_REALISTIC_MAT)) : NULL;
 
 			if (gpumat) {
 				/* do glsl only if creating it succeed, else fallback */
@@ -1659,7 +1803,7 @@ void GPU_begin_object_materials(View3D *v3d, RegionView3D *rv3d, Scene *scene, O
 
 				if (GMS.use_alpha_pass && ((ma->mode & MA_TRANSP) || (new_shading_nodes && ma->alpha != 1.0f))) {
 					GMS.matbuf[a].alpha = ma->alpha;
-					alphablend = (ma->alpha == 1.0f)? GPU_BLEND_SOLID: GPU_BLEND_ALPHA;
+					alphablend = (ma->alpha == 1.0f) ? GPU_BLEND_SOLID: GPU_BLEND_ALPHA;
 				}
 				else {
 					GMS.matbuf[a].alpha = 1.0f;
@@ -1683,17 +1827,16 @@ void GPU_begin_object_materials(View3D *v3d, RegionView3D *rv3d, Scene *scene, O
 
 static int GPU_get_particle_info(GPUParticleInfo *pi)
 {
-	ParticleData *p;
 	DupliObject *dob = GMS.dob;
-	int ind;
 	if (dob->particle_system) {
+		int ind;
 		if (dob->persistent_id[0] < dob->particle_system->totpart)
 			ind = dob->persistent_id[0];
 		else {
 			ind = dob->particle_system->child[dob->persistent_id[0] - dob->particle_system->totpart].parent;
 		}
 		if (ind >= 0) {
-			p = &dob->particle_system->particles[ind];
+			ParticleData *p = &dob->particle_system->particles[ind];
 
 			pi->scalprops[0] = ind;
 			pi->scalprops[1] = GMS.gscene->r.cfra - p->time;
@@ -1714,8 +1857,6 @@ static int GPU_get_particle_info(GPUParticleInfo *pi)
 int GPU_object_material_bind(int nr, void *attribs)
 {
 	GPUVertexAttribs *gattribs = attribs;
-	GPUMaterial *gpumat;
-	GPUBlendMode alphablend;
 
 	/* no GPU_begin_object_materials, use default material */
 	if (!GMS.matbuf) {
@@ -1766,7 +1907,7 @@ int GPU_object_material_bind(int nr, void *attribs)
 
 	if (GMS.lastretval) {
 		/* for alpha pass, use alpha blend */
-		alphablend = GMS.alphablend[nr];
+		GPUBlendMode alphablend = GMS.alphablend[nr];
 
 		if (gattribs && GMS.gmatbuf[nr]) {
 			/* bind glsl material and get attributes */
@@ -1775,22 +1916,24 @@ int GPU_object_material_bind(int nr, void *attribs)
 
 			float auto_bump_scale;
 
-			gpumat = GPU_material_from_blender(GMS.gscene, mat, GMS.is_opensubdiv, false);
+			GPUMaterial *gpumat = GPU_material_from_blender(GMS.gscene, mat, GMS.is_opensubdiv, false);
 			GPU_material_vertex_attributes(gpumat, gattribs);
 
 			if (GMS.dob)
 				GPU_get_particle_info(&partile_info);
 
-			GPU_material_bind(gpumat, GMS.gob->lay, GMS.glay, 1.0, !(GMS.gob->mode & OB_MODE_TEXTURE_PAINT), GMS.gviewmat, GMS.gviewinv, GMS.gviewcamtexcofac, GMS.gscenelock);
+			GPU_material_bind(
+			        gpumat, GMS.gob->lay, GMS.glay, 1.0, !(GMS.gob->mode & OB_MODE_TEXTURE_PAINT),
+			        GMS.gviewmat, GMS.gviewinv, GMS.gviewcamtexcofac, GMS.gscenelock);
 
 			auto_bump_scale = GMS.gob->derivedFinal != NULL ? GMS.gob->derivedFinal->auto_bump_scale : 1.0f;
-			GPU_material_bind_uniforms(gpumat, GMS.gob->obmat, GMS.gob->col, auto_bump_scale, &partile_info);
+			GPU_material_bind_uniforms(gpumat, GMS.gob->obmat, GMS.gviewmat, GMS.gob->col, auto_bump_scale, &partile_info);
 			GMS.gboundmat = mat;
 
 			/* for glsl use alpha blend mode, unless it's set to solid and
 			 * we are already drawing in an alpha pass */
 			if (mat->game.alpha_blend != GPU_BLEND_SOLID)
-				alphablend= mat->game.alpha_blend;
+				alphablend = mat->game.alpha_blend;
 
 			if (GMS.is_alpha_pass) glDepthMask(1);
 
@@ -1833,7 +1976,7 @@ int GPU_object_material_visible(int nr, void *attribs)
 	if (gattribs)
 		memset(gattribs, 0, sizeof(*gattribs));
 
-	if (nr>=GMS.totmat)
+	if (nr >= GMS.totmat)
 		nr = 0;
 
 	if (GMS.use_alpha_pass) {
@@ -1935,8 +2078,6 @@ void GPU_end_object_materials(void)
 
 int GPU_default_lights(void)
 {
-	int a, count = 0;
-	
 	/* initialize */
 	if (U.light[0].flag == 0 && U.light[1].flag == 0 && U.light[2].flag == 0) {
 		U.light[0].flag = 1;
@@ -1960,7 +2101,9 @@ int GPU_default_lights(void)
 
 	GPU_basic_shader_light_set_viewer(false);
 
-	for (a = 0; a < 8; a++) {
+	int count = 0;
+
+	for (int a = 0; a < 8; a++) {
 		if (a < 3 && U.light[a].flag) {
 			GPULightData light = {0};
 
@@ -1983,28 +2126,24 @@ int GPU_default_lights(void)
 
 int GPU_scene_object_lights(Scene *scene, Object *ob, int lay, float viewmat[4][4], int ortho)
 {
-	Base *base;
-	Lamp *la;
-	int count;
-	
 	/* disable all lights */
-	for (count = 0; count < 8; count++)
+	for (int count = 0; count < 8; count++)
 		GPU_basic_shader_light_set(count, NULL);
 	
 	/* view direction for specular is not computed correct by default in
 	 * opengl, so we set the settings ourselfs */
 	GPU_basic_shader_light_set_viewer(!ortho);
 
-	count = 0;
+	int count = 0;
 
-	for (base = scene->base.first; base; base = base->next) {
+	for (Base *base = scene->base.first; base; base = base->next) {
 		if (base->object->type != OB_LAMP)
 			continue;
 
 		if (!(base->lay & lay) || !(base->lay & ob->lay))
 			continue;
 
-		la = base->object->data;
+		Lamp *la = base->object->data;
 		
 		/* setup lamp transform */
 		glPushMatrix();
@@ -2158,13 +2297,11 @@ void GPU_state_init(void)
  */
 void GPU_draw_update_fvar_offset(DerivedMesh *dm)
 {
-	int i;
-
 	/* Sanity check to be sure we only do this for OpenSubdiv draw. */
 	BLI_assert(dm->type == DM_TYPE_CCGDM);
 	BLI_assert(GMS.is_opensubdiv);
 
-	for (i = 0; i < GMS.totmat; ++i) {
+	for (int i = 0; i < GMS.totmat; ++i) {
 		Material *material = GMS.gmatbuf[i];
 		GPUMaterial *gpu_material;
 

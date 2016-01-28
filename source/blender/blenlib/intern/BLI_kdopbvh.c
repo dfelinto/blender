@@ -146,6 +146,17 @@ typedef struct BVHRayCastData {
 	BVHTreeRayHit hit;
 } BVHRayCastData;
 
+typedef struct BVHNearestRayData {
+	BVHTree *tree;
+	BVHTree_NearestToRayCallback callback;
+	void    *userdata;
+	BVHTreeRay ray;
+
+	struct NearestRayToAABB_Precalc nearest_precalc;
+
+	bool pick_smallest[3];
+	BVHTreeNearest nearest;
+} BVHNearestRayData;
 
 /**
  * Bounding Volume Hierarchy Definition
@@ -750,7 +761,7 @@ typedef struct BVHDivNodesData {
 	int first_of_next_level;
 } BVHDivNodesData;
 
-static void non_recursive_bvh_div_nodes_task_cb(void *userdata, void *UNUSED(userdata_chunk), int j)
+static void non_recursive_bvh_div_nodes_task_cb(void *userdata, const int j)
 {
 	BVHDivNodesData *data = userdata;
 
@@ -873,9 +884,9 @@ static void non_recursive_bvh_div_nodes(BVHTree *tree, BVHNode *branches_array, 
 		cb_data.i = i;
 		cb_data.depth = depth;
 
-		BLI_task_parallel_range_ex(
-		            i, end_j, &cb_data, NULL, 0, non_recursive_bvh_div_nodes_task_cb,
-		            num_leafs > KDOPBVH_THREAD_LEAF_THRESHOLD, false);
+		BLI_task_parallel_range(
+		            i, end_j, &cb_data, non_recursive_bvh_div_nodes_task_cb,
+		            num_leafs > KDOPBVH_THREAD_LEAF_THRESHOLD);
 	}
 }
 
@@ -1195,7 +1206,7 @@ int BLI_bvhtree_overlap_thread_num(const BVHTree *tree)
 	return (int)MIN2(tree->tree_type, tree->nodes[tree->totleaf]->totnode);
 }
 
-static void bvhtree_overlap_task_cb(void *userdata, void *UNUSED(userdata_chunk), int j)
+static void bvhtree_overlap_task_cb(void *userdata, const int j)
 {
 	BVHOverlapData_Thread *data = &((BVHOverlapData_Thread *)userdata)[j];
 	BVHOverlapData_Shared *data_shared = data->shared;
@@ -1260,9 +1271,9 @@ BVHTreeOverlap *BLI_bvhtree_overlap(
 		data[j].thread = j;
 	}
 
-	BLI_task_parallel_range_ex(
-	            0, thread_num, data, NULL, 0, bvhtree_overlap_task_cb,
-	            tree1->totleaf > KDOPBVH_THREAD_LEAF_THRESHOLD, false);
+	BLI_task_parallel_range(
+	            0, thread_num, data, bvhtree_overlap_task_cb,
+	            tree1->totleaf > KDOPBVH_THREAD_LEAF_THRESHOLD);
 	
 	for (j = 0; j < thread_num; j++)
 		total += BLI_stack_count(data[j].overlap);
@@ -1611,7 +1622,7 @@ static void dfs_raycast_all(BVHRayCastData *data, BVHNode *node)
 	if (node->totnode == 0) {
 		if (data->callback) {
 			data->hit.index = -1;
-			data->hit.dist = FLT_MAX;
+			data->hit.dist = BVH_RAYCAST_DIST_MAX;
 			data->callback(data->userdata, node->index, &data->ray, &data->hit);
 		}
 		else {
@@ -1720,7 +1731,7 @@ int BLI_bvhtree_ray_cast_ex(
 	}
 	else {
 		data.hit.index = -1;
-		data.hit.dist = FLT_MAX;
+		data.hit.dist = BVH_RAYCAST_DIST_MAX;
 	}
 
 	if (root) {
@@ -1747,7 +1758,7 @@ float BLI_bvhtree_bb_raycast(const float bv[6], const float light_start[3], cons
 	BVHRayCastData data;
 	float dist;
 
-	data.hit.dist = FLT_MAX;
+	data.hit.dist = BVH_RAYCAST_DIST_MAX;
 	
 	/* get light direction */
 	sub_v3_v3v3(data.ray.direction, light_end, light_start);
@@ -1792,7 +1803,7 @@ int BLI_bvhtree_ray_cast_all_ex(
 	bvhtree_ray_cast_data_precalc(&data, flag);
 
 	data.hit.index = -1;
-	data.hit.dist = FLT_MAX;
+	data.hit.dist = BVH_RAYCAST_DIST_MAX;
 
 	if (root) {
 		dfs_raycast_all(&data, root);
@@ -1806,6 +1817,102 @@ int BLI_bvhtree_ray_cast_all(
         BVHTree_RayCastCallback callback, void *userdata)
 {
 	return BLI_bvhtree_ray_cast_all_ex(tree, co, dir, radius, callback, userdata, BVH_RAYCAST_DEFAULT);
+}
+
+static float calc_dist_sq_to_ray(BVHNearestRayData *data, BVHNode *node)
+{
+	const float *bv = node->bv;
+	const float bb_min[3] = {bv[0], bv[2], bv[4]};
+	const float bb_max[3] = {bv[1], bv[3], bv[5]};
+	return dist_squared_ray_to_aabb_v3(&data->nearest_precalc, bb_min, bb_max, data->pick_smallest);
+}
+
+static void dfs_find_nearest_to_ray_dfs(BVHNearestRayData *data, BVHNode *node)
+{
+	if (node->totnode == 0) {
+		if (data->callback) {
+			data->callback(data->userdata, node->index, &data->ray, &data->nearest);
+		}
+		else {
+			const float dist_sq = calc_dist_sq_to_ray(data, node);
+			if (dist_sq != FLT_MAX) {  /* not an invalid ray */
+				data->nearest.index = node->index;
+				data->nearest.dist_sq = dist_sq;
+				/* TODO: return a value to the data->nearest.co
+				 * not urgent however since users currently define own callbacks */
+			}
+		}
+	}
+	else {
+		int i;
+		/* First pick the closest node to dive on */
+		if (data->pick_smallest[node->main_axis]) {
+			for (i = 0; i != node->totnode; i++) {
+				if (calc_dist_sq_to_ray(data, node->children[i]) >= data->nearest.dist_sq) {
+					continue;
+				}
+				dfs_find_nearest_to_ray_dfs(data, node->children[i]);
+			}
+		}
+		else {
+			for (i = node->totnode - 1; i >= 0; i--) {
+				if (calc_dist_sq_to_ray(data, node->children[i]) >= data->nearest.dist_sq) {
+					continue;
+				}
+				dfs_find_nearest_to_ray_dfs(data, node->children[i]);
+			}
+		}
+	}
+}
+
+static void dfs_find_nearest_to_ray_begin(BVHNearestRayData *data, BVHNode *node)
+{
+	float dist_sq = calc_dist_sq_to_ray(data, node);
+	if (dist_sq >= data->nearest.dist_sq) {
+		return;
+	}
+	dfs_find_nearest_to_ray_dfs(data, node);
+}
+
+int BLI_bvhtree_find_nearest_to_ray(
+	BVHTree *tree, const float co[3], const float dir[3], float radius, BVHTreeNearest *nearest,
+	BVHTree_NearestToRayCallback callback, void *userdata)
+{
+	BVHNearestRayData data;
+	BVHNode *root = tree->nodes[tree->totleaf];
+
+	BLI_ASSERT_UNIT_V3(dir);
+
+	data.tree = tree;
+
+	data.callback = callback;
+	data.userdata = userdata;
+
+	copy_v3_v3(data.ray.origin, co);
+	copy_v3_v3(data.ray.direction, dir);
+	data.ray.radius = radius;
+
+	dist_squared_ray_to_aabb_v3_precalc(&data.nearest_precalc, co, dir);
+
+	if (nearest) {
+		memcpy(&data.nearest, nearest, sizeof(*nearest));
+	}
+	else {
+		data.nearest.index = -1;
+		data.nearest.dist_sq = FLT_MAX;
+	}
+
+	/* dfs search */
+	if (root) {
+		dfs_find_nearest_to_ray_begin(&data, root);
+	}
+
+	/* copy back results */
+	if (nearest) {
+		memcpy(nearest, &data.nearest, sizeof(*nearest));
+	}
+
+	return data.nearest.index;
 }
 
 /**

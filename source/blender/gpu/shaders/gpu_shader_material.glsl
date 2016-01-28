@@ -172,6 +172,21 @@ void particle_info(vec4 sprops, vec3 loc, vec3 vel, vec3 avel, out float index, 
     angular_velocity = avel;
 }
 
+void vect_normalize(vec3 vin, out vec3 vout)
+{
+	vout = normalize(vin);
+}
+
+void direction_transform_m4v3(vec3 vin, mat4 mat, out vec3 vout)
+{
+	vout = (mat*vec4(vin, 0.0)).xyz;
+}
+
+void point_transform_m4v3(vec3 vin, mat4 mat, out vec3 vout)
+{
+	vout = (mat*vec4(vin, 1.0)).xyz;
+}
+
 void mapping(vec3 vec, mat4 mat, vec3 minvec, vec3 maxvec, float domin, float domax, out vec3 outvec)
 {
 	outvec = (mat * vec4(vec, 1.0)).xyz;
@@ -1195,6 +1210,11 @@ void mtex_alpha_to_col(vec4 col, float alpha, out vec4 outcol)
 	outcol = vec4(col.rgb, alpha);
 }
 
+void mtex_alpha_multiply_value(vec4 col, float value, out vec4 outcol)
+{
+    outcol = vec4(col.rgb, col.a * value);
+}
+
 void mtex_rgbtoint(vec4 rgb, out float intensity)
 {
 	intensity = dot(vec3(0.35, 0.45, 0.2), rgb.rgb);
@@ -1242,6 +1262,12 @@ void mtex_2d_mapping(vec3 vec, out vec3 outvec)
 vec3 mtex_2d_mapping(vec3 vec)
 {
 	return vec3(vec.xy*0.5 + vec2(0.5), vec.z);
+}
+
+void mtex_cube_map(vec3 co, samplerCube ima, out float value, out vec4 color)
+{
+	color = textureCube(ima, co);
+	value = 1.0;
 }
 
 void mtex_image(vec3 texco, sampler2D ima, out float value, out vec4 color)
@@ -1648,6 +1674,40 @@ void lamp_visibility_spot(float spotsi, float spotbl, float inpr, float visifac,
 void lamp_visibility_clamp(float visifac, out float outvisifac)
 {
 	outvisifac = (visifac < 0.001)? 0.0: visifac;
+}
+
+void world_paper_view(vec3 vec, out vec3 outvec)
+{
+	vec3 nvec = normalize(vec);
+	outvec = (gl_ProjectionMatrix[3][3] == 0.0) ? vec3(nvec.x, 0.0, nvec.y) : vec3(0.0, 0.0, -1.0);
+}
+
+void world_zen_mapping(vec3 view, float zenup, float zendown, out float zenfac)
+{
+	if (view.z >= 0.0)
+		zenfac = zenup;
+	else
+		zenfac = zendown;
+}
+
+void world_blend_paper_real(vec3 vec, out float blend)
+{
+	blend = abs(vec.y);
+}
+
+void world_blend_paper(vec3 vec, out float blend)
+{
+	blend = (vec.y + 1.0) * 0.5;
+}
+
+void world_blend_real(vec3 vec, out float blend)
+{
+	blend = abs(normalize(vec).z);
+}
+
+void world_blend(vec3 vec, out float blend)
+{
+	blend = (normalize(vec).z + 1) * 0.5;
 }
 
 void shade_view(vec3 co, out vec3 view)
@@ -3771,16 +3831,16 @@ void node_tex_clouds(vec3 co, float size, out vec4 color, out float fac)
 	fac = 1.0;
 }
 
-void node_tex_environment_equirectangular(vec3 co, sampler2D ima, float Lod, out vec4 color)
+vec4 sample_equirectangular_lod(vec3 co, sampler2D ima, float Lod)
 {
 	vec3 nco = normalize(co);
 	float u = -atan(nco.y, nco.x)/(M_2PI) + 0.5;
 	float v = atan(nco.z, hypot(nco.x, nco.y))/M_PI + 0.5;
 
-	color = texture2DLod(ima, vec2(u, v), Lod);
+	return texture2DLod(ima, vec2(u, v), Lod);
 }
 
-void node_tex_environment_mirror_ball(vec3 co, sampler2D ima, float Lod, out vec4 color)
+vec4 sample_mirror_ball_lod(vec3 co, sampler2D ima, float Lod)
 {
 	vec3 nco = normalize(co);
 
@@ -3793,7 +3853,17 @@ void node_tex_environment_mirror_ball(vec3 co, sampler2D ima, float Lod, out vec
 	float u = 0.5*(nco.x + 1.0);
 	float v = 0.5*(nco.z + 1.0);
 
-	color = texture2DLod(ima, vec2(u, v), Lod);
+	return texture2DLod(ima, vec2(u, v), Lod);
+}
+
+void node_tex_environment_equirectangular(vec3 co, sampler2D ima, out vec4 color)
+{
+	color = sample_equirectangular_lod(co, ima, 0.0);
+}
+
+void node_tex_environment_mirror_ball(vec3 co, sampler2D ima, out vec4 color)
+{
+	color = sample_mirror_ball_lod(co, ima, 0.0);
 }
 
 void node_tex_environment_empty(vec3 co, out vec4 color)
@@ -4075,7 +4145,8 @@ void node_light_path(
 	out float is_transmission_ray,
 	out float ray_length,
 	out float ray_depth,
-	out float transparent_depth)
+	out float transparent_depth,
+	out float transmission_depth)
 {
 	is_camera_ray = 1.0;
 	is_shadow_ray = 0.0;
@@ -4087,6 +4158,7 @@ void node_light_path(
 	ray_length = 1.0;
 	ray_depth = 1.0;
 	transparent_depth = 1.0;
+	transmission_depth = 1.0;
 }
 
 void node_light_falloff(float strength, float tsmooth, vec3 ray, out float quadratic, out float linear, out float constant)
@@ -4329,8 +4401,7 @@ void env_sampling_reflect_glossy(vec3 I, vec3 N, float roughness, float precalc_
 			float distortion = sqrt(1.0 - L.z * L.z); /* Distortion for Equirectangular Env */
 			float Lod = precalc_lod_factor - 0.5 * log2( pdf * distortion);
 
-			vec4 env_sample;
-			node_tex_environment_equirectangular(L, ima, Lod, env_sample);
+			vec4 env_sample = sample_equirectangular_lod(L, ima, Lod);
 			srgb_to_linearrgb(env_sample, env_sample);
 			out_radiance += env_sample;
 			weight++;
@@ -4411,8 +4482,7 @@ void env_sampling_reflect_aniso(vec3 I, vec3 N, float roughness, float anisotrop
 			float distortion = sqrt(1.0 - L.z * L.z); /* Distortion for Equirectangular Env */
 			float Lod = precalc_lod_factor - 0.5 * log2( pdf * distortion);
 
-			vec4 env_sample;
-			node_tex_environment_equirectangular(L, ima, Lod, env_sample);
+			vec4 env_sample = sample_equirectangular_lod(L, ima, Lod);
 			srgb_to_linearrgb(env_sample, env_sample);
 			out_radiance += env_sample;
 			weight++;
@@ -4460,8 +4530,7 @@ void env_sampling_refract_glossy(vec3 I, vec3 N, float ior, float roughness, flo
 	float weight = 1e-8;
 
 	if (abs(ior - 1.0) < 1e-4) {
-		vec4 env_sample = vec4(0.0, 0.0, 0.0, 1.0);
-		node_tex_environment_equirectangular(I, ima, 0.0, env_sample);
+		vec4 env_sample = sample_equirectangular_lod(I, ima, 0.0);
 		srgb_to_linearrgb(env_sample, env_sample);
 		out_radiance = env_sample;
 		weight = 1.0;
@@ -4496,8 +4565,7 @@ void env_sampling_refract_glossy(vec3 I, vec3 N, float ior, float roughness, flo
 				float distortion = sqrt(1.0 - L.z * L.z); /* Distortion for Equirectangular Env */
 				float Lod = precalc_lod_factor - 0.5 * log2( pdf * distortion);
 
-				vec4 env_sample;
-				node_tex_environment_equirectangular(L, ima, Lod, env_sample);
+				vec4 env_sample = sample_equirectangular_lod(L, ima, Lod);
 				srgb_to_linearrgb(env_sample, env_sample);
 				out_radiance += env_sample;
 				weight++;
@@ -4566,7 +4634,7 @@ void env_sampling_glass_glossy(vec3 I, vec3 N, float ior, float roughness, float
 			float distortion = sqrt(1.0 - L.z * L.z); /* Distortion for Equirectangular Env */
 			float Lod = precalc_lod_factor - 0.5 * log2( pdf * distortion);
 
-			node_tex_environment_equirectangular(L, ima, Lod, env_sample);
+			vec4 env_sample = sample_equirectangular_lod(L, ima, Lod);
 			srgb_to_linearrgb(env_sample, env_sample);
 			out_radiance_r += env_sample * fresnel;
 			weight_r++;
@@ -4605,7 +4673,7 @@ void env_sampling_glass_glossy(vec3 I, vec3 N, float ior, float roughness, float
 			float distortion = sqrt(1.0 - L.z * L.z); /* Distortion for Equirectangular Env */
 			float Lod = precalc_lod_factor - 0.5 * log2( pdf * distortion);
 
-			node_tex_environment_equirectangular(L, ima, Lod, env_sample);
+			vec4 env_sample = sample_equirectangular_lod(L, ima, Lod);
 			srgb_to_linearrgb(env_sample, env_sample);
 			out_radiance_t += env_sample * (1.0 - fresnel);
 			weight_t++;
@@ -4634,13 +4702,13 @@ void env_sampling_glass_sharp(vec3 I, vec3 N, float ior, sampler2D ima, out vec3
 
 	/* reflection */
 	vec3 L = reflect(I, N);
-	node_tex_environment_equirectangular(L, ima, 0.0, env_sample);
+	env_sample = sample_equirectangular_lod(L, ima, 0.0);
 	srgb_to_linearrgb(env_sample, env_sample);
 	result += env_sample.rgb * fresnel;
 
 	/* transmission */
 	L = refract(I, N, eta);
-	node_tex_environment_equirectangular(L, ima, 0.0, env_sample);
+	env_sample = sample_equirectangular_lod(L, ima, 0.0);
 	srgb_to_linearrgb(env_sample, env_sample);
 	result += env_sample.rgb * (1.0 - fresnel);
 }

@@ -1335,32 +1335,69 @@ static int set_skip_frame(int argc, const char **argv, void *data)
 	}
 }
 
-/* macro for ugly context setup/reset */
+
 #ifdef WITH_PYTHON
-#define BPY_CTX_SETUP(_cmd)                                                   \
-	{                                                                         \
-		wmWindowManager *wm = CTX_wm_manager(C);                              \
-		Scene *scene_prev = CTX_data_scene(C);                                \
-		wmWindow *win_prev;                                                   \
-		const bool has_win = !BLI_listbase_is_empty(&wm->windows);            \
-		if (has_win) {                                                        \
-			win_prev = CTX_wm_window(C);                                      \
-			CTX_wm_window_set(C, wm->windows.first);                          \
-		}                                                                     \
-		else {                                                                \
-			fprintf(stderr, "Python script \"%s\" "                           \
-			        "running with missing context data.\n", argv[1]);         \
-		}                                                                     \
-		{                                                                     \
-			_cmd;                                                             \
-		}                                                                     \
-		if (has_win) {                                                        \
-			CTX_wm_window_set(C, win_prev);                                   \
-		}                                                                     \
-		CTX_data_scene_set(C, scene_prev);                                    \
-	} (void)0                                                                 \
+
+/** \name Utilities Python Context Macro (#BPY_CTX_SETUP)
+ * \{ */
+struct BlendePyContextStore {
+	wmWindowManager *wm;
+	Scene *scene;
+	wmWindow *win;
+	bool has_win;
+};
+
+static void blender_py_context_backup(
+        bContext *C, struct BlendePyContextStore *c_py,
+        const char *script_id)
+{
+	c_py->wm = CTX_wm_manager(C);
+	c_py->scene = CTX_data_scene(C);
+	c_py->has_win = !BLI_listbase_is_empty(&c_py->wm->windows);
+	if (c_py->has_win) {
+		c_py->win = CTX_wm_window(C);
+		CTX_wm_window_set(C, c_py->wm->windows.first);
+	}
+	else {
+		c_py->win = NULL;
+		fprintf(stderr, "Python script \"%s\" "
+		        "running with missing context data.\n", script_id);
+	}
+}
+
+static void blender_py_context_restore(
+        bContext *C, struct BlendePyContextStore *c_py)
+{
+	/* script may load a file, check old data is valid before using */
+	if (c_py->has_win) {
+		if ((c_py->win == NULL) ||
+		    ((BLI_findindex(&G.main->wm, c_py->wm) != -1) &&
+		     (BLI_findindex(&c_py->wm->windows, c_py->win) != -1)))
+		{
+			CTX_wm_window_set(C, c_py->win);
+		}
+	}
+
+	if ((c_py->scene == NULL) ||
+	    BLI_findindex(&G.main->scene, c_py->scene) != -1)
+	{
+		CTX_data_scene_set(C, c_py->scene);
+	}
+}
+
+/* macro for context setup/reset */
+#define BPY_CTX_SETUP(_cmd) \
+	{ \
+		struct BlendePyContextStore py_c; \
+		blender_py_context_backup(C, &py_c, argv[1]); \
+		{ _cmd; } \
+		blender_py_context_restore(C, &py_c); \
+	} ((void)0)
 
 #endif /* WITH_PYTHON */
+
+/** \} */
+
 
 static int run_python_file(int argc, const char **argv, void *data)
 {
@@ -1748,11 +1785,11 @@ char **environ = NULL;
 #endif
 
 /**
- * Blender's main function responsabilities are:
+ * Blender's main function responsibilities are:
  * - setup subsystems.
  * - handle arguments.
- * - run WM_main() event loop,
- *   or exit when running in background mode.
+ * - run #WM_main() event loop,
+ *   or exit immediately when running in background mode.
  */
 int main(
         int argc,
@@ -1895,7 +1932,7 @@ int main(
 	DAG_init();
 
 	BKE_brush_system_init();
-	RE_init_texture_rng();
+	RE_texture_rng_init();
 	
 
 	BLI_callback_global_init();
@@ -2034,7 +2071,7 @@ int main(
 #endif
 
 	if (G.background) {
-		/* actually incorrect, but works for now (ton) */
+		/* Using window-manager API in background mode is a bit odd, but works fine. */
 		WM_exit(C);
 	}
 	else {

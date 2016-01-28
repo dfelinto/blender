@@ -60,9 +60,6 @@ set(SRC
 	intern/gpu_shader.c
 	intern/gpu_texture.c
 
-	shaders/gpu_program_smoke_frag.glsl
-	shaders/gpu_program_smoke_color_frag.glsl
-
 	shaders/gpu_shader_fx_lib.glsl
 	shaders/gpu_shader_fx_ssao_frag.glsl
 	shaders/gpu_shader_fx_dof_frag.glsl
@@ -81,6 +78,8 @@ set(SRC
 	shaders/gpu_shader_vsm_store_vert.glsl
 	shaders/gpu_shader_fx_depth_resolve.glsl
 	shaders/gpu_shader_fx_colormanage_frag.glsl
+	shaders/gpu_shader_smoke_frag.glsl
+	shaders/gpu_shader_smoke_vert.glsl
 
 	GPU_basic_shader.h
 	GPU_buffers.h
@@ -100,8 +99,8 @@ set(SRC
 )
 
 data_to_c_simple(shaders/gpu_shader_geometry.glsl SRC)
-data_to_c_simple(shaders/gpu_program_smoke_frag.glsl SRC)
-data_to_c_simple(shaders/gpu_program_smoke_color_frag.glsl SRC)
+data_to_c_simple(shaders/gpu_shader_smoke_frag.glsl SRC)
+data_to_c_simple(shaders/gpu_shader_smoke_vert.glsl SRC)
 data_to_c_simple(shaders/gpu_shader_material.glsl SRC)
 data_to_c_simple(shaders/gpu_shader_sep_gaussian_blur_frag.glsl SRC)
 data_to_c_simple(shaders/gpu_shader_sep_gaussian_blur_vert.glsl SRC)

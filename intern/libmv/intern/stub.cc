@@ -257,7 +257,8 @@ void libmv_cameraIntrinsicsUndistortByte(
     const libmv_CameraIntrinsics * /*libmv_intrinsics*/,
     const unsigned char *source_image,
     int width, int height,
-    float overscan, int channels,
+    float /*overscan*/,
+    int channels,
     unsigned char *destination_image) {
   memcpy(destination_image, source_image,
          channels * width * height * sizeof(unsigned char));
@@ -268,7 +269,7 @@ void libmv_cameraIntrinsicsUndistortFloat(
     const float* source_image,
     int width,
     int height,
-    float overscan,
+    float /*overscan*/,
     int channels,
     float* destination_image) {
   memcpy(destination_image, source_image,
@@ -280,7 +281,7 @@ void libmv_cameraIntrinsicsDistortByte(
     const unsigned char *source_image,
     int width,
     int height,
-    float overscan,
+    float /*overscan*/,
     int channels,
     unsigned char *destination_image) {
   memcpy(destination_image, source_image,
@@ -292,7 +293,7 @@ void libmv_cameraIntrinsicsDistortFloat(
     float* source_image,
     int width,
     int height,
-    float overscan,
+    float /*overscan*/,
     int channels,
     float* destination_image) {
   memcpy(destination_image, source_image,
@@ -302,34 +303,28 @@ void libmv_cameraIntrinsicsDistortFloat(
 /* ************ utils ************ */
 
 void libmv_cameraIntrinsicsApply(
-    const libmv_CameraIntrinsicsOptions* libmv_camera_intrinsics_options,
-    double x,
-    double y,
+    const struct libmv_CameraIntrinsics* /*libmv_intrinsics*/,
+    double /*x*/,
+    double /*y*/,
     double* x1,
     double* y1) {
-  double focal_length = libmv_camera_intrinsics_options->focal_length;
-  double principal_x = libmv_camera_intrinsics_options->principal_point_x;
-  double principal_y = libmv_camera_intrinsics_options->principal_point_y;
-  *x1 = x * focal_length + principal_x;
-  *y1 = y * focal_length + principal_y;
+  *x1 = 0.0;
+  *y1 = 0.0;
 }
 
 void libmv_cameraIntrinsicsInvert(
-    const libmv_CameraIntrinsicsOptions* libmv_camera_intrinsics_options,
-    double x,
-    double y,
+    const struct libmv_CameraIntrinsics* /*libmv_intrinsics*/,
+    double /*x*/,
+    double /*y*/,
     double* x1,
     double* y1) {
-  double focal_length = libmv_camera_intrinsics_options->focal_length;
-  double principal_x = libmv_camera_intrinsics_options->principal_point_x;
-  double principal_y = libmv_camera_intrinsics_options->principal_point_y;
-  *x1 = (x - principal_x) / focal_length;
-  *y1 = (y - principal_y) / focal_length;
+  *x1 = 0.0;
+  *y1 = 0.0;
 }
 
-void libmv_homography2DFromCorrespondencesEuc(/* const */ double (*x1)[2],
-                                              /* const */ double (*x2)[2],
-                                              int num_points,
+void libmv_homography2DFromCorrespondencesEuc(/* const */ double (* /*x1*/)[2],
+                                              /* const */ double (* /*x2*/)[2],
+                                              int /*num_points*/,
                                               double H[3][3]) {
   memset(H, 0, sizeof(double[3][3]));
   H[0][0] = 1.0f;
