@@ -3127,9 +3127,10 @@ class VIEW3D_PT_view3d_display(Panel):
         col.prop(view, "show_only_render")
         col.prop(view, "show_world")
 
-        col = layout.column()
-        col.active = view.show_world
-        col.prop(view, "show_world_sh")
+        if scene.render.use_shading_nodes:
+            col = layout.column()
+            col.active = view.show_world
+            col.prop(view, "show_world_sh")
 
         col = layout.column()
         display_all = not view.show_only_render

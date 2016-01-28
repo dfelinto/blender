@@ -2064,7 +2064,7 @@ static GPUNodeLink *GPU_brdf_sample_world(GPUBrdfInput *brdf)
 
 	/* First run the normal into the World node tree 
 	 * The environment texture nodes will save the nodelink of it. */
-	GPU_link(mat, "mat_vec_mul", brdf->normal, GPU_builtin(GPU_INVERSE_VIEW_MATRIX), &normalLink); /* Send world normal for sampling */
+	GPU_link(mat, "direction_transform_m4v3", brdf->normal, GPU_builtin(GPU_INVERSE_VIEW_MATRIX), &normalLink); /* Send world normal for sampling */
 	GPU_material_set_normal_link(mat, normalLink);
 	GPU_material_set_type(mat, GPU_MATERIAL_TYPE_ENV_NORMAL);
 	ntreeGPUMaterialNodes(wo->nodetree, mat, NODE_NEW_SHADING);
@@ -2073,7 +2073,7 @@ static GPUNodeLink *GPU_brdf_sample_world(GPUBrdfInput *brdf)
 	if (brdf->type == GPU_BRDF_ANISO_GGX) {
 		/* First run the tangent into the World node tree
 		 * The environment texture nodes will save the nodelink of it. */
-		GPU_link(mat, "mat_vec_mul", brdf->aniso_tangent, GPU_builtin(GPU_INVERSE_VIEW_MATRIX), &tangentLink); /* Send world tangent for sampling */
+		GPU_link(mat, "direction_transform_m4v3", brdf->aniso_tangent, GPU_builtin(GPU_INVERSE_VIEW_MATRIX), &tangentLink); /* Send world tangent for sampling */
 		GPU_material_set_tangent_link(mat, tangentLink);
 		GPU_material_set_type(mat, GPU_MATERIAL_TYPE_ENV_TANGENT);
 		ntreeGPUMaterialNodes(wo->nodetree, mat, NODE_NEW_SHADING);

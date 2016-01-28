@@ -2347,11 +2347,6 @@ vec3 from_world_to_tangent( vec3 vector, vec3 N, vec3 T, vec3 B)
 	return vec3( dot(T, vector), dot(B, vector), dot(N, vector));
 }
 
-void mat_vec_mul(vec3 Vector, mat4 mat, out vec3 result)
-{
-	result = ( mat * vec4(Vector, 0.0) ).xyz;
-}
-
 vec3 linePlaneIntersect(vec3 LineOrigin, vec3 LineVec, vec3 PlaneOrigin, vec3 PlaneNormal)
 {
 	return LineOrigin + LineVec * ( dot(PlaneNormal, PlaneOrigin - LineOrigin) / dot(PlaneNormal, LineVec) );
@@ -4181,11 +4176,6 @@ void node_object_info(mat4 objmat, out vec3 location, out float object_index, ou
 	object_index = 0.0;
 	material_index = 0.0;
 	random = 0.0;
-}
-
-void node_vector_transform(vec3 Vector, mat4 mat, float useTranslation, out vec3 result)
-{
-	result = ( mat * vec4(Vector, useTranslation) ).xyz;
 }
 
 void node_normal_map_tangent(float strength, vec4 color, vec3 N, vec4 T, mat4 viewmat, mat4 obmat, mat4 viewinvmat, mat4 obinvmat, out vec3 result)

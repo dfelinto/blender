@@ -71,7 +71,7 @@ static int node_shader_gpu_bsdf_glossy(GPUMaterial *mat, bNode *node, bNodeExecD
 		in[IN_NORMAL].link = GPU_builtin(GPU_VIEW_NORMAL);
 	else {
 		/* Convert to view space normal in case a Normal is plugged. This is because cycles uses world normals */
-		GPU_link(mat, "mat_vec_mul", in[IN_NORMAL].link, GPU_builtin(GPU_VIEW_MATRIX), &in[IN_NORMAL].link);
+		GPU_link(mat, "direction_transform_m4v3", in[IN_NORMAL].link, GPU_builtin(GPU_VIEW_MATRIX), &in[IN_NORMAL].link);
 	}
 
 	if (GPU_material_get_type(mat) == GPU_MATERIAL_TYPE_MESH_REAL_SH) {
