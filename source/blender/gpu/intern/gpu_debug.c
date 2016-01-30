@@ -276,7 +276,9 @@ void GPU_string_marker(size_t length, const char *buf)
 #ifndef WITH_GLEW_ES
 #ifndef GLEW_ES_ONLY
 	if (GLEW_VERSION_4_3) {
-		glDebugMessageInsert(GL_DEBUG_SOURCE_APPLICATION, GL_DEBUG_TYPE_MARKER, 0, GL_DEBUG_SEVERITY_NOTIFICATION, length, buf);
+		glDebugMessageInsert(
+		        GL_DEBUG_SOURCE_APPLICATION, GL_DEBUG_TYPE_MARKER, 0,
+		        GL_DEBUG_SEVERITY_NOTIFICATION, length, buf);
 
 		return;
 	}
@@ -285,20 +287,26 @@ void GPU_string_marker(size_t length, const char *buf)
 
 	if (GLEW_KHR_debug) {
 #ifndef GLEW_ES_ONLY
-		glDebugMessageInsert(GL_DEBUG_SOURCE_APPLICATION, GL_DEBUG_TYPE_MARKER, 0, GL_DEBUG_SEVERITY_NOTIFICATION, length, buf);
+		glDebugMessageInsert(
+		        GL_DEBUG_SOURCE_APPLICATION, GL_DEBUG_TYPE_MARKER, 0,
+		        GL_DEBUG_SEVERITY_NOTIFICATION, length, buf);
 #endif
 		return;
 	}
 
 #ifndef GLEW_ES_ONLY
 	if (GLEW_ARB_debug_output) {
-		glDebugMessageInsertARB(GL_DEBUG_SOURCE_APPLICATION_ARB, GL_DEBUG_TYPE_OTHER_ARB, 0, GL_DEBUG_SEVERITY_LOW_ARB, length, buf);
+		glDebugMessageInsertARB(
+		        GL_DEBUG_SOURCE_APPLICATION_ARB, GL_DEBUG_TYPE_OTHER_ARB, 0,
+		        GL_DEBUG_SEVERITY_LOW_ARB, length, buf);
 
 		return;
 	}
 
 	if (GLEW_AMD_debug_output) {
-		glDebugMessageInsertAMD(GL_DEBUG_CATEGORY_APPLICATION_AMD, GL_DEBUG_SEVERITY_LOW_AMD, 0, length, buf);
+		glDebugMessageInsertAMD(
+		        GL_DEBUG_CATEGORY_APPLICATION_AMD, GL_DEBUG_SEVERITY_LOW_AMD, 0,
+		        length, buf);
 
 		return;
 	}
@@ -457,7 +465,7 @@ void GPU_state_print(void)
 	gpu_state_print_fl(GL_FOG_INDEX);
 	gpu_state_print_fl(GL_FOG_MODE);
 	gpu_state_print_fl(GL_FOG_START);
-	gpu_state_print_fl(GL_FRAGMENT_PROGRAM_ARB);
+	gpu_state_print_fl(GL_FRAGMENT_PROGRAM_ARB); /* TODO: remove ARB program support */
 	gpu_state_print_fl(GL_FRAGMENT_SHADER_DERIVATIVE_HINT);
 	gpu_state_print_fl(GL_FRONT_FACE);
 	gpu_state_print_fl(GL_GENERATE_MIPMAP_HINT);
@@ -560,7 +568,6 @@ void GPU_state_print(void)
 	gpu_state_print_fl(GL_MODELVIEW_MATRIX);
 	gpu_state_print_fl(GL_MODELVIEW_STACK_DEPTH);
 	gpu_state_print_fl(GL_MULTISAMPLE);
-	gpu_state_print_fl(GL_MULTISAMPLE_ARB);
 	gpu_state_print_fl(GL_NAME_STACK_DEPTH);
 	gpu_state_print_fl(GL_NORMALIZE);
 	gpu_state_print_fl(GL_NORMAL_ARRAY);
@@ -686,7 +693,6 @@ void GPU_state_print(void)
 	gpu_state_print_fl(GL_TEXTURE_COORD_ARRAY_STRIDE);
 	gpu_state_print_fl(GL_TEXTURE_COORD_ARRAY_TYPE);
 	gpu_state_print_fl(GL_TEXTURE_CUBE_MAP);
-	gpu_state_print_fl(GL_TEXTURE_CUBE_MAP_ARB);
 	gpu_state_print_fl(GL_TEXTURE_GEN_Q);
 	gpu_state_print_fl(GL_TEXTURE_GEN_R);
 	gpu_state_print_fl(GL_TEXTURE_GEN_S);

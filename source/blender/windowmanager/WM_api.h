@@ -194,9 +194,9 @@ void		WM_main_remove_notifier_reference(const void *reference);
 void		WM_main_remove_editor_id_reference(const struct ID *id);
 
 			/* reports */
-void        WM_report_banner_show(const struct bContext *C);
-void        WM_report(const struct bContext *C, ReportType type, const char *message);
-void        WM_reportf(const struct bContext *C, ReportType type, const char *format, ...) ATTR_PRINTF_FORMAT(3, 4);
+void        WM_report_banner_show(void);
+void        WM_report(ReportType type, const char *message);
+void        WM_reportf(ReportType type, const char *format, ...) ATTR_PRINTF_FORMAT(2, 3);
 
 void wm_event_add_ex(
         struct wmWindow *win, const struct wmEvent *event_to_add,
@@ -281,17 +281,6 @@ void		WM_operator_properties_create(struct PointerRNA *ptr, const char *opstring
 void		WM_operator_properties_create_ptr(struct PointerRNA *ptr, struct wmOperatorType *ot);
 void        WM_operator_properties_clear(struct PointerRNA *ptr);
 void		WM_operator_properties_free(struct PointerRNA *ptr);
-void		WM_operator_properties_filesel(struct wmOperatorType *ot, int filter, short type, short action, short flag, short display, short sort);
-void        WM_operator_properties_border(struct wmOperatorType *ot);
-void        WM_operator_properties_border_to_rcti(struct wmOperator *op, struct rcti *rect);
-void        WM_operator_properties_border_to_rctf(struct wmOperator *op, rctf *rect);
-void		WM_operator_properties_gesture_border(struct wmOperatorType *ot, bool extend);
-void        WM_operator_properties_mouse_select(struct wmOperatorType *ot);
-void		WM_operator_properties_gesture_straightline(struct wmOperatorType *ot, int cursor);
-void		WM_operator_properties_select_all(struct wmOperatorType *ot);
-void		WM_operator_properties_select_action(struct wmOperatorType *ot, int default_action);
-void		WM_operator_properties_select_action_simple(struct wmOperatorType *ot, int default_action);
-void        WM_operator_properties_select_random(struct wmOperatorType *ot);
 
 bool        WM_operator_check_ui_enabled(const struct bContext *C, const char *idname);
 wmOperator *WM_operator_last_redo(const struct bContext *C);
@@ -299,6 +288,31 @@ ID         *WM_operator_drop_load_path(struct bContext *C, struct wmOperator *op
 
 bool        WM_operator_last_properties_init(struct wmOperator *op);
 bool        WM_operator_last_properties_store(struct wmOperator *op);
+
+
+/* wm_operator_props.c */
+void        WM_operator_properties_filesel(struct wmOperatorType *ot, int filter, short type, short action, short flag, short display, short sort);
+void        WM_operator_properties_border(struct wmOperatorType *ot);
+void        WM_operator_properties_border_to_rcti(struct wmOperator *op, struct rcti *rect);
+void        WM_operator_properties_border_to_rctf(struct wmOperator *op, rctf *rect);
+void        WM_operator_properties_gesture_border(struct wmOperatorType *ot, bool extend);
+void        WM_operator_properties_mouse_select(struct wmOperatorType *ot);
+void        WM_operator_properties_gesture_straightline(struct wmOperatorType *ot, int cursor);
+void        WM_operator_properties_select_all(struct wmOperatorType *ot);
+void        WM_operator_properties_select_action(struct wmOperatorType *ot, int default_action);
+void        WM_operator_properties_select_action_simple(struct wmOperatorType *ot, int default_action);
+void        WM_operator_properties_select_random(struct wmOperatorType *ot);
+struct CheckerIntervalParams {
+	int nth;  /* bypass when set to zero */
+	int skip;
+	int offset;
+};
+void        WM_operator_properties_checker_interval(struct wmOperatorType *ot, bool nth_can_disable);
+void        WM_operator_properties_checker_interval_from_op(
+        struct wmOperator *op, struct CheckerIntervalParams *op_params);
+bool        WM_operator_properties_checker_interval_test(
+        const struct CheckerIntervalParams *op_params, int depth);
+
 
 /* MOVE THIS SOMEWHERE ELSE */
 #define	SEL_TOGGLE		0
@@ -428,6 +442,8 @@ enum {
 	WM_JOB_TYPE_CLIP_PREFETCH,
 	WM_JOB_TYPE_SEQ_BUILD_PROXY,
 	WM_JOB_TYPE_SEQ_BUILD_PREVIEW,
+	WM_JOB_TYPE_POINTCACHE,
+	WM_JOB_TYPE_DPAINT_BAKE,
 	/* add as needed, screencast, seq proxy build
 	 * if having hard coded values is a problem */
 };
@@ -437,10 +453,12 @@ struct wmJob *WM_jobs_get(struct wmWindowManager *wm, struct wmWindow *win, void
 bool        WM_jobs_test(struct wmWindowManager *wm, void *owner, int job_type);
 float		WM_jobs_progress(struct wmWindowManager *wm, void *owner);
 char       *WM_jobs_name(struct wmWindowManager *wm, void *owner);
+double      WM_jobs_starttime(struct wmWindowManager *wm, void *owner);
 void       *WM_jobs_customdata(struct wmWindowManager *wm, void *owner);
 void       *WM_jobs_customdata_from_type(struct wmWindowManager *wm, int job_type);
 
 bool        WM_jobs_is_running(struct wmJob *);
+bool		WM_jobs_is_stopped(wmWindowManager *wm, void *owner);
 void       *WM_jobs_customdata_get(struct wmJob *);
 void        WM_jobs_customdata_set(struct wmJob *, void *customdata, void (*free)(void *));
 void        WM_jobs_timer(struct wmJob *, double timestep, unsigned int note, unsigned int endnote);

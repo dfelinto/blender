@@ -475,7 +475,7 @@ static void bmw_LoopShellWireWalker_begin(BMWalker *walker, void *data)
 				bmw_LoopShellWireWalker_visitVert(walker, e->v1, NULL);
 				bmw_LoopShellWireWalker_visitVert(walker, e->v2, NULL);
 			}
-			else {
+			else if (e->l) {
 				BMLoop *l_iter, *l_first;
 
 				l_iter = l_first = e->l;
@@ -928,7 +928,6 @@ static void *bmw_EdgeLoopWalker_step(BMWalker *walker)
 	BMEdge *e, *nexte = NULL;
 	BMLoop *l;
 	BMVert *v;
-	int i = 0;
 
 	BMW_state_remove_r(walker, &owalk);
 	lwalk = &owalk;
@@ -968,7 +967,7 @@ static void *bmw_EdgeLoopWalker_step(BMWalker *walker)
 		BMIter eiter;
 
 		/* match trunk: mark all connected wire edges */
-		for (i = 0; i < 2; i++) {
+		for (int i = 0; i < 2; i++) {
 			v = i ? e->v2 : e->v1;
 
 			BM_ITER_ELEM (nexte, &eiter, v, BM_EDGES_OF_VERT) {

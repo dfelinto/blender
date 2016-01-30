@@ -198,7 +198,7 @@ Object *bc_get_assigned_armature(Object *ob)
 // returns NULL if no ancestor is selected
 // IMPORTANT: This function expects that
 // all exported objects have set:
-// ob->id.flag & LIB_DOIT
+// ob->id.tag & LIB_TAG_DOIT
 Object *bc_get_highest_selected_ancestor_or_self(LinkNode *export_set, Object *ob) 
 {
 	Object *ancestor = ob;
@@ -237,17 +237,17 @@ bool bc_has_object_type(LinkNode *export_set, short obtype)
 
 int bc_is_marked(Object *ob)
 {
-	return ob && (ob->id.flag & LIB_DOIT);
+	return ob && (ob->id.tag & LIB_TAG_DOIT);
 }
 
 void bc_remove_mark(Object *ob)
 {
-	ob->id.flag &= ~LIB_DOIT;
+	ob->id.tag &= ~LIB_TAG_DOIT;
 }
 
 void bc_set_mark(Object *ob)
 {
-	ob->id.flag |= LIB_DOIT;
+	ob->id.tag |= LIB_TAG_DOIT;
 }
 
 // Use bubble sort algorithm for sorting the export set
@@ -358,7 +358,7 @@ void bc_triangulate_mesh(Mesh *me)
 	 
 	BMesh *bm = BM_mesh_create(&bm_mesh_allocsize_default);
 	BM_mesh_bm_from_me(bm, me, true, false, 0);
-	BM_mesh_triangulate(bm, quad_method, use_beauty, tag_only, NULL, NULL);
+	BM_mesh_triangulate(bm, quad_method, use_beauty, tag_only, NULL, NULL, NULL);
 
 	BM_mesh_bm_to_me(bm, me, false);
 	BM_mesh_free(bm);

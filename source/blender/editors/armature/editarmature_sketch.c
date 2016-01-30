@@ -982,7 +982,7 @@ static int sk_getStrokeSnapPoint(bContext *C, SK_Point *pt, SK_Sketch *sketch, S
 
 		mvalf[0] = dd->mval[0];
 		mvalf[1] = dd->mval[1];
-		peelObjectsContext(C, &sketch->depth_peels, mvalf, SNAP_ALL);
+		peelObjectsContext(C, mvalf, SNAP_ALL, &sketch->depth_peels);
 
 		if (stk->nb_points > 0 && stk->points[stk->nb_points - 1].type == PT_CONTINUOUS) {
 			last_p = stk->points[stk->nb_points - 1].p;
@@ -1086,7 +1086,9 @@ static int sk_getStrokeSnapPoint(bContext *C, SK_Point *pt, SK_Sketch *sketch, S
 		mval[1] = dd->mval[1];
 
 		/* try to snap to closer object */
-		found = snapObjectsContext(C, mval, &dist_px, vec, no, SNAP_NOT_SELECTED);
+		found = snapObjectsContext(
+		        C, mval, SNAP_NOT_SELECTED,
+		        vec, no, &dist_px);
 		if (found == 1) {
 			pt->type = dd->type;
 			pt->mode = PT_SNAP;
@@ -1779,14 +1781,13 @@ int sk_detectMergeGesture(bContext *C, SK_Gesture *gest, SK_Sketch *UNUSED(sketc
 {
 	ARegion *ar = CTX_wm_region(C);
 	if (gest->nb_segments > 2 && gest->nb_intersections == 2) {
-		short start_val[2], end_val[2];
-		short dist;
+		int start_val[2], end_val[2];
+		int dist;
 
-		if ((ED_view3d_project_short_global(ar, gest->stk->points[0].p,           start_val, V3D_PROJ_TEST_NOP) == V3D_PROJ_RET_OK) &&
-		    (ED_view3d_project_short_global(ar, sk_lastStrokePoint(gest->stk)->p, end_val,   V3D_PROJ_TEST_NOP) == V3D_PROJ_RET_OK))
+		if ((ED_view3d_project_int_global(ar, gest->stk->points[0].p,           start_val, V3D_PROJ_TEST_NOP) == V3D_PROJ_RET_OK) &&
+		    (ED_view3d_project_int_global(ar, sk_lastStrokePoint(gest->stk)->p, end_val,   V3D_PROJ_TEST_NOP) == V3D_PROJ_RET_OK))
 		{
-
-			dist = MAX2(ABS(start_val[0] - end_val[0]), ABS(start_val[1] - end_val[1]));
+			dist = len_manhattan_v2v2_int(start_val, end_val);
 
 			/* if gesture is a circle */
 			if (dist <= 20) {

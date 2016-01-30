@@ -21,6 +21,7 @@
 #include "util_string.h"
 #include "util_thread.h"
 
+#include "graph.h"
 #include "shader.h"
 
 #ifdef WITH_OSL
@@ -113,7 +114,7 @@ protected:
 class OSLCompiler {
 public:
 	OSLCompiler(void *manager, void *shadingsys, ImageManager *image_manager);
-	void compile(OSLGlobals *og, Shader *shader);
+	void compile(Scene *scene, OSLGlobals *og, Shader *shader);
 
 	void add(ShaderNode *node, const char *name, bool isfilepath = false);
 
@@ -144,13 +145,13 @@ public:
 private:
 #ifdef WITH_OSL
 	string id(ShaderNode *node);
-	OSL::ShadingAttribStateRef compile_type(Shader *shader, ShaderGraph *graph, ShaderType type);
+	OSL::ShaderGroupRef compile_type(Shader *shader, ShaderGraph *graph, ShaderType type);
 	bool node_skip_input(ShaderNode *node, ShaderInput *input);
 	string compatible_name(ShaderNode *node, ShaderInput *input);
 	string compatible_name(ShaderNode *node, ShaderOutput *output);
 
-	void find_dependencies(set<ShaderNode*>& dependencies, ShaderInput *input);
-	void generate_nodes(const set<ShaderNode*>& nodes);
+	void find_dependencies(ShaderNodeSet& dependencies, ShaderInput *input);
+	void generate_nodes(const ShaderNodeSet& nodes);
 #endif
 
 	void *shadingsys;

@@ -76,6 +76,8 @@
 
 #include "object_intern.h"
 
+/* prototypes */
+static void bake_set_props(wmOperator *op, Scene *scene);
 
 typedef struct BakeAPIRender {
 	Object *ob;
@@ -85,6 +87,7 @@ typedef struct BakeAPIRender {
 	ListBase selected_objects;
 
 	ScenePassType pass_type;
+	int pass_filter;
 	int margin;
 
 	int save_mode;
@@ -421,9 +424,70 @@ static bool bake_object_check(Object *ob, ReportList *reports)
 			return false;
 		}
 
-		image->id.flag |= LIB_DOIT;
+		image->id.tag |= LIB_TAG_DOIT;
 	}
 	return true;
+}
+
+static bool bake_pass_filter_check(ScenePassType pass_type, const int pass_filter, ReportList *reports)
+{
+	switch (pass_type) {
+		case SCE_PASS_COMBINED:
+			if ((pass_filter & R_BAKE_PASS_FILTER_EMIT) != 0) {
+				return true;
+			}
+
+			if (((pass_filter & R_BAKE_PASS_FILTER_DIRECT) != 0) ||
+			    ((pass_filter & R_BAKE_PASS_FILTER_INDIRECT) != 0))
+			{
+				if (((pass_filter & R_BAKE_PASS_FILTER_DIFFUSE) != 0) ||
+				    ((pass_filter & R_BAKE_PASS_FILTER_GLOSSY) != 0) ||
+				    ((pass_filter & R_BAKE_PASS_FILTER_TRANSM) != 0) ||
+				    ((pass_filter & R_BAKE_PASS_FILTER_SUBSURFACE) != 0))
+				{
+					return true;
+				}
+
+				if ((pass_filter & R_BAKE_PASS_FILTER_AO) != 0) {
+					BKE_report(reports, RPT_ERROR,
+					           "Combined bake pass Ambient Occlusion contribution requires an enabled light pass "
+					           "(bake the Ambient Occlusion pass type instead)");
+				}
+				else {
+					BKE_report(reports, RPT_ERROR,
+					           "Combined bake pass requires Emit, or a light pass with "
+					           "Direct or Indirect contributions enabled");
+				}
+
+				return false;
+			}
+			else {
+				BKE_report(reports, RPT_ERROR,
+				           "Combined bake pass requires Emit, or a light pass with "
+				           "Direct or Indirect contributions enabled");
+				return false;
+			}
+			break;
+		case SCE_PASS_DIFFUSE_COLOR:
+		case SCE_PASS_GLOSSY_COLOR:
+		case SCE_PASS_TRANSM_COLOR:
+		case SCE_PASS_SUBSURFACE_COLOR:
+			if (((pass_filter & R_BAKE_PASS_FILTER_COLOR) != 0) ||
+			    ((pass_filter & R_BAKE_PASS_FILTER_DIRECT) != 0) ||
+			    ((pass_filter & R_BAKE_PASS_FILTER_INDIRECT) != 0))
+			{
+				return true;
+			}
+			else {
+				BKE_report(reports, RPT_ERROR,
+				           "Bake pass requires Direct, Indirect, or Color contributions to be enabled");
+				return false;
+			}
+			break;
+		default:
+			return true;
+			break;
+	}
 }
 
 /* before even getting in the bake function we check for some basic errors */
@@ -478,7 +542,7 @@ static void bake_images_clear(Main *bmain, const bool is_tangent)
 {
 	Image *image;
 	for (image = bmain->image.first; image; image = image->id.next) {
-		if ((image->id.flag & LIB_DOIT) != 0) {
+		if ((image->id.tag & LIB_TAG_DOIT) != 0) {
 			RE_bake_ibuf_clear(image, is_tangent);
 		}
 	}
@@ -497,7 +561,7 @@ static void build_image_lookup(Main *bmain, Object *ob, BakeImages *bake_images)
 		Image *image;
 		ED_object_get_active_image(ob, i + 1, &image, NULL, NULL, NULL);
 
-		if ((image->id.flag & LIB_DOIT)) {
+		if ((image->id.tag & LIB_TAG_DOIT)) {
 			for (j = 0; j < i; j++) {
 				if (bake_images->data[j].image == image) {
 					bake_images->lookup[i] = j;
@@ -508,7 +572,7 @@ static void build_image_lookup(Main *bmain, Object *ob, BakeImages *bake_images)
 		else {
 			bake_images->lookup[i] = tot_images;
 			bake_images->data[tot_images].image = image;
-			image->id.flag |= LIB_DOIT;
+			image->id.tag |= LIB_TAG_DOIT;
 			tot_images++;
 		}
 	}
@@ -550,7 +614,7 @@ static size_t initialize_internal_images(BakeImages *bake_images, ReportList *re
 
 static int bake(
         Render *re, Main *bmain, Scene *scene, Object *ob_low, ListBase *selected_objects, ReportList *reports,
-        const ScenePassType pass_type, const int margin,
+        const ScenePassType pass_type, const int pass_filter, const int margin,
         const BakeSaveMode save_mode, const bool is_clear, const bool is_split_materials,
         const bool is_automatic_name, const bool is_selected_to_active, const bool is_cage,
         const float cage_extrusion, const int normal_space, const BakeNormalSwizzle normal_swizzle[],
@@ -584,7 +648,6 @@ static int bake(
 
 	size_t num_pixels;
 	int tot_materials;
-	int i;
 
 	RE_bake_engine_set_engine_parameters(re, bmain, scene);
 
@@ -641,7 +704,7 @@ static int bake(
 
 		num_pixels = (size_t)width * (size_t)height * bake_images.size;
 
-		for (i = 0; i < bake_images.size; i++) {
+		for (int i = 0; i < bake_images.size; i++) {
 			bake_images.data[i].width = width;
 			bake_images.data[i].height = height;
 			bake_images.data[i].offset = (is_split_materials ? num_pixels : 0);
@@ -650,8 +713,9 @@ static int bake(
 
 		if (!is_split_materials) {
 			/* saving a single image */
-			for (i = 0; i < tot_materials; i++)
+			for (int i = 0; i < tot_materials; i++) {
 				bake_images.lookup[i] = 0;
+			}
 		}
 	}
 
@@ -792,7 +856,7 @@ static int bake(
 		/* the baking itself */
 		for (i = 0; i < tot_highpoly; i++) {
 			ok = RE_bake_engine(re, highpoly[i].ob, i, pixel_array_high,
-			                    num_pixels, depth, pass_type, result);
+			                    num_pixels, depth, pass_type, pass_filter, result);
 			if (!ok) {
 				BKE_reportf(reports, RPT_ERROR, "Error baking from object \"%s\"", highpoly[i].ob->id.name + 2);
 				goto cage_cleanup;
@@ -818,7 +882,7 @@ cage_cleanup:
 		ob_low->restrictflag &= ~OB_RESTRICT_RENDER;
 
 		if (RE_bake_has_engine(re)) {
-			ok = RE_bake_engine(re, ob_low, 0, pixel_array_low, num_pixels, depth, pass_type, result);
+			ok = RE_bake_engine(re, ob_low, 0, pixel_array_low, num_pixels, depth, pass_type, pass_filter, result);
 		}
 		else {
 			BKE_report(reports, RPT_ERROR, "Current render engine does not support baking");
@@ -890,7 +954,7 @@ cage_cleanup:
 	}
 	else {
 		/* save the results */
-		for (i = 0; i < bake_images.size; i++) {
+		for (int i = 0; i < bake_images.size; i++) {
 			BakeImage *bk_image = &bake_images.data[i];
 
 			if (is_save_internal) {
@@ -1030,6 +1094,7 @@ static void bake_init_api_data(wmOperator *op, bContext *C, BakeAPIRender *bkr)
 	bkr->sa = sc ? BKE_screen_find_big_area(sc, SPACE_IMAGE, 10) : NULL;
 
 	bkr->pass_type = RNA_enum_get(op->ptr, "type");
+	bkr->pass_filter = RNA_enum_get(op->ptr, "pass_filter");
 	bkr->margin = RNA_int_get(op->ptr, "margin");
 
 	bkr->save_mode = RNA_enum_get(op->ptr, "save_mode");
@@ -1078,12 +1143,19 @@ static int bake_exec(bContext *C, wmOperator *op)
 	Render *re;
 	int result = OPERATOR_CANCELLED;
 	BakeAPIRender bkr = {NULL};
+	Scene *scene = CTX_data_scene(C);
+
+	bake_set_props(op, scene);
 
 	bake_init_api_data(op, C, &bkr);
 	re = bkr.render;
 
 	/* setup new render */
 	RE_test_break_cb(re, NULL, bake_break);
+
+	if (!bake_pass_filter_check(bkr.pass_type, bkr.pass_filter, bkr.reports)) {
+		goto finally;
+	}
 
 	if (!bake_objects_check(bkr.main, bkr.ob, &bkr.selected_objects, bkr.reports, bkr.is_selected_to_active)) {
 		goto finally;
@@ -1099,7 +1171,7 @@ static int bake_exec(bContext *C, wmOperator *op)
 	if (bkr.is_selected_to_active) {
 		result = bake(
 		        bkr.render, bkr.main, bkr.scene, bkr.ob, &bkr.selected_objects, bkr.reports,
-		        bkr.pass_type, bkr.margin, bkr.save_mode,
+		        bkr.pass_type, bkr.pass_filter, bkr.margin, bkr.save_mode,
 		        bkr.is_clear, bkr.is_split_materials, bkr.is_automatic_name, true, bkr.is_cage,
 		        bkr.cage_extrusion, bkr.normal_space, bkr.normal_swizzle,
 		        bkr.custom_cage, bkr.filepath, bkr.width, bkr.height, bkr.identifier, bkr.sa,
@@ -1112,7 +1184,7 @@ static int bake_exec(bContext *C, wmOperator *op)
 			Object *ob_iter = link->ptr.data;
 			result = bake(
 			        bkr.render, bkr.main, bkr.scene, ob_iter, NULL, bkr.reports,
-			        bkr.pass_type, bkr.margin, bkr.save_mode,
+			        bkr.pass_type, bkr.pass_filter, bkr.margin, bkr.save_mode,
 			        is_clear, bkr.is_split_materials, bkr.is_automatic_name, false, bkr.is_cage,
 			        bkr.cage_extrusion, bkr.normal_space, bkr.normal_swizzle,
 			        bkr.custom_cage, bkr.filepath, bkr.width, bkr.height, bkr.identifier, bkr.sa,
@@ -1138,6 +1210,11 @@ static void bake_startjob(void *bkv, short *UNUSED(stop), short *do_update, floa
 
 	RE_SetReports(bkr->render, bkr->reports);
 
+	if (!bake_pass_filter_check(bkr->pass_type, bkr->pass_filter, bkr->reports)) {
+		bkr->result = OPERATOR_CANCELLED;
+		return;
+	}
+
 	if (!bake_objects_check(bkr->main, bkr->ob, &bkr->selected_objects, bkr->reports, bkr->is_selected_to_active)) {
 		bkr->result = OPERATOR_CANCELLED;
 		return;
@@ -1151,7 +1228,7 @@ static void bake_startjob(void *bkv, short *UNUSED(stop), short *do_update, floa
 	if (bkr->is_selected_to_active) {
 		bkr->result = bake(
 		        bkr->render, bkr->main, bkr->scene, bkr->ob, &bkr->selected_objects, bkr->reports,
-		        bkr->pass_type, bkr->margin, bkr->save_mode,
+		        bkr->pass_type, bkr->pass_filter, bkr->margin, bkr->save_mode,
 		        bkr->is_clear, bkr->is_split_materials, bkr->is_automatic_name, true, bkr->is_cage,
 		        bkr->cage_extrusion, bkr->normal_space, bkr->normal_swizzle,
 		        bkr->custom_cage, bkr->filepath, bkr->width, bkr->height, bkr->identifier, bkr->sa,
@@ -1164,7 +1241,7 @@ static void bake_startjob(void *bkv, short *UNUSED(stop), short *do_update, floa
 			Object *ob_iter = link->ptr.data;
 			bkr->result = bake(
 			        bkr->render, bkr->main, bkr->scene, ob_iter, NULL, bkr->reports,
-			        bkr->pass_type, bkr->margin, bkr->save_mode,
+			        bkr->pass_type, bkr->pass_filter, bkr->margin, bkr->save_mode,
 			        is_clear, bkr->is_split_materials, bkr->is_automatic_name, false, bkr->is_cage,
 			        bkr->cage_extrusion, bkr->normal_space, bkr->normal_swizzle,
 			        bkr->custom_cage, bkr->filepath, bkr->width, bkr->height, bkr->identifier, bkr->sa,
@@ -1272,6 +1349,11 @@ static void bake_set_props(wmOperator *op, Scene *scene)
 	if (!RNA_property_is_set(op->ptr, prop)) {
 		RNA_property_boolean_set(op->ptr, prop, (bake->flag & R_BAKE_AUTO_NAME) != 0);
 	}
+
+	prop = RNA_struct_find_property(op->ptr, "pass_filter");
+	if (!RNA_property_is_set(op->ptr, prop)) {
+		RNA_property_enum_set(op->ptr, prop, bake->pass_filter);
+	}
 }
 
 static int bake_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
@@ -1320,6 +1402,8 @@ static int bake_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event)
 
 void OBJECT_OT_bake(wmOperatorType *ot)
 {
+	PropertyRNA *prop;
+
 	/* identifiers */
 	ot->name = "Bake";
 	ot->description = "Bake image textures of selected objects";
@@ -1331,8 +1415,11 @@ void OBJECT_OT_bake(wmOperatorType *ot)
 	ot->invoke = bake_invoke;
 	ot->poll = ED_operator_object_active_editable_mesh;
 
-	RNA_def_enum(ot->srna, "type", render_pass_type_items, SCE_PASS_COMBINED, "Type",
+	RNA_def_enum(ot->srna, "type", rna_enum_bake_pass_type_items, SCE_PASS_COMBINED, "Type",
 	             "Type of pass to bake, some of them may not be supported by the current render engine");
+	prop = RNA_def_enum(ot->srna, "pass_filter", rna_enum_bake_pass_filter_type_items, R_BAKE_PASS_FILTER_NONE, "Pass Filter",
+	             "Filter to combined, diffuse, glossy, transmission and subsurface passes");
+	RNA_def_property_flag(prop, PROP_ENUM_FLAG);
 	RNA_def_string_file_path(ot->srna, "filepath", NULL, FILE_MAX, "File Path",
 	                         "Image filepath to use when saving externally");
 	RNA_def_int(ot->srna, "width", 512, 1, INT_MAX, "Width",
@@ -1347,12 +1434,12 @@ void OBJECT_OT_bake(wmOperatorType *ot)
 	              "Distance to use for the inward ray cast when using selected to active", 0.0f, 1.0f);
 	RNA_def_string(ot->srna, "cage_object", NULL, MAX_NAME, "Cage Object",
 	               "Object to use as cage, instead of calculating the cage from the active object with cage extrusion");
-	RNA_def_enum(ot->srna, "normal_space", normal_space_items, R_BAKE_SPACE_TANGENT, "Normal Space",
+	RNA_def_enum(ot->srna, "normal_space", rna_enum_normal_space_items, R_BAKE_SPACE_TANGENT, "Normal Space",
 	             "Choose normal space for baking");
-	RNA_def_enum(ot->srna, "normal_r", normal_swizzle_items, R_BAKE_POSX, "R", "Axis to bake in red channel");
-	RNA_def_enum(ot->srna, "normal_g", normal_swizzle_items, R_BAKE_POSY, "G", "Axis to bake in green channel");
-	RNA_def_enum(ot->srna, "normal_b", normal_swizzle_items, R_BAKE_POSZ, "B", "Axis to bake in blue channel");
-	RNA_def_enum(ot->srna, "save_mode", bake_save_mode_items, R_BAKE_SAVE_INTERNAL, "Save Mode",
+	RNA_def_enum(ot->srna, "normal_r", rna_enum_normal_swizzle_items, R_BAKE_POSX, "R", "Axis to bake in red channel");
+	RNA_def_enum(ot->srna, "normal_g", rna_enum_normal_swizzle_items, R_BAKE_POSY, "G", "Axis to bake in green channel");
+	RNA_def_enum(ot->srna, "normal_b", rna_enum_normal_swizzle_items, R_BAKE_POSZ, "B", "Axis to bake in blue channel");
+	RNA_def_enum(ot->srna, "save_mode", rna_enum_bake_save_mode_items, R_BAKE_SAVE_INTERNAL, "Save Mode",
 	             "Choose how to save the baking map");
 	RNA_def_boolean(ot->srna, "use_clear", false, "Clear",
 	                "Clear Images before baking (only for internal saving)");

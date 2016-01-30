@@ -46,12 +46,12 @@ set(SRC
 	intern/bmp.c
 	intern/cache.c
 	intern/colormanagement.c
+	intern/colormanagement_inline.c
 	intern/divers.c
 	intern/filetype.c
 	intern/filter.c
 	intern/imageprocess.c
 	intern/indexer.c
-	intern/indexer_dv.c
 	intern/iris.c
 	intern/jpeg.c
 	intern/metadata.c
@@ -187,5 +187,11 @@ if(WIN32)
 		../../../intern/utfconv
 	)
 endif()
+
+# no need to compile object files for inline headers.
+set_source_files_properties(
+	intern/colormanagement_inline.c
+	PROPERTIES HEADER_FILE_ONLY TRUE
+)
 
 blender_add_lib(bf_imbuf "${SRC}" "${INC}" "${INC_SYS}")

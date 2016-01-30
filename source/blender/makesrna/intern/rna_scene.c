@@ -76,7 +76,7 @@
 #include "BLI_threads.h"
 
 #ifdef WITH_OPENEXR
-EnumPropertyItem exr_codec_items[] = {
+EnumPropertyItem rna_enum_exr_codec_items[] = {
 	{R_IMF_EXR_CODEC_NONE, "NONE", 0, "None", ""},
 	{R_IMF_EXR_CODEC_PXR24, "PXR24", 0, "Pxr24 (lossy)", ""},
 	{R_IMF_EXR_CODEC_ZIP, "ZIP", 0, "ZIP (lossless)", ""},
@@ -105,7 +105,7 @@ EnumPropertyItem uv_sculpt_tool_items[] = {
 };
 
 
-EnumPropertyItem snap_target_items[] = {
+EnumPropertyItem rna_enum_snap_target_items[] = {
 	{SCE_SNAP_TARGET_CLOSEST, "CLOSEST", 0, "Closest", "Snap closest point onto target"},
 	{SCE_SNAP_TARGET_CENTER, "CENTER", 0, "Center", "Snap center onto target"},
 	{SCE_SNAP_TARGET_MEDIAN, "MEDIAN", 0, "Median", "Snap median onto target"},
@@ -113,7 +113,7 @@ EnumPropertyItem snap_target_items[] = {
 	{0, NULL, 0, NULL, NULL}
 };
 	
-EnumPropertyItem proportional_falloff_items[] = {
+EnumPropertyItem rna_enum_proportional_falloff_items[] = {
 	{PROP_SMOOTH, "SMOOTH", ICON_SMOOTHCURVE, "Smooth", "Smooth falloff"},
 	{PROP_SPHERE, "SPHERE", ICON_SPHERECURVE, "Sphere", "Spherical falloff"},
 	{PROP_ROOT, "ROOT", ICON_ROOTCURVE, "Root", "Root falloff"},
@@ -126,7 +126,7 @@ EnumPropertyItem proportional_falloff_items[] = {
 };
 
 /* subset of the enum - only curves, missing random and const */
-EnumPropertyItem proportional_falloff_curve_only_items[] = {
+EnumPropertyItem rna_enum_proportional_falloff_curve_only_items[] = {
 	{PROP_SMOOTH, "SMOOTH", ICON_SMOOTHCURVE, "Smooth", "Smooth falloff"},
 	{PROP_SPHERE, "SPHERE", ICON_SPHERECURVE, "Sphere", "Spherical falloff"},
 	{PROP_ROOT, "ROOT", ICON_ROOTCURVE, "Root", "Root falloff"},
@@ -137,7 +137,7 @@ EnumPropertyItem proportional_falloff_curve_only_items[] = {
 };
 
 
-EnumPropertyItem proportional_editing_items[] = {
+EnumPropertyItem rna_enum_proportional_editing_items[] = {
 	{PROP_EDIT_OFF, "DISABLED", ICON_PROP_OFF, "Disable", "Proportional Editing disabled"},
 	{PROP_EDIT_ON, "ENABLED", ICON_PROP_ON, "Enable", "Proportional Editing enabled"},
 	{PROP_EDIT_PROJECTED, "PROJECTED", ICON_PROP_ON, "Projected (2D)",
@@ -148,14 +148,14 @@ EnumPropertyItem proportional_editing_items[] = {
 };
 
 /* keep for operators, not used here */
-EnumPropertyItem mesh_select_mode_items[] = {
+EnumPropertyItem rna_enum_mesh_select_mode_items[] = {
 	{SCE_SELECT_VERTEX, "VERTEX", ICON_VERTEXSEL, "Vertex", "Vertex selection mode"},
 	{SCE_SELECT_EDGE, "EDGE", ICON_EDGESEL, "Edge", "Edge selection mode"},
 	{SCE_SELECT_FACE, "FACE", ICON_FACESEL, "Face", "Face selection mode"},
 	{0, NULL, 0, NULL, NULL}
 };
 
-EnumPropertyItem snap_element_items[] = {
+EnumPropertyItem rna_enum_snap_element_items[] = {
 	{SCE_SNAP_MODE_INCREMENT, "INCREMENT", ICON_SNAP_INCREMENT, "Increment", "Snap to increments of grid"},
 	{SCE_SNAP_MODE_VERTEX, "VERTEX", ICON_SNAP_VERTEX, "Vertex", "Snap to vertices"},
 	{SCE_SNAP_MODE_EDGE, "EDGE", ICON_SNAP_EDGE, "Edge", "Snap to edges"},
@@ -164,7 +164,7 @@ EnumPropertyItem snap_element_items[] = {
 	{0, NULL, 0, NULL, NULL}
 };
 
-EnumPropertyItem snap_node_element_items[] = {
+EnumPropertyItem rna_enum_snap_node_element_items[] = {
 	{SCE_SNAP_MODE_GRID, "GRID", ICON_SNAP_GRID, "Grid", "Snap to grid"},
 	{SCE_SNAP_MODE_NODE_X, "NODE_X", ICON_SNAP_EDGE, "Node X", "Snap to left/right node border"},
 	{SCE_SNAP_MODE_NODE_Y, "NODE_Y", ICON_SNAP_EDGE, "Node Y", "Snap to top/bottom node border"},
@@ -264,7 +264,7 @@ EnumPropertyItem image_only_type_items[] = {
 	{0, NULL, 0, NULL, NULL}
 };
 
-EnumPropertyItem image_type_items[] = {
+EnumPropertyItem rna_enum_image_type_items[] = {
 	{0, "", 0, N_("Image"), NULL},
 
 	IMAGE_TYPE_ITEMS_IMAGE_ONLY
@@ -289,7 +289,7 @@ EnumPropertyItem image_type_items[] = {
 	{0, NULL, 0, NULL, NULL}
 };
 
-EnumPropertyItem image_color_mode_items[] = {
+EnumPropertyItem rna_enum_image_color_mode_items[] = {
 	{R_IMF_PLANES_BW, "BW", 0, "BW", "Images get saved in 8 bits grayscale (only PNG, JPEG, TGA, TIF)"},
 	{R_IMF_PLANES_RGB, "RGB", 0, "RGB", "Images are saved with RGB (color) data"},
 	{R_IMF_PLANES_RGBA, "RGBA", 0, "RGBA", "Images are saved with RGB and Alpha data (if supported)"},
@@ -297,12 +297,12 @@ EnumPropertyItem image_color_mode_items[] = {
 };
 
 #ifdef RNA_RUNTIME
-#define IMAGE_COLOR_MODE_BW   image_color_mode_items[0]
-#define IMAGE_COLOR_MODE_RGB  image_color_mode_items[1]
-#define IMAGE_COLOR_MODE_RGBA image_color_mode_items[2]
+#define IMAGE_COLOR_MODE_BW   rna_enum_image_color_mode_items[0]
+#define IMAGE_COLOR_MODE_RGB  rna_enum_image_color_mode_items[1]
+#define IMAGE_COLOR_MODE_RGBA rna_enum_image_color_mode_items[2]
 #endif
 
-EnumPropertyItem image_color_depth_items[] = {
+EnumPropertyItem rna_enum_image_color_depth_items[] = {
 	/* 1 (monochrome) not used */
 	{R_IMF_CHAN_DEPTH_8,   "8", 0, "8",  "8 bit color channels"},
 	{R_IMF_CHAN_DEPTH_10, "10", 0, "10", "10 bit color channels"},
@@ -313,13 +313,13 @@ EnumPropertyItem image_color_depth_items[] = {
 	{0, NULL, 0, NULL, NULL}
 };
 
-EnumPropertyItem normal_space_items[] = {
+EnumPropertyItem rna_enum_normal_space_items[] = {
 	{R_BAKE_SPACE_OBJECT, "OBJECT", 0, "Object", "Bake the normals in object space"},
 	{R_BAKE_SPACE_TANGENT, "TANGENT", 0, "Tangent", "Bake the normals in tangent space"},
 	{0, NULL, 0, NULL, NULL}
 };
 
-EnumPropertyItem normal_swizzle_items[] = {
+EnumPropertyItem rna_enum_normal_swizzle_items[] = {
 	{R_BAKE_POSX, "POS_X", 0, "+X", ""},
 	{R_BAKE_POSY, "POS_Y", 0, "+Y", ""},
 	{R_BAKE_POSZ, "POS_Z", 0, "+Z", ""},
@@ -329,7 +329,7 @@ EnumPropertyItem normal_swizzle_items[] = {
 	{0, NULL, 0, NULL, NULL}
 };
 
-EnumPropertyItem bake_save_mode_items[] = {
+EnumPropertyItem rna_enum_bake_save_mode_items[] = {
 	{R_BAKE_SAVE_INTERNAL, "INTERNAL", 0, "Internal", "Save the baking map in an internal image data-block"},
 	{R_BAKE_SAVE_EXTERNAL, "EXTERNAL", 0, "External", "Save the baking map in an external file"},
 	{0, NULL, 0, NULL, NULL}
@@ -341,19 +341,19 @@ EnumPropertyItem bake_save_mode_items[] = {
                                    "Single file with an encoded stereo pair"},
 #define R_IMF_VIEWS_ENUM_MV       {R_IMF_VIEWS_MULTIVIEW, "MULTIVIEW", 0, "Multi-View", "Single file with all the views"},
 
-EnumPropertyItem views_format_items[] = {
+EnumPropertyItem rna_enum_views_format_items[] = {
 	R_IMF_VIEWS_ENUM_IND
 	R_IMF_VIEWS_ENUM_S3D
 	{0, NULL, 0, NULL, NULL}
 };
 
-EnumPropertyItem views_format_multilayer_items[] = {
+EnumPropertyItem rna_enum_views_format_multilayer_items[] = {
 	R_IMF_VIEWS_ENUM_IND
 	R_IMF_VIEWS_ENUM_MV
 	{0, NULL, 0, NULL, NULL}
 };
 
-EnumPropertyItem views_format_multiview_items[] = {
+EnumPropertyItem rna_enum_views_format_multiview_items[] = {
 	R_IMF_VIEWS_ENUM_IND
 	R_IMF_VIEWS_ENUM_S3D
 	R_IMF_VIEWS_ENUM_MV
@@ -364,7 +364,7 @@ EnumPropertyItem views_format_multiview_items[] = {
 #undef R_IMF_VIEWS_ENUM_S3D
 #undef R_IMF_VIEWS_ENUM_MV
 
-EnumPropertyItem stereo3d_display_items[] = {
+EnumPropertyItem rna_enum_stereo3d_display_items[] = {
 	{S3D_DISPLAY_ANAGLYPH, "ANAGLYPH", 0, "Anaglyph",
 	 "Render views for left and right eyes as two differently filtered colors in a single image "
 	 "(anaglyph glasses are required)"},
@@ -377,17 +377,31 @@ EnumPropertyItem stereo3d_display_items[] = {
 	{0, NULL, 0, NULL, NULL}
 };
 
-EnumPropertyItem stereo3d_anaglyph_type_items[] = {
+EnumPropertyItem rna_enum_stereo3d_anaglyph_type_items[] = {
 	{S3D_ANAGLYPH_REDCYAN, "RED_CYAN", 0, "Red-Cyan", ""},
 	{S3D_ANAGLYPH_GREENMAGENTA, "GREEN_MAGENTA", 0, "Green-Magenta", ""},
 	{S3D_ANAGLYPH_YELLOWBLUE, "YELLOW_BLUE", 0, "Yellow-Blue", ""},
 	{0, NULL, 0, NULL, NULL}
 };
 
-EnumPropertyItem stereo3d_interlace_type_items[] = {
+EnumPropertyItem rna_enum_stereo3d_interlace_type_items[] = {
 	{S3D_INTERLACE_ROW, "ROW_INTERLEAVED", 0, "Row Interleaved", ""},
 	{S3D_INTERLACE_COLUMN, "COLUMN_INTERLEAVED", 0, "Column Interleaved", ""},
 	{S3D_INTERLACE_CHECKERBOARD, "CHECKERBOARD_INTERLEAVED", 0, "Checkerboard Interleaved", ""},
+	{0, NULL, 0, NULL, NULL}
+};
+
+EnumPropertyItem rna_enum_bake_pass_filter_type_items[] = {
+	{R_BAKE_PASS_FILTER_NONE, "NONE", 0, "None", ""},
+	{R_BAKE_PASS_FILTER_AO, "AO", 0, "AO", ""},
+	{R_BAKE_PASS_FILTER_EMIT, "EMIT", 0, "Emit", ""},
+	{R_BAKE_PASS_FILTER_DIRECT, "DIRECT", 0, "Direct", ""},
+	{R_BAKE_PASS_FILTER_INDIRECT, "INDIRECT", 0, "Indirect", ""},
+	{R_BAKE_PASS_FILTER_COLOR, "COLOR", 0, "Color", ""},
+	{R_BAKE_PASS_FILTER_DIFFUSE, "DIFFUSE", 0, "Diffuse", ""},
+	{R_BAKE_PASS_FILTER_GLOSSY, "GLOSSY", 0, "Glossy", ""},
+	{R_BAKE_PASS_FILTER_TRANSM, "TRANSMISSION", 0, "Transmission", ""},
+	{R_BAKE_PASS_FILTER_SUBSURFACE, "SUBSURFACE", 0, "Subsurface", ""},
 	{0, NULL, 0, NULL, NULL}
 };
 
@@ -508,7 +522,7 @@ static void rna_Scene_object_unlink(Scene *scene, ReportList *reports, Object *o
 	BKE_scene_base_unlink(scene, base);
 	MEM_freeN(base);
 
-	ob->id.us--;
+	id_us_min(&ob->id);
 
 	/* needed otherwise the depgraph will contain freed objects which can crash, see [#20958] */
 	DAG_relations_tag_update(G.main);
@@ -901,7 +915,7 @@ static EnumPropertyItem *rna_ImageFormatSettings_file_format_itemf(
 {
 	ID *id = ptr->id.data;
 	if (id && GS(id->name) == ID_SCE) {
-		return image_type_items;
+		return rna_enum_image_type_items;
 	}
 	else {
 		return image_only_type_items;
@@ -936,7 +950,7 @@ static EnumPropertyItem *rna_ImageFormatSettings_color_mode_itemf(
 #endif
 
 	if (chan_flag == (IMA_CHAN_FLAG_BW | IMA_CHAN_FLAG_RGB | IMA_CHAN_FLAG_ALPHA)) {
-		return image_color_mode_items;
+		return rna_enum_image_color_mode_items;
 	}
 	else {
 		int totitem = 0;
@@ -959,17 +973,17 @@ static EnumPropertyItem *rna_ImageFormatSettings_color_depth_itemf(
 	ImageFormatData *imf = (ImageFormatData *)ptr->data;
 
 	if (imf == NULL) {
-		return image_color_depth_items;
+		return rna_enum_image_color_depth_items;
 	}
 	else {
 		const int depth_ok = BKE_imtype_valid_depths(imf->imtype);
 		const int is_float = ELEM(imf->imtype, R_IMF_IMTYPE_RADHDR, R_IMF_IMTYPE_OPENEXR, R_IMF_IMTYPE_MULTILAYER);
 
-		EnumPropertyItem *item_8bit =  &image_color_depth_items[0];
-		EnumPropertyItem *item_10bit = &image_color_depth_items[1];
-		EnumPropertyItem *item_12bit = &image_color_depth_items[2];
-		EnumPropertyItem *item_16bit = &image_color_depth_items[3];
-		EnumPropertyItem *item_32bit = &image_color_depth_items[4];
+		EnumPropertyItem *item_8bit =  &rna_enum_image_color_depth_items[0];
+		EnumPropertyItem *item_10bit = &rna_enum_image_color_depth_items[1];
+		EnumPropertyItem *item_12bit = &rna_enum_image_color_depth_items[2];
+		EnumPropertyItem *item_16bit = &rna_enum_image_color_depth_items[3];
+		EnumPropertyItem *item_32bit = &rna_enum_image_color_depth_items[4];
 
 		int totitem = 0;
 		EnumPropertyItem *item = NULL;
@@ -1022,16 +1036,16 @@ static EnumPropertyItem *rna_ImageFormatSettings_views_format_itemf(
 	ImageFormatData *imf = (ImageFormatData *)ptr->data;
 
 	if (imf == NULL) {
-		return views_format_items;
+		return rna_enum_views_format_items;
 	}
 	else if (imf->imtype == R_IMF_IMTYPE_OPENEXR) {
-		return views_format_multiview_items;
+		return rna_enum_views_format_multiview_items;
 	}
 	else if (imf->imtype == R_IMF_IMTYPE_MULTILAYER) {
-		return views_format_multilayer_items;
+		return rna_enum_views_format_multilayer_items;
 	}
 	else {
-		return views_format_items;
+		return rna_enum_views_format_items;
 	}
 }
 
@@ -1047,14 +1061,14 @@ static EnumPropertyItem *rna_ImageFormatSettings_exr_codec_itemf(
 	int i = 1, totitem = 0;
 
 	if (imf->depth == 16)
-		return exr_codec_items; /* All compression types are defined for halfs */
+		return rna_enum_exr_codec_items; /* All compression types are defined for halfs */
 
 	for (i = 0; i < R_IMF_EXR_CODEC_MAX; i++) {
 		if ((i == R_IMF_EXR_CODEC_B44 || i == R_IMF_EXR_CODEC_B44A)) {
 			continue; /* B44 and B44A are not defined for 32 bit floats */
 		}
 
-		RNA_enum_item_add(&item, &totitem, &exr_codec_items[i]);
+		RNA_enum_item_add(&item, &totitem, &rna_enum_exr_codec_items[i]);
 	}
 
 	RNA_enum_item_end(&item, &totitem);
@@ -1545,11 +1559,11 @@ static void object_simplify_update(Object *ob)
 	ModifierData *md;
 	ParticleSystem *psys;
 
-	if ((ob->id.flag & LIB_DOIT) == 0) {
+	if ((ob->id.tag & LIB_TAG_DOIT) == 0) {
 		return;
 	}
 
-	ob->id.flag &= ~LIB_DOIT;
+	ob->id.tag &= ~LIB_TAG_DOIT;
 
 	for (md = ob->modifiers.first; md; md = md->next) {
 		if (ELEM(md->type, eModifierType_Subsurf, eModifierType_Multires, eModifierType_ParticleSystem)) {
@@ -1821,9 +1835,9 @@ static void rna_FreestyleLineSet_linestyle_set(PointerRNA *ptr, PointerRNA value
 	FreestyleLineSet *lineset = (FreestyleLineSet *)ptr->data;
 
 	if (lineset->linestyle)
-		lineset->linestyle->id.us--;
+		id_us_min(&lineset->linestyle->id);
 	lineset->linestyle = (FreestyleLineStyle *)value.data;
-	lineset->linestyle->id.us++;
+	id_us_plus(&lineset->linestyle->id);
 }
 
 static FreestyleLineSet *rna_FreestyleSettings_lineset_add(
@@ -2063,11 +2077,19 @@ static void rna_def_tool_settings(BlenderRNA  *brna)
 		 "unless the active object already has Grease Pencil data (i.e. for old files)"},
 		{GP_TOOL_SOURCE_OBJECT, "OBJECT", 0, "Object",
 		 "Grease Pencil data-blocks attached to the active object are used "
-		 "(required using pre 2.73 add-ons, e.g. BSurfaces)"},
+		 "(required when using pre 2.73 add-ons, e.g. BSurfaces)"},
 		{0, NULL, 0, NULL, NULL}
 	};
-
-
+	
+	static EnumPropertyItem gpencil_stroke_placement_items[] = {
+		{GP_PROJECT_VIEWSPACE, "CURSOR", 0, "Cursor", "Draw stroke at the 3D cursor"},
+		{0, "VIEW", 0, "View", "Stick stroke to the view "}, /* weird, GP_PROJECT_VIEWALIGN is inverted */
+		{GP_PROJECT_VIEWSPACE | GP_PROJECT_DEPTH_VIEW, "SURFACE", 0, "Surface", "Stick stroke to surfaces"},
+		{GP_PROJECT_VIEWSPACE | GP_PROJECT_DEPTH_STROKE, "STROKE", 0, "Stroke", "Stick stroke to other strokes"},
+		{0, NULL, 0, NULL, NULL}
+	};
+	
+	
 	srna = RNA_def_struct(brna, "ToolSettings", NULL);
 	RNA_def_struct_path_func(srna, "rna_ToolSettings_path");
 	RNA_def_struct_ui_text(srna, "Tool Settings", "");
@@ -2086,14 +2108,14 @@ static void rna_def_tool_settings(BlenderRNA  *brna)
 	prop = RNA_def_property(srna, "use_multipaint", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "multipaint", 1);
 	RNA_def_property_ui_text(prop, "WPaint Multi-Paint",
-	                         "Paint across all selected bones while "
-	                         "weight painting");
+	                         "Paint across the weights of all selected bones, "
+	                         "maintaining their relative influence");
 	RNA_def_property_update(prop, 0, "rna_Scene_update_active_object_data");
 
 	prop = RNA_def_property(srna, "vertex_group_user", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "weightuser");
 	RNA_def_property_enum_items(prop, draw_groupuser_items);
-	RNA_def_property_ui_text(prop, "Mask Non-Group Vertices", "Display unweighted vertices (multi-paint overrides)");
+	RNA_def_property_ui_text(prop, "Mask Non-Group Vertices", "Display unweighted vertices");
 	RNA_def_property_update(prop, 0, "rna_Scene_update_active_object_data");
 
 	prop = RNA_def_property(srna, "vertex_group_subset", PROP_ENUM, PROP_NONE);
@@ -2148,7 +2170,7 @@ static void rna_def_tool_settings(BlenderRNA  *brna)
 	/* Transform */
 	prop = RNA_def_property(srna, "proportional_edit", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "proportional");
-	RNA_def_property_enum_items(prop, proportional_editing_items);
+	RNA_def_property_enum_items(prop, rna_enum_proportional_editing_items);
 	RNA_def_property_ui_text(prop, "Proportional Editing",
 	                         "Proportional Editing mode, allows transforms with distance fall-off");
 	RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL); /* header redraw */
@@ -2183,7 +2205,7 @@ static void rna_def_tool_settings(BlenderRNA  *brna)
 
 	prop = RNA_def_property(srna, "proportional_edit_falloff", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "prop_mode");
-	RNA_def_property_enum_items(prop, proportional_falloff_items);
+	RNA_def_property_enum_items(prop, rna_enum_proportional_falloff_items);
 	RNA_def_property_ui_text(prop, "Proportional Editing Falloff", "Falloff type for proportional editing mode");
 	RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL); /* header redraw */
 
@@ -2231,14 +2253,14 @@ static void rna_def_tool_settings(BlenderRNA  *brna)
 
 	prop = RNA_def_property(srna, "snap_element", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "snap_mode");
-	RNA_def_property_enum_items(prop, snap_element_items);
+	RNA_def_property_enum_items(prop, rna_enum_snap_element_items);
 	RNA_def_property_ui_text(prop, "Snap Element", "Type of element to snap to");
 	RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL); /* header redraw */
 	
 	/* node editor uses own set of snap modes */
 	prop = RNA_def_property(srna, "snap_node_element", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "snap_node_mode");
-	RNA_def_property_enum_items(prop, snap_node_element_items);
+	RNA_def_property_enum_items(prop, rna_enum_snap_node_element_items);
 	RNA_def_property_ui_text(prop, "Snap Node Element", "Type of element to snap to");
 	RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL); /* header redraw */
 	
@@ -2251,7 +2273,7 @@ static void rna_def_tool_settings(BlenderRNA  *brna)
 
 	prop = RNA_def_property(srna, "snap_target", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "snap_target");
-	RNA_def_property_enum_items(prop, snap_target_items);
+	RNA_def_property_enum_items(prop, rna_enum_snap_target_items);
 	RNA_def_property_ui_text(prop, "Snap Target", "Which part to snap onto the target");
 	RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL); /* header redraw */
 
@@ -2275,11 +2297,18 @@ static void rna_def_tool_settings(BlenderRNA  *brna)
 	RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL); /* header redraw */
 
 	/* Grease Pencil */
-	prop = RNA_def_property(srna, "use_grease_pencil_sessions", PROP_BOOLEAN, PROP_NONE);
+	prop = RNA_def_property(srna, "use_gpencil_continuous_drawing", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "gpencil_flags", GP_TOOL_FLAG_PAINTSESSIONS_ON);
-	RNA_def_property_ui_text(prop, "Use Sketching Sessions",
+	RNA_def_property_ui_text(prop, "Use Continuous Drawing",
 	                         "Allow drawing multiple strokes at a time with Grease Pencil");
 	RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL); /* xxx: need toolbar to be redrawn... */
+	
+	prop = RNA_def_property(srna, "use_gpencil_additive_drawing", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "gpencil_flags", GP_TOOL_FLAG_RETAIN_LAST);
+	RNA_def_property_ui_text(prop, "Use Additive Drawing",
+	                         "When creating new frames, the strokes from the previous/active frame "
+	                         "are included as the basis for the new one");
+	RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
 	
 	prop = RNA_def_property(srna, "grease_pencil_source", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_bitflag_sdna(prop, NULL, "gpencil_src");
@@ -2287,6 +2316,45 @@ static void rna_def_tool_settings(BlenderRNA  *brna)
 	RNA_def_property_ui_text(prop, "Grease Pencil Source",
 	                         "Datablock where active Grease Pencil data is found from");
 	RNA_def_property_update(prop, NC_GPENCIL | ND_DATA, NULL);
+	
+	prop = RNA_def_property(srna, "gpencil_sculpt", PROP_POINTER, PROP_NONE);
+	RNA_def_property_pointer_sdna(prop, NULL, "gp_sculpt");
+	RNA_def_property_struct_type(prop, "GPencilSculptSettings");
+	RNA_def_property_ui_text(prop, "Grease Pencil Sculpt", "");
+	
+	/* Grease Pencil - 3D View Stroke Placement */
+	prop = RNA_def_property(srna, "gpencil_stroke_placement_view3d", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_bitflag_sdna(prop, NULL, "gpencil_v3d_align");
+	RNA_def_property_enum_items(prop, gpencil_stroke_placement_items);
+	RNA_def_property_ui_text(prop, "Stroke Placement (3D View)", "");
+	RNA_def_property_update(prop, NC_GPENCIL | ND_DATA, NULL);
+	
+	prop = RNA_def_property(srna, "use_gpencil_stroke_endpoints", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "gpencil_v3d_align", GP_PROJECT_DEPTH_STROKE_ENDPOINTS);
+	RNA_def_property_ui_text(prop, "Only Endpoints", "Only use the first and last parts of the stroke for snapping");
+	RNA_def_property_update(prop, NC_GPENCIL | ND_DATA, NULL);
+	
+	/* Grease Pencil - 2D Views Stroke Placement */
+	prop = RNA_def_property(srna, "gpencil_stroke_placement_view2d", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_bitflag_sdna(prop, NULL, "gpencil_v2d_align");
+	RNA_def_property_enum_items(prop, gpencil_stroke_placement_items);
+	RNA_def_property_ui_text(prop, "Stroke Placement (2D View)", "");
+	RNA_def_property_update(prop, NC_GPENCIL | ND_DATA, NULL);
+
+	/* Grease Pencil - Sequencer Preview Stroke Placement */
+	prop = RNA_def_property(srna, "gpencil_stroke_placement_sequencer_preview", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_bitflag_sdna(prop, NULL, "gpencil_seq_align");
+	RNA_def_property_enum_items(prop, gpencil_stroke_placement_items);
+	RNA_def_property_ui_text(prop, "Stroke Placement (Sequencer Preview)", "");
+	RNA_def_property_update(prop, NC_GPENCIL | ND_DATA, NULL);
+	
+	/* Grease Pencil - Image Editor Stroke Placement */
+	prop = RNA_def_property(srna, "gpencil_stroke_placement_image_editor", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_bitflag_sdna(prop, NULL, "gpencil_ima_align");
+	RNA_def_property_enum_items(prop, gpencil_stroke_placement_items);
+	RNA_def_property_ui_text(prop, "Stroke Placement (Image Editor)", "");
+	RNA_def_property_update(prop, NC_GPENCIL | ND_DATA, NULL);
+
 	
 	/* Auto Keying */
 	prop = RNA_def_property(srna, "use_keyframe_insert_auto", PROP_BOOLEAN, PROP_NONE);
@@ -2563,7 +2631,7 @@ static void rna_def_statvis(BlenderRNA  *brna)
 
 	prop = RNA_def_property(srna, "overhang_axis", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "overhang_axis");
-	RNA_def_property_enum_items(prop, object_axis_items);
+	RNA_def_property_enum_items(prop, rna_enum_object_axis_items);
 	RNA_def_property_ui_text(prop, "Axis", "");
 	RNA_def_property_update(prop, 0, "rna_EditMesh_update");
 
@@ -2785,6 +2853,12 @@ void rna_def_render_layer_common(StructRNA *srna, int scene)
 	prop = RNA_def_property(srna, "use_sky", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "layflag", SCE_LAY_SKY);
 	RNA_def_property_ui_text(prop, "Sky", "Render Sky in this Layer");
+	if (scene) RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, "rna_Scene_glsl_update");
+	else RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+
+	prop = RNA_def_property(srna, "use_ao", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "layflag", SCE_LAY_AO);
+	RNA_def_property_ui_text(prop, "AO", "Render AO in this Layer");
 	if (scene) RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, "rna_Scene_glsl_update");
 	else RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 
@@ -3629,25 +3703,25 @@ static void rna_def_bake_data(BlenderRNA *brna)
 
 	prop = RNA_def_property(srna, "normal_space", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_bitflag_sdna(prop, NULL, "normal_space");
-	RNA_def_property_enum_items(prop, normal_space_items);
+	RNA_def_property_enum_items(prop, rna_enum_normal_space_items);
 	RNA_def_property_ui_text(prop, "Normal Space", "Choose normal space for baking");
 	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
 
 	prop = RNA_def_property(srna, "normal_r", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_bitflag_sdna(prop, NULL, "normal_swizzle[0]");
-	RNA_def_property_enum_items(prop, normal_swizzle_items);
+	RNA_def_property_enum_items(prop, rna_enum_normal_swizzle_items);
 	RNA_def_property_ui_text(prop, "Normal Space", "Axis to bake in red channel");
 	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
 
 	prop = RNA_def_property(srna, "normal_g", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_bitflag_sdna(prop, NULL, "normal_swizzle[1]");
-	RNA_def_property_enum_items(prop, normal_swizzle_items);
+	RNA_def_property_enum_items(prop, rna_enum_normal_swizzle_items);
 	RNA_def_property_ui_text(prop, "Normal Space", "Axis to bake in green channel");
 	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
 
 	prop = RNA_def_property(srna, "normal_b", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_bitflag_sdna(prop, NULL, "normal_swizzle[2]");
-	RNA_def_property_enum_items(prop, normal_swizzle_items);
+	RNA_def_property_enum_items(prop, rna_enum_normal_swizzle_items);
 	RNA_def_property_ui_text(prop, "Normal Space", "Axis to bake in blue channel");
 	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
 
@@ -3659,7 +3733,7 @@ static void rna_def_bake_data(BlenderRNA *brna)
 
 	prop = RNA_def_property(srna, "save_mode", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_bitflag_sdna(prop, NULL, "save_mode");
-	RNA_def_property_enum_items(prop, bake_save_mode_items);
+	RNA_def_property_enum_items(prop, rna_enum_bake_save_mode_items);
 	RNA_def_property_ui_text(prop, "Save Mode", "Choose how to save the baking map");
 	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
 
@@ -3693,6 +3767,57 @@ static void rna_def_bake_data(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Cage",
 	                         "Cast rays to active object from a cage");
 	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+	/* custom passes flags */
+	prop = RNA_def_property(srna, "use_pass_ambient_occlusion", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "pass_filter", R_BAKE_PASS_FILTER_AO);
+	RNA_def_property_ui_text(prop, "AO", "Add ambient occlusion contribution");
+
+	prop = RNA_def_property(srna, "use_pass_emit", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "pass_filter", R_BAKE_PASS_FILTER_EMIT);
+	RNA_def_property_ui_text(prop, "Emit", "Add emission contribution");
+
+	prop = RNA_def_property(srna, "use_pass_direct", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "pass_filter", R_BAKE_PASS_FILTER_DIRECT);
+	RNA_def_property_ui_text(prop, "Direct", "Add direct lighting contribution");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+	prop = RNA_def_property(srna, "use_pass_indirect", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "pass_filter", R_BAKE_PASS_FILTER_INDIRECT);
+	RNA_def_property_ui_text(prop, "Indirect", "Add indirect lighting contribution");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+	prop = RNA_def_property(srna, "use_pass_color", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "pass_filter", R_BAKE_PASS_FILTER_COLOR);
+	RNA_def_property_ui_text(prop, "Color", "Color the pass");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+	prop = RNA_def_property(srna, "use_pass_diffuse", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "pass_filter", R_BAKE_PASS_FILTER_DIFFUSE);
+	RNA_def_property_ui_text(prop, "Diffuse", "Add diffuse contribution");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+	prop = RNA_def_property(srna, "use_pass_glossy", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "pass_filter", R_BAKE_PASS_FILTER_GLOSSY);
+	RNA_def_property_ui_text(prop, "Glossy", "Add glossy contribution");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+	prop = RNA_def_property(srna, "use_pass_transmission", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "pass_filter", R_BAKE_PASS_FILTER_TRANSM);
+	RNA_def_property_ui_text(prop, "Transmission", "Add transmission contribution");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+	prop = RNA_def_property(srna, "use_pass_subsurface", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "pass_filter", R_BAKE_PASS_FILTER_SUBSURFACE);
+	RNA_def_property_ui_text(prop, "Subsurface", "Add subsurface contribution");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+	prop = RNA_def_property(srna, "pass_filter", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_sdna(prop, NULL, "pass_filter");
+	RNA_def_property_enum_items(prop, rna_enum_bake_pass_filter_type_items);
+	RNA_def_property_flag(prop, PROP_ENUM_FLAG);
+	RNA_def_property_ui_text(prop, "Pass Filter",  "Passes to include in the active baking pass");
+	RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 }
 
 static void rna_def_scene_game_data(BlenderRNA *brna)
@@ -3774,12 +3899,9 @@ static void rna_def_scene_game_data(BlenderRNA *brna)
 
 	static EnumPropertyItem storage_items[] = {
 		{RAS_STORE_AUTO, "AUTO", 0, "Auto Select", "Choose the best supported mode"},
-		{RAS_STORE_IMMEDIATE, "IMMEDIATE", 0, "Immediate Mode", "Slowest performance, requires OpenGL (any version)"},
-		{RAS_STORE_VA, "VERTEX_ARRAY", 0, "Vertex Arrays", "Better performance, requires at least OpenGL 1.1"},
-#if 0  /* XXX VBOS are currently disabled since they cannot beat vertex array with display lists in performance. */
+		{RAS_STORE_VA, "VERTEX_ARRAY", 0, "Vertex Arrays", "Usually the best choice (good performance with display lists)"},
 		{RAS_STORE_VBO, "VERTEX_BUFFER_OBJECT", 0, "Vertex Buffer Objects",
-		                "Best performance, requires at least OpenGL 1.4"}, 
-#endif
+		                "Typically slower than vertex arrays with display lists, requires at least OpenGL 1.4"},
 		{0, NULL, 0, NULL, NULL}};
 
 	srna = RNA_def_struct(brna, "SceneGameData", NULL);
@@ -3820,7 +3942,7 @@ static void rna_def_scene_game_data(BlenderRNA *brna)
 
 	prop = RNA_def_property(srna, "exit_key", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "exitkey");
-	RNA_def_property_enum_items(prop, event_type_items);
+	RNA_def_property_enum_items(prop, rna_enum_event_type_items);
 	RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_UI_EVENTS);
 	RNA_def_property_enum_default(prop, ESCKEY);
 	RNA_def_property_enum_funcs(prop, NULL, "rna_GameSettings_exit_key_set", NULL);
@@ -4464,12 +4586,13 @@ static void rna_def_image_format_stereo3d_format(BlenderRNA *brna)
 	StructRNA *srna;
 	PropertyRNA *prop;
 
+	/* rna_enum_stereo3d_display_items, without (S3D_DISPLAY_PAGEFLIP) */
 	static EnumPropertyItem stereo3d_display_items[] = {
 		{S3D_DISPLAY_ANAGLYPH, "ANAGLYPH", 0, "Anaglyph",
-	     "Render views for left and right eyes as two differently filtered colors in a single image "
-	     "(anaglyph glasses are required)"},
+		 "Render views for left and right eyes as two differently filtered colors in a single image "
+		 "(anaglyph glasses are required)"},
 		{S3D_DISPLAY_INTERLACE, "INTERLACE", 0, "Interlace",
-	     "Render views for left and right eyes interlaced in a single image (3D-ready monitor is required)"},
+		 "Render views for left and right eyes interlaced in a single image (3D-ready monitor is required)"},
 		{S3D_DISPLAY_SIDEBYSIDE, "SIDEBYSIDE", 0, "Side-by-Side", "Render views for left and right eyes side-by-side"},
 		{S3D_DISPLAY_TOPBOTTOM, "TOPBOTTOM", 0, "Top-Bottom", "Render views for left and right eyes one above another"},
 		{0, NULL, 0, NULL, NULL}
@@ -4487,12 +4610,12 @@ static void rna_def_image_format_stereo3d_format(BlenderRNA *brna)
 	RNA_def_property_update(prop, NC_IMAGE | ND_DISPLAY, "rna_Stereo3dFormat_update");
 
 	prop = RNA_def_property(srna, "anaglyph_type", PROP_ENUM, PROP_NONE);
-	RNA_def_property_enum_items(prop, stereo3d_anaglyph_type_items);
+	RNA_def_property_enum_items(prop, rna_enum_stereo3d_anaglyph_type_items);
 	RNA_def_property_ui_text(prop, "Anaglyph Type", "");
 	RNA_def_property_update(prop, NC_IMAGE | ND_DISPLAY, "rna_Stereo3dFormat_update");
 
 	prop = RNA_def_property(srna, "interlace_type", PROP_ENUM, PROP_NONE);
-	RNA_def_property_enum_items(prop, stereo3d_interlace_type_items);
+	RNA_def_property_enum_items(prop, rna_enum_stereo3d_interlace_type_items);
 	RNA_def_property_ui_text(prop, "Interlace Type", "");
 	RNA_def_property_update(prop, NC_IMAGE | ND_DISPLAY, "rna_Stereo3dFormat_update");
 
@@ -4528,6 +4651,16 @@ static void rna_def_scene_image_format_data(BlenderRNA *brna)
 	};
 #endif
 
+#ifdef WITH_TIFF
+	static EnumPropertyItem tiff_codec_items[] = {
+		{R_IMF_TIFF_CODEC_NONE, "NONE", 0, "None", ""},
+		{R_IMF_TIFF_CODEC_DEFLATE, "DEFLATE", 0, "Deflate", ""},
+		{R_IMF_TIFF_CODEC_LZW, "LZW", 0, "LZW", ""},
+		{R_IMF_TIFF_CODEC_PACKBITS, "PACKBITS", 0, "Pack Bits", ""},
+		{0, NULL, 0, NULL, NULL}
+	};
+#endif
+
 	StructRNA *srna;
 	PropertyRNA *prop;
 
@@ -4541,7 +4674,7 @@ static void rna_def_scene_image_format_data(BlenderRNA *brna)
 
 	prop = RNA_def_property(srna, "file_format", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "imtype");
-	RNA_def_property_enum_items(prop, image_type_items);
+	RNA_def_property_enum_items(prop, rna_enum_image_type_items);
 	RNA_def_property_enum_funcs(prop, NULL, "rna_ImageFormatSettings_file_format_set",
 	                            "rna_ImageFormatSettings_file_format_itemf");
 	RNA_def_property_ui_text(prop, "File Format", "File format to save the rendered images as");
@@ -4549,7 +4682,7 @@ static void rna_def_scene_image_format_data(BlenderRNA *brna)
 
 	prop = RNA_def_property(srna, "color_mode", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_bitflag_sdna(prop, NULL, "planes");
-	RNA_def_property_enum_items(prop, image_color_mode_items);
+	RNA_def_property_enum_items(prop, rna_enum_image_color_mode_items);
 	RNA_def_property_enum_funcs(prop, NULL, NULL, "rna_ImageFormatSettings_color_mode_itemf");
 	RNA_def_property_ui_text(prop, "Color Mode",
 	                         "Choose BW for saving grayscale images, RGB for saving red, green and blue channels, "
@@ -4558,7 +4691,7 @@ static void rna_def_scene_image_format_data(BlenderRNA *brna)
 
 	prop = RNA_def_property(srna, "color_depth", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_bitflag_sdna(prop, NULL, "depth");
-	RNA_def_property_enum_items(prop, image_color_depth_items);
+	RNA_def_property_enum_items(prop, rna_enum_image_color_depth_items);
 	RNA_def_property_enum_funcs(prop, NULL, NULL, "rna_ImageFormatSettings_color_depth_itemf");
 	RNA_def_property_ui_text(prop, "Color Depth", "Bit depth per channel");
 	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
@@ -4597,7 +4730,7 @@ static void rna_def_scene_image_format_data(BlenderRNA *brna)
 
 	prop = RNA_def_property(srna, "exr_codec", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "exr_codec");
-	RNA_def_property_enum_items(prop, exr_codec_items);
+	RNA_def_property_enum_items(prop, rna_enum_exr_codec_items);
 	RNA_def_property_enum_funcs(prop, NULL, NULL, "rna_ImageFormatSettings_exr_codec_itemf");
 	RNA_def_property_ui_text(prop, "Codec", "Codec settings for OpenEXR");
 	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
@@ -4624,6 +4757,15 @@ static void rna_def_scene_image_format_data(BlenderRNA *brna)
 	RNA_def_property_enum_sdna(prop, NULL, "jp2_codec");
 	RNA_def_property_enum_items(prop, jp2_codec_items);
 	RNA_def_property_ui_text(prop, "Codec", "Codec settings for Jpek2000");
+	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+#endif
+
+#ifdef WITH_TIFF
+	/* TIFF */
+	prop = RNA_def_property(srna, "tiff_codec", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_sdna(prop, NULL, "tiff_codec");
+	RNA_def_property_enum_items(prop, tiff_codec_items);
+	RNA_def_property_ui_text(prop, "Compression", "Compression mode for TIFF");
 	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
 #endif
 
@@ -4655,7 +4797,7 @@ static void rna_def_scene_image_format_data(BlenderRNA *brna)
 	/* multiview */
 	prop = RNA_def_property(srna, "views_format", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "views_format");
-	RNA_def_property_enum_items(prop, views_format_items);
+	RNA_def_property_enum_items(prop, rna_enum_views_format_items);
 	RNA_def_property_enum_funcs(prop, NULL, NULL, "rna_ImageFormatSettings_views_format_itemf");
 	RNA_def_property_ui_text(prop, "Views Format", "Format of multiview media");
 	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
@@ -5459,7 +5601,7 @@ static void rna_def_scene_render_data(BlenderRNA *brna)
 #if 0 /* moved */
 	prop = RNA_def_property(srna, "file_format", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "imtype");
-	RNA_def_property_enum_items(prop, image_type_items);
+	RNA_def_property_enum_items(prop, rna_enum_image_type_items);
 	RNA_def_property_enum_funcs(prop, NULL, "rna_RenderSettings_file_format_set", NULL);
 	RNA_def_property_ui_text(prop, "File Format", "File format to save the rendered images as");
 	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
@@ -5742,13 +5884,13 @@ static void rna_def_scene_render_data(BlenderRNA *brna)
 
 	prop = RNA_def_property(srna, "sequencer_gl_preview", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "seq_prev_type");
-	RNA_def_property_enum_items(prop, viewport_shade_items);
+	RNA_def_property_enum_items(prop, rna_enum_viewport_shade_items);
 	RNA_def_property_ui_text(prop, "Sequencer Preview Shading", "Method to draw in the sequencer view");
 	RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_SceneSequencer_update");
 
 	prop = RNA_def_property(srna, "sequencer_gl_render", PROP_ENUM, PROP_NONE);
 	RNA_def_property_enum_sdna(prop, NULL, "seq_rend_type");
-	RNA_def_property_enum_items(prop, viewport_shade_items);
+	RNA_def_property_enum_items(prop, rna_enum_viewport_shade_items);
 	RNA_def_property_ui_text(prop, "Sequencer Preview Shading", "Method to draw in the sequencer view");
 
 	prop = RNA_def_property(srna, "use_sequencer_gl_textured_solid", PROP_BOOLEAN, PROP_NONE);
@@ -5897,7 +6039,7 @@ static void rna_def_scene_render_data(BlenderRNA *brna)
 	/* Debugging settings. */
 #ifdef WITH_CYCLES_DEBUG
 	prop = RNA_def_property(srna, "debug_pass_type", PROP_ENUM, PROP_NONE);
-	RNA_def_property_enum_items(prop, render_pass_debug_type_items);
+	RNA_def_property_enum_items(prop, rna_enum_render_pass_debug_type_items);
 	RNA_def_property_ui_text(prop, "Debug Pass Type", "Type of the debug pass to use");
 	RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
 #endif

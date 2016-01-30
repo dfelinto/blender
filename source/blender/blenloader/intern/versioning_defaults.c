@@ -60,6 +60,9 @@ void BLO_update_defaults_userpref_blend(void)
 
 	U.versions = 1;
 	U.savetime = 2;
+
+	/* default from T47064 */
+	U.audiorate = 48000;
 }
 
 /**
@@ -91,10 +94,57 @@ void BLO_update_defaults_startup_blend(Main *bmain)
 				sculpt->flags |= SCULPT_DYNTOPO_COLLAPSE;
 				sculpt->detail_size = 12;
 			}
+			
+			if (ts->gp_sculpt.brush[0].size == 0) {
+				GP_BrushEdit_Settings *gset = &ts->gp_sculpt;
+				GP_EditBrush_Data *brush;
+				
+				brush = &gset->brush[GP_EDITBRUSH_TYPE_SMOOTH];
+				brush->size = 25;
+				brush->strength = 0.3f;
+				brush->flag = GP_EDITBRUSH_FLAG_USE_FALLOFF | GP_EDITBRUSH_FLAG_SMOOTH_PRESSURE;
+				
+				brush = &gset->brush[GP_EDITBRUSH_TYPE_THICKNESS];
+				brush->size = 25;
+				brush->strength = 0.5f;
+				brush->flag = GP_EDITBRUSH_FLAG_USE_FALLOFF;
+				
+				brush = &gset->brush[GP_EDITBRUSH_TYPE_GRAB];
+				brush->size = 50;
+				brush->strength = 0.3f;
+				brush->flag = GP_EDITBRUSH_FLAG_USE_FALLOFF;
+				
+				brush = &gset->brush[GP_EDITBRUSH_TYPE_PUSH];
+				brush->size = 25;
+				brush->strength = 0.3f;
+				brush->flag = GP_EDITBRUSH_FLAG_USE_FALLOFF;
+				
+				brush = &gset->brush[GP_EDITBRUSH_TYPE_TWIST];
+				brush->size = 50;
+				brush->strength = 0.3f; // XXX?
+				brush->flag = GP_EDITBRUSH_FLAG_USE_FALLOFF;
+				
+				brush = &gset->brush[GP_EDITBRUSH_TYPE_PINCH];
+				brush->size = 50;
+				brush->strength = 0.5f; // XXX?
+				brush->flag = GP_EDITBRUSH_FLAG_USE_FALLOFF;
+				
+				brush = &gset->brush[GP_EDITBRUSH_TYPE_RANDOMIZE];
+				brush->size = 25;
+				brush->strength = 0.5f;
+				brush->flag = GP_EDITBRUSH_FLAG_USE_FALLOFF;
+			}
+			
+			ts->gpencil_v3d_align = GP_PROJECT_VIEWSPACE;
+			ts->gpencil_v2d_align = GP_PROJECT_VIEWSPACE;
+			ts->gpencil_seq_align = GP_PROJECT_VIEWSPACE;
+			ts->gpencil_ima_align = GP_PROJECT_VIEWSPACE;
 		}
 
 		scene->gm.lodflag |= SCE_LOD_USE_HYST;
 		scene->gm.scehysteresis = 10;
+
+		scene->r.ffcodecdata.audio_mixrate = 48000;
 	}
 
 	for (linestyle = bmain->linestyle.first; linestyle; linestyle = linestyle->id.next) {
@@ -125,11 +175,10 @@ void BLO_update_defaults_startup_blend(Main *bmain)
 					/* Remove all stored panels, we want to use defaults (order, open/closed) as defined by UI code here! */
 					BLI_freelistN(&ar->panels);
 
-					/* simple fix for 3d view properties scrollbar being not set to top */
-					if (ar->regiontype == RGN_TYPE_UI) {
-						float offset = ar->v2d.tot.ymax - ar->v2d.cur.ymax;
-						ar->v2d.cur.ymax += offset;
-						ar->v2d.cur.ymin += offset;
+					/* some toolbars have been saved as initialized,
+					 * we don't want them to have odd zoom-level or scrolling set, see: T47047 */
+					if (ELEM(ar->regiontype, RGN_TYPE_UI, RGN_TYPE_TOOLS, RGN_TYPE_TOOL_PROPS)) {
+						ar->v2d.flag &= ~V2D_IS_INITIALISED;
 					}
 				}
 			}
@@ -178,6 +227,12 @@ void BLO_update_defaults_startup_blend(Main *bmain)
 		br = (Brush *)BKE_libblock_find_name_ex(bmain, ID_BR, "Draw");
 		if (br) {
 			br->ob_mode &= ~OB_MODE_TEXTURE_PAINT;
+		}
+
+		/* rename twist brush to rotate brush to match rotate tool */
+		br = (Brush *)BKE_libblock_find_name_ex(bmain, ID_BR, "Twist");
+		if (br) {
+			BKE_libblock_rename(bmain, &br->id, "Rotate");
 		}
 	}
 }

@@ -247,7 +247,7 @@ static void node_browse_tex_cb(bContext *C, void *ntree_v, void *node_v)
 	if (node->menunr < 1) return;
 	
 	if (node->id) {
-		node->id->us--;
+		id_us_min(node->id);
 		node->id = NULL;
 	}
 	tex = BLI_findlink(&bmain->tex, node->menunr - 1);
@@ -939,6 +939,7 @@ static void node_shader_buts_tex_brick(uiLayout *layout, bContext *UNUSED(C), Po
 static void node_shader_buts_tex_wave(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
 {
 	uiItemR(layout, ptr, "wave_type", 0, "", ICON_NONE);
+	uiItemR(layout, ptr, "wave_profile", 0, "", ICON_NONE);
 }
 
 static void node_shader_buts_tex_musgrave(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
@@ -1054,21 +1055,8 @@ static void node_shader_buts_anisotropic(uiLayout *layout, bContext *UNUSED(C), 
 	uiItemR(layout, ptr, "distribution", 0, "", ICON_NONE);
 }
 
-static void node_shader_buts_subsurface(uiLayout *layout, bContext *C, PointerRNA *ptr)
+static void node_shader_buts_subsurface(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
 {
-	/* SSS only enabled in Experimental Kernel */
-	PointerRNA scene = CTX_data_pointer_get(C, "scene");
-	if (scene.data) {
-		PointerRNA cscene = RNA_pointer_get(&scene, "cycles");
-		if (cscene.data &&
-		    ((U.compute_device_type != USER_COMPUTE_DEVICE_NONE) &&
-		     (RNA_enum_get(&cscene, "device") == 1) &&
-		     (RNA_enum_get(&cscene, "feature_set") == 0)))
-		{
-			uiItemL(layout, IFACE_("Only enabled in experimental GPU kernel"), ICON_ERROR);
-		}
-	}
-
 	uiItemR(layout, ptr, "falloff", 0, "", ICON_NONE);
 }
 
@@ -1373,6 +1361,7 @@ static void node_composit_buts_blur(uiLayout *layout, bContext *UNUSED(C), Point
 		uiItemR(col, ptr, "size_x", 0, IFACE_("X"), ICON_NONE);
 		uiItemR(col, ptr, "size_y", 0, IFACE_("Y"), ICON_NONE);
 	}
+	uiItemR(col, ptr, "use_extended_bounds", 0, NULL, ICON_NONE);
 }
 
 static void node_composit_buts_dblur(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
@@ -2206,6 +2195,7 @@ static void node_composit_buts_bokehblur(uiLayout *layout, bContext *UNUSED(C), 
 	uiItemR(layout, ptr, "use_variable_size", 0, NULL, ICON_NONE);
 	// uiItemR(layout, ptr, "f_stop", 0, NULL, ICON_NONE);  // UNUSED
 	uiItemR(layout, ptr, "blur_max", 0, NULL, ICON_NONE);
+	uiItemR(layout, ptr, "use_extended_bounds", 0, NULL, ICON_NONE);
 }
 
 static void node_composit_backdrop_viewer(SpaceNode *snode, ImBuf *backdrop, bNode *node, int x, int y)
@@ -2452,7 +2442,6 @@ static void node_composit_buts_planetrackdeform(uiLayout *layout, bContext *C, P
 		MovieTrackingObject *object;
 		uiLayout *col;
 		PointerRNA tracking_ptr;
-		NodeTrackPosData *data = node->storage;
 
 		RNA_pointer_create(&clip->id, &RNA_MovieTracking, tracking, &tracking_ptr);
 
@@ -3335,7 +3324,7 @@ void draw_nodespace_back_pix(const bContext *C, ARegion *ar, SpaceNode *snode, b
 
 
 /* if v2d not NULL, it clips and returns 0 if not visible */
-int node_link_bezier_points(View2D *v2d, SpaceNode *snode, bNodeLink *link, float coord_array[][2], int resol)
+bool node_link_bezier_points(View2D *v2d, SpaceNode *snode, bNodeLink *link, float coord_array[][2], int resol)
 {
 	float dist, vec[4][2];
 	float deltax, deltay;
@@ -3371,7 +3360,8 @@ int node_link_bezier_points(View2D *v2d, SpaceNode *snode, bNodeLink *link, floa
 		toreroute = 0;
 	}
 
-	dist = UI_GetThemeValue(TH_NODE_CURVING) * 0.10f * fabsf(vec[0][0] - vec[3][0]);
+	/* may be called outside of drawing (so pass spacetype) */
+	dist = UI_GetThemeValueType(TH_NODE_CURVING, SPACE_NODE) * 0.10f * fabsf(vec[0][0] - vec[3][0]);
 	deltax = vec[3][0] - vec[0][0];
 	deltay = vec[3][1] - vec[0][1];
 	/* check direction later, for top sockets */
@@ -3475,7 +3465,6 @@ void node_draw_link_bezier(View2D *v2d, SpaceNode *snode, bNodeLink *link,
 				glBegin(GL_LINE_STRIP);
 				glVertex2fv(arrow1);
 				glVertex2fv(arrow);
-				glVertex2fv(arrow);
 				glVertex2fv(arrow2);
 				glEnd();
 			}
@@ -3512,15 +3501,11 @@ void node_draw_link_bezier(View2D *v2d, SpaceNode *snode, bNodeLink *link,
 			glBegin(GL_LINE_STRIP);
 			glVertex2fv(arrow1);
 			glVertex2fv(arrow);
-			glVertex2fv(arrow);
 			glVertex2fv(arrow2);
 			glEnd();
 		}
 		
 		glDisable(GL_LINE_SMOOTH);
-		
-		/* restore previuos linewidth */
-		glLineWidth(1.0f);
 	}
 }
 
@@ -3551,13 +3536,9 @@ void node_draw_link_straight(View2D *v2d, SpaceNode *snode, bNodeLink *link,
                              int th_col1, int do_shaded, int th_col2, int do_triple, int th_col3)
 {
 	float coord_array[2][2];
-	float linew;
 	int i;
 	
 	node_link_straight_points(v2d, snode, link, coord_array);
-	
-	/* store current linewidth */
-	glGetFloatv(GL_LINE_WIDTH, &linew);
 	
 	glEnable(GL_LINE_SMOOTH);
 	
@@ -3604,9 +3585,6 @@ void node_draw_link_straight(View2D *v2d, SpaceNode *snode, bNodeLink *link,
 	}
 	
 	glDisable(GL_LINE_SMOOTH);
-	
-	/* restore previuos linewidth */
-	glLineWidth(1.0f);
 }
 #endif
 

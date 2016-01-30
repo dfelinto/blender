@@ -106,6 +106,10 @@ void VIEW3D_OT_zoom_border(struct wmOperatorType *ot);
 
 void view3d_boxview_copy(ScrArea *sa, ARegion *ar);
 
+void view3d_orbit_apply_dyn_ofs(
+        float r_ofs[3], const float ofs_old[3], const float viewquat_old[4],
+        const float viewquat_new[4], const float dyn_ofs[3]);
+
 void view3d_ndof_fly(
         const struct wmNDOFMotionData *ndof,
         struct View3D *v3d, struct RegionView3D *rv3d,
@@ -180,7 +184,7 @@ void draw_mesh_paint(View3D *v3d, RegionView3D *rv3d,
 void draw_sim_debug_data(Scene *scene, View3D *v3d, ARegion *ar);
 
 /* view3d_draw.c */
-void view3d_main_area_draw(const struct bContext *C, struct ARegion *ar);
+void view3d_main_region_draw(const struct bContext *C, struct ARegion *ar);
 void ED_view3d_draw_depth(Scene *scene, struct ARegion *ar, View3D *v3d, bool alphaoverride);
 void ED_view3d_draw_depth_gpencil(Scene *scene, ARegion *ar, View3D *v3d);
 void ED_view3d_after_add(ListBase *lb, Base *base, const short dflag);
@@ -208,19 +212,22 @@ void VIEW3D_OT_game_start(struct wmOperatorType *ot);
 bool ED_view3d_boundbox_clip_ex(const RegionView3D *rv3d, const struct BoundBox *bb, float obmat[4][4]);
 bool ED_view3d_boundbox_clip(RegionView3D *rv3d, const struct BoundBox *bb);
 
+typedef struct V3D_SmoothParams {
+	struct Object *camera_old, *camera;
+	const float *ofs, *quat, *dist, *lens;
+	/* alternate rotation center (ofs = must be NULL) */
+	const float *dyn_ofs;
+} V3D_SmoothParams;
+
 void ED_view3d_smooth_view_ex(
         struct wmWindowManager *wm, struct wmWindow *win, struct ScrArea *sa,
-        struct View3D *v3d, struct ARegion *ar,
-        struct Object *camera_old, struct Object *camera,
-        const float *ofs, const float *quat, const float *dist, const float *lens,
-        const int smooth_viewtx);
+        struct View3D *v3d, struct ARegion *ar, const int smooth_viewtx,
+        const V3D_SmoothParams *sview);
 
 void ED_view3d_smooth_view(
         struct bContext *C,
-        struct View3D *v3d, struct ARegion *ar,
-        struct Object *camera_old, struct Object *camera,
-        const float *ofs, const float *quat, const float *dist, const float *lens,
-        const int smooth_viewtx);
+        struct View3D *v3d, struct ARegion *ar, const int smooth_viewtx,
+        const V3D_SmoothParams *sview);
 
 void view3d_winmatrix_set(ARegion *ar, const View3D *v3d, const rctf *rect);
 void view3d_viewmatrix_set(Scene *scene, const View3D *v3d, RegionView3D *rv3d);
@@ -273,9 +280,8 @@ extern const char *view3d_context_dir[]; /* doc access */
 
 /* draw_volume.c */
 void draw_smoke_volume(struct SmokeDomainSettings *sds, struct Object *ob,
-                       struct GPUTexture *tex, const float min[3], const float max[3],
-                       const int res[3], float dx, float base_scale, const float viewnormal[3],
-                       struct GPUTexture *tex_shadow, struct GPUTexture *tex_flame);
+                       const float min[3], const float max[3],
+                       const float viewnormal[3]);
 
 //#define SMOKE_DEBUG_VELOCITY
 //#define SMOKE_DEBUG_HEAT

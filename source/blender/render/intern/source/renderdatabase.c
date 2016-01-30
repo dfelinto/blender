@@ -1363,6 +1363,26 @@ void project_renderdata(Render *re,
 
 /* ------------------------------------------------------------------------- */
 
+void RE_updateRenderInstance(Render *re, ObjectInstanceRen *obi, int flag)
+{
+	/* flag specifies what things have changed. */
+	if (flag & RE_OBJECT_INSTANCES_UPDATE_OBMAT) {
+		copy_m4_m4(obi->obmat, obi->ob->obmat);
+		invert_m4_m4(obi->obinvmat, obi->obmat);
+	}
+	if (flag & RE_OBJECT_INSTANCES_UPDATE_VIEW) {
+		mul_m4_m4m4(obi->localtoviewmat, re->viewmat, obi->obmat);
+		mul_m4_m4m4(obi->localtoviewinvmat, obi->obinvmat, re->viewinv);
+	}
+}
+
+void RE_updateRenderInstances(Render *re, int flag)
+{
+	int i = 0;
+	for (i = 0; i < re->totinstance; i++)
+		RE_updateRenderInstance(re, &re->objectinstance[i], flag);
+}
+
 ObjectInstanceRen *RE_addRenderInstance(
         Render *re, ObjectRen *obr, Object *ob, Object *par,
         int index, int psysindex, float mat[4][4], int lay, const DupliObject *dob)
@@ -1382,20 +1402,20 @@ ObjectInstanceRen *RE_addRenderInstance(
 	if (par && dob) {
 		const ParticleSystem *psys = dob->particle_system;
 		if (psys) {
-			int index;
+			int part_index;
 			if (obi->index < psys->totpart) {
-				index = obi->index;
+				part_index = obi->index;
 			}
 			else if (psys->child) {
-				index = psys->child[obi->index - psys->totpart].parent;
+				part_index = psys->child[obi->index - psys->totpart].parent;
 			}
 			else {
-				index = -1;
+				part_index = -1;
 			}
 
-			if (index >= 0) {
-				const ParticleData *p = &psys->particles[index];
-				obi->part_index = index;
+			if (part_index >= 0) {
+				const ParticleData *p = &psys->particles[part_index];
+				obi->part_index = part_index;
 				obi->part_size = p->size;
 				obi->part_age = RE_GetStats(re)->cfra - p->time;
 				obi->part_lifetime = p->lifetime;
@@ -1406,6 +1426,8 @@ ObjectInstanceRen *RE_addRenderInstance(
 			}
 		}
 	}
+
+	RE_updateRenderInstance(re, obi, RE_OBJECT_INSTANCES_UPDATE_OBMAT | RE_OBJECT_INSTANCES_UPDATE_VIEW);
 
 	if (mat) {
 		copy_m4_m4(obi->mat, mat);

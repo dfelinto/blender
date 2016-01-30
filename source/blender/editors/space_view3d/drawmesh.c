@@ -60,9 +60,10 @@
 
 #include "UI_resources.h"
 
-#include "GPU_extensions.h"
 #include "GPU_draw.h"
 #include "GPU_material.h"
+#include "GPU_basic_shader.h"
+#include "GPU_shader.h"
 
 #include "RE_engine.h"
 
@@ -166,7 +167,7 @@ static DMDrawOption draw_mesh_face_select__drawFaceOptsInv(void *userData, int i
 
 	MPoly *mpoly = &me->mpoly[index];
 	if (!(mpoly->flag & ME_HIDE) && !(mpoly->flag & ME_FACE_SEL))
-		return DM_DRAW_OPTION_NO_MCOL;  /* Don't set color */
+		return DM_DRAW_OPTION_NORMAL;
 	else
 		return DM_DRAW_OPTION_SKIP;
 }
@@ -179,7 +180,6 @@ void draw_mesh_face_select(RegionView3D *rv3d, Mesh *me, DerivedMesh *dm, bool d
 	data.edge_flags = get_tface_mesh_marked_edge_info(me, draw_select_edges);
 
 	glEnable(GL_DEPTH_TEST);
-	glDisable(GL_LIGHTING);
 	ED_view3d_polygon_offset(rv3d, 1.0);
 
 	/* Draw (Hidden) Edges */
@@ -231,10 +231,11 @@ static struct TextureDrawState {
 	int is_lit, is_tex;
 	int color_profile;
 	bool use_backface_culling;
+	bool two_sided_lighting;
 	unsigned char obcol[4];
 	bool is_texpaint;
 	bool texpaint_material; /* use material slots for texture painting */
-} Gtexdraw = {NULL, NULL, NULL, false, 0, 0, 0, false, {0, 0, 0, 0}, false, false};
+} Gtexdraw = {NULL, NULL, NULL, false, 0, 0, 0, false, false, {0, 0, 0, 0}, false, false};
 
 static bool set_draw_settings_cached(int clearcache, MTexPoly *texface, Material *ma, struct TextureDrawState gtexdraw)
 {
@@ -317,7 +318,7 @@ static bool set_draw_settings_cached(int clearcache, MTexPoly *texface, Material
 		if (textured) {
 			if (texpaint) {
 				c_badtex = false;
-				if (GPU_verify_image(ima, NULL, 0, 1, 0, false)) {
+				if (GPU_verify_image(ima, NULL, GL_TEXTURE_2D, 0, 1, 0, false)) {
 					glEnable(GL_TEXTURE_2D);
 					glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE);
 					glTexEnvi(GL_TEXTURE_ENV, GL_COMBINE_RGB, GL_MODULATE);
@@ -336,7 +337,7 @@ static bool set_draw_settings_cached(int clearcache, MTexPoly *texface, Material
 					glTexEnvi(GL_TEXTURE_ENV, GL_OPERAND2_RGB, GL_SRC_ALPHA);
 					glTexEnvi(GL_TEXTURE_ENV, GL_COMBINE_ALPHA, GL_REPLACE);
 					glTexEnvi(GL_TEXTURE_ENV, GL_SRC0_ALPHA, GL_PREVIOUS);
-					glBindTexture(GL_TEXTURE_2D, ima->bindcode);
+					glBindTexture(GL_TEXTURE_2D, ima->bindcode[TEXTARGET_TEXTURE_2D]);
 					glActiveTexture(GL_TEXTURE0);					
 				}
 				else {
@@ -370,24 +371,26 @@ static bool set_draw_settings_cached(int clearcache, MTexPoly *texface, Material
 	if (c_badtex) lit = 0;
 	if (lit != c_lit || ma != c_ma) {
 		if (lit) {
-			float spec[4];
-			if (!ma) ma = give_current_material_or_def(NULL, 0);  /* default material */
+			int options = GPU_SHADER_LIGHTING | GPU_SHADER_USE_COLOR;
 
-			spec[0] = ma->spec * ma->specr;
-			spec[1] = ma->spec * ma->specg;
-			spec[2] = ma->spec * ma->specb;
-			spec[3] = 1.0;
+			if (gtexdraw.two_sided_lighting)
+				options |= GPU_SHADER_TWO_SIDED;
+			if (c_textured && !c_badtex)
+				options |= GPU_SHADER_TEXTURE_2D;
 
-			glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, spec);
-			glColorMaterial(GL_FRONT_AND_BACK, GL_DIFFUSE);
-			glMateriali(GL_FRONT_AND_BACK, GL_SHININESS, CLAMPIS(ma->har, 0, 128));
-			glEnable(GL_LIGHTING);
-			glEnable(GL_COLOR_MATERIAL);
+			if (!ma)
+				ma = give_current_material_or_def(NULL, 0);  /* default material */
+
+			float specular[3];
+			mul_v3_v3fl(specular, &ma->specr, ma->spec);
+
+			GPU_basic_shader_colors(NULL, specular, ma->har, 1.0f);
+			GPU_basic_shader_bind(options);
 		}
 		else {
-			glDisable(GL_LIGHTING); 
-			glDisable(GL_COLOR_MATERIAL);
+			GPU_basic_shader_bind(GPU_SHADER_USE_COLOR);
 		}
+
 		c_lit = lit;
 		c_ma = ma;
 	}
@@ -410,9 +413,15 @@ static void draw_textured_begin(Scene *scene, View3D *v3d, RegionView3D *rv3d, O
 		solidtex = false;
 		Gtexdraw.is_lit = 0;
 	}
+	else if ((ob->mode & OB_MODE_TEXTURE_PAINT) && BKE_scene_use_new_shading_nodes(scene)) {
+		solidtex = true;
+		if (v3d->flag2 & V3D_SHADELESS_TEX)
+			Gtexdraw.is_lit = 0;
+		else
+			Gtexdraw.is_lit = -1;
+	}
 	else if ((v3d->drawtype == OB_SOLID) ||
-	         ((ob->mode & OB_MODE_EDIT) && (v3d->drawtype != OB_TEXTURE)) ||
-	         ((ob->mode & OB_MODE_TEXTURE_PAINT) && BKE_scene_use_new_shading_nodes(scene)))
+	         ((ob->mode & OB_MODE_EDIT) && (v3d->drawtype != OB_TEXTURE)))
 	{
 		/* draw with default lights in solid draw mode and edit mode */
 		solidtex = true;
@@ -456,7 +465,7 @@ static void draw_textured_begin(Scene *scene, View3D *v3d, RegionView3D *rv3d, O
 		/* load the stencil texture here */
 		if (Gtexdraw.stencil != NULL) {
 			glActiveTexture(GL_TEXTURE2);
-			if (GPU_verify_image(Gtexdraw.stencil, NULL, false, false, false, false)) {
+			if (GPU_verify_image(Gtexdraw.stencil, NULL, GL_TEXTURE_2D, false, false, false, false)) {
 				float col[4] = {imapaint->stencil_col[0], imapaint->stencil_col[1], imapaint->stencil_col[2], 1.0f};
 				glEnable(GL_TEXTURE_2D);
 				glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE);
@@ -482,12 +491,12 @@ static void draw_textured_begin(Scene *scene, View3D *v3d, RegionView3D *rv3d, O
 	Gtexdraw.color_profile = BKE_scene_check_color_management_enabled(scene);
 	Gtexdraw.use_game_mat = (RE_engines_find(scene->r.engine)->flag & RE_GAME) != 0;
 	Gtexdraw.use_backface_culling = (v3d->flag2 & V3D_BACKFACE_CULLING) != 0;
+	Gtexdraw.two_sided_lighting = (me->flag & ME_TWOSIDED);
 
 	memcpy(Gtexdraw.obcol, obcol, sizeof(obcol));
 	set_draw_settings_cached(1, NULL, NULL, Gtexdraw);
 	glShadeModel(GL_SMOOTH);
 	glCullFace(GL_BACK);
-	glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, (me->flag & ME_TWOSIDED) ? GL_TRUE : GL_FALSE);
 }
 
 static void draw_textured_end(void)
@@ -520,7 +529,7 @@ static void draw_textured_end(void)
 
 	glShadeModel(GL_FLAT);
 	glDisable(GL_CULL_FACE);
-	glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_FALSE);
+	GPU_basic_shader_bind(GPU_SHADER_USE_COLOR);
 
 	/* XXX, bad patch - GPU_default_lights() calls
 	 * glLightfv(GL_POSITION, ...) which
@@ -551,27 +560,28 @@ static DMDrawOption draw_tface__set_draw_legacy(MTexPoly *mtexpoly, const bool h
 		glColor3ub(0xFF, 0x00, 0xFF);
 		return DM_DRAW_OPTION_NO_MCOL; /* Don't set color */
 	}
-	else if (ma && (ma->shade_flag & MA_OBCOLOR)) {
-		glColor3ubv(Gtexdraw.obcol);
-		return DM_DRAW_OPTION_NO_MCOL; /* Don't set color */
-	}
 	else if (!has_mcol) {
 		if (mtexpoly) {
 			glColor3f(1.0, 1.0, 1.0);
 		}
 		else {
 			if (ma) {
-				float col[3];
-				if (Gtexdraw.color_profile) linearrgb_to_srgb_v3_v3(col, &ma->r);
-				else copy_v3_v3(col, &ma->r);
-				
-				glColor3fv(col);
+				if (ma->shade_flag & MA_OBCOLOR) {
+					glColor3ubv(Gtexdraw.obcol);
+				}
+				else {
+					float col[3];
+					if (Gtexdraw.color_profile) linearrgb_to_srgb_v3_v3(col, &ma->r);
+					else copy_v3_v3(col, &ma->r);
+
+					glColor3fv(col);
+				}
 			}
 			else {
 				glColor3f(1.0, 1.0, 1.0);
 			}
 		}
-		return DM_DRAW_OPTION_NO_MCOL; /* Don't set color */
+		return DM_DRAW_OPTION_NORMAL; /* normal drawing (no mcols anyway, no need to turn off) */
 	}
 	else {
 		return DM_DRAW_OPTION_NORMAL; /* Set color from mcol */
@@ -809,7 +819,7 @@ static void draw_mesh_text(Scene *scene, Object *ob, int glsl)
 
 			/* TEXFACE */
 			if (glsl) {
-				GPU_enable_material(matnr + 1, &gattribs);
+				GPU_object_material_bind(matnr + 1, &gattribs);
 
 				for (i = 0; i < gattribs.totlayer; i++) {
 					if (gattribs.layer[i].type == CD_MTFACE) {
@@ -961,7 +971,7 @@ static void draw_mesh_textured_old(Scene *scene, View3D *v3d, RegionView3D *rv3d
 	}
 	else if (draw_flags & DRAW_FACE_SELECT) {
 		if (ob->mode & OB_MODE_WEIGHT_PAINT)
-			dm->drawMappedFaces(dm, wpaint__setSolidDrawOptions_facemask, GPU_enable_material, NULL, me,
+			dm->drawMappedFaces(dm, wpaint__setSolidDrawOptions_facemask, GPU_object_material_bind, NULL, me,
 			                    DM_DRAW_USE_COLORS | DM_DRAW_ALWAYS_SMOOTH | DM_DRAW_SKIP_HIDDEN);
 		else {
 			drawTFace_userData userData;
@@ -1010,6 +1020,8 @@ typedef struct TexMatCallback {
 	Object *ob;
 	Mesh *me;
 	DerivedMesh *dm;
+	bool shadeless;
+	bool two_sided_lighting;
 } TexMatCallback;
 
 static void tex_mat_set_material_cb(void *UNUSED(userData), int mat_nr, void *attribs)
@@ -1018,7 +1030,7 @@ static void tex_mat_set_material_cb(void *UNUSED(userData), int mat_nr, void *at
 	 * that the GLSL code will give different result depending on the drawtype,
 	 * in texture draw mode it will output the active texture node, in material
 	 * draw mode it will show the full material. */
-	GPU_enable_material(mat_nr, attribs);
+	GPU_object_material_bind(mat_nr, attribs);
 }
 
 static void tex_mat_set_texture_cb(void *userData, int mat_nr, void *attribs)
@@ -1029,31 +1041,21 @@ static void tex_mat_set_texture_cb(void *userData, int mat_nr, void *attribs)
 	Image *ima;
 	ImageUser *iuser;
 	bNode *node;
-	int texture_set = 0;
 
 	/* draw image texture if we find one */
 	if (ED_object_get_active_image(data->ob, mat_nr, &ima, &iuser, &node, NULL)) {
 		/* get openl texture */
 		int mipmap = 1;
-		int bindcode = (ima) ? GPU_verify_image(ima, iuser, 0, 0, mipmap, false) : 0;
-		float zero[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+		int bindcode = (ima) ? GPU_verify_image(ima, iuser, GL_TEXTURE_2D, 0, 0, mipmap, false) : 0;
 
 		if (bindcode) {
 			NodeTexBase *texbase = node->storage;
 
 			/* disable existing material */
-			GPU_disable_material();
-			glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, zero);
-			glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, zero);
-			glMateriali(GL_FRONT_AND_BACK, GL_SHININESS, 0);
+			GPU_object_material_unbind();
 
 			/* bind texture */
-			glColorMaterial(GL_FRONT_AND_BACK, GL_DIFFUSE);
-			glEnable(GL_COLOR_MATERIAL);
-			glEnable(GL_TEXTURE_2D);
-
-			glBindTexture(GL_TEXTURE_2D, ima->bindcode);
-			glColor3f(1.0f, 1.0f, 1.0f);
+			glBindTexture(GL_TEXTURE_2D, ima->bindcode[TEXTARGET_TEXTURE_2D]);
 
 			glMatrixMode(GL_TEXTURE);
 			glLoadMatrixf(texbase->tex_mapping.mat);
@@ -1067,21 +1069,36 @@ static void tex_mat_set_texture_cb(void *userData, int mat_nr, void *attribs)
 			gattribs->layer[0].gltexco = 1;
 			gattribs->totlayer = 1;
 
-			texture_set = 1;
+			/* bind material */
+			float diffuse[3] = {1.0f, 1.0f, 1.0f};
+
+			int options = GPU_SHADER_TEXTURE_2D;
+			if (!data->shadeless)
+				options |= GPU_SHADER_LIGHTING;
+			if (data->two_sided_lighting)
+				options |= GPU_SHADER_TWO_SIDED;
+
+			GPU_basic_shader_colors(diffuse, NULL, 0, 1.0f);
+			GPU_basic_shader_bind(options);
+
+			return;
 		}
 	}
 
-	if (!texture_set) {
+	/* disable texture material */
+	GPU_basic_shader_bind(GPU_SHADER_USE_COLOR);
+
+	if (data->shadeless) {
+		glColor3f(1.0f, 1.0f, 1.0f);
+		memset(gattribs, 0, sizeof(*gattribs));
+	}
+	else {
 		glMatrixMode(GL_TEXTURE);
 		glLoadIdentity();
 		glMatrixMode(GL_MODELVIEW);
 
-		/* disable texture */
-		glDisable(GL_TEXTURE_2D);
-		glDisable(GL_COLOR_MATERIAL);
-
-		/* draw single color */
-		GPU_enable_material(mat_nr, attribs);
+		/* enable solid material */
+		GPU_object_material_bind(mat_nr, attribs);
 	}
 }
 
@@ -1132,57 +1149,50 @@ void draw_mesh_textured(Scene *scene, View3D *v3d, RegionView3D *rv3d,
 	if (ob->transflag & OB_NEG_SCALE) glFrontFace(GL_CW);
 	else glFrontFace(GL_CCW);
 
-	if ((v3d->drawtype == OB_TEXTURE) && (v3d->flag2 & V3D_SHADELESS_TEX))
-		glColor3f(1.0f, 1.0f, 1.0f);
+	Mesh *me = ob->data;
+
+	bool shadeless = ((v3d->flag2 & V3D_SHADELESS_TEX) &&
+	    ((v3d->drawtype == OB_TEXTURE) || (ob->mode & OB_MODE_TEXTURE_PAINT)));
+	bool two_sided_lighting = (me->flag & ME_TWOSIDED) != 0;
+
+	TexMatCallback data = {scene, ob, me, dm, shadeless, two_sided_lighting};
+	bool (*set_face_cb)(void *, int);
+	bool picking = (G.f & G_PICKSEL) != 0;
+	
+	/* face hiding callback depending on mode */
+	if (ob == scene->obedit)
+		set_face_cb = tex_mat_set_face_editmesh_cb;
+	else if (draw_flags & DRAW_FACE_SELECT)
+		set_face_cb = tex_mat_set_face_mesh_cb;
 	else
-		glEnable(GL_LIGHTING);
+		set_face_cb = NULL;
 
-	{
-		Mesh *me = ob->data;
-		TexMatCallback data = {scene, ob, me, dm};
-		bool (*set_face_cb)(void *, int);
-		bool glsl, picking = (G.f & G_PICKSEL) != 0;
-		
-		/* face hiding callback depending on mode */
-		if (ob == scene->obedit)
-			set_face_cb = tex_mat_set_face_editmesh_cb;
-		else if (draw_flags & DRAW_FACE_SELECT)
-			set_face_cb = tex_mat_set_face_mesh_cb;
-		else
-			set_face_cb = NULL;
+	/* test if we can use glsl */
+	bool glsl = (v3d->drawtype == OB_MATERIAL) && !picking;
 
-		/* test if we can use glsl */
-		glsl = (v3d->drawtype == OB_MATERIAL) && GPU_glsl_support() && !picking;
+	GPU_begin_object_materials(v3d, rv3d, scene, ob, glsl, NULL);
 
-		GPU_begin_object_materials(v3d, rv3d, scene, ob, glsl, NULL);
-
-		if (glsl || picking) {
-			/* draw glsl or solid */
-			dm->drawMappedFacesMat(dm,
-			                       tex_mat_set_material_cb,
-			                       set_face_cb, &data);
-		}
-		else {
-			float zero[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-
-			/* draw textured */
-			glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, zero);
-			glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, zero);
-			glMateriali(GL_FRONT_AND_BACK, GL_SHININESS, 0);
-
-			dm->drawMappedFacesMat(dm,
-			                       tex_mat_set_texture_cb,
-			                       set_face_cb, &data);
-		}
-
-		GPU_end_object_materials();
+	if (glsl || picking) {
+		/* draw glsl or solid */
+		dm->drawMappedFacesMat(dm,
+		                       tex_mat_set_material_cb,
+		                       set_face_cb, &data);
+	}
+	else {
+		/* draw textured */
+		dm->drawMappedFacesMat(dm,
+		                       tex_mat_set_texture_cb,
+		                       set_face_cb, &data);
 	}
 
+	GPU_end_object_materials();
+
 	/* reset opengl state */
-	glDisable(GL_COLOR_MATERIAL);
-	glDisable(GL_TEXTURE_2D);
-	glDisable(GL_LIGHTING);
+	GPU_end_object_materials();
+	GPU_basic_shader_bind(GPU_SHADER_USE_COLOR);
+
 	glBindTexture(GL_TEXTURE_2D, 0);
+
 	glFrontFace(GL_CCW);
 
 	glMatrixMode(GL_TEXTURE);
@@ -1199,38 +1209,29 @@ void draw_mesh_textured(Scene *scene, View3D *v3d, RegionView3D *rv3d,
 /* Vertex Paint and Weight Paint */
 static void draw_mesh_paint_light_begin(void)
 {
-	const float spec[4] = {0.47f, 0.47f, 0.47f, 0.47f};
-
-	GPU_enable_material(0, NULL);
-
-	/* but set default spec */
-	glColorMaterial(GL_FRONT_AND_BACK, GL_SPECULAR);
-	glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, spec);
-
-	/* diffuse */
-	glColorMaterial(GL_FRONT_AND_BACK, GL_DIFFUSE);
-	glEnable(GL_LIGHTING);
-	glEnable(GL_COLOR_MATERIAL);
+	/* get material diffuse color from vertex colors but set default spec */
+	const float specular[3] = {0.47f, 0.47f, 0.47f};
+	GPU_basic_shader_colors(NULL, specular, 35, 1.0f);
+	GPU_basic_shader_bind(GPU_SHADER_LIGHTING | GPU_SHADER_USE_COLOR);
 }
+
 static void draw_mesh_paint_light_end(void)
 {
-	glDisable(GL_COLOR_MATERIAL);
-	glDisable(GL_LIGHTING);
-
-	GPU_disable_material();
+	GPU_basic_shader_bind(GPU_SHADER_USE_COLOR);
 }
 
 void draw_mesh_paint_weight_faces(DerivedMesh *dm, const bool use_light,
                                   void *facemask_cb, void *user_data)
 {
-	DMSetMaterial setMaterial = GPU_object_materials_check() ? GPU_enable_material : NULL;
+	DMSetMaterial setMaterial = GPU_object_materials_check() ? GPU_object_material_bind : NULL;
+	int flags = DM_DRAW_USE_COLORS;
 
 	if (use_light) {
 		draw_mesh_paint_light_begin();
+		flags |= DM_DRAW_NEED_NORMALS;
 	}
 
-	dm->drawMappedFaces(dm, (DMSetDrawOptions)facemask_cb, setMaterial, NULL, user_data,
-	                    DM_DRAW_USE_COLORS);
+	dm->drawMappedFaces(dm, (DMSetDrawOptions)facemask_cb, setMaterial, NULL, user_data, flags);
 
 	if (use_light) {
 		draw_mesh_paint_light_end();
@@ -1241,18 +1242,21 @@ void draw_mesh_paint_vcolor_faces(DerivedMesh *dm, const bool use_light,
                                   void *facemask_cb, void *user_data,
                                   const Mesh *me)
 {
-	DMSetMaterial setMaterial = GPU_object_materials_check() ? GPU_enable_material : NULL;
+	DMSetMaterial setMaterial = GPU_object_materials_check() ? GPU_object_material_bind : NULL;
+	int flags = 0;
 
 	if (use_light) {
 		draw_mesh_paint_light_begin();
+		flags |= DM_DRAW_NEED_NORMALS;
 	}
 
 	if (me->mloopcol) {
-		dm->drawMappedFaces(dm, facemask_cb, setMaterial, NULL, user_data, DM_DRAW_USE_COLORS);
+		dm->drawMappedFaces(dm, facemask_cb, setMaterial, NULL, user_data,
+		                    DM_DRAW_USE_COLORS | flags);
 	}
 	else {
 		glColor3f(1.0f, 1.0f, 1.0f);
-		dm->drawMappedFaces(dm, facemask_cb, setMaterial, NULL, user_data, 0);
+		dm->drawMappedFaces(dm, facemask_cb, setMaterial, NULL, user_data, flags);
 	}
 
 	if (use_light) {

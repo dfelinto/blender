@@ -42,22 +42,29 @@ CCL_NAMESPACE_BEGIN
 
 /* Constructor */
 
-BlenderSync::BlenderSync(BL::RenderEngine b_engine_, BL::BlendData b_data_, BL::Scene b_scene_, Scene *scene_, bool preview_, Progress &progress_, bool is_cpu_)
-: b_engine(b_engine_),
-  b_data(b_data_), b_scene(b_scene_),
-  shader_map(&scene_->shaders),
-  object_map(&scene_->objects),
-  mesh_map(&scene_->meshes),
-  light_map(&scene_->lights),
-  particle_system_map(&scene_->particle_systems),
+BlenderSync::BlenderSync(BL::RenderEngine& b_engine,
+                         BL::BlendData& b_data,
+                         BL::Scene& b_scene,
+                         Scene *scene,
+                         bool preview,
+                         Progress &progress,
+                         bool is_cpu)
+: b_engine(b_engine),
+  b_data(b_data),
+  b_scene(b_scene),
+  shader_map(&scene->shaders),
+  object_map(&scene->objects),
+  mesh_map(&scene->meshes),
+  light_map(&scene->lights),
+  particle_system_map(&scene->particle_systems),
   world_map(NULL),
   world_recalc(false),
+  scene(scene),
+  preview(preview),
   experimental(false),
-  progress(progress_)
+  is_cpu(is_cpu),
+  progress(progress)
 {
-	scene = scene_;
-	preview = preview_;
-	is_cpu = is_cpu_;
 }
 
 BlenderSync::~BlenderSync()
@@ -145,9 +152,9 @@ bool BlenderSync::sync_recalc()
 	return recalc;
 }
 
-void BlenderSync::sync_data(BL::RenderSettings b_render,
-                            BL::SpaceView3D b_v3d,
-                            BL::Object b_override,
+void BlenderSync::sync_data(BL::RenderSettings& b_render,
+                            BL::SpaceView3D& b_v3d,
+                            BL::Object& b_override,
                             int width, int height,
                             void **python_thread_state,
                             const char *layer)
@@ -308,7 +315,7 @@ void BlenderSync::sync_film()
 
 /* Render Layer */
 
-void BlenderSync::sync_render_layers(BL::SpaceView3D b_v3d, const char *layer)
+void BlenderSync::sync_render_layers(BL::SpaceView3D& b_v3d, const char *layer)
 {
 	PointerRNA cscene = RNA_pointer_get(&b_scene.ptr, "cycles");
 	string layername;
@@ -327,7 +334,8 @@ void BlenderSync::sync_render_layers(BL::SpaceView3D b_v3d, const char *layer)
 			render_layer.exclude_layer = 0;
 			render_layer.holdout_layer = 0;
 			render_layer.material_override = PointerRNA_NULL;
-			render_layer.use_background = true;
+			render_layer.use_background_shader = true;
+			render_layer.use_background_ao = true;
 			render_layer.use_hair = true;
 			render_layer.use_surfaces = true;
 			render_layer.use_viewport_visibility = true;
@@ -359,7 +367,8 @@ void BlenderSync::sync_render_layers(BL::SpaceView3D b_v3d, const char *layer)
 			render_layer.layer |= render_layer.holdout_layer;
 
 			render_layer.material_override = b_rlay->material_override();
-			render_layer.use_background = b_rlay->use_sky();
+			render_layer.use_background_shader = b_rlay->use_sky();
+			render_layer.use_background_ao = b_rlay->use_ao();
 			render_layer.use_surfaces = b_rlay->use_solid();
 			render_layer.use_hair = b_rlay->use_strand();
 			render_layer.use_viewport_visibility = false;
@@ -414,7 +423,9 @@ void BlenderSync::sync_images()
 
 /* Scene Parameters */
 
-SceneParams BlenderSync::get_scene_params(BL::Scene b_scene, bool background, bool is_cpu)
+SceneParams BlenderSync::get_scene_params(BL::Scene& b_scene,
+                                          bool background,
+                                          bool is_cpu)
 {
 	BL::RenderSettings r = b_scene.render();
 	SceneParams params;
@@ -440,7 +451,7 @@ SceneParams BlenderSync::get_scene_params(BL::Scene b_scene, bool background, bo
 
 #if !(defined(__GNUC__) && (defined(i386) || defined(_M_IX86)))
 	if(is_cpu) {
-		params.use_qbvh = system_cpu_support_sse2();
+		params.use_qbvh = DebugFlags().cpu.qbvh && system_cpu_support_sse2();
 	}
 	else
 #endif
@@ -453,15 +464,15 @@ SceneParams BlenderSync::get_scene_params(BL::Scene b_scene, bool background, bo
 
 /* Session Parameters */
 
-bool BlenderSync::get_session_pause(BL::Scene b_scene, bool background)
+bool BlenderSync::get_session_pause(BL::Scene& b_scene, bool background)
 {
 	PointerRNA cscene = RNA_pointer_get(&b_scene.ptr, "cycles");
 	return (background)? false: get_boolean(cscene, "preview_pause");
 }
 
-SessionParams BlenderSync::get_session_params(BL::RenderEngine b_engine,
-                                              BL::UserPreferences b_userpref,
-                                              BL::Scene b_scene,
+SessionParams BlenderSync::get_session_params(BL::RenderEngine& b_engine,
+                                              BL::UserPreferences& b_userpref,
+                                              BL::Scene& b_scene,
                                               bool background)
 {
 	SessionParams params;
@@ -552,7 +563,7 @@ SessionParams BlenderSync::get_session_params(BL::RenderEngine b_engine,
 		params.tile_size = make_int2(tile_x, tile_y);
 	}
 
-	if(BlenderSession::headless == false) {
+	if((BlenderSession::headless == false) && background) {
 		params.tile_order = (TileOrder)RNA_enum_get(&cscene, "tile_order");
 	}
 	else {

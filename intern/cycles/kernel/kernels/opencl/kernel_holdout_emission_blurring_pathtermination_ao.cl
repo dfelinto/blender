@@ -76,7 +76,6 @@ __kernel void kernel_ocl_path_trace_holdout_emission_blurring_pathtermination_ao
 #endif
 		kernel_holdout_emission_blurring_pathtermination_ao(
 		        (KernelGlobals *)kg,
-		        data,
 		        (ShaderData *)sd,
 		        per_sample_output_buffers,
 		        rng_coop,

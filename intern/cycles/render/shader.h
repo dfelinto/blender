@@ -43,6 +43,7 @@ CCL_NAMESPACE_BEGIN
 
 class Device;
 class DeviceScene;
+class DeviceRequestedFeatures;
 class Mesh;
 class Progress;
 class Scene;
@@ -107,6 +108,7 @@ public:
 	bool has_bssrdf_bump;
 	bool has_heterogeneous_volume;
 	bool has_object_dependency;
+	bool has_integrator_dependency;
 
 	/* requested mesh attributes */
 	AttributeRequestSet attributes;
@@ -116,10 +118,10 @@ public:
 
 #ifdef WITH_OSL
 	/* osl shading state references */
-	OSL::ShadingAttribStateRef osl_surface_ref;
-	OSL::ShadingAttribStateRef osl_surface_bump_ref;
-	OSL::ShadingAttribStateRef osl_volume_ref;
-	OSL::ShadingAttribStateRef osl_displacement_ref;
+	OSL::ShaderGroupRef osl_surface_ref;
+	OSL::ShaderGroupRef osl_surface_bump_ref;
+	OSL::ShaderGroupRef osl_volume_ref;
+	OSL::ShaderGroupRef osl_displacement_ref;
 #endif
 
 	Shader();
@@ -167,8 +169,7 @@ public:
 
 	/* Selective nodes compilation. */
 	void get_requested_features(Scene *scene,
-	                            int& max_group,
-	                            int& features);
+	                            DeviceRequestedFeatures *requested_features);
 
 protected:
 	ShaderManager();
@@ -182,8 +183,7 @@ protected:
 	size_t beckmann_table_offset;
 
 	void get_requested_graph_features(ShaderGraph *graph,
-	                                  int& max_group,
-	                                  int& features);
+	                                  DeviceRequestedFeatures *requested_features);
 };
 
 CCL_NAMESPACE_END

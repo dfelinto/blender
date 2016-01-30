@@ -51,6 +51,7 @@
 #include "BKE_curve.h"
 #include "BKE_depsgraph.h"
 #include "BKE_font.h"
+#include "BKE_library.h"
 #include "BKE_main.h"
 #include "BKE_object.h"
 #include "BKE_report.h"
@@ -344,50 +345,18 @@ static bool font_paste_utf8(bContext *C, const char *str, const size_t str_len)
 static int paste_from_file(bContext *C, ReportList *reports, const char *filename)
 {
 	Object *obedit = CTX_data_edit_object(C);
-	FILE *fp;
 	char *strp;
-	int filelen;
+	size_t filelen;
 	int retval;
 
-	fp = BLI_fopen(filename, "r");
-
-	if (!fp) {
+	strp = BLI_file_read_text_as_mem(filename, 1, &filelen);
+	if (strp == NULL) {
 		BKE_reportf(reports, RPT_ERROR, "Failed to open file '%s'", filename);
 		return OPERATOR_CANCELLED;
 	}
+	strp[filelen] = 0;
 
-	fseek(fp, 0L, SEEK_END);
-
-	errno = 0;
-	filelen = ftell(fp);
-	if (filelen == -1) {
-		goto fail;
-	}
-
-	if (filelen <= MAXTEXT) {
-		strp = MEM_mallocN(filelen + 4, "tempstr");
-
-		fseek(fp, 0L, SEEK_SET);
-
-		/* fread() instead of read(), because windows read() converts text
-		 * to DOS \r\n linebreaks, causing double linebreaks in the 3d text */
-		errno = 0;
-		filelen = fread(strp, 1, filelen, fp);
-		if (filelen == -1) {
-			MEM_freeN(strp);
-			goto fail;
-		}
-
-		strp[filelen] = 0;
-	}
-	else {
-		strp = NULL;
-	}
-
-	fclose(fp);
-
-
-	if (strp && font_paste_utf8(C, strp, filelen)) {
+	if (font_paste_utf8(C, strp, filelen)) {
 		text_update_edited(C, obedit, FO_EDIT);
 		retval = OPERATOR_FINISHED;
 
@@ -397,18 +366,9 @@ static int paste_from_file(bContext *C, ReportList *reports, const char *filenam
 		retval = OPERATOR_CANCELLED;
 	}
 
-	if (strp) {
-		MEM_freeN(strp);
-	}
+	MEM_freeN(strp);
 
 	return retval;
-
-
-	/* failed to seek or read */
-fail:
-	BKE_reportf(reports, RPT_ERROR, "Failed to read file '%s', %s", filename, strerror(errno));
-	fclose(fp);
-	return OPERATOR_CANCELLED;
 }
 
 static int paste_from_file_exec(bContext *C, wmOperator *op)
@@ -538,7 +498,7 @@ static void txt_add_object(bContext *C, TextLine *firstline, int totline, const 
 
 	cu = obedit->data;
 	cu->vfont = BKE_vfont_builtin_get();
-	cu->vfont->id.us++;
+	id_us_plus(&cu->vfont->id);
 
 	for (tmp = firstline, a = 0; nbytes < MAXTEXT && a < totline; tmp = tmp->next, a++) {
 		size_t nchars_line, nbytes_line;
@@ -1509,7 +1469,7 @@ void FONT_OT_textbox_remove(wmOperatorType *ot)
 
 /***************** editmode enter/exit ********************/
 
-void make_editText(Object *obedit)
+void ED_curve_editfont_make(Object *obedit)
 {
 	Curve *cu = obedit->data;
 	EditFont *ef = cu->editfont;
@@ -1545,7 +1505,7 @@ void make_editText(Object *obedit)
 	BKE_vfont_select_clamp(obedit);
 }
 
-void load_editText(Object *obedit)
+void ED_curve_editfont_load(Object *obedit)
 {
 	Curve *cu = obedit->data;
 	EditFont *ef = cu->editfont;
@@ -1574,7 +1534,7 @@ void load_editText(Object *obedit)
 	cu->selend = ef->selend;
 }
 
-void free_editText(Object *obedit)
+void ED_curve_editfont_free(Object *obedit)
 {
 	BKE_curve_editfont_free((Curve *)obedit->data);
 }
@@ -1727,7 +1687,7 @@ static int font_open_exec(bContext *C, wmOperator *op)
 	if (pprop->prop) {
 		/* when creating new ID blocks, use is already 1, but RNA
 		 * pointer se also increases user, so this compensates it */
-		font->id.us--;
+		id_us_min(&font->id);
 	
 		RNA_id_pointer_create(&font->id, &idptr);
 		RNA_property_pointer_set(&pprop->ptr, pprop->prop, idptr);
@@ -1885,7 +1845,7 @@ void undo_push_font(bContext *C, const char *name)
 /**
  * TextBox selection
  */
-bool mouse_font(bContext *C, const int mval[2], bool extend, bool deselect, bool toggle)
+bool ED_curve_editfont_select_pick(bContext *C, const int mval[2], bool extend, bool deselect, bool toggle)
 {
 	Object *obedit = CTX_data_edit_object(C);
 	Curve *cu = obedit->data;

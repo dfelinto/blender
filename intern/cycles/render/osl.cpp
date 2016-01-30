@@ -100,7 +100,7 @@ void OSLShaderManager::device_update(Device *device, DeviceScene *dscene, Scene 
 
 		OSLCompiler compiler((void*)this, (void*)ss, scene->image_manager);
 		compiler.background = (shader == scene->shaders[scene->default_background]);
-		compiler.compile(og, shader);
+		compiler.compile(scene, og, shader);
 
 		if(shader->use_mis && shader->has_surface_emission)
 			scene->light_manager->need_update = true;
@@ -125,11 +125,21 @@ void OSLShaderManager::device_update(Device *device, DeviceScene *dscene, Scene 
 
 	device_update_common(device, dscene, scene, progress);
 
-	/* greedyjit test
 	{
+		/* Perform greedyjit optimization.
+		 *
+		 * This might waste time on optimizing gorups which are never actually
+		 * used, but this prevents OSL from allocating data on TLS at render
+		 * time.
+		 *
+		 * This is much better for us because this way we aren't required to
+		 * stop task scheduler threads to make sure all TLS is clean and don't
+		 * have issues with TLS data free accessing freed memory if task scheduler
+		 * is being freed after the Session is freed.
+		 */
 		thread_scoped_lock lock(ss_shared_mutex);
 		ss->optimize_all_groups();
-	}*/
+	}
 }
 
 void OSLShaderManager::device_free(Device *device, DeviceScene *dscene, Scene *scene)
@@ -176,7 +186,7 @@ void OSLShaderManager::texture_system_free()
 	ts_shared_users--;
 
 	if(ts_shared_users == 0) {
-		OSL::TextureSystem::destroy(ts_shared);
+		OSL::TextureSystem::destroy(ts_shared, true);
 		ts_shared = NULL;
 	}
 
@@ -195,7 +205,7 @@ void OSLShaderManager::shading_system_init()
 		ss_shared->attribute("lockgeom", 1);
 		ss_shared->attribute("commonspace", "world");
 		ss_shared->attribute("searchpath:shader", path_get("shader"));
-		//ss_shared->attribute("greedyjit", 1);
+		ss_shared->attribute("greedyjit", 1);
 
 		VLOG(1) << "Using shader search path: " << path_get("shader");
 
@@ -272,7 +282,11 @@ bool OSLShaderManager::osl_compile(const string& inputfile, const string& output
 	stdosl_path = path_get("shader/stdosl.h");
 
 	/* compile */
+#if OSL_LIBRARY_VERSION_CODE >= 10602
+	OSL::OSLCompiler *compiler = new OSL::OSLCompiler(&OSL::ErrorHandler::default_handler());
+#else
 	OSL::OSLCompiler *compiler = new OSL::OSLCompiler();
+#endif
 	bool ok = compiler->compile(string_view(inputfile), options, string_view(stdosl_path));
 	delete compiler;
 
@@ -573,6 +587,10 @@ void OSLCompiler::add(ShaderNode *node, const char *name, bool isfilepath)
 	if(node->has_object_dependency()) {
 		current_shader->has_object_dependency = true;
 	}
+
+	if(node->has_integrator_dependency()) {
+		current_shader->has_integrator_dependency = true;
+	}
 }
 
 void OSLCompiler::parameter(const char *name, float f)
@@ -694,11 +712,11 @@ void OSLCompiler::parameter_array(const char *name, const Transform tfm[], int a
 	ss->Parameter(name, type, (const float *)tfm);
 }
 
-void OSLCompiler::find_dependencies(set<ShaderNode*>& dependencies, ShaderInput *input)
+void OSLCompiler::find_dependencies(ShaderNodeSet& dependencies, ShaderInput *input)
 {
 	ShaderNode *node = (input->link)? input->link->parent: NULL;
 
-	if(node) {
+	if(node != NULL && dependencies.find(node) == dependencies.end()) {
 		foreach(ShaderInput *in, node->inputs)
 			if(!node_skip_input(node, in))
 				find_dependencies(dependencies, in);
@@ -707,9 +725,9 @@ void OSLCompiler::find_dependencies(set<ShaderNode*>& dependencies, ShaderInput 
 	}
 }
 
-void OSLCompiler::generate_nodes(const set<ShaderNode*>& nodes)
+void OSLCompiler::generate_nodes(const ShaderNodeSet& nodes)
 {
-	set<ShaderNode*> done;
+	ShaderNodeSet done;
 	bool nodes_done;
 
 	do {
@@ -751,16 +769,16 @@ void OSLCompiler::generate_nodes(const set<ShaderNode*>& nodes)
 	} while(!nodes_done);
 }
 
-OSL::ShadingAttribStateRef OSLCompiler::compile_type(Shader *shader, ShaderGraph *graph, ShaderType type)
+OSL::ShaderGroupRef OSLCompiler::compile_type(Shader *shader, ShaderGraph *graph, ShaderType type)
 {
 	OSL::ShadingSystem *ss = (OSL::ShadingSystem*)shadingsys;
 
 	current_type = type;
 
-	OSL::ShadingAttribStateRef group = ss->ShaderGroupBegin(shader->name.c_str());
+	OSL::ShaderGroupRef group = ss->ShaderGroupBegin(shader->name.c_str());
 
 	ShaderNode *output = graph->output();
-	set<ShaderNode*> dependencies;
+	ShaderNodeSet dependencies;
 
 	if(type == SHADER_TYPE_SURFACE) {
 		/* generate surface shader */
@@ -788,7 +806,7 @@ OSL::ShadingAttribStateRef OSLCompiler::compile_type(Shader *shader, ShaderGraph
 	return group;
 }
 
-void OSLCompiler::compile(OSLGlobals *og, Shader *shader)
+void OSLCompiler::compile(Scene *scene, OSLGlobals *og, Shader *shader)
 {
 	if(shader->need_update) {
 		ShaderGraph *graph = shader->graph;
@@ -800,9 +818,16 @@ void OSLCompiler::compile(OSLGlobals *og, Shader *shader)
 				shader->graph_bump = shader->graph->copy();
 
 		/* finalize */
-		shader->graph->finalize(false, true);
-		if(shader->graph_bump)
-			shader->graph_bump->finalize(true, true);
+		shader->graph->finalize(scene,
+		                        false,
+		                        true,
+		                        shader->has_integrator_dependency);
+		if(shader->graph_bump) {
+			shader->graph_bump->finalize(scene,
+			                             true,
+			                             true,
+			                             shader->has_integrator_dependency);
+		}
 
 		current_shader = shader;
 
@@ -815,6 +840,7 @@ void OSLCompiler::compile(OSLGlobals *og, Shader *shader)
 		shader->has_displacement = false;
 		shader->has_heterogeneous_volume = false;
 		shader->has_object_dependency = false;
+		shader->has_integrator_dependency = false;
 
 		/* generate surface shader */
 		if(shader->used && graph && output->input("Surface")->link) {
@@ -828,8 +854,8 @@ void OSLCompiler::compile(OSLGlobals *og, Shader *shader)
 			shader->has_surface = true;
 		}
 		else {
-			shader->osl_surface_ref = OSL::ShadingAttribStateRef();
-			shader->osl_surface_bump_ref = OSL::ShadingAttribStateRef();
+			shader->osl_surface_ref = OSL::ShaderGroupRef();
+			shader->osl_surface_bump_ref = OSL::ShaderGroupRef();
 		}
 
 		/* generate volume shader */
@@ -838,7 +864,7 @@ void OSLCompiler::compile(OSLGlobals *og, Shader *shader)
 			shader->has_volume = true;
 		}
 		else
-			shader->osl_volume_ref = OSL::ShadingAttribStateRef();
+			shader->osl_volume_ref = OSL::ShaderGroupRef();
 
 		/* generate displacement shader */
 		if(shader->used && graph && output->input("Displacement")->link) {
@@ -846,7 +872,7 @@ void OSLCompiler::compile(OSLGlobals *og, Shader *shader)
 			shader->has_displacement = true;
 		}
 		else
-			shader->osl_displacement_ref = OSL::ShadingAttribStateRef();
+			shader->osl_displacement_ref = OSL::ShaderGroupRef();
 	}
 
 	/* push state to array for lookup */

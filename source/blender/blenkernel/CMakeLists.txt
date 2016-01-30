@@ -46,10 +46,9 @@ set(INC
 	../../../intern/iksolver/extern
 	../../../intern/memutil
 	../../../intern/mikktspace
-	../../../intern/raskter
 	../../../intern/smoke/extern
 	../../../intern/atomic
-	../../../extern/libmv
+	../../../intern/libmv
 
 	# XXX - BAD LEVEL CALL WM_api.h
 	../windowmanager
@@ -471,20 +470,6 @@ if(WITH_LIBMV)
 	add_definitions(-DWITH_LIBMV)
 endif()
 
-if(WITH_LIBMV_WERROR)
-	if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_C_COMPILER_ID MATCHES "Clang")
-		set_source_files_properties(intern/tracking.c
-		                            intern/tracking_auto.c
-		                            intern/tracking_detect.c
-		                            intern/tracking_plane_tracker.c
-		                            intern/tracking_region_tracker.c
-		                            intern/tracking_solver.c
-		                            intern/tracking_stabilize.c
-		                            intern/tracking_util.c
-		                            PROPERTIES COMPILE_FLAGS -Werror)
-	endif()
-endif()
-
 if(WITH_FFTW3)
 	list(APPEND INC_SYS
 		${FFTW3_INCLUDE_DIRS}
@@ -506,15 +491,18 @@ if(WITH_OPENSUBDIV)
 		../../../intern/opensubdiv
 		${OPENSUBDIV_INCLUDE_DIRS}
 	)
-	if(WITH_SUBSURF_WERROR)
-		if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_C_COMPILER_ID MATCHES "Clang")
-			set_source_files_properties(intern/CCGSubSurf.c
-			                            intern/CCGSubSurf_legacy.c
-			                            intern/CCGSubSurf_opensubdiv.c
-			                            intern/CCGSubSurf_opensubdiv_converter.c
-			                            intern/CCGSubSurf_util.c
-			                            PROPERTIES COMPILE_FLAGS -Werror)
-		endif()
+endif()
+
+if(WITH_OPENVDB)
+	add_definitions(-DWITH_OPENVDB)
+	list(APPEND INC
+		 ../../../intern/openvdb
+	)
+
+	if(WITH_OPENVDB_BLOSC)
+		add_definitions(
+			-DWITH_OPENVDB_BLOSC
+		)
 	endif()
 endif()
 

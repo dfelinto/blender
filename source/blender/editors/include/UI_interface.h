@@ -39,9 +39,11 @@
 /* Struct Declarations */
 
 struct ID;
+struct IDProperty;
 struct ListBase;
 struct ARegion;
 struct ScrArea;
+struct bScreen;
 struct wmEvent;
 struct wmWindow;
 struct wmOperator;
@@ -203,6 +205,12 @@ enum {
 	UI_BUT_ALIGN_RIGHT       = (1 << 16),
 	UI_BUT_ALIGN_DOWN        = (1 << 17),
 	UI_BUT_ALIGN             = (UI_BUT_ALIGN_TOP | UI_BUT_ALIGN_LEFT | UI_BUT_ALIGN_RIGHT | UI_BUT_ALIGN_DOWN),
+
+	/* Warning - HACK! Needed for buttons which are not TOP/LEFT aligned, but have some top/left corner stitched to some
+	 *                 other TOP/LEFT-aligned button, because of 'corrective' hack in widget_roundbox_set()... */
+	UI_BUT_ALIGN_STITCH_TOP  = (1 << 18),
+	UI_BUT_ALIGN_STITCH_LEFT = (1 << 19),
+	UI_BUT_ALIGN_ALL         = (UI_BUT_ALIGN | UI_BUT_ALIGN_STITCH_TOP | UI_BUT_ALIGN_STITCH_LEFT),
 };
 
 /* scale fixed button widths by this to account for DPI */
@@ -355,6 +363,13 @@ typedef void (*uiBlockHandleFunc)(struct bContext *C, void *arg, int event);
 
 typedef void (*uiMenuCreateFunc)(struct bContext *C, struct uiLayout *layout, void *arg1);
 typedef void (*uiMenuHandleFunc)(struct bContext *C, void *arg, int event);
+/**
+ * Used for cycling menu values without opening the menu (Ctrl-Wheel).
+ * \param direction: forward or backwards [1 / -1].
+ * \param arg1: uiBut.poin (as with #uiMenuCreateFunc).
+ * \return true when the button was changed.
+ */
+typedef bool (*uiMenuStepFunc)(struct bContext *C, int direction, void *arg1);
 
 /* Popup Menus
  *
@@ -623,8 +638,7 @@ void UI_but_string_info_get(struct bContext *C, uiBut *but, ...) ATTR_SENTINEL(0
 #define UI_ID_AUTO_NAME     (1 << 7)
 #define UI_ID_FAKE_USER     (1 << 8)
 #define UI_ID_PIN           (1 << 9)
-#define UI_ID_BROWSE_RENDER (1 << 10)
-#define UI_ID_PREVIEWS      (1 << 11)
+#define UI_ID_PREVIEWS      (1 << 10)
 #define UI_ID_FULL          (UI_ID_RENAME | UI_ID_BROWSE | UI_ID_ADD_NEW | UI_ID_OPEN | UI_ID_ALONE | UI_ID_DELETE | UI_ID_LOCAL)
 
 int UI_icon_from_id(struct ID *id);
@@ -645,7 +659,7 @@ uiBut *uiDefKeyevtButS(uiBlock *block, int retval, const char *str, int x, int y
 uiBut *uiDefHotKeyevtButS(uiBlock *block, int retval, const char *str, int x, int y, short width, short height, short *keypoin, short *modkeypoin, const char *tip);
 
 uiBut *uiDefSearchBut(uiBlock *block, void *arg, int retval, int icon, int maxlen, int x, int y, short width, short height, float a1, float a2, const char *tip);
-uiBut *uiDefSearchButO_ptr(uiBlock *block, struct wmOperatorType *ot, IDProperty *properties,
+uiBut *uiDefSearchButO_ptr(uiBlock *block, struct wmOperatorType *ot, struct IDProperty *properties,
                            void *arg, int retval, int icon, int maxlen, int x, int y,
                            short width, short height, float a1, float a2, const char *tip);
 
@@ -687,6 +701,8 @@ void    UI_but_func_drawextra_set(
         uiBlock *block,
         void (*func)(const struct bContext *C, void *, void *, void *, struct rcti *rect),
         void *arg1, void *arg2);
+
+void    UI_but_func_menu_step_set(uiBut *but, uiMenuStepFunc func);
 
 void    UI_but_func_tooltip_set(uiBut *but, uiButToolTipFunc func, void *argN);
 void    UI_but_tooltip_timer_remove(struct bContext *C, uiBut *but);
@@ -950,7 +966,7 @@ void uiItemIntO(uiLayout *layout, const char *name, int icon, const char *opname
 void uiItemFloatO(uiLayout *layout, const char *name, int icon, const char *opname, const char *propname, float value);
 void uiItemStringO(uiLayout *layout, const char *name, int icon, const char *opname, const char *propname, const char *value);
 
-PointerRNA uiItemFullO_ptr(uiLayout *layout, struct wmOperatorType *ot, const char *name, int icon, IDProperty *properties, int context, int flag);
+PointerRNA uiItemFullO_ptr(uiLayout *layout, struct wmOperatorType *ot, const char *name, int icon, struct IDProperty *properties, int context, int flag);
 PointerRNA uiItemFullO(uiLayout *layout, const char *idname, const char *name, int icon, struct IDProperty *properties, int context, int flag);
 
 void uiItemR(uiLayout *layout, struct PointerRNA *ptr, const char *propname, int flag, const char *name, int icon);

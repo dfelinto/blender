@@ -58,7 +58,7 @@ __kernel void kernel_ocl_path_trace_scene_intersect(
 			return;
 		}
 	} else {
-		if(x < (sw * parallel_samples) && y < sh){
+		if(x < (sw * parallel_samples) && y < sh) {
 			ray_index = x + y * (sw * parallel_samples);
 		} else {
 			return;
@@ -66,7 +66,6 @@ __kernel void kernel_ocl_path_trace_scene_intersect(
 	}
 
 	kernel_scene_intersect((KernelGlobals *)kg,
-	                       data,
 	                       rng_coop,
 	                       Ray_coop,
 	                       PathState_coop,
@@ -77,6 +76,5 @@ __kernel void kernel_ocl_path_trace_scene_intersect(
 #ifdef __KERNEL_DEBUG__
 	                       debugdata_coop,
 #endif
-	                       parallel_samples,
 	                       ray_index);
 }

@@ -23,11 +23,6 @@
  * ***** END GPL LICENSE BLOCK *****
  */
 
-/* Do some compatibility hacks in order to make
- * the code working with GPU_material pipeline.
- */
-#define GLSL_COMPAT_WORKAROUND
-
 #include "opensubdiv_capi.h"
 
 #ifdef _MSC_VER
@@ -191,18 +186,21 @@ void transpose_m3(float mat[3][3])
 
 GLuint compileShader(GLenum shaderType,
                      const char *section,
+                     const char *version,
                      const char *define)
 {
-	const char *sources[3];
 	char sdefine[64];
-	sprintf(sdefine, "#define %s\n#define GLSL_COMPAT_WORKAROUND\n", section);
+	sprintf(sdefine, "#define %s\n", section);
 
-	sources[0] = define;
-	sources[1] = sdefine;
-	sources[2] = datatoc_gpu_shader_opensubd_display_glsl;
+	const char *sources[] = {
+		version,
+		define,
+		sdefine,
+		datatoc_gpu_shader_opensubd_display_glsl
+	};
 
 	GLuint shader = glCreateShader(shaderType);
-	glShaderSource(shader, 3, sources, NULL);
+	glShaderSource(shader, 4, sources, NULL);
 	glCompileShader(shader);
 
 	GLint status;
@@ -210,32 +208,35 @@ GLuint compileShader(GLenum shaderType,
 	if (status == GL_FALSE) {
 		GLchar emsg[1024];
 		glGetShaderInfoLog(shader, sizeof(emsg), 0, emsg);
-		fprintf(stderr, "Error compiling GLSL shader (%s): %s\n", section, emsg);
-		fprintf(stderr, "Section: %s\n", sdefine);
+		fprintf(stderr, "Error compiling GLSL %s: %s\n", section, emsg);
+		fprintf(stderr, "Version: %s\n", version);
 		fprintf(stderr, "Defines: %s\n", define);
-		fprintf(stderr, "Source: %s\n", sources[2]);
+		fprintf(stderr, "Source: %s\n", datatoc_gpu_shader_opensubd_display_glsl);
 		return 0;
 	}
 
 	return shader;
 }
 
-GLuint linkProgram(const char *define)
+GLuint linkProgram(const char *version, const char *define)
 {
 	GLuint vertexShader = compileShader(GL_VERTEX_SHADER,
 	                                    "VERTEX_SHADER",
+	                                    version,
 	                                    define);
 	if (vertexShader == 0) {
 		return 0;
 	}
 	GLuint geometryShader = compileShader(GL_GEOMETRY_SHADER,
 	                                      "GEOMETRY_SHADER",
+	                                      version,
 	                                      define);
 	if (geometryShader == 0) {
 		return 0;
 	}
 	GLuint fragmentShader = compileShader(GL_FRAGMENT_SHADER,
 	                                      "FRAGMENT_SHADER",
+	                                      version,
 	                                      define);
 	if (fragmentShader == 0) {
 		return 0;
@@ -250,30 +251,23 @@ GLuint linkProgram(const char *define)
 	glBindAttribLocation(program, 0, "position");
 	glBindAttribLocation(program, 1, "normal");
 
-#ifdef GLSL_COMPAT_WORKAROUND
-	glProgramParameteriEXT(program,
-	                       GL_GEOMETRY_INPUT_TYPE_EXT,
-	                       GL_LINES_ADJACENCY_EXT);
 
-	if (strstr(define, "WIREFRAME") == NULL) {
+	if (!GLEW_VERSION_3_2) {
+		/* provide input/output layout info */
+		glProgramParameteriEXT(program,
+		                       GL_GEOMETRY_INPUT_TYPE_EXT,
+		                       GL_LINES_ADJACENCY_EXT);
+
+		bool wireframe = strstr(define, "WIREFRAME") != NULL;
+
 		glProgramParameteriEXT(program,
 		                       GL_GEOMETRY_OUTPUT_TYPE_EXT,
-		                       GL_TRIANGLE_STRIP);
-
-		glProgramParameteriEXT(program,
-		                       GL_GEOMETRY_VERTICES_OUT_EXT,
-		                       4);
-	}
-	else {
-		glProgramParameteriEXT(program,
-		                       GL_GEOMETRY_OUTPUT_TYPE_EXT,
-		                       GL_LINE_STRIP);
+		                       wireframe ? GL_LINE_STRIP : GL_TRIANGLE_STRIP);
 
 		glProgramParameteriEXT(program,
 		                       GL_GEOMETRY_VERTICES_OUT_EXT,
 		                       8);
 	}
-#endif
 
 	glLinkProgram(program);
 
@@ -312,7 +306,7 @@ void bindProgram(GLMeshInterface * /*mesh*/,
 {
 	glUseProgram(program);
 
-	/* Matricies */
+	/* Matrices */
 	glUniformMatrix4fv(glGetUniformLocation(program, "modelViewMatrix"),
 	                   1, false,
 	                   g_transform.model_view_matrix);
@@ -323,7 +317,7 @@ void bindProgram(GLMeshInterface * /*mesh*/,
 	                   1, false,
 	                   g_transform.normal_matrix);
 
-	/* Ligthing */
+	/* Lighting */
 	glBindBuffer(GL_UNIFORM_BUFFER, g_lighting_ub);
 	glBufferSubData(GL_UNIFORM_BUFFER,
 	                0, sizeof(g_lighting_data), &g_lighting_data);
@@ -378,11 +372,29 @@ bool openSubdiv_osdGLDisplayInit(void)
 	static bool need_init = true;
 	static bool init_success = false;
 	if (need_init) {
-		g_flat_fill_solid_program = linkProgram("#define FLAT_SHADING\n");
-		g_flat_fill_texture2d_program = linkProgram("#define USE_TEXTURE_2D\n#define FLAT_SHADING\n");
-		g_smooth_fill_solid_program = linkProgram("#define SMOOTH_SHADING\n");
-		g_smooth_fill_texture2d_program = linkProgram("#define USE_TEXTURE_2D\n#define SMOOTH_SHADING\n");
-		g_wireframe_program = linkProgram("#define WIREFRAME\n");
+
+		if (!openSubdiv_supportGPUDisplay()) {
+			return false;
+		}
+
+		const char *version = "";
+		if (GLEW_VERSION_3_2) {
+			version = "#version 150 compatibility\n";
+		}
+		else if (GLEW_VERSION_3_1) {
+			version = "#version 140\n"
+			          "#extension GL_ARB_compatibility: enable\n";
+		}
+		else {
+			version = "#version 130\n";
+			/* minimum supported for OpenSubdiv */
+		}
+
+		g_flat_fill_solid_program = linkProgram(version, "#define FLAT_SHADING\n");
+		g_flat_fill_texture2d_program = linkProgram(version, "#define USE_TEXTURE_2D\n#define FLAT_SHADING\n");
+		g_smooth_fill_solid_program = linkProgram(version, "#define SMOOTH_SHADING\n");
+		g_smooth_fill_texture2d_program = linkProgram(version, "#define USE_TEXTURE_2D\n#define SMOOTH_SHADING\n");
+		g_wireframe_program = linkProgram(version, "#define WIREFRAME\n");
 
 		glGenBuffers(1, &g_lighting_ub);
 		glBindBuffer(GL_UNIFORM_BUFFER, g_lighting_ub);
@@ -427,7 +439,7 @@ void openSubdiv_osdGLMeshDisplayPrepare(int use_osd_glsl,
 	g_use_osd_glsl = use_osd_glsl != 0;
 	g_active_uv_index = active_uv_index;
 
-	/* Update transformation matricies. */
+	/* Update transformation matrices. */
 	glGetFloatv(GL_PROJECTION_MATRIX, g_transform.projection_matrix);
 	glGetFloatv(GL_MODELVIEW_MATRIX, g_transform.model_view_matrix);
 
@@ -482,7 +494,7 @@ void openSubdiv_osdGLMeshDisplayPrepare(int use_osd_glsl,
 	}
 }
 
-static GLuint preapre_patchDraw(GLMeshInterface *mesh,
+static GLuint prepare_patchDraw(GLMeshInterface *mesh,
                                 bool fill_quads)
 {
 	GLint program = 0;
@@ -657,7 +669,7 @@ void openSubdiv_osdGLMeshDisplay(OpenSubdiv_GLMesh *gl_mesh,
 	}
 
 	/* Setup GLSL/OpenGL to draw patches in current context. */
-	GLuint program = preapre_patchDraw(mesh, fill_quads != 0);
+	GLuint program = prepare_patchDraw(mesh, fill_quads != 0);
 
 	if (start_patch != -1) {
 		draw_partition_patches_range(mesh,

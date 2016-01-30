@@ -58,7 +58,6 @@ __kernel void kernel_ocl_path_trace_shader_eval(
 
 	/* Continue on with shader evaluation. */
 	kernel_shader_eval((KernelGlobals *)kg,
-	                   data,
 	                   (ShaderData *)sd,
 	                   rng_coop,
 	                   Ray_coop,

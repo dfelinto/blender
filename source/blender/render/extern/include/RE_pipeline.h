@@ -231,6 +231,9 @@ struct RenderStats *RE_GetStats(struct Render *re);
 void RE_ResultGet32(struct Render *re, unsigned int *rect);
 void RE_AcquiredResultGet32(struct Render *re, struct RenderResult *result, unsigned int *rect, const int view_id);
 
+void RE_render_result_rect_from_ibuf(struct RenderResult *rr, struct RenderData *rd,
+    struct ImBuf *ibuf, const int view_id);
+
 struct RenderLayer *RE_GetRenderLayer(struct RenderResult *rr, const char *name);
 float *RE_RenderLayerGetPass(volatile struct RenderLayer *rl, int passtype, const char *viewname);
 
@@ -277,7 +280,7 @@ bool RE_WriteRenderViewsImage(
         struct ReportList *reports, struct RenderResult *rr, struct Scene *scene, const bool stamp, char *name);
 bool RE_WriteRenderViewsMovie(
         struct ReportList *reports, struct RenderResult *rr, struct Scene *scene, struct RenderData *rd,
-        struct bMovieHandle *mh, const size_t width, const size_t height, void **movie_ctx_arr,
+        struct bMovieHandle *mh, void **movie_ctx_arr,
         const int totvideos, bool preview);
 
 /* only RE_NewRender() needed, main Blender render calls */
@@ -359,6 +362,13 @@ bool RE_force_single_renderlayer(struct Scene *scene);
 bool RE_is_rendering_allowed(struct Scene *scene, struct Object *camera_override, struct ReportList *reports);
 
 bool RE_allow_render_generic_object(struct Object *ob);
+
+/* RE_updateRenderInstances flag */
+enum {
+	RE_OBJECT_INSTANCES_UPDATE_VIEW  = (1 << 0),
+	RE_OBJECT_INSTANCES_UPDATE_OBMAT = (1 << 1),
+};
+void RE_updateRenderInstances(Render *re, int flag);
 
 /******* defined in render_result.c *********/
 

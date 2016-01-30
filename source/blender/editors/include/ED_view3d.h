@@ -265,7 +265,7 @@ float ED_view3d_radius_to_dist(
         const char persp, const bool use_aspect,
         const float radius);
 
-void drawcircball(int mode, const float cent[3], float rad, float tmat[4][4]);
+void drawcircball(int mode, const float cent[3], float rad, const float tmat[4][4]);
 
 /* backbuffer select and draw support */
 void          ED_view3d_backbuf_validate(struct ViewContext *vc);
@@ -333,13 +333,13 @@ void ED_view3d_draw_offscreen(
 struct ImBuf *ED_view3d_draw_offscreen_imbuf(
         struct Scene *scene, struct View3D *v3d, struct ARegion *ar, int sizex, int sizey,
         unsigned int flag, bool draw_background,
-        int alpha_mode, int samples, const char *viewname,
-        struct GPUOffScreen *ofs, char err_out[256]);
+        int alpha_mode, int samples, bool full_samples, const char *viewname,
+        struct GPUFX *fx, struct GPUOffScreen *ofs, char err_out[256]);
 struct ImBuf *ED_view3d_draw_offscreen_imbuf_simple(
         struct Scene *scene, struct Object *camera, int width, int height,
         unsigned int flag, int drawtype, bool use_solid_tex, bool use_gpencil, bool draw_background,
-        int alpha_mode, int samples, const char *viewname,
-        struct GPUOffScreen *ofs, char err_out[256]);
+        int alpha_mode, int samples, bool full_samples, const char *viewname,
+        struct GPUFX *fx, struct GPUOffScreen *ofs, char err_out[256]);
 
 struct Base *ED_view3d_give_base_under_cursor(struct bContext *C, const int mval[2]);
 void ED_view3d_quadview_update(struct ScrArea *sa, struct ARegion *ar, bool do_clip);
@@ -394,6 +394,18 @@ void ED_view3d_operator_properties_viewmat(struct wmOperatorType *ot);
 void ED_view3d_operator_properties_viewmat_set(struct bContext *C, struct wmOperator *op);
 void ED_view3d_operator_properties_viewmat_get(struct wmOperator *op, int *winx, int *winy, float persmat[4][4]);
 #endif
+
+bool ED_view3d_snap_from_region(
+        struct Scene *scene, struct View3D *v3d, struct ARegion *ar,
+        const float mval[2], float dist_px,
+        bool use_depth, bool use_obedit,
+        bool use_vert, bool use_edge, bool use_face,
+        float r_co[3], float r_no[3]);
+
+bool ED_view3d_snap_from_ray(
+        struct Scene *scene,
+        const float ray_start[3], const float ray_normal[3],
+        float r_co[3]);
 
 /* render */
 void ED_view3d_stop_render_preview(struct wmWindowManager *wm, struct ARegion *ar);

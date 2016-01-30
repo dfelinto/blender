@@ -259,6 +259,8 @@ extern StructRNA RNA_GPencilFrame;
 extern StructRNA RNA_GPencilLayer;
 extern StructRNA RNA_GPencilStroke;
 extern StructRNA RNA_GPencilStrokePoint;
+extern StructRNA RNA_GPencilSculptSettings;
+extern StructRNA RNA_GPencilSculptBrush;
 extern StructRNA RNA_GameBooleanProperty;
 extern StructRNA RNA_GameFloatProperty;
 extern StructRNA RNA_GameIntProperty;
@@ -973,6 +975,7 @@ char *RNA_path_resolve_from_type_to_property(
 
 char *RNA_path_full_ID_py(struct ID *id);
 char *RNA_path_full_struct_py(struct PointerRNA *ptr);
+char *RNA_path_full_property_py_ex(PointerRNA *ptr, PropertyRNA *prop, int index, bool use_fallback);
 char *RNA_path_full_property_py(struct PointerRNA *ptr, struct PropertyRNA *prop, int index);
 char *RNA_path_struct_property_py(struct PointerRNA *ptr, struct PropertyRNA *prop, int index);
 char *RNA_path_property_py(struct PointerRNA *ptr, struct PropertyRNA *prop, int index);
@@ -1003,7 +1006,7 @@ void  RNA_float_set_array(PointerRNA *ptr, const char *name, const float *values
 
 int  RNA_enum_get(PointerRNA *ptr, const char *name);
 void RNA_enum_set(PointerRNA *ptr, const char *name, int value);
-void RNA_enum_set_identifier(PointerRNA *ptr, const char *name, const char *id);
+void RNA_enum_set_identifier(struct bContext *C, PointerRNA *ptr, const char *name, const char *id);
 bool RNA_enum_is_equal(struct bContext *C, PointerRNA *ptr, const char *name, const char *enumname);
 
 /* lower level functions that don't use a PointerRNA */

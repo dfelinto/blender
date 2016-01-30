@@ -50,19 +50,7 @@ typedef struct IsectPrecalc {
 } IsectPrecalc;
 
 #if defined(__KERNEL_CUDA__)
-#  if (defined(i386) || defined(_M_IX86))
-#    if __CUDA_ARCH__ > 500
-ccl_device_noinline
-#    else  /* __CUDA_ARCH__ > 500 */
 ccl_device_inline
-#    endif  /* __CUDA_ARCH__ > 500 */
-#  else  /* (defined(i386) || defined(_M_IX86)) */
-#    if defined(__KERNEL_EXPERIMENTAL__) && (__CUDA_ARCH__ >= 500)
-ccl_device_noinline
-#    else
-ccl_device_inline
-#    endif
-#  endif  /* (defined(i386) || defined(_M_IX86)) */
 #elif defined(__KERNEL_OPENCL_APPLE__)
 ccl_device_noinline
 #else  /* defined(__KERNEL_OPENCL_APPLE__) */
@@ -204,12 +192,11 @@ ccl_device_inline bool triangle_intersect(KernelGlobals *kg,
 ccl_device_inline void triangle_intersect_subsurface(
         KernelGlobals *kg,
         const IsectPrecalc *isect_precalc,
-        Intersection *isect_array,
+        SubsurfaceIntersection *ss_isect,
         float3 P,
         int object,
         int triAddr,
         float tmax,
-        uint *num_hits,
         uint *lcg_state,
         int max_hits)
 {
@@ -272,29 +259,36 @@ ccl_device_inline void triangle_intersect_subsurface(
 	/* Normalize U, V, W, and T. */
 	const float inv_det = 1.0f / det;
 
-	(*num_hits)++;
+	ss_isect->num_hits++;
 	int hit;
 
-	if(*num_hits <= max_hits) {
-		hit = *num_hits - 1;
+	if(ss_isect->num_hits <= max_hits) {
+		hit = ss_isect->num_hits - 1;
 	}
 	else {
 		/* reservoir sampling: if we are at the maximum number of
 		 * hits, randomly replace element or skip it */
-		hit = lcg_step_uint(lcg_state) % *num_hits;
+		hit = lcg_step_uint(lcg_state) % ss_isect->num_hits;
 
 		if(hit >= max_hits)
 			return;
 	}
 
 	/* record intersection */
-	Intersection *isect = &isect_array[hit];
+	Intersection *isect = &ss_isect->hits[hit];
 	isect->prim = triAddr;
 	isect->object = object;
 	isect->type = PRIMITIVE_TRIANGLE;
 	isect->u = U * inv_det;
 	isect->v = V * inv_det;
 	isect->t = T * inv_det;
+
+	/* Record geometric normal. */
+	/* TODO(sergey): Use float4_to_float3() on just an edges. */
+	const float3 v0 = float4_to_float3(tri_a);
+	const float3 v1 = float4_to_float3(tri_b);
+	const float3 v2 = float4_to_float3(tri_c);
+	ss_isect->Ng[hit] = normalize(cross(v1 - v0, v2 - v0));
 }
 #endif
 
@@ -376,7 +370,6 @@ ccl_device_inline float3 triangle_refine_subsurface(KernelGlobals *kg,
 	float3 D = ray->D;
 	float t = isect->t;
 
-#ifdef __INTERSECTION_REFINE__
 	if(isect->object != OBJECT_NONE) {
 #ifdef __OBJECT_MOTION__
 		Transform tfm = ccl_fetch(sd, ob_itfm);
@@ -393,6 +386,7 @@ ccl_device_inline float3 triangle_refine_subsurface(KernelGlobals *kg,
 
 	P = P + D*t;
 
+#ifdef __INTERSECTION_REFINE__
 	const float4 tri_a = kernel_tex_fetch(__tri_woop, isect->prim*TRI_NODE_SIZE+0),
 	             tri_b = kernel_tex_fetch(__tri_woop, isect->prim*TRI_NODE_SIZE+1),
 	             tri_c = kernel_tex_fetch(__tri_woop, isect->prim*TRI_NODE_SIZE+2);
@@ -404,6 +398,7 @@ ccl_device_inline float3 triangle_refine_subsurface(KernelGlobals *kg,
 	float rt = dot(edge2, qvec) / dot(edge1, pvec);
 
 	P = P + D*rt;
+#endif  /* __INTERSECTION_REFINE__ */
 
 	if(isect->object != OBJECT_NONE) {
 #ifdef __OBJECT_MOTION__
@@ -418,9 +413,6 @@ ccl_device_inline float3 triangle_refine_subsurface(KernelGlobals *kg,
 	}
 
 	return P;
-#else
-	return P + D*t;
-#endif
 }
 
 #undef IDX

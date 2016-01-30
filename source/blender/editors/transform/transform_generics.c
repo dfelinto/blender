@@ -39,6 +39,7 @@
 #include "DNA_anim_types.h"
 #include "DNA_armature_types.h"
 #include "DNA_brush_types.h"
+#include "DNA_gpencil_types.h"
 #include "DNA_lattice_types.h"
 #include "DNA_screen_types.h"
 #include "DNA_sequence_types.h"
@@ -73,6 +74,7 @@
 #include "BKE_depsgraph.h"
 #include "BKE_fcurve.h"
 #include "BKE_lattice.h"
+#include "BKE_library.h"
 #include "BKE_nla.h"
 #include "BKE_context.h"
 #include "BKE_paint.h"
@@ -278,7 +280,7 @@ static void animrecord_check_state(Scene *scene, ID *id, wmTimer *animtimer)
 					NlaStrip *strip = add_nlastrip_to_stack(adt, adt->action);
 					
 					/* clear reference to action now that we've pushed it onto the stack */
-					adt->action->id.us--;
+					id_us_min(&adt->action->id);
 					adt->action = NULL;
 					
 					/* adjust blending + extend so that they will behave correctly */
@@ -950,7 +952,13 @@ static void recalcData_sequencer(TransInfo *t)
 		Sequence *seq = tdsq->seq;
 
 		if (seq != seq_prev) {
-			BKE_sequence_invalidate_dependent(t->scene, seq);
+			if (BKE_sequence_tx_fullupdate_test(seq)) {
+				/* A few effect strip types need a complete recache on transform. */
+				BKE_sequence_invalidate_cache(t->scene, seq);
+			}
+			else {
+				BKE_sequence_invalidate_dependent(t->scene, seq);
+			}
 		}
 
 		seq_prev = seq;
@@ -1032,7 +1040,7 @@ void drawLine(TransInfo *t, const float center[3], const float dir[3], char axis
 		glColor3ubv(col2);
 		
 		setlinestyle(0);
-		glBegin(GL_LINE_STRIP);
+		glBegin(GL_LINES);
 		glVertex3fv(v1);
 		glVertex3fv(v2);
 		glEnd();
@@ -1088,6 +1096,7 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
 	ScrArea *sa = CTX_wm_area(C);
 	Object *obedit = CTX_data_edit_object(C);
 	Object *ob = CTX_data_active_object(C);
+	bGPdata *gpd = CTX_data_gpencil_data(C);
 	PropertyRNA *prop;
 	
 	t->scene = sce;
@@ -1157,6 +1166,11 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
 			t->remove_on_cancel = true;
 		}
 	}
+	
+	/* GPencil editing context */
+	if ((gpd) && (gpd->flag & GP_DATA_STROKE_EDITMODE)) {
+		t->options |= CTX_GPENCIL_STROKES;
+	}
 
 	/* Assign the space type, some exceptions for running in different mode */
 	if (sa == NULL) {
@@ -1205,13 +1219,13 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
 		
 		/* bend always uses the cursor */
 		if (t->mode == TFM_BEND) {
-			t->around = V3D_CURSOR;
+			t->around = V3D_AROUND_CURSOR;
 		}
 
 		t->current_orientation = v3d->twmode;
 
 		/* exceptional case */
-		if (t->around == V3D_LOCAL) {
+		if (t->around == V3D_AROUND_LOCAL_ORIGINS) {
 			if (ELEM(t->mode, TFM_ROTATION, TFM_RESIZE, TFM_TRACKBALL)) {
 				const bool use_island = transdata_check_local_islands(t, t->around);
 
@@ -1267,7 +1281,7 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
 	else if (t->spacetype == SPACE_NODE) {
 		// XXX for now, get View2D from the active region
 		t->view = &ar->v2d;
-		t->around = V3D_CENTER;
+		t->around = V3D_AROUND_CENTER_BOUNDS;
 	}
 	else if (t->spacetype == SPACE_IPO) {
 		SpaceIpo *sipo = sa->spacedata.first;
@@ -1293,7 +1307,7 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
 		else {
 			t->view = NULL;
 		}
-		t->around = V3D_CENTER;
+		t->around = V3D_AROUND_CENTER_BOUNDS;
 	}
 
 	if (op && ((prop = RNA_struct_find_property(op->ptr, "constraint_orientation")) &&
@@ -1764,13 +1778,13 @@ bool calculateCenterActive(TransInfo *t, bool select_only, float r_center[3])
 void calculateCenter(TransInfo *t)
 {
 	switch (t->around) {
-		case V3D_CENTER:
+		case V3D_AROUND_CENTER_BOUNDS:
 			calculateCenterBound(t, t->center);
 			break;
-		case V3D_CENTROID:
+		case V3D_AROUND_CENTER_MEAN:
 			calculateCenterMedian(t, t->center);
 			break;
-		case V3D_CURSOR:
+		case V3D_AROUND_CURSOR:
 			if (ELEM(t->spacetype, SPACE_IMAGE, SPACE_CLIP))
 				calculateCenterCursor2D(t, t->center);
 			else if (t->spacetype == SPACE_IPO)
@@ -1778,11 +1792,11 @@ void calculateCenter(TransInfo *t)
 			else
 				calculateCenterCursor(t, t->center);
 			break;
-		case V3D_LOCAL:
+		case V3D_AROUND_LOCAL_ORIGINS:
 			/* Individual element center uses median center for helpline and such */
 			calculateCenterMedian(t, t->center);
 			break;
-		case V3D_ACTIVE:
+		case V3D_AROUND_ACTIVE:
 		{
 			if (calculateCenterActive(t, false, t->center)) {
 				/* pass */

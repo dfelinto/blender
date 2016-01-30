@@ -55,6 +55,7 @@
 
 #include "BKE_action.h"
 #include "BKE_fcurve.h"
+#include "BKE_gpencil.h"
 #include "BKE_global.h"
 #include "BKE_library.h"
 #include "BKE_key.h"
@@ -549,9 +550,10 @@ static int actkeys_copy_exec(bContext *C, wmOperator *op)
 
 	/* copy keyframes */
 	if (ac.datatype == ANIMCONT_GPENCIL) {
-		/* FIXME... */
-		BKE_report(op->reports, RPT_ERROR, "Keyframe pasting is not available for grease pencil mode");
-		return OPERATOR_CANCELLED;
+		if (ED_gpencil_anim_copybuf_copy(&ac) == false) {
+			/* Nothing got copied - An error about this should be been logged already */
+			return OPERATOR_CANCELLED;
+		}
 	}
 	else if (ac.datatype == ANIMCONT_MASK) {
 		/* FIXME... */
@@ -599,7 +601,13 @@ static int actkeys_paste_exec(bContext *C, wmOperator *op)
 	ac.reports = op->reports;
 	
 	/* paste keyframes */
-	if (ELEM(ac.datatype, ANIMCONT_GPENCIL, ANIMCONT_MASK)) {
+	if (ac.datatype == ANIMCONT_GPENCIL) {
+		if (ED_gpencil_anim_copybuf_paste(&ac, offset_mode) == false) {
+			/* An error occurred - Reports should have been fired already */
+			return OPERATOR_CANCELLED;
+		}
+	}
+	else if (ac.datatype == ANIMCONT_MASK) {
 		/* FIXME... */
 		BKE_report(op->reports, RPT_ERROR, "Keyframe pasting is not available for grease pencil or mask mode");
 		return OPERATOR_CANCELLED;
@@ -634,8 +642,8 @@ void ACTION_OT_paste(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 	
 	/* props */
-	RNA_def_enum(ot->srna, "offset", keyframe_paste_offset_items, KEYFRAME_PASTE_OFFSET_CFRA_START, "Offset", "Paste time offset of keys");
-	RNA_def_enum(ot->srna, "merge", keyframe_paste_merge_items, KEYFRAME_PASTE_MERGE_MIX, "Type", "Method of merging pasted keys and existing");
+	RNA_def_enum(ot->srna, "offset", rna_enum_keyframe_paste_offset_items, KEYFRAME_PASTE_OFFSET_CFRA_START, "Offset", "Paste time offset of keys");
+	RNA_def_enum(ot->srna, "merge", rna_enum_keyframe_paste_merge_items, KEYFRAME_PASTE_MERGE_MIX, "Type", "Method of merging pasted keys and existing");
 	prop = RNA_def_boolean(ot->srna, "flipped", false, "Flipped", "Paste keyframes from mirrored bones if they exist");
 	RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
@@ -650,7 +658,7 @@ static EnumPropertyItem prop_actkeys_insertkey_types[] = {
 	{0, NULL, 0, NULL, NULL}
 };
 
-/* this function is responsible for snapping keyframes to frame-times */
+/* this function is responsible for inserting new keyframes */
 static void insert_action_keys(bAnimContext *ac, short mode) 
 {
 	ListBase anim_data = {NULL, NULL};
@@ -693,10 +701,45 @@ static void insert_action_keys(bAnimContext *ac, short mode)
 			insert_keyframe(reports, ale->id, NULL, ((fcu->grp) ? (fcu->grp->name) : (NULL)), fcu->rna_path, fcu->array_index, cfra, flag);
 		else
 			insert_vert_fcurve(fcu, cfra, fcu->curval, 0);
-
+		
 		ale->update |= ANIM_UPDATE_DEFAULT;
 	}
+	
+	ANIM_animdata_update(ac, &anim_data);
+	ANIM_animdata_freelist(&anim_data);
+}
 
+/* this function is for inserting new grease pencil frames */
+static void insert_gpencil_keys(bAnimContext *ac, short mode)
+{
+	ListBase anim_data = {NULL, NULL};
+	bAnimListElem *ale;
+	int filter;
+	
+	Scene *scene = ac->scene;
+	ToolSettings *ts = scene->toolsettings;
+	eGP_GetFrame_Mode add_frame_mode;
+	
+	/* filter data */
+	filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_LIST_VISIBLE | ANIMFILTER_FOREDIT | ANIMFILTER_NODUPLIS);
+	if (mode == 2) filter |= ANIMFILTER_SEL;
+	
+	ANIM_animdata_filter(ac, &anim_data, filter, ac->data, ac->datatype);
+	
+	
+	/* add a copy or a blank frame? */
+	if (ts->gpencil_flags & GP_TOOL_FLAG_RETAIN_LAST)
+		add_frame_mode = GP_GETFRAME_ADD_COPY; /* XXX: actframe may not be what we want? */
+	else
+		add_frame_mode = GP_GETFRAME_ADD_NEW;
+	
+	
+	/* insert gp frames */
+	for (ale = anim_data.first; ale; ale = ale->next) {
+		bGPDlayer *gpl = (bGPDlayer *)ale->data;
+		gpencil_layer_getframe(gpl, CFRA, add_frame_mode);
+	}
+	
 	ANIM_animdata_update(ac, &anim_data);
 	ANIM_animdata_freelist(&anim_data);
 }
@@ -711,14 +754,22 @@ static int actkeys_insertkey_exec(bContext *C, wmOperator *op)
 	/* get editor data */
 	if (ANIM_animdata_get_context(C, &ac) == 0)
 		return OPERATOR_CANCELLED;
-	if (ELEM(ac.datatype, ANIMCONT_GPENCIL, ANIMCONT_MASK))
+		
+	if (ac.datatype == ANIMCONT_MASK) {
+		BKE_report(op->reports, RPT_ERROR, "Insert Keyframes is not yet implemented for this mode");
 		return OPERATOR_CANCELLED;
+	}
 		
 	/* what channels to affect? */
 	mode = RNA_enum_get(op->ptr, "type");
 	
 	/* insert keyframes */
-	insert_action_keys(&ac, mode);
+	if (ac.datatype == ANIMCONT_GPENCIL) {
+		insert_gpencil_keys(&ac, mode);
+	}
+	else {
+		insert_action_keys(&ac, mode);
+	}
 
 	/* set notifier that keyframes have changed */
 	WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_ADDED, NULL);
@@ -1223,7 +1274,7 @@ void ACTION_OT_interpolation_type(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 	
 	/* id-props */
-	ot->prop = RNA_def_enum(ot->srna, "type", beztriple_interpolation_mode_items, 0, "Type", "");
+	ot->prop = RNA_def_enum(ot->srna, "type", rna_enum_beztriple_interpolation_mode_items, 0, "Type", "");
 }
 
 /* ******************** Set Handle-Type Operator *********************** */
@@ -1305,7 +1356,7 @@ void ACTION_OT_handle_type(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 	
 	/* id-props */
-	ot->prop = RNA_def_enum(ot->srna, "type", keyframe_handle_type_items, 0, "Type", "");
+	ot->prop = RNA_def_enum(ot->srna, "type", rna_enum_keyframe_handle_type_items, 0, "Type", "");
 }
 
 /* ******************** Set Keyframe-Type Operator *********************** */
@@ -1407,7 +1458,7 @@ void ACTION_OT_keyframe_type(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 	
 	/* id-props */
-	ot->prop = RNA_def_enum(ot->srna, "type", beztriple_keyframe_type_items, 0, "Type", "");
+	ot->prop = RNA_def_enum(ot->srna, "type", rna_enum_beztriple_keyframe_type_items, 0, "Type", "");
 }
 
 /* ************************************************************************** */
@@ -1642,16 +1693,21 @@ static void mirror_action_keys(bAnimContext *ac, short mode)
 	for (ale = anim_data.first; ale; ale = ale->next) {
 		AnimData *adt = ANIM_nla_mapping_get(ac, ale);
 		
-		if (adt) {
+		if (ale->type == ANIMTYPE_GPLAYER) {
+			ED_gplayer_mirror_frames(ale->data, ac->scene, mode);
+		}
+		else if (ale->type == ANIMTYPE_MASKLAYER) {
+			/* TODO */
+		}
+		else if (adt) {
 			ANIM_nla_mapping_apply_fcurve(adt, ale->key_data, 0, 1); 
 			ANIM_fcurve_keyframes_loop(&ked, ale->key_data, NULL, edit_cb, calchandles_fcurve);
 			ANIM_nla_mapping_apply_fcurve(adt, ale->key_data, 1, 1);
 		}
-		//else if (ale->type == ACTTYPE_GPLAYER)
-		//	snap_gplayer_frames(ale->data, mode);
-		else 
+		else {
 			ANIM_fcurve_keyframes_loop(&ked, ale->key_data, NULL, edit_cb, calchandles_fcurve);
-
+		}
+		
 		ale->update |= ANIM_UPDATE_DEFAULT;
 	}
 
@@ -1669,10 +1725,6 @@ static int actkeys_mirror_exec(bContext *C, wmOperator *op)
 	/* get editor data */
 	if (ANIM_animdata_get_context(C, &ac) == 0)
 		return OPERATOR_CANCELLED;
-		
-	/* XXX... */
-	if (ELEM(ac.datatype, ANIMCONT_GPENCIL, ANIMCONT_MASK))
-		return OPERATOR_PASS_THROUGH;
 		
 	/* get mirroring mode */
 	mode = RNA_enum_get(op->ptr, "type");

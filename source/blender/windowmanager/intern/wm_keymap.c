@@ -202,6 +202,9 @@ int WM_keymap_map_type_get(wmKeyMapItem *kmi)
 	if (kmi->type == KM_TEXTINPUT) {
 		return KMI_TYPE_TEXTINPUT;
 	}
+	if (ELEM(kmi->type, TABLET_STYLUS, TABLET_ERASER)) {
+		return KMI_TYPE_MOUSE;
+	}
 	return KMI_TYPE_KEYBOARD;
 }
 
@@ -904,12 +907,12 @@ static void wm_user_modal_keymap_set_items(wmWindowManager *wm, wmKeyMap *km)
 const char *WM_key_event_string(const short type, const bool compact)
 {
 	EnumPropertyItem *it;
-	const int i = RNA_enum_from_value(event_type_items, (int)type);
+	const int i = RNA_enum_from_value(rna_enum_event_type_items, (int)type);
 
 	if (i == -1) {
 		return "";
 	}
-	it = &event_type_items[i];
+	it = &rna_enum_event_type_items[i];
 
 	/* We first try enum items' description (abused as shortname here), and fall back to usual name if empty. */
 	if (compact && it->description[0]) {
@@ -1298,17 +1301,12 @@ char *WM_key_event_operator_string(
 	return NULL;
 }
 
-int WM_key_event_operator_id(
+wmKeyMapItem *WM_key_event_operator(
         const bContext *C, const char *opname, int opcontext,
         IDProperty *properties, const bool is_hotkey,
         wmKeyMap **r_keymap)
 {
-	wmKeyMapItem *kmi = wm_keymap_item_find(C, opname, opcontext, properties, is_hotkey, true, r_keymap);
-	
-	if (kmi)
-		return kmi->id;
-	else
-		return 0;
+	return wm_keymap_item_find(C, opname, opcontext, properties, is_hotkey, true, r_keymap);
 }
 
 int WM_keymap_item_compare(wmKeyMapItem *k1, wmKeyMapItem *k2)
@@ -1797,7 +1795,7 @@ wmKeyMap *WM_keymap_guess_opname(const bContext *C, const char *opname)
 	}
 	/* Animation Editor Channels */
 	else if (STRPREFIX(opname, "ANIM_OT_channels")) {
-		km = WM_keymap_find_all(C, "Animation Channels", sl->spacetype, 0);
+		km = WM_keymap_find_all(C, "Animation Channels", 0, 0);
 	}
 	/* Animation Generic - after channels */
 	else if (STRPREFIX(opname, "ANIM_OT")) {
@@ -1864,7 +1862,7 @@ wmKeyMap *WM_keymap_guess_opname(const bContext *C, const char *opname)
 				km = WM_keymap_find_all(C, "NLA Editor", sl->spacetype, 0);
 				break;
 			case SPACE_IMAGE:
-				km = WM_keymap_find_all(C, "UV Editor", sl->spacetype, 0);
+				km = WM_keymap_find_all(C, "UV Editor", 0, 0);
 				break;
 			case SPACE_NODE:
 				km = WM_keymap_find_all(C, "Node Editor", sl->spacetype, 0);

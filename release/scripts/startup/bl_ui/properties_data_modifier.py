@@ -156,6 +156,15 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
         col.label(text="Object:")
         col.prop(md, "object", text="")
 
+        layout.prop(md, "use_bmesh")
+        if md.use_bmesh:
+            box = layout.box()
+            box.label("BMesh Options:")
+            box.prop(md, "use_bmesh_separate")
+            box.prop(md, "use_bmesh_dissolve")
+            box.prop(md, "use_bmesh_connect_regions")
+            box.prop(md, "threshold")
+
     def BUILD(self, layout, ob, md):
         split = layout.split()
 
@@ -281,6 +290,10 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
             row.prop(md, "vertex_group_factor")
 
             col.prop(md, "use_collapse_triangulate")
+            row = col.split(percentage=0.75)
+            row.prop(md, "use_symmetry")
+            row.prop(md, "symmetry_axis", text="")
+            
 
         elif decimate_type == 'UNSUBDIV':
             layout.prop(md, "iterations")
@@ -1276,14 +1289,14 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
             col = layout.column(align=True)
             split = col.split(0.333, align=True)
             sub = split.column(align=True)
-            sub.prop(md, "data_types_verts_vgroup")
-            row = split.row(align=True)
-            row.prop(md, "layers_vgroup_select_src", text="")
-            row.label(icon='RIGHTARROW_THIN')
-            row.prop(md, "layers_vgroup_select_dst", text="")
-            split = col.split(0.333, align=True)
-            sub = split.column(align=True)
             sub.prop(md, "data_types_verts")
+            sub = split.column(align=True)
+            row = sub.row(align=True)
+            row.prop(md, "layers_vgroup_select_src", text="")
+            row.label(icon='RIGHTARROW')
+            row.prop(md, "layers_vgroup_select_dst", text="")
+            row = sub.row(align=True)
+            row.label("", icon='NONE')
 
         layout.separator()
 
@@ -1312,17 +1325,14 @@ class DATA_PT_modifiers(ModifierButtonsPanel, Panel):
             split = col.split(0.333, align=True)
             sub = split.column(align=True)
             sub.prop(md, "data_types_loops")
-            split = col.split(0.333, align=True)
             sub = split.column(align=True)
-            sub.prop(md, "data_types_loops_vcol")
-            row = split.row(align=True)
+            row = sub.row(align=True)
+            row.label("", icon='NONE')
+            row = sub.row(align=True)
             row.prop(md, "layers_vcol_select_src", text="")
             row.label(icon='RIGHTARROW')
             row.prop(md, "layers_vcol_select_dst", text="")
-            split = col.split(0.333, align=True)
-            sub = split.column(align=True)
-            sub.prop(md, "data_types_loops_uv")
-            row = split.row(align=True)
+            row = sub.row(align=True)
             row.prop(md, "layers_uv_select_src", text="")
             row.label(icon='RIGHTARROW')
             row.prop(md, "layers_uv_select_dst", text="")

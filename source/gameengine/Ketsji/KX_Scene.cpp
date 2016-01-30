@@ -898,7 +898,7 @@ SCA_IObject* KX_Scene::AddReplicaObject(class CValue* originalobject,
 		m_tempObjectList->Add(replica->AddRef());
 		// this convert the life from frames to sort-of seconds, hard coded 0.02 that assumes we have 50 frames per second
 		// if you change this value, make sure you change it in KX_GameObject::pyattr_get_life property too
-		CValue *fval = new CFloatValue(lifespan*0.02);
+		CValue *fval = new CFloatValue(lifespan*0.02f);
 		replica->SetProperty("::timebomb",fval);
 		fval->Release();
 	}
@@ -1557,9 +1557,9 @@ void KX_Scene::CalculateVisibleMeshes(RAS_IRasterizer* rasty,KX_Camera* cam, int
 		planes[5].setValue(cplanes[3].getValue());	// bottom
 		CullingInfo info(layer);
 
-		double mvmat[16] = {0};
+		float mvmat[16] = {0};
 		cam->GetModelviewMatrix().getValue(mvmat);
-		double pmat[16] = {0};
+		float pmat[16] = {0};
 		cam->GetProjectionMatrix().getValue(pmat);
 
 		dbvt_culling = m_physicsEnvironment->CullingTest(PhysicsCullingCallback,&info,planes,5,m_dbvt_occlusion_res,
@@ -1588,7 +1588,7 @@ void KX_Scene::LogicBeginFrame(double curtime)
 		
 		if (propval)
 		{
-			float timeleft = propval->GetNumber() - 1.0/KX_KetsjiEngine::GetTicRate();
+			float timeleft = (float)(propval->GetNumber() - 1.0/KX_KetsjiEngine::GetTicRate());
 			
 			if (timeleft > 0)
 			{
@@ -1827,9 +1827,9 @@ void KX_Scene::UpdateObjectActivity(void)
 				 * Manhattan distance. */
 				MT_Point3 obpos = ob->NodeGetWorldPosition();
 				
-				if ((fabs(camloc[0] - obpos[0]) > m_activity_box_radius) ||
-				    (fabs(camloc[1] - obpos[1]) > m_activity_box_radius) ||
-				    (fabs(camloc[2] - obpos[2]) > m_activity_box_radius) )
+				if ((fabsf(camloc[0] - obpos[0]) > m_activity_box_radius) ||
+				    (fabsf(camloc[1] - obpos[1]) > m_activity_box_radius) ||
+				    (fabsf(camloc[2] - obpos[2]) > m_activity_box_radius) )
 				{
 					ob->Suspend();
 				}
@@ -1843,8 +1843,8 @@ void KX_Scene::UpdateObjectActivity(void)
 
 void KX_Scene::SetActivityCullingRadius(float f)
 {
-	if (f < 0.5)
-		f = 0.5;
+	if (f < 0.5f)
+		f = 0.5f;
 	m_activity_box_radius = f;
 }
 	

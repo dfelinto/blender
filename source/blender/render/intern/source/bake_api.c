@@ -299,7 +299,7 @@ static bool cast_ray_highpoly(
 
 		hits[i].index = -1;
 		/* TODO: we should use FLT_MAX here, but sweepsphere code isn't prepared for that */
-		hits[i].dist = 10000.0f;
+		hits[i].dist = BVH_RAYCAST_DIST_MAX;
 
 		/* transform the ray from the world space to the highpoly space */
 		mul_v3_m4v3(co_high, highpoly[i].imat, co);
@@ -444,7 +444,6 @@ static TriTessFace *mesh_calc_tri_tessface(
 
 			if (calculate_normal) {
 				if (lt->poly != mpoly_prev) {
-					const MPoly *mp = &me->mpoly[lt->poly];
 					BKE_mesh_calc_poly_normal(mp, &me->mloop[mp->loopstart], me->mvert, no);
 					mpoly_prev = lt->poly;
 				}
@@ -646,6 +645,7 @@ void RE_bake_pixels_populate(
 	/* initialize all pixel arrays so we know which ones are 'blank' */
 	for (i = 0; i < num_pixels; i++) {
 		pixel_array[i].primitive_id = -1;
+		pixel_array[i].object_id = 0;
 	}
 
 	for (i = 0; i < bake_images->size; i++) {

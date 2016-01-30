@@ -242,7 +242,7 @@ OperationDepsNode *DepsgraphNodeBuilder::find_operation_node(
 
 void DepsgraphNodeBuilder::build_scene(Main *bmain, Scene *scene)
 {
-	/* LIB_DOIT is used to indicate whether node for given ID was already
+	/* LIB_TAG_DOIT is used to indicate whether node for given ID was already
 	 * created or not. This flag is being set in add_id_node(), so functions
 	 * shouldn't bother with setting it, they only might query this flag when
 	 * needed.
@@ -272,6 +272,7 @@ void DepsgraphNodeBuilder::build_scene(Main *bmain, Scene *scene)
 		/* object that this is a proxy for */
 		// XXX: the way that proxies work needs to be completely reviewed!
 		if (ob->proxy) {
+			ob->proxy->proxy_from = ob;
 			build_object(scene, base, ob->proxy);
 		}
 
@@ -315,10 +316,10 @@ void DepsgraphNodeBuilder::build_group(Scene *scene,
                                        Group *group)
 {
 	ID *group_id = &group->id;
-	if (group_id->flag & LIB_DOIT) {
+	if (group_id->tag & LIB_TAG_DOIT) {
 		return;
 	}
-	group_id->flag |= LIB_DOIT;
+	group_id->tag |= LIB_TAG_DOIT;
 
 	for (GroupObject *go = (GroupObject *)group->gobject.first;
 	     go != NULL;
@@ -365,7 +366,7 @@ SubgraphDepsNode *DepsgraphNodeBuilder::build_subgraph(Group *group)
 
 void DepsgraphNodeBuilder::build_object(Scene *scene, Base *base, Object *ob)
 {
-	if (ob->id.flag & LIB_DOIT) {
+	if (ob->id.tag & LIB_TAG_DOIT) {
 		IDDepsNode *id_node = m_graph->find_id_node(&ob->id);
 		id_node->layers = base->lay;
 		return;
@@ -430,7 +431,7 @@ void DepsgraphNodeBuilder::build_object(Scene *scene, Base *base, Object *ob)
 			default:
 			{
 				ID *obdata = (ID *)ob->data;
-				if ((obdata->flag & LIB_DOIT) == 0) {
+				if ((obdata->tag & LIB_TAG_DOIT) == 0) {
 					build_animdata(obdata);
 				}
 				break;
@@ -598,7 +599,7 @@ OperationDepsNode *DepsgraphNodeBuilder::build_driver(ID *id, FCurve *fcu)
 void DepsgraphNodeBuilder::build_world(World *world)
 {
 	ID *world_id = &world->id;
-	if (world_id->flag & LIB_DOIT) {
+	if (world_id->tag & LIB_TAG_DOIT) {
 		return;
 	}
 
@@ -961,7 +962,7 @@ void DepsgraphNodeBuilder::build_obdata_geom(Scene *scene, Object *ob)
 		// add geometry collider relations
 	}
 
-	if (obdata->flag & LIB_DOIT) {
+	if (obdata->tag & LIB_TAG_DOIT) {
 		return;
 	}
 
@@ -1045,7 +1046,7 @@ void DepsgraphNodeBuilder::build_camera(Object *ob)
 	/* TODO: Link scene-camera links in somehow... */
 	Camera *cam = (Camera *)ob->data;
 	ID *camera_id = &cam->id;
-	if (camera_id->flag & LIB_DOIT) {
+	if (camera_id->tag & LIB_TAG_DOIT) {
 		return;
 	}
 
@@ -1068,7 +1069,7 @@ void DepsgraphNodeBuilder::build_lamp(Object *ob)
 {
 	Lamp *la = (Lamp *)ob->data;
 	ID *lamp_id = &la->id;
-	if (lamp_id->flag & LIB_DOIT) {
+	if (lamp_id->tag & LIB_TAG_DOIT) {
 		return;
 	}
 
@@ -1101,7 +1102,7 @@ void DepsgraphNodeBuilder::build_nodetree(DepsNode *owner_node, bNodeTree *ntree
 	build_animdata(ntree_id);
 
 	/* Parameters for drivers. */
-	add_operation_node(ntree_id, DEPSNODE_TYPE_PARAMETERS, DEPSOP_TYPE_EXEC, NULL,
+	add_operation_node(ntree_id, DEPSNODE_TYPE_PARAMETERS, DEPSOP_TYPE_POST, NULL,
 	                   DEG_OPCODE_PLACEHOLDER, "Parameters Eval");
 
 	/* nodetree's nodes... */
@@ -1114,9 +1115,9 @@ void DepsgraphNodeBuilder::build_nodetree(DepsNode *owner_node, bNodeTree *ntree
 				build_texture(owner_node, (Tex *)bnode->id);
 			}
 			else if (bnode->type == NODE_GROUP) {
-				bNodeTree *ntree = (bNodeTree *)bnode->id;
-				if ((ntree_id->flag & LIB_DOIT) == 0) {
-					build_nodetree(owner_node, ntree);
+				bNodeTree *group_ntree = (bNodeTree *)bnode->id;
+				if ((group_ntree->id.tag & LIB_TAG_DOIT) == 0) {
+					build_nodetree(owner_node, group_ntree);
 				}
 			}
 		}
@@ -1129,7 +1130,7 @@ void DepsgraphNodeBuilder::build_nodetree(DepsNode *owner_node, bNodeTree *ntree
 void DepsgraphNodeBuilder::build_material(DepsNode *owner_node, Material *ma)
 {
 	ID *ma_id = &ma->id;
-	if (ma_id->flag & LIB_DOIT) {
+	if (ma_id->tag & LIB_TAG_DOIT) {
 		return;
 	}
 
@@ -1167,10 +1168,10 @@ void DepsgraphNodeBuilder::build_texture_stack(DepsNode *owner_node, MTex **text
 void DepsgraphNodeBuilder::build_texture(DepsNode *owner_node, Tex *tex)
 {
 	ID *tex_id = &tex->id;
-	if (tex_id->flag & LIB_DOIT) {
+	if (tex_id->tag & LIB_TAG_DOIT) {
 		return;
 	}
-	tex_id->flag |= LIB_DOIT;
+	tex_id->tag |= LIB_TAG_DOIT;
 	/* texture itself */
 	build_animdata(tex_id);
 	/* texture's nodetree */

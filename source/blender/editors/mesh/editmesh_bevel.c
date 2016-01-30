@@ -99,7 +99,7 @@ static void edbm_bevel_update_header(bContext *C, wmOperator *op)
 
 		BLI_snprintf(msg, HEADER_LENGTH, str, type_str,
 		             WM_bool_as_string(RNA_boolean_get(op->ptr, "clamp_overlap")),
-			     WM_bool_as_string(RNA_boolean_get(op->ptr, "vertex_only")),
+		             WM_bool_as_string(RNA_boolean_get(op->ptr, "vertex_only")),
 		             offset_str, RNA_int_get(op->ptr, "segments"));
 
 		ED_area_headerprint(sa, msg);
@@ -259,7 +259,7 @@ static int edbm_bevel_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 	opdata = op->customdata;
 
 	/* initialize mouse values */
-	if (!calculateTransformCenter(C, V3D_CENTROID, center_3d, opdata->mcenter)) {
+	if (!calculateTransformCenter(C, V3D_AROUND_CENTER_MEAN, center_3d, opdata->mcenter)) {
 		/* in this case the tool will likely do nothing,
 		 * ideally this will never happen and should be checked for above */
 		opdata->mcenter[0] = opdata->mcenter[1] = 0;
@@ -421,7 +421,7 @@ static int edbm_bevel_modal(bContext *C, wmOperator *op, const wmEvent *event)
 
 				{
 					PropertyRNA *prop = RNA_struct_find_property(op->ptr, "clamp_overlap");
-					RNA_property_enum_set(op->ptr, prop, !RNA_property_boolean_get(op->ptr, prop));
+					RNA_property_boolean_set(op->ptr, prop, !RNA_property_boolean_get(op->ptr, prop));
 				}
 				edbm_bevel_calc(op);
 				edbm_bevel_update_header(C, op);
@@ -433,7 +433,7 @@ static int edbm_bevel_modal(bContext *C, wmOperator *op, const wmEvent *event)
 				
 				{
 					PropertyRNA *prop = RNA_struct_find_property(op->ptr, "vertex_only");
-					RNA_property_enum_set(op->ptr, prop, !RNA_property_boolean_get(op->ptr, prop));
+					RNA_property_boolean_set(op->ptr, prop, !RNA_property_boolean_get(op->ptr, prop));
 				}
 				edbm_bevel_calc(op);
 				edbm_bevel_update_header(C, op);

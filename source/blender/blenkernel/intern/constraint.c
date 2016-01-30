@@ -2730,8 +2730,8 @@ static void stretchto_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *t
 				float hard = min_ff(bulge, bulge_max);
 				
 				float range = bulge_max - 1.0f;
-				float scale = (range > 0.0f) ? 1.0f / range : 0.0f;
-				float soft = 1.0f + range * atanf((bulge - 1.0f) * scale) / (float)M_PI_2;
+				float scale_fac = (range > 0.0f) ? 1.0f / range : 0.0f;
+				float soft = 1.0f + range * atanf((bulge - 1.0f) * scale_fac) / (float)M_PI_2;
 				
 				bulge = interpf(soft, hard, data->bulge_smooth);
 			}
@@ -2742,8 +2742,8 @@ static void stretchto_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *t
 				float hard = max_ff(bulge, bulge_min);
 				
 				float range = 1.0f - bulge_min;
-				float scale = (range > 0.0f) ? 1.0f / range : 0.0f;
-				float soft = 1.0f - range * atanf((1.0f - bulge) * scale) / (float)M_PI_2;
+				float scale_fac = (range > 0.0f) ? 1.0f / range : 0.0f;
+				float soft = 1.0f - range * atanf((1.0f - bulge) * scale_fac) / (float)M_PI_2;
 				
 				bulge = interpf(soft, hard, data->bulge_smooth);
 			}
@@ -3478,7 +3478,7 @@ static void shrinkwrap_get_tarmat(bConstraint *con, bConstraintOb *cob, bConstra
 
 					/* TODO should use FLT_MAX.. but normal projection doenst yet supports it */
 					hit.index = -1;
-					hit.dist = (scon->projLimit == 0.0f) ? 100000.0f : scon->projLimit;
+					hit.dist = (scon->projLimit == 0.0f) ? BVH_RAYCAST_DIST_MAX : scon->projLimit;
 
 					switch (scon->projAxis) {
 						case OB_POSX: case OB_POSY: case OB_POSZ:
@@ -4123,7 +4123,7 @@ static void followtrack_evaluate(bConstraint *con, bConstraintOb *cob, ListBase 
 
 					bvhtree_from_mesh_looptri(&treeData, target, 0.0f, 4, 6);
 
-					hit.dist = FLT_MAX;
+					hit.dist = BVH_RAYCAST_DIST_MAX;
 					hit.index = -1;
 
 					result = BLI_bvhtree_ray_cast(treeData.tree, ray_start, ray_nor, 0.0f, &hit, treeData.raycast_callback, &treeData);

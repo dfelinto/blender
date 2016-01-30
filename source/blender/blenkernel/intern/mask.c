@@ -804,7 +804,7 @@ static Mask *mask_alloc(Main *bmain, const char *name)
 
 	mask = BKE_libblock_alloc(bmain, ID_MSK, name);
 
-	mask->id.flag |= LIB_FAKEUSER;
+	id_fake_user_set(&mask->id);
 
 	return mask;
 }
@@ -843,10 +843,7 @@ Mask *BKE_mask_copy_nolib(Mask *mask)
 	BKE_mask_layer_copy_list(&mask_new->masklayers, &mask->masklayers);
 
 	/* enable fake user by default */
-	if (!(mask_new->id.flag & LIB_FAKEUSER)) {
-		mask_new->id.flag |= LIB_FAKEUSER;
-		mask_new->id.us++;
-	}
+	id_fake_user_set(&mask->id);
 
 	return mask_new;
 }
@@ -862,10 +859,7 @@ Mask *BKE_mask_copy(Mask *mask)
 	BKE_mask_layer_copy_list(&mask_new->masklayers, &mask->masklayers);
 
 	/* enable fake user by default */
-	if (!(mask_new->id.flag & LIB_FAKEUSER)) {
-		mask_new->id.flag |= LIB_FAKEUSER;
-		mask_new->id.us++;
-	}
+	id_fake_user_set(&mask->id);
 
 	if (mask->id.lib) {
 		BKE_id_lib_local_paths(G.main, mask->id.lib, &mask_new->id);
@@ -1595,8 +1589,8 @@ void BKE_mask_update_scene(Main *bmain, Scene *scene)
 	Mask *mask;
 
 	for (mask = bmain->mask.first; mask; mask = mask->id.next) {
-		if (mask->id.flag & (LIB_ID_RECALC | LIB_ID_RECALC_DATA)) {
-			bool do_new_frame = (mask->id.flag & LIB_ID_RECALC_DATA) != 0;
+		if (mask->id.tag & (LIB_TAG_ID_RECALC | LIB_TAG_ID_RECALC_DATA)) {
+			bool do_new_frame = (mask->id.tag & LIB_TAG_ID_RECALC_DATA) != 0;
 			BKE_mask_evaluate_all_masks(bmain, CFRA, do_new_frame);
 		}
 	}

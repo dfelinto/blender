@@ -150,6 +150,7 @@
 #include "BKE_curve.h"
 #include "BKE_constraint.h"
 #include "BKE_global.h" // for G
+#include "BKE_idcode.h"
 #include "BKE_library.h" // for  set_listbasepointers
 #include "BKE_main.h"
 #include "BKE_node.h"
@@ -1355,9 +1356,6 @@ static void write_actuators(WriteData *wd, ListBase *lb)
 			break;
 		case ACT_OBJECT:
 			writestruct(wd, DATA, "bObjectActuator", 1, act->data);
-			break;
-		case ACT_IPO:
-			writestruct(wd, DATA, "bIpoActuator", 1, act->data);
 			break;
 		case ACT_PROPERTY:
 			writestruct(wd, DATA, "bPropertyActuator", 1, act->data);
@@ -2899,7 +2897,7 @@ static void write_libraries(WriteData *wd, Main *main)
 			found_one = false;
 			while (tot--) {
 				for (id= lbarray[tot]->first; id; id= id->next) {
-					if (id->us>0 && (id->flag & LIB_EXTERN)) {
+					if (id->us > 0 && (id->tag & LIB_TAG_EXTERN)) {
 						found_one = true;
 						break;
 					}
@@ -2924,7 +2922,12 @@ static void write_libraries(WriteData *wd, Main *main)
 			
 			while (a--) {
 				for (id= lbarray[a]->first; id; id= id->next) {
-					if (id->us>0 && (id->flag & LIB_EXTERN)) {
+					if (id->us > 0 && (id->tag & LIB_TAG_EXTERN)) {
+						if (!BKE_idcode_is_linkable(GS(id->name))) {
+							printf("ERROR: write file: datablock '%s' from lib '%s' is not linkable "
+							       "but is flagged as directly linked", id->name, main->curlib->filepath);
+							BLI_assert(0);
+						}
 						writestruct(wd, ID_ID, "ID", 1, id);
 					}
 				}

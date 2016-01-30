@@ -430,7 +430,7 @@ typedef struct DecimateModifierData {
 	float percent;  /* (mode == MOD_DECIM_MODE_COLLAPSE) */
 	short iter;     /* (mode == MOD_DECIM_MODE_UNSUBDIV) */
 	char delimit;   /* (mode == MOD_DECIM_MODE_DISSOLVE) */
-	char pad;
+	char symmetry_axis; /* (mode == MOD_DECIM_MODE_COLLAPSE) */
 	float angle;    /* (mode == MOD_DECIM_MODE_DISSOLVE) */
 
 	char defgrp_name[64];  /* MAX_VGROUP_NAME */
@@ -445,6 +445,7 @@ enum {
 	MOD_DECIM_FLAG_INVERT_VGROUP       = (1 << 0),
 	MOD_DECIM_FLAG_TRIANGULATE         = (1 << 1),  /* for collapse only. dont convert tri pairs back to quads */
 	MOD_DECIM_FLAG_ALL_BOUNDARY_VERTS  = (1 << 2),  /* for dissolve only. collapse all verts between 2 faces */
+	MOD_DECIM_FLAG_SYMMETRY            = (1 << 3),
 };
 
 enum {
@@ -639,7 +640,9 @@ typedef struct BooleanModifierData {
 	ModifierData modifier;
 
 	struct Object *object;
-	int operation, pad;
+	char operation;
+	char bm_flag, pad[2];
+	float threshold;
 } BooleanModifierData;
 
 typedef enum {
@@ -647,6 +650,14 @@ typedef enum {
 	eBooleanModifierOp_Union      = 1,
 	eBooleanModifierOp_Difference = 2,
 } BooleanModifierOp;
+
+/* temp bm_flag (debugging only) */
+enum {
+	eBooleanModifierBMeshFlag_Enabled                   = (1 << 0),
+	eBooleanModifierBMeshFlag_BMesh_Separate            = (1 << 1),
+	eBooleanModifierBMeshFlag_BMesh_NoDissolve          = (1 << 2),
+	eBooleanModifierBMeshFlag_BMesh_NoConnectRegions    = (1 << 3),
+};
 
 typedef struct MDefInfluence {
 	int vertex;
@@ -687,7 +698,7 @@ typedef struct MeshDeformModifierData {
 	float *bindcos;                 /* deprecated storage of cage coords */
 
 	/* runtime */
-	void (*bindfunc)(struct Scene *scene, struct MeshDeformModifierData *mmd,
+	void (*bindfunc)(struct Scene *scene, struct MeshDeformModifierData *mmd, struct DerivedMesh *cagedm,
 	                 float *vertexcos, int totvert, float cagemat[4][4]);
 } MeshDeformModifierData;
 
@@ -705,7 +716,8 @@ typedef struct ParticleSystemModifierData {
 	ModifierData modifier;
 
 	struct ParticleSystem *psys;
-	struct DerivedMesh *dm;
+	struct DerivedMesh *dm_final;  /* Final DM - its topology may differ from orig mesh. */
+	struct DerivedMesh *dm_deformed;  /* Deformed-onle DM - its topology is same as orig mesh one. */
 	int totdmvert, totdmedge, totdmface;
 	short flag, pad;
 } ParticleSystemModifierData;

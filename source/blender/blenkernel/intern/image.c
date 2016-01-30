@@ -552,8 +552,8 @@ void BKE_image_make_local(struct Image *ima)
 			if (tex->id.lib == NULL) {
 				if (tex->ima == ima) {
 					tex->ima = ima_new;
-					ima_new->id.us++;
-					ima->id.us--;
+					id_us_plus(&ima_new->id);
+					id_us_min(&ima->id);
 				}
 			}
 			tex = tex->id.next;
@@ -563,8 +563,8 @@ void BKE_image_make_local(struct Image *ima)
 			if (brush->id.lib == NULL) {
 				if (brush->clone.image == ima) {
 					brush->clone.image = ima_new;
-					ima_new->id.us++;
-					ima->id.us--;
+					id_us_plus(&ima_new->id);
+					id_us_min(&ima->id);
 				}
 			}
 			brush = brush->id.next;
@@ -585,9 +585,7 @@ void BKE_image_make_local(struct Image *ima)
 						for (a = 0; a < me->totface; a++, tface++) {
 							if (tface->tpage == ima) {
 								tface->tpage = ima_new;
-								if (ima_new->id.us == 0) {
-									tface->tpage->id.us = 1;
-								}
+								id_us_ensure_real((ID *)ima_new);
 								id_lib_extern((ID *)ima_new);
 							}
 						}
@@ -606,9 +604,7 @@ void BKE_image_make_local(struct Image *ima)
 						for (a = 0; a < me->totpoly; a++, mtpoly++) {
 							if (mtpoly->tpage == ima) {
 								mtpoly->tpage = ima_new;
-								if (ima_new->id.us == 0) {
-									mtpoly->tpage->id.us = 1;
-								}
+								id_us_ensure_real((ID *)ima_new);
 								id_lib_extern((ID *)ima_new);
 							}
 						}
@@ -659,6 +655,18 @@ bool BKE_image_scale(Image *image, int width, int height)
 	BKE_image_release_ibuf(image, ibuf, lock);
 
 	return (ibuf != NULL);
+}
+
+bool BKE_image_has_bindcode(Image *ima)
+{
+	bool has_bindcode = false;
+	for (int i = 0; i < TEXTARGET_COUNT; i++) {
+		if (ima->bindcode[i]) {
+			has_bindcode = true;
+			break;
+		}
+	}
+	return has_bindcode;
 }
 
 static void image_init_color_management(Image *ima)
@@ -744,7 +752,7 @@ Image *BKE_image_load_exists_ex(const char *filepath, bool *r_exists)
 				if ((BKE_image_has_anim(ima) == false) ||
 				    (ima->id.us == 0))
 				{
-					ima->id.us++;  /* officially should not, it doesn't link here! */
+					id_us_plus(&ima->id);  /* officially should not, it doesn't link here! */
 					if (ima->ok == 0)
 						ima->ok = IMA_OK;
 					if (r_exists)
@@ -831,7 +839,9 @@ static ImBuf *add_ibuf_size(unsigned int width, unsigned int height, const char 
 }
 
 /* adds new image block, creates ImBuf and initializes color */
-Image *BKE_image_add_generated(Main *bmain, unsigned int width, unsigned int height, const char *name, int depth, int floatbuf, short gen_type, const float color[4], const bool stereo3d)
+Image *BKE_image_add_generated(
+        Main *bmain, unsigned int width, unsigned int height, const char *name,
+        int depth, int floatbuf, short gen_type, const float color[4], const bool stereo3d)
 {
 	/* on save, type is changed to FILE in editsima.c */
 	Image *ima = image_alloc(bmain, name, IMA_SRC_GENERATED, IMA_TYPE_UV_TEST);
@@ -1140,14 +1150,14 @@ void BKE_image_free_all_textures(void)
 #endif
 
 	for (ima = G.main->image.first; ima; ima = ima->id.next)
-		ima->id.flag &= ~LIB_DOIT;
+		ima->id.tag &= ~LIB_TAG_DOIT;
 
 	for (tex = G.main->tex.first; tex; tex = tex->id.next)
 		if (tex->ima)
-			tex->ima->id.flag |= LIB_DOIT;
+			tex->ima->id.tag |= LIB_TAG_DOIT;
 
 	for (ima = G.main->image.first; ima; ima = ima->id.next) {
-		if (ima->cache && (ima->id.flag & LIB_DOIT)) {
+		if (ima->cache && (ima->id.tag & LIB_TAG_DOIT)) {
 #ifdef CHECK_FREED_SIZE
 			uintptr_t old_size = image_mem_size(ima);
 #endif
@@ -1625,6 +1635,14 @@ void BKE_imbuf_to_image_format(struct ImageFormatData *im_format, const ImBuf *i
 		im_format->imtype = R_IMF_IMTYPE_TIFF;
 		if (custom_flags & TIF_16BIT)
 			im_format->depth = R_IMF_CHAN_DEPTH_16;
+		if (custom_flags & TIF_COMPRESS_NONE)
+			im_format->tiff_codec = R_IMF_TIFF_CODEC_NONE;
+		if (custom_flags & TIF_COMPRESS_DEFLATE)
+			im_format->tiff_codec = R_IMF_TIFF_CODEC_DEFLATE;
+		if (custom_flags & TIF_COMPRESS_LZW)
+			im_format->tiff_codec = R_IMF_TIFF_CODEC_LZW;
+		if (custom_flags & TIF_COMPRESS_PACKBITS)
+			im_format->tiff_codec = R_IMF_TIFF_CODEC_PACKBITS;
 	}
 #endif
 
@@ -2096,7 +2114,7 @@ void BKE_render_result_stamp_info(Scene *scene, Object *camera, struct RenderRes
 
 void BKE_stamp_info_callback(void *data, struct StampData *stamp_data, StampCallback callback, bool noskip)
 {
-	if (!callback || !stamp_data) {
+	if ((callback == NULL) || (stamp_data == NULL)) {
 		return;
 	}
 
@@ -2170,11 +2188,14 @@ bool BKE_imbuf_alpha_test(ImBuf *ibuf)
 
 /* note: imf->planes is ignored here, its assumed the image channels
  * are already set */
-void BKE_imbuf_write_prepare(ImBuf *ibuf, ImageFormatData *imf)
+void BKE_imbuf_write_prepare(ImBuf *ibuf, const ImageFormatData *imf)
 {
 	char imtype = imf->imtype;
 	char compress = imf->compress;
 	char quality = imf->quality;
+
+	/* initialize all from image format */
+	ibuf->foptions.flag = 0;
 
 	if (imtype == R_IMF_IMTYPE_IRIS) {
 		ibuf->ftype = IMB_FTYPE_IMAGIC;
@@ -2207,8 +2228,21 @@ void BKE_imbuf_write_prepare(ImBuf *ibuf, ImageFormatData *imf)
 	else if (imtype == R_IMF_IMTYPE_TIFF) {
 		ibuf->ftype = IMB_FTYPE_TIF;
 
-		if (imf->depth == R_IMF_CHAN_DEPTH_16)
+		if (imf->depth == R_IMF_CHAN_DEPTH_16) {
 			ibuf->foptions.flag |= TIF_16BIT;
+		}
+		if (imf->tiff_codec == R_IMF_TIFF_CODEC_NONE) {
+			ibuf->foptions.flag |= TIF_COMPRESS_NONE;
+		}
+		else if (imf->tiff_codec == R_IMF_TIFF_CODEC_DEFLATE) {
+			ibuf->foptions.flag |= TIF_COMPRESS_DEFLATE;
+		}
+		else if (imf->tiff_codec == R_IMF_TIFF_CODEC_LZW) {
+			ibuf->foptions.flag |= TIF_COMPRESS_LZW;
+		}
+		else if (imf->tiff_codec == R_IMF_TIFF_CODEC_PACKBITS) {
+			ibuf->foptions.flag |= TIF_COMPRESS_PACKBITS;
+		}
 	}
 #endif
 #ifdef WITH_OPENEXR
@@ -2301,7 +2335,7 @@ void BKE_imbuf_write_prepare(ImBuf *ibuf, ImageFormatData *imf)
 	}
 }
 
-int BKE_imbuf_write(ImBuf *ibuf, const char *name, ImageFormatData *imf)
+int BKE_imbuf_write(ImBuf *ibuf, const char *name, const ImageFormatData *imf)
 {
 	int ok;
 
@@ -2335,12 +2369,15 @@ int BKE_imbuf_write_as(ImBuf *ibuf, const char *name, ImageFormatData *imf,
 		/* note that we are not restoring _all_ settings */
 		ibuf->planes = ibuf_back.planes;
 		ibuf->ftype =  ibuf_back.ftype;
+		ibuf->foptions =  ibuf_back.foptions;
 	}
 
 	return ok;
 }
 
-int BKE_imbuf_write_stamp(Scene *scene, struct RenderResult *rr, ImBuf *ibuf, const char *name, struct ImageFormatData *imf)
+int BKE_imbuf_write_stamp(
+        Scene *scene, struct RenderResult *rr, ImBuf *ibuf, const char *name,
+        const struct ImageFormatData *imf)
 {
 	if (scene && scene->r.stamp & R_STAMP_ALL)
 		BKE_imbuf_stamp_info(rr, ibuf);
@@ -2864,21 +2901,30 @@ bool BKE_image_is_stereo(Image *ima)
             BLI_findstring(&ima->views, STEREO_RIGHT_NAME, offsetof(ImageView, name)));
 }
 
-static void image_view_from_render_view(ImageView *iv_dst, RenderView *rv_src)
-{
-	BLI_strncpy(iv_dst->name, rv_src->name, sizeof(iv_dst->name));
-}
-
 static void image_init_multilayer_multiview(Image *ima, RenderResult *rr)
 {
+	/* update image views from render views, but only if they actually changed,
+	 * to avoid invalid memory access during render. ideally these should always
+	 * be acquired with a mutex along with the render result, but there are still
+	 * some places with just an image pointer that need to access views */
+	if (rr && BLI_listbase_count(&ima->views) == BLI_listbase_count(&rr->views)) {
+		ImageView *iv = ima->views.first;
+		RenderView *rv = rr->views.first;
+		bool modified = false;
+		for (; rv; rv = rv->next, iv = iv->next) {
+			modified |= !STREQ(rv->name, iv->name);
+		}
+		if (!modified)
+			return;
+	}
+
 	BKE_image_free_views(ima);
+
 	if (rr) {
-		RenderView *rv_src;
-		for (rv_src = rr->views.first; rv_src; rv_src = rv_src->next) {
-			ImageView *iv_dst;
-			iv_dst = MEM_callocN(sizeof(ImageView), "Viewer Image View");
-			image_view_from_render_view(iv_dst, rv_src);
-			BLI_addhead(&ima->views, iv_dst);
+		for (RenderView *rv = rr->views.first; rv; rv = rv->next) {
+			ImageView *iv = MEM_callocN(sizeof(ImageView), "Viewer Image View");
+			BLI_strncpy(iv->name, rv->name, sizeof(iv->name));
+			BLI_addtail(&ima->views, iv);
 		}
 	}
 }
@@ -2926,7 +2972,7 @@ bool BKE_image_is_openexr(struct Image *ima)
 	return false;
 }
 
-void BKE_image_backup_render(Scene *scene, Image *ima)
+void BKE_image_backup_render(Scene *scene, Image *ima, bool free_current_slot)
 {
 	/* called right before rendering, ima->renders contains render
 	 * result pointers for everything but the current render */
@@ -2934,13 +2980,18 @@ void BKE_image_backup_render(Scene *scene, Image *ima)
 	int slot = ima->render_slot, last = ima->last_render_slot;
 
 	if (slot != last) {
-		if (ima->renders[slot]) {
-			RE_FreeRenderResult(ima->renders[slot]);
-			ima->renders[slot] = NULL;
-		}
-
 		ima->renders[last] = NULL;
 		RE_SwapResult(re, &ima->renders[last]);
+
+		if (ima->renders[slot]) {
+			if (free_current_slot) {
+				RE_FreeRenderResult(ima->renders[slot]);
+				ima->renders[slot] = NULL;
+			}
+			else {
+				RE_SwapResult(re, &ima->renders[slot]);
+			}
+		}
 	}
 
 	ima->last_render_slot = slot;
@@ -4370,6 +4421,15 @@ void BKE_image_get_size(Image *image, ImageUser *iuser, int *width, int *height)
 	if (ibuf && ibuf->x > 0 && ibuf->y > 0) {
 		*width = ibuf->x;
 		*height = ibuf->y;
+	}
+	else if (image->type == IMA_TYPE_R_RESULT && iuser != NULL && iuser->scene != NULL) {
+		Scene *scene = iuser->scene;
+		*width = (scene->r.xsch * scene->r.size) / 100;
+		*height = (scene->r.ysch * scene->r.size) / 100;
+		if ((scene->r.mode & R_BORDER) && (scene->r.mode & R_CROP)) {
+			*width *= BLI_rctf_size_x(&scene->r.border);
+			*height *= BLI_rctf_size_y(&scene->r.border);
+		}
 	}
 	else {
 		*width  = IMG_SIZE_FALLBACK;

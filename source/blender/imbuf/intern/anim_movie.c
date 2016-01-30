@@ -127,9 +127,9 @@ static void free_anim_movie(struct anim *UNUSED(anim))
 
 
 #if defined(_WIN32)
-# define PATHSEPERATOR '\\'
+# define PATHSEPARATOR '\\'
 #else
-# define PATHSEPERATOR '/'
+# define PATHSEPARATOR '/'
 #endif
 
 static int an_stringdec(const char *string, char *head, char *tail, unsigned short *numlen)
@@ -142,7 +142,7 @@ static int an_stringdec(const char *string, char *head, char *tail, unsigned sho
 	nume = len;
 
 	for (i = len - 1; i >= 0; i--) {
-		if (string[i] == PATHSEPERATOR) break;
+		if (string[i] == PATHSEPARATOR) break;
 		if (isdigit(string[i])) {
 			if (found) {
 				nums = i;
@@ -525,9 +525,14 @@ static int startffmpeg(struct anim *anim)
 	}
 
 	frame_rate = av_get_r_frame_rate_compat(pFormatCtx->streams[videoStream]);
-	anim->duration = ceil(pFormatCtx->duration *
-	                      av_q2d(frame_rate) /
-	                      AV_TIME_BASE);
+	if (pFormatCtx->streams[videoStream]->nb_frames != 0) {
+		anim->duration = pFormatCtx->streams[videoStream]->nb_frames;
+	}
+	else {
+		anim->duration = ceil(pFormatCtx->duration *
+		                      av_q2d(frame_rate) /
+		                      AV_TIME_BASE);
+	}
 
 	frs_num = frame_rate.num;
 	frs_den = frame_rate.den;
@@ -826,7 +831,7 @@ static int ffmpeg_decode_video_frame(struct anim *anim)
 		 * which is necessary to decode the remaining data
 		 * in the decoder engine after EOF. It also prevents a memory
 		 * leak, since av_read_frame spills out a full size packet even
-		 * on EOF... (and: it's save to call on NULL packets) */
+		 * on EOF... (and: it's safe to call on NULL packets) */
 
 		av_free_packet(&anim->next_packet);
 

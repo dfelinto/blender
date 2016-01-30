@@ -209,8 +209,8 @@ void BKE_lamp_make_local(Lamp *la)
 				
 				if (ob->id.lib == NULL) {
 					ob->data = la_new;
-					la_new->id.us++;
-					la->id.us--;
+					id_us_plus(&la_new->id);
+					id_us_min(&la->id);
 				}
 			}
 			ob = ob->id.next;
@@ -225,8 +225,10 @@ void BKE_lamp_free(Lamp *la)
 
 	for (a = 0; a < MAX_MTEX; a++) {
 		mtex = la->mtex[a];
-		if (mtex && mtex->tex) mtex->tex->id.us--;
-		if (mtex) MEM_freeN(mtex);
+		if (mtex && mtex->tex)
+			id_us_min(&mtex->tex->id);
+		if (mtex)
+			MEM_freeN(mtex);
 	}
 	
 	BKE_animdata_free((ID *)la);
@@ -263,12 +265,12 @@ static void lamp_node_drivers_update(Scene *scene, bNodeTree *ntree, float ctime
 void lamp_drivers_update(Scene *scene, Lamp *la, float ctime)
 {
 	/* Prevent infinite recursion by checking (and tagging the lamp) as having been visited already
-	 * (see BKE_scene_update_tagged()). This assumes la->id.flag & LIB_DOIT isn't set by anything else
+	 * (see BKE_scene_update_tagged()). This assumes la->id.tag & LIB_TAG_DOIT isn't set by anything else
 	 * in the meantime... [#32017] */
-	if (la->id.flag & LIB_DOIT)
+	if (la->id.tag & LIB_TAG_DOIT)
 		return;
 
-	la->id.flag |= LIB_DOIT;
+	la->id.tag |= LIB_TAG_DOIT;
 	
 	/* lamp itself */
 	if (la->adt && la->adt->drivers.first)
@@ -278,6 +280,6 @@ void lamp_drivers_update(Scene *scene, Lamp *la, float ctime)
 	if (la->nodetree)
 		lamp_node_drivers_update(scene, la->nodetree, ctime);
 
-	la->id.flag &= ~LIB_DOIT;
+	la->id.tag &= ~LIB_TAG_DOIT;
 }
 

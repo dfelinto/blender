@@ -155,14 +155,6 @@ extern const short ui_radial_dir_to_angle[8];
 #define PNL_GRID    (UI_UNIT_Y / 5) /* 4 default */
 #define PNL_HEADER  (UI_UNIT_Y + 4) /* 24 default */
 
-/* Button text selection:
- * extension direction, selextend, inside ui_do_but_TEX */
-#define EXTEND_LEFT     1
-#define EXTEND_RIGHT    2
-
-/* for scope resize zone */
-#define SCOPE_RESIZE_PAD    9
-
 /* bit button defines */
 /* Bit operations */
 #define UI_BITBUT_TEST(a, b)    ( ( (a) & 1 << (b) ) != 0)
@@ -173,6 +165,9 @@ extern const short ui_radial_dir_to_angle[8];
 
 /* split numbuts by ':' and align l/r */
 #define USE_NUMBUTS_LR_ALIGN
+
+/* Use new 'align' computation code. */
+#define USE_UIBUT_SPATIAL_ALIGN
 
 /* PieMenuData->flags */
 enum {
@@ -285,6 +280,8 @@ struct uiBut {
 
 	/* UI_BTYPE_PULLDOWN/UI_BTYPE_MENU data */
 	uiMenuCreateFunc menu_create_func;
+
+	uiMenuStepFunc menu_step_func;
 
 	/* RNA data */
 	struct PointerRNA rnapoin;
@@ -467,6 +464,7 @@ bool ui_but_is_colorpicker_display_space(struct uiBut *but);
 
 extern void ui_but_string_get_ex(uiBut *but, char *str, const size_t maxlen, const int float_precision) ATTR_NONNULL();
 extern void ui_but_string_get(uiBut *but, char *str, const size_t maxlen) ATTR_NONNULL();
+extern char *ui_but_string_get_dynamic(uiBut *but, int *r_str_size);
 extern void ui_but_convert_to_unit_alt_name(uiBut *but, char *str, size_t maxlen) ATTR_NONNULL();
 extern bool ui_but_string_set(struct bContext *C, uiBut *but, const char *str) ATTR_NONNULL();
 extern bool ui_but_string_set_eval_num(struct bContext *C, uiBut *but, const char *str, double *value) ATTR_NONNULL();
@@ -493,7 +491,6 @@ extern int  ui_but_is_pushed(uiBut *but) ATTR_WARN_UNUSED_RESULT;
 
 extern void ui_block_bounds_calc(uiBlock *block);
 extern void ui_block_translate(uiBlock *block, int x, int y);
-extern void ui_block_align_calc(uiBlock *block);
 
 extern struct ColorManagedDisplay *ui_block_cm_display_get(uiBlock *block);
 void ui_block_cm_to_display_space_v3(uiBlock *block, float pixel[3]);
@@ -651,6 +648,7 @@ void ui_but_pie_dir_visual(RadialDirection dir, float vec[2]);
 void ui_but_pie_dir(RadialDirection dir, float vec[2]);
 float ui_block_calc_pie_segment(struct uiBlock *block, const float event_xy[2]);
 
+void ui_but_add_shortcut(uiBut *but, const char *key_str, const bool do_strip);
 void ui_but_clipboard_free(void);
 void ui_panel_menu(struct bContext *C, ARegion *ar, Panel *pa);
 uiBut *ui_but_find_old(uiBlock *block_old, const uiBut *but_new);
@@ -701,10 +699,12 @@ void ui_resources_free(void);
 
 /* interface_layout.c */
 void ui_layout_add_but(uiLayout *layout, uiBut *but);
-bool ui_but_can_align(uiBut *but) ATTR_WARN_UNUSED_RESULT;
 void ui_but_add_search(uiBut *but, PointerRNA *ptr, PropertyRNA *prop, PointerRNA *searchptr, PropertyRNA *searchprop);
-void ui_but_add_shortcut(uiBut *but, const char *key_str, const bool do_strip);
 void ui_layout_list_set_labels_active(uiLayout *layout);
+
+/* interface_align.c */
+bool ui_but_can_align(const uiBut *but) ATTR_WARN_UNUSED_RESULT;
+void ui_block_align_calc(uiBlock *block);
 
 /* interface_anim.c */
 void ui_but_anim_flag(uiBut *but, float cfra);

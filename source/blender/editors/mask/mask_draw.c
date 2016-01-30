@@ -197,7 +197,6 @@ static void draw_single_handle(const MaskLayer *mask_layer, const MaskSplinePoin
 		glVertex2fv(point_pos);
 		glVertex2fv(handle_pos);
 		glEnd();
-		glLineWidth(1);
 	}
 
 	switch (handle_type) {
@@ -213,6 +212,7 @@ static void draw_single_handle(const MaskLayer *mask_layer, const MaskSplinePoin
 			break;
 	}
 
+	glLineWidth(1);
 	glBegin(GL_LINES);
 	glVertex2fv(point_pos);
 	glVertex2fv(handle_pos);
@@ -386,8 +386,6 @@ static void draw_spline_points(const bContext *C, MaskLayer *masklay, MaskSpline
 		glColor3ub(0, 0, 0);
 		draw_circle(x, y, 6.0f, false, xscale, yscale);
 	}
-
-	glPointSize(1.0f);
 
 	if (is_smooth) {
 		glDisable(GL_LINE_SMOOTH);
@@ -669,7 +667,7 @@ typedef struct ThreadedMaskRasterizeData {
 	int num_scanlines;
 } ThreadedMaskRasterizeData;
 
-static void mask_rasterize_func(TaskPool *pool, void *taskdata, int UNUSED(threadid))
+static void mask_rasterize_func(TaskPool * __restrict pool, void *taskdata, int UNUSED(threadid))
 {
 	ThreadedMaskRasterizeState *state = (ThreadedMaskRasterizeState *) BLI_task_pool_userdata(pool);
 	ThreadedMaskRasterizeData *data = (ThreadedMaskRasterizeData *) taskdata;

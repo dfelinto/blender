@@ -123,10 +123,11 @@ static void library_foreach_modifiersForeachIDLink(
 }
 
 static void library_foreach_constraintObjectLooper(bConstraint *UNUSED(con), ID **id_pointer,
-                                                   bool UNUSED(is_reference), void *user_data)
+                                                   bool is_reference, void *user_data)
 {
 	LibraryForeachIDData *data = (LibraryForeachIDData *) user_data;
-	FOREACH_CALLBACK_INVOKE_ID_PP(data->self_id, id_pointer, data->flag, data->callback, data->user_data, IDWALK_NOP);
+	const int cd_flag = is_reference ? IDWALK_USER : IDWALK_NOP;
+	FOREACH_CALLBACK_INVOKE_ID_PP(data->self_id, id_pointer, data->flag, data->callback, data->user_data, cd_flag);
 }
 
 static void library_foreach_particlesystemsObjectLooper(
@@ -223,9 +224,8 @@ void BKE_library_foreach_ID_link(ID *id, LibraryIDLinkCallback callback, void *u
 			CALLBACK_INVOKE(scene->set, IDWALK_NOP);
 			CALLBACK_INVOKE(scene->clip, IDWALK_NOP);
 			CALLBACK_INVOKE(scene->nodetree, IDWALK_NOP);
-			if (scene->basact) {
-				CALLBACK_INVOKE(scene->basact->object, IDWALK_NOP);
-			}
+			/* DO NOT handle scene->basact here, it's doubling with the loop over whole scene->base later,
+			 * since basact is just a pointer to one of those items. */
 			CALLBACK_INVOKE(scene->obedit, IDWALK_NOP);
 
 			for (srl = scene->r.layers.first; srl; srl = srl->next) {
@@ -303,6 +303,8 @@ void BKE_library_foreach_ID_link(ID *id, LibraryIDLinkCallback callback, void *u
 				BKE_rigidbody_world_id_loop(scene->rigidbody_world, library_foreach_rigidbodyworldSceneLooper, &data);
 			}
 
+			CALLBACK_INVOKE(scene->gm.dome.warptext, IDWALK_NOP);
+
 			break;
 		}
 
@@ -335,14 +337,6 @@ void BKE_library_foreach_ID_link(ID *id, LibraryIDLinkCallback callback, void *u
 			}
 			CALLBACK_INVOKE(object->gpd, IDWALK_USER);
 			CALLBACK_INVOKE(object->dup_group, IDWALK_USER);
-
-			if (object->particlesystem.first) {
-				ParticleSystem *psys;
-				for (psys = object->particlesystem.first; psys; psys = psys->next) {
-					CALLBACK_INVOKE(psys->target_ob, IDWALK_NOP);
-					CALLBACK_INVOKE(psys->parent, IDWALK_NOP);
-				}
-			}
 
 			if (object->pd) {
 				CALLBACK_INVOKE(object->pd->tex, IDWALK_USER);
@@ -514,7 +508,7 @@ void BKE_library_foreach_ID_link(ID *id, LibraryIDLinkCallback callback, void *u
 			Group *group = (Group *) id;
 			GroupObject *gob;
 			for (gob = group->gobject.first; gob; gob = gob->next) {
-				CALLBACK_INVOKE(gob->ob, IDWALK_NOP);
+				CALLBACK_INVOKE(gob->ob, IDWALK_USER_ONE);
 			}
 			break;
 		}
@@ -670,8 +664,52 @@ void BKE_library_update_ID_link_user(ID *id_dst, ID *id_src, const int cd_flag)
 		id_us_plus(id_dst);
 	}
 	else if (cd_flag & IDWALK_USER_ONE) {
-		if (id_dst->us == 0) {
-			id_us_plus(id_dst);
-		}
+		id_us_ensure_real(id_dst);
 	}
+}
+
+/* ***** ID users iterator. ***** */
+typedef struct IDUsersIter {
+	ID *id;
+
+	ListBase *lb_array[MAX_LIBARRAY];
+	int lb_idx;
+
+	ID *curr_id;
+	int count;  /* Set by callback. */
+} IDUsersIter;
+
+static bool foreach_libblock_id_users_callback(void *user_data, ID **id_p, int UNUSED(cb_flag))
+{
+	IDUsersIter *iter = user_data;
+
+	if (*id_p && (*id_p == iter->id)) {
+		iter->count++;
+	}
+
+	return true;
+}
+
+/**
+ * Return the number of times given \a id_user uses/references \a id_used.
+ *
+ * \note This only checks for pointer references of an ID, shallow usages (like e.g. by RNA paths, as done
+ *       for FCurves) are not detected at all.
+ *
+ * \param id_user the ID which is supposed to use (reference) \a id_used.
+ * \param id_used the ID which is supposed to be used (referenced) by \a id_user.
+ * \return the number of direct usages/references of \a id_used by \a id_user.
+ */
+int BKE_library_ID_use_ID(ID *id_user, ID *id_used)
+{
+	IDUsersIter iter;
+
+	/* We do not care about iter.lb_array/lb_idx here... */
+	iter.id = id_used;
+	iter.curr_id = id_user;
+	iter.count = 0;
+
+	BKE_library_foreach_ID_link(iter.curr_id, foreach_libblock_id_users_callback, (void *)&iter, IDWALK_NOP);
+
+	return iter.count;
 }

@@ -116,7 +116,7 @@
 /* this is an exact copy of the define in rna_lamp.c
  * kept here because of linking order.
  * Icons are only defined here */
-EnumPropertyItem lamp_type_items[] = {
+EnumPropertyItem rna_enum_lamp_type_items[] = {
 	{LA_LOCAL, "POINT", ICON_LAMP_POINT, "Point", "Omnidirectional point light source"},
 	{LA_SUN, "SUN", ICON_LAMP_SUN, "Sun", "Constant direction parallel ray light source"},
 	{LA_SPOT, "SPOT", ICON_LAMP_SPOT, "Spot", "Directional cone light source"},
@@ -261,10 +261,7 @@ static void view_align_update(struct Main *UNUSED(main), struct Scene *UNUSED(sc
 
 void ED_object_add_unit_props(wmOperatorType *ot)
 {
-	PropertyRNA *prop;
-
-	prop = RNA_def_float(ot->srna, "radius", 1.0f, 0.0, OBJECT_ADD_SIZE_MAXF, "Radius", "", 0.001, 100.00);
-	RNA_def_property_subtype(prop, PROP_DISTANCE);
+	RNA_def_float_distance(ot->srna, "radius", 1.0f, 0.0, OBJECT_ADD_SIZE_MAXF, "Radius", "", 0.001, 100.00);
 }
 
 void ED_object_add_generic_props(wmOperatorType *ot, bool do_editmode)
@@ -291,6 +288,11 @@ void ED_object_add_generic_props(wmOperatorType *ot, bool do_editmode)
 
 	prop = RNA_def_boolean_layer_member(ot->srna, "layers", 20, NULL, "Layer", "");
 	RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
+}
+
+void ED_object_add_mesh_props(wmOperatorType *ot)
+{
+	RNA_def_boolean(ot->srna, "calc_uvs", false, "Generate UVs", "Generate a default UV map");
 }
 
 bool ED_object_add_generic_get_opts(bContext *C, wmOperator *op, const char view_align_axis,
@@ -482,7 +484,7 @@ void OBJECT_OT_add(wmOperatorType *ot)
 
 	/* properties */
 	ED_object_add_unit_props(ot);
-	RNA_def_enum(ot->srna, "type", object_type_items, 0, "Type", "");
+	RNA_def_enum(ot->srna, "type", rna_enum_object_type_items, 0, "Type", "");
 
 	ED_object_add_generic_props(ot, true);
 }
@@ -516,7 +518,7 @@ static int effector_add_exec(bContext *C, wmOperator *op)
 		cu->flag |= CU_PATH | CU_3D;
 		ED_object_editmode_enter(C, 0);
 		ED_object_new_primitive_matrix(C, ob, loc, rot, mat);
-		BLI_addtail(&cu->editnurb->nurbs, add_nurbs_primitive(C, ob, mat, CU_NURBS | CU_PRIM_PATH, dia));
+		BLI_addtail(&cu->editnurb->nurbs, ED_curve_add_nurbs_primitive(C, ob, mat, CU_NURBS | CU_PRIM_PATH, dia));
 		if (!enter_editmode)
 			ED_object_editmode_exit(C, EM_FREEDATA);
 	}
@@ -641,7 +643,7 @@ static int object_metaball_add_exec(bContext *C, wmOperator *op)
 	ED_object_new_primitive_matrix(C, obedit, loc, rot, mat);
 	dia = RNA_float_get(op->ptr, "radius");
 
-	add_metaball_primitive(C, obedit, mat, dia, RNA_enum_get(op->ptr, "type"));
+	ED_mball_add_primitive(C, obedit, mat, dia, RNA_enum_get(op->ptr, "type"));
 
 	/* userdef */
 	if (newob && !enter_editmode) {
@@ -668,7 +670,7 @@ void OBJECT_OT_metaball_add(wmOperatorType *ot)
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
-	ot->prop = RNA_def_enum(ot->srna, "type", metaelem_type_items, 0, "Primitive", "");
+	ot->prop = RNA_def_enum(ot->srna, "type", rna_enum_metaelem_type_items, 0, "Primitive", "");
 
 	ED_object_add_unit_props(ot);
 	ED_object_add_generic_props(ot, true);
@@ -815,7 +817,7 @@ void OBJECT_OT_empty_add(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
 	/* properties */
-	ot->prop = RNA_def_enum(ot->srna, "type", object_empty_drawtype_items, 0, "Type", "");
+	ot->prop = RNA_def_enum(ot->srna, "type", rna_enum_object_empty_drawtype_items, 0, "Type", "");
 
 	ED_object_add_unit_props(ot);
 	ED_object_add_generic_props(ot, false);
@@ -951,7 +953,7 @@ void OBJECT_OT_lamp_add(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
 	/* properties */
-	ot->prop = RNA_def_enum(ot->srna, "type", lamp_type_items, 0, "Type", "");
+	ot->prop = RNA_def_enum(ot->srna, "type", rna_enum_lamp_type_items, 0, "Type", "");
 	RNA_def_property_translation_context(ot->prop, BLT_I18NCONTEXT_ID_LAMP);
 
 	ED_object_add_unit_props(ot);
@@ -1157,12 +1159,12 @@ static int object_delete_exec(bContext *C, wmOperator *op)
 		return OPERATOR_CANCELLED;
 
 	/* delete has to handle all open scenes */
-	BKE_main_id_flag_listbase(&bmain->scene, LIB_DOIT, 1);
+	BKE_main_id_flag_listbase(&bmain->scene, LIB_TAG_DOIT, 1);
 	for (win = wm->windows.first; win; win = win->next) {
 		scene = win->screen->scene;
 		
-		if (scene->id.flag & LIB_DOIT) {
-			scene->id.flag &= ~LIB_DOIT;
+		if (scene->id.tag & LIB_TAG_DOIT) {
+			scene->id.tag &= ~LIB_TAG_DOIT;
 			
 			DAG_relations_tag_update(bmain);
 
@@ -1543,7 +1545,7 @@ static int convert_exec(bContext *C, wmOperator *op)
 
 			/* flag data thats not been edited (only needed for !keep_original) */
 			if (ob->data) {
-				((ID *)ob->data)->flag |= LIB_DOIT;
+				((ID *)ob->data)->tag |= LIB_TAG_DOIT;
 			}
 
 			/* possible metaball basis is not in this scene */
@@ -1587,7 +1589,7 @@ static int convert_exec(bContext *C, wmOperator *op)
 
 				/* decrement original mesh's usage count  */
 				me = newob->data;
-				me->id.us--;
+				id_us_min(&me->id);
 
 				/* make a new copy of the mesh */
 				newob->data = BKE_mesh_copy(me);
@@ -1612,7 +1614,7 @@ static int convert_exec(bContext *C, wmOperator *op)
 
 				/* decrement original mesh's usage count  */
 				me = newob->data;
-				me->id.us--;
+				id_us_min(&me->id);
 
 				/* make a new copy of the mesh */
 				newob->data = BKE_mesh_copy(me);
@@ -1643,7 +1645,7 @@ static int convert_exec(bContext *C, wmOperator *op)
 				newob = basen->object;
 
 				/* decrement original curve's usage count  */
-				((Curve *)newob->data)->id.us--;
+				id_us_min(&((Curve *)newob->data)->id);
 
 				/* make a new copy of the curve */
 				newob->data = BKE_curve_copy(ob->data);
@@ -1664,19 +1666,19 @@ static int convert_exec(bContext *C, wmOperator *op)
 			cu->type = OB_CURVE;
 
 			if (cu->vfont) {
-				cu->vfont->id.us--;
+				id_us_min(&cu->vfont->id);
 				cu->vfont = NULL;
 			}
 			if (cu->vfontb) {
-				cu->vfontb->id.us--;
+				id_us_min(&cu->vfontb->id);
 				cu->vfontb = NULL;
 			}
 			if (cu->vfonti) {
-				cu->vfonti->id.us--;
+				id_us_min(&cu->vfonti->id);
 				cu->vfonti = NULL;
 			}
 			if (cu->vfontbi) {
-				cu->vfontbi->id.us--;
+				id_us_min(&cu->vfontbi->id);
 				cu->vfontbi = NULL;
 			}
 
@@ -1714,7 +1716,7 @@ static int convert_exec(bContext *C, wmOperator *op)
 					newob = basen->object;
 
 					/* decrement original curve's usage count  */
-					((Curve *)newob->data)->id.us--;
+					id_us_min(&((Curve *)newob->data)->id);
 
 					/* make a new copy of the curve */
 					newob->data = BKE_curve_copy(ob->data);
@@ -1749,7 +1751,7 @@ static int convert_exec(bContext *C, wmOperator *op)
 				newob = basen->object;
 
 				mb = newob->data;
-				mb->id.us--;
+				id_us_min(&mb->id);
 
 				newob->data = BKE_mesh_add(bmain, "Mesh");
 				newob->type = OB_MESH;
@@ -1789,7 +1791,7 @@ static int convert_exec(bContext *C, wmOperator *op)
 
 		if (!keep_original && (ob->flag & OB_DONE)) {
 			DAG_id_tag_update(&ob->id, OB_RECALC_DATA);
-			((ID *)ob->data)->flag &= ~LIB_DOIT; /* flag not to convert this datablock again */
+			((ID *)ob->data)->tag &= ~LIB_TAG_DOIT; /* flag not to convert this datablock again */
 		}
 	}
 	CTX_DATA_END;
@@ -1915,7 +1917,7 @@ static Base *object_add_duplicate_internal(Main *bmain, Scene *scene, Base *base
 					ID_NEW_US(obn->mat[a])
 					else
 						obn->mat[a] = BKE_material_copy(obn->mat[a]);
-					id->us--;
+					id_us_min(id);
 
 					if (dupflag & USER_DUP_ACT) {
 						BKE_animdata_copy_id_action(&obn->mat[a]->id);
@@ -1936,7 +1938,7 @@ static Base *object_add_duplicate_internal(Main *bmain, Scene *scene, Base *base
 						BKE_animdata_copy_id_action(&psys->part->id);
 					}
 
-					id->us--;
+					id_us_min(id);
 				}
 			}
 		}
@@ -1952,7 +1954,7 @@ static Base *object_add_duplicate_internal(Main *bmain, Scene *scene, Base *base
 						obn->data = BKE_mesh_copy(obn->data);
 						didit = 1;
 					}
-					id->us--;
+					id_us_min(id);
 				}
 				break;
 			case OB_CURVE:
@@ -1962,7 +1964,7 @@ static Base *object_add_duplicate_internal(Main *bmain, Scene *scene, Base *base
 						obn->data = BKE_curve_copy(obn->data);
 						didit = 1;
 					}
-					id->us--;
+					id_us_min(id);
 				}
 				break;
 			case OB_SURF:
@@ -1972,7 +1974,7 @@ static Base *object_add_duplicate_internal(Main *bmain, Scene *scene, Base *base
 						obn->data = BKE_curve_copy(obn->data);
 						didit = 1;
 					}
-					id->us--;
+					id_us_min(id);
 				}
 				break;
 			case OB_FONT:
@@ -1982,7 +1984,7 @@ static Base *object_add_duplicate_internal(Main *bmain, Scene *scene, Base *base
 						obn->data = BKE_curve_copy(obn->data);
 						didit = 1;
 					}
-					id->us--;
+					id_us_min(id);
 				}
 				break;
 			case OB_MBALL:
@@ -1992,7 +1994,7 @@ static Base *object_add_duplicate_internal(Main *bmain, Scene *scene, Base *base
 						obn->data = BKE_mball_copy(obn->data);
 						didit = 1;
 					}
-					id->us--;
+					id_us_min(id);
 				}
 				break;
 			case OB_LAMP:
@@ -2002,7 +2004,7 @@ static Base *object_add_duplicate_internal(Main *bmain, Scene *scene, Base *base
 						obn->data = BKE_lamp_copy(obn->data);
 						didit = 1;
 					}
-					id->us--;
+					id_us_min(id);
 				}
 				break;
 			case OB_ARMATURE:
@@ -2016,7 +2018,7 @@ static Base *object_add_duplicate_internal(Main *bmain, Scene *scene, Base *base
 						BKE_pose_rebuild(obn, obn->data);
 						didit = 1;
 					}
-					id->us--;
+					id_us_min(id);
 				}
 				break;
 			case OB_LATTICE:
@@ -2026,7 +2028,7 @@ static Base *object_add_duplicate_internal(Main *bmain, Scene *scene, Base *base
 						obn->data = BKE_lattice_copy(obn->data);
 						didit = 1;
 					}
-					id->us--;
+					id_us_min(id);
 				}
 				break;
 			case OB_CAMERA:
@@ -2036,7 +2038,7 @@ static Base *object_add_duplicate_internal(Main *bmain, Scene *scene, Base *base
 						obn->data = BKE_camera_copy(obn->data);
 						didit = 1;
 					}
-					id->us--;
+					id_us_min(id);
 				}
 				break;
 			case OB_SPEAKER:
@@ -2046,7 +2048,7 @@ static Base *object_add_duplicate_internal(Main *bmain, Scene *scene, Base *base
 						obn->data = BKE_speaker_copy(obn->data);
 						didit = 1;
 					}
-					id->us--;
+					id_us_min(id);
 				}
 				break;
 		}
@@ -2083,7 +2085,7 @@ static Base *object_add_duplicate_internal(Main *bmain, Scene *scene, Base *base
 							ID_NEW_US((*matarar)[a])
 							else
 								(*matarar)[a] = BKE_material_copy((*matarar)[a]);
-							id->us--;
+							id_us_min(id);
 						}
 					}
 				}
@@ -2186,7 +2188,7 @@ void OBJECT_OT_duplicate(wmOperatorType *ot)
 
 	/* to give to transform */
 	RNA_def_boolean(ot->srna, "linked", 0, "Linked", "Duplicate object but not object data, linking to the original data");
-	prop = RNA_def_enum(ot->srna, "mode", transform_mode_types, TFM_TRANSLATION, "Mode", "");
+	prop = RNA_def_enum(ot->srna, "mode", rna_enum_transform_mode_types, TFM_TRANSLATION, "Mode", "");
 	RNA_def_property_flag(prop, PROP_HIDDEN);
 }
 

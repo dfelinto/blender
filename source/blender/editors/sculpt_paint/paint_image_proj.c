@@ -306,6 +306,8 @@ typedef struct ProjPaintState {
 	/* reproject vars */
 	Image *reproject_image;
 	ImBuf *reproject_ibuf;
+	bool   reproject_ibuf_free_float;
+	bool   reproject_ibuf_free_uchar;
 
 	/* threads */
 	int thread_tot;
@@ -2989,10 +2991,10 @@ static bool project_bucket_face_isect(ProjPaintState *ps, int bucket_x, int buck
 	    isect_point_tri_v2(p3, v1, v2, v3) ||
 	    isect_point_tri_v2(p4, v1, v2, v3) ||
 	    /* we can avoid testing v3,v1 because another intersection MUST exist if this intersects */
-	    (isect_line_line_v2(p1, p2, v1, v2) || isect_line_line_v2(p1, p2, v2, v3)) ||
-	    (isect_line_line_v2(p2, p3, v1, v2) || isect_line_line_v2(p2, p3, v2, v3)) ||
-	    (isect_line_line_v2(p3, p4, v1, v2) || isect_line_line_v2(p3, p4, v2, v3)) ||
-	    (isect_line_line_v2(p4, p1, v1, v2) || isect_line_line_v2(p4, p1, v2, v3)))
+	    (isect_seg_seg_v2(p1, p2, v1, v2) || isect_seg_seg_v2(p1, p2, v2, v3)) ||
+	    (isect_seg_seg_v2(p2, p3, v1, v2) || isect_seg_seg_v2(p2, p3, v2, v3)) ||
+	    (isect_seg_seg_v2(p3, p4, v1, v2) || isect_seg_seg_v2(p3, p4, v2, v3)) ||
+	    (isect_seg_seg_v2(p4, p1, v1, v2) || isect_seg_seg_v2(p4, p1, v2, v3)))
 	{
 		return 1;
 	}
@@ -3638,7 +3640,7 @@ static void project_paint_build_proj_ima(
 		projIma->partRedrawRect =  BLI_memarena_alloc(arena, sizeof(ImagePaintPartialRedraw) * PROJ_BOUNDBOX_SQUARED);
 		memset(projIma->partRedrawRect, 0, sizeof(ImagePaintPartialRedraw) * PROJ_BOUNDBOX_SQUARED);
 		projIma->undoRect = (volatile void **) BLI_memarena_alloc(arena, size);
-		memset(projIma->undoRect, 0, size);
+		memset((void *)projIma->undoRect, 0, size);
 		projIma->maskRect = BLI_memarena_alloc(arena, size);
 		memset(projIma->maskRect, 0, size);
 		projIma->valid = BLI_memarena_alloc(arena, size);
@@ -3913,6 +3915,12 @@ static void project_paint_end(ProjPaintState *ps)
 		}
 	}
 
+	if (ps->reproject_ibuf_free_float) {
+		imb_freerectfloatImBuf(ps->reproject_ibuf);
+	}
+	if (ps->reproject_ibuf_free_uchar) {
+		imb_freerectImBuf(ps->reproject_ibuf);
+	}
 	BKE_image_release_ibuf(ps->reproject_image, ps->reproject_ibuf, NULL);
 
 	MEM_freeN(ps->screenCoords);
@@ -4599,23 +4607,28 @@ static void *do_projectpaint_thread(void *ph_v)
 				}
 				else {
 					if (is_floatbuf) {
-						/* re-project buffer is assumed byte - TODO, allow float */
-						bicubic_interpolation_color(ps->reproject_ibuf, projPixel->newColor.ch, NULL,
+						if (UNLIKELY(ps->reproject_ibuf->rect_float == NULL)) {
+							IMB_float_from_rect(ps->reproject_ibuf);
+							ps->reproject_ibuf_free_float = true;
+						}
+
+						bicubic_interpolation_color(ps->reproject_ibuf, NULL, projPixel->newColor.f,
 						                            projPixel->projCoSS[0], projPixel->projCoSS[1]);
-						if (projPixel->newColor.ch[3]) {
-							float newColor_f[4];
+						if (projPixel->newColor.f[3]) {
 							float mask = ((float)projPixel->mask) * (1.0f / 65535.0f);
 
-							straight_uchar_to_premul_float(newColor_f, projPixel->newColor.ch);
-							IMB_colormanagement_colorspace_to_scene_linear_v4(newColor_f, true, ps->reproject_ibuf->rect_colorspace);
-							mul_v4_v4fl(newColor_f, newColor_f, mask);
+							mul_v4_v4fl(projPixel->newColor.f, projPixel->newColor.f, mask);
 
 							blend_color_mix_float(projPixel->pixel.f_pt,  projPixel->origColor.f_pt,
-							                      newColor_f);
+							                      projPixel->newColor.f);
 						}
 					}
 					else {
-						/* re-project buffer is assumed byte - TODO, allow float */
+						if (UNLIKELY(ps->reproject_ibuf->rect == NULL)) {
+							IMB_rect_from_float(ps->reproject_ibuf);
+							ps->reproject_ibuf_free_uchar = true;
+						}
+
 						bicubic_interpolation_color(ps->reproject_ibuf, projPixel->newColor.ch, NULL,
 						                            projPixel->projCoSS[0], projPixel->projCoSS[1]);
 						if (projPixel->newColor.ch[3]) {
@@ -5280,7 +5293,9 @@ static int texture_paint_camera_project_exec(bContext *C, wmOperator *op)
 	ps.reproject_image = image;
 	ps.reproject_ibuf = BKE_image_acquire_ibuf(image, NULL, NULL);
 
-	if (ps.reproject_ibuf == NULL || ps.reproject_ibuf->rect == NULL) {
+	if ((ps.reproject_ibuf == NULL) ||
+	    ((ps.reproject_ibuf->rect || ps.reproject_ibuf->rect_float) == false))
+	{
 		BKE_report(op->reports, RPT_ERROR, "Image data could not be found");
 		return OPERATOR_CANCELLED;
 	}
@@ -5401,8 +5416,8 @@ static int texture_paint_image_from_view_exec(bContext *C, wmOperator *op)
 
 	ibuf = ED_view3d_draw_offscreen_imbuf(
 	        scene, CTX_wm_view3d(C), CTX_wm_region(C),
-	        w, h, IB_rect, false, R_ALPHAPREMUL, 0, NULL,
-	        NULL, err_out);
+	        w, h, IB_rect, false, R_ALPHAPREMUL, 0, false, NULL,
+	        NULL, NULL, err_out);
 	if (!ibuf) {
 		/* Mostly happens when OpenGL offscreen buffer was failed to create, */
 		/* but could be other reasons. Should be handled in the future. nazgul */
@@ -5730,7 +5745,7 @@ static int texture_paint_add_texture_paint_slot_invoke(bContext *C, wmOperator *
 	BLI_assert(type != -1);
 
 	/* take the second letter to avoid the ID identifier */
-	BLI_snprintf(imagename, FILE_MAX, "%s %s", &ma->id.name[2], layer_type_items[type].name);
+	BLI_snprintf(imagename, sizeof(imagename), "%s %s", &ma->id.name[2], layer_type_items[type].name);
 
 	RNA_string_set(op->ptr, "name", imagename);
 	return WM_operator_props_dialog_popup(C, op, 15 * UI_UNIT_X, 5 * UI_UNIT_Y);
@@ -5769,7 +5784,7 @@ void PAINT_OT_add_texture_paint_slot(wmOperatorType *ot)
 	RNA_def_property_subtype(prop, PROP_COLOR_GAMMA);
 	RNA_def_property_float_array_default(prop, default_color);
 	RNA_def_boolean(ot->srna, "alpha", 1, "Alpha", "Create an image with an alpha channel");
-	RNA_def_enum(ot->srna, "generated_type", image_generated_type_items, IMA_GENTYPE_BLANK,
+	RNA_def_enum(ot->srna, "generated_type", rna_enum_image_generated_type_items, IMA_GENTYPE_BLANK,
 	             "Generated Type", "Fill the image with a grid for UV map testing");
 	RNA_def_boolean(ot->srna, "float", 0, "32 bit Float", "Create image with 32 bit floating point bit depth");
 }

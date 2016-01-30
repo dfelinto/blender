@@ -311,7 +311,7 @@ static int screen_render_exec(bContext *C, wmOperator *op)
 
 	ima = BKE_image_verify_viewer(IMA_TYPE_R_RESULT, "Render Result");
 	BKE_image_signal(ima, NULL, IMA_SIGNAL_FREE);
-	BKE_image_backup_render(scene, ima);
+	BKE_image_backup_render(scene, ima, true);
 
 	/* cleanup sequencer caches before starting user triggered render.
 	 * otherwise, invalidated cache entries can make their way into
@@ -786,7 +786,7 @@ static void clean_viewport_memory(Main *bmain, Scene *scene, int renderlay)
 	Base *base;
 
 	for (object = bmain->object.first; object; object = object->id.next) {
-		object->id.flag |= LIB_DOIT;
+		object->id.tag |= LIB_TAG_DOIT;
 	}
 
 	for (SETLOOPER(scene, sce_iter, base)) {
@@ -794,16 +794,16 @@ static void clean_viewport_memory(Main *bmain, Scene *scene, int renderlay)
 			continue;
 		}
 		if (RE_allow_render_generic_object(base->object)) {
-			base->object->id.flag &= ~LIB_DOIT;
+			base->object->id.tag &= ~LIB_TAG_DOIT;
 		}
 	}
 
 	for (SETLOOPER(scene, sce_iter, base)) {
 		object = base->object;
-		if ((object->id.flag & LIB_DOIT) == 0) {
+		if ((object->id.tag & LIB_TAG_DOIT) == 0) {
 			continue;
 		}
-		object->id.flag &= ~LIB_DOIT;
+		object->id.tag &= ~LIB_TAG_DOIT;
 
 		BKE_object_free_derived_caches(object);
 	}
@@ -956,7 +956,7 @@ static int screen_render_invoke(bContext *C, wmOperator *op, const wmEvent *even
 	/* get a render result image, and make sure it is empty */
 	ima = BKE_image_verify_viewer(IMA_TYPE_R_RESULT, "Render Result");
 	BKE_image_signal(ima, NULL, IMA_SIGNAL_FREE);
-	BKE_image_backup_render(rj->scene, ima);
+	BKE_image_backup_render(rj->scene, ima, true);
 	rj->image = ima;
 
 	/* setup new render */
@@ -1188,6 +1188,7 @@ static void render_view3d_startjob(void *customdata, short *stop, short *do_upda
 	char name[32];
 	int update_flag;
 	bool use_border;
+	int ob_inst_update_flag = 0;
 
 	update_flag = rp->engine->job_update_flag;
 	rp->engine->job_update_flag = 0;
@@ -1299,6 +1300,13 @@ static void render_view3d_startjob(void *customdata, short *stop, short *do_upda
 	/* OK, can we enter render code? */
 	if (rstats->convertdone) {
 		bool first_time = true;
+
+		if (update_flag & PR_UPDATE_VIEW) {
+			ob_inst_update_flag |= RE_OBJECT_INSTANCES_UPDATE_VIEW;
+		}
+
+		RE_updateRenderInstances(re, ob_inst_update_flag);
+
 		for (;;) {
 			if (first_time == false) {
 				if (restore)

@@ -40,6 +40,7 @@
 #include "DNA_armature_types.h"
 #include "DNA_camera_types.h"
 #include "DNA_constraint_types.h"
+#include "DNA_gpencil_types.h"
 #include "DNA_group_types.h"
 #include "DNA_key_types.h"
 #include "DNA_lamp_types.h"
@@ -210,6 +211,9 @@ void BKE_object_free_modifiers(Object *ob)
 
 	/* same for softbody */
 	BKE_object_free_softbody(ob);
+
+	/* modifiers may have stored data in the DM cache */
+	BKE_object_free_derived_caches(ob);
 }
 
 void BKE_object_modifier_hook_reset(Object *ob, HookModifierData *hmd)
@@ -360,10 +364,15 @@ void BKE_object_free_caches(Object *object)
 	for (md = object->modifiers.first; md != NULL; md = md->next) {
 		if (md->type == eModifierType_ParticleSystem) {
 			ParticleSystemModifierData *psmd = (ParticleSystemModifierData *) md;
-			if (psmd->dm != NULL) {
-				psmd->dm->needsFree = 1;
-				psmd->dm->release(psmd->dm);
-				psmd->dm = NULL;
+			if (psmd->dm_final != NULL) {
+				psmd->dm_final->needsFree = 1;
+				psmd->dm_final->release(psmd->dm_final);
+				psmd->dm_final = NULL;
+				if (psmd->dm_deformed != NULL) {
+					psmd->dm_deformed->needsFree = 1;
+					psmd->dm_deformed->release(psmd->dm_deformed);
+					psmd->dm_deformed = NULL;
+				}
 				psmd->flag |= eParticleSystemFlag_file_loaded;
 				update_flag |= OB_RECALC_DATA;
 			}
@@ -384,12 +393,12 @@ void BKE_object_free_ex(Object *ob, bool do_id_user)
 {
 	int a;
 	
-	BKE_object_free_derived_caches(ob);
+	BKE_object_free_modifiers(ob);
 	
 	/* disconnect specific data, but not for lib data (might be indirect data, can get relinked) */
 	if (ob->data) {
 		ID *id = ob->data;
-		id->us--;
+		id_us_min(id);
 		if (id->us == 0 && id->lib == NULL) {
 			switch (ob->type) {
 				case OB_MESH:
@@ -408,7 +417,8 @@ void BKE_object_free_ex(Object *ob, bool do_id_user)
 
 	if (ob->mat) {
 		for (a = 0; a < ob->totcol; a++) {
-			if (ob->mat[a]) ob->mat[a]->id.us--;
+			if (ob->mat[a])
+				id_us_min(&ob->mat[a]->id);
 		}
 		MEM_freeN(ob->mat);
 	}
@@ -420,8 +430,10 @@ void BKE_object_free_ex(Object *ob, bool do_id_user)
 	if (ob->bb) MEM_freeN(ob->bb); 
 	ob->bb = NULL;
 	if (ob->adt) BKE_animdata_free((ID *)ob);
-	if (ob->poselib) ob->poselib->id.us--;
-	if (ob->gpd) ((ID *)ob->gpd)->us--;
+	if (ob->poselib)
+		id_us_min(&ob->poselib->id);
+	if (ob->gpd)
+		id_us_min(&ob->gpd->id);
 	if (ob->defbase.first)
 		BLI_freelistN(&ob->defbase);
 	if (ob->pose)
@@ -429,7 +441,6 @@ void BKE_object_free_ex(Object *ob, bool do_id_user)
 	if (ob->mpath)
 		animviz_free_motionpath(ob->mpath);
 	BKE_bproperty_free_list(&ob->prop);
-	BKE_object_free_modifiers(ob);
 	
 	free_sensors(&ob->sensors);
 	free_controllers(&ob->controllers);
@@ -478,9 +489,8 @@ static void unlink_object__unlinkModifierLinks(void *userData, Object *ob, Objec
 	}
 }
 
-void BKE_object_unlink(Object *ob)
+void BKE_object_unlink(Main *bmain, Object *ob)
 {
-	Main *bmain = G.main;
 	Object *obt;
 	Material *mat;
 	World *wrld;
@@ -1657,8 +1667,8 @@ void BKE_object_make_local(Object *ob)
 					while (base) {
 						if (base->object == ob) {
 							base->object = ob_new;
-							ob_new->id.us++;
-							ob->id.us--;
+							id_us_plus(&ob_new->id);
+							id_us_min(&ob->id);
 						}
 						base = base->next;
 					}
@@ -1797,7 +1807,7 @@ void BKE_object_make_proxy(Object *ob, Object *target, Object *gob)
 	/* set object type and link to data */
 	ob->type = target->type;
 	ob->data = target->data;
-	id_us_plus((ID *)ob->data);     /* ensures lib data becomes LIB_EXTERN */
+	id_us_plus((ID *)ob->data);     /* ensures lib data becomes LIB_TAG_EXTERN */
 	
 	/* copy material and index information */
 	ob->actcol = ob->totcol = 0;
@@ -2674,6 +2684,18 @@ void BKE_boundbox_minmax(const BoundBox *bb, float obmat[4][4], float r_min[3], 
 		float vec[3];
 		mul_v3_m4v3(vec, obmat, bb->vec[i]);
 		minmax_v3v3_v3(r_min, r_max, vec);
+	}
+}
+
+void BKE_boundbox_scale(struct BoundBox *bb_dst, const struct BoundBox *bb_src, float scale)
+{
+	float cent[3];
+	BKE_boundbox_calc_center_aabb(bb_src, cent);
+
+	for (int i = 0; i < ARRAY_SIZE(bb_dst->vec); i++) {
+		bb_dst->vec[i][0] = ((bb_src->vec[i][0] - cent[0]) * scale) + cent[0];
+		bb_dst->vec[i][1] = ((bb_src->vec[i][1] - cent[1]) * scale) + cent[1];
+		bb_dst->vec[i][2] = ((bb_src->vec[i][2] - cent[2]) * scale) + cent[2];
 	}
 }
 
@@ -3778,13 +3800,13 @@ static Object *obrel_armature_find(Object *ob)
 
 static bool obrel_list_test(Object *ob)
 {
-	return ob && !(ob->id.flag & LIB_DOIT);
+	return ob && !(ob->id.tag & LIB_TAG_DOIT);
 }
 
 static void obrel_list_add(LinkNode **links, Object *ob)
 {
 	BLI_linklist_prepend(links, ob);
-	ob->id.flag |= LIB_DOIT;
+	ob->id.tag |= LIB_TAG_DOIT;
 }
 
 /*
@@ -3802,7 +3824,7 @@ LinkNode *BKE_object_relational_superset(struct Scene *scene, eObjectSet objectS
 
 	/* Remove markers from all objects */
 	for (base = scene->base.first; base; base = base->next) {
-		base->object->id.flag &= ~LIB_DOIT;
+		base->object->id.tag &= ~LIB_TAG_DOIT;
 	}
 
 	/* iterate over all selected and visible objects */
@@ -4073,6 +4095,108 @@ bool BKE_object_modifier_use_time(Object *ob, ModifierData *md)
 
 		/* XXX: also, should check NLA strips, though for now assume that nobody uses
 		 * that and we can omit that for performance reasons... */
+	}
+
+	return false;
+}
+
+/* set "ignore cache" flag for all caches on this object */
+static void object_cacheIgnoreClear(Object *ob, int state)
+{
+	ListBase pidlist;
+	PTCacheID *pid;
+	BKE_ptcache_ids_from_object(&pidlist, ob, NULL, 0);
+
+	for (pid = pidlist.first; pid; pid = pid->next) {
+		if (pid->cache) {
+			if (state)
+				pid->cache->flag |= PTCACHE_IGNORE_CLEAR;
+			else
+				pid->cache->flag &= ~PTCACHE_IGNORE_CLEAR;
+		}
+	}
+
+	BLI_freelistN(&pidlist);
+}
+
+/* Note: this function should eventually be replaced by depsgraph functionality.
+ * Avoid calling this in new code unless there is a very good reason for it!
+ */
+bool BKE_object_modifier_update_subframe(Scene *scene, Object *ob, bool update_mesh,
+                                         int parent_recursion, float frame,
+                                         int type)
+{
+	ModifierData *md = modifiers_findByType(ob, (ModifierType)type);
+	bConstraint *con;
+
+	if (type == eModifierType_DynamicPaint) {
+		DynamicPaintModifierData *pmd = (DynamicPaintModifierData *)md;
+
+		/* if other is dynamic paint canvas, don't update */
+		if (pmd && pmd->canvas)
+			return true;
+	}
+	else if (type == eModifierType_Smoke) {
+		SmokeModifierData *smd = (SmokeModifierData *)md;
+
+		if (smd && (smd->type & MOD_SMOKE_TYPE_DOMAIN) != 0)
+			return true;
+	}
+
+	/* if object has parents, update them too */
+	if (parent_recursion) {
+		int recursion = parent_recursion - 1;
+		bool no_update = false;
+		if (ob->parent) no_update |= BKE_object_modifier_update_subframe(scene, ob->parent, 0, recursion, frame, type);
+		if (ob->track) no_update |= BKE_object_modifier_update_subframe(scene, ob->track, 0, recursion, frame, type);
+
+		/* skip subframe if object is parented
+		 *  to vertex of a dynamic paint canvas */
+		if (no_update && (ob->partype == PARVERT1 || ob->partype == PARVERT3))
+			return false;
+
+		/* also update constraint targets */
+		for (con = ob->constraints.first; con; con = con->next) {
+			const bConstraintTypeInfo *cti = BKE_constraint_typeinfo_get(con);
+			ListBase targets = {NULL, NULL};
+
+			if (cti && cti->get_constraint_targets) {
+				bConstraintTarget *ct;
+				cti->get_constraint_targets(con, &targets);
+				for (ct = targets.first; ct; ct = ct->next) {
+					if (ct->tar)
+						BKE_object_modifier_update_subframe(scene, ct->tar, 0, recursion, frame, type);
+				}
+				/* free temp targets */
+				if (cti->flush_constraint_targets)
+					cti->flush_constraint_targets(con, &targets, 0);
+			}
+		}
+	}
+
+	/* was originally OB_RECALC_ALL - TODO - which flags are really needed??? */
+	ob->recalc |= OB_RECALC_OB | OB_RECALC_DATA | OB_RECALC_TIME;
+	BKE_animsys_evaluate_animdata(scene, &ob->id, ob->adt, frame, ADT_RECALC_ANIM);
+	if (update_mesh) {
+		/* ignore cache clear during subframe updates
+		 *  to not mess up cache validity */
+		object_cacheIgnoreClear(ob, 1);
+		BKE_object_handle_update(G.main->eval_ctx, scene, ob);
+		object_cacheIgnoreClear(ob, 0);
+	}
+	else
+		BKE_object_where_is_calc_time(scene, ob, frame);
+
+	/* for curve following objects, parented curve has to be updated too */
+	if (ob->type == OB_CURVE) {
+		Curve *cu = ob->data;
+		BKE_animsys_evaluate_animdata(scene, &cu->id, cu->adt, frame, ADT_RECALC_ANIM);
+	}
+	/* and armatures... */
+	if (ob->type == OB_ARMATURE) {
+		bArmature *arm = ob->data;
+		BKE_animsys_evaluate_animdata(scene, &arm->id, arm->adt, frame, ADT_RECALC_ANIM);
+		BKE_pose_where_is(scene, ob);
 	}
 
 	return false;

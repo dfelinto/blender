@@ -137,7 +137,7 @@ static int sound_open_exec(bContext *C, wmOperator *op)
 	if (pprop->prop) {
 		/* when creating new ID blocks, use is already 1, but RNA
 		 * pointer se also increases user, so this compensates it */
-		sound->id.us--;
+		id_us_min(&sound->id);
 
 		RNA_id_pointer_create(&sound->id, &idptr);
 		RNA_property_pointer_set(&pprop->ptr, pprop->prop, idptr);
@@ -188,7 +188,7 @@ static void SOUND_OT_open(wmOperatorType *ot)
 	WM_operator_properties_filesel(ot, FILE_TYPE_FOLDER | FILE_TYPE_SOUND | FILE_TYPE_MOVIE, FILE_SPECIAL, FILE_OPENFILE,
 	                               WM_FILESEL_FILEPATH | WM_FILESEL_RELPATH, FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);
 	RNA_def_boolean(ot->srna, "cache", false, "Cache", "Cache the sound in memory");
-	RNA_def_boolean(ot->srna, "mono", false, "Mono", "Mixdown the sound to mono");
+	RNA_def_boolean(ot->srna, "mono", false, "Mono", "Merge all the sound's channels into one");
 }
 
 static void SOUND_OT_open_mono(wmOperatorType *ot)
@@ -778,7 +778,7 @@ static void SOUND_OT_unpack(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
 	/* properties */
-	RNA_def_enum(ot->srna, "method", unpack_method_items, PF_USE_LOCAL, "Method", "How to unpack");
+	RNA_def_enum(ot->srna, "method", rna_enum_unpack_method_items, PF_USE_LOCAL, "Method", "How to unpack");
 	RNA_def_string(ot->srna, "id", NULL, MAX_ID_NAME - 2, "Sound Name", "Sound datablock name to unpack"); /* XXX, weark!, will fail with library, name collisions */
 }
 

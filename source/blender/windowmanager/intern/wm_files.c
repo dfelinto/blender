@@ -429,7 +429,7 @@ void wm_file_read_report(bContext *C)
 
 	if (reports) {
 		if (!G.background) {
-			WM_report_banner_show(C);
+			WM_report_banner_show();
 		}
 	}
 }
@@ -458,7 +458,7 @@ static void wm_file_read_post(bContext *C, bool is_startup_file)
 		/* possible python hasn't been initialized */
 		if (CTX_py_init_get(C)) {
 			/* sync addons, these may have changed from the defaults */
-			BPY_string_exec(C, "__import__('addon_utils').reset_all()");
+			BPY_execute_string(C, "__import__('addon_utils').reset_all()");
 
 			BPY_python_reset(C);
 			addons_loaded = true;
@@ -469,6 +469,8 @@ static void wm_file_read_post(bContext *C, bool is_startup_file)
 		BPY_python_reset(C);
 		addons_loaded = true;
 	}
+#else
+	UNUSED_VARS(is_startup_file);
 #endif  /* WITH_PYTHON */
 
 	WM_operatortype_last_properties_clear_all();
@@ -768,6 +770,10 @@ int wm_homefile_read_exec(bContext *C, wmOperator *op)
 			}
 		}
 	}
+	else {
+		/* always load UI for factory settings (prefs will re-init) */
+		G.fileflags &= ~G_FILE_NO_UI;
+	}
 
 	return wm_homefile_read(C, op->reports, from_memory, filepath) ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
 }
@@ -935,15 +941,15 @@ static ImBuf *blend_file_thumb(Scene *scene, bScreen *screen, BlendThumbnail **t
 		ibuf = ED_view3d_draw_offscreen_imbuf_simple(
 		        scene, scene->camera,
 		        BLEN_THUMB_SIZE * 2, BLEN_THUMB_SIZE * 2,
-		        IB_rect, OB_SOLID, false, false, false, R_ALPHAPREMUL, 0, NULL,
-		        NULL, err_out);
+		        IB_rect, OB_SOLID, false, false, false, R_ALPHAPREMUL, 0, false, NULL,
+		        NULL, NULL, err_out);
 	}
 	else {
 		ibuf = ED_view3d_draw_offscreen_imbuf(
 		        scene, v3d, ar,
 		        BLEN_THUMB_SIZE * 2, BLEN_THUMB_SIZE * 2,
-		        IB_rect, false, R_ALPHAPREMUL, 0, NULL,
-		        NULL, err_out);
+		        IB_rect, false, R_ALPHAPREMUL, 0, false, NULL,
+		        NULL, NULL, err_out);
 	}
 
 	if (ibuf) {
@@ -1062,6 +1068,8 @@ int wm_file_write(bContext *C, const char *filepath, int fileflags, ReportList *
 	G.main->recovered = 0;
 	
 	if (BLO_write_file(CTX_data_main(C), filepath, fileflags, reports, thumb)) {
+		const bool do_history = (G.background == false) && (CTX_wm_manager(C)->op_undo_depth == 0);
+
 		if (!(fileflags & G_FILE_SAVE_COPY)) {
 			G.relbase_valid = 1;
 			BLI_strncpy(G.main->name, filepath, sizeof(G.main->name));  /* is guaranteed current file */
@@ -1073,7 +1081,7 @@ int wm_file_write(bContext *C, const char *filepath, int fileflags, ReportList *
 		BKE_BIT_TEST_SET(G.fileflags, fileflags & G_FILE_AUTOPLAY, G_FILE_AUTOPLAY);
 
 		/* prevent background mode scripts from clobbering history */
-		if (!G.background) {
+		if (do_history) {
 			wm_history_file_update();
 		}
 

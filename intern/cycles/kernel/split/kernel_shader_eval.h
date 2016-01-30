@@ -30,7 +30,7 @@
  * Queue_data (QUEUE_ACTIVE_AND_REGENERATD_RAYS)-------|                         |
  * Queue_index(QUEUE_HITBG_BUFF_UPDATE_TOREGEN_RAYS)---|                         |
  * ray_state ------------------------------------------|                         |
- * kg (globals + data) --------------------------------|                         |
+ * kg (globals) ---------------------------------------|                         |
  * queuesize ------------------------------------------|                         |
  *
  * Note on Queues :
@@ -46,7 +46,6 @@
  */
 ccl_device void kernel_shader_eval(
         KernelGlobals *kg,
-        ccl_constant KernelData *data,
         ShaderData *sd,                        /* Output ShaderData structure to be filled */
         ccl_global uint *rng_coop,             /* Required for rbsdf calculation */
         ccl_global Ray *Ray_coop,              /* Required for setting up shader from ray */
@@ -64,10 +63,8 @@ ccl_device void kernel_shader_eval(
 		shader_setup_from_ray(kg,
 		                      sd,
 		                      isect,
-		                      &ray,
-		                      state->bounce,
-		                      state->transparent_bounce);
+		                      &ray);
 		float rbsdf = path_state_rng_1D_for_decision(kg, rng, state, PRNG_BSDF);
-		shader_eval_surface(kg, sd, rbsdf, state->flag, SHADER_CONTEXT_MAIN);
+		shader_eval_surface(kg, sd, state, rbsdf, state->flag, SHADER_CONTEXT_MAIN);
 	}
 }

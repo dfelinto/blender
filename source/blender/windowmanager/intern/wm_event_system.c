@@ -559,8 +559,8 @@ void WM_event_print(const wmEvent *event)
 		const char *type_id = unknown;
 		const char *val_id = unknown;
 
-		RNA_enum_identifier(event_type_items, event->type, &type_id);
-		RNA_enum_identifier(event_value_items, event->val, &val_id);
+		RNA_enum_identifier(rna_enum_event_type_items, event->type, &type_id);
+		RNA_enum_identifier(rna_enum_event_value_items, event->val, &val_id);
 
 		printf("wmEvent  type:%d / %s, val:%d / %s,\n"
 		       "         shift:%d, ctrl:%d, alt:%d, oskey:%d, keymodifier:%d,\n"
@@ -598,17 +598,17 @@ void WM_event_print(const wmEvent *event)
 /**
  * Show the report in the info header.
  */
-void WM_report_banner_show(const bContext *C)
+void WM_report_banner_show(void)
 {
-	wmWindowManager *wm = CTX_wm_manager(C);
-	ReportList *wm_reports = CTX_wm_reports(C);
+	wmWindowManager *wm = G.main->wm.first;
+	ReportList *wm_reports = &wm->reports;
 	ReportTimerInfo *rti;
 
 	/* After adding reports to the global list, reset the report timer. */
 	WM_event_remove_timer(wm, NULL, wm_reports->reporttimer);
 
 	/* Records time since last report was added */
-	wm_reports->reporttimer = WM_event_add_timer(wm, CTX_wm_window(C), TIMERREPORT, 0.05);
+	wm_reports->reporttimer = WM_event_add_timer(wm, wm->winactive, TIMERREPORT, 0.05);
 
 	rti = MEM_callocN(sizeof(ReportTimerInfo), "ReportTimerInfo");
 	wm_reports->reporttimer->customdata = rti;
@@ -624,32 +624,32 @@ void WM_ndof_deadzone_set(float deadzone)
 	GHOST_setNDOFDeadZone(deadzone);
 }
 
-static void wm_add_reports(const bContext *C, ReportList *reports)
+static void wm_add_reports(ReportList *reports)
 {
 	/* if the caller owns them, handle this */
 	if (reports->list.first && (reports->flag & RPT_OP_HOLD) == 0) {
-		ReportList *wm_reports = CTX_wm_reports(C);
+		wmWindowManager *wm = G.main->wm.first;
 
 		/* add reports to the global list, otherwise they are not seen */
-		BLI_movelisttolist(&wm_reports->list, &reports->list);
+		BLI_movelisttolist(&wm->reports.list, &reports->list);
 
-		WM_report_banner_show(C);
+		WM_report_banner_show();
 	}
 }
 
-void WM_report(const bContext *C, ReportType type, const char *message)
+void WM_report(ReportType type, const char *message)
 {
 	ReportList reports;
 
 	BKE_reports_init(&reports, RPT_STORE);
 	BKE_report(&reports, type, message);
 
-	wm_add_reports(C, &reports);
+	wm_add_reports(&reports);
 
 	BKE_reports_clear(&reports);
 }
 
-void WM_reportf(const bContext *C, ReportType type, const char *format, ...)
+void WM_reportf(ReportType type, const char *format, ...)
 {
 	DynStr *ds;
 	va_list args;
@@ -659,7 +659,9 @@ void WM_reportf(const bContext *C, ReportType type, const char *format, ...)
 	BLI_dynstr_vappendf(ds, format, args);
 	va_end(args);
 
-	WM_report(C, type, BLI_dynstr_get_cstring(ds));
+	char *str = BLI_dynstr_get_cstring(ds);
+	WM_report(type, str);
+	MEM_freeN(str);
 
 	BLI_dynstr_free(ds);
 }
@@ -706,7 +708,7 @@ static void wm_operator_reports(bContext *C, wmOperator *op, int retval, bool ca
 	}
 
 	/* if the caller owns them, handle this */
-	wm_add_reports(C, op->reports);
+	wm_add_reports(op->reports);
 }
 
 /**
@@ -1538,8 +1540,24 @@ static int wm_eventmatch(wmEvent *winevent, wmKeyMapItem *kmi)
 			if (ISKEYBOARD(winevent->type) && (winevent->ascii || winevent->utf8_buf[0])) return 1; 
 		}
 
-	if (kmitype != KM_ANY)
-		if (winevent->type != kmitype) return 0;
+	if (kmitype != KM_ANY) {
+		if (ELEM(kmitype, TABLET_STYLUS, TABLET_ERASER)) {
+			const wmTabletData *wmtab = winevent->tablet_data;
+			
+			if (wmtab == NULL)
+				return 0;
+			else if (winevent->type != LEFTMOUSE) /* tablet events can occur on hover + keypress */
+				return 0;
+			else if ((kmitype == TABLET_STYLUS) && (wmtab->Active != EVT_TABLET_STYLUS))
+				return 0;
+			else if ((kmitype == TABLET_ERASER) && (wmtab->Active != EVT_TABLET_ERASER))
+				return 0;
+		}
+		else {
+			if (winevent->type != kmitype)
+				return 0;
+		}
+	}
 	
 	if (kmi->val != KM_ANY)
 		if (winevent->val != kmi->val) return 0;
@@ -1673,8 +1691,15 @@ static int wm_handler_operator_call(bContext *C, ListBase *handlers, wmEventHand
 				if (ot->flag & OPTYPE_UNDO)
 					wm->op_undo_depth--;
 
-				if (retval & (OPERATOR_CANCELLED | OPERATOR_FINISHED))
+				if (retval & (OPERATOR_CANCELLED | OPERATOR_FINISHED)) {
 					wm_operator_reports(C, op, retval, false);
+				}
+				else {
+					/* not very common, but modal operators may report before finishing */
+					if (!BLI_listbase_is_empty(&op->reports->list)) {
+						wm_add_reports(op->reports);
+					}
+				}
 
 				/* important to run 'wm_operator_finished' before NULLing the context members */
 				if (retval & OPERATOR_FINISHED) {
@@ -1850,6 +1875,9 @@ static int wm_handler_fileselect_do(bContext *C, ListBase *handlers, wmEventHand
 					/* add reports to the global list, otherwise they are not seen */
 					BLI_movelisttolist(&CTX_wm_reports(C)->list, &handler->op->reports->list);
 
+					/* more hacks, since we meddle with reports, banner display doesn't happen automatic */
+					WM_report_banner_show();
+
 					CTX_wm_window_set(C, win_prev);
 					CTX_wm_area_set(C, area_prev);
 					CTX_wm_region_set(C, ar_prev);
@@ -1862,7 +1890,9 @@ static int wm_handler_fileselect_do(bContext *C, ListBase *handlers, wmEventHand
 					WM_operator_last_properties_store(handler->op);
 				}
 
-				WM_operator_free(handler->op);
+				if (retval & (OPERATOR_CANCELLED | OPERATOR_FINISHED)) {
+					WM_operator_free(handler->op);
+				}
 			}
 			else {
 				if (handler->op->type->cancel) {

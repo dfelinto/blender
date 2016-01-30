@@ -130,6 +130,7 @@ static void draw_render_info(const bContext *C,
 
 			UI_ThemeColor(TH_FACE_SELECT);
 
+			glLineWidth(1.0f);
 			for (i = 0, tile = tiles; i < total_tiles; i++, tile++) {
 				glaDrawBorderCorners(tile, zoomx, zoomy);
 			}
@@ -338,9 +339,7 @@ void ED_image_draw_info(Scene *scene, ARegion *ar, bool color_manage, bool use_d
 
 	/* draw outline */
 	glColor3ub(128, 128, 128);
-	glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-	glRecti(color_rect.xmin, color_rect.ymin, color_rect.xmax, color_rect.ymax);
-	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+	sdrawbox(color_rect.xmin, color_rect.ymin, color_rect.xmax, color_rect.ymax);
 
 	dx += 1.75f * UI_UNIT_X;
 
@@ -622,7 +621,7 @@ static void draw_image_buffer_tiled(SpaceImage *sima, ARegion *ar, Scene *scene,
 			}
 			else {
 				glaDrawPixelsSafe(x, y, dx, dy, dx, GL_LUMINANCE, GL_UNSIGNED_INT,
-				                  (unsigned char*)rect + channel_offset);
+				                  (unsigned char *)rect + channel_offset);
 			}
 		}
 	}
@@ -816,7 +815,7 @@ static void draw_image_paint_helpers(const bContext *C, ARegion *ar, Scene *scen
 	}
 }
 
-/* draw main image area */
+/* draw main image region */
 
 void draw_image_main(const bContext *C, ARegion *ar)
 {

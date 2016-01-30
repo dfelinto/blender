@@ -27,11 +27,12 @@
 add_subdirectory(string)
 add_subdirectory(ghost)
 add_subdirectory(guardedalloc)
+add_subdirectory(libmv)
 add_subdirectory(memutil)
 add_subdirectory(opencolorio)
 add_subdirectory(mikktspace)
-add_subdirectory(raskter)
 add_subdirectory(glew-mx)
+add_subdirectory(eigen)
 
 if(WITH_AUDASPACE)
 	add_subdirectory(audaspace)
@@ -73,10 +74,6 @@ if(WITH_BULLET)
 	add_subdirectory(rigidbody)
 endif()
 
-if(WITH_OPENNL)
-	add_subdirectory(opennl)
-endif()
-
 if(WITH_OPENSUBDIV)
 	add_subdirectory(opensubdiv)
 endif()
@@ -84,4 +81,8 @@ endif()
 # only windows needs utf16 converter
 if(WIN32)
 	add_subdirectory(utfconv)
+endif()
+
+if(WITH_OPENVDB)
+	add_subdirectory(openvdb)
 endif()

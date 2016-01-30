@@ -49,6 +49,7 @@
 #include "BKE_fcurve.h"
 #include "BKE_global.h"
 #include "BKE_key.h"
+#include "BKE_library.h"
 #include "BKE_main.h"
 #include "BKE_report.h"
 #include "BKE_animsys.h"
@@ -1177,7 +1178,7 @@ static void remap_hooks_and_vertex_parents(Object *obedit)
 }
 
 /* load editNurb in object */
-void load_editNurb(Object *obedit)
+void ED_curve_editnurb_load(Object *obedit)
 {
 	ListBase *editnurb = object_editcurve_get(obedit);
 
@@ -1209,7 +1210,7 @@ void load_editNurb(Object *obedit)
 }
 
 /* make copy in cu->editnurb */
-void make_editNurb(Object *obedit)
+void ED_curve_editnurb_make(Object *obedit)
 {
 	Curve *cu = (Curve *)obedit->data;
 	EditNurb *editnurb = cu->editnurb;
@@ -1252,7 +1253,7 @@ void make_editNurb(Object *obedit)
 	}
 }
 
-void free_editNurb(Object *obedit)
+void ED_curve_editnurb_free(Object *obedit)
 {
 	Curve *cu = obedit->data;
 
@@ -1298,10 +1299,10 @@ static int separate_exec(bContext *C, wmOperator *op)
 	newob = newbase->object;
 	newcu = newob->data = BKE_curve_copy(oldcu);
 	newcu->editnurb = NULL;
-	oldcu->id.us--; /* because new curve is a copy: reduce user count */
+	id_us_min(&oldcu->id); /* because new curve is a copy: reduce user count */
 
 	/* 3. put new object in editmode, clear it and set separated nurbs */
-	make_editNurb(newob);
+	ED_curve_editnurb_make(newob);
 	newedit = newcu->editnurb;
 	BKE_nurbList_free(&newedit->nurbs);
 	BKE_curve_editNurb_keyIndex_free(newedit);
@@ -1309,8 +1310,8 @@ static int separate_exec(bContext *C, wmOperator *op)
 	BLI_movelisttolist(&newedit->nurbs, &newnurb);
 
 	/* 4. put old object out of editmode and delete separated geometry */
-	load_editNurb(newob);
-	free_editNurb(newob);
+	ED_curve_editnurb_load(newob);
+	ED_curve_editnurb_free(newob);
 	curve_delete_segments(oldob, true);
 
 	DAG_id_tag_update(&oldob->id, OB_RECALC_DATA);  /* this is the original one */
@@ -1351,7 +1352,11 @@ static int curve_split_exec(bContext *C, wmOperator *op)
 	adduplicateflagNurb(obedit, &newnurb, SELECT, true);
 
 	if (BLI_listbase_is_empty(&newnurb) == false) {
+		Curve *cu = obedit->data;
+		const int len_orig = BLI_listbase_count(editnurb);
+
 		curve_delete_segments(obedit, true);
+		cu->actnu -= len_orig - BLI_listbase_count(editnurb);
 		BLI_movelisttolist(editnurb, &newnurb);
 
 		if (ED_curve_updateAnimPaths(obedit->data))
@@ -1918,18 +1923,30 @@ bool ed_editnurb_extrude_flag(EditNurb *editnurb, const short flag)
 	return ok;
 }
 
+static bool calc_duplicate_actvert(
+        const ListBase *editnurb, const ListBase *newnurb, Curve *cu,
+        int start, int end, int vert)
+{
+	if ((start <= cu->actvert) && (end > cu->actvert)) {
+		cu->actvert = vert;
+		cu->actnu = BLI_listbase_count(editnurb) + BLI_listbase_count(newnurb);
+		return true;
+	}
+	return false;
+}
+
 static void adduplicateflagNurb(Object *obedit, ListBase *newnurb,
                                 const short flag, const bool split)
 {
 	ListBase *editnurb = object_editcurve_get(obedit);
-	Nurb *nu = editnurb->last, *newnu;
+	Nurb *nu, *newnu;
 	BezTriple *bezt, *bezt1;
 	BPoint *bp, *bp1, *bp2, *bp3;
 	Curve *cu = (Curve *)obedit->data;
-	int a, b, c, starta, enda, diffa, cyclicu, cyclicv, newu, newv;
+	int a, b, c, starta, enda, diffa, cyclicu, cyclicv, newu, newv, i;
 	char *usel;
 
-	while (nu) {
+	for (i = 0, nu = editnurb->first; nu; i++, nu = nu->next) {
 		cyclicu = cyclicv = 0;
 		if (nu->type == CU_BEZIER) {
 			for (a = 0, bezt = nu->bezt; a < nu->pntsu; a++, bezt++) {
@@ -1950,12 +1967,21 @@ static void adduplicateflagNurb(Object *obedit, ListBase *newnurb,
 					}
 					else {
 						if (enda == nu->pntsu - 1) newu += cyclicu;
+						if (i == cu->actnu) {
+							calc_duplicate_actvert(
+							        editnurb, newnurb, cu,
+							        starta, starta + diffa, cu->actvert - starta);
+						}
 
 						newnu = BKE_nurb_copy(nu, newu, 1);
-						BLI_addtail(newnurb, newnu);
 						memcpy(newnu->bezt, &nu->bezt[starta], diffa * sizeof(BezTriple));
 						if (newu != diffa) {
 							memcpy(&newnu->bezt[diffa], nu->bezt, cyclicu * sizeof(BezTriple));
+							if (i == cu->actnu) {
+								calc_duplicate_actvert(
+								        editnurb, newnurb, cu,
+								        0, cyclicu, newu - cyclicu + cu->actvert);
+							}
 							cyclicu = 0;
 						}
 
@@ -1964,19 +1990,28 @@ static void adduplicateflagNurb(Object *obedit, ListBase *newnurb,
 						for (b = 0, bezt1 = newnu->bezt; b < newnu->pntsu; b++, bezt1++) {
 							select_beztriple(bezt1, SELECT, flag, HIDDEN);
 						}
+
+						BLI_addtail(newnurb, newnu);
 					}
 				}
 			}
 
 			if (cyclicu != 0) {
+				if (i == cu->actnu) {
+					calc_duplicate_actvert(
+					        editnurb, newnurb, cu,
+					        0, cyclicu, cu->actvert);
+				}
+
 				newnu = BKE_nurb_copy(nu, cyclicu, 1);
-				BLI_addtail(newnurb, newnu);
 				memcpy(newnu->bezt, nu->bezt, cyclicu * sizeof(BezTriple));
 				newnu->flagu &= ~CU_NURB_CYCLIC;
 
 				for (b = 0, bezt1 = newnu->bezt; b < newnu->pntsu; b++, bezt1++) {
 					select_beztriple(bezt1, SELECT, flag, HIDDEN);
 				}
+
+				BLI_addtail(newnurb, newnu);
 			}
 		}
 		else if (nu->pntsv == 1) {    /* because UV Nurb has a different method for dupli */
@@ -1998,12 +2033,21 @@ static void adduplicateflagNurb(Object *obedit, ListBase *newnurb,
 					}
 					else {
 						if (enda == nu->pntsu - 1) newu += cyclicu;
+						if (i == cu->actnu) {
+							calc_duplicate_actvert(
+							        editnurb, newnurb, cu,
+							        starta, starta + diffa, cu->actvert - starta);
+						}
 
 						newnu = BKE_nurb_copy(nu, newu, 1);
-						BLI_addtail(newnurb, newnu);
 						memcpy(newnu->bp, &nu->bp[starta], diffa * sizeof(BPoint));
 						if (newu != diffa) {
 							memcpy(&newnu->bp[diffa], nu->bp, cyclicu * sizeof(BPoint));
+							if (i == cu->actnu) {
+								calc_duplicate_actvert(
+								        editnurb, newnurb, cu,
+								        0, cyclicu, newu - cyclicu + cu->actvert);
+							}
 							cyclicu = 0;
 						}
 
@@ -2012,19 +2056,28 @@ static void adduplicateflagNurb(Object *obedit, ListBase *newnurb,
 						for (b = 0, bp1 = newnu->bp; b < newnu->pntsu; b++, bp1++) {
 							select_bpoint(bp1, SELECT, flag, HIDDEN);
 						}
+
+						BLI_addtail(newnurb, newnu);
 					}
 				}
 			}
 
 			if (cyclicu != 0) {
+				if (i == cu->actnu) {
+					calc_duplicate_actvert(
+					        editnurb, newnurb, cu,
+					        0, cyclicu, cu->actvert);
+				}
+
 				newnu = BKE_nurb_copy(nu, cyclicu, 1);
-				BLI_addtail(newnurb, newnu);
 				memcpy(newnu->bp, nu->bp, cyclicu * sizeof(BPoint));
 				newnu->flagu &= ~CU_NURB_CYCLIC;
 
 				for (b = 0, bp1 = newnu->bp; b < newnu->pntsu; b++, bp1++) {
 					select_bpoint(bp1, SELECT, flag, HIDDEN);
 				}
+
+				BLI_addtail(newnurb, newnu);
 			}
 		}
 		else {
@@ -2100,6 +2153,28 @@ static void adduplicateflagNurb(Object *obedit, ListBase *newnurb,
 									memcpy(&newnu->bp[b * newnu->pntsu], &nu->bp[b * nu->pntsu + a], newu * sizeof(BPoint));
 									memcpy(&newnu->bp[b * newnu->pntsu + newu], &nu->bp[b * nu->pntsu], cyclicu * sizeof(BPoint));
 								}
+
+								if (cu->actnu == i) {
+									for (b = 0, diffa = 0; b < newv; b++, diffa += nu->pntsu - newu) {
+										starta = b * nu->pntsu + a;
+										if (calc_duplicate_actvert(
+										        editnurb, newnurb, cu,
+										        cu->actvert, starta,
+										        cu->actvert % nu->pntsu + newu + b * newnu->pntsu))
+										{
+											/* actvert in cyclicu selection */
+											break;
+										}
+										else if (calc_duplicate_actvert(
+										             editnurb, newnurb, cu,
+										             starta, starta + newu,
+										             cu->actvert - starta + b * newnu->pntsu))
+										{
+											/* actvert in 'current' iteration selection */
+											break;
+										}
+									}
+								}
 								cyclicu = cyclicv = 0;
 							}
 							else if ((a / nu->pntsu) + newv == nu->pntsv && cyclicv != 0) {
@@ -2107,12 +2182,34 @@ static void adduplicateflagNurb(Object *obedit, ListBase *newnurb,
 								newnu = BKE_nurb_copy(nu, newu, newv + cyclicv);
 								memcpy(newnu->bp, &nu->bp[a], newu * newv * sizeof(BPoint));
 								memcpy(&newnu->bp[newu * newv], nu->bp, newu * cyclicv * sizeof(BPoint));
+
+								/* check for actvert in cylicv selection */
+								if (cu->actnu == i) {
+									calc_duplicate_actvert(
+									        editnurb, newnurb, cu,
+									        cu->actvert, a,
+									        (newu * newv) + cu->actvert);
+								}
 								cyclicu = cyclicv = 0;
 							}
 							else {
 								newnu = BKE_nurb_copy(nu, newu, newv);
 								for (b = 0; b < newv; b++) {
 									memcpy(&newnu->bp[b * newu], &nu->bp[b * nu->pntsu + a], newu * sizeof(BPoint));
+								}
+							}
+
+							/* general case if not handled by cyclicu or cyclicv */
+							if (cu->actnu == i) {
+								for (b = 0, diffa = 0; b < newv; b++, diffa += nu->pntsu - newu) {
+									starta = b * nu->pntsu + a;
+									if (calc_duplicate_actvert(
+									        editnurb, newnurb, cu,
+									        starta, starta + newu,
+									        cu->actvert - (a / nu->pntsu * nu->pntsu + diffa + (starta % nu->pntsu))))
+									{
+										break;
+									}
 								}
 							}
 							BLI_addtail(newnurb, newnu);
@@ -2131,6 +2228,20 @@ static void adduplicateflagNurb(Object *obedit, ListBase *newnurb,
 						for (b = 0; b < newv; b++) {
 							memcpy(&newnu->bp[b * newu], &nu->bp[b * nu->pntsu], newu * sizeof(BPoint));
 						}
+
+						/* check for actvert in the unused cyclicuv selection */
+						if (cu->actnu == i) {
+							for (b = 0, diffa = 0; b < newv; b++, diffa += nu->pntsu - newu) {
+								starta = b * nu->pntsu;
+								if (calc_duplicate_actvert(
+								        editnurb, newnurb, cu,
+								        starta, starta + newu,
+								        cu->actvert - (diffa + (starta % nu->pntsu))))
+								{
+									break;
+								}
+							}
+						}
 						BLI_addtail(newnurb, newnu);
 
 						if (newu != nu->pntsu) newnu->flagu &= ~CU_NURB_CYCLIC;
@@ -2144,12 +2255,9 @@ static void adduplicateflagNurb(Object *obedit, ListBase *newnurb,
 				}
 			}
 		}
-		nu = nu->prev;
 	}
 
 	if (BLI_listbase_is_empty(newnurb) == false) {
-		cu->actnu = cu->actvert = CU_ACT_NONE;
-
 		for (nu = newnurb->first; nu; nu = nu->next) {
 			if (nu->type == CU_BEZIER) {
 				if (split) {
@@ -4163,7 +4271,7 @@ void CURVE_OT_make_segment(wmOperatorType *ot)
 
 /***************** pick select from 3d view **********************/
 
-bool mouse_nurb(bContext *C, const int mval[2], bool extend, bool deselect, bool toggle)
+bool ED_curve_editnurb_select_pick(bContext *C, const int mval[2], bool extend, bool deselect, bool toggle)
 {
 	Object *obedit = CTX_data_edit_object(C);
 	Curve *cu = obedit->data;
@@ -4867,7 +4975,9 @@ static int add_vertex_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 			const float mval[2] = {UNPACK2(event->mval)};
 			float no_dummy[3];
 			float dist_px_dummy;
-			snapObjectsContext(C, mval, &dist_px_dummy, location, no_dummy, SNAP_NOT_OBEDIT);
+			snapObjectsContext(
+			        C, mval, SNAP_NOT_OBEDIT,
+			        location, no_dummy, &dist_px_dummy);
 		}
 
 		RNA_float_set_array(op->ptr, "location", location);
@@ -4953,7 +5063,7 @@ void CURVE_OT_extrude(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
 	/* to give to transform */
-	RNA_def_enum(ot->srna, "mode", transform_mode_types, TFM_TRANSLATION, "Mode", "");
+	RNA_def_enum(ot->srna, "mode", rna_enum_transform_mode_types, TFM_TRANSLATION, "Mode", "");
 }
 
 /***************** make cyclic operator **********************/

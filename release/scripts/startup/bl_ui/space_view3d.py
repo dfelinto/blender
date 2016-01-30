@@ -118,6 +118,14 @@ class VIEW3D_HT_header(Header):
             row.operator("pose.paste", text="", icon='PASTEDOWN').flipped = False
             row.operator("pose.paste", text="", icon='PASTEFLIPDOWN').flipped = True
 
+        # GPencil
+        if context.gpencil_data and context.gpencil_data.use_stroke_edit_mode:
+            row = layout.row(align=True)
+            row.operator("gpencil.copy", text="", icon='COPYDOWN')
+            row.operator("gpencil.paste", text="", icon='PASTEDOWN')
+
+            layout.prop(context.gpencil_data, "use_onion_skinning", text="Onion Skins", icon='PARTICLE_PATH') # XXX: icon
+
 
 class VIEW3D_MT_editor_menus(Menu):
     bl_space_type = 'VIEW3D_MT_editor_menus'
@@ -131,11 +139,14 @@ class VIEW3D_MT_editor_menus(Menu):
         obj = context.active_object
         mode_string = context.mode
         edit_object = context.edit_object
+        gp_edit = context.gpencil_data and context.gpencil_data.use_stroke_edit_mode
 
         layout.menu("VIEW3D_MT_view")
 
         # Select Menu
-        if mode_string in {'PAINT_WEIGHT', 'PAINT_VERTEX', 'PAINT_TEXTURE'}:
+        if gp_edit:
+            layout.menu("VIEW3D_MT_select_gpencil")
+        elif mode_string in {'PAINT_WEIGHT', 'PAINT_VERTEX', 'PAINT_TEXTURE'}:
             mesh = obj.data
             if mesh.use_paint_mask:
                 layout.menu("VIEW3D_MT_select_paint_mask")
@@ -144,7 +155,9 @@ class VIEW3D_MT_editor_menus(Menu):
         elif mode_string != 'SCULPT':
             layout.menu("VIEW3D_MT_select_%s" % mode_string.lower())
 
-        if mode_string == 'OBJECT':
+        if gp_edit:
+            pass
+        elif mode_string == 'OBJECT':
             layout.menu("INFO_MT_add", text="Add")
         elif mode_string == 'EDIT_MESH':
             layout.menu("INFO_MT_mesh_add", text="Add")
@@ -157,7 +170,9 @@ class VIEW3D_MT_editor_menus(Menu):
         elif mode_string == 'EDIT_ARMATURE':
             layout.menu("INFO_MT_edit_armature_add", text="Add")
 
-        if edit_object:
+        if gp_edit:
+            layout.menu("VIEW3D_MT_edit_gpencil")
+        elif edit_object:
             layout.menu("VIEW3D_MT_edit_%s" % edit_object.type.lower())
         elif obj:
             if mode_string != 'PAINT_TEXTURE':
@@ -537,7 +552,39 @@ class VIEW3D_MT_view_cameras(Menu):
         layout.operator("view3d.object_as_camera")
         layout.operator("view3d.viewnumpad", text="Active Camera").type = 'CAMERA'
 
+
 # ********** Select menus, suffix from context.mode **********
+
+class VIEW3D_MT_select_object_more_less(Menu):
+    bl_label = "Select More/Less"
+
+    def draw(self, context):
+        layout = self.layout
+
+        layout = self.layout
+
+        layout.operator("object.select_more", text="More")
+        layout.operator("object.select_less", text="Less")
+
+        layout.separator()
+
+        props = layout.operator("object.select_hierarchy", text="Parent")
+        props.extend = False
+        props.direction = 'PARENT'
+
+        props = layout.operator("object.select_hierarchy", text="Child")
+        props.extend = False
+        props.direction = 'CHILD'
+
+        layout.separator()
+
+        props = layout.operator("object.select_hierarchy", text="Extend Parent")
+        props.extend = True
+        props.direction = 'PARENT'
+
+        props = layout.operator("object.select_hierarchy", text="Extend Child")
+        props.extend = True
+        props.direction = 'CHILD'
 
 
 class VIEW3D_MT_select_object(Menu):
@@ -561,9 +608,40 @@ class VIEW3D_MT_select_object(Menu):
 
         layout.separator()
 
+        layout.menu("VIEW3D_MT_select_object_more_less")
+
+        layout.separator()
+
         layout.operator_menu_enum("object.select_grouped", "type", text="Grouped")
         layout.operator_menu_enum("object.select_linked", "type", text="Linked")
         layout.operator("object.select_pattern", text="Select Pattern...")
+
+
+class VIEW3D_MT_select_pose_more_less(Menu):
+    bl_label = "Select More/Less"
+
+    def draw(self, context):
+        layout = self.layout
+
+        layout = self.layout
+
+        props = layout.operator("pose.select_hierarchy", text="Parent")
+        props.extend = False
+        props.direction = 'PARENT'
+
+        props = layout.operator("pose.select_hierarchy", text="Child")
+        props.extend = False
+        props.direction = 'CHILD'
+
+        layout.separator()
+
+        props = layout.operator("pose.select_hierarchy", text="Extend Parent")
+        props.extend = True
+        props.direction = 'PARENT'
+
+        props = layout.operator("pose.select_hierarchy", text="Extend Child")
+        props.extend = True
+        props.direction = 'CHILD'
 
 
 class VIEW3D_MT_select_pose(Menu):
@@ -585,23 +663,7 @@ class VIEW3D_MT_select_pose(Menu):
 
         layout.separator()
 
-        props = layout.operator("pose.select_hierarchy", text="Parent")
-        props.extend = False
-        props.direction = 'PARENT'
-
-        props = layout.operator("pose.select_hierarchy", text="Child")
-        props.extend = False
-        props.direction = 'CHILD'
-
-        layout.separator()
-
-        props = layout.operator("pose.select_hierarchy", text="Extend Parent")
-        props.extend = True
-        props.direction = 'PARENT'
-
-        props = layout.operator("pose.select_hierarchy", text="Extend Child")
-        props.extend = True
-        props.direction = 'CHILD'
+        layout.menu("VIEW3D_MT_select_pose_more_less")
 
         layout.separator()
 
@@ -651,6 +713,37 @@ class VIEW3D_MT_edit_mesh_select_similar(Menu):
         layout.operator("mesh.select_similar_region", text="Face Regions")
 
 
+class VIEW3D_MT_edit_mesh_select_by_trait(Menu):
+    bl_label = "Select All by Trait"
+
+    def draw(self, context):
+        layout = self.layout
+        if context.scene.tool_settings.mesh_select_mode[2] is False:
+            layout.operator("mesh.select_non_manifold", text="Non Manifold")
+        layout.operator("mesh.select_loose", text="Loose Geometry")
+        layout.operator("mesh.select_interior_faces", text="Interior Faces")
+        layout.operator("mesh.select_face_by_sides")
+
+        layout.separator()
+
+        layout.operator("mesh.select_ungrouped", text="Ungrouped Verts")
+
+
+class VIEW3D_MT_edit_mesh_select_more_less(Menu):
+    bl_label = "Select More/Less"
+
+    def draw(self, context):
+        layout = self.layout
+
+        layout.operator("mesh.select_more", text="More")
+        layout.operator("mesh.select_less", text="Less")
+
+        layout.separator()
+
+        layout.operator("mesh.select_next_item", text="Next Active")
+        layout.operator("mesh.select_prev_item", text="Previous Active")
+
+
 class VIEW3D_MT_select_edit_mesh(Menu):
     bl_label = "Select"
 
@@ -680,23 +773,16 @@ class VIEW3D_MT_select_edit_mesh(Menu):
 
         layout.separator()
 
-        # topology
-        layout.operator("mesh.select_loose", text="Loose Geometry")
-        if context.scene.tool_settings.mesh_select_mode[2] is False:
-            layout.operator("mesh.select_non_manifold", text="Non Manifold")
-        layout.operator("mesh.select_interior_faces", text="Interior Faces")
-        layout.operator("mesh.select_face_by_sides")
-
-        layout.separator()
-
         # other ...
         layout.menu("VIEW3D_MT_edit_mesh_select_similar")
-        layout.operator("mesh.select_ungrouped", text="Ungrouped Verts")
 
         layout.separator()
 
-        layout.operator("mesh.select_more", text="More")
-        layout.operator("mesh.select_less", text="Less")
+        layout.menu("VIEW3D_MT_edit_mesh_select_by_trait")
+
+        layout.separator()
+
+        layout.menu("VIEW3D_MT_edit_mesh_select_more_less")
 
         layout.separator()
 
@@ -881,6 +967,29 @@ class VIEW3D_MT_select_edit_armature(Menu):
 
         layout.operator_menu_enum("armature.select_similar", "type", text="Similar")
         layout.operator("object.select_pattern", text="Select Pattern...")
+
+
+class VIEW3D_MT_select_gpencil(Menu):
+    bl_label = "Select"
+    
+    def draw(self, context):
+        layout = self.layout
+
+        layout.operator("gpencil.select_border")
+        layout.operator("gpencil.select_circle")
+
+        layout.separator()
+
+        layout.operator("gpencil.select_all", text="(De)select All").action = 'TOGGLE'
+        layout.operator("gpencil.select_all", text="Inverse").action = 'INVERT'
+        layout.operator("gpencil.select_linked", text="Linked")
+        #layout.operator_menu_enum("gpencil.select_grouped", "type", text="Grouped")
+        layout.operator("gpencil.select_grouped", text="Grouped")
+
+        layout.separator()
+
+        layout.operator("gpencil.select_more")
+        layout.operator("gpencil.select_less")
 
 
 class VIEW3D_MT_select_paint_mask(Menu):
@@ -2380,6 +2489,7 @@ class VIEW3D_MT_edit_mesh_faces(Menu):
         layout.operator("mesh.bevel").vertex_only = False
         layout.operator("mesh.solidify")
         layout.operator("mesh.intersect")
+        layout.operator("mesh.intersect_boolean")
         layout.operator("mesh.wireframe")
 
         layout.separator()
@@ -2821,6 +2931,81 @@ class VIEW3D_MT_edit_armature_delete(Menu):
         layout.operator("armature.dissolve", text="Dissolve")
 
 
+# ********** GPencil Stroke Edit menu **********
+
+
+class VIEW3D_MT_edit_gpencil(Menu):
+    bl_label = "GPencil"
+    
+    def draw(self, context):
+        toolsettings = context.tool_settings
+
+        layout = self.layout
+
+        layout.operator("ed.undo")
+        layout.operator("ed.redo")
+        layout.operator("ed.undo_history")
+
+        layout.separator()
+
+        layout.operator("gpencil.brush_paint", text="Sculpt Strokes").wait_for_input = True
+        layout.prop_menu_enum(toolsettings.gpencil_sculpt, "tool", text="Sculpt Brush")
+
+        layout.separator()
+
+        layout.menu("VIEW3D_MT_edit_gpencil_transform")
+        layout.operator("transform.mirror", text="Mirror")
+        layout.menu("GPENCIL_MT_snap")
+
+        layout.separator()
+
+        layout.menu("VIEW3D_MT_object_animation")   # NOTE: provides keyingset access...
+
+        layout.separator()
+
+        layout.menu("VIEW3D_MT_edit_gpencil_delete")
+        layout.operator("gpencil.duplicate_move", text="Duplicate")
+
+        layout.separator()
+
+        layout.operator("gpencil.copy", text="Copy")
+        layout.operator("gpencil.paste", text="Paste")
+
+        layout.separator()
+
+        layout.prop_menu_enum(toolsettings, "proportional_edit")
+        layout.prop_menu_enum(toolsettings, "proportional_edit_falloff")
+
+        layout.separator()
+
+        layout.operator("gpencil.reveal")
+        layout.operator("gpencil.hide", text="Show Active Layer Only").unselected = True
+        layout.operator("gpencil.hide", text="Hide Active Layer").unselected = False
+
+        layout.separator()
+
+        layout.operator_menu_enum("gpencil.move_to_layer", "layer", text="Move to Layer")
+        layout.operator_menu_enum("gpencil.convert", "type", text="Convert to Geometry...")
+
+
+class VIEW3D_MT_edit_gpencil_transform(Menu):
+    bl_label = "Transform"
+
+    def draw(self, context):
+        layout = self.layout
+
+        layout.operator("transform.translate")
+        layout.operator("transform.rotate")
+        layout.operator("transform.resize", text="Scale")
+
+        layout.separator()
+
+        layout.operator("transform.bend", text="Bend")
+        layout.operator("transform.shear", text="Shear")
+        layout.operator("transform.tosphere", text="To Sphere")
+        layout.operator("transform.transform", text="Shrink Fatten").mode = 'GPENCIL_SHRINKFATTEN'
+
+
 # ********** Panel **********
 
 
@@ -3046,7 +3231,7 @@ class VIEW3D_PT_view3d_shading(Panel):
             col.prop(view, "use_matcap")
             if view.use_matcap:
                 col.template_icon_view(view, "matcap_icon")
-        elif view.viewport_shade == 'TEXTURED':
+        if view.viewport_shade == 'TEXTURED' or context.mode == 'PAINT_TEXTURE':
             if scene.render.use_shading_nodes or gs.material_mode != 'GLSL':
                 col.prop(view, "show_textured_shadeless")
 

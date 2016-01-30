@@ -718,7 +718,7 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
 				mul_m4_v3(obedit->imat, cent);
 			}
 			else {
-				if (around == V3D_CENTROID) {
+				if (around == V3D_AROUND_CENTER_MEAN) {
 					if (em->bm->totvert) {
 						const float total_div = 1.0f / (float)em->bm->totvert;
 						BM_ITER_MESH (eve, &iter, em->bm, BM_VERTS_OF_MESH) {
@@ -768,9 +768,9 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
 
 	for (tob = bmain->object.first; tob; tob = tob->id.next) {
 		if (tob->data)
-			((ID *)tob->data)->flag &= ~LIB_DOIT;
+			((ID *)tob->data)->tag &= ~LIB_TAG_DOIT;
 		if (tob->dup_group)
-			((ID *)tob->dup_group)->flag &= ~LIB_DOIT;
+			((ID *)tob->dup_group)->tag &= ~LIB_TAG_DOIT;
 	}
 
 	for (ctx_ob = ctx_data_list.first;
@@ -791,7 +791,7 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
 			
 			if (ob->data == NULL) {
 				/* special support for dupligroups */
-				if ((ob->transflag & OB_DUPLIGROUP) && ob->dup_group && (ob->dup_group->id.flag & LIB_DOIT) == 0) {
+				if ((ob->transflag & OB_DUPLIGROUP) && ob->dup_group && (ob->dup_group->id.tag & LIB_TAG_DOIT) == 0) {
 					if (ob->dup_group->id.lib) {
 						tot_lib_error++;
 					}
@@ -812,7 +812,7 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
 						add_v3_v3(ob->dup_group->dupli_ofs, cent);
 
 						tot_change++;
-						ob->dup_group->id.flag |= LIB_DOIT;
+						ob->dup_group->id.tag |= LIB_TAG_DOIT;
 						do_inverse_offset = true;
 					}
 				}
@@ -825,23 +825,23 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
 				Mesh *me = ob->data;
 
 				if (centermode == ORIGIN_TO_CURSOR) { /* done */ }
-				else if (centermode == ORIGIN_TO_CENTER_OF_MASS) { BKE_mesh_center_centroid(me, cent); }
-				else if (around == V3D_CENTROID)                 { BKE_mesh_center_median(me, cent); }
-				else                                             { BKE_mesh_center_bounds(me, cent); }
+				else if (centermode == ORIGIN_TO_CENTER_OF_MASS)    { BKE_mesh_center_centroid(me, cent); }
+				else if (around == V3D_AROUND_CENTER_MEAN)          { BKE_mesh_center_median(me, cent); }
+				else                                                { BKE_mesh_center_bounds(me, cent); }
 
 				negate_v3_v3(cent_neg, cent);
 				BKE_mesh_translate(me, cent_neg, 1);
 
 				tot_change++;
-				me->id.flag |= LIB_DOIT;
+				me->id.tag |= LIB_TAG_DOIT;
 				do_inverse_offset = true;
 			}
 			else if (ELEM(ob->type, OB_CURVE, OB_SURF)) {
 				Curve *cu = ob->data;
 
-				if      (centermode == ORIGIN_TO_CURSOR) { /* done */ }
-				else if (around == V3D_CENTROID) { BKE_curve_center_median(cu, cent); }
-				else                             { BKE_curve_center_bounds(cu, cent);   }
+				if      (centermode == ORIGIN_TO_CURSOR)    { /* done */ }
+				else if (around == V3D_AROUND_CENTER_MEAN)  { BKE_curve_center_median(cu, cent); }
+				else                                        { BKE_curve_center_bounds(cu, cent); }
 
 				/* don't allow Z change if curve is 2D */
 				if ((ob->type == OB_CURVE) && !(cu->flag & CU_3D))
@@ -851,7 +851,7 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
 				BKE_curve_translate(cu, cent_neg, 1);
 
 				tot_change++;
-				cu->id.flag |= LIB_DOIT;
+				cu->id.tag |= LIB_TAG_DOIT;
 				do_inverse_offset = true;
 
 				if (obedit) {
@@ -885,7 +885,7 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
 					cu->yof = cu->yof - (cent[1] / cu->fsize);
 
 					tot_change++;
-					cu->id.flag |= LIB_DOIT;
+					cu->id.tag |= LIB_TAG_DOIT;
 					do_inverse_offset = true;
 				}
 			}
@@ -906,7 +906,7 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
 					ED_armature_origin_set(scene, ob, cursor, centermode, around);
 
 					tot_change++;
-					arm->id.flag |= LIB_DOIT;
+					arm->id.tag |= LIB_TAG_DOIT;
 					/* do_inverse_offset = true; */ /* docenter_armature() handles this */
 
 					BKE_object_where_is_calc(scene, ob);
@@ -921,15 +921,15 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
 			else if (ob->type == OB_MBALL) {
 				MetaBall *mb = ob->data;
 
-				if      (centermode == ORIGIN_TO_CURSOR) { /* done */ }
-				else if (around == V3D_CENTROID) { BKE_mball_center_median(mb, cent); }
-				else                             { BKE_mball_center_bounds(mb, cent); }
+				if      (centermode == ORIGIN_TO_CURSOR)    { /* done */ }
+				else if (around == V3D_AROUND_CENTER_MEAN)  { BKE_mball_center_median(mb, cent); }
+				else                                        { BKE_mball_center_bounds(mb, cent); }
 
 				negate_v3_v3(cent_neg, cent);
 				BKE_mball_translate(mb, cent_neg);
 
 				tot_change++;
-				mb->id.flag |= LIB_DOIT;
+				mb->id.tag |= LIB_TAG_DOIT;
 				do_inverse_offset = true;
 
 				if (obedit) {
@@ -942,15 +942,15 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
 			else if (ob->type == OB_LATTICE) {
 				Lattice *lt = ob->data;
 
-				if      (centermode == ORIGIN_TO_CURSOR) { /* done */ }
-				else if (around == V3D_CENTROID) { BKE_lattice_center_median(lt, cent); }
-				else                             { BKE_lattice_center_bounds(lt, cent); }
+				if      (centermode == ORIGIN_TO_CURSOR)    { /* done */ }
+				else if (around == V3D_AROUND_CENTER_MEAN)  { BKE_lattice_center_median(lt, cent); }
+				else                                        { BKE_lattice_center_bounds(lt, cent); }
 
 				negate_v3_v3(cent_neg, cent);
 				BKE_lattice_translate(lt, cent_neg, 1);
 
 				tot_change++;
-				lt->id.flag |= LIB_DOIT;
+				lt->id.tag |= LIB_TAG_DOIT;
 				do_inverse_offset = true;
 			}
 
@@ -1011,7 +1011,7 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
 	BLI_freelistN(&ctx_data_list);
 
 	for (tob = bmain->object.first; tob; tob = tob->id.next)
-		if (tob->data && (((ID *)tob->data)->flag & LIB_DOIT))
+		if (tob->data && (((ID *)tob->data)->tag & LIB_TAG_DOIT))
 			DAG_id_tag_update(&tob->id, OB_RECALC_OB | OB_RECALC_DATA);
 
 	if (tot_change) {
@@ -1044,8 +1044,8 @@ void OBJECT_OT_origin_set(wmOperatorType *ot)
 	};
 	
 	static EnumPropertyItem prop_set_bounds_types[] = {
-		{V3D_CENTROID, "MEDIAN", 0, "Median Center", ""},
-		{V3D_CENTER, "BOUNDS", 0, "Bounds Center", ""},
+		{V3D_AROUND_CENTER_MEAN, "MEDIAN", 0, "Median Center", ""},
+		{V3D_AROUND_CENTER_BOUNDS, "BOUNDS", 0, "Bounds Center", ""},
 		{0, NULL, 0, NULL, NULL}
 	};
 	
@@ -1064,5 +1064,5 @@ void OBJECT_OT_origin_set(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 	
 	ot->prop = RNA_def_enum(ot->srna, "type", prop_set_center_types, 0, "Type", "");
-	RNA_def_enum(ot->srna, "center", prop_set_bounds_types, V3D_CENTROID, "Center", "");
+	RNA_def_enum(ot->srna, "center", prop_set_bounds_types, V3D_AROUND_CENTER_MEAN, "Center", "");
 }

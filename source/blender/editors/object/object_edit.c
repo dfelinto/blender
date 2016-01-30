@@ -46,6 +46,7 @@
 
 #include "DNA_armature_types.h"
 #include "DNA_curve_types.h"
+#include "DNA_gpencil_types.h"
 #include "DNA_group_types.h"
 #include "DNA_material_types.h"
 #include "DNA_meta_types.h"
@@ -341,8 +342,8 @@ static bool ED_object_editmode_load_ex(Main *bmain, Object *obedit, const bool f
 			me->edit_btmesh = NULL;
 		}
 		if (obedit->restore_mode & OB_MODE_WEIGHT_PAINT) {
-			ED_mesh_mirror_spatial_table(NULL, NULL, NULL, 'e');
-			ED_mesh_mirror_topo_table(NULL, 'e');
+			ED_mesh_mirror_spatial_table(NULL, NULL, NULL, NULL, 'e');
+			ED_mesh_mirror_topo_table(NULL, NULL, 'e');
 		}
 	}
 	else if (obedit->type == OB_ARMATURE) {
@@ -356,20 +357,20 @@ static bool ED_object_editmode_load_ex(Main *bmain, Object *obedit, const bool f
 		DAG_relations_tag_update(bmain);
 	}
 	else if (ELEM(obedit->type, OB_CURVE, OB_SURF)) {
-		load_editNurb(obedit);
-		if (freedata) free_editNurb(obedit);
+		ED_curve_editnurb_load(obedit);
+		if (freedata) ED_curve_editnurb_free(obedit);
 	}
 	else if (obedit->type == OB_FONT) {
-		load_editText(obedit);
-		if (freedata) free_editText(obedit);
+		ED_curve_editfont_load(obedit);
+		if (freedata) ED_curve_editfont_free(obedit);
 	}
 	else if (obedit->type == OB_LATTICE) {
-		load_editLatt(obedit);
-		if (freedata) free_editLatt(obedit);
+		ED_lattice_editlatt_load(obedit);
+		if (freedata) ED_lattice_editlatt_free(obedit);
 	}
 	else if (obedit->type == OB_MBALL) {
-		load_editMball(obedit);
-		if (freedata) free_editMball(obedit);
+		ED_mball_editmball_load(obedit);
+		if (freedata) ED_mball_editmball_free(obedit);
 	}
 
 	/* Tag update so no access to freed data referenced from
@@ -532,28 +533,28 @@ void ED_object_editmode_enter(bContext *C, int flag)
 	else if (ob->type == OB_FONT) {
 		scene->obedit = ob; /* XXX for context */
 		ok = 1;
-		make_editText(ob);
+		ED_curve_editfont_make(ob);
 
 		WM_event_add_notifier(C, NC_SCENE | ND_MODE | NS_EDITMODE_TEXT, scene);
 	}
 	else if (ob->type == OB_MBALL) {
 		scene->obedit = ob; /* XXX for context */
 		ok = 1;
-		make_editMball(ob);
+		ED_mball_editmball_make(ob);
 
 		WM_event_add_notifier(C, NC_SCENE | ND_MODE | NS_EDITMODE_MBALL, scene);
 	}
 	else if (ob->type == OB_LATTICE) {
 		scene->obedit = ob; /* XXX for context */
 		ok = 1;
-		make_editLatt(ob);
+		ED_lattice_editlatt_make(ob);
 
 		WM_event_add_notifier(C, NC_SCENE | ND_MODE | NS_EDITMODE_LATTICE, scene);
 	}
 	else if (ob->type == OB_SURF || ob->type == OB_CURVE) {
 		ok = 1;
 		scene->obedit = ob; /* XXX for context */
-		make_editNurb(ob);
+		ED_curve_editnurb_make(ob);
 
 		WM_event_add_notifier(C, NC_SCENE | ND_MODE | NS_EDITMODE_CURVE, scene);
 	}
@@ -934,16 +935,20 @@ static void copy_attr(Main *bmain, Scene *scene, View3D *v3d, short event)
 						cu1->wordspace = cu->wordspace;
 						cu1->ulpos = cu->ulpos;
 						cu1->ulheight = cu->ulheight;
-						if (cu1->vfont) cu1->vfont->id.us--;
+						if (cu1->vfont)
+							id_us_min(&cu1->vfont->id);
 						cu1->vfont = cu->vfont;
 						id_us_plus((ID *)cu1->vfont);
-						if (cu1->vfontb) cu1->vfontb->id.us--;
+						if (cu1->vfontb)
+							id_us_min(&cu1->vfontb->id);
 						cu1->vfontb = cu->vfontb;
 						id_us_plus((ID *)cu1->vfontb);
-						if (cu1->vfonti) cu1->vfonti->id.us--;
+						if (cu1->vfonti)
+							id_us_min(&cu1->vfonti->id);
 						cu1->vfonti = cu->vfonti;
 						id_us_plus((ID *)cu1->vfonti);
-						if (cu1->vfontbi) cu1->vfontbi->id.us--;
+						if (cu1->vfontbi)
+							id_us_min(&cu1->vfontbi->id);
 						cu1->vfontbi = cu->vfontbi;
 						id_us_plus((ID *)cu1->vfontbi);
 						
@@ -1502,13 +1507,14 @@ static void UNUSED_FUNCTION(image_aspect) (Scene *scene, View3D *v3d)
 
 static EnumPropertyItem *object_mode_set_itemsf(bContext *C, PointerRNA *UNUSED(ptr), PropertyRNA *UNUSED(prop), bool *r_free)
 {
-	EnumPropertyItem *input = object_mode_items;
+	EnumPropertyItem *input = rna_enum_object_mode_items;
 	EnumPropertyItem *item = NULL;
 	Object *ob;
+	bGPdata *gpd;
 	int totitem = 0;
 
 	if (!C) /* needed for docs */
-		return object_mode_items;
+		return rna_enum_object_mode_items;
 
 	ob = CTX_data_active_object(C);
 	if (ob) {
@@ -1531,6 +1537,14 @@ static EnumPropertyItem *object_mode_set_itemsf(bContext *C, PointerRNA *UNUSED(
 	else {
 		/* We need at least this one! */
 		RNA_enum_items_add_value(&item, &totitem, input, OB_MODE_OBJECT);
+	}
+	
+	/* On top of all the rest, GPencil Stroke Edit Mode
+	 * is available if there's a valid gp datablock...
+	 */
+	gpd = CTX_data_gpencil_data(C);
+	if (gpd) {
+		RNA_enum_items_add_value(&item, &totitem, rna_enum_object_mode_items, OB_MODE_GPENCIL);
 	}
 
 	RNA_enum_item_end(&item, &totitem);
@@ -1556,6 +1570,8 @@ static const char *object_mode_op_string(int mode)
 		return "PARTICLE_OT_particle_edit_toggle";
 	if (mode == OB_MODE_POSE)
 		return "OBJECT_OT_posemode_toggle";
+	if (mode == OB_MODE_GPENCIL)
+		return "GPENCIL_OT_editmode_toggle";
 	return NULL;
 }
 
@@ -1567,6 +1583,8 @@ static bool object_mode_compat_test(Object *ob, ObjectMode mode)
 	if (ob) {
 		if (mode == OB_MODE_OBJECT)
 			return true;
+		else if (mode == OB_MODE_GPENCIL)
+			return true; /* XXX: assume this is the case for now... */
 
 		switch (ob->type) {
 			case OB_MESH:
@@ -1621,13 +1639,45 @@ bool ED_object_mode_compat_set(bContext *C, Object *ob, int mode, ReportList *re
 	return ok;
 }
 
+static int object_mode_set_poll(bContext *C)
+{
+	/* Since Grease Pencil editmode is also handled here,
+	 * we have a special exception for allowing this operator
+	 * to still work in that case when there's no active object
+	 * so that users can exit editmode this way as per normal.
+	 */
+	if (ED_operator_object_active_editable(C))
+		return true;
+	else
+		return (CTX_data_gpencil_data(C) != NULL);
+}
+
 static int object_mode_set_exec(bContext *C, wmOperator *op)
 {
 	Object *ob = CTX_data_active_object(C);
+	bGPdata *gpd = CTX_data_gpencil_data(C);
 	ObjectMode mode = RNA_enum_get(op->ptr, "mode");
 	ObjectMode restore_mode = (ob) ? ob->mode : OB_MODE_OBJECT;
 	const bool toggle = RNA_boolean_get(op->ptr, "toggle");
-
+	
+	if (gpd) {
+		/* GP Mode is not bound to a specific object. Therefore,
+		 * we don't want it to be actually saved on any objects,
+		 * as weirdness can happen if you select other objects,
+		 * or load old files.
+		 *
+		 * Instead, we use the following 2 rules to ensure that
+		 * the mode selector works as expected:
+		 *  1) If there's no object, we want to enter editmode.
+		 *     (i.e. with no object, we're in object mode)
+		 *  2) Otherwise, exit stroke editmode, so that we can
+		 *     enter another mode...
+		 */
+		if (!ob || (gpd->flag & GP_DATA_STROKE_EDITMODE)) {
+			WM_operator_name_call(C, "GPENCIL_OT_editmode_toggle", WM_OP_EXEC_REGION_WIN, NULL);
+		}
+	}
+	
 	if (!ob || !object_mode_compat_test(ob, mode))
 		return OPERATOR_PASS_THROUGH;
 
@@ -1671,12 +1721,12 @@ void OBJECT_OT_mode_set(wmOperatorType *ot)
 	/* api callbacks */
 	ot->exec = object_mode_set_exec;
 	
-	ot->poll = ED_operator_object_active_editable;
+	ot->poll = object_mode_set_poll; //ED_operator_object_active_editable;
 	
 	/* flags */
 	ot->flag = 0; /* no register/undo here, leave it to operators being called */
 	
-	ot->prop = RNA_def_enum(ot->srna, "mode", object_mode_items, OB_MODE_OBJECT, "Mode", "");
+	ot->prop = RNA_def_enum(ot->srna, "mode", rna_enum_object_mode_items, OB_MODE_OBJECT, "Mode", "");
 	RNA_def_enum_funcs(ot->prop, object_mode_set_itemsf);
 	RNA_def_property_flag(ot->prop, PROP_SKIP_SAVE);
 
@@ -1734,7 +1784,7 @@ void OBJECT_OT_game_property_new(wmOperatorType *ot)
 	/* flags */
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
-	RNA_def_enum(ot->srna, "type", gameproperty_type_items, GPROP_FLOAT, "Type", "Type of game property to add");
+	RNA_def_enum(ot->srna, "type", rna_enum_gameproperty_type_items, GPROP_FLOAT, "Type", "Type of game property to add");
 	RNA_def_string(ot->srna, "name", NULL, MAX_NAME, "Name", "Name of the game property to add");
 }
 

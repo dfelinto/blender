@@ -388,7 +388,7 @@ Object *DocumentImporter::create_camera_object(COLLADAFW::InstanceCamera *camera
 	Camera *cam = uid_camera_map[cam_uid];
 	Camera *old_cam = (Camera *)ob->data;
 	ob->data = cam;
-	old_cam->id.us--;
+	id_us_min(&old_cam->id);
 	if (old_cam->id.us == 0)
 		BKE_libblock_free(G.main, old_cam);
 	return ob;
@@ -406,7 +406,7 @@ Object *DocumentImporter::create_lamp_object(COLLADAFW::InstanceLight *lamp, Sce
 	Lamp *la = uid_lamp_map[lamp_uid];
 	Lamp *old_lamp = (Lamp *)ob->data;
 	ob->data = la;
-	old_lamp->id.us--;
+	id_us_min(&old_lamp->id);
 	if (old_lamp->id.us == 0)
 		BKE_libblock_free(G.main, old_lamp);
 	return ob;
@@ -654,7 +654,7 @@ std::vector<Object *> *DocumentImporter::write_node(COLLADAFW::Node *node, COLLA
 		for (std::vector<Object *>::iterator it = objects_done->begin(); it != objects_done->end(); ++it) {
 			ob = *it;
 			std::string nodename = node->getName().size() ? node->getName() : node->getOriginalId();
-			rename_id(&ob->id, (char *)nodename.c_str());
+			BKE_libblock_rename(G.main, &ob->id, (char *)nodename.c_str());
 			object_map.insert(std::pair<COLLADAFW::UniqueId, Object *>(node->getUniqueId(), ob));
 			node_map[node->getUniqueId()] = node;
 

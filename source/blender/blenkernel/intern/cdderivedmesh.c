@@ -57,16 +57,15 @@
 
 #include "GPU_buffers.h"
 #include "GPU_draw.h"
-#include "GPU_extensions.h"
 #include "GPU_glew.h"
+#include "GPU_shader.h"
+#include "GPU_basic_shader.h"
 
 #include "WM_api.h"
 
 #include <string.h>
 #include <limits.h>
 #include <math.h>
-
-extern GLubyte stipple_quarttone[128]; /* glutil.c, bad level data */
 
 typedef struct {
 	DerivedMesh dm;
@@ -344,8 +343,21 @@ static void cdDM_update_normals_from_pbvh(DerivedMesh *dm)
 	CDDerivedMesh *cddm = (CDDerivedMesh *) dm;
 	float (*face_nors)[3];
 
-	if (!cddm->pbvh || !cddm->pbvh_draw || !dm->numPolyData)
+	/* Some callbacks do not use optimal PBVH draw, so needs all the
+	 * possible data (like normals) to be copied from PBVH back to DM.
+	 *
+	 * This is safe to do if PBVH and DM are representing the same mesh,
+	 * which could be wrong when modifiers are enabled for sculpt.
+	 * So here we only doing update when there's no modifiers applied
+	 * during sculpt.
+	 *
+	 * It's safe to do nothing if there are modifiers, because in this
+	 * case modifier stack is re-constructed from scratch on every
+	 * update.
+	 */
+	if (!cddm->pbvh_draw) {
 		return;
+	}
 
 	face_nors = CustomData_get_layer(&dm->polyData, CD_NORMAL);
 
@@ -446,18 +458,15 @@ static void cdDM_drawFacesSolid(
 	CDDerivedMesh *cddm = (CDDerivedMesh *) dm;
 	int a;
 
-	if (cddm->pbvh && cddm->pbvh_draw) {
-		if (BKE_pbvh_has_faces(cddm->pbvh)) {
-			float (*face_nors)[3] = CustomData_get_layer(&dm->faceData, CD_NORMAL);
-
-			cdDM_update_normals_from_pbvh(dm);
+	if (cddm->pbvh) {
+		if (cddm->pbvh_draw && BKE_pbvh_has_faces(cddm->pbvh)) {
+			float (*face_nors)[3] = CustomData_get_layer(&dm->polyData, CD_NORMAL);
 
 			BKE_pbvh_draw(cddm->pbvh, partial_redraw_planes, face_nors,
 			              setMaterial, false, false);
 			glShadeModel(GL_FLAT);
+			return;
 		}
-
-		return;
 	}
 	
 	GPU_vertex_setup(dm);
@@ -505,14 +514,18 @@ static void cdDM_drawFacesTex_common(
 	 *       textured view, but object itself will be displayed gray
 	 *       (the same as it'll display without UV maps in textured view)
 	 */
-	if (cddm->pbvh && cddm->pbvh_draw && BKE_pbvh_type(cddm->pbvh) == PBVH_BMESH) {
-		if (BKE_pbvh_has_faces(cddm->pbvh)) {
-			cdDM_update_normals_from_pbvh(dm);
+	if (cddm->pbvh) {
+		if (cddm->pbvh_draw &&
+		    BKE_pbvh_type(cddm->pbvh) == PBVH_BMESH &&
+		    BKE_pbvh_has_faces(cddm->pbvh))
+		{
 			GPU_set_tpage(NULL, false, false);
 			BKE_pbvh_draw(cddm->pbvh, NULL, NULL, NULL, false, false);
+			return;
 		}
-
-		return;
+		else {
+			cdDM_update_normals_from_pbvh(dm);
+		}
 	}
 
 	colType = CD_TEXTURE_MLOOPCOL;
@@ -664,7 +677,7 @@ static void cdDM_drawMappedFaces(
 			else
 				me = userData;
 
-			findex_buffer = GPU_buffer_alloc(dm->drawObject->tot_loop_verts * sizeof(int), false);
+			findex_buffer = GPU_buffer_alloc(dm->drawObject->tot_loop_verts * sizeof(int));
 			fi_map = GPU_buffer_lock(findex_buffer, GPU_BINDING_ARRAY);
 
 			if (fi_map) {
@@ -748,6 +761,8 @@ static void cdDM_drawMappedFaces(
 				draw_option = setMaterial(bufmat->mat_nr + 1, NULL);
 
 			if (draw_option != DM_DRAW_OPTION_SKIP) {
+				DMDrawOption last_draw_option = DM_DRAW_OPTION_NORMAL;
+
 				for (i = 0; i < totpoly; i++) {
 					int actualFace = next_actualFace;
 					int flush = 0;
@@ -766,17 +781,12 @@ static void cdDM_drawMappedFaces(
 						}
 					}
 
-					if (draw_option == DM_DRAW_OPTION_STIPPLE) {
-						glEnable(GL_POLYGON_STIPPLE);
-						glPolygonStipple(stipple_quarttone);
-					}
-
 					/* Goal is to draw as long of a contiguous triangle
 					 * array as possible, so draw when we hit either an
 					 * invisible triangle or at the end of the array */
 
 					/* flush buffer if current triangle isn't drawable or it's last triangle... */
-					flush = (ELEM(draw_option, DM_DRAW_OPTION_SKIP, DM_DRAW_OPTION_STIPPLE)) || (i == totpoly - 1);
+					flush = (draw_option != last_draw_option) || (i == totpoly - 1);
 
 					if (!flush && compareDrawOptions) {
 						flush |= compareDrawOptions(userData, actualFace, next_actualFace) == 0;
@@ -786,18 +796,27 @@ static void cdDM_drawMappedFaces(
 					tot_element += tot_tri_verts;
 
 					if (flush) {
-						if (!ELEM(draw_option, DM_DRAW_OPTION_SKIP, DM_DRAW_OPTION_STIPPLE))
+						if (draw_option != DM_DRAW_OPTION_SKIP) {
 							tot_drawn += tot_tri_verts;
+
+							if (last_draw_option != draw_option) {
+								if (draw_option == DM_DRAW_OPTION_STIPPLE) {
+									GPU_basic_shader_bind(GPU_SHADER_STIPPLE | GPU_SHADER_USE_COLOR);
+									GPU_basic_shader_stipple(GPU_SHADER_STIPPLE_QUARTTONE);
+								}
+								else {
+									GPU_basic_shader_bind(GPU_SHADER_USE_COLOR);
+								}
+							}
+						}
 
 						if (tot_drawn) {
 							GPU_buffer_draw_elements(dm->drawObject->triangles, GL_TRIANGLES, bufmat->start + start_element, tot_drawn);
 							tot_drawn = 0;
 						}
 
+						last_draw_option = draw_option;
 						start_element = tot_element;
-
-						if (draw_option == DM_DRAW_OPTION_STIPPLE)
-							glDisable(GL_POLYGON_STIPPLE);
 					}
 					else {
 						tot_drawn += tot_tri_verts;
@@ -807,6 +826,7 @@ static void cdDM_drawMappedFaces(
 		}
 	}
 
+	GPU_basic_shader_bind(GPU_SHADER_USE_COLOR);
 	glShadeModel(GL_FLAT);
 
 	GPU_buffers_unbind();
@@ -878,14 +898,18 @@ static void cdDM_drawMappedFacesGLSL(
 	 *       will skip using textures (dyntopo currently destroys UV anyway) and
 	 *       works fine for matcap
 	 */
-	if (cddm->pbvh && cddm->pbvh_draw && BKE_pbvh_type(cddm->pbvh) == PBVH_BMESH) {
-		if (BKE_pbvh_has_faces(cddm->pbvh)) {
-			cdDM_update_normals_from_pbvh(dm);
+	if (cddm->pbvh) {
+		if (cddm->pbvh_draw &&
+		    BKE_pbvh_type(cddm->pbvh) == PBVH_BMESH &&
+		    BKE_pbvh_has_faces(cddm->pbvh))
+		{
 			setMaterial(1, &gattribs);
 			BKE_pbvh_draw(cddm->pbvh, NULL, NULL, NULL, false, false);
+			return;
 		}
-
-		return;
+		else {
+			cdDM_update_normals_from_pbvh(dm);
+		}
 	}
 
 	matnr = -1;
@@ -893,10 +917,7 @@ static void cdDM_drawMappedFacesGLSL(
 
 	glShadeModel(GL_SMOOTH);
 
-	/* workaround for NVIDIA GPUs on Mac not supporting vertex arrays + interleaved formats, see T43342 */
-	if ((GPU_type_matches(GPU_DEVICE_NVIDIA, GPU_OS_MAC, GPU_DRIVER_ANY) && (U.gameflags & USER_DISABLE_VBO)) ||
-	    setDrawOptions != NULL)
-	{
+	if (setDrawOptions != NULL) {
 		DMVertexAttribs attribs;
 		DEBUG_VBO("Using legacy code. cdDM_drawMappedFacesGLSL\n");
 		memset(&attribs, 0, sizeof(attribs));
@@ -1032,11 +1053,8 @@ static void cdDM_drawMappedFacesGLSL(
 
 		/* part two, generate and fill the arrays with the data */
 		if (max_element_size > 0) {
-			buffer = GPU_buffer_alloc(max_element_size * dm->drawObject->tot_loop_verts, false);
+			buffer = GPU_buffer_alloc(max_element_size * dm->drawObject->tot_loop_verts);
 
-			if (buffer == NULL) {
-				buffer = GPU_buffer_alloc(max_element_size * dm->drawObject->tot_loop_verts, true);
-			}
 			varray = GPU_buffer_lock_stream(buffer, GPU_BINDING_ARRAY);
 			if (varray == NULL) {
 				GPU_buffers_unbind();
@@ -1147,14 +1165,18 @@ static void cdDM_drawMappedFacesMat(
 	 *       works fine for matcap
 	 */
 
-	if (cddm->pbvh && cddm->pbvh_draw && BKE_pbvh_type(cddm->pbvh) == PBVH_BMESH) {
-		if (BKE_pbvh_has_faces(cddm->pbvh)) {
-			cdDM_update_normals_from_pbvh(dm);
+	if (cddm->pbvh) {
+		if (cddm->pbvh_draw &&
+		    BKE_pbvh_type(cddm->pbvh) == PBVH_BMESH &&
+		    BKE_pbvh_has_faces(cddm->pbvh))
+		{
 			setMaterial(userData, 1, &gattribs);
 			BKE_pbvh_draw(cddm->pbvh, NULL, NULL, NULL, false, false);
+			return;
 		}
-
-		return;
+		else {
+			cdDM_update_normals_from_pbvh(dm);
+		}
 	}
 
 	matnr = -1;
@@ -1347,6 +1369,7 @@ static void cdDM_buffer_copy_vertex(
 static void cdDM_buffer_copy_normal(
         DerivedMesh *dm, short *varray)
 {
+	CDDerivedMesh *cddm = (CDDerivedMesh *)dm;
 	int i, j, totpoly;
 	int start;
 
@@ -1361,6 +1384,10 @@ static void cdDM_buffer_copy_normal(
 	mpoly = dm->getPolyArray(dm);
 	mloop = dm->getLoopArray(dm);
 	totpoly = dm->getNumPolys(dm);
+
+	/* we are in sculpt mode, disable loop normals (since they won't get updated) */
+	if (cddm->pbvh)
+		lnors = NULL;
 
 	start = 0;
 	for (i = 0; i < totpoly; i++, mpoly++) {
@@ -2886,6 +2913,8 @@ static bool poly_gset_compare_fn(const void *k1, const void *k2)
  * \param vtargetmap  The table that maps vertices to target vertices.  a value of -1
  * indicates a vertex is a target, and is to be kept.
  * This array is aligned with 'dm->numVertData'
+ * \warning \a vtergatmap must **not** contain any chained mapping (v1 -> v2 -> v3 etc.), this is not supported
+ * and will likely generate corrupted geometry.
  *
  * \param tot_vtargetmap  The number of non '-1' values in vtargetmap. (not the size)
  *
@@ -3194,7 +3223,10 @@ DerivedMesh *CDDM_merge_verts(DerivedMesh *dm, const int *vtargetmap, const int 
 			med->v1 = newv[med->v1];
 		if (newv[med->v2] != -1)
 			med->v2 = newv[med->v2];
-		
+
+		/* Can happen in case vtargetmap contains some double chains, we do not support that. */
+		BLI_assert(med->v1 != med->v2);
+
 		CustomData_copy_data(&dm->edgeData, &cddm2->dm.edgeData, olde[i], i, 1);
 	}
 	

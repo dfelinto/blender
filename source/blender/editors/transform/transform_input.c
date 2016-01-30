@@ -51,9 +51,9 @@ static void InputSpring(TransInfo *UNUSED(t), MouseInput *mi, const double mval[
 	double dx, dy;
 	float ratio;
 
-	dx = (mi->center[0] - mval[0]);
-	dy = (mi->center[1] - mval[1]);
-	ratio = hypot(dx, dy) / mi->factor;
+	dx = ((double)mi->center[0] - mval[0]);
+	dy = ((double)mi->center[1] - mval[1]);
+	ratio = hypot(dx, dy) / (double)mi->factor;
 
 	output[0] = ratio;
 }
@@ -64,8 +64,8 @@ static void InputSpringFlip(TransInfo *t, MouseInput *mi, const double mval[2], 
 
 	/* flip scale */
 	/* values can become really big when zoomed in so use longs [#26598] */
-	if ((long long int)(mi->center[0] - mval[0]) * (long long int)(mi->center[0] - mi->imval[0]) +
-	    (long long int)(mi->center[1] - mval[1]) * (long long int)(mi->center[1] - mi->imval[1]) < 0)
+	if ((int64_t)((int)mi->center[0] - mval[0]) * (int64_t)((int)mi->center[0] - mi->imval[0]) +
+	    (int64_t)((int)mi->center[1] - mval[1]) * (int64_t)((int)mi->center[1] - mi->imval[1]) < 0)
 	{
 		output[0] *= -1.0f;
 	}
@@ -88,9 +88,10 @@ static void InputTrackBall(TransInfo *UNUSED(t), MouseInput *mi, const double mv
 
 static void InputHorizontalRatio(TransInfo *t, MouseInput *UNUSED(mi), const double mval[2], float output[3])
 {
-	const float pad = t->ar->winx / 10;
+	const int winx = t->ar ? t->ar->winx : 1;
+	const double pad = winx / 10;
 
-	output[0] = (mval[0] - pad) / (t->ar->winx - 2 * pad);
+	output[0] = (mval[0] - pad) / (winx - 2 * pad);
 }
 
 static void InputHorizontalAbsolute(TransInfo *t, MouseInput *mi, const double mval[2], float output[3])
@@ -105,9 +106,10 @@ static void InputHorizontalAbsolute(TransInfo *t, MouseInput *mi, const double m
 
 static void InputVerticalRatio(TransInfo *t, MouseInput *UNUSED(mi), const double mval[2], float output[3])
 {
-	const float pad = t->ar->winy / 10;
+	const int winy = t->ar ? t->ar->winy : 1;
+	const double pad = winy / 10;
 
-	output[0] = (mval[1] - pad) / (t->ar->winy - 2 * pad);
+	output[0] = (mval[1] - pad) / (winy - 2 * pad);
 }
 
 static void InputVerticalAbsolute(TransInfo *t, MouseInput *mi, const double mval[2], float output[3])
@@ -163,20 +165,24 @@ static void InputCustomRatio(TransInfo *t, MouseInput *mi, const double mval[2],
 	output[0] = -output[0];
 }
 
+struct InputAngle_Data {
+	double angle;
+	double mval_prev[2];
+};
+
 static void InputAngle(TransInfo *UNUSED(t), MouseInput *mi, const double mval[2], float output[3])
 {
-	double dx2 = mval[0] - mi->center[0];
-	double dy2 = mval[1] - mi->center[1];
+	struct InputAngle_Data *data = mi->data;
+	double dx2 = mval[0] - (double)mi->center[0];
+	double dy2 = mval[1] - (double)mi->center[1];
 	double B = sqrt(dx2 * dx2 + dy2 * dy2);
 
-	double dx1 = mi->imval[0] - mi->center[0];
-	double dy1 = mi->imval[1] - mi->center[1];
+	double dx1 = data->mval_prev[0] - (double)mi->center[0];
+	double dy1 = data->mval_prev[1] - (double)mi->center[1];
 	double A = sqrt(dx1 * dx1 + dy1 * dy1);
 
-	double dx3 = mval[0] - mi->imval[0];
-	double dy3 = mval[1] - mi->imval[1];
-
-	double *angle = mi->data;
+	double dx3 = mval[0] - data->mval_prev[0];
+	double dy3 = mval[1] - data->mval_prev[1];
 
 	/* use doubles here, to make sure a "1.0" (no rotation) doesn't become 9.999999e-01, which gives 0.02 for acos */
 	double deler = (((dx1 * dx1 + dy1 * dy1) +
@@ -210,19 +216,12 @@ static void InputAngle(TransInfo *UNUSED(t), MouseInput *mi, const double mval[2
 		if ((dx1 * dy2 - dx2 * dy1) > 0.0) dphi = -dphi;
 	}
 
-	if (mi->precision) {
-		dphi = dphi * mi->precision_factor;
-	}
+	data->angle += ((double)dphi) * (mi->precision ? (double)mi->precision_factor : 1.0);
 
-	/* if no delta angle, don't update initial position */
-	if (dphi != 0) {
-		mi->imval[0] = mval[0];
-		mi->imval[1] = mval[1];
-	}
+	data->mval_prev[0] = mval[0];
+	data->mval_prev[1] = mval[1];
 
-	*angle += (double)dphi;
-
-	output[0] = *angle;
+	output[0] = data->angle;
 }
 
 static void InputAngleSpring(TransInfo *t, MouseInput *mi, const double mval[2], float output[3])
@@ -288,19 +287,25 @@ void initMouseInputMode(TransInfo *t, MouseInput *mi, MouseInputMode mode)
 			t->helpline = HLP_SPRING;
 			break;
 		case INPUT_ANGLE:
+		case INPUT_ANGLE_SPRING:
+		{
+			struct InputAngle_Data *data;
 			mi->use_virtual_mval = false;
 			mi->precision_factor = 1.0f / 30.0f;
-			mi->data = MEM_callocN(sizeof(double), "angle accumulator");
-			mi->apply = InputAngle;
+			data = MEM_callocN(sizeof(struct InputAngle_Data), "angle accumulator");
+			data->mval_prev[0] = mi->imval[0];
+			data->mval_prev[1] = mi->imval[1];
+			mi->data = data;
+			if (mode == INPUT_ANGLE) {
+				mi->apply = InputAngle;
+			}
+			else {
+				calcSpringFactor(mi);
+				mi->apply = InputAngleSpring;
+			}
 			t->helpline = HLP_ANGLE;
 			break;
-		case INPUT_ANGLE_SPRING:
-			mi->use_virtual_mval = false;
-			calcSpringFactor(mi);
-			mi->data = MEM_callocN(sizeof(double), "angle accumulator");
-			mi->apply = InputAngleSpring;
-			t->helpline = HLP_ANGLE;
-			break;
+		}
 		case INPUT_TRACKBALL:
 			mi->precision_factor = 1.0f / 30.0f;
 			/* factor has to become setting or so */
@@ -369,8 +374,8 @@ void applyMouseInput(TransInfo *t, MouseInput *mi, const int mval[2], float outp
 		mi->virtual_mval.prev[1] += mval_delta[1];
 
 		if (mi->precision) {
-			mval_delta[0] *= mi->precision_factor;
-			mval_delta[1] *= mi->precision_factor;
+			mval_delta[0] *= (double)mi->precision_factor;
+			mval_delta[1] *= (double)mi->precision_factor;
 		}
 
 		mi->virtual_mval.accum[0] += mval_delta[0];

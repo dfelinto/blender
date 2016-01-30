@@ -60,11 +60,31 @@ def use_cpu(context):
     return (device_type == 'NONE' or cscene.device == 'CPU')
 
 
+def use_opencl(context):
+    cscene = context.scene.cycles
+    device_type = context.user_preferences.system.compute_device_type
+
+    return (device_type == 'OPENCL' and cscene.device == 'GPU')
+
+
+def use_cuda(context):
+    cscene = context.scene.cycles
+    device_type = context.user_preferences.system.compute_device_type
+
+    return (device_type == 'CUDA' and cscene.device == 'GPU')
+
+
 def use_branched_path(context):
     cscene = context.scene.cycles
     device_type = context.user_preferences.system.compute_device_type
 
     return (cscene.progressive == 'BRANCHED_PATH' and device_type != 'OPENCL')
+
+
+def use_sample_all_lights(context):
+    cscene = context.scene.cycles
+
+    return cscene.sample_all_lights_direct or cscene.sample_all_lights_indirect
 
 
 def draw_samples_info(layout, context):
@@ -169,11 +189,15 @@ class CyclesRender_PT_sampling(CyclesButtonsPanel, Panel):
             sub.prop(cscene, "glossy_samples", text="Glossy")
             sub.prop(cscene, "transmission_samples", text="Transmission")
             sub.prop(cscene, "ao_samples", text="AO")
-            sub.prop(cscene, "mesh_light_samples", text="Mesh Light")
+
+            subsub = sub.row(align=True)
+            subsub.active = use_sample_all_lights(context)
+            subsub.prop(cscene, "mesh_light_samples", text="Mesh Light")
+
             sub.prop(cscene, "subsurface_samples", text="Subsurface")
             sub.prop(cscene, "volume_samples", text="Volume")
 
-        if use_cpu(context) or cscene.feature_set == 'EXPERIMENTAL':
+        if not (use_opencl(context) and cscene.feature_set != 'EXPERIMENTAL'):
             layout.row().prop(cscene, "sampling_pattern", text="Pattern")
 
         for rl in scene.render.layers:
@@ -281,6 +305,12 @@ class CyclesRender_PT_motion_blur(CyclesButtonsPanel, Panel):
         row.operator("render.shutter_curve_preset", icon='LINCURVE', text="").shape = 'LINE'
         row.operator("render.shutter_curve_preset", icon='NOCURVE', text="").shape = 'MAX'
 
+        col = layout.column()
+        col.prop(cscene, "rolling_shutter_type")
+        row = col.row()
+        row.active = cscene.rolling_shutter_type != 'NONE'
+        row.prop(cscene, "rolling_shutter_duration")
+
 
 class CyclesRender_PT_film(CyclesButtonsPanel, Panel):
     bl_label = "Film"
@@ -387,6 +417,7 @@ class CyclesRender_PT_layer_options(CyclesButtonsPanel, Panel):
 
         col = split.column()
         col.prop(rl, "use_sky", "Use Environment")
+        col.prop(rl, "use_ao", "Use AO")
         col.prop(rl, "use_solid", "Use Surfaces")
         col.prop(rl, "use_strand", "Use Hair")
 
@@ -856,7 +887,9 @@ class CyclesLamp_PT_lamp(CyclesButtonsPanel, Panel):
         if not (lamp.type == 'AREA' and clamp.is_portal):
             sub = col.column(align=True)
             if use_branched_path(context):
-                sub.prop(clamp, "samples")
+                subsub = sub.row(align=True)
+                subsub.active = use_sample_all_lights(context)
+                subsub.prop(clamp, "samples")
             sub.prop(clamp, "max_bounces")
 
         col = split.column()
@@ -1065,7 +1098,9 @@ class CyclesWorld_PT_settings(CyclesButtonsPanel, Panel):
         sub.active = cworld.sample_as_light
         sub.prop(cworld, "sample_map_resolution")
         if use_branched_path(context):
-            sub.prop(cworld, "samples")
+            subsub = sub.row(align=True)
+            subsub.active = use_sample_all_lights(context)
+            subsub.prop(cworld, "samples")
         sub.prop(cworld, "max_bounces")
 
         col = split.column()
@@ -1427,15 +1462,82 @@ class CyclesRender_PT_bake(CyclesButtonsPanel, Panel):
 
         if cscene.bake_type == 'NORMAL':
             layout.separator()
-            box = layout.box()
-            box.label(text="Normal Settings:")
-            box.prop(cbk, "normal_space", text="Space")
+            col = layout.column()
+            col.label(text="Normal Settings:")
+            col.prop(cbk, "normal_space", text="Space")
 
-            row = box.row(align=True)
+            row = col.row(align=True)
             row.label(text="Swizzle:")
             row.prop(cbk, "normal_r", text="")
             row.prop(cbk, "normal_g", text="")
             row.prop(cbk, "normal_b", text="")
+
+        elif cscene.bake_type == 'COMBINED':
+            col = layout.column()
+            col.label(text="Combined Settings:")
+
+            row = col.row()
+            row.prop(cbk, "use_pass_ambient_occlusion")
+            row.prop(cbk, "use_pass_emit")
+
+            row = col.row(align=True)
+            row.prop(cbk, "use_pass_direct", toggle=True)
+            row.prop(cbk, "use_pass_indirect", toggle=True)
+
+            split = col.split()
+            split.active = cbk.use_pass_direct or cbk.use_pass_indirect
+
+            col = split.column()
+            col.prop(cbk, "use_pass_diffuse")
+            col.prop(cbk, "use_pass_glossy")
+
+            col = split.column()
+            col.prop(cbk, "use_pass_transmission")
+            col.prop(cbk, "use_pass_subsurface")
+
+        elif cscene.bake_type in {'DIFFUSE', 'GLOSSY', 'TRANSMISSION', 'SUBSURFACE'}:
+            layout.separator()
+            col = layout.column()
+            col.label(text="{0} Settings:".format(cscene.bake_type.title()))
+
+            row = col.row(align=True)
+            row.prop(cbk, "use_pass_direct", toggle=True)
+            row.prop(cbk, "use_pass_indirect", toggle=True)
+            row.prop(cbk, "use_pass_color", toggle=True)
+
+
+class CyclesRender_PT_debug(CyclesButtonsPanel, Panel):
+    bl_label = "Debug"
+    bl_context = "render"
+    bl_options = {'DEFAULT_CLOSED'}
+    COMPAT_ENGINES = {'CYCLES'}
+
+    @classmethod
+    def poll(cls, context):
+        return bpy.app.debug_value == 256
+
+    def draw(self, context):
+        layout = self.layout
+
+        scene = context.scene
+        cscene = scene.cycles
+
+        col = layout.column()
+
+        col.label('CPU Flags:')
+        row = col.row(align=True)
+        row.prop(cscene, "debug_use_cpu_sse2", toggle=True)
+        row.prop(cscene, "debug_use_cpu_sse3", toggle=True)
+        row.prop(cscene, "debug_use_cpu_sse41", toggle=True)
+        row.prop(cscene, "debug_use_cpu_avx", toggle=True)
+        row.prop(cscene, "debug_use_cpu_avx2", toggle=True)
+        col.prop(cscene, "debug_use_qbvh")
+
+        col = layout.column()
+        col.label('OpenCL Flags:')
+        col.prop(cscene, "debug_opencl_kernel_type", text="Kernel")
+        col.prop(cscene, "debug_opencl_device_type", text="Device")
+        col.prop(cscene, "debug_use_opencl_debug", text="Debug")
 
 
 class CyclesParticle_PT_CurveSettings(CyclesButtonsPanel, Panel):

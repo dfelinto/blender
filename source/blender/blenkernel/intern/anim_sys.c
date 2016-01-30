@@ -229,10 +229,10 @@ void BKE_animdata_free(ID *id)
 		if (adt) {
 			/* unlink action (don't free, as it's in its own list) */
 			if (adt->action)
-				adt->action->id.us--;
+				id_us_min(&adt->action->id);
 			/* same goes for the temporarily displaced action */
 			if (adt->tmpact)
-				adt->tmpact->id.us--;
+				id_us_min(&adt->tmpact->id);
 				
 			/* free nla data */
 			free_nladata(&adt->nla_tracks);
@@ -1596,8 +1596,8 @@ static bool animsys_write_rna_setting(PointerRNA *ptr, char *path, int array_ind
 
 				/* for cases like duplifarmes it's only a temporary so don't
 				 * notify anyone of updates */
-				if (!(id->flag & LIB_ANIM_NO_RECALC)) {
-					id->flag |= LIB_ID_RECALC;
+				if (!(id->tag & LIB_TAG_ANIM_NO_RECALC)) {
+					id->tag |= LIB_TAG_ID_RECALC;
 					DAG_id_type_tag(G.main, GS(id->name));
 				}
 			}
@@ -2562,8 +2562,8 @@ static void animsys_evaluate_nla(ListBase *echannels, PointerRNA *ptr, AnimData 
 	 */
 	if (ptr->id.data != NULL) {
 		ID *id = ptr->id.data;
-		if (!(id->flag & LIB_ANIM_NO_RECALC)) {
-			id->flag |= LIB_ID_RECALC;
+		if (!(id->tag & LIB_TAG_ANIM_NO_RECALC)) {
+			id->tag |= LIB_TAG_ID_RECALC;
 			DAG_id_type_tag(G.main, GS(id->name));
 		}
 	}

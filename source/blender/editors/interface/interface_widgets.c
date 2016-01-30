@@ -57,6 +57,8 @@
 
 #include "interface_intern.h"
 
+#include "GPU_basic_shader.h"
+
 #ifdef WITH_INPUT_IME
 #  include "WM_types.h"
 #endif
@@ -660,14 +662,14 @@ static void widgetbase_draw(uiWidgetBase *wtb, uiWidgetColors *wcol)
 				glDrawArrays(GL_POLYGON, 0, wtb->totvert);
 
 				/* light checkers */
-				glEnable(GL_POLYGON_STIPPLE);
+				GPU_basic_shader_bind(GPU_SHADER_STIPPLE | GPU_SHADER_USE_COLOR);
 				glColor4ub(UI_ALPHA_CHECKER_LIGHT, UI_ALPHA_CHECKER_LIGHT, UI_ALPHA_CHECKER_LIGHT, 255);
-				glPolygonStipple(stipple_checker_8px);
+				GPU_basic_shader_stipple(GPU_SHADER_STIPPLE_CHECKER_8PX);
 
 				glVertexPointer(2, GL_FLOAT, 0, wtb->inner_v);
 				glDrawArrays(GL_POLYGON, 0, wtb->totvert);
 
-				glDisable(GL_POLYGON_STIPPLE);
+				GPU_basic_shader_bind(GPU_SHADER_USE_COLOR);
 
 				/* alpha fill */
 				glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -737,18 +739,18 @@ static void widgetbase_draw(uiWidgetBase *wtb, uiWidgetColors *wcol)
 		                               wcol->outline[1],
 		                               wcol->outline[2],
 		                               wcol->outline[3] / WIDGET_AA_JITTER};
+		unsigned char emboss[4];
 
 		widget_verts_to_triangle_strip(wtb, wtb->totvert, triangle_strip);
 
 		if (wtb->draw_emboss) {
 			widget_verts_to_triangle_strip_open(wtb, wtb->halfwayvert, triangle_strip_emboss);
+			UI_GetThemeColor4ubv(TH_WIDGET_EMBOSS, emboss);
 		}
 
 		glEnableClientState(GL_VERTEX_ARRAY);
 
 		for (j = 0; j < WIDGET_AA_JITTER; j++) {
-			unsigned char emboss[4];
-
 			glTranslate2fv(jit[j]);
 			
 			/* outline */
@@ -759,8 +761,6 @@ static void widgetbase_draw(uiWidgetBase *wtb, uiWidgetColors *wcol)
 
 			/* emboss bottom shadow */
 			if (wtb->draw_emboss) {
-				UI_GetThemeColor4ubv(TH_WIDGET_EMBOSS, emboss);
-
 				if (emboss[3]) {
 					glColor4ubv(emboss);
 					glVertexPointer(2, GL_FLOAT, 0, triangle_strip_emboss);
@@ -780,19 +780,17 @@ static void widgetbase_draw(uiWidgetBase *wtb, uiWidgetColors *wcol)
 		                               wcol->item[1],
 		                               wcol->item[2],
 		                               (unsigned char)((float)wcol->item[3] / WIDGET_AA_JITTER)};
+		glColor4ubv(tcol);
 
 		/* for each AA step */
 		for (j = 0; j < WIDGET_AA_JITTER; j++) {
 			glTranslate2fv(jit[j]);
 
-			if (wtb->tria1.tot) {
-				glColor4ubv(tcol);
+			if (wtb->tria1.tot)
 				widget_trias_draw(&wtb->tria1);
-			}
-			if (wtb->tria2.tot) {
-				glColor4ubv(tcol);
+
+			if (wtb->tria2.tot)
 				widget_trias_draw(&wtb->tria2);
-			}
 		
 			glTranslatef(-jit[j][0], -jit[j][1], 0.0f);
 		}
@@ -975,7 +973,7 @@ float UI_text_clip_middle_ex(
 	float strwidth;
 
 	/* Add some epsilon to OK width, avoids 'ellipsing' text that nearly fits!
-	 * Better to have a small piece of the last char cut out, than two remaining chars replaced by an allipsis... */
+	 * Better to have a small piece of the last char cut out, than two remaining chars replaced by an ellipsis... */
 	okwidth += 1.0f + UI_DPI_FAC;
 
 	BLI_assert(str[0]);
@@ -1856,7 +1854,7 @@ static struct uiWidgetColors wcol_progress = {
 	{0, 0, 0, 255},
 	{190, 190, 190, 255},
 	{100, 100, 100, 180},
-	{68, 68, 68, 255},
+	{128, 128, 128, 255},
 	
 	{0, 0, 0, 255},
 	{255, 255, 255, 255},
@@ -2621,12 +2619,12 @@ static void ui_draw_but_HSV_v(uiBut *but, const rcti *rect)
 static void ui_draw_separator(const rcti *rect,  uiWidgetColors *wcol)
 {
 	int y = rect->ymin + BLI_rcti_size_y(rect) / 2 - 1;
-	unsigned char col[4];
-	
-	col[0] = wcol->text[0];
-	col[1] = wcol->text[1];
-	col[2] = wcol->text[2];
-	col[3] = 30;
+	unsigned char col[4] = {
+		wcol->text[0],
+		wcol->text[1],
+		wcol->text[2],
+		30
+	};
 	
 	glEnable(GL_BLEND);
 	glColor4ubv(col);
@@ -2865,30 +2863,37 @@ static void widget_scroll(uiBut *but, uiWidgetColors *wcol, rcti *rect, int stat
 	UI_draw_widget_scroll(wcol, rect, &rect1, state);
 }
 
-static void widget_progressbar(uiBut *but, uiWidgetColors *wcol, rcti *rect, int UNUSED(state), int UNUSED(roundboxalign))
+static void widget_progressbar(uiBut *but, uiWidgetColors *wcol, rcti *rect, int UNUSED(state), int roundboxalign)
 {
+	uiWidgetBase wtb, wtb_bar;
 	rcti rect_prog = *rect, rect_bar = *rect;
+
+	widget_init(&wtb);
+	widget_init(&wtb_bar);
+
+	/* round corners */
 	float value = but->a1;
-	float w, min;
-	
-	/* make the progress bar a proportion of the original height */
-	/* hardcoded 4px high for now */
-	rect_prog.ymax = rect_prog.ymin + 4 * UI_DPI_FAC;
-	rect_bar.ymax = rect_bar.ymin + 4 * UI_DPI_FAC;
-	
-	w = value * BLI_rcti_size_x(&rect_prog);
-	
+	float offs = 0.25f * BLI_rcti_size_y(&rect_prog);
+	float w = value * BLI_rcti_size_x(&rect_prog);
+
 	/* ensure minimium size */
-	min = BLI_rcti_size_y(&rect_prog);
-	w = MAX2(w, min);
-	
+	w = MAX2(w, offs);
+
 	rect_bar.xmax = rect_bar.xmin + w;
-		
-	UI_draw_widget_scroll(wcol, &rect_prog, &rect_bar, UI_SCROLL_NO_OUTLINE);
-	
+
+	round_box_edges(&wtb, roundboxalign, &rect_prog, offs);
+	round_box_edges(&wtb_bar, roundboxalign, &rect_bar, offs);
+
+	wtb.draw_outline = true;
+	widgetbase_draw(&wtb, wcol);
+
+	/* "slider" bar color */
+	copy_v3_v3_char(wcol->inner, wcol->item);
+	widgetbase_draw(&wtb_bar, wcol);
+
 	/* raise text a bit */
-	rect->ymin += 6 * UI_DPI_FAC;
-	rect->xmin -= 6 * UI_DPI_FAC;
+	rect->xmin += (BLI_rcti_size_x(&rect_prog) / 2);
+	rect->xmax += (BLI_rcti_size_x(&rect_prog) / 2);
 }
 
 static void widget_link(uiBut *but, uiWidgetColors *UNUSED(wcol), rcti *rect, int UNUSED(state), int UNUSED(roundboxalign))
@@ -3494,6 +3499,8 @@ static uiWidgetType *widget_type(uiWidgetTypeEnum type)
 			
 		/* specials */
 		case UI_WTYPE_ICON:
+			/* behave like regular labels (this is simply a label with an icon) */
+			wt.state = widget_state_label;
 			wt.custom = widget_icon_has_anim;
 			break;
 			
@@ -3548,9 +3555,9 @@ static int widget_roundbox_set(uiBut *but, rcti *rect)
 	if ((but->drawflag & UI_BUT_ALIGN) && but->type != UI_BTYPE_PULLDOWN) {
 		
 		/* ui_block_position has this correction too, keep in sync */
-		if (but->drawflag & UI_BUT_ALIGN_TOP)
+		if (but->drawflag & (UI_BUT_ALIGN_TOP | UI_BUT_ALIGN_STITCH_TOP))
 			rect->ymax += U.pixelsize;
-		if (but->drawflag & UI_BUT_ALIGN_LEFT)
+		if (but->drawflag & (UI_BUT_ALIGN_LEFT | UI_BUT_ALIGN_STITCH_LEFT))
 			rect->xmin -= U.pixelsize;
 		
 		switch (but->drawflag & UI_BUT_ALIGN) {

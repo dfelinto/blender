@@ -208,11 +208,11 @@ static void restrictbutton_recursive_child(bContext *C, Scene *scene, Object *ob
 					id = ptr.id.data;
 					if (autokeyframe_cfra_can_key(scene, id)) {
 						ReportList *reports = CTX_wm_reports(C);
-						short flag = ANIM_get_keyframing_flags(scene, 1);
+						eInsertKeyFlags key_flag = ANIM_get_keyframing_flags(scene, 1);
 
 						fcu->flag &= ~FCURVE_SELECTED;
 						insert_keyframe(reports, id, action, ((fcu->grp) ? (fcu->grp->name) : (NULL)),
-						                fcu->rna_path, fcu->array_index, CFRA, flag);
+						                fcu->rna_path, fcu->array_index, CFRA, key_flag);
 						/* Assuming this is not necessary here, since 'ancestor' object button will do it anyway. */
 						/* WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL); */
 					}
@@ -434,6 +434,7 @@ static void restrictbutton_gr_restrict_view(bContext *C, void *poin, void *poin2
 {
 	restrictbutton_gr_restrict_flag(poin, poin2, OB_RESTRICT_VIEW);
 	WM_event_add_notifier(C, NC_GROUP, NULL);
+	DAG_id_type_tag(CTX_data_main(C), ID_OB);
 }
 static void restrictbutton_gr_restrict_select(bContext *C, void *poin, void *poin2)
 {
@@ -473,7 +474,7 @@ static void namebutton_cb(bContext *C, void *tsep, char *oldname)
 		TreeElement *te = outliner_find_tree_element(&soops->tree, tselem);
 		
 		if (tselem->type == 0) {
-			test_idbutton(tselem->id->name);  // library.c, unique name and alpha sort
+			BLI_libblock_ensure_unique_name(G.main, tselem->id->name);
 			
 			switch (GS(tselem->id->name)) {
 				case ID_MA:
@@ -508,7 +509,7 @@ static void namebutton_cb(bContext *C, void *tsep, char *oldname)
 					defgroup_unique_name(te->directdata, (Object *)tselem->id); //	id = object
 					break;
 				case TSE_NLA_ACTION:
-					test_idbutton(tselem->id->name);
+					BLI_libblock_ensure_unique_name(G.main, tselem->id->name);
 					break;
 				case TSE_EBONE:
 				{
@@ -1318,7 +1319,7 @@ static void tselem_draw_icon(uiBlock *block, int xmax, float x, float y, TreeSto
 			case ID_GR:
 				tselem_draw_icon_uibut(&arg, ICON_GROUP); break;
 			case ID_LI:
-				if (tselem->id->flag & LIB_MISSING) {
+				if (tselem->id->tag & LIB_TAG_MISSING) {
 					tselem_draw_icon_uibut(&arg, ICON_LIBRARY_DATA_BROKEN);
 				}
 				else if (((Library *)tselem->id)->parent) {
@@ -1562,10 +1563,10 @@ static void outliner_draw_tree_element(
 		
 		if (tselem->type == 0 && tselem->id->lib) {
 			glPixelTransferf(GL_ALPHA_SCALE, 0.5f);
-			if (tselem->id->flag & LIB_MISSING) {
+			if (tselem->id->tag & LIB_TAG_MISSING) {
 				UI_icon_draw((float)startx + offsx, (float)*starty + 2 * ufac, ICON_LIBRARY_DATA_BROKEN);
 			}
-			else if (tselem->id->flag & LIB_INDIRECT) {
+			else if (tselem->id->tag & LIB_TAG_INDIRECT) {
 				UI_icon_draw((float)startx + offsx, (float)*starty + 2 * ufac, ICON_LIBRARY_DATA_INDIRECT);
 			}
 			else {

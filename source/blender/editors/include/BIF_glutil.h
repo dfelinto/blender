@@ -90,12 +90,6 @@ void glutil_draw_lined_arc(float start, float angle, float radius, int nsegments
 void glutil_draw_filled_arc(float start, float angle, float radius, int nsegments);
 
 /**
- * Returns an integer value as obtained by glGetIntegerv.
- * The param must cause only one value to be gotten from GL.
- */
-int glaGetOneInteger(int param);
-
-/**
  * Returns a float value as obtained by glGetFloatv.
  * The param must cause only one value to be gotten from GL.
  */
@@ -191,15 +185,6 @@ void gla2DGetMap(gla2DDrawInfo *di, struct rctf *rect);
 void gla2DSetMap(gla2DDrawInfo *di, struct rctf *rect);
 #endif
 
-/* use this for platform hacks. glPointSize is solved here */
-void bglBegin(int mode);
-void bglEnd(void);
-// int bglPointHack(void); /* UNUSED */
-void bglVertex3fv(const float vec[3]);
-void bglVertex3f(float x, float y, float z);
-void bglVertex2fv(const float vec[2]);
-/* intel gfx cards frontbuffer problem */
-// void bglFlush(void); /* UNUSED */
 void set_inverted_drawing(int enable);
 void setlinestyle(int nr);
 

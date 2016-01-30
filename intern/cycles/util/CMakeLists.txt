@@ -11,6 +11,7 @@ set(INC_SYS
 set(SRC
 	util_aligned_malloc.cpp
 	util_cache.cpp
+	util_debug.cpp
 	util_logging.cpp
 	util_math_cdf.cpp
 	util_md5.cpp
@@ -58,6 +59,7 @@ set(SRC_HEADERS
 	util_param.h
 	util_path.h
 	util_progress.h
+	util_queue.h
 	util_set.h
 	util_simd.h
 	util_sseb.h

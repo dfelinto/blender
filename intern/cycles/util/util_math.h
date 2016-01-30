@@ -351,7 +351,7 @@ ccl_device_inline float2 normalize_len(const float2 a, float *t)
 ccl_device_inline float2 safe_normalize(const float2 a)
 {
 	float t = len(a);
-	return (t)? a/t: a;
+	return (t != 0.0f)? a/t: a;
 }
 
 ccl_device_inline bool operator==(const float2 a, const float2 b)
@@ -553,7 +553,7 @@ ccl_device_inline float3 normalize_len(const float3 a, float *t)
 ccl_device_inline float3 safe_normalize(const float3 a)
 {
 	float t = len(a);
-	return (t)? a/t: a;
+	return (t != 0.0f)? a/t: a;
 }
 
 #ifndef __KERNEL_OPENCL__
@@ -866,7 +866,7 @@ ccl_device_inline float4 normalize(const float4 a)
 ccl_device_inline float4 safe_normalize(const float4 a)
 {
 	float t = len(a);
-	return (t)? a/t: a;
+	return (t != 0.0f)? a/t: a;
 }
 
 ccl_device_inline float4 min(float4 a, float4 b)
@@ -935,6 +935,37 @@ ccl_device_inline float4 reduce_add(const float4& a)
 ccl_device_inline void print_float4(const char *label, const float4& a)
 {
 	printf("%s: %.8f %.8f %.8f %.8f\n", label, (double)a.x, (double)a.y, (double)a.z, (double)a.w);
+}
+
+#endif
+
+/* Int2 */
+
+#ifndef __KERNEL_OPENCL__
+
+ccl_device_inline int2 operator+(const int2 &a, const int2 &b)
+{
+	return make_int2(a.x + b.x, a.y + b.y);
+}
+
+ccl_device_inline int2 operator+=(int2 &a, const int2 &b)
+{
+	return a = a + b;
+}
+
+ccl_device_inline int2 operator-(const int2 &a, const int2 &b)
+{
+	return make_int2(a.x - b.x, a.y - b.y);
+}
+
+ccl_device_inline int2 operator*(const int2 &a, const int2 &b)
+{
+	return make_int2(a.x * b.x, a.y * b.y);
+}
+
+ccl_device_inline int2 operator/(const int2 &a, const int2 &b)
+{
+	return make_int2(a.x / b.x, a.y / b.y);
 }
 
 #endif

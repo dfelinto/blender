@@ -156,7 +156,7 @@ static void pointdensity_cache_psys(Scene *scene,
 		                            CD_MASK_BAREMESH | CD_MASK_MTFACE | CD_MASK_MCOL);
 	}
 
-	if ( !psys_check_enabled(ob, psys)) {
+	if (!psys_check_enabled(ob, psys)) {
 		psys_render_restore(ob, psys);
 		return;
 	}
@@ -715,31 +715,41 @@ static void particle_system_minmax(Scene *scene,
 	}
 }
 
-void RE_sample_point_density(Scene *scene,
-                             PointDensity *pd,
-                             const int resolution,
-                             const bool use_render_params,
-                             float *values)
+void RE_point_density_cache(
+        Scene *scene,
+        PointDensity *pd,
+        const bool use_render_params)
 {
-	const size_t resolution2 = resolution * resolution;
+	float mat[4][4];
+	/* Same matricies/resolution as dupli_render_particle_set(). */
+	unit_m4(mat);
+	BLI_mutex_lock(&sample_mutex);
+	cache_pointdensity_ex(scene, pd, mat, mat, 1, 1, use_render_params);
+	BLI_mutex_unlock(&sample_mutex);
+}
+
+void RE_point_density_minmax(
+        struct Scene *scene,
+        struct PointDensity *pd,
+        const bool use_render_params,
+        float r_min[3], float r_max[3])
+{
 	Object *object = pd->object;
-	size_t x, y, z;
-	float min[3], max[3], dim[3], mat[4][4];
-
 	if (object == NULL) {
-		sample_dummy_point_density(resolution, values);
-		return;
+		zero_v3(r_min);
+		zero_v3(r_max);
 	}
-
 	if (pd->source == TEX_PD_PSYS) {
 		ParticleSystem *psys;
 		if (pd->psys == 0) {
-			sample_dummy_point_density(resolution, values);
+			zero_v3(r_min);
+			zero_v3(r_max);
 			return;
 		}
 		psys = BLI_findlink(&object->particlesystem, pd->psys - 1);
 		if (psys == NULL) {
-			sample_dummy_point_density(resolution, values);
+			zero_v3(r_min);
+			zero_v3(r_max);
 			return;
 		}
 		particle_system_minmax(scene,
@@ -747,30 +757,56 @@ void RE_sample_point_density(Scene *scene,
 		                       psys,
 		                       pd->radius,
 		                       use_render_params,
-		                       min, max);
+		                       r_min, r_max);
 	}
 	else {
 		float radius[3] = {pd->radius, pd->radius, pd->radius};
 		float *loc, *size;
 		BKE_object_obdata_texspace_get(pd->object, NULL, &loc, &size, NULL);
-		sub_v3_v3v3(min, loc, size);
-		add_v3_v3v3(max, loc, size);
+		sub_v3_v3v3(r_min, loc, size);
+		add_v3_v3v3(r_max, loc, size);
 		/* Adjust texture space to include density points on the boundaries. */
-		sub_v3_v3(min, radius);
-		add_v3_v3(max, radius);
+		sub_v3_v3(r_min, radius);
+		add_v3_v3(r_max, radius);
+	}
+}
+
+/* NOTE 1: Requires RE_point_density_cache() to be called first.
+ * NOTE 2: Frees point density structure after sampling.
+ */
+void RE_point_density_sample(
+        Scene *scene,
+        PointDensity *pd,
+        const int resolution,
+        const bool use_render_params,
+        float *values)
+{
+	const size_t resolution2 = resolution * resolution;
+	Object *object = pd->object;
+	size_t x, y, z;
+	float min[3], max[3], dim[3];
+
+	/* TODO(sergey): Implement some sort of assert() that point density
+	 * was cached already.
+	 */
+
+	if (object == NULL) {
+		sample_dummy_point_density(resolution, values);
+		return;
 	}
 
+	RE_point_density_minmax(scene,
+	                        pd,
+	                        use_render_params,
+	                        min,
+	                        max);
 	sub_v3_v3v3(dim, max, min);
 	if (dim[0] <= 0.0f || dim[1] <= 0.0f || dim[2] <= 0.0f) {
 		sample_dummy_point_density(resolution, values);
 		return;
 	}
 
-	/* Same matricies/resolution as dupli_render_particle_set(). */
-	unit_m4(mat);
-
 	BLI_mutex_lock(&sample_mutex);
-	cache_pointdensity_ex(scene, pd, mat, mat, 1, 1, use_render_params);
 	for (z = 0; z < resolution; ++z) {
 		for (y = 0; y < resolution; ++y) {
 			for (x = 0; x < resolution; ++x) {

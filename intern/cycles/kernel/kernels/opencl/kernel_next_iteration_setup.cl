@@ -84,7 +84,6 @@ __kernel void kernel_ocl_path_trace_next_iteration_setup(
 	if(ray_index != QUEUE_EMPTY_SLOT) {
 #endif
 		enqueue_flag = kernel_next_iteration_setup((KernelGlobals *)kg,
-		                                           data,
 		                                           (ShaderData *)sd,
 		                                           rng_coop,
 		                                           throughput_coop,

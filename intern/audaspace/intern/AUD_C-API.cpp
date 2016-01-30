@@ -918,7 +918,7 @@ AUD_Sound *AUD_Sequence_create(float fps, int muted)
 	// specs are changed at a later point!
 	AUD_Specs specs;
 	specs.channels = AUD_CHANNELS_STEREO;
-	specs.rate = AUD_RATE_44100;
+	specs.rate = AUD_RATE_48000;
 	AUD_Sound *sequencer = new AUD_Sound(boost::shared_ptr<AUD_SequencerFactory>(new AUD_SequencerFactory(specs, fps, muted)));
 	return sequencer;
 }
@@ -1292,9 +1292,11 @@ AUD_Device *AUD_openMixdownDevice(AUD_DeviceSpecs specs, AUD_Sound *sequencer, f
 		device->setQuality(true);
 		device->setVolume(volume);
 
-		dynamic_cast<AUD_SequencerFactory *>(sequencer->get())->setSpecs(specs.specs);
+		AUD_SequencerFactory *f = dynamic_cast<AUD_SequencerFactory *>(sequencer->get());
 
-		AUD_Handle handle = device->play(*sequencer);
+		f->setSpecs(specs.specs);
+
+		AUD_Handle handle = device->play(f->createQualityReader());
 		if (handle.get()) {
 			handle->seek(start);
 		}

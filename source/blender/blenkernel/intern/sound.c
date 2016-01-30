@@ -106,7 +106,7 @@ bSound *BKE_sound_new_file_exists_ex(struct Main *bmain, const char *filepath, b
 		BLI_path_abs(strtest, ID_BLEND_PATH(bmain, &sound->id));
 
 		if (BLI_path_cmp(strtest, str) == 0) {
-			sound->id.us++;  /* officially should not, it doesn't link here! */
+			id_us_plus(&sound->id);  /* officially should not, it doesn't link here! */
 			if (r_exists)
 				*r_exists = true;
 			return sound;
@@ -227,7 +227,7 @@ void BKE_sound_init(struct Main *bmain)
 		buffersize = 1024;
 
 	if (specs.rate < AUD_RATE_8000)
-		specs.rate = AUD_RATE_44100;
+		specs.rate = AUD_RATE_48000;
 
 	if (specs.format <= AUD_FORMAT_INVALID)
 		specs.format = AUD_FORMAT_S16;
@@ -562,6 +562,7 @@ void BKE_sound_set_scene_sound_pitch(void *handle, float pitch, char animated)
 
 void BKE_sound_set_scene_sound_pan(void *handle, float pan, char animated)
 {
+	printf("%s\n", __func__);
 	AUD_SequenceEntry_setAnimationData(handle, AUD_AP_PANNING, sound_cfra, &pan, animated);
 }
 
