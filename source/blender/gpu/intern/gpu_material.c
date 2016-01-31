@@ -2359,7 +2359,7 @@ static void do_world_tex(GPUShadeInput *shi, struct World *wo, GPUNodeLink **hor
 			}
 			else {
 				if (tex->type == TEX_ENVMAP)
-					GPU_link(mat, "mtex_cube_map", texco, GPU_cube_map(tex->ima, &tex->iuser, false, false), &tin, &trgb);
+					GPU_link(mat, "mtex_cube_map", texco, GPU_cube_map(tex->ima, &tex->iuser, false), &tin, &trgb);
 				else if (tex->type == TEX_IMAGE)
 					GPU_link(mat, "mtex_image", texco, GPU_image(tex->ima, &tex->iuser, false, false), &tin, &trgb);
 			}
