@@ -392,8 +392,8 @@ void vec_math_negate(vec3 v, out vec3 outv)
 
 void invert_z(vec3 v, out vec3 outv)
 {
-        v.z = -v.z;
-        outv = v;
+	v.z = -v.z;
+	outv = v;
 }
 
 void normal(vec3 dir, vec3 nor, out vec3 outnor, out float outdot)
@@ -2311,12 +2311,6 @@ void viewN_to_shadeN(vec3 N, out vec3 shadeN)
 	shadeN = normalize(-N); 
 }
 
-void invert_z(vec3 V, out vec3 invZ)
-{
-	V.z = -V.z;
-	invZ = V;
-}
-
 void make_orthonormals(vec3 N, out vec3 T, out vec3 B)
 {
 	vec3 UpVector = abs(N.z) < 0.99999 ? vec3(0.0,0.0,1.0) : vec3(1.0,0.0,0.0);
@@ -2328,14 +2322,6 @@ void make_orthonormals_tangent(vec3 N, inout vec3 T, out vec3 B)
 {
 	B = normalize( cross(N, T) );
 	T = cross(B, N);
-}
-
-void default_tangent(vec3 N, vec3 orco, mat4 objmat, mat4 viewmat, mat4 invviewmat, out vec3 T)
-{
-	N = (invviewmat*vec4(N, 0.0)).xyz;
-	T = (objmat*vec4(orco.y * -0.5, orco.x * 0.5, 0.0, 0.0)).xyz;
-	T = cross(N, normalize(cross(T, N)));
-	T = (viewmat * vec4(T, 0.0)).xyz; /* from World to View space */
 }
 
 void default_coordinates(vec3 attr_orco, out vec3 generated)
@@ -3674,6 +3660,40 @@ void node_uvmap(vec3 attr_uv, out vec3 outvec)
 	outvec = attr_uv;
 }
 
+void tangent_orco_x(vec3 orco_in, out vec3 orco_out)
+{
+	orco_out = vec3(0.0, orco_in.z * -0.5, orco_in.y * 0.5);
+}
+
+void tangent_orco_y(vec3 orco_in, out vec3 orco_out)
+{
+	orco_out = vec3(orco_in.z * -0.5, 0.0, orco_in.x * 0.5);
+}
+
+void tangent_orco_z(vec3 orco_in, out vec3 orco_out)
+{
+	orco_out = vec3(orco_in.y * -0.5, orco_in.x * 0.5, 0.0);
+}
+
+void node_tangent(vec3 N, vec3 orco, mat4 objmat, mat4 invviewmat, out vec3 T)
+{
+	N = (invviewmat*vec4(N, 0.0)).xyz;
+	T = (objmat*vec4(orco, 0.0)).xyz;
+	T = cross(N, normalize(cross(T, N)));
+}
+
+void node_tangentmap(vec4 attr_tangent, mat4 toworld, out vec3 tangent)
+{
+	tangent = (toworld * vec4(attr_tangent.xyz, 0.0)).xyz;
+}
+
+void default_tangent(vec3 N, vec3 orco, mat4 objmat, mat4 viewmat, mat4 invviewmat, out vec3 T)
+{
+	orco = vec3(orco.y * -0.5, orco.x * 0.5, 0.0);
+	node_tangent(N, orco, objmat, invviewmat, T);
+	T = (viewmat * vec4(T, 0.0)).xyz;
+}
+
 void node_geometry(vec3 I, vec3 N, vec3 attr_orco, mat4 toworld, mat4 fromobj,
 	out vec3 position, out vec3 normal, out vec3 tangent,
 	out vec3 true_normal, out vec3 incoming, out vec3 parametric,
@@ -3681,8 +3701,8 @@ void node_geometry(vec3 I, vec3 N, vec3 attr_orco, mat4 toworld, mat4 fromobj,
 {
 	position = (toworld*vec4(I, 1.0)).xyz;
 	normal = (toworld*vec4(N, 0.0)).xyz;
-	tangent = (fromobj*vec4(attr_orco.y * -0.5, attr_orco.x * 0.5, 0.0, 0.0)).xyz;
-	tangent = cross(normal, normalize(cross(tangent, normal)));
+	attr_orco = vec3(attr_orco.y * -0.5, attr_orco.x * 0.5, 0.0);
+	node_tangent(N, attr_orco, fromobj, toworld, tangent);
 	true_normal = normal;
 
 	/* handle perspective/orthographic */
@@ -3708,14 +3728,6 @@ void node_geometry_lamp(vec3 I, vec3 N, mat4 toworld,
 	parametric = vec3(0.0);
 	backfacing = 0.0;
 	pointiness = 0.0;
-}
-
-void node_tangent(vec3 axis, vec3 N, mat4 toworld, mat4 objmat, mat4 fromobj, out vec3 T)
-{
-	N = (toworld*vec4(N, 0.0)).xyz;
-	axis = (fromobj*vec4(axis, 0.0)).xyz;
-	vec3 UpVector = abs(dot(N, axis)) < 0.99999 ? axis : axis.zxy;
-	T = normalize( cross(UpVector, N) );
 }
 
 void node_tex_coord(vec3 I, vec3 N, mat4 viewinvmat, mat4 obinvmat, vec4 camerafac,
