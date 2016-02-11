@@ -789,6 +789,49 @@ void FONT_OT_text_copy(wmOperatorType *ot)
 	ot->poll = ED_operator_editfont;
 }
 
+/* Copy To Clipboard */
+
+static void copy_selection_to_clipboard(Object *obedit)
+{
+	int selstart, selend;
+	size_t len;
+	char *buf = NULL;
+
+	if (BKE_vfont_select_get(obedit, &selstart, &selend)) {
+		Curve *cu = obedit->data;
+		EditFont *ef = cu->editfont;
+
+		len = selend - selstart + 1;
+		buf = MEM_mallocN(len * sizeof(char), __func__);
+		BLI_strncpy_wchar_as_utf8(buf, ef->textbuf + selstart, len - 1);
+		WM_clipboard_text_set(buf, false);
+	}
+
+	if (buf)
+		MEM_freeN(buf);
+}
+
+static int copy_to_clipboard_exec(bContext *C, wmOperator *UNUSED(op))
+{
+	Object *obedit = CTX_data_edit_object(C);
+
+	copy_selection_to_clipboard(obedit);
+
+	return OPERATOR_FINISHED;
+}
+
+void FONT_OT_text_copy_to_clipboard(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Copy Text";
+	ot->description = "Copy selected text to system clipboard";
+	ot->idname = "FONT_OT_text_copy_to_clipboard";
+
+	/* api callbacks */
+	ot->exec = copy_to_clipboard_exec;
+	ot->poll = ED_operator_editfont;
+}
+
 /******************* cut text operator ********************/
 
 static int cut_text_exec(bContext *C, wmOperator *UNUSED(op))
