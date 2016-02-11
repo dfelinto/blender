@@ -865,6 +865,39 @@ void FONT_OT_text_cut(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
+/* Cut To Clipboard */
+
+static int cut_to_clipboard_exec(bContext *C, wmOperator *UNUSED(op))
+{
+	Object *obedit = CTX_data_edit_object(C);
+	int selstart, selend;
+
+	if (!BKE_vfont_select_get(obedit, &selstart, &selend))
+		return OPERATOR_CANCELLED;
+
+	copy_selection_to_clipboard(obedit);
+	kill_selection(obedit, 0);
+
+	text_update_edited(C, obedit, FO_EDIT);
+
+	return OPERATOR_FINISHED;
+}
+
+void FONT_OT_text_cut_to_clipboard(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Cut Text";
+	ot->description = "Cut selected text to system clipboard";
+	ot->idname = "FONT_OT_text_cut_to_clipboard";
+
+	/* api callbacks */
+	ot->exec = cut_to_clipboard_exec;
+	ot->poll = ED_operator_editfont;
+
+	/* flags */
+	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
+
 /******************* paste text operator ********************/
 
 static bool paste_selection(Object *obedit, ReportList *reports)

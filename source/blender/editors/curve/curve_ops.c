@@ -65,6 +65,7 @@ void ED_operatortypes_curve(void)
 	WM_operatortype_append(FONT_OT_text_copy);
 	WM_operatortype_append(FONT_OT_text_copy_to_clipboard);
 	WM_operatortype_append(FONT_OT_text_cut);
+	WM_operatortype_append(FONT_OT_text_cut_to_clipboard);
 	WM_operatortype_append(FONT_OT_text_paste);
 	WM_operatortype_append(FONT_OT_text_paste_from_file);
 	WM_operatortype_append(FONT_OT_text_paste_from_clipboard);
@@ -214,12 +215,14 @@ void ED_keymap_curve(wmKeyConfig *keyconf)
 	WM_keymap_add_item(keymap, "FONT_OT_text_copy", CKEY, KM_PRESS, KM_CTRL, 0);
 	WM_keymap_add_item(keymap, "FONT_OT_text_copy_to_clipboard", CKEY, KM_PRESS, KM_SHIFT | KM_CTRL, 0);
 	WM_keymap_add_item(keymap, "FONT_OT_text_cut", XKEY, KM_PRESS, KM_CTRL, 0);
+	WM_keymap_add_item(keymap, "FONT_OT_text_cut_to_clipboard", XKEY, KM_PRESS, KM_SHIFT | KM_CTRL, 0);
 	WM_keymap_add_item(keymap, "FONT_OT_text_paste", VKEY, KM_PRESS, KM_CTRL, 0);
 	WM_keymap_add_item(keymap, "FONT_OT_text_paste_from_clipboard", VKEY, KM_PRESS, KM_SHIFT | KM_CTRL, 0);
 #ifdef __APPLE__
 	WM_keymap_add_item(keymap, "FONT_OT_text_copy", CKEY, KM_PRESS, KM_OSKEY, 0);
 	WM_keymap_add_item(keymap, "FONT_OT_text_copy_to_clipboard", CKEY, KM_PRESS, KM_SHIFT | KM_OSKEY, 0);
 	WM_keymap_add_item(keymap, "FONT_OT_text_cut", XKEY, KM_PRESS, KM_OSKEY, 0);
+	WM_keymap_add_item(keymap, "FONT_OT_text_cut_to_clipboard", XKEY, KM_PRESS, KM_SHIFT | KM_OSKEY, 0);
 	WM_keymap_add_item(keymap, "FONT_OT_text_paste", VKEY, KM_PRESS, KM_OSKEY, 0);
 	WM_keymap_add_item(keymap, "FONT_OT_text_paste_from_clipboard", VKEY, KM_PRESS, KM_SHIFT | KM_OSKEY, 0);
 #endif
