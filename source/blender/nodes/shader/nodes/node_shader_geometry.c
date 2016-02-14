@@ -45,18 +45,18 @@ static bNodeSocketTemplate sh_node_geometry_out[] = {
 static int node_shader_gpu_geometry(GPUMaterial *mat, bNode *UNUSED(node), bNodeExecData *UNUSED(execdata), GPUNodeStack *in, GPUNodeStack *out)
 {
 	if (GPU_material_get_type(mat) == GPU_MATERIAL_TYPE_LAMP) {
-		GPUNodeLink *lampcoLink = GPU_material_get_lampco_link(mat);
-		if (lampcoLink)
-			return GPU_stack_link(mat, "node_geometry_lamp", in, out,
-	                      GPU_builtin(GPU_VIEW_POSITION), lampcoLink,
-	                      GPU_builtin(GPU_INVERSE_VIEW_MATRIX));
-		else
-			return 0;
+		GPUNodeLink *lampNorLink = GPU_material_get_lamp_normal_link(mat);
+		GPUNodeLink *lampPosLink = GPU_material_get_lamp_position_link(mat);
+		GPUNodeLink *lampInLink = GPU_material_get_lamp_incoming_link(mat);
+
+		return GPU_stack_link(mat, "node_geometry_lamp", in, out,
+						lampNorLink, lampPosLink, lampInLink,
+						GPU_builtin(GPU_INVERSE_VIEW_MATRIX));
 	}
 	else
 		return GPU_stack_link(mat, "node_geometry", in, out,
-	                      GPU_builtin(GPU_VIEW_POSITION), GPU_builtin(GPU_VIEW_NORMAL),
-	                      GPU_attribute(CD_ORCO, ""), GPU_builtin(GPU_INVERSE_VIEW_MATRIX), GPU_builtin(GPU_OBJECT_MATRIX));
+							GPU_builtin(GPU_VIEW_POSITION), GPU_builtin(GPU_VIEW_NORMAL),
+							GPU_attribute(CD_ORCO, ""), GPU_builtin(GPU_INVERSE_VIEW_MATRIX), GPU_builtin(GPU_OBJECT_MATRIX));
 }
 
 /* node type definition */
