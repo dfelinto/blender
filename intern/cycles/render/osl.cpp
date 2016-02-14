@@ -186,7 +186,8 @@ void OSLShaderManager::texture_system_free()
 	ts_shared_users--;
 
 	if(ts_shared_users == 0) {
-		OSL::TextureSystem::destroy(ts_shared, true);
+		ts_shared->invalidate_all(true);
+		OSL::TextureSystem::destroy(ts_shared);
 		ts_shared = NULL;
 	}
 
@@ -581,7 +582,7 @@ void OSLCompiler::add(ShaderNode *node, const char *name, bool isfilepath)
 	}
 	else if(current_type == SHADER_TYPE_VOLUME) {
 		if(node->has_spatial_varying())
-			current_shader->has_heterogeneous_volume = true;
+			current_shader->has_volume_spatial_varying = true;
 	}
 
 	if(node->has_object_dependency()) {
@@ -759,7 +760,7 @@ void OSLCompiler::generate_nodes(const ShaderNodeSet& nodes)
 					}
 					else if(current_type == SHADER_TYPE_VOLUME) {
 						if(node->has_spatial_varying())
-							current_shader->has_heterogeneous_volume = true;
+							current_shader->has_volume_spatial_varying = true;
 					}
 				}
 				else
@@ -838,7 +839,7 @@ void OSLCompiler::compile(Scene *scene, OSLGlobals *og, Shader *shader)
 		shader->has_bssrdf_bump = false;
 		shader->has_volume = false;
 		shader->has_displacement = false;
-		shader->has_heterogeneous_volume = false;
+		shader->has_volume_spatial_varying = false;
 		shader->has_object_dependency = false;
 		shader->has_integrator_dependency = false;
 

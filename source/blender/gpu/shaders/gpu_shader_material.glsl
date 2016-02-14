@@ -2,6 +2,17 @@
 #define uint unsigned int
 #endif
 
+/* Converters */
+
+float convert_rgba_to_float(vec4 color)
+{
+#ifdef USE_NEW_SHADING
+	return color.r*0.2126 + color.g*0.7152 + color.b*0.0722;
+#else
+	return (color.r + color.g + color.b) / 3.0;
+#endif
+}
+
 float exp_blender(float f)
 {
 	return pow(2.71828182846, f);
@@ -749,7 +760,11 @@ void valtorgb(float fac, sampler2D colormap, out vec4 outcol, out float outalpha
 
 void rgbtobw(vec4 color, out float outval)  
 {
+#ifdef USE_NEW_SHADING
+	outval = color.r*0.2126 + color.g*0.7152 + color.b*0.0722;
+#else
 	outval = color.r*0.35 + color.g*0.45 + color.b*0.2; /* keep these factors in sync with texture.h:RGBTOBW */
+#endif
 }
 
 void invert(float fac, vec4 col, out vec4 outcol)
@@ -1273,6 +1288,15 @@ vec3 mtex_2d_mapping(vec3 vec)
 void mtex_cube_map(vec3 co, samplerCube ima, out float value, out vec4 color)
 {
 	color = textureCube(ima, co);
+	value = 1.0;
+}
+
+void mtex_cube_map_refl(samplerCube ima, vec3 vp, vec3 vn, mat4 viewmatrixinverse, mat4 viewmatrix, out float value, out vec4 color)
+{
+	vec3 viewdirection = vec3(viewmatrixinverse * vec4(vp, 0.0));
+	vec3 normaldirection = normalize(vec3(vec4(vn, 0.0) * viewmatrix));
+	vec3 reflecteddirection = reflect(viewdirection, normaldirection);
+	color = textureCube(ima, reflecteddirection);
 	value = 1.0;
 }
 
@@ -3714,16 +3738,16 @@ void node_geometry(vec3 I, vec3 N, vec3 attr_orco, mat4 toworld, mat4 fromobj,
 	pointiness = 0.5;
 }
 
-void node_geometry_lamp(vec3 I, vec3 N, mat4 toworld,
+void node_geometry_lamp(vec3 N, vec3 P, vec3 I, mat4 toworld,
 	out vec3 position, out vec3 normal, out vec3 tangent,
 	out vec3 true_normal, out vec3 incoming, out vec3 parametric,
 	out float backfacing, out float pointiness)
 {
-	position = (toworld*vec4(I-N, 1.0)).xyz;
-	normal = normalize((toworld*vec4(N, 0.0)).xyz);
+	position = (toworld*vec4(I-P, 1.0)).xyz;
+	normal = normalize(toworld*vec4(N, 0.0)).xyz;
 	tangent = vec3(0.0);
 	true_normal = normal;
-	incoming = normal;
+	incoming = normalize(toworld*vec4(P, 0.0)).xyz;
 
 	parametric = vec3(0.0);
 	backfacing = 0.0;
@@ -4201,6 +4225,7 @@ void node_normal_map_tangent(float strength, vec4 color, vec3 N, vec4 T, mat4 vi
 	color = ( color - vec4(0.5))*vec4(2.0);
 	N = normalize((obinvmat*(viewinvmat*vec4(N, 0.0))).xyz);
 	T = vec4( normalize((obinvmat*(viewinvmat*vec4(T.xyz, 0.0))).xyz), T.w);
+	//vec3 No = color.xyz * vec3(1.0, -1.0, 1.0);
 	vec3 B = T.w * cross(N, T.xyz);
 	vec3 No = from_tangent_to_world(color.xyz, N, T.xyz, B);
 	result = normalize(N + (No - N) * max(strength, 0.0));

@@ -128,7 +128,9 @@ struct GPUMaterial {
 	/* for passing parameters to the world nodetree */
 	GPUNodeLink *normalLink;
 	GPUNodeLink *tangentLink;
-	GPUNodeLink *lampcoLink;
+	GPUNodeLink *lampNorLink;
+	GPUNodeLink *lampPosLink;
+	GPUNodeLink *lampInLink;
 	GPUBrdfInput *brdf;
 	
 	bool is_opensubdiv;
@@ -238,7 +240,9 @@ static int GPU_material_construct_end(GPUMaterial *material, const char *passnam
 		GPUNodeLink *outlink = material->outlink;
 		material->pass = GPU_generate_pass(&material->nodes, outlink,
 			&material->attribs, &material->builtins, material->type,
-			passname, material->is_opensubdiv);
+			passname,
+			material->is_opensubdiv,
+			GPU_material_use_new_shading_nodes(material));
 
 		if (!material->pass)
 			return 0;
@@ -528,14 +532,34 @@ GPUNodeLink *GPU_material_get_tangent_link(GPUMaterial *material)
 	return material->tangentLink;
 }
 
-void GPU_material_set_lampco_link(GPUMaterial *material, GPUNodeLink *link)
+void GPU_material_set_lamp_normal_link(GPUMaterial *material, GPUNodeLink *link)
 {
-	material->lampcoLink = link;
+	material->lampNorLink = link;
 }
 
-GPUNodeLink *GPU_material_get_lampco_link(GPUMaterial *material)
+GPUNodeLink *GPU_material_get_lamp_normal_link(GPUMaterial *material)
 {
-	return material->lampcoLink;
+	return material->lampNorLink;
+}
+
+void GPU_material_set_lamp_position_link(GPUMaterial *material, GPUNodeLink *link)
+{
+	material->lampPosLink = link;
+}
+
+GPUNodeLink *GPU_material_get_lamp_position_link(GPUMaterial *material)
+{
+	return material->lampPosLink;
+}
+
+void GPU_material_set_lamp_incoming_link(GPUMaterial *material, GPUNodeLink *link)
+{
+	material->lampInLink = link;
+}
+
+GPUNodeLink *GPU_material_get_lamp_incoming_link(GPUMaterial *material)
+{
+	return material->lampInLink;
 }
 
 void GPU_material_set_brdf_link(GPUMaterial *material, GPUBrdfInput *brdf)
@@ -1298,8 +1322,19 @@ static void do_material_tex(GPUShadeInput *shi)
 
 			talpha = 0;
 
-			if (tex && tex->type == TEX_IMAGE && tex->ima) {
-				GPU_link(mat, "mtex_image", texco, GPU_image(tex->ima, &tex->iuser, false, false), &tin, &trgb);
+			if (tex && tex->ima &&
+			    ((tex->type == TEX_IMAGE) ||
+			     ((tex->type == TEX_ENVMAP) && (mtex->texco == TEXCO_REFL))))
+			{
+				if (tex->type == TEX_IMAGE) {
+					GPU_link(mat, "mtex_image", texco, GPU_image(tex->ima, &tex->iuser, false, false), &tin, &trgb);
+				}
+				else {
+					GPU_link(mat, "mtex_cube_map_refl",
+					         GPU_cube_map(tex->ima, &tex->iuser, false), shi->view, shi->vn,
+					         GPU_builtin(GPU_INVERSE_VIEW_MATRIX),
+					         GPU_builtin(GPU_VIEW_MATRIX), &tin, &trgb);
+				}
 				rgbnor = TEX_RGB;
 
 				talpha = ((tex->imaflag & TEX_USEALPHA) && tex->ima && (tex->ima->flag & IMA_IGNORE_ALPHA) == 0);
@@ -1345,9 +1380,13 @@ static void do_material_tex(GPUShadeInput *shi)
 						GPU_link(mat, "set_value_one", &tin);
 				}
 
-				if (tex->type == TEX_IMAGE)
-					if (GPU_material_do_color_management(mat))
+				if ((tex->type == TEX_IMAGE) ||
+				    ((tex->type == TEX_ENVMAP) && (mtex->texco == TEXCO_REFL)))
+				{
+					if (GPU_material_do_color_management(mat)) {
 						GPU_link(mat, "srgb_to_linearrgb", tcol, &tcol);
+					}
+				}
 				
 				if (mtex->mapto & MAP_COL) {
 					GPUNodeLink *colfac;
@@ -1850,12 +1889,36 @@ static void shade_one_brdf_light(GPUBrdfInput *brdf, GPULamp *lamp)
 
 	/* Lamp Color */
 	if (lamp->la->use_nodes) {
-		GPUNodeLink *lamp_lv;
+		GPUNodeLink *lamp_normal, *lamp_position, *lamp_incoming;
 		GPUMatType type = GPU_material_get_type(mat);
 
+		if ( !(lamp->type == LA_SUN || lamp->type == LA_HEMI) ) {
+			GPU_link(mat, "shade_mul_value_v3", dist, lv, &lamp_normal);
+		}
+		else {
+			GPU_link(mat, "set_rgb", lv, &lamp_normal);
+		}
+		
+		if (lamp->type == LA_AREA) {
+			float vec_z[3] = {0.0, 0.0, -1.0};
+			GPU_link(mat, "direction_transform_m4v3", GPU_uniform(&vec_z), GPU_dynamic_uniform((float*)lamp->dynmat, GPU_DYNAMIC_LAMP_DYNMAT, lamp->ob), &lamp_incoming);
+		}
+		else {
+			GPU_link(mat, "set_rgb", lampcoLink, &lampzLink);
+		}
+
+		if (lamp->type == LA_AREA) {
+			float vec_z[3] = {0.0, 0.0, -1.0};
+			GPU_link(mat, "direction_transform_m4v3", GPU_uniform(&vec_z), GPU_dynamic_uniform((float*)lamp->dynmat, GPU_DYNAMIC_LAMP_DYNMAT, lamp->ob), &lamp_incoming);
+		}
+		else {
+			GPU_link(mat, "set_rgb", lampcoLink, &lampzLink);
+		}
+
 		/* to pass the lamp coordinates to the lamp shadertree */
-		GPU_link(mat, "shade_mul_value_v3", dist, lv, &lamp_lv);
-		GPU_material_set_lampco_link(mat, lamp_lv);
+		GPU_material_set_lamp_normal_link(mat, lamp_normal);
+		GPU_material_set_lamp_position_link(mat, lamp_position);
+		GPU_material_set_lamp_incoming_link(mat, lamp_incoming);
 
 		GPU_material_set_type(mat, GPU_MATERIAL_TYPE_LAMP);
 
