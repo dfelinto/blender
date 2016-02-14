@@ -2583,6 +2583,12 @@ static void rna_def_space_view3d(BlenderRNA *brna)
 	RNA_def_property_ui_text(prop, "Realistic Material Preview", "Use a more accurate preview of the shaders in the viewport");
 	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, "rna_SpaceView3D_viewport_real_shading_update");
 
+	prop = RNA_def_property(srna, "pbr_samples", PROP_INT, PROP_NONE);
+	RNA_def_property_int_sdna(prop, NULL, "pbr_samples");
+	RNA_def_property_ui_text(prop, "Quality", "Define the quality of brdf sampling.");
+	RNA_def_property_range(prop, 1, 64);
+	RNA_def_property_update(prop, NC_SPACE | ND_SPACE_VIEW3D, "rna_SpaceView3D_viewport_real_shading_update");
+
 	prop = RNA_def_property(srna, "use_occlude_geometry", PROP_BOOLEAN, PROP_NONE);
 	RNA_def_property_boolean_sdna(prop, NULL, "flag", V3D_ZBUF_SELECT);
 	RNA_def_property_ui_text(prop, "Occlude Geometry", "Limit selection to visible (clipped with depth buffer)");

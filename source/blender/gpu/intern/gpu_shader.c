@@ -186,7 +186,8 @@ static void gpu_shader_standard_extensions(char defines[MAX_EXT_DEFINE_LENGTH], 
 
 static void gpu_shader_standard_defines(char defines[MAX_DEFINE_LENGTH],
                                         bool use_opensubdiv,
-                                        bool use_new_shading)
+                                        bool use_new_shading,
+                                        int importance_sample_count)
 {
 	/* some useful defines to detect GPU type */
 	if (GPU_type_matches(GPU_DEVICE_ATI, GPU_OS_ANY, GPU_DRIVER_ANY)) {
@@ -229,6 +230,14 @@ static void gpu_shader_standard_defines(char defines[MAX_DEFINE_LENGTH],
 		strcat(defines, "#define USE_NEW_SHADING\n");
 	}
 
+	if (!importance_sample_count) {
+		importance_sample_count = 1;
+	}
+
+	char buffer[32];
+	sprintf(buffer, "#define NUM_SAMPLE %du\n", importance_sample_count);
+	strcat(defines, buffer);
+
 	return;
 }
 
@@ -249,7 +258,8 @@ GPUShader *GPU_shader_create(const char *vertexcode,
 	                            input,
 	                            output,
 	                            number,
-	                            GPU_SHADER_FLAGS_NONE);
+	                            GPU_SHADER_FLAGS_NONE,
+	                            0);
 }
 
 GPUShader *GPU_shader_create_ex(const char *vertexcode,
@@ -260,7 +270,8 @@ GPUShader *GPU_shader_create_ex(const char *vertexcode,
                                 int input,
                                 int output,
                                 int number,
-                                const int flags)
+                                const int flags,
+                                const int samplecount)
 {
 #ifdef WITH_OPENSUBDIV
 	/* TODO(sergey): used to add #version 150 to the geometry shader.
@@ -305,7 +316,8 @@ GPUShader *GPU_shader_create_ex(const char *vertexcode,
 
 	gpu_shader_standard_defines(standard_defines,
 	                            use_opensubdiv,
-	                            (flags & GPU_SHADER_FLAGS_NEW_SHADING) != 0);
+	                            (flags & GPU_SHADER_FLAGS_NEW_SHADING) != 0,
+	                            samplecount);
 	gpu_shader_standard_extensions(standard_extensions, geocode != NULL);
 
 	if (vertexcode) {

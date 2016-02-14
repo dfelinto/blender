@@ -13,6 +13,11 @@ float convert_rgba_to_float(vec4 color)
 #endif
 }
 
+void convert_vec3_to_vec4(vec3 invec, float val, out vec4 outvec)
+{
+	outvec = vec4(invec, val);
+}
+
 float exp_blender(float f)
 {
 	return pow(2.71828182846, f);
@@ -3738,16 +3743,16 @@ void node_geometry(vec3 I, vec3 N, vec3 attr_orco, mat4 toworld, mat4 fromobj,
 	pointiness = 0.5;
 }
 
-void node_geometry_lamp(vec3 N, vec3 P, vec3 I, mat4 toworld,
+void node_geometry_lamp(vec3 N, vec4 P, vec3 I, mat4 toworld,
 	out vec3 position, out vec3 normal, out vec3 tangent,
 	out vec3 true_normal, out vec3 incoming, out vec3 parametric,
 	out float backfacing, out float pointiness)
 {
-	position = (toworld*vec4(I-P, 1.0)).xyz;
+	position = (toworld*P).xyz;
 	normal = normalize(toworld*vec4(N, 0.0)).xyz;
 	tangent = vec3(0.0);
 	true_normal = normal;
-	incoming = normalize(toworld*vec4(P, 0.0)).xyz;
+	incoming = normalize(toworld*vec4(I, 0.0)).xyz;
 
 	parametric = vec3(0.0);
 	backfacing = 0.0;
@@ -4198,9 +4203,9 @@ void node_light_path(
 	transmission_depth = 1.0;
 }
 
-void node_light_falloff(float strength, float tsmooth, vec3 ray, out float quadratic, out float linear, out float constant)
+void node_light_falloff(float strength, float tsmooth, vec4 lamppos, vec3 pos, out float quadratic, out float linear, out float constant)
 {
-	float ray_length = length(ray);
+	float ray_length = length(lamppos.xyz - pos);
 
 	if (tsmooth > 0.0) {
 		float squared = ray_length * ray_length;
@@ -4300,10 +4305,6 @@ void env_sampling_refract_sharp(vec3 I, vec3 N, float eta, out vec3 result)
 {
 	result = refract(normalize(I), normalize(N), (gl_FrontFacing) ? 1.0/eta : eta);
 }
-
-/* Hammersley points set */
-uniform vec4 hammersley32[32] 	= vec4[32](vec4(0,0,1,0),vec4(0.03125,0.5,-1,1.224646798818428e-16),vec4(0.0625,0.25,0,1),vec4(0.09375,0.75,-1.8369701961596905e-16,-1),vec4(0.125,0.125,0.7071067811865475,0.7071067811865475),vec4(0.15625,0.625,-0.7071067811865476,-0.7071067811865474),vec4(0.1875,0.375,-0.7071067811865474,0.7071067811865476),vec4(0.21875,0.875,0.7071067811865474,-0.7071067811865476),vec4(0.25,0.0625,0.9238795325112867,0.3826834323650898),vec4(0.28125,0.5625,-0.9238795325112867,-0.38268343236508967),vec4(0.3125,0.3125,-0.3826834323650897,0.9238795325112867),vec4(0.34375,0.8125,0.38268343236509006,-0.9238795325112866),vec4(0.375,0.1875,0.3826834323650898,0.9238795325112867),vec4(0.40625,0.6875,-0.38268343236509034,-0.9238795325112865),vec4(0.4375,0.4375,-0.9238795325112867,0.3826834323650898),vec4(0.46875,0.9375,0.9238795325112865,-0.38268343236509034),vec4(0.5,0.03125,0.9807852804032304,0.19509032201612825),vec4(0.53125,0.53125,-0.9807852804032304,-0.19509032201612836),vec4(0.5625,0.28125,-0.1950903220161282,0.9807852804032304),vec4(0.59375,0.78125,0.19509032201612828,-0.9807852804032304),vec4(0.625,0.15625,0.5555702330196022,0.8314696123025452),vec4(0.65625,0.65625,-0.555570233019602,-0.8314696123025453),vec4(0.6875,0.40625,-0.8314696123025453,0.555570233019602),vec4(0.71875,0.90625,0.8314696123025452,-0.5555702330196022),vec4(0.75,0.09375,0.8314696123025452,0.5555702330196022),vec4(0.78125,0.59375,-0.8314696123025455,-0.5555702330196018),vec4(0.8125,0.34375,-0.5555702330196018,0.8314696123025455),vec4(0.84375,0.84375,0.5555702330196017,-0.8314696123025455),vec4(0.875,0.21875,0.19509032201612825,0.9807852804032304),vec4(0.90625,0.71875,-0.19509032201612864,-0.9807852804032304),vec4(0.9375,0.46875,-0.9807852804032303,0.19509032201612844),vec4(0.96875,0.96875,0.9807852804032304,-0.19509032201612864));
-#define NUM_SAMPLE 32u
 
 /* needed for uint type and bitwise operation */
 #extension GL_EXT_gpu_shader4: enable

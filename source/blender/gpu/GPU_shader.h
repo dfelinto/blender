@@ -63,7 +63,8 @@ GPUShader *GPU_shader_create_ex(
         const char *libcode,
         const char *defines,
         int input, int output, int number,
-        const int flags);
+        const int flags,
+        const int samplecount);
 void GPU_shader_free(GPUShader *shader);
 
 void GPU_shader_bind(GPUShader *shader);

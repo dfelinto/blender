@@ -156,16 +156,15 @@ static void SHFilter(ImBuf *ibuf, float *SHCoef)
 	}
 }
 
-static void get_precalc_lod_factors(Image *ima, ImageUser *iuser, float *maxLod, float *precalcLodFactor, float *sampleNumber)
+static void get_precalc_lod_factors(Image *ima, ImageUser *iuser, float *maxLod, float sampleNumber, float *precalcLodFactor)
 {
 		*maxLod = 0.0f;
 		*precalcLodFactor = 0.0f;
-		*sampleNumber = 32.0f; /* Hardcoded for now */
 
 		ImBuf *ibuf = BKE_image_acquire_ibuf(ima, iuser, NULL);
 		if (ibuf) {
 			*maxLod = log((float)ibuf->y)/log(2);
-			*precalcLodFactor = 0.5f * log( (float)ibuf->x * (float)ibuf->y / *sampleNumber) / log(2);
+			*precalcLodFactor = 0.5f * log( (float)ibuf->x * (float)ibuf->y / sampleNumber) / log(2);
 			*precalcLodFactor -= 2.0f; /* Biasing the factor to get more accurate sampling */
 		}
 		BKE_image_release_ibuf(ima, ibuf, NULL);
@@ -276,8 +275,8 @@ static int node_shader_gpu_tex_environment(GPUMaterial *mat, bNode *node, bNodeE
 
 	} else if (brdf && brdf->type == GPU_BRDF_GLOSSY_GGX) {
 		// REFLECTION GLOSSY
-		float maxLod, precalcLodFactor, sampleNumber;
-		get_precalc_lod_factors(ima, iuser, &maxLod, &precalcLodFactor, &sampleNumber);
+		float maxLod, precalcLodFactor, sampleNumber = GPU_material_get_samplecount(mat);
+		get_precalc_lod_factors(ima, iuser, &maxLod, sampleNumber, &precalcLodFactor);
 
 		return GPU_link(mat, "env_sampling_reflect_glossy", in[0].link, normal_transformed,
 						brdf->roughness, GPU_uniform(&precalcLodFactor), GPU_uniform(&maxLod), GPU_builtin(GPU_INVERSE_VIEW_MATRIX),
@@ -285,14 +284,13 @@ static int node_shader_gpu_tex_environment(GPUMaterial *mat, bNode *node, bNodeE
 
 	} else if (brdf && brdf->type == GPU_BRDF_ANISO_GGX) {
 		// REFLECTION ANISO
-		float maxLod, precalcLodFactor, sampleNumber;
-		maxLod = 0.0f, precalcLodFactor = 0.0f, sampleNumber = 64.0f; /* Hardcoded for now */
+		float maxLod, precalcLodFactor, sampleNumber = GPU_material_get_samplecount(mat);
+		maxLod = 0.0f, precalcLodFactor = 0.0f, sampleNumber *= 2.0f;
 
 		ImBuf *ibuf = BKE_image_acquire_ibuf(ima, iuser, NULL);
 		if (ibuf) {
 			maxLod = log((float)ibuf->y)/log(2);
 			precalcLodFactor = 0.5f * log( (float)ibuf->x * (float)ibuf->y / sampleNumber) / log(2);
-			//precalcLodFactor -= 2.0f; /* Biasing the factor to get more accurate sampling */
 		}
 		BKE_image_release_ibuf(ima, ibuf, NULL);
 
@@ -303,9 +301,8 @@ static int node_shader_gpu_tex_environment(GPUMaterial *mat, bNode *node, bNodeE
 
 	} else if (brdf && brdf->type == GPU_BRDF_REFRACT_GGX) {
 		// REFRACTION GLOSSY
-		float maxLod, precalcLodFactor, sampleNumber;
-		get_precalc_lod_factors(ima, iuser, &maxLod, &precalcLodFactor, &sampleNumber);
-		precalcLodFactor += 1.0f; /* Biasing the factor Again */
+		float maxLod, precalcLodFactor, sampleNumber = GPU_material_get_samplecount(mat);
+		get_precalc_lod_factors(ima, iuser, &maxLod, sampleNumber, &precalcLodFactor);
 
 		return GPU_link(mat, "env_sampling_refract_glossy", in[0].link, normal_transformed, brdf->ior,
 						brdf->roughness, GPU_uniform(&precalcLodFactor), GPU_uniform(&maxLod), GPU_builtin(GPU_INVERSE_VIEW_MATRIX),
@@ -313,9 +310,8 @@ static int node_shader_gpu_tex_environment(GPUMaterial *mat, bNode *node, bNodeE
 
 	} else if (brdf && brdf->type == GPU_BRDF_GLASS_GGX) {
 		// GLASS GLOSSY
-		float maxLod, precalcLodFactor, sampleNumber;
-		get_precalc_lod_factors(ima, iuser, &maxLod, &precalcLodFactor, &sampleNumber);
-		precalcLodFactor += 1.0f; /* Biasing the factor Again */
+		float maxLod, precalcLodFactor, sampleNumber = GPU_material_get_samplecount(mat);
+		get_precalc_lod_factors(ima, iuser, &maxLod, sampleNumber, &precalcLodFactor);
 
 		return GPU_link(mat, "env_sampling_glass_glossy", in[0].link, normal_transformed, brdf->ior,
 						brdf->roughness, GPU_uniform(&precalcLodFactor), GPU_uniform(&maxLod), GPU_builtin(GPU_INVERSE_VIEW_MATRIX),

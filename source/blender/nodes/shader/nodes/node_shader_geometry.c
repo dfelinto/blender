@@ -45,12 +45,12 @@ static bNodeSocketTemplate sh_node_geometry_out[] = {
 static int node_shader_gpu_geometry(GPUMaterial *mat, bNode *UNUSED(node), bNodeExecData *UNUSED(execdata), GPUNodeStack *in, GPUNodeStack *out)
 {
 	if (GPU_material_get_type(mat) == GPU_MATERIAL_TYPE_LAMP) {
-		GPUNodeLink *lampNorLink = GPU_material_get_lamp_normal_link(mat);
-		GPUNodeLink *lampPosLink = GPU_material_get_lamp_position_link(mat);
-		GPUNodeLink *lampInLink = GPU_material_get_lamp_incoming_link(mat);
+		GPUNodeLink *lamp_normal = GPU_material_get_lamp_normal_link(mat);
+		GPUNodeLink *lamp_position = GPU_material_get_lamp_position_link(mat);
+		GPUNodeLink *lamp_incoming = GPU_material_get_lamp_incoming_link(mat);
 
 		return GPU_stack_link(mat, "node_geometry_lamp", in, out,
-						lampNorLink, lampPosLink, lampInLink,
+						lamp_normal, lamp_position, lamp_incoming,
 						GPU_builtin(GPU_INVERSE_VIEW_MATRIX));
 	}
 	else

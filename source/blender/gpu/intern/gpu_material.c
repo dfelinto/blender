@@ -126,12 +126,14 @@ struct GPUMaterial {
 	bool bound;
 
 	/* for passing parameters to the world nodetree */
-	GPUNodeLink *normalLink;
-	GPUNodeLink *tangentLink;
+	GPUNodeLink *norlink;
+	GPUNodeLink *tanlink;
 	GPUNodeLink *lampNorLink;
 	GPUNodeLink *lampPosLink;
 	GPUNodeLink *lampInLink;
 	GPUBrdfInput *brdf;
+
+	int samplecount;
 	
 	bool is_opensubdiv;
 };
@@ -242,7 +244,8 @@ static int GPU_material_construct_end(GPUMaterial *material, const char *passnam
 			&material->attribs, &material->builtins, material->type,
 			passname,
 			material->is_opensubdiv,
-			GPU_material_use_new_shading_nodes(material));
+			GPU_material_use_new_shading_nodes(material),
+			material->samplecount);
 
 		if (!material->pass)
 			return 0;
@@ -491,6 +494,11 @@ void GPU_material_set_type(GPUMaterial *material, GPUMatType type)
 	material->type = type;
 }
 
+int GPU_material_get_samplecount(GPUMaterial *material)
+{
+	return material->samplecount;
+}
+
 void GPU_material_vertex_attributes(GPUMaterial *material, GPUVertexAttribs *attribs)
 {
 	*attribs = material->attribs;
@@ -514,22 +522,22 @@ GPUNodeLink *GPU_material_get_output_link(GPUMaterial *material)
 
 void GPU_material_set_normal_link(GPUMaterial *material, GPUNodeLink *link)
 {
-	material->normalLink = link;
+	material->norlink = link;
 }
 
 GPUNodeLink *GPU_material_get_normal_link(GPUMaterial *material)
 {
-	return material->normalLink;
+	return material->norlink;
 }
 
 void GPU_material_set_tangent_link(GPUMaterial *material, GPUNodeLink *link)
 {
-	material->tangentLink = link;
+	material->tanlink = link;
 }
 
 GPUNodeLink *GPU_material_get_tangent_link(GPUMaterial *material)
 {
-	return material->tangentLink;
+	return material->tanlink;
 }
 
 void GPU_material_set_lamp_normal_link(GPUMaterial *material, GPUNodeLink *link)
@@ -1892,28 +1900,27 @@ static void shade_one_brdf_light(GPUBrdfInput *brdf, GPULamp *lamp)
 		GPUNodeLink *lamp_normal, *lamp_position, *lamp_incoming;
 		GPUMatType type = GPU_material_get_type(mat);
 
-		if ( !(lamp->type == LA_SUN || lamp->type == LA_HEMI) ) {
-			GPU_link(mat, "shade_mul_value_v3", dist, lv, &lamp_normal);
+		/* Position */
+		if (lamp->type == LA_SUN || lamp->type == LA_HEMI) {
+			float zero = 0.0f;
+			GPU_link(mat, "convert_vec3_to_vec4", lv, GPU_uniform(&zero), &lamp_position);
+		}
+		else {
+			float one = 1.0f;
+			GPU_link(mat, "convert_vec3_to_vec4", GPU_dynamic_uniform(lamp->dynco, GPU_DYNAMIC_LAMP_DYNCO, lamp->ob), GPU_uniform(&one), &lamp_position);
+		}
+
+		/* Normal */
+		if (lamp->type == LA_AREA) {
+			float vec_z[3] = {0.0f, 0.0f, -1.0f};
+			GPU_link(mat, "direction_transform_m4v3", GPU_uniform(&vec_z), GPU_dynamic_uniform((float*)lamp->dynmat, GPU_DYNAMIC_LAMP_DYNMAT, lamp->ob), &lamp_normal);
 		}
 		else {
 			GPU_link(mat, "set_rgb", lv, &lamp_normal);
 		}
-		
-		if (lamp->type == LA_AREA) {
-			float vec_z[3] = {0.0, 0.0, -1.0};
-			GPU_link(mat, "direction_transform_m4v3", GPU_uniform(&vec_z), GPU_dynamic_uniform((float*)lamp->dynmat, GPU_DYNAMIC_LAMP_DYNMAT, lamp->ob), &lamp_incoming);
-		}
-		else {
-			GPU_link(mat, "set_rgb", lampcoLink, &lampzLink);
-		}
 
-		if (lamp->type == LA_AREA) {
-			float vec_z[3] = {0.0, 0.0, -1.0};
-			GPU_link(mat, "direction_transform_m4v3", GPU_uniform(&vec_z), GPU_dynamic_uniform((float*)lamp->dynmat, GPU_DYNAMIC_LAMP_DYNMAT, lamp->ob), &lamp_incoming);
-		}
-		else {
-			GPU_link(mat, "set_rgb", lampcoLink, &lampzLink);
-		}
+		/* Incoming */
+		GPU_link(mat, "set_rgb", lv, &lamp_incoming);
 
 		/* to pass the lamp coordinates to the lamp shadertree */
 		GPU_material_set_lamp_normal_link(mat, lamp_normal);
@@ -2120,15 +2127,15 @@ static GPUNodeLink *GPU_brdf_sample_world(GPUBrdfInput *brdf)
 	Scene *scene = GPU_material_scene(brdf->mat);
 	GPUMaterial *mat = brdf->mat;
 	World *wo = scene->world;
-	GPUNodeLink *normalLink, *tangentLink, *env_sample;
+	GPUNodeLink *norlink, *tanlink, *env_sample;
 	GPUMatType type = GPU_material_get_type(mat);
 
 	/* XXX : All of this is pretty wonky and need to be replace by sampling a global/local cubemap */
 
 	/* First run the normal into the World node tree 
 	 * The environment texture nodes will save the nodelink of it. */
-	GPU_link(mat, "direction_transform_m4v3", brdf->normal, GPU_builtin(GPU_INVERSE_VIEW_MATRIX), &normalLink); /* Send world normal for sampling */
-	GPU_material_set_normal_link(mat, normalLink);
+	GPU_link(mat, "direction_transform_m4v3", brdf->normal, GPU_builtin(GPU_INVERSE_VIEW_MATRIX), &norlink); /* Send world normal for sampling */
+	GPU_material_set_normal_link(mat, norlink);
 	GPU_material_set_type(mat, GPU_MATERIAL_TYPE_ENV_NORMAL);
 	ntreeGPUMaterialNodes(wo->nodetree, mat, NODE_NEW_SHADING);
 	GPU_material_empty_output_link(mat);
@@ -2136,8 +2143,8 @@ static GPUNodeLink *GPU_brdf_sample_world(GPUBrdfInput *brdf)
 	if (brdf->type == GPU_BRDF_ANISO_GGX) {
 		/* First run the tangent into the World node tree
 		 * The environment texture nodes will save the nodelink of it. */
-		GPU_link(mat, "direction_transform_m4v3", brdf->aniso_tangent, GPU_builtin(GPU_INVERSE_VIEW_MATRIX), &tangentLink); /* Send world tangent for sampling */
-		GPU_material_set_tangent_link(mat, tangentLink);
+		GPU_link(mat, "direction_transform_m4v3", brdf->aniso_tangent, GPU_builtin(GPU_INVERSE_VIEW_MATRIX), &tanlink); /* Send world tangent for sampling */
+		GPU_material_set_tangent_link(mat, tanlink);
 		GPU_material_set_type(mat, GPU_MATERIAL_TYPE_ENV_TANGENT);
 		ntreeGPUMaterialNodes(wo->nodetree, mat, NODE_NEW_SHADING);
 		GPU_material_empty_output_link(mat);
@@ -2594,7 +2601,7 @@ GPUMaterial *GPU_material_world(struct Scene *scene, struct World *wo, bool use_
 }
 
 
-GPUMaterial *GPU_material_from_blender(Scene *scene, Material *ma, bool use_opensubdiv, bool use_realistic_preview)
+GPUMaterial *GPU_material_from_blender(Scene *scene, Material *ma, bool use_opensubdiv, bool use_realistic_preview, int samplecount)
 {
 	GPUMaterial *mat;
 	GPUNodeLink *outlink;
@@ -2613,6 +2620,7 @@ GPUMaterial *GPU_material_from_blender(Scene *scene, Material *ma, bool use_open
 	mat = GPU_material_construct_begin(ma);
 	mat->scene = scene;
 	mat->type = (use_realistic_preview)? GPU_MATERIAL_TYPE_MESH_REAL_SH : GPU_MATERIAL_TYPE_MESH;
+	mat->samplecount = samplecount;
 	mat->is_opensubdiv = use_opensubdiv;
 
 	/* render pipeline option */
@@ -2646,7 +2654,7 @@ GPUMaterial *GPU_material_from_blender(Scene *scene, Material *ma, bool use_open
 		if (mat->outlink)
 			GPU_link(mat, "linearrgb_to_srgb", mat->outlink, &mat->outlink);
 
-	//VERY BAD but it works
+	/* XXX : this is nasty but it works */
 	mat->type = GPU_MATERIAL_TYPE_MESH;
 
 	GPU_material_construct_end(mat, ma->id.name);
@@ -3171,7 +3179,7 @@ GPUShaderExport *GPU_shader_export(struct Scene *scene, struct Material *ma)
 	int liblen, fraglen;
 
 	/* TODO(sergey): How to determine whether we need OSD or not here? */
-	GPUMaterial *mat = GPU_material_from_blender(scene, ma, false, false);
+	GPUMaterial *mat = GPU_material_from_blender(scene, ma, false, false, 0);
 	GPUPass *pass = (mat) ? mat->pass : NULL;
 
 	if (pass && pass->fragmentcode && pass->vertexcode) {

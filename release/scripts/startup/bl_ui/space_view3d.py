@@ -3242,6 +3242,9 @@ class VIEW3D_PT_view3d_shading(Panel):
 
         if scene.render.use_shading_nodes and view.viewport_shade == 'MATERIAL' :
             col.prop(view, "use_realistic_mat")
+            if view.use_realistic_mat:
+                subcol = col.column(align=True)
+                subcol.prop(view, "pbr_samples")
 
         col.prop(view, "show_backface_culling")
 

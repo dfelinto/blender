@@ -48,14 +48,16 @@ static bNodeSocketTemplate sh_node_light_falloff_out[] = {
 static int node_shader_gpu_light_falloff(GPUMaterial *mat, bNode *UNUSED(node), bNodeExecData *UNUSED(execdata), GPUNodeStack *in, GPUNodeStack *out)
 {
 	if (GPU_material_get_type(mat) == GPU_MATERIAL_TYPE_LAMP) {
-		GPUNodeLink *lampcoLink = GPU_material_get_lampco_link(mat);
-		if (lampcoLink)
-			return GPU_stack_link(mat, "node_light_falloff", in, out, lampcoLink);
+		GPUNodeLink *lampposlink = GPU_material_get_lamp_position_link(mat);
+		if (lampposlink)
+			return GPU_stack_link(mat, "node_light_falloff", in, out, lampposlink, GPU_builtin(GPU_VIEW_POSITION));
 		else
 			return 0;
 	}
-	else
-		return GPU_stack_link(mat, "node_light_falloff", in, out, GPU_builtin(GPU_VIEW_POSITION));
+	else {
+		float lamppos[4] = {0.0f};
+		return GPU_stack_link(mat, "node_light_falloff", in, out, GPU_uniform(&lamppos), GPU_builtin(GPU_VIEW_POSITION));
+	}
 }
 
 /* node type definition */

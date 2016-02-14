@@ -1647,7 +1647,8 @@ GPUPass *GPU_generate_pass(
         GPUVertexAttribs *attribs, int *builtins,
         const GPUMatType type, const char *UNUSED(name),
         const bool use_opensubdiv,
-        const bool use_new_shading)
+        const bool use_new_shading,
+        const int samplecount)
 {
 	GPUShader *shader;
 	GPUPass *pass;
@@ -1686,7 +1687,8 @@ GPUPass *GPU_generate_pass(
 	                              0,
 	                              0,
 	                              0,
-	                              flags);
+	                              flags,
+	                              samplecount);
 
 	/* failed? */
 	if (!shader) {

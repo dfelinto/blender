@@ -237,6 +237,10 @@ typedef struct View3D {
 	float stereo3d_convergence_factor;
 	float stereo3d_volume_alpha;
 	float stereo3d_convergence_alpha;
+
+	/* Pbr options */
+	int pbr_samples;
+	int pad5;
 } View3D;
 
 
