@@ -2094,7 +2094,7 @@ def update_file_browser_space(context,path):
                     params.directory = path
                     if not context.screen.show_fullscreen:
                         params.use_filter = True
-                        params.display_type = 'FILE_IMGDISPLAY'
+                        params.display_type = 'THUMBNAIL'
                         params.use_filter_movie = False
                         params.use_filter_script = False
                         params.use_filter_sound = False
