@@ -3103,7 +3103,7 @@ class VIEW3D_PT_view3d_name(Panel):
 
     @classmethod
     def poll(cls, context):
-        if not context.scene.mv.ui.use_default_blender_interface
+        if not context.scene.mv.ui.use_default_blender_interface:
             return False
 
         return (context.space_data and context.active_object)
@@ -3239,7 +3239,7 @@ class VIEW3D_PT_view3d_shading(Panel):
 
     @classmethod
     def poll(cls, context):
-        return context.scene.mv.ui.use_default_blender_interface:
+        return context.scene.mv.ui.use_default_blender_interface
 
     def draw(self, context):
         layout = self.layout
