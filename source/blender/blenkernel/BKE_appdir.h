@@ -76,10 +76,10 @@ enum {
 	BLENDER_RESOURCE_PATH_SYSTEM    = 2,
 };
 
-#define BLENDER_STARTUP_FILE    "startup.blend"
-#define BLENDER_USERPREF_FILE   "userpref.blend"
-#define BLENDER_QUIT_FILE       "quit.blend"
-#define BLENDER_BOOKMARK_FILE   "bookmarks.txt"
-#define BLENDER_HISTORY_FILE    "recent-files.txt"
+#define BLENDER_STARTUP_FILE    "fd_startup.blend"
+#define BLENDER_USERPREF_FILE   "fd_userpref.blend"
+#define BLENDER_QUIT_FILE       "fd_quit.blend"
+#define BLENDER_BOOKMARK_FILE   "fd_bookmarks.txt"
+#define BLENDER_HISTORY_FILE    "fd_recent-files.txt"
 
 #endif  /* __BKE_APPDIR_H__ */

@@ -886,8 +886,8 @@ void OBJECT_OT_drop_named_image(wmOperatorType *ot)
 	PropertyRNA *prop;
 
 	/* identifiers */
-	ot->name = "Image Drag and Drop";
-	ot->description = "Calls the drag and drop operator";
+	ot->name = "Fluid Designer Drag and Drop";
+	ot->description = "Calls the Fluid Designer drag and drop operator";
 	ot->idname = "OBJECT_OT_drop_named_image";
 
 	/* api callbacks */
