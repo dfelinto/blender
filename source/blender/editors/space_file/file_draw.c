@@ -521,6 +521,17 @@ void file_draw_list(const bContext *C, ARegion *ar)
 	const bool update_stat_strings = small_size != SMALL_SIZE_CHECK(layout->curr_size);
 	const float thumb_icon_aspect = sqrtf(64.0f / (float)(params->thumbnail_size));
 
+	char file_str_name[FILE_MAXFILE] = "";
+
+	/* Text wrapping */
+	char fileName[FILE_MAXFILE] = "";
+	char tempStr[FILE_MAXFILE] = "";
+	char strBuffer[FILE_MAXFILE] = "";
+	int linInStr = 0;
+	int strOffs = 17;
+	int strLen = 0;
+	int a = 0;
+
 	numfiles = filelist_files_ensure(files);
 	
 	if (params->display != FILE_IMGDISPLAY) {
@@ -654,9 +665,44 @@ void file_draw_list(const bContext *C, ARegion *ar)
 			}
 		}
 
+		strcpy(file_str_name, file->relpath);
+
+		if (FILE_IMGDISPLAY != params->display) {
+			uiStyle *style = UI_style_get();
+			uiFontStyle fs = style->widgetlabel;
+			UI_text_clip_middle_ex(&fs, file_str_name, textwidth + 1.0f, UI_DPI_ICON_SIZE, sizeof(file_str_name), '\0');
+		}
+
 		if (!(file_selflag& FILE_SEL_EDITING)) {
-			int tpos = (FILE_IMGDISPLAY == params->display) ? sy - layout->tile_h + layout->textheight : sy;
-			file_draw_string(sx + 1, tpos, file->name, (float)textwidth, textheight, align);
+			int tpos = (FILE_IMGDISPLAY == params->display) ? sy - layout->tile_h + layout->textheight + 35 : sy;
+
+			if (FILE_IMGDISPLAY == params->display) {
+				strcpy(fileName, file->relpath);
+
+				/*strOffs = num_chars_to_width(fileName, textwidth)*/;
+				linInStr = ceil((float)strlen(fileName) / (float)strOffs);
+
+				if (linInStr > 3)
+					linInStr = 3;
+
+				for (a = 0; a < linInStr; a++) {
+					/*strOffs = num_chars_to_width(fileName, textwidth);*/
+					strcpy(strBuffer, fileName);
+
+					/* Draw begin */
+					strncpy(tempStr, strBuffer, strOffs);
+					file_draw_string(sx + 1, tpos, tempStr, (float)textwidth, textheight, align);
+
+					/*Draw end*/
+					strLen = (int)strlen(fileName);
+					strncpy(strBuffer, fileName + strOffs, strLen);
+					strcpy(fileName, strBuffer);
+					tpos -= textheight;
+				}
+			}
+			else {
+				file_draw_string(sx + 1, tpos, file_str_name, (float)textwidth, textheight, align);
+			}
 		}
 
 		sx += (int)layout->column_widths[COLUMN_NAME] + column_space;

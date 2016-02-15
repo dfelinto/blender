@@ -1131,6 +1131,13 @@ static void do_view3d_region_buttons(bContext *C, void *UNUSED(index), int event
 static int view3d_panel_transform_poll(const bContext *C, PanelType *UNUSED(pt))
 {
 	Scene *scene = CTX_data_scene(C);
+	Object *obedit = CTX_data_edit_object(C);
+	Object *ob;
+
+	if (scene->basact != NULL) {
+		ob = scene->basact->object;
+		return (ob == obedit);
+	}
 	return (scene->basact != NULL);
 }
 

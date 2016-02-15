@@ -131,7 +131,7 @@ static struct bUnitDef buMetricLenDef[] = {
 #endif
 	{NULL, NULL, NULL,	NULL, NULL, 0.0, 0.0}
 };
-static struct bUnitCollection buMetricLenCollection = {buMetricLenDef, 3, 0, sizeof(buMetricLenDef) / sizeof(bUnitDef)};
+static struct bUnitCollection buMetricLenCollection = {buMetricLenDef, 6, 0, sizeof(buMetricLenDef) / sizeof(bUnitDef)};
 
 static struct bUnitDef buImperialLenDef[] = {
 	{"mile", "miles",       "mi", "m", "Miles",      UN_SC_MI, 0.0,  B_UNIT_DEF_NONE},
@@ -143,7 +143,7 @@ static struct bUnitDef buImperialLenDef[] = {
 	{"thou", "thou",        "thou", "mil", "Thou",   UN_SC_MIL, 0.0, B_UNIT_DEF_NONE}, /* plural for thou has no 's' */
 	{NULL, NULL, NULL, NULL, NULL, 0.0, 0.0}
 };
-static struct bUnitCollection buImperialLenCollection = {buImperialLenDef, 4, 0, sizeof(buImperialLenDef) / sizeof(bUnitDef)};
+static struct bUnitCollection buImperialLenCollection = {buImperialLenDef, 5, 0, sizeof(buImperialLenDef) / sizeof(bUnitDef)};
 
 /* Areas */
 static struct bUnitDef buMetricAreaDef[] = {
@@ -312,6 +312,7 @@ static bUnitDef *unit_default(bUnitCollection *usys)
 
 static bUnitDef *unit_best_fit(double value, bUnitCollection *usys, bUnitDef *unit_start, int suppress)
 {
+#if 0
 	bUnitDef *unit;
 	double value_abs = value > 0.0 ? value : -value;
 
@@ -332,6 +333,7 @@ static bUnitDef *unit_best_fit(double value, bUnitCollection *usys, bUnitDef *un
 			}
 		}
 	}
+#endif
 
 	return unit_default(usys);
 }

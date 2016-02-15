@@ -825,6 +825,7 @@ void OBJECT_OT_empty_add(wmOperatorType *ot)
 
 static int empty_drop_named_image_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
+#if 0
 	Scene *scene = CTX_data_scene(C);
 
 	Base *base = NULL;
@@ -865,6 +866,17 @@ static int empty_drop_named_image_invoke(bContext *C, wmOperator *op, const wmEv
 	id_us_min(ob->data);
 	ob->data = ima;
 	id_us_plus(ob->data);
+#else
+	char path[FILE_MAX];
+	PointerRNA ptr;
+
+	RNA_string_get(op->ptr, "filepath", path);
+
+	WM_operator_properties_create(&ptr, "FD_DRAGDROP_OT_drag_and_drop");
+	RNA_string_set(&ptr, "filepath", path);
+	WM_operator_name_call(C, "FD_DRAGDROP_OT_drag_and_drop", WM_OP_INVOKE_REGION_WIN, &ptr);
+	WM_operator_properties_free(&ptr);
+#endif
 
 	return OPERATOR_FINISHED;
 }
@@ -874,8 +886,8 @@ void OBJECT_OT_drop_named_image(wmOperatorType *ot)
 	PropertyRNA *prop;
 
 	/* identifiers */
-	ot->name = "Add Empty Image/Drop Image To Empty";
-	ot->description = "Add an empty image type to scene with data";
+	ot->name = "Image Drag and Drop";
+	ot->description = "Calls the drag and drop operator";
 	ot->idname = "OBJECT_OT_drop_named_image";
 
 	/* api callbacks */

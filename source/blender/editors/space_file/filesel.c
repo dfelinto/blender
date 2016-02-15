@@ -514,7 +514,7 @@ void ED_fileselect_init_layout(struct SpaceFile *sfile, ARegion *ar)
 		layout->prv_border_x = 0.3f * UI_UNIT_X;
 		layout->prv_border_y = 0.3f * UI_UNIT_Y;
 		layout->tile_w = layout->prv_w + 2 * layout->prv_border_x;
-		layout->tile_h = layout->prv_h + 2 * layout->prv_border_y + textheight;
+		layout->tile_h = layout->prv_h + 2 * layout->prv_border_y + textheight + 30;
 		layout->width = (int)(BLI_rctf_size_x(&v2d->cur) - 2 * layout->tile_border_x);
 		layout->columns = layout->width / (layout->tile_w + 2 * layout->tile_border_x);
 		if (layout->columns > 0)
