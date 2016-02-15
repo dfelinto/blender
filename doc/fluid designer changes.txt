@@ -1,0 +1,48 @@
+This is a list of the changes that were made to Blenders source code for anyone who wants a quick overview of the changes that were made for fluid designer
+
+Title: Change default file name so they don’t conflict with Default Blender
+Modified File Path: Blender/blenkernel/intern/BKE_appdir.h
+Description: The startup.blend, userpref.blend, quit.blend, bookmarks.txt, and recent-files.txt have been renamed with “fd_” at the beginning of the file name so they don’t conflict with the default version of Blender.
+
+
+Title: Change the default units
+Modified File Path: Blender/blenkernel/intern/unit.c
+Description: The default Imperial Units have been changed from Feet to Inches, and the default metric units have been changed from meters to millimeters.
+
+
+Title: Change the name of the Application
+Modified File Path: Blender/windowmanager/wm_window.c
+Description: Change the name of the Application.
+
+
+Title: Enable Drag and Drop for Library Add-ons
+Modified File Path: Blender/editors/object /object_add.c
+Modified File Path: Blender/editors/space_view3d/space_view3d.c
+Description: Modify the Code to allow for drag and drop, space_view3d.c is where we find the code to modify the drop events. Object_add.c is where we find the operator that we need to modify to call the python drag and drop operator.
+
+
+Title: Add Definitions for New Icons
+Modified File Path: Blender/editors/include /UI_icons.h
+Description: Add new definitions for new add-on icons.
+
+
+Title: Add multiple lines to thumbnail text
+Modified File Path: Blender/editors/space_file /file_draw.c
+Modified File Path: Blender/editors/space_file /file_sel.c
+Description: Allow for longer descriptions in the file browser in thumbnail view.
+
+
+Title: Change Translation precision default
+Modified File Path: Blender/makesrna/RNA_types.h
+Description: Change the precision to avoid rounding issues 
+
+
+Title: Only show transform panel in edit mode
+Modified File Path: Blender/ editors/space_view3d/view3d_buttons.c
+Description: Only show the transform panel in edit mode 
+
+
+
+
+
+
