@@ -28,6 +28,9 @@ class VIEW3D_HT_header(Header):
     bl_space_type = 'VIEW_3D'
 
     def draw(self, context):
+        if not context.scene.mv.ui.use_default_blender_interface:
+            return
+
         layout = self.layout
 
         view = context.space_data
@@ -3018,7 +3021,9 @@ class VIEW3D_PT_grease_pencil(GreasePencilDataPanel, Panel):
     bl_region_type = 'UI'
 
     # NOTE: this is just a wrapper around the generic GP Panel
-
+    @classmethod
+    def poll(cls, context):
+        return context.scene.mv.ui.use_default_blender_interface
 
 class VIEW3D_PT_view3d_properties(Panel):
     bl_space_type = 'VIEW_3D'
@@ -3027,6 +3032,9 @@ class VIEW3D_PT_view3d_properties(Panel):
 
     @classmethod
     def poll(cls, context):
+        if not context.scene.mv.ui.use_default_blender_interface:
+            return False
+
         view = context.space_data
         return (view)
 
@@ -3075,6 +3083,9 @@ class VIEW3D_PT_view3d_cursor(Panel):
 
     @classmethod
     def poll(cls, context):
+        if not context.scene.mv.ui.use_default_blender_interface:
+            return False
+
         view = context.space_data
         return (view is not None)
 
@@ -3092,6 +3103,9 @@ class VIEW3D_PT_view3d_name(Panel):
 
     @classmethod
     def poll(cls, context):
+        if not context.scene.mv.ui.use_default_blender_interface
+            return False
+
         return (context.space_data and context.active_object)
 
     def draw(self, context):
@@ -3118,6 +3132,9 @@ class VIEW3D_PT_view3d_display(Panel):
 
     @classmethod
     def poll(cls, context):
+        if not context.scene.mv.ui.use_default_blender_interface:
+            return False
+
         view = context.space_data
         return (view)
 
@@ -3180,6 +3197,9 @@ class VIEW3D_PT_view3d_stereo(Panel):
 
     @classmethod
     def poll(cls, context):
+        if not context.scene.mv.ui.use_default_blender_interface:
+            return False
+
         scene = context.scene
 
         multiview = scene.render.use_multiview
@@ -3216,6 +3236,10 @@ class VIEW3D_PT_view3d_shading(Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_label = "Shading"
+
+    @classmethod
+    def poll(cls, context):
+        return context.scene.mv.ui.use_default_blender_interface:
 
     def draw(self, context):
         layout = self.layout
@@ -3270,6 +3294,9 @@ class VIEW3D_PT_view3d_motion_tracking(Panel):
 
     @classmethod
     def poll(cls, context):
+        if not context.scene.mv.ui.use_default_blender_interface:
+            return False
+
         view = context.space_data
         return (view)
 
@@ -3300,6 +3327,9 @@ class VIEW3D_PT_view3d_meshdisplay(Panel):
 
     @classmethod
     def poll(cls, context):
+        if not context.scene.mv.ui.use_default_blender_interface:
+            return False
+
         # The active object check is needed because of local-mode
         return (context.active_object and (context.mode == 'EDIT_MESH'))
 
@@ -3367,6 +3397,9 @@ class VIEW3D_PT_view3d_meshstatvis(Panel):
 
     @classmethod
     def poll(cls, context):
+        if not context.scene.mv.ui.use_default_blender_interface:
+            return False
+
         # The active object check is needed because of local-mode
         return (context.active_object and (context.mode == 'EDIT_MESH'))
 
@@ -3413,6 +3446,9 @@ class VIEW3D_PT_view3d_curvedisplay(Panel):
 
     @classmethod
     def poll(cls, context):
+        if not context.scene.mv.ui.use_default_blender_interface:
+            return False
+
         editmesh = context.mode == 'EDIT_CURVE'
         return (editmesh)
 
@@ -3433,6 +3469,10 @@ class VIEW3D_PT_background_image(Panel):
     bl_region_type = 'UI'
     bl_label = "Background Images"
     bl_options = {'DEFAULT_CLOSED'}
+
+    @classmethod
+    def poll(cls, context):
+        return context.scene.mv.ui.use_default_blender_interface
 
     def draw_header(self, context):
         view = context.space_data
@@ -3543,6 +3583,9 @@ class VIEW3D_PT_transform_orientations(Panel):
 
     @classmethod
     def poll(cls, context):
+        if not context.scene.mv.ui.use_default_blender_interface:
+            return False
+
         view = context.space_data
         return (view)
 
@@ -3570,6 +3613,9 @@ class VIEW3D_PT_etch_a_ton(Panel):
 
     @classmethod
     def poll(cls, context):
+        if not context.scene.mv.ui.use_default_blender_interface:
+            return False
+
         scene = context.space_data
         ob = context.active_object
         return scene and ob and ob.type == 'ARMATURE' and ob.mode == 'EDIT'
@@ -3640,6 +3686,9 @@ class VIEW3D_PT_context_properties(Panel):
 
     @classmethod
     def poll(cls, context):
+        if not context.scene.mv.ui.use_default_blender_interface:
+            return False
+
         import rna_prop_ui
         member = cls._active_context_member(context)
 

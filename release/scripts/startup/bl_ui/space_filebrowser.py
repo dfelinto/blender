@@ -25,6 +25,9 @@ class FILEBROWSER_HT_header(Header):
     bl_space_type = 'FILE_BROWSER'
 
     def draw(self, context):
+        if not context.screen.show_fullscreen:
+            return
+
         layout = self.layout
 
         st = context.space_data
@@ -128,6 +131,10 @@ class FILEBROWSER_PT_system_folders(Panel):
     bl_category = "Bookmarks"
     bl_label = "System"
 
+    @classmethod
+    def poll(cls, context):
+        return context.screen.show_fullscreen
+
     def draw(self, context):
         layout = self.layout
         space = context.space_data
@@ -146,6 +153,9 @@ class FILEBROWSER_PT_system_bookmarks(Panel):
 
     @classmethod
     def poll(cls, context):
+        if not context.screen.show_fullscreen:
+            return False
+
         return not context.user_preferences.filepaths.hide_system_bookmarks
 
     def draw(self, context):
@@ -161,6 +171,10 @@ class FILEBROWSER_PT_system_bookmarks(Panel):
 class FILEBROWSER_MT_bookmarks_specials(Menu):
     bl_label = "Bookmarks Specials"
 
+    @classmethod
+    def poll(cls, context):
+        return context.screen.show_fullscreen
+
     def draw(self, context):
         layout = self.layout
         layout.operator("file.bookmark_cleanup", icon='X', text="Cleanup")
@@ -175,6 +189,10 @@ class FILEBROWSER_PT_bookmarks(Panel):
     bl_region_type = 'TOOLS'
     bl_category = "Bookmarks"
     bl_label = "Bookmarks"
+
+    @classmethod
+    def poll(cls, context):
+        return context.screen.show_fullscreen
 
     def draw(self, context):
         layout = self.layout
@@ -208,6 +226,9 @@ class FILEBROWSER_PT_recent_folders(Panel):
 
     @classmethod
     def poll(cls, context):
+        if not context.screen.show_fullscreen:
+            return False
+
         return not context.user_preferences.filepaths.hide_recent_locations
 
     def draw(self, context):

@@ -36,6 +36,10 @@ class View3DPanel:
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'TOOLS'
 
+    @classmethod
+    def poll(cls, context):
+        return context.scene.mv.ui.use_default_blender_interface
+
 
 # **************** standard tool clusters ******************
 
@@ -1877,10 +1881,18 @@ class VIEW3D_PT_tools_particlemode(View3DPanel, Panel):
 class VIEW3D_PT_tools_grease_pencil_draw(GreasePencilDrawingToolsPanel, Panel):
     bl_space_type = 'VIEW_3D'
 
+    @classmethod
+    def poll(cls, context):
+        return context.scene.mv.ui.use_default_blender_interface
+
 
 # Grease Pencil stroke editing tools
 class VIEW3D_PT_tools_grease_pencil_edit(GreasePencilStrokeEditPanel, Panel):
     bl_space_type = 'VIEW_3D'
+
+    @classmethod
+    def poll(cls, context):
+        return context.scene.mv.ui.use_default_blender_interface
 
 
 # Grease Pencil stroke sculpting tools

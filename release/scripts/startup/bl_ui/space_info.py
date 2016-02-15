@@ -31,6 +31,17 @@ class INFO_HT_header(Header):
         scene = context.scene
         rd = scene.render
 
+        if not scene.mv.ui.use_default_blender_interface:
+            return
+
+        if scene.mv.ui.show_debug_tools:
+            layout.prop(scene.mv.ui, "show_debug_tools", icon='DISCLOSURE_TRI_DOWN', text="", emboss=False)
+            layout.prop(scene.mv.ui, "use_default_blender_interface", icon='BLENDER', text="")
+            layout.operator("wm.console_toggle", icon='CONSOLE', text="")
+            layout.operator("fluidgeneral.start_debug", icon='GAME', text="")
+        else:
+            layout.prop(scene.mv.ui,"show_debug_tools",icon='DISCLOSURE_TRI_RIGHT',text="",emboss=False)
+
         row = layout.row(align=True)
         row.template_header()
 

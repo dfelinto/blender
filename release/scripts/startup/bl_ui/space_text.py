@@ -103,6 +103,7 @@ class TEXT_PT_properties(Panel):
     bl_space_type = 'TEXT_EDITOR'
     bl_region_type = 'UI'
     bl_label = "Properties"
+    bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
         layout = self.layout
@@ -134,6 +135,7 @@ class TEXT_PT_find(Panel):
     bl_space_type = 'TEXT_EDITOR'
     bl_region_type = 'UI'
     bl_label = "Find"
+    bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
         layout = self.layout
