@@ -1927,9 +1927,9 @@ def get_selection_point(context, event, ray_max=10000.0,objects=None):
         ray_target_obj = matrix_inv * ray_target
 
         # cast the ray
-        hit, normal, face_index = obj.ray_cast(ray_origin_obj, ray_target_obj)
+        ok, hit, normal, face_index = obj.ray_cast(ray_origin_obj, ray_target_obj)
 
-        if face_index != -1:
+        if ok and face_index != -1:
             return hit, normal, face_index
         else:
             return None, None, None
