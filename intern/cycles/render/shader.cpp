@@ -152,6 +152,7 @@ Shader::Shader()
 	has_volume = false;
 	has_displacement = false;
 	has_bssrdf_bump = false;
+	has_surface_spatial_varying = false;
 	has_volume_spatial_varying = false;
 	has_object_dependency = false;
 	has_integrator_dependency = false;
@@ -528,6 +529,11 @@ void ShaderManager::get_requested_features(Scene *scene,
 			requested_features->nodes_features |= NODE_FEATURE_BUMP;
 		}
 	}
+}
+
+void ShaderManager::free_memory()
+{
+	beckmann_table.free_memory();
 }
 
 CCL_NAMESPACE_END

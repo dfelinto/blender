@@ -852,69 +852,6 @@ bool OSLRenderServices::has_userdata(ustring name, TypeDesc type, OSL::ShaderGlo
 	return false; /* never called by OSL */
 }
 
-#if OSL_LIBRARY_VERSION_CODE < 10600
-bool OSLRenderServices::texture(ustring filename,
-                                TextureOpt &options,
-                                OSL::ShaderGlobals *sg,
-                                float s, float t,
-                                float dsdx, float dtdx,
-                                float dsdy, float dtdy,
-                                float *result)
-{
-	OSL::TextureSystem *ts = osl_ts;
-	ShaderData *sd = (ShaderData *)(sg->renderstate);
-	KernelGlobals *kg = sd->osl_globals;
-	OSLThreadData *tdata = kg->osl_tdata;
-	OIIO::TextureSystem::Perthread *texture_thread_info =
-	       tdata->oiio_thread_info;
-	OIIO::TextureSystem::TextureHandle *texture_handle = NULL;
-	if(filename[0] != '@') {
-		texture_handle = ts->get_texture_handle(filename, texture_thread_info);
-	}
-	return texture(filename,
-	               texture_handle,
-	               texture_thread_info,
-	               options,
-	               sg,
-	               s, t,
-	               dsdx, dtdx, dsdy, dtdy,
-	               options.nchannels,
-	               result,
-	               NULL, NULL);
-}
-
-bool OSLRenderServices::texture3d(ustring filename,
-                                  TextureOpt &options,
-                                  OSL::ShaderGlobals *sg,
-                                  const OSL::Vec3 &P,
-                                  const OSL::Vec3 &dPdx,
-                                  const OSL::Vec3 &dPdy,
-                                  const OSL::Vec3 &dPdz,
-                                  float *result)
-{
-	OSL::TextureSystem *ts = osl_ts;
-	ShaderData *sd = (ShaderData *)(sg->renderstate);
-	KernelGlobals *kg = sd->osl_globals;
-	OSLThreadData *tdata = kg->osl_tdata;
-	OIIO::TextureSystem::Perthread *texture_thread_info =
-	       tdata->oiio_thread_info;
-	OIIO::TextureSystem::TextureHandle *texture_handle = NULL;
-	if(filename[0] != '@') {
-		texture_handle = ts->get_texture_handle(filename, texture_thread_info);
-	}
-	return texture3d(filename,
-	                 texture_handle,
-	                 texture_thread_info,
-	                 options,
-	                 sg,
-	                 P,
-	                 dPdx, dPdy, dPdz,
-	                 options.nchannels,
-	                 result,
-	                 NULL, NULL, NULL);
-}
-#endif  /* OSL_LIBRARY_VERSION_CODE < 10600 */
-
 bool OSLRenderServices::texture(ustring filename,
                                 TextureHandle *texture_handle,
                                 TexturePerthread *texture_thread_info,
@@ -989,17 +926,6 @@ bool OSLRenderServices::texture(ustring filename,
 		status = true;
 	}
 	else {
-#if OIIO_VERSION < 10500
-		(void) dresultds;  /* Ignored. */
-		(void) dresultdt;  /* Ignored. */
-		status = ts->texture(texture_handle,
-		                     texture_thread_info,
-		                     options,
-		                     s, t,
-		                     dsdx, dtdx,
-		                     dsdy, dtdy,
-		                     result);
-#else
 		if(texture_handle != NULL) {
 			status = ts->texture(texture_handle,
 			                     texture_thread_info,
@@ -1021,7 +947,6 @@ bool OSLRenderServices::texture(ustring filename,
 			                     result,
 			                     dresultds, dresultdt);
 		}
-#endif
 	}
 
 	if(!status) {
@@ -1082,17 +1007,6 @@ bool OSLRenderServices::texture3d(ustring filename,
 		status = true;
 	}
 	else {
-#if OIIO_VERSION < 10500
-		(void) dresultds;  /* Ignored. */
-		(void) dresultdt;  /* Ignored. */
-		(void) dresultdr;  /* Ignored. */
-		status = ts->texture3d(texture_handle,
-		                       texture_thread_info,
-		                       options,
-		                       P,
-		                       dPdx, dPdy, dPdz,
-		                       result);
-#else
 		if(texture_handle != NULL) {
 			status = ts->texture3d(texture_handle,
 			                       texture_thread_info,
@@ -1112,7 +1026,6 @@ bool OSLRenderServices::texture3d(ustring filename,
 			                       result,
 			                       dresultds, dresultdt, dresultdr);
 		}
-#endif
 	}
 
 	if(!status) {
@@ -1147,14 +1060,9 @@ bool OSLRenderServices::environment(ustring filename, TextureOpt &options,
 
 	OIIO::TextureSystem::TextureHandle *th = ts->get_texture_handle(filename, thread_info);
 
-#if OIIO_VERSION < 10500
-	bool status = ts->environment(th, thread_info,
-	                              options, R, dRdx, dRdy, result);
-#else
 	bool status = ts->environment(th, thread_info,
 	                              options, R, dRdx, dRdy,
 	                              nchannels, result);
-#endif
 
 	if(!status) {
 		if(nchannels == 3 || nchannels == 4) {

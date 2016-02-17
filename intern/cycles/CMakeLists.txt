@@ -210,6 +210,7 @@ endif()
 # Subdirectories
 
 if(WITH_CYCLES_BLENDER)
+	add_definitions(-DWITH_BLENDER_GUARDEDALLOC)
 	add_subdirectory(blender)
 endif()
 
@@ -224,6 +225,11 @@ add_subdirectory(kernel)
 add_subdirectory(render)
 add_subdirectory(subd)
 add_subdirectory(util)
+
+# TODO(sergey): Make this to work with standalone repository.
+if(WITH_GTESTS)
+	add_subdirectory(test)
+endif()
 
 if(NOT WITH_BLENDER AND WITH_CYCLES_STANDALONE)
 	delayed_do_install(${CMAKE_BINARY_DIR}/bin)

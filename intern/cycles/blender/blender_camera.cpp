@@ -156,24 +156,12 @@ static void blender_camera_from_object(BlenderCamera *bcam,
 			default:
 				bcam->type = CAMERA_PERSPECTIVE;
 				break;
-		}	
+		}
 
-		switch(RNA_enum_get(&ccamera, "panorama_type"))
-		{
-			case 1:
-				bcam->panorama_type = PANORAMA_FISHEYE_EQUIDISTANT;
-				break;
-			case 2:
-				bcam->panorama_type = PANORAMA_FISHEYE_EQUISOLID;
-				break;
-			case 3:
-				bcam->panorama_type = PANORAMA_MIRRORBALL;
-				break;
-			case 0:
-			default:
-				bcam->panorama_type = PANORAMA_EQUIRECTANGULAR;
-				break;
-		}	
+		bcam->panorama_type = (PanoramaType)get_enum(ccamera,
+		                                             "panorama_type",
+		                                             PANORAMA_NUM_TYPES,
+		                                             PANORAMA_EQUIRECTANGULAR);
 
 		bcam->fisheye_fov = RNA_float_get(&ccamera, "fisheye_fov");
 		bcam->fisheye_lens = RNA_float_get(&ccamera, "fisheye_lens");
@@ -188,7 +176,7 @@ static void blender_camera_from_object(BlenderCamera *bcam,
 
 		/* allow f/stop number to change aperture_size but still
 		 * give manual control over aperture radius */
-		int aperture_type = RNA_enum_get(&ccamera, "aperture_type");
+		int aperture_type = get_enum(ccamera, "aperture_type");
 
 		if(aperture_type == 1) {
 			float fstop = RNA_float_get(&ccamera, "aperture_fstop");
@@ -461,32 +449,16 @@ void BlenderSync::sync_camera(BL::RenderSettings& b_render,
 	curvemapping_to_array(b_shutter_curve, bcam.shutter_curve, RAMP_TABLE_SIZE);
 
 	PointerRNA cscene = RNA_pointer_get(&b_scene.ptr, "cycles");
-	switch(RNA_enum_get(&cscene, "motion_blur_position")) {
-		case 0:
-			bcam.motion_position = Camera::MOTION_POSITION_START;
-			break;
-		case 1:
-			bcam.motion_position = Camera::MOTION_POSITION_CENTER;
-			break;
-		case 2:
-			bcam.motion_position = Camera::MOTION_POSITION_END;
-			break;
-		default:
-			bcam.motion_position = Camera::MOTION_POSITION_CENTER;
-			break;
-	}
-
-	switch(RNA_enum_get(&cscene, "rolling_shutter_type")) {
-		case 0:
-			bcam.rolling_shutter_type = Camera::ROLLING_SHUTTER_NONE;
-			break;
-		case 1:
-			bcam.rolling_shutter_type = Camera::ROLLING_SHUTTER_TOP;
-			break;
-		default:
-			bcam.rolling_shutter_type = Camera::ROLLING_SHUTTER_NONE;
-			break;
-	}
+	bcam.motion_position =
+	        (Camera::MotionPosition)get_enum(cscene,
+	                                         "motion_blur_position",
+	                                         Camera::MOTION_NUM_POSITIONS,
+	                                         Camera::MOTION_POSITION_CENTER);
+	bcam.rolling_shutter_type =
+		(Camera::RollingShutterType)get_enum(cscene,
+		                                     "rolling_shutter_type",
+		                                     Camera::ROLLING_SHUTTER_NUM_TYPES,
+		                                     Camera::ROLLING_SHUTTER_NONE);
 	bcam.rolling_shutter_duration = RNA_float_get(&cscene, "rolling_shutter_duration");
 
 	/* border */

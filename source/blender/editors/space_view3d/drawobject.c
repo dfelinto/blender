@@ -6362,6 +6362,7 @@ static void draw_editnurb(
 	 * when at its lowest, don't render normals */
 	if ((cu->flag & CU_3D) && (ts->normalsize > 0.0015f) && (cu->drawflag & CU_HIDE_NORMALS) == 0) {
 		BevList *bl;
+		glLineWidth(1.0f);
 		for (bl = ob->curve_cache->bev.first, nu = nurb; nu && bl; bl = bl->next, nu = nu->next) {
 			BevPoint *bevp = bl->bevpoints;
 			int nr = bl->nr;
@@ -7510,6 +7511,8 @@ void draw_object(Scene *scene, ARegion *ar, View3D *v3d, Base *base, const short
 
 	/* only once set now, will be removed too, should become a global standard */
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	/* reset here to avoid having to call all over */
+	glLineWidth(1.0f);
 
 	view3d_cached_text_draw_begin();
 	

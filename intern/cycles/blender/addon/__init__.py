@@ -23,7 +23,7 @@ bl_info = {
     "location": "Info header, render engine menu",
     "description": "Cycles Render Engine integration",
     "warning": "",
-    "wiki_url": "http://wiki.blender.org/index.php/Doc:2.6/Manual/Render/Cycles",
+    "wiki_url": "https://www.blender.org/manual/render/cycles/index.html",
     "tracker_url": "",
     "support": 'OFFICIAL',
     "category": "Render"}
@@ -88,10 +88,17 @@ class CyclesRender(bpy.types.RenderEngine):
             self.report({'ERROR'}, "OSL support disabled in this build.")
 
 
+def engine_exit():
+    engine.exit()
+
+
 def register():
     from . import ui
     from . import properties
     from . import presets
+    import atexit
+
+    atexit.register(engine_exit)
 
     engine.init()
 
@@ -107,6 +114,7 @@ def unregister():
     from . import ui
     from . import properties
     from . import presets
+    import atexit
 
     bpy.app.handlers.version_update.remove(version_update.do_versions)
 
@@ -114,3 +122,6 @@ def unregister():
     properties.unregister()
     presets.unregister()
     bpy.utils.unregister_module(__name__)
+
+    atexit.unregister(engine_exit)
+    engine_exit()
