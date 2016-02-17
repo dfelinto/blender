@@ -33,8 +33,11 @@
 
 #include "BLI_utildefines.h"
 
+#include "BKE_main.h"
+
 #include "WM_types.h"
 
+#include "ED_render.h"
 #include "ED_screen.h"
 
 #include "GPU_compositing.h"
@@ -54,6 +57,8 @@
 typedef struct {
 	PyObject_HEAD
 	GPUOffScreen *ofs;
+	struct Main *bmain;
+	struct ScrArea *sa;
 } BPy_GPUOffScreen;
 
 static int bpy_gpu_offscreen_valid_check(BPy_GPUOffScreen *py_gpu_ofs)
@@ -244,6 +249,103 @@ static PyObject *pygpu_offscreen_draw_view3d(BPy_GPUOffScreen *self, PyObject *a
 	Py_RETURN_NONE;
 }
 
+static void offscreen_render_free(BPy_GPUOffScreen *self)
+{
+	if (self->bmain && self->sa) {
+		ED_render_engine_area_exit(self->bmain, self->sa);
+	}
+
+	self->bmain = NULL;
+	self->sa = NULL;
+}
+
+PyDoc_STRVAR(pygpu_offscreen_render_view3d_doc,
+"render_view3d(blend_data, scene, area, region, modelview_matrix, projection_matrix)\n"
+"\n"
+"   Preview render of the 3d viewport in the offscreen object.\n"
+"\n"
+"   :param blend_data: Blender data.\n"
+"   :type blend_data: :class:`bpy.types.BlendData`\n"
+"   :param scene: Scene to draw.\n"
+"   :type scene: :class:`bpy.types.Scene`\n"
+"   :param area: Area of the 3D View.\n"
+"   :type area: :class:`bpy.types.Area`\n"
+"   :param region: Region of the 3D View.\n"
+"   :type region: :class:`bpy.types.Region`\n"
+"   :param modelview_matrix: ModelView Matrix.\n"
+"   :type modelview_matrix: :class:`mathutils.Matrix`\n"
+"   :param projection_matrix: Projection Matrix.\n"
+"   :type projection_matrix: :class:`mathutils.Matrix`\n"
+);
+static PyObject *pygpu_offscreen_render_view3d(BPy_GPUOffScreen *self, PyObject *args, PyObject *kwds)
+{
+	static const char *kwlist[] = {"blend_data", "scene", "area", "region", "projection_matrix", "modelview_matrix", NULL};
+
+	MatrixObject *py_mat_modelview, *py_mat_projection;
+	PyObject *py_bmain, *py_scene, *py_space, *py_region;
+
+	Main *bmain;
+	Scene *scene;
+	ScrArea *sa;
+	ARegion *ar;
+	void *rv3d_mats;
+
+	BPY_GPU_OFFSCREEN_CHECK_OBJ(self);
+
+	if (!PyArg_ParseTupleAndKeywords(
+	        args, kwds, "OOOOO&O&:render_view3d", (char **)(kwlist),
+	        &py_bmain, &py_scene, &py_space, &py_region,
+	        pygpu_offscreen_check_matrix, &py_mat_projection,
+	        pygpu_offscreen_check_matrix, &py_mat_modelview) ||
+	    (!(bmain    = PyC_RNA_AsPointer(py_bmain, "BlendData")) ||
+	     !(scene    = PyC_RNA_AsPointer(py_scene, "Scene")) ||
+	     !(sa       = PyC_RNA_AsPointer(py_space, "Area")) ||
+	     !(ar       = PyC_RNA_AsPointer(py_region, "Region"))))
+	{
+		return NULL;
+	}
+
+	rv3d_mats = ED_view3d_mats_rv3d_backup(ar->regiondata);
+
+	if ((self->bmain != bmain) || (self->sa != sa)) {
+		offscreen_render_free(self);
+	}
+	else {
+		self->bmain = bmain;
+		self->sa = sa;
+	}
+
+	GPU_offscreen_bind(self->ofs, true); /* bind */
+
+	ED_view3d_render_preview_offscreen(
+	        bmain, scene,
+	        sa, ar,
+	        GPU_offscreen_width(self->ofs),
+	        GPU_offscreen_height(self->ofs),
+	        (float(*)[4])py_mat_modelview->matrix,
+	        (float(*)[4])py_mat_projection->matrix);
+
+	GPU_offscreen_unbind(self->ofs, true); /* unbind */
+
+	ED_view3d_mats_rv3d_restore(ar->regiondata, rv3d_mats);
+	MEM_freeN(rv3d_mats);
+
+	Py_RETURN_NONE;
+}
+
+PyDoc_STRVAR(pygpu_offscreen_render_view3d_stop_doc,
+"render_view3d_stop()\n"
+"\n"
+"   Stop the render preview from the offscreen object.\n"
+);
+static PyObject *pygpu_offscreen_render_view3d_stop(BPy_GPUOffScreen *self)
+{
+	BPY_GPU_OFFSCREEN_CHECK_OBJ(self);
+
+	offscreen_render_free(self);
+	Py_RETURN_NONE;
+}
+
 PyDoc_STRVAR(pygpu_offscreen_free_doc,
 "free()\n"
 "\n"
@@ -254,6 +356,7 @@ static PyObject *pygpu_offscreen_free(BPy_GPUOffScreen *self)
 {
 	BPY_GPU_OFFSCREEN_CHECK_OBJ(self);
 
+	offscreen_render_free(self);
 	GPU_offscreen_free(self->ofs);
 	self->ofs = NULL;
 	Py_RETURN_NONE;
@@ -277,6 +380,8 @@ static struct PyMethodDef bpy_gpu_offscreen_methods[] = {
 	{"bind", (PyCFunction)pygpu_offscreen_bind, METH_VARARGS | METH_KEYWORDS, pygpu_offscreen_bind_doc},
 	{"unbind", (PyCFunction)pygpu_offscreen_unbind, METH_VARARGS | METH_KEYWORDS, pygpu_offscreen_unbind_doc},
 	{"draw_view3d", (PyCFunction)pygpu_offscreen_draw_view3d, METH_VARARGS | METH_KEYWORDS, pygpu_offscreen_draw_view3d_doc},
+	{"render_view3d", (PyCFunction)pygpu_offscreen_render_view3d, METH_VARARGS | METH_KEYWORDS, pygpu_offscreen_render_view3d_doc},
+	{"render_view3d_stop", (PyCFunction)pygpu_offscreen_render_view3d_stop, METH_NOARGS, pygpu_offscreen_render_view3d_stop_doc},
 	{"free", (PyCFunction)pygpu_offscreen_free, METH_NOARGS, pygpu_offscreen_free_doc},
 	{NULL, NULL, 0, NULL}
 };
@@ -344,6 +449,8 @@ static PyObject *BPy_GPU_OffScreen_CreatePyObject(GPUOffScreen *ofs)
 	BPy_GPUOffScreen *self;
 	self = PyObject_New(BPy_GPUOffScreen, &BPy_GPUOffScreen_Type);
 	self->ofs = ofs;
+	self->bmain = NULL;
+	self->sa = NULL;
 	return (PyObject *)self;
 }
 
