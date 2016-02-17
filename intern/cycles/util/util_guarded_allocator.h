@@ -121,8 +121,36 @@ public:
 	template <class U>
 	GuardedAllocator& operator=(const GuardedAllocator<U>&) { return *this; }
 
-	inline bool operator==(GuardedAllocator const& /*other*/) { return true; }
-	inline bool operator!=(GuardedAllocator const& other) { return !operator==(other); }
+	inline bool operator==(GuardedAllocator const& /*other*/) const { return true; }
+	inline bool operator!=(GuardedAllocator const& other) const { return !operator==(other); }
+
+#ifdef _MSC_VER
+	/* Welcome to the black magic here.
+	 *
+	 * The issue is that MSVC C++ allocates container proxy on any
+	 * vector initialization, including static vectors which don't
+	 * have any data yet. This leads to several issues:
+	 *
+	 * - Static objects initialization fiasco (global_stats from
+	 *   util_stats.h might not be initialized yet).
+	 * - If main() function changes allocator type (for example,
+	 *   this might happen with `blender --debug-memory`) nobody
+	 *   will know how to convert already allocated memory to a new
+	 *   guarded allocator.
+	 *
+	 * Here we work this around by making it so container proxy does
+	 * not use guarded allocation. A bit fragile, unfortunately.
+	 */
+	template<>
+	struct rebind<std::_Container_proxy> {
+		typedef std::allocator<std::_Container_proxy> other;
+	};
+
+	operator std::allocator<std::_Container_proxy>() const
+	{
+		return std::allocator<std::_Container_proxy>();
+	}
+#endif
 };
 
 /* Get memory usage and peak from the guarded STL allocator. */
