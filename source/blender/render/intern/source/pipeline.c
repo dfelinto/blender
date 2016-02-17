@@ -448,6 +448,8 @@ void RE_AcquireResultImage(Render *re, RenderResult *rr, const int view_id)
 
 			rr->xof = re->disprect.xmin;
 			rr->yof = re->disprect.ymin;
+
+			rr->stamp_data = re->result->stamp_data;
 		}
 	}
 }
@@ -1504,7 +1506,9 @@ static void do_render_3d(Render *re)
 	const int cfra_backup = re->scene->r.cfra;
 	const float subframe_backup = re->scene->r.subframe;
 
-	BKE_scene_frame_set(re->scene, (double)re->scene->r.cfra + re->scene->r.subframe + re->mblur_offs + re->field_offs);
+	BKE_scene_frame_set(
+	        re->scene, (double)re->scene->r.cfra + (double)re->scene->r.subframe +
+	        (double)re->mblur_offs + (double)re->field_offs);
 
 	/* init main render result */
 	main_render_result_new(re);
@@ -2596,7 +2600,13 @@ static void renderresult_stampinfo(Render *re)
 	for (rv = re->result->views.first;rv;rv = rv->next, nr++) {
 		RE_SetActiveRenderView(re, rv->name);
 		RE_AcquireResultImage(re, &rres, nr);
-		BKE_image_stamp_buf(re->scene, RE_GetCamera(re), (unsigned char *)rres.rect32, rres.rectf, rres.rectx, rres.recty, 4);
+		BKE_image_stamp_buf(re->scene,
+		                    RE_GetCamera(re),
+		                    (re->r.stamp & R_STAMP_STRIPMETA) ? rres.stamp_data : NULL,
+		                    (unsigned char *)rres.rect32,
+		                    rres.rectf,
+		                    rres.rectx, rres.recty,
+		                    4);
 		RE_ReleaseResultImage(re);
 	}
 }
@@ -2807,13 +2817,14 @@ static bool check_valid_compositing_camera(Scene *scene, Object *camera_override
 		while (node) {
 			if (node->type == CMP_NODE_R_LAYERS && (node->flag & NODE_MUTED) == 0) {
 				Scene *sce = node->id ? (Scene *)node->id : scene;
-
-				if (!sce->camera && !BKE_scene_camera_find(sce)) {
+				if (sce->camera == NULL) {
+					sce->camera = BKE_scene_camera_find(sce);
+				}
+				if (sce->camera == NULL) {
 					/* all render layers nodes need camera */
 					return false;
 				}
 			}
-
 			node = node->next;
 		}
 

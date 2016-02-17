@@ -317,7 +317,7 @@ LLVM_FORCE_REBUILD=false
 LLVM_SKIP=false
 
 # OSL needs to be compiled for now!
-OSL_VERSION="1.6.9"
+OSL_VERSION="1.7.1"
 OSL_VERSION_MIN=$OSL_VERSION
 OSL_FORCE_BUILD=false
 OSL_FORCE_REBUILD=false
@@ -1454,7 +1454,7 @@ clean_OIIO() {
 
 compile_OIIO() {
   # To be changed each time we make edits that would modify the compiled result!
-  oiio_magic=15
+  oiio_magic=16
   _init_oiio
 
   # Clean install if needed!
@@ -1507,6 +1507,7 @@ compile_OIIO() {
     cmake_d="$cmake_d -D STOP_ON_WARNING=OFF"
     cmake_d="$cmake_d -D BUILDSTATIC=OFF"
     cmake_d="$cmake_d -D LINKSTATIC=OFF"
+    cmake_d="$cmake_d -D USE_SIMD=sse2"
 
     cmake_d="$cmake_d -D ILMBASE_VERSION=$ILMBASE_VERSION"
     cmake_d="$cmake_d -D OPENEXR_VERSION=$OPENEXR_VERSION"
@@ -1681,7 +1682,7 @@ clean_OSL() {
 
 compile_OSL() {
   # To be changed each time we make edits that would modify the compiled result!
-  osl_magic=18
+  osl_magic=20
   _init_osl
 
   # Clean install if needed!
@@ -1735,6 +1736,9 @@ compile_OSL() {
     cmake_d="$cmake_d -D BUILD_TESTING=OFF"
     cmake_d="$cmake_d -D STOP_ON_WARNING=OFF"
     cmake_d="$cmake_d -D BUILDSTATIC=OFF"
+    cmake_d="$cmake_d -D OSL_BUILD_PLUGINS=OFF"
+    cmake_d="$cmake_d -D OSL_BUILD_TESTS=OFF"
+    cmake_d="$cmake_d -D USE_SIMD=sse2"
 
     #~ cmake_d="$cmake_d -D ILMBASE_VERSION=$ILMBASE_VERSION"
 
@@ -1804,7 +1808,7 @@ clean_OSD() {
 
 compile_OSD() {
   # To be changed each time we make edits that would modify the compiled result!
-  osd_magic=0
+  osd_magic=1
   _init_osd
 
   # Clean install if needed!
@@ -1853,7 +1857,7 @@ compile_OSD() {
     cmake_d="$cmake_d -D CMAKE_INSTALL_PREFIX=$_inst"
     # ptex is only needed when nicholas bishop is ready
     cmake_d="$cmake_d -D NO_PTEX=1"
-    cmake_d="$cmake_d -D NO_CLEW=1"
+    cmake_d="$cmake_d -D NO_CLEW=1 -D NO_CUDA=1 -D NO_OPENCL=1"
     # maya plugin, docs, tutorials, regression tests and examples are not needed
     cmake_d="$cmake_d -D NO_MAYA=1 -D NO_DOC=1 -D NO_TUTORIALS=1 -D NO_REGRESSION=1 -DNO_EXAMPLES=1"
 
@@ -3085,7 +3089,7 @@ install_RPM() {
     INFO "Forced Boost building, as requested..."
     compile_Boost
   else
-    check_package_version_ge_RPM boost-devel $BOOST_VERSION
+    check_package_version_ge_RPM boost-devel $BOOST_VERSION_MIN
     if [ $? -eq 0 ]; then
       install_packages_RPM boost-devel
       clean_Boost

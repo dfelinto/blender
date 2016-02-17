@@ -1757,7 +1757,19 @@ static void rna_def_userdef_theme_space_view3d(BlenderRNA *brna)
 	RNA_def_property_array(prop, 4);
 	RNA_def_property_ui_text(prop, "Clipping Border", "");
 	RNA_def_property_update(prop, 0, "rna_userdef_update");
-	
+
+	prop = RNA_def_property(srna, "text_keyframe", PROP_FLOAT, PROP_COLOR_GAMMA);
+	RNA_def_property_float_sdna(prop, NULL, "time_keyframe");
+	RNA_def_property_array(prop, 3);
+	RNA_def_property_ui_text(prop, "Keyframe", "Color for indicating Object keyframes");
+	RNA_def_property_update(prop, 0, "rna_userdef_update");
+
+	prop = RNA_def_property(srna, "text_grease_pencil", PROP_FLOAT, PROP_COLOR_GAMMA);
+	RNA_def_property_float_sdna(prop, NULL, "time_gp_keyframe");
+	RNA_def_property_array(prop, 3);
+	RNA_def_property_ui_text(prop, "Grease Pencil", "Color for indicating Grease Pencil keyframes");
+	RNA_def_property_update(prop, 0, "rna_userdef_update");
+
 	rna_def_userdef_theme_spaces_paint_curves(srna);
 }
 
@@ -3762,7 +3774,7 @@ static void rna_def_userdef_edit(BlenderRNA *brna)
 
 	prop = RNA_def_property(srna, "grease_pencil_eraser_radius", PROP_INT, PROP_PIXEL);
 	RNA_def_property_int_sdna(prop, NULL, "gp_eraser");
-	RNA_def_property_range(prop, 0, 100);
+	RNA_def_property_range(prop, 1, 500);
 	RNA_def_property_ui_text(prop, "Grease Pencil Eraser Radius", "Radius of eraser 'brush'");
 	
 	

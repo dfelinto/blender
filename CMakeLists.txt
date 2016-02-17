@@ -155,7 +155,6 @@ option_defaults_init(
 	_init_CODEC_FFMPEG
 	_init_CYCLES_OSL
 	_init_IMAGE_OPENEXR
-	_init_IMAGE_REDCODE
 	_init_INPUT_NDOF
 	_init_JACK
 	_init_OPENCOLLADA
@@ -173,7 +172,6 @@ if (UNIX AND NOT APPLE)
 	set(_init_CODEC_FFMPEG                   OFF)
 	set(_init_CYCLES_OSL                     OFF)
 	set(_init_IMAGE_OPENEXR                  OFF)
-	set(_init_IMAGE_REDCODE                  OFF)
 	set(_init_INPUT_NDOF                     OFF)
 	set(_init_JACK                           OFF)
 	set(_init_OPENCOLLADA                    OFF)
@@ -309,7 +307,6 @@ option(WITH_IMAGE_TIFF          "Enable LibTIFF Support" ON)
 option(WITH_IMAGE_DDS           "Enable DDS Image Support" ON)
 option(WITH_IMAGE_CINEON        "Enable CINEON and DPX Image Support" ON)
 option(WITH_IMAGE_HDR           "Enable HDR Image Support" ON)
-option(WITH_IMAGE_REDCODE       "Enable RedCode Image Support" ${_init_IMAGE_REDCODE})
 option(WITH_IMAGE_FRAMESERVER   "Enable image FrameServer Support for rendering" ON)
 
 # Audio/Video format support
@@ -630,10 +627,6 @@ endif()
 
 if(NOT WITH_SDL AND WITH_GHOST_SDL)
 	message(FATAL_ERROR "WITH_GHOST_SDL requires WITH_SDL")
-endif()
-
-if(WITH_IMAGE_REDCODE AND ((NOT WITH_IMAGE_OPENJPEG) OR (NOT WITH_CODEC_FFMPEG)))
-	message(FATAL_ERROR "WITH_IMAGE_REDCODE requires WITH_IMAGE_OPENJPEG and WITH_CODEC_FFMPEG")
 endif()
 
 # python module, needs some different options
@@ -1430,7 +1423,7 @@ elseif(WIN32)
 				message(WARNING "Using HARDCODED OpenEXR locations")
 				set(OPENEXR ${LIBDIR}/openexr)
 				set(OPENEXR_INCLUDE_DIR ${OPENEXR}/include)
-				set(OPENEXR_INCLUDE_DIRS ${OPENEXR}/include/OpenEXR)
+				set(OPENEXR_INCLUDE_DIRS ${OPENEXR_INCLUDE_DIR} ${OPENEXR}/include/OpenEXR)
 				set(OPENEXR_LIBPATH ${OPENEXR}/lib)
 				set(OPENEXR_LIBRARIES
 					${OPENEXR_LIBPATH}/Iex-2_2.lib
@@ -1482,6 +1475,9 @@ elseif(WIN32)
 			endif()
 			if(WITH_INTERNATIONAL)
 				list(APPEND boost_extra_libs locale)
+			endif()
+			if(WITH_OPENVDB)
+				list(APPEND boost_extra_libs iostreams)
 			endif()
 			set(Boost_USE_STATIC_RUNTIME ON) # prefix lib
 			set(Boost_USE_MULTITHREADED ON) # suffix -mt
@@ -1573,11 +1569,12 @@ elseif(WIN32)
 		endif()
 
 		if(WITH_OPENVDB)
+			set(TBB_LIBRARIES ${LIBDIR}/tbb/lib/tbb.lib)
+			set(TBB_INCLUDE_DIR ${LIBDIR}/tbb/include)
 			set(OPENVDB ${LIBDIR}/openvdb)
-			set(OPENVDB_INCLUDE_DIRS ${OPENVDB}/include)
+			set(OPENVDB_INCLUDE_DIRS ${OPENVDB}/include ${TBB_INCLUDE_DIR})
 			set(OPENVDB_LIBRARIES openvdb ${TBB_LIBRARIES})
 			set(OPENVDB_LIBPATH ${LIBDIR}/openvdb/lib)
-			set(OPENVDB_DEFINITIONS)
 		endif()
 
 		if(WITH_MOD_CLOTH_ELTOPO)
@@ -2016,7 +2013,7 @@ elseif(APPLE)
 	if(WITH_IMAGE_OPENEXR)
 		set(OPENEXR ${LIBDIR}/openexr)
 		set(OPENEXR_INCLUDE_DIR ${OPENEXR}/include)
-		set(OPENEXR_INCLUDE_DIRS ${OPENEXR}/include/OpenEXR)
+		set(OPENEXR_INCLUDE_DIRS ${OPENEXR_INCLUDE_DIR} ${OPENEXR}/include/OpenEXR)
 		set(OPENEXR_LIBRARIES Iex Half IlmImf Imath IlmThread)
 		set(OPENEXR_LIBPATH ${OPENEXR}/lib)
 	endif()
@@ -2140,6 +2137,9 @@ elseif(APPLE)
 		if(WITH_CYCLES_NETWORK)
 			list(APPEND BOOST_LIBRARIES boost_serialization-mt)
 		endif()
+		if(WITH_OPENVDB)
+			list(APPEND BOOST_LIBRARIES boost_iostreams-mt)
+		endif()
 		set(BOOST_LIBPATH ${BOOST}/lib)
 		set(BOOST_DEFINITIONS)
 	endif()
@@ -2167,6 +2167,8 @@ elseif(APPLE)
 	if(WITH_OPENVDB)
 		set(OPENVDB ${LIBDIR}/openvdb)
 		set(OPENVDB_INCLUDE_DIRS ${OPENVDB}/include)
+		set(TBB_INCLUDE_DIRS ${LIBDIR}/tbb/include)
+		set(TBB_LIBRARIES ${LIBDIR}/tbb/lib/libtbb.a)
 		set(OPENVDB_LIBRARIES openvdb ${TBB_LIBRARIES})
 		set(OPENVDB_LIBPATH ${LIBDIR}/openvdb/lib)
 		set(OPENVDB_DEFINITIONS)
@@ -2362,11 +2364,6 @@ if(WITH_IMAGE_OPENJPEG)
 	if(WIN32)
 		set(OPENJPEG_DEFINES "-DOPJ_STATIC")
 	endif()
-endif()
-
-if(WITH_IMAGE_REDCODE)
-	set(REDCODE ${CMAKE_SOURCE_DIR}/extern)
-	set(REDCODE_INC ${REDCODE})
 endif()
 
 if(NOT WITH_SYSTEM_EIGEN3)
@@ -2854,7 +2851,7 @@ if(WITH_PYTHON)
 							"Python.h for python version \"${PYTHON_VERSION}\"")
 	endif()
 
-	if(WIN32)
+	if(WIN32 OR APPLE)
 		# pass, we have this in an archive to extract
 	elseif(WITH_PYTHON_INSTALL AND WITH_PYTHON_INSTALL_NUMPY)
 		find_python_package(numpy)
@@ -3037,7 +3034,6 @@ if(FIRST_RUN)
 	info_cfg_option(WITH_IMAGE_HDR)
 	info_cfg_option(WITH_IMAGE_OPENEXR)
 	info_cfg_option(WITH_IMAGE_OPENJPEG)
-	info_cfg_option(WITH_IMAGE_REDCODE)
 	info_cfg_option(WITH_IMAGE_TIFF)
 
 	info_cfg_text("Audio:")

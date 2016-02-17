@@ -19,11 +19,11 @@
 bl_info = {
     "name": "Cycles Render Engine",
     "author": "",
-    "blender": (2, 70, 0),
+    "blender": (2, 76, 0),
     "location": "Info header, render engine menu",
     "description": "Cycles Render Engine integration",
     "warning": "",
-    "wiki_url": "http://wiki.blender.org/index.php/Doc:2.6/Manual/Render/Cycles",
+    "wiki_url": "https://www.blender.org/manual/render/cycles/index.html",
     "tracker_url": "",
     "support": 'OFFICIAL',
     "category": "Render"}
@@ -89,10 +89,19 @@ class CyclesRender(bpy.types.RenderEngine):
             self.report({'ERROR'}, "OSL support disabled in this build.")
 
 
+def engine_exit():
+    engine.exit()
+
+
 def register():
     from . import ui
     from . import properties
     from . import presets
+    import atexit
+
+    # Make sure we only registered the callback once.
+    atexit.unregister(engine_exit)
+    atexit.register(engine_exit)
 
     engine.init()
 
@@ -108,6 +117,7 @@ def unregister():
     from . import ui
     from . import properties
     from . import presets
+    import atexit
 
     bpy.app.handlers.version_update.remove(version_update.do_versions)
 

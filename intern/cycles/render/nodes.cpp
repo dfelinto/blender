@@ -21,8 +21,8 @@
 #include "svm.h"
 #include "svm_math_util.h"
 #include "osl.h"
-#include "sky_model.h"
 
+#include "util_sky_model.h"
 #include "util_foreach.h"
 #include "util_transform.h"
 
@@ -2243,6 +2243,7 @@ static ShaderEnum subsurface_falloff_init()
 
 	enm.insert("Cubic", CLOSURE_BSSRDF_CUBIC_ID);
 	enm.insert("Gaussian", CLOSURE_BSSRDF_GAUSSIAN_ID);
+	enm.insert("Burley", CLOSURE_BSSRDF_BURLEY_ID);
 
 	return enm;
 }
@@ -4251,10 +4252,10 @@ bool VectorMathNode::constant_fold(ShaderOutput *socket, float3 *optimized_value
 
 	if(vector1_in->link == NULL && vector2_in->link == NULL) {
 		svm_vector_math(&value,
-						&vector,
-						(NodeVectorMath)type_enum[type],
-						vector1_in->value,
-						vector2_in->value);
+		                &vector,
+		                (NodeVectorMath)type_enum[type],
+		                vector1_in->value,
+		                vector2_in->value);
 
 		if(socket == output("Value")) {
 			optimized_value->x = value;
@@ -4598,28 +4599,6 @@ void OSLScriptNode::compile(SVMCompiler& /*compiler*/)
 
 void OSLScriptNode::compile(OSLCompiler& compiler)
 {
-#if defined(WITH_OSL) && (OSL_LIBRARY_VERSION_CODE < 10701)
-	/* XXX fix for #36790:
-	 * point and normal parameters are reflected as generic SOCK_VECTOR sockets
-	 * on the node. Socket fixed input values need to be copied explicitly here for
-	 * vector sockets, otherwise OSL will reject the value due to mismatching type.
-	 */
-	foreach(ShaderInput *input, this->inputs) {
-		if(!input->link) {
-			/* no need for compatible_name here, OSL parameter names are always unique */
-			string param_name(input->name);
-			switch(input->type) {
-				case SHADER_SOCKET_VECTOR:
-					compiler.parameter_point(param_name.c_str(), input->value);
-					compiler.parameter_normal(param_name.c_str(), input->value);
-					break;
-				default:
-					break;
-			}
-		}
-	}
-#endif
-
 	if(!filepath.empty())
 		compiler.add(this, filepath.c_str(), true);
 	else

@@ -182,6 +182,9 @@ enum {
 
 #define PIE_CLICK_THRESHOLD_SQ 50.0f
 
+/* max amount of items a radial menu (pie menu) can contain */
+#define PIE_MAX_ITEMS 8
+
 typedef struct uiLinkLine {  /* only for draw/edit */
 	struct uiLinkLine *next, *prev;
 	struct uiBut *from, *to;
@@ -225,6 +228,7 @@ struct uiBut {
 	 * (type == UI_BTYPE_SCROLL)      Use as scroll size.
 	 * (type == UI_BTYPE_SEARCH_MENU) Use as number or rows.
 	 * (type == UI_BTYPE_COLOR)       Use as indication of color palette
+	 * (type == UI_BTYPE_PROGRESS_BAR) Use to store progress (0..1).
 	 */
 	float a1;
 
@@ -331,6 +335,10 @@ typedef struct ColorPickerData {
 } ColorPickerData;
 
 struct PieMenuData {
+	/* store title and icon to allow access when pie levels are created */
+	const char *title;
+	int icon;
+
 	float pie_dir[2];
 	float pie_center_init[2];
 	float pie_center_spawned[2];
@@ -601,6 +609,10 @@ uiPopupBlockHandle *ui_popup_block_create(
 uiPopupBlockHandle *ui_popup_menu_create(
         struct bContext *C, struct ARegion *butregion, uiBut *but,
         uiMenuCreateFunc create_func, void *arg);
+
+void ui_pie_menu_level_create(
+        uiBlock *block, struct wmOperatorType *ot, const char *propname, IDProperty *properties,
+        const EnumPropertyItem *items, int totitem, int context, int flag);
 
 void ui_popup_block_free(struct bContext *C, uiPopupBlockHandle *handle);
 

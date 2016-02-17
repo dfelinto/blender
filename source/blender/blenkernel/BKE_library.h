@@ -85,6 +85,7 @@ void id_sort_by_name(struct ListBase *lb, struct ID *id);
 
 bool new_id(struct ListBase *lb, struct ID *id, const char *name);
 void id_clear_lib_data(struct Main *bmain, struct ID *id);
+void id_clear_lib_data_ex(struct Main *bmain, struct ID *id, bool id_in_mainlist);
 
 struct ListBase *which_libbase(struct Main *mainlib, short type);
 
@@ -102,9 +103,9 @@ struct BlendThumbnail *BKE_main_thumbnail_from_imbuf(struct Main *bmain, struct 
 struct ImBuf *BKE_main_thumbnail_to_imbuf(struct Main *bmain, struct BlendThumbnail *data);
 void BKE_main_thumbnail_create(struct Main *bmain);
 
-void BKE_main_id_tag_idcode(struct Main *mainvar, const short type, const bool tag);
-void BKE_main_id_tag_listbase(struct ListBase *lb, const bool tag);
-void BKE_main_id_tag_all(struct Main *mainvar, const bool tag);
+void BKE_main_id_tag_idcode(struct Main *mainvar, const short type, const int tag, const bool value);
+void BKE_main_id_tag_listbase(struct ListBase *lb, const int tag, const bool value);
+void BKE_main_id_tag_all(struct Main *mainvar, const int tag, const bool value);
 
 void BKE_main_id_flag_listbase(ListBase *lb, const int flag, const bool value);
 void BKE_main_id_flag_all(struct Main *bmain, const int flag, const bool value);

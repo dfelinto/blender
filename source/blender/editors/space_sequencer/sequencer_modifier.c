@@ -71,7 +71,7 @@ static int strip_modifier_add_exec(bContext *C, wmOperator *op)
 	Sequence *seq = BKE_sequencer_active_get(scene);
 	int type = RNA_enum_get(op->ptr, "type");
 
-	BKE_sequence_modifier_new(seq, NULL, type, scene);
+	BKE_sequence_modifier_new(seq, NULL, type);
 
 	BKE_sequence_invalidate_cache(scene, seq);
 	WM_event_add_notifier(C, NC_SCENE | ND_SEQUENCER, scene);
@@ -260,7 +260,7 @@ void SEQUENCER_OT_strip_modifier_copy(wmOperatorType *ot)
 {
 	static EnumPropertyItem type_items[] = {
 		{SEQ_MODIFIER_COPY_REPLACE, "REPLACE", 0, "Replace",
-		 "Replace modifiers in desctination"},
+		 "Replace modifiers in destination"},
 		{SEQ_MODIFIER_COPY_APPEND,  "APPEND",  0, "Append",
 		 "Append active modifiers to selected strips"},
 		{0, NULL, 0, NULL, NULL}};

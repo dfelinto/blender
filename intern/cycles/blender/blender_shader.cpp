@@ -51,6 +51,50 @@ void BlenderSync::find_shader(BL::ID& id,
 	}
 }
 
+/* RNA translation utilities */
+
+static VolumeSampling get_volume_sampling(PointerRNA& ptr)
+{
+	return (VolumeSampling)get_enum(ptr,
+	                                "volume_sampling",
+	                                VOLUME_NUM_SAMPLING,
+	                                VOLUME_SAMPLING_DISTANCE);
+}
+
+static VolumeInterpolation get_volume_interpolation(PointerRNA& ptr)
+{
+	return (VolumeInterpolation)get_enum(ptr,
+	                                     "volume_interpolation",
+	                                     VOLUME_NUM_INTERPOLATION,
+	                                     VOLUME_INTERPOLATION_LINEAR);
+}
+
+static int validate_enum_value(int value, int num_values, int default_value)
+{
+	if(value >= num_values) {
+		return default_value;
+	}
+	return value;
+}
+
+template<typename NodeType>
+static InterpolationType get_image_interpolation(NodeType& b_node)
+{
+	int value = b_node.interpolation();
+	return (InterpolationType)validate_enum_value(value,
+	                                              INTERPOLATION_NUM_TYPES,
+	                                              INTERPOLATION_LINEAR);
+}
+
+template<typename NodeType>
+static ExtensionType get_image_extension(NodeType& b_node)
+{
+	int value = b_node.extension();
+	return (ExtensionType)validate_enum_value(value,
+	                                          EXTENSION_NUM_TYPES,
+	                                          EXTENSION_REPEAT);
+}
+
 /* Graph */
 
 static BL::NodeSocket get_node_output(BL::Node& b_node, const string& name)
@@ -114,9 +158,6 @@ static ShaderSocketType convert_osl_socket_type(OSL::OSLQuery& query,
                                                 BL::NodeSocket& b_socket)
 {
 	ShaderSocketType socket_type = convert_socket_type(b_socket);
-#if OSL_LIBRARY_VERSION_CODE < 10701
-	(void) query;
-#else
 	if(socket_type == SHADER_SOCKET_VECTOR) {
 		/* TODO(sergey): Do we need compatible_name() here? */
 		const OSL::OSLQuery::Parameter *param = query.getparam(b_socket.name());
@@ -130,7 +171,7 @@ static ShaderSocketType convert_osl_socket_type(OSL::OSLQuery& query,
 			}
 		}
 	}
-#endif
+
 	return socket_type;
 }
 #endif  /* WITH_OSL */
@@ -142,32 +183,32 @@ static void set_default_value(ShaderInput *input,
 {
 	/* copy values for non linked inputs */
 	switch(input->type) {
-	case SHADER_SOCKET_FLOAT: {
-		input->set(get_float(b_sock.ptr, "default_value"));
-		break;
-	}
-	case SHADER_SOCKET_INT: {
-		input->set((float)get_int(b_sock.ptr, "default_value"));
-		break;
-	}
-	case SHADER_SOCKET_COLOR: {
-		input->set(float4_to_float3(get_float4(b_sock.ptr, "default_value")));
-		break;
-	}
-	case SHADER_SOCKET_NORMAL:
-	case SHADER_SOCKET_POINT:
-	case SHADER_SOCKET_VECTOR: {
-		input->set(get_float3(b_sock.ptr, "default_value"));
-		break;
-	}
-	case SHADER_SOCKET_STRING: {
-		input->set((ustring)blender_absolute_path(b_data, b_id, get_string(b_sock.ptr, "default_value")));
-		break;
-	}
-	
-	case SHADER_SOCKET_CLOSURE:
-	case SHADER_SOCKET_UNDEFINED:
-		break;
+		case SHADER_SOCKET_FLOAT: {
+			input->set(get_float(b_sock.ptr, "default_value"));
+			break;
+		}
+		case SHADER_SOCKET_INT: {
+			input->set((float)get_int(b_sock.ptr, "default_value"));
+			break;
+		}
+		case SHADER_SOCKET_COLOR: {
+			input->set(float4_to_float3(get_float4(b_sock.ptr, "default_value")));
+			break;
+		}
+		case SHADER_SOCKET_NORMAL:
+		case SHADER_SOCKET_POINT:
+		case SHADER_SOCKET_VECTOR: {
+			input->set(get_float3(b_sock.ptr, "default_value"));
+			break;
+		}
+		case SHADER_SOCKET_STRING: {
+			input->set((ustring)blender_absolute_path(b_data, b_id, get_string(b_sock.ptr, "default_value")));
+			break;
+		}
+
+		case SHADER_SOCKET_CLOSURE:
+		case SHADER_SOCKET_UNDEFINED:
+			break;
 	}
 }
 
@@ -399,12 +440,15 @@ static ShaderNode *add_node(Scene *scene,
 		SubsurfaceScatteringNode *subsurface = new SubsurfaceScatteringNode();
 
 		switch(b_subsurface_node.falloff()) {
-		case BL::ShaderNodeSubsurfaceScattering::falloff_CUBIC:
-			subsurface->closure = CLOSURE_BSSRDF_CUBIC_ID;
-			break;
-		case BL::ShaderNodeSubsurfaceScattering::falloff_GAUSSIAN:
-			subsurface->closure = CLOSURE_BSSRDF_GAUSSIAN_ID;
-			break;
+			case BL::ShaderNodeSubsurfaceScattering::falloff_CUBIC:
+				subsurface->closure = CLOSURE_BSSRDF_CUBIC_ID;
+				break;
+			case BL::ShaderNodeSubsurfaceScattering::falloff_GAUSSIAN:
+				subsurface->closure = CLOSURE_BSSRDF_GAUSSIAN_ID;
+				break;
+			case BL::ShaderNodeSubsurfaceScattering::falloff_BURLEY:
+				subsurface->closure = CLOSURE_BSSRDF_BURLEY_ID;
+				break;
 		}
 
 		node = subsurface;
@@ -414,18 +458,18 @@ static ShaderNode *add_node(Scene *scene,
 		GlossyBsdfNode *glossy = new GlossyBsdfNode();
 		
 		switch(b_glossy_node.distribution()) {
-		case BL::ShaderNodeBsdfGlossy::distribution_SHARP:
-			glossy->distribution = ustring("Sharp");
-			break;
-		case BL::ShaderNodeBsdfGlossy::distribution_BECKMANN:
-			glossy->distribution = ustring("Beckmann");
-			break;
-		case BL::ShaderNodeBsdfGlossy::distribution_GGX:
-			glossy->distribution = ustring("GGX");
-			break;
-		case BL::ShaderNodeBsdfGlossy::distribution_ASHIKHMIN_SHIRLEY:
-			glossy->distribution = ustring("Ashikhmin-Shirley");
-			break;
+			case BL::ShaderNodeBsdfGlossy::distribution_SHARP:
+				glossy->distribution = ustring("Sharp");
+				break;
+			case BL::ShaderNodeBsdfGlossy::distribution_BECKMANN:
+				glossy->distribution = ustring("Beckmann");
+				break;
+			case BL::ShaderNodeBsdfGlossy::distribution_GGX:
+				glossy->distribution = ustring("GGX");
+				break;
+			case BL::ShaderNodeBsdfGlossy::distribution_ASHIKHMIN_SHIRLEY:
+				glossy->distribution = ustring("Ashikhmin-Shirley");
+				break;
 		}
 		node = glossy;
 	}
@@ -433,15 +477,15 @@ static ShaderNode *add_node(Scene *scene,
 		BL::ShaderNodeBsdfGlass b_glass_node(b_node);
 		GlassBsdfNode *glass = new GlassBsdfNode();
 		switch(b_glass_node.distribution()) {
-		case BL::ShaderNodeBsdfGlass::distribution_SHARP:
-			glass->distribution = ustring("Sharp");
-			break;
-		case BL::ShaderNodeBsdfGlass::distribution_BECKMANN:
-			glass->distribution = ustring("Beckmann");
-			break;
-		case BL::ShaderNodeBsdfGlass::distribution_GGX:
-			glass->distribution = ustring("GGX");
-			break;
+			case BL::ShaderNodeBsdfGlass::distribution_SHARP:
+				glass->distribution = ustring("Sharp");
+				break;
+			case BL::ShaderNodeBsdfGlass::distribution_BECKMANN:
+				glass->distribution = ustring("Beckmann");
+				break;
+			case BL::ShaderNodeBsdfGlass::distribution_GGX:
+				glass->distribution = ustring("GGX");
+				break;
 		}
 		node = glass;
 	}
@@ -558,15 +602,14 @@ static ShaderNode *add_node(Scene *scene,
 			 * input/output type info needed for proper node construction.
 			 */
 			OSL::OSLQuery query;
-#if OSL_LIBRARY_VERSION_CODE >= 10701
+
 			if(!bytecode_hash.empty()) {
 				query.open_bytecode(b_script_node.bytecode());
 			}
 			else {
-				!OSLShaderManager::osl_query(query, b_script_node.filepath());
+				OSLShaderManager::osl_query(query, b_script_node.filepath());
 			}
 			/* TODO(sergey): Add proper query info error parsing. */
-#endif
 
 			/* Generate inputs/outputs from node sockets
 			 *
@@ -654,14 +697,14 @@ static ShaderNode *add_node(Scene *scene,
 				scene->image_manager->tag_reload_image(
 				        image->filename,
 				        image->builtin_data,
-				        (InterpolationType)b_image_node.interpolation(),
-				        (ExtensionType)b_image_node.extension());
+				        get_image_interpolation(b_image_node),
+				        get_image_extension(b_image_node));
 			}
 		}
 		image->color_space = ImageTextureNode::color_space_enum[(int)b_image_node.color_space()];
 		image->projection = ImageTextureNode::projection_enum[(int)b_image_node.projection()];
-		image->interpolation = (InterpolationType)b_image_node.interpolation();
-		image->extension = (ExtensionType)b_image_node.extension();
+		image->interpolation = get_image_interpolation(b_image_node);
+		image->extension = get_image_extension(b_image_node);
 		image->projection_blend = b_image_node.projection_blend();
 		BL::TexMapping b_texture_mapping(b_image_node.texture_mapping());
 		get_tex_mapping(&image->tex_mapping, b_texture_mapping);
@@ -697,14 +740,15 @@ static ShaderNode *add_node(Scene *scene,
 
 			/* TODO(sergey): Does not work properly when we change builtin type. */
 			if(b_image.is_updated()) {
-				scene->image_manager->tag_reload_image(env->filename,
-				                                       env->builtin_data,
-				                                       (InterpolationType)b_env_node.interpolation(),
-				                                       EXTENSION_REPEAT);
+				scene->image_manager->tag_reload_image(
+				        env->filename,
+				        env->builtin_data,
+				        get_image_interpolation(b_env_node),
+				        EXTENSION_REPEAT);
 			}
 		}
 		env->color_space = EnvironmentTextureNode::color_space_enum[(int)b_env_node.color_space()];
-		env->interpolation = (InterpolationType)b_env_node.interpolation();
+		env->interpolation = get_image_interpolation(b_env_node);
 		env->projection = EnvironmentTextureNode::projection_enum[(int)b_env_node.projection()];
 		BL::TexMapping b_texture_mapping(b_env_node.texture_mapping());
 		get_tex_mapping(&env->tex_mapping, b_texture_mapping);
@@ -825,8 +869,7 @@ static ShaderNode *add_node(Scene *scene,
 		point_density->filename = b_point_density_node.name();
 		point_density->space =
 		        PointDensityTextureNode::space_enum[(int)b_point_density_node.space()];
-		point_density->interpolation =
-		        (InterpolationType)b_point_density_node.interpolation();
+		point_density->interpolation = get_image_interpolation(b_point_density_node);
 		point_density->builtin_data = b_point_density_node.ptr.data;
 
 		/* 1 - render settings, 0 - vewport settings. */
@@ -1201,8 +1244,8 @@ void BlenderSync::sync_materials(bool update_all)
 			shader->use_mis = get_boolean(cmat, "sample_as_light");
 			shader->use_transparent_shadow = get_boolean(cmat, "use_transparent_shadow");
 			shader->heterogeneous_volume = !get_boolean(cmat, "homogeneous_volume");
-			shader->volume_sampling_method = (VolumeSampling)RNA_enum_get(&cmat, "volume_sampling");
-			shader->volume_interpolation_method = (VolumeInterpolation)RNA_enum_get(&cmat, "volume_interpolation");
+			shader->volume_sampling_method = get_volume_sampling(cmat);
+			shader->volume_interpolation_method = get_volume_interpolation(cmat);
 
 			shader->set_graph(graph);
 			shader->tag_update(scene);
@@ -1232,8 +1275,8 @@ void BlenderSync::sync_world(bool update_all)
 			/* volume */
 			PointerRNA cworld = RNA_pointer_get(&b_world.ptr, "cycles");
 			shader->heterogeneous_volume = !get_boolean(cworld, "homogeneous_volume");
-			shader->volume_sampling_method = (VolumeSampling)RNA_enum_get(&cworld, "volume_sampling");
-			shader->volume_interpolation_method = (VolumeInterpolation)RNA_enum_get(&cworld, "volume_interpolation");
+			shader->volume_sampling_method = get_volume_sampling(cworld);
+			shader->volume_interpolation_method = get_volume_interpolation(cworld);
 		}
 		else if(b_world) {
 			ShaderNode *closure, *out;

@@ -243,7 +243,7 @@ void DepsgraphRelationBuilder::build_scene(Main *bmain, Scene *scene)
 	/* LIB_TAG_DOIT is used to indicate whether node for given ID was already
 	 * created or not.
 	 */
-	BKE_main_id_tag_all(bmain, false);
+	BKE_main_id_tag_all(bmain, LIB_TAG_DOIT, false);
 
 	if (scene->set) {
 		// TODO: link set to scene, especially our timesource...
@@ -1122,7 +1122,27 @@ void DepsgraphRelationBuilder::build_particles(Scene *scene, Object *ob)
 				}
 			}
 		}
+
+		if (part->ren_as == PART_DRAW_OB && part->dup_ob) {
+			ComponentKey dup_ob_key(&part->dup_ob->id, DEPSNODE_TYPE_TRANSFORM);
+			add_relation(dup_ob_key,
+			             psys_key,
+			             DEPSREL_TYPE_TRANSFORM,
+			             "Particle Object Visualization");
+		}
 	}
+
+	/* Particle depends on the object transform, so that channel is to be ready
+	 * first.
+	 *
+	 * TODO(sergey): This relation should be altered once real granular update
+	 * is implemented.
+	 */
+	ComponentKey transform_key(&ob->id, DEPSNODE_TYPE_TRANSFORM);
+	add_relation(transform_key,
+	             obdata_ubereval_key,
+	             DEPSREL_TYPE_GEOMETRY_EVAL,
+	             "Partcile Eval");
 
 	/* pointcache */
 	// TODO...

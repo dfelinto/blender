@@ -126,6 +126,10 @@ class VIEW3D_HT_header(Header):
 
             layout.prop(context.gpencil_data, "use_onion_skinning", text="Onion Skins", icon='PARTICLE_PATH') # XXX: icon
 
+            layout.prop(context.tool_settings.gpencil_sculpt, "use_select_mask")
+
+
+
 
 class VIEW3D_MT_editor_menus(Menu):
     bl_space_type = 'VIEW3D_MT_editor_menus'
@@ -471,8 +475,8 @@ class VIEW3D_MT_view_navigation(Menu):
 
         layout.separator()
 
-        layout.operator("view3d.view_roll", text="Roll Left").angle = pi / -12.0
-        layout.operator("view3d.view_roll", text="Roll Right").angle = pi / 12.0
+        layout.operator("view3d.view_roll", text="Roll Left").type = 'LEFT'
+        layout.operator("view3d.view_roll", text="Roll Right").type = 'RIGHT'
 
         layout.separator()
 
@@ -971,7 +975,7 @@ class VIEW3D_MT_select_edit_armature(Menu):
 
 class VIEW3D_MT_select_gpencil(Menu):
     bl_label = "Select"
-    
+
     def draw(self, context):
         layout = self.layout
 
@@ -2936,7 +2940,7 @@ class VIEW3D_MT_edit_armature_delete(Menu):
 
 class VIEW3D_MT_edit_gpencil(Menu):
     bl_label = "GPencil"
-    
+
     def draw(self, context):
         toolsettings = context.tool_settings
 

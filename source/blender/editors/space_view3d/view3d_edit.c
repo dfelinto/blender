@@ -4171,9 +4171,9 @@ static int viewroll_modal(bContext *C, wmOperator *op, const wmEvent *event)
 }
 
 static EnumPropertyItem prop_view_roll_items[] = {
-	{0, "ROLLANGLE", 0, "Roll Angle", "Roll the view using an angle value"},
-	{V3D_VIEW_STEPLEFT, "ROLLLEFT", 0, "Roll Left", "Roll the view around to the Left"},
-	{V3D_VIEW_STEPRIGHT, "ROLLTRIGHT", 0, "Roll Right", "Roll the view around to the Right"},
+	{0, "ANGLE", 0, "Roll Angle", "Roll the view using an angle value"},
+	{V3D_VIEW_STEPLEFT, "LEFT", 0, "Roll Left", "Roll the view around to the Left"},
+	{V3D_VIEW_STEPRIGHT, "RIGHT", 0, "Roll Right", "Roll the view around to the Right"},
 	{0, NULL, 0, NULL, NULL}
 };
 
@@ -4485,8 +4485,9 @@ void VIEW3D_OT_background_image_add(wmOperatorType *ot)
 	
 	/* properties */
 	RNA_def_string(ot->srna, "name", "Image", MAX_ID_NAME - 2, "Name", "Image name to assign");
-	WM_operator_properties_filesel(ot, FILE_TYPE_FOLDER | FILE_TYPE_IMAGE | FILE_TYPE_MOVIE, FILE_SPECIAL, FILE_OPENFILE,
-	                               WM_FILESEL_FILEPATH | WM_FILESEL_RELPATH, FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);
+	WM_operator_properties_filesel(
+	        ot, FILE_TYPE_FOLDER | FILE_TYPE_IMAGE | FILE_TYPE_MOVIE, FILE_SPECIAL, FILE_OPENFILE,
+	        WM_FILESEL_FILEPATH | WM_FILESEL_RELPATH, FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);
 }
 
 
