@@ -3624,7 +3624,8 @@ bool ED_view3d_calc_render_border(Scene *scene, View3D *v3d, ARegion *ar, rcti *
 
 static bool view3d_main_region_draw_engine(const bContext *C, Scene *scene,
                                          ARegion *ar, View3D *v3d,
-                                         bool clip_border, const rcti *border_rect)
+                                         bool clip_border, const rcti *border_rect,
+                                         float viewmat[4][4], float winmat[4][4])
 {
 	RegionView3D *rv3d = ar->regiondata;
 	RenderEngineType *type;
@@ -3650,7 +3651,7 @@ static bool view3d_main_region_draw_engine(const bContext *C, Scene *scene,
 	}
 
 	/* setup view matrices */
-	view3d_main_region_setup_view(scene, v3d, ar, NULL, NULL);
+	view3d_main_region_setup_view(scene, v3d, ar, viewmat, winmat);
 
 	/* background draw */
 	ED_region_pixelspace(ar);
@@ -3688,6 +3689,26 @@ static bool view3d_main_region_draw_engine(const bContext *C, Scene *scene,
 	}
 
 	return true;
+}
+
+void ED_view3d_render_preview_offscreen(Main *bmain, Scene *scene,
+                                        ScrArea *sa, ARegion *ar,
+                                        int UNUSED(winx), int UNUSED(winy),
+                                        float viewmat[4][4], float winmat[4][4])
+{
+	bContext *C;
+	View3D *v3d = sa->spacedata.first;
+
+	C = CTX_create();
+	CTX_data_main_set(C, bmain);
+	CTX_data_scene_set(C, scene);
+	CTX_wm_manager_set(C, bmain->wm.first);
+	CTX_wm_area_set(C, sa);
+	CTX_wm_region_set(C, ar);
+
+	view3d_main_region_draw_engine(C, scene, ar, v3d, false, NULL, viewmat, winmat);
+
+	CTX_free(C);
 }
 
 static void view3d_main_region_draw_engine_info(View3D *v3d, RegionView3D *rv3d, ARegion *ar, bool render_border)
@@ -4053,7 +4074,7 @@ void view3d_main_region_draw(const bContext *C, ARegion *ar)
 
 	/* draw viewport using external renderer */
 	if (v3d->drawtype == OB_RENDER)
-		view3d_main_region_draw_engine(C, scene, ar, v3d, clip_border, &border_rect);
+		view3d_main_region_draw_engine(C, scene, ar, v3d, clip_border, &border_rect, NULL, NULL);
 	
 	view3d_main_region_draw_info(C, scene, ar, v3d, grid_unit, render_border);
 

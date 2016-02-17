@@ -342,6 +342,12 @@ struct ImBuf *ED_view3d_draw_offscreen_imbuf_simple(
         int alpha_mode, int samples, bool full_samples, const char *viewname,
         struct GPUFX *fx, struct GPUOffScreen *ofs, char err_out[256]);
 
+void ED_view3d_render_preview_offscreen(
+        struct Main *bmain, struct Scene *scene,
+        struct ScrArea *sa, struct ARegion *ar,
+        const int winx, const int winy,
+        float viewmat[4][4], float winmat[4][4]);
+
 struct Base *ED_view3d_give_base_under_cursor(struct bContext *C, const int mval[2]);
 void ED_view3d_quadview_update(struct ScrArea *sa, struct ARegion *ar, bool do_clip);
 void ED_view3d_update_viewmat(struct Scene *scene, struct View3D *v3d, struct ARegion *ar, float viewmat[4][4], float winmat[4][4]);
