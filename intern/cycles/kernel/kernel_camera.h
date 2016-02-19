@@ -107,7 +107,7 @@ ccl_device void camera_sample_perspective(KernelGlobals *kg, float raster_x, flo
 
 	float3 tP = transform_point(&cameratoworld, ray->P);
 	float3 tD = transform_direction(&cameratoworld, ray->D);
-	ray->P = spherical_stereo_position(kg, tD, tP);
+	ray->P = spherical_stereo_position(kg, tD, tP, kernel_data.cam.interocular_offset);
 	ray->D = spherical_stereo_direction(kg, tD, tP, ray->P);
 	ray->D = normalize(ray->D);
 
@@ -117,18 +117,18 @@ ccl_device void camera_sample_perspective(KernelGlobals *kg, float raster_x, flo
 
 	tP = transform_perspective(&rastertocamera, make_float3(raster_x, raster_y, 0.0f));
 	tD = transform_direction(&cameratoworld, tP);
-	float3 Pdiff = spherical_stereo_position(kg, tD, tP);
+	float3 Pdiff = spherical_stereo_position(kg, tD, tP, kernel_data.cam.interocular_offset);
 	float3 Ddiff = normalize(spherical_stereo_direction(kg, tD, tP, Pdiff));
 
 	tP = transform_perspective(&rastertocamera, make_float3(raster_x + 1.0f, raster_y, 0.0f));
 	tD = transform_direction(&cameratoworld, tP);
-	Pcamera = spherical_stereo_position(kg, tD, tP);
+	Pcamera = spherical_stereo_position(kg, tD, tP, kernel_data.cam.interocular_offset);
 	ray->dD.dx = normalize(spherical_stereo_direction(kg, tD, tP, Pcamera)) - Ddiff;
 	ray->dP.dx = Pcamera - Pdiff;
 
 	tP = transform_perspective(&rastertocamera, make_float3(raster_x, raster_y + 1.0f, 0.0f));
 	tD = transform_direction(&cameratoworld, tP);
-	Pcamera = spherical_stereo_position(kg, tD, tP);
+	Pcamera = spherical_stereo_position(kg, tD, tP, kernel_data.cam.interocular_offset);
 	ray->dD.dy = normalize(spherical_stereo_direction(kg, tD, tP, Pcamera)) - Ddiff;
 	/* dP.dy is zero, since the omnidirectional panorama only shift the eyes horizontally */
 #endif
@@ -215,6 +215,17 @@ ccl_device void camera_sample_panorama(KernelGlobals *kg, float raster_x, float 
 {
 	Transform rastertocamera = kernel_data.cam.rastertocamera;
 	float3 Pcamera = transform_perspective(&rastertocamera, make_float3(raster_x, raster_y, 0.0f));
+	float interocular_offset = kernel_data.cam.interocular_offset;
+
+//	if(kernel_data.cam.stereo_eye == STEREO_BOTH) {
+	if(true) {
+		interocular_offset = fabsf(interocular_offset);
+
+		if(Pcamera.y < 0.5f) {
+			interocular_offset *= -1.0f;
+		}
+		Pcamera.y = fmodf(Pcamera.y * 2.0f, 1.0f);
+	}
 
 	/* create ray form raster position */
 	ray->P = make_float3(0.0f, 0.0f, 0.0f);
@@ -275,7 +286,7 @@ ccl_device void camera_sample_panorama(KernelGlobals *kg, float raster_x, float 
 
 	float3 tP = transform_point(&cameratoworld, ray->P);
 	float3 tD = transform_direction(&cameratoworld, ray->D);
-	ray->P = spherical_stereo_position(kg, tD, tP);
+	ray->P = spherical_stereo_position(kg, tD, tP, interocular_offset);
 	ray->D = spherical_stereo_direction(kg, tD, tP, ray->P);
 	ray->D = normalize(ray->D);
 
@@ -285,18 +296,18 @@ ccl_device void camera_sample_panorama(KernelGlobals *kg, float raster_x, float 
 
 	tP = transform_perspective(&rastertocamera, make_float3(raster_x, raster_y, 0.0f));
 	tD = transform_direction(&cameratoworld, panorama_to_direction(kg, tP.x, tP.y));
-	float3 Pdiff = spherical_stereo_position(kg, tD, tP);
+	float3 Pdiff = spherical_stereo_position(kg, tD, tP, interocular_offset);
 	float3 Ddiff = normalize(spherical_stereo_direction(kg, tD, tP, Pdiff));
 
 	tP = transform_perspective(&rastertocamera, make_float3(raster_x + 1.0f, raster_y, 0.0f));
 	tD = transform_direction(&cameratoworld, panorama_to_direction(kg, tP.x, tP.y));
-	Pcamera = spherical_stereo_position(kg, tD, tP);
+	Pcamera = spherical_stereo_position(kg, tD, tP, interocular_offset);
 	ray->dD.dx = normalize(spherical_stereo_direction(kg, tD, tP, Pcamera)) - Ddiff;
 	ray->dP.dx = Pcamera - Pdiff;
 
 	tP = transform_perspective(&rastertocamera, make_float3(raster_x, raster_y + 1.0f, 0.0f));
 	tD = transform_direction(&cameratoworld, panorama_to_direction(kg, tP.x, tP.y));
-	Pcamera = spherical_stereo_position(kg, tD, tP);
+	Pcamera = spherical_stereo_position(kg, tD, tP, interocular_offset);
 	ray->dD.dy = normalize(spherical_stereo_direction(kg, tD, tP, Pcamera)) - Ddiff;
 	/* dP.dy is zero, since the omnidirectional panorama only shift the eyes horizontally */
 #endif

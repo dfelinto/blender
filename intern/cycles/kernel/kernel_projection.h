@@ -222,7 +222,7 @@ ccl_device float2 direction_to_panorama(KernelGlobals *kg, float3 dir)
 	}
 }
 
-ccl_device float3 spherical_stereo_position(KernelGlobals *kg, float3 dir, float3 pos)
+ccl_device float3 spherical_stereo_position(KernelGlobals *kg, float3 dir, float3 pos, float interocular_offset)
 {
 	float3 up, side;
 
@@ -232,7 +232,7 @@ ccl_device float3 spherical_stereo_position(KernelGlobals *kg, float3 dir, float
 	up = make_float3(0.0f, 0.0f, 1.0f);
 	side = normalize(cross(dir, up));
 
-	return pos + (side * kernel_data.cam.interocular_offset);
+	return pos + (side * interocular_offset);
 }
 
 ccl_device float3 spherical_stereo_direction(KernelGlobals *kg, float3 dir, float3 pos, float3 newpos)
