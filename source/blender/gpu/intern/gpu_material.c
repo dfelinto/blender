@@ -2033,7 +2033,8 @@ static void shade_one_brdf_light(GPUBrdfInput *brdf, GPULamp *lamp)
 		brdf->type != GPU_BRDF_REFRACT_GGX &&
 		brdf->type != GPU_BRDF_GLASS_GGX &&
 		brdf->type != GPU_BRDF_REFRACT_SHARP &&
-		brdf->type != GPU_BRDF_GLASS_SHARP)
+		brdf->type != GPU_BRDF_GLASS_SHARP && 
+		brdf->type != GPU_BRDF_TRANSLUCENT)
 	{
 		mat->dynproperty |= DYN_LAMP_PERSMAT;
 		GPU_link(mat, "shade_inp", vn, lv, &inp);
