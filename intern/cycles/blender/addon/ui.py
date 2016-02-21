@@ -949,6 +949,43 @@ class CyclesLamp_PT_spot(CyclesButtonsPanel, Panel):
         col.prop(lamp, "show_cone")
 
 
+class CyclesLamp_PT_viewport(CyclesButtonsPanel, Panel):
+    bl_label = "Viewport Shadows"
+    bl_context = "data"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    @classmethod
+    def poll(cls, context):
+        lamp = context.lamp
+        return (lamp and lamp.type in {'SPOT','SUN','AREA'}) and CyclesButtonsPanel.poll(context)
+
+    def draw_header(self, context):
+        lamp = context.lamp
+
+        self.layout.prop(lamp, "use_shadow", text="")
+
+    def draw(self, context):
+        layout = self.layout
+
+        lamp = context.lamp
+
+        layout.active = lamp.use_shadow
+
+        col = layout.column(align=True)
+        col.prop(lamp, "ge_shadow_buffer_type", text="", toggle=True)
+        col.prop(lamp, "shadow_buffer_size", text="Size")
+        col.prop(lamp, "shadow_buffer_bias", text="Bias")
+        col.prop(lamp, "shadow_buffer_bleed_bias", text="Bleed Bias")
+
+        row = layout.row(align=True)
+        row.prop(lamp, "shadow_buffer_clip_start", text="Clip Start")
+        row.prop(lamp, "shadow_buffer_clip_end", text="Clip End")
+
+        if lamp.type == 'SUN':
+            row = layout.row()
+            row.prop(lamp, "shadow_frustum_size", text="Frustum Size")
+
+
 class CyclesWorld_PT_preview(CyclesButtonsPanel, Panel):
     bl_label = "Preview"
     bl_context = "world"

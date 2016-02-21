@@ -2036,14 +2036,21 @@ static void shade_one_brdf_light(GPUBrdfInput *brdf, GPULamp *lamp)
 		brdf->type != GPU_BRDF_GLASS_SHARP)
 	{
 		mat->dynproperty |= DYN_LAMP_PERSMAT;
+		GPU_link(mat, "shade_inp", vn, lv, &inp);
 		
 		if (lamp->la->shadowmap_type == LA_SHADMAP_VARIANCE) {
-			GPU_link(mat, "shade_inp", vn, lv, &inp);
 			GPU_link(mat, "test_shadowbuf_vsm",
 				GPU_builtin(GPU_VIEW_POSITION),
 				GPU_dynamic_texture(lamp->tex, GPU_DYNAMIC_SAMPLER_2DSHADOW, lamp->ob),
-				GPU_dynamic_uniform((float*)lamp->dynpersmat, GPU_DYNAMIC_LAMP_DYNPERSMAT, lamp->ob),
+				GPU_dynamic_uniform((float *)lamp->dynpersmat, GPU_DYNAMIC_LAMP_DYNPERSMAT, lamp->ob),
 				GPU_uniform(&lamp->bias), GPU_uniform(&lamp->la->bleedbias), inp, &shadfac);
+		}
+		else {
+			GPU_link(mat, "test_shadowbuf",
+				GPU_builtin(GPU_VIEW_POSITION),
+				GPU_dynamic_texture(lamp->tex, GPU_DYNAMIC_SAMPLER_2DSHADOW, lamp->ob),
+				GPU_dynamic_uniform((float *)lamp->dynpersmat, GPU_DYNAMIC_LAMP_DYNPERSMAT, lamp->ob),
+				GPU_uniform(&lamp->bias), inp, &shadfac);
 		}
 	}
 	else
@@ -2693,11 +2700,22 @@ void GPU_materials_free(void)
 
 static void gpu_lamp_calc_winmat(GPULamp *lamp)
 {
-	float temp, angle, pixsize, wsize;
+	float temp, angle, pixsize, wsize, hsize;
 
 	if (lamp->type == LA_SUN) {
 		wsize = lamp->la->shadow_frustum_size;
 		orthographic_m4(lamp->winmat, -wsize, wsize, -wsize, wsize, lamp->d, lamp->clipend);
+	}
+	else if (lamp->type == LA_AREA) {
+		wsize = hsize = lamp->area_size;
+
+		if (lamp->la->area_shape != LA_AREA_SQUARE)
+			hsize = lamp->area_size_y;
+
+		wsize *= lamp->areavec[0];
+		hsize *= lamp->areavec[1];
+
+		perspective_m4(lamp->winmat, -wsize, wsize, -hsize, hsize, lamp->d, lamp->d + lamp->clipend);
 	}
 	else {
 		angle = saacos(lamp->spotsi);
@@ -2821,25 +2839,9 @@ static void gpu_lamp_from_blender(Scene *scene, Object *ob, Object *par, Lamp *l
 	lamp->bias *= 0.25f;
 
 	if (use_realistic_preview) {
-		float small_vsm = 64.0f;
-		float big_vsm = 2048.0f;
-		float tmp, angle_fac;
-		float area_fac = lamp->area_size;
-
-		/* Shadow map size to fake area light*/
-		area_fac = 1.0f - exp(-area_fac);
-		angle_fac = la->spotsize / DEG2RADF(180.0f);
-		angle_fac = -log(1.0f - angle_fac);
-
-		CLAMP(area_fac, 0.0f, 1.0f);
-		tmp = (big_vsm + area_fac * (small_vsm - big_vsm))*angle_fac;
-		CLAMP(tmp, 1.0f, 2048.0f);
-		lamp->size = (int)tmp;
-
 		lamp->mode &= ~(LA_HALO | LA_NEG | LA_SPHERE | LA_SQUARE);
 		lamp->energy = 1.0f;
-		lamp->la->shadowmap_type = LA_SHADMAP_VARIANCE;
-		lamp->bias = 0.00001f; // Sharp shadow
+		lamp->use_realistic_lighting = true;
 
 		if (la->area_shape == LA_AREA_SQUARE)
 			lamp->area_size_y = la->area_size;
@@ -2892,7 +2894,7 @@ GPULamp *GPU_lamp_from_blender(Scene *scene, Object *ob, Object *par, bool use_r
 	la = ob->data;
 	gpu_lamp_from_blender(scene, ob, par, la, lamp, use_realistic_preview);
 
-	if ((use_realistic_preview && (la->type == LA_SUN || la->type == LA_SPOT)) ||
+	if (((la->mode & (LA_SHAD_BUF | LA_SHAD_RAY)) && use_realistic_preview && (la->type == LA_SUN || la->type == LA_SPOT || la->type == LA_AREA)) ||
 	    (la->type == LA_SPOT && (la->mode & (LA_SHAD_BUF | LA_SHAD_RAY))) ||
 	    (la->type == LA_SUN && (la->mode & LA_SHAD_RAY)))
 	{
@@ -2903,7 +2905,7 @@ GPULamp *GPU_lamp_from_blender(Scene *scene, Object *ob, Object *par, bool use_r
 			return lamp;
 		}
 
-		if ( use_realistic_preview || lamp->la->shadowmap_type == LA_SHADMAP_VARIANCE) {
+		if (lamp->la->shadowmap_type == LA_SHADMAP_VARIANCE) {
 
 			/* Shadow depth map */
 			lamp->depthtex = GPU_texture_create_depth(lamp->size, lamp->size, NULL);
@@ -3032,10 +3034,14 @@ bool GPU_lamp_has_shadow_buffer(GPULamp *lamp)
 
 void GPU_lamp_update_buffer_mats(GPULamp *lamp)
 {
-	float rangemat[4][4], persmat[4][4];
+	float rangemat[4][4], persmat[4][4], tempmat[4][4];
 
 	/* initshadowbuf */
-	invert_m4_m4(lamp->viewmat, lamp->obmat);
+	copy_m4_m4(tempmat, lamp->obmat);
+	if (lamp->type == LA_AREA) {
+		translate_m4(tempmat, 0.0, 0.0, lamp->d);
+	}
+	invert_m4_m4(lamp->viewmat, tempmat);
 	normalize_v3(lamp->viewmat[0]);
 	normalize_v3(lamp->viewmat[1]);
 	normalize_v3(lamp->viewmat[2]);
@@ -3076,8 +3082,10 @@ void GPU_lamp_shadow_buffer_unbind(GPULamp *lamp)
 	if (lamp->la->shadowmap_type == LA_SHADMAP_VARIANCE) {
 		GPU_shader_unbind();
 		GPU_framebuffer_blur(lamp->fb, lamp->tex, lamp->blurfb, lamp->blurtex);
-		//TODO : only do this second blur if realistic preview 
-		GPU_framebuffer_blur(lamp->fb, lamp->tex, lamp->blurfb, lamp->blurtex);
+		if (lamp->use_realistic_lighting) {
+			/* Second blur to hide artifacts */
+			GPU_framebuffer_blur(lamp->fb, lamp->tex, lamp->blurfb, lamp->blurtex);
+		}
 	}
 
 	GPU_framebuffer_texture_unbind(lamp->fb, lamp->tex);
