@@ -1338,7 +1338,7 @@ static int move_to_layer_invoke(bContext *C, wmOperator *op, const wmEvent *even
 {
 	View3D *v3d = CTX_wm_view3d(C);
 	if (v3d && v3d->localvd) {
-		return WM_operator_confirm_message(C, op, "Move from localview");
+		return WM_operator_confirm_message(C, op, "Move out of Local View");
 	}
 	else {
 		move_to_layer_init(C, op);
@@ -2135,7 +2135,7 @@ static void tag_localizable_objects(bContext *C, const int mode)
 {
 	Main *bmain = CTX_data_main(C);
 
-	BKE_main_id_tag_all(bmain, false);
+	BKE_main_id_tag_all(bmain, LIB_TAG_DOIT, false);
 
 	/* Set LIB_TAG_DOIT flag for all selected objects, so next we can check whether
 	 * object is gonna to become local or not.
