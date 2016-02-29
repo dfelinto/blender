@@ -25,6 +25,9 @@ class INFO_HT_header(Header):
     bl_space_type = 'INFO'
 
     def draw(self, context):
+        if bpy.app.debug_value == -37:
+            return
+
         layout = self.layout
 
         window = context.window
