@@ -1383,7 +1383,7 @@ void UI_block_draw(const bContext *C, uiBlock *block)
 	glPushMatrix();
 	glLoadIdentity();
 
-	wmOrtho2_region_ui(ar);
+	wmOrtho2_region_pixelspace(ar);
 	
 	/* back */
 	if (block->flag & UI_BLOCK_RADIAL)
@@ -2787,7 +2787,12 @@ void UI_block_emboss_set(uiBlock *block, char dt)
 	block->dt = dt;
 }
 
-void ui_but_update(uiBut *but)
+/**
+ * \param but: Button to update.
+ * \param validate: When set, this function may change the button value.
+ * Otherwise treat the button value as read-only.
+ */
+void ui_but_update_ex(uiBut *but, const bool validate)
 {
 	/* if something changed in the button */
 	double value = UI_BUT_VALUE_UNSET;
@@ -2809,13 +2814,19 @@ void ui_but_update(uiBut *but)
 		case UI_BTYPE_NUM:
 		case UI_BTYPE_SCROLL:
 		case UI_BTYPE_NUM_SLIDER:
-			UI_GET_BUT_VALUE_INIT(but, value);
-			if      (value < (double)but->hardmin) ui_but_value_set(but, but->hardmin);
-			else if (value > (double)but->hardmax) ui_but_value_set(but, but->hardmax);
+			if (validate) {
+				UI_GET_BUT_VALUE_INIT(but, value);
+				if      (value < (double)but->hardmin) {
+					ui_but_value_set(but, but->hardmin);
+				}
+				else if (value > (double)but->hardmax) {
+					ui_but_value_set(but, but->hardmax);
+				}
 
-			/* max must never be smaller than min! Both being equal is allowed though */
-			BLI_assert(but->softmin <= but->softmax &&
-			           but->hardmin <= but->hardmax);
+				/* max must never be smaller than min! Both being equal is allowed though */
+				BLI_assert(but->softmin <= but->softmax &&
+				           but->hardmin <= but->hardmax);
+			}
 			break;
 			
 		case UI_BTYPE_ICON_TOGGLE:
@@ -2844,14 +2855,16 @@ void ui_but_update(uiBut *but)
 				if (but->block->flag & UI_BLOCK_LOOP) {
 					if (but->rnaprop && (RNA_property_type(but->rnaprop) == PROP_ENUM)) {
 						int value_enum = RNA_property_enum_get(&but->rnapoin, but->rnaprop);
-						const char *buf;
-						if (RNA_property_enum_name_gettexted(
+
+						EnumPropertyItem item;
+						if (RNA_property_enum_item_from_value_gettexted(
 						        but->block->evil_C,
-						        &but->rnapoin, but->rnaprop, value_enum, &buf))
+						        &but->rnapoin, but->rnaprop, value_enum, &item))
 						{
-							size_t slen = strlen(buf);
+							size_t slen = strlen(item.name);
 							ui_but_string_free_internal(but);
-							ui_but_string_set_internal(but, buf, slen);
+							ui_but_string_set_internal(but, item.name, slen);
+							but->icon = item.icon;
 						}
 					}
 				}
@@ -2989,6 +3002,15 @@ void ui_but_update(uiBut *but)
 	/* text clipping moved to widget drawing code itself */
 }
 
+void ui_but_update(uiBut *but)
+{
+	ui_but_update_ex(but, false);
+}
+
+void ui_but_update_edited(uiBut *but)
+{
+	ui_but_update_ex(but, true);
+}
 
 void UI_block_align_begin(uiBlock *block)
 {
@@ -3557,11 +3579,11 @@ static int findBitIndex(unsigned int x)
 	else {
 		int idx = 0;
 
-		if (x & 0xFFFF0000) idx += 16, x >>= 16;
-		if (x & 0xFF00) idx += 8, x >>= 8;
-		if (x & 0xF0) idx += 4, x >>= 4;
-		if (x & 0xC) idx += 2, x >>= 2;
-		if (x & 0x2) idx += 1;
+		if (x & 0xFFFF0000) { idx += 16; x >>= 16; }
+		if (x & 0xFF00)     { idx +=  8; x >>=  8; }
+		if (x & 0xF0)       { idx +=  4; x >>=  4; }
+		if (x & 0xC)        { idx +=  2; x >>=  2; }
+		if (x & 0x2)        { idx +=  1; }
 
 		return idx;
 	}
@@ -4300,12 +4322,30 @@ uiBut *uiDefSearchBut(uiBlock *block, void *arg, int retval, int icon, int maxle
  * \param arg: user value,
  * \param  active: when set, button opens with this item visible and selected.
  */
-void UI_but_func_search_set(uiBut *but, uiButSearchFunc sfunc, void *arg, uiButHandleFunc bfunc, void *active)
+void UI_but_func_search_set(
+        uiBut *but,
+        uiButSearchCreateFunc search_create_func,
+        uiButSearchFunc search_func, void *arg,
+        uiButHandleFunc bfunc, void *active)
 {
-	but->search_func = sfunc;
+	/* needed since callers don't have access to internal functions (as an alternative we could expose it) */
+	if (search_create_func == NULL) {
+		search_create_func = ui_searchbox_create_generic;
+	}
+
+	but->search_create_func = search_create_func;
+	but->search_func = search_func;
 	but->search_arg = arg;
 	
-	UI_but_func_set(but, bfunc, arg, active);
+	if (bfunc) {
+#ifdef DEBUG
+		if (but->func) {
+			/* watch this, can be cause of much confusion, see: T47691 */
+			printf("%s: warning, overwriting button callback with search function callback!\n", __func__);
+		}
+#endif
+		UI_but_func_set(but, bfunc, arg, active);
+	}
 	
 	/* search buttons show red-alert if item doesn't exist, not for menus */
 	if (0 == (but->block->flag & UI_BLOCK_LOOP)) {
@@ -4380,7 +4420,9 @@ uiBut *uiDefSearchButO_ptr(
 	uiBut *but;
 
 	but = uiDefSearchBut(block, arg, retval, icon, maxlen, x, y, width, height, a1, a2, tip);
-	UI_but_func_search_set(but, operator_enum_search_cb, but, operator_enum_call_cb, NULL);
+	UI_but_func_search_set(
+	        but, ui_searchbox_create_generic, operator_enum_search_cb,
+	        but, operator_enum_call_cb, NULL);
 
 	but->optype = ot;
 	but->opcontext = WM_OP_EXEC_DEFAULT;

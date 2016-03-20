@@ -41,8 +41,8 @@ extern "C" {
 /* these lines are grep'd, watch out for our not-so-awesome regex
  * and keep comment above the defines.
  * Use STRINGIFY() rather than defining with quotes */
-#define BLENDER_VERSION         276
-#define BLENDER_SUBVERSION      11
+#define BLENDER_VERSION         277
+#define BLENDER_SUBVERSION      0
 /* Several breakages with 270, e.g. constraint deg vs rad */
 #define BLENDER_MINVERSION      270
 #define BLENDER_MINSUBVERSION   6
@@ -103,11 +103,19 @@ extern const char   *BKE_undo_get_name(int nr, bool *r_active);
 extern bool          BKE_undo_save_file(const char *filename);
 extern struct Main  *BKE_undo_get_main(struct Scene **r_scene);
 
-/* copybuffer */
-void BKE_copybuffer_begin(struct Main *bmain);
+/* partial blend file writing */
+void BKE_blendfile_write_partial_tag_ID(struct ID *id, bool set);
+void BKE_blendfile_write_partial_begin(struct Main *bmain_src);
+bool BKE_blendfile_write_partial(
+        struct Main *bmain_src, const char *filepath, const int write_flags, struct ReportList *reports);
+void BKE_blendfile_write_partial_end(struct Main *bmain_src);
+
+
+/* copybuffer (wrapper for BKE_blendfile_write_partial) */
+void BKE_copybuffer_begin(struct Main *bmain_src);
 void BKE_copybuffer_tag_ID(struct ID *id);
-int BKE_copybuffer_save(const char *filename, struct ReportList *reports);
-int BKE_copybuffer_paste(struct bContext *C, const char *libname, const short flag, struct ReportList *reports);
+bool BKE_copybuffer_save(struct Main *bmain_src, const char *filename, struct ReportList *reports);
+bool BKE_copybuffer_paste(struct bContext *C, const char *libname, const short flag, struct ReportList *reports);
 
 #ifdef __cplusplus
 }

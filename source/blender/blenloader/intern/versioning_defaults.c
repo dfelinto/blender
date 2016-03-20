@@ -144,6 +144,12 @@ void BLO_update_defaults_startup_blend(Main *bmain)
 			ts->gpencil_v2d_align = GP_PROJECT_VIEWSPACE;
 			ts->gpencil_seq_align = GP_PROJECT_VIEWSPACE;
 			ts->gpencil_ima_align = GP_PROJECT_VIEWSPACE;
+
+			ParticleEditSettings *pset = &ts->particle;
+			for (int a = 0; a < PE_TOT_BRUSH; a++) {
+				pset->brush[a].strength = 0.5f;
+			}
+			pset->brush[PE_BRUSH_CUT].strength = 1.0f;
 		}
 
 		scene->gm.lodflag |= SCE_LOD_USE_HYST;
@@ -238,6 +244,12 @@ void BLO_update_defaults_startup_blend(Main *bmain)
 		br = (Brush *)BKE_libblock_find_name_ex(bmain, ID_BR, "Twist");
 		if (br) {
 			BKE_libblock_rename(bmain, &br->id, "Rotate");
+		}
+
+		/* use original normal for grab brush (otherwise flickers with normal weighting). */
+		br = (Brush *)BKE_libblock_find_name_ex(bmain, ID_BR, "Grab");
+		if (br) {
+			br->flag |= BRUSH_ORIGINAL_NORMAL;
 		}
 	}
 }

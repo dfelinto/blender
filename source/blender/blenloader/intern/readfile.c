@@ -1497,8 +1497,7 @@ static void *newlibadr_us(FileData *fd, void *lib, void *adr)	/* increases user 
 {
 	ID *id = newlibadr(fd, lib, adr);
 	
-	if (id)
-		id->us++;
+	id_us_plus_no_lib(id);
 	
 	return id;
 }
@@ -3024,6 +3023,10 @@ static void direct_link_nodetree(FileData *fd, bNodeTree *ntree)
 				else if (node->type==SH_NODE_SCRIPT) {
 					NodeShaderScript *nss = (NodeShaderScript *) node->storage;
 					nss->bytecode = newdataadr(fd, nss->bytecode);
+				}
+				else if (node->type==SH_NODE_TEX_POINTDENSITY) {
+					NodeShaderTexPointDensity *npd = (NodeShaderTexPointDensity *) node->storage;
+					memset(&npd->pd, 0, sizeof(npd->pd));
 				}
 			}
 			else if (ntree->type==NTREE_COMPOSIT) {
@@ -4637,7 +4640,7 @@ static void lib_link_modifiers__linkModifiers(
 
 	*idpoin = newlibadr(fd, ob->id.lib, *idpoin);
 	if (*idpoin != NULL && (cd_flag & IDWALK_USER) != 0) {
-		(*idpoin)->us++;
+		id_us_plus_no_lib(*idpoin);
 	}
 }
 static void lib_link_modifiers(FileData *fd, Object *ob)
@@ -5640,7 +5643,7 @@ static void lib_link_scene(FileData *fd, Main *main)
 						seq->sound = newlibadr(fd, sce->id.lib, seq->sound);
 					}
 					if (seq->sound) {
-						seq->sound->id.us++;
+						id_us_plus_no_lib((ID *)seq->sound);
 						seq->scene_sound = BKE_sound_add_scene_sound_defaults(sce, seq);
 					}
 				}
@@ -9584,7 +9587,7 @@ static void give_base_to_objects(Main *mainvar, Scene *scene, View3D *v3d, Libra
 				base->flag = ob->flag;
 
 				CLAMP_MIN(ob->id.us, 0);
-				ob->id.us += 1;
+				id_us_plus_no_lib((ID *)ob);
 
 				ob->id.tag &= ~LIB_TAG_INDIRECT;
 				ob->id.tag |= LIB_TAG_EXTERN;
@@ -9708,7 +9711,7 @@ static void link_object_postprocess(ID *id, Scene *scene, View3D *v3d, const sho
 		base->lay = ob->lay;
 		base->object = ob;
 		base->flag = ob->flag;
-		ob->id.us++;
+		id_us_plus_no_lib((ID *)ob);
 
 		if (flag & FILE_AUTOSELECT) {
 			base->flag |= SELECT;

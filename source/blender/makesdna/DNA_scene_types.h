@@ -1342,10 +1342,10 @@ typedef struct ToolSettings {
 
 	/* Auto-Keying Mode */
 	short autokey_mode, autokey_flag;	/* defines in DNA_userdef_types.h */
+	char keyframe_type;                 /* keyframe type (see DNA_curve_types.h) */
 
 	/* Multires */
 	char multires_subdiv_type;
-	char pad3[1];
 
 	/* Skeleton generation */
 	short skgen_resolution;
@@ -1645,7 +1645,7 @@ typedef struct Scene {
 #define R_FREE_IMAGE		0x0100
 #define R_SINGLE_LAYER		0x0200
 #define R_EXR_TILE_FILE		0x0400
-#define R_COMP_FREE			0x0800
+/* #define R_COMP_FREE			0x0800 */
 #define R_NO_IMAGE_LOAD		0x1000
 #define R_NO_TEX			0x2000
 #define R_NO_FRAME_UPDATE	0x4000
@@ -1739,16 +1739,17 @@ extern const char *RE_engine_id_CYCLES;
 
 /* **************** SCENE ********************* */
 
+/* note that much higher maxframes give imprecise sub-frames, see: T46859 */
 /* for general use */
-#define MAXFRAME	300000
-#define MAXFRAMEF	300000.0f
+#define MAXFRAME	500000
+#define MAXFRAMEF	500000.0f
 
 #define MINFRAME	0
 #define MINFRAMEF	0.0f
 
 /* (minimum frame number for current-frame) */
-#define MINAFRAME	-300000
-#define MINAFRAMEF	-300000.0f
+#define MINAFRAME	-500000
+#define MINAFRAMEF	-500000.0f
 
 /* depricate this! */
 #define TESTBASE(v3d, base)  (                                                \

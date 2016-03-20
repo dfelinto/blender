@@ -151,6 +151,53 @@ static void UI_OT_copy_data_path_button(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER;
 }
 
+static int copy_python_command_button_poll(bContext *C)
+{
+	uiBut *but = UI_context_active_but_get(C);
+
+	if (but && (but->optype != NULL)) {
+		return 1;
+	}
+
+	return 0;
+}
+
+static int copy_python_command_button_exec(bContext *C, wmOperator *UNUSED(op))
+{
+	uiBut *but = UI_context_active_but_get(C);
+
+	if (but && (but->optype != NULL)) {
+		PointerRNA *opptr;
+		char *str;
+		opptr = UI_but_operator_ptr_get(but); /* allocated when needed, the button owns it */
+
+		str = WM_operator_pystring_ex(C, NULL, false, true, but->optype, opptr);
+
+		WM_clipboard_text_set(str, 0);
+
+		MEM_freeN(str);
+
+		return OPERATOR_FINISHED;
+	}
+
+	return OPERATOR_CANCELLED;
+}
+
+static void UI_OT_copy_python_command_button(wmOperatorType *ot)
+{
+	/* identifiers */
+	ot->name = "Copy Python Command";
+	ot->idname = "UI_OT_copy_python_command_button";
+	ot->description = "Copy the Python command matching this button";
+
+	/* callbacks */
+	ot->exec = copy_python_command_button_exec;
+	ot->poll = copy_python_command_button_poll;
+
+	/* flags */
+	ot->flag = OPTYPE_REGISTER;
+}
+
 /* Reset to Default Values Button Operator ------------------------ */
 
 static int operator_button_property_finish(bContext *C, PointerRNA *ptr, PropertyRNA *prop)
@@ -1040,10 +1087,11 @@ static void UI_OT_drop_color(wmOperatorType *ot)
 /* ********************************************************* */
 /* Registration */
 
-void ED_button_operatortypes(void)
+void ED_operatortypes_ui(void)
 {
 	WM_operatortype_append(UI_OT_reset_default_theme);
 	WM_operatortype_append(UI_OT_copy_data_path_button);
+	WM_operatortype_append(UI_OT_copy_python_command_button);
 	WM_operatortype_append(UI_OT_reset_default_button);
 	WM_operatortype_append(UI_OT_unset_property_button);
 	WM_operatortype_append(UI_OT_copy_to_selected_button);
@@ -1059,4 +1107,16 @@ void ED_button_operatortypes(void)
 	WM_operatortype_append(UI_OT_eyedropper_color);
 	WM_operatortype_append(UI_OT_eyedropper_id);
 	WM_operatortype_append(UI_OT_eyedropper_depth);
+}
+
+/**
+ * \brief User Interface Keymap
+ *
+ * For now only modal maps here, since UI uses special ui-handlers instead of operators.
+ */
+void ED_keymap_ui(wmKeyConfig *keyconf)
+{
+	WM_keymap_find(keyconf, "User Interface", 0, 0);
+
+	eyedropper_modal_keymap(keyconf);
 }

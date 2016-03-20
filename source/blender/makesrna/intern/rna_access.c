@@ -1521,6 +1521,51 @@ bool RNA_property_enum_name_gettexted(bContext *C, PointerRNA *ptr, PropertyRNA 
 	return result;
 }
 
+bool RNA_property_enum_item_from_value(
+        bContext *C, PointerRNA *ptr, PropertyRNA *prop, const int value,
+        EnumPropertyItem *r_item)
+{
+	EnumPropertyItem *item = NULL;
+	bool free;
+
+	RNA_property_enum_items(C, ptr, prop, &item, NULL, &free);
+	if (item) {
+		const int i = RNA_enum_from_value(item, value);
+		bool result;
+
+		if (i != -1) {
+			*r_item = item[i];
+			result = true;
+		}
+		else {
+			result = false;
+		}
+
+		if (free)
+			MEM_freeN(item);
+
+		return result;
+	}
+	return false;
+}
+
+bool RNA_property_enum_item_from_value_gettexted(
+        bContext *C, PointerRNA *ptr, PropertyRNA *prop, const int value,
+        EnumPropertyItem *r_item)
+{
+	bool result;
+
+	result = RNA_property_enum_item_from_value(C, ptr, prop, value, r_item);
+
+	if (!(prop->flag & PROP_ENUM_NO_TRANSLATE)) {
+		if (BLT_translate_iface()) {
+			r_item->name = BLT_pgettext(prop->translation_context, r_item->name);
+		}
+	}
+
+	return result;
+}
+
 int RNA_property_enum_bitflag_identifiers(bContext *C, PointerRNA *ptr, PropertyRNA *prop, const int value,
                                           const char **identifier)
 {
@@ -2098,6 +2143,7 @@ void RNA_property_int_set(PointerRNA *ptr, PropertyRNA *prop, int value)
 	/* BLI_assert(RNA_property_int_clamp(ptr, prop, &value) == 0); */
 
 	if ((idprop = rna_idproperty_check(&prop, ptr))) {
+		RNA_property_int_clamp(ptr, prop, &value);
 		IDP_Int(idprop) = value;
 		rna_idproperty_touch(idprop);
 	}
@@ -2356,6 +2402,7 @@ void RNA_property_float_set(PointerRNA *ptr, PropertyRNA *prop, float value)
 	/* BLI_assert(RNA_property_float_clamp(ptr, prop, &value) == 0); */
 
 	if ((idprop = rna_idproperty_check(&prop, ptr))) {
+		RNA_property_float_clamp(ptr, prop, &value);
 		if (idprop->type == IDP_FLOAT)
 			IDP_Float(idprop) = value;
 		else
@@ -6106,7 +6153,7 @@ static int rna_function_format_array_length(const char *format, int ofs, int fle
 }
 
 static int rna_function_parameter_parse(PointerRNA *ptr, PropertyRNA *prop, PropertyType type,
-                                        char ftype, int len, void *dest, void *src, StructRNA *srna,
+                                        char ftype, int len, void *dest, const void *src, StructRNA *srna,
                                         const char *tid, const char *fid, const char *pid)
 {
 	/* ptr is always a function pointer, prop always a parameter */
@@ -6401,7 +6448,7 @@ int RNA_function_call_direct_va(bContext *C, ReportList *reports, PointerRNA *pt
 				}
 				case PROP_STRING:
 				{
-					const char **arg = va_arg(args, const char **);
+					char **arg = va_arg(args, char **);
 					err = rna_function_parameter_parse(&funcptr, parm, type, ftype, len, arg, retdata,
 					                                   NULL, tid, fid, pid);
 					break;

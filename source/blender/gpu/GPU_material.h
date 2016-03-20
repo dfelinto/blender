@@ -181,10 +181,13 @@ typedef enum GPUDynamicType {
 	GPU_DYNAMIC_LAMP_SPOTSIZE        = 10 | GPU_DYNAMIC_GROUP_LAMP,
 	GPU_DYNAMIC_LAMP_SPOTBLEND       = 11 | GPU_DYNAMIC_GROUP_LAMP,
 	GPU_DYNAMIC_LAMP_SPOTSCALE       = 12 | GPU_DYNAMIC_GROUP_LAMP,
-	GPU_DYNAMIC_LAMP_DYNMAT          = 13 | GPU_DYNAMIC_GROUP_LAMP,
-	GPU_DYNAMIC_LAMP_AREASCALE       = 14 | GPU_DYNAMIC_GROUP_LAMP,
-	GPU_DYNAMIC_LAMP_SIZEX           = 15 | GPU_DYNAMIC_GROUP_LAMP,
-	GPU_DYNAMIC_LAMP_SIZEY           = 16 | GPU_DYNAMIC_GROUP_LAMP,
+	GPU_DYNAMIC_LAMP_COEFFCONST      = 13 | GPU_DYNAMIC_GROUP_LAMP,
+	GPU_DYNAMIC_LAMP_COEFFLIN        = 14 | GPU_DYNAMIC_GROUP_LAMP,
+	GPU_DYNAMIC_LAMP_COEFFQUAD       = 15 | GPU_DYNAMIC_GROUP_LAMP,
+	GPU_DYNAMIC_LAMP_DYNMAT          = 16 | GPU_DYNAMIC_GROUP_LAMP,
+	GPU_DYNAMIC_LAMP_AREASCALE       = 17 | GPU_DYNAMIC_GROUP_LAMP,
+	GPU_DYNAMIC_LAMP_SIZEX           = 18 | GPU_DYNAMIC_GROUP_LAMP,
+	GPU_DYNAMIC_LAMP_SIZEY           = 19 | GPU_DYNAMIC_GROUP_LAMP,
 
 	GPU_DYNAMIC_SAMPLER_2DBUFFER     = 1  | GPU_DYNAMIC_GROUP_SAMPLER,
 	GPU_DYNAMIC_SAMPLER_2DIMAGE      = 2  | GPU_DYNAMIC_GROUP_SAMPLER,
@@ -395,7 +398,8 @@ float *GPU_lamp_dynpersmat(GPULamp *lamp);
 void GPU_lamp_update(GPULamp *lamp, int lay, int hide, float obmat[4][4]);
 void GPU_lamp_update_size(GPULamp *lamp, float sizex, float sizey);
 void GPU_lamp_update_colors(GPULamp *lamp, float r, float g, float b, float energy);
-void GPU_lamp_update_distance(GPULamp *lamp, float distance, float att1, float att2);
+void GPU_lamp_update_distance(GPULamp *lamp, float distance, float att1, float att2,
+                              float coeff_const, float coeff_lin, float coeff_quad);
 void GPU_lamp_update_spot(GPULamp *lamp, float spotsize, float spotblend);
 int GPU_lamp_shadow_layer(GPULamp *lamp);
 GPUNodeLink *GPU_lamp_get_data(

@@ -228,17 +228,7 @@ static std::map<int, SCA_IInputDevice::KX_EnumInputs> create_translate_table()
 	m[EKEY				] = SCA_IInputDevice::KX_EKEY;                  
 	m[FKEY				] = SCA_IInputDevice::KX_FKEY;                  
 	m[GKEY				] = SCA_IInputDevice::KX_GKEY;                  
-
-//XXX clean up
-#ifdef WIN32
-#define HKEY	'h'
-#endif
 	m[HKEY				] = SCA_IInputDevice::KX_HKEY;                  
-//XXX clean up
-#ifdef WIN32
-#undef HKEY
-#endif
-
 	m[IKEY				] = SCA_IInputDevice::KX_IKEY;                  
 	m[JKEY				] = SCA_IInputDevice::KX_JKEY;                  
 	m[KKEY				] = SCA_IInputDevice::KX_KKEY;                  
@@ -1427,6 +1417,9 @@ static KX_LightObject *gamelight_from_blamp(Object *ob, Lamp *la, unsigned int l
 	
 	lightobj->m_att1 = la->att1;
 	lightobj->m_att2 = (la->mode & LA_QUAD) ? la->att2 : 0.0f;
+	lightobj->m_coeff_const = la->coeff_const;
+	lightobj->m_coeff_lin = la->coeff_lin;
+	lightobj->m_coeff_quad = la->coeff_quad;
 	lightobj->m_color[0] = la->r;
 	lightobj->m_color[1] = la->g;
 	lightobj->m_color[2] = la->b;

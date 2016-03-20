@@ -197,7 +197,9 @@ static uiBlock *id_search_menu(bContext *C, ARegion *ar, void *arg_litem)
 		
 		but = uiDefSearchBut(block, search, 0, ICON_VIEWZOOM, sizeof(search), 10, 0, w, UI_UNIT_Y,
 		                     template.prv_rows, template.prv_cols, "");
-		UI_but_func_search_set(but, id_search_cb, &template, id_search_call_cb, idptr.data);
+		UI_but_func_search_set(
+		        but, ui_searchbox_create_generic, id_search_cb,
+		        &template, id_search_call_cb, idptr.data);
 	}
 	/* list view */
 	else {
@@ -207,7 +209,9 @@ static uiBlock *id_search_menu(bContext *C, ARegion *ar, void *arg_litem)
 		/* fake button, it holds space for search items */
 		uiDefBut(block, UI_BTYPE_LABEL, 0, "", 10, 15, searchbox_width, searchbox_height, NULL, 0, 0, 0, 0, NULL);
 		but = uiDefSearchBut(block, search, 0, ICON_VIEWZOOM, sizeof(search), 10, 0, searchbox_width, UI_UNIT_Y - 1, 0, 0, "");
-		UI_but_func_search_set(but, id_search_cb, &template, id_search_call_cb, idptr.data);
+		UI_but_func_search_set(
+		        but, ui_searchbox_create_generic, id_search_cb,
+		        &template, id_search_call_cb, idptr.data);
 	}
 		
 	
@@ -1972,81 +1976,62 @@ static void curvemap_tools_dofunc(bContext *C, void *cumap_v, int event)
 	ED_region_tag_redraw(CTX_wm_region(C));
 }
 
-static uiBlock *curvemap_tools_posslope_func(bContext *C, ARegion *ar, void *cumap_v)
+static uiBlock *curvemap_tools_func(
+        bContext *C, ARegion *ar, CurveMapping *cumap,
+        bool show_extend, int reset_mode)
 {
 	uiBlock *block;
 	short yco = 0, menuwidth = 10 * UI_UNIT_X;
 
 	block = UI_block_begin(C, ar, __func__, UI_EMBOSS);
-	UI_block_func_butmenu_set(block, curvemap_tools_dofunc, cumap_v);
+	UI_block_func_butmenu_set(block, curvemap_tools_dofunc, cumap);
 
-	uiDefIconTextBut(block, UI_BTYPE_BUT_MENU, 1, ICON_BLANK1, IFACE_("Reset View"),          0, yco -= UI_UNIT_Y,
-	                 menuwidth, UI_UNIT_Y, NULL, 0.0, 0.0, 0, UICURVE_FUNC_RESET_VIEW, "");
-	uiDefIconTextBut(block, UI_BTYPE_BUT_MENU, 1, ICON_BLANK1, IFACE_("Vector Handle"),       0, yco -= UI_UNIT_Y,
-	                 menuwidth, UI_UNIT_Y, NULL, 0.0, 0.0, 0, UICURVE_FUNC_HANDLE_VECTOR, "");
-	uiDefIconTextBut(block, UI_BTYPE_BUT_MENU, 1, ICON_BLANK1, IFACE_("Auto Handle"),         0, yco -= UI_UNIT_Y,
-	                 menuwidth, UI_UNIT_Y, NULL, 0.0, 0.0, 0, UICURVE_FUNC_HANDLE_AUTO, "");
-	uiDefIconTextBut(block, UI_BTYPE_BUT_MENU, 1, ICON_BLANK1, IFACE_("Extend Horizontal"),   0, yco -= UI_UNIT_Y,
-	                 menuwidth, UI_UNIT_Y, NULL, 0.0, 0.0, 0, UICURVE_FUNC_EXTEND_HOZ, "");
-	uiDefIconTextBut(block, UI_BTYPE_BUT_MENU, 1, ICON_BLANK1, IFACE_("Extend Extrapolated"), 0, yco -= UI_UNIT_Y,
-	                 menuwidth, UI_UNIT_Y, NULL, 0.0, 0.0, 0, UICURVE_FUNC_EXTEND_EXP, "");
-	uiDefIconTextBut(block, UI_BTYPE_BUT_MENU, 1, ICON_BLANK1, IFACE_("Reset Curve"),         0, yco -= UI_UNIT_Y,
-	                 menuwidth, UI_UNIT_Y, NULL, 0.0, 0.0, 0, UICURVE_FUNC_RESET_POS, "");
+	{
+		uiDefIconTextBut(
+		        block, UI_BTYPE_BUT_MENU, 1, ICON_BLANK1, IFACE_("Reset View"),
+		        0, yco -= UI_UNIT_Y, menuwidth, UI_UNIT_Y, NULL, 0.0, 0.0, 0, UICURVE_FUNC_RESET_VIEW, "");
+		uiDefIconTextBut(
+		        block, UI_BTYPE_BUT_MENU, 1, ICON_BLANK1, IFACE_("Vector Handle"),
+		        0, yco -= UI_UNIT_Y, menuwidth, UI_UNIT_Y, NULL, 0.0, 0.0, 0, UICURVE_FUNC_HANDLE_VECTOR, "");
+		uiDefIconTextBut(
+		        block, UI_BTYPE_BUT_MENU, 1, ICON_BLANK1, IFACE_("Auto Handle"),
+		        0, yco -= UI_UNIT_Y, menuwidth, UI_UNIT_Y, NULL, 0.0, 0.0, 0, UICURVE_FUNC_HANDLE_AUTO, "");
+	}
+
+	if (show_extend) {
+		uiDefIconTextBut(
+		        block, UI_BTYPE_BUT_MENU, 1, ICON_BLANK1, IFACE_("Extend Horizontal"),
+		        0, yco -= UI_UNIT_Y, menuwidth, UI_UNIT_Y, NULL, 0.0, 0.0, 0, UICURVE_FUNC_EXTEND_HOZ, "");
+		uiDefIconTextBut(
+		        block, UI_BTYPE_BUT_MENU, 1, ICON_BLANK1, IFACE_("Extend Extrapolated"),
+		        0, yco -= UI_UNIT_Y, menuwidth, UI_UNIT_Y, NULL, 0.0, 0.0, 0, UICURVE_FUNC_EXTEND_EXP, "");
+	}
+
+	{
+		uiDefIconTextBut(
+		        block, UI_BTYPE_BUT_MENU, 1, ICON_BLANK1, IFACE_("Reset Curve"),
+		        0, yco -= UI_UNIT_Y, menuwidth, UI_UNIT_Y, NULL, 0.0, 0.0, 0, reset_mode, "");
+	}
 
 	UI_block_direction_set(block, UI_DIR_RIGHT);
 	UI_block_bounds_set_text(block, 50);
 
 	return block;
+}
+
+static uiBlock *curvemap_tools_posslope_func(bContext *C, ARegion *ar, void *cumap_v)
+{
+	return curvemap_tools_func(C, ar, cumap_v, true, UICURVE_FUNC_RESET_POS);
 }
 
 static uiBlock *curvemap_tools_negslope_func(bContext *C, ARegion *ar, void *cumap_v)
 {
-	uiBlock *block;
-	short yco = 0, menuwidth = 10 * UI_UNIT_X;
-
-	block = UI_block_begin(C, ar, __func__, UI_EMBOSS);
-	UI_block_func_butmenu_set(block, curvemap_tools_dofunc, cumap_v);
-
-	uiDefIconTextBut(block, UI_BTYPE_BUT_MENU, 1, ICON_BLANK1, IFACE_("Reset View"),          0, yco -= UI_UNIT_Y,
-	                 menuwidth, UI_UNIT_Y, NULL, 0.0, 0.0, 0, UICURVE_FUNC_RESET_VIEW, "");
-	uiDefIconTextBut(block, UI_BTYPE_BUT_MENU, 1, ICON_BLANK1, IFACE_("Vector Handle"),       0, yco -= UI_UNIT_Y,
-	                 menuwidth, UI_UNIT_Y, NULL, 0.0, 0.0, 0, UICURVE_FUNC_HANDLE_VECTOR, "");
-	uiDefIconTextBut(block, UI_BTYPE_BUT_MENU, 1, ICON_BLANK1, IFACE_("Auto Handle"),         0, yco -= UI_UNIT_Y,
-	                 menuwidth, UI_UNIT_Y, NULL, 0.0, 0.0, 0, UICURVE_FUNC_HANDLE_AUTO, "");
-	uiDefIconTextBut(block, UI_BTYPE_BUT_MENU, 1, ICON_BLANK1, IFACE_("Extend Horizontal"),   0, yco -= UI_UNIT_Y,
-	                 menuwidth, UI_UNIT_Y, NULL, 0.0, 0.0, 0, UICURVE_FUNC_EXTEND_HOZ, "");
-	uiDefIconTextBut(block, UI_BTYPE_BUT_MENU, 1, ICON_BLANK1, IFACE_("Extend Extrapolated"), 0, yco -= UI_UNIT_Y,
-	                 menuwidth, UI_UNIT_Y, NULL, 0.0, 0.0, 0, UICURVE_FUNC_EXTEND_EXP, "");
-	uiDefIconTextBut(block, UI_BTYPE_BUT_MENU, 1, ICON_BLANK1, IFACE_("Reset Curve"),         0, yco -= UI_UNIT_Y,
-	                 menuwidth, UI_UNIT_Y, NULL, 0.0, 0.0, 0, UICURVE_FUNC_RESET_NEG, "");
-
-	UI_block_direction_set(block, UI_DIR_RIGHT);
-	UI_block_bounds_set_text(block, 50);
-
-	return block;
+	return curvemap_tools_func(C, ar, cumap_v, true, UICURVE_FUNC_RESET_NEG);
 }
 
 static uiBlock *curvemap_brush_tools_func(bContext *C, ARegion *ar, void *cumap_v)
 {
-	uiBlock *block;
-	short yco = 0, menuwidth = 10 * UI_UNIT_X;
-
-	block = UI_block_begin(C, ar, __func__, UI_EMBOSS);
-	UI_block_func_butmenu_set(block, curvemap_tools_dofunc, cumap_v);
-
-	uiDefIconTextBut(block, UI_BTYPE_BUT_MENU, 1, ICON_BLANK1, IFACE_("Reset View"),    0, yco -= UI_UNIT_Y,
-	                 menuwidth, UI_UNIT_Y, NULL, 0.0, 0.0, 0, UICURVE_FUNC_RESET_VIEW, "");
-	uiDefIconTextBut(block, UI_BTYPE_BUT_MENU, 1, ICON_BLANK1, IFACE_("Vector Handle"), 0, yco -= UI_UNIT_Y,
-	                 menuwidth, UI_UNIT_Y, NULL, 0.0, 0.0, 0, UICURVE_FUNC_HANDLE_VECTOR, "");
-	uiDefIconTextBut(block, UI_BTYPE_BUT_MENU, 1, ICON_BLANK1, IFACE_("Auto Handle"),   0, yco -= UI_UNIT_Y,
-	                 menuwidth, UI_UNIT_Y, NULL, 0.0, 0.0, 0, UICURVE_FUNC_HANDLE_AUTO, "");
-	uiDefIconTextBut(block, UI_BTYPE_BUT_MENU, 1, ICON_BLANK1, IFACE_("Reset Curve"),   0, yco -= UI_UNIT_Y,
-	                 menuwidth, UI_UNIT_Y, NULL, 0.0, 0.0, 0, UICURVE_FUNC_RESET_NEG, "");
-
-	UI_block_direction_set(block, UI_DIR_RIGHT);
-	UI_block_bounds_set_text(block, 50);
-
-	return block;
+	return curvemap_tools_func(C, ar, cumap_v, false, UICURVE_FUNC_RESET_NEG);
 }
 
 static void curvemap_buttons_redraw(bContext *C, void *UNUSED(arg1), void *UNUSED(arg2))
@@ -2168,10 +2153,10 @@ static void curvemap_buttons_layout(
 
 	UI_block_emboss_set(block, UI_EMBOSS_NONE);
 
-	bt = uiDefIconBut(block, UI_BTYPE_BUT, 0, ICON_ZOOMIN, 0, 0, dx, dx, NULL, 0.0, 0.0, 0.0, 0.0, TIP_("Zoom in"));
+	bt = uiDefIconBut(block, UI_BTYPE_BUT, 0, ICON_ZOOM_IN, 0, 0, dx, dx, NULL, 0.0, 0.0, 0.0, 0.0, TIP_("Zoom in"));
 	UI_but_func_set(bt, curvemap_buttons_zoom_in, cumap, NULL);
 
-	bt = uiDefIconBut(block, UI_BTYPE_BUT, 0, ICON_ZOOMOUT, 0, 0, dx, dx, NULL, 0.0, 0.0, 0.0, 0.0, TIP_("Zoom out"));
+	bt = uiDefIconBut(block, UI_BTYPE_BUT, 0, ICON_ZOOM_OUT, 0, 0, dx, dx, NULL, 0.0, 0.0, 0.0, 0.0, TIP_("Zoom out"));
 	UI_but_func_set(bt, curvemap_buttons_zoom_out, cumap, NULL);
 
 	if (brush)
@@ -3322,7 +3307,9 @@ static void operator_search_cb(const bContext *C, void *UNUSED(arg), const char 
 
 void UI_but_func_operator_search(uiBut *but)
 {
-	UI_but_func_search_set(but, operator_search_cb, NULL, operator_call_cb, NULL);
+	UI_but_func_search_set(
+	        but, ui_searchbox_create_operator, operator_search_cb,
+	        NULL, operator_call_cb, NULL);
 }
 
 void uiTemplateOperatorSearch(uiLayout *layout)
@@ -3681,6 +3668,9 @@ void uiTemplateKeymapItemProperties(uiLayout *layout, PointerRNA *ptr)
 			/* operator buttons may store props for use (file selector, [#36492]) */
 			if (but->rnaprop) {
 				UI_but_func_set(but, keymap_item_modified, ptr->data, NULL);
+
+				/* Otherwise the keymap will be re-generated which we're trying to edit, see: T47685 */
+				UI_but_flag_enable(but, UI_BUT_UPDATE_DELAY);
 			}
 		}
 	}
