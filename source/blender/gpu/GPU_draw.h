@@ -32,6 +32,8 @@
 #ifndef __GPU_DRAW_H__
 #define __GPU_DRAW_H__
 
+#include "GPU_glew.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -112,7 +114,7 @@ void GPU_render_text(
 /* Mipmap settings
  * - these will free textures on changes */
 
-void GPU_generate_mipmap(int target);
+void GPU_generate_mipmap(GLenum target);
 void GPU_set_mipmap(bool mipmap);
 bool GPU_get_mipmap(void);
 void GPU_set_linear_mipmap(bool linear);
