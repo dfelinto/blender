@@ -2028,8 +2028,6 @@ static void shade_one_brdf_light(GPUBrdfInput *brdf, GPULamp *lamp)
 	GPUNodeLink *shadfac = NULL, *lcol, *inp, *inpr, *output, *tmp;
 	float one = 1.0f, sun_fac = 1.0f;
 
-	printf("shade_one_brdf_light %d %d\n",brdf->type,lamp->type );
-
 	/* from get_lamp_visibility */
 	if (lamp->type == LA_SUN || lamp->type == LA_HEMI) {
 		mat->dynproperty |= DYN_LAMP_VEC;
@@ -2261,8 +2259,6 @@ static GPUNodeLink *brdf_sample_env(GPUBrdfInput *brdf)
 	GPUMaterial *mat = brdf->mat;
 	GPUMatType type = GPU_material_get_type(mat);
 	GPUNodeLink *envlight, *incoming;
-
-	printf("brdf_sample_env %d \n",brdf->type);
 
 	GPU_link(mat, "direction_transform_m4v3", GPU_builtin(GPU_VIEW_POSITION), GPU_builtin(GPU_INVERSE_VIEW_MATRIX), &incoming);
 	GPU_link(mat, "shade_view", incoming, &incoming);
