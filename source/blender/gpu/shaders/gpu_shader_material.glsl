@@ -3643,7 +3643,7 @@ void node_background(vec4 color, float strength, vec3 N, out vec4 result)
 
 void node_mix_shader(float fac, vec4 shader1, vec4 shader2, out vec4 shader)
 {
-	shader = mix(shader1, shader2, fac);
+	shader = mix(shader1, shader2, clamp(fac, 0.0, 1.0));
 }
 
 void node_add_shader(vec4 shader1, vec4 shader2, out vec4 shader)
