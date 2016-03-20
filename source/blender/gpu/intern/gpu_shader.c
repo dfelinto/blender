@@ -62,6 +62,10 @@ extern char datatoc_gpu_shader_fx_dof_hq_geo_glsl[];
 extern char datatoc_gpu_shader_fx_depth_resolve_glsl[];
 extern char datatoc_gpu_shader_fx_lib_glsl[];
 extern char datatoc_gpu_shader_fx_colormanage_frag_glsl[];
+extern char datatoc_gpu_shader_probe_sh_compute_frag_glsl[];
+extern char datatoc_gpu_shader_probe_sh_compute_vert_glsl[];
+extern char datatoc_gpu_shader_display_sh_frag_glsl[];
+extern char datatoc_gpu_shader_display_sh_vert_glsl[];
 
 static struct GPUShadersGlobal {
 	struct {
@@ -69,6 +73,8 @@ static struct GPUShadersGlobal {
 		GPUShader *sep_gaussian_blur;
 		GPUShader *smoke;
 		GPUShader *smoke_fire;
+		GPUShader *compute_sh;
+		GPUShader *display_sh;
 		/* cache for shader fx. Those can exist in combinations so store them here */
 		GPUShader *fx_shaders[MAX_FX_SHADERS * 2];
 	} shaders;
@@ -164,6 +170,10 @@ static void gpu_shader_standard_extensions(char defines[MAX_EXT_DEFINE_LENGTH], 
 		strcat(defines, "#extension GL_ARB_texture_query_lod: enable\n");
 	}
 
+	if (GLEW_ARB_shader_texture_lod) {
+		strcat(defines, "#extension GL_ARB_shader_texture_lod: enable\n");
+	}
+
 	if (use_geometry_shader && GPU_geometry_shader_support_via_extension()) {
 		strcat(defines, "#extension GL_EXT_geometry_shader4: enable\n");
 	}
@@ -234,8 +244,13 @@ static void gpu_shader_standard_defines(char defines[MAX_DEFINE_LENGTH],
 		importance_sample_count = 1;
 	}
 
+	/* XXX : this must be here for the NUM_SAMPLE to work */
+	strcat(defines, "#if __VERSION__ < 130\n"
+		            "#define uint unsigned int\n"
+		            "#endif\n");
+
 	char buffer[32];
-	sprintf(buffer, "#define NUM_SAMPLE %du\n", importance_sample_count);
+	sprintf(buffer, "#define NUM_SAMPLE uint(%d)\n", importance_sample_count);
 	strcat(defines, buffer);
 
 	return;
@@ -612,6 +627,20 @@ GPUShader *GPU_shader_get_builtin_shader(GPUBuiltinShader shader)
 				        NULL, NULL, "#define USE_FIRE;\n", 0, 0, 0);
 			retval = GG.shaders.smoke_fire;
 			break;
+		case GPU_SHADER_COMPUTE_SH:
+			if (!GG.shaders.compute_sh)
+				GG.shaders.compute_sh = GPU_shader_create(
+				        datatoc_gpu_shader_probe_sh_compute_vert_glsl, datatoc_gpu_shader_probe_sh_compute_frag_glsl,
+				        NULL, NULL, "#define CUBEMAP_RES 64\n", 0, 0, 0);
+			retval = GG.shaders.compute_sh;
+			break;
+		case GPU_SHADER_DISPLAY_SH:
+			if (!GG.shaders.display_sh)
+				GG.shaders.display_sh = GPU_shader_create(
+				        datatoc_gpu_shader_display_sh_vert_glsl, datatoc_gpu_shader_display_sh_frag_glsl,
+				        NULL, NULL, NULL, 0, 0, 0);
+			retval = GG.shaders.display_sh;
+			break;
 	}
 
 	if (retval == NULL)
@@ -723,6 +752,16 @@ void GPU_shader_free_builtin_shaders(void)
 	if (GG.shaders.smoke_fire) {
 		GPU_shader_free(GG.shaders.smoke_fire);
 		GG.shaders.smoke_fire = NULL;
+	}
+
+	if (GG.shaders.compute_sh) {
+		GPU_shader_free(GG.shaders.compute_sh);
+		GG.shaders.compute_sh = NULL;
+	}
+
+	if (GG.shaders.display_sh) {
+		GPU_shader_free(GG.shaders.display_sh);
+		GG.shaders.display_sh = NULL;
 	}
 
 	for (i = 0; i < 2 * MAX_FX_SHADERS; i++) {

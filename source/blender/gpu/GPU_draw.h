@@ -112,6 +112,7 @@ void GPU_render_text(
 /* Mipmap settings
  * - these will free textures on changes */
 
+void GPU_generate_mipmap(int target);
 void GPU_set_mipmap(bool mipmap);
 bool GPU_get_mipmap(void);
 void GPU_set_linear_mipmap(bool linear);

@@ -286,9 +286,10 @@ typedef struct Object {
 	unsigned int init_state;	/* bit masks of initial state as recorded by the users */
 
 	ListBase gpulamp;		/* runtime, for glsl lamp display only */
+	ListBase gpuprobe; /* runtime, for glsl reflections */
 	ListBase pc_ids;
 	ListBase *duplilist;	/* for temporary dupli list storage, only for use by RNA API */
-	
+
 	struct RigidBodyOb *rigidbody_object;		/* settings for Bullet rigid body */
 	struct RigidBodyCon *rigidbody_constraint;	/* settings for Bullet constraint */
 
@@ -299,6 +300,10 @@ typedef struct Object {
 	LodLevel *currentlod;
 
 	struct PreviewImage *preview;
+
+	struct Object *probe;	/* for pbr viewport : the probe object used for rendering this object materials */
+	char isprobe; 			/* for pbr viewport : does this object generate lighting capture datas */
+	char pad3[7];
 } Object;
 
 /* Warning, this is not used anymore because hooks are now modifiers */

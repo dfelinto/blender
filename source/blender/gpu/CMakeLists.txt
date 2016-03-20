@@ -69,6 +69,7 @@ set(SRC
 	shaders/gpu_shader_fx_dof_hq_geo.glsl
 	shaders/gpu_shader_fx_vert.glsl
 	shaders/gpu_shader_material.glsl
+	shaders/gpu_shader_material_bsdf_frag.glsl
 	shaders/gpu_shader_sep_gaussian_blur_frag.glsl
 	shaders/gpu_shader_sep_gaussian_blur_vert.glsl
 	shaders/gpu_shader_basic_frag.glsl
@@ -80,6 +81,10 @@ set(SRC
 	shaders/gpu_shader_fx_colormanage_frag.glsl
 	shaders/gpu_shader_smoke_frag.glsl
 	shaders/gpu_shader_smoke_vert.glsl
+	shaders/gpu_shader_probe_sh_compute_frag.glsl
+	shaders/gpu_shader_probe_sh_compute_vert.glsl
+	shaders/gpu_shader_display_sh_frag.glsl
+	shaders/gpu_shader_display_sh_vert.glsl
 
 	GPU_basic_shader.h
 	GPU_buffers.h
@@ -102,6 +107,7 @@ data_to_c_simple(shaders/gpu_shader_geometry.glsl SRC)
 data_to_c_simple(shaders/gpu_shader_smoke_frag.glsl SRC)
 data_to_c_simple(shaders/gpu_shader_smoke_vert.glsl SRC)
 data_to_c_simple(shaders/gpu_shader_material.glsl SRC)
+data_to_c_simple(shaders/gpu_shader_material_bsdf_frag.glsl SRC)
 data_to_c_simple(shaders/gpu_shader_sep_gaussian_blur_frag.glsl SRC)
 data_to_c_simple(shaders/gpu_shader_sep_gaussian_blur_vert.glsl SRC)
 data_to_c_simple(shaders/gpu_shader_basic_frag.glsl SRC)
@@ -120,6 +126,10 @@ data_to_c_simple(shaders/gpu_shader_fx_dof_hq_geo.glsl SRC)
 data_to_c_simple(shaders/gpu_shader_fx_depth_resolve.glsl SRC)
 data_to_c_simple(shaders/gpu_shader_fx_colormanage_frag.glsl SRC)
 data_to_c_simple(shaders/gpu_shader_fx_lib.glsl SRC)
+data_to_c_simple(shaders/gpu_shader_probe_sh_compute_frag.glsl SRC)
+data_to_c_simple(shaders/gpu_shader_probe_sh_compute_vert.glsl SRC)
+data_to_c_simple(shaders/gpu_shader_display_sh_frag.glsl SRC)
+data_to_c_simple(shaders/gpu_shader_display_sh_vert.glsl SRC)
 
 if(WITH_GAMEENGINE)
 	add_definitions(-DWITH_GAMEENGINE)

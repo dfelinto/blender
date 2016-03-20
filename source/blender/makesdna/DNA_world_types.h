@@ -129,6 +129,7 @@ typedef struct World {
 	struct bNodeTree *nodetree;
 
 	ListBase gpumaterial;		/* runtime */
+	ListBase gpuprobe;		/* runtime */
 } World;
 
 /* **************** WORLD ********************* */

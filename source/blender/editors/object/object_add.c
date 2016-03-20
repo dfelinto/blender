@@ -1102,6 +1102,9 @@ static void object_delete_check_glsl_update(Object *ob)
 		if (ob->gpulamp.first)
 			GPU_lamp_free(ob);
 	}
+
+	if (ob->gpuprobe.first)
+		GPU_probe_free(&ob->gpuprobe);
 }
 
 /* remove base from a specific scene */

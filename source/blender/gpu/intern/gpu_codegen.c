@@ -56,6 +56,7 @@
 #include <stdarg.h>
 
 extern char datatoc_gpu_shader_material_glsl[];
+extern char datatoc_gpu_shader_material_bsdf_frag_glsl[];
 extern char datatoc_gpu_shader_vertex_glsl[];
 extern char datatoc_gpu_shader_vertex_world_glsl[];
 extern char datatoc_gpu_shader_geometry_glsl[];
@@ -408,6 +409,28 @@ const char *GPU_builtin_name(GPUBuiltin builtin)
 		return "unfparticlevel";
 	else if (builtin == GPU_PARTICLE_ANG_VELOCITY)
 		return "unfparticleangvel";
+	else if (builtin == GPU_PBR_PROBE)
+		return "unfprobe";
+	else if (builtin == GPU_PBR_LOD_FACTOR)
+		return "unflodfactor";
+	else if (builtin == GPU_PBR_SH0)
+		return "unfsh0";
+	else if (builtin == GPU_PBR_SH1)
+		return "unfsh1";
+	else if (builtin == GPU_PBR_SH2)
+		return "unfsh2";
+	else if (builtin == GPU_PBR_SH3)
+		return "unfsh3";
+	else if (builtin == GPU_PBR_SH4)
+		return "unfsh4";
+	else if (builtin == GPU_PBR_SH5)
+		return "unfsh5";
+	else if (builtin == GPU_PBR_SH6)
+		return "unfsh6";
+	else if (builtin == GPU_PBR_SH7)
+		return "unfsh7";
+	else if (builtin == GPU_PBR_SH8)
+		return "unfsh8";
 	else
 		return "";
 }
@@ -434,7 +457,8 @@ static void codegen_set_unique_ids(ListBase *nodes)
 	GPUNode *node;
 	GPUInput *input;
 	GPUOutput *output;
-	int id = 1, texid = 0;
+	/* tex slot 0 is pbr envmap */
+	int id = 1, texid = 1;
 
 	bindhash = BLI_ghash_ptr_new("codegen_set_unique_ids1 gh");
 	definehash = BLI_ghash_ptr_new("codegen_set_unique_ids2 gh");
@@ -521,7 +545,11 @@ static int codegen_print_uniforms_functions(DynStr *ds, ListBase *nodes)
 					builtins |= input->builtin;
 					name = GPU_builtin_name(input->builtin);
 
-					if (gpu_str_prefix(name, "unf")) {
+					if (input->builtin == GPU_PBR_PROBE) {
+						BLI_dynstr_appendf(ds, "uniform samplerCube %s;\n"
+							, name);
+					}
+					else if (gpu_str_prefix(name, "unf")) {
 						BLI_dynstr_appendf(ds, "uniform %s %s;\n",
 							GPU_DATATYPE_STR[input->type], name);
 					}
@@ -656,7 +684,7 @@ static void codegen_call_functions(DynStr *ds, ListBase *nodes, GPUOutput *final
 	BLI_dynstr_append(ds, ";\n");
 }
 
-static char *code_generate_fragment(ListBase *nodes, GPUOutput *output)
+static char *code_generate_fragment(ListBase *nodes, const GPUMatType type, GPUOutput *output)
 {
 	DynStr *ds = BLI_dynstr_new();
 	char *code;
@@ -666,7 +694,6 @@ static char *code_generate_fragment(ListBase *nodes, GPUOutput *output)
 	GPUNode *node;
 	GPUInput *input;
 #endif
-
 
 #if 0
 	BLI_dynstr_append(ds, FUNCTION_PROTOTYPES);
@@ -679,6 +706,10 @@ static char *code_generate_fragment(ListBase *nodes, GPUOutput *output)
 	if (G.debug & G_DEBUG)
 		BLI_dynstr_appendf(ds, "/* %s */\n", name);
 #endif
+
+	if (type == GPU_MATERIAL_TYPE_MESH_REAL_SH) {
+		BLI_dynstr_append(ds, datatoc_gpu_shader_material_bsdf_frag_glsl);
+	}
 
 	BLI_dynstr_append(ds, "void main()\n{\n");
 
@@ -736,7 +767,7 @@ static char *code_generate_vertex(ListBase *nodes, const GPUMatType type)
 	GPUInput *input;
 	char *code;
 	char *vertcode = NULL;
-	
+
 	for (node = nodes->first; node; node = node->next) {
 		for (input = node->inputs.first; input; input = input->next) {
 			if (input->source == GPU_SOURCE_ATTRIB && input->attribfirst) {
@@ -765,6 +796,7 @@ static char *code_generate_vertex(ListBase *nodes, const GPUMatType type)
 
 	switch (type) {
 		case GPU_MATERIAL_TYPE_MESH:
+		case GPU_MATERIAL_TYPE_MESH_REAL_SH:
 			vertcode = datatoc_gpu_shader_vertex_glsl;
 			break;
 		case GPU_MATERIAL_TYPE_WORLD:
@@ -1667,8 +1699,9 @@ GPUPass *GPU_generate_pass(
 	gpu_nodes_get_vertex_attributes(nodes, attribs);
 	gpu_nodes_get_builtin_flag(nodes, builtins);
 
+
 	/* generate code and compile with opengl */
-	fragmentcode = code_generate_fragment(nodes, outlink->output);
+	fragmentcode = code_generate_fragment(nodes, type, outlink->output);
 	vertexcode = code_generate_vertex(nodes, type);
 	geometrycode = code_generate_geometry(nodes, use_opensubdiv);
 

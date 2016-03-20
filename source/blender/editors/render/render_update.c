@@ -307,6 +307,16 @@ static void material_changed(Main *bmain, Material *ma)
 
 		if (parent->gpumaterial.first)
 			GPU_material_free(&parent->gpumaterial);
+
+		for (ob = bmain->object.first; ob; ob = ob->id.next) {
+			if (ob->gpuprobe.first) {
+				LinkData *link;
+				for (link = ob->gpuprobe.first; link; link = link->next) {
+					GPUProbe *ref = (GPUProbe *)link->data;
+					GPU_probe_set_update(ref, true);
+				}
+			}
+		}
 	}
 
 	/* find if we have a scene with textured display */
@@ -356,6 +366,16 @@ static void lamp_changed(Main *bmain, Lamp *la)
 
 	if (defmaterial.gpumaterial.first)
 		GPU_material_free(&defmaterial.gpumaterial);
+
+	for (ob = bmain->object.first; ob; ob = ob->id.next) {
+		if (ob->gpuprobe.first) {
+			LinkData *link;
+			for (link = ob->gpuprobe.first; link; link = link->next) {
+				GPUProbe *ref = (GPUProbe *)link->data;
+				GPU_probe_set_update(ref, true);
+			}
+		}
+	}
 }
 
 static int material_uses_texture(Material *ma, Tex *tex)
@@ -394,6 +414,16 @@ static void texture_changed(Main *bmain, Tex *tex)
 
 		if (ma->gpumaterial.first)
 			GPU_material_free(&ma->gpumaterial);
+
+		for (ob = bmain->object.first; ob; ob = ob->id.next) {
+			if (ob->gpuprobe.first) {
+				LinkData *link;
+				for (link = ob->gpuprobe.first; link; link = link->next) {
+					GPUProbe *ref = (GPUProbe *)link->data;
+					GPU_probe_set_update(ref, true);
+				}
+			}
+		}
 	}
 
 	/* find lamps */
@@ -424,7 +454,25 @@ static void texture_changed(Main *bmain, Tex *tex)
 		BKE_icon_changed(BKE_icon_id_ensure(&wo->id));
 		
 		if (wo->gpumaterial.first)
-			GPU_material_free(&wo->gpumaterial);		
+			GPU_material_free(&wo->gpumaterial);
+
+		if (wo->gpuprobe.first) {
+			LinkData *link;
+			for (link = wo->gpuprobe.first; link; link = link->next) {
+				GPUProbe *ref = (GPUProbe *)link->data;
+				GPU_probe_set_update(ref, true);
+			}
+		}
+
+		for (ob = bmain->object.first; ob; ob = ob->id.next) {
+			if (ob->gpuprobe.first) {
+				LinkData *link;
+				for (link = ob->gpuprobe.first; link; link = link->next) {
+					GPUProbe *ref = (GPUProbe *)link->data;
+					GPU_probe_set_update(ref, true);
+				}
+			}
+		}
 	}
 
 	/* find compositing nodes */
@@ -481,6 +529,25 @@ static void world_changed(Main *bmain, World *wo)
 	
 	if (wo->gpumaterial.first)
 		GPU_material_free(&wo->gpumaterial);
+
+	if (wo->gpuprobe.first){
+		LinkData *link;
+		for (link = wo->gpuprobe.first; link; link = link->next) {
+			GPUProbe *ref = (GPUProbe *)link->data;
+			GPU_probe_set_update(ref, true);
+		}
+	}
+
+	for (Object *ob = bmain->object.first; ob; ob = ob->id.next) {
+		if (ob->gpuprobe.first) {
+			LinkData *link;
+			for (link = ob->gpuprobe.first; link; link = link->next) {
+				GPUProbe *ref = (GPUProbe *)link->data;
+				GPU_probe_set_update(ref, true);
+			}
+		}
+	}
+
 }
 
 static void image_changed(Main *bmain, Image *ima)
@@ -521,7 +588,7 @@ static void scene_changed(Main *bmain, Scene *scene)
 	for (wo = bmain->world.first; wo; wo = wo->id.next)
 		if (wo->gpumaterial.first)
 			GPU_material_free(&wo->gpumaterial);
-	
+
 	if (defmaterial.gpumaterial.first)
 		GPU_material_free(&defmaterial.gpumaterial);
 }

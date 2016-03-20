@@ -239,6 +239,7 @@ typedef struct View3D {
 	float stereo3d_convergence_alpha;
 
 	/* Pbr options */
+	struct Object *probe_source; /* runtime : the probe that is being updated when V3D_PROBE_CAPTURE */
 	int pbr_samples;
 	int pad5;
 } View3D;
@@ -318,6 +319,7 @@ typedef struct View3D {
 #define V3D_SHOW_WORLD			(1 << 0)
 #define V3D_SHOW_WORLD_SH		(1 << 1)
 #define V3D_REALISTIC_MAT		(1 << 2)
+#define V3D_PROBE_CAPTURE		(1 << 3)	/* runtime flag */
 
 /* View3D->around */
 enum {

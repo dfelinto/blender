@@ -128,7 +128,7 @@ GPUFrameBuffer *GPU_framebuffer_create(void)
 	return fb;
 }
 
-int GPU_framebuffer_texture_attach(GPUFrameBuffer *fb, GPUTexture *tex, int slot, char err_out[256])
+static int gpu_framebuffer_texture_attach(GPUFrameBuffer *fb, GPUTexture *tex, int slot, int cubeface, char err_out[256])
 {
 	GLenum attachment;
 	GLenum error;
@@ -159,8 +159,12 @@ int GPU_framebuffer_texture_attach(GPUFrameBuffer *fb, GPUTexture *tex, int slot
 	/* Clean glError buffer. */
 	while (glGetError() != GL_NO_ERROR) {}
 
-	glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, attachment, 
-		GPU_texture_target(tex), GPU_texture_opengl_bindcode(tex), 0);
+	if (GPU_texture_target(tex) == GL_TEXTURE_CUBE_MAP)
+		glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, attachment,
+			GL_TEXTURE_CUBE_MAP_POSITIVE_X + cubeface, GPU_texture_opengl_bindcode(tex), 0);
+	else
+		glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, attachment,
+			GPU_texture_target(tex), GPU_texture_opengl_bindcode(tex), 0);
 
 	error = glGetError();
 
@@ -178,6 +182,16 @@ int GPU_framebuffer_texture_attach(GPUFrameBuffer *fb, GPUTexture *tex, int slot
 	GPU_texture_framebuffer_set(tex, fb, slot);
 
 	return 1;
+}
+
+int GPU_framebuffer_cubeface_attach(GPUFrameBuffer *fb, GPUTexture *tex, int slot, int cubeface, char err_out[256])
+{
+	return gpu_framebuffer_texture_attach(fb, tex, slot, cubeface, err_out);
+}
+
+int GPU_framebuffer_texture_attach(GPUFrameBuffer *fb, GPUTexture *tex, int slot, char err_out[256])
+{
+	return gpu_framebuffer_texture_attach(fb, tex, slot, 0, err_out);
 }
 
 void GPU_framebuffer_texture_detach(GPUTexture *tex)
@@ -343,6 +357,7 @@ bool GPU_framebuffer_check_valid(GPUFrameBuffer *fb, char err_out[256])
 void GPU_framebuffer_free(GPUFrameBuffer *fb)
 {
 	int i;
+
 	if (fb->depthtex)
 		GPU_framebuffer_texture_detach(fb->depthtex);
 

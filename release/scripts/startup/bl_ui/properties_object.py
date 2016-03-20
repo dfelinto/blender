@@ -323,6 +323,24 @@ class OBJECT_PT_relations_extras(ObjectButtonsPanel, Panel):
         layout.prop(ob, "use_extra_recalc_data")
 
 
+class OBJECT_PT_probe_settings(ObjectButtonsPanel, Panel):
+    bl_label = "Viewport Probe Settings"
+    bl_context = "object"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    @classmethod
+    def poll(cls, context):
+        return (context.object)
+
+    def draw(self, context):
+        layout = self.layout
+
+        ob = context.object
+
+        layout.prop(ob, "env_probe", text="Probe object")
+        layout.prop(ob, "is_probe", text="Enable Probe Capture")
+
+
 from bl_ui.properties_animviz import (
         MotionPathButtonsPanel,
         OnionSkinButtonsPanel,

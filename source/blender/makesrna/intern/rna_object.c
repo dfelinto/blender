@@ -202,6 +202,47 @@ static void rna_Object_internal_update(Main *UNUSED(bmain), Scene *UNUSED(scene)
 	DAG_id_tag_update(ptr->id.data, OB_RECALC_OB);
 }
 
+static int rna_Object_probeObject_poll(PointerRNA *ptr, PointerRNA value)
+{
+	Object *ob = (Object *)ptr->id.data;
+	Object *probe = (Object *)value.data;
+
+	if (probe) {
+		if (probe->isprobe) {
+			return 1;
+		}
+	}
+
+	return 0;
+}
+
+static PointerRNA rna_Object_probeObject_get(PointerRNA *ptr)
+{
+	Object *ob = (Object *)ptr->id.data;
+	Object *probe = ob->probe;
+
+	if (probe)
+		return rna_pointer_inherit_refine(ptr, &RNA_Object, probe);
+
+	return rna_pointer_inherit_refine(ptr, NULL, NULL);
+}
+
+static void rna_Object_probeObject_set(PointerRNA *ptr, PointerRNA value)
+{
+	Object *ob = (Object *)ptr->id.data;
+	Object *probe = (Object *)value.data;
+
+	if (probe) {
+		if (probe->isprobe) {
+			ob->probe = probe;
+			id_lib_extern((ID *)probe);
+		}
+	}
+	else {
+		ob->probe = NULL;
+	}
+}
+
 static void rna_Object_matrix_world_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 {
 	/* don't use compat so we get predictable rotation */
@@ -2834,6 +2875,23 @@ static void rna_def_object(BlenderRNA *brna)
 	RNA_def_property_struct_type(prop, "LodLevel");
 	RNA_def_property_ui_text(prop, "Level of Detail Levels", "A collection of detail levels to automatically switch between");
 	RNA_def_property_update(prop, NC_OBJECT | ND_LOD, NULL);
+
+	/* Viewport Probe */
+	prop = RNA_def_property(srna, "is_probe", PROP_BOOLEAN, PROP_NONE);
+	RNA_def_property_boolean_sdna(prop, NULL, "isprobe", 1);
+	RNA_def_property_ui_text(prop, "Enable Probe Capture", "Use this object as a probe capture point");
+	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, NULL);
+
+	prop = RNA_def_property(srna, "env_probe", PROP_POINTER, PROP_NONE);
+	RNA_def_property_struct_type(prop, "Object");
+	RNA_def_property_pointer_sdna(prop, NULL, "probe");
+	RNA_def_property_flag(prop, PROP_EDITABLE);
+	RNA_def_property_ui_text(prop, "Probe Object",
+		                     "Probe object that defines the environment for the BSDFs");
+	RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Object_internal_update");
+	// RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, NULL);
+	RNA_def_property_pointer_funcs(prop, "rna_Object_probeObject_get", "rna_Object_probeObject_set", NULL,
+	                               "rna_Object_probeObject_poll");
 
 	RNA_api_object(srna);
 }

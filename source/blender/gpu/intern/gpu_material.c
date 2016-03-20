@@ -46,6 +46,7 @@
 #include "BLI_math.h"
 #include "BLI_blenlib.h"
 #include "BLI_utildefines.h"
+#include "BLI_dynstr.h"
 
 #include "BKE_anim.h"
 #include "BKE_colortools.h"
@@ -65,6 +66,7 @@
 #include "GPU_material.h"
 #include "GPU_shader.h"
 #include "GPU_texture.h"
+#include "GPU_draw.h"
 
 #include "gpu_codegen.h"
 
@@ -90,6 +92,34 @@ static struct GPUWorld {
 	float horicol[3];
 	float ambcol[4];
 } GPUWorld;
+
+struct GPUProbe {
+	Scene *scene;
+	World *wo;
+	Object *ob;
+
+	int type;
+	int size;
+
+	bool update;
+
+	float obmat[4][4];
+	float winmat[4][4];
+	float viewmat[4][4];
+	float persmat[4][4];
+	float dynpersmat[4][4];
+
+	GPUTexture *tex;
+	GPUTexture *depthtex;
+	GPUFrameBuffer *fb;
+
+	GPUTexture *shtex;
+	GPUFrameBuffer *fbsh;
+
+	float *shcoefs;
+
+	ListBase materials;
+};
 
 struct GPUMaterial {
 	Scene *scene;
@@ -122,12 +152,16 @@ struct GPUMaterial {
 	int partvel;
 	int partangvel;
 
+	/* Probe binding */
+	int probeloc;
+	int lodfactorloc;
+	int shloc[9];
+	GPUProbe *bindedprobe;
+
 	ListBase lamps;
 	bool bound;
 
 	/* for passing parameters to the world nodetree */
-	GPUNodeLink *norlink;
-	GPUNodeLink *tanlink;
 	GPUNodeLink *lampNorLink;
 	GPUNodeLink *lampPosLink;
 	GPUNodeLink *lampInLink;
@@ -280,6 +314,28 @@ static int GPU_material_construct_end(GPUMaterial *material, const char *passnam
 			material->partvel = GPU_shader_get_uniform(shader, GPU_builtin_name(GPU_PARTICLE_VELOCITY));
 		if (material->builtins & GPU_PARTICLE_ANG_VELOCITY)
 			material->partangvel = GPU_shader_get_uniform(shader, GPU_builtin_name(GPU_PARTICLE_ANG_VELOCITY));
+		if (material->builtins & GPU_PBR_LOD_FACTOR)
+			material->lodfactorloc = GPU_shader_get_uniform(shader, GPU_builtin_name(GPU_PBR_LOD_FACTOR));
+		if (material->builtins & GPU_PBR_PROBE)
+			material->probeloc = GPU_shader_get_uniform(shader, GPU_builtin_name(GPU_PBR_PROBE));
+		if (material->builtins & GPU_PBR_SH0)
+			material->shloc[0] = GPU_shader_get_uniform(shader, GPU_builtin_name(GPU_PBR_SH0));
+		if (material->builtins & GPU_PBR_SH1)
+			material->shloc[1] = GPU_shader_get_uniform(shader, GPU_builtin_name(GPU_PBR_SH1));
+		if (material->builtins & GPU_PBR_SH2)
+			material->shloc[2] = GPU_shader_get_uniform(shader, GPU_builtin_name(GPU_PBR_SH2));
+		if (material->builtins & GPU_PBR_SH3)
+			material->shloc[3] = GPU_shader_get_uniform(shader, GPU_builtin_name(GPU_PBR_SH3));
+		if (material->builtins & GPU_PBR_SH4)
+			material->shloc[4] = GPU_shader_get_uniform(shader, GPU_builtin_name(GPU_PBR_SH4));
+		if (material->builtins & GPU_PBR_SH5)
+			material->shloc[5] = GPU_shader_get_uniform(shader, GPU_builtin_name(GPU_PBR_SH5));
+		if (material->builtins & GPU_PBR_SH6)
+			material->shloc[6] = GPU_shader_get_uniform(shader, GPU_builtin_name(GPU_PBR_SH6));
+		if (material->builtins & GPU_PBR_SH7)
+			material->shloc[7] = GPU_shader_get_uniform(shader, GPU_builtin_name(GPU_PBR_SH7));
+		if (material->builtins & GPU_PBR_SH8)
+			material->shloc[8] = GPU_shader_get_uniform(shader, GPU_builtin_name(GPU_PBR_SH8));
 		return 1;
 	}
 
@@ -339,7 +395,7 @@ void GPU_material_bind(
 			viewlay &= srl->lay;
 
 		/* handle layer lamps */
-		if (material->type == GPU_MATERIAL_TYPE_MESH) {
+		if (material->type == GPU_MATERIAL_TYPE_MESH || material->type == GPU_MATERIAL_TYPE_MESH_REAL_SH) {
 			for (LinkData *nlink = material->lamps.first; nlink; nlink = nlink->next) {
 				GPULamp *lamp = nlink->data;
 				
@@ -462,13 +518,49 @@ void GPU_material_bind_uniforms(
 		if (material->builtins & GPU_PARTICLE_ANG_VELOCITY) {
 			GPU_shader_uniform_vector(shader, material->partangvel, 3, 1, pi->angular_velocity);
 		}
+	}
+}
 
+void GPU_material_bind_uniforms_probe(GPUMaterial *material, GPUProbe *probe)
+{
+	if (material->pass) {
+		GPUShader *shader = GPU_pass_shader(material->pass);
+
+		/* handle per object builtins */
+		if (material->builtins & GPU_PBR_PROBE) {
+			/* XXX : save the probe for unbinding */
+			material->bindedprobe = probe;
+
+			GPU_texture_bind(probe->tex, 0);
+			GPU_shader_uniform_texture(shader, material->probeloc, probe->tex);
+		}
+		if (material->builtins & GPU_PBR_LOD_FACTOR) {
+			float lodfactor;
+			float samplenum = (float)(material->samplecount);
+
+			//maxlod = log((float)probe->size) / log(2);
+			lodfactor = 0.5f * log( ( (float)(probe->size * probe->size) / samplenum ) ) / log(2);
+
+			/* Biasing the factor to get more accurate sampling for higher sample count */
+			lodfactor -= (samplenum - 16.0f) / 128.0f;
+			GPU_shader_uniform_vector(shader, material->lodfactorloc, 1, 1, &lodfactor);
+		}
+		if (material->builtins & GPU_PBR_SH0) {
+			int i;
+			/* Making the asumption that we need all of them */
+			for (i = 0; i < 9; ++i) {
+				GPU_shader_uniform_vector(shader, material->shloc[i], 3, 1, &probe->shcoefs[i*3]);
+			}
+		}
 	}
 }
 
 void GPU_material_unbind(GPUMaterial *material)
 {
 	if (material->pass) {
+		if (material->bindedprobe)
+			GPU_texture_unbind(material->bindedprobe->tex);
+
 		material->bound = 0;
 		GPU_pass_unbind(material->pass);
 	}
@@ -494,11 +586,6 @@ void GPU_material_set_type(GPUMaterial *material, GPUMatType type)
 	material->type = type;
 }
 
-int GPU_material_get_samplecount(GPUMaterial *material)
-{
-	return material->samplecount;
-}
-
 void GPU_material_vertex_attributes(GPUMaterial *material, GPUVertexAttribs *attribs)
 {
 	*attribs = material->attribs;
@@ -518,26 +605,6 @@ void GPU_material_empty_output_link(GPUMaterial *material)
 GPUNodeLink *GPU_material_get_output_link(GPUMaterial *material)
 {
 	return material->outlink;
-}
-
-void GPU_material_set_normal_link(GPUMaterial *material, GPUNodeLink *link)
-{
-	material->norlink = link;
-}
-
-GPUNodeLink *GPU_material_get_normal_link(GPUMaterial *material)
-{
-	return material->norlink;
-}
-
-void GPU_material_set_tangent_link(GPUMaterial *material, GPUNodeLink *link)
-{
-	material->tanlink = link;
-}
-
-GPUNodeLink *GPU_material_get_tangent_link(GPUMaterial *material)
-{
-	return material->tanlink;
 }
 
 void GPU_material_set_lamp_normal_link(GPUMaterial *material, GPUNodeLink *link)
@@ -1860,12 +1927,101 @@ void GPU_shaderesult_set(GPUShadeInput *shi, GPUShadeResult *shr)
 	}
 }
 
+/* PBR Viewport Material Mode */
+
+void GPU_brdf_input_initialize(GPUBrdfInput *brdf)
+{
+	memset(brdf, 0, sizeof(*brdf));
+}
+
+static void prep_brdf_input(GPUBrdfInput *brdf)
+{
+	GPUNodeLink *normal = NULL;
+	GPUNodeLink *color = NULL;
+	GPUNodeLink *roughness = NULL;
+	GPUNodeLink *ior = NULL;
+	GPUNodeLink *sigma = NULL;
+	GPUNodeLink *toon_size = NULL;
+	GPUNodeLink *toon_smooth = NULL;
+	GPUNodeLink *anisotropy = NULL;
+	GPUNodeLink *aniso_rotation = NULL;
+	GPUNodeLink *aniso_tangent = NULL;
+
+	/* Normal & Tangent can't be NULL */
+	if (brdf->normal)
+		GPU_link(brdf->mat, "set_rgb", brdf->normal, &normal);
+	else
+		GPU_link(brdf->mat, "set_rgb", GPU_builtin(GPU_VIEW_NORMAL), &normal);
+
+	if (brdf->aniso_tangent)
+		GPU_link(brdf->mat, "set_rgb", brdf->aniso_tangent, &aniso_tangent);
+	else
+		GPU_link(brdf->mat, "default_tangent", GPU_builtin(GPU_VIEW_NORMAL), GPU_attribute(CD_ORCO, ""),
+			GPU_builtin(GPU_OBJECT_MATRIX), GPU_builtin(GPU_VIEW_MATRIX),
+			GPU_builtin(GPU_INVERSE_VIEW_MATRIX), &aniso_tangent);
+
+	if (brdf->color)
+		GPU_link(brdf->mat, "set_rgba", brdf->color, &color);
+	else
+		GPU_link(brdf->mat, "set_rgba_zero", &color);
+
+	if (brdf->roughness)
+		GPU_link(brdf->mat, "set_value", brdf->roughness, &roughness);
+	else
+		GPU_link(brdf->mat, "set_value_zero", &roughness);
+
+	if (brdf->ior)
+		GPU_link(brdf->mat, "set_value", brdf->ior, &ior);
+	else
+		GPU_link(brdf->mat, "set_value_zero", &ior);
+
+	if (brdf->sigma)
+		GPU_link(brdf->mat, "set_value", brdf->sigma, &sigma);
+	else
+		GPU_link(brdf->mat, "set_value_zero", &sigma);
+
+	if (brdf->toon_size)
+		GPU_link(brdf->mat, "set_value", brdf->toon_size, &toon_size);
+	else
+		GPU_link(brdf->mat, "set_value_zero", &toon_size);
+
+	if (brdf->toon_smooth)
+		GPU_link(brdf->mat, "set_value", brdf->toon_smooth, &toon_smooth);
+	else
+		GPU_link(brdf->mat, "set_value_zero", &toon_smooth);
+
+	if (brdf->anisotropy)
+		GPU_link(brdf->mat, "set_value", brdf->anisotropy, &anisotropy);
+	else
+		GPU_link(brdf->mat, "set_value_zero", &anisotropy);
+
+	if (brdf->aniso_rotation)
+		GPU_link(brdf->mat, "set_value", brdf->aniso_rotation, &aniso_rotation);
+	else
+		GPU_link(brdf->mat, "set_value_zero", &aniso_rotation);
+
+	GPU_link(brdf->mat, "set_rgba_zero", &brdf->output);
+
+	brdf->normal = normal;
+	brdf->color = color;
+	brdf->roughness = roughness;
+	brdf->ior = ior;
+	brdf->sigma = sigma;
+	brdf->toon_size = toon_size;
+	brdf->toon_smooth = toon_smooth;
+	brdf->anisotropy = anisotropy;
+	brdf->aniso_rotation = aniso_rotation;
+	brdf->aniso_tangent = aniso_tangent;
+}
+
 static void shade_one_brdf_light(GPUBrdfInput *brdf, GPULamp *lamp)
 {
 	GPUMaterial *mat = brdf->mat;
 	GPUNodeLink *lco, *lv, *dist, *visifac, *vn, *view;
-	GPUNodeLink *shadfac = NULL, *lcol, *inp, *inpr, *output;
+	GPUNodeLink *shadfac = NULL, *lcol, *inp, *inpr, *output, *tmp;
 	float one = 1.0f, sun_fac = 1.0f;
+
+	printf("shade_one_brdf_light %d %d\n",brdf->type,lamp->type );
 
 	/* from get_lamp_visibility */
 	if (lamp->type == LA_SUN || lamp->type == LA_HEMI) {
@@ -1878,14 +2034,20 @@ static void shade_one_brdf_light(GPUBrdfInput *brdf, GPULamp *lamp)
 		GPU_link(mat, "lamp_visibility_other", GPU_builtin(GPU_VIEW_POSITION), GPU_dynamic_uniform(lamp->dynco, GPU_DYNAMIC_LAMP_DYNCO, lamp->ob), &lv, &dist, &visifac);
 	}
 
-	GPU_link(mat, "set_rgb", GPU_builtin(GPU_VIEW_POSITION), &view);
 	GPU_link(mat, "set_rgb", GPU_dynamic_uniform(lamp->dynco, GPU_DYNAMIC_LAMP_DYNCO, lamp->ob), &lco);
 
+	if ((brdf->type == GPU_BRDF_TRANSLUCENT || brdf->type == GPU_BRDF_DIFFUSE) && (lamp->type == LA_AREA))
+		GPU_link(mat, "set_rgb", GPU_builtin(GPU_VIEW_POSITION), &view);
+	else
+		GPU_link(mat, "shade_view", GPU_builtin(GPU_VIEW_POSITION), &view);
+		
+	/* Translucent is defined as backfacing lighting */
 	if (brdf->type == GPU_BRDF_TRANSLUCENT)
-		GPU_link(mat, "set_rgb", brdf->normal, &vn);
+		GPU_link(mat, "vec_math_normalize", brdf->normal, &vn, &tmp);
 	else
 		GPU_link(mat, "viewN_to_shadeN", brdf->normal, &vn);
 	
+
 	if (lamp->type == LA_SPOT) {
 		mat->dynproperty |= DYN_LAMP_VEC | DYN_LAMP_IMAT;
 		GPU_link(mat, "lamp_visibility_spot_circle", GPU_dynamic_uniform(lamp->dynvec, GPU_DYNAMIC_LAMP_DYNVEC, lamp->ob), GPU_dynamic_uniform((float *)lamp->dynimat, GPU_DYNAMIC_LAMP_DYNIMAT, lamp->ob), GPU_dynamic_uniform((float *)lamp->spotvec, GPU_DYNAMIC_LAMP_SPOTSCALE, lamp->ob), lv, &inpr);		
@@ -1948,84 +2110,107 @@ static void shade_one_brdf_light(GPUBrdfInput *brdf, GPULamp *lamp)
 		GPU_link(mat, "set_rgb", GPU_dynamic_uniform(lamp->dyncol, GPU_DYNAMIC_LAMP_DYNCOL, lamp->ob), &lcol);
 	}
 
-
 	/* BRDF evaluation */
-	if (brdf->type == GPU_BRDF_DIFFUSE || brdf->type == GPU_BRDF_TRANSLUCENT) {
-		if (lamp->type == LA_AREA)
-			GPU_link(mat, "bsdf_diffuse_area_light", vn, lv, view, dist, lco, GPU_dynamic_uniform((float *)lamp->areavec, GPU_DYNAMIC_LAMP_AREASCALE, lamp->ob), GPU_dynamic_uniform((float*)lamp->dynmat, GPU_DYNAMIC_LAMP_DYNMAT, lamp->ob), GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob),  GPU_dynamic_uniform(&lamp->area_size_y, GPU_DYNAMIC_LAMP_SIZEY, lamp->ob), brdf->roughness, &output);
-		else if (lamp->type == LA_SUN || lamp->type == LA_HEMI)
-			GPU_link(mat, "bsdf_diffuse_sun_light", vn, lv, view, dist, GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob), brdf->roughness, &output);
-		else
-			GPU_link(mat, "bsdf_diffuse_sphere_light", vn, lv, view, dist, GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob), brdf->roughness, &output);
-	}
-	else if (brdf->type == GPU_BRDF_ANISO_GGX) {
-		if (lamp->type == LA_AREA)
-			GPU_link(mat, "bsdf_anisotropic_ggx_area_light", vn, brdf->aniso_tangent, lv, view, dist, brdf->aniso_rotation, brdf->anisotropy, GPU_dynamic_uniform((float *)lamp->areavec, GPU_DYNAMIC_LAMP_AREASCALE, lamp->ob), GPU_builtin(GPU_INVERSE_VIEW_MATRIX), GPU_dynamic_uniform((float *)lamp->dynimat, GPU_DYNAMIC_LAMP_DYNIMAT, lamp->ob), GPU_dynamic_uniform((float*)lamp->dynmat, GPU_DYNAMIC_LAMP_DYNMAT, lamp->ob), GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob),  GPU_dynamic_uniform(&lamp->area_size_y, GPU_DYNAMIC_LAMP_SIZEY, lamp->ob), brdf->roughness, &output);
-		else if (lamp->type == LA_SUN || lamp->type == LA_HEMI)
-			GPU_link(mat, "bsdf_anisotropic_ggx_sun_light", vn, brdf->aniso_tangent, lv, view, dist, brdf->aniso_rotation, brdf->anisotropy, GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob), brdf->roughness, &output);
-		else
-			GPU_link(mat, "bsdf_anisotropic_ggx_sphere_light", vn, brdf->aniso_tangent, lv, view, dist, brdf->aniso_rotation, brdf->anisotropy, GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob), brdf->roughness, &output);
-	}
-	else if (brdf->type == GPU_BRDF_GLOSSY_GGX) {
-		if (lamp->type == LA_AREA)
-			GPU_link(mat, "bsdf_glossy_ggx_area_light", vn, lv, view, dist, GPU_dynamic_uniform((float *)lamp->areavec, GPU_DYNAMIC_LAMP_AREASCALE, lamp->ob), GPU_builtin(GPU_INVERSE_VIEW_MATRIX), GPU_dynamic_uniform((float *)lamp->dynimat, GPU_DYNAMIC_LAMP_DYNIMAT, lamp->ob), GPU_dynamic_uniform((float*)lamp->dynmat, GPU_DYNAMIC_LAMP_DYNMAT, lamp->ob), GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob),  GPU_dynamic_uniform(&lamp->area_size_y, GPU_DYNAMIC_LAMP_SIZEY, lamp->ob), brdf->roughness, &output);
-		else if (lamp->type == LA_SUN || lamp->type == LA_HEMI)
-			GPU_link(mat, "bsdf_glossy_ggx_sun_light", vn, lv, view, dist, GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob), brdf->roughness, &output);
-		else
-			GPU_link(mat, "bsdf_glossy_ggx_sphere_light", vn, lv, view, dist, GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob), brdf->roughness, &output);
-	}
-	else if (brdf->type == GPU_BRDF_GLOSSY_SHARP) {
-		if (lamp->type == LA_AREA)
-			GPU_link(mat, "bsdf_glossy_sharp_area_light", vn, lv, view, dist, GPU_dynamic_uniform((float *)lamp->areavec, GPU_DYNAMIC_LAMP_AREASCALE, lamp->ob), GPU_builtin(GPU_INVERSE_VIEW_MATRIX), GPU_dynamic_uniform((float *)lamp->dynimat, GPU_DYNAMIC_LAMP_DYNIMAT, lamp->ob), GPU_dynamic_uniform((float*)lamp->dynmat, GPU_DYNAMIC_LAMP_DYNMAT, lamp->ob), GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob),  GPU_dynamic_uniform(&lamp->area_size_y, GPU_DYNAMIC_LAMP_SIZEY, lamp->ob), brdf->roughness, &output);
-		else if (lamp->type == LA_SUN || lamp->type == LA_HEMI)
-			GPU_link(mat, "bsdf_glossy_sharp_sun_light", vn, lv, view, dist, GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob), brdf->roughness, &output);
-		else
-			GPU_link(mat, "bsdf_glossy_sharp_sphere_light", vn, lv, view, dist, GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob), brdf->roughness, &output);
-	}
-	else if (brdf->type == GPU_BRDF_REFRACT_GGX) {
-		if (lamp->type == LA_AREA)
-			GPU_link(mat, "bsdf_refract_ggx_area_light", vn, lv, view, dist, brdf->ior, GPU_dynamic_uniform((float *)lamp->areavec, GPU_DYNAMIC_LAMP_AREASCALE, lamp->ob), GPU_builtin(GPU_INVERSE_VIEW_MATRIX), GPU_dynamic_uniform((float *)lamp->dynimat, GPU_DYNAMIC_LAMP_DYNIMAT, lamp->ob), GPU_dynamic_uniform((float*)lamp->dynmat, GPU_DYNAMIC_LAMP_DYNMAT, lamp->ob), GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob),  GPU_dynamic_uniform(&lamp->area_size_y, GPU_DYNAMIC_LAMP_SIZEY, lamp->ob), brdf->roughness, &output);
-		else if (lamp->type == LA_SUN || lamp->type == LA_HEMI)
-			GPU_link(mat, "bsdf_refract_ggx_sun_light", vn, lv, view, dist, brdf->ior, GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob), brdf->roughness, &output);
-		else
-			GPU_link(mat, "bsdf_refract_ggx_sphere_light", vn, lv, view, dist, brdf->ior, GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob), brdf->roughness, &output);
-	}
-	else if (brdf->type == GPU_BRDF_REFRACT_SHARP) {
-		if (lamp->type == LA_AREA)
-			GPU_link(mat, "bsdf_refract_sharp_area_light", vn, lv, view, dist, brdf->ior, GPU_dynamic_uniform((float *)lamp->areavec, GPU_DYNAMIC_LAMP_AREASCALE, lamp->ob), GPU_builtin(GPU_INVERSE_VIEW_MATRIX), GPU_dynamic_uniform((float *)lamp->dynimat, GPU_DYNAMIC_LAMP_DYNIMAT, lamp->ob), GPU_dynamic_uniform((float*)lamp->dynmat, GPU_DYNAMIC_LAMP_DYNMAT, lamp->ob), GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob),  GPU_dynamic_uniform(&lamp->area_size_y, GPU_DYNAMIC_LAMP_SIZEY, lamp->ob), brdf->roughness, &output);
-		else if (lamp->type == LA_SUN || lamp->type == LA_HEMI)
-			GPU_link(mat, "bsdf_refract_sharp_sun_light", vn, lv, view, dist, brdf->ior, GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob), brdf->roughness, &output);
-		else
-			GPU_link(mat, "bsdf_refract_sharp_sphere_light", vn, lv, view, dist, brdf->ior, GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob), brdf->roughness, &output);
-	}
-	else if (brdf->type == GPU_BRDF_GLASS_GGX) {
-		if (lamp->type == LA_AREA)
-			GPU_link(mat, "bsdf_glass_ggx_area_light", vn, lv, view, dist, brdf->ior, GPU_dynamic_uniform((float *)lamp->areavec, GPU_DYNAMIC_LAMP_AREASCALE, lamp->ob), GPU_builtin(GPU_INVERSE_VIEW_MATRIX), GPU_dynamic_uniform((float *)lamp->dynimat, GPU_DYNAMIC_LAMP_DYNIMAT, lamp->ob), GPU_dynamic_uniform((float*)lamp->dynmat, GPU_DYNAMIC_LAMP_DYNMAT, lamp->ob), GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob),  GPU_dynamic_uniform(&lamp->area_size_y, GPU_DYNAMIC_LAMP_SIZEY, lamp->ob), brdf->roughness, &output);
-		else if (lamp->type == LA_SUN || lamp->type == LA_HEMI)
-			GPU_link(mat, "bsdf_glass_ggx_sun_light", vn, lv, view, dist, brdf->ior, GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob), brdf->roughness, &output);
-		else
-			GPU_link(mat, "bsdf_glass_ggx_sphere_light", vn, lv, view, dist, brdf->ior, GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob), brdf->roughness, &output);
-	}
-	else if (brdf->type == GPU_BRDF_GLASS_SHARP) {
-		if (lamp->type == LA_AREA)
-			GPU_link(mat, "bsdf_glass_sharp_area_light", vn, lv, view, dist, brdf->ior, GPU_dynamic_uniform((float *)lamp->areavec, GPU_DYNAMIC_LAMP_AREASCALE, lamp->ob), GPU_builtin(GPU_INVERSE_VIEW_MATRIX), GPU_dynamic_uniform((float *)lamp->dynimat, GPU_DYNAMIC_LAMP_DYNIMAT, lamp->ob), GPU_dynamic_uniform((float*)lamp->dynmat, GPU_DYNAMIC_LAMP_DYNMAT, lamp->ob), GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob),  GPU_dynamic_uniform(&lamp->area_size_y, GPU_DYNAMIC_LAMP_SIZEY, lamp->ob), brdf->roughness, &output);
-		else if (lamp->type == LA_SUN || lamp->type == LA_HEMI)
-			GPU_link(mat, "bsdf_glass_sharp_sun_light", vn, lv, view, dist, brdf->ior, GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob), brdf->roughness, &output);
-		else
-			GPU_link(mat, "bsdf_glass_sharp_sphere_light", vn, lv, view, dist, brdf->ior, GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob), brdf->roughness, &output);
-	}
-	else if (brdf->type == GPU_BRDF_VELVET) {
-		if (lamp->type == LA_AREA)
-			GPU_link(mat, "bsdf_velvet_area_light", vn, lv, view, dist, brdf->sigma, GPU_dynamic_uniform((float *)lamp->areavec, GPU_DYNAMIC_LAMP_AREASCALE, lamp->ob), GPU_builtin(GPU_INVERSE_VIEW_MATRIX), GPU_dynamic_uniform((float *)lamp->dynimat, GPU_DYNAMIC_LAMP_DYNIMAT, lamp->ob), GPU_dynamic_uniform((float*)lamp->dynmat, GPU_DYNAMIC_LAMP_DYNMAT, lamp->ob), GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob),  GPU_dynamic_uniform(&lamp->area_size_y, GPU_DYNAMIC_LAMP_SIZEY, lamp->ob), &output);
-		else if (lamp->type == LA_SUN || lamp->type == LA_HEMI)
-			GPU_link(mat, "bsdf_velvet_sun_light", vn, lv, view, dist, brdf->sigma, GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob), &output);
-		else
-			GPU_link(mat, "bsdf_velvet_sphere_light", vn, lv, view, dist, brdf->sigma, GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob), &output);
-	}
-	else {
-		/* In case of unsupported BRDF */
-		GPU_link(brdf->mat, "set_rgba_zero", &output);
-		return;
+	switch (brdf->type) {
+		case GPU_BRDF_ANISO_GGX : 
+			switch (lamp->type) {
+				case LA_SUN :
+				case LA_HEMI : 	GPU_link(mat, "bsdf_anisotropic_ggx_sun_light", vn, brdf->aniso_tangent, lv, view, lco, dist, GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob), GPU_dynamic_uniform(&lamp->area_size_y, GPU_DYNAMIC_LAMP_SIZEY, lamp->ob), GPU_dynamic_uniform(&lamp->areavec, GPU_DYNAMIC_LAMP_AREASCALE, lamp->ob), GPU_dynamic_uniform(&lamp->dynmat, GPU_DYNAMIC_LAMP_DYNMAT, lamp->ob), brdf->roughness, brdf->ior, brdf->sigma, brdf->toon_size, brdf->toon_smooth, brdf->anisotropy, brdf->aniso_rotation, &output);
+					break;
+				case LA_AREA : 	GPU_link(mat, "bsdf_anisotropic_ggx_area_light", vn, brdf->aniso_tangent, lv, view, lco, dist, GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob), GPU_dynamic_uniform(&lamp->area_size_y, GPU_DYNAMIC_LAMP_SIZEY, lamp->ob), GPU_dynamic_uniform(&lamp->areavec, GPU_DYNAMIC_LAMP_AREASCALE, lamp->ob), GPU_dynamic_uniform(&lamp->dynmat, GPU_DYNAMIC_LAMP_DYNMAT, lamp->ob), brdf->roughness, brdf->ior, brdf->sigma, brdf->toon_size, brdf->toon_smooth, brdf->anisotropy, brdf->aniso_rotation, &output);
+					break;
+				default : 		GPU_link(mat, "bsdf_anisotropic_ggx_sphere_light", vn, brdf->aniso_tangent, lv, view, lco, dist, GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob), GPU_dynamic_uniform(&lamp->area_size_y, GPU_DYNAMIC_LAMP_SIZEY, lamp->ob), GPU_dynamic_uniform(&lamp->areavec, GPU_DYNAMIC_LAMP_AREASCALE, lamp->ob), GPU_dynamic_uniform(&lamp->dynmat, GPU_DYNAMIC_LAMP_DYNMAT, lamp->ob), brdf->roughness, brdf->ior, brdf->sigma, brdf->toon_size, brdf->toon_smooth, brdf->anisotropy, brdf->aniso_rotation, &output);
+					break;
+			}
+			break;
+		case GPU_BRDF_GLOSSY_GGX : 
+			switch (lamp->type) {
+				case LA_SUN :
+				case LA_HEMI : 	GPU_link(mat, "bsdf_glossy_ggx_sun_light", vn, brdf->aniso_tangent, lv, view, lco, dist, GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob), GPU_dynamic_uniform(&lamp->area_size_y, GPU_DYNAMIC_LAMP_SIZEY, lamp->ob), GPU_dynamic_uniform(&lamp->areavec, GPU_DYNAMIC_LAMP_AREASCALE, lamp->ob), GPU_dynamic_uniform(&lamp->dynmat, GPU_DYNAMIC_LAMP_DYNMAT, lamp->ob), brdf->roughness, brdf->ior, brdf->sigma, brdf->toon_size, brdf->toon_smooth, brdf->anisotropy, brdf->aniso_rotation, &output);
+					break;
+				case LA_AREA : 	GPU_link(mat, "bsdf_glossy_ggx_area_light", vn, brdf->aniso_tangent, lv, view, lco, dist, GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob), GPU_dynamic_uniform(&lamp->area_size_y, GPU_DYNAMIC_LAMP_SIZEY, lamp->ob), GPU_dynamic_uniform(&lamp->areavec, GPU_DYNAMIC_LAMP_AREASCALE, lamp->ob), GPU_dynamic_uniform(&lamp->dynmat, GPU_DYNAMIC_LAMP_DYNMAT, lamp->ob), brdf->roughness, brdf->ior, brdf->sigma, brdf->toon_size, brdf->toon_smooth, brdf->anisotropy, brdf->aniso_rotation, &output);
+					break;
+				default : 		GPU_link(mat, "bsdf_glossy_ggx_sphere_light", vn, brdf->aniso_tangent, lv, view, lco, dist, GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob), GPU_dynamic_uniform(&lamp->area_size_y, GPU_DYNAMIC_LAMP_SIZEY, lamp->ob), GPU_dynamic_uniform(&lamp->areavec, GPU_DYNAMIC_LAMP_AREASCALE, lamp->ob), GPU_dynamic_uniform(&lamp->dynmat, GPU_DYNAMIC_LAMP_DYNMAT, lamp->ob), brdf->roughness, brdf->ior, brdf->sigma, brdf->toon_size, brdf->toon_smooth, brdf->anisotropy, brdf->aniso_rotation, &output);
+					break;
+			}
+			break;
+		case GPU_BRDF_GLOSSY_SHARP : 
+			switch (lamp->type) {
+				case LA_SUN :
+				case LA_HEMI : 	GPU_link(mat, "bsdf_glossy_sharp_sun_light", vn, brdf->aniso_tangent, lv, view, lco, dist, GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob), GPU_dynamic_uniform(&lamp->area_size_y, GPU_DYNAMIC_LAMP_SIZEY, lamp->ob), GPU_dynamic_uniform(&lamp->areavec, GPU_DYNAMIC_LAMP_AREASCALE, lamp->ob), GPU_dynamic_uniform(&lamp->dynmat, GPU_DYNAMIC_LAMP_DYNMAT, lamp->ob), brdf->roughness, brdf->ior, brdf->sigma, brdf->toon_size, brdf->toon_smooth, brdf->anisotropy, brdf->aniso_rotation, &output);
+					break;
+				case LA_AREA : 	GPU_link(mat, "bsdf_glossy_sharp_area_light", vn, brdf->aniso_tangent, lv, view, lco, dist, GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob), GPU_dynamic_uniform(&lamp->area_size_y, GPU_DYNAMIC_LAMP_SIZEY, lamp->ob), GPU_dynamic_uniform(&lamp->areavec, GPU_DYNAMIC_LAMP_AREASCALE, lamp->ob), GPU_dynamic_uniform(&lamp->dynmat, GPU_DYNAMIC_LAMP_DYNMAT, lamp->ob), brdf->roughness, brdf->ior, brdf->sigma, brdf->toon_size, brdf->toon_smooth, brdf->anisotropy, brdf->aniso_rotation, &output);
+					break;
+				default : 		GPU_link(mat, "bsdf_glossy_sharp_sphere_light", vn, brdf->aniso_tangent, lv, view, lco, dist, GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob), GPU_dynamic_uniform(&lamp->area_size_y, GPU_DYNAMIC_LAMP_SIZEY, lamp->ob), GPU_dynamic_uniform(&lamp->areavec, GPU_DYNAMIC_LAMP_AREASCALE, lamp->ob), GPU_dynamic_uniform(&lamp->dynmat, GPU_DYNAMIC_LAMP_DYNMAT, lamp->ob), brdf->roughness, brdf->ior, brdf->sigma, brdf->toon_size, brdf->toon_smooth, brdf->anisotropy, brdf->aniso_rotation, &output);
+					break;
+			}
+			break;
+		case GPU_BRDF_REFRACT_GGX : 
+			switch (lamp->type) {
+				case LA_SUN :
+				case LA_HEMI : 	GPU_link(mat, "bsdf_refract_ggx_sun_light", vn, brdf->aniso_tangent, lv, view, lco, dist, GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob), GPU_dynamic_uniform(&lamp->area_size_y, GPU_DYNAMIC_LAMP_SIZEY, lamp->ob), GPU_dynamic_uniform(&lamp->areavec, GPU_DYNAMIC_LAMP_AREASCALE, lamp->ob), GPU_dynamic_uniform(&lamp->dynmat, GPU_DYNAMIC_LAMP_DYNMAT, lamp->ob), brdf->roughness, brdf->ior, brdf->sigma, brdf->toon_size, brdf->toon_smooth, brdf->anisotropy, brdf->aniso_rotation, &output);
+					break;
+				case LA_AREA : 	GPU_link(mat, "bsdf_refract_ggx_area_light", vn, brdf->aniso_tangent, lv, view, lco, dist, GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob), GPU_dynamic_uniform(&lamp->area_size_y, GPU_DYNAMIC_LAMP_SIZEY, lamp->ob), GPU_dynamic_uniform(&lamp->areavec, GPU_DYNAMIC_LAMP_AREASCALE, lamp->ob), GPU_dynamic_uniform(&lamp->dynmat, GPU_DYNAMIC_LAMP_DYNMAT, lamp->ob), brdf->roughness, brdf->ior, brdf->sigma, brdf->toon_size, brdf->toon_smooth, brdf->anisotropy, brdf->aniso_rotation, &output);
+					break;
+				default : 		GPU_link(mat, "bsdf_refract_ggx_sphere_light", vn, brdf->aniso_tangent, lv, view, lco, dist, GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob), GPU_dynamic_uniform(&lamp->area_size_y, GPU_DYNAMIC_LAMP_SIZEY, lamp->ob), GPU_dynamic_uniform(&lamp->areavec, GPU_DYNAMIC_LAMP_AREASCALE, lamp->ob), GPU_dynamic_uniform(&lamp->dynmat, GPU_DYNAMIC_LAMP_DYNMAT, lamp->ob), brdf->roughness, brdf->ior, brdf->sigma, brdf->toon_size, brdf->toon_smooth, brdf->anisotropy, brdf->aniso_rotation, &output);
+					break;
+			}
+			break;
+		case GPU_BRDF_REFRACT_SHARP : 
+			switch (lamp->type) {
+				case LA_SUN :
+				case LA_HEMI : 	GPU_link(mat, "bsdf_refract_sharp_sun_light", vn, brdf->aniso_tangent, lv, view, lco, dist, GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob), GPU_dynamic_uniform(&lamp->area_size_y, GPU_DYNAMIC_LAMP_SIZEY, lamp->ob), GPU_dynamic_uniform(&lamp->areavec, GPU_DYNAMIC_LAMP_AREASCALE, lamp->ob), GPU_dynamic_uniform(&lamp->dynmat, GPU_DYNAMIC_LAMP_DYNMAT, lamp->ob), brdf->roughness, brdf->ior, brdf->sigma, brdf->toon_size, brdf->toon_smooth, brdf->anisotropy, brdf->aniso_rotation, &output);
+					break;
+				case LA_AREA : 	GPU_link(mat, "bsdf_refract_sharp_area_light", vn, brdf->aniso_tangent, lv, view, lco, dist, GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob), GPU_dynamic_uniform(&lamp->area_size_y, GPU_DYNAMIC_LAMP_SIZEY, lamp->ob), GPU_dynamic_uniform(&lamp->areavec, GPU_DYNAMIC_LAMP_AREASCALE, lamp->ob), GPU_dynamic_uniform(&lamp->dynmat, GPU_DYNAMIC_LAMP_DYNMAT, lamp->ob), brdf->roughness, brdf->ior, brdf->sigma, brdf->toon_size, brdf->toon_smooth, brdf->anisotropy, brdf->aniso_rotation, &output);
+					break;
+				default : 		GPU_link(mat, "bsdf_refract_sharp_sphere_light", vn, brdf->aniso_tangent, lv, view, lco, dist, GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob), GPU_dynamic_uniform(&lamp->area_size_y, GPU_DYNAMIC_LAMP_SIZEY, lamp->ob), GPU_dynamic_uniform(&lamp->areavec, GPU_DYNAMIC_LAMP_AREASCALE, lamp->ob), GPU_dynamic_uniform(&lamp->dynmat, GPU_DYNAMIC_LAMP_DYNMAT, lamp->ob), brdf->roughness, brdf->ior, brdf->sigma, brdf->toon_size, brdf->toon_smooth, brdf->anisotropy, brdf->aniso_rotation, &output);
+					break;
+			}
+			break;
+		case GPU_BRDF_GLASS_GGX : 
+			switch (lamp->type) {
+				case LA_SUN :
+				case LA_HEMI : 	GPU_link(mat, "bsdf_glass_ggx_sun_light", vn, brdf->aniso_tangent, lv, view, lco, dist, GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob), GPU_dynamic_uniform(&lamp->area_size_y, GPU_DYNAMIC_LAMP_SIZEY, lamp->ob), GPU_dynamic_uniform(&lamp->areavec, GPU_DYNAMIC_LAMP_AREASCALE, lamp->ob), GPU_dynamic_uniform(&lamp->dynmat, GPU_DYNAMIC_LAMP_DYNMAT, lamp->ob), brdf->roughness, brdf->ior, brdf->sigma, brdf->toon_size, brdf->toon_smooth, brdf->anisotropy, brdf->aniso_rotation, &output);
+					break;
+				case LA_AREA : 	GPU_link(mat, "bsdf_glass_ggx_area_light", vn, brdf->aniso_tangent, lv, view, lco, dist, GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob), GPU_dynamic_uniform(&lamp->area_size_y, GPU_DYNAMIC_LAMP_SIZEY, lamp->ob), GPU_dynamic_uniform(&lamp->areavec, GPU_DYNAMIC_LAMP_AREASCALE, lamp->ob), GPU_dynamic_uniform(&lamp->dynmat, GPU_DYNAMIC_LAMP_DYNMAT, lamp->ob), brdf->roughness, brdf->ior, brdf->sigma, brdf->toon_size, brdf->toon_smooth, brdf->anisotropy, brdf->aniso_rotation, &output);
+					break;
+				default : 		GPU_link(mat, "bsdf_glass_ggx_sphere_light", vn, brdf->aniso_tangent, lv, view, lco, dist, GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob), GPU_dynamic_uniform(&lamp->area_size_y, GPU_DYNAMIC_LAMP_SIZEY, lamp->ob), GPU_dynamic_uniform(&lamp->areavec, GPU_DYNAMIC_LAMP_AREASCALE, lamp->ob), GPU_dynamic_uniform(&lamp->dynmat, GPU_DYNAMIC_LAMP_DYNMAT, lamp->ob), brdf->roughness, brdf->ior, brdf->sigma, brdf->toon_size, brdf->toon_smooth, brdf->anisotropy, brdf->aniso_rotation, &output);
+					break;
+			}
+			break;
+		case GPU_BRDF_GLASS_SHARP : 
+			switch (lamp->type) {
+				case LA_SUN :
+				case LA_HEMI : 	GPU_link(mat, "bsdf_glass_sharp_sun_light", vn, brdf->aniso_tangent, lv, view, lco, dist, GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob), GPU_dynamic_uniform(&lamp->area_size_y, GPU_DYNAMIC_LAMP_SIZEY, lamp->ob), GPU_dynamic_uniform(&lamp->areavec, GPU_DYNAMIC_LAMP_AREASCALE, lamp->ob), GPU_dynamic_uniform(&lamp->dynmat, GPU_DYNAMIC_LAMP_DYNMAT, lamp->ob), brdf->roughness, brdf->ior, brdf->sigma, brdf->toon_size, brdf->toon_smooth, brdf->anisotropy, brdf->aniso_rotation, &output);
+					break;
+				case LA_AREA : 	GPU_link(mat, "bsdf_glass_sharp_area_light", vn, brdf->aniso_tangent, lv, view, lco, dist, GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob), GPU_dynamic_uniform(&lamp->area_size_y, GPU_DYNAMIC_LAMP_SIZEY, lamp->ob), GPU_dynamic_uniform(&lamp->areavec, GPU_DYNAMIC_LAMP_AREASCALE, lamp->ob), GPU_dynamic_uniform(&lamp->dynmat, GPU_DYNAMIC_LAMP_DYNMAT, lamp->ob), brdf->roughness, brdf->ior, brdf->sigma, brdf->toon_size, brdf->toon_smooth, brdf->anisotropy, brdf->aniso_rotation, &output);
+					break;
+				default : 		GPU_link(mat, "bsdf_glass_sharp_sphere_light", vn, brdf->aniso_tangent, lv, view, lco, dist, GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob), GPU_dynamic_uniform(&lamp->area_size_y, GPU_DYNAMIC_LAMP_SIZEY, lamp->ob), GPU_dynamic_uniform(&lamp->areavec, GPU_DYNAMIC_LAMP_AREASCALE, lamp->ob), GPU_dynamic_uniform(&lamp->dynmat, GPU_DYNAMIC_LAMP_DYNMAT, lamp->ob), brdf->roughness, brdf->ior, brdf->sigma, brdf->toon_size, brdf->toon_smooth, brdf->anisotropy, brdf->aniso_rotation, &output);
+					break;
+			}
+			break;
+		case GPU_BRDF_VELVET : 
+			switch (lamp->type) {
+				case LA_SUN :
+				case LA_HEMI : 	GPU_link(mat, "bsdf_velvet_sun_light", vn, brdf->aniso_tangent, lv, view, lco, dist, GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob), GPU_dynamic_uniform(&lamp->area_size_y, GPU_DYNAMIC_LAMP_SIZEY, lamp->ob), GPU_dynamic_uniform(&lamp->areavec, GPU_DYNAMIC_LAMP_AREASCALE, lamp->ob), GPU_dynamic_uniform(&lamp->dynmat, GPU_DYNAMIC_LAMP_DYNMAT, lamp->ob), brdf->roughness, brdf->ior, brdf->sigma, brdf->toon_size, brdf->toon_smooth, brdf->anisotropy, brdf->aniso_rotation, &output);
+					break;
+				case LA_AREA : 	GPU_link(mat, "bsdf_velvet_area_light", vn, brdf->aniso_tangent, lv, view, lco, dist, GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob), GPU_dynamic_uniform(&lamp->area_size_y, GPU_DYNAMIC_LAMP_SIZEY, lamp->ob), GPU_dynamic_uniform(&lamp->areavec, GPU_DYNAMIC_LAMP_AREASCALE, lamp->ob), GPU_dynamic_uniform(&lamp->dynmat, GPU_DYNAMIC_LAMP_DYNMAT, lamp->ob), brdf->roughness, brdf->ior, brdf->sigma, brdf->toon_size, brdf->toon_smooth, brdf->anisotropy, brdf->aniso_rotation, &output);
+					break;
+				default : 		GPU_link(mat, "bsdf_velvet_sphere_light", vn, brdf->aniso_tangent, lv, view, lco, dist, GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob), GPU_dynamic_uniform(&lamp->area_size_y, GPU_DYNAMIC_LAMP_SIZEY, lamp->ob), GPU_dynamic_uniform(&lamp->areavec, GPU_DYNAMIC_LAMP_AREASCALE, lamp->ob), GPU_dynamic_uniform(&lamp->dynmat, GPU_DYNAMIC_LAMP_DYNMAT, lamp->ob), brdf->roughness, brdf->ior, brdf->sigma, brdf->toon_size, brdf->toon_smooth, brdf->anisotropy, brdf->aniso_rotation, &output);
+					break;
+			}
+			break;
+		default : 
+			switch (lamp->type) {
+				case LA_SUN :
+				case LA_HEMI : 	GPU_link(mat, "bsdf_diffuse_sun_light", vn, brdf->aniso_tangent, lv, view, lco, dist, GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob), GPU_dynamic_uniform(&lamp->area_size_y, GPU_DYNAMIC_LAMP_SIZEY, lamp->ob), GPU_dynamic_uniform(&lamp->areavec, GPU_DYNAMIC_LAMP_AREASCALE, lamp->ob), GPU_dynamic_uniform(&lamp->dynmat, GPU_DYNAMIC_LAMP_DYNMAT, lamp->ob), brdf->roughness, brdf->ior, brdf->sigma, brdf->toon_size, brdf->toon_smooth, brdf->anisotropy, brdf->aniso_rotation, &output);
+					break;
+				case LA_AREA : 	GPU_link(mat, "bsdf_diffuse_area_light", vn, brdf->aniso_tangent, lv, view, lco, dist, GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob), GPU_dynamic_uniform(&lamp->area_size_y, GPU_DYNAMIC_LAMP_SIZEY, lamp->ob), GPU_dynamic_uniform(&lamp->areavec, GPU_DYNAMIC_LAMP_AREASCALE, lamp->ob), GPU_dynamic_uniform(&lamp->dynmat, GPU_DYNAMIC_LAMP_DYNMAT, lamp->ob), brdf->roughness, brdf->ior, brdf->sigma, brdf->toon_size, brdf->toon_smooth, brdf->anisotropy, brdf->aniso_rotation, &output);
+					break;
+				default : 		GPU_link(mat, "bsdf_diffuse_sphere_light", vn, brdf->aniso_tangent, lv, view, lco, dist, GPU_dynamic_uniform(&lamp->area_size, GPU_DYNAMIC_LAMP_SIZEX, lamp->ob), GPU_dynamic_uniform(&lamp->area_size_y, GPU_DYNAMIC_LAMP_SIZEY, lamp->ob), GPU_dynamic_uniform(&lamp->areavec, GPU_DYNAMIC_LAMP_AREASCALE, lamp->ob), GPU_dynamic_uniform(&lamp->dynmat, GPU_DYNAMIC_LAMP_DYNMAT, lamp->ob), brdf->roughness, brdf->ior, brdf->sigma, brdf->toon_size, brdf->toon_smooth, brdf->anisotropy, brdf->aniso_rotation, &output);
+					break;
+			}
+			break;
 	}
 
 	/* Shadowing */
@@ -2040,15 +2225,13 @@ static void shade_one_brdf_light(GPUBrdfInput *brdf, GPULamp *lamp)
 		GPU_link(mat, "shade_inp", vn, lv, &inp);
 		
 		if (lamp->la->shadowmap_type == LA_SHADMAP_VARIANCE) {
-			GPU_link(mat, "test_shadowbuf_vsm",
-				GPU_builtin(GPU_VIEW_POSITION),
+			GPU_link(mat, "test_shadowbuf_vsm",	GPU_builtin(GPU_VIEW_POSITION),
 				GPU_dynamic_texture(lamp->tex, GPU_DYNAMIC_SAMPLER_2DSHADOW, lamp->ob),
 				GPU_dynamic_uniform((float *)lamp->dynpersmat, GPU_DYNAMIC_LAMP_DYNPERSMAT, lamp->ob),
 				GPU_uniform(&lamp->bias), GPU_uniform(&lamp->la->bleedbias), inp, &shadfac);
 		}
 		else {
-			GPU_link(mat, "test_shadowbuf",
-				GPU_builtin(GPU_VIEW_POSITION),
+			GPU_link(mat, "test_shadowbuf",	GPU_builtin(GPU_VIEW_POSITION),
 				GPU_dynamic_texture(lamp->tex, GPU_DYNAMIC_SAMPLER_2DSHADOW, lamp->ob),
 				GPU_dynamic_uniform((float *)lamp->dynpersmat, GPU_DYNAMIC_LAMP_DYNPERSMAT, lamp->ob),
 				GPU_uniform(&lamp->bias), inp, &shadfac);
@@ -2066,110 +2249,62 @@ static void shade_one_brdf_light(GPUBrdfInput *brdf, GPULamp *lamp)
 	add_user_list(&lamp->materials, mat->ma);
 }
 
-static void prep_brdf_input(GPUBrdfInput *brdf)
+static GPUNodeLink *brdf_sample_env(GPUBrdfInput *brdf)
 {
-	GPUNodeLink *normal = NULL;
-	GPUNodeLink *color = NULL;
-	GPUNodeLink *roughness = NULL;
-	GPUNodeLink *ior = NULL;
-	GPUNodeLink *sigma = NULL;
-	GPUNodeLink *toon_size = NULL;
-	GPUNodeLink *toon_smooth = NULL;
-	GPUNodeLink *anisotropy = NULL;
-	GPUNodeLink *aniso_rotation = NULL;
-	GPUNodeLink *aniso_tangent = NULL;
-
-	/* Normal & Tangent can't be NULL */
-	if (brdf->normal)
-		GPU_link(brdf->mat, "set_rgb", brdf->normal, &normal);
-	else
-		GPU_link(brdf->mat, "set_rgb", GPU_builtin(GPU_VIEW_NORMAL), &normal);
-
-	if (brdf->type == GPU_BRDF_ANISO_GGX) {
-		if (brdf->aniso_tangent)
-			GPU_link(brdf->mat, "set_rgb", brdf->aniso_tangent, &aniso_tangent);
-		else
-			GPU_link(brdf->mat, "default_tangent", GPU_builtin(GPU_VIEW_NORMAL), GPU_attribute(CD_ORCO, ""),
-				GPU_builtin(GPU_OBJECT_MATRIX), GPU_builtin(GPU_VIEW_MATRIX),
-				GPU_builtin(GPU_INVERSE_VIEW_MATRIX), &aniso_tangent);
-	}
-
-	if (brdf->color)
-		GPU_link(brdf->mat, "set_rgba", brdf->color, &color);
-	if (brdf->roughness)
-		GPU_link(brdf->mat, "set_value", brdf->roughness, &roughness);
-	if (brdf->ior)
-		GPU_link(brdf->mat, "set_value", brdf->ior, &ior);	
-	if (brdf->sigma)
-		GPU_link(brdf->mat, "set_value", brdf->sigma, &sigma);	
-	if (brdf->toon_size)
-		GPU_link(brdf->mat, "set_value", brdf->toon_size, &toon_size);	
-	if (brdf->toon_smooth)
-		GPU_link(brdf->mat, "set_value", brdf->toon_smooth, &toon_smooth);	
-	if (brdf->anisotropy)
-		GPU_link(brdf->mat, "set_value", brdf->anisotropy, &anisotropy);
-	if (brdf->aniso_rotation)
-		GPU_link(brdf->mat, "set_value", brdf->aniso_rotation, &aniso_rotation);
-
-	GPU_link(brdf->mat, "set_rgba_zero", &brdf->output);
-
-	brdf->normal = normal;
-	brdf->color = color;
-	brdf->roughness = roughness;
-	brdf->ior = ior;
-	brdf->sigma = sigma;
-	brdf->toon_size = toon_size;
-	brdf->toon_smooth = toon_smooth;
-	brdf->anisotropy = anisotropy;
-	brdf->aniso_rotation = aniso_rotation;
-	brdf->aniso_tangent = aniso_tangent;
-}
-
-void GPU_brdf_input_initialize(GPUBrdfInput *brdf)
-{
-	memset(brdf, 0, sizeof(*brdf));
-}
-
-static GPUNodeLink *GPU_brdf_sample_world(GPUBrdfInput *brdf)
-{
-	Scene *scene = GPU_material_scene(brdf->mat);
 	GPUMaterial *mat = brdf->mat;
-	World *wo = scene->world;
-	GPUNodeLink *norlink, *tanlink, *env_sample;
 	GPUMatType type = GPU_material_get_type(mat);
+	GPUNodeLink *envlight, *incoming;
 
-	/* XXX : All of this is pretty wonky and need to be replace by sampling a global/local cubemap */
+	printf("brdf_sample_env %d \n",brdf->type);
 
-	/* First run the normal into the World node tree 
-	 * The environment texture nodes will save the nodelink of it. */
-	GPU_link(mat, "direction_transform_m4v3", brdf->normal, GPU_builtin(GPU_INVERSE_VIEW_MATRIX), &norlink); /* Send world normal for sampling */
-	GPU_material_set_normal_link(mat, norlink);
-	GPU_material_set_type(mat, GPU_MATERIAL_TYPE_ENV_NORMAL);
-	ntreeGPUMaterialNodes(wo->nodetree, mat, NODE_NEW_SHADING);
-	GPU_material_empty_output_link(mat);
+	GPU_link(mat, "direction_transform_m4v3", GPU_builtin(GPU_VIEW_POSITION), GPU_builtin(GPU_INVERSE_VIEW_MATRIX), &incoming);
+	GPU_link(mat, "shade_view", incoming, &incoming);
+	GPU_link(mat, "direction_transform_m4v3", brdf->normal, GPU_builtin(GPU_INVERSE_VIEW_MATRIX), &brdf->normal);
+	GPU_link(mat, "direction_transform_m4v3", brdf->aniso_tangent, GPU_builtin(GPU_INVERSE_VIEW_MATRIX), &brdf->aniso_tangent);
 
-	if (brdf->type == GPU_BRDF_ANISO_GGX) {
-		/* First run the tangent into the World node tree
-		 * The environment texture nodes will save the nodelink of it. */
-		GPU_link(mat, "direction_transform_m4v3", brdf->aniso_tangent, GPU_builtin(GPU_INVERSE_VIEW_MATRIX), &tanlink); /* Send world tangent for sampling */
-		GPU_material_set_tangent_link(mat, tanlink);
-		GPU_material_set_type(mat, GPU_MATERIAL_TYPE_ENV_TANGENT);
-		ntreeGPUMaterialNodes(wo->nodetree, mat, NODE_NEW_SHADING);
-		GPU_material_empty_output_link(mat);
+	if (brdf->type == GPU_BRDF_TRANSLUCENT)
+		GPU_link(mat, "vec_math_negate", brdf->normal, &brdf->normal);
+
+	switch (brdf->type) {
+		case GPU_BRDF_GLOSSY_SHARP :
+			GPU_link(mat, "env_sampling_reflect_sharp", incoming, brdf->normal, GPU_builtin(GPU_PBR_PROBE), &envlight);
+			break;
+		case GPU_BRDF_GLOSSY_GGX :
+			GPU_link(mat, "env_sampling_reflect_glossy", incoming, brdf->normal, brdf->roughness, GPU_builtin(GPU_PBR_LOD_FACTOR), GPU_builtin(GPU_PBR_PROBE), &envlight);
+			break;
+		case GPU_BRDF_ANISO_GGX :
+			GPU_link(mat, "env_sampling_reflect_aniso", incoming, brdf->normal, brdf->roughness, brdf->anisotropy, brdf->aniso_rotation, brdf->aniso_tangent, GPU_builtin(GPU_PBR_LOD_FACTOR), GPU_builtin(GPU_PBR_PROBE), &envlight);
+			break;
+		case GPU_BRDF_REFRACT_SHARP :
+			GPU_link(mat, "env_sampling_refract_sharp", incoming, brdf->normal, brdf->ior, GPU_builtin(GPU_PBR_PROBE), &envlight);
+			break;
+		case GPU_BRDF_REFRACT_GGX :
+			GPU_link(mat, "env_sampling_refract_glossy", incoming, brdf->normal, brdf->ior,	brdf->roughness, GPU_builtin(GPU_PBR_LOD_FACTOR), GPU_builtin(GPU_PBR_PROBE), &envlight);
+			break;
+		case GPU_BRDF_GLASS_SHARP :
+			GPU_link(mat, "env_sampling_glass_sharp", incoming, brdf->normal, brdf->ior, GPU_builtin(GPU_PBR_PROBE), &envlight);
+			break;
+		case GPU_BRDF_GLASS_GGX :
+			GPU_link(mat, "env_sampling_glass_glossy", incoming, brdf->normal, brdf->ior, brdf->roughness, GPU_builtin(GPU_PBR_LOD_FACTOR), GPU_builtin(GPU_PBR_PROBE), &envlight);
+			break;
+		case GPU_BRDF_TRANSPARENT :
+			GPU_link(mat, "env_sampling_transparent", incoming, GPU_builtin(GPU_PBR_PROBE), &envlight); 
+			break;
+		case GPU_BRDF_DIFFUSE :
+		case GPU_BRDF_TRANSLUCENT :
+		case GPU_BRDF_VELVET :
+		default :
+			GPU_link(mat, "env_sampling_diffuse", incoming, brdf->normal, brdf->roughness, GPU_builtin(GPU_PBR_SH0), GPU_builtin(GPU_PBR_SH1), GPU_builtin(GPU_PBR_SH2), GPU_builtin(GPU_PBR_SH3), GPU_builtin(GPU_PBR_SH4), GPU_builtin(GPU_PBR_SH5), GPU_builtin(GPU_PBR_SH6), GPU_builtin(GPU_PBR_SH7), GPU_builtin(GPU_PBR_SH8), &envlight);
+			break;
 	}
+/*
+	add_user_list(&mat->reflections, probe);
+	add_user_list(&probe->materials, mat->ma);
+*/
+	/* prevent undefined result (eg dividing by 0) giving infinity inside HDR images */
+	GPU_link(mat, "shade_clamp_positive", envlight, &envlight);
 
-	/* Then run the World node tree for sampling
-	 * The sampling occurs in the environment texture node thus
-	 * every operation occuring after the sampling may give incorrect results */
-	GPU_material_set_brdf_link(mat, brdf);
-	GPU_material_set_type(mat, GPU_MATERIAL_TYPE_ENV_BRDF);
-	ntreeGPUMaterialNodes(wo->nodetree, mat, NODE_NEW_SHADING);
-	env_sample = GPU_material_get_output_link(mat);
-	GPU_material_empty_output_link(mat);
-
-	GPU_material_set_type(mat, type);
-
-	return env_sample;
+	return envlight;
 }
 
 void GPU_shade_BRDF(GPUBrdfInput *brdf)
@@ -2181,7 +2316,7 @@ void GPU_shade_BRDF(GPUBrdfInput *brdf)
 	Object *ob;
 	Scene *sce_iter;
 	GPULamp *lamp;
-	GPUNodeLink *envLight;
+	GPUNodeLink *envlight;
 	float one = 1.0f;
 	int i = 0;
 	bool real_shading = GPU_material_use_new_shading_nodes(mat);
@@ -2233,47 +2368,13 @@ void GPU_shade_BRDF(GPUBrdfInput *brdf)
 	GPU_link(mat, "shade_clamp_positive", brdf->output, &brdf->output);
 
 	/* Environement Light */
-	if (BKE_scene_use_new_shading_nodes(scene) && wo->nodetree && wo->use_nodes)
-		envLight = GPU_brdf_sample_world(brdf);
-	else
-		envLight = GPU_get_world_horicol();
+	envlight = brdf_sample_env(brdf);
 
 	/* Combine Lighting */
-	switch (brdf->type) {
-		case GPU_BRDF_DIFFUSE :
-			GPU_link(mat, "node_bsdf_diffuse", brdf->color, brdf->roughness, brdf->normal, GPU_builtin(GPU_VIEW_POSITION), envLight, brdf->output, &brdf->output);
-			break;
-		case GPU_BRDF_GLOSSY_SHARP :
-		case GPU_BRDF_GLOSSY_GGX :
-		case GPU_BRDF_GLOSSY_BECKMANN :
-		case GPU_BRDF_GLOSSY_ASHIKHMIN_SHIRLEY :
-			GPU_link(mat, "node_bsdf_glossy", brdf->color, brdf->roughness, brdf->normal, GPU_builtin(GPU_VIEW_POSITION), envLight, brdf->output, &brdf->output);
-			break;
-		case GPU_BRDF_ANISO_GGX :
-		case GPU_BRDF_ANISO_BECKMANN :
-		case GPU_BRDF_ANISO_ASHIKHMIN_SHIRLEY :
-			GPU_link(mat, "node_bsdf_anisotropic", brdf->color, brdf->roughness, brdf->normal, GPU_builtin(GPU_VIEW_POSITION), envLight, brdf->output, &brdf->output);
-			break;
-		case GPU_BRDF_REFRACT_SHARP :
-		case GPU_BRDF_REFRACT_GGX :
-		case GPU_BRDF_REFRACT_BECKMANN :
-			GPU_link(mat, "node_bsdf_refraction", brdf->color, brdf->roughness, brdf->ior, brdf->normal, GPU_builtin(GPU_VIEW_POSITION), envLight, brdf->output, &brdf->output);
-			break;
-		case GPU_BRDF_GLASS_SHARP :
-		case GPU_BRDF_GLASS_GGX :
-		case GPU_BRDF_GLASS_BECKMANN :
-			GPU_link(mat, "node_bsdf_glass", brdf->color, brdf->roughness, brdf->ior, brdf->normal, GPU_builtin(GPU_VIEW_POSITION), envLight, brdf->output, &brdf->output);
-			break;
-		case GPU_BRDF_VELVET :
-			GPU_link(mat, "node_bsdf_velvet", brdf->color, brdf->sigma, brdf->normal, GPU_builtin(GPU_VIEW_POSITION), envLight, brdf->output, &brdf->output);
-			break;
-		case GPU_BRDF_TRANSLUCENT :
-			GPU_link(mat, "node_bsdf_translucent", brdf->color, brdf->roughness, brdf->normal, GPU_builtin(GPU_VIEW_POSITION), envLight, brdf->output, &brdf->output);
-			break;
-		case GPU_BRDF_TRANSPARENT :
-			GPU_link(mat, "node_bsdf_transparent", brdf->color, envLight, &brdf->output);
-			break;
-	}
+	if (brdf->type == GPU_BRDF_TRANSPARENT)
+		GPU_link(mat, "node_bsdf_transparent", brdf->color, envlight, &brdf->output);
+	else
+		GPU_link(mat, "node_bsdf_opaque", brdf->color, envlight, brdf->output, &brdf->output);
 }
 
 static GPUNodeLink *GPU_blender_material(GPUMaterial *mat, Material *ma)
@@ -2567,7 +2668,7 @@ static void GPU_material_old_world(struct GPUMaterial *mat, struct World *wo)
 	GPU_material_output_link(mat, shr.combined);
 }
 
-GPUMaterial *GPU_material_world(struct Scene *scene, struct World *wo, bool use_spherical_harmonics)
+GPUMaterial *GPU_material_world(struct Scene *scene, struct World *wo)
 {
 	LinkData *link;
 	GPUMaterial *mat;
@@ -2579,7 +2680,7 @@ GPUMaterial *GPU_material_world(struct Scene *scene, struct World *wo, bool use_
 	/* allocate material */
 	mat = GPU_material_construct_begin(NULL);
 	mat->scene = scene;
-	mat->type = (use_spherical_harmonics) ? GPU_MATERIAL_TYPE_WORLD_SH : GPU_MATERIAL_TYPE_WORLD;
+	mat->type = GPU_MATERIAL_TYPE_WORLD;
 
 	/* create nodes */
 	if (BKE_scene_use_new_shading_nodes(scene) && wo->nodetree && wo->use_nodes)
@@ -2591,9 +2692,6 @@ GPUMaterial *GPU_material_world(struct Scene *scene, struct World *wo, bool use_
 	if (GPU_material_do_color_management(mat))
 		if (mat->outlink)
 			GPU_link(mat, "linearrgb_to_srgb", mat->outlink, &mat->outlink);
-
-	//VERY BAD but it works
-	mat->type = GPU_MATERIAL_TYPE_WORLD;
 
 	GPU_material_construct_end(mat, wo->id.name);
 	
@@ -2607,7 +2705,6 @@ GPUMaterial *GPU_material_world(struct Scene *scene, struct World *wo, bool use_
 
 	return mat;
 }
-
 
 GPUMaterial *GPU_material_from_blender(Scene *scene, Material *ma, bool use_opensubdiv, bool use_realistic_preview, int samplecount)
 {
@@ -2662,9 +2759,6 @@ GPUMaterial *GPU_material_from_blender(Scene *scene, Material *ma, bool use_open
 		if (mat->outlink)
 			GPU_link(mat, "linearrgb_to_srgb", mat->outlink, &mat->outlink);
 
-	/* XXX : this is nasty but it works */
-	mat->type = GPU_MATERIAL_TYPE_MESH;
-
 	GPU_material_construct_end(mat, ma->id.name);
 
 	/* note that even if building the shader fails in some way, we still keep
@@ -2695,6 +2789,394 @@ void GPU_materials_free(void)
 
 	for (ob = G.main->object.first; ob; ob = ob->id.next)
 		GPU_lamp_free(ob);
+}
+
+/* Reflection Capture Generation */
+
+static void gpu_probe_buffers_free(GPUProbe *probe)
+{
+	int i = 0;
+
+	if (probe->shtex) {
+		GPU_texture_free(probe->shtex);
+		probe->shtex = NULL;
+	}
+	if (probe->fbsh) {
+		GPU_framebuffer_free(probe->fbsh);
+		probe->fbsh = NULL;
+	}
+	if (probe->tex) {
+		GPU_texture_free(probe->tex);
+		probe->tex = NULL;
+	}
+	if (probe->depthtex) {
+		GPU_texture_free(probe->depthtex);
+		probe->depthtex = NULL;
+	}
+	if (probe->fb) {
+		GPU_framebuffer_free(probe->fb);
+		probe->fb = NULL;
+	}
+}
+
+void GPU_probe_free(ListBase *gpuprobe)
+{
+	GPUProbe *probe;
+	LinkData *link;
+	LinkData *nlink;
+	Material *ma;
+
+	for (link = gpuprobe->first; link; link = link->next) {
+		probe = (GPUProbe *)link->data;
+
+		while (probe->materials.first) {
+			nlink = probe->materials.first;
+			ma = nlink->data;
+			BLI_freelinkN(&probe->materials, nlink);
+
+			if (ma->gpumaterial.first)
+				GPU_material_free(&ma->gpumaterial);
+		}
+
+		gpu_probe_buffers_free(probe);
+
+		if (probe->shcoefs) {
+			MEM_freeN(probe->shcoefs);
+		}
+
+		MEM_freeN(probe);
+	}
+
+	BLI_freelistN(gpuprobe);
+}
+
+static void gpu_probe_from_blender(Scene *scene, World *wo, Object *ob, GPUProbe *probe)
+{
+	int i;
+
+	probe->scene = scene;
+	probe->wo = wo;
+	probe->ob = ob;
+
+	/* TODO Add functionality */
+	probe->type = GPU_PROBE_CUBE;
+	probe->size = 512;
+
+	probe->shcoefs = MEM_mallocN(sizeof(float) * 9 * 3, "Probe Spherical Harmonics");
+
+	/* Setting ambiant to black */
+	memset(probe->shcoefs, 0, sizeof(float) * 9 * 3);
+
+	//if (ReflectionCubemap) {
+
+		/* Cubemap */
+		probe->fb = GPU_framebuffer_create();
+		if (!probe->fb) {
+			gpu_probe_buffers_free(probe);
+			return;
+		}
+
+		probe->tex = GPU_texture_create_cube_probe(probe->size, NULL);
+		if (!probe->tex) {
+			gpu_probe_buffers_free(probe);
+			return;
+		}
+
+		if (!GPU_framebuffer_cubeface_attach(probe->fb, probe->tex, 0, 0, NULL)) {
+			gpu_probe_buffers_free(probe);
+			return;
+		}
+
+		probe->depthtex = GPU_texture_create_depth(probe->size, probe->size, NULL);
+		if (!probe->depthtex) {
+			gpu_probe_buffers_free(probe);
+			return;
+		}
+
+		if (!GPU_framebuffer_texture_attach(probe->fb, probe->depthtex, 0, NULL)) {
+			gpu_probe_buffers_free(probe);
+			return;
+		}
+
+		if (!GPU_framebuffer_check_valid(probe->fb, NULL)) {
+			gpu_probe_buffers_free(probe);
+			return;
+		}
+
+
+		/* Spherical harmonic texture */
+		probe->fbsh = GPU_framebuffer_create();
+		if (!probe->fbsh) {
+			gpu_probe_buffers_free(probe);
+			return;
+		}
+
+		probe->shtex = GPU_texture_create_sh_filter_target(NULL);
+		if (!probe->shtex) {
+			gpu_probe_buffers_free(probe);
+			return;
+		}
+
+		if (!GPU_framebuffer_texture_attach(probe->fbsh, probe->shtex, 0, NULL)) {
+			gpu_probe_buffers_free(probe);
+			return;
+		}
+
+		GPU_texture_bind_as_framebuffer(probe->shtex);
+
+		if (!GPU_framebuffer_check_valid(probe->fbsh, NULL)) {
+			gpu_probe_buffers_free(probe);
+			return;
+		}
+
+		GPU_framebuffer_texture_unbind(probe->fbsh, probe->shtex);
+	
+	//}
+	// else {
+		//Planar Reflection
+	// }
+
+	GPU_framebuffer_restore();
+
+	GPU_probe_set_update(probe, true);
+}
+
+GPUProbe *GPU_probe_world(Scene *scene, World *wo)
+{
+	GPUProbe *probe;
+	LinkData *link;
+	int i = 0;
+
+	for (link = wo->gpuprobe.first; link; link = link->next)
+		if (((GPUProbe *)link->data)->scene == scene)
+			return link->data;
+
+	probe = MEM_callocN(sizeof(GPUProbe), "GPUProbe");
+
+	link = MEM_callocN(sizeof(LinkData), "GPUProbeLink");
+	link->data = probe;
+	BLI_addtail(&wo->gpuprobe, link);
+
+	gpu_probe_from_blender(scene, wo, NULL, probe);
+
+	return probe;
+}
+
+GPUProbe *GPU_probe_object(Scene *scene, Object *ob)
+{
+	GPUProbe *probe;
+	LinkData *link;
+
+	for (link = ob->gpuprobe.first; link; link = link->next) {
+		probe = (GPUProbe *)link->data;
+		if (probe->scene == scene)
+			return link->data;
+	}
+
+	probe = MEM_callocN(sizeof(GPUProbe), "GPUProbe");
+
+	link = MEM_callocN(sizeof(LinkData), "GPUProbeLink");
+	link->data = probe;
+	BLI_addtail(&ob->gpuprobe, link);
+
+	gpu_probe_from_blender(scene, NULL, ob, probe);
+
+	return probe;
+}
+
+static void envmap_transmatrix(float mat[4][4], int part)
+{
+	float tmat[4][4], tmat2[4][4], eul1[3], eul2[3], rotmat1[4][4], rotmat2[4][4];
+	
+	eul1[0] = eul1[1] = eul1[2] = 0.0;
+	eul2[0] = eul2[1] = eul2[2] = 0.0;
+	
+	if (part == 0){ /* pos x */
+		eul1[1] = -M_PI / 2.0;
+		eul2[2] = M_PI;
+	}
+	else if (part == 1) { /* neg x */
+		eul1[1] = M_PI / 2.0;
+		eul2[2] = M_PI;
+	}
+	else if (part == 2) { /* pos y */
+		eul1[0] = M_PI / 2.0;
+	}
+	else if (part == 3) { /* neg y */
+		eul1[0] = -M_PI / 2.0;
+	}
+	else if (part == 4) { /* pos z */
+		eul1[0] = M_PI;
+	}
+	else { /* neg z */
+		eul1[2] = M_PI;
+	}
+	
+	copy_m4_m4(tmat, mat);
+	eul_to_mat4(rotmat1, eul1);
+	eul_to_mat4(rotmat2, eul2);
+	mul_m4_m4m4(tmat2, rotmat1, rotmat2);
+	mul_m4_m4m4(mat, tmat, tmat2);
+}
+
+static void gpu_probe_cube_update_buffer_mats(GPUProbe *probe, int cubeface)
+{
+	float tempmat[4][4];
+
+	if (!probe->ob) {
+		/* Global Reflection Capture */
+		const float clipsta = 0.1f;
+
+		perspective_m4(probe->winmat, -clipsta, clipsta, -clipsta, clipsta, clipsta, 1000.8f);
+		//orthographic_m4(probe->winmat, -clipsta, clipsta, -clipsta, clipsta, clipsta, 0.8f);
+		unit_m4(probe->obmat);
+		envmap_transmatrix(probe->obmat, cubeface);
+	}
+	else {
+		/* Local Reflection Capture */
+		const float clipsta = 0.1f;
+		float obmat_scale[3];
+
+		perspective_m4(probe->winmat, -clipsta, clipsta, -clipsta, clipsta, clipsta, 1000.8f);
+		//orthographic_m4(probe->winmat, -clipsta, clipsta, -clipsta, clipsta, clipsta, 0.8f);
+		unit_m4(probe->obmat);
+		translate_m4(probe->obmat, probe->ob->obmat[3][0], probe->ob->obmat[3][1], probe->ob->obmat[3][2]);
+		envmap_transmatrix(probe->obmat, cubeface);
+	}
+
+	copy_m4_m4(tempmat, probe->obmat);
+	invert_m4_m4(probe->viewmat, tempmat);
+	normalize_v3(probe->viewmat[0]);
+	normalize_v3(probe->viewmat[1]);
+	normalize_v3(probe->viewmat[2]);
+
+	mul_m4_m4m4(probe->persmat, probe->winmat, probe->viewmat);
+}
+
+void GPU_probe_buffer_bind(GPUProbe *probe)
+{
+	glDisable(GL_SCISSOR_TEST);
+	GPU_texture_bind_as_framebuffer(probe->tex);
+}
+
+void GPU_probe_switch_fb_cubeface(GPUProbe *probe, int cubeface, float viewmat[4][4], int *winsize, float winmat[4][4])
+{
+	gpu_probe_cube_update_buffer_mats(probe, cubeface);
+
+	GPU_framebuffer_cubeface_attach(probe->fb, probe->tex, 0, cubeface, NULL);
+
+	/* set matrices */
+	copy_m4_m4(viewmat, probe->viewmat);
+	copy_m4_m4(winmat, probe->winmat);
+	*winsize = probe->size;
+}
+
+void GPU_probe_buffer_unbind(GPUProbe *probe)
+{
+	GPU_framebuffer_texture_unbind(probe->fb, probe->tex);
+	GPU_framebuffer_restore();
+	glEnable(GL_SCISSOR_TEST);
+}
+
+void GPU_probe_rebuild_mipmaps(GPUProbe *probe)
+{
+	if (probe->type == GPU_PROBE_CUBE) {
+		GPU_texture_bind(probe->tex, 0);
+		GPU_generate_mipmap(GL_TEXTURE_CUBE_MAP);
+		GPU_texture_unbind(probe->tex);
+	}
+}
+
+void GPU_probe_set_update(GPUProbe *probe, bool val)
+{
+	probe->update = val;
+}
+
+bool GPU_probe_get_update(GPUProbe *probe)
+{
+	return probe->update;
+}
+
+Object *GPU_probe_get_object(GPUProbe *probe)
+{
+	return probe->ob;
+}
+
+
+/* Spherical Harmonics : Diffuse lighting */
+
+void gpu_compute_sh(GPUProbe *probe)
+{
+	int probe_source_uniform;
+	GPUShader *sh_shader = GPU_shader_get_builtin_shader(GPU_SHADER_COMPUTE_SH);
+
+	if (!sh_shader)
+		return;
+
+	GPU_shader_bind(sh_shader);
+
+	probe_source_uniform = GPU_shader_get_uniform(sh_shader, "probe");
+
+	GPU_texture_bind(probe->tex, 0);
+	GPU_shader_uniform_texture(sh_shader, probe_source_uniform, probe->tex);
+
+	/* Drawing quad */
+	glBegin(GL_TRIANGLE_STRIP);
+	glVertex3f(-1.0, -1.0, 1.0);
+	glVertex3f(1.0, -1.0, 1.0);
+	glVertex3f(-1.0, 1.0, 1.0);
+	glVertex3f(1.0, 1.0, 1.0);
+	glEnd();
+
+	GPU_texture_unbind(probe->tex);
+
+	GPU_shader_unbind();
+}
+
+void GPU_probe_sh_compute(GPUProbe *probe)
+{
+	glDisable(GL_SCISSOR_TEST);
+	GPU_texture_bind_as_framebuffer(probe->shtex);
+
+	gpu_compute_sh(probe);
+
+	GPU_framebuffer_texture_unbind(probe->fbsh, probe->shtex);
+
+	/* Only read the 9 pixels containing the coefs */
+	glReadPixels(0, 0, 3, 3, GL_RGB, GL_FLOAT, probe->shcoefs);
+
+	GPU_framebuffer_restore();
+	glEnable(GL_SCISSOR_TEST);
+}
+
+void GPU_probe_sh_shader_bind(GPUProbe *probe)
+{
+	int uniformloc[9], i;
+	GPUShader *sh_shader = GPU_shader_get_builtin_shader(GPU_SHADER_DISPLAY_SH);
+
+	if (!sh_shader)
+		return;
+
+	GPU_shader_bind(sh_shader);
+
+	uniformloc[0] = GPU_shader_get_uniform(sh_shader, "sh0");
+	uniformloc[1] = GPU_shader_get_uniform(sh_shader, "sh1");
+	uniformloc[2] = GPU_shader_get_uniform(sh_shader, "sh2");
+	uniformloc[3] = GPU_shader_get_uniform(sh_shader, "sh3");
+	uniformloc[4] = GPU_shader_get_uniform(sh_shader, "sh4");
+	uniformloc[5] = GPU_shader_get_uniform(sh_shader, "sh5");
+	uniformloc[6] = GPU_shader_get_uniform(sh_shader, "sh6");
+	uniformloc[7] = GPU_shader_get_uniform(sh_shader, "sh7");
+	uniformloc[8] = GPU_shader_get_uniform(sh_shader, "sh8");
+
+	for (i = 0; i < 9; ++i) {
+		GPU_shader_uniform_vector(sh_shader, uniformloc[i], 3, 1, &probe->shcoefs[i*3]);
+	}
+}
+
+void GPU_probe_sh_shader_unbind(void)
+{
+	GPU_shader_unbind();
 }
 
 /* Lamps and shadow buffers */
@@ -3084,7 +3566,7 @@ void GPU_lamp_shadow_buffer_unbind(GPULamp *lamp)
 		GPU_shader_unbind();
 		GPU_framebuffer_blur(lamp->fb, lamp->tex, lamp->blurfb, lamp->blurtex);
 		if (lamp->use_realistic_lighting) {
-			/* Second blur to hide artifacts */
+			/* XXX Second blur to hide artifacts */
 			GPU_framebuffer_blur(lamp->fb, lamp->tex, lamp->blurfb, lamp->blurtex);
 		}
 	}

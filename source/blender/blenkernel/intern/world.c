@@ -76,6 +76,9 @@ void BKE_world_free_ex(World *wrld, bool do_id_user)
 
 	if (wrld->gpumaterial.first)
 		GPU_material_free(&wrld->gpumaterial);
+
+	if (wrld->gpuprobe.first)
+		GPU_probe_free(&wrld->gpuprobe);
 	
 	BKE_icon_id_delete((struct ID *)wrld);
 	wrld->id.icon_id = 0;

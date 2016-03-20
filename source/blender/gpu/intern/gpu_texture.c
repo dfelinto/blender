@@ -161,6 +161,23 @@ static GPUTexture *GPU_texture_create_nD(
 					break;
 			}
 		}
+		else if (components == 3) {
+			format = GL_RGB;
+			switch (hdr_type) {
+				case GPU_HDR_NONE:
+					internalformat = GL_RGB8;
+					break;
+				/* the following formats rely on ARB_texture_float or OpenGL 3.0 */
+				case GPU_HDR_HALF_FLOAT:
+					internalformat = GL_RGB16F_ARB;
+					break;
+				case GPU_HDR_FULL_FLOAT:
+					internalformat = GL_RGB32F_ARB;
+					break;
+				default:
+					break;
+			}
+		}
 		else if (components == 2) {
 			/* these formats rely on ARB_texture_rg or OpenGL 3.0 */
 			format = GL_RG;
@@ -242,6 +259,76 @@ static GPUTexture *GPU_texture_create_nD(
 	return tex;
 }
 
+static GPUTexture *GPU_texture_create_cube(int w, GPUHDRType hdr_type, char err_out[256])
+{
+	GLenum type, format, internalformat;
+
+	GPUTexture *tex = MEM_callocN(sizeof(GPUTexture), "GPUTexture");
+	tex->w = w;
+	tex->h = w;
+	tex->number = -1;
+	tex->refcount = 1;
+	tex->target = GL_TEXTURE_CUBE_MAP;
+	tex->target_base = GL_TEXTURE_CUBE_MAP;
+	tex->depth = 0;
+	tex->fb_attachment = -1;
+
+	glGenTextures(1, &tex->bindcode);
+
+	if (!tex->bindcode) {
+		if (err_out) {
+			BLI_snprintf(err_out, 256, "GPUTexture: texture create failed: %d",
+				(int)glGetError());
+		}
+		else {
+			fprintf(stderr, "GPUTexture: texture create failed: %d\n",
+				(int)glGetError());
+		}
+		GPU_texture_free(tex);
+		return NULL;
+	}
+
+	if (!GPU_full_non_power_of_two_support()) {
+		tex->w = power_of_2_max_i(tex->w);
+		tex->h = power_of_2_max_i(tex->h);
+	}
+
+	tex->number = 0;
+	glBindTexture(tex->target, tex->bindcode);
+
+	type = GL_FLOAT;
+
+	format = GL_RGBA;
+	switch (hdr_type) {
+		case GPU_HDR_NONE:
+			internalformat = GL_RGBA8;
+			break;
+		/* the following formats rely on ARB_texture_float or OpenGL 3.0 */
+		case GPU_HDR_HALF_FLOAT:
+			internalformat = GL_RGBA16F_ARB;
+			break;
+		case GPU_HDR_FULL_FLOAT:
+			internalformat = GL_RGBA32F_ARB;
+			break;
+		default:
+			break;
+	}
+
+	for (int i = 0; i < 6; i++)
+		glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, internalformat ,tex->w, tex->h, 0,
+		             format, type, NULL);
+
+	/* TODO : use global parameters */
+	glTexParameteri(tex->target_base, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+	glTexParameteri(tex->target_base, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(tex->target_base, GL_GENERATE_MIPMAP, GL_TRUE);
+
+	glTexParameteri(tex->target_base, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(tex->target_base, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(tex->target_base, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+	return tex;
+}
 
 GPUTexture *GPU_texture_create_3D(int w, int h, int depth, int channels, const float *fpixels)
 {
@@ -572,6 +659,27 @@ GPUTexture *GPU_texture_create_1D_procedural(int w, const float *pixels, char er
 
 		GPU_texture_unbind(tex);
 	}
+
+	return tex;
+}
+
+GPUTexture *GPU_texture_create_cube_probe(int w, char err_out[256])
+{
+	GPUTexture *tex = GPU_texture_create_cube(w, GPU_HDR_HALF_FLOAT, err_out);
+
+	if (tex)
+		GPU_texture_unbind(tex);
+
+	return tex;
+}
+
+
+GPUTexture *GPU_texture_create_sh_filter_target(char err_out[256])
+{
+	GPUTexture *tex = GPU_texture_create_nD(4, 4, 2, NULL, 0, GPU_HDR_HALF_FLOAT, 3, 0, err_out);
+
+	if (tex)
+		GPU_texture_unbind(tex);
 
 	return tex;
 }

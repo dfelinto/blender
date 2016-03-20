@@ -799,6 +799,31 @@ static void view3d_recalc_used_layers(ARegion *ar, wmNotifier *wmn, Scene *scene
 	}
 }
 
+static void view3d_tag_probes_update(ARegion *ar, wmNotifier *wmn, Scene *scene)
+{
+	wmWindow *win = wmn->wm->winactive;
+	ScrArea *sa;
+	unsigned int lay_used = 0;
+	Base *base;
+
+	if (!win) return;
+
+	base = scene->base.first;
+	while (base) {
+		Object *ob = base->object;
+
+		if (ob->gpuprobe.first) {
+			LinkData *link;
+			for (link = ob->gpuprobe.first; link; link = link->next) {
+				GPUProbe *ref = (GPUProbe *)link->data;
+				GPU_probe_set_update(ref, true);
+			}
+		}
+
+		base = base->next;
+	}
+}
+
 static void view3d_main_region_listener(bScreen *sc, ScrArea *sa, ARegion *ar, wmNotifier *wmn)
 {
 	Scene *scene = sc->scene;
@@ -870,6 +895,7 @@ static void view3d_main_region_listener(bScreen *sc, ScrArea *sa, ARegion *ar, w
 				case ND_KEYS:
 				case ND_PARTICLE:
 				case ND_LOD:
+					view3d_tag_probes_update(ar, wmn, scene);
 					ED_region_tag_redraw(ar);
 					break;
 			}
@@ -938,12 +964,14 @@ static void view3d_main_region_listener(bScreen *sc, ScrArea *sa, ARegion *ar, w
 					    !DEG_depsgraph_use_legacy())
 #endif
 					{
+						view3d_tag_probes_update(ar, wmn, scene);
 						ED_region_tag_redraw(ar);
 					}
 					break;
 				}
 				case ND_SHADING_DRAW:
 				case ND_SHADING_LINKS:
+				view3d_tag_probes_update(ar, wmn, scene);
 					ED_region_tag_redraw(ar);
 					break;
 			}
@@ -951,6 +979,7 @@ static void view3d_main_region_listener(bScreen *sc, ScrArea *sa, ARegion *ar, w
 		case NC_WORLD:
 			switch (wmn->data) {
 				case ND_WORLD_DRAW:
+					view3d_tag_probes_update(ar, wmn, scene);
 					/* handled by space_view3d_listener() for v3d access */
 					break;
 			}

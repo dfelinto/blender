@@ -78,7 +78,6 @@ static int node_shader_gpu_bsdf_glass(GPUMaterial *mat, bNode *node, bNodeExecDa
 
 	if (GPU_material_get_type(mat) == GPU_MATERIAL_TYPE_MESH_REAL_SH) {
 		GPUBrdfInput brdf;
-		GPUNodeLink *reflectOut, *refractOut, *output;
 
 		GPU_brdf_input_initialize(&brdf);
 

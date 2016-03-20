@@ -455,6 +455,7 @@ void BKE_object_free_ex(Object *ob, bool do_id_user)
 	if (ob->soft) sbFree(ob->soft);
 	if (ob->bsoft) bsbFree(ob->bsoft);
 	if (ob->gpulamp.first) GPU_lamp_free(ob);
+	if (ob->gpuprobe.first) GPU_probe_free(&ob->gpuprobe);
 
 	BKE_sculptsession_free(ob);
 
@@ -1564,6 +1565,7 @@ Object *BKE_object_copy_ex(Main *bmain, Object *ob, bool copy_caches)
 	obn->derivedFinal = NULL;
 
 	BLI_listbase_clear(&obn->gpulamp);
+	BLI_listbase_clear(&obn->gpuprobe);
 	BLI_listbase_clear(&obn->pc_ids);
 
 	obn->mpath = NULL;

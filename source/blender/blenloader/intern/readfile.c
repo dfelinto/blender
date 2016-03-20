@@ -3546,6 +3546,7 @@ static void direct_link_world(FileData *fd, World *wrld)
 	
 	wrld->preview = direct_link_preview_image(fd, wrld->preview);
 	BLI_listbase_clear(&wrld->gpumaterial);
+	BLI_listbase_clear(&wrld->gpuprobe);
 }
 
 
@@ -4894,6 +4895,11 @@ static void lib_link_object(FileData *fd, Main *main)
 					if (!level->source && level == ob->lodlevels.first)
 						level->source = ob;
 				}
+			}
+
+			{
+				ob->probe = newlibadr(fd, ob->id.lib, ob->probe);
+				BLI_listbase_clear(&ob->gpuprobe);
 			}
 		}
 	}
@@ -9230,6 +9236,8 @@ static void expand_object(FileData *fd, Main *mainvar, Object *ob)
 			expand_doit(fd, mainvar, level->source);
 		}
 	}
+
+	expand_doit(fd, mainvar, ob->probe);
 }
 
 static void expand_scene(FileData *fd, Main *mainvar, Scene *sce)

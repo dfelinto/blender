@@ -282,10 +282,14 @@ void GPU_set_gpu_mipmapping(int gpu_mipmap)
 	}
 }
 
-static void gpu_generate_mipmap(GLenum target)
+void GPU_generate_mipmap(GLenum target)
 {
 	const bool is_ati = GPU_type_matches(GPU_DEVICE_ATI, GPU_OS_ANY, GPU_DRIVER_ANY);
 	int target_enabled = 0;
+
+	if (GLEW_ARB_seamless_cube_map) {
+		glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
+	}
 
 	/* work around bug in ATI driver, need to have GL_TEXTURE_2D enabled
 	 * http://www.opengl.org/wiki/Common_Mistakes#Automatic_mipmap_generation */
@@ -853,7 +857,7 @@ void GPU_create_gl_tex(unsigned int *bind, unsigned int *rect, float *frect, int
 
 		if (GPU_get_mipmap() && mipmap) {
 			if (GTS.gpu_mipmap) {
-				gpu_generate_mipmap(GL_TEXTURE_2D);
+				GPU_generate_mipmap(GL_TEXTURE_2D);
 			}
 			else {
 				int i;
@@ -904,7 +908,7 @@ void GPU_create_gl_tex(unsigned int *bind, unsigned int *rect, float *frect, int
 
 			if (GPU_get_mipmap() && mipmap) {
 				if (GTS.gpu_mipmap) {
-					gpu_generate_mipmap(GL_TEXTURE_CUBE_MAP);
+					GPU_generate_mipmap(GL_TEXTURE_CUBE_MAP);
 				}
 				else {
 					if (!ibuf) {
@@ -1219,7 +1223,7 @@ static bool GPU_check_scaled_image(ImBuf *ibuf, Image *ima, float *frect, int x,
 		}
 
 		if (GPU_get_mipmap()) {
-			gpu_generate_mipmap(GL_TEXTURE_2D);
+			GPU_generate_mipmap(GL_TEXTURE_2D);
 		}
 		else {
 			ima->tpageflag &= ~IMA_MIPMAP_COMPLETE;
@@ -1266,7 +1270,7 @@ void GPU_paint_update_image(Image *ima, ImageUser *iuser, int x, int y, int w, i
 			/* we have already accounted for the case where GTS.gpu_mipmap is false
 			 * so we will be using GPU mipmap generation here */
 			if (GPU_get_mipmap()) {
-				gpu_generate_mipmap(GL_TEXTURE_2D);
+				GPU_generate_mipmap(GL_TEXTURE_2D);
 			}
 			else {
 				ima->tpageflag &= ~IMA_MIPMAP_COMPLETE;
@@ -1300,7 +1304,7 @@ void GPU_paint_update_image(Image *ima, ImageUser *iuser, int x, int y, int w, i
 
 		/* see comment above as to why we are using gpu mipmap generation here */
 		if (GPU_get_mipmap()) {
-			gpu_generate_mipmap(GL_TEXTURE_2D);
+			GPU_generate_mipmap(GL_TEXTURE_2D);
 		}
 		else {
 			ima->tpageflag &= ~IMA_MIPMAP_COMPLETE;
@@ -1573,6 +1577,7 @@ static struct GPUMaterialState {
 	Object *gob;
 	DupliObject *dob;
 	Scene *gscene;
+	GPUProbe *gprobe;
 	int glay;
 	bool gscenelock;
 	float (*gviewmat)[4];
@@ -1590,6 +1595,7 @@ static struct GPUMaterialState {
 	int lastmatnr, lastretval;
 	GPUBlendMode lastalphablend;
 	bool is_opensubdiv;
+
 } GMS = {NULL};
 
 /* fixed function material, alpha handed by caller */
@@ -1783,6 +1789,25 @@ void GPU_begin_object_materials(
 
 			GMS.alphablend[0] = GPU_BLEND_SOLID;
 		}
+
+		if (new_shading_nodes && !(v3d->flag2 & V3D_RENDER_SHADOW)) {
+			bool use_object_probe = false;
+			Object *probe_source = NULL;
+
+			if (ob->probe) {
+				if ((v3d->flag3 & V3D_PROBE_CAPTURE) && (ob->probe == v3d->probe_source))
+					use_object_probe = false;
+				else if (ob->probe->isprobe)
+					use_object_probe = true;
+			}
+
+			if (use_object_probe)
+				GMS.gprobe = GPU_probe_object(scene, ob->probe);
+			else if (ob->isprobe)
+				GMS.gprobe = GPU_probe_object(scene, ob);
+			else
+				GMS.gprobe = GPU_probe_world(scene, scene->world);
+		}
 		
 		/* setup materials */
 		for (a = 1; a <= ob->totcol; a++) {
@@ -1914,7 +1939,7 @@ int GPU_object_material_bind(int nr, void *attribs)
 		if (gattribs && GMS.gmatbuf[nr]) {
 			/* bind glsl material and get attributes */
 			Material *mat = GMS.gmatbuf[nr];
-			GPUParticleInfo partile_info;
+			GPUParticleInfo particle_info;
 
 			float auto_bump_scale;
 
@@ -1922,14 +1947,18 @@ int GPU_object_material_bind(int nr, void *attribs)
 			GPU_material_vertex_attributes(gpumat, gattribs);
 
 			if (GMS.dob)
-				GPU_get_particle_info(&partile_info);
+				GPU_get_particle_info(&particle_info);
 
 			GPU_material_bind(
 			        gpumat, GMS.gob->lay, GMS.glay, 1.0, !(GMS.gob->mode & OB_MODE_TEXTURE_PAINT),
 			        GMS.gviewmat, GMS.gviewinv, GMS.gviewcamtexcofac, GMS.gscenelock);
 
 			auto_bump_scale = GMS.gob->derivedFinal != NULL ? GMS.gob->derivedFinal->auto_bump_scale : 1.0f;
-			GPU_material_bind_uniforms(gpumat, GMS.gob->obmat, GMS.gviewmat, GMS.gob->col, auto_bump_scale, &partile_info);
+			GPU_material_bind_uniforms(gpumat, GMS.gob->obmat, GMS.gviewmat, GMS.gob->col, auto_bump_scale, &particle_info);
+
+			if (GMS.gprobe)
+				GPU_material_bind_uniforms_probe(gpumat, GMS.gprobe);
+
 			GMS.gboundmat = mat;
 
 			/* for glsl use alpha blend mode, unless it's set to solid and

@@ -55,6 +55,7 @@ struct GPUNodeStack;
 struct GPUMaterial;
 struct GPUTexture;
 struct GPULamp;
+struct GPUProbe;
 struct PreviewImage;
 struct World;
 
@@ -63,6 +64,7 @@ typedef struct GPUNodeLink GPUNodeLink;
 typedef struct GPUMaterial GPUMaterial;
 typedef struct GPULamp GPULamp;
 typedef struct GPUParticleInfo GPUParticleInfo;
+typedef struct GPUProbe GPUProbe;
 
 /* Functions to create GPU Materials nodes */
 
@@ -98,6 +100,17 @@ typedef enum GPUBuiltin {
 	GPU_PARTICLE_ANG_VELOCITY = (1 << 12),
 	GPU_LOC_TO_VIEW_MATRIX =    (1 << 13),
 	GPU_INVERSE_LOC_TO_VIEW_MATRIX = (1 << 14),
+	GPU_PBR_LOD_FACTOR =        (1 << 15),
+	GPU_PBR_PROBE =             (1 << 16),
+	GPU_PBR_SH0 =               (1 << 25),
+	GPU_PBR_SH1 =               (1 << 17),
+	GPU_PBR_SH2 =               (1 << 18),
+	GPU_PBR_SH3 =               (1 << 19),
+	GPU_PBR_SH4 =               (1 << 20),
+	GPU_PBR_SH5 =               (1 << 21),
+	GPU_PBR_SH6 =               (1 << 22),
+	GPU_PBR_SH7 =               (1 << 23),
+	GPU_PBR_SH8 =               (1 << 24),
 } GPUBuiltin;
 
 typedef enum GPUOpenGLBuiltin {
@@ -109,11 +122,7 @@ typedef enum GPUMatType {
 	GPU_MATERIAL_TYPE_MESH = 1,
 	GPU_MATERIAL_TYPE_MESH_REAL_SH = 2,
 	GPU_MATERIAL_TYPE_WORLD = 3,
-	GPU_MATERIAL_TYPE_WORLD_SH = 4,
 	GPU_MATERIAL_TYPE_LAMP = 5,
-	GPU_MATERIAL_TYPE_ENV_NORMAL = 6,
-	GPU_MATERIAL_TYPE_ENV_TANGENT = 7,
-	GPU_MATERIAL_TYPE_ENV_BRDF = 8,
 } GPUMatType;
 
 
@@ -217,10 +226,6 @@ void GPU_node_link_set_type(GPUNodeLink *link, GPUType type);
 bool GPU_link(GPUMaterial *mat, const char *name, ...);
 bool GPU_stack_link(GPUMaterial *mat, const char *name, GPUNodeStack *in, GPUNodeStack *out, ...);
 
-void GPU_material_set_normal_link(GPUMaterial *material, GPUNodeLink *link);
-GPUNodeLink *GPU_material_get_normal_link(GPUMaterial *material);
-void GPU_material_set_tangent_link(GPUMaterial *material, GPUNodeLink *link);
-GPUNodeLink *GPU_material_get_tangent_link(GPUMaterial *material);
 void GPU_material_set_lamp_normal_link(GPUMaterial *material, GPUNodeLink *link);
 GPUNodeLink *GPU_material_get_lamp_normal_link(GPUMaterial *material);
 void GPU_material_set_lamp_position_link(GPUMaterial *material, GPUNodeLink *link);
@@ -235,7 +240,7 @@ GPUNodeLink *GPU_get_world_horicol(void);
 GPUBlendMode GPU_material_alpha_blend(GPUMaterial *material, float obcol[4]);
 
 /* High level functions to create and use GPU materials */
-GPUMaterial *GPU_material_world(struct Scene *scene, struct World *wo, bool use_spherical_harmonics);
+GPUMaterial *GPU_material_world(struct Scene *scene, struct World *wo);
 
 GPUMaterial *GPU_material_from_blender(struct Scene *scene, struct Material *ma, bool use_opensubdiv,
 		bool use_realistic_preview, int samplecount);
@@ -251,12 +256,12 @@ void GPU_material_bind(
 void GPU_material_bind_uniforms(
         GPUMaterial *material, float obmat[4][4], float viewmat[4][4], float obcol[4],
         float autobumpscale, GPUParticleInfo *pi);
+void GPU_material_bind_uniforms_probe(GPUMaterial *material, GPUProbe *probe);
 void GPU_material_unbind(GPUMaterial *material);
 bool GPU_material_bound(GPUMaterial *material);
 struct Scene *GPU_material_scene(GPUMaterial *material);
 GPUMatType GPU_material_get_type(GPUMaterial *material);
 void GPU_material_set_type(GPUMaterial *material, GPUMatType type);
-int GPU_material_get_samplecount(GPUMaterial *material);
 
 void GPU_material_vertex_attributes(GPUMaterial *material,
 	struct GPUVertexAttribs *attrib);
@@ -397,7 +402,30 @@ GPUNodeLink *GPU_lamp_get_data(
         GPUMaterial *mat, GPULamp *lamp,
         GPUNodeLink **r_col, GPUNodeLink **r_lv, GPUNodeLink **r_dist, GPUNodeLink **r_shadow, GPUNodeLink **r_energy);
 
+/* Probes */
+
+typedef enum GPUProbeType {
+	GPU_PROBE_CUBE = 0,
+	//GPU_PROBE_PLANAR = 1,
+} GPUProbeType;
+
+GPUProbe *GPU_probe_world(struct Scene *scene, struct World *wo);
+GPUProbe *GPU_probe_object(struct Scene *scene, struct Object *ob);
+void GPU_probe_free(ListBase *gpuprobe);
+
+void GPU_probe_buffer_bind(GPUProbe *probe);
+void GPU_probe_switch_fb_cubeface(GPUProbe *probe, int cubeface, float viewmat[4][4], int *winsize, float winmat[4][4]);
+void GPU_probe_buffer_unbind(GPUProbe *probe);
+void GPU_probe_rebuild_mipmaps(GPUProbe *probe);
+void GPU_probe_sh_compute(GPUProbe *probe);
+void GPU_probe_sh_shader_bind(GPUProbe *probe);
+void GPU_probe_sh_shader_unbind(void);
+void GPU_probe_set_update(GPUProbe *probe, bool val);
+bool GPU_probe_get_update(GPUProbe *probe);
+struct Object *GPU_probe_get_object(GPUProbe *probe);
+
 /* World */
+
 void GPU_mist_update_enable(short enable);
 void GPU_mist_update_values(int type, float start, float dist, float inten, float color[3]);
 void GPU_horizon_update_color(float color[3]);
