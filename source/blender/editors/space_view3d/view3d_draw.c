@@ -2629,7 +2629,7 @@ static void gpu_update_probes(Scene *scene, View3D *v3d)
 	BLI_listbase_clear(&probelist);
 
 	/* World Probe */
-	{
+	if (scene->world) {
 		probe = GPU_probe_world(scene, scene->world);
 
 		if (probe && GPU_probe_get_update(probe)) {

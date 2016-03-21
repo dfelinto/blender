@@ -1793,22 +1793,18 @@ void GPU_begin_object_materials(
 			GMS.alphablend[0] = GPU_BLEND_SOLID;
 		}
 
-		if (new_shading_nodes && !(v3d->flag2 & V3D_RENDER_SHADOW)) {
+		if (new_shading_nodes && (v3d->flag3 & V3D_REALISTIC_MAT) && !(v3d->flag2 & V3D_RENDER_SHADOW)) {
 			bool use_object_probe = false;
-			Object *probe_source = NULL;
 
-			if (ob->probe) {
-				if ((v3d->flag3 & V3D_PROBE_CAPTURE) && (ob->probe == v3d->probe_source))
-					use_object_probe = false;
-				else if (ob->probe->isprobe)
+			if (ob->probe)
+				if (!((v3d->flag3 & V3D_PROBE_CAPTURE) && (ob->probe == v3d->probe_source)) && ob->probe->isprobe)
 					use_object_probe = true;
-			}
 
 			if (use_object_probe)
 				GMS.gprobe = GPU_probe_object(scene, ob->probe);
 			else if (ob->isprobe)
 				GMS.gprobe = GPU_probe_object(scene, ob);
-			else
+			else if (scene->world)
 				GMS.gprobe = GPU_probe_world(scene, scene->world);
 		}
 		
