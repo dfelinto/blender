@@ -49,8 +49,6 @@ ccl_device_inline void path_state_init(KernelGlobals *kg, ccl_addr_space PathSta
 		state->volume_stack[0].shader = SHADER_NONE;
 	}
 #endif
-
-	state->roughness = 0.0f;
 }
 
 ccl_device_inline void path_state_next(KernelGlobals *kg, ccl_addr_space PathState *state, int label)

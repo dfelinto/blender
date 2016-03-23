@@ -296,7 +296,6 @@ enum PathRayFlag {
 	PATH_RAY_MIS_SKIP = 2048,
 	PATH_RAY_DIFFUSE_ANCESTOR = 4096,
 	PATH_RAY_SINGLE_PASS_DONE = 8192,
-	PATH_RAY_LWR_PASS_DONE = 16384,
 
 	/* we need layer member flags to be the 20 upper bits */
 	PATH_RAY_LAYER_SHIFT = (32-20)
@@ -426,10 +425,6 @@ typedef ccl_addr_space struct PathRadiance {
 
 	float4 shadow;
 	float mist;
-
-	float3 color;
-	float depth;
-	float3 normal;
 } PathRadiance;
 
 typedef struct BsdfEval {
@@ -860,8 +855,6 @@ typedef struct PathState {
 	int volume_bounce;
 	RNG rng_congruential;
 	VolumeStack volume_stack[VOLUME_STACK_SIZE];
-
-	float roughness;
 #endif
 } PathState;
 
@@ -1014,7 +1007,7 @@ typedef struct KernelFilm {
 	int pass_shadow;
 	float pass_shadow_scale;
 	int filter_table_offset;
-	int pass_lwr;
+	int pass_pad2;
 
 	int pass_mist;
 	float mist_start;
@@ -1027,14 +1020,6 @@ typedef struct KernelFilm {
 	int pass_ray_bounces;
 	int pass_pad3;
 #endif
-
-	int lwr_diffuse_direct;
-	int lwr_diffuse_indirect;
-	int lwr_glossy_direct;
-	int lwr_glossy_indirect;
-	int lwr_transmission_direct;
-	int lwr_transmission_indirect;
-	int pass_pad1, pass_pad2;
 } KernelFilm;
 
 typedef struct KernelBackground {
@@ -1228,16 +1213,6 @@ enum RayState {
 #define ADD_RAY_FLAG(ray_state, ray_index, flag) (ray_state[ray_index] = (ray_state[ray_index] | flag))
 #define REMOVE_RAY_FLAG(ray_state, ray_index, flag) (ray_state[ray_index] = (ray_state[ray_index] & (~flag)))
 #define IS_FLAG(ray_state, ray_index, flag) (ray_state[ray_index] & flag)
-
-typedef enum FilterMode {
-	FILTER_COMBINED = 1,
-	FILTER_DIFFUSE_DIRECT = 2,
-	FILTER_DIFFUSE_INDIRECT = 4,
-	FILTER_GLOSSY_DIRECT = 8,
-	FILTER_GLOSSY_INDIRECT = 16,
-	FILTER_TRANSMISSION_DIRECT = 32,
-	FILTER_TRANSMISSION_INDIRECT = 64,
-} FilterMode;
 
 CCL_NAMESPACE_END
 

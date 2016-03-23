@@ -200,22 +200,6 @@ class CyclesRender_PT_sampling(CyclesButtonsPanel, Panel):
         if not (use_opencl(context) and cscene.feature_set != 'EXPERIMENTAL'):
             layout.row().prop(cscene, "sampling_pattern", text="Pattern")
 
-        row = layout.row()
-        sub = row.column()
-        sub.prop(cscene, "use_filtering")
-        if cscene.use_filtering:
-            sub.prop(cscene, "filter_half_window")
-            sub.prop(cscene, "filter_bandwidth_factor", slider=True)
-            col = sub.column(align=True)
-            row = col.row(align=True)
-            row.prop(cscene, "filter_diffuse_direct", toggle=True)
-            row.prop(cscene, "filter_glossy_direct", toggle=True)
-            row.prop(cscene, "filter_transmission_direct", toggle=True)
-            row = col.row(align=True)
-            row.prop(cscene, "filter_diffuse_indirect", toggle=True)
-            row.prop(cscene, "filter_glossy_indirect", toggle=True)
-            row.prop(cscene, "filter_transmission_indirect", toggle=True)
-
         for rl in scene.render.layers:
             if rl.samples > 0:
                 layout.separator()
@@ -379,7 +363,6 @@ class CyclesRender_PT_performance(CyclesButtonsPanel, Panel):
         sub.prop(rd, "tile_y", text="Y")
 
         sub.prop(cscene, "use_progressive_refine")
-        sub.prop(cscene, "prepass_samples")
 
         subsub = sub.column(align=True)
         subsub.enabled = not rd.use_border

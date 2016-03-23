@@ -195,8 +195,6 @@ public:
 			thread_film_convert(*task);
 		else if(task->type == DeviceTask::SHADER)
 			thread_shader(*task);
-		else if(task->type == DeviceTask::FILTER)
-			thread_filter(*task);
 	}
 
 	class CPUDeviceTask : public DeviceTask {
@@ -294,27 +292,6 @@ public:
 #ifdef WITH_OSL
 		OSLShader::thread_free(&kg);
 #endif
-	}
-
-	void thread_filter(DeviceTask& task)
-	{
-		KernelGlobals kg = kernel_globals;
-
-		void(*filter1_kernel)(KernelGlobals *, float *, int, int, int, int, int, int, int, float, float*);
-		void(*filter2_kernel)(KernelGlobals *, float *, int, int, int, int, int, int, int, float, float*, int4);
-
-		filter1_kernel = kernel_cpu_filter1_pixel;
-		filter2_kernel = kernel_cpu_filter2_pixel;
-
-		float *storage = new float[99*task.h*task.w];
-		for(int y = 0; y < task.h; y++)
-			for(int x = 0; x < task.w; x++)
-				filter1_kernel(&kg, (float*)task.buffer, x+task.x, y+task.y, task.offset, task.stride, task.sample, task.filter_mode, task.filter_half_window, task.filter_bandwidth_factor, storage + 99*(y*task.w+x));
-		for(int y = 0; y < task.h; y++)
-			for(int x = 0; x < task.w; x++)
-				filter2_kernel(&kg, (float*)task.buffer, x+task.x, y+task.y, task.offset, task.stride, task.sample, task.filter_mode, task.filter_half_window, task.filter_bandwidth_factor, storage + 99*(y*task.w+x), make_int4(task.x, task.y, task.w, task.h));
-
-		delete[] storage;
 	}
 
 	void thread_film_convert(DeviceTask& task)

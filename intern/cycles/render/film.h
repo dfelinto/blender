@@ -53,7 +53,6 @@ class Film {
 public:
 	float exposure;
 	vector<Pass> passes;
-	int lwr_passes;
 	float pass_alpha_threshold;
 
 	FilterType filter_type;
@@ -76,7 +75,7 @@ public:
 	void device_free(Device *device, DeviceScene *dscene, Scene *scene);
 
 	bool modified(const Film& film);
-	void tag_passes_update(Scene *scene, const vector<Pass>& passes_, int lwr_passes);
+	void tag_passes_update(Scene *scene, const vector<Pass>& passes_);
 	void tag_update(Scene *scene);
 };
 

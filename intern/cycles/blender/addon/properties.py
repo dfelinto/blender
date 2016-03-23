@@ -255,63 +255,6 @@ class CyclesRenderSettings(bpy.types.PropertyGroup):
                 default='USE',
                 )
 
-        cls.use_filtering = BoolProperty(
-                name="Use LWR filtering",
-                description="Apply a post-processing filter to the image that removes noise at the cost of accuracy",
-                default=False,
-                )
-        cls.filter_half_window = IntProperty(
-                name="Half Window",
-                description="Radius of the LWR filter window (larger values produce smoother results, but take longer to filter and potentially lose more detail)",
-                min=2, max=64,
-                default=5,
-                )
-        cls.filter_bandwidth_factor = FloatProperty(
-                name="Bandwidth factor",
-                description="Controls the strength of the filtering - 0 is the automatically selected strength (and should be fine for most scenes, except for hair/fur)",
-                min=-2, max=2,
-                default=0,
-                )
-
-        cls.filter_diffuse_direct = BoolProperty(
-                name="Diffuse Direct",
-                description="Filter the diffuse direct pass separately",
-                default=False,
-                )
-        cls.filter_diffuse_indirect = BoolProperty(
-                name="Diffuse Indirect",
-                description="Filter the diffuse indirect pass separately",
-                default=False,
-                )
-        cls.filter_glossy_direct = BoolProperty(
-                name="Glossy Direct",
-                description="Filter the glossy direct pass separately",
-                default=False,
-                )
-        cls.filter_glossy_indirect = BoolProperty(
-                name="Glossy Indirect",
-                description="Filter the glossy indirect pass separately",
-                default=False,
-                )
-        cls.filter_transmission_direct = BoolProperty(
-                name="Transmission Direct",
-                description="Filter the transmission direct pass separately",
-                default=False,
-                )
-        cls.filter_transmission_indirect = BoolProperty(
-                name="Transmissison Indirect",
-                description="Filter the transmission indirect pass separately",
-                default=False,
-                )
-
-        cls.prepass_samples = IntProperty(
-                name="Prepass Samples",
-                description="Number of samples to render before the remaining samples are rendered"
-                            "in order to give a faster preview of the result",
-                min=0, max=16384,
-                default=0,
-                )
-
         cls.sample_all_lights_direct = BoolProperty(
                 name="Sample All Direct Lights",
                 description="Sample all lights (for direct samples), rather than randomly picking one",

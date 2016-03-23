@@ -34,7 +34,7 @@ class Tile;
 
 class DeviceTask : public Task {
 public:
-	typedef enum { PATH_TRACE, FILM_CONVERT, SHADER, FILTER } Type;
+	typedef enum { PATH_TRACE, FILM_CONVERT, SHADER } Type;
 	Type type;
 
 	int x, y, w, h;
@@ -50,10 +50,6 @@ public:
 	int shader_eval_type;
 	int shader_filter;
 	int shader_x, shader_w;
-
-	float filter_bandwidth_factor;
-	int filter_half_window;
-	int filter_mode;
 
 	DeviceTask(Type type = PATH_TRACE);
 

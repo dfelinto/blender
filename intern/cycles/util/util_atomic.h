@@ -56,20 +56,9 @@ ccl_device_inline void atomic_add_float(volatile ccl_global float *source,
 	} while(atomic_cmpxchg((volatile ccl_global unsigned int *)source,
 	                       prev_value.int_value,
 	                       new_value.int_value) != prev_value.int_value);
-	return prev_value.float_value;
 }
 
 #endif  /* __KERNEL_OPENCL__ */
-
-#ifdef __KERNEL_CUDA__
-
-ccl_device_inline float atomic_add_float(ccl_global float *source,
-                                         const float operand)
-{
-	return atomicAdd(source, operand);
-}
-
-#endif  /* __KERNEL_CUDA__ */
 
 #endif  /* __KERNEL_GPU__ */
 

@@ -146,13 +146,12 @@ ccl_device float3 bsdf_hair_transmission_eval_transmit(const ShaderClosure *sc, 
 	return make_float3(*pdf, *pdf, *pdf);
 }
 
-ccl_device int bsdf_hair_reflection_sample(const ShaderClosure *sc, float3 Ng, float3 I, float3 dIdx, float3 dIdy, float randu, float randv, float3 *eval, float3 *omega_in, float3 *domega_in_dx, float3 *domega_in_dy, float *pdf, float* roughness)
+ccl_device int bsdf_hair_reflection_sample(const ShaderClosure *sc, float3 Ng, float3 I, float3 dIdx, float3 dIdy, float randu, float randv, float3 *eval, float3 *omega_in, float3 *domega_in_dx, float3 *domega_in_dy, float *pdf)
 {
 	float offset = sc->data2;
 	float3 Tg = sc->T;
 	float roughness1 = sc->data0;
 	float roughness2 = sc->data1;
-	*roughness = min(roughness1, roughness2);
 	float Iz = dot(Tg, I);
 	float3 locy = normalize(I - Tg * Iz);
 	float3 locx = cross(locy, Tg);
@@ -197,13 +196,12 @@ ccl_device int bsdf_hair_reflection_sample(const ShaderClosure *sc, float3 Ng, f
 	return LABEL_REFLECT|LABEL_GLOSSY;
 }
 
-ccl_device int bsdf_hair_transmission_sample(const ShaderClosure *sc, float3 Ng, float3 I, float3 dIdx, float3 dIdy, float randu, float randv, float3 *eval, float3 *omega_in, float3 *domega_in_dx, float3 *domega_in_dy, float *pdf, float* roughness)
+ccl_device int bsdf_hair_transmission_sample(const ShaderClosure *sc, float3 Ng, float3 I, float3 dIdx, float3 dIdy, float randu, float randv, float3 *eval, float3 *omega_in, float3 *domega_in_dx, float3 *domega_in_dy, float *pdf)
 {
 	float offset = sc->data2;
 	float3 Tg = sc->T;
 	float roughness1 = sc->data0;
 	float roughness2 = sc->data1;
-	*roughness = min(roughness1, roughness2);
 	float Iz = dot(Tg, I);
 	float3 locy = normalize(I - Tg * Iz);
 	float3 locx = cross(locy, Tg);

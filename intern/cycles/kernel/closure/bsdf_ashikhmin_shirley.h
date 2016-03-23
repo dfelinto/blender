@@ -126,9 +126,8 @@ ccl_device_inline void bsdf_ashikhmin_shirley_sample_first_quadrant(float n_x, f
 	*cos_theta = powf(randv, 1.0f / (n_x * cos_phi*cos_phi + n_y * sin_phi*sin_phi + 1.0f));
 }
 
-ccl_device int bsdf_ashikhmin_shirley_sample(const ShaderClosure *sc, float3 Ng, float3 I, float3 dIdx, float3 dIdy, float randu, float randv, float3 *eval, float3 *omega_in, float3 *domega_in_dx, float3 *domega_in_dy, float *pdf, float *roughness)
+ccl_device int bsdf_ashikhmin_shirley_sample(const ShaderClosure *sc, float3 Ng, float3 I, float3 dIdx, float3 dIdy, float randu, float randv, float3 *eval, float3 *omega_in, float3 *domega_in_dx, float3 *domega_in_dy, float *pdf)
 {
-	*roughness = min(sc->data0, sc->data1);
 	float3 N = sc->N;
 
 	float NdotI = dot(N, I);

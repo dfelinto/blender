@@ -565,7 +565,7 @@ ccl_device void shader_bsdf_eval(KernelGlobals *kg,
 
 ccl_device int shader_bsdf_sample(KernelGlobals *kg, const ShaderData *sd,
 	float randu, float randv, BsdfEval *bsdf_eval,
-	float3 *omega_in, differential3 *domega_in, float *pdf, float *roughness)
+	float3 *omega_in, differential3 *domega_in, float *pdf)
 {
 	int sampled = 0;
 
@@ -606,7 +606,7 @@ ccl_device int shader_bsdf_sample(KernelGlobals *kg, const ShaderData *sd,
 	float3 eval;
 
 	*pdf = 0.0f;
-	label = bsdf_sample(kg, sd, sc, randu, randv, &eval, omega_in, domega_in, pdf, roughness);
+	label = bsdf_sample(kg, sd, sc, randu, randv, &eval, omega_in, domega_in, pdf);
 
 	if(*pdf != 0.0f) {
 		bsdf_eval_init(bsdf_eval, sc->type, eval*sc->weight, kernel_data.film.use_light_pass);
@@ -622,13 +622,13 @@ ccl_device int shader_bsdf_sample(KernelGlobals *kg, const ShaderData *sd,
 
 ccl_device int shader_bsdf_sample_closure(KernelGlobals *kg, const ShaderData *sd,
 	const ShaderClosure *sc, float randu, float randv, BsdfEval *bsdf_eval,
-	float3 *omega_in, differential3 *domega_in, float *pdf, float *roughness)
+	float3 *omega_in, differential3 *domega_in, float *pdf)
 {
 	int label;
 	float3 eval;
 
 	*pdf = 0.0f;
-	label = bsdf_sample(kg, sd, sc, randu, randv, &eval, omega_in, domega_in, pdf, roughness);
+	label = bsdf_sample(kg, sd, sc, randu, randv, &eval, omega_in, domega_in, pdf);
 
 	if(*pdf != 0.0f)
 		bsdf_eval_init(bsdf_eval, sc->type, eval*sc->weight, kernel_data.film.use_light_pass);

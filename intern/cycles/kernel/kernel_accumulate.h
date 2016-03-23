@@ -132,7 +132,6 @@ ccl_device_inline void path_radiance_init(PathRadiance *L, int use_light_pass)
 {
 	/* clear all */
 #ifdef __PASSES__
-	L->depth = 0.0f;
 	L->use_light_pass = use_light_pass;
 
 	if(use_light_pass) {

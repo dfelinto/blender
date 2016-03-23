@@ -57,9 +57,8 @@ ccl_device float3 bsdf_diffuse_eval_transmit(const ShaderClosure *sc, const floa
 	return make_float3(0.0f, 0.0f, 0.0f);
 }
 
-ccl_device int bsdf_diffuse_sample(const ShaderClosure *sc, float3 Ng, float3 I, float3 dIdx, float3 dIdy, float randu, float randv, float3 *eval, float3 *omega_in, float3 *domega_in_dx, float3 *domega_in_dy, float *pdf, float* roughness)
+ccl_device int bsdf_diffuse_sample(const ShaderClosure *sc, float3 Ng, float3 I, float3 dIdx, float3 dIdy, float randu, float randv, float3 *eval, float3 *omega_in, float3 *domega_in_dx, float3 *domega_in_dy, float *pdf)
 {
-	*roughness = 1.0f;
 	float3 N = sc->N;
 
 	// distribution over the hemisphere
@@ -101,9 +100,8 @@ ccl_device float3 bsdf_translucent_eval_transmit(const ShaderClosure *sc, const 
 	return make_float3 (cos_pi, cos_pi, cos_pi);
 }
 
-ccl_device int bsdf_translucent_sample(const ShaderClosure *sc, float3 Ng, float3 I, float3 dIdx, float3 dIdy, float randu, float randv, float3 *eval, float3 *omega_in, float3 *domega_in_dx, float3 *domega_in_dy, float *pdf, float* roughness)
+ccl_device int bsdf_translucent_sample(const ShaderClosure *sc, float3 Ng, float3 I, float3 dIdx, float3 dIdy, float randu, float randv, float3 *eval, float3 *omega_in, float3 *domega_in_dx, float3 *domega_in_dy, float *pdf)
 {
-	*roughness = 1.0f;
 	float3 N = sc->N;
 
 	// we are viewing the surface from the right side - send a ray out with cosine

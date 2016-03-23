@@ -55,11 +55,6 @@ public:
 	int start_resolution;
 	int threads;
 
-	int filter_params;
-	int prepass_samples;
-	int filter_half_window;
-	float filter_bandwidth_factor;
-
 	bool display_buffer_linear;
 
 	double cancel_timeout;
@@ -91,11 +86,6 @@ public:
 
 		shadingsystem = SHADINGSYSTEM_SVM;
 		tile_order = TILE_CENTER;
-
-		filter_params = 0;
-		prepass_samples = 0;
-		filter_half_window = 5;
-		filter_bandwidth_factor = 1.0f;
 	}
 
 	bool modified(const SessionParams& params)
@@ -116,10 +106,6 @@ public:
 		&& text_timeout == params.text_timeout
 		&& progressive_update_timeout == params.progressive_update_timeout
 		&& tile_order == params.tile_order
-		&& filter_params == params.filter_params
-		&& prepass_samples == params.prepass_samples
-		&& filter_half_window == params.filter_half_window
-		&& filter_bandwidth_factor == params.filter_bandwidth_factor
 		&& shadingsystem == params.shadingsystem); }
 
 };
@@ -141,7 +127,8 @@ public:
 	Stats stats;
 
 	function<void(RenderTile&)> write_render_tile_cb;
-	function<void(RenderTile&, bool)> update_render_tile_cb;
+	function<void(RenderTile&)> update_render_tile_cb;
+
 	Session(const SessionParams& params);
 	~Session();
 
