@@ -116,7 +116,8 @@ void bmo_extrude_discrete_faces_exec(BMesh *bm, BMOperator *op)
 				}
 			}
 
-		} while (((l_new = l_new->next),
+		} while (((void)
+		          (l_new = l_new->next),
 		          (l_org = l_org->next)) != l_org_first);
 	}
 
@@ -772,6 +773,7 @@ void bmo_solidify_face_region_exec(BMesh *bm, BMOperator *op)
 
 	/* Flip original faces (so the shell is extruded inward) */
 	BMO_op_init(bm, &reverseop, op->flag, "reverse_faces");
+	BMO_slot_bool_set(reverseop.slots_in, "flip_multires", true);
 	BMO_slot_copy(op,         slots_in, "geom",
 	              &reverseop, slots_in, "faces");
 	BMO_op_exec(bm, &reverseop);

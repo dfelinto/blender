@@ -61,7 +61,8 @@ set(SRC
 	bpy_interface.c
 	bpy_interface_atexit.c
 	bpy_intern_string.c
-	bpy_library.c
+	bpy_library_load.c
+	bpy_library_write.c
 	bpy_operator.c
 	bpy_operator_wrap.c
 	bpy_path.c
@@ -197,10 +198,6 @@ endif()
 
 if(WITH_IMAGE_OPENJPEG)
 	add_definitions(-DWITH_OPENJPEG)
-endif()
-
-if(WITH_IMAGE_REDCODE)
-	add_definitions(-DWITH_REDCODE)
 endif()
 
 if(WITH_IMAGE_TIFF)

@@ -437,7 +437,7 @@ typedef struct HaloRen {
 	unsigned int lay;
 	struct Material *mat;
 	struct ImagePool *pool;
-	bool skip_load_image;
+	bool skip_load_image, texnode_preview;
 } HaloRen;
 
 /* ------------------------------------------------------------------------- */
@@ -569,6 +569,7 @@ typedef struct LampRen {
 	
 	short falloff_type;
 	float ld1, ld2;
+	float coeff_const, coeff_lin, coeff_quad;
 	struct CurveMapping *curfalloff;
 
 	/* copied from Lamp, to decouple more rendering stuff */

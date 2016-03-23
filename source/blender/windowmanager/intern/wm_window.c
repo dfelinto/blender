@@ -163,6 +163,7 @@ static void wm_ghostwindow_destroy(wmWindow *win)
 	if (win->ghostwin) {
 		GHOST_DisposeWindow(g_system, win->ghostwin);
 		win->ghostwin = NULL;
+		win->multisamples = 0;
 	}
 }
 
@@ -432,6 +433,9 @@ static void wm_window_ghostwindow_add(wmWindowManager *wm, const char *title, wm
 		
 		if (win->eventstate == NULL)
 			win->eventstate = MEM_callocN(sizeof(wmEvent), "window event state");
+
+		/* store multisamples window was created with, in case user prefs change */
+		win->multisamples = multisamples;
 		
 		/* store actual window size in blender window */
 		bounds = GHOST_GetClientBounds(win->ghostwin);
@@ -674,10 +678,10 @@ wmWindow *WM_window_open_temp(bContext *C, const rcti *rect_init, int type)
 	CTX_wm_area_set(C, sa);
 	
 	if (type == WM_WINDOW_RENDER) {
-		ED_area_newspace(C, sa, SPACE_IMAGE);
+		ED_area_newspace(C, sa, SPACE_IMAGE, false);
 	}
 	else {
-		ED_area_newspace(C, sa, SPACE_USERPREF);
+		ED_area_newspace(C, sa, SPACE_USERPREF, false);
 	}
 	
 	ED_screen_set(C, win->screen);

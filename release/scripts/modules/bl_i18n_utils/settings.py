@@ -89,6 +89,7 @@ LANGUAGES = (
     (39, "Uzbek Cyrillic (Ўзбек)", "uz_UZ@cyrillic"),
     (40, "Hindi (मानक हिन्दी)", "hi_IN"),
     (41, "Vietnamese (tiếng Việt)", "vi_VN"),
+    (42, "Basque (Euskara)", "eu_EU"),
 )
 
 # Default context, in py!
@@ -337,6 +338,8 @@ WARN_MSGID_NOT_CAPITALIZED_ALLOWED = {
     "image path can't be written to",
     "in memory to enable editing!",
     "jumps over",
+    "left",
+    "right",
     "the lazy dog",
     "unable to load movie clip",
     "unable to load text",

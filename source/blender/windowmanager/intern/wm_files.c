@@ -161,6 +161,13 @@ static void wm_window_match_init(bContext *C, ListBase *wmlist)
 	/* reset active window */
 	CTX_wm_window_set(C, active_win);
 
+	/* XXX Hack! We have to clear context menu here, because removing all modalhandlers above frees the active menu
+	 *     (at least, in the 'startup splash' case), causing use-after-free error in later handling of the button
+	 *     callbacks in UI code (see ui_apply_but_funcs_after()).
+	 *     Tried solving this by always NULL-ing context's menu when setting wm/win/etc., but it broke popups refreshing
+	 *     (see T47632), so for now just handling this specific case here. */
+	CTX_wm_menu_set(C, NULL);
+
 	ED_editors_exit(C);
 
 	/* just had return; here from r12991, this code could just get removed?*/
@@ -182,6 +189,7 @@ static void wm_window_match_init(bContext *C, ListBase *wmlist)
 static void wm_window_substitute_old(wmWindowManager *wm, wmWindow *oldwin, wmWindow *win)
 {
 	win->ghostwin = oldwin->ghostwin;
+	win->multisamples = oldwin->multisamples;
 	win->active = oldwin->active;
 	if (win->active)
 		wm->winactive = win;
@@ -190,6 +198,7 @@ static void wm_window_substitute_old(wmWindowManager *wm, wmWindow *oldwin, wmWi
 		GHOST_SetWindowUserData(win->ghostwin, win);    /* pointer back */
 
 	oldwin->ghostwin = NULL;
+	oldwin->multisamples = 0;
 
 	win->eventstate = oldwin->eventstate;
 	oldwin->eventstate = NULL;
@@ -1068,6 +1077,8 @@ int wm_file_write(bContext *C, const char *filepath, int fileflags, ReportList *
 	G.main->recovered = 0;
 	
 	if (BLO_write_file(CTX_data_main(C), filepath, fileflags, reports, thumb)) {
+		const bool do_history = (G.background == false) && (CTX_wm_manager(C)->op_undo_depth == 0);
+
 		if (!(fileflags & G_FILE_SAVE_COPY)) {
 			G.relbase_valid = 1;
 			BLI_strncpy(G.main->name, filepath, sizeof(G.main->name));  /* is guaranteed current file */
@@ -1079,7 +1090,7 @@ int wm_file_write(bContext *C, const char *filepath, int fileflags, ReportList *
 		BKE_BIT_TEST_SET(G.fileflags, fileflags & G_FILE_AUTOPLAY, G_FILE_AUTOPLAY);
 
 		/* prevent background mode scripts from clobbering history */
-		if (!G.background) {
+		if (do_history) {
 			wm_history_file_update();
 		}
 

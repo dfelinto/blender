@@ -522,6 +522,7 @@ static void insert_graph_keys(bAnimContext *ac, eGraphKeys_InsertKey_Types mode)
 	ReportList *reports = ac->reports;
 	SpaceIpo *sipo = (SpaceIpo *)ac->sl;
 	Scene *scene = ac->scene;
+	ToolSettings *ts = scene->toolsettings;
 	short flag = 0;
 	
 	/* filter data */
@@ -574,7 +575,7 @@ static void insert_graph_keys(bAnimContext *ac, eGraphKeys_InsertKey_Types mode)
 				y = 0.0f;
 				
 			/* insert keyframe directly into the F-Curve */
-			insert_vert_fcurve(fcu, x, y, 0);
+			insert_vert_fcurve(fcu, x, y, ts->keyframe_type, 0);
 			
 			ale->update |= ANIM_UPDATE_DEFAULT;
 		}
@@ -602,9 +603,9 @@ static void insert_graph_keys(bAnimContext *ac, eGraphKeys_InsertKey_Types mode)
 			 *                        up adding the keyframes on a new F-Curve in the action data instead.
 			 */
 			if (ale->id && !ale->owner && !fcu->driver)
-				insert_keyframe(reports, ale->id, NULL, ((fcu->grp) ? (fcu->grp->name) : (NULL)), fcu->rna_path, fcu->array_index, cfra, flag);
+				insert_keyframe(reports, ale->id, NULL, ((fcu->grp) ? (fcu->grp->name) : (NULL)), fcu->rna_path, fcu->array_index, cfra, ts->keyframe_type, flag);
 			else
-				insert_vert_fcurve(fcu, cfra, fcu->curval, 0);
+				insert_vert_fcurve(fcu, cfra, fcu->curval, ts->keyframe_type, 0);
 			
 			ale->update |= ANIM_UPDATE_DEFAULT;
 		}
@@ -683,9 +684,11 @@ static int graphkeys_click_insert_exec(bContext *C, wmOperator *op)
 	 */
 	if (fcurve_is_keyframable(fcu)) {
 		ListBase anim_data;
-
+		ToolSettings *ts = ac.scene->toolsettings;
+		
 		short mapping_flag = ANIM_get_normalization_flags(&ac);
 		float scale, offset;
+		
 		/* get frame and value from props */
 		frame = RNA_float_get(op->ptr, "frame");
 		val = RNA_float_get(op->ptr, "value");
@@ -696,11 +699,11 @@ static int graphkeys_click_insert_exec(bContext *C, wmOperator *op)
 		
 		/* apply inverse unit-mapping to value to get correct value for F-Curves */
 		scale = ANIM_unit_mapping_get_factor(ac.scene, ale->id, fcu, mapping_flag | ANIM_UNITCONV_RESTORE, &offset);
-
+		
 		val = val * scale - offset;
-
+		
 		/* insert keyframe on the specified frame + value */
-		insert_vert_fcurve(fcu, frame, val, 0);
+		insert_vert_fcurve(fcu, frame, val, ts->keyframe_type, 0);
 		
 		ale->update |= ANIM_UPDATE_DEPS;
 		
@@ -1348,8 +1351,9 @@ void GRAPH_OT_sound_bake(wmOperatorType *ot)
 	ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
 	/* properties */
-	WM_operator_properties_filesel(ot, FILE_TYPE_FOLDER | FILE_TYPE_SOUND | FILE_TYPE_MOVIE, FILE_SPECIAL, FILE_OPENFILE,
-	                               WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);
+	WM_operator_properties_filesel(
+	        ot, FILE_TYPE_FOLDER | FILE_TYPE_SOUND | FILE_TYPE_MOVIE, FILE_SPECIAL, FILE_OPENFILE,
+	        WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);
 	RNA_def_float(ot->srna, "low", 0.0f, 0.0, 100000.0, "Lowest frequency",
 	              "Cutoff frequency of a high-pass filter that is applied to the audio data", 0.1, 1000.00);
 	RNA_def_float(ot->srna, "high", 100000.0, 0.0, 100000.0, "Highest frequency",
@@ -2115,9 +2119,9 @@ static void snap_graph_keys(bAnimContext *ac, short mode)
 		
 		/* perform snapping */
 		if (adt) {
-			ANIM_nla_mapping_apply_fcurve(adt, ale->key_data, 0, 1); 
+			ANIM_nla_mapping_apply_fcurve(adt, ale->key_data, 0, 0); 
 			ANIM_fcurve_keyframes_loop(&ked, ale->key_data, NULL, edit_cb, calchandles_fcurve);
-			ANIM_nla_mapping_apply_fcurve(adt, ale->key_data, 1, 1);
+			ANIM_nla_mapping_apply_fcurve(adt, ale->key_data, 1, 0);
 		}
 		else 
 			ANIM_fcurve_keyframes_loop(&ked, ale->key_data, NULL, edit_cb, calchandles_fcurve);
@@ -2252,9 +2256,9 @@ static void mirror_graph_keys(bAnimContext *ac, short mode)
 		
 		/* perform actual mirroring */
 		if (adt) {
-			ANIM_nla_mapping_apply_fcurve(adt, ale->key_data, 0, 1); 
+			ANIM_nla_mapping_apply_fcurve(adt, ale->key_data, 0, 0); 
 			ANIM_fcurve_keyframes_loop(&ked, ale->key_data, NULL, edit_cb, calchandles_fcurve);
-			ANIM_nla_mapping_apply_fcurve(adt, ale->key_data, 1, 1);
+			ANIM_nla_mapping_apply_fcurve(adt, ale->key_data, 1, 0);
 		}
 		else 
 			ANIM_fcurve_keyframes_loop(&ked, ale->key_data, NULL, edit_cb, calchandles_fcurve);

@@ -3798,32 +3798,39 @@ static bool do_history(const char *name, ReportList *reports)
 		BKE_report(reports, RPT_ERROR, "Unable to make version backup: filename too short");
 		return 1;
 	}
-		
+
 	while (hisnr > 1) {
 		BLI_snprintf(tempname1, sizeof(tempname1), "%s%d", name, hisnr-1);
-		BLI_snprintf(tempname2, sizeof(tempname2), "%s%d", name, hisnr);
-	
-		if (BLI_rename(tempname1, tempname2)) {
-			BKE_report(reports, RPT_ERROR, "Unable to make version backup");
-			return 1;
+		if (BLI_exists(tempname1)) {
+			BLI_snprintf(tempname2, sizeof(tempname2), "%s%d", name, hisnr);
+
+			if (BLI_rename(tempname1, tempname2)) {
+				BKE_report(reports, RPT_ERROR, "Unable to make version backup");
+				return true;
+			}
 		}
 		hisnr--;
 	}
 
 	/* is needed when hisnr==1 */
-	BLI_snprintf(tempname1, sizeof(tempname1), "%s%d", name, hisnr);
+	if (BLI_exists(name)) {
+		BLI_snprintf(tempname1, sizeof(tempname1), "%s%d", name, hisnr);
 
-	if (BLI_rename(name, tempname1)) {
-		BKE_report(reports, RPT_ERROR, "Unable to make version backup");
-		return 1;
+		if (BLI_rename(name, tempname1)) {
+			BKE_report(reports, RPT_ERROR, "Unable to make version backup");
+			return true;
+		}
 	}
 
 	return 0;
 }
 
-/* return: success (1) */
-int BLO_write_file(
-        Main *mainvar, const char *filepath, int write_flags, ReportList *reports, const BlendThumbnail *thumb)
+/**
+ * \return Success.
+ */
+bool BLO_write_file(
+        Main *mainvar, const char *filepath, int write_flags,
+        ReportList *reports, const BlendThumbnail *thumb)
 {
 	char tempname[FILE_MAX+1];
 	int err, write_user_block;
@@ -3921,14 +3928,14 @@ int BLO_write_file(
 	return 1;
 }
 
-/* return: success (1) */
-int BLO_write_file_mem(Main *mainvar, MemFile *compare, MemFile *current, int write_flags)
+/**
+ * \return Success.
+ */
+bool BLO_write_file_mem(Main *mainvar, MemFile *compare, MemFile *current, int write_flags)
 {
 	int err;
 
 	err = write_file_handle(mainvar, NULL, compare, current, 0, write_flags, NULL);
-	
-	if (err==0) return 1;
-	return 0;
-}
 
+	return (err == 0);
+}

@@ -300,8 +300,9 @@ void TEXT_OT_open(wmOperatorType *ot)
 	ot->flag = OPTYPE_UNDO;
 	
 	/* properties */
-	WM_operator_properties_filesel(ot, FILE_TYPE_FOLDER | FILE_TYPE_TEXT | FILE_TYPE_PYSCRIPT, FILE_SPECIAL, FILE_OPENFILE,
-	                               WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);  //XXX TODO, relative_path
+	WM_operator_properties_filesel(
+	        ot, FILE_TYPE_FOLDER | FILE_TYPE_TEXT | FILE_TYPE_PYSCRIPT, FILE_SPECIAL, FILE_OPENFILE,
+	        WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);  //XXX TODO, relative_path
 	RNA_def_boolean(ot->srna, "internal", 0, "Make internal", "Make text file internal after loading");
 }
 
@@ -577,8 +578,9 @@ void TEXT_OT_save_as(wmOperatorType *ot)
 	ot->poll = text_edit_poll;
 
 	/* properties */
-	WM_operator_properties_filesel(ot, FILE_TYPE_FOLDER | FILE_TYPE_TEXT | FILE_TYPE_PYSCRIPT, FILE_SPECIAL, FILE_SAVE,
-	                               WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);  //XXX TODO, relative_path
+	WM_operator_properties_filesel(
+	        ot, FILE_TYPE_FOLDER | FILE_TYPE_TEXT | FILE_TYPE_PYSCRIPT, FILE_SPECIAL, FILE_SAVE,
+	        WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);  //XXX TODO, relative_path
 }
 
 /******************* run script operator *********************/
@@ -1949,6 +1951,19 @@ static int text_delete_exec(bContext *C, wmOperator *op)
 		txt_backspace_word(text);
 	}
 	else if (type == DEL_PREV_CHAR) {
+
+		if (text->flags & TXT_TABSTOSPACES) {
+			if (!txt_has_sel(text) && !txt_cursor_is_line_start(text)) {
+				int tabsize = 0;
+				tabsize = txt_calc_tab_left(text->curl, text->curc);
+				if (tabsize) {
+					text->sell = text->curl;
+					text->selc = text->curc - tabsize;
+					txt_order_cursors(text, false);
+				}
+			}
+		}
+
 		txt_backspace_char(text);
 	}
 	else if (type == DEL_NEXT_WORD) {
@@ -1958,6 +1973,19 @@ static int text_delete_exec(bContext *C, wmOperator *op)
 		txt_delete_word(text);
 	}
 	else if (type == DEL_NEXT_CHAR) {
+
+		if (text->flags & TXT_TABSTOSPACES) {
+			if (!txt_has_sel(text) && !txt_cursor_is_line_end(text)) {
+				int tabsize = 0;
+				tabsize = txt_calc_tab_right(text->curl, text->curc);
+				if (tabsize) {
+					text->sell = text->curl;
+					text->selc = text->curc + tabsize;
+					txt_order_cursors(text, true);
+				}
+			}
+		}
+
 		txt_delete_char(text);
 	}
 

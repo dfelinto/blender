@@ -62,6 +62,7 @@ struct uiFontStyle;
 struct uiWidgetColors;
 struct Image;
 struct ImageUser;
+struct wmKeyConfig;
 struct wmOperatorType;
 struct uiWidgetColors;
 struct MTex;
@@ -178,7 +179,7 @@ enum {
 	UI_BUT_DRAG_MULTI      = (1 << 25),  /* edit this button as well as the active button (not just dragging) */
 	UI_BUT_SCA_LINK_GREY   = (1 << 26),  /* used to flag if sca links shoud be gray out */
 	UI_BUT_HAS_SEP_CHAR    = (1 << 27),  /* but->str contains UI_SEP_CHAR, used for key shortcuts */
-	UI_BUT_TIP_FORCE       = (1 << 28),  /* force show tooltips when holding option/alt if U's USER_TOOLTIPS is off */
+	UI_BUT_UPDATE_DELAY    = (1 << 28),  /* don't run updates while dragging (needed in rare cases). */
 	UI_BUT_TEXTEDIT_UPDATE = (1 << 29),  /* when widget is in textedit mode, update value on each char stroke */
 	UI_BUT_SEARCH_UNLINK   = (1 << 30),  /* show unlink for search button */
 };
@@ -353,6 +354,7 @@ typedef void (*uiButHandleFunc)(struct bContext *C, void *arg1, void *arg2);
 typedef void (*uiButHandleRenameFunc)(struct bContext *C, void *arg, char *origstr);
 typedef void (*uiButHandleNFunc)(struct bContext *C, void *argN, void *arg2);
 typedef int (*uiButCompleteFunc)(struct bContext *C, char *str, void *arg);
+typedef struct ARegion *(*uiButSearchCreateFunc)(struct bContext *C, struct ARegion *butregion, uiBut *but);
 typedef void (*uiButSearchFunc)(const struct bContext *C, void *arg, const char *str, uiSearchItems *items);
 /* Must return allocated string. */
 typedef char *(*uiButToolTipFunc)(struct bContext *C, void *argN, const char *tip);
@@ -679,7 +681,9 @@ uiBut *UI_block_links_find_inlink(uiBlock *block, void *poin);
 /* use inside searchfunc to add items */
 bool    UI_search_item_add(uiSearchItems *items, const char *name, void *poin, int iconid);
 /* bfunc gets search item *poin as arg2, or if NULL the old string */
-void    UI_but_func_search_set(uiBut *but,        uiButSearchFunc sfunc, void *arg1, uiButHandleFunc bfunc, void *active);
+void    UI_but_func_search_set(
+        uiBut *but, uiButSearchCreateFunc cfunc, uiButSearchFunc sfunc,
+        void *arg1, uiButHandleFunc bfunc, void *active);
 /* height in pixels, it's using hardcoded values still */
 int     UI_searchbox_size_y(void);
 int     UI_searchbox_size_x(void);
@@ -705,6 +709,7 @@ void    UI_but_func_drawextra_set(
 void    UI_but_func_menu_step_set(uiBut *but, uiMenuStepFunc func);
 
 void    UI_but_func_tooltip_set(uiBut *but, uiButToolTipFunc func, void *argN);
+void    UI_but_tooltip_refresh(struct bContext *C, uiBut *but);
 void    UI_but_tooltip_timer_remove(struct bContext *C, uiBut *but);
 
 bool UI_textbutton_activate_rna(const struct bContext *C, struct ARegion *ar,
@@ -775,6 +780,7 @@ void UI_popup_handlers_remove_all(struct bContext *C, struct ListBase *handlers)
 void UI_init(void);
 void UI_init_userdef(void);
 void UI_reinit_font(void);
+void UI_reinit_gl_state(void);
 void UI_exit(void);
 
 /* Layout
@@ -976,7 +982,13 @@ void uiItemEnumR(uiLayout *layout, const char *name, int icon, struct PointerRNA
 void uiItemEnumR_string(uiLayout *layout, struct PointerRNA *ptr, const char *propname, const char *value, const char *name, int icon);
 void uiItemsEnumR(uiLayout *layout, struct PointerRNA *ptr, const char *propname);
 void uiItemPointerR(uiLayout *layout, struct PointerRNA *ptr, const char *propname, struct PointerRNA *searchptr, const char *searchpropname, const char *name, int icon);
-void uiItemsFullEnumO(uiLayout *layout, const char *opname, const char *propname, struct IDProperty *properties, int context, int flag);
+void uiItemsFullEnumO(
+        uiLayout *layout, const char *opname, const char *propname,
+        struct IDProperty *properties, int context, int flag);
+void uiItemsFullEnumO_items(
+        uiLayout *layout, struct wmOperatorType *ot, PointerRNA ptr, PropertyRNA *prop,
+        IDProperty *properties, int context, int flag,
+        const EnumPropertyItem *item_array, int totitem);
 
 void uiItemL(uiLayout *layout, const char *name, int icon); /* label */
 void uiItemLDrag(uiLayout *layout, struct PointerRNA *ptr, const char *name, int icon); /* label icon for dragging */
@@ -995,7 +1007,9 @@ typedef struct uiDragColorHandle {
 	bool gamma_corrected;
 } uiDragColorHandle;
 
-void ED_button_operatortypes(void);
+void ED_operatortypes_ui(void);
+void ED_keymap_ui(struct wmKeyConfig *keyconf);
+
 void UI_drop_color_copy(struct wmDrag *drag, struct wmDropBox *drop);
 int UI_drop_color_poll(struct bContext *C, struct wmDrag *drag, const struct wmEvent *event);
 

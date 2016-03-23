@@ -199,17 +199,21 @@ static void stats_background(void *UNUSED(arg), RenderStats *rs)
 	fflush(stdout);
 }
 
-static void render_print_save_message(const char *name, int ok, int err)
+static void render_print_save_message(
+        ReportList *reports, const char *name, int ok, int err)
 {
 	if (ok) {
+		/* no need to report, just some helpful console info */
 		printf("Saved: '%s'\n", name);
 	}
 	else {
-		printf("Render error (%s) cannot save: '%s'\n", strerror(err), name);
+		/* report on error since users will want to know what failed */
+		BKE_reportf(reports, RPT_ERROR, "Render error (%s) cannot save: '%s'", strerror(err), name);
 	}
 }
 
 static int render_imbuf_write_stamp_test(
+        ReportList *reports,
         Scene *scene, struct RenderResult *rr, ImBuf *ibuf, const char *name,
         const ImageFormatData *imf, bool stamp)
 {
@@ -223,7 +227,7 @@ static int render_imbuf_write_stamp_test(
 		ok = BKE_imbuf_write(ibuf, name, imf);
 	}
 
-	render_print_save_message(name, ok, errno);
+	render_print_save_message(reports, name, ok, errno);
 
 	return ok;
 }
@@ -448,6 +452,8 @@ void RE_AcquireResultImage(Render *re, RenderResult *rr, const int view_id)
 
 			rr->xof = re->disprect.xmin;
 			rr->yof = re->disprect.ymin;
+
+			rr->stamp_data = re->result->stamp_data;
 		}
 	}
 }
@@ -682,6 +688,19 @@ static void re_init_resolution(Render *re, Render *source,
 	re->clipcrop = 1.0f + 2.0f / (float)(re->winx > re->winy ? re->winy : re->winx);
 }
 
+void render_copy_renderdata(RenderData *to, RenderData *from)
+{
+	BLI_freelistN(&to->layers);
+	BLI_freelistN(&to->views);
+	curvemapping_free_data(&to->mblur_shutter_curve);
+
+	*to = *from;
+
+	BLI_duplicatelist(&to->layers, &from->layers);
+	BLI_duplicatelist(&to->views, &from->views);
+	curvemapping_copy_data(&to->mblur_shutter_curve, &from->mblur_shutter_curve);
+}
+
 /* what doesn't change during entire render sequence */
 /* disprect is optional, if NULL it assumes full window render */
 void RE_InitState(Render *re, Render *source, RenderData *rd,
@@ -695,13 +714,7 @@ void RE_InitState(Render *re, Render *source, RenderData *rd,
 	re->i.starttime = PIL_check_seconds_timer();
 
 	/* copy render data and render layers for thread safety */
-	BLI_freelistN(&re->r.layers);
-	BLI_freelistN(&re->r.views);
-	curvemapping_free_data(&re->r.mblur_shutter_curve);
-	re->r = *rd;
-	BLI_duplicatelist(&re->r.layers, &rd->layers);
-	BLI_duplicatelist(&re->r.views, &rd->views);
-	curvemapping_copy_data(&re->r.mblur_shutter_curve, &rd->mblur_shutter_curve);
+	render_copy_renderdata(&re->r, rd);
 
 	if (source) {
 		/* reuse border flags from source renderer */
@@ -1504,10 +1517,17 @@ static void do_render_3d(Render *re)
 	const int cfra_backup = re->scene->r.cfra;
 	const float subframe_backup = re->scene->r.subframe;
 
-	BKE_scene_frame_set(re->scene, (double)re->scene->r.cfra + re->scene->r.subframe + re->mblur_offs + re->field_offs);
+	BKE_scene_frame_set(
+	        re->scene, (double)re->scene->r.cfra + (double)re->scene->r.subframe +
+	        (double)re->mblur_offs + (double)re->field_offs);
 
 	/* init main render result */
 	main_render_result_new(re);
+	if (re->result == NULL) {
+		BKE_report(re->reports, RPT_ERROR, "Failed allocate render result, out of memory");
+		G.is_break = true;
+		return;
+	}
 
 #ifdef WITH_FREESTYLE
 	if (re->r.mode & R_EDGE_FRS) {
@@ -2581,8 +2601,10 @@ static void do_render_composite_fields_blur_3d(Render *re)
 #endif
 
 	/* weak... the display callback wants an active renderlayer pointer... */
-	re->result->renlay = render_get_active_layer(re, re->result);
-	re->display_update(re->duh, re->result, NULL);
+	if (re->result != NULL) {
+		re->result->renlay = render_get_active_layer(re, re->result);
+		re->display_update(re->duh, re->result, NULL);
+	}
 }
 
 static void renderresult_stampinfo(Render *re)
@@ -2596,7 +2618,13 @@ static void renderresult_stampinfo(Render *re)
 	for (rv = re->result->views.first;rv;rv = rv->next, nr++) {
 		RE_SetActiveRenderView(re, rv->name);
 		RE_AcquireResultImage(re, &rres, nr);
-		BKE_image_stamp_buf(re->scene, RE_GetCamera(re), (unsigned char *)rres.rect32, rres.rectf, rres.rectx, rres.recty, 4);
+		BKE_image_stamp_buf(re->scene,
+		                    RE_GetCamera(re),
+		                    (re->r.stamp & R_STAMP_STRIPMETA) ? rres.stamp_data : NULL,
+		                    (unsigned char *)rres.rect32,
+		                    rres.rectf,
+		                    rres.rectx, rres.recty,
+		                    4);
 		RE_ReleaseResultImage(re);
 	}
 }
@@ -2773,15 +2801,17 @@ static void do_render_all_options(Render *re)
 	re->stats_draw(re->sdh, &re->i);
 	
 	/* save render result stamp if needed */
-	camera = RE_GetCamera(re);
-	/* sequence rendering should have taken care of that already */
-	if (!(render_seq && (re->r.stamp & R_STAMP_STRIPMETA)))
-		BKE_render_result_stamp_info(re->scene, camera, re->result, false);
+	if (re->result != NULL) {
+		camera = RE_GetCamera(re);
+		/* sequence rendering should have taken care of that already */
+		if (!(render_seq && (re->r.stamp & R_STAMP_STRIPMETA)))
+			BKE_render_result_stamp_info(re->scene, camera, re->result, false);
 
-	/* stamp image info here */
-	if ((re->r.stamp & R_STAMP_ALL) && (re->r.stamp & R_STAMP_DRAW)) {
-		renderresult_stampinfo(re);
-		re->display_update(re->duh, re->result, NULL);
+		/* stamp image info here */
+		if ((re->r.stamp & R_STAMP_ALL) && (re->r.stamp & R_STAMP_DRAW)) {
+			renderresult_stampinfo(re);
+			re->display_update(re->duh, re->result, NULL);
+		}
 	}
 }
 
@@ -2807,13 +2837,14 @@ static bool check_valid_compositing_camera(Scene *scene, Object *camera_override
 		while (node) {
 			if (node->type == CMP_NODE_R_LAYERS && (node->flag & NODE_MUTED) == 0) {
 				Scene *sce = node->id ? (Scene *)node->id : scene;
-
-				if (!sce->camera && !BKE_scene_camera_find(sce)) {
+				if (sce->camera == NULL) {
+					sce->camera = BKE_scene_camera_find(sce);
+				}
+				if (sce->camera == NULL) {
 					/* all render layers nodes need camera */
 					return false;
 				}
 			}
-
 			node = node->next;
 		}
 
@@ -3239,7 +3270,7 @@ bool RE_WriteRenderViewsImage(ReportList *reports, RenderResult *rr, Scene *scen
 	    rd->im_format.views_format == R_IMF_VIEWS_MULTIVIEW)
 	{
 		ok = RE_WriteRenderResult(reports, rr, name, &rd->im_format, true, NULL);
-		render_print_save_message(name, ok, errno);
+		render_print_save_message(reports, name, ok, errno);
 	}
 
 	/* mono, legacy code */
@@ -3258,7 +3289,7 @@ bool RE_WriteRenderViewsImage(ReportList *reports, RenderResult *rr, Scene *scen
 
 			if (rd->im_format.imtype == R_IMF_IMTYPE_MULTILAYER) {
 				ok = RE_WriteRenderResult(reports, rr, name, &rd->im_format, false, rv->name);
-				render_print_save_message(name, ok, errno);
+				render_print_save_message(reports, name, ok, errno);
 			}
 			else {
 				ImBuf *ibuf = render_result_rect_to_ibuf(rr, rd, view_id);
@@ -3266,7 +3297,7 @@ bool RE_WriteRenderViewsImage(ReportList *reports, RenderResult *rr, Scene *scen
 				IMB_colormanagement_imbuf_for_write(ibuf, true, false, &scene->view_settings,
 				                                    &scene->display_settings, &rd->im_format);
 
-				ok = render_imbuf_write_stamp_test(scene, rr, ibuf, name, &rd->im_format, stamp);
+				ok = render_imbuf_write_stamp_test(reports, scene, rr, ibuf, name, &rd->im_format, stamp);
 
 				/* optional preview images for exr */
 				if (ok && rd->im_format.imtype == R_IMF_IMTYPE_OPENEXR && (rd->im_format.flag & R_IMF_FLAG_PREVIEW_JPG)) {
@@ -3281,7 +3312,7 @@ bool RE_WriteRenderViewsImage(ReportList *reports, RenderResult *rr, Scene *scen
 					IMB_colormanagement_imbuf_for_write(ibuf, true, false, &scene->view_settings,
 					                                    &scene->display_settings, &imf);
 
-					ok = render_imbuf_write_stamp_test(scene, rr, ibuf, name, &imf, stamp);
+					ok = render_imbuf_write_stamp_test(reports, scene, rr, ibuf, name, &imf, stamp);
 				}
 
 				/* imbuf knows which rects are not part of ibuf */
@@ -3310,7 +3341,7 @@ bool RE_WriteRenderViewsImage(ReportList *reports, RenderResult *rr, Scene *scen
 
 			ibuf_arr[2] = IMB_stereo3d_ImBuf(&scene->r.im_format, ibuf_arr[0], ibuf_arr[1]);
 
-			ok = render_imbuf_write_stamp_test(scene, rr, ibuf_arr[2], name, &rd->im_format, stamp);
+			ok = render_imbuf_write_stamp_test(reports, scene, rr, ibuf_arr[2], name, &rd->im_format, stamp);
 
 			/* optional preview images for exr */
 			if (ok && rd->im_format.imtype == R_IMF_IMTYPE_OPENEXR &&
@@ -3328,7 +3359,7 @@ bool RE_WriteRenderViewsImage(ReportList *reports, RenderResult *rr, Scene *scen
 				IMB_colormanagement_imbuf_for_write(ibuf_arr[2], true, false, &scene->view_settings,
 				                                    &scene->display_settings, &imf);
 
-				ok = render_imbuf_write_stamp_test(scene, rr, ibuf_arr[2], name, &rd->im_format, stamp);
+				ok = render_imbuf_write_stamp_test(reports, scene, rr, ibuf_arr[2], name, &rd->im_format, stamp);
 			}
 
 			/* imbuf knows which rects are not part of ibuf */

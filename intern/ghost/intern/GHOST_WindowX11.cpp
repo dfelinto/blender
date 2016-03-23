@@ -105,8 +105,12 @@ typedef struct {
  *     print(", ".join([str(p) for p in px]), end=",\n")
  */
 
-/* See the python script above to regenerate the 48x48 icon within blender */
-static long BLENDER_ICON_48x48x32[] = {
+/**
+ * See the python script above to regenerate the 48x48 icon within blender
+ *
+ * \note Using 'unsigned' to avoid `-Wnarrowing` warning.
+ */
+static const unsigned long BLENDER_ICON_48x48x32[] = {
 	48,48,
 	4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303,
 	4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303, 4671303,
@@ -1100,7 +1104,7 @@ setOrder(
 			xev.xclient.data.l[3] = 0;
 			xev.xclient.data.l[4] = 0;
 
-			root = RootWindow(m_display, m_visualInfo->screen),
+			root = RootWindow(m_display, m_visualInfo->screen);
 			eventmask = SubstructureRedirectMask | SubstructureNotifyMask;
 
 			XSendEvent(m_display, root, False, eventmask, &xev);

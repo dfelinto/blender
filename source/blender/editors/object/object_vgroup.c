@@ -257,7 +257,6 @@ void ED_vgroup_parray_mirror_sync(Object *ob,
 	BMEditMesh *em = BKE_editmesh_from_object(ob);
 	MDeformVert **dvert_array_all = NULL;
 	int dvert_tot_all;
-	int i;
 
 	/* get an array of all verts, not only selected */
 	if (ED_vgroup_parray_alloc(ob->data, &dvert_array_all, &dvert_tot_all, false) == false) {
@@ -268,22 +267,26 @@ void ED_vgroup_parray_mirror_sync(Object *ob,
 		BM_mesh_elem_table_ensure(em->bm, BM_VERT);
 	}
 
-	for (i = 0; i < dvert_tot; i++) {
-		if (dvert_array[i] == NULL) {
-			/* its unselected, check if its mirror is */
-			int i_sel = ED_mesh_mirror_get_vert(ob, i);
-			if ((i_sel != -1) && (i_sel != i) && (dvert_array[i_sel])) {
+	int flip_map_len;
+	const int *flip_map = defgroup_flip_map(ob, &flip_map_len, true);
+
+	for (int i_src = 0; i_src < dvert_tot; i_src++) {
+		if (dvert_array[i_src] != NULL) {
+			/* its selected, check if its mirror exists */
+			int i_dst = ED_mesh_mirror_get_vert(ob, i_src);
+			if (i_dst != -1 && dvert_array_all[i_dst] != NULL) {
 				/* we found a match! */
-				MDeformVert *dv_src = dvert_array[i_sel];
-				MDeformVert *dv_dst = dvert_array_all[i];
+				const MDeformVert *dv_src = dvert_array[i_src];
+				MDeformVert       *dv_dst = dvert_array_all[i_dst];
 
-				defvert_copy_subset(dv_dst, dv_src, vgroup_validmap, vgroup_tot);
+				defvert_mirror_subset(dv_dst, dv_src, vgroup_validmap, vgroup_tot, flip_map, flip_map_len);
 
-				dvert_array[i] = dvert_array_all[i];
+				dvert_array[i_dst] = dvert_array_all[i_dst];
 			}
 		}
 	}
 
+	MEM_freeN((void *)flip_map);
 	MEM_freeN(dvert_array_all);
 }
 
@@ -1789,11 +1792,8 @@ static void vgroup_smooth_subset(
 		for (int i = 0; i < dvert_tot; i++) {
 			MVert *v = &me->mvert[i];
 			if (v->flag & SELECT) {
-				int j;
-				for (j = 0; j < emap[i].count; j++) {
-					MEdge *e = &me->medge[emap[i].indices[j]];
-					const int i_other = (e->v1 == i ? e->v2 : e->v1);
-					MVert *v_other = &me->mvert[i_other];
+				for (int j = 0; j < emap[i].count; j++) {
+					MVert *v_other = &me->mvert[emap[i].indices[j]];
 					if ((source == WEIGHT_SMOOTH_ALL) ||
 					    (source == ((v_other->flag & SELECT) != 0)))
 					{
@@ -2123,7 +2123,7 @@ static void dvert_mirror_op(MDeformVert *dvert, MDeformVert *dvert_mirr,
 				defvert_copy(dvert, dvert_mirr);
 			}
 			else {
-				defvert_copy_index(dvert, dvert_mirr, act_vgroup);
+				defvert_copy_index(dvert, act_vgroup, dvert_mirr, act_vgroup);
 			}
 		}
 
@@ -3327,8 +3327,14 @@ static int vertex_group_copy_to_selected_exec(bContext *C, wmOperator *op)
 	CTX_DATA_BEGIN (C, Object *, ob, selected_editable_objects)
 	{
 		if (obact != ob) {
-			if (ED_vgroup_array_copy(ob, obact)) changed_tot++;
-			else fail++;
+			if (ED_vgroup_array_copy(ob, obact)) {
+				DAG_id_tag_update(&ob->id, OB_RECALC_DATA);
+				WM_event_add_notifier(C, NC_GEOM | ND_VERTEX_GROUP, ob);
+				changed_tot++;
+			}
+			else {
+				fail++;
+			}
 		}
 	}
 	CTX_DATA_END;

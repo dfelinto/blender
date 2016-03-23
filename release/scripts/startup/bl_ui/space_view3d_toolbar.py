@@ -242,13 +242,19 @@ class VIEW3D_PT_tools_animation(View3DPanel, Panel):
     def draw(self, context):
         layout = self.layout
 
+        ob = context.active_object
+        mpath = ob.motion_path if ob else None
+
         draw_keyframing_tools(context, layout)
 
         col = layout.column(align=True)
         col.label(text="Motion Paths:")
-        row = col.row(align=True)
-        row.operator("object.paths_calculate", text="Calculate")
-        row.operator("object.paths_clear", text="Clear")
+        if mpath:
+            row = col.row(align=True)
+            row.operator("object.paths_update", text="Update")
+            row.operator("object.paths_clear", text="", icon='X')
+        else:
+            col.operator("object.paths_calculate", text="Calculate")
 
         col.separator()
 
@@ -770,11 +776,17 @@ class VIEW3D_PT_tools_posemode(View3DPanel, Panel):
 
         draw_keyframing_tools(context, layout)
 
+        pchan = context.active_pose_bone
+        mpath = pchan.motion_path if pchan else None
+
         col = layout.column(align=True)
         col.label(text="Motion Paths:")
-        row = col.row(align=True)
-        row.operator("pose.paths_calculate", text="Calculate")
-        row.operator("pose.paths_clear", text="Clear")
+        if mpath:
+            row = col.row(align=True)
+            row.operator("pose.paths_update", text="Update")
+            row.operator("pose.paths_clear", text="", icon='X')
+        else:
+            col.operator("pose.paths_calculate", text="Calculate")
 
 
 class VIEW3D_PT_tools_posemode_options(View3DPanel, Panel):
@@ -1042,6 +1054,10 @@ class VIEW3D_PT_tools_brush(Panel, View3DPaintPanel):
             self.prop_unified_strength(row, context, brush, "use_pressure_strength")
 
             col.prop(brush, "vertex_tool", text="Blend")
+
+            if brush.vertex_tool == 'BLUR':
+                col.prop(brush, "use_accumulate")
+                col.separator()
 
             col = layout.column()
             col.prop(toolsettings, "use_auto_normalize", text="Auto Normalize")

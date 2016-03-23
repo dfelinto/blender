@@ -943,9 +943,9 @@ static void draw_selected_name(Scene *scene, Object *ob, rcti *rect)
 		
 		/* color depends on whether there is a keyframe */
 		if (id_frame_has_keyframe((ID *)ob, /* BKE_scene_frame_get(scene) */ (float)cfra, ANIMFILTER_KEYS_LOCAL))
-			UI_ThemeColor(TH_VERTEX_SELECT);
+			UI_ThemeColor(TH_TIME_KEYFRAME);
 		else if (ED_gpencil_has_keyframe_v3d(scene, ob, cfra))
-			UI_ThemeColor(TH_CFRAME); // XXX
+			UI_ThemeColor(TH_TIME_GP_KEYFRAME);
 		else
 			UI_ThemeColor(TH_TEXT_HI);
 	}
@@ -1135,6 +1135,8 @@ static void drawviewborder(Scene *scene, ARegion *ar, View3D *v3d)
 			glEnable(GL_BLEND);
 			glColor4f(0, 0, 0, ca->passepartalpha);
 		}
+		glLineWidth(1.0f);
+
 		if (x1i > 0.0f)
 			glRectf(0.0, winy, x1i, 0.0);
 		if (x2i < winx)
@@ -1310,7 +1312,7 @@ static void drawviewborder(Scene *scene, ARegion *ar, View3D *v3d)
 
 /* *********************** backdraw for selection *************** */
 
-static void backdrawview3d(Scene *scene, ARegion *ar, View3D *v3d)
+static void backdrawview3d(Scene *scene, wmWindow *win, ARegion *ar, View3D *v3d)
 {
 	RegionView3D *rv3d = ar->regiondata;
 	struct Base *base = scene->basact;
@@ -1365,7 +1367,7 @@ static void backdrawview3d(Scene *scene, ARegion *ar, View3D *v3d)
 	if (multisample_enabled)
 		glDisable(GL_MULTISAMPLE);
 
-	if (U.ogl_multisamples != USER_MULTISAMPLE_NONE) {
+	if (win->multisamples != USER_MULTISAMPLE_NONE) {
 		/* for multisample we use an offscreen FBO. multisample drawing can fail
 		 * with color coded selection drawing, and reading back depths from such
 		 * a buffer can also cause a few seconds freeze on OS X / NVidia. */
@@ -1456,7 +1458,7 @@ static void view3d_opengl_read_Z_pixels(ARegion *ar, int x, int y, int w, int h,
 void ED_view3d_backbuf_validate(ViewContext *vc)
 {
 	if (vc->v3d->flag & V3D_INVALID_BACKBUF)
-		backdrawview3d(vc->scene, vc->ar, vc->v3d);
+		backdrawview3d(vc->scene, vc->win, vc->ar, vc->v3d);
 }
 
 /**
@@ -2061,7 +2063,6 @@ static void draw_dupli_objects_color(
 	short transflag;
 	bool use_displist = false;  /* -1 is initialize */
 	char dt;
-	bool testbb = false;
 	short dtx;
 	DupliApplyData *apply_data;
 
@@ -2085,10 +2086,11 @@ static void draw_dupli_objects_color(
 	if (dob) dob_next = dupli_step(dob->next);
 
 	for (; dob; dob_prev = dob, dob = dob_next, dob_next = dob_next ? dupli_step(dob_next->next) : NULL) {
+		bool testbb = false;
+
 		tbase.object = dob->ob;
 
 		/* Make sure lod is updated from dupli's position */
-
 		savedlod = dob->ob->currentlod;
 
 #ifdef WITH_GAMEENGINE
@@ -2506,7 +2508,11 @@ static void gpu_render_lamp_update(Scene *scene, View3D *v3d,
 		if (srl)
 			layers &= srl->lay;
 
-		if (layers && GPU_lamp_override_visible(lamp, srl, NULL) && GPU_lamp_has_shadow_buffer(lamp)) {
+		if (layers &&
+		    GPU_lamp_has_shadow_buffer(lamp) &&
+		    /* keep last, may do string lookup */
+		    GPU_lamp_override_visible(lamp, srl, NULL))
+		{
 			shadow = MEM_callocN(sizeof(View3DShadow), "View3DShadow");
 			shadow->lamp = lamp;
 			BLI_addtail(shadows, shadow);
@@ -3302,13 +3308,19 @@ ImBuf *ED_view3d_draw_offscreen_imbuf(
 {
 	RegionView3D *rv3d = ar->regiondata;
 	ImBuf *ibuf;
-	const bool draw_sky = (alpha_mode == R_ADDSKY) && v3d && (v3d->flag3 & V3D_SHOW_WORLD);
-	const bool own_ofs = (ofs == NULL);
+	const bool draw_sky = (alpha_mode == R_ADDSKY);
 
 	/* view state */
 	GPUFXSettings fx_settings = v3d->fx_settings;
 	bool is_ortho = false;
 	float winmat[4][4];
+
+	if (ofs && ((GPU_offscreen_width(ofs) != sizex) || (GPU_offscreen_height(ofs) != sizey))) {
+		/* sizes differ, can't reuse */
+		ofs = NULL;
+	}
+
+	const bool own_ofs = (ofs == NULL);
 
 	if (own_ofs) {
 		/* bind */
@@ -3382,7 +3394,7 @@ ImBuf *ED_view3d_draw_offscreen_imbuf(
 		unsigned int i;
 		int j;
 
-		BLI_jitter_init(jit_ofs, scene->r.osa);
+		BLI_jitter_init(jit_ofs, samples);
 
 		/* first sample buffer, also initializes 'rv3d->persmat' */
 		ED_view3d_draw_offscreen(
@@ -3830,6 +3842,7 @@ static void update_lods(Scene *scene, float camera_pos[3])
 static void view3d_main_region_draw_objects(const bContext *C, Scene *scene, View3D *v3d,
                                           ARegion *ar, const char **grid_unit)
 {
+	wmWindow *win = CTX_wm_window(C);
 	RegionView3D *rv3d = ar->regiondata;
 	unsigned int lay_used = v3d->lay_used;
 	
@@ -3883,7 +3896,7 @@ static void view3d_main_region_draw_objects(const bContext *C, Scene *scene, Vie
 	view3d_main_region_clear(scene, v3d, ar);
 
 	/* enables anti-aliasing for 3D view drawing */
-	if (U.ogl_multisamples != USER_MULTISAMPLE_NONE) {
+	if (win->multisamples != USER_MULTISAMPLE_NONE) {
 		glEnable(GL_MULTISAMPLE);
 	}
 
@@ -3896,7 +3909,7 @@ static void view3d_main_region_draw_objects(const bContext *C, Scene *scene, Vie
 	}
 
 	/* Disable back anti-aliasing */
-	if (U.ogl_multisamples != USER_MULTISAMPLE_NONE) {
+	if (win->multisamples != USER_MULTISAMPLE_NONE) {
 		glDisable(GL_MULTISAMPLE);
 	}
 

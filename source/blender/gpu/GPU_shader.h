@@ -46,6 +46,7 @@ struct GPUTexture;
 enum {
 	GPU_SHADER_FLAGS_NONE = 0,
 	GPU_SHADER_FLAGS_SPECIAL_OPENSUBDIV = (1 << 0),
+	GPU_SHADER_FLAGS_NEW_SHADING        = (1 << 1),
 };
 
 GPUShader *GPU_shader_create(
@@ -68,6 +69,8 @@ void GPU_shader_free(GPUShader *shader);
 void GPU_shader_bind(GPUShader *shader);
 void GPU_shader_unbind(void);
 
+void *GPU_shader_get_interface(GPUShader *shader);
+void GPU_shader_set_interface(GPUShader *shader, void *interface);
 int GPU_shader_get_uniform(GPUShader *shader, const char *name);
 void GPU_shader_uniform_vector(GPUShader *shader, int location, int length,
 	int arraysize, const float *value);

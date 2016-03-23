@@ -650,12 +650,12 @@ void BKE_scene_init(Scene *sce)
 	pset->fade_frames = 2;
 	pset->selectmode = SCE_SELECT_PATH;
 	for (a = 0; a < PE_TOT_BRUSH; a++) {
-		pset->brush[a].strength = 0.5;
+		pset->brush[a].strength = 0.5f;
 		pset->brush[a].size = 50;
 		pset->brush[a].step = 10;
 		pset->brush[a].count = 10;
 	}
-	pset->brush[PE_BRUSH_CUT].strength = 100;
+	pset->brush[PE_BRUSH_CUT].strength = 1.0f;
 
 	sce->r.ffcodecdata.audio_mixrate = 48000;
 	sce->r.ffcodecdata.audio_volume = 1.0f;
@@ -889,7 +889,7 @@ void BKE_scene_set_background(Main *bmain, Scene *scene)
 	/* no full animation update, this to enable render code to work (render code calls own animation updates) */
 }
 
-/* called from creator.c */
+/* called from creator_args.c */
 Scene *BKE_scene_set_name(Main *bmain, const char *name)
 {
 	Scene *sce = (Scene *)BKE_libblock_find_name_ex(bmain, ID_SCE, name);
@@ -1810,8 +1810,8 @@ void BKE_scene_update_tagged(EvaluationContext *eval_ctx, Main *bmain, Scene *sc
 	/* clear "LIB_TAG_DOIT" flag from all materials, to prevent infinite recursion problems later
 	 * when trying to find materials with drivers that need evaluating [#32017] 
 	 */
-	BKE_main_id_tag_idcode(bmain, ID_MA, false);
-	BKE_main_id_tag_idcode(bmain, ID_LA, false);
+	BKE_main_id_tag_idcode(bmain, ID_MA, LIB_TAG_DOIT, false);
+	BKE_main_id_tag_idcode(bmain, ID_LA, LIB_TAG_DOIT, false);
 
 	/* update all objects: drivers, matrices, displists, etc. flags set
 	 * by depgraph or manual, no layer check here, gets correct flushed
@@ -1969,8 +1969,8 @@ void BKE_scene_update_for_newframe_ex(EvaluationContext *eval_ctx, Main *bmain, 
 	/* clear "LIB_TAG_DOIT" flag from all materials, to prevent infinite recursion problems later
 	 * when trying to find materials with drivers that need evaluating [#32017] 
 	 */
-	BKE_main_id_tag_idcode(bmain, ID_MA, false);
-	BKE_main_id_tag_idcode(bmain, ID_LA, false);
+	BKE_main_id_tag_idcode(bmain, ID_MA, LIB_TAG_DOIT, false);
+	BKE_main_id_tag_idcode(bmain, ID_LA, LIB_TAG_DOIT, false);
 
 	/* run rigidbody sim */
 	/* NOTE: current position is so that rigidbody sim affects other objects, might change in the future */
@@ -2190,6 +2190,12 @@ bool BKE_scene_use_shading_nodes_custom(Scene *scene)
 {
 	RenderEngineType *type = RE_engines_find(scene->r.engine);
 	return (type && type->flag & RE_USE_SHADING_NODES_CUSTOM);
+}
+
+bool BKE_scene_use_spherical_stereo(Scene *scene)
+{
+	RenderEngineType *type = RE_engines_find(scene->r.engine);
+	return (type && type->flag & RE_USE_SPHERICAL_STEREO);
 }
 
 bool BKE_scene_uses_blender_internal(const  Scene *scene)
@@ -2530,13 +2536,15 @@ void BKE_scene_multiview_view_prefix_get(Scene *scene, const char *name, char *r
 
 	/* begin of extension */
 	index_act = BLI_str_rpartition(name, delims, rext, &suf_act);
+	if (*rext == NULL)
+		return;
 	BLI_assert(index_act > 0);
 	UNUSED_VARS_NDEBUG(index_act);
 
 	for (srv = scene->r.views.first; srv; srv = srv->next) {
 		if (BKE_scene_multiview_is_render_view_active(&scene->r, srv)) {
 			size_t len = strlen(srv->suffix);
-			if (STREQLEN(*rext - len, srv->suffix, len)) {
+			if (strlen(*rext) >= len && STREQLEN(*rext - len, srv->suffix, len)) {
 				BLI_strncpy(rprefix, name, strlen(name) - strlen(*rext) - len + 1);
 				break;
 			}

@@ -1065,7 +1065,8 @@ static bool bm_vert_connect_select_history(BMesh *bm)
 					else {
 						changed |= bm_vert_connect_pair(bm, (BMVert *)ese_last->ele, (BMVert *)ese->ele);
 					}
-				} while ((ese_last = ese),
+				} while ((void)
+				         (ese_last = ese),
 				         (ese = ese->next));
 
 				if (changed) {
@@ -1105,7 +1106,8 @@ static bool bm_vert_connect_select_history(BMesh *bm)
 					BM_edge_select_set(bm, e, true);
 					changed = true;
 				}
-			} while ((ese_prev = ese),
+			} while ((void)
+			         (ese_prev = ese),
 			         (ese = ese->next));
 
 			if (changed == false) {
@@ -1468,8 +1470,12 @@ static int edbm_flip_normals_exec(bContext *C, wmOperator *op)
 	Object *obedit = CTX_data_edit_object(C);
 	BMEditMesh *em = BKE_editmesh_from_object(obedit);
 	
-	if (!EDBM_op_callf(em, op, "reverse_faces faces=%hf", BM_ELEM_SELECT))
+	if (!EDBM_op_callf(
+	        em, op, "reverse_faces faces=%hf flip_multires=%b",
+	        BM_ELEM_SELECT, true))
+	{
 		return OPERATOR_CANCELLED;
+	}
 	
 	EDBM_update_generic(em, true, false);
 
@@ -1637,8 +1643,9 @@ static int edbm_normals_make_consistent_exec(bContext *C, wmOperator *op)
 	if (!EDBM_op_callf(em, op, "recalc_face_normals faces=%hf", BM_ELEM_SELECT))
 		return OPERATOR_CANCELLED;
 
-	if (RNA_boolean_get(op->ptr, "inside"))
-		EDBM_op_callf(em, op, "reverse_faces faces=%hf", BM_ELEM_SELECT);
+	if (RNA_boolean_get(op->ptr, "inside")) {
+		EDBM_op_callf(em, op, "reverse_faces faces=%hf flip_multires=%b", BM_ELEM_SELECT, true);
+	}
 
 	EDBM_update_generic(em, true, false);
 
@@ -4987,7 +4994,7 @@ static int edbm_noise_exec(bContext *C, wmOperator *op)
 		BM_ITER_MESH (eve, &iter, em->bm, BM_VERTS_OF_MESH) {
 			if (BM_elem_flag_test(eve, BM_ELEM_SELECT)) {
 				float tin, dum;
-				externtex(ma->mtex[0], eve->co, &tin, &dum, &dum, &dum, &dum, 0, NULL, false);
+				externtex(ma->mtex[0], eve->co, &tin, &dum, &dum, &dum, &dum, 0, NULL, false, false);
 				eve->co[2] += fac * tin;
 			}
 		}

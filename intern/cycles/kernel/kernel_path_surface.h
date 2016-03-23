@@ -19,8 +19,8 @@ CCL_NAMESPACE_BEGIN
 #if defined(__BRANCHED_PATH__) || defined(__SUBSURFACE__)
 
 /* branched path tracing: connect path directly to position on one or more lights and add it to L */
-ccl_device void kernel_branched_path_surface_connect_light(KernelGlobals *kg, RNG *rng,
-	ShaderData *sd, PathState *state, float3 throughput, float num_samples_adjust, PathRadiance *L, bool sample_all_lights)
+ccl_device_noinline void kernel_branched_path_surface_connect_light(KernelGlobals *kg, RNG *rng,
+	ShaderData *sd, PathState *state, float3 throughput, float num_samples_adjust, PathRadiance *L, int sample_all_lights)
 {
 #ifdef __EMISSION__
 	/* sample illumination from lights to find path contribution */
@@ -39,7 +39,7 @@ ccl_device void kernel_branched_path_surface_connect_light(KernelGlobals *kg, RN
 		/* lamp sampling */
 		for(int i = 0; i < kernel_data.integrator.num_all_lights; i++) {
 			if(UNLIKELY(light_select_reached_max_bounces(kg, i, state->bounce)))
-			   continue;
+				continue;
 
 			int num_samples = ceil_to_int(num_samples_adjust*light_select_num_samples(kg, i));
 			float num_samples_inv = num_samples_adjust/(num_samples*kernel_data.integrator.num_all_lights);

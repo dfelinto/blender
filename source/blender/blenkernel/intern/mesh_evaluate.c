@@ -188,7 +188,7 @@ static void mesh_calc_normals_poly_accum_task_cb(void *userdata, const int pidx)
 	MeshCalcNormalsData *data = userdata;
 	const MPoly *mp = &data->mpolys[pidx];
 	const MLoop *ml = &data->mloop[mp->loopstart];
-    const MVert *mverts = data->mverts;
+	const MVert *mverts = data->mverts;
 
 	float pnor_temp[3];
 	float *pnor = data->pnors ? data->pnors[pidx] : pnor_temp;
@@ -2674,16 +2674,16 @@ int BKE_mesh_recalc_tessellation(
 		}
 	}
 
-	/* NOTE: quad detection issue - forth vertidx vs forth loopidx:
+	/* NOTE: quad detection issue - fourth vertidx vs fourth loopidx:
 	 * Polygons take care of their loops ordering, hence not of their vertices ordering.
-	 * Currently, our tfaces' forth vertex index might be 0 even for a quad. However, we know our forth loop index is
+	 * Currently, our tfaces' fourth vertex index might be 0 even for a quad. However, we know our fourth loop index is
 	 * never 0 for quads (because they are sorted for polygons, and our quads are still mere copies of their polygons).
-	 * So we pass NULL as MFace pointer, and BKE_mesh_loops_to_tessdata will use the forth loop index as quad test.
+	 * So we pass NULL as MFace pointer, and BKE_mesh_loops_to_tessdata will use the fourth loop index as quad test.
 	 * ...
 	 */
 	BKE_mesh_loops_to_tessdata(fdata, ldata, pdata, NULL, mface_to_poly_map, lindices, totface);
 
-	/* NOTE: quad detection issue - forth vertidx vs forth loopidx:
+	/* NOTE: quad detection issue - fourth vertidx vs fourth loopidx:
 	 * ...However, most TFace code uses 'MFace->v4 == 0' test to check whether it is a tri or quad.
 	 * test_index_face() will check this and rotate the tessellated face if needed.
 	 */
@@ -3200,6 +3200,112 @@ void BKE_mesh_convert_mfaces_to_mpolys_ex(ID *id, CustomData *fdata, CustomData 
 }
 /** \} */
 
+/**
+ * Flip a single MLoop's #MDisps structure,
+ * low level function to be called from face-flipping code which re-arranged the mdisps themselves.
+ */
+void BKE_mesh_mdisp_flip(MDisps *md, const bool use_loop_mdisp_flip)
+{
+	if (UNLIKELY(!md->totdisp || !md->disps)) {
+		return;
+	}
+
+	const int sides = (int)sqrt(md->totdisp);
+	float (*co)[3] = md->disps;
+
+	for (int x = 0; x < sides; x++) {
+		float *co_a, *co_b;
+
+		for (int y = 0; y < x; y++) {
+			co_a = co[y * sides + x];
+			co_b = co[x * sides + y];
+
+			swap_v3_v3(co_a, co_b);
+			SWAP(float, co_a[0], co_a[1]);
+			SWAP(float, co_b[0], co_b[1]);
+
+			if (use_loop_mdisp_flip) {
+				co_a[2] *= -1.0f;
+				co_b[2] *= -1.0f;
+			}
+		}
+
+		co_a = co[x * sides + x];
+
+		SWAP(float, co_a[0], co_a[1]);
+
+		if (use_loop_mdisp_flip) {
+			co_a[2] *= -1.0f;
+		}
+	}
+}
+
+/**
+ * Flip (invert winding of) the given \a mpoly, i.e. reverse order of its loops
+ * (keeping the same vertex as 'start point').
+ *
+ * \param mpoly the polygon to flip.
+ * \param mloop the full loops array.
+ * \param ldata the loops custom data.
+ */
+void BKE_mesh_polygon_flip_ex(
+        MPoly *mpoly, MLoop *mloop, CustomData *ldata,
+        MDisps *mdisp, const bool use_loop_mdisp_flip)
+{
+	int loopstart = mpoly->loopstart;
+	int loopend = loopstart + mpoly->totloop - 1;
+	const bool loops_in_ldata = (CustomData_get_layer(ldata, CD_MLOOP) == mloop);
+
+	if (mdisp) {
+		for (int i = mpoly->loopstart; i <= loopend; i++) {
+			BKE_mesh_mdisp_flip(&mdisp[i], use_loop_mdisp_flip);
+		}
+	}
+
+	/* Note that we keep same start vertex for flipped face. */
+
+	/* We also have to update loops edge
+	 * (they will get their original 'other edge', that is, the original edge of their original previous loop)... */
+	unsigned int prev_edge_index = mloop[loopstart].e;
+	mloop[loopstart].e = mloop[loopend].e;
+
+	for (loopstart++; loopend > loopstart; loopstart++, loopend--) {
+		mloop[loopend].e = mloop[loopend - 1].e;
+		SWAP(unsigned int, mloop[loopstart].e, prev_edge_index);
+
+		if (!loops_in_ldata) {
+			SWAP(MLoop, mloop[loopstart], mloop[loopend]);
+		}
+		CustomData_swap(ldata, loopstart, loopend);
+	}
+	/* Even if we did not swap the other 'pivot' loop, we need to set its swapped edge. */
+	if (loopstart == loopend) {
+		mloop[loopstart].e = prev_edge_index;
+	}
+}
+
+void BKE_mesh_polygon_flip(MPoly *mpoly, MLoop *mloop, CustomData *ldata)
+{
+	MDisps *mdisp = CustomData_get_layer(ldata, CD_MDISPS);
+	BKE_mesh_polygon_flip_ex(mpoly, mloop, ldata, mdisp, true);
+}
+
+/**
+ * Flip (invert winding of) all polygons (used to inverse their normals).
+ *
+ * \note Invalidates tessalation, caller must handle that.
+ */
+void BKE_mesh_polygons_flip(
+        MPoly *mpoly, MLoop *mloop, CustomData *ldata, int totpoly)
+{
+	MDisps *mdisp = CustomData_get_layer(ldata, CD_MDISPS);
+	MPoly *mp;
+	int i;
+
+	for (mp = mpoly, i = 0; i < totpoly; mp++, i++) {
+		BKE_mesh_polygon_flip_ex(mp, mloop, ldata, mdisp, true);
+	}
+}
 
 /* -------------------------------------------------------------------- */
 

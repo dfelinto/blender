@@ -1,3 +1,13 @@
+/* Converters */
+
+float convert_rgba_to_float(vec4 color)
+{
+#ifdef USE_NEW_SHADING
+	return color.r*0.2126 + color.g*0.7152 + color.b*0.0722;
+#else
+	return (color.r + color.g + color.b) / 3.0;
+#endif
+}
 
 float exp_blender(float f)
 {
@@ -384,6 +394,12 @@ void vec_math_negate(vec3 v, out vec3 outv)
 	outv = -v;
 }
 
+void invert_z(vec3 v, out vec3 outv)
+{
+        v.z = -v.z;
+        outv = v;
+}
+
 void normal(vec3 dir, vec3 nor, out vec3 outnor, out float outdot)
 {
 	outnor = nor;
@@ -737,7 +753,11 @@ void valtorgb(float fac, sampler2D colormap, out vec4 outcol, out float outalpha
 
 void rgbtobw(vec4 color, out float outval)  
 {
+#ifdef USE_NEW_SHADING
+	outval = color.r*0.2126 + color.g*0.7152 + color.b*0.0722;
+#else
 	outval = color.r*0.35 + color.g*0.45 + color.b*0.2; /* keep these factors in sync with texture.h:RGBTOBW */
+#endif
 }
 
 void invert(float fac, vec4 col, out vec4 outcol)
@@ -901,6 +921,11 @@ void shade_norm(vec3 normal, out vec3 outnormal)
 {
 	/* blender render normal is negated */
 	outnormal = -normalize(normal);
+}
+
+void mtex_mirror(vec3 tcol, vec4 refcol, float tin, float colmirfac, out vec4 outrefcol)
+{
+    outrefcol = mix(refcol, vec4(1.0, tcol), tin*colmirfac);
 }
 
 void mtex_rgb_blend(vec3 outcol, vec3 texcol, float fact, float facg, out vec3 incol)
@@ -1264,6 +1289,15 @@ void mtex_cube_map(vec3 co, samplerCube ima, out float value, out vec4 color)
 	value = 1.0;
 }
 
+void mtex_cube_map_refl(samplerCube ima, vec3 vp, vec3 vn, mat4 viewmatrixinverse, mat4 viewmatrix, out float value, out vec4 color)
+{
+	vec3 viewdirection = vec3(viewmatrixinverse * vec4(vp, 0.0));
+	vec3 normaldirection = normalize(vec3(vec4(vn, 0.0) * viewmatrix));
+	vec3 reflecteddirection = reflect(viewdirection, normaldirection);
+	color = textureCube(ima, reflecteddirection);
+	value = 1.0;
+}
+
 void mtex_image(vec3 texco, sampler2D ima, out float value, out vec4 color)
 {
 	color = texture2D(ima, texco.xy);
@@ -1596,6 +1630,17 @@ void lamp_falloff_sliders(float lampdist, float ld1, float ld2, float dist, out 
 
 	visifac = lampdist/(lampdist + ld1*dist);
 	visifac *= lampdistkw/(lampdistkw + ld2*dist*dist);
+}
+
+void lamp_falloff_invcoefficients(float coeff_const, float coeff_lin, float coeff_quad, float dist, out float visifac)
+{
+	vec3 coeff = vec3(coeff_const, coeff_lin, coeff_quad);
+	vec3 d_coeff = vec3(1.0, dist, dist*dist);
+	float visifac_r = dot(coeff, d_coeff);
+	if (visifac_r > 0.0)
+		visifac = 1.0 / visifac_r;
+	else
+		visifac = 0.0;
 }
 
 void lamp_falloff_curve(float lampdist, sampler2D curvemap, float dist, out float visifac)
@@ -2016,6 +2061,11 @@ void shade_spec_t(float shadfac, float spec, float visifac, float specfac, out f
 void shade_add_spec(float t, vec3 lampcol, vec3 speccol, out vec3 outcol)
 {
 	outcol = t*lampcol*speccol;
+}
+
+void shade_add_mirror(vec3 mir, vec4 refcol, vec3 combined, out vec3 result)
+{
+    result = mir*refcol.gba + (vec3(1.0) - mir*refcol.rrr)*combined;
 }
 
 void alpha_spec_correction(vec3 spec, float spectra, float alpha, out float outalpha)

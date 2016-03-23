@@ -1497,8 +1497,7 @@ static void *newlibadr_us(FileData *fd, void *lib, void *adr)	/* increases user 
 {
 	ID *id = newlibadr(fd, lib, adr);
 	
-	if (id)
-		id->us++;
+	id_us_plus_no_lib(id);
 	
 	return id;
 }
@@ -3025,6 +3024,10 @@ static void direct_link_nodetree(FileData *fd, bNodeTree *ntree)
 					NodeShaderScript *nss = (NodeShaderScript *) node->storage;
 					nss->bytecode = newdataadr(fd, nss->bytecode);
 				}
+				else if (node->type==SH_NODE_TEX_POINTDENSITY) {
+					NodeShaderTexPointDensity *npd = (NodeShaderTexPointDensity *) node->storage;
+					memset(&npd->pd, 0, sizeof(npd->pd));
+				}
 			}
 			else if (ntree->type==NTREE_COMPOSIT) {
 				if (ELEM(node->type, CMP_NODE_TIME, CMP_NODE_CURVE_VEC, CMP_NODE_CURVE_RGB, CMP_NODE_HUECORRECT))
@@ -3834,6 +3837,7 @@ static void direct_link_texture(FileData *fd, Tex *tex)
 		if (tex->pd->falloff_curve) {
 			direct_link_curvemapping(fd, tex->pd->falloff_curve);
 		}
+		tex->pd->point_data = NULL; /* runtime data */
 	}
 	
 	tex->vd = newdataadr(fd, tex->vd);
@@ -4636,7 +4640,7 @@ static void lib_link_modifiers__linkModifiers(
 
 	*idpoin = newlibadr(fd, ob->id.lib, *idpoin);
 	if (*idpoin != NULL && (cd_flag & IDWALK_USER) != 0) {
-		(*idpoin)->us++;
+		id_us_plus_no_lib(*idpoin);
 	}
 }
 static void lib_link_modifiers(FileData *fd, Object *ob)
@@ -5503,7 +5507,6 @@ static void lib_link_sequence_modifiers(FileData *fd, Scene *scene, ListBase *lb
 	for (smd = lb->first; smd; smd = smd->next) {
 		if (smd->mask_id)
 			smd->mask_id = newlibadr_us(fd, scene->id.lib, smd->mask_id);
-		smd->scene = scene;
 	}
 }
 
@@ -5635,7 +5638,7 @@ static void lib_link_scene(FileData *fd, Main *main)
 						seq->sound = newlibadr(fd, sce->id.lib, seq->sound);
 					}
 					if (seq->sound) {
-						seq->sound->id.us++;
+						id_us_plus_no_lib((ID *)seq->sound);
 						seq->scene_sound = BKE_sound_add_scene_sound_defaults(sce, seq);
 					}
 				}
@@ -6060,9 +6063,12 @@ static void direct_link_windowmanager(FileData *fd, wmWindowManager *wm)
 		win->drawfail = 0;
 		win->active = 0;
 
-		win->cursor      = 0;
-		win->lastcursor  = 0;
-		win->modalcursor = 0;
+		win->cursor       = 0;
+		win->lastcursor   = 0;
+		win->modalcursor  = 0;
+		win->grabcursor   = 0;
+		win->addmousemove = true;
+		win->multisamples = 0;
 		win->stereo3d_format = newdataadr(fd, win->stereo3d_format);
 
 		/* multiview always fallback to anaglyph at file opening
@@ -9574,7 +9580,7 @@ static void give_base_to_objects(Main *mainvar, Scene *scene, View3D *v3d, Libra
 				base->flag = ob->flag;
 
 				CLAMP_MIN(ob->id.us, 0);
-				ob->id.us += 1;
+				id_us_plus_no_lib((ID *)ob);
 
 				ob->id.tag &= ~LIB_TAG_INDIRECT;
 				ob->id.tag |= LIB_TAG_EXTERN;
@@ -9698,7 +9704,7 @@ static void link_object_postprocess(ID *id, Scene *scene, View3D *v3d, const sho
 		base->lay = ob->lay;
 		base->object = ob;
 		base->flag = ob->flag;
-		ob->id.us++;
+		id_us_plus_no_lib((ID *)ob);
 
 		if (flag & FILE_AUTOSELECT) {
 			base->flag |= SELECT;
@@ -9849,7 +9855,7 @@ static Main *library_link_begin(Main *mainvar, FileData **fd, const char *filepa
 	(*fd)->mainlist = MEM_callocN(sizeof(ListBase), "FileData.mainlist");
 	
 	/* clear for group instantiating tag */
-	BKE_main_id_tag_listbase(&(mainvar->group), false);
+	BKE_main_id_tag_listbase(&(mainvar->group), LIB_TAG_DOIT, false);
 
 	/* make mains */
 	blo_split_main((*fd)->mainlist, mainvar);
@@ -9931,7 +9937,7 @@ static void library_link_end(Main *mainl, FileData **fd, const short flag, Scene
 	}
 
 	/* clear group instantiating tag */
-	BKE_main_id_tag_listbase(&(mainvar->group), false);
+	BKE_main_id_tag_listbase(&(mainvar->group), LIB_TAG_DOIT, false);
 
 	/* patch to prevent switch_endian happens twice */
 	if ((*fd)->flags & FD_FLAGS_SWITCH_ENDIAN) {

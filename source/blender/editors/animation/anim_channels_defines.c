@@ -2812,7 +2812,6 @@ static bool acf_gpl_setting_valid(bAnimContext *UNUSED(ac), bAnimListElem *UNUSE
 	switch (setting) {
 		/* unsupported */
 		case ACHANNEL_SETTING_EXPAND: /* gpencil layers are more like F-Curves than groups */
-		case ACHANNEL_SETTING_VISIBLE: /* graph editor only */
 		case ACHANNEL_SETTING_SOLO: /* nla editor only */
 			return false;
 		
@@ -2832,7 +2831,11 @@ static int acf_gpl_setting_flag(bAnimContext *UNUSED(ac), eAnimChannel_Settings 
 		case ACHANNEL_SETTING_SELECT: /* selected */
 			return GP_LAYER_SELECT;
 			
-		case ACHANNEL_SETTING_MUTE: /* muted */
+		case ACHANNEL_SETTING_MUTE: /* animation muting - similar to frame lock... */
+			return GP_LAYER_FRAMELOCK;
+			
+		case ACHANNEL_SETTING_VISIBLE: /* visiblity of the layers (NOT muting) */
+			*neg = true;
 			return GP_LAYER_HIDE;
 			
 		case ACHANNEL_SETTING_PROTECT: /* protected */
@@ -3757,9 +3760,13 @@ void ANIM_channel_draw(bAnimContext *ac, bAnimListElem *ale, float yminc, float 
 			/* protect... */
 			if (acf->has_setting(ac, ale, ACHANNEL_SETTING_PROTECT))
 				offset += ICON_WIDTH;
+				
 			/* mute... */
 			if (acf->has_setting(ac, ale, ACHANNEL_SETTING_MUTE))
 				offset += ICON_WIDTH;
+			if (ale->type == ANIMTYPE_GPLAYER)
+				offset += ICON_WIDTH;
+				
 			/* pinned... */
 			if (acf->has_setting(ac, ale, ACHANNEL_SETTING_PINNED))
 				offset += ICON_WIDTH;
@@ -3867,6 +3874,7 @@ static void achannel_setting_slider_cb(bContext *C, void *id_poin, void *fcu_poi
 	
 	ReportList *reports = CTX_wm_reports(C);
 	Scene *scene = CTX_data_scene(C);
+	ToolSettings *ts = scene->toolsettings;
 	PointerRNA id_ptr, ptr;
 	PropertyRNA *prop;
 	short flag = 0;
@@ -3889,7 +3897,7 @@ static void achannel_setting_slider_cb(bContext *C, void *id_poin, void *fcu_poi
 			flag |= INSERTKEY_REPLACE;
 		
 		/* insert a keyframe for this F-Curve */
-		done = insert_keyframe_direct(reports, ptr, prop, fcu, cfra, flag);
+		done = insert_keyframe_direct(reports, ptr, prop, fcu, cfra, ts->keyframe_type, flag);
 		
 		if (done)
 			WM_event_add_notifier(C, NC_ANIMATION | ND_ANIMCHAN | NA_EDITED, NULL);
@@ -3905,6 +3913,7 @@ static void achannel_setting_slider_shapekey_cb(bContext *C, void *key_poin, voi
 	
 	ReportList *reports = CTX_wm_reports(C);
 	Scene *scene = CTX_data_scene(C);
+	ToolSettings *ts = scene->toolsettings;
 	PointerRNA id_ptr, ptr;
 	PropertyRNA *prop;
 	short flag = 0;
@@ -3932,7 +3941,7 @@ static void achannel_setting_slider_shapekey_cb(bContext *C, void *key_poin, voi
 			flag |= INSERTKEY_REPLACE;
 		
 		/* insert a keyframe for this F-Curve */
-		done = insert_keyframe_direct(reports, ptr, prop, fcu, cfra, flag);
+		done = insert_keyframe_direct(reports, ptr, prop, fcu, cfra, ts->keyframe_type, flag);
 		
 		if (done)
 			WM_event_add_notifier(C, NC_ANIMATION | ND_ANIMCHAN | NA_EDITED, NULL);
@@ -3955,6 +3964,7 @@ static void achannel_setting_slider_nla_curve_cb(bContext *C, void *UNUSED(id_po
 	
 	ReportList *reports = CTX_wm_reports(C);
 	Scene *scene = CTX_data_scene(C);
+	ToolSettings *ts = scene->toolsettings;
 	short flag = 0;
 	bool done = false;
 	float cfra;
@@ -3974,7 +3984,7 @@ static void achannel_setting_slider_nla_curve_cb(bContext *C, void *UNUSED(id_po
 			flag |= INSERTKEY_REPLACE;
 		
 		/* insert a keyframe for this F-Curve */
-		done = insert_keyframe_direct(reports, ptr, prop, fcu, cfra, flag);
+		done = insert_keyframe_direct(reports, ptr, prop, fcu, cfra, ts->keyframe_type, flag);
 		
 		if (done)
 			WM_event_add_notifier(C, NC_ANIMATION | ND_ANIMCHAN | NA_EDITED, NULL);
@@ -4006,6 +4016,8 @@ static void draw_setting_widget(bAnimContext *ac, bAnimListElem *ale, const bAni
 			
 			if (ELEM(ale->type, ANIMTYPE_FCURVE, ANIMTYPE_NLACURVE))
 				tooltip = TIP_("F-Curve is visible in Graph Editor for editing");
+			else if (ale->type == ANIMTYPE_GPLAYER)
+				tooltip = TIP_("Grease Pencil layer is visible in the viewport");
 			else
 				tooltip = TIP_("Channels are visible in Graph Editor for editing");
 			break;
@@ -4050,6 +4062,9 @@ static void draw_setting_widget(bAnimContext *ac, bAnimListElem *ale, const bAni
 			}
 			else if ((ac) && (ac->spacetype == SPACE_NLA) && (ale->type != ANIMTYPE_NLATRACK)) {
 				tooltip = TIP_("Temporarily disable NLA stack evaluation (i.e. only the active action is evaluated)");
+			}
+			else if (ale->type == ANIMTYPE_GPLAYER) {
+				tooltip = TIP_("Lock current frame displayed by layer (i.e. disable animation playback)");
 			}
 			else {
 				tooltip = TIP_("Do channels contribute to result (toggle channel muting)");
@@ -4247,6 +4262,13 @@ void ANIM_channel_draw_widgets(const bContext *C, bAnimContext *ac, bAnimListEle
 			
 			UI_block_emboss_set(block, UI_EMBOSS_NONE);
 		}
+		else {
+			/* Cannot get property/cannot or rename for some reason, so clear rename index
+			 * so that this doesn't hang around, and the name can be drawn normally - T47492
+			 */
+			ac->ads->renameIndex = 0;
+			WM_event_add_notifier(C, NC_ANIMATION | ND_ANIMCHAN, NULL);
+		}
 	}
 	
 	/* step 5) draw mute+protection toggles + (sliders) ....................... */
@@ -4286,6 +4308,11 @@ void ANIM_channel_draw_widgets(const bContext *C, bAnimContext *ac, bAnimListEle
 			if (acf->has_setting(ac, ale, ACHANNEL_SETTING_MUTE)) {
 				offset += ICON_WIDTH;
 				draw_setting_widget(ac, ale, acf, block, (int)v2d->cur.xmax - offset, ymid, ACHANNEL_SETTING_MUTE);
+			}
+			if (ale->type == ANIMTYPE_GPLAYER) {
+				/* Not technically "mute" (in terms of anim channels, but this sets layer visibility instead) */
+				offset += ICON_WIDTH;
+				draw_setting_widget(ac, ale, acf, block, (int)v2d->cur.xmax - offset, ymid, ACHANNEL_SETTING_VISIBLE);
 			}
 			
 			/* modifiers disable */

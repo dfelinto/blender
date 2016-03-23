@@ -100,7 +100,6 @@ class NODE_HT_header(Header):
         elif snode.tree_type == 'CompositorNodeTree':
             if snode_id:
                 layout.prop(snode_id, "use_nodes")
-                layout.prop(snode_id.render, "use_free_unused_nodes", text="Free Unused")
             layout.prop(snode, "show_backdrop")
             if snode.show_backdrop:
                 row = layout.row(align=True)
@@ -488,6 +487,7 @@ class NODE_PT_tools_grease_pencil_draw(GreasePencilDrawingToolsPanel, Panel):
 class NODE_PT_tools_grease_pencil_edit(GreasePencilStrokeEditPanel, Panel):
     bl_space_type = 'NODE_EDITOR'
     bl_region_type = 'TOOLS'
+
 
 # Grease Pencil stroke sculpting tools
 class NODE_PT_tools_grease_pencil_sculpt(GreasePencilStrokeSculptPanel, Panel):

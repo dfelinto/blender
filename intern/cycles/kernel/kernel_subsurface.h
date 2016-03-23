@@ -16,7 +16,12 @@
 
 CCL_NAMESPACE_BEGIN
 
-/* NEW BSSRDF: See "BSSRDF Importance Sampling", SIGGRAPH 2013 */
+/* BSSRDF using disk based importance sampling.
+ *
+ * BSSRDF Importance Sampling, SIGGRAPH 2013
+ * http://library.imageworks.com/pdfs/imageworks-library-BSSRDF-sampling.pdf
+ *
+ */
 
 /* TODO:
  * - test using power heuristic for combing bssrdfs
@@ -100,8 +105,6 @@ ccl_device float3 subsurface_scatter_eval(ShaderData *sd, ShaderClosure *sc, flo
 	}
 
 	float sample_weight_inv = 1.0f/sample_weight_sum;
-
-	//printf("num closures %d\n", sd->num_closure);
 
 	for(int i = 0; i < sd->num_closure; i++) {
 		sc = &sd->closure[i];

@@ -102,6 +102,10 @@ endif()
 # Setup the exe sources and buildinfo
 set(SRC
 	creator.c
+	creator_args.c
+	creator_signals.c
+
+	creator_intern.h
 )
 
 # MSVC 2010 gives linking errors with the manifest
@@ -130,7 +134,7 @@ if(WIN32 AND NOT UNIX)
 
 
 	list(APPEND SRC
-		../icons/winblender.rc
+		${CMAKE_SOURCE_DIR}/release/windows/icons/winblender.rc
 	)
 endif()
 
@@ -506,7 +510,7 @@ if(UNIX AND NOT APPLE)
 		if(WITH_PYTHON_INSTALL)
 
 			install(
-				FILES ${PYTHON_EXECUTABLE}
+				PROGRAMS ${PYTHON_EXECUTABLE}
 				DESTINATION ${TARGETDIR_VER}/python/bin
 			)
 
@@ -528,12 +532,8 @@ if(UNIX AND NOT APPLE)
 			install(
 				DIRECTORY ${PYTHON_LIBPATH}/python${PYTHON_VERSION}
 				DESTINATION ${TARGETDIR_VER}/python/${_target_LIB}
-				PATTERN ".svn" EXCLUDE
 				PATTERN "__pycache__" EXCLUDE               # * any cache *
-				PATTERN "distutils" EXCLUDE                 # ./distutils
 				PATTERN "lib2to3" EXCLUDE                   # ./lib2to3
-				PATTERN "config" EXCLUDE                    # ./config
-				PATTERN "config-*" EXCLUDE                  # ./config-*
 				PATTERN "site-packages/*" EXCLUDE           # ./site-packages/*
 				PATTERN "tkinter" EXCLUDE                   # ./tkinter
 				PATTERN "lib-dynload/_tkinter.*" EXCLUDE    # ./lib-dynload/_tkinter.co
@@ -542,6 +542,15 @@ if(UNIX AND NOT APPLE)
 				PATTERN "turtledemo" EXCLUDE                # ./turtledemo
 				PATTERN "turtle.py" EXCLUDE                 # ./turtle.py
 			)
+
+			# Needed for distutils/pip
+			# get the last part of the include dir, will be 'python{version}{abiflag}',
+			get_filename_component(_py_inc_suffix ${PYTHON_INCLUDE_DIR} NAME)
+			install(
+				FILES ${PYTHON_INCLUDE_DIR}/pyconfig.h
+				DESTINATION ${TARGETDIR_VER}/python/include/${_py_inc_suffix}
+			)
+			unset(_py_inc_suffix)
 
 			# # doesnt work, todo
 			# install(CODE "execute_process(COMMAND find ${CMAKE_INSTALL_PREFIX}/${BLENDER_VERSION}/python/lib/ -name '*.so' -exec strip -s {} '\;')")
@@ -560,7 +569,6 @@ if(UNIX AND NOT APPLE)
 					PATTERN "__pycache__" EXCLUDE           # * any cache *
 					PATTERN "*.pyc" EXCLUDE                 # * any cache *
 					PATTERN "*.pyo" EXCLUDE                 # * any cache *
-					PATTERN "distutils" EXCLUDE             # ./distutils
 					PATTERN "oldnumeric" EXCLUDE            # ./oldnumeric
 					PATTERN "doc" EXCLUDE                   # ./doc
 					PATTERN "tests" EXCLUDE                 # ./tests
@@ -585,7 +593,6 @@ if(UNIX AND NOT APPLE)
 					PATTERN "__pycache__" EXCLUDE           # * any cache *
 					PATTERN "*.pyc" EXCLUDE                 # * any cache *
 					PATTERN "*.pyo" EXCLUDE                 # * any cache *
-					PATTERN "cacert.pem" EXCLUDE            # for now we don't deal with security
 				)
 				# On some platforms requests does have extra dependencies.
 				set(_requests_deps "chardet" "urllib3")
@@ -625,13 +632,13 @@ elseif(WIN32)
 		# MinGW TODO: This bit of Python configuration diverges from MSVC
 		if(NOT CMAKE_COMPILER_IS_GNUCC)
 			install(
-				FILES ${LIBDIR}/python/lib/python${_PYTHON_VERSION_NO_DOTS}.dll ${LIBDIR}/python/lib/sqlite3.dll
+				FILES ${LIBDIR}/python/lib/python${_PYTHON_VERSION_NO_DOTS}.dll
 				DESTINATION "."
 				CONFIGURATIONS Release;RelWithDebInfo;MinSizeRel
 			)
 
 			install(
-				FILES ${LIBDIR}/python/lib/python${_PYTHON_VERSION_NO_DOTS}_d.dll ${LIBDIR}/python/lib/sqlite3_d.dll
+				FILES ${LIBDIR}/python/lib/python${_PYTHON_VERSION_NO_DOTS}_d.dll
 				DESTINATION "."
 				CONFIGURATIONS Debug
 			)
@@ -981,7 +988,7 @@ elseif(APPLE)
 		# copy site-packages files
 		install_dir(
 			${LIBDIR}/release/site-packages
-			${CMAKE_CURRENT_BINARY_DIR}/python/lib/python${PYTHON_VERSION}/site-packages
+			${CMAKE_CURRENT_BINARY_DIR}/python/lib/python${PYTHON_VERSION}
 		)
 
 		install(DIRECTORY ${LIBDIR}/python/bin
@@ -1094,7 +1101,7 @@ setup_liblinks(blender)
 if(WIN32 AND NOT WITH_PYTHON_MODULE)
 	set(LAUNCHER_SRC
 		creator_launch_win.c
-		../icons/winblender.rc
+		${CMAKE_SOURCE_DIR}/release/windows/icons/winblender.rc
 	)
 	add_executable(blender-launcher ${LAUNCHER_SRC})
 	target_link_libraries(blender-launcher bf_intern_utfconv ${PLATFORM_LINKLIBS})

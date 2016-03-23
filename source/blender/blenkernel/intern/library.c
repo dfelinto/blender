@@ -183,7 +183,7 @@ void id_us_ensure_real(ID *id)
 }
 
 /* Unused currently... */
-static void UNUSED_FUNCTION(id_us_clear_real)(ID *id)
+void id_us_clear_real(ID *id)
 {
 	if (id && (id->tag & LIB_TAG_EXTRAUSER)) {
 		if (id->tag & LIB_TAG_EXTRAUSER_SET) {
@@ -194,11 +194,31 @@ static void UNUSED_FUNCTION(id_us_clear_real)(ID *id)
 	}
 }
 
+/**
+ * Same as \a id_us_plus, but does not handle lib indirect -> extern.
+ * Only used by readfile.c so far, but simpler/safer to keep it here nonetheless.
+ */
+void id_us_plus_no_lib(ID *id)
+{
+	if (id) {
+		if ((id->tag & LIB_TAG_EXTRAUSER) && (id->tag & LIB_TAG_EXTRAUSER_SET)) {
+			BLI_assert(id->us >= 1);
+			/* No need to increase count, just tag extra user as no more set.
+			 * Avoids annoying & inconsistent +1 in user count. */
+			id->tag &= ~LIB_TAG_EXTRAUSER_SET;
+		}
+		else {
+			BLI_assert(id->us >= 0);
+			id->us++;
+		}
+	}
+}
+
+
 void id_us_plus(ID *id)
 {
 	if (id) {
-		BLI_assert(id->us >= 0);
-		id->us++;
+		id_us_plus_no_lib(id);
 		id_lib_extern(id);
 	}
 }
@@ -208,11 +228,6 @@ void id_us_min(ID *id)
 {
 	if (id) {
 		const int limit = ID_FAKE_USERS(id);
-
-		if ((id->us == limit) && (id->tag & LIB_TAG_EXTRAUSER) && !(id->tag & LIB_TAG_EXTRAUSER_SET)) {
-			/* We need an extra user here, but never actually incremented user count for it so far, do it now. */
-			id_us_ensure_real(id);
-		}
 
 		if (id->us <= limit) {
 			printf("ID user decrement error: %s (from '%s'): %d <= %d\n",
@@ -224,6 +239,11 @@ void id_us_min(ID *id)
 		}
 		else {
 			id->us--;
+		}
+
+		if ((id->us == limit) && (id->tag & LIB_TAG_EXTRAUSER)) {
+			/* We need an extra user here, but never actually incremented user count for it so far, do it now. */
+			id_us_ensure_real(id);
 		}
 	}
 }
@@ -323,7 +343,7 @@ bool id_make_local(ID *id, bool test)
 			if (!test) BKE_action_make_local((bAction *)id);
 			return true;
 		case ID_NT:
-			if (!test) ntreeMakeLocal((bNodeTree *)id);
+			if (!test) ntreeMakeLocal((bNodeTree *)id, true);
 			return true;
 		case ID_BR:
 			if (!test) BKE_brush_make_local((Brush *)id);
@@ -575,7 +595,51 @@ ListBase *which_libbase(Main *mainlib, short type)
 }
 
 /**
- * Clear or set given flags for all ids in listbase (runtime flags only).
+ * Clear or set given tags for all ids in listbase (runtime tags).
+ */
+void BKE_main_id_tag_listbase(ListBase *lb, const int tag, const bool value)
+{
+	ID *id;
+	if (value) {
+		for (id = lb->first; id; id = id->next) {
+			id->tag |= tag;
+		}
+	}
+	else {
+		const int ntag = ~tag;
+		for (id = lb->first; id; id = id->next) {
+			id->tag &= ntag;
+		}
+	}
+}
+
+/**
+ * Clear or set given tags for all ids of given type in bmain (runtime tags).
+ */
+void BKE_main_id_tag_idcode(struct Main *mainvar, const short type, const int tag, const bool value)
+{
+	ListBase *lb = which_libbase(mainvar, type);
+
+	BKE_main_id_tag_listbase(lb, tag, value);
+}
+
+/**
+ * Clear or set given tags for all ids in bmain (runtime tags).
+ */
+void BKE_main_id_tag_all(struct Main *mainvar, const int tag, const bool value)
+{
+	ListBase *lbarray[MAX_LIBARRAY];
+	int a;
+
+	a = set_listbasepointers(mainvar, lbarray);
+	while (a--) {
+		BKE_main_id_tag_listbase(lbarray[a], tag, value);
+	}
+}
+
+
+/**
+ * Clear or set given flags for all ids in listbase (persistent flags).
  */
 void BKE_main_id_flag_listbase(ListBase *lb, const int flag, const bool value)
 {
@@ -592,7 +656,7 @@ void BKE_main_id_flag_listbase(ListBase *lb, const int flag, const bool value)
 }
 
 /**
- * Clear or set given flags for all ids in bmain (runtime flags only).
+ * Clear or set given flags for all ids in bmain (persistent flags).
  */
 void BKE_main_id_flag_all(Main *bmain, const int flag, const bool value)
 {
@@ -1254,6 +1318,16 @@ void BKE_libblock_free_us(Main *bmain, void *idv)      /* test users */
 	
 	id_us_min(id);
 
+	/* XXX This is a temp (2.77) hack so that we keep same behavior as in 2.76 regarding groups when deleting an object.
+	 *     Since only 'user_one' usage of objects is groups, and only 'real user' usage of objects is scenes,
+	 *     removing that 'user_one' tag when there is no more real (scene) users of an object ensures it gets
+	 *     fully unlinked.
+	 *     Otherwise, there is no real way to get rid of an object anymore - better handling of this is TODO.
+	 */
+	if ((GS(id->name) == ID_OB) && (id->us == 1)) {
+		id_us_clear_real(id);
+	}
+
 	if (id->us == 0) {
 		switch (GS(id->name)) {
 			case ID_OB:
@@ -1654,7 +1728,7 @@ bool new_id(ListBase *lb, ID *id, const char *tname)
  * Pull an ID out of a library (make it local). Only call this for IDs that
  * don't have other library users.
  */
-void id_clear_lib_data(Main *bmain, ID *id)
+void id_clear_lib_data_ex(Main *bmain, ID *id, bool id_in_mainlist)
 {
 	bNodeTree *ntree = NULL;
 
@@ -1664,7 +1738,8 @@ void id_clear_lib_data(Main *bmain, ID *id)
 
 	id->lib = NULL;
 	id->tag &= ~(LIB_TAG_INDIRECT | LIB_TAG_EXTERN);
-	new_id(which_libbase(bmain, GS(id->name)), id, NULL);
+	if (id_in_mainlist)
+		new_id(which_libbase(bmain, GS(id->name)), id, NULL);
 
 	/* internal bNodeTree blocks inside ID types below
 	 * also stores id->lib, make sure this stays in sync.
@@ -1672,7 +1747,7 @@ void id_clear_lib_data(Main *bmain, ID *id)
 	ntree = ntreeFromID(id);
 
 	if (ntree) {
-		ntreeMakeLocal(ntree);
+		ntreeMakeLocal(ntree, false);
 	}
 
 	if (GS(id->name) == ID_OB) {
@@ -1683,6 +1758,11 @@ void id_clear_lib_data(Main *bmain, ID *id)
 		}
 		object->proxy = object->proxy_from = object->proxy_group = NULL;
 	}
+}
+
+void id_clear_lib_data(Main *bmain, ID *id)
+{
+	id_clear_lib_data_ex(bmain, id, true);
 }
 
 /* next to indirect usage in read/writefile also in editobject.c scene.c */
@@ -1748,39 +1828,6 @@ static void lib_indirect_test_id(ID *id, Library *lib)
 	}
 
 #undef LIBTAG
-}
-
-void BKE_main_id_tag_listbase(ListBase *lb, const bool tag)
-{
-	ID *id;
-	if (tag) {
-		for (id = lb->first; id; id = id->next) {
-			id->tag |= LIB_TAG_DOIT;
-		}
-	}
-	else {
-		for (id = lb->first; id; id = id->next) {
-			id->tag &= ~LIB_TAG_DOIT;
-		}
-	}
-}
-
-void BKE_main_id_tag_idcode(struct Main *mainvar, const short type, const bool tag)
-{
-	ListBase *lb = which_libbase(mainvar, type);
-
-	BKE_main_id_tag_listbase(lb, tag);
-}
-
-void BKE_main_id_tag_all(struct Main *mainvar, const bool tag)
-{
-	ListBase *lbarray[MAX_LIBARRAY];
-	int a;
-
-	a = set_listbasepointers(mainvar, lbarray);
-	while (a--) {
-		BKE_main_id_tag_listbase(lbarray[a], tag);
-	}
 }
 
 /* if lib!=NULL, only all from lib local

@@ -244,7 +244,8 @@ BMFace *BM_faces_join_pair(BMesh *bm, BMFace *f_a, BMFace *f_b, BMEdge *e, const
 	BLI_assert(l_a && l_b);
 
 	if (l_a->v == l_b->v) {
-		bmesh_loop_reverse(bm, f_b);
+		const int cd_loop_mdisp_offset = CustomData_get_offset(&bm->ldata, CD_MDISPS);
+		bmesh_loop_reverse(bm, f_b, cd_loop_mdisp_offset, true);
 	}
 	
 	return BM_faces_join(bm, faces, 2, do_del);
@@ -600,7 +601,7 @@ BMVert *BM_edge_split(BMesh *bm, BMEdge *e, BMVert *v, BMEdge **r_e, float fac)
 	BMFace **oldfaces = NULL;
 	BMEdge *e_dummy;
 	BLI_array_staticdeclare(oldfaces, 32);
-	const int cd_loop_mdisp_offset = CustomData_get_offset(&bm->ldata, CD_MDISPS);
+	const int cd_loop_mdisp_offset = BM_edge_is_wire(e) ? -1 : CustomData_get_offset(&bm->ldata, CD_MDISPS);
 
 	BLI_assert(BM_vert_in_edge(e, v) == true);
 

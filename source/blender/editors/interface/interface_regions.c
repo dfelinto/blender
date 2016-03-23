@@ -242,7 +242,7 @@ static void ui_tooltip_region_draw_cb(const bContext *UNUSED(C), ARegion *ar)
 	if (multisample_enabled)
 		glDisable(GL_MULTISAMPLE);
 
-	wmOrtho2_region_ui(ar);
+	wmOrtho2_region_pixelspace(ar);
 
 	/* draw background */
 	ui_draw_tooltip_background(UI_style_get(), NULL, &bbox);
@@ -354,24 +354,8 @@ static void ui_tooltip_region_free_cb(ARegion *ar)
 	ar->regiondata = NULL;
 }
 
-ARegion *ui_tooltip_create(bContext *C, ARegion *butregion, uiBut *but)
+static uiTooltipData *ui_tooltip_data_from_button(bContext *C, uiBut *but)
 {
-	const float pad_px = UI_TIP_PADDING;
-	wmWindow *win = CTX_wm_window(C);
-	uiStyle *style = UI_style_get();
-	static ARegionType type;
-	ARegion *ar;
-	uiTooltipData *data;
-/*	IDProperty *prop;*/
-	char buf[512];
-	/* aspect values that shrink text are likely unreadable */
-	const float aspect = min_ff(1.0f, but->block->aspect);
-	int fonth, fontw;
-	int winx, ofsx, ofsy, h, i;
-	rctf rect_fl;
-	rcti rect_i;
-	int font_flag = 0;
-
 	uiStringInfo but_tip = {BUT_GET_TIP, NULL};
 	uiStringInfo enum_label = {BUT_GET_RNAENUM_LABEL, NULL};
 	uiStringInfo enum_tip = {BUT_GET_RNAENUM_TIP, NULL};
@@ -380,11 +364,10 @@ ARegion *ui_tooltip_create(bContext *C, ARegion *butregion, uiBut *but)
 	uiStringInfo rna_struct = {BUT_GET_RNASTRUCT_IDENTIFIER, NULL};
 	uiStringInfo rna_prop = {BUT_GET_RNAPROP_IDENTIFIER, NULL};
 
-	if (but->drawflag & UI_BUT_NO_TOOLTIP)
-		return NULL;
+	char buf[512];
 
 	/* create tooltip data */
-	data = MEM_callocN(sizeof(uiTooltipData), "uiTooltipData");
+	uiTooltipData *data = MEM_callocN(sizeof(uiTooltipData), "uiTooltipData");
 
 	UI_but_string_info_get(C, but, &but_tip, &enum_label, &enum_tip, &op_keymap, &prop_keymap, &rna_struct, &rna_prop, NULL);
 
@@ -392,7 +375,7 @@ ARegion *ui_tooltip_create(bContext *C, ARegion *butregion, uiBut *but)
 	if (but_tip.strinfo) {
 		BLI_strncpy(data->header, but_tip.strinfo, sizeof(data->lines[0]));
 		if (enum_label.strinfo) {
-			BLI_snprintf(data->header, sizeof(data->header), "%s: ", but_tip.strinfo);
+			BLI_snprintf(data->header, sizeof(data->header), "%s:  ", but_tip.strinfo);
 			BLI_strncpy(data->active_info, enum_label.strinfo, sizeof(data->lines[0]));
 		}
 		data->format[data->totline].style = UI_TIP_STYLE_HEADER;
@@ -576,6 +559,36 @@ ARegion *ui_tooltip_create(bContext *C, ARegion *butregion, uiBut *but)
 		MEM_freeN(data);
 		return NULL;
 	}
+	else {
+		return data;
+	}
+}
+
+ARegion *ui_tooltip_create(bContext *C, ARegion *butregion, uiBut *but)
+{
+	const float pad_px = UI_TIP_PADDING;
+	wmWindow *win = CTX_wm_window(C);
+	const int winx = WM_window_pixels_x(win);
+	uiStyle *style = UI_style_get();
+	static ARegionType type;
+	ARegion *ar;
+/*	IDProperty *prop;*/
+	/* aspect values that shrink text are likely unreadable */
+	const float aspect = min_ff(1.0f, but->block->aspect);
+	int fonth, fontw;
+	int ofsx, ofsy, h, i;
+	rctf rect_fl;
+	rcti rect_i;
+	int font_flag = 0;
+
+	if (but->drawflag & UI_BUT_NO_TOOLTIP) {
+		return NULL;
+	}
+
+	uiTooltipData *data = ui_tooltip_data_from_button(C, but);
+	if (data == NULL) {
+		return NULL;
+	}
 
 	/* create area region */
 	ar = ui_region_temp_add(CTX_wm_screen(C));
@@ -592,7 +605,7 @@ ARegion *ui_tooltip_create(bContext *C, ARegion *butregion, uiBut *but)
 
 	UI_fontstyle_set(&data->fstyle);
 
-	data->wrap_width = min_ii(UI_TIP_MAXWIDTH * U.pixelsize / aspect, WM_window_pixels_x(win) - (UI_TIP_PADDING * 2));
+	data->wrap_width = min_ii(UI_TIP_MAXWIDTH * U.pixelsize / aspect, winx - (UI_TIP_PADDING * 2));
 
 	font_flag |= BLF_WORD_WRAP;
 	if (data->fstyle.kerning == 1) {
@@ -615,7 +628,8 @@ ARegion *ui_tooltip_create(bContext *C, ARegion *butregion, uiBut *but)
 
 		if (data->format[i].style == UI_TIP_STYLE_HEADER) {
 			w = BLF_width_ex(data->fstyle.uifont_id, data->header, sizeof(data->header), &info);
-			if (enum_label.strinfo) {
+			/* check for enum label */
+			if (data->active_info[0]) {
 				x_pos = info.width;
 				w = max_ii(w, x_pos + BLF_width(data->fstyle.uifont_id, data->active_info, sizeof(data->active_info)));
 			}
@@ -684,8 +698,6 @@ ARegion *ui_tooltip_create(bContext *C, ARegion *butregion, uiBut *but)
 #undef TIP_BORDER_Y
 
 	/* clip with window boundaries */
-	winx = WM_window_pixels_x(win);
-
 	if (rect_i.xmax > winx) {
 		/* super size */
 		if (rect_i.xmax > winx + rect_i.xmin) {
@@ -817,7 +829,7 @@ int UI_searchbox_size_y(void)
 
 int UI_searchbox_size_x(void)
 {
-	return 12 * UI_UNIT_X;
+	return 10 * UI_UNIT_X;
 }
 
 int UI_search_items_find_index(uiSearchItems *items, const char *name)
@@ -1073,7 +1085,7 @@ static void ui_searchbox_region_draw_cb(const bContext *UNUSED(C), ARegion *ar)
 	uiSearchboxData *data = ar->regiondata;
 	
 	/* pixel space */
-	wmOrtho2_region_ui(ar);
+	wmOrtho2_region_pixelspace(ar);
 
 	if (data->noback == false)
 		ui_draw_search_back(NULL, NULL, &data->bbox);  /* style not used yet */
@@ -1152,7 +1164,7 @@ static void ui_searchbox_region_free_cb(ARegion *ar)
 	ar->regiondata = NULL;
 }
 
-ARegion *ui_searchbox_create(bContext *C, ARegion *butregion, uiBut *but)
+ARegion *ui_searchbox_create_generic(bContext *C, ARegion *butregion, uiBut *but)
 {
 	wmWindow *win = CTX_wm_window(C);
 	uiStyle *style = UI_style_get();
@@ -1313,6 +1325,110 @@ ARegion *ui_searchbox_create(bContext *C, ARegion *butregion, uiBut *but)
 	for (i = 0; i < data->items.maxitem; i++)
 		data->items.names[i] = MEM_callocN(but->hardmax + 1, "search pointers");
 	
+	return ar;
+}
+
+/**
+ * Similar to Python's `str.title` except...
+ *
+ * - we know words are upper case and ascii only.
+ * - '_' are replaces by spaces.
+ */
+static void str_tolower_titlecaps_ascii(char *str, const size_t len)
+{
+	size_t i;
+	bool prev_delim = true;
+
+	for (i = 0; (i < len) && str[i]; i++) {
+		if (str[i] >= 'A' && str[i] <= 'Z') {
+			if (prev_delim == false) {
+				str[i] += 'a' - 'A';
+			}
+		}
+		else if (str[i] == '_') {
+			str[i] = ' ';
+		}
+
+		prev_delim = ELEM(str[i], ' ') || (str[i] >= '0' && str[i] <= '9');
+	}
+
+}
+
+static void ui_searchbox_region_draw_cb__operator(const bContext *UNUSED(C), ARegion *ar)
+{
+	uiSearchboxData *data = ar->regiondata;
+
+	/* pixel space */
+	wmOrtho2_region_pixelspace(ar);
+
+	if (data->noback == false)
+		ui_draw_search_back(NULL, NULL, &data->bbox);  /* style not used yet */
+
+	/* draw text */
+	if (data->items.totitem) {
+		rcti rect;
+		int a;
+
+		/* draw items */
+		for (a = 0; a < data->items.totitem; a++) {
+			rcti rect_pre, rect_post;
+			ui_searchbox_butrect(&rect, data, a);
+
+			rect_pre  = rect;
+			rect_post = rect;
+
+			rect_pre.xmax = rect_post.xmin = rect.xmin + ((rect.xmax - rect.xmin) / 4);
+
+			/* widget itself */
+			{
+				wmOperatorType *ot = data->items.pointers[a];
+
+				int state = (a == data->active) ? UI_ACTIVE : 0;
+				char  text_pre[128];
+				char *text_pre_p = strstr(ot->idname, "_OT_");
+				if (text_pre_p == NULL) {
+					text_pre[0] = '\0';
+				}
+				else {
+					int text_pre_len;
+					text_pre_p += 1;
+					text_pre_len = BLI_strncpy_rlen(
+					        text_pre, ot->idname, min_ii(sizeof(text_pre), text_pre_p - ot->idname));
+					text_pre[text_pre_len] = ':';
+					text_pre[text_pre_len + 1] = '\0';
+					str_tolower_titlecaps_ascii(text_pre, sizeof(text_pre));
+				}
+
+				rect_pre.xmax += 4;  /* sneaky, avoid showing ugly margin */
+				ui_draw_menu_item(&data->fstyle, &rect_pre, text_pre, data->items.icons[a], state, false);
+				ui_draw_menu_item(&data->fstyle, &rect_post, data->items.names[a], 0, state, data->use_sep);
+			}
+
+		}
+		/* indicate more */
+		if (data->items.more) {
+			ui_searchbox_butrect(&rect, data, data->items.maxitem - 1);
+			glEnable(GL_BLEND);
+			UI_icon_draw((BLI_rcti_size_x(&rect)) / 2, rect.ymin - 9, ICON_TRIA_DOWN);
+			glDisable(GL_BLEND);
+		}
+		if (data->items.offset) {
+			ui_searchbox_butrect(&rect, data, 0);
+			glEnable(GL_BLEND);
+			UI_icon_draw((BLI_rcti_size_x(&rect)) / 2, rect.ymax - 7, ICON_TRIA_UP);
+			glDisable(GL_BLEND);
+		}
+	}
+}
+
+ARegion *ui_searchbox_create_operator(bContext *C, ARegion *butregion, uiBut *but)
+{
+	ARegion *ar;
+
+	ar = ui_searchbox_create_generic(C, butregion, but);
+
+	ar->type->draw = ui_searchbox_region_draw_cb__operator;
+
 	return ar;
 }
 
@@ -1505,7 +1621,8 @@ static void ui_block_position(wmWindow *window, ARegion *butregion, uiBut *but, 
 				// yof = ysize; (not with menu scrolls)
 			}
 		}
-		
+
+#if 0 /* seems redundant and causes issues with blocks inside big regions */
 		/* or no space left or right */
 		if (left == 0 && right == 0) {
 			if (dir1 == UI_DIR_UP || dir1 == UI_DIR_DOWN) {
@@ -1513,7 +1630,8 @@ static void ui_block_position(wmWindow *window, ARegion *butregion, uiBut *but, 
 				xof = -block->rect.xmin + 5;
 			}
 		}
-		
+#endif
+
 #if 0
 		/* clamp to window bounds, could be made into an option if its ever annoying */
 		if (     (offscreen = (block->rect.ymin + yof)) < 0) yof -= offscreen;   /* bottom */
@@ -2828,6 +2946,8 @@ uiPieMenu *UI_pie_menu_begin(struct bContext *C, const char *title, int icon, co
 		}
 		/* do not align left */
 		but->drawflag &= ~UI_BUT_TEXT_LEFT;
+		pie->block_radial->pie_data.title = but->str;
+		pie->block_radial->pie_data.icon = icon;
 	}
 
 	return pie;
@@ -2938,6 +3058,101 @@ int UI_pie_menu_invoke_from_rna_enum(
 
 	return OPERATOR_INTERFACE;
 }
+
+/**
+ * \name Pie Menu Levels
+ *
+ * Pie menus can't contain more than 8 items (yet). When using #uiItemsFullEnumO, a "More" button is created that calls
+ * a new pie menu if the enum has too many items. We call this a new "level".
+ * Indirect recursion is used, so that a theoretically unlimited number of items is supported.
+ *
+ * This is a implementation specifically for operator enums, needed since the object mode pie now has more than 8
+ * items. Ideally we'd have some way of handling this for all kinds of pie items, but that's tricky.
+ *
+ * - Julian (Feb 2016)
+ *
+ * \{ */
+
+typedef struct PieMenuLevelData {
+	char title[UI_MAX_NAME_STR]; /* parent pie title, copied for level */
+	int icon; /* parent pie icon, copied for level */
+	int totitem; /* total count of *remaining* items */
+
+	/* needed for calling uiItemsFullEnumO_array again for new level */
+	wmOperatorType *ot;
+	const char *propname;
+	IDProperty *properties;
+	int context, flag;
+} PieMenuLevelData;
+
+/**
+ * Invokes a new pie menu for a new level.
+ */
+static void ui_pie_menu_level_invoke(bContext *C, void *argN, void *arg2)
+{
+	EnumPropertyItem *item_array = (EnumPropertyItem *)argN;
+	PieMenuLevelData *lvl = (PieMenuLevelData *)arg2;
+	wmWindow *win = CTX_wm_window(C);
+
+	uiPieMenu *pie = UI_pie_menu_begin(C, IFACE_(lvl->title), lvl->icon, win->eventstate);
+	uiLayout *layout = UI_pie_menu_layout(pie);
+
+	layout = uiLayoutRadial(layout);
+
+	PointerRNA ptr;
+
+	WM_operator_properties_create_ptr(&ptr, lvl->ot);
+	/* so the context is passed to itemf functions (some need it) */
+	WM_operator_properties_sanitize(&ptr, false);
+	PropertyRNA *prop = RNA_struct_find_property(&ptr, lvl->propname);
+
+	if (prop) {
+		uiItemsFullEnumO_items(
+		        layout, lvl->ot, ptr, prop, lvl->properties, lvl->context, lvl->flag,
+		        item_array, lvl->totitem);
+	}
+	else {
+		RNA_warning("%s.%s not found", RNA_struct_identifier(ptr.type), lvl->propname);
+	}
+
+	UI_pie_menu_end(C, pie);
+}
+
+/**
+ * Set up data for defining a new pie menu level and add button that invokes it.
+ */
+void ui_pie_menu_level_create(
+        uiBlock *block, wmOperatorType *ot, const char *propname, IDProperty *properties,
+        const EnumPropertyItem *items, int totitem, int context, int flag)
+{
+	const int totitem_parent = PIE_MAX_ITEMS - 1;
+	const int totitem_remain = totitem - totitem_parent;
+	size_t array_size = sizeof(EnumPropertyItem) * totitem_remain;
+
+	/* used as but->func_argN so freeing is handled elsewhere */
+	EnumPropertyItem *remaining = MEM_mallocN(array_size + sizeof(EnumPropertyItem), "pie_level_item_array");
+	memcpy(remaining, items + totitem_parent, array_size);
+	/* a NULL terminating sentinal element is required */
+	memset(&remaining[totitem_remain], 0, sizeof(EnumPropertyItem));
+
+
+	/* yuk, static... issue is we can't reliably free this without doing dangerous changes */
+	static PieMenuLevelData lvl;
+	BLI_strncpy(lvl.title, block->pie_data.title, UI_MAX_NAME_STR);
+	lvl.totitem    = totitem_remain;
+	lvl.ot         = ot;
+	lvl.propname   = propname;
+	lvl.properties = properties;
+	lvl.context    = context;
+	lvl.flag       = flag;
+
+	/* add a 'more' menu entry */
+	uiBut *but = uiDefIconTextBut(block, UI_BTYPE_BUT, 0, ICON_PLUS, "More", 0, 0, UI_UNIT_X * 3, UI_UNIT_Y, NULL,
+	                              0.0f, 0.0f, 0.0f, 0.0f, "Show more items of this menu");
+	UI_but_funcN_set(but, ui_pie_menu_level_invoke, remaining, &lvl);
+}
+
+/** \} */ /* Pie Menu Levels */
 
 
 /*************************** Standard Popup Menus ****************************/

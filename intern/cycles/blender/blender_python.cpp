@@ -39,6 +39,10 @@ CCL_NAMESPACE_BEGIN
 
 namespace {
 
+/* Device list stored static (used by compute_device_list()). */
+static ccl::vector<CCLDeviceInfo> device_list;
+static ccl::DeviceType device_type = DEVICE_NONE;
+
 /* Flag describing whether debug flags were synchronized from scene. */
 bool debug_flags_set = false;
 
@@ -134,19 +138,29 @@ void python_thread_state_restore(void **python_thread_state)
 
 static const char *PyC_UnicodeAsByte(PyObject *py_str, PyObject **coerce)
 {
-#ifdef WIN32
-	/* bug [#31856] oddly enough, Python3.2 --> 3.3 on Windows will throw an
-	 * exception here this needs to be fixed in python:
-	 * see: bugs.python.org/issue15859 */
-	if(!PyUnicode_Check(py_str)) {
-		PyErr_BadArgument();
-		return "";
+	const char *result = _PyUnicode_AsString(py_str);
+	if(result) {
+		/* 99% of the time this is enough but we better support non unicode
+		 * chars since blender doesnt limit this.
+		 */
+		return result;
 	}
-#endif
-	if((*coerce = PyUnicode_EncodeFSDefault(py_str))) {
-		return PyBytes_AS_STRING(*coerce);
+	else {
+		PyErr_Clear();
+		if(PyBytes_Check(py_str)) {
+			return PyBytes_AS_STRING(py_str);
+		}
+		else if((*coerce = PyUnicode_EncodeFSDefault(py_str))) {
+			return PyBytes_AS_STRING(*coerce);
+		}
+		else {
+			/* Clear the error, so Cycles can be at leadt used without
+			 * GPU and OSL support,
+			 */
+			PyErr_Clear();
+			return "";
+		}
 	}
-	return "";
 }
 
 static PyObject *init_func(PyObject * /*self*/, PyObject *args)
@@ -169,6 +183,16 @@ static PyObject *init_func(PyObject * /*self*/, PyObject *args)
 	VLOG(2) << "Debug flags initialized to:\n"
 	        << DebugFlags();
 
+	Py_RETURN_NONE;
+}
+
+
+static PyObject *exit_func(PyObject * /*self*/, PyObject * /*args*/)
+{
+	ShaderManager::free_memory();
+	TaskScheduler::free_memory();
+	Device::free_memory();
+	device_list.free_memory();
 	Py_RETURN_NONE;
 }
 
@@ -616,6 +640,7 @@ static PyObject *debug_flags_reset_func(PyObject * /*self*/, PyObject * /*args*/
 
 static PyMethodDef methods[] = {
 	{"init", init_func, METH_VARARGS, ""},
+	{"exit", exit_func, METH_VARARGS, ""},
 	{"create", create_func, METH_VARARGS, ""},
 	{"free", free_func, METH_O, ""},
 	{"render", render_func, METH_O, ""},
@@ -648,10 +673,6 @@ static struct PyModuleDef module = {
 
 static CCLDeviceInfo *compute_device_list(DeviceType type)
 {
-	/* device list stored static */
-	static ccl::vector<CCLDeviceInfo> device_list;
-	static ccl::DeviceType device_type = DEVICE_NONE;
-
 	/* create device list if it's not already done */
 	if(type != device_type) {
 		ccl::vector<DeviceInfo>& devices = ccl::Device::available_devices();

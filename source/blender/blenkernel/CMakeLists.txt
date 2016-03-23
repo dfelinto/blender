@@ -412,6 +412,13 @@ if(WITH_PYTHON)
 	if(WITH_PYTHON_SECURITY)
 		add_definitions(-DWITH_PYTHON_SECURITY)
 	endif()
+
+
+	if (PYTHON_EXECUTABLE)
+		get_filename_component(_python_exe_name ${PYTHON_EXECUTABLE} NAME)
+		add_definitions(-DPYTHON_EXECUTABLE_NAME=${_python_exe_name})
+		unset(_python_exe_name)
+	endif()
 endif()
 
 if(WITH_MOD_FLUID)
@@ -470,20 +477,6 @@ if(WITH_LIBMV)
 	add_definitions(-DWITH_LIBMV)
 endif()
 
-if(WITH_LIBMV_WERROR)
-	if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_C_COMPILER_ID MATCHES "Clang")
-		set_source_files_properties(intern/tracking.c
-		                            intern/tracking_auto.c
-		                            intern/tracking_detect.c
-		                            intern/tracking_plane_tracker.c
-		                            intern/tracking_region_tracker.c
-		                            intern/tracking_solver.c
-		                            intern/tracking_stabilize.c
-		                            intern/tracking_util.c
-		                            PROPERTIES COMPILE_FLAGS -Werror)
-	endif()
-endif()
-
 if(WITH_FFTW3)
 	list(APPEND INC_SYS
 		${FFTW3_INCLUDE_DIRS}
@@ -505,16 +498,6 @@ if(WITH_OPENSUBDIV)
 		../../../intern/opensubdiv
 		${OPENSUBDIV_INCLUDE_DIRS}
 	)
-	if(WITH_SUBSURF_WERROR)
-		if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_C_COMPILER_ID MATCHES "Clang")
-			set_source_files_properties(intern/CCGSubSurf.c
-			                            intern/CCGSubSurf_legacy.c
-			                            intern/CCGSubSurf_opensubdiv.c
-			                            intern/CCGSubSurf_opensubdiv_converter.c
-			                            intern/CCGSubSurf_util.c
-			                            PROPERTIES COMPILE_FLAGS -Werror)
-		endif()
-	endif()
 endif()
 
 if(WITH_OPENVDB)

@@ -247,7 +247,7 @@ void DepsgraphNodeBuilder::build_scene(Main *bmain, Scene *scene)
 	 * shouldn't bother with setting it, they only might query this flag when
 	 * needed.
 	 */
-	BKE_main_id_tag_all(bmain, false);
+	BKE_main_id_tag_all(bmain, LIB_TAG_DOIT, false);
 
 	/* scene ID block */
 	add_id_node(&scene->id);
@@ -777,6 +777,14 @@ void DepsgraphNodeBuilder::build_rig(Scene *scene, Object *ob)
 			ob->adt->recalc |= ADT_RECALC_ANIM;
 		}
 	}
+
+	/* Make sure pose is up-to-date with armature updates. */
+	add_operation_node(&arm->id,
+	                   DEPSNODE_TYPE_PARAMETERS,
+	                   DEPSOP_TYPE_EXEC,
+	                   NULL,
+	                   DEG_OPCODE_PLACEHOLDER,
+	                   "Armature Eval");
 
 	/**
 	 * Pose Rig Graph

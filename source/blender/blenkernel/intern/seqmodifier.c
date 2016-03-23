@@ -184,7 +184,6 @@ static void whiteBalance_init_data(SequenceModifierData *smd)
 }
 
 typedef struct WhiteBalanceThreadData {
-	struct ColorSpace *colorspace;
 	float white[3];
 } WhiteBalanceThreadData;
 
@@ -196,9 +195,9 @@ static void whiteBalance_apply_threaded(int width, int height, unsigned char *re
 
 	WhiteBalanceThreadData *data = (WhiteBalanceThreadData *) data_v;
 
-	multiplier[0] = 1.0f / data->white[0];
-	multiplier[1] = 1.0f / data->white[1];
-	multiplier[2] = 1.0f / data->white[2];
+	multiplier[0] = (data->white[0] != 0.0f) ? 1.0f / data->white[0] : FLT_MAX;
+	multiplier[1] = (data->white[1] != 0.0f) ? 1.0f / data->white[1] : FLT_MAX;
+	multiplier[2] = (data->white[2] != 0.0f) ? 1.0f / data->white[2] : FLT_MAX;
 
 	for (y = 0; y < height; y++) {
 		for (x = 0; x < width; x++) {
@@ -210,10 +209,16 @@ static void whiteBalance_apply_threaded(int width, int height, unsigned char *re
 			}
 			else {
 				straight_uchar_to_premul_float(result, rect + pixel_index);
-				IMB_colormanagement_colorspace_to_scene_linear_v3(result, data->colorspace);
 			}
 
+#if 0
 			mul_v3_v3(result, multiplier);
+#else
+			/* similar to division without the clipping */
+			for (int i = 0; i < 3; i++) {
+				result[i] = 1.0f - powf(1.0f - result[i], multiplier[i]);
+			}
+#endif
 
 			if (mask_rect_float) {
 				copy_v3_v3(mask, mask_rect_float + pixel_index);
@@ -230,7 +235,6 @@ static void whiteBalance_apply_threaded(int width, int height, unsigned char *re
 				copy_v3_v3(rect_float + pixel_index, result);
 			}
 			else {
-				IMB_colormanagement_scene_linear_to_colorspace_v3(result, data->colorspace);
 				premul_float_to_straight_uchar(rect + pixel_index, result);
 			}
 		}
@@ -243,9 +247,6 @@ static void whiteBalance_apply(SequenceModifierData *smd, ImBuf *ibuf, ImBuf *ma
 	WhiteBalanceModifierData *wbmd = (WhiteBalanceModifierData *) smd;
 
 	copy_v3_v3(data.white, wbmd->white_value);
-	IMB_colormanagement_display_to_scene_linear_v3(data.white,
-	                                               IMB_colormanagement_display_get_named(wbmd->modifier.scene->display_settings.display_device));
-	data.colorspace = ibuf->rect_colorspace;
 
 	modifier_apply_threaded(ibuf, mask, whiteBalance_apply_threaded, &data);
 }
@@ -883,7 +884,7 @@ const SequenceModifierTypeInfo *BKE_sequence_modifier_type_info_get(int type)
 	return modifiersTypes[type];
 }
 
-SequenceModifierData *BKE_sequence_modifier_new(Sequence *seq, const char *name, int type, struct Scene *scene)
+SequenceModifierData *BKE_sequence_modifier_new(Sequence *seq, const char *name, int type)
 {
 	SequenceModifierData *smd;
 	const SequenceModifierTypeInfo *smti = BKE_sequence_modifier_type_info_get(type);
@@ -892,7 +893,6 @@ SequenceModifierData *BKE_sequence_modifier_new(Sequence *seq, const char *name,
 
 	smd->type = type;
 	smd->flag |= SEQUENCE_MODIFIER_EXPANDED;
-	smd->scene = scene;
 
 	if (!name || !name[0])
 		BLI_strncpy(smd->name, smti->name, sizeof(smd->name));

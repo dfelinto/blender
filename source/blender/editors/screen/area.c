@@ -502,7 +502,7 @@ void ED_region_do_draw(bContext *C, ARegion *ar)
 	/* note; this sets state, so we can use wmOrtho and friends */
 	wmSubWindowScissorSet(win, ar->swinid, &ar->drawrct, scissor_pad);
 
-	wmOrtho2_region_ui(ar);
+	wmOrtho2_region_pixelspace(ar);
 	
 	UI_SetTheme(sa ? sa->spacetype : 0, at->regionid);
 	
@@ -1339,7 +1339,7 @@ static void area_calc_totrct(ScrArea *sa, int sizex, int sizey)
 
 
 /* used for area initialize below */
-static void region_subwindow(wmWindow *win, ARegion *ar)
+static void region_subwindow(wmWindow *win, ARegion *ar, bool activate)
 {
 	bool hidden = (ar->flag & (RGN_FLAG_HIDDEN | RGN_FLAG_TOO_SMALL)) != 0;
 
@@ -1351,10 +1351,12 @@ static void region_subwindow(wmWindow *win, ARegion *ar)
 			wm_subwindow_close(win, ar->swinid);
 		ar->swinid = 0;
 	}
-	else if (ar->swinid == 0)
-		ar->swinid = wm_subwindow_open(win, &ar->winrct);
-	else 
-		wm_subwindow_position(win, ar->swinid, &ar->winrct);
+	else if (ar->swinid == 0) {
+		ar->swinid = wm_subwindow_open(win, &ar->winrct, activate);
+	}
+	else {
+		wm_subwindow_position(win, ar->swinid, &ar->winrct, activate);
+	}
 }
 
 static void ed_default_handlers(wmWindowManager *wm, ScrArea *sa, ListBase *handlers, int flag)
@@ -1457,7 +1459,7 @@ void ED_area_initialize(wmWindowManager *wm, wmWindow *win, ScrArea *sa)
 	
 	/* region windows, default and own handlers */
 	for (ar = sa->regionbase.first; ar; ar = ar->next) {
-		region_subwindow(win, ar);
+		region_subwindow(win, ar, false);
 		
 		if (ar->swinid) {
 			/* default region handlers */
@@ -1498,10 +1500,10 @@ void ED_region_update_rect(bContext *C, ARegion *ar)
 void ED_region_init(bContext *C, ARegion *ar)
 {
 //	ARegionType *at = ar->type;
-	
+
 	/* refresh can be called before window opened */
-	region_subwindow(CTX_wm_window(C), ar);
-	
+	region_subwindow(CTX_wm_window(C), ar, false);
+
 	region_update_rect(ar);
 }
 
@@ -1609,14 +1611,30 @@ void ED_area_swapspace(bContext *C, ScrArea *sa1, ScrArea *sa2)
 	ED_area_tag_refresh(sa2);
 }
 
-void ED_area_newspace(bContext *C, ScrArea *sa, int type)
+/**
+ * \param skip_ar_exit  Skip calling area exit callback. Set for opening temp spaces.
+ */
+void ED_area_newspace(bContext *C, ScrArea *sa, int type, const bool skip_ar_exit)
 {
 	if (sa->spacetype != type) {
 		SpaceType *st;
 		SpaceLink *slold;
 		SpaceLink *sl;
+		/* store sa->type->exit callback */
+		void *sa_exit = sa->type ? sa->type->exit : NULL;
+
+		/* in some cases (opening temp space) we don't want to
+		 * call area exit callback, so we temporarily unset it */
+		if (skip_ar_exit && sa->type) {
+			sa->type->exit = NULL;
+		}
 
 		ED_area_exit(C, sa);
+
+		/* restore old area exit callback */
+		if (skip_ar_exit && sa->type) {
+			sa->type->exit = sa_exit;
+		}
 
 		st = BKE_spacetype_from_id(type);
 		slold = sa->spacedata.first;
@@ -1684,12 +1702,12 @@ void ED_area_prevspace(bContext *C, ScrArea *sa)
 	SpaceLink *sl = sa->spacedata.first;
 
 	if (sl && sl->next) {
-		/* workaround for case of double prevspace, render window
-		 * with a file browser on top of it */
-		if (sl->next->spacetype == SPACE_FILE && sl->next->next)
-			ED_area_newspace(C, sa, sl->next->next->spacetype);
-		else
-			ED_area_newspace(C, sa, sl->next->spacetype);
+		ED_area_newspace(C, sa, sl->next->spacetype, false);
+
+		/* keep old spacedata but move it to end, so calling
+		 * ED_area_prevspace once more won't open it again */
+		BLI_remlink(&sa->spacedata, sl);
+		BLI_addtail(&sa->spacedata, sl);
 	}
 	else {
 		/* no change */

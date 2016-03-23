@@ -126,6 +126,10 @@ class VIEW3D_HT_header(Header):
 
             layout.prop(context.gpencil_data, "use_onion_skinning", text="Onion Skins", icon='PARTICLE_PATH') # XXX: icon
 
+            layout.prop(context.tool_settings.gpencil_sculpt, "use_select_mask")
+
+
+
 
 class VIEW3D_MT_editor_menus(Menu):
     bl_space_type = 'VIEW3D_MT_editor_menus'
@@ -471,8 +475,8 @@ class VIEW3D_MT_view_navigation(Menu):
 
         layout.separator()
 
-        layout.operator("view3d.view_roll", text="Roll Left").angle = pi / -12.0
-        layout.operator("view3d.view_roll", text="Roll Right").angle = pi / 12.0
+        layout.operator("view3d.view_roll", text="Roll Left").type = 'LEFT'
+        layout.operator("view3d.view_roll", text="Roll Right").type = 'RIGHT'
 
         layout.separator()
 
@@ -874,7 +878,6 @@ class VIEW3D_MT_select_edit_text(Menu):
         layout.separator()
 
         layout.operator("font.text_paste_from_file")
-        layout.operator("font.text_paste_from_clipboard")
 
         layout.separator()
 
@@ -971,7 +974,7 @@ class VIEW3D_MT_select_edit_armature(Menu):
 
 class VIEW3D_MT_select_gpencil(Menu):
     bl_label = "Select"
-    
+
     def draw(self, context):
         layout = self.layout
 
@@ -1223,6 +1226,8 @@ class VIEW3D_MT_object(Menu):
 
     def draw(self, context):
         layout = self.layout
+        view = context.space_data
+        is_local_view = (view.local_view is not None)
 
         layout.operator("ed.undo")
         layout.operator("ed.redo")
@@ -1274,7 +1279,13 @@ class VIEW3D_MT_object(Menu):
 
         layout.separator()
 
-        layout.operator("object.move_to_layer", text="Move to Layer...")
+        if is_local_view:
+            layout.operator_context = 'EXEC_REGION_WIN'
+            layout.operator("object.move_to_layer", text="Move out of Local View")
+            layout.operator_context = 'INVOKE_REGION_WIN'
+        else:
+            layout.operator("object.move_to_layer", text="Move to Layer...")
+
         layout.menu("VIEW3D_MT_object_showhide")
 
         layout.operator_menu_enum("object.convert", "target")
@@ -2916,6 +2927,7 @@ class VIEW3D_MT_edit_armature_roll(Menu):
         layout.separator()
 
         layout.operator("transform.transform", text="Set Roll").mode = 'BONE_ROLL'
+        layout.operator("armature.roll_clear")
 
 
 class VIEW3D_MT_edit_armature_delete(Menu):
@@ -2936,7 +2948,7 @@ class VIEW3D_MT_edit_armature_delete(Menu):
 
 class VIEW3D_MT_edit_gpencil(Menu):
     bl_label = "GPencil"
-    
+
     def draw(self, context):
         toolsettings = context.tool_settings
 

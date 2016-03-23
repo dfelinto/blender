@@ -39,6 +39,7 @@
 #include "BLI_noise.h"
 #include "BLI_kdopbvh.h"
 #include "BLI_utildefines.h"
+#include "BLI_task.h"
 
 #include "BLT_translation.h"
 
@@ -434,11 +435,13 @@ typedef struct PointDensityRangeData {
 	float velscale;
 } PointDensityRangeData;
 
-static void accum_density(void *userdata, int index, float squared_dist)
+static void accum_density(void *userdata, int index, const float co[3], float squared_dist)
 {
 	PointDensityRangeData *pdr = (PointDensityRangeData *)userdata;
 	const float dist = (pdr->squared_radius - squared_dist) / pdr->squared_radius * 0.5f;
 	float density = 0.0f;
+
+	UNUSED_VARS(co);
 
 	if (pdr->point_data_used & POINT_DATA_VEL) {
 		pdr->vec[0] += pdr->point_data[index * 3 + 0]; // * density;
@@ -738,6 +741,7 @@ void RE_point_density_minmax(
 	if (object == NULL) {
 		zero_v3(r_min);
 		zero_v3(r_max);
+		return;
 	}
 	if (pd->source == TEX_PD_PSYS) {
 		ParticleSystem *psys;
@@ -762,12 +766,57 @@ void RE_point_density_minmax(
 	else {
 		float radius[3] = {pd->radius, pd->radius, pd->radius};
 		float *loc, *size;
-		BKE_object_obdata_texspace_get(pd->object, NULL, &loc, &size, NULL);
-		sub_v3_v3v3(r_min, loc, size);
-		add_v3_v3v3(r_max, loc, size);
-		/* Adjust texture space to include density points on the boundaries. */
-		sub_v3_v3(r_min, radius);
-		add_v3_v3(r_max, radius);
+
+		if (BKE_object_obdata_texspace_get(pd->object, NULL, &loc, &size, NULL)) {
+			sub_v3_v3v3(r_min, loc, size);
+			add_v3_v3v3(r_max, loc, size);
+			/* Adjust texture space to include density points on the boundaries. */
+			sub_v3_v3(r_min, radius);
+			add_v3_v3(r_max, radius);
+		}
+		else {
+			zero_v3(r_min);
+			zero_v3(r_max);
+		}
+	}
+}
+
+typedef struct SampleCallbackData {
+	PointDensity *pd;
+	int resolution;
+	float *min, *dim;
+	float *values;
+} SampleCallbackData;
+
+static void point_density_sample_func(void *data_v, const int iter)
+{
+	SampleCallbackData *data = (SampleCallbackData *)data_v;
+
+	const int resolution = data->resolution;
+	const int resolution2 = resolution * resolution;
+	const float *min = data->min, *dim = data->dim;
+	PointDensity *pd = data->pd;
+	float *values = data->values;
+
+	size_t z = (size_t)iter;
+	for (size_t y = 0; y < resolution; ++y) {
+		for (size_t x = 0; x < resolution; ++x) {
+			size_t index = z * resolution2 + y * resolution + x;
+			float texvec[3];
+			float age, vec[3];
+			TexResult texres;
+
+			copy_v3_v3(texvec, min);
+			texvec[0] += dim[0] * (float)x / (float)resolution;
+			texvec[1] += dim[1] * (float)y / (float)resolution;
+			texvec[2] += dim[2] * (float)z / (float)resolution;
+
+			pointdensity(pd, texvec, &texres, &age, vec);
+			pointdensity_color(pd, &texres, age, vec);
+
+			copy_v3_v3(&values[index*4 + 0], &texres.tr);
+			values[index*4 + 3] = texres.tin;
+		}
 	}
 }
 
@@ -781,9 +830,7 @@ void RE_point_density_sample(
         const bool use_render_params,
         float *values)
 {
-	const size_t resolution2 = resolution * resolution;
 	Object *object = pd->object;
-	size_t x, y, z;
 	float min[3], max[3], dim[3];
 
 	/* TODO(sergey): Implement some sort of assert() that point density
@@ -795,39 +842,35 @@ void RE_point_density_sample(
 		return;
 	}
 
+	BLI_mutex_lock(&sample_mutex);
 	RE_point_density_minmax(scene,
 	                        pd,
 	                        use_render_params,
 	                        min,
 	                        max);
+	BLI_mutex_unlock(&sample_mutex);
 	sub_v3_v3v3(dim, max, min);
 	if (dim[0] <= 0.0f || dim[1] <= 0.0f || dim[2] <= 0.0f) {
 		sample_dummy_point_density(resolution, values);
 		return;
 	}
 
-	BLI_mutex_lock(&sample_mutex);
-	for (z = 0; z < resolution; ++z) {
-		for (y = 0; y < resolution; ++y) {
-			for (x = 0; x < resolution; ++x) {
-				size_t index = z * resolution2 + y * resolution + x;
-				float texvec[3];
-				float age, vec[3];
-				TexResult texres;
+	SampleCallbackData data;
+	data.pd = pd;
+	data.resolution = resolution;
+	data.min = min;
+	data.dim = dim;
+	data.values = values;
+	BLI_task_parallel_range(0,
+	                        resolution,
+	                        &data,
+	                        point_density_sample_func,
+	                        resolution > 32);
 
-				copy_v3_v3(texvec, min);
-				texvec[0] += dim[0] * (float)x / (float)resolution;
-				texvec[1] += dim[1] * (float)y / (float)resolution;
-				texvec[2] += dim[2] * (float)z / (float)resolution;
-
-				pointdensity(pd, texvec, &texres, &age, vec);
-				pointdensity_color(pd, &texres, age, vec);
-
-				copy_v3_v3(&values[index*4 + 0], &texres.tr);
-				values[index*4 + 3] = texres.tin;
-			}
-		}
-	}
 	free_pointdensity(pd);
-	BLI_mutex_unlock(&sample_mutex);
+}
+
+void RE_point_density_free(struct PointDensity *pd)
+{
+	free_pointdensity(pd);
 }

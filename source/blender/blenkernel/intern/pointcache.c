@@ -1107,15 +1107,15 @@ static int ptcache_smoke_openvdb_read(struct OpenVDBReader *reader, void *smoke_
 
 		OpenVDB_import_grid_fl(reader, "shadow", &sds->shadow, sds->res);
 
-		const char *name = (!sds->wt) ? "density" : "density Low";
+		const char *name = (!sds->wt) ? "density" : "density low";
 		OpenVDB_import_grid_fl(reader, name, &dens, sds->res);
 
-		if (fluid_fields & SM_ACTIVE_HEAT) {
+		if (cache_fields & SM_ACTIVE_HEAT) {
 			OpenVDB_import_grid_fl(reader, "heat", &heat, sds->res);
 			OpenVDB_import_grid_fl(reader, "heat old", &heatold, sds->res);
 		}
 
-		if (fluid_fields & SM_ACTIVE_FIRE) {
+		if (cache_fields & SM_ACTIVE_FIRE) {
 			name = (!sds->wt) ? "flame" : "flame low";
 			OpenVDB_import_grid_fl(reader, name, &flame, sds->res);
 			name = (!sds->wt) ? "fuel" : "fuel low";
@@ -1124,7 +1124,7 @@ static int ptcache_smoke_openvdb_read(struct OpenVDBReader *reader, void *smoke_
 			OpenVDB_import_grid_fl(reader, name, &react, sds->res);
 		}
 
-		if (fluid_fields & SM_ACTIVE_COLORS) {
+		if (cache_fields & SM_ACTIVE_COLORS) {
 			name = (!sds->wt) ? "color" : "color low";
 			OpenVDB_import_grid_vec(reader, name, &r, &g, &b, sds->res);
 		}
@@ -1886,9 +1886,6 @@ static PTCacheFile *ptcache_file_open(PTCacheID *pid, int mode, int cfra)
 	ptcache_filename(pid, filename, cfra, 1, 1);
 
 	if (mode==PTCACHE_FILE_READ) {
-		if (!BLI_exists(filename)) {
-			return NULL;
-		}
 		fp = BLI_fopen(filename, "rb");
 	}
 	else if (mode==PTCACHE_FILE_WRITE) {
@@ -3683,9 +3680,6 @@ void BKE_ptcache_bake(PTCacheBaker *baker)
 
 			ptime = ctime;
 		}
-
-		/* Delay to lessen CPU load from UI thread */
-		PIL_sleep_ms(200);
 
 		/* NOTE: breaking baking should leave calculated frames in cache, not clear it */
 		if ((cancel || G.is_break)) {

@@ -1792,9 +1792,12 @@ static int wm_handler_fileselect_do(bContext *C, ListBase *handlers, wmEventHand
 				if (sa->prev) {
 					sa = sa->prev;
 				}
-				ED_area_newspace(C, sa, SPACE_FILE);     /* 'sa' is modified in-place */
+				ED_area_newspace(C, sa, SPACE_FILE, true);     /* 'sa' is modified in-place */
 				/* we already had a fullscreen here -> mark new space as a stacked fullscreen */
-				sa->flag |= AREA_FLAG_STACKED_FULLSCREEN;
+				sa->flag |= (AREA_FLAG_STACKED_FULLSCREEN | AREA_FLAG_TEMP_TYPE);
+			}
+			else if (sa->spacetype == SPACE_FILE) {
+				sa = ED_screen_state_toggle(C, CTX_wm_window(C), sa, SCREENMAXIMIZED);
 			}
 			else {
 				sa = ED_screen_full_newspace(C, sa, SPACE_FILE);    /* sets context */
@@ -1823,11 +1826,9 @@ static int wm_handler_fileselect_do(bContext *C, ListBase *handlers, wmEventHand
 
 			if (val != EVT_FILESELECT_EXTERNAL_CANCEL) {
 				ScrArea *sa = CTX_wm_area(C);
-				const SpaceLink *sl = sa->spacedata.first;
-				const bool was_prev_temp = (sl->next && sl->next->spacetype == SPACE_IMAGE);
 
 				if (sa->full) {
-					ED_screen_full_prevspace(C, sa, was_prev_temp);
+					ED_screen_full_prevspace(C, sa);
 				}
 				/* user may have left fullscreen */
 				else {
@@ -1890,7 +1891,9 @@ static int wm_handler_fileselect_do(bContext *C, ListBase *handlers, wmEventHand
 					WM_operator_last_properties_store(handler->op);
 				}
 
-				WM_operator_free(handler->op);
+				if (retval & (OPERATOR_CANCELLED | OPERATOR_FINISHED)) {
+					WM_operator_free(handler->op);
+				}
 			}
 			else {
 				if (handler->op->type->cancel) {
@@ -3408,11 +3411,12 @@ void wm_event_add_ghostevent(wmWindowManager *wm, wmWindow *win, int type, int U
 			if (event.keymodifier == event.type)
 				event.keymodifier = 0;
 						
-			/* this case happened with an external numpad, it's not really clear
-			 * why, but it's also impossible to map a key modifier to an unknown
-			 * key, so it shouldn't harm */
-			if (event.keymodifier == UNKNOWNKEY)
-				event.keymodifier = 0;
+			/* this case happens with an external numpad, and also when using 'dead keys' (to compose complex latin
+			 * characters e.g.), it's not really clear why.
+			 * Since it's impossible to map a key modifier to an unknown key, it shouldn't harm to clear it. */
+			if (event.keymodifier == UNKNOWNKEY) {
+				evt->keymodifier = event.keymodifier = 0;
+			}
 			
 			/* if test_break set, it catches this. Do not set with modifier presses. XXX Keep global for now? */
 			if ((event.type == ESCKEY && event.val == KM_PRESS) &&

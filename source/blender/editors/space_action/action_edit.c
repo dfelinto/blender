@@ -667,6 +667,7 @@ static void insert_action_keys(bAnimContext *ac, short mode)
 	
 	ReportList *reports = ac->reports;
 	Scene *scene = ac->scene;
+	ToolSettings *ts = scene->toolsettings;
 	short flag = 0;
 	
 	/* filter data */
@@ -698,9 +699,9 @@ static void insert_action_keys(bAnimContext *ac, short mode)
 		 *                       (TODO: add the full-blown PointerRNA relative parsing case here...)
 		 */
 		if (ale->id && !ale->owner)
-			insert_keyframe(reports, ale->id, NULL, ((fcu->grp) ? (fcu->grp->name) : (NULL)), fcu->rna_path, fcu->array_index, cfra, flag);
+			insert_keyframe(reports, ale->id, NULL, ((fcu->grp) ? (fcu->grp->name) : (NULL)), fcu->rna_path, fcu->array_index, cfra, ts->keyframe_type, flag);
 		else
-			insert_vert_fcurve(fcu, cfra, fcu->curval, 0);
+			insert_vert_fcurve(fcu, cfra, fcu->curval, ts->keyframe_type, 0);
 		
 		ale->update |= ANIM_UPDATE_DEFAULT;
 	}
@@ -902,16 +903,16 @@ static bool delete_action_keys(bAnimContext *ac)
 				ale->key_data = NULL;
 			}
 		}
-
+		
 		if (changed) {
 			ale->update |= ANIM_UPDATE_DEFAULT;
 			changed_final = true;
 		}
 	}
-
+	
 	ANIM_animdata_update(ac, &anim_data);
 	ANIM_animdata_freelist(&anim_data);
-
+	
 	return changed_final;
 }
 
@@ -1586,9 +1587,9 @@ static void snap_action_keys(bAnimContext *ac, short mode)
 			ED_masklayer_snap_frames(ale->data, ac->scene, mode);
 		}
 		else if (adt) {
-			ANIM_nla_mapping_apply_fcurve(adt, ale->key_data, 0, 1); 
+			ANIM_nla_mapping_apply_fcurve(adt, ale->key_data, 0, 0); 
 			ANIM_fcurve_keyframes_loop(&ked, ale->key_data, NULL, edit_cb, calchandles_fcurve);
-			ANIM_nla_mapping_apply_fcurve(adt, ale->key_data, 1, 1);
+			ANIM_nla_mapping_apply_fcurve(adt, ale->key_data, 1, 0);
 		}
 		else {
 			ANIM_fcurve_keyframes_loop(&ked, ale->key_data, NULL, edit_cb, calchandles_fcurve);
@@ -1700,9 +1701,9 @@ static void mirror_action_keys(bAnimContext *ac, short mode)
 			/* TODO */
 		}
 		else if (adt) {
-			ANIM_nla_mapping_apply_fcurve(adt, ale->key_data, 0, 1); 
+			ANIM_nla_mapping_apply_fcurve(adt, ale->key_data, 0, 0); 
 			ANIM_fcurve_keyframes_loop(&ked, ale->key_data, NULL, edit_cb, calchandles_fcurve);
-			ANIM_nla_mapping_apply_fcurve(adt, ale->key_data, 1, 1);
+			ANIM_nla_mapping_apply_fcurve(adt, ale->key_data, 1, 0);
 		}
 		else {
 			ANIM_fcurve_keyframes_loop(&ked, ale->key_data, NULL, edit_cb, calchandles_fcurve);

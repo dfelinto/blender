@@ -42,22 +42,29 @@ CCL_NAMESPACE_BEGIN
 
 /* Constructor */
 
-BlenderSync::BlenderSync(BL::RenderEngine b_engine_, BL::BlendData b_data_, BL::Scene b_scene_, Scene *scene_, bool preview_, Progress &progress_, bool is_cpu_)
-: b_engine(b_engine_),
-  b_data(b_data_), b_scene(b_scene_),
-  shader_map(&scene_->shaders),
-  object_map(&scene_->objects),
-  mesh_map(&scene_->meshes),
-  light_map(&scene_->lights),
-  particle_system_map(&scene_->particle_systems),
+BlenderSync::BlenderSync(BL::RenderEngine& b_engine,
+                         BL::BlendData& b_data,
+                         BL::Scene& b_scene,
+                         Scene *scene,
+                         bool preview,
+                         Progress &progress,
+                         bool is_cpu)
+: b_engine(b_engine),
+  b_data(b_data),
+  b_scene(b_scene),
+  shader_map(&scene->shaders),
+  object_map(&scene->objects),
+  mesh_map(&scene->meshes),
+  light_map(&scene->lights),
+  particle_system_map(&scene->particle_systems),
   world_map(NULL),
   world_recalc(false),
+  scene(scene),
+  preview(preview),
   experimental(false),
-  progress(progress_)
+  is_cpu(is_cpu),
+  progress(progress)
 {
-	scene = scene_;
-	preview = preview_;
-	is_cpu = is_cpu_;
 }
 
 BlenderSync::~BlenderSync()
@@ -145,9 +152,9 @@ bool BlenderSync::sync_recalc()
 	return recalc;
 }
 
-void BlenderSync::sync_data(BL::RenderSettings b_render,
-                            BL::SpaceView3D b_v3d,
-                            BL::Object b_override,
+void BlenderSync::sync_data(BL::RenderSettings& b_render,
+                            BL::SpaceView3D& b_v3d,
+                            BL::Object& b_override,
                             int width, int height,
                             void **python_thread_state,
                             const char *layer)
@@ -185,7 +192,7 @@ void BlenderSync::sync_integrator()
 #endif
 	PointerRNA cscene = RNA_pointer_get(&b_scene.ptr, "cycles");
 
-	experimental = (RNA_enum_get(&cscene, "feature_set") != 0);
+	experimental = (get_enum(cscene, "feature_set") != 0);
 
 	Integrator *integrator = scene->integrator;
 	Integrator previntegrator = *integrator;
@@ -213,7 +220,11 @@ void BlenderSync::sync_integrator()
 	if(get_boolean(cscene, "use_animated_seed"))
 		integrator->seed = hash_int_2d(b_scene.frame_current(), get_int(cscene, "seed"));
 
-	integrator->sampling_pattern = (SamplingPattern)RNA_enum_get(&cscene, "sampling_pattern");
+	integrator->sampling_pattern = (SamplingPattern)get_enum(
+	        cscene,
+	        "sampling_pattern",
+	        SAMPLING_NUM_PATTERNS,
+	        SAMPLING_PATTERN_SOBOL);
 
 	integrator->layer_flag = render_layer.layer;
 
@@ -230,7 +241,10 @@ void BlenderSync::sync_integrator()
 	}
 #endif
 
-	integrator->method = (Integrator::Method)get_enum(cscene, "progressive");
+	integrator->method = (Integrator::Method)get_enum(cscene,
+	                                                  "progressive",
+	                                                  Integrator::NUM_METHODS,
+	                                                  Integrator::PATH);
 
 	integrator->sample_all_lights_direct = get_boolean(cscene, "sample_all_lights_direct");
 	integrator->sample_all_lights_indirect = get_boolean(cscene, "sample_all_lights_indirect");
@@ -280,7 +294,10 @@ void BlenderSync::sync_film()
 	film->use_sample_clamp = (integrator->sample_clamp_direct != 0.0f || integrator->sample_clamp_indirect != 0.0f);
 
 	film->exposure = get_float(cscene, "film_exposure");
-	film->filter_type = (FilterType)RNA_enum_get(&cscene, "filter_type");
+	film->filter_type = (FilterType)get_enum(cscene,
+	                                         "pixel_filter_type",
+	                                         FILTER_NUM_TYPES,
+	                                         FILTER_BLACKMAN_HARRIS);
 	film->filter_width = (film->filter_type == FILTER_BOX)? 1.0f: get_float(cscene, "filter_width");
 
 	if(b_scene.world()) {
@@ -308,7 +325,7 @@ void BlenderSync::sync_film()
 
 /* Render Layer */
 
-void BlenderSync::sync_render_layers(BL::SpaceView3D b_v3d, const char *layer)
+void BlenderSync::sync_render_layers(BL::SpaceView3D& b_v3d, const char *layer)
 {
 	PointerRNA cscene = RNA_pointer_get(&b_scene.ptr, "cycles");
 	string layername;
@@ -341,7 +358,7 @@ void BlenderSync::sync_render_layers(BL::SpaceView3D b_v3d, const char *layer)
 	/* render layer */
 	BL::RenderSettings r = b_scene.render();
 	BL::RenderSettings::layers_iterator b_rlay;
-	int use_layer_samples = RNA_enum_get(&cscene, "use_layer_samples");
+	int use_layer_samples = get_enum(cscene, "use_layer_samples");
 	bool first_layer = true;
 	uint layer_override = get_layer(b_engine.layer_override());
 	uint scene_layers = layer_override ? layer_override : get_layer(b_scene.layers());
@@ -416,7 +433,9 @@ void BlenderSync::sync_images()
 
 /* Scene Parameters */
 
-SceneParams BlenderSync::get_scene_params(BL::Scene b_scene, bool background, bool is_cpu)
+SceneParams BlenderSync::get_scene_params(BL::Scene& b_scene,
+                                          bool background,
+                                          bool is_cpu)
 {
 	BL::RenderSettings r = b_scene.render();
 	SceneParams params;
@@ -431,7 +450,11 @@ SceneParams BlenderSync::get_scene_params(BL::Scene b_scene, bool background, bo
 	if(background)
 		params.bvh_type = SceneParams::BVH_STATIC;
 	else
-		params.bvh_type = (SceneParams::BVHType)RNA_enum_get(&cscene, "debug_bvh_type");
+		params.bvh_type = (SceneParams::BVHType)get_enum(
+		        cscene,
+		        "debug_bvh_type",
+		        SceneParams::BVH_NUM_TYPES,
+		        SceneParams::BVH_STATIC);
 
 	params.use_bvh_spatial_split = RNA_boolean_get(&cscene, "debug_use_spatial_splits");
 
@@ -455,22 +478,22 @@ SceneParams BlenderSync::get_scene_params(BL::Scene b_scene, bool background, bo
 
 /* Session Parameters */
 
-bool BlenderSync::get_session_pause(BL::Scene b_scene, bool background)
+bool BlenderSync::get_session_pause(BL::Scene& b_scene, bool background)
 {
 	PointerRNA cscene = RNA_pointer_get(&b_scene.ptr, "cycles");
 	return (background)? false: get_boolean(cscene, "preview_pause");
 }
 
-SessionParams BlenderSync::get_session_params(BL::RenderEngine b_engine,
-                                              BL::UserPreferences b_userpref,
-                                              BL::Scene b_scene,
+SessionParams BlenderSync::get_session_params(BL::RenderEngine& b_engine,
+                                              BL::UserPreferences& b_userpref,
+                                              BL::Scene& b_scene,
                                               bool background)
 {
 	SessionParams params;
 	PointerRNA cscene = RNA_pointer_get(&b_scene.ptr, "cycles");
 
 	/* feature set */
-	params.experimental = (RNA_enum_get(&cscene, "feature_set") != 0);
+	params.experimental = (get_enum(cscene, "feature_set") != 0);
 
 	/* device type */
 	vector<DeviceInfo>& devices = Device::available_devices();
@@ -478,13 +501,13 @@ SessionParams BlenderSync::get_session_params(BL::RenderEngine b_engine,
 	/* device default CPU */
 	params.device = devices[0];
 
-	if(RNA_enum_get(&cscene, "device") == 2) {
+	if(get_enum(cscene, "device") == 2) {
 		/* find network device */
 		foreach(DeviceInfo& info, devices)
 			if(info.type == DEVICE_NETWORK)
 				params.device = info;
 	}
-	else if(RNA_enum_get(&cscene, "device") == 1) {
+	else if(get_enum(cscene, "device") == 1) {
 		/* find GPU device with given id */
 		PointerRNA systemptr = b_userpref.system().ptr;
 		PropertyRNA *deviceprop = RNA_struct_find_property(&systemptr, "compute_device");
@@ -523,7 +546,7 @@ SessionParams BlenderSync::get_session_params(BL::RenderEngine b_engine,
 		else {
 			params.samples = preview_aa_samples;
 			if(params.samples == 0)
-				params.samples = USHRT_MAX;
+				params.samples = INT_MAX;
 		}
 	}
 	else {
@@ -533,7 +556,7 @@ SessionParams BlenderSync::get_session_params(BL::RenderEngine b_engine,
 		else {
 			params.samples = preview_samples;
 			if(params.samples == 0)
-				params.samples = USHRT_MAX;
+				params.samples = INT_MAX;
 		}
 	}
 
@@ -555,7 +578,7 @@ SessionParams BlenderSync::get_session_params(BL::RenderEngine b_engine,
 	}
 
 	if((BlenderSession::headless == false) && background) {
-		params.tile_order = (TileOrder)RNA_enum_get(&cscene, "tile_order");
+		params.tile_order = (TileOrder)get_enum(cscene, "tile_order");
 	}
 	else {
 		params.tile_order = TILE_BOTTOM_TO_TOP;

@@ -70,10 +70,10 @@ EnumPropertyItem rna_enum_fmodifier_type_items[] = {
 };
 
 EnumPropertyItem rna_enum_beztriple_keyframe_type_items[] = {
-	{BEZT_KEYTYPE_KEYFRAME, "KEYFRAME", 0, "Keyframe", "Normal keyframe - e.g. for key poses"},
-	{BEZT_KEYTYPE_BREAKDOWN, "BREAKDOWN", 0, "Breakdown", "A breakdown pose - e.g. for transitions between key poses"},
-	{BEZT_KEYTYPE_EXTREME, "EXTREME", 0, "Extreme", "An 'extreme' pose, or some other purpose as needed"},
-	{BEZT_KEYTYPE_JITTER, "JITTER", 0, "Jitter", "A filler or baked keyframe for keying on ones, or some other purpose as needed"},
+	{BEZT_KEYTYPE_KEYFRAME, "KEYFRAME", VICO_KEYTYPE_KEYFRAME_VEC, "Keyframe", "Normal keyframe - e.g. for key poses"},
+	{BEZT_KEYTYPE_BREAKDOWN, "BREAKDOWN", VICO_KEYTYPE_BREAKDOWN_VEC, "Breakdown", "A breakdown pose - e.g. for transitions between key poses"},
+	{BEZT_KEYTYPE_EXTREME, "EXTREME", VICO_KEYTYPE_EXTREME_VEC, "Extreme", "An 'extreme' pose, or some other purpose as needed"},
+	{BEZT_KEYTYPE_JITTER, "JITTER", VICO_KEYTYPE_JITTER_VEC, "Jitter", "A filler or baked keyframe for keying on ones, or some other purpose as needed"},
 	{0, NULL, 0, NULL, NULL}
 };
 
@@ -740,9 +740,9 @@ static void rna_FModifierStepped_end_frame_range(PointerRNA *ptr, float *min, fl
 	*max = MAXFRAMEF;
 }
 
-static BezTriple *rna_FKeyframe_points_insert(FCurve *fcu, float frame, float value, int flag)
+static BezTriple *rna_FKeyframe_points_insert(FCurve *fcu, float frame, float value, int keyframe_type, int flag)
 {
-	int index = insert_vert_fcurve(fcu, frame, value, flag | INSERTKEY_NO_USERPREF);
+	int index = insert_vert_fcurve(fcu, frame, value, (char)keyframe_type, flag | INSERTKEY_NO_USERPREF);
 	return ((fcu->bezt) && (index >= 0)) ? (fcu->bezt + index) : NULL;
 }
 
@@ -1777,7 +1777,9 @@ static void rna_def_fcurve_keyframe_points(BlenderRNA *brna, PropertyRNA *cprop)
 	parm = RNA_def_float(func, "value", 0.0f, -FLT_MAX, FLT_MAX, "",
 	                     "Y Value of this keyframe point", -FLT_MAX, FLT_MAX);
 	RNA_def_property_flag(parm, PROP_REQUIRED);
-
+	
+	RNA_def_enum(func, "keyframe_type", rna_enum_beztriple_keyframe_type_items, 0, "", 
+	             "Type of keyframe to insert");
 	RNA_def_enum_flag(func, "options", keyframe_flag_items, 0, "", "Keyframe options");
 
 	parm = RNA_def_pointer(func, "keyframe", "Keyframe", "", "Newly created keyframe");

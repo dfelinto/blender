@@ -1900,8 +1900,14 @@ static void WM_OT_splash(wmOperatorType *ot)
 
 
 /* ***************** Search menu ************************* */
-static uiBlock *wm_block_search_menu(bContext *C, ARegion *ar, void *UNUSED(arg_op))
+
+struct SearchPopupInit_Data {
+	int size[2];
+};
+
+static uiBlock *wm_block_search_menu(bContext *C, ARegion *ar, void *userdata)
 {
+	const struct SearchPopupInit_Data *init_data = userdata;
 	static char search[256] = "";
 	wmEvent event;
 	wmWindow *win = CTX_wm_window(C);
@@ -1911,11 +1917,12 @@ static uiBlock *wm_block_search_menu(bContext *C, ARegion *ar, void *UNUSED(arg_
 	block = UI_block_begin(C, ar, "_popup", UI_EMBOSS);
 	UI_block_flag_enable(block, UI_BLOCK_LOOP | UI_BLOCK_MOVEMOUSE_QUIT | UI_BLOCK_SEARCH_MENU);
 	
-	but = uiDefSearchBut(block, search, 0, ICON_VIEWZOOM, sizeof(search), 10, 10, UI_searchbox_size_x(), UI_UNIT_Y, 0, 0, "");
+	but = uiDefSearchBut(block, search, 0, ICON_VIEWZOOM, sizeof(search), 10, 10, init_data->size[0], UI_UNIT_Y, 0, 0, "");
 	UI_but_func_operator_search(but);
 	
 	/* fake button, it holds space for search items */
-	uiDefBut(block, UI_BTYPE_LABEL, 0, "", 10, 10 - UI_searchbox_size_y(), UI_searchbox_size_x(), UI_searchbox_size_y(), NULL, 0, 0, 0, 0, NULL);
+	uiDefBut(block, UI_BTYPE_LABEL, 0, "", 10, 10 - init_data->size[1],
+	         init_data->size[0], init_data->size[1], NULL, 0, 0, 0, 0, NULL);
 	
 	UI_block_bounds_set_popup(block, 6, 0, -UI_UNIT_Y); /* move it downwards, mouse over button */
 	
@@ -1934,9 +1941,16 @@ static int wm_search_menu_exec(bContext *UNUSED(C), wmOperator *UNUSED(op))
 	return OPERATOR_FINISHED;
 }
 
-static int wm_search_menu_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
+static int wm_search_menu_invoke(bContext *C, wmOperator *UNUSED(op), const wmEvent *UNUSED(event))
 {
-	UI_popup_block_invoke(C, wm_block_search_menu, op);
+	struct SearchPopupInit_Data data = {
+		.size = {
+		    UI_searchbox_size_x() * 2,
+		    UI_searchbox_size_y(),
+		},
+	};
+
+	UI_popup_block_invoke(C, wm_block_search_menu, &data);
 	
 	return OPERATOR_INTERFACE;
 }
@@ -2320,8 +2334,9 @@ static void WM_OT_open_mainfile(wmOperatorType *ot)
 	ot->ui = wm_open_mainfile_ui;
 	/* omit window poll so this can work in background mode */
 
-	WM_operator_properties_filesel(ot, FILE_TYPE_FOLDER | FILE_TYPE_BLENDER, FILE_BLENDER, FILE_OPENFILE,
-	                               WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);
+	WM_operator_properties_filesel(
+	        ot, FILE_TYPE_FOLDER | FILE_TYPE_BLENDER, FILE_BLENDER, FILE_OPENFILE,
+	        WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);
 
 	RNA_def_boolean(ot->srna, "load_ui", true, "Load UI", "Load user interface setup in the .blend file");
 	RNA_def_boolean(ot->srna, "use_scripts", true, "Trusted Source",
@@ -2625,7 +2640,7 @@ static int wm_link_append_exec(bContext *C, wmOperator *op)
 	 * its also generally useful to know what is new
 	 *
 	 * take extra care BKE_main_id_flag_all(bmain, LIB_TAG_PRE_EXISTING, false) is called after! */
-	BKE_main_id_flag_all(bmain, LIB_TAG_PRE_EXISTING, true);
+	BKE_main_id_tag_all(bmain, LIB_TAG_PRE_EXISTING, true);
 
 	/* We define our working data...
 	 * Note that here, each item 'uses' one library, and only one. */
@@ -2706,7 +2721,7 @@ static int wm_link_append_exec(bContext *C, wmOperator *op)
 
 	/* important we unset, otherwise these object wont
 	 * link into other scenes from this blend file */
-	BKE_main_id_flag_all(bmain, LIB_TAG_PRE_EXISTING, false);
+	BKE_main_id_tag_all(bmain, LIB_TAG_PRE_EXISTING, false);
 
 	/* recreate dependency graph to include new objects */
 	DAG_scene_relations_rebuild(bmain, scene);
@@ -2775,9 +2790,9 @@ static void WM_OT_append(wmOperatorType *ot)
 	ot->flag |= OPTYPE_UNDO;
 
 	WM_operator_properties_filesel(
-		ot, FILE_TYPE_FOLDER | FILE_TYPE_BLENDER | FILE_TYPE_BLENDERLIB, FILE_LOADLIB, FILE_OPENFILE,
-		WM_FILESEL_FILEPATH | WM_FILESEL_DIRECTORY | WM_FILESEL_FILENAME | WM_FILESEL_FILES,
-		FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);
+	        ot, FILE_TYPE_FOLDER | FILE_TYPE_BLENDER | FILE_TYPE_BLENDERLIB, FILE_LOADLIB, FILE_OPENFILE,
+	        WM_FILESEL_FILEPATH | WM_FILESEL_DIRECTORY | WM_FILESEL_FILENAME | WM_FILESEL_FILES,
+	        FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);
 
 	wm_link_append_properties_common(ot, false);
 	RNA_def_boolean(ot->srna, "set_fake", false, "Fake User", "Set Fake User for appended items (except Objects and Groups)");
@@ -2868,8 +2883,9 @@ static void WM_OT_recover_auto_save(wmOperatorType *ot)
 	ot->exec = wm_recover_auto_save_exec;
 	ot->invoke = wm_recover_auto_save_invoke;
 
-	WM_operator_properties_filesel(ot, FILE_TYPE_BLENDER, FILE_BLENDER, FILE_OPENFILE,
-	                               WM_FILESEL_FILEPATH, FILE_LONGDISPLAY, FILE_SORT_TIME);
+	WM_operator_properties_filesel(
+	        ot, FILE_TYPE_BLENDER, FILE_BLENDER, FILE_OPENFILE,
+	        WM_FILESEL_FILEPATH, FILE_LONGDISPLAY, FILE_SORT_TIME);
 }
 
 /* *************** save file as **************** */
@@ -3001,8 +3017,9 @@ static void WM_OT_save_as_mainfile(wmOperatorType *ot)
 	ot->check = blend_save_check;
 	/* omit window poll so this can work in background mode */
 
-	WM_operator_properties_filesel(ot, FILE_TYPE_FOLDER | FILE_TYPE_BLENDER, FILE_BLENDER, FILE_SAVE,
-	                               WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);
+	WM_operator_properties_filesel(
+	        ot, FILE_TYPE_FOLDER | FILE_TYPE_BLENDER, FILE_BLENDER, FILE_SAVE,
+	        WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);
 	RNA_def_boolean(ot->srna, "compress", false, "Compress", "Write compressed .blend file");
 	RNA_def_boolean(ot->srna, "relative_remap", true, "Remap Relative",
 	                "Remap relative paths when saving in a different directory");
@@ -3068,8 +3085,9 @@ static void WM_OT_save_mainfile(wmOperatorType *ot)
 	ot->check = blend_save_check;
 	/* omit window poll so this can work in background mode */
 	
-	WM_operator_properties_filesel(ot, FILE_TYPE_FOLDER | FILE_TYPE_BLENDER, FILE_BLENDER, FILE_SAVE,
-	                               WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);
+	WM_operator_properties_filesel(
+	        ot, FILE_TYPE_FOLDER | FILE_TYPE_BLENDER, FILE_BLENDER, FILE_SAVE,
+	        WM_FILESEL_FILEPATH, FILE_DEFAULTDISPLAY, FILE_SORT_ALPHA);
 	RNA_def_boolean(ot->srna, "compress", false, "Compress", "Write compressed .blend file");
 	RNA_def_boolean(ot->srna, "relative_remap", false, "Remap Relative",
 	                "Remap relative paths when saving in a different directory");
@@ -3862,7 +3880,9 @@ typedef struct {
 	PropertyType type;
 	PropertySubType subtype;
 	PointerRNA ptr, col_ptr, fill_col_ptr, rot_ptr, zoom_ptr, image_id_ptr;
+	PointerRNA fill_col_override_ptr, fill_col_override_test_ptr;
 	PropertyRNA *prop, *col_prop, *fill_col_prop, *rot_prop, *zoom_prop;
+	PropertyRNA *fill_col_override_prop, *fill_col_override_test_prop;
 	StructRNA *image_id_srna;
 	float initial_value, current_value, min_value, max_value;
 	int initial_mouse[2];
@@ -3882,12 +3902,39 @@ static void radial_control_update_header(wmOperator *op, bContext *C)
 	char msg[WM_RADIAL_CONTROL_HEADER_LENGTH];
 	ScrArea *sa = CTX_wm_area(C);
 	Scene *scene = CTX_data_scene(C);
-
-	if (sa && hasNumInput(&rc->num_input)) {
-		char num_str[NUM_STR_REP_LEN];
-		outputNumInput(&rc->num_input, num_str, &scene->unit);
-		BLI_snprintf(msg, WM_RADIAL_CONTROL_HEADER_LENGTH, "%s: %s", RNA_property_ui_name(rc->prop), num_str);
-		ED_area_headerprint(sa, msg);
+	
+	if (sa) {
+		if (hasNumInput(&rc->num_input)) {
+			char num_str[NUM_STR_REP_LEN];
+			outputNumInput(&rc->num_input, num_str, &scene->unit);
+			BLI_snprintf(msg, WM_RADIAL_CONTROL_HEADER_LENGTH, "%s: %s", RNA_property_ui_name(rc->prop), num_str);
+			ED_area_headerprint(sa, msg);
+		}
+		else {
+			const char *ui_name = RNA_property_ui_name(rc->prop);
+			switch (rc->subtype) {
+				case PROP_NONE:
+				case PROP_DISTANCE:
+					BLI_snprintf(msg, WM_RADIAL_CONTROL_HEADER_LENGTH, "%s: %0.4f", ui_name, rc->current_value);
+					break;
+				case PROP_PIXEL:
+					BLI_snprintf(msg, WM_RADIAL_CONTROL_HEADER_LENGTH, "%s: %d", ui_name, (int)rc->current_value); /* XXX: round to nearest? */
+					break;
+				case PROP_PERCENTAGE:
+					BLI_snprintf(msg, WM_RADIAL_CONTROL_HEADER_LENGTH, "%s: %3.1f%%", ui_name, rc->current_value);
+					break;
+				case PROP_FACTOR:
+					BLI_snprintf(msg, WM_RADIAL_CONTROL_HEADER_LENGTH, "%s: %1.3f", ui_name, rc->current_value);
+					break;
+				case PROP_ANGLE:
+					BLI_snprintf(msg, WM_RADIAL_CONTROL_HEADER_LENGTH, "%s: %3.2f", ui_name, RAD2DEGF(rc->current_value));
+					break;
+				default:
+					BLI_snprintf(msg, WM_RADIAL_CONTROL_HEADER_LENGTH, "%s", ui_name); /* XXX: No value? */
+					break;
+			}
+			ED_area_headerprint(sa, msg);
+		}
 	}
 }
 
@@ -3955,8 +4002,23 @@ static void radial_control_paint_tex(RadialControl *rc, float radius, float alph
 	float rot;
 
 	/* set fill color */
-	if (rc->fill_col_prop)
-		RNA_property_float_get_array(&rc->fill_col_ptr, rc->fill_col_prop, col);
+	if (rc->fill_col_prop) {
+		PointerRNA *fill_ptr;
+		PropertyRNA *fill_prop;
+
+		if (rc->fill_col_override_prop &&
+		    RNA_property_boolean_get(&rc->fill_col_override_test_ptr, rc->fill_col_override_test_prop))
+		{
+			fill_ptr = &rc->fill_col_override_ptr;
+			fill_prop = rc->fill_col_override_prop;
+		}
+		else {
+			fill_ptr = &rc->fill_col_ptr;
+			fill_prop = rc->fill_col_prop;
+		}
+
+		RNA_property_float_get_array(fill_ptr, fill_prop, col);
+	}
 	glColor4f(col[0], col[1], col[2], alpha);
 
 	if (rc->gltex) {
@@ -4033,14 +4095,14 @@ static void radial_control_paint_cursor(bContext *C, int x, int y, void *customd
 			r2 = tex_radius = WM_RADIAL_CONTROL_DISPLAY_SIZE;
 			rmin = WM_RADIAL_CONTROL_DISPLAY_MIN_SIZE;
 			alpha = rc->current_value / 2.0f + 0.5f;
-			BLI_snprintf(str, WM_RADIAL_MAX_STR, "%1.2f", rc->current_value);
+			BLI_snprintf(str, WM_RADIAL_MAX_STR, "%1.3f", rc->current_value);
 			strdrawlen = BLI_strlen_utf8(str);
 			break;
 		case PROP_ANGLE:
 			r1 = r2 = tex_radius = WM_RADIAL_CONTROL_DISPLAY_SIZE;
 			alpha = 0.75;
 			rmin = WM_RADIAL_CONTROL_DISPLAY_MIN_SIZE;
-			BLI_snprintf(str, WM_RADIAL_MAX_STR, "%3f", RAD2DEGF(rc->current_value));
+			BLI_snprintf(str, WM_RADIAL_MAX_STR, "%3.2f", RAD2DEGF(rc->current_value));
 			strdrawlen = BLI_strlen_utf8(str);
 			break;
 		default:
@@ -4089,12 +4151,12 @@ static void radial_control_paint_cursor(bContext *C, int x, int y, void *customd
 		glutil_draw_lined_arc(0.0, (float)(M_PI * 2.0), rmin, 40);
 
 	BLF_size(fontid, 1.5 * fstyle_points, 1.0f / U.dpi);
-	BLF_width_and_height(fontid, str, strdrawlen, &strwidth, &strheight);
 	BLF_enable(fontid, BLF_SHADOW);
 	BLF_shadow(fontid, 3, 0.0f, 0.0f, 0.0f, 0.5f);
 	BLF_shadow_offset(fontid, 1, -1);
 
 	/* draw value */
+	BLF_width_and_height(fontid, str, strdrawlen, &strwidth, &strheight);
 	BLF_position(fontid, -0.5f * strwidth, -0.5f * strheight, 0.0f);
 	BLF_draw(fontid, str, strdrawlen);
 
@@ -4220,9 +4282,27 @@ static int radial_control_get_properties(bContext *C, wmOperator *op)
 		return 0;
 	if (!radial_control_get_path(&ctx_ptr, op, "color_path", &rc->col_ptr, &rc->col_prop, 3, RC_PROP_REQUIRE_FLOAT))
 		return 0;
-	if (!radial_control_get_path(&ctx_ptr, op, "fill_color_path", &rc->fill_col_ptr, &rc->fill_col_prop, 3, RC_PROP_REQUIRE_FLOAT))
+
+
+	if (!radial_control_get_path(
+	        &ctx_ptr, op, "fill_color_path", &rc->fill_col_ptr, &rc->fill_col_prop, 3, RC_PROP_REQUIRE_FLOAT))
+	{
 		return 0;
-	
+	}
+
+	if (!radial_control_get_path(
+	        &ctx_ptr, op, "fill_color_override_path",
+	        &rc->fill_col_override_ptr, &rc->fill_col_override_prop, 3, RC_PROP_REQUIRE_FLOAT))
+	{
+		return 0;
+	}
+	if (!radial_control_get_path(
+	        &ctx_ptr, op, "fill_color_override_test_path",
+	        &rc->fill_col_override_test_ptr, &rc->fill_col_override_test_prop, 0, RC_PROP_REQUIRE_BOOL))
+	{
+		return 0;
+	}
+
 	/* slightly ugly; allow this property to not resolve
 	 * correctly. needed because 3d texture paint shares the same
 	 * keymap as 2d image paint */
@@ -4561,6 +4641,7 @@ static int radial_control_modal(bContext *C, wmOperator *op, const wmEvent *even
 	}
 
 	ED_region_tag_redraw(CTX_wm_region(C));
+	radial_control_update_header(op, C);
 
 	if (ret != OPERATOR_RUNNING_MODAL)
 		radial_control_cancel(C, op);
@@ -4592,6 +4673,9 @@ static void WM_OT_radial_control(wmOperatorType *ot)
 	RNA_def_string(ot->srna, "color_path", NULL, 0, "Color Path", "Path of property used to set the color of the control");
 
 	RNA_def_string(ot->srna, "fill_color_path", NULL, 0, "Fill Color Path", "Path of property used to set the fill color of the control");
+
+	RNA_def_string(ot->srna, "fill_color_override_path", NULL, 0, "Fill Color Override Path", "");
+	RNA_def_string(ot->srna, "fill_color_override_test_path", NULL, 0, "Fill Color Override Test", "");
 
 	RNA_def_string(ot->srna, "zoom_path", NULL, 0, "Zoom Path", "Path of property used to set the zoom level for the control");
 
@@ -4855,7 +4939,7 @@ static int previews_ensure_exec(bContext *C, wmOperator *UNUSED(op))
 	int i;
 
 	/* We use LIB_TAG_DOIT to check whether we have already handled a given ID or not. */
-	BKE_main_id_flag_all(bmain, LIB_TAG_DOIT, true);
+	BKE_main_id_tag_all(bmain, LIB_TAG_DOIT, true);
 
 	BLI_LINKSTACK_INIT(preview_id_stack.id_stack);
 

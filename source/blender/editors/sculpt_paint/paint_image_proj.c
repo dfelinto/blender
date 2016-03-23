@@ -2096,8 +2096,9 @@ static void project_bucket_clip_face(
 
 	/* detect pathological case where face the three vertices are almost collinear in screen space.
 	 * mostly those will be culled but when flood filling or with smooth shading it's a possibility */
-	if (dist_squared_to_line_v2(v1coSS, v2coSS, v3coSS) < 0.5f ||
-	    dist_squared_to_line_v2(v2coSS, v3coSS, v1coSS) < 0.5f)
+	if (min_fff(dist_squared_to_line_v2(v1coSS, v2coSS, v3coSS),
+	            dist_squared_to_line_v2(v2coSS, v3coSS, v1coSS),
+	            dist_squared_to_line_v2(v3coSS, v1coSS, v2coSS)) < PROJ_PIXEL_TOLERANCE)
 	{
 		collinear = true;
 	}
@@ -3933,10 +3934,10 @@ static void project_paint_end(ProjPaintState *ps)
 		/* must be set for non-shared */
 		BLI_assert(ps->dm_mloopuv || ps->is_shared_user);
 		if (ps->dm_mloopuv)
-			MEM_freeN(ps->dm_mloopuv);
+			MEM_freeN((void *)ps->dm_mloopuv);
 
 		if (ps->do_layer_clone)
-			MEM_freeN(ps->dm_mloopuv_clone);
+			MEM_freeN((void *)ps->dm_mloopuv_clone);
 		if (ps->thread_tot > 1) {
 			BLI_spin_end(ps->tile_lock);
 			MEM_freeN((void *)ps->tile_lock);

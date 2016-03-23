@@ -983,7 +983,7 @@ static bool paint_stroke_curve_end(bContext *C, wmOperator *op, PaintStroke *str
 			return true;
 
 #ifdef DEBUG_TIME
-		TIMEIT_START(stroke);
+		TIMEIT_START_AVERAGED(whole_stroke);
 #endif
 
 		pcp = pc->points;
@@ -1044,7 +1044,7 @@ static bool paint_stroke_curve_end(bContext *C, wmOperator *op, PaintStroke *str
 		stroke_done(C, op);
 
 #ifdef DEBUG_TIME
-		TIMEIT_END(stroke);
+		TIMEIT_END_AVERAGED(whole_stroke);
 #endif
 
 		return true;
@@ -1239,20 +1239,31 @@ int paint_stroke_exec(bContext *C, wmOperator *op)
 
 	/* only when executed for the first time */
 	if (stroke->stroke_started == 0) {
-		/* XXX stroke->last_mouse_position is unset, this may cause problems */
-		stroke->test_start(C, op, NULL);
-		stroke->stroke_started = 1;
+		PropertyRNA *strokeprop;
+		PointerRNA firstpoint;
+		float mouse[2];
+
+		strokeprop = RNA_struct_find_property(op->ptr, "stroke");
+
+		if (RNA_property_collection_lookup_int(op->ptr, strokeprop, 0, &firstpoint)) {
+			RNA_float_get_array(&firstpoint, "mouse", mouse);
+			stroke->stroke_started = stroke->test_start(C, op, mouse);
+		}
 	}
 
-	RNA_BEGIN (op->ptr, itemptr, "stroke")
-	{
-		stroke->update_step(C, stroke, &itemptr);
+	if (stroke->stroke_started) {
+		RNA_BEGIN (op->ptr, itemptr, "stroke")
+		{
+			stroke->update_step(C, stroke, &itemptr);
+		}
+		RNA_END;
 	}
-	RNA_END;
+
+	bool ok = (stroke->stroke_started != 0);
 
 	stroke_done(C, op);
 
-	return OPERATOR_FINISHED;
+	return ok ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
 }
 
 void paint_stroke_cancel(bContext *C, wmOperator *op)

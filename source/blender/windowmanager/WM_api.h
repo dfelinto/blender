@@ -26,7 +26,7 @@
 #ifndef __WM_API_H__
 #define __WM_API_H__
 
-/** \file WM_api.h
+/** \file blender/windowmanager/WM_api.h
  *  \ingroup wm
  *
  *  \page wmpage windowmanager
@@ -291,7 +291,9 @@ bool        WM_operator_last_properties_store(struct wmOperator *op);
 
 
 /* wm_operator_props.c */
-void        WM_operator_properties_filesel(struct wmOperatorType *ot, int filter, short type, short action, short flag, short display, short sort);
+void        WM_operator_properties_filesel(
+        struct wmOperatorType *ot, int filter, short type, short action,
+        short flag, short display, short sort);
 void        WM_operator_properties_border(struct wmOperatorType *ot);
 void        WM_operator_properties_border_to_rcti(struct wmOperator *op, struct rcti *rect);
 void        WM_operator_properties_border_to_rctf(struct wmOperator *op, rctf *rect);
@@ -407,7 +409,6 @@ void		wmOrtho				(float x1, float x2, float y1, float y2, float n, float f);
 void		wmOrtho2			(float x1, float x2, float y1, float y2);
 			/* use for conventions (avoid hard-coded offsets all over) */
 void		wmOrtho2_region_pixelspace(const struct ARegion *ar);
-void		wmOrtho2_region_ui(const struct ARegion *ar);
 void		wmOrtho2_pixelspace(const float x, const float y);
 
 			/* utilities */

@@ -14,11 +14,6 @@ include(cmake/external_libs.cmake)
 # todo: this code could be refactored a bit to avoid duplication
 # note: CXX_HAS_SSE is needed in case passing SSE flags fails altogether (gcc-arm)
 
-if(WITH_CYCLES_WERROR)
-	ADD_CHECK_C_COMPILER_FLAG(CMAKE_C_FLAGS C_WERROR -Werror)
-	ADD_CHECK_CXX_COMPILER_FLAG(CMAKE_CXX_FLAGS C_WERROR -Werror)
-endif()
-
 if(NOT WITH_CPU_SSE)
 	set(CXX_HAS_SSE FALSE)
 	set(CXX_HAS_AVX FALSE)
@@ -207,15 +202,22 @@ endif()
 if(CMAKE_COMPILER_IS_GNUCXX)
 	ADD_CHECK_CXX_COMPILER_FLAG(CMAKE_CXX_FLAGS _has_cxxflag_float_conversion "-Werror=float-conversion")
 	ADD_CHECK_CXX_COMPILER_FLAG(CMAKE_CXX_FLAGS _has_cxxflag_double_promotion "-Werror=double-promotion")
+	ADD_CHECK_CXX_COMPILER_FLAG(CMAKE_CXX_FLAGS _has_no_error_unused_macros "-Wno-error=unused-macros")
 	unset(_has_cxxflag_float_conversion)
 	unset(_has_cxxflag_double_promotion)
+	unset(_has_no_error_unused_macros)
 endif()
 
 
 # Subdirectories
 
 if(WITH_CYCLES_BLENDER)
+	add_definitions(-DWITH_BLENDER_GUARDEDALLOC)
 	add_subdirectory(blender)
+endif()
+
+if(WITH_CYCLES_NETWORK)
+	add_definitions(-DWITH_NETWORK)
 endif()
 
 if(WITH_CYCLES_STANDALONE OR WITH_CYCLES_NETWORK)
@@ -229,6 +231,11 @@ add_subdirectory(kernel)
 add_subdirectory(render)
 add_subdirectory(subd)
 add_subdirectory(util)
+
+# TODO(sergey): Make this to work with standalone repository.
+if(WITH_GTESTS)
+	add_subdirectory(test)
+endif()
 
 if(NOT WITH_BLENDER AND WITH_CYCLES_STANDALONE)
 	delayed_do_install(${CMAKE_BINARY_DIR}/bin)

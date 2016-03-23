@@ -3131,9 +3131,6 @@ static void init_render_mesh(Render *re, ObjectRen *obr, int timeoffset)
 	copy_m3_m4(imat, ob->imat);
 	negative_scale= is_negative_m4(mat);
 
-	if (me->totvert==0)
-		return;
-	
 	need_orco= 0;
 	for (a=1; a<=ob->totcol; a++) {
 		ma= give_render_material(re, ob, a);
@@ -3194,6 +3191,14 @@ static void init_render_mesh(Render *re, ObjectRen *obr, int timeoffset)
 		dm= mesh_create_derived_render(re->scene, ob, mask);
 	if (dm==NULL) return;	/* in case duplicated object fails? */
 
+	mvert= dm->getVertArray(dm);
+	totvert= dm->getNumVerts(dm);
+
+	if (totvert == 0) {
+		dm->release(dm);
+		return;
+	}
+
 	if (mask & CD_MASK_ORCO) {
 		orco = get_object_orco(re, ob);
 		if (!orco) {
@@ -3204,9 +3209,6 @@ static void init_render_mesh(Render *re, ObjectRen *obr, int timeoffset)
 			}
 		}
 	}
-
-	mvert= dm->getVertArray(dm);
-	totvert= dm->getNumVerts(dm);
 
 	/* attempt to autsmooth on original mesh, only without subsurf */
 	if (do_autosmooth && me->totvert==totvert && me->totface==dm->getNumTessFaces(dm))
@@ -3799,6 +3801,9 @@ static GroupObject *add_render_lamp(Render *re, Object *ob)
 	lar->falloff_type = la->falloff_type;
 	lar->ld1= la->att1;
 	lar->ld2= la->att2;
+	lar->coeff_const= la->coeff_const;
+	lar->coeff_lin= la->coeff_lin;
+	lar->coeff_quad= la->coeff_quad;
 	lar->curfalloff = curvemapping_copy(la->curfalloff);
 
 	if (lar->curfalloff) {
@@ -5871,11 +5876,7 @@ void RE_Database_Baking(Render *re, Main *bmain, Scene *scene, unsigned int lay,
 	re->lay= lay;
 
 	/* renderdata setup and exceptions */
-	BLI_freelistN(&re->r.layers);
-	BLI_freelistN(&re->r.views);
-	re->r = scene->r;
-	BLI_duplicatelist(&re->r.layers, &scene->r.layers);
-	BLI_duplicatelist(&re->r.views, &scene->r.views);
+	render_copy_renderdata(&re->r, &scene->r);
 
 	RE_init_threadcount(re);
 	

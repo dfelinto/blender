@@ -119,6 +119,8 @@ ImBuf *ED_space_image_acquire_buffer(SpaceImage *sima, void **r_lock)
 		if (ibuf) {
 			if (ibuf->rect || ibuf->rect_float)
 				return ibuf;
+			BKE_image_release_ibuf(sima->image, ibuf, *r_lock);
+			*r_lock = NULL;
 		}
 	}
 	else
@@ -327,6 +329,16 @@ void ED_space_image_scopes_update(const struct bContext *C, struct SpaceImage *s
 		return;
 	if (ob && ((ob->mode & (OB_MODE_TEXTURE_PAINT | OB_MODE_EDIT)) != 0))
 		return;
+
+	/* We also don't update scopes of render result during render. */
+	if (G.is_rendering) {
+		const Image *image = sima->image;
+		if (image != NULL &&
+		    (image->type == IMA_TYPE_R_RESULT || image->type == IMA_TYPE_COMPOSITE))
+		{
+			return;
+		}
+	}
 	
 	scopes_update(&sima->scopes, ibuf, use_view_settings ? &scene->view_settings : NULL, &scene->display_settings);
 }

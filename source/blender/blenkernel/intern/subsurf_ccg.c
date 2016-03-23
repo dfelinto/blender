@@ -1524,19 +1524,19 @@ static void ccgDM_copyFinalLoopArray(DerivedMesh *dm, MLoop *mloop)
 
 					mv->v = v1;
 					mv->e = GET_UINT_FROM_POINTER(BLI_edgehash_lookup(ccgdm->ehash, v1, v2));
-					mv++, i++;
+					mv++; i++;
 
 					mv->v = v2;
 					mv->e = GET_UINT_FROM_POINTER(BLI_edgehash_lookup(ccgdm->ehash, v2, v3));
-					mv++, i++;
+					mv++; i++;
 
 					mv->v = v3;
 					mv->e = GET_UINT_FROM_POINTER(BLI_edgehash_lookup(ccgdm->ehash, v3, v4));
-					mv++, i++;
+					mv++; i++;
 
 					mv->v = v4;
 					mv->e = GET_UINT_FROM_POINTER(BLI_edgehash_lookup(ccgdm->ehash, v4, v1));
-					mv++, i++;
+					mv++; i++;
 				}
 			}
 		}
@@ -2060,13 +2060,13 @@ static void ccgDM_buffer_copy_triangles(
 					for (x = 0; x < gridFaces; x++) {
 						start = gpumat->start + fc[mati].i_tri_hidden;
 
-						varray[start--] = totloops + 1;
+						varray[start--] = totloops;
 						varray[start--] = totloops + 2;
 						varray[start--] = totloops + 3;
 
 						varray[start--] = totloops;
 						varray[start--] = totloops + 1;
-						varray[start--] = totloops + 3;
+						varray[start--] = totloops + 2;
 
 						fc[mati].i_tri_hidden -= 6;
 
@@ -2084,9 +2084,9 @@ static void ccgDM_buffer_copy_triangles(
 
 						varray[start++] = totloops + 3;
 						varray[start++] = totloops + 2;
-						varray[start++] = totloops + 1;
+						varray[start++] = totloops;
 
-						varray[start++] = totloops + 3;
+						varray[start++] = totloops + 2;
 						varray[start++] = totloops + 1;
 						varray[start++] = totloops;
 
