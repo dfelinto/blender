@@ -519,6 +519,42 @@ static void driver_delete_var_cb(bContext *UNUSED(C), void *driver_v, void *dvar
 	driver_free_variable(driver, dvar);
 }
 
+/* callback to report why a driver variable is invalid */
+static void driver_dvar_invalid_name_query_cb(bContext *C, void *dvar_v, void *UNUSED(arg))
+{
+	uiPopupMenu *pup = UI_popup_menu_begin(C, CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Invalid Variable Name"), ICON_NONE);
+	uiLayout *layout = UI_popup_menu_layout(pup);
+	
+	DriverVar *dvar = (DriverVar *)dvar_v;
+	
+	if (dvar->flag & DVAR_FLAG_INVALID_EMPTY) {
+		uiItemL(layout, "It cannot be left blank", ICON_ERROR);
+	}
+	if (dvar->flag & DVAR_FLAG_INVALID_START_NUM) {
+		uiItemL(layout, "It cannot start with a number", ICON_ERROR);
+	}
+	if (dvar->flag & DVAR_FLAG_INVALID_START_CHAR) {
+		uiItemL(layout, 
+		        "It cannot start with a special character,"
+		        " including '$', '@', '!', '~', '+', '-', '_', '.', or ' '",
+				ICON_NONE);
+	}
+	if (dvar->flag & DVAR_FLAG_INVALID_HAS_SPACE) {
+		uiItemL(layout, "It cannot contain spaces (e.g. 'a space')", ICON_ERROR);
+	}
+	if (dvar->flag & DVAR_FLAG_INVALID_HAS_DOT) {
+		uiItemL(layout, "It cannot contain dots (e.g. 'a.dot')", ICON_ERROR);
+	}
+	if (dvar->flag & DVAR_FLAG_INVALID_HAS_SPECIAL) {
+		uiItemL(layout, "It cannot contain special (non-alphabetical/numeric) characters", ICON_ERROR);
+	}
+	if (dvar->flag & DVAR_FLAG_INVALID_PY_KEYWORD) {
+		uiItemL(layout, "It cannot be a reserved keyword in Python", ICON_INFO);
+	}
+	
+	UI_popup_menu_end(C, pup);
+}
+
 /* callback to reset the driver's flags */
 static void driver_update_flags_cb(bContext *UNUSED(C), void *fcu_v, void *UNUSED(arg))
 {
@@ -816,8 +852,16 @@ static void graph_panel_drivers(const bContext *C, Panel *pa)
 		/* variable name */
 		uiItemR(row, &dvar_ptr, "name", 0, "", ICON_NONE);
 		
-		/* remove button */
+		/* invalid name? */
 		UI_block_emboss_set(block, UI_EMBOSS_NONE);
+		
+		if (dvar->flag & DVAR_FLAG_INVALID_NAME) {
+			but = uiDefIconBut(block, UI_BTYPE_BUT, B_IPO_DEPCHANGE, ICON_ERROR, 290, 0, UI_UNIT_X, UI_UNIT_Y,
+			                   NULL, 0.0, 0.0, 0.0, 0.0, IFACE_("Invalid variable name. Click here for details"));
+			UI_but_func_set(but, driver_dvar_invalid_name_query_cb, dvar, NULL); // XXX: reports?
+		}
+		
+		/* remove button */
 		but = uiDefIconBut(block, UI_BTYPE_BUT, B_IPO_DEPCHANGE, ICON_X, 290, 0, UI_UNIT_X, UI_UNIT_Y,
 		                   NULL, 0.0, 0.0, 0.0, 0.0, IFACE_("Delete target variable"));
 		UI_but_func_set(but, driver_delete_var_cb, driver, dvar);
@@ -939,14 +983,15 @@ void graph_buttons_register(ARegionType *art)
 	pt = MEM_callocN(sizeof(PanelType), "spacetype graph panel view");
 	strcpy(pt->idname, "GRAPH_PT_view");
 	strcpy(pt->label, N_("View Properties"));
+	strcpy(pt->category, "View");
 	strcpy(pt->translation_context, BLT_I18NCONTEXT_DEFAULT_BPYRNA);
 	pt->draw = graph_panel_view;
-	pt->flag |= PNL_DEFAULT_CLOSED;
 	BLI_addtail(&art->paneltypes, pt);
 	
 	pt = MEM_callocN(sizeof(PanelType), "spacetype graph panel properties");
 	strcpy(pt->idname, "GRAPH_PT_properties");
 	strcpy(pt->label, N_("Active F-Curve"));
+	strcpy(pt->category, "F-Curve");
 	strcpy(pt->translation_context, BLT_I18NCONTEXT_DEFAULT_BPYRNA);
 	pt->draw = graph_panel_properties;
 	pt->poll = graph_panel_poll;
@@ -955,6 +1000,7 @@ void graph_buttons_register(ARegionType *art)
 	pt = MEM_callocN(sizeof(PanelType), "spacetype graph panel properties");
 	strcpy(pt->idname, "GRAPH_PT_key_properties");
 	strcpy(pt->label, N_("Active Keyframe"));
+	strcpy(pt->category, "F-Curve");
 	strcpy(pt->translation_context, BLT_I18NCONTEXT_DEFAULT_BPYRNA);
 	pt->draw = graph_panel_key_properties;
 	pt->poll = graph_panel_poll;
@@ -964,6 +1010,7 @@ void graph_buttons_register(ARegionType *art)
 	pt = MEM_callocN(sizeof(PanelType), "spacetype graph panel drivers");
 	strcpy(pt->idname, "GRAPH_PT_drivers");
 	strcpy(pt->label, N_("Drivers"));
+	strcpy(pt->category, "Drivers");
 	strcpy(pt->translation_context, BLT_I18NCONTEXT_DEFAULT_BPYRNA);
 	pt->draw = graph_panel_drivers;
 	pt->poll = graph_panel_drivers_poll;
@@ -972,6 +1019,7 @@ void graph_buttons_register(ARegionType *art)
 	pt = MEM_callocN(sizeof(PanelType), "spacetype graph panel modifiers");
 	strcpy(pt->idname, "GRAPH_PT_modifiers");
 	strcpy(pt->label, N_("Modifiers"));
+	strcpy(pt->category, "Modifiers");
 	strcpy(pt->translation_context, BLT_I18NCONTEXT_DEFAULT_BPYRNA);
 	pt->draw = graph_panel_modifiers;
 	pt->poll = graph_panel_poll;
