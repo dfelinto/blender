@@ -389,6 +389,17 @@ struct uiLayout *UI_popup_menu_layout(uiPopupMenu *head);
 void UI_popup_menu_reports(struct bContext *C, struct ReportList *reports) ATTR_NONNULL();
 int UI_popup_menu_invoke(struct bContext *C, const char *idname, struct ReportList *reports) ATTR_NONNULL(1, 2);
 
+/* Popup Dialogs
+ *
+ * Functions used to create popup dialogs.
+ * This a generic popup dialog to be customized by scripts. */
+
+typedef struct uiPopupDialog uiPopupDialog;
+
+struct uiPopupDialog *UI_popup_dialog_begin(struct bContext *C, const char *title, int icon, int keep_open, int exit_on_execute) ATTR_NONNULL();
+void UI_popup_dialog_end(struct bContext *C, struct uiPopupDialog *head);
+struct uiLayout *UI_popup_dialog_layout(uiPopupDialog *head);
+
 /* Pie menus */
 typedef struct uiPieMenu uiPieMenu;
 
@@ -803,6 +814,7 @@ void UI_exit(void);
 #define UI_LAYOUT_MENU          2
 #define UI_LAYOUT_TOOLBAR       3
 #define UI_LAYOUT_PIEMENU       4
+#define UI_LAYOUT_DIALOG        5
 
 #define UI_UNIT_X               ((void)0, U.widget_unit)
 #define UI_UNIT_Y               ((void)0, U.widget_unit)

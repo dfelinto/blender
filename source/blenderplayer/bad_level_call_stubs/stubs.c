@@ -673,6 +673,9 @@ struct wmKeyMap *WM_modalkeymap_add(struct wmKeyConfig *keyconf, const char *idn
 struct uiPopupMenu *UI_popup_menu_begin(struct bContext *C, const char *title, int icon) RET_NULL
 void UI_popup_menu_end(struct bContext *C, struct uiPopupMenu *head) RET_NONE
 struct uiLayout *UI_popup_menu_layout(struct uiPopupMenu *head) RET_NULL
+struct uiPopupDialog *UI_popup_dialog_begin(struct bContext *C, const char *title, int icon, int keep_open, int exit_on_execute) RET_NULL
+void UI_popup_dialog_end(struct bContext *C, struct uiPopupDialog *head) RET_NONE
+struct uiLayout *UI_popup_dialog_layout(struct uiPopupDialog *head) RET_NULL
 struct uiLayout *UI_pie_menu_layout(struct uiPieMenu *pie) RET_NULL
 int UI_pie_menu_invoke(struct bContext *C, const char *idname, const struct wmEvent *event) RET_ZERO
 struct uiPieMenu *UI_pie_menu_begin(struct bContext *C, const char *title, int icon, const struct wmEvent *event) RET_NULL

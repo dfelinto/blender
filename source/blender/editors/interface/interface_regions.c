@@ -2592,6 +2592,18 @@ struct uiPopupMenu {
 	void *menu_arg;
 };
 
+struct uiPopupDialog {
+	uiBlock *block;
+	uiLayout *layout;
+	uiBut *but;
+
+	int mx, my;
+	bool popup, slideout;
+
+	uiMenuCreateFunc dialog_func;
+	void *dialog_arg;
+};
+
 struct uiPieMenu {
 	uiBlock *block_radial; /* radial block of the pie menu (more could be added later) */
 	uiLayout *layout;
@@ -2841,6 +2853,74 @@ void UI_popup_menu_end(bContext *C, uiPopupMenu *pup)
 }
 
 uiLayout *UI_popup_menu_layout(uiPopupMenu *pup)
+{
+	return pup->layout;
+}
+
+/******************** Popup Dialog API with begin and end ***********************/
+
+/* only return handler, and set optional title */
+uiPopupDialog *UI_popup_dialog_begin(bContext *C, const char *title, int icon, int keep_open, int exit_on_execute)
+{
+	uiStyle *style = UI_style_get_dpi();
+	uiPopupDialog *pup = MEM_callocN(sizeof(uiPopupDialog), "popup dialog");
+	uiBut *but;
+
+	pup->block = UI_block_begin(C, NULL, __func__, UI_EMBOSS_PULLDOWN);
+	pup->block->flag |= UI_BLOCK_POPUP |
+	                    UI_BLOCK_NO_FLIP |
+	                    (UI_BLOCK_KEEP_OPEN * keep_open) |
+	                    (UI_BLOCK_MOVEMOUSE_QUIT * exit_on_execute);
+
+	pup->block->puphash = ui_popup_menu_hash(title);
+	pup->layout = UI_block_layout(pup->block, UI_LAYOUT_VERTICAL, UI_LAYOUT_DIALOG, 0, 0, 200, 20, 0, style);
+
+	/* note, this intentionally differs from the menu & submenu default because many operators
+	 * use popups like this to select one of their options - where having invoke doesn't make sense */
+	uiLayoutSetOperatorContext(pup->layout, WM_OP_EXEC_REGION_WIN);
+
+	/* create in advance so we can let buttons point to retval already */
+	pup->block->handle = MEM_callocN(sizeof(uiPopupBlockHandle), "uiPopupBlockHandle");
+
+	/* create title button */
+	if (title[0]) {
+		char titlestr[256];
+
+		if (icon) {
+			BLI_snprintf(titlestr, sizeof(titlestr), " %s", title);
+			uiDefIconTextBut(pup->block, UI_BTYPE_LABEL, 0, icon, titlestr, 0, 0, 200, UI_UNIT_Y, NULL, 0.0, 0.0, 0, 0, "");
+		}
+		else {
+			but = uiDefBut(pup->block, UI_BTYPE_LABEL, 0, title, 0, 0, 200, UI_UNIT_Y, NULL, 0.0, 0.0, 0, 0, "");
+			but->drawflag = UI_BUT_TEXT_LEFT;
+		}
+
+		uiItemS(pup->layout);
+	}
+
+	return pup;
+}
+
+/* set the whole structure to work */
+void UI_popup_dialog_end(bContext *C, uiPopupDialog *pup)
+{
+	wmWindow *window = CTX_wm_window(C);
+	uiPopupBlockHandle *dialog;
+
+	pup->popup = true;
+	pup->mx = window->eventstate->x;
+	pup->my = window->eventstate->y;
+
+	dialog = ui_popup_block_create(C, NULL, NULL, NULL, ui_block_func_POPUP, pup);
+	dialog->popup = true;
+
+	UI_popup_handlers_add(C, &window->modalhandlers, dialog, 0);
+	WM_event_add_mousemove(C);
+
+	MEM_freeN(pup);
+}
+
+uiLayout *UI_popup_dialog_layout(uiPopupDialog *pup)
 {
 	return pup->layout;
 }

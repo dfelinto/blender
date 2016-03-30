@@ -310,6 +310,24 @@ static void rna_PupMenuEnd(bContext *C, PointerRNA *handle)
 	UI_popup_menu_end(C, handle->data);
 }
 
+/* popup dialog wrapper */
+static PointerRNA rna_PupDialogBegin(bContext *C, const char *title, int icon, int keep_open, int exit_on_execute)
+{
+	PointerRNA r_ptr;
+	void *data;
+
+	data = (void *)UI_popup_dialog_begin(C, title, icon, keep_open, exit_on_execute);
+
+	RNA_pointer_create(NULL, &RNA_UIPopupDialog, data, &r_ptr);
+
+	return r_ptr;
+}
+
+static void rna_PupDialogEnd(bContext *C, PointerRNA *handle)
+{
+	UI_popup_dialog_end(C, handle->data);
+}
+
 /* pie menu wrapper */
 static PointerRNA rna_PieMenuBegin(bContext *C, const char *title, int icon, PointerRNA *event)
 {
@@ -478,6 +496,26 @@ void RNA_api_wm(StructRNA *srna)
 	func = RNA_def_function(srna, "pupmenu_end__internal", "rna_PupMenuEnd");
 	RNA_def_function_flag(func, FUNC_NO_SELF | FUNC_USE_CONTEXT);
 	parm = RNA_def_pointer(func, "menu", "UIPopupMenu", "", "");
+	RNA_def_property_flag(parm, PROP_RNAPTR | PROP_NEVER_NULL);
+
+	/* wrap UI_popup_dialog_begin */
+	func = RNA_def_function(srna, "pupdialog_begin__internal", "rna_PupDialogBegin");
+	RNA_def_function_flag(func, FUNC_NO_SELF | FUNC_USE_CONTEXT);
+	parm = RNA_def_string(func, "title", NULL, 0, "", "");
+	RNA_def_property_flag(parm, PROP_REQUIRED);
+	parm = RNA_def_property(func, "icon", PROP_ENUM, PROP_NONE);
+	RNA_def_property_enum_items(parm, rna_enum_icon_items);
+	RNA_def_boolean(func, "keep_open", 1, "Keep Open", "Keep the dialog open until the escape key is pressed");
+	RNA_def_boolean(func, "exit_on_execute", 1, "Exit On Execute", "Close the dialog when an operator is called");
+	/* return */
+	parm = RNA_def_pointer(func, "dialog", "UIPopupDialog", "", "");
+	RNA_def_property_flag(parm, PROP_RNAPTR | PROP_NEVER_NULL);
+	RNA_def_function_return(func, parm);
+
+	/* wrap UI_popup_menu_end */
+	func = RNA_def_function(srna, "pupdialog_end__internal", "rna_PupDialogEnd");
+	RNA_def_function_flag(func, FUNC_NO_SELF | FUNC_USE_CONTEXT);
+	parm = RNA_def_pointer(func, "dialog", "UIPopupDialog", "", "");
 	RNA_def_property_flag(parm, PROP_RNAPTR | PROP_NEVER_NULL);
 
 	/* wrap uiPieMenuBegin */

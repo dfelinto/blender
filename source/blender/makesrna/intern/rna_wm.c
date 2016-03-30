@@ -606,6 +606,17 @@ static PointerRNA rna_PopupMenu_layout_get(PointerRNA *ptr)
 	return rptr;
 }
 
+static PointerRNA rna_PopupDialog_layout_get(PointerRNA *ptr)
+{
+	struct uiPopupDialog *pup = ptr->data;
+	uiLayout *layout = UI_popup_dialog_layout(pup);
+
+	PointerRNA rptr;
+	RNA_pointer_create(ptr->id.data, &RNA_UILayout, layout, &rptr);
+
+	return rptr;
+}
+
 static PointerRNA rna_PieMenu_layout_get(PointerRNA *ptr)
 {
 	struct uiPieMenu *pie = ptr->data;
@@ -1806,6 +1817,26 @@ static void rna_def_popupmenu(BlenderRNA *brna)
 	RNA_define_verify_sdna(1); /* not in sdna */
 }
 
+static void rna_def_popupdialog(BlenderRNA *brna)
+{
+	StructRNA *srna;
+	PropertyRNA *prop;
+
+	srna = RNA_def_struct(brna, "UIPopupDialog", NULL);
+	RNA_def_struct_ui_text(srna, "PopupDialog", "");
+	RNA_def_struct_sdna(srna, "uiPopupDialog");
+
+	RNA_define_verify_sdna(0); /* not in sdna */
+
+	/* could wrap more, for now this is enough */
+	prop = RNA_def_property(srna, "layout", PROP_POINTER, PROP_NONE);
+	RNA_def_property_struct_type(prop, "UILayout");
+	RNA_def_property_pointer_funcs(prop, "rna_PopupDialog_layout_get",
+	                               NULL, NULL, NULL);
+
+	RNA_define_verify_sdna(1); /* not in sdna */
+}
+
 static void rna_def_piemenu(BlenderRNA *brna)
 {
 	StructRNA *srna;
@@ -2233,6 +2264,7 @@ void RNA_def_wm(BlenderRNA *brna)
 	rna_def_event(brna);
 	rna_def_timer(brna);
 	rna_def_popupmenu(brna);
+	rna_def_popupdialog(brna);
 	rna_def_piemenu(brna);
 	rna_def_window(brna);
 	rna_def_windowmanager(brna);

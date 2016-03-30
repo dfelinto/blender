@@ -1779,7 +1779,7 @@ static uiBut *ui_item_menu(
 
 	if (!name)
 		name = "";
-	if (layout->root->type == UI_LAYOUT_MENU && !icon)
+	if (ELEM(layout->root->type, UI_LAYOUT_MENU, UI_LAYOUT_DIALOG) && !icon)
 		icon = ICON_BLANK1;
 
 	w = ui_text_icon_width(layout, name, icon, 1);
@@ -1811,7 +1811,7 @@ static uiBut *ui_item_menu(
 	if (layout->root->type == UI_LAYOUT_HEADER) {
 		UI_block_emboss_set(block, UI_EMBOSS);
 	}
-	if (ELEM(layout->root->type, UI_LAYOUT_PANEL, UI_LAYOUT_TOOLBAR) ||
+	if (true || ELEM(layout->root->type, UI_LAYOUT_PANEL, UI_LAYOUT_TOOLBAR) ||
 	    (force_menu && layout->root->type != UI_LAYOUT_MENU))  /* We never want a dropdown in menu! */
 	{
 		UI_but_type_set_menu_from_pulldown(but);
@@ -1835,7 +1835,7 @@ void uiItemM(uiLayout *layout, bContext *UNUSED(C), const char *menuname, const 
 		name = CTX_IFACE_(mt->translation_context, mt->label);
 	}
 
-	if (layout->root->type == UI_LAYOUT_MENU && !icon)
+	if (ELEM(layout->root->type, UI_LAYOUT_MENU, UI_LAYOUT_DIALOG) && !icon)
 		icon = ICON_BLANK1;
 
 	ui_item_menu(layout, name, icon, ui_item_menutype_func, mt, NULL, TIP_(mt->description), false);
@@ -1852,7 +1852,7 @@ static uiBut *uiItemL_(uiLayout *layout, const char *name, int icon)
 
 	if (!name)
 		name = "";
-	if (layout->root->type == UI_LAYOUT_MENU && !icon)
+	if (ELEM(layout->root->type, UI_LAYOUT_MENU, UI_LAYOUT_DIALOG) && !icon)
 		icon = ICON_BLANK1;
 
 	w = ui_text_icon_width(layout, name, icon, 0);
