@@ -1811,7 +1811,7 @@ static uiBut *ui_item_menu(
 	if (layout->root->type == UI_LAYOUT_HEADER) {
 		UI_block_emboss_set(block, UI_EMBOSS);
 	}
-	if (true || ELEM(layout->root->type, UI_LAYOUT_PANEL, UI_LAYOUT_TOOLBAR) ||
+	if (ELEM(layout->root->type, UI_LAYOUT_PANEL, UI_LAYOUT_TOOLBAR) ||
 	    (force_menu && layout->root->type != UI_LAYOUT_MENU))  /* We never want a dropdown in menu! */
 	{
 		UI_but_type_set_menu_from_pulldown(but);
