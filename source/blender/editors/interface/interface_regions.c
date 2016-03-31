@@ -2803,7 +2803,7 @@ uiPopupMenu *UI_popup_menu_begin(bContext *C, const char *title, int icon)
 	uiBut *but;
 
 	pup->block = UI_block_begin(C, NULL, __func__, UI_EMBOSS_PULLDOWN);
-	pup->block->flag |= UI_BLOCK_POPUP_MEMORY | UI_BLOCK_IS_FLIP;
+	pup->block->flag |= UI_BLOCK_POPUP | UI_BLOCK_IS_FLIP;
 	pup->block->puphash = ui_popup_menu_hash(title);
 	pup->layout = UI_block_layout(pup->block, UI_LAYOUT_VERTICAL, UI_LAYOUT_MENU, 0, 0, 200, 0, MENU_PADDING, style);
 
@@ -2866,7 +2866,7 @@ uiPopupDialog *UI_popup_dialog_begin(bContext *C, const char *title, int icon, i
 	uiPopupDialog *pup = MEM_callocN(sizeof(uiPopupDialog), "popup dialog");
 	uiBut *but;
 
-	pup->block = UI_block_begin(C, NULL, __func__, UI_EMBOSS_PULLDOWN);
+	pup->block = UI_block_begin(C, NULL, __func__, UI_EMBOSS);
 	pup->block->flag |= UI_BLOCK_POPUP |
 	                    UI_BLOCK_NO_FLIP |
 	                    (UI_BLOCK_KEEP_OPEN * keep_open) |
